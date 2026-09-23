@@ -17,7 +17,6 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.backends.mesh import ScriptedMeshBackend
 from app.core.export.writer import plan_export, write_plan
 from app.core.generate import from_image, from_text
 from app.core.geom.attributes import used_slots
@@ -25,6 +24,7 @@ from app.core.ingest import threemf
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, load, new_project, save
 from app.core.types import Profile
+from tests.scripted_backend import ScriptedMeshBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 

@@ -369,6 +369,9 @@ _NOT_A_RANGE = frozenset(
     {
         "absolute_path", "already_solid", "ambiguous_reference", "broken_scheme",
         "checksum", "choices",
+        # Ein ZIP ohne lesbares Modell oder mit Kennwort (archive.py): der
+        # Inhalt, keine Zahl.
+        "encrypted", "no_model",
         # „#RRGGBB" ist ein Format und keine Spanne: Eine Filamentfarbe kann
         # nicht „zu groß" sein, sie ist lesbar oder nicht.
         "changed", "colour",

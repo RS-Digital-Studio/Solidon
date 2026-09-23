@@ -970,8 +970,9 @@ class SupportDialog(QDialog):
         # eingerichtetes Mailprogramm geschah auf den Klick nichts, und der
         # Kunde wartete auf ein Fenster, das nicht kam. Derselbe Satz wie beim
         # Portal, denn es ist dieselbe Lage — und derselbe Rückweg: der
-        # abgelegte Ordner mit „bericht.txt".
-        if QDesktopServices.openUrl(QUrl(support.mail_link(ticket))):
+        # abgelegte Ordner mit „bericht.txt". Der Ordner reist mit, damit ein
+        # gekürzter Text sagt, wo der ganze liegt.
+        if QDesktopServices.openUrl(QUrl(support.mail_link(ticket, str(self.written)))):
             self.state.clear()
             return
         _log.warning("no mail program answered the mailto link")

@@ -689,3 +689,21 @@ def test_the_tool_list_speaks_the_mcp_contract() -> None:
         assert "inputSchema" in entry, entry["name"]
         assert "input_schema" not in entry, entry["name"]
         assert entry["inputSchema"].get("type") == "object", entry["name"]
+
+
+def test_positional_params_are_a_protocol_error_not_an_unexpected_one(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """JSON-RPC erlaubt eine Liste als Parameter; dieses Protokoll kennt nur Namen.
+
+    Bis zum 22.09.2026 wurde daraus ein ``AttributeError``, beantwortet als
+    „Unerwarteter Fehler" und mit einem Stapel im Fehlerprotokoll — je
+    fehlgeformter Anfrage eines Clients.
+    """
+    raw = json.dumps({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": [1, 2]})
+    with caplog.at_level(logging.ERROR, logger="app.core.agent.remote"):
+        answer = json.loads(remote.answer_bytes(raw.encode("utf-8"), _Bridge()))
+
+    assert answer["error"]["code"] == remote.INVALID_PARAMS
+    assert answer["id"] == 3
+    assert not caplog.records, "eine fehlgeformte Anfrage ist kein Programmfehler"

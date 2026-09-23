@@ -1318,9 +1318,10 @@ behalten ihre Seite. Vorbelegte Richtungswerte ändern ihre Schemaseite nicht.
 **Agent**
 
 `chat.py` (§26.3, §2.5) · `snapshots.py` (Ansichten für den Agenten) ·
-`remote_server.py` (MCP im Fenster; lesende, teure Aufrufe wie die
-Orientierungsanalyse gibt das Fenster als `DeferredAnswer` zurück, der
-Serverthread rechnet sie)
+`remote_server.py` (MCP im Fenster; lesende Analysen wie die
+Orientierungssuche gibt das Fenster als `core.agent.remote.Deferred` zurück —
+nur der Schnappschuss entsteht im Hauptthread, `WindowBridge._compute` rechnet
+im Serverthread mit Abbruch und Zeitgrenze)
 
 **Prüfbericht**
 

@@ -14,7 +14,8 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 | `threemf.py` | 3MF **lesen** — Objekte, Farbgruppen, erklärte Einheit, Baugruppe mit Production-Erweiterung (§17.1, §20). Bis zum 02.09.2026 lag der Leser beim Schreiber in `export/`; die Konstanten des Containers stehen hier, `export/threemf.py` holt sie sich |
 | `ops.py` | Die `load`-Operation. **Auch Laden ist eine Operation** und steht im Stapel |
 | `plan.py` | Welche Operation eine Datei einliest — für Fenster und Kommandozeile; `names_in_use` nennt die im Stapel vergebenen Objektnamen, damit der Plan einen freien wählt; `is_only_imported` sagt umgekehrt, ob ein ganzes Dokument nichts als eingelesene Dateien trägt (RM-130) |
-| `fetch.py` | Eine Modelldatei aus dem Netz holen (§16.3, §32) |
+| `fetch.py` | Eine Modelldatei aus dem Netz holen (§16.3, §32); eine Adresse von Printables, Thingiverse, MakerWorld, Cults3D, MyMiniFactory oder Thangs ohne Dateiendung ist eine Seite und wird ohne Netzzugriff mit dem Weg über den Herunterladen-Knopf beantwortet (`model_page_host`) |
+| `archive.py` | Ein ZIP mit Modellen **vor** dem Einbetten auflösen: nur das Modell kommt ins Projekt, bei mehreren wird gefragt; dieselben Grenzen wie beim 3MF, Pfadtricks übergangen, GLTF-Begleitdateien aus demselben Archiv. `IMPORT_SUFFIXES` ist die Liste für Dateidialog, Ablage, Netz und Kommandozeile; `plan.MODEL_SUFFIXES` bleibt die der Operationen |
 | `outline.py` | SVG/DXF-Profile mit Innenringen lesen, prüfen, auswählen und extrudieren; SVG-Standardwerte für fehlende Rechteckpositionen werden nur in der Parserkopie ergänzt |
 
 ## Warum Laden eine Operation ist

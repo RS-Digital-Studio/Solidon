@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from math import isfinite
 from pathlib import Path
-from typing import Any, BinaryIO, Final
+from typing import Any, BinaryIO, Final, cast
 
 from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, Signal
 
@@ -54,6 +54,7 @@ from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.section import SectionPlane
+from app.core.ingest.archive import is_archive, model_from_archive
 from app.core.ingest.loader import read_bounded_payload, read_local_payload
 from app.core.ingest.plan import ImportPlan, import_plan, is_only_imported, names_in_use
 from app.core.knowledge import profiles
@@ -316,6 +317,41 @@ class _EvaluationWorker(Worker):
         ``destroyed``-Vertrag bleibt unangetastet.
         """
         del self._session
+        super().release_finished_references()
+
+
+class _ArchiveWorker(Worker):
+    """Holt das Modell aus einem ZIP, bevor irgendetwas eingebettet wird.
+
+    Im Arbeiter, weil ein Archiv bis zur Importgrenze entpackt werden kann,
+    und mit der Frage des Kerns, weil ein Archiv mehrere Modelle tragen kann
+    (Regel 21): ``ask`` ist :meth:`Session.ask_from_worker` — derselbe Dialog
+    wie jede andere Rückfrage.
+    """
+
+    readyWith = Signal(str, object)
+    failedWith = Signal(object)
+    dropped = Signal()
+
+    def __init__(self, name: str, payload: bytes, ask: Any) -> None:
+        super().__init__()
+        self._name = name
+        self._payload = payload
+        self._ask = ask
+
+    def work(self) -> None:
+        try:
+            name, payload = model_from_archive(self._name, self._payload, self._ask)
+        except OperationCancelled:
+            self.dropped.emit()
+        except AppError as error:
+            self.failedWith.emit(error)
+        else:
+            self.readyWith.emit(name, payload)
+
+    def release_finished_references(self) -> None:
+        """Das Archiv nach seiner Zustellung lösen — es kann Hunderte MB tragen."""
+        del self._payload, self._ask
         super().release_finished_references()
 
 
@@ -1019,7 +1055,7 @@ class Session(QObject):
         # Ein Arbeiter, der bei einem synchronen Lauf noch rechnete: Sein
         # Ergebnis ist danach älter als der Stand, den ``evaluate_now`` liefert.
         self._superseded: _EvaluationWorker | None = None
-        self._plan: _PlanWorker | None = None
+        self._plan: _PlanWorker | _ArchiveWorker | None = None
         """Der laufende Einleseplan (§2.8) — siehe ``import_payload_async``."""
         self._agent: _AgentWorker | None = None
         self._split: _SplitWorker | None = None
@@ -2100,7 +2136,12 @@ class Session(QObject):
 
         STEP nimmt den anderen Kern und trägt seine eigene Einheit — es braucht
         also weder die Einheitenfrage noch die Mesh-Eingangsstufe (§30, §11.1).
+
+        Ein ZIP mit genau einem Modell geht hier durch; mehrere verlangen eine
+        Wahl, und die gibt es nur auf dem Weg mit Arbeiter und Dialog.
         """
+        if is_archive(name):
+            name, payload = model_from_archive(name, payload, None)
         path = Path(name)
         source_id = self._embed_source("import", path.name, payload, origin)
 
@@ -2196,7 +2237,14 @@ class Session(QObject):
         Dokument; sie in einen Arbeiter zu verlegen hieße, das Dokument aus
         zwei Fäden zu ändern. Teuer ist sie ohnehin nicht — teuer ist das
         Zählen danach.
+
+        **Ein ZIP wird vorher aufgelöst** (:mod:`app.core.ingest.archive`):
+        eingebettet wird das Modell darin, nie das Archiv mit Bildern und
+        Anleitung.
         """
+        if is_archive(name):
+            self._unpack_archive(name, payload, unit=unit, origin=origin)
+            return
         path = Path(name)
         source_id = self._embed_source("import", path.name, payload, origin)
         first_model = not self.history.operations
@@ -2252,6 +2300,35 @@ class Session(QObject):
                 InternalError(detail=detail), src, stamp
             )
         )
+        self._leash.start(worker)
+
+    def _unpack_archive(
+        self, name: str, payload: bytes, *, unit: str, origin: SourceOrigin | None
+    ) -> None:
+        """Das Modell aus dem Archiv holen und danach denselben Weg einlesen."""
+        worker = _ArchiveWorker(name, payload, self.ask_from_worker)
+        self._plan = worker
+        self.busyChanged.emit(True)
+        worker.finished.connect(partial(self._on_plan_done, worker))
+        stamp = self._project_generation
+
+        def ready(inner: str, data: object, stamp: int = stamp) -> None:
+            if stamp != self._project_generation:
+                return
+            self.import_payload_async(inner, cast(bytes, data), unit=unit, origin=origin)
+
+        def failed(error: object, stamp: int = stamp) -> None:
+            if stamp == self._project_generation:
+                self.importFailed.emit(error)
+
+        def dropped(stamp: int = stamp) -> None:
+            if stamp == self._project_generation:
+                self.importFinished.emit(False)
+
+        worker.readyWith.connect(ready)
+        worker.failedWith.connect(failed)
+        worker.dropped.connect(dropped)
+        worker.crashed.connect(lambda detail: failed(InternalError(detail=detail)))
         self._leash.start(worker)
 
     def _on_plan_done(self, worker: Any) -> None:

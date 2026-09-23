@@ -23,6 +23,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.backends.llm import Message, Reply
+from app.core.backends.mesh import (
+    CancelledFn,
+    GeneratedMesh,
+    GenerationFailed,
+    _silent,
+)
+from app.core.errors import OperationCancelled
+from app.core.geom.mesh import read_mesh
+from app.core.types import ProgressFn
+from app.i18n import _
 
 Answer = Reply | Callable[[Sequence[Message]], Reply]
 
@@ -84,3 +94,77 @@ class ScriptedBackend:
         if not self.seen:
             return ""
         return " ".join(entry.content for entry in self.seen[-1] if entry.role == "system")
+
+
+# --- Der Generator der Suite (Weg 3) -------------------------------------------------
+#
+# Bis zum 22.09.2026 lag er in ``app/core/backends/mesh.py`` und reiste damit
+# im Kundenpaket mit — derselbe Befund wie beim Sprachmodell darüber, nur
+# zwanzig Tage später: Keine Anwendungsdatei importierte ihn.
+
+
+@dataclass(slots=True)
+class ScriptedMeshBackend:
+    """Ein Generator, der eine vorbereitete Datei zurückgibt (§35).
+
+    Weg 3 muss ohne Grafikkarte testbar sein, und ein Test, der nur saubere
+    Geometrie zu sehen bekäme, bewiese nichts — vorbereitet werden hier also
+    die kaputten Körper, die ein Generator wirklich liefert.
+    """
+
+    answers: dict[str, bytes] = field(default_factory=dict)
+    fallback: bytes | None = None
+    suffix: str = ".stl"
+    calls: list[tuple[str, int]] = field(default_factory=list)
+
+    @property
+    def id(self) -> str:
+        return "scripted"
+
+    @property
+    def available(self) -> bool:
+        return bool(self.answers) or self.fallback is not None
+
+    def text_to_mesh(
+        self,
+        prompt: str,
+        *,
+        seed: int = 0,
+        progress: ProgressFn = _silent,
+        cancelled: CancelledFn | None = None,
+    ) -> GeneratedMesh:
+        self.calls.append((prompt, seed))
+        progress(0.5, str(_("Modell wird erzeugt")))
+        # Auch der Doppel fragt: Ein Test soll den Abbruchweg fahren können,
+        # ohne eine Grafikkarte und ohne eine Sekunde Wartezeit.
+        if cancelled is not None and cancelled():
+            raise OperationCancelled
+        payload = self.answers.get(prompt, self.fallback)
+        if payload is None:
+            raise GenerationFailed(detail=f"nothing scripted for {prompt!r}")
+        return self._as_result(payload, prompt, seed)
+
+    def image_to_mesh(
+        self,
+        image: bytes,
+        *,
+        seed: int = 0,
+        progress: ProgressFn = _silent,
+        cancelled: CancelledFn | None = None,
+    ) -> GeneratedMesh:
+        self.calls.append((f"<image {len(image)}>", seed))
+        if cancelled is not None and cancelled():
+            raise OperationCancelled
+        if self.fallback is None:
+            raise GenerationFailed(detail="nothing scripted for an image")
+        return self._as_result(self.fallback, "", seed)
+
+    def _as_result(self, payload: bytes, prompt: str, seed: int) -> GeneratedMesh:
+        return GeneratedMesh(
+            mesh=read_mesh(payload, self.suffix),
+            payload=payload,
+            suffix=self.suffix,
+            backend=self.id,
+            prompt=prompt,
+            seed=seed,
+        )

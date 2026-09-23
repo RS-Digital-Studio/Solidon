@@ -77,6 +77,7 @@ from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import activation, bootstrap, discover, examples, manual, tools, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
+from app.core.agent.remote import Deferred as RemoteDeferred
 from app.core.agent.session import (
     MAX_STEPS,
     build_fit,
@@ -138,6 +139,7 @@ from app.core.geom.sculpt import (
     strokes_to_text,
 )
 from app.core.geom.section import SectionPlane, plane_through
+from app.core.ingest.archive import IMPORT_SUFFIXES
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
 from app.core.ingest.plan import imported_group_for_bed
@@ -192,6 +194,7 @@ from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
 from app.core.tour import tour_for
 from app.core.types import (
     Bone,
+    CancelToken,
     DocumentChange,
     Feature,
     FeatureRef,
@@ -310,7 +313,7 @@ from app.ui.print_settings_dialog import (
     settings_for_export,
 )
 from app.ui.recipe_dialog import RecipeDialog
-from app.ui.remote_server import DeferredAnswer, RemoteServer, WindowBridge
+from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
@@ -580,6 +583,16 @@ def waiting() -> Iterator[None]:
 
 def model_filter() -> str:
     return _filter_for(tr("Modelle"), MODEL_SUFFIXES)
+
+
+def import_filter() -> str:
+    """Was *Modell einfügen* annimmt: jedes Modell und das ZIP darum.
+
+    Getrennt von :func:`model_filter`, weil die Quellenwahl eines
+    Operationsdialogs die Datei unverändert einbettet — ein Archiv wäre dort
+    eine Quelle, die keine Operation liest.
+    """
+    return _filter_for(tr("Modelle"), IMPORT_SUFFIXES)
 
 
 def gcode_filter() -> str:
@@ -5702,7 +5715,9 @@ class MainWindow(QMainWindow):
         Fehlerpfad und einen zweiten Weg in ``import_payload`` — für die paar
         Zehntel, die eine Platte für dreißig Megabyte braucht (§2.8).
         """
-        name, _filter = QFileDialog.getOpenFileName(self, tr("Modell einfügen"), "", model_filter())
+        name, _filter = QFileDialog.getOpenFileName(
+            self, tr("Modell einfügen"), "", import_filter()
+        )
         if not name:
             return
         starting_fresh = self.stack.currentWidget() is self.start_screen
@@ -15461,30 +15476,7 @@ class MainWindow(QMainWindow):
 
     # --- Fernsteuerung über MCP (Konzept P15 §7 Etappe 9, D19) ------------------
 
-    def _remote_orientation(self, result: Any, values: Mapping[str, Any]) -> DeferredAnswer:
-        """Die Orientierungsanalyse des Fernaufrufs — gerechnet im Serverthread (RM-144).
-
-        Der Fernaufruf läuft im Qt-Hauptthread (die Brücke stellt per
-        ``postEvent`` zu), und die Suche kostet Sekunden; bis zum 23.09.2026
-        wurde sie deshalb abgelehnt. Die Analyse liest nur: Szene, Profil und
-        die Druckeinstellungen des Dokuments. Davon wird hier eine
-        Momentaufnahme genommen — die Szene eines Ergebnisses wird ersetzt,
-        nicht verändert —, und der wartende Serverthread rechnet. Das Fenster
-        bleibt bedienbar; Abbruch und Zeitgrenze setzt die Brücke. Eine
-        lesende Analyse erzeugt keine Transaktion.
-        """
-        scene = result.scene
-        document = copy(self.session.project.document)
-        profile = self.session.profile
-        wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
-        return DeferredAnswer(
-            work=lambda token: analysis_text(
-                "orientation", scene, document, profile, objects=wanted, cancelled=token
-            ),
-            stopped=tr("Die Orientierungssuche wurde abgebrochen."),
-        )
-
-    def run_remote(self, name: str, arguments: Mapping[str, Any]) -> str | DeferredAnswer:
+    def run_remote(self, name: str, arguments: Mapping[str, Any]) -> str | RemoteDeferred:
         """Ein Fernaufruf, ausgeführt wie ein Menüklick.
 
         Derselbe Weg durch ``session.apply``, also dieselbe Transaktion,
@@ -15546,16 +15538,26 @@ class MainWindow(QMainWindow):
                 return tr("Diese Analyse gibt es nicht: {kinds}").format(
                     kinds=", ".join(ANALYSIS_KINDS)
                 )
-            if kind == "orientation":
-                return self._remote_orientation(result, values)
+            # **Gerechnet wird im Faden des Fernaufrufs, nicht hier** (RM-144).
+            # Dieser Weg läuft im Qt-Hauptthread, und die Orientierungssuche
+            # kostet Sekunden — gemessen 5,3 s an der kleinen Referenzplatte;
+            # die Schichtanalyse eines großen Netzes ebenso. Bis zum 22.09.2026
+            # wurde die Suche deshalb abgelehnt. Hier entsteht nur der
+            # Schnappschuss: die ausgewertete Szene, Druckeinstellungen und
+            # Passungen, das Profil. Der Rest rechnet mit Abbruch und
+            # Zeitgrenze in :meth:`WindowBridge._compute`, und das Dokument
+            # sieht davon nichts — lesend, ohne Transaktion.
             wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
-            return analysis_text(
-                kind,
-                result.scene,
-                self.session.project.document,
-                self.session.profile,
-                objects=wanted,
-            )
+            snapshot = copy(self.session.project.document)
+            snapshot.fits = list(snapshot.fits)
+            scene, profile = result.scene, self.session.profile
+
+            def analysis(cancelled: CancelToken) -> str:
+                return analysis_text(
+                    kind, scene, snapshot, profile, objects=wanted, cancelled=cancelled
+                )
+
+            return analysis
         if name == SET_PRINT_TARGET:
             printer = str(values.get("printer", "")).strip()
             material = str(values.get("material", "")).strip()

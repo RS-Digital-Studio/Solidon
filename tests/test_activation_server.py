@@ -800,3 +800,184 @@ def test_php_gives_the_commercial_licence_a_second_device_and_no_third(
     finally:
         process.terminate()
         process.wait(timeout=10)
+
+
+def test_the_server_record_learns_the_licence_kind_and_an_old_database_migrates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-182: Die Art steht im Datensatz — auch in einer Datenbank von vorher.
+
+    Bis zum 22.09.2026 kannte der Server die Art nur während einer Anfrage.
+    Der Support sah bei einem Schlüssel außerhalb des eigenen Archivs nicht,
+    ob zwei Plätze zustehen. Geprüft wird an einer Datenbank im Aufbau der
+    laufenden Produktivversion (ohne Spalte), die schon einen Bestandsdatensatz
+    trägt: Der erste Kontakt nach dem Hochladen legt die Spalte an und trägt
+    die signierte Art nach.
+    """
+    licence_public = ed25519.public_key(LICENCE_SEED)
+    activation_public = ed25519.public_key(ACTIVATION_SEED)
+    monkeypatch.setattr(key, "PUBLIC_KEY", licence_public)
+    monkeypatch.setattr(certificate, "ACTIVATION_PUBLIC_KEY", activation_public)
+    commercial = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 11, 1),
+        order="POOL-C-0042",
+        holder="werkstatt@beispiel.de",
+        kind=key.LicenceKind.COMMERCIAL,
+    )
+    digest = certificate.licence_digest(commercial)
+
+    database = tmp_path / "activation.sqlite"
+    with contextlib.closing(sqlite3.connect(database)) as old:
+        # Der Aufbau vor RM-182, samt einem Datensatz, den der Support vor der
+        # ersten Aktivierung angelegt hat.
+        old.executescript(
+            """
+            CREATE TABLE licences (
+                digest TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL);
+            CREATE TABLE activations (
+                id TEXT PRIMARY KEY, licence_digest TEXT NOT NULL, device_public TEXT NOT NULL,
+                device_name TEXT NOT NULL, activated_on TEXT NOT NULL, deactivated_at TEXT NULL);
+            CREATE UNIQUE INDEX one_active_device ON activations(licence_digest)
+                WHERE deactivated_at IS NULL;
+            """
+        )
+        old.execute(
+            "INSERT INTO licences(digest, status, created_at) VALUES(?, 'active', ?)",
+            (digest, "2026-09-01T00:00:00+00:00"),
+        )
+        old.commit()
+
+    seed_file = tmp_path / "activation.seed"
+    seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+    seed_file.chmod(0o600)
+    token_file = tmp_path / "operator.token"
+    token = "cd" * 32
+    token_file.write_text(token + "\n", encoding="ascii")
+    token_file.chmod(0o600)
+    port = _free_port()
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "SOLIDON_ACTIVATION_SEED_FILE": str(seed_file),
+            "SOLIDON_ACTIVATION_DB": str(database),
+            "SOLIDON_ACTIVATION_OPERATOR_TOKEN_FILE": str(token_file),
+            "SOLIDON_ACTIVATION_TEST_PUBLIC_KEY": activation_public.hex(),
+            "SOLIDON_ACTIVATION_TEST_LICENCE_PUBLIC_KEY": licence_public.hex(),
+            "SOLIDON_ACTIVATION_MAJOR": str(key.current_major()),
+        }
+    )
+    process = subprocess.Popen(
+        _php_command(port),
+        cwd=Path(__file__).parent.parent,
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    url = f"http://127.0.0.1:{port}/api/activation.php"
+    try:
+        for number in range(2):
+            keyring = _MemoryKeyring()
+            monkeypatch.setattr(device, "_load_keyring", lambda bound=keyring: bound)
+            request_text = certificate.create_request(
+                make_key(LICENCE_SEED, commercial), f"Werkstatt {number + 1}"
+            )
+            for _attempt in range(50):
+                try:
+                    status, answer = _post(url, request_text)
+                    break
+                except URLError:
+                    time.sleep(0.05)
+            else:
+                pytest.fail("der lokale PHP-Aktivierungsdienst ist nicht gestartet")
+            assert status == 200, f"Platz {number + 1}: {answer}"
+
+        with contextlib.closing(sqlite3.connect(database)) as stored:
+            recorded = stored.execute("SELECT kind FROM licences WHERE digest = ?", (digest,))
+            assert recorded.fetchone() == (int(key.LicenceKind.COMMERCIAL),), (
+                "die signierte Art steht im Datensatz"
+            )
+            indexes = {row[0] for row in stored.execute("SELECT name FROM sqlite_master")}
+            assert "one_active_device" not in indexes, "der zweite Platz brauchte den Drop"
+
+        looked_up, answer = _operator_post(
+            f"http://127.0.0.1:{port}/api/operator.php",
+            token,
+            {"action": "lookup", "digest": digest},
+        )
+        assert looked_up == 200, answer
+        licence_state = json.loads(answer)["licence"]
+        assert licence_state["kind"] == int(key.LicenceKind.COMMERCIAL)
+        assert licence_state["device_limit"] == key.DEVICE_LIMITS[key.LicenceKind.COMMERCIAL]
+    finally:
+        process.terminate()
+        process.wait(timeout=10)
+
+
+def test_setup_adds_the_kind_column_to_an_existing_database(tmp_path: Path) -> None:
+    """Dieselbe Migration im Einrichtungswerkzeug wie im Dienst (RM-182)."""
+    database = tmp_path / "activation.sqlite"
+    with contextlib.closing(sqlite3.connect(database)) as old:
+        old.execute(
+            "CREATE TABLE licences (digest TEXT PRIMARY KEY, status TEXT NOT NULL "
+            "DEFAULT 'active', created_at TEXT NOT NULL)"
+        )
+        old.execute("INSERT INTO licences VALUES('ab', 'blocked', '2026-09-01')")
+        old.commit()
+
+    assert setup_activation_server(["--database", str(database)]) == 0
+
+    with contextlib.closing(sqlite3.connect(database)) as stored:
+        columns = {row[1] for row in stored.execute("PRAGMA table_info(licences)")}
+        assert "kind" in columns
+        assert stored.execute("SELECT status, kind FROM licences").fetchall() == [("blocked", None)]
+
+
+def test_rotating_the_rate_key_starts_fresh_pseudonyms_and_keeps_limiting(tmp_path: Path) -> None:
+    """RM-096: der Rotationsweg — Schlüssel und Zähler löschen, der Dienst legt neu an.
+
+    Der Ratenstartwert ist vom Signaturschlüssel getrennt und wird beim ersten
+    Zugriff privat angelegt. Gedreht wird er, indem beide Dateien fehlen: Der
+    nächste Zugriff erzeugt einen neuen Wert, die alten Pseudonyme sind damit
+    wertlos, und die Begrenzung greift unverändert. ``activation.seed`` bleibt
+    dabei unberührt.
+    """
+    from tests.test_public_php_security import _php_server
+
+    seed = tmp_path / "activation.seed"
+    seed.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+    seed.chmod(0o600)
+    seed_before = seed.read_bytes()
+    database = tmp_path / "activation.sqlite"
+    assert setup_activation_server(["--database", str(database)]) == 0
+    rate_key = tmp_path / "activation-rate.json.key"
+    rate_state = tmp_path / "activation-rate.json"
+    environment = {
+        "SOLIDON_ACTIVATION_SEED_FILE": str(seed),
+        "SOLIDON_ACTIVATION_DB": str(database),
+        "SOLIDON_ACTIVATION_TEST_PUBLIC_KEY": ed25519.public_key(ACTIVATION_SEED).hex(),
+    }
+    with _php_server(tmp_path, environment, extensions=("sodium", "pdo_sqlite")) as base:
+        for _attempt in range(60):
+            status, answer = _get(f"{base}/activation-health.php")
+            assert status == 200, answer
+        assert _get(f"{base}/activation-health.php")[0] == 429
+        first_key = rate_key.read_bytes()
+        pseudonyms = {name for name in json.loads(rate_state.read_bytes()) if ":ip:" in name}
+
+        rate_key.unlink()
+        rate_state.unlink()
+
+        status, answer = _get(f"{base}/activation-health.php")
+        assert status == 200, "nach der Drehung zählt der Anschluss neu"
+        second_key = rate_key.read_bytes()
+        renewed = {name for name in json.loads(rate_state.read_bytes()) if ":ip:" in name}
+        for _attempt in range(59):
+            _get(f"{base}/activation-health.php")
+        assert _get(f"{base}/activation-health.php")[0] == 429, "die Begrenzung greift weiter"
+
+    assert first_key != second_key
+    assert len(bytes.fromhex(second_key.decode("ascii"))) == 32
+    assert pseudonyms and renewed and not pseudonyms & renewed, "alte Pseudonyme sind wertlos"
+    assert seed.read_bytes() == seed_before

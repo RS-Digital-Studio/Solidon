@@ -123,7 +123,11 @@ class Proposal:
         tut, steht in :attr:`undo_sweeps`, und dort steht auch, wie viele
         Schritte wirklich zurückgehen.
         """
-        if self.answer:
+        # Nur ein Antworttext mit Inhalt: Ein lokales Modell schickt neben
+        # seinen Aufrufen oft nur zwei Zeilenumbrüche, und ``splitlines()`` auf dem
+        # gestrippten Rest ist leer — die Annahme endete bis zum 22.09.2026 in
+        # einem ``IndexError`` samt Bitte um einen Fehlerbericht.
+        if self.answer.strip():
             return self.answer.strip().splitlines()[0]
         if self.drafts:
             return ", ".join(draft.op for draft in self.drafts)

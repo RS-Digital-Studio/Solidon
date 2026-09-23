@@ -22,9 +22,7 @@ import json
 import socket
 import threading
 import time
-from collections.abc import Callable
 from contextlib import suppress
-from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlsplit
@@ -135,27 +133,6 @@ class _LimitedHeaderReader:
         return line
 
 
-@dataclass(frozen=True, slots=True)
-class DeferredAnswer:
-    """Eine Antwort, die der Hauptthread vorbereitet und der Server rechnet.
-
-    Manche Fernaufrufe lesen nur — die Orientierungssuche etwa (RM-144) — und
-    kosten Sekunden. Im Hauptthread gerechnet hielte sie das Fenster so lange
-    an. Der Hauptthread nimmt deshalb nur die Momentaufnahme dessen, was die
-    Rechnung liest, und gibt ``work`` zurück; der wartende Serverthread führt
-    es aus. ``work`` bekommt ein Abbruchsignal, das die Brücke beim Beenden
-    und nach :data:`DEFERRED_BUDGET` Sekunden setzt.
-    """
-
-    work: Callable[[CancelSignal], str]
-    stopped: str
-    """Die Antwort, wenn die Rechnung abgebrochen wurde."""
-
-
-#: Wie lange eine im Serverthread gerechnete Antwort höchstens rechnen darf.
-DEFERRED_BUDGET = 120.0
-
-
 class _Call(QEvent):
     """Ein Aufruf auf dem Weg in den Hauptthread."""
 
@@ -166,11 +143,9 @@ class _Call(QEvent):
         self.name = name
         self.arguments = arguments
         self.done = threading.Event()
-        self.answer: str | DeferredAnswer = ""
+        self.answer: str | remote.Deferred = ""
         self.error: BaseException | None = None
         self.cancelled = threading.Event()
-        self.token: CancelSignal | None = None
-        """Das Abbruchsignal einer im Serverthread laufenden Antwort."""
 
 
 class WindowBridge(QObject):
@@ -189,6 +164,7 @@ class WindowBridge(QObject):
         self._pending: dict[int, _Call] = {}
         self._pending_lock = threading.Lock()
         self._accepting = True
+        self._computing: set[CancelSignal] = set()
 
     @property
     def has_pending_calls(self) -> bool:
@@ -213,38 +189,50 @@ class WindowBridge(QObject):
                 raise TimeoutError(name)
             if event.error is not None:
                 raise event.error
-            if isinstance(event.answer, DeferredAnswer):
-                return self._run_deferred(event, event.answer)
-            return str(event.answer)
+            answer = event.answer
         finally:
             with self._pending_lock:
                 self._pending.pop(id(event), None)
+        if callable(answer):
+            return self._compute(name, answer)
+        return answer
 
-    def _run_deferred(self, event: _Call, deferred: DeferredAnswer) -> str:
-        """Rechnet eine vorbereitete Antwort hier im Serverthread (RM-144)."""
+    def _compute(self, name: str, work: remote.Deferred) -> str:
+        """Eine vorbereitete lesende Auskunft in diesem Faden rechnen (RM-144).
+
+        Der Hauptthread hat nur den Schnappschuss genommen; gerechnet wird
+        hier, im Faden des Servers, der ohnehin auf die Antwort wartet. Das
+        Fenster bleibt dabei bedienbar. Zeitgrenze und Ausschalten erreichen
+        die Rechnung über ihr Token — :data:`CALL_TIMEOUT` gilt für die
+        Rechnung ebenso wie für das Warten auf den Hauptthread.
+        """
         token = CancelSignal()
-        event.token = token
-        if event.cancelled.is_set():
-            return deferred.stopped
-        budget = threading.Timer(DEFERRED_BUDGET, token.cancel)
-        budget.daemon = True
-        budget.start()
+        with self._pending_lock:
+            if not self._accepting:
+                raise TimeoutError(name)
+            self._computing.add(token)
+        deadline = threading.Timer(CALL_TIMEOUT, token.cancel)
+        deadline.daemon = True
+        deadline.start()
         try:
-            return deferred.work(token)
-        except OperationCancelled:
-            return deferred.stopped
+            return work(token)
+        except OperationCancelled as stopped:
+            raise TimeoutError(name) from stopped
         finally:
-            budget.cancel()
+            deadline.cancel()
+            with self._pending_lock:
+                self._computing.discard(token)
 
     def cancel_pending(self) -> None:
         """Wartende Worker lösen und noch eingereihte Qt-Aufrufe verwerfen."""
         with self._pending_lock:
             self._accepting = False
             pending = tuple(self._pending.values())
+            computing = tuple(self._computing)
+        for token in computing:
+            token.cancel()
         for event in pending:
             event.cancelled.set()
-            if event.token is not None:
-                event.token.cancel()
             event.error = TimeoutError(event.name)
             event.done.set()
 

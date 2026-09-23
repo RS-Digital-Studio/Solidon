@@ -45,7 +45,14 @@ from app.core.knowledge import rules
 #: Werkzeugbeschreibungen nennen den Ort („Handlungen rechts (bei gewähltem
 #: Körper) → Vereinigen"), und der Prompt verspricht nichts, was sie nicht
 #: einlösen.
-PROMPT_VERSION = "6"
+#:
+#: Version 7 sagt der Kurzfassung für lokale Modelle, was ihren Werkzeugen
+#: fehlt (RM-185): Millimeter und Grad als Einheit aller Felder, die zehn
+#: Ortsangaben jedes Bausteins, und dass ein Feld ohne Satz eine
+#: Feineinstellung ist, die nur eine ausdrückliche Anfrage setzt. Das Schema
+#: fiel damit von 37 836 auf rund 27 000 Token, und das Fenster kam auf
+#: 32 768 zurück.
+PROMPT_VERSION = "7"
 
 _ROLE = """
 Du bist der Konstruktionsassistent von Solidon, einer Anwendung für druckbare
@@ -123,12 +130,25 @@ nicht noch einmal.
 """
 
 #: Was in jedem Werkzeug gleich heißt — nur für das kompakte Schema, das
-#: diese Sätze nicht mehr je Feld trägt (RM-173, ``tools._without_convention_text``).
+#: diese Sätze nicht mehr je Feld trägt (RM-173, ``tools._repeats_a_convention``).
 _CONVENTIONS_HINT = """
 Was in jedem Werkzeug gleich heißt, steht dort nicht noch einmal: ``y`` und
 ``z`` sind die weiteren Achsen zu dem, was an ``x`` steht, ``ny`` und ``nz``
 die weiteren zu ``nx``; ``play`` ist das Spiel einer Passung in Millimetern,
 und null heißt Wert aus dem kalibrierten Materialprofil.
+"""
+
+#: Was die Kurzfassung der Werkzeuge außerdem weglässt (RM-185,
+#: ``tools._compact_parameter_text``): Einheiten, die Ortsfelder der Bausteine
+#: und den Text der Rückseitenfelder. Jede der drei Kürzungen steht hier als
+#: Satz — ein Feld, das das Modell nicht erklärt bekommt, setzt es falsch.
+_COMPACT_FIELDS_HINT = """
+Die Werkzeuge stehen in Kurzfassung. Längen sind Millimeter, Winkel Grad; am
+Feld steht keine Einheit. Die Bausteine (insert_…) führen die zehn Angaben
+ihrer Stelle — ``x`` bis ``at_features`` oben — nicht auf und nehmen sie
+trotzdem, in genau dieser Bedeutung. Ein Feld ohne Satz oder nur mit seiner
+Bedingung ist eine Feineinstellung: Setze es nur, wenn die Anfrage einen Wert
+dafür nennt; sonst gilt seine Vorgabe, oft der Wert aus dem Materialprofil.
 """
 
 #: Der Hinweis auf den Ort — nur für Schemata, die ihn auch tragen.
@@ -169,6 +189,7 @@ def system_prompt(rule_set: rules.RuleSet | None = None, *, compact: bool = Fals
     if compact:
         parts.append(_BINDING_HINT.strip())
         parts.append(_CONVENTIONS_HINT.strip())
+        parts.append(_COMPACT_FIELDS_HINT.strip())
     else:
         parts.append(_MENU_HINT.strip())
     return "\n\n".join(parts)

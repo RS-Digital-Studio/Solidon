@@ -805,6 +805,7 @@ function activation_deactivation_request(string $raw): array
         'digest' => $digest,
         'device_public' => $public,
         'activation_id' => $activationId,
+        'licence_kind' => $licence['licence_kind'],
     ];
 }
 
@@ -840,8 +841,10 @@ function activation_create_schema(PDO $database): void
 {
     $database->exec(
         'CREATE TABLE IF NOT EXISTS licences ('
-        . 'digest TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT \'active\', created_at TEXT NOT NULL)'
+        . 'digest TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT \'active\', created_at TEXT NOT NULL, '
+        . 'kind INTEGER NULL)'
     );
+    activation_migrate_licence_kind($database);
     $database->exec(
         'CREATE TABLE IF NOT EXISTS activations ('
         . 'id TEXT PRIMARY KEY, licence_digest TEXT NOT NULL, device_public TEXT NOT NULL, '
@@ -874,6 +877,46 @@ function activation_create_schema(PDO $database): void
         . 'licence_digest TEXT NOT NULL, action TEXT NOT NULL, reason TEXT NOT NULL, '
         . 'changed INTEGER NOT NULL)'
     );
+}
+
+/**
+ * Führt die Lizenzart in einer Bestandsdatenbank als Spalte nach (RM-182).
+ *
+ * Bis zum 22.09.2026 kannte der Datensatz einer Lizenz nur Kennung, Zustand
+ * und ersten Kontakt; die Art stand allein im Schlüssel. Der Support sah bei
+ * einem Schlüssel, der nicht im eigenen Archiv lag, nicht, ob zwei Plätze
+ * zustehen oder einer. `NULL` heißt „noch nicht gesehen": Eine Lizenz, die
+ * der Support gesperrt hat, bevor sie je aktiviert wurde, hat keine Art, bis
+ * der erste Schlüssel sie nennt. Zwei gleichzeitige Erstaufrufe nach dem
+ * Hochladen dürfen dieselbe Spalte anlegen wollen; der zweite findet sie vor.
+ */
+function activation_migrate_licence_kind(PDO $database): void
+{
+    $has = static function () use ($database): bool {
+        foreach ($database->query('PRAGMA table_info(licences)')->fetchAll() as $column) {
+            if (($column['name'] ?? '') === 'kind') {
+                return true;
+            }
+        }
+        return false;
+    };
+    if ($has()) {
+        return;
+    }
+    try {
+        $database->exec('ALTER TABLE licences ADD COLUMN kind INTEGER NULL');
+    } catch (PDOException $problem) {
+        if (!$has()) {
+            throw $problem;
+        }
+    }
+}
+
+/** Trägt die signierte Lizenzart ein, wo der Datensatz sie noch nicht kennt. */
+function activation_record_licence_kind(PDO $database, string $digest, int $kind): void
+{
+    $record = $database->prepare('UPDATE licences SET kind = ? WHERE digest = ? AND kind IS NULL');
+    $record->execute([$kind, $digest]);
 }
 
 /** Öffnet die Datenbank; die Bereitschaftsprobe schreibt dabei garantiert nichts. */
@@ -1015,9 +1058,14 @@ function activation_issue(array $request): string
     try {
         $database->exec('BEGIN IMMEDIATE');
         $insertLicence = $database->prepare(
-            'INSERT OR IGNORE INTO licences(digest, status, created_at) VALUES(?, \'active\', ?)'
+            'INSERT OR IGNORE INTO licences(digest, status, created_at, kind) '
+            . 'VALUES(?, \'active\', ?, ?)'
         );
-        $insertLicence->execute([$request['digest'], gmdate('c')]);
+        $insertLicence->execute([$request['digest'], gmdate('c'), $request['licence_kind']]);
+        // Ein Datensatz aus der Zeit vor der Spalte — oder einer, den der
+        // Support gesperrt hat, bevor es je eine Aktivierung gab — bekommt
+        // seine Art beim ersten Kontakt. Sie steht signiert im Schlüssel.
+        activation_record_licence_kind($database, $request['digest'], $request['licence_kind']);
         $licence = $database->prepare('SELECT status FROM licences WHERE digest = ?');
         $licence->execute([$request['digest']]);
         if (($licence->fetch()['status'] ?? '') !== 'active') {
@@ -1142,6 +1190,9 @@ function activation_deactivate(array $request): void
         if ($found['deactivated_at'] === null) {
             $update = $database->prepare('UPDATE activations SET deactivated_at = ? WHERE id = ?');
             $update->execute([gmdate('c'), $request['activation_id']]);
+        }
+        if (isset($request['licence_kind'])) {
+            activation_record_licence_kind($database, $request['digest'], (int) $request['licence_kind']);
         }
         activation_commit($database);
     } catch (ActivationFailure $problem) {

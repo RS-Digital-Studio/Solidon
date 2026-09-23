@@ -1073,6 +1073,23 @@ def test_a_report_write_error_keeps_both_recovery_ways(
     assert not opened, "ohne abgelegte Anhänge darf keine Mail aufgehen"
 
 
+def test_a_mail_program_that_does_not_open_leaves_the_way_back(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """RM-038: ``openUrl`` meldet nein — und der Knopf tat still nichts."""
+    from app.ui import support_dialog as module
+    from app.ui.support_dialog import SupportDialog
+
+    monkeypatch.setattr(module.discover, "in_flatpak", lambda: False)
+    monkeypatch.setattr(module.QDesktopServices, "openUrl", staticmethod(lambda _url: False))
+    dialog = SupportDialog(message="Frage")
+    dialog.written = tmp_path
+
+    dialog._open_mail()
+
+    assert "bericht.txt" in dialog.state.text(), "der Rückweg über den abgelegten Bericht"
+
+
 @pytest.fixture
 def mail_portal_bus(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Ein Portal mit echten Qt-Nachrichten und getrenntem Request-Ergebnis."""

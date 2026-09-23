@@ -41,6 +41,7 @@ from app.core import activation, manual
 from app.core.bootstrap import load_operations, load_user_parts
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
 from app.core.export.writer import FORMAT_SUFFIX, plan_export, write_plan
+from app.core.ingest.archive import is_archive, model_from_archive
 from app.core.ingest.loader import detect_unit, read_local_payload, read_model
 from app.core.ingest.plan import import_plan, names_in_use
 from app.core.knowledge import profiles
@@ -135,8 +136,9 @@ def terminal_ask(question: str, choices: list[str]) -> str:
             raise UserError(
                 title=_("Diese Frage braucht eine Antwort, und hier ist niemand."),
                 detail=_(
-                    "Der Lauf hat keine Eingabe. Die Antwort lässt sich vorab "
-                    "mitgeben — beim Einlesen etwa über „--unit“."
+                    "Der Lauf hat keine Eingabe. Die Antwort lässt sich beim Einlesen "
+                    "vorab mitgeben — die Einheit über „--unit“, das Modell aus einem "
+                    "ZIP über „--entry“."
                 ),
                 values={"question": question, "choices": ", ".join(choices)},
                 suggestions=(CANCEL,),
@@ -398,12 +400,22 @@ def command_import(args: argparse.Namespace) -> int:
         return 1
 
     payload = read_local_payload(incoming)
+    name = incoming.name
+    if is_archive(name):
+        # Wie im Fenster: eingebettet wird das Modell im ZIP, nicht das
+        # Archiv — und bei mehreren fragt das Terminal (Regel 21).
+        # ``--entry`` ist dieselbe Antwort vorab, für Skripte ohne Terminal;
+        # ein Name, der nicht im Archiv liegt, wird abgewiesen wie eine
+        # falsche Antwort im Terminal.
+        entry = args.entry
+        ask = terminal_ask if entry is None else (lambda question, choices: entry)
+        name, payload = model_from_archive(name, payload, ask)
 
     source_id = next_source_id(project.document.sources)
     project.document.sources[source_id] = Source(
         id=source_id,
         kind="import",
-        path=embedded_source_path(incoming.name, source_id),
+        path=embedded_source_path(name, source_id),
         sha256="",
     )
     project.sources[source_id] = payload
@@ -424,15 +436,13 @@ def command_import(args: argparse.Namespace) -> int:
     # Und derselbe freie Name wie im Fenster: Zweimal dieselbe Datei ergibt
     # zwei Körper, die sich im Baum auseinanderhalten lassen.
     taken = names_in_use(project.document)
-    plan = import_plan(
-        source_id, incoming.name, payload, args.unit, first_model=first_model, taken=taken
-    )
+    plan = import_plan(source_id, name, payload, args.unit, first_model=first_model, taken=taken)
     if plan.asks_unit:
         plan = import_plan(
             source_id,
-            incoming.name,
+            name,
             payload,
-            _chosen_unit(payload, incoming, args.unit),
+            _chosen_unit(payload, name, args.unit),
             first_model=first_model,
             taken=taken,
         )
@@ -443,17 +453,17 @@ def command_import(args: argparse.Namespace) -> int:
     if not result.complete:
         return 1
     save(project, path)
-    print(f"{tr('Geladen')}: {incoming.name}")
+    print(f"{tr('Geladen')}: {name}")
     return 0
 
 
-def _chosen_unit(payload: bytes, incoming: Path, requested: str) -> str:
+def _chosen_unit(payload: bytes, name: str, requested: str) -> str:
     """Fragt, bevor die Operation geschrieben wird, damit die Antwort mit ihr
     gespeichert wird (§17.1).
     """
     if requested != "auto":
         return requested
-    guess = detect_unit(read_model(payload, incoming.suffix).bounds.diagonal)
+    guess = detect_unit(read_model(payload, Path(name).suffix).bounds.diagonal)
     if guess.unit is not None:
         return guess.unit
     return terminal_ask(
@@ -621,6 +631,9 @@ def build_parser() -> argparse.ArgumentParser:
     importing.add_argument("path")
     importing.add_argument("file")
     importing.add_argument("--unit", default="auto", choices=("auto", "mm", "cm", "in", "m"))
+    importing.add_argument(
+        "--entry", default=None, help=tr("Welches Modell aus einem ZIP-Archiv, Name wie darin")
+    )
     importing.set_defaults(handler=command_import)
 
     undo = commands.add_parser("undo", help=tr("Letzte Transaktion zurücknehmen"))

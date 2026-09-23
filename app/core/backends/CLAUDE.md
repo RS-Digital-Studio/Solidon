@@ -24,7 +24,9 @@ laufenden Anwendung heraus einrichten können soll, muss hier stehen.
 
 ## Das Skript-Modell der Suite liegt nicht mehr hier
 
-`tests/scripted_backend.py` ist ein Modell mit vorgeschriebenen Antworten.
+`tests/scripted_backend.py` ist ein Modell mit vorgeschriebenen Antworten —
+und seit dem 22.09.2026 auch der Generator der Suite (`ScriptedMeshBackend`),
+der bis dahin in `mesh.py` im Kundenpaket lag.
 Damit sind Sitzungsverlauf, Werkzeugaufrufe und Transaktionskopplung prüfbar,
 ohne ein echtes Modell zu fragen (§35, §40). Bis zum 02.09.2026 lag es hier
 als `scripted.py` und reiste damit im Kundenpaket mit, obwohl keine

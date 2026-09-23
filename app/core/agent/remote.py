@@ -28,18 +28,18 @@ wäre eine Lizenzzeile für dreißig Zeilen Code (Regel 22).
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, Final, Protocol
 from urllib.parse import urlsplit
 
 from app.branding import APP_NAME, APP_VERSION
 from app.core.agent.tools import ADD_FIT, ASK_USER, runs_foreign_source, tool_schemas
-from app.core.errors import AppError
+from app.core.errors import AppError, OperationCancelled
 from app.core.json_boundary import StrictJsonError
 from app.core.json_boundary import loads as load_json
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, Registry
-from app.core.types import FeatureRef
+from app.core.types import CancelToken, FeatureRef
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -61,6 +61,7 @@ MAX_REQUEST_BYTES: Final = 1 << 20
 PARSE_ERROR: Final = -32700
 INVALID_REQUEST: Final = -32600
 METHOD_NOT_FOUND: Final = -32601
+INVALID_PARAMS: Final = -32602
 INTERNAL_ERROR: Final = -32603
 
 #: Werkzeuge, die nie fernbedienbar sind.
@@ -99,9 +100,34 @@ class Bridge(Protocol):
     Absichtlich schmal. Diese Schicht kennt kein Dokument, keine Sitzung und
     kein Fenster — sie packt aus, prüft und reicht weiter. Alles Weitere
     entscheidet die Seite, die das Dokument hält.
+
+    Eine Brücke, die nicht rechtzeitig antwortet oder abgeschaltet wird,
+    wirft ``TimeoutError``; der Aufrufer bekommt dafür einen Satz mit Ausweg
+    (:data:`TIMED_OUT`), keinen Protokollfehler.
     """
 
     def call(self, name: str, arguments: dict[str, Any]) -> str: ...
+
+
+Deferred = Callable[[CancelToken], str]
+"""Eine Auskunft, die der Hauptthread nur **vorbereitet** (RM-144).
+
+Eine lesende Rechnung — Orientierungssuche, Schichtanalyse — nimmt im
+Hauptthread nur ihren Schnappschuss (Szene, Druckeinstellungen, Profil) und
+gibt diese Funktion zurück. Gerechnet wird im Faden des Fernaufrufs, der
+ohnehin wartet; das Fenster bleibt bedienbar, und das Token trägt Abbruch
+und Zeitgrenze hinein. Geändert wird dabei nichts, also entsteht auch keine
+Transaktion."""
+
+#: Was der Ferngast liest, wenn die Brücke nicht rechtzeitig antwortet oder
+#: die Schnittstelle währenddessen ausgeschaltet wurde. Bis zum 22.09.2026
+#: wurde das ein Protokollfehler „Unerwarteter Fehler" samt Eintrag im
+#: Fehlerprotokoll — für einen Zustand, der keiner ist (Regel 17).
+TIMED_OUT: Final = _(
+    "Das Fenster hat den Aufruf nicht rechtzeitig beantwortet — es rechnet gerade, "
+    "oder die Schnittstelle wurde ausgeschaltet. Versuchen Sie es erneut, sobald "
+    "das Fenster frei ist."
+)
 
 
 def allowed(address: str) -> bool:
@@ -384,6 +410,11 @@ def handle(
     ident = payload.get("id")
     method = payload.get("method")
     params = payload.get("params") or {}
+    if not isinstance(params, dict):
+        # JSON-RPC erlaubt Parameter als Liste; dieses Protokoll kennt nur
+        # benannte. Ohne die Zeile wurde daraus ein ``AttributeError`` und im
+        # Fehlerprotokoll ein „unerwarteter Fehler" je fehlgeformter Anfrage.
+        return _error(ident, INVALID_PARAMS, _("Die Parameter sind ein Objekt."))
 
     if method == "initialize":
         return _result(
@@ -430,6 +461,8 @@ def _called(
         return _tool_error(str(refused))
     except AppError as problem:
         return _tool_error(_readable(problem))
+    except TimeoutError, OperationCancelled:
+        return _tool_error(str(TIMED_OUT))
     return {"content": [{"type": "text", "text": answer}], "isError": False}
 
 

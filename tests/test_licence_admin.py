@@ -59,7 +59,12 @@ def test_a_private_regular_token_file_is_read(tmp_path: Path) -> None:
             licence_admin.read_token(token_file)
         except licence_admin.OperatorError as problem:
             if "gehört nicht dem aktuellen Nutzer" in str(problem.__cause__ or problem):
-                pytest.skip(f"der Runner vergibt den Besitz nicht an den Nutzer: {problem}")
+                # Seit dem 22.09.2026 nennt die Ursache Besitzer, Nutzer,
+                # Standardbesitzer und den abgelehnten Eintrag als SID — der
+                # übersprungene Lauf dokumentiert damit, was RM-113 verlangt.
+                pytest.skip(
+                    f"der Runner vergibt den Besitz nicht an den Nutzer: {problem.__cause__}"
+                )
             raise
 
     assert licence_admin.read_token(token_file) == "ab" * 32
@@ -525,3 +530,36 @@ def test_operator_reason_uses_the_selected_code_instead_of_display_text(
     window._show_state = lambda *_args: None
     licence_admin.SupportWindow.change(window, "block")
     assert calls == ([] if expected is None else [("block", "aa" * 32, expected)])
+
+
+def test_the_summary_names_the_kind_the_server_recorded() -> None:
+    """RM-182: Ohne Archiv sah der Support „Art unbekannt", obwohl der Server sie kennt."""
+    from app.core.activation import key
+    from tools.licence_admin import kind_label
+
+    assert kind_label(None, int(key.LicenceKind.COMMERCIAL), 2) == "gewerblich · 2 Plätze"
+    assert kind_label(key.LicenceKind.PRIVATE, None, None) == "privat"
+    assert kind_label(key.LicenceKind.PRIVATE, 1, 1) == "privat · 1 Platz"
+    assert kind_label(None, None, None) == "Art unbekannt"
+    assert "prüfen" in kind_label(key.LicenceKind.PRIVATE, int(key.LicenceKind.COMMERCIAL), 2), (
+        "ein Widerspruch zwischen Archiv und Server steht da, statt entschieden zu werden"
+    )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows-DACL")
+def test_a_refused_token_file_names_owner_and_reader_by_sid(tmp_path: Path) -> None:
+    """RM-113: Die Ablehnung sagt, welches Konto besitzt und welches mitliest.
+
+    Auf dem CI-Runner blieb offen, welche SID dort Besitzer ist; die Meldung
+    nannte keine. Eine frisch geschriebene Datei erbt hier den Eintrag
+    „Eigentümerrechte" (S-1-3-4) — genau so ein Fall.
+    """
+    token_file = tmp_path / "operator.token"
+    token_file.write_text("ab" * 32, encoding="ascii")
+
+    with pytest.raises(licence_admin.OperatorError) as refused:
+        licence_admin.read_token(token_file)
+
+    cause = str(refused.value.__cause__)
+    assert "Besitzer S-1-" in cause and "Standardbesitzer S-1-" in cause
+    assert "S-1-3-4" in cause or "lesbar für S-1-" in cause

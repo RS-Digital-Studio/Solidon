@@ -285,6 +285,61 @@ def test_a_question_nobody_can_answer_ends_in_a_sentence(
     assert "Traceback" not in text
 
 
+def test_importing_a_zip_asks_which_model_and_embeds_only_that(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein ZIP von der Modellseite: gewählt wird im Terminal, eingebettet das Modell."""
+    import zipfile
+
+    archive = tmp_path / "teile.zip"
+    with zipfile.ZipFile(archive, "w") as container:
+        container.writestr("boden.stl", (MESHES / "cube_clean.stl").read_bytes())
+        container.writestr("deckel.stl", (MESHES / "cube_clean.stl").read_bytes())
+        container.writestr("anleitung.pdf", b"%PDF")
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path)])
+    monkeypatch.setattr("builtins.input", lambda prompt="": "2")
+
+    assert main(["import", str(path), str(archive)]) == 0
+
+    project = load(path)
+    assert [entry.op for entry in project.document.ops] == ["load"]
+    source = project.document.sources["src_1"]
+    assert source.path.endswith("deckel.stl"), source.path
+    assert project.sources["src_1"] == (MESHES / "cube_clean.stl").read_bytes()
+    assert "boden.stl" in capsys.readouterr().out, "die Wahl stand im Terminal"
+
+
+def test_a_zip_in_a_script_names_its_own_way_out_and_takes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ohne Terminal nannte die Absage „--unit" — für die Wahl im ZIP gab es
+    keinen Ausweg. ``--entry`` beantwortet die Frage vorab."""
+    import zipfile
+
+    def no_one(prompt: str = "") -> str:
+        raise EOFError
+
+    archive = tmp_path / "teile.zip"
+    with zipfile.ZipFile(archive, "w") as container:
+        container.writestr("boden.stl", (MESHES / "cube_clean.stl").read_bytes())
+        container.writestr("deckel.stl", (MESHES / "cube_clean.stl").read_bytes())
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path)])
+    monkeypatch.setattr("builtins.input", no_one)
+
+    assert main(["import", str(path), str(archive)]) != 0
+    said = capsys.readouterr()
+    assert "--entry" in said.out + said.err
+    assert "Traceback" not in said.out + said.err
+
+    assert main(["import", str(path), str(archive), "--entry", "fehlt.stl"]) != 0
+    assert "Traceback" not in capsys.readouterr().err
+
+    assert main(["import", str(path), str(archive), "--entry", "deckel.stl"]) == 0
+    assert load(path).document.sources["src_1"].path.endswith("deckel.stl")
+
+
 def test_the_same_import_works_when_the_unit_is_given(tmp_path: Path) -> None:
     """Und derselbe Aufruf geht durch, sobald die Antwort mitkommt."""
     path = tmp_path / "projekt.p3d"

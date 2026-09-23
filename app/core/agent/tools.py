@@ -119,6 +119,85 @@ def _parameter_tail(entry: ParamSpec, schema: tuple[ParamSpec, ...]) -> str:
     return f"{tail} {condition}" if condition else tail
 
 
+#: Die Einheiten, die das kompakte Schema nicht je Feld nennt (RM-185).
+#:
+#: Das Register kennt genau zwei — Millimeter an 548 und Grad an 82 Feldern.
+#: Beide stehen im kompakten Systemprompt einmal (``prompt._COMPACT_FIELDS_HINT``);
+#: je Feld kosteten sie gemessen 1 269 Token. Eine dritte Einheit bliebe am
+#: Feld stehen, bis der Prompt sie nennt.
+IMPLIED_UNITS: Final = frozenset({"mm", "°"})
+
+
+def _compact_tail(entry: ParamSpec, schema: tuple[ParamSpec, ...]) -> str:
+    """Was im kompakten Schema hinter dem Satz eines Parameters steht.
+
+    Dieselbe Quelle wie :func:`_parameter_tail`, ohne die Einheit, die der
+    Prompt für alle Felder sagt (:data:`IMPLIED_UNITS`). Die **Bedingung**
+    bleibt immer: Ein Wert im toten Zweig ist ein Zug, der nichts tut.
+    """
+    unit = entry.unit if entry.unit and entry.unit not in IMPLIED_UNITS else None
+    tail = f" [{unit}]" if unit else ""
+    condition = condition_text(entry, schema, keys=True)
+    return f"{tail} {condition}" if condition else tail
+
+
+def _first_sentence(text: str) -> str:
+    """Der erste Satz ohne Schlusspunkt — dieselbe Schnittregel wie :func:`_shortened`."""
+    return text.split(". ")[0].rstrip(".").rstrip()
+
+
+def _own_placement_sentences(source: Registry) -> frozenset[tuple[str, str]]:
+    """Rückseitenfelder mit Ortsnamen, deren Satz nur ein Werkzeug trägt.
+
+    ``x``, ``angle``, ``nx`` und ihre Geschwister erklärt der Systemprompt
+    für die Bausteine. Auf der Rückseite anderer Werkzeuge heißen sie meist
+    dasselbe — „Mitte der Bohrung im Koordinatensystem des Objekts" steht an
+    drei Bohrungen, „Dreht den Körper um seine eigene Hochachse" an elf
+    Grundkörpern —, und dort genügt die Konvention. **Ein Satz, den nur ein
+    Werkzeug trägt, ist dagegen eine eigene Bedeutung:** ``angle`` der Senkung
+    ist der Kopfwinkel, nicht eine Drehung. Ohne ihn läse das Modell die
+    Konvention und setzte den falschen Wert.
+    """
+    counts: dict[tuple[str, str], set[str]] = {}
+    for schema in op_schemas(source):
+        spec = source.get(str(schema["name"]))
+        for entry in spec.params.spec():
+            if entry.placement != "advanced" or entry.name not in PART_PLACEMENT_PARAMS:
+                continue
+            text = str(entry.doc) if entry.doc is not None else str(entry.title)
+            counts.setdefault((entry.name, _first_sentence(text)), set()).add(spec.name)
+    return frozenset(key for key, owners in counts.items() if len(owners) == 1)
+
+
+def _compact_parameter_text(
+    text: str,
+    entry: ParamSpec,
+    schema: tuple[ParamSpec, ...],
+    own: frozenset[tuple[str, str]],
+) -> str:
+    """Der Feldtext im kompakten Schema — leer heißt: kein Text (RM-185).
+
+    **Vorderseite:** der erste Satz, dahinter Bedingung und seltene Einheit.
+    **Rückseite** (``placement="advanced"``, 776 von 1 332 Feldern): nur die
+    Bedingung. Das sind Feineinstellungen, deren Vorgabe meist aus dem
+    Materialprofil kommt; der Prompt sagt einmal, dass sie nur gesetzt werden,
+    wenn die Anfrage einen Wert nennt — gemessen 5 755 Token, die ein lokales
+    Modell in jedem Zug einlas, um sie in aller Regel nicht zu benutzen. Eine
+    eigene Ortsbedeutung (:func:`_own_placement_sentences`) behält ihren Satz.
+    """
+    body = text
+    full_tail = _parameter_tail(entry, schema)
+    if full_tail and text.endswith(full_tail):
+        body = text[: len(text) - len(full_tail)]
+    head = _first_sentence(body)
+    tail = _compact_tail(entry, schema)
+    if _repeats_a_convention(entry.name, text):
+        return tail.strip()
+    if entry.placement == "advanced" and (entry.name, head) not in own:
+        return tail.strip()
+    return f"{head}.{tail}" if head else tail.strip()
+
+
 def _caveat_tail(spec: OperationSpec) -> str:
     """Was ``_with_caveat`` hinter die Beschreibung einer Operation hängt."""
     line = caveat_line(spec)
@@ -152,16 +231,19 @@ def _plain_number(field: dict[str, Any]) -> dict[str, Any]:
     return {**field, "type": kept[0] if len(kept) == 1 else kept}
 
 
-def _without_convention_text(name: str, field: dict[str, Any]) -> dict[str, Any]:
-    """Der Text eines Felds, das nur eine Konvention wiederholt, fällt weg."""
-    text = str(field.get("description", ""))
-    if not text:
-        return field
+def _repeats_a_convention(name: str, text: str) -> bool:
+    """Ob der Satz eines Felds nur eine Konvention des Prompts wiederholt.
+
+    **Weg fällt dann der Satz, nicht die Bedingung dahinter.** Bis zum
+    22.09.2026 nahm diese Stelle die ganze Beschreibung: ``play`` an
+    *Schraubenloch* und *Lagersitz* und die Geschwisterachsen von *Textur
+    aufbringen* verloren mit dem Satz auch „Gilt bei …" — ein Wert im toten
+    Zweig, und die Prüfung danach sieht nur, dass sich nichts geändert hat.
+    Der Test daneben übersprang Felder ohne Text und sah es deshalb nicht.
+    """
     bare = text.split(" [", 1)[0].strip()
     sibling = name in _SIBLING_FIELDS and _SIBLING_REFERENCE in text
-    if sibling or CONVENTION_SENTENCES.get(name) == bare:
-        return {key: value for key, value in field.items() if key != "description"}
-    return field
+    return sibling or CONVENTION_SENTENCES.get(name) == bare
 
 
 def _without_binding_pattern(field: dict[str, Any]) -> dict[str, Any]:
@@ -228,6 +310,7 @@ def operation_tools(
     arbeitet.
     """
     source = registry or REGISTRY
+    own = _own_placement_sentences(source) if compact else frozenset()
     schemas = []
     for schema in op_schemas(source):
         spec = source.get(str(schema["name"]))
@@ -236,7 +319,11 @@ def operation_tools(
         if spec.consumes:
             properties[OBJECTS_FIELD] = {
                 "type": "array",
-                "items": {"type": "string"},
+                # Kompakt ohne ``items``: Was in der Liste steht, sagt der
+                # Systemprompt („eine Liste von Kennungen aus dem Steckbrief")
+                # — je Werkzeug kostete die Angabe gemessen 7 Token, an 104
+                # Werkzeugen 700 (RM-185).
+                **({} if compact else {"items": {"type": "string"}}),
                 "minItems": needed_inputs(spec),
             }
             if spec.consumes > 0:
@@ -309,11 +396,19 @@ def operation_tools(
         # Gestrichen wird nur, wo **alle Platzierungsfelder** beisammen sind: Ein
         # Werkzeug, das ``x`` aus eigenem Recht führt (verschieben, drehen),
         # meint damit etwas anderes und behält seinen Text.
+        #
+        # **Seit RM-185 fällt kompakt das ganze Feld, nicht nur sein Text.**
+        # Zehn Felder mit Namen und Typ kosteten an den 35 Bausteinen
+        # gemessen 2 905 Token — und sagten nichts, was der Prompt nicht schon
+        # sagt: dass jeder Baustein diese zehn Angaben nimmt und was sie
+        # bedeuten. Angenommen werden sie unverändert; die Sitzung prüft
+        # gegen das Register und nicht gegen die Kurzfassung.
         if compact and all(name in properties for name in PART_PLACEMENT_PARAMS):
             for name in PART_PLACEMENT_PARAMS:
-                properties[name] = {
-                    key: value for key, value in properties[name].items() if key != "description"
-                }
+                del properties[name]
+            parameters["required"] = [
+                name for name in parameters.get("required", []) if name not in PART_PLACEMENT_PARAMS
+            ]
 
         # **Die Bindung eines Zahlenfelds steht im Systemprompt — und das
         # lokale Modell hat sie vorher nie gesehen.** Jedes bindbare Feld trug
@@ -339,10 +434,9 @@ def operation_tools(
             # für den Satz an ``play``, der in zwanzig Werkzeugen gleich ist.
             # Gemessen mit beidem: 28 440 statt 31 539 Token. Die eigenen
             # Sätze von ``x`` und ``nx`` bleiben, denn dort heißt ``x`` beim
-            # Verschieben etwas anderes als beim Bohren.
-            properties = {
-                name: _without_convention_text(name, field) for name, field in properties.items()
-            }
+            # Verschieben etwas anderes als beim Bohren. Gestrichen wird im
+            # Durchgang unten (:func:`_repeats_a_convention`), der die
+            # Bedingung des Felds kennt und stehen lässt.
 
         parameters["properties"] = properties
         # §2.6: der Chat ist auch ein Suchfeld. Der Ort steht in der
@@ -361,6 +455,10 @@ def operation_tools(
             # bedeutet; weg fällt, warum er so heißt und was bei Randfällen
             # passiert. Was danach noch doppelt steht, holen die beiden Blöcke
             # oben in den Systemprompt.
+            #
+            # Seit RM-185 verlieren dabei auch Millimeter und Grad ihre Angabe
+            # am Feld (der Prompt sagt sie einmal), und die Rückseite behält
+            # nur die Bedingung (:func:`_compact_parameter_text`).
             schema_specs = spec.params.spec()
             for entry in schema_specs:
                 field = properties.get(entry.name)
@@ -369,8 +467,12 @@ def operation_tools(
                 text = str(field.get("description", ""))
                 if not text:
                     continue
-                short = _shortened(text, _parameter_tail(entry, schema_specs))
-                if short != text:
+                short = _compact_parameter_text(text, entry, schema_specs, own)
+                if not short:
+                    properties[entry.name] = {
+                        key: value for key, value in field.items() if key != "description"
+                    }
+                elif short != text:
                     properties[entry.name] = {**field, "description": short}
             parameters["properties"] = properties
             # Der erste Satz sagt, was die Operation tut; der Rest erklärt

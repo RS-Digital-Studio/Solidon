@@ -178,6 +178,39 @@ def test_a_crash_goes_out_even_without_a_written_word() -> None:
     )
 
 
+def test_a_crash_loop_still_fits_what_the_server_accepts() -> None:
+    """Ein Fehler, der sich wiederholt, wird nicht zur Absage „zu lang".
+
+    ``add_crash`` hängt jeden weiteren Fehler an, und eine wechselseitige
+    Rekursion schreibt tausend Rahmen, die ``traceback`` nicht zusammenfasst.
+    Der Server nimmt höchstens :data:`support.MAX_SENT_TEXT_LENGTH` Zeichen; vorher
+    ging der Bericht mit einem Satz des Nutzers als 400 „Die Rückmeldung ist
+    zu lang" zurück. Anfang und Ende des Stapelabzugs bleiben — dort stehen
+    der erste Fehler und die Ausnahme selbst.
+    """
+    frames = "\n".join(f'  File "app/core/x.py", line {n}, in step' for n in range(6000))
+    detail = f"Traceback (most recent call last):\n{frames}\nRecursionError: maximum depth"
+    ticket = Ticket(kind=support.KIND_CRASH, message="Es ist abgestürzt.", detail=detail)
+
+    support.check(ticket)
+    text = ticket.as_text()
+
+    assert len(text) <= support.MAX_SENT_TEXT_LENGTH
+    assert "Traceback (most recent call last):" in text
+    assert "RecursionError: maximum depth" in text
+    assert "Es ist abgestürzt." in text
+    assert "--- system ---" in text
+
+
+def test_the_client_limit_is_the_one_the_server_checks() -> None:
+    """Die Grenze steht zweimal — im Client und in ``support.php``."""
+    source = ENDPOINT.read_text(encoding="utf-8")
+    limit = re.search(r"mb_strlen\(\$message\) > (\d+)", source)
+
+    assert limit is not None
+    assert int(limit.group(1)) == support.MAX_SENT_TEXT_LENGTH
+
+
 def test_a_broken_return_address_is_refused() -> None:
     with pytest.raises(UserError):
         support.check(Ticket(message="x", contact="kein-at-zeichen"))
@@ -426,6 +459,38 @@ def test_a_missing_mail_program_is_said_and_the_folder_stays(
         assert not dialog.state.text(), "ein geöffnetes Mailprogramm nimmt den alten Satz mit"
     finally:
         dialog.close()
+
+
+def test_a_long_report_fits_the_mail_link_and_says_where_the_rest_is() -> None:
+    """RM-038: Eine lange Nachricht öffnete kein Mailprogramm, und der Knopf schwieg.
+
+    20 000 Zeichen mit Umlauten werden prozentkodiert zu weit über 60 000;
+    unter Windows geht die Adresse als Befehlszeile an Outlook, und die endet
+    bei 32 767. Die Mail wird gekürzt, bleibt lesbar dekodierbar, und ihr
+    Schluss nennt den abgelegten Bericht.
+    """
+    from urllib.parse import parse_qs, urlsplit
+
+    message = ("Größe ändern: Überhang & Brücke? " * 700).strip()
+    ticket = Ticket(message=message, detail="Traceback (most recent call last):\n" * 50)
+    link = support.mail_link(ticket, r"C:\Nutzer\Berichte\2026-09-22")
+
+    assert len(link) <= support.MAILTO_LIMIT
+    body = parse_qs(urlsplit(link).query)["body"][0]
+    assert body.startswith(ticket.subject), "der Anfang reist unverändert"
+    assert "bericht.txt" in body
+    assert body.rstrip().endswith("2026-09-22"), "der Ordner steht am Schluss"
+    assert "%" not in body.replace("100%", ""), "nichts bleibt prozentkodiert"
+
+
+def test_a_short_report_is_not_cut() -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    ticket = Ticket(message="Kurz und gut.")
+    body = parse_qs(urlsplit(support.mail_link(ticket, "C:/Ablage")).query)["body"][0]
+
+    assert "bericht.txt" not in body
+    assert body.splitlines()[3] == "Kurz und gut."
 
 
 # --- die Grenze zur Telemetrie --------------------------------------------------------

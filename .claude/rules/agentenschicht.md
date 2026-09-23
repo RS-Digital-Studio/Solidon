@@ -122,12 +122,12 @@ vollständigen Auftrag und weist Modell, Kontext, Werkzeugzahl und Anfragehash
 aus. Dieser funktionale Zählweg misst keine Geschwindigkeit; Kalt-/Warmläufe
 und Leistungsprüfungen bleiben dem Release vorbehalten.
 
-**Stand 21.09.2026: 136 Operationen, 147 Werkzeuge** — die Zahlen hält
+**Stand 22.09.2026: 136 Operationen, 147 Werkzeuge** — die Zahlen hält
 `tests/test_registry_consistency.py` gegen Register und `tool_schemas()`.
-Der kompakte Auftrag wurde mit `qwen3:14b`, `num_ctx=40960` und
-`num_predict=1` vollständig mit **37 661 Token** gezählt (91,9 Prozent des
-Fensters; drei weitere Operationen dieser Größe sprengen es). Werkzeugzahl und
-Tokenzahl in `backends/llm.py` gehören zu derselben Zählung.
+Der kompakte Auftrag wurde mit `qwen3:14b`, `num_ctx=32768` und
+`num_predict=1` vollständig mit **27 293 Token** gezählt (83,3 Prozent des
+Fensters, 5 475 Token Rest). Werkzeugzahl und Tokenzahl in `backends/llm.py`
+gehören zu derselben Zählung.
 Systemprompt und Werkzeugsatz zusammen waren am 26.08.2026 (90 Operationen,
 nach dem OpenSCAD-Ausbau eines weniger) 149 061 Zeichen im vollen und 110 027
 im kompakten Satz; seither sind weitere Operationen dazugekommen, und die
@@ -145,12 +145,39 @@ weiter. Gezählt ist die Luft trotzdem: über dem kompakten Satz bleiben rund
 das Fenster nicht ohne Weiteres — bei diesem Wert belegt das Modell 14 GB und
 bleibt damit gerade noch auf einer 16-GB-Karte.
 
-**Seit dem 16.09.2026 steht das Fenster auf 40 960** (Entscheidung Robert):
-143 Werkzeuge kosten 36 731 Token, und Ollama kürzt einen Prompt über dem
-Fenster still auf die Hälfte. Der Preis auf einer 16-GB-Karte ist gemessen —
-89 % im VRAM, 11 statt 41 Token je Sekunde, 18 s statt 6,3 je warmem Zug;
-„18 s sind in Ordnung, bis 30 alles ok." Wer das Schema unter 28 000 Token
-bringt (RM-185), stellt 32 768 zurück.
+**Vom 16.09. bis zum 22.09.2026 stand das Fenster auf 40 960** (Entscheidung
+Robert): 143 Werkzeuge kosteten 36 731 Token, der Preis waren 11 statt 41 Token
+je Sekunde. **Seit dem 22.09.2026 wieder 32 768** (RM-185): Die Kurzfassung
+zählt mit 147 Werkzeugen 27 293 Token statt 37 836. Drei Kürzungen, jede als
+Satz im kompakten Prompt (`prompt._COMPACT_FIELDS_HINT`, Prompt-Version 7):
+
+- **Rückseitenfelder** (`placement="advanced"`) behalten nur ihre Bedingung
+  (−5 755 Token). Ein Ortsname mit eigener Bedeutung — sein Satz steht nur an
+  einem Werkzeug, etwa der Kopfwinkel der Senkung — behält den Satz.
+- **Die zehn Ortsfelder** fallen bei den `insert_*`-Bausteinen aus der
+  Kurzfassung (−2 905). Angenommen werden sie weiter: Die Sitzung prüft gegen
+  das Register, nie gegen die Kurzfassung.
+- **Millimeter und Grad** stehen einmal im Prompt statt am Feld (−1 269);
+  eine andere Einheit bliebe am Feld (`tools.IMPLIED_UNITS`).
+
+Nicht übernommen, obwohl gemessen: die Zeile „Wann nicht" zu streichen
+(−2 123) — sie ist Inhalt. Eine **Bedingung** („Gilt bei …") fällt nie weg,
+auch nicht an einem Feld, dessen Satz eine Konvention wiederholt
+(`tools._repeats_a_convention`). Wer die Werkzeugmenge ändert, zählt neu
+(`tools/measure_local_model.py --count-tokens`); der Test
+`test_the_local_window_fits_on_a_sixteen_gigabyte_card_with_room_for_the_scene`
+verlangt unter 28 000 und 4 000 Token Luft.
+
+**Der Steckbrief teilt dasselbe Fenster.** Über `context.CONDENSE_ABOVE_CHARS`
+fasst der lokale Weg gleiche Merkmale zusammen, nennt je Körper nur die
+zwölf größten Flächen (`digest.FACE_LINES_CONDENSED`) und zählt den Rest;
+beide Zeilen nennen den Weg zu allem (`read_digest` mit `objects`, dort
+unverdichtet).
+
+**Der Denkblock bleibt an.** `think: false` wurde am 23.09.2026 gemessen und
+zurückgenommen: dieselbe Basis mit qwen3:14b ohne Denkblock 14 statt 21 von
+39, Baustein 2 statt 7 von 13 — der Zeitgewinn (24 min statt rund 3 h für die
+Suite) kostet die Treffer. Wer ihn wieder vorschlägt, misst gegen dieselbe Basis.
 
 ## Eine Ablehnung muss sagen, was zu ändern ist
 
@@ -234,6 +261,11 @@ Fenster; `app/ui/remote_server.py` bringt beides dazu. Vier Auflagen, und
   Qt-Ereignis in den Hauptthread und geht denselben Weg wie ein Menüklick; der
   Server wartet. Das Dokument gehört dem Fenster, und was nebenher
   hineinschriebe, könnte weder Undo noch Prüfbericht erklären.
+- **Lesende Rechnungen rechnen im Faden des Servers** (RM-144). Der
+  Hauptthread nimmt nur den Schnappschuss und gibt `remote.Deferred` zurück;
+  `WindowBridge._compute` rechnet mit Token, das Zeitgrenze und Ausschalten
+  erreicht. Keine Transaktion, kein Dokumentzugriff. Eine Zeitüberschreitung
+  ist ein Werkzeugfehler mit Satz (`remote.TIMED_OUT`), kein Protokollfehler.
 
 Die Werkzeuge kommen aus `tools.py`, abzüglich `DENIED`. Eine zweite Liste gäbe
 es nicht — sie wäre am Tag nach der nächsten Operation falsch.

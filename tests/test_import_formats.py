@@ -371,8 +371,8 @@ def test_a_generated_glb_stands_upright_and_gets_one_working_size(profile: Profi
     Schrank 29 mm hoch und 100 mm tief, die Tischplatte senkrecht. Gedreht
     wird wie beim Import; die Einheit bleibt die eigene Arbeitsgröße.
     """
-    from app.core.backends.mesh import ScriptedMeshBackend
     from app.core.generate import WORKING_SIZE_MM, from_text
+    from tests.scripted_backend import ScriptedMeshBackend
 
     # Ein Kegel mit der Spitze nach glTF-oben: Standfläche unten, Spitze oben.
     cone = trimesh.creation.cone(radius=0.5, height=2.0)
@@ -397,8 +397,8 @@ def test_a_generated_glb_stands_upright_and_gets_one_working_size(profile: Profi
 
 def test_a_generated_mesh_without_an_axis_convention_keeps_its_axes(profile: Profile) -> None:
     """Nur glTF schreibt eine Achse vor; ein STL aus dem Generator bleibt roh."""
-    from app.core.backends.mesh import ScriptedMeshBackend
     from app.core.generate import WORKING_SIZE_MM, from_text
+    from tests.scripted_backend import ScriptedMeshBackend
 
     body = trimesh.creation.box(extents=(1.0, 2.0, 3.0))
     payload = _bytes(body.export(file_type="stl"))

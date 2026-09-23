@@ -61,7 +61,8 @@ def _initialise_database(target: Path) -> None:
             CREATE TABLE IF NOT EXISTS licences (
                 digest TEXT PRIMARY KEY,
                 status TEXT NOT NULL DEFAULT 'active',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                kind INTEGER NULL
             );
             CREATE TABLE IF NOT EXISTS activations (
                 id TEXT PRIMARY KEY,
@@ -107,6 +108,12 @@ def _initialise_database(target: Path) -> None:
             );
             """
         )
+        # Eine Bestandsdatenbank bekommt die Spalte der Lizenzart nach
+        # (RM-182) — dieselbe Migration wie ``activation_migrate_licence_kind``
+        # im Dienst; ``IF NOT EXISTS`` fasst die vorhandene Tabelle nicht an.
+        columns = {row[1] for row in database.execute("PRAGMA table_info(licences)")}
+        if "kind" not in columns:
+            database.execute("ALTER TABLE licences ADD COLUMN kind INTEGER NULL")
         database.commit()
 
 

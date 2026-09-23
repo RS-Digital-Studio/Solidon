@@ -23,9 +23,9 @@ from app.core.backends.mesh import (
     WORKFLOW_DIR,
     ComfyBackend,
     GenerationFailed,
-    ScriptedMeshBackend,
     reachable,
 )
+from tests.scripted_backend import ScriptedMeshBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -2991,3 +2991,53 @@ def test_the_setup_fetches_the_image_model_only_when_asked(
     result = comfy_setup.setup(comfyui, weights=False, image_model=True)
     assert "image_model" not in steps, "ohne Gewichte nur die Knoten — auch kein Bildmodell"
     assert result.image_model, "was da ist, wird trotzdem gemeldet"
+
+
+@pytest.mark.parametrize("path", ["/prompt", "/history/", "/upload/image"])
+def test_a_service_that_answers_with_a_json_list_is_a_sentence_not_a_crash(path: str) -> None:
+    """Unter der Adresse steht ein anderer Dienst — gültiges JSON, nur kein Objekt.
+
+    ``.get`` auf einer Liste war ein ``AttributeError`` und damit „Im Programm
+    ist ein unerwarteter Fehler aufgetreten" für eine falsch eingetragene
+    Adresse (Regel 17).
+    """
+    server = Comfy()
+
+    def answer(url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+        if path in url:
+            server.requests.append(url)
+            return b'["kein", "Objekt"]'
+        return server(url, body, headers)
+
+    comfy = ComfyBackend(url="http://127.0.0.1:8188", transport=answer, poll_seconds=0.0)
+    with pytest.raises(GenerationFailed) as raised:
+        if path == "/upload/image":
+            comfy.image_to_mesh(b"PNG", seed=1)
+        else:
+            comfy.text_to_mesh("ein Halter")
+
+    assert raised.value.suggestions
+
+
+def test_an_output_entry_of_the_wrong_shape_is_skipped_not_fatal() -> None:
+    """Eine Ausgabe, die kein Objekt ist, gehört nicht uns — weitersuchen."""
+    server = Comfy()
+
+    def answer(url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+        if "/history/" in url:
+            return json.dumps(
+                {
+                    "job-1": {
+                        "outputs": {
+                            "1": ["kein", "Knoten"],
+                            "2": {"meshes": "kein Eintrag"},
+                            "4": {"meshes": [{"filename": "out.stl"}]},
+                        }
+                    }
+                }
+            ).encode("utf-8")
+        return server(url, body, headers)
+
+    comfy = ComfyBackend(url="http://127.0.0.1:8188", transport=answer, poll_seconds=0.0)
+
+    assert comfy.text_to_mesh("ein Halter").mesh.triangle_count > 0

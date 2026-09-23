@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -499,6 +499,43 @@ def test_a_proposal_collects_operations_without_touching_the_document(
     assert proposal.origin.by == "agent"
     assert proposal.origin.prompt_version == PROMPT_VERSION
     assert proposal.origin.rules_version == rules.version()
+
+
+def test_a_blank_answer_from_a_local_model_neither_erases_the_reply_nor_breaks_acceptance(
+    project: Project, profile: Profile
+) -> None:
+    """Ein lokales Modell schickt neben Aufrufen oft nur „\n\n".
+
+    Der Leerraum überschrieb den Antwortsatz davor, und ``summary()`` warf auf
+    ihm einen ``IndexError`` — die Annahme endete als Programmfehler.
+    """
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                text="Ich verschiebe die Platte.",
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="translate_object",
+                        arguments={"objects": ["obj_1"], "dx": 5.0},
+                    ),
+                ),
+            ),
+            Reply(text="\n\n"),
+        ],
+    )
+
+    proposal = agent.propose("Schieb die Platte 5 mm nach rechts")
+
+    assert proposal.answer == "Ich verschiebe die Platte."
+    assert proposal.summary() == "Ich verschiebe die Platte."
+    blank = Proposal(request="x", answer="\n\n", drafts=list(proposal.drafts))
+    assert blank.summary() == "translate_object"
+    transaction = agent_apply.accept(blank, History(project.document))
+    assert transaction is not None
+    assert project.document.chat[-1].text == "translate_object", "keine leere Blase im Chat"
 
 
 def test_an_invalid_call_comes_back_as_a_message(project: Project, profile: Profile) -> None:
@@ -1639,11 +1676,23 @@ def test_the_compact_schema_keeps_every_tool() -> None:
     assert len(kurz) == llm.PROMPT_TOOL_COUNT, (
         "der gemessene Ollama-Prompt gehört nach jeder neuen Operation neu gemessen"
     )
+    # **Ein Feld darf kompakt nur fehlen, wenn der Prompt es für dieses
+    # Werkzeug sagt** (RM-185): die zehn Ortsangaben der Bausteine. Jedes
+    # andere Feld bleibt, und die Pflichtfelder bleiben alle.
+    from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+
+    ort = set(PART_PLACEMENT_PARAMS)
     for lang, knapp in zip(voll, kurz, strict=True):
-        assert (
-            lang["input_schema"]["properties"].keys() == knapp["input_schema"]["properties"].keys()
+        lange = set(lang["input_schema"]["properties"])
+        knappe = set(knapp["input_schema"]["properties"])
+        assert knappe <= lange, f"{knapp['name']}: kompakt ein Feld, das es nicht gibt"
+        fehlt = lange - knappe
+        assert not fehlt or (ort <= lange and fehlt == ort), (
+            f"{knapp['name']}: kompakt fehlen {sorted(fehlt)} — nur die zehn Ortsangaben "
+            "eines Bausteins dürfen fehlen, und dann alle"
         )
-        assert lang["input_schema"].get("required") == knapp["input_schema"].get("required")
+        pflicht = [name for name in lang["input_schema"].get("required", []) if name not in fehlt]
+        assert pflicht == knapp["input_schema"].get("required", []), knapp["name"]
 
     grosse = len(json.dumps(voll, ensure_ascii=False, default=str))
     kleine = len(json.dumps(kurz, ensure_ascii=False, default=str))
@@ -1668,13 +1717,18 @@ def test_the_compact_schema_keeps_unit_condition_and_caveat() -> None:
     derselben Quelle, aus der ``json_schema`` sie zusammensetzt, und gilt
     darum in jeder Sprache.
     """
-    from app.core.agent.tools import operation_tools
+    from app.core.agent.prompt import system_prompt
+    from app.core.agent.tools import IMPLIED_UNITS, operation_tools
     from app.core.registry import REGISTRY, caveat_line
     from app.core.registry.params import condition_text
 
     voll = {entry["name"]: entry for entry in operation_tools()}
     kurz = {entry["name"]: entry for entry in operation_tools(compact=True)}
     assert len(kurz) > 50, "das Register ist nicht geladen"
+    prompt = system_prompt(compact=True)
+    assert {"mm", "°"} == IMPLIED_UNITS and "Millimeter" in prompt and "Grad" in prompt, (
+        "die Einheiten, die kompakt am Feld fehlen, nennt der Prompt"
+    )
 
     ohne_einheit: list[str] = []
     ohne_bedingung: list[str] = []
@@ -1694,16 +1748,20 @@ def test_the_compact_schema_keeps_unit_condition_and_caveat() -> None:
             langer = str(
                 voll[name]["input_schema"]["properties"][entry.name].get("description", "")
             )
-            if not kurzer:
-                # Die sechs Platzierungsangaben stehen im Systemprompt; dass
-                # sie dort ankommen, prüft der Test weiter unten.
-                continue
-            einheit = f"[{entry.unit}]" if entry.unit else ""
-            if einheit and einheit in langer and einheit not in kurzer:
-                ohne_einheit.append(f"{name}.{entry.name}")
+            # **Die Bedingung auch dort, wo kein Satz mehr steht** (RM-185):
+            # Ein Rückseitenfeld verliert kompakt seine Prosa, nie aber, wann
+            # es wirkt. Die Prüfung stand hinter einem ``continue`` für leere
+            # Felder und hätte genau diesen Fall übersehen.
             bedingung = condition_text(entry, schema, keys=True)
             if bedingung and bedingung in langer and bedingung not in kurzer:
                 ohne_bedingung.append(f"{name}.{entry.name}")
+            # Millimeter und Grad sagt der Prompt einmal für alle Felder; eine
+            # andere Einheit bleibt am Feld.
+            einheit = f"[{entry.unit}]" if entry.unit else ""
+            if entry.unit in IMPLIED_UNITS:
+                continue
+            if einheit and einheit in langer and einheit not in kurzer:
+                ohne_einheit.append(f"{name}.{entry.name}")
 
     assert not ohne_einheit, (
         f"{len(ohne_einheit)} Parameter verlieren die Einheit: {ohne_einheit[:5]}"
@@ -1801,25 +1859,31 @@ def test_where_a_part_sits_is_explained_where_the_model_reads_it() -> None:
     from app.core.agent.tools import operation_tools
     from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
 
+    # Welche Werkzeuge Bausteine sind, sagt das volle Schema: Kompakt fehlen
+    # ihnen die Felder ganz (RM-185), und eine Auswahl über die kompakten
+    # Felder fände keinen — der Test prüfte dann nichts.
+    bausteine = {
+        entry["name"]
+        for entry in operation_tools()
+        if all(
+            name in entry["input_schema"].get("properties", {}) for name in PART_PLACEMENT_PARAMS
+        )
+    }
+    assert bausteine, "kein Werkzeug trägt alle zehn — dann prüft dieser Test nichts"
     for compact in (False, True):
         prompt = system_prompt(compact=compact)
-        bausteine = [
-            entry
+        felder = {
+            entry["name"]: entry["input_schema"].get("properties", {})
             for entry in operation_tools(compact=compact)
-            if all(
-                name in entry["input_schema"].get("properties", {})
-                for name in PART_PLACEMENT_PARAMS
-            )
-        ]
-        assert bausteine, "kein Werkzeug trägt alle sechs — dann prüft dieser Test nichts"
+            if entry["name"] in bausteine
+        }
         for name in PART_PLACEMENT_PARAMS:
             im_schema = all(
-                str(entry["input_schema"]["properties"][name].get("description", ""))
-                for entry in bausteine
+                str(eigene.get(name, {}).get("description", "")) for eigene in felder.values()
             )
             im_prompt = f"``{name}``" in prompt
             assert im_schema or im_prompt, (
-                f"compact={compact}: {name} wird weder in den {len(bausteine)} "
+                f"compact={compact}: {name} wird weder in den {len(felder)} "
                 "Bausteinen noch im Systemprompt erklärt"
             )
 
@@ -1827,7 +1891,7 @@ def test_where_a_part_sits_is_explained_where_the_model_reads_it() -> None:
 def test_what_the_compact_schema_takes_from_a_field_the_prompt_says() -> None:
     """RM-173: Was ein Feld im kompakten Schema verliert, sagt der Prompt einmal.
 
-    ``_without_convention_text`` nimmt zwei Sorten Feldtext weg: den Satz an
+    ``_repeats_a_convention`` nimmt zwei Sorten Feldtext weg: den Satz an
     ``play``, der in zwanzig Werkzeugen wörtlich gleich steht, und die vier
     Achsen, deren Text nur auf ihr Geschwisterfeld zeigt („— siehe Position
     X"). Beides steht dafür in ``_CONVENTIONS_HINT``. Zwei Dinge hält der
@@ -1861,20 +1925,207 @@ def test_what_the_compact_schema_takes_from_a_field_the_prompt_says() -> None:
             f'„{satz}" steht an {feld} in {len(traeger)} Werkzeugen — '
             "ein Satz, der sich nicht wiederholt, gehört an sein Feld, nicht in den Prompt"
         )
+        # Der Satz fällt, eine Bedingung dahinter bleibt („Gilt bei …").
         assert all(
-            "description" not in kurz[name]["input_schema"]["properties"][feld] for name in traeger
+            satz not in str(kurz[name]["input_schema"]["properties"][feld].get("description", ""))
+            for name in traeger
         )
 
+    # **Ohne Text heißt: der Prompt nennt das Feld — oder es ist eine
+    # Feineinstellung der Rückseite**, und für die sagt der Prompt einmal, wie
+    # das Modell damit umgeht (RM-185, ``_COMPACT_FIELDS_HINT``). Ein Feld der
+    # Vorderseite ohne Text und ohne Nennung wäre eines, das das Modell raten
+    # müsste.
+    from app.core.agent.prompt import _COMPACT_FIELDS_HINT
+    from app.core.registry import REGISTRY
+
+    assert _COMPACT_FIELDS_HINT.strip() in prompt
     ohne_hinweis: list[str] = []
     for name, lang in voll.items():
+        rueckseite = {
+            entry.name
+            for entry in REGISTRY.get(name).params.spec()
+            if entry.placement == "advanced"
+        }
         for feld, spec in lang["input_schema"]["properties"].items():
-            knapp = kurz[name]["input_schema"]["properties"][feld]
-            if "description" in spec and "description" not in knapp and f"``{feld}``" not in prompt:
+            knapp = kurz[name]["input_schema"]["properties"].get(feld)
+            genannt = f"``{feld}``" in prompt
+            if knapp is None:
+                if not genannt:
+                    ohne_hinweis.append(f"{name}.{feld} (fehlt)")
+                continue
+            if (
+                "description" in spec
+                and "description" not in knapp
+                and not genannt
+                and feld not in rueckseite
+            ):
                 ohne_hinweis.append(f"{name}.{feld}")
     assert not ohne_hinweis, (
         f"{len(ohne_hinweis)} Felder stehen kompakt ohne Text, und der Prompt nennt sie "
         f"nicht: {ohne_hinweis[:5]}"
     )
+
+
+def test_a_large_scene_is_condensed_for_the_local_window_and_a_small_one_is_not(
+    project: Project, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-173: Ein Besteckeinsatz mit 42 gleichen Bohrungen füllte das Fenster.
+
+    Neben 27 293 Token Werkzeugen bleiben rund 5 400; sein Steckbrief allein
+    waren 31 736 Zeichen. Über :data:`context.CONDENSE_ABOVE_CHARS` fasst der
+    lokale Weg gleiche Merkmale zusammen und nennt den Weg zu den Lagen,
+    darunter bleibt alles, wie es war — auch die Platte der Agenten-Suite.
+    """
+    scene = scene_of(project, profile)
+    small = context.build_messages("Bohr ein Loch", project.document, scene, compact=True)
+    assert "hole_1  Ø" in small[1].content, "unter der Grenze steht jede Bohrung mit Lage"
+    assert "read_digest" not in small[1].content
+
+    monkeypatch.setattr(context, "CONDENSE_ABOVE_CHARS", 100)
+    large = context.build_messages("Bohr ein Loch", project.document, scene, compact=True)
+    hosted = context.build_messages("Bohr ein Loch", project.document, scene, compact=False)
+
+    assert "hole_1, hole_2, hole_3, hole_4  (4\N{MULTIPLICATION SIGN})" in large[1].content
+    assert "read_digest" in large[1].content, "der Weg zu den Lagen steht dabei"
+    assert "hole_1  Ø" in hosted[1].content, "ein gehostetes Modell hat das Fenster dafür"
+
+
+def test_a_condensed_digest_keeps_the_largest_faces_and_counts_the_rest(
+    project: Project, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-173, die Flächenliste: Im Besteckeinsatz waren nach dem Verdichten
+    121 von 153 Zeilen Flächen. Verdichtet bleiben die größten
+    (:data:`digest.FACE_LINES_CONDENSED`), der Rest wird gezählt, und die
+    Zeile nennt den Weg zu allen."""
+    from app.core.perceive import digest as digest_module
+
+    scene = scene_of(project, profile)
+    monkeypatch.setattr(digest_module, "FACE_LINES_CONDENSED", 2)
+
+    short = digest_module.digest(scene, condensed=True)
+    full = digest_module.digest(scene)
+
+    assert "face_1  planar" in short and "face_2  planar" in short, "die zwei größten bleiben"
+    for smaller in ("face_3", "face_4", "face_5", "face_6"):
+        assert f"{smaller}  planar" not in short
+        assert f"{smaller}  planar" in full, "unverdichtet steht jede Fläche"
+    assert "4 " in short and "640 mm²" in short, "Zahl und größte ausgelassene Fläche"
+    assert short.count("read_digest") == 2, "Bohrungen und Flächen nennen den Weg"
+
+
+def test_read_digest_with_objects_gives_every_position_back(
+    project: Project, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Was der verdichtete Steckbrief verspricht, hält ``read_digest`` mit ``objects``."""
+    from app.core.agent import session as session_module
+
+    class LocalLike(ScriptedBackend):
+        @property
+        def id(self) -> str:
+            return "ollama"
+
+    monkeypatch.setattr(session_module, "CONDENSE_ABOVE_CHARS", 100)
+    backend = LocalLike(
+        answers=[
+            Reply(tool_calls=(ToolCall(id="1", name="read_digest", arguments={}),)),
+            Reply(
+                tool_calls=(ToolCall(id="2", name="read_digest", arguments={"objects": ["obj_1"]}),)
+            ),
+            Reply(text="Gelesen."),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    agent.propose("Wo sitzen die Bohrungen?")
+
+    answers = [message.content for message in backend.seen[-1] if message.role == "tool"]
+    assert "read_digest" in answers[0], "ohne objects verdichtet"
+    assert "hole_1  Ø" in answers[1], "mit objects jede Lage"
+
+
+def test_a_part_takes_the_placement_its_compact_tool_leaves_out(
+    project: Project, profile: Profile
+) -> None:
+    """RM-185: Kompakt fehlen die zehn Ortsfelder eines Bausteins — angenommen
+    werden sie trotzdem.
+
+    Die Kurzfassung sagt die Ortsangaben einmal im Prompt statt 35-mal als
+    Feld. Das trägt nur, solange die Sitzung gegen das **Register** prüft und
+    nicht gegen die Kurzfassung: Ein Modell, das dem Prompt folgt und ``x``
+    schickt, darf keinen „unbekannten Parameter" zurückbekommen.
+    """
+
+    class LocalLike(ScriptedBackend):
+        """Ein Modell, das die Sitzung wie Ollama bedient — also kompakt."""
+
+        schemas: ClassVar[list[dict[str, Any]]] = []
+
+        @property
+        def id(self) -> str:
+            return "ollama"
+
+        def complete(self, messages, tools=(), **options):  # type: ignore[no-untyped-def]
+            type(self).schemas = [dict(entry) for entry in tools]
+            return ScriptedBackend.complete(self, messages, tools, **options)
+
+    backend = LocalLike(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="insert_screw_hole",
+                        arguments={"objects": ["obj_1"], "x": 6.0, "y": 4.0, "axis": "z"},
+                    ),
+                )
+            ),
+            Reply(text="Ein Schraubenloch sitzt bei 6/4."),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Setz ein M3-Schraubenloch bei x 6, y 4")
+
+    angebot = next(entry for entry in LocalLike.schemas if entry["name"] == "insert_screw_hole")
+    assert "x" not in angebot["input_schema"]["properties"], "die Kurzfassung ist gefahren"
+    assert proposal.invalid_calls == 0, proposal.findings
+    assert [draft.op for draft in proposal.drafts] == ["insert_screw_hole"]
+    assert proposal.drafts[0].params["x"] == 6.0
+    assert proposal.drafts[0].params["y"] == 4.0
+
+
+def test_an_own_meaning_of_a_placement_name_keeps_its_sentence() -> None:
+    """RM-185: ``angle`` einer Senkung ist ein Kopfwinkel, keine Drehung.
+
+    Die Rückseitenfelder verlieren kompakt ihren Satz, und für Ortsnamen sagt
+    der Prompt, was sie bedeuten. Das stimmt, wo der Satz Konvention ist —
+    „Dreht den Körper um seine eigene Hochachse" steht an elf Grundkörpern.
+    Wo nur ein Werkzeug einen Ortsnamen anders meint, bliebe ohne den Satz
+    die Konvention stehen, und das Modell setzte die Senkung als Drehwinkel.
+    """
+    from app.core.agent.tools import operation_tools
+
+    voll = {entry["name"]: entry for entry in operation_tools()}
+    kurz = {entry["name"]: entry for entry in operation_tools(compact=True)}
+
+    eigen = kurz["countersink_hole"]["input_schema"]["properties"]["angle"]
+    lang = str(voll["countersink_hole"]["input_schema"]["properties"]["angle"]["description"])
+    assert eigen.get("description"), "der Kopfwinkel verlöre seine Bedeutung"
+    assert lang.startswith(str(eigen["description"]).rstrip(".")), eigen
+
+    konvention = kurz["create_box"]["input_schema"]["properties"]["angle"]
+    assert "description" not in konvention, "die Drehung sagt der Prompt einmal"
 
 
 # --- Zurücknehmen sagt, was es mitnimmt (Review 25.08.2026, Regel 16) --------------

@@ -49,6 +49,12 @@ Drei Stellen hängen daran, und die dritte ist die, die sich nicht ansieht:
 - Die Meldung an den Kunden nennt **keine Zahl**
   (`licence_service._error_from`): Wie viele Plätze eine Lizenz hat, hängt an
   ihrer Art, und eine fest eingetragene Zahl wäre für die andere falsch.
+- **Die Art steht seit dem 22.09.2026 im Datensatz** (`licences.kind`,
+  RM-182). `activation_migrate_licence_kind` legt die Spalte in einer
+  Bestandsdatenbank an, und `activation_issue`/`activation_deactivate` tragen
+  die signierte Art ein, wo sie fehlt; `operator.php` liefert `kind` und
+  `device_limit`, `tools/licence_admin.kind_label` zeigt sie. Das
+  Einrichtungswerkzeug migriert dieselbe Spalte.
 - **Die Datenbank erzwang die Eins selbst.** Bis zum 15.09.2026 stand ein
   `UNIQUE INDEX one_active_device ON activations(licence_digest)` darüber, und
   der ließ den zweiten Platz als `service_unavailable` scheitern, obwohl die

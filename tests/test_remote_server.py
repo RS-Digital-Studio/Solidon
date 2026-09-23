@@ -765,61 +765,121 @@ def test_a_rebound_domain_does_not_pass_as_this_machine() -> None:
         running.stop()
 
 
-def test_a_deferred_answer_is_computed_off_the_main_thread(qt_app: Any) -> None:
-    """Die Orientierungsanalyse des Fernaufrufs (RM-144): Der Hauptthread gibt
-    nur die vorbereitete Rechnung zurück, der wartende Serverthread rechnet.
-    Das Fenster ist in dieser Zeit frei."""
-    from app.ui.remote_server import DeferredAnswer
+# --- Lesende Auskünfte rechnen im Faden des Fernaufrufs (RM-144) --------------------
 
-    ran_in: list[str] = []
 
-    def work(token: Any) -> str:
-        ran_in.append(threading.current_thread().name)
-        return "gerechnet"
+def _deferring_bridge(started: threading.Event, release: threading.Event) -> WindowBridge:
+    """Eine Brücke, deren Hauptthread nur vorbereitet und die Rechnung zurückgibt."""
+    from app.core.types import CancelToken
 
-    bridge = WindowBridge(lambda name, arguments: DeferredAnswer(work=work, stopped="abgebrochen"))
-    answers: list[str] = []
-    worker = threading.Thread(target=lambda: answers.append(bridge.call("read_analysis", {})))
-    worker.name = "server"
+    def run(name: str, arguments: dict[str, Any]) -> Any:
+        if name != "read_analysis":
+            return f"{name}: fertig"
+
+        def work(cancelled: CancelToken) -> str:
+            started.set()
+            while not release.wait(0.01):
+                cancelled.raise_if_cancelled()
+            return "Herkunft: Schichtanalyse (geschätzt), nicht G-Code."
+
+        return work
+
+    return WindowBridge(run)
+
+
+def _call_in_thread(bridge: WindowBridge, name: str) -> tuple[threading.Thread, list[Any]]:
+    outcome: list[Any] = []
+
+    def invoke() -> None:
+        try:
+            outcome.append(bridge.call(name, {"kind": "orientation"}))
+        except BaseException as problem:
+            outcome.append(problem)
+
+    worker = threading.Thread(target=invoke, daemon=True)
     worker.start()
-    limit = time.monotonic() + 2.0
-    while worker.is_alive() and time.monotonic() < limit:
-        QCoreApplication.sendPostedEvents(bridge)
+    return worker, outcome
+
+
+def _pump_until(condition: Any, seconds: float = 5.0) -> bool:
+    limit = time.monotonic() + seconds
+    while not condition() and time.monotonic() < limit:
+        QCoreApplication.processEvents()
         time.sleep(0.005)
-    worker.join(timeout=1.0)
-
-    assert answers == ["gerechnet"]
-    assert ran_in == ["server"], "gerechnet wird im Serverthread, nicht im Fenster"
+    return bool(condition())
 
 
-def test_a_deferred_answer_stops_with_the_bridge(qt_app: Any) -> None:
-    """Beim Beenden wird die laufende Rechnung abgebrochen, nicht abgewartet."""
-    from app.core.errors import OperationCancelled
-    from app.ui.remote_server import DeferredAnswer
+def test_a_long_analysis_leaves_the_window_free_for_the_next_call(qt_app: Any) -> None:
+    """RM-144: Die Orientierungssuche hielt das Fenster an — sie wurde deshalb abgelehnt.
 
-    started = threading.Event()
+    Jetzt nimmt der Hauptthread nur den Schnappschuss, und gerechnet wird im
+    wartenden Faden des Servers. Der Beweis ist ein zweiter Aufruf, den der
+    Hauptthread beantwortet, **während** die erste Rechnung noch läuft.
+    """
+    started, release = threading.Event(), threading.Event()
+    bridge = _deferring_bridge(started, release)
+    slow, slow_outcome = _call_in_thread(bridge, "read_analysis")
+    assert _pump_until(started.is_set), "die Rechnung hat nicht angefangen"
 
-    def work(token: Any) -> str:
-        started.set()
-        limit = time.monotonic() + 5.0
-        while time.monotonic() < limit:
-            if token.is_cancelled:
-                raise OperationCancelled
-            time.sleep(0.005)
-        return "zu spät"
+    quick, quick_outcome = _call_in_thread(bridge, "read_report")
+    assert _pump_until(lambda: bool(quick_outcome)), "der Hauptthread war blockiert"
+    assert quick_outcome == ["read_report: fertig"]
+    assert not slow_outcome, "die erste Rechnung läuft noch"
 
-    bridge = WindowBridge(lambda name, arguments: DeferredAnswer(work=work, stopped="abgebrochen"))
-    answers: list[str] = []
-    worker = threading.Thread(target=lambda: answers.append(bridge.call("read_analysis", {})))
-    worker.start()
-    limit = time.monotonic() + 2.0
-    while not started.is_set() and time.monotonic() < limit:
-        QCoreApplication.sendPostedEvents(bridge)
-        time.sleep(0.005)
-    assert started.is_set()
+    release.set()
+    slow.join(timeout=5.0)
+    quick.join(timeout=5.0)
+    assert slow_outcome == ["Herkunft: Schichtanalyse (geschätzt), nicht G-Code."]
+
+
+def test_switching_the_interface_off_stops_a_running_analysis(qt_app: Any) -> None:
+    """Abbruch greift: ``cancel_pending`` erreicht die Rechnung über ihr Token."""
+    started, release = threading.Event(), threading.Event()
+    bridge = _deferring_bridge(started, release)
+    worker, outcome = _call_in_thread(bridge, "read_analysis")
+    assert _pump_until(started.is_set)
 
     bridge.cancel_pending()
-    worker.join(timeout=2.0)
+    worker.join(timeout=5.0)
 
     assert not worker.is_alive()
-    assert answers == ["abgebrochen"]
+    assert outcome and isinstance(outcome[0], TimeoutError)
+
+
+def test_a_running_analysis_ends_at_the_call_deadline(
+    qt_app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Und die Zeitgrenze greift auch dort, wo nicht mehr auf den Hauptthread gewartet wird."""
+    monkeypatch.setattr(remote_server, "CALL_TIMEOUT", 0.3)
+    started, release = threading.Event(), threading.Event()
+    bridge = _deferring_bridge(started, release)
+    begun = time.monotonic()
+    worker, outcome = _call_in_thread(bridge, "read_analysis")
+    assert _pump_until(started.is_set)
+    worker.join(timeout=5.0)
+
+    assert outcome and isinstance(outcome[0], TimeoutError)
+    assert time.monotonic() - begun < 3.0
+    release.set()
+
+
+def test_a_timed_out_call_reaches_the_client_as_a_sentence(qt_app: Any) -> None:
+    """Regel 17: kein „Unerwarteter Fehler" für ein Fenster, das gerade rechnet."""
+
+    class _Late(_Bridge):
+        def call(self, name: str, arguments: dict[str, Any]) -> str:
+            raise TimeoutError(name)
+
+    raw = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {"name": "read_report", "arguments": {}},
+        }
+    ).encode("utf-8")
+    answer = json.loads(remote.answer_bytes(raw, _Late()))
+
+    assert "error" not in answer
+    assert answer["result"]["isError"] is True
+    assert "erneut" in answer["result"]["content"][0]["text"]

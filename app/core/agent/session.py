@@ -30,7 +30,7 @@ from typing import Any, Final, cast
 from app.core import activation, expressions
 from app.core.agent import checks
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
-from app.core.agent.context import build_messages
+from app.core.agent.context import CONDENSE_ABOVE_CHARS, build_messages
 from app.core.agent.prompt import PROMPT_VERSION
 from app.core.agent.proposal import Proposal, Question
 from app.core.agent.tools import (
@@ -451,8 +451,11 @@ class AgentSession:
             spent += reply.budget_input_tokens + reply.output_tokens
             proposal.input_tokens += reply.input_tokens
             proposal.output_tokens += reply.output_tokens
-            if reply.text:
-                proposal.answer = reply.text
+            # Leerraum ist keine Antwort: Ein letzter Schritt aus zwei Zeilenumbrüchen
+            # überschrieb sonst den Satz davor, und der Chat zeigte eine
+            # leere Blase über einem Vorschlag.
+            if reply.text.strip():
+                proposal.answer = reply.text.strip()
 
             # **``stop_reason`` wurde gespeichert und nie gelesen.** Zwei
             # Gründe verschwanden damit lautlos: eine abgeschnittene Antwort
@@ -613,7 +616,13 @@ class AgentSession:
                 proposal.invalid_calls += 1
                 return unknown, scene
             proposal.readings.append(name)
-            return digest(scene, working, self.selection, only=wanted or None), scene
+            # Nach genannten Objekten gefragt: voll, mit allen Lagen — das ist
+            # der Weg, den der verdichtete Steckbrief des lokalen Modells
+            # nennt. Ohne Auswahl dieselbe Grenze wie im Kontext.
+            text = digest(scene, working, self.selection, only=wanted or None)
+            if not wanted and self.backend.id == "ollama" and len(text) > CONDENSE_ABOVE_CHARS:
+                text = digest(scene, working, self.selection, condensed=True)
+            return text, scene
         if name == READ_STANDARD:
             return self._standard(arguments, proposal), scene
         if name == READ_ANALYSIS:

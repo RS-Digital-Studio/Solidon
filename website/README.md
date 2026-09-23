@@ -105,6 +105,22 @@ ausdrücklich genannten Dateien. Beim Umstellen auf diesen Vertrag bleibt
 `activation.seed` unverändert; das bestehende globale Kurzzeitkontingent
 bleibt wirksam, ältere IP-Pseudonyme laufen nach ihrer bisherigen Frist aus.
 
+**Den Rate-Key drehen** (RM-096): `appdata/activation-rate.json.key` und
+`appdata/activation-rate.json` per FTPS löschen. Der nächste Zugriff legt
+einen neuen 256-Bit-Wert privat an; alte Pseudonyme sind damit wertlos, die
+Begrenzung greift ohne Unterbrechung weiter, und `activation.seed` wird dabei
+nicht berührt (`tests/test_activation_server.py::test_rotating_the_rate_key_starts_fresh_pseudonyms_and_keeps_limiting`).
+Anlass sind ein vermuteter Abfluss des Werts oder ein Wechsel des Hostings;
+einen Zeitplan braucht es nicht, weil der Wert nur Kurzzeitpseudonyme
+(900 Sekunden) bildet.
+
+**Die Lizenzart im Datensatz** (RM-182): Der erste schreibende Aufruf nach
+dem Hochladen ergänzt `licences.kind` in der laufenden Datenbank und entfernt
+den alten Index `one_active_device`. Vorher eine Sicherung der Datenbank
+ziehen (`tools/deploy_activation_server.py` tut das); danach zeigt die
+Support-Verwaltung Art und Zahl der Geräteplätze auch für Schlüssel, die nicht
+im Archiv liegen.
+
 Nur bei einem abweichenden Ablageort sind Servervariablen nötig:
 
 ```text

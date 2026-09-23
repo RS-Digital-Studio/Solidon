@@ -196,7 +196,7 @@ def record(
     answer = ChatEntry(
         id=_identifier(),
         role="agent",
-        text=proposal.answer or proposal.summary(),
+        text=proposal.answer.strip() or proposal.summary(),
         transaction_id=None if discarded else (transaction.id if transaction else None),
         origin=proposal.origin,
         discarded=discarded,

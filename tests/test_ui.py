@@ -12442,6 +12442,39 @@ def test_a_remote_timeout_never_reports_an_old_result_as_finished(
     assert "fertig" not in answer
 
 
+def test_a_remote_orientation_analysis_is_the_chat_answer_computed_off_the_window(
+    window: MainWindow,
+) -> None:
+    """RM-144: dieselbe Analyse über Chat und MCP — ohne Transaktion und ohne Hauptthread.
+
+    Der Fernaufruf gab bis zum 22.09.2026 nur einen Satz zurück, die
+    Orientierungssuche hielte das Fenster an. Jetzt nimmt der Hauptthread
+    einen Schnappschuss und gibt die Rechnung an den Faden des Servers.
+    """
+    from app.core.agent.analysis import analysis_text
+    from app.core.scene.cancel import CancelSignal
+
+    window.run_remote("create_box", {"width": 30.0, "depth": 10.0, "height": 40.0})
+    before = len(window.session.project.document.transactions)
+    result = window.session.last_result
+    assert result is not None
+
+    prepared = window.run_remote("read_analysis", {"kind": "orientation"})
+
+    assert callable(prepared), "gerechnet wird nicht im Hauptthread"
+    answer = prepared(CancelSignal())
+    chat = analysis_text(
+        "orientation",
+        result.scene,
+        window.session.project.document,
+        window.session.profile,
+        cancelled=CancelSignal(),
+    )
+    assert answer == chat, "Chat und MCP sagen dasselbe"
+    assert answer.startswith("Herkunft") or "Schichtanalyse" in answer.splitlines()[0]
+    assert len(window.session.project.document.transactions) == before, "lesend, kein Schritt"
+
+
 def test_a_remote_call_says_where_it_came_from(window: MainWindow) -> None:
     """Der Herkunftsvermerk (§26.4).
 
@@ -14945,12 +14978,75 @@ def _drag(urls: list[str]) -> Any:
 
 
 def test_a_dropped_link_is_taken_like_a_dropped_file() -> None:
-    """§2.3: Ziehen und Ablegen gilt auch für einen Verweis aus dem Browser."""
-    from app.ui.start_screen import accepted_url
+    """§2.3: Ziehen und Ablegen gilt auch für einen Verweis aus dem Browser.
+
+    **Auch der Verweis auf eine Modellseite** (22.09.2026): Er bekam beim
+    Ziehen ein Verbotszeichen und keinen Satz. Angenommen wird jede
+    Web-Adresse; was dahinter liegt, sagt der Kern — für eine Modellseite der
+    Weg über ihren Herunterladen-Knopf.
+    """
+    from app.ui.start_screen import accepted_path, accepted_url
 
     assert accepted_url(_drag(["https://example.invalid/halter.stl"])) is not None
-    assert accepted_url(_drag(["https://example.invalid/modelle/17"])) is None
+    assert accepted_url(_drag(["https://www.printables.com/model/3161-3d-benchy"])) is not None
+    assert accepted_url(_drag(["https://example.invalid/modelle/17"])) is not None
     assert accepted_url(_drag(["file:///C:/teil.stl"])) is None, "das ist der Weg für Dateien"
+    assert accepted_url(_drag(["ftp://example.invalid/teil.stl"])) is None
+    assert accepted_path(_drag([Path("C:/Downloads/teile.zip").as_uri()])) is not None, (
+        "ein ZIP von der Modellseite geht wie eine Datei"
+    )
+
+
+def test_a_dropped_model_page_says_where_the_file_is(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Satz statt des Verbotszeichens — und ohne Anfrage ins Netz."""
+    shown: list[errors.AppError] = []
+    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, _parent: shown.append(error))
+    drop = _drag(["https://www.thingiverse.com/thing:763622"])
+
+    window.dropEvent(drop)  # type: ignore[arg-type]
+
+    assert drop.accepted
+    assert window._download_worker is None, "keine Anfrage an eine Seite hinter einer Bot-Prüfung"
+    assert shown and shown[0].values["constraint"] == "web_page"
+    assert "Herunterladen" in str(shown[0].detail)
+
+
+def test_a_zip_with_several_models_asks_and_imports_the_chosen_one(
+    session: Session, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Archiv wird vor dem Einbetten aufgelöst; die Wahl geht über den Frageweg."""
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as container:
+        container.writestr("teile/boden.stl", (MESHES / "cube_clean.stl").read_bytes())
+        container.writestr("teile/deckel.stl", (MESHES / "cube_clean.stl").read_bytes())
+        container.writestr("foto.jpg", b"JFIF")
+    asked: list[list[str]] = []
+
+    def answer(_question: str, choices: list[str]) -> str:
+        asked.append(choices)
+        return "teile/deckel.stl"
+
+    monkeypatch.setattr(session, "ask_from_worker", answer)
+    finished: list[bool] = []
+    session.importFinished.connect(finished.append)
+
+    session.import_payload_async("teile.zip", buffer.getvalue(), unit="mm")
+    worker = session._plan
+    assert worker is not None and worker.wait(10_000)
+    for _round in range(5):
+        qt_app.processEvents()
+    assert session.wait_for_idle(30_000)
+
+    assert asked == [["teile/boden.stl", "teile/deckel.stl"]]
+    sources = session.project.document.sources
+    assert any(source.path.endswith("deckel.stl") for source in sources.values()), sources
+    assert not any(source.path.endswith(".zip") for source in sources.values())
+    assert session.history.operations and session.history.operations[-1].op == "load"
 
 
 def test_a_part_file_drop_reaches_open_path_but_json_does_not(

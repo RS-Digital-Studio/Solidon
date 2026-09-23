@@ -398,6 +398,25 @@ def _answer_json(answer: bytes) -> Any:
         ) from problem
 
 
+def _answer_object(answer: bytes) -> dict[str, Any]:
+    """Eine JSON-Antwort, die ein Objekt sein muss — sonst ein Satz mit Weg.
+
+    ComfyUI beantwortet ``/prompt``, ``/history``, ``/queue`` und
+    ``/upload/image`` mit Objekten. Steht unter der eingetragenen Adresse ein
+    anderer Dienst, kommt auch gültiges JSON zurück, nur als Liste oder Zahl —
+    und ``.get`` darauf war bis zum 22.09.2026 ein ``AttributeError``, also
+    „Im Programm ist ein unerwarteter Fehler aufgetreten" samt Bitte um einen
+    Fehlerbericht für eine falsch eingetragene Adresse (Regel 17).
+    """
+    loaded = _answer_json(answer)
+    if not isinstance(loaded, dict):
+        raise GenerationFailed(
+            detail=_("ComfyUI hat in einer Form geantwortet, die sich nicht lesen lässt."),
+            suggestions=(RETRY, CANCEL),
+        )
+    return loaded
+
+
 def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = None) -> bytes:
     """Eine Anfrage, Bytes zurück. POST, wenn es einen Rumpf gibt, sonst GET.
 
@@ -817,7 +836,7 @@ class ComfyBackend:
         missing: list[str] = []
         for kind in self._graph_nodes(workflow):
             answer = self.transport(f"{self.base}/object_info/{urllib.parse.quote(kind)}", None, {})
-            described = _answer_json(answer)
+            described = _answer_object(answer)
             if kind not in described:
                 missing.append(kind)
         return tuple(missing)
@@ -974,7 +993,7 @@ class ComfyBackend:
             f"{self.base}/object_info/{urllib.parse.quote(class_type)}", None, {}
         )
         try:
-            described = _answer_json(answer)
+            described = _answer_object(answer)
         except GenerationFailed as problem:
             # Derselbe Fall wie in ``_answer_json``, nur genauer: Hier ist
             # bekannt, **welcher** Knoten sich nicht lesen ließ, und das ist
@@ -1008,9 +1027,11 @@ class ComfyBackend:
                 suggestions=(INSTALL_MISSING, CANCEL),
             )
 
-        inputs = described.get(class_type, {}).get("input", {})
+        node = described.get(class_type)
+        inputs = node.get("input") if isinstance(node, dict) else None
         for group in ("required", "optional"):
-            entry = (inputs.get(group) or {}).get(field)
+            fields = inputs.get(group) if isinstance(inputs, dict) else None
+            entry = fields.get(field) if isinstance(fields, dict) else None
             if not isinstance(entry, list) or not entry:
                 continue
             # **Zwei Formen, und beide kommen aus demselben Server.** Klassisch
@@ -1052,7 +1073,7 @@ class ComfyBackend:
             body,
             {"Content-Type": f"multipart/form-data; boundary={boundary}"},
         )
-        given = _answer_json(answer).get("name")
+        given = _answer_object(answer).get("name")
         return str(given or name)
 
     def _run(
@@ -1070,7 +1091,7 @@ class ComfyBackend:
             answer = self.transport(
                 f"{self.base}/prompt", payload, {"Content-Type": "application/json"}
             )
-            job = _answer_json(answer).get("prompt_id")
+            job = _answer_object(answer).get("prompt_id")
             if not job:
                 raise GenerationFailed(detail=_("Das Backend hat keinen Auftrag angenommen."))
 
@@ -1129,11 +1150,12 @@ class ComfyBackend:
                 _log.info("waiting for %s cancelled", job)
                 raise OperationCancelled
             answer = self.transport(f"{self.base}/history/{job}", None, {})
-            history = _answer_json(answer)
+            history = _answer_object(answer)
             entry = history.get(job)
-            if entry and entry.get("outputs"):
-                return dict(entry["outputs"])
             if isinstance(entry, dict):
+                outputs = entry.get("outputs")
+                if isinstance(outputs, dict) and outputs:
+                    return dict(outputs)
                 _failed(entry)
             waited = time.monotonic() - started
             if waited > self.timeout_seconds and not self._still_working(job):
@@ -1202,11 +1224,12 @@ class ComfyBackend:
         """
         try:
             answer = self.transport(f"{self.base}/queue", None, {})
-            queue = _answer_json(answer)
+            queue = _answer_object(answer)
         except AppError, OSError, ValueError:
             return False
         for group in ("queue_running", "queue_pending"):
-            for entry in queue.get(group) or ():
+            listed = queue.get(group)
+            for entry in listed if isinstance(listed, list) else ():
                 if isinstance(entry, list) and job in [str(field) for field in entry]:
                     return True
         return False
@@ -1226,11 +1249,11 @@ class ComfyBackend:
         """
         try:
             answer = self.transport(f"{self.base}/queue", None, {})
-            queue = _answer_json(answer)
+            queue = _answer_object(answer)
         except AppError, OSError, ValueError:
             return 0
-        pending = queue.get("queue_pending") or ()
-        for index, entry in enumerate(pending):
+        pending = queue.get("queue_pending")
+        for index, entry in enumerate(pending if isinstance(pending, list) else ()):
             if isinstance(entry, list) and job in [str(field) for field in entry]:
                 return index + 1
         return 0
@@ -1238,84 +1261,17 @@ class ComfyBackend:
     def _download(self, outputs: dict[str, Any]) -> tuple[bytes, str]:
         """Findet das Netz unter den Ausgaben und holt es."""
         for node in outputs.values():
+            if not isinstance(node, dict):
+                continue
             for key in ("meshes", "3d", "result", "files"):
-                for entry in node.get(key, ()) or ():
+                listed = node.get(key)
+                for entry in listed if isinstance(listed, list) else ():
                     located = _located(entry)
                     if located is None:
                         continue
                     query, suffix = located
                     return self.transport(f"{self.base}/view?{query}", None, {}), suffix
         raise GenerationFailed(detail=_("Der Auftrag hat keine Netzdatei erzeugt."))
-
-
-# --- Geskriptet, für die Suite ------------------------------------------------------
-
-
-@dataclass(slots=True)
-class ScriptedMeshBackend:
-    """Ein Generator, der eine vorbereitete Datei zurückgibt (§35).
-
-    Weg 3 muss ohne Grafikkarte testbar sein, und ein Test, der nur saubere
-    Geometrie zu sehen bekäme, bewiese nichts — vorbereitet werden hier also
-    die kaputten Körper, die ein Generator wirklich liefert.
-    """
-
-    answers: dict[str, bytes] = field(default_factory=dict)
-    fallback: bytes | None = None
-    suffix: str = ".stl"
-    calls: list[tuple[str, int]] = field(default_factory=list)
-
-    @property
-    def id(self) -> str:
-        return "scripted"
-
-    @property
-    def available(self) -> bool:
-        return bool(self.answers) or self.fallback is not None
-
-    def text_to_mesh(
-        self,
-        prompt: str,
-        *,
-        seed: int = 0,
-        progress: ProgressFn = _silent,
-        cancelled: CancelledFn | None = None,
-    ) -> GeneratedMesh:
-        self.calls.append((prompt, seed))
-        progress(0.5, str(_("Modell wird erzeugt")))
-        # Auch der Doppel fragt: Ein Test soll den Abbruchweg fahren können,
-        # ohne eine Grafikkarte und ohne eine Sekunde Wartezeit.
-        if cancelled is not None and cancelled():
-            raise OperationCancelled
-        payload = self.answers.get(prompt, self.fallback)
-        if payload is None:
-            raise GenerationFailed(detail=f"nothing scripted for {prompt!r}")
-        return self._as_result(payload, prompt, seed)
-
-    def image_to_mesh(
-        self,
-        image: bytes,
-        *,
-        seed: int = 0,
-        progress: ProgressFn = _silent,
-        cancelled: CancelledFn | None = None,
-    ) -> GeneratedMesh:
-        self.calls.append((f"<image {len(image)}>", seed))
-        if cancelled is not None and cancelled():
-            raise OperationCancelled
-        if self.fallback is None:
-            raise GenerationFailed(detail="nothing scripted for an image")
-        return self._as_result(self.fallback, "", seed)
-
-    def _as_result(self, payload: bytes, prompt: str, seed: int) -> GeneratedMesh:
-        return GeneratedMesh(
-            mesh=read_mesh(payload, self.suffix),
-            payload=payload,
-            suffix=self.suffix,
-            backend=self.id,
-            prompt=prompt,
-            seed=seed,
-        )
 
 
 #: Endungen, unter denen ein Körper unter den Ausgaben erkannt wird. Ein

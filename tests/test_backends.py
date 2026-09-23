@@ -355,6 +355,24 @@ def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
     assert OLLAMA_CONTEXT_TOKENS > PROMPT_TOKENS, "so viel brauchen die Werkzeuge allein"
 
 
+def test_the_local_window_fits_on_a_sixteen_gigabyte_card_with_room_for_the_scene() -> None:
+    """RM-185: 32 768 Token, und davon mindestens 4 000 für Steckbrief und Verlauf.
+
+    Mit 40 960 lag qwen3:14b auf einer RTX 4080 zu elf Prozent auf dem
+    Prozessor — 11 statt 41 Token je Sekunde, 18 s je warmem Zug statt 6,3
+    (gemessen am 16.09.2026). Das größere Fenster war der Preis eines
+    Werkzeugschemas von 36 731 Token. Die Kurzfassung (Prompt-Version 7)
+    zählt 27 293; die Abnahme verlangt unter 28 000 und Platz für 4 000 Token
+    Kontext. Wer eine Operation dazulegt und neu misst, sieht hier, ob das
+    Fenster noch trägt — statt es still wieder zu heben.
+    """
+    from app.core.backends.llm import OLLAMA_CONTEXT_TOKENS, PROMPT_TOKENS
+
+    assert OLLAMA_CONTEXT_TOKENS == 32768
+    assert PROMPT_TOKENS < 28000, "RM-185: das Werkzeugschema passt nicht mehr in 28 000 Token"
+    assert PROMPT_TOKENS + 4000 <= OLLAMA_CONTEXT_TOKENS, "kein Platz für Steckbrief und Verlauf"
+
+
 def test_the_local_model_stays_loaded_between_two_steps() -> None:
     """Ohne ``keep_alive`` kann Ollama zwischen Werkzeugaufruf und Antwort entladen.
 

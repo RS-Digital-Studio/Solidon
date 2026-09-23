@@ -122,7 +122,9 @@ def build_messages(
         # Nachrichten), hier schon.
         Message(
             role="user",
-            content=FOREIGN_NAMES_NOTICE + "\n" + world_text(document, scene, selection),
+            content=FOREIGN_NAMES_NOTICE
+            + "\n"
+            + world_text(document, scene, selection, condensed=None if compact else False),
             images=views,
         ),
     ]
@@ -134,13 +136,36 @@ def build_messages(
     return messages
 
 
+#: Ab dieser Länge verdichtet der Steckbrief für ein lokales Modell (RM-173).
+#:
+#: Neben der Kurzfassung der Werkzeuge (27 293 Token) bleiben im Fenster von
+#: 32 768 rund 5 400 Token für Steckbrief, Verlauf und Antwort. Zehntausend
+#: Zeichen sind etwa 3 000 Token — darüber reicht der Platz für einen Zug mit
+#: zwei Schritten nicht mehr. Gemessen am 23.09.2026 an sechs Modellen aus
+#: ``F:\3D Dateien``: Ein Halter mit 4 362 Zeichen bleibt unverändert, ein
+#: Besteckeinsatz mit 42 gleichen Bohrungen fällt von 31 736 auf 14 125.
+#: Unter der Grenze sieht das Modell jede Lage, wie bisher.
+CONDENSE_ABOVE_CHARS = 10_000
+
+
 def world_text(
     document: Document,
     scene: Scene,
     selection: tuple[ObjectId, str] | None = None,
+    *,
+    condensed: bool | None = False,
 ) -> str:
-    """Steckbrief, Prüfbericht und Verlauf in einem Block."""
-    parts = [f"{tr('Szene und Verlauf')}:", digest(scene, document, selection)]
+    """Steckbrief, Prüfbericht und Verlauf in einem Block.
+
+    ``condensed`` fasst gleiche Merkmale zusammen (RM-173,
+    :func:`app.core.perceive.digest.digest`): ``True`` immer, ``None`` erst
+    über :data:`CONDENSE_ABOVE_CHARS` — der Weg des lokalen Modells, das
+    dieselbe Entscheidung auch bei der Kurzfassung der Werkzeuge trifft.
+    """
+    text = digest(scene, document, selection, condensed=bool(condensed))
+    if condensed is None and len(text) > CONDENSE_ABOVE_CHARS:
+        text = digest(scene, document, selection, condensed=True)
+    parts = [f"{tr('Szene und Verlauf')}:", text]
     report = report_text(scene.report)
     if report:
         parts.append(report)

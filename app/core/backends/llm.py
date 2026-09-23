@@ -1168,7 +1168,14 @@ OLLAMA_RELEASE_SECONDS = 10.0
 #: Der Platz im Schema bleibt der eigentliche Hebel (RM-185): Wer das Schema
 #: unter 28 000 Token bringt, stellt hier 32 768 zurück und bekommt die
 #: Geschwindigkeit wieder.
-OLLAMA_CONTEXT_TOKENS = 40960
+#:
+#: **Seit dem 22.09.2026 wieder 32 768** (RM-185): Die Kurzfassung der
+#: Werkzeuge kostet 27 293 Token statt 37 836 — ohne Einheiten am Feld, ohne
+#: die zehn Ortsfelder der Bausteine und ohne den Text der Rückseitenfelder,
+#: alle drei als Satz im Prompt (``agent/prompt.py``, Version 7). Damit
+#: bleiben 5 475 Token für Steckbrief, Verlauf und Antwort, und qwen3:14b
+#: liegt auf einer 16-GB-Karte wieder ganz im VRAM.
+OLLAMA_CONTEXT_TOKENS = 32768
 
 
 #: Unter welchem Namen der gewählte Modellname gemerkt wird. Neben der Adresse
@@ -2063,7 +2070,16 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: ``num_ctx`` 40 960, ``num_predict`` 1, ``keep_alive`` 0, ein Ausgabetoken.
 #: SHA-256 der gesendeten Anfrage:
 #: ``9028a67c2d6d7aabfb11c287dfffc0fcaacc2a32526f6c0eb805ecc04d692143``.
-PROMPT_TOKENS: Final = 37661
+#:
+#: Am 22.09.2026 zählte derselbe Aufruf vor jeder Änderung **37 836** — der
+#: Satz war seit dem 21. um 175 Token gewachsen, ohne neue Operation. Mit der
+#: Kurzfassung aus RM-185 (Prompt-Version 7) dann **27 293 Token bei 147
+#: Werkzeugen**, gezählt mit ``num_ctx`` 32 768 und ebenso mit 40 960 —
+#: dieselbe Zahl, also ungekürzt; 83,3 % des Fensters. qwen3:14b
+#: (bdbd181c33f2), Ollama 0.34.2, ``num_predict`` 1, ``keep_alive`` 0, ein
+#: Ausgabetoken. SHA-256 der Anfrage mit 32 768:
+#: ``728c421340d676cb926088faaf77bf5c1aca43b97b3a0e347cf6c9e92a297329``.
+PROMPT_TOKENS: Final = 27293
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu

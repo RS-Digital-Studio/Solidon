@@ -17,7 +17,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.backends.mesh import ScriptedMeshBackend
 from app.core.bootstrap import load_operations
 from app.core.examples import directory, render_preview
 from app.core.generate import from_text
@@ -27,6 +26,7 @@ from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project, save
 from app.core.types import Parameter, Source, SourceKind
 from app.i18n import TranslatableText, _
+from tests.scripted_backend import ScriptedMeshBackend
 
 CORPUS = Path(__file__).resolve().parent.parent / "tests" / "data" / "meshes"
 EXAMPLE_GENERATION_DATE = "2026-08-31"

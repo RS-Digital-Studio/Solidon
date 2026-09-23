@@ -44,6 +44,23 @@ from app.i18n import TranslatableText, _, tr
 #: steht.
 NAME_LIMIT = 60
 
+#: Ab wie vielen gleichen Merkmalen ein verdichteter Steckbrief sie in einer
+#: Zeile nennt (RM-173). Zwei gleiche Bohrungen sind ein Paar, das man
+#: unterscheidet; ab drei ist es ein Raster, und dessen Lagen fragt das
+#: Modell gezielt nach, wenn es sie braucht.
+CONDENSE_FROM: Final = 3
+
+#: Wie viele Flächen je Körper ein verdichteter Steckbrief einzeln nennt — die
+#: größten, in ihrer Reihenfolge (RM-173). Im Besteckeinsatz waren nach dem
+#: Zusammenfassen gleicher Merkmale noch 121 von 153 Zeilen Flächen, und ein
+#: Druckteil hat selten mehr als ein Dutzend, auf die sich ein Satz des
+#: Nutzers bezieht: Boden, Deckel, Seiten, eine Stufe. Die übrigen zählt eine
+#: Zeile, und ``read_digest`` mit ``objects`` nennt sie alle.
+FACE_LINES_CONDENSED: Final = 12
+
+#: Welche Merkmale als Fläche zählen.
+_FACE_KINDS: Final = frozenset({"face", "curved_face"})
+
 
 def as_value(text: object) -> str:
     """Ein Wert aus fremder Hand, auf eine Zeile gebracht und gekürzt (§32).
@@ -94,6 +111,8 @@ def digest(
     document: Document | None = None,
     selection: tuple[ObjectId, str] | None = None,
     only: Collection[ObjectId] | None = None,
+    *,
+    condensed: bool = False,
 ) -> str:
     """Die ganze Szene in der Form, die §23 beschreibt.
 
@@ -101,6 +120,13 @@ def digest(
     das mitten im Zug nach einem einzelnen Objekt fragen kann. Alles andere
     (Parameter, Passungen, Quellen, Verlauf) bleibt vollständig: es gehört
     zur Szene, nicht zu einem Objekt.
+
+    ``condensed`` nennt gleiche Merkmale in einer Zeile, ohne ihre Lagen
+    (:data:`CONDENSE_FROM`). Für das Fenster eines lokalen Modells: Ein
+    Besteckeinsatz aus dem Korpus mit 41 gleichen Bohrungen füllte mit seinem
+    Steckbrief rund 10 000 Token — mehr, als neben den Werkzeugen überhaupt
+    Platz ist (RM-173). Die Lagen stehen weiter im vollen Steckbrief, den
+    ``read_digest`` mit ``objects`` liefert.
     """
     plates = _plate_count(scene)
     lines: list[str] = [_scene_line(scene)]
@@ -128,7 +154,7 @@ def digest(
     for object_id, entry in scene.objects.items():
         if only is not None and object_id not in only:
             continue
-        lines.extend(_object_lines(object_id, entry, plates))
+        lines.extend(_object_lines(object_id, entry, plates, condensed=condensed))
 
     lines.extend(_finding_lines(scene))
     if document is not None:
@@ -332,7 +358,9 @@ def _plate_count(scene: Scene) -> int:
     return len({entry.plate for entry in scene.objects.values()})
 
 
-def _object_lines(object_id: ObjectId, entry: SceneObject, plates: int = 1) -> list[str]:
+def _object_lines(
+    object_id: ObjectId, entry: SceneObject, plates: int = 1, *, condensed: bool = False
+) -> list[str]:
     size = entry.mesh.bounds.size
     closed = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")
     on_bed = tr("auf Bett") if abs(entry.mesh.bounds.minimum[2]) < 0.05 else ""
@@ -363,11 +391,96 @@ def _object_lines(object_id: ObjectId, entry: SceneObject, plates: int = 1) -> l
     lines = [f"{object_id}  {as_name(entry.name)}  " + ", ".join(facts)]
     lines.append("  " + _extent_line(entry))
     sleeves = sleeves_of(entry.features)
+    if condensed:
+        lines.extend(_condensed_feature_lines(entry, sleeves))
+        return lines
     for feature_id, feature in entry.features.items():
         lines.append(
             "  " + _feature_line(feature_id, feature) + _wall_note(feature, sleeves.get(feature_id))
         )
     return lines
+
+
+def _condensed_feature_lines(entry: SceneObject, sleeves: dict[str, Sleeve]) -> list[str]:
+    """Die Merkmale eines Körpers, gleiche zusammengefasst — in ihrer Reihenfolge.
+
+    Gleich heißt: dieselbe Zeile, sobald Name und Lage fehlen. Ein Merkmal mit
+    Wandangabe bleibt für sich; die Wand gehört einem Paar, und genau vor der
+    Änderung dieses Paars warnt sie (:func:`_wall_note`). Die Gruppe steht an
+    der Stelle ihres ersten Mitglieds.
+    """
+    shapes: dict[str, list[str]] = {}
+    single: dict[str, str] = {}
+    walled: set[str] = set()
+    for feature_id, feature in entry.features.items():
+        line = _feature_line(feature_id, feature)
+        wall = _wall_note(feature, sleeves.get(feature_id))
+        if wall:
+            single[feature_id] = line + wall
+            walled.add(feature_id)
+            continue
+        at = (
+            _vector_measure(feature, "centre", _place)
+            if measure_status(feature, "centre").available
+            else ""
+        )
+        shape = line[len(feature_id) :].replace(at, "", 1) if at else line[len(feature_id) :]
+        shapes.setdefault(f"{feature.kind}{shape}", []).append(feature_id)
+        single[feature_id] = line
+    grouped = {
+        members[0]: (shape, members)
+        for shape, members in shapes.items()
+        if len(members) >= CONDENSE_FROM
+    }
+    folded = {member for _shape, members in grouped.values() for member in members}
+    hidden = _smaller_faces(entry, exempt=folded | walled)
+    lines: list[str] = []
+    for feature_id in entry.features:
+        if feature_id in hidden:
+            continue
+        if feature_id in grouped:
+            shape, members = grouped[feature_id]
+            kind = entry.features[feature_id].kind
+            body = shape[len(kind) :].strip()
+            lines.append(
+                f"  {', '.join(members)}  ({len(members)}\N{MULTIPLICATION SIGN}) {body} — "
+                + tr("Lagen je Merkmal: read_digest mit objects")
+            )
+        elif feature_id not in folded:
+            lines.append("  " + single[feature_id])
+    if hidden:
+        largest = max(_face_area(entry.features[feature_id]) for feature_id in hidden)
+        lines.append(
+            f"  {len(hidden)} {tr('kleinere Flächen bis')} {units.format_area(largest)} — "
+            + tr("alle Flächen: read_digest mit objects")
+        )
+    return lines
+
+
+def _face_area(feature: Feature) -> float:
+    """Die Fläche eines Flächenmerkmals, null, wo sie nicht belegt ist."""
+    if not measure_status(feature, "area").available:
+        return 0.0
+    return float(feature.params["area"])
+
+
+def _smaller_faces(entry: SceneObject, *, exempt: Collection[str]) -> set[str]:
+    """Die Flächen jenseits der :data:`FACE_LINES_CONDENSED` größten.
+
+    Eine Fläche mit Wandangabe bleibt stehen — die Warnung gehört zu ihr —,
+    ebenso eine, die schon in einer Sammelzeile steht. Gleich große Flächen
+    entscheidet die Reihenfolge im Körper, nicht der Zufall.
+    """
+    faces = [
+        feature_id
+        for feature_id, feature in entry.features.items()
+        if feature.kind in _FACE_KINDS and feature_id not in exempt
+    ]
+    if len(faces) <= FACE_LINES_CONDENSED:
+        return set()
+    order = {feature_id: index for index, feature_id in enumerate(faces)}
+    ranked = sorted(faces, key=lambda key: (-_face_area(entry.features[key]), order[key]))
+    return set(ranked[FACE_LINES_CONDENSED:])
 
 
 def _wall_note(feature: Feature, sleeve: Sleeve | None) -> str:

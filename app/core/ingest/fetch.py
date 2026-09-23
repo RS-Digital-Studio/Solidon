@@ -14,6 +14,18 @@ Meldung genau das und schlägt den Weg über den Herunterladen-Knopf der Seite
 vor (Regel 17). Solidon liest keine Modellseiten aus; was deren Betreiber
 erlauben, steht in ihren Bedingungen und nicht in unserem Quelltext.
 
+**Und warum das auch technisch so bleibt** (nachgesehen am 22.09.2026):
+Printables, Thingiverse, MakerWorld und Cults3D beantworten jede Anfrage
+ohne Browser mit einer Cloudflare-Prüfung („Just a moment…", 403 oder 429);
+Thingiverse sperrt ``/*/zip`` und ``/download:*`` zusätzlich in seiner
+``robots.txt``, und seine Schnittstelle verlangt einen Schlüssel
+(``NO_TOKEN_PROVIDED``). Eine Datei hinter einer dieser Seiten zu holen hieße,
+eine Zugangssperre zu umgehen. Eine Adresse dieser Plattformen, die keine
+Datei nennt, wird deshalb ohne Netzzugriff mit dem Weg beantwortet, der
+geht: dort auf Herunterladen klicken und die Datei hierher ziehen
+(:func:`model_page_host`). Eine direkte Dateiadresse — auch ein ZIP mit den
+Teilen eines Projekts — wird geholt wie bisher.
+
 Die Grenzen sind dieselben wie beim Import von der Platte
 (:func:`app.core.ingest.loader.check_limits`), plus die drei, die nur im Netz
 gelten: nur ``http`` und ``https``, ein Zeitlimit, und ein Abbruch, sobald
@@ -46,8 +58,8 @@ from app.core.http import (
     validate_download_redirect,
     validate_http_url,
 )
+from app.core.ingest.archive import IMPORT_SUFFIXES
 from app.core.ingest.loader import MAX_FILE_BYTES
-from app.core.ingest.plan import MODEL_SUFFIXES
 from app.core.log import get_logger, redact_external, redact_url
 from app.core.types import ProgressFn
 from app.i18n import _
@@ -70,8 +82,24 @@ TIMEOUT_SECONDS: Final = 60.0
 CHUNK_BYTES: Final = 256 * 1024
 
 #: Dieselbe Liste wie auf der Platte. Der Netzweg ändert nur die Herkunft,
-#: nicht die Formate, die Solidon verspricht (§16.3).
-ALLOWED_SUFFIXES: Final = MODEL_SUFFIXES
+#: nicht die Formate, die Solidon verspricht (§16.3) — und dazu gehört seit
+#: dem 22.09.2026 das ZIP, in dem Modellseiten mehrere Teile ausliefern
+#: (:mod:`app.core.ingest.archive`).
+ALLOWED_SUFFIXES: Final = IMPORT_SUFFIXES
+
+#: Die Modellplattformen, deren Seiten ohne Browser nicht zu haben sind
+#: (Moduldocstring). Verglichen wird der Rechnername und jede seiner
+#: Unterdomänen; ``files.printables.com`` mit einer Dateiendung im Pfad ist
+#: dagegen eine direkte Datei und geht den gewöhnlichen Weg.
+MODEL_PAGE_HOSTS: Final[tuple[str, ...]] = (
+    "printables.com",
+    "thingiverse.com",
+    "makerworld.com",
+    "makerworld.com.cn",
+    "cults3d.com",
+    "myminifactory.com",
+    "thangs.com",
+)
 
 #: Dateiname aus ``Content-Disposition``. Absichtlich schlicht: was in
 #: Anführungszeichen hinter ``filename=`` steht, mehr wird nicht geraten.
@@ -103,9 +131,56 @@ def check_url(url: str) -> str:
     an dem man das zulässt (§32).
     """
     try:
-        return validate_http_url(url, allow_http=True, allow_fragment=True)
+        address = validate_http_url(url, allow_http=True, allow_fragment=True)
     except UnsafeUrlError as problem:
         raise _url_validation_error(url, problem) from problem
+    if model_page_host(address):
+        raise _model_page_error(address)
+    return address
+
+
+def model_page_host(url: str) -> str:
+    """Die Plattform, deren **Seite** diese Adresse zeigt — sonst leer.
+
+    Eine Seite ist eine Adresse auf :data:`MODEL_PAGE_HOSTS`, deren Pfad
+    keine Dateiendung aus :data:`ALLOWED_SUFFIXES` trägt. Beantwortet wird
+    das ohne Netzzugriff: Die Seite zu laden, nur um danach zu sagen, dass
+    sie keine Datei ist, kostete eine Minute Wartezeit gegen eine
+    Bot-Prüfung, die ohnehin nicht nachgibt.
+    """
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower().rstrip(".")
+    platform = next(
+        (entry for entry in MODEL_PAGE_HOSTS if host == entry or host.endswith(f".{entry}")),
+        "",
+    )
+    if not platform:
+        return ""
+    if suffix_of(unquote(parts.path)) in ALLOWED_SUFFIXES:
+        return ""
+    return platform
+
+
+def _model_page_error(url: str, kind: str = "") -> ValidationError:
+    """Der eine Satz für jede Seite, die keine Datei ist.
+
+    Wortgleich für die bekannte Plattform und für die Seite, die sich erst
+    beim Laden als HTML zeigt: In beiden Fällen hat der Kunde die Adresse
+    der Seite kopiert oder gezogen, und in beiden hilft derselbe Klick.
+    """
+    values: dict[str, str] = {"url": redact_url(url)}
+    if kind:
+        values["type"] = kind
+    return ValidationError(
+        field="url",
+        detail=_(
+            "Das ist die Seite zum Modell, nicht die Datei. Klicken Sie dort auf "
+            "Herunterladen und ziehen Sie die Datei hierher."
+        ),
+        constraint="web_page",
+        values=values,
+        suggestions=[_DOWNLOAD_YOURSELF],
+    )
 
 
 def _url_validation_error(url: str, problem: UnsafeUrlError) -> ValidationError:
@@ -354,17 +429,7 @@ def _reject_web_page(answer: object, url: str) -> None:
     """
     kind = _header(answer, "Content-Type").split(";")[0].strip().lower()
     if kind in ("text/html", "application/xhtml+xml"):
-        raise ValidationError(
-            field="url",
-            detail=_(
-                "Unter dieser Adresse steht eine Webseite, keine Modelldatei. "
-                "Auf der Seite gibt es einen Knopf zum Herunterladen — die Datei "
-                "danach hier ablegen."
-            ),
-            constraint="web_page",
-            values={"url": url, "type": kind},
-            suggestions=[_DOWNLOAD_YOURSELF],
-        )
+        raise _model_page_error(url, kind)
 
 
 #: Der Ausweg, der bei beiden Adressfehlern gilt: die Seite im Browser

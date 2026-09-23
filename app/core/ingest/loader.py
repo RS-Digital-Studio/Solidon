@@ -24,6 +24,7 @@ import json
 import math
 import mimetypes
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -200,12 +201,21 @@ def read_local_payload(path: Path) -> bytes:
     payload = read_bounded_payload(path)
     if path.suffix.lower() != ".gltf":
         return payload
-    packed = _embed_gltf_dependencies(path, payload)
+    folder = path.parent.resolve()
+    packed = embed_gltf_dependencies(
+        path.name, payload, lambda entry, uri: _gltf_reference(folder, entry, uri)
+    )
     check_limits(len(packed), 0)
     return packed
 
 
-def _embed_gltf_dependencies(path: Path, payload: bytes) -> bytes:
+GltfLocator = Callable[[dict[str, Any], str], "GltfReference"]
+"""``(eintrag, uri) -> Referenz``: wo eine Begleitdatei liegt und wie sie gelesen
+wird. Ein Ordner auf der Platte ist ein Ort dafür, ein ZIP-Archiv ein zweiter
+(:mod:`app.core.ingest.archive`) — die Grenzen des Einbettens gelten für beide."""
+
+
+def embed_gltf_dependencies(file_name: str, payload: bytes, locate: GltfLocator) -> bytes:
     """Macht die externen Puffer und Bilder einer GLTF selbstständig."""
     try:
         document = json.loads(payload)
@@ -214,18 +224,17 @@ def _embed_gltf_dependencies(path: Path, payload: bytes) -> bytes:
             field="file",
             detail=_("Die GLTF-Datei enthält kein lesbares JSON."),
             constraint="unreadable",
-            values={"file": path.name},
+            values={"file": file_name},
         ) from problem
     if not isinstance(document, dict):
         raise ValidationError(
             field="file",
             detail=_("Die GLTF-Datei enthält kein gültiges Modelldokument."),
             constraint="unreadable",
-            values={"file": path.name},
+            values={"file": file_name},
         )
 
-    folder = path.parent.resolve()
-    references: list[_GltfReference] = []
+    references: list[GltfReference] = []
     for section in ("buffers", "images"):
         entries = document.get(section, [])
         if not isinstance(entries, list):
@@ -233,7 +242,7 @@ def _embed_gltf_dependencies(path: Path, payload: bytes) -> bytes:
                 field="file",
                 detail=_("Die GLTF-Datei enthält kein gültiges Modelldokument."),
                 constraint="unreadable",
-                values={"file": path.name, "section": section},
+                values={"file": file_name, "section": section},
             )
         for entry in entries:
             if not isinstance(entry, dict):
@@ -241,12 +250,12 @@ def _embed_gltf_dependencies(path: Path, payload: bytes) -> bytes:
                     field="file",
                     detail=_("Die GLTF-Datei enthält kein gültiges Modelldokument."),
                     constraint="unreadable",
-                    values={"file": path.name, "section": section},
+                    values={"file": file_name, "section": section},
                 )
             uri = entry.get("uri")
             if not isinstance(uri, str) or not uri or uri.lower().startswith("data:"):
                 continue
-            references.append(_gltf_reference(folder, entry, uri))
+            references.append(locate(entry, uri))
 
     # Vor dem ersten Lesen und erst recht vor Base64 steht die Größe des
     # fertigen JSON fest. Base64 macht drei Bytes zu vier; zwei einzeln
@@ -259,24 +268,30 @@ def _embed_gltf_dependencies(path: Path, payload: bytes) -> bytes:
         projected_size += _embedded_uri_size(reference) + 2 - previous_size
     check_limits(projected_size, 0)
 
-    cached: dict[Path, str] = {}
+    cached: dict[str, str] = {}
     for reference in references:
         reference.entry["uri"] = _embedded_gltf_uri(reference, cached)
     return json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
 @dataclass(frozen=True, slots=True)
-class _GltfReference:
-    """Eine bereits geprüfte lokale Referenz samt ihrer späteren Größe."""
+class GltfReference:
+    """Eine bereits geprüfte Referenz samt ihrer späteren Größe.
+
+    ``key`` erkennt dieselbe Begleitdatei unter zwei Verweisen wieder, ``read``
+    liest höchstens so viele Bytes, wie es bekommt — ein Ordner und ein
+    Archiv lesen verschieden, begrenzt werden beide gleich.
+    """
 
     entry: dict[str, Any]
     uri: str
-    dependency: Path
+    key: str
     media_type: str
     size: int
+    read: Callable[[int], bytes]
 
 
-def _gltf_reference(folder: Path, entry: dict[str, Any], uri: str) -> _GltfReference:
+def _gltf_reference(folder: Path, entry: dict[str, Any], uri: str) -> GltfReference:
     """Prüft Pfad und Größe, ohne den Inhalt der Begleitdatei zu lesen."""
     parts = urlsplit(uri)
     if parts.scheme or parts.netloc or parts.query or parts.fragment:
@@ -327,27 +342,33 @@ def _gltf_reference(folder: Path, entry: dict[str, Any], uri: str) -> _GltfRefer
             values={"dependency": uri},
         ) from problem
     media_type = mimetypes.guess_type(dependency.name)[0] or "application/octet-stream"
-    return _GltfReference(entry, uri, dependency, media_type, size)
+
+    def read(limit: int) -> bytes:
+        with dependency.open("rb") as stream:
+            return stream.read(limit)
+
+    return GltfReference(entry, uri, str(dependency), media_type, size, read)
 
 
-def _embedded_uri_size(reference: _GltfReference) -> int:
+def _embedded_uri_size(reference: GltfReference) -> int:
     """Länge der späteren Datenadresse, ohne sie schon anzulegen."""
     prefix = f"data:{reference.media_type};base64,"
     encoded = 4 * ((reference.size + 2) // 3)
     return len(prefix.encode("ascii")) + encoded
 
 
-def _embedded_gltf_uri(reference: _GltfReference, cached: dict[Path, str]) -> str:
+def _embedded_gltf_uri(reference: GltfReference, cached: dict[str, str]) -> str:
     """Liest genau eine vorgeprüfte Begleitdatei innerhalb des Modellordners."""
-    if reference.dependency in cached:
-        return cached[reference.dependency]
+    if reference.key in cached:
+        return cached[reference.key]
 
     try:
-        with reference.dependency.open("rb") as stream:
-            # Hat ein anderes Programm die Datei nach der Vorprüfung ersetzt,
-            # wird höchstens ein Byte über die angekündigte Größe hinaus
-            # gelesen. Ein Größenrennen darf die frühe Grenze nicht umgehen.
-            data = stream.read(reference.size + 1)
+        # Hat ein anderes Programm die Datei nach der Vorprüfung ersetzt,
+        # wird höchstens ein Byte über die angekündigte Größe hinaus
+        # gelesen. Ein Größenrennen darf die frühe Grenze nicht umgehen —
+        # und ein Archiveintrag, der mehr entpackt, als er ankündigt, auch
+        # nicht.
+        data = reference.read(reference.size + 1)
     except OSError as problem:
         raise ValidationError(
             field="file",
@@ -370,7 +391,7 @@ def _embedded_gltf_uri(reference: _GltfReference, cached: dict[Path, str]) -> st
         )
     check_limits(len(data), 0)
     embedded = f"data:{reference.media_type};base64,{base64.b64encode(data).decode('ascii')}"
-    cached[reference.dependency] = embedded
+    cached[reference.key] = embedded
     return embedded
 
 
@@ -663,19 +684,28 @@ def _archive_entry_count(payload: bytes) -> int | None:
     return max(announced, counted)
 
 
-def _too_many_archive_entries(entries: int) -> ValidationError:
+def _too_many_archive_entries(entries: int, *, model_archive: bool = False) -> ValidationError:
     """Baut die gemeinsame Absage für ein zu großes Zentralverzeichnis."""
     return ValidationError(
         suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
         field="file",
-        detail=_("Das 3MF-Archiv enthält mehr Einträge, als diese Anwendung verarbeitet."),
+        detail=(
+            _("Das ZIP-Archiv enthält mehr Einträge, als diese Anwendung verarbeitet.")
+            if model_archive
+            else _("Das 3MF-Archiv enthält mehr Einträge, als diese Anwendung verarbeitet.")
+        ),
         constraint="file_too_large",
         values={"entries": entries, "limit": MAX_ARCHIVE_ENTRIES},
     )
 
 
-def check_unpacked(payload: bytes) -> None:
+def check_unpacked(payload: bytes, *, model_archive: bool = False) -> None:
     """Prüft Verzeichnis, Eindeutigkeit und Entpackgröße eines 3MF (§32).
+
+    ``model_archive`` nennt in den Absagen ein ZIP-Archiv statt eines 3MF —
+    dieselben Grenzen gelten für ein heruntergeladenes Archiv mit Modellen
+    darin (:mod:`app.core.ingest.archive`), und ein Kunde, der ein ZIP
+    abgelegt hat, soll nicht von einem 3MF lesen.
 
     Geprüft war nur die gepackte Größe: 2,6 MB wurden beim Lesen zu 1,08 GB —
     Verhältnis 412, und über ``ingest/fetch`` ist so eine Datei aus dem Netz
@@ -690,7 +720,7 @@ def check_unpacked(payload: bytes) -> None:
 
     announced_entries = _archive_entry_count(payload)
     if announced_entries is not None and announced_entries > MAX_ARCHIVE_ENTRIES:
-        raise _too_many_archive_entries(announced_entries)
+        raise _too_many_archive_entries(announced_entries, model_archive=model_archive)
 
     try:
         with zipfile.ZipFile(BytesIO(payload)) as container:
@@ -701,7 +731,7 @@ def check_unpacked(payload: bytes) -> None:
         return
 
     if len(infos) > MAX_ARCHIVE_ENTRIES:
-        raise _too_many_archive_entries(len(infos))
+        raise _too_many_archive_entries(len(infos), model_archive=model_archive)
 
     seen: dict[str, zipfile.ZipInfo] = {}
     duplicates: list[tuple[zipfile.ZipInfo, zipfile.ZipInfo]] = []
@@ -762,7 +792,11 @@ def check_unpacked(payload: bytes) -> None:
                     raise ValidationError(
                         suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
                         field="file",
-                        detail=_("Das 3MF-Archiv enthält denselben Eintrag mehrfach."),
+                        detail=(
+                            _("Das ZIP-Archiv enthält denselben Eintrag mehrfach.")
+                            if model_archive
+                            else _("Das 3MF-Archiv enthält denselben Eintrag mehrfach.")
+                        ),
                         constraint="invalid_archive",
                         values={"entry": second.filename},
                     )

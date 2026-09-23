@@ -65,6 +65,14 @@ MAX_TOTAL_BYTES: Final = 12 * 1024 * 1024
 #: an.
 MAX_MESSAGE_LENGTH: Final = 20_000
 
+#: Wie lang der ganze Text werden darf, den :meth:`Ticket.as_text` baut —
+#: dieselbe Zahl, die ``support.php`` als Obergrenze des Felds ``message``
+#: prüft. Die Nachricht ist durch :data:`MAX_MESSAGE_LENGTH` begrenzt, der
+#: Stapelabzug nicht: Ein Fehler, der sich wiederholt, hängt sich über
+#: ``add_crash`` immer wieder an, und eine wechselseitige Rekursion schreibt
+#: tausend Rahmen. Den vollständigen Text behält der abgelegte Ordner.
+MAX_SENT_TEXT_LENGTH: Final = 60_000
+
 #: Wie viel von der Antwort gelesen wird. Sie trägt zwei Felder — ``ok`` und
 #: eine Referenz —, also ist die Grenze hier ein Deckel gegen einen bösen
 #: Server und keine Platzrechnung.
@@ -205,19 +213,35 @@ class Ticket:
         ]
         if self.contact:
             lines.extend(["", f"{tr('Rückantwort an')}: {self.contact}"])
-        if self.detail:
-            lines.extend(["", "--- detail ---", self.detail.strip()])
-
-        lines.extend(["", "--- system ---"])
-        lines.extend(f"{name}: {value}" for name, value in environment().items())
+        tail = ["", "--- system ---"]
+        tail.extend(f"{name}: {value}" for name, value in environment().items())
         if self.attachments:
-            lines.extend(["", "--- anhänge ---"])
-            lines.extend(
+            tail.extend(["", "--- anhänge ---"])
+            tail.extend(
                 f"{entry.name} ({entry.size // 1024} KB)"
                 + (f" — {entry.description}" if entry.description else "")
                 for entry in self.attachments
             )
-        return "\n".join(lines)
+        if self.detail:
+            frame = len("\n".join([*lines, "", "--- detail ---", "", *tail]))
+            detail = _shortened(self.detail.strip(), MAX_SENT_TEXT_LENGTH - frame)
+            lines.extend(["", "--- detail ---", detail])
+        return "\n".join([*lines, *tail])
+
+
+def _shortened(detail: str, budget: int) -> str:
+    """Kürzt einen Stapelabzug auf ``budget`` Zeichen — in der Mitte.
+
+    Am Anfang steht der erste Fehler, am Ende die Ausnahme selbst; was
+    dazwischen fällt, sind die Wiederholungen. Der vollständige Text liegt im
+    abgelegten Ordner, und der Hinweis sagt das.
+    """
+    if len(detail) <= budget:
+        return detail
+    note = "\n[… " + tr("gekürzt, vollständig im abgelegten Ordner") + " …]\n"
+    keep = max(budget - len(note), 0)
+    head = keep // 2
+    return detail[:head] + note + detail[len(detail) - (keep - head) :]
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,17 +401,50 @@ def send(ticket: Ticket, url: str = SUPPORT_URL, sender: Sender | None = None) -
     return Receipt(reference=reference)
 
 
-def mail_link(ticket: Ticket) -> str:
+#: Wie lang eine ``mailto``-Adresse höchstens wird (RM-038).
+#:
+#: Eine Nachricht darf 20 000 Zeichen haben, ein Stapelabzug kommt dazu, und
+#: prozentkodiert wird jeder Umlaut zu sechs Zeichen. Die Adresse geht unter
+#: Windows als Befehlszeile an das Mailprogramm (hier: ``OUTLOOK.EXE /mailto
+#: "%1"``), und eine Befehlszeile endet bei 32 767 Zeichen; Outlook und viele
+#: Webmail-Weiterleitungen schneiden schon um 2 000 ab. Über der Grenze ging
+#: bis zum 22.09.2026 nichts auf, und der Knopf tat still nichts. Zweitausend
+#: Zeichen öffnen sich überall; was nicht hineinpasst, steht vollständig im
+#: abgelegten Bericht, und die gekürzte Mail sagt, wo.
+MAILTO_LIMIT: Final = 2000
+
+
+def mail_link(ticket: Ticket, folder: str = "") -> str:
     """Der Weg ohne diesen Server: eine vorbereitete Mail im Mailprogramm.
 
     Anhänge kann ein ``mailto`` nicht tragen — deshalb steht im Text, wo der
     abgelegte Ordner liegt, und der Nutzer zieht die Dateien selbst hinein.
+    Passt der ganze Text nicht in :data:`MAILTO_LIMIT`, wird er gekürzt und
+    endet mit dem Hinweis auf ``bericht.txt`` in ``folder``.
     """
     from urllib.parse import quote
 
     subject = quote(ticket.subject, safe="")
-    body = quote(ticket.as_text(), safe="")
-    return f"mailto:{SUPPORT_ADDRESS}?subject={subject}&body={body}"
+    head = f"mailto:{SUPPORT_ADDRESS}?subject={subject}&body="
+    text = ticket.as_text()
+    body = quote(text, safe="")
+    if len(head) + len(body) <= MAILTO_LIMIT:
+        return head + body
+    note = "\n\n" + tr(
+        "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten "
+        "Ordner — bitte als Anhang beifügen."
+    )
+    if folder:
+        note += f"\n{folder}"
+    budget = MAILTO_LIMIT - len(head) - len(quote(note, safe=""))
+    low, high = 0, len(text)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if len(quote(text[:middle], safe="")) <= budget:
+            low = middle
+        else:
+            high = middle - 1
+    return head + quote(text[:low] + note, safe="")
 
 
 def _package(ticket: Ticket) -> tuple[str, bytes]:

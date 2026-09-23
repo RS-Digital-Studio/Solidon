@@ -110,9 +110,29 @@ REASON_LABELS: Final = {
 
 def _owned_by_current_user(descriptor: int) -> bool:
     """Ob Eigentümer und Leserechte der geöffneten Datei privat sind."""
+    return not _ownership_problem(descriptor)
+
+
+def _ownership_problem(descriptor: int) -> str:
+    """Warum die geöffnete Datei nicht privat ist — leer, wenn sie es ist.
+
+    **Der Grund reist mit, samt SIDs** (RM-113). Auf dem Windows-Runner der
+    CI lehnte die Prüfung im Tag-Lauf 0.3.0 eine frisch geschriebene Datei
+    mit „gehört nicht dem aktuellen Nutzer" ab, und welcher der sieben Wege
+    zu ``False`` geführt hatte, sagte niemand — der Test überspringt dort
+    seitdem, und die Abnahme verlangt genau diese Angabe. SIDs sind keine
+    Geheimnisse; sie benennen Konten.
+
+    Als Besitzer gilt der Nutzer des Prozesses **oder** sein Standardbesitzer
+    (``TokenOwner``): Ein erhöhter Administrator legt Dateien mit der Gruppe
+    der Administratoren als Besitzer an, ein gewöhnlicher mit sich selbst —
+    beides ist der aktuelle Nutzer, und die Leserechte prüft die Liste
+    danach ohnehin gegen genau diese Konten, SYSTEM und die Administratoren.
+    """
     if os.name != "nt":
         getuid = cast(Callable[[], int], vars(os)["getuid"])
-        return os.fstat(descriptor).st_uid == getuid()
+        owner_uid = os.fstat(descriptor).st_uid
+        return "" if owner_uid == getuid() else f"Besitzer uid {owner_uid}"
 
     class TokenOwner(ctypes.Structure):
         _fields_ = (("sid", ctypes.c_void_p),)
@@ -195,6 +215,19 @@ def _owned_by_current_user(descriptor: int) -> bool:
         ctypes.POINTER(ctypes.c_uint32),
     )
     advapi32.CreateWellKnownSid.restype = ctypes.c_int
+    advapi32.ConvertSidToStringSidW.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))
+    advapi32.ConvertSidToStringSidW.restype = ctypes.c_int
+
+    def named(sid: Any) -> str:
+        """Eine SID als ``S-1-…`` für die Diagnose, sonst ``?``."""
+        text = ctypes.c_void_p()
+        if not sid or not advapi32.ConvertSidToStringSidW(sid, ctypes.byref(text)):
+            return "?"
+        try:
+            return str(ctypes.wstring_at(text.value)) if text.value else "?"
+        finally:
+            kernel32.LocalFree(text)
+
     handle = ctypes.c_void_p(msvcrt.get_osfhandle(descriptor))
     owner = ctypes.c_void_p()
     dacl = ctypes.c_void_p()
@@ -210,11 +243,11 @@ def _owned_by_current_user(descriptor: int) -> bool:
         ctypes.byref(security_descriptor),
     )
     if result != 0:
-        return False
+        return f"GetSecurityInfo {result}"
     token = ctypes.c_void_p()
     try:
         if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x0008, ctypes.byref(token)):
-            return False
+            return "OpenProcessToken"
 
         def token_sid(kind: int, structure: type[ctypes.Structure]) -> tuple[Any, int] | None:
             needed = ctypes.c_uint32()
@@ -236,13 +269,19 @@ def _owned_by_current_user(descriptor: int) -> bool:
         owner_data = token_sid(4, TokenOwner)
         user_data = token_sid(1, SidAndAttributes)
         if owner_data is None or user_data is None:
-            return False
+            return "GetTokenInformation"
         _owner_buffer, token_owner = owner_data
         _user_buffer, token_user = user_data
-        if not advapi32.EqualSid(owner, ctypes.c_void_p(token_owner)):
-            return False
+        accounts = (
+            f"Besitzer {named(owner)}, Nutzer {named(ctypes.c_void_p(token_user))}, "
+            f"Standardbesitzer {named(ctypes.c_void_p(token_owner))}"
+        )
+        if not any(
+            advapi32.EqualSid(owner, ctypes.c_void_p(mine)) for mine in (token_user, token_owner)
+        ):
+            return accounts
         if not dacl:
-            return False
+            return f"keine Zugriffsliste; {accounts}"
 
         def well_known_sid(kind: int) -> tuple[Any, int] | None:
             size = ctypes.c_uint32(68)
@@ -259,7 +298,7 @@ def _owned_by_current_user(descriptor: int) -> bool:
         system_data = well_known_sid(22)  # WinLocalSystemSid
         administrators_data = well_known_sid(26)  # WinBuiltinAdministratorsSid
         if system_data is None or administrators_data is None:
-            return False
+            return "CreateWellKnownSid"
         _system_buffer, system_sid = system_data
         _administrators_buffer, administrators_sid = administrators_data
         trusted_sids = (token_user, token_owner, system_sid, administrators_sid)
@@ -271,15 +310,15 @@ def _owned_by_current_user(descriptor: int) -> bool:
             ctypes.sizeof(acl),
             2,  # AclSizeInformation
         ):
-            return False
+            return f"GetAclInformation; {accounts}"
         for index in range(acl.ace_count):
             pointer = ctypes.c_void_p()
             if not advapi32.GetAce(dacl, index, ctypes.byref(pointer)) or pointer.value is None:
-                return False
+                return f"GetAce {index}; {accounts}"
             header = ctypes.cast(pointer, ctypes.POINTER(AceHeader)).contents
             if header.kind != 0:  # Nur ein gewöhnlicher ACCESS_ALLOWED_ACE ist eindeutig.
                 if header.kind in {5, 9, 11}:
-                    return False
+                    return f"Eintrag {index} der Art {header.kind}; {accounts}"
                 continue
             ace = ctypes.cast(pointer, ctypes.POINTER(AllowedAce)).contents
             content_read = ace.mask & (0x00000001 | 0x80000000 | 0x10000000)
@@ -289,9 +328,9 @@ def _owned_by_current_user(descriptor: int) -> bool:
             if not any(
                 advapi32.EqualSid(sid, ctypes.c_void_p(trusted)) for trusted in trusted_sids
             ):
-                return False
+                return f"lesbar für {named(sid)}; {accounts}"
 
-        return True
+        return ""
     finally:
         if token:
             kernel32.CloseHandle(token)
@@ -323,6 +362,34 @@ class SupportLicence:
         if len(self.licence_key) <= 28:
             return self.licence_key
         return f"{self.licence_key[:18]}…{self.licence_key[-9:]}"
+
+
+def kind_label(archived: Any, recorded: Any, places: Any) -> str:
+    """Die Lizenzart für die Zusammenfassung — aus dem Archiv, sonst vom Server.
+
+    Seit RM-182 führt der Aktivierungsdienst die signierte Art im Datensatz.
+    Ein Schlüssel, der nur als Digest vorliegt oder aus einem fremden Archiv
+    stammt, stand vorher als „Art unbekannt" da, obwohl der Server sie
+    kannte — und genau im Supportfall zählt, ob zwei Plätze zustehen.
+    Widersprechen sich beide Quellen, steht der Widerspruch da, keine Wahl.
+    """
+    names = {
+        key.LicenceKind.PRIVATE: "privat",
+        key.LicenceKind.COMMERCIAL: "gewerblich",
+    }
+
+    def named(value: Any) -> str | None:
+        if isinstance(value, bool) or not isinstance(value, int):
+            return None
+        return names.get(value, f"Art {value}") if value else None
+
+    local, remote = named(archived), named(recorded)
+    if local and remote and local != remote:
+        return f"Archiv: {local}, Server: {remote} — prüfen"
+    label = local or remote or "Art unbekannt"
+    if isinstance(places, int) and not isinstance(places, bool) and places > 0:
+        label = f"{label} · {places} {'Platz' if places == 1 else 'Plätze'}"
+    return label
 
 
 def _record_from_key(
@@ -548,8 +615,9 @@ def read_token(path: Path) -> str:
                 or (opened.st_dev, opened.st_ino) != (metadata.st_dev, metadata.st_ino)
             ):
                 raise OSError("Tokendatei wechselte beim Öffnen")
-            if not _owned_by_current_user(descriptor):
-                raise OSError("Tokendatei gehört nicht dem aktuellen Nutzer")
+            problem = _ownership_problem(descriptor)
+            if problem:
+                raise OSError(f"Tokendatei gehört nicht dem aktuellen Nutzer ({problem})")
             if os.name != "nt" and stat.S_IMODE(opened.st_mode) & 0o077:
                 raise OSError("Tokendatei ist für andere Nutzer zugänglich")
             raw = os.read(descriptor, MAX_TOKEN_FILE_BYTES + 1)
@@ -1323,15 +1391,7 @@ class SupportWindow:
         # Die Art wird benannt, auch die private: Fehlte die Zeile bei
         # privaten Lizenzen, wäre ihr Fehlen die Aussage — und die liest
         # sich im Supportfall wie „unbekannt".
-        kinds = {
-            key.LicenceKind.PRIVATE: ("privat"),
-            key.LicenceKind.COMMERCIAL: ("gewerblich"),
-        }
-        kind = (
-            kinds.get(self.current.kind, ("Art unbekannt"))
-            if self.current.kind
-            else ("Art unbekannt")
-        )
+        kind = kind_label(self.current.kind, licence.get("kind"), licence.get("device_limit"))
         transaction = self.current.transaction or ("noch nicht zugeordnet")
         created = licence.get("created_at") or ("noch nie aktiviert")
         self.summary.set(

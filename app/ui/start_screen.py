@@ -55,8 +55,7 @@ from app.branding import APP_NAME, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import examples
 from app.core.errors import AppError
 from app.core.examples import Example
-from app.core.ingest.fetch import ALLOWED_SUFFIXES, suffix_of
-from app.core.ingest.plan import MODEL_SUFFIXES
+from app.core.ingest.archive import IMPORT_SUFFIXES
 from app.core.knowledge import filaments
 from app.i18n import tr
 from app.ui.filament_inventory import paint_spool
@@ -174,7 +173,7 @@ class DropArea(QPushButton):
 
         names = [
             suffix.lstrip(".").upper()
-            for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX)
+            for suffix in (*IMPORT_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX)
         ]
         middle = (len(names) + 1) // 2
         kinds = QLabel(
@@ -476,13 +475,18 @@ class ExampleTile(QPushButton):
 
 
 def accepted_url(event: QDragEnterEvent | QDropEvent) -> str | None:
-    """Die erste fallengelassene **Web**-Adresse, die auf ein Modell zeigt.
+    """Die erste fallengelassene **Web**-Adresse.
 
     Wer aus dem Browser einen Herunterladen-Verweis auf das Fenster zieht,
     meint dieselbe Handlung wie mit einer Datei — und bekam bisher nichts, weil
-    :func:`accepted_path` alles verwirft, was keine lokale Datei ist. Geprüft
-    wird nur die Endung; ob dahinter wirklich ein Modell liegt, weiß erst der
-    Server (:mod:`app.core.ingest.fetch`).
+    :func:`accepted_path` alles verwirft, was keine lokale Datei ist.
+
+    **Jede Web-Adresse wird angenommen, nicht nur eine mit Modellendung.** Die
+    Endung war hier bis zum 22.09.2026 die Bedingung, und der häufigste Fall
+    fiel durch: der Verweis auf die Modellseite selbst. Er bekam beim Ziehen
+    ein Verbotszeichen und keinen Satz. Ob hinter der Adresse eine Datei
+    liegt, sagt jetzt :mod:`app.core.ingest.fetch` — für eine Modellseite ohne
+    Netzzugriff und mit dem Weg, der geht.
     """
     data = event.mimeData()
     if not data.hasUrls():
@@ -490,8 +494,7 @@ def accepted_url(event: QDragEnterEvent | QDropEvent) -> str | None:
     for url in data.urls():
         if url.isLocalFile() or url.scheme().lower() not in ("http", "https"):
             continue
-        if suffix_of(url.path()) in ALLOWED_SUFFIXES:
-            return str(url.toString())
+        return str(url.toString())
     return None
 
 
@@ -520,7 +523,7 @@ def accepted_paths(event: QDragEnterEvent | QDropEvent) -> list[Path]:
         if not url.isLocalFile():
             continue
         path = Path(url.toLocalFile())
-        if path.suffix.lower() in (*MODEL_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
+        if path.suffix.lower() in (*IMPORT_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
             found.append(path)
     return found
 

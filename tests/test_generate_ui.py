@@ -11,13 +11,14 @@ from pathlib import Path
 import pytest
 from PySide6.QtWidgets import QApplication, QDialogButtonBox
 
-from app.core.backends.mesh import GeneratedMesh, ScriptedMeshBackend
+from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import OperationCancelled
 from app.core.scene import History
 from app.core.scene.project import new_project
 from app.ui.generate_dialog import GenerateDialog
 from app.ui.session import Session
 from tests.conftest import FakeMesh
+from tests.scripted_backend import ScriptedMeshBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 

@@ -115,7 +115,7 @@ function operator_request(string $raw): array
 function operator_state(PDO $database, string $digest): array
 {
     $licence = $database->prepare(
-        'SELECT status, created_at FROM licences WHERE digest = ?'
+        'SELECT status, created_at, kind FROM licences WHERE digest = ?'
     );
     $licence->execute([$digest]);
     $licenceRow = $licence->fetch();
@@ -159,12 +159,18 @@ function operator_state(PDO $database, string $digest): array
         ];
     }
 
+    // Die Art steht seit RM-182 im Datensatz: Der Support sieht auch bei
+    // einem Schlüssel, der nicht im eigenen Archiv liegt, wie viele Plätze
+    // zustehen. `null` heißt noch nie mit Schlüssel gesehen.
+    $kind = $licenceRow === false || $licenceRow['kind'] === null ? null : (int) $licenceRow['kind'];
     return [
         'ok' => true,
         'licence' => [
             'digest' => $digest,
             'status' => $licenceRow === false ? 'unknown' : (string) $licenceRow['status'],
             'created_at' => $licenceRow === false ? null : (string) $licenceRow['created_at'],
+            'kind' => $kind,
+            'device_limit' => $kind === null ? null : (ACTIVATION_DEVICE_LIMITS[$kind] ?? null),
         ],
         'activations' => $activationRows,
         'attempts' => array_map(

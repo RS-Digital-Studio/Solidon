@@ -351,3 +351,90 @@ def test_the_readable_formats_are_the_same_ones_the_drop_area_takes() -> None:
 
     assert set(READABLE_SUFFIXES) <= set(ALLOWED_SUFFIXES)
     assert ".step" in ALLOWED_SUFFIXES
+
+
+# --- Modellseiten und Archive (22.09.2026) -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        "https://www.printables.com/model/3161-3d-benchy",
+        "https://www.thingiverse.com/thing:763622",
+        "https://makerworld.com/de/models/1234567",
+        "https://cults3d.com/en/3d-model/various/3dbenchy",
+        "https://www.myminifactory.com/object/3d-print-benchy-1",
+        "https://thangs.com/designer/x/3d-model/benchy-1",
+    ],
+)
+def test_a_model_page_is_answered_with_the_way_that_works_without_the_network(
+    page: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Seite der Plattform ist nicht die Datei — und hinter einer Bot-Prüfung.
+
+    Nachgesehen am 22.09.2026: Printables, Thingiverse, MakerWorld und
+    Cults3D antworten ohne Browser mit einer Cloudflare-Prüfung, Thingiverse
+    sperrt Downloads zusätzlich in seiner ``robots.txt``. Die Seite zu laden
+    kostete nur Wartezeit; gesagt wird sofort, was hilft.
+    """
+
+    def forbidden(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("für eine Modellseite geht keine Anfrage hinaus")
+
+    monkeypatch.setattr("app.core.ingest.fetch.open_public_url", forbidden)
+    with pytest.raises(ValidationError) as raised:
+        fetch_model(page)
+
+    assert raised.value.values["constraint"] == "web_page"
+    assert "Herunterladen" in str(raised.value.detail)
+    assert [action.id for action in raised.value.suggestions] == ["open_in_browser"]
+    assert raised.value.values["url"].startswith("https://")
+
+
+def test_a_direct_file_on_a_platform_is_no_page() -> None:
+    """``files.printables.com/…/halter.stl`` ist eine Datei und geht den gewöhnlichen Weg."""
+    from app.core.ingest.fetch import model_page_host
+
+    assert model_page_host("https://files.printables.com/media/prints/1/stls/halter.stl") == ""
+    assert model_page_host("https://www.thingiverse.com/download:123/teile.zip") == ""
+    assert model_page_host("https://www.printables.com/model/3161") == "printables.com"
+    assert model_page_host("https://beispiel.example/model/3161") == "", "nur die bekannten"
+    assert model_page_host("https://printables.com.example/model/3161") == "", "kein Anhängsel"
+
+
+def test_an_unknown_page_that_turns_out_to_be_html_says_the_same_sentence(server: str) -> None:
+    with pytest.raises(ValidationError) as raised:
+        fetch_model(f"{server}/seite")
+
+    assert "Herunterladen" in str(raised.value.detail)
+    assert raised.value.values["type"] == "text/html"
+
+
+def test_a_zip_behind_an_address_is_taken(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Modellseiten liefern mehrere Teile als ZIP; ausgepackt wird beim Einlesen."""
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as container:
+        container.writestr("halter.stl", (MESHES / "cube_clean.stl").read_bytes())
+    archived = buffer.getvalue()
+
+    class _Zip(_Redirected):
+        def __init__(self, url: str) -> None:
+            super().__init__(url)
+            self.headers = {"Content-Type": "application/zip"}
+            self._rest = archived
+
+        def read(self, size: int) -> bytes:
+            payload, self._rest = self._rest, b""
+            return payload
+
+    monkeypatch.setattr(
+        "app.core.ingest.fetch.open_public_url",
+        lambda address, **_kwargs: _Zip(address),
+    )
+    fetched = fetch_model("https://files.example.invalid/teile.zip")
+
+    assert fetched.name == "teile.zip"
+    assert fetched.payload == archived
