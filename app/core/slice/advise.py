@@ -24,15 +24,18 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import Final
 
-from app.core.errors import ValidationError
+from app.core.errors import CALIBRATE_MATERIAL, ValidationError
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.slice.analysis import (
+    OVERHANG_MARGIN,
+    _layer_shape,
     island_layers,
     largest_overhang_patch,
     narrowest_measured,
     support_on_model,
     tapered_layers,
+    thinnest_spot,
     total_overhang,
 )
 from app.core.types import (
@@ -44,7 +47,7 @@ from app.core.types import (
     Severity,
     SliceResult,
 )
-from app.core.units import is_close
+from app.core.units import EPS_GEOM, is_close
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -1163,15 +1166,21 @@ def warnings_for(
         )
 
     if not profile.material.calibrated:
+        # **Einmal gesagt und mit dem Weg dorthin.** Der Satz stand in keinem
+        # Bericht, weil ``warnings_for`` keinen Aufrufer hatte (Durchsicht
+        # 0.5.0); jetzt steht er im Prüfbericht, und der Knopf daneben öffnet
+        # die Kalibrierung — ein Hinweis ohne Handlung ist nach Regel 17 nur
+        # halb.
         findings.append(
             Finding(
                 code="settings.uncalibrated_material",
                 severity="info",
                 message=_(
-                    "Die Toleranzen dieses Materials sind der mitgelieferte Startwert, "
-                    "keine Messung."
+                    "Die Toleranzen dieses Materials sind Startwerte. Mit dem "
+                    "Toleranz-Testkörper stimmen sie für Ihren Drucker."
                 ),
                 values={"material": profile.material.title},
+                suggestions=(CALIBRATE_MATERIAL,),
             )
         )
 
@@ -1284,29 +1293,50 @@ def warnings_for(
         )
 
     if result is not None:
-        least = NARROW_LINE_SHARE * profile.printer.nozzle_diameter
-        thin = narrowest_measured(result)
-        if thin is not None and thin < least:
-            # Eine einzelne variable Arachne-Bahn kann eine Wand tragen.
-            # Zwei Bahnen sind eine Festigkeitsfrage, keine Druckbarkeitsgrenze.
-            findings.append(
-                Finding(
-                    code="settings.wall_below_nozzle",
-                    severity="warning",
-                    message=_(
-                        "Die dünnste Stelle ist schmaler als die hier angesetzte "
-                        "Mindestbahnbreite. Die Materialbahnen im Slicer prüfen; "
-                        "fehlen sie dort, eine kleinere Düse wählen oder die Stelle "
-                        "verbreitern."
-                    ),
-                    values={
-                        "width_mm": thin,
-                        "nozzle_mm": profile.printer.nozzle_diameter,
-                        "least_mm": least,
-                    },
-                )
-            )
+        findings += located_warnings(result, profile)
+    return findings
 
+
+def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
+    """Die Befunde aus der Geometrie — jeder mit der Stelle, an der er sitzt.
+
+    Eine Rechnung für zwei Wege: :func:`warnings_for` nimmt sie für den
+    Druckdialog, :func:`app.core.slice.findings.body_findings` bindet sie
+    zusätzlich an ihren Körper für den Prüfbericht. Der Ort ist die Mitte der
+    Fläche, die an der dünnsten Stelle bei der Öffnung verloren geht, bzw. die
+    Mitte der freien Fläche über der längsten Brücke; ohne Ort fliegt der
+    Klick zum Körper.
+    """
+    findings: list[Finding] = []
+    least = NARROW_LINE_SHARE * profile.printer.nozzle_diameter
+    thin = narrowest_measured(result)
+    if thin is not None and thin < least:
+        # Eine einzelne variable Arachne-Bahn kann eine Wand tragen.
+        # Zwei Bahnen sind eine Festigkeitsfrage, keine Druckbarkeitsgrenze.
+        layer = min(
+            (entry for entry in result.layers if entry.min_width > EPS_GEOM),
+            key=lambda entry: entry.min_width,
+        )
+        spot = thinnest_spot(_layer_shape(layer), layer.min_width)
+        findings.append(
+            Finding(
+                code="settings.wall_below_nozzle",
+                severity="warning",
+                message=_(
+                    "Die dünnste Stelle ist schmaler als die hier angesetzte "
+                    "Mindestbahnbreite. Die Materialbahnen im Slicer prüfen; "
+                    "fehlen sie dort, eine kleinere Düse wählen oder die Stelle "
+                    "verbreitern."
+                ),
+                values={
+                    "width_mm": thin,
+                    "nozzle_mm": profile.printer.nozzle_diameter,
+                    "least_mm": least,
+                    "z_mm": round(layer.z, 2),
+                },
+                location=None if spot is None else (spot[0], spot[1], layer.z),
+            )
+        )
     findings += _from_spans(result)
     return findings
 
@@ -1321,7 +1351,7 @@ def warnings_for(
 SPAN_INTERESTING: Final = 15.0
 
 
-def _from_spans(result: SliceResult | None) -> list[Finding]:
+def _from_spans(result: SliceResult) -> list[Finding]:
     """Decken, die quer durch die Luft spannen (§22.2).
 
     Kein Vorschlag, sondern ein Befund: keine Einstellung macht aus einer
@@ -1331,15 +1361,29 @@ def _from_spans(result: SliceResult | None) -> list[Finding]:
 
     Gemeldet wird die schlimmste Stelle mit ihrer Höhe, nicht jede einzelne:
     ein Bericht mit dreißig Zeilen derselben Sache wird nicht gelesen.
+
+    **Der Ort ist die freie Fläche, nicht die Achse.** Hier stand
+    ``(0, 0, z)``: die Höhe stimmte, der Klick flog aber zum Ursprung der
+    Szene, neben das Teil. Jetzt ist es die Mitte der größten freien Fläche
+    dieser Schicht über der darunter; ohne sie fliegt er zum Körper.
     """
-    if result is None:
-        return []
-    spanning = [layer for layer in result.layers if layer.bridge_width > SPAN_INTERESTING]
+    spanning = [
+        index for index, layer in enumerate(result.layers) if layer.bridge_width > SPAN_INTERESTING
+    ]
     if not spanning:
         return []
-
-    worst = max(spanning, key=lambda layer: layer.bridge_width)
+    worst = max(spanning, key=lambda index: result.layers[index].bridge_width)
+    layer = result.layers[worst]
     _log.info("%d layer(s) span more than %.0f mm", len(spanning), SPAN_INTERESTING)
+    location = None
+    if worst > 0:
+        free = _layer_shape(layer).difference(
+            _layer_shape(result.layers[worst - 1]).buffer(OVERHANG_MARGIN)
+        )
+        pieces = [part for part in getattr(free, "geoms", [free]) if part.area > 0.0]
+        if pieces:
+            anchor = max(pieces, key=lambda part: part.area).representative_point()
+            location = (float(anchor.x), float(anchor.y), float(layer.z))
     return [
         Finding(
             code="slice.long_bridge",
@@ -1351,11 +1395,11 @@ def _from_spans(result: SliceResult | None) -> list[Finding]:
                 "vermeidet das — sonst hilft nur eine Stütze."
             ),
             values={
-                "span_mm": round(worst.bridge_width, 1),
-                "z_mm": round(worst.z, 2),
+                "span_mm": round(layer.bridge_width, 1),
+                "z_mm": round(layer.z, 2),
                 "layers": len(spanning),
             },
-            location=(0.0, 0.0, worst.z),
+            location=location,
         )
     ]
 

@@ -179,6 +179,15 @@ PARALLEL_FROM = 40
 MAX_WORKERS = 16
 FULL_WORKERS = 6
 
+#: Wie viele Arbeiter die Stützsäulen unter sich aufteilen (:func:`_support_volume`).
+SUPPORT_WORKERS = 6
+
+#: So viele Schichten misst ein Arbeiter in einem Block (:func:`_measure_batch`).
+#: Groß genug, dass jeder GEOS-Aufruf ein Feld statt einer Schicht fragt;
+#: klein genug, dass sechs Arbeiter an 400 Schichten gleichmäßig zu tun haben
+#: und ein Abbruch nach höchstens einem Block je Arbeiter greift.
+BATCH_LAYERS = 16
+
 #: Ab dieser Zahl Stützflächen ist der Aufbau eines räumlichen Index billiger
 #: als ein vektorisierter GEOS-Test gegen jede einzelne. An 59 Kugelschichten
 #: mit bis zu 151 Teilen: 50 auf 35 ms; darunter bleibt der direkte Aufruf
@@ -469,27 +478,57 @@ def _support_volume(
     welche davon die Schicht darunter überhaupt berührt. Beide Wege ergeben
     dieselbe Zahl (4016,6 mm³ an derselben Kugel), einer davon in einem
     Hundertachtzigstel der Zeit.
+
+    **Und die Säulen verteilen sich auf Arbeiter** (23.09.2026, RM-201). Weil
+    keine Säule eine andere beschneidet, rechnet jeder Arbeiter denselben
+    Durchgang von oben nach unten für die Überhänge seiner Schichten — jeder
+    Schicht, die einen trägt, der Reihe nach einer Gruppe zugeteilt. An einer
+    Hohlkugel hielt die eine Liste bis zu 317 konzentrische Ringe, deren
+    Hüllboxen sich alle überlappen, und lief auf einem Kern. Die Summe
+    entsteht mit ``math.fsum`` in fester Gruppenfolge, also unabhängig davon,
+    welcher Arbeiter zuerst fertig ist; von der Summe über eine einzige Liste
+    weicht sie höchstens in der letzten Stelle ab.
     """
-    pending: list[ShapelyPolygon] = []
-    volume = 0.0
-    for index in range(len(sections) - 1, -1, -1):
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        metrics = measured[index]
-        region = None if metrics is None else metrics.overhang
-        if region is not None and not region.is_empty:
-            pending += _areas_of(region)
-        if not pending:
-            continue
-        below = sections[index - 1] if index else None
-        if below is not None and not below.is_empty:
-            pending = _above_material(pending, below, cancelled=cancelled)
+    starting = [
+        index
+        for index, metrics in enumerate(measured)
+        if metrics is not None and metrics.overhang is not None and not metrics.overhang.is_empty
+    ]
+    if not starting:
+        return 0.0
+    groups = min(_workers(SUPPORT_WORKERS), len(starting)) if len(sections) >= PARALLEL_FROM else 1
+    # Je Gruppe die Überhänge jeder so vielten Schicht, die einen trägt —
+    # verteilt über die Höhe, damit keine Gruppe alle Decken bekommt.
+    member = {index: number % groups for number, index in enumerate(starting)}
+
+    def columns(group: int) -> float:
+        pending: list[ShapelyPolygon] = []
+        volume = 0.0
+        for index in range(len(sections) - 1, -1, -1):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            if member.get(index) == group:
+                region = measured[index].overhang  # type: ignore[union-attr]
+                pending += _areas_of(region)
             if not pending:
                 continue
-        volume += float(shapely.area(np.asarray(pending, dtype=object)).sum()) * _layer_step(
-            index, layer_height, first_layer_height
-        )
-    return volume
+            below = sections[index - 1] if index else None
+            if below is not None and not below.is_empty:
+                pending = _above_material(pending, below, cancelled=cancelled)
+                if not pending:
+                    continue
+            volume += float(shapely.area(np.asarray(pending, dtype=object)).sum()) * _layer_step(
+                index, layer_height, first_layer_height
+            )
+        return volume
+
+    if groups == 1:
+        return columns(0)
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=groups) as pool:
+        shares = list(pool.map(columns, range(groups)))
+    return math.fsum(shares)
 
 
 def _layer_step(index: int, layer_height: float, first_layer_height: float | None) -> float:
@@ -679,26 +718,26 @@ def _measure_all(
                 results[index] = _repeated(measured, shape)
         return results
 
-    if len(jobs) < PARALLEL_FROM:
-        for index, shape, below, plate, sampled in jobs:
-            if cancelled is not None:
-                cancelled.raise_if_cancelled()
-            step = _layer_step(index, layer_height, first_layer_height)
-            results[index] = _measure(
-                shape, below, plate, step, detail, overhang_factor, bridge_from, sampled
-            )
-        return carried()
-
-    def one(job: tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool, bool]) -> None:
+    def block(chunk: list[tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool, bool]]) -> None:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        index, shape, below, plate, sampled = job
-        step = _layer_step(index, layer_height, first_layer_height)
-        results[index] = _measure(
-            shape, below, plate, step, detail, overhang_factor, bridge_from, sampled
+        measured = _measure_batch(
+            [job[1] for job in chunk],
+            [job[2] for job in chunk],
+            [job[3] for job in chunk],
+            [_layer_step(job[0], layer_height, first_layer_height) for job in chunk],
+            detail,
+            overhang_factor,
+            bridge_from,
+            [job[4] for job in chunk],
         )
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
+        for job, metrics in zip(chunk, measured, strict=True):
+            results[job[0]] = metrics
+
+    if len(jobs) < PARALLEL_FROM:
+        for start in range(0, len(jobs), BATCH_LAYERS):
+            block(jobs[start : start + BATCH_LAYERS])
+        return carried()
 
     # **Die Zahl der Arbeiter ist am Prüfkörper gemessen und trägt nicht
     # überall.** Gemessen am 16.09.2026 an einer 200 mm hohen Waschschüssel
@@ -716,17 +755,26 @@ def _measure_all(
     # Eine Zahl, die beide Fälle gewinnt, gibt es damit nicht, und eine
     # Heuristik über die Schichtzahl wäre an zwei Punkten geraten. Die Marke
     # bleibt, bis jemand den wirklichen Engpass misst (RM, 16.09.2026).
+    #
+    # Seit dem 23.09.2026 (RM-201) bekommt jeder Arbeiter einen Block von
+    # höchstens :data:`BATCH_LAYERS` Schichten, gestapelt gemessen
+    # (:func:`_measure_batch`). Das Bündeln, das am 16.09. nichts brachte,
+    # verteilte nur die Aufträge anders; jetzt fragt jeder GEOS-Aufruf einen
+    # ganzen Block, und der Interpreter-Lock wird je Block statt je Schicht
+    # verhandelt.
     workers = _workers(FULL_WORKERS if detail == "full" else MAX_WORKERS)
+    size = max(1, min(BATCH_LAYERS, math.ceil(len(jobs) / (workers * 3))))
+    chunks = [jobs[start : start + size] for start in range(0, len(jobs), size)]
     with ThreadPoolExecutor(max_workers=workers) as pool:
         if cancelled is None:
-            list(pool.map(one, jobs))
+            list(pool.map(block, chunks))
         else:
-            # Höchstens ein Auftrag je Arbeiter liegt zwischen zwei Fragen.
+            # Höchstens ein Block je Arbeiter liegt zwischen zwei Fragen.
             # Der Kontextmanager wartet beim Abbruch nur auf diesen begrenzten
             # Satz laufender GEOS-Aufrufe, nicht auf alle übrigen Schichten.
-            for start in range(0, len(jobs), workers):
+            for start in range(0, len(chunks), workers):
                 cancelled.raise_if_cancelled()
-                list(pool.map(one, jobs[start : start + workers]))
+                list(pool.map(block, chunks[start : start + workers]))
     return carried()
 
 
@@ -1135,6 +1183,9 @@ def _polygon_with_contours(
             # Segmente sind dafür der ausdrücklich vorgesehene GEOS-Weg.
             chained = None
         if chained is not None:
+            nested = _nested(coordinates, ring_of, capture_contours=capture_contours)
+            if nested is not None:
+                return nested
             edges = shapely.linearrings(coordinates, indices=ring_of)
     if chained is None:
         rounded = np.round(points.reshape(-1, 2), 6)
@@ -1195,6 +1246,81 @@ def _polygon_with_contours(
     return shape, _to_polygons(shape) if capture_contours else None
 
 
+def _nested(
+    coordinates: np.ndarray, ring_of: np.ndarray, *, capture_contours: bool
+) -> tuple[ShapelyPolygon, tuple[Polygon, ...] | None] | None:
+    """Mehrere verkettete Ringe zu Flächen mit Löchern — ohne ``polygonize``.
+
+    Die Verkettung (:func:`_rings_from`) kennt die Ringe schon; was fehlt, ist
+    nur, welcher in welchem liegt. Das beantwortet ein Punkt je Ring gegen die
+    übrigen Ringe als Flächen, in einem Aufruf über einen räumlichen Index:
+    gerade Tiefe ist Material, ungerade ein Loch, und ein Loch gehört dem
+    Ring genau eine Ebene darüber. Ausgerichtet wird wie beim einzelnen Ring
+    — Außenring im Uhrzeigersinn, Loch dagegen.
+
+    **Warum nicht mehr über ``polygonize``.** An einer Hohlkugel hat jede
+    Schicht zwei Ringe, und der allgemeine Weg baute daraus Flächen, prüfte
+    Musterpunkte, vereinigte das Ergebnis und übersetzte es danach noch einmal
+    in Konturen — 130 von 300 ms des Schnitts (23.09.2026, RM-201). Die
+    Punkte sind dieselben; nur Anfangspunkt und Umlaufsinn eines Rings können
+    sich von dem unterscheiden, was GEOS gewählt hätte, und das ändert eine
+    Fläche höchstens in der letzten Stelle (``tests/test_slice_core.py``).
+
+    ``None``, wenn das Ergebnis nicht gültig ist — ein Ring, der einen anderen
+    berührt, eine Ebene durch eine Ecke —, dann bleibt der allgemeine Weg.
+    """
+    starts = np.flatnonzero(np.r_[True, ring_of[1:] != ring_of[:-1]])
+    ends = np.r_[starts[1:], len(ring_of)]
+    if np.any(ends - starts < 3):
+        return None
+    following = np.arange(1, len(ring_of) + 1)
+    following[ends - 1] = starts
+    x, y = coordinates[:, 0], coordinates[:, 1]
+    twice_area = np.add.reduceat(x * y[following] - x[following] * y, starts)
+    rings = [coordinates[first:last] for first, last in zip(starts, ends, strict=True)]
+    outlines = shapely.polygons(shapely.linearrings(coordinates, indices=ring_of))
+    held, holder = shapely.STRtree(outlines).query(
+        shapely.points(coordinates[starts]), predicate="within"
+    )
+    inner = held != holder
+    held, holder = held[inner], holder[inner]
+    depth = np.bincount(held, minlength=len(rings))
+    parent = np.full(len(rings), -1, dtype=np.int64)
+    for child, container in zip(held.tolist(), holder.tolist(), strict=True):
+        if depth[container] == depth[child] - 1:
+            parent[child] = container
+
+    def turned(ring: np.ndarray, clockwise: bool, area: float) -> np.ndarray:
+        if (area > 0.0) == clockwise:
+            return np.concatenate((ring[:1], ring[:0:-1]))
+        return ring
+
+    shells = [number for number in range(len(rings)) if depth[number] % 2 == 0]
+    holes: dict[int, list[np.ndarray]] = {number: [] for number in shells}
+    for number in range(len(rings)):
+        if depth[number] % 2:
+            if parent[number] < 0 or int(parent[number]) not in holes:
+                return None
+            holes[int(parent[number])].append(
+                turned(rings[number], False, float(twice_area[number]))
+            )
+    outer = {number: turned(rings[number], True, float(twice_area[number])) for number in shells}
+    parts = [ShapelyPolygon(outer[number], holes[number]) for number in shells]
+    shape = parts[0] if len(parts) == 1 else MultiPolygon(parts)
+    if not shape.is_valid:
+        return None
+    if not capture_contours:
+        return shape, None
+
+    def closed(ring: np.ndarray) -> tuple[tuple[float, float], ...]:
+        return tuple(map(tuple, np.vstack((ring, ring[:1])).tolist()))
+
+    return shape, tuple(
+        Polygon(outline=closed(outer[number]), holes=tuple(closed(hole) for hole in holes[number]))
+        for number in shells
+    )
+
+
 def _repaired(shape: ShapelyPolygon) -> ShapelyPolygon:
     """Ein Ring und sein Loch dürfen sich berühren, und dann ist das Polygon
     ungültig.
@@ -1227,67 +1353,16 @@ def _measure(
     gesucht wird; :func:`_measure_all` fragt nur jede :data:`TAPER_SAMPLE`.
     und schreibt den Wert dazwischen fort.
     """
-    area = float(shape.area)
-    reach = max(layer_height * overhang_factor, OVERHANG_MARGIN)
-    region: ShapelyPolygon | None = None
-    island_region: ShapelyPolygon | None = None
-    if on_plate:
-        # Auf der Druckplatte aufzuliegen ist die eine Stützart, die nichts kostet.
-        overhang = 0.0
-        islands = 0.0
-    elif previous is None or previous.is_empty:
-        overhang = area
-        islands = area
-        region = shape
-        island_region = shape
-    else:
-        supported = previous.buffer(reach)
-        region = shape.difference(supported)
-        overhang = float(region.area)
-        island_region = _islands(shape, previous)
-        islands = float(island_region.area)
-
-    if detail == "support":
-        # Alles darunter geht um die gedruckte Struktur, nicht um Stützen.
-        return LayerMetrics(
-            z=0.0,
-            area=area,
-            overhang_area=overhang,
-            island_area=islands,
-            min_width=0.0,
-            bridge_width=0.0,
-            contour_count=0,
-            overhang=region,
-            islands=island_region,
-        )
-
-    # Ist selbst jenseits der größeren Überhangzugabe nichts frei, kann in
-    # dem schmalen Band bis zur kleineren Brückenzugabe keine druckrelevante
-    # Spannweite liegen. Bei 0,2-mm-Schichten sind das höchstens 0,15 mm je
-    # Seite, deutlich unter einer Brückenbreite. Damit entfallen an einer
-    # glatten Kugel rund 340 zweite Buffer-/Differenzrechnungen. Bei groben
-    # Schichten, deren Band selbst breit genug wäre, bleibt die vollständige
-    # Messung.
-    bridge_width = (
-        0.0
-        if previous is None
-        or previous.is_empty
-        or (region is not None and region.is_empty and reach - OVERHANG_MARGIN < bridge_from / 2.0)
-        else _bridge_width(shape, previous, bridge_from)
-    )
-
-    return LayerMetrics(
-        z=0.0,
-        area=area,
-        overhang_area=overhang,
-        island_area=islands,
-        min_width=minimum_width(shape),
-        bridge_width=bridge_width,
-        contour_count=_contour_count(shape),
-        overhang=region,
-        islands=island_region,
-        taper_length=taper_length(shape) if taper else 0.0,
-    )
+    return _measure_batch(
+        [shape],
+        [previous],
+        [on_plate],
+        [layer_height],
+        detail,
+        overhang_factor,
+        bridge_from,
+        [taper],
+    )[0]
 
 
 def _islands(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> ShapelyPolygon:
@@ -1309,12 +1384,20 @@ def _islands(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> ShapelyP
     Die Grenze ist ``EPS_GEOM`` und keine eigene Zahl (Regel 7). Sie steht auf
     der Fläche, nicht auf einer Länge: Zwei Konturen mit weniger als einem
     Quadrat von EPS_GEOM Kantenlänge gemeinsam berühren sich, statt zu tragen.
+
+    **Die Schnittfläche wird nur gerechnet, wo die Antwort offen ist.** Sie
+    ist eine Überlagerung zweier fast gleicher Konturen, der teuerste Fall für
+    GEOS: An einer Hohlkugelschicht kostete sie 2,8 bis 7 ms, je Schicht, für
+    ein Ja, das niemand bezweifelte. Zwei billige Fragen entscheiden fast
+    immer vorher. Berühren sich die Teile gar nicht, schwebt das obere. Und
+    liegt ein Quadrat von zwei ``EPS_GEOM`` Kantenlänge um einen Punkt des
+    oberen Teils ganz im Inneren beider, teilen sie mindestens diese Fläche —
+    das Vierfache der Grenze. Beide Fragen stellt GEOS vektorisiert über alle
+    Teile einer Schicht, zusammen unter 0,1 ms.
     """
     if previous is None or previous.is_empty:
         return shape
-    parts = getattr(shape, "geoms", [shape])
-    floating = [part for part in parts if part.intersection(previous).area <= EPS_GEOM * EPS_GEOM]
-    return unary_union(floating) if floating else ShapelyPolygon()
+    return _islands_many(np.asarray([shape], dtype=object), np.asarray([previous], dtype=object))[0]
 
 
 def _simplified(shape: ShapelyPolygon) -> ShapelyPolygon:
@@ -1322,9 +1405,59 @@ def _simplified(shape: ShapelyPolygon) -> ShapelyPolygon:
 
     Ein hundertstel Millimeter ist ein Zehntel dessen, was die feinste Düse
     ablegen kann; was daran verschwindet, hat nie jemand gedruckt.
+
+    **Vereinfacht wird die geordnete Kontur** (:func:`_canonical`), denn
+    Douglas-Peucker hängt am Anfangspunkt eines Rings.
     """
+    shape = _canonical(shape)
     coarse = shape.simplify(WIDTH_SIMPLIFY)
     return shape if coarse.is_empty or coarse.length <= EPS_GEOM else coarse
+
+
+def _canonical(shape: ShapelyPolygon) -> ShapelyPolygon:
+    """Dieselbe Fläche mit festgelegtem Anfangspunkt und Umlaufsinn jedes Rings.
+
+    **Anfangspunkt und Umlaufsinn sind keine Eigenschaft des Schnitts**, sondern
+    des Wegs, der ihn gebaut hat: Die Verkettung beginnt einen Ring an der
+    ersten Kante in ihrer Liste, ``polygonize`` an einer eigenen. Die
+    Vereinfachung vor der Breitensuche (Douglas-Peucker) und die Abtastung des
+    Keils (alle Millimeter ab dem Anfangspunkt) hängen aber daran — gemessen
+    am 23.09.2026: Derselbe Querschnitt mit anders begonnenen Ringen gab am
+    Besteckeinsatz an 23 von 800 Schichten eine andere kleinste Breite und an
+    65 einen anderen Keil. ``shapely.normalize`` legt beides fest, und damit
+    rechnen der übersetzte und der GEOS-Weg dieselben Zahlen.
+    """
+    return shapely.normalize(shape)
+
+
+def _width_outline(shape: ShapelyPolygon) -> ShapelyPolygon:
+    """Die Kontur, an der :func:`minimum_width` öffnet — vereinfacht wie
+    :func:`_simplified`, aber ohne die Topologie Punkt für Punkt zu hüten.
+
+    Zwei Gründe, und beide sind gemessen (22.09.2026). Der erste ist die Zeit:
+    Die topologietreue Vereinfachung kostete an einem Kugelschnitt mit 1 200
+    Ecken 1,9 ms, Douglas-Peucker 0,14. Der zweite ist die Öffnung selbst:
+    Ein ungeglätteter Schnitt trägt kurze Kanten zwischen zwei schwachen
+    Knicken, die beim Erodieren verschwinden, und die Aufweitung setzt an ihre
+    Stelle die Ecke der Nachbarn — die Öffnung ist dann nicht mehr die
+    Identität, und jede Schicht müsste nachweisen, dass diese Ecken nichts
+    verdecken (:func:`_protrusion`). Bis zu dieser Messung wurde die erste
+    Frage deshalb am ungeglätteten Schnitt gestellt, die Suche danach am
+    geglätteten; jetzt fragen beide dieselbe Kontur.
+
+    Douglas-Peucker darf eine Struktur unter zwei Toleranzen Breite verlieren
+    — die Suche löst sie ohnehin nicht auf. Wird das Ergebnis leer, ungültig
+    oder eine andere Geometrieart, bleibt die topologietreue Vereinfachung.
+    Über sieben Modelle aus ``F:\\3D Dateien`` und eine Kugel mit 200 000
+    Dreiecken gab jede Schicht dieselbe Breite, bis auf eine um einen
+    Halbierungsschritt; die Breitenmessung wurde dabei zwei- bis fünfmal
+    schneller.
+    """
+    shape = _canonical(shape)
+    coarse = shape.simplify(WIDTH_SIMPLIFY, preserve_topology=False)
+    if coarse.is_empty or coarse.length <= EPS_GEOM or coarse.geom_type != shape.geom_type:
+        return _simplified(shape)
+    return coarse
 
 
 def _without_slits(shape: ShapelyPolygon) -> ShapelyPolygon:
@@ -1378,7 +1511,7 @@ def _eroded(shape: ShapelyPolygon, radius: float) -> ShapelyPolygon:
     return shape.buffer(-radius, quad_segs=1, join_style="mitre")
 
 
-def _opening_loss(shape: ShapelyPolygon, width: float) -> float:
+def _opening_loss(shape: ShapelyPolygon, width: float, *, exact: bool = True) -> float:
     """Wie viel Fläche eine morphologische Öffnung dieser Breite wegnimmt.
 
     Öffnen heißt erodieren und wieder aufweiten. Mit gefasten Ecken
@@ -1387,16 +1520,265 @@ def _opening_loss(shape: ShapelyPolygon, width: float) -> float:
     heraus, jede Ecke kommt an ihren Schnittpunkt zurück. Übrig bleibt genau
     das, was schmaler war — und dessen Fläche ist die Antwort.
 
-    Verglichen werden **Flächen**, nicht Geometrien. Die Öffnung liegt in der
-    Ausgangsform; eine Differenz gäbe dieselbe Zahl und kostete je Versuch
-    eine Boolesche Operation mehr.
+    **Die Öffnung liegt nicht immer in der Ausgangsform**, und das stand hier
+    bis zum 22.09.2026 als Annahme. Wo die Erosion eine Stelle knapp
+    übersteht, endet das erodierte Stück spitz, und die gefaste Aufweitung
+    verlängert jede Spitze um bis zu fünf Radien — eine Nadel, die über die
+    Form hinaus ins Freie ragt. In der Flächenbilanz gleicht sie den Verlust
+    aus, den sie verdecken sollte: Am runden Ende eines Trennstegs verschwand
+    so ein Ende unter einem Millimeter hinter 1,59 mm, an einer Hohlkugel
+    wog die Bilanz eines fast vollständig abgetragenen Rings minus 35 mm².
+    Und weil die Bilanz dabei nicht mehr monoton in der Weite ist, bestand
+    ein Schreibtisch-Organizer die Frage bei 2,0 mm und scheiterte bei 0,5:
+    Gemeldet wurde „mindestens 2 mm", gemessen sind 0,47. Zwei Dinge gelten
+    deshalb:
+
+    - **Splitter sind keine Struktur.** Ein erodiertes Stück, dessen mittlere
+      Weite (vierfache Fläche über Umfang) unter :data:`WIDTH_SIMPLIFY`
+      liegt, ist das, was von einer Wand genau auf der geprüften Weite übrig
+      bleibt, und liegt unter der Auflösung der Suche. Es wird nicht
+      aufgeweitet — das spart nebenbei die teuerste Aufweitung der ganzen
+      Messung (168 Splitter einer Hohlkugelschicht, 54 ms für einen Puffer).
+    - **Gezählt wird, was der Form fehlt**, nicht die Bilanz. Beide
+      unterscheiden sich genau um das, was die Aufweitung außerhalb der Form
+      dazugewinnt (:func:`_protrusion`). Die Bilanz ist also eine untere
+      Schranke des Verlusts; reißt sie schon das Budget, steht das Nein fest.
+
+    ``exact=False`` gibt nur die Bilanz zurück. Das genügt, wo allein ein
+    **Nein** entschieden wird (der Teileweg in :func:`_survives_opening`).
     """
-    radius = width / 2.0
-    eroded = _eroded(shape, radius)
+    return float(
+        _opening_losses(np.asarray([shape], dtype=object), np.asarray([width]), exact=exact)[0]
+    )
+
+
+def _without_slivers(eroded: ShapelyPolygon) -> ShapelyPolygon:
+    """Die erodierte Form ohne Stücke unter der Auflösung der Breitensuche.
+
+    Dieselbe Grenze wie :func:`_real_holes` für Löcher, dieselbe mittlere
+    Weite, in einem Aufruf über alle Stücke.
+    """
     if eroded.is_empty:
-        return float(shape.area)
-    opened = eroded.buffer(radius, quad_segs=1, join_style="mitre")
-    return max(0.0, float(shape.area) - float(opened.area))
+        return eroded
+    parts = np.asarray(list(getattr(eroded, "geoms", [eroded])), dtype=object)
+    wide = 4.0 * shapely.area(parts) >= WIDTH_SIMPLIFY * shapely.length(parts)
+    if wide.all():
+        return eroded
+    kept = [part for part, keep in zip(parts.tolist(), wide.tolist(), strict=True) if keep]
+    if not kept:
+        return ShapelyPolygon()
+    return kept[0] if len(kept) == 1 else MultiPolygon(kept)
+
+
+def _protrusion(
+    opened: ShapelyPolygon, shape: ShapelyPolygon, allowance: float = math.inf
+) -> float:
+    """Die Fläche der Aufweitung außerhalb der Form, in mm².
+
+    Im Normalfall ist die Öffnung die Identität: Jede Ecke kommt an ihre alte
+    Stelle zurück, und beide Formen sind nach dem Ordnen Punkt für Punkt gleich
+    — zehn Mikrosekunden an einem Ring mit 441 Ecken. Sonst werden die Ecken
+    auf dem Raster von ``EPS_GEOM`` verglichen, und nur die ohne Entsprechung
+    fragen nach ihrem Abstand zur Form. Wer draußen liegt, ist die Spitze einer
+    Nadel.
+
+    **Unter ``allowance`` genügt eine Schranke.** Die meisten Nadeln sind
+    Rechenreste: Ein ungeglätteter Querschnitt durch eine Kugel mit 200 000
+    Dreiecken verliert bei der Öffnung jede zehnte Ecke, weil kurze Kanten
+    zwischen zwei schwachen Knicken verschwinden, und an ihrer Stelle steht
+    die Ecke der Nachbarn um Zehntausendstel vor der Form. Jede
+    zusammenhängende Folge äußerer Ecken liegt höchstens so weit draußen wie
+    ihre fernste Ecke; ihre Fläche draußen ist nicht größer als dieser Abstand
+    mal der Länge ihres Zugs samt der beiden Kanten zu den inneren Nachbarn.
+    Reicht die Summe dieser Schranken nicht an ``allowance``, ist sie die
+    Antwort — eine obere Schranke, die dieselbe Entscheidung trägt. Am Korpus
+    (Kugel und sechs Modelle aus ``F:\\3D Dateien``, 1 654 Fragen, 22.09.2026)
+    lag die echte Fläche nie darüber.
+
+    **Sonst wird nur um die Nadeln herum gerechnet.** Eine Differenz über die
+    ganze Form kostete an einem Baum mit Astspitzen 7 ms je Frage, und an
+    seinen Spitzen stand in jeder Schicht eine Nadel. Jede Folge bekommt ein
+    Fenster: die Hüllbox ihres Zugs, um ihren größten Abstand zur Form
+    erweitert. Überlappende Fenster werden zusammengelegt, damit keine Fläche
+    doppelt zählt.
+    """
+    if shapely.equals_exact(
+        shapely.normalize(opened), shapely.normalize(shape), tolerance=EPS_GEOM
+    ):
+        return 0.0
+    rings = shapely.get_rings(shapely.get_parts(opened))
+    corners, ring_of = shapely.get_coordinates(rings, return_index=True)
+    if not len(corners):
+        return 0.0
+    # Ein Ring wiederholt seinen ersten Punkt am Ende; für die Folgen zählt er
+    # einmal.
+    closing = np.r_[ring_of[1:] != ring_of[:-1], True]
+    corners, ring_of = corners[~closing], ring_of[~closing]
+    outside = _unknown_corners(corners, shapely.get_coordinates(shape))
+    if outside.any():
+        shapely.prepare(shape)
+        candidates = np.flatnonzero(outside)
+        outside[candidates] = ~shapely.dwithin(shape, shapely.points(corners[candidates]), EPS_GEOM)
+    if not outside.any():
+        return 0.0
+    reach = np.zeros(len(corners))
+    reach[outside] = shapely.distance(shape, shapely.points(corners[outside]))
+    runs = _needle_runs(corners, ring_of, outside, reach)
+    bound = float(np.dot(runs.reach, runs.length))
+    if bound <= allowance:
+        return bound
+    margin = (runs.reach + EPS_GEOM)[:, None]
+    windows = _disjoint_rectangles(np.hstack((runs.low - margin, runs.high + margin)))
+    try:
+        # ``clip_by_rect`` nimmt nur ein Rechteck je Aufruf.
+        beyond = shapely.difference(
+            np.asarray([shapely.clip_by_rect(opened, *window) for window in windows.tolist()]),
+            np.asarray([shapely.clip_by_rect(shape, *window) for window in windows.tolist()]),
+        )
+    except shapely.errors.GEOSException:
+        # Der schnelle Zuschnitt verspricht keine gültige Fläche, und eine
+        # Aufweitung mit Nadeln liegt mit langen, fast parallelen Kanten an
+        # der Form. Scheitert die Überlagerung daran, rechnet sie über das
+        # Fenster als Fläche und auf dem Raster der Schnittpunkte (sechs
+        # Nachkommastellen, :func:`_rings_from`), das ohnehin die Auflösung
+        # der Konturen ist.
+        boxes = shapely.box(*windows.T)
+        beyond = shapely.difference(
+            shapely.intersection(opened, boxes, grid_size=EPS_GEOM),
+            shapely.intersection(shape, boxes, grid_size=EPS_GEOM),
+            grid_size=EPS_GEOM,
+        )
+    return float(shapely.area(beyond).sum())
+
+
+#: Bis zu welcher Koordinate die Rasterzellen einer Ecke als eine ganze Zahl
+#: vergleichbar sind: 2³⁰ Zellen von ``EPS_GEOM``, gut ein Meter. Darüber
+#: nimmt :func:`_unknown_corners` den langsameren Vergleich.
+_GRID_REACH = float(2**30) * EPS_GEOM
+
+
+def _unknown_corners(corners: np.ndarray, known: np.ndarray) -> np.ndarray:
+    """Welche Ecken in keiner ``EPS_GEOM``-Zelle einer bekannten Ecke liegen.
+
+    Zwei ganze Zahlen je Punkt werden zu einer zusammengelegt und über eine
+    sortierte Liste gesucht; an 1 200 Ecken sind das 50 Mikrosekunden, ein
+    Siebtel von ``np.isin`` über komplexe Schlüssel. Jenseits eines Meters
+    reicht die Zahl dafür nicht, dann bleibt der komplexe Weg.
+    """
+    if max(float(np.abs(corners).max()), float(np.abs(known).max())) >= _GRID_REACH:
+        return ~np.isin(_grid_keys(corners), _grid_keys(known))
+    offset = 2**30
+    shift = np.int64(2**31)
+
+    def keys(points: np.ndarray) -> np.ndarray:
+        cells = np.round(points / EPS_GEOM).astype(np.int64) + offset
+        return cells[:, 0] * shift + cells[:, 1]
+
+    table = np.sort(keys(known))
+    wanted = keys(corners)
+    found = np.minimum(np.searchsorted(table, wanted), len(table) - 1)
+    return np.asarray(table[found] != wanted)
+
+
+def _grid_keys(coordinates: np.ndarray) -> np.ndarray:
+    """Je Punkt eine Zahl, gleich für Punkte in derselben ``EPS_GEOM``-Zelle.
+
+    Komplex, weil ``np.isin`` darauf sortiert; über einen zusammengesetzten
+    Datentyp war derselbe Vergleich viermal so teuer.
+    """
+    cells = np.round(coordinates / EPS_GEOM)
+    return cells[:, 0] + 1j * cells[:, 1]
+
+
+@dataclass(frozen=True, slots=True)
+class _Runs:
+    """Die Folgen äußerer Ecken einer Aufweitung (:func:`_needle_runs`)."""
+
+    reach: np.ndarray
+    """Je Folge der größte Abstand einer ihrer Ecken zur Form."""
+    length: np.ndarray
+    """Je Folge die Länge ihres Zugs samt der Kanten zu den inneren Nachbarn."""
+    low: np.ndarray
+    """Je Folge die untere linke Ecke der Hüllbox ihres Zugs."""
+    high: np.ndarray
+    """Je Folge die obere rechte Ecke der Hüllbox ihres Zugs."""
+
+
+def _needle_runs(
+    corners: np.ndarray, ring_of: np.ndarray, outside: np.ndarray, reach: np.ndarray
+) -> _Runs:
+    """Die zusammenhängenden Folgen äußerer Ecken, über alle Ringe in einem Zug.
+
+    ``corners`` stehen ringweise in Umlaufreihenfolge, ohne den wiederholten
+    Schlusspunkt. Jeder Ring wird so gedreht, dass er an einer inneren Ecke
+    beginnt — dann zerfällt keine Folge am Ringschluss in zwei, und die
+    Folgen sind zusammenhängende Abschnitte einer Liste. Ein Ring ganz
+    draußen ist eine Folge; seine Nachbarn sind seine eigenen Enden.
+    """
+    count = len(corners)
+    index = np.arange(count)
+    first = np.r_[0, np.flatnonzero(np.diff(ring_of)) + 1]
+    size = np.diff(np.r_[first, count])
+    ring = np.repeat(np.arange(len(first)), size)
+    start, length = first[ring], size[ring]
+    position = index - start
+    previous = start + (position - 1) % length
+    following = start + (position + 1) % length
+
+    # Je Ring die erste innere Ecke; ein Ring ganz draußen beginnt vorn.
+    inside_rank = np.where(outside, count, position)
+    offset = np.minimum.reduceat(inside_rank, first)
+    offset[offset >= count] = 0
+    rotated = start + (position + offset[ring]) % length
+    flags = outside[rotated]
+    opens = flags & ~np.r_[False, flags[:-1]]
+    opens[first] = flags[first]
+    members = rotated[flags]
+    run_of = np.cumsum(opens)[flags] - 1
+    heads = np.flatnonzero(np.r_[True, run_of[1:] != run_of[:-1]])
+    tails = np.r_[heads[1:], len(members)] - 1
+
+    entering = np.linalg.norm(corners[members] - corners[previous[members]], axis=1)
+    leaving = np.linalg.norm(corners[following[members[tails]]] - corners[members[tails]], axis=1)
+    chain_low = np.minimum.reduceat(corners[members], heads)
+    chain_high = np.maximum.reduceat(corners[members], heads)
+    for neighbour in (previous[members[heads]], following[members[tails]]):
+        chain_low = np.minimum(chain_low, corners[neighbour])
+        chain_high = np.maximum(chain_high, corners[neighbour])
+    return _Runs(
+        reach=np.maximum.reduceat(reach[members], heads),
+        length=np.add.reduceat(entering, heads) + leaving,
+        low=chain_low,
+        high=chain_high,
+    )
+
+
+def _disjoint_rectangles(windows: np.ndarray) -> np.ndarray:
+    """Überlappende Fenster zu ihrer gemeinsamen Hüllbox zusammengelegt, bis
+    keine zwei sich mehr überlappen — sonst zählte eine Fläche doppelt.
+
+    Ein Fenster bleibt ein Rechteck, weil der schnelle Zuschnitt
+    (``clip_by_rect``) nur Rechtecke kennt; das zusammengelegte ist größer,
+    aber die Fläche außerhalb der Form darin bleibt dieselbe. Es sind selten
+    mehr als zwanzig, und der paarweise Vergleich in NumPy ist billiger als
+    eine Vereinigung in GEOS.
+    """
+    windows = windows.copy()
+    while len(windows) > 1:
+        overlap = (
+            (windows[:, None, 0] <= windows[None, :, 2])
+            & (windows[None, :, 0] <= windows[:, None, 2])
+            & (windows[:, None, 1] <= windows[None, :, 3])
+            & (windows[None, :, 1] <= windows[:, None, 3])
+        )
+        np.fill_diagonal(overlap, False)
+        if not overlap.any():
+            break
+        first, second = (int(number) for number in np.argwhere(overlap)[0])
+        windows[first, :2] = np.minimum(windows[first, :2], windows[second, :2])
+        windows[first, 2:] = np.maximum(windows[first, 2:], windows[second, 2:])
+        windows = np.delete(windows, second, axis=0)
+    return windows
 
 
 def _survives_opening(shape: ShapelyPolygon, width: float) -> bool:
@@ -1431,12 +1813,7 @@ def _survives_opening(shape: ShapelyPolygon, width: float) -> bool:
     nicht gerissen hat, bekommt die exakte Antwort über die ganze Form — mit
     einer Obergrenze für die vergebliche Arbeit statt einer Wette.
     """
-    lost = 0.0
-    for part in _thinnest_first(shape):
-        lost += _opening_loss(part, width)
-        if lost > WIDTH_LOST_FROM:
-            return False
-    return _opening_loss(shape, width) <= WIDTH_LOST_FROM
+    return bool(_survive_many(np.asarray([shape], dtype=object), np.asarray([width]))[0])
 
 
 def _thinnest_first(shape: ShapelyPolygon) -> list[ShapelyPolygon]:
@@ -1488,9 +1865,10 @@ def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERE
     das ist genau die alte Antwort.
 
     Drei Freiheiten werden fürs Tempo genommen, und keine davon ändert eine
-    Antwort, auf die jemand handelt. Die Kontur wird vereinfacht, die Erosion
-    benutzt gefaste statt gerundeter Ecken — beides bleibt weit unter dem, was
-    ein Drucker auflöst. Und eine Schicht, die eine Öffnung um
+    Antwort, auf die jemand handelt. Die Kontur wird vereinfacht
+    (:func:`_width_outline`), die Erosion benutzt gefaste statt gerundeter
+    Ecken — beides bleibt weit unter dem, was ein Drucker auflöst. Und eine
+    Schicht, die eine Öffnung um
     ``interesting_below`` übersteht, wird als genau diese Breite gemeldet und
     nicht weiter gemessen: ob eine Wand vier oder neun Millimeter dick ist,
     fragt der Bericht nicht, und die Suche danach kostete mehr als der Rest
@@ -1499,13 +1877,11 @@ def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERE
     ``interesting_below=0.0`` hebt diesen Deckel auf; dann wird die Klammer
     selbst gesucht.
     """
+    if interesting_below > 0.0:
+        return float(_minimum_widths([shape], interesting_below)[0])
     if shape.is_empty or shape.length <= EPS_GEOM:
         return 0.0
-    solid = _without_slits(shape)
-    if interesting_below > 0.0 and _survives_opening(solid, interesting_below):
-        return float(interesting_below)
-
-    coarse = _simplified(solid)
+    coarse = _width_outline(_without_slits(shape))
     low = 0.0
     high = float(interesting_below) if interesting_below > 0.0 else _open_bracket(coarse)
     # Die vierfache Fläche über dem Umfang ist die mittlere Breite dieser
@@ -1526,6 +1902,47 @@ def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERE
         else:
             high = middle
     return float(high)
+
+
+def thinnest_spot(shape: ShapelyPolygon, width: float) -> tuple[float, float] | None:
+    """Wo die schmalste Struktur einer Schicht liegt, als Punkt in XY (§22.2).
+
+    :func:`minimum_width` sagt, **wie** schmal; der Prüfbericht braucht dazu
+    das **Wo**, damit ein Klick hinfliegt. Es ist die Fläche, die eine
+    Öffnung der gemeldeten Breite wegnimmt — dieselbe Öffnung wie in der
+    Messung —, und davon das größte Stück. ``None``, wenn bei dieser Breite
+    nichts verloren geht.
+    """
+    if shape.is_empty or width <= EPS_GEOM:
+        return None
+    coarse = _width_outline(_without_slits(shape))
+    # Die Schicht kommt hier aus ihren gespeicherten Konturen zurück
+    # (:func:`_layer_shape`), und an einer Stelle, wo sich zwei Teile
+    # berühren, ist das nicht Punkt für Punkt der Schnitt, an dem gemessen
+    # wurde: Am Baum mit Schale ergab dieselbe Schicht 0,1875 mm im Schnitt
+    # und 0,21875 aus den Konturen — einen Halbierungsschritt daneben, und bei
+    # 0,1875 ging aus den Konturen nichts verloren. Gesucht wird deshalb bis
+    # zur nächsten Weite, bei der etwas verloren geht.
+    for factor in (1.0, 1.25, 1.5, 2.0):
+        radius = width * factor / 2.0
+        eroded = _without_slivers(_eroded(coarse, radius))
+        try:
+            lost = (
+                coarse
+                if eroded.is_empty
+                else coarse.difference(eroded.buffer(radius, quad_segs=1, join_style="mitre"))
+            )
+        except shapely.errors.GEOSException:
+            lost = shapely.difference(
+                coarse,
+                eroded.buffer(radius, quad_segs=1, join_style="mitre"),
+                grid_size=EPS_GEOM,
+            )
+        pieces = [part for part in shapely.get_parts(lost).tolist() if part.area > EPS_GEOM]
+        if pieces:
+            spot = max(pieces, key=lambda part: part.area).representative_point()
+            return float(spot.x), float(spot.y)
+    return None
 
 
 def _open_bracket(shape: ShapelyPolygon) -> float:
@@ -1849,6 +2266,313 @@ def _ring(ring: Any) -> tuple[tuple[float, float], ...]:
     return tuple(map(tuple, shapely.get_coordinates(ring).tolist()))
 
 
+# --- Gestapelte Messung (RM-201) ---------------------------------------------------
+#
+# Eine Schicht nach der anderen zu messen hieß: je Schicht zwanzig bis vierzig
+# kleine GEOS-Aufrufe, jeder mit seinem Weg durch den Interpreter. Auf einem
+# Kern ist das billig; auf sechs Arbeitern warten die Aufrufe aufeinander, weil
+# jeder für seine Mikrosekunden den Interpreter-Lock braucht. Gemessen am
+# 23.09.2026 am Baum mit Schale (197 120 Dreiecke): die Breitensuche auf einem
+# Kern 2,9 s, auf sechs Arbeitern 2,6 s — Faktor 1,1. Gestapelt fragt jeder
+# Aufruf ein ganzes Feld von Schichten, GEOS rechnet ohne Lock durch, und die
+# Arbeiter bekommen Blöcke statt Schichten. Jede Zahl entsteht aus derselben
+# GEOS-Rechnung wie vorher einzeln; nur der Weg dorthin ist kürzer.
+
+
+def _opening_losses(shapes: np.ndarray, widths: np.ndarray, *, exact: bool = True) -> np.ndarray:
+    """:func:`_opening_loss` für ein Feld von Formen und Weiten in einem Zug."""
+    radius = np.asarray(widths, dtype=float) / 2.0
+    full = shapely.area(shapes)
+    eroded = _without_slivers_many(shapely.buffer(shapes, -radius, quad_segs=1, join_style="mitre"))
+    gone = shapely.is_empty(eroded)
+    opened = shapely.buffer(eroded, radius, quad_segs=1, join_style="mitre")
+    balance = np.where(gone, full, full - shapely.area(opened))
+    if exact:
+        open_question = np.flatnonzero(~gone & (balance <= WIDTH_LOST_FROM))
+        if len(open_question):
+            same = shapely.equals_exact(
+                shapely.normalize(opened[open_question]),
+                shapely.normalize(shapes[open_question]),
+                tolerance=EPS_GEOM,
+            )
+            for number in open_question[~same].tolist():
+                balance[number] += _protrusion(
+                    opened[number], shapes[number], WIDTH_LOST_FROM - balance[number]
+                )
+    return cast(np.ndarray, np.maximum(balance, 0.0))
+
+
+def _without_slivers_many(eroded: np.ndarray) -> np.ndarray:
+    """:func:`_without_slivers` über ein Feld, die Stücke aller Formen in einem Zug."""
+    parts, owner = shapely.get_parts(eroded, return_index=True)
+    if not len(parts):
+        return eroded
+    wide = 4.0 * shapely.area(parts) >= WIDTH_SIMPLIFY * shapely.length(parts)
+    if wide.all():
+        return eroded
+    result = eroded.copy()
+    for number in np.unique(owner[~wide]).tolist():
+        kept = parts[(owner == number) & wide].tolist()
+        result[number] = (
+            ShapelyPolygon() if not kept else kept[0] if len(kept) == 1 else MultiPolygon(kept)
+        )
+    return result
+
+
+def _survive_many(shapes: np.ndarray, widths: np.ndarray, *, exact: bool = True) -> np.ndarray:
+    """:func:`_survives_opening` für ein Feld von Formen und Weiten.
+
+    ``exact=False`` fragt die ganze Form nur nach ihrer Bilanz: Ein Nein ist
+    dann sicher, ein Ja nicht (:func:`_opening_loss`).
+
+    Der Teileweg (RM-109) wird für alle Formen mit mehreren Teilen zugleich
+    gefragt: die dünnsten :data:`WIDTH_SCAN_PARTS` Teile jeder Form, ihre
+    Bilanz in einem Aufruf, je Form summiert. Die Entscheidung ist dieselbe
+    wie beim Abbruch nach dem ersten Teil, das das Budget reißt — jede Bilanz
+    ist nicht negativ, die Teilsummen steigen also nur. Was danach offen ist,
+    fragt die ganze Form.
+    """
+    widths = np.asarray(widths, dtype=float)
+    survives = np.ones(len(shapes), dtype=bool)
+    parts, owner = shapely.get_parts(shapes, return_index=True)
+    counts = np.bincount(owner, minlength=len(shapes)) if len(parts) else np.zeros(len(shapes))
+    several = counts > 1
+    if several.any():
+        chosen = np.isin(owner, np.flatnonzero(several))
+        parts, owner = parts[chosen], owner[chosen]
+        lengths = shapely.length(parts)
+        mean = np.where(
+            lengths > EPS_GEOM, 4.0 * shapely.area(parts) / np.maximum(lengths, EPS_GEOM), 0.0
+        )
+        # Je Form die dünnsten zuerst, dieselbe Ordnung wie :func:`_thinnest_first`.
+        order = np.lexsort((mean, owner))
+        rank = np.empty(len(order), dtype=np.int64)
+        starts = np.r_[0, np.flatnonzero(np.diff(owner[order])) + 1]
+        rank[order] = np.arange(len(order)) - np.repeat(starts, np.diff(np.r_[starts, len(order)]))
+        scanned = rank < WIDTH_SCAN_PARTS
+        losses = _opening_losses(parts[scanned], widths[owner[scanned]], exact=False)
+        lost = np.bincount(owner[scanned], weights=losses, minlength=len(shapes))
+        survives[lost > WIDTH_LOST_FROM] = False
+    open_question = np.flatnonzero(survives)
+    if len(open_question):
+        survives[open_question] = (
+            _opening_losses(shapes[open_question], widths[open_question], exact=exact)
+            <= WIDTH_LOST_FROM
+        )
+    return survives
+
+
+def _minimum_widths(shapes: list[ShapelyPolygon], interesting_below: float) -> np.ndarray:
+    """:func:`minimum_width` für viele Schichten, die Halbierung im Gleichschritt.
+
+    Jede Schicht bekommt dieselben Fragen in derselben Reihenfolge wie einzeln
+    — erst der Deckel, dann das Mittel, dann die Halbierungen —, nur stellt
+    jede Runde sie allen offenen Schichten in einem Aufruf.
+
+    **Genau gefragt wird zweimal je Schicht, nicht bei jedem Schritt.** Ein
+    Nein ist schon aus der Bilanz sicher; nur ein Ja kann eine Nadel verdecken
+    (:func:`_opening_loss`), und die genaue Antwort kostet dann eine
+    Überlagerung. Die Halbierung läuft deshalb über die Bilanz, und am Ende
+    wird die größte bestandene Weite genau nachgefragt. Hält sie, ist die
+    Klammer gültig — jedes Nein darüber war ohnehin sicher. Hält sie nicht,
+    hat irgendwo eine Nadel ein Ja erschlichen, und diese Schicht wird ganz
+    genau neu gesucht. Am Baum mit Schale (849 Schichten, Nadeln an jeder
+    Astspitze) fielen so die genauen Nachfragen von 825 auf eine je Schicht.
+    """
+    widths = np.zeros(len(shapes))
+    usable = np.asarray(
+        [
+            number
+            for number, shape in enumerate(shapes)
+            if not shape.is_empty and shape.length > EPS_GEOM
+        ],
+        dtype=np.int64,
+    )
+    if not len(usable):
+        return widths
+    coarse = np.asarray(
+        [_width_outline(_without_slits(shapes[number])) for number in usable.tolist()],
+        dtype=object,
+    )
+    thick = _survive_many(coarse, np.full(len(usable), float(interesting_below)))
+    widths[usable[thick]] = float(interesting_below)
+    active = np.flatnonzero(~thick)
+    if not len(active):
+        return widths
+    low, high = _halved(coarse[active], interesting_below, exact=False)
+    checked = np.flatnonzero(low > 0.0)
+    if len(checked):
+        misled = checked[~_survive_many(coarse[active[checked]], low[checked])]
+        if len(misled):
+            low[misled], high[misled] = _halved(
+                coarse[active[misled]], interesting_below, exact=True
+            )
+    widths[usable[active]] = high
+    return widths
+
+
+def _halved(
+    coarse: np.ndarray, interesting_below: float, *, exact: bool
+) -> tuple[np.ndarray, np.ndarray]:
+    """Die Klammer der Breitensuche für Formen, die den Deckel nicht halten.
+
+    Das Mittel (vierfache Fläche über Umfang) als erster Versuch, dann
+    :data:`WIDTH_STEPS` Halbierungen — die Schritte aus :func:`minimum_width`.
+    """
+    low = np.zeros(len(coarse))
+    high = np.full(len(coarse), float(interesting_below))
+    guess = 4.0 * shapely.area(coarse) / shapely.length(coarse)
+    tried = np.flatnonzero((guess > EPS_GEOM) & (guess < high))
+    if len(tried):
+        passed = _survive_many(coarse[tried], guess[tried], exact=exact)
+        low[tried[passed]] = guess[tried[passed]]
+        high[tried[~passed]] = guess[tried[~passed]]
+    for _step in range(WIDTH_STEPS):
+        middle = (low + high) / 2.0
+        passed = _survive_many(coarse, middle, exact=exact)
+        low[passed] = middle[passed]
+        high[~passed] = middle[~passed]
+    return low, high
+
+
+def _islands_many(shapes: np.ndarray, previous: np.ndarray) -> list[ShapelyPolygon]:
+    """:func:`_islands` für ein Feld von Schichtpaaren; ``previous`` ist nie leer."""
+    parts, owner = shapely.get_parts(shapes, return_index=True)
+    result: list[ShapelyPolygon] = [ShapelyPolygon()] * len(shapes)
+    if not len(parts):
+        return result
+    below = previous[owner]
+    touching = shapely.intersects(parts, below)
+    anchors = shapely.point_on_surface(parts)
+    placed = ~shapely.is_empty(anchors)
+    shared = np.zeros(len(parts), dtype=bool)
+    if placed.any():
+        spots = shapely.get_coordinates(anchors[placed])
+        squares = shapely.box(
+            spots[:, 0] - EPS_GEOM,
+            spots[:, 1] - EPS_GEOM,
+            spots[:, 0] + EPS_GEOM,
+            spots[:, 1] + EPS_GEOM,
+        )
+        shared[placed] = shapely.contains_properly(
+            below[placed], squares
+        ) & shapely.contains_properly(parts[placed], squares)
+    floating = ~touching
+    unclear = np.flatnonzero(touching & ~shared)
+    if len(unclear):
+        floating[unclear] = (
+            shapely.area(shapely.intersection(parts[unclear], below[unclear]))
+            <= EPS_GEOM * EPS_GEOM
+        )
+    for number in np.unique(owner[floating]).tolist():
+        pieces = parts[(owner == number) & floating].tolist()
+        result[number] = unary_union(pieces)
+    return result
+
+
+def _measure_batch(
+    shapes: list[ShapelyPolygon],
+    previous: list[ShapelyPolygon | None],
+    on_plate: list[bool],
+    steps: list[float],
+    detail: Detail,
+    overhang_factor: float,
+    bridge_from: float,
+    taper: list[bool],
+) -> list[LayerMetrics]:
+    """Die Kennzahlen vieler Schichten gegen ihre jeweils darunter, gestapelt.
+
+    Dieselben Zahlen wie :func:`_measure` je Schicht — der ist jetzt dieser
+    Aufruf mit einem Element.
+    """
+    count = len(shapes)
+    body = np.asarray(shapes, dtype=object)
+    areas = shapely.area(body)
+    reach = np.maximum(np.asarray(steps, dtype=float) * overhang_factor, OVERHANG_MARGIN)
+    regions: list[ShapelyPolygon | None] = [None] * count
+    island_regions: list[ShapelyPolygon | None] = [None] * count
+    overhang = np.zeros(count)
+    islands = np.zeros(count)
+    carried = [
+        number
+        for number in range(count)
+        if not on_plate[number] and previous[number] is not None and not previous[number].is_empty  # type: ignore[union-attr]
+    ]
+    for number in range(count):
+        if on_plate[number] or number in carried:
+            continue
+        # Nichts darunter: die ganze Schicht hängt in der Luft.
+        regions[number] = shapes[number]
+        island_regions[number] = shapes[number]
+        overhang[number] = islands[number] = areas[number]
+    if carried:
+        index = np.asarray(carried)
+        below = np.asarray([previous[number] for number in carried], dtype=object)
+        free = shapely.difference(body[index], shapely.buffer(below, reach[index], quad_segs=16))
+        overhang[index] = shapely.area(free)
+        floating = _islands_many(body[index], below)
+        islands[index] = shapely.area(np.asarray(floating, dtype=object))
+        for position, number in enumerate(carried):
+            regions[number] = free[position]
+            island_regions[number] = floating[position]
+
+    if detail == "support":
+        return [
+            LayerMetrics(
+                z=0.0,
+                area=float(areas[number]),
+                overhang_area=float(overhang[number]),
+                island_area=float(islands[number]),
+                min_width=0.0,
+                bridge_width=0.0,
+                contour_count=0,
+                overhang=regions[number],
+                islands=island_regions[number],
+            )
+            for number in range(count)
+        ]
+
+    widths = _minimum_widths(shapes, WIDTH_INTERESTING)
+    contours = shapely.get_num_geometries(body)
+    metrics = []
+    for number in range(count):
+        below_shape = previous[number]
+        region = regions[number]
+        # Ist selbst jenseits der größeren Überhangzugabe nichts frei, kann in
+        # dem schmalen Band bis zur kleineren Brückenzugabe keine druckrelevante
+        # Spannweite liegen. Bei 0,2-mm-Schichten sind das höchstens 0,15 mm je
+        # Seite, deutlich unter einer Brückenbreite. Damit entfallen an einer
+        # glatten Kugel rund 340 zweite Buffer-/Differenzrechnungen. Bei groben
+        # Schichten, deren Band selbst breit genug wäre, bleibt die vollständige
+        # Messung.
+        bridge_width = (
+            0.0
+            if below_shape is None
+            or below_shape.is_empty
+            or (
+                region is not None
+                and region.is_empty
+                and reach[number] - OVERHANG_MARGIN < bridge_from / 2.0
+            )
+            else _bridge_width(shapes[number], below_shape, bridge_from)
+        )
+        metrics.append(
+            LayerMetrics(
+                z=0.0,
+                area=float(areas[number]),
+                overhang_area=float(overhang[number]),
+                island_area=float(islands[number]),
+                min_width=float(widths[number]),
+                bridge_width=bridge_width,
+                contour_count=int(contours[number]),
+                overhang=region,
+                islands=island_regions[number],
+                taper_length=taper_length(shapes[number]) if taper[number] else 0.0,
+            )
+        )
+    return metrics
+
+
 # --- Urteile über den ganzen Körper ---------------------------------------------
 
 
@@ -1978,6 +2702,9 @@ def taper_length(shape: ShapelyPolygon) -> float:
     if shape.is_empty:
         return 0.0
     total = 0.0
+    # Abgetastet wird ab dem Anfangspunkt des Rings; der ist festgelegt
+    # (:func:`_canonical`), sonst hinge der Keil am Weg, der den Schnitt baute.
+    shape = _canonical(shape)
     parts = shape.geoms if isinstance(shape, MultiPolygon) else (shape,)
     window = max(1, round(TAPER_WINDOW / TAPER_STEP))
     for part in parts:

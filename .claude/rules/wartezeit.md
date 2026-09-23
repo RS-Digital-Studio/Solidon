@@ -10,6 +10,7 @@ paths:
   - "app/ui/organizer_dialog.py"
   - "app/ui/local_recognition.py"
   - "app/ui/local_recognition_flow.py"
+  - "app/ui/print_findings_flow.py"
 ---
 
 # Regeln für Wartezeit und Nebenläufigkeit

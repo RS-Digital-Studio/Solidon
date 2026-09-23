@@ -417,3 +417,38 @@ def test_the_coordinates_themselves_are_identical() -> None:
     assert np.array_equal(np.sort(first, axis=0), np.sort(second, axis=0)), (
         "the two ways put the ring in different places"
     )
+
+
+def test_widths_and_tapers_do_not_depend_on_where_a_ring_starts() -> None:
+    """Ein Rohr mit versetzter Bohrung: die Wand läuft von 1,5 auf 4,5 mm —
+    ein Keil über den ganzen Umfang.
+
+    Der übersetzte Weg beginnt einen Ring an seiner ersten Kante, GEOS an
+    einer eigenen. Die Breitensuche vereinfacht die Kontur mit
+    Douglas-Peucker, der Keil tastet sie alle Millimeter ab dem Anfangspunkt
+    ab — beides hing am Anfangspunkt, und am Stand vor dem 23.09.2026 meldete
+    dieselbe Schicht auf dem einen Weg 62 mm Keil und auf dem anderen 60.
+    Jetzt wird vor beiden Fragen geordnet (``analysis._canonical``).
+    """
+    outer = trimesh.creation.cylinder(radius=15.0, height=20.0, sections=64)
+    inner = trimesh.creation.cylinder(radius=12.0, height=24.0, sections=48)
+    inner.apply_translation((1.5, 0.0, 0.0))
+    tube = trimesh.boolean.difference([outer, inner])
+    tube.apply_translation((0.0, 0.0, 10.0))
+    mesh = MeshData.of(tube)
+
+    compiled = slice_body(mesh, 0.5)
+    saved = analysis._chain
+    try:
+        analysis._chain = None
+        geos = slice_body(mesh, 0.5)
+    finally:
+        analysis._chain = saved
+
+    assert [layer.taper_length for layer in compiled.layers] == [
+        layer.taper_length for layer in geos.layers
+    ]
+    assert [layer.min_width for layer in compiled.layers] == [
+        layer.min_width for layer in geos.layers
+    ]
+    assert any(layer.taper_length > 0.0 for layer in compiled.layers), "der Keil ist da"

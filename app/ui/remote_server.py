@@ -22,7 +22,9 @@ import json
 import socket
 import threading
 import time
+from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlsplit
@@ -30,7 +32,9 @@ from urllib.parse import urlsplit
 from PySide6.QtCore import QCoreApplication, QEvent, QObject
 
 from app.core.agent import remote
+from app.core.errors import OperationCancelled
 from app.core.log import get_logger
+from app.core.scene.cancel import CancelSignal
 
 _log = get_logger(__name__)
 
@@ -131,6 +135,27 @@ class _LimitedHeaderReader:
         return line
 
 
+@dataclass(frozen=True, slots=True)
+class DeferredAnswer:
+    """Eine Antwort, die der Hauptthread vorbereitet und der Server rechnet.
+
+    Manche Fernaufrufe lesen nur — die Orientierungssuche etwa (RM-144) — und
+    kosten Sekunden. Im Hauptthread gerechnet hielte sie das Fenster so lange
+    an. Der Hauptthread nimmt deshalb nur die Momentaufnahme dessen, was die
+    Rechnung liest, und gibt ``work`` zurück; der wartende Serverthread führt
+    es aus. ``work`` bekommt ein Abbruchsignal, das die Brücke beim Beenden
+    und nach :data:`DEFERRED_BUDGET` Sekunden setzt.
+    """
+
+    work: Callable[[CancelSignal], str]
+    stopped: str
+    """Die Antwort, wenn die Rechnung abgebrochen wurde."""
+
+
+#: Wie lange eine im Serverthread gerechnete Antwort höchstens rechnen darf.
+DEFERRED_BUDGET = 120.0
+
+
 class _Call(QEvent):
     """Ein Aufruf auf dem Weg in den Hauptthread."""
 
@@ -141,9 +166,11 @@ class _Call(QEvent):
         self.name = name
         self.arguments = arguments
         self.done = threading.Event()
-        self.answer = ""
+        self.answer: str | DeferredAnswer = ""
         self.error: BaseException | None = None
         self.cancelled = threading.Event()
+        self.token: CancelSignal | None = None
+        """Das Abbruchsignal einer im Serverthread laufenden Antwort."""
 
 
 class WindowBridge(QObject):
@@ -186,10 +213,28 @@ class WindowBridge(QObject):
                 raise TimeoutError(name)
             if event.error is not None:
                 raise event.error
-            return event.answer
+            if isinstance(event.answer, DeferredAnswer):
+                return self._run_deferred(event, event.answer)
+            return str(event.answer)
         finally:
             with self._pending_lock:
                 self._pending.pop(id(event), None)
+
+    def _run_deferred(self, event: _Call, deferred: DeferredAnswer) -> str:
+        """Rechnet eine vorbereitete Antwort hier im Serverthread (RM-144)."""
+        token = CancelSignal()
+        event.token = token
+        if event.cancelled.is_set():
+            return deferred.stopped
+        budget = threading.Timer(DEFERRED_BUDGET, token.cancel)
+        budget.daemon = True
+        budget.start()
+        try:
+            return deferred.work(token)
+        except OperationCancelled:
+            return deferred.stopped
+        finally:
+            budget.cancel()
 
     def cancel_pending(self) -> None:
         """Wartende Worker lösen und noch eingereihte Qt-Aufrufe verwerfen."""
@@ -198,6 +243,8 @@ class WindowBridge(QObject):
             pending = tuple(self._pending.values())
         for event in pending:
             event.cancelled.set()
+            if event.token is not None:
+                event.token.cancel()
             event.error = TimeoutError(event.name)
             event.done.set()
 

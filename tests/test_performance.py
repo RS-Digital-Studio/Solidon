@@ -820,9 +820,15 @@ def test_the_layer_analysis_of_a_hollow_body_is_watched_too() -> None:
     Innenkontur, und daran hängen 3 658 Puffer, 796 Differenzen und 718
     Anfragen an den Stützindex, die es bei einem Ring nicht gibt. Die Marke
     hält den Stand fest, damit er nicht schlechter wird; die Grenze darunter
-    fängt eine Größenordnung. Wer die Schale unter die §31-Zahl bringen will,
-    fängt bei ``_measure`` an, nicht beim Schnitt: Der kostet 27 ms von den
-    1 100.
+    fängt eine Größenordnung.
+
+    Seit der Durchsicht vor 0.5.0 (23.09.2026, RM-201) ist die Messung
+    gestapelt (``_measure_batch``), die Inselfrage ohne Überlagerung, die
+    Breitensuche ohne Nadeln, die Säulen auf Arbeitern und die zwei Ringe
+    einer Schicht ohne ``polygonize`` gebaut: unter Fremdlast im selben
+    Prozess 2,53 → 1,52 s gegen den Stand davor. Eine Referenzmessung ohne
+    Fremdlast steht aus. Was bleibt, ist vor allem die Breitensuche
+    (``_minimum_widths``, sieben Öffnungen je Schicht).
     """
     mesh = hollow_slice_target_mesh()
     outcome: list[Any] = []

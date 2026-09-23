@@ -34,6 +34,7 @@ In der Oberfläche heißt es „Schichtanalyse", nicht „Vorschau".
 | `advise.py` | Einstellungen aus Geometrie, Material und Maschine (§22.2, §29); `combine` vereint die Anforderungen des Ausgabeumfangs ohne benötigte Stützen zu verlieren |
 | `gcode.py` | G-Code zurücklesen (§28.1, §28.2) |
 | `estimate.py` | Was ein Teil kostet, ohne es zu schneiden |
+| `findings.py` | Die Schichtanalyse im Prüfbericht (§17.3, §22.2, §22.3): Inseln mit Ort und Stützbedarf, größter frei hängender Überhang, lange Brücke und schmalste Stelle mit Ort (`advise.located_warnings`), gesparte Stütze einer anderen Lage mit Drehwinkel; gemerkt im Cache des Netzes, gerufen von `ui/print_findings_flow.py` nach jeder Auswertung |
 | `orientation.py` | Die Suche nach einer Druckorientierung; eine kleine Grundflächen-Vorauswahl für Auto Split wird mit demselben echten Stützvolumen und derselben Fünf-Prozent-Grenze entschieden (§22.3) |
 
 Die Orientierungskandidaten kommen deterministisch aus den flächengeordneten
@@ -139,6 +140,28 @@ Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
   tausende kleine Ringe mit `units.ring_area` (die Schnürsenkelformel in einer
   Python-Schleife, gemessen zwanzigmal schneller als das Umpacken in ein
   Feld): 287 → 19 ms je Vorschlagsrechnung am Gitterbecher.
+
+- **Gestapelt statt je Schicht.** `_measure_all` gibt jedem Arbeiter einen
+  Block von höchstens `BATCH_LAYERS` Schichten, und `_measure_batch` stellt
+  jede Frage (Überhang, Inseln, Breitensuche) als **einen** vektorisierten
+  GEOS-Aufruf über den Block. Einzeln gestellt warteten die kleinen Aufrufe
+  auf den Interpreter-Lock, und sechs Arbeiter waren kaum schneller als
+  einer. Die Einzelfunktionen (`_measure`, `_islands`, `minimum_width`,
+  `_opening_loss`, `_survives_opening`) sind Blöcke aus einem Element.
+- **Die Öffnung zählt, was der Form fehlt.** Die gefaste Aufweitung kann
+  Nadeln über die Form hinaus treiben; `_opening_loss` wirft Splitter unter
+  `WIDTH_SIMPLIFY` weg und rechnet die Fläche außerhalb (`_protrusion`:
+  Identität, Rasterabgleich der Ecken, Schranke, erst dann Fenster um die
+  Nadeln). Die Halbierung läuft über die Bilanz, die größte bestandene Weite
+  wird genau nachgefragt (`_minimum_widths`, `_halved`). Geöffnet wird an
+  einer Douglas-Peucker-Kontur (`_width_outline`), vereinfacht und
+  abgetastet wird eine geordnete (`_canonical`) — Anfangspunkt und
+  Umlaufsinn eines Rings sind Sache des Wegs, nicht des Körpers.
+- **Mehrere verkettete Ringe ohne `polygonize`** (`_nested`): ein Punkt je
+  Ring gegen die übrigen, gerade Tiefe ist Material.
+- **Die Säulen auf Arbeitern.** `_support_volume` teilt die Überhänge
+  reihum `SUPPORT_WORKERS` Gruppen zu; keine Säule beschneidet eine andere,
+  die Summe entsteht mit `math.fsum` in fester Folge.
 
 Die Arbeiterzahl der vollständigen Messung steht bei sechs (`FULL_WORKERS`);
 die Messreihe dazu steht an der Konstante.

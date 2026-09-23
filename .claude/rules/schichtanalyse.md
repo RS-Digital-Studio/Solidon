@@ -457,6 +457,35 @@ als fünf Schichten, wird je nach Lage verfehlt oder fünffach gezählt — beid
 unter jeder Schwelle, die ihn liest. Wer ihn je Schicht braucht, fragt
 `taper_length(shape)` selbst.
 
+## Die Öffnung zählt, was der Form fehlt
+
+Die kleinste Strukturbreite fragt eine morphologische Öffnung mit gefasten
+Ecken. **Deren Flächenbilanz ist keine Antwort**: Die gefaste Aufweitung eines
+spitz endenden Stücks treibt eine Nadel über die Form hinaus, und die Fläche
+draußen gleicht den Verlust drinnen aus — am 22.09.2026 meldete ein
+Organizer „mindestens 2 mm", wo 0,47 mm stehen. Drei Dinge gelten deshalb:
+
+- Ein **Nein** darf aus der Bilanz kommen (sie ist eine untere Schranke), ein
+  **Ja** nur aus dem, was der Form fehlt (`_protrusion`).
+- Splitter der Erosion unter `WIDTH_SIMPLIFY` werden nicht aufgeweitet.
+- Was vom Anfangspunkt eines Rings abhängt — Douglas-Peucker, eine Abtastung
+  in festen Schritten —, bekommt die geordnete Kontur (`_canonical`). Sonst
+  rechnen der übersetzte und der GEOS-Weg verschiedene Zahlen.
+
+Wer eine dieser drei Stellen anfasst, vergleicht an echten Modellen gegen die
+exakte Differenz `Form − Öffnung`, Schicht für Schicht, und misst die Zeit
+in beide Richtungen: vorher/nachher und auf einem wie auf sechs Arbeitern.
+
+## Die Befunde im Prüfbericht kommen nach der Auswertung
+
+`slice/findings.py` berichtet Inseln, frei hängende Flächen, lange Brücken,
+die schmalste Stelle und eine Lage mit weniger Stützen — **jeder Befund mit
+Ort und Handlung und mit `source="internal"`**. Er läuft im Arbeiter nach der
+Auswertung (`ui/print_findings_flow.py`), nie in ihr: eine Schichtanalyse
+kostet an 200 000 Dreiecken Sekunden, und die Auswertung läuft bei jedem
+Klick. Gemerkt wird am Netz; der Schlüssel nennt alles, was das Ergebnis
+bestimmt (Raster, Winkel, Brückenbreite, Drucker).
+
 ## Stabile IDs
 
 Feature-Erkennung liefert Provenienz-IDs, an denen Ops und Passungen hängen.

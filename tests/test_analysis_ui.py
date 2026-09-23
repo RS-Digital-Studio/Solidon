@@ -6773,3 +6773,80 @@ def test_the_roof_of_a_part_carries_the_grip_in_the_view(window: MainWindow) -> 
     for _ in range(40):
         QApplication.processEvents()
     assert window.viewport._part_grip is None
+
+
+# --- die Schichtanalyse im Prüfbericht (§22.2) ------------------------------------
+
+
+def _wait_for_print_findings(window: MainWindow) -> None:
+    """Die Berichtsanalyse läuft im Arbeiter nach der Auswertung; der Test
+    wartet wie das Fenster, bis sie ihre Zeilen geliefert hat."""
+    worker = window._print_findings.worker
+    if worker is not None:
+        worker.wait(60_000)
+    for _round in range(5):
+        QApplication.processEvents()
+
+
+def test_an_island_reaches_the_report_with_place_and_actions(qt_app: QApplication) -> None:
+    """Der Inselturm: eine Kontur, die in der Luft beginnt. Nach der
+    Auswertung steht sie im Prüfbericht — mit Körper, Ort, Stützbedarf und
+    den zwei Handlungen, die der Fensterhandler auch ausführen kann."""
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.open_path(MESHES / "island_tower.stl")
+        window.session.wait_for_idle()
+        _wait_for_print_findings(window)
+
+        islands = [
+            finding
+            for finding in window.report._findings
+            if finding.code == "slice.island_needs_support"
+        ]
+        assert islands, "die Insel fehlt im Prüfbericht"
+        island = islands[0]
+        assert island.object_id in window.session.last_result.scene.objects
+        assert island.location is not None
+        assert island.source == "internal"
+        handlers = window.error_handlers()
+        assert all(action.id in handlers for action in island.suggestions)
+    finally:
+        window.wait_for_workers()
+
+
+def test_a_stale_result_does_not_add_its_findings(qt_app: QApplication) -> None:
+    """Ein Ergebnis, das nicht mehr gezeigt wird, liefert keine Zeilen nach."""
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.open_path(MESHES / "island_tower.stl")
+        window.session.wait_for_idle()
+        _wait_for_print_findings(window)
+        shown = list(window.report._findings)
+        stale = object()
+
+        window._print_findings._arrived(
+            [Finding(code="slice.island_needs_support", severity="warning", message="x")],
+            stale,
+            window._print_findings.worker,
+        )
+
+        assert window.report._findings == shown
+    finally:
+        window.wait_for_workers()
+
+
+def test_the_remote_orientation_analysis_is_prepared_not_computed(window: MainWindow) -> None:
+    """RM-144: ``read_analysis`` mit ``orientation`` wurde abgelehnt, weil die
+    Suche im Hauptthread Sekunden kostet. Jetzt gibt das Fenster eine
+    Momentaufnahme zurück, die der Serverthread rechnet — und die Antwort
+    ist dieselbe Analyse wie im Chat, mit Herkunft."""
+    from app.core.agent.tools import READ_ANALYSIS
+    from app.core.scene.cancel import CancelSignal
+    from app.ui.remote_server import DeferredAnswer
+
+    prepared = window.run_remote(READ_ANALYSIS, {"kind": "orientation"})
+
+    assert isinstance(prepared, DeferredAnswer)
+    answer = prepared.work(CancelSignal())
+    assert "Schichtanalyse" in answer
+    assert "obj_1" in answer

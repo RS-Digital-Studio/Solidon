@@ -86,7 +86,12 @@ def footprint(mesh: Mesh) -> BaseGeometry:
     """
     from app.core.geom.mesh import as_mesh_data
 
-    triangles = np.asarray(as_mesh_data(mesh).raw.triangles, dtype=float)[:, :, :2]
+    body = as_mesh_data(mesh).raw
+    if len(body.faces) and body.is_watertight and body.is_winding_consistent:
+        outline = _outline_of_closed(body)
+        if outline is not None:
+            return outline
+    triangles = np.asarray(body.triangles, dtype=float)[:, :, :2]
     # Nahezu senkrechte Flächen werden bei einer Drehung zu Dreiecken mit
     # wenigen Rundungsbits Breite. Ihr ungerasterter Overlay kann eine
     # Seitenzuordnung verlieren. Entartete Projektionen bleiben als Linien
@@ -95,6 +100,70 @@ def footprint(mesh: Mesh) -> BaseGeometry:
     # Overlay, das Eingangsnetz und seine Koordinaten bleiben unangetastet.
     projected = make_valid(polygons(triangles))
     return union_all(projected, grid_size=EPS_GEOM)
+
+
+def _outline_of_closed(body: Any) -> BaseGeometry | None:
+    """Die Projektion eines geschlossenen Netzes über seine Umrisskanten.
+
+    **Vereinigt wurde jedes Dreieck, und das kostete Sekunden.** Ein
+    Besteckeinsatz mit 59 744 Dreiecken brauchte 4,2 s für eine Projektion,
+    und die Orientierungssuche fragt sie für jede Lage, deren Hüllbox eine
+    Sperrzone des Betts schneidet: neunmal, 47 der 57 Sekunden einer Suche
+    (23.09.2026).
+
+    Bei einem geschlossenen, einheitlich umlaufenden Netz ist die Projektion
+    die Vereinigung der **nach oben** zeigenden Dreiecke — über jedem Punkt
+    des Schattens liegt als oberstes ein solches. Zwei nach oben zeigende
+    Nachbarn liegen in der Projektion auf verschiedenen Seiten ihrer
+    gemeinsamen Kante (beide laufen gegen den Uhrzeigersinn um, die Kante
+    einmal hin und einmal zurück); der Rand des Schattens liegt also auf den
+    **Umrisskanten**, deren einer Nachbar nach oben zeigt und der andere
+    nicht. Diese wenigen Kanten werden verknotet und zu Flächen geschlossen,
+    und eine Fläche gehört zum Schatten, wenn ein Punkt in ihr unter einem
+    nach oben zeigenden Dreieck liegt. Dieselbe Fläche wie die Vereinigung,
+    gerechnet über den Rand statt über das Innere.
+
+    ``None``, wenn es keine Umrisskante gibt (ein entartetes Netz) — dann
+    bleibt die Vereinigung aller Dreiecke.
+    """
+    import shapely
+
+    triangles = np.asarray(body.triangles, dtype=float)
+    # Senkrechte Wände liegen nach einer Drehung um Rundungsbits neben der
+    # Senkrechten, und dann zeigte jede zweite „nach oben": Eine Kumiko-Schale
+    # von der Seite trug so 44 088 Umrisskanten, die fast alle nur Wände
+    # nachzeichneten, und das Verknoten kostete 6 s. Eine Wand, die um weniger
+    # als ``EPS_GEOM`` im Bogenmaß kippt, wirft keinen Schatten, den die
+    # Vereinigung je gesehen hätte.
+    up = np.asarray(body.face_normals, dtype=float)[:, 2] > EPS_GEOM
+    if not up.any():
+        return None
+    edges = np.asarray(body.faces_unique_edges, dtype=np.int64)[up].ravel()
+    counts = np.bincount(edges, minlength=len(body.edges_unique))
+    rim = np.flatnonzero(counts == 1)
+    if not len(rim):
+        return None
+    ends = np.asarray(body.vertices, dtype=float)[
+        np.asarray(body.edges_unique, dtype=np.int64)[rim]
+    ][:, :, :2]
+    lines = shapely.linestrings(ends)
+    # Verknotet auf dem Raster, das auch die Vereinigung benutzte: Kanten, die
+    # sich in der Projektion kreuzen oder berühren, bekommen dort einen Knoten.
+    noded = union_all(lines, grid_size=EPS_GEOM)
+    faces = shapely.get_parts(shapely.polygonize(shapely.get_parts(noded)))
+    if not len(faces):
+        return None
+    covering = polygons(triangles[up][:, :, :2])
+    probes = shapely.point_on_surface(faces)
+    inside, _covered = shapely.STRtree(covering).query(probes, predicate="intersects")
+    kept = faces[np.unique(inside)]
+    if not len(kept):
+        return None
+    # Die Flächen einer Polygonisierung überlappen nicht — sie sind eine
+    # Überdeckung, und die vereinigt GEOS ohne Überlagerung: an 18 131 Flächen
+    # 0,12 s statt 1,43.
+    merged = shapely.coverage_union_all(kept)
+    return merged if merged.is_valid else make_valid(union_all(kept, grid_size=EPS_GEOM))
 
 
 def _bounds_inside(bounds: BoundingBox, area: BaseGeometry) -> bool:

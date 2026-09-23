@@ -763,3 +763,63 @@ def test_a_rebound_domain_does_not_pass_as_this_machine() -> None:
         assert _raw_post(running.port, [f"Host: [::1]:{running.port}", json_kopf]) == 200
     finally:
         running.stop()
+
+
+def test_a_deferred_answer_is_computed_off_the_main_thread(qt_app: Any) -> None:
+    """Die Orientierungsanalyse des Fernaufrufs (RM-144): Der Hauptthread gibt
+    nur die vorbereitete Rechnung zurück, der wartende Serverthread rechnet.
+    Das Fenster ist in dieser Zeit frei."""
+    from app.ui.remote_server import DeferredAnswer
+
+    ran_in: list[str] = []
+
+    def work(token: Any) -> str:
+        ran_in.append(threading.current_thread().name)
+        return "gerechnet"
+
+    bridge = WindowBridge(lambda name, arguments: DeferredAnswer(work=work, stopped="abgebrochen"))
+    answers: list[str] = []
+    worker = threading.Thread(target=lambda: answers.append(bridge.call("read_analysis", {})))
+    worker.name = "server"
+    worker.start()
+    limit = time.monotonic() + 2.0
+    while worker.is_alive() and time.monotonic() < limit:
+        QCoreApplication.sendPostedEvents(bridge)
+        time.sleep(0.005)
+    worker.join(timeout=1.0)
+
+    assert answers == ["gerechnet"]
+    assert ran_in == ["server"], "gerechnet wird im Serverthread, nicht im Fenster"
+
+
+def test_a_deferred_answer_stops_with_the_bridge(qt_app: Any) -> None:
+    """Beim Beenden wird die laufende Rechnung abgebrochen, nicht abgewartet."""
+    from app.core.errors import OperationCancelled
+    from app.ui.remote_server import DeferredAnswer
+
+    started = threading.Event()
+
+    def work(token: Any) -> str:
+        started.set()
+        limit = time.monotonic() + 5.0
+        while time.monotonic() < limit:
+            if token.is_cancelled:
+                raise OperationCancelled
+            time.sleep(0.005)
+        return "zu spät"
+
+    bridge = WindowBridge(lambda name, arguments: DeferredAnswer(work=work, stopped="abgebrochen"))
+    answers: list[str] = []
+    worker = threading.Thread(target=lambda: answers.append(bridge.call("read_analysis", {})))
+    worker.start()
+    limit = time.monotonic() + 2.0
+    while not started.is_set() and time.monotonic() < limit:
+        QCoreApplication.sendPostedEvents(bridge)
+        time.sleep(0.005)
+    assert started.is_set()
+
+    bridge.cancel_pending()
+    worker.join(timeout=2.0)
+
+    assert not worker.is_alive()
+    assert answers == ["abgebrochen"]

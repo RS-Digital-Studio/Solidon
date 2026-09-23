@@ -301,6 +301,7 @@ from app.ui.panels import (
 )
 from app.ui.pose_bar import PoseBar
 from app.ui.print_disclosure import ensure_print_disclosure
+from app.ui.print_findings_flow import PrintFindingsFlow
 from app.ui.print_settings_dialog import (
     FilamentOverrideDialog,
     PrintSettingsDialog,
@@ -309,7 +310,7 @@ from app.ui.print_settings_dialog import (
     settings_for_export,
 )
 from app.ui.recipe_dialog import RecipeDialog
-from app.ui.remote_server import RemoteServer, WindowBridge
+from app.ui.remote_server import DeferredAnswer, RemoteServer, WindowBridge
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
@@ -1984,6 +1985,10 @@ class MainWindow(QMainWindow):
         self._leash = WorkerLeash(self)
         """Hält fertige und ersetzte Arbeiter, bis Qt mit ihnen durch ist —
         das Warum steht in :mod:`app.ui.leash`."""
+        self._print_findings = PrintFindingsFlow(self, self._leash, self._is_current_result)
+        """Was die Schichtanalyse dem Prüfbericht nach jeder Auswertung
+        hinzufügt (§22.2) — im Arbeiter, damit die Auswertung nicht länger wird."""
+        self._print_findings.found.connect(self._add_print_findings)
         self._close_requested = False
         self._close_retry = QTimer(self)
         """Hält das Fenster offen, bis jeder angehaltene Arbeiter ausgelaufen ist."""
@@ -15456,7 +15461,30 @@ class MainWindow(QMainWindow):
 
     # --- Fernsteuerung über MCP (Konzept P15 §7 Etappe 9, D19) ------------------
 
-    def run_remote(self, name: str, arguments: Mapping[str, Any]) -> str:
+    def _remote_orientation(self, result: Any, values: Mapping[str, Any]) -> DeferredAnswer:
+        """Die Orientierungsanalyse des Fernaufrufs — gerechnet im Serverthread (RM-144).
+
+        Der Fernaufruf läuft im Qt-Hauptthread (die Brücke stellt per
+        ``postEvent`` zu), und die Suche kostet Sekunden; bis zum 23.09.2026
+        wurde sie deshalb abgelehnt. Die Analyse liest nur: Szene, Profil und
+        die Druckeinstellungen des Dokuments. Davon wird hier eine
+        Momentaufnahme genommen — die Szene eines Ergebnisses wird ersetzt,
+        nicht verändert —, und der wartende Serverthread rechnet. Das Fenster
+        bleibt bedienbar; Abbruch und Zeitgrenze setzt die Brücke. Eine
+        lesende Analyse erzeugt keine Transaktion.
+        """
+        scene = result.scene
+        document = copy(self.session.project.document)
+        profile = self.session.profile
+        wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
+        return DeferredAnswer(
+            work=lambda token: analysis_text(
+                "orientation", scene, document, profile, objects=wanted, cancelled=token
+            ),
+            stopped=tr("Die Orientierungssuche wurde abgebrochen."),
+        )
+
+    def run_remote(self, name: str, arguments: Mapping[str, Any]) -> str | DeferredAnswer:
         """Ein Fernaufruf, ausgeführt wie ein Menüklick.
 
         Derselbe Weg durch ``session.apply``, also dieselbe Transaktion,
@@ -15519,16 +15547,7 @@ class MainWindow(QMainWindow):
                     kinds=", ".join(ANALYSIS_KINDS)
                 )
             if kind == "orientation":
-                # Der Fernaufruf läuft im Qt-Hauptthread (WindowBridge stellt
-                # per postEvent zu), und die Orientierungssuche kostet dort
-                # Sekunden ohne Fortschritt und ohne Abbrechen — gemessen
-                # 5,3 s an der kleinen Referenzplatte. Bis sie einen Arbeiter
-                # hat, wird sie hier abgelehnt; die drei anderen Analysen
-                # bleiben unter 0,1 s (§2.8: darunter braucht es nichts).
-                return tr(
-                    "Die Orientierungssuche hielte das Fenster an — sie läuft "
-                    "über den Chat oder den Dialog „Druckoptimal ausrichten“."
-                )
+                return self._remote_orientation(result, values)
             wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
             return analysis_text(
                 kind,
@@ -17371,6 +17390,7 @@ class MainWindow(QMainWindow):
         # ``_update_actions`` — mit dem Grund am Knopf statt ohne Knopf.
         self.explode_bar.show_for(len(result.scene.objects))
         self.report.show_result(result, self.session.project.document)
+        self._print_findings.start(result, self.session.profile, self.effective_print_settings())
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
@@ -17563,6 +17583,18 @@ class MainWindow(QMainWindow):
         # ließen vom Projektnamen auf 1024 Pixeln nur „c…)“ stehen.
         self._fit_toolbar()
         self._update_facts()
+
+    def _is_current_result(self, result: Any) -> bool:
+        """Ob ein Ergebnis noch der Stand ist, den das Fenster zeigt."""
+        return result is self.session.last_result
+
+    def _add_print_findings(self, found: list[Finding]) -> None:
+        """Die Befunde der Schichtanalyse in den Bericht (§22.2).
+
+        Sie kommen nach dem Bericht der Auswertung; ``show_result`` räumt sie
+        beim nächsten Stand wieder ab, und der Ablauf liefert die neuen nach.
+        """
+        self.report.add_findings(list(found))
 
     def effective_print_settings(self) -> PrintSettings:
         """Die Druckeinstellungen, die für dieses Projekt wirklich gelten.
@@ -18233,6 +18265,12 @@ class MainWindow(QMainWindow):
             # ``check_profile`` ist wörtlich dieselbe Handlung wie
             # ``choose_printer``: Das Profil wechselt man in den
             # Druckeinstellungen. Befunde und Fassungen von 3d-druck-fb.
+            # Die Handlungen der Schichtanalyse im Prüfbericht (§22.2): eine
+            # andere Lage, der Blick auf den Stützbedarf, und für das
+            # unkalibrierte Material der Weg zur Kalibrierung.
+            "orient_for_print": lambda _error: self.run_operation(REGISTRY.get("orient_for_print")),
+            "show_support_need": self._show_support_need,
+            "calibrate_material": lambda _error: self.action_calibrate(),
             "show_output": lambda error: show_details(error, self),
             "check_profile": lambda _error: self.action_print_settings(),
             # **Zwei verschenkte Klickwege, gefunden beim Release-Durchgang.**
@@ -18673,6 +18711,16 @@ class MainWindow(QMainWindow):
         # Der Kern nennt das Feld, das nicht ging (``ValidationError.field``),
         # und der Befund trägt es weiter. Damit steht der Cursor gleich dort.
         self.edit_operation(error.op_id, str(error.values.get("field", "")))
+
+    def _show_support_need(self, error: AppError) -> None:
+        """Die Stützkarte des Körpers, dessen Insel oder Überhang gemeldet ist."""
+        object_id = self._object_of(error)
+        if object_id is None:
+            return
+        self.object_tree.select_object(object_id)
+        self.tools.activate("analysis")
+        self.analysis_bar.show_map("support")
+        self._analysis_map("support", object_id)
 
     def _place_on_bed_after_error(self, error: AppError) -> None:
         """Ein Klick gegen den häufigsten Befund von Weg 1 (§17.1, §2.7).
@@ -19792,6 +19840,7 @@ class MainWindow(QMainWindow):
         # Die Analysekarte hat einen eigenen Schalter — ohne ihn läuft sie
         # ihre Sekunden zu Ende, während das Fenster schon zugeht.
         self._cancel_map_worker()
+        self._print_findings.cancel()
         self._cancel_download()
         self._cancel_source_read()
         self._cancel_gcode()
@@ -19800,6 +19849,7 @@ class MainWindow(QMainWindow):
         workers = (
             self._map_worker,
             self._slice_worker,
+            self._print_findings.worker,
             self._update_worker,
             self._finished_update_worker,
             self._ollama_size_worker,

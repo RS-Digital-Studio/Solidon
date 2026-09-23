@@ -134,7 +134,7 @@ Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
 |---|---|
 | `oberflaeche.md` | jeder Datei hier — Texte, Zahlen, Grenzen, Barrierefreiheit |
 | `ansicht.md` | `viewport.py`, `overlay.py`, `cursors.py` und den Leisten |
-| `wartezeit.md` | `session.py`, `loading.py`, `leash.py`, `splash.py`, `main_window.py`, `outline_dialog.py`, `organizer_dialog.py`, `local_recognition.py`, `local_recognition_flow.py` |
+| `wartezeit.md` | `session.py`, `loading.py`, `leash.py`, `splash.py`, `main_window.py`, `outline_dialog.py`, `organizer_dialog.py`, `local_recognition.py`, `local_recognition_flow.py`, `print_findings_flow.py` |
 | `zeichenflaeche.md` | `sketch_editor.py` |
 
 Hier steht die Karte, dort das Gesetz.
@@ -1318,7 +1318,15 @@ behalten ihre Seite. Vorbelegte Richtungswerte ändern ihre Schemaseite nicht.
 **Agent**
 
 `chat.py` (§26.3, §2.5) · `snapshots.py` (Ansichten für den Agenten) ·
-`remote_server.py` (MCP im Fenster)
+`remote_server.py` (MCP im Fenster; lesende, teure Aufrufe wie die
+Orientierungsanalyse gibt das Fenster als `DeferredAnswer` zurück, der
+Serverthread rechnet sie)
+
+**Prüfbericht**
+
+`print_findings_flow.py` — nach jeder Auswertung die Befunde der
+Schichtanalyse (`core.slice.findings`) im Arbeiter; ein neuer Stand löst den
+laufenden ab, ein veralteter Stand liefert nichts nach
 
 ## P0-08 — KI-Hinweis an der Sendegrenze
 

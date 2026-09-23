@@ -260,13 +260,14 @@ def test_a_layer_that_looks_like_the_one_below_is_measured_once(
     """
     body = place_on_bed(mushroom())
     counted: list[int] = []
-    measured = analysis._measure
+    measured = analysis._measure_batch
 
-    def counting(*args, **kwargs):
-        counted.append(1)
-        return measured(*args, **kwargs)
+    def counting(shapes, *args, **kwargs):
+        # Gestapelt gemessen (RM-201): gezählt wird je Schicht im Block.
+        counted.extend(1 for _shape in shapes)
+        return measured(shapes, *args, **kwargs)
 
-    monkeypatch.setattr(analysis, "_measure", counting)
+    monkeypatch.setattr(analysis, "_measure_batch", counting)
     quick = slice_body(body, 0.2)
     measurements = len(counted)
 
@@ -440,9 +441,16 @@ def test_a_contour_touching_only_at_a_corner_is_an_island() -> None:
     corner = _islands(shapely_box(10.0, 10.0, 20.0, 20.0), below)
     overlapping = _islands(shapely_box(5.0, 5.0, 15.0, 15.0), below)
 
+    # Unter der Grenze: 10⁻⁷ mal 10⁻⁶ mm gemeinsam sind 10⁻¹³ mm² — weniger
+    # als EPS_GEOM², also eine Berührung. Darüber: 10⁻⁷ mal ein Millimeter.
+    grazing = _islands(shapely_box(10.0 - 1e-7, 10.0 - 1e-6, 20.0, 20.0), below)
+    thin_but_long = _islands(shapely_box(10.0 - 1e-7, 0.0, 20.0, 10.0), below)
+
     assert not edge.is_empty, "eine Kante ohne Breite traegt nichts"
     assert not corner.is_empty, "eine Ecke noch weniger"
     assert overlapping.is_empty, "fuenf Millimeter Ueberlappung tragen"
+    assert not grazing.is_empty, "weniger als EPS_GEOM² gemeinsam ist eine Berührung"
+    assert thin_but_long.is_empty, "10⁻⁷ mm² gemeinsam liegen über der Grenze"
 
 
 # --- widths ---------------------------------------------------------------------
@@ -453,6 +461,76 @@ def test_the_smallest_structure_width_is_measured() -> None:
 
     assert minimum_width(shapely_box(0.0, 0.0, 10.0, 0.6)) == pytest.approx(0.6, rel=0.05)
     assert minimum_width(shapely_box(0.0, 0.0, 10.0, 2.0)) == pytest.approx(2.0, rel=0.05)
+
+
+def _polygonal_ring(outer: float, inner: float, corners: int) -> object:
+    """Ein Ring aus zwei regelmäßigen Vielecken, das innere um eine halbe
+    Teilung gedreht — so schwankt die Wand um wenige Tausendstel, wie an
+    jedem vernetzten Rohr, dessen Innen- und Außenhaut nicht dieselben
+    Ecken tragen."""
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    def polygon(radius: float, phase: float) -> list[tuple[float, float]]:
+        return [
+            (
+                radius * math.cos(2.0 * math.pi * index / corners + phase),
+                radius * math.sin(2.0 * math.pi * index / corners + phase),
+            )
+            for index in range(corners)
+        ]
+
+    return ShapelyPolygon(polygon(outer, 0.0), [polygon(inner, math.pi / corners)])
+
+
+def test_an_opening_that_takes_the_whole_wall_reports_the_loss() -> None:
+    """Die Wand ist höchstens 1,5012 mm stark; eine Öffnung von 1,5 mm trägt
+    sie fast ganz ab.
+
+    Übrig bleiben vierhundert Splitter von höchstens zwei Tausendsteln, dort
+    wo die Wand gerade über der Weite liegt. Gefast aufgeweitet (``mitre``)
+    wird jeder zu einer Nadel von bis zu fünf Radien Länge, und die Nadeln
+    zusammen bedeckten mehr als den ganzen Ring: Die Flächenbilanz ergab
+    minus 35 mm², gemeldet wurde „nichts verloren", und die Halbierung stieg
+    über die Wand hinaus. Splitter unter der Auflösung der Suche
+    (``WIDTH_SIMPLIFY``) sind keine Struktur.
+    """
+    from app.core.slice.analysis import WIDTH_LOST_FROM, _opening_loss
+
+    ring = _polygonal_ring(40.0, 38.5, 400)
+    thickest = 40.0 - 38.5 * math.cos(math.pi / 400)
+
+    assert _opening_loss(ring, 1.5) > 0.9 * ring.area  # type: ignore[attr-defined]
+    assert _opening_loss(ring, 1.4) <= WIDTH_LOST_FROM
+    assert minimum_width(ring) <= thickest, "keine Strukturbreite über der stärksten Stelle"
+
+
+def test_the_rounded_end_of_a_rib_is_not_hidden_by_mitre_needles() -> None:
+    """Das runde Ende eines gebogenen Trennstegs, 1,45 mm breit auslaufend.
+
+    Die Punkte sind der Schnitt durch das Ende eines Stegs aus einem
+    Besteckeinsatz (``F:\\3D Dateien``, 22.09.2026), an einen Block gesetzt.
+    Bei einer Öffnung von 1,0 mm geht die runde Spitze verloren (0,13 mm²).
+    Der erodierte Steg endet dabei spitz, und die gefaste Aufweitung verlängert
+    diese Spitze um bis zu fünf Radien — über das Stegende hinaus ins Freie.
+    Die Nadel lag außerhalb der Form und glich den Verlust in der
+    Flächenbilanz aus: gemeldet wurden 1,59 mm, wo das Ende unter einem
+    Millimeter liegt. Gezählt wird, was der Form fehlt, nicht was die
+    Aufweitung außerhalb dazugewinnt.
+    """
+    from shapely.geometry import Polygon as ShapelyPolygon
+    from shapely.geometry import box as shapely_box
+
+    end = [
+        (73.383, 190.571), (73.412, 190.439), (73.371, 190.312), (73.271, 190.222),
+        (73.140, 190.194), (72.505, 190.401), (71.978, 190.512), (71.454, 190.564),
+        (70.965, 190.560), (70.900, 190.562), (70.900, 192.006), (71.202, 191.953),
+        (71.743, 191.733), (72.309, 191.428), (72.829, 191.070), (73.295, 190.669),
+    ]  # fmt: skip
+    shape = shapely_box(60.9, 186.0, 70.9, 196.0).union(ShapelyPolygon(end))
+
+    measured = minimum_width(shape)
+
+    assert 0.75 <= measured <= 1.0, f"das Stegende ist unter einem Millimeter, gemeldet {measured}"
 
 
 def test_above_the_interesting_width_it_stops_measuring() -> None:

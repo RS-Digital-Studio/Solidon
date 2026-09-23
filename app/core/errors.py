@@ -78,6 +78,13 @@ SHOW_LOCATIONS = Action("show_locations", _("Stellen zeigen"))
 #: Handlung nennt deshalb das Ergebnis und nicht die Arbeit.
 RESIZE_THE_WIDENING = Action("resize_the_widening", _("Senkung mitziehen"), primary=True)
 SHOW_HISTORY = Action("show_history", _("Verlauf zeigen"))
+#: Die Handlungen der Schichtanalyse im Prüfbericht (§22.2, §22.3): eine
+#: Insel oder frei hängende Fläche braucht Stützen, und die zwei Auswege sind
+#: eine andere Lage oder der Blick auf den Stützbedarf. Der dritte gilt dem
+#: Hinweis auf unkalibriertes Material.
+ORIENT_FOR_PRINT = Action("orient_for_print", _("Druckoptimal ausrichten"), primary=True)
+SHOW_SUPPORT_NEED = Action("show_support_need", _("Stützbedarf zeigen"))
+CALIBRATE_MATERIAL = Action("calibrate_material", _("Material kalibrieren"), primary=True)
 #: Die laufende Teilungssuche anhalten und verwerfen.
 #:
 #: **Sie hieß ``cancel_evaluation`` und meinte die Teilung.** Ein zweiter

@@ -743,6 +743,14 @@ _LINE_VALUES: tuple[str, ...] = (
     # Die Formabweichung nennt ihr Maß in der Zeile — der Befund steht nur,
     # wo belegte Punkte messbar neben der Form liegen (``check_form_deviation``).
     "deviation_mm",
+    # Die Schichtanalyse im Bericht (§22.2): wie viel Stütze unter einer Insel
+    # oder was eine andere Lage spart, wie weit eine Decke frei spannt, wie
+    # schmal die dünnste Stelle ist. Ohne die Zahl ist die Zeile ein Satz
+    # ohne Maß, und das Maß ist, wonach man entscheidet.
+    "support_cm3",
+    "saved_percent",
+    "span_mm",
+    "width_mm",
 )
 
 
