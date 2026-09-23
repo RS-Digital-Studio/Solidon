@@ -29,7 +29,15 @@ from typing import Any, Final
 
 from app.core.errors import CANCEL, Action, ValidationError, require_positive
 from app.core.sketch.planes import feature_plane_parts, standing_on_feature, to_plane
-from app.core.sketch.profile import _JOIN_TOL, _flat_curve, arc_sweep
+from app.core.sketch.profile import (
+    _JOIN_TOL,
+    _flat_curve,
+    arc_sweep,
+    ellipse_element_extremes,
+    ellipse_frame,
+    parameter_sweep,
+)
+from app.core.sketch.solver import CURVE_SLOTS, closest_on_spline
 from app.core.types import (
     PlaneFrame,
     Point2,
@@ -111,6 +119,39 @@ def circle_intersections(
     ]
 
 
+def ellipse_intersections(line: tuple[Point2, Point2], element: SketchElement) -> list[Point2]:
+    """Wo eine Gerade eine Ellipse oder einen Ellipsenbogen trifft — exakt.
+
+    Im Kreis der Ellipse ist sie ein Einheitskreis: Die Gerade wird in dessen
+    Rahmen gebracht (dieselbe affine Abbildung, mit der die Profilbildung
+    rechnet, :class:`~app.core.sketch.profile.EllipseFrame`), dort mit
+    :func:`circle_intersections` geschnitten und zurückgebracht — keine
+    Sehnenkette, keine Winkelfunktion. Ein Ellipsenbogen behält nur, was
+    gegen den Uhrzeigersinn zwischen seinem Anfang und seinem Ende liegt.
+    """
+    frame = ellipse_frame(*element.points[:3])
+    if frame.first <= EPS_SKETCH or frame.second <= EPS_SKETCH:
+        return []
+    ux, uy = frame.axis
+
+    def inside(point: Point2) -> Point2:
+        dx, dy = point[0] - frame.centre[0], point[1] - frame.centre[1]
+        return ((dx * ux + dy * uy) / frame.first, (-dx * uy + dy * ux) / frame.second)
+
+    hits = circle_intersections((inside(line[0]), inside(line[1])), (0.0, 0.0), 1.0)
+    parameters = [(x / size, y / size) for x, y in hits if (size := math.hypot(x, y)) > EPS_SKETCH]
+    if element.kind == "elliptical_arc":
+        start = frame.parameter(element.points[3])
+        reach = parameter_sweep(start, frame.parameter(element.points[4]))
+        parameters = [
+            parameter
+            for parameter in parameters
+            if math.hypot(parameter[0] - start[0], parameter[1] - start[1]) <= EPS_SKETCH
+            or parameter_sweep(start, parameter) <= reach + EPS_SKETCH
+        ]
+    return [frame.at(*parameter) for parameter in parameters]
+
+
 def _parameter_on(line: tuple[Point2, Point2], point: Point2) -> float:
     """Wo auf der Strecke ein Punkt liegt: 0 am Anfang, 1 am Ende."""
     (ax, ay), (bx, by) = line
@@ -187,6 +228,8 @@ def _meetings(sketch: Sketch, index: int, line: tuple[Point2, Point2]) -> list[P
             edge = other.points[1]
             radius = math.hypot(edge[0] - centre[0], edge[1] - centre[1])
             found.extend(circle_intersections(line, centre, radius))
+        elif other.kind in ("ellipse", "elliptical_arc"):
+            found.extend(ellipse_intersections(line, other))
         else:
             flat = _flat_curve(other)
             for begin, end in itertools.pairwise(flat):
@@ -213,8 +256,14 @@ def trim(sketch: Sketch, index: int, at: Point2) -> Sketch:
     Weg ist das Stück, auf das geklickt wurde — genau wie in jedem CAD. Liegt
     der Klick jenseits aller Kreuzungen, fällt die ganze Linie weg; auch das
     ist die übliche Antwort, und sie ist rücknehmbar.
+
+    Eine Ellipse und ein Ellipsenbogen werden ebenso getrimmt
+    (:func:`_trimmed_ellipse`) — so entsteht ein Ellipsenbogen, wie in Fusion,
+    das dafür kein eigenes Werkzeug hat.
     """
     element = sketch.elements[index]
+    if element.kind in ELLIPSE_KINDS:
+        return _trimmed_ellipse(sketch, index, at)
     line = (element.points[0], element.points[1])
     crossings = crossings_on(sketch, index)
     if not crossings:
@@ -278,6 +327,150 @@ def extend(sketch: Sketch, index: int, at: Point2) -> Sketch:
     )
     points = (line[0], target) if towards_end else (target, line[1])
     return _rebuilt_line(sketch, index, (points,))
+
+
+def _ellipse_crossings(sketch: Sketch, index: int) -> list[Point2]:
+    """Wo andere Elemente diese Ellipse schneiden — exakt gegen die Ellipse
+    (:func:`ellipse_intersections`), die anderen als die Punktfolge, die auch
+    das Profil rechnet; eine Linie ist darin genau sie selbst. Beim
+    Ellipsenbogen zählt nur, was auf seiner Spanne liegt."""
+    element = sketch.elements[index]
+    found: list[Point2] = []
+    for other_index, other in enumerate(sketch.elements):
+        if other_index == index:
+            continue
+        for begin, end in itertools.pairwise(_flat_curve(other)):
+            found.extend(
+                point
+                for point in ellipse_intersections((begin, end), element)
+                if -_ON_SEGMENT <= _parameter_on((begin, end), point) <= 1.0 + _ON_SEGMENT
+            )
+    unique: list[Point2] = []
+    for point in found:
+        if all(math.dist(point, kept) > _SAME_SPOT for kept in unique):
+            unique.append(point)
+    return unique
+
+
+def _trimmed_ellipse(sketch: Sketch, index: int, at: Point2) -> Sketch:
+    """Trimmen an einer Ellipse oder einem Ellipsenbogen (RM-188 P6.6a).
+
+    Die Kreuzungen teilen die Kurve; weg ist das Stück, auf das geklickt
+    wurde. Eine volle Ellipse braucht dafür zwei Kreuzungen und wird ein
+    Ellipsenbogen, der gegen den Uhrzeigersinn von der Kreuzung hinter dem
+    Klick zu der davor läuft. Ein Bogen verliert das Stück zwischen den
+    Kreuzungen um den Klick — oder bis zu seinem Ende, wie eine Linie — und
+    wird dabei zu höchstens zwei Bögen auf **derselben** Ellipse
+    (:func:`_rebuilt_ellipse`).
+    """
+    element = sketch.elements[index]
+    frame = ellipse_frame(element.points[0], element.points[1], element.points[2])
+    crossings = _ellipse_crossings(sketch, index)
+    click = frame.parameter(at)
+    pieces: list[tuple[Point2, Point2]] = []
+    if element.kind == "ellipse":
+        if len(crossings) < 2:
+            raise ValidationError(
+                "element",
+                _(
+                    "Diese Ellipse wird nicht zweimal gekreuzt — zum Trimmen braucht es "
+                    "zwei Kanten, zwischen denen ein Stück wegfällt."
+                ),
+                constraint="too_few_crossings",
+            )
+        ranked = sorted(crossings, key=lambda point: parameter_sweep(click, frame.parameter(point)))
+        pieces.append((ranked[0], ranked[-1]))
+    else:
+        start, end = element.points[3], element.points[4]
+        origin = frame.parameter(start)
+        reach = parameter_sweep(origin, frame.parameter(end))
+
+        def along(point: Point2) -> float:
+            return parameter_sweep(origin, frame.parameter(point))
+
+        inner = [
+            point
+            for point in crossings
+            if math.dist(point, start) > _JOIN_TOL
+            and math.dist(point, end) > _JOIN_TOL
+            and along(point) < reach
+        ]
+        if not inner:
+            raise ValidationError(
+                "element",
+                _("Dieser Bogen kreuzt nichts — zum Trimmen braucht es eine Kante zum Kürzen."),
+            )
+        where = along(at)
+        before = [point for point in inner if along(point) < where]
+        after = [point for point in inner if along(point) > where]
+        if before:
+            pieces.append((start, max(before, key=along)))
+        if after:
+            pieces.append((min(after, key=along), end))
+    kept = [piece for piece in pieces if math.dist(*piece) > _JOIN_TOL]
+    return _rebuilt_ellipse(sketch, index, tuple(kept))
+
+
+def _rebuilt_ellipse(
+    sketch: Sketch, index: int, pieces: tuple[tuple[Point2, Point2], ...]
+) -> Sketch:
+    """Tauscht eine Ellipse oder einen Ellipsenbogen gegen die Bögen, die von
+    ihr bleiben — mit den Bedingungen, die dabei weiter gelten.
+
+    Dieselben Regeln wie bei der Linie (:func:`_rebuilt_line`): Was an Mitte
+    und Achsen hing, bleibt am ersten Bogen — ein Maß der Achse misst
+    weiterhin dieselbe Ellipse. Ein Bogenende, das seinen Ort behält, behält
+    seine Bedingungen. **Ein zweiter Bogen hängt an der Ellipse des ersten**:
+    Mitte und erstes Achsende gedeckt, die zweite Achse gleich lang. Nicht
+    auch ihr Ende gedeckt — die zweite Achse steht schon durch die eigene
+    Gleichung des Bogens senkrecht, und eine dritte Deckung sagte das ein
+    zweites Mal: „legt fest, was schon festliegt" (gemessen). Auf welcher
+    Seite ihr Ende liegt, ändert an der Ellipse nichts.
+    """
+    element = sketch.elements[index]
+    begin = offsets_of(sketch)[index]
+    count = len(element.points)
+    axes = element.points[:3]
+    fresh = tuple(
+        SketchElement("elliptical_arc", (*axes, first, last), construction=element.construction)
+        for first, last in pieces
+    )
+    added = 5 * len(fresh)
+    mapping: dict[int, int] = {}
+    for old in range(len(flat_points(sketch))):
+        if begin <= old < begin + count:
+            continue
+        mapping[old] = old if old < begin else old - count + added
+    if fresh:
+        mapping.update({begin + axis: begin + axis for axis in range(3)})
+    if element.kind == "elliptical_arc":
+        start, end = element.points[3], element.points[4]
+        for number, (first, last) in enumerate(pieces):
+            if first is start:
+                mapping[begin + 3] = begin + 5 * number + 3
+            if last is end:
+                mapping[begin + 4] = begin + 5 * number + 4
+
+    constraints: list[SketchConstraint] = []
+    for entry in sketch.constraints:
+        if entry.kind in CURVE_SLOTS:
+            moved = _curve_targets(entry, begin, mapping, len(fresh), size=5)
+        else:
+            targets = tuple(mapping.get(target, -1) for target in entry.targets)
+            moved = None if min(targets, default=0) < 0 else targets
+        if moved is not None:
+            constraints.append(SketchConstraint(entry.kind, moved, entry.value))
+    for number in range(1, len(fresh)):
+        other = begin + 5 * number
+        constraints.extend(
+            (
+                SketchConstraint("coincident", (begin, other)),
+                SketchConstraint("coincident", (begin + 1, other + 1)),
+                SketchConstraint("equal", (begin, begin + 2, other, other + 2)),
+            )
+        )
+    elements = (*sketch.elements[:index], *fresh, *sketch.elements[index + 1 :])
+    return replace(sketch, elements=elements, constraints=tuple(constraints))
 
 
 def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
@@ -401,6 +594,10 @@ def mirror(sketch: Sketch, indices: tuple[int, ...], axis: str) -> Sketch:
             # Ein Bogen läuft gegen den Uhrzeigersinn; gespiegelt liefe er
             # andersherum. Anfang und Ende zu tauschen dreht ihn zurück.
             points = (points[0], points[2], points[1])
+        elif element.kind == "elliptical_arc":
+            # Derselbe Grund beim Ellipsenbogen. Die Achsenpunkte bleiben: Die
+            # zweite Achse trägt nur ihre Länge, ihre Seite zählt nicht.
+            points = (*points[:3], points[4], points[3])
         copies.append(replace(element, points=points))
 
     if not copies:
@@ -472,6 +669,17 @@ def _rebuilt_line(sketch: Sketch, index: int, pieces: tuple[tuple[Point2, Point2
 
     constraints: list[SketchConstraint] = []
     for entry in sketch.constraints:
+        if entry.kind in CURVE_SLOTS:
+            # **Eine Kurvenbedingung nennt die Linie über ihren Anfang**
+            # (RM-188 P6.6b) — gemeint ist die Gerade, und die ist für jedes
+            # Stück dieselbe. Sie wandert deshalb zu dem Stück, das ihre
+            # Stelle trägt (bei *glatt* und *krümmungsstetig* der Punkt davor),
+            # sonst zum ersten. Was an einem weggefallenen Ende hing, fällt mit
+            # ihm, wie jede Punktbedingung.
+            moved = _curve_targets(entry, begin, mapping, len(fresh))
+            if moved is not None:
+                constraints.append(SketchConstraint(entry.kind, moved, entry.value))
+            continue
         whole = begin in entry.targets and begin + 1 in entry.targets
         if whole:
             if entry.kind not in _ALONG_THE_LINE or not fresh:
@@ -492,6 +700,598 @@ def _rebuilt_line(sketch: Sketch, index: int, pieces: tuple[tuple[Point2, Point2
 
     elements = (*sketch.elements[:index], *fresh, *sketch.elements[index + 1 :])
     return replace(sketch, elements=elements, constraints=tuple(constraints))
+
+
+def _curve_targets(
+    entry: SketchConstraint,
+    begin: int,
+    mapping: dict[int, int],
+    pieces: int,
+    *,
+    size: int = 2,
+) -> tuple[int, ...] | None:
+    """Die Ziele einer Kurvenbedingung, nachdem die Kurve bei ``begin`` in
+    ``pieces`` Stücke zu je ``size`` Punkten zerfiel — oder ``None``, wenn sie
+    mit ihr fällt. Die Kurve wandert zu dem Stück, das die Stelle trägt."""
+    slots = CURVE_SLOTS[entry.kind]
+    targets: list[int] = []
+    for slot, target in enumerate(entry.targets):
+        if slot in slots and target == begin:
+            if not pieces:
+                return None
+            spot = mapping.get(entry.targets[slot - 1]) if slot > 0 else None
+            if entry.kind != "on_curve" and spot is not None and 0 <= spot - begin < size * pieces:
+                targets.append(begin + size * ((spot - begin) // size))
+            else:
+                targets.append(begin)
+            continue
+        moved = mapping.get(target)
+        if moved is None:
+            return None
+        targets.append(moved)
+    return tuple(targets)
+
+
+# --- Splinepunkte (RM-188 P6.6a) ---------------------------------------------------
+
+#: Die kleinste Punktzahl eines Splines — unter zweien ist er ein Punkt
+#: (dieselbe Grenze wie im Löser).
+_LEAST_SPLINE_POINTS: Final = 2
+
+
+def spline_point_added(sketch: Sketch, index: int, at: Point2) -> tuple[Sketch, int]:
+    """Ein Punkt mehr im Spline ``index`` — dort, wo die Kurve ``at`` am
+    nächsten kommt. Zurück kommen die Zeichnung und der flache Index des
+    neuen Punkts.
+
+    Der Punkt liegt **auf** der Kurve und nicht am Klick: Eine Kurve, die
+    durch einen weiteren ihrer eigenen Punkte läuft, behält ihre Lage an
+    allen alten Punkten und ändert ihre Form nur um den neuen herum —
+    derselbe Griff wie „Stützpunkt einfügen" in Fusion. Die Bedingungen
+    rücken mit ihren Punkten auf; eine Bedingung auf der ganzen Kurve nennt
+    ihren Anfang, und der bleibt.
+    """
+    element = sketch.elements[index]
+    if element.kind != "spline":
+        raise ValidationError(
+            "element",
+            _("Punkte einfügen und entfernen lässt sich an einer Kurve durch Punkte."),
+            constraint="not_a_spline",
+        )
+    piece, spot = closest_on_spline(element.points, at)
+    if min(math.dist(spot, knot) for knot in element.points[piece : piece + 2]) <= _JOIN_TOL:
+        # Zwei Punkte an einer Stelle machen ein Stück ohne Länge, und dort
+        # hätte die Kurve keine Richtung.
+        raise ValidationError(
+            "point",
+            _("Hier liegt schon ein Punkt der Kurve — zwischen zwei Punkten klicken."),
+            constraint="point_there",
+        )
+    begin = offsets_of(sketch)[index]
+    local = piece + 1
+    points = (*element.points[:local], spot, *element.points[local:])
+    added = begin + local
+    constraints = tuple(
+        SketchConstraint(
+            entry.kind,
+            tuple(target + 1 if target >= added else target for target in entry.targets),
+            entry.value,
+        )
+        for entry in sketch.constraints
+    )
+    elements = (
+        *sketch.elements[:index],
+        replace(element, points=points),
+        *sketch.elements[index + 1 :],
+    )
+    return replace(sketch, elements=elements, constraints=constraints), added
+
+
+def spline_point_removed(sketch: Sketch, flat: int) -> Sketch:
+    """Nimmt den Punkt ``flat`` aus seinem Spline — die Kurve läuft danach
+    durch die übrigen.
+
+    Was an dem Punkt hing, fällt mit ihm. Eine Bedingung auf der **ganzen**
+    Kurve bleibt: Sie nennt deren ersten Punkt (RM-188 P6.6b), und fällt der
+    erste weg, ist der nächste der neue erste — unter derselben Nummer.
+    """
+    offsets = offsets_of(sketch)
+    owner = next(
+        (
+            position
+            for position, element in enumerate(sketch.elements)
+            if offsets[position] <= flat < offsets[position] + len(element.points)
+        ),
+        None,
+    )
+    if owner is None or sketch.elements[owner].kind != "spline":
+        raise ValidationError(
+            "point",
+            _("Punkte einfügen und entfernen lässt sich an einer Kurve durch Punkte."),
+            value=flat,
+            constraint="not_a_spline",
+        )
+    element = sketch.elements[owner]
+    if len(element.points) <= _LEAST_SPLINE_POINTS:
+        raise ValidationError(
+            "point",
+            _(
+                "Eine Kurve braucht mindestens zwei Punkte — "
+                "statt des Punkts die ganze Kurve löschen."
+            ),
+            value=flat,
+            constraint="least_points",
+        )
+    begin = offsets[owner]
+    local = flat - begin
+    points = (*element.points[:local], *element.points[local + 1 :])
+    constraints: list[SketchConstraint] = []
+    for entry in sketch.constraints:
+        slots = CURVE_SLOTS.get(entry.kind, ())
+        targets: list[int] = []
+        for slot, target in enumerate(entry.targets):
+            if slot in slots and target == begin:
+                targets.append(begin)
+            elif target == flat:
+                break
+            else:
+                targets.append(target - 1 if target > flat else target)
+        else:
+            constraints.append(SketchConstraint(entry.kind, tuple(targets), entry.value))
+    elements = (
+        *sketch.elements[:owner],
+        replace(element, points=points),
+        *sketch.elements[owner + 1 :],
+    )
+    return replace(sketch, elements=elements, constraints=tuple(constraints))
+
+
+def removed(sketch: Sketch, indices: Iterable[int]) -> Sketch:
+    """Die Zeichnung ohne die Elemente ``indices`` — und ohne jede Bedingung,
+    die einen ihrer Punkte liest; die übrigen Ziele rücken auf.
+
+    Der Weg des Löschens im Editor und der Rücknahme einer Tangente, die ihren
+    Berührpunkt als Hilfspunkt mitgebracht hat (:func:`taken_back`) — eine
+    Rechnung für beides.
+    """
+    dropped = set(indices)
+    offsets = offsets_of(sketch)
+    gone: set[int] = set()
+    for index in dropped:
+        gone.update(range(offsets[index], offsets[index] + len(sketch.elements[index].points)))
+    mapping: dict[int, int] = {}
+    fresh = 0
+    for old in range(len(flat_points(sketch))):
+        if old in gone:
+            continue
+        mapping[old] = fresh
+        fresh += 1
+    elements = tuple(element for at, element in enumerate(sketch.elements) if at not in dropped)
+    constraints = tuple(
+        SketchConstraint(
+            entry.kind, tuple(mapping[target] for target in entry.targets), entry.value
+        )
+        for entry in sketch.constraints
+        if all(target in mapping for target in entry.targets)
+    )
+    return replace(sketch, elements=elements, constraints=constraints)
+
+
+# --- Ellipsen zeichnen (RM-188 P6.6a) ------------------------------------------------
+
+
+def ellipse_from_clicks(
+    centre: Point2, first_end: Point2, across: Point2
+) -> tuple[Point2, Point2, Point2] | None:
+    """Die drei Punkte einer Ellipse aus drei Klicks — oder ``None``.
+
+    Der erste Klick ist die Mitte, der zweite das Ende der ersten Achse, der
+    dritte sagt, wie weit die Ellipse **quer** dazu reicht: Sein Abstand von
+    der ersten Achse ist die zweite Halbachse, und der gespeicherte Punkt
+    liegt senkrecht über der Mitte — vom dritten Klick zählt nur seine Höhe
+    über der Achse. So steht die zweite Achse von Anfang an senkrecht, und der
+    Löser muss nichts zurechtrücken, was die Hand nicht gemeint hat.
+
+    ``None`` heißt: keine Ellipse — die erste Achse hat keine Länge, oder der
+    dritte Klick liegt auf ihr. Die Grenze ist die des Lösers (``EPS_GEOM``).
+    """
+    ux, uy = first_end[0] - centre[0], first_end[1] - centre[1]
+    first = math.hypot(ux, uy)
+    if first <= EPS_GEOM:
+        return None
+    ux, uy = ux / first, uy / first
+    height = -(across[0] - centre[0]) * uy + (across[1] - centre[1]) * ux
+    if abs(height) <= EPS_GEOM:
+        return None
+    return centre, first_end, (centre[0] - uy * height, centre[1] + ux * height)
+
+
+def onto_ellipse(axes: Sequence[Point2], point: Point2) -> Point2:
+    """Wo der Strahl von der Mitte durch ``point`` die Ellipse trifft — für
+    einen Punkt auf ihr er selbst (``profile.EllipseFrame.parameter``)."""
+    frame = ellipse_frame(axes[0], axes[1], axes[2])
+    return frame.at(*frame.parameter(point))
+
+
+def carried_onto(old: Sequence[Point2], new: Sequence[Point2], point: Point2) -> Point2:
+    """Derselbe Punkt auf einer gedrehten oder gestreckten Ellipse — an
+    derselben Stelle ihres Parameters. So wandern die Enden eines
+    Ellipsenbogens mit, wenn jemand an einer Achse zieht, und der Bogen behält
+    seine Spanne."""
+    before = ellipse_frame(old[0], old[1], old[2])
+    after = ellipse_frame(new[0], new[1], new[2])
+    return after.at(*before.parameter(point))
+
+
+# --- Bedingungen zwischen Kurven planen (RM-188 P6.6b) -------------------------------
+
+#: Die Elementarten, an denen eine Kurvenbedingung hängen kann
+#: (``solver.CURVE_SLOTS``). Ein loser Punkt ist keine Kurve.
+CURVE_KINDS: Final = frozenset({"line", "circle", "arc", "ellipse", "elliptical_arc", "spline"})
+
+#: Die beiden Ellipsenarten — für *gleich groß* über beide Achsen.
+ELLIPSE_KINDS: Final = frozenset({"ellipse", "elliptical_arc"})
+
+
+@dataclass(frozen=True, slots=True)
+class CurvePlan:
+    """Was eine Bedingung zwischen Kurven an der Zeichnung ändert.
+
+    ``constraints`` kommen dazu. ``helper`` ist ein Hilfspunkt, der vorher als
+    letztes Element angehängt wird — seine Nummer steht in den Zielen schon
+    drin. Ein Plan und keine fertige Zeichnung, damit Knopf, Kontextmenü und
+    die Frage „steht sie schon?" dieselbe Rechnung lesen.
+    """
+
+    constraints: tuple[SketchConstraint, ...]
+    helper: Point2 | None = None
+
+
+def with_plan(sketch: Sketch, plan: CurvePlan) -> Sketch:
+    """Die Zeichnung mit dem Plan — ein Schritt, ein Rückgängig."""
+    elements = sketch.elements
+    if plan.helper is not None:
+        elements = (*elements, SketchElement("point", (plan.helper,), construction=True))
+    return replace(sketch, elements=elements, constraints=(*sketch.constraints, *plan.constraints))
+
+
+def _spots(element: SketchElement, begin: int, *, ends_only: bool) -> tuple[int, ...]:
+    """Die eigenen Punkte einer Kurve, an denen ein Übergang sitzen kann.
+
+    Ihre Enden — beim Spline auch jeder Punkt, durch den er läuft, außer für
+    *krümmungsstetig*: Innen ist ein Catmull-Rom-Spline nur tangentenstetig.
+    Kreis und Ellipse haben keine Enden.
+    """
+    kind = element.kind
+    if kind == "line":
+        return (begin, begin + 1)
+    if kind == "arc":
+        return (begin + 1, begin + 2)
+    if kind == "elliptical_arc":
+        return (begin + 3, begin + 4)
+    if kind == "spline":
+        last = begin + len(element.points) - 1
+        return (begin, last) if ends_only else tuple(range(begin, last + 1))
+    return ()
+
+
+def curve_gap(element: SketchElement, point: Point2) -> float:
+    """Wie weit ``point`` neben der Kurve liegt, die *Punkt auf Kurve* meint:
+    die Gerade einer Linie, der Kreis eines Bogens, die Ellipse eines
+    Ellipsenbogens, der Spline selbst. Bei der Ellipse radial gemessen — nie
+    weniger als der wahre Abstand, und null genau auf ihr."""
+    points = element.points
+    if element.kind == "line":
+        return _off_line(points[0], point, points[1])
+    if element.kind in ("circle", "arc"):
+        return abs(math.dist(points[0], point) - math.dist(points[0], points[1]))
+    if element.kind in ELLIPSE_KINDS:
+        return math.dist(point, onto_ellipse(points, point))
+    if element.kind == "spline":
+        _piece, spot = closest_on_spline(points, point)
+        return math.dist(spot, point)
+    return math.inf
+
+
+def _solved(sketch: Sketch, points: Sequence[Point2], index: int) -> SketchElement:
+    """Das Element ``index`` mit seinen gelösten Punkten."""
+    element = sketch.elements[index]
+    begin = offsets_of(sketch)[index]
+    return replace(element, points=tuple(points[begin : begin + len(element.points)]))
+
+
+def _linked(sketch: Sketch, first: int, second: int) -> bool:
+    return first == second or any(
+        entry.kind == "coincident" and set(entry.targets) == {first, second}
+        for entry in sketch.constraints
+    )
+
+
+def _joint(
+    sketch: Sketch, points: Sequence[Point2], first: int, second: int, *, ends_only: bool
+) -> tuple[int, int, SketchConstraint | None] | None:
+    """Wo zwei Kurven aneinanderstoßen: die Stelle an der ersten, die an der
+    zweiten und die Bedingung, die den Stoß erst festhält — oder ``None``.
+
+    Zuerst zwei eigene Punkte am selben Ort, verbunden durch eine Deckung
+    oder nur übereinander gezeichnet (dann kommt die Deckung dazu). Danach ein
+    Ende der einen Kurve, das auf der anderen liegt; die Stelle ist dann für
+    beide dieser Punkt, und *Punkt auf Kurve* hält ihn dort. Ein Spline liest
+    einen Übergang nur an einem seiner eigenen Punkte (``solver``), ein Ende
+    auf seinem Inneren zählt deshalb nicht.
+    """
+    offsets = offsets_of(sketch)
+    one, other = sketch.elements[first], sketch.elements[second]
+    one_spots = _spots(one, offsets[first], ends_only=ends_only)
+    other_spots = _spots(other, offsets[second], ends_only=ends_only)
+    pairs = [(a, b) for a in one_spots for b in other_spots]
+    for a, b in pairs:
+        if _linked(sketch, a, b):
+            return a, b, None
+    for a, b in pairs:
+        if math.dist(points[a], points[b]) <= _JOIN_TOL:
+            return a, b, SketchConstraint("coincident", (a, b))
+    for spots, carrier in ((one_spots, second), (other_spots, first)):
+        if sketch.elements[carrier].kind == "spline":
+            continue
+        head = offsets[carrier]
+        shape = _solved(sketch, points, carrier)
+        for spot in spots:
+            held = SketchConstraint("on_curve", (spot, head))
+            if held in sketch.constraints:
+                return spot, spot, None
+            if curve_gap(shape, points[spot]) <= _JOIN_TOL:
+                return spot, spot, held
+    return None
+
+
+def _closest_approach(one: SketchElement, other: SketchElement) -> Point2:
+    """Die Mitte zwischen den nächsten Stellen zweier Kurven — der Startort
+    eines Berührpunkts, den der Löser danach genau setzt.
+
+    Beide Kurven als die Punktfolge der Ansicht (``_flat_curve``, schon auf
+    ``CHORD_ERROR`` genau); eine Linie, die darin nur zwei Punkte hat, wird
+    auf 64 Stellen geteilt. Dann das nächste Paar. Deterministisch und ohne
+    Zufall; genau muss es nicht sein, nur auf der richtigen Seite — und
+    schnell, denn die Knopfleiste fragt bei jeder Auswahl, ob es einen Plan
+    gibt.
+    """
+    import numpy as np
+
+    def dense(element: SketchElement) -> Any:
+        flat = np.asarray(_flat_curve(element), dtype=float)
+        if len(flat) != 2:
+            return flat
+        steps = np.linspace(0.0, 1.0, 65)
+        return flat[0] + (flat[1] - flat[0]) * steps[:, None]
+
+    first, second = dense(one), dense(other)
+    gaps = np.linalg.norm(first[:, None, :] - second[None, :, :], axis=2)
+    row, column = np.unravel_index(int(np.argmin(gaps)), gaps.shape)
+    middle = (first[row] + second[column]) / 2.0
+    return (float(middle[0]), float(middle[1]))
+
+
+def tangent_plan(
+    sketch: Sketch, points: Sequence[Point2], first: int, second: int
+) -> CurvePlan | None:
+    """Wie zwei Kurven tangential werden — oder ``None``, wenn es an dieser
+    Auswahl nicht geht.
+
+    Vier Lagen, in dieser Reihenfolge:
+
+    * **Sie stoßen aneinander** (:func:`_joint`): *glatt* an dieser Stelle —
+      der Übergang einer Kontur, Linie in Bogen, Spline in Kreis.
+    * **Linie und Kreis oder Bogen ohne Stoß**: die bestehende Tangente
+      (``tangent``, Abstand der Mitte zur Geraden gleich dem Radius), wie sie
+      immer war — in jeder Reihenfolge der Auswahl. Hier entstand einmal eine
+      Bedingung mit fünf Zielen, und mit dem Bogen zuerst gewählt bot sich der
+      Knopf gar nicht an (Befund B2 der P6.6-Arbeit).
+    * **Zwei andere Kurven ohne Stoß**: ein Hilfspunkt als Berührpunkt, auf
+      beiden Kurven und dort glatt — drei Bedingungen, die zusammen genau eine
+      Freiheit nehmen, und ein Punkt, an dem man die Berührung später findet.
+    * **Ein Spline ohne Stoß**: nichts. Er liest einen Übergang nur an einem
+      seiner Punkte; der Weg dahin ist, einen davon auf die andere Kurve zu
+      legen.
+    """
+    one, other = sketch.elements[first], sketch.elements[second]
+    if first == second or one.kind not in CURVE_KINDS or other.kind not in CURVE_KINDS:
+        return None
+    if one.kind == other.kind == "line":
+        return None
+    offsets = offsets_of(sketch)
+    heads = (offsets[first], offsets[second])
+    joint = _joint(sketch, points, first, second, ends_only=False)
+    if joint is not None:
+        spot, other_spot, link = joint
+        smooth = SketchConstraint("smooth", (spot, heads[0], other_spot, heads[1]))
+        return CurvePlan((*((link,) if link is not None else ()), smooth))
+    kinds = {one.kind, other.kind}
+    if "line" in kinds and len(kinds) == 2 and kinds <= {"line", "circle", "arc"}:
+        line, round_ = (heads[0], heads[1]) if one.kind == "line" else (heads[1], heads[0])
+        return CurvePlan((SketchConstraint("tangent", (line, line + 1, round_, round_ + 1)),))
+    if "spline" in kinds:
+        return None
+    helper = len(points)
+    touch = _closest_approach(_solved(sketch, points, first), _solved(sketch, points, second))
+    return CurvePlan(
+        (
+            SketchConstraint("on_curve", (helper, heads[0])),
+            SketchConstraint("on_curve", (helper, heads[1])),
+            SketchConstraint("smooth", (helper, heads[0], helper, heads[1])),
+        ),
+        helper=touch,
+    )
+
+
+def curvature_plan(
+    sketch: Sketch, points: Sequence[Point2], first: int, second: int
+) -> CurvePlan | None:
+    """*Krümmungsstetig* zwischen einem Spline und der Kurve an seinem Ende.
+
+    Braucht einen Stoß an einem **Ende** des Splines (:func:`_joint` mit
+    ``ends_only``) — innen hat er keine eindeutige Krümmung. Krümmungsstetig
+    schließt glatt ein: Steht *glatt* dort noch nicht, kommt es mit, in
+    demselben Schritt. ``None``, wenn keiner der beiden ein Spline ist oder
+    sie nicht aneinanderstoßen.
+    """
+    one, other = sketch.elements[first], sketch.elements[second]
+    if first == second or one.kind not in CURVE_KINDS or other.kind not in CURVE_KINDS:
+        return None
+    if "spline" not in (one.kind, other.kind):
+        return None
+    joint = _joint(sketch, points, first, second, ends_only=True)
+    if joint is None:
+        return None
+    spot, other_spot, link = joint
+    offsets = offsets_of(sketch)
+    heads = (offsets[first], offsets[second])
+    planned: list[SketchConstraint] = [] if link is None else [link]
+    if not _between(sketch, "smooth", heads):
+        planned.append(SketchConstraint("smooth", (spot, heads[0], other_spot, heads[1])))
+    planned.append(SketchConstraint("curvature", (spot, heads[0], other_spot, heads[1])))
+    return CurvePlan(tuple(planned))
+
+
+def on_curve_plan(sketch: Sketch, point: int, curve: int) -> CurvePlan | None:
+    """*Punkt auf Kurve* — ``None``, wenn der Punkt zur Kurve selbst gehört."""
+    element = sketch.elements[curve]
+    head = offsets_of(sketch)[curve]
+    if element.kind not in CURVE_KINDS or head <= point < head + len(element.points):
+        return None
+    return CurvePlan((SketchConstraint("on_curve", (point, head)),))
+
+
+def equal_axes_plan(
+    sketch: Sketch, points: Sequence[Point2], first: int, second: int
+) -> CurvePlan | None:
+    """Zwei Ellipsen gleich groß: beide Achsen gleich, die längere zur längeren.
+
+    Welche Achse die erste ist, legt die Zeichenreihenfolge fest und nicht die
+    Größe (§9) — wer zwei Ellipsen gleich groß macht, meint aber gleiche
+    Form. Gepaart wird deshalb nach der gezeichneten Länge.
+    """
+    one, other = sketch.elements[first], sketch.elements[second]
+    if first == second or one.kind not in ELLIPSE_KINDS or other.kind not in ELLIPSE_KINDS:
+        return None
+    offsets = offsets_of(sketch)
+    a, b = offsets[first], offsets[second]
+
+    def major_first(begin: int) -> bool:
+        return math.dist(points[begin], points[begin + 1]) >= math.dist(
+            points[begin], points[begin + 2]
+        )
+
+    swapped = major_first(a) != major_first(b)
+    return CurvePlan(
+        (
+            SketchConstraint("equal", (a, a + 1, b, b + (2 if swapped else 1))),
+            SketchConstraint("equal", (a, a + 2, b, b + (1 if swapped else 2))),
+        )
+    )
+
+
+def _curve_heads(entry: SketchConstraint) -> frozenset[int]:
+    return frozenset(entry.targets[slot] for slot in CURVE_SLOTS[entry.kind])
+
+
+def _between(sketch: Sketch, kind: str, heads: tuple[int, int]) -> list[int]:
+    """Die Bedingungen der Art ``kind`` zwischen genau diesen zwei Kurven."""
+    wanted = frozenset(heads)
+    return [
+        at
+        for at, entry in enumerate(sketch.constraints)
+        if entry.kind == kind and _curve_heads(entry) == wanted
+    ]
+
+
+def curve_constraints_present(
+    sketch: Sketch, action: str, first: int, second: int
+) -> tuple[int, ...]:
+    """Welche Bedingungen ``action`` an dieser Auswahl schon angelegt hat —
+    leer, wenn keine. ``first`` und ``second`` sind Elementindizes, bei
+    *Punkt auf Kurve* der Punkt (flach) und die Kurve.
+
+    Gefragt wird nach der **Aussage** und nicht nach den Zielen: *glatt*
+    zwischen zwei Kurven steht, gleich an welcher Stelle und in welcher
+    Reihenfolge es angelegt wurde. Für die Tangente zählt auch die alte Form
+    (``tangent``) zwischen Linie und Kreis oder Bogen.
+    """
+    offsets = offsets_of(sketch)
+    if action == "on_curve":
+        wanted = SketchConstraint("on_curve", (first, offsets[second]))
+        return tuple(at for at, entry in enumerate(sketch.constraints) if entry == wanted)
+    heads = (offsets[first], offsets[second])
+    if action == "curvature":
+        return tuple(_between(sketch, "curvature", heads))
+    if action == "equal":
+        # Gleich groß zwischen zwei Ellipsen: je eine Achse der einen und eine
+        # der anderen — welche zu welcher, sagt der Plan nach der Länge, hier
+        # zählt nur, dass beide Paare stehen.
+        a, b = heads
+        axes_of_one = {(a, a + 1), (a, a + 2)}
+        axes_of_other = {(b, b + 1), (b, b + 2)}
+        matching = [
+            at
+            for at, entry in enumerate(sketch.constraints)
+            if entry.kind == "equal"
+            and {entry.targets[:2], entry.targets[2:]} & axes_of_one
+            and {entry.targets[:2], entry.targets[2:]} & axes_of_other
+        ]
+        return tuple(matching) if len(matching) >= 2 else ()
+    found = _between(sketch, "smooth", heads)
+    for at, entry in enumerate(sketch.constraints):
+        if entry.kind != "tangent":
+            continue
+        line, rest = entry.targets[:2], entry.targets[2:]
+        if {line[0], rest[0]} == set(heads) and line[1] == line[0] + 1:
+            found.append(at)
+    return tuple(sorted(found))
+
+
+def taken_back(sketch: Sketch, action: str, first: int, second: int) -> Sketch | None:
+    """Die Zeichnung ohne die Bedingungen, die ``action`` an dieser Auswahl
+    angelegt hat — ``None``, wenn dort keine steht (siehe
+    :func:`curve_constraints_present`).
+
+    Eine Tangente, die ihren Berührpunkt als Hilfspunkt mitgebracht hat
+    (:func:`tangent_plan`), nimmt ihn wieder mit: Ein loser Punkt auf zwei
+    Kurven wäre danach eine Bedingung, die niemand mehr sieht.
+    """
+    present = curve_constraints_present(sketch, action, first, second)
+    if not present:
+        return None
+    helpers: set[int] = set()
+    if action == "tangent":
+        offsets = offsets_of(sketch)
+        for at in present:
+            entry = sketch.constraints[at]
+            if entry.kind != "smooth" or entry.targets[0] != entry.targets[2]:
+                continue
+            point = entry.targets[0]
+            owner = next(
+                (
+                    index
+                    for index, element in enumerate(sketch.elements)
+                    if offsets[index] == point and element.kind == "point"
+                ),
+                None,
+            )
+            heads = _curve_heads(entry)
+            hanging = [other for other in sketch.constraints if point in other.targets]
+            if owner is not None and all(
+                other == entry
+                or (
+                    other.kind == "on_curve"
+                    and other.targets[0] == point
+                    and other.targets[1] in heads
+                )
+                for other in hanging
+            ):
+                helpers.add(owner)
+    kept = tuple(entry for at, entry in enumerate(sketch.constraints) if at not in set(present))
+    thinner = replace(sketch, constraints=kept)
+    return removed(thinner, helpers) if helpers else thinner
 
 
 # --- Projizieren -----------------------------------------------------------------
@@ -682,8 +1482,9 @@ def face_outline(sketch: Sketch, objects: Iterable[SceneObject], frame: PlaneFra
     Rand, und den gibt es auch dort — außen einer, innen je Loch einer.
 
     **Woher der Rand kommt:** Am exakten Körper aus seinen Kurven
-    (``brep.edit.face_loops``) — eine Bohrung kommt als Kreis und ein Bogen
-    als Bogen. Am Netz aus den Randringen (``perceive.relations``); ein Ring,
+    (``brep.edit.face_loops``) — eine Bohrung kommt als Kreis, ein Bogen
+    als Bogen und eine Ellipse als Ellipse. Am Netz aus den Randringen
+    (``perceive.relations``); ein Ring,
     den ein erkanntes Merkmal als Kreis belegt (Bohrung oder Zapfen, Achse
     durch die Ebene), wird ein Kreis — aber nur, wenn er an keiner Stelle
     weiter als ``MAX_FACET_SAG`` neben dem Ring liegt, an den Ecken und in
@@ -787,6 +1588,39 @@ def _exact_outline(
                     if _dot(piece.axis or turning, turning) < 0.0:
                         ends = (flat[1], flat[0])
                     elements.append(SketchElement("arc", (centre, *ends), construction=True))
+                elif (
+                    piece.kind in ("ellipse", "elliptical_arc")
+                    and piece.centre is not None
+                    and piece.major_end is not None
+                    and piece.minor_end is not None
+                ):
+                    # Die Ellipse selbst, nicht ihre Sehnen (RM-188 P6.6a): Mitte
+                    # und die Enden beider Halbachsen, wie die Skizze sie trägt.
+                    # Der Bogen dreht wie der Kreisbogen um die Zeichenrichtung.
+                    axes = (
+                        to_plane(frame, piece.centre),
+                        to_plane(frame, piece.major_end),
+                        to_plane(frame, piece.minor_end),
+                    )
+                    if piece.kind == "ellipse":
+                        elements.append(SketchElement("ellipse", axes, construction=True))
+                    else:
+                        ends = (flat[0], flat[1])
+                        if _dot(piece.axis or turning, turning) < 0.0:
+                            ends = (flat[1], flat[0])
+                        # Die Enden genau auf ihre Ellipse: Aus einer Kante,
+                        # die OpenCASCADE als B-Spline führt, liegen sie nur
+                        # innerhalb der Kantentoleranz darauf — und über lauter
+                        # festen Punkten hielte der Löser jeden Rest über
+                        # ``EPS_GEOM`` für einen Widerspruch.
+                        shape = ellipse_frame(*axes)
+                        ends = (
+                            shape.at(*shape.parameter(ends[0])),
+                            shape.at(*shape.parameter(ends[1])),
+                        )
+                        elements.append(
+                            SketchElement("elliptical_arc", (*axes, *ends), construction=True)
+                        )
                 else:
                     elements.extend(
                         SketchElement("line", (first, second), construction=True)
@@ -1376,12 +2210,14 @@ MEASURED_KINDS: frozenset[str] = frozenset({"distance", "radius", "diameter"})
 
 
 def _drawing_box(sketch: Sketch) -> tuple[Point2, Point2] | None:
-    """Das Hüllrechteck dessen, was gezeichnet ist — Kreise und Bögen ganz.
+    """Das Hüllrechteck dessen, was gezeichnet ist — Kreise, Bögen und
+    Ellipsen ganz.
 
     Die Punkte allein sagen es nicht: Ein Kreis führt Mitte und einen
     Randpunkt, ein Bogen Mitte, Anfang und Ende. Gemessen wird deshalb am
     Rand selbst — Kreis bis zu seinem Radius in jeder Achsenrichtung, Bogen
-    über seine Enden und die Achsenpunkte, die in seiner Spanne liegen.
+    über seine Enden und die Achsenpunkte, die in seiner Spanne liegen,
+    Ellipse und Ellipsenbogen über ihre Scheitel in x und y.
     Hilfsgeometrie zählt mit, wenn sonst nichts da ist: Auch eine Zeichnung
     aus lauter Hilfslinien hat eine Mitte. ``None`` für eine leere Skizze.
     """
@@ -1407,6 +2243,10 @@ def _drawing_box(sketch: Sketch) -> tuple[Point2, Point2] | None:
                             centre[1] + radius * (0.0, 1.0, 0.0, -1.0)[quarter],
                         )
                     )
+        elif element.kind in ELLIPSE_KINDS:
+            # Die Scheitel, die das Stück überstreicht — an einer gedrehten
+            # Ellipse liegen sie auf keinem ihrer gespeicherten Punkte.
+            found.extend(ellipse_element_extremes(element))
         else:
             found.extend(element.points)
     if not found:

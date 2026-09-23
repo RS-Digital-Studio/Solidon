@@ -35,7 +35,12 @@ from app.core.log import get_logger
 from app.core.sketch.planes import to_world
 from app.core.sketch.profile import (
     Profile,
+    ProfileSegment,
+    arc_segment_extremes,
     arc_through,
+    ellipse_frame,
+    ellipse_segment_extremes,
+    ellipse_turn,
     shifted,
     signed_area,
     spline_controls,
@@ -107,6 +112,8 @@ def _wire(profile: Profile, lift: _Lift) -> Any:
     for segment in profile.segments:
         if segment.kind == "line":
             edge = BRepBuilderAPI_MakeEdge(lift(segment.start), lift(segment.end)).Edge()
+        elif segment.kind == "ellipse":
+            edge = _ellipse_edge(segment, lift)
         elif segment.kind == "spline":
             # Ein kubisches Stück je Kante: Flächenintegrale des Kernes
             # müssen an den inneren Splineknoten getrennt werden. Eine
@@ -170,6 +177,78 @@ def _spline_from_controls(
         knots.SetValue(index + 1, float(index))
         multiplicities.SetValue(index + 1, 4 if index in (0, len(pieces)) else 3)
     return curve_type(poles, knots, multiplicities, 3, False)
+
+
+def _ellipse_axes(segment: ProfileSegment, lift: _Lift) -> tuple[Any, float, float, Any]:
+    """Die Ellipse eines Profilstücks im Raum: Lage, Haupt- und Nebenhalbachse.
+
+    ``gp_Elips`` verlangt die längere Achse zuerst; die Skizze legt das nicht
+    fest (die erste Achse darf die kürzere sein). Dann trägt die zweite
+    Richtung die Hauptachse. Die Normale bleibt ``x`` kreuz ``y`` der gehobenen
+    Zeichnung — derselbe Drehsinn wie beim Kreis (:func:`_circle_edge`), also
+    läuft der Parameter der Ellipse gegen den Uhrzeigersinn der Zeichnung.
+    """
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Elips, gp_Vec
+
+    frame = ellipse_frame(*segment.ellipse) if segment.ellipse is not None else None
+    assert frame is not None, "ein Ellipsenstück trägt seine Ellipse"
+    ux, uy = frame.axis
+    origin = lift(frame.centre)
+    along = gp_Vec(origin, lift((frame.centre[0] + ux, frame.centre[1] + uy)))
+    across = gp_Vec(origin, lift((frame.centre[0] - uy, frame.centre[1] + ux)))
+    normal = gp_Dir(along.Crossed(across))
+    if frame.first >= frame.second:
+        axes = gp_Ax2(origin, normal, gp_Dir(along))
+        return gp_Elips(axes, frame.first, frame.second), frame.first, frame.second, normal
+    axes = gp_Ax2(origin, normal, gp_Dir(across))
+    return gp_Elips(axes, frame.second, frame.first), frame.second, frame.first, normal
+
+
+def _ellipse_edge(segment: ProfileSegment, lift: _Lift) -> Any:
+    """Ein Stück Ellipse als **echte** Ellipsenkante — voll oder als Bogen.
+
+    Der Bogen läuft vom Anfang zum Ende des Stücks, in der Richtung, die sein
+    Stützpunkt sagt. ``GC_MakeArcOfEllipse`` mit ``True`` läuft gegen den
+    Uhrzeigersinn vom ersten zum zweiten Punkt; mit ``False`` gibt es
+    denselben Bogen umgekehrt zurück (gemessen, `sonden/p66`). Ein Stück im
+    Uhrzeigersinn ist also der Bogen vom Ende zum Anfang, umgekehrt.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.GC import GC_MakeArcOfEllipse
+
+    ellipse, _major, _minor, _normal = _ellipse_axes(segment, lift)
+    _frame, sweep = ellipse_turn(segment)
+    if abs(sweep) >= 2.0 * math.pi - EPS_GEOM:
+        return BRepBuilderAPI_MakeEdge(ellipse).Edge()
+    if sweep > 0.0:
+        curve = GC_MakeArcOfEllipse(ellipse, lift(segment.start), lift(segment.end), True)
+    else:
+        curve = GC_MakeArcOfEllipse(ellipse, lift(segment.end), lift(segment.start), False)
+    return BRepBuilderAPI_MakeEdge(curve.Value()).Edge()
+
+
+def ellipse_curve_2d(segment: ProfileSegment) -> Any:
+    """Dieselbe Ellipse für die ebene Schnittprüfung vor dem Körperbau.
+
+    Für die Frage „kreuzt sich der Umriss" zählt nur, welche Punkte die Kurve
+    überstreicht, nicht ihre Laufrichtung — genommen wird deshalb immer der
+    Bogen gegen den Uhrzeigersinn über den Bereich des Stücks.
+    """
+    from OCP.GC import GC_MakeArcOfEllipse2d
+    from OCP.Geom2d import Geom2d_Ellipse
+    from OCP.gp import gp_Ax2d, gp_Dir2d, gp_Elips2d, gp_Pnt2d
+
+    frame, sweep = ellipse_turn(segment)
+    ux, uy = frame.axis
+    centre = gp_Pnt2d(*frame.centre)
+    if frame.first >= frame.second:
+        ellipse = gp_Elips2d(gp_Ax2d(centre, gp_Dir2d(ux, uy)), frame.first, frame.second, True)
+    else:
+        ellipse = gp_Elips2d(gp_Ax2d(centre, gp_Dir2d(-uy, ux)), frame.second, frame.first, True)
+    if abs(sweep) >= 2.0 * math.pi - EPS_GEOM:
+        return Geom2d_Ellipse(ellipse)
+    low, high = (segment.start, segment.end) if sweep > 0.0 else (segment.end, segment.start)
+    return GC_MakeArcOfEllipse2d(ellipse, gp_Pnt2d(*low), gp_Pnt2d(*high), True).Value()
 
 
 def _circle_edge(centre: Point2, radius: float, lift: _Lift) -> Any:
@@ -1770,6 +1849,16 @@ def _points(segment: Any) -> list[Point2]:
     if segment.via is not None:
         found.append(segment.via)
     found.extend(segment.through)
+    if segment.kind == "ellipse":
+        # Die Scheitel, die das Stück überstreicht: An einer gedrehten Ellipse
+        # reicht sie weiter als ihre Enden und ihr Stützpunkt, und die
+        # Achsprüfung von ``revolve`` sähe sonst eine Ellipse über der Achse
+        # nicht.
+        found.extend(ellipse_segment_extremes(segment))
+    elif segment.kind == "arc":
+        # Dasselbe beim Kreisbogen: Ein Bogen über 340° hatte seinen linken
+        # Scheitel jenseits der Achse, und geprüft wurden nur seine drei Punkte.
+        found.extend(arc_segment_extremes(segment))
     return found
 
 

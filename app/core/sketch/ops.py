@@ -41,6 +41,7 @@ from app.core.sketch.planes import (
     is_feature_plane,
 )
 from app.core.sketch.profile import (
+    PROFILE_REVISION,
     Profile,
     ProfileSegment,
     arc_through,
@@ -485,6 +486,7 @@ class SketchExtrudeParams(BaseParams):
     name="sketch_extrude",
     title=_("Grundform hochziehen"),
     category="sketch",
+    cache_version=PROFILE_REVISION,
     params=SketchExtrudeParams,
     consumes=0,
     produces=1,
@@ -773,7 +775,7 @@ def _pocket_in_mesh(
     # Kurve statt entlang ihrer Stützpunkte, und ein Kreis trägt die Ecken der
     # plattformgleichen Tafel (``sketch_solid.outline_points``) — ältere
     # Ergebnisse dürfen nicht aus dem Cache kommen.
-    cache_version="spline-curve-circle-table-1",
+    cache_version=f"spline-curve-circle-table-1+{PROFILE_REVISION}",
     params=SketchPocketParams,
     consumes=1,
     produces=1,
@@ -1030,6 +1032,7 @@ class SketchRevolveParams(BaseParams):
     name="sketch_revolve",
     title=_("Rotationskörper aufziehen"),
     category="sketch",
+    cache_version=PROFILE_REVISION,
     params=SketchRevolveParams,
     consumes=0,
     produces=1,
@@ -1198,7 +1201,7 @@ class SketchSweepParams(BaseParams):
     # ``self-check``: Eine Bahn, die sich kreuzt, zu eng biegt oder mit ihrer
     # Röhre an sich selbst stößt, gibt seit P6.5 eine Absage statt eines
     # selbstdurchdringenden Körpers — ein alter Cachetreffer brächte ihn zurück.
-    cache_version="profile-holes-normal-start-self-check-2",
+    cache_version=f"profile-holes-normal-start-self-check-2+{PROFILE_REVISION}",
     params=SketchSweepParams,
     consumes=0,
     produces=1,
@@ -1498,6 +1501,7 @@ class SketchLoftParams(BaseParams):
     name="sketch_loft",
     title=_("Zwischen zwei Umrissen aufspannen"),
     category="sketch",
+    cache_version=PROFILE_REVISION,
     params=SketchLoftParams,
     consumes=0,
     produces=1,
@@ -1799,6 +1803,7 @@ class SketchRevolveCutParams(BaseParams):
 @register_op(
     name="sketch_revolve_cut",
     title=_("Durch Drehen schneiden"),
+    cache_version=PROFILE_REVISION,
     category="sketch",
     params=SketchRevolveCutParams,
     consumes=1,
@@ -2018,6 +2023,7 @@ class SketchSweepCutParams(BaseParams):
 @register_op(
     name="sketch_sweep_cut",
     title=_("Entlang einer Bahn schneiden"),
+    cache_version=PROFILE_REVISION,
     category="sketch",
     params=SketchSweepCutParams,
     consumes=1,
@@ -2183,6 +2189,7 @@ class SketchLoftCutParams(BaseParams):
 @register_op(
     name="sketch_loft_cut",
     title=_("Durch Überblenden schneiden"),
+    cache_version=PROFILE_REVISION,
     category="sketch",
     params=SketchLoftCutParams,
     consumes=1,

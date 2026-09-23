@@ -2231,7 +2231,7 @@ class SliceResult:
 
 # --- Skizzen (§30.1) -----------------------------------------------------------
 
-SketchElementKind = Literal["point", "line", "arc", "circle", "spline"]
+SketchElementKind = Literal["point", "line", "arc", "circle", "spline", "ellipse", "elliptical_arc"]
 SketchConstraintKind = Literal[
     "distance",
     "radius",
@@ -2248,12 +2248,25 @@ SketchConstraintKind = Literal[
     "angle",
     "equal",
     "midpoint",
+    "on_curve",
+    "smooth",
+    "curvature",
 ]
 """Die Arten von Zwangsbedingungen (§30.1).
 
 ``angle`` misst den Winkel zwischen zwei Linien in Grad, ``equal`` hält zwei
 Spannen gleich lang (zwei Linien, zwei Radien), ``midpoint`` setzt einen Punkt
 auf die Mitte einer Linie.
+
+**Drei Arten nennen Kurven statt Punkte** (RM-188 P6.6b): Eine Kurve steht
+als der flache Index des ersten Punkts ihres Elements im Ziel. ``on_curve``
+(Punkt, Kurve) setzt einen Punkt auf eine Linie — die Gerade durch sie —,
+einen Kreis, Bogen, eine Ellipse, einen Ellipsenbogen oder einen Spline.
+``smooth`` (Punkt an A, Kurve A, Punkt an B, Kurve B) macht zwei Kurven an
+einer Stelle tangentenstetig, ``curvature`` mit denselben Zielen zusätzlich
+krümmungsstetig — beides ohne die Deckung der Punkte, die dafür eine eigene
+``coincident`` trägt. Bei einem Spline ist die Stelle einer seiner Punkte,
+bei ``curvature`` eines seiner Enden.
 
 **Konzentrisch steht hier nicht**, und das ist eine Entscheidung: Zwei Kreise
 mit gemeinsamer Mitte sind die Deckung ihrer Mittelpunkte — ``coincident`` auf
@@ -2274,7 +2287,17 @@ class SketchElement:
 
     ``spline`` ist die einzige Art ohne feste Punktzahl: er läuft durch so
     viele, wie jemand gesetzt hat, mindestens zwei. Die Invariante darüber
-    bleibt unberührt — auch seine Punkte sind Punkte."""
+    bleibt unberührt — auch seine Punkte sind Punkte.
+
+    ``ellipse`` trägt Mittelpunkt, das Ende der ersten Achse und das Ende der
+    zweiten (RM-188 P6.6a). Die zweite steht senkrecht auf der ersten — das
+    ist die eigene Gleichung des Elements, wie beim Bogen die gleich langen
+    Schenkel —, und ihre Länge ist die zweite Halbachse. Welche der beiden die
+    längere ist, legt die Reihenfolge nicht fest: Gezeichnet wird meist die
+    Hauptachse zuerst, gezogen darf jede werden. ``elliptical_arc`` trägt
+    dieselben drei Punkte und dazu Anfang und Ende, die auf der Ellipse liegen;
+    der Bogen läuft wie ein Kreisbogen **gegen den Uhrzeigersinn** vom Anfang
+    zum Ende. Auch hier sind alle Freiheitsgrade Punktkoordinaten."""
 
     kind: SketchElementKind
     points: tuple[Point2, ...]

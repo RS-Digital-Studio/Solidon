@@ -41,7 +41,20 @@ from app.i18n import _
 _TOL: Final[float] = EPS_GEOM
 
 #: Wie viele Punkte ein Element je ``kind`` trägt (§9).
-_ELEMENT_POINTS: Final[dict[str, int]] = {"point": 1, "line": 2, "circle": 2, "arc": 3}
+#:
+#: Eine Ellipse führt Mitte, das Ende der ersten und das Ende der zweiten
+#: Achse; ein Ellipsenbogen dazu Anfang und Ende (RM-188 P6.6a). Sechs
+#: beziehungsweise zehn Koordinaten für fünf beziehungsweise sieben echte
+#: Freiheitsgrade — den Unterschied tragen die eigenen Gleichungen
+#: (:func:`_element_equations`), nicht eine zweite Sorte Variable.
+_ELEMENT_POINTS: Final[dict[str, int]] = {
+    "point": 1,
+    "line": 2,
+    "circle": 2,
+    "arc": 3,
+    "ellipse": 3,
+    "elliptical_arc": 5,
+}
 
 #: Arten ohne feste Punktzahl, mit ihrem Mindestmaß. Ein Spline läuft durch so
 #: viele Punkte, wie jemand gesetzt hat — unter zweien ist er ein Punkt.
@@ -71,6 +84,33 @@ _CONSTRAINT_TARGETS: Final[dict[str, int]] = {
     # und nicht das Datenmodell.
     "equal": 4,
     "midpoint": 3,
+    # **Kurven werden über ihren ersten Punkt genannt** (RM-188 P6.6b). Ein
+    # Ziel, das eine Kurve meint, ist der flache Index des ersten Punkts ihres
+    # Elements — bei jeder Art einer ihrer Punkte, bei Kreis und Ellipse die
+    # Mitte, bei Linie und Spline der Anfang. Welche Kurve das ist, sagt das
+    # Element, zu dem der Punkt gehört; so bleibt die Zielzahl fest, auch für
+    # einen Spline mit beliebig vielen Punkten. ``on_curve``: (Punkt, Kurve).
+    "on_curve": 2,
+    # ``smooth`` und ``curvature``: (Punkt an A, Kurve A, Punkt an B, Kurve B)
+    # — je Kurve die Stelle, an der sie gelesen wird. An einem gemeinsamen
+    # Punkt ist das zweimal derselbe; zwei Splines, die sich an ihren Enden
+    # treffen, haben zwei verschiedene, deckungsgleiche Punkte.
+    "smooth": 4,
+    "curvature": 4,
+}
+
+#: Die Elementarten, auf die eine Kurvenbedingung zeigen darf.
+_CURVE_KINDS: Final[frozenset[str]] = frozenset(
+    {"line", "circle", "arc", "ellipse", "elliptical_arc", "spline"}
+)
+
+#: Die Bedingungen, deren Ziele Kurven nennen — und an welcher Stelle der
+#: Ziele (``edit`` braucht das, wenn ein Spline Punkte gewinnt oder verliert:
+#: Ein Kurvenziel bleibt, ein Punktziel fällt mit seinem Punkt).
+CURVE_SLOTS: Final[dict[str, tuple[int, ...]]] = {
+    "on_curve": (1,),
+    "smooth": (1, 3),
+    "curvature": (1, 3),
 }
 
 #: Bedingungen, die nichts festlegen. Sie werden geprüft wie jede andere —
@@ -511,6 +551,752 @@ def _arc_equation(centre: int, start: int, end: int) -> tuple[_ResidualFn, _Grad
     return fn, grad
 
 
+def _ellipse_axes_equation(centre: int, first: int, second: int) -> tuple[_ResidualFn, _GradientFn]:
+    """Die zweite Achse einer Ellipse steht senkrecht auf der ersten.
+
+    Das Residuum ist der Anteil der zweiten Achse **entlang** der ersten,
+    ``(u · w) / |u|`` mit ``u`` = erste, ``w`` = zweite Achse — eine Länge in
+    Millimetern und damit in derselben Größe wie jede andere Zeile. Ein
+    Skalarprodukt ohne Teilung hätte Quadratmillimeter und zöge die
+    Konfliktprüfung (``_TOL``) bei großen Ellipsen scharf, bei kleinen stumpf.
+    """
+
+    def parts(pts: np.ndarray) -> tuple[float, float, float, float, float, float]:
+        ux = float(pts[first][0] - pts[centre][0])
+        uy = float(pts[first][1] - pts[centre][1])
+        wx = float(pts[second][0] - pts[centre][0])
+        wy = float(pts[second][1] - pts[centre][1])
+        length = max(math.hypot(ux, uy), EPS_GEOM)
+        return ux, uy, wx, wy, length, (ux * wx + uy * wy) / length
+
+    def fn(pts: np.ndarray) -> tuple[float, ...]:
+        return (parts(pts)[5],)
+
+    def grad(pts: np.ndarray, out: np.ndarray) -> None:
+        ux, uy, wx, wy, length, along = parts(pts)
+        # Nach w: die Einheitsrichtung der ersten Achse.
+        gwx, gwy = ux / length, uy / length
+        # Nach u: (w - along · û) / |u|.
+        gux = (wx - along * gwx) / length
+        guy = (wy - along * gwy) / length
+        out[0, first, 0] += gux
+        out[0, first, 1] += guy
+        out[0, second, 0] += gwx
+        out[0, second, 1] += gwy
+        out[0, centre, 0] -= gux + gwx
+        out[0, centre, 1] -= guy + gwy
+
+    return fn, grad
+
+
+#: Unterhalb dieser Größe gilt ein Vektor als null — nur als Schutz gegen die
+#: Teilung durch null in den Ellipsengleichungen, keine Toleranz (Regel 7).
+_TINY: Final[float] = 1e-12
+
+
+def _on_ellipse_equation(
+    point: int, centre: int, first: int, second: int
+) -> tuple[_ResidualFn, _GradientFn]:
+    """Ein Punkt liegt auf der Ellipse aus Mitte und beiden Achsenenden.
+
+    **Gemessen wird entlang des Strahls von der Mitte durch den Punkt.** Mit
+    ``A = [u w]`` (beide Achsen als Spalten) ist ``A⁻¹·d`` der Punkt im
+    Einheitskreis der Ellipse, ``d`` sein Abstand zur Mitte; auf dem Strahl
+    liegt die Ellipse bei ``d / |A⁻¹·d|``. Das Residuum ist der Abstand
+    dazwischen::
+
+        r = |d| · (1 - |det A| / |(cross(d, w), cross(u, d))|)
+
+    Am Kreis ist das genau ``|d| - R``. Es ist nicht der kürzeste Abstand zur
+    Kurve, aber nie kleiner als er — ein Rest unter ``_TOL`` heißt also auch
+    „höchstens so weit neben der Kurve" —, und es braucht weder eine
+    Projektion noch eine Winkelfunktion: Grundrechenarten und Wurzeln, auf
+    jeder Maschine dieselbe Zahl (RM-187).
+    """
+
+    def fn(pts: np.ndarray) -> tuple[float, ...]:
+        return (_radial(pts, point, centre, first, second).residual,)
+
+    def grad(pts: np.ndarray, out: np.ndarray) -> None:
+        ray = _radial(pts, point, centre, first, second)
+        # r = |d| · (1 - ratio), ratio = |D| / G, also
+        #   ∂r = ∂|d| · (1 - ratio) - (|d| / G) · (∂|D| - ratio · ∂G)
+        # mit ∂|d|/∂d = d̂, ∂G = (g1 ∂g1 + g2 ∂g2) / G, ∂|D| = ±∂D und
+        #   ∂g1/∂d = (wy, -wx), ∂g1/∂w = (-dy, dx),
+        #   ∂g2/∂d = (-uy, ux), ∂g2/∂u = (dy, -dx),
+        #   ∂D/∂u = (wy, -wx),  ∂D/∂w = (-uy, ux).
+        factor = ray.reach / ray.spread
+        keep = 1.0 - ray.ratio
+        dx, dy, ux, uy, wx, wy = ray.d_x, ray.d_y, ray.u_x, ray.u_y, ray.w_x, ray.w_y
+        g1, g2, sign, spread = ray.g1, ray.g2, ray.sign, ray.spread
+        # Nach d: nur |d| und G hängen daran.
+        spread_x = (g1 * wy - g2 * uy) / spread
+        spread_y = (-g1 * wx + g2 * ux) / spread
+        gdx = ray.unit_x * keep + factor * ray.ratio * spread_x
+        gdy = ray.unit_y * keep + factor * ray.ratio * spread_y
+        # Nach u: |D| über ∂D/∂u, G über g2.
+        gux = -factor * (sign * wy - ray.ratio * g2 * dy / spread)
+        guy = -factor * (-sign * wx + ray.ratio * g2 * dx / spread)
+        # Nach w: |D| über ∂D/∂w, G über g1.
+        gwx = -factor * (-sign * uy + ray.ratio * g1 * dy / spread)
+        gwy = -factor * (sign * ux - ray.ratio * g1 * dx / spread)
+        out[0, point, 0] += gdx
+        out[0, point, 1] += gdy
+        out[0, first, 0] += gux
+        out[0, first, 1] += guy
+        out[0, second, 0] += gwx
+        out[0, second, 1] += gwy
+        out[0, centre, 0] -= gdx + gux + gwx
+        out[0, centre, 1] -= gdy + guy + gwy
+
+    return fn, grad
+
+
+@dataclass(frozen=True, slots=True)
+class _Ray:
+    """Die Zwischengrößen der Strahlmessung an einer Ellipse (:func:`_on_ellipse_equation`)."""
+
+    d_x: float
+    d_y: float
+    u_x: float
+    u_y: float
+    w_x: float
+    w_y: float
+    g1: float
+    g2: float
+    sign: float
+    reach: float
+    spread: float
+    ratio: float
+    unit_x: float
+    unit_y: float
+
+    @property
+    def residual(self) -> float:
+        return self.reach * (1.0 - self.ratio)
+
+
+def _radial(pts: np.ndarray, point: int, centre: int, first: int, second: int) -> _Ray:
+    """Wo ``point`` auf dem Strahl von der Mitte aus zur Ellipse steht."""
+    dx = float(pts[point][0] - pts[centre][0])
+    dy = float(pts[point][1] - pts[centre][1])
+    ux = float(pts[first][0] - pts[centre][0])
+    uy = float(pts[first][1] - pts[centre][1])
+    wx = float(pts[second][0] - pts[centre][0])
+    wy = float(pts[second][1] - pts[centre][1])
+    reach = math.hypot(dx, dy)
+    if reach < _TINY:
+        # Genau auf der Mitte hat der Strahl keine Richtung. Genommen wird die
+        # der ersten Achse; der Rest ist dort ohnehin eine ganze Halbachse.
+        scale = max(math.hypot(ux, uy), _TINY)
+        dx, dy = _TINY * ux / scale, _TINY * uy / scale
+        reach = math.hypot(dx, dy)
+    g1 = dx * wy - dy * wx
+    g2 = ux * dy - uy * dx
+    det = ux * wy - uy * wx
+    spread = max(math.hypot(g1, g2), _TINY)
+    return _Ray(
+        d_x=dx,
+        d_y=dy,
+        u_x=ux,
+        u_y=uy,
+        w_x=wx,
+        w_y=wy,
+        g1=g1,
+        g2=g2,
+        sign=1.0 if det >= 0.0 else -1.0,
+        reach=reach,
+        spread=spread,
+        ratio=abs(det) / spread,
+        unit_x=dx / reach,
+        unit_y=dy / reach,
+    )
+
+
+def _element_equations(
+    kind: str, begin: int
+) -> list[tuple[tuple[int, ...], int, _ResidualFn, _GradientFn]]:
+    """Die eigenen Gleichungen eines Elements — mit den Punkten, die sie lesen.
+
+    Ein Bogen hält seine Schenkel gleich lang; eine Ellipse hält die zweite
+    Achse senkrecht auf der ersten; ein Ellipsenbogen hält dazu Anfang und
+    Ende auf der Ellipse. Die Punkte stehen dabei, damit
+    :func:`_build_equations` eine Gleichung weglassen kann, deren Punkte alle
+    fest sind und an der sie schon gilt (B28, verallgemeinert).
+    """
+    if kind == "arc":
+        return [((begin, begin + 1, begin + 2), 1, *_arc_equation(begin, begin + 1, begin + 2))]
+    if kind in ("ellipse", "elliptical_arc"):
+        centre, first, second = begin, begin + 1, begin + 2
+        equations: list[tuple[tuple[int, ...], int, _ResidualFn, _GradientFn]] = [
+            ((centre, first, second), 1, *_ellipse_axes_equation(centre, first, second))
+        ]
+        if kind == "elliptical_arc":
+            for end in (begin + 3, begin + 4):
+                equations.append(
+                    (
+                        (centre, first, second, end),
+                        1,
+                        *_on_ellipse_equation(end, centre, first, second),
+                    )
+                )
+        return equations
+    return []
+
+
+# --- Kurvenbedingungen (RM-188 P6.6b) --------------------------------------------------
+#
+# *Punkt auf Kurve*, *glatt* (G1) und *krümmungsstetig* (G2) lesen Normalen und
+# Krümmungen von Ellipsen und Splines. Deren Ableitungen von Hand wären
+# Seiten voller Kettenregel, und ein Vorzeichenfehler darin ist ein stiller
+# Fehler: Der Löser konvergiert langsamer, und die Ranganalyse — an der die
+# Meldung „legt fest, was schon festliegt" hängt — irrt. Die Residuen stehen
+# deshalb **einmal** als Rechnung über Zahlen da und werden für die Ableitung
+# mit Dualzahlen noch einmal gerechnet (Vorwärtsableitung): exakt bis auf die
+# Rundung, dieselbe Rechnung wie das Residuum, keine zweite Herleitung.
+
+
+class _Dual:
+    """Eine Zahl mit ihrer Ableitung nach den Koordinaten einer Bedingung.
+
+    Nur die vier Grundrechenarten und die Wurzel — mehr braucht keine der
+    Kurvenbedingungen, und mehr soll hier nicht stehen (RM-187: keine
+    Winkelfunktion).
+    """
+
+    __slots__ = ("slope", "value")
+
+    def __init__(self, value: float, slope: np.ndarray) -> None:
+        self.value = value
+        self.slope = slope
+
+    def __add__(self, other: Any) -> _Dual:
+        if isinstance(other, _Dual):
+            return _Dual(self.value + other.value, self.slope + other.slope)
+        return _Dual(self.value + other, self.slope)
+
+    __radd__ = __add__
+
+    def __sub__(self, other: Any) -> _Dual:
+        if isinstance(other, _Dual):
+            return _Dual(self.value - other.value, self.slope - other.slope)
+        return _Dual(self.value - other, self.slope)
+
+    def __rsub__(self, other: Any) -> _Dual:
+        return _Dual(other - self.value, -self.slope)
+
+    def __neg__(self) -> _Dual:
+        return _Dual(-self.value, -self.slope)
+
+    def __mul__(self, other: Any) -> _Dual:
+        if isinstance(other, _Dual):
+            return _Dual(
+                self.value * other.value, self.slope * other.value + other.slope * self.value
+            )
+        return _Dual(self.value * other, self.slope * other)
+
+    __rmul__ = __mul__
+
+    def __truediv__(self, other: Any) -> _Dual:
+        if isinstance(other, _Dual):
+            return _Dual(
+                self.value / other.value,
+                (self.slope * other.value - other.slope * self.value) / (other.value * other.value),
+            )
+        return _Dual(self.value / other, self.slope / other)
+
+    def __rtruediv__(self, other: Any) -> _Dual:
+        return _Dual(other / self.value, -other * self.slope / (self.value * self.value))
+
+
+def _root(value: Any) -> Any:
+    """Die Wurzel einer Zahl oder Dualzahl — gegen null gesichert wie ``_unit``."""
+    if isinstance(value, _Dual):
+        root = math.sqrt(max(value.value, _TINY * _TINY))
+        return _Dual(root, value.slope / (2.0 * root))
+    return math.sqrt(max(value, _TINY * _TINY))
+
+
+def _plain(value: Any) -> float:
+    """Der Zahlenwert einer Zahl oder Dualzahl — für Fallunterscheidungen."""
+    return float(value.value) if isinstance(value, _Dual) else float(value)
+
+
+_Vector = tuple[Any, Any]
+"""Ein Vektor aus Zahlen oder Dualzahlen."""
+
+
+@dataclass(frozen=True, slots=True)
+class _Curve:
+    """Eine Kurve, wie eine Kurvenbedingung sie liest: Art und ihre Punkte."""
+
+    kind: str
+    begin: int
+    count: int
+
+    @property
+    def points(self) -> tuple[int, ...]:
+        return tuple(range(self.begin, self.begin + self.count))
+
+
+def _curve_at(
+    elements: Sequence[SketchElement], offsets: Sequence[int], target: int, field: str
+) -> _Curve:
+    """Die Kurve, die ein Ziel meint — oder die Absage, warum es keine ist."""
+    for element, begin in zip(elements, offsets, strict=True):
+        if begin == target and element.kind in _CURVE_KINDS:
+            return _Curve(element.kind, begin, len(element.points))
+    raise ValidationError(
+        field,
+        _(
+            "Die Bedingung zeigt nicht auf eine Kurve — gemeint ist der erste Punkt "
+            "einer Linie, eines Kreises, Bogens, einer Ellipse oder Kurve."
+        ),
+        value=target,
+        constraint="not_a_curve",
+    )
+
+
+def _bezier_rows(count: int, piece: int) -> list[list[float]]:
+    """Die vier Bézierpunkte eines Splinestücks als Gewichte über seine Punkte.
+
+    Dieselbe Catmull-Rom-Kurve wie ``profile.spline_controls`` — dort mit
+    Zahlen, hier mit Gewichten, damit die Kontrollpunkte als Summe über die
+    Splinepunkte in jede Rechnung gehen, auch in eine mit Dualzahlen.
+    """
+    before = max(piece - 1, 0)
+    after = min(piece + 2, count - 1)
+    rows = [[0.0] * count for _ in range(4)]
+    rows[0][piece] = 1.0
+    rows[1][piece] += 1.0
+    rows[1][piece + 1] += 1.0 / 6.0
+    rows[1][before] -= 1.0 / 6.0
+    rows[2][piece + 1] += 1.0
+    rows[2][after] -= 1.0 / 6.0
+    rows[2][piece] += 1.0 / 6.0
+    rows[3][piece + 1] = 1.0
+    return rows
+
+
+def _weighted(rows: Sequence[float], values: Sequence[_Vector]) -> _Vector:
+    x: Any = 0.0
+    y: Any = 0.0
+    for weight, (px, py) in zip(rows, values, strict=True):
+        if weight:
+            x = x + weight * px
+            y = y + weight * py
+    return x, y
+
+
+def _spline_derivatives(values: Sequence[_Vector], local: int) -> tuple[_Vector, _Vector]:
+    """Erste und zweite Ableitung der Splinekurve an ihrem Punkt ``local``.
+
+    Am Anfang das erste Stück bei t = 0, sonst das Stück, das an diesem Punkt
+    **endet**, bei t = 1. Die erste Ableitung ist an jedem Punkt dieselbe von
+    beiden Seiten (die Kurve ist tangentenstetig); die zweite nicht — deshalb
+    fragt ``curvature`` nur an den Enden.
+    """
+    count = len(values)
+    at_start = local == 0
+    piece = 0 if at_start else local - 1
+    b0, b1, b2, b3 = (_weighted(row, values) for row in _bezier_rows(count, piece))
+    if at_start:
+        d1 = (3.0 * (b1[0] - b0[0]), 3.0 * (b1[1] - b0[1]))
+        d2 = (6.0 * (b2[0] - 2.0 * b1[0] + b0[0]), 6.0 * (b2[1] - 2.0 * b1[1] + b0[1]))
+    else:
+        d1 = (3.0 * (b3[0] - b2[0]), 3.0 * (b3[1] - b2[1]))
+        d2 = (6.0 * (b3[0] - 2.0 * b2[0] + b1[0]), 6.0 * (b3[1] - 2.0 * b2[1] + b1[1]))
+    return d1, d2
+
+
+def _curvature_vector(d1: _Vector, d2: _Vector) -> _Vector:
+    """Der Krümmungsvektor aus erster und zweiter Ableitung.
+
+    ``κ = (d1 kreuz d2) / |d1|³`` in Richtung der Linksnormalen ``J·d1/|d1|`` —
+    zusammen ``(d1 kreuz d2) · J·d1 / |d1|⁴``. Er zeigt zum Krümmungsmittelpunkt,
+    gleich in welcher Richtung die Kurve durchlaufen wird; zwei Kurven, die
+    sich an einem Punkt treffen, vergleicht man deshalb an ihm und nicht an
+    einer Zahl mit Vorzeichen.
+    """
+    cross = d1[0] * d2[1] - d1[1] * d2[0]
+    speed = d1[0] * d1[0] + d1[1] * d1[1]
+    scale = cross / (speed * speed)
+    return (-d1[1] * scale, d1[0] * scale)
+
+
+def _ellipse_parts(values: Sequence[_Vector], spot: _Vector) -> tuple[_Vector, _Vector, _Vector]:
+    """Abstand des Punkts zur Mitte und beide Achsen: ``d``, ``u``, ``w``."""
+    (cx, cy), (mx, my), (nx, ny) = values[0], values[1], values[2]
+    return (spot[0] - cx, spot[1] - cy), (mx - cx, my - cy), (nx - cx, ny - cy)
+
+
+def _normal_of(kind: str, values: Sequence[_Vector], spot: _Vector, local: int) -> _Vector:
+    """Eine Normale der Kurve an ``spot`` — nicht auf Länge eins gebracht.
+
+    Linie: senkrecht auf ihrer Richtung. Kreis und Bogen: radial. Ellipse und
+    Ellipsenbogen: der Gradient ihrer Gleichung ``|A⁻¹·d|²``, bis auf einen
+    positiven Faktor ``(w_y g₁ - u_y g₂, u_x g₂ - w_x g₁)`` mit
+    ``g₁ = d kreuz w`` und ``g₂ = u kreuz d`` — auch neben der Kurve definiert, ohne
+    Projektion. Spline: senkrecht auf seiner Tangente an seinem Punkt ``local``.
+    """
+    if kind == "line":
+        (ax, ay), (bx, by) = values[0], values[1]
+        return (-(by - ay), bx - ax)
+    if kind in ("circle", "arc"):
+        return (spot[0] - values[0][0], spot[1] - values[0][1])
+    if kind in ("ellipse", "elliptical_arc"):
+        (dx, dy), (ux, uy), (wx, wy) = _ellipse_parts(values, spot)
+        g1 = dx * wy - dy * wx
+        g2 = ux * dy - uy * dx
+        return (wy * g1 - uy * g2, ux * g2 - wx * g1)
+    d1, _d2 = _spline_derivatives(values, local)
+    return (-d1[1], d1[0])
+
+
+def _curvature_of(kind: str, values: Sequence[_Vector], spot: _Vector, local: int) -> _Vector:
+    """Der Krümmungsvektor der Kurve an ``spot`` (:func:`_curvature_vector`).
+
+    Die Ellipse wird dort gelesen, wo der Strahl von der Mitte durch den Punkt
+    sie trifft — für einen Punkt auf ihr genau an ihm. Mit ``e`` dem Parameter
+    dort ist ``E' = e_x·w - e_y·u`` und ``E' kreuz E'' = det A``.
+    """
+    if kind == "line":
+        return (0.0, 0.0)
+    if kind in ("circle", "arc"):
+        (cx, cy), (rx, ry) = values[0], values[1]
+        qx, qy = cx - spot[0], cy - spot[1]
+        radius = _root((rx - cx) * (rx - cx) + (ry - cy) * (ry - cy))
+        reach = _root(qx * qx + qy * qy)
+        return (qx / (reach * radius), qy / (reach * radius))
+    if kind in ("ellipse", "elliptical_arc"):
+        (dx, dy), (ux, uy), (wx, wy) = _ellipse_parts(values, spot)
+        g1 = dx * wy - dy * wx
+        g2 = ux * dy - uy * dx
+        det = ux * wy - uy * wx
+        size = _root(g1 * g1 + g2 * g2)
+        sign = 1.0 if _plain(det) >= 0.0 else -1.0
+        ex, ey = sign * g1 / size, sign * g2 / size
+        tangent = (ex * wx - ey * ux, ex * wy - ey * uy)
+        return _curvature_vector(tangent, (-(ex * ux + ey * wx), -(ex * uy + ey * wy)))
+    return _curvature_vector(*_spline_derivatives(values, local))
+
+
+def _unit_vector(vector: _Vector) -> _Vector:
+    length = _root(vector[0] * vector[0] + vector[1] * vector[1])
+    return (vector[0] / length, vector[1] / length)
+
+
+def _dual_equation(
+    indices: Sequence[int], residual: Callable[[list[_Vector]], Any]
+) -> tuple[_ResidualFn, _GradientFn]:
+    """Ein Residuum über die Punkte ``indices`` — als Zahl und mit Dualzahlen
+    abgeleitet (siehe den Abschnitt oben). Jeder Punkt steht in ``indices``
+    genau einmal, auch wenn er zwei Rollen trägt."""
+    order = tuple(dict.fromkeys(indices))
+    size = 2 * len(order)
+    unit = np.eye(size)
+
+    def fn(pts: np.ndarray) -> tuple[float, ...]:
+        values = [(float(pts[i][0]), float(pts[i][1])) for i in order]
+        return (_plain(residual(values)),)
+
+    def grad(pts: np.ndarray, out: np.ndarray) -> None:
+        values: list[_Vector] = [
+            (
+                _Dual(float(pts[i][0]), unit[2 * place]),
+                _Dual(float(pts[i][1]), unit[2 * place + 1]),
+            )
+            for place, i in enumerate(order)
+        ]
+        result = residual(values)
+        if not isinstance(result, _Dual):
+            return
+        for place, i in enumerate(order):
+            out[0, i, 0] += float(result.slope[2 * place])
+            out[0, i, 1] += float(result.slope[2 * place + 1])
+
+    return fn, grad
+
+
+def _on_line_equation(point: int, start: int, end: int) -> tuple[_ResidualFn, _GradientFn]:
+    """Ein Punkt liegt auf der **Geraden** durch eine Linie — ihr Abstand mit
+    Vorzeichen, ``û kreuz (p - a)``. Die Gerade und nicht die Strecke: So sucht es
+    jeder, der eine Bohrung auf eine Mittellinie setzt, die kürzer gezeichnet
+    ist als das Teil."""
+
+    def fn(pts: np.ndarray) -> tuple[float, ...]:
+        ux, uy, _ = _unit(pts, start, end)
+        dx = float(pts[point][0] - pts[start][0])
+        dy = float(pts[point][1] - pts[start][1])
+        return (ux * dy - uy * dx,)
+
+    def grad(pts: np.ndarray, out: np.ndarray) -> None:
+        ux, uy, _ = _unit(pts, start, end)
+        dx = float(pts[point][0] - pts[start][0])
+        dy = float(pts[point][1] - pts[start][1])
+        # Nach der Richtung û, zurückgeholt auf die Enden der Linie …
+        gx, gy = _project(pts, start, end, dy, -dx)
+        out[0, end, 0] += gx
+        out[0, end, 1] += gy
+        out[0, start, 0] -= gx
+        out[0, start, 1] -= gy
+        # … und nach d = p - a.
+        out[0, point, 0] += -uy
+        out[0, point, 1] += ux
+        out[0, start, 0] -= -uy
+        out[0, start, 1] -= ux
+
+    return fn, grad
+
+
+#: Wie oft die Projektion auf einen Spline je Stück nachgebessert wird, und an
+#: wie vielen Stellen sie vorher sucht. Acht Newtonschritte von der besten
+#: Stelle aus erreichen die Rundung; das Raster verhindert, dass sie auf der
+#: falschen Seite einer Schleife beginnt.
+_PROJECTION_STEPS: Final = 8
+_PROJECTION_SAMPLES: Final = 16
+
+
+def _bernstein(t: float) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]]:
+    """Die kubischen Bernsteinpolynome bei ``t`` und ihre zwei Ableitungen."""
+    r = 1.0 - t
+    values = (r * r * r, 3.0 * r * r * t, 3.0 * r * t * t, t * t * t)
+    first = (-3.0 * r * r, 3.0 * r * r - 6.0 * r * t, 6.0 * r * t - 3.0 * t * t, 3.0 * t * t)
+    second = (6.0 * r, -12.0 * r + 6.0 * t, 6.0 * r - 12.0 * t, 6.0 * t)
+    return values, first, second
+
+
+def _closest_on_spline(spline: np.ndarray, spot: tuple[float, float]) -> tuple[int, float, float]:
+    """Stück, Parameter und Abstand des Kurvenpunkts, der ``spot`` am nächsten liegt.
+
+    Deterministisch und ohne Zufall: ein festes Raster je Stück, dann
+    Newtonschritte auf ``(s(t) - p) · s'(t) = 0``, am Rand des Stücks
+    festgehalten. Unter allen Stücken gewinnt das kleinste — bei Gleichstand
+    das erste.
+    """
+    count = len(spline)
+    best: tuple[float, int, float] | None = None
+    for piece in range(count - 1):
+        controls = np.asarray(_bezier_rows(count, piece), dtype=float) @ spline
+        samples = [
+            math.dist(tuple(_bernstein(t)[0] @ controls), spot)
+            for t in np.linspace(0.0, 1.0, _PROJECTION_SAMPLES + 1)
+        ]
+        t = float(np.argmin(samples)) / _PROJECTION_SAMPLES
+        for _step in range(_PROJECTION_STEPS):
+            values, first, second = _bernstein(t)
+            place = np.asarray(values) @ controls
+            speed = np.asarray(first) @ controls
+            bend = np.asarray(second) @ controls
+            gap = place - np.asarray(spot)
+            slope = float(gap[0] * speed[0] + gap[1] * speed[1])
+            steep = float(
+                speed[0] * speed[0] + speed[1] * speed[1] + gap[0] * bend[0] + gap[1] * bend[1]
+            )
+            if steep <= _TINY:
+                break
+            t = min(1.0, max(0.0, t - slope / steep))
+        distance = math.dist(tuple(np.asarray(_bernstein(t)[0]) @ controls), spot)
+        if best is None or distance < best[0]:
+            best = (distance, piece, t)
+    assert best is not None, "ein Spline hat mindestens ein Stück"
+    return best[1], best[2], best[0]
+
+
+def closest_on_spline(points: Sequence[Point2], at: Point2) -> tuple[int, Point2]:
+    """Das Stück und der Kurvenpunkt eines Splines, die ``at`` am nächsten liegen.
+
+    Dieselbe Suche wie für *Punkt auf Kurve* — ``edit.spline_point_added``
+    setzt dort den neuen Punkt ein, und der liegt damit genau auf der Kurve,
+    die der Löser kennt.
+    """
+    spline = np.asarray(points, dtype=float).reshape(-1, 2)
+    piece, t, _distance = _closest_on_spline(spline, (float(at[0]), float(at[1])))
+    controls = np.asarray(_bezier_rows(len(spline), piece), dtype=float) @ spline
+    x, y = np.asarray(_bernstein(t)[0]) @ controls
+    return piece, (float(x), float(y))
+
+
+def _on_spline_equation(point: int, curve: _Curve) -> tuple[_ResidualFn, _GradientFn]:
+    """Ein Punkt liegt auf der Splinekurve — ihr Abstand mit Vorzeichen.
+
+    Gerechnet an der **nächsten Stelle der Kurve** (:func:`_closest_on_spline`):
+    ``r = n̂ · (p - s(t*))`` mit der Einheitsnormalen dort. Die Ableitung folgt
+    aus dem Hüllensatz: An der nächsten Stelle steht ``p - s`` senkrecht auf
+    der Kurve, also hebt sich der Anteil über ``t*`` auf, und es bleibt
+    ``∂r/∂p = n̂`` und ``∂r/∂Q_k = -w_k(t*) · n̂`` mit den Gewichten der
+    Splinepunkte an dieser Stelle — exakt, ohne Differenzen.
+
+    **Jenseits eines Endes** ist die nächste Stelle das Ende selbst, und die
+    Normale dort misst nur den seitlichen Versatz: Ein Punkt in Verlängerung
+    der Kurve hätte den Rest null. Dort zählt deshalb der ganze Abstand zum
+    Ende, mit dem Vorzeichen der Seite.
+    """
+    indices = curve.points
+
+    def measure(pts: np.ndarray) -> tuple[float, np.ndarray, np.ndarray]:
+        spline = np.asarray([pts[index] for index in indices], dtype=float)
+        spot = (float(pts[point][0]), float(pts[point][1]))
+        count = len(spline)
+        piece, t, _distance = _closest_on_spline(spline, spot)
+        rows = np.asarray(_bezier_rows(count, piece), dtype=float)
+        values, first, _second = _bernstein(t)
+        weights = np.asarray(values) @ rows
+        place = weights @ spline
+        speed = (np.asarray(first) @ rows) @ spline
+        length = max(math.hypot(float(speed[0]), float(speed[1])), _TINY)
+        normal = np.array([-float(speed[1]), float(speed[0])]) / length
+        gap = np.asarray(spot) - place
+        across = float(normal[0] * gap[0] + normal[1] * gap[1])
+        reach = math.hypot(float(gap[0]), float(gap[1]))
+        at_end = (piece == 0 and t <= 0.0) or (piece == count - 2 and t >= 1.0)
+        if at_end and reach > _TINY and abs(across) < reach * (1.0 - EPS_GEOM):
+            side = 1.0 if across >= 0.0 else -1.0
+            direction = side * gap / reach
+            return side * reach, direction, weights
+        return across, normal, weights
+
+    def fn(pts: np.ndarray) -> tuple[float, ...]:
+        return (measure(pts)[0],)
+
+    def grad(pts: np.ndarray, out: np.ndarray) -> None:
+        _residual, direction, weights = measure(pts)
+        out[0, point, 0] += float(direction[0])
+        out[0, point, 1] += float(direction[1])
+        for weight, index in zip(weights, indices, strict=True):
+            out[0, index, 0] -= float(weight * direction[0])
+            out[0, index, 1] -= float(weight * direction[1])
+
+    return fn, grad
+
+
+def _curve_equation(
+    constraint: SketchConstraint,
+    elements: Sequence[SketchElement],
+    offsets: Sequence[int],
+    anchors: np.ndarray,
+    field: str,
+) -> tuple[int, _ResidualFn, _GradientFn]:
+    """Die Gleichung einer Kurvenbedingung — nach Prüfung ihrer Ziele."""
+    kind = constraint.kind
+    if kind == "on_curve":
+        point, head = constraint.targets
+        curve = _curve_at(elements, offsets, head, field)
+        if point in curve.points:
+            raise ValidationError(
+                field,
+                _(
+                    "Ein Punkt der Kurve selbst liegt schon auf ihr oder bestimmt "
+                    "sie — dafür braucht es keine Bedingung."
+                ),
+                value=point,
+                constraint="own_point",
+            )
+        if curve.kind == "line":
+            return 1, *_on_line_equation(point, curve.begin, curve.begin + 1)
+        if curve.kind in ("circle", "arc"):
+            centre = curve.begin
+            return 1, *_equal_equation(centre, point, centre, centre + 1)
+        if curve.kind in ("ellipse", "elliptical_arc"):
+            begin = curve.begin
+            return 1, *_on_ellipse_equation(point, begin, begin + 1, begin + 2)
+        return 1, *_on_spline_equation(point, curve)
+
+    first_spot, first_head, second_spot, second_head = constraint.targets
+    first = _curve_at(elements, offsets, first_head, field)
+    second = _curve_at(elements, offsets, second_head, field)
+    if first.begin == second.begin:
+        raise ValidationError(
+            field,
+            _("Ein Übergang braucht zwei verschiedene Kurven."),
+            value=first_head,
+            constraint="same_curve",
+        )
+    for spot, curve in ((first_spot, first), (second_spot, second)):
+        if curve.kind != "spline":
+            continue
+        if spot not in curve.points:
+            raise ValidationError(
+                field,
+                _(
+                    "An einer Kurve gilt der Übergang an einem ihrer eigenen Punkte — "
+                    "einem Ende oder einem Punkt, durch den sie läuft."
+                ),
+                value=spot,
+                constraint="spline_point",
+            )
+        if kind == "curvature" and spot not in (curve.begin, curve.begin + curve.count - 1):
+            raise ValidationError(
+                field,
+                _(
+                    "Krümmungsstetig gilt an einem Ende der Kurve — innen ist sie nur "
+                    "tangentenstetig."
+                ),
+                value=spot,
+                constraint="spline_end",
+            )
+
+    order = tuple(dict.fromkeys((first_spot, *first.points, second_spot, *second.points)))
+    place = {index: position for position, index in enumerate(order)}
+
+    def read(values: list[_Vector], curve: _Curve, spot: int) -> tuple[list[_Vector], _Vector]:
+        return [values[place[index]] for index in curve.points], values[place[spot]]
+
+    if kind == "smooth":
+
+        def smooth(values: list[_Vector]) -> Any:
+            one, one_spot = read(values, first, first_spot)
+            other, other_spot = read(values, second, second_spot)
+            ax, ay = _unit_vector(_normal_of(first.kind, one, one_spot, first_spot - first.begin))
+            bx, by = _unit_vector(
+                _normal_of(second.kind, other, other_spot, second_spot - second.begin)
+            )
+            return ax * by - ay * bx
+
+        return 1, *_dual_equation(order, smooth)
+
+    # Krümmungsstetig: der Unterschied der Krümmungsvektoren entlang der
+    # Normalen von A, auf eine Länge gebracht (``_curvature_scale``).
+    scale = _curvature_scale(first, second, anchors, first_spot, second_spot)
+
+    def curving(values: list[_Vector]) -> Any:
+        one, one_spot = read(values, first, first_spot)
+        other, other_spot = read(values, second, second_spot)
+        nx, ny = _unit_vector(_normal_of(first.kind, one, one_spot, first_spot - first.begin))
+        kx, ky = _curvature_of(first.kind, one, one_spot, first_spot - first.begin)
+        lx, ly = _curvature_of(second.kind, other, other_spot, second_spot - second.begin)
+        return ((kx - lx) * nx + (ky - ly) * ny) * scale
+
+    return 1, *_dual_equation(order, curving)
+
+
+def _curvature_scale(
+    first: _Curve, second: _Curve, anchors: np.ndarray, first_spot: int, second_spot: int
+) -> float:
+    """Womit ein Krümmungsunterschied zur Länge wird: ``L² / 2``.
+
+    Zwei Schmiegekreise mit den Krümmungen κ₁ und κ₂ laufen nach einer Länge
+    L entlang der Tangente um ``(κ₁ - κ₂) · L² / 2`` auseinander. Mit L als
+    der größeren Ausdehnung beider Kurven am Übergang — Linienlänge, Radius,
+    größere Halbachse, Abstand zum nächsten Splinepunkt — misst der Rest also
+    Millimeter wie jede andere Zeile, und ``_TOL`` bedeutet hier dasselbe wie
+    sonst. Gerechnet einmal aus den gespeicherten Punkten: Eine Zahl, die sich
+    während des Lösens änderte, wäre eine zweite Gleichung im Residuum.
+    """
+
+    def reach(curve: _Curve, spot: int) -> float:
+        begin = curve.begin
+        if curve.kind == "spline":
+            neighbour = spot + 1 if spot == begin else spot - 1
+            return _span(anchors, spot, neighbour)
+        if curve.kind in ("ellipse", "elliptical_arc"):
+            return max(_span(anchors, begin, begin + 1), _span(anchors, begin, begin + 2))
+        return _span(anchors, begin, begin + 1)
+
+    length = max(reach(first, first_spot), reach(second, second_spot), EPS_GEOM)
+    return length * length / 2.0
+
+
 def _constraint_equation(
     constraint: SketchConstraint, measure: float, anchors: np.ndarray
 ) -> tuple[int, _ResidualFn, _GradientFn]:
@@ -650,18 +1436,19 @@ def _build_equations(
                 value=constraint.value,
                 constraint="value_not_allowed",
             )
-        rows, fn, grad = _constraint_equation(constraint, measure, anchors)
+        if constraint.kind in CURVE_SLOTS:
+            rows, fn, grad = _curve_equation(constraint, sketch.elements, offsets, anchors, field)
+        else:
+            rows, fn, grad = _constraint_equation(constraint, measure, anchors)
         equations.append(_Equation(index, rows, fn, grad))
 
-    # Punkte mit ``fixed`` — für den ganz festen Bogen darunter.
+    # Punkte mit ``fixed`` — für die ganz festen Elemente darunter.
     held = {
         constraint.targets[0] for constraint in sketch.constraints if constraint.kind == "fixed"
     }
     for position, element in enumerate(sketch.elements):
-        if element.kind not in ("circle", "arc"):
-            continue
-        centre = offsets[position]
-        if _span(anchors, centre, centre + 1) < EPS_GEOM:
+        begin = offsets[position]
+        if element.kind in ("circle", "arc") and _span(anchors, begin, begin + 1) < EPS_GEOM:
             # ``positive`` und nicht ``element.kind``: Die Beschränkung sagt,
             # **was** verletzt wurde, nicht **woran**. Hier stand einmal
             # „circle", und weil das keine Spanne ist, las der Kunde über einem
@@ -672,19 +1459,28 @@ def _build_equations(
                 _("Ein Kreis braucht einen Radius größer als null."),
                 constraint="positive",
             )
-        if element.kind == "arc":
-            fn, grad = _arc_equation(centre, centre + 1, centre + 2)
-            if {centre, centre + 1, centre + 2} <= held and abs(fn(anchors)[0]) <= _TOL:
-                # **Ein Bogen, dessen drei Punkte fest sind, braucht seine
-                # eigene Gleichung nicht** — sie gilt dort schon, und
-                # mitgezählt wäre sie die siebte Zeile über sechs Koordinaten:
-                # „Eine Bedingung legt fest, was schon festliegt", an jedem
-                # Bogen einer übernommenen Flächenkontur und an jedem, dessen
-                # letzten Punkt jemand festnagelt. Gilt sie an den gespeicherten
-                # Punkten nicht, bleibt sie stehen, und der Widerspruch wird
-                # gemeldet wie bisher.
+        if element.kind in ("ellipse", "elliptical_arc") and (
+            _span(anchors, begin, begin + 1) < EPS_GEOM
+            or _span(anchors, begin, begin + 2) < EPS_GEOM
+        ):
+            raise ValidationError(
+                f"elements[{position}]",
+                _("Eine Ellipse braucht zwei Achsen, die länger als null sind."),
+                constraint="positive",
+            )
+        for points, rows, fn, grad in _element_equations(element.kind, begin):
+            if set(points) <= held and all(abs(value) <= _TOL for value in fn(anchors)):
+                # **Eine eigene Gleichung, deren Punkte alle fest sind, braucht
+                # es nicht** — sie gilt dort schon, und mitgezählt wäre sie
+                # eine Zeile zu viel: beim Bogen die siebte über sechs
+                # Koordinaten, bei der Ellipse die siebte über sechs, und
+                # der Löser meldete „Eine Bedingung legt fest, was schon
+                # festliegt" an jeder übernommenen Kontur und an jedem Element,
+                # dessen Punkte jemand einzeln festnagelt (B28). Gilt sie an
+                # den gespeicherten Punkten nicht, bleibt sie stehen, und der
+                # Widerspruch wird gemeldet wie bisher.
                 continue
-            equations.append(_Equation(None, 1, fn, grad))
+            equations.append(_Equation(None, rows, fn, grad))
 
     return equations, anchors
 
@@ -825,17 +1621,36 @@ def _row_blocks(equations: Sequence[_Equation]) -> list[range]:
     return blocks
 
 
+#: Wie nah zwei Restfehler beieinander liegen dürfen, um als gleich zu gelten —
+#: relativ zum größten. Keine Toleranz im Sinne von Regel 7, sondern die
+#: Rundung der Lösung: Ein Gleichstand, den die Rechnung auf die letzte
+#: Stelle genau träfe, entschiede sonst das Rauschen.
+_TIE_SHARE: Final[float] = 1e-9
+
+
 def _worst_constraints(
     equations: Sequence[_Equation], blocks: Sequence[range], residuals: np.ndarray
 ) -> list[int]:
-    """Bedingungsindizes nach ihrem größten Restfehler, absteigend, stabil."""
+    """Bedingungsindizes nach ihrem größten Restfehler, absteigend, stabil.
+
+    **Bei Gleichstand die später gesetzte zuerst.** Eine Kette aus drei
+    Bedingungen, die einander widersprechen, teilt den Fehler gleichmäßig
+    auf — ein fester Kreis, ein fester Punkt daneben und *Punkt auf Kurve*
+    tragen gemessen je ein Drittel. Mit der früheren zuerst nannte die Meldung
+    die beiden Fixierungen und nie die Bedingung, die eben dazukam; die Liste
+    ist aber in der Reihenfolge des Setzens, und der Widerspruch kam mit der
+    letzten (RM-188 P6.6b)."""
     worst: dict[int, float] = {}
     for equation, block in zip(equations, blocks, strict=True):
         if equation.constraint is None:
             continue
         peak = max((abs(float(residuals[row])) for row in block), default=0.0)
         worst[equation.constraint] = max(worst.get(equation.constraint, 0.0), peak)
-    return sorted(worst, key=lambda index: (-worst[index], index))
+    largest = max(worst.values(), default=0.0)
+    if largest <= 0.0:
+        return sorted(worst)
+    step = largest * _TIE_SHARE
+    return sorted(worst, key=lambda index: (-round(worst[index] / step), -index))
 
 
 def _conflict_pair(

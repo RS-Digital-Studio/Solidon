@@ -39,11 +39,11 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
 
 | Datei | Rolle |
 |---|---|
-| `solver.py` | Der 2D-Löser — und sein Zugmodus (`dragged`, `start`), begrenzt durch `DRAG_REACH_TRIES`/`DRAG_SLIDE_TRIES`; Rang über `_matrix_rank` (Einerzeilen abgeschält), Redundanz über `_losses` (eine Zerlegung) |
-| `profile.py` | Vom gelösten Element zum geschlossenen Umriss; `arc_sweep` ist die eine Antwort, wie weit ein Bogen läuft |
+| `solver.py` | Der 2D-Löser — und sein Zugmodus (`dragged`, `start`), begrenzt durch `DRAG_REACH_TRIES`/`DRAG_SLIDE_TRIES`; Rang über `_matrix_rank` (Einerzeilen abgeschält), Redundanz über `_losses` (eine Zerlegung); die eigenen Gleichungen der Elemente (`_element_equations`), die Kurvenbedingungen (`_curve_equation`, `CURVE_SLOTS`) und `closest_on_spline` |
+| `profile.py` | Vom gelösten Element zum geschlossenen Umriss; `arc_sweep` ist die eine Antwort, wie weit ein Bogen läuft, `EllipseFrame`/`ellipse_turn` die für Ellipsen; `flat_curve` die Punktfolge der Ansicht |
 | `shapes.py` | Die Grundformen und die zwei Lochbilder; `grid_centres` hält die gemeinsame mittige Rasterlage für Skizze und Feldschnitt |
 | `planes.py` | Wo eine Skizze liegt; `frame_in_scene` löst eine Ebenenangabe gegen eine Szene mit ihren Projektparametern auf — der Weg für jeden Verbraucher außerhalb der Skizzen-Ops |
-| `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln — an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`), die vier Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at` — die Lochbilder halten über Bedingungen zwischen den Mitten, nicht über Festpunkte), Projizieren (`project`, ein Ebenenschnitt — am exakten Körper exakt über `brep.section`: Kreise, Bögen und Strecken statt eines Sehnenzugs, fest wie am Netz über `_held_copy`) und die Flächenkontur (`face_outline`, der Rand der Fläche unter der Zeichnung) |
+| `edit.py` | Trimmen (auch Ellipsen — so entsteht der Ellipsenbogen), Verlängern, Versetzen, Spiegeln — an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`), die vier Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at` — die Lochbilder halten über Bedingungen zwischen den Mitten, nicht über Festpunkte), Projizieren (`project`, ein Ebenenschnitt — am exakten Körper exakt über `brep.section`: Kreise, Bögen und Strecken statt eines Sehnenzugs, fest wie am Netz über `_held_copy`) und die Flächenkontur (`face_outline`, der Rand der Fläche unter der Zeichnung); die Ellipse aus drei Klicks (`ellipse_from_clicks`), Splinepunkte einfügen und entfernen (`spline_point_added`, `spline_point_removed`), Löschen mit Umnummerieren (`removed`) und die Pläne der Kurvenbedingungen (`tangent_plan`, `curvature_plan`, `on_curve_plan`, `equal_axes_plan`, `taken_back`) |
 | `ops.py` | Die Operationen der Kategorie „Skizze“; `cut_regions` teilt den bestehenden Taschenschnitt mit aufgelösten Feldern, einschließlich Ebene, Durchgang und Z-Bezug (`_cut_span`, auch für den Übergangsschnitt). Die drei Schnitte mit Werkzeug (`sketch_revolve_cut`, `sketch_sweep_cut`, `sketch_loft_cut`) bauen ihr Werkzeug über dieselben Helfer wie die Erzeuger (`_revolve_section`, `_swept`, `_loft_outlines`) und ziehen es über `_cut_with_tool` in beiden Kernen ab |
 | `serialize.py` | **Die ganze Skizze als ein Parameterwert** einer Operation |
 
@@ -72,7 +72,7 @@ erhalten.
 
 ## Grenzen
 
-- **Fünfzehn Bedingungsarten, und „konzentrisch" ist keine davon.** Zwei
+- **Achtzehn Bedingungsarten, und „konzentrisch" ist keine davon.** Zwei
   Kreise mit gemeinsamer Mitte sind die Deckung ihrer Mittelpunkte; eine
   eigene Art wäre ein zweiter Weg, denselben Sachverhalt zu speichern, zu
   prüfen und zu migrieren. Das Wort steht trotzdem an einem Knopf der
@@ -87,15 +87,19 @@ erhalten.
   Winkelmaß nur Werte echt zwischen 0 und `MOST_ANGLE_DEGREES`. Die Zahl
   steht in **Grad** in der Datei und wird erst in der Gleichung Bogenmaß; §11
   gilt den Längen.
-- **Eine neue Bedingungsart erhöht `format_version` nicht.** Der Aufbau der
-  Projektdatei ändert sich nicht, und jede ältere Datei liest sich
-  unverändert — es gibt nichts zu migrieren (AGENTS.md, Checkliste
-  „Dateiformat ändern", Punkt 4). Was sich ändert, ist der **Wertebereich**
-  einer vorhandenen Aufzählung, und der wächst nur nach vorn: Eine neue Datei
-  in einer alten Version wird ohnehin am Versionsdeckel abgewiesen (§16.2),
-  nicht an einer unbekannten Bedingung. Die zwei Listen der Arten
+- **Eine neue Element- oder Bedingungsart erhöht `format_version`** (RM-188
+  P6.6, Format 31). Der Aufbau der Projektdatei ändert sich dabei nicht, und
+  jede ältere Datei liest sich unverändert — die Migration schreibt nichts um.
+  Hier stand bis dahin das Gegenteil: Eine neue Datei in einer alten Version
+  werde ohnehin am Versionsdeckel abgewiesen. Das gilt nur, wenn zwischen den
+  beiden Versionen zufällig eine andere Formatänderung lag; sonst lädt das
+  ältere Programm die Datei halb und hält mitten in der Auswertung mit „Diese
+  Elementart gibt es nicht" an, als wäre die Skizze beschädigt. §16.2 sagt
+  „neuer → freundlich ablehnen statt halb zu laden", und die Stufen 25→26,
+  27→28 und 28→29 stehen aus genau diesem Grund. Die zwei Listen der Arten
   (`solver._CONSTRAINT_TARGETS`, `serialize._CONSTRAINT_KINDS`) hält
-  `tests/test_sketch.py` deckungsgleich.
+  `tests/test_sketch.py` deckungsgleich, die der Elementarten
+  `tests/test_sketch_curves.py`.
 - **Die zwei gezeichneten Formen halten sich selbst, ohne bemaßt zu sein**
   (`polygon_at`, `slot_between`). Das Vieleck hängt an einem **Hilfskreis**:
   alle Ecken auf ihm, alle Seiten gleich lang — zusammen genau so viele
@@ -248,4 +252,56 @@ erhalten.
   eine vorher widerspruchsfreie Zeichnung stehen. Ohne Grenze hielt ein Zug
   über die Reichweite einer bemaßten Kette das Fenster je Mausereignis
   Sekunden an.
+- **Die Ellipse trägt drei Punkte, der Ellipsenbogen fünf** (RM-188 P6.6a):
+  Mitte, Ende der ersten, Ende der zweiten Achse, beim Bogen dazu Anfang und
+  Ende, gegen den Uhrzeigersinn. Die zweite Achse steht senkrecht — die eigene
+  Gleichung des Elements (`_ellipse_axes_equation`); welche Achse die längere
+  ist, legt die Reihenfolge nicht fest. Die Bogenenden liegen über einen
+  **winkelfreien radialen Rest** auf der Ellipse
+  (`r = |d|·(1 − |det A| / |(d kreuz w, u kreuz d)|)`), für Kreise der genaue
+  Abstand, sonst eine obere Schranke. Profil und Netzweg rechnen ohne
+  Winkelfunktion: Parameter sind Einheitsvektoren, geteilt wird über
+  normierte Summen, und der Sehnenfehler wird am Parametermittelpunkt exakt
+  gemessen (affin invariant), höchstens `MAX_FACET_SAG` (RM-187). Der exakte
+  Kern baut echte `Geom_Ellipse`-Kanten.
+- **Nach einer Booleschen Operation ist die Ellipsenkante ein B-Spline**
+  (OpenCASCADE schneidet Ebene und extrudierte Ellipse so). Die Flächenkontur
+  holt die Ellipse trotzdem zurück (`brep.edit._section_ellipse`): Steht die
+  Ebene senkrecht auf der Extrusion, ist der Schnitt die verschobene
+  Grundellipse — geprüft gegen die Toleranz der Kante, sonst bleibt die
+  Kette. Die Bogenenden rückt `_exact_outline` radial auf ihre Ellipse.
+- **Kurvenbedingungen nennen eine Kurve über den ersten Punkt ihres Elements**
+  (`CURVE_SLOTS`, RM-188 P6.6b): `on_curve` (Punkt, Kurve; eine Linie gilt
+  als Gerade), `smooth` und `curvature` (Stelle an A, A, Stelle an B, B). Die
+  Ableitungen von `smooth` und `curvature` kommen aus **Dualzahlen**
+  (`_Dual`, Vorwärtsableitung) — dieselbe Rechnung wie das Residuum, keine
+  zweite Herleitung; `curvature` misst den Unterschied der Krümmungsvektoren
+  mal `L²/2` (Millimeter, `L` fest aus den gespeicherten Punkten). *Punkt auf
+  Kurve* am Spline rechnet an der nächsten Kurvenstelle mit
+  Hüllensatz-Ableitung. Ein Spline liest einen Übergang nur an einem seiner
+  Punkte, *krümmungsstetig* nur an einem Ende.
+- **Wer eine Kurve zerlegt, nimmt ihre Kurvenbedingungen mit**
+  (`_curve_targets`): Trimmen einer Linie oder Ellipse, Splinepunkt einfügen
+  oder entfernen — das Kurvenziel wandert zum Stück, das die Stelle trägt,
+  und ein Splineanfang behält seine Nummer, wenn der erste Punkt fällt. Zwei
+  Bögen aus einer getrimmten Ellipse hängen über Deckung von Mitte und
+  Achsende und gleich lange zweite Achsen zusammen (eine dritte Deckung wäre
+  redundant, gemessen).
+- **Eine Änderung der Profilbildung, die Ergebnisse ändert, hebt
+  `profile.PROFILE_REVISION`** — sie steht in der Cache-Kennung aller sechs
+  Verbraucher (Hochziehen, Tasche, Drehen, Führen, Überblenden, Lochfeld;
+  `test_every_profile_consumer_carries_the_profile_revision`). Sonst käme ein
+  falsches Ergebnis nach dem Fix weiter aus dem Speicher- oder Dateicache
+  (B1 der P6.6-Arbeit: ein Loch außerhalb des Ursprungs ging verloren).
+- **Bei gleich großem Rest nennt der Löser die später gesetzte Bedingung**
+  (`_worst_constraints`, Gleichstand relativ 10⁻⁹): Eine Kette aus drei
+  widersprüchlichen Bedingungen teilt den Fehler gleichmäßig, und die Meldung
+  nannte sonst nie die, die eben dazukam.
+- **Wie eine Bedingung zwischen Kurven entsteht, plant der Kern**
+  (`tangent_plan` und Nachbarn, `CurvePlan`): Stoßen zwei Kurven aneinander,
+  wird die Tangente *glatt* an der Stelle; Linie und Kreis oder Bogen ohne
+  Stoß behalten die alte Abstandstangente, in jeder Reihenfolge der Auswahl;
+  andere Paare ohne Stoß bekommen einen Hilfspunkt als Berührpunkt, den die
+  Rücknahme wieder mitnimmt (`taken_back`). Die Oberfläche fragt nur nach dem
+  Plan.
 - **Kein Qt.** Der Editor ruft hier herein, nie umgekehrt.

@@ -319,6 +319,13 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M4.5 17.5a9 9 0 0 1 15 0" /><circle cx="4.5" cy="17.5" r="1.8" />'
         '<circle cx="19.5" cy="17.5" r="1.8" />'
     ),
+    # Ellipse: schräg liegend, damit sie kein gedrückter Kreis ist, mit ihrer
+    # Mitte und dem Ende der ersten Achse — dort setzen die ersten Klicks an.
+    "sketch_ellipse": (
+        '<ellipse cx="12" cy="12" rx="9" ry="5" transform="rotate(-25 12 12)" />'
+        '<circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />'
+        '<circle cx="20.2" cy="8.2" r="1.4" />'
+    ),
     # Die S-Kurve mit ihren Stützpunkten — das Bild jeder Spline-Bedienung.
     "sketch_spline": (
         '<path d="M4 17c3.5 0 4-10 8-10s4.5 10 8 10" />'

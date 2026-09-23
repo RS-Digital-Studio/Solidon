@@ -56,7 +56,7 @@ def _adaptive_outline(
     profile: Profile, max_sag: float, check_cancelled: Callable[[], None] | None
 ) -> list[tuple[float, float]]:
     """Die echte Kurve in Sehnen mit belegter maximaler Abweichung zerlegen."""
-    from app.core.sketch.profile import arc_through, spline_controls
+    from app.core.sketch.profile import arc_through, ellipse_segment_points, spline_controls
 
     def resolution_error() -> ValidationError:
         return ValidationError(
@@ -143,6 +143,12 @@ def _adaptive_outline(
             if segment.kind == "spline" and segment.through:
                 for controls in spline_controls(segment.through):
                     bezier(controls)
+            elif segment.kind == "ellipse":
+                # Die Ellipse tastet sich selbst ab, auf dieselbe Grenze
+                # (``profile.ellipse_segment_points``): ohne Winkelfunktion,
+                # also auf jeder Maschine dieselben Ecken (RM-187).
+                for point in ellipse_segment_points(segment, sag)[1:]:
+                    append(point)
             elif segment.via is not None:
                 arc = arc_through(segment.start, segment.via, segment.end)
                 if arc is None:
@@ -287,6 +293,13 @@ def outline_points(
                 # Ein geschlossener Spline endet auf seinem Anfang; die
                 # Abtastung hat diesen Punkt als Doppel entfernt.
                 points.append(tuple(segment.end))  # type: ignore[arg-type]
+        elif segment.kind == "ellipse":
+            # **Die Kurve auf ``MAX_FACET_SAG``**, dieselbe Grenze, mit der der
+            # exakte Kern vernetzt (RM-188 P6.6a). Für die Ellipse gibt es
+            # keine gespeicherte Abtastung, die gleich bleiben müsste.
+            from app.core.sketch.profile import ellipse_segment_points
+
+            points.extend(ellipse_segment_points(segment, MAX_FACET_SAG)[1:])
         elif segment.via is not None:
             points.extend(
                 _arc_points(

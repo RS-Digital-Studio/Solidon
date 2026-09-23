@@ -29,6 +29,20 @@ from app.i18n import TranslatableText, _
 #: bleibt aber weit unter jedem druckbaren Maß.
 _JOIN_TOL = 1e-4
 
+#: Der Stand der Profilbildung, wie er in die Cache-Kennung jeder Operation
+#: eingeht, die eine Zeichnung zu Umrissen macht (``cache_version``).
+#:
+#: **Eine Zahl für alle Verbraucher**, weil eine Änderung hier alle trifft:
+#: Hochziehen, Tasche, Drehen, Führen, Überblenden und Lochfeld lesen dieselben
+#: Umrisse. ``holes-in-place-1`` (Durchsicht P6.6): Ein Loch in einer Platte,
+#: die nicht um den Ursprung lag, ging bis dahin verloren — ein Ergebnis ohne
+#: Loch darf danach nicht mehr aus dem Speicher- oder Dateicache kommen.
+PROFILE_REVISION: Final = "holes-in-place-1"
+
+#: Die Elementarten, die sich zu einer Kette verbinden — alles mit zwei Enden.
+#: Kreis und volle Ellipse sind je ein Umriss für sich, ein Punkt ist keiner.
+_CHAINED: Final = frozenset({"line", "arc", "spline", "elliptical_arc"})
+
 
 @dataclass(frozen=True, slots=True)
 class ProfileSegment:
@@ -38,7 +52,7 @@ class ProfileSegment:
     Ende — damit bleibt die Geometrie beim Umdrehen der Laufrichtung
     dieselbe, und der Kern baut den Bogen aus drei Punkten exakt nach."""
 
-    kind: Literal["line", "arc", "spline"]
+    kind: Literal["line", "arc", "spline", "ellipse"]
     start: Point2
     end: Point2
     via: Point2 | None = None
@@ -47,6 +61,16 @@ class ProfileSegment:
     Anfang und Ende. Der Kern legt daraus eine B-Spline-Kurve, die jeden davon
     trifft — segmentiert wird nichts, und beim Umdrehen der Laufrichtung dreht
     sich diese Liste mit."""
+    ellipse: tuple[Point2, Point2, Point2] | None = None
+    """Bei einem Stück Ellipse die Ellipse selbst: Mitte, Ende der ersten und
+    Ende der zweiten Achse, wie im Element gespeichert (RM-188 P6.6a).
+
+    Aus drei Punkten auf der Kurve ließe sich eine Ellipse nicht
+    zurückrechnen, anders als ein Kreis — sie reist deshalb mit. ``via``
+    liegt wie beim Bogen auf der Kurve zwischen Anfang und Ende und
+    entscheidet, welchen der beiden Wege das Stück nimmt. Eine volle Ellipse
+    ist ein Stück, dessen Ende auf seinem Anfang liegt; sie läuft gegen den
+    Uhrzeigersinn."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,14 +119,22 @@ def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
     # Kante im extrudierten Körper landen.
     shaping = [element for element in solved.elements if not element.construction]
     circles = [element for element in shaping if element.kind == "circle"]
-    drawable = [element for element in shaping if element.kind in ("line", "arc", "spline")]
-    if not circles and not drawable:
+    # **Eine volle Ellipse ist ein Umriss für sich**, wie ein Kreis — und nicht
+    # ein Glied, das in eine Kette gerät: Ihr Anfang liegt auf dem Ende ihrer
+    # ersten Achse, und eine Linie, die dort zufällig endet, hätte sich sonst
+    # in ihren Ring gehängt.
+    ellipses = [element for element in shaping if element.kind == "ellipse"]
+    drawable = [element for element in shaping if element.kind in _CHAINED]
+    if not circles and not ellipses and not drawable:
         raise _broken(_("Die Skizze enthält nichts, was einen Umriss ergeben könnte."))
 
     loops: list[Profile] = [
         Profile(circle=(element.points[0], math.dist(element.points[0], element.points[1])))
         for element in circles
     ]
+    loops.extend(
+        Profile(segments=(_segment(element.kind, element.points),)) for element in ellipses
+    )
     segments = [_segment(element.kind, element.points) for element in drawable]
     while segments:
         loops.append(Profile(segments=_one_loop(segments)))
@@ -171,7 +203,11 @@ def path_of(solved: SolvedSketch) -> Profile:
         raise _broken(
             _("Ein Kreis ist keine Bahn — er hat kein Ende, an dem der Querschnitt beginnt.")
         )
-    drawable = [element for element in shaping if element.kind in ("line", "arc", "spline")]
+    if any(element.kind == "ellipse" for element in shaping):
+        raise _broken(
+            _("Eine Ellipse ist keine Bahn — sie hat kein Ende, an dem der Querschnitt beginnt.")
+        )
+    drawable = [element for element in shaping if element.kind in _CHAINED]
     if not drawable:
         raise _broken(_("Die Skizze enthält nichts, was eine Bahn ergeben könnte."))
     segments = [_segment(element.kind, element.points) for element in drawable]
@@ -283,6 +319,8 @@ def _outline(profile: Profile) -> list[Point2]:
             continue
         if segment.kind == "spline":
             points.extend(_along_spline(segment.through)[:-1])
+        elif segment.kind == "ellipse":
+            points.extend(ellipse_segment_points(segment, CHORD_ERROR)[:-1])
         else:
             points.append(segment.start)
     return points
@@ -335,7 +373,11 @@ def _crosses_exactly(loop: Profile) -> bool | None:
     curves: list[tuple[Any, ProfileSegment]] = []
     for segment in loop.segments:
         curve: Any | None
-        if segment.kind == "spline":
+        if segment.kind == "ellipse":
+            from app.core.brep.profiles import ellipse_curve_2d
+
+            curve = ellipse_curve_2d(segment)
+        elif segment.kind == "spline":
             through = segment.through or (segment.start, segment.end)
             if len(through) < 2 or all(_joins(through[0], other) for other in through[1:]):
                 curve = None
@@ -407,6 +449,8 @@ def _crosses_approximately(loop: Profile) -> bool:
             )
         elif segment.kind == "spline":
             points = _along_spline(segment.through or (segment.start, segment.end))
+        elif segment.kind == "ellipse":
+            points = ellipse_segment_points(segment, CHORD_ERROR)
         else:
             points = (segment.start, segment.end)
         pieces.extend(pairwise(points))
@@ -435,6 +479,8 @@ def _share_a_stretch(first: ProfileSegment, second: ProfileSegment) -> bool:
     """
     if first.kind == "line" and second.kind == "line":
         return _overlapping(first.start, first.end, second.start, second.end)
+    if first.kind == "ellipse" and second.kind == "ellipse":
+        return _ellipses_share_a_stretch(first, second)
     if first.kind != "arc" or second.kind != "arc" or first.via is None or second.via is None:
         return True
     one = arc_through(first.start, first.via, first.end)
@@ -547,6 +593,15 @@ def signed_area(profile: Profile) -> float:
                 total += _bezier_signed_area(piece)
             continue
         total += (segment.start[0] * segment.end[1] - segment.end[0] * segment.start[1]) / 2.0
+        if segment.kind == "ellipse":
+            # Das Stück zwischen Sehne und Kurve: das Kreissegment
+            # ``(Δ - sin Δ) / 2`` des Einheitskreises, gestreckt um die Fläche
+            # ``a · b`` der Achsen — eine affine Abbildung ändert Flächen um
+            # genau diesen Faktor. Die volle Ellipse hat keine Sehne und
+            # ergibt so π·a·b.
+            frame, sweep = ellipse_turn(segment)
+            total += frame.first * frame.second * (sweep - math.sin(sweep)) / 2.0
+            continue
         if segment.kind != "arc" or segment.via is None:
             continue
         arc = arc_through(segment.start, segment.via, segment.end)
@@ -632,7 +687,6 @@ def _containment(
     if exact:
         from OCP.BRepClass import BRepClass_FaceClassifier
         from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-        from OCP.gp import gp_Pnt2d
         from OCP.TopAbs import TopAbs_IN
 
         from app.core.brep.profiles import _face, _lift_xy, _wire
@@ -672,8 +726,15 @@ def _containment(
         if circle is not None:
             return math.dist(circle[0], point) < circle[1]
         if exact:
+            # **Der Punkt im Raum, nicht in den Parametern der Fläche.** Ein
+            # ``gp_Pnt2d`` liest der Klassifizierer als (u, v) der Fläche, und
+            # die Ebene einer Fläche aus einem Draht hat ihren Ursprung in der
+            # Mitte des Drahts: An einer Platte von (0 | 0) bis (40 | 20) wurde
+            # ein Kreis bei (10 | 10) bei (30 | 20) gesucht, auf dem Rand — und
+            # das Loch war weg (seit v0.3.5, Durchsicht P6.6). Die Fläche liegt
+            # auf ``_lift_xy``, also derselbe Punkt auf Höhe null.
             return bool(
-                BRepClass_FaceClassifier(faces[index], gp_Pnt2d(*point), EPS_GEOM).State()
+                BRepClass_FaceClassifier(faces[index], _lift_xy(point), EPS_GEOM).State()
                 == TopAbs_IN
             )
         return _inside(point, outlines[index])
@@ -696,16 +757,29 @@ def shifted(profile: Profile, dx: float, dy: float) -> Profile:
             circle=((centre[0] + dx, centre[1] + dy), radius),
             holes=tuple(shifted(one, dx, dy) for one in profile.holes),
         )
+
+    def moved(point: Point2) -> Point2:
+        return (point[0] + dx, point[1] + dy)
+
     return Profile(
         segments=tuple(
             ProfileSegment(
                 segment.kind,
-                (segment.start[0] + dx, segment.start[1] + dy),
-                (segment.end[0] + dx, segment.end[1] + dy),
-                via=None if segment.via is None else (segment.via[0] + dx, segment.via[1] + dy),
+                moved(segment.start),
+                moved(segment.end),
+                via=None if segment.via is None else moved(segment.via),
                 # Die Stützpunkte ziehen mit: ohne sie käme der Spline
                 # verschoben an seinen Enden und unverschoben dazwischen an.
-                through=tuple((x + dx, y + dy) for x, y in segment.through),
+                through=tuple(moved(point) for point in segment.through),
+                # Und die Ellipse mit ihren drei Punkten — sonst liefen Anfang
+                # und Ende verschoben um eine Kurve, die stehen geblieben ist.
+                ellipse=None
+                if segment.ellipse is None
+                else (
+                    moved(segment.ellipse[0]),
+                    moved(segment.ellipse[1]),
+                    moved(segment.ellipse[2]),
+                ),
             )
             for segment in profile.segments
         ),
@@ -718,6 +792,22 @@ def _segment(kind: str, points: tuple[Point2, ...]) -> ProfileSegment:
         return ProfileSegment("line", points[0], points[1])
     if kind == "spline":
         return ProfileSegment("spline", points[0], points[-1], through=points)
+    if kind == "ellipse":
+        centre, first, second = points
+        frame = ellipse_frame(centre, first, second)
+        # Die volle Ellipse beginnt und endet am Ende ihrer ersten Achse; der
+        # Stützpunkt liegt gegenüber, wie beim vollen Bogen.
+        start = frame.at(1.0, 0.0)
+        return ProfileSegment(
+            "ellipse", start, start, via=frame.at(-1.0, 0.0), ellipse=(centre, first, second)
+        )
+    if kind == "elliptical_arc":
+        centre, first, second, start, end = points
+        frame = ellipse_frame(centre, first, second)
+        middle = ccw_middle(frame.parameter(start), frame.parameter(end))
+        return ProfileSegment(
+            "ellipse", start, end, via=frame.at(*middle), ellipse=(centre, first, second)
+        )
     centre, start, end = points
     return ProfileSegment("arc", start, end, via=_arc_midpoint(centre, start, end))
 
@@ -810,6 +900,7 @@ def _flipped(segment: ProfileSegment) -> ProfileSegment:
         segment.start,
         via=segment.via,
         through=tuple(reversed(segment.through)),
+        ellipse=segment.ellipse,
     )
 
 
@@ -826,6 +917,320 @@ def _broken(detail: TranslatableText | str) -> GeometryError:
             CORRECT_INPUT,
         ),
     )
+
+
+# --- Ellipsen (RM-188 P6.6a) ---------------------------------------------------------
+
+#: Unterhalb dieser Länge hat ein Parametervektor keine Richtung — nur ein
+#: Schutz gegen die Teilung durch null, keine Toleranz (Regel 7).
+_TINY_PARAMETER: Final = 1e-15
+
+#: Wie weit ein abgetastetes Stück im Parameter höchstens reicht, als Kosinus:
+#: ein Sechzehntel des Umlaufs. Die Sehnengrenze allein reichte bei sehr
+#: kleinen Ellipsen mit einem Viereck — dieselbe Überlegung wie ``_LEAST_STEPS``
+#: beim Bogen. ``cos(π/8)`` als Wurzelausdruck: Wurzeln rundet jede Maschine
+#: gleich, ``math.cos`` nicht (RM-187).
+_WIDEST_STEP: Final = math.sqrt(2.0 + math.sqrt(2.0)) / 2.0
+
+#: Wie oft ein Stück höchstens geteilt wird. Zweiundfünfzig Teilungen sind
+#: die Stellenzahl eines ``float`` — feiner lässt sich kein Parameter teilen.
+_DEEPEST_SPLIT: Final = 52
+
+
+@dataclass(frozen=True, slots=True)
+class EllipseFrame:
+    """Eine Ellipse, wie Profil, Netzweg und Ansicht sie rechnen.
+
+    ``axis`` ist die Einheitsrichtung der ersten Achse, ``first`` und
+    ``second`` sind die beiden Halbachsen. Der Parameter ``(cos t, sin t)``
+    läuft im rechtshändigen Rahmen aus der ersten Achse und derselben um
+    90 Grad gedreht — also **gegen den Uhrzeigersinn**, gleich auf welcher
+    Seite der gespeicherte zweite Achsenpunkt liegt: Er trägt die Länge der
+    zweiten Achse, ihre Richtung folgt aus der ersten.
+
+    Gerechnet wird ohne Winkelfunktion. Ein Parameter ist ein Einheitsvektor
+    im Kreis der Ellipse, und was zwischen zwei davon liegt, findet die
+    Halbierung ihrer Summe — Grundrechenarten und Wurzeln, auf jeder Maschine
+    dieselbe Zahl (RM-187). Nur wo eine Entscheidung mit großem Abstand fällt
+    (Drehsinn, Flächenvorzeichen), steht ``atan2``.
+    """
+
+    centre: Point2
+    axis: Point2
+    first: float
+    second: float
+
+    def at(self, cos: float, sin: float) -> Point2:
+        """Der Punkt der Ellipse zum Parameter ``(cos, sin)``."""
+        ux, uy = self.axis
+        return (
+            self.centre[0] + self.first * cos * ux - self.second * sin * uy,
+            self.centre[1] + self.first * cos * uy + self.second * sin * ux,
+        )
+
+    def parameter(self, point: Point2) -> Point2:
+        """Der Parameter, an dem der Strahl von der Mitte durch ``point`` die
+        Ellipse trifft — für einen Punkt auf ihr genau seiner."""
+        ux, uy = self.axis
+        dx, dy = point[0] - self.centre[0], point[1] - self.centre[1]
+        x = (dx * ux + dy * uy) / self.first
+        y = (-dx * uy + dy * ux) / self.second
+        size = math.hypot(x, y)
+        if size <= _TINY_PARAMETER:
+            return (1.0, 0.0)
+        return (x / size, y / size)
+
+
+def ellipse_frame(centre: Point2, first_end: Point2, second_end: Point2) -> EllipseFrame:
+    """Der Rahmen einer Ellipse aus Mitte und den Enden ihrer beiden Achsen."""
+    first = math.dist(centre, first_end)
+    second = math.dist(centre, second_end)
+    if first <= _TINY_PARAMETER:
+        return EllipseFrame(centre, (1.0, 0.0), first, second)
+    axis = ((first_end[0] - centre[0]) / first, (first_end[1] - centre[1]) / first)
+    return EllipseFrame(centre, axis, first, second)
+
+
+def ccw_middle(start: Point2, end: Point2) -> Point2:
+    """Der Parameter auf halbem Weg **gegen den Uhrzeigersinn** von ``start``
+    nach ``end`` — beide Einheitsvektoren im Kreis der Ellipse.
+
+    Zusammenfallende Enden sind ein voller Umlauf, und die Mitte liegt
+    gegenüber — dieselbe Lesart wie beim Bogen (:func:`arc_sweep`).
+    """
+    if math.hypot(end[0] - start[0], end[1] - start[1]) <= _FULL_CIRCLE_EPS:
+        return (-start[0], -start[1])
+    sx, sy = start[0] + end[0], start[1] + end[1]
+    size = math.hypot(sx, sy)
+    if size <= _FULL_CIRCLE_EPS:
+        # Genau gegenüber: eine halbe Drehung weiter liegt die Mitte bei 90°.
+        return (-start[1], start[0])
+    cross = start[0] * end[1] - start[1] * end[0]
+    if cross > 0.0:
+        return (sx / size, sy / size)
+    return (-sx / size, -sy / size)
+
+
+def parameter_sweep(start: Point2, end: Point2) -> float:
+    """Wie weit der Parameter gegen den Uhrzeigersinn von ``start`` bis
+    ``end`` läuft, im Bogenmaß in (0, 2π] — zusammenfallend ist ein Umlauf.
+
+    Nur für Entscheidungen und Flächen, nicht für Punkte (siehe
+    :class:`EllipseFrame`)."""
+    cross = start[0] * end[1] - start[1] * end[0]
+    dot = start[0] * end[0] + start[1] * end[1]
+    sweep = math.atan2(cross, dot) % (2.0 * math.pi)
+    return 2.0 * math.pi if sweep <= _FULL_CIRCLE_EPS else sweep
+
+
+def ellipse_turn(segment: ProfileSegment) -> tuple[EllipseFrame, float]:
+    """Der Rahmen eines Ellipsenstücks und wie weit es läuft — mit Vorzeichen.
+
+    Positiv heißt gegen den Uhrzeigersinn vom Anfang zum Ende, negativ mit
+    ihm; welcher der beiden Wege gemeint ist, sagt ``via``. Liegt das Ende
+    auf dem Anfang, ist es die volle Ellipse, gegen den Uhrzeigersinn.
+    """
+    assert segment.ellipse is not None, "ein Ellipsenstück trägt seine Ellipse"
+    frame = ellipse_frame(*segment.ellipse)
+    if math.dist(segment.start, segment.end) <= _JOIN_TOL:
+        return frame, 2.0 * math.pi
+    start = frame.parameter(segment.start)
+    sweep = parameter_sweep(start, frame.parameter(segment.end))
+    if segment.via is None:
+        return frame, sweep
+    if parameter_sweep(start, frame.parameter(segment.via)) < sweep:
+        return frame, sweep
+    return frame, sweep - 2.0 * math.pi
+
+
+def ellipse_segment_points(segment: ProfileSegment, sag: float) -> tuple[Point2, ...]:
+    """Ein Ellipsenstück als Punktfolge vom Anfang zum Ende.
+
+    Keine Sehne liegt weiter als ``sag`` neben der Kurve, und das ist keine
+    Schätzung: Im Kreis der Ellipse liegt der Punkt eines Bogens, der am
+    weitesten von seiner Sehne entfernt ist, auf halbem Parameterweg — und
+    eine affine Abbildung erhält, wo eine Tangente parallel zur Sehne steht.
+    Also wird dort gemessen und geteilt, bis die Grenze hält.
+
+    Anfang und Ende sind **die** Punkte des Stücks, nicht ihre Projektion auf
+    die Kurve: Der Nachbar in der Kette endet genau dort, und ein Rest von
+    10⁻¹⁰ zwischen beiden wäre im Netz eine Kante ohne Länge.
+    """
+    frame, sweep = ellipse_turn(segment)
+    start = frame.parameter(segment.start)
+    end = frame.parameter(segment.end)
+    full = abs(sweep) >= 2.0 * math.pi - _FULL_CIRCLE_EPS
+    if full:
+        parameters = _ccw_parameters(frame, start, start, sag, full=True)
+    elif sweep > 0.0:
+        parameters = _ccw_parameters(frame, start, end, sag, full=False)
+    else:
+        parameters = list(reversed(_ccw_parameters(frame, end, start, sag, full=False)))
+    points = [frame.at(*parameter) for parameter in parameters]
+    points[0] = segment.start
+    points[-1] = segment.end if not full else segment.start
+    return tuple(points)
+
+
+def _ccw_parameters(
+    frame: EllipseFrame, start: Point2, end: Point2, sag: float, *, full: bool
+) -> list[Point2]:
+    """Die Parameter gegen den Uhrzeigersinn von ``start`` bis ``end``,
+    einschließlich beider, so fein, dass keine Sehne mehr als ``sag`` abweicht."""
+    if full:
+        stops = [start, (-start[1], start[0]), (-start[0], -start[1]), (start[1], -start[0]), start]
+    else:
+        middle = ccw_middle(start, end)
+        stops = [start, ccw_middle(start, middle), middle, ccw_middle(middle, end), end]
+    found = [stops[0]]
+    for first, second in pairwise(stops):
+        found.extend(_refined(frame, first, second, sag))
+    return found
+
+
+def _refined(frame: EllipseFrame, first: Point2, second: Point2, sag: float) -> list[Point2]:
+    """Die Teilpunkte zwischen zwei Parametern unter einem Viertelumlauf, ohne
+    den ersten und mit dem letzten."""
+    found: list[Point2] = []
+    pending = [(first, second, 0)]
+    while pending:
+        begin, end, depth = pending.pop()
+        sx, sy = begin[0] + end[0], begin[1] + end[1]
+        size = math.hypot(sx, sy)
+        middle = (sx / size, sy / size) if size > _TINY_PARAMETER else (-begin[1], begin[0])
+        wide = begin[0] * end[0] + begin[1] * end[1] < _WIDEST_STEP
+        if depth < _DEEPEST_SPLIT and (wide or _chord_gap(frame, begin, middle, end) > sag):
+            pending.append((middle, end, depth + 1))
+            pending.append((begin, middle, depth + 1))
+            continue
+        found.append(end)
+    return found
+
+
+def _chord_gap(frame: EllipseFrame, begin: Point2, middle: Point2, end: Point2) -> float:
+    """Wie weit die Kurve zwischen zwei Parametern von ihrer Sehne abweicht —
+    gemessen am Punkt auf halbem Parameterweg, dem weitesten (siehe
+    :func:`ellipse_segment_points`)."""
+    ax, ay = frame.at(*begin)
+    bx, by = frame.at(*end)
+    mx, my = frame.at(*middle)
+    span = math.hypot(bx - ax, by - ay)
+    if span <= _TINY_PARAMETER:
+        return math.hypot(mx - ax, my - ay)
+    return abs((bx - ax) * (my - ay) - (by - ay) * (mx - ax)) / span
+
+
+def ellipse_segment_extremes(segment: ProfileSegment) -> list[Point2]:
+    """Die Scheitel in x- und y-Richtung, die das Ellipsenstück überstreicht.
+
+    An einer gedrehten Ellipse liegen sie weder auf ihren Achsenenden noch auf
+    Anfang oder Ende. ``x(t)`` hat seine Extrema, wo ``(cos t, sin t)`` in
+    Richtung ``(a·uₓ, -b·u_y)`` zeigt, ``y(t)`` bei ``(a·u_y, b·uₓ)`` — je in
+    beide Richtungen, und genommen werden die, die im Bereich des Stücks
+    liegen.
+    """
+    frame, sweep = ellipse_turn(segment)
+    ux, uy = frame.axis
+    first, second = frame.first, frame.second
+    candidates: list[Point2] = []
+    for x, y in ((first * ux, -second * uy), (first * uy, second * ux)):
+        size = math.hypot(x, y)
+        if size <= _TINY_PARAMETER:
+            continue
+        candidates.extend(((x / size, y / size), (-x / size, -y / size)))
+    if abs(sweep) >= 2.0 * math.pi - _FULL_CIRCLE_EPS:
+        return [frame.at(*candidate) for candidate in candidates]
+    low = frame.parameter(segment.start if sweep > 0.0 else segment.end)
+    reach = abs(sweep)
+    return [
+        frame.at(*candidate)
+        for candidate in candidates
+        if parameter_sweep(low, candidate) <= reach or _same_parameter(low, candidate)
+    ]
+
+
+def ellipse_element_extremes(element: SketchElement) -> list[Point2]:
+    """Die Scheitel in x und y einer Ellipse oder eines Ellipsenbogens der
+    Zeichnung, beim Bogen samt seinen Enden — für Hüllen, die die ganze Kurve
+    meinen (Strecken um die Mitte, Einpassen, Bauraumprüfung)."""
+    segment = _segment(element.kind, element.points)
+    ends = [segment.start, segment.end] if element.kind == "elliptical_arc" else []
+    return [*ends, *ellipse_segment_extremes(segment)]
+
+
+def arc_segment_extremes(segment: ProfileSegment) -> list[Point2]:
+    """Die Scheitel in x- und y-Richtung, die ein Kreisbogenstück überstreicht.
+
+    Ein Bogenstück führt Anfang, Ende und Stützpunkt, aber nicht seine Mitte —
+    sie ist der Umkreismittelpunkt der drei. Ein Bogen über mehr als einen
+    Viertelkreis reicht mit einem Scheitel weiter als seine drei Punkte; die
+    Achsprüfung beim Drehen sah deshalb einen 340°-Bogen nicht, dessen linker
+    Scheitel über der Achse lag (RM-188 P6.6, dieselbe Lücke wie beim Spline,
+    Gesamtreview D-3). Welche Richtung das Stück läuft, sagt der Stützpunkt;
+    ``atan2`` entscheidet hier nur, gerechnet wird kein Punkt damit.
+    """
+    if segment.via is None:
+        return []
+    (ax, ay), (bx, by), (cx, cy) = segment.start, segment.via, segment.end
+    twice = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(twice) <= _TINY_PARAMETER:
+        return []
+    a2, b2, c2 = ax * ax + ay * ay, bx * bx + by * by, cx * cx + cy * cy
+    ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / twice
+    uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / twice
+    radius = math.hypot(ax - ux, ay - uy)
+    turn = 2.0 * math.pi
+
+    def angle(point: Point2) -> float:
+        return math.atan2(point[1] - uy, point[0] - ux)
+
+    begin = angle(segment.start)
+    reach = (angle(segment.end) - begin) % turn
+    whole = math.dist(segment.start, segment.end) <= _JOIN_TOL
+    counter_clockwise = whole or (angle(segment.via) - begin) % turn <= reach
+    found: list[Point2] = []
+    for quarter, (dx, dy) in enumerate(((1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0))):
+        swept = (quarter * math.pi / 2.0 - begin) % turn
+        inside = whole or (swept <= reach if counter_clockwise else swept >= reach)
+        if inside:
+            found.append((ux + radius * dx, uy + radius * dy))
+    return found
+
+
+def _same_parameter(one: Point2, other: Point2) -> bool:
+    return math.hypot(one[0] - other[0], one[1] - other[1]) <= _FULL_CIRCLE_EPS
+
+
+def _ellipses_share_a_stretch(first: ProfileSegment, second: ProfileSegment) -> bool:
+    """Ob zwei Ellipsenstücke, die OpenCASCADE als deckungsgleich meldet, eine
+    Länge teilen — die Frage aus :func:`_share_a_stretch` für Ellipsen.
+
+    Zwei Stücke **einer** Ellipse, die nur an einem Ende aneinanderstoßen,
+    teilen nichts: dieselbe Naht wie beim geteilten Kreis (B37 der
+    Skizzendurchsicht). Geteilt ist erst, was über ``EPS_GEOM`` lang ist,
+    gemessen an der kleineren Halbachse — das unterschätzt die Länge und
+    meldet im Zweifel eine Kreuzung.
+    """
+    one, one_sweep = ellipse_turn(first)
+    other, other_sweep = ellipse_turn(second)
+    probes = [other.at(1.0, 0.0), other.at(0.0, 1.0), other.at(-1.0, 0.0), other.at(0.0, -1.0)]
+    if math.dist(one.centre, other.centre) > _JOIN_TOL or any(
+        math.dist(point, one.at(*one.parameter(point))) > _JOIN_TOL for point in probes
+    ):
+        return True
+
+    def interval(segment: ProfileSegment, sweep: float) -> tuple[float, float]:
+        begin = segment.start if sweep > 0.0 else segment.end
+        cos, sin = one.parameter(begin)
+        return math.atan2(sin, cos), abs(sweep)
+
+    low, span = interval(first, one_sweep)
+    other_low, other_span = interval(second, other_sweep)
+    shift = (other_low - low) % (2.0 * math.pi)
+    shared = 0.0
+    for start in (low + shift, low + shift - 2.0 * math.pi):
+        shared += max(0.0, min(low + span, start + other_span) - max(low, start))
+    return shared * min(one.first, one.second) > EPS_GEOM
 
 
 # --- Die gezeichnete Kurve (§30.1, Konzept „Die Skizze in den Raum") --------
@@ -927,6 +1332,11 @@ def _flat_curve(element: SketchElement) -> tuple[Point2, ...]:
         return _along_arc(centre, start, arc_sweep(centre, start, end), radius)
     if element.kind == "spline":
         return _along_spline(points)
+    if element.kind in ("ellipse", "elliptical_arc"):
+        # Dieselbe Abtastung wie im Netzweg, nur mit der Sehnengrenze der
+        # Ansicht — und wie beim Kreis trägt die volle Ellipse ihren ersten
+        # Punkt am Ende noch einmal.
+        return ellipse_segment_points(_segment(element.kind, points), CHORD_ERROR)
     return (points[0],)
 
 
@@ -976,6 +1386,13 @@ def _along_spline(points: tuple[Point2, ...]) -> tuple[Point2, ...]:
     return tuple(curve)
 
 
+def flat_curve(element: SketchElement) -> tuple[Point2, ...]:
+    """Ein Element als Punktfolge in der Zeichenebene — dieselbe, die
+    :func:`curves_of` in die Ansicht legt. Für die Zeichenfläche des Editors,
+    die daran trifft und zeichnet: eine Kurve, eine Punktfolge."""
+    return _flat_curve(element)
+
+
 def curves_of(solved: SolvedSketch, frame: PlaneFrame) -> tuple[SketchCurve, ...]:
     """Die gelöste Skizze als Punktfolgen im Raum, in Reihenfolge der Elemente.
 
@@ -1021,6 +1438,12 @@ def bounds_of(profile: Profile) -> tuple[Point2, Point2]:
         if segment.via is not None:
             corners.append(segment.via)
         corners.extend(segment.through)
+        if segment.kind == "ellipse":
+            # Anders als beim Bogen **genau**: Eine Ellipse ist neu, es gibt
+            # keine gespeicherte Form, deren Lage sich dadurch verschöbe, und
+            # die Scheitel einer gedrehten Ellipse liegen weit neben ihren
+            # drei Punkten.
+            corners.extend(ellipse_segment_extremes(segment))
     if not corners:
         return (0.0, 0.0), (0.0, 0.0)
     xs = [p[0] for p in corners]
@@ -1061,6 +1484,13 @@ def scaled(profile: Profile, factor: float, centre: Point2) -> Profile:
                 end=moved(segment.end),
                 via=None if segment.via is None else moved(segment.via),
                 through=tuple(moved(p) for p in segment.through),
+                ellipse=None
+                if segment.ellipse is None
+                else (
+                    moved(segment.ellipse[0]),
+                    moved(segment.ellipse[1]),
+                    moved(segment.ellipse[2]),
+                ),
             )
             for segment in profile.segments
         ),

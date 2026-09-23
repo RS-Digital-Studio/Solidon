@@ -759,6 +759,7 @@ LOCALISERS = frozenset({"localised", "localised_value"})
 #: steht, kann „breite/2" sein und nicht nur eine Zahl.
 GRAMMAR_NOT_LABEL = frozenset(
     {
+        "_place_ellipse_axis",
         "change_constraint_value",
         "measured_angle",
         "measured_expression",

@@ -839,6 +839,47 @@ def test_a_sketch_with_a_hole_becomes_one_region() -> None:
     assert len(regions[0].holes) == 1, "und ein Loch darin"
 
 
+@pytest.mark.parametrize(
+    ("corner", "centre"),
+    [((0.0, 0.0), (10.0, 10.0)), ((-60.0, 35.0), (-45.0, 42.0)), ((120.0, -80.0), (150.0, -70.0))],
+)
+def test_a_hole_away_from_the_origin_stays_a_hole(
+    corner: tuple[float, float], centre: tuple[float, float]
+) -> None:
+    """Ein Loch bleibt ein Loch, gleich wo die Platte liegt (Durchsicht P6.6).
+
+    Die Verschachtelung fragte den exakten Kern mit einem **ebenen** Punkt
+    (``gp_Pnt2d``) — und der liest ihn in den Parametern der Fläche. Die Ebene
+    einer Fläche aus einem Draht hat ihren Ursprung aber in der Mitte des
+    Drahts: Eine Platte von (0 | 0) bis (40 | 20) trägt ihn bei (20 | 10), und
+    der Kreis bei (10 | 10) wurde bei (30 | 20) gesucht — auf dem Rand, also
+    „nicht innen". Aus Platte und Loch wurden zwei Umrisse nebeneinander, der
+    Kreis ein eigener Körper **in** der Platte, und das Loch war weg: 4000 mm³
+    statt 3367 an der Beispieldatei. Die Tests darüber zeichnen um den
+    Ursprung, dort fällt beides zusammen. Seit v0.3.5 ausgeliefert.
+    """
+    from app.core.sketch.profile import regions_of
+    from app.core.types import SketchElement
+
+    x, y = corner
+    plate = (
+        SketchElement("line", ((x, y), (x + 40.0, y))),
+        SketchElement("line", ((x + 40.0, y), (x + 40.0, y + 20.0))),
+        SketchElement("line", ((x + 40.0, y + 20.0), (x, y + 20.0))),
+        SketchElement("line", ((x, y + 20.0), (x, y))),
+    )
+    hole = SketchElement("circle", (centre, (centre[0] + 4.0, centre[1])))
+    regions = regions_of(solve_sketch(Sketch(plane="plane:xy", elements=(*plate, hole))))
+
+    assert len(regions) == 1, "Platte und Loch sind ein Umriss"
+    assert len(regions[0].holes) == 1, "und der Kreis ist sein Loch"
+    if brep_available():
+        from app.core.brep import profiles as brep_profiles
+
+        body = brep_profiles.extrude(regions[0], 5.0)
+        assert body.volume == pytest.approx((40.0 * 20.0 - math.pi * 16.0) * 5.0, rel=1e-9)
+
+
 def test_two_separate_shapes_stay_two_regions() -> None:
     """Nebeneinander ist nicht ineinander.
 

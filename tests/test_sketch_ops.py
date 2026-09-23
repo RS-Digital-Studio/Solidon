@@ -642,6 +642,69 @@ def test_a_sweep_does_not_reuse_a_cached_solid_without_its_hole(profile: Profile
     assert after.scene.objects["obj_1"].mesh.volume == pytest.approx(math.pi * 16.0 * 20.0)
 
 
+@pytest.mark.parametrize(
+    "op", ["sketch_extrude", "sketch_pocket", "sketch_revolve", "sketch_sweep", "sketch_loft"]
+)
+def test_every_profile_consumer_carries_the_profile_revision(op: str) -> None:
+    """Ein Ergebnis ohne das Loch, das vor der Durchsicht P6.6 bei einer
+    Platte neben dem Ursprung verloren ging, darf nicht aus dem Cache kommen
+    (B1): Jede Operation, die eine Zeichnung zu Umrissen macht, trägt den Stand
+    der Profilbildung in ihrer Cache-Kennung."""
+    from app.core.sketch.profile import PROFILE_REVISION
+
+    assert PROFILE_REVISION in REGISTRY.get(op).cache_version
+
+
+def test_an_extrusion_without_its_hole_is_not_taken_from_the_cache(profile: Profile) -> None:
+    """Der gespeicherte Vollkörper von vorher ersetzt nicht die Platte mit Loch."""
+    from app.core.registry import Registry
+
+    spec = REGISTRY.get("sketch_extrude")
+
+    def old_extrude(ctx: OpContext) -> OpResult:
+        # So kam es vor dem Fix heraus: die Platte ohne das Loch.
+        return spec.fn(
+            dataclasses.replace(
+                ctx,
+                params=dataclasses.replace(
+                    ctx.params, sketch="", shape="rectangle", length=40.0, width=20.0
+                ),
+            )
+        )
+
+    legacy = Registry()
+    legacy.register(dataclasses.replace(spec, cache_version="", fn=old_extrude))
+    drawing = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (40.0, 0.0))),
+            SketchElement("line", ((40.0, 0.0), (40.0, 20.0))),
+            SketchElement("line", ((40.0, 20.0), (0.0, 20.0))),
+            SketchElement("line", ((0.0, 20.0), (0.0, 0.0))),
+            SketchElement("circle", ((10.0, 10.0), (14.0, 10.0))),
+        ),
+    )
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(
+                id=1,
+                op="sketch_extrude",
+                outputs=("obj_1",),
+                params={"sketch": sketch_to_text(drawing), "height": 5.0},
+            )
+        ],
+    )
+    cache = ResultCache()
+    before = evaluate(document, profile, cache=cache, registry=legacy)
+    assert before.scene.objects["obj_1"].mesh.volume == pytest.approx(800.0 * 5.0)
+
+    after = evaluate(document, profile, cache=cache)
+    assert after.complete
+    assert after.scene.objects["obj_1"].mesh.volume == pytest.approx((800.0 - math.pi * 16.0) * 5.0)
+
+
 def test_a_loft_spans_between_two_independent_drawings() -> None:
     """RM-147 E2: rund unten, eckig oben — der Loft, den jedes CAD hat.
 

@@ -17,7 +17,13 @@ from app.core.errors import ValidationError
 from app.core.geom.sketch_solid import ARC_STEPS, outline_points
 from app.core.registry import op_params, param, register_op
 from app.core.sketch import shapes
-from app.core.sketch.profile import Profile, arc_through, profile_of, shifted
+from app.core.sketch.profile import (
+    PROFILE_REVISION,
+    Profile,
+    arc_through,
+    profile_of,
+    shifted,
+)
 from app.core.sketch.solver import solve_sketch
 from app.core.types import (
     BaseParams,
@@ -49,14 +55,22 @@ class FieldTools:
 
 
 def _sag(profile: Profile) -> float:
-    """Die maximale Kreisabweichung der bestehenden Mesh-Umrissabtastung."""
+    """Die maximale Kreisabweichung der bestehenden Mesh-Umrissabtastung.
+
+    Eine Ellipse tastet ``outline_points`` auf ``MAX_FACET_SAG`` ab (RM-188
+    P6.6a) — um so viel kann ihr Vieleck innerhalb der Kurve liegen, und um so
+    viel muss ein Ausschluss wachsen, damit er die Kurve sicher deckt.
+    """
     radius = profile.circle[1] if profile.circle is not None else 0.0
+    ellipse = False
     for segment in profile.segments:
         if segment.kind == "arc" and segment.via is not None:
             arc = arc_through(segment.start, segment.via, segment.end)
             if arc is not None:
                 radius = max(radius, arc[1])
-    return radius * (1 - units.inscribed_ratio(ARC_STEPS))
+        ellipse = ellipse or segment.kind == "ellipse"
+    circular = radius * (1 - units.inscribed_ratio(ARC_STEPS))
+    return max(circular, MAX_FACET_SAG) if ellipse else circular
 
 
 def _region(profile: Profile, *, exact: bool) -> tuple[BaseGeometry, float]:
@@ -337,7 +351,7 @@ class FieldCutParams(BaseParams):
     # Runde Löcher tragen seit dem 22.09.2026 die Ecken der plattformgleichen
     # Tafel (``sketch_solid.outline_points``, RM-187); ältere Ergebnisse
     # dürfen nicht aus dem Cache kommen.
-    cache_version="circle-table-1",
+    cache_version=f"circle-table-1+{PROFILE_REVISION}",
     params=FieldCutParams,
     consumes=1,
     produces=1,

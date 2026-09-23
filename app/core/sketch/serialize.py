@@ -31,7 +31,12 @@ from app.core.types import (
 )
 from app.i18n import _
 
-_ELEMENT_KINDS: frozenset[str] = frozenset(("point", "line", "arc", "circle", "spline"))
+#: Die Elementarten, die eine fremde Datei nennen darf. Wie bei den
+#: Bedingungen hält ``tests/test_sketch_curves.py`` sie deckungsgleich mit dem
+#: Löser (``solver._ELEMENT_POINTS`` und ``_ELEMENT_MINIMUM``).
+_ELEMENT_KINDS: frozenset[str] = frozenset(
+    ("point", "line", "arc", "circle", "spline", "ellipse", "elliptical_arc")
+)
 #: **Eine Liste, die es zweimal gibt, und deshalb steht hier warum.** Der Löser
 #: führt seine eigene (``_CONSTRAINT_TARGETS``), weil er zu jeder Art die Zahl
 #: der Zielpunkte braucht; diese hier prüft eine **fremde Datei**, bevor
@@ -54,6 +59,9 @@ _CONSTRAINT_KINDS: frozenset[str] = frozenset(
         "angle",
         "equal",
         "midpoint",
+        "on_curve",
+        "smooth",
+        "curvature",
     )
 )
 

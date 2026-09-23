@@ -1,5 +1,5 @@
 ---
-description: "Der Skizzeneditor — gezogene Punkte, Zwangsbedingungen, die Maßkarte, Lochkreis und Lochraster, die Karte unten, neue Ebenen und die Flächenkontur"
+description: "Der Skizzeneditor — gezogene Punkte, Zwangsbedingungen, die Maßkarte, Lochkreis und Lochraster, die Karte unten, neue Ebenen, die Flächenkontur, Ellipse und Kurvenbedingungen"
 paths:
   - "app/ui/sketch_editor.py"
 ---
@@ -609,14 +609,13 @@ eine Ecke, Klick.** Eine Ecke sind zwei Linienenden am selben Ort — gesucht
   „legt fest, was schon festliegt" über eine Skizze, die bestimmt war.
 * **Die Fase bleibt einen Grad frei.** Ihre Länge steht als Maß, ihr Winkel
   nicht — ein Maß für „gleich weit von einer Ecke, die es nicht mehr gibt"
-  kennt die Bedingungsliste nicht. Hier stand dazu „eine neue Bedingungsart
-  wäre ein Dateiformat", und das war zu weit gegriffen: Eine Art dazuzunehmen
-  ändert den **Aufbau** der Projektdatei nicht, nur den Wertebereich einer
-  Aufzählung, und ältere Dateien lesen sich unverändert (gemessen am
-  Arbeitspaket W2, das vier Arten hinzufügte, ohne `format_version` anzufassen
-  — die Begründung steht in `app/core/sketch/CLAUDE.md`). Was bleibt, ist der
-  Bedienentwurf: Für diesen Winkel gäbe es keine Auswahl, an der ein Knopf
-  hängen könnte. Die Zeile sagt es ehrlich („Noch ein Maß fehlt").
+  kennt die Bedingungsliste nicht. Eine neue Art wäre dabei nicht das
+  Hindernis: Sie ändert den **Aufbau** der Projektdatei nicht, nur den
+  Wertebereich einer Aufzählung, und ältere Dateien lesen sich unverändert
+  (die Versionsstufe steht trotzdem, seit RM-188 P6.6 — die Begründung steht
+  in `app/core/sketch/CLAUDE.md`). Was bleibt, ist der Bedienentwurf: Für
+  diesen Winkel gäbe es keine Auswahl, an der ein Knopf hängen könnte. Die
+  Zeile sagt es ehrlich („Noch ein Maß fehlt").
 
 ## Vieleck, Langloch und vier Bedingungen (14.09.2026)
 
@@ -902,3 +901,58 @@ fremde Halte zwischen den Werkzeugen und *Fertig*. **Angeknüpft wird an die
 Statuszeile, und die Fensterfolge wird nie mit `nextInFocusChain` abgegangen:**
 Der erste Bau tat das durch alle 634 Halte, und sobald das Panel gelöscht war,
 waren die Menüs der Leiste tot (`test_the_menus_outlive_the_sketch_mode`).
+
+## Ellipse und Kurvenbedingungen (RM-188 P6.6, Durchsicht 0.5.0)
+
+Eingehängt in die vorhandene Werkzeugzeile, die Bedingungsknöpfe und das
+Kontextmenü — kein neuer Griff, keine neue Leiste (Abstimmung der
+Koordination vom 23.09.2026: der Editor wird danach insgesamt umgebaut).
+
+**Ein Knopf *Ellipse*, keiner für den Ellipsenbogen.** Die Werkzeugzeile
+stand bei 875 von 900 Bildpunkten; zwei Knöpfe hätten 961 verlangt, schon
+einer 918. Der Bogen entsteht wie in Fusion durch **Trimmen** der Ellipse
+(`edit.trim` → `_trimmed_ellipse`), und die Zeile hat den **engen Abstand
+des Rasters** (`style.TIGHT`, vier statt sechs Bildpunkte, gemessen 872) —
+zwei Bildpunkte weniger zwischen den Knöpfen statt eines versteckten
+Werkzeugs; Abstände liegen auf dem Raster von vier (`tests/test_style.py`).
+Kein Kürzel: Fusion belegt keines.
+
+**Drei Klicks: Mitte, Achsende, Breite.** Vom dritten Klick zählt nur seine
+Höhe über der ersten Achse (`edit.ellipse_from_clicks`); der Punkt liegt
+senkrecht über der Mitte, und deshalb gibt es für ihn **keine Deckung** — sie
+zöge die Ellipse schief. Mitte und Achsende fangen wie jeder Klick. Getippt
+wird wie am Kreis: die Achse als Durchmesser oder Radius nach dem Umschalter,
+gespeichert als `diameter` auf (Mitte, Achsende). Ein Klick auf die Mitte
+oder die erste Achse zählt nicht, und die Zeile sagt warum.
+
+**Die Griffe einer Ellipse tun, was ein CAD tut** (`_ellipse_drag`): Das
+Achsende dreht und streckt die erste Achse, die zweite dreht mit und behält
+ihre Länge; das Ende der zweiten ändert nur deren Länge; die Enden eines
+Bogens gleiten auf der Ellipse. Die Mitte bleibt dabei stehen, und die
+Bogenenden wandern an derselben Stelle ihres Parameters mit
+(`edit.carried_onto`). Der Löser allein fände die *nächste* Lage — und
+verkürzte beim Drehen die zweite Achse.
+
+**Bedingungen zwischen Kurven plant der Kern** (`_PLANNED`, `constraint_plan`,
+`edit.tangent_plan` und Nachbarn). *Tangential* gilt für jedes Kurvenpaar
+außer zwei Linien, in jeder Reihenfolge der Auswahl — mit dem Bogen zuerst
+gewählt bot sich der Knopf früher nicht an, und mit der Linie zuerst entstand
+eine Bedingung mit fünf Zielen (Befund B2). Was der Klick anlegt, hängt an der
+Lage: am Stoß *glatt*, zwischen Linie und Kreis oder Bogen die
+Abstandstangente, sonst ein Hilfspunkt als Berührpunkt; an einem Spline ohne
+Stoß an einem seiner Punkte bleibt der Knopf weg. *Auf Kurve* nimmt einen
+Punkt und eine Kurve, *Krümmungsstetig* einen Spline und die Kurve an seinem
+Ende und bringt *glatt* mit, *Gleich groß* macht zwei Ellipsen in beiden
+Achsen gleich, die längere zur längeren. Ein zweiter Klick nimmt zurück, eine
+Tangente mit Hilfspunkt samt Punkt. Alle übrigen Griffe laufen unverändert
+über `constraint_targets`; *Waagerecht* und *Senkrecht* nehmen an einer
+Ellipse die erste Achse.
+
+**Die Liste nennt Kurven, nicht ihre ersten Punkte** (`targets_phrase` mit
+der Art): „Auf Kurve — Punkt 1, Ellipse 1", nicht „Ellipse 1 Mitte".
+
+**Splinepunkte kommen und gehen über das Kontextmenü**
+(`_offer_spline_point_insertion`, `_offer_spline_point_removal`): Rechtsklick
+auf die Kurve fügt dort einen Punkt ein — auf der Kurve, nicht am Klick —,
+Rechtsklick auf einen ihrer Punkte nimmt ihn heraus, unter drei Punkten
+gesperrt und begründet. Entf löscht weiterhin das ganze Element.

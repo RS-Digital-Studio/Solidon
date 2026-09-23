@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 30
+FORMAT_VERSION: Final = 31
 
 
 @dataclass(frozen=True, slots=True)
@@ -794,6 +794,23 @@ def _let_seam_and_lid_fits_follow_their_bodies(data: dict[str, Any]) -> dict[str
     return data
 
 
+def _allow_curve_sketches(data: dict[str, Any]) -> dict[str, Any]:
+    """30 → 31: Skizzen kennen Ellipse, Ellipsenbogen und drei Kurvenbedingungen.
+
+    Ein Skizzentext darf seither die Elemente ``ellipse`` und
+    ``elliptical_arc`` tragen und die Bedingungen ``on_curve``, ``smooth``
+    und ``curvature``, deren Ziele auch Kurven nennen (RM-188 P6.6a/b). An
+    einer älteren Datei ist nichts umzuschreiben: Ihre Linien, Kreise, Bögen
+    und Splines bedeuten dasselbe wie vorher, und keine ihrer Bedingungen
+    zeigt auf eine Kurve. Die Stufe steht für die andere Richtung: Ein
+    älteres Programm hielte mitten in der Auswertung mit „Diese Elementart
+    gibt es nicht" an — als wäre die Skizze beschädigt. Mit der
+    Versionsgrenze sagt es stattdessen, dass die Datei neuer ist und ein
+    Update sie öffnet.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -825,6 +842,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=27, to_version=28, apply=_allow_native_alias_groups),
     Step(from_version=28, to_version=29, apply=_allow_edge_answers),
     Step(from_version=29, to_version=30, apply=_let_seam_and_lid_fits_follow_their_bodies),
+    Step(from_version=30, to_version=31, apply=_allow_curve_sketches),
 )
 
 

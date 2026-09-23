@@ -400,13 +400,20 @@ class LoopPiece:
     andere und trägt die abgetastete Kette. Kreis und Bogen führen dazu
     ``centre``, ``axis`` und ``radius`` aus der Kurve selbst, nicht aus
     Punkten gerechnet.
+
+    ``ellipse`` und ``elliptical_arc`` (RM-188 P6.6a) wie Kreis und Bogen, dazu
+    die Enden ihrer beiden Halbachsen: ``major_end`` auf der Hauptachse,
+    ``minor_end`` auf der Nebenachse — genau die drei Punkte, die eine
+    Skizzenellipse trägt.
     """
 
-    kind: Literal["line", "arc", "circle", "curve"]
+    kind: Literal["line", "arc", "circle", "ellipse", "elliptical_arc", "curve"]
     points: tuple[Vec3, ...]
     centre: Vec3 | None = None
     axis: Vec3 | None = None
     radius: float = 0.0
+    major_end: Vec3 | None = None
+    minor_end: Vec3 | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -420,7 +427,8 @@ class FaceLoop:
 def face_loops(
     solid: Solid, face_index: int, deflection: float = DEFLECTION
 ) -> tuple[FaceLoop, ...]:
-    """Die Ränder der Fläche ``face_index`` — Strecken, Kreise und Bögen exakt.
+    """Die Ränder der Fläche ``face_index`` — Strecken, Kreise, Bögen und
+    Ellipsen exakt.
 
     Für die Flächenkontur der Skizze (RM-188 P3.4): Am exakten Körper ist der
     Rand einer Bohrung ein Kreis und keine Kette aus Sehnen, und so soll er in
@@ -436,14 +444,28 @@ def face_loops(
     require()
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
     from OCP.GCPnts import GCPnts_QuasiUniformDeflection
-    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Line
-    from OCP.TopAbs import TopAbs_WIRE
-    from OCP.TopExp import TopExp_Explorer
+    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Ellipse, GeomAbs_Line
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_WIRE
+    from OCP.TopExp import TopExp, TopExp_Explorer
     from OCP.TopoDS import TopoDS
+
+    # Welche Flächen an einer Kante hängen — erst gebaut, wenn eine Kante
+    # weder Strecke noch Kreis noch Ellipse ist (:func:`_section_ellipse`).
+    neighbours: Any = None
 
     def spot(point: Any) -> Vec3:
         return (float(point.X()), float(point.Y()), float(point.Z()))
+
+    def reach(centre: Vec3, direction: Any, length: float) -> Vec3:
+        return (
+            centre[0] + length * float(direction.X()),
+            centre[1] + length * float(direction.Y()),
+            centre[2] + length * float(direction.Z()),
+        )
 
     face = solid.faces()[face_index]
     outer_wire = BRepTools.OuterWire_s(face)
@@ -477,6 +499,26 @@ def face_loops(
                         radius=float(circle.Radius()),
                     )
                 )
+            elif kind == GeomAbs_Ellipse:
+                # Wie beim Kreis: Der Parameter läuft gegen den Uhrzeigersinn um
+                # die Achse, im rechtshändigen Rahmen aus Haupt- und Nebenachse
+                # (``gp_Ax2``) — vom ersten zum letzten ist der Bogen.
+                ellipse = curve.Ellipse()
+                position = ellipse.Position()
+                direction = position.Direction()
+                middle = spot(ellipse.Location())
+                whole = last - first >= 2.0 * math.pi - EPS_GEOM
+                pieces.append(
+                    LoopPiece(
+                        "ellipse" if whole else "elliptical_arc",
+                        (start,) if whole else (start, end),
+                        centre=middle,
+                        axis=(float(direction.X()), float(direction.Y()), float(direction.Z())),
+                        radius=float(ellipse.MajorRadius()),
+                        major_end=reach(middle, position.XDirection(), ellipse.MajorRadius()),
+                        minor_end=reach(middle, position.YDirection(), ellipse.MinorRadius()),
+                    )
+                )
             else:
                 sampler = GCPnts_QuasiUniformDeflection(curve, max(deflection, EPS_GEOM))
                 if sampler.IsDone() and sampler.NbPoints() >= 2:
@@ -485,12 +527,154 @@ def face_loops(
                     )
                 else:
                     chain = (start, end)
-                pieces.append(LoopPiece("curve", chain))
+                if neighbours is None:
+                    neighbours = NeighbourMap()
+                    TopExp.MapShapesAndAncestors_s(
+                        solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours
+                    )
+                middle_spot = spot(curve.Value((first + last) / 2.0))
+                recognised = _section_ellipse(neighbours, face, edges.Current(), chain, middle_spot)
+                pieces.append(recognised or LoopPiece("curve", chain))
             edges.Next()
         if pieces:
             loops.append(FaceLoop(outer=bool(wire.IsSame(outer_wire)), pieces=tuple(pieces)))
         wires.Next()
     return tuple(loops)
+
+
+def _section_ellipse(
+    neighbours: Any, face: Any, edge: Any, chain: Sequence[Vec3], middle: Vec3
+) -> LoopPiece | None:
+    """Die Ellipse, die eine B-Spline-Kante in Wahrheit ist — oder nichts
+    (RM-188 P6.6a).
+
+    OpenCASCADE rechnet den Schnitt einer Ebene mit einer extrudierten
+    Ellipse als B-Spline: Nach einer elliptischen Tasche in einem exakten
+    Block trägt die Deckfläche keine Ellipse mehr, und ihre Kontur kam als
+    Kette aus 35 Strecken in die Zeichnung (gemessen,
+    ``sonden/p66/sonde_ellipse_boolean.py``). Steht die Ebene aber senkrecht
+    auf der Extrusionsrichtung und die Grundellipse ebenso, ist dieser
+    Schnitt die Grundellipse selbst, in die Ebene verschoben — eine Aussage
+    über die beiden Flächen, keine Anpassung an Punkte.
+
+    **Geprüft wird sie trotzdem.** Liegt ein Abtastpunkt der Kante weiter als
+    ihre eigene Toleranz neben der Ellipse, bleibt es bei der Kette; gemessen
+    wird radial, und das ist nie weniger als der wahre Abstand. ``middle``
+    ist der Punkt auf halbem Parameterweg: Er sagt, in welcher Richtung die
+    Kante läuft, denn anders als bei Kreis und Ellipse legt ein B-Spline das
+    nicht fest.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Ellipse, GeomAbs_Plane, GeomAbs_SurfaceOfExtrusion
+    from OCP.TopoDS import TopoDS
+
+    flat = BRepAdaptor_Surface(face)
+    if flat.GetType() != GeomAbs_Plane or not neighbours.Contains(edge) or len(chain) < 2:
+        return None
+    plane = flat.Plane()
+    normal = plane.Axis().Direction()
+    origin = plane.Location()
+    allowed = max(float(BRep_Tool.Tolerance_s(TopoDS.Edge(edge))), EPS_GEOM)
+    for shape in neighbours.FindFromKey(edge):
+        wall = BRepAdaptor_Surface(TopoDS.Face(shape))
+        if wall.GetType() != GeomAbs_SurfaceOfExtrusion:
+            continue
+        basis = wall.BasisCurve()
+        if basis.GetType() != GeomAbs_Ellipse:
+            continue
+        ellipse = basis.Ellipse()
+        position = ellipse.Position()
+        direction = wall.Direction()
+        facing = direction.Dot(normal)
+        if 1.0 - abs(facing) > EPS_GEOM or 1.0 - abs(position.Direction().Dot(normal)) > EPS_GEOM:
+            continue
+        centre = ellipse.Location()
+        along = (
+            (origin.X() - centre.X()) * normal.X()
+            + (origin.Y() - centre.Y()) * normal.Y()
+            + (origin.Z() - centre.Z()) * normal.Z()
+        ) / facing
+        middle_point: Vec3 = (
+            centre.X() + along * direction.X(),
+            centre.Y() + along * direction.Y(),
+            centre.Z() + along * direction.Z(),
+        )
+        frame = _SectionFrame(
+            centre=middle_point,
+            x_axis=_vector(position.XDirection()),
+            y_axis=_vector(position.YDirection()),
+            major=float(ellipse.MajorRadius()),
+            minor=float(ellipse.MinorRadius()),
+        )
+        if max(frame.off(point) for point in (*chain, middle)) > allowed:
+            continue
+        ends = (chain[0], chain[-1])
+        whole = math.dist(*ends) <= allowed
+        if not whole:
+            # Nur eine Entscheidung und mit großem Abstand — hier darf ``atan2``
+            # stehen (RM-187): Läuft die Kante über ``middle`` gegen den
+            # Uhrzeigersinn vom ersten zum letzten Punkt, oder andersherum?
+            turn = 2.0 * math.pi
+            begin = frame.angle(ends[0])
+            if (frame.angle(middle) - begin) % turn > (frame.angle(ends[1]) - begin) % turn:
+                ends = (ends[1], ends[0])
+        return LoopPiece(
+            "ellipse" if whole else "elliptical_arc",
+            (ends[0],) if whole else ends,
+            centre=middle_point,
+            axis=_vector(position.Direction()),
+            radius=frame.major,
+            major_end=frame.reached(frame.x_axis, frame.major),
+            minor_end=frame.reached(frame.y_axis, frame.minor),
+        )
+    return None
+
+
+def _vector(direction: Any) -> Vec3:
+    """Eine Richtung aus OpenCASCADE als Zahlentripel."""
+    return (float(direction.X()), float(direction.Y()), float(direction.Z()))
+
+
+@dataclass(frozen=True, slots=True)
+class _SectionFrame:
+    """Eine Ellipse im Raum, wie :func:`_section_ellipse` sie prüft: Mitte,
+    die Richtungen beider Achsen und ihre Halbachsen."""
+
+    centre: Vec3
+    x_axis: Vec3
+    y_axis: Vec3
+    major: float
+    minor: float
+
+    def local(self, point: Vec3) -> tuple[float, float]:
+        """Der Punkt im Kreis der Ellipse — auf ihr hat er die Länge eins."""
+        gap = [point[place] - self.centre[place] for place in range(3)]
+        return (
+            sum(gap[place] * self.x_axis[place] for place in range(3)) / self.major,
+            sum(gap[place] * self.y_axis[place] for place in range(3)) / self.minor,
+        )
+
+    def off(self, point: Vec3) -> float:
+        """Wie weit der Punkt radial neben der Ellipse liegt — nie weniger als
+        der wahre Abstand, null genau auf ihr."""
+        u, v = self.local(point)
+        size = math.hypot(u, v)
+        reach = math.dist(point, self.centre)
+        return reach * abs(1.0 - 1.0 / size) if size > 0.0 else reach
+
+    def angle(self, point: Vec3) -> float:
+        """Der Parameterwinkel des Punkts — nur für Entscheidungen."""
+        u, v = self.local(point)
+        return math.atan2(v, u)
+
+    def reached(self, direction: Vec3, length: float) -> Vec3:
+        """Der Punkt ``length`` von der Mitte in ``direction``."""
+        return (
+            self.centre[0] + length * direction[0],
+            self.centre[1] + length * direction[1],
+            self.centre[2] + length * direction[2],
+        )
 
 
 def edge_key(entry: EdgeInfo) -> str:

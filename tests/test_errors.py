@@ -419,6 +419,14 @@ _NOT_A_RANGE = frozenset(
         # eindeutigen Umlauf, Kanten, die schon in der Zeichnung stehen — Lagen
         # und Orte, keine Zahl in einem Feld.
         "not_on_a_face", "tilted_to_face", "unreadable_rim", "already_there",
+        # Kurvenbedingungen und Kurven bearbeiten (RM-188 P6.6): ein Ziel, das
+        # keine Kurve ist, ein Punkt der Kurve selbst, zweimal dieselbe Kurve,
+        # eine Stelle abseits der Splinepunkte oder im Inneren statt am Ende,
+        # ein Splinepunkt, der schon dort liegt oder der letzte zweite wäre,
+        # und eine Ellipse, die nicht zweimal gekreuzt wird. Alles Lagen und
+        # Auswahlen — kein Feld, in dem eine Zahl zu klein wäre.
+        "not_a_curve", "own_point", "same_curve", "spline_point", "spline_end",
+        "not_a_spline", "point_there", "least_points", "too_few_crossings",
         # Eine erklärte Bedingung zwischen Parametern (``PartSpec.feasible``):
         # jeder Wert für sich ist erlaubt, nur nicht zusammen.
         "feasible",

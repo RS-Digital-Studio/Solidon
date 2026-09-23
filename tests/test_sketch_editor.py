@@ -26,7 +26,7 @@ from app.core.registry import REGISTRY
 from app.core.sketch import shapes
 from app.core.sketch.planes import image_normal
 from app.core.sketch.serialize import sketch_from_text, sketch_to_text
-from app.core.types import PlaneFrame
+from app.core.types import PlaneFrame, Sketch, SketchConstraint, SketchElement
 from app.ui.op_dialog import OperationDialog
 from app.ui.sketch_editor import (
     ACTION_KEYS,
@@ -7621,6 +7621,7 @@ def test_the_tools_stand_in_four_groups_with_dividers(qt_app: QApplication) -> N
             "rectangle",
             "circle",
             "arc",
+            "ellipse",
             "spline",
             "polygon",
             "slot",
@@ -7745,6 +7746,7 @@ _CLICKS_PER_TOOL: dict[str, int] = {
     "rectangle": 2,
     "circle": 2,
     "arc": 3,
+    "ellipse": 3,
     "spline": 3,
     "polygon": 2,
     "slot": 2,
@@ -8728,3 +8730,291 @@ def test_the_menus_outlive_the_sketch_mode(qt_app: QApplication) -> None:
     finally:
         window.close()
         window.deleteLater()
+
+
+# --- Ellipse, Ellipsenbogen und Kurvenbedingungen (RM-188 P6.6) --------------------
+
+
+def _ellipse_canvas(tool: str) -> SketchCanvas:
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool(tool)
+    return canvas
+
+
+def test_an_ellipse_takes_three_clicks_and_its_second_axis_stands(qt_app: QApplication) -> None:
+    """Mitte, Achsende, Breite: vom dritten Klick zählt nur die Höhe über der
+    ersten Achse, und die zweite steht senkrecht. Jeder Schritt sagt, was der
+    nächste Klick tut, und die Vorschau zeigt, was entsteht."""
+    canvas = _ellipse_canvas("ellipse")
+    hints = [canvas.status_text()]
+
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.hover_on_plane((20.0, 0.0))
+    assert [element.kind for element in canvas.pending_elements()] == ["line"]
+    hints.append(canvas.status_text())
+    canvas.place_on_plane((20.0, 0.0))
+    canvas.hover_on_plane((5.0, 8.0))
+    assert [element.kind for element in canvas.pending_elements()] == ["ellipse"]
+    hints.append(canvas.status_text())
+    canvas.place_on_plane((5.0, 8.0))
+
+    (ellipse,) = canvas.sketch.elements
+    assert ellipse.kind == "ellipse"
+    assert [value for point in ellipse.points for value in point] == pytest.approx(
+        [0.0, 0.0, 20.0, 0.0, 0.0, 8.0]
+    )
+    assert len(set(hints)) == 3 and all(hints), "jeder Schritt hat seinen eigenen Satz"
+    canvas.undo()
+    assert not canvas.sketch.elements, "ein Rückgängig nimmt die ganze Ellipse"
+
+
+def test_a_third_click_on_the_first_axis_is_refused_and_says_why(qt_app: QApplication) -> None:
+    canvas = _ellipse_canvas("ellipse")
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.place_on_plane((20.0, 0.0))
+
+    canvas.place_on_plane((30.0, 0.0))
+
+    assert not canvas.sketch.elements
+    assert "Achse" in canvas.status_text()
+    canvas.place_on_plane((3.0, 6.0))
+    assert [element.kind for element in canvas.sketch.elements] == ["ellipse"], (
+        "die ersten beiden Klicks blieben stehen"
+    )
+
+
+def test_trimming_an_ellipse_makes_the_elliptical_arc(qt_app: QApplication) -> None:
+    """Der Ellipsenbogen hat keinen eigenen Knopf — Trimmen macht ihn aus der
+    Ellipse, derselbe Klick wie an einer Linie: weg ist die geklickte Seite."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.add_element("ellipse", ((0.0, 0.0), (20.0, 0.0), (0.0, 8.0)))
+    canvas.add_element("line", ((5.0, -20.0), (5.0, 20.0)))
+    canvas.set_tool("trim")
+
+    canvas.place_on_plane((20.0, 0.0))
+
+    arc, _line = canvas.sketch.elements
+    assert arc.kind == "elliptical_arc"
+    _centre, _first, _second, start, end = arc.points
+    assert start[0] == pytest.approx(5.0) and end[0] == pytest.approx(5.0)
+    assert start[1] > 0.0 > end[1], "gegen den Uhrzeigersinn über die linke Seite"
+    canvas.undo()
+    assert canvas.sketch.elements[0].kind == "ellipse"
+
+
+def test_typed_axes_become_diameters_of_the_ellipse(qt_app: QApplication) -> None:
+    """Wie am Kreis: Die getippte Zahl ist die Achse, und sie bleibt als Maß
+    stehen — sonst wanderte die Ellipse beim nächsten Lösen."""
+    from app.ui.labels import set_circle_measure
+
+    set_circle_measure("diameter")
+    canvas = _ellipse_canvas("ellipse")
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.hover_on_plane((10.0, 0.0))
+    assert canvas.pending_measure() == pytest.approx(20.0), "das Feld zeigt die ganze Achse"
+
+    canvas.place_measured(40.0)
+    canvas.hover_on_plane((3.0, 9.0))
+    canvas.place_measured(16.0)
+
+    (ellipse,) = canvas.sketch.elements
+    assert [value for point in ellipse.points for value in point] == pytest.approx(
+        [0.0, 0.0, 20.0, 0.0, 0.0, 8.0]
+    )
+    diameters = [
+        (entry.targets, float(entry.value))
+        for entry in canvas.sketch.constraints
+        if entry.kind == "diameter"
+    ]
+    assert diameters == [((0, 1), pytest.approx(40.0)), ((0, 2), pytest.approx(16.0))]
+
+
+def test_the_tangent_is_offered_for_an_arc_and_a_line_in_either_order(
+    qt_app: QApplication,
+) -> None:
+    """Befund B2: Mit dem Bogen zuerst gewählt bot sich *Tangential* nicht an,
+    mit der Linie zuerst legte es eine Bedingung mit fünf Zielen an, und die
+    Zeile sagte „Die Bedingung hat die falsche Zahl von Zielpunkten"."""
+    sketch = shapes.rectangle(40.0, 20.0)
+    sketch = replace(
+        sketch,
+        elements=(
+            SketchElement("line", ((0.0, 12.0), (30.0, 13.0))),
+            SketchElement("arc", ((15.0, 0.0), (25.0, 0.0), (5.0, 0.0))),
+        ),
+        constraints=(),
+    )
+    dialog = SketchEditorDialog(sketch_to_text(sketch))
+    canvas = dialog.canvas
+
+    for selection in (
+        [("arc", (2, 3, 4)), ("line", (0, 1))],
+        [("line", (0, 1)), ("arc", (2, 3, 4))],
+    ):
+        canvas.selection = list(selection)
+        assert dialog.constraint_offers()["tangent"]
+        dialog.request_constraint("tangent")
+        (tangent,) = canvas.sketch.constraints
+        assert (tangent.kind, tangent.targets) == ("tangent", (0, 1, 2, 3))
+        assert not canvas.conflict
+        dialog.request_constraint("tangent")
+        assert not canvas.sketch.constraints, "der zweite Klick nimmt sie zurück"
+
+
+def test_a_touch_between_a_line_and_an_ellipse_brings_its_point_and_takes_it_back(
+    qt_app: QApplication,
+) -> None:
+    ellipse = SketchElement("ellipse", ((0.0, 0.0), (15.0, 0.0), (0.0, 6.0)))
+    line = SketchElement("line", ((-20.0, 9.0), (20.0, 8.0)))
+    dialog = SketchEditorDialog(sketch_to_text(Sketch("plane:xy", (ellipse, line))))
+    canvas = dialog.canvas
+    canvas.selection = [("ellipse", (0, 1, 2)), ("line", (3, 4))]
+
+    dialog.request_constraint("tangent")
+
+    assert [element.kind for element in canvas.sketch.elements] == ["ellipse", "line", "point"]
+    assert canvas.sketch.elements[2].construction
+    assert sorted(entry.kind for entry in canvas.sketch.constraints) == [
+        "on_curve",
+        "on_curve",
+        "smooth",
+    ]
+    assert dialog.panel.constraint_already_set()["tangent"]
+    assert not canvas.conflict
+
+    dialog.request_constraint("tangent")
+    assert [element.kind for element in canvas.sketch.elements] == ["ellipse", "line"]
+    assert not canvas.sketch.constraints
+
+
+def test_curvature_is_offered_only_where_a_spline_ends_on_the_other_curve(
+    qt_app: QApplication,
+) -> None:
+    spline = SketchElement("spline", ((20.0, 0.0), (28.0, 2.5), (36.0, 8.0), (44.0, 7.0)))
+    arc = SketchElement("arc", ((50.0, 12.5), (44.0, 7.0), (58.0, 11.0)))
+    circle = SketchElement("circle", ((0.0, 30.0), (5.0, 30.0)))
+    sketch = Sketch(
+        "plane:xy",
+        (spline, arc, circle),
+        (SketchConstraint("coincident", (3, 5)),),
+    )
+    dialog = SketchEditorDialog(sketch_to_text(sketch))
+    canvas = dialog.canvas
+
+    canvas.selection = [("spline", (0, 1, 2, 3)), ("circle", (7, 8))]
+    assert not dialog.constraint_offers()["curvature"], "kein Stoß, keine Krümmung"
+
+    canvas.selection = [("spline", (0, 1, 2, 3)), ("arc", (4, 5, 6))]
+    assert dialog.constraint_offers()["curvature"]
+    dialog.request_constraint("curvature")
+
+    kinds = [entry.kind for entry in canvas.sketch.constraints]
+    assert kinds == ["coincident", "smooth", "curvature"], "glatt kommt mit"
+    assert not canvas.conflict
+
+
+def test_a_point_goes_onto_an_ellipse_and_the_list_names_the_ellipse(
+    qt_app: QApplication,
+) -> None:
+    ellipse = SketchElement("ellipse", ((0.0, 0.0), (15.0, 0.0), (0.0, 6.0)))
+    point = SketchElement("point", ((20.0, 10.0),))
+    dialog = SketchEditorDialog(sketch_to_text(Sketch("plane:xy", (ellipse, point))))
+    canvas = dialog.canvas
+    canvas.selection = [("point", (3,)), ("ellipse", (0, 1, 2))]
+
+    assert dialog.constraint_offers()["on_curve"]
+    dialog.request_constraint("on_curve")
+
+    (constraint,) = canvas.sketch.constraints
+    assert (constraint.kind, constraint.targets) == ("on_curve", (3, 0))
+    import math
+
+    (cx, cy), (mx, my), (nx, ny), (x, y) = canvas.points()
+    first, second = math.hypot(mx - cx, my - cy), math.hypot(nx - cx, ny - cy)
+    ux, uy = (mx - cx) / first, (my - cy) / first
+    along = (x - cx) * ux + (y - cy) * uy
+    across = -(x - cx) * uy + (y - cy) * ux
+    assert (along / first) ** 2 + (across / second) ** 2 == pytest.approx(1.0)
+    row = dialog.panel.constraint_list.item(0).text()
+    assert "Ellipse 1" in row and "Punkt 1" in row and "Mitte" not in row
+
+
+def test_a_spline_point_comes_and_goes_through_the_context_menu(qt_app: QApplication) -> None:
+    """Die Kurve direkt bearbeiten, ohne neuen Griff: Rechtsklick auf die
+    Kurve fügt einen Punkt dort ein, wo sie ist, Rechtsklick auf einen ihrer
+    Punkte nimmt ihn heraus."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.add_element("spline", ((0.0, 0.0), (10.0, 8.0), (22.0, 3.0), (30.0, 9.0)))
+
+    menu = canvas.context_menu_at(None, (16.0, 6.4))
+    (insert,) = [action for action in menu.actions() if "einfügen" in action.text()]
+    insert.trigger()
+    assert len(canvas.sketch.elements[0].points) == 5
+
+    menu = canvas.context_menu_at(1)
+    (remove,) = [action for action in menu.actions() if "Kurve nehmen" in action.text()]
+    assert remove.isEnabled()
+    remove.trigger()
+    assert len(canvas.sketch.elements[0].points) == 4
+
+    canvas.undo()
+    assert len(canvas.sketch.elements[0].points) == 5, "jeder Schritt ist ein Rückgängig"
+
+
+def test_dragging_ellipse_handles_does_what_a_cad_does(qt_app: QApplication) -> None:
+    """Das Achsende dreht die Ellipse, und die zweite Achse behält ihre Länge;
+    das Ende der zweiten Achse ändert nur deren Länge; das Ende eines Bogens
+    gleitet auf der Ellipse, die stehen bleibt."""
+    import math
+
+    canvas = SketchCanvas()
+    canvas.add_element(
+        "elliptical_arc", ((0.0, 0.0), (20.0, 0.0), (0.0, 8.0), (20.0, 0.0), (0.0, 8.0))
+    )
+
+    canvas.move_point(1, 0.0, 20.0)
+    centre, first, second = canvas.points()[:3]
+    assert math.dist(centre, first) == pytest.approx(20.0, abs=1e-6)
+    assert math.dist(centre, second) == pytest.approx(8.0, abs=1e-6), "die Breite bleibt"
+    assert first == pytest.approx((0.0, 20.0), abs=1e-6)
+
+    canvas.move_point(2, -12.0, 3.0)
+    centre, first, second = canvas.points()[:3]
+    assert math.dist(centre, second) == pytest.approx(12.0, abs=1e-6)
+    assert first == pytest.approx((0.0, 20.0), abs=1e-6), "die Drehung bleibt"
+
+    canvas.move_point(4, 10.0, -30.0)
+    centre, first, second, _start, end = canvas.points()
+    assert first == pytest.approx((0.0, 20.0), abs=1e-6)
+    u = ((end[0] - centre[0]) / 12.0, (end[1] - centre[1]) / 20.0)
+    assert math.hypot(*u) == pytest.approx(1.0, abs=1e-6), "das Ende liegt auf der Ellipse"
+
+
+def test_an_ellipse_is_hit_on_its_curve_and_not_inside(qt_app: QApplication) -> None:
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.add_element("ellipse", ((0.0, 0.0), (20.0, 0.0), (0.0, 8.0)))
+
+    hit = canvas._hit_element(canvas._to_screen(0.0, -8.0))
+    assert hit == ("ellipse", (0, 1, 2))
+    assert canvas._hit_element(canvas._to_screen(6.0, 2.0)) is None
+
+
+def test_fitting_reaches_the_vertices_of_a_turned_ellipse(qt_app: QApplication) -> None:
+    """Einpassen und Bauraumprüfung sahen von einer gedrehten Ellipse nur ihre
+    drei Punkte — der Scheitel links ragte aus dem Bild."""
+    import math
+
+    canvas = SketchCanvas()
+    first = (20.0 * math.cos(math.radians(40.0)), 20.0 * math.sin(math.radians(40.0)))
+    second = (-6.0 * math.sin(math.radians(40.0)), 6.0 * math.cos(math.radians(40.0)))
+    canvas.add_element("ellipse", ((0.0, 0.0), first, second))
+
+    reach = max(abs(x) for x, _y in canvas._extent_points())
+
+    # x-Scheitel einer gedrehten Ellipse: sqrt(a² cos² θ + b² sin² θ).
+    expected = math.hypot(20.0 * math.cos(math.radians(40.0)), 6.0 * math.sin(math.radians(40.0)))
+    assert reach == pytest.approx(expected, abs=1e-9)

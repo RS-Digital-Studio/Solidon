@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import os
 import stat
 import sys
@@ -442,6 +443,36 @@ def test_match_answers_cross_the_v19_history_migration_without_double_wrapping(t
     changes = project.document.transactions[-1].changes
     assert changes.before.edited_ops[3].matches == {"legacy": old}
     assert changes.after.edited_ops[3].matches == {"legacy": old}
+
+
+def test_v30_sketches_open_and_compute_the_same_bodies(profile) -> None:
+    """30 → 31: Skizzen aus der Zeit vor Ellipse und Kurvenbedingungen öffnen
+    und rechnen wie vorher (RM-188 P6.6).
+
+    Die Datei ist mit dem Stand vor der Umstellung gebaut (``3fa7d719``,
+    Format 30):
+    eine Platte 40 × 20 mit Kreis Ø 8 und Langloch 8 + Ø 6, die Breite an einem
+    Projektparameter, fünf hoch; ein Drehkörper aus Rechteck 5 × 10 mit
+    Halbkreis R 2,5 obenauf im Abstand 12,5 von der Achse; dazu ein Spline als
+    Hilfsgeometrie und eine Tangente Linie–Kreis. Die Sollwerte sind
+    Handrechnungen — die Platte unmittelbar, der Drehkörper nach Pappus.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.evaluate import evaluate
+
+    path = Path(__file__).parent / "data" / "projects" / "sketch_v30.p3d"
+    assert project_data(path)["format_version"] == 30
+    project = load(path)
+    assert project.document.format_version == FORMAT_VERSION
+    load_operations()
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    plate = (40.0 * 20.0 - math.pi * 4.0**2 - (8.0 * 6.0 + math.pi * 3.0**2)) * 5.0
+    ring = 2.0 * math.pi * 12.5 * (5.0 * 10.0 + math.pi * 2.5**2 / 2.0)
+    volumes = sorted(float(entry.mesh.volume) for entry in result.scene.objects.values())
+    assert volumes == pytest.approx(sorted([plate, ring]), rel=1e-6)
 
 
 @pytest.mark.parametrize(

@@ -20,6 +20,7 @@ import math
 import weakref
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from itertools import pairwise
 from typing import Any, Final, Literal
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSignalBlocker, Qt, Signal
@@ -72,9 +73,14 @@ from app.core.sketch.planes import (
     through_plane,
     tilt_plane,
 )
-from app.core.sketch.profile import arc_sweep, regions_of
+from app.core.sketch.profile import (
+    arc_sweep,
+    ellipse_element_extremes,
+    flat_curve,
+    regions_of,
+)
 from app.core.sketch.serialize import sketch_from_text, sketch_to_text
-from app.core.sketch.solver import solve_sketch
+from app.core.sketch.solver import CURVE_SLOTS, solve_sketch
 from app.core.types import (
     PlaneFrame,
     Sketch,
@@ -313,6 +319,12 @@ def _constraint_label(kind: ConstraintAction) -> str:
         "equal": tr("Gleich groß"),
         "midpoint": tr("Mittelpunkt"),
         "concentric": tr("Konzentrisch"),
+        "on_curve": tr("Auf Kurve"),
+        # *Glatt* legt der Knopf *Tangential* an, wo zwei Kurven aneinander-
+        # stoßen oder keine davon eine Linie an einem Kreis ist — in der Liste
+        # heißt es deshalb, wie der Knopf heißt, der es gesetzt hat.
+        "smooth": tr("Tangential"),
+        "curvature": tr("Krümmungsstetig"),
     }[kind]
 
 
@@ -338,6 +350,8 @@ _ELEMENT_NAMES: Final[dict[SketchElementKind, TranslatableText]] = {
     "circle": _("Kreis"),
     "arc": _("Bogen"),
     "spline": _("Kurve"),
+    "ellipse": _("Ellipse"),
+    "elliptical_arc": _("Ellipsenbogen"),
 }
 
 
@@ -354,6 +368,8 @@ def _point_role(kind: SketchElementKind, position: int) -> str:
         "circle": (tr("Mitte"), tr("Rand")),
         "arc": (tr("Mitte"), tr("Anfang"), tr("Ende")),
         "spline": (),
+        "ellipse": (tr("Mitte"), tr("Achse 1"), tr("Achse 2")),
+        "elliptical_arc": (tr("Mitte"), tr("Achse 1"), tr("Achse 2"), tr("Anfang"), tr("Ende")),
     }
     known = roles[kind]
     if position < len(known):
@@ -361,6 +377,17 @@ def _point_role(kind: SketchElementKind, position: int) -> str:
     if kind == "spline":
         return f"{tr('Punkt')} {position + 1}"
     return ""
+
+
+def _element_labels(sketch: Sketch) -> list[str]:
+    """Ein Name je Element — „Kreis 2", je Art durchgezählt wie in
+    :func:`point_names`."""
+    labels: list[str] = []
+    seen: dict[str, int] = {}
+    for element in sketch.elements:
+        seen[element.kind] = seen.get(element.kind, 0) + 1
+        labels.append(_element_name(element.kind, seen[element.kind]))
+    return labels
 
 
 def point_names(sketch: Sketch) -> tuple[str, ...]:
@@ -380,12 +407,17 @@ def point_names(sketch: Sketch) -> tuple[str, ...]:
     return tuple(names)
 
 
-def targets_phrase(sketch: Sketch, targets: tuple[int, ...]) -> str:
+def targets_phrase(sketch: Sketch, targets: tuple[int, ...], kind: str = "") -> str:
     """Woran eine Bedingung hängt, in Worten statt in Indizes.
 
     Liegen alle Ziele auf **einem** Element, steht es einmal da: „Waagerecht —
     Linie 1" und nicht „Linie 1 Anfang, Linie 1 Ende". Das ist der häufigste
     Fall, und er ist auch der, in dem die Aufzählung nur Platz kostet.
+
+    **Eine Kurvenbedingung nennt ihre Kurven** (``kind``, RM-188 P6.6b): Ihr
+    Ziel ist der erste Punkt der Kurve, gemeint ist die ganze — „Auf Kurve —
+    Punkt 1, Kreis 1" und nicht „Kreis 1 Mitte". Bei *glatt* und
+    *krümmungsstetig* stehen nur die beiden Kurven da; die Stelle ist ihr Stoß.
 
     Ein Index, den die Skizze nicht hat, wird übersprungen statt geraten — er
     kommt vor, während ein Element gerade entsteht.
@@ -397,6 +429,16 @@ def targets_phrase(sketch: Sketch, targets: tuple[int, ...]) -> str:
     inside = [target for target in targets if 0 <= target < len(names)]
     if not inside:
         return ""
+    if kind in CURVE_SLOTS and len(inside) == len(targets):
+        labels = _element_labels(sketch)
+        slots = CURVE_SLOTS[kind]
+        shown: list[str] = []
+        for slot, target in enumerate(targets):
+            if slot in slots:
+                shown.append(labels[owners[target]])
+            elif kind == "on_curve":
+                shown.append(names[target])
+        return ", ".join(dict.fromkeys(shown))
     if len({owners[target] for target in inside}) == 1:
         element = sketch.elements[owners[inside[0]]]
         if len(inside) == len(element.points) or len(element.points) == 1:
@@ -1005,6 +1047,10 @@ class SketchCanvas(QWidget):
         self._name_circle_button()
         self.second_measure_lock = self._lock_label(tr("Höhe"), tr("Die Höhe steht schon fest."))
         self._rectangle_measures: list[float | None] = [None, None]
+        self._ellipse_measures: list[str | None] = [None, None]
+        """Die getippten Achsen einer entstehenden Ellipse, als gespeicherter
+        Durchmesser — sie werden beim letzten Klick zu Bedingungen, wie das
+        getippte Maß am Kreis (RM-188 P6.6a)."""
         self.measuringChanged.connect(self._place_measure_field)
         self._measure_host: QWidget | None = None
         """Wo das Maßfeld gerade wohnt — im Viewport-Modus die Ansicht.
@@ -1222,7 +1268,21 @@ class SketchCanvas(QWidget):
             return (SketchElement("arc", stored),)
         if self.tool == "spline":
             return (SketchElement("spline", (*self._pending_world, target)),)
+        if self.tool == "ellipse":
+            return self._pending_ellipse(target)
         return ()
+
+    def _pending_ellipse(self, target: tuple[float, float]) -> tuple[SketchElement, ...]:
+        """Die Vorschau der Ellipse, Klick für Klick: nach der Mitte die erste
+        Achse als Linie zum Zeiger, danach die Ellipse selbst, so breit, wie
+        der Zeiger über der Achse steht (``edit.ellipse_from_clicks``)."""
+        first = self._pending_world[0]
+        if len(self._pending_world) == 1:
+            return (SketchElement("line", (first, target), construction=True),)
+        axes = edit.ellipse_from_clicks(first, self._pending_world[1], target)
+        if axes is None:
+            return (SketchElement("line", (first, self._pending_world[1]), construction=True),)
+        return (SketchElement("ellipse", axes),)
 
     def _drawn_shape(
         self, first: tuple[float, float], second: tuple[float, float]
@@ -1671,7 +1731,7 @@ class SketchCanvas(QWidget):
         return any(abs(x) > half_x or abs(y) > half_y for x, y in self._extent_points())
 
     def _extent_points(self) -> list[tuple[float, float]]:
-        """Die gelösten Punkte samt den Rändern von Kreisen und Bögen.
+        """Die gelösten Punkte samt den Rändern von Kreisen, Bögen und Ellipsen.
 
         ``points()`` nennt für einen Kreis nur Mitte und einen Randpunkt: Ein
         Kreis um (100, 0) mit Randpunkt (0, 0) reicht bis 200, und Einpassen
@@ -1683,6 +1743,13 @@ class SketchCanvas(QWidget):
         found = list(points)
         offsets = edit.offsets_of(self.sketch)
         for index, element in enumerate(self.sketch.elements):
+            if element.kind in ("ellipse", "elliptical_arc"):
+                # Die Scheitel rechnet der Kern — an einer gedrehten Ellipse
+                # liegen sie auf keinem ihrer drei Punkte.
+                begin = offsets[index]
+                shape = replace(element, points=tuple(points[begin : begin + len(element.points)]))
+                found.extend(ellipse_element_extremes(shape))
+                continue
             if element.kind not in ("circle", "arc"):
                 continue
             begin = offsets[index]
@@ -1778,9 +1845,10 @@ class SketchCanvas(QWidget):
             self.measure_field.setAccessibleName(tr("Radius"))
         elif tool == "chamfer":
             self.measure_field.setAccessibleName(tr("Fasenmaß"))
-        elif tool in ("circle", "polygon", "bolt_circle"):
+        elif tool in ("circle", "polygon", "bolt_circle", "ellipse"):
             # Alle drei werden über einen Kreis bemaßt — der eine über sich
-            # selbst, die anderen über Umkreis und Teilkreis.
+            # selbst, die anderen über Umkreis und Teilkreis; die Ellipse über
+            # ihre Achsen, die dasselbe meinen wie ein Durchmesser.
             self._name_circle_button()
         elif tool == "slot":
             self.measure_field.setAccessibleName(tr("Länge"))
@@ -2142,6 +2210,8 @@ class SketchCanvas(QWidget):
             if started:
                 return tr("Rechteck: Gegenecke klicken oder Breite und Höhe eintippen.")
             return tr("Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke.")
+        if self.tool == "ellipse":
+            return self._ellipse_hint(started)
         if self.tool == "arc":
             # **Anfang, Ende, Wölbung** — die Reihenfolge von Fusion und
             # Onshape. Vorher war der erste Klick die Mitte: ein Punkt, der auf
@@ -2188,6 +2258,17 @@ class SketchCanvas(QWidget):
                 )
             return tool_instruction("bolt_circle")
         return ""
+
+    def _ellipse_hint(self, started: int) -> str:
+        """Was der nächste Klick an der Ellipse tut."""
+        if started == 0:
+            return tool_instruction(self.tool)
+        if started == 1:
+            return tr("Ellipse: der nächste Klick setzt das Ende der ersten Achse. Oder eintippen.")
+        return tr(
+            "Ellipse: der nächste Klick sagt, wie weit sie quer zur ersten Achse reicht. "
+            "Oder eintippen."
+        )
 
     def _corner_hint(self) -> str:
         """Die Zeile für Verrunden und Fase — je nachdem, was unter dem
@@ -2345,33 +2426,10 @@ class SketchCanvas(QWidget):
         element_indices = {_located(self.sketch, entry[1][0])[0] for entry in self.selection}
         if not element_indices:
             return
-
-        offsets = edit.offsets_of(self.sketch)
-        removed: set[int] = set()
-        for index in element_indices:
-            begin = offsets[index]
-            removed.update(range(begin, begin + len(self.sketch.elements[index].points)))
-
-        mapping: dict[int, int] = {}
-        fresh = 0
-        for old in range(len(edit.flat_points(self.sketch))):
-            if old in removed:
-                continue
-            mapping[old] = fresh
-            fresh += 1
-
-        elements = tuple(
-            element for at, element in enumerate(self.sketch.elements) if at not in element_indices
-        )
-        constraints = tuple(
-            SketchConstraint(
-                entry.kind, tuple(mapping[target] for target in entry.targets), entry.value
-            )
-            for entry in self.sketch.constraints
-            if all(target in mapping for target in entry.targets)
-        )
+        # Die Umnummerierung rechnet der Kern (``edit.removed``) — derselbe
+        # Weg, auf dem eine zurückgenommene Tangente ihren Berührpunkt verliert.
         self.selection.clear()
-        self._apply(replace(self.sketch, elements=elements, constraints=constraints))
+        self._apply(edit.removed(self.sketch, element_indices))
         self.selectionChanged.emit()
 
     def toggle_construction(self) -> None:
@@ -2476,12 +2534,77 @@ class SketchCanvas(QWidget):
         element = self.sketch.elements[element_index]
         current = self.points()
         dragged: dict[int, tuple[float, float]] = {flat: (x, y)}
-        if element.kind in ("circle", "arc") and local == 0:
+        if element.kind in ("circle", "arc", "ellipse", "elliptical_arc") and local == 0:
             dx, dy = x - current[flat][0], y - current[flat][1]
             for step in range(1, len(element.points)):
                 other = flat + step
                 dragged[other] = (current[other][0] + dx, current[other][1] + dy)
+        elif element.kind in ("ellipse", "elliptical_arc"):
+            dragged = self._ellipse_drag(flat - local, local, (x, y), current)
         self._drag_solve(dragged)
+
+    def _ellipse_drag(
+        self,
+        begin: int,
+        local: int,
+        pointer: tuple[float, float],
+        current: Sequence[tuple[float, float]],
+    ) -> dict[int, tuple[float, float]]:
+        """Was ein Griff an einer Ellipse mitnimmt (RM-188 P6.6a).
+
+        Der Löser allein fände die *nächste* Lage, und die ist hier die
+        falsche: Wer das Ende der ersten Achse dreht, verlöre dabei die Breite
+        der zweiten, denn die kürzeste Bewegung, die sie wieder senkrecht
+        stellt, verkürzt sie. Deshalb legt der Griff fest, was CAD-üblich ist:
+
+        * **Ende der ersten Achse** dreht und streckt sie; die zweite dreht mit
+          und behält ihre Länge.
+        * **Ende der zweiten Achse** ändert nur ihre Länge — der Zeiger zählt
+          mit seiner Höhe über der ersten Achse, die Drehung bleibt.
+        * **Anfang und Ende eines Bogens** gleiten auf der Ellipse; die
+          Ellipse selbst bleibt stehen.
+
+        Bei beiden Achsgriffen bleibt die Mitte, wo sie ist, und die Enden
+        eines Bogens wandern an derselben Stelle ihres Parameters mit
+        (``edit.carried_onto``) — sonst schöbe der Löser die Mitte, um die
+        alten Enden auf die neue Ellipse zu holen.
+        """
+        old = (current[begin], current[begin + 1], current[begin + 2])
+        centre, first_end, second_end = old
+        count = len(self.sketch.elements[_located(self.sketch, begin)[0]].points)
+        if local in (1, 2):
+            new: tuple[tuple[float, float], ...]
+            if local == 1:
+                second = math.dist(centre, second_end)
+                span = math.dist(centre, pointer)
+                if span <= EPS_DISPLAY:
+                    return {begin + 1: first_end}
+                ux, uy = (pointer[0] - centre[0]) / span, (pointer[1] - centre[1]) / span
+                side = (first_end[0] - centre[0]) * (second_end[1] - centre[1]) - (
+                    first_end[1] - centre[1]
+                ) * (second_end[0] - centre[0])
+                sign = 1.0 if side >= 0.0 else -1.0
+                new = (
+                    centre,
+                    pointer,
+                    (centre[0] - sign * uy * second, centre[1] + sign * ux * second),
+                )
+            else:
+                made = edit.ellipse_from_clicks(centre, first_end, pointer)
+                if made is None:
+                    return {begin + 2: second_end}
+                new = made
+            dragged = {begin + axis: new[axis] for axis in range(3)}
+            for end in range(3, count):
+                dragged[begin + end] = edit.carried_onto(old, new, current[begin + end])
+            return dragged
+        # Anfang oder Ende eines Ellipsenbogens: auf der Ellipse, die bleibt.
+        return {
+            begin: centre,
+            begin + 1: first_end,
+            begin + 2: second_end,
+            begin + local: edit.onto_ellipse(old, pointer),
+        }
 
     def _drag_solve(self, dragged: Mapping[int, tuple[float, float]]) -> None:
         """Ein Schritt eines Zugs: lösen, zurückschreiben, sagen, was hält.
@@ -2614,7 +2737,85 @@ class SketchCanvas(QWidget):
             for _kind, targets in self.selection:
                 spans.extend(targets[:2])
             return tuple(spans)[:4]
+        if action in ("horizontal", "vertical") and self.selected_pattern() in (
+            ("ellipse",),
+            ("elliptical_arc",),
+        ):
+            # Die erste Achse: Mitte und ihr Ende (siehe ``_NEEDS``).
+            return self.selection_targets()[:2]
         return self.selection_targets()
+
+    # --- Geplante Bedingungen zwischen Kurven (RM-188 P6.6b) -----------------------
+
+    def uses_plan(self, action: ConstraintAction) -> bool:
+        """Ob dieser Griff an der Auswahl über einen Plan des Kerns läuft
+        (:data:`_PLANNED`) — *gleich groß* nur zwischen zwei Ellipsen."""
+        if action not in _PLANNED:
+            return False
+        if action == "equal":
+            pattern = self.selected_pattern()
+            return len(pattern) == 2 and all(kind in edit.ELLIPSE_KINDS for kind in pattern)
+        return True
+
+    def _planned_pair(self, action: ConstraintAction) -> tuple[int, int] | None:
+        """Die beiden Ziele eines geplanten Griffs: zwei Elementindizes, bei
+        *Auf Kurve* der Punkt (flach) und die Kurve."""
+        if len(self.selection) != 2 or not all(targets for _kind, targets in self.selection):
+            return None
+        if action == "on_curve":
+            point = next((targets[0] for kind, targets in self.selection if kind == "point"), None)
+            curve = next((targets[0] for kind, targets in self.selection if kind != "point"), None)
+            if point is None or curve is None:
+                return None
+            return point, _located(self.sketch, curve)[0]
+        if any(kind == "point" for kind, _targets in self.selection):
+            return None
+        first, second = (_located(self.sketch, targets[0])[0] for _kind, targets in self.selection)
+        return first, second
+
+    def constraint_plan(self, action: ConstraintAction) -> edit.CurvePlan | None:
+        """Was dieser Griff an der Auswahl anlegen würde — ``None``, wenn er
+        hier nicht geht (etwa eine Tangente an einem Spline ohne Stoß)."""
+        pair = self._planned_pair(action)
+        if pair is None:
+            return None
+        points = self.points()
+        if action == "on_curve":
+            return edit.on_curve_plan(self.sketch, *pair)
+        if action == "tangent":
+            return edit.tangent_plan(self.sketch, points, *pair)
+        if action == "curvature":
+            return edit.curvature_plan(self.sketch, points, *pair)
+        return edit.equal_axes_plan(self.sketch, points, *pair)
+
+    def constraint_present(self, action: ConstraintAction) -> bool:
+        """Ob der Griff an dieser Auswahl schon steht — dann nimmt ein Klick
+        ihn zurück (dieselbe Zusage wie :meth:`add_constraint`)."""
+        pair = self._planned_pair(action)
+        return pair is not None and bool(edit.curve_constraints_present(self.sketch, action, *pair))
+
+    def apply_constraint_plan(self, action: ConstraintAction) -> bool:
+        """Legt an, was der Kern plant — ein Schritt, ein Rückgängig."""
+        plan = self.constraint_plan(action)
+        if plan is None:
+            return False
+        self._apply(edit.with_plan(self.sketch, plan))
+        return True
+
+    def take_back_constraint(self, action: ConstraintAction) -> bool:
+        """Nimmt zurück, was der Griff an dieser Auswahl angelegt hat —
+        samt einem Berührpunkt, den eine Tangente mitgebracht hat."""
+        pair = self._planned_pair(action)
+        thinner = None if pair is None else edit.taken_back(self.sketch, action, *pair)
+        if thinner is None:
+            return False
+        if len(thinner.elements) != len(self.sketch.elements):
+            # Der Berührpunkt ging mit, und hinter ihm rücken die Nummern auf:
+            # Eine Auswahl, die dort stand, zeigte danach auf Nachbarn.
+            self.selection.clear()
+            self.selectionChanged.emit()
+        self._apply(thinner)
+        return True
 
     def _select(self, entry: tuple[str, tuple[int, ...]], extend: bool) -> None:
         # Ohne Strg ist ein Klick eine eindeutige Auswahl. Ein bereits
@@ -2758,6 +2959,18 @@ class SketchCanvas(QWidget):
                 stroker = QPainterPathStroker()
                 stroker.setWidth(tolerance * 2.0)
                 if stroker.createStroke(path).contains(QPointF(wx, wy)):
+                    flats = tuple(range(begin, begin + len(element.points)))
+                    return (element.kind, flats)
+            elif element.kind in ("ellipse", "elliptical_arc"):
+                # Die Kurve selbst, als dieselbe Punktfolge, die die Ansicht
+                # zeichnet (``profile.flat_curve``) — ein Bogen fängt damit
+                # nur seine eigene Spanne, wie der Kreisbogen.
+                shape = replace(element, points=tuple(points[begin : begin + len(element.points)]))
+                trace = flat_curve(shape)
+                if any(
+                    _segment_distance(first, second, (wx, wy)) <= tolerance
+                    for first, second in pairwise(trace)
+                ):
                     flats = tuple(range(begin, begin + len(element.points)))
                     return (element.kind, flats)
         return None
@@ -3076,11 +3289,23 @@ class SketchCanvas(QWidget):
             self.update()
             return
 
+        if self.tool == "ellipse":
+            refusal = self._ellipse_click_refusal()
+            if refusal:
+                # Wie beim flachen Bogen: Nur dieser eine Klick zählt nicht, die
+                # vorigen bleiben stehen, und die Zeile sagt warum (Regel 17).
+                self._pending.pop()
+                self._pending_world.pop()
+                self.statusChanged.emit(refusal)
+                self.update()
+                return
+
         needed = {
             "point": 1,
             "line": 2,
             "circle": 2,
             "arc": 3,
+            "ellipse": 3,
             "rectangle": 2,
             "polygon": 2,
             "slot": 2,
@@ -3120,6 +3345,10 @@ class SketchCanvas(QWidget):
                 self.statusChanged.emit(self._shape_refusal())
                 return
             self._finish_drawn_shape(first, opposite)
+            return
+
+        if self.tool == "ellipse":
+            self._finish_ellipse()
             return
 
         begin = len(edit.flat_points(self.sketch))
@@ -3261,7 +3490,9 @@ class SketchCanvas(QWidget):
         self.second_measure_lock.setVisible(rectangle and self._rectangle_measures[1] is not None)
         # Der Umschalter steht auch am Vieleck: Es wird über seinen
         # Umkreis bemaßt, und die getippte Zahl meint dasselbe wie am Kreis.
-        circle = self.tool in ("circle", "polygon")
+        # Ebenso an der Ellipse — eine Achse ist ihr Durchmesser in dieser
+        # Richtung.
+        circle = self.tool in ("circle", "polygon", "ellipse")
         self.circle_measure_button.setVisible(circle)
         if appearing:
             # In dieser Reihenfolge, damit die Schlösser über ihren Feldern
@@ -3389,6 +3620,18 @@ class SketchCanvas(QWidget):
         """
         if self.tool in CORNER_TOOLS:
             return self.corner_values[self.tool] if self._corner_hover is not None else 0.0
+        if self.tool == "ellipse" and len(self._pending_world) in (1, 2):
+            # Die Achse, die der nächste Klick setzt — die erste vom Mittelpunkt
+            # zum Zeiger, die zweite quer dazu. Wie am Kreis steht im Feld, was
+            # eine getippte Zahl meint: Durchmesser oder Radius.
+            centre = self._pending_world[0]
+            target = self.pointer_target()
+            if len(self._pending_world) == 1:
+                half = math.dist(centre, target)
+            else:
+                axes = edit.ellipse_from_clicks(centre, self._pending_world[1], target)
+                half = 0.0 if axes is None else math.dist(centre, axes[2])
+            return half * 2.0 if circle_measure() == "diameter" else half
         if len(self._pending_world) != 1 or self.tool not in (
             "line",
             "circle",
@@ -3456,6 +3699,9 @@ class SketchCanvas(QWidget):
                 return
             self.statusChanged.emit(self._corner_hint())
             self.update()
+            return
+        if self.tool == "ellipse" and value > 0.0 and len(self._pending_world) in (1, 2):
+            self._place_ellipse_axis(value)
             return
         if (
             value <= 0.0
@@ -3742,7 +3988,7 @@ class SketchCanvas(QWidget):
 
     def _name_circle_button(self) -> None:
         self.circle_measure_button.setText(circle_sign())
-        if self.tool in ("circle", "polygon"):
+        if self.tool in ("circle", "polygon", "ellipse"):
             self.measure_field.setAccessibleName(circle_word())
 
     def _toggle_circle_measure(self) -> None:
@@ -3769,6 +4015,7 @@ class SketchCanvas(QWidget):
     def _reset_measure_entry(self) -> None:
         """Verwirft nur die laufende Eingabe, nie gezeichnete Geometrie."""
         self._rectangle_measures = [None, None]
+        self._ellipse_measures = [None, None]
         self._hide_measure_widgets()
 
     def finish_spline(self) -> None:
@@ -3799,6 +4046,91 @@ class SketchCanvas(QWidget):
                 constraints=(*self.sketch.constraints, *snapped_pairs),
             )
         )
+
+    def _ellipse_click_refusal(self) -> str:
+        """Warum der eben gesetzte Klick einer Ellipse nicht zählt — leer,
+        wenn er zählt. Die Geometrie rechnet der Kern (``edit``)."""
+        clicks = self._pending_world
+        if len(clicks) == 2 and math.dist(clicks[0], clicks[1]) <= EPS_DISPLAY:
+            return tr(
+                "Das Achsende liegt auf der Mitte — daneben klicken, der Abstand ist die Achse."
+            )
+        if len(clicks) == 3 and edit.ellipse_from_clicks(*clicks) is None:
+            return tr(
+                "Der Punkt liegt auf der ersten Achse — daraus wird keine Ellipse. "
+                "Quer dazu klicken: der Abstand ist die zweite Achse."
+            )
+        return ""
+
+    def _finish_ellipse(self) -> None:
+        """Die Ellipse aus den gesammelten Klicks anlegen.
+
+        Deckungen gibt es für die Klicks, die als eigene Punkte gespeichert
+        werden — Mitte und Achsende. Der dritte Klick sagt nur, wie breit die
+        Ellipse wird; sein Punkt liegt senkrecht über der Mitte und nicht dort,
+        wo geklickt wurde, und eine Deckung dort zöge die Ellipse schief.
+        Getippte Achsen kommen als Durchmesser dazu, wie am Kreis.
+        """
+        axes = edit.ellipse_from_clicks(*self._pending_world[:3])
+        if axes is None:
+            return
+        begin = len(edit.flat_points(self.sketch))
+        element = SketchElement("ellipse", axes)
+        snapped_pairs = tuple(
+            SketchConstraint("coincident", (snapped_flat, begin + local))
+            for local, snapped_flat in enumerate(self._pending[:2])
+            if snapped_flat >= 0
+        )
+        typed = tuple(
+            SketchConstraint("diameter", (begin, begin + 1 + axis), value)
+            for axis, value in enumerate(self._ellipse_measures)
+            if value is not None
+        )
+        self._pending.clear()
+        self._pending_world.clear()
+        self._ellipse_measures = [None, None]
+        self._apply(
+            replace(
+                self.sketch,
+                elements=(*self.sketch.elements, element),
+                constraints=(*self.sketch.constraints, *snapped_pairs, *typed),
+            )
+        )
+        self.measuringChanged.emit(0.0)
+
+    def _place_ellipse_axis(self, value: float) -> None:
+        """Eine getippte Achse der entstehenden Ellipse (siehe
+        :meth:`place_measured`): Die erste zeigt vom Mittelpunkt zum Zeiger,
+        die zweite steht auf der Seite des Zeigers senkrecht dazu. Die Zahl
+        meint den Durchmesser oder den Radius, wie am Kreis — gespeichert wird
+        der Durchmesser."""
+        stored = circle_stored(value)
+        centre = self._pending_world[0]
+        if len(self._pending_world) == 1:
+            dx, dy = self._pointer[0] - centre[0], self._pointer[1] - centre[1]
+            direction = (
+                _snapped_direction(dx, dy) if math.hypot(dx, dy) > EPS_DISPLAY else (1.0, 0.0)
+            )
+            reach = stored / 2.0
+            self._pending.append(-1)
+            self._pending_world.append(
+                (centre[0] + direction[0] * reach, centre[1] + direction[1] * reach)
+            )
+            self._ellipse_measures[0] = f"{stored:.9f}"
+            self.statusChanged.emit(self.status_text())
+            self.measuringChanged.emit(self.pending_measure())
+            self.update()
+            return
+        first_end = self._pending_world[1]
+        ux, uy = first_end[0] - centre[0], first_end[1] - centre[1]
+        span = math.hypot(ux, uy)
+        ux, uy = ux / span, uy / span
+        side = -(self._pointer[0] - centre[0]) * uy + (self._pointer[1] - centre[1]) * ux
+        height = stored / 2.0 if side >= 0.0 else -stored / 2.0
+        self._pending.append(-1)
+        self._pending_world.append((centre[0] - uy * height, centre[1] + ux * height))
+        self._ellipse_measures[1] = f"{stored:.9f}"
+        self._finish_ellipse()
 
     def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         if self._panning is not None:
@@ -4082,12 +4414,13 @@ class SketchCanvas(QWidget):
     def _context_menu(self, event: Any) -> None:
         """Bedingungen am Ort der Auswahl — §30.1 nennt das Kontextmenü
         ausdrücklich. Und, wo einer liegt, der Punkt selbst."""
-        menu = self.context_menu_at(self._hit_point(QPointF(event.position())))
+        position = QPointF(event.position())
+        menu = self.context_menu_at(self._hit_point(position), self._to_world(position))
         if menu.isEmpty():
             return
         menu.exec(event.globalPosition().toPoint())
 
-    def context_menu_at(self, hit: int | None) -> QMenu:
+    def context_menu_at(self, hit: int | None, spot: tuple[float, float] | None = None) -> QMenu:
         """Was das Kontextmenü anbietet — gebaut, nicht gezeigt.
 
         Getrennt vom Zeigen, weil ein Menü, das sich selbst öffnet, in einem
@@ -4127,7 +4460,10 @@ class SketchCanvas(QWidget):
                     action.triggered.connect(
                         lambda _checked=False, index=at: self.remove_constraint(index)
                     )
+            self._offer_spline_point_removal(menu, hit)
             menu.addSeparator()
+        elif spot is not None:
+            self._offer_spline_point_insertion(menu, spot)
 
         # Löschen stand allein auf der Entf-Taste. Wer die nicht rät, wird ein
         # Element nicht los: in der Werkzeugleiste steht es nicht, und ein
@@ -4189,7 +4525,74 @@ class SketchCanvas(QWidget):
         gebaute Menü (Koordinaten, Löschen, Bedingungen) im gefahrenen Modus
         unerreichbar: Der Rechtsklick lief in die Objektauswahl.
         """
-        return self.context_menu_at(self._hit_point(self._to_screen(point[0], point[1])))
+        return self.context_menu_at(self._hit_point(self._to_screen(point[0], point[1])), point)
+
+    def _offer_spline_point_removal(self, menu: QMenu, hit: int) -> None:
+        """Am Punkt einer Kurve: ihn herausnehmen (RM-188 P6.6a) — die Kurve
+        läuft danach durch die übrigen. Unter drei Punkten gesperrt, mit Grund."""
+        element_index, _local = _located(self.sketch, hit)
+        element = self.sketch.elements[element_index]
+        if element.kind != "spline":
+            return
+        entry = menu.addAction(tr("Punkt aus der Kurve nehmen"))
+        if len(element.points) <= 2:
+            entry.setEnabled(False)
+            entry.setToolTip(
+                tr(
+                    "Eine Kurve braucht mindestens zwei Punkte — "
+                    "statt des Punkts die ganze Kurve löschen."
+                )
+            )
+            return
+        entry.setToolTip(tr("Die Kurve läuft danach durch die übrigen Punkte."))
+        entry.triggered.connect(lambda _checked=False, flat=hit: self.remove_spline_point(flat))
+
+    def _offer_spline_point_insertion(self, menu: QMenu, at: tuple[float, float]) -> None:
+        """Auf einer Kurve: dort einen Punkt einfügen — auf der Kurve, nicht am
+        Klick, damit sie ihre Form behält (``edit.spline_point_added``)."""
+        found = self._hit_element(self._to_screen(at[0], at[1]))
+        if found is None or found[0] != "spline":
+            return
+        index = _located(self.sketch, found[1][0])[0]
+        entry = menu.addAction(tr("Punkt in die Kurve einfügen"))
+        entry.setToolTip(tr("Ein weiterer Punkt, durch den die Kurve läuft — dort, wo sie ist."))
+        entry.triggered.connect(
+            lambda _checked=False, element=index, spot=at: self.insert_spline_point(element, spot)
+        )
+        menu.addSeparator()
+
+    def _solved_sketch(self) -> Sketch:
+        """Die Zeichnung mit den gelösten Punkten — was man sieht, nicht was
+        gespeichert war. Derselbe Stand, den ein Zug zurückschreibt."""
+        points = self.points()
+        offsets = edit.offsets_of(self.sketch)
+        return replace(
+            self.sketch,
+            elements=tuple(
+                replace(element, points=tuple(points[begin : begin + len(element.points)]))
+                for begin, element in zip(offsets, self.sketch.elements, strict=True)
+            ),
+        )
+
+    def insert_spline_point(self, index: int, at: tuple[float, float]) -> None:
+        """Ein Punkt mehr in der Kurve ``index``, wo sie ``at`` am nächsten ist."""
+        try:
+            grown, _added = edit.spline_point_added(self._solved_sketch(), index, at)
+        except AppError as error:
+            self.statusChanged.emit(str(error.detail or error.title))
+            return
+        self._apply(grown)
+
+    def remove_spline_point(self, flat: int) -> None:
+        """Nimmt einen Punkt aus seiner Kurve — mit allem, was an ihm hing."""
+        try:
+            shrunk = edit.spline_point_removed(self._solved_sketch(), flat)
+        except AppError as error:
+            self.statusChanged.emit(str(error.detail or error.title))
+            return
+        self.selection.clear()
+        self.selectionChanged.emit()
+        self._apply(shrunk)
 
     def edit_point(self, flat: int) -> None:
         """Einen Punkt auf genaue Koordinaten setzen.
@@ -4500,6 +4903,16 @@ class SketchCanvas(QWidget):
                     self._to_screen(*second),
                 )
             painter.drawPath(path)
+        elif element.kind in ("ellipse", "elliptical_arc"):
+            # Dieselbe Punktfolge wie in der Ansicht und im Treffertest — eine
+            # Ellipse, die hier anders gezeichnet würde als dort, wäre die
+            # zweite Wahrheit über dieselbe Kurve.
+            shape = replace(element, points=tuple(points[begin : begin + len(element.points)]))
+            trace = flat_curve(shape)
+            path = QPainterPath(self._to_screen(*trace[0]))
+            for spot in trace[1:]:
+                path.lineTo(self._to_screen(*spot))
+            painter.drawPath(path)
 
     def _paint_measures(self, painter: QPainter) -> None:
         """Maßbedingungen stehen als Text an ihrer Strecke — der Wert oder
@@ -4549,6 +4962,11 @@ class SketchCanvas(QWidget):
                     painter.drawLine(self._to_screen(*first), self._to_screen(*last))
                 else:
                     self._paint_arc_preview(painter, stored)
+        elif self.tool == "ellipse":
+            # Aus derselben Quelle wie die Vorschau im Viewport
+            # (:meth:`pending_elements`), gezeichnet wie jedes Element.
+            for element in self.pending_elements():
+                self._paint_element(painter, element, list(element.points), 0)
         self._paint_snap_mark(painter)
 
     def _paint_arc_preview(
@@ -5121,6 +5539,11 @@ def _plane_measure(field: Any) -> str:
 
 #: Welche Auswahlmuster eine Bedingung braucht — die Knöpfe folgen dem, statt
 #: eine falsche Auswahl mit einem Fehler zu quittieren.
+#: Die Kurvenarten, an denen Tangente und *Auf Kurve* hängen können
+#: (``edit.CURVE_KINDS``), und die runden unter ihnen.
+_CURVES: Final[tuple[str, ...]] = ("line", "circle", "arc", "ellipse", "elliptical_arc", "spline")
+_ROUNDS: Final[tuple[str, ...]] = ("circle", "arc", "ellipse", "elliptical_arc")
+
 _NEEDS: dict[ConstraintAction, tuple[tuple[str, ...], ...]] = {
     "distance": (("point", "point"),),
     # **Radius und Durchmesser stehen hier bewusst nicht.** Sie gelten nicht
@@ -5132,11 +5555,21 @@ _NEEDS: dict[ConstraintAction, tuple[tuple[str, ...], ...]] = {
     # Ändern dieses Maßes. Ein Knopf, der sie nachträglich an einen bestehenden
     # Kreis hängt, wäre ein eigener Bedienentwurf und keine Zeile hier.
     "coincident": (("point", "point"),),
-    "horizontal": (("line",),),
-    "vertical": (("line",),),
+    # **Eine Ellipse liegt über ihre erste Achse** waagerecht oder senkrecht
+    # (``constraint_targets`` nimmt Mitte und Achsende) — der Griff, mit dem
+    # man ihre Drehung festlegt, ohne einen Winkel zu tippen.
+    "horizontal": (("line",), ("ellipse",), ("elliptical_arc",)),
+    "vertical": (("line",), ("ellipse",), ("elliptical_arc",)),
     "parallel": (("line", "line"),),
     "perpendicular": (("line", "line"),),
-    "tangent": (("line", "circle"), ("line", "arc")),
+    # **Jedes Kurvenpaar außer zwei Linien, in jeder Reihenfolge** (RM-188
+    # P6.6b). Hier standen nur Linie mit Kreis und Linie mit Bogen, und nur in
+    # dieser Reihenfolge — mit dem Bogen zuerst gewählt bot sich der Knopf nicht
+    # an (Befund B2). Was daraus wird, rechnet der Kern (``edit.tangent_plan``);
+    # an einem Spline ohne Stoß gibt es keinen Plan, und der Knopf bleibt weg.
+    "tangent": tuple(
+        (first, second) for first in _CURVES for second in _CURVES if not first == second == "line"
+    ),
     "symmetric": (("point", "point", "line"),),
     "fixed": (("point",),),
     "reference": (("point", "point"),),
@@ -5152,15 +5585,34 @@ _NEEDS: dict[ConstraintAction, tuple[tuple[str, ...], ...]] = {
         ("arc", "arc"),
         ("circle", "arc"),
         ("arc", "circle"),
+        # Zwei Ellipsen gleich groß heißt: beide Achsen gleich, die längere zur
+        # längeren (``edit.equal_axes_plan``) — zwei Bedingungen, ein Schritt.
+        ("ellipse", "ellipse"),
+        ("elliptical_arc", "elliptical_arc"),
+        ("ellipse", "elliptical_arc"),
+        ("elliptical_arc", "ellipse"),
     ),
     "midpoint": (("point", "line"),),
-    "concentric": (
-        ("circle", "circle"),
-        ("arc", "arc"),
-        ("circle", "arc"),
-        ("arc", "circle"),
+    # Konzentrisch bleibt die Deckung zweier Mitten (:data:`_CORE_KIND`); eine
+    # Ellipse trägt ihre Mitte wie der Kreis als ersten Punkt.
+    "concentric": tuple((first, second) for first in _ROUNDS for second in _ROUNDS),
+    "on_curve": (
+        *(("point", curve) for curve in _CURVES),
+        *((curve, "point") for curve in _CURVES),
+    ),
+    # Krümmungsstetig gilt am Ende eines Splines (``edit.curvature_plan``).
+    "curvature": tuple(
+        (first, second) for first in _CURVES for second in _CURVES if "spline" in (first, second)
     ),
 }
+
+#: Die Griffe, deren Bedingungen der Kern aus der Auswahl plant, statt sie
+#: eins zu eins aus den gewählten Punkten zu nehmen (``edit.tangent_plan`` und
+#: Nachbarn): Eine Tangente kann *glatt* werden, einen Berührpunkt mitbringen
+#: oder die Abstandstangente bleiben; *gleich groß* zwischen Ellipsen sind zwei
+#: Bedingungen. Für alle übrigen gilt der alte Weg über
+#: :meth:`SketchCanvas.constraint_targets` unverändert.
+_PLANNED: Final[frozenset[str]] = frozenset({"tangent", "on_curve", "curvature", "equal"})
 
 
 def _needs_phrase(kind: ConstraintAction) -> str:
@@ -5180,18 +5632,27 @@ def _needs_phrase(kind: ConstraintAction) -> str:
         "radius": tr("Mittelpunkt und Rand eines Kreises"),
         "diameter": tr("Mittelpunkt und Rand eines Kreises"),
         "coincident": tr("zwei Punkte"),
-        "horizontal": tr("eine Linie"),
-        "vertical": tr("eine Linie"),
+        "horizontal": tr("eine Linie oder eine Ellipse"),
+        "vertical": tr("eine Linie oder eine Ellipse"),
         "parallel": tr("zwei Linien"),
         "perpendicular": tr("zwei Linien"),
-        "tangent": tr("eine Linie und einen Kreis oder Bogen"),
+        "tangent": tr(
+            "zwei Kurven, nicht beides Linien — an einer Kurve durch Punkte "
+            "einen Stoß an einem ihrer Punkte"
+        ),
         "symmetric": tr("zwei Punkte und eine Linie"),
         "fixed": tr("einen Punkt"),
         "reference": tr("zwei Punkte"),
         "angle": tr("zwei Linien"),
-        "equal": tr("zwei Linien oder zwei Kreise beziehungsweise Bögen"),
+        "equal": tr("zwei Linien, zwei Kreise beziehungsweise Bögen oder zwei Ellipsen"),
         "midpoint": tr("einen Punkt und eine Linie"),
-        "concentric": tr("zwei Kreise oder Bögen"),
+        "concentric": tr("zwei Kreise, Bögen oder Ellipsen"),
+        "on_curve": tr("einen Punkt und eine Linie, einen Kreis, Bogen, eine Ellipse oder Kurve"),
+        "smooth": tr(
+            "zwei Kurven, nicht beides Linien — an einer Kurve durch Punkte "
+            "einen Stoß an einem ihrer Punkte"
+        ),
+        "curvature": tr("eine Kurve durch Punkte und die Kurve, die an ihrem Ende anschließt"),
     }[kind]
 
 
@@ -5218,18 +5679,21 @@ def _does_phrase(kind: ConstraintAction) -> str:
         "radius": tr("hält den Kreis auf einem festen Radius — halb so groß wie sein Ø"),
         "diameter": tr("hält den Kreis auf einem festen Durchmesser — so bohrt man M3"),
         "coincident": tr("legt zwei Punkte genau aufeinander"),
-        "horizontal": tr("legt eine Linie waagerecht"),
-        "vertical": tr("stellt eine Linie senkrecht"),
+        "horizontal": tr("legt eine Linie oder die erste Achse einer Ellipse waagerecht"),
+        "vertical": tr("stellt eine Linie oder die erste Achse einer Ellipse senkrecht"),
         "parallel": tr("hält zwei Linien parallel zueinander"),
         "perpendicular": tr("stellt zwei Linien im rechten Winkel zueinander"),
-        "tangent": tr("legt eine Linie glatt an einen Kreis oder Bogen an"),
+        "tangent": tr("legt zwei Kurven ohne Knick aneinander"),
         "symmetric": tr("spiegelt zwei Punkte an einer Linie"),
         "fixed": tr("nagelt einen Punkt fest, damit die Skizze nicht wandert"),
         "reference": tr("misst einen Abstand, ohne ihn festzulegen"),
         "angle": tr("hält zwei Linien in einem festen Winkel zueinander"),
         "equal": tr("macht zwei Linien gleich lang oder zwei Rundungen gleich groß"),
         "midpoint": tr("hält einen Punkt genau auf halber Strecke einer Linie"),
-        "concentric": tr("legt zwei Kreise oder Bögen auf dieselbe Mitte"),
+        "concentric": tr("legt zwei Kreise, Bögen oder Ellipsen auf dieselbe Mitte"),
+        "on_curve": tr("legt einen Punkt auf eine Kurve — eine Linie gilt dabei als Gerade"),
+        "smooth": tr("legt zwei Kurven ohne Knick aneinander"),
+        "curvature": tr("lässt eine Kurve ohne Knick und ohne Sprung in der Krümmung weiterlaufen"),
     }[kind]
 
 
@@ -5241,6 +5705,10 @@ def tool_instruction(name: str) -> str:
         "line": tr("Linie: erster Klick setzt den Anfang."),
         "circle": tr("Kreis: erster Klick setzt die Mitte."),
         "arc": tr("Bogen: erster Klick setzt den Anfang."),
+        "ellipse": tr(
+            "Ellipse: erster Klick setzt die Mitte, der zweite das Ende einer Achse — "
+            "einen Bogen daraus macht Trimmen."
+        ),
         "spline": tr("Kurve: klicken, so oft es die Form braucht."),
         "trim": tr("Auf die Hälfte klicken, die wegfallen soll."),
         "extend": tr("Auf die Hälfte klicken, die wachsen soll."),
@@ -5594,6 +6062,14 @@ class SketchPanel(QWidget):
         # Grund, aus dem der Skizzenbereich 1007 Bildpunkte verlangt, und eine
         # Zahl, die nur im Bild steht, lässt sich nicht rot werden lassen.
         self._tools_row = tools
+        # **Der enge Abstand des Rasters statt der sechs Bildpunkte des
+        # Themas** (``style.TIGHT``, RM-188 P6.6a): Die Zeile stand bei 875 von
+        # 900, und die Ellipse kostet mit ihrem Abstand 43 — zwei Bildpunkte
+        # weniger zwischen den Knöpfen geben rund 50 zurück, ohne einen Knopf
+        # zu verstecken. Symbole einer Werkzeugzeile gehören zusammen; genau
+        # dafür ist die Stufe da. Gemessen am Thema „hell", 10 Punkt: 872
+        # Bildpunkte.
+        tools.setSpacing(style.TIGHT)
         self._tool_buttons: dict[str, QToolButton] = {}
         # **Vier Gruppen, drei Trennstriche** (Robert, 16.09.2026: „das zeichen
         # panel ein bisschen übersichtlicher gestalten"): Auswählen — Zeichnen
@@ -5613,6 +6089,14 @@ class SketchPanel(QWidget):
                 ("rectangle", tr("Rechteck")),
                 ("circle", tr("Kreis")),
                 ("arc", tr("Bogen")),
+                # Neben Kreis und Bogen, wie ihre runden Geschwister (RM-188
+                # P6.6a) — ohne Kürzel: Fusion belegt keines, und ein Buchstabe
+                # für ein seltenes Werkzeug fehlte dem nächsten häufigen.
+                # **Ein Knopf, kein zweiter für den Ellipsenbogen**: Die Zeile
+                # stand vorher bei 875 von 900 Bildpunkten, zwei Knöpfe hätten
+                # 961 verlangt. Den Bogen macht Trimmen aus der Ellipse, wie in
+                # Fusion, das dafür ebenfalls kein Werkzeug hat.
+                ("ellipse", tr("Ellipse")),
                 ("spline", tr("Kurve")),
                 ("polygon", tr("Vieleck")),
                 ("slot", tr("Langloch")),
@@ -7051,9 +7535,24 @@ class SketchPanel(QWidget):
 
     def constraint_offers(self) -> dict[ConstraintAction, bool]:
         """Welche Bedingung zur Auswahl passt — Kontextmenü und Knöpfe lesen
-        dieselbe Antwort."""
+        dieselbe Antwort.
+
+        Bei den geplanten Griffen (:data:`_PLANNED`) entscheidet dazu der
+        Kern, ob es an **dieser** Auswahl geht: Eine Tangente an einem Spline
+        braucht einen Stoß an einem seiner Punkte, krümmungsstetig einen am
+        Ende. Was schon steht, bleibt angeboten — der Klick nimmt es zurück.
+        """
         pattern = self.canvas.selected_pattern()
-        return {kind: pattern in patterns for kind, patterns in _NEEDS.items()}
+        offers: dict[ConstraintAction, bool] = {}
+        for kind, patterns in _NEEDS.items():
+            fits = pattern in patterns
+            if fits and self.canvas.uses_plan(kind):
+                fits = (
+                    self.canvas.constraint_present(kind)
+                    or self.canvas.constraint_plan(kind) is not None
+                )
+            offers[kind] = fits
+        return offers
 
     def constraint_already_set(self) -> dict[ConstraintAction, bool]:
         """Welche Bedingung auf **dieser** Auswahl schon steht.
@@ -7070,7 +7569,11 @@ class SketchPanel(QWidget):
         """
         existing = {(entry.kind, entry.targets) for entry in self.canvas.sketch.constraints}
         return {
-            kind: ((core_kind(kind), self.canvas.constraint_targets(kind)) in existing)
+            kind: (
+                self.canvas.constraint_present(kind)
+                if self.canvas.uses_plan(kind)
+                else (core_kind(kind), self.canvas.constraint_targets(kind)) in existing
+            )
             for kind in _NEEDS
         }
 
@@ -7089,6 +7592,16 @@ class SketchPanel(QWidget):
                     what=_needs_phrase(kind),
                 )
             )
+            return
+        if self.canvas.uses_plan(kind):
+            # Geplant vom Kern (:data:`_PLANNED`): anlegen oder zurücknehmen,
+            # beides als ein Schritt. Ein Maß fragt keiner dieser Griffe ab.
+            if self.canvas.take_back_constraint(kind):
+                self.canvas.statusChanged.emit(
+                    tr("{name} zurückgenommen.").format(name=_constraint_label(kind))
+                )
+            else:
+                self.canvas.apply_constraint_plan(kind)
             return
         targets = self.canvas.constraint_targets(kind)
         takes_back = self.constraint_already_set().get(kind, False)
@@ -7211,7 +7724,7 @@ class SketchPanel(QWidget):
             # Maus schon dort hatte. Die Nummern stehen weiter im Tooltip: wer
             # eine Bedingung aus einer Fehlermeldung des Solvers sucht, sucht
             # nach ihnen.
-            where = targets_phrase(self.canvas.sketch, entry.targets)
+            where = targets_phrase(self.canvas.sketch, entry.targets, entry.kind)
             text = f"{label} — {where}" if where else label
             numbers = ", ".join(str(target) for target in entry.targets)
             if index in conflict:
