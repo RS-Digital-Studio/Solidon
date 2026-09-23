@@ -9465,8 +9465,11 @@ class Viewport(QWidget):
             )
             priority = 0 if (object_id, feature_id) in selected_refs else 1 if explicit else 2
             shown_point = (points[-1][0], points[-1][1], points[-1][2])
+            # **Die Marke nennt nur das Herkunftswort, das warnt** (``compact``):
+            # „gemessen“ an dreißig Bohrungen drängte Beschriftungen aus dem Bild
+            # (23.09.2026). Die volle Auskunft steht im Tooltip und im Baum.
             self._feature_label_data.append(
-                (shown_point, feature_label(feature_id, feature), priority)
+                (shown_point, feature_label(feature_id, feature, compact=True), priority)
             )
             self._feature_label_owners.append(object_id)
         if not points:

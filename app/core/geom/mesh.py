@@ -583,7 +583,7 @@ def enclosed_volume(body: trimesh.Trimesh) -> float:
 
 
 def on_surface(
-    body: trimesh.Trimesh, points: np.ndarray
+    body: trimesh.Trimesh, points: np.ndarray, *, index: _SurfaceIndex | None = None
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Für jeden Punkt der nächste Ort auf der Oberfläche, sein Abstand und
     sein Dreieck.
@@ -620,9 +620,21 @@ def on_surface(
     der von ``trimesh`` gecachte ``rtree``-Index war genau die Stelle, unter
     der der beschädigte Speicher lag. Wer dasselbe Netz in mehreren Portionen
     fragt, baut ihn einmal (:class:`_SurfaceIndex`); so misst
-    :func:`max_distance_to_surface`.
+    :func:`max_distance_to_surface`. Wer ihn über mehrere Aufrufe hält, gibt
+    ihn als ``index`` mit (:func:`surface_index`) — er muss zu ``body``
+    gehören.
     """
-    return _nearest_on(_SurfaceIndex.of(body), np.asarray(points, dtype=float).reshape(-1, 3))
+    built = index if index is not None and index.body is body else _SurfaceIndex.of(body)
+    return _nearest_on(built, np.asarray(points, dtype=float).reshape(-1, 3))
+
+
+def surface_index(body: trimesh.Trimesh) -> _SurfaceIndex:
+    """Der Suchbaum für :func:`on_surface`, einmal gebaut für viele Fragen an dasselbe Netz.
+
+    Nur Zahlen und ein ``cKDTree`` — kein ``rtree``, und nichts davon liegt
+    im Cache des Netzes. Wer ihn hält, entscheidet, wie lange.
+    """
+    return _SurfaceIndex.of(body)
 
 
 @dataclass(frozen=True)

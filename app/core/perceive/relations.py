@@ -662,11 +662,28 @@ def _face_boundary_rings(
     boundary = unique[count == 1]
     if not len(boundary):
         return None
-    vertices, degrees = np.unique(boundary, return_counts=True)
+    vertices, inverse, degrees = np.unique(boundary, return_inverse=True, return_counts=True)
     if (degrees != 2).any():
         return _rings_through_a_shared_corner(body, indices, boundary, vertices, degrees)
+    # **Die Komponenten in der Nummerierung des Rands, nicht des Körpers.**
+    # ``trimesh.graph.connected_components`` legt je Aufruf Felder über alle
+    # Ecken des Körpers an. ``_shoulder_connections`` fragt je ebener Facette
+    # am Hohlraum — am Gartenschlauchhalter 2 091-mal über 196 000 Ecken, 2,4
+    # von 3,4 s des ersten Klicks, im Qt-Hauptthread (RM-181, 23.09.2026).
+    # Die Reihenfolge bleibt dieselbe: scipy vergibt die Nummern nach der
+    # kleinsten Ecke einer Komponente, und ``vertices`` ist aufsteigend.
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    local = np.asarray(inverse, dtype=np.int64).reshape(boundary.shape)
+    size = len(vertices)
+    graph = coo_matrix(
+        (np.ones(len(local), dtype=np.int8), (local[:, 0], local[:, 1])), shape=(size, size)
+    )
+    number, labels = connected_components(graph, directed=False)
     rings = []
-    for component in trimesh.graph.connected_components(boundary, nodes=vertices, engine="scipy"):
+    for label in range(number):
+        component = vertices[labels == label]
         if len(component) < 3:
             return None
         selected = np.isin(boundary[:, 0], component)
@@ -1131,10 +1148,12 @@ def _shoulder_connections(
     for identifier in {identifier for adjacent in owners.values() for identifier in adjacent}:
         starts[list(candidates[identifier].face_indices)] = False
     connections = []
-    for facet in body.facets:
-        indices = np.asarray(facet, dtype=np.int64)
-        if not starts[indices].any():
-            continue
+    near = [
+        indices
+        for facet in body.facets
+        if starts[(indices := np.asarray(facet, dtype=np.int64))].any()
+    ]
+    for indices in _only_owned_rims(body, near, edge_codes):
         faces = np.asarray(body.faces)[indices]
         rings = _face_boundary_rings(body, indices)
         if rings is None or len(rings) != 2 or any(ring not in owners for ring in rings):
@@ -1155,6 +1174,55 @@ def _shoulder_connections(
             continue
         connections.append((adjacent, tuple(int(index) for index in indices)))
     return connections
+
+
+def _only_owned_rims(
+    body: trimesh.Trimesh,
+    facets: Sequence[NDArray[np.int64]],
+    owned: NDArray[np.int64],
+) -> list[NDArray[np.int64]]:
+    """Die Facetten, deren Rand ganz aus belegten Ringkanten besteht — in ihrer Reihenfolge.
+
+    Eine notwendige Bedingung für :func:`_shoulder_connections`, in einem Zug
+    über alle Facetten statt je Facette: Eine Schulter hat genau zwei belegte
+    Ringe als Rand. Trägt eine Facette eine Randkante, die in keinem belegten
+    Ring liegt, ist der Ring dieser Kante kein belegter, und die volle Prüfung
+    ließe die Facette fallen. Ebenso eine ohne Rand und eine, in der mehr als
+    zwei ihrer Dreiecke eine Kante teilen — dort gibt
+    :func:`_face_boundary_rings` ``None``. Gezählt wird wie dort: die Kanten
+    je Zeile sortiert, eine Kante mit Zähler eins ist Rand.
+
+    **Warum überhaupt.** Am Gartenschlauchhalter (392 532 Dreiecke) fragte
+    der erste Klick 2 091 Facetten am Hohlraum einzeln nach ihren Ringen, jede
+    mit dem festen Aufwand einer Komponentensuche — 1,7 von 3,0 s im
+    Qt-Hauptthread (RM-181, 23.09.2026). Übrig bleiben die wenigen, an denen
+    sich die Ringsuche lohnt; welche davon Schultern sind, entscheidet
+    unverändert die volle Prüfung.
+    """
+    if not facets:
+        return []
+    lengths = np.fromiter((len(indices) for indices in facets), dtype=np.int64, count=len(facets))
+    labels = np.repeat(np.arange(len(facets), dtype=np.int64), lengths)
+    faces = np.asarray(body.faces, dtype=np.int64)[np.concatenate(facets)]
+    edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
+    codes = edges[:, 0] * len(body.vertices) + edges[:, 1]
+    owners = np.tile(labels, 3)
+    order = np.lexsort((codes, owners))
+    codes, owners = codes[order], owners[order]
+    first = np.ones(len(codes), dtype=bool)
+    first[1:] = (codes[1:] != codes[:-1]) | (owners[1:] != owners[:-1])
+    runs = np.flatnonzero(first)
+    counts = np.diff(np.append(runs, len(codes)))
+    run_codes, run_owners = codes[runs], owners[runs]
+    rim = counts == 1
+    rejected = np.zeros(len(facets), dtype=bool)
+    rejected[run_owners[counts > 2]] = True
+    rejected[run_owners[rim & ~np.isin(run_codes, owned)]] = True
+    bounded = np.zeros(len(facets), dtype=bool)
+    bounded[run_owners[rim]] = True
+    return [
+        indices for indices, kept in zip(facets, bounded & ~rejected, strict=True) if bool(kept)
+    ]
 
 
 #: Ein Dreieck, das kein Merkmal beansprucht.
@@ -1772,7 +1840,13 @@ def _role_of(identifier: FeatureId, scope: tuple[Feature, ...]) -> int | None:
 
 
 def _target_dimensions(spec: Any, feature: Feature) -> tuple[str, ...]:
-    """Gemessene Längen, die diese Operation tatsächlich ändert."""
+    """Gemessene Maße, die diese Operation tatsächlich setzt.
+
+    Längen — und am Langloch seine Richtung: *Zum Langloch ziehen* trägt sie
+    als Winkel in sein Feld (``actions.feature_value_source``), und dieselbe
+    Zahl geht an jedes Mitglied. Eine Gruppe, die sie nicht vergleicht, dreht
+    beim Übernehmen jedes anders liegende Langloch still mit.
+    """
     dimensions = set()
     for entry in spec.params.spec():
         source = feature_value_source(entry.name, feature)
@@ -1781,11 +1855,11 @@ def _target_dimensions(spec: Any, feature: Feature) -> tuple[str, ...]:
         if source is None or getattr(entry, "optional", False):
             continue
         key, index = source
-        if (
-            index is None
-            and entry.unit == "mm"
-            and key in feature.params
-            and _is_number(feature.params[key])
+        if index is not None or key not in feature.params:
+            continue
+        value = feature.params[key]
+        if (entry.unit == "mm" and _is_number(value)) or (
+            entry.unit == units.DEGREE_UNIT and _is_direction(value)
         ):
             dimensions.add(key)
     return tuple(sorted(dimensions))
@@ -1980,7 +2054,22 @@ def _same_surface_patch(reference: _SurfacePatch, candidate: _SurfacePatch) -> b
     Klick auf eine Bohrung, im Qt-Hauptthread (gemessen am 22.09.2026). Nur
     was weiter weg liegt — eine andere Unterteilung derselben Fläche — geht
     den Weg über die Dreiecke.
+
+    **Und davor die Hüllquader.** Liegt jede Ecke des einen Ausschnitts
+    höchstens um die Sehnenhöhe neben den Dreiecken des anderen, liegt sie
+    auch höchstens so weit neben deren Hüllquader — also stimmen beide
+    Hüllquader in jeder Richtung bis auf die Sehnenhöhe überein. Das ist eine
+    notwendige Bedingung und kein Urteil: Wer sie verfehlt, ist verschieden,
+    ohne dass ein Dreieck gemessen wird. An den 20 Wülsten von
+    ``build_tray_v3.step`` kostete ein Klick 180 ms, fast alles in
+    Vergleichen, die am Ende „verschieden" sagten (RM-181, 22.09.2026).
     """
+    reach = units.MAX_FACET_SAG + EPS_GEOM
+    if bool(
+        np.any(np.abs(reference.points.min(axis=0) - candidate.points.min(axis=0)) > reach)
+        or np.any(np.abs(reference.points.max(axis=0) - candidate.points.max(axis=0)) > reach)
+    ):
+        return False
     for own, other in ((reference, candidate), (candidate, reference)):
         to_corners = np.asarray(other.points_tree.query(own.points, k=1)[0], dtype=np.float64)
         unsettled = np.flatnonzero(to_corners > units.MAX_FACET_SAG)
@@ -2090,9 +2179,28 @@ def _same_parameter(key: str, first: Any, second: Any) -> bool | None:
         return abs(one - two) <= tolerance
     if isinstance(first, str) and isinstance(second, str):
         return first == second
+    if _is_direction(first) and _is_direction(second):
+        # Eine Richtung ohne Vorzeichen — ein Langloch entlang d ist dasselbe
+        # wie entlang -d —, verglichen mit derselben Winkelauflösung wie der
+        # Öffnungswinkel eines Kegels.
+        along = np.asarray(first, dtype=float)
+        other = np.asarray(second, dtype=float)
+        lengths = float(np.linalg.norm(along)) * float(np.linalg.norm(other))
+        if not math.isfinite(lengths) or lengths <= EPS_GEOM:
+            return None
+        return abs(float(along @ other)) / lengths >= units.exact_cos_degrees(EPS_ANGLE)
     return None
 
 
 def _is_number(value: Any) -> bool:
     """Ein skalarer Zahlenwert, aber kein Wahrheitswert."""
     return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_direction(value: Any) -> bool:
+    """Drei Zahlen — eine Richtung im Raum, wie sie ein Langloch trägt."""
+    return (
+        isinstance(value, (tuple, list))
+        and len(value) == 3
+        and all(_is_number(component) for component in value)
+    )

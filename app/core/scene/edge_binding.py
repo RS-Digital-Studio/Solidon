@@ -248,10 +248,15 @@ def _ask_for_each(
             for number, candidate in enumerate(matches, start=1)
         )
         tokens = [target.token for target in targets]
+        # **Ohne den Schlüssel im Satz.** „e:12.50,3.00,0.00:1.000,0.000,0.000“
+        # ist eine gerundete Lage aus sechs Zahlen und keine Beschriftung
+        # (§2.4); was der Kunde liest, sind die Zeilen der Kandidaten
+        # (``ui.labels.edge_label``), und der Agent findet den Schlüssel in
+        # jedem Antworttoken.
         question = tr(
-            "Körper „{object}“: Die gewählte Kante {key} ist nicht eindeutig — {count} Kanten "
-            "tragen diesen Schlüssel. Wählen Sie die gemeinte Kante."
-        ).format(object=str(source.name), key=key, count=len(matches))
+            "Körper „{object}“: {count} Kanten liegen fast an derselben Stelle. "
+            "Wählen Sie die gemeinte Kante."
+        ).format(object=str(source.name), count=len(matches))
         try:
             if announce is not None:
                 announce(targets)

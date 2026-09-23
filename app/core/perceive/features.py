@@ -3363,25 +3363,48 @@ def nearly_flat_mask(body: trimesh.Trimesh, features: Mapping[str, Feature]) -> 
     Mittelnormale. :func:`planes_beside` nimmt solche Flächen als Ebene mit,
     und die Frage „ist daneben eine Ebene" bekommt für eine Wand mit
     Formschräge dieselbe Antwort wie für eine ohne.
+
+    **Gemerkt je Körper und gerundeter Seite** (:func:`remembered`, Schlüssel
+    Kennung und Flächenabdruck je Seite): Merkmalfenster und Operation fragen
+    je Rundung, und am Countercleaner mit 701 900 Dreiecken las jede Frage
+    die vier großen gerundeten Seiten neu — 0,1 s je Klick, 4,8 von 5,9
+    Sekunden über alle 62 Handlungslisten (RM-181, gemessen am 22.09.2026).
+    Die Antwort ist schreibgeschützt; wer sie verknüpft, bekommt ein neues Feld.
     """
-    mask = np.zeros(len(body.faces), dtype=bool)
-    normals = np.asarray(body.face_normals, dtype=float)
-    areas = np.asarray(body.area_faces, dtype=float)
-    limit = units.exact_cos_degrees(NEARLY_FLAT_ANGLE)
-    for feature in features.values():
-        if feature.kind != "curved_face" or not feature.face_indices:
-            continue
-        chosen = np.asarray(feature.face_indices, dtype=np.int64)
-        if chosen.max() >= len(body.faces):
-            continue
-        mean = (normals[chosen] * areas[chosen, None]).sum(axis=0)
-        length = float(np.linalg.norm(mean))
-        if length <= EPS_GEOM:
-            continue
-        mean /= length
-        if float(np.min(normals[chosen] @ mean)) >= limit:
-            mask[chosen] = True
-    return mask
+    curved = [
+        feature
+        for feature in features.values()
+        if feature.kind == "curved_face" and feature.face_indices
+    ]
+    if not curved:
+        return np.zeros(len(body.faces), dtype=bool)
+    with _MEMORY_LOCK:
+        memory = _memory_of(body)
+    key = tuple(
+        (str(feature.id), _patch_digest(memory, feature.face_indices)) for feature in curved
+    )
+
+    def read() -> np.ndarray:
+        mask = np.zeros(len(body.faces), dtype=bool)
+        normals = np.asarray(body.face_normals, dtype=float)
+        areas = np.asarray(body.area_faces, dtype=float)
+        limit = units.exact_cos_degrees(NEARLY_FLAT_ANGLE)
+        for feature in curved:
+            chosen = np.asarray(feature.face_indices, dtype=np.int64)
+            if chosen.max() >= len(body.faces):
+                continue
+            mean = (normals[chosen] * areas[chosen, None]).sum(axis=0)
+            length = float(np.linalg.norm(mean))
+            if length <= EPS_GEOM:
+                continue
+            mean /= length
+            if float(np.min(normals[chosen] @ mean)) >= limit:
+                mask[chosen] = True
+        mask.setflags(write=False)
+        return mask
+
+    answer: np.ndarray = remembered("nearly_flat", body, (), read, extra=key)
+    return answer
 
 
 def planes_beside(
@@ -4875,6 +4898,13 @@ _SUPPORT_CACHE: dict[str, OrderedDict[tuple[int, bytes, Any, int], Any]] = {}
 SUPPORT_CACHE_LIMIT = 8
 CACHE_LIMIT_PER_QUESTION = 4096
 
+#: Fragen, deren Antwort so groß ist wie der ganze Körper — dieselbe Grenze
+#: wie die Stützpunktlesung. Die verschweißte Kopie und der Oberflächenindex,
+#: an denen die Mündungsprobe einer Bohrung jede Frage stellt
+#: (``prepare_ops.bore_entrance``), wiegen am Gartenschlauchhalter mit 392 532
+#: Dreiecken je rund 15 und 75 Megabyte; viertausend davon hielte kein Rechner.
+WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset({"support", "merged_copy", "surface_index"})
+
 
 #: Die zuletzt gebildeten Abdrücke je Listenobjekt — mit der Liste selbst als
 #: Anker, damit ihre Identität nicht an eine andere Liste fallen kann.
@@ -5015,7 +5045,7 @@ def remembered(
         answers = _SUPPORT_CACHE.setdefault(name, OrderedDict())
         answers[key] = value
         memory.answers.add((name, key))
-        limit = SUPPORT_CACHE_LIMIT if name == "support" else CACHE_LIMIT_PER_QUESTION
+        limit = SUPPORT_CACHE_LIMIT if name in WHOLE_BODY_ANSWERS else CACHE_LIMIT_PER_QUESTION
         while len(answers) > limit:
             answers.popitem(last=False)
     return value

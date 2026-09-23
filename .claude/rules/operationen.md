@@ -769,6 +769,16 @@ entlang der Achse wandern, wenn die Zielwand eine andere Stärke besitzt.
 Am exakten Kern gilt dieselbe Suche gegen `features_of`; ein `any(kind ==
 "slot")` schwieg, sobald ein zweites Langloch im Körper stand.
 
+**Und dieselbe Frage stellt die Auswertung jedem erklärten Merkmal**
+(`scene.evaluate._near_its_declaration`): Was eine Operation als `generated`
+ausgibt, bekommt einen erkannten Partner nur, wenn der quer zur Achse
+innerhalb der Breite des erklärten liegt und entlang der Achse innerhalb
+seiner erklärten Tiefe. `_sits_at` bleibt die strengere Prüfung der
+Operation, die ihr eigenes Loch sucht; die Auswertung prüft allgemein und
+großzügiger, weil ein Baustein seine Mitte an der Mündung erklären darf, die
+Erkennung sie in die Mitte legt. Ohne diese Grenze nahm eine verschobene
+Senkung die der Nachbarbohrung 18 mm daneben, und deren Name verwaiste.
+
 ## Beide Kerne sagen dasselbe, und zwar aus der Nachbarschaft (20.09.2026, P1.5)
 
 Drei Gegenfälle, an denen die Kerne auseinanderlagen, und drei Regeln, die
@@ -1133,9 +1143,14 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   jemand braucht — oder die Kette hält an** (20.09.2026, P1.4c.2). Die
   native Erkennung nummeriert frisch; ein `face_1` nach `features_of` ist
   kein Beleg für das `face_1` davor. Belegt ist ein Bezug nur durch
-  Durchreichen, durch die eindeutige Zuordnung auf denselben Namen oder durch
-  einen von der Operation selbst ausgestellten Übergang
-  (`OpResult.feature_continuations`). Diesen stellt nur aus, wer die
+  Durchreichen, durch die eindeutige Zuordnung auf denselben Namen, durch die
+  eindeutige Zuordnung auf ein **bis auf Rechenrauschen unverändertes**
+  Merkmal (`_unchanged_continuations`: jede Lage und Richtung auf `EPS_GEOM`,
+  jede Größe relativ auf `EPS_GEOM` — gemessen bitgleich an unberührten
+  Flächen, 23.09.2026) oder durch einen von der Operation selbst
+  ausgestellten Übergang (`OpResult.feature_continuations`). Ohne den dritten
+  Weg fragte Solidon nach jedem *Fläche versetzen* nach jeder unberührten
+  Fläche einer Passung, weil die Erkennung neu nummeriert. Diesen stellt nur aus, wer die
   Änderungsabsicht geometrisch nachgewiesen hat — `resize_hole` über
   `_preserved_exact_features`, und jede exakte Merkmalshandlung über
   `_exact_features_after` (Versetzen, Verdoppeln, Drehen, Entfernen, Senken,

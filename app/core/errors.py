@@ -226,6 +226,16 @@ class OperationCancelled(Exception):
     gezeigt (§15.6)."""
 
 
+class QuestionDeclined(OperationCancelled):
+    """Eine Rückfrage wurde ohne Wahl geschlossen — die Frage, nicht die Rechnung (§21.3).
+
+    Wer sie nicht kennt, sieht einen gewöhnlichen Abbruch. Die Auswertung macht
+    daraus einen Befund am fragenden Schritt, die Verweisprüfung lässt den
+    Verweis stehen: Bis zum 23.09.2026 galt das Schließen einer Zuordnungsfrage
+    als Abbruch der ganzen Rechnung, und das Fenster sagte dazu nichts.
+    """
+
+
 def _with_values(kwargs: dict[str, Any], **extra: Any) -> dict[str, Any]:
     """Vereint die Werte, die eine Unterklasse kennt, mit denen des Aufrufers."""
     kwargs["values"] = {**extra, **(kwargs.pop("values", None) or {})}

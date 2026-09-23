@@ -554,6 +554,40 @@ def test_an_evaluation_question_keeps_the_project_generation_from_its_creation(
         _release_unstarted_worker(session, "_worker", worker)
 
 
+def test_a_question_closed_without_a_choice_is_declined_not_cancelled(session: Session) -> None:
+    """Das Schließen einer Frage sagt der Frage ab, nicht der Rechnung.
+
+    ``QuestionDeclined`` lässt die Auswertung am fragenden Schritt mit einem Befund anhalten
+    (RM-024: „Abbruch liefert einen Befund"). Bis zum 23.09.2026 kam hier
+    ``OperationCancelled``: Die ganze Rechnung galt als abgebrochen, und weil
+    ``_cancel_by_user`` nicht stand, sagte das Fenster nichts. Eine überholte Frage bleibt
+    ein gewöhnlicher Abbruch — ihre Antwort gehört zu keinem aktuellen Stand.
+    """
+    from app.core.errors import OperationCancelled, QuestionDeclined
+
+    def close(request: AskRequest) -> None:
+        request.reply(None)
+
+    session.askRequested.connect(close, Qt.ConnectionType.DirectConnection)
+    try:
+        with pytest.raises(QuestionDeclined):
+            session.ask_from_worker("Welches Merkmal entspricht hole_1?", ["hole_2"])
+    finally:
+        session.askRequested.disconnect(close)
+
+    def outdated(request: AskRequest) -> None:
+        session._project_generation += 1
+        request.reply(None)
+
+    session.askRequested.connect(outdated, Qt.ConnectionType.DirectConnection)
+    try:
+        with pytest.raises(OperationCancelled) as stopped:
+            session.ask_from_worker("Welches Merkmal entspricht hole_1?", ["hole_2"])
+    finally:
+        session.askRequested.disconnect(outdated)
+    assert not isinstance(stopped.value, QuestionDeclined)
+
+
 def _matching_question_scenes():
     """Zwei unterscheidbare Ansichten mit tatsächlichen, körpergebundenen Dreiecken."""
     import trimesh
@@ -19966,6 +20000,62 @@ def test_an_edge_question_shows_the_edge_line_in_the_dialog_and_emphasises_by_to
         "die markierte Zeile betont die Kante über ihr Token"
     )
     assert shown[-1] == ("candidates", ()), "nach der Antwort ist die Frage aus dem Bild"
+
+
+def test_a_feature_question_names_its_candidates_like_the_tree(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Zuordnungs- und die Verweisfrage zeigen „Bohrung 2 · Ø4,40“ statt ``hole_2``.
+
+    Nach *Dreiecke verringern* am Halter mit Wabenmuster fragte die Zuordnung
+    „Welches Merkmal entspricht cone_3?“ und bot Kennungen an, die sonst
+    nirgends in der Oberfläche stehen. Die Antwort bleibt die Kennung; die
+    Zeile ist die Beschriftung des Objektbaums.
+    """
+    from app.core.scene import EvaluationResult
+    from app.core.types import Feature, Scene, SceneObject
+    from app.ui import main_window as module
+    from app.ui.labels import feature_label
+
+    hole = Feature(
+        "hole_2",
+        "hole",
+        "detected",
+        {"diameter": 4.4, "centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0)},
+        measure_sources={"diameter": "fit"},
+    )
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    plate = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 5.0)))
+    body = SceneObject(id="obj_1", name="Halter", mesh=plate, features={"hole_2": hole})
+    preview = EvaluationResult(scene=Scene(objects={"obj_1": body}), stopped_at=2)
+    built: list[dict[str, str]] = []
+    monkeypatch.setattr(window, "_on_scene", lambda result: None)
+    monkeypatch.setattr(window.viewport, "show_candidates", lambda *args: None)
+
+    class Answer(module.AskDialog):
+        def __init__(self, question, choices, parent=None, *, labels=None):
+            built.append(dict(labels or {}))
+            super().__init__(question, choices, parent, labels=labels)
+
+        def exec(self):
+            self.list.setCurrentRow(0)
+            return self.DialogCode.Accepted
+
+    monkeypatch.setattr(module, "AskDialog", Answer)
+    request = AskRequest(
+        "Welches Merkmal entspricht hole_1?",
+        ["hole_2", "Nicht weiterführen"],
+        preview=preview,
+        candidates=(("obj_1", "hole_2"),),
+    )
+    window._on_ask(request)
+
+    assert built and built[0]["hole_2"] == feature_label("hole_2", hole)
+    assert "Nicht weiterführen" not in built[0], "eine Antwort ohne Merkmal bleibt, wie sie ist"
+    assert request.answer == "hole_2", "der Kern bekommt die Kennung, nicht die Beschriftung"
 
 
 def test_the_ask_dialog_shows_a_label_per_token_and_returns_the_token(

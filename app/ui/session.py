@@ -47,6 +47,7 @@ from app.core.errors import (
     AppError,
     InternalError,
     OperationCancelled,
+    QuestionDeclined,
     UserError,
     ValidationError,
 )
@@ -3771,8 +3772,14 @@ class Session(QObject):
             raise OperationCancelled
         self.askRequested.emit(request)
         request.answered.wait()
-        if request.answer is None or not self.question_is_current(request):
+        if not self.question_is_current(request):
             raise OperationCancelled
+        if request.answer is None:
+            # Ohne Wahl geschlossen, und die Frage gilt noch: ein Abbruch der
+            # **Frage**, nicht der Rechnung. Die Auswertung macht daraus einen
+            # Befund am Schritt; bis zum 23.09.2026 endete hier die ganze
+            # Rechnung, und das Fenster sagte nichts (``QuestionDeclined``).
+            raise QuestionDeclined
         return request.answer
 
     # --- worker replies ---------------------------------------------------------

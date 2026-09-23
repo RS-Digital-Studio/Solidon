@@ -3454,21 +3454,22 @@ def test_removing_a_bore_restores_the_body_exactly(profile: Profile) -> None:
     assert restored == pytest.approx(27000.0, abs=0.01), restored
 
 
-def test_turning_a_through_bore_says_it_no_longer_goes_through(profile: Profile) -> None:
-    """Der Zwilling, der beim Versetzen stand und beim Drehen fehlte.
+@pytest.mark.parametrize("angle", [30.0, 60.0])
+def test_turning_a_through_bore_keeps_it_through(profile: Profile, angle: float) -> None:
+    """Eine gekippte Durchgangsbohrung bleibt eine Durchgangsbohrung (RM-133).
 
-    Eine gekippte Bohrung trifft die Gegenseite nicht mehr — und das ist
-    derselbe Fall, für den *Versetzen* und *Verdoppeln* seit heute einen
-    Befund haben. Gemessen an einer 12 mm starken Wand mit einer durchgehenden
-    Bohrung Ø 6, Material im alten Schlauch nach dem Drehen:
-
-        um 30°     86,8 mm³
-        um 60°    158,1 mm³
-
-    Beide Läufe endeten ohne ein Wort. Gefragt wird mit der **gedrehten**
-    Achse; mit der alten misst die Prüfung den Schlauch von vorher und findet
-    dort erwartungsgemäß nichts.
+    Bis zum 23.09.2026 wurde das Werkzeug nur so lang gebaut wie die gemessene
+    Bohrung: Um 30° gekippt blieben an einer 12 mm starken Wand 86,8 mm³ im
+    Schlauch stehen, um 60° 158,1 — die Warnung ``no_longer_through`` sagte es,
+    aber das Teil war nicht, was der Kunde wollte. Die gesenkte Bohrung
+    (``_rotate_cavity_chain``, RM-172) und der exakte Kern
+    (``_through_bore_depth``) bleiben seit ihrem Bau durchgehend; nur die
+    einzelne Bohrung am Netz nicht. Jetzt reicht ihr Werkzeug so weit, wie
+    :func:`_reach_past_a_tilted_face` es für die Wand rechnet — und nicht
+    weiter, damit keine Wand fällt, die niemand gemeint hat.
     """
+    from app.core.geom.prepare_ops import _no_longer_through
+
     wall = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 12.0)))
     bored = drill(
         wall, position=(0.0, 0.0, 6.0), axis="z", diameter=6.0, profile=profile, compensate=False
@@ -3477,11 +3478,110 @@ def test_turning_a_through_bore_says_it_no_longer_goes_through(profile: Profile)
     hole = next(name for name, found in entry.features.items() if found.kind == "hole")
     assert entry.features[hole].params.get("through"), "sonst prüft dieser Test nichts"
 
-    result = _run_op("rotate_feature", entry, profile, at_feature=hole, axis="x", angle=30.0)
+    result = _run_op("rotate_feature", entry, profile, at_feature=hole, axis="x", angle=angle)
 
-    said = [found for found in result.findings if found.code == "rotate_feature.no_longer_through"]
+    codes = [found.code for found in result.findings]
+    assert "rotate_feature.no_longer_through" not in codes, codes
+    out = result.outputs[0]
+    turned = out.features[hole]
+    centre = tuple(float(value) for value in turned.params["centre"])
+    assert not _no_longer_through(
+        as_mesh_data(out.mesh), turned, centre, quality="fine", seed=None, cancelled=None
+    ), "im gekippten Schlauch steht kein Material mehr"
+    tilted = math.radians(angle)
+    expected_axis = np.array([0.0, -math.sin(tilted), math.cos(tilted)])
+    found = [
+        feature
+        for feature in detect(as_mesh_data(out.mesh)).values()
+        if feature.kind == "hole"
+        and abs(float(np.dot(feature.params["axis"], expected_axis))) > 0.999
+    ]
+    assert found and found[0].params.get("through"), (
+        "die Erkennung sieht eine gekippte Durchgangsbohrung"
+    )
+    assert out.mesh.is_watertight and out.mesh.component_count == 1
+
+
+@pytest.mark.parametrize("operation", ["rotate_feature", "move_feature"])
+def test_material_behind_air_does_not_block_a_through_bore(
+    profile: Profile, operation: str
+) -> None:
+    """Eine Durchgangsbohrung ist durch ihre Wand hindurch — was dahinter steht, zählt nicht.
+
+    Die Prüfung ``_no_longer_through`` schnitt eine Säule durch den **ganzen**
+    Körper. Am Schraubenhalter mit Wabenmuster (``F:\\3D Dateien``) ging eine
+    um 15° gekippte Befestigungsbohrung sauber durch die Rückwand, und die
+    Säule traf 43 bis 112 mm weiter die Waben: „geht nicht mehr durch" — ein
+    Fehlalarm an jedem Teil, dessen Achse hinter der Wand wieder Material
+    kreuzt (RM-133, 23.09.2026). Jetzt zählt nur, was unmittelbar hinter dem
+    geschnittenen Werkzeug steht; wo zwischen Werkzeugende und Rest Luft ist,
+    ist die Bohrung durch.
+
+    Gebaut: eine 10 mm starke Wand mit einer Bohrung Ø 6 quer hindurch, 20 mm
+    davor eine zweite Wand, beide über eine Bodenplatte verbunden — ein Körper.
+    """
+    wall = trimesh.creation.box(extents=(40.0, 10.0, 40.0))
+    wall.apply_translation((0.0, 5.0, 20.0))
+    front = trimesh.creation.box(extents=(40.0, 10.0, 40.0))
+    front.apply_translation((0.0, 35.0, 20.0))
+    floor = trimesh.creation.box(extents=(40.0, 40.0, 5.0))
+    floor.apply_translation((0.0, 20.0, 2.5))
+    body = boolean("union", [MeshData.of(wall), MeshData.of(front), MeshData.of(floor)]).mesh
+    bore = trimesh.creation.cylinder(radius=3.0, height=30.0, sections=64)
+    bore.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1.0, 0.0, 0.0)))
+    bore.apply_translation((0.0, 5.0, 20.0))
+    bored = boolean("difference", [body, MeshData.of(bore)]).mesh
+    assert bored.component_count == 1
+    entry = SceneObject(id="obj_1", name="Halter", mesh=bored, features=detect(bored))
+    hole = next(
+        name
+        for name, found in entry.features.items()
+        if found.kind == "hole" and abs(float(found.params["axis"][1])) > 0.99
+    )
+    assert entry.features[hole].params.get("through"), "sonst prüft dieser Test nichts"
+
+    if operation == "rotate_feature":
+        result = _run_op(operation, entry, profile, at_feature=hole, axis="x", angle=15.0)
+    else:
+        result = _run_op(operation, entry, profile, at_feature=hole, x=5.0, y=5.0, z=22.0)
+
+    codes = [found.code for found in result.findings]
+    assert f"{operation}.no_longer_through" not in codes, codes
+
+
+def test_turning_a_bore_into_its_neighbour_says_so(profile: Profile) -> None:
+    """Kippt eine Bohrung in die Nachbarbohrung, sagt der Schritt es — wie beim Versetzen.
+
+    Bis zum 23.09.2026 fragten nur *Bohrung ändern* und der Versatz mit Senkung
+    nach der Nachbarwand (``_neighbour_bore_findings``); gekippt verband sich
+    eine Bohrung Ø 6 um 40° mit der Bohrung 10 mm daneben, und der Bericht
+    schwieg (RM-133: nur handlungsrelevante Folgen melden — das ist eine).
+    """
+    body = MeshData.of(trimesh.creation.box(extents=(80.0, 60.0, 10.0)))
+    tools = []
+    for x in (-10.0, 0.0):
+        cylinder = trimesh.creation.cylinder(radius=3.0, height=30.0, sections=64)
+        cylinder.apply_translation((x, 20.0, 0.0))
+        tools.append(cylinder)
+    plate = boolean("difference", [body, MeshData.of(trimesh.util.concatenate(tools))]).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate, features=detect(plate))
+    holes = {
+        round(float(found.params["centre"][0])): name
+        for name, found in entry.features.items()
+        if found.kind == "hole"
+    }
+
+    result = _run_op("rotate_feature", entry, profile, at_feature=holes[-10], axis="y", angle=-40.0)
+
+    said = [found for found in result.findings if found.code == "bore.neighbour_opened"]
     assert said, [found.code for found in result.findings]
-    assert said[0].severity == "warning"
+    assert set(said[0].feature_ids) == {holes[-10], holes[0]}
+    assert "Winkel" in str(said[0].message), "der Ausweg beim Kippen ist ein anderer Winkel"
+
+    calm = _run_op("rotate_feature", entry, profile, at_feature=holes[-10], axis="y", angle=15.0)
+    assert not [found for found in calm.findings if found.code.startswith("bore.neighbour")], (
+        "weg vom Nachbarn bleibt die Wand, wie sie war"
+    )
 
 
 def test_a_copy_never_takes_the_number_of_a_removed_feature(profile: Profile) -> None:

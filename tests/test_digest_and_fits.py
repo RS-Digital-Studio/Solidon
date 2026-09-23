@@ -113,9 +113,10 @@ def test_measure_status_rejects_undefined_directions_and_sizes(name: str, value:
 @pytest.mark.parametrize(
     ("source", "qualifier"),
     [
-        ("native", ""),
-        ("fit", "geschätzt"),
-        ("parameter", "Vorgabemaß"),
+        ("native", "aus der Konstruktion"),
+        ("facets", "gemessen"),
+        ("fit", "eingepasst"),
+        ("parameter", "aus dem Schritt"),
         (None, "Maßherkunft nicht bestimmt"),
     ],
 )
@@ -134,7 +135,7 @@ def test_digest_reads_the_actual_measure_source(source: str | None, qualifier: s
     text = _feature_line(feature.id, feature)
     assert "Ø 8.01" in text
     assert qualifier in text
-    assert ("geschätzt" in text) is (source == "fit")
+    assert ("eingepasst" in text) is (source == "fit")
     assert feature.params["diameter"] == pytest.approx(8.012345)
     missing = _feature_line(feature.id, replace(feature, params={"diameter": None}))
     assert "Maß nicht bestimmt" in missing and "Ø 0" not in missing
@@ -172,7 +173,32 @@ def test_digest_does_not_invent_an_axis_for_an_undefined_direction() -> None:
         params={**feature.params, "axis": (0.0, 0.0, 1.0)},
         measure_sources={"diameter": "native", "axis": "fit"},
     )
-    assert "Achse +Z (geschätzt)" in _feature_line(fitted.id, fitted)
+    assert "Achse +Z (eingepasst)" in _feature_line(fitted.id, fitted)
+
+
+def test_the_digest_names_a_shared_measure_source_once() -> None:
+    """Teilen alle Maße einer Zeile eine Quelle, steht ihr Wort einmal am Ende.
+
+    Dieselben Wörter wie im Objektbaum (``actions.MEASURE_SOURCE_WORDS``) —
+    und dieselbe Faltung: „(gemessen)“ hinter jeder Zahl wäre Rauschen, das
+    dem Agenten Platz nimmt (§26.1). Gemischte Quellen bleiben je Maß benannt.
+    """
+    from app.core.perceive.digest import _feature_line
+
+    measured = Feature(
+        "hole_1",
+        "hole",
+        "detected",
+        {"diameter": 5.0, "axis": (0.0, 0.0, 1.0), "centre": (1.0, 2.0, 3.0)},
+        measure_sources={"diameter": "facets", "axis": "facets", "centre": "facets"},
+    )
+    line = _feature_line(measured.id, measured)
+    assert line.endswith("— Maße gemessen"), line
+    assert line.count("gemessen") == 1, line
+    mixed = replace(measured, measure_sources={**measured.measure_sources, "diameter": "fit"})
+    line = _feature_line(mixed.id, mixed)
+    assert "(eingepasst)" in line and "Maße" not in line, line
+    assert line.count("(gemessen)") == 2, line
 
 
 def test_measure_fields_use_the_starting_measure_and_keep_the_target_value() -> None:
@@ -662,6 +688,52 @@ def test_the_stack_line_does_not_carry_a_whole_gathered_value(profile: Profile) 
     assert not wrote_its_own_line(text)
     assert "cube([10,10,10]);" in history, "der Anfang steht da, damit man ihn erkennt"
     assert "…" in history and len(history) < 200, "und danach ist Schluss"
+
+
+def test_no_warning_writes_its_own_line(profile: Profile) -> None:
+    """Ein Befund kann einen Namen aus der Datei tragen — ein 3MF-Teil etwa.
+
+    ``_finding_lines`` schrieb die Meldung ungefiltert in den Steckbrief. Ein
+    Teilname mit Zeilenumbruch in einer fremden 3MF (``ingest.threemf``
+    nennt ihn in der Warnung) schrieb damit eigene Zeilen, und ein Name von
+    zweitausend Zeichen verdrängte, was wirklich in der Szene steht (§32).
+    """
+    from app.i18n import _
+
+    scene = plate_scene(profile)
+    warning = Finding(
+        code="ingest.helper_skipped",
+        severity="warning",
+        message=_("„{name}“ ist unbekannt.", name=INJECTION + "x" * 2000),
+    )
+    scene = replace(scene, report=Report(findings=(warning,)))
+
+    text = digest(scene)
+    line = next(line for line in text.splitlines() if "Deckel" in line)
+
+    assert not wrote_its_own_line(text)
+    assert len(line) < 400, "ein Befund bleibt eine Zeile von lesbarer Länge"
+
+
+def test_no_parameter_name_of_a_step_writes_its_own_line(profile: Profile) -> None:
+    """Die Namen der Werte eines Schritts kommen ungeprüft aus der Projektdatei.
+
+    ``operation_from_data`` übernimmt die Schlüssel, wie sie dastehen; erst die
+    Auswertung prüft sie gegen das Schema. Die Verlaufszeile setzte bei Zahlen
+    und Wahrheitswerten den Schlüssel ungefiltert ein.
+    """
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops.append(
+        Operation(id=1, op="drill_hole", params={INJECTION: 5.0, INJECTION + "2": True})
+    )
+    document.transactions.append(
+        Transaction(id="t1", title="Bohren", ops=(1,), origin=Origin(by="user"))
+    )
+
+    text = digest(plate_scene(profile), document)
+
+    assert not wrote_its_own_line(text)
+    assert "Verlauf" in text
 
 
 def test_a_new_object_name_writes_no_line_of_its_own(profile: Profile) -> None:
@@ -1165,13 +1237,15 @@ def test_a_fit_pointing_at_nothing_is_an_error(profile: Profile) -> None:
     assert findings[0].severity == "error"
     # §2.7: der Satz nennt den Grund und einen Weg. Er nannte keinen von
     # beiden — und der häufigste Fall ist einer, in den ein Kunde ohne Warnung
-    # hineinläuft: „Dose mit Deckel" öffnen, den eigenen Namen daraufschreiben,
-    # und der Prüfbericht meldet einen Fehler. Wer nicht weiß, dass eine
-    # Boolesche Operation die benannten Merkmale kostet, sucht ihn in seiner
-    # Beschriftung.
+    # hineinläuft. Seit RM-189 ist das vor allem ein erkanntes Merkmal, das ein
+    # späterer Schritt unkenntlich gemacht hat (Glätten, starkes Verringern);
+    # „benannte Merkmale überstehen das nicht" war dort eine falsche Ursache.
+    # Der Weg ist der Verlauf, und der Knopf dazu steht im Bericht
+    # (``panels.FINDING_ACTIONS``).
     message = str(findings[0].message)
-    assert "neu gebaut" in message, message
-    assert "zurücknehmen" in message, "der Satz muss eine Handlung nennen"
+    assert "nicht mehr erkennbar" in message, message
+    assert "Verlauf" in message, "der Satz muss den Weg nennen"
+    assert "benannte" not in message, "keine Ursache, die der Befund nicht kennt"
 
 
 def test_fits_can_be_added_and_removed() -> None:

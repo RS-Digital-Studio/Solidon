@@ -4354,6 +4354,142 @@ def test_a_fillet_click_reads_the_planes_of_a_body_once(monkeypatch: pytest.Monk
     assert len(reads) == 1, "je Körper einmal gelesen, nicht je Klick"
 
 
+def test_the_panel_welds_and_indexes_a_body_once_for_all_bores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Mündungsprobe einer gesenkten Bohrung verschweißt und indiziert den Körper einmal.
+
+    ``bore_entrance`` — das Merkmalfenster fragt es für jede angeklickte
+    Bohrung mit Senkung — kopierte und verschweißte den ganzen Körper dreimal
+    und baute für die Mündungsprobe einen Suchbaum über alle Dreiecke. Am
+    Gartenschlauchhalter mit 392 532 Dreiecken kostete ein Klick so bis zu
+    0,4 s im Hauptfaden, am Bohrhalter 48 ms je Bohrung (RM-181, gemessen am
+    22.09.2026). Beides ist eine Eigenschaft des Körpers und nicht der
+    Bohrung.
+    """
+    from app.core.geom import mesh as mesh_module
+
+    bodies = []
+    for x in (0.0, 30.0):
+        profile = [[12.0, 0.0], [12.0, 10.0], [5.5, 10.0], [5.5, 8.5], [3.0, 6.0], [3.0, 0.0]]
+        body = trimesh.creation.revolve([*profile, [12.0, 0.0]], sections=48)
+        body.apply_translation([x, 0.0, 0.0])
+        bodies.append(body)
+    mesh = MeshData.of(trimesh.util.concatenate(bodies))
+    found = detect(mesh)
+    from app.core.perceive.relations import cavity_chains
+
+    bores = [chain[0] for chain in cavity_chains(found, mesh)]
+    assert len(bores) == 2, "zwei Bohrungen mit Senkung"
+
+    welds: list[int] = []
+    indexes: list[int] = []
+    merge, index_of = trimesh.Trimesh.merge_vertices, mesh_module._SurfaceIndex.of
+
+    def counted_merge(self: trimesh.Trimesh, *args: Any, **kwargs: Any) -> Any:
+        welds.append(1)
+        return merge(self, *args, **kwargs)
+
+    def counted_index(body: trimesh.Trimesh) -> Any:
+        indexes.append(1)
+        return index_of(body)
+
+    monkeypatch.setattr(trimesh.Trimesh, "merge_vertices", counted_merge)
+    monkeypatch.setattr(mesh_module._SurfaceIndex, "of", staticmethod(counted_index))
+    offered = []
+    for bore in bores:
+        for _repeat in range(2):
+            rows = actions_for(bore, found, mesh=mesh)
+            offered.append({row.op for row in rows if row.op})
+
+    assert all("resize_hole" in ops for ops in offered)
+    assert len(welds) <= 1, f"{len(welds)} verschweißte Kopien für {len(offered)} Handlungslisten"
+    assert len(indexes) <= 1, f"{len(indexes)} Suchbäume für {len(offered)} Handlungslisten"
+
+
+def test_the_nearly_flat_sides_of_a_body_are_read_once() -> None:
+    """Die gerundeten Seiten, die als Ebene neben einer Rundung gelten, liest der Körper einmal.
+
+    Am Countercleaner (701 900 Dreiecke) las jede Frage des Merkmalfensters
+    die großen gerundeten Seiten neu — 0,1 s je Klick auf eine Rundung.
+    """
+    from shapely import affinity
+    from shapely.geometry import Point, box
+
+    from app.core.perceive.features import nearly_flat_mask
+
+    # Ein elliptischer Bogen ist kein Zylinder — er bleibt eine gerundete Seite.
+    arc = affinity.scale(Point(0.0, 0.0).buffer(10.0, quad_segs=32), 1.6, 1.0)
+    outline = box(-20.0, -10.0, 0.0, 10.0).union(arc)
+    body = MeshData.of(trimesh.creation.extrude_polygon(outline, height=6.0))
+    found = detect(body)
+    assert any(feature.kind == "curved_face" for feature in found.values()), sorted(
+        feature.kind for feature in found.values()
+    )
+
+    first = nearly_flat_mask(body.raw, found)
+    assert nearly_flat_mask(body.raw, found) is first, "dieselbe gemerkte Antwort"
+    assert not first.flags.writeable
+    changed = {name: feature for name, feature in found.items() if feature.kind != "curved_face"}
+    assert not nearly_flat_mask(body.raw, changed).any(), "ohne gerundete Seite keine Ebene"
+
+
+def test_the_panel_builds_the_body_of_a_cone_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ob eine Kegelmulde einen eigenen Körper hat, wird je Körper einmal gefragt.
+
+    ``no_own_body`` baute für jeden Klick auf einen Kegel den Körper aus seinen
+    Flächen neu und richtete dessen Normalen aus — am Sieb aus
+    ``Siebhalter+X1C.3mf`` (1 484 Dreiecke) 200 ms je Klick (RM-181).
+    """
+    from app.core.geom import prepare_ops
+    from app.core.geom.boolean import boolean
+
+    plate = MeshData.of(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    tip = trimesh.creation.cone(radius=8.0, height=6.0, sections=64)
+    tip.apply_transform(trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0)))
+    tip.apply_translation((0.0, 0.0, 5.0 + EPS_GEOM))
+    body = boolean("difference", [plate, MeshData.of(tip)]).mesh
+    found = detect(body)
+    cones = [feature for feature in found.values() if feature.kind == "cone"]
+    assert len(cones) == 1, sorted(feature.kind for feature in found.values())
+
+    builds: list[int] = []
+    original = prepare_ops._body_from_faces
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        builds.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(prepare_ops, "_body_from_faces", counted)
+    first = actions_for(cones[0], found, mesh=body)
+    second = actions_for(cones[0], found, mesh=body)
+
+    assert [row.op for row in first] == [row.op for row in second]
+    assert len(builds) <= 1, f"{len(builds)} Körperbauten für zwei Handlungslisten"
+
+
+@pytest.mark.parametrize(
+    "name",
+    (
+        "plate_holes.stl",
+        "plate_countersunk.stl",
+        "block_with_rounded_edge.stl",
+        "post_with_fillet.stl",
+    ),
+)
+def test_the_planar_mask_is_the_mask_of_the_detected_faces(name: str) -> None:
+    """Dieselbe Dreiecksmenge wie ``face_mask(mesh, detect_faces(mesh))`` — nur ohne
+    Träger und Innenlage gerechnet. Panel und Operation fragen beide diese Maske."""
+    from app.core.perceive.features import detect_faces, face_mask, planar_mask
+
+    mesh = normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm").mesh
+
+    expected = face_mask(mesh, detect_faces(mesh))
+    assert expected.any(), "jeder dieser Körper hat ebene Flächen"
+    assert np.array_equal(planar_mask(mesh), expected)
+    assert not planar_mask(mesh).flags.writeable, "die gemerkte Antwort bleibt unverändert"
+
+
 def _tab_with_a_round_end() -> MeshData:
     """Eine Lasche: ein Rechteck, dessen Ende ein Halbkreis ist — die runde Wand geht
     tangential in die beiden Flanken über."""

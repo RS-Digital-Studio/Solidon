@@ -21,6 +21,7 @@ Drei Ausgänge, und nur einer davon ist still:
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
@@ -381,28 +382,73 @@ def _hull_limits(
     gehören, wenn C[r,j] <= m[r] + U - L. U enthält auch alle Strafpaare.
     Die Zeilengrenze wird abgerundet: Der Floatvergleich entscheidet danach
     exakt dieselbe Menge wie der rationale Vergleich, ohne Fraction je Paar.
+
+    **U und L gelten je Zusammenhangskomponente der angenommenen Paare.**
+    Strafpaare kosten überall dieselbe Strafe P, und es gibt nie weniger
+    Spalten als Zeilen der kleineren Seite; jedes Optimum zahlt deshalb in
+    jeder Komponente genau deren Optimum — sonst ließe sich die günstigere
+    Komponente einer anderen Zuteilung übernehmen und die Strafpaare auf
+    freie Spalten umlegen. Die Grenze einer Zeile ist damit m[r] + U_K - L_K
+    ihrer Komponente K. Bis zum 22.09.2026 stand dort die Lücke des ganzen
+    Körpers: Eine einzige Hall-Lücke — zwei alte Kegel, ein neuer — hob sie auf
+    P, und die Hülle ließ dann auch den Tausch zweier Bohrungen zu, die mit
+    Kosten 0,0 gegen 0,893 eindeutig lagen. Am Halter mit Wabenmuster kamen so
+    nach *Dreiecke verringern* vier Fragen zu Bohrungen, die sich nicht bewegt
+    hatten (RM-024). Die Zuteilung selbst bleibt die des globalen Lösers; nur
+    die Hülle wird enger, und sie bleibt eine notwendige Bedingung.
     """
-    oriented = matrix.T if matrix.shape[0] > matrix.shape[1] else matrix
+    transposed = matrix.shape[0] > matrix.shape[1]
+    oriented = matrix.T if transposed else matrix
     minima = np.empty(len(oriented))
     for start in range(0, len(oriented), VECTOR_ROWS):
         if check is not None:
             check()
         minima[start : start + VECTOR_ROWS] = np.min(oriented[start : start + VECTOR_ROWS], axis=1)
-    gap = Fraction(0)
-    for index, (selected, minimum) in enumerate(zip(assignment.values, minima, strict=True)):
+    # Die gewählte Kante je Zeile der kleineren Seite — dort, wo sie steht.
+    selected = np.empty(len(oriented))
+    selected[assignment.columns if transposed else assignment.rows] = assignment.values
+    components = _accepted_components(oriented, check)
+    gaps: dict[int, Fraction] = {}
+    for index, (chosen, minimum) in enumerate(zip(selected, minima, strict=True)):
         if check is not None and index % VECTOR_ROWS == 0:
             check()
-        gap += Fraction(float(selected)) - Fraction(float(minimum))
+        component = int(components[index])
+        gaps[component] = (
+            gaps.get(component, Fraction(0)) + Fraction(float(chosen)) - Fraction(float(minimum))
+        )
     limits = np.empty(len(minima))
     for index, minimum in enumerate(minima):
         if check is not None and index % VECTOR_ROWS == 0:
             check()
-        exact = Fraction(float(minimum)) + gap
+        exact = Fraction(float(minimum)) + gaps[int(components[index])]
         rounded = float(exact)
         if Fraction(rounded) > exact:
             rounded = float(np.nextafter(rounded, -np.inf))
         limits[index] = rounded
     return limits
+
+
+def _accepted_components(oriented: np.ndarray, check: Callable[[], None] | None) -> np.ndarray:
+    """Je Zeile die Komponente, die ihre angenommenen Paare mit anderen Zeilen verbindet.
+
+    Zwei Zeilen gehören zusammen, wenn sie eine angenommene Spalte teilen —
+    auch über Zwischenschritte. Eine Zeile ohne angenommenes Paar steht allein.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    if check is not None:
+        check()
+    rows, columns = np.nonzero(oriented <= MATCH_THRESHOLD)
+    count = oriented.shape[0] + oriented.shape[1]
+    graph = coo_matrix(
+        (np.ones(len(rows), dtype=np.int8), (rows, oriented.shape[0] + columns)),
+        shape=(count, count),
+    )
+    _number, labels = connected_components(graph, directed=False)
+    if check is not None:
+        check()
+    return np.asarray(labels[: oriented.shape[0]], dtype=np.intp)
 
 
 def _reachable(
@@ -975,6 +1021,10 @@ def moved_features(
             handedness = params.get("handedness")
             if handedness in {"right", "left"}:
                 params["handedness"] = "left" if handedness == "right" else "right"
+        if feature.kind == "pattern" and params.get("carrier") != "cylinder":
+            turned = _turned_field_angle(feature.params, params, turn)
+            if turned is not None:
+                params["angle"] = turned
         # replace und nicht ein frisches Feature: Der Aufbau von Hand
         # nannte fünf der sieben Felder, und die zwei fehlenden fielen bei
         # jedem Verschieben still weg. created_by ist der Eintrag „diesen
@@ -991,6 +1041,38 @@ def moved_features(
             ),
         )
     return moved
+
+
+def _turned_field_angle(
+    before: Mapping[str, Any], after: Mapping[str, Any], turn: np.ndarray
+) -> float | None:
+    """Der Feldwinkel eines ebenen Musters in der Ebene nach der Abbildung.
+
+    ``angle`` zählt gegen die erste Achse der Trägerebene, und die folgt allein
+    aus der Normalen (``units.plane_axes`` — dieselbe Regel wie
+    ``patterns.Frame.plane``). Eine Drehung um die Normale lässt die Normale
+    stehen und drehte bis zum 22.09.2026 auch den Winkel nicht: Die
+    mitgeführte Erkennung (``features.carry_detection``) trug nach 30 Grad am
+    Halter mit Wabenmuster weiter 90, die frische 120, und *Merkmal ändern*
+    zeichnete das Feld verdreht neu. Die erste Feldachse wird deshalb in der
+    Welt mitgedreht und in der neuen Ebene gelesen; gezählt wird wie bei der
+    Erkennung zwischen null und 180 Grad (``patterns._turn``).
+    """
+    from app.core import units
+
+    try:
+        angle = math.radians(float(before["angle"]))
+        old_axes = units.plane_axes(tuple(float(value) for value in before["normal"]))
+        new_axes = units.plane_axes(tuple(float(value) for value in after["normal"]))
+    except KeyError, TypeError, ValueError:
+        return None
+    if old_axes is None or new_axes is None:
+        return None
+    first, second = (np.asarray(axis, dtype=float) for axis in old_axes)
+    along = turn @ (math.cos(angle) * first + math.sin(angle) * second)
+    x_axis, y_axis = (np.asarray(axis, dtype=float) for axis in new_axes)
+    turned = math.degrees(math.atan2(float(along @ y_axis), float(along @ x_axis))) % 180.0
+    return 0.0 if turned >= 180.0 - 1e-3 else turned
 
 
 @dataclass(frozen=True, slots=True)

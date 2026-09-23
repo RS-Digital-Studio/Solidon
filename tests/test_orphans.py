@@ -21,6 +21,7 @@ from app.core.ingest.loader import normalise
 from app.core.perceive.features import detect
 from app.core.scene import orphans
 from app.core.types import Document, FeatureRef, Fit, Operation, Profile, Scene, SceneObject
+from app.i18n import tr
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -98,7 +99,7 @@ def test_the_question_is_asked_once_not_on_every_run(scene: Scene) -> None:
 def test_the_user_can_drop_the_fit_instead(scene: Scene) -> None:
     document = document_with(fit_to("hole_9"))
 
-    result = orphans.check(document, scene, lambda question, choices: orphans.REMOVE_CHOICE)
+    result = orphans.check(document, scene, lambda question, choices: choices[-1])
 
     assert document.fits == []
     assert result.removed == 1
@@ -132,7 +133,7 @@ def test_the_candidates_keep_to_the_kind(scene: Scene) -> None:
     orphans.check(document, scene, lambda question, choices: seen.append(choices) or "hole_1")
 
     assert all(name.startswith("hole_") for name in seen[0][:-1])
-    assert seen[0][-1] == orphans.REMOVE_CHOICE
+    assert seen[0][-1] == tr("Passung löschen"), "die letzte Antwort sagt, was sie tut"
 
 
 def test_both_sides_of_a_fit_are_checked(scene: Scene) -> None:
@@ -184,6 +185,64 @@ def document_with_op(named: str, op: str = "insert_heatset_m4") -> Document:
         Operation(id=1, op=op, inputs=("obj_1",), outputs=("obj_1",), params={"at_feature": named})
     )
     return document
+
+
+def test_every_unresolved_reference_offers_its_way_forward(scene: Scene) -> None:
+    """Ein Verweis, der ins Leere zeigt, führt zu der Stelle, an der er sich beheben lässt.
+
+    Regel 17 gilt im Prüfbericht so gut wie im Dialog. ``feature.orphaned``
+    und ``feature.blocked`` standen ohne Knopf da: Der Schritt, dessen Feld
+    neu zu wählen ist, blieb ohne Kennung, und eine Passung ohne Merkmal ohne
+    den Weg, den ``fit.missing_feature`` längst anbietet. Jetzt öffnet
+    *Eingabe korrigieren* den Schritt am genannten Feld, und an einer
+    Passung steht *Verlauf zeigen*.
+    """
+    from app.core.errors import CORRECT_INPUT, SHOW_HISTORY
+
+    def decline(question: str, choices: list[str]) -> None:
+        return None
+
+    step = orphans.check(document_with_op("hole_9"), scene, decline).findings
+    assert [finding.code for finding in step] == ["feature.orphaned"]
+    assert step[0].op_id == 1 and step[0].values["field"] == "at_feature"
+    assert CORRECT_INPUT in step[0].suggestions
+
+    kept = document_with(fit_to("hole_9"))
+    fit = orphans.check(kept, scene, decline).findings
+    assert [finding.code for finding in fit] == ["feature.orphaned"]
+    assert SHOW_HISTORY in fit[0].suggestions
+    assert kept.fits, "wer nicht antwortet, verliert keine Passung"
+    assert fit[0].severity == "error"
+
+    held = orphans.check(
+        document_with_op("hole_1"), scene, refuse, blocked=[FeatureRef("obj_1", "hole_1")]
+    ).findings
+    assert [finding.code for finding in held] == ["feature.blocked"]
+    assert held[0].op_id == 1 and CORRECT_INPUT in held[0].suggestions
+    assert "wähle" not in str(held[0].message), "Kundentexte stehen in der Sie-Form"
+
+
+def test_a_question_closed_without_a_choice_keeps_the_reference_and_says_so(scene: Scene) -> None:
+    """Die Sitzung meldet eine ohne Wahl geschlossene Frage als ``QuestionDeclined``.
+
+    Bis zum 23.09.2026 flog sie als gewöhnlicher Abbruch aus ``check`` heraus: Der
+    Arbeiter verwarf das fertig gerechnete Ergebnis, und wer ein Projekt mit einem
+    verlorenen Verweis öffnete und die Frage schloss, sah danach nichts — nicht einmal den
+    Befund, den ``check`` für „keine Antwort“ längst hat. Jetzt gilt dasselbe wie für jede
+    andere fehlende Antwort: Der Verweis bleibt, der Befund nennt den Weg.
+    """
+    from app.core.errors import QuestionDeclined
+
+    def close(question: str, choices: list[str]) -> str:
+        raise QuestionDeclined
+
+    kept = document_with(fit_to("hole_9"))
+    result = orphans.check(kept, scene, close)
+
+    assert [finding.code for finding in result.findings] == ["feature.orphaned"]
+    assert result.findings[0].severity == "error"
+    assert kept.fits and kept.fits[0].a.feature_id == "hole_9", "nichts gestrichen, nichts geraten"
+    assert not result.changed
 
 
 def test_an_operation_that_names_a_feature_is_a_reference() -> None:
@@ -308,11 +367,11 @@ def test_missing_clear_feature_cannot_expand_removal_to_whole_body(scene: Scene,
 
     def answer(question, choices):
         offered.extend(choices)
-        return orphans.REMOVE_CHOICE
+        return tr("Ohne dieses Merkmal rechnen")
 
     result = orphans.check(document, scene, answer)
 
-    assert orphans.REMOVE_CHOICE not in offered
+    assert tr("Ohne dieses Merkmal rechnen") not in offered
     assert not result.changed
     assert document.ops[0].params == before
     assert result.findings[0].severity == "error"
@@ -360,7 +419,7 @@ def test_dropping_it_clears_the_name_and_keeps_the_step(scene: Scene) -> None:
     """
     document = document_with_op("hole_9")
 
-    result = orphans.check(document, scene, lambda question, choices: orphans.REMOVE_CHOICE)
+    result = orphans.check(document, scene, lambda question, choices: choices[-1])
 
     assert result.removed == 1
     assert len(document.ops) == 1, "the step stays"
@@ -549,10 +608,49 @@ def test_a_lost_sketch_plane_is_put_to_the_user(scene: Scene) -> None:
     result = orphans.check(document, scene, answer)
 
     assert asked and "face_99" in asked[0][0]
-    assert orphans.REMOVE_CHOICE not in asked[0][1], "eine Ebene bietet kein Streichen an"
+    assert all(choice.startswith("face_") for choice in asked[0][1]), "kein Streichen"
     assert all(choice.startswith("face_") for choice in asked[0][1]), "Flächen, nichts anderes"
     rewritten = sketch_from_text(str(document.ops[0].params["sketch"]))
     assert rewritten.plane == f"feature:{asked[0][1][0]}", "die Antwort steht im Skizzentext"
+    assert result.rewritten == 1
+
+
+@pytest.mark.parametrize(
+    ("plane", "expected"),
+    [
+        ("offset:feature:face_99:12.5", "offset:feature:{face}:12.5"),
+        ("tilt:feature:obj_1:face_99:x:30", "tilt:feature:obj_1:{face}:x:30"),
+        (
+            "offset:tilt:feature:obj_1:face_99:y:15:@wand",
+            "offset:tilt:feature:obj_1:{face}:y:15:@wand",
+        ),
+    ],
+)
+def test_a_lost_face_under_a_derived_plane_keeps_every_derivation(
+    scene: Scene, plane: str, expected: str
+) -> None:
+    """Die Antwort ersetzt die Fläche unter der Ableitung, nicht die ganze Ebene.
+
+    Seit dem 22.09.2026 fragt die Prüfung auch durch eine Versatz- oder
+    Neigungsebene hindurch nach ihrer Fläche. Die Antwort schrieb danach aber
+    die nackte Flächenebene in den Skizzentext: Aus „12,5 mm über ``face_99``"
+    wurde „auf ``face_1``", und die Zeichnung lag still auf der Fläche statt
+    darüber — Abstand, Neigung und Projektparameter waren fort.
+    """
+    from app.core.sketch.serialize import sketch_from_text
+
+    document = document_with_sketch(plane)
+    asked: list[list[str]] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(list(choices))
+        return choices[0]
+
+    result = orphans.check(document, scene, answer)
+
+    assert asked, "die verlorene Fläche unter der Ableitung wird erfragt"
+    rewritten = sketch_from_text(str(document.ops[0].params["sketch"]))
+    assert rewritten.plane == expected.format(face=asked[0][0])
     assert result.rewritten == 1
 
 
@@ -604,7 +702,7 @@ def test_a_lost_sketch_plane_offers_each_identifier_once(scene: Scene) -> None:
     result = orphans.check(document, both, answer, announce=highlighted.append)
 
     assert asked, "die Frage kommt"
-    offered = [choice for choice in asked[0] if choice != orphans.REMOVE_CHOICE]
+    offered = list(asked[0])
     assert offered == faces, f"je Kennung eine Antwort, ohne Körpernamen — {offered}"
     assert len(offered) == len(set(offered))
     rewritten = sketch_from_text(str(document.ops[0].params["sketch"]))

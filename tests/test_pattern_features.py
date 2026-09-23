@@ -835,6 +835,50 @@ def test_a_moved_body_keeps_its_pattern_under_the_same_name() -> None:
     assert np.allclose(after.params["direction"], read.params["direction"])
 
 
+def _field_axis(feature: Feature) -> np.ndarray:
+    """Die erste Achse des Feldes in der Welt — aus Normale und Feldwinkel."""
+    from app.core import units
+
+    axes = units.plane_axes(feature.params["normal"])
+    assert axes is not None
+    first, second = (np.asarray(axis, dtype=float) for axis in axes)
+    angle = math.radians(float(feature.params["angle"]))
+    return math.cos(angle) * first + math.sin(angle) * second
+
+
+@pytest.mark.parametrize(("degrees", "axis"), [(30.0, (0.0, 0.0, 1.0)), (90.0, (1.0, 0.0, 0.0))])
+def test_a_turned_body_carries_the_field_of_its_pattern_along(
+    degrees: float, axis: tuple[float, float, float]
+) -> None:
+    """Der Feldwinkel dreht mit, wenn die Erkennung mitgeführt statt neu gerechnet wird.
+
+    ``angle`` steht gegen die erste Achse der Trägerebene, und die hängt allein
+    an der Normalen (``units.plane_axes``). Eine Drehung um die Normale lässt
+    die Normale, wie sie war — und ließ bis zum 22.09.2026 auch den Winkel
+    stehen: Am Halter mit Wabenmuster trug die mitgeführte Erkennung nach 30
+    Grad weiter 90, die frische 120. *Merkmal ändern* zeichnete das Muster dann
+    im alten Winkel neu, um 30 Grad verdreht gegen seine Zellen.
+    """
+    from app.core.perceive.matching import transformed_features
+
+    entry = textured("hexagon", "engraved")
+    read = only_pattern(entry.features)
+    turn = trimesh.transformations.rotation_matrix(math.radians(degrees), axis)
+    body = entry.mesh.raw.copy()
+    body.apply_transform(turn)
+    moved = MeshData.of(body)
+
+    carried = transformed_features(entry.features, turn, mesh=moved).candidates[read.id]
+    fresh = only_pattern(detect(moved))
+
+    assert np.allclose(carried.params["normal"], fresh.params["normal"], atol=1e-9)
+    along = abs(float(_field_axis(carried) @ _field_axis(fresh)))
+    assert along == pytest.approx(1.0, abs=1e-9), (
+        f"das Feld liegt um {math.degrees(math.acos(min(along, 1.0))):.1f} Grad verdreht"
+    )
+    assert 0.0 <= float(carried.params["angle"]) < 180.0
+
+
 def test_overlapping_noise_blobs_leave_one_clean_top_face() -> None:
     """Ohne Vereinigung der Streuflecken hatte die Deckfläche doppelte Dreiecke."""
     entry = textured("noise", "engraved", pitch=2.0, depth=0.6)

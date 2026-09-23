@@ -357,6 +357,23 @@ def test_a_cube_has_no_overhang_worth_the_name() -> None:
     assert analysis.threshold == 45.0
 
 
+def test_the_overhang_legend_names_the_limit_it_highlights() -> None:
+    """Die Legende nennt die Grenze, nach der die Karte wirklich hervorhebt.
+
+    Die Grenze kommt aus dem Profil (``analysis_limits``): Ein kalibriertes
+    Material trägt seinen gemessenen Überhangwinkel. Die Legende stand bis zum
+    22.09.2026 fest auf „Über 45 Grad …“ — bei einem Material, das 55 Grad
+    trägt, markierte die Karte ab 55 und die Zeile darunter sagte 45.
+    """
+    from app.i18n import format_decimal
+
+    steep = maps.overhang_map(cube(), 55.0)
+    assert steep.threshold == 55.0
+    assert format_decimal(55.0, digits=0) in str(steep.note)
+    assert "45" not in str(steep.note)
+    assert format_decimal(45.0, digits=0) in str(maps.overhang_map(cube()).note)
+
+
 def test_a_tilted_face_is_measured_not_guessed() -> None:
     """Um 30 Grad gedreht steht die Unterseite auf 60 und eine Seite auf 30."""
     tilted = apply(cube(), rotation("x", 30.0))
@@ -706,6 +723,41 @@ def test_the_expensive_loop_asks_too(profile: Profile) -> None:
     assert token.asked > 1, "die Schleife hat gefragt, nicht nur der Eingang"
 
 
+@pytest.mark.parametrize("kind", ["wall", "curvature", "defects"])
+def test_every_expensive_map_stops_when_the_next_one_is_chosen(
+    kind: maps.MapKind, profile: Profile
+) -> None:
+    """Auch Wandstärke und Krümmung hören auf, wenn jemand die nächste Karte wählt.
+
+    ``build`` reichte den Abbruch nur an Stütz-, Formabweichungs- und
+    Netzfehlerkarte weiter. Die Wandstärke — die teuerste nach der Stützkarte,
+    1,7 s an 885 570 Dreiecken — und die Krümmung liefen bis zum Ende durch,
+    während das Fenster schon auf die nächste Karte wartete (§18.4, die Zusage
+    am ``_MapWorker``).
+    """
+    from app.core.errors import OperationCancelled
+
+    class _AfterTheFirstLook:
+        """Sagt beim zweiten Fragen ab — das erste ist der Eingang von ``build``."""
+
+        def __init__(self) -> None:
+            self.asked = 0
+
+        @property
+        def is_cancelled(self) -> bool:
+            return self.asked > 1
+
+        def raise_if_cancelled(self) -> None:
+            self.asked += 1
+            if self.asked > 1:
+                raise OperationCancelled
+
+    token = _AfterTheFirstLook()
+    with pytest.raises(OperationCancelled):
+        maps.build(kind, object_with(_table()), profile=profile, cancelled=token)
+    assert token.asked > 1
+
+
 def test_a_map_runs_through_while_nobody_cancels(profile: Profile) -> None:
     """Der Schalter ist da und wird nicht gezogen — dann ändert er nichts."""
     from app.core.scene.cancel import CancelSignal
@@ -736,6 +788,10 @@ def test_a_finding_picks_its_map() -> None:
         maps.map_for(Finding(code="perceive.generated_lost", severity="warning", message="x"))
         is None
     ), "auch ein verlorenes erzeugtes Merkmal hat im aktuellen Körper keine Fläche mehr"
+    assert (
+        maps.map_for(Finding(code="perceive.referenced_lost", severity="warning", message="x"))
+        is None
+    ), "und ein verlorenes erkanntes, auf das eine Passung zeigte, ebenso wenig (RM-189)"
     assert maps.map_for(Finding(code="repair.still_open", severity="warning", message="x")) == (
         "defects"
     )

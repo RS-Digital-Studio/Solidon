@@ -356,7 +356,7 @@ def build(
     if kind == "defects":
         return defect_map(mesh, cancelled)
     if kind == "curvature":
-        return curvature_map(mesh, entry.features)
+        return curvature_map(mesh, entry.features, cancelled=cancelled)
     if kind == "deviation":
         return deviation_map(mesh, entry, cancelled=cancelled, progress=progress)
     if kind == "features":
@@ -741,35 +741,34 @@ def _inward_thickness(
     # Nichts kann dicker sein, als der Körper lang ist.
     steps = int(float(body.scale) / field.pitch) + 2
     reached = np.zeros(len(centres), dtype=float)
-    inside = np.ones(len(centres), dtype=bool)
-    samples = np.empty_like(centres)
-    indices = np.empty(centres.shape, dtype=int)
     upper = np.asarray(field.filled.shape, dtype=int) - 1
+    # **Gerechnet wird nur, wer noch im Material ist.** Hat ein Lauf das
+    # Material einmal verlassen, hört er auf zu zählen — was jenseits der
+    # gegenüberliegenden Wand liegt, gehört zur nächsten Wand, nicht zu dieser.
+    # Bis zum 22.09.2026 wurden trotzdem alle Dreiecke jeden Schritt neu
+    # abgetastet, bis zur Länge des Körpers: an einer dünnwandigen Schale
+    # dreihundert Schritte über alle Dreiecke für Wände, die nach drei zu Ende
+    # waren. Die Rechnung je Punkt bleibt dieselbe wie in ``_indices`` —
+    # dieselben Operationen in derselben Reihenfolge, nur über die noch
+    # laufenden Dreiecke —, und damit bleiben auch Punkte genau auf einer
+    # Rasterhälfte auf derselben Seite wie zuvor.
+    active = np.arange(len(centres))
 
     for step in range(steps):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        # Drei große Fließkommafelder und ein Ganzzahlfeld je Schritt waren
-        # hier mehr Arbeit als das Nachschlagen selbst: auf dem §31-Körper 1,5
-        # von 2,4 Sekunden. Die Rechenreihenfolge bleibt dieselbe wie in
-        # ``_indices``; nur die beiden Puffer werden für alle Höhen wieder
-        # benutzt. Damit bleiben auch Punkte genau auf einer Rasterhälfte auf
-        # derselben Seite wie zuvor.
-        np.multiply(normals, field.pitch * (step + 0.5), out=samples)
-        np.subtract(centres, samples, out=samples)
+        samples = np.multiply(normals[active], field.pitch * (step + 0.5))
+        np.subtract(centres[active], samples, out=samples)
         np.subtract(samples, field.origin, out=samples)
         np.divide(samples, field.pitch, out=samples)
         np.rint(samples, out=samples)
-        np.copyto(indices, samples, casting="unsafe")
+        indices = samples.astype(int)
         np.clip(indices, 0, upper, out=indices)
         here = field.filled[indices[:, 0], indices[:, 1], indices[:, 2]]
-        # Hat ein Lauf das Material einmal verlassen, hört er auf zu zählen: was
-        # jenseits der gegenüberliegenden Wand liegt, gehört zur nächsten Wand,
-        # nicht zu dieser.
-        inside &= here
-        if not inside.any():
+        active = active[here]
+        if not len(active):
             break
-        reached += inside
+        reached[active] += 1.0
 
     values = reached * field.pitch
     return [float(value) if value > 0.0 else float("nan") for value in values]
@@ -809,7 +808,13 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
         high=90.0,
         highlighted=tuple(int(index) for index in np.nonzero(angles > limit)[0]),
         threshold=limit,
-        note=_("Über 45 Grad braucht die Fläche in aller Regel eine Stütze."),
+        # Die Grenze, nach der die Karte wirklich hervorhebt — ein kalibriertes
+        # Material trägt seinen gemessenen Winkel (``analysis_limits``), und
+        # „45 Grad“ fest im Satz widersprach dann der eigenen Färbung.
+        note=_(
+            "Über {angle} Grad braucht die Fläche in aller Regel eine Stütze.",
+            angle=format_decimal(round(limit, 1)),
+        ),
     )
 
 
@@ -863,7 +868,12 @@ def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> Analysis
 # --- Krümmung -------------------------------------------------------------------
 
 
-def curvature_map(mesh: MeshData, features: dict[FeatureId, Feature] | None = None) -> AnalysisMap:
+def curvature_map(
+    mesh: MeshData,
+    features: dict[FeatureId, Feature] | None = None,
+    *,
+    cancelled: CancelToken | None = None,
+) -> AnalysisMap:
     """Der Radius, mit dem ein Dreieck gekrümmt ist — in Millimetern.
 
     **Vorher stand hier der schärfste Winkel zu einem Nachbarn, und das misst
@@ -887,33 +897,36 @@ def curvature_map(mesh: MeshData, features: dict[FeatureId, Feature] | None = No
     """
     body = mesh.raw
     values = np.full(len(body.faces), np.nan, dtype=float)
-    pairs = np.asarray(body.face_adjacency)
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
     if not len(pairs):
         return _curvature_result(values, set(), _radii_from_features(values, features))
 
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     degrees = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
-    radii = pair_radii(body)
+    radii = np.asarray(pair_radii(body), dtype=float)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
 
-    sharp: set[int] = set()
-    for (first, second), radius, angle in zip(pairs, radii, degrees, strict=True):
-        if angle >= CURVATURE_LIMIT:
-            # **Eine Kante geht nicht in den Wert ein, sie wird markiert.** Sie
-            # sagt nichts darüber, wie die Fläche gekrümmt ist, auf der das
-            # Dreieck liegt — sie sagt, dass daneben eine andere anfängt. Der
-            # kleinste Radius über *alle* Nachbarn, wie es die alte Karte mit
-            # dem schärfsten Winkel tat, überschreibt jede Rundung: An einem
-            # Zylinder grenzt **jedes** Manteldreieck an den Deckel, und die
-            # ganze Wand käme als scharfe Kante heraus.
-            sharp.update((int(first), int(second)))
-            continue
-        if not np.isfinite(radius):
-            continue
-        for index in (int(first), int(second)):
-            # Unter den **glatten** Nachbarn gewinnt der kleinste: Wo eine
-            # Fläche in zwei Richtungen verschieden gekrümmt ist, ist die
-            # engere die, nach der gefragt wird.
-            current = values[index]
-            values[index] = float(radius) if math.isnan(current) else min(current, float(radius))
+    # **Eine Kante geht nicht in den Wert ein, sie wird markiert.** Sie sagt
+    # nichts darüber, wie die Fläche gekrümmt ist, auf der das Dreieck liegt —
+    # sie sagt, dass daneben eine andere anfängt. Der kleinste Radius über
+    # *alle* Nachbarn, wie es die alte Karte mit dem schärfsten Winkel tat,
+    # überschreibt jede Rundung: An einem Zylinder grenzt **jedes**
+    # Manteldreieck an den Deckel, und die ganze Wand käme als scharfe Kante
+    # heraus.
+    edge = degrees >= CURVATURE_LIMIT
+    sharp = {int(index) for index in np.unique(pairs[edge])}
+    # Unter den **glatten** Nachbarn gewinnt der kleinste: Wo eine Fläche in
+    # zwei Richtungen verschieden gekrümmt ist, ist die engere die, nach der
+    # gefragt wird. ``fmin`` übergeht das ``nan`` des Anfangs — dieselbe
+    # Rechnung wie die Schleife je Paar bis zum 22.09.2026, nur auf einmal:
+    # 1,35 Millionen Paare an 900 000 Dreiecken kosteten dort zwei Sekunden.
+    smooth = ~edge & np.isfinite(radii)
+    np.fmin.at(values, pairs[smooth, 0], radii[smooth])
+    np.fmin.at(values, pairs[smooth, 1], radii[smooth])
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
 
     exact = _radii_from_features(values, features)
     return _curvature_result(values, sharp, exact)
@@ -1000,10 +1013,10 @@ def _radii_from_features(values: np.ndarray, features: dict[FeatureId, Feature] 
         radius = float(measured) * factor
         if radius <= 0.0:
             continue
-        for index in feature.face_indices or ():
-            if 0 <= int(index) < len(values):
-                values[int(index)] = radius
-                exact.add(int(index))
+        indices = np.asarray(feature.face_indices or (), dtype=np.int64)
+        indices = indices[(indices >= 0) & (indices < len(values))]
+        values[indices] = radius
+        exact.update(indices.tolist())
     return exact
 
 
@@ -1385,7 +1398,12 @@ def map_for(finding: Finding) -> MapKind | None:
     # weiterhin erkannte Stellen färben und würde so einen Ort vortäuschen,
     # den der Befund nicht nennt. Körper und erzeugender Schritt bleiben
     # ehrliche Ziele des Klicks.
-    if code in {"perceive.generated_lost", "perceive.mended", "perceive.orphaned"}:
+    if code in {
+        "perceive.generated_lost",
+        "perceive.referenced_lost",
+        "perceive.mended",
+        "perceive.orphaned",
+    }:
         return None
     if code.startswith("perceive."):
         return "features"

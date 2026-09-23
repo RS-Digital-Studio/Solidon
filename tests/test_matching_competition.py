@@ -469,3 +469,108 @@ def test_cancellation_inside_hull_graph_and_closure_reaches_the_original_caller(
         matching.match(old, new, (0, 0, 0), 1.0, check_cancelled=signal.raise_if_cancelled)
     assert entered == [stage]
     assert all(feature.created_by is None for feature in (*old.values(), *new.values()))
+
+
+def test_a_hall_deficit_elsewhere_does_not_open_a_clear_pair():
+    """Eine Hall-Lücke unter den Kegeln öffnet keine Bohrung, die eindeutig bleibt (RM-024).
+
+    Nachgestellt nach dem Halter mit Wabenmuster
+    (``large-screwdriver-holder-with-honeycomb-pattern.stl``, *Dreiecke verringern*
+    auf 5 000, eine Passung auf zwei Bohrungen): Die Bohrungspaare liegen 18 mm
+    auseinander, jede alte kostet zu ihrer neuen 0,0 und zur Nachbarin 0,893. Zwei
+    alte Kegel beanspruchen denselben neuen — eine echte Lücke, die gefragt
+    werden muss. Ihre Strafe P ging aber in die **eine** Kostenhülle aller
+    Merkmale ein, die Hülle ließ damit auch den Bohrungstausch zu, und der Kunde
+    bekam vier Fragen „Welches Merkmal entspricht hole_1? hole_1 / hole_2"
+    zu Bohrungen, die sich nicht bewegt hatten. Die Hülle gilt je
+    Zusammenhangskomponente der angenommenen Paare: Jedes Optimum zahlt in jeder
+    Komponente genau deren Optimum, denn Strafpaare kosten überall dasselbe.
+    """
+    old = holes([0.0, 18.0], "old")
+    new = holes([0.0, 18.0], "new")
+    cone = {"axis": (0.0, 0.0, 1.0), "diameter": 8.0}
+    old |= {
+        "old_cone_1": Feature(
+            "old_cone_1", "cone", "detected", {**cone, "centre": (100.0, 0.0, 0.0)}
+        ),
+        "old_cone_2": Feature(
+            "old_cone_2", "cone", "detected", {**cone, "centre": (102.0, 0.0, 0.0)}
+        ),
+    }
+    new |= {
+        "new_cone": Feature("new_cone", "cone", "detected", {**cone, "centre": (101.0, 0.0, 0.0)})
+    }
+    # Wie nach dem Verringern: mehr neue Merkmale als alte — dann ist die alte
+    # Seite die vollständig zugeteilte, und die Strafe des leer ausgehenden
+    # Kegels steht in ihrer Summe.
+    new |= {
+        f"new_face_{index}": Feature(
+            f"new_face_{index}",
+            "face",
+            "detected",
+            {"centre": (0.0, 50.0 + index, 0.0), "normal": (0.0, 0.0, 1.0), "area": 10.0},
+        )
+        for index in range(3)
+    }
+
+    result = matching.match(old, new, (0.0, 0.0, 0.0), 252.0)
+
+    assert result.mapping == {"old_0": "new_0", "old_1": "new_1"}, result.ambiguous
+    assert set(result.ambiguous) == {"old_cone_1", "old_cone_2"}
+    assert all(candidates == ("new_cone",) for candidates in result.ambiguous.values())
+
+
+@pytest.mark.parametrize("transpose", [False, True])
+def test_component_hulls_keep_every_optimum_available_across_blocks(monkeypatch, transpose):
+    """Die Hülle je Komponente verliert kein Optimum — auch zwischen getrennten Blöcken.
+
+    Blockmatrizen aus zwei bis drei Gruppen angenommener Paare, eine davon mit
+    Hall-Lücke: Veröffentlicht wird nur, was in **jedem** exakten Optimum
+    steht, und erreichbar bleibt alles, was in **irgendeinem** steht. Die Optima
+    zählt der Test selbst über alle Zuteilungen mit Brüchen, nicht über den Löser.
+    """
+    random = np.random.default_rng(2209)
+    for _ in range(30):
+        matrix = np.full((4, 6), 1e6)
+        blocks = [
+            (slice(0, 2), slice(0, 2)),
+            (slice(2, 4), slice(2, 3)),
+            (slice(2, 4), slice(3, 6)),
+        ]
+        for rows, columns in blocks[: random.integers(2, 4)]:
+            shape = (rows.stop - rows.start, columns.stop - columns.start)
+            matrix[rows, columns] = random.choice([0.0, 0.125, 0.5, 0.875, 1e6], size=shape)
+        if transpose:
+            matrix = matrix.T
+        oriented = matrix.T if matrix.shape[0] > matrix.shape[1] else matrix
+        best = None
+        optima = []
+        for columns in permutations(range(oriented.shape[1]), oriented.shape[0]):
+            total = sum(
+                Fraction(float(oriented[row, column])) for row, column in enumerate(columns)
+            )
+            pairs = {
+                (column, row) if matrix.shape[0] > matrix.shape[1] else (row, column)
+                for row, column in enumerate(columns)
+                if oriented[row, column] <= 1.0
+            }
+            if best is None or total < best:
+                best, optima = total, [pairs]
+            elif total == best:
+                optima.append(pairs)
+        assigned = assignment_for(matrix)
+        monkeypatch.setattr(matching, "_assignment", lambda *args, answer=assigned: answer)
+        old = holes(list(range(len(matrix))), "old")
+        new = holes(list(range(matrix.shape[1])), "new")
+        result = matching.match(old, new, (0, 0, 0), 1.0)
+        published = {
+            (int(name.removeprefix("old_")), int(target.removeprefix("new_")))
+            for name, target in result.mapping.items()
+        }
+        available = published | {
+            (int(name.removeprefix("old_")), int(target.removeprefix("new_")))
+            for name, candidates in result.ambiguous.items()
+            for target in candidates
+        }
+        assert published <= set.intersection(*optima)
+        assert set.union(*optima) <= available

@@ -18,6 +18,13 @@ zusätzlich zu `AGENTS.md`.
   Keine globalen Objekte, kein Logger, der etwas anzeigt, kein Dialog.
 - **Fragen statt raten** (Regel 21): Mehrdeutigkeit geht über `ctx.ask`.
   Der Kern entscheidet nicht für den Nutzer.
+- **Eine ohne Wahl geschlossene Frage sagt der Frage ab, nicht der
+  Rechnung.** Die Sitzung meldet sie als `errors.QuestionDeclined`
+  (Unterklasse von `OperationCancelled`); in der Auswertung wird daraus über
+  `_WatchedAsk` ein Befund am fragenden Schritt mit Weg zurück, die
+  Verweisprüfung lässt den Verweis stehen. Wer eine neue Frage außerhalb
+  eines Schritts stellt, entscheidet dasselbe ausdrücklich — ein stiller
+  Abbruch ohne Satz ist keine Antwort (RM-024).
 
 ## Zahlen
 

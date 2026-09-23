@@ -25,12 +25,13 @@ from collections import Counter
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache, partial
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from app.core import expressions
 from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
+    CORRECT_INPUT,
     SHOW_DETAILS,
     SHOW_HISTORY,
     SHOW_STEP_VALUES,
@@ -39,6 +40,7 @@ from app.core.errors import (
     InternalError,
     NativeReferenceLost,
     OperationCancelled,
+    QuestionDeclined,
 )
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.profiles import analysis_limits, for_process
@@ -1681,7 +1683,17 @@ def _native_reselection(
     beides meldet der Aufrufer als Halt. Die Wahl reist wie eine Netzantwort
     durch ``recorded`` in den Stapel, nur in der nativen Domäne mit Scope.
     """
-    occupied = set(matched.mapping.values())
+    # **Wer neu gewählt wird, steht nicht mehr in der Zuordnung.** Ein alter
+    # Bezug, den die Geometrie eindeutig einem Merkmal unter anderem Namen
+    # zuordnet, ist nicht belegt (``_unproven_native_references``) und wird
+    # gefragt — bis zum 23.09.2026 aber mit seiner alten Zuordnung im Gepäck:
+    # Sein gefundener Nachfolger galt als besetzt und stand nicht unter den
+    # Antworten, und jede Antwort scheiterte an ``mapping_with_decisions``
+    # („Die Zuordnung ist nicht mehr gültig"), weil der alte Name schon
+    # zugeordnet war. Am exakten Quader genügte dafür, eine Seite zu versetzen,
+    # während eine Passung auf Deck- und Bodenfläche lag.
+    settled = {old: new for old, new in matched.mapping.items() if old not in lost}
+    occupied = set(settled.values())
     triangles = current.mesh.triangle_count
     claims: dict[FeatureId, tuple[FeatureId, ...]] = {}
     for name in sorted(lost):
@@ -1694,12 +1706,17 @@ def _native_reselection(
             and candidate not in occupied
             and _selectable(feature, triangles)
         )
+        # Der gefundene Nachfolger steht vorn: Er ist, was die Geometrie sagt,
+        # und die Zeile, die der Dialog zuerst markiert.
+        found = matched.mapping.get(name)
+        if found in options:
+            options = (found, *(candidate for candidate in options if candidate != found))
         if options:
             claims[name] = options
     if not claims:
         return current, matched
     question = MatchResult(
-        mapping=dict(matched.mapping),
+        mapping=settled,
         orphaned=tuple(name for name in matched.orphaned if name not in claims),
         ambiguous=claims,
         fresh=matched.fresh,
@@ -1747,6 +1764,117 @@ def _native_reselection(
         previous=previous,
     )
     return dataclasses.replace(current, features=aliased), question
+
+
+#: Die Maße, an denen ein Merkmal nach einem Umbau als **unverändert** gilt —
+#: Lage und Richtung (``_UNCHANGED_VECTORS``) und Größe (``_UNCHANGED_SIZES``).
+_UNCHANGED_VECTORS: Final = ("centre", "normal", "axis", "direction")
+_UNCHANGED_SIZES: Final = (
+    "area",
+    "diameter",
+    "radius",
+    "depth",
+    "length",
+    "angle",
+    "tube_diameter",
+    "pitch",
+    "volume",
+)
+
+
+def _unchanged(old: Feature, new: Feature) -> bool:
+    """Ob zwei Merkmale bis auf Rechenrauschen dieselbe Geometrie beschreiben.
+
+    Jede Lage und Richtung auf :data:`EPS_GEOM` gleich — eine Achse ohne
+    Vorzeichen, wie die Zuordnung sie liest —, jede Größe relativ auf
+    :data:`EPS_GEOM`, und was eines trägt, trägt auch das andere. Gemessen an
+    ``carpet-corner-clip.step`` und ``build_tray_v3.step`` (23.09.2026): Eine
+    Fläche, die *Fläche versetzen* nicht berührt, kommt bitgleich zurück.
+    """
+    if old.kind != new.kind:
+        return False
+    for key in _UNCHANGED_VECTORS:
+        first, second = old.params.get(key), new.params.get(key)
+        if first is None and second is None:
+            continue
+        if not isinstance(first, tuple | list) or not isinstance(second, tuple | list):
+            return False
+        if len(first) != 3 or len(second) != 3:
+            return False
+        try:
+            straight = max(abs(float(a) - float(b)) for a, b in zip(first, second, strict=True))
+            turned = max(abs(float(a) + float(b)) for a, b in zip(first, second, strict=True))
+        except TypeError, ValueError:
+            return False
+        if straight > EPS_GEOM and (key != "axis" or turned > EPS_GEOM):
+            return False
+    for key in _UNCHANGED_SIZES:
+        first, second = old.params.get(key), new.params.get(key)
+        if first is None and second is None:
+            continue
+        numbers = all(
+            isinstance(value, int | float) and not isinstance(value, bool)
+            for value in (first, second)
+        )
+        if not numbers:
+            return False
+        one, two = float(cast(float, first)), float(cast(float, second))
+        if abs(one - two) > EPS_GEOM * max(1.0, abs(one), abs(two)):
+            return False
+    return True
+
+
+def _unchanged_continuations(
+    current: SceneObject,
+    reference: Mapping[FeatureId, Feature],
+    unproven: Collection[FeatureId],
+    matched: MatchResult,
+) -> tuple[SceneObject, MatchResult]:
+    """Alte Bezüge, deren eindeutiger Partner unverändert ist, unter ihrem Namen fortführen.
+
+    Beleg nach P1.4c.2 war nur die Zuordnung auf **denselben** Namen. Die native
+    Erkennung nummeriert nach jedem Umbau neu, und eine Fläche, die der Schritt
+    nicht berührt hat, kam unter anderem Namen zurück: Am Teppichclip fragte
+    Solidon bei jedem *Fläche versetzen* nach beiden Flächen einer Passung, die
+    niemand angefasst hatte. Ist der eindeutige Partner bis auf Rechenrauschen
+    dieselbe Geometrie (:func:`_unchanged`), ist das ein Beleg — strenger als
+    die Zuordnung, die §21.2 für „ID bleibt“ genügt. Der Partner wird wie bei
+    der Neuwahl unter dem alten Namen veröffentlicht (``apply_mapping``).
+
+    Die Zuordnung danach führt diese Namen auf sich selbst; was auf einen
+    umbenannten Partner zeigte, fällt heraus und bleibt damit unbelegt — gefragt
+    wird dann wie bisher, nie still angenommen.
+    """
+    unchanged = {
+        name: found
+        for name in sorted(unproven)
+        if (found := matched.mapping.get(name)) is not None
+        and found != name
+        and name not in matched.ambiguous
+        and name in reference
+        and found in current.features
+        and _unchanged(reference[name], current.features[found])
+    }
+    if not unchanged:
+        return current, matched
+    aliased = apply_mapping(
+        dict(current.features),
+        MatchResult(
+            mapping=unchanged, orphaned=matched.orphaned, ambiguous=dict(matched.ambiguous)
+        ),
+        previous=reference,
+    )
+    renamed = set(unchanged.values()) | set(unchanged) | set(matched.orphaned)
+    renamed |= set(matched.ambiguous)
+    mapping = {
+        old: new
+        for old, new in matched.mapping.items()
+        if old not in unchanged and new not in renamed
+    }
+    mapping.update({name: name for name in unchanged})
+    return dataclasses.replace(current, features=aliased), dataclasses.replace(
+        matched, mapping=mapping
+    )
 
 
 def _unproven_native_references(
@@ -1920,9 +2048,21 @@ def _answer_matches(
             decisions = {}
             occupied = set(matched.mapping.values())
             noncontinuation = tr("Nicht weiterführen")
-            for old_id, candidates in claims.items():
+            # **Wer benutzt wird, wählt zuerst.** Die Reihenfolge der Namen
+            # stellte die Frage für eine Bohrung, an der eine Passung hing,
+            # zuletzt — mit „Nicht weiterführen“ als einziger Antwort, weil zwei
+            # unbenutzte die Nachfolger schon genommen hatten (23.09.2026).
+            # ``sorted`` ist stabil; unter sich bleibt die Reihenfolge dieselbe.
+            for old_id in sorted(claims, key=lambda name: name not in referenced):
+                candidates = claims[old_id]
                 watch.raise_if_cancelled()
                 available = tuple(name for name in candidates if name not in occupied)
+                if not available and old_id not in referenced:
+                    # Keine Wahl und kein Verbraucher: Ein Dialog mit „Nicht
+                    # weiterführen“ als einziger Antwort fragte nichts. Die
+                    # Entscheidung wird trotzdem festgehalten wie eine Antwort.
+                    decisions[old_id] = None
+                    continue
                 question, _unused_choices = question_for(old_id, available)
                 question = tr("Körper „{object}“: {question}").format(
                     object=str(entry.name), question=question
@@ -1937,6 +2077,8 @@ def _answer_matches(
                         "Diese bisherigen Bezüge teilen sich mögliche Nachfolger: {names}. "
                         "Jedes aktuelle Merkmal kann nur einen bisherigen Bezug übernehmen."
                     ).format(names=", ".join(claims))
+                # Sie-Form wie jeder Kundentext (``match_decisions``); bis zum
+                # 22.09.2026 stand hier „Ordne sie … neu zu".
                 question += "\n\n" + tr(
                     "Bei „Nicht weiterführen“ bleiben Verweise auf dieses Merkmal ungeklärt. "
                     "Ordnen Sie sie in den betroffenen Folgeschritten neu zu."
@@ -2096,6 +2238,7 @@ def _with_features(
         )
         unproven = set(wanted) - passed_through - continued
         matched: MatchResult | None = None
+        reference_features: dict[FeatureId, Feature] = previous
         if (
             previous
             and (touches_features or unproven)
@@ -2109,7 +2252,6 @@ def _with_features(
             # Merkmalen, nicht das Erhalten von Bezügen. Eine gemeldete
             # Bewegung wird dabei an den alten Maßen nachgeführt, wie am Netz.
             watch.raise_if_cancelled()
-            reference_features: dict[FeatureId, Feature] = previous
             if transform is not None:
                 reference_features = transformed_features(
                     previous, transform, check_cancelled=watch.raise_if_cancelled
@@ -2144,6 +2286,15 @@ def _with_features(
                         True,
                     ),
                 )
+        if matched is not None and unproven:
+            # **Was der Umbau nicht berührt hat, trägt seinen Namen weiter.** Die
+            # native Erkennung nummeriert neu, und eine unberührte Fläche kam
+            # unter anderem Namen zurück — gefragt wurde nach jeder, auf die eine
+            # Passung zeigte. Bitgleich gemessen, ist sie ein Beleg
+            # (:func:`_unchanged_continuations`, 23.09.2026).
+            exact_entry, matched = _unchanged_continuations(
+                exact_entry, reference_features, unproven, matched
+            )
         lost = _unproven_native_references(unproven, exact_entry, matched)
         if lost and matched is not None and scope is not None:
             # **Die native Neuwahl** (§21.3): Was die Zuordnung nicht belegt,
@@ -2441,6 +2592,24 @@ def _with_features(
             mesh.bounds.diagonal,
             check_cancelled=watch.raise_if_cancelled,
         )
+        # **Ein erklärtes Merkmal sucht seinen Partner an seiner Stelle.** Die
+        # Zuordnung toleriert 8 % der Diagonale, weil zwischen zwei Schritten
+        # ungeklärt gewandert werden darf; was die Operation selbst gesetzt hat,
+        # steht aber dort, wo sie es sagt. Am Schraubenhalter nahm eine
+        # verschobene Senkung die der Nachbarbohrung 18 mm daneben, und
+        # ``cone_2`` war verwaist, ohne dass jemand es angefasst hatte
+        # (23.09.2026). Weiter weg als seine eigene Größe ist es nicht es selbst.
+        far = {
+            name
+            for name, found in seen.mapping.items()
+            if not _near_its_declaration(declared[name], detected[found])
+        }
+        if far:
+            seen = dataclasses.replace(
+                seen,
+                mapping={name: found for name, found in seen.mapping.items() if name not in far},
+                orphaned=(*seen.orphaned, *sorted(far)),
+            )
         blind = set(seen.orphaned)
         # Randöffnungen sind geometrisch erkennbare Langlöcher. Fehlt ihre
         # Wand, darf ein mitgetragener Eintrag nicht zur ungeprüften Zusage
@@ -2715,17 +2884,41 @@ def _with_features(
         # ``tests/test_orphans.py`` liest diesen Quelltext und verlangt, dass
         # ``perceive.orphaned`` wörtlich mit ``info`` gemeldet wird. Ein Ternär
         # an der Stelle sieht kürzer aus und nimmt dem Test seine Aussage.
-        if getattr(old_feature, "provenance", "detected") == "generated" and old_id in referenced:
+        #
+        # **Und ein verwendetes erkanntes Merkmal ebenso** (RM-189). Zeigt eine
+        # Passung oder ein späterer Schritt auf eine Bohrung, die dieser
+        # Schritt unkenntlich gemacht hat — *Glätten* am Bohrhalter nahm allen
+        # 29 Bohrungen die Zylinderform, starkes *Dreiecke verringern* sieben —,
+        # stand im Bericht nur die Passung ohne Merkmal, und welcher Schritt es
+        # war, suchte der Kunde selbst. Der Befund steht am Schritt und führt zu
+        # ihm (*Eingabe korrigieren*), wie jeder Befund aus einer Operation.
+        # Gezählt wird dabei nur, wer **nach** diesem Schritt noch auf das
+        # Merkmal zeigt (``needed``, :func:`_needed_after`): *Fläche versetzen*
+        # verbraucht seine Fläche selbst, und am Zylinder des Piratenschiffs
+        # meldete jeder zweite Versatz einen Verlust, den niemand hatte
+        # (23.09.2026).
+        generated = getattr(old_feature, "provenance", "detected") == "generated"
+        later = needed.get(old_id, ()) if needed is not None else ()
+        if (old_id in referenced) if generated or needed is None else (old_id in needed):
+            values: dict[str, Any] = {"feature": old_id}
+            if later:
+                values["where"] = "; ".join(later)
             findings.append(
                 Finding(
-                    code="perceive.generated_lost",
+                    code="perceive.generated_lost" if generated else "perceive.referenced_lost",
                     severity="warning",
                     message=_(
                         "Ein benanntes Merkmal ist nach dieser Operation nicht mehr auffindbar."
+                    )
+                    if generated
+                    else _(
+                        "Ein Merkmal, auf das sich eine Passung oder ein späterer Schritt "
+                        "bezieht, ist nach diesem Schritt nicht mehr erkennbar."
                     ),
                     object_id=entry.id,
                     op_id=operation.id,
-                    values={"feature": old_id},
+                    values=values,
+                    suggestions=(CORRECT_INPUT, SHOW_HISTORY),
                 )
             )
             continue
@@ -2793,6 +2986,47 @@ def _with_features(
         entry,
         features={**mapped, **rigid_orphans, **unchecked, **declared},
     )
+
+
+def _near_its_declaration(declared: Feature, found: Feature) -> bool:
+    """Ob ein erkanntes Merkmal dort liegt, wo die Operation ihr erklärtes gesetzt hat.
+
+    Quer zur Achse darf der Mittelpunkt höchstens um die Breite des erklärten
+    Merkmals abweichen — Durchmesser, bei einem Langloch seine Länge —, entlang
+    der Achse höchstens um seine Tiefe, wo eine erklärt ist: Wo auf der Achse
+    eine Mitte liegt, ist eine Frage der Messung (Mündung oder Mitte, je nach
+    Erzeuger), wie weit daneben eine Bohrung liegt, nicht. Ohne Achse gilt die
+    Breite als Abstand. Ein erklärtes Merkmal ohne Größe oder ohne Ort wird
+    nicht beschränkt; dort entscheidet die Zuordnung allein.
+    """
+
+    def number(key: str) -> float:
+        value = declared.params.get(key)
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            return abs(float(value))
+        return 0.0
+
+    width = max(number("diameter"), number("length"))
+    where = declared.params.get("centre")
+    there = found.params.get("centre")
+    if not isinstance(where, tuple | list) or not isinstance(there, tuple | list):
+        return True
+    if width <= EPS_GEOM:
+        return True
+    try:
+        offset = [float(b) - float(a) for a, b in zip(where, there, strict=True)]
+        axis = declared.params.get("axis")
+        direction = [float(value) for value in axis] if isinstance(axis, tuple | list) else []
+    except TypeError, ValueError:
+        return True
+    length = math.hypot(*direction) if len(direction) == 3 else 0.0
+    if length <= EPS_GEOM:
+        return math.hypot(*offset) <= width
+    unit = [value / length for value in direction]
+    along = sum(a * b for a, b in zip(offset, unit, strict=True))
+    across = math.hypot(*(value - along * part for value, part in zip(offset, unit, strict=True)))
+    depth = number("depth")
+    return across <= width and (depth <= EPS_GEOM or abs(along) <= depth)
 
 
 #: Welcher Sammelparameter seine Ausdrücke in einem eigenen Text versteckt.
@@ -2866,7 +3100,26 @@ class _WatchedAsk:
 
     def __call__(self, question: str, choices: list[str]) -> str:
         self.used = True
-        return self._ask(question, choices)
+        try:
+            return self._ask(question, choices)
+        except QuestionDeclined:
+            # **Ohne Wahl geschlossen heißt: dieser Schritt wartet** — nicht
+            # „die Rechnung ist abgebrochen". Jede Frage eines Schritts geht
+            # hier durch (Kantenbindung, Operation, Merkmalszuordnung); aus der
+            # Absage wird ein Befund am Schritt mit dem Weg zurück, und der
+            # Stand davor bleibt zu sehen (RM-024, 23.09.2026).
+            raise AmbiguityError(
+                QUESTION_LEFT_OPEN, suggestions=(CORRECT_INPUT, SHOW_HISTORY)
+            ) from None
+
+
+#: Der Befund, wenn eine Frage eines Schritts ohne Wahl geschlossen wurde
+#: (``QuestionDeclined``). *Eingabe korrigieren* öffnet den Schritt; beim
+#: Übernehmen rechnet die Auswertung ihn neu und fragt wieder.
+QUESTION_LEFT_OPEN: Final = _(
+    "Die Frage wurde ohne Wahl geschlossen. Öffnen Sie den Schritt erneut, dann kommt sie "
+    "wieder, oder nehmen Sie ihn mit Strg+Z zurück."
+)
 
 
 def _body_profiles(profile: Profile, inputs: Sequence[SceneObject]) -> dict[str, Profile]:

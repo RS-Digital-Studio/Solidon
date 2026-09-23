@@ -903,6 +903,125 @@ def test_the_customer_chooses_the_face_that_carries_the_reference_on(
     assert cold.scene.objects["obj_1"].features[top].params["centre"][2] == pytest.approx(35.0)
 
 
+def _side_of(faces, sign: float) -> str:
+    """Die Seitenfläche, deren Normale in ``sign``-Richtung von X zeigt."""
+    return next(
+        name
+        for name, feature in faces.items()
+        if feature.kind == "face" and feature.params["normal"][0] * sign > 0.5
+    )
+
+
+def test_an_untouched_face_keeps_its_name_through_a_rebuild_without_a_question(
+    profile: Profile,
+) -> None:
+    """Eine Fläche, die der Umbau nicht berührt hat, ist dieselbe — gefragt wird nicht.
+
+    Die native Erkennung nummeriert nach jedem Umbau neu; eine unberührte Fläche
+    kommt deshalb meist unter anderem Namen zurück, und eine Zuordnung auf einen
+    anderen Namen galt nicht als Beleg (P1.4c.2). Am Teppichclip
+    (``carpet-corner-clip.step``) fragte Solidon so bei jedem *Fläche versetzen*
+    nach beiden Flächen einer Passung, die niemand angefasst hatte. Gemessen
+    (23.09.2026, ``probe_native_identity.py``): Mitte, Normale und Inhalt solcher
+    Flächen sind nach dem Umbau bitgleich. Dieselbe Geometrie bis auf
+    Rechenrauschen ist ein Beleg — strenger als die Zuordnung, die §21.2 für
+    „ID bleibt“ genügt.
+    """
+    project, history, sources, top, bottom = _box_project(profile)
+    before = evaluate(project.document, profile, sources=sources)
+    faces = before.scene.objects["obj_1"].features
+    project.document.fits.append(
+        Fit(name="deckel", a=FeatureRef("obj_1", top), b=FeatureRef("obj_1", bottom), kind="flush")
+    )
+    history.apply(
+        "Seite versetzen",
+        [
+            OperationDraft(
+                op="push_face",
+                inputs=("obj_1",),
+                params={"face": _side_of(faces, 1.0), "distance": 1.0},
+            )
+        ],
+    )
+
+    result = evaluate(
+        project.document,
+        profile,
+        sources=sources,
+        ask=lambda *_: pytest.fail("eine unberührte Fläche wird nicht erfragt"),
+    )
+
+    assert result.complete and not result.blocked_references, [
+        (finding.code, str(finding.message)) for finding in result.scene.report.findings
+    ]
+    body = result.scene.objects["obj_1"]
+    for name in (top, bottom):
+        assert body.features[name].params["centre"] == pytest.approx(faces[name].params["centre"])
+        assert body.features[name].params["area"] == pytest.approx(faces[name].params["area"])
+    assert body.mesh.volume == pytest.approx(41.0 * 30.0 * 20.0, rel=1e-9)
+    assert project.document.fits[0].a == FeatureRef("obj_1", top), "der Bezug bleibt, wie er war"
+
+
+def test_the_found_successor_of_a_moved_face_is_offered_and_taken(profile: Profile) -> None:
+    """Die versetzte Fläche selbst trägt die Passung: gefragt wird, und die Antwort gilt.
+
+    Exakter Quader, bündige Passung zwischen rechter und linker Seite, dann die
+    rechte um 1 mm versetzt. Die Zuordnung findet die versetzte Fläche eindeutig
+    unter neuem Namen; sie ist nicht unverändert, also wird gefragt (P1.4c.3).
+    Bis zum 23.09.2026 stand genau dieser gefundene Nachfolger nicht unter den
+    Antworten — er galt als vergeben —, und jede Antwort endete in „Die Zuordnung
+    ist nicht mehr gültig": Der alte Name stand noch in der Zuordnung, die er neu
+    bekommen sollte. Eine Sackgasse im einfachsten Weg am exakten Körper.
+    """
+    project, history, sources, _top, _bottom = _box_project(profile)
+    before = evaluate(project.document, profile, sources=sources)
+    faces = before.scene.objects["obj_1"].features
+    right, left = _side_of(faces, 1.0), _side_of(faces, -1.0)
+    project.document.fits.append(
+        Fit(name="seiten", a=FeatureRef("obj_1", right), b=FeatureRef("obj_1", left), kind="flush")
+    )
+    history.apply(
+        "Seite versetzen",
+        [
+            OperationDraft(
+                op="push_face", inputs=("obj_1",), params={"face": right, "distance": 1.0}
+            )
+        ],
+    )
+    asked: list[list[str]] = []
+    shown: dict[str, object] = {}
+
+    def context(preview, candidates) -> None:
+        if preview is not None:
+            shown["scene"] = preview.scene
+
+    def choose(question: str, choices: list[str]) -> str:
+        asked.append(list(choices))
+        scene = shown["scene"]
+        for candidate in choices:
+            feature = scene.objects["obj_1"].features.get(candidate)  # type: ignore[attr-defined]
+            if feature is not None and abs(float(feature.params["centre"][0]) - 21.0) < 1e-6:
+                return candidate
+        pytest.fail(f"die versetzte Fläche steht nicht unter den Antworten: {choices}")
+
+    result = evaluate(
+        project.document, profile, sources=sources, ask=choose, question_context=context
+    )
+
+    assert result.complete and not result.blocked_references, [
+        (finding.code, str(finding.message)) for finding in result.scene.report.findings
+    ]
+    assert len(asked) == 1, "nur die versetzte Fläche wird erfragt, die linke ist unberührt"
+    scene = shown["scene"]
+    first = scene.objects["obj_1"].features[asked[0][0]]  # type: ignore[attr-defined]
+    assert float(first.params["centre"][0]) == pytest.approx(21.0), (
+        "der gefundene Nachfolger steht als erste Antwort da"
+    )
+    body = result.scene.objects["obj_1"]
+    assert float(body.features[right].params["centre"][0]) == pytest.approx(21.0)
+    assert float(body.features[left].params["centre"][0]) == pytest.approx(-20.0)
+
+
 def test_another_producer_version_asks_again(profile: Profile) -> None:
     """Der Scope ist die Fassung des Erzeugers: ein anderer Versatz, eine neue Frage."""
     project, history, sources, _top, _bottom = _pushed_project(profile)

@@ -1893,6 +1893,38 @@ def _edge_labels(candidates: Sequence[tuple[str, str] | EdgeTarget]) -> dict[str
     return {entry.token: edge_label(entry) for entry in candidates if isinstance(entry, EdgeTarget)}
 
 
+def _candidate_labels(request: AskRequest) -> dict[str, str]:
+    """Die Zeile je Antwort, die der Kunde im Dialog liest — Kanten und Merkmale.
+
+    Kanten tragen ihre Kantenzeile (:func:`_edge_labels`). Ein Merkmal stand
+    bis zum 22.09.2026 als Kennung da: Die Zuordnungsfrage nach *Dreiecke
+    verringern* bot „hole_1“ und „hole_2“ an, die Verweisfrage beim Öffnen
+    ebenso — der Objektbaum nennt dieselben Merkmale „Bohrung 1 · Ø4,40“.
+    Jetzt steht dieselbe Beschriftung wie im Baum (``feature_label``), aus
+    der Szene, die die Frage zeigt. Eine Kennung, die an mehreren Körpern
+    steht und unqualifiziert gewählt wird (die Skizzenebene), bleibt Kennung:
+    Ihre Zeile gilt jedem Fundort, und eine Beschriftung davon wäre eine Wahl.
+    """
+    labels = _edge_labels(request.candidates)
+    scene = request.preview.scene if request.preview is not None else None
+    if scene is None:
+        return labels
+    pairs = [entry for entry in request.candidates if not isinstance(entry, EdgeTarget)]
+    homes: dict[str, set[str]] = {}
+    for object_id, feature_id in pairs:
+        homes.setdefault(feature_id, set()).add(object_id)
+    for object_id, feature_id in pairs:
+        body = scene.objects.get(object_id)
+        feature = body.features.get(feature_id) if body is not None else None
+        if body is None or feature is None:
+            continue
+        text = feature_label(feature_id, feature)
+        labels[f"{object_id}:{feature_id}"] = f"{body.name}: {text}"
+        if len(homes[feature_id]) == 1:
+            labels[feature_id] = text
+    return labels
+
+
 class MainWindow(QMainWindow):
     """Fenster, Menüs und die Verdrahtung zwischen Sitzung und Panels."""
 
@@ -18063,7 +18095,7 @@ class MainWindow(QMainWindow):
                 request.question,
                 request.choices,
                 self,
-                labels=_edge_labels(request.candidates),
+                labels=_candidate_labels(request),
             )
             self._ask_dialog = dialog
             self._ask_request = request

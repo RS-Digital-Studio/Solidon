@@ -1039,6 +1039,7 @@ def test_an_area_reaches_the_user_in_his_unit(qt_app: object) -> None:
     from PySide6.QtCore import QLocale
 
     from app.core.types import Feature
+    from app.i18n import tr
     from app.ui.labels import area, feature_measure, set_display_unit
 
     before = QLocale()
@@ -1054,11 +1055,11 @@ def test_an_area_reaches_the_user_in_his_unit(qt_app: object) -> None:
 
         set_display_unit("mm")
         assert area(4334.0) == "4334 mm²"
-        assert feature_measure(face) == "4334 mm²"
+        assert feature_measure(face) == f"4334 mm² · {tr('gemessen')}"
 
         set_display_unit("in")
         assert area(4334.0) == "6,72 in²", "Zoll, und mit dem Komma der Sprache"
-        assert feature_measure(face) == "6,72 in²"
+        assert feature_measure(face) == f"6,72 in² · {tr('gemessen')}"
     finally:
         set_display_unit("mm")
         QLocale.setDefault(before)
@@ -1067,17 +1068,19 @@ def test_an_area_reaches_the_user_in_his_unit(qt_app: object) -> None:
 @pytest.mark.parametrize(
     "source,qualifier",
     [
-        ("native", ""),
-        ("fit", "geschätzt"),
-        ("parameter", "Vorgabemaß"),
+        ("native", "aus der Konstruktion"),
+        ("facets", "gemessen"),
+        ("fit", "eingepasst"),
+        ("parameter", "aus dem Schritt"),
         (None, "Maßherkunft nicht bestimmt"),
     ],
 )
 def test_feature_measure_names_its_source_without_inventing_a_nominal_size(
     qt_app: object, source: str | None, qualifier: str
 ) -> None:
-    """Das Maß eines Merkmals trägt seine Herkunft als Zusatz — geschätzt, Vorgabemaß, gemessen —
-    und erfindet keine Nenngröße; ein fehlendes Maß sagt das, statt null zu zeigen.
+    """Das Maß eines Merkmals trägt seine Herkunft als Zusatz — aus der Konstruktion,
+    gemessen, eingepasst oder aus dem Schritt, wie der Änderungsverlauf von 0.5.0 es
+    verspricht — und erfindet keine Nenngröße; ein fehlendes Maß sagt das, statt null zu zeigen.
     """
     from dataclasses import replace
 
@@ -1093,11 +1096,42 @@ def test_feature_measure_names_its_source_without_inventing_a_nominal_size(
     )
     assert qualifier in feature_measure(feature)
     assert qualifier in feature_label(feature.id, feature)
-    assert ("geschätzt" in feature_measure(feature)) is (source == "fit")
+    assert ("eingepasst" in feature_measure(feature)) is (source == "fit")
     assert feature_measure_tip(feature)
     missing = replace(feature, params={"diameter": None})
     assert feature_measure(missing) == "Maß nicht bestimmt"
     assert feature.params["diameter"] == pytest.approx(8.012345)
+    # Die Marke in der Ansicht ist eng: Sie nennt das Wort nur, wo die Zahl nicht
+    # die vorhandene Oberfläche selbst ist (eingepasst, aus dem Schritt, unbekannt).
+    marker = feature_label(feature.id, feature, compact=True)
+    assert (qualifier in marker) is (source not in ("native", "facets"))
+    assert "8" in marker and marker.startswith(feature_label(feature.id, feature)[:7])
+
+
+def test_a_viewport_marker_stays_short_but_a_warning_word_stays(qt_app: object) -> None:
+    """„gemessen“ an jeder Marke drängte Beschriftungen aus der Ansicht.
+
+    Seit jedes Maß seine Herkunft nennt (23.09.2026), trägt die einzeilige
+    Beschriftung „Bohrung 2 · Ø8,00 mm · gemessen“ — an einem Teil mit dreißig
+    Bohrungen dreißigmal dasselbe Wort, und die Platzierung der Marken
+    (``Viewport._layout_feature_labels``) ließ Beschriftungen weg, weil sie sich
+    überdeckten. In der Ansicht bleibt deshalb nur das Wort, das warnt; die
+    Herkunft einer gemessenen Zahl steht im Objektbaum, im Merkmalfenster und im
+    Tooltip.
+    """
+    from app.core.types import Feature
+    from app.i18n import tr
+    from app.ui.labels import feature_label
+
+    measured = Feature(
+        "hole_2", "hole", "detected", {"diameter": 8.0}, measure_sources={"diameter": "facets"}
+    )
+    fitted = Feature(
+        "hole_3", "hole", "detected", {"diameter": 8.0}, measure_sources={"diameter": "fit"}
+    )
+    assert tr("gemessen") not in feature_label("hole_2", measured, compact=True)
+    assert tr("gemessen") in feature_label("hole_2", measured)
+    assert tr("eingepasst") in feature_label("hole_3", fitted, compact=True)
 
 
 @pytest.mark.parametrize(
@@ -1123,10 +1157,10 @@ def test_equal_measure_sources_share_one_suffix_but_mixed_sources_remain_explici
         measure_sources={"diameter": "fit", second: "fit"},
     )
     text = feature_measure(feature)
-    assert text.count("geschätzt") == 1 and text.endswith("geschätzt")
+    assert text.count("eingepasst") == 1 and text.endswith("eingepasst")
     mixed = replace(feature, measure_sources={"diameter": "fit", second: "parameter"})
     text = feature_measure(mixed)
-    assert text.count("geschätzt") == text.count("Vorgabemaß") == 1
+    assert text.count("eingepasst") == text.count("aus dem Schritt") == 1
 
 
 def test_a_finding_value_follows_the_display_unit(qt_app: object) -> None:

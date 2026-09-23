@@ -2399,6 +2399,8 @@ def _around(
     # entscheidet dort, ob ein Bogen als Kante oder als Wand in den Baum kommt,
     # und hier, ob sich die Kante zurückrechnen lässt — eine Frage, eine
     # Antwort, sonst verspricht der Baum, was die Bearbeitung nicht hält.
+    # Die Ebenen liest ``planar_mask`` einmal je Körper — dieselbe Menge
+    # wie ``detect_faces``, und dieselbe, die das Merkmalfenster fragt.
     beside = planes_beside(
         mesh.raw,
         triangles,

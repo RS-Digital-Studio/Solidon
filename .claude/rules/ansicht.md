@@ -713,6 +713,13 @@ einer Analysekarte (§19.1). Das gewählte Merkmal trägt seine Beschriftung auc
 bei ausgeschalteter Überlagerung — ohne sie wäre die Aussage allein die Farbe
 (Regel 18).
 
+**Eine Marke nennt nur das Herkunftswort, das warnt** (`feature_label(...,
+compact=True)`, im Kern `measure_qualifier(..., compact=True)`): „eingepasst“,
+„aus dem Schritt“, „Maß nicht bestimmt“. Das Wort einer direkt gemessenen oder
+aus dem exakten Modell übernommenen Zahl steht im Objektbaum, im
+Merkmalfenster und im Tooltip, nicht an jeder Marke — dreißigmal „gemessen“
+verbreiterte die Kästen, bis die Platzierung Beschriftungen wegließ.
+
 **Schweben und Auswahl sind zwei sichtbare Zustände.** Unter dem Zeiger liegt
 eine halbtransparente Flächenmarkierung samt Merkmalszeiger und Beschriftung;
 die Auswahl ist deckend und bleibt im Objektbaum sowie in der Statusleiste

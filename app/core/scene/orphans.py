@@ -19,6 +19,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.core.errors import QuestionDeclined
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, Registry, inactive_dependency
 from app.core.types import (
@@ -33,9 +34,6 @@ from app.core.types import (
 from app.i18n import _, tr
 
 _log = get_logger(__name__)
-
-#: Die Antwort, die die Passung streicht, statt sie woandershin zu zeigen.
-REMOVE_CHOICE = "-"
 
 
 @dataclass(slots=True)
@@ -347,7 +345,7 @@ def check(
             continue
         candidates = _candidates(scene, reference, family)
         if not candidates:
-            result.findings.append(_lost(reference, None))
+            result.findings.append(_lost(reference, removed=False))
             continue
 
         # **Eine Antwort je Kennung, wo der Körper nicht mitgeschrieben wird.**
@@ -368,11 +366,19 @@ def check(
                 continue
             choices.append(label)
             offered_pairs.append(pair)
-        question, offered = question_for(reference, tuple(choices))
+        question, offered = question_for(
+            reference, tuple(choices), step=_step_title(document, reference, registry)
+        )
+        removal = removal_choice(reference)
         if announce is not None:
             announce(tuple(candidates))
         try:
             answer = ask(question, offered)
+        except QuestionDeclined:
+            # Ohne Wahl geschlossen ist keine Antwort — und kein Abbruch der
+            # Rechnung, die der Arbeiter dann verwürfe (23.09.2026). Weiter
+            # unten bleibt der Verweis stehen und bekommt seinen Befund.
+            answer = None
         finally:
             # Auch bei Abbruch: Was hervorgehoben ist, gehört zur offenen
             # Frage — bleibt es danach stehen, leuchtet die Ansicht ohne
@@ -384,15 +390,19 @@ def check(
             _rewrite(document, reference, chosen)
             result.rewritten += 1
             result.findings.append(_rewritten_finding(reference, chosen))
-        elif reference.kind == "plane" or not reference.removable:
-            # Keine Antwort streicht keine Ebene oder bewusste Merkmalsauswahl:
-            # Eine geleerte Flächenmenge könnte den ganzen Körper betreffen.
-            # Der erhaltene Verweis hält die Operation gezielt an (§15.2).
-            result.findings.append(_lost(reference, None))
-        else:
+        elif removal is not None and answer == removal:
             _remove(document, reference)
             result.removed += 1
-            result.findings.append(_lost(reference, reference.title))
+            result.findings.append(_lost(reference, removed=True))
+        else:
+            # **Wer nicht antwortet, verliert nichts** — auch keine Passung.
+            # Gestrichen wird nur auf die ausdrückliche Antwort dafür; bis zum
+            # 22.09.2026 strich jede andere Antwort eine Passung oder leerte
+            # den Schritt still. Eine Ebene oder bewusste Merkmalsauswahl
+            # bietet das Streichen gar nicht an: Eine geleerte Flächenmenge
+            # könnte den ganzen Körper betreffen. Der erhaltene Verweis hält
+            # die Operation gezielt an (§15.2).
+            result.findings.append(_lost(reference, removed=False))
     if result.changed:
         _log.info("orphan check rewrote %d and removed %d", result.rewritten, result.removed)
     return result
@@ -497,21 +507,65 @@ def _kind_of(feature_id: str) -> str | None:
     return None
 
 
-def question_for(reference: Reference, candidates: Sequence[str]) -> tuple[str, list[str]]:
+def question_for(
+    reference: Reference, candidates: Sequence[str], *, step: str | None = None
+) -> tuple[str, list[str]]:
     """Die Frage und ihre Antworten; die Passung zu streichen ist der letzte
     Ausweg.
+
+    **Die Frage nennt, wer fragt** — die Passung beim Namen, den Schritt beim
+    Titel, den der Verlauf zeigt (``step``). Bis zum 22.09.2026 stand dort
+    „Dieser Verweis zeigt ins Leere: obj_1:hole_9“, eine Kennung aus der
+    Projektdatei, und als letzte Antwort ein nackter Strich.
 
     Eine Skizzenebene und eine fest gewählte Merkmalsmenge bieten kein
     Streichen an: Eine leere Auswahl kann den Wirkungsbereich erweitern.
     Wer nicht antwortet, verliert nichts; der Verweis hält die Operation an.
     """
-    question = (
-        f"{tr('Dieser Verweis zeigt ins Leere:')} {reference.ref}. "
-        f"{tr('Welches Merkmal ist gemeint?')}"
-    )
-    if reference.kind == "plane" or not reference.removable:
+    missing = reference.ref.feature_id
+    where = step or reference.title
+    if reference.kind == "fit":
+        question = tr(
+            "Die Passung „{fit}“ zeigt auf ein Merkmal, das es nicht mehr gibt ({feature}). "
+            "Welches Merkmal ist gemeint?"
+        ).format(fit=reference.fit_name, feature=missing)
+    elif reference.kind == "plane":
+        question = tr(
+            "Die Skizze im Schritt „{step}“ liegt auf einer Fläche, die es nicht mehr gibt "
+            "({feature}). Auf welcher Fläche soll sie liegen?"
+        ).format(step=where, feature=missing)
+    else:
+        question = tr(
+            "Der Schritt „{step}“ zeigt auf ein Merkmal, das es nicht mehr gibt ({feature}). "
+            "Welches Merkmal ist gemeint?"
+        ).format(step=where, feature=missing)
+    removal = removal_choice(reference)
+    if removal is None:
         return question, [*candidates]
-    return question, [*candidates, REMOVE_CHOICE]
+    return question, [*candidates, removal]
+
+
+def removal_choice(reference: Reference) -> str | None:
+    """Die Antwort, die den Verweis streicht — lesbar, oder keine.
+
+    Eine Passung wird gelöscht, ein Schritt rechnet ohne das Merkmal mit
+    seinen eigenen Zahlen weiter (:func:`_remove`). Eine Ebene oder eine
+    bewusste Merkmalsauswahl bietet kein Streichen an.
+    """
+    if reference.kind == "plane" or not reference.removable:
+        return None
+    return tr("Passung löschen") if reference.kind == "fit" else tr("Ohne dieses Merkmal rechnen")
+
+
+def _step_title(document: Document, reference: Reference, registry: Registry | None) -> str | None:
+    """Der Titel des Schritts, wie ihn der Verlauf zeigt — für die Frage."""
+    if reference.kind == "fit":
+        return None
+    source = registry or REGISTRY
+    operation = next((entry for entry in document.ops if entry.id == reference.op_id), None)
+    if operation is None or not source.has(operation.op):
+        return None
+    return str(source.get(operation.op).title)
 
 
 def _rewrite(document: Document, reference: Reference, chosen: tuple[ObjectId, FeatureId]) -> None:
@@ -537,11 +591,12 @@ def _rewrite(document: Document, reference: Reference, chosen: tuple[ObjectId, F
                 continue
             drawn = sketch_from_text(str(operation.params.get(reference.field) or ""))
             params = dict(operation.params)
-            plane = (
+            face = (
                 feature_plane(object_id, feature_id)
                 if reference.ref.object_id
                 else f"feature:{feature_id}"
             )
+            plane = _on_another_face(drawn.plane, face)
             params[reference.field] = sketch_to_text(dataclasses.replace(drawn, plane=plane))
             document.ops[index] = dataclasses.replace(operation, params=params)
             return
@@ -559,6 +614,38 @@ def _rewrite(document: Document, reference: Reference, chosen: tuple[ObjectId, F
             else dataclasses.replace(fit, b=replacement)
         )
         return
+
+
+def _on_another_face(plane: str, face: str) -> str:
+    """Dieselbe Ebene, nur auf einer anderen Fläche — jede Ableitung darüber bleibt.
+
+    Der Verweis einer Skizze nennt die Fläche **unter** ihren Ableitungen
+    (:func:`feature_ref_of_sketch` über ``standing_on_feature``). Die Antwort
+    ersetzt deshalb genau diese Fläche: Eine Versatzebene 12,5 mm über
+    ``face_9`` wird eine 12,5 mm über der gewählten Fläche, mit demselben
+    Abstand, derselben Neigung und denselben Projektparametern. Bis zum
+    22.09.2026 schrieb ``_rewrite`` die nackte Flächenebene hin, und die
+    Zeichnung lag danach auf der Fläche statt darüber.
+    """
+    from app.core.sketch.planes import (
+        OffsetPlane,
+        TiltPlane,
+        derived_plane,
+        is_feature_plane,
+        offset_plane,
+        tilt_plane,
+    )
+
+    if is_feature_plane(plane):
+        return face
+    described = derived_plane(plane)
+    if isinstance(described, OffsetPlane):
+        return offset_plane(_on_another_face(described.base, face), described.distance)
+    if isinstance(described, TiltPlane):
+        return tilt_plane(_on_another_face(described.base, face), described.axis, described.angle)
+    # Eine Ebene ohne Fläche darunter trägt keinen Verweis (``standing_on_feature``);
+    # käme sie trotzdem hierher, bliebe sie, wie sie ist.
+    return plane
 
 
 def _remove(document: Document, reference: Reference) -> None:
@@ -618,30 +705,58 @@ def _blocked(reference: Reference) -> Finding:
     """Der Verweis, den die Auswertung angehalten hat — ohne Frage, ohne Umschreiben.
 
     Ein Fehler und keine Warnung, denn die Kette steht; und ohne Kandidaten,
-    denn die Kandidaten der alten Szene wären die Flächen vor dem Umbau.
+    denn die Kandidaten der alten Szene wären die Flächen vor dem Umbau. Der
+    Weg nach vorn ist die Neuwahl im Schritt (:func:`_way_forward`).
     """
     return Finding(
         code="feature.blocked",
         severity="error",
         message=_(
-            "Ein Verweis ist seit dem Umbau des exakten Körpers nicht belegt. "
-            "Er wird nicht neu geraten; wähle die Fläche im betroffenen Schritt neu."
+            "Nach dem Umbau des Körpers ist unklar, welche Fläche gemeint ist. "
+            "Wählen Sie die Fläche neu."
         ),
         object_id=reference.ref.object_id,
         feature_ids=(reference.ref.feature_id,),
-        values={"reference": str(reference.ref), "where": reference.title},
+        **_way_forward(reference),
     )
 
 
-def _lost(reference: Reference, removed_fit: str | None) -> Finding:
+def _lost(reference: Reference, *, removed: bool) -> Finding:
+    """Ein Verweis ohne Merkmal — stehen gelassen, oder auf ausdrücklichen Wunsch gestrichen.
+
+    Gestrichen ist es eine Warnung mit dem Satz, was geschah: Die Passung ist
+    weg, oder der Schritt rechnet ohne das Merkmal mit seinen eigenen Zahlen.
+    """
+    if not removed:
+        message = _("Ein Verweis zeigt auf ein Merkmal, das es nicht mehr gibt.")
+    elif reference.kind == "fit":
+        message = _("Die Passung wurde gelöscht, weil ihr Merkmal fehlt.")
+    else:
+        message = _("Der Schritt rechnet jetzt ohne das fehlende Merkmal.")
     return Finding(
         code="feature.orphaned",
-        severity="warning" if removed_fit else "error",
-        message=_("Ein Verweis zeigt auf ein Merkmal, das es nicht mehr gibt."),
+        severity="warning" if removed else "error",
+        message=message,
         object_id=reference.ref.object_id,
         feature_ids=(reference.ref.feature_id,),
-        values={"reference": str(reference.ref), "where": reference.title},
+        **_way_forward(reference),
     )
+
+
+def _way_forward(reference: Reference) -> dict[str, Any]:
+    """Schrittkennung, Feld und Knopf eines Verweisbefunds (Regel 17).
+
+    Ein Schritt oder eine Skizze öffnet sich über *Eingabe korrigieren* am
+    genannten Feld; eine Passung gehört keinem Schritt, und der Weg ist der
+    Verlauf — derselbe wie bei ``fit.missing_feature``.
+    """
+    from app.core.errors import CORRECT_INPUT, SHOW_HISTORY
+
+    values: dict[str, Any] = {"reference": str(reference.ref), "where": reference.title}
+    if reference.kind == "fit":
+        return {"values": values, "suggestions": (SHOW_HISTORY,)}
+    values["field"] = reference.field
+    return {"op_id": reference.op_id, "values": values, "suggestions": (CORRECT_INPUT,)}
 
 
 def candidates_of(scene: Scene, reference: FeatureRef) -> dict[str, Feature]:

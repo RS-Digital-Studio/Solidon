@@ -2964,13 +2964,13 @@ def test_measure_source_is_shared_by_tree_caption_fields_and_accessibility(
         assert built is not None
         _action, group, editors = built
         caption = group.findChild(QLabel, "feature-measure-source")
-        assert caption is not None and "geschätzt" in caption.text()
+        assert caption is not None and "eingepasst" in caption.text()
         editor = editors["diameter"]
         hint = editor.toolTip()
-        assert "Ausgangswert:" in hint and "geschätzt" in hint
+        assert "Ausgangswert:" in hint and "eingepasst" in hint
         assert "Konstruktionsmaß ist nicht bekannt" in hint
         assert editor.statusTip() == editor.accessibleDescription() == hint
-        assert "geschätzt" in _feature_tip(identifier, feature, None)
+        assert "eingepasst" in _feature_tip(identifier, feature, None)
         editor.set_value_mm(10.0)
         assert editor.toolTip() == hint
         assert "10" not in caption.text()
@@ -3069,7 +3069,7 @@ def test_original_bore_fields_keep_expressions_through_depth_and_hidden_position
         assert built is not None
         action, group, editors = built
         assert isinstance(editors["diameter"], ValueField)
-        assert "Vorgabemaß" in editors["diameter"].toolTip()
+        assert "aus dem Schritt" in editors["diameter"].toolTip()
         assert "erzeugenden Schritt" in editors["diameter"].accessibleDescription()
         values = feature_field_values(action.fields, editors, action.fixed)
         assert values["diameter"] == "=@bore"

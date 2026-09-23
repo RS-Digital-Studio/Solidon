@@ -7,7 +7,13 @@ from importlib import import_module
 import pytest
 import trimesh
 
-from app.core.errors import AmbiguityError, OperationCancelled
+from app.core.errors import (
+    CORRECT_INPUT,
+    SHOW_HISTORY,
+    AmbiguityError,
+    OperationCancelled,
+    QuestionDeclined,
+)
 from app.core.geom.mesh import MeshCodec, MeshData
 from app.core.perceive.features import detect
 from app.core.perceive.match_records import group_key
@@ -15,7 +21,12 @@ from app.core.perceive.matching import MatchResult, fingerprint
 from app.core.registry import Registry, op_params, param, register_op
 from app.core.scene import CancelSignal, History, OperationDraft, ResultCache, evaluate
 from app.core.scene.cache import DiskCache
-from app.core.scene.evaluate import _answer_matches, _with_feature_reservations, _with_features
+from app.core.scene.evaluate import (
+    QUESTION_LEFT_OPEN,
+    _answer_matches,
+    _with_feature_reservations,
+    _with_features,
+)
 from app.core.scene.project import load, new_project, save
 from app.core.types import BaseParams, Feature, Operation, OpResult, SceneObject
 from app.i18n import _, tr
@@ -51,9 +62,14 @@ def old_holes(count=1):
 
 
 def test_competing_group_asks_every_owner_and_never_offers_one_target_twice(plates):
-    """Drei alte Bohrungen um zwei neue: Jede wird gefragt, die Auswahl schrumpft mit jeder
-    Antwort, die letzte bekommt nur noch „Nicht weiterführen" — und wer nicht fortgeführt wird,
-    bleibt als Kennung reserviert.
+    """Drei alte Bohrungen um zwei neue: Die verwiesene wird **zuerst** gefragt und hat die
+    volle Auswahl, die nächste bekommt, was übrig ist — und wem nichts bleibt und auf den sich
+    nichts bezieht, dem wird keine Frage mit „Nicht weiterführen" als einziger Antwort
+    gestellt. Wer nicht fortgeführt wird, bleibt als Kennung reserviert.
+
+    Bis zum 23.09.2026 lief die Frage in der Reihenfolge der Namen: Die verwiesene Bohrung
+    kam zuletzt und bekam nur noch „Nicht weiterführen" — ausgerechnet der Bezug, an dem eine
+    Passung hing, verlor seinen Nachfolger an zwei, die niemand benutzt.
     """
     body = SceneObject(id="body", name="Platte", mesh=plates[1])
     before = old_holes(3)
@@ -74,18 +90,18 @@ def test_competing_group_asks_every_owner_and_never_offers_one_target_twice(plat
         question_context=lambda scene, targets: contexts.append((scene, targets)),
     )
     result = _with_feature_reservations(result, set(before), set(before))
-    assert len(asked) == 3
-    assert [len(choices) for _, choices in asked] == [3, 2, 1]
-    assert asked[-1][1] == (tr("Nicht weiterführen"),)
+    assert len(asked) == 2
+    assert [len(choices) for _, choices in asked] == [3, 2]
+    assert "before_3" in asked[0][0].split("?")[0], "die verwiesene Bohrung kommt zuerst"
     assert set(asked[0][1][:-1]) > set(asked[1][1][:-1])
     assert all(name in asked[0][0] for name in before)
-    for name in ("before_1", "before_2"):
+    for name in ("before_3", "before_1"):
         assert result.features[name].created_by == before[name].created_by
-    assert "before_3" not in result.features
-    assert "before_3" in result.reserved_feature_ids
+    assert "before_2" not in result.features
+    assert "before_2" in result.reserved_feature_ids
     record = recorded[group_key("body", before)]
-    assert record["decisions"]["before_3"] == {"not_carried": True}
-    assert len(contexts) == 6 and contexts[-1] == (None, ())
+    assert record["decisions"]["before_2"] == {"not_carried": True}
+    assert len(contexts) == 4 and contexts[-1] == (None, ())
     for scene, targets in contexts[::2]:
         assert scene.mesh is body.mesh
         assert set(targets) <= set(scene.features)
@@ -147,6 +163,59 @@ def test_answer_failure_after_another_group_keeps_mapping_records_and_findings(p
     assert len(calls) == 2
     assert matched == original and recorded == {} and findings == []
     assert contexts[-1] == (None, ())
+
+
+def test_an_unused_owner_with_nothing_left_is_not_asked(plates):
+    """Ein Dialog mit „Nicht weiterführen" als einziger Antwort fragt nichts: Bleibt einem
+    bisherigen Merkmal kein Nachfolger und bezieht sich nichts darauf, wird es still nicht
+    fortgeführt — festgehalten wie eine Antwort. Einem verwiesenen bleibt die Frage, denn an
+    ihm hängt eine Passung oder ein Schritt, und Abbrechen beginnt die Gruppe neu.
+    """
+    body = SceneObject(id="body", name="Platte", mesh=plates[1], features=detect(plates[1]))
+    targets = tuple(name for name, feature in body.features.items() if feature.kind == "hole")
+    matched = MatchResult(ambiguous={"used": targets, "spare_1": targets, "spare_2": targets})
+    asked: list[tuple[str, tuple[str, ...]]] = []
+    recorded: dict = {}
+
+    def ask(question, choices):
+        asked.append((question, tuple(choices)))
+        return choices[0]
+
+    _answer_matches(
+        body,
+        matched,
+        Operation(id=2, op="thicken"),
+        ask,
+        [],
+        recorded,
+        {"used"},
+        CancelSignal(),
+        None,
+        None,
+    )
+
+    assert len(asked) == 2, 'die dritte Frage hätte nur „Nicht weiterführen" angeboten'
+    assert asked[0][0].split("?")[0].endswith("used")
+    record = next(iter(recorded.values()))
+    assert sum(1 for entry in record["decisions"].values() if entry == {"not_carried": True}) == 1
+
+    asked.clear()
+    lonely = MatchResult(ambiguous={"used": (targets[0],), "also_used": (targets[0],)})
+    _answer_matches(
+        body,
+        lonely,
+        Operation(id=2, op="thicken"),
+        ask,
+        [],
+        {},
+        {"used", "also_used"},
+        CancelSignal(),
+        None,
+        None,
+    )
+    assert [len(choices) for _question, choices in asked] == [2, 1], (
+        "ein verwiesener Bezug ohne Nachfolger wird weiter gefragt"
+    )
 
 
 def test_old_unqualified_answer_never_frees_a_new_competing_group(plates):
@@ -359,6 +428,34 @@ def test_whole_operation_answers_are_object_qualified_and_atomic(
         ask=lambda *_: pytest.fail("saved object-qualified groups must be reused"),
     )
     assert again.complete and not again.matches
+
+
+def test_a_question_closed_without_a_choice_stops_the_step_with_its_way_back(plates, profile):
+    """Wer die Zuordnungsfrage schließt, ohne zu wählen, bekommt einen Befund am Schritt — mit
+    dem Weg zurück als Knöpfe — und sieht den Stand davor.
+
+    Bis zum 23.09.2026 warf die Sitzung dafür ``OperationCancelled``: Die ganze Rechnung galt
+    als abgebrochen, das Fenster sagte nichts (``_cancel_by_user`` stand nicht), und im Bild
+    stand der alte Stand, als wäre nichts gewesen. RM-024 verlangt „Abbruch liefert einen
+    Befund".
+    """
+    project, _history, registry = two_body_project(plates)
+    before = deepcopy(project.document.ops)
+    asked = []
+
+    def ask(question, choices):
+        asked.append(question)
+        raise QuestionDeclined
+
+    result = evaluate(project.document, profile, registry=registry, ask=ask)
+
+    assert len(asked) == 1, "nach der geschlossenen Frage fragt dieser Lauf nicht weiter"
+    assert result.stopped_at == 2 and result.completed == (1,)
+    assert project.document.ops == before and not result.matches
+    stop = [finding for finding in result.scene.report.findings if finding.op_id == 2]
+    assert len(stop) == 1 and stop[0].severity == "error"
+    assert stop[0].message == QUESTION_LEFT_OPEN
+    assert [action.id for action in stop[0].suggestions] == [CORRECT_INPUT.id, SHOW_HISTORY.id]
 
 
 def test_native_competition_does_not_take_a_matching_mesh_answer(monkeypatch):

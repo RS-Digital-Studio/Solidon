@@ -28,8 +28,10 @@ unverändert durchgereicht, von der Operation selbst als
 qualifiziert, ordinal je Ausgabe, auf Struktur geprüft in
 `_checked_continuations`, im Ergebniscache als `CachedResult.continuations`
 mitgeführt) oder durch die eindeutige geometrische Zuordnung auf **denselben**
-Namen mit gültiger aktueller Auswahl. Ein frisch vergebener gleicher Name,
-ein Partner unter anderem Namen und eine ausgelassene Zuordnung sind nicht
+Namen mit gültiger aktueller Auswahl — oder auf ein bis auf Rechenrauschen
+unverändertes Merkmal unter anderem Namen (`_unchanged_continuations`, das
+unter dem alten Namen weitergeführt wird). Ein frisch vergebener gleicher Name,
+ein veränderter Partner unter anderem Namen und eine ausgelassene Zuordnung sind nicht
 belegt (`_unproven_native_references`); die Kette hält atomar an der
 Erzeugergrenze mit `NativeReferenceLost`, der Befund nennt den späteren
 Verbraucher, und `EvaluationResult.blocked_references` trägt die Bezüge zum
@@ -42,9 +44,13 @@ Belege stellen `resize_hole` (Bohrung und belegter Boden aus
 
 **Was die Zuordnung nicht belegt, wählt der Kunde am neu gebauten Körper**
 (`_native_reselection`): je nicht belegtem altem Bezug die aktuellen
-Merkmale derselben Art mit gültiger Auswahl, die noch kein alter Name
-beansprucht, über denselben Frageweg und dieselbe Gruppen-, Fingerabdruck-
-und Atomizitätsmechanik wie am Netz (`_answer_matches` mit `scope`). Die
+Merkmale derselben Art mit gültiger Auswahl, die noch kein **belegter** alter
+Name beansprucht, über denselben Frageweg und dieselbe Gruppen-, Fingerabdruck-
+und Atomizitätsmechanik wie am Netz (`_answer_matches` mit `scope`). Die neu
+zu wählenden Namen fallen vorher aus der Zuordnung, und ihr geometrisch
+gefundener Nachfolger unter anderem Namen steht als erste Antwort da — sonst
+fehlte gerade er unter den Antworten, und jede Antwort scheiterte an
+`mapping_with_decisions`, weil der alte Name schon zugeordnet war. Die
 Wahl wird als Alias unter dem alten Namen veröffentlicht (`apply_mapping`,
 mit aktuellen Maßen, Dreiecken und Teilträgern) und liegt in
 `Operation.matches` in der eigenen Domäne `native-group:` mit `scope` —
@@ -198,6 +204,18 @@ Parameter mit `kind="features"` speichern eine Liste stabiler Merkmalkennungen.
 Jeder fehlende Verweis wird einzeln aufgelöst, auch nach einem Cachetreffer.
 Wenn eine leere Auswahl den ganzen Körper bedeutet, darf „Verweis streichen“
 den Wirkungsbereich nicht vergrößern. Abbrechen erhält den fehlenden Verweis.
+
+**Die Verweisfrage nennt, wer fragt, und streicht nur auf ausdrücklichen
+Wunsch** (`orphans.question_for`, `removal_choice`): die Passung beim Namen,
+den Schritt beim Titel aus dem Register, und als letzte Antwort „Passung
+löschen“ beziehungsweise „Ohne dieses Merkmal rechnen“ — nie ein nackter
+Strich. Jede andere Antwort, auch Abbrechen oder eine ohne Wahl geschlossene
+Frage (`QuestionDeclined`), lässt den Verweis stehen; der Befund
+(`feature.orphaned`, `feature.blocked`) trägt seinen Weg (`_way_forward`:
+Schritt und Feld mit *Eingabe korrigieren*, eine Passung mit *Verlauf
+zeigen*). Eine Skizze auf abgeleiteter Ebene behält beim Neuzuordnen jede
+Ableitung darüber (`_on_another_face`): Versatz, Neigung und Ausdrücke,
+nur die Fläche darunter wechselt.
 Eine Körpervorbelegung entfernt nur ihre selbst geometrisch abgeleiteten
 Einzel- und Mehrfachverweise. Ausdrücklich gewählte Merkmale und nachträglich
 übergebene Werte behalten Vorrang; aus einer Körperwahl wird keine Flächenwahl.
@@ -270,6 +288,36 @@ des Körpers braucht: Der Körper behält, was die Operation ausgab, ohne
 Zuordnung und ohne Waisenbefund, wie bei `perceive.too_many`; was der Merker
 kennt, kommt trotzdem. Die Szene einer solchen Auswertung ist ein Bild, kein
 Dokumentstand.
+
+**Die Zuordnungsfrage fragt, was etwas trägt, zuerst — und nur, was eine
+Antwort hat** (`_answer_matches`). Verwiesene alte Merkmale kommen vor
+unverwiesenen (stabile Sortierung); bleibt einem unverwiesenen nichts zur
+Wahl, wird es ohne Dialog nicht weitergeführt und wie eine Antwort
+festgehalten. Ein verwiesenes ohne Nachfolger wird weiter gefragt — an ihm
+hängt etwas, und Abbrechen beginnt die Gruppe neu.
+
+**Eine ohne Wahl geschlossene Frage hält den Schritt an, nicht die
+Rechnung.** Die Sitzung meldet sie als `errors.QuestionDeclined` (Unterklasse
+von `OperationCancelled`; eine überholte Frage bleibt ein gewöhnlicher
+Abbruch). Jede Frage eines Schritts läuft durch `_WatchedAsk`; dort wird
+daraus ein `AmbiguityError` mit `QUESTION_LEFT_OPEN` und den Knöpfen
+*Eingabe korrigieren* (öffnet den Schritt, beim Übernehmen kommt die Frage
+wieder) und *Verlauf zeigen*. Der Stand davor bleibt sichtbar; der Befund
+steht am Schritt.
+
+**Ein erklärtes Merkmal sucht seinen erkannten Partner an seiner Stelle**
+(`_near_its_declaration`): quer zur Achse innerhalb seiner Breite
+(Durchmesser, beim Langloch die Länge), entlang der Achse innerhalb seiner
+Tiefe, wo eine erklärt ist. Die Zuordnung toleriert zwischen zwei Schritten
+8 % der Diagonale; was die Operation selbst gesetzt hat, steht dort, wo sie es
+sagt — sonst nahm eine verschobene Senkung die der Nachbarbohrung, und deren
+Name verwaiste.
+
+**Ein verwiesenes erkanntes Merkmal, das ein Schritt unkenntlich macht,
+meldet sich am Schritt** (`perceive.referenced_lost`, Warnung mit
+`CORRECT_INPUT` und `SHOW_HISTORY`). Gezählt wird, wer **nach** dem Schritt
+noch darauf zeigt (`needed`, `_needed_after`) — was der Schritt selbst
+verbraucht, fehlt danach niemandem.
 
 Auch beim nachträglichen Ändern von Operationseingängen gilt der Zustand
 unmittelbar vor diesem Schritt: bereits verbrauchte und erst später erzeugte

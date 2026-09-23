@@ -294,15 +294,22 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
         # erkannt, und die vom Deckel *benannten* (`lid_cavity`) sind dabei
         # nicht mehr. Wer das nicht weiß, sucht den Fehler in seiner
         # Beschriftung.
+        #
+        # **Und er nennt keine Ursache, die er nicht kennt** (RM-189). Seit die
+        # erzeugten Merkmale solche Schritte überstehen, trifft der Fall vor
+        # allem erkannte: *Glätten* oder starkes *Dreiecke verringern* nimmt
+        # einer Bohrung die Zylinderform. Der Satz „benannte Merkmale überstehen
+        # das nicht" war dort falsch; welcher Schritt es war, sagt der Befund
+        # am Schritt selbst (``perceive.referenced_lost``), und der Verlauf
+        # führt dorthin.
         return [
             Finding(
                 code="fit.missing_feature",
                 severity="error",
                 message=_(
-                    "Eine Passung verweist auf ein Merkmal, das es nicht mehr gibt: eine "
-                    "Operation danach hat den Körper neu gebaut, und benannte Merkmale "
-                    "überstehen das nicht. Die Schritte ab dort zurücknehmen und vor der "
-                    "Passung ausführen."
+                    "Ein Merkmal dieser Passung gibt es nicht mehr, oder es ist nach einem "
+                    "späteren Schritt nicht mehr erkennbar. Der Verlauf zeigt, welcher "
+                    "Schritt es verändert hat."
                 ),
                 values={"fit": fit.name, "a": str(fit.a), "b": str(fit.b)},
                 # Ein Merkmal, das es nicht mehr gibt, lässt sich nicht

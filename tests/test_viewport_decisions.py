@@ -6645,17 +6645,17 @@ def test_preview_labels_and_contours_follow_only_the_surviving_features(
     viewport.show_difference(compare_scenes(before.scene, after))
     assert len(viewport._feature_label_data) == 1
     assert "16" in viewport._feature_label_data[0][1]
-    assert "geschätzt" in viewport._feature_label_data[0][1]
+    assert "eingepasst" in viewport._feature_label_data[0][1]
     # Die Auswahl spricht zum Bildschirmleser, nicht zum Zeiger: Ein Tooltip
     # für ein bloß gewähltes Merkmal stünde überall im Bild (seit 21.09.2026
     # nur noch am gehoverten Merkmal, und ohne statusTip an der Ansicht).
-    assert "geschätzt" in viewport.accessibleDescription()
+    assert "eingepasst" in viewport.accessibleDescription()
     assert not viewport.toolTip() and not viewport.statusTip()
     contour = renderer.item_of("feature-outline:obj_1")
     assert np.ptp(contour.points[:, 0]) == pytest.approx(80.0)
     viewport.hold_before(True)
     assert len(viewport._feature_label_data) == 2
-    assert "geschätzt" not in viewport.accessibleDescription()
+    assert "eingepasst" not in viewport.accessibleDescription()
     contour = renderer.item_of("feature-outline:obj_1")
     assert np.ptp(contour.points[:, 0]) == pytest.approx(40.0)
 

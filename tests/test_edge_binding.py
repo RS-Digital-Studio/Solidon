@@ -242,7 +242,8 @@ def test_a_colliding_key_asks_before_the_cache_and_binds_the_chosen_edge(
     )
 
     assert result.complete, result.scene.report.findings
-    assert len(chooser.asked) == 1 and "nicht eindeutig" in chooser.asked[0]
+    assert len(chooser.asked) == 1 and "fast an derselben Stelle" in chooser.asked[0]
+    assert COLLIDING_KEY not in chooser.asked[0], "die Frage zeigt keinen Schlüssel aus Zahlen"
     assert chooser.offered[0] == [f"{COLLIDING_KEY}#1", f"{COLLIDING_KEY}#2"]
     assert chooser.cleared == 1, "die Kandidaten werden nach der Antwort weggeräumt"
     assert len(chooser.targets) == 2 and {entry.object_id for entry in chooser.targets} == {"obj_1"}

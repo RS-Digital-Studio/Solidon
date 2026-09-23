@@ -1329,7 +1329,9 @@ def test_a_fillet_says_what_it_is_and_how_big() -> None:
 
     assert feature_name("fillet_1", fillet("fillet_1", recess=False)) == tr("Verrundung")
     assert feature_name("fillet_2", fillet("fillet_2", recess=True)) == tr("Hohlkehle")
-    assert feature_measure(fillet("fillet_1", recess=False)) == f"R{length(3.0)}"
+    assert feature_measure(fillet("fillet_1", recess=False)) == (
+        f"R{length(3.0)} · {tr('aus der Konstruktion')}"
+    )
 
 
 def test_a_face_is_named_by_where_it_looks() -> None:
@@ -1372,7 +1374,7 @@ def test_a_curved_face_is_named_by_its_hollowness_and_not_by_a_direction() -> No
 
     assert feature_name("curve_1", curved("curve_1", inner=False)) == tr("Gerundete Seite")
     assert feature_name("curve_2", curved("curve_2", inner=True)) == tr("Gerundete Seite innen")
-    assert feature_measure(curved("curve_1", inner=False)) == area(381.7)
+    assert feature_measure(curved("curve_1", inner=False)) == (f"{area(381.7)} · {tr('gemessen')}")
 
 
 def test_a_sphere_and_a_torus_say_which_way_they_point() -> None:

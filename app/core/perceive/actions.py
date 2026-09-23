@@ -40,17 +40,46 @@ if TYPE_CHECKING:
     from app.core.perceive.relations import FeatureGroupReason
 
 
-def measure_qualifier(status: MeasureStatus) -> TranslatableText | None:
-    """Kurzer Zusatz für dieselbe Maßquelle in Oberfläche und Steckbrief."""
+#: Das eine sichtbare Wort je Maßquelle — Objektbaum, Merkmalfenster,
+#: Bohrhinweis und Steckbrief lesen es hier (:func:`measure_qualifier`).
+#:
+#: **Jede Quelle hat eines**, auch die belegten. Bis zum 22.09.2026 trugen nur
+#: der Fit („geschätzt“) und die Vorgabe („Vorgabemaß“) ein Wort; ein am Netz
+#: oder an der exakten Fläche gemessenes Maß stand ohne da, und wer nicht mit
+#: der Maus darüberfuhr, sah nicht, woher es kam — der Änderungsverlauf von
+#: 0.5.0 versprach aber „gemessen, eingepasst oder aus dem Schritt“. Die
+#: Wörter sind die eines Kunden, der vom Slicer kommt: Wo die Zahl steht,
+#: sagt das Wort, was sie ist; der Satz dazu steht im Tooltip
+#: (:func:`measure_explanation`).
+MEASURE_SOURCE_WORDS: Final[dict[str, TranslatableText]] = {
+    "native": _("aus der Konstruktion"),
+    "facets": _("gemessen"),
+    "fit": _("eingepasst"),
+    "parameter": _("aus dem Schritt"),
+}
+
+
+#: Die Quellen, deren Zahl die vorhandene Oberfläche selbst ist: am Netz
+#: gemessen oder aus dem exakten Modell übernommen. Eine **enge** Beschriftung
+#: — die Marken in der Ansicht — nennt ihr Wort nicht (:func:`measure_qualifier`
+#: mit ``compact``): Dreißig Bohrungen mit dreißigmal „gemessen“ drängten
+#: Beschriftungen aus dem Bild. Die übrigen Wörter warnen und bleiben überall.
+DIRECT_MEASURE_SOURCES: Final[frozenset[str]] = frozenset({"native", "facets"})
+
+
+def measure_qualifier(status: MeasureStatus, *, compact: bool = False) -> TranslatableText | None:
+    """Das kurze Wort zur Maßquelle — dasselbe in Oberfläche und Steckbrief.
+
+    ``compact`` lässt das Wort einer direkten Quelle weg
+    (:data:`DIRECT_MEASURE_SOURCES`), für Stellen mit einer Zeile unter vielen.
+    """
     if not status.available:
         return _("Maß nicht bestimmt")
-    if status.state == "unknown":
+    if status.state == "unknown" or status.source is None:
         return _("Maßherkunft nicht bestimmt")
-    if status.source == "parameter":
-        return _("Vorgabemaß")
-    if status.state == "estimated":
-        return _("geschätzt")
-    return None
+    if compact and status.source in DIRECT_MEASURE_SOURCES:
+        return None
+    return MEASURE_SOURCE_WORDS.get(status.source)
 
 
 def measure_explanation(status: MeasureStatus) -> TranslatableText:
@@ -71,17 +100,17 @@ def measure_explanation(status: MeasureStatus) -> TranslatableText:
         )
     if status.source == "fit":
         return _(
-            "Aus der vorhandenen Oberfläche geschätzt. Das ursprüngliche "
+            "An die vorhandene Oberfläche eingepasst. Das ursprüngliche "
             "Konstruktionsmaß ist nicht bekannt."
         )
     if status.source == "facets":
         return _(
-            "Am vorhandenen Dreiecksmodell bestimmt. Eine gerundete Ursprungsfläche "
+            "Am vorhandenen Dreiecksnetz gemessen. Eine gerundete Ursprungsfläche "
             "kann davon abweichen."
         )
     return _(
-        "An der exakten Modellfläche bestimmt. Druckabweichungen und Passungsspiel "
-        "sind darin nicht enthalten."
+        "Aus der Konstruktion des Modells übernommen. Druckabweichungen und "
+        "Passungsspiel sind darin nicht enthalten."
     )
 
 
@@ -362,11 +391,28 @@ def feature_value_source(field: str, feature: Feature | None = None) -> FeatureV
 
     Die Gruppenauskunft liest damit dieselbe Zuordnung wie das Panel. Ein
     Index kennzeichnet eine Komponente der Position; ohne Index ist es ein
-    skalares Maß des Merkmals.
+    Maß des Merkmals — eine Zahl, oder am Langloch seine Richtung.
+
+    **Am Langloch liest das Feld seine Länge und seine Richtung**
+    (:func:`_slot_value`), nicht den Durchmesser wie an einer Bohrung. Bis zum
+    22.09.2026 stand das nur im Panel; die Gruppe las die allgemeine Tabelle,
+    verglich allein die Breite und nahm ein längeres und ein quer liegendes
+    Langloch als „gleich" in *Auf alle anwenden* — mit den Werten des
+    gewählten hätte das Übernehmen beide still gekürzt und gedreht.
     """
-    if field == "diameter" and feature is not None and feature.kind == "fillet":
+    if feature is not None and feature.kind == "fillet" and field == "diameter":
         return ("radius", None)
+    if feature is not None and feature.kind == "slot" and field in _SLOT_SOURCES:
+        return _SLOT_SOURCES[field]
     return _FROM_FEATURE.get(field)
+
+
+#: Woraus die zwei Felder von *Zum Langloch ziehen* an einem **erkannten
+#: Langloch** lesen (:func:`_slot_value`).
+_SLOT_SOURCES: Final[dict[str, FeatureValueSource]] = {
+    "slot_length": ("length", None),
+    "slot_angle": ("direction", None),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -530,11 +576,11 @@ def _value_of(spec: Any, feature: Feature, op: str = "") -> float | bool | str:
         return measured if not spec.choices or measured in spec.choices else spec.default
     shift = _SHIFTED_BY.get((op, spec.name))
     beside = float(feature.params.get(shift, 0.0)) if shift else 0.0
-    if index is None:
-        return float(measured) + beside
     try:
-        return float(measured[index]) + beside
-    except IndexError, TypeError:
+        # Eine Richtung (``direction`` am Langloch) ist keine Zahl; ihren Winkel
+        # liefert :func:`_slot_value`, und ohne Achse bleibt es die Vorgabe.
+        return float(measured if index is None else measured[index]) + beside
+    except IndexError, TypeError, ValueError:
         return spec.default  # type: ignore[no-any-return]
 
 
@@ -543,8 +589,6 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
     radius = entry.name == "diameter" and feature.kind == "fillet"
     factor = 2.0 if radius else 1.0
     source = feature_value_source(entry.name, feature)
-    if feature.kind == "slot" and entry.name in {"slot_length", "slot_angle"}:
-        source = ("length" if entry.name == "slot_length" else "direction", None)
     derived = (op, entry.name) in _SHIFTED_BY and not (
         feature.kind == "slot" and entry.name == "slot_length" and not feature.params.get("open")
     )

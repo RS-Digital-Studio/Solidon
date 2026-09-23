@@ -618,3 +618,118 @@ def test_an_unchanged_depth_stays_with_each_hole_of_a_group() -> None:
         op="resize_hole",
     )
     assert changed["hole_2"]["depth"] == pytest.approx(8.0), "geändert gilt sie allen"
+
+
+@pytest.fixture(scope="module")
+def four_slots() -> tuple[MeshData, dict[str, Feature], dict[str, str]]:
+    """Vier Langlöcher Ø 6 in einer Platte: zwei gleiche, ein längeres, ein quer liegendes.
+
+    Alle vier haben dieselbe Breite und dieselbe Achse — das ist alles, was
+    *Zum Langloch ziehen* bis zum 22.09.2026 verglich.
+    """
+    from app.core.geom.prepare import drill
+    from app.core.knowledge import profiles
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    mesh = MeshData.of(trimesh.creation.box(extents=(160.0, 120.0, 10.0)))
+    layout = {
+        "reference": ((-45.0, -30.0), 20.0, 0.0),
+        "twin": ((0.0, -30.0), 20.0, 0.0),
+        "longer": ((45.0, -30.0), 30.0, 0.0),
+        "across": ((-45.0, 30.0), 20.0, 90.0),
+    }
+    for (x, y), length, angle in layout.values():
+        mesh = drill(
+            mesh,
+            profile=profile,
+            position=(x, y, 5.0),
+            axis="z",
+            diameter=6.0,
+            compensate=False,
+            slot_length=length,
+            slot_angle=angle,
+        ).mesh
+    features = detect(mesh)
+    slots = [feature for feature in features.values() if feature.kind == "slot"]
+    assert len(slots) == 4, sorted(feature.kind for feature in features.values())
+    names = {
+        role: min(
+            slots,
+            key=lambda feature: float(
+                np.hypot(feature.params["centre"][0] - x, feature.params["centre"][1] - y)
+            ),
+        ).id
+        for role, ((x, y), _length, _angle) in layout.items()
+    }
+    return mesh, features, names
+
+
+def test_pulling_slots_together_takes_only_slots_of_the_same_length_and_direction(
+    four_slots: tuple[MeshData, dict[str, Feature], dict[str, str]],
+) -> None:
+    """*Zum Langloch ziehen* setzt Länge und Richtung — gleich ist nur, was schon so liegt.
+
+    Die Handlung trägt die Länge und die Richtung des gewählten Langlochs in
+    ihre Felder, und *Auf alle anwenden* schickt dieselben Werte an jedes
+    Mitglied (``params_for_members``). Bis zum 22.09.2026 verglich die Gruppe
+    nur die Breite: Ein 30 mm langes und ein quer liegendes Langloch standen
+    als „gleich" daneben und wären beim Übernehmen still auf 20 mm gekürzt
+    beziehungsweise um 90 Grad gedreht worden — obwohl der Nachweis „Gleiches
+    Ausgangsmaß für diese Änderung" versprach.
+    """
+    mesh, features, names = four_slots
+
+    group = alike_for_action("slot_hole", names["reference"], features, mesh)
+
+    assert set(_targets(group)) == {names["reference"], names["twin"]}
+    assert "same_target_dimensions" in group.evidence
+
+
+def test_the_slot_field_reads_its_length_where_the_group_compares_it(
+    four_slots: tuple[MeshData, dict[str, Feature], dict[str, str]],
+) -> None:
+    """Feld und Gruppe lesen dieselbe Kennzahl: am Langloch die Länge, nicht die Breite."""
+    from app.core.perceive.actions import feature_value_source
+
+    _mesh, features, names = four_slots
+    slot = features[names["reference"]]
+
+    assert feature_value_source("slot_length", slot) == ("length", None)
+    assert feature_value_source("slot_angle", slot) == ("direction", None)
+    hole = Feature(id="hole_1", kind="hole", provenance="detected", params={"diameter": 5.0})
+    assert feature_value_source("slot_length", hole) == ("diameter", None), (
+        "an einer runden Bohrung gibt es keine Länge; das Feld liest ihren Durchmesser"
+    )
+
+
+def test_a_different_extent_is_different_without_measuring_a_triangle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Zwei Ausschnitte mit verschiedenen Hüllquadern sind verschieden — ohne Dreiecksmessung.
+
+    Eine notwendige Bedingung der Flächengleichheit: Liegt jede Ecke des einen
+    höchstens um die Sehnenhöhe neben den Dreiecken des anderen, stimmen die
+    Hüllquader bis auf die Sehnenhöhe überein. An den 20 Wülsten von
+    ``build_tray_v3.step`` kosteten die Vergleiche, die am Ende „verschieden"
+    sagten, 180 ms je Klick (RM-181).
+    """
+    whole = trimesh.creation.icosphere(subdivisions=2, radius=5.0)
+    cap = whole.slice_plane((0.0, 0.0, 2.0), (0.0, 0.0, 1.0))
+
+    def patch_of(body: trimesh.Trimesh) -> object:
+        points = np.asarray(body.vertices, dtype=float)
+        corners = np.asarray(body.faces, dtype=np.int64)
+        return relations._SurfacePatch(points=points, triangles=points[corners], corners=corners)
+
+    measured: list[int] = []
+    original = relations._distance_to_surface
+
+    def counted(*args: object, **kwargs: object) -> object:
+        measured.append(1)
+        return original(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(relations, "_distance_to_surface", counted)
+
+    assert not relations._same_surface_patch(patch_of(whole), patch_of(cap))  # type: ignore[arg-type]
+    assert measured == [], "verschieden schon an den Hüllquadern"
+    assert relations._same_surface_patch(patch_of(whole), patch_of(whole.copy()))  # type: ignore[arg-type]

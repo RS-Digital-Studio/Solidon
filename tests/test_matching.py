@@ -922,11 +922,15 @@ def _carried(
     mesh: MeshData,
     previous: dict[str, Feature],
     referenced: frozenset[str] | set[str] = frozenset(),
+    *,
+    needed: dict[str, tuple[str, ...]] | None = None,
 ) -> tuple[dict[str, Feature], list]:
     """``_with_features`` an einer Operation, die ``features={}`` zurückgibt.
 
     Elf Stellen unter ``app/core/geom/`` tun das, und keine von ihnen meint
     damit „die erzeugten Merkmale sind fort" — sie füllen das Feld nur nicht.
+    ``needed`` ist, wer nach diesem Schritt noch auf ein Merkmal zeigt
+    (``evaluate._needed_after``); ohne Angabe gilt ``referenced``.
     """
     from app.core.scene.evaluate import _with_features
     from app.core.types import Operation, SceneObject
@@ -937,7 +941,9 @@ def _carried(
     entry = SceneObject(id="obj_1", name="Teil", mesh=mesh, features={})
     findings: list = []
     operation = Operation(id=4, op="thicken", inputs=("obj_1",), outputs=("obj_1",), params={})
-    result = _with_features(entry, previous, operation, never, findings, referenced=referenced)
+    result = _with_features(
+        entry, previous, operation, never, findings, referenced=referenced, needed=needed
+    )
     return result.features, findings
 
 
@@ -1055,6 +1061,130 @@ def test_a_referenced_generated_feature_that_is_gone_is_a_warning() -> None:
     assert "op3.bore_1" not in features, "die Karte dürfte sonst nur ein Phantom markieren"
     assert [entry.code for entry in reported] == ["perceive.generated_lost"]
     assert [entry.severity for entry in reported] == ["warning"]
+
+
+def test_a_referenced_detected_feature_that_is_gone_names_its_step() -> None:
+    """Auch ein **erkanntes** Merkmal, auf das eine Passung zeigt, meldet seinen Verlust (RM-189).
+
+    Robert, 18.09.2026: „Eine Passung verweist auf ein Merkmal, das es nicht
+    mehr gibt … alles sollte korrekt übernommen werden." Nachgestellt am
+    Bohrhalter (``drill-holder.3mf``): Eine Passung zwischen zwei Bohrungen,
+    danach *Glätten* mit zwei Durchgängen — alle 29 Bohrungen sind danach keine
+    Zylinder mehr und nicht mehr erkennbar; stark *Dreiecke verringern* verliert
+    sieben. Der Verlust ist echt, und der Bericht nannte nur die Passung
+    („eine Operation danach hat den Körper neu gebaut") und nicht den
+    Schritt, der ihn verursacht hat: Der Verlust eines erkannten Merkmals war
+    eine stille Feststellung, auch wenn eine Passung darauf zeigte. Jetzt ist
+    er eine Warnung am verursachenden Schritt, mit dem Weg dorthin.
+    """
+    from app.core.errors import CORRECT_INPUT
+
+    plate = one_hole_plate()
+    bore = next(iter(holes_of(plate).values()))
+    plugged = MeshData.of(trimesh.creation.box(extents=(60.0, 30.0, 8.0)))
+
+    _features, findings = _carried(plugged, {bore.id: bore}, referenced={bore.id})
+
+    reported = [entry for entry in findings if entry.values.get("feature") == bore.id]
+    assert [entry.severity for entry in reported] == ["warning"], [
+        (entry.code, entry.severity) for entry in reported
+    ]
+    assert reported[0].op_id == 4, "der Befund nennt den Schritt, der es verloren hat"
+    assert CORRECT_INPUT in reported[0].suggestions
+
+    _features, quiet = _carried(plugged, {bore.id: bore})
+    assert {entry.severity for entry in quiet if entry.values.get("feature") == bore.id} == {
+        "info"
+    }, "ohne Verweis bleibt es eine Feststellung"
+
+
+def test_a_feature_only_its_own_step_names_is_not_reported_lost() -> None:
+    """Was der Schritt selbst verbraucht, fehlt danach niemandem.
+
+    *Fläche versetzen* nennt seine Fläche und verändert sie; danach ist sie
+    oft nicht mehr dieselbe. Am Zylinder aus dem Piratenschiff-Satz
+    (``obj_11_Cylinder_B.stl``) meldete jeder zweite Versatz „Ein Merkmal, auf
+    das sich eine Passung oder ein späterer Schritt bezieht, ist nach diesem
+    Schritt nicht mehr erkennbar" — ohne Passung, ohne späteren Schritt
+    (23.09.2026, Nachmessung zu RM-128). Gezählt wird, wer **nach** dem
+    Schritt noch zeigt (``_needed_after``), wie am exakten Körper.
+    """
+    plate = one_hole_plate()
+    bore = next(iter(holes_of(plate).values()))
+    plugged = MeshData.of(trimesh.creation.box(extents=(60.0, 30.0, 8.0)))
+
+    _features, own = _carried(plugged, {bore.id: bore}, referenced={bore.id}, needed={})
+    assert {entry.severity for entry in own if entry.values.get("feature") == bore.id} == {
+        "info"
+    }, [(entry.code, entry.severity) for entry in own]
+
+    _features, later = _carried(
+        plugged, {bore.id: bore}, referenced={bore.id}, needed={bore.id: ("stift_1",)}
+    )
+    reported = [entry for entry in later if entry.values.get("feature") == bore.id]
+    assert [entry.severity for entry in reported] == ["warning"]
+    assert reported[0].values.get("where") == "stift_1", "der Befund nennt, wer das Merkmal braucht"
+
+
+def test_a_declared_feature_does_not_take_a_neighbour_far_from_where_it_was_put() -> None:
+    """Was eine Operation selbst gesetzt hat, sucht seinen erkannten Partner an seiner Stelle.
+
+    Die Zuordnung eines erklärten Merkmals zur Erkennung lief mit derselben
+    Toleranz wie die zwischen zwei Schritten: 8 % der Modelldiagonale. Am
+    Schraubenhalter mit Wabenmuster wanderte ``hole_1`` samt Senkung 1 mm
+    entlang seiner Achse; die erklärte Senkung stand danach mit ihrem alten
+    Durchmesser 1 mm vor der Wand, fand an ihrer Stelle keinen gleichen Kegel
+    — und nahm die Senkung der **Nachbarbohrung** 18 mm daneben. ``cone_2``
+    war danach verwaist, ohne dass jemand es angefasst hatte (23.09.2026,
+    Namensprobe zum Verschieben, Drehen und Zurücknehmen).
+
+    Nachgestellt: zwei Bohrungen Ø 4, 30 mm auseinander; der Schritt erklärt
+    ``hole_1`` bei x = 22, wo keine Bohrung ist. Die nächste steht 8 mm weiter —
+    innerhalb der Schritt-Toleranz, aber zwei Durchmesser vom erklärten Ort.
+    """
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Operation, SceneObject
+
+    plate = trimesh.creation.box(extents=(100.0, 60.0, 10.0))
+    for x in (0.0, 30.0):
+        drill = trimesh.creation.cylinder(radius=2.0, height=40.0, sections=48)
+        drill.apply_translation((x, 0.0, 0.0))
+        plate = trimesh.boolean.difference([plate, drill])
+    mesh = MeshData.of(plate)
+    before = {round(float(hole.params["centre"][0])): hole for hole in holes_of(mesh).values()}
+    left = replace(before[0], id="hole_1")
+    right = replace(before[30], id="hole_2")
+    declared = replace(
+        left,
+        provenance="generated",
+        params={**left.params, "centre": (22.0, 0.0, float(left.params["centre"][2]))},
+        face_indices=(),
+        surface_patches=(),
+    )
+
+    def never(question: str, choices: list[str]) -> str:
+        raise AssertionError(f"nothing here is ambiguous: {question}")
+
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features={"hole_1": declared})
+    findings: list = []
+    operation = Operation(id=4, op="thicken", inputs=("obj_1",), outputs=("obj_1",), params={})
+    result = _with_features(
+        entry,
+        {"hole_1": left, "hole_2": right},
+        operation,
+        never,
+        findings,
+        referenced={"hole_2"},
+    )
+
+    assert "hole_2" in result.features, [(entry.code, entry.values) for entry in findings]
+    assert float(result.features["hole_2"].params["centre"][0]) == pytest.approx(30.0, abs=0.1)
+    assert not [
+        entry
+        for entry in findings
+        if entry.code in ("perceive.orphaned", "perceive.referenced_lost")
+        and entry.values.get("feature") == "hole_2"
+    ]
 
 
 def test_a_thread_travels_unchecked_because_detection_cannot_see_it() -> None:
@@ -1521,7 +1651,11 @@ def test_bore_advice_distinguishes_a_measurement_from_a_known_screw(source: str 
         measure_sources={"diameter": source} if source else {},  # type: ignore[arg-type]
     )
     text, choices = bore_advice(MEASURED_BORE, feature=feature)
-    qualifier = {"fit": "geschätzt", "parameter": "Vorgabemaß", None: "Maßherkunft nicht bestimmt"}
+    qualifier = {
+        "fit": "eingepasst",
+        "parameter": "aus dem Schritt",
+        None: "Maßherkunft nicht bestimmt",
+    }
     assert qualifier[source] in text
     assert "5.19" in text and "Passt vermutlich zu M5 (Durchgangsloch fein)" in text
     assert "Durchgangsloch für" not in text, "eine Messung ist keine Konstruktionsangabe"

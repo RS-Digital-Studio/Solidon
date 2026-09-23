@@ -4313,7 +4313,7 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
             for field in flow._measure_group.findChildren(LengthSpin)
             if "Tiefe" in field.accessibleName()
         )
-        assert "Vorgabemaß" in depth.toolTip()
+        assert "aus dem Schritt" in depth.toolTip()
         assert "erzeugenden Schritt" in depth.accessibleDescription()
         depth.lineEdit().selectAll()
         QTest.keyClicks(depth.lineEdit(), QLocale().toString(float(edited_depth), "f", 2))

@@ -27,8 +27,11 @@ möglichen Partner. Daraus abgeleitete Referenzkosten bleiben beim Abschluss
 lokaler Zeilenrivalen und aktivierter Besitzeransprüche unverändert.
 Ein geöffneter Besitzer führt sämtliche eigenen Ansprüche nach; offene
 Kandidaten können dadurch keinen außen fest zugeordneten Nachfolger belegen.
-Die Hülle ist konservativ und kann bei Hall-Defiziten zusätzliche Fragen
-auslösen; sie behauptet keine Kostengleichheit sämtlicher Kandidaten.
+Die Lücke zwischen oberer und unterer Schranke gilt je
+Zusammenhangskomponente der angenommenen Paare (`_accepted_components`):
+Ein Optimum außerhalb der Komponente ändert die Wahl in ihr nicht, und ein
+Hall-Defizit an ganz anderer Stelle öffnet kein eindeutiges Paar mehr. Die
+Hülle behauptet weiter keine Kostengleichheit sämtlicher Kandidaten.
 Auch mehrere alte Ansprüche auf nur einen neuen Kandidaten sind mehrdeutig.
 `require_injective` sperrt doppelte Nachfolger gemeinsam vor Namen- und
 Erzeugerübernahme. `fresh` bezeichnet alle Ziele ohne freigegebenen alten Namen.
@@ -93,7 +96,16 @@ durch angehängte Dreiecksnummern nicht neu gemessen. `matching` transportiert
 Quellen bei belegter Formerhaltung und verwirft sie mit ungültigen Formmaßen.
 Neu aus Dreiecken bestimmte Hüllmaße tragen `facets`. `actions` stellt
 kurzen Maßzusatz und Erklärung gemeinsam für Steckbrief, Bohrhinweis und UI
-bereit. `ActionField.measurement` beschreibt den Ausgangswert; ein neuer
+bereit: **Jede Quelle hat ein sichtbares Wort**
+(`actions.MEASURE_SOURCE_WORDS` — `native` „aus der Konstruktion“, `facets`
+„gemessen“, `fit` „eingepasst“, `parameter` „aus dem Schritt“), der Satz dazu
+steht im Tooltip (`measure_explanation`). Der Steckbrief nennt eine allen
+Maßen einer Zeile gemeinsame Herkunft einmal am Zeilenende („— Maße
+gemessen“, `digest._shared_source`), gemischte Quellen je Maß; der Agent liest
+damit dieselben Wörter wie der Kunde. Die enge Form
+(`measure_qualifier(..., compact=True)`) lässt das Wort der direkten Quellen
+weg (`DIRECT_MEASURE_SOURCES`: `native`, `facets`) — für die Marken in der
+Ansicht, wo viele einzeilige Beschriftungen um Platz ringen. `ActionField.measurement` beschreibt den Ausgangswert; ein neuer
 Zielwert ist keine neue Messung. Historische Felder lesen weiterhin den Schritt.
 
 Die Passungskarte übernimmt ausschließlich den aktuellen Prüfbericht.
@@ -255,6 +267,11 @@ sagt, ob das Feld einmal herumreicht und der Umriss periodisch gilt). Beides
 brauchen `remove_feature` und `resize_feature` in `geom/prepare_ops.py`. Den
 Träger findet `carrier_of` über Ebene und Normale beziehungsweise Achse und
 Durchmesser, nie über eine Kennung: Die altert beim Umbenennen.
+
+Dreht eine Operation den ganzen Körper, dreht der Feldwinkel eines ebenen
+Musters mit (`matching._turned_field_angle`): Er ist gegen die Flächenachsen
+der Normale gemessen (`units.plane_axes`), und die gedrehte Normale hat
+andere — ohne das stand ein gedrehtes Wabenmuster mit seinem alten Winkel da.
 
 ## Lokale Erkennung großer Netze
 
@@ -517,6 +534,23 @@ Netz oder ein Merkmal mit anderen Dreiecken, anderer Achse oder Mitte ist
 ein anderer Schlüssel und erbt nichts. Ebenso liest `_large_facet_faces` die
 ebenen Flecken je Körper einmal, und `_one_body` verschweißt eine
 ungeschweißte STL je Körper einmal statt bei jeder Frage.
+**Und was die Handlungszeilen je Klick fragten, fragen sie je Körper**
+(RM-181): `features.planar_mask` (die Ebenen für `fillet_blocked` und
+`geom.edges._around`), `nearly_flat_mask` (je Abdruck der gerundeten
+Seiten), `prepare_ops.has_own_body` (je Flächen und `alone`), die
+verschweißte Kopie (`prepare_ops._welded`) und der Oberflächenindex
+(`_surface_index`, von `mesh.on_surface(..., index=)` nur für genau diesen
+Körper angenommen). Ganze Körperantworten zählen gegen `SUPPORT_CACHE_LIMIT`
+(`features.WHOLE_BODY_ANSWERS`), nicht gegen die 4096 je Frage. Die
+Randringe sucht `relations._face_boundary_rings` in der Nummerierung des
+Rands statt des Körpers, und `_shoulder_connections` fragt nur Facetten, deren
+Rand ganz aus belegten Ringkanten besteht (`_only_owned_rims`) — der erste
+Klick am Gartenschlauchhalter fiel so von 2,8 auf 1,0 s. Der vollständige
+Flächenvergleich (`_same_surface_patch`) sagt „verschieden“, sobald die
+Hüllquader um mehr als die Sehnenhöhe auseinanderliegen, ohne ein Dreieck zu
+messen. Die Gruppe vergleicht am Langloch Länge und Richtung
+(`actions._SLOT_SOURCES`, dieselbe Zuordnung wie das Panel), Richtungen
+vorzeichenlos.
 **Und der Steckbrief fragt denselben Weg** (`digest._selection_lines`, P1.5):
 Der Agent liest zur gewählten Stelle dieselben Mitglieder, Umfänge und Gründe
 wie das Panel. Die Sätze zu Nachweis und Grund stehen deshalb einmal im Kern
@@ -559,7 +593,7 @@ unberührt; das Budget gilt nur der Karte.
 | `helix.py` | Wendelflächen (§21.1): Achse, Steigung, Gangtiefe. Ein eingelesener Bolzen bringt sonst je nach Größe drei bis zwanzig Merkmale mit, die es nicht gibt — die Flanke eines Gewindegangs ist örtlich eine Kegelfläche und passt sich sauber ein. Wo eine Wendel liegt, steht danach **ein** `thread` statt vieler Erfundener. Welche Einpassungen eine Wendel verschluckt, sagt `features.without_phantoms_on` für beide Kerne — der exakte Leser `brep.thread` ruft dieselbe Regel |
 | `slots.py` | Langlöcher (§21.1): zwei Halbzylinder, zwei ebene Flanken, ein Merkmal. Dieselbe Bauart wie `helix.py` und aus demselben Grund — die Einpassung findet darin zwei Verrundungen, und der Kunde sah zwei Rundungen, wo eine Öffnung ist |
 | `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Die Randringe der Hohlraumketten (`_cavity_links`) liegen im Cache des Netzes unter einem Schlüssel aus Name, Art und Flächen — **ohne Lage**, damit `geom.transform.apply` den Eintrag an die bewegte Kopie weiterreichen kann; `session._warm_metrics` fragt sie im Arbeiter, bevor der Objektbaum sie im Hauptfaden liest. Der vollständige Flächenvergleich zweier Ausschnitte (`_same_surface_patch`) fragt erst die Ecken über den Suchbaum und misst nur an Dreiecken, was weiter als die Sehnenhöhe von jeder Ecke liegt — vier gleich vernetzte Bohrungen kosteten je Klick 1,6 s im Hauptfaden, jetzt eine Baumabfrage. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen. Am Langloch ist das die **dünnste** Wand: Der Weg der Mittellinie geht zur Hälfte ab, denn dort sitzen die Enden. Eine Regel (`_sleeve_between`), drei Auskünfte: `sleeve_at` fragt für **ein** Merkmal; `sleeves_of` liefert die dünnste Wand an **jeder** Merkmalszeile des Steckbriefs; `thinnest_sleeve` liefert das Minimum für die Wandprüfung. Beide Körperabfragen lesen die Maße je Merkmal einmal und teilen dieselbe Paarprüfung (RM-127). Und wem ein Dreieck gehört, das zwei Merkmale beanspruchen, sagt `cell_owner_table` (innerstes bei Verschachtelung, `CONTESTED` bei Widerspruch) — der Viewport liest es für den Klick im Bild |
-| `maps.py` | Analysekarten (§18.4). Die Netzfehlerkarte hat **drei** Stufen, und die dritte ist die einzige räumliche: offene und verzweigte Kanten stehen in der Kantentabelle, eine **Durchdringung** nicht — zwei Wände, die einander schneiden, haben lauter saubere Kanten mit je zwei Flächen (`repair.self_intersecting_faces`, RM-143) |
+| `maps.py` | Analysekarten (§18.4). Die Netzfehlerkarte hat **drei** Stufen, und die dritte ist die einzige räumliche: offene und verzweigte Kanten stehen in der Kantentabelle, eine **Durchdringung** nicht — zwei Wände, die einander schneiden, haben lauter saubere Kanten mit je zwei Flächen (`repair.self_intersecting_faces`, RM-143). Wand- und Krümmungskarte nehmen `cancelled` bis in die Schrittschleife mit (ein Kartenwechsel hält die alte an); die Wand rechnet je Schritt nur die noch aktiven Dreiecke, die Krümmung ist vektorisiert. Die Überhanglegende nennt den Grenzwinkel der Karte, nicht fest 45 Grad |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23). Unter der Auswahlzeile steht seit P1.5, was das Merkmalfenster zur gewählten Stelle weiß (`_selection_lines`): die Hohlraumkette oder der Grund „nicht sicher einzeln“, und je Mitgliedschaft eine Zeile der Handlungsgruppen — gleiche Merkmale mit Umfang, unsichere mit Grund; Handlungen mit derselben Mitgliedschaft teilen eine Zeile (§26.1) |
 | `matching.py` | Merkmalsbezeichner über Operationen hinweg stabil halten (§21.2, §21.3) |
 | `actions.py` | Was der Kunde mit einem erkannten Merkmal tun kann — und was nicht, mit Grund. Die Liste fürs Merkmalspanel, **aus dem Register abgeleitet** (§10, §21); `reason_against` beantwortet dieselbe Frage für den Kern |
@@ -604,7 +638,8 @@ des Verlaufs bearbeitbar.
 Ein verlorenes erkanntes oder erzeugtes Merkmal und eine bereits geschlossene
 Fehlstelle haben im aktuellen Körper keine Fläche mehr, die eine
 Merkmalskarte ehrlich färben könnte. `perceive.orphaned`,
-`perceive.generated_lost` und `perceive.mended` führen deshalb nur zum
+`perceive.generated_lost`, `perceive.referenced_lost` und `perceive.mended`
+führen deshalb nur zum
 betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
 `perceive.*`-Befunde behalten ihre Merkmalskarte.
 

@@ -1348,6 +1348,7 @@ def _no_longer_through(
     quality: Quality,
     seed: int | None,
     cancelled: CancelToken | None,
+    tool: MeshData | None = None,
 ) -> bool:
     """Steht im Schlauch dieser Bohrung wieder Material?
 
@@ -1365,6 +1366,14 @@ def _no_longer_through(
     gegen den fertigen Körper verschnitten. Bleibt dort Volumen, steht Material
     im Schlauch. Ein Vergleich von Hüllmaßen hätte an jedem nicht
     quaderförmigen Teil falschen Alarm gegeben.
+
+    **Mit ``tool`` zählt nur, was unmittelbar hinter dem Schnitt steht.** Die
+    lange Säule kreuzt an einem verwinkelten Teil hinter der Wand wieder
+    Material: Am Schraubenhalter mit Wabenmuster ging eine um 15° gekippte
+    Befestigungsbohrung sauber durch die Rückwand, und die Säule traf 43 bis
+    112 mm weiter die Waben — „geht nicht mehr durch" (RM-133, 23.09.2026).
+    Ein Rest, der erst jenseits des Werkzeugendes beginnt, liegt hinter Luft
+    (:func:`_behind_the_cut`); die Bohrung ist durch ihre Wand hindurch.
     """
     diameter = float(feature.params.get("diameter", 0.0)) - FEATURE_OVERLAP
     if diameter <= EPS_GEOM:
@@ -1395,7 +1404,36 @@ def _no_longer_through(
     remaining = left.mesh.raw
     if len(remaining.faces) == 0:
         return False
-    return bool(remaining.volume > EPS_GEOM)
+    if not bool(remaining.volume > EPS_GEOM):
+        return False
+    if tool is None:
+        return True
+    return not _behind_the_cut(remaining, tool, centre, _feature_direction(feature))
+
+
+def _behind_the_cut(remaining: Any, tool: MeshData, centre: Vec3, direction: Vec3) -> bool:
+    """Ob jeder Rest in der Säule erst jenseits des Werkzeugs beginnt — hinter Luft.
+
+    Je Seite gilt das Werkzeugende als Grenze, gemessen entlang der Achse von
+    ``centre``. Ein Rest, der dort ansetzt, ist Wand, durch die das Werkzeug
+    nicht kam; einer, der erst dahinter beginnt, hat zwischen sich und dem
+    Schnitt etwas, das nicht Material ist — die Bohrung hat ihre Wand dort
+    schon verlassen. Die Zugabe ist die des Werkzeugs (``FEATURE_OVERLAP``):
+    Näher als sie liegt nichts, was man Luft nennen könnte.
+    """
+    axis = np.asarray(direction, dtype=np.float64)
+    origin = np.asarray(centre, dtype=np.float64)
+    cut = (np.asarray(tool.raw.vertices, dtype=np.float64) - origin) @ axis
+    forward = float(cut.max()) + FEATURE_OVERLAP + EPS_GEOM
+    backward = float(cut.min()) - FEATURE_OVERLAP - EPS_GEOM
+    for piece in remaining.split(only_watertight=False):
+        if not bool(abs(float(piece.volume)) > EPS_GEOM):
+            continue
+        along = (np.asarray(piece.vertices, dtype=np.float64) - origin) @ axis
+        if float(along.min()) > forward or float(along.max()) < backward:
+            continue
+        return False
+    return True
 
 
 def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
@@ -1514,6 +1552,7 @@ def _throughness_lost(
     quality: Quality,
     seed: int | None,
     cancelled: CancelToken | None,
+    tool: MeshData | None = None,
 ) -> list[Finding]:
     """Der Befund dazu — leer, wenn die Bohrung weiter durchgeht.
 
@@ -1524,7 +1563,7 @@ def _throughness_lost(
     if not feature.params.get("through"):
         return []
     if not _no_longer_through(
-        mesh, feature, centre, quality=quality, seed=seed, cancelled=cancelled
+        mesh, feature, centre, quality=quality, seed=seed, cancelled=cancelled, tool=tool
     ):
         return []
     return [_through_lost_finding(op, feature, centre)]
@@ -2533,6 +2572,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            tool=placing,
         )
         findings.extend(lost)
         if lost:
@@ -2874,8 +2914,25 @@ def _hole_is_clear_read(mesh: MeshData, feature: Feature, radius: float, depth: 
 
 def has_own_body(mesh: MeshData, feature: Feature, *, alone: bool) -> bool:
     """Ob aus den Flächen dieses Merkmals ein Körper entsteht — die Frage, die
-    :func:`_tool_for` stellt, für das Panel vorab beantwortet."""
-    return _feature_body(mesh, feature, alone=alone) is not None
+    :func:`_tool_for` stellt, für das Panel vorab beantwortet.
+
+    **Gemerkt je Körper, Flächen und ``alone``** (``features.remembered``),
+    wie :func:`hole_is_clear`: Das Merkmalfenster fragt es bei jedem Klick auf
+    einen Kegel oder eine Kuppel, und jeder Bau richtete die Flächen neu aus
+    (``fix_normals``) — am Sieb aus ``Siebhalter+X1C.3mf`` mit 1 484
+    Dreiecken 200 ms je Klick (RM-181, gemessen am 22.09.2026). Die Antwort
+    hängt allein an Netz, Flächen und ``alone`` (:func:`_feature_body`).
+    """
+    from app.core.perceive.features import remembered
+
+    own: bool = remembered(
+        "has_own_body",
+        mesh.raw,
+        feature.face_indices,
+        lambda: _feature_body(mesh, feature, alone=alone) is not None,
+        extra=alone,
+    )
+    return own
 
 
 #: Warum *Zum Langloch ziehen* an einem geteilten Hohlraum absagt — an der
@@ -3029,10 +3086,11 @@ def move_feature(ctx: OpContext) -> OpResult:
         # Körper selbst — nur an den Mündungen, nie am Boden.
         shifted_cavity = _past_the_mouths(body, cavity_body).raw.copy()
         shifted_cavity.apply_translation(travel)
+        cutting = MeshData.of(shifted_cavity)
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         placed = boolean(
             "difference",
-            [closed.mesh, MeshData.of(shifted_cavity)],
+            [closed.mesh, cutting],
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
@@ -3072,9 +3130,10 @@ def move_feature(ctx: OpContext) -> OpResult:
             alone=True,
         )
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+        cutting = _placing_tool(ctx, body, source, feature, target, cavity)
         placed = boolean(
             "difference" if cavity else "union",
-            [closed.mesh, _placing_tool(ctx, body, source, feature, target, cavity)],
+            [closed.mesh, cutting],
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
@@ -3105,6 +3164,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        tool=cutting,
     )
     findings += lost
     if lost:
@@ -3309,9 +3369,10 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         return _exact_duplicate_by_faces(ctx, source, feature, centre, target, cavity=cavity)
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
     change: BooleanKind = "difference" if cavity else "union"
+    cutting = _placing_tool(ctx, body, source, feature, target, cavity)
     placed = boolean(
         change,
-        [body, _placing_tool(ctx, body, source, feature, target, cavity)],
+        [body, cutting],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -3341,6 +3402,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        tool=cutting,
     )
 
     copy = dataclasses.replace(
@@ -3414,10 +3476,11 @@ def _duplicate_cavity_chain(
         )
     shifted = tool.raw.copy()
     shifted.apply_translation(travel)
+    cutting = MeshData.of(shifted)
     ctx.progress(0.2, str(_("Der ganze Hohlraum wird an der neuen Stelle angelegt …")))
     placed = boolean(
         "difference",
-        [body, MeshData.of(shifted)],
+        [body, cutting],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -3453,6 +3516,7 @@ def _duplicate_cavity_chain(
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        tool=cutting,
     )
     findings += lost
     if lost:
@@ -3860,9 +3924,12 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         alone=True,
     )
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
+    tool = _turned_through_bore(body, feature, spun, centre, turned_axis)
+    if tool is None:
+        tool = _placing_tool(ctx, body, source, spun, centre, cavity, axis=turned_axis)
     placed = boolean(
         "difference" if cavity else "union",
-        [closed.mesh, _placing_tool(ctx, body, source, spun, centre, cavity, axis=turned_axis)],
+        [closed.mesh, tool],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -3893,7 +3960,14 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        tool=tool,
     )
+    # **Und die Nachbarwand, wie beim Versetzen mit Senkung und beim Vergrößern.**
+    # Um 40° gekippt verband sich eine Bohrung Ø 6 mit der Bohrung 10 mm
+    # daneben, und der Bericht schwieg (RM-133, 23.09.2026) — eine Folge, die der
+    # Kunde ändern kann, anders als die bloße Volumenänderung.
+    if cavity and feature.kind in {"hole", "cone"}:
+        findings += _neighbour_bore_findings(source, feature, tool, ctx, turned=True)
     carried = {**_without_old_triangles(source.features), feature.id: moved}
     floor = _floor_carried(
         body,
@@ -3977,10 +4051,11 @@ def _rotate_cavity_chain(
     )
     turned = tool.raw.copy()
     transform.moved(turned, matrix)
+    turned_tool = MeshData.of(turned)
     ctx.progress(0.6, str(_("Der Hohlraum wird gedreht gesetzt …")))
     placed = boolean(
         "difference",
-        [closed.mesh, MeshData.of(turned)],
+        [closed.mesh, turned_tool],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -4016,15 +4091,54 @@ def _rotate_cavity_chain(
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        tool=turned_tool,
     )
     findings += lost
     if lost:
         features[bore.id] = dataclasses.replace(bore, params={**bore.params, "through": False})
+    findings += _neighbour_bore_findings(source, feature, turned_tool, ctx, turned=True)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=placed.mesh, features=features)],
         findings=findings,
         solver=deepest((closed.solver, placed.solver)),
     )
+
+
+def _turned_through_bore(
+    body: MeshData, feature: Feature, spun: Feature, centre: Vec3, turned_axis: Vec3
+) -> MeshData | None:
+    """Das Werkzeug einer gekippten **Durchgangsbohrung** — lang genug, dass sie
+    durchgehend bleibt; ``None`` für alles andere.
+
+    Das übliche Werkzeug ist die gemessene Bohrung selbst (``_tool_for``) und
+    endet, gekippt, vor den Oberflächen: Gemessen an einer 12 mm starken Wand
+    blieben nach 30° **86,8 mm³** im Schlauch, nach 60° **158,1**, und der
+    Befund ``no_longer_through`` war alles, was der Kunde bekam. Eine gekippte
+    Durchgangsbohrung soll durchgehen — so tun es die gesenkte Bohrung
+    (:func:`_rotate_cavity_chain`, RM-172) und der exakte Kern
+    (``_through_bore_depth``) seit ihrem Bau (RM-133, 23.09.2026). Wie weit,
+    rechnet :func:`_reach_past_a_tilted_face` aus Wandstärke, Radius und
+    Neigung, mit derselben Obergrenze wie die Kette; darüber hinaus schnitte das
+    Werkzeug Luft oder eine Wand, die niemand gemeint hat. Bleibt trotzdem
+    Material im Schlauch — an einer schrägen Wand etwa —, sagt es
+    ``_throughness_lost`` wie bisher.
+    """
+    if feature.kind != "hole" or not feature.params.get("through"):
+        return None
+    old_axis = np.asarray(_feature_direction(feature), dtype=np.float64)
+    new_axis = np.asarray(turned_axis, dtype=np.float64)
+    tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
+    if tilt <= EPS_DISPLAY:
+        return None
+    diameter = float(feature.params.get("diameter", 0.0))
+    depth = float(feature.params.get("depth", 0.0))
+    if diameter <= EPS_GEOM or depth <= EPS_GEOM:
+        return None
+    reach = _reach_past_a_tilted_face(
+        depth / 2.0, diameter / 2.0, tilt, at_most=float(body.bounds.diagonal)
+    )
+    stretched = dataclasses.replace(spun, params={**spun.params, "depth": 2.0 * reach})
+    return _feature_solid(stretched, centre, axis=turned_axis, oversize=0.0)
 
 
 def _reach_past_a_tilted_face(
@@ -4072,6 +4186,41 @@ def _cone_past_a_tilted_face(
     return max(0.0, min(needed, at_most))
 
 
+def _welded(mesh: MeshData) -> Any:
+    """Die verschweißte Kopie eines Körpers — einmal je Körper, und nur gelesen.
+
+    Randringe und Schulterprobe der Bohrungskette (``bore_entrance``,
+    ``_bore_end_planes``) lesen Ecken, die an unverschweißten STL-Dreiecken
+    geometrisch zusammenfallen. Je Frage eine Kopie zu verschweißen kostete am
+    Gartenschlauchhalter mit 392 532 Dreiecken 73 ms, und das Merkmalfenster
+    fragte je Klick auf eine gesenkte Bohrung bis zu fünfmal (RM-181, gemessen
+    am 22.09.2026). Die Antwort hängt allein am Körper; niemand verändert sie.
+    """
+    from app.core.perceive.features import remembered
+
+    def weld() -> Any:
+        body = mesh.raw.copy()
+        body.merge_vertices()
+        return body
+
+    return remembered("merged_copy", mesh.raw, (), weld)
+
+
+def _surface_index(mesh: MeshData) -> Any:
+    """Der Suchbaum für :func:`app.core.geom.mesh.on_surface` — einmal je Körper.
+
+    Die Mündungsprobe fragt eine Handvoll Punkte, der Baum darunter kennt alle
+    Dreiecke: am Gartenschlauchhalter 0,2 s für den Aufbau, je Bohrung neu
+    (RM-181). Gemerkt wird er in den Merkern der Erkennung, nicht im Cache des
+    Netzes (``features.WHOLE_BODY_ANSWERS``, acht über alle Körper), und er
+    geht mit seinem Körper.
+    """
+    from app.core.geom.mesh import surface_index
+    from app.core.perceive.features import remembered
+
+    return remembered("surface_index", mesh.raw, (), lambda: surface_index(mesh.raw))
+
+
 def _mouth_is_open(mesh: MeshData, edge: NDArray[np.float64], normal: NDArray[np.float64]) -> bool:
     """Vor dem gesamten Rand liegt Luft; ein Sacklochboden bleibt geschlossen."""
     from app.core.geom.mesh import on_surface
@@ -4079,7 +4228,7 @@ def _mouth_is_open(mesh: MeshData, edge: NDArray[np.float64], normal: NDArray[np
     inward = edge.mean(axis=0) - edge
     inward /= np.maximum(np.linalg.norm(inward, axis=1), EPS_GEOM)[:, None]
     probes = edge + inward * FEATURE_OVERLAP + normal * FEATURE_OVERLAP
-    closest, _, at = on_surface(mesh.raw, probes)
+    closest, _, at = on_surface(mesh.raw, probes, index=_surface_index(mesh))
     body_normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
     signed = np.einsum("ij,ij->i", probes - closest, body_normals[at])
     return bool(np.all(signed > EPS_GEOM))
@@ -6025,13 +6174,15 @@ def _neighbour_bore_findings(
     *,
     moved: bool = False,
     deeper: bool = False,
+    turned: bool = False,
 ) -> list[Finding]:
     """Nur eine durch diese Vergrößerung — oder diese Stelle — geschwächte
     Nachbarwand melden.
 
     ``moved`` sagt, dass das Werkzeug an einer neuen Stelle steht; der Satz
     nennt dann die Stelle als Ausweg, nicht den Durchmesser. ``deeper`` sagt
-    dasselbe für eine neue Tiefe.
+    dasselbe für eine neue Tiefe, ``turned``, dass es gekippt steht (*Merkmal
+    drehen*); dann ist der Ausweg ein anderer Winkel.
 
     Der Hüllquader sortiert entfernte Kandidaten aus. Den Abstand bestimmen
     die echten, an ihren Endringen geschlossenen Hohlräume und das tatsächlich
@@ -6087,7 +6238,9 @@ def _neighbour_bore_findings(
             Finding(
                 code="bore.neighbour_opened" if opened else "bore.neighbour_wall_thin",
                 severity="warning",
-                message=_neighbour_message(opened, moved, after_gap, threshold, deeper=deeper),
+                message=_neighbour_message(
+                    opened, moved, after_gap, threshold, deeper=deeper, turned=turned
+                ),
                 feature_ids=(feature.id, neighbour.id),
                 values={"thickness": after_gap, "minimum": threshold, "previous": before_gap},
                 suggestions=(CORRECT_INPUT,),
@@ -6097,9 +6250,28 @@ def _neighbour_bore_findings(
 
 
 def _neighbour_message(
-    opened: bool, moved: bool, thickness: float, minimum: float, *, deeper: bool = False
+    opened: bool,
+    moved: bool,
+    thickness: float,
+    minimum: float,
+    *,
+    deeper: bool = False,
+    turned: bool = False,
 ) -> TranslatableText:
     """Der Satz zur Nachbarwand: was sie schwächt, und was der Kunde ändern kann."""
+    if turned and opened:
+        return _(
+            "In dieser Neigung verbindet sich die Bohrung mit einem benachbarten Hohlraum. "
+            "Wählen Sie einen anderen Winkel, um die Trennwand zu erhalten."
+        )
+    if turned:
+        return _(
+            "In dieser Neigung bleiben zum benachbarten Hohlraum nur {thickness:.2f} mm "
+            "Wand. Das Materialprofil verlangt mindestens {minimum:.2f} mm. Wählen Sie "
+            "einen anderen Winkel.",
+            thickness=thickness,
+            minimum=minimum,
+        )
     if deeper and opened:
         return _(
             "Bei dieser Tiefe verbindet sich die Bohrung mit einem benachbarten Hohlraum. "
@@ -6503,8 +6675,7 @@ def bore_entrance(
         return None
     if chain[0].id != feature.id:
         raise _entrance_error()
-    welded = mesh.raw.copy()
-    welded.merge_vertices()
+    welded = _welded(mesh)
     origin = _bore_vector(feature, "centre")
     direction = np.asarray(_bore_vector(feature, "axis"), dtype=float)
     direction /= np.linalg.norm(direction)
@@ -7299,8 +7470,7 @@ def _bore_end_planes(
     indices = cavity_surface_indices(mesh, scope) if grows else feature.face_indices
     # Auch unverschweißte STL-Dreiecke teilen geometrisch dieselben Ränder.
     # Verschweißen ändert hier weder Flächenreihenfolge noch Eingangsmodell.
-    body = mesh.raw.copy()
-    body.merge_vertices()
+    body = _welded(mesh)
     rings = boundary_rings(body, dataclasses.replace(feature, face_indices=tuple(indices)))
     if rings is None or len(rings) != 2:
         return ()
