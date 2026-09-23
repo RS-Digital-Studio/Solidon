@@ -10,7 +10,7 @@ Sie tragen die ersten fünf Minuten (§2.3). Der Startbildschirm bietet sie an,
 
 ## Rechte
 
-Für die elf in `LICENSE` einzeln benannten, von RS Digital erzeugten
+Für die zwölf in `LICENSE` einzeln benannten, von RS Digital erzeugten
 P3D/SVG-Paare behält RS Digital das Urheberrecht. Die dortige
 Nutzungsfreigabe erlaubt Bearbeiten, Drucken, Export und die private oder
 gewerbliche Nutzung eigener Ergebnisse, aber keine unveränderte Weitergabe

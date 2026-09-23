@@ -155,6 +155,16 @@ EXAMPLES: Final[tuple[Example, ...]] = (
             "beide Hälften auf das Bett legen."
         ),
     ),
+    Example(
+        id="zu-gross-automatisch-teilen",
+        title=_("Zu groß fürs Bett — automatisch teilen"),
+        way="",
+        doc=_(
+            "Eine 60 cm lange Wandleiste passt auf kein übliches Druckbett. Automatisch "
+            "teilen findet die Nähte, setzt Passstifte hinein und legt die Stücke zum "
+            "Drucken nebeneinander."
+        ),
+    ),
     # Das letzte ist keine achte Sorte, sondern die Summe: es legt hintereinander,
     # was die anderen einzeln zeigen. Es steht auch auf dem Startbildschirm und
     # im Handbuch — ein Beispiel, das nach einer Platte mit Löchern aussieht,

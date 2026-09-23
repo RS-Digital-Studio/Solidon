@@ -393,6 +393,12 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Dieselbe Ursache beim halben Teilen: das Modell war schon offen.
     "cut_away.uncapped": (REPAIR_AND_RETRY,),
     "split.too_many_parts": (SPLIT_ALONG_LINE, CHOOSE_PRINTER, SHOW_DETAILS),
+    # Die zwei Sätze einer gelungenen Teilung (RM-080, T6/T7): warum die Naht
+    # in der Mitte liegt, und dass es nicht mit weniger Stücken geht. Beide
+    # sagen, was fertig ist — der nächste Handgriff ist, die Stücke zum Drucken
+    # nebeneinander zu legen, und genau der steht als Knopf daneben.
+    "split.symmetric": (ARRANGE_ON_BED,),
+    "split.fewest_parts": (ARRANGE_ON_BED,),
     # Die Druckdatei ist niedriger als das Modell: CuraEngine schneidet unter
     # ``z = 0`` wortlos ab (gemessen 30.08.2026, 50 statt 100 Schichten). Die
     # Ursache ist dieselbe wie bei ``arrange.below_bed`` — das Teil steckt

@@ -775,7 +775,20 @@ billigen Naht-Vorauswahl entscheidet das interne Stützvolumen der fertig
 verstifteten Hälften, §22.3; `search_plane` sagt neben der Ebene, wie viele
 Ebenen an einer gesperrten Sichtfläche gescheitert sind — daran unterscheidet
 `split_to_fit` „keine Ebene" von „keine Ebene neben der Sperre",
-`split.blocked_by_protection`) ·
+`split.blocked_by_protection`; braucht ein Stück mehr als einen Schnitt, plant
+`_plan_step` die Folge: `_alternatives` nennt verschiedene Abtastlagen, die
+Spiegelebene, die gleichmäßige Teilung und die Nebenachsen, `_rollout` teilt je
+Lage den Rest billig zu Ende, `_PlanCost` ordnet nach Stücken, dann
+Klebestellen, begrenzt über `PLAN_BUDGET` Probeschnitte; `_gaps` findet Lagen
+zwischen losen Teilen, `Candidate.gap`, ein Schritt ohne Stifte;
+`_child_reserves` gibt die Stiftzugabe nur der Hälfte mit Stiften; `_room`
+kennt die Sperrzonen des Betts; `_mirrored_step` schneidet die Stücke
+beiderseits einer Spiegelebene gespiegelt; `fewest_parts` ist die untere
+Schranke hinter `split.fewest_parts`) ·
+`symmetry.py` (`mirror_plane` misst Spiegelsymmetrie quer zu einer Richtung:
+Mitte der Ausdehnung, Flächenschwerpunkt, dann gespiegelte Ecken und
+Dreiecksmitten gegen die Oberfläche über `max_distance_to_surface`, Grenze
+`units.match_tolerance`) ·
 `pins.py` (Passstifte; Auto Split wählt die Form aus Fügefläche und
 Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
 `orient.py` (Kandidatenlagen aus Hülle und größten Flächen; `extreme_points`

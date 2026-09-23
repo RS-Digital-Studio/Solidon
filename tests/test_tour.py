@@ -263,6 +263,19 @@ def test_hollow_tour_recognises_its_actions() -> None:
     )
 
 
+def test_oversized_tour_recognises_its_action() -> None:
+    """Das Schaustück zu Automatisch teilen: die erste Naht verschieben wird erkannt."""
+    project, history = _opened("zu-gross-automatisch-teilen")
+    document = project.document
+
+    _walk(
+        tour_for("zu-gross-automatisch-teilen"),  # type: ignore[arg-type]
+        document,
+        history,
+        {2: lambda d, h: h.change_params(_op_id(d, "split_pinned"), {"position": -90.0})},
+    )
+
+
 def test_box_tour_recognises_its_action() -> None:
     """Die Dose führt nicht nur Text: Die Höhenänderung wird erkannt."""
     project, history = _opened("dose-mit-deckel")

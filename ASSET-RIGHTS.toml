@@ -64,6 +64,7 @@ paths = [
   "app/examples/weg2-halter-konstruieren.p3d",
   "app/examples/weg3-generiert-aufbereiten.p3d",
   "app/examples/weg4-figur-formen.p3d",
+  "app/examples/zu-gross-automatisch-teilen.p3d",
 ]
 art = "project"
 creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
@@ -100,6 +101,7 @@ paths = [
   "app/examples/weg2-halter-konstruieren.svg",
   "app/examples/weg3-generiert-aufbereiten.svg",
   "app/examples/weg4-figur-formen.svg",
+  "app/examples/zu-gross-automatisch-teilen.svg",
 ]
 art = "image"
 creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
@@ -119,6 +121,7 @@ inputs = [
   "app/examples/weg2-halter-konstruieren.p3d",
   "app/examples/weg3-generiert-aufbereiten.p3d",
   "app/examples/weg4-figur-formen.p3d",
+  "app/examples/zu-gross-automatisch-teilen.p3d",
   "registrierte Solidon-Operationen und -Bausteine",
 ]
 derivative_status = "generated_from_own_sources"

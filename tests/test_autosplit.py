@@ -1126,12 +1126,11 @@ def test_a_half_with_its_pin_stays_on_the_bed(profile: Profile) -> None:
     outcome = autosplit.split_to_fit(box, profile)
 
     assert len(outcome.parts) >= 3, "eine Naht reichte nackt, mit Stift nicht"
-    for part in outcome.parts:
-        seam = SectionPlane(autosplit.AXIS_NORMALS["x"], float(part.bounds.centre[0]))
-        overhang = pins.plan_pins(part, seam).length / 2.0
-        assert part.bounds.size[0] + overhang <= limit + autosplit.EPS_GEOM, (
-            "Hälfte samt Stift bleibt auf dem Bett"
-        )
+    # Gemessen an den gebauten Stücken samt ihren wirklichen Stiften — seit die
+    # Zugabe nur noch an der Hälfte mit Stiften hängt, trägt nicht jedes Stück
+    # einen, und die Probe mit einem gedachten Stift an jedem wäre zu streng.
+    for built in built_pieces(box, profile):
+        assert autosplit.fits(built, profile), "Stück samt Stift bleibt auf dem Bett"
 
 
 def test_without_pins_the_bed_check_is_the_bare_extent(profile: Profile) -> None:
@@ -1722,7 +1721,12 @@ def test_the_automatic_round_fallback_keeps_its_glue_hint(profile: Profile, tmp_
     assert [entry.params["shape"] for entry in split_ops] == ["round"]
     assert all(entry.params["shape"] != "auto" for entry in split_ops)
     assert [entry.params["glue_hint"] for entry in split_ops] == [True]
-    assert [finding.code for finding in applied.findings] == ["split.connector_glue"]
+    # Der Würfel ist spiegelgleich, die Naht liegt in der Mitte (T6) — und das
+    # sagt der zweite Befund.
+    assert [finding.code for finding in applied.findings] == [
+        "split.connector_glue",
+        "split.symmetric",
+    ]
 
     path = tmp_path / "rund-mit-kleberhinweis.p3d"
     save(project, path)
@@ -1916,7 +1920,12 @@ def test_auto_split_leaves_no_dead_fit_after_two_cuts(profile: Profile) -> None:
     applied = apply_split(project.document, block, "obj_1", profile)
 
     assert len(applied.object_ids) == 3, "doppelt zu lang: zwei Schnitte, drei Stücke"
-    assert [finding.code for finding in applied.findings].count("split.fit_dropped") == 2
+    # **Und die erste Naht behält ihre Passungen** (RM-080, T7): Bis zum
+    # 23.09.2026 entfielen die zwei Paare des ersten Schnitts, weil der zweite
+    # ein verstiftetes Stück noch einmal teilte. Jetzt wandern sie auf die
+    # Hälfte, die den Stift trägt.
+    assert [finding.code for finding in applied.findings].count("split.fit_dropped") == 0
+    assert len(applied.fits) == 4, "beide Nähte tragen je zwei Passungen"
 
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     codes = [finding.code for finding in result.scene.report.findings]
@@ -2526,3 +2535,433 @@ def test_the_tilted_fan_is_the_same_on_every_machine() -> None:
     for normal in fan:
         assert math.isclose(math.hypot(*normal), 1.0, abs_tol=1e-15)
         assert normal[0] > 0.0
+
+
+# --- die Folge als Ganzes, Symmetrie, Lücken (RM-080, T6/T7) -------------------
+
+
+def built_split(mesh: MeshData, profile: Profile, *, pins: int = 2):
+    """Auto Split den Weg des Kunden: planen, anwenden, auswerten.
+
+    Zurück kommen der Plan, was angewandt wurde, und das Ergebnis der
+    Auswertung — gemessen wird an den gebauten Stücken mit ihren wirklichen
+    Verbindern, nicht an den nackten Hälften der Suche.
+    """
+    project = new_project(profile.printer.id, profile.material.id)
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/1_teil.stl", sha256=""
+    )
+    project.sources["src_1"] = mesh.raw.export(file_type="stl")
+    History(project.document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    plan = plan_split(mesh, "obj_1", profile, pins=pins)
+    applied = apply_planned(project.document, plan, "obj_1", pins=pins)
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    return plan, applied, result
+
+
+def built_pieces(mesh: MeshData, profile: Profile, *, pins: int = 2) -> list[MeshData]:
+    """Die gebauten Stücke einer Auto-Split-Teilung, samt Stiften und Bohrungen."""
+    _plan, applied, result = built_split(mesh, profile, pins=pins)
+    return [result.scene.objects[object_id].mesh for object_id in applied.object_ids]
+
+
+def manifold_body(shape: Any) -> MeshData:
+    """Ein Körper aus ``manifold3d``, wie ihn die Tests hier bauen."""
+    built = shape.to_mesh64()
+    return MeshData.of(
+        trimesh.Trimesh(
+            vertices=np.array(built.vert_properties[:, :3]),
+            faces=np.array(built.tri_verts),
+            process=False,
+        )
+    )
+
+
+def block(size: tuple[float, float, float], at: tuple[float, float, float] = (0.0, 0.0, 0.0)):
+    import manifold3d as m
+
+    return m.Manifold.cube(size, center=True).translate(at)
+
+
+def slotted_bar(length: float = 730.0) -> MeshData:
+    """Ein Balken mit einem Durchbruch genau dort, wo drei Stücke ihre erste Naht brauchen.
+
+    Auf einem 252er Bett (256 weniger Rand) braucht ein 730 mm langer Balken
+    drei Stücke — die untere Schranke, 730/252 aufgerundet. Dafür muss die
+    erste Naht zwischen x = -139 (sonst ist der Rest länger als zwei Betten)
+    und x = -113 (sonst passt das erste Stück nicht) liegen. Genau dort, von
+    -150 bis -100, geht ein Durchbruch durch den Balken: Jede Naht hat dort
+    zwei Konturen. Die Suche für sich nimmt eine Naht mit einer Kontur weiter
+    links — und braucht danach vier Stücke.
+    """
+    return manifold_body(
+        block((length, 60.0, 40.0), (0.0, 0.0, 20.0))
+        - block((50.0, 20.0, 60.0), (-125.0, 0.0, 20.0))
+    )
+
+
+def fork() -> MeshData:
+    """Ein Sockel von 400 mm und zwei 600 mm hohe Zinken an seinen Enden.
+
+    Nach dem ersten Schnitt quer zur Höhe besteht das obere Stück aus zwei
+    losen Zinken, 370 mm auseinander — zusammen breiter als das Bett, einzeln
+    schmal. Keine Ebene mit Schnittfläche macht sie kleiner; die Lücke
+    zwischen ihnen tut es ohne Naht.
+    """
+    return manifold_body(
+        block((400.0, 30.0, 40.0), (0.0, 0.0, 20.0))
+        + block((30.0, 30.0, 600.0), (-185.0, 0.0, 300.0))
+        + block((30.0, 30.0, 600.0), (185.0, 0.0, 300.0))
+    )
+
+
+def test_the_sequence_is_planned_as_a_whole(profile: Profile) -> None:
+    """RM-080, T7: Braucht ein Teil mehrere Schnitte, zählt die ganze Folge.
+
+    Die Suche allein nahm am Balken mit Durchbruch die schönste erste Naht —
+    eine Kontur, links vom Durchbruch — und brauchte danach vier Stücke. Die
+    Planung teilt je Nahtlage den Rest zu Ende und nimmt die mit den wenigsten
+    Stücken: drei, die untere Schranke, und eine Naht mit zwei Brücken im
+    Durchbruch. Klebestellen sind es gleich viele: 2 + 1 gegen 1 + 1 + 1.
+    """
+    mesh = slotted_bar()
+    assert autosplit.fewest_parts(mesh, profile) == 3
+
+    outcome = autosplit.split_to_fit(mesh, profile, pins=0)
+
+    assert len(outcome.parts) == 3
+    assert sum(step.plane.contours for step in outcome.cuts) == 3
+    assert "split.fewest_parts" in {finding.code for finding in outcome.findings}
+    for part in outcome.parts:
+        assert part.is_watertight
+        assert autosplit.fits(part, profile)
+
+
+def test_the_planned_sequence_holds_with_pins_and_is_reproducible(profile: Profile) -> None:
+    """Dieselbe Folge mit Stiften — und jedes Mal dieselbe (§11.3).
+
+    Die gebauten Stücke passen samt ihren wirklichen Stiften aufs Bett, und die
+    Passungen zeigen auf Merkmale, die es gibt.
+    """
+    mesh = slotted_bar()
+    first = autosplit.split_to_fit(mesh, profile)
+    second = autosplit.split_to_fit(mesh, profile)
+
+    assert len(first.parts) == 3
+    assert [step.plane for step in first.cuts] == [step.plane for step in second.cuts]
+    plan, applied, result = built_split(mesh, profile)
+    assert len(applied.object_ids) == 3
+    for object_id in applied.object_ids:
+        assert autosplit.fits(result.scene.objects[object_id].mesh, profile), object_id
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert "fit.missing_feature" not in codes, codes
+    assert len(applied.fits) == sum(plan.pins_at(index, 2) for index in range(plan.cuts)), (
+        "jede Naht behält ihre Passungen, auch die eines später noch einmal geteilten Stücks"
+    )
+
+
+def test_only_the_half_with_the_pins_grows(profile: Profile) -> None:
+    """Die Stiftzugabe gehört der Hälfte, die die Stifte trägt.
+
+    Bis zum 23.09.2026 bekamen beide Hälften sie. Ein 760 mm langer Balken
+    passt in vier Stücke (760/252 aufgerundet); mit der doppelten Zugabe
+    wurden es fünf, weil das mittlere Stück an beiden Enden je einen Stift
+    zu tragen schien, den es gar nicht hatte.
+    """
+    mesh = bar(760.0)
+
+    outcome = autosplit.split_to_fit(mesh, profile)
+
+    assert len(outcome.parts) == autosplit.fewest_parts(mesh, profile) == 4
+    for built in built_pieces(mesh, profile):
+        assert autosplit.fits(built, profile)
+
+
+def test_the_child_reserve_follows_the_pins() -> None:
+    """Die Zugabe hängt an der Hälfte mit Stiften — an A, oder an B, wenn die Suche es sagt."""
+    seam = autosplit.Candidate("x", 0.0, 100.0, 1, 0.0)
+    on_a, bare = autosplit._child_reserves((1.0, 0.0, 0.0), seam, 5.0)
+    assert on_a == (6.0, 0.0, 0.0) and bare == (1.0, 0.0, 0.0)
+    bare, on_b = autosplit._child_reserves((1.0, 0.0, 0.0), replace(seam, pins_on_b=True), 5.0)
+    assert on_b == (6.0, 0.0, 0.0) and bare == (1.0, 0.0, 0.0)
+
+
+def test_loose_arms_are_parted_at_the_gap(profile: Profile) -> None:
+    """Ein Stück aus zwei losen Teilen wird an der Lücke getrennt, ohne Naht.
+
+    Bis zum 23.09.2026 endete die Gabel nach zwei Schnitten mit „keine
+    brauchbare Trennebene" — gemessen genauso am Pflock aus dem Korpus,
+    anderthalbfach. Jetzt passt jedes Stück; wo die Folge an einer Lücke
+    trennt, hat der Schritt keine Kontur und keine Stifte.
+    """
+    mesh = fork()
+
+    outcome = autosplit.split_to_fit(mesh, profile)
+
+    codes = {finding.code for finding in outcome.findings}
+    assert "split.no_plane" not in codes and "split.too_many_parts" not in codes
+    assert all(autosplit.fits(part, profile) for part in outcome.parts)
+    plan, applied, result = built_split(mesh, profile)
+    for step, draft in zip(plan.outcome.cuts, plan.drafts, strict=True):
+        if step.plane.gap:
+            assert draft.params["pins"] == 0
+    for object_id in applied.object_ids:
+        assert autosplit.fits(result.scene.objects[object_id].mesh, profile), object_id
+    assert "fit.missing_feature" not in [f.code for f in result.scene.report.findings]
+
+
+def test_a_gap_is_found_where_no_edge_crosses() -> None:
+    """Eine Lücke ist, wo keine Kante die Ebene kreuzt und beiderseits Material liegt."""
+    two = manifold_body(
+        block((10.0, 10.0, 10.0), (-20.0, 0.0, 0.0)) + block((10.0, 10.0, 10.0), (20.0, 0.0, 0.0))
+    )
+    found = autosplit._gaps(two, "x", np.array([-20.0, 0.0, 14.0, 16.0, 30.0]))
+    assert [entry.position for entry in found] == [0.0, 14.0]
+    assert all(entry.gap and entry.area == 0.0 for entry in found)
+
+
+def test_the_mirror_plane_is_measured_not_guessed() -> None:
+    """T6: Symmetrie wird gemessen — an der Oberfläche, gegen die Vergleichstoleranz."""
+    from app.core import units
+    from app.core.geom.symmetry import mirror_plane
+
+    box = MeshData.of(trimesh.creation.box(extents=(40.0, 20.0, 10.0)))
+    found = mirror_plane(box, (1.0, 0.0, 0.0))
+    assert found is not None and found.position == pytest.approx(0.0) and found.deviation < 1e-9
+
+    ell = manifold_body(
+        block((40.0, 10.0, 10.0), (0.0, 0.0, 0.0)) + block((10.0, 30.0, 10.0), (15.0, 15.0, 0.0))
+    )
+    assert mirror_plane(ell, (1.0, 0.0, 0.0)) is None, "ein L ist quer zu x nicht spiegelgleich"
+    assert mirror_plane(ell, (0.0, 0.0, 1.0)) is not None, "flach liegend aber schon"
+
+    # Ein Zylinder, um 7 Grad gedreht: Seine Sehnen liegen beiderseits der
+    # Ebene verschieden, und trotzdem ist er spiegelgleich — bis auf die
+    # Sehnenhöhe, weit unter der Toleranz.
+    turned = trimesh.creation.cylinder(radius=20.0, height=30.0, sections=48)
+    turned.apply_transform(trimesh.transformations.rotation_matrix(np.radians(7.0), [0, 0, 1]))
+    found = mirror_plane(MeshData.of(turned), (1.0, 0.0, 0.0))
+    assert found is not None and 0.0 < found.deviation < found.tolerance
+
+    # Ein Höcker über der Toleranz macht es zu einer Form, nicht zu Rauschen.
+    bump = manifold_body(block((40.0, 20.0, 10.0)) + block((4.0, 4.0, 4.0), (12.0, 0.0, 6.0)))
+    assert units.match_tolerance(float(np.linalg.norm(bump.bounds.size))) < 4.0
+    assert mirror_plane(bump, (1.0, 0.0, 0.0)) is None
+
+
+def centre_rib(thickness: float = 0.6) -> MeshData:
+    """Ein spiegelgleicher Balken mit einem dünnen Steg genau in der Mitte.
+
+    Der Steg ist dünner als ``2 · PRISM_STEP``: Die Querschnitte einen halben
+    Millimeter daneben haben ihn nicht, und die Nahtbewertung sieht in der
+    Mitte eine sprunghafte Änderung. Die Suche für sich nimmt deshalb eine Naht
+    daneben — zwei ungleiche Hälften, eine mit dem ganzen Steg.
+    """
+    return manifold_body(
+        block((400.0, 60.0, 40.0), (0.0, 0.0, 20.0))
+        + block((thickness, 70.0, 50.0), (0.0, 0.0, 20.0))
+    )
+
+
+def test_a_symmetric_part_is_cut_in_its_mirror_plane(profile: Profile) -> None:
+    """T6: In der Symmetrieebene sind beide Schnittflächen gleich — der Steg stört dort nicht.
+
+    Die Querschnittsänderung misst, ob die zwei Schnittflächen verschieden
+    ausfallen. An der Spiegelebene sind sie es nie. Die Naht liegt deshalb in
+    der Mitte, beide Hälften sind gleich, und der Prüfbericht sagt es.
+    """
+    mesh = centre_rib()
+    window = autosplit._window(mesh, profile, "x")
+    sampled = [
+        entry
+        for entry in autosplit._judge(mesh, "x", np.linspace(window[0], window[1], 33))
+        if entry.area > 0.0
+    ]
+    assert abs(min(sampled, key=autosplit._candidate_order).position) > 0.01, (
+        "der Prüfkörper trifft den Fall: ohne Symmetrie gewinnt eine Naht daneben"
+    )
+
+    outcome = autosplit.split_to_fit(mesh, profile, pins=0)
+
+    assert len(outcome.cuts) == 1
+    assert outcome.cuts[0].plane.symmetric
+    assert outcome.cuts[0].plane.position == pytest.approx(0.0, abs=1e-9)
+    first, second = outcome.parts
+    assert first.volume == pytest.approx(second.volume, rel=1e-9)
+    assert "split.symmetric" in {finding.code for finding in outcome.findings}
+
+
+def test_the_mirror_plane_does_not_win_at_a_waist(profile: Profile) -> None:
+    """Die Hantel ist spiegelgleich, und ihre Mitte ist die dünnste Stelle (T1) — dort nicht."""
+    mesh = dumbbell()
+    mirror = autosplit._mirror_candidate(
+        mesh, "x", autosplit._window(mesh, profile, "x"), protect=(), cancelled=None
+    )
+    assert mirror is not None and mirror.notch > 0.0, "die Hantel ist spiegelgleich, mit Taille"
+
+    candidate = autosplit.find_plane(mesh, profile)
+
+    assert candidate is not None and not candidate.symmetric
+    assert abs(candidate.position) > 1.0
+
+
+def test_a_long_symmetric_bar_comes_apart_in_equal_pieces() -> None:
+    """T6 in der Folge: erst die Mitte, dann jede Hälfte gespiegelt.
+
+    Ein 900 mm langer Balken braucht vier Stücke. Die Säge vom Rand nahm
+    252, 252, 198 und 198; geplant sind es viermal 225 — und die zwei
+    Hälften sind gespiegelt geschnitten, nicht je für sich gesucht.
+    """
+    from app.core.knowledge import profiles
+
+    flat = profiles.make_profile("bambu-a1", "petg")
+    outcome = autosplit.split_to_fit(bar(900.0), flat, pins=0)
+
+    lengths = sorted(float(part.bounds.size[0]) for part in outcome.parts)
+    assert lengths == pytest.approx([225.0] * 4)
+    positions = sorted(step.plane.position for step in outcome.cuts)
+    assert positions == pytest.approx([-225.0, 0.0, 225.0])
+    codes = [finding.code for finding in outcome.findings]
+    assert "split.symmetric" in codes and "split.fewest_parts" in codes
+
+
+def test_a_reflected_cut_lands_on_the_mirrored_place() -> None:
+    """Die Spiegelung eines Schnitts: dieselbe Achse gespiegelt, eine andere Achse unverändert."""
+    mirror = SectionPlane((1.0, 0.0, 0.0), 10.0)
+    same_axis, flipped = autosplit._reflected(autosplit.Candidate("x", 30.0, 1.0, 1, 0.0), mirror)
+    assert flipped and same_axis.position == pytest.approx(-10.0) and same_axis.normal is None
+    other_axis, flipped = autosplit._reflected(autosplit.Candidate("y", 5.0, 1.0, 1, 0.0), mirror)
+    assert not flipped and other_axis.position == pytest.approx(5.0)
+    tilted = autosplit.tilted_normals("y")[0]
+    turned, _flipped = autosplit._reflected(
+        autosplit.Candidate("y", 7.0, 1.0, 1, 0.0, normal=tilted), mirror
+    )
+    assert turned.normal is not None and turned.normal[1] > 0.0
+    assert math.isclose(math.hypot(*turned.normal), 1.0, abs_tol=1e-12)
+
+
+def test_the_planning_listens_to_cancel(profile: Profile, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Planung fragt zwischen ihren Probeschnitten nach dem Abbruch (§15.6)."""
+    signal = CancelSignal()
+    cuts_after_cancel: list[int] = []
+    original = autosplit._cut_in_two
+
+    def watched(*args: Any) -> Any:
+        if signal.cancelled:
+            cuts_after_cancel.append(1)
+        return original(*args)
+
+    def cancel_while_planning(_fraction: float, text: str) -> None:
+        if "Schnittfolge" in text:
+            signal.cancel()
+
+    monkeypatch.setattr(autosplit, "_cut_in_two", watched)
+    with pytest.raises(OperationCancelled):
+        autosplit.split_to_fit(
+            slotted_bar(), profile, pins=0, cancelled=signal, progress=cancel_while_planning
+        )
+    assert not cuts_after_cancel, "nach dem Abbruch lief kein Probeschnitt mehr"
+
+
+def test_the_planning_reports_its_progress(profile: Profile) -> None:
+    """Die Planung sagt, woran sie ist, und der Balken läuft nie rückwärts."""
+    seen: list[tuple[float, str]] = []
+    autosplit.split_to_fit(
+        slotted_bar(),
+        profile,
+        pins=0,
+        progress=lambda fraction, text: seen.append((fraction, text)),
+    )
+    fractions = [fraction for fraction, _text in seen]
+    assert fractions == sorted(fractions)
+    assert any("Schnittfolge" in text for _fraction, text in seen)
+
+
+def test_a_spent_budget_falls_back_to_the_plain_search(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Budget begrenzt die Probeschnitte als Zahl, nicht als Zeit (§11.3).
+
+    Ohne Budget entscheidet die Naht selbst — die Teilung wird trotzdem fertig,
+    nur wieder mit vier Stücken.
+    """
+    monkeypatch.setattr(autosplit, "PLAN_BUDGET", 0)
+    outcome = autosplit.split_to_fit(slotted_bar(), profile, pins=0)
+    assert len(outcome.parts) == 4
+    assert all(autosplit.fits(part, profile) for part in outcome.parts)
+
+
+def test_the_window_knows_the_corner_the_bed_does_not_have(profile: Profile) -> None:
+    """Die Sperrzone des Centauri Carbon 2 nimmt einem breiten Stück Länge.
+
+    Das Bett ist 252 mm breit (256 weniger zwei Rand), die Sperrzone mit Rand
+    reicht von x = 116 bis 126 und bis y = -106. Ein Stück, 245 mm tief, muss
+    in y über ihr liegen, also bleibt in x von -126 bis 116: 242 mm. Ein
+    schmales Stück legt sich daneben und hat die vollen 252.
+    """
+    wide = MeshData.of(trimesh.creation.box(extents=(300.0, 245.0, 10.0)))
+    narrow = MeshData.of(trimesh.creation.box(extents=(300.0, 60.0, 10.0)))
+    assert autosplit._room(wide, profile, "x") == pytest.approx(242.0, abs=0.01)
+    assert autosplit._room(narrow, profile, "x") == pytest.approx(252.0)
+
+
+def test_two_loose_blocks_come_apart_at_the_gap(profile: Profile) -> None:
+    """Zwei lose Blöcke, zusammen 500 mm breit: getrennt an der Lücke, ohne Naht.
+
+    Bis zum 23.09.2026 lag das ganze Suchfenster in der Lücke — jede
+    abgetastete Ebene ohne Schnittfläche —, und der Kunde bekam „keine
+    brauchbare Trennebene" für ein Teil, das nur auseinanderzulegen war.
+    """
+    left = trimesh.creation.box(extents=(200.0, 60.0, 40.0))
+    left.apply_translation((-150.0, 0.0, 0.0))
+    right = trimesh.creation.box(extents=(200.0, 60.0, 40.0))
+    right.apply_translation((150.0, 0.0, 0.0))
+    mesh = MeshData.of(trimesh.util.concatenate([left, right]))
+
+    outcome = autosplit.split_to_fit(mesh, profile)
+
+    assert len(outcome.parts) == 2
+    assert [step.plane.contours for step in outcome.cuts] == [0]
+    assert "split.no_plane" not in {finding.code for finding in outcome.findings}
+    plan = plan_split(mesh, "obj_1", profile)
+    assert plan.drafts[0].params["pins"] == 0, "an einer Lücke sitzt kein Stift"
+    assert plan.seated == (0,)
+
+
+def waisted_bar() -> MeshData:
+    """900 mm, spiegelgleich, und in der Mitte jeder Hälfte eine sanfte Mulde.
+
+    Jede Hälfte hat damit zwei gleich gute Nähte links und rechts ihrer Mulde
+    (T1 meidet die Mulde selbst). Sucht jede Hälfte für sich, entscheidet der
+    Gleichstand beide Male für die tiefere Lage — und die Stücke beiderseits
+    der Mitte sind keine Spiegelbilder mehr.
+    """
+    line = [[0.0, -450.0], [40.0, -450.0]]
+    for centre in (-225.0, 225.0):
+        line += [[40.0, centre - 60.0], [32.0, centre], [40.0, centre + 60.0]]
+    line += [[40.0, 450.0], [0.0, 450.0]]
+    body = trimesh.creation.revolve(np.array(line), sections=64)
+    body.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [0, 1, 0]))
+    return MeshData.of(body)
+
+
+def test_the_pieces_beside_a_mirror_seam_are_cut_as_mirror_images() -> None:
+    """T6: Die Stücke beiderseits der Symmetrieebene werden gespiegelt geschnitten.
+
+    Gemessen am Balken mit zwei Mulden: Je für sich gesucht lagen die Nähte bei
+    -198, 54 und 282 — die rechte Hälfte nahm die andere Seite ihrer Mulde als
+    die linke. Gespiegelt liegen sie bei -198, 0 und 198, und die äußeren und
+    inneren Stücke sind je gleich lang.
+    """
+    from app.core.knowledge import profiles
+
+    flat = profiles.make_profile("bambu-a1", "petg")
+    outcome = autosplit.split_to_fit(waisted_bar(), flat, pins=0)
+
+    positions = sorted(step.plane.position for step in outcome.cuts)
+    assert positions == pytest.approx([-positions[2], 0.0, positions[2]], abs=1e-9)
+    lengths = sorted(float(part.bounds.size[0]) for part in outcome.parts)
+    assert lengths[0] == pytest.approx(lengths[1]) and lengths[2] == pytest.approx(lengths[3])

@@ -780,3 +780,32 @@ def test_every_example_reopens_from_the_disk_cache_without_a_miss(
         )
     assert warm.object_hashes == cold.object_hashes
     assert warm.scene.report == cold.scene.report
+
+
+def test_the_oversized_example_shows_auto_split_with_its_pins(evaluated) -> None:
+    """Das Schaustück zu *Automatisch teilen* (RM-080, T9): drei Stücke, verstiftet, auf dem Bett.
+
+    Die 60-cm-Wandleiste ist mit den Kernfunktionen der Oberfläche geteilt
+    (``plan_split``/``apply_planned``); im Verlauf stehen zwei gewöhnliche
+    Schritte *Teilen*, danach das Anordnen. Jedes Stück passt samt Stiften auf
+    das Bett des Vorgabeprofils und auf das, mit dem die Suite öffnet, jede
+    Naht trägt ihre Passungen — auch die erste, deren Stück der zweite
+    Schnitt noch einmal geteilt hat.
+    """
+    from app.core.geom import autosplit
+
+    project, result = evaluated("zu-gross-automatisch-teilen")
+
+    operations = [operation.op for operation in project.document.ops]
+    assert operations.count("split_pinned") == 2 and operations[-1] == "arrange_bed"
+    assert len(result.scene.objects) == 3
+    assert len(project.document.fits) == 4, "zwei Nähte, je zwei Stifte, je eine Passung"
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert "fit.missing_feature" not in codes, codes
+    for printer in ("generic-220", "centauri-carbon-2"):
+        bed = profiles.make_profile(printer, "petg")
+        for entry in result.scene.objects.values():
+            assert autosplit.fits(entry.mesh, bed), (printer, entry.name)
+            assert entry.mesh.is_watertight, entry.name
+    pinned = [entry for entry in result.scene.objects.values() if "pin_1" in entry.features]
+    assert pinned, "die Stücke tragen die Stifte als Merkmale"

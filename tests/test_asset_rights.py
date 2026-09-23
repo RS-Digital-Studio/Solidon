@@ -28,6 +28,7 @@ EXAMPLE_STEMS = (
     "weg2-halter-konstruieren",
     "weg3-generiert-aufbereiten",
     "weg4-figur-formen",
+    "zu-gross-automatisch-teilen",
 )
 EXAMPLE_SOURCE_INGEST = {
     "components": 1,

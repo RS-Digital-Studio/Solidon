@@ -1025,6 +1025,36 @@ denselben Daten wie die Leiste. Wer die Menütiefe ändert, sucht die Wege, die
 als Zeichenketten in Docstrings, Katalogen und Tests stehen — beim letzten Mal
 waren es fünf, vier davon in `tests/test_agent_suite.py`.
 
+## Auto Split: die Folge, die Spiegelebene, der Rand (RM-080)
+
+- **Braucht ein Stück mehr als einen Schnitt, entscheidet die ganze Folge**
+  (`autosplit._plan_step`). Die Rangfolge einer Folge ist fest: alles passt
+  vor nicht alles, dann weniger Stücke, dann weniger Klebestellen (Summe der
+  Konturen, eine Lücke kostet keine), dann die Summe der Nahtbewertungen. Die
+  Stückzahl steht vor den Klebestellen, weil ein weiteres Stück immer eine
+  weitere Naht ist. Das Stützvolumen entscheidet nur den letzten Schnitt eines
+  Stücks — vorher hat eine Hälfte keine Lage.
+- **Begrenzt wird über eine Zahl, nie über die Uhr.** `PLAN_BUDGET`
+  Probeschnitte je Teilung; nach Zeit begrenzt, teilte dieselbe Datei auf
+  einem belasteten Rechner anders (§11.3). Ist das Budget weg, gilt die Naht,
+  die die Suche allein nähme — die Teilung wird trotzdem fertig.
+- **Die Spiegelebene wird gemessen und gewinnt nur, was sie nicht
+  verschlechtert** (`symmetry.mirror_plane`, `units.match_tolerance`): gleiche
+  Konturzahl wie die beste Naht, keine Einschnürung (T1), Stützvolumen
+  innerhalb derselben Fünf-Prozent-Grenze. Die Querschnittsänderung zählt an
+  ihr nicht — beide Schnittflächen sind dort dieselbe. Gespiegelt geschnitten
+  werden die Stücke beiderseits nur bei gleicher Stiftzugabe.
+- **Die Stiftzugabe gehört der Hälfte, die die Stifte trägt**
+  (`_child_reserves`). Was ein Stück schon trug, erben beide Hälften.
+- **Eine Lücke ist die beste Naht.** Wo keine Kante die Ebene kreuzt, trennt
+  der Schritt ohne Stifte (`Candidate.gap`, `pins=0` im Verlauf).
+- **Der Rand ist der des Anordnens** (`split.bed_margin`). Wer Auto Split mit
+  kleinerem Rand fährt als *Auf dem Bett anordnen*, bekommt Stücke, die nach
+  dem Anordnen über dem Bettrand liegen.
+- **Befunde der Suche stehen in keinem Schritt** und überleben die folgende
+  Auswertung nur, weil das Fenster sie wieder anhängt, solange der Verlauf da
+  steht, wo die Teilung ihn ließ (`MainWindow._split_findings`).
+
 ## Szene: Platzierung, Kennungen, Cache, Projektdatei
 
 Bis zum 06.09.2026 standen diese Regeln in der Karte `app/core/scene/CLAUDE.md`;

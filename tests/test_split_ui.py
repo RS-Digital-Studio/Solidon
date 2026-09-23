@@ -299,3 +299,59 @@ def test_the_offset_points_away_from_the_middle(qt_app: QApplication) -> None:
 
     assert offset[0] == pytest.approx(20.0), "half the distance between the two centres"
     assert offset[1] == pytest.approx(0.0)
+
+
+def test_a_symmetric_split_explains_itself_and_offers_the_next_step(qt_app: QApplication) -> None:
+    """Der Kundenweg zu T6/T7 (RM-080): teilen, lesen, weiter.
+
+    Ein spiegelgleicher Balken, zu lang fürs Bett: *Automatisch teilen* legt
+    die Naht in die Mitte, und der Prüfbericht sagt warum — mit dem Knopf für
+    den nächsten Handgriff, die Stücke nebeneinander aufs Bett zu legen.
+    Gedrückt, nicht die Methode dahinter gerufen.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QPushButton
+
+    from app.ui.main_window import MainWindow
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    session = window.session
+    session.project = new_project("centauri-carbon-2", "petg")
+    session.project.sources["src_1"] = trimesh.creation.box(extents=(400.0, 60.0, 40.0)).export(
+        file_type="stl"
+    )
+    session.project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/1_balken.stl", sha256=""
+    )
+    session.history = History(session.project.document)
+    session.history.apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    session.evaluate_async()
+    session.wait_for_idle()
+    QApplication.processEvents()
+
+    applied = session.auto_split("obj_1")
+    window._split_done(applied)
+    session.wait_for_idle()
+    window._on_scene(session.last_result)
+    QApplication.processEvents()
+
+    listing = window.report.list
+    rows = [
+        index
+        for index in range(listing.count())
+        if getattr(listing.item(index).data(Qt.ItemDataRole.UserRole), "code", "")
+        == "split.symmetric"
+    ]
+    assert rows, "der Prüfbericht sagt, dass in der Symmetrieebene geteilt wurde"
+    listing.setCurrentRow(rows[0])
+    buttons = {button.text(): button for button in window.report._offers.findChildren(QPushButton)}
+    assert "Auf dem Bett anordnen" in buttons, list(buttons)
+    before = len(session.project.document.ops)
+    buttons["Auf dem Bett anordnen"].click()
+    session.wait_for_idle()
+    assert len(session.project.document.ops) == before + 1
+    assert session.project.document.ops[-1].op == "arrange_bed"
+    window.deleteLater()

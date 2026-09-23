@@ -2308,6 +2308,9 @@ class MainWindow(QMainWindow):
         self._split_protected = 0
         """Wie viele Merkmale beim letzten Start von *Automatisch teilen*
         gesperrt waren — für die Ansage danach; der Körper ist dann verbraucht."""
+        self._split_findings: tuple[int, list[Finding]] = (-1, [])
+        """Was *Automatisch teilen* über seinen Plan zu sagen hatte, und bei
+        welcher Zahl von Verlaufsschritten das galt — siehe :meth:`_split_done`."""
         self._body_facts: tuple[int, dict[ObjectId, BodyFacts]] = (-1, {})
         """Geschlossen, Stücke, Hohlraum — je Körper, für die Auswertung, die
         gerade gilt. ``_update_actions`` fragt bei jeder Auswahl für drei
@@ -5987,7 +5990,20 @@ class MainWindow(QMainWindow):
         self.session.split_async(object_id, self._split_done)
 
     def _split_done(self, applied: Any) -> None:
+        """Die Teilung ist angewandt: Befunde in den Bericht, Ergebnis in die Statuszeile.
+
+        **Die Befunde müssen die Auswertung danach überstehen.** Sie kommen
+        aus der Suche und nicht aus einem Schritt, und die Auswertung, die die
+        Teilung sofort auslöst, ersetzt den Bericht (``show_result``). Bis zum
+        23.09.2026 standen „Auch nach dem letzten Schnitt passt nicht jedes
+        Teil" und jeder andere Satz des Plans nur bis zu diesem Augenblick da.
+        """
         self.report.add_findings(applied.findings)
+        if applied.transaction is not None:
+            self._split_findings = (
+                len(self.session.project.document.ops),
+                list(applied.findings),
+            )
         if applied.transaction is None:
             self.announce(tr("Dieses Objekt passt bereits auf das Bett."))
             return
@@ -17393,6 +17409,15 @@ class MainWindow(QMainWindow):
         self.explode_bar.show_for(len(result.scene.objects))
         self.report.show_result(result, self.session.project.document)
         self._print_findings.start(result, self.session.profile, self.effective_print_settings())
+        steps, planned = self._split_findings
+        if planned and steps == len(self.session.project.document.ops):
+            # Die Befunde der Suche stehen in keinem Schritt; jede Auswertung
+            # ersetzt den Bericht. Solange der Verlauf da steht, wo die
+            # Teilung ihn ließ, gelten sie und werden wieder angehängt — nach
+            # der nächsten Änderung oder einem Undo nicht mehr.
+            self.report.add_findings(planned)
+        elif planned:
+            self._split_findings = (-1, [])
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)

@@ -279,6 +279,15 @@ def test_auto_split_findings_offer_a_manual_line_without_repeating_the_search() 
     )
 
 
+def test_a_finished_split_offers_to_lay_the_pieces_out() -> None:
+    """Die zwei Sätze einer gelungenen Teilung führen zum nächsten Handgriff (RM-080)."""
+    from app.core.errors import ARRANGE_ON_BED
+    from app.ui.panels import FINDING_ACTIONS
+
+    assert FINDING_ACTIONS["split.symmetric"] == (ARRANGE_ON_BED,)
+    assert FINDING_ACTIONS["split.fewest_parts"] == (ARRANGE_ON_BED,)
+
+
 def test_a_body_below_the_bed_gets_the_click_that_helps() -> None:
     """Teilen und Verkleinern helfen dem verrutschten Koerper nicht.
 

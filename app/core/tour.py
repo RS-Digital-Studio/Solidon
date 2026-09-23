@@ -98,6 +98,21 @@ def _op_number_changed(name: str, field: str, original: float) -> StepCheck:
     return check
 
 
+def _first_op_number_changed(name: str, field: str, original: float) -> StepCheck:
+    """Wie :func:`_op_number_changed`, aber nur an der **ersten** Operation dieses Namens.
+
+    Für Beispiele mit mehreren gleichen Schritten, deren Werte verschieden
+    beginnen — zwei Schnitte an zwei Stellen: Die Übung gilt dem ersten.
+    """
+
+    def check(document: Document, history: History) -> bool:
+        entry = _first_op(document, name)
+        value = _number(entry.params.get(field)) if entry is not None else None
+        return value is not None and not is_close(value, original)
+
+    return check
+
+
 def _op_text_changed(name: str, field: str, original: str) -> StepCheck:
     """Dasselbe für einen Textparameter."""
 
@@ -690,11 +705,58 @@ TOURS: Final[tuple[Tour, ...]] = (
             # sparen — wer ihrem Schlusssatz folgte, griff zu einer Funktion,
             # die seinen Fall gar nicht meint, und die beiden Wege, auf denen
             # er die Naht selbst legt, standen nirgends.
-            "Passt ein Teil nicht auf das Bett, sucht Bearbeiten → Automatisch "
+            "Passt ein Teil nicht auf das Bett, sucht Vorbereiten → Automatisch "
             "teilen die Trennebene selbst. Soll die Naht woanders liegen, legen "
             "Sie sie mit *Teilen* aus den Handlungen rechts an eine Ebene — oder "
             "ziehen sie mit *An gezeichneter Linie trennen* dorthin, wo Sie sie "
             "haben wollen."
+        ),
+    ),
+    Tour(
+        example_id="zu-gross-automatisch-teilen",
+        intro=_(
+            "Eine Wandleiste von 60 cm — zu lang für jedes übliche Druckbett. "
+            "Automatisch teilen hat sie in drei Stücke zerlegt, mit Passstiften "
+            "in jeder Naht."
+        ),
+        steps=(
+            TourStep(
+                shows="history",
+                text=_(
+                    "Im Verlauf stehen zwei gewöhnliche Schritte „Teilen“: So hat "
+                    "Automatisch teilen die Leiste zerlegt. Drei Stücke — weniger "
+                    "gehen auf einem 220er Bett nicht."
+                ),
+            ),
+            TourStep(
+                shows="viewport",
+                text=_(
+                    "In jeder Naht stecken zwei Stifte, in der Gegenseite die "
+                    "passenden Löcher. Das Spiel kommt aus dem Materialprofil, und "
+                    "zu jedem Stift gibt es eine Passung."
+                ),
+            ),
+            TourStep(
+                shows="history",
+                text=_(
+                    "Öffnen Sie den ersten „Teilen“-Schritt mit einem Doppelklick und "
+                    "verschieben Sie die Position — die Naht wandert, Stifte und "
+                    "Passungen gehen mit."
+                ),
+                done=_first_op_number_changed("split_pinned", "position", -100.0),
+            ),
+            TourStep(
+                shows="tools",
+                text=_(
+                    "Die Stücke liegen schon nebeneinander auf dem Bett. Die "
+                    "Explosion in der Werkzeugzeile zeigt, wie sie zusammengehören."
+                ),
+            ),
+        ),
+        closing=_(
+            "Mit Ihrem eigenen Modell: Vorbereiten → Automatisch teilen. Ist ein "
+            "Teil spiegelgleich, liegt die Naht in der Mitte, und beide Seiten "
+            "drucken sich mit denselben Einstellungen."
         ),
     ),
     Tour(

@@ -51,13 +51,14 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.generate import into_project as generate_into
+from app.core.geom.autosplit import MARGIN
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.section import SectionPlane
 from app.core.ingest.archive import is_archive, model_from_archive
 from app.core.ingest.loader import read_bounded_payload, read_local_payload
 from app.core.ingest.plan import ImportPlan, import_plan, is_only_imported, names_in_use
-from app.core.knowledge import profiles
+from app.core.knowledge import print_settings, profiles
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.recipe import Recipe
 from app.core.lid_flow import LidApplied, apply_lid
@@ -99,6 +100,7 @@ from app.core.split import (
     apply_pinned_split,
     apply_planned,
     apply_split,
+    bed_margin,
     plan_split,
     protected_patches,
 )
@@ -820,9 +822,12 @@ class _SplitWorker(Worker):
         profile: Profile,
         features: Mapping[FeatureId, Feature],
         protect: Sequence[Any] = (),
+        margin: float = MARGIN,
     ) -> None:
         super().__init__()
         self._mesh = mesh
+        #: Der Rand zum Bettrand, mit dem danach angeordnet wird (``bed_margin``).
+        self._margin = margin
         self._object_id = object_id
         self._profile = profile
         self._features = dict(features)
@@ -844,6 +849,7 @@ class _SplitWorker(Worker):
                 protect=self._protect,
                 cancelled=self.cancel,
                 progress=self.progressed.emit,
+                margin=self._margin,
             )
         except OperationCancelled:
             self.cancelled.emit()
@@ -2512,6 +2518,17 @@ class Session(QObject):
         self._changed()
         return generation.object_id
 
+    def split_margin(self) -> float:
+        """Der Rand, den *Automatisch teilen* zum Bettrand lässt (:func:`bed_margin`).
+
+        Aus den Druckeinstellungen des Projekts, sonst aus denen, die das
+        Profil vorgibt — dieselbe Quelle wie die Vorbelegung des Anordnens.
+        """
+        settings = self.project.document.print_settings
+        if settings is None:
+            settings = print_settings.resolve(self.profile)
+        return bed_margin(settings)
+
     def auto_split(self, object_id: str) -> SplitApplied:
         """§25: ein Teil schneiden, bis es passt, mit Stiften und
         Passungspaaren (§14).
@@ -2541,6 +2558,7 @@ class Session(QObject):
             object_id,
             object_profile,
             features=entry.features,
+            margin=self.split_margin(),
         )
         if applied.transaction is not None:
             self._changed()
@@ -2940,6 +2958,7 @@ class Session(QObject):
             object_profile,
             entry.features,
             protect=protected_patches(entry, self.protected_features(object_id)),
+            margin=self.split_margin(),
         )
         # Jeder Empfänger bekommt den Absender mit: Was ein überlebender
         # Arbeiter eines früheren Starts noch meldet, zählt nicht mehr.

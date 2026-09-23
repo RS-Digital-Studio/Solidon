@@ -20,9 +20,15 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.core.errors import ValidationError
-from app.core.geom.autosplit import SplitOutcome, split_to_fit
+from app.core.geom.autosplit import MARGIN, SplitOutcome, Step, split_to_fit
 from app.core.geom.mesh import MeshData
-from app.core.geom.pins import PIN_COUNT, feature_side, next_connector_index, plan_pins
+from app.core.geom.pins import (
+    PIN_COUNT,
+    PinPlan,
+    feature_side,
+    next_connector_index,
+    plan_pins,
+)
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft, change_for
@@ -37,6 +43,7 @@ from app.core.types import (
     Fit,
     ObjectId,
     Origin,
+    PrintSettings,
     Profile,
     ProgressFn,
     SceneObject,
@@ -45,6 +52,33 @@ from app.core.types import (
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
+
+
+def bed_margin(settings: PrintSettings) -> float:
+    """Der Rand, den Auto Split jedem Stück zum Bettrand lässt — der Abstand des Anordnens.
+
+    Nach dem Teilen ist *Auf dem Bett anordnen* der nächste Handgriff, und
+    der Prüfbericht bietet ihn an. Das Anordnen hält zum Bettrand denselben
+    Abstand wie zwischen zwei Teilen: die Vorgabe der Operation, mindestens
+    aber zweimal den Rand aus Haftung und Stützen
+    (:func:`app.core.export.writer.clearance_margin`) — dieselbe Rechnung,
+    mit der die Oberfläche den Anordnungsdialog vorbelegt. Teilte Auto Split
+    mit weniger Rand, lag ein Stück zum Teilen auf dem Bett und nach dem
+    Anordnen darüber: gemessen an der 60-cm-Wandleiste auf einem 220er Bett,
+    ein Stück von 212,5 mm und 4,5 mm über dem Rand.
+    """
+    from app.core.export.writer import clearance_margin
+    from app.core.registry import REGISTRY
+
+    default = next(
+        (
+            float(entry.default or 0.0)
+            for entry in REGISTRY.get("arrange_bed").params.spec()
+            if entry.name == "spacing"
+        ),
+        0.0,
+    )
+    return max(MARGIN, default, 2.0 * clearance_margin(settings))
 
 
 def protected_patches(entry: SceneObject, feature_ids: Iterable[FeatureId]) -> list[Any]:
@@ -95,6 +129,21 @@ class SplitPlan:
     nur von Hand gebaute Pläne in Tests; ``plan_split`` füllt sie immer."""
     connector_start: int = 1
     """Erste freie Verbinderkennung des ausgewählten Ausgangskörpers."""
+    connectors: tuple[PinPlan | None, ...] = ()
+    """Die Verbinderplanung je Schnitt, wie der Schritt sie gleich baut.
+
+    Aus ihr entstehen beim Anwenden die Merkmale ``pin_<n>`` und
+    ``bore_<n>``, an denen die Passungen eines Stücks hängen, das ein späterer
+    Schnitt desselben Laufs noch einmal teilt (:func:`apply_planned`). Leer in
+    von Hand gebauten Plänen; dann entfallen solche Passungen wie früher."""
+    features: Mapping[FeatureId, Feature] = field(default_factory=dict)
+    """Die Merkmale des Ausgangskörpers, an denen seine älteren Passungen hängen."""
+    clearance: float = 0.0
+    """Das Spiel des Materials, mit dem die Bohrungen gebaut werden.
+
+    Beim Planen gelesen, weil das Anwenden kein Profil mehr bekommt: Die
+    Passungen folgen dem Material ihrer Körper (``auto:``), nur die
+    vorhergesagten Bohrungsmerkmale brauchen die Zahl."""
 
     @property
     def cuts(self) -> int:
@@ -126,6 +175,7 @@ def plan_split(
     protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
     progress: ProgressFn | None = None,
+    margin: float = MARGIN,
 ) -> SplitPlan:
     """Sucht die Schnitte und macht Operationen daraus.
 
@@ -148,6 +198,7 @@ def plan_split(
         protect=protect,
         cancelled=cancelled,
         progress=progress,
+        margin=margin,
     )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -177,7 +228,10 @@ def plan_split(
                     }
                 ),
                 "position": step.plane.position,
-                "pins": pins,
+                # Eine Lücke zwischen losen Teilen hat keine Schnittfläche und
+                # damit keinen Platz für einen Stift (RM-080): null, damit der
+                # Schritt nicht nach Stiften sucht, die es nicht geben kann.
+                "pins": _pins_at(step, pins),
                 # Auto Split trifft diese Wahl aus den Messdaten der jeweiligen
                 # Naht. Gespeichert wird die konkrete Form, damit dieselbe
                 # Projektdatei nicht bei jeder Auswertung neu entscheidet.
@@ -193,21 +247,40 @@ def plan_split(
         )
         for step in outcome.cuts
     ]
+    connectors: list[PinPlan | None] = []
+    seated: list[int] = []
+    for step in outcome.cuts:
+        # Dieselbe Planung wie ``fitting_pins`` und wie der Schritt selbst —
+        # hier samt Lagen, weil ein späterer Schnitt desselben Laufs an ihnen
+        # entscheidet, auf welches Stück eine Passung wandert.
+        wanted = _pins_at(step, pins)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if not wanted or step.source is None:
+            connectors.append(None)
+            seated.append(wanted if step.source is None else 0)
+            continue
+        connector = plan_pins(
+            step.source, step.plane.plane, count=wanted, shape=step.connector_shape
+        )
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        connectors.append(connector)
+        seated.append(connector.count)
     return SplitPlan(
         drafts=tuple(drafts),
         outcome=outcome,
-        seated=tuple(
-            fitting_pins(
-                step.source,
-                step.plane.plane,
-                pins,
-                shape=step.connector_shape,
-                cancelled=cancelled,
-            )
-            for step in outcome.cuts
-        ),
+        seated=tuple(seated),
         connector_start=next_connector_index(features or {}),
+        connectors=tuple(connectors),
+        features=dict(features or {}),
+        clearance=profile.material.clearance,
     )
+
+
+def _pins_at(step: Step, wanted: int) -> int:
+    """Die Stiftzahl eines Schritts: die gewünschte, an einer Lücke keine."""
+    return 0 if step.plane.gap else wanted
 
 
 def fitting_pins(
@@ -265,6 +338,7 @@ def apply_split(
     protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
     progress: ProgressFn | None = None,
+    margin: float = MARGIN,
 ) -> SplitApplied:
     """Schneidet, bis es passt, und hält jede Naht als Passungspaar fest (§14)."""
     plan = plan_split(
@@ -276,6 +350,7 @@ def apply_split(
         protect=protect,
         cancelled=cancelled,
         progress=progress,
+        margin=margin,
     )
     return apply_planned(document, plan, object_id, pins=pins)
 
@@ -334,28 +409,41 @@ def apply_planned(
         """Alle Nahtpassungen aus den gemeinsam geplanten Ausgaben bilden."""
         existing = list(document.fits)  # Passungen aus früheren Transaktionen
         connector_starts: dict[ObjectId, int] = {object_id: plan.connector_start}
+        known: dict[ObjectId, dict[FeatureId, Feature]] = {object_id: dict(plan.features)}
         created.clear()
         dropped.clear()
         for index, operation in enumerate(planned):
             target = operation.inputs[0]
-            # Ein Stück, das ein späterer Schnitt desselben Laufs noch einmal
-            # teilt, ist danach zwei — die Passungen, die es benennen, zeigen
-            # ins Leere. Sie entfallen, gleich ob sie vor diesem Lauf im
-            # Dokument standen oder ein früherer Schnitt sie eben erst
-            # angelegt hat. **Beide Listen werden geprüft:** ``change_for``
-            # schreibt die vollständige neue Liste, und eine tote Passung aus
-            # dem eigenen Lauf käme sonst über den Akkumulator erneut ins
-            # Dokument — der Prüfbericht meldete danach je verwaister Naht ein
-            # ``fit.missing_feature`` (§14). Umgehängt wird nichts: der zweite
-            # Schnitt vergibt wieder ``pin_1``, ein Verweis darauf zeigte auf
-            # einen anderen Stift als gemeint (:func:`_fits_without`).
-            existing, gone_old = _partition_fits(existing, target)
-            kept_created, gone_new = _partition_fits(created, target)
-            created[:] = kept_created
+            made = operation.outputs
+            step_plane = plan.outcome.cuts[index].plane.plane
+            # **Ein Stück, das ein späterer Schnitt desselben Laufs noch einmal
+            # teilt, gibt seine Passungen an die Hälfte weiter, die das Merkmal
+            # trägt** — wie bei *Teilen* und der gezeichneten Linie
+            # (:func:`_retarget_fits`). Bis zum 23.09.2026 entfielen sie: Jede
+            # Naht einer Teilung in drei oder mehr Stücke außer den letzten
+            # stand ohne Passung da, und der Slicer bekam für sie kein Spiel.
+            # Die Merkmale kommen aus der Verbinderplanung jedes Schritts
+            # (``plan.connectors``) und wandern mit ihren Stücken, wie die
+            # Operation sie wandern lässt; eine Passung, deren Verbinder der
+            # neue Schnitt trifft, entfällt mit Hinweis. **Beide Listen werden
+            # geprüft:** ``change_for`` schreibt die vollständige neue Liste,
+            # und eine tote Passung aus dem eigenen Lauf käme sonst über den
+            # Akkumulator erneut ins Dokument (§14).
+            carried = known.pop(target, {})
+            existing, moving_old = _partition_fits(existing, target)
+            kept_created, moving_new = _partition_fits(created, target)
+            kept_old, gone_old = _retarget_fits(
+                moving_old, target, made[0], made[1], carried, step_plane
+            )
+            kept_new, gone_new = _retarget_fits(
+                moving_new, target, made[0], made[1], carried, step_plane
+            )
+            existing.extend(kept_old)
+            created[:] = [*kept_created, *kept_new]
             dropped.extend(gone_old)
             dropped.extend(gone_new)
+            first_features, second_features = _features_after(carried, step_plane)
             feature_start = connector_starts.pop(target, 1)
-            made = operation.outputs
             seated = plan.pins_at(index, pins)
             next_start = feature_start + seated
             connector_starts[made[0]] = next_start
@@ -363,9 +451,25 @@ def apply_planned(
             # So viele Paare, wie Stifte sitzen — nicht so viele, wie
             # gewünscht waren. Eine zu schmale Schnittfläche bekommt keinen
             # Stift und deshalb auch keine Passung, die auf ihn zeigt.
-            pinned, drilled = (
-                (made[1], made[0]) if operation.params.get("pins_on_b") else (made[0], made[1])
+            on_b = bool(operation.params.get("pins_on_b"))
+            pinned, drilled = (made[1], made[0]) if on_b else (made[0], made[1])
+            pin_side, bore_side = (
+                (second_features, first_features) if on_b else (first_features, second_features)
             )
+            connector = plan.connectors[index] if index < len(plan.connectors) else None
+            if connector is not None:
+                pin_side.update(
+                    _connector_features(
+                        connector, plan.clearance, feature_start, on_b=on_b, pins=True
+                    )
+                )
+                bore_side.update(
+                    _connector_features(
+                        connector, plan.clearance, feature_start, on_b=on_b, pins=False
+                    )
+                )
+            known[made[0]] = first_features
+            known[made[1]] = second_features
             created.extend(
                 _pairs(
                     pinned,
@@ -631,6 +735,59 @@ def _retarget_fits(
         else:
             dropped.append(fit)
     return kept, dropped
+
+
+def _features_after(
+    features: Mapping[FeatureId, Feature], plane: SectionPlane
+) -> tuple[dict[FeatureId, Feature], dict[FeatureId, Feature]]:
+    """Welche Merkmale nach einem Schnitt auf welcher Hälfte stehen — wie die Operation es tut.
+
+    Derselbe Maßstab wie ``_features_after_split`` in ``geom/prepare_ops.py``:
+    ohne Mittelpunkt zur ersten Hälfte, auf dem Schnitt entfällt es, ein
+    Verbinder mit seiner Ausdehnung gemessen.
+    """
+    first: dict[FeatureId, Feature] = {}
+    second: dict[FeatureId, Feature] = {}
+    for feature_id, feature in features.items():
+        side = feature_side(feature, plane, connector=feature_id.startswith(("pin_", "bore_")))
+        if side in (-1, None):
+            first[feature_id] = feature
+        elif side == 1:
+            second[feature_id] = feature
+    return first, second
+
+
+def _connector_features(
+    connector: PinPlan, clearance: float, start: int, *, on_b: bool, pins: bool
+) -> dict[FeatureId, Feature]:
+    """Die Merkmale, die ``add_pins`` für diese Planung anlegt — Stifte oder Bohrungen.
+
+    Dieselben Werte wie dort (``geom/pins.py``): Durchmesser, Mitte, Achse,
+    Tiefe; die Bohrung um das Spiel des Materials weiter und um den
+    Sitzpuffer tiefer. Trägt Hälfte B die Stifte, zeigt die Achse andersherum.
+    """
+    from app.core.geom.pins import BORE_RELIEF
+
+    axis = (
+        (-connector.normal[0], -connector.normal[1], -connector.normal[2])
+        if on_b
+        else connector.normal
+    )
+    made: dict[FeatureId, Feature] = {}
+    for index, position in enumerate(connector.positions, start=start):
+        feature_id = f"pin_{index}" if pins else f"bore_{index}"
+        made[feature_id] = Feature(
+            id=feature_id,
+            kind="pin" if pins else "hole",
+            provenance="generated",
+            params={
+                "diameter": round(connector.diameter + (0.0 if pins else clearance), 4),
+                "centre": position,
+                "axis": axis,
+                "depth": round(connector.length / 2.0 + (0.0 if pins else BORE_RELIEF), 4),
+            },
+        )
+    return made
 
 
 def _fit_dropped(fit: Fit) -> Finding:

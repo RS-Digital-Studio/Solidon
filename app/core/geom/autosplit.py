@@ -23,9 +23,13 @@ Näherung wieder zusammenzukleben ergibt ein genähertes Teil (§11.1).
 
 from __future__ import annotations
 
+import threading
+import weakref
+from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any, Final
+from functools import lru_cache
+from typing import Any, Final, cast
 
 import numpy as np
 
@@ -40,7 +44,7 @@ from app.core.geom.section import AXIS_NORMALS, Axis, SectionPlane
 from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections
 from app.core.slice.orientation import SUPPORT_TIE, best_face_candidate, stands
-from app.core.types import CancelToken, Finding, Profile, ProgressFn, Vec3
+from app.core.types import CancelToken, Finding, PrinterProfile, Profile, ProgressFn, Vec3
 from app.core.units import EPS_GEOM, is_close
 from app.i18n import _
 
@@ -136,6 +140,35 @@ SUPPORT_PLANE_CANDIDATES = 3
 #: tatsächlich durch die interne Schichtanalyse laufen.
 SUPPORT_ORIENTATION_CANDIDATES = 3
 
+#: **Wie viele Nahtlagen ein Schritt der Schnittfolge gegeneinander plant**
+#: (RM-080, T7). Braucht ein Stück mehr als einen Schnitt, entscheidet nicht
+#: mehr die schönste erste Naht, sondern die ganze Folge dahinter: Je
+#: Nahtlage wird der Rest billig zu Ende geteilt und gezählt. Drei verschiedene
+#: Lagen aus der Abtastung, dazu die Spiegelebene, die gleichmäßige Teilung
+#: und je übergroße Nebenachse ihre beste Lage — die Breite, mit der das
+#: Chopper-Verfahren (SIGGRAPH Asia 2012) seine Strahlsuche fährt, liegt bei
+#: vier.
+PLAN_BRANCHES: Final = 3
+
+#: **Wie viele Probeschnitte die Planung einer ganzen Teilung höchstens macht.**
+#: Eine Zahl und keine Zeit: Nach Uhr begrenzt, teilte dieselbe Datei auf
+#: einem belasteten Rechner anders als auf einem ruhigen (§11.3). Ist das
+#: Budget verbraucht, entscheidet für die übrigen Schritte die Naht selbst,
+#: wie vor der Planung. Gemessen an den Körpern in ``tests/test_autosplit.py``
+#: und den Korpusmodellen reicht die Hälfte davon; der Rest ist Reserve für
+#: Teile, die zwölf Stücke brauchen.
+PLAN_BUDGET: Final = 96
+
+#: Wie viele Lagen je Probeschnitt der Planung abgetastet werden. Die Hälfte
+#: der Suche: Die Probe soll zählen, wie viele Stücke eine Folge braucht und
+#: wie viele Klebestellen sie hat — die genaue Lage jeder späteren Naht
+#: entscheidet ihr eigener Schritt, mit voller Abtastung und Stützvolumen.
+PLAN_SAMPLES: Final = 17
+
+#: Wie fein die nutzbare Länge an einer Sperrzone des Betts gesucht wird —
+#: Halbierungen des Bereichs, 2⁻¹⁶ der Bettlänge sind unter der Anzeigegenauigkeit.
+ROOM_STEPS: Final = 16
+
 
 @dataclass(frozen=True, slots=True)
 class Candidate:
@@ -155,6 +188,24 @@ class Candidate:
     """Die Richtung einer schiefen Ebene (RM-080, T3) — ``None`` heißt quer zu
     ``axis``. ``axis`` bleibt die Achse, die das Stück zu lang machte und die
     der Schnitt verkürzt."""
+    symmetric: bool = False
+    """Ob die Ebene die gemessene Spiegelebene des Stücks ist (RM-080, T6,
+    :func:`app.core.geom.symmetry.mirror_plane`)."""
+    change: float = 0.0
+    """Wie stark sich der Querschnitt einen halben Millimeter daneben ändert,
+    relativ — der Anteil ``PRISM_WEIGHT`` der Punktzahl, ungewichtet."""
+    notch: float = 0.0
+    """Wie tief die Lage in einer Einschnürung liegt (T1) — null, wo keine ist."""
+
+    @property
+    def gap(self) -> bool:
+        """Ob die Ebene zwischen zwei getrennten Stücken durchgeht und nichts schneidet.
+
+        Keine Naht, keine Klebestelle, kein Verbinder: Ein Stück aus zwei
+        losen Teilen, das nur zusammen nicht aufs Bett passt, wird an der
+        Lücke getrennt (§22.3).
+        """
+        return self.contours == 0
 
     @property
     def plane(self) -> SectionPlane:
@@ -289,22 +340,35 @@ def split_to_fit(
     protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
     progress: ProgressFn | None = None,
+    margin: float = MARGIN,
 ) -> SplitOutcome:
     """Schneidet, bis jedes Stück passt — oder klar ist, dass Schneiden es
     nicht richten wird.
 
-    In der Breite zuerst: das Stück, das am weitesten übersteht, wird als
-    Nächstes geschnitten. Das hält die Stückzahl klein — den schlimmsten
-    Übeltäter zuerst zu schneiden ist, was ein Mensch mit einer Säge tut, und
-    aus demselben Grund.
+    Das Stück, das am weitesten übersteht, wird als Nächstes geschnitten.
+    **Wo aber ein Schnitt nicht reicht, entscheidet die ganze Folge** (RM-080,
+    T7): Bis zum 23.09.2026 nahm jeder Schritt die schönste Naht für sich, und
+    ein Bilderrahmen von 500 mm kam in sieben Stücken zurück, wo vier genügen
+    — der erste Schnitt ging durch eine Ecke, weil sie eine Klebestelle
+    weniger hatte als der Schnitt durch die Mitte, und danach passte nichts
+    mehr. :func:`_plan_step` teilt je Nahtlage den Rest billig zu Ende und
+    wählt die Lage, deren ganze Folge die wenigsten Stücke, dann die wenigsten
+    Klebestellen hat. Stücke, die ein einziger Schnitt aufs Bett bringt,
+    bekommen weiter die volle Suche samt Stützvolumen (:func:`search_plane`).
+
+    **Ein spiegelgleiches Teil wird in seiner Symmetrieebene geteilt** (T6),
+    wo das die Konturzahl, die Einschnürung und das Stützvolumen nicht
+    verschlechtert — und die Stücke beiderseits werden danach gespiegelt
+    geschnitten, nicht jedes für sich gesucht: So bleiben sie gleich, bis zum
+    letzten Schnitt.
 
     **Der Passstift zählt zur Ausdehnung.** Ein Stift steht über die
     Schnittfläche hinaus (§25); eine Hälfte, die nackt genau aufs Bett passt,
-    ragt mit Stift darüber. Jeder Schnitt legt darum eine Zugabe auf beide neuen
-    Hälften — den Überstand an dieser Naht —, und die Bettprüfung
-    (:func:`oversize`) rechnet sie mit. Wo eine Hälfte damit übersteht, wird
-    feiner geteilt. ``pins`` ist die gewünschte Stiftzahl; ohne Stifte
-    (``pins=0``) gibt es keine Zugabe und die alte Rechnung bleibt.
+    ragt mit Stift darüber. Die Zugabe bekommt die Hälfte, **die die Stifte
+    trägt** — die andere hat an dieser Naht nur Bohrungen, und die stehen
+    nicht über. Bis zum 23.09.2026 bekamen beide sie, und ein Balken, der in
+    drei Stücken passt, brauchte vier. ``pins`` ist die gewünschte Stiftzahl;
+    ohne Stifte (``pins=0``) gibt es keine Zugabe.
 
     ``protect`` reicht die geschützten Flächen an **jeden** Schnitt weiter,
     nicht nur an den ersten. Sie sind Punktwolken und keine Dreiecksnummern,
@@ -312,17 +376,27 @@ def split_to_fit(
     Nummerierung — ein Verweis über Indizes zeigte nach dem ersten Schnitt
     ins Leere, und mehrfach geteilt wird gerade das, was besonders groß ist.
 
-    ``cancelled`` wird **zwischen** den Schnitten und innerhalb der Abtastung
-    abgefragt (§15.6). Ein halb geschnittener Körper entsteht dabei nicht: Der
-    Abbruch wirft, und was schon gefunden war, ist ein Plan und noch keine
-    Änderung am Dokument.
+    ``cancelled`` wird **zwischen** den Schnitten, zwischen den Probeschnitten
+    der Planung und innerhalb der Abtastung abgefragt (§15.6). Ein halb
+    geschnittener Körper entsteht dabei nicht: Der Abbruch wirft, und was schon
+    gefunden war, ist ein Plan und noch keine Änderung am Dokument.
+
+    ``margin`` ist der Rand, den jedes Stück zum Bettrand lässt. Die Vorgabe
+    ist :data:`MARGIN`; die Oberfläche gibt den Abstand mit, mit dem sie die
+    Stücke danach anordnet (:func:`app.core.split.bed_margin`) — sonst passt
+    ein Stück zum Teilen, und *Auf dem Bett anordnen* schiebt es über den Rand.
     """
     if pins is None:
         from app.core.geom.pins import PIN_COUNT
 
         pins = PIN_COUNT
+    if margin > MARGIN + EPS_GEOM:
+        profile = _narrowed(profile, margin - MARGIN)
 
     outcome = SplitOutcome(parts=[mesh])
+    budget = _Budget(PLAN_BUDGET)
+    planned = False
+    mirrored_any = False
 
     def finish() -> SplitOutcome:
         """Den vollständig gerechneten Plan samt ehrlichem Ende melden."""
@@ -336,6 +410,13 @@ def split_to_fit(
     # Der ganze Körper trägt keine (er ist nicht verstiftet), erst ein Schnitt
     # legt eine an.
     reserves: list[Vec3] = [(0.0, 0.0, 0.0)]
+    # Eine feste Kennung je Stück, ebenfalls im Lockschritt: Die Stellung in
+    # der Liste verschiebt sich mit jedem Schnitt, und die Spiegelpaare (T6)
+    # müssen ihr Gegenüber auch drei Schnitte später noch finden.
+    keys: list[int] = [0]
+    counter = 0
+    mirrors: dict[int, tuple[int, SectionPlane]] = {}
+    done: dict[int, tuple[Candidate, int, int, Vec3]] = {}
     if fits(mesh, profile):
         return finish()
 
@@ -344,10 +425,12 @@ def split_to_fit(
             cancelled.raise_if_cancelled()
         index = _worst(outcome.parts, profile, reserves)
         if index is None:
+            _conclude(outcome, mesh, profile, planned=planned, mirrored=mirrored_any)
             return finish()
 
         part = outcome.parts[index]
         reserve = reserves[index]
+        key = keys[index]
         axis = _axis_to_cut(part, profile, reserve)
         if axis is None:
             # Erreichbar ist das nicht — ``_worst`` gibt nur einen Index heraus,
@@ -359,31 +442,56 @@ def split_to_fit(
         # Wie weit der Stift dieser Naht überstünde — an einer Ebene durch die
         # Mitte gemessen, weil dort der Querschnitt für ein prismatisches Stück
         # steht. Die Zahl geht in das Suchfenster (damit der Schnitt Raum für den
-        # Stift lässt) und in die Reserve der Kinder.
+        # Stift lässt) und in die Reserve der Hälfte, die ihn trägt.
         allowance = _pin_allowance(part, axis, profile, pins, cancelled=cancelled)
-        search = search_plane(
-            part,
-            profile,
-            axis=axis,
-            allowance=allowance,
-            samples=samples,
-            protect=protect,
-            cancelled=cancelled,
-            connector_count=pins,
-            progress=(
-                (
-                    lambda fraction, text: progress(
-                        min(
-                            0.99,
-                            (len(outcome.cuts) + fraction) / max(max_parts - 1, 1),
-                        ),
-                        text,
-                    )
+        step_progress = (
+            (
+                lambda fraction, text: progress(
+                    min(
+                        0.99,
+                        (len(outcome.cuts) + fraction) / max(max_parts - 1, 1),
+                    ),
+                    text,
                 )
-                if progress is not None
-                else None
-            ),
+            )
+            if progress is not None
+            else None
         )
+        held = reserve["xyz".index(axis)]
+        mirrored = _mirrored_step(key, reserve, mirrors, done, protect)
+        flipped = False
+        if mirrored is not None:
+            # Das Gegenüber ist schon geschnitten: derselbe Schnitt, gespiegelt.
+            reflected, flipped = mirrored
+            search = PlaneSearch(reflected)
+        elif _one_cut_enough(part, profile, reserve, axis, allowance):
+            search = search_plane(
+                part,
+                profile,
+                axis=axis,
+                allowance=allowance,
+                reserve=held,
+                samples=samples,
+                protect=protect,
+                cancelled=cancelled,
+                connector_count=pins,
+                progress=step_progress,
+            )
+        else:
+            planned = True
+            search = _plan_step(
+                part,
+                profile,
+                axis=axis,
+                allowance=allowance,
+                reserve=reserve,
+                samples=samples,
+                protect=protect,
+                room=max_parts - len(outcome.parts) + 1,
+                budget=budget,
+                cancelled=cancelled,
+                progress=step_progress,
+            )
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         candidate = search.candidate
@@ -420,7 +528,9 @@ def split_to_fit(
 
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        first, second, cut_findings = _cut_in_two(part, candidate)
+        first, second, cut_findings = (
+            search.halves if search.halves is not None else _cut_in_two(part, candidate)
+        )
         # Einmal je Ursache und nicht je Schnitt: ``capped`` ist genau die
         # Wasserdichtheit der Eingabe, und die Hälfte eines offenen Körpers ist
         # wieder offen. Vierfach im Prüfbericht stünde viermal derselbe Satz.
@@ -442,7 +552,11 @@ def split_to_fit(
 
         connector_shape = "round"
         connector_glue = False
-        if pins > 0:
+        if candidate.gap:
+            # Eine Lücke ist keine Naht: Es gibt keine Fläche für einen Stift,
+            # und die Hälften stehen um nichts über.
+            allowance = 0.0
+        elif pins > 0:
             from app.core.geom.pins import AUTO, plan_pins
 
             if cancelled is not None:
@@ -469,14 +583,19 @@ def split_to_fit(
                 for finding in connector_plan.findings
                 if finding.code == "split.connector_glue"
             )
+        else:
+            allowance = 0.0
 
         outcome.parts[index : index + 1] = [first, second]
-        # Beide Hälften erben die Zugabe des Elternteils und bekommen die des
-        # neuen Schnitts auf der Schnittachse dazu. Auf **beide**, weil erst der
-        # nächste Schnitt entscheidet, welche die knappe wird — der sichere
-        # Fehler ist, einer zu viel Reserve zu geben, nicht einer zu wenig.
-        child = _add_along(reserve, candidate, allowance)
-        reserves[index : index + 1] = [child, child]
+        reserves[index : index + 1] = list(_child_reserves(reserve, candidate, allowance))
+        counter += 2
+        first_key, second_key = counter - 1, counter
+        keys[index : index + 1] = [first_key, second_key]
+        done[key] = (candidate, first_key, second_key, reserve)
+        _pair_mirrors(
+            mirrors, done, key, candidate, (first_key, second_key), mirrored is not None, flipped
+        )
+        mirrored_any = mirrored_any or candidate.symmetric or mirrored is not None
         outcome.cuts.append(
             Step(
                 part_index=index,
@@ -484,7 +603,7 @@ def split_to_fit(
                 source=part,
                 connector_shape=connector_shape,
                 connector_glue=connector_glue,
-                pins_on_b=candidate.pins_on_b and pins > 0,
+                pins_on_b=candidate.pins_on_b and pins > 0 and not candidate.gap,
             )
         )
         _log.info("split along %s at %.2f mm", candidate.axis, candidate.position)
@@ -498,7 +617,93 @@ def split_to_fit(
                 values={"parts": len(outcome.parts), "limit": max_parts},
             )
         )
+    else:
+        _conclude(outcome, mesh, profile, planned=planned, mirrored=mirrored_any)
     return finish()
+
+
+def _conclude(
+    outcome: SplitOutcome, mesh: MeshData, profile: Profile, *, planned: bool, mirrored: bool
+) -> None:
+    """Was der Kunde über eine gelungene Teilung wissen soll — zwei Sätze höchstens.
+
+    **Spiegelgleich** (T6): Die Naht liegt in der Symmetrieebene, die Stücke
+    beiderseits sind gleich und drucken sich mit denselben Einstellungen — das
+    erklärt, warum sie genau dort liegt, und spart ihm die Frage, ob er beide
+    Hälften einzeln einrichten muss.
+
+    **Weniger geht nicht** (T7): Nur wenn die Folge geplant war und die Zahl
+    der Stücke die untere Schranke erreicht — je Achse die Länge geteilt durch
+    das Bett, aufgerundet. Das ist ein Beweis und keine Einschätzung: Kein Stück
+    ist länger als das Bett, also braucht jede Achse mindestens so viele. Wo
+    die Schranke nicht erreicht ist, wird nichts behauptet.
+    """
+    if mirrored:
+        outcome.findings.append(
+            Finding(
+                code="split.symmetric",
+                severity="info",
+                message=_(
+                    "In der Symmetrieebene geteilt: Beide Seiten sind gleich und drucken "
+                    "sich mit denselben Einstellungen."
+                ),
+                values={"parts": len(outcome.parts)},
+            )
+        )
+    if planned and len(outcome.parts) <= fewest_parts(mesh, profile):
+        outcome.findings.append(
+            Finding(
+                code="split.fewest_parts",
+                severity="info",
+                message=_("Weniger Teile gehen auf diesem Drucker nicht."),
+                values={"parts": len(outcome.parts)},
+            )
+        )
+
+
+def fewest_parts(mesh: MeshData, profile: Profile) -> int:
+    """Die untere Schranke der Stückzahl: je Achse Länge durch Bett, aufgerundet.
+
+    Auto Split dreht kein Stück (§25) — jedes ist also entlang jeder Achse
+    höchstens so lang wie das Bett, und die Achse, die am meisten Stücke
+    verlangt, verlangt sie von der ganzen Teilung. Stifte machen die Stücke
+    länger, nie kürzer; die Schranke gilt mit ihnen erst recht.
+    """
+    limits = _limits(profile)
+    size = mesh.bounds.size
+    return max(
+        1,
+        *(
+            int(np.ceil(float(size[index]) / limits[index] - EPS_GEOM)) if limits[index] > 0 else 1
+            for index in range(3)
+        ),
+    )
+
+
+def _narrowed(profile: Profile, extra: float) -> Profile:
+    """Dasselbe Profil mit einem um ``extra`` schmaleren Bett.
+
+    Die freigegebene Fläche wird um den Rand verkleinert und als ausdrückliche
+    Kontur eingesetzt, Sperrzonen darin als Löcher; alles in dieser Datei, das
+    nach Bett und Rand fragt, rechnet damit ohne eigenen Parameter weiter. Die
+    Höhe bleibt: Ein Rand liegt auf dem Bett, nicht darüber.
+    """
+    from shapely.geometry import Polygon
+
+    area = printable_area(profile.printer, margin=extra)
+    if area.is_empty or not isinstance(area, Polygon):
+        return profile
+    contour = tuple((float(x), float(y)) for x, y in area.exterior.coords[:-1])
+    holes = tuple(
+        tuple((float(x), float(y)) for x, y in ring.coords[:-1]) for ring in area.interiors
+    )
+    printer = replace(
+        profile.printer,
+        printable_area=contour,
+        bed_exclusions=holes,
+        printable_height=printable_height(profile.printer),
+    )
+    return replace(profile, printer=printer)
 
 
 def _codes(findings: Sequence[Finding]) -> frozenset[str]:
@@ -545,6 +750,168 @@ def _add_along(reserve: Vec3, candidate: Candidate, extra: float) -> Vec3:
         reserve[1] + abs(candidate.normal[1]) * extra,
         reserve[2] + abs(candidate.normal[2]) * extra,
     )
+
+
+def _child_reserves(reserve: Vec3, candidate: Candidate, extra: float) -> tuple[Vec3, Vec3]:
+    """Die Zugabe beider Hälften: der Überstand ``extra`` nur an der, die die Stifte trägt.
+
+    Die andere hat an dieser Naht Bohrungen, und eine Bohrung steht nicht
+    über. Was das Elternstück schon trug, erben beide — an welcher seiner
+    Flächen es sitzt, weiß hier niemand, und zu viel Reserve ist der sichere
+    Fehler. Hälfte A trägt die Stifte, es sei denn, die Suche hat sie ans
+    fertige Stützvolumen nach B gelegt (``pins_on_b``, RM-005).
+    """
+    pinned = _add_along(reserve, candidate, extra)
+    return (reserve, pinned) if candidate.pins_on_b else (pinned, reserve)
+
+
+def _reflected(candidate: Candidate, mirror: SectionPlane) -> tuple[Candidate, bool]:
+    """Derselbe Schnitt, an der Spiegelebene ``mirror`` gespiegelt (T6).
+
+    Aus ``n · x = q`` wird ``n' · x = q - 2 p (n · e)`` mit ``n' = n - 2 (n · e) e``
+    für die Spiegelebene ``e · x = p``. Zeigt ``n'`` entlang der Schnittachse
+    ins Negative, wird die Ebene umgedreht — dieselbe Ebene, die Hälften
+    tauschen die Namen, und ``True`` sagt das. Die Stifte wandern mit: Das
+    gespiegelte Stück trägt sie an der gespiegelten Stelle.
+    """
+    normal = np.asarray(candidate.plane.normal, dtype=float)
+    across = np.asarray(mirror.normal, dtype=float)
+    dot = float(normal @ across)
+    turned = normal - 2.0 * dot * across
+    position = candidate.position - 2.0 * mirror.position * dot
+    flipped = bool(turned["xyz".index(candidate.axis)] < 0.0)
+    if flipped:
+        turned = -turned
+        position = -position
+    return (
+        replace(
+            candidate,
+            position=float(position),
+            normal=(
+                None
+                if candidate.normal is None
+                else (float(turned[0]), float(turned[1]), float(turned[2]))
+            ),
+            symmetric=False,
+            pins_on_b=candidate.pins_on_b != flipped,
+        ),
+        flipped,
+    )
+
+
+def _mirrored_step(
+    key: int,
+    reserve: Vec3,
+    mirrors: dict[int, tuple[int, SectionPlane]],
+    done: dict[int, tuple[Candidate, int, int, Vec3]],
+    protect: Sequence[Any],
+) -> tuple[Candidate, bool] | None:
+    """Der gespiegelte Schnitt des Gegenübers, wenn es schon geschnitten ist (T6).
+
+    Zwei Stücke beiderseits einer Symmetrieebene sind Spiegelbilder, also
+    passt der gespiegelte Schnitt auf das eine, wenn der ursprüngliche auf das
+    andere passte. Gesucht wird nicht noch einmal: Eine eigene Suche fände an
+    einem Spiegelbild dieselbe Lage nur bis auf Rundung und Gleichstand — und
+    dann wären die Stücke nicht mehr gleich. Eine Sperrfläche gilt trotzdem:
+    Sie ist nicht gespiegelt, sondern liegt, wo der Kunde sie gesetzt hat.
+
+    **Gespiegelt wird nur, wo beide Stücke dieselbe Aufgabe haben** — dieselbe
+    Stiftzugabe. Die Stifte einer Naht in der Symmetrieebene sitzen an einer
+    Hälfte, und die ist damit länger als ihr Spiegelbild. Am Rahmen von 500 mm
+    mit Stiften brauchte die stiftlose Hälfte, gespiegelt geschnitten, ein
+    Stück mehr als mit eigener Suche: neun statt acht.
+    """
+    partner = mirrors.get(key)
+    if partner is None:
+        return None
+    other, plane = partner
+    cut = done.get(other)
+    if cut is None:
+        return None
+    if any(abs(mine - theirs) > EPS_GEOM for mine, theirs in zip(reserve, cut[3], strict=True)):
+        return None
+    candidate, flipped = _reflected(cut[0], plane)
+    if cuts_through(candidate.plane, protect):
+        return None
+    return candidate, flipped
+
+
+def _pair_mirrors(
+    mirrors: dict[int, tuple[int, SectionPlane]],
+    done: dict[int, tuple[Candidate, int, int, Vec3]],
+    key: int,
+    candidate: Candidate,
+    children: tuple[int, int],
+    mirrored: bool,
+    flipped: bool,
+) -> None:
+    """Merkt sich, welche neuen Stücke Spiegelbilder voneinander sind.
+
+    Ein Schnitt in der Symmetrieebene macht seine zwei Hälften zu einem Paar.
+    Ein gespiegelter Schnitt macht die Hälften zu Paaren mit denen des
+    Gegenübers — über Kreuz, wenn die gespiegelte Ebene umgedreht wurde.
+    """
+    first, second = children
+    if candidate.symmetric:
+        mirrors[first] = (second, candidate.plane)
+        mirrors[second] = (first, candidate.plane)
+        return
+    if not mirrored:
+        return
+    partner = mirrors.get(key)
+    cut = done.get(partner[0]) if partner is not None else None
+    if partner is None or cut is None:
+        return
+    plane = partner[1]
+    _candidate, other_first, other_second, _reserve = cut
+    pairs = (
+        ((first, other_second), (second, other_first))
+        if flipped
+        else ((first, other_first), (second, other_second))
+    )
+    for one, other in pairs:
+        mirrors[one] = (other, plane)
+        mirrors[other] = (one, plane)
+
+
+@dataclass(frozen=True, slots=True)
+class _PlanCost:
+    """Was eine ganze Schnittfolge kostet (T7) — in der Reihenfolge, in der es zählt.
+
+    Zuerst, ob alles aufs Bett kommt; dann die Stückzahl; dann die
+    Klebestellen (je Naht ihre Konturen, eine Lücke kostet keine); zuletzt die
+    Summe der Nahtbewertungen. Die Stückzahl steht vor den Klebestellen, weil
+    ein weiteres Stück immer auch eine weitere Naht ist.
+    """
+
+    failed: int = 0
+    parts: int = 0
+    joints: int = 0
+    score: float = 0.0
+
+    def __add__(self, other: _PlanCost) -> _PlanCost:
+        return _PlanCost(
+            failed=self.failed + other.failed,
+            parts=self.parts + other.parts,
+            joints=self.joints + other.joints,
+            score=self.score + other.score,
+        )
+
+
+class _Budget:
+    """Die Zahl der Probeschnitte, die die Planung noch machen darf (:data:`PLAN_BUDGET`)."""
+
+    __slots__ = ("left",)
+
+    def __init__(self, cuts: int) -> None:
+        self.left = cuts
+
+    def take(self) -> bool:
+        """Einen Probeschnitt nehmen — ``False``, wenn keiner mehr übrig ist."""
+        if self.left <= 0:
+            return False
+        self.left -= 1
+        return True
 
 
 def _pin_allowance(
@@ -618,6 +985,8 @@ class PlaneSearch:
     keine Sperre eine Ebene getroffen hat. Die Zahl unterscheidet zwei
     Antworten, die sonst gleich aussehen: „nichts gefunden" und „nichts
     gefunden, weil alles gesperrt war" — die zweite hat einen anderen Ausweg."""
+    halves: tuple[MeshData, MeshData, list[Finding]] | None = None
+    """Der Schnitt an ``candidate``, wenn die Planung ihn schon gemacht hat (T7)."""
 
 
 def find_plane(
@@ -626,6 +995,7 @@ def find_plane(
     *,
     axis: Axis | None = None,
     allowance: float = 0.0,
+    reserve: float = 0.0,
     samples: int = SAMPLES,
     protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
@@ -644,6 +1014,7 @@ def find_plane(
         profile,
         axis=axis,
         allowance=allowance,
+        reserve=reserve,
         samples=samples,
         protect=protect,
         cancelled=cancelled,
@@ -660,6 +1031,7 @@ def search_plane(
     *,
     axis: Axis | None = None,
     allowance: float = 0.0,
+    reserve: float = 0.0,
     samples: int = SAMPLES,
     protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
@@ -677,15 +1049,17 @@ def search_plane(
     ``axis`` und ``allowance`` gibt die Suche vor, wenn sie den Stiftüberstand
     schon kennt (:func:`split_to_fit`): Die Achse ist dann mit der Reserve des
     Stücks gewählt, und ``allowance`` engt das Fenster so ein, dass die Hälften
-    mitsamt Stift aufs Bett passen. Ohne beides — ein Aufruf von außen —
-    entscheidet die Achse die nackte Ausdehnung und das Fenster bleibt weit.
+    mitsamt Stift aufs Bett passen. ``reserve`` ist, was das Stück entlang der
+    Achse schon von früheren Nähten trägt — beide Hälften erben es. Ohne all
+    das — ein Aufruf von außen — entscheidet die Achse die nackte Ausdehnung
+    und das Fenster bleibt weit.
 
     ``protect`` sind Punktwolken geschützter Flächen (§22.3). Ebenen, die
-    durch eine davon gehen, fallen aus der Auswahl — **auf beiden Wegen**,
-    dem abgetasteten und dem aus der konvexen Zerlegung. Bleibt danach
-    nichts, gibt es keine Naht: ``None``, wie bei einem Körper, den
-    Schneiden nicht rettet. Was der Nutzer daraus zu wählen bekommt,
-    entscheidet die Ebene darüber.
+    durch eine davon gehen, fallen aus der Auswahl — **auf allen Wegen**,
+    dem abgetasteten, dem schiefen, dem aus der konvexen Zerlegung und der
+    Spiegelebene. Bleibt danach nichts, gibt es keine Naht: ``None``, wie bei
+    einem Körper, den Schneiden nicht rettet. Was der Nutzer daraus zu wählen
+    bekommt, entscheidet die Ebene darüber.
 
     ``connector_count`` ist die Zahl der Verbinder im späteren Schritt. Ohne
     ausdrücklichen Wert gilt T4s Vorgabe; null bewertet absichtlich einen
@@ -703,8 +1077,62 @@ def search_plane(
 
     if progress is not None:
         progress(0.0, str(_("Die Trennebenen werden gesucht …")))
+    candidates, blocked, _window_used = _candidate_pool(
+        mesh,
+        profile,
+        axis,
+        allowance=allowance,
+        reserve=reserve,
+        samples=samples,
+        protect=protect,
+        cancelled=cancelled,
+        progress=progress,
+    )
+    if not candidates:
+        return PlaneSearch(None, blocked)
+    return PlaneSearch(
+        _best_by_support(
+            mesh,
+            profile,
+            candidates,
+            plane_candidates=support_planes,
+            orientation_candidates=support_orientations,
+            connector_count=connector_count,
+            cancelled=cancelled,
+            progress=progress,
+        ),
+        blocked,
+    )
 
-    window = _window(mesh, profile, axis, allowance)
+
+def _candidate_pool(
+    mesh: MeshData,
+    profile: Profile,
+    axis: Axis,
+    *,
+    allowance: float,
+    reserve: float,
+    samples: int,
+    protect: Sequence[Any],
+    cancelled: CancelToken | None,
+    progress: ProgressFn | None = None,
+) -> tuple[list[Candidate], int, tuple[float, float]]:
+    """Alle bewerteten Nahtlagen eines Stücks, bevor das Stützvolumen entscheidet.
+
+    Die abgetasteten Ebenen quer zur Achse, dazu die **Lücken** — Lagen, an
+    denen kein Dreieck die Ebene kreuzt, weil das Stück aus losen Teilen
+    besteht —, dazu die gemessene **Spiegelebene** (T6). Überzeugt keine davon,
+    kommen der Fächer schiefer Richtungen (T3) und die zweite Meinung der
+    konvexen Zerlegung dazu. Zurück kommen die Lagen, die Zahl der an einer
+    Sperre gescheiterten und das Fenster.
+
+    **Eine Lücke schlägt jede Naht.** Bis zum 23.09.2026 kannte die Suche nur
+    Ebenen mit Schnittfläche; ein Stück aus zwei losen Zinken, das nur zusammen
+    zu breit war, bekam „keine brauchbare Trennebene" — gemessen am Pflock aus
+    dem Korpus auf das Anderthalbfache gebracht, dessen oberes Drittel nach
+    dem ersten Schnitt aus zwei Armen bestand.
+    """
+    window = _window(mesh, profile, axis, allowance, reserve)
     positions = np.linspace(window[0], window[1], samples)
     candidates: list[Candidate] = []
     blocked = 0
@@ -715,23 +1143,24 @@ def search_plane(
             blocked += 1
             continue
         candidates.append(entry)
+    candidates.extend(
+        entry for entry in _gaps(mesh, axis, positions) if not cuts_through(entry.plane, protect)
+    )
+    mirror = _mirror_candidate(mesh, axis, window, protect=protect, cancelled=cancelled)
+    if mirror is not None:
+        # Die Mitte ist oft schon abgetastet; die Spiegelebene ersetzt sie,
+        # statt dieselbe Ebene zweimal ins Stützvolumen zu schicken.
+        candidates = [
+            entry
+            for entry in candidates
+            if entry.normal is not None or abs(entry.position - mirror.position) > EPS_GEOM
+        ]
+        candidates.append(mirror)
     if progress is not None:
         progress(0.25, str(_("Die Trennebenen werden gesucht …")))
     best = min(candidates, key=_candidate_order) if candidates else None
     if best is not None and best.score <= HINT_THRESHOLD:
-        return PlaneSearch(
-            _best_by_support(
-                mesh,
-                profile,
-                candidates,
-                plane_candidates=support_planes,
-                orientation_candidates=support_orientations,
-                connector_count=connector_count,
-                cancelled=cancelled,
-                progress=progress,
-            ),
-            blocked,
-        )
+        return candidates, blocked, window
 
     # **Schiefe Ebenen** (RM-080, T3): Wo keine achsparallele Ebene
     # überzeugt, fragt die Suche einen Fächer gekippter Richtungen — dieselbe
@@ -747,7 +1176,7 @@ def search_plane(
     # gewann eine um 15 Grad gekippte Naht mit 0,398 gegen die achsparallele,
     # beide mit einer Kontur.
     upright_best = min((entry.contours for entry in candidates), default=None)
-    for entry in _tilted(mesh, profile, axis, allowance, cancelled=cancelled):
+    for entry in _tilted(mesh, profile, axis, allowance, reserve=reserve, cancelled=cancelled):
         if upright_best is not None and entry.contours >= upright_best:
             continue
         if cuts_through(entry.plane, protect):
@@ -773,21 +1202,409 @@ def search_plane(
         blocked += 1
     if hinted is not None:
         candidates.append(hinted)
-    if not candidates:
-        return PlaneSearch(None, blocked)
-    return PlaneSearch(
-        _best_by_support(
-            mesh,
-            profile,
-            candidates,
-            plane_candidates=support_planes,
-            orientation_candidates=support_orientations,
-            connector_count=connector_count,
-            cancelled=cancelled,
-            progress=progress,
-        ),
-        blocked,
+    return candidates, blocked, window
+
+
+def _gaps(
+    mesh: MeshData, axis: Axis, positions: np.ndarray, normal: Vec3 | None = None
+) -> list[Candidate]:
+    """Die Lagen, an denen die Ebene zwischen losen Teilen hindurchgeht.
+
+    Eine Lage ist eine Lücke, wenn **keine Kante** die Ebene kreuzt und kein
+    Eckpunkt auf ihr liegt, und wenn auf beiden Seiten Material ist. Dann
+    zerfällt das Stück dort ohne Schnittfläche — keine Naht, kein Stift,
+    Konturzahl null. Bewertet wird nur die Mittenlage: Eine Lücke hat keinen
+    Querschnitt, dessen Änderung oder Einschnürung zählen könnte.
+
+    Gezählt wird über sortierte Kantenenden statt je Lage über alle Kanten:
+    Eine Kante kreuzt ``p``, wenn ihr unteres Ende unter und ihr oberes über
+    ``p`` liegt.
+    """
+    direction = np.asarray(normal if normal is not None else AXIS_NORMALS[axis], dtype=float)
+    heights = np.asarray(mesh.raw.vertices, dtype=float) @ direction
+    edges = np.asarray(mesh.raw.edges_unique, dtype=np.int64)
+    if not len(heights) or not len(edges):
+        return []
+    ends = heights[edges]
+    lower = np.sort(ends.min(axis=1))
+    upper = np.sort(ends.max(axis=1))
+    corners = np.sort(heights)
+    low, high = float(corners[0]), float(corners[-1])
+    centre = (low + high) / 2.0
+    span = (high - low) or 1.0
+    found: list[Candidate] = []
+    for raw_position in positions:
+        position = float(raw_position)
+        if not low + EPS_GEOM < position < high - EPS_GEOM:
+            continue
+        crossing = int(np.searchsorted(lower, position, side="left")) - int(
+            np.searchsorted(upper, position, side="right")
+        )
+        touching = int(np.searchsorted(corners, position + EPS_GEOM, side="right")) - int(
+            np.searchsorted(corners, position - EPS_GEOM, side="left")
+        )
+        if crossing > 0 or touching > 0:
+            continue
+        found.append(
+            Candidate(
+                axis=axis,
+                position=position,
+                area=0.0,
+                contours=0,
+                score=BALANCE_WEIGHT * abs(position - centre) / (span / 2.0),
+                normal=normal,
+            )
+        )
+    return found
+
+
+#: Die zuletzt gemessenen Spiegelebenen, je Netz und Achse (T6).
+#:
+#: Ein Stück wird in einem Schritt zweimal gefragt — von der Kandidatenliste
+#: und von den Alternativen der Planung —, und an einem spiegelgleichen Netz
+#: mit 95 000 Dreiecken kostet die Messung zwei Sekunden (``kumiko``-Schale aus
+#: dem Korpus). Gemerkt wird unter der Adresse des Netzes mit einem schwachen
+#: Verweis daneben, der sagt, ob dort noch dasselbe Netz liegt (``hash`` eines
+#: trimesh-Netzes rechnet je Aufruf). Wenige Einträge genügen: gefragt wird
+#: das Stück, das gerade geschnitten wird.
+_MIRRORS: OrderedDict[tuple[int, str], tuple[weakref.ref[Any], Any]] = OrderedDict()
+_MIRRORS_LIMIT: Final = 16
+_MIRRORS_LOCK = threading.Lock()
+
+
+def _measured_mirror(mesh: MeshData, axis: Axis, cancelled: CancelToken | None) -> Any:
+    """:func:`app.core.geom.symmetry.mirror_plane` quer zur Achse, einmal je Netz gemessen."""
+    from app.core.geom.symmetry import mirror_plane
+
+    raw = mesh.raw
+    key = (id(raw), axis)
+    with _MIRRORS_LOCK:
+        known = _MIRRORS.get(key)
+        if known is not None and known[0]() is raw:
+            return known[1]
+    found = mirror_plane(mesh, AXIS_NORMALS[axis], cancelled=cancelled)
+    with _MIRRORS_LOCK:
+        _MIRRORS[key] = (weakref.ref(raw), found)
+        while len(_MIRRORS) > _MIRRORS_LIMIT:
+            _MIRRORS.popitem(last=False)
+    return found
+
+
+def _mirror_candidate(
+    mesh: MeshData,
+    axis: Axis,
+    window: tuple[float, float],
+    *,
+    protect: Sequence[Any],
+    cancelled: CancelToken | None,
+    inside_window: bool = True,
+) -> Candidate | None:
+    """Die Spiegelebene quer zur Achse als Nahtlage — wenn es sie gibt (T6).
+
+    Gemessen, nicht angenommen (:func:`app.core.geom.symmetry.mirror_plane`).
+    Sie wird bewertet wie jede andere Lage und nur als ``symmetric`` markiert;
+    ob sie gewinnt, entscheidet :func:`_best_by_support` nach Konturzahl,
+    Einschnürung und Stützvolumen. Eine Spiegelebene durch eine Lücke ist
+    ebenfalls eine — zwei gleiche lose Teile nebeneinander.
+    """
+    found = _measured_mirror(mesh, axis, cancelled)
+    if found is None:
+        return None
+    position = found.position
+    if inside_window and not window[0] - EPS_GEOM <= position <= window[1] + EPS_GEOM:
+        return None
+    at = np.asarray([position])
+    judged = [
+        entry for entry in _judge(mesh, axis, at, cancelled=cancelled) if entry.area > EPS_GEOM
+    ]
+    entry = judged[0] if judged else next(iter(_gaps(mesh, axis, at)), None)
+    if entry is None or cuts_through(entry.plane, protect):
+        return None
+    return replace(entry, symmetric=True)
+
+
+def _plan_step(
+    part: MeshData,
+    profile: Profile,
+    *,
+    axis: Axis,
+    allowance: float,
+    reserve: Vec3,
+    samples: int,
+    protect: Sequence[Any],
+    room: int,
+    budget: _Budget,
+    cancelled: CancelToken | None,
+    progress: ProgressFn | None,
+) -> PlaneSearch:
+    """Der nächste Schnitt eines Stücks, das mehr als einen braucht — als Teil der Folge (T7).
+
+    Die Nahtsuche allein wählt die schönste erste Naht. Welche Folge danach
+    kommt, sieht sie nicht: Am Bilderrahmen von 500 mm schnitt sie durch eine
+    Ecke, weil dort eine Kontur weniger lag als in der Mitte, und brauchte
+    danach sieben Stücke statt vier. Hier werden mehrere Nahtlagen
+    gegeneinander geplant (:func:`_alternatives`): Jede wird geschnitten, der
+    Rest mit einer billigen Suche zu Ende geteilt (:func:`_rollout`), und die
+    Lage gewinnt, deren ganze Folge am wenigsten kostet (:class:`_PlanCost`).
+    Bei gleichen Kosten gewinnt die Spiegelebene (T6), sonst die Naht, die
+    die Suche allein genommen hätte.
+
+    Das Stützvolumen fragt dieser Schritt nicht: Solange eine Hälfte nicht aufs
+    Bett passt, hat sie keine Lage und keinen Stützbedarf. Es entscheidet den
+    letzten Schnitt jedes Stücks, dort wie bisher.
+
+    Begrenzt ist das über :data:`PLAN_BUDGET` Probeschnitte je Teilung, nicht
+    über die Uhr (§11.3); ist das Budget verbraucht, gilt die Naht, die die
+    Suche allein genommen hätte. ``room`` ist, wie viele Stücke dieses Stück
+    noch werden darf, ohne die Obergrenze zu reißen.
+    """
+    held = reserve["xyz".index(axis)]
+    if progress is not None:
+        progress(0.0, str(_("Die Schnittfolge wird geplant …")))
+    candidates, blocked, window = _candidate_pool(
+        part,
+        profile,
+        axis,
+        allowance=allowance,
+        reserve=held,
+        samples=samples,
+        protect=protect,
+        cancelled=cancelled,
     )
+    alternatives = _alternatives(
+        part,
+        profile,
+        candidates,
+        axis=axis,
+        window=window,
+        allowance=allowance,
+        reserve=reserve,
+        protect=protect,
+        cancelled=cancelled,
+    )
+    if not alternatives:
+        return PlaneSearch(None, blocked)
+
+    best: tuple[tuple[Any, ...], Candidate, tuple[MeshData, MeshData, list[Finding]]] | None = None
+    for rank, candidate in enumerate(alternatives):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if progress is not None:
+            progress(rank / len(alternatives), str(_("Die Schnittfolge wird geplant …")))
+        if not budget.take():
+            break
+        first, second, findings = _cut_in_two(part, candidate)
+        if first is None or second is None:
+            continue
+        extra = 0.0 if candidate.gap else allowance
+        cost = _PlanCost(joints=candidate.contours, score=candidate.score)
+        first_reserve, second_reserve = _child_reserves(reserve, candidate, extra)
+        head = _rollout(
+            first,
+            first_reserve,
+            profile,
+            allowance=allowance,
+            room=room - 1,
+            budget=budget,
+            protect=protect,
+            cancelled=cancelled,
+        )
+        tail = _rollout(
+            second,
+            second_reserve,
+            profile,
+            allowance=allowance,
+            room=room - head.parts,
+            budget=budget,
+            protect=protect,
+            cancelled=cancelled,
+        )
+        cost = cost + head + tail
+        if cost.parts > room:
+            cost = replace(cost, failed=cost.failed + 1)
+        order = (
+            cost.failed,
+            cost.parts,
+            cost.joints,
+            0 if candidate.symmetric and candidate.notch <= 0.0 else 1,
+            round(cost.score, 9),
+            rank,
+        )
+        if best is None or order < best[0]:
+            best = (order, candidate, (first, second, findings))
+    if best is None:
+        # Kein Probeschnitt mehr übrig, bevor der erste lief: die Naht, die
+        # die Suche allein genommen hätte.
+        return PlaneSearch(alternatives[0], blocked)
+    return PlaneSearch(best[1], blocked, halves=best[2])
+
+
+def _alternatives(
+    part: MeshData,
+    profile: Profile,
+    candidates: Sequence[Candidate],
+    *,
+    axis: Axis,
+    window: tuple[float, float],
+    allowance: float,
+    reserve: Vec3,
+    protect: Sequence[Any],
+    cancelled: CancelToken | None,
+) -> list[Candidate]:
+    """Die Nahtlagen, die :func:`_plan_step` gegeneinander plant — die erste ist die der Suche.
+
+    * Die besten :data:`PLAN_BRANCHES` Lagen der Abtastung, nach Konturzahl
+      und Bewertung, aber **verschieden**: je mindestens ein Drittel des
+      Fensters auseinander. Drei Nachbarn einen Millimeter voneinander planten
+      dreimal dieselbe Folge.
+    * Die **Spiegelebene** (T6), auch außerhalb des Fensters: Ein Teil, doppelt
+      so lang wie das Bett, lässt sich in der Mitte teilen und jede Hälfte
+      noch einmal — gleiche Stücke, wo die Säge vom Rand her ungleiche macht.
+    * Die **gleichmäßige Teilung**: Braucht die Achse ``n`` Stücke, die Lage
+      bei einem ``n``-tel. Am Rand beginnend nimmt die Suche das größte
+      Stück, das passt, und lässt für den Rest manchmal eins zu wenig Platz.
+    * Je **weiterer übergroßer Achse** ihre beste Lage — welche Richtung
+      zuerst geschnitten wird, gehört zur Folge.
+    """
+    ordered = sorted(candidates, key=lambda entry: (entry.contours, _candidate_order(entry)))
+    spacing = (window[1] - window[0]) / PLAN_BRANCHES
+    chosen: list[Candidate] = []
+    for entry in ordered:
+        if len(chosen) >= PLAN_BRANCHES:
+            break
+        if any(_same_place(entry, other, spacing) for other in chosen):
+            continue
+        chosen.append(entry)
+
+    extras: list[Candidate] = []
+    mirror = _mirror_candidate(
+        part, axis, window, protect=protect, cancelled=cancelled, inside_window=False
+    )
+    if mirror is not None:
+        extras.append(mirror)
+    index = "xyz".index(axis)
+    length = float(part.bounds.size[index])
+    usable = _room(part, profile, axis) - allowance - reserve[index]
+    if usable > EPS_GEOM:
+        pieces = int(np.ceil(length / usable - EPS_GEOM))
+        if pieces >= 3:
+            at = np.asarray([float(part.bounds.minimum[index]) + length / pieces])
+            extras.extend(
+                entry
+                for entry in _judge(part, axis, at, cancelled=cancelled)
+                if entry.area > EPS_GEOM and not cuts_through(entry.plane, protect)
+            )
+    over = oversize(part, profile, allowance=reserve)
+    for other_index, other in enumerate(("x", "y", "z")):
+        if other == axis or over[other_index] <= EPS_GEOM:
+            continue
+        side = cast(Axis, other)
+        other_window = _window(part, profile, side, allowance, reserve[other_index])
+        positions = np.linspace(other_window[0], other_window[1], PLAN_SAMPLES)
+        found = [
+            entry
+            for entry in (
+                *_judge(part, side, positions, cancelled=cancelled),
+                *_gaps(part, side, positions),
+            )
+            if (entry.area > EPS_GEOM or entry.gap) and not cuts_through(entry.plane, protect)
+        ]
+        if found:
+            extras.append(min(found, key=lambda entry: (entry.contours, _candidate_order(entry))))
+
+    for entry in extras:
+        twin = next(
+            (other for other in chosen if _same_place(entry, other, EPS_GEOM)),
+            None,
+        )
+        if twin is None:
+            chosen.append(entry)
+        elif entry.symmetric and not twin.symmetric:
+            chosen[chosen.index(twin)] = entry
+    return chosen
+
+
+def _same_place(first: Candidate, second: Candidate, spacing: float) -> bool:
+    """Ob zwei Nahtlagen dieselbe Ebene bis auf ``spacing`` sind."""
+    return (
+        first.axis == second.axis
+        and first.normal == second.normal
+        and abs(first.position - second.position) <= spacing
+    )
+
+
+def _rollout(
+    piece: MeshData,
+    reserve: Vec3,
+    profile: Profile,
+    *,
+    allowance: float,
+    room: int,
+    budget: _Budget,
+    protect: Sequence[Any],
+    cancelled: CancelToken | None,
+) -> _PlanCost:
+    """Teilt ein Stück billig zu Ende und sagt, was die Folge kostet (T7).
+
+    Billig heißt: halbe Abtastung (:data:`PLAN_SAMPLES`), nur achsparallel und
+    Lücken, kein Fächer, keine konvexe Zerlegung, kein Stützvolumen — und je
+    Stück die Naht mit den wenigsten Konturen, dann der besten Bewertung. Die
+    Probe soll zählen, nicht entscheiden; entschieden wird jede spätere Naht in
+    ihrem eigenen Schritt. Die Stiftzugabe ist die des planenden Schritts, und
+    die Stifte sitzen wie ohne Stützvolumen an Hälfte A.
+
+    Was nicht passt, weil keine Lage, kein Budget oder kein Platz unter der
+    Obergrenze übrig ist, zählt als ``failed`` — ein Plan, der nicht aufgeht,
+    verliert gegen jeden, der aufgeht.
+    """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if fits(piece, profile, allowance=reserve):
+        return _PlanCost(parts=1)
+    axis = _axis_to_cut(piece, profile, reserve)
+    if axis is None or room <= 1:
+        return _PlanCost(failed=1, parts=1)
+    index = "xyz".index(axis)
+    window = _window(piece, profile, axis, allowance, reserve[index])
+    positions = np.linspace(window[0], window[1], PLAN_SAMPLES)
+    found = [
+        entry
+        for entry in (
+            *_judge(piece, axis, positions, cancelled=cancelled),
+            *_gaps(piece, axis, positions),
+        )
+        if (entry.area > EPS_GEOM or entry.gap) and not cuts_through(entry.plane, protect)
+    ]
+    if not found or not budget.take():
+        return _PlanCost(failed=1, parts=1)
+    choice = min(found, key=lambda entry: (entry.contours, _candidate_order(entry)))
+    first, second, _findings = _cut_in_two(piece, choice)
+    if first is None or second is None:
+        return _PlanCost(failed=1, parts=1)
+    first_reserve, second_reserve = _child_reserves(
+        reserve, choice, 0.0 if choice.gap else allowance
+    )
+    head = _rollout(
+        first,
+        first_reserve,
+        profile,
+        allowance=allowance,
+        room=room - 1,
+        budget=budget,
+        protect=protect,
+        cancelled=cancelled,
+    )
+    tail = _rollout(
+        second,
+        second_reserve,
+        profile,
+        allowance=allowance,
+        room=room - head.parts,
+        budget=budget,
+        protect=protect,
+        cancelled=cancelled,
+    )
+    return _PlanCost(joints=choice.contours, score=choice.score) + head + tail
 
 
 def _candidate_order(
@@ -829,6 +1646,7 @@ def _tilted(
     axis: Axis,
     allowance: float,
     *,
+    reserve: float = 0.0,
     cancelled: CancelToken | None = None,
 ) -> list[Candidate]:
     """Die bewerteten Lagen des Normalenfächers, die beide Hälften aufs Bett bringen.
@@ -853,7 +1671,7 @@ def _tilted(
         low, high = float(heights.min()), float(heights.max())
         inset = (high - low) * 0.05
         positions = np.linspace(low + inset, high - inset, TILT_SAMPLES)
-        room = limit - allowance * abs(normal[index])
+        room = limit - allowance * abs(normal[index]) - reserve
         usable = [
             float(position)
             for position in positions
@@ -933,20 +1751,44 @@ def _best_by_support(
     # Nähte verschiedener Konturzahl in derselben Liste: Am Z aus zwei Stäben
     # schlug eine schiefe Naht durch zwei Stäbe die durch die Strebe allein.
     fewest = min(candidate.contours for candidate in candidates)
-    good = [candidate for candidate in candidates if candidate.contours == fewest]
-    shortlist = sorted(good, key=_candidate_order)[: max(1, plane_candidates)]
+    good = sorted(
+        (candidate for candidate in candidates if candidate.contours == fewest),
+        key=_candidate_order,
+    )
+    # **Die Spiegelebene steht vorn, wenn sie nichts verschlechtert** (T6).
+    # Die Konturzahl hält schon die Zeile darüber: Nur eine Spiegelebene mit
+    # so wenigen Konturen wie die beste Naht ist hier. Die Einschnürung hält
+    # diese Zeile: Eine Hantel ist spiegelgleich, und ihre Mitte ist genau die
+    # dünnste Stelle, die T1 meidet. Das Stützvolumen hält die Schleife
+    # darunter — eine andere Naht gewinnt nur mit derselben
+    # Fünf-Prozent-Grenze, mit der jede Naht die erste schlägt.
+    #
+    # **Die Querschnittsänderung zählt an der Spiegelebene nicht**, und das mit
+    # Grund: Der Term misst, ob die zwei Schnittflächen verschieden
+    # ausfallen. In der Spiegelebene sind sie gleich — dieselbe Fläche von
+    # beiden Seiten —, auch wenn ein halber Millimeter daneben eine Rippe
+    # oder eine Zierrille beginnt.
+    mirror = next(
+        (candidate for candidate in good if candidate.symmetric and candidate.notch <= 0.0), None
+    )
+    if mirror is not None:
+        good = [mirror, *(candidate for candidate in good if candidate is not mirror)]
+    shortlist = good[: max(1, plane_candidates)]
 
     def judged(candidate: Candidate) -> tuple[Candidate, float]:
         """Die bessere Zuordnung der Stifte an dieser Naht, und ihr Stützvolumen."""
+        # Eine Lücke hat keine Fläche für einen Verbinder — gemessen werden
+        # die nackten Stücke, wie der Schritt sie dann auch baut.
+        count = 0 if candidate.gap else connector_count
         on_a = _support_after_cut(
             mesh,
             candidate,
             profile,
             orientation_candidates=orientation_candidates,
             cancelled=cancelled,
-            connector_count=connector_count,
+            connector_count=count,
         )
-        if connector_count <= 0:
+        if count <= 0:
             return candidate, on_a
         on_b = _support_after_cut(
             mesh,
@@ -954,7 +1796,7 @@ def _best_by_support(
             profile,
             orientation_candidates=orientation_candidates,
             cancelled=cancelled,
-            connector_count=connector_count,
+            connector_count=count,
             pins_on_b=True,
         )
         if np.isfinite(on_b) and (
@@ -1084,7 +1926,7 @@ def _axis_to_cut(mesh: MeshData, profile: Profile, reserve: Vec3 = (0.0, 0.0, 0.
 
 
 def _window(
-    mesh: MeshData, profile: Profile, axis: Axis, allowance: float = 0.0
+    mesh: MeshData, profile: Profile, axis: Axis, allowance: float = 0.0, reserve: float = 0.0
 ) -> tuple[float, float]:
     """Der Bereich der Schnittpositionen, die sich zu probieren lohnen.
 
@@ -1096,10 +1938,20 @@ def _window(
 
     ``allowance`` verkürzt die nutzbare Länge um den Stiftüberstand: Die Hälften
     müssen mitsamt Stift aufs Bett passen, also darf jede höchstens so lang
-    werden wie die Platte weniger dieser Zugabe (§25).
+    werden wie die Platte weniger dieser Zugabe (§25). ``reserve`` ist, was das
+    Stück entlang dieser Achse schon von früheren Nähten trägt; beide Hälften
+    erben es, also verkürzt es die Länge genauso.
+
+    **Die Länge ist die, die mit der Breite des Stücks wirklich aufs Bett
+    geht** (:func:`_room`), nicht die des Hüllrechtecks: Eine Sperrzone in der
+    Ecke — beim Centauri Carbon 2 zehn mal zwanzig Millimeter — nimmt einem
+    breiten Stück Länge weg. Mit dem Hüllrechteck gerechnet kamen Hälften von
+    245 mm heraus, die dort nicht passen, und jede bekam einen zweiten
+    Schnitt nahe am Rand: Splitter von 26 bis 35 mm am Keilschloss aus dem
+    Korpus, anderthalbfach.
     """
     index = "xyz".index(axis)
-    limit = _limits(profile)[index] - allowance
+    limit = _room(mesh, profile, axis) - allowance - reserve
     low = float(mesh.bounds.minimum[index])
     high = float(mesh.bounds.maximum[index])
 
@@ -1110,6 +1962,82 @@ def _window(
         inset = (high - low) * 0.05
         return (max(earliest, low + inset), min(latest, high - inset))
     return (low + limit * FIRST_SLICE_SHARE, low + limit)
+
+
+def _room(mesh: MeshData, profile: Profile, axis: Axis) -> float:
+    """Wie lang ein Stück entlang ``axis`` höchstens sein darf, damit es mit seiner
+    Breite aufs Bett passt.
+
+    Ohne Sperrzonen und ohne eigene Kontur ist das die Bettlänge. Sonst wird
+    die Länge gesucht, bei der ein Quader mit der Breite des Stücks gerade noch
+    eine Lage findet — mit :func:`app.core.build_area.placement_offset`, also
+    mit genau der Prüfung, die danach über „passt" entscheidet. Ist das Stück
+    selbst quer zu breit, ist über seine spätere Breite nichts bekannt, und es
+    gilt die Bettlänge.
+    """
+    index = "xyz".index(axis)
+    limits = _limits(profile)
+    if index == 2:
+        return limits[2]
+    other = 1 - index
+    across = float(mesh.bounds.size[other])
+    if across > limits[other] + EPS_GEOM:
+        return limits[index]
+    return _room_across(profile.printer, index, round(across, 6))
+
+
+@lru_cache(maxsize=256)
+def _room_across(printer: PrinterProfile, index: int, across: float) -> float:
+    """Die längste Strecke entlang der Achse ``index`` bei dieser Breite — gemerkt je Drucker.
+
+    Halbiert wird :data:`ROOM_STEPS`-mal zwischen null und der Bettlänge; die
+    Antwort liegt damit unter der Anzeigegenauigkeit neben der wahren. Ein
+    Rechteck ohne Sperrzone antwortet sofort mit der Bettlänge.
+    """
+    area = printable_area(printer, margin=MARGIN)
+    if area.is_empty:
+        return 0.0
+    left, front, right, back = area.bounds
+    full = float((right - left, back - front)[index])
+    if area.area >= (right - left) * (back - front) - EPS_GEOM:
+        return full
+
+    def lies(length: float) -> bool:
+        extent = [0.0, 0.0, 1.0]
+        extent[index] = max(length, EPS_GEOM)
+        extent[1 - index] = max(across, EPS_GEOM)
+        probe = MeshData.of(trimesh.creation.box(extents=extent))
+        return placement_offset(probe, printer, margin=MARGIN) is not None
+
+    if lies(full):
+        return full
+    shortest, longest = 0.0, full
+    for _step in range(ROOM_STEPS):
+        middle = (shortest + longest) / 2.0
+        if lies(middle):
+            shortest = middle
+        else:
+            longest = middle
+    return shortest
+
+
+def _one_cut_enough(
+    part: MeshData, profile: Profile, reserve: Vec3, axis: Axis, allowance: float
+) -> bool:
+    """Ob ein einziger Schnitt quer zu ``axis`` dieses Stück aufs Bett bringen kann.
+
+    Dann entscheidet die Naht selbst, mit voller Abtastung und Stützvolumen
+    (:func:`search_plane`). Sonst braucht das Stück eine Folge, und die wird
+    geplant (:func:`_plan_step`): wenn es auch quer zur Schnittachse übersteht,
+    oder wenn es mehr als doppelt so lang ist wie das, was mit Stift und
+    geerbter Reserve aufs Bett geht.
+    """
+    index = "xyz".index(axis)
+    over = oversize(part, profile, allowance=reserve)
+    if any(over[other] > EPS_GEOM for other in range(3) if other != index):
+        return False
+    length = _room(part, profile, axis) - allowance - reserve[index]
+    return float(part.bounds.size[index]) <= 2.0 * length + EPS_GEOM
 
 
 def _sections_in_blocks(
@@ -1269,6 +2197,7 @@ def _judge(
         neighbours = [float(entry.area) for entry in (under, over) if entry is not None]
         change = max((abs(area - other) for other in neighbours), default=0.0) / max(area, EPS_GEOM)
         balance = abs(float(position) - centre) / (span / 2.0)
+        notch = depth_at(float(position))
         judged.append(
             Candidate(
                 axis=axis,
@@ -1279,9 +2208,11 @@ def _judge(
                     CONTOUR_WEIGHT * (contours - 1)
                     + PRISM_WEIGHT * change
                     + BALANCE_WEIGHT * balance
-                    + NOTCH_WEIGHT * depth_at(float(position))
+                    + NOTCH_WEIGHT * notch
                 ),
                 normal=normal,
+                change=change,
+                notch=notch,
             )
         )
     return judged

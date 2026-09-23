@@ -628,6 +628,69 @@ def hollow_and_split() -> Project:
     return project
 
 
+def split_oversized() -> Project:
+    """Zu lang für jedes übliche Druckbett: *Automatisch teilen* mit Passstiften (RM-080, T9).
+
+    Eine Wandleiste von sechzig Zentimetern mit drei Schraublöchern — ein
+    eigenes, parametrisch gebautes Teil, kein fremdes Modell. Geteilt wird sie
+    so, wie der Kunde es tut: ausgewertet, dann über dieselben Kernfunktionen,
+    die *Automatisch teilen …* in der Oberfläche benutzt (``plan_split`` und
+    ``apply_planned``), mit dem Vorgabeprofil. Die Suche plant die Folge als
+    Ganzes und kommt mit drei Stücken aus — weniger geht auf einem 220er Bett
+    nicht, und der Prüfbericht sagt das. Danach liegen die Stücke nebeneinander
+    auf dem Bett, bereit für den Slicer.
+
+    Im Verlauf stehen danach gewöhnliche Schritte *Teilen* mit ihren Zahlen:
+    Wer eine Naht verschieben will, ändert ihre Position.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge import print_settings
+    from app.core.split import apply_planned, bed_margin, plan_split
+
+    project = new_project()
+    history = History(project.document)
+    history.apply(
+        _("Leiste"),
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 600.0, "depth": 40.0, "height": 14.0, "name": "Wandleiste"},
+            )
+        ],
+    )
+    history.apply(
+        _("Schraubenlöcher"),
+        [
+            OperationDraft(
+                op="insert_screw_hole",
+                inputs=("obj_1",),
+                params={"size": "M4", "depth": 14.0, "x": x, "z": 14.0},
+            )
+            for x in (-200.0, 0.0, 200.0)
+        ],
+    )
+    profile = profiles.make_profile()
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    entry = result.scene.objects["obj_1"]
+    # Derselbe Rand wie in der Oberfläche: der Abstand, mit dem danach
+    # angeordnet wird — sonst passt ein Stück zum Teilen und liegt nach dem
+    # Anordnen über dem Bettrand.
+    margin = bed_margin(print_settings.resolve(profile))
+    plan = plan_split(
+        as_mesh_data(entry.mesh), "obj_1", profile, features=entry.features, margin=margin
+    )
+    applied = apply_planned(project.document, plan, "obj_1", profile)
+    History(project.document).apply(
+        _("Anordnen"),
+        [
+            OperationDraft(
+                op="arrange_bed", inputs=tuple(applied.object_ids), params={"spacing": margin}
+            )
+        ],
+    )
+    return project
+
+
 def box_with_lid() -> Project:
     """Eine Dose mit Deckel — das Stück, an dem alles zusammenkommt.
 
@@ -874,7 +937,7 @@ def fit_after_material_change() -> Project:
 #:
 #: **Warum eine Liste und nicht „jeder gesetzte Name".** Ein Beispiel ist eine
 #: Datei wie jede andere, und ein Name darin könnte auch von einem Nutzer
-#: stammen — dann wäre er wörtlich gemeint (§4.1). Diese dreizehn kommen aus
+#: stammen — dann wäre er wörtlich gemeint (§4.1). Diese vierzehn kommen aus
 #: dem Code hier daneben; sie sind Message-IDs, weil sie es sind, und nicht,
 #: weil sie an einer bestimmten Stelle stehen.
 #:
@@ -896,9 +959,10 @@ EXAMPLE_NAMES: frozenset[TranslatableText] = frozenset(
         _("Wandstärke"),
         _("Weiß"),
         _("Überhang"),
+        _("Wandleiste"),
     }
 )
-"""Die dreizehn Namen als Übersetzungsmarker, nicht als Zeichenketten.
+"""Die vierzehn Namen als Übersetzungsmarker, nicht als Zeichenketten.
 
 **Damit findet der Einsammler sie.** ``app/i18n/extract.py`` sucht nach
 ``_()``-Aufrufen und liest diese Datei ausdrücklich mit (``EXTRA_SOURCES``);
@@ -926,6 +990,7 @@ BUILDERS: dict[str, Callable[[], Project]] = {
     "skizze-mit-massen": sketched_plate,
     "drucker-kalibrieren": calibration_plate,
     "aushoehlen-und-teilen": hollow_and_split,
+    "zu-gross-automatisch-teilen": split_oversized,
     "dose-mit-deckel": box_with_lid,
     "passung-nach-materialwechsel": fit_after_material_change,
 }
