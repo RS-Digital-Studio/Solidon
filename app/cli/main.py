@@ -24,6 +24,7 @@ import difflib
 import sys
 import time
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,7 @@ from app.branding import (
     APP_NAME,
     APP_VERSION,
     DISTRIBUTION_NAME,
+    PLANNED_SALE_START,
     PROJECT_SUFFIX,
     SUPPORT_ADDRESS,
     WEBSITE_URL,
@@ -717,20 +719,36 @@ def _demo_is_over() -> bool:
     if not state.over:
         return False
     last_day = state.deadline.strftime("%d.%m.%Y") if state.deadline else ""
-    print(
-        tr("Diese Demo von {app} lief bis zum {date} und lässt sich nicht mehr starten.").format(
-            app=APP_NAME, date=last_day
-        ),
-        file=sys.stderr,
-    )
-    print(tr("Die aktuelle Version gibt es auf {url}.").format(url=WEBSITE_URL), file=sys.stderr)
-    print(
-        tr(
-            "Ihre Projektdateien bleiben lesbar — eine Projektdatei ist ein "
-            "ZIP-Archiv mit JSON darin."
-        ),
-        file=sys.stderr,
-    )
+    # Dieselben Sätze wie im Fenster (``dialogs.expired_demo_text``) und
+    # dieselbe Wahl: vor dem geplanten Verkaufsstart das Datum, danach der
+    # Verweis auf die Website — die Verfügbarkeit behauptet keiner von beiden
+    # (RM-061). Hier stand „Die aktuelle Version gibt es auf …", und am
+    # 31.10. gibt es dort keine.
+    if datetime.now(UTC) < PLANNED_SALE_START:
+        lines = (
+            tr("Diese Demo war bis einschließlich {date} nutzbar.").format(date=last_day),
+            tr(
+                "{app} 1.0 ist für den {start} um 10:00 Uhr deutscher Zeit geplant; "
+                "den Tag davor bereiten wir die Verkaufsversion vor."
+            ).format(app=APP_NAME, start=PLANNED_SALE_START.strftime("%d.%m.%Y")),
+            tr(
+                "Ihre gespeicherten Projekte bleiben erhalten. Auf {url} finden Sie den "
+                "aktuellen Stand und danach die Installation von 1.0."
+            ).format(url=WEBSITE_URL),
+        )
+    else:
+        lines = (
+            tr("Diese Demo ist beendet. Ob {app} 1.0 schon verfügbar ist, steht auf {url}.").format(
+                app=APP_NAME, url=WEBSITE_URL
+            ),
+            tr(
+                "Installieren Sie dort die aktuelle Version. Zum Bearbeiten und "
+                "Exportieren brauchen Sie eine Lizenz."
+            ),
+            tr("Ihre gespeicherten Projekte bleiben erhalten."),
+        )
+    for line in lines:
+        print(line, file=sys.stderr)
     return True
 
 

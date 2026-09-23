@@ -1182,3 +1182,42 @@ def test_cancel_button_stops_the_actual_slicer_profile_walk(inventory, tmp_path,
     assert inventory.wait_for_workers(0)
     assert "abgebrochen" in inventory.message.text()
     assert filaments.catalogue() == ()
+
+
+def test_taking_over_from_the_slicer_says_what_is_missing(qt_app: QApplication) -> None:
+    """*Markierte Spulen übernehmen* stand grau und sagte nicht, worauf es wartet."""
+    entries = (filaments.CatalogueFilament("PETG Weiß", "#ffffff", "PETG"),)
+    dialog = SlicerSpoolDialog(entries)
+    try:
+        button = dialog._ok_button
+        assert not button.isEnabled()
+        said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        assert all(text.strip() for text in said), said
+
+        item = dialog.list.item(0)
+        assert item is not None
+        item.setCheckState(Qt.CheckState.Checked)
+        assert button.isEnabled()
+        assert not button.toolTip()
+    finally:
+        dialog.deleteLater()
+
+
+def test_the_low_stock_mark_is_named_as_it_reads(inventory: InventoryView) -> None:
+    """„als Wenig Filament kennzeichnen" las sich als Satzbruch; die Marke
+    steht jetzt in Anführungszeichen, wie sie an der Spule steht."""
+    assert "„Wenig Filament“" in inventory.low_stock_threshold.toolTip()
+
+
+def test_the_resting_reverse_button_says_what_it_waits_for(inventory: InventoryView) -> None:
+    """*Gewählten Vorgang zurücknehmen* ruht, bis ein Vorgang gewählt ist —
+    und sagte dabei nur, was er täte (Regel 18: der Grund des Ruhens)."""
+    entry = filaments.save(filaments.CatalogueFilament("PETG Weiß", "#ffffff", "PETG"))
+    inventory.refresh()
+    inventory.show_spool(entry.identifier)
+
+    button = inventory.reverse_button
+    assert not button.isEnabled()
+    said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+    assert said[0] == said[1] == said[2]
+    assert "Noch keine Buchungen" in said[0] or "wählen" in said[0], said[0]

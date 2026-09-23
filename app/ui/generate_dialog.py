@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -306,11 +307,22 @@ class GenerateDialog(QDialog):
         self.picture = QPushButton(tr("Bild wählen …"), self)
         self.picture.clicked.connect(self._choose_image)
         self.picture_label = QLabel(tr("Kein Bild gewählt"), self)
+        # **Der Weg zurück zum Text.** Mit Bild fährt der Dialog den Bildweg,
+        # und die Beschreibung ging dabei still verloren; zurück führte nur ein
+        # neuer Dialog. Sichtbar nur, solange ein Bild gilt.
+        self.drop_picture = QPushButton(tr("Bild entfernen"), self)
+        self.drop_picture.setVisible(False)
+        self.drop_picture.clicked.connect(self.clear_image)
+        picture_row = QWidget(self)
+        picture_line = QHBoxLayout(picture_row)
+        picture_line.setContentsMargins(0, 0, 0, 0)
+        picture_line.addWidget(self.picture_label, 1)
+        picture_line.addWidget(self.drop_picture)
 
         form = QFormLayout()
         form.addRow(tr("Beschreibung"), self.prompt)
         form.addRow(tr("Bild"), self.picture)
-        form.addRow("", self.picture_label)
+        form.addRow("", picture_row)
 
         # §2.4: vorn die zwei Werte, die man ändert; hinten alles andere. Der
         # Startwert stand an dritter Stelle über allem, was jemand hier tun
@@ -692,9 +704,52 @@ class GenerateDialog(QDialog):
         Der Weg für ein Bild, das jemand ins Chatfenster gezogen hat: es ist
         schon gewählt, also wäre ein Dialog, der noch einmal danach fragt, ein
         Schritt zu viel (Konzept P15, E8).
+
+        **Ein unlesbares Bild wird gesagt, nicht geworfen** (Regel 17): Eine
+        inzwischen fehlende oder gesperrte Datei lief als ``OSError`` aus dem
+        Slot, beim Ablegen aus dem Chat bis ins Hauptfenster. Die bisherige
+        Wahl bleibt dann, wie sie war.
         """
-        self._image = path.read_bytes()
-        self.picture_label.setText(path.name)
+        try:
+            picture = path.read_bytes()
+        except OSError as problem:
+            _log.warning("image could not be read: %s", problem)
+            self.state.setText(
+                tr("Das Bild {name} ließ sich nicht lesen. Wählen Sie ein anderes.").replace(
+                    "{name}", path.name
+                )
+            )
+            return
+        self._show_image(picture, path.name)
+
+    def clear_image(self) -> None:
+        """Zurück zum Textweg — die Beschreibung gilt wieder."""
+        self._show_image(None, "")
+
+    def _show_image(self, picture: bytes | None, name: str) -> None:
+        """Bild und Beschreibung in denselben Stand bringen.
+
+        Mit Bild ruht die Beschreibung, mit Grund an allen drei Kanälen
+        (Regel 18): Der Bildweg liest sie nicht, und ein bedienbares Feld
+        versprach das Gegenteil.
+        """
+        self._image = picture
+        self.picture_label.setText(name or tr("Kein Bild gewählt"))
+        self.drop_picture.setVisible(picture is not None)
+        resting = (
+            str(
+                tr(
+                    "Aus einem Bild erzeugt Solidon ohne Beschreibung. "
+                    "„Bild entfernen“ führt zurück."
+                )
+            )
+            if picture is not None
+            else ""
+        )
+        self.prompt.setEnabled(picture is None)
+        self.prompt.setToolTip(resting)
+        self.prompt.setStatusTip(resting)
+        self.prompt.setAccessibleDescription(resting)
         # **Der Weg hat gewechselt, also gilt die alte Antwort nicht mehr.** Mit
         # Bild braucht es kein SDXL-Modell; ohne schon. Wer eines wählt, soll
         # nicht weiter lesen, dass etwas fehlt, was er gerade umgangen hat.

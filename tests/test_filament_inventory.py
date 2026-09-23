@@ -978,6 +978,9 @@ def test_snapshot_cache_is_immutable_and_never_masks_a_damaged_new_file(
         return original(data)
 
     monkeypatch.setattr(filaments, "_decode_inventory", recorded)
+    # Das Schreiben hat die Momentaufnahme schon gesetzt; hier geht es um
+    # einen Leser, der die Datei selbst zerlegt — genau einmal.
+    monkeypatch.setattr(filaments, "_SNAPSHOT_CACHE", None)
     snapshot = filaments.read_snapshot()
     assert filaments.catalogue() == (first,)
     assert filaments.get(first.identifier) == first
@@ -1135,3 +1138,83 @@ with filaments._catalogue_lock():
         json.loads(filaments.catalogue_path().read_text(encoding="utf-8"))["format_version"]
         == filaments.FORMAT_VERSION
     )
+
+
+def test_the_file_keeps_its_bytes_when_the_writer_gets_faster() -> None:
+    """Schneller geschrieben heißt nicht anders geschrieben.
+
+    ``_write`` kodierte über ``asdict`` und ``json.dump`` — 90 der 175 ms
+    eines ``save`` an einem Lager mit 500 Spulen und 2000 Buchungen. Der
+    schnellere Weg muss Byte für Byte dieselbe Datei ergeben, mit Buchung,
+    Korrektur, mehrfarbiger Spule und unbekannter Menge darin; der
+    Vergleich rechnet die alte Bauart hier unabhängig nach.
+    """
+    from dataclasses import asdict
+
+    first = spool()
+    filaments.save(
+        filaments.CatalogueFilament(
+            "Seide Doppel",
+            "#102030",
+            "PLA",
+            remaining_grams=None,
+            extra_colours=("#aabbcc", "#ddeeff"),
+            note="Umlaute: äöüß — «»",
+        )
+    )
+    filaments.book("print-1", "geometry", [position(first, 40.0)])
+    filaments.book(
+        "print-1", "geometry", [position(first, 35.5, "gcode")], allow_unverified_stock=False
+    )
+    written = filaments.catalogue_path().read_bytes()
+    state = filaments._read()
+    reference = json.dumps(
+        {
+            "format_version": filaments.FORMAT_VERSION,
+            "inventory_identifier": state.identifier,
+            "spools": [asdict(entry) for entry in state.spools.values()],
+            "stock_counts": state.counts,
+            "bookings": [asdict(booking) for booking in state.journal.values()],
+        },
+        ensure_ascii=False,
+        indent=2,
+        allow_nan=False,
+    ).encode("utf-8")
+
+    assert written == reference
+    assert filaments._encoded(state) == reference
+
+
+def test_a_written_inventory_is_not_decoded_again_by_the_next_reader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Oberfläche liest nach jedem Schreiben neu — nicht die eben
+    geschriebene Datei noch einmal.
+
+    ``read_snapshot`` zerlegte und prüfte nach jedem ``save`` die ganze
+    Datei, im Hauptthread: 36 ms an einem Lager mit 500 Spulen und 2000
+    Buchungen. Der geschriebene Stand ist der gelesene; ein fremder
+    Austausch danach ändert den Stempel und wird wie bisher gelesen.
+    """
+    first = spool()
+    decoded: list[int] = []
+    original = filaments._decode_inventory
+
+    def counting(data: object) -> object:
+        decoded.append(1)
+        return original(data)
+
+    monkeypatch.setattr(filaments, "_decode_inventory", counting)
+    changed = filaments.save(replace(first, name="Neu benannt"))
+    decoded.clear()
+
+    assert filaments.get(first.identifier) == changed
+    assert filaments.catalogue() == (changed,)
+    assert decoded == [], "the snapshot decoded the file it had just written"
+
+    # Ein fremder Schreiber ändert den Stempel: gelesen wird wieder die Datei.
+    content = json.loads(filaments.catalogue_path().read_text(encoding="utf-8"))
+    content["spools"][0]["name"] = "Von außen geändert"
+    filaments.catalogue_path().write_text(json.dumps(content), encoding="utf-8")
+    assert filaments.get(first.identifier).name == "Von außen geändert"
+    assert decoded, "a foreign change must be read from the file"

@@ -699,6 +699,31 @@ def test_a_search_without_a_hit_says_so_instead_of_showing_nothing(
     assert window.text.toPlainText().strip()
 
 
+def test_a_search_without_a_hit_names_the_way_back(qt_app: QApplication) -> None:
+    """„Dazu steht nichts im Handbuch." endete dort — ohne den nächsten Schritt
+    (Regel 17)."""
+    window = ManualWindow()
+    try:
+        window.search.setText("gibtesnicht-xyz")
+        assert "Suchfeld" in window.text.toPlainText(), window.text.toPlainText()
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_the_search_and_the_page_list_carry_names(qt_app: QApplication) -> None:
+    """Suchfeld und Seitenliste standen ohne zugänglichen Namen da — ein
+    Bildschirmleser las „Eingabefeld" und „Liste"."""
+    window = ManualWindow()
+    try:
+        assert window.search.accessibleName().strip()
+        assert window.contents.accessibleName().strip()
+        assert window.text.accessibleName().strip()
+    finally:
+        window.close()
+        window.deleteLater()
+
+
 def test_clearing_the_search_brings_everything_back(qt_app: QApplication) -> None:
     window = ManualWindow()
     window.search.setText("Elefantenfuß")
@@ -1267,8 +1292,8 @@ def test_the_manual_opens_only_its_own_website(
     try:
         geoeffnet: list[str] = []
         monkeypatch.setattr(
-            "app.ui.manual_window.QDesktopServices.openUrl",
-            lambda url: geoeffnet.append(url.toString()),
+            "PySide6.QtGui.QDesktopServices.openUrl",
+            lambda url: geoeffnet.append(url.toString()) or True,
         )
 
         for adresse in (
@@ -1646,8 +1671,8 @@ def test_a_click_on_a_manual_link_really_reaches_the_allowlist(
     try:
         opened: list[str] = []
         monkeypatch.setattr(
-            "app.ui.manual_window.QDesktopServices.openUrl",
-            lambda url: opened.append(url.toString()),
+            "PySide6.QtGui.QDesktopServices.openUrl",
+            lambda url: opened.append(url.toString()) or True,
         )
         window.text.setMarkdown(
             "Ein [Handbuch](https://solidon3d.de/handbuch.html) und ein "

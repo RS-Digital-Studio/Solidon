@@ -385,12 +385,18 @@ class SlicerSpoolDialog(QDialog):
         self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self._ok_button.setText(tr("Markierte Spulen übernehmen"))
         make_primary(self._ok_button)
-        self._ok_button.setEnabled(False)
         self.list.itemChanged.connect(self._selection_changed)
         layout.addWidget(buttons)
+        self._selection_changed()
 
-    def _selection_changed(self, _item: QListWidgetItem) -> None:
-        self._ok_button.setEnabled(bool(self.chosen_spools()))
+    def _selection_changed(self, _item: QListWidgetItem | None = None) -> None:
+        """Ohne Haken nichts zu übernehmen — und der Knopf sagt es (Regel 18)."""
+        chosen = bool(self.chosen_spools())
+        why = "" if chosen else str(tr("Keine Spule markiert."))
+        self._ok_button.setEnabled(chosen)
+        self._ok_button.setToolTip(why)
+        self._ok_button.setStatusTip(why)
+        self._ok_button.setAccessibleDescription(why)
 
     def chosen_spools(self) -> list[filaments.CatalogueFilament]:
         """Die ausdrückliche Besitzwahl; keine Markierung wird vorausgesetzt."""
@@ -509,7 +515,7 @@ class InventoryView(QWidget):
         self.low_stock_threshold.setValue(self._low_stock_percent)
         self.low_stock_threshold.setAccessibleName(tr("Warnschwelle für niedrigen Bestand"))
         self.low_stock_threshold.setToolTip(
-            tr("Spulen unter diesem Anteil ihrer Nennfüllung als Wenig Filament kennzeichnen.")
+            tr("Spulen unter diesem Anteil ihrer Nennfüllung als „Wenig Filament“ kennzeichnen.")
         )
         self.low_stock_threshold.valueChanged.connect(self._threshold_changed)
         threshold_label = QLabel(tr("Warnschwelle für niedrigen Bestand"), shelf)
@@ -981,6 +987,7 @@ class InventoryView(QWidget):
         if not self.history.count():
             item = QListWidgetItem(tr("Noch keine Buchungen für diese Spule."), self.history)
             item.setFlags(Qt.ItemFlag.NoItemFlags)
+        self._describe_reverse_button(False)
 
     def _history_selected(self, row: int) -> None:
         if self._keep_count_target is not None and not self._matches_reverse_target(
@@ -1012,6 +1019,16 @@ class InventoryView(QWidget):
                 "Rückgängig geht es am selben Knopf."
             )
         )
+        # **Ruhend sagt er, worauf er wartet** — nicht, was er täte (Regel 18).
+        if not self.reverse_button.isEnabled():
+            hint = (
+                tr("Erst einen Vorgang im Buchungsverlauf wählen.")
+                if any(
+                    item is not None and item.flags() & Qt.ItemFlag.ItemIsSelectable
+                    for item in (self.history.item(row) for row in range(self.history.count()))
+                )
+                else tr("Noch keine Buchungen für diese Spule.")
+            )
         self.reverse_button.setToolTip(hint)
         self.reverse_button.setStatusTip(hint)
         self.reverse_button.setAccessibleDescription(hint)

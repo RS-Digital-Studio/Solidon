@@ -423,6 +423,76 @@ def test_a_row_says_nothing_before_it_has_looked(qt_app: QApplication) -> None:
     assert all(row.status is not None for row in dialog.rows)
 
 
+def test_the_row_marker_reads_as_a_word(qt_app: QApplication) -> None:
+    """„+", „-" und „?" sind die zweite Kodierung neben der Farbe — ein
+    Bildschirmleser las sie als „plus", „minus", „Fragezeichen"."""
+    dialog = InstallDialog()
+    try:
+        for row in dialog.rows:
+            assert row.state.accessibleName() == "Wird gesucht …", row.requirement.id
+        settled(dialog, qt_app)
+        for row in dialog.rows:
+            assert row.status is not None
+            expected = "Vorhanden" if row.status.present else "Fehlt"
+            assert row.state.accessibleName() == expected, row.requirement.id
+            assert row.state.toolTip() == expected
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_resting_buttons_say_why_while_something_runs(qt_app: QApplication) -> None:
+    """Während einer Installation ruhen alle Knöpfe — und sagten nicht, warum
+    (Regel 18). Danach tragen sie wieder ihren eigenen Satz."""
+    from PySide6.QtWidgets import QPushButton
+
+    dialog = settled(InstallDialog(), qt_app)
+    try:
+        before = {
+            button: button.toolTip()
+            for row in dialog.rows
+            for button in row.findChildren(QPushButton)
+        }
+        dialog._busy(True)
+        silent = [
+            button.text()
+            for button in dialog.findChildren(QPushButton)
+            if not button.isHidden()
+            and not button.isEnabled()
+            and not all(
+                text.strip()
+                for text in (button.toolTip(), button.statusTip(), button.accessibleDescription())
+            )
+        ]
+        assert not silent, f"ruhen ohne Grund: {silent}"
+        dialog._busy(False)
+        after = {button: button.toolTip() for button in before}
+        assert after == before, "nach dem Lauf trägt jeder Knopf wieder seinen eigenen Satz"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_details_of_a_start_do_not_blame_the_package_manager(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Was die Paketverwaltung gemeldet hat:" stand auch über dem Aufruf eines
+    Dienststarts — dort hat keine Paketverwaltung etwas gemeldet."""
+    from PySide6.QtWidgets import QMessageBox
+
+    shown: list[str] = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda box: shown.append(box.text()) or 0)
+    dialog = settled(InstallDialog(), qt_app)
+    try:
+        dialog._running_action = "start"
+        dialog._details = "Aufruf: comfy launch"
+        dialog._show_details()
+        assert shown and "Paketverwaltung" not in shown[0], shown
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_looking_does_not_happen_in_the_gui_thread(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1585,4 +1655,33 @@ def test_closing_waits_asynchronously_for_the_active_task(
         finish.set()
         worker.wait(2000)
         qt_app.processEvents()
+        dialog.release()
+
+
+def test_escape_does_not_wait_for_the_search(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Suche läuft bei jedem Öffnen Sekunden lang, und solange ging der
+    Dialog auf Esc hin nicht zu: „Dieses Fenster schließt nach der laufenden
+    Aufgabe" — für eine Suche, die nichts schreibt und deren Antwort nach dem
+    Schließen niemand mehr will. Eine begonnene Installation hält weiter auf
+    (``test_closing_waits_asynchronously_for_the_active_task``)."""
+    import threading
+
+    gate = threading.Event()
+
+    def slow_statuses() -> object:
+        gate.wait(10)
+        return ()
+
+    monkeypatch.setattr(install, "statuses", slow_statuses)
+    dialog = InstallDialog()
+    try:
+        dialog.show()
+        survey = dialog._survey
+        assert survey is not None and survey.isRunning()
+        dialog.reject()
+        assert not dialog.isVisible(), "Esc wartete auf die Suche"
+    finally:
+        gate.set()
         dialog.release()

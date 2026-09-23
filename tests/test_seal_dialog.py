@@ -211,3 +211,46 @@ def test_path_choice_focus_keeps_the_outer_apply_button_primary(qt_app):
         dialog.close()
         dialog.deleteLater()
         qt_app.processEvents()
+
+
+def test_a_crashed_check_ends_the_wait_and_says_so(qt_app, monkeypatch):
+    """``crashed`` liefert eine Zeichenkette, ``_crashed`` las sie als Fehler
+    mit ``detail`` — der Slot warf, und „Dichtweg wird geprüft …" blieb mit
+    laufendem Balken stehen."""
+    from app.ui import seal_dialog
+
+    entry = plate()
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("kaputt")
+
+    monkeypatch.setattr(seal_dialog, "opening_choices", broken)
+    dialog = SealPathDialog(entry, [entry], {"support_feature": "plate:top"})
+    try:
+        # Der Wartebalken endet — vorher lief er bis zum Schließen.
+        _until(qt_app, dialog.progress.isHidden)
+        assert "geprüft" not in dialog.status.text(), dialog.status.text()
+        assert dialog.status.text().strip()
+    finally:
+        dialog.release()
+        dialog.close()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+
+def test_the_resting_seal_button_says_why(qt_app):
+    """*Dichtweg übernehmen* ruhte ohne Grund an Tooltip, Statuszeile und
+    Bildschirmleser, solange keine Kontur gewählt war (Regel 18)."""
+    entry = plate()
+    dialog = SealPathDialog(entry, [entry], {"support_feature": "plate:top"})
+    try:
+        _until(qt_app, lambda: dialog.contours.count() == 2)
+        button = dialog.accept_button
+        assert not button.isEnabled()
+        said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        assert all(text.strip() for text in said), said
+    finally:
+        dialog.release()
+        dialog.close()
+        dialog.deleteLater()
+        qt_app.processEvents()

@@ -34,6 +34,14 @@ Blockade zu werden, die §29 ausdrücklich nicht will:
   Körpernamen und dem Klick, der hinführt; der Dialog zeigt die ersten Sätze
   und verweist für den Rest dorthin.
 
+**Dieselbe Ausnahme gilt der Übergabe an den Slicer** (22.09.2026). Das Modell
+liegt danach im Slicer, ein Slicen schreibt eine Druckdatei, und kein Strg+Z
+holt beides zurück — der Export fragte, die Übergabe nicht. `confirm_handover`
+fragt vor *Slicen* und *Im Slicer öffnen*, aber **nur bei Fehlern** der
+gewählten Platten aus dem Prüfbericht, nicht bei Warnungen: Die Übergabe ist
+oft der Blick ins gewohnte Programm, und eine Frage bei jedem Überhang wäre die
+Blockade, die §29 nicht will. Weitergehen ist auch hier die Vorgabe.
+
 **Und danach weiß der Kunde, wo die Datei liegt.** „Exportiert: dose.3mf" in
 der Statuszeile war alles — alle vier Wege enden hier, und kein Knopf führte
 zum Ordner (Bedienweg-Durchsicht 14.09.2026). *Ordner zeigen* steht daneben,
@@ -428,6 +436,30 @@ beides — keinen leeren Namen, und keine zwei gleichen.
 Die allgemeine Frage dahinter, weil dieselbe Lücke an jedem neuen Ort mit
 Feldern entsteht: **Wo Felder stehen, tragen sie ihren Namen — und „wo" heißt
 jede Stelle, nicht die zwei, die man gerade im Kopf hat.**
+
+Drei Formen derselben Lücke, alle drei in der Durchsicht 0.5.0 gefunden:
+
+- **Wiederholte Zeilen nennen, wozu sie gehören.** Im Rezeptdialog trug jeder
+  Parameter sieben Felder mit denselben Namen („Beschriftung", „Einheit" …);
+  der Name trägt deshalb „· {Parameter}", wie die Merkmalsfelder die Handlung.
+- **`setAccessibleName` überschreibt den sichtbaren Text.** Ein Haken, dessen
+  Text der Parametername ist, wurde mit „Diesen Wert freigeben" benannt und
+  verlor damit genau die Auskunft, welcher. Der Name bleibt der sichtbare
+  Text; der erklärende Satz gehört in `setAccessibleDescription`.
+- **Ein Zeichen als zweite Kodierung braucht ein Wort als Namen.** „+", „-",
+  „?" neben der Farbe lesen sich für einen Vorleser als „plus", „minus",
+  „Fragezeichen" — `setAccessibleName` und Tooltip sagen „Vorhanden",
+  „Fehlt", „Wird gesucht …".
+
+## Eine Adresse im Browser öffnet `dialogs.open_link`
+
+`QDesktopServices.openUrl` meldet `False`, wenn kein Programm die Adresse
+annimmt — und fünf Stellen lasen das nicht: Der Klick tat nichts, ohne ein
+Wort (Regel 17). `open_link(address, parent)` legt die Adresse dann in die
+Zwischenablage und nennt sie im Satz. Wer `openUrl` direkt ruft, liest den
+Rückgabewert und hat einen eigenen Rückweg (Aktivierung, Mail, Förderung).
+Eine Funktion, die unmittelbar an `clicked` hängt, bekommt keinen
+Parameter mit Vorgabe: PySide reicht ihm den `checked`-Wert hinein.
 
 ## Ein Haken in einer Formularzeile antwortet auf der ganzen Zeile
 

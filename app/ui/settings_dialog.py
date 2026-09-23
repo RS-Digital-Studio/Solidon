@@ -39,7 +39,7 @@ from app.core.units import DISPLAY_UNITS
 from app.i18n import TranslatableText, _, language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.ai_disclosure import clear_disclosure
-from app.ui.first_run import LANGUAGE_CHANGED
+from app.ui.first_run import LANGUAGE_CHANGED, add_printer_choices
 from app.ui.labels import TrackSlider, by_title
 from app.ui.palette import DIFF_PALETTES
 from app.ui.panels import align_forms
@@ -212,7 +212,7 @@ class SettingsDialog(QDialog):
             tr(
                 "Ein anderes Programm auf diesem Rechner darf dieselben "
                 "Operationen aufrufen wie die Menüs. Nur über 127.0.0.1, und "
-                "jeder Aufruf ist eine Transaktion, die ein Strg+Z zurücknimmt."
+                "jeden Aufruf nimmt ein Strg+Z zurück."
             )
         )
         # Die Portnummer gehört zur Fernsteuerung und nicht neben sie: Sie
@@ -257,10 +257,10 @@ class SettingsDialog(QDialog):
         self.spacemouse.toggled.connect(self.spacemouse_speed.setEnabled)
         self.spacemouse.toggled.connect(self.spacemouse_invert.setEnabled)
 
-        self.printer = _choices(
-            self,
-            {key: str(entry.title) for key, entry in by_title(profiles.printer_profiles())},
-        )
+        # Nach Verfahren gruppiert wie im Erststart — dieselben Drucker, dieselbe
+        # Ordnung (RM-071).
+        self.printer = QComboBox(self)
+        add_printer_choices(self.printer, profiles.printer_profiles())
         _select(self.printer, settings.printer or profiles.DEFAULT_PRINTER)
         # Die Materialliste folgt dem Verfahren des Druckers: Ein Harzdrucker
         # bietet Harze an, ein Filamentdrucker Filamente — PLA in einem

@@ -53,6 +53,7 @@ from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
 from app.core.types import Document, Feature, Profile
 from app.i18n import tr
+from app.ui.dialogs import problem_text
 from app.ui.labels import PARAMETER_UNITS, NumberSpin, feature_label, localised
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.style import TIGHT, make_primary
@@ -197,7 +198,13 @@ class _ParamRow:
         Es ist nur eine Entscheidung, und die trifft der Kunde.
         """
         self.take.setChecked(not self.derived)
-        self.take.setAccessibleName(tr("Diesen Wert freigeben"))
+        # **Jedes Feld sagt, zu welchem Wert es gehört.** Bei zwei Parametern
+        # las der Bildschirmleser zweimal „Diesen Wert freigeben",
+        # „Beschriftung", „Einheit" — der sichtbare Name am Haken war
+        # überschrieben. Der Name bleibt Name, der Satz wird Beschreibung.
+        name = str(parameter.name)
+        self.take.setAccessibleName(name)
+        self.take.setAccessibleDescription(tr("Diesen Wert freigeben"))
 
         self.hint: QLabel | None = None
         if self.derived:
@@ -217,7 +224,7 @@ class _ParamRow:
             self.take.setAccessibleDescription(note)
 
         self.title = QLineEdit(str(parameter.title or parameter.name), parent)
-        self.title.setAccessibleName(tr("Beschriftung"))
+        self.title.setAccessibleName(f"{tr('Beschriftung')} · {name}")
         # **Die Einheit entscheidet über die Umrechnung, nicht über die
         # Beschriftung.** ``op_dialog.shown_unit`` zeigt ein Feld genau dann in
         # der eingestellten Anzeigeeinheit, wenn seine Einheit ``mm`` ist
@@ -230,7 +237,7 @@ class _ParamRow:
         # (Regel 21): So sieht der Kunde, was der Fall ist, statt es zu erfahren,
         # wenn das Teil falsch herauskommt.
         self.unit = QComboBox(parent)
-        self.unit.setAccessibleName(tr("Einheit"))
+        self.unit.setAccessibleName(f"{tr('Einheit')} · {name}")
         for code, label in UNITS:
             self.unit.addItem(str(label), code)
         chosen = str(parameter.unit or "")
@@ -269,18 +276,18 @@ class _ParamRow:
             float(parameter.maximum) if parameter.maximum is not None else value + span
         )
         self.default.setValue(value)
-        self.minimum.setAccessibleName(tr("Kleinster Wert"))
-        self.maximum.setAccessibleName(tr("Größter Wert"))
-        self.default.setAccessibleName(tr("Vorgabe"))
+        self.minimum.setAccessibleName(f"{tr('Kleinster Wert')} · {name}")
+        self.maximum.setAccessibleName(f"{tr('Größter Wert')} · {name}")
+        self.default.setAccessibleName(f"{tr('Vorgabe')} · {name}")
 
         self.placement = QComboBox(parent)
         self.placement.addItem(tr("Vorn im Dialog"), PLACE_FRONT)
         self.placement.addItem(tr("Unter „Weitere Einstellungen“"), PLACE_ADVANCED)
-        self.placement.setAccessibleName(tr("Wo der Wert steht"))
+        self.placement.setAccessibleName(f"{tr('Wo der Wert steht')} · {name}")
 
         self.doc = QLineEdit(parent)
         self.doc.setPlaceholderText(tr("Ein Satz: was passiert, wenn man ihn ändert"))
-        self.doc.setAccessibleName(tr("Beschreibung"))
+        self.doc.setAccessibleName(f"{tr('Beschreibung')} · {name}")
 
     def restore(self, entry: Any) -> None:
         """Übernimmt die Angaben, die dieses Maß im bearbeiteten Baustein trug (E6).
@@ -363,11 +370,15 @@ class _FeatureRow:
         # sehen, welche Stelle er freigibt. Dieselbe Quelle wie Viewport und
         # Statusleiste (§18.5); zwei Formulierungen für ein Merkmal wären zwei
         # Gelegenheiten, auseinanderzulaufen.
-        self.take = QCheckBox(feature_label(feature.id, feature), parent)
+        shown = feature_label(feature.id, feature)
+        self.take = QCheckBox(shown, parent)
         self.take.setChecked(True)
-        self.take.setAccessibleName(tr("Dieses Merkmal nach außen geben"))
+        # Wie am Parameter: der Name der Stelle bleibt Name, der Satz wird
+        # Beschreibung, und das Namensfeld sagt, zu welcher Stelle es gehört.
+        self.take.setAccessibleName(shown)
+        self.take.setAccessibleDescription(tr("Dieses Merkmal nach außen geben"))
         self.name = QLineEdit(self.feature_id, parent)
-        self.name.setAccessibleName(tr("Öffentlicher Name"))
+        self.name.setAccessibleName(f"{tr('Öffentlicher Name')} · {shown}")
 
     def restore(self, public_name: str | None) -> None:
         """Übernimmt, was der bearbeitete Baustein an dieser Stelle versprach (E6).
@@ -1035,11 +1046,18 @@ class RecipeDialog(QDialog):
         self.accept()
 
     def _failed(self, error: object) -> None:
+        """Titel, Grund **und was hilft** — die Vorschläge des Kerns fielen weg.
+
+        ``problem_text`` setzt jede Angabe in eine eigene Zeile und hängt die
+        Vorschläge an, die hier kein Knopf einlöst (Regel 17).
+        """
         self._show_waiting(False)
         self._update_enabled()
-        title = getattr(error, "title", None)
-        detail = getattr(error, "detail", "") or ""
-        self.report.setText(f"{title or tr('Der Baustein ließ sich nicht anlegen.')}\n{detail}")
+        self.report.setText(
+            problem_text(error)
+            if isinstance(error, AppError)
+            else str(tr("Der Baustein ließ sich nicht anlegen."))
+        )
         _log.warning("recipe could not be stored: %s", error)
 
     def _worker_done(self, worker: object) -> None:

@@ -28,7 +28,7 @@ from __future__ import annotations
 import gc
 import weakref
 from collections.abc import Callable
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -148,7 +148,9 @@ def test_finished_filament_and_body_dialogs_are_released(qt_app, tmp_path, monke
             "slicer_filaments",
             lambda: (SlicerProfile(Path("profile.json"), "Profil", "filament", from_user=True),),
         )
-        trigger = owner._choose_slicer_profile
+        # Der Bestand wird im Arbeiter gelesen; die Auswahl öffnet erst mit
+        # seiner Antwort.
+        trigger = partial(_choose_and_wait, owner)
     else:
         owner = QWidget()
         trigger = partial(BodyChoiceDialog.ask, owner, "Körper", ("one", "two"), {})
@@ -170,6 +172,12 @@ def test_finished_filament_and_body_dialogs_are_released(qt_app, tmp_path, monke
     finally:
         owner.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def _choose_and_wait(owner: Any) -> None:
+    """*Wählen …* klicken und die Antwort des Arbeiters zustellen lassen."""
+    owner._choose_slicer_profile()
+    assert owner.wait_for_profiles()
 
 
 def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
@@ -421,7 +429,8 @@ def test_everything_that_holds_a_leash_can_be_told_to_let_go() -> None:
 
     Die fachlichen Namen bleiben daneben stehen, und das ist kein Zugeständnis:
     ``wait_for_survey`` gibt einen Wahrheitswert zurück und wird vom
-    Produktivcode gerufen (``FirstRunDialog.reject``), ``release`` räumt auf und
+    Produktivcode gerufen (``InstallDialog.release``; das Schließen der ersten
+    Schritte wartet seit dem 22.09.2026 nicht mehr), ``release`` räumt auf und
     gibt nichts zurück. Zwei Sachen, zwei Namen — nur soll die eine überall
     gleich heißen.
     """

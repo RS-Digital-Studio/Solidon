@@ -378,6 +378,61 @@ def test_the_dialog_is_there_before_the_answers_are(qt_app: QApplication) -> Non
     assert "nachgesehen" not in dialog.chat_state.text()
 
 
+@pytest.mark.parametrize("button", ["accept", "reject", "language"])
+def test_closing_the_first_steps_does_not_wait_for_the_survey(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, button: str
+) -> None:
+    """Wer gleich zu Beginn schließt oder die Sprache wählt, wartet auf nichts.
+
+    Schließen, Übernehmen und der Sprachwechsel warteten bis zu dreißig
+    Sekunden im Oberflächen-Thread auf die Suche nach den Zusatzprogrammen —
+    ohne Wartezeiger, und gemessen rund drei Sekunden auf dieser Maschine.
+    Die Sprache ist das erste Feld des ersten Dialogs; wer sie sofort
+    umstellt, sah ein Fenster, das nicht antwortet. Die Erhebung hält die
+    Halteleine, nicht das Schließen (``app.ui.leash``).
+    """
+    import threading
+    import time
+
+    from app.core import discover
+
+    gate = threading.Event()
+
+    def slow_survey() -> tuple[tools.ToolState, ...]:
+        gate.wait(10)
+        return ()
+
+    monkeypatch.setattr(first_run.tools, "survey", slow_survey)
+    monkeypatch.setattr(first_run, "_chat_text", lambda: "")
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: ())
+    settings = UiSettings()
+    dialog = FirstRunDialog(settings)
+    try:
+        started = time.perf_counter()
+        if button == "accept":
+            dialog.accept()
+        elif button == "reject":
+            dialog.reject()
+        else:
+            other = next(
+                index
+                for index in range(dialog.language.count())
+                if dialog.language.itemData(index) != settings.language
+            )
+            dialog.language.setCurrentIndex(other)
+        waited = time.perf_counter() - started
+
+        assert dialog.result() != 0 or button == "reject"
+        assert waited < 1.0, f"{button} wartete {waited:.2f} s auf die Erhebung"
+    finally:
+        gate.set()
+        dialog.release()
+        if button == "language":
+            from app.i18n import set_language
+
+            set_language("de")
+
+
 def test_the_first_screen_answers_before_it_is_asked(qt_app: QApplication) -> None:
     """Vier Stellen, an denen ein Neuling raten musste — aus einer Fahrt zu viert.
 
@@ -1995,7 +2050,7 @@ def test_an_ordinary_project_gets_no_empty_addition(
     monkeypatch.setattr(part_check, "check_outgoing", lambda document, registry=None: [])
     dialog = SupportDialog(message="Der Deckel sitzt schief.", session=Session())
 
-    assert dialog._session_note() == tr("Modell, Operationsstapel und Chat-Verlauf")
+    assert dialog._session_note() == tr("Modell, Arbeitsschritte und Chat-Verlauf")
 
 
 def test_the_update_check_is_on_and_reaches_older_installations(tmp_path: Path) -> None:

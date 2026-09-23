@@ -20,8 +20,7 @@ from __future__ import annotations
 import html
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -39,6 +38,7 @@ from app.core.errors import AppError, OperationCancelled
 from app.core.scene.cancel import CancelSignal
 from app.i18n import get_language, tr
 from app.ui.changes_dialog import groups_html
+from app.ui.dialogs import open_link
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import make_primary
 
@@ -354,8 +354,21 @@ class UpdateDialog(QDialog):
             self._worker.cancelled.cancel()
             self.state.setText(tr("Wird abgebrochen …"))
 
+    def reject(self) -> None:
+        """Esc während des Ladens bricht es ab — und lässt es nicht im Verborgenen weiterlaufen.
+
+        *Später* ist während des Ladens gesperrt, Esc und das Fensterkreuz
+        waren es nicht: Der Dialog ging zu, und zweihundert Megabyte luden
+        weiter, ohne Balken, ohne Knopf und ohne dass jemand die fertige
+        Datei je zu sehen bekam. Abgebrochen wird wie über den Knopf; die
+        Halteleine hält den Arbeiter, bis er ausgelaufen ist.
+        """
+        if self._worker is not None:
+            self._worker.cancelled.cancel()
+        super().reject()
+
     def open_page(self) -> None:
-        QDesktopServices.openUrl(QUrl(self._release.url or WEBSITE_URL))
+        open_link(self._release.url or WEBSITE_URL, self)
 
     # --- was der Arbeiter meldet ----------------------------------------------------
 

@@ -213,3 +213,25 @@ eigener Arbeiter dafür wäre keine Antwort und ist auch keine nötige:
 `CatalogueWrites` (Spulenwähler) und `InventoryView._run` (Lagerfenster)
 fahren jeden Schreibauftrag längst neben dem Hauptthread, mit
 Wartezeiger ab 200 ms und Fortschritt ab zwei Sekunden (§2.8).
+
+**Das Serialisieren war der größte Posten, und der Leser danach der teuerste
+im Hauptthread** (Durchsicht vor 0.5.0, 22.09.2026, 500 Spulen und 2000
+Buchungen, 1,6 MB, Fremdlast aus sechzehn Prüfern — alt und neu abwechselnd
+im selben Prozess, Median aus fünfzehn):
+
+| Posten | vorher | nachher |
+|---|---|---|
+| `save` gesamt (im Arbeiter) | 176,9 ms | 130,5 ms |
+| `catalogue()` danach (im Hauptthread) | 67,4 ms | 0,6 ms |
+
+`_encoded` schreibt über `json.dumps` (C-Kodierer, seit Python 3.14 mit
+Einrückung) statt über `json.dump` (Python-Kodierer in Zehntausenden
+Stücken, 65,5 gegen 10,2 ms), und `_plain` ersetzt `asdict`, das jeden
+Blattwert tief kopiert. Die Datei bleibt Byte für Byte dieselbe
+(`test_the_file_keeps_its_bytes_when_the_writer_gets_faster`). Und was
+`_write` geschrieben hat, ist danach die Momentaufnahme der Leser
+(`_remember_written`, gestempelt nach dem Austausch unter der Sperre): Die
+Oberfläche liest nach jedem Schreiben neu und zerlegte dafür die eben
+geschriebene Datei ein zweites Mal. Ein fremder Austausch ändert den Stempel
+und wird wie bisher gelesen. Die Zusage darüber bleibt: Der Schreibweg selbst
+liest unter der Sperre neu und prüft vollständig.

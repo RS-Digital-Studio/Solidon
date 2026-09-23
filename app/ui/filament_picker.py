@@ -44,10 +44,19 @@ from dataclasses import replace
 from functools import partial
 from typing import cast
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QSignalBlocker, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QObject,
+    QPoint,
+    QSignalBlocker,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
-    QApplication,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -62,6 +71,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSlider,
@@ -379,6 +389,8 @@ class SlicerFilamentDialog(QDialog):
         layout.addWidget(buttons)
         self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         assert self._ok_button is not None
+        # „OK" sagt nicht, was es tut — der Knopf übernimmt das gewählte Profil.
+        self._ok_button.setText(tr("Profil übernehmen"))
         make_primary(self._ok_button)
 
         # **Die Vorwahl steuert den Filter, nicht nur die Markierung.** Wer mit
@@ -438,6 +450,8 @@ class SlicerFilamentDialog(QDialog):
                     shown=MAX_HITS, total=len(found)
                 )
             )
+        elif len(found) == 1:
+            self.count.setText(tr("1 Profil"))
         else:
             self.count.setText(tr("{total} Profile").format(total=len(found)))
         self._selection_changed(self.list.currentItem(), None)
@@ -473,8 +487,12 @@ def slicer_filaments() -> tuple[slicer_profiles.SlicerProfile, ...]:
     """Die Filamentprofile des eingerichteten Slicers, oder nichts.
 
     Kein Slicer ist kein Fehler: Solidon läuft ohne, und dann gibt es hier
-    nichts zu wählen. Die Suche kostet gemessen 0,8 Sekunden über 5962
-    Profile — genug für einen Wartezeiger, zu wenig für einen Arbeiter (§2.8).
+    nichts zu wählen.
+
+    **Nur im Arbeiter** (:class:`_SlicerFilamentSearch`). Hier stand „0,8
+    Sekunden über 5962 Profile — genug für einen Wartezeiger"; gemessen am
+    23.09.2026 an demselben Bestand mit der Programmsuche davor waren es
+    26,6 s beim ersten Mal und 4,3 s danach (§2.8).
     """
     found = discover.find_programs("slicer", tools.SLICERS)
     remembered = discover.remembered_path("slicer")
@@ -513,6 +531,15 @@ def configured_spools(
         filaments.CatalogueFilament(entry.profile, entry.colour, entry.material_type, entry.profile)
         for entry in loaded
     )
+
+
+class _SlicerFilamentSearch(Worker):
+    """Liest den Filamentbestand des Slicers außerhalb des Fensters (§2.8)."""
+
+    done = Signal(object)
+
+    def work(self) -> None:
+        self.done.emit(slicer_filaments())
 
 
 class NewFilamentDialog(QDialog):
@@ -712,6 +739,35 @@ class NewFilamentDialog(QDialog):
         profile_row.addWidget(self.clear_profile)
         self._slicer_profile_label = QLabel(tr("Slicer-Profil"), self)
         details.addRow(self._slicer_profile_label, profile_row)
+        # **Das Lesen des Bestands läuft im Arbeiter, mit Balken und
+        # Abbrechen** (:meth:`_choose_slicer_profile`). Die Zeile steht nur,
+        # solange gelesen wird.
+        self._leash = WorkerLeash(self)
+        self._profile_worker: _SlicerFilamentSearch | None = None
+        self.profile_search = QWidget(self)
+        search_line = QHBoxLayout(self.profile_search)
+        search_line.setContentsMargins(0, 0, 0, 0)
+        search_line.setSpacing(TIGHT)
+        reading = QLabel(
+            tr(
+                "Die Profile des Slicers werden gelesen — beim ersten Mal bis zu "
+                "einer halben Minute."
+            ),
+            self.profile_search,
+        )
+        reading.setWordWrap(True)
+        set_level(reading, "caption")
+        progress = QProgressBar(self.profile_search)
+        progress.setRange(0, 0)
+        progress.setTextVisible(False)
+        progress.setAccessibleName(reading.text())
+        self.stop_search = QPushButton(tr("Abbrechen"), self.profile_search)
+        self.stop_search.clicked.connect(self._stop_profile_search)
+        search_line.addWidget(reading, 1)
+        search_line.addWidget(progress)
+        search_line.addWidget(self.stop_search)
+        self.profile_search.hide()
+        details.addRow(self.profile_search)
         self.more_section = collapsible(tr("Weitere Angaben"), self.more, open_now=False)
         layout.addRow(self.more_section)
         self.validation = QLabel(self)
@@ -910,13 +966,71 @@ class NewFilamentDialog(QDialog):
         )
 
     def _choose_slicer_profile(self) -> None:
-        """Den Bestand des Slicers aufschlagen und eines auswählen."""
+        """Den Bestand des Slicers aufschlagen und eines auswählen.
+
+        **Gelesen wird im Arbeiter** — hier stand ein Wartezeiger um
+        :func:`slicer_filaments`, und das Fenster stand gemessen 4 bis 27
+        Sekunden still (§2.8). Die Auswahl öffnet mit seiner Antwort
+        (:meth:`_profiles_read`); bis dahin bleibt der Dialog bedienbar, und
+        *Abbrechen* gibt ihn sofort frei.
+        """
+        if self._profile_worker is not None:
+            return
         self._validate()
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            entries = slicer_filaments()
-        finally:
-            QApplication.restoreOverrideCursor()
+        worker = _SlicerFilamentSearch()
+        worker.done.connect(self._profiles_read)
+        worker.crashed.connect(self._profiles_crashed)
+        self._profile_worker = worker
+        self._show_search(True)
+        self._leash.start(worker)
+
+    def _show_search(self, searching: bool) -> None:
+        """Balken und Abbrechen während des Lesens; der Wählen-Knopf sagt, warum er ruht."""
+        self.profile_search.setVisible(searching)
+        why = str(tr("Der Bestand des Slicers wird gerade gelesen.")) if searching else ""
+        self.choose_profile.setEnabled(not searching)
+        self.choose_profile.setToolTip(why)
+        self.choose_profile.setStatusTip(why)
+        self.choose_profile.setAccessibleDescription(why)
+
+    def _stop_profile_search(self) -> None:
+        """Nicht mehr warten — der Arbeiter läuft unter der Halteleine aus."""
+        self._profile_worker = None
+        self._show_search(False)
+
+    def done(self, result: int) -> None:
+        """Wer den Dialog schließt, will keine Auswahl mehr danach sehen."""
+        self._stop_profile_search()
+        super().done(result)
+
+    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
+        """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
+
+        Warum der Name, warum die eigene Frist: :mod:`app.ui.leash`.
+        """
+        self._stop_profile_search()
+        self._leash.wait_all(timeout_ms)
+
+    def wait_for_profiles(self, timeout_ms: int = 30_000) -> bool:
+        """Auf das Lesen warten und seine Antwort zustellen — für Tests."""
+        for worker in self._leash.pending():
+            if worker.isRunning():
+                worker.wait(timeout_ms)
+        QCoreApplication.processEvents()
+        return self._profile_worker is None
+
+    def _profiles_crashed(self, detail: str) -> None:
+        """Ein Absturz beim Lesen ist ein leerer Bestand mit Protokollzeile."""
+        _log.warning("slicer filament search crashed: %s", detail)
+        self._profiles_read(())
+
+    def _profiles_read(self, entries: object) -> None:
+        """Die Antwort des Arbeiters — nur, wenn noch jemand darauf wartet."""
+        if self.sender() is not self._profile_worker:
+            return
+        self._profile_worker = None
+        self._show_search(False)
+        entries = tuple(entries) if isinstance(entries, tuple | list) else ()
         if not entries:
             # Regel 17: Ein Fehlschlag endet nie mit „geht nicht".
             self.validation.setText(
@@ -1255,7 +1369,10 @@ class FilamentField(QComboBox):
         except AppError as problem:
             loaded = False
             entries = ()
-            self.addItem(str(problem))
+            # Titel und Detail als zwei Sätze: ``str(problem)`` schrieb
+            # „Titel.: Detail". Das Detail bleibt in der Zeile, denn es nennt
+            # den Ausweg (Datei beiseitelegen, Sicherung).
+            self.addItem(" ".join(str(part) for part in (problem.title, problem.detail) if part))
             self.setItemData(self.count() - 1, 0, int(Qt.ItemDataRole.UserRole) - 1)
             self.setItemData(
                 self.count() - 1, problem_text(problem), Qt.ItemDataRole.AccessibleDescriptionRole
@@ -1574,6 +1691,14 @@ _PROFILE_ROLE = int(Qt.ItemDataRole.UserRole) + 5
 _ID_ROLE = int(Qt.ItemDataRole.UserRole) + 6
 
 
+def _explain(button: QPushButton, free: bool, said: str) -> None:
+    """Freigabe und Satz eines Knopfes in einem Zug — an allen drei Kanälen."""
+    button.setEnabled(free)
+    button.setToolTip(said)
+    button.setStatusTip(said)
+    button.setAccessibleDescription(said)
+
+
 class FilamentPanel(QWidget):
     """Die Filamente auf einen Blick: was das Projekt trägt, was im Regal liegt.
 
@@ -1630,16 +1755,14 @@ class FilamentPanel(QWidget):
         self.add_button.clicked.connect(self._add)
         self.inventory_button = QPushButton(tr("Filamentlager öffnen"), self)
         self.inventory_button.clicked.connect(self.inventoryRequested)
+        # Freigabe und Satz beider Knöpfe setzt ``_selection_changed`` — beim
+        # Aufbau einmal ausdrücklich, weil ``_fill`` bei einem unlesbaren
+        # Lager vorher zurückkehrt.
         self.settings_button = QPushButton(tr("Druckwerte …"), self)
         self.settings_button.setEnabled(False)
-        self.settings_button.setToolTip(
-            tr("Temperatur, Kühlung, Rückzug und Materialwerte dieser Spule einstellen.")
-        )
         self.settings_button.clicked.connect(self._request_override)
         self.delete_button = QPushButton(tr("Filament löschen"), self)
         self.delete_button.setIcon(icon("delete", self.delete_button))
-        self.delete_button.setToolTip(removal_hint())
-        self.delete_button.setAccessibleDescription(removal_hint())
         self.delete_button.setEnabled(False)
         self.delete_button.clicked.connect(self._remove)
 
@@ -1664,6 +1787,7 @@ class FilamentPanel(QWidget):
         """Slot, Name, Farbe, Zahl der Körper und eigene Druckwerte."""
         self._room: int | None = None
         """Was die Überlagerung dieser Karte zugeteilt hat (``set_room``)."""
+        self._selection_changed(None)
         self.show_scene(())
 
     # -- Höhe: was die Überlagerung fragt --------------------------------
@@ -2006,12 +2130,30 @@ class FilamentPanel(QWidget):
             self._edit()
 
     def _selection_changed(self, item: QListWidgetItem | None, *_args: object) -> None:
-        """Nur Projektfilamente haben eigene Druckwerte."""
-        self.settings_button.setEnabled(
-            bool(item is not None and item.data(_SLOT_ROLE) is not None)
+        """Nur Projektfilamente haben eigene Druckwerte.
+
+        **Ein ruhender Knopf sagt, worauf er wartet** — an allen drei Kanälen
+        (Regel 18). Beide standen grau mit einem Satz über ihre Handlung und
+        leerer Statuszeile; frei tragen sie wieder diesen Satz.
+        """
+        project = bool(item is not None and item.data(_SLOT_ROLE) is not None)
+        shelf = bool(item is not None and item.data(_ID_ROLE))
+        busy = self._writes.pending
+        _explain(
+            self.settings_button,
+            project,
+            str(tr("Temperatur, Kühlung, Rückzug und Materialwerte dieser Spule einstellen."))
+            if project
+            else str(tr("Erst eine Spule unter „Im Projekt“ wählen.")),
         )
-        self.delete_button.setEnabled(
-            bool(item is not None and item.data(_ID_ROLE)) and not self._writes.pending
+        _explain(
+            self.delete_button,
+            shelf and not busy,
+            removal_hint()
+            if shelf and not busy
+            else str(tr("Das Filamentlager wird gespeichert …"))
+            if busy
+            else str(tr("Erst eine Spule unter „Im Regal“ wählen.")),
         )
 
     def _request_override(self) -> None:

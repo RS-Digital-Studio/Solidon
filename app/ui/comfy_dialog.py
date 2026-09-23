@@ -16,6 +16,7 @@ was schon da ist, bleibt, und ein neuer Lauf setzt fort.
 from __future__ import annotations
 
 import time
+from contextlib import suppress
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -313,10 +314,21 @@ class ComfySetupDialog(QDialog):
         self._leash.hold_until_done(worker)
 
     def reject(self) -> None:
+        """Schließen bricht den Lauf ab — und wartet nicht auf ihn.
+
+        Abgebrochen wird zwischen den Schritten und im Download je Block: ein
+        halb kopierter Knotenordner wäre schlimmer als ein Vorgang, der
+        ausläuft. Hier stand danach ``wait(2000)``, zwei Sekunden stehendes
+        Fenster auf Esc hin, ohne Balken und ohne Zeile. Den Thread hält die
+        Halteleine über den Dialog hinaus (:mod:`app.ui.leash`); seine
+        Signale werden getrennt, damit eine späte Antwort keinen
+        geschlossenen Dialog mehr anfasst.
+        """
         worker = self._worker
         if worker is not None and worker.isRunning():
-            # Abgebrochen wird zwischen den Schritten: ein halb kopierter
-            # Knotenordner wäre schlimmer als ein Vorgang, der ausläuft.
             worker.cancel()
-            worker.wait(2000)
+            for signal in (worker.step, worker.done, worker.failed, worker.crashed):
+                with suppress(RuntimeError, TypeError):
+                    signal.disconnect()
+            self._idle()
         super().reject()

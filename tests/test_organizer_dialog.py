@@ -244,3 +244,61 @@ def test_selection_reprojects_existing_body_without_rebuilding_geometry(qt_app, 
         assert 'data-highlight="true"' in dialog._preview_svg
     finally:
         dispose(dialog, qt_app)
+
+
+def test_one_compartment_is_named_in_the_singular(qt_app):
+    """„Fachvorlage für 1 Fächer" stand da, sobald eine Vorlage ein Fach trug."""
+    from app.ui.organizer_dialog import _template_line
+
+    assert "ein Fach" in _template_line(1)
+    assert "1 Fächer" not in _template_line(1)
+    assert "3 Fächer" in _template_line(3)
+
+
+def test_the_resting_accept_button_says_why(qt_app):
+    """*Organizer anlegen* ruhte während der Vorschau ohne Grund an allen drei
+    Kanälen; die Zeile darunter sagte es, der Knopf nicht (Regel 18)."""
+    dialog = OrganizerDialog({})
+    try:
+        assert not dialog.accept_button.isEnabled()
+        said = (
+            dialog.accept_button.toolTip(),
+            dialog.accept_button.statusTip(),
+            dialog.accept_button.accessibleDescription(),
+        )
+        assert all(text.strip() for text in said), said
+        _until(qt_app, dialog.accept_button.isEnabled)
+        assert not dialog.accept_button.toolTip(), "frei trägt er keinen Sperrgrund"
+    finally:
+        dispose(dialog, qt_app)
+
+
+def test_the_name_and_the_basis_carry_their_labels(qt_app):
+    """Das Namensfeld stand ohne Beschriftung neben „Neues Raster" — sichtbar
+    nur der Platzhalter „Organizer", der beim Tippen verschwindet; die
+    Bezugswahl hatte gar keinen Namen."""
+    from PySide6.QtWidgets import QLabel
+
+    dialog = OrganizerDialog({})
+    try:
+        buddies = [
+            label for label in dialog.findChildren(QLabel) if label.buddy() is dialog.name_field
+        ]
+        assert buddies and buddies[0].text().strip(), "das Feld trägt eine sichtbare Beschriftung"
+        assert dialog.basis.accessibleName().strip()
+    finally:
+        dispose(dialog, qt_app)
+
+
+def test_a_split_beyond_the_limit_is_said_not_thrown(qt_app):
+    """Ab 1024 Fächern warf *Längs teilen* die Absage aus dem Slot."""
+    spec = LayoutSpec("inner", Node("cell", "cell", width=80, depth=60, radius=0))
+    dialog = OrganizerDialog({"layout": layout_to_text(spec), "wall": 4, "radius": 0})
+    try:
+        _until(qt_app, dialog.accept_button.isEnabled)
+        full = dialog._nodes["cell"]
+        dialog._nodes.update({f"cell_{index}": full for index in range(1, 1025)})
+        dialog._split_node("cell", "x")
+        assert "zu groß" in dialog.state.text(), dialog.state.text()
+    finally:
+        dispose(dialog, qt_app)

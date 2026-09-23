@@ -1352,6 +1352,26 @@ def test_an_empty_result_says_what_to_do(qt_app: QApplication) -> None:
     assert not dialog._ok_button.isEnabled(), "ohne Treffer gibt es nichts zu übernehmen"
 
 
+def test_one_found_profile_is_counted_in_the_singular(qt_app: QApplication) -> None:
+    """„1 Profile" stand unter einer Liste mit einem Treffer."""
+    from pathlib import Path as _Path
+
+    from app.core.export import slicer_profiles as sp
+    from app.ui.filament_picker import SlicerFilamentDialog
+
+    bestand = [
+        sp.SlicerProfile(path=_Path("/x/a.json"), name="Elegoo PLA @EC", kind="filament"),
+        sp.SlicerProfile(path=_Path("/x/b.json"), name="Elegoo PETG @EC", kind="filament"),
+    ]
+    dialog = SlicerFilamentDialog(None, bestand)
+    try:
+        assert dialog.count.text() == "2 Profile"
+        dialog.search.setText("PETG")
+        assert dialog.count.text() == "1 Profil"
+    finally:
+        dialog.deleteLater()
+
+
 @pytest.mark.parametrize("lookup", ["empty", "broken"])
 def test_profile_choice_reports_an_empty_search_beside_an_existing_profile(
     qt_app: QApplication,
@@ -1383,6 +1403,7 @@ def test_profile_choice_reports_an_empty_search_beside_an_existing_profile(
     assert heading is not None
     heading.click()
     dialog.choose_profile.click()
+    assert dialog.wait_for_profiles()
     assert dialog.slicer_profile.text() == "Bestehendes PETG"
     assert dialog.validation.isVisibleTo(dialog)
     assert "Keine Filamentprofile" in dialog.validation.text()
@@ -1397,8 +1418,100 @@ def test_profile_choice_reports_an_empty_search_beside_an_existing_profile(
         module.SlicerFilamentDialog, "exec", lambda _self: module.QDialog.DialogCode.Accepted
     )
     dialog.choose_profile.click()
+    assert dialog.wait_for_profiles()
     assert dialog.slicer_profile.text() == "PETG Neu"
     assert not dialog.validation.text()
+
+
+def _slow_profiles(monkeypatch: pytest.MonkeyPatch, name: str = "PETG Neu"):
+    """Ein Bestand, der erst antwortet, wenn der Test es erlaubt."""
+    import threading
+    from pathlib import Path
+
+    from app.core.export.slicer_profiles import SlicerProfile
+    from app.ui import filament_picker as module
+
+    gate = threading.Event()
+    ran_in: list[str] = []
+
+    def slow() -> tuple[SlicerProfile, ...]:
+        ran_in.append(threading.current_thread().name)
+        gate.wait(10)
+        return (SlicerProfile(Path("p.json"), name, "filament", from_user=True),)
+
+    monkeypatch.setattr(module, "slicer_filaments", slow)
+    return gate, ran_in
+
+
+def test_reading_the_slicer_profiles_does_not_hold_the_dialog(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Wählen …* las den Bestand im Hauptthread, unter einem Wartezeiger.
+
+    Gemessen am 23.09.2026 an 5962 Profilen (ElegooSlicer und fünf weitere
+    Slicer): 26,6 s beim ersten Mal, 4,3 s danach — ein eingefrorenes
+    Fenster ohne Balken und ohne Abbrechen (§2.8).
+    """
+    import threading
+    import time
+
+    from app.ui import filament_picker as module
+
+    gate, ran_in = _slow_profiles(monkeypatch)
+    monkeypatch.setattr(
+        module.SlicerFilamentDialog, "exec", lambda _self: module.QDialog.DialogCode.Accepted
+    )
+    dialog = NewFilamentDialog(name="PETG")
+    try:
+        started = time.perf_counter()
+        dialog.choose_profile.click()
+        assert time.perf_counter() - started < 1.0, "der Klick kehrt sofort zurück"
+        assert not dialog.profile_search.isHidden(), "Balken und Abbrechen stehen da"
+        assert not dialog.choose_profile.isEnabled()
+        assert dialog.choose_profile.toolTip(), "der gesperrte Knopf sagt, warum"
+
+        gate.set()
+        assert dialog.wait_for_profiles()
+
+        assert ran_in and ran_in[0] != threading.main_thread().name
+        assert dialog.slicer_profile.text() == "PETG Neu"
+        assert dialog.profile_search.isHidden()
+        assert dialog.choose_profile.isEnabled()
+    finally:
+        gate.set()
+        dialog.wait_for_profiles()
+        dialog.deleteLater()
+
+
+def test_the_profile_search_can_be_cancelled(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Abbrechen gibt den Dialog sofort frei; die späte Antwort öffnet nichts."""
+    from app.ui import filament_picker as module
+
+    gate, _ran_in = _slow_profiles(monkeypatch)
+    opened: list[object] = []
+    monkeypatch.setattr(
+        module.SlicerFilamentDialog,
+        "exec",
+        lambda self: opened.append(self) or module.QDialog.DialogCode.Accepted,
+    )
+    dialog = NewFilamentDialog(name="PETG", slicer_profile="Altes PETG")
+    try:
+        dialog.choose_profile.click()
+        dialog.stop_search.click()
+
+        assert dialog.profile_search.isHidden()
+        assert dialog.choose_profile.isEnabled()
+
+        gate.set()
+        assert dialog.wait_for_profiles()
+        assert opened == [], "die abgebrochene Suche öffnet keine Auswahl mehr"
+        assert dialog.slicer_profile.text() == "Altes PETG"
+    finally:
+        gate.set()
+        dialog.wait_for_profiles()
+        dialog.deleteLater()
 
 
 def test_the_profile_of_a_spool_can_be_chosen_and_removed(qt_app: QApplication) -> None:
@@ -1610,3 +1723,65 @@ def test_full_body_offers_named_replacement_and_cancel_keeps_selection(
 # steht in ``tests/test_language_rules.py``
 # (``test_labels_do_not_name_the_mouse_event_type``): Er braucht kein Qt,
 # und diese Datei läuft vor jedem Commit an ``app/``.
+
+
+def test_an_unreadable_store_reads_as_its_title_in_the_list(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die graue Zeile im Wähler zeigte ``str(problem)`` — „Titel.: Detail".
+    Sie trägt jetzt zwei Sätze; das Detail bleibt, denn es nennt den Ausweg."""
+    from app.core.errors import ValidationError
+
+    def broken(*_args: object, **_kwargs: object) -> object:
+        raise ValidationError(
+            title="Das Filamentlager lässt sich nicht lesen.",
+            field="catalogue",
+            constraint="unreadable",
+            detail="Die Datei bleibt unverändert.",
+        )
+
+    monkeypatch.setattr(filaments, "catalogue", broken)
+    field = FilamentField(0)
+    try:
+        assert field.itemText(0) == (
+            "Das Filamentlager lässt sich nicht lesen. Die Datei bleibt unverändert."
+        )
+        described = str(field.itemData(0, Qt.ItemDataRole.AccessibleDescriptionRole))
+        assert "Die Datei bleibt unverändert." in described
+    finally:
+        field.deleteLater()
+
+
+def test_the_panel_buttons_say_why_they_rest(qt_app: QApplication) -> None:
+    """*Druckwerte …* und *Filament löschen* standen grau ohne Grund.
+
+    Beide warten auf eine Zeile — die eine unter „Im Projekt", die andere
+    unter „Im Regal"; gesagt hat es keiner, und der Statuskanal war leer
+    (Regel 18: Tooltip, Statuszeile, Bildschirmleser).
+    """
+    from app.ui.filament_picker import FilamentPanel
+
+    panel = FilamentPanel()
+    try:
+        for button in (panel.settings_button, panel.delete_button):
+            assert not button.isEnabled()
+            said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+            assert all(text.strip() for text in said), (button.text(), said)
+            assert said[0] == said[1] == said[2]
+        assert "Im Projekt" in panel.settings_button.toolTip()
+        assert "Im Regal" in panel.delete_button.toolTip()
+    finally:
+        panel.release()
+        panel.deleteLater()
+
+
+def test_the_profile_choice_button_says_what_it_does(qt_app: QApplication) -> None:
+    """„OK" sagt nicht, was es tut — derselbe Befund, der dem Katalog sein
+    „Einfügen" gegeben hat."""
+    from app.ui.filament_picker import SlicerFilamentDialog
+
+    dialog = SlicerFilamentDialog(None, [])
+    try:
+        assert dialog._ok_button.text() == "Profil übernehmen"
+    finally:
+        dialog.deleteLater()

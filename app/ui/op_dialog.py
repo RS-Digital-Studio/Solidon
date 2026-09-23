@@ -698,6 +698,82 @@ class ValueField(QWidget):
         self.hint.setText(f"= {value:g}{unit}")
 
 
+class CountField(ValueField):
+    """Die Stückzahl einer Operation — mit fx, aufgelöst beim Übernehmen.
+
+    Hier stand ein nacktes ``QSpinBox``: Hinter jedem anderen Zahlenfeld steht
+    ein fx, und genau die Stückzahl — *Objekt duplizieren*, *Kopien in Reihe
+    oder Kreis* — hatte keines. Wer sechs Dome für ``@reihen * @spalten``
+    wollte, rechnete im Kopf.
+
+    **Der Ausdruck wird zur Zahl, bevor er den Stapel erreicht.** Die
+    Kennungen der Kopien vergibt der Stapel beim Anlegen, und die Stückzahl
+    steht dort als Zahl (``History._stated``, Registertext von *Objekt
+    duplizieren*); ein Ausdruck, der sich später ändert, hieße neue Objekte ohne
+    Schritt. Der Hinweis unter dem Feld sagt das, bevor jemand übernimmt — und
+    was nicht ganzzahlig im erlaubten Bereich landet, sperrt den Knopf mit
+    Grund, statt beim Kern als „kein Ausdruck" zu enden.
+    """
+
+    def resolved(self) -> int | None:
+        """Die Stückzahl, die übernommen wird — oder ``None``, wenn sie nicht trägt."""
+        entered = super().value()
+        try:
+            number = (
+                expressions.evaluate(entered, self._parameter_values)
+                if isinstance(entered, str)
+                else entered
+            )
+        except AppError:
+            return None
+        if number is None or not float(number).is_integer():
+            return None
+        count = int(number)
+        low, high = self._entry.minimum, self._entry.maximum
+        if (low is not None and count < low) or (high is not None and count > high):
+            return None
+        return count
+
+    @property
+    def valid(self) -> bool:
+        """Ob die Eingabe eine Stückzahl ergibt, die der Kern annimmt."""
+        return self.resolved() is not None
+
+    def value(self) -> float | int | str | None:
+        """Die Zahl, nie der Ausdruck — siehe Klassentext."""
+        count = self.resolved()
+        return count if count is not None else super().value()
+
+    def problem(self) -> str:
+        """Warum die Eingabe keine Stückzahl ist — für Knopf und Hinweis."""
+        low, high = self._entry.minimum, self._entry.maximum
+        if low is not None and high is not None:
+            return str(
+                tr("Die Stückzahl muss eine ganze Zahl von {low} bis {high} ergeben.")
+            ).format(low=int(low), high=int(high))
+        return str(tr("Der Ausdruck muss eine ganze Zahl ergeben. Passen Sie ihn an."))
+
+    def _describe(self) -> None:
+        super()._describe()
+        entered = self.text.text().strip()
+        if not self.toggle.isChecked() or not entered:
+            return
+        count = self.resolved()
+        if count is None:
+            try:
+                expressions.check(entered)
+                expressions.evaluate(entered, self._parameter_values)
+            except AppError:
+                # Den Satz des Auswerters behält ``ValueField`` — er sagt,
+                # welcher Name fehlt oder welche Klammer.
+                return
+            self.hint.setText(self.problem())
+            return
+        self.hint.setText(
+            str(tr("= {count} — steht danach als feste Stückzahl im Schritt.")).format(count=count)
+        )
+
+
 class MaterialField(QComboBox):
     """Welches Material ein Teil ist — gewählt, nicht getippt.
 
@@ -1639,6 +1715,27 @@ class OperationDialog(QDialog):
         placed.setVisible(False)
         self._placement_hint = placed
         layout.addWidget(placed)
+        # **Und der Weg zurück ins Bild** (RM-205). Escape in der Platzierung
+        # bringt den Dialog zurück und behält die Werte — aber von hier
+        # führte nichts mehr zurück in die erste Stufe: ``surfaceRequested``
+        # hatte keinen Sender, seit der Knopf *Im Modell platzieren* am
+        # 11.09.2026 fiel. Wer nach dem Nachbessern des Durchmessers neu
+        # zielen wollte, musste den Dialog schließen und von vorn beginnen.
+        # Der Knopf erscheint nur, wo schon gezielt wurde: Dann ist die
+        # Platzierung für diese Operation möglich, und der Kunde kennt sie.
+        self._aimed = False
+        self.aim_again = QPushButton(tr("Stelle im Bild wählen"), self)
+        aim_note = tr("Zurück ins Bild und die Stelle am Modell neu wählen. Die Werte bleiben.")
+        self.aim_again.setToolTip(aim_note)
+        self.aim_again.setStatusTip(aim_note)
+        self.aim_again.setAccessibleDescription(aim_note)
+        self.aim_again.setVisible(False)
+        self.aim_again.clicked.connect(self.surfaceRequested)
+        aim_row = QHBoxLayout()
+        aim_row.setContentsMargins(0, 0, 0, 0)
+        aim_row.addWidget(self.aim_again)
+        aim_row.addStretch(1)
+        layout.addLayout(aim_row)
         self._filament_notice = ErrorNotice(self)
         self._filament_notice.hide()
         layout.addWidget(self._filament_notice)
@@ -1800,6 +1897,14 @@ class OperationDialog(QDialog):
             isinstance(editor, SealPathField) and not editor.valid
             for editor in self._editors.values()
         )
+        no_count = next(
+            (
+                editor.problem()
+                for editor in self._editors.values()
+                if isinstance(editor, CountField) and not editor.valid
+            ),
+            "",
+        )
         missing_sketch = self._missing_sketch()
         missing_material = self._missing_material()
         # Und ein Pflicht-Ziel ohne Eintrag (Bedienweg-Durchsicht 14.09.2026):
@@ -1827,6 +1932,7 @@ class OperationDialog(QDialog):
             or (tr("Wählen Sie mindestens eine gültige Kontur.") if no_contour else "")
             or (tr("Öffnen Sie die Fachaufteilung und prüfen Sie ihre Maße.") if no_layout else "")
             or (tr("Wählen oder zeichnen Sie einen geschlossenen Dichtweg.") if no_seal else "")
+            or no_count
             or missing_sketch
             or missing_material
             or (tr("Dafür braucht es ein Merkmal an einem zweiten Körper.") if no_target else "")
@@ -1839,6 +1945,7 @@ class OperationDialog(QDialog):
             or no_contour
             or no_layout
             or no_seal
+            or bool(no_count)
             or bool(missing_sketch)
             or bool(missing_material)
             or no_target
@@ -1861,7 +1968,14 @@ class OperationDialog(QDialog):
         if any(
             isinstance(
                 editor,
-                (FeatureSetField, EdgeSetField, ContourField, OrganizerLayoutField, SealPathField),
+                (
+                    FeatureSetField,
+                    EdgeSetField,
+                    ContourField,
+                    OrganizerLayoutField,
+                    SealPathField,
+                    CountField,
+                ),
             )
             and not editor.valid
             for editor in self._editors.values()
@@ -1935,8 +2049,15 @@ class OperationDialog(QDialog):
         anfängt und wenn er aufhört. Er ist die einzige Stelle, die es weiß:
         Das Register sagt, ob eine Operation platziert *werden kann*, nicht ob
         sie es gerade *tut*.
+
+        Und wer nicht mehr zielt, nachdem er es schon tat, bekommt den Knopf
+        zurück ins Bild (RM-205) — nicht beim ersten Öffnen, wo der Dialog
+        vielleicht gar nicht platzieren kann.
         """
         self._placement_hint.setVisible(bool(on))
+        if on:
+            self._aimed = True
+        self.aim_again.setVisible(self._aimed and not on)
 
     def block_apply(self, reason: str | None) -> None:
         """Den Übernehmen-Knopf von außen sperren — mit Grund — oder freigeben.
@@ -2313,6 +2434,10 @@ class OperationDialog(QDialog):
             editor.validityChanged.connect(self._follow_source_pending)
         elif isinstance(editor, ValueField | SketchField | ImageSourceField | ArmatureField):
             editor.changed.connect(self.valuesChanged)
+            if isinstance(editor, CountField):
+                # Ob die Stückzahl trägt, entscheidet der Knopf mit — bei
+                # jeder Eingabe, nicht erst beim Klick.
+                editor.changed.connect(self._follow_source_pending)
         elif isinstance(editor, QCheckBox):
             editor.toggled.connect(self.valuesChanged)
         elif isinstance(editor, QSpinBox | QDoubleSpinBox):
@@ -2360,12 +2485,9 @@ class OperationDialog(QDialog):
             picker.choiceProblem.connect(self._filament_choice_problem)
             return picker
         if entry.kind == "int" and entry.name == self.spec.produces_from:
-            spin = QSpinBox(self)
-            spin.setMinimum(int(entry.minimum) if entry.minimum is not None else -1_000_000)
-            spin.setMaximum(int(entry.maximum) if entry.maximum is not None else 1_000_000)
-            if start is not None:
-                spin.setValue(int(start))
-            return _kept_narrow(spin)
+            # Die Stückzahl bekommt ihr fx wie jedes andere Zahlenfeld — und
+            # löst es beim Übernehmen zur Zahl auf (:class:`CountField`).
+            return CountField(entry, start, self._parameter_values, self)
         if entry.kind in ("float", "int"):
             # Kein nacktes ``QDoubleSpinBox`` mehr: ein Maß darf an einem
             # Projektparameter hängen (§13), und ``float("=@breite")`` war der
@@ -2579,7 +2701,11 @@ class OperationDialog(QDialog):
         if entry is not None and (entry.kind in ("feature", "features") or entry.targets_feature):
             self._feature_focus = name
         klappe = getattr(self, "advanced", None)
-        if entry is not None and entry.placement != "front" and klappe is not None:
+        # Gefragt wird das Formular, in dem die Zeile steht, nicht das Schema:
+        # Ein entschiedener Wert steht vorn, auch wenn sein Schema ihn nach
+        # hinten legt (``_promoted_fields``), und die Klappe ginge sonst für
+        # ein Feld auf, das gar nicht darin liegt.
+        if self._rows.get(name) is self._advanced_form and klappe is not None:
             klappe.setChecked(True)
         editor.setFocus(Qt.FocusReason.OtherFocusReason)
         # Ein ``ValueField`` ist ein Verbund; der Cursor gehört in sein Drehfeld,
@@ -2981,6 +3107,15 @@ def _show_patterns(combo: QComboBox, choices: Sequence[Any]) -> None:
     combo.setIconSize(QSize(PATTERN_ICON, PATTERN_ICON))
 
 
+_SKETCH_EPS = 0.01
+"""Ab wann eine getippte Zahl als neues Maß gilt und nicht als Anzeige.
+
+Hundertstelmillimeter: feiner als die zweistellige Anzeige und gröber als der
+Rest, den der Löser auf seiner Toleranz stehen lässt. Zu klein gewählt, hielte
+eine Rundungsdifferenz den Dialog für eine Ansage und er streckte im Kreis; zu
+groß, verschluckte er eine echte Änderung.
+"""
+
 #: Was vorausgewählt ist, wenn die Skizze fertig ist.
 #:
 #: **Nicht die erste Zeile.** Die Liste kommt alphabetisch nach Titel aus dem
@@ -2992,15 +3127,6 @@ def _show_patterns(combo: QComboBox, choices: Sequence[Any]) -> None:
 #: aufzieht. Steht der Eintrag einmal nicht im Register, bleibt es bei der
 #: ersten Zeile — eine Vorauswahl, die ins Leere zeigt, wäre schlimmer als
 #: eine unpassende.
-_SKETCH_EPS = 0.01
-"""Ab wann eine getippte Zahl als neues Maß gilt und nicht als Anzeige.
-
-Hundertstelmillimeter: feiner als die zweistellige Anzeige und gröber als der
-Rest, den der Löser auf seiner Toleranz stehen lässt. Zu klein gewählt, hielte
-eine Rundungsdifferenz den Dialog für eine Ansage und er streckte im Kreis; zu
-groß, verschluckte er eine echte Änderung.
-"""
-
 DEFAULT_SKETCH_USE = "sketch_extrude"
 
 #: Was vorausgewählt ist, wenn die Zeichnung auf einem Körper liegt.

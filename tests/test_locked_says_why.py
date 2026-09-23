@@ -180,6 +180,30 @@ def _recipe(session: Session) -> RecipeDialog:
     )
 
 
+def _organizer() -> QDialog:
+    """Der Fächer-Dialog, wie ihn das Werkzeug öffnet — die Vorschau rechnet noch."""
+    from app.ui.organizer_dialog import OrganizerDialog
+
+    return OrganizerDialog({})
+
+
+def _seal_path() -> QDialog:
+    """Der Dichtweg auf einer Platte mit zwei Öffnungen, noch keine gewählt."""
+    from app.ui.seal_dialog import SealPathDialog
+    from tests.test_seal_openings import plate
+
+    entry = plate()
+    return SealPathDialog(entry, [entry], {"support_feature": "plate:top"})
+
+
+def _slicer_spools() -> QDialog:
+    """Die Übernahme aus dem Slicer, bevor jemand eine Spule anhakt."""
+    from app.core.knowledge import filaments
+    from app.ui.filament_inventory import SlicerSpoolDialog
+
+    return SlicerSpoolDialog((filaments.CatalogueFilament("PETG Weiß", "#ffffff", "PETG"),))
+
+
 #: Wie jeder Dialog gebaut wird. Die Bauanleitungen stammen aus den Tests, die
 #: es zu den einzelnen Fenstern schon gibt — zwei Aufbauten desselben Dialogs
 #: laufen auseinander, sobald jemand an einem davon etwas ändert.
@@ -187,6 +211,15 @@ BUILDERS: dict[str, Callable[[Session], QDialog]] = {
     "SupportDialog": lambda _session: SupportDialog(
         message="Der Deckel sitzt schief.", error=ValueError("kaputt")
     ),
+    # **Und leer, wie ihn *Hilfe → Rückmeldung senden* öffnet.** Der Eintrag
+    # darüber trägt Text; *Senden* ist dort frei, und dass es frisch geöffnet
+    # wortlos ruhte, sah dieser Wächter deshalb nie.
+    "SupportDialog (leer)": lambda _session: SupportDialog(),
+    # Die drei, die der Wächter bis zur Durchsicht 0.5.0 nicht baute — jeder
+    # trug einen gesperrten Hauptknopf ohne Grund.
+    "OrganizerDialog": lambda _session: _organizer(),
+    "SealPathDialog": lambda _session: _seal_path(),
+    "SlicerSpoolDialog": lambda _session: _slicer_spools(),
     "UpdateDialog": lambda _session: UpdateDialog(_release()),
     "ChangesDialog": lambda _session: ChangesDialog(),
     "AboutDialog": lambda _session: AboutDialog(),

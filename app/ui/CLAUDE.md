@@ -535,6 +535,10 @@ genau einem vollständigen Stand.
 
 `filament_inventory.py` zeigt und verwaltet Spulen ohne Renderer; `filament_picker.py`
 enthält den gemeinsamen Spulendialog und die Übernahme konfigurierter Slicerfilamente.
+Den Profilbestand des Slicers für *Slicer-Profil → Wählen …* liest
+`_SlicerFilamentSearch` im Arbeiter, mit Balken und *Abbrechen* im Dialog —
+gemessen 4 bis 27 s an 5962 Profilen; `wait_for_profiles` stellt die Antwort in
+Tests zu.
 `filament_assignment.py` zeigt die Schnellauswahl. Beide Auswahlwege melden
 `spoolChosen`, ohne lokale Kennungen in Geometrieparameter zu schreiben.
 `main_window.py` führt die Zuweisungsoperationen aus und speichert die Bindung
@@ -1292,9 +1296,9 @@ behalten ihre Seite. Vorbelegte Richtungswerte ändern ihre Schemaseite nicht.
 
 | Datei | Besonderheit |
 |---|---|
-| `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt. `offer_naming=True` hängt vorn den Haken *Maße als Parameter anlegen* an, `names_dimensions()` liest ihn; die Parameter legt das Fenster an (`_named_dimensions`, §13) |
-| `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung über PayPal oder GoFundMe |
-| `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29). An einem Resin-Drucker zeigt er nur, was gilt (`_reduce_for_resin`, `_fit_to_technology` nach einem Druckerwechsel): Drucker, Material, Platten, Programm und *Im Slicer öffnen* als Hauptknopf — Stufe, Wände, Füllung, Vorschläge, Düse, Slicen und Druckdatei sind verborgen, `settings_for_export` gibt keine Werte mit. Ein Programm ohne Familie (`other`) sperrt Slicen mit Grund und lässt Öffnen frei |
+| `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt. `offer_naming=True` hängt vorn den Haken *Maße als Parameter anlegen* an, `names_dimensions()` liest ihn; die Parameter legt das Fenster an (`_named_dimensions`, §13). Die Stückzahl (`produces_from`) ist ein `CountField`: fx wie jedes Zahlenfeld, zur ganzen Zahl aufgelöst, bevor sie den Stapel erreicht (die Kennungen vergibt er vorher). `aim_again` führt nach Escape aus der Platzierung zurück in Stufe 1 (RM-205) |
+| `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung über PayPal oder GoFundMe. Eine Adresse im Browser öffnet `open_link`: ohne Browser liegt sie danach in der Zwischenablage und steht im Satz — `QDesktopServices.openUrl` direkt ruft niemand, der den Rückgabewert nicht liest |
+| `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29). An einem Resin-Drucker zeigt er nur, was gilt (`_reduce_for_resin`, `_fit_to_technology` nach einem Druckerwechsel): Drucker, Material, Platten, Programm und *Im Slicer öffnen* als Hauptknopf — Stufe, Wände, Füllung, Vorschläge, Düse, Slicen und Druckdatei sind verborgen, `settings_for_export` gibt keine Werte mit. Ein Programm ohne Familie (`other`) sperrt Slicen mit Grund und lässt Öffnen frei. Vor *Slicen* und *Im Slicer öffnen* fragt `dialogs.confirm_handover`, wenn der Prüfbericht Fehler der gewählten Platten trägt (`_may_hand_over`) |
 | `print_disclosure.py` | Der Hinweis davor: dass diese Werte Erfahrungswerte sind und mit einer 3MF mitreisen — und die Wahl, ob sie das sollen (§29) |
 | weitere | `settings_dialog` · `generate_dialog` (Weg 3) · `recipe_dialog` · `variants_dialog` · `comfy_dialog` · `install_dialog` · `support_dialog` · `update_dialog` · `changes_dialog` |
 
@@ -1914,7 +1918,19 @@ und stellt Sprache sowie Qt-Katalog des ursprünglichen Fensters wieder her.
 
 Beim Sprachwechsel der ersten Schritte werden Antworten für den Neuaufbau
 übertragen. Erst die Annahme setzt `first_run_done`; die Sprachwahl beendet
-die Einrichtung nicht.
+die Einrichtung nicht. **Schließen, Übernehmen und der Sprachwechsel warten
+nicht auf die Programmsuche** — die Halteleine hält den Arbeiter; der alte
+Dialog der Sprachschleife geht über `deleteLater`, nicht über `release`.
+*Eigenes Modell öffnen …* meldet den Import nur an: `action_first_run` liest
+die Datei erst, nachdem der Dialog zu ist und `_adopt_defaults` das Projekt
+angelegt hat — sonst ersetzte das leere Projekt den Plan einer großen Datei.
+
+Die Druckerliste steht an drei Orten (Erststart, Einstellungen,
+Druckvorbereitung) und wird an allen dreien gleich gebaut:
+`first_run.add_printer_choices` ordnet nach Verfahren und Titel,
+`group_printer_choices` setzt je Verfahren einen nicht wählbaren, halbfetten
+Kopf. Der eigene Drucker fragt die Schichthöhe mit (leer = abgeleitet, der
+abgeleitete Wert steht im Feld).
 
 Unerwartete Fehler beim Erzeugen oder Einrichten von ComfyUI verlassen den
 Wartezustand als `InternalError`. Die gemeinsame Fehleranzeige verbindet den

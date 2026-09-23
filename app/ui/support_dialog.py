@@ -225,7 +225,7 @@ def log_tail() -> bytes:
 
 def _project_note(project: Project | None) -> str:
     """Eigene Bausteine gehören zur Beschreibung desselben gespeicherten Stands."""
-    note = tr("Modell, Operationsstapel und Chat-Verlauf")
+    note = tr("Modell, Arbeitsschritte und Chat-Verlauf")
     if project is None:
         return note
     try:
@@ -295,6 +295,26 @@ class _SendWorker(Worker):
             self.failed.emit(support.SendFailed(values={"reason": str(problem)[:200]}))
             return
         self.done.emit(receipt)
+
+
+class _NoMailProgram:
+    """Der eine Satz für „kein Mailprogramm" — ob Portal oder ``mailto``.
+
+    Als Klasse mit Methode und nicht als Modulkonstante: ``tr`` übersetzt
+    beim Aufruf, und beim Import gibt es noch keine Sprache.
+    """
+
+    @staticmethod
+    def text() -> str:
+        return str(
+            tr(
+                "Das E-Mail-Programm ließ sich nicht öffnen. Öffnen Sie Ihr Mailprogramm "
+                "und übernehmen Sie den Text aus „bericht.txt“ sowie die abgelegten Anhänge."
+            )
+        )
+
+
+_NO_MAIL_PROGRAM = _NoMailProgram()
 
 
 class SupportDialog(QDialog):
@@ -676,8 +696,7 @@ class SupportDialog(QDialog):
         elif self.state.text() == waiting:
             self.state.clear()
         self.progress.setVisible(pending or self._worker is not None)
-        self.save_folder.setEnabled(not pending and self._worker is None)
-        self.by_mail.setEnabled(not pending and self._worker is None)
+        self._show_ways()
         ticket = self.ticket()
         lines = [ticket.as_text()]
         # „Vorher sieht er, was mitgeht" galt nicht fürs vorangekreuzte
@@ -698,6 +717,30 @@ class SupportDialog(QDialog):
         self.preview.setPlainText("\n".join(lines))
         self._update_send()
 
+    def _show_ways(self) -> None:
+        """Ablegen und Mail ruhen, solange der Anhang entsteht oder gesendet wird.
+
+        Mit Grund an allen drei Kanälen (Regel 18) — und ohne, sobald sie
+        wieder frei sind: Nach einem gescheiterten Versand standen sie sonst
+        frei da und sagten „Wird gesendet …".
+        """
+        pending = self._session_pending()
+        busy = pending or self._worker is not None
+        resting = (
+            str(
+                tr("Wird gesendet …")
+                if self._worker is not None
+                else tr("Sitzung wird vorbereitet …")
+            )
+            if busy
+            else ""
+        )
+        for button in (self.save_folder, self.by_mail):
+            button.setEnabled(not busy)
+            button.setToolTip(resting)
+            button.setStatusTip(resting)
+            button.setAccessibleDescription(resting)
+
     def _update_send(self) -> None:
         """*Senden* gilt erst, wenn etwas dasteht (§2.7 — kein toter Knopf).
 
@@ -713,6 +756,20 @@ class SupportDialog(QDialog):
         # dieselbe Sendung, die ``_start`` anschließend prüft und verschickt.
         has_content = bool(self._message_text().strip() or self.detail.strip())
         self.send.setEnabled(has_content and not running)
+        # **Der ruhende Knopf sagt, worauf er wartet** — an allen drei Kanälen
+        # (Regel 18). Frisch geöffnet stand er wortlos grau da.
+        why = (
+            ""
+            if has_content and not running
+            else str(tr("Wird gesendet …"))
+            if self._worker is not None
+            else str(tr("Sitzung wird vorbereitet …"))
+            if running
+            else str(tr("Schreiben Sie zuerst, worum es geht."))
+        )
+        self.send.setToolTip(why)
+        self.send.setStatusTip(why)
+        self.send.setAccessibleDescription(why)
 
     # --- Senden -----------------------------------------------------------------
 
@@ -792,8 +849,7 @@ class SupportDialog(QDialog):
         if worker is not None:
             self._leash.hold_until_done(worker)
         self._update_send()
-        self.save_folder.setEnabled(not self._session_pending())
-        self.by_mail.setEnabled(not self._session_pending())
+        self._show_ways()
 
     # --- Die Wege ohne Netz -----------------------------------------------------
 
@@ -908,8 +964,18 @@ class SupportDialog(QDialog):
         ticket = self.ticket()
         if discover.in_flatpak():
             self._open_mail_portal(ticket)
-        else:
-            QDesktopServices.openUrl(QUrl(support.mail_link(ticket)))
+            return
+        # **Und ohne Mailprogramm sagt der Dialog es** (RM-038). Die Antwort
+        # von ``openUrl`` stand nirgends: Auf einem Windows ohne
+        # eingerichtetes Mailprogramm geschah auf den Klick nichts, und der
+        # Kunde wartete auf ein Fenster, das nicht kam. Derselbe Satz wie beim
+        # Portal, denn es ist dieselbe Lage — und derselbe Rückweg: der
+        # abgelegte Ordner mit „bericht.txt".
+        if QDesktopServices.openUrl(QUrl(support.mail_link(ticket))):
+            self.state.clear()
+            return
+        _log.warning("no mail program answered the mailto link")
+        self.state.setText(_NO_MAIL_PROGRAM.text())
 
     def _open_mail_portal(self, ticket: Ticket) -> None:
         """Übergibt Originaltext an das Flatpak-Mailportal, ohne URL-Zwischenschritt.
@@ -1050,12 +1116,7 @@ class SupportDialog(QDialog):
                 )
         self.by_mail.setEnabled(True)
         if error:
-            self.state.setText(
-                tr(
-                    "Das E-Mail-Programm ließ sich nicht öffnen. Öffnen Sie Ihr Mailprogramm "
-                    "und übernehmen Sie den Text aus „bericht.txt“ sowie die abgelegten Anhänge."
-                )
-            )
+            self.state.setText(_NO_MAIL_PROGRAM.text())
         else:
             self.state.clear()
 

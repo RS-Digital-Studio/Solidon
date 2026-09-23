@@ -1663,3 +1663,51 @@ def test_the_dialog_says_what_it_takes(qt_app: QApplication) -> None:
     assert str(SCOPE_NUMBERS_SHOWN) in many, "bis zur Grenze zählt sie auf"
 
     assert scope_text((), 4), "und auch der leere Fall sagt etwas"
+
+
+def test_every_row_says_which_value_it_belongs_to(qt_app: QApplication) -> None:
+    """Bei zwei Parametern las der Bildschirmleser zweimal „Diesen Wert
+    freigeben", „Beschriftung", „Einheit" — welcher gemeint war, stand
+    nirgends; der sichtbare Name am Haken war überschrieben. Dasselbe am
+    Merkmal: „Dieses Merkmal nach außen geben" statt „Bohrung …"."""
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    try:
+        rows = {row.name: row for row in dialog._params}
+        for name, row in rows.items():
+            for widget in row.widgets():
+                assert name in widget.accessibleName(), (name, widget.accessibleName())
+        assert rows["breite"].title.accessibleName() != rows["hoehe"].title.accessibleName()
+        assert rows["breite"].take.accessibleDescription(), "was der Haken tut, bleibt gesagt"
+
+        feature = dialog._features[0]
+        shown = feature.take.text()
+        assert feature.take.accessibleName() == shown
+        assert shown in feature.name.accessibleName()
+        assert feature.take.accessibleDescription()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_a_refused_part_names_what_helps(qt_app: QApplication) -> None:
+    """Der Satz unter dem Dialog nannte Titel und Grund, aber keinen Ausweg —
+    die Vorschläge des Kerns fielen weg (Regel 17)."""
+    from app.core.errors import ValidationError
+    from app.core.types import Action
+
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    try:
+        dialog._failed(
+            ValidationError(
+                field="title",
+                detail="Der Name enthält nur Satzzeichen.",
+                constraint="empty",
+                suggestions=(Action("rename", "Einen Namen mit Buchstaben wählen"),),
+            )
+        )
+        shown = dialog.report.text()
+        assert "Der Name enthält nur Satzzeichen." in shown
+        assert "Einen Namen mit Buchstaben wählen" in shown, shown
+    finally:
+        dialog.release()
+        dialog.deleteLater()

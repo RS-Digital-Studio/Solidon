@@ -29,8 +29,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from PySide6.QtCore import Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QGuiApplication
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -89,7 +89,8 @@ class _Survey(Worker):
 
     Sekunden, nicht Millisekunden, und deshalb nicht im Oberflächen-Thread
     (§38). Kein Abbrechen: Es gibt nichts zu bereuen — die Suche schreibt
-    nichts, und wer den Dialog schließt, wartet auf sie über die Halteleine.
+    nichts, und wer den Dialog schließt, wartet nicht auf sie; die Halteleine
+    hält sie, bis sie ausgelaufen ist.
     """
 
     done = Signal(object)
@@ -173,6 +174,9 @@ class _Row(QWidget):
         self.status: install.Status | None = None
         self.state = QLabel(PENDING, self)
         self.state.setFixedWidth(16)
+        # Das Zeichen ist die zweite Kodierung neben der Farbe; vorgelesen
+        # wurde es als „Fragezeichen", „plus", „minus". Der Name sagt das Wort.
+        self._name_state(str(tr("Wird gesucht …")))
 
         title = QLabel(f"{requirement.title} — {requirement.what_for}", self)
         title.setWordWrap(True)
@@ -262,6 +266,7 @@ class _Row(QWidget):
         self.status = status
         here = status.present
         self.state.setText(PRESENT if here else ABSENT)
+        self._name_state(str(tr("Vorhanden") if here else tr("Fehlt")))
         self.action.setVisible(not here)
         self.action.setEnabled(not here and status.installable)
         # Jeder neue Status ersetzt den Grund in allen drei Hilfekanälen.
@@ -283,12 +288,25 @@ class _Row(QWidget):
         self.where.setText(self._where_text(status))
         self.setToolTip(self._explanation(status))
 
+    def _name_state(self, word: str) -> None:
+        """Das Zustandszeichen als Wort — für Bildschirmleser und Maus."""
+        self.state.setAccessibleName(word)
+        self.state.setToolTip(word)
+
     def set_busy(self, running: bool) -> None:
-        """Während irgendetwas installiert wird, drückt hier niemand etwas."""
+        """Während irgendetwas installiert wird, drückt hier niemand etwas.
+
+        **Und jeder ruhende Knopf sagt, warum** — an allen drei Kanälen
+        (Regel 18). Sein eigener Satz wird dafür gemerkt und danach
+        zurückgegeben, dieselbe Bauart wie ``_OWN_TIP`` im Druckdialog.
+        """
         self.action.setEnabled(not running and self.status is not None and self.status.installable)
         self.launch.setEnabled(not running)
         self.follow.setEnabled(not running)
         self.locate.setEnabled(not running)
+        busy = str(tr("Erst wenn die laufende Aufgabe fertig ist.")) if running else ""
+        for button in (self.action, self.launch, self.follow, self.locate):
+            _explain_while_busy(button, busy)
 
     def _where_text(self, status: install.Status) -> str:
         """Der Fundort, wenn es einen gibt — sonst der Satz, der weiterhilft.
@@ -442,7 +460,36 @@ class _Row(QWidget):
             self.locationChanged.emit()
 
     def _open_page(self) -> None:
-        QDesktopServices.openUrl(QUrl(self.requirement.url))
+        # Spät geladen wie der Installationsdialog in ``dialogs``: Die beiden
+        # Module kennen einander nur beim Aufruf.
+        from app.ui.dialogs import open_link
+
+        open_link(self.requirement.url, self)
+
+
+#: Wo ein Knopf seinen eigenen Satz ablegt, solange er einen Wartegrund trägt.
+_OWN_TIP = "solidon_own_tip"
+
+
+def _explain_while_busy(button: QPushButton, busy: str) -> None:
+    """Den Wartegrund an alle drei Kanäle — oder den eigenen Satz zurück."""
+    own = button.property(_OWN_TIP)
+    if busy:
+        if own is None:
+            button.setProperty(
+                _OWN_TIP, (button.toolTip(), button.statusTip(), button.accessibleDescription())
+            )
+        button.setToolTip(busy)
+        button.setStatusTip(busy)
+        button.setAccessibleDescription(busy)
+        return
+    if own is None:
+        return
+    tip, status, described = own
+    button.setToolTip(str(tip))
+    button.setStatusTip(str(status))
+    button.setAccessibleDescription(str(described))
+    button.setProperty(_OWN_TIP, None)
 
 
 class InstallDialog(QDialog):
@@ -635,7 +682,14 @@ class InstallDialog(QDialog):
         if self._launcher is not None:
             self._launcher.stop_waiting()
         deadline = time.monotonic() + max(0, timeout_ms) / 1000
-        pending = self._leash.pending()
+        # **Die Suche hält das Schließen nicht auf.** Sie schreibt nichts und
+        # ihre Antwort will nach dem Schließen niemand mehr; mit ihr in dieser
+        # Liste ging der Dialog auf Esc hin nicht zu, solange sie lief — und
+        # sie läuft bei jedem Öffnen, Sekunden lang. Ihren Thread hält die
+        # Halteleine; :meth:`release` wartet für die Suite auf ihn.
+        pending = tuple(
+            worker for worker in self._leash.pending() if not isinstance(worker, _Survey)
+        )
         for worker in pending:
             if worker.isRunning():
                 remaining = max(0, int((deadline - time.monotonic()) * 1000))
@@ -995,7 +1049,13 @@ class InstallDialog(QDialog):
         """Das Protokoll, für den der es weitergeben will (§33.2)."""
         box = QMessageBox(self)
         box.setWindowTitle(tr("Einzelheiten"))
-        box.setText(tr("Was die Paketverwaltung gemeldet hat:"))
+        # Beim Start eines Dienstes hat keine Paketverwaltung etwas gemeldet —
+        # dort stehen Aufruf und Adresse.
+        box.setText(
+            tr("Womit Solidon den Dienst zu starten versucht hat:")
+            if self._running_action == "start"
+            else tr("Was die Paketverwaltung gemeldet hat:")
+        )
         box.setDetailedText(self._details)
         box.exec()
 
@@ -1035,6 +1095,10 @@ class InstallDialog(QDialog):
     def _busy(self, running: bool) -> None:
         self.progress.setVisible(running)
         self.all_button.setEnabled(not running)
+        _explain_while_busy(
+            self.all_button,
+            str(tr("Erst wenn die laufende Aufgabe fertig ist.")) if running else "",
+        )
         for row in self.rows:
             row.set_busy(running)
 

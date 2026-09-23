@@ -14,11 +14,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import (
     QAccessible,
     QAccessibleActionInterface,
-    QDesktopServices,
     QFont,
     QKeyEvent,
     QResizeEvent,
@@ -41,7 +40,7 @@ from PySide6.QtWidgets import (
 
 from app.core.backends import llm, mesh
 from app.core.log import get_logger
-from app.i18n import tr
+from app.i18n import get_language, tr
 from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_timestamp
 from app.ui.style import ROOMY, TIGHT, WIDE, make_primary, set_level
 
@@ -534,7 +533,10 @@ class AiDisclosureDialog(QDialog):
                 dialog.deleteLater()
             return
         if address in _ALLOWED_EXTERNAL_LINKS:
-            QDesktopServices.openUrl(QUrl(address))
+            # Spät geladen: ``dialogs`` lädt dieses Modul selbst.
+            from app.ui.dialogs import open_link
+
+            open_link(address, self)
 
     def _fit_wrapped_paragraphs(self) -> None:
         """Gibt jedem umgebrochenen Text seine echte Höhe für die aktuelle Breite."""
@@ -830,13 +832,16 @@ class LocalPrivacyDialog(QDialog):
         self.setWindowTitle(tr("Solidon-Datenschutz"))
         self.resize(720, 620)
 
-        note = QLabel(
-            tr(
-                "Diese lokale Fassung wird mit Solidon ausgeliefert. Externe Links sind "
-                "hier deaktiviert."
-            ),
-            self,
+        said = tr(
+            "Diese lokale Fassung wird mit Solidon ausgeliefert. Externe Links sind "
+            "hier deaktiviert."
         )
+        # Die Erklärung gibt es nur auf Deutsch. In jeder anderen Sprache sagt
+        # der Leser das vorher — sonst hält man die fremde Sprache für einen
+        # Fehler der Übersetzung.
+        if get_language() != "de":
+            said = f"{said} {tr('Die Erklärung liegt nur auf Deutsch vor.')}"
+        self.note = note = QLabel(said, self)
         note.setWordWrap(True)
         note.setAccessibleName(note.text())
         note.setAccessibleDescription(note.text())

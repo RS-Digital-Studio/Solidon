@@ -18,7 +18,7 @@ import shutil
 import sys
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 from datetime import UTC, date, datetime
 from pathlib import Path, PureWindowsPath
 from time import monotonic, sleep
@@ -709,20 +709,64 @@ def restore_backup() -> Path:
         return target
 
 
-def _write(state: _Inventory) -> None:
-    """Alle Spulen und das Journal gemeinsam; erst die fertige Datei ersetzt den Stand."""
-    target = catalogue_path()
-    scratch = target.with_name(target.name + ".tmp")
+#: Die Feldnamen je Datensatztyp, einmal gelesen. ``dataclasses.fields``
+#: je Wert kostete an einem Lager mit 2000 Buchungen mehr als das Schreiben.
+_FIELD_NAMES: dict[type, tuple[str, ...]] = {}
+
+
+def _plain(value: Any) -> Any:
+    """Ein Datensatz als JSON-Wert — dasselbe Ergebnis wie ``asdict``, ohne
+    dessen tiefe Kopie.
+
+    ``asdict`` kopiert jeden Blattwert über ``copy.deepcopy`` und fragt je
+    Wert die Felder neu ab: 24,6 ms an einem Lager mit 500 Spulen und 2000
+    Buchungen, für Werte, die hier nur gelesen und sofort geschrieben
+    werden. Tupel werden zu Listen — so schreibt ``json`` sie ohnehin.
+    """
+    names = _FIELD_NAMES.get(type(value))
+    if names is None and hasattr(type(value), "__dataclass_fields__"):
+        names = tuple(entry.name for entry in fields(value))
+        _FIELD_NAMES[type(value)] = names
+    if names is not None:
+        return {name: _plain(getattr(value, name)) for name in names}
+    if isinstance(value, (tuple, list)):
+        return [_plain(entry) for entry in value]
+    return value
+
+
+def _encoded(state: _Inventory) -> bytes:
+    """Der vollständige Dateiinhalt eines Standes.
+
+    **Über ``json.dumps`` und nicht über ``json.dump``.** ``dump`` schreibt
+    über den Python-Kodierer in Zehntausenden kleinen Stücken; ``dumps`` nimmt
+    den C-Kodierer, der seit Python 3.14 auch Einrückung kann. Dieselben
+    Bytes, gemessen 65,5 gegen 10,2 ms an 1,6 MB (500 Spulen, 2000
+    Buchungen) — der größte Posten eines ``save``.
+    """
     data = {
         "format_version": FORMAT_VERSION,
         "inventory_identifier": state.identifier,
-        "spools": [asdict(entry) for entry in state.spools.values()],
+        "spools": [_plain(entry) for entry in state.spools.values()],
         "stock_counts": state.counts,
-        "bookings": [asdict(booking) for booking in state.journal.values()],
+        "bookings": [_plain(booking) for booking in state.journal.values()],
     }
+    return json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False).encode("utf-8")
+
+
+def _write(state: _Inventory) -> None:
+    """Alle Spulen und das Journal gemeinsam; erst die fertige Datei ersetzt den Stand.
+
+    Was geschrieben wurde, ist danach auch die Momentaufnahme der Leser
+    (:func:`_remember_written`): Die Oberfläche liest nach jedem Schreiben
+    neu, und im Hauptthread zerlegte sie dafür die eben geschriebene Datei
+    noch einmal — 36 ms an einem Lager mit 500 Spulen und 2000 Buchungen.
+    """
+    target = catalogue_path()
+    scratch = target.with_name(target.name + ".tmp")
+    content = _encoded(state)
     try:
-        with scratch.open("w", encoding="utf-8") as stream:
-            json.dump(data, stream, ensure_ascii=False, indent=2, allow_nan=False)
+        with scratch.open("wb") as stream:
+            stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
         # Der Stand, der gleich ersetzt wird, ist der letzte lesbare — die
@@ -734,6 +778,33 @@ def _write(state: _Inventory) -> None:
         _replace_snapshot(scratch, target)
     finally:
         scratch.unlink(missing_ok=True)
+    _remember_written(target, state)
+
+
+def _remember_written(target: Path, state: _Inventory) -> None:
+    """Den eben geschriebenen Stand als Momentaufnahme der Leser merken.
+
+    Gestempelt wird die Datei **nach** dem Austausch und unter der Sperre der
+    Transaktion: Kein anderer Solidon-Prozess schreibt dazwischen, und ein
+    fremder Austausch danach ändert Kennung, Größe oder Zeit — dann liest
+    :func:`read_snapshot` die Datei wie bisher. Ein Stempel, der sich nicht
+    lesen lässt, lässt den Merker leer; das Schreiben ist trotzdem gelungen.
+    """
+    global _SNAPSHOT_CACHE
+    try:
+        stamp = _file_stamp(target.stat())
+    except OSError:
+        _SNAPSHOT_CACHE = None
+        return
+    _SNAPSHOT_CACHE = (
+        target,
+        stamp,
+        InventorySnapshot(
+            state.identifier,
+            MappingProxyType(dict(state.spools)),
+            MappingProxyType(dict(state.journal)),
+        ),
+    )
 
 
 @contextmanager

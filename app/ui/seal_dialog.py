@@ -29,8 +29,9 @@ from app.core.errors import AppError, InternalError, OperationCancelled, Validat
 from app.core.geom.seal import MAX_OPENING_SIGNATURE, OpeningChoice, match_opening, opening_choices
 from app.core.types import FeatureRef, Parameter, SceneObject
 from app.i18n import _, tr
+from app.ui.dialogs import problem_text
 from app.ui.labels import area, feature_label
-from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.outline_dialog import _ProfileView
 from app.ui.sketch_editor import SketchEditorDialog, Surroundings
 from app.ui.style import make_primary, no_primary
@@ -322,7 +323,7 @@ class SealPathDialog(QDialog):
         hint = QLabel(
             tr(
                 "Diese Wahl legt den Verlauf fest. Nutmaße, Materialien und das vollständige "
-                "Ergebnis prüfen Sie anschließend im Operationsdialog."
+                "Ergebnis prüfen Sie anschließend im nächsten Dialog."
             ),
             self,
         )
@@ -333,7 +334,7 @@ class SealPathDialog(QDialog):
         )
         self.accept_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self.accept_button.setText(tr("Dichtweg übernehmen"))
-        self.accept_button.setEnabled(False)
+        self._lock_accept(str(tr("Dichtweg wird geprüft …")))
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("Abbrechen"))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -365,10 +366,20 @@ class SealPathDialog(QDialog):
             return
         self._revision += 1
         self._ready_revision = -1
-        self.accept_button.setEnabled(False)
+        self._lock_accept(str(tr("Dichtweg wird geprüft …")))
         opening = self.mode.currentData() == "opening"
         self.support.setEnabled(opening)
         self.sketch_button.setEnabled(not opening)
+        # Das jeweils andere Feld ruht — und sagt, wie es wieder geht
+        # (Regel 18); gefunden vom Wächter über alle Dialoge.
+        for widget, resting, why in (
+            (self.sketch_button, opening, tr("Erst „Dichtweg aus: Zeichnung“ wählen.")),
+            (self.support, not opening, tr("Erst „Dichtweg aus: Öffnung am Körper“ wählen.")),
+        ):
+            said = str(why) if resting else ""
+            widget.setToolTip(said)
+            widget.setStatusTip(said)
+            widget.setAccessibleDescription(said)
         self.contours.setEnabled(False)
         self.contour_view.setEnabled(False)
         self.status.setText(tr("Dichtweg wird geprüft …"))
@@ -387,12 +398,17 @@ class SealPathDialog(QDialog):
         if not values["path_sketch"] and not values["support_feature"]:
             self.progress.hide()
             self.status.setText(tr("Wählen oder zeichnen Sie einen geschlossenen Dichtweg."))
+            self._lock_accept(self.status.text())
             return
         worker = _ReadWorker(self.source, self.objects, values, self._parameters, self._revision)
         self._worker = worker
         worker.ready.connect(self._read)
         worker.failed.connect(self._failed)
-        worker.crashed.connect(self._crashed)
+        # Die Revision reist am Empfänger mit, wie bei ``ready`` und
+        # ``failed`` im Signal selbst — ``crashed`` trägt nur den Text.
+        worker.crashed.connect(
+            weak_slot(self, SealPathDialog._crashed, worker.revision, forward=True)
+        )
         worker.finished.connect(self._finished)
         self._leash.start(worker)
 
@@ -459,18 +475,34 @@ class SealPathDialog(QDialog):
             self.status.setText(
                 tr("Klicken Sie auf die gewünschte Öffnung im Bild oder in der Liste.")
             )
-        self.accept_button.setEnabled(valid)
+        self._lock_accept("" if valid else self.status.text())
+
+    def _lock_accept(self, why: str) -> None:
+        """Der Hauptknopf ruht mit Grund an allen drei Kanälen — oder ist frei.
+
+        Der Grund ist der Satz der Zustandszeile; der Knopf stand ohne ihn
+        grau da (Regel 18).
+        """
+        self.accept_button.setEnabled(not why)
+        self.accept_button.setToolTip(why)
+        self.accept_button.setStatusTip(why)
+        self.accept_button.setAccessibleDescription(why)
 
     def _failed(self, revision: int, problem: AppError) -> None:
+        """Grund und Ausweg in der Zustandszeile (Regel 17)."""
         if not self._closed and revision == self._revision:
             self.progress.hide()
-            self.status.setText(str(problem.detail or problem.title))
-            self.accept_button.setEnabled(False)
+            self.status.setText(problem_text(problem))
+            self._lock_accept(str(problem.detail or problem.title))
 
-    def _crashed(self, problem: InternalError) -> None:
-        if self.sender() is self._worker:
-            assert self._worker is not None
-            self._failed(self._worker.revision, problem)
+    def _crashed(self, revision: int, detail: str) -> None:
+        """``crashed`` liefert eine Zeichenkette und keinen Fehler.
+
+        Hier stand ``problem: InternalError`` — ``_failed`` fragte die
+        Zeichenkette nach ``detail``, der Slot warf, und „Dichtweg wird
+        geprüft …" blieb mit laufendem Balken stehen.
+        """
+        self._failed(revision, InternalError(detail=detail))
 
     def _finished(self) -> None:
         if self.sender() is self._worker:

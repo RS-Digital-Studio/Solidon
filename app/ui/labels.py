@@ -2597,10 +2597,82 @@ def demo_line(state: Activation) -> str:
     Demo mit hartem Ende ist es die Zusage, dass niemand überrascht wird —
     wer am 28.10. ein Projekt anfängt, soll es vorher gewusst haben.
     """
+    return demo_days(state, sentence=False)
+
+
+def demo_days(state: Activation, *, sentence: bool = True) -> str:
+    """Die Frist der Demo, als Zeile oder als Satz — mit „Tag" bei einem.
+
+    **Am letzten Tag stand „noch 1 Tage".** Der Stichtag zählt mit
+    (``store.days_left``: „am 30.10. bleibt ein Tag übrig"), und genau an
+    diesem Tag las jeder Demo-Kunde den Fehler, an drei Stellen zugleich.
+    Er heißt jetzt, was er ist: „heute letzter Tag" — verständlicher als
+    „noch 1 Tag" (Konzept Demo→1.0 §5, Punkt 3), und der Tag, an dem man
+    speichert und exportiert.
+    """
     if state.days_left == 1:
-        # Am letzten Tag stand „noch 1 Tage" in der Statusleiste — dauerhaft,
-        # an genau dem Tag, an dem jemand am genauesten hinsieht.
-        return tr("Demo — noch 1 Tag, bis zum {date}").format(date=deadline_date(state))
-    return tr("Demo — noch {days} Tage, bis zum {date}").format(
-        days=state.days_left, date=deadline_date(state)
+        template = (
+            tr("Demo — heute letzter Tag ({date}).")
+            if sentence
+            else tr("Demo — heute letzter Tag ({date})")
+        )
+    else:
+        template = (
+            tr("Demo — noch {days} Tage, bis zum {date}.")
+            if sentence
+            else tr("Demo — noch {days} Tage, bis zum {date}")
+        )
+    return template.format(days=state.days_left, date=deadline_date(state))
+
+
+#: Ab wie vielen Resttagen die Demo ihr Ende einmal je Sitzung ankündigt —
+#: sieben, also ab dem 24.10. für eine Demo bis zum 30.10. (Konzept Demo→1.0
+#: §5, Punkt 2). Gezählt wird mit dem Stichtag, wie ``store.days_left``.
+SALE_NOTICE_DAYS = 7
+
+
+def sale_notice(state: Activation) -> str:
+    """Der ruhige Hinweis der letzten Demowoche — oder nichts.
+
+    **Einmal je Sitzung, nicht modal, nie eine Kaufaufforderung** (Konzept
+    Demo→1.0 §5, Punkt 2): Er sagt, wann die Demo endet, wann 1.0 kommt und
+    dass die eigenen Projekte bleiben, und nennt den Weg, auf dem der Kunde
+    mehr erfährt. Die dauerhafte Statuszeile trägt das Datum schon; dieser
+    Satz trägt die Pause und den Start, die sonst erst der Abschied nennt —
+    und der kommt zu spät, um vorher zu speichern.
+    """
+    if not state.in_demo or not 0 < state.days_left <= SALE_NOTICE_DAYS:
+        return ""
+    from app.branding import APP_NAME, PLANNED_SALE_START
+
+    return str(
+        tr(
+            "Die Demo endet am {date}. {app} 1.0 ist für den {start} um 10:00 Uhr "
+            "geplant, Ihre Projekte bleiben erhalten. Mehr unter Hilfe → Solidon "
+            "freischalten …"
+        )
+    ).format(
+        date=deadline_date(state),
+        app=APP_NAME,
+        start=calendar_date(PLANNED_SALE_START.date()),
     )
+
+
+def trial_days(days: int, *, way: bool = False) -> str:
+    """Die Resttage des Testlaufs — mit dem Menüweg für die Statusleiste.
+
+    Singular wie in :func:`demo_days`: Die Statuszeile erscheint erst ab
+    zwei Tagen, also stand „noch 1 Tage" genau am Tag davor.
+    """
+    one = days == 1
+    if way:
+        template = (
+            tr("Testzeitraum: noch {days} Tag — Hilfe → Solidon freischalten …")
+            if one
+            else tr("Testzeitraum: noch {days} Tage — Hilfe → Solidon freischalten …")
+        )
+    else:
+        template = (
+            tr("Testzeitraum: noch {days} Tag.") if one else tr("Testzeitraum: noch {days} Tage.")
+        )
+    return template.format(days=days)

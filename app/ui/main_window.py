@@ -266,8 +266,10 @@ from app.ui.labels import (
     length_bound,
     local_moment,
     localised,
+    sale_notice,
     set_circle_measure,
     spoiled_the_exact_body,
+    trial_days,
 )
 from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
@@ -2029,6 +2031,8 @@ class MainWindow(QMainWindow):
         self._trial_message = ""
         """Die Testlauf-Zeile der Statusleiste — gemerkt, damit das
         Freischalten genau sie wegräumt und keine fremde Meldung."""
+        self._sale_announced = False
+        """Ob die letzte Demowoche in dieser Sitzung schon angekündigt wurde."""
         self._asked_for_update = False
         """Ob jemand von Hand nach einer neuen Version gefragt hat. Die
         Abfrage beim Start schweigt, wenn es nichts Neues gibt; auf einen Klick
@@ -5125,9 +5129,7 @@ class MainWindow(QMainWindow):
         elif state.in_demo and state.days_left > 0:
             message = demo_line(state)
         elif state.in_trial and state.days_left < 3:
-            message = tr("Testzeitraum: noch {days} Tage — Hilfe → Solidon freischalten …").format(
-                days=state.days_left
-            )
+            message = trial_days(state.days_left, way=True)
         elif state.expired:
             # **Ausgerechnet am Tag, an dem alles grau wird, schwieg die
             # Zeile.** ``in_trial`` verlangt ``days_left > 0``, also fiel bei
@@ -5977,8 +5979,20 @@ class MainWindow(QMainWindow):
     def action_variants(self) -> None:
         """§28.3: derselbe Stapel mit einer gestuften Zahl, nebeneinander auf
         einer Platte.
+
+        **Und danach steht da, was geschrieben wurde und wohin** — wie nach
+        jedem Export, mit *Ordner zeigen* daneben. Der Dialog schloss sich nach
+        dem Schreiben, und seine Zeile „4 Dateien geschrieben" las niemand;
+        was der Lauf zu sagen hatte (eine Gravur ohne Platz), kam nie im
+        Prüfbericht an, obwohl der Haken im Dialog genau das zusagt.
         """
-        VariantsDialog(self.session, self).exec()
+        dialog = VariantsDialog(self.session, self)
+        dialog.exec()
+        if dialog.findings:
+            self.report.add_findings(list(dialog.findings))
+            self._focus_report()
+        if dialog.written:
+            self._announce_written(dialog.written)
 
     def action_install_extras(self) -> None:
         """§36: was fehlt, wofür es da ist, und ein Knopf, der es holt."""
@@ -7080,6 +7094,14 @@ class MainWindow(QMainWindow):
             self._focus_report()
         if not written:
             return
+        self._announce_written(written)
+
+    def _announce_written(self, written: Sequence[Path]) -> None:
+        """Was geschrieben wurde und wohin — mit *Ordner zeigen* daneben.
+
+        Eine Stelle für den Export und den Variantengenerator: Beide legen
+        Dateien ab, und nach beiden fragt der Kunde dasselbe.
+        """
         self.announce(
             f"{tr('Exportiert')}: {written[0].name}"
             if len(written) == 1
@@ -18591,6 +18613,26 @@ class MainWindow(QMainWindow):
         # abgelehnt, dreimal gezeigt oder verkaufte Fassung, und sie tut
         # nichts.
         self._usage.start()
+        self._announce_the_sale()
+
+    def _announce_the_sale(self) -> None:
+        """Die letzte Demowoche sagt einmal je Sitzung, was danach kommt.
+
+        Als Quittung (``announce``) und nicht als Dialog: Sie nimmt keinen
+        Fokus, hält keinen laufenden Vorgang auf und bleibt in der
+        Statuszeile, bis etwas anderes zu sagen ist (Konzept Demo→1.0 §5,
+        Punkt 2 — „keine Folge modaler Kaufaufforderungen"). Der Weg zur
+        Auskunft ist der Menüeintrag, den die Statuszeile daneben ohnehin
+        öffnet. Einmal je Sitzung: ``start`` läuft einmal je Anwendung, der
+        Merker hält auch einen zweiten Aufruf ab.
+        """
+        if self._sale_announced:
+            return
+        text = sale_notice(activation.state())
+        if not text:
+            return
+        self._sale_announced = True
+        self.announce(text)
 
     def _apply_remote(self) -> None:
         """Die MCP-Schnittstelle an- oder abschalten (Konzept P15 §7 Etappe 9).
@@ -18681,17 +18723,27 @@ class MainWindow(QMainWindow):
         spoken = self.settings.language
         printer_draft = None
         inventory_requested: list[bool] = []
+        # **Der Import wartet, bis der Dialog zu ist und das Projekt steht.**
+        # Er lief direkt aus dem Knopf, also noch im offenen Dialog — und
+        # ``_adopt_defaults`` legte danach das leere Projekt an, weil das
+        # Dokument noch keinen Schritt trug. Der Plan einer großen Datei kam
+        # dann für ein Dokument, das es nicht mehr gab, und das erste Modell
+        # verschwand ohne Wort. Dieselbe Bauart wie beim Filamentlager.
+        import_requested: list[bool] = []
         while True:
             dialog = first_run.FirstRunDialog(self.settings, self)
             if printer_draft is not None:
                 dialog.restore_custom_printer_draft(printer_draft)
-            dialog.importRequested.connect(self.action_import)
+            dialog.importRequested.connect(lambda: import_requested.append(True))
             dialog.inventoryRequested.connect(lambda: inventory_requested.append(True))
             answer = dialog.exec()
             if answer != first_run.LANGUAGE_CHANGED:
                 break
             printer_draft = dialog.custom_printer_draft()
-            dialog.release()
+            # Weggeräumt, nicht abgewartet: ``release`` wartete auf die
+            # Programmsuche des alten Dialogs, und der Sprachwechsel stand
+            # so lange still. Den Arbeiter hält die Halteleine.
+            dialog.deleteLater()
         if answer == first_run.FirstRunDialog.DialogCode.Accepted:
             dialog.apply_to(self.settings)
             self._adopt_defaults()
@@ -18705,6 +18757,8 @@ class MainWindow(QMainWindow):
         self._store_settings()
         if inventory_requested and answer == first_run.FirstRunDialog.DialogCode.Accepted:
             self.action_inventory()
+        if import_requested and answer == first_run.FirstRunDialog.DialogCode.Accepted:
+            self.action_import()
         # Wer im Dialog den Chat eingerichtet hat, soll ihn nicht erst nach
         # einem Neustart bekommen — derselbe Weckruf wie in action_llm_key.
         self.session.set_agent_backend(None)
@@ -19217,6 +19271,8 @@ class MainWindow(QMainWindow):
         box.setInformativeText("\n".join(lines))
         restore = box.addButton(tr("Sicherung öffnen"), QMessageBox.ButtonRole.AcceptRole)
         box.addButton(decline, QMessageBox.ButtonRole.RejectRole)
+        # Akzent und halbfette Schrift, nicht nur der Default (Regel 18).
+        make_primary(restore)
         box.setDefaultButton(restore)
         box.exec()
         return box.clickedButton() is restore

@@ -274,6 +274,14 @@ class ShortcutsWindow(QDialog):
         )
         note.setWordWrap(True)
 
+        # Eine Suche ohne Treffer sagt es, statt eine leere Liste hinzustellen
+        # — die sähe aus wie ein Fehler (Regel 17).
+        self.nothing = QLabel(
+            tr("Keine Taste passt zur Suche. Ein anderes Wort oder das Suchfeld leeren."), self
+        )
+        self.nothing.setWordWrap(True)
+        self.nothing.hide()
+
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
@@ -281,6 +289,7 @@ class ShortcutsWindow(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(self.search)
         layout.addWidget(self.tree, stretch=1)
+        layout.addWidget(self.nothing)
         layout.addWidget(note)
         layout.addWidget(buttons)
         # **„Schließen" ist nie ein Hauptknopf**, und in diesem Fenster war er
@@ -297,6 +306,7 @@ class ShortcutsWindow(QDialog):
         Zeilen darunter sieht aus wie ein Treffer, der nichts sagt.
         """
         query = self.search.text().strip().casefold()
+        shown = 0
         for index in range(self.tree.topLevelItemCount()):
             heading = self.tree.topLevelItem(index)
             if heading is None:
@@ -321,3 +331,5 @@ class ShortcutsWindow(QDialog):
                 child.setHidden(hidden)
                 left += not hidden
             heading.setHidden(not left)
+            shown += left
+        self.nothing.setVisible(bool(query) and not shown)

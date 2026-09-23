@@ -488,6 +488,43 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
     )
 
 
+def test_the_three_questions_mark_their_answer_twice(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Speichern, Trotzdem exportieren, Verwerfen: die Antwort trägt den Akzent
+    **und** die halbfette Schrift.
+
+    ``QMessageBox.setDefaultButton`` setzt nur den Default — gezeichnet in
+    der Akzentfarbe, aber in normaler Schrift, und Farbe allein ist keine
+    zweite Kodierung (Regel 18). Der Quelltextwächter darüber sieht das
+    nicht: Er sucht ``setDefault(True)``, und das ruft hier Qt selbst.
+    """
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QMessageBox
+
+    from app.core.types import Finding
+    from app.ui import dialogs
+
+    seen: list[QMessageBox] = []
+
+    def remember(box: QMessageBox) -> int:
+        seen.append(box)
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", remember)
+    dialogs.confirm_unsaved("Projekt")
+    dialogs.confirm_export([Finding(severity="warning", code="x", message="Ein Befund")])
+    dialogs.confirm_discard(3, ["Eins", "Zwei", "Drei"])
+
+    assert len(seen) == 3
+    for box in seen:
+        answer = box.defaultButton()
+        assert answer is not None, box.windowTitle()
+        assert answer.font().weight() >= QFont.Weight.DemiBold, (
+            f"{box.windowTitle()}: „{answer.text()}“ nur über die Farbe hervorgehoben"
+        )
+
+
 #: Die Dialoge, die sich ohne fremden Zustand bauen lassen, als Bauanweisungen.
 #: Gebaut wird erst im Test — ein Widget ohne ``QApplication`` bringt den
 #: ganzen Lauf mit 0xC0000409 um.
@@ -1613,3 +1650,29 @@ def test_a_danger_button_is_drawn_in_the_error_red(qt_app: QApplication) -> None
         apply_theme(qt_app, previous_theme)
         qt_app.setPalette(previous_palette)
         qt_app.setStyleSheet(previous_sheet)
+
+
+def test_a_shortcut_search_without_a_hit_says_so(qt_app: QApplication) -> None:
+    """Eine Suche ohne Treffer ließ die Kürzelübersicht leer stehen — eine
+    leere Liste sieht aus wie ein Fehler (Regel 17)."""
+    from PySide6.QtGui import QKeySequence
+    from PySide6.QtWidgets import QMenuBar
+
+    from app.ui.shortcuts_window import ShortcutsWindow
+
+    bar = QMenuBar()
+    menu = bar.addMenu("Datei")
+    action = menu.addAction("Öffnen")
+    action.setShortcut(QKeySequence("Ctrl+O"))
+    window = ShortcutsWindow(bar)
+    try:
+        assert window.tree.topLevelItemCount() == 1, "ohne Zeile prüft der Test nichts"
+        assert window.nothing.isHidden()
+        window.search.setText("gibtesnicht-xyz")
+        assert not window.nothing.isHidden()
+        assert window.nothing.text().strip()
+        window.search.setText("")
+        assert window.nothing.isHidden()
+    finally:
+        window.deleteLater()
+        bar.deleteLater()

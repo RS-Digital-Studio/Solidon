@@ -6,7 +6,7 @@ Ein-Zeilen-Änderung, samt Distributionsname und Umgebungsvariablen.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Final
 
 #: Produktname. Entschieden am 27.07.2026 als „Formwerk", geändert am
@@ -47,6 +47,14 @@ SUPPORT_ADDRESS: Final = "support@solidon3d.de"
 #: Quelle wird in Oberfläche, öffentlicher Sicherheitszusage und CRA-Prüfung
 #: gelesen; eine abgeschriebene Datumszeichenkette könnte unbemerkt abweichen.
 SECURITY_SUPPORT_UNTIL: Final = date(2031, 10, 31)
+
+#: Der geplante Verkaufsstart von Solidon 1.0 — 01.11.2026, 10:00 Uhr
+#: deutscher Zeit (Robert, 16.09.2026; RM-061), als UTC: Am 25.10. endet die
+#: Sommerzeit, 10:00 MEZ sind 09:00 UTC. Die Abschiedsmeldung einer
+#: abgelaufenen Demo wählt daran ihren Text; die tatsächliche Verfügbarkeit
+#: behauptet sie nie, denn die kennt nur die Website
+#: (``konzepte/konzept-demo-zu-1.0-2026-09.md`` §6.2).
+PLANNED_SALE_START: Final = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
 
 #: Die Produktseite: Download, Handbuch, Kauf. Von hier lesen der Installer
 #: (``tools/make_installer.py``), der Update-Hinweis und der Knopf „Solidon

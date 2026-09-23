@@ -384,6 +384,50 @@ def test_mail_link_keeps_unicode_and_reserved_characters() -> None:
     assert fields["body"][0].splitlines()[2:] == ticket.as_text().splitlines()[2:]
 
 
+def test_the_mail_draft_carries_umlauts_and_line_breaks_through_qt(qt_app: object) -> None:
+    """RM-038: Was ``QDesktopServices`` bekommt, ist ``QUrl(mail_link(…))`` —
+    nicht die Zeichenkette. Der Weg über Qt muss Umlaute, Satzzeichen und
+    Zeilenwechsel so zurückgeben, wie der Kunde sie geschrieben hat."""
+    from urllib.parse import parse_qs
+
+    from PySide6.QtCore import QUrl
+
+    ticket = Ticket(message="Größe: 100% & Frage?\nÄußerst schief — 12,5 mm; %3A bleibt so.")
+    url = QUrl(support.mail_link(ticket))
+    assert url.isValid() and url.scheme() == "mailto"
+    fields = parse_qs(url.query(QUrl.ComponentFormattingOption.FullyEncoded))
+    assert fields["subject"] == [ticket.subject]
+    assert fields["body"][0].splitlines()[2:] == ticket.as_text().splitlines()[2:]
+    assert "\n" in fields["body"][0]
+
+
+def test_a_missing_mail_program_is_said_and_the_folder_stays(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ohne Mailprogramm geschah auf den Klick nichts (RM-038).
+
+    ``openUrl`` meldet es mit ``False``, und die Antwort stand nirgends. Jetzt
+    sagt der Dialog, was jetzt geht — der abgelegte Ordner mit „bericht.txt".
+    """
+    from app.ui import support_dialog as module
+    from app.ui.support_dialog import SupportDialog
+
+    monkeypatch.setattr(module.discover, "in_flatpak", lambda: False)
+    monkeypatch.setattr(module.QDesktopServices, "openUrl", staticmethod(lambda _url: False))
+    dialog = SupportDialog(message="Der Deckel sitzt schief.")
+    try:
+        dialog.written = tmp_path
+        dialog._open_mail()
+        assert "bericht.txt" in dialog.state.text()
+        assert dialog.by_mail.isEnabled()
+
+        monkeypatch.setattr(module.QDesktopServices, "openUrl", staticmethod(lambda _url: True))
+        dialog._open_mail()
+        assert not dialog.state.text(), "ein geöffnetes Mailprogramm nimmt den alten Satz mit"
+    finally:
+        dialog.close()
+
+
 # --- die Grenze zur Telemetrie --------------------------------------------------------
 
 
@@ -909,3 +953,50 @@ def test_nested_exception_groups_have_one_shared_construction_budget() -> None:
     assert "ExceptionGroup" in text and "CountedError" in text
     assert "…" in text
     assert len(text) <= 2 * 1024 * 1024
+
+
+def test_an_empty_message_says_why_sending_rests(qt_app) -> None:
+    """Frisch geöffnet ruht *Senden*, bis etwas dasteht — ohne Grund an
+    Tooltip, Statuszeile und Bildschirmleser. Der Wächter über alle Dialoge
+    baut diesen mit Text und sah den Fall nie."""
+    from app.ui.support_dialog import SupportDialog
+
+    dialog = SupportDialog()
+    try:
+        assert not dialog.send.isEnabled()
+        said = (dialog.send.toolTip(), dialog.send.statusTip(), dialog.send.accessibleDescription())
+        assert all(text.strip() for text in said), said
+        dialog.message.setPlainText("Der Deckel sitzt schief.")
+        assert dialog.send.isEnabled()
+        assert not dialog.send.toolTip()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_ways_out_say_why_they_rest_while_the_session_is_prepared(qt_app) -> None:
+    """*Bericht ablegen* ruhte, solange die Sitzung entsteht, ohne Grund."""
+    from app.ui.session import Session
+    from app.ui.support_dialog import SupportDialog
+
+    dialog = SupportDialog(message="Der Deckel sitzt schief.", session=Session())
+    try:
+        dialog.with_session.setChecked(True)
+        assert dialog._session_pending(), "ohne laufende Vorbereitung prüft der Test nichts"
+        button = dialog.save_folder
+        assert not button.isEnabled()
+        said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        assert all(text.strip() for text in said), said
+
+        # Und frei wieder ohne Sperrgrund — sonst sagte er „wird vorbereitet"
+        # an einem Knopf, der längst geht.
+        from time import monotonic
+
+        until = monotonic() + 10
+        while dialog._session_pending() and monotonic() < until:
+            qt_app.processEvents()
+        assert button.isEnabled()
+        assert not button.toolTip()
+    finally:
+        dialog.release()
+        dialog.deleteLater()

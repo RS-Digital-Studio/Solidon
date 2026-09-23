@@ -96,16 +96,22 @@ from app.core.types import (
 )
 from app.core.units import DEGREE_UNIT, is_close
 from app.i18n import TranslatableText, _, format_decimal, tr
-from app.ui.dialogs import handlers_of, licence_lock_line, show_error
+from app.ui.dialogs import (
+    confirm_handover,
+    handlers_of,
+    licence_lock_line,
+    problem_text,
+    show_error,
+)
 from app.ui.facts import duration, mass
 from app.ui.filament_picker import SWATCH_PIXELS, slot_colours, swatch
 from app.ui.filament_usage import UsageNotice
+from app.ui.first_run import add_printer_choices
 from app.ui.header import filament_names
 from app.ui.labels import (
     LengthSpin,
     NumberSpin,
     RowCheckBox,
-    by_title,
     caption_toggles,
     choice_label,
     colour_name,
@@ -906,7 +912,7 @@ FIELDS: tuple[Field, ...] = (
         note=_(
             "Gilt nur, solange das Teil keine eingefärbte Spule hat — dann steht hier, womit "
             "der Slicer rechnet. Sobald Sie im Filamentwähler eine Farbe setzen oder über "
-            "*Filament auf eine Fläche* arbeiten, gilt die Spule."
+            "„Filament auf eine Fläche“ arbeiten, gilt die Spule."
         ),
     ),
     Field(
@@ -1218,6 +1224,10 @@ def _make_setting_editor(
     limit = FIELD_WIDTH.get(field.kind)
     if limit is not None:
         editor.setMaximumWidth(max(limit, editor.sizeHint().width()))
+    # **Der Name am Feld** — ein Bildschirmleser las „Drehfeld, 0,200", denn
+    # ein ``QFormLayout`` verbindet Beschriftung und Feld nicht
+    # (`oberflaeche.md`, „Ein Feld ohne Namen …").
+    editor.setAccessibleName(accessible_name(field))
     note = str(field.note)
     if note:
         if not editor.toolTip():
@@ -1225,6 +1235,18 @@ def _make_setting_editor(
         editor.setStatusTip(note)
         editor.setAccessibleDescription(note)
     return editor
+
+
+def accessible_name(field: Field) -> str:
+    """Wie ein Feld heißt, wenn man es nicht sieht — eindeutig im Dialog.
+
+    „Erste Schicht" steht zweimal (Schichthöhe und Tempo), „Außenwand" auch;
+    ein Bildschirmleser, der zweimal dasselbe Wort vorliest, sagt nicht,
+    welches Feld den Fokus hat. Bei Gleichstand kommt die Gruppe dazu.
+    """
+    title = str(field.title)
+    twins = sum(1 for other in FIELDS if str(other.title) == title)
+    return f"{title} ({group_title(field.group)})" if twins > 1 else title
 
 
 def _set_setting_editor(editor: QWidget, field: Field, value: object) -> None:
@@ -1367,10 +1389,10 @@ class FilamentOverrideDialog(QDialog):
                 editor = _make_setting_editor(field, body, lambda *_args: None)
                 _set_setting_editor(editor, field, getattr(source, field.path.partition(".")[2]))
                 self.editors[field.path] = editor
-                label = QLabel(
-                    f"{field.title!s} [{field.unit}]" if field.unit else str(field.title),
-                    body,
-                )
+                # Ohne Einheit in der Klammer (B12): Das Feld trägt sie als
+                # Suffix, und „Düse [°C]" über „210 °C" sagte sie zweimal.
+                label = QLabel(str(field.title), body)
+                label.setBuddy(editor)
                 note = str(field.note)
                 if note:
                     label.setToolTip(note)
@@ -1977,7 +1999,9 @@ class _StockWorker(Worker):
                     )
             self.done.emit("\n".join(dict.fromkeys(notes)))
         except AppError as problem:
-            self.done.emit(str(problem))
+            # Titel und Detail in zwei Zeilen (``problem_text``), nicht als
+            # „Titel.: Detail" — und ohne die Adressen für den Code.
+            self.done.emit(problem_text(problem))
 
 
 class _SliceWorker(Worker):
@@ -2564,8 +2588,9 @@ class PrintSettingsDialog(QDialog):
         # arbeitete für immer gegen deren Bauraum (§12).
         document = self.session.project.document
         self.printer_choice = QComboBox(self)
-        for key, entry in by_title(profiles.printer_profiles()):
-            self.printer_choice.addItem(str(entry.title), key)
+        # Nach Verfahren gruppiert wie im Erststart (RM-071): Ein Resin-Drucker
+        # stand hier flach zwischen den FDM-Geräten.
+        add_printer_choices(self.printer_choice, profiles.printer_profiles())
         _select_data(self.printer_choice, document.printer or profiles.DEFAULT_PRINTER)
         self.printer_choice.currentIndexChanged.connect(self._scene_profile_changed)
 
@@ -2868,7 +2893,9 @@ class PrintSettingsDialog(QDialog):
         entry = profiles.printer(str(self.printer_choice.currentData()))
         if entry.nozzles == value:
             return
-        profiles.save_printer(replace(entry, nozzles=value))
+        if not self._saved_printer(replace(entry, nozzles=value)):
+            self._show_nozzle_count()
+            return
         self._scene_profile_changed()
 
     def _nozzle_changed(self, value: float) -> None:
@@ -2888,10 +2915,36 @@ class PrintSettingsDialog(QDialog):
         entry = profiles.printer(str(self.printer_choice.currentData()))
         if abs(entry.nozzle_diameter - value) < 1e-9:
             return
-        profiles.save_printer(
+        if not self._saved_printer(
             replace(entry, nozzle_diameter=value, extrusion_width=round(value * 1.05, 3))
-        )
+        ):
+            self._show_nozzle()
+            return
         self._scene_profile_changed()
+
+    def _saved_printer(self, entry: Any) -> bool:
+        """Das geänderte Druckerprofil ablegen — oder sagen, warum es nicht ging.
+
+        ``save_printer`` schreibt in das Nutzerprofil, und das kann scheitern:
+        ein voller Datenträger, ein schreibgeschützter Ordner. Die Ausnahme
+        lief bis hierher aus dem Slot heraus, das Feld zeigte die neue Düse
+        und der Drucker rechnete weiter mit der alten — ein Widerspruch ohne
+        Satz (Regel 17). Jetzt steht der Grund in der Zustandszeile, und das
+        Feld zeigt wieder, was gilt.
+        """
+        try:
+            profiles.save_printer(entry)
+        except AppError as problem:
+            _log.warning("printer profile could not be saved: %s", problem)
+            self.state.setText(
+                tr(
+                    "Der Drucker ließ sich nicht speichern. Prüfen Sie den freien "
+                    "Speicherplatz und die Schreibrechte, und ändern Sie den Wert erneut."
+                )
+            )
+            self._state_shows_reason = False
+            return False
+        return True
 
     def _scene_profile_changed(self) -> None:
         """Ein anderer Drucker heißt andere Vorgaben — und eine Neuauswertung.
@@ -4178,6 +4231,10 @@ class PrintSettingsDialog(QDialog):
             # nur als „Widget", und ein Farbfeld ohne Namen ist genau die
             # Bedeutung allein über Farbe, die Regel 18 verbietet.
             row.setAccessibleName(caption)
+            # Und an der Auswahl selbst, denn dort landet der Fokus: Ohne
+            # Namen las ein Bildschirmleser nur „Kombinationsfeld".
+            box.setAccessibleName(caption)
+            label.setBuddy(box)
             side = QHBoxLayout(row)
             side.setContentsMargins(0, 0, 0, 0)
             side.setSpacing(TIGHT)
@@ -4447,12 +4504,27 @@ class PrintSettingsDialog(QDialog):
         if not chosen:
             return
         source = self._filament_source or Path(str(chosen))
-        values = slicer_profiles.filament_values(source, self._profile_roots())
-        if not values:
+        # **Nie stumm** (Regel 17): Ein Profil ohne lesbare Werte ließ den
+        # Klick folgenlos, und ein Wert wie ``nan`` warf aus dem Slot. Beides
+        # sagt jetzt die Zustandszeile; die Einstellungen bleiben unberührt.
+        try:
+            values = slicer_profiles.filament_values(source, self._profile_roots())
+            settings = self.settings
+            for path, value in values.items():
+                settings = print_settings.with_path(settings, path, value)
+        except AppError as problem:
+            _log.warning("filament values could not be adopted: %s", problem)
+            self.state.setText(problem_text(problem))
+            self._state_shows_reason = False
             return
-        settings = self.settings
-        for path, value in values.items():
-            settings = print_settings.with_path(settings, path, value)
+        if not values:
+            self.state.setText(
+                tr("{profile} nennt keine Werte, die Solidon übernehmen kann.").replace(
+                    "{profile}", self._filament_title
+                )
+            )
+            self._state_shows_reason = False
+            return
         self.settings = settings
         self._load_into_editors()
         self._refresh_advice()
@@ -4710,7 +4782,7 @@ class PrintSettingsDialog(QDialog):
         # bei jedem Öffnen. Die Auskunft gab es, aber in der Zustandszeile
         # darunter; wer auf den grauen Knopf zeigt, fragt ihn und nicht sie.
         no_slicer = str(
-            tr("Dafür fehlt ein Slicer — der Knopf Zusätzliche Programme richtet einen ein.")
+            tr("Dafür fehlt ein Slicer — der Knopf „Zusätzliche Programme …“ richtet einen ein.")
         )
         # **Kein Zustand ohne Erhebung** (§2.8). Solange der Arbeiter sucht,
         # ist „Dafür fehlt ein Slicer" keine Auskunft, sondern eine Behauptung
@@ -5012,6 +5084,7 @@ class PrintSettingsDialog(QDialog):
     def _add_row(self, form: QFormLayout, field: Field) -> None:
         """Beschriftung und Feld in eine Zeile — bei einem Haken antwortet beides."""
         label, editor = self._label(field), self._editor(field)
+        label.setBuddy(editor)
         form.addRow(label, editor)
         if isinstance(editor, RowCheckBox):
             caption_toggles(label, editor)
@@ -5250,8 +5323,16 @@ class PrintSettingsDialog(QDialog):
         field = self._fields.get(path)
         if isinstance(value, str):
             return choice_label(value)
+        # Vor der Zahl, denn ``True`` ist auch ein ``int``: Ein Haken stand
+        # hier als „0 → 1".
+        if isinstance(value, bool):
+            return str(tr("an") if value else tr("aus"))
         if field is not None and isinstance(value, int | float):
-            return f"{float(value) * field.factor:g} {field.unit}".strip()
+            # Mit den Nachkommastellen und dem Komma des Felds daneben — ``:g``
+            # schrieb „0.16 mm" neben „0,160 mm" und „59.5238 mm/s".
+            decimals = 0 if field.kind == "int" else field.decimals
+            number = localised(f"{float(value) * field.factor:.{decimals}f}")
+            return f"{number} {field.unit}".strip()
         return str(value)
 
     def _refresh_stock(self) -> None:
@@ -5277,7 +5358,7 @@ class PrintSettingsDialog(QDialog):
             self.stock_notice.setVisible(bool(text))
 
         worker.done.connect(show_note)
-        worker.crashed.connect(lambda detail: show_note(str(InternalError(detail=detail))))
+        worker.crashed.connect(lambda detail: show_note(problem_text(InternalError(detail=detail))))
         self._leash.start(worker)
 
     def _refresh_advice(self) -> None:
@@ -5633,16 +5714,13 @@ class PrintSettingsDialog(QDialog):
         blocker = QSignalBlocker(self.advice_view)
         self.advice_view.clear()
         for entry in entries:
-            field = self._fields.get(entry.path)
             unavailable = entry.unavailable if isinstance(entry, _TargetedAdvice) else ""
             # Regel 18: das Ausrufezeichen ist die zweite Kodierung neben der
             # Einstufung — eine Warnung darf sich nicht allein an Farbe zeigen.
             marker = "! " if entry.severity == "warning" or unavailable else ""
             was = self._shown(entry.path, entry.was)
             becomes = self._shown(entry.path, entry.value)
-            title = str(field.title) if field else entry.path
-            if isinstance(entry, _TargetedAdvice) and entry.slot is not None and entry.slot.name:
-                title = f"{title} · {entry.slot.name}"
+            title = self._advice_title(entry)
             reason = "\n".join(part for part in (str(entry.reason), str(unavailable)) if part)
             item = QTreeWidgetItem(
                 [
@@ -5721,6 +5799,14 @@ class PrintSettingsDialog(QDialog):
         for column in range(2):
             self.advice_view.resizeColumnToContents(column)
 
+    def _advice_title(self, entry: SettingAdvice) -> str:
+        """Wie ein Vorschlag heißt — in der Liste und in der Meldung danach."""
+        field = self._fields.get(entry.path)
+        title = str(field.title) if field else entry.path
+        if isinstance(entry, _TargetedAdvice) and entry.slot is not None and entry.slot.name:
+            title = f"{title} · {entry.slot.name}"
+        return title
+
     def _chosen_advice(self) -> list[SettingAdvice]:
         """Die angehakten Vorschläge, in der Reihenfolge der Liste."""
         wanted = {
@@ -5774,6 +5860,18 @@ class PrintSettingsDialog(QDialog):
             self.settings = handover.with_slot_override(self.settings, entry.slot, override)
         self._load_into_editors()
         self._refresh_advice()
+        # **Der Knopf sagt, was er getan hat.** Die Felder änderten sich
+        # still, und die Liste darüber rechnete gleich neu — wer nicht auf die
+        # richtige Zeile sah, wusste nicht, was übernommen war; mit allen
+        # Haken abgewählt blieb der Klick ganz ohne Antwort.
+        if selected:
+            said = str(tr("Übernommen: {settings}.")).replace(
+                "{settings}", ", ".join(dict.fromkeys(self._advice_title(one) for one in selected))
+            )
+        else:
+            said = str(tr("Kein Vorschlag angehakt — es bleibt alles, wie es war."))
+        self.state.setText(said)
+        self._state_shows_reason = False
 
     # --- Slicen ---------------------------------------------------------------
 
@@ -5879,6 +5977,8 @@ class PrintSettingsDialog(QDialog):
         setup = self._current_setup()
         if setup is None:
             return
+        if not self._may_hand_over(objects):
+            return
         self._remember_slicer_choice(require_machine=False)
         self._remember_handover("open")
 
@@ -5951,6 +6051,8 @@ class PrintSettingsDialog(QDialog):
             self._open_slicer_section()
             self.state.setText(self._process_missing_line())
             return
+        if not self._may_hand_over(objects):
+            return
         self._remember_slicer_choice(require_machine=False)
         # Gemerkt bei Nutzung, nie bei Ansicht (§29): Wer rechnet, dessen
         # Hauptweg ist das Rechnen — der Öffnen-Weg merkt sich genauso.
@@ -5974,6 +6076,32 @@ class PrintSettingsDialog(QDialog):
         worker.step.connect(self._slicing_plate)
         self._worker = worker
         self._leash.start(worker)
+
+    def _may_hand_over(self, objects: Sequence[SceneObject]) -> bool:
+        """Fehler im Prüfbericht werden vor der Übergabe genannt (Regel 19).
+
+        Gefragt wird mit den Fehlern der gewählten Platten und denen ohne
+        Körper — eine Übergabe von Platte 2 hält kein Fehler auf Platte 1
+        auf. Die Befunde kommen aus der letzten Auswertung, also genau aus
+        dem, was der Prüfbericht daneben zeigt; gerechnet wird dafür nichts.
+        Wer abbricht, behält Auswahl und Übergabeart wie vorher.
+        """
+        result = self.session.last_result
+        report = getattr(getattr(result, "scene", None), "report", None)
+        found = tuple(getattr(report, "findings", ()) or ())
+        plates = set(self._chosen_plates())
+        chosen = {entry.id for entry in objects if entry.plate in plates}
+        errors = [
+            finding
+            for finding in found
+            if finding.severity == "error"
+            and (finding.object_id is None or finding.object_id in chosen)
+        ]
+        if not errors or confirm_handover(errors, self):
+            return True
+        self.reported.emit(errors)
+        self.state.setText(tr("Nicht übergeben — die Fehler stehen im Prüfbericht."))
+        return False
 
     def _show_handover_progress(self, count: int, text: str) -> None:
         """Beide langen Übergabewege vor dem Arbeiter sichtbar machen."""

@@ -13,6 +13,7 @@ herausgeschrieben; das Projekt bleibt, wie es war.
 
 from __future__ import annotations
 
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -38,9 +39,10 @@ from app.core.scene import build_variants
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import ProjectSources
 from app.core.scene.variants import MAX_VARIANTS
+from app.core.types import Finding
 from app.i18n import tr
 from app.ui.dialogs import show_error
-from app.ui.labels import NumberSpin
+from app.ui.labels import NumberSpin, localised_value
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.session import Session
 
@@ -63,7 +65,9 @@ class _VariantWorker(Worker):
     wird danach, ob der Satz vollständig ist.
     """
 
-    done = Signal(object)
+    done = Signal(object, object)
+    """Der Variantensatz und die geschriebenen Dateien — leer, wenn nichts
+    geschrieben wurde (abgebrochen, lückenhaft oder ohne Körper)."""
     failed = Signal(object)
     progressed = Signal(float, str)
     """Der Fortschritt, **als Signal**: ``build_variants`` ruft seinen Rückruf
@@ -72,21 +76,39 @@ class _VariantWorker(Worker):
     Thread gesetzt, gemessen an den Thread-Kennungen (Gesamtreview 05.09.2026,
     UI-14). Ein Signal stellt die Meldung über die Ereignisschleife zu."""
 
-    def __init__(self, cancel: CancelSignal, **arguments: Any) -> None:
+    def __init__(
+        self, cancel: CancelSignal, target: Path, project_name: str, **arguments: Any
+    ) -> None:
         super().__init__()
         self._cancel = cancel
+        self._target = target
+        self._project_name = project_name
         self._arguments = arguments
 
     def _report(self, share: float, text: str) -> None:
         self.progressed.emit(share, text)
 
     def work(self) -> None:
+        """Rechnen **und** schreiben — beides abseits des Oberflächen-Threads.
+
+        Geschrieben wurde im Slot danach, also im Oberflächen-Thread, und ein
+        Schreibfehler lief dort ohne Satz aus dem Slot heraus (Regel 17). Ein
+        Abbruch vor dem Schreiben schreibt nichts: gefragt wird das Token
+        unmittelbar davor.
+        """
         try:
             made = build_variants(**self._arguments, progress=self._report, cancelled=self._cancel)
+            written: list[Path] = []
+            if made.complete and not self._cancel.is_cancelled:
+                profile = self._arguments["profile"]
+                objects = list(made.scene(profile).objects.values())
+                if objects:
+                    plan = plan_export(objects, project_name=self._project_name, profile=profile)
+                    written = write_plan(plan, self._target)
         except AppError as error:
             self.failed.emit(error)
             return
-        self.done.emit(made)
+        self.done.emit(made, written)
 
 
 class VariantsDialog(QDialog):
@@ -181,6 +203,12 @@ class VariantsDialog(QDialog):
         self._worker: _VariantWorker | None = None
         self._cancel = CancelSignal()
         self._target: Path | None = None
+        self.written: list[Path] = []
+        """Was der Lauf geschrieben hat — das Fenster nennt es nach dem Schließen."""
+        self.findings: list[Finding] = []
+        """Was der Lauf zu sagen hat: eine Gravur ohne Platz, eine Variante ohne
+        Ergebnis. „Wo kein Platz dafür ist, sagt es der Bericht" verspricht der
+        Haken — der Bericht bekam es nie."""
 
         if not document.parameters:
             # Der Satz steht in der Zustandszeile **und** am Knopf: Wer auf einen
@@ -221,6 +249,7 @@ class VariantsDialog(QDialog):
         self._target = Path(directory)
 
         project = self.session.project
+        title = self.session.path.stem if self.session.path else tr("Varianten")
         self._cancel.reset()
         self.progress.setValue(0)
         self.progress.setVisible(True)
@@ -230,6 +259,8 @@ class VariantsDialog(QDialog):
 
         worker = _VariantWorker(
             self._cancel,
+            self._target,
+            f"{title}_{name}",
             document=project.document,
             profile=self.session.profile,
             parameter=str(name),
@@ -242,7 +273,7 @@ class VariantsDialog(QDialog):
         worker.progressed.connect(self._advance)
         worker.done.connect(self._finished)
         worker.failed.connect(self._broke)
-        worker.crashed.connect(lambda detail: self._broke(InternalError(detail=detail)))
+        worker.crashed.connect(self._crashed)
         # Das Feld ist danach die Antwort auf „läuft gerade einer" und nicht
         # mehr die einzige Referenz: Gehalten wird über die Leine, ab dem
         # Start. Fiele das Feld weg, während der Arbeiter läuft — ein Test
@@ -278,15 +309,23 @@ class VariantsDialog(QDialog):
         self._cancel.cancel()
         self.state.setText(tr("Wird abgebrochen …"))
 
+    def _crashed(self, detail: str) -> None:
+        self._broke(InternalError(detail=detail))
+
     def _broke(self, error: object) -> None:
         self._release()
         if isinstance(error, AppError):
+            # Der Satz steht auch im Dialog: Nach dem Fehlerfenster stand dort
+            # weiter „Die Varianten werden gerechnet …".
+            self.state.setText(str(error.title))
             show_error(error, self)
 
-    def _finished(self, made: Any) -> None:
-        """Was fertig gerechnet wurde, wird geschrieben."""
+    def _finished(self, made: Any, written: Any) -> None:
+        """Was gerechnet und geschrieben wurde — und was dabei auffiel."""
         self._release()
-        if self._cancel.is_cancelled:
+        written = list(written or ())
+        self.findings = [entry for entry in made.findings if entry.code.startswith("variants.")]
+        if self._cancel.is_cancelled and not written:
             self.state.setText(tr("Abgebrochen — es wurde nichts geschrieben."))
             return
         if not made.complete:
@@ -297,26 +336,24 @@ class VariantsDialog(QDialog):
             # bleibt offen und nennt die Werte ohne Ergebnis; der Kunde ändert
             # die Reihe und rechnet neu.
             stopped = [entry for entry in made.findings if entry.code == "variants.stopped"]
-            values = ", ".join(str(entry.values.get("value", "")) for entry in stopped)
+            # Zahlen in der Schreibweise der Oberfläche (``localised``): Im
+            # deutschen Fenster stand „-0.1" neben „0,2 mm" im Feld darüber.
+            values = ", ".join(localised_value(entry.values.get("value", "")) for entry in stopped)
             text = tr("Nicht jede Variante ließ sich rechnen — nichts wurde geschrieben.")
             if values:
                 text = f"{text} {tr('Ohne Ergebnis')}: {values}"
             self.state.setText(text)
             return
 
-        objects = list(made.scene(self.session.profile).objects.values())
-        if not objects:
+        if not written:
             self.state.setText(tr("Es ist keine Variante übrig geblieben."))
             return
-        if self._target is None:
-            return
-
-        name = self.parameter.currentData()
-        title = self.session.path.stem if self.session.path else tr("Varianten")
-        plan = plan_export(objects, project_name=f"{title}_{name}", profile=self.session.profile)
-        written = write_plan(plan, self._target)
         _log.info("wrote %d variant file(s)", len(written))
-        self.state.setText(f"{len(written)} {tr('Dateien geschrieben')}")
+        # Das Fenster sagt nach dem Schließen, wie viele wohin, mit *Ordner
+        # zeigen* daneben (``MainWindow.action_variants``). Hier stand
+        # „4 Dateien geschrieben" — in einem Dialog, der sich in derselben
+        # Zeile schloss, also von niemandem gelesen.
+        self.written = written
         self.accept()
 
     def _release(self) -> None:
@@ -343,12 +380,32 @@ class VariantsDialog(QDialog):
         Dieselbe Grenze wie an der Halteleine, und derselbe Umgang damit: nicht
         erzwingen, sondern aufschreiben.
         """
-        worker = self._worker
         self._worker = None
         self.progress.setVisible(False)
         self._lock_build("")
-        if worker is not None and not worker.wait(WAIT_TIMEOUT_MS):
-            _log.warning("variant worker did not finish within %d ms", WAIT_TIMEOUT_MS)
+
+    def _let_go(self) -> None:
+        """Den laufenden Lauf abbrechen und loslassen, ohne auf ihn zu warten.
+
+        **Das Schließen wartete bis zu zwei Sekunden** (``_release`` mit
+        ``wait``): Der Abbruch greift zwischen zwei Auswertungen, und eine
+        begonnene läuft zu Ende — so lange stand das Fenster auf Esc hin
+        still, ohne Balken und ohne Zeile. Die Halteleine hält den Thread
+        über den Dialog hinaus (:mod:`app.ui.leash`); die Signale werden
+        getrennt, damit eine späte Antwort keinen geschlossenen Dialog mehr
+        bewegt. Geschrieben wird dann auch nichts mehr: Der Arbeiter fragt
+        das Token unmittelbar vor dem Schreiben.
+        """
+        worker = self._worker
+        self._cancel.cancel()
+        self._release()
+        if worker is None:
+            return
+        for name in ("done", "failed", "progressed", "crashed"):
+            signal = getattr(worker, name, None)
+            if signal is not None:
+                with suppress(RuntimeError, TypeError):
+                    signal.disconnect()
 
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Alles loslassen, was dieser Dialog außerhalb von Qt hält.
@@ -371,8 +428,7 @@ class VariantsDialog(QDialog):
         05.09.2026, UI-34).
         """
         if self._worker is not None:
-            self._cancel.cancel()
-            self._release()
+            self._let_go()
         super().reject()
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
@@ -382,6 +438,5 @@ class VariantsDialog(QDialog):
         zerstörtes C++-Objekt und nimmt den Prozess mit.
         """
         if self._worker is not None:
-            self._cancel.cancel()
-            self._release()
+            self._let_go()
         super().closeEvent(event)

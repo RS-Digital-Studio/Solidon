@@ -28,6 +28,7 @@ from app.core.registry import REGISTRY, VARIANT_GROUPS, catalogue_operations, pa
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QApplication, QMenu, QToolButton, QWidgetAction
 
@@ -443,13 +444,55 @@ def test_the_printer_list_is_sorted_the_way_it_is_read(window: MainWindow) -> No
 
     Geprüft am Dialog und nicht an der Hilfsfunktion: die Frage ist, was in der
     Auswahl steht, und dorthin führen zwei verschiedene Wege.
+
+    **Seit dem 22.09.2026 ist die Druckerliste nach Verfahren gruppiert**
+    (RM-071, Resin-Konzept §4): je Verfahren ein Kopf, der nicht wählbar ist,
+    darunter seine Drucker nach Titel, „Benutzerdefiniert …" am Ende. Sortiert
+    heißt damit „sortiert innerhalb der Gruppe" — die ganze Liste am Stück
+    kann es nicht mehr sein, und der Test las das bis dahin als Fehler.
     """
-    from app.ui.first_run import FirstRunDialog
+    from app.core.knowledge import profiles
+    from app.ui.first_run import _GROUP_HEADER, FirstRunDialog, _group_title
 
     dialog = FirstRunDialog(window.settings, window)
-    for auswahl, name in ((dialog.language, "Sprache"), (dialog.printer, "Drucker")):
-        titles = [auswahl.itemText(index) for index in range(auswahl.count())]
-        assert titles == sorted(titles, key=str.casefold), f"{name}: {titles}"
+    try:
+        languages = [dialog.language.itemText(index) for index in range(dialog.language.count())]
+        assert languages == sorted(languages, key=str.casefold), f"Sprache: {languages}"
+
+        known = profiles.printer_profiles()
+        rows = [
+            (dialog.printer.itemText(index), str(dialog.printer.itemData(index) or ""))
+            for index in range(dialog.printer.count())
+        ]
+        assert rows[-1][1] == "__custom__", f"„Benutzerdefiniert …“ gehört ans Ende: {rows}"
+        groups: list[tuple[str, list[str]]] = []
+        for title, data in rows[:-1]:
+            if data == _GROUP_HEADER:
+                groups.append((title, []))
+                continue
+            assert groups, f"{title} steht vor dem ersten Gruppenkopf: {rows}"
+            head, members = groups[-1]
+            assert head == _group_title(known[data].technology), (
+                f"{title} ({known[data].technology}) steht unter dem Kopf „{head}“"
+            )
+            members.append(title)
+        technologies = {entry.technology for entry in known.values()}
+        assert [head for head, _members in groups] == [
+            _group_title(technology)
+            for technology in ("fdm", "resin")
+            if technology in technologies
+        ]
+        for head, members in groups:
+            assert members, f"Ein Kopf ohne Drucker: {head}"
+            assert members == sorted(members, key=str.casefold), f"Drucker unter {head}: {members}"
+        model = dialog.printer.model()
+        for index, (title, data) in enumerate(rows):
+            if data == _GROUP_HEADER:
+                flags = model.flags(model.index(index, 0))
+                assert not flags & Qt.ItemFlag.ItemIsSelectable, f"Kopf wählbar: {title}"
+                assert not flags & Qt.ItemFlag.ItemIsEnabled, f"Kopf bedienbar: {title}"
+    finally:
+        dialog.release()
 
 
 def test_no_tool_shares_its_name_with_its_own_controls(window: MainWindow) -> None:

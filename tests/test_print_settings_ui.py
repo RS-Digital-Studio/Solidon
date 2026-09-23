@@ -580,6 +580,20 @@ def test_the_editors_start_on_the_resolved_values(dialog: PrintSettingsDialog) -
     assert editor.value() == pytest.approx(dialog.settings.layers.layer_height)
 
 
+def test_advice_values_read_like_the_field_beside_them(dialog: PrintSettingsDialog) -> None:
+    """Die Spalte „Vorschlag" schreibt jeden Wert, wie ihn das Feld zeigt.
+
+    Dort stand ``f"{wert:g}"``: im deutschen Fenster „0.16 mm" neben einem
+    Feld mit „0,160 mm", eine Bahngeschwindigkeit als „59.5238 mm/s", und
+    ein Haken als „0 → 1". Jetzt Komma, die Nachkommastellen des Felds und
+    „aus → an".
+    """
+    assert dialog._shown("layers.layer_height", 0.16) == "0,160 mm"
+    assert dialog._shown("speed.outer_wall", 59.52380952380952) == "59,5 mm/s"
+    assert dialog._shown("shell.outer_wall_first", True) == "an"
+    assert dialog._shown("shell.outer_wall_first", False) == "aus"
+
+
 def test_a_speed_survives_being_shown(dialog: PrintSettingsDialog) -> None:
     """Ein Feld, das einen Wert nur anzeigt, darf ihn nicht verändern.
 
@@ -632,6 +646,39 @@ def test_choosing_a_filament_adopts_its_values(dialog: PrintSettingsDialog, tmp_
     assert dialog.settings.filament.max_flow == 5.0
     assert dialog.settings.temperature.nozzle == 255
     assert dialog.settings.temperature.bed == 75
+
+
+def test_adopting_says_why_nothing_changed(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
+    """Der Knopf „Werte übernehmen" endet nie stumm (Regel 17).
+
+    Ein Profil ohne lesbare Werte ließ den Klick folgenlos, und ein Wert wie
+    ``nan`` warf eine Ausnahme aus dem Slot. Beides sagt jetzt die Zeile
+    darunter; die Einstellungen bleiben, wie sie waren.
+    """
+    empty = tmp_path / "Leer.json"
+    empty.write_text(json.dumps({"name": "Leer"}), encoding="utf-8")
+    before = dialog.settings
+    dialog._filament_profile = str(empty)
+    dialog._filament_title = "Leer"
+    dialog.state.setText("")
+
+    dialog._adopt_filament_values()
+
+    assert dialog.settings == before
+    assert "Leer" in dialog.state.text(), "der Klick braucht eine Antwort"
+
+    broken = tmp_path / "Kaputt.json"
+    broken.write_text(
+        json.dumps({"name": "Kaputt", "nozzle_temperature": ["nan"]}), encoding="utf-8"
+    )
+    dialog._filament_profile = str(broken)
+    dialog._filament_title = "Kaputt"
+    dialog.state.setText("")
+
+    dialog._adopt_filament_values()
+
+    assert dialog.settings == before
+    assert dialog.state.text(), "ein unlesbarer Wert wird gemeldet, nicht geworfen"
 
 
 def test_filling_the_filament_list_changes_nothing(dialog: PrintSettingsDialog) -> None:
@@ -898,6 +945,44 @@ def test_applying_the_advice_moves_the_editors(qt_app: QApplication) -> None:
     editor = dialog._editors["speed.outer_wall"]
     assert isinstance(editor, QDoubleSpinBox)
     assert editor.value() == pytest.approx(dialog.settings.speed.outer_wall)
+
+
+def test_applying_the_advice_says_what_it_changed(qt_app: QApplication) -> None:
+    """Der Knopf sagt, was er getan hat — und dass er nichts tat.
+
+    Die Felder änderten sich still, und die Liste darüber rechnete neu: Wer
+    nicht gerade auf die richtige Zeile sah, wusste nicht, was übernommen
+    war. Mit allen Haken abgewählt blieb der Klick ganz ohne Antwort.
+    """
+    session = Session()
+    session.project.document.material = "tpu-95a"
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog.wait_for_slicers()
+    titles = [
+        str(dialog._fields[entry.path].title)
+        for entry in dialog._chosen_advice()
+        if entry.path in dialog._fields
+    ]
+    assert titles, "ohne Vorschlag prüft der Test nichts"
+
+    dialog._apply_advice()
+
+    assert all(title in dialog.state.text() for title in titles), dialog.state.text()
+
+    session = Session()
+    session.project.document.material = "tpu-95a"
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog.wait_for_slicers()
+    for index in range(dialog.advice_view.topLevelItemCount()):
+        item = dialog.advice_view.topLevelItem(index)
+        assert item is not None
+        item.setCheckState(0, Qt.CheckState.Unchecked)
+    before = dialog.settings
+
+    dialog._apply_advice()
+
+    assert dialog.settings == before
+    assert dialog.state.text(), "auch ein Klick ohne Haken bekommt eine Antwort"
 
 
 def test_the_advice_list_is_never_empty_of_words(dialog: PrintSettingsDialog) -> None:
@@ -1272,6 +1357,72 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
     assert dialog._worker.wait(5_000)
     QApplication.processEvents()
     assert handed == [True, False]
+
+
+@pytest.mark.parametrize("way", ["open", "slice"])
+def test_an_error_in_the_report_is_named_before_the_model_leaves(
+    monkeypatch: pytest.MonkeyPatch, dialog: PrintSettingsDialog, tmp_path: Path, way: str
+) -> None:
+    """Der Export fragte bei Fehlern, die Übergabe an den Slicer nicht.
+
+    Beide schicken das Modell hinaus, und keins von beiden holt ein Strg+Z
+    zurück (Regel 19 erlaubt hier die Frage). Wer abbricht, übergibt nichts
+    und behält seine Übergabeart; ein Fehler auf einer anderen Platte oder
+    eine bloße Warnung hält niemanden auf.
+    """
+    import types as types_module
+
+    from app.core.types import Finding, Report
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "prusa-slicer.exe"
+    executable.write_bytes(b"")
+    dialog._slicer_path = executable
+    cube = _cube_object()
+    other = replace(_cube_object(), id="obj_2", plate=1)
+    broken = Finding(
+        code="ingest.not_watertight",
+        severity="error",
+        message="Der Körper ist nicht geschlossen.",
+        object_id="obj_1",
+    )
+    elsewhere = replace(broken, object_id="obj_2", message="Auf Platte 2")
+    warning = replace(broken, severity="warning", message="Nur eine Warnung")
+    scene = types_module.SimpleNamespace(
+        objects={"obj_1": cube, "obj_2": other},
+        report=Report((broken, elsewhere, warning)),
+    )
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+    asked: list[list[str]] = []
+    answer = {"go": False}
+
+    def ask(findings: list[Finding], _parent: object) -> bool:
+        asked.append([str(entry.message) for entry in findings])
+        return answer["go"]
+
+    monkeypatch.setattr(module, "confirm_handover", ask)
+    reported: list[object] = []
+    dialog.reported.connect(reported.append)
+    started: list[object] = []
+    monkeypatch.setattr(dialog._leash, "start", started.append)
+    before = dialog.settings.handover
+
+    (dialog._open_in_slicer if way == "open" else dialog._slice)()
+
+    assert asked == [["Der Körper ist nicht geschlossen."]], (
+        "gefragt wird mit den Fehlern der gewählten Platte, ohne Warnung und fremde Platte"
+    )
+    assert not started, "abgebrochen heißt: nichts geht hinaus"
+    assert dialog.settings.handover == before, "und die Übergabeart bleibt, wie sie war"
+    assert "Prüfbericht" in dialog.state.text()
+    assert reported, "die Fehler landen im Prüfbericht"
+
+    answer["go"] = True
+    (dialog._open_in_slicer if way == "open" else dialog._slice)()
+    assert len(asked) == 2
+    assert started, "weitergehen übergibt"
 
 
 @pytest.mark.parametrize(
@@ -2625,6 +2776,10 @@ def test_a_second_slot_gets_its_own_choice(
     # Bildschirmleser braucht den Namen ohnehin am Container.
     assert "Gehäuse" in dialog.slot_rows[0][0].accessibleName()
     assert "Schrift" in dialog.slot_rows[1][0].accessibleName()
+    # Und an der Auswahl selbst: Der Fokus landet auf ihr, nicht auf der
+    # Zeile — ohne Namen las der Bildschirmleser nur „Kombinationsfeld".
+    assert dialog.slot_rows[0][1].accessibleName() == "Gehäuse"
+    assert dialog.slot_rows[1][1].accessibleName() == "Schrift"
 
     box = dialog.slot_rows[1][1]
     box.addItem("Haus PLA weiß", str(tmp_path / "pla.json"))
@@ -3247,6 +3402,21 @@ def test_the_print_dialog_stands_before_the_slicer_search_comes_back(
         tor.set()
         dialog.wait_for_slicers()
         dialog.release()
+
+
+def test_the_missing_slicer_names_its_button_as_it_reads(dialog: PrintSettingsDialog) -> None:
+    """Der Grund am grauen Knopf nennt den Weg so, wie er dasteht.
+
+    „der Knopf Zusätzliche Programme richtet einen ein" las sich als Satz
+    ohne Knopf; der Name steht jetzt in Anführungszeichen und genau so, wie
+    ihn der Knopf trägt — mit den drei Punkten.
+    """
+    dialog._slicers_pending = False
+    dialog._slicer_path = None
+    dialog._show_slicer_state()
+
+    grund = dialog.slice_button.toolTip()
+    assert f"„{dialog.setup_button.text()}“" in grund, grund
 
 
 def test_the_slicer_search_arrives_and_settles_the_choice(
@@ -5854,3 +6024,122 @@ def test_a_resin_printer_reduces_the_dialog_to_what_applies_and_a_switch_brings_
     finally:
         dialog.close()
         dialog.deleteLater()
+
+
+@pytest.mark.parametrize("field", ["nozzle", "nozzle_count"])
+def test_a_printer_that_cannot_be_saved_says_so_and_shows_what_holds(
+    monkeypatch: pytest.MonkeyPatch, dialog: PrintSettingsDialog, field: str
+) -> None:
+    """Düse und Düsenzahl gehören dem Drucker und landen in seinem Profil —
+    und das Schreiben kann scheitern.
+
+    Die Ausnahme lief aus dem Slot heraus: kein Satz, und das Feld zeigte die
+    neue Düse, während der Drucker mit der alten weiterrechnete (Regel 17).
+    """
+    from app.core.errors import FileWriteError
+
+    def refuse(_entry: object) -> object:
+        raise FileWriteError(detail="kein Platz")
+
+    monkeypatch.setattr(profiles, "save_printer", refuse)
+    before = profiles.printer(str(dialog.printer_choice.currentData()))
+    if field == "nozzle":
+        dialog.nozzle.set_value_mm(before.nozzle_diameter + 0.2)
+        dialog._nozzle_changed(before.nozzle_diameter + 0.2)
+        assert dialog.nozzle.value_mm() == pytest.approx(before.nozzle_diameter)
+    else:
+        dialog.nozzle_count.setValue(before.nozzles + 1)
+        assert dialog.nozzle_count.value() == before.nozzles
+    assert "Drucker" in dialog.state.text() and "speichern" in dialog.state.text()
+    assert profiles.printer(before.id) == before
+
+
+def test_every_setting_field_carries_its_name_and_its_unit_once(
+    dialog: PrintSettingsDialog, qt_app: QApplication
+) -> None:
+    """Sechsundfünfzig Felder, und ein Bildschirmleser las „Drehfeld, 0,200".
+
+    `oberflaeche.md`: „Wo Felder stehen, tragen sie ihren Namen — und ‚wo'
+    heißt jede Stelle." Hier hatte keines einen ``accessibleName`` und keine
+    Beschriftung einen Buddy; „Erste Schicht" steht zweimal (Schichthöhe und
+    Tempo), also nennt der Name bei Gleichstand die Gruppe. Und die Werte einer
+    Spule trugen die Einheit zweimal — „Düse [°C]" über „210 °C" (B12).
+    """
+    names = [dialog._editors[field.path].accessibleName() for field in FIELDS]
+    assert all(names), [field.path for field, name in zip(FIELDS, names, strict=True) if not name]
+    assert len(set(names)) == len(names), sorted(n for n in names if names.count(n) > 1)
+    for path, label in dialog._labels.items():
+        assert label.buddy() is dialog._editors[path], path
+
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+    spool = FilamentOverrideDialog(MaterialSlot(index=1, name="PLA Weiß"), settings)
+    try:
+        from PySide6.QtWidgets import QLabel
+
+        for text in (label.text() for label in spool.findChildren(QLabel)):
+            assert "[" not in text, f"Einheit doppelt: {text}"
+        assert all(editor.accessibleName() for editor in spool.editors.values())
+    finally:
+        spool.deleteLater()
+
+
+def test_a_crashed_stock_check_reads_as_lines_not_as_title_colon_detail(
+    dialog: PrintSettingsDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch der Absturz der Bestandsprüfung schrieb ``str(InternalError(…))``."""
+    from types import SimpleNamespace
+
+    from app.ui import print_settings_dialog as module
+
+    def broken(*_args: object, **_kwargs: object) -> object:
+        raise ValueError("boom")
+
+    monkeypatch.setattr(module, "prepare_usage", broken)
+    # Die Prüfung läuft nur mit einem Ergebnis; welche Körper es trägt, ist
+    # gleich, denn sie scheitert vor dem ersten.
+    monkeypatch.setattr(
+        dialog.session, "last_result", SimpleNamespace(scene=SimpleNamespace(objects={}))
+    )
+    dialog._stock_revision += 1
+    dialog._refresh_stock()
+    worker = dialog._stock_worker
+    assert worker is not None
+    worker.wait(10_000)
+    qt_app.processEvents()
+
+    shown = dialog.stock_notice.text()
+    assert shown, "der Absturz wird gesagt"
+    assert ".:" not in shown, shown
+
+
+def test_a_stock_problem_reads_as_two_lines_not_as_title_colon_detail(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Bestandshinweis zeigte ``str(problem)``: „Titel.: Detail" samt der
+    Adressen für den Code — `oberflaeche.md` will beides nicht."""
+    from app.core.errors import ValidationError
+    from app.ui import print_settings_dialog as module
+
+    def broken(*_args: object, **_kwargs: object) -> object:
+        raise ValidationError(
+            title="Das Filamentlager lässt sich nicht lesen.",
+            field="catalogue",
+            constraint="unreadable",
+            detail="Die Datei bleibt unverändert.",
+        )
+
+    monkeypatch.setattr(module, "prepare_usage", broken)
+    said: list[str] = []
+    worker = module._StockWorker(
+        (),
+        print_settings.resolve(profiles.make_profile("generic-220", "pla")),
+        profiles.make_profile("generic-220", "pla"),
+    )
+    worker.done.connect(said.append)
+    worker.work()
+    lines = said[0].splitlines()
+    assert lines[:2] == [
+        "Das Filamentlager lässt sich nicht lesen.",
+        "Die Datei bleibt unverändert.",
+    ]
+    assert ".:" not in said[0] and "catalogue" not in said[0]

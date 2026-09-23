@@ -47,7 +47,7 @@ from app.core.organizer.serialize import (
 from app.core.scene.cancel import CancelSignal
 from app.core.types import ParamSpec
 from app.i18n import tr
-from app.ui.dialogs import ErrorNotice
+from app.ui.dialogs import ErrorNotice, problem_text
 from app.ui.labels import length
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.style import ROOMY, make_primary, no_primary
@@ -282,7 +282,7 @@ class OrganizerDialog(QDialog):
         if layout_only:
             hint = QLabel(
                 tr(
-                    "Die Außenmaße bleiben im Operationsdialog. Hier ändern "
+                    "Die Außenmaße stehen im vorigen Dialog. Hier ändern "
                     "Sie nur die Fachaufteilung."
                 ),
                 self,
@@ -299,6 +299,8 @@ class OrganizerDialog(QDialog):
         self.basis.setToolTip(
             tr("Ein Bezugwechsel übernimmt die aktuell sichtbaren lichten Fachmaße.")
         )
+        # Ohne Namen las der Bildschirmleser nur den gewählten Eintrag.
+        self.basis.setAccessibleName(tr("Welche Maße fest bleiben"))
         self.basis.currentIndexChanged.connect(self._basis_changed)
         controls.addWidget(self.basis)
         self.new_grid = QPushButton(tr("Neues Raster"), self)
@@ -309,6 +311,13 @@ class OrganizerDialog(QDialog):
         self.name_field.setPlaceholderText(tr("Organizer"))
         self.name_field.setAccessibleName(tr("Name"))
         self.name_field.setEnabled(not layout_only)
+        # **Mit sichtbarer Beschriftung.** Das Feld stand wortlos neben „Neues
+        # Raster"; sein einziger Hinweis war der Platzhalter, und der
+        # verschwindet, sobald etwas darin steht.
+        name_label = QLabel(tr("Name:"), self)
+        name_label.setBuddy(self.name_field)
+        name_label.setEnabled(not layout_only)
+        controls.addWidget(name_label)
         controls.addWidget(self.name_field)
         layout.addLayout(controls)
         self.basis_notice = QLabel(self)
@@ -364,7 +373,7 @@ class OrganizerDialog(QDialog):
         self.accept_button.setText(
             tr("Aufteilung übernehmen") if layout_only else tr("Organizer anlegen")
         )
-        self.accept_button.setEnabled(False)
+        self._lock_accept(str(tr("Die Vorschau wird noch berechnet.")))
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("Abbrechen"))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -461,7 +470,7 @@ class OrganizerDialog(QDialog):
             else 0
         )
         self.selection.setText(
-            tr("Ausgewählt: Fachvorlage für {count} Fächer").format(count=affected)
+            _template_line(affected)
             if node.kind == "cell"
             else tr("Ausgewählt: Teilung der Fachgruppe")
         )
@@ -552,7 +561,12 @@ class OrganizerDialog(QDialog):
             if axis == "x"
             else replace(node, depth=divided_value)
         )
-        children = (replace(divided, id=fresh()), replace(divided, id=fresh()))
+        try:
+            children = (replace(divided, id=fresh()), replace(divided, id=fresh()))
+        except AppError as problem:
+            # Die Absage steht in der Zeile, statt aus dem Slot zu fallen.
+            self.state.set_error(problem, {})
+            return
         replacement = Node("split", identifier, axis=axis, wall=wall, children=children)
 
         def change(current: Node) -> Node:
@@ -649,7 +663,7 @@ class OrganizerDialog(QDialog):
             return
         self._revision += 1
         self._pending = True
-        self.accept_button.setEnabled(False)
+        self._lock_accept(str(tr("Die Vorschau wird noch berechnet.")))
         self.state.setText(tr("Vorschau wird berechnet …"))
         if self._worker is not None:
             self._worker.cancelled.cancel()
@@ -694,7 +708,11 @@ class OrganizerDialog(QDialog):
         self._ready_revision = revision
         self.preview.load(QByteArray(svg.encode("utf-8")))
         self.measurement.setText(
-            tr("{width} × {depth} × {height} · {count} Fächer").format(
+            (
+                tr("{width} × {depth} × {height} · ein Fach")
+                if len(layout.cells) == 1
+                else tr("{width} × {depth} × {height} · {count} Fächer")
+            ).format(
                 width=length(layout.width),
                 depth=length(layout.depth),
                 height=length(layout.height),
@@ -718,18 +736,21 @@ class OrganizerDialog(QDialog):
         if layout.inactive_heights:
             self.state.setText(
                 tr(
+                    "Eine gespeicherte Wandhöhe gehört zu einem derzeit nicht "
+                    "vorhandenen Fach. Beim Vergrößern wird sie wieder verwendet."
+                )
+                if len(layout.inactive_heights) == 1
+                else tr(
                     "{count} gespeicherte Wandhöhen gehören zu derzeit nicht "
                     "vorhandenen Fächern. Beim Vergrößern werden sie wieder verwendet."
                 ).format(count=len(layout.inactive_heights))
             )
-        self.accept_button.setEnabled(True)
+        self._lock_accept("")
         if self._selected[0] == "node":
             node = self._nodes.get(self._selected[1])
             if node is not None and node.kind == "cell":
                 affected = sum(node.id in cell.id.split("/") for cell in layout.cells)
-                self.selection.setText(
-                    tr("Ausgewählt: Fachvorlage für {count} Fächer").format(count=affected)
-                )
+                self.selection.setText(_template_line(affected))
         self._paint_layout()
 
     def _paint_layout(self) -> None:
@@ -786,10 +807,23 @@ class OrganizerDialog(QDialog):
 
     def _failed(self, revision: int, problem: object) -> None:
         if not self._closed and revision == self._revision:
-            self.accept_button.setEnabled(False)
+            self._lock_accept(
+                problem_text(problem) or str(tr("Die Angaben ergeben so keinen Organizer."))
+            )
             self.state.set_error(
                 problem, {"correct_input": weak_slot(self.tree, QTreeWidget.setFocus)}
             )
+
+    def _lock_accept(self, why: str) -> None:
+        """Der Hauptknopf ruht mit Grund an allen drei Kanälen — oder ist frei.
+
+        Er ruhte während jeder Vorschau und nach jedem Fehler wortlos; der
+        Satz stand nur in der Zeile darunter (Regel 18).
+        """
+        self.accept_button.setEnabled(not why)
+        self.accept_button.setToolTip(why)
+        self.accept_button.setStatusTip(why)
+        self.accept_button.setAccessibleDescription(why)
 
     def _crashed(self, detail: str) -> None:
         worker = self.sender()
@@ -820,3 +854,10 @@ class OrganizerDialog(QDialog):
         if self._worker is not None:
             self._worker.cancelled.cancel()
         self._leash.wait_all(timeout_ms)
+
+
+def _template_line(affected: int) -> str:
+    """„Fachvorlage für 1 Fächer" stand da, sobald eine Vorlage ein einziges Fach trug."""
+    if affected == 1:
+        return str(tr("Ausgewählt: Fachvorlage für ein Fach"))
+    return str(tr("Ausgewählt: Fachvorlage für {count} Fächer")).format(count=affected)

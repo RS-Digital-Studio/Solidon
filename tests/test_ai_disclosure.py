@@ -407,6 +407,33 @@ def test_only_visible_anthropic_links_open_the_exact_legal_pages(
     assert opened == [ANTHROPIC_PRIVACY_URL, ANTHROPIC_COMMERCIAL_TERMS_URL]
 
 
+def test_a_legal_page_without_a_browser_leaves_its_address(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne Browser tat der Klick nichts — jetzt liegt die Adresse bereit.
+
+    ``openUrl`` meldet ``False``, wenn kein Programm die Adresse annimmt; der
+    Rückgabewert wurde nicht gelesen. Der Weg ist derselbe wie beim
+    Freischalten: Adresse in die Zwischenablage, ein Satz dazu.
+    """
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda _address: False)
+    said: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda _parent, _title, text, *_rest: said.append(text) or 0
+    )
+    qt_app.clipboard().setText("")
+    dialog = AiDisclosureDialog(_target("anthropic"))
+    try:
+        dialog.external_links[0].click()
+    finally:
+        dialog.deleteLater()
+
+    assert qt_app.clipboard().text() == ANTHROPIC_PRIVACY_URL
+    assert said and ANTHROPIC_PRIVACY_URL in said[0]
+
+
 def test_local_privacy_opens_only_the_packaged_read_only_document(
     qt_app: QApplication,
     monkeypatch: pytest.MonkeyPatch,
@@ -430,6 +457,28 @@ def test_local_privacy_opens_only_the_packaged_read_only_document(
     assert reader.text.isReadOnly()
     assert not reader.text.openLinks()
     assert not reader.text.openExternalLinks()
+
+
+def test_the_local_privacy_reader_says_it_is_german(qt_app: QApplication) -> None:
+    """Die Erklärung liegt nur auf Deutsch vor — in jeder anderen Sprache sagt
+    der Leser das, bevor jemand eine fremde Sprache für einen Fehler hält."""
+    german = LocalPrivacyDialog("# Datenschutz")
+    try:
+        assert "Deutsch" not in german.note.text()
+    finally:
+        german.deleteLater()
+    install_language("en")
+    set_language("en")
+    try:
+        english = LocalPrivacyDialog("# Datenschutz")
+        try:
+            assert "German" in english.note.text(), english.note.text()
+            assert english.text.accessibleDescription() == english.note.text()
+        finally:
+            english.deleteLater()
+    finally:
+        install_language("de")
+        set_language("de")
 
 
 def test_packaging_includes_the_local_privacy_document() -> None:

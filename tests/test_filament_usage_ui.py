@@ -830,3 +830,50 @@ def test_notice_keeps_closed_dialog_workers_and_then_deletes_the_dialog(
     assert notice.wait_for_workers(0)
     if pending == "create":
         assert any(entry.name == "Neue Spule" for entry in filaments.catalogue())
+
+
+def test_a_locked_booking_says_why_on_every_channel(qt_app: QApplication) -> None:
+    """*Abziehen* nannte seinen Grund im Tooltip und für den Bildschirmleser,
+    die Statuszeile blieb leer (Regel 18: alle drei Kanäle)."""
+    dialog = _dialog(_request(None))
+    try:
+        button = dialog.book_button
+        assert not button.isEnabled(), "ohne Spule gibt es nichts abzuziehen"
+        said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        assert all(text.strip() for text in said), said
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_an_unnamed_filament_keeps_a_name_for_the_screen_reader(qt_app: QApplication) -> None:
+    """Ohne Slotnamen hieß die Auswahl „Spule für " — der Satz brach ab."""
+    request = UsageRequest(
+        "geometry",
+        "Halter",
+        0,
+        (UsageLine(MaterialSlot(0, "", (1.0, 1.0, 1.0)), 42, "", "internal"),),
+    )
+    dialog = _dialog(request)
+    try:
+        assert dialog.choices[0].accessibleName() == "Spule für Ohne Filamentzuweisung"
+        assert dialog.amounts[0].accessibleName() == "Verbrauch für Ohne Filamentzuweisung"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_resting_booking_button_says_why(qt_app: QApplication) -> None:
+    """Während der Bestand geprüft wird, ruht *Filament abziehen …* — der
+    Satz stand nur als Knopftext da, alle drei Kanäle waren leer."""
+    notice = UsageNotice(UiSettings(inventory_booking_mode="auto"))
+    try:
+        notice.offer(_request(_spool()))
+        button = notice.review
+        assert not button.isEnabled(), "die Prüfung läuft noch"
+        said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        assert all(text.strip() for text in said), said
+        _wait(notice)
+    finally:
+        notice.release()
+        notice.deleteLater()

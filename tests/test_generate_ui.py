@@ -695,6 +695,49 @@ def test_a_setup_that_cannot_start_says_why_and_offers_the_run_again(
     assert dialog.progress.isHidden()
 
 
+def test_closing_the_setup_while_it_runs_cancels_it_without_waiting(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Esc während der Einrichtung: abbrechen, ja — aber nicht zwei Sekunden
+    auf den Thread warten. Den hält die Halteleine; eine späte Antwort bewegt
+    den geschlossenen Dialog nicht mehr."""
+    import threading
+    import time
+
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    comfyui = tmp_path / "ComfyUI"
+    (comfyui / "custom_nodes").mkdir(parents=True)
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: comfyui)
+    gate = threading.Event()
+    asked: list[bool] = []
+
+    def slow(*_args: object, cancelled: object = None, **_kwargs: object) -> object:
+        gate.wait(10)
+        asked.append(bool(callable(cancelled) and cancelled()))
+        raise comfy_setup.SetupFailed("abgebrochen")
+
+    monkeypatch.setattr(comfy_setup, "setup", slow)
+    dialog = ComfySetupDialog()
+    try:
+        dialog.start_button.click()
+        worker = dialog._worker
+        assert worker is not None and worker.isRunning()
+        started = time.perf_counter()
+        dialog.reject()
+        waited = time.perf_counter() - started
+        assert waited < 0.5, f"Esc wartete {waited:.2f} s"
+        gate.set()
+        assert worker.wait(10_000)
+        qt_app.processEvents()
+        assert asked == [True], "der Lauf hat den Abbruch gesehen"
+        assert dialog.state.text() != "abgebrochen", "eine späte Antwort bewegt den Dialog nicht"
+    finally:
+        gate.set()
+        dialog.release()
+
+
 def test_the_dialog_names_the_middle_state_before_the_run(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1358,5 +1401,56 @@ def test_another_attempt_during_a_run_does_not_start_a_second_job(qt_app: QAppli
         assert dialog.again.isEnabled(), "nach dem Lauf steht der Knopf wieder"
     finally:
         gate.set()
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_an_unreadable_image_is_said_not_thrown(qt_app: QApplication, tmp_path: Path) -> None:
+    """Ein Bild, das inzwischen fehlt oder gesperrt ist, warf ``OSError`` aus
+    dem Slot — beim Ablegen aus dem Chatfenster bis ins Hauptfenster."""
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.set_image(tmp_path / "weg.png")
+
+        assert dialog._image is None, "kein halbes Bild"
+        assert "weg.png" in dialog.state.text(), dialog.state.text()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_a_chosen_image_can_be_taken_back_and_rests_the_description(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    """Mit Bild fährt der Dialog den Bildweg, und die Beschreibung ging still
+    verloren; zurück zum Textweg führte nur ein neuer Dialog.
+
+    Jetzt ruht das Beschreibungsfeld mit Grund, und *Bild entfernen* führt
+    zurück.
+    """
+    picture = tmp_path / "skizze.png"
+    picture.write_bytes(b"\x89PNG\r\n\x1a\n")
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        wait_for_readiness(dialog, qt_app)
+        assert not dialog.drop_picture.isVisibleTo(dialog)
+
+        dialog.set_image(picture)
+        wait_for_readiness(dialog, qt_app)
+
+        assert dialog._workflow() == "image_to_mesh"
+        assert not dialog.prompt.isEnabled(), "die Beschreibung ruht, solange ein Bild gilt"
+        assert dialog.prompt.toolTip(), "und sagt, warum"
+        assert dialog.drop_picture.isVisibleTo(dialog)
+
+        dialog.drop_picture.click()
+        wait_for_readiness(dialog, qt_app)
+
+        assert dialog._workflow() == "text_to_mesh"
+        assert dialog.prompt.isEnabled()
+        assert not dialog.drop_picture.isVisibleTo(dialog)
+        assert dialog.picture_label.text() == "Kein Bild gewählt"
+    finally:
         dialog.release()
         dialog.deleteLater()

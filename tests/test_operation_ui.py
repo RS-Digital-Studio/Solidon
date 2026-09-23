@@ -87,14 +87,48 @@ def test_integer_part_bindings_reopen_and_keep_the_reference(
 
 
 def test_variable_output_count_keeps_a_fixed_integer_editor(qt_app: QApplication) -> None:
-    """Ergebniskennungen benötigen weiterhin eine beim Planen feste Anzahl."""
-    from PySide6.QtWidgets import QSpinBox
+    """Ergebniskennungen benötigen weiterhin eine beim Planen feste Anzahl —
+    und die Stückzahl bekommt trotzdem ihr fx.
 
-    dialog = OperationDialog(REGISTRY.get("pattern"), {"obj_1": "Körper"})
-    try:
-        assert isinstance(dialog._editors["count"], QSpinBox)
-    finally:
-        dialog.deleteLater()
+    Hinter jedem Zahlenfeld steht ein fx, so verspricht es die Website, und
+    genau die Stückzahl hatte keines: ein nacktes ``QSpinBox``. Jetzt nimmt sie
+    einen Ausdruck, löst ihn beim Übernehmen zur ganzen Zahl auf (der Stapel
+    vergibt die Kennungen vorher, ``History._stated``) und sperrt den Knopf mit
+    Grund, wenn keine ganze Zahl im erlaubten Bereich herauskommt.
+    """
+    from app.ui.op_dialog import CountField
+
+    for name in ("pattern", "duplicate_object"):
+        dialog = OperationDialog(
+            REGISTRY.get(name),
+            {"obj_1": "Körper"},
+            parameter_values={"reihen": 2.0, "spalten": 3.0},
+        )
+        try:
+            editor = dialog._editors["count"]
+            assert isinstance(editor, CountField)
+            assert editor.toggle.isVisibleTo(dialog), "die Stückzahl hat kein fx"
+            editor.start_expression("=")
+            editor.text.setText("=@reihen*@spalten")
+            assert dialog.values()["count"] == 6
+            assert isinstance(dialog.values()["count"], int), "die Stückzahl bleibt eine Zahl"
+            assert "6" in editor.hint.text() and "Stückzahl" in editor.hint.text()
+            assert dialog._accept_button.isEnabled()
+
+            editor.text.setText("=@reihen/4")
+            assert not dialog._accept_button.isEnabled(), "eine halbe Kopie ist keine Stückzahl"
+            assert dialog._accept_button.toolTip(), "gesperrt ohne Grund"
+            assert not dialog.can_accept()
+
+            spec_count = next(
+                entry for entry in REGISTRY.get(name).params.spec() if entry.name == "count"
+            )
+            assert spec_count.maximum is not None
+            editor.text.setText(f"={int(spec_count.maximum) + 1}")
+            assert not dialog._accept_button.isEnabled(), "über der Obergrenze"
+            assert str(int(spec_count.maximum)) in dialog._accept_button.toolTip()
+        finally:
+            dialog.deleteLater()
 
 
 @pytest.mark.parametrize("name", ["sketch_revolve", "sketch_sweep", "sketch_loft", "sketch_pocket"])

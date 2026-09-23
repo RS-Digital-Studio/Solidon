@@ -965,6 +965,37 @@ def test_escape_forgets_the_target_body(flow: Any) -> None:
     assert controller.target == "", "Escape gibt das Ziel frei; nur Übernehmen behält es"
 
 
+def test_escape_leads_back_to_the_dialog_and_the_dialog_back_into_the_view(
+    flow: Any,
+) -> None:
+    """Escape bringt den Dialog, und aus dem Dialog führt ein Knopf zurück in
+    die erste Stufe (RM-205).
+
+    ``surfaceRequested`` hatte keinen Sender mehr, seit *Im Modell platzieren*
+    fiel: Wer nach dem Nachbessern neu zielen wollte, schloss den Dialog und
+    begann von vorn. Der Knopf steht erst da, wenn schon gezielt wurde, und
+    die Werte des Dialogs bleiben.
+    """
+    controller, session, _viewport, dialog = flow
+    dialog.show()
+    assert not dialog.aim_again.isVisibleTo(dialog), "vor dem ersten Zielen kein Rückweg"
+    controller.start()
+    assert controller.active
+    assert not dialog.aim_again.isVisibleTo(dialog)
+    _point(controller, session)
+    values = dialog.values()
+    controller.back()
+    assert not controller.active
+    assert dialog.aim_again.isVisibleTo(dialog), "aus dem Dialog führt kein Weg zurück ins Bild"
+    assert dialog.aim_again.toolTip()
+
+    dialog.aim_again.click()
+    assert controller.active, "der Knopf beginnt die Platzierung wieder in Stufe 1"
+    assert not controller._deepening
+    assert not dialog.aim_again.isVisibleTo(dialog)
+    assert dialog.values() == values
+
+
 def test_invalid_surface_cannot_reuse_the_previous_position(flow: Any) -> None:
     controller, session, viewport, _dialog = flow
     before = len(session.project.document.ops)

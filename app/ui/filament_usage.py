@@ -80,6 +80,15 @@ def _note(line: UsageLine, *, split: bool = False) -> str:
     return "converted_from_length" if line.converted_from_length else ""
 
 
+def _slot_title(line: UsageLine) -> str:
+    """Wie das Druckfilament heißt — auch ohne Slotnamen ein ganzer Name.
+
+    Überschrift und zugängliche Namen lesen dieselbe Quelle: Ohne Namen stand
+    oben „Ohne Filamentzuweisung", der Bildschirmleser las „Spule für ".
+    """
+    return str(line.slot.name) or str(tr("Ohne Filamentzuweisung"))
+
+
 def _source(line: UsageLine) -> str:
     """Herkunft der jeweiligen Zahl, ohne G-Code zu einer Messung zu erklären."""
     if line.source == "internal":
@@ -263,7 +272,7 @@ class UsageDialog(QDialog):
             marker.setPixmap(
                 swatch(slot_colours(int(line.slot.index), line.slot)).pixmap(NORMAL * 3, NORMAL * 3)
             )
-            name = QLabel(str(line.slot.name) or tr("Ohne Filamentzuweisung"), card)
+            name = QLabel(_slot_title(line), card)
             name.setTextFormat(Qt.TextFormat.PlainText)
             name.setWordWrap(True)
             set_level(name, "section")
@@ -275,10 +284,10 @@ class UsageDialog(QDialog):
             )
             choice.setMinimumContentsLength(12)
             choice.currentTextChanged.connect(choice.setToolTip)
-            choice.setAccessibleName(tr("Spule für {name}").format(name=str(line.slot.name)))
+            choice.setAccessibleName(tr("Spule für {name}").format(name=_slot_title(line)))
             choice.setMinimumHeight(TARGET_SIZE)
             amount = self._amount_widget(line.grams, self.content)
-            amount.setAccessibleName(tr("Verbrauch für {name}").format(name=str(line.slot.name)))
+            amount.setAccessibleName(tr("Verbrauch für {name}").format(name=_slot_title(line)))
             set_level(amount, "section")
             heading.addWidget(amount)
             row.addLayout(heading)
@@ -548,7 +557,7 @@ class UsageDialog(QDialog):
         choice.setMinimumContentsLength(8)
         choice.currentTextChanged.connect(choice.setToolTip)
         choice.setAccessibleName(
-            tr("Spule für {name}").format(name=str(self._lines[index].slot.name))
+            tr("Spule für {name}").format(name=_slot_title(self._lines[index]))
         )
         self._fill_choice(choice, self._lines[index], identifier, suggest=False)
         amount = self._amount_widget(grams, widget)
@@ -695,14 +704,20 @@ class UsageDialog(QDialog):
         self.book_button.setEnabled(not reason)
         self.repeat_button.setVisible(bool(self._bookings))
         self.repeat_button.setEnabled(not busy)
+        # Der Grund an allen drei Kanälen (Regel 18) — die Statuszeile fehlte.
         self.book_button.setToolTip(reason)
+        self.book_button.setStatusTip(reason)
         self.book_button.setAccessibleDescription(reason)
-        self.correct_button.setAccessibleDescription(
+        # Die Korrektur trägt frei ihren Handlungssatz, gesperrt denselben Grund.
+        corrects = str(
             tr(
                 "Die bisher gebuchten Mengen werden durch diese ausdrücklich eingegebenen "
                 "Mengen ersetzt. Der Verlauf bleibt erhalten."
             )
         )
+        self.correct_button.setToolTip(reason)
+        self.correct_button.setStatusTip(reason)
+        self.correct_button.setAccessibleDescription(reason or corrects)
         self.state.setText(reason)
         self.state.setVisible(bool(reason))
         self.reload_button.setVisible(not self._loaded or bool(reason))
@@ -1008,9 +1023,14 @@ class UsageNotice(QWidget):
         else:
             self.state.setText(state)
         self.state.setVisible(bool(state))
-        self.review.setToolTip(state)
-        self.review.setAccessibleDescription(state)
         busy = self._tasks.worker is not None
+        # Der ruhende Knopf nennt seinen Grund an allen drei Kanälen (Regel
+        # 18); bis hierhin stand er nur als Knopftext da, und die Statuszeile
+        # fehlte immer.
+        said = state or (str(tr("Der Bestand wird gerade geprüft.")) if busy else "")
+        self.review.setToolTip(said)
+        self.review.setStatusTip(said)
+        self.review.setAccessibleDescription(said)
         self.state.set_actions_enabled(not busy)
         self.review.setEnabled(not busy)
         self.review.setText(

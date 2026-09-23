@@ -11,6 +11,7 @@ import math
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -49,6 +50,7 @@ from app.branding import (
     COPYRIGHT,
     DONATION_URL,
     GOFUNDME_URL,
+    PLANNED_SALE_START,
     SECURITY_SUPPORT_UNTIL,
     SUPPORT_ADDRESS,
     WEBSITE_URL,
@@ -81,7 +83,10 @@ from app.ui.labels import (
     NumberSpin,
     calendar_date,
     deadline_date,
+    demo_days,
     fill_parameter_units,
+    localised_value,
+    trial_days,
     value_line,
 )
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
@@ -239,8 +244,10 @@ class CalibrationDialog(QDialog):
 
         current = profiles.material(material)
         state = tr("kalibriert") if current.calibrated else tr("Startwert")
+        # Der Titel, den der Kunde überall sonst liest — nicht die Kennung des
+        # Profils („resin — Startwert" über einem „Standardharz").
         explanation = QLabel(
-            f"{material} — {state}\n\n"
+            f"{current.title} — {state}\n\n"
             + tr(
                 "Gemessene Werte gehören ins Materialprofil, nicht ins Modell. "
                 "Alle bestehenden Projekte rechnen danach mit den neuen Werten.\n\n"
@@ -506,7 +513,9 @@ class ParameterDialog(QDialog):
         self.fx_button.setText(FORMULA_MARKER)
         self.fx_button.setCheckable(True)
         self.fx_button.setAutoRaise(True)
-        self.fx_button.setToolTip(tr("Statt einer Zahl einen Parameterausdruck eintragen."))
+        self.fx_button.setToolTip(
+            tr("Statt einer festen Zahl rechnen lassen — zum Beispiel die halbe Breite.")
+        )
         self.fx_button.setAccessibleName(tr("Parameterausdruck"))
 
         self.parameter_button = QToolButton(self)
@@ -562,9 +571,9 @@ class ParameterDialog(QDialog):
         if existing is not None:
             # Vorbelegt mit dem heutigen Stand — ein Änderungsdialog, der leer
             # aufgeht, verlangt vom Kunden, sich zu erinnern, was dasteht.
-            # ``localised`` bleibt hier draußen: Die zwei Grenzfelder nehmen
-            # Punkt und Komma an, und was hier hineingeschrieben wird, liest
-            # ``_bounds`` gleich wieder.
+            # In der Schreibweise der Oberfläche (``localised_value``): Hier
+            # stand „0.5" neben „12,50 mm" im Wertfeld. ``_bounds`` liest das
+            # Komma wie den Punkt, der Rückweg bleibt also derselbe.
             self.name_field.setText(str(existing.name))
             self.name_field.setReadOnly(True)
             self.name_field.setToolTip(
@@ -576,9 +585,9 @@ class ParameterDialog(QDialog):
             )
             self.value_field.setValue(float(existing.value))
             if existing.minimum is not None:
-                self.minimum_field.setText(f"{float(existing.minimum):g}")
+                self.minimum_field.setText(localised_value(f"{float(existing.minimum):g}"))
             if existing.maximum is not None:
-                self.maximum_field.setText(f"{float(existing.maximum):g}")
+                self.maximum_field.setText(localised_value(f"{float(existing.maximum):g}"))
             self.expression_field.setText(str(existing.expression or ""))
 
         self.problem = QLabel("", self)
@@ -2014,11 +2023,15 @@ class ActivationDialog(QDialog):
             set_role(
                 self.state_label,
                 "info",
+                # Die Lizenzart steht hier wie im Über-Dialog (RM-182): Wer
+                # nachsieht, auf welchem Geräteplatz er steht, fragt auch,
+                # welche Lizenz er gekauft hat — die gewerbliche hat zwei.
                 tr(
-                    "Freigeschaltet für {holder} (Bestellung {order}).\n"
+                    "Freigeschaltet für {holder} — {kind} (Bestellung {order}).\n"
                     "Aktives Gerät: {device}. Danach bleibt Solidon ohne Lizenzverbindung nutzbar."
                 ).format(
                     holder=state.licence.holder or tr("diesen Rechner"),
+                    kind=licence_kind_text(state.licence.kind),
                     order=state.licence.order,
                     device=state.certificate.device_name,
                 ),
@@ -2029,11 +2042,12 @@ class ActivationDialog(QDialog):
                 self.state_label,
                 "info",
                 tr(
-                    "Freigeschaltet für {holder} (Bestellung {order}). Dieser "
+                    "Freigeschaltet für {holder} — {kind} (Bestellung {order}). Dieser "
                     "Bestandsschlüssel braucht keine Geräteaktivierung und bleibt "
                     "vollständig offline nutzbar."
                 ).format(
                     holder=state.licence.holder or tr("diesen Rechner"),
+                    kind=licence_kind_text(state.licence.kind),
                     order=state.licence.order,
                 ),
             )
@@ -2054,9 +2068,7 @@ class ActivationDialog(QDialog):
             set_role(
                 self.state_label,
                 "info",
-                tr("Demo — noch {days} Tage, bis zum {date}.").format(
-                    days=state.days_left, date=deadline_date(state)
-                )
+                demo_days(state)
                 + " "
                 + tr(
                     "Für die Demo gibt es keinen Schlüssel: sie läuft vollständig und "
@@ -2068,7 +2080,7 @@ class ActivationDialog(QDialog):
             set_role(
                 self.state_label,
                 "info",
-                tr("Testzeitraum: noch {days} Tage.").format(days=state.days_left)
+                trial_days(state.days_left)
                 + " "
                 + tr(
                     "Danach bleiben Öffnen, Ansehen, Messen und Speichern nutzbar; "
@@ -2446,11 +2458,31 @@ class ActivationDialog(QDialog):
         self._worker = None
         self._follow_field()
 
+    def _busy_with_the_server(self) -> bool:
+        """Ob gerade eine Frei- oder Rückgabe beim Server läuft — dann bleibt
+        der Dialog offen und sagt, worauf er wartet."""
+        if self._worker is None or not self._worker.isRunning():
+            return False
+        self.state_label.setText(tr("Bitte warten Sie, bis die Aktivierung abgeschlossen ist."))
+        return True
+
+    def done(self, result: int) -> None:
+        """Esc und *Schließen* warten wie das Fensterkreuz auf den Server.
+
+        ``closeEvent`` hielt den Dialog, solange die Freischaltung lief — aber
+        Esc und der Knopf *Schließen* gehen über ``reject()`` und kommen an
+        ``closeEvent`` nicht vorbei. Der Dialog verschwand, die Antwort kam in
+        ein verborgenes Fenster, und das Fenster dahinter zeigte bis zum
+        nächsten Blick den alten Zustand.
+        """
+        if self._busy_with_the_server():
+            return
+        super().done(result)
+
     def closeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
         """Während der Serverfreigabe darf der Dialog den Zustand nicht verlieren."""
-        if self._worker is not None and self._worker.isRunning():
+        if self._busy_with_the_server():
             event.ignore()
-            self.state_label.setText(tr("Bitte warten Sie, bis die Aktivierung abgeschlossen ist."))
             return
         self.release()
         super().closeEvent(event)
@@ -2460,9 +2492,36 @@ class ActivationDialog(QDialog):
         self._leash.wait_all()
 
 
+def open_link(address: str, parent: QWidget | None = None) -> bool:
+    """Öffnet eine Adresse im Browser — und sagt, wie es ohne ihn weitergeht.
+
+    ``openUrl`` meldet ``False``, wenn kein Programm die Adresse annimmt, und
+    an sechs Stellen wurde das nicht gelesen: Der Klick tat nichts, ohne ein
+    Wort. Der Rückweg ist derselbe wie beim Freischalten (:meth:`_open_page`
+    der Aktivierung): Die Adresse liegt in der Zwischenablage und steht im
+    Satz, damit man sie auch abschreiben kann.
+    """
+    if QDesktopServices.openUrl(QUrl(address)):
+        return True
+    QApplication.clipboard().setText(address)
+    QMessageBox.information(
+        parent,
+        tr("Der Browser ließ sich nicht öffnen"),
+        tr("Die Adresse ist kopiert — fügen Sie sie in einen Browser ein:\n{address}").replace(
+            "{address}", address
+        ),
+    )
+    return False
+
+
 def open_website() -> None:
-    """Öffnet die Produktseite — dieselbe Adresse, die auch der Installer nennt."""
-    QDesktopServices.openUrl(QUrl(WEBSITE_URL))
+    """Öffnet die Produktseite — dieselbe Adresse, die auch der Installer nennt.
+
+    Ohne Parameter, und das mit Absicht: Die Funktion hängt direkt an
+    ``clicked``, und PySide reicht einem Parameter mit Vorgabe den
+    ``checked``-Wert hinein (gemessen: ``False`` statt ``None``).
+    """
+    open_link(WEBSITE_URL)
 
 
 def copy_donation_url(url: str = DONATION_URL) -> None:
@@ -2505,7 +2564,7 @@ def open_donation(parent: QWidget | None = None, *, url: str = DONATION_URL) -> 
     return False
 
 
-def expired_demo_text(state: activation.Activation) -> str:
+def expired_demo_text(state: activation.Activation, now: datetime | None = None) -> str:
     """Was eine abgelaufene Demo zu sagen hat — der Text ohne Fenster darum.
 
     Getrennt vom Dialog, weil dieselben Sätze auch die Kommandozeile braucht;
@@ -2517,21 +2576,42 @@ def expired_demo_text(state: activation.Activation) -> str:
     Sackgasse, und Regel 17 verbietet sie auch hier. Und was aus der eigenen
     Arbeit wird: das ist die Frage, die jemand als erste stellt, und die
     Antwort nimmt ihr die Schärfe.
+
+    **Und sie kennt die Pause bis zum Verkaufsstart**
+    (RM-061, Konzept Demo→1.0 §6.2). Hier stand „Die aktuelle Version gibt es auf
+    solidon3d.de" — am 31.10. gibt es dort keine, und wer an diesem Tag
+    startet, liest eine Zusage, die die Website nicht hält. Vor dem geplanten
+    Start nennt der Text das Datum, danach verweist er auf die Website; die
+    Verfügbarkeit behauptet er in keinem Fall, denn die kennt nur sie. Die
+    Uhr des Kunden wählt nur, welcher der beiden wahren Sätze dasteht.
     """
-    return (
-        tr("Diese Demo von {app} lief bis zum {date} und lässt sich nicht mehr starten.").format(
-            app=APP_NAME, date=deadline_date(state)
+    moment = now or datetime.now(UTC)
+    if moment < PLANNED_SALE_START:
+        lines = (
+            tr("Diese Demo war bis einschließlich {date} nutzbar.").format(
+                date=deadline_date(state)
+            ),
+            tr(
+                "{app} 1.0 ist für den {start} um 10:00 Uhr deutscher Zeit geplant; "
+                "den Tag davor bereiten wir die Verkaufsversion vor."
+            ).format(app=APP_NAME, start=calendar_date(PLANNED_SALE_START.date())),
+            tr(
+                "Ihre gespeicherten Projekte bleiben erhalten. Auf {url} finden Sie den "
+                "aktuellen Stand und danach die Installation von 1.0."
+            ).format(url=WEBSITE_URL),
         )
-        + "\n\n"
-        + tr("Die aktuelle Version gibt es auf {url}.").format(url=WEBSITE_URL)
-        + "\n\n"
-        + tr(
-            "Ihre Projekte sind davon nicht betroffen. Sie liegen, wo Sie sie "
-            "gespeichert haben, und eine Projektdatei ist ein ZIP-Archiv mit JSON "
-            "darin — lesbar auch ohne dieses Programm, und die nächste Version "
-            "öffnet sie unverändert."
+    else:
+        lines = (
+            tr("Diese Demo ist beendet. Ob {app} 1.0 schon verfügbar ist, steht auf {url}.").format(
+                app=APP_NAME, url=WEBSITE_URL
+            ),
+            tr(
+                "Installieren Sie dort die aktuelle Version. Zum Bearbeiten und "
+                "Exportieren brauchen Sie eine Lizenz."
+            ),
+            tr("Ihre gespeicherten Projekte bleiben erhalten."),
         )
-    )
+    return "\n\n".join(str(line) for line in lines)
 
 
 def show_expired_demo(state: activation.Activation) -> None:
@@ -2541,7 +2621,7 @@ def show_expired_demo(state: activation.Activation) -> None:
     geschieht, sucht den Fehler bei sich oder hält das Programm für kaputt.
     """
     box = QMessageBox()
-    box.setWindowTitle(tr("Die Demo ist abgelaufen"))
+    box.setWindowTitle(tr("Die Demo ist beendet"))
     box.setIcon(QMessageBox.Icon.Information)
     box.setText(expired_demo_text(state))
     website = box.addButton(tr("Website öffnen"), QMessageBox.ButtonRole.AcceptRole)
@@ -3253,22 +3333,27 @@ def _licence_line() -> str:
         # „gewerblich" da, wäre ihr Fehlen die Aussage — und genau das muss ein
         # gewerblicher Arbeitsplatz hier belegen können, ohne die Bestellmail
         # zu suchen (Regel 18: keine Bedeutung allein über die Abwesenheit).
-        kinds = {
-            activation.LicenceKind.PRIVATE: tr("private Lizenz"),
-            activation.LicenceKind.COMMERCIAL: tr("gewerbliche Lizenz"),
-        }
         return tr("Lizenziert für {holder} — {kind} (Bestellung {order}).").format(
             holder=state.licence.holder or tr("diesen Rechner"),
-            kind=kinds[state.licence.kind],
+            kind=licence_kind_text(state.licence.kind),
             order=state.licence.order,
         )
     if state.in_demo:
-        return tr("Demo — noch {days} Tage, bis zum {date}.").format(
-            days=state.days_left, date=deadline_date(state)
-        )
+        return demo_days(state)
     if state.in_trial:
-        return tr("Testzeitraum: noch {days} Tage.").format(days=state.days_left)
+        return trial_days(state.days_left)
     return licence_lock_line(state)
+
+
+def licence_kind_text(kind: activation.LicenceKind) -> str:
+    """Die Lizenzart als Wort — im Über- und im Freischaltdialog dasselbe.
+
+    Benannt wird auch die private: Stünde nur „gewerblich" da, wäre ihr
+    Fehlen die Aussage (Regel 18: keine Bedeutung allein über Abwesenheit).
+    """
+    if kind == activation.LicenceKind.COMMERCIAL:
+        return str(tr("gewerbliche Lizenz"))
+    return str(tr("private Lizenz"))
 
 
 def _third_party_text() -> str:
@@ -3306,6 +3391,7 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     save = box.addButton(tr("Speichern"), QMessageBox.ButtonRole.AcceptRole)
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
     box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    make_primary(save)
     box.setDefaultButton(save)
     box.exec()
 
@@ -3338,16 +3424,62 @@ def confirm_export(findings: Sequence[Finding], parent: QWidget | None = None) -
     Gefragt wird nur, wenn es etwas zu fragen gibt — der Aufrufer ruft diese
     Funktion gar nicht erst ohne Befund (siehe ``_ExportWorker``).
     """
+    return _go_on_despite(
+        findings,
+        tr("Vor dem Export gefunden"),
+        tr("Die Datei ist noch nicht geschrieben — die Prüfung hat etwas gefunden."),
+        tr("Trotzdem exportieren"),
+        parent,
+    )
+
+
+def confirm_handover(findings: Sequence[Finding], parent: QWidget | None = None) -> bool:
+    """Fehler im Prüfbericht, bevor das Modell an den Slicer geht — und die Wahl.
+
+    Dieselbe Frage wie vor dem Export (:func:`confirm_export`) und aus
+    demselben Grund: Regel 19 verbietet Rückfragen vor **rücknehmbaren**
+    Handlungen, und die Übergabe ist keine. Das Modell liegt danach im Slicer,
+    und ein Slicen schreibt eine Druckdatei — kein Strg+Z holt beides zurück.
+    Bis hierher fragte der Export, die Übergabe nicht: Wer im Druckdialog auf
+    *Slicen* drückte, bekam einen Körper mit Fehlern in den Slicer, und der
+    einzige Hinweis war der Bericht daneben.
+
+    **Gefragt wird bei Fehlern, nicht bei Warnungen.** Die Übergabe ist oft
+    der Blick auf das Modell im Slicer; eine Frage bei jedem Überhang hielte
+    genau dort auf, wo §29 „Bericht, keine Blockade" verlangt. Weitergehen ist
+    die Vorgabe, wie beim Export.
+    """
+    return _go_on_despite(
+        findings,
+        tr("Vor der Übergabe gefunden"),
+        tr(
+            "Der Prüfbericht meldet Fehler. Der Slicer bekommt das Modell trotzdem, "
+            "wenn Sie weitergehen."
+        ),
+        tr("Trotzdem übergeben"),
+        parent,
+    )
+
+
+def _go_on_despite(
+    findings: Sequence[Finding],
+    title: str,
+    text: str,
+    go_on: str,
+    parent: QWidget | None,
+) -> bool:
+    """Die Befunde in fünf Zeilen, dazu Weitergehen als Vorgabe und Abbrechen."""
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Warning)
-    box.setWindowTitle(tr("Vor dem Export gefunden"))
-    box.setText(tr("Die Datei ist noch nicht geschrieben — die Prüfung hat etwas gefunden."))
+    box.setWindowTitle(title)
+    box.setText(text)
     lines = [f"· {finding.message}" for finding in findings[:EXPORT_LINES]]
     if len(findings) > EXPORT_LINES:
         lines.append(tr("Der Rest steht im Prüfbericht."))
     box.setInformativeText(newline.join(lines))
-    write = box.addButton(tr("Trotzdem exportieren"), QMessageBox.ButtonRole.AcceptRole)
+    write = box.addButton(go_on, QMessageBox.ButtonRole.AcceptRole)
     box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    make_primary(write)
     box.setDefaultButton(write)
     box.exec()
     return box.clickedButton() is write
@@ -3377,6 +3509,7 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
         box.setInformativeText("\n".join(f"· {name}" for name in names))
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
     box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    make_primary(discard)
     box.setDefaultButton(discard)
     box.exec()
     return box.clickedButton() is discard

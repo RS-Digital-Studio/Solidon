@@ -273,7 +273,7 @@ def test_an_incomplete_series_is_not_written_and_names_its_gaps(
 
         assert not list(tmp_path.glob("*")), "ein Satz mit Lücke wird nicht geschrieben"
         assert dialog.result() != VariantsDialog.DialogCode.Accepted, "der Dialog bleibt offen"
-        assert "-0.1" in dialog.state.text(), dialog.state.text()
+        assert "-0,1" in dialog.state.text(), dialog.state.text()
     finally:
         dialog.deleteLater()
 
@@ -340,3 +340,141 @@ def test_the_engraving_is_on_by_default_and_the_tick_reaches_the_run(
         assert seen == [True, False], f"der Haken kam nicht an: {seen}"
     finally:
         dialog.deleteLater()
+
+
+def test_escape_during_a_run_returns_at_once_and_nothing_is_written_later(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Schließen wartete bis zu zwei Sekunden auf eine laufende Auswertung.
+
+    Der Abbruch greift zwischen zwei Auswertungen; eine begonnene läuft zu
+    Ende, und so lange stand das Fenster auf Esc hin still. Jetzt hält die
+    Halteleine den Thread, der Dialog geht sofort — und was danach fertig
+    wird, schreibt nichts mehr.
+    """
+    import time
+
+    from app.ui import variants_dialog as module
+
+    held = threading.Event()
+    real = module.build_variants
+
+    def slow(*args: Any, **kwargs: Any) -> Any:
+        held.wait(30)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(
+        module.QFileDialog, "getExistingDirectory", staticmethod(lambda *_a, **_k: str(tmp_path))
+    )
+    monkeypatch.setattr(module, "build_variants", slow)
+    dialog = VariantsDialog(session_with_parameter())
+    try:
+        dialog.count.setValue(2)
+        dialog._build()
+        worker = dialog._worker
+        assert worker is not None
+        started = time.perf_counter()
+        dialog.reject()
+        waited = time.perf_counter() - started
+        assert waited < 0.5, f"Esc wartete {waited:.2f} s auf die Auswertung"
+        held.set()
+        assert worker.wait(30_000)
+        QApplication.processEvents()
+        assert not list(tmp_path.glob("*")), "nach dem Schließen wurde doch geschrieben"
+        assert dialog.written == []
+    finally:
+        held.set()
+        dialog.deleteLater()
+
+
+def test_a_finished_run_tells_the_window_what_was_written_and_what_was_found(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Dialog schloss sich nach dem Schreiben, und „4 Dateien geschrieben"
+    las niemand. Jetzt trägt er die Dateien und seine Befunde hinaus; das
+    Fenster nennt beides (siehe ``test_the_window_announces_the_variants``)."""
+    from app.ui import variants_dialog as module
+
+    monkeypatch.setattr(
+        module.QFileDialog, "getExistingDirectory", staticmethod(lambda *_a, **_k: str(tmp_path))
+    )
+    dialog = VariantsDialog(session_with_parameter())
+    try:
+        dialog.count.setValue(2)
+        dialog._build()
+        worker = dialog._worker
+        assert worker is not None and worker.wait(30_000)
+        QApplication.processEvents()
+        assert dialog.result() == VariantsDialog.DialogCode.Accepted
+        assert len(dialog.written) == len(list(tmp_path.glob("*"))) >= 2
+        assert all(entry.code.startswith("variants.") for entry in dialog.findings)
+    finally:
+        dialog.deleteLater()
+
+
+def test_a_write_that_fails_is_said_in_the_dialog(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Geschrieben wurde im Slot, und ein Schreibfehler lief ohne Satz heraus
+    (Regel 17): Die Zeile blieb auf „wird gerechnet", nichts kam."""
+    from app.core.errors import FileWriteError
+    from app.ui import variants_dialog as module
+
+    monkeypatch.setattr(
+        module.QFileDialog, "getExistingDirectory", staticmethod(lambda *_a, **_k: str(tmp_path))
+    )
+
+    def refuse(*_args: Any, **_kwargs: Any) -> list[Path]:
+        raise FileWriteError(detail="Zugriff verweigert")
+
+    monkeypatch.setattr(module, "write_plan", refuse)
+    shown: list[object] = []
+    monkeypatch.setattr(module, "show_error", lambda error, _parent: shown.append(error))
+    dialog = VariantsDialog(session_with_parameter())
+    try:
+        dialog.count.setValue(2)
+        dialog._build()
+        worker = dialog._worker
+        assert worker is not None and worker.wait(30_000)
+        QApplication.processEvents()
+        assert shown and isinstance(shown[0], FileWriteError)
+        assert "gerechnet" not in dialog.state.text()
+        assert dialog.result() != VariantsDialog.DialogCode.Accepted
+    finally:
+        dialog.deleteLater()
+
+
+def test_the_window_announces_the_variants(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach dem Lauf sagt das Fenster, wie viele Dateien wohin gingen, mit
+    *Ordner zeigen* — und der Befund „keine Gravur" landet im Prüfbericht,
+    wie es der Haken im Dialog zusagt."""
+    from app.core.types import Finding
+    from app.ui import main_window as module
+    from app.ui.main_window import MainWindow
+    from app.ui.settings import UiSettings
+
+    written = [tmp_path / "a.stl", tmp_path / "b.stl"]
+    finding = Finding(code="variants.no_mark", severity="warning", message="Kein Platz")
+
+    class Finished:
+        def __init__(self, *_args: object) -> None:
+            self.written = written
+            self.findings = [finding]
+
+        def exec(self) -> int:
+            return 1
+
+    monkeypatch.setattr(module, "VariantsDialog", Finished)
+    window = MainWindow(Session(), UiSettings())
+    added: list[object] = []
+    monkeypatch.setattr(window.report, "add_findings", lambda found: added.extend(found))
+    try:
+        window.action_variants()
+        assert added == [finding]
+        assert window.reveal_export.isVisibleTo(window)
+        assert str(tmp_path) in window.reveal_export.toolTip()
+        assert "2" in window.status_message.text()
+    finally:
+        window.close()

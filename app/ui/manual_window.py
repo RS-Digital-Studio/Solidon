@@ -30,7 +30,6 @@ import re
 
 from PySide6.QtCore import QByteArray, Qt, QTimer, QUrl
 from PySide6.QtGui import (
-    QDesktopServices,
     QImage,
     QKeySequence,
     QPainter,
@@ -54,6 +53,7 @@ from app.branding import APP_NAME, WEBSITE_URL
 from app.core import drawing, figures, manual
 from app.core.log import get_logger
 from app.i18n import get_language, tr
+from app.ui.dialogs import open_link
 from app.ui.icons import OVERSAMPLING
 
 _log = get_logger(__name__)
@@ -285,11 +285,16 @@ class ManualWindow(QMainWindow):
         self.search.setPlaceholderText(tr("Suchen — auch im Text der Seiten"))
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self._filter)
+        # Ohne Namen las ein Bildschirmleser „Eingabefeld", „Liste" und
+        # „Text" — drei Teile, keiner sagt, wozu.
+        self.search.setAccessibleName(tr("Handbuch durchsuchen"))
 
         self.contents = QListWidget(self)
         self.contents.currentRowChanged.connect(self._show_current)
+        self.contents.setAccessibleName(tr("Seiten des Handbuchs"))
 
         self.text = PageView(self)
+        self.text.setAccessibleName(tr("Handbuchseite"))
         # **Kein Klick öffnet von selbst etwas.** Das Handbuch entsteht aus dem
         # Register, und ein mitgereistes Rezept bringt Titel und Beschreibung
         # aus einer fremden Projektdatei mit. ``setOpenLinks(False)`` schließt
@@ -336,7 +341,9 @@ class ManualWindow(QMainWindow):
         beginnt sonst mit der eigenen Adresse und ist es nicht.
         """
         if address.scheme() == "https" and address.host() == QUrl(WEBSITE_URL).host():
-            QDesktopServices.openUrl(address)
+            # Über ``open_link``: Ohne Browser liegt die Adresse danach in der
+            # Zwischenablage, statt dass der Klick wortlos verpufft.
+            open_link(address.toString(), self)
 
     # --- Inhalt ---------------------------------------------------------------
 
@@ -364,7 +371,13 @@ class ManualWindow(QMainWindow):
         if self._visible:
             self.contents.setCurrentRow(0)
         else:
-            self.text.setMarkdown(tr("Dazu steht nichts im Handbuch."))
+            # Mit dem nächsten Schritt, nicht mit dem Ende (Regel 17).
+            self.text.setMarkdown(
+                tr(
+                    "Dazu steht nichts im Handbuch. Versuchen Sie ein anderes Wort, "
+                    "oder leeren Sie das Suchfeld für alle Seiten."
+                )
+            )
 
     def _show_current(self, row: int) -> None:
         if 0 <= row < len(self._visible):

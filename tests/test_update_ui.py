@@ -269,6 +269,42 @@ def test_cancelling_says_that_nothing_is_left(
     assert dialog.get_button.isVisible() or not dialog.isVisible()
 
 
+def test_escape_while_loading_cancels_the_download(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Esc schloss das Fenster, und das Paket lud unsichtbar weiter.
+
+    *Später* ist während des Ladens gesperrt; Esc und das Kreuz sind es nicht,
+    und beide gehen über ``reject``."""
+    import threading
+
+    from app.core.errors import OperationCancelled
+
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+    seen: list[bool] = []
+    gate = threading.Event()
+
+    def download(_package: object, *, progress: object, cancelled: object) -> object:
+        gate.wait(10)
+        seen.append(bool(cancelled.is_cancelled))
+        raise OperationCancelled()
+
+    monkeypatch.setattr(updates, "download", download)
+    dialog = UpdateDialog(release())
+    try:
+        dialog._start()
+        worker = dialog._worker
+        assert worker is not None
+        dialog.reject()
+        gate.set()
+        assert worker.wait(10_000)
+        assert seen == [True], "der Download lief nach dem Schließen weiter"
+    finally:
+        gate.set()
+        dialog.release()
+
+
 def test_a_problem_offers_the_page(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
     """Regel 17: Ein Fehler endet nie mit „fehlgeschlagen"."""
     monkeypatch.setattr(updates, "packaged", lambda: True)
@@ -347,3 +383,26 @@ def test_the_link_follows_the_language_of_the_window(
     dialog = UpdateDialog(release(changes_total=115))
 
     assert 'href="https://solidon3d.de/pt/changelog.html"' in dialog.more.text()
+
+
+def test_the_release_page_without_a_browser_leaves_its_address(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Seite öffnen* ohne Browser verpuffte; jetzt liegt die Adresse bereit."""
+    from PySide6.QtGui import QDesktopServices
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda _address: False)
+    said: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda _parent, _title, text, *_rest: said.append(text) or 0
+    )
+    qt_app.clipboard().setText("")
+    dialog = UpdateDialog(release(url="https://solidon3d.de/neu.html"))
+    try:
+        dialog.open_page()
+    finally:
+        dialog.deleteLater()
+
+    assert qt_app.clipboard().text() == "https://solidon3d.de/neu.html"
+    assert said and "https://solidon3d.de/neu.html" in said[0]

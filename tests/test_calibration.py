@@ -994,3 +994,22 @@ def test_a_variant_keeps_two_bodies_apart(profile: Profile) -> None:
         spans.sort()
         for (_low_a, high_a), (low_b, _high_b) in pairwise(spans):
             assert low_b >= high_a - 1e-6, f"Variante {suffix}: zwei Körper teilen denselben Raum"
+
+
+def test_the_dialog_names_the_material_the_way_the_customer_reads_it(
+    own_profiles: Path, qt_app: object
+) -> None:
+    """Oben stand die Kennung des Profils: „resin — Startwert" über einem
+    Dialog, der sonst überall „Standardharz" sagt, „tpu-95a" statt „TPU 95A"."""
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.dialogs import CalibrationDialog
+
+    for material in ("resin", "tpu-95a"):
+        dialog = CalibrationDialog(material)
+        texts = " ".join(label.text() for label in dialog.findChildren(QLabel))
+        title = str(profiles.material(material).title)
+        assert f"{title} — " in texts, texts[:120]
+        assert f"{material} — " not in texts, texts[:120]
+        dialog.close()

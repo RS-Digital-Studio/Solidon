@@ -383,3 +383,166 @@ def test_inventory_opens_after_main_window_adopts_the_custom_printer(
         assert filaments.catalogue() == (spool,)
     finally:
         window.close()
+
+
+def test_a_model_opened_from_the_first_steps_is_not_replaced_by_the_empty_project(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Eigenes Modell öffnen …" endet mit dem Modell im Fenster (§2.3).
+
+    Der Knopf meldete den Import, **während der Dialog noch offen war**: Das
+    Fenster las die Datei an, der Dialog schloss, und danach legte
+    ``_adopt_defaults`` das leere Projekt mit den eben gewählten Vorgaben an
+    — weil das Dokument noch keinen Schritt trug. Bei einer Datei über der
+    Grenze, ab der der Plan im Arbeiter entsteht (8 MB), kam dessen Antwort
+    danach und war veraltet: Das erste Modell des Kunden verschwand ohne
+    Wort. Die Grenze ist hier heruntergesetzt; der Weg ist derselbe.
+    """
+    import time
+
+    from app.ui import main_window, session
+    from app.ui.session import Session
+
+    model = Path(__file__).parent / "data" / "meshes" / "cube_clean.stl"
+    monkeypatch.setattr(session, "PLAN_IN_WORKER_ABOVE", 0)
+    # Eine große Datei plant Sekunden; die kleine hier braucht dafür einen
+    # Aufschub im Arbeiter, sonst kommt ihr Plan noch vor dem Schließen an.
+    plan = session.import_plan
+
+    def slow_plan(*args: object, **kwargs: object) -> object:
+        time.sleep(0.5)
+        return plan(*args, **kwargs)
+
+    monkeypatch.setattr(session, "import_plan", slow_plan)
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_args, **_kwargs: (str(model), ""))
+
+    class OpenDialog(FirstRunDialog):
+        def look(self) -> None:
+            pass
+
+        def exec(self) -> int:
+            from PySide6.QtCore import QTimer
+
+            QTimer.singleShot(0, self, self.open_button.click)
+            return super().exec()
+
+    monkeypatch.setattr(first_run, "FirstRunDialog", OpenDialog)
+    monkeypatch.setattr(main_window, "save_settings", lambda _settings: None)
+    monkeypatch.setattr(Session, "set_agent_backend", lambda *_args: None)
+    window = main_window.MainWindow(Session(), UiSettings())
+    monkeypatch.setattr(window, "_refresh_chat_availability", lambda *_args, **_kwargs: None)
+    try:
+        window.action_first_run()
+        deadline = time.monotonic() + 10
+        while not window.session.project.document.ops and time.monotonic() < deadline:
+            qt_app.processEvents()
+            time.sleep(0.01)
+
+        assert window.settings.first_run_done
+        kinds = [op.op for op in window.session.project.document.ops]
+        assert kinds == ["load"], kinds
+        assert window.session.project.document.printer == window.settings.printer
+    finally:
+        window.wait_for_workers()
+        window.close()
+
+
+def _assert_box_grouped_by_technology(box: object) -> None:
+    """Eine Druckerliste liest sich überall gleich: je Verfahren ein Kopf, der
+    nicht wählbar ist und sich nicht nur über seine graue Farbe abhebt,
+    darunter die Drucker dieses Verfahrens nach Titel."""
+    from PySide6.QtWidgets import QComboBox
+
+    assert isinstance(box, QComboBox)
+    known = profiles.printer_profiles()
+    heads: list[str] = []
+    members: dict[str, list[str]] = {}
+    for row in range(box.count()):
+        data = str(box.itemData(row) or "")
+        if data == first_run._GROUP_HEADER:
+            heads.append(box.itemText(row))
+            members[heads[-1]] = []
+            item = box.model().item(row)
+            assert not item.flags() & Qt.ItemFlag.ItemIsEnabled, box.itemText(row)
+            assert item.font().bold(), f"Kopf nur über die Farbe erkennbar: {box.itemText(row)}"
+            continue
+        if data not in known:
+            continue
+        assert heads, f"{box.itemText(row)} steht vor dem ersten Kopf"
+        assert heads[-1] == first_run._group_title(known[data].technology), box.itemText(row)
+        members[heads[-1]].append(box.itemText(row))
+    assert heads == [first_run._group_title("fdm"), first_run._group_title("resin")]
+    for head, titles in members.items():
+        assert titles == sorted(titles, key=str.casefold), (head, titles)
+
+
+def test_every_printer_list_is_grouped_like_the_first_steps(qt_app: QApplication) -> None:
+    """Dieselbe Druckerliste an drei Stellen, und nur eine war gruppiert.
+
+    Der Erststart trägt seit RM-071 je Verfahren einen Kopf; die Einstellungen
+    und die Druckvorbereitung listeten dieselben Drucker weiter flach nach
+    Titel — der Resin-Drucker stand dort zwischen den FDM-Geräten, als wäre
+    er einer von ihnen. Und der Kopf hob sich nur über seine graue Farbe ab,
+    die jedes gesperrte Element trägt (Regel 18).
+    """
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+    from app.ui.settings_dialog import SettingsDialog
+
+    first_steps = FirstRunDialog(UiSettings())
+    settings = SettingsDialog(UiSettings())
+    session = Session()
+    printing = PrintSettingsDialog(session, UiSettings())
+    try:
+        for box in (first_steps.printer, settings.printer, printing.printer_choice):
+            _assert_box_grouped_by_technology(box)
+        # Der gewählte Drucker bleibt gewählt, der Kopf wird es nie.
+        assert settings.printer.currentData() == profiles.DEFAULT_PRINTER
+        assert printing.printer_choice.currentData() == session.project.document.printer
+    finally:
+        first_steps.release()
+        printing.release()
+
+
+@pytest.mark.parametrize("technology", ["fdm", "resin"])
+def test_a_custom_printer_takes_its_layer_height_or_names_the_derived_one(
+    setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, technology: str
+) -> None:
+    """„Gebraucht werden Bauraum und Schichthöhe", sagt die Website — und das
+    Formular des eigenen Druckers hatte kein Feld dafür.
+
+    Leer bleibt der abgeleitete Wert (FDM: aus der Düse, höchstens die
+    Vorlage; Resin: die Vorlage), und das Feld nennt ihn, statt leer zu
+    schweigen. Eingetragen gilt der eigene, gespeichert im Profil.
+    """
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    dialog = setup_dialog
+    dialog.printer.setCurrentIndex(dialog.printer.findData("__custom__"))
+    dialog.printer_technology.setCurrentIndex(dialog.printer_technology.findData(technology))
+    assert dialog.printer_layer.isVisibleTo(dialog.custom_printer)
+    if technology == "fdm":
+        dialog.printer_nozzle.setValue(0.3)
+        derived = 0.15
+    else:
+        derived = profiles.printer(profiles.DEFAULT_RESIN_PRINTER).layer_height
+    shown = dialog.printer_layer.specialValueText()
+    assert dialog.printer_layer.value() == dialog.printer_layer.minimum(), "leer heißt abgeleitet"
+    assert f"{derived:g}".replace(".", ",") in shown, shown
+
+    dialog.printer_name.setText("Leer")
+    dialog.apply_to(dialog.settings)
+    assert profiles.printer(dialog.settings.printer).layer_height == pytest.approx(derived)
+
+    other = FirstRunDialog(UiSettings())
+    try:
+        other.printer.setCurrentIndex(other.printer.findData("__custom__"))
+        other.printer_technology.setCurrentIndex(other.printer_technology.findData(technology))
+        own = 0.28 if technology == "fdm" else 0.03
+        other.printer_layer.setValue(own)
+        other.printer_name.setText("Eigen")
+        draft = other.custom_printer_draft()
+        assert draft is not None and draft.layer_height == pytest.approx(own)
+        other.apply_to(other.settings)
+        assert profiles.printer(other.settings.printer).layer_height == pytest.approx(own)
+    finally:
+        other.release()

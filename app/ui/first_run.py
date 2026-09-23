@@ -25,12 +25,13 @@ jetzt sofort seine Fragen und trägt die Antworten nach.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import uuid4
 
 from PySide6.QtCore import QCoreApplication, QSignalBlocker, Qt, QTimer, Signal
-from PySide6.QtGui import QStandardItemModel
+from PySide6.QtGui import QFont, QStandardItemModel
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -57,8 +58,8 @@ from app.core.export import slicer_profiles
 from app.core.export.handover import detect
 from app.core.knowledge import profiles
 from app.core.log import get_logger
-from app.core.types import PrintTechnology
-from app.i18n import language_name, set_language, tr
+from app.core.types import PrinterProfile, PrintTechnology
+from app.i18n import format_decimal, language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
 from app.ui.icons import icon
 from app.ui.labels import NumberSpin, by_title, deadline_date
@@ -128,6 +129,8 @@ class CustomPrinterDraft:
     nozzles: int
     pixel_size: float
     minimum_wall: float
+    layer_height: float = 0.0
+    """Die eingetragene Schichthöhe; null heißt abgeleitet."""
 
 
 #: Woran ein Gruppenkopf in der Druckerliste zu erkennen ist — kein Drucker,
@@ -419,6 +422,27 @@ class FirstRunDialog(QDialog):
             tr("Die dünnste Wand, die dieses Harz nach Waschen und Härten stehen lässt.")
         )
         custom_form.addRow(tr("Mindestwand"), self.printer_wall)
+        # **Die Schichthöhe, die die Website verspricht.** „Gebraucht werden
+        # Bauraum und Schichthöhe" steht in den Fragen auf der Startseite, und
+        # das Formular hatte kein Feld dafür: FDM leitete sie aus der Düse ab,
+        # Resin nahm die Vorlage. Leer bleibt genau das — und das Feld nennt
+        # den abgeleiteten Wert, statt leer zu schweigen.
+        self.printer_layer = NumberSpin(self.custom_printer)
+        self.printer_layer.setRange(0.0, 1.0)
+        self.printer_layer.setDecimals(3)
+        self.printer_layer.setSingleStep(0.01)
+        self.printer_layer.setSuffix(" " + tr("mm"))
+        self.printer_layer.setValue(0.0)
+        self.printer_layer.setToolTip(
+            tr(
+                "Leer lassen, dann gilt der gezeigte Wert. Bei Filament wählen die "
+                "Druckeinstellungen die Schichthöhe je Qualitätsstufe."
+            )
+        )
+        self.printer_layer.setAccessibleName(tr("Schichthöhe"))
+        self.printer_layer.setAccessibleDescription(self.printer_layer.toolTip())
+        self.printer_nozzle.valueChanged.connect(self._name_derived_layer)
+        custom_form.addRow(tr("Schichthöhe"), self.printer_layer)
         self._technology_rows = {
             "fdm": (self.printer_nozzle, self.printer_nozzles),
             "resin": (self.printer_pixel, self.printer_wall),
@@ -447,10 +471,13 @@ class FirstRunDialog(QDialog):
         # riet. Er gilt, und was ihn vom eigenen Gerät unterscheidet, sind zwei
         # Werte, die sich ändern lassen (§2.4: eine gute Vorgabe schlägt eine
         # Einstellmöglichkeit, aber nur, wenn man ihr trauen kann).
+        #
+        # „Maße" und nicht „Bauraum und Düse": Ein eigener Resin-Drucker fragt
+        # Pixelgröße und Mindestwand, eine Düse hat er nicht (RM-071).
         printer_hint = QLabel(
             tr(
                 "Ihr Drucker ist nicht dabei? Wählen Sie „Benutzerdefiniert“ "
-                "und tragen Sie Name, Bauraum und Düse ein."
+                "und tragen Sie seinen Namen und seine Maße ein."
             ),
             basics,
         )
@@ -584,7 +611,8 @@ class FirstRunDialog(QDialog):
         self._leash.start(survey)
 
     def wait_for_survey(self, milliseconds: int = 30_000) -> bool:
-        """Auf die Erhebung warten. Beim Schließen und in Tests."""
+        """Auf die Erhebung warten. Beim Aufräumen (:meth:`release`) und in Tests —
+        das Schließen wartet nicht mehr."""
         survey = self._survey
         finished = survey.wait(milliseconds) if survey is not None else True
         QCoreApplication.processEvents()
@@ -693,12 +721,15 @@ class FirstRunDialog(QDialog):
         if survey is not None:
             self._leash.hold_until_done(survey)
 
-    def reject(self) -> None:
-        self.wait_for_survey()
-        super().reject()
+    # **Schließen wartet nicht auf die Erhebung.** Hier stand vor jedem
+    # Schließen ``wait_for_survey()`` — bis zu dreißig Sekunden im
+    # Oberflächen-Thread, gemessen rund drei, ohne Wartezeiger; wer den
+    # Dialog gleich zu Beginn übernahm oder überging, sah ein Fenster, das
+    # nicht antwortet. Nötig ist das Warten nicht: Die Halteleine hält den
+    # Arbeiter über das Fenster hinaus (:mod:`app.ui.leash`), und seine späte
+    # Antwort trifft einen Dialog, dessen Werte schon übernommen sind.
 
     def accept(self) -> None:
-        self.wait_for_survey()
         if not self._save_custom_printer():
             return
         super().accept()
@@ -806,7 +837,6 @@ class FirstRunDialog(QDialog):
         """§2.3: die ersten fünf Minuten enden beim ersten Import, nicht bei
         „fertig".
         """
-        self.wait_for_survey()
         if not self._save_custom_printer():
             return
         self.apply_to(self.settings)
@@ -815,7 +845,6 @@ class FirstRunDialog(QDialog):
 
     def _open_inventory(self) -> None:
         """Die Einrichtung übernehmen und danach das Filamentlager öffnen."""
-        self.wait_for_survey()
         if not self._save_custom_printer():
             return
         self.apply_to(self.settings)
@@ -834,7 +863,32 @@ class FirstRunDialog(QDialog):
         for technology, fields in self._technology_rows.items():
             for field in fields:
                 form.setRowVisible(field, technology == chosen)
+        self._name_derived_layer()
         self._grow_soon()
+
+    def _derived_layer_height(self) -> float:
+        """Die Schichthöhe, die gilt, wenn das Feld leer bleibt.
+
+        Dieselbe Rechnung wie beim Speichern: FDM aus der Düse, höchstens die
+        Vorlage; Resin die Vorlage des allgemeinen Resin-Druckers.
+        """
+        if self.custom_technology() == "resin":
+            return profiles.printer(profiles.DEFAULT_RESIN_PRINTER).layer_height
+        template = profiles.printer(profiles.DEFAULT_PRINTER)
+        return min(template.layer_height, self.printer_nozzle.value() / 2)
+
+    def _name_derived_layer(self) -> None:
+        """Das leere Feld nennt den Wert, der dann gilt."""
+        self.printer_layer.setSpecialValueText(
+            str(tr("automatisch · {value} mm")).format(
+                value=format_decimal(round(self._derived_layer_height(), 3))
+            )
+        )
+
+    def _chosen_layer_height(self) -> float:
+        """Die eingetragene Schichthöhe, oder die abgeleitete, wenn leer."""
+        entered = self.printer_layer.value()
+        return entered if entered > self.printer_layer.minimum() else self._derived_layer_height()
 
     def custom_technology(self) -> PrintTechnology:
         """Das Verfahren des eigenen Druckers, wie es gerade gewählt ist."""
@@ -868,6 +922,7 @@ class FirstRunDialog(QDialog):
                 build_volume=(width, depth, height),
                 pixel_size=self.printer_pixel.value(),
                 minimum_wall=self.printer_wall.value(),
+                layer_height=self._chosen_layer_height(),
             )
         else:
             template = profiles.printer(profiles.DEFAULT_PRINTER)
@@ -879,7 +934,7 @@ class FirstRunDialog(QDialog):
                 build_volume=(width, depth, height),
                 nozzle_diameter=nozzle,
                 nozzles=self.printer_nozzles.value(),
-                layer_height=min(template.layer_height, nozzle / 2),
+                layer_height=self._chosen_layer_height(),
                 extrusion_width=nozzle * template.extrusion_width / template.nozzle_diameter,
             )
         try:
@@ -912,6 +967,7 @@ class FirstRunDialog(QDialog):
             nozzles=self.printer_nozzles.value(),
             pixel_size=self.printer_pixel.value(),
             minimum_wall=self.printer_wall.value(),
+            layer_height=self.printer_layer.value(),
         )
 
     def restore_custom_printer_draft(self, draft: CustomPrinterDraft | None) -> None:
@@ -927,6 +983,7 @@ class FirstRunDialog(QDialog):
         self.printer_nozzles.setValue(draft.nozzles)
         self.printer_pixel.setValue(draft.pixel_size)
         self.printer_wall.setValue(draft.minimum_wall)
+        self.printer_layer.setValue(draft.layer_height)
         _select(self.printer, "__custom__")
 
     def _fill_slicers(self, found: tuple[Path, ...]) -> None:
@@ -1007,44 +1064,8 @@ class FirstRunDialog(QDialog):
         self._group_printers()
 
     def _group_printers(self) -> None:
-        """Ein Kopf je Verfahren über seiner Gruppe — nicht wählbar, nur gelesen.
-
-        Der Kunde wählt seine Maschine aus derselben Liste wie alle anderen,
-        schaltet nichts um und muss nichts wissen (Resin-Konzept §4): Der Kopf
-        sagt, welches Verfahren die Drucker darunter haben, und ist über
-        seine Rolle als Kopf hinaus nichts — kein Eintrag, keine Antwort.
-        """
-        model = self.printer.model()
-        assert isinstance(model, QStandardItemModel)
-        with QSignalBlocker(self.printer):
-            for index in reversed(range(self.printer.count())):
-                if str(self.printer.itemData(index) or "") == _GROUP_HEADER:
-                    self.printer.removeItem(index)
-            present = {
-                _technology_of(str(self.printer.itemData(index) or ""))
-                for index in range(self.printer.count())
-                if str(self.printer.itemData(index) or "") != "__custom__"
-            }
-            if len(present) < 2:
-                # Eine einzige Gruppe braucht keinen Kopf: Ein Slicer, der
-                # nur FDM-Drucker kennt, zeigt sie wie bisher.
-                return
-            for technology in _TECHNOLOGY_ORDER:
-                first = next(
-                    (
-                        index
-                        for index in range(self.printer.count())
-                        if str(self.printer.itemData(index) or "") not in {"__custom__", ""}
-                        and _technology_of(str(self.printer.itemData(index))) == technology
-                    ),
-                    None,
-                )
-                if first is None:
-                    continue
-                self.printer.insertItem(first, _group_title(technology), userData=_GROUP_HEADER)
-                item = model.item(first)
-                if item is not None:
-                    item.setFlags(Qt.ItemFlag.NoItemFlags)
+        """Ein Kopf je Verfahren über seiner Gruppe — :func:`group_printer_choices`."""
+        group_printer_choices(self.printer)
 
     def _fill_printers(self, identifiers: tuple[str, ...], suggested: str = "") -> None:
         """Nur passende Drucker anbieten und eine weiterhin passende Wahl erhalten."""
@@ -1116,6 +1137,77 @@ def _select(box: QComboBox, identifier: str) -> None:
     index = box.findData(identifier)
     if index >= 0:
         box.setCurrentIndex(index)
+
+
+def group_printer_choices(box: QComboBox) -> None:
+    """Ein Kopf je Verfahren über seiner Gruppe — nicht wählbar, nur gelesen.
+
+    Der Kunde wählt seine Maschine aus derselben Liste wie alle anderen,
+    schaltet nichts um und muss nichts wissen (Resin-Konzept §4): Der Kopf
+    sagt, welches Verfahren die Drucker darunter haben, und ist über seine
+    Rolle als Kopf hinaus nichts — kein Eintrag, keine Antwort. Die Liste muss
+    dafür schon nach Verfahren geordnet sein (:func:`add_printer_choices`).
+
+    **Halbfett, nicht nur grau.** Grau trägt jeder gesperrte Eintrag; ein Kopf,
+    der sich allein darüber abhebt, liest sich wie ein Drucker, den man nicht
+    wählen darf (Regel 18).
+
+    **An allen drei Druckerlisten**, nicht nur im Erststart: Einstellungen und
+    Druckvorbereitung nennen dieselben Drucker, und dort stand der
+    Resin-Drucker flach zwischen den FDM-Geräten.
+    """
+    model = box.model()
+    assert isinstance(model, QStandardItemModel)
+    with QSignalBlocker(box):
+        for index in reversed(range(box.count())):
+            if str(box.itemData(index) or "") == _GROUP_HEADER:
+                box.removeItem(index)
+        present = {
+            _technology_of(str(box.itemData(index) or ""))
+            for index in range(box.count())
+            if str(box.itemData(index) or "") != "__custom__"
+        }
+        if len(present) < 2:
+            # Eine einzige Gruppe braucht keinen Kopf: Ein Slicer, der
+            # nur FDM-Drucker kennt, zeigt sie wie bisher.
+            return
+        heading = QFont(box.font())
+        heading.setBold(True)
+        for technology in _TECHNOLOGY_ORDER:
+            first = next(
+                (
+                    index
+                    for index in range(box.count())
+                    if str(box.itemData(index) or "") not in {"__custom__", ""}
+                    and _technology_of(str(box.itemData(index))) == technology
+                ),
+                None,
+            )
+            if first is None:
+                continue
+            box.insertItem(first, _group_title(technology), userData=_GROUP_HEADER)
+            item = model.item(first)
+            if item is not None:
+                item.setFlags(Qt.ItemFlag.NoItemFlags)
+                item.setFont(heading)
+
+
+def add_printer_choices(box: QComboBox, entries: Mapping[str, PrinterProfile]) -> None:
+    """Die Drucker nach Verfahren und darin nach sichtbarem Titel, mit Köpfen.
+
+    Dieselbe Ordnung wie im Erststart: FDM zuerst, dann Resin, jede Gruppe
+    nach dem Titel, den der Kunde liest (:func:`app.ui.labels.by_title`).
+    """
+
+    def rank(pair: tuple[str, PrinterProfile]) -> tuple[int, str]:
+        technology = pair[1].technology
+        order = _TECHNOLOGY_ORDER.index(technology) if technology in _TECHNOLOGY_ORDER else 99
+        return order, str(pair[1].title).casefold()
+
+    with QSignalBlocker(box):
+        for identifier, printer in sorted(entries.items(), key=rank):
+            box.addItem(str(printer.title), identifier)
+    group_printer_choices(box)
 
 
 def _technology_of(identifier: str) -> PrintTechnology:
