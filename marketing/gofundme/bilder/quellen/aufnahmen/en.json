@@ -1,0 +1,52 @@
+{
+  "halter-vorher": {
+    "loch_links": [
+      913,
+      560
+    ],
+    "loch_rechts": [
+      1494,
+      781
+    ],
+    "teil": [
+      1180,
+      720
+    ],
+    "durchmesser_alt": 34.085
+  },
+  "halter-bohrung": {
+    "loch": [
+      1500,
+      660
+    ]
+  },
+  "halter-nachher": {
+    "loch_links": [
+      913,
+      560
+    ],
+    "loch_rechts": [
+      1494,
+      781
+    ],
+    "teil": [
+      1180,
+      720
+    ],
+    "durchmesser_neu": 38.0
+  },
+  "pruefbericht": {
+    "modell": [
+      1450,
+      720
+    ]
+  },
+  "drucken": {
+    "dialog": [
+      1000,
+      451,
+      560,
+      640
+    ]
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "version": "0.4.4",
+  "language": "en",
+  "screen": "MSI MAG271CQR",
+  "device_pixel_ratio": 1.0,
+  "size": [
+    2560,
+    1369
+  ],
+  "method": "PrintWindow(PW_CLIENTONLY | PW_RENDERFULLCONTENT)",
+  "screen_difference": 0.16,
+  "layout": {
+    "viewport": [
+      0,
+      69,
+      2309,
+      1259
+    ],
+    "feature_panel": [
+      2315,
+      87,
+      245,
+      295
+    ],
+    "report": [
+      1899,
+      108,
+      396,
+      497
+    ],
+    "object_tree": [
+      13,
+      115,
+      298,
+      733
+    ],
+    "parameters": [
+      13,
+      880,
+      298,
+      96
+    ]
+  },
+  "pair": "dowel",
+  "values": {
+    "diameter": 8.0,
+    "length": 12.0,
+    "play": 0.2,
+    "chamfer": 0.5
+  },
+  "dialog": [
+    1030,
+    660,
+    420,
+    337
+  ],
+  "ok_button": "Set counterparts"
+}

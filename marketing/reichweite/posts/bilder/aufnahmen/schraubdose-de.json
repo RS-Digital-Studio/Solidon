@@ -1,0 +1,54 @@
+{
+  "version": "0.4.4",
+  "language": "de",
+  "screen": "MSI MAG271CQR",
+  "device_pixel_ratio": 1.0,
+  "size": [
+    2560,
+    1369
+  ],
+  "method": "PrintWindow(PW_CLIENTONLY | PW_RENDERFULLCONTENT)",
+  "screen_difference": 0.0,
+  "layout": {
+    "viewport": [
+      0,
+      69,
+      2310,
+      1259
+    ],
+    "feature_panel": [
+      2316,
+      87,
+      244,
+      8
+    ],
+    "report": [
+      1900,
+      108,
+      396,
+      549
+    ],
+    "object_tree": [
+      13,
+      115,
+      298,
+      183
+    ],
+    "parameters": [
+      13,
+      335,
+      298,
+      174
+    ]
+  },
+  "project": "website/teile/schraubdose.p3d",
+  "steps": [
+    "create_cylinder",
+    "hollow_object",
+    "screw_lid",
+    "apply_texture",
+    "translate_object",
+    "place_on_bed",
+    "place_on_bed"
+  ]
+}
