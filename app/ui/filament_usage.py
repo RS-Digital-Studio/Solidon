@@ -80,7 +80,7 @@ def _note(line: UsageLine, *, split: bool = False) -> str:
     return "converted_from_length" if line.converted_from_length else ""
 
 
-def _slot_title(line: UsageLine) -> str:
+def slot_title(line: UsageLine) -> str:
     """Wie das Druckfilament heißt — auch ohne Slotnamen ein ganzer Name.
 
     Überschrift und zugängliche Namen lesen dieselbe Quelle: Ohne Namen stand
@@ -272,7 +272,7 @@ class UsageDialog(QDialog):
             marker.setPixmap(
                 swatch(slot_colours(int(line.slot.index), line.slot)).pixmap(NORMAL * 3, NORMAL * 3)
             )
-            name = QLabel(_slot_title(line), card)
+            name = QLabel(slot_title(line), card)
             name.setTextFormat(Qt.TextFormat.PlainText)
             name.setWordWrap(True)
             set_level(name, "section")
@@ -284,10 +284,10 @@ class UsageDialog(QDialog):
             )
             choice.setMinimumContentsLength(12)
             choice.currentTextChanged.connect(choice.setToolTip)
-            choice.setAccessibleName(tr("Spule für {name}").format(name=_slot_title(line)))
+            choice.setAccessibleName(tr("Spule für {name}").format(name=slot_title(line)))
             choice.setMinimumHeight(TARGET_SIZE)
             amount = self._amount_widget(line.grams, self.content)
-            amount.setAccessibleName(tr("Verbrauch für {name}").format(name=_slot_title(line)))
+            amount.setAccessibleName(tr("Verbrauch für {name}").format(name=slot_title(line)))
             set_level(amount, "section")
             heading.addWidget(amount)
             row.addLayout(heading)
@@ -556,9 +556,7 @@ class UsageDialog(QDialog):
         choice.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         choice.setMinimumContentsLength(8)
         choice.currentTextChanged.connect(choice.setToolTip)
-        choice.setAccessibleName(
-            tr("Spule für {name}").format(name=_slot_title(self._lines[index]))
-        )
+        choice.setAccessibleName(tr("Spule für {name}").format(name=slot_title(self._lines[index])))
         self._fill_choice(choice, self._lines[index], identifier, suggest=False)
         amount = self._amount_widget(grams, widget)
         amount.setAccessibleName(tr("Teilmenge dieser Spule"))

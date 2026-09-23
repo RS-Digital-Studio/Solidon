@@ -105,7 +105,7 @@ from app.ui.dialogs import (
 )
 from app.ui.facts import duration, mass
 from app.ui.filament_picker import SWATCH_PIXELS, slot_colours, swatch
-from app.ui.filament_usage import UsageNotice
+from app.ui.filament_usage import UsageNotice, slot_title
 from app.ui.first_run import add_printer_choices
 from app.ui.header import filament_names
 from app.ui.labels import (
@@ -1996,7 +1996,7 @@ class _StockWorker(Worker):
                     if line.grams is None:
                         notes.append(
                             tr("{name}: Einzelbedarf erst nach dem Slicen bekannt.").format(
-                                name=str(line.slot.name)
+                                name=slot_title(line)
                             )
                         )
                     elif line.spool_identifier:

@@ -211,6 +211,23 @@ def test_stock_warning_has_no_stock_side_effect(qt_app, inventory):
     assert not filaments.bookings()
 
 
+@pytest.mark.parametrize("name", ["", "PETG Blau"])
+def test_unknown_stock_demand_always_names_the_filament(qt_app, monkeypatch, name):
+    """Auch eine unbenannte Zuweisung liefert im Druckdialog eine ganze Zeile."""
+    from app.core.filament_usage import UsageLine, UsageRequest
+
+    line = UsageLine(MaterialSlot(0, name, (0.0, 0.0, 1.0)), None)
+    request = UsageRequest("preview", "Teil", 0, (line,))
+    monkeypatch.setattr(printing, "prepare_usage", lambda *_args: (request,))
+    profile = profiles.make_profile()
+    worker = printing._StockWorker([], print_settings.resolve(profile), profile)
+    notes = []
+    worker.done.connect(notes.append)
+    worker.work()
+    title = name or "Ohne Filamentzuweisung"
+    assert notes == [f"{title}: Einzelbedarf erst nach dem Slicen bekannt."]
+
+
 def test_first_inventory_binding_keeps_the_selected_print_quality(qt_app):
     """Eine erstmals angelegte Lagerkennung bewahrt die bisher wirksame Feinheit."""
     from app.ui.session import Session
