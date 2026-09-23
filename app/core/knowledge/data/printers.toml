@@ -62,7 +62,7 @@ nozzle_diameter = 0.4
 layer_height = 0.2
 extrusion_width = 0.42
 enclosed = false
-bed_temperature_max = 110
+bed_temperature_max = 100
 nozzle_temperature_max = 300
 
 [bambu-a1]
@@ -123,7 +123,7 @@ layer_height = 0.2
 extrusion_width = 0.45
 enclosed = false
 bed_temperature_max = 120
-nozzle_temperature_max = 300
+nozzle_temperature_max = 290
 
 [prusa-mini]
 title = "Prusa MINI+"
@@ -177,7 +177,7 @@ nozzle_diameter = 0.4
 layer_height = 0.2
 extrusion_width = 0.42
 enclosed = false
-bed_temperature_max = 100
+bed_temperature_max = 110
 nozzle_temperature_max = 300
 
 [anycubic-kobra-2]
