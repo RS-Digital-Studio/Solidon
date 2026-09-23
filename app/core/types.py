@@ -1865,6 +1865,82 @@ class Origin:
     temperature: float | None = None
 
 
+RevisionKind = Literal["insert", "move", "suppress", "reactivate"]
+"""Welche Handlung eine Transaktion am Verlauf selbst vorgenommen hat (P7).
+
+``insert`` und ``move`` planen den Suffix ab der ersten geänderten Stelle mit
+neuen Kennungen neu — die Reihenfolge des Stapels **ist** die seiner Kennungen
+(§15). ``suppress`` und ``reactivate`` wechseln nur die Fassung der Schritte."""
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceExpectation:
+    """Welches Merkmal ein Verweis traf, als sein Schritt zuletzt gerechnet wurde (P7.3).
+
+    Ein ausgeschalteter Schritt rechnet nicht, und seine Verweise tragen nur
+    Namen. Namen neuer Merkmale hängen aber an der Erkennungsreihenfolge: Wer
+    die erste von zwei Bohrungen ausschaltet, gibt ihren Namen für die zweite
+    frei. Beim Wiedereinschalten muss sich prüfen lassen, dass der Verweis
+    **dasselbe** Merkmal trifft — deshalb Herkunft und Abdruck, nicht der Name
+    allein (§15.7, §21.3). Ein abgeleiteter Vermerk, keine Anweisung: Er
+    entscheidet nur, ob der wieder eingeschaltete Schritt ungefragt rechnen darf.
+    """
+
+    key: str
+    """Die Stelle im Schritt: Parametername, bei Listen ``name:index``, bei einer
+    Skizzenebene ``plane:name``."""
+    feature: FeatureId
+    kind: FeatureKind
+    creator: OpId | None = None
+    """``Feature.created_by`` des getroffenen Merkmals, falls bekannt."""
+    fingerprint: Mapping[str, Any] = field(default_factory=dict)
+    """``perceive.matching.fingerprint`` im Rahmen des damaligen Eingangskörpers."""
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceSight:
+    """Was ein Verweis traf, als sein Schritt gerechnet wurde (P7) — abgeleitet, nie gespeichert.
+
+    Die Auswertung hält es je Schritt fest, unmittelbar bevor er rechnet, und
+    für die Passungen am Endstand. Ein Umbau des Verlaufs vergleicht damit
+    Grundstand und Vorschlag: Trifft derselbe Verweis danach **dasselbe**
+    Merkmal — gleiche Herkunft oder gleicher Abdruck —, oder hat sich nur sein
+    Name verschoben, oder ist es verloren? Ohne diesen Vergleich bekäme ein
+    späteres *Bohrung vergrößern* nach dem Umsortieren still die andere
+    Bohrung (§21.3: nie still umbiegen).
+    """
+
+    key: str
+    """:attr:`app.core.scene.orphans.Reference.key` — die Stelle ohne Schrittkennung."""
+    ref: FeatureRef
+    feature: Feature | None
+    """Das getroffene Merkmal, oder ``None``, wenn der Name nicht auflöste."""
+    candidates: Mapping[FeatureId, Feature] = field(default_factory=dict)
+    """Alle Merkmale des Körpers in diesem Augenblick."""
+    centre: Vec3 = (0.0, 0.0, 0.0)
+    diagonal: float = 0.0
+    """Der Bezugsrahmen der Zuordnung (``mesh.bounds``) — derselbe wie in ``matching``."""
+
+
+@dataclass(frozen=True, slots=True)
+class Suppression:
+    """Warum ein Schritt nicht gerechnet wird (P7.3, seit Format v31).
+
+    **Ausdrücklich gespeichert, auch für die Mitgenommenen.** Wer eine Bohrung
+    ausschaltet, deren Loch ein späteres *Bohrung vergrößern* benennt, schaltet
+    dieses mit aus (``chosen=False``) — die Auswertung überspringt nur, was
+    hier steht, und errät keine Abhängigkeit. Eingeschaltet wird ein
+    mitgenommener Schritt zusammen mit dem, der ihn mitnahm.
+    """
+
+    chosen: bool = True
+    """Vom Nutzer gewählt — oder mitgenommen, weil er ohne einen gewählten nicht rechnen kann."""
+    expects: tuple[ReferenceExpectation, ...] = ()
+    fits: tuple[str, ...] = ()
+    """Passungen, die ruhen, solange dieser Schritt aus ist — ihr Merkmal oder
+    Körper entsteht in ihm (§14)."""
+
+
 @dataclass(frozen=True, slots=True)
 class Operation:
     """Ein Eintrag des Stapels (§12). ``inputs``/``outputs`` bilden den DAG."""
@@ -1925,6 +2001,9 @@ class Operation:
     ein Parameter ist. Wer das später „zur Sicherheit" in den Hash einträgt,
     macht jede beantwortete Frage zu einer vollständigen Neuberechnung.
     """
+    suppressed: Suppression | None = None
+    """Ausgeschaltet (P7.3): Der Schritt bleibt im Verlauf und in der Datei,
+    wird aber nicht gerechnet. ``None`` ist der Normalfall."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1996,6 +2075,13 @@ class Transaction:
     origin: Origin = Origin(by="user")
     changes: DocumentChange | None = None
     """Was die Transaktion neben ihren Operationen geändert hat, oder None."""
+    revision: RevisionKind | None = None
+    """Gesetzt, wenn die Transaktion den Verlauf selbst umbaut (P7, seit v31).
+
+    Der Verlauf zeigt die neu geplanten Schritte einer eingefügten oder
+    verschobenen Folge an ihrer neuen Stelle und blendet ihre alten Zeilen
+    aus — anders als beim Löschen, wo die alte Zeile durchgestrichen als
+    Geschichte stehen bleibt (§15.4)."""
 
 
 @dataclass(frozen=True, slots=True)

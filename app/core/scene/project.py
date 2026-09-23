@@ -36,7 +36,7 @@ from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
-from typing import Any, BinaryIO, Final
+from typing import Any, BinaryIO, Final, get_args
 
 from app.branding import APP_VERSION, PROJECT_SUFFIX
 from app.core import examples
@@ -61,7 +61,7 @@ from app.core.scene.serialise import (
     report_from_data,
     report_to_data,
 )
-from app.core.types import Document, Finding, Report, Source, SourceId
+from app.core.types import Document, Finding, Report, RevisionKind, Source, SourceId
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -931,7 +931,42 @@ def _validate_operation_schema(
         not isinstance(entry, str) for entry in translatable
     ):
         raise ValueError(f"schema:{where}.translatable")
+    _validate_suppression_schema(operation.get("suppressed"), f"{where}.suppressed")
     return outputs
+
+
+#: Die Handlungen, mit denen eine Transaktion den Verlauf selbst umbaut (P7).
+_REVISION_KINDS: Final = frozenset(get_args(RevisionKind))
+
+
+def _validate_suppression_schema(value: object, where: str) -> None:
+    """Ein ausgeschalteter Schritt (P7.3, seit v31) — vor ``suppression_from_data``.
+
+    Ein Abdruck bleibt lesbares JSON aus ``matching.fingerprint``; geprüft wird
+    hier nur seine Form, nicht seine Werte. Eine unbrauchbare Zahl darin führt
+    beim Wiedereinschalten zur Frage, nicht zu einer geratenen Zuordnung.
+    """
+    if value is None:
+        return
+    suppression = _nested_mapping(value, where)
+    assert suppression is not None
+    if not isinstance(suppression.get("chosen", True), bool):
+        raise ValueError(f"schema:{where}.chosen")
+    expects = suppression.get("expects", [])
+    if not isinstance(expects, list):
+        raise ValueError(f"schema:{where}.expects")
+    for index, entry in enumerate(expects):
+        place = f"{where}.expects[{index}]"
+        expected = _nested_mapping(entry, place)
+        assert expected is not None
+        if any(not isinstance(expected.get(name), str) for name in ("key", "feature", "kind")):
+            raise ValueError(f"schema:{place}")
+        if expected.get("creator") is not None:
+            _schema_integer(expected["creator"], f"{place}.creator")
+        _nested_mapping(expected.get("fingerprint"), f"{place}.fingerprint", optional=True)
+    fits = suppression.get("fits", [])
+    if not isinstance(fits, list) or any(not isinstance(name, str) for name in fits):
+        raise ValueError(f"schema:{where}.fits")
 
 
 def _validate_binding_identity(binding: dict[str, Any], where: str) -> None:
@@ -1063,6 +1098,9 @@ def _validate_current_project_schema(data: dict[str, Any]) -> None:
         for op_id in op_ids:
             _schema_integer(op_id, f"{where}.ops")
         _validate_origin_schema(transaction.get("origin"), f"{where}.origin")
+        revision = transaction.get("revision")
+        if revision is not None and revision not in _REVISION_KINDS:
+            raise ValueError(f"schema:{where}.revision")
         changes = _nested_mapping(transaction.get("changes"), f"{where}.changes", optional=True)
         if changes is not None:
             _validate_state_schema(changes.get("before", {}), f"{where}.changes.before")

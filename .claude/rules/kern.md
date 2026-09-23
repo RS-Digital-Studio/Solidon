@@ -220,6 +220,15 @@ Wer stattdessen `document.parameters[...] = ...` schreibt, baut den Fehler
 nach, der hier zweimal steckte: die Änderung ist nicht rücknehmbar, sie gilt
 nicht als Änderung, und beim Schließen ist sie weg.
 
+**Auch der Umbau des Verlaufs** — Einfügen, Verschieben, Aus- und Einschalten
+(RM-188 P7). `History.plan_*` plant, `scene.revision.revise` rechnet den
+Vorschlag isoliert, `revision.commit` übernimmt ihn als eine Transaktion.
+Niemand sortiert `document.ops` um oder setzt `Operation.suppressed` von
+Hand: Die Kennung ist die Reihenfolge, und ein Verweis, dessen Merkmal danach
+anders heißt, zielte still auf ein anderes (§21.3). Ein ungültiger Vorschlag
+ändert nichts; ein Plan, unter dem sich das Dokument geändert hat, wird
+abgesagt (`RevisionPlan.mark`), nicht nachgebessert.
+
 Die Grenze verläuft an der Auswertung: was sie beeinflusst, gehört in die
 Transaktion. Druckeinstellungen und Sichtbarkeit tun das nicht — die
 Einstellungen reisen zum Slicer, die Sichtbarkeit gehört der Ansicht.

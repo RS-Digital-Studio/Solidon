@@ -736,6 +736,37 @@ def test_no_parameter_name_of_a_step_writes_its_own_line(profile: Profile) -> No
     assert "Verlauf" in text
 
 
+def test_the_stack_line_names_steps_that_are_off_or_resting(profile: Profile) -> None:
+    """Ein ausgeschalteter Schritt steht im Verlauf, rechnet aber nicht (P7.3).
+
+    Ohne Vermerk läse der Agent „drill_hole(diameter=6)" und suchte die Bohrung
+    im Steckbrief vergeblich — oder bohrte sie ein zweites Mal. Der Vermerk
+    sagt, was der Nutzer im Verlaufsfeld sieht: aus, oder ruht mit.
+    """
+    from app.core.types import Suppression
+
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops.extend(
+        [
+            Operation(id=1, op="drill_hole", params={"diameter": 6.0}, suppressed=Suppression()),
+            Operation(
+                id=2, op="chamfer", params={"size": 1.0}, suppressed=Suppression(chosen=False)
+            ),
+            Operation(id=3, op="shell", params={"thickness": 2.0}),
+        ]
+    )
+    document.transactions.append(
+        Transaction(id="t1", title="Bohren", ops=(1, 2, 3), origin=Origin(by="user"))
+    )
+
+    text = digest(plate_scene(profile), document)
+    history = next(line for line in text.splitlines() if line.startswith("Verlauf"))
+
+    assert "drill_hole(diameter=6) aus" in history
+    assert "chamfer(size=1) ruht" in history
+    assert "shell(thickness=2)," in history, "ein laufender Schritt bleibt ohne Vermerk"
+
+
 def test_a_new_object_name_writes_no_line_of_its_own(profile: Profile) -> None:
     """``new_feature_lines`` ist der zweite Text, den der Agent nach jedem
     Schritt liest — und er nannte den Namen ungefiltert.

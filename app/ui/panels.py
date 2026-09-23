@@ -34,11 +34,15 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QAction,
     QColor,
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
     QFont,
     QIcon,
     QImage,
     QKeyEvent,
     QKeySequence,
+    QMouseEvent,
     QPainter,
     QPainterPath,
     QPen,
@@ -111,7 +115,7 @@ from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, shown_of_twins
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.history import repair_is_available
+from app.core.scene.history import StepNeed, repair_is_available
 from app.core.types import Document, Feature, Finding, MaterialSlot, ObjectId, OpId, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import TranslatableText, sort_key, tr
@@ -3100,6 +3104,170 @@ class ParameterPanel(QWidget):
         self._fit()
 
 
+#: Datenrolle der Einfügemarke im Verlauf (P7.1): Die Zeile trägt keinen
+#: Schritt, ein Doppelklick beendet das Einfügen.
+MARKER_ROLE = int(Qt.ItemDataRole.UserRole) + 3
+
+
+def replanned_steps(document: Document) -> frozenset[int]:
+    """Schritte, die ein Einfügen oder Verschieben neu gefasst hat (P7).
+
+    Ihre alten Zeilen sind nicht gelöscht: Derselbe Schritt steht unter neuer
+    Kennung an seiner neuen Stelle. Der Verlauf blendet sie deshalb aus, statt
+    sie wie ein gelöschter Schritt durchzustreichen (§15.4 gilt dem Löschen).
+    """
+    found: set[int] = set()
+    for transaction in document.transactions:
+        changes = transaction.changes
+        if transaction.revision not in ("insert", "move") or changes is None:
+            continue
+        found.update(
+            op_id for op_id, version in (changes.after.edited_ops or {}).items() if version is None
+        )
+    return frozenset(found)
+
+
+def step_state(document: Document, op_id: int) -> str:
+    """Ob ein Schritt rechnet — leer, „aus" oder „ruht" (P7.3), als Wort und nicht als Farbe."""
+    entry = next((operation for operation in document.ops if operation.id == op_id), None)
+    if entry is None or entry.suppressed is None:
+        return ""
+    return tr("aus") if entry.suppressed.chosen else tr("ruht")
+
+
+def needs_tip(op_id: int, needs: Sequence[StepNeed]) -> str:
+    """Was ein Schritt braucht und wer ihn braucht — die abhängige Folge in Worten (P7.2)."""
+    wanted = sorted({need.on for need in needs if need.step == op_id})
+    users = sorted({need.step for need in needs if need.on == op_id})
+    lines: list[str] = []
+    if wanted:
+        lines.append(tr("Braucht Schritt {numbers}.").format(numbers=", ".join(map(str, wanted))))
+    if users:
+        lines.append(
+            tr("Schritt {numbers} braucht diesen.").format(numbers=", ".join(map(str, users)))
+        )
+    return "\n".join(lines)
+
+
+def drop_before(row_ops: Sequence[tuple[int, ...]], row: int) -> int | None:
+    """Vor welchen Schritt eine Ablage vor Zeile ``row`` fällt — ``None`` heißt: ans Ende.
+
+    Zeilen ohne Schritt (Protokollzeilen, Zurückgenommenes, die Einfügemarke)
+    zählen nicht; es gilt der nächste Schritt darunter.
+    """
+    for ops in row_ops[max(row, 0) :]:
+        if ops:
+            return ops[0]
+    return None
+
+
+class _HistoryList(QListWidget):
+    """Die Verlaufsliste, an der sich Schritte ziehen lassen (P7.2).
+
+    Qt verschöbe beim Ablegen die Zeilen selbst. Der Verlauf ist aber das
+    Dokument, und das ändert nur die Sitzung — geplant, isoliert gerechnet,
+    als eine Transaktion. Die Liste sagt deshalb nur, wohin gezogen wurde, und
+    zeigt schon beim Ziehen, welche Stellen gehen: Eine ungültige bekommt
+    keinen Einfügestrich, und ihr Grund steht in der Statuszeile.
+    """
+
+    dropped = Signal(object, object)
+    """Die gezogenen Schritte und der Schritt, vor den sie sollen (``None``: ans Ende)."""
+    refused = Signal(str)
+    """Warum die Stelle unter dem Zeiger nicht geht."""
+    markerActivated = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+        self.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self.dragged: Callable[[], tuple[int, ...]] = lambda: ()
+        self.places: Callable[[tuple[int, ...]], Mapping[int | None, str | None]] | None = None
+        self._moving: tuple[int, ...] = ()
+        self._targets: Mapping[int | None, str | None] = {}
+        self._said = ""
+
+    def row_ops(self) -> list[tuple[int, ...]]:
+        """Je Zeile die Schritte, die sie trägt — sichtbar oder nicht."""
+        found: list[tuple[int, ...]] = []
+        for row in range(self.count()):
+            item = self.item(row)
+            found.append(tuple(item.data(OPS_ROLE) or ()) if not item.isHidden() else ())
+        return found
+
+    def startDrag(self, supportedActions: Qt.DropAction) -> None:  # noqa: N802, N803 - Qt
+        self._moving = self.dragged()
+        if not self._moving or self.places is None:
+            return
+        self._targets = dict(self.places(self._moving))
+        self._said = ""
+        super().startDrag(supportedActions)
+        self._moving = ()
+        self._targets = {}
+
+    def _target_of(self, event: QDragMoveEvent | QDropEvent) -> tuple[bool, int | None]:
+        """Die Stelle unter dem Zeiger: ob es eine gibt, und vor welchen Schritt."""
+        position = event.position().toPoint()
+        index = self.indexAt(position)
+        if not index.isValid():
+            return True, None
+        rect = self.visualRect(index)
+        row = index.row() + (1 if position.y() > rect.center().y() else 0)
+        return True, drop_before(self.row_ops(), row)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt
+        if event.source() is self and self._moving:
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:  # noqa: N802 - Qt
+        if event.source() is not self or not self._moving:
+            event.ignore()
+            return
+        _found, before = self._target_of(event)
+        if before not in self._targets:
+            # Hier bewegte sich nichts: kein Strich, und kein Satz.
+            self.setDropIndicatorShown(False)
+            super().dragMoveEvent(event)
+            event.ignore()
+            return
+        problem = self._targets[before]
+        self.setDropIndicatorShown(problem is None)
+        super().dragMoveEvent(event)
+        if problem is None:
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+            self._said = ""
+            return
+        event.ignore()
+        if problem != self._said:
+            self._said = problem
+            self.refused.emit(problem)
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt
+        # **Kein ``super()``**: Qt legte sonst eine Kopie der Zeilen ab. Und
+        # ``CopyAction`` statt ``MoveAction``, damit Qt die gezogenen Zeilen
+        # nicht selbst entfernt — das tut der Neuaufbau nach dem Umbau.
+        moving = self._moving
+        _found, before = self._target_of(event)
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
+        self.setDropIndicatorShown(True)
+        if moving and before in self._targets and self._targets[before] is None:
+            self.dropped.emit(moving, before)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt
+        item = self.itemAt(event.position().toPoint())
+        if item is not None and item.data(MARKER_ROLE):
+            self.markerActivated.emit()
+            return
+        super().mouseDoubleClickEvent(event)
+
+
 class HistoryPanel(QWidget):
     """Transaktionen, neueste zuletzt. Die Einheit des Undo (§15.5).
 
@@ -3133,6 +3301,16 @@ class HistoryPanel(QWidget):
     """Die Zeichnung dieses Schritts soll als Kopie für einen **neuen** Schritt
     geöffnet werden (Bedienabnahme Zeichnen E6, Entscheidung Robert
     23.09.2026). Der alte Schritt bleibt, wie er ist."""
+    insertRequested = Signal(int)
+    """Neue Schritte sollen vor diesen kommen (P7.1) — die Einfügemarke."""
+    stopInsertRequested = Signal()
+    """Die Einfügemarke soll weg; die Oberfläche zeigt wieder den Endstand."""
+    moveRequested = Signal(object, object)
+    """Diese Schritte vor jenen (``None``: ans Ende) — rücknehmbar, ohne Nachfrage (P7.2)."""
+    suppressRequested = Signal(object)
+    """Diese Schritte ausschalten (P7.3) — rücknehmbar, ohne Nachfrage."""
+    reactivateRequested = Signal(object)
+    """Diese Schritte wieder einschalten (P7.3)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -3143,7 +3321,7 @@ class HistoryPanel(QWidget):
         Änderung, und ein Verlauf, der bei jedem Schritt wieder zuklappt,
         nähme dem Kunden gerade das, was er sich eben aufgemacht hat.
         """
-        self.list = QListWidget(self)
+        self.list = _HistoryList(self)
         self.list.setAccessibleName(tr("Verlauf"))
         # **Das kleinste Symbol, das die Zeile nicht weiter treibt.** Ein
         # Symbol kostet zwei Punkte Zeilenhöhe, gleich wie klein es ist —
@@ -3169,8 +3347,8 @@ class HistoryPanel(QWidget):
         self.list.itemClicked.connect(self._toggle_group)
         self.list.setToolTip(
             tr(
-                "Doppelklick öffnet die Operation und ihre Parameter. "
-                "Mit Strg oder Umschalt mehrere Schritte wählen."
+                "Doppelklick öffnet einen Schritt. Ziehen verschiebt ihn, "
+                "Leertaste schaltet ihn aus und ein."
             )
         )
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -3180,6 +3358,32 @@ class HistoryPanel(QWidget):
         self.remove_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self.remove_action.triggered.connect(self._request_selected_removal)
         self.list.addAction(self.remove_action)
+        # **Die Tastatur kann alles, was die Maus kann** (P7): davor einfügen,
+        # schrittweise verschieben, aus- und einschalten, das Einfügen beenden.
+        # Am Verlauf und nur dort — dieselbe Begrenzung wie bei Entf.
+        self.insert_action = self._list_action(tr("Davor einfügen"), "Ins", self._request_insert)
+        self.up_action = self._list_action(
+            tr("Nach oben", context="Verlauf"), "Alt+Up", self._request_up
+        )
+        self.down_action = self._list_action(
+            tr("Nach unten", context="Verlauf"), "Alt+Down", self._request_down
+        )
+        self.toggle_action = self._list_action(tr("Aus- oder einschalten"), "Space", self._toggle)
+        self.stop_insert_action = self._list_action(
+            tr("Einfügen beenden"), "Esc", self.stopInsertRequested.emit
+        )
+        self.list.dragged = self.selected_operations
+        self.list.dropped.connect(self.moveRequested.emit)
+        self.list.refused.connect(self.noteRequested.emit)
+        self.list.markerActivated.connect(self.stopInsertRequested.emit)
+        self.revision_context: Callable[[], tuple[int | None, Sequence[StepNeed]]] | None = None
+        """Einfügemarke und abhängige Folge, von der Sitzung gelesen (P7) —
+        vom Fenster gesetzt; ohne es zeigt der Verlauf beides nicht."""
+        self._order: tuple[int, ...] = ()
+        """Die Schritte des Stapels in ihrer Folge — für Nach oben und Nach unten."""
+        self._resting: dict[int, bool] = {}
+        """Je ausgeschaltetem Schritt, ob er gewählt ist (``True``) oder mitruht."""
+        self._inserting: int | None = None
         self._room: int | None = None
         """Wie beim Objektbaum: die zugeteilte Höhe, ``None`` bis sie kommt."""
         self._bakeable: frozenset[int] = frozenset()
@@ -3250,7 +3454,19 @@ class HistoryPanel(QWidget):
         aus demselben Grund: es ist passiert, es gilt nur gerade nicht (§26.3).
         """
         self.list.clear()
+        inserting, needs = (
+            self.revision_context() if self.revision_context is not None else (None, ())
+        )
+        self._inserting = inserting
+        self._order = tuple(entry.id for entry in sorted(document.ops, key=lambda one: one.id))
+        self._resting = {
+            entry.id: entry.suppressed.chosen
+            for entry in document.ops
+            if entry.suppressed is not None
+        }
+        self.stop_insert_action.setEnabled(inserting is not None)
         titles = {entry.id: _op_title(entry.op) for entry in document.ops}
+        replanned = replanned_steps(document)
         deleted: set[int] = set()
         for transaction in document.transactions:
             changes = transaction.changes
@@ -3264,7 +3480,7 @@ class HistoryPanel(QWidget):
                 previous = before.get(op_id)
                 if previous is not None:
                     titles.setdefault(op_id, _op_title(previous.op))
-        deleted_ids = frozenset(deleted)
+        deleted_ids = frozenset(deleted - replanned)
         self._bakeable = frozenset(
             entry.id
             for entry in document.ops
@@ -3283,6 +3499,13 @@ class HistoryPanel(QWidget):
             entry.id for entry in document.ops if str(entry.params.get("sketch", "") or "").strip()
         )
         for transaction in document.transactions:
+            if transaction.ops and all(op_id in replanned for op_id in transaction.ops):
+                # Neu gefasst, nicht gelöscht (P7): Derselbe Schritt steht unter
+                # neuer Kennung beim Umbau, der ihn eingereiht hat.
+                continue
+            if transaction.revision in ("insert", "move"):
+                self._add_revision_rows(transaction, document, titles, replanned, needs)
+                continue
             # Nur was abweicht, wird ausgeschrieben (§26.4). „(Nutzer)" stand
             # vorher an jeder Zeile — in einem Projekt ohne Agenten also
             # überall, und was überall steht, liest niemand mehr. Dieselbe
@@ -3336,7 +3559,13 @@ class HistoryPanel(QWidget):
             symbol = _op_icon_name(first_op) if first_op else ""
             if symbol:
                 item.setIcon(icon(symbol, self.list))
-            active_ops = tuple(op_id for op_id in transaction.ops if op_id not in deleted_ids)
+            # Neu gefasste Schritte stehen beim Umbau, nicht hier (P7) — eine
+            # Auswahl dieser Zeile nennt sie nicht mit.
+            active_ops = tuple(
+                op_id
+                for op_id in transaction.ops
+                if op_id not in deleted_ids and op_id not in replanned
+            )
             if transaction.ops and not active_ops:
                 item.setText(f"{item.text()}  ({tr('gelöscht')})")
                 font = QFont(item.font())
@@ -3345,6 +3574,7 @@ class HistoryPanel(QWidget):
                 item.setForeground(QColor(UNDONE_COLOUR))
             if len(transaction.ops) == 1 and active_ops:
                 item.setData(Qt.ItemDataRole.UserRole, transaction.ops[0])
+                self._mark_state(item, document, transaction.ops[0], needs)
             # **Die Zeile trägt auch, was sie umfasst.** ``UserRole`` bleibt
             # die *eine* Operation zum Öffnen — eine Transaktion aus vier
             # Schritten hat keine, und das ist richtig, denn welchen sollte ein
@@ -3369,6 +3599,8 @@ class HistoryPanel(QWidget):
 
             if len(transaction.ops) > 1:
                 for op_id in transaction.ops:
+                    if op_id in replanned:
+                        continue
                     child = QListWidgetItem(f"    {op_id}  {titles.get(op_id, '')}")
                     child.setData(GROUP_ROLE, transaction.id)
                     child_symbol = _op_icon_name(
@@ -3379,6 +3611,7 @@ class HistoryPanel(QWidget):
                     if op_id not in deleted_ids:
                         child.setData(Qt.ItemDataRole.UserRole, op_id)
                         child.setData(OPS_ROLE, (op_id,))
+                        self._mark_state(child, document, op_id, needs)
                     else:
                         child.setText(f"{child.text()}  ({tr('gelöscht')})")
                         font = QFont(child.font())
@@ -3406,8 +3639,234 @@ class HistoryPanel(QWidget):
             item.setToolTip(tr("Ein Wiederholen holt diesen Schritt zurück."))
             self.list.addItem(item)
 
+        if inserting is not None:
+            self._add_marker(inserting)
         self._fit()
         self.list.scrollToBottom()
+
+    # --- Umbau des Verlaufs (P7) -----------------------------------------------------
+
+    def _list_action(self, label: str, key: str, slot: Callable[[], object]) -> QAction:
+        """Eine Handlung am Verlauf mit Kürzel, das nur hier gilt (wie Entf)."""
+        action = QAction(label, self.list)
+        action.setShortcut(QKeySequence(key))
+        action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        action.triggered.connect(lambda _checked=False: slot())
+        self.list.addAction(action)
+        return action
+
+    def _add_revision_rows(
+        self,
+        transaction: Any,
+        document: Document,
+        titles: Mapping[int, str],
+        replanned: Collection[int],
+        needs: Sequence[StepNeed],
+    ) -> None:
+        """Ein Einfügen oder Verschieben: eine Protokollzeile, darunter die Schritte (P7).
+
+        Die neu gefassten Schritte stehen **nicht eingeklappt** unter dem
+        Umbau, sondern wie eigene Zeilen: Sie sind die Folge des Stapels ab
+        der ersten geänderten Stelle, in genau der Reihenfolge, in der sie
+        rechnen. Die Protokollzeile trägt den Titel des Umbaus und nimmt mit
+        Strg+Z alles zurück; sie selbst öffnet nichts.
+        """
+        by = f"  ({tr('Agent')})" if transaction.origin.by == "agent" else ""
+        header = QListWidgetItem(f"{transaction.title}{by}")
+        header.setForeground(QColor(UNDONE_COLOUR))
+        header.setToolTip(
+            tr("{id} · Strg+Z nimmt den ganzen Umbau zurück.").format(id=transaction.id)
+        )
+        header.setData(OPS_ROLE, ())
+        self.list.addItem(header)
+        for op_id in transaction.ops:
+            if op_id in replanned:
+                continue
+            row = QListWidgetItem(f"{op_id}  {titles.get(op_id, '')}")
+            symbol = _op_icon_name(
+                next((entry.op for entry in document.ops if entry.id == op_id), "")
+            )
+            if symbol:
+                row.setIcon(icon(symbol, self.list))
+            row.setData(Qt.ItemDataRole.UserRole, op_id)
+            row.setData(OPS_ROLE, (op_id,))
+            row.setToolTip(tr("Schritt {number}").format(number=op_id))
+            self._mark_state(row, document, op_id, needs)
+            self.list.addItem(row)
+
+    def _mark_state(
+        self, item: QListWidgetItem, document: Document, op_id: int, needs: Sequence[StepNeed]
+    ) -> None:
+        """Aus, ruhend, abhängig: in Worten an der Zeile, nie nur als Farbe (Regel 18)."""
+        state = step_state(document, op_id)
+        tips = [item.toolTip()] if item.toolTip() else []
+        if state:
+            item.setText(f"{item.text()}  ({state})")
+            font = QFont(item.font())
+            font.setItalic(True)
+            item.setFont(font)
+            item.setForeground(QColor(UNDONE_COLOUR))
+            tips.append(
+                tr("Ausgeschaltet: Der Schritt bleibt im Verlauf, rechnet aber nicht.")
+                if self._resting.get(op_id)
+                else tr("Ruht, weil er einen ausgeschalteten Schritt braucht.")
+            )
+        dependency = needs_tip(op_id, needs)
+        if dependency:
+            tips.append(dependency)
+        if tips:
+            item.setToolTip("\n".join(tips))
+
+    def _add_marker(self, inserting: int) -> None:
+        """Die Einfügemarke vor ihrem Schritt — und alles danach ruhig gestellt (P7.1)."""
+        rows = self.list.row_ops()
+        at = next(
+            (index for index, ops in enumerate(rows) if ops and inserting in ops),
+            self.list.count(),
+        )
+        marker = QListWidgetItem(f"▸  {tr('Neue Schritte kommen hierhin')}")
+        font = QFont(marker.font())
+        font.setBold(True)
+        marker.setFont(font)
+        marker.setData(MARKER_ROLE, True)
+        marker.setData(OPS_ROLE, ())
+        marker.setToolTip(tr("Doppelklick oder Esc beendet das Einfügen."))
+        marker.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        self.list.insertItem(at, marker)
+        for row in range(at + 1, self.list.count()):
+            entry = self.list.item(row)
+            if entry.data(OPS_ROLE):
+                entry.setForeground(QColor(UNDONE_COLOUR))
+
+    def _steps_for_action(self) -> tuple[int, ...]:
+        chosen = self.selected_operations()
+        if chosen:
+            return chosen
+        item = self.list.currentItem()
+        return tuple(int(op_id) for op_id in (item.data(OPS_ROLE) or ())) if item else ()
+
+    def _request_insert(self) -> None:
+        chosen = self._steps_for_action()
+        if len(chosen) >= 1:
+            self.insertRequested.emit(chosen[0])
+
+    def _neighbour_target(self, chosen: tuple[int, ...], upwards: bool) -> tuple[bool, int | None]:
+        """Die Stelle einen Schritt höher oder tiefer — ob es eine gibt, und welche."""
+        order = [op_id for op_id in self._order if op_id not in chosen]
+        positions = [index for index, op_id in enumerate(self._order) if op_id in chosen]
+        if not positions:
+            return False, None
+        first = self._order[positions[0]]
+        last = self._order[positions[-1]]
+        if upwards:
+            earlier = [op_id for op_id in order if op_id < first]
+            return (True, earlier[-1]) if earlier else (False, None)
+        later = [op_id for op_id in order if op_id > last]
+        if not later:
+            return False, None
+        return True, later[1] if len(later) > 1 else None
+
+    def _request_up(self) -> None:
+        self._request_neighbour(upwards=True)
+
+    def _request_down(self) -> None:
+        self._request_neighbour(upwards=False)
+
+    def _request_neighbour(self, *, upwards: bool) -> None:
+        chosen = self._steps_for_action()
+        found, before = self._neighbour_target(chosen, upwards)
+        if not chosen or not found:
+            self.noteRequested.emit(
+                tr("Höher geht es nicht.") if upwards else tr("Tiefer geht es nicht.")
+            )
+            return
+        problem = self._target_problem(chosen, before)
+        if problem:
+            self.noteRequested.emit(problem)
+            return
+        self.moveRequested.emit(chosen, before)
+
+    def _target_problem(self, chosen: tuple[int, ...], before: int | None) -> str | None:
+        """Warum diese Stelle nicht geht — ``None``, wenn sie geht oder niemand es weiß."""
+        if self.list.places is None:
+            return None
+        return self.list.places(chosen).get(before)
+
+    def _toggle(self) -> None:
+        """Leertaste: gewählte Schritte aus — oder, wenn alle schon aus sind, wieder an."""
+        chosen = self._steps_for_action()
+        if not chosen:
+            return
+        if all(op_id in self._resting for op_id in chosen):
+            self.reactivateRequested.emit(chosen)
+        else:
+            self.suppressRequested.emit(
+                tuple(op_id for op_id in chosen if op_id not in self._resting)
+            )
+
+    def _add_revision_entries(self, menu: QMenu, op_ids: tuple[int, ...]) -> None:
+        """Einfügen, Verschieben, Aus- und Einschalten im Kontextmenü (P7)."""
+        if len(op_ids) == 1:
+            insert = menu.addAction(tr("Davor einfügen"))
+            insert.setShortcut(self.insert_action.shortcut())
+            insert.triggered.connect(
+                lambda _checked=False, chosen=op_ids[0]: self.insertRequested.emit(chosen)
+            )
+        places = self.list.places(op_ids) if self.list.places is not None else {}
+        for label, upwards, action in (
+            (tr("Nach oben", context="Verlauf"), True, self.up_action),
+            (tr("Nach unten", context="Verlauf"), False, self.down_action),
+        ):
+            entry = menu.addAction(label)
+            entry.setShortcut(action.shortcut())
+            found, before = self._neighbour_target(op_ids, upwards)
+            problem = places.get(before) if found else None
+            entry.setEnabled(found and problem is None and before in places)
+            if problem:
+                entry.setToolTip(problem)
+            entry.triggered.connect(
+                lambda _checked=False, chosen=op_ids, target=before: self.moveRequested.emit(
+                    chosen, target
+                )
+            )
+        valid = [before for before, problem in places.items() if problem is None]
+        if valid:
+            further = menu.addMenu(tr("Verschieben vor"))
+            for before in valid:
+                label = tr("Ans Ende") if before is None else f"{before}  {self._title_of(before)}"
+                target = further.addAction(label)
+                target.triggered.connect(
+                    lambda _checked=False, chosen=op_ids, where=before: self.moveRequested.emit(
+                        chosen, where
+                    )
+                )
+        if all(op_id in self._resting for op_id in op_ids):
+            switch = menu.addAction(tr("Einschalten"))
+            switch.triggered.connect(
+                lambda _checked=False, chosen=op_ids: self.reactivateRequested.emit(chosen)
+            )
+        else:
+            switch = menu.addAction(tr("Ausschalten"))
+            switch.setToolTip(
+                tr("Der Schritt bleibt im Verlauf, rechnet aber nicht. Strg+Z nimmt es zurück.")
+            )
+            fresh = tuple(op_id for op_id in op_ids if op_id not in self._resting)
+            switch.triggered.connect(
+                lambda _checked=False, chosen=fresh: self.suppressRequested.emit(chosen)
+            )
+        switch.setShortcut(self.toggle_action.shortcut())
+        if self._inserting is not None:
+            stop = menu.addAction(tr("Einfügen beenden"))
+            stop.setShortcut(self.stop_insert_action.shortcut())
+            stop.triggered.connect(lambda _checked=False: self.stopInsertRequested.emit())
+
+    def _title_of(self, op_id: int) -> str:
+        """Der Titel eines Schritts, wie seine Zeile ihn nennt."""
+        for row in range(self.list.count()):
+            item = self.list.item(row)
+            if item.data(Qt.ItemDataRole.UserRole) == op_id:
+                return item.text().split("  ", 1)[-1].strip()
+        return ""
 
     def _toggle_group(self, item: QListWidgetItem) -> None:
         """Einen Oberpunkt auf- oder zuklappen.
@@ -3595,6 +4054,8 @@ class HistoryPanel(QWidget):
             reuse.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.drawingReuseRequested.emit(chosen)
             )
+        self._add_revision_entries(menu, op_ids)
+        menu.setToolTipsVisible(True)
         remove = menu.addAction(tr("Schritt löschen …"))
         remove.triggered.connect(
             lambda _checked=False, chosen=op_ids: self.removalRequested.emit(chosen)

@@ -44,6 +44,7 @@ from app.core.errors import (
     CANCEL_SPLIT,
     RETRY,
     SHOW_HISTORY,
+    STOP_INSERTING,
     AppError,
     GeometryError,
     InternalError,
@@ -79,7 +80,7 @@ from app.core.scene import (
     orphans,
 )
 from app.core.scene.evaluate import conversion_finding, evaluate
-from app.core.scene.history import change_for
+from app.core.scene.history import Dependencies, MoveTarget, RevisionPlan, StepNeed, change_for
 from app.core.scene.project import (
     Project,
     ProjectSources,
@@ -95,6 +96,9 @@ from app.core.scene.project import (
     save,
     write_autosave,
 )
+from app.core.scene.revision import Revision, revise, step_needs
+from app.core.scene.revision import commit as commit_revision
+from app.core.scene.revision import dependencies as revision_dependencies
 from app.core.split import (
     SplitApplied,
     SplitTarget,
@@ -568,13 +572,21 @@ class _Snapshot:
     profile: Profile
 
     @classmethod
-    def of(cls, session: Session) -> _Snapshot:
-        """Zieht den Stand jetzt — nur im Hauptfaden aufrufen."""
+    def of(cls, session: Session, change_op: OpId | None = None) -> _Snapshot:
+        """Zieht den Stand jetzt — nur im Hauptfaden aufrufen.
+
+        Bei einer Einfügemarke der Stand davor (P7.1): Vorschau und Agent
+        rechnen dort, wo der neue Schritt hinkommt. Wer einen Schritt hinter
+        der Marke ändert, bekommt den ganzen Verlauf — dort steht der Schritt.
+        """
         import copy
 
         result = session.last_result
+        shown = session.displayed_document()
+        if change_op is not None and all(entry.id != change_op for entry in shown.ops):
+            shown = session.project.document
         return cls(
-            document=copy.deepcopy(session.project.document),
+            document=copy.deepcopy(shown),
             before=result.scene if result is not None else None,
             profile=session.profile,
         )
@@ -911,6 +923,94 @@ class _SplitWorker(Worker):
         super().release_finished_references()
 
 
+class _RevisionWorker(Worker):
+    """Ein Umbau des Verlaufs, isoliert gerechnet (P7) — besitzt nichts, meldet alles.
+
+    Gerechnet wird an einer Kopie, die beim Start im Hauptfaden gezogen wurde
+    (:class:`_Snapshot`, dieselbe Begründung): Der Hauptfaden darf das
+    Dokument währenddessen ändern, und dann ist der Plan veraltet — das sagt
+    ``History.commit`` beim Übernehmen, nicht eine halbe Kopie im Arbeiter.
+    Fehlt ein gerechneter Grundstand (eine Auswertung lief noch, oder die
+    Einfügemarke zeigt den Stand davor), rechnet der Arbeiter ihn zuerst; der
+    Cache trägt, was schon gerechnet ist. Abbrechen hält ihn an, und nichts
+    ist geändert (§15.6).
+    """
+
+    revisedWith = Signal(object)
+    failedWith = Signal(object)
+    cancelled = Signal()
+
+    def __init__(
+        self,
+        session: Session,
+        document: Any,
+        planned: RevisionPlan | Callable[[History, Dependencies], RevisionPlan],
+        baseline: EvaluationResult | None,
+        cancel: CancelSignal,
+    ) -> None:
+        super().__init__()
+        self._session = session
+        self._document = document
+        self._planned = planned
+        self._baseline = baseline
+        self.cancel = cancel
+        self._project_generation = session._project_generation
+        self._profile = session.profile
+        self._quality = session.quality
+        self._sources = ProjectSources(session.project, base_dir=session.base_dir)
+
+    def work(self) -> None:
+        session = self._session
+        session._pending.project_generation = self._project_generation
+
+        def run(document: Any) -> EvaluationResult:
+            return evaluate(
+                document,
+                self._profile,
+                quality=self._quality,
+                progress=session.report_progress,
+                ask=session.ask_from_worker,
+                question_context=session.announce_question,
+                cancelled=self.cancel,
+                cache=session.cache,
+                sources=self._sources,
+            )
+
+        try:
+            history = History(self._document)
+            baseline = self._baseline if self._baseline is not None else run(self._document)
+            context = revision_dependencies(self._document, baseline)
+            plan = (
+                self._planned
+                if isinstance(self._planned, RevisionPlan)
+                else self._planned(history, context)
+            )
+            revision = revise(
+                history,
+                plan,
+                evaluate=run,
+                baseline=baseline,
+                context=context,
+                ask=session.ask_from_worker,
+                announce=lambda preview, candidates: session.announce_question(preview, candidates),
+            )
+        except OperationCancelled:
+            self.cancelled.emit()
+        except AppError as error:
+            self.failedWith.emit(error)
+        else:
+            self.revisedWith.emit(revision)
+        finally:
+            session.announce_question(None, ())
+            session._pending.project_generation = None
+            session.report_progress(1.0, "")
+
+    def release_finished_references(self) -> None:
+        """Sitzung, Kopie und Plan nach der Zustellung lösen."""
+        del self._session, self._document, self._planned, self._baseline, self._sources
+        super().release_finished_references()
+
+
 class _QuestionPending(OperationCancelled):
     """Die stille Vorschau ist an einer Rückfrage stehengeblieben.
 
@@ -1024,6 +1124,12 @@ class Session(QObject):
     projectChanged = Signal()
     """Stapel, Pfad oder Titel haben sich geändert; die Leisten laden neu."""
     failed = Signal(object)
+    revisionDone = Signal(object)
+    """Ein Umbau des Verlaufs ist übernommen (P7) — trägt die ``Revision`` samt Befunden."""
+    insertionChanged = Signal(object)
+    """Die Einfügemarke ist gesetzt oder weg (P7.1) — trägt die Schrittkennung oder ``None``."""
+    revisionCancelled = Signal()
+    """Ein Umbau des Verlaufs wurde abgebrochen — geändert ist nichts."""
     """Eine ``AppError``, die die Oberfläche als Vorschlag zeigt (§2.7)."""
     counterpartFinished = Signal(object)
     """Die Passung eines Gegenstücks ist nachgetragen — trägt die neuen Befunde.
@@ -1112,6 +1218,13 @@ class Session(QObject):
         """Der laufende Einleseplan (§2.8) — siehe ``import_payload_async``."""
         self._agent: _AgentWorker | None = None
         self._split: _SplitWorker | None = None
+        self._revision: _RevisionWorker | None = None
+        """Der laufende Umbau des Verlaufs (P7), höchstens einer."""
+        self._revision_cancel = CancelSignal()
+        self._insert_before: OpId | None = None
+        """Die Einfügemarke (P7.1): Neue Schritte kommen vor diesen, und die
+        Oberfläche zeigt den Stand davor. Kein Dokumentzustand — sie gehört
+        der Sitzung und reist nicht in die Datei."""
         self._leash = WorkerLeash(self)
         """Hält jeden ausgelaufenen Arbeiter, bis Qt mit ihm durch ist.
 
@@ -1283,7 +1396,7 @@ class Session(QObject):
         Auch ein fertiger Faden zählt bis zur Zustellung seines Endsignals:
         Sein Ergebnis kann noch die nächste Auswertung anstoßen.
         """
-        return self._worker is not None or self._plan is not None
+        return self._worker is not None or self._plan is not None or self._revision is not None
 
     @property
     def document_name(self) -> str:
@@ -1498,6 +1611,9 @@ class Session(QObject):
         self.last_result = None
         self._coarse_scene = None
         self._stop_coarse_preparation()
+        if self._insert_before is not None:
+            self._insert_before = None
+            self.insertionChanged.emit(None)
         self.projectChanged.emit()
         self.evaluate_async()
 
@@ -1516,6 +1632,7 @@ class Session(QObject):
         self._bind_filament_profiles()
         self._dirty = True
         self.result_current = False
+        self._keep_insertion_valid()
         self.projectChanged.emit()
         self.evaluate_async()
 
@@ -1544,7 +1661,14 @@ class Session(QObject):
         **Solange die Kette hält, nimmt sie keinen neuen Schritt an** — eine
         Änderung ohne Schritt (Parameter, Passung, Drucker) aber sehr wohl,
         denn die kann den Halt lösen. Warum, steht an :meth:`halt_in_the_way`.
+
+        **Steht eine Einfügemarke, kommen die Schritte dorthin** (P7.1) — als
+        isoliert gerechneter Umbau (:meth:`_insert`). Der Rückgabewert heißt
+        dann: angenommen und unterwegs; ein ungültiger Vorschlag meldet sich
+        über ``failed`` und ändert nichts.
         """
+        if self._insert_before is not None and drafts:
+            return self._insert(title, drafts, origin, changes, raise_on_error=raise_on_error)
         try:
             refusal = self.halt_in_the_way() if drafts else None
             if refusal is not None:
@@ -1624,6 +1748,13 @@ class Session(QObject):
         Körper wird aufgelöst wie in ``panels.as_error``: aus dem Befund, sonst
         der einzige Eingang des Schritts.
         """
+        if self._insert_before is not None:
+            # **Und während einer Einfügemarke kommt nichts ans Ende** (P7.1):
+            # Abläufe mit eigener Buchführung — Teilen mit Stiften, Deckel,
+            # Gegenstück, Auto Split, Erzeugen, ein Agentenvorschlag — hängen
+            # ihre Schritte an. Hinter der Marke gezeigt, vor ihr gerechnet,
+            # wäre das ein Schritt an einer Stelle, die der Kunde nicht sieht.
+            return self._inserting_refusal()
         halted = self.halted_step()
         if halted is None:
             return None
@@ -2837,7 +2968,7 @@ class Session(QObject):
         # stapeln sich Boolesche Operationen für Ergebnisse, die schon
         # niemand mehr sehen will.
         cancel = CancelSignal()
-        snapshot = _Snapshot.of(self)
+        snapshot = _Snapshot.of(self, change_op)
 
         def compute() -> tuple[Any, SceneDifference | None, str]:
             # ``worker`` steht unten und ist beim **Aufruf** gebunden — die
@@ -3175,6 +3306,258 @@ class Session(QObject):
         if self.history.redo() is not None:
             self._changed()
 
+    # --- Umbau des Verlaufs (RM-188 P7) ------------------------------------------
+
+    @property
+    def inserting(self) -> OpId | None:
+        """Vor welchen Schritt neue Schritte gerade kommen — ``None`` heißt: ans Ende."""
+        return self._insert_before
+
+    @property
+    def revision_running(self) -> bool:
+        return self._revision is not None
+
+    def displayed_document(self) -> Any:
+        """Das Dokument, das die Oberfläche zeigt — bei einer Einfügemarke der Stand davor.
+
+        Eine flache Kopie mit den Schritten vor der Marke und ohne Passungen:
+        Passungen gelten dem Endstand, und am Stand davor wäre ihr Merkmal oft
+        noch gar nicht da (§14). Das Dokument selbst bleibt, wie es ist.
+        """
+        document = self.project.document
+        marker = self._insert_before
+        if marker is None:
+            return document
+        return dataclasses.replace(
+            document, ops=[entry for entry in document.ops if entry.id < marker], fits=[]
+        )
+
+    def start_inserting(self, before: int) -> bool:
+        """Die Einfügemarke vor ``before`` setzen (P7.1).
+
+        Danach zeigt die ganze Oberfläche den Stand vor diesem Schritt —
+        Ansicht, Baum, Merkmale, Prüfbericht —, und jede Operation über
+        :meth:`apply` wird dort eingefügt. Kein Dokumentzustand und keine
+        Transaktion: Die Marke ändert nichts, sie zeigt nur, wohin es geht.
+        """
+        try:
+            step = self.history.operation(int(before))
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        if self._insert_before == step.id:
+            return True
+        self._insert_before = step.id
+        self.insertionChanged.emit(step.id)
+        self.result_current = False
+        self.projectChanged.emit()
+        self.evaluate_async()
+        return True
+
+    def stop_inserting(self) -> None:
+        """Die Einfügemarke entfernen — die Oberfläche zeigt wieder den Endstand."""
+        if self._insert_before is None:
+            return
+        self._insert_before = None
+        self.insertionChanged.emit(None)
+        self.result_current = False
+        self.projectChanged.emit()
+        self.evaluate_async()
+
+    def _keep_insertion_valid(self) -> None:
+        """Nach einer Änderung: Gibt es den Schritt der Marke nicht mehr, ist sie weg.
+
+        Strg+Z nach einem Einfügen legt die alte Folge mit ihren alten
+        Kennungen zurück; die Marke zeigte auf die neue. Eine Marke vor einem
+        Schritt, den es nicht gibt, stünde am Ende und hieße dort anders als
+        im Verlauf — sie geht, und der Verlauf sagt es.
+        """
+        marker = self._insert_before
+        if marker is None:
+            return
+        if any(entry.id == marker for entry in self.project.document.ops):
+            return
+        self._insert_before = None
+        self.insertionChanged.emit(None)
+
+    def _inserting_refusal(self) -> UserError:
+        """Die Absage für einen Ablauf, der nur ans Ende kann — mit dem Weg dorthin."""
+        return UserError(
+            _("Das geht nicht mitten im Verlauf."),
+            _(
+                "Dieser Ablauf hängt seine Schritte ans Ende. Beenden Sie zuerst das "
+                "Einfügen, dann geht er dort weiter."
+            ),
+            suggestions=(STOP_INSERTING, CANCEL),
+            op_id=self._insert_before,
+        )
+
+    def step_needs(self) -> tuple[StepNeed, ...]:
+        """Welcher Schritt welchen braucht — Körper und Merkmale, für den Verlauf (P7.2)."""
+        result = self.last_result if self.result_current and self._insert_before is None else None
+        return step_needs(
+            self.project.document, revision_dependencies(self.project.document, result)
+        )
+
+    def move_targets(self, op_ids: Sequence[int]) -> tuple[MoveTarget, ...]:
+        """Wohin die gewählten Schritte könnten — mit dem Grund, wo nicht (P7.2).
+
+        Nur lesend und ohne Rechnung; die Merkmalskanten kommen aus der letzten
+        Auswertung, solange sie zum Dokument gehört.
+        """
+        result = self.last_result if self.result_current and self._insert_before is None else None
+        try:
+            return self.history.valid_targets(
+                op_ids, revision_dependencies(self.project.document, result)
+            )
+        except AppError:
+            return ()
+
+    def revise_history(self, kind: str, op_ids: Sequence[int], before: int | None = None) -> bool:
+        """Schritte verschieben, aus- oder einschalten — geplant, isoliert gerechnet, übernommen.
+
+        ``kind`` ist ``move`` (vor ``before``, ``None`` ans Ende), ``suppress``
+        oder ``reactivate``. Geplant wird sofort, damit eine unmögliche Stelle
+        ohne Wartezeit ihren Satz sagt; gerechnet wird im Arbeiter (§2.8), und
+        erst ein gültiges Ergebnis ersetzt die Folge — als **eine**
+        Transaktion, ohne Nachfrage (Regel 19). Eine Einfügemarke endet
+        vorher: Umbauten gelten dem ganzen Verlauf.
+        """
+        if self._revision is not None:
+            self.failed.emit(
+                UserError(
+                    _("Ein Umbau des Verlaufs läuft noch."),
+                    _("Warten Sie, bis er fertig ist, oder brechen Sie ihn ab."),
+                    suggestions=(CANCEL,),
+                )
+            )
+            return False
+        self.stop_inserting()
+        baseline = self.last_result if self.result_current else None
+        wanted = tuple(int(op_id) for op_id in op_ids)
+
+        def planned(history: History, context: Dependencies) -> RevisionPlan:
+            if kind == "suppress":
+                return history.plan_suppress(wanted, context)
+            if kind == "reactivate":
+                return history.plan_reactivate(wanted, context)
+            if kind == "move":
+                return history.plan_move(wanted, before, context)
+            raise InternalError(detail=f"unknown history revision {kind!r}")
+
+        if baseline is not None:
+            try:
+                plan = planned(self.history, revision_dependencies(self.project.document, baseline))
+            except AppError as error:
+                self.failed.emit(error)
+                return False
+            return self._start_revision(plan, baseline)
+        return self._start_revision(planned, None)
+
+    def _insert(
+        self,
+        title: TranslatableText | str,
+        drafts: list[OperationDraft],
+        origin: Origin | None,
+        changes: DocumentChange | None,
+        *,
+        raise_on_error: bool = False,
+    ) -> bool:
+        """Die Schritte vor die Einfügemarke setzen (P7.1) — geplant sofort, gerechnet im Arbeiter.
+
+        Der Grundstand für den Vergleich ist der ganze Verlauf, nicht der Stand
+        davor, den die Oberfläche gerade zeigt; der Arbeiter rechnet ihn zuerst
+        (der Cache trägt das meiste). Nach dem Übernehmen rückt die Marke
+        hinter den neuen Schritt — wer mehrere einfügt, fügt sie der Reihe nach ein.
+        """
+        marker = self._insert_before
+        assert marker is not None
+        if self._revision is not None:
+            error = UserError(
+                _("Ein Umbau des Verlaufs läuft noch."),
+                _("Warten Sie, bis er fertig ist, oder brechen Sie ihn ab."),
+                suggestions=(CANCEL,),
+            )
+            if raise_on_error:
+                raise error
+            self.failed.emit(error)
+            return False
+        try:
+            plan = self.history.plan_insert(
+                marker, title, drafts, origin or Origin(by="user"), changes
+            )
+        except AppError as error:
+            if raise_on_error:
+                raise
+            self.failed.emit(error)
+            return False
+        return self._start_revision(plan, None)
+
+    def _start_revision(
+        self,
+        planned: RevisionPlan | Callable[[History, Dependencies], RevisionPlan],
+        baseline: EvaluationResult | None,
+    ) -> bool:
+        """Den Arbeiter für einen Umbau starten — mit einer Kopie des Dokuments von jetzt."""
+        import copy
+
+        self._revision_cancel = CancelSignal()
+        worker = _RevisionWorker(
+            self, copy.deepcopy(self.project.document), planned, baseline, self._revision_cancel
+        )
+        worker.revisedWith.connect(partial(self._on_revised, finished=worker))
+        worker.failedWith.connect(partial(self._on_revision_failed, finished=worker))
+        worker.cancelled.connect(partial(self._on_revision_cancelled, finished=worker))
+        worker.crashed.connect(
+            lambda detail, done=worker: self._on_revision_failed(
+                InternalError(detail=detail), finished=done
+            )
+        )
+        worker.finished.connect(partial(self._on_revision_done, worker))
+        self._revision = worker
+        self.busyChanged.emit(True)
+        self._leash.start(worker)
+        return True
+
+    def _on_revised(self, revision: Revision, finished: _RevisionWorker | None = None) -> None:
+        """Der Vorschlag ist gültig: genau diesen Plan übernehmen — oder sagen, warum nicht."""
+        if finished is not None and (
+            finished is not self._revision
+            or finished._project_generation != self._project_generation
+        ):
+            return
+        try:
+            commit_revision(self.history, revision)
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        if revision.plan.kind == "insert" and self._insert_before is not None:
+            # Die Marke rückt mit: Sie stand vor einem Schritt, der jetzt eine
+            # neue Kennung trägt — und davor steht der eingefügte.
+            self._insert_before = revision.plan.new_id(self._insert_before)
+            self.insertionChanged.emit(self._insert_before)
+        self._changed()
+        self.revisionDone.emit(revision)
+
+    def _on_revision_failed(self, error: Any, finished: _RevisionWorker | None = None) -> None:
+        if finished is not None and finished is not self._revision:
+            return
+        self.failed.emit(error)
+
+    def _on_revision_cancelled(self, finished: _RevisionWorker | None = None) -> None:
+        if finished is not None and finished is not self._revision:
+            return
+        self.revisionCancelled.emit()
+
+    def _on_revision_done(self, finished: _RevisionWorker) -> None:
+        """Der Umbau ist ausgelaufen — nur der aktuelle räumt sein Feld."""
+        if finished is self._revision:
+            worker, self._revision = self._revision, None
+            self._leash.hold_until_done(worker)
+            self.busyChanged.emit(self.busy)
+            return
+        self._leash.hold_until_done(finished)
+
     # --- evaluation -------------------------------------------------------------
 
     def evaluate_async(self) -> None:
@@ -3221,7 +3604,9 @@ class Session(QObject):
         # Wer die volle Kette braucht, braucht sie an einer Stelle, und alles
         # danach soll wieder so schnell sein wie vorher (§31).
         once, self._quality_once = self._quality_once, None
-        document = self.project.document
+        # Bei einer Einfügemarke der Stand davor (P7.1) — die ganze Oberfläche
+        # zeigt und löst gegen ihn auf, bis das Einfügen endet.
+        document = self.displayed_document()
         result = evaluate(
             document,
             self.profile,
@@ -3237,9 +3622,24 @@ class Session(QObject):
         # mitgebrachten oder einem Ersatzdrucker gerechnet wird, sagt es der
         # Bericht — sonst verschwände der Satz mit der ersten Änderung, und
         # der Ersatz liefe still weiter.
-        return _with_findings(
-            result, list(profiles.carried_findings(document.printer, document.material))
-        )
+        extra = list(profiles.carried_findings(document.printer, document.material))
+        if self._insert_before is not None:
+            # Und dass der Bericht einem Zwischenstand gilt (P7.1): Ein Teil vor
+            # Schritt 5 ist nicht das fertige, auch wenn nichts daran fehlt.
+            extra.append(
+                Finding(
+                    code="history.inserting",
+                    severity="info",
+                    message=_(
+                        "Zu sehen ist der Stand vor Schritt {number}. "
+                        "Neue Schritte kommen hierhin.",
+                        number=self._insert_before,
+                    ),
+                    op_id=self._insert_before,
+                    suggestions=(STOP_INSERTING,),
+                )
+            )
+        return _with_findings(result, extra)
 
     def recompute_fully(self) -> None:
         """Einmal mit der vollen Rückfallkette rechnen (§17.2).
@@ -3313,6 +3713,8 @@ class Session(QObject):
         """
         self.cancel_evaluation()
         self.cancel_agent()
+        # Und ein laufender Umbau des Verlaufs (P7): Abgebrochen ist nichts geändert.
+        self._revision_cancel.cancel()
 
     def cancel_evaluation(self) -> None:
         """Hält nur die Auswertung samt eingereihtem Nachlauf an."""
@@ -4194,6 +4596,7 @@ class Session(QObject):
                 or self._worker
                 or self._agent
                 or self._split
+                or self._revision
                 or next(iter(self._previews), None)
                 or next(iter(self._placements), None)
             )

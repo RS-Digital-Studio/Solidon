@@ -5207,6 +5207,128 @@ class MainWindow(QMainWindow):
             return frozenset()
         return frozenset(feature.kind for feature in entry.features.values())
 
+    # --- Umbau des Verlaufs (RM-188 P7) ------------------------------------------
+
+    def _wire_history_revisions(self) -> None:
+        """Einfügen, Verschieben, Aus- und Einschalten am Verlauf verdrahten (P7).
+
+        Der Verlauf sagt, was gewollt ist; die Sitzung plant, rechnet isoliert
+        und übernimmt als eine Transaktion. Gebundene Methoden, keine Lambdas
+        auf ``self`` — derselbe Grund wie bei den übrigen Signalen hier.
+        """
+        panel = self.history_panel
+        panel.insertRequested.connect(self._start_inserting)
+        panel.stopInsertRequested.connect(self.session.stop_inserting)
+        panel.moveRequested.connect(self._move_history_steps)
+        panel.suppressRequested.connect(self._suppress_history_steps)
+        panel.reactivateRequested.connect(self._reactivate_history_steps)
+        panel.list.places = self._move_places
+        panel.revision_context = self._revision_context
+        self.session.revisionDone.connect(self._on_revision_done)
+        self.session.revisionCancelled.connect(self._on_revision_cancelled)
+        self.session.insertionChanged.connect(self._on_insertion_changed)
+
+    def _revision_context(self) -> tuple[int | None, tuple[Any, ...]]:
+        """Einfügemarke und abhängige Folge für den Verlauf (P7)."""
+        return self.session.inserting, self.session.step_needs()
+
+    def _move_places(self, op_ids: tuple[int, ...]) -> dict[int | None, str | None]:
+        """Jede Stelle, an die die Schritte könnten, mit dem Grund, wo nicht (P7.2)."""
+        places: dict[int | None, str | None] = {}
+        for target in self.session.move_targets(op_ids):
+            problem = target.problem
+            places[target.before] = (
+                None if problem is None else str(problem.detail or problem.title)
+            )
+        return places
+
+    def _history_change_allowed(self) -> bool:
+        """Vor einem Umbau: die bestehende Frage nach dem Zurückgenommenen (§15.4)."""
+        if not self._quiet_command_allowed():
+            return False
+        discardable = self.session.history.discardable
+        return not discardable or confirm_discard(discardable, self._discarded_names(), self)
+
+    def _start_inserting(self, op_id: int) -> None:
+        if self._history_change_allowed():
+            self.session.start_inserting(op_id)
+
+    def _move_history_steps(self, op_ids: Sequence[int], before: int | None) -> None:
+        if self._history_change_allowed():
+            self.session.revise_history("move", op_ids, before)
+
+    def _suppress_history_steps(self, op_ids: Sequence[int]) -> None:
+        if op_ids and self._history_change_allowed():
+            self.session.revise_history("suppress", op_ids)
+
+    def _reactivate_history_steps(self, op_ids: Sequence[int]) -> None:
+        if op_ids and self._history_change_allowed():
+            self.session.revise_history("reactivate", op_ids)
+
+    def _reactivate_after_error(self, error: AppError) -> None:
+        """„Schritt einschalten" aus dem Prüfbericht: der Schritt aus dem Befund."""
+        step = error.values.get("reactivate") or error.op_id
+        if step:
+            self._reactivate_history_steps([int(step)])
+
+    def _suppress_after_error(self, error: AppError) -> None:
+        """„Diesen Schritt ausschalten": der Schritt, an dem die Kette hält."""
+        if error.op_id is not None:
+            self._suppress_history_steps([int(error.op_id)])
+
+    def _suppress_along_after_error(self, error: AppError) -> None:
+        """„Diesen Schritt mit ausschalten": dieselben Schritte und der, an dem es hielt."""
+        steps = [int(step) for step in str(error.values.get("steps", "")).split(",") if step]
+        also = error.values.get("also")
+        if also is not None:
+            steps.append(int(also))
+        self._suppress_history_steps(steps)
+
+    def _on_revision_done(self, revision: Any) -> None:
+        """Was sich geändert hat, in einem Satz — und der Rückweg dazu (§2.7)."""
+        plan = revision.plan
+        followed = len(revision.findings)
+        if plan.kind == "suppress":
+            sentence = (
+                tr(
+                    "Ausgeschaltet — {count} weitere Schritte ruhen mit. Strg+Z nimmt es zurück."
+                ).replace("{count}", str(len(plan.carried)))
+                if plan.carried
+                else tr("Ausgeschaltet. Strg+Z nimmt es zurück.")
+            )
+        elif plan.kind == "reactivate":
+            sentence = tr("Eingeschaltet. Strg+Z nimmt es zurück.")
+        elif plan.kind == "insert":
+            sentence = tr("Eingefügt — die Schritte danach sind neu gerechnet.")
+        else:
+            sentence = tr("Verschoben — die Schritte danach sind neu gerechnet.")
+        if followed:
+            sentence += " " + tr("{count} Verweise folgen ihrem Merkmal.").replace(
+                "{count}", str(followed)
+            )
+        self.announce(sentence)
+        if revision.findings:
+            self.report.add_findings(list(revision.findings))
+
+    def _on_revision_cancelled(self) -> None:
+        self.announce(tr("Abgebrochen — am Verlauf hat sich nichts geändert."))
+
+    def _on_insertion_changed(self, marker: int | None) -> None:
+        """Wohin neue Schritte kommen, in der Statuszeile (P7.1)."""
+        if marker is None:
+            self.announce(tr("Einfügen beendet — zu sehen ist wieder der ganze Verlauf."))
+            return
+        self.announce(
+            tr("Neue Schritte kommen jetzt vor Schritt {number}.").replace("{number}", str(marker))
+        )
+
+    def _end_inserting_for_output(self) -> None:
+        """Vor Export und Druck: zurück zum fertigen Teil, nicht zum Zwischenstand."""
+        if self.session.inserting is None:
+            return
+        self.session.stop_inserting()
+        self.session.wait_for_idle()
+
     def switch_kernel(self, op_id: int) -> None:
         """Denselben Schritt im anderen Rechenkern (P2.8, ``History.change_kernel``).
 
@@ -5532,6 +5654,7 @@ class MainWindow(QMainWindow):
         self.session.splitCancelled.connect(self._on_split_cancelled)
         self.session.evaluationCancelled.connect(self._on_evaluation_cancelled)
         self.session.counterpartFinished.connect(self._on_counterpart_finished)
+        self._wire_history_revisions()
         self._refresh_chat_availability()
 
     # --- actions ----------------------------------------------------------------
@@ -6854,6 +6977,7 @@ class MainWindow(QMainWindow):
         Körper noch die im Dialog geänderte Schichthöhe. Ihre Analyse gehört
         deshalb nicht in die gemeinsamen Druckempfehlungen.
         """
+        self._end_inserting_for_output()
         # §29: Was Solidon hier rechnet, reist mit einer gespeicherten 3MF und
         # mit der Übergabe an den Slicer. Der Hinweis sagt das einmal je
         # Textfassung und lässt dabei wählen, ob es so sein soll; danach steht
@@ -7215,6 +7339,7 @@ class MainWindow(QMainWindow):
         """
         if self._close_requested or self._exporting:
             return
+        self._end_inserting_for_output()
         result = self.session.last_result
         if result is None or not result.scene.objects:
             return
@@ -7332,6 +7457,7 @@ class MainWindow(QMainWindow):
         """
         if self._close_requested or self._exporting:
             return
+        self._end_inserting_for_output()
         result = self.session.last_result
         if result is None or not result.scene.objects:
             return
@@ -19263,6 +19389,13 @@ class MainWindow(QMainWindow):
             # öffnete er die Liste der externen Programme, weil der Kern ihn
             # dafür benutzte — der Knopf log also seinen Namen.
             "open_settings": lambda _error: self.action_settings(),
+            # Die Wege am Verlauf selbst (P7): einschalten, ausschalten, den
+            # Deckel mit seinem Hohlraum zusammen ausschalten, das Einfügen
+            # beenden — alle rücknehmbar, alle ohne Nachfrage (Regel 19).
+            "reactivate_step": self._reactivate_after_error,
+            "suppress_step": self._suppress_after_error,
+            "suppress_along": self._suppress_along_after_error,
+            "stop_inserting": lambda _error: self.session.stop_inserting(),
             "enter_licence_key": lambda _error: self.action_activate(),
             "activate_online": lambda _error: self.action_activate(),
             "activate_offline": lambda _error: self.action_activate(),

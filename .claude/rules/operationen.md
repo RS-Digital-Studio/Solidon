@@ -1326,6 +1326,30 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   Suffixes stehen die Teile dort, wo der Körper stand, in jedem Schritt,
   der die ganze Szene nimmt; jeder andere behält seine Kennung, denn die
   erste Kennung der Zerlegung ist die des Ausgangskörpers.
+- **Einfügen und Verschieben planen den Suffix genauso neu** (RM-188 P7):
+  ab der ersten geänderten Stelle neue Kennungen, dieselben Werte, Körper
+  und Startwerte, eine Transaktion (`_clone` teilt sich das mit
+  `_retried_after`). Gefragt wird am Zustand **an der Stelle**: Ein Körper,
+  den erst ein späterer Schritt anlegt, ist dort nicht da; ein Schritt, der
+  einen Körper verbraucht, den ein späterer braucht, bekommt keine Stelle.
+  Ein Vorwärtsbezug, ein Kreis oder ein verlorenes Merkmal wird abgesagt,
+  nie umgebogen.
+- **Ein Verweis folgt beim Umbau seinem Merkmal, nicht seinem Namen.** Was
+  ein Verweis vorher traf, steht in der Sichtung vor seinem Schritt
+  (`ReferenceSight`); nach dem Umbau entscheidet `revision.verdict` in fester
+  Folge — Herkunft (`Feature.created_by` über die Umnummerierung), Abdruck,
+  Lage — und die Lage rechnet in reinem Python, weil eine BLAS-Summe auf
+  einer anderen Maschine anders rundet und hier eine Entscheidung fällt
+  (`kern.md`). Eindeutig: Der Verweis wird umgeschrieben und ein Befund sagt
+  es. Mehrdeutig oder fort: fragen oder absagen, nie raten (Regel 21).
+- **Ein ausgeschalteter Schritt erzeugt nichts, und nichts tritt an seine
+  Stelle.** Die Auswertung überspringt ihn mit Befund; ein Körper, den nur er
+  anlegt, fehlt, statt durch einen Ersatz vorgetäuscht zu werden. Wer ihn
+  braucht, ruht mit — gewählt (`Suppression.chosen`) ist nur, was der Nutzer
+  ausgeschaltet hat. Ein Schritt, der die ganze Szene nimmt (Ausgänge gleich
+  Eingängen, etwa Anordnen), rechnet mit dem, was da ist. Passungen, deren
+  Merkmal mit ihm ruht, ruhen mit (`fits.paused_fits`) und werden nicht als
+  verletzt gemeldet.
 - **Die Slots je Dreieck reisen nur mit, wenn die Operation sie mitnimmt.**
   `MeshData.replacing` behält die Slotliste allein bei gleicher Dreieckszahl;
   wer Teilnetze bildet, hat eine andere und bekommt **keine** — nicht eine

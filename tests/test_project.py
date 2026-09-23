@@ -593,6 +593,124 @@ def build_example_project() -> Project:
     return project
 
 
+def build_example_v32() -> Project:
+    """Das Beispiel für Format 32: derselbe Stand, der zweite Schritt ausgeschaltet (P7.3).
+
+    Die Quelle von ``example_v32.p3d``. Ausgeschaltet wird über den Verlauf,
+    wie im Fenster — eine Transaktion mit ``revision``, der Schritt mit seiner
+    ``Suppression``, und die Passung an seinem frischen Körper ruht mit.
+    """
+    project = build_example_project()
+    history = History(project.document)
+    duplicate = next(entry.id for entry in history.operations if entry.op == "duplicate_object")
+    history.commit(history.plan_suppress([duplicate]))
+    return project
+
+
+def test_the_v32_example_carries_a_resting_step_and_v30_migrates_unchanged() -> None:
+    """Format 32 trägt ausgeschaltete Schritte und den Umbau des Verlaufs (P7.3).
+
+    Das Beispiel bleibt mit seiner Unterdrückung lesbar; ein Undo aus der
+    Datei schaltet den Schritt wieder ein. Eine ältere Datei kennt keinen
+    ausgeschalteten Schritt, und die Migration deutet keinen hinein.
+    """
+    folder = Path(__file__).parent / "data" / "projects"
+    project = load(folder / "example_v32.p3d")
+    duplicate = next(entry for entry in project.document.ops if entry.op == "duplicate_object")
+    assert duplicate.suppressed is not None and duplicate.suppressed.chosen
+    assert duplicate.suppressed.fits == ("stift_1",), "die Passung am frischen Körper ruht mit"
+    last = project.document.transactions[-1]
+    assert last.revision == "suppress" and last.ops == ()
+    history = History(project.document)
+    history.undo()
+    assert (
+        next(entry for entry in history.operations if entry.id == duplicate.id).suppressed is None
+    )
+
+    older = load(folder / "example_v30.p3d")
+    raw = project_data(folder / "example_v30.p3d")
+    assert older.document.format_version == FORMAT_VERSION
+    assert all(entry.suppressed is None for entry in older.document.ops)
+    assert all(entry.revision is None for entry in older.document.transactions)
+    assert [entry["op"] for entry in raw["ops"]] == [entry.op for entry in older.document.ops]
+
+
+def test_a_resting_step_keeps_what_its_references_met(tmp_path: Path) -> None:
+    """Der Vermerk eines ausgeschalteten Schritts übersteht Speichern und Öffnen (P7.3).
+
+    Herkunft und Abdruck entscheiden beim Einschalten, ob der Verweis dasselbe
+    Merkmal trifft; beide müssen deshalb unverändert zurückkommen — auch auf
+    den gespeicherten Undo-Seiten.
+    """
+    from dataclasses import replace
+
+    from app.core.types import ReferenceExpectation, Suppression
+
+    project = build_example_v32()
+    history = History(project.document)
+    duplicate = next(entry for entry in history.operations if entry.op == "duplicate_object")
+    expected = ReferenceExpectation(
+        key="at_feature",
+        feature="hole_2",
+        kind="hole",
+        creator=1,
+        fingerprint={
+            "kind": "hole",
+            "relative": [0.25, 0.0, 0.0],
+            "axis": [0.0, 0.0, 1.0],
+            "diameter": 5.2,
+            "directional": False,
+        },
+    )
+    project.document.ops[:] = [
+        replace(entry, suppressed=Suppression(chosen=False, expects=(expected,), fits=("stift_1",)))
+        if entry.id == duplicate.id
+        else entry
+        for entry in project.document.ops
+    ]
+    reopened = load(save(project, tmp_path / "vermerk.p3d"))
+    again = next(entry for entry in reopened.document.ops if entry.id == duplicate.id)
+    assert again.suppressed == Suppression(chosen=False, expects=(expected,), fits=("stift_1",))
+    changes = reopened.document.transactions[-1].changes
+    assert changes is not None and changes.after.edited_ops is not None
+    assert changes.after.edited_ops[duplicate.id].suppressed.chosen  # type: ignore[union-attr]
+    assert changes.before.edited_ops[duplicate.id].suppressed is None  # type: ignore[index,union-attr]
+
+
+@pytest.mark.parametrize(
+    "suppressed",
+    [
+        [],
+        {"chosen": "ja"},
+        {"expects": {}},
+        {"expects": [{"key": "at_feature", "feature": "hole_1"}]},
+        {"expects": [{"key": "a", "feature": "b", "kind": "hole", "creator": "drei"}]},
+        {"fits": "stift_1"},
+    ],
+)
+def test_a_damaged_suppression_is_a_file_error(tmp_path: Path, suppressed: object) -> None:
+    """Ein beschädigter Vermerk ist ein Dateifehler mit Handlungsvorschlag, kein Programmfehler."""
+    data = project_data(Path(__file__).parent / "data" / "projects" / "example_v32.p3d")
+    data["ops"][-1]["suppressed"] = suppressed
+    path = tmp_path / "kaputt.p3d"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(PROJECT_ENTRY, json.dumps(data))
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+    assert caught.value.suggestions
+
+
+def test_an_unknown_revision_kind_is_a_file_error(tmp_path: Path) -> None:
+    data = project_data(Path(__file__).parent / "data" / "projects" / "example_v32.p3d")
+    data["transactions"][-1]["revision"] = "branch"
+    path = tmp_path / "zweig.p3d"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(PROJECT_ENTRY, json.dumps(data))
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+    assert caught.value.suggestions
+
+
 def test_saving_and_loading_keeps_the_stack(filled: Project, tmp_path: Path) -> None:
     path = save(filled, tmp_path / "projekt.p3d")
     reopened = load(path)

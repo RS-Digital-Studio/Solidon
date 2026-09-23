@@ -78,6 +78,16 @@ SHOW_LOCATIONS = Action("show_locations", _("Stellen zeigen"))
 #: Handlung nennt deshalb das Ergebnis und nicht die Arbeit.
 RESIZE_THE_WIDENING = Action("resize_the_widening", _("Senkung mitziehen"), primary=True)
 SHOW_HISTORY = Action("show_history", _("Verlauf zeigen"))
+#: Die Handlungen am Verlauf selbst (P7). Einschalten nimmt mit, was der
+#: Schritt braucht; der Schritt steht in ``values["reactivate"]`` beziehungsweise
+#: in ``op_id``. Rücknehmbar, also ohne Nachfrage (Regel 19).
+REACTIVATE_STEP = Action("reactivate_step", _("Schritt einschalten"), primary=True)
+SUPPRESS_STEP = Action("suppress_step", _("Diesen Schritt ausschalten"))
+#: Hält ein Vorschlag zum Ausschalten an einem späteren Schritt an, der ohne
+#: den ausgeschalteten nicht rechnet — ein Deckel ohne Hohlraum —, schaltet
+#: dieser Weg ihn mit aus: dieselben Schritte plus ``values["also"]``.
+SUPPRESS_ALONG = Action("suppress_along", _("Diesen Schritt mit ausschalten"), primary=True)
+STOP_INSERTING = Action("stop_inserting", _("Einfügen beenden"), primary=True)
 #: Die Handlungen der Schichtanalyse im Prüfbericht (§22.2, §22.3): eine
 #: Insel oder frei hängende Fläche braucht Stützen, und die zwei Auswege sind
 #: eine andere Lage oder der Blick auf den Stützbedarf. Der dritte gilt dem

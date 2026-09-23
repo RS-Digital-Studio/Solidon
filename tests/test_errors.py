@@ -493,6 +493,10 @@ _NOT_A_RANGE = frozenset(
         "beyond_table", "known_axis",
         # Ein fremdes Muster ohne gewählten Stil: eine Auswahl, keine Zahl.
         "pattern_style",
+        # Den Verlauf umbauen (RM-188 P7): ein Ziel, an dem der Schritt schon
+        # steht, und ein Schritt, der schon aus- oder eingeschaltet ist — Lagen
+        # im Verlauf, keine Zahl in einem Feld.
+        "unchanged", "already_off", "already_on",
         # Der gespeicherte Bausteinstand fehlt im Katalog (RM-138): ein Stand,
         # keine Zahl.
         "part_state_missing",

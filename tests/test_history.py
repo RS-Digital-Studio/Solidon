@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.errors import RECOUNT_AND_RETRY, SPLIT_AND_RETRY, ValidationError
+from app.core.errors import RECOUNT_AND_RETRY, SPLIT_AND_RETRY, UserError, ValidationError
 from app.core.registry import VARIABLE, Registry, op_params, param, register_op
 from app.core.scene import History, OperationDraft
 from app.core.scene.history import change_for
@@ -1887,3 +1887,340 @@ def test_an_object_creator_cannot_consume_an_existing_body(
             history.apply(_("Anlegen"), [OperationDraft(op="make_object", inputs=("obj_1",))])
     assert raised.value.constraint == "consumes"
     assert document_to_data(document) == before
+
+
+# --- Umbau des Verlaufs (RM-188 P7.1 bis P7.3) ------------------------------------
+
+
+def _chain(history: History) -> None:
+    """Körper, Umbenennen, Teilen, Verteilen des ersten Stücks — eine kleine echte Folge."""
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_1",))])
+    history.apply(_("Teilen"), [OperationDraft(op="split_object", inputs=("obj_1",))])
+    history.apply(
+        _("Verteilen"), [OperationDraft(op="scatter", inputs=("obj_2",), params={"count": 3})]
+    )
+
+
+def test_inserting_a_step_replans_the_suffix_as_one_undoable_transaction(
+    history: History,
+) -> None:
+    """P7.1: Einfügen vor Schritt 3 — die Folge dahinter bekommt neue Kennungen, sonst nichts.
+
+    Dieselben Werte, dieselben Körper, derselbe Startwert: Nur so rechnet der
+    Vorschlag dasselbe Teil mit dem neuen Schritt davor. Ein Strg+Z legt die
+    alte Folge mit ihren alten Kennungen wieder hin, ein Strg+Y die neue.
+    """
+    _chain(history)
+    old = history.operations
+    seed = old[3].seed
+    plan = history.plan_insert(
+        old[2].id, _("Objekt umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_1",))]
+    )
+    assert history.operations == old, "geplant ist noch nichts geschrieben"
+    transaction = history.commit(plan)
+
+    ops = history.operations
+    assert [entry.op for entry in ops] == [
+        "make_object",
+        "rename_object",
+        "rename_object",
+        "split_object",
+        "scatter",
+    ]
+    assert [entry.id for entry in ops[:2]] == [old[0].id, old[1].id], "davor bleibt alles"
+    assert ops[2].id > old[3].id, "der neue Schritt steht vorn, trägt aber eine neue Kennung"
+    assert [(entry.inputs, entry.outputs, dict(entry.params)) for entry in ops[3:]] == [
+        (entry.inputs, entry.outputs, dict(entry.params)) for entry in old[2:]
+    ]
+    assert ops[4].seed == seed, "der Startwert reist mit (§11.3)"
+    assert transaction.revision == "insert"
+    assert transaction.ops == tuple(entry.id for entry in ops[2:])
+
+    history.undo()
+    assert history.operations == old, "Strg+Z legt die alte Folge vollständig zurück"
+    history.redo()
+    assert [entry.id for entry in history.operations] == [entry.id for entry in ops]
+
+
+def test_an_inserted_step_resolves_against_the_state_at_its_place(history: History) -> None:
+    """Ein Körper, den erst ein späterer Schritt anlegt, ist an der Stelle nicht mehr da."""
+    _chain(history)
+    before = document_to_data(history.document)
+    split = next(entry for entry in history.operations if entry.op == "split_object")
+    with pytest.raises(ValidationError) as caught:
+        history.plan_insert(
+            split.id, _("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_2",))]
+        )
+    assert caught.value.constraint == "unknown_object"
+    assert document_to_data(history.document) == before
+
+
+def test_an_insert_that_takes_away_a_later_body_is_refused(history: History) -> None:
+    """Verbraucht der neue Schritt einen Körper, den ein späterer braucht: keine Stelle."""
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_2",))])
+    before = document_to_data(history.document)
+    rename = history.operations[-1]
+    with pytest.raises(UserError) as caught:
+        history.plan_insert(
+            rename.id,
+            _("Verbinden"),
+            [OperationDraft(op="combine_objects", inputs=("obj_1", "obj_2"))],
+        )
+    assert caught.value.values["number"] == rename.id
+    assert caught.value.suggestions, "Regel 17"
+    assert document_to_data(history.document) == before
+
+
+def test_an_insert_carries_its_named_dimensions_in_the_same_transaction(
+    history: History,
+) -> None:
+    """Atomare Übernahme einschließlich Parameter: ein Strg+Z nimmt Schritt und Maß zurück."""
+    _chain(history)
+    first = history.operations[1]
+    plan = history.plan_insert(
+        first.id,
+        _("Umbenennen"),
+        [OperationDraft(op="rename_object", inputs=("obj_1",))],
+        changes=change_for(history.document, parameters={"breite": _parameter("breite", 40.0)}),
+    )
+    history.commit(plan)
+    assert history.document.parameters["breite"].value == 40.0
+    history.undo()
+    assert "breite" not in history.document.parameters
+
+
+def test_moving_steps_keeps_their_values_and_undo_restores_the_order(history: History) -> None:
+    """P7.2: Mehrere Schritte wandern gemeinsam und in ihrer Folge; Strg+Z stellt sie zurück."""
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    for _step in range(3):
+        history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_1",))])
+    history.apply(_("Verteilen"), [OperationDraft(op="scatter", inputs=("obj_1",))])
+    old = history.operations
+    plan = history.plan_move([old[3].id, old[4].id], old[1].id)
+    transaction = history.commit(plan)
+
+    moved = history.operations
+    assert [entry.op for entry in moved] == [
+        "make_object",
+        "rename_object",
+        "scatter",
+        "rename_object",
+        "rename_object",
+    ]
+    assert moved[0].id == old[0].id, "vor der ersten geänderten Stelle bleibt alles"
+    assert moved[2].seed == old[4].seed
+    assert transaction.revision == "move"
+    assert plan.renumbered[old[4].id] == moved[2].id
+    history.undo()
+    assert history.operations == old
+
+
+def test_a_move_that_changes_nothing_is_refused(history: History) -> None:
+    _chain(history)
+    ops = history.operations
+    with pytest.raises(ValidationError) as caught:
+        history.plan_move([ops[2].id], ops[3].id)
+    assert caught.value.constraint == "unchanged"
+
+
+def test_a_step_cannot_move_before_the_step_that_makes_its_body(history: History) -> None:
+    """Ein Vorwärtsbezug auf einen Körper wird abgesagt, nicht umgebogen."""
+    _chain(history)
+    before = document_to_data(history.document)
+    ops = history.operations
+    scatter = ops[3]
+    split = ops[2]
+    with pytest.raises(UserError) as caught:
+        history.plan_move([scatter.id], split.id)
+    assert caught.value.values["step"] == scatter.id
+    assert caught.value.values["other"] == split.id
+    assert document_to_data(history.document) == before
+    targets = history.valid_targets([scatter.id])
+    assert targets, "die Stellen werden genannt, gültig oder nicht"
+    assert all(target.problem is not None for target in targets if target.before is not None)
+
+
+def test_a_step_cannot_move_behind_the_step_that_uses_up_its_body(history: History) -> None:
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_2",))])
+    history.apply(_("Verbinden"), [OperationDraft(op="combine_objects", inputs=("obj_1", "obj_2"))])
+    ops = history.operations
+    with pytest.raises(UserError) as caught:
+        history.plan_move([ops[2].id], None)
+    assert caught.value.values["other"] == ops[3].id, "der Verbraucher steht im Satz"
+
+
+def test_a_feature_need_forbids_moving_before_its_creator(history: History) -> None:
+    """Ein Merkmal, das erst ein früherer Schritt anlegt, ist eine Kante der Folge (P7.2)."""
+    from app.core.scene.history import Dependencies, StepNeed
+
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_1",))])
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_1",))])
+    ops = history.operations
+    context = Dependencies(needs=(StepNeed(ops[2].id, ops[1].id, "obj_1", "hole_1"),))
+    with pytest.raises(UserError) as caught:
+        history.plan_move([ops[2].id], ops[1].id, context)
+    assert caught.value.values["feature"] == "hole_1"
+    # Ohne die Kante wäre dieselbe Stelle gültig — die Körperkette allein sieht sie nicht.
+    assert history.plan_move([ops[2].id], ops[1].id).kind == "move"
+    targets = history.valid_targets([ops[2].id], context)
+    assert [target.before for target in targets if target.problem is None] == []
+
+
+def test_suppressing_a_step_takes_along_what_needs_its_body(history: History) -> None:
+    """P7.3: Aus heißt nicht gelöscht — und wer einen Körper aus dem Schritt braucht, ruht mit."""
+    _chain(history)
+    ops = history.operations
+    split, scatter = ops[2], ops[3]
+    plan = history.plan_suppress([split.id])
+    assert plan.carried == (scatter.id,)
+    transaction = history.commit(plan)
+
+    now = {entry.id: entry for entry in history.operations}
+    assert now[split.id].suppressed is not None and now[split.id].suppressed.chosen
+    assert now[scatter.id].suppressed is not None and not now[scatter.id].suppressed.chosen
+    assert [entry.id for entry in history.operations] == [entry.id for entry in ops], (
+        "kein Schritt verschwindet, keiner wird neu nummeriert"
+    )
+    assert transaction.revision == "suppress" and transaction.ops == ()
+    history.undo()
+    assert all(entry.suppressed is None for entry in history.operations)
+
+
+def test_a_body_from_a_resting_step_is_not_there_for_a_new_step(history: History) -> None:
+    """Keine stillen Ersatzobjekte: Was ein ausgeschalteter Schritt anlegt, gibt es nicht."""
+    _chain(history)
+    split = history.operations[2]
+    history.commit(history.plan_suppress([split.id]))
+    with pytest.raises(ValidationError) as caught:
+        history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_2",))])
+    assert caught.value.constraint == "unknown_object"
+    # Der Körper, den er verbraucht hätte, steht dagegen weiter da.
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_1",))])
+
+
+def test_a_whole_scene_step_keeps_running_with_what_is_left(history: History) -> None:
+    """Ausrichten und Anordnen meinen das Bett — sie ruhen nur, wenn ihnen alles fehlt."""
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Teilen"), [OperationDraft(op="split_object", inputs=("obj_2",))])
+    history.apply(
+        _("Ausrichten"),
+        [OperationDraft(op="orient_everything", inputs=("obj_1", "obj_3", "obj_4"))],
+    )
+    split = history.operations[2]
+    plan = history.plan_suppress([split.id])
+    assert plan.carried == (), "das Ausrichten nimmt, was da ist"
+
+
+def test_reactivating_a_carried_step_brings_back_what_carried_it(history: History) -> None:
+    """Ein mitgenommener Schritt geht mit dem an, der ihn mitnahm; ein anderer bleibt aus."""
+    _chain(history)
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_3",))])
+    ops = history.operations
+    split, scatter, own = ops[2], ops[3], ops[4]
+    history.commit(history.plan_suppress([split.id]))
+    history.commit(history.plan_suppress([own.id]))
+    assert {entry.id for entry in history.operations if entry.suppressed is not None} == {
+        split.id,
+        scatter.id,
+        own.id,
+    }
+    plan = history.plan_reactivate([scatter.id])
+    assert split.id in plan.carried, "die Teilung kommt mit, sonst rechnete das Verteilen nicht"
+    history.commit(plan)
+    now = {entry.id: entry for entry in history.operations}
+    assert now[split.id].suppressed is None and now[scatter.id].suppressed is None
+    assert now[own.id].suppressed is not None and now[own.id].suppressed.chosen, (
+        "was aus eigenem Grund ruht, bleibt aus"
+    )
+
+
+def test_a_rested_fit_comes_back_with_its_step(history: History) -> None:
+    """Eine Passung an einem Körper, den der Schritt anlegt, ruht mit (§14)."""
+    from app.core.scene.fits import active_fits, paused_fits
+
+    _chain(history)
+    history.document.fits.append(
+        Fit(name="stift", a=FeatureRef("obj_2", "pin_1"), b=FeatureRef("obj_3", "hole_1"))
+    )
+    split = history.operations[2]
+    history.commit(history.plan_suppress([split.id]))
+    assert paused_fits(history.document) == {"stift"}
+    assert active_fits(history.document) == []
+    history.commit(history.plan_reactivate([split.id]))
+    assert [fit.name for fit in active_fits(history.document)] == ["stift"]
+
+
+def test_a_stale_plan_writes_nothing(history: History) -> None:
+    """Hat sich das Dokument seit dem Planen bewegt, wird der Plan abgewiesen."""
+    _chain(history)
+    plan = history.plan_suppress([history.operations[1].id])
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_2",))])
+    before = document_to_data(history.document)
+    with pytest.raises(UserError):
+        history.commit(plan)
+    assert document_to_data(history.document) == before
+
+
+def test_a_resting_step_survives_replanning_and_follows_its_creator(history: History) -> None:
+    """Wird die Folge neu geplant, reist die Unterdrückung mit, samt der Erzeugerkennung."""
+    from app.core.types import ReferenceExpectation, Suppression
+
+    _chain(history)
+    ops = history.operations
+    rename = ops[1]
+    expected = ReferenceExpectation(key="name", feature="face_1", kind="face", creator=rename.id)
+    history.document.ops[:] = [
+        dataclasses.replace(entry, suppressed=Suppression(chosen=True, expects=(expected,)))
+        if entry.id == ops[3].id
+        else entry
+        for entry in history.document.ops
+    ]
+    plan = history.plan_insert(
+        rename.id, _("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_1",))]
+    )
+    history.commit(plan)
+    resting = next(entry for entry in history.operations if entry.suppressed is not None)
+    assert resting.op == "scatter"
+    assert resting.suppressed is not None
+    assert resting.suppressed.expects[0].creator == plan.renumbered[rename.id]
+
+
+def test_removing_an_unrelated_step_keeps_a_resting_fit(history: History) -> None:
+    """Gelöscht wird nach Kennungen: Eine ruhende Passung geht erst mit ihrem Schritt."""
+    _chain(history)
+    history.document.fits.append(
+        Fit(name="stift", a=FeatureRef("obj_2", "pin_1"), b=FeatureRef("obj_3", "hole_1"))
+    )
+    split = history.operations[2]
+    history.commit(history.plan_suppress([split.id]))
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.remove_operations([history.operations[-1].id])
+    assert [fit.name for fit in history.document.fits] == ["stift"]
+    history.remove_operations([split.id])
+    assert history.document.fits == []
+
+
+def test_replanning_copies_a_step_this_version_does_not_know(history: History) -> None:
+    """Ein unbekannter Schritt aus einer Datei wird beim Neuplanen wörtlich übernommen.
+
+    Hier stand ``Registry.get`` — ein ``InternalError`` samt Fehlerbericht für
+    eine Datei aus einer anderen Version, beim Reparieren wie beim Einfügen.
+    """
+    _chain(history)
+    ops = history.operations
+    history.document.ops.append(
+        Operation(id=ops[-1].id + 1, op="create_from_scad", inputs=(), outputs=("obj_9",))
+    )
+    plan = history.plan_insert(
+        ops[1].id, _("Umbenennen"), [OperationDraft(op="rename_object", inputs=("obj_1",))]
+    )
+    history.commit(plan)
+    copied = history.operations[-1]
+    assert copied.op == "create_from_scad" and copied.outputs == ("obj_9",)

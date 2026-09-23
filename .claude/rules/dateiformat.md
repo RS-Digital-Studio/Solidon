@@ -35,6 +35,16 @@ Dieselbe Version stellt Passungen aus *Teilen* und *Deckel* auf `auto:` um:
 Sie folgen dem Material ihrer Körper statt dem Projektmaterial des
 Augenblicks (Migration 29 → 30, `material_fits_v29.p3d`).
 
+**Ein ausgeschalteter Schritt steht in der Datei, mit dem, was er traf**
+(Version 32, `Operation.suppressed`): `chosen` (vom Nutzer gewählt oder
+mitruhend), `expects` (Schlüssel, Merkmal, Art, Erzeuger und Abdruck jedes
+Verweises zum Zeitpunkt des Ausschaltens) und `fits` (die Passungen, die mit
+ihm ruhen). Transaktionen eines Umbaus tragen `revision` (`insert`, `move`,
+`suppress`, `reactivate`). Die Stufe 31 → 32 schreibt nichts um — eine ältere
+Datei hat keinen ausgeschalteten Schritt; die Schemaprüfung weist einen
+beschädigten Eintrag und eine unbekannte Umbauart ab
+(`project._validate_suppression_schema`).
+
 **Gleich heißt inhaltsgleich, nicht bytegleich** (RM-106). Zwei Plattformen
 schreiben dieselbe Projektdatei mit anderen Deflate-Bytes (zlib gegen
 zlib-ng); der ZIP-Kopf nennt kein schreibendes System (`CONTAINER_SYSTEM`).

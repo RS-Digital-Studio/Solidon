@@ -50,6 +50,7 @@ from app.core.paths import installed_language, user_config_dir
 from app.core.registry import REGISTRY, cli_commands, documentation
 from app.core.registry.params import LIST_KINDS, NUMBER_KINDS, TEXT_KINDS
 from app.core.scene import History, OperationDraft, ResultCache, disk_backed_cache, evaluate
+from app.core.scene.history import RevisionPlan
 from app.core.scene.project import (
     Project,
     ProjectSources,
@@ -59,6 +60,9 @@ from app.core.scene.project import (
     next_source_id,
     save,
 )
+from app.core.scene.revision import commit as commit_revision
+from app.core.scene.revision import dependencies as revision_dependencies
+from app.core.scene.revision import revise
 from app.core.types import Source
 from app.core.units import format_length
 from app.i18n import _, set_language, tr
@@ -386,6 +390,14 @@ def command_info(args: argparse.Namespace) -> int:
         ops = ", ".join(str(entry) for entry in transaction.ops)
         # !s zuerst: ein übersetzbarer Titel kennt keine Formatbreite.
         print(f"  {transaction.id:<5} {transaction.title!s:<28} ({tr('Ops')} {ops})")
+    resting = [entry for entry in document.ops if entry.suppressed is not None]
+    if resting:
+        # Was nicht rechnet, steht dabei (P7.3) — ohne das sähe das Teil aus,
+        # als fehle ihm grundlos ein Schritt.
+        print(tr("Ausgeschaltet"))
+        for entry in resting:
+            state = tr("aus") if entry.suppressed and entry.suppressed.chosen else tr("ruht")
+            print(f"  {entry.id:<5} {entry.op:<28} ({state})")
     print_report(result)
     return 0 if result.complete else 1
 
@@ -472,6 +484,77 @@ def _chosen_unit(payload: bytes, name: str, requested: str) -> str:
     )
 
 
+def _revised(
+    project: Project,
+    path: Path,
+    planned: Any,
+) -> int:
+    """Einen Umbau des Verlaufs rechnen und nur ein gültiges Ergebnis speichern (P7).
+
+    Derselbe Weg wie im Fenster: Grundstand rechnen, planen, den Vorschlag
+    isoliert auswerten (``scene.revision.revise``), dann übernehmen. Eine
+    Absage kommt als ``AppError`` bis ins Hauptprogramm, und die Datei auf der
+    Platte bleibt, wie sie war — ein ungültiger Vorschlag ändert nichts.
+    """
+    history = History(project.document)
+    baseline = run_evaluation(project, path, quiet=True)
+    context = revision_dependencies(project.document, baseline)
+    plan: RevisionPlan = planned(history, context)
+
+    def run(document: Any) -> Any:
+        return evaluate(
+            document,
+            profile_of(project),
+            progress=TerminalProgress(),
+            ask=terminal_ask,
+            sources=ProjectSources(project, base_dir=path.parent),
+            cache=evaluation_cache(),
+        )
+
+    revision = revise(
+        history, plan, evaluate=run, baseline=baseline, context=context, ask=terminal_ask
+    )
+    transaction = commit_revision(history, revision)
+    print_findings(revision.findings)
+    result = run_evaluation(project, path)
+    print_report(result)
+    if not result.complete:
+        return 1
+    save(project, path)
+    print(f"{tr('Übernommen')}: {transaction.title}")
+    return 0
+
+
+def command_move(args: argparse.Namespace) -> int:
+    """Schritte an eine andere Stelle des Verlaufs (P7.2)."""
+    path = Path(args.path)
+    project = open_project(path)
+    before = None if args.end else args.before
+    return _revised(
+        project,
+        path,
+        lambda history, context: history.plan_move(args.steps, before, context),
+    )
+
+
+def command_suppress(args: argparse.Namespace) -> int:
+    """Schritte ausschalten, samt dem, was ohne sie nicht rechnet (P7.3)."""
+    path = Path(args.path)
+    project = open_project(path)
+    return _revised(
+        project, path, lambda history, context: history.plan_suppress(args.steps, context)
+    )
+
+
+def command_reactivate(args: argparse.Namespace) -> int:
+    """Ausgeschaltete Schritte wieder einschalten (P7.3)."""
+    path = Path(args.path)
+    project = open_project(path)
+    return _revised(
+        project, path, lambda history, context: history.plan_reactivate(args.steps, context)
+    )
+
+
 def command_run(args: argparse.Namespace) -> int:
     path = Path(args.path)
     project = open_project(path)
@@ -488,11 +571,17 @@ def command_run(args: argparse.Namespace) -> int:
         # ohne ``--on`` liefen sie sonst auf nichts.
         inputs = tuple(run_evaluation(project, path, quiet=True).scene.objects)
 
+    draft = OperationDraft(op=spec.name, inputs=inputs, params=params, seed=args.seed)
+    if args.before is not None:
+        # Vor einen Schritt statt ans Ende (P7.1): geplant, isoliert gerechnet,
+        # und nur ein gültiger Vorschlag landet in der Datei.
+        return _revised(
+            project,
+            path,
+            lambda history, _context: history.plan_insert(args.before, spec.title, [draft]),
+        )
     history = History(project.document)
-    history.apply(
-        spec.title,
-        [OperationDraft(op=spec.name, inputs=inputs, params=params, seed=args.seed)],
-    )
+    history.apply(spec.title, [draft])
     result = run_evaluation(project, path)
     print_report(result)
     if not result.complete:
@@ -640,6 +729,26 @@ def build_parser() -> argparse.ArgumentParser:
     undo.add_argument("path")
     undo.set_defaults(handler=command_undo)
 
+    # Der Verlauf selbst (P7): verschieben, aus- und einschalten. Einfügen
+    # geht über ``run … --before``, denn eingefügt wird eine Operation.
+    move = commands.add_parser("move", help=tr("Schritte im Verlauf verschieben"))
+    move.add_argument("path")
+    move.add_argument("steps", type=int, nargs="+", help=tr("Schrittnummern, z. B. 4 5"))
+    where = move.add_mutually_exclusive_group(required=True)
+    where.add_argument("--before", type=int, help=tr("Vor diesen Schritt"))
+    where.add_argument("--end", action="store_true", help=tr("Ans Ende des Verlaufs"))
+    move.set_defaults(handler=command_move)
+
+    suppress = commands.add_parser("suppress", help=tr("Schritte ausschalten"))
+    suppress.add_argument("path")
+    suppress.add_argument("steps", type=int, nargs="+", help=tr("Schrittnummern, z. B. 4 5"))
+    suppress.set_defaults(handler=command_suppress)
+
+    reactivate = commands.add_parser("reactivate", help=tr("Schritte wieder einschalten"))
+    reactivate.add_argument("path")
+    reactivate.add_argument("steps", type=int, nargs="+", help=tr("Schrittnummern, z. B. 4 5"))
+    reactivate.set_defaults(handler=command_reactivate)
+
     export = commands.add_parser("export", help=tr("Objekte als Druckdatei schreiben"))
     export.add_argument("path")
     export.add_argument("directory", nargs="?", default=".")
@@ -667,6 +776,12 @@ def build_parser() -> argparse.ArgumentParser:
         entry.add_argument("path")
         entry.add_argument("--on", nargs="*", help=tr("Eingangsobjekte, z. B. obj_1"))
         entry.add_argument("--seed", type=int, default=None)
+        entry.add_argument(
+            "--before",
+            type=int,
+            default=None,
+            help=tr("Vor diesem Schritt einfügen statt ans Ende"),
+        )
         for argument in command.arguments:
             if argument.kind == "bool":
                 # Beide Zustände, nicht nur der wahre: ``--compensate`` und

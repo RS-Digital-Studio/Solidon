@@ -381,6 +381,50 @@ gespeicherten Bausteinstand). Varianten rechnen in der feinen Stufe und
 teilen einen Cache (`variants.build`). Ein Programmfehler der
 Merkmalserkennung hält am Schritt an wie einer der Operation.
 
+**Den Verlauf umbauen heißt: planen, isoliert rechnen, übernehmen**
+(RM-188 P7, Konzept vollwertiges CAD §13.9). Einfügen, Verschieben, Aus- und
+Einschalten beginnen in `History.plan_insert` / `plan_move` /
+`plan_suppress` / `plan_reactivate` und enden als `RevisionPlan`: die
+Transaktion mit `revision`, die neu gefasste Folge, die Umnummerierung, beim
+Ausschalten die mitgenommenen Schritte und der Dokumentstand beim Planen
+(`mark`). `revision.revise` rechnet `plan.document(base)` isoliert und
+vergleicht jeden Merkmalsverweis und jede Passung mit dem, was sie vorher
+trafen: Vor jedem Schritt hält die Auswertung eine `ReferenceSight` fest
+(`EvaluationResult.sights`, `fit_sights`), das Urteil fragt Herkunft, dann
+Abdruck, dann Lage (`revision.verdict`, reine Python-Arithmetik wie
+`kern.md` verlangt). Folgt ein Merkmal unter anderem Namen, schreibt der Plan
+den Verweis um (`orphans.with_reference`, Befund
+`history.reference_followed`); ist es fort oder mehrdeutig, fragt er
+(`AmbiguityError` mit Kandidaten) oder sagt ab, ohne etwas zu schreiben.
+`revision.commit` übergibt an `History.commit` — ein veralteter Plan wird
+abgesagt — als **eine** Transaktion; Strg+Z legt die alte Folge mit ihren
+alten Kennungen zurück.
+
+**Die Kennung ist die Reihenfolge.** Die Auswertung sortiert nach
+`Operation.id`, deshalb fassen Einfügen und Verschieben die Folge ab der
+ersten geänderten Stelle unter neuen Kennungen neu (`_moved_order`, `_clone`
+gemeinsam mit `_retried_after`): dieselben Werte, dieselben Körper, derselbe
+Startwert. Die alten Kennungen stehen in `changes.after.edited_ops` als
+`None` — neu gefasst, nicht gelöscht; der Verlauf blendet sie aus
+(`panels.replanned_steps`). Welche Stelle geht, sagt `History.valid_targets`
+aus `revision.dependencies` (Körper aus Ein- und Ausgängen, Merkmale aus den
+Sichtungen) mit dem Grund für jede andere (`_order_problem`).
+
+**Ein ausgeschalteter Schritt bleibt im Verlauf und rechnet nicht**
+(`Operation.suppressed`, `Suppression`: `chosen` — gewählt oder mitruhend,
+`expects` — was seine Verweise trafen, `fits` — die Passungen, die mit ihm
+ruhen). `evaluate` überspringt ihn mit Info-Befund (`history.step_off`,
+`history.step_resting`, Handlung *Schritt einschalten*); ein Körper, den nur
+er anlegt, fehlt (`_absent_objects`), und ein Ganzszenenschritt wie Anordnen
+nimmt, was da ist (`_without_absent_inputs`). Wer einen fehlenden Körper
+braucht, ruht beim Planen mit; kommt er trotzdem an die Reihe, hält
+`evaluate.needs_resting_step` an. `fits.paused_fits` nimmt ruhende Passungen
+aus der Prüfung, `orphans.references` fragt nicht nach ruhenden Schritten.
+Beim Ausschalten nimmt `revise` jeden Schritt mit, dessen Verweis sein
+Merkmal verlöre; hielte die Kette an einem anderen an, schreibt es nichts und
+bietet *Diesen Schritt mit ausschalten* an. Einschalten holt die
+mitruhenden zurück (`_roots_of`).
+
 ## Die Karte
 
 **Das Dokument**
@@ -397,7 +441,8 @@ Merkmalserkennung hält am Schritt an wie einer der Operation.
 
 | Datei | Rolle |
 |---|---|
-| `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5). `OperationDraft` ist der Schritt, bevor er zählt |
+| `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5). `OperationDraft` ist der Schritt, bevor er zählt; `RevisionPlan` der Umbau, bevor er zählt |
+| `revision.py` | Den Verlauf umbauen (RM-188 P7): `dependencies`, `step_needs`, `revise` (isoliert rechnen, Verweise folgen lassen, fragen oder absagen), `commit` |
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5) — **opt-in je Operation**: wer keine Kumulationsregel hat, bekommt einen eigenen Schritt |
 | `evaluate.py` | Die Auswertung (§15.1) |
 | `edge_binding.py` | Ausdrücklich gewählte Kanten **vor** dem Verbrauchercache am aktuellen Eingang binden; Kollisionen fragen, die Antwort liegt als `edge-answer:` in `Operation.matches` (§21.3, P1.4c) |
@@ -588,6 +633,15 @@ Flächenhistorie neu zu. Unverändert geerbte Merkmale anderer Operationen
 führt `evaluate._carried_along` anhand der gemeldeten Matrix nach, oder anhand
 der reinen Verschiebung, die `_shift_between` aus zwei Hüllquadern abliest.
 Schon ausdrücklich nachgeführte Merkmale werden nicht nochmals bewegt.
+
+**Am exakten Körper sagt ein Umbau öfter ab als am Netz.** `features_of`
+nummeriert Bohrungen nach Lage; eine neue links von einer vorhandenen nimmt
+ihr den Namen, und hängt ein späterer Verweis daran, hält die Auswertung mit
+`NativeReferenceLost` an — auch ohne Umbau, wer in dieser Reihenfolge baut.
+Ein Verschieben oder Einfügen, das diese Reihenfolge herstellt, läuft in
+denselben Halt; `revise` schreibt dann nichts (im Fenster und auf der
+Kommandozeile stellt der Kern vorher seine Rückfrage). Am Netz folgt derselbe
+Verweis seinem Merkmal. Offen unter RM-188 P7.
 
 Bedingte Passungen speichern `when_positive=(operation_id, parameter_name)`.
 Ihre Prüfung verlangt das zugehörige Dokument; fehlt es beim Aufruf, ist

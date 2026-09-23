@@ -32,9 +32,11 @@ from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
     CORRECT_INPUT,
+    REACTIVATE_STEP,
     SHOW_DETAILS,
     SHOW_HISTORY,
     SHOW_STEP_VALUES,
+    SUPPRESS_STEP,
     AmbiguityError,
     AppError,
     InternalError,
@@ -114,6 +116,7 @@ from app.core.types import (
     Profile,
     ProgressFn,
     Quality,
+    ReferenceSight,
     Report,
     Scene,
     SceneObject,
@@ -216,6 +219,17 @@ class EvaluationResult:
     sie nicht allein wegen eines vorhandenen gleichen Namens für aufgelöst
     halten und sie auch nicht gegen die alte Szene vor dem Halt neu wählen
     lassen — die Fläche, die er dort fände, ist die vor dem Umbau."""
+    sights: Mapping[OpId, tuple[ReferenceSight, ...]] = field(default_factory=dict)
+    """Was jeder Merkmalsverweis eines gerechneten Schritts traf, unmittelbar
+    bevor der Schritt rechnete (P7). Abgeleitet, nie gespeichert.
+
+    Ein Umbau des Verlaufs vergleicht damit Grundstand und Vorschlag
+    (``scene.revision``): Merkmalsnamen hängen an der Erkennungsreihenfolge,
+    und wer die erste von zwei Bohrungen verschiebt, verschiebt auch ihre
+    Namen. Ohne diesen Vergleich träfe ein späterer Verweis still das falsche
+    Loch."""
+    fit_sights: tuple[ReferenceSight, ...] = ()
+    """Dasselbe für die aktiven Passungen, am Endstand (§14)."""
 
     @property
     def complete(self) -> bool:
@@ -383,9 +397,32 @@ def _evaluate(
             referenced_anywhere.add(reference.ref.feature_id)
             continue
         referenced_features.setdefault(reference.ref.object_id, set()).add(reference.ref.feature_id)
+    # Die Verweise je Schritt, für die Sichtungen (P7): welcher Name welches
+    # Merkmal traf, als sein Schritt rechnete.
+    references_of: dict[OpId, list[Reference]] = {}
+    for reference in all_references:
+        if reference.kind != "fit":
+            references_of.setdefault(reference.op_id, []).append(reference)
+    sights: dict[OpId, tuple[ReferenceSight, ...]] = {}
+    # **Was ein ausgeschalteter Schritt frisch anlegt, gibt es nicht** (P7.3):
+    # kein Ersatz, kein Nachrücken. Was er nur fortführt oder verbraucht,
+    # bleibt, wie es vor ihm war — dieselbe Regel wie beim Löschen (§15.4).
+    absent = _absent_objects(operations)
+    # Und was ein ausgeschalteter Schritt verbraucht hätte, steht dort, wo seine
+    # frischen Körper gestanden hätten — für die Schritte über das ganze Bett.
+    consumed_by_resting = {
+        entry.id: tuple(name for name in entry.inputs if name not in entry.outputs)
+        for entry in operations
+        if entry.suppressed is not None
+    }
 
     for position, operation in enumerate(operations):
         token.raise_if_cancelled()
+        if operation.suppressed is not None:
+            # Übersprungen und gesagt: Der Verlauf zeigt den Schritt als aus,
+            # der Prüfbericht nennt ihn mit dem Weg zurück (Regel 17).
+            findings.append(_resting_finding(operation, source))
+            continue
         if not source.has(operation.op):
             # **Ein Name aus einer Datei ist kein Programmfehler.**
             # ``Registry.get`` wirft ``InternalError``, und für einen Aufruf
@@ -459,8 +496,9 @@ def _evaluate(
         operation, stray = _without_stray_inputs(operation, spec)
         if stray is not None:
             findings.append(stray)
+        operation = _without_absent_inputs(operation, spec, absent, objects, consumed_by_resting)
 
-        problem = _missing_inputs(operation, objects, spec)
+        problem = _missing_inputs(operation, objects, spec, absent)
         if problem is not None:
             findings.append(problem)
             stopped_at = operation.id
@@ -490,6 +528,10 @@ def _evaluate(
             break
 
         inputs = [objects[entry] for entry in operation.inputs]
+        if operation.id in references_of:
+            sights[operation.id] = tuple(
+                sight_of(reference, objects) for reference in references_of[operation.id]
+            )
         watched = _WatchedAsk(ask)
 
         def announce_edges(
@@ -1020,6 +1062,16 @@ def _evaluate(
         profile=profile,
         report=Report(tuple(findings)),
     )
+    # Die Passungen am Endstand, für den Vergleich eines Umbaus (P7).
+    fit_sights = (
+        tuple(
+            sight_of(reference, objects)
+            for reference in all_references
+            if reference.kind == "fit" and reference.fit_name in active_fit_names
+        )
+        if stopped_at is None
+        else ()
+    )
     # §14: Passungen werden bei jeder Auswertung geprüft, nie nur auf Nachfrage.
     if stopped_at is None and scene.fits:
         findings.extend(check_fits(scene, profile, document=document, cancelled=token))
@@ -1096,6 +1148,8 @@ def _evaluate(
         answers=answers,
         matches=matches,
         blocked_references=tuple(blocked),
+        sights=sights,
+        fit_sights=fit_sights,
     )
 
 
@@ -3470,8 +3524,114 @@ def _without_stray_inputs(
     )
 
 
+def _absent_objects(operations: Sequence[Operation]) -> dict[ObjectId, OpId]:
+    """Welche Körper ausgeschaltete Schritte frisch anlegen würden — und welcher (P7.3).
+
+    Frisch heißt: unter den Ausgängen, nicht unter den Eingängen. Ein Schritt,
+    der die Kennung seines Eingangs fortführt (eine Bohrung in ``obj_1``),
+    lässt den Körper stehen, wie er vor ihm war; nur, was erst in ihm
+    entsteht, fehlt. Keine Kennung wird zweimal frisch vergeben (§15.4).
+    """
+    absent: dict[ObjectId, OpId] = {}
+    for entry in operations:
+        if entry.suppressed is None:
+            continue
+        for output in entry.outputs:
+            if output not in entry.inputs:
+                absent.setdefault(output, entry.id)
+    return absent
+
+
+def _without_absent_inputs(
+    operation: Operation,
+    spec: OperationSpec,
+    absent: Mapping[ObjectId, OpId],
+    objects: Mapping[ObjectId, SceneObject],
+    consumed_by_resting: Mapping[OpId, tuple[ObjectId, ...]] | None = None,
+) -> Operation:
+    """Ein Schritt über die ganze Szene nimmt, was auf dem Bett steht (P7.3).
+
+    *Auf dem Bett anordnen* und *Druckoptimal ausrichten* meinen das Bett, und
+    das Bett trägt, was nach dem Ausschalten da ist: Ist die Teilung aus,
+    ordnet das Anordnen den ganzen Körper an — dort, wo seine zwei Hälften
+    gestanden hätten —, statt selbst mit auszugehen. Das Gegenstück zu
+    ``History.split_and_retry``, wo die Teile an die Stelle des Körpers
+    treten. Nur für Schritte, deren Ausgänge ihre Eingänge sind: Dann folgt
+    der Ausgang seinem Eingang, und die Objektzahl bleibt stimmig (§15.2).
+    Ersetzt wird nur, was ein ausgeschalteter Schritt angelegt hätte, und nur
+    durch den Körper, den er verbraucht hätte; ein sonst fehlender Körper hält
+    weiter an.
+    """
+    if not spec.takes_whole_scene or operation.outputs != operation.inputs:
+        return operation
+    consumed = consumed_by_resting or {}
+    kept: list[ObjectId] = []
+    for entry in operation.inputs:
+        if entry in objects or entry not in absent:
+            kept.append(entry)
+            continue
+        kept.extend(
+            body
+            for body in consumed.get(absent[entry], ())
+            if body in objects and body not in kept and body not in operation.inputs
+        )
+    chosen = tuple(dict.fromkeys(kept))
+    if chosen == operation.inputs:
+        return operation
+    return dataclasses.replace(operation, inputs=chosen, outputs=chosen)
+
+
+def _resting_finding(operation: Operation, registry: Registry) -> Finding:
+    """Der Satz zu einem ausgeschalteten Schritt — gewählt oder mitgenommen (P7.3)."""
+    assert operation.suppressed is not None
+    title: TranslatableText | str = (
+        registry.get(operation.op).title if registry.has(operation.op) else operation.op
+    )
+    return Finding(
+        code="history.step_off" if operation.suppressed.chosen else "history.step_resting",
+        severity="info",
+        message=(
+            _("Dieser Schritt ist ausgeschaltet und wird nicht gerechnet.")
+            if operation.suppressed.chosen
+            else _("Dieser Schritt ruht, weil er einen ausgeschalteten Schritt braucht.")
+        ),
+        op_id=operation.id,
+        values={"step": title, "reactivate": operation.id},
+        suggestions=(REACTIVATE_STEP,),
+    )
+
+
+def sight_of(reference: Reference, objects: Mapping[ObjectId, SceneObject]) -> ReferenceSight:
+    """Was dieser Verweis im Augenblick trifft (P7) — mit allen Merkmalen seines Körpers.
+
+    Eine alte Skizzenebene ohne Körpernamen gilt überall; gesucht wird wie in
+    ``orphans._resolves`` am ersten Körper, der das Merkmal trägt.
+    """
+    object_id, feature_id = reference.ref.object_id, reference.ref.feature_id
+    body = (
+        objects.get(object_id)
+        if object_id
+        else next((entry for entry in objects.values() if feature_id in entry.features), None)
+    )
+    if body is None:
+        return ReferenceSight(key=reference.key, ref=reference.ref, feature=None)
+    bounds = body.mesh.bounds
+    centre = bounds.centre
+    return ReferenceSight(
+        key=reference.key,
+        ref=reference.ref,
+        feature=body.features.get(feature_id),
+        candidates=body.features,
+        centre=(float(centre[0]), float(centre[1]), float(centre[2])),
+        diagonal=float(bounds.diagonal),
+    )
+
+
 def _missing_inputs(
-    operation: Operation, objects: Mapping[ObjectId, SceneObject], spec: OperationSpec
+    operation: Operation,
+    objects: Mapping[ObjectId, SceneObject],
+    spec: OperationSpec,
+    absent: Mapping[ObjectId, OpId] | None = None,
 ) -> Finding | None:
     """Hat diese Operation, worauf sie arbeiten soll?
 
@@ -3481,8 +3641,28 @@ def _missing_inputs(
     stirbt an einem ``IndexError``, der als Stapelabzug beim Nutzer landet.
     Eine Projektdatei, in der das steht, ließ sich damit überhaupt nicht mehr
     öffnen.
+
+    **Ein Körper aus einem ausgeschalteten Schritt ist ein eigener Fall**
+    (P7.3). Der Verlauf nimmt abhängige Schritte beim Ausschalten mit; kommt
+    trotzdem einer hier an — eine von Hand bearbeitete Datei, ein Stand aus
+    einem anderen Werkzeug —, hält die Kette an und nennt beide Auswege: den
+    liefernden Schritt einschalten oder diesen auch ausschalten.
     """
     missing = [entry for entry in operation.inputs if entry not in objects]
+    producers = [(absent or {}).get(entry) for entry in missing]
+    if missing and all(producer is not None for producer in producers):
+        return Finding(
+            code="evaluate.needs_resting_step",
+            severity="error",
+            message=_("Dieser Schritt braucht einen Körper aus einem ausgeschalteten Schritt."),
+            op_id=operation.id,
+            values={
+                "missing": ", ".join(missing),
+                "op": operation.op,
+                "reactivate": int(producers[0] or 0),
+            },
+            suggestions=(REACTIVATE_STEP, SUPPRESS_STEP),
+        )
     if missing:
         return Finding(
             code="evaluate.missing_input",

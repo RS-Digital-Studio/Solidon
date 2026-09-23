@@ -40,6 +40,7 @@ from app.core.types import (
     Origin,
     Parameter,
     PrintSettings,
+    ReferenceExpectation,
     Report,
     RetractionSettings,
     ShellSettings,
@@ -51,6 +52,7 @@ from app.core.types import (
     SpeedSettings,
     SpoolBinding,
     SupportSettings,
+    Suppression,
     TemperatureSettings,
     Transaction,
 )
@@ -439,6 +441,9 @@ def transaction_to_data(transaction: Transaction) -> dict[str, Any]:
             "changes": (
                 None if transaction.changes is None else change_to_data(transaction.changes)
             ),
+            # Nur bei einem Umbau des Verlaufs (P7, seit v31): Der Verlauf zeigt
+            # die neu geplante Folge dann an ihrer neuen Stelle.
+            "revision": transaction.revision,
         }
     )
 
@@ -458,6 +463,7 @@ def transaction_from_data(data: dict[str, Any]) -> Transaction:
         ops=tuple(int(entry) for entry in data.get("ops", ())),
         origin=origin_from_data(data.get("origin")),
         changes=None if changes is None else change_from_data(changes),
+        revision=data.get("revision"),
     )
 
 
@@ -542,10 +548,14 @@ def operation_to_data(operation: Operation) -> dict[str, Any]:
     # selbst getippt hat, und der ist wörtlich gemeint.
     if operation.translatable:
         data["translatable"] = list(operation.translatable)
+    # Nur ein ausgeschalteter Schritt trägt das Feld (P7.3, seit v31).
+    if operation.suppressed is not None:
+        data["suppressed"] = suppression_to_data(operation.suppressed)
     return data
 
 
 def operation_from_data(data: dict[str, Any]) -> Operation:
+    suppressed = data.get("suppressed")
     return Operation(
         id=int(data["id"]),
         op=data["op"],
@@ -556,6 +566,52 @@ def operation_from_data(data: dict[str, Any]) -> Operation:
         seed=data.get("seed"),
         matches=deepcopy({name: dict(entry) for name, entry in data.get("matches", {}).items()}),
         translatable=tuple(data.get("translatable", ())),
+        suppressed=None if suppressed is None else suppression_from_data(suppressed),
+    )
+
+
+def suppression_to_data(suppression: Suppression) -> dict[str, Any]:
+    """Ein ausgeschalteter Schritt als Daten (P7.3).
+
+    Der Abdruck reist als Kopie seiner eigenen Werte: Er ist lesbares JSON aus
+    ``matching.fingerprint`` und darf weder mit dem Dokument noch mit einer
+    gespeicherten Undo-Seite geteilt werden.
+    """
+    return _without_none(
+        {
+            "chosen": suppression.chosen,
+            "expects": [
+                _without_none(
+                    {
+                        "key": entry.key,
+                        "feature": entry.feature,
+                        "kind": entry.kind,
+                        "creator": entry.creator,
+                        "fingerprint": deepcopy(dict(entry.fingerprint)) or None,
+                    }
+                )
+                for entry in suppression.expects
+            ]
+            or None,
+            "fits": list(suppression.fits) or None,
+        }
+    )
+
+
+def suppression_from_data(data: dict[str, Any]) -> Suppression:
+    return Suppression(
+        chosen=bool(data.get("chosen", True)),
+        expects=tuple(
+            ReferenceExpectation(
+                key=str(entry["key"]),
+                feature=str(entry["feature"]),
+                kind=entry["kind"],
+                creator=None if entry.get("creator") is None else int(entry["creator"]),
+                fingerprint=deepcopy(dict(entry.get("fingerprint") or {})),
+            )
+            for entry in data.get("expects", ())
+        ),
+        fits=tuple(str(name) for name in data.get("fits", ())),
     )
 
 

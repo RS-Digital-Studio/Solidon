@@ -906,3 +906,99 @@ def test_importing_cli_modules_does_not_install_process_hooks(tmp_path: Path) ->
     assert done.returncode == 0, done.stderr
     assert "HEADLESS=True" in done.stdout
     assert not list(tmp_path.rglob("crash-*.log"))
+
+
+def _drilled_plate(path: Path) -> None:
+    """Quader mit zwei Bohrungen und einer Vergrößerung der linken — über die Kommandozeile."""
+    assert main(["new", str(path)]) == 0
+    assert (
+        main(["run", "create_box", str(path), "--width", "80", "--depth", "40", "--height", "10"])
+        == 0
+    )
+    for x, seed in (("-20", "1"), ("20", "2")):
+        assert (
+            main(
+                [
+                    "run",
+                    "drill_hole",
+                    str(path),
+                    "--on",
+                    "obj_1",
+                    "--seed",
+                    seed,
+                    "--diameter",
+                    "5",
+                    "--x",
+                    x,
+                    "--y",
+                    "0",
+                    "--z",
+                    "10",
+                    "--depth",
+                    "10",
+                ]
+            )
+            == 0
+        )
+
+
+def test_steps_are_switched_off_moved_and_on_again_from_the_command_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """P7 auf der Kommandozeile: dieselben Handlungen wie im Verlauf, gespeichert nur bei Erfolg."""
+    path = tmp_path / "platte.p3d"
+    _drilled_plate(path)
+    steps = [entry.id for entry in load(path).document.ops]
+    assert main(["suppress", str(path), str(steps[1])]) == 0
+    resting = {entry.id: entry.suppressed for entry in load(path).document.ops}
+    assert resting[steps[1]] is not None and resting[steps[1]].chosen
+    assert main(["reactivate", str(path), str(steps[1])]) == 0
+    assert all(entry.suppressed is None for entry in load(path).document.ops)
+
+    assert main(["move", str(path), str(steps[2]), "--before", str(steps[1])]) == 0
+    moved = load(path).document
+    assert [entry.params.get("x") for entry in moved.ops if entry.op == "drill_hole"] == [
+        20.0,
+        -20.0,
+    ]
+    assert moved.transactions[-1].revision == "move"
+
+
+def test_an_invalid_move_leaves_the_file_untouched(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein ungültiger Vorschlag ändert nichts — auch nicht an der Datei auf der Platte."""
+    path = tmp_path / "platte.p3d"
+    _drilled_plate(path)
+    before = path.read_bytes()
+    steps = [entry.id for entry in load(path).document.ops]
+    assert main(["move", str(path), str(steps[1]), "--before", str(steps[0])]) == 1
+    assert path.read_bytes() == before
+    assert "Schritt" in capsys.readouterr().err
+
+
+def test_a_step_is_inserted_before_another_from_the_command_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """P7.1: ``run … --before`` setzt den Schritt vor den genannten, nicht ans Ende."""
+    path = tmp_path / "platte.p3d"
+    _drilled_plate(path)
+    steps = [entry.id for entry in load(path).document.ops]
+    assert (
+        main(
+            [
+                "run",
+                "chamfer_edges",
+                str(path),
+                "--on",
+                "obj_1",
+                "--distance",
+                "1",
+                "--before",
+                str(steps[1]),
+            ]
+        )
+        == 0
+    )
+    ops = [entry.op for entry in load(path).document.ops]
+    assert ops == ["create_box", "chamfer_edges", "drill_hole", "drill_hole"]

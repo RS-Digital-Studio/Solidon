@@ -232,10 +232,42 @@ def _condition_value(fit: Fit, document: Document | None) -> float:
     return float(value)
 
 
+def paused_fits(document: Document) -> frozenset[str]:
+    """Die Passungen, die mit einem ausgeschalteten Schritt ruhen (P7.3).
+
+    Zwei Wege, und beide stehen im Dokument, keiner wird geraten: die Namen,
+    die ein ausgeschalteter Schritt ausdrücklich mitnimmt
+    (``Suppression.fits`` — sein Merkmal oder sein Körper entsteht in ihm),
+    und eine bedingte Passung, deren Schritt ausgeschaltet ist — ohne ihn gibt
+    es den Stift nicht, den ``when_positive`` ein- und ausschaltet. Eine
+    ruhende Passung bleibt im Dokument und prüft wieder, sobald ihr Schritt
+    eingeschaltet ist.
+    """
+    resting = {entry.id for entry in document.ops if entry.suppressed is not None}
+    if not resting:
+        return frozenset()
+    names = {
+        name
+        for entry in document.ops
+        if entry.suppressed is not None
+        for name in entry.suppressed.fits
+    }
+    names.update(
+        fit.name
+        for fit in document.fits
+        if fit.when_positive is not None and fit.when_positive[0] in resting
+    )
+    return frozenset(names)
+
+
 def active_fits(document: Document) -> list[Fit]:
-    """Nur eine gültige nichtpositive Bedingung deaktiviert eine Passung."""
+    """Nur eine gültige nichtpositive Bedingung deaktiviert eine Passung —
+    und ein ausgeschalteter Schritt, mit dem sie ruht (:func:`paused_fits`)."""
     active: list[Fit] = []
+    paused = paused_fits(document)
     for fit in document.fits:
+        if fit.name in paused:
+            continue
         try:
             if _condition_value(fit, document) <= 0.0:
                 continue

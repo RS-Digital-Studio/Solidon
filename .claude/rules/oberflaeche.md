@@ -71,6 +71,37 @@ Erleichterung:
   „Zuletzt geöffnet" — vorher stand dort nur, was als Projekt geöffnet wurde,
   und ohne die Frage beim Schließen wäre die Datei eine Suche im Dateidialog.
 
+## Der Verlauf lässt sich umbauen — und sagt, was er nicht kann
+
+Einfügen, Verschieben, Aus- und Einschalten (RM-188 P7) sind rücknehmbar,
+also fragt keines davon vorher (Regel 19). Die einzige Frage davor ist die
+bestehende aus §15.4, wenn Zurückgenommenes verworfen würde
+(`MainWindow._history_change_allowed`, `confirm_discard`) — sie gilt dem
+Verwerfen, nicht dem Umbau.
+
+* **Die Vorschau ist die Rechnung.** Die Sitzung rechnet den Vorschlag im
+  Arbeiter (`_RevisionWorker`, `wartezeit.md`), und erst ein gültiges
+  Ergebnis wird übernommen — als eine Transaktion, mit dem Satz in der
+  Statuszeile und Strg+Z als Rückweg. Ein ungültiger Vorschlag ändert nichts
+  und kommt mit seinen Handlungen (*Schritt einschalten*, *Diesen Schritt mit
+  ausschalten*, *Einfügen beenden*, *Abbrechen*), nie als „fehlgeschlagen"
+  (Regel 17).
+* **Eine unmögliche Stelle sagt ihren Grund, bevor gerechnet wird**
+  (`Session.move_targets`): beim Ziehen kein Einfügestrich und der Satz in
+  der Statuszeile, im Kontextmenü ein ausgegrauter Eintrag mit Kurzhilfe.
+* **Der Zustand steht als Wort an der Zeile** — „(aus)", „(ruht)" —,
+  kursiv und gedämpft nur zusätzlich (Regel 18). Die Kurzhilfe nennt, was ein
+  Schritt braucht und wer ihn braucht.
+* **Die Tastatur kann alles, was die Maus kann:** Einfg, Alt+Pfeil,
+  Leertaste, Esc — am Verlauf und nur dort, wie Entf.
+* **Mit Einfügemarke zeigt die ganze Oberfläche den Stand davor**
+  (`Session.displayed_document`), und jede Operation über `Session.apply`
+  landet dort. Abläufe mit eigener Buchführung — Teilen mit Stiften, Deckel,
+  Gegenstück, Auto Split, Erzeugen, ein Agentenvorschlag — hängen ans Ende
+  und sagen deshalb ab, mit *Einfügen beenden* als Weg. Export und
+  Druckeinstellungen beenden das Einfügen zuerst: Hinaus geht das fertige
+  Teil, nicht der Zwischenstand.
+
 ## Texte
 
 Keine feste Zeichenkette in der Oberfläche — alles über `tr()`, deutsche
@@ -404,8 +435,9 @@ kein Wechsel am Erzeuger, sondern nur am Schritt, der vernetzt hat.
 `spoiled_the_exact_body()` liest den Schuldigen aus
 `evaluate.exact_became_mesh` und `kind_requirement` nennt ihn beim Titel. Der
 Vorschlag muss dabei ausführbar sein: Der erste Entwurf schlug vor, „den
-Schritt im Verlauf nach hinten zu nehmen" — und das kann der Verlauf nicht,
-aus gutem Grund (spätere Operationen bauen auf seinen Ausgaben auf).
+Schritt im Verlauf nach hinten zu nehmen" — und das geht nicht, aus gutem
+Grund (spätere Operationen bauen auf seinen Ausgaben auf, und auch das
+Verschieben im Verlauf setzt keinen Schritt hinter die, die ihn brauchen).
 Und eine dritte Lage ist die umgekehrte: Ein Werkzeug mit
 `requires_kind="mesh"` (*Merkmale an dieser Stelle erkennen*) bekommt am
 exakten Körper seinen eigenen Satz — *Flächenbearbeitung beenden* —, nicht

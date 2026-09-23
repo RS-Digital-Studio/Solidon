@@ -19,7 +19,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.core.errors import QuestionDeclined
+from app.core.errors import InternalError, QuestionDeclined
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, Registry, inactive_dependency
 from app.core.types import (
@@ -29,6 +29,7 @@ from app.core.types import (
     FeatureRef,
     Finding,
     ObjectId,
+    Operation,
     Scene,
 )
 from app.i18n import _, tr
@@ -74,6 +75,21 @@ class Reference:
         """Wie dieser Verweis in einer Frage oder einem Befund heißt."""
         return self.fit_name if self.kind == "fit" else f"{tr('Operation')} {self.op_id}"
 
+    @property
+    def key(self) -> str:
+        """Die Stelle **innerhalb** ihres Schritts, ohne dessen Kennung (P7).
+
+        Einfügen und Verschieben geben einem Schritt eine neue Kennung; sein
+        Verweis bleibt an derselben Stelle. ``at_feature``, bei Listen
+        ``features:2``, bei einer Skizzenebene ``plane:sketch``, bei einer
+        Passung ``fit:stift_1:a`` — dieselbe Schreibweise wie
+        :attr:`app.core.types.ReferenceExpectation.key`.
+        """
+        if self.kind == "fit":
+            return self.where
+        tail = self.where.split(":", 2)[2]
+        return f"plane:{tail}" if self.kind == "plane" else tail
+
 
 @dataclass(slots=True)
 class CheckResult:
@@ -112,6 +128,11 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
 
     source = registry or REGISTRY
     for operation in document.ops:
+        if operation.suppressed is not None:
+            # Ein ausgeschalteter Schritt rechnet nicht, also löst er auch
+            # nichts auf (P7.3). Was er beim Wiedereinschalten treffen muss,
+            # trägt seine ``Suppression`` — gefragt wird dann, nicht jetzt.
+            continue
         for field_name in _feature_fields(source, operation.op, operation.params):
             named = str(operation.params.get(field_name) or "")
             if not named or not operation.inputs:
@@ -676,6 +697,61 @@ def _set_param(document: Document, reference: Reference, value: str) -> None:
                 params[reference.field] = tuple(names)
             document.ops[index] = dataclasses.replace(operation, params=params)
             return
+
+
+def with_reference(
+    operation: Operation,
+    key: str,
+    feature_id: FeatureId,
+    registry: Registry | None = None,
+) -> Operation:
+    """Derselbe Schritt, dessen Verweis an ``key`` nun ``feature_id`` nennt (P7).
+
+    Die reine Fassung von :func:`_rewrite` für einen Schritt, der noch in
+    keinem Dokument steht: Ein Umbau des Verlaufs plant ihn neu, und wenn sein
+    Merkmal danach unter einem anderen Namen dasteht, folgt ihm der Verweis —
+    derselbe Körper, dieselbe Stelle, nur der Name wechselt. ``key`` ist
+    :attr:`Reference.key`; eine Stelle, die der Schritt nicht trägt, ist ein
+    Programmfehler des Aufrufers.
+    """
+    params = dict(operation.params)
+    if key.startswith("plane:"):
+        from app.core.sketch.planes import standing_on_feature
+        from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+
+        field_name = key.split(":", 1)[1]
+        drawn = sketch_from_text(str(params.get(field_name) or ""))
+        standing = standing_on_feature(drawn.plane)
+        reference = feature_ref_of_sketch(str(params.get(field_name) or ""))
+        if standing is None or reference is None:
+            raise InternalError(detail=f"step {operation.id} carries no plane at {key}")
+        if standing != drawn.plane:
+            # Eine abgeleitete Ebene steht auf der Fläche; getauscht wird nur
+            # der Fuß, Versatz und Kippung bleiben.
+            plane = drawn.plane.replace(standing, _plane_on(reference, feature_id), 1)
+        else:
+            plane = _plane_on(reference, feature_id)
+        params[field_name] = sketch_to_text(dataclasses.replace(drawn, plane=plane))
+        return dataclasses.replace(operation, params=params)
+    field_name, _separator, position = key.partition(":")
+    if field_name not in params and registry is not None and registry.has(operation.op):
+        raise InternalError(detail=f"step {operation.id} carries no reference at {key}")
+    if position:
+        names = list(params.get(field_name) or ())
+        names[int(position)] = feature_id
+        params[field_name] = tuple(names)
+    else:
+        params[field_name] = feature_id
+    return dataclasses.replace(operation, params=params)
+
+
+def _plane_on(reference: FeatureRef, feature_id: FeatureId) -> str:
+    """Die Ebenenschreibweise desselben Körpers auf einem anderen Merkmal."""
+    from app.core.sketch.planes import feature_plane
+
+    if reference.object_id:
+        return feature_plane(reference.object_id, feature_id)
+    return f"feature:{feature_id}"
 
 
 def _rewritten_finding(reference: Reference, chosen: tuple[ObjectId, FeatureId]) -> Finding:

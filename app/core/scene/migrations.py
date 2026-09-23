@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 31
+FORMAT_VERSION: Final = 32
 
 
 @dataclass(frozen=True, slots=True)
@@ -811,6 +811,23 @@ def _allow_curve_sketches(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _allow_suppressed_steps(data: dict[str, Any]) -> dict[str, Any]:
+    """31 → 32: Ein Schritt kann ausgeschaltet sein, und der Verlauf baut sich um (P7).
+
+    Ein ausgeschalteter Schritt trägt ``suppressed`` — ob er gewählt oder
+    mitgenommen wurde, welche Merkmale seine Verweise trafen und welche
+    Passungen mit ihm ruhen —, und eine Transaktion, die Schritte einfügt,
+    verschiebt, aus- oder einschaltet, trägt ``revision``. Beides ist additiv:
+    Eine ältere Datei hat keinen ausgeschalteten Schritt und keinen Umbau,
+    umzuschreiben ist nichts, und nichts wird nachträglich als ausgeschaltet
+    gedeutet. Die Stufe steht für die andere Richtung: Ein älteres Programm
+    überläse ``suppressed`` und rechnete den ausgeschalteten Schritt mit — ein
+    anderes Teil als das gespeicherte; mit der Versionsgrenze sagt es
+    stattdessen, dass die Datei neuer ist.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -843,6 +860,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=28, to_version=29, apply=_allow_edge_answers),
     Step(from_version=29, to_version=30, apply=_let_seam_and_lid_fits_follow_their_bodies),
     Step(from_version=30, to_version=31, apply=_allow_curve_sketches),
+    Step(from_version=31, to_version=32, apply=_allow_suppressed_steps),
 )
 
 

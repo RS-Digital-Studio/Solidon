@@ -701,6 +701,12 @@ bevor es jemand wusste:
   des Halts; `halted_step()` nennt Kennung und Titel des Schritts. Ein Test,
   der nach einem Halt weiterbauen will, löst ihn erst (Undo, `change_params`,
   `recount_and_retry`). Die Regel steht in `oberflaeche.md`.
+- **Mit Einfügemarke ist `last_result` der Stand davor.** Solange
+  `Session.inserting` steht, wertet die Sitzung `displayed_document()` aus —
+  die Schritte vor der Marke, ohne Passungen —, und `apply` fügt dort ein
+  (`_insert`, isoliert gerechnet im `_RevisionWorker`). Wer das fertige Teil
+  braucht, beendet das Einfügen zuerst (`stop_inserting`, dann
+  `wait_for_idle`), wie Export und Druckeinstellungen es tun.
 - **`Scene.objects` ist ein Wörterbuch.** Darüber zu iterieren gibt die
   Kennungen. Die Folgemeldung `'str' object has no attribute 'mesh'` sieht
   aus wie ein leerer Import und ist keiner.
@@ -1488,6 +1494,22 @@ Aushöhlen, und in den exakten Kern ohne Kern) und sendet
 `Session.change_kernel` — die zweite Sperre (kein späterer Schritt braucht
 den exakten Körper) wirft der Kern. Der Haken in den Operationsdialogen ist
 gefallen — die Regel dazu steht in `oberflaeche.md`.
+
+**Der Verlauf lässt sich umbauen** (RM-188 P7). `HistoryPanel` sagt nur, was
+gewollt ist — `insertRequested`, `moveRequested`, `suppressRequested`,
+`reactivateRequested`, `stopInsertRequested` — aus Kontextmenü
+(`_add_revision_entries`), Tastatur (`_list_action`: Einfg, Alt+Pfeil,
+Leertaste, Esc) und Ziehen (`_HistoryList`: legt nie selbst ab, fragt beim
+Ziehen `places` nach gültigen Stellen und meldet den Grund über `refused`).
+Neu gefasste Zeilen blendet es aus (`replanned_steps`), Einfügen und
+Verschieben stehen als Protokollzeile mit ihrer Folge darunter
+(`_add_revision_rows`), Zustand und Abhängigkeit als Wort an der Zeile
+(`step_state`, `needs_tip`), die Einfügemarke als eigene Zeile
+(`MARKER_ROLE`). `MainWindow._wire_history_revisions` verbindet das mit der
+Sitzung: `Session.revise_history` plant sofort (eine unmögliche Stelle sagt
+es ohne Wartezeit) und rechnet im `_RevisionWorker`; `revisionDone`,
+`revisionCancelled` und `insertionChanged` gehen an die Statuszeile. Die
+Regeln dazu stehen in `oberflaeche.md`.
 
 **Ein Paar ist kein Baustein, sondern zwei** (RM-147 E1): *Gegenstücke setzen …*
 steht deshalb im Menü *Bausteine* neben dem Katalog und nicht darin.

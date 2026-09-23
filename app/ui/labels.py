@@ -1682,6 +1682,13 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "where": _("Wo"),
     "worst_case": _("Schlechtester Fall"),
     "z": _("Z"),
+    # Den Verlauf umbauen (RM-188 P7): der Schritt, an dem ein Umbau hielte,
+    # der Schritt, an dem ein anderer hängt, und der Schritt, der wieder
+    # rechnen soll — alle drei als Schrittnummer.
+    "also": _("Ausschalten"),
+    "number": _("Schritt"),
+    "other": _("Anderer Schritt"),
+    "reactivate": _("Einschalten"),
 }
 
 

@@ -998,7 +998,9 @@ def _stack_lines(document: Document) -> list[str]:
     parts = []
     for transaction in document.transactions:
         calls = ", ".join(
-            _op_call(operations[entry]) if entry in operations else str(entry)
+            _op_call(operations[entry]) + _resting_mark(operations[entry])
+            if entry in operations
+            else str(entry)
             for entry in transaction.ops
         )
         by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
@@ -1007,6 +1009,17 @@ def _stack_lines(document: Document) -> list[str]:
         # kann (§32).
         parts.append(f"{transaction.id} {as_name(transaction.title)} ({calls}, {by})")
     return [f"{tr('Verlauf')}: " + " · ".join(parts)]
+
+
+def _resting_mark(operation: Operation) -> str:
+    """„ aus" oder „ ruht" hinter einem Schritt, der nicht rechnet (P7.3).
+
+    Ohne Vermerk suchte der Agent das Ergebnis eines ausgeschalteten Schritts
+    im Steckbrief vergeblich — oder legte es ein zweites Mal an.
+    """
+    if operation.suppressed is None:
+        return ""
+    return " " + (tr("aus") if operation.suppressed.chosen else tr("ruht"))
 
 
 def _op_call(operation: Operation) -> str:

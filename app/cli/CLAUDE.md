@@ -30,8 +30,19 @@ Fehler beim Schreiben des Berichts lässt die ursprüngliche Diagnose und den
 Fehlerausgang erhalten. Qt wird für den Bericht nicht geladen.
 
 Die festen Befehle daneben — `ops`, `docs`, `profiles`, `new`, `info`,
-`import`, `run`, `undo`, `export` — sind die, die kein Register erzeugen kann,
-weil sie über dem Dokument stehen statt in ihm.
+`import`, `run`, `undo`, `move`, `suppress`, `reactivate`, `export` — sind
+die, die kein Register erzeugen kann, weil sie über dem Dokument stehen statt
+in ihm.
+
+**Den Verlauf umbauen geht denselben Weg wie im Fenster** (RM-188 P7):
+`move <datei> <schritte> --before <schritt> | --end`, `suppress` und
+`reactivate` planen über `History.plan_*`, `_revised` rechnet den Vorschlag
+isoliert (`scene.revision.revise`, mit `terminal_ask` für eine Rückfrage) und
+schreibt die Datei nur bei einem gültigen Ergebnis — ein ungültiger
+Vorschlag endet mit Exit 1 und lässt sie unberührt. Eingefügt wird eine
+Operation, deshalb heißt das Einfügen `<op> … --before <schritt>` am
+Registerbefehl und nicht eigens. `info` nennt ausgeschaltete Schritte mit
+„(aus)" oder „(ruht)".
 
 ## Was hier anders ist als im Fenster
 

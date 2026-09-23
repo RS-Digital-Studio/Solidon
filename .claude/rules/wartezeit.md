@@ -123,6 +123,15 @@ einen weiteren Arbeiter am Dokument baut, gibt ihm denselben Stempel mit; und
 was ein Arbeiter an Widgets meldet, geht als **Signal** (`_VariantWorker.progressed`),
 nie als gebundene Widgetmethode im Rückruf (UI-14).
 
+**Ein Umbau des Verlaufs rechnet im Arbeiter und übernimmt im Hauptfaden**
+(`_RevisionWorker`, RM-188 P7). Er bekommt eine Kopie des Dokuments von
+jetzt, rechnet den Grundstand, wenn keiner aktuell ist, und den Vorschlag;
+übernommen wird nur, wenn Arbeiter und Projektstempel noch die aktuellen sind
+(`Session._on_revised`). Rückfragen gehen über `ask_from_worker`, Abbrechen
+reißt die Rechnung kooperativ ab und meldet `revisionCancelled` — am Verlauf
+hat sich dann nichts geändert. `busy` umfasst ihn, `wait_for_idle` wartet auf
+ihn, und ein zweiter Umbau während des ersten wird abgesagt statt eingereiht.
+
 
 **Ein Export bekommt Fortschritt, aber kein Abbrechen** (`_ExportWorker`). Die
 Regel darüber ist nicht aufgeweicht, sie greift hier nur anders: Ein halb

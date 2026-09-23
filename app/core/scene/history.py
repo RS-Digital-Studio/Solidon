@@ -46,6 +46,7 @@ from app.core.types import (
     Document,
     DocumentChange,
     DocumentState,
+    FeatureId,
     Fit,
     ObjectId,
     Operation,
@@ -54,7 +55,10 @@ from app.core.types import (
     Parameter,
     ParameterName,
     PrintSettings,
+    ReferenceExpectation,
+    RevisionKind,
     SpoolBinding,
+    Suppression,
     Transaction,
     TransactionId,
 )
@@ -78,12 +82,59 @@ USER_ORIGIN: Final[Origin] = Origin(by="user")
 
 
 def _living_objects(operations: Sequence[Operation]) -> set[ObjectId]:
-    """Die Körper, die nach einer Folge aktiver Schritte noch vorhanden sind."""
+    """Die Körper, die nach einer Folge aktiver Schritte noch vorhanden sind.
+
+    Ein ausgeschalteter Schritt zählt nicht (P7.3): Was er frisch anlegen
+    würde, gibt es nicht, und was er verbrauchen würde, bleibt stehen —
+    dieselbe Rechnung wie in der Auswertung (``evaluate._absent_objects``).
+    """
+    living: set[ObjectId] = set()
+    for entry in operations:
+        if entry.suppressed is not None:
+            continue
+        living.difference_update(set(entry.inputs) - set(entry.outputs))
+        living.update(entry.outputs)
+    return living
+
+
+def _structural_objects(operations: Sequence[Operation]) -> set[ObjectId]:
+    """Die Körper nach einer Folge **aller** Schritte, ausgeschaltet oder nicht.
+
+    Der Bau eines Verlaufs ist eine Sache der Kennungen: Ein ausgeschalteter
+    Schritt, der ``obj_4`` anlegt, bleibt der Schritt, der ``obj_4`` anlegt,
+    und ein mitgenommener danach arbeitet weiter an ``obj_4`` — sonst ließe
+    sich beim Neuplanen keiner von beiden neu fassen, und beim Einschalten
+    stimmte die Kette nicht mehr. Ob gerechnet wird, entscheidet die
+    Auswertung; ob die Folge zusammenpasst, diese Rechnung.
+    """
     living: set[ObjectId] = set()
     for entry in operations:
         living.difference_update(set(entry.inputs) - set(entry.outputs))
         living.update(entry.outputs)
     return living
+
+
+def _renumbered_suppression(
+    suppression: Suppression | None, renumbered: Mapping[OpId, OpId]
+) -> Suppression | None:
+    """Dieselbe Unterdrückung, deren Erzeugerkennungen einer Neuplanung folgen.
+
+    Ein ruhender Schritt hält fest, welcher Schritt das Merkmal anlegte, das
+    er braucht (``ReferenceExpectation.creator``). Plant ein Umbau diesen
+    Erzeuger unter neuer Kennung neu, folgt der Vermerk — sonst prüfte das
+    Einschalten gegen einen Schritt, den es nicht mehr gibt.
+    """
+    if suppression is None or not suppression.expects:
+        return suppression
+    return dataclasses.replace(
+        suppression,
+        expects=tuple(
+            dataclasses.replace(entry, creator=renumbered.get(entry.creator, entry.creator))
+            if entry.creator is not None
+            else entry
+            for entry in suppression.expects
+        ),
+    )
 
 
 def repair_targets(
@@ -306,6 +357,157 @@ def change_for(
             spool_bindings=tuple(spool_bindings) if spool_bindings is not None else None,
         ),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class StepNeed:
+    """Ein Schritt braucht einen früheren (P7.2, P7.3).
+
+    Zwei Arten, und beide gehören zur Folge, nicht zur Geometrie: ein Körper,
+    den erst der frühere anlegt (``feature_id is None``), oder ein Merkmal, das
+    in ihm entsteht. Aus der Körperkette folgt die erste Art von selbst; die
+    zweite kennt nur eine Auswertung — ``scene.revision.dependencies`` liest
+    sie aus den Sichtungen eines Laufs (``Feature.created_by``).
+    """
+
+    step: OpId
+    on: OpId
+    object_id: ObjectId
+    feature_id: FeatureId | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Dependencies:
+    """Was ein Umbau des Verlaufs über die Folge wissen muss — aus einem gerechneten Stand (P7).
+
+    Ohne sie kennt der Verlauf nur die Körperkette. Umsortieren und Ausschalten
+    sagen dann nichts über Merkmale, die ein früherer Schritt anlegt; die
+    isolierte Auswertung danach fängt es trotzdem, nur später und ohne den
+    Grund vorab zu nennen.
+    """
+
+    needs: tuple[StepNeed, ...] = ()
+    expectations: Mapping[OpId, tuple[ReferenceExpectation, ...]] = field(default_factory=dict)
+    """Je Schritt, was seine Verweise zuletzt trafen — für das Ausschalten."""
+    fit_needs: Mapping[str, frozenset[OpId]] = field(default_factory=dict)
+    """Je Passung die Schritte, deren Merkmal oder Körper sie braucht."""
+    fit_expectations: Mapping[str, tuple[ReferenceExpectation, ...]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class RevisionPlan:
+    """Ein Umbau des Verlaufs, fertig geplant und noch nicht geschrieben (P7).
+
+    **Planen, isoliert rechnen, dann übernehmen.** Der Plan trägt die
+    Transaktion, die :meth:`History.commit` anhängt, samt der neu gefassten
+    Schritte; :meth:`document` baut daraus die Kopie für die isolierte
+    Auswertung. Erst ein gültiges Ergebnis ersetzt die Folge — ein ungültiger
+    Vorschlag verändert nichts (Konzept vollwertiges CAD §13.9).
+    """
+
+    kind: RevisionKind
+    transaction: Transaction
+    planned: tuple[Operation, ...] = ()
+    """Die neu gefassten Schritte beim Einfügen und Verschieben, in ihrer Folge."""
+    renumbered: Mapping[OpId, OpId] = field(default_factory=dict)
+    """Alte Kennung → neue Kennung für jeden neu gefassten Schritt."""
+    subjects: tuple[OpId, ...] = ()
+    """Die gewählten Schritte (beim Einfügen die neuen)."""
+    carried: tuple[OpId, ...] = ()
+    """Beim Ausschalten die mitgenommenen, beim Einschalten die mitgeholten Schritte."""
+    mark: tuple[Any, ...] = ()
+    """Der Dokumentstand beim Planen — ein anderer heißt: veraltet."""
+
+    def new_id(self, op_id: OpId) -> OpId:
+        """Die Kennung, die ein Schritt nach diesem Umbau trägt."""
+        return self.renumbered.get(op_id, op_id)
+
+    def document(self, base: Document) -> Document:
+        """Eine Kopie von ``base`` mit diesem Umbau — nur für die isolierte Auswertung."""
+        copied = deepcopy(base)
+        copied.ops.extend(deepcopy(self.planned))
+        copied.transactions.append(self.transaction)
+        if self.transaction.changes is not None:
+            restore(copied, self.transaction.changes.after)
+        return copied
+
+    def version(self, op_id: OpId) -> Operation | None:
+        """Die Fassung eines Schritts nach diesem Umbau — neue Kennung gefragt."""
+        for entry in self.planned:
+            if entry.id == op_id:
+                return entry
+        changes = self.transaction.changes
+        if changes is not None and changes.after.edited_ops is not None:
+            return changes.after.edited_ops.get(op_id)
+        return None
+
+    def replacing(self, versions: Mapping[OpId, Operation]) -> RevisionPlan:
+        """Derselbe Plan mit anderen Fassungen einzelner Schritte — ihr Verweis folgt
+        seinem Merkmal unter neuem Namen (``scene.revision``)."""
+        planned = tuple(versions.get(entry.id, entry) for entry in self.planned)
+        transaction = self.transaction
+        changes = transaction.changes
+        if changes is not None and changes.after.edited_ops is not None:
+            edited = {
+                op_id: versions.get(op_id, entry) if entry is not None else None
+                for op_id, entry in changes.after.edited_ops.items()
+            }
+            transaction = dataclasses.replace(
+                transaction,
+                changes=dataclasses.replace(
+                    changes, after=dataclasses.replace(changes.after, edited_ops=edited)
+                ),
+            )
+        return dataclasses.replace(self, planned=planned, transaction=transaction)
+
+    def editing(self, original: Operation, changed: Operation) -> RevisionPlan:
+        """Derselbe Plan, der zusätzlich einen unbeteiligten Schritt neu fasst.
+
+        Beim Aus- und Einschalten behält jeder Schritt seine Kennung; verschiebt
+        sich dabei nur der Name des Merkmals, das ein anderer Schritt nennt,
+        folgt dessen Verweis — und seine alte Fassung reist in derselben
+        Transaktion mit, damit ein Strg+Z auch sie zurücklegt.
+        """
+        changes = self.transaction.changes or DocumentChange()
+        before = dict(changes.before.edited_ops or {})
+        after = dict(changes.after.edited_ops or {})
+        before.setdefault(original.id, _copy_operation_matches(original))
+        after[changed.id] = _copy_operation_matches(changed)
+        return dataclasses.replace(
+            self,
+            transaction=dataclasses.replace(
+                self.transaction,
+                changes=DocumentChange(
+                    before=dataclasses.replace(changes.before, edited_ops=before),
+                    after=dataclasses.replace(changes.after, edited_ops=after),
+                ),
+            ),
+        )
+
+    def with_fits(self, current: Sequence[Fit], fits: Sequence[Fit]) -> RevisionPlan:
+        """Derselbe Plan, dessen Passungen am Ende ``fits`` lauten (vorher: ``current``)."""
+        changes = self.transaction.changes or DocumentChange()
+        before_fits = changes.before.fits if changes.before.fits is not None else tuple(current)
+        return dataclasses.replace(
+            self,
+            transaction=dataclasses.replace(
+                self.transaction,
+                changes=DocumentChange(
+                    before=dataclasses.replace(changes.before, fits=tuple(before_fits)),
+                    after=dataclasses.replace(changes.after, fits=tuple(fits)),
+                ),
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class MoveTarget:
+    """Eine Stelle, an die sich die gewählten Schritte verschieben ließen (P7.2)."""
+
+    before: OpId | None
+    """Vor diesen Schritt, ``None`` ans Ende."""
+    problem: AppError | None = None
+    """Warum es dort nicht geht — ``None`` heißt: gültig."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -696,27 +898,9 @@ class History:
         """
         replaced_ids: dict[OpId, OpId] = {}
         for entry in suffix:
-            draft = redraft(entry) or OperationDraft(
-                op=entry.op,
-                inputs=entry.inputs,
-                params=entry.params,
-                outputs=entry.outputs,
-                seed=entry.seed,
-            )
-            cloned = self._plan(draft, living)
-            cloned = dataclasses.replace(
-                cloned,
-                solver=None,
-                translatable=entry.translatable,
-                matches=entry.matches,
-            )
-            cloned = _copy_operation_matches(
-                cloned, previous_outputs=entry.outputs, previous_inputs=entry.inputs
-            )
+            cloned = self._clone(entry, living, replaced_ids, redraft(entry))
             planned.append(cloned)
             replaced_ids[entry.id] = cloned.id
-            living.difference_update(set(cloned.inputs) - set(cloned.outputs))
-            living.update(cloned.outputs)
 
         old_versions = {entry.id: _copy_operation_matches(entry) for entry in suffix}
         rebound_fits = tuple(
@@ -1259,15 +1443,13 @@ class History:
             )
 
         versions = {op_id: _copy_operation_matches(self.operation(op_id)) for op_id in removed_ids}
-        objects_before = self._known_objects()
-        objects_after: set[ObjectId] = set()
         removed_set = set(removed_ids)
-        for entry in self.operations:
-            if entry.id in removed_set:
-                continue
-            objects_after.difference_update(set(entry.inputs) - set(entry.outputs))
-            objects_after.update(entry.outputs)
-        disappeared = objects_before - objects_after
+        # **Nach Kennungen, nicht nach dem, was gerade rechnet** (P7.3): Eine
+        # Passung an einem Körper, den ein ausgeschalteter Schritt anlegt, ruht
+        # nur — sie geht erst, wenn dieser Schritt selbst gelöscht wird.
+        disappeared = _structural_objects(self.operations) - _structural_objects(
+            [entry for entry in self.operations if entry.id not in removed_set]
+        )
         remaining_fits = tuple(
             fit
             for fit in self.document.fits
@@ -1394,6 +1576,686 @@ class History:
         transaction, _swapped = self._swap_operations(_("Gespeicherten Stand verwenden"), pairs)
         _log.info("switched %d part steps to another state", len(pairs))
         return transaction
+
+    # --- Umbau des Verlaufs (P7) -------------------------------------------------
+
+    def _clone(
+        self,
+        entry: Operation,
+        living: set[ObjectId],
+        renumbered: Mapping[OpId, OpId],
+        draft: OperationDraft | None = None,
+    ) -> Operation:
+        """Einen Schritt unter neuer Kennung neu fassen — dieselben Werte, dieselben Körper.
+
+        Der gemeinsame Baustein von :meth:`_retried_after` und dem Umbau des
+        Verlaufs. Startwert, Übersetzungsvermerk, Antworten und Unterdrückung
+        reisen mit; die Solverauskunft nicht, sie gehört dem nächsten Lauf.
+        Ein Schritt, den dieses Register nicht kennt, wird wörtlich übernommen
+        — er rechnet ohnehin nicht (``evaluate.unknown_operation``), und ihn im
+        Register nachzuschlagen war ein ``InternalError`` statt eines Umbaus.
+        """
+        suppressed = _renumbered_suppression(entry.suppressed, renumbered)
+        if not self._registry.has(entry.op):
+            for name in entry.inputs:
+                if name not in living:
+                    raise ValidationError(
+                        title=_("Der gewählte Körper ist nicht mehr da."),
+                        field="in",
+                        detail=_("Die Operation verweist auf ein Objekt, das es nicht gibt."),
+                        constraint="unknown_object",
+                        values={"op": entry.op, "missing": [name]},
+                        suggestions=(CHANGE_SELECTION, CANCEL),
+                    )
+            cloned = dataclasses.replace(
+                entry, id=next(self._next_op), solver=None, suppressed=suppressed
+            )
+        else:
+            planned = self._plan(
+                draft
+                or OperationDraft(
+                    op=entry.op,
+                    inputs=entry.inputs,
+                    params=entry.params,
+                    outputs=entry.outputs,
+                    seed=entry.seed,
+                ),
+                living,
+            )
+            cloned = dataclasses.replace(
+                planned,
+                solver=None,
+                translatable=entry.translatable,
+                matches=entry.matches,
+                suppressed=suppressed,
+            )
+        cloned = _copy_operation_matches(
+            cloned, previous_outputs=entry.outputs, previous_inputs=entry.inputs
+        )
+        living.difference_update(set(cloned.inputs) - set(cloned.outputs))
+        living.update(cloned.outputs)
+        return cloned
+
+    def _revision_mark(self) -> tuple[Any, ...]:
+        """Woran sich zeigt, dass seit dem Planen etwas geschehen ist.
+
+        Die Transaktionen fangen jede Handlung, die Schrittfassungen auch das,
+        was ohne Transaktion geschrieben wird — eine festgehaltene Antwort
+        (``record_answers``, ``record_matches``) ändert, was ein neu gefasster
+        Schritt mitnehmen müsste. Die Solverauskunft nicht: Sie ist ein
+        Vermerk, den der nächste Lauf ohnehin neu schreibt.
+        """
+        transactions = self.document.transactions
+        return (
+            len(transactions),
+            transactions[-1].id if transactions else None,
+            tuple(
+                (
+                    entry.id,
+                    entry.op,
+                    entry.inputs,
+                    entry.outputs,
+                    entry.params,
+                    entry.seed,
+                    entry.translatable,
+                    entry.matches,
+                    entry.suppressed,
+                )
+                for entry in self.operations
+            ),
+            tuple(self.document.fits),
+        )
+
+    def _chosen(self, op_ids: Sequence[OpId]) -> tuple[OpId, ...]:
+        """Die gewählten Schritte, aufsteigend, jeder einmal — und jeder vorhanden."""
+        chosen = tuple(sorted({int(op_id) for op_id in op_ids}))
+        if not chosen:
+            raise ValidationError(
+                field="ops",
+                detail=_("Dafür ist kein Schritt ausgewählt."),
+                constraint="empty",
+                suggestions=(CANCEL,),
+            )
+        for op_id in chosen:
+            self.operation(op_id)
+        return chosen
+
+    def _revision_changes(
+        self,
+        replaced: Sequence[Operation],
+        renumbered: Mapping[OpId, OpId],
+        extra: DocumentChange | None,
+    ) -> DocumentChange:
+        """Beide Seiten eines Neuplanens: alte Fassungen zurück, neue Kennungen gebunden.
+
+        Dieselbe Buchführung wie :meth:`_retried_after` — die alten Fassungen
+        stehen vorn, ihre Entfernung hinten, bedingte Passungen folgen ihrem
+        Schritt auf die neue Kennung (§14). ``extra`` bringt mit, was der
+        eingefügte Schritt selbst ändert (benannte Maße, Passungen); es darf
+        keine Schrittfassungen tragen.
+        """
+        if extra is not None and (
+            extra.before.edited_ops is not None or extra.after.edited_ops is not None
+        ):
+            raise InternalError(detail="an inserted step cannot carry step versions of its own")
+        old_versions = {entry.id: _copy_operation_matches(entry) for entry in replaced}
+        current = tuple(self.document.fits)
+        wanted = (
+            tuple(extra.after.fits)
+            if extra is not None and extra.after.fits is not None
+            else current
+        )
+        rebound = tuple(
+            dataclasses.replace(
+                fit, when_positive=(renumbered[fit.when_positive[0]], fit.when_positive[1])
+            )
+            if fit.when_positive is not None and fit.when_positive[0] in renumbered
+            else fit
+            for fit in wanted
+        )
+        fits_changed = rebound != current
+        before = extra.before if extra is not None else DocumentState()
+        after = extra.after if extra is not None else DocumentState()
+        return DocumentChange(
+            before=dataclasses.replace(
+                before, edited_ops=old_versions, fits=current if fits_changed else None
+            ),
+            after=dataclasses.replace(
+                after,
+                edited_ops=dict.fromkeys(old_versions),
+                fits=rebound if fits_changed else None,
+            ),
+        )
+
+    def commit(self, plan: RevisionPlan) -> Transaction:
+        """Schreibt einen geplanten Umbau — genau diesen, als **eine** Transaktion.
+
+        Nur, wenn sich das Dokument seit dem Planen nicht bewegt hat: Der Plan
+        trägt die alten Fassungen, die ein Undo zurücklegt, und neue
+        Kennungen, die über der damaligen Wasserlinie liegen. Ein veralteter
+        Plan wird abgewiesen und nichts geschrieben.
+        """
+        activation.require(activation.CHANGE)
+        if plan.mark != self._revision_mark():
+            raise UserError(
+                title=_("Der Verlauf hat sich inzwischen geändert."),
+                detail=_("Die Änderung wurde nicht übernommen. Versuchen Sie es noch einmal."),
+                suggestions=(CANCEL,),
+            )
+        changes = plan.transaction.changes
+        if changes is None:
+            raise InternalError(detail="a revision plan carries no document change")
+        self._forget_undone()
+        self._open_bundle = None
+        self.document.ops.extend(plan.planned)
+        self.document.transactions.append(plan.transaction)
+        self._settle(changes.after)
+        _log.info("revised the history (%s) with %d step(s)", plan.kind, len(plan.transaction.ops))
+        return plan.transaction
+
+    def plan_insert(
+        self,
+        before: OpId,
+        title: TranslatableText | str,
+        drafts: Sequence[OperationDraft],
+        origin: Origin = USER_ORIGIN,
+        changes: DocumentChange | ChangeFn | None = None,
+    ) -> RevisionPlan:
+        """Neue Schritte **vor** ``before`` einfügen — geplant, nicht geschrieben (P7.1).
+
+        Die Eingaben lösen gegen den Stand unmittelbar vor ``before`` auf:
+        Nur was dort lebt, darf ein neuer Schritt nehmen, und ein Körper, den
+        erst ein späterer Schritt anlegt, ist hier „nicht mehr da". Danach
+        wird die ganze Folge ab ``before`` mit neuen Kennungen neu gefasst —
+        dieselben Werte, dieselben Körper, dieselben Startwerte —, denn die
+        Reihenfolge des Stapels ist die seiner Kennungen (§15). ``changes``
+        reist in derselben Transaktion (benannte Maße, Passungen eines
+        Ablaufs): ein Strg+Z nimmt alles zurück und legt die alte Folge mit
+        ihren alten Kennungen wieder hin.
+
+        Verbraucht ein neuer Schritt einen Körper, den ein späterer noch
+        braucht, gibt es die Stelle nicht — das sagt die Absage, bevor
+        irgendetwas gerechnet wird.
+        """
+        activation.require(activation.CHANGE)
+        if not drafts:
+            raise ValidationError(
+                field="ops",
+                detail=_("Zum Einfügen fehlt ein Schritt."),
+                constraint="empty",
+                suggestions=(CANCEL,),
+            )
+        mark = self._revision_mark()
+        operations = self.operations
+        index = self._position_of(before)
+        prefix, suffix = operations[:index], operations[index:]
+        self._reseed()
+        active = _living_objects(prefix)
+        structural = _structural_objects(prefix)
+        planned: list[Operation] = []
+        for draft in drafts:
+            entry = self._plan(draft, active)
+            planned.append(entry)
+            for living in (active, structural):
+                living.difference_update(set(entry.inputs) - set(entry.outputs))
+                living.update(entry.outputs)
+        settled = changes(planned) if callable(changes) else changes
+        subjects = tuple(entry.id for entry in planned)
+        renumbered: dict[OpId, OpId] = {}
+        for entry in suffix:
+            try:
+                cloned = self._clone(entry, structural, renumbered)
+            except ValidationError as problem:
+                if problem.constraint != "unknown_object":
+                    raise
+                raise UserError(
+                    title=_("Hier lässt sich der Schritt nicht einfügen."),
+                    detail=_(
+                        "Er verbraucht einen Körper, den Schritt {number} danach noch braucht.",
+                        number=entry.id,
+                    ),
+                    values={"number": entry.id, "missing": ", ".join(entry.inputs)},
+                    op_id=entry.id,
+                    suggestions=(CANCEL,),
+                ) from problem
+            planned.append(cloned)
+            renumbered[entry.id] = cloned.id
+        transaction = Transaction(
+            id=f"t{next(self._next_transaction)}",
+            title=_("Eingefügt: {step}", step=title),
+            ops=tuple(entry.id for entry in planned),
+            origin=origin,
+            changes=self._revision_changes(suffix, renumbered, settled),
+            revision="insert",
+        )
+        return RevisionPlan(
+            kind="insert",
+            transaction=transaction,
+            planned=tuple(planned),
+            renumbered=renumbered,
+            subjects=subjects,
+            mark=mark,
+        )
+
+    def _position_of(self, op_id: OpId) -> int:
+        """Die Stelle eines Schritts im Stapel — oder der Satz, dass es ihn nicht gibt."""
+        found = self.operation(op_id)
+        return next(index for index, entry in enumerate(self.operations) if entry.id == found.id)
+
+    def valid_targets(
+        self, op_ids: Sequence[OpId], dependencies: Dependencies | None = None
+    ) -> tuple[MoveTarget, ...]:
+        """Jede Stelle, an die die gewählten Schritte könnten — mit dem Grund, wo nicht (P7.2).
+
+        Für die Oberfläche beim Ziehen und im Kontextmenü: gültige Stellen
+        zeigen, ungültige mit ihrem Satz. Stellen, an denen sich nichts
+        bewegte, fehlen. Nur lesend und ohne Rechnung — was die Geometrie
+        danach sagt, klärt die isolierte Auswertung.
+        """
+        chosen = self._chosen(op_ids)
+        operations = self.operations
+        needs = dependencies.needs if dependencies is not None else ()
+        targets: list[MoveTarget] = []
+        for before in (*(entry.id for entry in operations if entry.id not in chosen), None):
+            order = _moved_order(operations, chosen, before)
+            if [entry.id for entry in order] == [entry.id for entry in operations]:
+                continue
+            targets.append(MoveTarget(before, _order_problem(order, needs, self._registry)))
+        return tuple(targets)
+
+    def plan_move(
+        self,
+        op_ids: Sequence[OpId],
+        before: OpId | None,
+        dependencies: Dependencies | None = None,
+    ) -> RevisionPlan:
+        """Die gewählten Schritte vor ``before`` setzen (``None``: ans Ende) — geplant (P7.2).
+
+        Mehrere Schritte wandern gemeinsam und in ihrer Folge. Vorher geprüft,
+        ohne zu rechnen: Jeder Schritt findet seinen Körper, keiner steht vor
+        dem, der ihn anlegt oder verbraucht, und keiner vor dem Schritt, dessen
+        Merkmal er braucht (``dependencies``). Ein Vorwärtsbezug wird nicht
+        umgebogen, sondern abgesagt, mit beiden Schritten im Satz. Neu gefasst
+        wird die Folge ab der ersten Stelle, die sich ändert.
+        """
+        activation.require(activation.CHANGE)
+        chosen = self._chosen(op_ids)
+        if before is not None:
+            self.operation(before)
+        mark = self._revision_mark()
+        operations = self.operations
+        order = _moved_order(operations, chosen, before)
+        first = next(
+            (
+                index
+                for index, (old, new) in enumerate(zip(operations, order, strict=True))
+                if old.id != new.id
+            ),
+            None,
+        )
+        if first is None:
+            raise ValidationError(
+                field="before",
+                detail=_("An dieser Stelle steht der Schritt schon."),
+                constraint="unchanged",
+                suggestions=(CANCEL,),
+            )
+        problem = _order_problem(
+            order, dependencies.needs if dependencies is not None else (), self._registry
+        )
+        if problem is not None:
+            raise problem
+        self._reseed()
+        structural = _structural_objects(operations[:first])
+        planned: list[Operation] = []
+        renumbered: dict[OpId, OpId] = {}
+        for entry in order[first:]:
+            cloned = self._clone(entry, structural, renumbered)
+            planned.append(cloned)
+            renumbered[entry.id] = cloned.id
+        versions = {entry.id: entry for entry in operations}
+        transaction = Transaction(
+            id=f"t{next(self._next_transaction)}",
+            title=_steps_title(
+                [versions[op_id] for op_id in chosen],
+                self._registry,
+                one=lambda step: _("Verschoben: {step}", step=step),
+                few=lambda count, steps: _(
+                    "{count} Schritte verschoben: {steps}", count=count, steps=steps
+                ),
+                many=lambda count, steps, rest: _(
+                    "{count} Schritte verschoben: {steps} und {rest} weitere",
+                    count=count,
+                    steps=steps,
+                    rest=rest,
+                ),
+            ),
+            ops=tuple(entry.id for entry in planned),
+            changes=self._revision_changes(operations[first:], renumbered, None),
+            revision="move",
+        )
+        return RevisionPlan(
+            kind="move",
+            transaction=transaction,
+            planned=tuple(planned),
+            renumbered=renumbered,
+            subjects=chosen,
+            mark=mark,
+        )
+
+    def _off_closure(
+        self,
+        chosen: Collection[OpId],
+        dependencies: Dependencies | None,
+    ) -> tuple[set[OpId], dict[ObjectId, OpId]]:
+        """Welche Schritte ruhen, wenn ``chosen`` aus ist — und welcher Körper wem fehlt.
+
+        Der Reihe nach, denn wer etwas braucht, steht hinter dem, der es
+        anlegt: Ein Schritt ruht mit, wenn er einen Körper nimmt, den ein
+        ruhender frisch anlegt, oder ein Merkmal braucht, das in einem
+        ruhenden entsteht — aus den Sichtungen eines Laufs
+        (``Dependencies.needs``) oder, bei einem schon ruhenden, aus seinem
+        eigenen Vermerk (``Suppression.expects``). Ein Schritt über die ganze
+        Szene (Anordnen, Ausrichten) ruht nie wegen eines Körpers: Er nimmt,
+        was auf dem Bett steht (``evaluate._without_absent_inputs``).
+        """
+        off = set(chosen)
+        absent: dict[ObjectId, OpId] = {}
+        needs: dict[OpId, set[OpId]] = {}
+        for need in dependencies.needs if dependencies is not None else ():
+            needs.setdefault(need.step, set()).add(need.on)
+        for entry in self.operations:
+            if entry.id not in off:
+                wanted = set(needs.get(entry.id, ()))
+                if entry.suppressed is not None:
+                    wanted.update(
+                        expected.creator
+                        for expected in entry.suppressed.expects
+                        if expected.creator is not None
+                    )
+                gone = [name for name in entry.inputs if name in absent]
+                # Ein Schritt über das ganze Bett ruht nie wegen eines Körpers:
+                # Er nimmt, was dort steht (``evaluate._without_absent_inputs``).
+                whole = (
+                    self._registry.has(entry.op)
+                    and self._registry.get(entry.op).takes_whole_scene
+                    and entry.outputs == entry.inputs
+                )
+                if (gone and not whole) or wanted & off:
+                    off.add(entry.id)
+            if entry.id in off:
+                for output in entry.outputs:
+                    if output not in entry.inputs:
+                        absent.setdefault(output, entry.id)
+        return off, absent
+
+    def _fit_pauses(
+        self,
+        off: Collection[OpId],
+        absent: Mapping[ObjectId, OpId],
+        dependencies: Dependencies | None,
+    ) -> dict[OpId, list[str]]:
+        """Welche Passung mit welchem ruhenden Schritt ruht (§14, P7.3).
+
+        Eine Passung ruht, wenn einer ihrer Körper nicht entsteht oder ihr
+        Merkmal in einem ruhenden Schritt entsteht. Vermerkt wird sie an genau
+        diesem Schritt — geht er wieder an, prüft sie wieder.
+        """
+        pauses: dict[OpId, list[str]] = {}
+        fit_needs = dependencies.fit_needs if dependencies is not None else {}
+        for fit in self.document.fits:
+            holder = next(
+                (
+                    absent[reference.object_id]
+                    for reference in (fit.a, fit.b)
+                    if reference.object_id in absent
+                ),
+                None,
+            )
+            if holder is None:
+                holder = next(
+                    (op_id for op_id in sorted(fit_needs.get(fit.name, ())) if op_id in off),
+                    None,
+                )
+            if holder is not None:
+                pauses.setdefault(holder, []).append(fit.name)
+        return pauses
+
+    def plan_suppress(
+        self,
+        op_ids: Sequence[OpId],
+        dependencies: Dependencies | None = None,
+        *,
+        also: Collection[OpId] = (),
+        paused: Mapping[OpId, Sequence[str]] | None = None,
+    ) -> RevisionPlan:
+        """Die gewählten Schritte ausschalten — samt dem, was ohne sie nicht rechnen kann (P7.3).
+
+        Nichts wird gelöscht und nichts ersetzt: Die Schritte bleiben mit
+        ihren Werten im Verlauf und in der Datei, nur rechnen sie nicht.
+        Mitgenommen wird, wer einen Körper braucht, den ein ausgeschalteter
+        anlegt, oder ein Merkmal, das in ihm entsteht; beides steht danach
+        ausdrücklich im Dokument (``Suppression.chosen=False``). Behält ein
+        Schritt die Kennung seines Körpers, rechnen spätere auf dem Zustand
+        davor weiter — wie beim Löschen (§15.4). Passungen an einem Körper
+        oder Merkmal, das nicht entsteht, ruhen mit. Projektparameter bleiben
+        unberührt. Eine Transaktion, rücknehmbar, keine Nachfrage (Regel 19).
+
+        ``also`` und ``paused`` bringt die isolierte Auswertung mit
+        (``scene.revision``): Schritte und Passungen, deren Merkmal nach dem
+        Ausschalten verloren ist, ohne dass ein Lauf vorher sagen konnte,
+        woher es kam.
+        """
+        activation.require(activation.CHANGE)
+        chosen = self._chosen(op_ids)
+        mark = self._revision_mark()
+        versions = {entry.id: entry for entry in self.operations}
+        if all(
+            versions[op_id].suppressed is not None and versions[op_id].suppressed.chosen  # type: ignore[union-attr]
+            for op_id in chosen
+        ):
+            raise ValidationError(
+                field="ops",
+                detail=_("Dieser Schritt ist schon ausgeschaltet."),
+                constraint="already_off",
+                suggestions=(CANCEL,),
+            )
+        resting = {op_id for op_id, entry in versions.items() if entry.suppressed is not None}
+        off, absent = self._off_closure(resting | set(chosen) | set(also), dependencies)
+        pauses = self._fit_pauses(off, absent, dependencies)
+        for op_id, names in (paused or {}).items():
+            pauses.setdefault(op_id, []).extend(name for name in names if name not in pauses[op_id])
+        expectations = dependencies.expectations if dependencies is not None else {}
+        fit_expectations = dependencies.fit_expectations if dependencies is not None else {}
+        before: dict[OpId, Operation | None] = {}
+        after: dict[OpId, Operation | None] = {}
+        carried: list[OpId] = []
+        for op_id in sorted(off):
+            entry = versions[op_id]
+            current = entry.suppressed
+            fits = tuple(
+                dict.fromkeys((*(current.fits if current else ()), *pauses.get(op_id, ())))
+            )
+            expects = (
+                current.expects if current is not None else tuple(expectations.get(op_id, ()))
+            ) + tuple(
+                expected
+                for name in fits
+                if current is None or name not in current.fits
+                for expected in fit_expectations.get(name, ())
+            )
+            wanted = Suppression(
+                chosen=op_id in chosen or (current is not None and current.chosen),
+                expects=expects,
+                fits=fits,
+            )
+            if wanted == current:
+                continue
+            if current is None and op_id not in chosen:
+                carried.append(op_id)
+            before[op_id] = _copy_operation_matches(entry)
+            after[op_id] = _copy_operation_matches(dataclasses.replace(entry, suppressed=wanted))
+        self._reseed()
+        transaction = Transaction(
+            id=f"t{next(self._next_transaction)}",
+            title=_steps_title(
+                [versions[op_id] for op_id in chosen],
+                self._registry,
+                one=lambda step: _("Ausgeschaltet: {step}", step=step),
+                few=lambda count, steps: _(
+                    "{count} Schritte ausgeschaltet: {steps}", count=count, steps=steps
+                ),
+                many=lambda count, steps, rest: _(
+                    "{count} Schritte ausgeschaltet: {steps} und {rest} weitere",
+                    count=count,
+                    steps=steps,
+                    rest=rest,
+                ),
+            ),
+            ops=(),
+            changes=DocumentChange(
+                before=DocumentState(edited_ops=before), after=DocumentState(edited_ops=after)
+            ),
+            revision="suppress",
+        )
+        return RevisionPlan(
+            kind="suppress",
+            transaction=transaction,
+            subjects=chosen,
+            carried=tuple(carried),
+            mark=mark,
+        )
+
+    def plan_reactivate(
+        self, op_ids: Sequence[OpId], dependencies: Dependencies | None = None
+    ) -> RevisionPlan:
+        """Ausgeschaltete Schritte wieder einschalten — samt dem, was sie brauchen (P7.3).
+
+        Ein mitgenommener Schritt geht mit dem an, der ihn mitnahm: Wer ihn
+        allein wählt, holt dessen Wahl mit zurück, denn ohne sie rechnete er
+        nicht. Ein gewählter geht mit allem an, was nur seinetwegen ruhte;
+        was aus einem anderen Grund ruht, bleibt aus. Ob die Verweise danach
+        dasselbe Merkmal treffen wie vorher, prüft die isolierte Auswertung
+        gegen den Vermerk jedes Schritts (``Suppression.expects``).
+        """
+        activation.require(activation.CHANGE)
+        chosen = self._chosen(op_ids)
+        mark = self._revision_mark()
+        versions = {entry.id: entry for entry in self.operations}
+        resting = {op_id: entry for op_id, entry in versions.items() if entry.suppressed}
+        targets = [op_id for op_id in chosen if op_id in resting]
+        if not targets:
+            raise ValidationError(
+                field="ops",
+                detail=_("Dieser Schritt ist schon eingeschaltet."),
+                constraint="already_on",
+                suggestions=(CANCEL,),
+            )
+        roots = {op_id for op_id, entry in resting.items() if entry.suppressed.chosen}  # type: ignore[union-attr]
+        freed: set[OpId] = set()
+        for op_id in targets:
+            if op_id in roots:
+                freed.add(op_id)
+            else:
+                freed |= self._roots_of(op_id, roots, dependencies)
+        off, absent = self._off_closure(roots - freed, dependencies)
+        pauses = self._fit_pauses(off, absent, dependencies)
+        before: dict[OpId, Operation | None] = {}
+        after: dict[OpId, Operation | None] = {}
+        brought: list[OpId] = []
+        for op_id, entry in sorted(resting.items()):
+            current = entry.suppressed
+            assert current is not None
+            if op_id not in off:
+                wanted: Suppression | None = None
+                if op_id not in chosen:
+                    brought.append(op_id)
+            else:
+                wanted = dataclasses.replace(
+                    current,
+                    chosen=current.chosen and op_id not in freed,
+                    fits=tuple(dict.fromkeys((*current.fits, *pauses.get(op_id, ())))),
+                )
+            if wanted == current:
+                continue
+            before[op_id] = _copy_operation_matches(entry)
+            after[op_id] = _copy_operation_matches(dataclasses.replace(entry, suppressed=wanted))
+        self._reseed()
+        transaction = Transaction(
+            id=f"t{next(self._next_transaction)}",
+            title=_steps_title(
+                [versions[op_id] for op_id in targets],
+                self._registry,
+                one=lambda step: _("Eingeschaltet: {step}", step=step),
+                few=lambda count, steps: _(
+                    "{count} Schritte eingeschaltet: {steps}", count=count, steps=steps
+                ),
+                many=lambda count, steps, rest: _(
+                    "{count} Schritte eingeschaltet: {steps} und {rest} weitere",
+                    count=count,
+                    steps=steps,
+                    rest=rest,
+                ),
+            ),
+            ops=(),
+            changes=DocumentChange(
+                before=DocumentState(edited_ops=before), after=DocumentState(edited_ops=after)
+            ),
+            revision="reactivate",
+        )
+        return RevisionPlan(
+            kind="reactivate",
+            transaction=transaction,
+            subjects=tuple(targets),
+            carried=tuple(brought),
+            mark=mark,
+        )
+
+    def _roots_of(
+        self, op_id: OpId, roots: Collection[OpId], dependencies: Dependencies | None
+    ) -> set[OpId]:
+        """Die gewählten ausgeschalteten Schritte, ohne die ``op_id`` nicht rechnen kann.
+
+        Gesucht wird rückwärts über dieselben Kanten wie beim Ausschalten: den
+        Körper, den ein früherer frisch anlegt, und das Merkmal, das in ihm
+        entsteht (Sichtung oder Vermerk). Was dabei auf einen gewählten
+        ausgeschalteten Schritt trifft, muss mit an.
+        """
+        operations = self.operations
+        creators: dict[ObjectId, OpId] = {}
+        for entry in operations:
+            for output in entry.outputs:
+                if output not in entry.inputs:
+                    creators.setdefault(output, entry.id)
+        needs: dict[OpId, set[OpId]] = {}
+        for need in dependencies.needs if dependencies is not None else ():
+            needs.setdefault(need.step, set()).add(need.on)
+        by_id = {entry.id: entry for entry in operations}
+        found: set[OpId] = set()
+        pending = [op_id]
+        seen: set[OpId] = set()
+        while pending:
+            current = pending.pop()
+            if current in seen or current not in by_id:
+                continue
+            seen.add(current)
+            entry = by_id[current]
+            ancestors = {creators[name] for name in entry.inputs if name in creators}
+            ancestors |= needs.get(current, set())
+            if entry.suppressed is not None:
+                ancestors |= {
+                    expected.creator
+                    for expected in entry.suppressed.expects
+                    if expected.creator is not None
+                }
+            for ancestor in ancestors:
+                if ancestor == current or ancestor not in by_id:
+                    continue
+                if ancestor in roots:
+                    found.add(ancestor)
+                if by_id[ancestor].suppressed is not None:
+                    pending.append(ancestor)
+        return found
 
     def _later_users(self, op_id: OpId, objects: tuple[ObjectId, ...]) -> set[OpId]:
         """Operationen nach dieser, die eine ihrer Ausgaben nehmen."""
@@ -1553,7 +2415,7 @@ class History:
         current = {entry.id: entry for entry in self.document.ops}
         edited = dict(state.edited_ops)
         changed = False
-        fields = ("id", "op", "inputs", "outputs", "params", "seed", "translatable")
+        fields = ("id", "op", "inputs", "outputs", "params", "seed", "translatable", "suppressed")
         for op_id, stored in state.edited_ops.items():
             entry = current.get(op_id)
             if stored is None or entry is None:
@@ -1657,6 +2519,10 @@ class History:
         for entry in self.operations:
             if before is not None and entry.id >= before:
                 break
+            if entry.suppressed is not None:
+                # Was ein ausgeschalteter Schritt anlegen würde, gibt es nicht
+                # (P7.3) — ein neuer Schritt darauf hielte beim Rechnen an.
+                continue
             living.difference_update(set(entry.inputs) - set(entry.outputs))
             living.update(entry.outputs)
         return living
@@ -1851,6 +2717,126 @@ def _outputs_following(entry: Operation, inputs: Sequence[ObjectId]) -> tuple[Ob
     ):
         kept += 1
     return (*tuple(inputs)[:kept], *entry.outputs[kept:])
+
+
+def _moved_order(
+    operations: Sequence[Operation], chosen: Collection[OpId], before: OpId | None
+) -> list[Operation]:
+    """Die Folge, wenn ``chosen`` in ihrer Reihenfolge vor ``before`` steht (``None``: ans Ende)."""
+    moving = [entry for entry in operations if entry.id in chosen]
+    staying = [entry for entry in operations if entry.id not in chosen]
+    at = next((index for index, entry in enumerate(staying) if entry.id == before), len(staying))
+    return [*staying[:at], *moving, *staying[at:]]
+
+
+def _order_problem(
+    order: Sequence[Operation], needs: Sequence[StepNeed], registry: Registry
+) -> UserError | None:
+    """Warum diese Folge nicht geht — oder ``None`` (P7.2).
+
+    Drei Fälle, keiner wird umgebogen: ein Schritt vor dem, der seinen Körper
+    anlegt; ein Schritt hinter dem, der seinen Körper vorher verbraucht; ein
+    Schritt vor dem, dessen Merkmal er braucht. Gerechnet wird nach Kennungen
+    über alle Schritte, auch die ausgeschalteten — die Folge muss auch nach
+    dem Einschalten stimmen.
+    """
+    title = _("Dorthin lässt sich der Schritt nicht verschieben.")
+    living: set[ObjectId] = set()
+    consumers: dict[ObjectId, OpId] = {}
+    for entry in order:
+        for name in entry.inputs:
+            if name in living:
+                continue
+            if name in consumers:
+                return UserError(
+                    title=title,
+                    detail=_(
+                        "Schritt {other} verbraucht vorher den Körper, an dem Schritt "
+                        "{step} arbeitet.",
+                        step=entry.id,
+                        other=consumers[name],
+                    ),
+                    values={"step": entry.id, "other": consumers[name], "object": name},
+                    op_id=entry.id,
+                    suggestions=(CANCEL,),
+                )
+            other = next(
+                (later.id for later in order if name in later.outputs and name not in later.inputs),
+                None,
+            )
+            return UserError(
+                title=title,
+                detail=_(
+                    "Schritt {step} arbeitet an einem Körper, den erst Schritt {other} anlegt.",
+                    step=entry.id,
+                    other=other if other is not None else "?",
+                ),
+                values={"step": entry.id, "other": other or 0, "object": name},
+                op_id=entry.id,
+                suggestions=(CANCEL,),
+            )
+        for name in set(entry.inputs) - set(entry.outputs):
+            living.discard(name)
+            consumers[name] = entry.id
+        living.update(entry.outputs)
+    positions = {entry.id: index for index, entry in enumerate(order)}
+    for need in needs:
+        if need.step not in positions or need.on not in positions:
+            continue
+        if positions[need.on] > positions[need.step]:
+            return UserError(
+                title=title,
+                detail=_(
+                    "Schritt {step} braucht ein Merkmal, das erst Schritt {other} anlegt.",
+                    step=need.step,
+                    other=need.on,
+                )
+                if need.feature_id is not None
+                else _(
+                    "Schritt {step} arbeitet an einem Körper, den erst Schritt {other} anlegt.",
+                    step=need.step,
+                    other=need.on,
+                ),
+                values={
+                    "step": need.step,
+                    "other": need.on,
+                    "object": need.object_id,
+                    **({"feature": need.feature_id} if need.feature_id is not None else {}),
+                },
+                op_id=need.step,
+                suggestions=(CANCEL,),
+            )
+    return None
+
+
+def _steps_title(
+    entries: Sequence[Operation],
+    registry: Registry,
+    *,
+    one: Callable[[TranslatableText | str], TranslatableText],
+    few: Callable[[int, TranslatableText | str], TranslatableText],
+    many: Callable[[int, TranslatableText | str, int], TranslatableText],
+) -> TranslatableText:
+    """Welche Schritte eine Handlung am Verlauf betrifft, im Titel — drei Namen, dann eine Zahl.
+
+    Dieselbe Form wie beim Löschen (:func:`_deletion_title`): Nummer und Titel
+    je Schritt in der Folge des Stapels, damit der Kunde im Verlauf findet,
+    was gemeint ist.
+    """
+    named: list[TranslatableText | str] = []
+    for entry in entries:
+        try:
+            named.append(_("{number} {title}", number=entry.id, title=registry.get(entry.op).title))
+        except AppError:
+            named.append(str(entry.id))
+    if len(named) == 1:
+        return one(named[0])
+    steps = named[0] if named else ""
+    for title in named[1:_NAMED_IN_TITLE]:
+        steps = _("{head}, {tail}", head=steps, tail=title)
+    if len(named) <= _NAMED_IN_TITLE:
+        return few(len(named), steps)
+    return many(len(named), steps, len(named) - _NAMED_IN_TITLE)
 
 
 def _deletion_title(
