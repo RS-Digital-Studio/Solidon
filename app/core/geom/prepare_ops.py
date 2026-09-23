@@ -4317,7 +4317,9 @@ class RemoveFeatureParams(BaseParams):
     # 6: ein geschlossener Hohlraum hinterlässt keine Narben (23.09.2026).
     # 7: ein Musterstopfen um einen Zylinder füllt auch Taschen mit
     # parallelen Wänden bis zum Boden (``patterns.plug_for``, 23.09.2026).
-    cache_version="7",
+    # 8: derselbe Stopfen wird an den Facettengrenzen konform geteilt und
+    # endet an den Stirnflächen des Stifts (23.09.2026).
+    cache_version="8",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -5279,8 +5281,9 @@ class ResizeFeatureParams(BaseParams):
     # Körper nicht — es entsteht als Netz (``apply_texture``). 7 seit dem
     # 23.09.2026: Ein Muster kann den Stil wechseln (``style``), sein Stopfen
     # um einen Zylinder füllt die Tasche bis zum Boden, und zwei Zweige haben
-    # am selben Tag unabhängig auf 6 erhöht.
-    cache_version="7",
+    # am selben Tag unabhängig auf 6 erhöht. 8: Der Stopfen wird an den
+    # Facettengrenzen konform geteilt und endet an den Stirnflächen des Stifts.
+    cache_version="8",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -10937,7 +10940,10 @@ def _resize_pattern(
         clearance=field.frame.clearance,
         around=field.around,
     )
-    tool = field.placed(flat)
+    # Wo das Feld bis an eine Stirnfläche des Stifts reicht, schneidet ein
+    # vertieftes Muster über sie hinaus — aus demselben Grund wie die
+    # durchgehende Zelle oben (``Field.placed``).
+    tool = field.placed(flat, beyond=BOOLEAN_OVERLAP if engraved else 0.0)
     placed = boolean(
         "difference" if engraved else "union",
         [cleared.mesh, tool],

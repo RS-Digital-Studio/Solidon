@@ -726,6 +726,8 @@ def _rim_patterns(
     und danach gilt dieselbe Frage wie für jede Zellgruppe: deckungsgleich,
     mindestens so viele wie ihr Stil verlangt, im Gitter.
     """
+    from app.core.geom.transform import along
+
     around: dict[FeatureId, list[EdgePiece]] = {}
     spans: dict[FeatureId, tuple[np.ndarray, float, float]] = {}
     for piece in pieces:
@@ -736,13 +738,14 @@ def _rim_patterns(
                 continue
             if name not in spans:
                 axis = np.asarray(owned[name].params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
-                corners = measure.points[
-                    measure.triangles[np.asarray(owned[name].face_indices, dtype=np.int64)]
-                ].reshape(-1, 3)
-                along = corners @ axis
-                spans[name] = (axis, float(along.min()), float(along.max()))
+                first, last = _axial_span(
+                    measure.points,
+                    measure.triangles[np.asarray(owned[name].face_indices, dtype=np.int64)],
+                    axis,
+                )
+                spans[name] = (axis, first, last)
             axis, low, high = spans[name]
-            reach = measure.points[measure.triangles[piece.indices]].reshape(-1, 3) @ axis
+            reach = along(measure.points[measure.triangles[piece.indices]].reshape(-1, 3), axis)
             # Nur, was in der Länge des Stifts liegt: Eine Rippe, die über die
             # Stirnfläche hinausragt, lässt sich dort weder stopfen noch
             # abnehmen — entfernt blieben ihre Stummel stehen.
@@ -1316,6 +1319,13 @@ class Frame:
     (22.09.2026). ``None``, wenn der Träger nicht bekannt oder nicht in
     Facetten gelesen ist.
     """
+    span: tuple[float, float] | None = None
+    """Wie weit der Träger entlang der Achse reicht, in der zweiten Achse der Abwicklung.
+
+    Am Zylinder von Stirnfläche zu Stirnfläche (:func:`_axial_span`) — dort
+    endet ein Stopfen, der eine Zelle füllt. ``None``, wenn der Träger nicht
+    bekannt ist.
+    """
 
     @classmethod
     def plane(cls, normal: np.ndarray) -> Frame:
@@ -1505,44 +1515,96 @@ class Frame:
 
 
 def _split_along(body: Any, positions: np.ndarray) -> Any:
-    """Ein flacher Körper, an jeder dieser Lagen der ersten Achse durchgeschnitten.
+    """Ein flacher Körper, an jeder dieser Lagen der ersten Achse geteilt — konform.
 
-    Der exakte Kern schneidet (``split_by_plane``) und fügt die Stücke wieder
-    zusammen: Die Schnittkanten bleiben als Kanten im Netz, und darauf kommt
-    es an — jedes Dreieck liegt danach ganz auf einer Seite jeder Lage.
+    Jede Kante, die eine Lage kreuzt, bekommt genau einen neuen Punkt auf ihr,
+    und beide Dreiecke an der Kante teilen ihn (:func:`_cut_at`): Der Körper
+    bleibt geschlossen, und jedes Dreieck liegt danach ganz auf einer Seite
+    jeder Lage. Gerechnet werden nur Grundrechenarten (RM-187).
+
+    **Keine Boolesche Rechnung dafür.** Hier stand ``split_by_plane`` mit einem
+    ``batch_boolean``, das die Stücke wieder zusammenfügte. Geht eine Lage
+    durch eine Ecke oder ulp-nah an ihr vorbei, treffen die zwei Schnittflächen
+    nicht Bit für Bit aufeinander, und die Vereinigung ließ Finnen stehen —
+    zwei deckungsgleiche Dreiecke mit entgegengesetzter Normale —, aus denen
+    ``manifold3d`` beim nächsten Einlesen einen Keil verwarf. Das trifft jede
+    Zelle, die mittig auf einer Kante des Vielecks sitzt, denn dort setzt
+    ``refined_for_bending`` eine Ecke genau auf die Facettengrenze: Nach dem
+    Entfernen von 48 Taschen um einen Griff Ø 30 standen vier Hohlräume von
+    0,03 bis 0,06 mm³ im Körper (23.09.2026). Solange die Facettenwinkel auf
+    sechs Stellen gerundet waren, lag die Lage zufällig 10⁻⁶ mm neben der Ecke.
     """
-    import manifold3d
     import trimesh
 
     if len(positions) == 0:
         return body
-    solid = manifold3d.Manifold(
-        manifold3d.Mesh64(
-            # Kopien, nicht Sichten: Der Kern nimmt keine Sicht auf eine
-            # fremde Spalte an, und die Ecken des verfeinerten Netzes sind eine.
-            np.array(body.vertices, dtype=np.float64, order="C"),
-            np.array(body.faces, dtype=np.uint64, order="C"),
+    vertices = np.array(body.vertices, dtype=np.float64)
+    faces = np.array(body.faces, dtype=np.int64)
+    for position in np.sort(np.asarray(positions, dtype=np.float64)):
+        vertices, faces = _cut_at(vertices, faces, float(position))
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+
+
+def _cut_at(
+    vertices: np.ndarray, faces: np.ndarray, position: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Die Dreiecke, die die Lage ``x = position`` kreuzen, an ihr geteilt.
+
+    Eine Ecke, die höchstens ``EPS_GEOM`` neben der Lage liegt, liegt auf ihr —
+    dieselbe Grenze, mit der :meth:`Frame._facet_borders` eine Lage am Rand des
+    Körpers verwirft; sonst entstünden Splitter ohne Breite. Ein Dreieck mit
+    einer Ecke auf der Lage wird zu zweien, eines mit einer Ecke allein auf
+    ihrer Seite zu dreien, und die Umlaufrichtung bleibt. Der Punkt auf einer
+    Kante wird einmal gerechnet, von der Ecke vor der Lage zu der dahinter, und
+    liegt genau auf ihr: Zwei Kanten mit denselben Ecken bekommen denselben
+    Punkt, gleich wie ihre Ecken nummeriert sind.
+    """
+    side = vertices[:, 0] - position
+    touching = np.abs(side) <= EPS_GEOM
+    if touching.any():
+        vertices = vertices.copy()
+        vertices[touching, 0] = position
+        side = np.where(touching, 0.0, side)
+    sign = np.sign(side).astype(np.int64)
+    corner_signs = sign[faces]
+    crossing = (corner_signs.min(axis=1) < 0) & (corner_signs.max(axis=1) > 0)
+    if not crossing.any():
+        return vertices, faces
+    crossed = faces[crossing]
+    signs = corner_signs[crossing]
+    # Die besondere Ecke nach vorn: die auf der Lage — oder die allein auf
+    # ihrer Seite, deren Vorzeichen dem der Summe entgegensteht.
+    total = signs.sum(axis=1)
+    special = np.where(total == 0, 0, -np.sign(total))
+    first = np.argmax(signs == special[:, None], axis=1)
+    rolled = crossed[np.arange(len(crossed))[:, None], (first[:, None] + np.arange(3)) % 3]
+    pointed = rolled[total == 0]
+    alone = rolled[total != 0]
+    edges, inverse = unique_edges(
+        np.concatenate((pointed[:, [1, 2]], alone[:, [0, 1]], alone[:, [0, 2]])),
+        return_inverse=True,
+    )
+    before = side[edges[:, 0]] < 0.0
+    low = np.where(before, edges[:, 0], edges[:, 1])
+    high = np.where(before, edges[:, 1], edges[:, 0])
+    share = side[low] / (side[low] - side[high])
+    points = vertices[low] + share[:, None] * (vertices[high] - vertices[low])
+    points[:, 0] = position
+    new = len(vertices) + inverse
+    middle = new[: len(pointed)]
+    towards_one = new[len(pointed) : len(pointed) + len(alone)]
+    towards_two = new[len(pointed) + len(alone) :]
+    triangles = np.concatenate(
+        (
+            faces[~crossing],
+            np.column_stack((pointed[:, 0], pointed[:, 1], middle)),
+            np.column_stack((pointed[:, 0], middle, pointed[:, 2])),
+            np.column_stack((alone[:, 0], towards_one, towards_two)),
+            np.column_stack((towards_one, alone[:, 1], alone[:, 2])),
+            np.column_stack((towards_one, alone[:, 2], towards_two)),
         )
     )
-    pieces = [solid]
-    for position in np.sort(positions):
-        cut: list[Any] = []
-        for piece in pieces:
-            low, high = piece.bounding_box()[0], piece.bounding_box()[3]
-            if not low < position < high:
-                cut.append(piece)
-                continue
-            for part in piece.split_by_plane((1.0, 0.0, 0.0), float(position)):
-                if not part.is_empty():
-                    cut.append(part)
-        pieces = cut
-    merged = manifold3d.Manifold.batch_boolean(pieces, manifold3d.OpType.Add)
-    built = merged.to_mesh64()
-    return trimesh.Trimesh(
-        vertices=np.asarray(built.vert_properties[:, :3], dtype=float),
-        faces=np.asarray(built.tri_verts, dtype=np.int64),
-        process=False,
-    )
+    return np.concatenate((vertices, points)), triangles
 
 
 def _facet_sag(frame: Frame, points: np.ndarray, triangles: np.ndarray) -> float:
@@ -1687,7 +1749,25 @@ def frame_for(
     facets = _facet_planes(
         frame, points, triangles, np.asarray(body.face_normals, dtype=float)[indices]
     )
-    return dataclasses.replace(frame, sag=sag, facets=facets)
+    from app.core.geom.transform import along
+
+    low, high = _axial_span(points, triangles, frame.normal)
+    level = float(along(frame.origin, frame.normal))
+    return dataclasses.replace(frame, sag=sag, facets=facets, span=(low - level, high - level))
+
+
+def _axial_span(points: np.ndarray, triangles: np.ndarray, axis: np.ndarray) -> tuple[float, float]:
+    """Wie weit ein Stift entlang seiner Achse reicht — von Stirnfläche zu Stirnfläche.
+
+    Gemessen an den Ecken seiner Dreiecke, in Weltlage entlang ``axis`` und
+    ohne BLAS (``transform.along``, RM-187). Dieselbe Länge fragen die Suche
+    nach Randmustern (:func:`_rim_patterns`: was darin liegt, ist eine Zelle)
+    und der Stopfen (:attr:`Frame.span`: dort endet er).
+    """
+    from app.core.geom.transform import along
+
+    reach = along(points[np.asarray(triangles, dtype=np.int64)].reshape(-1, 3), axis)
+    return float(reach.min()), float(reach.max())
 
 
 def _carrier_outline(body: Any, carrier: Feature) -> np.ndarray:
@@ -2426,13 +2506,14 @@ def plug_for(
     # Prisma ist auf beiden bündig — ein Überlapp stünde als Haut auf der
     # Rückseite (195 Sechsecke von einem Hundertstel am Halter, 22.09.2026).
     through = bool(feature.params.get("through", False))
-    # Um einen Zylinder um einen Saum breiter als die Mündung: Stopfen und
-    # Zellwand sind dieselbe Fläche, aber verschieden fein geteilt gebogen,
-    # und ihre Sehnen kreuzten einander — die Differenz ließ 347 Splitter
-    # stehen, die Vereinigung zwei Muster von einem Hundertstel Tiefe
-    # (22.09.2026). Auf der Ebene fallen beide Wände exakt zusammen, und die
-    # Rechnung nimmt das an; dort bleibt der Stopfen bündig.
-    margin = 0.0 if frame.kind == "plane" else 2.0 * frame.clearance
+    # **Ein vertiefter Stopfen endet an den Stirnflächen des Stifts**
+    # (:attr:`Frame.span`). Eine Zelle, die durch eine läuft — die Mulden
+    # eines Schraubdeckels, Rillen oben offen —, hat dort keine Wand, die der
+    # Saum decken müsste, und was über die Stirnfläche ragte, legte die
+    # Vereinigung als Stufe an: 31 Kerben mit je einer eigenen Fläche und
+    # 1,7 mm³ zu viel (23.09.2026). Ein erhabener Stopfen darf hinausreichen —
+    # die Differenz trägt dort nur Luft ab.
+    span = frame.span if frame.kind == "cylinder" and not raised else None
     parts = []
     for mouth in mouths:
         reach = frame.clearance
@@ -2443,16 +2524,16 @@ def plug_for(
             low, _low_v, high, _high_v = mouth.polygon.bounds
             reach += (high - low) ** 2 / (8.0 * frame.radius)
         height = mouth.depth if through else mouth.depth + BOOLEAN_OVERLAP + reach
-        polygon = (
-            mouth.polygon.buffer(margin, join_style="mitre") if margin > 0.0 else mouth.polygon
-        )
-        prism = _extruded(polygon, height)
-        if prism is None:
-            continue
-        if frame.kind == "cylinder" and not raised and not through:
-            _widened_towards_the_axis(prism, polygon, height, frame.radius)
-        prism.apply_translation((0.0, 0.0, lift if raised else lift - height))
-        parts.append(prism)
+        polygon = _mouth_with_margin(mouth, frame)
+        middle = float(polygon.centroid.x)
+        for piece in _within_span(polygon, span):
+            prism = _extruded(piece, height)
+            if prism is None:
+                continue
+            if frame.kind == "cylinder" and not raised and not through:
+                _widened_towards_the_axis(prism, middle, height, frame.radius)
+            prism.apply_translation((0.0, 0.0, lift if raised else lift - height))
+            parts.append(prism)
     if not parts:
         return None
     return MeshData.of(frame.placed(concatenated(parts), faceted=True))
@@ -2559,18 +2640,70 @@ class Field:
         local = self._turn().T @ developed
         return float(local[0]), float(local[1])
 
-    def placed(self, tool: MeshData) -> MeshData:
-        """Ein flacher Körper aus den Achsen des Feldes in die Welt."""
+    def placed(self, tool: MeshData, *, beyond: float = 0.0) -> MeshData:
+        """Ein flacher Körper aus den Achsen des Feldes in die Welt.
+
+        ``beyond`` legt die Deckel des Werkzeugs, die an einer Stirnfläche
+        des Trägers enden, mindestens so weit dahinter (:func:`_through_the_ends`).
+        Ein Schneidwerkzeug, das bündig mit ihr endet, ließ dort Häute ohne
+        Dicke stehen: Neu gezeichnete Rillen eines Deckels, die durch seinen
+        Rand laufen, hatten eine Finne in der Stirnfläche, und die Erkennung las
+        die Rille nicht mehr (23.09.2026). Ein Werkzeug, das vereinigt wird,
+        bekommt keinen Überstand — dort legte er Material über der Stirnfläche
+        an.
+        """
         import trimesh
 
         vertices = np.asarray(tool.raw.vertices, dtype=float)
         developed = vertices[:, :2] @ self._turn().T + self.middle
+        if beyond > 0.0 and self.frame.span is not None:
+            developed = _through_the_ends(
+                developed,
+                vertices[:, 2],
+                np.asarray(tool.raw.faces, dtype=np.int64),
+                self.frame.span,
+                beyond,
+            )
         flat = trimesh.Trimesh(
             vertices=np.column_stack((developed, vertices[:, 2] + self.level)),
             faces=np.asarray(tool.raw.faces, dtype=np.int64),
             process=False,
         )
         return MeshData.of(self.frame.placed(flat))
+
+
+def _through_the_ends(
+    developed: np.ndarray,
+    heights: np.ndarray,
+    faces: np.ndarray,
+    span: tuple[float, float],
+    beyond: float,
+) -> np.ndarray:
+    """Die Deckel eines Werkzeugs mindestens um ``beyond`` hinter die Stirnfläche legen.
+
+    Ein Deckel ist ein Dreieck quer zur Achse — höchstens ``CORNER_DEGREES``
+    gekippt, die Eckenregel dieses Moduls —, dessen Ecken alle an der
+    Stirnfläche liegen (auf ``MAX_FACET_SAG`` genau, dieselbe Grenze, mit der
+    :func:`_rim_patterns` fragt, was in der Länge des Stifts liegt) oder
+    jenseits davon. Nur die rücken; eine Rautenecke knapp unter der Stirnfläche
+    gehört zu schrägen Wänden und bleibt, wo sie ist — mit ihr verschoben
+    schnitt sie Kerben von Hundertsteln in die Stirnfläche. Gemessen wird ab
+    der Stirnfläche, nicht ab dem nur angenähert dort liegenden Werkzeugende.
+    ``developed`` ist
+    die Lage in der Abwicklung, ``heights`` die Höhe darüber.
+    """
+    corners = np.column_stack((developed, heights))[faces]
+    normals = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    lengths = np.linalg.norm(normals, axis=1)
+    across = (lengths > EPS_GEOM) & (
+        np.abs(normals[:, 1]) >= units.exact_cos_degrees(CORNER_DEGREES) * lengths
+    )
+    moved = np.array(developed, dtype=float)
+    for edge, outward in ((span[1], 1.0), (span[0], -1.0)):
+        at_end = (outward * (corners[:, :, 1] - edge) >= -units.MAX_FACET_SAG).all(axis=1)
+        chosen = np.unique(faces[across & at_end])
+        moved[chosen, 1] = outward * np.maximum(outward * moved[chosen, 1], outward * edge + beyond)
+    return moved
 
 
 def field_outline(mesh: MeshData, feature: Feature, features: Mapping[FeatureId, Feature]) -> Field:
@@ -2636,7 +2769,12 @@ def field_outline(mesh: MeshData, feature: Feature, features: Mapping[FeatureId,
         if width >= circumference - pitch and _turn(angle) <= SAME_DIRECTION_DEGREES:
             around = circumference
     for mouth in mouths_of(mesh, feature, features):
-        moved = affinity.translate(mouth.polygon, -float(middle[0]), -float(middle[1]))
+        # Derselbe Umriss, den der Stopfen füllt. Eine Zelle am Stirnrand
+        # liefert sonst einen gezackten Mündungsrand innerhalb der glatten
+        # gefüllten Fläche. Das neue Werkzeug schnitte dort Nullhäute ab.
+        moved = affinity.translate(
+            _mouth_with_margin(mouth, frame), -float(middle[0]), -float(middle[1])
+        )
         pieces.append(moved)
         if frame.kind == "cylinder":
             # Eine Zelle über der Naht liegt auf beiden Seiten des Blatts.
@@ -2678,18 +2816,25 @@ def _solid(geometry: Any) -> Any:
     return unary_union(parts) if parts else geometry
 
 
-def _widened_towards_the_axis(prism: Any, polygon: Any, height: float, radius: float) -> None:
+def _widened_towards_the_axis(prism: Any, middle: float, height: float, radius: float) -> None:
     """Den Boden eines vertieften Stopfens um einen Zylinder so weit wie die Tasche dort.
 
-    In der Abwicklung ist ein Millimeter in der Tiefe ``d`` unter dem Mantel
-    ``R / (R - d)`` Millimeter breit: Eine Tasche mit **parallelen** Wänden —
-    gefräst, aus einer fremden Datei — wird zum Boden hin breiter, eine mit
-    radialen Wänden (so biegt ``apply_texture``) bleibt gleich. Bis zum
-    22.09.2026 blieb der Stopfen ein gerades Prisma über der Mündung; an
+    In der Abwicklung ist ein Millimeter **im Umfang** in der Tiefe ``d`` unter
+    dem Mantel ``R / (R - d)`` Millimeter breit: Eine Tasche mit **parallelen**
+    Wänden — gefräst, aus einer fremden Datei — wird zum Boden hin breiter,
+    eine mit radialen Wänden (so biegt ``apply_texture``) bleibt gleich. Bis
+    zum 22.09.2026 blieb der Stopfen ein gerades Prisma über der Mündung; an
     48 Taschen 3 auf 5 mm um einen Griff Ø 30 standen danach 96 eingeschlossene
     Hohlräume von je 0,07 mm³ am Taschenboden. Der Boden wird deshalb um die
-    Mitte der Mündung um diesen Faktor gestreckt. Was er dabei mehr deckt, ist
-    Material unter dem Mantel — die Vereinigung ändert dort nichts.
+    Mitte der Mündung (``middle``, die erste Achse der Abwicklung) um diesen
+    Faktor gestreckt. Was er dabei mehr deckt, ist Material unter dem Mantel —
+    die Vereinigung ändert dort nichts.
+
+    **Nur im Umfang:** Entlang der Achse ist eine Tasche in jeder Tiefe gleich
+    lang. Bis zum 23.09.2026 streckte der Boden in beiden Achsen, und eine
+    Zelle, die durch eine Stirnfläche läuft, ragte mit einem Keil über sie
+    hinaus — 31 Rillen um einen Griff Ø 30 legten beim Entfernen 10,9 mm³
+    Material über der Stirnfläche an.
 
     ``prism`` steht auf Z = 0 (der Boden) bis ``height`` (die Mündung) und wird
     an Ort und Stelle geändert.
@@ -2697,11 +2842,48 @@ def _widened_towards_the_axis(prism: Any, polygon: Any, height: float, radius: f
     if radius <= height + EPS_GEOM:
         return
     factor = radius / (radius - height)
-    centre = np.asarray(polygon.centroid.coords[0], dtype=float)
     vertices = np.array(prism.vertices, dtype=float)
     floor = vertices[:, 2] <= EPS_GEOM
-    vertices[floor, :2] = centre + (vertices[floor, :2] - centre) * factor
+    vertices[floor, 0] = middle + (vertices[floor, 0] - middle) * factor
     prism.vertices = vertices
+
+
+def _mouth_with_margin(mouth: Mouth, frame: Frame) -> Any:
+    """Der Mündungsumriss, den der Stopfen und danach das neue Muster benutzen.
+
+    Um den Zylinder deckt der Saum die verschieden fein gebogenen Sehnen von
+    Stopfen und Zellwand. Ohne ihn kreuzten sie einander: Die Differenz ließ
+    Splitter stehen, die Vereinigung Muster von einem Hundertstel Tiefe.
+    Auf einer Ebene fällt die Mündung bereits exakt auf ihre Wand.
+    Das Neuzeichnen liest denselben Saum: Was der Stopfen dort füllt, gehört
+    anschließend zur Trägerfläche und ist keine Aussparung im Feld.
+    """
+    margin = 0.0 if frame.kind == "plane" else 2.0 * frame.clearance
+    return mouth.polygon.buffer(margin, join_style="mitre") if margin > 0.0 else mouth.polygon
+
+
+def _within_span(polygon: Any, span: tuple[float, float] | None) -> list[Any]:
+    """Die Stücke eines Umrisses zwischen den Stirnflächen — oder der Umriss selbst.
+
+    Geschnitten wird nur, wo er über eine hinausreicht: Jede andere Zelle
+    behält ihren Umriss Bit für Bit. Das Rechteck reicht in der ersten Achse
+    um die eigene Breite über den Umriss hinaus, damit keine seiner Kanten auf
+    einer Ecke liegt.
+    """
+    from shapely.geometry import box
+
+    if span is None:
+        return [polygon]
+    left, bottom, right, top = polygon.bounds
+    if bottom >= span[0] and top <= span[1]:
+        return [polygon]
+    width = right - left
+    clipped = polygon.intersection(box(left - width, span[0], right + width, span[1]))
+    return [
+        part
+        for part in getattr(clipped, "geoms", [clipped])
+        if part.geom_type == "Polygon" and part.area > EPS_GEOM
+    ]
 
 
 def _extruded(polygon: Any, height: float) -> Any:

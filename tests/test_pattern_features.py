@@ -39,6 +39,7 @@ from app.core.types import (
     Scene,
     SceneObject,
 )
+from app.core.units import EPS_GEOM
 
 NOZZLE = PrinterProfile(id="test", title="Test", build_volume=(220.0, 220.0, 250.0))
 PROFILE = Profile(printer=NOZZLE, material=None)
@@ -1085,6 +1086,25 @@ def test_a_coarse_pattern_around_a_handle_is_one_pattern_on_the_handle(
     assert kinds(out.features) == {"pin": 1, "face": 2, "pattern": 1}, kinds(out.features)
 
 
+def grooved_to_end_face(pattern: str, *, z: float = 8.0) -> SceneObject:
+    """Ein Griff mit einem vertieften Muster, dessen Feld über eine Stirnfläche hinausreicht."""
+    entry = SceneObject(id="obj_1", name="Griff", mesh=cylinder())
+    out, _findings = run_op(
+        "apply_texture",
+        entry,
+        pattern=pattern,
+        pitch=3.0,
+        depth=0.8,
+        mode="engraved",
+        width=CIRCUMFERENCE,
+        height=20.0,
+        wrap="cylinder",
+        wrap_diameter=CYLINDER_DIAMETER,
+        z=z,
+    )
+    return out
+
+
 @pytest.mark.parametrize("pattern", ["rib", "knurl_diamond"])
 def test_grooves_running_out_of_the_end_face_are_one_pattern_around_the_handle(
     pattern: str,
@@ -1099,20 +1119,7 @@ def test_grooves_running_out_of_the_end_face_are_one_pattern_around_the_handle(
     hinausreicht. Entfernt kommt der Stift wieder: Die fehlenden Facetten unter
     den Rillen ergänzt das regelmäßige Vieleck des Trägers.
     """
-    entry = SceneObject(id="obj_1", name="Griff", mesh=cylinder())
-    out, _findings = run_op(
-        "apply_texture",
-        entry,
-        pattern=pattern,
-        pitch=3.0,
-        depth=0.8,
-        mode="engraved",
-        width=CIRCUMFERENCE,
-        height=20.0,
-        wrap="cylinder",
-        wrap_diameter=CYLINDER_DIAMETER,
-        z=8.0,
-    )
+    out = grooved_to_end_face(pattern)
     read = only_pattern(out.features)
     assert read.params["style"] == pattern
     assert read.params["mode"] == "engraved"
@@ -1121,11 +1128,13 @@ def test_grooves_running_out_of_the_end_face_are_one_pattern_around_the_handle(
     assert math.isclose(read.params["pitch"], expected, abs_tol=0.02), read.params["pitch"]
     assert kinds(out.features)["pin"] == 1, kinds(out.features)
     plain, _findings = run_op("remove_feature", out, at_feature=read.id)
-    assert kinds(plain.features).get("pin") == 1, kinds(plain.features)
-    assert "pattern" not in kinds(plain.features)
-    # Die Stopfen schließen auch die Kerben in der Deckfläche; was sie dort
-    # an Überlappung mitbringen, sind unter 2 mm³ auf 21 190.
-    assert math.isclose(plain.mesh.volume, cylinder().volume, abs_tol=2.0), plain.mesh.volume
+    # Die Stopfen schließen auch die Kerben in der Deckfläche — bündig mit ihr.
+    # Bis zum 23.09.2026 ragten sie um ihren Saum darüber hinaus: Jede Kerbe
+    # blieb als eigene Fläche stehen (31 am Griff), und es kamen 1,7 mm³ dazu,
+    # mit dem in beiden Achsen gestreckten Taschenboden 12,7. Danach gilt
+    # dasselbe Maß wie für ein Muster mitten auf dem Griff.
+    assert kinds(plain.features) == {"pin": 1, "face": 2}, kinds(plain.features)
+    assert math.isclose(plain.mesh.volume, cylinder().volume, abs_tol=0.05), plain.mesh.volume
 
 
 def test_a_regular_polygon_gets_back_the_facets_a_pattern_cut_away() -> None:
@@ -1139,6 +1148,109 @@ def test_a_regular_polygon_gets_back_the_facets_a_pattern_cut_away() -> None:
     uneven = np.radians(np.array([-170.0, -100.0, -20.0, 45.0, 130.0]))
     same, _offsets = patterns._regular_polygon(uneven, np.full(5, 10.0))
     np.testing.assert_array_equal(same, uneven)
+
+
+def _folded_edges(body: trimesh.Trimesh) -> int:
+    """Kanten, an denen zwei Dreiecke fast aufeinanderliegen — eine Finne."""
+    normals = np.asarray(body.face_normals)
+    pairs = np.asarray(body.face_adjacency)
+    return int(((normals[pairs[:, 0]] * normals[pairs[:, 1]]).sum(axis=1) < -0.9).sum())
+
+
+def _read_volume(body: trimesh.Trimesh) -> float:
+    """Das Volumen, das ``manifold3d`` liest — wie die Vereinigung danach."""
+    import manifold3d
+
+    return float(
+        manifold3d.Manifold(
+            manifold3d.Mesh64(
+                np.array(body.vertices, dtype=np.float64, order="C"),
+                np.array(body.faces, dtype=np.uint64, order="C"),
+            )
+        ).volume()
+    )
+
+
+@pytest.mark.parametrize("pattern", ["rib", "knurl_diamond"])
+@pytest.mark.parametrize("pitch", [4.0, 5.9])
+@pytest.mark.parametrize("z", [-8.0, 8.0])
+def test_redrawing_grooves_through_the_end_face_leaves_no_fins(
+    pattern: str, pitch: float, z: float
+) -> None:
+    """Ein neues Muster läuft durch dieselbe Stirnfläche und lässt dort keine Nullhaut.
+
+    Die sieben Faltungen des Kreuzrändels mit 4 mm Teilung waren am Netz
+    wasserdicht, machten aber aus der oberen Stirnfläche 16 Verrundungen.
+    Die Zahl der Komponenten allein hätte den Fehler nicht festgehalten.
+    """
+    source = grooved_to_end_face(pattern, z=z)
+    read = only_pattern(source.features)
+    redrawn, _findings = run_op("resize_feature", source, at_feature=read.id, pitch=pitch)
+    body = redrawn.mesh.raw
+    assert body.is_watertight and body.is_winding_consistent
+    assert redrawn.mesh.component_count == 1
+    assert _folded_edges(body) == 0
+    assert math.isclose(_read_volume(body), body.volume, rel_tol=1e-9)
+    assert kinds(redrawn.features) == {"pin": 1, "face": 2, "pattern": 1}
+    after = only_pattern(redrawn.features)
+    assert after.params["style"] == pattern
+    expected = wrap_pitch(pattern, pitch, CYLINDER_DIAMETER, CIRCUMFERENCE)
+    assert math.isclose(after.params["pitch"], expected, abs_tol=0.02)
+    np.testing.assert_allclose(
+        body.bounds[:, 2], [-CYLINDER_LENGTH / 2.0, CYLINDER_LENGTH / 2.0], atol=EPS_GEOM, rtol=0.0
+    )
+
+
+def test_a_facet_border_beside_a_corner_of_the_plug_splits_without_fins() -> None:
+    """Eine Facettengrenze 10⁻¹⁴ neben einer Ecke des Stopfens teilt ihn sauber.
+
+    ``refined_for_bending`` teilt die Kanten einer Mündung gleichmäßig; sitzt
+    die Zelle mittig auf einer Kante des Vielecks, fällt eine Ecke auf die
+    Facettengrenze — bis auf die letzte Stelle. Der Schnitt über
+    ``split_by_plane`` und ``batch_boolean`` ließ dort Finnen stehen, und
+    ``manifold3d`` las den Stopfen danach mit 0,1 mm³ weniger: Nach dem
+    Entfernen von 48 Taschen um einen Griff blieben vier Hohlräume im Körper
+    (23.09.2026). Der Quader hat die Maße eines solchen Stopfens, die
+    Kantenlänge ist eine Facettenbreite an Ø 30 mit 96 Facetten.
+    """
+    from app.core.geom.mesh_ops import refined
+
+    box = MeshData.of(trimesh.creation.box(extents=(3.08, 5.08, 1.0257)))
+    body = refined(box, 15.0 * 2.0 * math.pi / 96).raw
+    assert (np.asarray(body.vertices)[:, 0] == 0.0).any(), "der Fall braucht eine Ecke bei x = 0"
+    for position in (0.0, 3.6e-15, 2e-14, -2e-14):
+        split = patterns._split_along(body, np.array([position]))
+        assert _folded_edges(split) == 0, position
+        assert math.isclose(_read_volume(split), body.volume, rel_tol=1e-9), position
+        assert split.is_watertight and split.is_winding_consistent, position
+        assert math.isclose(split.volume, body.volume, rel_tol=1e-12), position
+        offset = np.asarray(split.vertices)[np.asarray(split.faces)][:, :, 0] - position
+        across = (offset.min(axis=1) < -EPS_GEOM) & (offset.max(axis=1) > EPS_GEOM)
+        assert not across.any(), position
+
+
+def test_splitting_at_many_positions_keeps_the_body_closed_and_its_volume() -> None:
+    """Die Eigenschaften des Schnitts an einem Körper ohne Sonderlage.
+
+    Jede Lage, auch eine genau auf einer Ecke: dicht, gleich orientiert,
+    dasselbe Volumen, kein Dreieck quer zu einer Lage — und keine neuen Ecken
+    neben einer Lage, nur auf ihr.
+    """
+    body = trimesh.creation.icosphere(subdivisions=2, radius=10.0)
+    xs = np.asarray(body.vertices)[:, 0]
+    positions = np.array([-7.3, -2.0, float(xs[5]), 1.0 / 3.0, 6.5])
+    split = patterns._split_along(body, positions)
+    assert split.is_watertight and split.is_winding_consistent
+    assert math.isclose(split.volume, body.volume, rel_tol=1e-12)
+    assert math.isclose(_read_volume(split), body.volume, rel_tol=1e-9)
+    corners = np.asarray(split.vertices)[np.asarray(split.faces)][:, :, 0]
+    for position in positions:
+        offset = corners - position
+        across = (offset.min(axis=1) < -EPS_GEOM) & (offset.max(axis=1) > EPS_GEOM)
+        assert not across.any(), position
+    # Genau auf der Lage, nicht ein ulp daneben: Genau das ließ die Finnen entstehen.
+    added = np.asarray(split.vertices)[len(body.vertices) :, 0]
+    assert len(added) and np.isin(added, positions).all()
 
 
 def test_a_full_turn_redrawn_has_no_seam() -> None:
