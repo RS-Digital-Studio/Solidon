@@ -6314,3 +6314,36 @@ def test_a_countersink_over_the_edge_says_so(profile: Profile, kernel: str) -> N
 
     inside = _run_op("countersink_hole", entry, profile, diameter=5.0, x=27.0, y=0.0, z=top)
     assert "bore.over_the_edge" not in [finding.code for finding in inside.findings]
+
+
+def test_a_clean_cavity_is_closed_without_the_slow_winding_repair(monkeypatch) -> None:
+    """Der Hohlraum einer Senkbohrung wird ohne ``fix_normals`` geschlossen — und gleich.
+
+    trimesh richtet die Wicklung Dreieck für Dreieck in Python aus: Am Hohlraum
+    einer Senkbohrung der fünfmal unterteilten Senkplatte (199 680 Dreiecke)
+    kostete das 23,6 von 30 s der Vorschau einer Durchmesseränderung
+    (22.09.2026). Die Deckel laufen jetzt gegen die Randkanten, der Körper ist
+    damit gleichsinnig gewickelt, und nur ein durcheinander gewickeltes Netz
+    geht noch den langen Weg. Verglichen wird mit dem langen Weg selbst.
+    """
+    from app.core.geom import prepare_ops
+    from app.core.perceive.relations import cavity_surface_indices
+
+    mesh = normalise(read_mesh((MESHES / "plate_countersunk.stl").read_bytes(), ".stl"), "mm").mesh
+    features = detect(mesh)
+    hole = next(feature for feature in features.values() if feature.kind == "hole")
+    chain = [feature for feature in features.values() if feature.kind == "cone"]
+    reference = prepare_ops._paired_cavity_body(mesh, hole, *chain)
+    assert reference is not None, "ohne Hohlraumkörper prüft der Test nichts"
+
+    def refused(*_args, **_kwargs):
+        raise AssertionError("fix_normals an einem sauberen Hohlraum")
+
+    monkeypatch.setattr(trimesh.repair, "fix_normals", refused)
+    body = prepare_ops._paired_cavity_body(mesh, hole, *chain)
+    assert body is not None and body.raw.is_watertight
+    assert body.raw.volume == pytest.approx(reference.raw.volume, rel=1e-9)
+    assert body.raw.volume > 0.0
+    assert len(body.raw.faces) == len(reference.raw.faces)
+    indices = cavity_surface_indices(mesh, (hole, *chain))
+    assert len(indices) > 0

@@ -1723,6 +1723,9 @@ class OperationDialog(QDialog):
         # zielen wollte, musste den Dialog schließen und von vorn beginnen.
         # Der Knopf erscheint nur, wo schon gezielt wurde: Dann ist die
         # Platzierung für diese Operation möglich, und der Kunde kennt sie.
+        # Mit der Maus geht es auch ohne ihn — ein Klick ins Modell holt die
+        # Platzierung zurück und setzt dort die Stelle
+        # (``PlacementFlow._resume``); der Knopf ist der Weg für die Tastatur.
         self._aimed = False
         self.aim_again = QPushButton(tr("Stelle im Bild wählen"), self)
         aim_note = tr("Zurück ins Bild und die Stelle am Modell neu wählen. Die Werte bleiben.")

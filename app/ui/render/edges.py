@@ -62,6 +62,57 @@ def feature_edges(vertices: np.ndarray, faces: np.ndarray, angle: float) -> np.n
     return np.asarray(points[unique[chosen].ravel()], dtype=float)
 
 
+def outline_edges(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    """Der Rand einer Dreiecksauswahl — Kanten mit genau einem Dreieck, ``(2m, 3)``.
+
+    **Nach dem Ort gezählt, nicht nach der Eckennummer.** Eine Markierung aus
+    einer ungeschweißten STL trägt an jeder Dreieckskante eigene Ecken; nach
+    Nummern gezählt wäre jede Kante ein Rand und die Kontur ein Gitter.
+    Dieselbe Antwort gab bis zum 22.09.2026 ein ``np.unique(…, axis=0)`` über
+    alle Ecken der Auswahl und danach :func:`feature_edges` mit 180 Grad —
+    an der Senkbohrung einer Lochplatte mit 311 296 Dreiecken 0,7 s im
+    Qt-Hauptthread, bei **jeder** Auswahl und jedem Zeigerwechsel daneben.
+
+    Geschweißt wird deshalb nur, was danach noch in Frage kommt: Erst zählt
+    ein Ganzzahlschlüssel die Kanten nach Nummern (``klein·n + groß``, wie in
+    :func:`feature_edges`), und nur die Kanten mit einem Dreieck werden über
+    ihre Koordinaten zusammengeführt und neu gezählt. An einem geschweißten
+    Netz sind das die wenigen des wirklichen Randes, an einer Dreieckssuppe
+    alle — dann kostet es, was die alte Rechnung immer kostete. Eine Kante,
+    die nach Nummern zweimal vorkommt, bleibt innen, wie vorher.
+    """
+    triangles = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+    points = np.asarray(vertices, dtype=float).reshape(-1, 3)
+    if len(triangles) == 0:
+        return np.zeros((0, 3), dtype=float)
+    edges = np.concatenate([triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]])
+    edges.sort(axis=1)
+    key = edges[:, 0] * len(points) + edges[:, 1]
+    unique, counts = np.unique(key, return_counts=True)
+    single = unique[counts == 1]
+    if not len(single):
+        return np.zeros((0, 3), dtype=float)
+    candidates = np.column_stack((single // len(points), single % len(points)))
+    # Die Enden der Kandidaten nach ihrem Ort zusammenführen — exakt, keine
+    # Toleranz: Getrennte Ecken am selben Ort sind dieselbe Stelle, und eine
+    # Toleranz schlösse einen feinen Spalt, den die Markierung zeigen soll.
+    ends, place = np.unique(candidates.ravel(), return_inverse=True)
+    spots = points[ends]
+    order = np.lexsort((spots[:, 2], spots[:, 1], spots[:, 0]))
+    ordered = spots[order]
+    fresh = np.ones(len(ordered), dtype=bool)
+    fresh[1:] = np.any(ordered[1:] != ordered[:-1], axis=1)
+    welded = np.empty(len(ordered), dtype=np.int64)
+    welded[order] = np.cumsum(fresh) - 1
+    pairs = welded[place.reshape(-1, 2)]
+    pairs.sort(axis=1)
+    count = int(welded.max()) + 1
+    joined = pairs[:, 0] * count + pairs[:, 1]
+    _values, back, seen = np.unique(joined, return_inverse=True, return_counts=True)
+    keep = (seen[back] == 1) & (pairs[:, 0] != pairs[:, 1])
+    return np.asarray(points[candidates[keep].ravel()], dtype=float)
+
+
 #: Wie fein zwei Bildabstände noch als verschieden gelten, in Bildpunkten.
 #:
 #: Darunter entscheidet die Tiefe. Der Fall dafür ist die Silhouette: Ein

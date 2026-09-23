@@ -19,7 +19,7 @@ from app.core.scene.history import OperationDraft
 from app.core.scene.project import load, save
 from app.ui.labels import LengthSpin
 from app.ui.op_dialog import OperationDialog
-from app.ui.placement_flow import _PICK_IN_MODEL, PlacementFlow
+from app.ui.placement_flow import _PICK_IN_MODEL, SNAP_PIXELS, PlacementFlow
 from app.ui.render.api import PointerEvent
 from app.ui.session import Session
 
@@ -168,6 +168,13 @@ class _Viewport(QWidget):
 
     def set_placement_pointer(self, handler: Any) -> None:
         self.pointer = handler
+
+    def set_placement_resume(self, handler: Any) -> None:
+        self.resume = handler
+
+    def clear_placement_resume(self, handler: Any) -> None:
+        if getattr(self, "resume", None) == handler:
+            self.resume = None
 
     def placement_hit(self, _x: int, _y: int) -> Any:
         return self.hit
@@ -450,6 +457,40 @@ def test_reference_pick_rejects_foreign_body_and_early_enter_never_commits(flow)
     assert session.project.document is document
 
 
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
+def test_the_reference_pick_reaches_as_far_in_logical_points_at_any_scaling(
+    flow: Any, monkeypatch: Any, ratio: float
+) -> None:
+    """Der Klick auf einen Bezug fängt überall gleich weit — in Logikpunkten.
+
+    :data:`SNAP_PIXELS` sind Logikpunkte, der Maßstab der Ansicht zählt
+    Gerätepixel. Bis zum 22.09.2026 fehlte dazwischen das Geräteverhältnis,
+    und bei 200 Prozent Skalierung fing der Bezug nur halb so weit wie der
+    Tiefenfang in derselben Datei (Koordinator-Zusatz a der Durchsicht).
+    Nachgestellt wird ein Bildschirm, auf dem dasselbe Bild doppelt so viele
+    Gerätepixel je Millimeter hat.
+    """
+    import app.core.scene.placement as module
+
+    controller, session, viewport, _dialog = flow
+    controller.start()
+    _point(controller, session)
+    scale = viewport._pixels_per_mm_at(controller._surface.point)
+    monkeypatch.setattr(viewport, "_device_ratio", lambda: ratio)
+    monkeypatch.setattr(viewport, "_pixels_per_mm_at", lambda _point: scale * ratio)
+    asked: list[float] = []
+    monkeypatch.setattr(
+        module,
+        "reference_candidates",
+        lambda _prepared, _point, distance, **_kwargs: asked.append(distance) or (),
+    )
+    controller._reference_selected(0, _PICK_IN_MODEL)
+    controller._pick_reference(320, 240)
+    assert asked == [pytest.approx(SNAP_PIXELS / scale)], (
+        f"der Fang misst in Logikpunkten, gleich bei welchem Verhältnis ({ratio})"
+    )
+
+
 def test_the_reference_menu_hangs_on_the_dimension_and_changes_only_the_reference(
     flow, qt_app: QApplication
 ) -> None:
@@ -580,6 +621,64 @@ def test_the_surface_worker_gets_its_own_copy_of_the_mesh(flow: Any, monkeypatch
         assert mesh is not entry.mesh, "der Arbeiter rechnet auf dem Netz der Szene"
         assert not np.shares_memory(mesh.raw.vertices, entry.mesh.raw.vertices)
         assert not np.shares_memory(mesh.raw.faces, entry.mesh.raw.faces)
+
+
+def test_the_pointer_is_followed_while_it_moves_and_asks_about_its_face_once(
+    flow: Any, qt_app: QApplication, monkeypatch: Any
+) -> None:
+    """Die Stelle folgt dem Zeiger im Takt, und die Fläche wird einmal vorbereitet.
+
+    Zwei Fehler, gemessen am 22.09.2026 an der Senkplatte (311 000 Dreiecke)
+    mit einem Ereignis alle 8 ms (RM-203): Jede Bewegung startete den
+    16-ms-Zeitgeber neu, und die Frage kam erst, als der Zeiger ruhte — die
+    Stelle stand 5,5 s nach der letzten Bewegung. Und jede Frage bereitete die
+    ganze Fläche neu vor, an einer frischen Kopie ohne Merker, weil die
+    Antwort der vorigen Frage überholt war und verworfen wurde. Danach: 27
+    Fragen während der Bewegung, die Stelle steht 64 ms nach ihrem Ende.
+    """
+    import time
+
+    import app.core.scene.placement as module
+
+    controller, session, _viewport, _dialog = flow
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    controller._frozen = False
+    controller._commit_pending = False
+    controller._prepared = None
+    controller._prepared_mesh = None
+    controller._surface_known = None
+    seen: list[Any] = []
+    actual = module.prepare_surface
+
+    def watched(mesh: Any, *args: Any, **kwargs: Any) -> Any:
+        seen.append(mesh)
+        return actual(mesh, *args, **kwargs)
+
+    monkeypatch.setattr(module, "prepare_surface", watched)
+
+    assert controller.pointer(PointerEvent("move", 320, 240))
+    assert controller._timer.isActive()
+    time.sleep(0.012)
+    assert controller.pointer(PointerEvent("move", 321, 240))
+    assert controller._timer.remainingTime() <= 8, "die nächste Bewegung schob die Frage hinaus"
+
+    controller._timer.stop()
+    controller._next_surface()
+    assert controller._surface_busy, "die erste Frage läuft"
+    # Eine Bewegung, während sie läuft: Ihre Antwort ist überholt, bevor sie kommt.
+    assert controller.pointer(PointerEvent("move", 322, 240))
+    controller._timer.stop()
+    for _round in range(200):
+        assert session.wait_for_idle(30_000)
+        qt_app.processEvents()
+        if not controller._surface_busy and controller._pending is None:
+            break
+    assert controller._surface is not None, "die jüngste Stelle steht"
+    assert len(seen) == 1, f"die Fläche wurde {len(seen)}-mal vorbereitet"
+    assert controller._surface_mesh is not None and controller._surface_mesh[1] is seen[0], (
+        "jede Frage liest dieselbe Kopie mit ihren Merkern"
+    )
 
 
 def test_a_click_that_did_not_land_does_not_lock_the_next_one(flow: Any) -> None:
@@ -726,6 +825,100 @@ def test_placing_a_hole_goes_through_three_stages(flow: Any) -> None:
     assert session.wait_for_idle(30_000)
     assert not controller.active
     assert len(session.project.document.transactions) == before + 1
+
+
+def _escape(controller: PlacementFlow, viewport: Any) -> None:
+    """Escape so, wie der Kunde es drückt: als Taste an der Ansicht."""
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+
+    QApplication.sendEvent(
+        viewport,
+        QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier),
+    )
+
+
+def test_escape_goes_back_exactly_one_stage_and_the_model_leads_back_in(
+    flow: Any, qt_app: QApplication
+) -> None:
+    """Escape geht je Stufe genau eine zurück, und aus dem Dialog führt ein Klick zurück.
+
+    RM-205, gefunden im Review vom 21.09.2026: Escape in der Tiefe übersprang
+    die Maße und landete im Dialog, und aus dem Dialog führte kein Weg zurück
+    — ``surfaceRequested`` hatte keinen Sender mehr, seit der Knopf gefallen
+    war. Jetzt: Tiefe → Maße → Zielen → Dialog, die Werte bleiben, und ein
+    Klick auf das Modell setzt dort die Stelle, über ``surfaceRequested``.
+    """
+    controller, session, viewport, dialog = flow
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    _point(controller, session, confirm=True)
+    controller.accept()
+    assert session.wait_for_idle(30_000)
+    assert controller.active and controller._deepening, "Stufe 3"
+    name = depth_field("drill_hole", REGISTRY.get("drill_hole").params)
+    assert name is not None
+    assert controller.pointer(PointerEvent("move", 320, 300))
+    depth = float(dialog.values()[name])
+    assert depth > 0.0
+
+    _escape(controller, viewport)
+    assert controller.active and not controller._deepening, "aus der Tiefe zurück in die Maße"
+    assert controller._frozen and controller._surface is not None, "die Stelle steht noch"
+    assert float(dialog.values()[name]) == pytest.approx(depth), "die gezogene Tiefe bleibt"
+    assert viewport.display == "solid", "die geliehene Ansicht ist zurückgegeben"
+
+    _escape(controller, viewport)
+    assert controller.active and not controller._frozen, "aus den Maßen zurück ins Zielen"
+    assert float(dialog.values()[name]) == pytest.approx(depth), "die Werte bleiben"
+
+    _escape(controller, viewport)
+    assert not controller.active, "aus dem Zielen in den Dialog"
+    assert dialog.isVisible()
+    assert viewport.resume is not None, "der Rückweg steht offen"
+    assert dialog._placement_hint.isVisibleTo(dialog), "und der Dialog sagt ihn an"
+
+    asked: list[int] = []
+    dialog.surfaceRequested.connect(lambda: asked.append(1))
+    assert not viewport.resume(PointerEvent("move", 330, 250)), "eine Bewegung gehört der Ansicht"
+    assert viewport.resume(PointerEvent("press", 330, 250, button="left"))
+    assert viewport.resume(PointerEvent("release", 331, 250, button="left"))
+    assert asked == [1], "der Rückweg geht über surfaceRequested"
+    assert controller.active and viewport.resume is None
+    controller._timer.stop()
+    controller._next_surface()
+    for _round in range(200):
+        assert session.wait_for_idle(30_000)
+        qt_app.processEvents()
+        if controller._frozen and not controller._surface_busy:
+            break
+    assert controller._frozen, "derselbe Klick setzt die Stelle — Stufe 2"
+    assert float(dialog.values()[name]) == pytest.approx(depth), "und die Tiefe von vorhin bleibt"
+
+
+def test_the_way_back_ignores_a_drag_and_a_click_beside_the_body(flow: Any) -> None:
+    """Der Rückweg nimmt nur den Klick auf den Körper; Zug und Daneben gehören der Kamera."""
+    controller, session, viewport, dialog = flow
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    controller.back()
+    assert viewport.resume is not None
+    asked: list[int] = []
+    dialog.surfaceRequested.connect(lambda: asked.append(1))
+
+    assert viewport.resume(PointerEvent("press", 330, 250, button="left"))
+    assert viewport.resume(PointerEvent("release", 430, 250, button="left")), (
+        "ein Zug verbraucht sein Loslassen, setzt aber nichts"
+    )
+    assert asked == [] and not controller.active
+
+    hit, viewport.hit = viewport.hit, None
+    assert not viewport.resume(PointerEvent("press", 10, 10, button="left")), (
+        "neben dem Körper bleibt der Druck der Kamera"
+    )
+    viewport.hit = hit
+    dialog.reject()
+    assert viewport.resume is None, "mit dem Dialog geht der Rückweg"
 
 
 def test_the_depth_stage_never_starts_at_the_value_that_means_through(flow: Any) -> None:
@@ -1358,7 +1551,12 @@ def _keyboard_placement(flow: Any, qt_app: QApplication) -> Any:
 def test_escape_from_each_inner_dimension_editor_returns_to_values(
     flow: Any, qt_app: QApplication, position: int
 ) -> None:
-    """Esc aus dem QLineEdit beider Maßgruppen erhält Werte und erzeugt keine Operation."""
+    """Esc aus dem QLineEdit beider Maßgruppen erhält Werte und erzeugt keine Operation.
+
+    Seit RM-205 (22.09.2026) geht Escape je Stufe genau eine zurück: aus den
+    Maßen an der Stelle erst ins Zielen, das zweite in den Dialog. Geprüft
+    wird beides, und nach jedem die Zusage dieses Tests.
+    """
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
 
@@ -1372,6 +1570,13 @@ def test_escape_from_each_inner_dimension_editor_returns_to_values(
     editor.setFocus(Qt.FocusReason.OtherFocusReason)
     qt_app.processEvents()
     assert field.hasFocus(), "das innere Eingabefeld muss vor Esc tatsächlich fokussiert sein"
+    assert controller._frozen, "die Stelle steht — Stufe 2"
+
+    QTest.keyClick(editor, Qt.Key.Key_Escape)
+    qt_app.processEvents()
+    assert controller.active and not controller._frozen, "das erste Esc geht ins Zielen"
+    assert dialog.values() == values
+    assert len(session.project.document.ops) == before
 
     QTest.keyClick(editor, Qt.Key.Key_Escape)
     qt_app.processEvents()
@@ -4182,8 +4387,42 @@ def test_the_dialog_learns_from_the_flow_when_it_is_aiming(flow: Any) -> None:
             "solange gezielt wird, sagt der Dialog, wo die Stelle herkommt"
         )
 
+        # **Nach Escape bleibt er stehen** (RM-205, 22.09.2026): Ein Klick auf
+        # das Modell holt die Platzierung zurück, der Satz stimmt also weiter.
         controller.back()
-        assert dialog._placement_hint.isHidden(), "und danach wieder nicht"
+        assert not dialog._placement_hint.isHidden(), "der Klick ins Modell führt zurück"
+        assert viewport.resume is not None
+
+        # Beim Ändern eines Schritts gibt es diese Geste nicht — dort sagt er
+        # nach Escape nichts.
+        controller._change_op = session.project.document.ops[-1].id
+        controller.back()
+        assert dialog._placement_hint.isHidden(), "ohne Rückweg kein Satz"
     finally:
         controller.dispose()
         dialog.deleteLater()
+
+
+def test_several_redraws_in_one_event_round_draw_one_frame(
+    flow: Any, qt_app: QApplication, monkeypatch: Any
+) -> None:
+    """Drei Neuzeichnungen derselben Ereignisrunde, ein Bild.
+
+    Ein Anschlag im Maßfeld zeichnete den Fluss drei Mal neu — über das Maß,
+    über die Wertemeldung des Trägers und über den fertigen Werkzeugbau — und
+    jedes Mal ein ganzes Bild: an der Senkplatte bei 3163 mal 1259 Bildpunkten
+    14 ms je Bild (22.09.2026). Die Lage der Felder entsteht sofort, das Bild
+    einmal, wenn die Runde leer ist.
+    """
+    controller, session, viewport, _dialog = flow
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    _point(controller, session)
+    qt_app.processEvents()
+    frames: list[int] = []
+    monkeypatch.setattr(viewport, "_draw", lambda: frames.append(1))
+    for _ in range(3):
+        controller.redraw()
+    assert frames == [], "gezeichnet wird nach der Runde, nicht je Aufruf"
+    qt_app.processEvents()
+    assert frames == [1], f"{len(frames)} Bilder für eine Runde"

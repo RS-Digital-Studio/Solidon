@@ -825,7 +825,7 @@ stehen. `set_preview_gizmo(True)` nimmt ihn deshalb ab und
 `set_preview_gizmo(False)` baut ihn wieder auf — `_detach_gizmo` lässt den
 Schalterzustand in Ruhe, die Entscheidung bleibt also stehen.
 
-**Ein Griff, der nicht in `_on_pointer` steht, ist sichtbar und tot.** Er
+**Ein Griff, der nicht in `_dispatch_pointer` steht, ist sichtbar und tot.** Er
 wird gezeichnet, nimmt aber kein Zeigerereignis an, und jede Geste fällt
 durch zur Kameraführung — wer den Quader in seiner Vorschau verschieben
 wollte, schwenkte die Ansicht. Die Vorfahrt dort ist die eine Stelle, an
@@ -1106,7 +1106,16 @@ verwenden diese Kontexte; der Merkmalskörper wird dabei nicht erneut gebaut.
 Der Kontext gehört zu Eingaben und Werten, verspätete Ergebnisse werden über
 Generation und Laufkennung verworfen. `Position übernehmen` bestätigt den
 vorhandenen Dialog und erzeugt genau dessen Transaktion; Escape behält die
-Zahlen ohne neuen Verlaufsschritt. Beim Bearbeiten eines historischen Schritts
+Zahlen ohne neuen Verlaufsschritt — **und geht je Stufe genau eine zurück**
+(`PlacementFlow.step_back`, RM-205): Tiefe → Maße → Zielen → Dialog. Aus dem
+Dialog führt ein Klick auf das Modell zurück und setzt dort die Stelle
+(`_resume` über `Viewport.set_placement_resume`, sendet `surfaceRequested`);
+der Dialog zeigt dazu seinen Platzierungssatz weiter. Am gewählten Merkmal
+(`QuietHost`) und beim Ändern eines Schritts gibt es nur eine Stufe, dort
+geht Escape ganz zurück. Die Mausbewegung fragt im 16-ms-Takt nach der
+Fläche, nicht erst im Stillstand: eine Frage zur Zeit, ihr Ende nimmt die
+jüngste Stelle, und eine überholte Antwort behält die vorbereitete Fläche
+(`_surface_known`) samt der einen Netzkopie des Arbeiters (`_surface_mesh`). Beim Bearbeiten eines historischen Schritts
 liefert `Session.placement_before()` dessen tatsächlichen Eingang. Auch ein
 fehlerhafter Schritt bleibt damit korrigierbar. `result_current` und
 `Viewport.is_scene_applied()` sperren Ziele bis zur aktuellen sichtbaren Szene.

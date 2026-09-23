@@ -18974,6 +18974,44 @@ def test_a_coarse_preview_measures_the_same_change_as_the_exact_one(
     )
 
 
+def test_a_step_that_names_a_feature_is_previewed_on_the_exact_body(
+    session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Wer ein Merkmal beim Namen nennt, bekommt keine vergröberte Vorschau.
+
+    Die grobe Stufe verkleinert den Eingang und erkennt ihn neu; ein Schritt
+    mit ``at_feature`` fand sein Merkmal danach nicht mehr. An der Senkplatte
+    mit 311 296 Dreiecken (``plate_countersunk.stl``, fünfmal unterteilt)
+    stand beim Maßeditor im Bild statt einer Vorschau „Dieses Merkmal gibt
+    es an diesem Objekt nicht.", und Übernehmen blieb gesperrt (22.09.2026).
+    Hier dieselbe Platte einmal unterteilt und die Schranke heruntergesetzt —
+    am HEAD derselbe Satz.
+    """
+    import trimesh
+
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.ui import session as session_module
+
+    raw = trimesh.load(MESHES / "plate_countersunk.stl", force="mesh")
+    vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+    finer = tmp_path / "plate_countersunk_x1.stl"
+    trimesh.Trimesh(vertices, faces, process=False).export(finer)
+    session.import_model(finer)
+    result = session.evaluate_now()
+    body, entry = next(iter(result.scene.objects.items()))
+    hole = next(key for key, feature in entry.features.items() if feature.kind == "hole")
+    draft = OperationDraft(
+        op="resize_hole", params={"at_feature": hole, "diameter": 6.0}, inputs=(body,)
+    )
+
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
+    seen: list[int] = []
+    _scene, difference, reason = session._preview_outcome([draft], coarsened=seen.append)
+    assert reason == "" and difference is not None, reason
+    assert seen == [], "genau gerechnet, nicht vergröbert"
+
+
 def test_a_preview_without_the_coarse_callback_stays_exact(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:

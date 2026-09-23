@@ -495,6 +495,7 @@ class _Viewport:
     draws: int = 0
     settled: int = 0
     parallel_scale: float | None = None
+    order: list[str] = field(default_factory=list)
 
     def camera_pose(self) -> tuple[object, object, object, float | None]:
         assert self.renderer is not None
@@ -515,6 +516,10 @@ class _Viewport:
         if parallel_scale is not None:
             self.parallel_scale = parallel_scale
         self.draws += 1
+        self.order.append("pose")
+
+    def note_camera_motion(self) -> None:
+        self.order.append("motion")
 
     def settle_camera(self) -> None:
         self.settled += 1
@@ -570,6 +575,20 @@ def test_advance_moves_the_camera_and_draws_once(qt_app: QApplication) -> None:
     assert view.renderer is not None
     assert view.renderer.camera.position[0] < 0.0
     assert controller.motion.x == 1.0
+
+
+def test_each_step_marks_the_motion_before_its_frame(qt_app: QApplication) -> None:
+    """Die Kappe meldet die Bewegung vor dem Bild (RM-200).
+
+    Im Takt der 3D-Maus zeichnet die Ansicht leichter; kommt die Meldung
+    erst nach ``set_camera_pose``, ist ausgerechnet das erste Bild jeder
+    Fahrt das volle und teure.
+    """
+    controller, view, _settings, _fits = _controller(qt_app)
+    controller.handle_report(report(1, 350, 0, 0))
+    assert controller.advance(DT)
+    assert controller.advance(DT)
+    assert view.order == ["motion", "pose", "motion", "pose"]
 
 
 def test_switched_off_the_device_is_still_seen_but_moves_nothing(qt_app: QApplication) -> None:

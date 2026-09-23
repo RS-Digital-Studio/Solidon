@@ -161,6 +161,9 @@ class RecordingRenderer(Renderer):
         self.labelled: list[list[str]] = []
         self.removed: list[Item] = []
         self.renders = 0
+        self.interacting = False
+        self.reduced_renders = 0
+        self._reduced = False
         self.draw_orders: list[list[Item]] = []
         self.reset_bounds: list[Bounds | None] = []
         self.pose = CameraPose((100.0, -100.0, 80.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
@@ -237,6 +240,7 @@ class RecordingRenderer(Renderer):
         style: SurfaceStyle,
         cell_colours: CellColours | None = None,
         capacity: int | None = None,
+        normals: np.ndarray | None = None,
     ) -> Item:
         if capacity is not None:
             if style.lighting or cell_colours is not None:
@@ -257,6 +261,7 @@ class RecordingRenderer(Renderer):
                     "style": style,
                     "cell_colours": cell_colours,
                     "capacity": capacity,
+                    "normals": normals,
                     "item": item,
                 },
             )
@@ -423,6 +428,15 @@ class RecordingRenderer(Renderer):
 
     def render(self) -> None:
         self.renders += 1
+        # Wie der pygfx-Renderer: leicht nur mit eingeschalteter Verdeckung.
+        self._reduced = self.interacting and bool(self.occlusion) and self.occlusion[-1][0]
+        self.reduced_renders += int(self._reduced)
+
+    def set_interacting(self, active: bool) -> None:
+        self.interacting = bool(active)
+
+    def frame_was_reduced(self) -> bool:
+        return self._reduced
 
     def screenshot(self) -> np.ndarray:
         return np.zeros((self.size[1], self.size[0], 3), dtype=np.uint8)

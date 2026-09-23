@@ -31,7 +31,7 @@ def test_original_face_adjacency_survives_an_unavailable_private_cache(cache_kin
         raw._cache = SimpleNamespace(
             verify=lambda: None, cache=None if cache_kind == "malformed" else {}
         )
-    assert placement._welded_adjacency(raw, vertices) == {0: [1], 1: [0]}
+    assert placement._welded_adjacency(raw, vertices).tolist() == [[0, 1]]
 
 
 def test_original_face_adjacency_cache_follows_mesh_changes():
@@ -42,10 +42,10 @@ def test_original_face_adjacency_cache_follows_mesh_changes():
         process=False,
     )
     first = placement._welded_adjacency(raw, raw.vertices)
-    assert first == {0: [1], 1: [0]}
+    assert first.tolist() == [[0, 1]]
     assert placement._welded_adjacency(raw, raw.vertices) is first
     raw.vertices[3, 0] += 0.001
-    assert placement._welded_adjacency(raw, raw.vertices) == {}
+    assert placement._welded_adjacency(raw, raw.vertices).tolist() == []
 
 
 @pytest.mark.parametrize("slotted", [False, True])
@@ -395,6 +395,98 @@ def test_reference_choice_keeps_the_point_and_survives_crossing_the_plate():
     assert moved.edges[index].distance == pytest.approx(5.0)
     with pytest.raises(ValidationError):
         placement.with_reference(prepared, original, index, "missing_edge")
+
+
+def test_held_references_skip_the_ranking_of_every_edge(monkeypatch):
+    """Mit festgehaltenen Bezügen wird keine Kante gerankt und keine kopiert.
+
+    Das Loslassen des Platzierungsgriffs ruft ``at_point`` mit den Bezügen
+    der Stelle im Qt-Hauptthread; die Rangfolge über alle Randkanten wurde
+    dort bis zum 22.09.2026 gebildet und verworfen — 85 ms an einer Platte
+    mit 2 452 Randkanten (RM-200). Ohne Bezüge bleibt die Wahl, wie sie war:
+    die zwei nächsten unabhängigen Kanten, und nur sie tragen einen Abstand.
+    """
+    mesh = MeshData.of(trimesh.creation.box((40.0, 30.0, 8.0)))
+    prepared = placement.prepare_surface(mesh, _top(mesh))
+    original = placement.at_point(prepared, (15.0, 10.0, 4.0))
+    assert sorted(edge.distance for edge in original.edges) == pytest.approx([5.0, 5.0])
+
+    checks = []
+    real = placement._independent
+
+    def counted(frame, edges):
+        checks.append(len(edges))
+        return real(frame, edges)
+
+    monkeypatch.setattr(placement, "_independent", counted)
+    moved = placement.at_point(prepared, (-15.0, -10.0, 4.0), references=original.edges)
+    # Geprüft wird nur noch das Paar selbst (``_checked_references``).
+    assert checks == [2], "festgehaltene Bezüge brauchen keine Rangfolge"
+    assert [edge.id for edge in moved.edges] == [edge.id for edge in original.edges]
+    assert sorted(edge.distance for edge in moved.edges) == pytest.approx([25.0, 35.0])
+
+    again = placement.at_point(prepared, (15.0, 10.0, 4.0))
+    assert again == original
+
+
+def test_a_clean_face_is_united_from_its_rim_and_matches_the_general_union(monkeypatch):
+    """Die Fläche eines sauberen Netzes entsteht ohne ``union_all`` — und gleich.
+
+    Bis zum 22.09.2026 ging jedes Dreieck der gewählten Fläche als eigenes
+    Polygon durch ``union_all``: 17 bis 28 s an der Oberseite der fünfmal
+    unterteilten ``plate_holes.stl``, bevor Griff und Maße erschienen
+    (RM-200). Der Rand eines sauberen Netzes kommt mit Zählen aus.
+    Verglichen wird mit der allgemeinen Vereinigung, Punkt für Punkt nach
+    Normalisierung.
+    """
+    from pathlib import Path
+
+    import shapely
+
+    corpus = Path(__file__).parent / "data/meshes/plate_holes.stl"
+    mesh = MeshData.of(trimesh.load(corpus, force="mesh"))
+    face = _top(mesh)
+    indices, _planar = placement._patch_faces(mesh, face)
+    frame = placement.prepare_surface(mesh, face).frame
+    relative = np.asarray(mesh.raw.triangles)[list(indices)] - frame.origin
+    xy = np.stack((relative @ frame.x_axis, relative @ frame.y_axis), axis=-1)
+    reference = shapely.union_all([shapely.Polygon(corners) for corners in xy])
+
+    def refused(*_args, **_kwargs):
+        raise AssertionError("union_all an einem sauberen Netz")
+
+    monkeypatch.setattr(shapely, "union_all", refused)
+    fast = placement.prepare_surface(mesh, face)
+    assert len(fast.area.interiors) == 4
+    assert shapely.normalize(fast.area).equals_exact(shapely.normalize(reference), 0.0)
+
+
+def test_overlapping_or_t_junction_triangles_fall_back_to_the_general_union():
+    """Was keine saubere Überdeckung ist, vereinigt weiter ``union_all``.
+
+    Zwei überlappende Dreiecke und eine T-Kreuzung — eine Kante, an der
+    auf der anderen Seite zwei kürzere liegen: Der Rand setzt geteilte
+    Ecken voraus, und sein Ergebnis wird deshalb geprüft, nicht geglaubt.
+    """
+    import shapely
+
+    overlapping = np.array(
+        [[[0.0, 0.0], [4.0, 0.0], [0.0, 4.0]], [[1.0, 1.0], [5.0, 1.0], [1.0, 5.0]]]
+    )
+    t_junction = np.array(
+        [
+            [[0.0, 0.0], [4.0, 0.0], [0.0, 4.0]],
+            [[4.0, 0.0], [2.0, 2.0], [4.0, 4.0]],
+            [[2.0, 2.0], [0.0, 4.0], [4.0, 4.0]],
+        ]
+    )
+    for triangles in (overlapping, t_junction):
+        general = shapely.union_all([shapely.Polygon(corners) for corners in triangles])
+        area = placement._patch_area(triangles)
+        assert area.is_valid and area.geom_type == "Polygon"
+        assert shapely.normalize(area).equals_exact(shapely.normalize(general), 1e-12)
+    assert placement._boundary_area(overlapping) is None
+    assert placement._boundary_area(t_junction) is None
 
 
 @pytest.mark.parametrize("angle, accepted", [(15.0, True), (5.0, False)])
@@ -1330,7 +1422,7 @@ def test_the_welded_adjacency_is_built_once_per_mesh_and_not_once_per_click():
 
     erste = placement._welded_adjacency(raw, vertices)
     zweite = placement._welded_adjacency(raw, vertices)
-    assert erste, "ohne Nachbarschaft prüft der Test nichts"
+    assert len(erste), "ohne Nachbarschaft prüft der Test nichts"
     assert zweite is erste, "die zweite Frage rechnete erneut"
 
     # Über den echten Weg: zwei Klicks auf verschiedene Flächen desselben

@@ -314,9 +314,14 @@ wird durch die Entscheidung des Prüflings: Eine Sonde, die die Vergleichszeile
 nachbaut, meldet nach dem Fix dieselben Zahlen wie davor — sie misst dann sich
 selbst.
 
-Vier Zahlen waren schon vorher richtig und bleiben das Vorbild:
-`MEASURE_SNAP_PIXELS`, `EDGE_REACH_PIXELS`, `PICK_SLACK_PIXELS` und das
-`SNAP_PIXELS` der Platzierung rechnen seit je mit dem Verhältnis.
+Drei Zahlen waren schon vorher richtig und bleiben das Vorbild:
+`MEASURE_SNAP_PIXELS`, `EDGE_REACH_PIXELS` und `PICK_SLACK_PIXELS`. Das
+`SNAP_PIXELS` der Platzierung rechnete nur im Tiefenfang mit dem Verhältnis;
+beim Bezugsklick (`_pick_reference`) fehlte es, und ebenso bei
+`GIZMO_LEAST_PIXELS` (`_gizmo_scale_for`) — beide bei 200 Prozent halb so
+groß, gefunden und behoben in der Durchsicht 0.5.0 (22.09.2026). Wer eine
+neue Bildpunktzahl einführt, sucht jede Verwendung ab, nicht nur die, an die
+er gedacht hat.
 
 **Zwei Zahlen dürfen es ausdrücklich nicht** — `SNAP_DOT_PIXELS` und
 `SKETCH_POINT_PIXELS`. Sie gehen als Punktgröße an den Renderer, und pygfx
@@ -330,9 +335,9 @@ jede `size=` am Vertrag.
 ohne Bildschirm unprüfbar. Der Langlochgriff (`slot_handle.py`) vergleicht
 gegen dieselbe Konstante und rechnet genauso um.
 
-Gemessen in `tests/test_navigator.py`, `tests/test_viewport_decisions.py` und
-`tests/test_slot_handle.py`: dieselbe Geste in Logikpunkten führt bei 1,0, 1,5
-und 2,0 zur selben Entscheidung.
+Gemessen in `tests/test_navigator.py`, `tests/test_viewport_decisions.py`,
+`tests/test_slot_handle.py` und `tests/test_surface_placement_ui.py`: dieselbe
+Geste in Logikpunkten führt bei 1,0, 1,5 und 2,0 zur selben Entscheidung.
 
 ## Was im Skizzenmodus in dieser Datei steht
 
@@ -1049,6 +1054,71 @@ unter der Grenze). Ein `argsort` über diese Zahlen ersetzt den Zeilenvergleich
 hält den Zahlenschlüssel gegen die langsame, offensichtlich richtige Rechnung
 — eine falsche Kodierung (zu kleines `n`, Kollisionen) fiele dort auf. Die
 `face_components` daneben (`_shadow_hulls_for`) bleiben Sache des Kerns.
+
+### Was ein neues Netz mitbringt, rechnet der Arbeiter (RM-203, 22.09.2026)
+
+Kanten, Schattenhüllen und Punktnormalen hängen am **Netz**, nicht an der
+Szene. Ein neues Anzeigenetz über `SCENE_PREPARATION_ABOVE` (20 000
+Dreiecken, zusammengezählt über die neuen) geht mit allem, was es braucht,
+in den `_SceneMeshWorker` (`_MeshTask`: Kanten bis `FEATURE_EDGE_LIMIT`,
+Hüllen in Körperkoordinaten, Normalen über `Renderer.surface_normals`);
+darunter rechnet der Aufbau selbst, weil ein Arbeiter für ein paar
+Millisekunden das Bild nur in die nächste Ereignisrunde schöbe. Bis der
+Arbeiter fertig ist, bleibt die letzte gültige Ansicht stehen. Gemessen am
+Baum mit 200 000 Dreiecken: 272–335 → 36–40 ms Hauptthread je Auswertung.
+
+**Die Merker halten zwei Netze je Körper** (`_MeshMemo`, `MESH_MEMO_KEPT`):
+Der historische Bohrschritt wechselt je Tastendruck zwischen dem Eingang vor
+dem Schritt und dem Endergebnis, und mit einem Eintrag verdrängte jeder
+Wechsel den anderen — an der Senkplatte 0,57 s bis zum Bild statt 33 ms. Eine
+Generation, kein Wachstum: Das dritte Netz verdrängt das älteste.
+
+**Ein Aufbau zeichnet ein Bild.** `select`, `_redraw_measurements` und die
+Schatten laufen in `_apply_scene` mit `draw=False`;
+`test_a_scene_build_draws_exactly_one_frame` hält es fest.
+
+### Die Markierung wird neu gebaut, wenn sich ihr Inhalt ändert, nicht wenn der Zeiger zuckt
+
+`_redraw_feature_patch` und `_redraw_hover_patch` merken sich, wofür sie
+zuletzt gebaut haben (`_feature_patch_state`, `_hover_patch_drawn`), und
+vergleichen Netze mit `_Same` — nach Identität, nicht über `id()`: Eine
+freigegebene Auswertung kann an derselben Adresse wiedererstehen. Gebaut wird
+mit geteilten Ecken (`_lifted_patch`, `_lifted_and_rim`), der Umriss durch
+Zählen nach Ort (`edges.outline_edges`), und eine unbeleuchtete Fläche
+rechnet keine Normalen. Gemessen an der Senkplatte (311 000 Dreiecke): Fläche
+300 → 63 ms, Kette einer Senkbohrung 1 100 → 175 ms, Hover bei gewähltem
+Merkmal 250–380 → 17–80 ms.
+
+### Der Schattenwurf hält seinen Aktor und fällt im Arbeiter (22.09.2026)
+
+Die Umrisse aller Stücke gehen in **einem** vektorisierten Aufruf
+(`core.geom.mesh.planar_outlines`) durch shapely; `shadow_soups` ist eine
+reine Funktion. Über `SHADOW_PROJECTION_ABOVE` (4 000 Hüllpunkten) wirft ein
+`_ShadowWorker`, und bis er fertig ist, bleibt der Schatten des vorigen
+Winkels stehen. Je Körper **ein** Aktor mit fester Kapazität, der nur neue
+Punkte bekommt (`_show_shadow_soups`) — am Piratenschiff (17 Körper, 35 254
+Hüllpunkte) 46,7 → 0,5 ms Hauptthread am Ende jeder Drehung. Die Hüllen
+liegen in Körperkoordinaten; der Versatz der Ansicht (Platten, Explosion)
+kommt beim Wurf dazu — vorher blieb der Schatten beim Auseinanderziehen
+stehen. Und **jeder Zug zieht den Schatten mit**, der am Griff
+(`_drag_shadow`) wie der freie am Körper (`continue_body_drag_at`).
+
+### Ein Zug zeichnet leichter, sein letztes Bild voll (RM-200, 22.09.2026)
+
+Solange eine Taste gezogen wird, das Rad dreht, die 3D-Maus fährt oder eine
+Flugtaste liegt, ist die Ansicht **in Bewegung** (`note_camera_motion`), und
+die Umgebungsverdeckung zeichnet ihre leichte Stufe (vier Richtungen, zwei
+Schritte, 3 × 3 Glättung). Das Loslassen beendet die Bewegung **vor** der
+Geste, damit deren Bild schon voll ist; zeichnet sie keines, kommt genau eines
+nach (`frame_was_reduced`). Rad, 3D-Maus und ein stillstehender Zug enden
+nach `INTERACTION_SETTLE_MS` (180 ms), `settle_camera` sofort.
+**`set_camera_pose` allein ist keine Bewegung** — so stellen
+Bildschirmfotos und Handbuchbilder ihre Kamera, und die gehören voll
+gezeichnet. Gemessen: Intel UHD 770 15,8 → 13,4 ms GPU je Bild (auf einer
+RTX 4080 ohne messbaren Unterschied); zusammen mit dem Licht, das sich nicht
+mehr je Bild dreht (`render/CLAUDE.md`), kostet eine Bewegung am
+Platzierungsgriff 13,6 → 8,8 ms und ein Takt der 3D-Maus an 815 000
+Dreiecken 16,7 → 8,7 ms.
 
 ### Jeder Ansichts-Setter prüft auf Änderung
 

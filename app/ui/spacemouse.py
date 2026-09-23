@@ -1053,6 +1053,11 @@ class SpaceMouseController(QObject):
         )
         if moved == pose:
             return False
+        # Im Takt der Kappe zeichnet die Ansicht leichter; ``settle_camera``
+        # bringt die volle Güte zurück, sobald die Kappe ruht (RM-200).
+        note = getattr(self._viewport, "note_camera_motion", None)
+        if note is not None:
+            note()
         self._viewport.set_camera_pose(
             moved.position, moved.focal_point, moved.view_up, moved.parallel_scale
         )

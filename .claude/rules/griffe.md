@@ -203,7 +203,7 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
 
 Wo er sitzt, sagt das Register (`slot_feature_kinds()` aus dem `applies_to` von
 *Zum Langloch ziehen*) — eine Aufzählung in der Ansicht wüsste beim nächsten
-Zuwachs die Hälfte. Und er steht in der Vorfahrt von `_on_pointer`, wie jeder
+Zuwachs die Hälfte. Und er steht in der Vorfahrt von `_dispatch_pointer`, wie jeder
 Griff: `tests/test_viewport_decisions.py` liest sie im Quelltext gegen die
 Griff-Felder und kennt seit diesem Griff keine Namensliste mehr, sondern die
 Bauart (`Gizmo` oder `…Handle`).
@@ -254,7 +254,7 @@ Prüfumgebung statt der Sache.
 
 ### Ein Griff steht vor allem, was über der Ansicht liegt (11.09.2026)
 
-`Viewport._on_pointer` hat eine feste Vorfahrt, und sie ist am 11.09.2026 um
+`Viewport._dispatch_pointer` hat eine feste Vorfahrt, und sie ist am 11.09.2026 um
 eine Stufe gewachsen: **Griffe, dann eine laufende Platzierung, dann der
 Zeiger, zuletzt die Kamera.** Die Platzierung stand davor und nahm jede
 Mausbewegung als Zielversuch — ein Griff sah danach kein `move` mehr, seine
@@ -279,7 +279,7 @@ Gemessen am echten Fenster (`drilled_v6.p3d`, Bild 1030 mal 710, Drehgeste über
 | mit Bewegungsgriff und Würfel | **4,31 ms** | 80 für 40 Bewegungen |
 | dieselbe Geste danach | 0,45 ms | 0 |
 
-`_on_pointer` überspringt dafür jeden Griff, der nicht `pressing` ist, sobald
+`_dispatch_pointer` überspringt dafür jeden Griff, der nicht `pressing` ist, sobald
 `event.buttons` belegt ist — der **ziehende** Griff bekommt seine Bewegungen
 weiter, sonst bliebe der Zug am Pfeil beim ersten Bildpunkt stehen
 (`tests/test_viewport_decisions.py::test_a_held_button_leaves_the_grips_out_of_the_way`).
@@ -384,7 +384,7 @@ nicht greifbar**; was weiter ging, war die eigene Zuggeste am Körper.
 
 Beides ist mit dem Widget verschwunden. `app/ui/render/gizmo.py` zeichnet
 Pfeile, Ringe und Würfel über den Vertrag, pickt über `pick_item` und
-bekommt die Zeigerereignisse **vor** dem Navigator (`Viewport._on_pointer`).
+bekommt die Zeigerereignisse **vor** dem Navigator (`Viewport._dispatch_pointer`).
 Was davon bleibt, sind zwei Regeln:
 
 * **Der Griff pickt über den Vertrag, nie mit einem eigenen Picker.**
@@ -410,6 +410,19 @@ Was davon bleibt, sind zwei Regeln:
   „immer frisch" nichts verlöre: Im Zug hat sich die Matrix seit dem Greifen
   nicht geändert, bei einem passenden Griff steht das Ziel unbewegt. Ein Griff
   **im Zug** neu zu bauen kostete den Zug — aus ihm wurde ein Kameraschwenk.
+
+### Am Bausteinmerkmal zieht der ganze Baustein mit (RM-174, 22.09.2026)
+
+Ein Zug an einem Merkmal, das als Baustein zieht (`moves_as_a_part`), zeigt
+die Dreiecke **aller** Merkmale desselben Schritts (`created_by`) als einen
+Aktor vor dem Körper, geführt mit der Matrix des Griffs
+(`_show_part_drag`, `_drag_part`) — vorher wanderte nur die Marke des
+angefassten Merkmals, und der Rest rückte erst beim Loslassen nach. Führt
+das Verschieben den Sitz aus der ebenen Fläche (plus der eigenen Grundfläche,
+`_landing_of`), wird der Baustein rot (`PART_OFF_FACE_COLOUR`) **und** das
+Zugfeld sagt „neben der Fläche" — nie die Farbe allein (Regel 18). Sitzt der
+Baustein auf keiner ebenen Fläche, gibt es keine Aussage statt einer
+falschen. Der Aktor gehört dem Zug und geht mit dem Geist (`_drop_ghost`).
 
 ### Frei drehen, aber 45 Grad treffen
 

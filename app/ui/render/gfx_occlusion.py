@@ -37,6 +37,7 @@ class _OcclusionResolvePass(EffectPass):  # type: ignore[misc]
         "projection_inverse": "4x4xf4",
         "radius": "f4",
         "bias": "f4",
+        "reach": "f4",
     }
     load_op = wgpu.LoadOp.load
     blend_state: ClassVar[dict[str, dict[str, str]]] = {
@@ -60,8 +61,9 @@ class _OcclusionResolvePass(EffectPass):  # type: ignore[misc]
             let plane_scale = max(max(u_effect.bias * 2.0, u_effect.radius * 0.01), 1e-6);
             var total = 0.0;
             var weights = 0.0;
-            for (var y = -2; y <= 2; y += 1) {
-                for (var x = -2; x <= 2; x += 1) {
+            let reach = i32(u_effect.reach);
+            for (var y = -reach; y <= reach; y += 1) {
+                for (var x = -reach; x <= reach; x += 1) {
                     let sample_pixel = pixel + vec2<i32>(x, y);
                     if (any(sample_pixel < vec2<i32>(0)) || any(sample_pixel >= dimensions)) {
                         continue;
@@ -98,6 +100,8 @@ class AmbientOcclusionPass(EffectPass):  # type: ignore[misc]
         "projection_inverse": "4x4xf4",
         "radius": "f4",
         "bias": "f4",
+        "directions": "f4",
+        "steps": "f4",
     }
     wgsl = (
         _VIEW_POSITION_WGSL
@@ -107,6 +111,8 @@ class AmbientOcclusionPass(EffectPass):  # type: ignore[misc]
             let pixel = vec2<i32>(varyings.position.xy);
             let dimensions = vec2<i32>(textureDimensions(depthTex));
             let depth = textureLoad(depthTex, pixel, 0);
+            let directions = max(i32(u_effect.directions), 1);
+            let steps = max(i32(u_effect.steps), 1);
             if (depth >= 1.0 || u_effect.radius <= 0.0) {
                 return vec4<f32>(1.0, 0.5, 0.5, 1.0);
             }
@@ -137,12 +143,15 @@ class AmbientOcclusionPass(EffectPass):  # type: ignore[misc]
             let phase = f32((pixel.x & 1) * 8 + (pixel.y & 1) * 4
                 + (pixel.x & 2) + (pixel.y & 2) / 2) / 16.0;
             var obscured = 0.0;
-            for (var direction = 0; direction < 8; direction += 1) {
-                let angle = (f32(direction) + phase) * 0.78539816339;
+            // Die Richtungen teilen den Vollkreis gleichmäßig, die Schritte
+            // den Radius — bei weniger Abtastungen dieselbe Reichweite.
+            let turn = 6.28318530718 / f32(directions);
+            for (var direction = 0; direction < directions; direction += 1) {
+                let angle = (f32(direction) + phase) * turn;
                 let axis = vec2<f32>(cos(angle), sin(angle));
                 var horizon = 0.0;
-                for (var step = 0; step < 4; step += 1) {
-                    let fraction = (f32(step) + 0.25 + phase * 0.5) * 0.25;
+                for (var step = 0; step < steps; step += 1) {
+                    let fraction = (f32(step) + 0.25 + phase * 0.5) / f32(steps);
                     let displacement = vec2<i32>(round(axis * screen_radius * fraction));
                     let sample_pixel = pixel + displacement;
                     if (any(sample_pixel < vec2<i32>(0)) || any(sample_pixel >= dimensions)) {
@@ -165,7 +174,9 @@ class AmbientOcclusionPass(EffectPass):  # type: ignore[misc]
                 }
                 obscured += horizon;
             }
-            let visibility = clamp(1.0 - obscured * 0.22, 0.35, 1.0);
+            // Die Summe über die Richtungen auf acht bezogen: Mit weniger
+            // Richtungen im Zug bleibt die Verdunkelung so stark wie im Stand.
+            let visibility = clamp(1.0 - obscured * 0.22 * 8.0 / f32(directions), 0.35, 1.0);
             // Im zweiten Durchgang führen Normale und Tiefe die Glättung des Faktors.
             return vec4<f32>(visibility, normal * 0.5 + 0.5);
         }
@@ -176,12 +187,21 @@ class AmbientOcclusionPass(EffectPass):  # type: ignore[misc]
         super().__init__()
         self._resolve = _OcclusionResolvePass()
 
-    def apply(self, renderer: Any, camera: Any, radius: float, bias: float) -> None:
+    def apply(
+        self, renderer: Any, camera: Any, radius: float, bias: float, *, light: bool = False
+    ) -> None:
         """Den Effekt vor Überlagerungen in denselben Farbpuffer zurückschreiben.
 
         Der begrenzte Texturzugriff bleibt hier; pygfx' öffentliche EffectPass-
         API übernimmt Shader, Bindungen und GPU-Ressourcen. Es wird kein Bild
         zur CPU kopiert, und weder Tiefen- noch Pickpuffer werden verändert.
+
+        **``light`` ist die Stufe für ein Bild im Zug** (RM-200): vier
+        Richtungen mit zwei Schritten statt acht mit vier, und eine Glättung
+        über drei mal drei statt fünf mal fünf Bildpunkte — 17 statt 57
+        Tiefenabfragen je Bildpunkt. Im Stand kommt die volle Stufe zurück;
+        wer zieht, sieht auf das Bewegte und nicht auf das Korn in einer
+        Fuge.
         """
         blender = renderer._blender
         read = wgpu.TextureUsage.TEXTURE_BINDING
@@ -194,8 +214,11 @@ class AmbientOcclusionPass(EffectPass):  # type: ignore[misc]
         self._uniform_data["projection_inverse"] = np.asarray(camera.projection_matrix_inverse).T
         self._uniform_data["radius"] = max(float(radius), 0.0)
         self._uniform_data["bias"] = max(float(bias), 0.0)
+        self._uniform_data["directions"] = 4.0 if light else 8.0
+        self._uniform_data["steps"] = 2.0 if light else 4.0
         for name in ("projection_inverse", "radius", "bias"):
             self._resolve._uniform_data[name] = self._uniform_data[name]
+        self._resolve._uniform_data["reach"] = 1.0 if light else 2.0
         encoder = renderer._device.create_command_encoder()
         self.render(encoder, colour, depth, temporary)
         self._resolve.render(

@@ -923,6 +923,36 @@ beim Beenden noch darin hängt, reißt den Prozess mit (0xC0000409). Er wartet
 ungeprüfte Liste, die sich ausdünnt, sobald die Antwort da ist. Wer eine
 gemerkte Pfadliste prüft, prüft sie so.
 
+### Ein Zeiger, der fragt, wird gedrosselt, nicht entprellt (RM-203, 22.09.2026)
+
+Die Platzierung fragt bei jeder Mausbewegung, welche Fläche unter dem Zeiger
+liegt — die Antwort rechnet ein Arbeiter. **Gedrosselt** heißt: höchstens alle
+16 ms eine Frage, eine zur Zeit, und ihr Ende nimmt sofort die jüngste
+Stelle. Bis zum 22.09.2026 startete jede Bewegung den Zeitgeber neu
+(**entprellt**): Bei einer Maus mit 125 Hz kam die Frage erst, wenn der Zeiger
+ruhte, und die Stelle stand 5,5 s nach der letzten Bewegung. Danach folgt sie
+dem Zeiger (27 Fragen während eines Strichs) und steht 64 ms nach seinem Ende.
+
+Zwei Sätze, die dazugehören:
+
+* **Eine überholte Antwort ist nicht wertlos.** Ihre Stelle gilt nicht mehr,
+  die vorbereitete Fläche schon (`PlacementFlow._surface_known`); die nächste
+  Frage auf derselben Fläche rechnet nur noch `at_point`.
+* **Ein Arbeiter bekommt eine Kopie je Netz, nicht je Frage**
+  (`_surface_mesh`). Eine frische Kopie hat leere Merker, und jede Frage baute
+  Nachbarschaft und Normalen des ganzen Netzes neu. Die Fragen laufen
+  nacheinander (`_surface_busy`), die Kopie teilt also niemand.
+
+Und die Vorbereitung selbst zählt, statt zu verschneiden:
+`placement._patch_area` baut die Fläche aus ihrem Rand (Kanten mit einem
+Besitzer, gezählt nach Ort, `shapely.build_area`) und prüft das Ergebnis,
+bevor sie es glaubt; nur was die Prüfung ablehnt, geht durch `union_all`.
+`_welded_adjacency` liefert Paare statt eines Wörterbuchs, `_patch_faces` die
+Zusammenhangskomponente (`scipy.sparse.csgraph`). An der Lochplatte mit
+815 104 Dreiecken kamen Griff und Maße nach dem Klick auf eine Bohrung vorher
+nach 9 bis 21 s, danach nach 1 bis 2,4 s; am Korpus sind alle 339 ebenen
+Stücke und 999 Flächenwahlen dieselben wie vorher.
+
 ### Ein Dialog, der beim Öffnen nachsieht, öffnet erst danach
 
 **Viermal** derselbe Fund an vier Stellen, jedes Mal gemessen: Die Liste der

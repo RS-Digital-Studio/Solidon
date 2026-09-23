@@ -16,7 +16,7 @@ import math
 import os
 import sys
 import weakref
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import replace
 from itertools import pairwise, product
 from typing import Any, Final, Literal, NamedTuple
@@ -49,6 +49,7 @@ from app.core.geom.mesh import (
     distance_to_triangles,
     face_components,
     hull_planes,
+    planar_outlines,
     ray_span_in_hull,
 )
 from app.core.geom.mesh_ops import decimate_for_display
@@ -64,7 +65,7 @@ from app.core.geom.transform import (
     snap_to_step,
 )
 from app.core.log import get_logger
-from app.core.perceive.features import CURVATURE_LIMIT
+from app.core.perceive.features import CURVATURE_LIMIT, EPS_ANGLE
 from app.core.perceive.maps import AnalysisMap
 from app.core.perceive.relations import cavity_chain_at, cavity_surface_indices
 from app.core.scene import EdgeTarget, EvaluationResult
@@ -129,7 +130,7 @@ from app.ui.render.api import (
     SurfaceStyle,
     hex_of,
 )
-from app.ui.render.edges import feature_edges
+from app.ui.render.edges import feature_edges, outline_edges
 from app.ui.render.gizmo import ARROW_SHARE, Gizmo, ray_plane_hit
 from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
 from app.ui.scale_widget import ScaleHandle
@@ -189,6 +190,12 @@ _FLIGHT_BY_QT_KEY: Final[dict[int, str]] = {
 #: 31 Schritte je Sekunde und damit das Viereinhalbfache der Entfernung je
 #: Sekunde. Der Bauraum wäre in einer Fünftelsekunde durchflogen.
 FLIGHT_TICK_MS: Final = 16
+#: Wie lange nach der letzten Radraste, dem letzten Takt der 3D-Maus oder der
+#: letzten Bewegung eines Zugs die Ansicht als „in Bewegung" gilt (RM-200).
+#: Danach kommt die volle Bildgüte zurück. Länger als der Abstand zweier
+#: Radrasten bei zügigem Drehen (gemessen 40 bis 120 ms), kürzer als die
+#: Zeit, nach der ein Mensch das stehende Bild ansieht.
+INTERACTION_SETTLE_MS: Final = 180
 #: Wie weit der Flug je Sekunde trägt, gemessen in Entfernungen zum
 #: Blickpunkt. Eins heißt: aus 300 mm Abstand 300 mm je Sekunde — der Bauraum
 #: von Rand zu Rand in etwa einer Sekunde.
@@ -304,21 +311,6 @@ def upright_for(
     )
 
 
-#: Reichweite der Umgebungsverdeckung in Weltmaß, also Millimetern.
-#:
-#: An einer gebohrten Platte mit einer Tasche nachgemessen, gegen dasselbe Bild
-#: ohne Verdeckung: 1 mm → 3,77 mittlere Abweichung, 2 mm → 1,75, 4 mm → 1,07,
-#: 8 mm → 0,95, 16 mm → 1,93. Der erste Ansatz stand auf 8 und war damit der
-#: **schwächste** Wert der Reihe — die Begründung dafür („die Größenordnung, in
-#: der Druckteile ihre Merkmale haben") klang plausibel und war falsch: gesucht
-#: wird im Umkreis dieses Radius nach verdeckenden Nachbarn, und wer zu weit
-#: sucht, mittelt die Kante weg, um die es geht.
-#:
-#: Genommen ist trotzdem nicht der stärkste Wert. Bei 1 mm zeigen ebene
-#: Seitenflächen im Bild waagerechte Streifen — die Selbstverdeckung, vor der
-#: :data:`SSAO_BIAS` warnt; die höhere Zahl ist dort größtenteils Rauschen. Zwei
-#: Millimeter ist die Größenordnung einer Fase, einer Nutbreite, eines
-#: Bohrungsrands, und das Bild bleibt sauber.
 #: Wie groß die Achsenanzeige ist und wie weit sie von der Ecke absteht — in
 #: Bildpunkten, nicht in Anteilen des Fensters.
 #:
@@ -1409,6 +1401,25 @@ FINDING_MARK_MS = 2600
 #: Punkt und an einer M3-Bohrung ein Reifen.
 FINDING_RING_SHARE = 0.09
 
+#: Wie weit der Satz einer Befundmarke über der Mitte steht, in Ringradien —
+#: knapp über dem Ring, damit er ihn nicht kreuzt und doch zu ihm gehört.
+FINDING_LABEL_REACH = 1.3
+
+#: Reichweite der Umgebungsverdeckung in Weltmaß, also Millimetern.
+#:
+#: An einer gebohrten Platte mit einer Tasche nachgemessen, gegen dasselbe Bild
+#: ohne Verdeckung: 1 mm → 3,77 mittlere Abweichung, 2 mm → 1,75, 4 mm → 1,07,
+#: 8 mm → 0,95, 16 mm → 1,93. Der erste Ansatz stand auf 8 und war damit der
+#: **schwächste** Wert der Reihe — die Begründung dafür („die Größenordnung, in
+#: der Druckteile ihre Merkmale haben") klang plausibel und war falsch: gesucht
+#: wird im Umkreis dieses Radius nach verdeckenden Nachbarn, und wer zu weit
+#: sucht, mittelt die Kante weg, um die es geht.
+#:
+#: Genommen ist trotzdem nicht der stärkste Wert. Bei 1 mm zeigen ebene
+#: Seitenflächen im Bild waagerechte Streifen — die Selbstverdeckung, vor der
+#: :data:`SSAO_BIAS` warnt; die höhere Zahl ist dort größtenteils Rauschen. Zwei
+#: Millimeter ist die Größenordnung einer Fase, einer Nutbreite, eines
+#: Bohrungsrands, und das Bild bleibt sauber.
 SSAO_RADIUS = 2.0
 
 #: Wie lange die Maus stehen muss, bevor unter ihr nach einem Merkmal gesucht
@@ -1471,13 +1482,6 @@ SELECTED_EDGE_WIDTH = 5.0
 #: beginnt. Genauer trennt der Bildabstand danach ohnehin.
 EDGE_REACH_WORLD_SHARE = 0.1
 
-#: Wie weit ein Klick danebengehen darf, als Anteil der Bilddiagonale.
-#:
-#: Ein Tausendstel — die Vorgabe des Zell-Pickers unter VTK, bis 06.09.2026 —
-#: wäre bei einem Fenster von 1300 Pixeln knapp zwei Pixel, und ein Klick auf
-#: eine Kante trifft dann wieder nichts. Der Wert geht an ``pick_surface``
-#: ausdrücklich mit; er hängt an keiner Vorgabe des Renderers.
-#: Fünf Tausendstel sind rund acht Pixel: genug, um eine dünne Wand zu
 #: Ab wann ein Zug am Körper ein Zug ist und kein Klick, in Millimetern.
 #:
 #: Ohne diese Grenze bekäme jede Auswahl einen Schritt im Verlauf mit null
@@ -1499,6 +1503,13 @@ EPS_DRAG = 0.05
 #: seitlich. Die Höhe bleibt wie bisher dem Griff.
 FLAT_VIEW_SIN = math.sin(math.radians(15.0))
 
+#: Wie weit ein Klick danebengehen darf, als Anteil der Bilddiagonale.
+#:
+#: Ein Tausendstel — die Vorgabe des Zell-Pickers unter VTK, bis 06.09.2026 —
+#: wäre bei einem Fenster von 1300 Pixeln knapp zwei Pixel, und ein Klick auf
+#: eine Kante trifft dann wieder nichts. Der Wert geht an ``pick_surface``
+#: ausdrücklich mit; er hängt an keiner Vorgabe des Renderers.
+#: Fünf Tausendstel sind rund acht Pixel: genug, um eine dünne Wand zu
 #: erwischen, zu wenig, um die falsche Fläche zu greifen.
 PICK_TOLERANCE = 0.005
 
@@ -1701,6 +1712,16 @@ SHADOW_SIDE = 0.62
 #: Hülle exakt und billig, darüber wäre sie teurer als das, was sie ersetzt.
 #: Siehe :func:`_thinned_for_hull`.
 SHADOW_HULL_POINTS = 4096
+
+#: Ab wie vielen Hüllpunkten aller Körper der Schattenwurf in einen Arbeiter
+#: geht (:class:`_ShadowWorker`).
+#:
+#: Gemessen am 22.09.2026: Ein Piratenschiff mit 58 Stücken trägt 35 254
+#: Hüllpunkte und kostete je Kamerageste 34 bis 53 ms; eine Lochplatte trägt
+#: um die hundert und kostet unter einer Millisekunde. Viertausend liegen bei
+#: rund vier Millisekunden — darunter lohnt kein Arbeiter, darüber wird der
+#: Haken am Ende einer Drehung fühlbar.
+SHADOW_PROJECTION_ABOVE = 4_000
 
 #: Die vierzehn Hauptrichtungen — sechs Achsen und acht Raumdiagonalen.
 #:
@@ -1920,6 +1941,9 @@ def source_colours(mesh: Any, face_count: int) -> Any | None:
 MeasureMode = Literal["off", "distance", "thickness", "angle"]
 
 MEASURE_COLOUR = ROLES["measure"]
+#: Ein Baustein, dessen Zug neben der Fläche endete (RM-174). Die Farbe sagt
+#: es nicht allein: Die Zahl im Zugfeld trägt dazu „neben der Fläche".
+PART_OFF_FACE_COLOUR = ROLES["error"]
 
 #: Der Griff auf einer Fläche, gemessen an der Diagonale des Objekts, und
 #: seine Untergrenze in Millimetern. Mitwachsend, weil ein fester Radius an
@@ -2053,6 +2077,17 @@ DISPLAY_DECIMATION_TARGET = 200_000
 #: jemand eine der beiden anfasst.
 SCALE_UNCHANGED = 1e-4
 
+#: Ab wie vielen Dreiecken neuer Anzeigenetze eine Szene im Arbeiter
+#: vorbereitet wird — Körperkanten, Schattenhüllen und Punktnormalen.
+#:
+#: **Gemessen am echten Renderer** (22.09.2026, ``tree_with_tray_stl.stl``,
+#: 197 120 Dreiecke): Ein neuer Stand kostete im Qt-Hauptthread 314 ms, davon
+#: 97 ms Kanten, 105 ms Schattenhüllen und 39 ms Normalen — rund 1,2 ms je
+#: tausend Dreiecke. Bei zwanzigtausend sind das 25 ms: kurz genug, um sie
+#: im Hauptthread zu zahlen, statt das Bild bis zur nächsten Ereignisrunde
+#: warten zu lassen, und die Grenze, ab der ein Arbeiter sich lohnt.
+SCENE_PREPARATION_ABOVE = 20_000
+
 #: Wie viele dezimierte Netze die Anzeige behält. Eines war zu wenig: Zwei
 #: große Körper verdrängten einander, und ``show_scene`` — das bei jeder
 #: Auswahl, jedem Themenwechsel und jedem Zug am Schnittschieber läuft —
@@ -2172,6 +2207,168 @@ def _thinned_for_hull(points: Any) -> Any:
     step = len(points) // SHADOW_HULL_POINTS + 1
     corners = np.unique(np.argmax(points @ np.asarray(SUPPORT_DIRECTIONS).T, axis=0))
     return np.vstack((points[::step], points[corners]))
+
+
+def shadow_hull_of(points: Any) -> Any:
+    """Die Punkte, aus denen ein Stück seinen Schatten wirft: seine konvexe Hülle.
+
+    Einmal je Körper statt einer Triangulierung über jeden Punkt des
+    Anzeigenetzes bei jedem Ansichtswechsel (gemessen: 31 ms bei
+    zwanzigtausend Dreiecken, 127 ms bei zweiundachtzigtausend, je Körper).
+    ``_thinned_for_hull`` deckelt die Kosten bei feinen Kugeln.
+
+    **Eine freie Funktion, weil ein Arbeiter sie ruft** (RM-203): Sie liest
+    nur die übergebenen Punkte und kennt keine Ansicht.
+    """
+    import numpy as np
+    from scipy.spatial import ConvexHull, QhullError
+
+    thinned = _thinned_for_hull(np.asarray(points, dtype=float))
+    if len(thinned) < 4:
+        return thinned if len(thinned) >= 3 else None
+    try:
+        return thinned[ConvexHull(thinned).vertices]
+    except QhullError as problem:
+        # Ein ebener oder entarteter Körper hat keine räumliche Hülle. Seine
+        # Punkte sind dann ohnehin wenige — sie gehen unverändert weiter.
+        _log.info("shadow hull unavailable: %s", problem)
+        return thinned
+
+
+def shadow_hulls_of(points: Any, raw: Any) -> list[Any]:
+    """Die Punkte, aus denen ein Körper seinen Schatten wirft — je Stück eines.
+
+    Ein Körper aus mehreren Stücken wirft je Stück einen Schatten (Robert,
+    25.08.2026, am Bildschirm gesehen). Welche Dreiecke ein Stück bilden,
+    sagt der Kern (:func:`face_components`); die Hülle je Stück kommt aus
+    seinen Punkten.
+
+    **In den Koordinaten, in denen ``points`` stehen** — die Ansicht gibt die
+    des Körpers und rückt erst beim Zeichnen um ihren Versatz. Bis zum
+    22.09.2026 standen hier die gezeichneten Punkte samt Versatz, und die
+    Hülle wurde über die Identität des Netzes gemerkt: Nach *Auseinanderziehen*
+    oder dem Wechsel auf „Alle Platten" behielt der Schatten den alten Ort,
+    während sein Körper wanderte (gemessen: Körper -30 mm, Schatten 0 mm).
+    Eine Hülle folgt einer Verschiebung exakt, also gehört der Versatz nicht
+    in sie hinein.
+    """
+    import numpy as np
+
+    pieces = face_components(raw) if raw is not None else []
+    if raw is None or len(pieces) <= 1:
+        single = shadow_hull_of(points)
+        return [single] if single is not None else []
+    faces = np.asarray(raw.faces, dtype=np.int64)
+    grid = np.asarray(points, dtype=float)
+    hulls = []
+    for piece in pieces:
+        used = np.unique(faces[np.asarray(piece, dtype=np.int64)].ravel())
+        hull = shadow_hull_of(grid[used])
+        if hull is not None:
+            hulls.append(hull)
+    return hulls
+
+
+def shadow_catchers(
+    object_id: ObjectId,
+    grounds: Mapping[ObjectId, tuple[float, float, Any]],
+    bed: Any,
+) -> list[tuple[float, Any]]:
+    """Die Flächen, die den Schatten eines Körpers auffangen (§18.6).
+
+    Immer die Platte (``bed`` ist ihr Umriss, ``None`` heißt unbeschnitten),
+    und dazu jeder Körper, dessen Oberkante nicht höher liegt als die
+    Unterkante dieses hier — ``grounds`` trägt je Körper Unter-, Oberkante
+    und Umriss von oben. Die Begründung steht an
+    :meth:`Viewport._shadow_catchers`; hier steht die Rechnung, damit ein
+    Arbeiter sie stellen kann.
+    """
+    catchers: list[tuple[float, Any]] = [(0.0, bed)]
+    mine = grounds.get(object_id)
+    if mine is None:
+        return catchers
+    floor = mine[0]
+    for other, (_low, high, outline) in grounds.items():
+        if other == object_id or outline is None:
+            continue
+        if EPS_GEOM < high <= floor + EPS_GEOM:
+            catchers.append((high, outline))
+    return catchers
+
+
+def shadow_outline_of(
+    hull_points: Any,
+    direction: tuple[float, float],
+    ground: float = 0.0,
+    window: Any = None,
+    base: tuple[Any, float] | None = None,
+) -> Any:
+    """Der Umriss eines Schattens auf der Fläche ``ground`` — die Rechnung hinter
+    :meth:`Viewport._shadow_outline_of`, frei von der Ansicht."""
+    import numpy as np
+
+    if hull_points is None or len(hull_points) < 3:
+        return None
+    outline = None
+    if base is not None and base[0] is not None and ground <= base[1] + EPS_GEOM:
+        reach = base[1] - ground
+        shift = np.asarray((reach * direction[0], reach * direction[1]), dtype=float)
+        outline = np.asarray(base[0], dtype=float) + shift
+    if outline is None:
+        outline = outline_of(shadow_points(hull_points, direction, ground))
+    if outline is None:
+        return None
+    if window is not None:
+        outline = clip_polygon(outline, window)
+        if len(outline) < 3:
+            return None
+    return np.column_stack((outline, np.full(len(outline), ground + SHADOW_LIFT)))
+
+
+def shadow_soups(
+    hulls: Mapping[ObjectId, Sequence[Any]],
+    grounds: Mapping[ObjectId, tuple[float, float, Any]],
+    beds: Mapping[ObjectId, Any],
+    direction: tuple[float, float],
+) -> dict[ObjectId, Any]:
+    """Je Körper die Dreiecke seines Schattens, jedes mit eigenen Ecken ``(3k, 3)``.
+
+    Die ganze Rechnung des Schattenwurfs ohne die Ansicht — Hüllen, Auffang-
+    flächen und Bettumrisse gehen als Werte hinein, damit sie nebenläufig
+    laufen kann (:class:`_ShadowWorker`). Die Umrisse aller Stücke auf ihrer
+    eigenen Unterkante entstehen in **einem** Gang durch GEOS
+    (:func:`app.core.geom.mesh.planar_outlines`); jede tiefere Auffangfläche
+    verschiebt sie nur (:func:`shadow_outline_of`).
+    """
+    import numpy as np
+
+    pieces = [
+        (object_id, np.asarray(hull, dtype=float))
+        for object_id, found in hulls.items()
+        for hull in found
+        if hull is not None and len(hull) >= 3
+    ]
+    floors = [float(hull[:, 2].min()) for _owner, hull in pieces]
+    bases = planar_outlines(
+        [
+            shadow_points(hull, direction, floor)
+            for (_owner, hull), floor in zip(pieces, floors, strict=True)
+        ]
+    )
+    soups: dict[ObjectId, list[Any]] = {}
+    catching: dict[ObjectId, list[tuple[float, Any]]] = {}
+    for (object_id, hull), floor, base in zip(pieces, floors, bases, strict=True):
+        if object_id not in catching:
+            catching[object_id] = shadow_catchers(object_id, grounds, beds.get(object_id))
+        for ground, window in catching[object_id]:
+            outline = shadow_outline_of(hull, direction, ground, window, (base, floor))
+            if outline is None:
+                continue
+            corners, fan = shapes.polygon(outline)
+            soups.setdefault(object_id, []).append(
+                np.asarray(corners, dtype=float)[np.asarray(fan, dtype=np.int64)].reshape(-1, 3)
+            )
+    return {object_id: np.vstack(parts) for object_id, parts in soups.items()}
 
 
 def shadow_points(points: Any, direction: tuple[float, float], ground: float = 0.0) -> Any:
@@ -3428,6 +3625,111 @@ def layout_feature_labels(
     return placed
 
 
+class _Same:
+    """Ein Wert in einem Vergleichsschlüssel, der nach Identität vergleicht.
+
+    **Eine Kennung (``id``) wäre die falsche Wahl.** Eine abgelöste Auswertung
+    wird freigegeben, und die nächste kann an genau dieser Adresse entstehen —
+    dann gliche der Schlüssel, und die Ansicht zeigte eine Markierung der
+    vorigen Auswertung. Die Hülle hält ihren Wert, bis der Schlüssel ersetzt
+    wird, und vergleicht mit ``is``: Ein Netz mit Millionen Dreiecken über
+    ``==`` zu vergleichen, wäre teurer als die Rechnung, die es spart.
+    """
+
+    __slots__ = ("value",)
+
+    def __init__(self, value: Any) -> None:
+        self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _Same) and other.value is self.value
+
+    def __hash__(self) -> int:
+        return id(self.value)
+
+
+#: Wie viele Netze je Körper die Merker der Ansicht behalten (:class:`_MeshMemo`).
+MESH_MEMO_KEPT: Final = 2
+
+
+class _MeshMemo:
+    """Je Körper die Antworten zu den zuletzt gezeigten Netzen — nach Identität.
+
+    **Zwei je Körper, nicht eines** (RM-203, 22.09.2026). Der historische
+    Bohrschritt zeigt beim Tippen den Eingang vor dem Schritt und für die
+    Vorschau wieder das Endergebnis, je Tastendruck beide
+    (``placement_flow._show_input_for_edit``, ``show_preview_base``). Mit
+    einem Eintrag je Körper verdrängte jeder Wechsel den anderen: An der
+    Senkplatte (311 000 Dreiecke) rechnete der Arbeiter Kanten, Hüllen und
+    Normalen bei jedem Wechsel neu, 0,57 s bis zum Bild. Der zweite Eintrag
+    hält das Netz davor am Leben, bis ein drittes kommt — eine Generation,
+    kein Wachstum über die Sitzung.
+
+    Verglichen wird mit ``is``: Ein Hash über Millionen Dreiecke wäre nicht
+    billiger als die Rechnung, die der Merker spart.
+    """
+
+    __slots__ = ("_entries",)
+
+    def __init__(self) -> None:
+        self._entries: dict[ObjectId, list[tuple[Any, Any]]] = {}
+
+    def has(self, object_id: ObjectId, mesh: Any) -> bool:
+        """Ob zu genau diesem Netz eine Antwort steht."""
+        return any(known is mesh for known, _value in self._entries.get(object_id, ()))
+
+    def get(self, object_id: ObjectId, mesh: Any) -> Any:
+        """Die Antwort zu genau diesem Netz, sonst ``None``."""
+        for known, value in self._entries.get(object_id, ()):
+            if known is mesh:
+                return value
+        return None
+
+    def remember(self, object_id: ObjectId, mesh: Any, value: Any) -> None:
+        """Die Antwort zu diesem Netz merken; die älteste des Körpers weicht."""
+        kept = [entry for entry in self._entries.get(object_id, ()) if entry[0] is not mesh]
+        self._entries[object_id] = [(mesh, value), *kept][:MESH_MEMO_KEPT]
+
+    def keep_only(self, object_ids: Collection[ObjectId]) -> None:
+        """Was einem Körper gehört, den es nicht mehr gibt, fällt weg."""
+        self._entries = {
+            object_id: entries
+            for object_id, entries in self._entries.items()
+            if object_id in object_ids
+        }
+
+    def clear(self) -> None:
+        self._entries.clear()
+
+
+def _inside_any(triangles: Any, point: Any) -> bool:
+    """Ob ein Punkt der Ebene in einem der Dreiecke liegt — Rand eingeschlossen.
+
+    ``triangles`` hat die Form ``(n, 3, 2)``. Vorzeichen der drei Kanten
+    gegen den Punkt; ein Dreieck ohne Fläche trägt nichts.
+    """
+    import numpy as np
+
+    if not len(triangles):
+        return False
+    first, second, third = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+
+    def side(start: Any, end: Any) -> Any:
+        return (end[:, 0] - start[:, 0]) * (point[1] - start[:, 1]) - (end[:, 1] - start[:, 1]) * (
+            point[0] - start[:, 0]
+        )
+
+    one, two, three = side(first, second), side(second, third), side(third, first)
+    tolerance = EPS_GEOM * EPS_GEOM
+    inside = ((one >= -tolerance) & (two >= -tolerance) & (three >= -tolerance)) | (
+        (one <= tolerance) & (two <= tolerance) & (three <= tolerance)
+    )
+    # Die drei Seitenwerte summieren sich, gleich wo der Punkt liegt, zur
+    # doppelten Dreiecksfläche.
+    doubled = np.abs(one + two + three)
+    return bool(np.any(inside & (doubled > tolerance)))
+
+
 class _SelectionHit(NamedTuple):
     """Ein Treffer behält Körper und Szeneort bis zur gemeinsamen Auswahlfrage."""
 
@@ -3448,16 +3750,45 @@ class _BoreTarget(NamedTuple):
     bounds: tuple[float, float]
 
 
+class _MeshTask(NamedTuple):
+    """Was der Arbeiter an einem Körper vorbereitet.
+
+    ``mesh`` ist das Netz, das gezeichnet wird. Dezimiert oder geschnitten
+    wird eine eigene Kopie (``_detached``); sonst bleibt es das Netz der
+    Szene, und der Arbeiter **liest es nicht an** — er rechnet dann an
+    ``reading``, einer eigenen Kopie. Das Netz der Szene muss seine Identität
+    behalten: Daran erkennt ``_apply_scene``, dass die Dreiecksnummern des
+    Bildes die der Szene sind (``_original_pick_cells``).
+    """
+
+    object_id: ObjectId
+    mesh: Any
+    cache_key: DisplayKey | None = None
+    edges: bool = False
+    hulls: bool = False
+    normals: bool = False
+    reading: Any = None
+
+
 class _PreparedScene(NamedTuple):
-    """Für den Renderer vorbereitete Netze samt neuen Cache-Einträgen."""
+    """Für den Renderer vorbereitete Netze samt neuen Cache-Einträgen.
+
+    ``edges``, ``hulls`` und ``normals`` gelten je dem Netz, das in
+    ``meshes`` für denselben Körper steht (RM-203): Körperkanten, Schattenhüllen
+    und Punktnormalen — alle in Körperkoordinaten, ohne den Versatz der Ansicht.
+    """
 
     meshes: dict[ObjectId, Any]
     cached: dict[DisplayKey, Any]
     uncapped: bool
+    edges: dict[ObjectId, Any] | None = None
+    hulls: dict[ObjectId, list[Any]] | None = None
+    normals: dict[ObjectId, Any] | None = None
 
 
 class _SceneMeshWorker(Worker):
-    """Dezimierung und Ansichtsbeschnitt abseits des Qt-Hauptthreads."""
+    """Dezimierung, Ansichtsbeschnitt, Kanten, Schattenhüllen und Normalen
+    abseits des Qt-Hauptthreads."""
 
     done = Signal(int, object, object)
 
@@ -3465,16 +3796,20 @@ class _SceneMeshWorker(Worker):
         self,
         generation: int,
         result: Any,
-        tasks: Sequence[tuple[ObjectId, Any, DisplayKey | None]],
+        tasks: Sequence[_MeshTask | tuple[ObjectId, Any, DisplayKey | None]],
         plane: SectionPlane | None,
         second: SectionPlane | None,
+        normals_of: Callable[[Any, Any], Any] | None = None,
     ) -> None:
         super().__init__()
         self._generation = generation
         self._result = result
-        self._tasks = tuple(tasks)
+        self._tasks = tuple(
+            task if isinstance(task, _MeshTask) else _MeshTask(*task) for task in tasks
+        )
         self._plane = plane
         self._second = second
+        self._normals_of = normals_of
         self.cancelled = CancelSignal()
 
     def cancel(self) -> None:
@@ -3486,13 +3821,19 @@ class _SceneMeshWorker(Worker):
         return self.cancelled.is_cancelled
 
     def work(self) -> None:
+        import numpy as np
+
         meshes: dict[ObjectId, Any] = {}
         cached: dict[DisplayKey, Any] = {}
+        edges: dict[ObjectId, Any] = {}
+        hulls: dict[ObjectId, list[Any]] = {}
+        normals: dict[ObjectId, Any] = {}
         uncapped = False
-        for object_id, source, cache_key in self._tasks:
+        for task in self._tasks:
             if self._was_cancelled():
                 return
-            mesh = source
+            object_id, cache_key = task.object_id, task.cache_key
+            mesh = task.mesh
             if cache_key is not None:
                 mesh = decimate_for_display(mesh, DISPLAY_DECIMATION_TARGET)
                 if self._was_cancelled():
@@ -3508,11 +3849,73 @@ class _SceneMeshWorker(Worker):
                 mesh = section.mesh
                 uncapped = uncapped or not section.capped
             meshes[object_id] = mesh
+            if not (task.edges or task.hulls or task.normals):
+                continue
+            # Gerechnet wird an dem, was dieser Arbeiter selbst besitzt: am
+            # dezimierten oder geschnittenen Netz, sonst an der Kopie zum Lesen.
+            own = mesh if (cache_key is not None or self._plane is not None) else task.reading
+            raw = getattr(own, "raw", None)
+            if raw is None or not len(raw.faces):
+                continue
+            vertices = np.asarray(raw.vertices, dtype=float)
+            faces = np.asarray(raw.faces, dtype=np.int64)
+            if task.edges and len(faces) <= FEATURE_EDGE_LIMIT:
+                edges[object_id] = feature_edges(vertices, faces, FEATURE_EDGE_ANGLE)
+            if self._was_cancelled():
+                return
+            if task.hulls:
+                hulls[object_id] = shadow_hulls_of(vertices, raw)
+            if self._was_cancelled():
+                return
+            if task.normals and self._normals_of is not None:
+                normals[object_id] = self._normals_of(vertices, faces)
         self.done.emit(
             self._generation,
             self._result,
-            _PreparedScene(meshes, cached, uncapped),
+            _PreparedScene(meshes, cached, uncapped, edges, hulls, normals),
         )
+
+
+class _ShadowWorker(Worker):
+    """Der Schattenwurf einer Kamerastellung abseits des Qt-Hauptthreads.
+
+    Am Ende jeder Kamerageste fällt der Schatten neu, weil das Licht der
+    Kamera folgt (§18.6). An einem Piratenschiff aus 17 Körpern und 58
+    Stücken kostete das 34 bis 53 ms im Qt-Hauptthread — ein Haken nach
+    jeder Drehung (22.09.2026). Der Arbeiter rechnet :func:`shadow_soups`
+    aus Werten, die ihm gehören; die Ansicht schreibt danach nur Punkte.
+    """
+
+    done = Signal(int, object)
+
+    def __init__(
+        self,
+        generation: int,
+        hulls: Mapping[ObjectId, Sequence[Any]],
+        grounds: Mapping[ObjectId, tuple[float, float, Any]],
+        beds: Mapping[ObjectId, Any],
+        direction: tuple[float, float],
+    ) -> None:
+        super().__init__()
+        self._generation = generation
+        self._inputs = (dict(hulls), dict(grounds), dict(beds), direction)
+        self.cancelled = CancelSignal()
+
+    def cancel(self) -> None:
+        """Ein neuerer Blickwinkel macht diesen Schattenwurf überflüssig."""
+        self.cancelled.cancel()
+
+    def work(self) -> None:
+        if self._was_cancelled():
+            return
+        soups = shadow_soups(*self._inputs)
+        if self._was_cancelled():
+            return
+        self.done.emit(self._generation, soups)
+
+    def _was_cancelled(self) -> bool:
+        """Den nebenläufig veränderlichen Abbruchzustand frisch lesen."""
+        return self.cancelled.is_cancelled
 
 
 class Viewport(QWidget):
@@ -3766,6 +4169,10 @@ class Viewport(QWidget):
         self._pointer_token: int | None = None
         self._actors: dict[ObjectId, Item] = {}
         self._placement_pointer: Callable[[PointerEvent], bool] | None = None
+        self._placement_resume: Callable[[PointerEvent], bool] | None = None
+        """Wer den Klick ins Modell nimmt, solange eine Platzierung pausiert —
+        der Rückweg aus dem Dialog in die erste Stufe (RM-205,
+        :meth:`set_placement_resume`)."""
         self._actor_offsets: dict[ObjectId, Any] = {}
         self._actor_scene: EvaluationResult | None = None
         self._frame_actors: list[Any] = []
@@ -3797,6 +4204,10 @@ class Viewport(QWidget):
         Bauraum oder auf die Körper. Wechselt der Zustand, wird einmal neu
         eingepasst; innerhalb desselben Zustands bleibt jeder Zoom stehen."""
         self._fitted_bounds: tuple[float, float, float, float, float, float] | None = None
+        """Die Maße, auf die eingepasst wurde — der Vergleich für
+        :func:`outgrown`. „Innerhalb desselben Zustands" hat eine Grenze: Ein
+        Körper, der fünfmal so groß ist wie alles bisher, ist kein Zoom mehr,
+        den man behalten will."""
         #: Welche Objekte dastanden, als zuletzt eingepasst wurde. Stehen
         #: dieselben noch da, hat der Nutzer nur geschoben, und die Kamera
         #: bleibt (:func:`outgrown`, ``moved_only``).
@@ -3804,10 +4215,6 @@ class Viewport(QWidget):
         #: Ob der letzte Aufbau nur ein Verschieben war. Gesetzt und gelesen
         #: in :meth:`_fit_once_for` (für :func:`outgrown`).
         self._moved_only: bool = False
-        """Die Maße, auf die eingepasst wurde — der Vergleich für
-        :func:`outgrown`. „Innerhalb desselben Zustands" hat eine Grenze: Ein
-        Körper, der fünfmal so groß ist wie alles bisher, ist kein Zoom mehr,
-        den man behalten will."""
         self._scheme: NavigationScheme = "solidon"
         self._theme: str | None = None
         """Welches Thema gerade gilt — damit :meth:`set_theme` prüfen kann.
@@ -4035,13 +4442,13 @@ class Viewport(QWidget):
         wieder auf, wenn ein Erzeuger ihn will — der Griff an einem gesetzten
         Baustein ginge dabei mit, obwohl der Baustein noch steht."""
         self._gizmo_wanted = False
+        """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
+        im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
+        Szenenwechsel neu angehängt; dieser Schalter sagt, ob überhaupt."""
         self._feature_gizmo_blocked = False
         #: Ob die Langlochknöpfe trotz gesperrtem Griff stehen — sagt der
         #: Aufrufer der Sperre, nicht die Sperre selbst.
         self._knobs_stay = False
-        """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
-        im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
-        Szenenwechsel neu angehängt; dieser Schalter sagt, ob überhaupt."""
         self.moves_as_a_part: Callable[[Feature], bool] = _never_a_part
         """Ob ein Merkmal aus einem Baustein stammt, den der Griff als Ganzes bewegt.
 
@@ -4068,6 +4475,20 @@ class Viewport(QWidget):
         Ohne ihn zeigt der Zug nur, **wohin** — nicht, von wo. Der Körper steht
         währenddessen still (seine Geometrie ändert sich erst bei der
         Auswertung), und damit sah es aus, als bewege sich gar nichts."""
+        self._part_drag_actor: Any | None = None
+        """Der ganze Baustein, solange eines seiner Merkmale gezogen wird (RM-174).
+
+        Ein Zug an einem Bausteinmerkmal versetzt den Baustein
+        (``MainWindow._move_the_part``); die Marke des angefassten Merkmals
+        allein zeigte davon die Hälfte, und die übrigen Merkmale rückten erst
+        beim Loslassen nach. Die Dreiecke aller Merkmale desselben Schritts
+        gehen hier mit der Matrix des Griffs."""
+        self._part_landing: tuple[Any, Any, Any, Any] | None = None
+        """Wo der Baustein landen kann: Sitz, zwei Richtungen der Sitzebene und
+        die Dreiecke der Fläche darin, in Ebenenkoordinaten — oder ``None``,
+        wenn der Sitz auf keiner ebenen Fläche liegt."""
+        self._part_off_face = False
+        """Ob der laufende Zug den Sitz des Bausteins neben die Fläche führt."""
         self._shape_actor: Any | None = None
         """Das Merkmal in seiner Gestalt — eigener Aktor, damit der Griff an der
         Öffnung bleibt und nicht am Schwerpunkt eines Zylinders.
@@ -4134,11 +4555,11 @@ class Viewport(QWidget):
         self._drag_axis: Axis | None = None
         """Die Achse des laufenden Zugs, sobald sie sich gezeigt hat."""
         self._drag_normal: Vec3 | None = None
+        """Die Flächennormale, wenn der Zug an einer Fläche hängt."""
         #: Welche Fläche am Griff hängt — was ``faceDragged`` sendet.
         self._drag_face: FeatureId | None = None
         #: Ob unter dem Zeiger eine bearbeitbare Kante liegt (§18.5).
         self._hover_edge = False
-        """Die Flächennormale, wenn der Zug an einer Fläche hängt."""
         # Kein Einrasten, solange die Leiste nichts anderes sagt — die
         # Begründung steht bei ``DEFAULT_GRID_STEP`` in ``transform_bar``.
         self._grid_step = 0.0
@@ -4170,14 +4591,14 @@ class Viewport(QWidget):
         """Je Körper die konvexe Hülle seiner Punkte, für den Schattenwurf.
         Einmal je Szenenaufbau gerechnet — ein Ansichtswechsel projiziert nur
         noch daraus (§18.6)."""
-        self._shadow_splits: dict[ObjectId, tuple[Any, list[Any]]] = {}
+        self._shadow_splits = _MeshMemo()
         """Je Körper das Netz, aus dem seine Hüllen stammen, und sie selbst.
 
         Überlebt den Szenenaufbau, anders als ``_shadow_hulls``: Er ist genau
         dafür da, das Zerlegen zu sparen, wenn sich am Netz nichts geändert
         hat. Verglichen wird die Identität des Netzes (siehe
         ``_shadow_hulls_for``)."""
-        self._edge_meshes: dict[ObjectId, tuple[Any, Any]] = {}
+        self._edge_meshes = _MeshMemo()
         """Je Körper das Netz, aus dem seine Körperkanten stammen, und sie selbst.
 
         Dieselbe Bauart und derselbe Grund wie bei ``_shadow_splits``, nur
@@ -4185,6 +4606,9 @@ class Viewport(QWidget):
         **453 ms bei jedem Aufbau** — und ``show_scene`` läuft bei jeder
         Auswahl, jedem Themenwechsel und jedem Schieberschritt (gemessen
         03.09.2026, siehe :meth:`_feature_edges_for`)."""
+        self._surface_normals = _MeshMemo()
+        """Je Körper das Netz, zu dem vorbereitete Punktnormalen gehören, und sie
+        selbst — gerechnet im Arbeiter (RM-203), übernommen beim Anlegen."""
         self._shadow_ground: dict[ObjectId, tuple[float, float, Any]] = {}
         """Je Körper Unterkante, Oberkante und sein Umriss von oben. Damit
         steht fest, wer auf wem steht — und damit, welche Fläche den Schatten
@@ -4198,6 +4622,10 @@ class Viewport(QWidget):
 
         Getrennt von :attr:`_bed_extent`, weil der Schattenschnitt nur die
         Platte braucht und das Einpassen der leeren Szene die Höhe."""
+        self._shadow_generation = 0
+        self._shadow_worker: _ShadowWorker | None = None
+        """Der laufende Schattenwurf (:class:`_ShadowWorker`) und die Nummer des
+        jüngsten Auftrags — nur dessen Antwort wird gezeigt."""
         self._shadow_cast: tuple[float, float] = (SHADOW_SIDE, SHADOW_REACH)
         """Die Lichtrichtung, mit der die Schatten im Bild stehen. Sie folgt
         der Kamera; wer sie schon getroffen hat, zeichnet nicht neu."""
@@ -4243,6 +4671,16 @@ class Viewport(QWidget):
         ersten Klick für verschluckt.
         """
         self._feature_geometry: dict[ObjectId, list[tuple[FeatureId, Any, Any, Any]]] = {}
+        """Je Körper die Dreiecke jedes Merkmals mit ihrem Hüllquader —
+        vorbereitet, weil die Trefferfrage bei jeder Ruhepause des Zeigers neu
+        gestellt wird (90 ms, :data:`HOVER_DELAY_MS`).
+
+        Der Quader ist die billige Vorprüfung: Ein Modell mit fünfhundert
+        Merkmalen hat fünfhundert Dreiecksmengen, und der genaue Abstand ist
+        nur für die eine oder zwei nötig, deren Quader den Zeiger überhaupt
+        erreicht. Geleert wird beim Szenenwechsel — die Dreiecke gehören einer
+        Auswertung, nicht dem Viewport.
+        """
         self._selection_hit: _SelectionHit | None = None
         self._original_pick_cells: set[ObjectId] = set()
         self._feature_cells: dict[ObjectId, tuple[tuple[FeatureId, ...], Any]] = {}
@@ -4276,18 +4714,16 @@ class Viewport(QWidget):
         kein Merkmal, sie hat keine Kennung, die die Erkennung vergibt.
         """
         self._edge_patch: Item | None = None
-        """Je Körper die Dreiecke jedes Merkmals mit ihrem Hüllquader —
-        vorbereitet, weil die Trefferfrage bei jeder Ruhepause des Zeigers neu
-        gestellt wird (90 ms, :data:`HOVER_DELAY_MS`).
-
-        Der Quader ist die billige Vorprüfung: Ein Modell mit fünfhundert
-        Merkmalen hat fünfhundert Dreiecksmengen, und der genaue Abstand ist
-        nur für die eine oder zwei nötig, deren Quader den Zeiger überhaupt
-        erreicht. Geleert wird beim Szenenwechsel — die Dreiecke gehören einer
-        Auswertung, nicht dem Viewport.
-        """
+        """Die Linie der gewählten Kante, vor dem Material gezeichnet
+        (:meth:`_redraw_edge_patch`)."""
         self._feature_patch: Any | None = None
+        """Die Dreiecke des gewählten Merkmals, in der Auswahlfarbe über dem
+        Körper. Ohne sie hieß „Bohrung gewählt", dass der ganze Körper
+        aufleuchtet — die Auswahl zeigte das Objekt und nicht die Stelle."""
         self._feature_patches: dict[ObjectId, Item] = {}
+        #: Wofür die stehende Merkmalsmarkierung gebaut wurde — siehe
+        #: :meth:`_feature_patch_state`.
+        self._feature_patch_drawn: tuple[Any, ...] | None = None
         self._feature_outlines: dict[ObjectId, Item] = {}
         self._protected_patch: Any | None = None
         self._protected_hatch: Any | None = None
@@ -4298,11 +4734,10 @@ class Viewport(QWidget):
         # der Nutzer beim Schließen, dass die Markierung fort ist — was er
         # nicht merken darf, ist, dass sie fehlt, während er sie glaubt.
         self._protected: dict[ObjectId, set[FeatureId]] = {}
-        """Die Dreiecke des gewählten Merkmals, in der Auswahlfarbe über dem
-        Körper. Ohne sie hieß „Bohrung gewählt", dass der ganze Körper
-        aufleuchtet — die Auswahl zeigte das Objekt und nicht die Stelle."""
         self._hover_patch: Any | None = None
         """Die durchscheinende Fläche unter dem ruhenden Zeiger (§18.5)."""
+        #: Wofür die stehende Zeigerfläche gebaut wurde (:meth:`_redraw_hover_patch`).
+        self._hover_patch_drawn: tuple[Any, ...] | None = None
         self._layer_actors: list[Any] = []
         self._layer: LayerInfo | None = None
         #: Wessen Schicht gezeigt wird. Ihre Konturen wandern mit diesem
@@ -4401,6 +4836,12 @@ class Viewport(QWidget):
         """Was die Kamera gerade tut, solange eine Taste unten ist. Schlägt
         jede andere Rolle: wer dreht, will nicht wissen, was unter dem Zeiger
         liegt."""
+        self._interaction_timer = QTimer(self)
+        self._interaction_timer.setSingleShot(True)
+        self._interaction_timer.setInterval(INTERACTION_SETTLE_MS)
+        self._interaction_timer.timeout.connect(self._end_interaction)
+        """Beendet die Bewegung, wenn nichts mehr kommt — Rad, 3D-Maus,
+        Flugtasten und ein Zug, der stillsteht (:meth:`note_camera_motion`)."""
         self._hover_timer = QTimer(self)
         self._hover_timer.setSingleShot(True)
         self._hover_timer.setInterval(HOVER_DELAY_MS)
@@ -4653,6 +5094,57 @@ class Viewport(QWidget):
         return True
 
     def _on_pointer(self, event: PointerEvent) -> None:
+        """Jede Zeigergeste des Renderers — mit der Bewegung, die sie auslöst.
+
+        **Ein Zug zeichnet leichter, sein letztes Bild in voller Güte**
+        (RM-200). Solange eine Taste gehalten wird oder das Rad dreht, gilt
+        die Ansicht als bewegt (:meth:`note_camera_motion`), und der Renderer
+        darf die Umgebungsverdeckung in ihrer leichten Stufe zeichnen. Beim
+        Loslassen endet die Bewegung **vor** der Geste: Was das Loslassen
+        zeichnet — Zugende der Kamera, Übernahme am Griff —, ist schon das
+        volle Bild. Zeichnet es nichts, und steht noch ein leichtes Bild, kommt
+        genau ein volles nach.
+        """
+        if event.kind == "release":
+            self._interaction_timer.stop()
+            if self.renderer is not None:
+                self.renderer.set_interacting(False)
+        elif (event.kind == "move" and bool(event.buttons)) or event.kind == "wheel":
+            self.note_camera_motion()
+        self._dispatch_pointer(event)
+        if (
+            event.kind == "release"
+            and self.renderer is not None
+            and self.renderer.frame_was_reduced()
+        ):
+            self._draw()
+
+    def note_camera_motion(self) -> None:
+        """Die Ansicht ist in Bewegung — bis zum Ende des Zugs oder bis
+        :data:`INTERACTION_SETTLE_MS` lang nichts mehr kommt.
+
+        Gerufen von jedem Treiber, der Bilder im Takt erzeugt: Zeigerzug und
+        Rad (:meth:`_on_pointer`), 3D-Maus (``spacemouse``) und Flugtasten.
+        **Nicht** von :meth:`set_camera_pose` selbst — über denselben Weg
+        stellen Bildschirmfotos und Handbuchbilder ihre Kamera, und die
+        gehören in voller Güte gezeichnet.
+        """
+        if self.renderer is None:
+            return
+        self.renderer.set_interacting(True)
+        self._interaction_timer.start()
+
+    def _end_interaction(self) -> None:
+        """Die Bewegung ist vorbei: volle Güte, und ein volles Bild, wenn das
+        stehende noch aus der Bewegung stammt."""
+        self._interaction_timer.stop()
+        if self.renderer is None:
+            return
+        self.renderer.set_interacting(False)
+        if self.renderer.frame_was_reduced():
+            self._draw()
+
+    def _dispatch_pointer(self, event: PointerEvent) -> None:
         """Jede Zeigergeste des Renderers, in fester Vorfahrt.
 
         Zuerst die Griffe — Vorschaugriff, Bewegungsgriff, Skalierwürfel und
@@ -4753,6 +5245,12 @@ class Viewport(QWidget):
             return
         if self._placement_pointer is not None and self._placement_pointer(event):
             return
+        if (
+            self._placement_pointer is None
+            and self._placement_resume is not None
+            and self._placement_resume(event)
+        ):
+            return
         if event.kind == "move":
             self._note_pointer(event.x, event.y)
         elif event.kind == "leave":
@@ -4776,6 +5274,23 @@ class Viewport(QWidget):
             self.drop_move_proposal()
         if changed:
             self.set_gizmo(self._gizmo_wanted)
+
+    def set_placement_resume(self, handler: Callable[[PointerEvent], bool]) -> None:
+        """Einer pausierten Platzierung den Klick ins Modell geben (RM-205).
+
+        Wer die Platzierung mit Escape bis in den Dialog verlassen hat, kommt
+        mit einem Klick auf das Modell zurück — ohne Knopf, denn den gibt es im
+        Dialog seit dem 11.09.2026 nicht mehr (Robert: „im dialog das im
+        modell platzieren brauchen wir auch nicht"). Der Rückruf steht hinter
+        den Griffen und fragt nur, solange keine Platzierung läuft; was er
+        nicht nimmt, geht wie immer an Zeiger und Kamera.
+        """
+        self._placement_resume = handler
+
+    def clear_placement_resume(self, handler: Callable[[PointerEvent], bool]) -> None:
+        """Den Rückweg abnehmen — nur den eigenen, ein späterer Dialog behält seinen."""
+        if self._placement_resume == handler:
+            self._placement_resume = None
 
     def move_proposal_waits(self) -> bool:
         """Ob ein am Griff versetztes Merkmal auf sein Übernehmen wartet."""
@@ -5057,7 +5572,19 @@ class Viewport(QWidget):
         towards = np.asarray(pose.position, dtype=float) - np.asarray(pose.focal_point, dtype=float)
         # Wie hoch das Bild an dieser Stelle ist: orthografisch steht es als
         # Parallelmaßstab, perspektivisch wächst es mit dem Abstand.
-        span = float(self.renderer.parallel_scale() or 0.0)
+        #
+        # **Den Maßstab nur in der Orthografie fragen** (RM-074, 22.09.2026).
+        # Der Renderer behält ihn auch in der Perspektive — den zuletzt
+        # gesetzten, gleich wie weit die Kamera inzwischen steht —, und die
+        # Frage nach „größer als null" nahm ihn dann: Am Beispielprojekt
+        # ``passung-nach-materialwechsel`` flog die Kamera 205 mm weit, und der
+        # Ring hatte weniger als einen Bildpunkt Durchmesser; zu sehen war nur
+        # der Satz.
+        span = (
+            float(self.renderer.parallel_scale() or 0.0)
+            if self.renderer.parallel_projection()
+            else 0.0
+        )
         if span <= 0.0:
             span = float(np.linalg.norm(towards)) * 0.5
         radius = max(span * FINDING_RING_SHARE, EPS_GEOM)
@@ -5065,13 +5592,20 @@ class Viewport(QWidget):
         centre = np.asarray(self.view_point_of(point, object_id), dtype=float)
         # **Der Ring wird nicht nach vorn gezogen, und das ist gemessen.** Der
         # Ort einer Warnung liegt oft im Material — die Mitte einer Bohrung,
-        # der Schwerpunkt einer Fläche —, und der Ring verschwindet dort zur
-        # Hälfte hinter der Wand. Der naheliegende Ausweg, ihn entlang der
-        # Blickachse davorzuziehen, setzt voraus, dass die Projektion
+        # der Schwerpunkt einer Fläche. Der naheliegende Ausweg, ihn entlang
+        # der Blickachse davorzuziehen, setzt voraus, dass die Projektion
         # orthografisch ist; sie ist es nicht. Im Bild wanderte die Marke damit
         # sichtbar von der Stelle weg, die sie meint, und wurde größer.
         # **Eine Marke neben der Sache ist schlechter als eine halb verdeckte.**
-        # Die Beschriftung trägt ``always_visible`` und steht in jedem Fall.
+        #
+        # **Und eine ganz verdeckte ist keine Marke** (RM-074, 22.09.2026):
+        # Am Beispielprojekt ``passung-nach-materialwechsel`` liegt der Ort
+        # der Passungswarnung im Deckel; der Flug stimmte, im Bild stand nur
+        # der Satz, der Ring lag vollständig im Material. Er bleibt deshalb
+        # genau an seiner Stelle und wird **vor** dem Material gezeichnet
+        # (``keep_in_front``) — ohne Tiefentest, also ohne Wandern: dieselbe
+        # Zusage wie bei der Kantenmarke (Regel 18, ``api.py``). Die Marke
+        # gilt ohnehin nur für :data:`FINDING_MARK_MS`.
         ring = _ring_points(centre, towards, radius)
         self._finding_actors.append(
             self.renderer.add_lines(
@@ -5080,12 +5614,23 @@ class Viewport(QWidget):
                 colour=SELECTED_COLOUR,
                 width=3.0,
                 connected=True,
+                keep_in_front=True,
             )
         )
         if title:
+            # **Über dem Ring im Bild, nicht über ihm in der Welt.** Der Satz
+            # stand um einen Radius in +z versetzt; von oben gesehen ist +z
+            # die Blickrichtung, und er lag mitten im Ring, quer über dessen
+            # Linie (RM-074, Bildbeleg vom 22.09.2026). Die Oben-Richtung der
+            # Kamera, senkrecht zur Blickachse gestellt, ist im Bild immer oben.
+            up = np.asarray(pose.view_up, dtype=float)
+            ahead = towards / max(float(np.linalg.norm(towards)), EPS_GEOM)
+            up = up - ahead * float(up @ ahead)
+            length = float(np.linalg.norm(up))
+            up = up / length if length > EPS_GEOM else np.array([0.0, 0.0, 1.0])
             self._finding_actors.append(
                 self.renderer.add_labels(
-                    np.asarray([centre + np.array([0.0, 0.0, radius])], dtype=float),
+                    np.asarray([centre + up * radius * FINDING_LABEL_REACH], dtype=float),
                     [title],
                     name="finding_label",
                     style=LabelStyle(
@@ -5366,61 +5911,21 @@ class Viewport(QWidget):
         dabei dasselbe. **Der Schnittschieber trifft den Cache absichtlich
         nicht**: ``cut`` erzeugt dort wirklich ein neues Netz.
         """
-        cached = self._shadow_splits.get(object_id)
-        if cached is not None and source is not None and cached[0] is source:
-            return cached[1]
+        if source is not None and self._shadow_splits.has(object_id, source):
+            known: list[Any] = self._shadow_splits.get(object_id, source)
+            return known
         hulls = self._shadow_hulls_of(points, mesh)
         if source is not None:
-            self._shadow_splits[object_id] = (source, hulls)
+            self._shadow_splits.remember(object_id, source, hulls)
         return hulls
 
     def _shadow_hulls_of(self, points: Any, mesh: Any) -> list[Any]:
-        """Die Punkte, aus denen ein Körper seinen Schatten wirft — je Stück eines.
-
-        Ein Körper aus mehreren Stücken wirft je Stück einen Schatten (Robert,
-        25.08.2026, am Bildschirm gesehen). Welche Dreiecke ein Stück bilden,
-        sagt der Kern (:func:`face_components`); die Hülle je Stück kommt aus
-        seinen Punkten — bereits mit dem Versatz der Ansicht, wie ``points``
-        gezeichnet wird.
-        """
-        import numpy as np
-
-        raw = getattr(mesh, "raw", None)
-        pieces = face_components(raw) if raw is not None else []
-        if raw is None or len(pieces) <= 1:
-            single = self._shadow_hull_of(points)
-            return [single] if single is not None else []
-        faces = np.asarray(raw.faces, dtype=np.int64)
-        grid = np.asarray(points, dtype=float)
-        hulls = []
-        for piece in pieces:
-            used = np.unique(faces[np.asarray(piece, dtype=np.int64)].ravel())
-            hull = self._shadow_hull_of(grid[used])
-            if hull is not None:
-                hulls.append(hull)
-        return hulls
+        """Die Schattenhüllen eines Körpers (:func:`shadow_hulls_of`)."""
+        return shadow_hulls_of(points, getattr(mesh, "raw", None))
 
     def _shadow_hull_of(self, points: Any) -> Any:
-        """Die Punkte, aus denen ein Stück seinen Schatten wirft: seine konvexe Hülle.
-
-        Einmal je Körper statt einer Triangulierung über jeden Punkt des
-        Anzeigenetzes bei jedem Ansichtswechsel (gemessen: 31 ms bei
-        zwanzigtausend Dreiecken, 127 ms bei zweiundachtzigtausend, je
-        Körper). ``_thinned_for_hull`` deckelt die Kosten bei feinen Kugeln.
-        """
-        import numpy as np
-        from scipy.spatial import ConvexHull, QhullError
-
-        thinned = _thinned_for_hull(np.asarray(points, dtype=float))
-        if len(thinned) < 4:
-            return thinned if len(thinned) >= 3 else None
-        try:
-            return thinned[ConvexHull(thinned).vertices]
-        except QhullError as problem:
-            # Ein ebener oder entarteter Körper hat keine räumliche Hülle. Seine
-            # Punkte sind dann ohnehin wenige — sie gehen unverändert weiter.
-            _log.info("shadow hull unavailable: %s", problem)
-            return thinned
+        """Die Schattenhülle eines Stücks (:func:`shadow_hull_of`)."""
+        return shadow_hull_of(points)
 
     def _shadow_catchers(self, object_id: ObjectId) -> list[tuple[float, Any]]:
         """Die Flächen, die den Schatten dieses Körpers auffangen (§18.6).
@@ -5440,45 +5945,11 @@ class Viewport(QWidget):
         Umriss heißt „unbeschnitten" und tritt nur auf, wenn kein Bauraum
         gezeigt wurde — dann gibt es keine Kante, an der zu schneiden wäre.
         """
-        mine = self._shadow_ground.get(object_id)
-        # Die Platte dieses Körpers, nicht die erste: die Umrisse der Körper
-        # stehen dort, wo gezeichnet wurde (§25), und ein Schatten, der am
-        # Umriss von Platte 1 geschnitten wird, verschwindet für jeden Körper
-        # auf Platte 2 restlos.
-        catchers: list[tuple[float, Any]] = [
-            (0.0, self._bed_outline_for(object_id) if self._bed_extent is not None else None)
-        ]
-        if mine is None:
-            return catchers
-        floor = mine[0]
-        for other, (_low, high, outline) in self._shadow_ground.items():
-            if other == object_id or outline is None:
-                continue
-            if EPS_GEOM < high <= floor + EPS_GEOM:
-                catchers.append((high, outline))
-        return catchers
-
-    @staticmethod
-    def _shadow_base_of(hull_points: Any, direction: tuple[float, float]) -> tuple[Any, float]:
-        """Der Umriss eines Stücks auf seiner **eigenen** Unterkante, und deren Höhe.
-
-        Von dort aus ist jede tiefere Auffangfläche eine reine Verschiebung:
-        ``shadow_points`` versetzt jeden Punkt um ``(z - ground)`` mal der
-        waagerechten Lichtrichtung, und liegt kein Punkt unter der Fläche,
-        fällt das ``ground`` als gemeinsamer Summand heraus. Für zehn
-        Auffangflächen wird die Hülle damit einmal gerechnet statt zehnmal —
-        gemessen an ``1-24+scale+polebarn.3mf``: 3541 Hüllen je Kamerageste,
-        eine je Körper und Stück wären 118.
-
-        Die Klammer in ``shadow_points`` (``maximum(..., 0)``) ist der Grund
-        für „tiefer": Ein Punkt unter der Fläche wirft nach dieser Regel
-        keinen Schatten nach vorn, und dann ist die Projektion nicht mehr
-        linear. Auf der eigenen Unterkante greift sie nie.
-        """
-        import numpy as np
-
-        floor = float(np.asarray(hull_points, dtype=float)[:, 2].min())
-        return outline_of(shadow_points(hull_points, direction, floor)), floor
+        return shadow_catchers(
+            object_id,
+            self._shadow_ground,
+            self._bed_outline_for(object_id) if self._bed_extent is not None else None,
+        )
 
     def _shadow_outline_of(
         self,
@@ -5498,30 +5969,23 @@ class Viewport(QWidget):
         einziges Vieleck statt einer Triangulierung: Die Punkte liegen bereits
         in der Reihenfolge des Randes, ``shapes.polygon`` fächert sie auf.
 
-        ``base`` ist derselbe Umriss auf der Unterkante des Stücks, samt ihrer
-        Höhe (:meth:`_shadow_base_of`). Liegt die Auffangfläche darunter — und
-        das tut sie bei jeder außer bei der Platte unter einem versenkten
-        Körper —, verschiebt sich der Umriss nur, statt neu gerechnet zu
-        werden.
+        ``base`` ist derselbe Umriss auf der **eigenen** Unterkante des
+        Stücks, samt ihrer Höhe — gerechnet in :meth:`_place_shadows` für alle
+        Stücke in einem Gang. Liegt die Auffangfläche darunter — und das tut
+        sie bei jeder außer bei der Platte unter einem versenkten Körper —,
+        verschiebt sich der Umriss nur, statt neu gerechnet zu werden:
+        ``shadow_points`` versetzt jeden Punkt um ``(z - ground)`` mal der
+        waagerechten Lichtrichtung, und liegt kein Punkt unter der Fläche,
+        fällt das ``ground`` als gemeinsamer Summand heraus. Für zehn
+        Auffangflächen wird die Hülle damit einmal gerechnet statt zehnmal —
+        gemessen an ``1-24+scale+polebarn.3mf``: 3541 Hüllen je Kamerageste,
+        eine je Körper und Stück wären 118. Die Klammer in ``shadow_points``
+        (``maximum(..., 0)``) ist der Grund für „tiefer": Ein Punkt unter der
+        Fläche wirft nach dieser Regel keinen Schatten nach vorn, und dann ist
+        die Projektion nicht mehr linear. Auf der eigenen Unterkante greift
+        sie nie.
         """
-        import numpy as np
-
-        if hull_points is None or len(hull_points) < 3:
-            return None
-        outline = None
-        if base is not None and base[0] is not None and ground <= base[1] + EPS_GEOM:
-            reach = base[1] - ground
-            shift = np.asarray((reach * direction[0], reach * direction[1]), dtype=float)
-            outline = np.asarray(base[0], dtype=float) + shift
-        if outline is None:
-            outline = outline_of(shadow_points(hull_points, direction, ground))
-        if outline is None:
-            return None
-        if window is not None:
-            outline = clip_polygon(outline, window)
-            if len(outline) < 3:
-                return None
-        return np.column_stack((outline, np.full(len(outline), ground + SHADOW_LIFT)))
+        return shadow_outline_of(hull_points, direction, ground, window, base)
 
     # --- scene ------------------------------------------------------------------
 
@@ -5596,7 +6060,8 @@ class Viewport(QWidget):
             return
         tasks, plane, second = prepared
         assert result is not None
-        worker = _SceneMeshWorker(generation, result, tasks, plane, second)
+        normals_of = self.renderer.surface_normals if self.renderer is not None else None
+        worker = _SceneMeshWorker(generation, result, tasks, plane, second, normals_of)
         self._scene_worker = worker
         worker.done.connect(self._scene_ready)
         worker.crashed.connect(weak_slot(self, Viewport._scene_crashed, generation, forward=True))
@@ -5607,22 +6072,29 @@ class Viewport(QWidget):
 
     def _scene_tasks(
         self, result: EvaluationResult | None
-    ) -> (
-        tuple[
-            list[tuple[ObjectId, Any, DisplayKey | None]],
-            SectionPlane | None,
-            SectionPlane | None,
-        ]
-        | None
-    ):
-        """Die nötige Aufbereitung, wenn mindestens ein Schritt teuer ist."""
+    ) -> tuple[list[_MeshTask], SectionPlane | None, SectionPlane | None] | None:
+        """Die nötige Aufbereitung, wenn mindestens ein Schritt teuer ist.
+
+        Teuer sind Dezimieren und Schneiden — und seit dem 22.09.2026 auch,
+        was ein **neues** Anzeigenetz mitbringt: Körperkanten, Schattenhüllen
+        und Punktnormalen (RM-203). Die drei hängen an der Identität des
+        Netzes (``_edge_meshes``, ``_shadow_splits``, ``_surface_normals``);
+        bei einer Auswahl, einem Themenwechsel oder einem Schieberschritt
+        steht dasselbe Netz, und dann ist nichts zu tun. Ein neues Netz über
+        :data:`SCENE_PREPARATION_ABOVE` Dreiecken geht in den Arbeiter,
+        darunter rechnet der Aufbau selbst — ein Arbeiter für ein paar
+        Millisekunden verschöbe das Bild nur in die nächste Ereignisrunde.
+        """
 
         if result is None or self.renderer is None:
             return None
         plane, second = self._section_planes()
 
-        tasks: list[tuple[ObjectId, Any, DisplayKey | None]] = []
+        tasks: list[_MeshTask] = []
         heavy = plane is not None
+        fresh = 0
+        solid = self._mode == "solid"
+        shadows = self.contact_shadows
         for object_id, entry in result.scene.objects.items():
             if not self._in_view(object_id, entry):
                 continue
@@ -5643,7 +6115,8 @@ class Viewport(QWidget):
                 else:
                     self._display_cache[key] = found
                     mesh = found
-            if cache_key is not None or plane is not None:
+            changes = cache_key is not None or plane is not None
+            if changes:
                 # **Der Arbeiter bekommt eine eigene Kopie.** Bis sein Ergebnis
                 # da ist, bleibt ``self._result`` die alte Auswertung, und die
                 # trägt für unveränderte Körper dasselbe ``MeshData`` wie die
@@ -5653,8 +6126,31 @@ class Viewport(QWidget):
                 # füllen. Der Cache ist nicht threadsicher; die Kopie kostet
                 # einen Bruchteil der Dezimierung und trennt die beiden.
                 mesh = _detached(mesh)
-            tasks.append((object_id, mesh, cache_key))
-        return (tasks, plane, second) if heavy else None
+            triangles = DISPLAY_DECIMATION_TARGET if cache_key is not None else mesh.triangle_count
+            edges = solid and triangles <= FEATURE_EDGE_LIMIT
+            if not changes:
+                edges = edges and not self._edge_meshes.has(object_id, mesh)
+            hulls = shadows and (changes or not self._shadow_splits.has(object_id, mesh))
+            normals = changes or not self._surface_normals.has(object_id, mesh)
+            if edges or hulls or normals:
+                fresh += triangles
+            tasks.append(_MeshTask(object_id, mesh, cache_key, edges, hulls, normals))
+        if not heavy and fresh <= SCENE_PREPARATION_ABOVE:
+            return None
+        # Der Arbeiter liest ein unverändertes Netz der Szene nie an; was er
+        # daran rechnen soll, rechnet er an einer eigenen Kopie (``_MeshTask``).
+        return (
+            [
+                task._replace(reading=_detached(task.mesh))
+                if task.cache_key is None
+                and plane is None
+                and (task.edges or task.hulls or task.normals)
+                else task
+                for task in tasks
+            ],
+            plane,
+            second,
+        )
 
     def _scene_ready(
         self,
@@ -5691,9 +6187,11 @@ class Viewport(QWidget):
         # seinen bereits eingereihten Rückruf zuverlässig ungültig.
         self._scene_generation += 1
         self._difference_generation += 1
+        self._shadow_generation += 1
         workers = (
             self._scene_worker,
             self._difference_worker,
+            self._shadow_worker,
             *self._scene_leash.pending(),
         )
         unique = {id(worker): worker for worker in workers if worker is not None}
@@ -5870,10 +6368,17 @@ class Viewport(QWidget):
         for actor in self._edge_actors.values():
             self.renderer.remove(actor)
         self._edge_actors.clear()
-        for actor in self._shadow_actors:
-            self.renderer.remove(actor)
-        self._shadow_actors.clear()
-        self._shadow_owners.clear()
+        # **Die Schattenaktoren bleiben stehen, wo wieder Schatten fallen** —
+        # sie tragen ihre Punkte mit fester Kapazität und bekommen gleich neue
+        # (:meth:`_place_shadows`); ein Arbeiter, der den Wurf rechnet, lässt
+        # bis dahin den alten stehen statt keinen. Im Skizzenmodus und unter
+        # einer Analysekarte fällt keiner, dort gehen sie jetzt.
+        self._reset_shadow_offset()
+        if self._sketch_frame is not None or not self.contact_shadows or result is None:
+            for actor in self._shadow_actors:
+                self.renderer.remove(actor)
+            self._shadow_actors.clear()
+            self._shadow_owners.clear()
         # Die Hüllen gehören zu den Körpern, die gerade weggeräumt wurden. Ein
         # Rest davon hieße: ein gelöschter Körper wirft beim nächsten Drehen
         # weiter seinen Schatten.
@@ -5884,19 +6389,12 @@ class Viewport(QWidget):
         # Körper gehört, den es nicht mehr gibt, fällt hier weg: Der Cache
         # wächst sonst über eine lange Sitzung mit jedem gelöschten Körper.
         if result is not None:
-            self._shadow_splits = {
-                object_id: entry
-                for object_id, entry in self._shadow_splits.items()
-                if object_id in result.scene.objects
-            }
-            self._edge_meshes = {
-                object_id: entry
-                for object_id, entry in self._edge_meshes.items()
-                if object_id in result.scene.objects
-            }
+            for memo in (self._shadow_splits, self._edge_meshes, self._surface_normals):
+                memo.keep_only(result.scene.objects)
         else:
             self._shadow_splits.clear()
             self._edge_meshes.clear()
+            self._surface_normals.clear()
         self._shadow_cast = self._shadow_direction()
         self._uncapped = prepared.uncapped if prepared is not None else False
         if prepared is not None:
@@ -5937,6 +6435,15 @@ class Viewport(QWidget):
             raw = getattr(mesh, "raw", None)
             if raw is None or not len(raw.faces):
                 continue
+            if prepared is not None:
+                # Was der Arbeiter vorbereitet hat, gilt diesem Netz — in
+                # denselben Merkern, die ohne Arbeiter der Aufbau füllt.
+                if prepared.edges and object_id in prepared.edges:
+                    self._edge_meshes.remember(object_id, mesh, prepared.edges[object_id])
+                if prepared.hulls and object_id in prepared.hulls:
+                    self._shadow_splits.remember(object_id, mesh, prepared.hulls[object_id])
+                if prepared.normals and object_id in prepared.normals:
+                    self._surface_normals.remember(object_id, mesh, prepared.normals[object_id])
             faces = np.asarray(raw.faces, dtype=np.int64)
             offset = np.asarray(self._view_offset(entry, result), dtype=float)
             local = np.asarray(raw.vertices, dtype=float)
@@ -5954,7 +6461,13 @@ class Viewport(QWidget):
             elif self._map is None:
                 cell_colours = self._slot_colours(mesh, entry, len(faces))
             # Eingepasst wird ausdrücklich, in `_fit_once_for` — der Renderer
-            # rührt die Kamera beim Einfügen nicht an.
+            # rührt die Kamera beim Einfügen nicht an. Punktnormalen, die ein
+            # Arbeiter schon gerechnet hat, gehen mit (RM-203); sonst rechnet
+            # der Renderer sie selbst.
+            extra: dict[str, Any] = {}
+            known = self._surface_normals.get(object_id, mesh)
+            if known is not None:
+                extra["normals"] = known
             actor = self.renderer.add_surface(
                 points,
                 faces,
@@ -5969,6 +6482,7 @@ class Viewport(QWidget):
                     pickable=True,
                 ),
                 cell_colours=cell_colours,
+                **extra,
             )
             self._actors[object_id] = actor
             self._actor_offsets[object_id] = offset.copy()
@@ -5981,20 +6495,21 @@ class Viewport(QWidget):
             # Netz dahinter bleibt dasselbe, solange sich nichts geändert hat.
             self._draw_feature_edges(local, faces, offset, object_id, mesh)
             # ``mesh`` und nicht ``points``: Daran erkennt der Schatten, ob er
-            # neu zerlegen muss.
-            self._remember_shadow(points, mesh, object_id, mesh)
+            # neu zerlegen muss. Die Hüllen stehen in Körperkoordinaten; der
+            # Versatz der Ansicht kommt erst beim Merken dazu.
+            self._remember_shadow(local, mesh, object_id, mesh, offset)
 
         # Erst jetzt: ein Schatten fällt auf die Fläche, auf der sein Körper
         # steht, und welche das ist, weiß nur die vollständige Szene.
         if self._sketch_frame is None:
-            self._place_shadows(self._shadow_direction())
+            self._place_shadows(self._shadow_direction(), reuse=True)
         # **Mit der ganzen Auswahl**, sonst räumt dieser Aufruf sie ab: Ohne
         # ``more`` setzt ``select`` das Feld unbedingt aus seinem Argument, und
         # der sorgfältige Beschnitt weiter oben wäre umsonst gewesen. Gemessen
         # am 04.09.2026 am echten Fenster — zwei gewählte Körper, nach der
         # nächsten Auswertung noch einer gefärbt, und ``_selected_bounds``
         # rahmte wieder einen einzigen.
-        self.select(self._selected, more=self._selected_more)
+        self.select(self._selected, more=self._selected_more, draw=False)
         self._redraw_difference()
         self._redraw_features()
         self._redraw_layer()
@@ -6008,7 +6523,7 @@ class Viewport(QWidget):
         # :meth:`_redraw_measurements` als behoben beschreibt. Behoben war die
         # Rechnung, nicht ihr Auslöser. Beide räumen selbst ab und kehren bei
         # leerem Zustand zurück, kosten hier also nichts.
-        self._redraw_measurements()
+        self._redraw_measurements(draw=False)
         # Ob ein Körper unter der Platte liegt, entscheidet sich mit jeder
         # Auswertung neu — und die Platte steht schon, seit der Drucker
         # gewählt wurde.
@@ -6305,16 +6820,15 @@ class Viewport(QWidget):
         gemerkter Versatz stünde danach falsch; der Versatz kommt beim
         Zeichnen dazu.
         """
-        cached = self._edge_meshes.get(object_id)
-        if cached is not None and source is not None and cached[0] is source:
-            return cached[1]
+        if source is not None and self._edge_meshes.has(object_id, source):
+            return self._edge_meshes.get(object_id, source)
         try:
             edges = feature_edges(vertices, faces, FEATURE_EDGE_ANGLE)
         except Exception as problem:  # pragma: no cover - hängt an der Geometrie
             _log.info("feature edges unavailable: %s", problem)
             return None
         if source is not None:
-            self._edge_meshes[object_id] = (source, edges)
+            self._edge_meshes.remember(object_id, source, edges)
         return edges
 
     def _draw_feature_edges(
@@ -6359,17 +6873,29 @@ class Viewport(QWidget):
         return True
 
     def _remember_shadow(
-        self, points: Any, mesh: Any, object_id: ObjectId, source: Any = None
+        self,
+        points: Any,
+        mesh: Any,
+        object_id: ObjectId,
+        source: Any = None,
+        offset: Any = None,
     ) -> None:
         """Die Hüllen eines Körpers für den Schattenwurf merken (§18.6).
 
         Gezeichnet wird erst, wenn die ganze Szene steht (``_place_shadows``):
         Ein Schatten fällt auf die Fläche, auf der sein Körper steht, und
         welche das ist, weiß nur die vollständige Szene.
+
+        ``points`` stehen in Körperkoordinaten, ``offset`` ist der Versatz der
+        Ansicht (:func:`shadow_hulls_of`, warum der Merker ihn nicht enthält).
         """
+        import numpy as np
+
         if self.renderer is None or not self.contact_shadows:
             return
-        hulls = self._shadow_hulls_for(object_id, points, mesh, source)
+        found = self._shadow_hulls_for(object_id, points, mesh, source)
+        shift = np.zeros(3) if offset is None else np.asarray(offset, dtype=float)
+        hulls = [hull + shift if hull is not None else None for hull in found]
         self._shadow_hulls[object_id] = hulls
         usable = [hull for hull in hulls if hull is not None and len(hull) >= 3]
         if not usable:
@@ -6389,52 +6915,124 @@ class Viewport(QWidget):
             outline_of(stacked),
         )
 
-    def _place_shadows(self, direction: tuple[float, float]) -> None:
+    def _place_shadows(self, direction: tuple[float, float], *, reuse: bool = False) -> None:
         """Die Schatten aller Körper aus den gemerkten Hüllen setzen.
 
         **Ein Aktor je Körper, nicht je Stück und Auffangfläche** (16.09.2026).
         Die Vielecke eines Körpers tragen dieselbe Farbe und dieselbe
         Deckkraft; was sie unterscheidet, ist ihre Lage, und die steht in den
-        Punkten. An ``1-24+scale+polebarn.3mf`` waren es 442 Aktoren für 89
-        Körper, und jeder wird bei **jeder** Kamerageste weggeworfen und neu
-        angelegt — im echten Renderer heißt das 442 Pufferaufbauten. Körperweise
-        bleibt es, was ``_shadow_owners`` braucht: Der Zug an einem Körper
-        verschiebt seinen Schatten mit (:meth:`_shift_shadow`).
+        Punkten. Körperweise bleibt es, was ``_shadow_owners`` braucht: Der
+        Zug an einem Körper verschiebt seinen Schatten mit (:meth:`_drag_shadow`).
+
+        **Und der Aktor bleibt stehen** (``reuse``, 22.09.2026). Er trägt seine
+        Dreiecke mit eigenen Ecken und eine feste Kapazität; ein neuer
+        Blickwinkel schreibt nur neue Punkte hinein (``Item.update_points``),
+        statt je Körper ein Element abzuräumen und neu anzulegen — pygfx baut
+        je neuem Element eine Pipeline. **Die Rechnung selbst geht in einen
+        Arbeiter**, sobald die Hüllen zusammen über
+        :data:`SHADOW_PROJECTION_ABOVE` Punkte tragen (:class:`_ShadowWorker`):
+        Bis er fertig ist, steht der Schatten des vorigen Blickwinkels.
         """
+        if self.renderer is None:
+            return
+        self._shadow_generation += 1
+        previous = self._shadow_worker
+        if previous is not None:
+            previous.cancel()
+            self._scene_leash.retire(previous)
+            self._shadow_worker = None
+        hulls = {
+            object_id: [hull for hull in found if hull is not None]
+            for object_id, found in self._shadow_hulls.items()
+        }
+        beds = {
+            object_id: self._bed_outline_for(object_id) if self._bed_extent is not None else None
+            for object_id in hulls
+        }
+        size = sum(len(hull) for found in hulls.values() for hull in found)
+        if size <= SHADOW_PROJECTION_ABOVE:
+            self._show_shadow_soups(
+                shadow_soups(hulls, self._shadow_ground, beds, direction), reuse=reuse
+            )
+            return
+        generation = self._shadow_generation
+        worker = _ShadowWorker(generation, hulls, dict(self._shadow_ground), beds, direction)
+        self._shadow_worker = worker
+        worker.done.connect(self._shadow_ready)
+        worker.crashed.connect(weak_slot(self, Viewport._shadow_crashed, generation, forward=True))
+        worker.finished.connect(
+            weak_slot(self, lambda view, done: view._shadow_worker_done(done), worker)
+        )
+        self._scene_leash.start(worker)
+
+    def _shadow_ready(self, generation: int, soups: dict[ObjectId, Any]) -> None:
+        """Den nebenläufig geworfenen Schatten übernehmen — nur den jüngsten."""
+        if generation != self._shadow_generation or self.renderer is None:
+            return
+        self._show_shadow_soups(soups, reuse=True)
+        self._draw()
+
+    def _shadow_crashed(self, generation: int, detail: str) -> None:
+        """Den Schatten des vorigen Blickwinkels stehen lassen und den Fehler protokollieren.
+
+        Der Schatten ist Anschauung, kein Dokument: Ein gescheiterter Wurf
+        öffnet keinen Fehlerbericht, er lässt nur den alten Schatten stehen —
+        aber still verschwinden darf er auch nicht (`wartezeit.md`, „Ein
+        Arbeiter erbt von `leash.Worker`").
+        """
+        if generation == self._shadow_generation:
+            _log.warning("shadow projection: %s", detail)
+
+    def _shadow_worker_done(self, worker: _ShadowWorker) -> None:
+        """Den ausgelaufenen Schattenwurf identitätssicher loslassen."""
+        if self._shadow_worker is worker:
+            self._shadow_worker = None
+        self._scene_leash.hold_until_done(worker)
+
+    def _show_shadow_soups(self, soups: Mapping[ObjectId, Any], *, reuse: bool) -> None:
+        """Die Dreiecke je Körper in seinen Schattenaktor schreiben — oder ihn anlegen."""
         import numpy as np
 
         if self.renderer is None:
             return
-        for object_id, hulls in self._shadow_hulls.items():
-            catchers = self._shadow_catchers(object_id)
-            corners: list[Any] = []
-            faces: list[Any] = []
-            offset = 0
-            for hull in hulls:
-                base = self._shadow_base_of(hull, direction)
-                for ground, window in catchers:
-                    outline = self._shadow_outline_of(hull, direction, ground, window, base)
-                    if outline is None:
-                        continue
-                    part_corners, part_faces = shapes.polygon(outline)
-                    corners.append(part_corners)
-                    faces.append(np.asarray(part_faces, dtype=np.int64) + offset)
-                    offset += len(part_corners)
-            if not corners:
-                continue
-            actor = self.renderer.add_surface(
-                np.vstack(corners),
-                np.vstack(faces),
-                name=f"shadow:{object_id}",
-                style=SurfaceStyle(
-                    colour=SHADOW_COLOUR,
-                    opacity=self._shadow_opacity,
-                    lighting=False,
-                    pickable=False,
-                ),
-            )
+        kept: dict[ObjectId, Any] = {}
+        for owner, actors in self._shadow_owners.items():
+            if reuse and len(actors) == 1:
+                kept[owner] = actors[0]
+            else:
+                for actor in actors:
+                    self.renderer.remove(actor)
+        for object_id, actor in kept.items():
+            if object_id not in soups:
+                self.renderer.remove(actor)
+        self._shadow_actors = []
+        self._shadow_owners = {}
+        for object_id, soup in soups.items():
+            actor = kept.get(object_id)
+            capacity = getattr(actor, "capacity", None)
+            if actor is not None and capacity is not None and len(soup) <= capacity:
+                actor.update_points(soup)
+            else:
+                if actor is not None:
+                    self.renderer.remove(actor)
+                # Doppelte Größe: Der Umriss eines Körpers wechselt mit dem
+                # Blickwinkel seine Eckenzahl, und ein Aktor, der schon beim
+                # nächsten Winkel reißt, spart nichts.
+                room = 3 * max(16, -(-2 * len(soup) // 3))
+                actor = self.renderer.add_surface(
+                    soup,
+                    np.arange(room, dtype=np.int64).reshape(-1, 3),
+                    name=f"shadow:{object_id}",
+                    style=SurfaceStyle(
+                        colour=SHADOW_COLOUR,
+                        opacity=self._shadow_opacity,
+                        lighting=False,
+                        pickable=False,
+                    ),
+                    capacity=room,
+                )
             self._shadow_actors.append(actor)
-            self._shadow_owners.setdefault(object_id, []).append(actor)
+            self._shadow_owners[object_id] = [actor]
 
     def _redraw_shadows(self, *, draw: bool = True) -> None:
         """Die Schatten der neuen Kamerastellung anpassen (§18.6).
@@ -6442,7 +7040,8 @@ class Viewport(QWidget):
         Am Ende einer Drehung, nicht während ihr: die Hüllen liegen bereit, die
         Projektion darüber kostet Bruchteile einer Millisekunde — aber sie je
         Bild zu rechnen wäre Arbeit für eine Zwischenstellung, die niemand
-        ansieht.
+        ansieht. Bei vielen Hüllpunkten rechnet ein Arbeiter, und das Bild
+        danach zeichnet :meth:`_shadow_ready`.
         """
         # Läuft eine Analysekarte, steht hier ohnehin nichts: `_draw_shadow`
         # legt dann keine Hülle ab, und `show_scene` räumt die alten weg.
@@ -6452,11 +7051,7 @@ class Viewport(QWidget):
         if math.dist(self._shadow_cast, direction) < EPS_GEOM:
             return
         self._shadow_cast = direction
-        for actor in self._shadow_actors:
-            self.renderer.remove(actor)
-        self._shadow_actors.clear()
-        self._shadow_owners.clear()
-        self._place_shadows(direction)
+        self._place_shadows(direction, reuse=True)
         if draw:
             self._draw()
 
@@ -6730,7 +7325,9 @@ class Viewport(QWidget):
         self._uncapped = self._uncapped or not result.capped
         return result.mesh
 
-    def select(self, object_id: ObjectId | None, *, more: Sequence[ObjectId] = ()) -> None:
+    def select(
+        self, object_id: ObjectId | None, *, more: Sequence[ObjectId] = (), draw: bool = True
+    ) -> None:
         """Hebt ein Objekt hervor — Farbe plus Statusleiste, nie Farbe
         allein (§19.1).
 
@@ -6784,7 +7381,11 @@ class Viewport(QWidget):
         # durchkommt, hängt der Griff nach jeder Auswertung am neuen Actor
         # statt am entfernten der letzten.
         self.set_gizmo(self._gizmo_wanted)
-        self._draw()
+        # ``draw=False`` gibt das Bild dem Aufrufer: Der Szenenaufbau zeichnet
+        # am Ende genau einmal (bis zum 22.09.2026 dreimal — hier, bei den
+        # Maßen und am Schluss, je 17 ms an einer Lochplatte).
+        if draw:
+            self._draw()
 
     def _apply_selection_colour(self) -> None:
         """Welcher Körper die Auswahlfarbe trägt — und wann keiner.
@@ -8185,7 +8786,7 @@ class Viewport(QWidget):
                 best = object_id
         return best
 
-    def _redraw_measurements(self) -> None:
+    def _redraw_measurements(self, *, draw: bool = True) -> None:
         """Alle Maße neu zeichnen: Linie, Punkt und Zahl je Eintrag (§18.3).
 
         **Ein Maß liegt in der Szene und wird im Bild gezeigt** (§25, §18.8).
@@ -8242,7 +8843,8 @@ class Viewport(QWidget):
                         ),
                     )
                 )
-        self._draw()
+        if draw:
+            self._draw()
 
     # --- analysis maps (§18.4) --------------------------------------------------
 
@@ -9251,12 +9853,76 @@ class Viewport(QWidget):
         Dreiecksliste expandiert. Gleiche Koordinaten mit verschiedenen
         Originalkennungen bleiben getrennt; die Markierung verschweißt nichts.
         """
+        lifted, inverse = self._lifted_vertices(raw, chosen, lift)
+        return self._clip_feature_corners(lifted[inverse]) + offset
+
+    def _lifted_patch(self, raw: Any, chosen: Any, lift: float, offset: Any) -> tuple[Any, Any]:
+        """Dieselbe Anhebung als Netz mit gemeinsamen Ecken — Punkte und Dreiecke.
+
+        **Die Markierung einer großen Auswahl ist sonst dreimal so groß wie
+        nötig.** :meth:`_lifted_corners` gibt jedem Dreieck eigene Ecken, weil
+        der Schnitt der Ansicht Dreiecke zerteilt; ohne Schnitt gibt es nichts
+        zu zerteilen, und die gemeinsamen Ecken reichen. An der Senkbohrung
+        einer Lochplatte mit 311 296 Dreiecken sind das 99 000 statt 590 000
+        Punkte, die der Renderer übernimmt (22.09.2026, RM-203). Mit Schnitt
+        bleibt es bei den eigenen Ecken, denn dort braucht der Kern sie.
+        """
+        import numpy as np
+
+        lifted, inverse = self._lifted_vertices(raw, chosen, lift)
+        plane, _second = self._section_planes()
+        if plane is not None:
+            corners = self._clip_feature_corners(lifted[inverse]) + offset
+            return corners, _triangle_faces(len(corners) // 3)
+        return lifted + np.asarray(offset, dtype=float), inverse.reshape(-1, 3)
+
+    def _lifted_and_rim(
+        self, raw: Any, chosen: Any, lift: float, offset: Any
+    ) -> tuple[tuple[Any, Any], tuple[Any, Any]]:
+        """Die angehobene Markierung und ihre Kontur auf den Ecken — ein Durchgang.
+
+        Beide lesen dieselbe Auswahl, und das Zusammensuchen ihrer Ecken
+        (``np.unique`` über alle Dreiecksnummern) war der teuerste Schritt
+        daran; es läuft hier einmal statt zweimal.
+        """
+        import numpy as np
+
+        corners, inverse = self._selected_vertices(raw, chosen)
+        lifted = self._lifted_from(corners, inverse, lift)
+        shift = np.asarray(offset, dtype=float)
+        plane, _second = self._section_planes()
+        if plane is not None:
+            patch = self._clip_feature_corners(lifted[inverse]) + shift
+            rim = self._clip_feature_corners(corners[inverse]) + shift
+            return (
+                (patch, _triangle_faces(len(patch) // 3)),
+                (rim, _triangle_faces(len(rim) // 3)),
+            )
+        faces = inverse.reshape(-1, 3)
+        return (lifted + shift, faces), (corners + shift, faces)
+
+    def _selected_vertices(self, raw: Any, chosen: Any) -> tuple[Any, Any]:
+        """Die Ecken einer Dreiecksauswahl und je Dreiecksecke ihr Platz darin."""
         import numpy as np
 
         triangles = np.asarray(raw.faces, dtype=np.int64)[chosen]
         vertices, inverse = np.unique(triangles, return_inverse=True)
-        inverse = inverse.reshape(-1)
-        corners = np.asarray(raw.vertices, dtype=float)[vertices]
+        return np.asarray(raw.vertices, dtype=float)[vertices], inverse.reshape(-1)
+
+    def _lifted_vertices(self, raw: Any, chosen: Any, lift: float) -> tuple[Any, Any]:
+        """Die angehobenen Ecken einer Auswahl und je Dreiecksecke ihr Platz darin."""
+        corners, inverse = self._selected_vertices(raw, chosen)
+        return self._lifted_from(corners, inverse, lift), inverse
+
+    def _lifted_from(self, corners: Any, inverse: Any, lift: float) -> Any:
+        """Die Ecken um ``lift`` entlang ihrer gemittelten Normalen angehoben."""
+        import numpy as np
+
+        if lift == 0.0:
+            # Ohne Anhebung gibt es nichts zu mitteln: Die Kontur liegt auf
+            # den Ecken selbst.
+            return corners
+        count = len(corners)
         selected = corners[inverse].reshape(-1, 3, 3)
         # Das Kreuzprodukt trägt bereits die doppelte Dreiecksfläche. So
         # braucht ein kleiner Patch keine Flächentabelle des gesamten Netzes.
@@ -9264,17 +9930,13 @@ class Viewport(QWidget):
         areas = np.linalg.norm(products, axis=1)
         weighted = np.repeat(products, 3, axis=0)
         summed = np.column_stack(
-            [
-                np.bincount(inverse, weights=weighted[:, axis], minlength=len(vertices))
-                for axis in range(3)
-            ]
+            [np.bincount(inverse, weights=weighted[:, axis], minlength=count) for axis in range(3)]
         )
-        weights = np.bincount(inverse, weights=np.repeat(areas, 3), minlength=len(vertices))
+        weights = np.bincount(inverse, weights=np.repeat(areas, 3), minlength=count)
         np.divide(summed, weights[:, None], out=summed, where=weights[:, None] > 0.0)
         lengths = np.linalg.norm(summed, axis=1, keepdims=True)
         averaged = np.divide(summed, lengths, out=np.zeros_like(summed), where=lengths > EPS_GEOM)
-        lifted = self._lift_within_section(corners, averaged * lift)
-        return self._clip_feature_corners(lifted[inverse]) + offset
+        return self._lift_within_section(corners, averaged * lift)
 
     def _lift_within_section(self, corners: Any, displacement: Any) -> Any:
         """Markierungen an Grenzflächen nur innerhalb des sichtbaren Halbraums anheben."""
@@ -9481,6 +10143,52 @@ class Viewport(QWidget):
             keep_in_front=True,
         )
 
+    def _feature_patch_state(self) -> tuple[Any, ...]:
+        """Wovon die Merkmalsmarkierung abhängt — und nur davon.
+
+        **Die Markierung wird nicht bei jedem Anlass neu gebaut.** Sie hing an
+        :meth:`_redraw_features`, und das läuft bei jedem Zeigerwechsel über
+        ein anderes Merkmal, jedem Themenwechsel, jedem Aufbau der Szene. An
+        der Senkbohrung einer Lochplatte mit 311 296 Dreiecken kostete jeder
+        Lauf 0,9 s im Qt-Hauptthread — der Zeiger fuhr über eine Fläche
+        daneben, und das Programm stand (22.09.2026, RM-203). Solange sich
+        keiner dieser Werte ändert, bleibt die gezeichnete Markierung stehen.
+        """
+        import numpy as np
+
+        refs = self.highlighted_feature_refs()
+        objects: list[tuple[Any, ...]] = []
+        if self._result is not None:
+            for object_id in dict.fromkeys(owner for owner, _feature_id in refs):
+                entry = self._result.scene.objects.get(object_id)
+                if entry is None:
+                    continue
+                shown = self._shown_feature_body(entry)
+                objects.append(
+                    (
+                        object_id,
+                        _Same(shown),
+                        _Same(shown.mesh),
+                        self._in_pick_view(object_id, entry),
+                        tuple(
+                            float(value)
+                            for value in np.asarray(
+                                self._shown_offset(entry, self._result), dtype=float
+                            )
+                        ),
+                    )
+                )
+        return (
+            _Same(self.renderer),
+            _Same(self._result),
+            refs,
+            self._selected,
+            self._selection_marking_hidden(),
+            self._section_planes(),
+            self._patch_lift(),
+            tuple(objects),
+        )
+
     def _redraw_feature_patch(self) -> None:
         """Die Dreiecke des gewählten Merkmals in der Auswahlfarbe über dem Körper.
 
@@ -9489,8 +10197,14 @@ class Viewport(QWidget):
         Bohrungsmarkierung verschließt die Öffnung nicht: Ihre Innenwand wird
         von beiden Öffnungen durchscheinend gezeichnet; andere Merkmalsflächen
         bleiben deckend und beidseitig sichtbar (``ansicht.md``).
+
+        Gebaut wird nur, wenn sich ihr Stand geändert hat
+        (:meth:`_feature_patch_state`).
         """
         if self.renderer is None:
+            return
+        state = self._feature_patch_state()
+        if state == self._feature_patch_drawn:
             return
         for patch in self._feature_patches.values():
             self.renderer.remove(patch)
@@ -9504,6 +10218,7 @@ class Viewport(QWidget):
         for outline in self._feature_outlines.values():
             self.renderer.remove(outline)
         self._feature_outlines.clear()
+        self._feature_patch_drawn = state
         if self._result is None:
             return
 
@@ -9519,8 +10234,8 @@ class Viewport(QWidget):
             entry = self._shown_feature_body(entry)
             feature_ids = [key for key in feature_ids if key in entry.features]
             mesh = as_mesh_data(entry.mesh)
-            raw = getattr(entry.mesh, "raw", None) if entry is not None else None
-            if entry is None or raw is None:
+            raw = getattr(entry.mesh, "raw", None)
+            if raw is None:
                 continue
             members = dict.fromkeys(feature_ids)
             for feature_id in feature_ids:
@@ -9529,36 +10244,42 @@ class Viewport(QWidget):
                     chain = cavity_chain_at(feature, entry.features, mesh)
                     if chain is not None:
                         members.update(dict.fromkeys(part.id for part in chain))
-            highlighted = tuple(
-                dict.fromkeys(
-                    index
-                    for feature_id in members
-                    if (feature := entry.features.get(feature_id)) is not None
-                    for index in feature.face_indices
-                    if 0 <= index < len(raw.faces)
-                )
-            )
+            # **Als Feld und nicht als Folge von Zahlen.** Hier stand ein
+            # ``dict.fromkeys`` über jede Dreiecksnummer, und je Nummer fragte
+            # die Bedingung ``len(raw.faces)`` — eine Eigenschaft von trimesh,
+            # an der Senkbohrung einer 311k-Platte 500 000-mal je Auswahl
+            # (0,13 s, RM-203). Die Reihenfolge der Dreiecke sagt der
+            # Markierung nichts; sie braucht die Menge.
+            count = len(raw.faces)
+            listed = [
+                np.asarray(feature.face_indices, dtype=np.int64)
+                for feature_id in members
+                if (feature := entry.features.get(feature_id)) is not None
+                and len(feature.face_indices)
+            ]
+            chosen = np.unique(np.concatenate(listed)) if listed else np.zeros(0, dtype=np.int64)
+            chosen = chosen[(chosen >= 0) & (chosen < count)]
             if members and all(
                 key in entry.features and entry.features[key].kind in ("hole", "cone")
                 for key in members
             ):
-                highlighted = (
-                    cavity_surface_indices(mesh, (entry.features[key] for key in members))
-                    or highlighted
-                )
-            if not highlighted:
+                blended = cavity_surface_indices(mesh, (entry.features[key] for key in members))
+                if blended:
+                    chosen = np.asarray(blended, dtype=np.int64)
+            if not len(chosen):
                 continue
-            chosen = np.asarray(highlighted, dtype=np.int64)
-            corners = self._lifted_corners(
-                raw, chosen, self._patch_lift(), self._shown_offset(entry, self._result)
+            offset = self._shown_offset(entry, self._result)
+            # Linien tragen ihren Tiefenversatz in Bildpunkten im Renderer.
+            # Ihre Weltkontur bleibt deshalb am tatsächlichen Merkmalrand —
+            # gezählt nach dem Ort, nicht nach Eckennummern
+            # (:func:`app.ui.render.edges.outline_edges`). Beide aus einem
+            # Durchgang über die Auswahl (:meth:`_lifted_and_rim`).
+            (corners, faces), (rim, rim_faces) = self._lifted_and_rim(
+                raw, chosen, self._patch_lift(), offset
             )
             if not len(corners):
                 continue
-            # Linien tragen ihren Tiefenversatz in Bildpunkten im Renderer.
-            # Ihre Weltkontur bleibt deshalb am tatsächlichen Merkmalrand.
-            rim = self._lifted_corners(raw, chosen, 0.0, self._shown_offset(entry, self._result))
-            vertices, inverse = np.unique(rim, axis=0, return_inverse=True)
-            boundary = feature_edges(vertices, inverse.reshape(-1, 3), 180.0)
+            boundary = outline_edges(rim, rim_faces)
             if len(boundary):
                 self._feature_outlines[object_id] = self.renderer.add_lines(
                     boundary,
@@ -9595,7 +10316,7 @@ class Viewport(QWidget):
             )
             patch = self.renderer.add_surface(
                 corners,
-                _triangle_faces(len(corners) // 3),
+                faces,
                 name="feature-patch"
                 if object_id == self._selected
                 else f"feature-patch:{object_id}",
@@ -9681,9 +10402,42 @@ class Viewport(QWidget):
         Schweben und Auswahl sind zwei sichtbare Zustände: halbdurchsichtig
         hier, deckend dort. Was schon gewählt ist, bekommt keine zweite
         Fläche, und eine Vorschau besitzt die Modellfarben allein.
+
+        Wie die Auswahl (:meth:`_redraw_feature_patch`) wird sie nur neu
+        gebaut, wenn sich ihr Stand geändert hat — ein Zeigerwechsel zeichnet
+        die Labels neu, und dasselbe Merkmal unter dem Zeiger ist kein Anlass,
+        seine Fläche noch einmal anzulegen.
         """
         if self.renderer is None:
             return
+        import numpy as np
+
+        result = self._result
+        entry = (
+            result.scene.objects.get(self._hovered_object)
+            if result is not None and self._hovered_object is not None
+            else None
+        )
+        state = (
+            _Same(self.renderer),
+            _Same(self._result),
+            self._hovered_object,
+            self._hovered_feature,
+            self._selection_marking_hidden(),
+            self.highlighted_feature_refs(),
+            self._section_planes(),
+            self._patch_lift(),
+            None
+            if entry is None or result is None
+            else (
+                _Same(entry.mesh),
+                self._in_pick_view(entry.id, entry),
+                tuple(float(value) for value in self._shown_offset(entry, result)),
+            ),
+        )
+        if state == self._hover_patch_drawn:
+            return
+        self._hover_patch_drawn = state
         if self._hover_patch is not None:
             self.renderer.remove(self._hover_patch)
             self._hover_patch = None
@@ -9697,15 +10451,12 @@ class Viewport(QWidget):
         indices = self._face_indices(self._hovered_object, self._hovered_feature)
         if not indices or self._result is None:
             return
-        entry = self._result.scene.objects.get(self._hovered_object)
         raw = getattr(entry.mesh, "raw", None) if entry is not None else None
         if entry is None or raw is None:
             return
 
-        import numpy as np
-
         chosen = np.asarray(indices, dtype=np.int64)
-        corners = self._lifted_corners(
+        corners, faces = self._lifted_patch(
             raw, chosen, self._patch_lift(), self._shown_offset(entry, self._result)
         )
         if not len(corners):
@@ -9715,7 +10466,7 @@ class Viewport(QWidget):
         hover_opacity = HOVERED_HOLE_OPACITY if hole_surface else HOVERED_FEATURE_OPACITY
         self._hover_patch = self.renderer.add_surface(
             corners,
-            _triangle_faces(len(corners) // 3),
+            faces,
             name="feature-hover",
             style=SurfaceStyle(
                 colour=FEATURE_LABEL_COLOUR,
@@ -11617,7 +12368,10 @@ class Viewport(QWidget):
         scale = self._pixels_per_mm_at(centre)
         if scale is None or scale <= EPS_GEOM or length <= EPS_GEOM:
             return GIZMO_SCALE
-        least = GIZMO_LEAST_PIXELS / scale
+        # ``scale`` zählt Gerätepixel je Millimeter, die Untergrenze steht in
+        # Logikpunkten — ohne Umrechnung war der Griff bei 200 Prozent
+        # Skalierung halb so groß zu treffen (Regel in ``ansicht.md``).
+        least = self._device_pixels(GIZMO_LEAST_PIXELS) / scale
         return max(GIZMO_SCALE, least / length) if wanted < least else GIZMO_SCALE
 
     def set_preview_gizmo(self, active: bool) -> None:
@@ -12014,6 +12768,7 @@ class Viewport(QWidget):
         self._drag_shadow(steps)
         self._draw_turn_arc(steps)
         self._drag_preview(steps)
+        self._drag_part(applied, steps)
         self._turn_slot_with(steps)
         if (
             self._gizmo is not None
@@ -12033,6 +12788,8 @@ class Viewport(QWidget):
             chosen = self.gizmo_feature()
             if chosen is not None:
                 self._show_ghost(chosen)
+                self._show_part_drag(chosen)
+                self._drag_part(applied, steps)
         face = self.gizmo_target()
         if face is not None:
             normal = face.params["normal"]
@@ -12060,10 +12817,13 @@ class Viewport(QWidget):
             dominant: Axis = ("x", "y", "z")[index]
             self._drag_kind = "move"
             self._drag_axis = dominant
-            # Dieselbe Zusage wie beim Winkel darüber: der gerastete Weg.
-            self.drag_bar.follow_length(
-                dominant.upper(), snap_to_step(steps.offset[index], self._grid_step)
-            )
+            # Dieselbe Zusage wie beim Winkel darüber: der gerastete Weg. Und
+            # wo der Baustein nicht landet, sagt es das Feld in Worten (RM-174,
+            # Regel 18: die rote Farbe des Bausteins nicht allein).
+            label = dominant.upper()
+            if self._part_off_face:
+                label = f"{label} · {tr('neben der Fläche')}"
+            self.drag_bar.follow_length(label, snap_to_step(steps.offset[index], self._grid_step))
         # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
         # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
         return corrected
@@ -12775,10 +13535,127 @@ class Viewport(QWidget):
         )
 
     def _drop_ghost(self) -> None:
-        """Nimmt den Ring weg — der Zug ist vorbei, die Auswertung gilt."""
+        """Nimmt den Ring weg — der Zug ist vorbei, die Auswertung gilt.
+
+        Der mitgezogene Baustein (:meth:`_show_part_drag`) gehört demselben
+        Zug und geht mit.
+        """
         if self._ghost_actor is not None and self.renderer is not None:
             self.renderer.remove(self._ghost_actor)
         self._ghost_actor = None
+        if self._part_drag_actor is not None and self.renderer is not None:
+            self.renderer.remove(self._part_drag_actor)
+        self._part_drag_actor = None
+        self._part_landing = None
+        self._part_off_face = False
+
+    def _show_part_drag(self, feature: Feature) -> None:
+        """Den ganzen Baustein zum Zug legen — alle Merkmale seines Schritts (RM-174).
+
+        Nur für ein Merkmal, das als Baustein zieht (:attr:`moves_as_a_part`);
+        seine Geschwister sind die Merkmale desselben Schritts
+        (``created_by``). Gezeigt werden ihre Dreiecke, vor dem Körper, denn
+        eine Tasche liegt im Material. Dazu wird einmal gemerkt, wo der
+        Baustein landen kann: die ebene Fläche um seinen Sitz und seine
+        eigene Grundfläche (:meth:`_drag_part`).
+        """
+        import numpy as np
+
+        if (
+            self.renderer is None
+            or self._result is None
+            or self._selected is None
+            or feature.created_by is None
+            or not self.moves_as_a_part(feature)
+        ):
+            return
+        entry = self._result.scene.objects.get(self._selected)
+        raw = getattr(getattr(entry, "mesh", None), "raw", None)
+        if entry is None or raw is None:
+            return
+        listed = [
+            np.asarray(member.face_indices, dtype=np.int64)
+            for member in entry.features.values()
+            if member.created_by == feature.created_by and member.face_indices
+        ]
+        faces = np.asarray(raw.faces, dtype=np.int64)
+        if not listed:
+            return
+        cells = np.unique(np.concatenate(listed))
+        cells = cells[(cells >= 0) & (cells < len(faces))]
+        if not len(cells):
+            return
+        offset = np.asarray(self._view_offset(entry, self._result), dtype=float)
+        vertices = np.asarray(raw.vertices, dtype=float)
+        used, inverse = np.unique(faces[cells], return_inverse=True)
+        self._part_drag_actor = self.renderer.add_surface(
+            vertices[used] + offset,
+            inverse.reshape(-1, 3),
+            name="part-drag",
+            style=SurfaceStyle(
+                colour=MEASURE_COLOUR,
+                opacity=0.55,
+                lighting=False,
+                pickable=False,
+                keep_in_front=True,
+            ),
+        )
+        self._part_landing = self._landing_of(raw, offset, cells)
+
+    def _landing_of(self, raw: Any, offset: Any, cells: Any) -> tuple[Any, Any, Any, Any] | None:
+        """Die Fläche, auf der der Sitz des gezogenen Bausteins landen kann.
+
+        Die Dreiecke des Körpers, die in der Ebene des Sitzes liegen und in
+        ihre Richtung zeigen, dazu die Grundfläche des Bausteins selbst —
+        sein alter Platz ist nach dem Zug wieder Fläche. Liegt der Sitz schon
+        vor dem Zug auf keinem davon, sitzt der Baustein nicht auf einer
+        ebenen Fläche, und es gibt nichts zu sagen (``None``).
+        """
+        import numpy as np
+
+        seat = self._face_seat
+        if seat is None:
+            return None
+        centre = np.asarray(seat[0], dtype=float)
+        normal = np.asarray(seat[1], dtype=float)
+        length = float(np.linalg.norm(normal))
+        if length <= EPS_GEOM:
+            return None
+        normal = normal / length
+        helper = np.array([1.0, 0.0, 0.0]) if abs(normal[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+        across = np.cross(normal, helper)
+        across /= np.linalg.norm(across)
+        along = np.cross(normal, across)
+        triangles = np.asarray(raw.triangles, dtype=float) + offset
+        facing = np.abs(np.asarray(raw.face_normals, dtype=float) @ normal) >= math.cos(
+            math.radians(EPS_ANGLE)
+        )
+        level = np.abs((triangles - centre) @ normal).max(axis=1) <= EPS_GEOM
+        chosen = facing & level
+        chosen[cells] = True
+        flat = triangles[chosen] - centre
+        planar = np.stack((flat @ across, flat @ along), axis=-1)
+        if not _inside_any(planar, np.zeros(2)):
+            return None
+        return centre, across, along, planar
+
+    def _drag_part(self, applied: Any, steps: TransformSteps) -> None:
+        """Den mitgezogenen Baustein nachführen — und sagen, ob er landet."""
+        import numpy as np
+
+        actor = self._part_drag_actor
+        if actor is None:
+            return
+        actor.set_matrix(np.asarray(applied, dtype=float))
+        landing = self._part_landing
+        off = False
+        if landing is not None and steps.moves and not steps.turns:
+            _centre, across, along, planar = landing
+            shift = np.asarray(steps.offset, dtype=float)
+            off = not _inside_any(planar, np.array((shift @ across, shift @ along)))
+        if off != self._part_off_face:
+            self._part_off_face = off
+            actor.set_colour(PART_OFF_FACE_COLOUR if off else MEASURE_COLOUR)
 
     def _drop_face_handle(self) -> None:
         """Nimmt die Marke am Merkmal weg — **und die Vorschau mit ihr**.
@@ -13453,6 +14330,9 @@ class Viewport(QWidget):
         """
         if self.renderer is None:
             return
+        # Das Bild hier ist das stehende — in voller Güte (RM-200).
+        self._interaction_timer.stop()
+        self.renderer.set_interacting(False)
         self.cameraMoved.emit()
         self._redraw_shadows(draw=False)
         self._draw()
@@ -14307,6 +15187,7 @@ class Viewport(QWidget):
         seconds = self._flight_clock.restart() / 1000.0
         if seconds <= 0.0:
             return
+        self.note_camera_motion()
         axes: dict[str, float] = {}
         for key in self._flying:
             for axis, amount in FLIGHT_KEYS[key].items():
@@ -14679,6 +15560,13 @@ class Viewport(QWidget):
                 (base[0] + self._body_drag_offset[0], base[1] + self._body_drag_offset[1], base[2])
             )
             self._sync_edge_preview(identifier)
+            # **Und sein Schatten geht mit** — dieselbe Zusage wie am Griff
+            # (:meth:`_drag_shadow`), die der freie Zug bis zum 22.09.2026
+            # nicht hielt: Der Körper wanderte übers Bett, sein Schatten
+            # klebte am alten Platz. Der Zug bleibt in der Bettebene, der
+            # Schatten also genau um denselben Weg versetzt.
+            for shadow in self._shadow_owners.get(identifier, ()):
+                shadow.set_position((self._body_drag_offset[0], self._body_drag_offset[1], 0.0))
             moved = True
         # Ein Bildaufbau für alle, nicht einer je Körper.
         if moved and self.renderer is not None:
@@ -15237,13 +16125,14 @@ class Viewport(QWidget):
         self._end_pull()
 
     def _undo_body_preview(self) -> None:
-        """Setzt gezogene Aktoren an ihren Ausgangsort zurück."""
+        """Setzt gezogene Aktoren an ihren Ausgangsort zurück — samt Schatten."""
         for object_id, home in self._actor_home.items():
             actor = self._actors.get(object_id)
             if actor is not None:
                 actor.set_position(home)
                 self._sync_edge_preview(object_id)
         self._actor_home.clear()
+        self._reset_shadow_offset()
         self._queue_feature_label_layout()
 
     def _plane_point(self, x: int, y: int) -> tuple[float, float] | None:

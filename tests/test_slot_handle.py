@@ -1033,7 +1033,7 @@ def test_the_knobs_stay_on_the_outline_across_two_drags() -> None:
         handle.remove()
 
 
-@pytest.mark.parametrize("ratio", [1.0, 2.0])
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
 def test_eight_logical_points_of_wobble_stay_a_click_at_any_scaling(
     qt_app: object, ratio: float
 ) -> None:

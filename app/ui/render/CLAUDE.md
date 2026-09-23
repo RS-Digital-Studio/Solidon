@@ -16,13 +16,13 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
 | `api.py` | Der Vertrag: `Renderer`, `Item`, `LabelsItem`, die Stile (`SurfaceStyle`, `CellColours`, `LabelStyle`, `AxesMarkerStyle`), `CameraPose`, `PointerEvent`, `Pick`. Farben als Hexwert (`rgb`, `hex_of`). `add_lines`/`add_surface` nehmen eine `capacity`, dann tauscht `Item.update_points` nur Zahlen in den Puffern (Maßtinte, RM-198). Was der Viewport, der Skizzeneditor, die Griffe und die Werkzeuge vom Bild wissen, wissen sie von hier |
 | `factory.py` | Die eine Baustelle: `make_renderer()` baut den Renderer — mit Qt-Widget unter einem Elternfenster oder ohne Fenster für Agentenbilder und Tests —, und `available()` fragt **vor** dem Aufbau den wgpu-Adapter, weil ein Renderer ohne Adapter nicht höflich stirbt, sondern mit dem Prozess. Die Frage kostet Zeit und fällt deshalb **einmal je Prozess**: `probe()` stellt sie beim Anwendungsstart in einem Arbeiter, `available()` findet die Antwort vor oder wartet mit Frist (`ADAPTER_TIMEOUT_SECONDS`) auf eine laufende — Zahlen und Begründung in `.claude/rules/ansicht.md`. Viewport, seine Bildaufnahme (`snapshots.py`) und der Fensterprüfstand gehen hindurch; keine Einstellung in der Oberfläche, die Entscheidung fällt einmal, im Code |
 | `gfx_renderer.py` | pygfx über wgpu (Vulkan, DX12, Metal): Netze als `gfx.Mesh` mit Flächenfarben, Körperkanten als Drahtgitter-Mesh über derselben Geometrie (`depth_compare="<="`, keine Kantenliste auf der CPU — die kostete am 3,15-Millionen-Dreiecke-Baum 5,8 s und 114 MB je Aufbau), Linien mit NaN-Brüchen, Punkte, Text im Bildraum mit einem Feld dahinter. Picking aus dem Bildpuffer mit genauem Sichtstrahlpunkt, wiederverwendetem Pickdurchgang und gebündelter Treffertoleranz. Durchscheinendes gewichtet gemischt (`weighted_blend`, reihenfolgeunabhängig), `force_opaque` über `solid`, der Lichtsatz `LIGHT_KIT`, das Achsenkreuz als zweites Teilbild mit eigener orthografischer Kamera. Qt-Einbettung über `rendercanvas.qt.QRenderWidget` als eigene Grafikfläche (`present_method="screen"`); ohne Fenster über `rendercanvas.offscreen` |
-| `gfx_occlusion.py` | Umgebungsverdeckung in zwei pygfx-`EffectPass`-Durchgängen: rekonstruiert Kamerapunkte aus Tiefe und inverser Projektion, tastet acht Richtungen in vier Abständen mit festem Bildortversatz ab und glättet den Verdeckungsfaktor tiefen- und normalengeführt. Radius und Bias in Millimetern. Nur der Faktor wird auf die ursprüngliche Farbe multipliziert; Farbkanten, Alpha, Tiefe und Picks bleiben erhalten. Der Renderer schattiert deckende Flächen und zeichnet erst danach Durchscheinendes, Linien, Beschriftungen und Achsen |
+| `gfx_occlusion.py` | Umgebungsverdeckung in zwei pygfx-`EffectPass`-Durchgängen: rekonstruiert Kamerapunkte aus Tiefe und inverser Projektion, tastet acht Richtungen in vier Abständen mit festem Bildortversatz ab und glättet den Verdeckungsfaktor tiefen- und normalengeführt. Im Zug (`apply(light=True)`, vom Renderer über `set_interacting`) vier Richtungen in zwei Abständen und eine Glättung über drei mal drei Bildpunkte, gleich stark normiert. Radius und Bias in Millimetern. Nur der Faktor wird auf die ursprüngliche Farbe multipliziert; Farbkanten, Alpha, Tiefe und Picks bleiben erhalten. Der Renderer schattiert deckende Flächen und zeichnet erst danach Durchscheinendes, Linien, Beschriftungen und Achsen |
 | `gfx_lines.py` | Eigene pygfx-Linienmaterialien gegen koplanare Rasterlücken. Der Vertexshader versetzt nur die Rastertiefe um einen Bildpunkt im Kameraraum; frühe Tiefenprüfung, Verdeckung und ursprüngliche Weltkoordinaten bleiben bestehen |
 | `gfx_surfaces.py` | `SurfaceStyle.coplanar_overlay` markiert koplanare Flächen mit einem Achtel Gerätebildpunkt Rastertiefenversatz. Basic- und Phong-Materialien behalten Beleuchtung, Verdeckung durch Vorderkörper und unveränderte Welt- und Pickkoordinaten; die Geometrie bleibt an ihrem Platz |
 | `shapes.py` | Die kleinen Netze der Ansicht als NumPy-Felder — Scheibe, Zylinder, Kegel, Pfeil, Würfel, Fläche, Raster, Ringlinie —, damit Viewport, Griffe und Achsenkreuz dieselben Körper zeichnen und `tests/test_render_shapes.py` sie ohne Fenster nachmisst (geschlossen, nach außen, Volumen nach Formel) |
 | `gizmo.py` | Der Bewegungsgriff (§18.11) auf dem Vertrag: drei Pfeile, drei Ringe, Hover über `pick_item`, Zug als Lot des Sichtstrahls auf die Achse beziehungsweise Schnitt mit der Ebene quer dazu. `handle(event)` sagt mit `True`, dass die Geste ihm gehört; `interact_callback` darf die Matrix berichtigen (der Magnet auf 45°). Der Skalierwürfel daneben liegt in `app/ui/scale_widget.py` und ist genauso gebaut |
 | `navigator.py` | Die Kameraführung auf dem Vertrag: die Tabelle `_NAVIGATION` (welche Taste in welchem Schema was tut), `turntable_camera` (der Drehteller, der die Ansicht aufrecht hält), `is_click`, und der `Navigator`, der `PointerEvent`s in Drehen, Kippen, Schieben, Radzoom am Zeiger, Körperzug, Malen und die Rückrufe an die Ansicht übersetzt (`NavigatorCallbacks`). Gemessen mit einem Renderer-Doppel in `tests/test_navigator.py` |
-| `edges.py` | Die Kantensuche der Ansicht: `feature_edges(vertices, faces, angle)` gibt Knick- und Randkanten als Punktpaare, in NumPy, damit `tests/test_render_shapes.py` sie am Würfel, an der Platte und am Dach nachzählt. Die geteilten Kanten sucht sie über einen `int64`-Zahlenschlüssel `klein·n + groß` statt `np.unique(edges, axis=0)` (333 → 57 ms bei 200 000 Dreiecken, Leistung B10; die Regel steht in `ansicht.md`). Der Renderer zeichnet Körperkanten heute über das Drahtgitter und braucht sie dafür nicht mehr; die Ansicht braucht sie für Maßlinien und Konturen am dezimierten Netz. Daneben `nearest_polyline(projected, x, y, tolerance)` — welcher Linienzug unter dem Zeiger liegt, gemessen gegen die **Strecken** und nicht die Punkte, bei gleichem Abstand entscheidet die Tiefe (`SAME_DISTANCE`). Der Viewport pickt damit einzelne B-Rep-Kanten, ohne dass eine im Renderer stünde |
+| `edges.py` | Die Kantensuche der Ansicht: `feature_edges(vertices, faces, angle)` gibt Knick- und Randkanten als Punktpaare, `outline_edges(vertices, faces)` den Rand einer Dreiecksauswahl — gezählt nach Ort, damit auch eine Suppe ihren Umriss hat (die Merkmalsmarkierung, `ansicht.md`), in NumPy, damit `tests/test_render_shapes.py` sie am Würfel, an der Platte und am Dach nachzählt. Die geteilten Kanten sucht sie über einen `int64`-Zahlenschlüssel `klein·n + groß` statt `np.unique(edges, axis=0)` (333 → 57 ms bei 200 000 Dreiecken, Leistung B10; die Regel steht in `ansicht.md`). Der Renderer zeichnet Körperkanten heute über das Drahtgitter und braucht sie dafür nicht mehr; die Ansicht braucht sie für Maßlinien und Konturen am dezimierten Netz. Daneben `nearest_polyline(projected, x, y, tolerance)` — welcher Linienzug unter dem Zeiger liegt, gemessen gegen die **Strecken** und nicht die Punkte, bei gleichem Abstand entscheidet die Tiefe (`SAME_DISTANCE`). Der Viewport pickt damit einzelne B-Rep-Kanten, ohne dass eine im Renderer stünde |
 
 ## Festlegungen, die der Viewport voraussetzt
 
@@ -55,6 +55,24 @@ Drehringe an. Die übrigen Gizmos behalten ihre Drehfunktion.
   **Punktgrößen und Linienbreiten gehören nicht dazu.** Was als `size=` oder
   `width=` hereinkommt, ist eine logische Bildpunktzahl, und pygfx rechnet sie
   selbst in Gerätepixel um. Wer sie vorher multipliziert, verdoppelt sie.
+* **Ein gerichtetes Licht dreht sich nicht je Bild.** pygfx richtet jedes
+  `DirectionalLight` in jedem Durchgang über `look_at` neu aus — nötig nur für
+  die Schattenkamera eines Lichts, das Schatten wirft, und hier wirft keines
+  (der Kontaktschatten ist selbst projiziert). `_directional_light` baut eine
+  Unterklasse, die nur die Richtung schreibt: 7,6 von 13 ms CPU je Bild bei
+  sechs Lichtern und zwei Durchgängen (Profiler, 22.09.2026).
+  `test_the_steady_light_draws_the_stock_image_without_turning_each_frame`
+  vergleicht das Bild mit pygfx' eigenem Licht.
+* **Ein Zug darf leichter zeichnen, sein letztes Bild nicht.**
+  `set_interacting(True)` erlaubt die leichte Stufe der Umgebungsverdeckung,
+  `frame_was_reduced()` sagt, ob das stehende Bild eines aus der Bewegung ist.
+  Wann gezogen wird, entscheidet der Viewport (`note_camera_motion`, Regel in
+  `ansicht.md`); am Vertrag sind beide Vorgaben, die nichts tun.
+* **Punktnormalen kann ein Arbeiter mitbringen.** `surface_normals(vertices,
+  faces)` ist eine reine Rechnung (pygfx' eigene), die der Szenenarbeiter
+  nebenläufig stellt; `add_surface(normals=…)` übernimmt sie, wenn die Form
+  passt. Eine unbeleuchtete Fläche rechnet gar keine — ihr Material liest sie
+  nicht.
 * **Der Lichtsatz ist `LIGHT_KIT`** — Schlüssellicht 50° über und 10° rechts
   der Kamera (0,75), Fülllicht von unten (0,25), zwei Rücklichter (0,21), dazu
   das Frontlicht; `set_headlight` stellt nur das Frontlicht, und die
@@ -65,7 +83,8 @@ Drehringe an. Die übrigen Gizmos behalten ihre Drehfunktion.
   `HEADLIGHT_GAIN` gleicht das auf rund 15 Prozent an das frühere Bild an,
   mehr geht mit einem Faktor nicht.
 * **Kein Interaktionsstil des Renderers.** Zeigergesten kommen als
-  `PointerEvent` beim Viewport an (`_on_pointer`), der sie erst den Griffen,
+  `PointerEvent` beim Viewport an (`_on_pointer` für die Bewegung,
+  `_dispatch_pointer` für die Vorfahrt), der sie erst den Griffen,
   dann einer laufenden Platzierung, dann dem Zeiger und zuletzt dem Navigator
   gibt; mit gedrückter Taste überspringt er jeden Griff, der nicht selbst zieht
   (die Regel und ihre Messung stehen in `.claude/rules/ansicht.md`). Die Kamera

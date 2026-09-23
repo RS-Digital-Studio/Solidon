@@ -150,6 +150,44 @@ AXES_LABEL_SIZE = 12.0
 IDLE_LABEL_LIMIT = 256
 
 
+_STEADY_LIGHT: Any = None
+
+
+def _directional_light(colour: str, intensity: float) -> Any:
+    """Ein gerichtetes Licht, das je Bild nur seine Richtung schreibt.
+
+    **pygfx dreht ein gerichtetes Licht bei jedem Zeichendurchgang neu**
+    (``DirectionalLight._gfx_update_uniform_buffer`` endet in ``look_at``) —
+    die Drehung braucht nur die Schattenkamera eines Lichts, das Schatten
+    wirft, und das tut hier keines (der Kontaktschatten ist selbst projiziert,
+    ``ansicht.md``). Gemessen am 22.09.2026 mit dem Profiler: Bei sechs
+    Lichtern und zwei Durchgängen je Bild (Umgebungsverdeckung, dann das
+    Durchscheinende) kostete das Drehen 7,6 ms von 13 ms Rechenzeit **je
+    Bild** — jede Drehung der Kamera, jeder Zug am Griff, jede Radraste.
+    Die Richtung selbst rechnet diese Unterklasse wie pygfx; nur die
+    Drehung fällt weg. Ein Test hält fest, dass das Licht dasselbe Bild gibt.
+    """
+    global _STEADY_LIGHT
+    if _STEADY_LIGHT is None:
+        import pygfx as gfx
+        from pygfx.objects._lights import get_pos_from_camera_parent_or_target
+
+        class _SteadyDirectionalLight(gfx.DirectionalLight):  # type: ignore[misc]
+            def _gfx_update_uniform_buffer(self) -> None:
+                if self.cast_shadow:
+                    super()._gfx_update_uniform_buffer()
+                    return
+                here = self.world.position
+                towards = get_pos_from_camera_parent_or_target(self) - here
+                distance = float(np.linalg.norm(towards))
+                self._gfx_distance_to_target = distance
+                direction = towards / distance if distance > 0 else np.array((0.0, 0.0, -1.0))
+                self.uniform_buffer.data["direction"].flat = direction
+
+        _STEADY_LIGHT = _SteadyDirectionalLight
+    return _STEADY_LIGHT(colour, intensity)
+
+
 def _vec(values: Sequence[float] | np.ndarray) -> Vec3:
     return (float(values[0]), float(values[1]), float(values[2]))
 
@@ -754,6 +792,11 @@ class GfxRenderer(Renderer):
         self._axes_camera: Any = None
         self._axes_objects: list[Any] = []
         self._occlusion_wanted = False
+        #: Ob gerade gezogen wird — dann zeichnet die Umgebungsverdeckung in
+        #: ihrer leichten Stufe (:meth:`set_interacting`).
+        self._interacting = False
+        #: Ob das zuletzt gezeichnete Bild die leichte Stufe trug.
+        self._reduced_frame = False
         self._occlusion: Any = None
         self._occlusion_radius = 0.0
         self._occlusion_bias = 0.0
@@ -774,12 +817,12 @@ class GfxRenderer(Renderer):
         self._camera = gfx.PerspectiveCamera(DEFAULT_VIEW_ANGLE, 1.0)
         self._camera_view_size: tuple[float, float] | None = None
         self._camera.world.reference_up = (0.0, 0.0, 1.0)
-        self._headlight = gfx.DirectionalLight("#ffffff", DEFAULT_HEADLIGHT * HEADLIGHT_GAIN)
+        self._headlight = _directional_light("#ffffff", DEFAULT_HEADLIGHT * HEADLIGHT_GAIN)
         self._camera.add(self._headlight)
         self._scene.add(self._camera)
         self._kit: list[tuple[Any, float, float]] = []
         for _name, share, elevation, azimuth in LIGHT_KIT:
-            light = gfx.DirectionalLight("#ffffff", share * HEADLIGHT_GAIN)
+            light = _directional_light("#ffffff", share * HEADLIGHT_GAIN)
             self._scene.add(light)
             self._kit.append((light, math.radians(elevation), math.radians(azimuth)))
         self.set_camera_pose(CameraPose((0.0, 0.0, 10.0), (0.0, 0.0, 0.0), (0.0, 1.0, 0.0)))
@@ -890,6 +933,19 @@ class GfxRenderer(Renderer):
         for listener in list(self._listeners.values()):
             listener(event)
 
+    @staticmethod
+    def surface_normals(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray | None:
+        """Dieselben Punktnormalen wie in :meth:`add_surface` — ohne Renderer-Zustand.
+
+        pygfx rechnet sie in NumPy (``normals_from_vertices``) und liest dabei
+        nur die übergebenen Felder; der Aufruf ist damit aus jedem Thread
+        erlaubt. Die Ecken gehen wie beim Zeichnen als ``float32`` hinein: Aus
+        denselben Zahlen kommt dieselbe Normale, und das Bild ändert sich um
+        nichts.
+        """
+        indices = np.ascontiguousarray(np.asarray(faces, dtype=np.uint32).reshape(-1, 3))
+        return _normals(_positions(vertices), indices)
+
     def device_ratio(self) -> float:
         """Gerätepixel je Logikpunkt — am Widget gefragt, ohne Fenster 1,0."""
         if self.widget is not None:
@@ -985,6 +1041,7 @@ class GfxRenderer(Renderer):
         style: SurfaceStyle,
         cell_colours: CellColours | None = None,
         capacity: int | None = None,
+        normals: np.ndarray | None = None,
     ) -> Item:
         gfx = self._gfx
         positions = _positions(vertices)
@@ -1026,7 +1083,19 @@ class GfxRenderer(Renderer):
             # mit mitgegebenen Normalen keiner; am 3,15-Millionen-Netz kostet
             # ein Lauf rund 0,7 s (06.09.2026). Gerechnet wird mit derselben
             # Funktion, die pygfx nähme, das Bild ändert sich also um nichts.
-            fields["normals"] = _normals(positions, indices)
+            #
+            # **Eine unbeleuchtete Fläche liest keine Normale** — und bekommt
+            # deshalb Nullen statt einer Rechnung (22.09.2026, RM-203). pygfx
+            # bindet den Puffer trotzdem, ohne ihn rechnete es selbst nach;
+            # an der Markierung einer Senkbohrung mit 196 608 Dreiecken kostete
+            # die Rechnung 180 ms je Auswahl, für ein Bild, das sie nie liest.
+            if not style.lighting:
+                fields["normals"] = np.zeros((len(positions), 3), dtype=np.float32)
+            elif normals is not None and np.shape(normals) == positions.shape:
+                # Vorbereitet in einem Arbeiter (:meth:`surface_normals`).
+                fields["normals"] = np.ascontiguousarray(normals, dtype=np.float32)
+            else:
+                fields["normals"] = _normals(positions, indices)
         geometry = gfx.Geometry(**fields)
         side = "front" if (style.cull_backfaces or style.backface_colour is not None) else "both"
         material = self._material(style, style.colour, style.opacity, side)
@@ -1691,6 +1760,7 @@ class GfxRenderer(Renderer):
 
     def _draw(self) -> None:
         self._pick_key = None
+        self._reduced_frame = self._interacting and self._occlusion_wanted
         self._sync_camera()
         self._place_lights()
         for labels in self._label_items:
@@ -1740,7 +1810,11 @@ class GfxRenderer(Renderer):
             self._renderer.render(self._scene, self._camera, clear=True, flush=False)
             if opaque:
                 self._occlusion.apply(
-                    self._renderer, self._camera, self._occlusion_radius, self._occlusion_bias
+                    self._renderer,
+                    self._camera,
+                    self._occlusion_radius,
+                    self._occlusion_bias,
+                    light=self._interacting,
                 )
             if deferred:
                 for obj in opaque:
@@ -1801,6 +1875,12 @@ class GfxRenderer(Renderer):
     def set_anti_aliasing(self, enabled: bool) -> None:
         self._renderer.ppaa = "ddaa" if enabled else "none"
 
+    def set_interacting(self, active: bool) -> None:
+        self._interacting = bool(active)
+
+    def frame_was_reduced(self) -> bool:
+        return self._reduced_frame
+
     def set_ambient_occlusion(self, enabled: bool, *, radius: float, bias: float) -> None:
         self._occlusion_wanted = bool(enabled)
         self._occlusion_radius = max(float(radius), 0.0)
@@ -1821,7 +1901,7 @@ class GfxRenderer(Renderer):
         scene.add(gfx.AmbientLight("#ffffff", 0.9))
         camera = gfx.OrthographicCamera(AXES_VIEW_SPAN, AXES_VIEW_SPAN)
         camera.world.reference_up = (0.0, 0.0, 1.0)
-        camera.add(gfx.DirectionalLight("#ffffff", 1.6))
+        camera.add(_directional_light("#ffffff", 1.6))
         scene.add(camera)
         length = 1.0
         shaft = 0.045 * style.line_width

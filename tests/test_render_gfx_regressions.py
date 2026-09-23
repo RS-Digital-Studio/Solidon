@@ -880,6 +880,141 @@ def test_the_vertex_normals_are_computed_once_and_not_per_shader(
     assert renderer._items, "der Körper steht in der Szene"
 
 
+def test_unlit_and_prepared_surfaces_need_no_normal_computation(
+    renderer: GfxRenderer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine unbeleuchtete Fläche rechnet keine Normalen, eine vorbereitete übernimmt sie.
+
+    Die Markierung einer Senkbohrung mit 196 608 Dreiecken rechnete je
+    Auswahl 180 ms Normalen, die ihr unbeleuchtetes Material nie liest; und
+    ein neuer Körper rechnete sie im Qt-Hauptthread, obwohl ein Arbeiter sie
+    vorbereiten kann (RM-203, 22.09.2026). Gezählt wird der Aufruf.
+    """
+    import pygfx.renderers.wgpu.shaders.meshshader as meshshader
+    import pygfx.utils as pygfx_utils
+
+    calls = 0
+    original = pygfx_utils.normals_from_vertices
+
+    def counted(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(pygfx_utils, "normals_from_vertices", counted)
+    monkeypatch.setattr(meshshader, "normals_from_vertices", counted)
+
+    vertices, faces = cube()
+    renderer.add_surface(vertices, faces, name="mark", style=SurfaceStyle(lighting=False))
+    assert calls == 0, "eine unbeleuchtete Fläche braucht keine Normale"
+
+    prepared = GfxRenderer.surface_normals(vertices, faces)
+    assert calls == 1 and prepared is not None and prepared.shape == (len(vertices), 3)
+    body = renderer.add_surface(
+        vertices, faces, name="body", style=SurfaceStyle(), normals=prepared
+    )
+    look_down(renderer, body.bounds())
+    renderer.render()
+    assert calls == 1, "vorbereitete Normalen werden übernommen, nicht neu gerechnet"
+
+    renderer.add_surface(vertices, faces, name="wrong", style=SurfaceStyle(), normals=prepared[:1])
+    assert calls == 2, "passen sie nicht, rechnet der Renderer selbst"
+
+
+def _lit_scene(view: GfxRenderer) -> None:
+    """Ein beleuchteter Würfel schräg von oben, mit Achsenkreuz — alle drei Lichtarten."""
+    view.add_surface(*plate(0, 40), name="floor", style=SurfaceStyle())
+    view.add_surface(*cube(10, (15, 15, 0)), name="body", style=SurfaceStyle(colour="#d08040"))
+    view.set_axes_marker(AxesMarkerStyle())
+    view.set_camera_pose(CameraPose((55, -60, 50), (20, 20, 0), (0, 0, 1)))
+    view.reset_camera((0, 40, 0, 40, 0, 10))
+
+
+def test_the_steady_light_draws_the_stock_image_without_turning_each_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Das eigene gerichtete Licht gibt dasselbe Bild und dreht sich nicht je Bild.
+
+    pygfx richtet ein gerichtetes Licht bei jedem Durchgang über ``look_at``
+    neu aus; bei sechs Lichtern und zwei Durchgängen kostete das 7,6 von
+    13 ms Rechenzeit je Bild (Profiler, 22.09.2026). Die Richtung braucht nur
+    ein Licht, das Schatten wirft, und das tut hier keines. Verglichen wird
+    mit einem Renderer, der pygfx' eigenes Licht bekommt.
+    """
+    import pygfx as gfx
+
+    from app.ui.render import gfx_renderer as module
+
+    turns = 0
+    original = gfx.WorldObject.look_at
+
+    def counted(self: object, *args: object, **kwargs: object) -> object:
+        nonlocal turns
+        if isinstance(self, gfx.DirectionalLight):
+            turns += 1
+        return original(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(gfx.WorldObject, "look_at", counted)
+
+    steady = GfxRenderer(offscreen=True, size=(400, 300))
+    try:
+        _lit_scene(steady)
+        steady.screenshot()
+        turns = 0
+        image = steady.screenshot()
+        assert turns == 0, f"{turns} Drehungen in einem Bild"
+    finally:
+        steady.close()
+
+    monkeypatch.setattr(
+        module, "_directional_light", lambda colour, power: gfx.DirectionalLight(colour, power)
+    )
+    stock = GfxRenderer(offscreen=True, size=(400, 300))
+    try:
+        _lit_scene(stock)
+        stock.screenshot()
+        turns = 0
+        reference = stock.screenshot()
+        assert turns > 0, "die Gegenprobe muss drehen, sonst misst der Zähler nichts"
+    finally:
+        stock.close()
+    difference = np.abs(image.astype(int) - reference.astype(int))
+    assert difference.max() <= 1, f"Abweichung bis {difference.max()} Stufen"
+    assert image.max() > 100, "das Bild ist beleuchtet"
+
+
+def test_a_moving_frame_draws_the_light_occlusion_and_the_still_frame_the_full_one(
+    renderer: GfxRenderer,
+) -> None:
+    """Im Zug zeichnet die Verdeckung leichter; das stehende Bild ist unverändert.
+
+    RM-200: Vier Richtungen mit zwei Schritten und eine Glättung über drei
+    mal drei Bildpunkte, solange gezogen wird. Die Fuge bleibt dabei dunkel,
+    und wer loslässt, bekommt Bild für Bild dasselbe wie vorher.
+    """
+    _occlusion_scene(renderer)
+    plain = renderer.screenshot()
+    renderer.set_ambient_occlusion(True, radius=8, bias=0.05)
+    still = renderer.screenshot()
+    assert not renderer.frame_was_reduced()
+
+    renderer.set_interacting(True)
+    moving = renderer.screenshot()
+    assert renderer.frame_was_reduced()
+    darkened = plain.astype(int).sum(axis=2) - moving.astype(int).sum(axis=2)
+    assert np.count_nonzero(darkened > 5) > 50, "auch im Zug ist die Fuge dunkel"
+    assert not np.array_equal(still, moving), "die leichte Stufe zeichnet wirklich anders"
+
+    renderer.set_interacting(False)
+    assert np.array_equal(renderer.screenshot(), still)
+    assert not renderer.frame_was_reduced()
+
+    renderer.set_ambient_occlusion(False, radius=8, bias=0.05)
+    renderer.set_interacting(True)
+    renderer.screenshot()
+    assert not renderer.frame_was_reduced(), "ohne Verdeckung gibt es nichts nachzuzeichnen"
+
+
 def test_the_axes_letters_stay_inside_their_field(renderer: GfxRenderer) -> None:
     """Die Buchstaben des Achsenkreuzes sind in jeder Blickrichtung ganz zu sehen.
 

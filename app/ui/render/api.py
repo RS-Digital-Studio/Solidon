@@ -321,8 +321,16 @@ class Renderer(ABC):
         style: SurfaceStyle,
         cell_colours: CellColours | None = None,
         capacity: int | None = None,
+        normals: np.ndarray | None = None,
     ) -> Item:
         """Eine Fläche aus Ecken ``(n, 3)`` und Dreiecken ``(m, 3)``.
+
+        **``normals`` sind vorbereitete Punktnormalen**, gerechnet mit
+        :meth:`surface_normals` desselben Renderers — ein Arbeiter kann sie
+        abseits des Qt-Hauptthreads rechnen, und der Aufbau übernimmt sie nur
+        noch (RM-203). Passt ihre Zahl nicht zu den Ecken, rechnet der
+        Renderer selbst; ein falsch beleuchteter Körper wäre der schlechtere
+        Fehler als eine verlorene Millisekunde.
 
         **Mit ``capacity`` hält das Element Platz für so viele Ecken** und
         :meth:`Item.update_points` tauscht danach nur Zahlen, nie die
@@ -423,6 +431,38 @@ class Renderer(ABC):
     @abstractmethod
     def view_size(self) -> tuple[int, int]:
         """Breite und Höhe des Bildes in Gerätepixeln."""
+
+    def set_interacting(self, active: bool) -> None:
+        """Ob gerade gezogen wird — ein Renderer darf dann leichter zeichnen.
+
+        **Eine Zusage an die Bildzeit, nicht an den Inhalt** (RM-200): Was im
+        Bild steht, bleibt dasselbe; nur Darstellungsgüte, die in Bewegung
+        niemand sieht, darf weichen — beim pygfx-Renderer die Abtastung der
+        Umgebungsverdeckung. Die Ansicht schaltet es mit dem Zug ein und vor
+        dessen letztem Bild wieder aus. Ohne Umsetzung tut der Aufruf nichts.
+        """
+        return None
+
+    def frame_was_reduced(self) -> bool:
+        """Ob das zuletzt gezeichnete Bild in der leichten Stufe entstand.
+
+        Die Ansicht fragt es am Ende eines Zugs: Ist das stehende Bild noch
+        eines aus der Bewegung, zeichnet sie einmal in voller Güte nach — und
+        nur dann, denn ein Bild ohne Anlass kostet dieselbe Zeit wie eines mit.
+        """
+        return False
+
+    @staticmethod
+    def surface_normals(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray | None:
+        """Die Punktnormalen, die :meth:`add_surface` für diese Fläche rechnen würde.
+
+        **Eine reine Rechnung ohne Renderer-Zustand**, damit ein Arbeiter sie
+        nebenläufig stellen kann (``viewport._SceneMeshWorker``): An einem
+        Körper mit 200 000 Dreiecken kostet sie 40 ms, und die gehören nicht in
+        den Qt-Hauptthread. ``None`` heißt: Dieser Renderer braucht keine, oder
+        er rechnet sie lieber selbst.
+        """
+        return None
 
     def device_ratio(self) -> float:
         """Gerätepixel je Logikpunkt des Fensters.

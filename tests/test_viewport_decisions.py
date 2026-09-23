@@ -3942,7 +3942,9 @@ def test_the_theme_reaches_the_shadow_and_the_drawing_reads_it() -> None:
     )
     assert "set_background" in quelle, "die gelesene Quelle ist nicht set_theme"
 
-    gezeichnet = inspect.getsource(Viewport._place_shadows)
+    # Gezeichnet wird seit dem 22.09.2026 in ``_show_shadow_soups`` — der
+    # Wurf selbst kann in einem Arbeiter laufen, das Anlegen nie.
+    gezeichnet = inspect.getsource(Viewport._show_shadow_soups)
     assert "self._shadow_opacity" in gezeichnet, (
         "das Zeichnen liest die Konstante statt des gemerkten Werts"
     )
@@ -5043,7 +5045,7 @@ def test_an_axis_view_draws_once_without_shadow_geometry(
         viewport._shadow_hulls = {"body": []}
         viewport._shadow_cast = (1.0, 0.0, -1.0)
         viewport._shadow_direction = lambda: (0.0, 1.0, -1.0)  # type: ignore[method-assign]
-        viewport._place_shadows = lambda direction: None  # type: ignore[method-assign]
+        viewport._place_shadows = lambda direction, **_kwargs: None  # type: ignore[method-assign]
     if sketch:
         viewport._sketch_frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
     viewport.view_from("front")
@@ -5051,7 +5053,7 @@ def test_an_axis_view_draws_once_without_shadow_geometry(
 
 
 @pytest.mark.parametrize("parallel", [False, True])
-@pytest.mark.parametrize("ratio", [1.0, 2.0])
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
 def test_fitting_keeps_depth_corners_inside_the_free_card_area(
     parallel: bool, ratio: float
 ) -> None:
@@ -7085,6 +7087,40 @@ def test_a_drag_previews_every_selected_body(qt_app: QApplication) -> None:
     )
 
 
+def test_a_free_drag_takes_the_shadow_along(qt_app: QApplication) -> None:
+    """Wer den Körper frei übers Bett zieht, zieht seinen Schatten mit.
+
+    Am Griff gilt das seit dem 03.09.2026 (:meth:`Viewport._drag_shadow`); der
+    freie Zug — der Weg, den jeder Slicer geht — ließ den Schatten bis zum
+    22.09.2026 am alten Platz liegen, während der Körper wegwanderte. Und ein
+    folgenloser Zug stellt ihn zurück.
+    """
+    from app.ui.viewport import Viewport
+
+    ergebnis = _scene_with_two_bodies()
+    fuehrend, weiterer = tuple(ergebnis.scene.objects)
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    renderer.widget = SimpleNamespace(setCursor=lambda cursor: None)
+    viewport.renderer = renderer
+    viewport.show_scene(ergebnis)
+    viewport.select(fuehrend, more=(weiterer,))
+    schatten = {
+        kennung: [RecordingItem(f"schatten:{kennung}", np.zeros((1, 3)), "#000000")]
+        for kennung in (fuehrend, weiterer)
+    }
+    viewport._shadow_owners = schatten
+
+    assert viewport.begin_body_drag_at((0.0, 0.0, 0.0))
+    viewport.continue_body_drag_at((10.0, 5.0))
+    for kennung, items in schatten.items():
+        assert items[0].position() == pytest.approx((10.0, 5.0, 0.0)), kennung
+
+    viewport._undo_body_preview()
+    for kennung, items in schatten.items():
+        assert items[0].position() == pytest.approx((0.0, 0.0, 0.0)), kennung
+
+
 def test_the_body_follows_the_pointer_without_picking_again(qt_app: QApplication) -> None:
     """Der Zug am Körper rechnet auf einer Ebene, statt je Bewegung zu picken.
 
@@ -7431,10 +7467,12 @@ def test_every_grip_the_viewport_holds_stands_in_the_right_of_way() -> None:
     griffe = set(re.findall(r"self\.(_[a-z_]+): *(?:Gizmo|[A-Z][A-Za-z]*Handle) *\| *None", quelle))
     assert len(griffe) >= 4, f"ohne gefundene Griffe prüft der Test nichts: {griffe}"
 
-    block = re.search(r"\n    def _on_pointer\(.*?\n    def ", quelle, re.DOTALL)
-    assert block is not None, "_on_pointer ist nicht mehr auffindbar"
+    # Seit dem 22.09.2026 steht die Vorfahrt in ``_dispatch_pointer``;
+    # ``_on_pointer`` legt davor nur fest, ob die Ansicht in Bewegung ist.
+    block = re.search(r"\n    def _dispatch_pointer\(.*?\n    def ", quelle, re.DOTALL)
+    assert block is not None, "_dispatch_pointer ist nicht mehr auffindbar"
     vorfahrt = re.search(r"for handle in \(([^)]*)\):", block.group(0))
-    assert vorfahrt is not None, "die Vorfahrt in _on_pointer ist nicht mehr auffindbar"
+    assert vorfahrt is not None, "die Vorfahrt in _dispatch_pointer ist nicht mehr auffindbar"
 
     gefragt = {teil.strip().removeprefix("self.") for teil in vorfahrt.group(1).split(",")}
     fehlen = griffe - gefragt
@@ -7875,7 +7913,7 @@ def _scaled_sketch_view(ratio: float) -> tuple[Any, float]:
     return viewport, per_mm
 
 
-@pytest.mark.parametrize("ratio", [1.0, 2.0])
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
 def test_the_outline_grip_reaches_as_far_in_logical_points_at_any_scaling(
     qt_app: QApplication, ratio: float
 ) -> None:
@@ -7909,7 +7947,7 @@ def test_the_outline_grip_reaches_as_far_in_logical_points_at_any_scaling(
         viewport.deleteLater()
 
 
-@pytest.mark.parametrize("ratio", [1.0, 2.0])
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
 def test_the_pull_handle_keeps_its_size_and_its_hit_zone_at_any_scaling(
     qt_app: QApplication, ratio: float
 ) -> None:
@@ -7941,7 +7979,7 @@ def test_the_pull_handle_keeps_its_size_and_its_hit_zone_at_any_scaling(
         viewport.deleteLater()
 
 
-@pytest.mark.parametrize("ratio", [1.0, 2.0])
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
 def test_the_drawn_sketch_marks_keep_their_size_at_any_scaling(
     qt_app: QApplication, ratio: float
 ) -> None:
@@ -7989,9 +8027,11 @@ def test_a_shadow_is_computed_once_per_piece_and_drawn_once_per_body(
     Stück **und** Auffangfläche.
 
     Die Hülle braucht sie nur einmal je Stück: Eine tiefere Auffangfläche
-    verschiebt den Umriss, sie ändert ihn nicht (``_shadow_base_of``). Und die
-    Vielecke eines Körpers tragen dieselbe Farbe, passen also in einen Aktor.
-    Nach dem Umbau: 126 ms am echten Renderer.
+    verschiebt den Umriss, sie ändert ihn nicht (``_shadow_outline_of``). Und
+    die Vielecke eines Körpers tragen dieselbe Farbe, passen also in einen
+    Aktor. Nach dem Umbau: 126 ms am echten Renderer. Seit dem 22.09.2026
+    gehen die Umrisse aller Stücke in **einem** Aufruf durch GEOS
+    (``planar_outlines``) — gezählt werden deshalb die Wolken darin.
     """
     from app.ui import viewport as module
 
@@ -8012,17 +8052,24 @@ def test_a_shadow_is_computed_once_per_piece_and_drawn_once_per_body(
     view._shadow_cast = (99.0, 99.0)
 
     hulls: list[int] = []
-    real = module.outline_of
+    real = module.planar_outlines
+    single = module.outline_of
 
-    def counted(points: object) -> object:
+    def counted(clouds: Any) -> Any:
+        hulls.extend(1 for _cloud in clouds)
+        return real(clouds)
+
+    def one(points: object) -> object:
         hulls.append(1)
-        return real(points)
+        return single(points)
 
     try:
-        module.outline_of = counted
+        module.planar_outlines = counted
+        module.outline_of = one
         view._redraw_shadows(draw=False)
     finally:
-        module.outline_of = real
+        module.planar_outlines = real
+        module.outline_of = single
 
     assert view._shadow_actors, "es fallen Schatten"
     assert len(view._shadow_actors) == 2, (
@@ -8098,3 +8145,630 @@ def test_the_edges_of_a_collision_question_are_drawn_as_labelled_lines(
 
     viewport.show_candidates()
     assert viewport.candidates == ()
+
+
+# --- RM-203: Was die Ansicht je Auswertung rechnet, rechnet sie einmal -----------
+
+
+def _box_scene(extents: tuple[float, float, float] = (40.0, 30.0, 10.0)) -> Any:
+    """Ein geschweißter Quader mit zwei benannten Flächen — neue Netzobjekte je Aufruf."""
+    import dataclasses
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Feature, Scene, SceneObject
+
+    raw = trimesh.creation.box(extents=extents).subdivide().subdivide()
+    top = tuple(int(index) for index in np.flatnonzero(raw.face_normals[:, 2] > 0.99))
+    feature = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, extents[2] / 2.0), "normal": (0.0, 0.0, 1.0)},
+        face_indices=top,
+    )
+    side = tuple(int(index) for index in np.flatnonzero(raw.face_normals[:, 0] > 0.99))
+    other = dataclasses.replace(
+        feature,
+        id="face_2",
+        params={"centre": (extents[0] / 2.0, 0.0, 0.0), "normal": (1.0, 0.0, 0.0)},
+        face_indices=side,
+    )
+    body = SceneObject(
+        id="obj_1",
+        name="Quader",
+        mesh=MeshData(raw),
+        features={"face_1": feature, "face_2": other},
+    )
+    return EvaluationResult(scene=Scene(objects={"obj_1": body}))
+
+
+def test_a_shadow_moves_with_its_body_when_the_view_spreads_the_parts(
+    qt_app: QApplication, profile: Profile
+) -> None:
+    """Auseinanderziehen rückt Körper **und** Schatten (§18.6, §18.8).
+
+    Die Schattenhüllen wurden über die Identität des Netzes gemerkt, aber mit
+    dem Versatz der Ansicht darin. Beim Auseinanderziehen bleibt das Netz
+    dasselbe — der Merker antwortete mit der alten Lage, und der Schatten
+    blieb liegen, während sein Körper um 30 mm wanderte (gemessen am
+    22.09.2026: Körper x 0 → -30, Schatten -1,27 → -1,27). Dasselbe beim
+    Wechsel auf alle Platten.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    viewport.show_build_volume(profile)
+    viewport.show_scene(_scene_with_two_bodies())
+
+    def centre_x(name: str) -> float:
+        return float(np.asarray(renderer.item_of(name).points)[:, 0].mean())
+
+    body_before, shadow_before = centre_x("object:obj_1"), centre_x("shadow:obj_1")
+    viewport.set_explosion(1.0)
+    body_after, shadow_after = centre_x("object:obj_1"), centre_x("shadow:obj_1")
+
+    assert body_after != pytest.approx(body_before), "der Körper rückt"
+    assert shadow_after - shadow_before == pytest.approx(body_after - body_before, abs=1e-6), (
+        "sein Schatten rückt genauso weit"
+    )
+
+
+def test_hovering_another_feature_leaves_the_selected_marking_alone(
+    qt_app: QApplication,
+) -> None:
+    """Ein Zeigerwechsel baut die Markierung der Auswahl nicht neu (RM-203).
+
+    ``_set_hover_target`` rief ``_redraw_features``, und das baute auch die
+    Fläche des **gewählten** Merkmals — an der Senkbohrung einer Lochplatte
+    mit 311 296 Dreiecken 0,9 s je Zeigerwechsel über eine Fläche daneben
+    (22.09.2026). Die Auswahl hat sich nicht geändert, also bleibt ihre
+    Markierung stehen; die Fläche unter dem Zeiger kommt dazu.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    viewport.show_scene(_box_scene())
+    viewport.select("obj_1")
+    viewport.select_feature("face_1")
+    built = len(renderer.entries("feature-patch"))
+    assert built == 1, "die Auswahl ist markiert"
+
+    viewport._set_hover_target("obj_1", "face_2")
+    assert len(renderer.entries("feature-patch")) == built, "die Auswahl bleibt, wie sie war"
+    assert renderer.item_of("feature-patch") is viewport._feature_patch
+    assert "feature-hover" in renderer.names(), "die Fläche unter dem Zeiger kommt dazu"
+
+    viewport._set_hover_target(None, None)
+    assert len(renderer.entries("feature-patch")) == built
+
+    viewport.select_feature("face_2")
+    assert len(renderer.entries("feature-patch")) == built + 1, "eine andere Auswahl baut neu"
+
+
+def test_the_marking_of_a_large_selection_shares_its_corners(qt_app: QApplication) -> None:
+    """Die Markierung trägt gemeinsame Ecken, solange kein Schnitt sie zerteilt.
+
+    Jedes Dreieck bekam eigene drei Ecken — an einer Auswahl von 196 608
+    Dreiecken 590 000 Punkte für den Renderer statt 99 000, und dazu je
+    Auswahl eine Normalenrechnung über alle (RM-203). Ohne Schnitt gibt es
+    nichts zu zerteilen; die Fläche bleibt dieselbe, nur kleiner.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    result = _box_scene()
+    viewport.show_scene(result)
+    viewport.select("obj_1")
+    viewport.select_feature("face_1")
+
+    entry = renderer.entries("feature-patch")[-1]
+    points = np.asarray(entry["item"].points)
+    faces = len(result.scene.objects["obj_1"].features["face_1"].face_indices)
+    assert len(points) < 3 * faces, "gemeinsame Ecken, keine Suppe"
+    lift = viewport._patch_lift()
+    assert np.allclose(points[:, 2], 5.0 + lift), "angehoben um genau den Abstand gegen Flimmern"
+    outline = renderer.item_of("feature-outline:obj_1").points.reshape(-1, 2, 3)
+    assert len(outline) == 4 * 4, "der Rand der Deckfläche, zweimal unterteilt"
+
+
+def test_a_large_new_scene_is_prepared_outside_the_qt_thread(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kanten, Schattenhüllen und Normalen eines neuen Netzes rechnet der Arbeiter (RM-203).
+
+    Gemessen am echten Renderer (22.09.2026, 197 120 Dreiecke): Ein neuer
+    Stand kostete im Qt-Hauptthread 314 ms, davon 97 ms Körperkanten,
+    105 ms Schattenhüllen und 39 ms Punktnormalen — bei jeder Auswertung.
+    Danach sind es rund 35 ms für die Übernahme; die Rechnungen laufen im
+    ``_SceneMeshWorker``, und die letzte gültige Ansicht bleibt bis dahin
+    stehen.
+    """
+    from app.ui import viewport as module
+    from app.ui.viewport import Viewport
+
+    main = threading.get_ident()
+    seen: dict[str, set[int]] = {"edges": set(), "components": set(), "normals": set()}
+    real_edges, real_components = module.feature_edges, module.face_components
+
+    def edges(*args: Any, **kwargs: Any) -> Any:
+        seen["edges"].add(threading.get_ident())
+        return real_edges(*args, **kwargs)
+
+    def components(*args: Any, **kwargs: Any) -> Any:
+        seen["components"].add(threading.get_ident())
+        return real_components(*args, **kwargs)
+
+    monkeypatch.setattr(module, "feature_edges", edges)
+    monkeypatch.setattr(module, "face_components", components)
+    monkeypatch.setattr(module, "SCENE_PREPARATION_ABOVE", 0, raising=False)
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+
+    def normals(vertices: Any, faces: Any) -> Any:
+        seen["normals"].add(threading.get_ident())
+        return np.zeros((len(vertices), 3), dtype=np.float32)
+
+    renderer.surface_normals = normals  # type: ignore[method-assign]
+    viewport.renderer = renderer
+    old = _scene_with_two_bodies()
+    viewport._result = old
+    fresh = _scene_with_two_bodies()
+    viewport.show_scene(fresh)
+    worker = viewport._scene_worker
+    assert worker is not None, "ein neues Netz über der Schwelle geht in den Arbeiter"
+    assert viewport._result is old, "bis dahin bleibt die letzte gültige Ansicht"
+    assert worker.wait(20_000)
+    for _round in range(20):
+        qt_app.processEvents()
+        if viewport._result is fresh:
+            break
+    assert viewport._result is fresh
+
+    assert seen["edges"] and main not in seen["edges"], seen
+    assert seen["components"] and main not in seen["components"], seen
+    assert seen["normals"] and main not in seen["normals"], seen
+    drawn = renderer.entries("object:obj_1")[-1]
+    assert drawn["normals"] is not None, "die vorbereiteten Normalen gehen an den Renderer"
+    assert "shadow:obj_1" in renderer.names() and "edges:obj_1" in renderer.names()
+
+    # Dieselben Netze noch einmal (eine Auswahl, ein Themenwechsel): nichts zu tun.
+    seen["edges"].clear()
+    seen["components"].clear()
+    viewport.show_scene(fresh)
+    assert viewport._scene_worker is None, "kein Arbeiter ohne neues Netz"
+    assert not seen["edges"] and not seen["components"], seen
+
+
+def test_switching_back_and_forth_between_two_results_prepares_each_only_once(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eingang und Endergebnis im Wechsel: jedes Netz wird einmal vorbereitet (RM-203).
+
+    Der historische Bohrschritt zeigt beim Tippen den Eingang vor dem Schritt
+    und für die Vorschau das Endergebnis — je Tastendruck beide. Mit einem
+    Merker je Körper verdrängte jeder Wechsel den anderen, und der Arbeiter
+    rechnete Kanten, Hüllen und Normalen jedes Mal neu: an der Senkplatte
+    (311 000 Dreiecke) 0,57 s bis zum Bild, statt 33 ms ohne Arbeiter.
+    """
+    from app.ui import viewport as module
+    from app.ui.viewport import Viewport
+
+    calls: list[int] = []
+    real_edges = module.feature_edges
+
+    def edges(*args: Any, **kwargs: Any) -> Any:
+        calls.append(threading.get_ident())
+        return real_edges(*args, **kwargs)
+
+    monkeypatch.setattr(module, "feature_edges", edges)
+    monkeypatch.setattr(module, "SCENE_PREPARATION_ABOVE", 0, raising=False)
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    before, after = _scene_with_two_bodies(), _scene_with_two_bodies()
+
+    def shown(result: Any) -> None:
+        viewport.show_scene(result)
+        worker = viewport._scene_worker
+        if worker is not None:
+            assert worker.wait(20_000)
+        for _round in range(20):
+            qt_app.processEvents()
+            if viewport._result is result:
+                return
+        raise AssertionError("die Szene kam nicht an")
+
+    shown(before)
+    shown(after)
+    prepared = len(calls)
+    assert prepared, "ohne Vorbereitung prüft der Test nichts"
+    for result in (before, after, before, after):
+        viewport.show_scene(result)
+        assert viewport._scene_worker is None, (
+            "ein gezeigtes Netz geht nicht noch einmal in den Arbeiter"
+        )
+        assert viewport._result is result
+    assert len(calls) == prepared, "Kanten wurden für bekannte Netze neu gerechnet"
+
+    third = _scene_with_two_bodies()
+    shown(third)
+    viewport.show_scene(before)
+    assert viewport._scene_worker is not None, "zwei Netze je Körper, nicht beliebig viele"
+    viewport.wait_for_workers()
+
+
+def test_a_scene_build_draws_exactly_one_frame(qt_app: QApplication, profile: Profile) -> None:
+    """Ein Szenenaufbau zeichnet ein Bild, nicht drei.
+
+    ``select`` am Ende des Aufbaus zeichnete, ``_redraw_measurements``
+    zeichnete, und der Schluss zeichnete — drei Bilder je Auswertung, je
+    rund 17 ms an einer Lochplatte mit Umgebungsverdeckung (22.09.2026).
+    """
+    from app.core.geom.measure import Measurement
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    viewport.show_build_volume(profile)
+    viewport.show_scene(_scene_with_two_bodies())
+    viewport.select("obj_1")
+    viewport.measurements.add(
+        Measurement(kind="distance", value=5.0, points=((0.0, 0.0, 0.0), (5.0, 0.0, 0.0)))
+    )
+    before = renderer.renders
+    viewport.show_scene(_scene_with_two_bodies())
+    assert renderer.renders - before == 1
+
+
+def test_the_shadow_of_many_pieces_falls_outside_the_qt_thread_and_keeps_its_actor(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Am Ende einer Drehung rechnet ein Arbeiter den Schatten, und der Aktor bleibt.
+
+    An einem Piratenschiff aus 17 Körpern mit 35 254 Hüllpunkten kostete der
+    Schattenwurf am Ende jeder Kamerageste 34 bis 53 ms im Qt-Hauptthread,
+    und jeder Körper bekam dabei ein neues Renderer-Element (22.09.2026).
+    Über :data:`SHADOW_PROJECTION_ABOVE` Hüllpunkten rechnet jetzt ein
+    Arbeiter; bis er fertig ist, bleibt der Schatten des vorigen Winkels
+    stehen, und danach bekommt derselbe Aktor neue Punkte.
+    """
+    from app.ui import viewport as module
+
+    main = threading.get_ident()
+    seen: set[int] = set()
+    real = module.shadow_soups
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        seen.add(threading.get_ident())
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(module, "shadow_soups", counted)
+
+    view = module.Viewport()
+    renderer = RecordingRenderer(size=(400, 300))
+    view.renderer = renderer
+    view._shadow_hulls = {
+        "obj_1": [np.array([[0.0, 0.0, 0.0], [8.0, 0.0, 0.0], [4.0, 6.0, 0.0], [4.0, 2.0, 9.0]])],
+    }
+    view._shadow_ground = {"obj_1": (0.0, 9.0, None)}
+    view._shadow_cast = (9.0, 9.0)
+    view._redraw_shadows(draw=False)
+    assert seen == {main}, "wenige Hüllpunkte: gleich im Hauptthread"
+    actor = view._shadow_owners["obj_1"][0]
+    before = np.asarray(actor.points).copy()
+    added = len(renderer.entries("shadow:obj_1"))
+
+    monkeypatch.setattr(module, "SHADOW_PROJECTION_ABOVE", 0, raising=False)
+    seen.clear()
+    renders = renderer.renders
+    # Die Kamera auf die andere Seite: Das Licht folgt ihr, der Schatten auch.
+    renderer.set_camera_pose(CameraPose((-100.0, 100.0, 80.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)))
+    view._redraw_shadows(draw=False)
+    worker = view._shadow_worker
+    assert worker is not None, "viele Hüllpunkte: ein Arbeiter"
+    assert np.array_equal(np.asarray(actor.points), before), "bis dahin steht der alte Schatten"
+    assert worker.wait(20_000)
+    for _round in range(20):
+        qt_app.processEvents()
+        if view._shadow_worker is None:
+            break
+    assert seen and main not in seen, seen
+    assert view._shadow_owners["obj_1"][0] is actor, "derselbe Aktor, neue Punkte"
+    assert not np.array_equal(np.asarray(actor.points), before)
+    assert len(renderer.entries("shadow:obj_1")) == added, "kein neues Element"
+    assert renderer.renders == renders + 1, "das fertige Bild zeichnet der Arbeiter nach"
+
+
+def test_a_drag_draws_light_and_its_release_exactly_one_full_frame(qt_app: QApplication) -> None:
+    """Ein Zug zeichnet in der leichten Stufe, das Loslassen einmal voll (RM-200).
+
+    Gehalten wird eine Taste über der leeren Ansicht; gezeichnet wird, was
+    ein Griff oder die Kamera je Bewegung zeichnet. Das Loslassen selbst
+    zeichnet hier nichts — dann kommt genau ein volles Bild nach, damit das
+    stehende nicht aus der Bewegung stammt.
+    """
+    from app.ui.render.api import PointerEvent
+    from app.ui.viewport import Viewport
+
+    view = Viewport()
+    renderer = RecordingRenderer(size=(400, 300))
+    view.renderer = renderer
+    view._navigator = None
+    renderer.set_ambient_occlusion(True, radius=8.0, bias=0.05)
+
+    view._on_pointer(PointerEvent("press", 100, 100, button="left"))
+    assert not renderer.interacting, "ein Druck allein ist noch kein Zug"
+    view._on_pointer(PointerEvent("move", 110, 100, buttons=frozenset({"left"})))
+    assert renderer.interacting
+    view._draw()
+    assert renderer.reduced_renders == 1
+    renders = renderer.renders
+
+    view._on_pointer(PointerEvent("release", 110, 100, button="left"))
+    assert not renderer.interacting
+    assert renderer.renders == renders + 1, "genau ein volles Bild nach dem Loslassen"
+    assert not renderer.frame_was_reduced()
+
+    view._on_pointer(PointerEvent("move", 120, 100))
+    assert not renderer.interacting, "eine Bewegung ohne Taste ist kein Zug"
+
+
+def test_a_wheel_turn_returns_to_full_quality_when_the_wheel_rests(qt_app: QApplication) -> None:
+    """Das Rad kennt kein Loslassen — nach einer Pause kommt das volle Bild.
+
+    Ebenso 3D-Maus und Flugtasten: Jeder Takt verlängert die Bewegung,
+    ``settle_camera`` beendet sie sofort. Die Kamera über
+    ``set_camera_pose`` allein zu stellen, ist keine Bewegung — so stellen
+    Bildschirmfotos und Handbuchbilder ihre Kamera, und die gehören voll
+    gezeichnet.
+    """
+    from app.ui import viewport as module
+    from app.ui.render.api import PointerEvent
+    from app.ui.viewport import Viewport
+
+    view = Viewport()
+    renderer = RecordingRenderer(size=(400, 300))
+    view.renderer = renderer
+    view._navigator = None
+    renderer.set_ambient_occlusion(True, radius=8.0, bias=0.05)
+
+    view._on_pointer(PointerEvent("wheel", 100, 100, delta=1.0))
+    assert renderer.interacting and view._interaction_timer.isActive()
+    assert view._interaction_timer.interval() == module.INTERACTION_SETTLE_MS
+    view._draw()
+    renders = renderer.renders
+    view._interaction_timer.timeout.emit()
+    assert not renderer.interacting
+    assert renderer.renders == renders + 1, "ein volles Bild, wenn das Rad ruht"
+    view._interaction_timer.timeout.emit()
+    assert renderer.renders == renders + 1, "und kein zweites ohne Anlass"
+
+    view.set_camera_pose((0.0, -50.0, 30.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+    assert not renderer.interacting, "eine gestellte Kamera ist keine Bewegung"
+    assert not renderer.frame_was_reduced()
+
+    view.note_camera_motion()
+    view.set_camera_pose((0.0, -60.0, 30.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+    assert renderer.frame_was_reduced()
+    view.settle_camera()
+    assert not renderer.interacting and not renderer.frame_was_reduced()
+    assert not view._interaction_timer.isActive()
+
+
+def test_the_flight_keys_mark_their_motion(qt_app: QApplication) -> None:
+    """Die Flugtasten sagen der Ansicht, dass sie sich bewegt — die 3D-Maus
+    prüft ``test_spacemouse``."""
+    from app.ui.viewport import Viewport
+
+    view = Viewport()
+    renderer = RecordingRenderer(size=(400, 300))
+    view.renderer = renderer
+    view._navigator = None
+    view.set_camera_pose((0.0, -50.0, 30.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+
+    view._flying = {"w"}
+    view._flight_clock.restart()
+    time.sleep(0.02)
+    view._fly_one_tick()
+    assert renderer.interacting, "ein Flugtakt ist Bewegung"
+    view._flying.clear()
+    view._end_interaction()
+
+
+def _plate_with_a_part() -> Any:
+    """Eine Platte, auf deren Oberseite ein Baustein aus zwei Merkmalen sitzt.
+
+    Beide stammen aus Schritt 7 (``created_by``); die Bohrung daneben aus
+    keinem. Die Dreiecke der Oberseite sind fein genug, dass der Baustein
+    einige davon trägt.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Feature, Scene, SceneObject
+
+    raw = trimesh.creation.box(extents=(40.0, 40.0, 10.0)).subdivide().subdivide()
+    centres = raw.triangles_center
+    top = np.flatnonzero(raw.face_normals[:, 2] > 0.99)
+    near = top[np.linalg.norm(centres[top, :2], axis=1) < 6.0]
+    features = {
+        "pocket_1": Feature(
+            id="pocket_1",
+            kind="hole",
+            provenance="created",
+            params={"diameter": 8.0, "centre": (0.0, 0.0, 5.0), "axis": (0.0, 0.0, 1.0)},
+            face_indices=tuple(int(index) for index in near[: len(near) // 2]),
+            created_by=7,
+        ),
+        "fillet_1": Feature(
+            id="fillet_1",
+            kind="fillet",
+            provenance="created",
+            params={"radius": 1.0, "centre": (2.0, 0.0, 5.0)},
+            face_indices=tuple(int(index) for index in near[len(near) // 2 :]),
+            created_by=7,
+        ),
+        "hole_2": Feature(
+            id="hole_2",
+            kind="hole",
+            provenance="detected",
+            params={"diameter": 4.0, "centre": (-12.0, 0.0, 5.0), "axis": (0.0, 0.0, 1.0)},
+        ),
+    }
+    body = SceneObject(id="obj_1", name="Platte", mesh=MeshData(raw), features=features)
+    return EvaluationResult(scene=Scene(objects={"obj_1": body})), near
+
+
+def test_a_drag_at_a_part_feature_moves_the_whole_part_and_says_where_it_misses(
+    qt_app: QApplication,
+) -> None:
+    """Am Bausteinmerkmal wandert der ganze Baustein mit, und neben der Fläche sagt er es.
+
+    RM-174: Seit dem 14.09.2026 versetzt der Griff an einem Bausteinmerkmal
+    den ganzen Baustein, im Bild wanderte aber nur die Marke des angefassten
+    Merkmals, und die übrigen rückten erst beim Loslassen nach. Jetzt gehen
+    die Dreiecke aller Merkmale desselben Schritts mit der Matrix des
+    Griffs; führt der Zug den Sitz über den Rand der Fläche, wird der
+    Baustein rot und das Zugfeld sagt „neben der Fläche" (Regel 18: nicht die
+    Farbe allein).
+    """
+    from app.ui import viewport as module
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer(scale=20.0)
+    viewport.renderer = renderer
+    scene, near = _plate_with_a_part()
+    viewport.moves_as_a_part = lambda feature: feature.created_by == 7
+    viewport.show_scene(scene)
+    viewport.select("obj_1")
+    viewport.select_feature("pocket_1")
+    viewport.set_placement_pointer(lambda event: False)
+    viewport.set_gizmo(True)
+    assert viewport._gizmo is not None, "am Bausteinmerkmal hängt ein Griff"
+
+    shift = np.eye(4)
+    shift[0, 3] = 3.0
+    viewport._on_gizmo_interacted(shift)
+    assert "part-drag" in renderer.names(), "der ganze Baustein geht mit"
+    drawn = renderer.entries("part-drag")[-1]
+    actor = viewport._part_drag_actor
+    assert actor is not None
+    corners = np.unique(np.asarray(scene.scene.objects["obj_1"].mesh.raw.faces)[near])
+    assert len(actor.points) == len(corners), "die Dreiecke beider Merkmale, nicht eines"
+    assert drawn["style"].keep_in_front, "eine Tasche liegt im Material"
+    assert np.allclose(actor.matrix(), shift)
+    assert actor.colour() == module.MEASURE_COLOUR
+    assert "neben der Fläche" not in viewport.drag_bar.label.text()
+
+    away = np.eye(4)
+    away[0, 3] = 60.0
+    viewport._on_gizmo_interacted(away)
+    assert np.allclose(actor.matrix(), away)
+    assert actor.colour() == module.PART_OFF_FACE_COLOUR, "neben der Fläche wird er rot"
+    assert "neben der Fläche" in viewport.drag_bar.label.text(), "und das Feld sagt es in Worten"
+
+    viewport._on_gizmo_interacted(shift)
+    assert actor.colour() == module.MEASURE_COLOUR, "zurück auf der Fläche ist alles wie vorher"
+
+    viewport._drop_ghost()
+    assert viewport._part_drag_actor is None and actor in renderer.removed
+
+    # Die Bohrung daneben kam aus keinem Baustein: Sie zieht allein.
+    viewport.select_feature("hole_2")
+    viewport.set_gizmo(True)
+    viewport._on_gizmo_interacted(shift)
+    assert viewport._part_drag_actor is None
+
+
+@pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
+def test_the_smallest_grip_is_as_large_in_logical_points_at_any_scaling(
+    qt_app: QApplication, ratio: float
+) -> None:
+    """Der kleinste Griff ist überall gleich groß — in Logikpunkten, nicht Gerätepixeln.
+
+    :data:`GIZMO_LEAST_PIXELS` sind Logikpunkte, ``_pixels_per_mm_at`` zählt
+    Gerätepixel. Ohne das Geräteverhältnis dazwischen war der Griff an einem
+    kleinen Teil bei 200 Prozent Skalierung nur halb so groß zu treffen
+    (Koordinator-Zusatz a der Durchsicht, 22.09.2026). Nachgestellt wird ein
+    Bildschirm, auf dem dasselbe Bild doppelt so viele Gerätepixel je
+    Millimeter hat — die Größe in Millimetern muss dieselbe bleiben.
+    """
+    from app.ui import viewport as module
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    renderer.device_ratio = lambda: ratio  # type: ignore[method-assign]
+    viewport.renderer = renderer
+    per_mm = 2.0 * ratio
+    viewport._pixels_per_mm_at = lambda _point: per_mm  # type: ignore[method-assign]
+    actor = RecordingItem("tool", np.array([[0.0, 0.0, 0.0], [4.0, 0.0, 0.0]]), "#ffffff")
+    try:
+        scale = viewport._gizmo_scale_for(actor, (0.0, 0.0, 0.0))
+        assert scale * actor.length() == pytest.approx(module.GIZMO_LEAST_PIXELS / 2.0), (
+            f"der Griff misst {scale * actor.length():.1f} mm statt "
+            f"{module.GIZMO_LEAST_PIXELS / 2.0:.1f} (Verhältnis {ratio})"
+        )
+    finally:
+        viewport.deleteLater()
+
+
+def test_the_finding_ring_stands_in_front_of_the_material_at_its_place(
+    qt_app: QApplication,
+) -> None:
+    """Die Marke eines Befunds ist zu sehen, auch wenn sein Ort im Material liegt.
+
+    RM-074, Abnahme am Beispielprojekt ``passung-nach-materialwechsel`` mit
+    dem echten Renderer (22.09.2026): Der Flug stimmte, im Bild stand aber nur
+    der Satz. Der Ring nahm in der Perspektive den alten Parallelmaßstab des
+    Renderers und war kleiner als ein Bildpunkt; und sein Ort liegt im
+    Deckel. Er misst jetzt am Abstand, bleibt an seiner Stelle (kein
+    Vorziehen entlang der Blickachse, das in der Perspektive wanderte) und
+    wird vor dem Material gezeichnet.
+    """
+    from app.ui import viewport as module
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    # Perspektivisch, 200 mm vom Ort — und ein alter Parallelmaßstab von
+    # einem Millimeter, den der Renderer behalten hat.
+    renderer.set_parallel_projection(False)
+    renderer.set_parallel_scale(1.0)
+    renderer.set_camera_pose(CameraPose((10.0, 5.0, 202.0), (10.0, 5.0, 2.0), (0.0, 1.0, 0.0)))
+    viewport.mark_finding((10.0, 5.0, 2.0), "Die Passung sitzt enger als vorgesehen.")
+    try:
+        ring = renderer.entries("finding_ring")[-1]
+        assert ring.get("keep_in_front"), "der Ring liegt sonst im Material"
+        radius = float(
+            np.linalg.norm(np.asarray(ring["item"].points, dtype=float)[0] - (10.0, 5.0, 2.0))
+        )
+        assert radius == pytest.approx(200.0 * 0.5 * module.FINDING_RING_SHARE, rel=1e-3), (
+            f"der Ring misst {radius:.2f} mm — der alte Parallelmaßstab galt in der Perspektive"
+        )
+        # Und der Satz steht im Bild über dem Ring — von oben gesehen in der
+        # Oben-Richtung der Kamera (+y), nicht in +z mitten im Ring.
+        label = np.asarray(renderer.entries("finding_label")[-1]["item"].points, dtype=float)[0]
+        offset = label - np.array((10.0, 5.0, 2.0))
+        assert offset[1] > radius and abs(offset[2]) < 1e-9, offset
+        points = np.asarray(ring["item"].points, dtype=float)
+        distances = np.linalg.norm(points - np.array((10.0, 5.0, 2.0)), axis=1)
+        assert np.ptp(distances) < 1e-9 * max(1.0, float(distances.max())), (
+            "und er steht genau um den Ort, nicht davor gezogen"
+        )
+    finally:
+        viewport._finding_timer.stop()
+        viewport.deleteLater()

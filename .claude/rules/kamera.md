@@ -286,7 +286,7 @@ seines Zustands.
 Was davon als Regel bleibt:
 
 * **Wer ein Ereignis vor der Navigation braucht, bekommt es vor ihr.**
-  `Viewport._on_pointer` reicht jedes Ereignis erst an die Griffe, dann an eine
+  `Viewport._dispatch_pointer` reicht jedes Ereignis erst an die Griffe, dann an eine
   laufende Platzierung, dann an den Zeiger, zuletzt an den Navigator — eine
   Vorfahrt an einer Stelle statt dreier Beobachter am Interactor. (Bis zum
   10.09.2026 stand der Zeiger vorn; die heutige Reihenfolge und ihr Anlass
@@ -317,3 +317,10 @@ Bild. `set_camera_pose(…, draw=False)`, `_redraw_shadows(draw=False)` und
 `test_surface_placement_ui.py::test_a_camera_move_with_measures_in_the_view_draws_exactly_one_frame`
 hält für Radraste, Zugende, 3D-Maus und Ansichtswahl fest, dass es genau
 eines bleibt.
+
+**Wer die Kamera im Takt bewegt, sagt es vorher** (`note_camera_motion`,
+22.09.2026): Zeigerzug und Rad über `_on_pointer`, die 3D-Maus je Takt vor
+`set_camera_pose`, die Flugtasten je Takt. Dann darf der Renderer leichter
+zeichnen; das Ende der Bewegung bringt das volle Bild zurück, genau eines. Die
+Regel dazu steht in `ansicht.md` („Ein Zug zeichnet leichter, sein letztes
+Bild voll").

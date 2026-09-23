@@ -628,6 +628,27 @@ COARSE_PREVIEW_ABOVE: Final = 150_000
 COARSE_PREVIEW_TARGET: Final = 50_000
 
 
+#: Werte, mit denen ein Schritt ein Merkmal, eine Fläche oder Kanten **des
+#: Eingangsnetzes** benennt. Eine vorgeschaltete Verkleinerung erkennt das
+#: Netz neu, und die Kennung gibt es danach nicht mehr — oder sie meint ein
+#: anderes Loch.
+FEATURE_REFERENCE_PARAMS: Final = ("at_feature", "at_features", "face", "edges")
+
+
+def _names_a_feature(params: Mapping[str, Any]) -> bool:
+    """Ob diese Werte etwas am Eingangsnetz beim Namen nennen.
+
+    **Dann rechnet die Vorschau genau.** Bis zum 22.09.2026 lag die grobe
+    Stufe auch vor *Bohrung ändern* und *Merkmal versetzen*: Ab 150 000
+    Dreiecken verkleinerte sie den Körper, die Erkennung lief auf dem groben
+    Netz neu, und der Schritt fand sein Merkmal nicht mehr — an der
+    Senkplatte mit 311 296 Dreiecken stand statt einer Vorschau „Dieses
+    Merkmal gibt es an diesem Objekt nicht.", und Übernehmen blieb gesperrt,
+    weil es eine dargestellte Vorschau verlangt (Maßeditor im Bild, Weg 1).
+    """
+    return any(params.get(name) not in (None, "", (), []) for name in FEATURE_REFERENCE_PARAMS)
+
+
 def _triangles_of(scene: Any) -> int:
     """Wie viele Dreiecke die Szene trägt — für das Band über der Vorschau."""
     if scene is None:
@@ -3261,6 +3282,9 @@ class Session(QObject):
             if draft.op == "apply_texture" and draft.params.get("coverage") == "whole_face"
             for body in draft.inputs
         }
+        exact_faces |= {
+            body for draft in drafts if _names_a_feature(draft.params) for body in draft.inputs
+        }
         if exact_faces:
             coarse = [draft for draft in coarse if not exact_faces.intersection(draft.inputs)]
         # Eine eigene Kopie auch des Stands: Der Rückweg unten rechnet ihn ein
@@ -3283,7 +3307,11 @@ class Session(QObject):
             changed_index = next(
                 index for index, entry in enumerate(working.ops) if entry.id == change_op
             )
-            if coarsened is not None and before is not None:
+            if (
+                coarsened is not None
+                and before is not None
+                and not _names_a_feature(working.ops[changed_index].params)
+            ):
                 # **Die grobe Stufe auch beim Ändern eines Schritts** (22.09.2026).
                 # Bis dahin blieb dieser Weg genau — die Verkleinerung musste
                 # vor den geänderten Schritt, und ``History.apply`` hängt an.

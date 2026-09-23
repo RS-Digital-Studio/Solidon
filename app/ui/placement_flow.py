@@ -1061,6 +1061,18 @@ class PlacementFlow(QObject):
         self._prepared: Any = None
         self._prepared_mesh: Any = None
         self._patch_faces: frozenset[int] = frozenset()
+        #: Das Szenennetz und seine eine Kopie für die Flächenfrage im
+        #: Arbeiter (:meth:`_next_surface`). Die Kopie bleibt, solange das
+        #: Netz bleibt: Ihre trägen Merker — Nachbarschaft, Normalen,
+        #: Dreiecke — füllt die erste Frage, und jede weitere liest sie.
+        self._surface_mesh: tuple[Any, Any] | None = None
+        #: Die zuletzt im Arbeiter vorbereitete Fläche, gleich ob ihre Antwort
+        #: noch galt: Eine überholte Frage hat die Fläche trotzdem richtig
+        #: vorbereitet, und die nächste Bewegung trifft meist dieselbe.
+        self._surface_known: tuple[Any, Any, frozenset[int]] | None = None
+        #: Wo die linke Taste für den Rückweg aus dem Dialog gedrückt wurde
+        #: (:meth:`_resume`) — ``None`` ohne solchen Druck.
+        self._resume_press: tuple[int, int] | None = None
         self._surface: Any = None
         self._object_id = ""
         self._centre_id = ""
@@ -1266,6 +1278,17 @@ class PlacementFlow(QObject):
         self._timer.setSingleShot(True)
         self._timer.setInterval(16)
         self._timer.timeout.connect(self._next_surface)
+        # **Ein Bild je Ereignisrunde, nicht je Neuzeichnung** (22.09.2026).
+        # Ein Anschlag im Maßfeld zeichnete den Fluss drei Mal neu — über
+        # ``_distance_changed``, über die Wertemeldung des Trägers und über
+        # den fertigen Werkzeugbau —, und jedes Mal ein ganzes Bild: an der
+        # Senkplatte bei 3163 mal 1259 Bildpunkten 14 ms je Bild, 43 bis 107 ms
+        # je Anschlag. Die Lage der Felder und Linien entsteht weiter sofort;
+        # das Bild dazu einmal, wenn die Runde leer ist.
+        self._frame = QTimer(self)
+        self._frame.setSingleShot(True)
+        self._frame.setInterval(0)
+        self._frame.timeout.connect(self._draw_now)
         dialog.surfaceRequested.connect(self.start)
         dialog.valuesChanged.connect(self._values_changed)
         dialog.finished.connect(self.dispose)
@@ -1653,6 +1676,8 @@ class PlacementFlow(QObject):
         if self._disposed or not self.can_place():
             return
         self.active = True
+        self.viewport.clear_placement_resume(self._resume)
+        self._resume_press = None
         # Der Satz im Dialog gilt der laufenden Platzierung, nicht dem
         # Registereintrag (siehe `OperationDialog.show_placement_hint`).
         self._tell_the_host_we_aim(True)
@@ -1744,6 +1769,89 @@ class PlacementFlow(QObject):
         )
         return self._result is not None and self.viewport.is_scene_applied(result)
 
+    def step_back(self) -> None:
+        """Escape: genau eine Stufe zurück, mit allen Werten (RM-205).
+
+        Die Platzierung hat drei Stufen (Robert, 09.09.2026): zielen, die Maße
+        an der geklickten Stelle einstellen, die Tiefe ziehen. Bis zum
+        22.09.2026 führte Escape aus jeder davon in den Dialog — aus der
+        Tiefe also über die Maße hinweg, und wer nur die Stelle neu wählen
+        wollte, fing im Dialog wieder an. Jetzt:
+
+        * **Tiefe → Maße.** Ansicht und Kamera kommen zurück, die gezogene
+          Tiefe bleibt als Zahl stehen.
+        * **Maße → Zielen.** Die Stelle folgt wieder dem Zeiger; die Felder
+          behalten ihre Werte, bis ein Klick eine neue Stelle setzt.
+        * **Zielen → Dialog** (:meth:`back`), wie bisher. Von dort führt ein
+          Klick auf das Modell wieder hierher (:meth:`_resume`).
+
+        Zuerst nimmt Escape einen offenen Bezugswahlmodus zurück, sonst
+        nichts. Wo es nur eine Stufe gibt — am gewählten Merkmal
+        (``QuietHost``) und beim Ändern eines Schritts —, geht es wie bisher
+        ganz zurück.
+        """
+        if self._disposed or self._cancel_reference_pick():
+            return
+        if not self.active:
+            self.back()
+            return
+        if self._deepening:
+            self._leave_depth()
+            self._settle()
+            return
+        if (
+            self._frozen
+            and self._surface is not None
+            and self._change_op is None
+            and self._measure_group is None
+            and not isinstance(self.dialog, QuietHost)
+        ):
+            self._frozen = False
+            self._seated_by_default = False
+            self._commit_pending = False
+            self._accept_pending = False
+            self._pending = None
+            self._serial += 1
+            self._accept.setText(tr("Weiter zur Tiefe") if self.deepens() else tr("Übernehmen"))
+            self._note.setText(tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück"))
+            self.redraw()
+            return
+        self.back()
+
+    def _resume(self, event: PointerEvent) -> bool:
+        """Ein Klick auf das Modell holt die pausierte Platzierung zurück.
+
+        Gesendet wird dabei ``surfaceRequested`` — derselbe Eingang, den der
+        Knopf *Stelle im Bild wählen* im Dialog für die Tastatur bedient
+        (``OperationDialog.aim_again``) —, und derselbe Klick setzt die
+        Stelle: Wer ins Modell klickt, meint diese Stelle und nicht „bitte
+        gleich zielen lassen". Ein Druck neben dem Körper und jeder Zug
+        gehören weiter der Kamera.
+        """
+        if self._disposed or self.active or not self.dialog.isVisible():
+            return False
+        if event.kind == "press" and event.button == "left":
+            self._resume_press = None
+            hit = self.viewport.placement_hit(event.x, event.y)
+            inputs = self.inputs_of()
+            if hit is None or (inputs and hit[0] not in inputs) or not self.can_place():
+                return False
+            self._resume_press = (event.x, event.y)
+            return True
+        if event.kind == "release" and event.button == "left" and self._resume_press is not None:
+            pressed, self._resume_press = self._resume_press, None
+            away = max(abs(event.x - pressed[0]), abs(event.y - pressed[1]))
+            threshold = float(QApplication.startDragDistance()) * self.viewport._device_ratio()
+            if away > threshold:
+                return True
+            self.dialog.surfaceRequested.emit()
+            # ``start`` hat ``active`` gesetzt, wenn es starten konnte — frisch
+            # gelesen, nicht aus der Prüfung oben.
+            if cast("bool", self.active):
+                self.pointer(event)
+            return True
+        return False
+
     def back(self) -> None:
         """Escape behält alle Werte, übernimmt aber keinen Schritt.
 
@@ -1759,6 +1867,12 @@ class PlacementFlow(QObject):
             return
         self._stop()
         self._object_id = ""
+        # **Und der Weg zurück steht offen** (RM-205): Ein Klick auf das Modell
+        # holt die Platzierung wieder, und der Satz im Dialog sagt es — er ist
+        # derselbe wie beim Zielen, weil der Klick dasselbe tut.
+        if starts_by_itself(self.spec_of()) and self._change_op is None:
+            self.viewport.set_placement_resume(self._resume)
+            self._tell_the_host_we_aim(True)
         self.dialog.show()
         self.dialog.raise_()
         self.dialog.activateWindow()
@@ -1766,6 +1880,8 @@ class PlacementFlow(QObject):
 
     def _stop(self) -> None:
         self.active = False
+        self.viewport.clear_placement_resume(self._resume)
+        self._resume_press = None
         self._reference_pick = None
         self._held_references = None
         self._held_centre = ""
@@ -2019,7 +2135,14 @@ class PlacementFlow(QObject):
             self._pending = event.x, event.y, confirm
             self._commit_pending = confirm
             self._serial += 1
-            self._timer.start()
+            # **Der Takt fragt höchstens alle 16 ms, er wartet nicht auf
+            # Stillstand** (RM-203). Bis zum 22.09.2026 startete jede Bewegung
+            # den Zeitgeber neu: Bei einer Maus mit 125 Hz kam die Frage erst,
+            # wenn der Zeiger ruhte, und die Vorschau folgte ihm nicht. Eine
+            # Frage zur Zeit bleibt (``_surface_busy``); ihr Ende nimmt gleich
+            # die jüngste Stelle. Ein Klick wartet nie auf den Takt davor.
+            if confirm or not self._timer.isActive():
+                self._timer.start()
             return True
         return event.buttons == frozenset({"left"})
 
@@ -2089,13 +2212,21 @@ class PlacementFlow(QObject):
             return
         clip_planes = tuple(plane for plane in self.viewport._section_planes() if plane is not None)
         stamp = self._serial
-        prepared = (
-            self._prepared
-            if self._prepared_mesh is entry.mesh and cell in self._patch_faces
-            else None
-        )
+        # **Die Fläche von eben gilt, solange der Treffer auf ihr liegt** —
+        # auch wenn er erst im Arbeiter feststeht. Ein dezimiert oder
+        # geschnitten gezeigter Körper meldet keine Originalzelle (``cell``
+        # ist -1), und bis zum 22.09.2026 bereitete dann jede Frage die
+        # ganze Fläche neu vor, an einer Kopie ohne Merker: an der Senkplatte
+        # (311 000 Dreiecke) eine Sekunde je Mausbewegung (RM-203).
+        known, known_faces = None, frozenset[int]()
+        if self._prepared is not None and self._prepared_mesh is entry.mesh:
+            known, known_faces = self._prepared, self._patch_faces
+        elif self._surface_known is not None and self._surface_known[0] is entry.mesh:
+            known, known_faces = self._surface_known[1], self._surface_known[2]
         self._surface_busy = True
-        mesh = for_a_worker(entry.mesh)
+        if self._surface_mesh is None or self._surface_mesh[0] is not entry.mesh:
+            self._surface_mesh = (entry.mesh, for_a_worker(entry.mesh))
+        mesh = self._surface_mesh[1]
 
         def compute() -> Any:
             at, face = point, cell
@@ -2106,13 +2237,23 @@ class PlacementFlow(QObject):
                 if original is None:
                     return None
                 face, at = original
-            context = prepared or placement.prepare_surface(mesh, face, entry.features)
+            context = (
+                known
+                if known is not None and face in known_faces
+                else placement.prepare_surface(mesh, face, entry.features)
+            )
             return context, placement.at_point(context, at)
 
         def done(value: Any) -> None:
             if not isValid(self) or self._disposed:
                 return
             self._surface_busy = False
+            if value is not None:
+                self._surface_known = (
+                    entry.mesh,
+                    value[0],
+                    frozenset(value[0].face_indices),
+                )
             if self.active and stamp == self._serial:
                 if value is None:
                     self._invalid(
@@ -2843,7 +2984,10 @@ class PlacementFlow(QObject):
             return
         index = self._reference_pick
         prepared = self._prepared
-        distance = SNAP_PIXELS * self._millimetres_per_pixel()
+        # Logikpunkte mal Millimeter je Gerätepixel: Dazwischen steht das
+        # Geräteverhältnis, sonst fängt der Bezug bei 200 Prozent Skalierung
+        # nur halb so weit wie beim Tiefenfang weiter unten.
+        distance = SNAP_PIXELS * self.viewport._device_ratio() * self._millimetres_per_pixel()
         if ray is None:
             self._reference_hit_ready(
                 index, placement.reference_candidates(prepared, point, distance)
@@ -3617,8 +3761,7 @@ class PlacementFlow(QObject):
                         # Entwurf: ``back`` verwarf ihn (``reject``), und die
                         # Maße waren weg (Review Ansicht #10). Steht kein
                         # Pickmodus, geht Escape wie bisher zurück.
-                        if not self._cancel_reference_pick():
-                            self.back()
+                        self.step_back()
                     else:
                         if watched in self._field_targets:
                             self._begin_edit()
@@ -3752,7 +3895,7 @@ class PlacementFlow(QObject):
                     item.set_visible(False)
             self.viewport.grip_placement(None)
             if draw:
-                self.viewport._draw()
+                self._draw_soon()
             return
         self._show_bar()
         area = self.viewport.rect()
@@ -3875,7 +4018,7 @@ class PlacementFlow(QObject):
                 self._measure_box.raise_()
             self.viewport.grip_placement(None)
             if draw:
-                self.viewport._draw()
+                self._draw_soon()
             return
         point = np.asarray(surface.point, dtype=np.float64)
         if self._tool is not None:
@@ -4346,4 +4489,14 @@ class PlacementFlow(QObject):
         for widget in (*self._measures, *self._centre_measures, self._centre, *shown):
             widget.raise_()
         if draw:
+            self._draw_soon()
+
+    def _draw_soon(self) -> None:
+        """Das Bild zu dieser Neuzeichnung bestellen — eines je Ereignisrunde."""
+        if not self._frame.isActive():
+            self._frame.start()
+
+    def _draw_now(self) -> None:
+        """Das bestellte Bild zeichnen, falls es den Fluss noch gibt."""
+        if not self._disposed and isValid(self):
             self.viewport._draw()

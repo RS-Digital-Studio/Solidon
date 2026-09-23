@@ -25,6 +25,7 @@ in der Datei, und die Operation schlägt es bei jedem Rechnen der Szene nach.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, replace
@@ -824,8 +825,12 @@ def mouth_outline(tool: PlacementTool) -> tuple[Point2, ...]:
     return tuple((float(x), float(y)) for x, y in ring) if len(ring) >= 3 else ()
 
 
-def _welded_adjacency(raw: Any, vertices: Any) -> dict[int, list[int]]:
+def _welded_adjacency(raw: Any, vertices: Any) -> np.ndarray:
     """Welche Dreiecke sich eine Kante teilen — über **exakte** Ortsgleichheit.
+
+    Zurück kommt je geteilter Kante ein Paar Dreiecksnummern, das kleinere
+    zuerst, als Feld mit zwei Spalten. Eine Kante mit mehr als zwei Besitzern
+    verbindet nichts; sie ist keine Fläche, sondern eine Verzweigung.
 
     Exakte Gleichheit verbindet auch unverschweißte STL-Dreiecke, und kein
     Abstandsschwellwert darf dabei einen tatsächlichen schmalen Spalt
@@ -839,6 +844,12 @@ def _welded_adjacency(raw: Any, vertices: Any) -> dict[int, list[int]]:
     Median und 52 ms im schlechtesten Fall, also unter zwanzig Bildern je
     Sekunde beim bloßen Zeigen (Befund Robert, 09.09.2026: „bei der Vorschau
     mit der Bohrung ist es noch relativ langsam").
+
+    **Und ohne Python-Schleife je Kante.** Bis zum 22.09.2026 zählte ein
+    Wörterbuch die Besitzer jeder Kante: An ``plate_holes.stl``, fünfmal
+    unterteilt (815 104 Dreiecke), dauerte der erste Klick auf eine Bohrung
+    darin 8,2 s, bevor Griff und Maße kamen (RM-200). Nach Kante sortiert
+    stehen die zwei Besitzer einer geteilten Kante nebeneinander.
     """
     try:
         cache = raw._cache
@@ -846,22 +857,17 @@ def _welded_adjacency(raw: Any, vertices: Any) -> dict[int, list[int]]:
     except AttributeError, TypeError, KeyError:
         cache = None
     else:
-        if isinstance(cached, dict):
+        if isinstance(cached, np.ndarray):
             return cached
     _, inverse = np.unique(vertices, axis=0, return_inverse=True)
-    faces = inverse[np.asarray(raw.faces, dtype=np.int64)]
+    faces = inverse.reshape(-1)[np.asarray(raw.faces, dtype=np.int64)]
     _, edge_ids = unique_edges(
         faces[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), return_inverse=True
     )
-    owners: dict[int, list[int]] = {}
-    for index, edge_id in enumerate(edge_ids):
-        owners.setdefault(int(edge_id), []).append(index // 3)
-    adjacency: dict[int, list[int]] = {}
-    for entries in owners.values():
-        if len(entries) == 2:
-            first, second = entries
-            adjacency.setdefault(first, []).append(second)
-            adjacency.setdefault(second, []).append(first)
+    edge_ids = np.asarray(edge_ids, dtype=np.int64).reshape(-1)
+    order = np.argsort(edge_ids, kind="stable")
+    shared = np.bincount(edge_ids)[edge_ids[order]] == 2
+    adjacency: np.ndarray = (order[shared] // 3).reshape(-1, 2)
     if cache is not None:
         # Die private Cacheform darf die berechnete Auskunft nicht verhindern.
         with suppress(AttributeError, TypeError, KeyError):
@@ -889,31 +895,39 @@ def _patch_faces(mesh: MeshData, face_index: int) -> tuple[tuple[int, ...], bool
                 "Wählen Sie eine andere Stelle auf dem Modell."
             ),
         )
-    adjacency = _welded_adjacency(raw, vertices)
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    pairs = _welded_adjacency(raw, vertices)
     origin = vertices[np.asarray(raw.faces)[face_index, 0]]
     triangles = np.asarray(raw.triangles, dtype=np.float64)
     coplanar = (normals @ normal >= np.cos(np.radians(EPS_ANGLE))) & (
         np.max(np.abs((triangles - origin) @ normal), axis=1) <= EPS_GEOM
     )
-    found = {face_index}
-    pending = [face_index]
-    while pending:
-        current = pending.pop()
-        for other in adjacency.get(current, ()):
-            if other not in found and coplanar[other]:
-                found.add(other)
-                pending.append(other)
-    border_angles = [
-        float(np.degrees(np.arccos(np.clip(normals[index] @ normals[other], -1.0, 1.0))))
-        for index in found
-        for other in adjacency.get(index, ())
-        if other not in found
-    ]
+    # Das angeklickte Dreieck gehört immer dazu — auch wenn es an der
+    # Genauigkeitsgrenze aus der eigenen Ebene fiele.
+    coplanar[face_index] = True
+    # Das Stück ist die Zusammenhangskomponente des Klicks im Graphen der
+    # koplanaren Nachbarn — dieselbe Menge, die die Breitensuche bis zum
+    # 22.09.2026 Dreieck für Dreieck fand.
+    inner = pairs[coplanar[pairs[:, 0]] & coplanar[pairs[:, 1]]]
+    count = len(normals)
+    graph = coo_matrix(
+        (np.ones(len(inner), dtype=np.int8), (inner[:, 0], inner[:, 1])), shape=(count, count)
+    )
+    _, labels = connected_components(graph, directed=False)
+    found = labels == labels[face_index]
+    border = pairs[found[pairs[:, 0]] != found[pairs[:, 1]]]
+    border_angles = np.degrees(
+        np.arccos(
+            np.clip(np.einsum("ij,ij->i", normals[border[:, 0]], normals[border[:, 1]]), -1.0, 1.0)
+        )
+    )
     # Dieselbe Krümmungsgrenze wie die Merkmalsanalyse: Mantelstreifen und
     # kleine Kugeldreiecke versprechen keine Maße einer ebenen Konstruktionsfläche.
-    smooth = sum(EPS_ANGLE < angle < CURVATURE_LIMIT for angle in border_angles)
-    planar = not border_angles or smooth * 2 < len(border_angles)
-    return tuple(sorted(found)), planar
+    smooth = int(np.count_nonzero((border_angles > EPS_ANGLE) & (border_angles < CURVATURE_LIMIT)))
+    planar = not len(border_angles) or smooth * 2 < len(border_angles)
+    return tuple(int(index) for index in np.flatnonzero(found)), planar
 
 
 def _straight_boundary(
@@ -977,12 +991,95 @@ def _straight_boundary(
     return [(start, keep[(index + 1) % len(keep)]) for index, start in enumerate(keep)]
 
 
+def _boundary_area(xy: np.ndarray) -> BaseGeometry | None:
+    """Die Fläche aus dem Rand der Dreiecke — oder ``None``, wenn er nicht trägt.
+
+    Eine Kante, die genau ein Dreieck des Stücks trägt, liegt am Rand; die
+    anderen teilt sie mit dem Nachbarn und verschwinden in der Vereinigung.
+    Gezählt wird nach Ort, nicht nach Eckennummer: Dieselbe Ecke zweier
+    Dreiecke hat in Ebenenkoordinaten dieselben zwei Zahlen. Aus den
+    Randkanten baut GEOS die Fläche mit ihren Löchern (``build_area``).
+
+    Das trägt nur bei einem sauberen Netz, und ob es eines war, sagt das
+    Ergebnis, nicht eine Annahme: Jede Randecke hat genau zwei Randkanten
+    (eine T-Kreuzung oder eine Ecke, an der zwei Löcher sich berühren, hätte
+    mehr), keine Kante gehört zu mehr als zwei Dreiecken, und die Fläche ist
+    ein gültiges Polygon mit der Summe der Dreiecksflächen — ein überlappendes
+    Dreieck zählte doppelt. Sonst ``None``.
+    """
+    import shapely
+
+    corners = np.asarray(xy, dtype=float).reshape(-1, 2)
+    if not len(corners):
+        return None
+    # Als komplexe Zahl ist ein Ort ein Wert: ``np.unique`` sortiert dann eine
+    # Spalte statt Zeilen (an 620 000 Ecken 0,10 statt 0,54 s), mit derselben
+    # Ordnung — erst x, dann y.
+    unique_places, ids = np.unique(
+        np.ascontiguousarray(corners).view(np.complex128).ravel(), return_inverse=True
+    )
+    places = unique_places.view(np.float64).reshape(-1, 2)
+    ids = ids.reshape(-1, 3).astype(np.int64)
+    edges = np.sort(ids[:, [0, 1, 1, 2, 2, 0]].reshape(-1, 2), axis=1)
+    count = np.int64(len(places))
+    keys, uses = np.unique(edges[:, 0] * count + edges[:, 1], return_counts=True)
+    if uses.max(initial=0) > 2:
+        return None
+    rim = keys[uses == 1]
+    if not len(rim):
+        return None
+    first, second = np.divmod(rim, count)
+    if np.any(
+        np.bincount(np.concatenate((first, second)), minlength=int(count))[
+            np.unique(np.concatenate((first, second)))
+        ]
+        != 2
+    ):
+        return None
+    lines = shapely.multilinestrings(
+        shapely.linestrings(np.stack((places[first], places[second]), axis=1))
+    )
+    area = shapely.build_area(lines)
+    triangles = np.asarray(xy, dtype=float)
+    along, across = triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]
+    total = float(np.abs(along[:, 0] * across[:, 1] - along[:, 1] * across[:, 0]).sum()) / 2.0
+    if (
+        area.is_empty
+        or area.geom_type != "Polygon"
+        or not area.is_valid
+        or not math.isclose(float(area.area), total, rel_tol=1e-9, abs_tol=0.0)
+    ):
+        return None
+    return area
+
+
+def _patch_area(xy: np.ndarray) -> BaseGeometry:
+    """Die Dreiecke eines Flächenstücks in Ebenenkoordinaten als eine GEOS-Fläche.
+
+    **Erst der Rand, dann die allgemeine Vereinigung.** Bis zum 22.09.2026
+    entstand jedes Dreieck als eigenes ``Polygon`` und alle zusammen gingen
+    durch ``union_all``: An der Oberseite von ``plate_holes.stl``, fünfmal
+    unterteilt (206 848 Dreiecke), dauerte das 17 bis 28 s — so lange standen
+    nach dem Klick auf eine Bohrung weder Griff noch Maße (RM-200). GEOS'
+    Überdeckungsvereinigung brauchte noch 3,8 s; der Rand aus
+    :func:`_boundary_area` kommt mit Zählen aus. Am Korpus gleich dem alten
+    Ergebnis, Punkt für Punkt nach Normalisierung; nur wo er ablehnt, rechnet
+    ``union_all``.
+    """
+    import shapely
+
+    area = _boundary_area(xy)
+    if area is not None:
+        return area
+    return shapely.union_all(shapely.polygons(np.asarray(xy, dtype=float)))
+
+
 def prepare_surface(
     mesh: MeshData, face_index: int, features: Mapping[str, Feature] | None = None
 ) -> PreparedSurface:
     """Originalfläche und Maße einmal vorbereiten; der Aufrufer hält den Kontext im Cache."""
-    from shapely import prepare, union_all
-    from shapely.geometry import Point, Polygon
+    from shapely import prepare
+    from shapely.geometry import Point
 
     from app.core.sketch.planes import frame_of, to_plane, to_world
 
@@ -992,7 +1089,7 @@ def prepare_surface(
     triangles = np.asarray(mesh.raw.triangles)[list(indices)]
     relative = triangles - frame.origin
     xy = np.stack((relative @ frame.x_axis, relative @ frame.y_axis), axis=-1)
-    area = union_all([Polygon(triangle) for triangle in xy])
+    area = _patch_area(xy)
     if area.is_empty or not area.is_valid or area.geom_type != "Polygon":
         raise _reject(
             "point",
@@ -1468,6 +1565,33 @@ def reference_extension(edge: EdgeReference, point: Vec3) -> tuple[Vec3, Vec3] |
     return (_vec(start if share < 0.0 else end), _vec(start + share * step))
 
 
+def _nearest_references(prepared: PreparedSurface, point: Vec3) -> list[EdgeReference]:
+    """Die zwei nächsten unabhängigen Randkanten, Außenkanten vor inneren und Achsen.
+
+    Gerechnet wird je Kante derselbe Abstand wie immer; nur der Lotabstand,
+    der mit der Kante weiterreist, entsteht erst für die, die gewählt wird —
+    nicht als Kopie jeder Kante der Fläche.
+    """
+    order = {"outer": 0, "inner": 1, "axis": 2}
+    here = np.asarray(point)
+    ranked = []
+    for index, edge in enumerate(prepared.edges):
+        start, end = np.asarray(edge.start), np.asarray(edge.end)
+        step = end - start
+        share = float(np.clip(np.dot(here - start, step) / np.dot(step, step), 0.0, 1.0))
+        distance = float(np.linalg.norm(here - (start + share * step)))
+        ranked.append(((order[edge.kind], distance), edge.id, index))
+    chosen: list[EdgeReference] = []
+    for _rank, _name, index in sorted(ranked):
+        edge = prepared.edges[index]
+        edge = replace(edge, distance=float(np.dot(here - np.asarray(edge.start), edge.inward)))
+        if _independent(prepared.frame, [*chosen, edge]):
+            chosen.append(edge)
+        if len(chosen) == 2:
+            break
+    return chosen
+
+
 def at_point(
     prepared: PreparedSurface, point: Vec3, *, references: Sequence[EdgeReference] | None = None
 ) -> SurfacePlacement:
@@ -1489,33 +1613,19 @@ def at_point(
     # Der bereits am Originalnetz gemessene Wert bleibt unverändert. Schon
     # eine unnötige Hin-/Rückprojektion verliert hier letzte Float64-Bits.
     point = _vec(point)
-    ranked = []
-    for edge in prepared.edges:
-        start, end = np.asarray(edge.start), np.asarray(edge.end)
-        step = end - start
-        share = float(
-            np.clip(np.dot(np.asarray(point) - start, step) / np.dot(step, step), 0.0, 1.0)
-        )
-        distance = float(np.linalg.norm(np.asarray(point) - (start + share * step)))
-        ranked.append(
-            (
-                ({"outer": 0, "inner": 1, "axis": 2}[edge.kind], distance),
-                edge.id,
-                replace(edge, distance=float(np.dot(np.asarray(point) - start, edge.inward))),
-            )
-        )
-    chosen: list[EdgeReference] = []
-    for _rank, _order, edge in sorted(ranked, key=lambda item: (item[0], item[1])):
-        if _independent(prepared.frame, [*chosen, edge]):
-            chosen.append(edge)
-        if len(chosen) == 2:
-            break
     if references is not None:
+        # **Festgehaltene Bezüge brauchen keine Rangfolge.** Bis zum 22.09.2026
+        # wurde sie trotzdem über jede Randkante gebildet und danach verworfen:
+        # An ``plate_holes.stl``, fünfmal unterteilt (815 104 Dreiecke, 2 452
+        # Randkanten auf der Oberseite), kostete das 85 ms je Aufruf — im
+        # Qt-Hauptthread, beim Loslassen des Platzierungsgriffs (RM-200).
         _checked_references(prepared, references)
         chosen = [
             replace(edge, distance=float(np.dot(np.asarray(point) - edge.start, edge.inward)))
             for edge in references
         ]
+    else:
+        chosen = _nearest_references(prepared, point)
     centres = []
     for feature_id, centre in prepared.centres:
         difference = np.asarray(point) - centre

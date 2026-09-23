@@ -205,6 +205,73 @@ def test_feature_edges_match_a_row_wise_reference_on_a_dense_mesh() -> None:
         assert pairs == reference(angle), f"Winkel {angle}"
 
 
+def _outline_reference(
+    vertices: np.ndarray, faces: np.ndarray
+) -> set[tuple[tuple[float, ...], ...]]:
+    """Die Kontur, wie die Markierung sie bis zum 22.09.2026 rechnete.
+
+    Jedes Dreieck mit eigenen Ecken, nach dem Ort verschweißt (``np.unique``
+    über die Zeilen), dann die Kanten mit genau einem Dreieck — langsam und
+    offensichtlich richtig.
+    """
+    soup = vertices[faces].reshape(-1, 3)
+    welded, inverse = np.unique(soup, axis=0, return_inverse=True)
+    edges = feature_edges(welded, np.asarray(inverse).reshape(-1, 3), 180.0).reshape(-1, 2, 3)
+    return {tuple(sorted((tuple(a), tuple(b)))) for a, b in edges}
+
+
+def _outline_of(vertices: np.ndarray, faces: np.ndarray) -> set[tuple[tuple[float, ...], ...]]:
+    from app.ui.render.edges import outline_edges
+
+    edges = outline_edges(vertices, faces).reshape(-1, 2, 3)
+    return {tuple(sorted((tuple(a), tuple(b)))) for a, b in edges}
+
+
+def test_the_outline_of_a_selection_counts_by_place_and_matches_the_welding_reference() -> None:
+    """Die Kontur einer Markierung — schnell gezählt, aber dieselbe wie vorher (RM-203).
+
+    ``_redraw_feature_patch`` verschweißte jede Auswahl über
+    ``np.unique(…, axis=0)`` und kostete damit an einer Senkbohrung mit
+    196 608 Dreiecken 0,7 s im Qt-Hauptthread, bei jeder Auswahl und jedem
+    Zeigerwechsel. ``outline_edges`` zählt zuerst nach Eckennummern und
+    verschweißt nur die Kandidaten. Geprüft an drei Lagen: ein geschweißter
+    Ausschnitt mit Loch, dieselbe Auswahl als Dreieckssuppe (jede Kante eigene
+    Ecken, die Kontur darf trotzdem kein Gitter werden), und eine Naht, an der
+    getrennte Ecken am selben Ort liegen.
+    """
+    rows = cols = 9
+    xs, ys = np.meshgrid(np.arange(cols, dtype=float), np.arange(rows, dtype=float))
+    vertices = np.column_stack([xs.ravel(), ys.ravel(), np.zeros(rows * cols)])
+    faces = []
+    for r in range(rows - 1):
+        for c in range(cols - 1):
+            if 3 <= r <= 4 and 3 <= c <= 4:
+                continue  # ein Loch in der Mitte: Die Kontur hat zwei Ringe
+            a = r * cols + c
+            faces.append((a, a + 1, a + cols))
+            faces.append((a + 1, a + cols + 1, a + cols))
+    faces_array = np.asarray(faces, dtype=np.int64)
+
+    welded = _outline_of(vertices, faces_array)
+    assert welded == _outline_reference(vertices, faces_array)
+    assert len(welded) == 4 * 8 + 4 * 2, "Außenrand und Lochrand, sonst nichts"
+
+    soup_vertices = vertices[faces_array].reshape(-1, 3)
+    soup_faces = np.arange(len(soup_vertices), dtype=np.int64).reshape(-1, 3)
+    assert _outline_of(soup_vertices, soup_faces) == welded, "die Suppe ist kein Gitter"
+
+    # Die Naht: Die rechte Hälfte trägt eigene Ecken für die Mittelspalte.
+    seam = vertices.copy()
+    doubled = np.vstack([seam, seam[4::cols]])
+    remap = {4 + r * cols: len(seam) + r for r in range(rows)}
+    seamed = faces_array.copy()
+    for index, (a, b, c) in enumerate(faces_array):
+        corners = vertices[[a, b, c]]
+        if corners[:, 0].min() >= 4.0:
+            seamed[index] = [remap.get(int(v), int(v)) for v in (a, b, c)]
+    assert _outline_of(doubled, seamed) == _outline_reference(doubled, seamed) == welded
+
+
 def test_the_pointer_finds_the_edge_it_points_at_and_the_nearer_of_two() -> None:
     """Welche Kante ein Klick meint — die Rechnung hinter dem Anklicken.
 

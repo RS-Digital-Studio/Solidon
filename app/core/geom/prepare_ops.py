@@ -890,12 +890,15 @@ def _body_from_faces(
     patch.merge_vertices()
 
     # Eine Randkante gehört genau einem Dreieck des Ausschnitts. Alles andere
-    # liegt innen und braucht keinen Deckel.
+    # liegt innen und braucht keinen Deckel. ``edges`` und ``edges_sorted``
+    # stehen Zeile für Zeile gleich; die gerichtete Fassung trägt den
+    # Umlaufsinn des Dreiecks, zu dem die Kante gehört.
     edges = patch.edges_sorted
     single = trimesh.grouping.group_rows(  # type: ignore[no-untyped-call]
         edges, require_count=1
     )
     rim = edges[single]
+    rim_directed = np.asarray(patch.edges, dtype=np.int64)[single]
     points = np.asarray(patch.vertices, dtype=float)
 
     rings = list(trimesh.graph.connected_components(rim)) if len(rim) else []
@@ -928,10 +931,14 @@ def _body_from_faces(
             spread = ring - hub
             if float(np.linalg.svd(spread, compute_uv=False)[-1]) > FLAT_RIM * len(ring) ** 0.5:
                 return None
+            # Der Deckel läuft gegen die Randkanten des Ausschnitts: Jede
+            # Kante wird von der anderen Seite geschlossen, und der Körper ist
+            # von Anfang an gleichsinnig gewickelt (siehe unten).
+            directed = rim_directed[belongs]
             cap = np.column_stack(
                 [
-                    ring_edges[:, 0],
-                    ring_edges[:, 1],
+                    directed[:, 1],
+                    directed[:, 0],
                     np.full(len(ring_edges), next_index, dtype=np.int64),
                 ]
             )
@@ -943,7 +950,19 @@ def _body_from_faces(
             faces=np.vstack(faces),
             process=True,
         )
-    trimesh.repair.fix_normals(closed)  # type: ignore[no-untyped-call]
+    # **Gleichsinnig gewickelt heißt: nur noch die Richtung prüfen.**
+    # ``fix_normals`` läuft in trimesh Dreieck für Dreieck durch Python: Am
+    # Hohlraum einer Senkbohrung der fünfmal unterteilten Senkplatte (199 680
+    # Dreiecke) kostete das 23,6 von 30 s der Vorschau einer
+    # Durchmesseränderung (22.09.2026). Ein Ausschnitt aus einem sauberen Netz
+    # mit gegenläufigen Deckeln ist schon gleichsinnig; dann genügt es, ihn
+    # umzudrehen, wenn er nach innen zeigt. Nur ein Netz, das schon vorher
+    # durcheinander gewickelt war, geht den langen Weg.
+    if closed.is_winding_consistent:
+        if closed.volume < 0.0:
+            closed.invert()
+    else:
+        trimesh.repair.fix_normals(closed)  # type: ignore[no-untyped-call]
     if not closed.is_watertight or closed.volume <= EPS_GEOM:
         return None
     return MeshData.of(closed)

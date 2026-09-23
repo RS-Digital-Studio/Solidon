@@ -700,7 +700,9 @@ Absatz sagt, worauf.
 
   Geantwortet wird gestuft, nach dem, was der Befund hergibt: **Ort** → die
   Kamera fliegt hin und eine vergängliche Marke steht dort (`mark_finding`,
-  Ring in Auswahlfarbe plus Titel); **Körper** → er wird ausgewählt und trägt
+  Ring in Auswahlfarbe plus Titel — der Ring vor dem Material an seiner
+  Stelle, sein Radius aus dem Abstand in der Perspektive, der Titel in der
+  Oben-Richtung der Kamera darüber; Bildbeleg RM-074, 22.09.2026); **Körper** → er wird ausgewählt und trägt
   damit Auswahlfarbe, Objektbaum und Statuszeile; **`op_id`** → der Verlauf
   zeigt den Schritt (`HistoryPanel.point_at`). Die Stufen schließen einander
   nicht aus; der Schritt gilt auch dann, wenn es keinen Körper gibt.
