@@ -29,9 +29,11 @@ from typing import Final, cast
 
 import numpy as np
 
+from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import Action, ValidationError
 from app.core.expressions import evaluate, is_expression, references
+from app.core.geom import transform
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -56,14 +58,56 @@ def _closest_on_segment(points: np.ndarray, head: np.ndarray, tail: np.ndarray) 
     Eine unendliche Achse bände die Fußspitze an den Oberarm, sobald beide
     zufällig auf einer Geraden liegen. Ein Knochen hat zwei Enden, und dazwischen
     liegt er.
+
+    Gerechnet elementweise (``units.dot3``, ``transform.along``) und nicht
+    über ``np.dot`` und ``@``: Aus dem Abstand wird das Gewicht und daraus die
+    Lage jeder Ecke, und die soll auf jeder Maschine dieselbe sein (RM-187).
     """
     along = tail - head
-    length = float(np.dot(along, along))
+    length = units.dot3(along, along)
     if length < 1e-12:
         return np.asarray(np.linalg.norm(points - head, axis=1), dtype=float)
-    share = np.clip(((points - head) @ along) / length, 0.0, 1.0)
+    share = np.clip(transform.along(points - head, along) / length, 0.0, 1.0)
     away = np.linalg.norm(points - (head + share[:, None] * along), axis=1)
     return np.asarray(away, dtype=float)
+
+
+#: ``ln 2`` in zwei Teilen (Cody-Waite): Der obere trägt nur 32 Bit Mantisse,
+#: also ist ``k · LN2_HIGH`` für jedes ``|k| < 2²¹`` exakt, und der untere
+#: trägt den Rest.
+_LN2_HIGH: Final = 0.6931471803691238
+_LN2_LOW: Final = 1.9082149292705877e-10
+_INVERSE_LN2: Final = 1.4426950408889634
+#: Taylorkoeffizienten ``1/n!`` bis ``n = 13`` — genug für ``|r| ≤ ln 2 / 2``:
+#: Der erste weggelassene Term liegt unter 10⁻¹⁷.
+_EXP_TERMS: Final = tuple(1.0 / math.factorial(order) for order in range(14))
+
+
+def _falloff(values: np.ndarray) -> np.ndarray:
+    """``exp(x)`` für ``x ≤ 0`` — auf jeder Maschine dieselben Bits.
+
+    **Nicht ``np.exp``** (RM-187): Die Exponentialfunktion wählt ihre
+    Umsetzung nach der CPU — SVML mit AVX-512 auf Linux, NEON auf dem Mac,
+    die Bibliothek der Plattform sonst —, und die runden die letzte Stelle
+    verschieden. Aus dem Gewicht wird hier die Lage jeder Ecke einer Stellung.
+
+    Gerechnet wird mit Grundrechenarten, jede als eigene NumPy-Operation und
+    damit nach IEEE-754 gerundet: erst ``x = k·ln 2 + r`` mit ganzem ``k``
+    (Cody-Waite, exakt), dann ``exp(r)`` als Taylorpolynom im Horner-Schema,
+    dann ``·2ᵏ`` über ``ldexp``, das nur den Exponenten setzt. Die Abweichung
+    von der wahren Funktion liegt bei einer Einheit der letzten Stelle.
+    """
+    # Unter -746 ist ``exp`` in doppelter Genauigkeit null; so weit unten
+    # bleibt ``k`` im Bereich von ``ldexp`` und ``r`` klein.
+    x = np.maximum(np.asarray(values, dtype=np.float64), -746.0)
+    k = np.rint(x * _INVERSE_LN2)
+    r = (x - k * _LN2_HIGH) - k * _LN2_LOW
+    total = np.full_like(r, _EXP_TERMS[-1])
+    for coefficient in reversed(_EXP_TERMS[:-1]):
+        total = total * r + coefficient
+    # Ein ``nan`` bleibt ``nan`` — über ``total``, nicht über den Exponenten.
+    exponent = np.where(np.isfinite(k), k, 0.0).astype(np.int64)
+    return np.asarray(np.ldexp(total, exponent), dtype=np.float64)
 
 
 def weights(mesh: MeshData, bones: Sequence[Bone]) -> np.ndarray:
@@ -86,8 +130,10 @@ def weights(mesh: MeshData, bones: Sequence[Bone]) -> np.ndarray:
         head = np.asarray(bone.head, dtype=float)
         tail = np.asarray(bone.tail, dtype=float)
         away = _closest_on_segment(points, head, tail)
-        reach = max(float(np.linalg.norm(tail - head)) * REACH, 1e-9)
-        field[:, index] = np.exp(-FALLOFF * (away / reach) ** 2)
+        span = tail - head
+        reach = max(math.hypot(float(span[0]), float(span[1]), float(span[2])) * REACH, 1e-9)
+        ratio = away / reach
+        field[:, index] = _falloff(-FALLOFF * (ratio * ratio))
 
     total = field.sum(axis=1)
     orphan = total < 1e-9
@@ -117,15 +163,19 @@ def _rotation(angles: Vec3) -> np.ndarray:
     Eine feste Reihenfolge und keine Quaternionen: Wer eine Pose von Hand
     einstellt, dreht um eine Achse nach der anderen und will die Zahl
     wiederfinden, die er eingetippt hat.
+
+    Aus den exakten Winkelfunktionen in Grad (``units.exact_cos_degrees``,
+    RM-187) und nicht aus ``math.cos(math.radians(…))``: dieselbe Stellung,
+    dieselben Bits auf jeder Maschine, und ein rechter Winkel ist exakt.
     """
-    x, y, z = (math.radians(float(value)) for value in angles)
+    x, y, z = (float(value) for value in angles)
     cx, sx, cy, sy, cz, sz = (
-        math.cos(x),
-        math.sin(x),
-        math.cos(y),
-        math.sin(y),
-        math.cos(z),
-        math.sin(z),
+        units.exact_cos_degrees(x),
+        units.exact_sin_degrees(x),
+        units.exact_cos_degrees(y),
+        units.exact_sin_degrees(y),
+        units.exact_cos_degrees(z),
+        units.exact_sin_degrees(z),
     )
     return np.array(
         [
@@ -182,7 +232,8 @@ def transforms(bones: Sequence[Bone], poses: Mapping[str, Vec3]) -> dict[str, np
         about[:3, 3] = head
         back = np.eye(4)
         back[:3, 3] = -head
-        result[bone.name] = parent @ about @ local @ back
+        # ``composed`` statt ``@`` (BLAS, RM-187): Diese Matrix bewegt die Haut.
+        result[bone.name] = transform.composed(parent, about, local, back)
     return result
 
 
@@ -204,7 +255,6 @@ def posed(mesh: MeshData, bones: Sequence[Bone], poses: Sequence[Pose]) -> MeshD
     matrices = transforms(bones, angles)
     field = weights(mesh, bones)
     points = np.asarray(mesh.raw.vertices, dtype=float)
-    homogeneous = np.hstack([points, np.ones((len(points), 1))])
 
     moved = np.zeros_like(points)
     for index, bone in enumerate(bones):
@@ -212,7 +262,8 @@ def posed(mesh: MeshData, bones: Sequence[Bone], poses: Sequence[Pose]) -> MeshD
         if not share.any():
             continue
         matrix = matrices.get(bone.name, np.eye(4))
-        moved += (homogeneous @ matrix.T)[:, :3] * share[:, None]
+        # Elementweise bewegt (``transform.moved_points``), nicht über BLAS.
+        moved += transform.moved_points(points, matrix) * share[:, None]
 
     built = trimesh.Trimesh(vertices=moved, faces=mesh.raw.faces, process=False)
     _log.info("posed %d vertices over %d bones", len(points), len(bones))

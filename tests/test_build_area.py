@@ -391,7 +391,11 @@ def test_a_fitting_ring_keeps_its_original_xy_position():
     assert placement_offset(MeshData.of(raw), printer) == pytest.approx((0, 0, -3))
 
 
-def test_placement_reuses_the_union_when_the_original_pose_hits_an_exclusion(monkeypatch):
+def test_placement_needs_no_union_when_the_original_pose_hits_an_exclusion(monkeypatch):
+    """Bis zum 23.09.2026 hieß dieser Test „reuses the union" und verlangte genau
+    eine Vereinigung. Seither fragt die Platzierung je Dreieck und vorher die
+    Hülle und die Ecken (``build_area._Projection``) — die Vereinigung
+    braucht sie gar nicht mehr, auch nicht einmal."""
     from app.core import build_area
     from app.core.geom.transform import apply, translation
 
@@ -410,5 +414,55 @@ def test_placement_reuses_the_union_when_the_original_pose_hits_an_exclusion(mon
     mesh = body((4, 4, 1))
     offset = build_area.placement_offset(mesh, printer)
     assert offset is not None
-    assert len(calls) == 1
+    assert not calls
     assert build_area.fits_on_bed(apply(mesh, translation(offset)), printer)
+
+
+def _beside_the_bed() -> MeshData:
+    """Ein Kegel, wie das Bowlingspiel aus den Downloads ihn neben die Platte stellt."""
+    pin = trimesh.creation.cylinder(radius=6.0, height=30.0, sections=64)
+    pin.apply_translation((427.0, -164.0, 15.0))
+    return MeshData.of(pin)
+
+
+def test_a_body_beside_the_bed_finds_its_place_without_the_triangle_union(monkeypatch):
+    """Die nächste Randlage fällt in die Sperrecke — und trotzdem keine Vereinigung.
+
+    **Der Anlass** (Review 23.09.2026, RM-190): Die Kegel des Bowlingspiels
+    stehen in der 3MF neben der Platte, bei x um 427 und y um -164. Die nächste
+    Lage am Bettrand ist die vordere rechte Ecke, beim Centauri Carbon 2 die
+    Sperrzone. ``placement_offset`` vereinigte dann die 83 878 projizierten
+    Dreiecke eines Kegels (7,8 s), und *Druckoptimal ausrichten* fragt das für
+    jede seiner 215 Lagen: zwanzig Minuten für einen Kegel, ohne dass am Ende
+    eine andere Lage herauskam als mit dem Rechteck.
+
+    Entschieden wird jetzt, was ohne Vereinigung entscheidbar ist: Deckt die
+    freigegebene Fläche das Rechteck oder die konvexe Hülle, passt der Körper;
+    liegt eine seiner Ecken sicher außerhalb, passt er nicht. Die Vereinigung
+    bleibt für den Fall dazwischen — ein Ring um eine Sperrfläche.
+    """
+    from app.core import build_area
+    from app.core.geom.transform import apply, translation
+
+    monkeypatch.setattr(build_area, "footprint", lambda _mesh: pytest.fail("unneeded union"))
+    printer = make_profile("centauri-carbon-2").printer
+    pin = _beside_the_bed()
+
+    offset = build_area.placement_offset(pin, printer)
+
+    # Dieselbe Lage wie mit der Vereinigung: die kleinste Verschiebung, bei der
+    # der Kegel an der Oberkante der Sperrzone steht (y = -108).
+    assert offset == pytest.approx((-305.0, 62.0, 0.0))
+    assert build_area.fits_on_bed(apply(pin, translation(offset)), printer)
+
+
+def test_the_orientation_search_beside_the_bed_needs_no_triangle_union(monkeypatch):
+    """Dieselbe Frage durch die Suche: jede Lage des Kegels ohne Vereinigung."""
+    from app.core import build_area
+
+    monkeypatch.setattr(build_area, "footprint", lambda _mesh: pytest.fail("unneeded union"))
+    profile = make_profile("centauri-carbon-2")
+
+    result = search(_beside_the_bed(), profile=profile, count=16)
+
+    assert not check_build_volume([result.mesh], profile)

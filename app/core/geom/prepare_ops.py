@@ -91,7 +91,7 @@ from app.core.geom.prepare import (
     split_findings,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, cut
-from app.core.geom.transform import Axis, moved_object, place_on_bed, translation
+from app.core.geom.transform import Axis, composed, moved_object, place_on_bed, translation
 from app.core.knowledge.profiles import analysis_limits, for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.scene.placement import SIDE_KEYS, side_of
@@ -1281,10 +1281,12 @@ def _section_closed(
     # 10.09.2026). Aus vollem Material geschnitten ist die Bohrung **eine**
     # Fläche, wie an jeder anderen Stelle auch.
     axis = _outward_axis(chain, feature)
-    reach = float(np.ptp(np.asarray(filled.raw.vertices) @ axis)) + FEATURE_OVERLAP
+    # Die Länge entlang der Achse elementweise, nicht über ``@`` (BLAS): Aus
+    # ihr wird gleich der Weg, um den das Werkzeug verschoben wird (RM-187).
+    reach = float(np.ptp(transform.along(filled.raw.vertices, axis))) + FEATURE_OVERLAP
     inner = _inner_sections(chain, feature)
     for entry, tool in zip(keep, tools, strict=True):
-        span = float(np.ptp(np.asarray(tool.raw.vertices) @ axis))
+        span = float(np.ptp(transform.along(tool.raw.vertices, axis)))
         steps = 0
         if extend_inner and any(entry.id == section.id for section in inner):
             steps = max(1, math.ceil(reach / span)) if span > EPS_GEOM else 1
@@ -1312,7 +1314,9 @@ def _feature_direction(feature: Feature, axis: Vec3 | None = None) -> Vec3:
     """
     wanted = axis if axis is not None else feature.params.get("axis", (0.0, 0.0, 1.0))
     given = np.asarray(wanted, dtype=float)
-    length = float(np.linalg.norm(given))
+    # ``math.hypot`` statt ``np.linalg.norm`` (BLAS): Die Richtung trägt jedes
+    # Werkzeug, das an diesem Merkmal gesetzt wird (RM-187).
+    length = math.hypot(float(given[0]), float(given[1]), float(given[2]))
     unit = given / length if length > EPS_GEOM else np.array([0.0, 0.0, 1.0])
     return (float(unit[0]), float(unit[1]), float(unit[2]))
 
@@ -7303,24 +7307,32 @@ def _bore_end_planes(
         return ()
     points = np.asarray(body.vertices, dtype=np.float64)
     ends = [points[sorted({vertex for edge in ring for vertex in edge})] for ring in rings]
-    axis = np.asarray(_feature_direction(feature), dtype=np.float64)
-    ends.sort(key=lambda ring: float(np.asarray(units.exact_centre(ring.tolist())) @ axis))
+    axis = _feature_direction(feature)
+    ends.sort(key=lambda ring: units.dot3(units.exact_centre(ring.tolist()), axis))
     planes = []
     for index, edge in enumerate(ends):
-        hub = np.array(units.exact_centre(edge.tolist()), dtype=np.float64)
-        _left, spread, directions = np.linalg.svd(edge - hub, full_matrices=False)
-        if float(spread[-1]) > FLAT_RIM * len(edge) ** 0.5:
+        # **Die Ebene eines Rands ohne LAPACK** (RM-187, 22.09.2026). Hier
+        # stand ``np.linalg.svd``, und ihre letzte Stelle entschied über jede
+        # Ecke des Werkzeugs: Accelerate auf dem Mac und OpenBLAS auf Windows
+        # und Linux runden verschieden, und das geänderte Netz des
+        # Änderungswegs trug auf jeder Plattform einen anderen Fingerabdruck.
+        # Dieselbe Frage beantwortet ``units.plane_fit`` in Grundrechenarten,
+        # und das Skalarprodukt geht nicht durch BLAS.
+        hub, normal, spread = units.plane_fit(edge.tolist())
+        if spread > FLAT_RIM * math.sqrt(len(edge)):
             return ()
-        normal = directions[-1]
-        if float(normal @ axis) * (1.0 if index else -1.0) < 0.0:
-            normal = -normal
-        if abs(float(normal @ axis)) <= EPS_GEOM:
+        along = units.dot3(normal, axis)
+        if along * (1.0 if index else -1.0) < 0.0:
+            normal, along = (-normal[0], -normal[1], -normal[2]), -along
+        if abs(along) <= EPS_GEOM:
             return ()
-        overlap = FEATURE_OVERLAP if grows and _mouth_is_open(mesh, edge, normal) else 0.0
+        overlap = (
+            FEATURE_OVERLAP if grows and _mouth_is_open(mesh, edge, np.asarray(normal)) else 0.0
+        )
         planes.append(
             SectionPlane(
-                normal=(float(normal[0]), float(normal[1]), float(normal[2])),
-                position=float(hub @ normal) + overlap,
+                normal=(normal[0] + 0.0, normal[1] + 0.0, normal[2] + 0.0),
+                position=units.dot3(hub, normal) + overlap,
             )
         )
     return tuple(planes)
@@ -7579,7 +7591,9 @@ def _with_nominal_bore(
         return found
     params = dict(found.params)
     centre = np.asarray(params["centre"])
-    params["centre"] = tuple(float(v) for v in origin + float((centre - origin) @ axis) * axis)
+    # Die Mitte, die das Merkmal danach trägt, auf jeder Maschine dieselbe
+    # (RM-187): Skalarprodukt über ``units.dot3``, nicht über ``@``.
+    params["centre"] = tuple(float(v) for v in origin + units.dot3(centre - origin, axis) * axis)
     params["axis"] = tuple(float(v) for v in axis)
     if found.kind == "hole":
         params["diameter"] = diameter
@@ -12354,7 +12368,7 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
         # muss den Eingang genau auf den Ausgang legen: erst gedreht, dann
         # verschoben. Der Versatz allein zeigte den Körper ungedreht am neuen
         # Ort, die Drehung allein gedreht am alten — beides war er nie.
-        matrices = [shift @ matrix for shift, matrix in zip(shifts, matrices, strict=True)]
+        matrices = [composed(shift, matrix) for shift, matrix in zip(shifts, matrices, strict=True)]
         if matrices:
             last_matrix = matrices[-1]
 

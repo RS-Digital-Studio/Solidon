@@ -22,6 +22,33 @@ lag eine um 180 Grad gedrehte Rampe um 10⁻¹⁶ neben der Stirnfläche ihrer
 Rippe, und die Vereinigung ließ beide Flächen als Doppelwand ohne Dicke
 stehen (Bereichslauf, 21.09.2026).
 
+**Plattformgleich gerechnet wird mit einem kleinen Werkzeugsatz** (RM-187).
+Plattformabhängig sind BLAS (`np.dot`, `@`, `inner`, `einsum` auf ARM,
+`np.linalg.norm` ohne Achse), LAPACK (`svd`, `eigh`, `lstsq`, `solve`,
+`inv`) und transzendente Funktionen aus NumPy wie aus `math`; gleich auf
+jeder Maschine sind Grundrechenarten, `sqrt`, `np.cross`, Normen über eine
+Achse, `math.hypot`/`math.fsum` und NumPys paarweise Summe. Was dafür da ist:
+
+| Frage | Helfer |
+|---|---|
+| Skalarprodukt zweier Raumvektoren | `units.dot3` |
+| Lage vieler Punkte entlang einer Richtung | `transform.along` |
+| Punkte bewegen, Richtungen drehen | `transform.moved_points`, `transform.turned` |
+| 4x4-Matrizen zusammensetzen (`a @ b`) | `transform.composed` |
+| kürzeste Drehung zwischen zwei Richtungen | `transform.rotation_between` |
+| Winkelfunktionen | `units.exact_cos`/`exact_sin`, `exact_cos_degrees`, `circle_point` |
+| Ausgleichsebene, symmetrische 3x3-Eigenwerte | `units.plane_fit`, `units.symmetric_eigen3` |
+| Mitte einer Punktwolke | `units.exact_centre` |
+| Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_vertex_normals` |
+| Summen, deren Gleichstand eine Lage entscheidet | `mesh.IntegerGrid` |
+| Zufall (Stufe 3 der Kette) | `Generator.random` aus den Rohbits, nie `normal` |
+
+`tests/test_platform_identity.py` prüft neun Wege durch den Kern auf einer
+Maschine: jede plattformabhängige Rechnung bekommt ein Rauschen von einem ULP
+(`platform_noise`), und ein zweiter Lauf tauscht den BLAS-Kern
+(`OPENBLAS_CORETYPE`). Wer einen Weg baut, der am Ende Geometrie oder eine
+Wahl zwischen Lagen erzeugt, nimmt ihn dort auf.
+
 `deviation.deviation_bounds` prüft ausgefüllte Originaldreiecke gegen einen
 bereits belegten analytischen `SurfacePatch`, ohne neue Formeinpassung.
 **Gerechnet wird je Trägerart für alle Dreiecke zugleich** (`_Batch`,
@@ -61,8 +88,9 @@ konvexe Radiusgrenzen, der Kegel globale konkave Stützebenen, der Torus
 vollständige Kantenintervalle und eingeschlossene Innen-/Achsenkandidaten.
 Die einmalige Kegelwinkelklammer verwendet begrenzte exakte Taylor-Terme;
 deterministische punktförmige Winkelfunktionen allein wären kein Fehlerbeweis.
-Die gemeinsame Kantenarbeit je Trägeraufruf ist begrenzt, einschließlich der
-anfänglichen Intervalle. Nach Verbrauch bleibt eine schnelle gültige Klammer.
+Die Kantenarbeit ist je Dreieck begrenzt (`_MAX_REFINEMENTS`), einschließlich
+der anfänglichen Intervalle — ein Budget je Träger verbrauchten die ersten
+Dreiecke eines Rings allein. Nach Verbrauch bleibt eine schnelle gültige Klammer.
 Jede Ausgabe trägt Unter-/Obergrenze in mm und kennzeichnet die erreichte
 Zielbreite. Der Abschluss bestätigt erneut endliche, geordnete Grenzen,
 auch nach einer numerisch offenen Verfeinerung. Nicht endlich einschließbare
@@ -169,7 +197,10 @@ Innenringen unabhängig von der Umlaufrichtung; ungültige Konturen werden
 nicht still repariert. `polygons_of` gibt alle Komponenten mitsamt ihren
 Löchern zurück. `offset_section` versetzt normal mit runden Übergängen:
 positiv wächst Material, negativ schrumpft es; Aufspaltung oder Kollaps
-bleiben sichtbar. Fertigungsspiel kommt ausschließlich vom Aufrufer.
+bleiben sichtbar. Fertigungsspiel kommt ausschließlich vom Aufrufer. Die
+Eckenzahl der Bögen (`_round_steps`) ist die kleinste durch vier teilbare,
+deren Sehnen `MAX_FACET_SAG` einhalten — entschieden über `units.exact_cos`,
+nicht über `ceil` einer Bibliotheksfunktion.
 `sketch_solid.outline_points(max_sag=...)` nutzt die gemeinsame echte
 Splinekurve mit begrenzter Sehnenabweichung, Abbruch und Punktbudget.
 Ohne diese optionale Grenze bleibt die bisherige Abtastung erhalten.
@@ -580,8 +611,13 @@ auflösen (`resolve_branching_edges` — dort liegen Flächen übereinander, die
 kleinste geht), Sanduhr-Ecken auftrennen (`split_pinched_vertices` — zwei
 Löcher, die sich eine Ecke teilen, sind zwei Ringe), Ränder vernähen und
 Ringe schließen (`boundary_loops` + `fill_boundary_loops`: Ohren in der
-Ausgleichsebene, Fächer über die Ringmitte als Rückfall, und **keine Fläche
-auf eine Kante, die schon zwei trägt**) — und dort zwei Nachbarn, die man leicht
+Ebene nach Newell, Fächer über die exakte Ringmitte als Rückfall, und **keine
+Fläche auf eine Kante, die schon zwei trägt**); deckungsgleiche Dreiecke
+(`remove_doubled_faces`): gegenläufige Paare sind Taschen und fallen paarweise,
+gleich umlaufende Kopien sind Doppelungen und behalten eine, und kein
+zusammenhängendes Teil verschwindet ganz; jede Frage nach Rändern und
+Verzweigungen liest dieselbe Kantenzählung (`_edge_table`, im Cache des
+Netzes) — und dort zwei Nachbarn, die man leicht
 verwechselt: `remove_small_components` misst die **Fläche** gegen die größte
 Komponente und wirft lose Fragmente, `remove_hollow_shells` misst das
 **Volumen** gegen null und wirft Flächenpaare ohne Dicke; ein Bauteil von
@@ -746,7 +782,12 @@ Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
 hält je Netz die äußersten Ecken, `turned_extents` dreht nur sie, und
 `_Placed` kennt die Hüllbox einer Kandidatenlage, bevor ein Dreieck bewegt
 ist — die Suche über zweihundert Lagen kopiert das Netz nur dort, wo eine
-Sperrfläche die Projektion verlangt)
+Sperrfläche die Projektion verlangt, und gibt `build_area.placement_offset`
+die gedrehten äußersten Ecken als Umriss mit. `evaluate_directions` misst je
+Lage Standfläche, Überhangfläche, Höhe und den **geschätzten Stützraum**
+`Orientation.support` — Überhangfläche in Projektion mal Höhe über dem Bett;
+die Heuristik ordnet weiter nach `score`, die Suche schneidet zusätzlich die
+Lagen mit der kleinsten Schätzung, siehe `slice/CLAUDE.md`)
 
 **Die Nummer eines zerlegten Teils hängt an der Geometrie, nicht am Rauschen.**
 `_loose_parts` ordnet nach Volumen — aber nach dem **gerundeten Verhältnis zum
@@ -1229,12 +1270,29 @@ erfinden — Regel 7, RM-097)
 Halbräumen wie Körper. Es bleibt eine offene Anzeigefläche ohne zusätzliche
 Kappen; die übergebenen Eckpunkte und der ursprüngliche Körper bleiben erhalten.
 
+`section._apply` schneidet in einem Rahmen, in dem die Ebene waagerecht liegt
+(`transform.rotation_between`, elementweise bewegt), und `_capped` baut den
+Deckel aus den X/Y-Koordinaten dort — `trimesh` legte ihn über eine SVD in die
+Ebene. Eine achsparallele Ebene dreht nur Vorzeichen und Achsen und ist Bit
+für Bit umkehrbar. Die Wandstärke (`measure.ray_distances`) schießt über
+denselben Strahltest wie der Rest (`mesh.ray_hits` mit `edge_margin` und
+`minimum_travel`).
+
 **Netz, Farbe, Text**
 
 `mesh_ops.py` (Arbeit am Netz selbst) · `colour_ops.py` · `paint.py` (Flächen
 in ein Filament färben) · `texture.py` (von einer Textur zu druckbaren Slots)
 · `label_ops.py` (Text und Logos auf einer Fläche; die Schriften dazu liegen
 in `data/fonts/`)
+
+Die Netzoperationen fragen `ctx.cancelled` nach ihrer Rechnung, je Durchgang
+der gleichmäßigen Teilung und je Portion der Abweichungsmessung
+(`deviation(..., cancelled=)`, `max_distance_to_surface(..., cancelled=)`);
+die Rechnung in `manifold3d` und `trimesh` selbst läuft ohne Rückruf bis zum
+Ende. *Offene Fläche schließen* (`_thickened`) trägt die Filamente mit: Außen-
+und Innenhaut dieselben Slots, eine Randwand den ihres Dreiecks. Das
+Anzeigeraster (`_clustered_for_display`) kennzeichnet ein Dreieck bis 2²¹
+Ecken als eine Zahl, darüber zeilenweise (`_first_of_each_triangle`).
 
 **`mesh.on_surface` sucht ohne `rtree`** — und seit dem 22.09.2026 ohne
 eine Python-Liste je Abfragepunkt: Die Kandidaten kommen je Größenband als

@@ -12,8 +12,15 @@ from app.core import units
 from app.core.build_area import placement_offset
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CHOOSE_PRINTER, SPLIT_MODEL, GeometryError
-from app.core.geom.mesh import MeshData
-from app.core.geom.transform import apply, moved_points, rotation, translation
+from app.core.geom.mesh import IntegerGrid, MeshData, stable_normals
+from app.core.geom.transform import (
+    apply,
+    composed,
+    moved_points,
+    rotation,
+    rotation_between,
+    translation,
+)
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
 from app.core.types import BoundingBox, CancelToken, Finding, PrinterProfile, Vec3
 from app.core.units import EPS_GEOM
@@ -53,6 +60,12 @@ HULL_SAMPLE = 20_000
 HULL_PROBE_FROM = 50_000
 HULL_ROUND_SHARE = 0.25
 
+#: Um wie viel die Überhangschwelle eines Einheitsvektors zur druckbaren Seite
+#: rückt — eine **Rechengrenze**, keine Geometrietoleranz: Eine Fläche unter
+#: genau dem Grenzwinkel liegt mit ihrer Projektion auf der Schwelle, und das
+#: Rauschen einer Normalen liegt bei 10⁻¹⁶. In Grad sind es 10⁻⁷ an 45 Grad.
+OVERHANG_EDGE: Final = 1e-9
+
 #: So weit darf die schnelle Projektion (BLAS) von der elementweisen Rechnung
 #: abweichen, mit der die äußersten Punkte danach exakt bewegt werden. Der
 #: gemessene Unterschied liegt bei 10⁻¹⁴ mm (RM-187); das Band ist bewusst
@@ -82,6 +95,19 @@ class Orientation:
     overhang: float
     """Fläche, die Stützen bräuchte, in mm²."""
     height: float
+    support: float = 0.0
+    """Geschätzter Stützraum in mm³: jede Überhangfläche in Projektion, mal
+    ihrer Höhe über dem Bett.
+
+    Eine obere Schranke — die Stütze endet in Wahrheit am nächsten Material
+    darunter —, aber anders als :attr:`overhang` weiß sie, **wie hoch** ein
+    Überhang hängt. Genau das fehlte der Vorauswahl der Suche (RM-190): Das
+    Schirmdach des Getränkehalters hängt gekippt über mehr Fläche als
+    liegend, aber nahe am Bett; die Schichtanalyse maß dort ein Drittel des
+    Stützraums, und die Überhangfläche setzte die Lage auf Rang 123 von 204.
+    Die Suche schneidet deshalb auch die Lagen mit der kleinsten Schätzung
+    (``slice.orientation.search``); die Heuristik selbst rechnet weiter mit
+    Fläche und Überhang, wie :attr:`score` sagt."""
 
     @property
     def score(self) -> float:
@@ -107,9 +133,20 @@ class OrientResult:
 
 
 def _largest_normals(normals: np.ndarray, areas: np.ndarray, limit: int) -> list[Vec3]:
-    """Gruppiert ebene Flächen, bewahrt aber ihre ungerundete Richtung."""
+    """Gruppiert ebene Flächen, bewahrt aber ihre ungerundete Richtung.
+
+    **Die Gruppensummen sind exakt** (``IntegerGrid``): Zwei spiegelgleiche
+    Flächen eines symmetrischen Teils haben dieselbe Summe, gleich in welcher
+    Reihenfolge ihre Dreiecke stehen, und die lexikographische Ordnung ihrer
+    Normalen entscheidet — nicht die letzte Stelle einer Gleitkommasumme
+    (RM-187). Die Richtung wird über ``math.hypot`` normiert, nicht über BLAS.
+    """
     unique, inverse = np.unique(np.round(normals, 6), axis=0, return_inverse=True)
-    grouped = np.bincount(inverse, weights=areas, minlength=len(unique))
+    inverse = np.asarray(inverse).reshape(-1)
+    # In ganzen Zahlen gesammelt — ``bincount`` rechnete die Gewichte in
+    # ``float`` und damit wieder in der Reihenfolge der Dreiecke.
+    grouped = np.zeros(len(unique), dtype=np.int64)
+    np.add.at(grouped, inverse, IntegerGrid.of(areas).steps)
     weighted = np.column_stack(
         [
             np.bincount(inverse, weights=normals[:, axis] * areas, minlength=len(unique))
@@ -122,10 +159,11 @@ def _largest_normals(normals: np.ndarray, areas: np.ndarray, limit: int) -> list
     found: list[Vec3] = []
     for index in order[:limit]:
         normal = weighted[index]
-        length = float(np.linalg.norm(normal))
+        length = math.hypot(float(normal[0]), float(normal[1]), float(normal[2]))
         if length > EPS_GEOM:
-            unit = normal / length
-            found.append((float(unit[0]), float(unit[1]), float(unit[2])))
+            found.append(
+                (float(normal[0]) / length, float(normal[1]) / length, float(normal[2]) / length)
+            )
     return found
 
 
@@ -147,8 +185,7 @@ def candidates(mesh: MeshData, *, hull_limit: int = 200) -> list[Vec3]:
     if not len(body.faces):
         return found
 
-    normals = np.asarray(body.face_normals, dtype=float)
-    areas = np.asarray(body.area_faces, dtype=float)
+    normals, areas = stable_normals(body)
     found.extend(_largest_normals(normals, areas, MAX_FACE_CANDIDATES))
     vertices = np.unique(np.asarray(body.vertices, dtype=float), axis=0)
     if len(vertices) < 4:
@@ -168,14 +205,29 @@ def candidates(mesh: MeshData, *, hull_limit: int = 200) -> list[Vec3]:
         # Ein flaches oder entartetes Netz hat keine dreidimensionale Hülle.
         # Seine eigenen Flächen und Achsen bleiben trotzdem prüfbar.
         return found
-    triangles = vertices[hull.simplices]
-    hull_areas = (
-        np.linalg.norm(
-            np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]), axis=1
-        )
-        / 2.0
+    # **Die Richtungen aus den Ecken der Hüllflächen, nicht aus Qhulls
+    # Ebenengleichungen** (RM-187): Deren letzte Stelle rechnet Qhulls eigener,
+    # je Plattform übersetzter Code, und aus einer Kandidatenrichtung wird
+    # die Drehmatrix des ganzen Körpers. Die Ecken sind Eingangspunkte; die
+    # Normale daraus rechnet :func:`stable_normals` in Grundrechenarten, die
+    # Seite (nach außen) sagt Qhull, denn dafür reicht das Vorzeichen.
+    faces = np.asarray(hull.simplices, dtype=np.int64)
+    triangles = vertices[faces]
+    normals, hull_areas = stable_normals(
+        trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     )
-    found.extend(_largest_normals(hull.equations[:, :3], hull_areas, max(1, hull_limit)))
+    outward = (
+        normals[:, 0] * hull.equations[:, 0]
+        + normals[:, 1] * hull.equations[:, 1]
+        + normals[:, 2] * hull.equations[:, 2]
+    ) >= 0.0
+    normals = np.where(outward[:, None], normals, -normals)
+    usable = hull_areas > 0.0
+    found.extend(
+        _largest_normals(normals[usable], hull_areas[usable], max(1, hull_limit))
+        if len(triangles)
+        else []
+    )
     return found
 
 
@@ -197,8 +249,14 @@ def evaluate_directions(
     if not directions:
         return []
     body = mesh.raw
-    normals = np.asarray(body.face_normals, dtype=float)
-    areas = np.asarray(body.area_faces, dtype=float)
+    # Normalen, Flächen und Summen so, dass dieselbe Lage auf jeder Maschine
+    # dieselben Zahlen bekommt (RM-187): ``stable_normals`` statt der Normalen
+    # von ``trimesh`` (BLAS), elementweise Projektionen statt ``@``, und
+    # Flächensummen in ganzen Zahlen (``IntegerGrid``) — zwei spiegelgleiche
+    # Lagen eines symmetrischen Teils sind damit exakt gleich gut, und die
+    # Richtung entscheidet, nicht das Rauschen.
+    normals, areas = stable_normals(body)
+    grid = IntegerGrid.of(areas)
     vertices = np.asarray(body.vertices)
     referenced = body.referenced_vertices
     if not referenced.all():
@@ -209,30 +267,56 @@ def evaluate_directions(
     batch_size = max(
         1, min(len(directions), MAX_PROJECTION_VALUES // max(len(vertices), len(normals), 1))
     )
-    threshold = -units.exact_cos_degrees(OVERHANG_LIMIT_DEGREES)
+    # **Genau 45 Grad sind druckbar, nicht überhängend.** Eine Fase unter dem
+    # Grenzwinkel liegt mit ihrer Normalen auf der Schwelle, und ob sie als
+    # Überhang zählte, entschied die letzte Stelle einer Projektion — an
+    # einem CAD-Teil mit 45-Grad-Fasen der häufigste Fall, nicht der seltene.
+    # Die Rechengrenze ``OVERHANG_EDGE`` schiebt die Schwelle um das Rauschen
+    # eines Einheitsvektors auf die Seite, die die Regel meint.
+    threshold = -units.exact_cos_degrees(OVERHANG_LIMIT_DEGREES) - OVERHANG_EDGE
     scored: list[Orientation] = []
     for start in range(0, len(directions), batch_size):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         batch = directions[start : start + batch_size]
         verticals = np.asarray([rotation_to_down(direction)[2, :3] for direction in batch])
-        vertex_heights = verticals @ vertices.T
-        normal_heights = verticals @ normals.T
-        centre_heights = verticals @ centres.T
+        vertex_heights = _heights(verticals, vertices)
+        normal_heights = _heights(verticals, normals)
+        centre_heights = _heights(verticals, centres)
         bottom = vertex_heights.min(axis=1)
         height = vertex_heights.max(axis=1) - bottom
         flat_bottom = (normal_heights < -0.999) & (centre_heights < bottom[:, None] + 0.05)
         downward = normal_heights < threshold
+        hanging = downward & ~flat_bottom
+        footprints = grid.sums(flat_bottom)
+        overhangs = grid.sums(hanging)
+        # Der Stützraum unter jeder Überhangfläche bis zum Bett: projizierte
+        # Fläche mal Höhe ihrer Mitte. Je Lage exakt summiert (``IntegerGrid``),
+        # damit zwei spiegelgleiche Lagen dieselbe Zahl tragen.
+        lifted = np.where(
+            hanging, areas[None, :] * -normal_heights * (centre_heights - bottom[:, None]), 0.0
+        )
+        supports = [IntegerGrid.of(row).total() for row in lifted]
         for index, direction in enumerate(batch):
             scored.append(
                 Orientation(
                     direction=direction,
-                    footprint=float(areas[flat_bottom[index]].sum()),
-                    overhang=float(areas[downward[index] & ~flat_bottom[index]].sum()),
+                    footprint=float(footprints[index]),
+                    overhang=float(overhangs[index]),
                     height=float(height[index]),
+                    support=supports[index],
                 )
             )
     return scored
+
+
+def _heights(verticals: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """Je Lage und Punkt die Höhe — ``verticals @ points.T`` ohne BLAS (RM-187)."""
+    return np.asarray(
+        verticals[:, 0, None] * points[None, :, 0]
+        + verticals[:, 1, None] * points[None, :, 1]
+        + verticals[:, 2, None] * points[None, :, 2]
+    )
 
 
 def ranked_orientations(
@@ -300,22 +384,24 @@ def rotation_to_down(direction: Vec3) -> np.ndarray:
     worden wäre. Sie gehört hierher, denn hier stehen die Kandidatenrichtungen,
     die sie dreht.
     """
-    source = np.asarray(direction, dtype=float)
-    length = float(np.linalg.norm(source))
+    x, y, z = (float(value) for value in direction)
+    length = math.hypot(x, y, z)
     if length <= EPS_GEOM:
         return np.eye(4)
-    source = source / length
-    target = np.array([0.0, 0.0, -1.0])
-
-    axis = np.cross(source, target)
-    if float(np.linalg.norm(axis)) <= EPS_GEOM:
-        if float(np.dot(source, target)) > 0:
-            return np.eye(4)
-        return np.asarray(
-            trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]), dtype=float
-        )
-    angle = math.acos(float(np.clip(np.dot(source, target), -1.0, 1.0)))
-    return np.asarray(trimesh.transformations.rotation_matrix(angle, axis), dtype=float)
+    # **Rodrigues aus den Vektoren, nicht Achse und Winkel** (RM-187). Hier
+    # stand ``trimesh.transformations.rotation_matrix(math.acos(…), achse)``:
+    # ``acos`` und ``sin``/``cos`` aus der Mathematikbibliothek der Plattform,
+    # dazu Normen über BLAS — und mit dieser Matrix wird der ganze Körper
+    # gedreht. ``transform.rotation_between`` braucht nur Grundrechenarten
+    # und liefert dieselbe kürzeste Drehung.
+    #
+    # Die Kopfüber-Lage bleibt eine halbe Drehung um **X**, wie bisher —
+    # jetzt exakt: ``diag(1, -1, -1)`` statt einer Matrix mit ``sin(π)``
+    # ``= 1,2·10⁻¹⁶`` neben den Nullen.
+    cross = math.hypot(y, x)
+    if cross / length <= EPS_GEOM and z > 0.0:
+        return np.diag((1.0, -1.0, -1.0, 1.0))
+    return rotation_between((x, y, z), (0.0, 0.0, -1.0))
 
 
 def extreme_points(mesh: MeshData) -> np.ndarray:
@@ -427,7 +513,7 @@ def _onto_bed(mesh: MeshData, turn: np.ndarray, low: np.ndarray, high: np.ndarra
         mesh.bounds.centre[1] - (high[1] + low[1]) / 2.0,
         -low[2],
     )
-    return np.asarray(translation(offset) @ turn, dtype=float)
+    return composed(translation(offset), turn)
 
 
 def print_transform(mesh: MeshData, direction: Vec3) -> np.ndarray:
@@ -519,7 +605,11 @@ def fitting_transform(
     turn, low, high = _lifted(mesh, direction)
     initial = _onto_bed(mesh, turn, low, high)
     for yaw in (0.0, 90.0):
-        turned = np.asarray(rotation("z", yaw) @ initial, dtype=float)
+        # Zusammengesetzt über ``composed`` und nicht über ``@`` (BLAS): Mit
+        # dieser Matrix wird der Körper gedreht, und dieselbe Datei soll auf
+        # jeder Maschine dasselbe Teil ergeben (RM-187). Die Vierteldrehung
+        # ist exakt (``units.exact_cos_degrees``), ``x' = -y, y' = x``.
+        turned = composed(rotation("z", yaw), initial)
         if yaw:
             low, high = (
                 np.array([-high[1], low[0], low[2]]),
@@ -534,11 +624,18 @@ def fitting_transform(
                 0.0,
             )
         )
-        turned = np.asarray(centre @ turned, dtype=float)
+        turned = composed(centre, turned)
         placed = _Placed(mesh, turned, _shifted(low, high, turned[:3, 3]))
-        offset = placement_offset(placed, printer, margin=margin)
+
+        # Die äußersten Ecken tragen die Hülle der Projektion; mit ihnen
+        # fragt die Platzierung nicht jede Ecke des Netzes (RM-190) — und erst,
+        # wenn das Rechteck nicht reicht.
+        def outline(matrix: np.ndarray = turned) -> np.ndarray:
+            return moved_points(extreme_points(mesh), matrix)[:, :2]
+
+        offset = placement_offset(placed, printer, margin=margin, outline=outline)
         if offset is not None:
-            return np.asarray(translation(offset) @ turned, dtype=float)
+            return composed(translation(offset), turned)
     return None
 
 

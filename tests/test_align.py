@@ -50,10 +50,20 @@ def test_the_same_direction_needs_no_turn() -> None:
 
 
 def test_the_opposite_direction_is_turned_all_the_way() -> None:
-    matrix = rotation_between((0.0, 0.0, 1.0), (0.0, 0.0, -1.0))
-    turned = matrix @ np.array([0.0, 0.0, 1.0, 1.0])
+    """Die halbe Drehung um die Hilfsachse von früher — und zwar exakt.
 
-    assert turned[:3] == pytest.approx([0.0, 0.0, -1.0], abs=1e-9)
+    Zeigen die Richtungen gegeneinander, dreht jede senkrechte Achse die eine
+    auf die andere, und welche, entscheidet über die Lage des Teils um die
+    Achse. Gespeicherte Ausrichtungen sind mit der X-Hilfsachse gerechnet
+    (Kreuzprodukt ergibt Y); dieselbe Datei soll dasselbe Teil ergeben (§11.3).
+    Exakt, weil ``2·a·aᵀ - I`` keine Winkelfunktion braucht — über
+    ``sin(π) = 1,2·10⁻¹⁶`` standen dort Reste neben den Nullen (RM-187).
+    """
+    matrix = rotation_between((0.0, 0.0, 1.0), (0.0, 0.0, -1.0))
+
+    assert np.array_equal(matrix[:3, :3], np.diag((-1.0, 1.0, -1.0)))
+    near_x = rotation_between((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0))
+    assert np.array_equal(near_x[:3, :3], np.diag((-1.0, -1.0, 1.0))), "nahe X hilft Y"
 
 
 # --- die Bezugssysteme ----------------------------------------------------------
@@ -95,12 +105,28 @@ def test_two_bores_end_up_coaxial() -> None:
 
 
 def test_flipping_turns_the_body_the_other_way() -> None:
-    fixed = plate()
-    moving = plate()
-    straight = align_matrix(hole(moving, "hole_1"), hole(fixed, "hole_1"))
-    flipped = align_matrix(hole(moving, "hole_1"), hole(fixed, "hole_1"), flip=True)
+    """Umgekehrt heißt: dieselbe Achse, die andere Richtung, derselbe Ort.
 
-    assert not np.allclose(straight, flipped)
+    Hier stand nur „die Matrizen sind verschieden" — das bestünde auch eine
+    Matrix, die das Teil irgendwohin wirft.
+    """
+    from app.core.geom.transform import moved_points, turned
+
+    fixed = plate()
+    moving = apply(plate(), rotation("y", 35.0))
+    source, target = hole(moving, "hole_1"), hole(fixed, "hole_2")
+    straight = align_matrix(source, target)
+    flipped = align_matrix(source, target, flip=True)
+
+    axis = np.asarray([source.params["axis"]], dtype=float)
+    wanted = np.asarray(target.params["axis"], dtype=float)
+    assert turned(axis, straight)[0] == pytest.approx(wanted, abs=1e-9)
+    assert turned(axis, flipped)[0] == pytest.approx(-wanted, abs=1e-9)
+    anchor = np.asarray([source.params["centre"]], dtype=float)
+    for matrix in (straight, flipped):
+        assert moved_points(anchor, matrix)[0] == pytest.approx(
+            np.asarray(target.params["centre"], dtype=float), abs=1e-9
+        )
 
 
 def test_two_faces_meet_front_to_front() -> None:
@@ -243,4 +269,7 @@ def test_a_detected_pin_carries_a_frame() -> None:
 
     richtung, punkt = frame_of(stifte[0])
     assert abs(abs(richtung[2]) - 1.0) < 1e-6, "die Achse zeigt entlang des Zapfens"
-    assert punkt is not None, "und er hat einen Ankerpunkt"
+    # Der Ankerpunkt liegt auf der Achse des Zapfens und in seiner Höhe — ein
+    # bloßes „nicht None" bestünde auch ein Punkt neben dem Teil.
+    assert punkt[:2] == pytest.approx((0.0, 0.0), abs=1e-6)
+    assert 2.0 - 1e-6 <= punkt[2] <= 14.0 + 1e-6

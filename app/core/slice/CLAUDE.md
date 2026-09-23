@@ -38,9 +38,16 @@ In der Oberfläche heißt es „Schichtanalyse", nicht „Vorschau".
 
 Die Orientierungskandidaten kommen deterministisch aus den flächengeordneten
 Normalen der konvexen Hülle, den Achsen und den großen Körperflächen (§28.2).
-Der echte Druckbereich wird vor der Schichtanalyse geprüft. Höchstens acht
-Finalisten, die sechs Achsen und eine zulässige Ausgangslage werden
-geschnitten; der Bericht trennt betrachtete, passende und geschnittene Lagen.
+Der echte Druckbereich wird vor der Schichtanalyse geprüft. Geschnitten
+werden höchstens acht Finalisten der Heuristik (`FINALISTS`, nach Standfläche
+und Überhangfläche), dazu die acht Lagen mit dem kleinsten **geschätzten
+Stützraum** (`SUPPORT_FINALISTS`, `geom.orient.Orientation.support`:
+Überhangfläche in Projektion mal Höhe über dem Bett; spiegelgleiche Lagen mit
+bitgleichen Zahlen einmal), die sechs Achsen und eine zulässige
+Ausgangslage; der Bericht trennt betrachtete, passende und geschnittene Lagen.
+Die Überhangfläche allein weiß nicht, wie hoch ein Überhang hängt — an Roberts
+Getränkehalter standen die besten Lagen von Schirm und Mast dort auf Rang 182
+und 51 (RM-190).
 Eine unzulässige Ausgangslage hat `baseline=None`, und dafür wird keine
 Einsparung behauptet. Stützräume misst die Suche am auf 20 000 Dreiecke
 ausgedünnten Ersatznetz, **Standfläche und Stand am Original**, und die
@@ -49,7 +56,11 @@ am Original: Ein schmaler flacher Rand überlebt die Ausdünnung nicht als
 Ebene, und ein Gitter zeigt in jeder Lage die Hälfte seiner Flächen nach
 unten — beides ließ die Suche am Gitterbecher (20.09.2026) die Lage
 verwerfen, die ohne Stützen druckt.
-Der Schwerpunkt muss in der Hülle der tatsächlichen Auflage liegen. Unter
+Der Schwerpunkt muss in der Hülle der tatsächlichen Auflage liegen, und
+**stehen heißt, die erste Schicht lässt sich drucken**: Mit Druckerprofil misst
+`judge(…, line_width=)` die Auflage um eine halbe Linienbreite nach innen
+versetzt (`Candidate.footing`), und daran gilt die kleinste Aufstandsfläche —
+eine Kante trägt keine Linie, auch eine lange nicht. Unter
 stehenden Kandidaten entscheidet Stützvolumen, innerhalb fünf Prozent die
 Auflagefläche. `SearchResult.transform` beschreibt die vollständige geprüfte
 Bewegung; `seed` bleibt als Aufrufparameter für bestehende Projekte lesbar,

@@ -11,14 +11,16 @@ Eine zweite Ebene macht aus dem Schnitt eine Scheibe.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
 
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.geom import enclosure
+from app.core.geom import enclosure, transform
 from app.core.geom.mesh import MeshData
+from app.core.geom.transform import moved, rotation_between
 from app.core.log import get_logger
 from app.core.types import Vec3
 from app.core.units import EPS_GEOM, is_zero
@@ -48,7 +50,8 @@ class SectionPlane:
 
     @property
     def origin(self) -> Vec3:
-        length = float(np.linalg.norm(self.normal)) or 1.0
+        # ``math.hypot`` statt ``np.linalg.norm`` (BLAS, RM-187).
+        length = math.hypot(*self.normal) or 1.0
         return (
             self.normal[0] / length * self.position,
             self.normal[1] / length * self.position,
@@ -228,20 +231,32 @@ def _keeping_slots(mesh: MeshData, body: trimesh.Trimesh) -> MeshData:
 
 
 def _apply(body: trimesh.Trimesh, plane: SectionPlane) -> tuple[trimesh.Trimesh, bool]:
-    """Eine Ebene. ``slice_plane`` deckelt, wenn die Eingabe wasserdicht ist.
+    """Eine Ebene — geschnitten und gedeckelt in einem Rahmen, in dem sie
+    waagerecht liegt.
+
+    **Warum ein eigener Rahmen** (RM-187, 22.09.2026): ``slice_plane`` von
+    ``trimesh`` rechnet Seite und Schnittpunkt jeder Kante über ``np.dot``
+    — also durch BLAS, dessen letzte Stelle an der CPU hängt —, und für den
+    Deckel legt es die Ebene über ``align_vectors`` in die XY-Ebene, das über
+    ``np.linalg.svd`` geht: Die Drehung *in* der Ebene war damit Sache der
+    Plattform, und die Dreiecke des Deckels auch. Hier wird der Körper erst so
+    gedreht, dass die Ebene waagerecht liegt (:func:`transform.rotation_between`,
+    elementweise bewegt). Dort ist jedes Skalarprodukt mit der Normalen
+    ``(0, 0, 1)`` exakt, jeder Schnittpunkt elementweise gerechnet, und die
+    Deckelkontur liest ihre ebenen Koordinaten direkt aus X und Y. Eine
+    achsparallele Ebene — der Regelfall — dreht dabei nur Vorzeichen und
+    Achsen und ist Bit für Bit umkehrbar; eine schräge kostet zwei Bewegungen
+    und bekommt dafür auf jeder Maschine dieselben Dreiecke.
 
     Das Deckeln braucht die Konturverschachtelung, und die kommt seit dem
     24.08.2026 aus :mod:`app.core.geom.enclosure` statt aus ``rtree`` — der
     Aufruf unten installiert sie, bevor hier geschnitten wird.
     """
-    normal = np.asarray(plane.normal, dtype=float)
-    length = float(np.linalg.norm(normal))
+    x, y, z = (float(value) for value in plane.normal)
+    length = math.hypot(x, y, z)
     if length <= EPS_GEOM:
         return body, True
-    normal = normal / length
-    # trimesh behält, was auf der positiven Seite liegt — die Normale zeigt
-    # also andersherum: die sichtbare Hälfte ist die, von der die Ebene
-    # wegschaut.
+    normal = np.array([x / length, y / length, z / length])
     watertight = bool(body.is_watertight)
 
     # Eine Ebene, die den Körper verfehlt, braucht keinen Schnitt — und ein
@@ -253,12 +268,69 @@ def _apply(body: trimesh.Trimesh, plane: SectionPlane) -> tuple[trimesh.Trimesh,
     if distances.min() >= -EPS_GEOM:
         return trimesh.Trimesh(), watertight
     enclosure.install()
-    result = body.slice_plane(
-        plane_origin=np.asarray(plane.origin, dtype=float),
-        plane_normal=-normal,
-        cap=watertight,
+    turn = rotation_between(normal, (0.0, 0.0, 1.0))
+    local = body.copy()
+    moved(local, turn)
+    # Im gedrehten Rahmen liegt die Ebene bei z = position, und was darüber
+    # liegt, fällt weg: trimesh behält die positive Seite der Normalen, die
+    # hier also nach unten zeigt.
+    sliced = trimesh.intersections.slice_mesh_plane(  # type: ignore[no-untyped-call]
+        local, plane_normal=(0.0, 0.0, -1.0), plane_origin=(0.0, 0.0, plane.position), cap=False
     )
-    return result, watertight
+    if watertight and len(sliced.faces):
+        sliced = _capped(sliced, plane.position)
+    back = np.eye(4)
+    back[:3, :3] = turn[:3, :3].T
+    moved(sliced, back)
+    return sliced, watertight
+
+
+#: Wie nah eine Ecke an der Schnittebene liegen muss, um zum Deckelrand zu
+#: gehören — derselbe Wert wie in ``trimesh.intersections.slice_mesh_plane``.
+_ON_PLANE: Final = 1e-8
+
+
+def _capped(sliced: trimesh.Trimesh, position: float) -> trimesh.Trimesh:
+    """Den Schnitt bei ``z = position`` mit einem ebenen Deckel schließen.
+
+    Dieselbe Bauart wie ``slice_mesh_plane(cap=True)``: Ecken zusammenlegen,
+    Randkanten in der Ebene zu Umrissen, Umrisse triangulieren, die
+    Dreiecksecken auf die vorhandenen Ecken zurückführen. Nur liegen die
+    ebenen Koordinaten hier exakt in X und Y, statt über eine SVD dorthin
+    gedreht zu werden. Der Deckel zeigt nach oben, aus dem Körper hinaus, wie
+    der, den ``trimesh`` setzt.
+    """
+    from scipy.spatial import cKDTree
+    from trimesh import geometry, grouping
+    from trimesh.creation import triangulate_polygon
+    from trimesh.path import polygons
+
+    vertices = np.asarray(sliced.vertices, dtype=np.float64)
+    unique, inverse = grouping.unique_rows(vertices)  # type: ignore[no-untyped-call]
+    vertices = vertices[unique]
+    faces = np.asarray(inverse)[np.asarray(sliced.faces, dtype=np.int64)]
+    faces = faces[(faces[:, :1] != faces[:, 1:]).all(axis=1)]
+    edges = geometry.faces_to_edges(faces)  # type: ignore[no-untyped-call]
+    edges.sort(axis=1)
+    on_plane = np.abs(vertices[:, 2] - position) < _ON_PLANE
+    edges = edges[on_plane[edges].all(axis=1)]
+    edges = edges[edges[:, 0] != edges[:, 1]]
+    single = grouping.group_rows(edges, require_count=1)  # type: ignore[no-untyped-call]
+    collected = [faces]
+    if len(vertices) >= 3 and len(single):
+        tree = cKDTree(vertices)
+        for outline in polygons.edges_to_polygons(edges[single], vertices[:, :2]):
+            points, triangles = triangulate_polygon(outline, force_vertices=True)
+            if not len(triangles):
+                continue
+            spatial = np.column_stack(
+                (np.asarray(points, dtype=np.float64), np.full(len(points), position))
+            )
+            _distance, nearest = tree.query(spatial)
+            mapped = np.asarray(nearest, dtype=np.int64)[np.asarray(triangles, dtype=np.int64)]
+            usable = (mapped[:, 1:] != mapped[:, :1]).all(axis=1) & (mapped[:, 1] != mapped[:, 2])
+            collected.append(mapped[usable])
+    return trimesh.Trimesh(vertices=vertices, faces=np.vstack(collected), process=False)
 
 
 def _corner_distances(body: trimesh.Trimesh, normal: np.ndarray, origin: np.ndarray) -> np.ndarray:
@@ -269,7 +341,7 @@ def _corner_distances(body: trimesh.Trimesh, normal: np.ndarray, origin: np.ndar
     corners = np.array(
         [(x, y, z) for x in (low[0], high[0]) for y in (low[1], high[1]) for z in (low[2], high[2])]
     )
-    return np.asarray((corners - origin) @ normal, dtype=float)
+    return transform.along(corners - origin, normal)
 
 
 def section_volume(mesh: MeshData, plane: SectionPlane) -> float:

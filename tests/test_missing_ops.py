@@ -237,6 +237,30 @@ def test_a_small_body_is_not_decimated_for_display() -> None:
     assert mesh_ops.decimate_for_display(body, 600) is body
 
 
+def test_the_raster_keeps_two_triangles_apart_beyond_two_million_corners() -> None:
+    """Die Kennung eines Dreiecks im Raster darf nicht überlaufen.
+
+    Das Raster legt Ecken zusammen und nimmt doppelte Dreiecke heraus; dazu
+    wurden die drei Ecken als Stellen **einer** Zahl zur Basis der Eckenzahl
+    geschrieben. Das hält bis 2²¹ Ecken, dann läuft die 64-Bit-Zahl über, und
+    zwei verschiedene Dreiecke tragen dieselbe Kennung: Bei 2²² Ecken sind
+    ``(0, 1, 2)`` und ``(0, 1, 2 + 2²⁰)`` modulo 2⁶⁴ gleich, und eines davon
+    fiel als „doppelt" aus dem Bild. Ein offenes Netz mit mehreren Millionen
+    Ecken ist genau der Fall, für den dieser Weg da ist.
+    """
+    corners = 2**22
+    distinct = np.array([[0, 1, 2], [0, 1, 2 + 2**20]], dtype=np.int64)
+
+    first = mesh_ops._first_of_each_triangle(distinct, corners)
+
+    assert sorted(first.tolist()) == [0, 1], "zwei verschiedene Dreiecke bleiben zwei"
+
+    doubled = np.array([[0, 1, 2], [3, 4, 5], [0, 1, 2]], dtype=np.int64)
+    for count in (6, corners):
+        kept = mesh_ops._first_of_each_triangle(doubled, count)
+        assert sorted(kept.tolist()) == [0, 1], "ein doppeltes Dreieck bleibt einmal"
+
+
 def test_redundant_corners_go_exactly_before_any_solver_runs() -> None:
     """Das Vorspiel an der Nadelplatte (§25, Netz): 203 776 Dreiecke aus
     unterteilten Fächern, und keine der Ecken beschreibt etwas — sie liegen
@@ -1854,3 +1878,98 @@ def test_a_target_below_the_triangle_count_keeps_quiet_about_it(profile: Profile
     result = run("decimate_mesh", entry, profile, triangles=1000)
 
     assert "mesh.already_below_target" not in {f.code for f in result.findings}
+
+
+@pytest.mark.parametrize(
+    ("op", "core", "params"),
+    [
+        ("smooth_mesh", "smooth", {"iterations": 2}),
+        ("remesh_mesh", "remesh", {"edge": 20.0}),
+        ("remesh_uniform", "uniform", {"edge": 20.0, "deviation": 0.1}),
+        ("subdivide_surface", "subdivided", {"edge": 20.0}),
+    ],
+)
+def test_a_cancelled_mesh_operation_does_not_measure_afterwards(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, op: str, core: str, params: dict
+) -> None:
+    """Wer während der Rechnung abbricht, wartet nicht noch auf die Messung danach.
+
+    Gemessen am Voronoi-Spiderman (885 570 Dreiecke, 23.09.2026): *Glätten*
+    rechnet 0,5 s und misst danach 5,4 s, wie weit die Fläche gewandert ist —
+    ohne eine einzige Abbruchfrage. Dasselbe bei *Kanten verfeinern*,
+    *Dreiecke angleichen* und *Fläche unterteilen* (25 s für die Rechnung
+    allein). Der Knopf „Abbrechen" wirkte erst, wenn alles fertig war.
+    """
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    signal = CancelSignal()
+    original = getattr(mesh_ops, core)
+
+    def computed_then_cancelled(*args: object, **kwargs: object):
+        result = original(*args, **kwargs)
+        signal.cancel()
+        return result
+
+    monkeypatch.setattr(mesh_ops, core, computed_then_cancelled)
+    measured = pytest.fail
+    monkeypatch.setattr(
+        mesh_ops, "max_distance_to_surface", lambda *_a, **_k: measured("nach dem Abbruch gemessen")
+    )
+    ball = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=20.0))
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball)
+    spec = REGISTRY.get(op)
+
+    with pytest.raises(OperationCancelled):
+        spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry}),
+                inputs=[entry],
+                params=spec.params(**params),
+                profile=profile,
+                quality="fine",
+                seed=None,
+                progress=lambda fraction, text: None,
+                ask=lambda question, choices: choices[0],
+                cancelled=signal,
+            )
+        )
+
+
+def _two_coloured_sheet() -> MeshData:
+    """Eine offene Fläche 40 x 20 mm, links Filament 0, rechts Filament 1."""
+    xs = np.linspace(-20.0, 20.0, 5)
+    ys = np.linspace(-10.0, 10.0, 3)
+    vertices = np.array([(x, y, 0.0) for y in ys for x in xs])
+    faces = []
+    slots = []
+    for row in range(len(ys) - 1):
+        for column in range(len(xs) - 1):
+            a = row * len(xs) + column
+            b, c, d = a + 1, a + len(xs), a + len(xs) + 1
+            faces += [(a, b, d), (a, d, c)]
+            slots += [int(xs[column] >= 0.0)] * 2
+    sheet = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    return MeshData.of(sheet, slots=tuple(slots))
+
+
+def test_thickening_keeps_the_filaments_and_names_its_body(profile: Profile) -> None:
+    """§20: Ein zweifarbiges Schild kam aus *Offene Fläche schließen* einfarbig.
+
+    Außen- und Innenhaut sind dieselben Dreiecke, eine Randwand gehört zu dem
+    Dreieck, an dessen Kante sie steht — also liegt jedes Dreieck links der
+    Mitte auf Filament 0 und jedes rechts auf Filament 1. Und der Befund nennt
+    den Körper, an dem er entstand, wie jeder andere Befund der Netzoperationen.
+    """
+    entry = SceneObject(id="obj_1", name="Schild", mesh=_two_coloured_sheet())
+
+    result = run("thicken", entry, profile, thickness=2.0)
+
+    body = result.outputs[0].mesh
+    assert body.is_watertight
+    assert len(body.slots) == body.triangle_count
+    centres = np.asarray(body.raw.triangles_center)
+    clear = np.abs(centres[:, 0]) > 1e-6
+    expected = (centres[clear, 0] > 0.0).astype(int)
+    assert np.array_equal(np.asarray(body.slots)[clear], expected)
+    assert {finding.object_id for finding in result.findings} == {"obj_1"}

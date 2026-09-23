@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.geom.mesh import RAY_PARALLEL_EPS, MeshData, on_surface
+from app.core.geom.mesh import MeshData, on_surface, ray_hits
 from app.core.types import BoundingBox, CancelToken, Mesh, Vec3
 from app.core.units import EPS_GEOM, round_display
 
@@ -419,47 +419,24 @@ def ray_distances(mesh: MeshData, origin: np.ndarray, direction: np.ndarray) -> 
     """Abstände von ``origin`` zu jedem Dreieck, das der Strahl trifft,
     nächstes zuerst.
 
-    Möller-Trumbore über alle Dreiecke auf einmal. Vektorisiert ist das schnell
-    genug für einzelne Strahlen und braucht keinen Raumindex — eine
-    Abhängigkeit weniger für eine Handvoll Zeilen (AGENTS.md Regel 22).
+    Möller-Trumbore über alle Dreiecke auf einmal, über dieselbe Rechnung wie
+    jeder andere Strahl im Kern (:func:`app.core.geom.mesh.ray_hits`) — bis zum
+    22.09.2026 stand sie hier ein zweites Mal, mit eigenen Schwellen und über
+    ``np.einsum`` und ``@``. Die Schwellen bleiben die der Wandstärke: Ein
+    Treffer zählt bis ``EPS_GEOM`` neben dem Dreieck, und das Dreieck unter
+    dem Startpunkt (Strahlparameter unter ``100·EPS_GEOM``) ist kein Gegenüber.
     """
-    vertices = np.asarray(mesh.raw.vertices, dtype=float)
     faces = np.asarray(mesh.raw.faces, dtype=np.int64)
     if not len(faces):
         return np.array([])
-
-    first = vertices[faces[:, 0]]
-    edge_one = vertices[faces[:, 1]] - first
-    edge_two = vertices[faces[:, 2]] - first
-
-    side = np.cross(direction, edge_two)
-    determinant = np.einsum("ij,ij->i", edge_one, side)
-    # ``EPS_GEOM`` sind Millimeter, die Determinante ist ein Spatprodukt aus
-    # drei Vektoren — mit einem Längenmaß verglichen fällt sie bei kleinen
-    # Dreiecken durch, ohne dass der Strahl parallel läge. Dieselbe Rechnung
-    # steht in :func:`app.core.geom.mesh.ray_hit_distances` und hat dort die
-    # dimensionsrichtige Schranke; jetzt beide dieselbe.
-    hits = np.abs(determinant) > RAY_PARALLEL_EPS
-    if not hits.any():
-        return np.array([])
-
-    inverse = np.zeros_like(determinant)
-    inverse[hits] = 1.0 / determinant[hits]
-
-    offset = origin - first
-    along = inverse * np.einsum("ij,ij->i", offset, side)
-    across = np.cross(offset, edge_one)
-    sideways = inverse * (across @ direction)
-    travel = inverse * np.einsum("ij,ij->i", edge_two, across)
-
-    inside = (
-        hits
-        & (along >= -EPS_GEOM)
-        & (sideways >= -EPS_GEOM)
-        & (along + sideways <= 1.0 + EPS_GEOM)
-        & (travel > EPS_GEOM * 100.0)
+    travel, _faces = ray_hits(
+        np.asarray(mesh.raw.vertices, dtype=float)[faces],
+        np.asarray(origin, dtype=float),
+        np.asarray(direction, dtype=float),
+        edge_margin=EPS_GEOM,
+        minimum_travel=EPS_GEOM * 100.0,
     )
-    return np.sort(travel[inside])
+    return np.sort(travel)
 
 
 def _inward_direction(

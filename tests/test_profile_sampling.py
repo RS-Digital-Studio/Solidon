@@ -170,3 +170,32 @@ def test_invalid_hole_is_rejected_before_a_fill_rule_can_reinterpret_it():
 
     with pytest.raises(ValidationError, match="Kontur"):
         section_of(_square_profile(4.0, holes=(Profile(circle=((10.0, 10.0), 1.0)),)))
+
+
+@pytest.mark.parametrize("nudge", [-math.inf, math.inf])
+def test_the_round_offset_does_not_count_its_corners_with_the_platform(monkeypatch, nudge):
+    """RM-187: Die Eckenzahl eines runden Versatzes entschied ``math.asin`` mit ``ceil``.
+
+    Liegt der Radius so, dass eine durch vier teilbare Eckenzahl die
+    Sehnengrenze genau trifft, kippt ``ceil`` mit der letzten Stelle der
+    Bibliotheksfunktion — und die Mathematikbibliotheken von Windows, Linux und
+    macOS runden dort verschieden. Vier Ecken mehr oder weniger sind kein
+    Rundungsrest, sondern ein anderer Umriss. Hier wird ``math.asin`` um eine
+    Stelle nach oben und nach unten verschoben; der Versatz bleibt derselbe.
+    """
+    from app.core.geom import contours
+
+    steps = 7 * 4
+    sag = MAX_FACET_SAG
+    # Der Radius, an dem ein 28-Eck die Sehnengrenze genau erreicht.
+    radius = sag / (2.0 * math.sin(math.pi / (2.0 * steps)) ** 2)
+
+    quiet = contours._round_steps(radius, sag)
+    real_asin = math.asin
+    monkeypatch.setattr(math, "asin", lambda value: math.nextafter(real_asin(value), nudge))
+    shifted = contours._round_steps(radius, sag)
+
+    assert shifted == quiet
+    assert quiet % 4 == 0
+    assert radius * (1.0 - math.cos(math.pi / quiet)) <= sag * (1.0 + 1e-12)
+    assert radius * (1.0 - math.cos(math.pi / (quiet - 4))) > sag

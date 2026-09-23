@@ -12,10 +12,11 @@ gibt es :func:`is_close`, :func:`is_zero`, :func:`is_greater` und
 from __future__ import annotations
 
 import decimal
+import fractions
 import functools
 import math
 from collections.abc import Sequence
-from typing import Final, Literal
+from typing import Any, Final, Literal, Protocol
 
 from app.i18n import TranslatableText, _
 
@@ -574,41 +575,53 @@ def _exact_pair(angle: float) -> tuple[float, float]:
 def _circle_table(sections: int) -> tuple[tuple[float, float], ...]:
     """Die Tabelle eines regelmäßigen ``sections``-Ecks, einmal je Prozess.
 
-    Ein Viertelumlauf reicht: Die übrigen drei entstehen durch Vorzeichen und
-    Tausch, und beides ist in Fließkomma **exakt** — es ändert kein Bit der
-    Mantisse. Das spart nicht nur Zeit; es schreibt auch die Symmetrie fest,
-    die ein Kreis haben soll. Bei ``sections``, die nicht durch vier teilbar
-    sind, gibt es keine gemeinsamen Viertelpunkte, und dann wird gerechnet.
+    Jede Ecke geht über :func:`_turn_cos_sin` — als **Bruch eines Umlaufs**
+    aus zwei Ganzzahlen, auf eine Achteldrehung zurückgeführt. Vorzeichen,
+    Tausch und Ergänzung sind in Fließkomma exakt; damit steht die Symmetrie,
+    die ein Kreis haben soll, auch bei ``sections``, die nicht durch vier
+    teilbar sind. Dort rechnete bis zum 22.09.2026 jede Ecke ihre eigene
+    Reihe, und der halbe Umlauf eines Sechsecks lag bei ``y = -7·10⁻⁵⁰``
+    statt auf der Achse.
     """
+    return tuple(_turn_cos_sin(fractions.Fraction(index, sections)) for index in range(sections))
+
+
+def _turn_cos_sin(turn: fractions.Fraction) -> tuple[float, float]:
+    """Kosinus und Sinus zu einem exakten Bruchteil eines Umlaufs.
+
+    **Erst exakt reduzieren, dann rechnen.** Der Bruch wird auf ``[0, 1)``
+    gebracht, in Viertel und Rest zerlegt, und ein Rest über einer
+    Achteldrehung geht über seine Ergänzung. Die Reihe sieht damit nur
+    Winkel zwischen null und 45 Grad; ein Vielfaches von 90 Grad ist ein
+    Rest von **null** und gibt exakt ``(±1, 0)`` oder ``(0, ±1)``. Vorher lief
+    die Reihe über den ungekürzten Winkel und traf die Null an einem rechten
+    Winkel nur bis auf die fünfzig Stellen, mit denen sie rechnet:
+    ``cos(90°)`` war ``-8,5·10⁻⁵⁰`` und ``sin(360°)`` ``-2·10⁻⁴⁹`` — auf jeder
+    Maschine gleich, aber nicht null, und eine Ecke auf der Achse lag nach
+    einer Vierteldrehung um diesen Rest daneben (Review, 22.09.2026).
+
+    Vorzeichenwechsel und Tausch ändern kein Bit der Mantisse; ``+ 0.0``
+    streicht die negative Null (dieselbe Falle, die :func:`positive_axis`
+    schon einmal gestellt hat).
+    """
+    fraction = turn % 1
+    quadrant, rest = divmod(fraction * 4, 1)
+    # ``rest`` ist der Anteil einer Vierteldrehung, also in [0, 1).
+    complement = rest > fractions.Fraction(1, 2)
+    if complement:
+        rest = 1 - rest
     with decimal.localcontext() as context:
         context.prec = EXACT_DIGITS
-        turn = 2 * _PI
-        quarter, remainder = divmod(sections, 4)
-        if remainder:
-            values = []
-            for index in range(sections):
-                angle = turn * index / sections
-                values.append((float(_cos_series(angle)), float(_sin_series(angle))))
-            return tuple(values)
-        first = []
-        for index in range(quarter + 1):
-            angle = turn * index / sections
-            first.append((float(_cos_series(angle)), float(_sin_series(angle))))
-    values = []
-    for index in range(sections):
-        eighth, step = divmod(index, quarter)
-        cos, sin = first[step]
-        # Vorzeichenwechsel und Tausch sind bitgenau — deshalb steht hier
-        # eine Tabelle und keine zweite Rechnung.
-        turned = ((cos, sin), (-sin, cos), (-cos, -sin), (sin, -cos))[eighth]
-        # ``+ 0.0`` streicht die negative Null und lässt jede andere Zahl in
-        # Ruhe. Beim Viertelpunkt eines 120-Ecks kam sonst ``(-0.0, 1.0)``
-        # heraus: Das Spiegeln dreht auch das Vorzeichen der Null um, und eine
-        # negative Null schreibt sich als ``-0.000`` und trennt zwei
-        # Schlüssel, die denselben Punkt meinen — dieselbe Falle, die
-        # :func:`positive_axis` schon einmal gestellt hat.
-        values.append((turned[0] + 0.0, turned[1] + 0.0))
-    return tuple(values)
+        angle = (
+            decimal.Decimal(rest.numerator) / decimal.Decimal(rest.denominator) * _PI / 2
+            if rest
+            else decimal.Decimal(0)
+        )
+        cos, sin = float(_cos_series(angle)), float(_sin_series(angle))
+    if complement:
+        cos, sin = sin, cos
+    turned = ((cos, sin), (-sin, cos), (-cos, -sin), (sin, -cos))[int(quadrant)]
+    return (turned[0] + 0.0, turned[1] + 0.0)
 
 
 def _reduced(angle: decimal.Decimal) -> decimal.Decimal:
@@ -687,6 +700,11 @@ def exact_cos_degrees(degrees: float) -> float:
     **Nicht ``exact_cos(math.radians(degrees))``:** Das Umrechnen rundet, und
     der gerundete Winkel geht in die Reihe. Hier bleibt die Umrechnung
     innerhalb der genauen Arithmetik, und erst das Ergebnis wird ``float``.
+
+    Ein Vielfaches von 90 Grad gibt exakt ``0`` oder ``±1`` — ein ``float`` in
+    Grad ist ein exakter Bruch, und :func:`_turn_cos_sin` reduziert ihn, bevor
+    die Reihe rechnet. Eine halbe Drehung um eine Achse lässt deshalb jede
+    Koordinate auf ihr, wo sie war.
     """
     return _exact_degrees(float(degrees))[0]
 
@@ -696,27 +714,13 @@ def exact_sin_degrees(degrees: float) -> float:
     return _exact_degrees(float(degrees))[1]
 
 
-#: Kosinus und Sinus der Vierteldrehungen — exakt, ohne Reihe.
-_QUARTER_TURNS: Final = ((1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0))
-
-
 @functools.lru_cache(maxsize=ANGLE_CACHE)
 def _exact_degrees(degrees: float) -> tuple[float, float]:
-    """Kosinus und Sinus zu einem Gradwinkel, ohne vorher zu runden.
-
-    **Ein Vielfaches von 90° kommt aus der Tabelle** (22.09.2026). Die Reihe
-    rechnet mit 50 Stellen von π, und ihr Rest bei 90° war -8,5·10⁻⁵⁰ statt
-    null: winzig, aber eine Zahl — ``transform.rotation("x", 90)`` trug ihn in
-    die Matrix, und eine um 90° gekippte Bohrung hatte eine Achse mit dieser
-    dritten Komponente. Zugesagt war, ein rechter Winkel sei exakt.
-    """
-    turns, rest = divmod(degrees, 90.0)
-    if rest == 0.0 and math.isfinite(turns):
-        return _QUARTER_TURNS[int(turns) % 4]
-    with decimal.localcontext() as context:
-        context.prec = EXACT_DIGITS
-        angle = _reduced(decimal.Decimal(degrees) * _PI / decimal.Decimal(180))
-        return (float(_cos_series(angle)), float(_sin_series(angle)))
+    """Kosinus und Sinus zu einem Gradwinkel, ohne vorher zu runden."""
+    if not math.isfinite(degrees):
+        # Wie ``math.cos``: Ein unendlicher Winkel hat keinen Kosinus.
+        raise ValueError(f"Ein Winkel muss endlich sein, nicht {degrees}")
+    return _turn_cos_sin(fractions.Fraction(degrees) / 360)
 
 
 def exact_mean(values: Sequence[float]) -> float:
@@ -756,6 +760,147 @@ def exact_centre(points: Sequence[Sequence[float]]) -> tuple[float, float, float
         exact_mean([row[1] for row in rows]),
         exact_mean([row[2] for row in rows]),
     )
+
+
+class Indexable3(Protocol):
+    """Was drei Komponenten über ``[0]``, ``[1]``, ``[2]`` hergibt — Tupel,
+    Liste oder NumPy-Feld."""
+
+    def __getitem__(self, index: int, /) -> Any: ...
+
+
+def dot3(first: Indexable3, second: Indexable3) -> float:
+    """Das Skalarprodukt zweier Raumvektoren — auf jeder Maschine dieselbe Zahl.
+
+    **Nicht ``np.dot`` und nicht ``a @ b``:** Beide gehen durch BLAS, und
+    dessen Kern wählt seine Reihenfolge und seine FMA-Nutzung nach der CPU —
+    auf dem Mac ist es Apples Accelerate, auf Windows und Linux OpenBLAS mit
+    je eigenem Kern. Drei Produkte, von links nach rechts summiert, in
+    Pythons ``float``: Jede Operation ist einzeln nach IEEE-754 gerundet, und
+    kein Compiler zieht sie zusammen (RM-187).
+    """
+    return (
+        float(first[0]) * float(second[0])
+        + float(first[1]) * float(second[1])
+        + float(first[2]) * float(second[2])
+    )
+
+
+#: Wie viele Jacobi-Durchgänge :func:`symmetric_eigen3` höchstens macht. Eine
+#: symmetrische 3x3-Matrix ist nach fünf bis sechs Durchgängen diagonal bis auf
+#: die letzte Stelle; die Grenze fängt nur, was nie konvergiert (``nan``).
+JACOBI_SWEEPS: Final = 64
+
+
+def symmetric_eigen3(
+    matrix: Sequence[Sequence[float]],
+) -> tuple[tuple[float, float, float], tuple[tuple[float, float, float], ...]]:
+    """Eigenwerte und Eigenvektoren einer symmetrischen 3x3-Matrix — ohne LAPACK.
+
+    Zurück kommen die Eigenwerte **aufsteigend** und je Eigenwert sein
+    Einheitsvektor, in derselben Reihenfolge.
+
+    **Warum nicht ``np.linalg.eigh`` oder ``svd``** (22.09.2026, RM-187):
+    LAPACK ist die plattformabhängigste Bibliothek im Stapel — Accelerate
+    auf dem Mac, OpenBLAS mit eigenem Kern je CPU auf Windows und Linux, und
+    beide dürfen einen Eigenvektor mit dem anderen Vorzeichen liefern. Gemessen
+    an der Senkbohrung des Änderungswegs: Die Ebene einer schrägen Mündung kam
+    aus einer SVD, und ihre letzte Stelle entschied über jede Ecke des
+    Werkzeugs; ein ULP daneben, und das geänderte Netz trug einen anderen
+    Fingerabdruck.
+
+    Das zyklische Jacobi-Verfahren braucht nur Grundrechenarten und
+    ``math.sqrt``, und beides ist nach IEEE-754 korrekt gerundet — auf jeder
+    Maschine dieselben Bits. Es ist dabei das genaueste Verfahren für kleine
+    symmetrische Matrizen. Abgebrochen wird, sobald kein Nebenelement mehr
+    zählt, spätestens nach :data:`JACOBI_SWEEPS` Durchgängen.
+    """
+    a = [[float(matrix[row][column]) for column in range(3)] for row in range(3)]
+    v = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    for _sweep in range(JACOBI_SWEEPS):
+        settled = True
+        for p, q in ((0, 1), (0, 2), (1, 2)):
+            apq = a[p][q]
+            # Ein Nebenelement zählt nicht mehr, wenn es neben beiden
+            # Diagonalelementen unter der Rundung verschwindet — auch
+            # hundertfach genommen (das Kriterium aus „Numerical Recipes").
+            reach = 100.0 * abs(apq)
+            if apq == 0.0 or (
+                abs(a[p][p]) + reach == abs(a[p][p]) and abs(a[q][q]) + reach == abs(a[q][q])
+            ):
+                a[p][q] = a[q][p] = 0.0
+                continue
+            settled = False
+            theta = (a[q][q] - a[p][p]) / (2.0 * apq)
+            if abs(theta) > 1e150:
+                t = 0.5 / theta
+            else:
+                t = 1.0 / (abs(theta) + math.sqrt(theta * theta + 1.0))
+                if theta < 0.0:
+                    t = -t
+            c = 1.0 / math.sqrt(t * t + 1.0)
+            s = t * c
+            tau = s / (1.0 + c)
+            a[p][p] -= t * apq
+            a[q][q] += t * apq
+            a[p][q] = a[q][p] = 0.0
+            r = 3 - p - q
+            arp, arq = a[r][p], a[r][q]
+            a[r][p] = a[p][r] = arp - s * (arq + tau * arp)
+            a[r][q] = a[q][r] = arq + s * (arp - tau * arq)
+            for row in range(3):
+                vrp, vrq = v[row][p], v[row][q]
+                v[row][p] = vrp - s * (vrq + tau * vrp)
+                v[row][q] = vrq + s * (vrp - tau * vrq)
+        if settled:
+            break
+    order = sorted(range(3), key=lambda index: (a[index][index], index))
+    values = (a[order[0]][order[0]], a[order[1]][order[1]], a[order[2]][order[2]])
+    vectors = []
+    for index in order:
+        column = (v[0][index], v[1][index], v[2][index])
+        length = math.hypot(*column)
+        vectors.append((column[0] / length, column[1] / length, column[2] / length))
+    return values, tuple(vectors)
+
+
+def plane_fit(
+    points: Sequence[Sequence[float]],
+) -> tuple[tuple[float, float, float], tuple[float, float, float], float]:
+    """Die Ausgleichsebene durch eine Punktwolke: Mitte, Normale und Restspanne.
+
+    Dasselbe, was ``np.linalg.svd(points - mitte)`` beantwortet — die
+    Richtung des kleinsten Singulärwerts ist die Normale, der Singulärwert
+    selbst die Restspanne (die Wurzel der Quadratsumme der Abstände zur
+    Ebene) —, aber **auf jeder Maschine dieselben Bits** (RM-187, siehe
+    :func:`symmetric_eigen3`): Die Mitte kommt aus :func:`exact_centre`, die
+    Streumatrix aus ``math.fsum`` über die einzeln gerundeten Produkte, die
+    Eigenrichtung aus Jacobi.
+
+    Das Vorzeichen der Normalen ist fest (:func:`positive_axis`); wer eine
+    Seite meint, dreht sie selbst um. Weniger als drei Punkte haben keine
+    Ebene.
+    """
+    rows = [(float(point[0]), float(point[1]), float(point[2])) for point in points]
+    if len(rows) < 3:
+        raise ValueError("Eine Ebene braucht mindestens drei Punkte")
+    centre = exact_centre(rows)
+    offsets = [(x - centre[0], y - centre[1], z - centre[2]) for x, y, z in rows]
+    entry = [
+        [math.fsum(offset[row] * offset[column] for offset in offsets) for column in range(3)]
+        for row in range(3)
+    ]
+    _values, vectors = symmetric_eigen3(entry)
+    normal = positive_axis(vectors[0])
+    # Die Restspanne aus den Abständen selbst, nicht aus dem kleinsten
+    # Eigenwert: Die Streumatrix quadriert die Kondition, und ihr kleinster
+    # Eigenwert trägt einen Fehler von ``eps·λmax`` — an einem ebenen Ring von
+    # 60 mm zwei Zehntel Mikrometer Scheinspanne, wo die SVD 10⁻¹³ sagt.
+    # ``d * d`` und nicht ``d ** 2``: Pythons Potenz ruft ``pow`` aus der
+    # Mathematikbibliothek der Plattform, das Produkt ist IEEE-754.
+    distances = [dot3(offset, normal) for offset in offsets]
+    spread = math.sqrt(math.fsum(distance * distance for distance in distances))
+    return centre, normal, spread
 
 
 def ring_area(points: Sequence[Sequence[float]]) -> float:

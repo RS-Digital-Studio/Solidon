@@ -26,7 +26,17 @@ verschiedenen Rechenwerken herauskommen.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import json
+import math
+import os
+import platform
+import subprocess
+import sys
+from collections.abc import Callable, Iterator
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -101,3 +111,433 @@ def test_a_plain_circle_outline_has_the_same_points_everywhere() -> None:
 
     assert points.shape == (64, 2)
     assert fingerprint(points) == "b71ac55dd467e8cf"
+
+
+# --- Die Rechenwege, nicht nur ihre Bausteine (RM-187, 22.09.2026) ------------------
+#
+# Die Tests darüber schreiben die Bits der Bausteine fest — und belegen damit
+# erst auf drei Maschinen etwas. Die Tests darunter belegen es auf **einer**:
+# Jede Rechnung, die eine andere Maschine in der letzten Stelle anders runden
+# darf, bekommt hier ein Rauschen von einer Einheit der letzten Stelle, und der
+# Fingerabdruck am Ende eines Weges darf sich davon nicht rühren. Rührt er
+# sich, hängt der Weg an der Maschine — und der Testname sagt, an welchem.
+#
+# **Was als plattformabhängig gilt, ist gemessen oder nachgelesen:**
+#
+# * BLAS — ``np.dot``, ``matmul``, ``inner``, ``vdot``, ``tensordot`` und die
+#   Vektornorm ``np.linalg.norm`` ohne Achse (sie ruft ``dot``). OpenBLAS wählt
+#   seinen Kern nach der CPU, der Mac rechnet mit Accelerate. Gemessen hier:
+#   ``OPENBLAS_CORETYPE=Sandybridge`` gegen ``Haswell`` ändert ``rotation_about``.
+# * ``np.einsum`` — seine Produktsummen nutzen auf ARM FMA, auf x86 nicht.
+# * LAPACK — ``svd``, ``eig``, ``eigh``, ``lstsq``, ``solve``, ``inv``, ``det``:
+#   andere Bibliothek, andere Pivotierung, bei Eigen- und Singulärvektoren auch
+#   ein anderes Vorzeichen.
+# * Transzendente Funktionen — ``np.cos`` und Geschwister wählen ihre
+#   Umsetzung nach der CPU (SVML mit AVX-512, NEON), ``math.cos`` und
+#   Geschwister kommen aus der Mathematikbibliothek der Plattform.
+#
+# **Nicht darunter, mit Absicht:** Grundrechenarten und ``sqrt`` (IEEE-754,
+# korrekt gerundet), ``np.cross`` (Produkte und Differenzen je Element),
+# ``np.sum``/``np.mean`` (NumPys paarweise Summe hat eine feste Reihenfolge),
+# ``math.hypot`` und ``math.fsum`` (CPython rechnet sie selbst, ohne die
+# Plattformbibliothek). Und ``@`` lässt sich nicht verrauschen — es ist ein
+# Operator und keine Funktion eines Moduls; dafür steht
+# :func:`test_a_way_through_the_kernel_does_not_follow_the_blas_kernel` daneben.
+#
+# Ein Ergebnis, das auf jeder Maschine exakt ist — eine ganze Zahl, ``π/2``,
+# ein Skalarprodukt mit einer Achse, das eine Eingangszahl zurückgibt —,
+# bekommt kein Rauschen: Dort wäre ein roter Test ein Fehlalarm.
+
+_BLAS_LIKE = ("dot", "vdot", "inner", "matmul", "einsum", "tensordot")
+_NUMPY_TRANSCENDENTAL = (
+    "cos",
+    "sin",
+    "tan",
+    "arccos",
+    "arcsin",
+    "arctan",
+    "arctan2",
+    "cosh",
+    "sinh",
+    "tanh",
+    "exp",
+    "exp2",
+    "expm1",
+    "log",
+    "log2",
+    "log10",
+    "log1p",
+    "hypot",
+    "power",
+    "cbrt",
+)
+_LAPACK = ("norm", "svd", "eig", "eigh", "eigvals", "eigvalsh", "lstsq", "solve", "inv", "det")
+_MATH = (
+    "cos",
+    "sin",
+    "tan",
+    "acos",
+    "asin",
+    "atan",
+    "atan2",
+    "cosh",
+    "sinh",
+    "tanh",
+    "exp",
+    "expm1",
+    "log",
+    "log2",
+    "log10",
+    "log1p",
+    "pow",
+)
+_EXACT_EVERYWHERE = np.array([np.pi, np.pi / 2, np.pi / 4, 3 * np.pi / 4])
+
+
+class _Noise:
+    """Welche Stellen eines Ergebnisses ein ULP wandern — ein festes Muster
+    über die Bits des Werts, damit jeder Lauf dasselbe Rauschen trägt."""
+
+    multiplier = np.uint64(0x9E3779B97F4A7C15)
+
+    def array(self, result: object, operands: np.ndarray | None) -> object:
+        values = np.asarray(result)
+        if values.dtype.kind != "f":
+            return result
+        flat = np.array(values, dtype=np.float64, copy=True)
+        pick = ((flat.view(np.uint64) * self.multiplier) >> np.uint64(61)) & np.uint64(1)
+        exact = ~np.isfinite(flat) | (flat == np.round(flat))
+        exact |= np.isin(np.abs(flat), _EXACT_EVERYWHERE)
+        if operands is not None and operands.size:
+            exact |= np.isin(np.abs(flat), operands)
+        move = (pick == 1) & ~exact
+        flat[move] = np.nextafter(flat[move], np.inf)
+        if values.ndim == 0:
+            return float(flat) if isinstance(result, float) else flat.astype(values.dtype)[()]
+        return flat.astype(values.dtype, copy=False)
+
+    def scalar(self, value: object) -> object:
+        if not isinstance(value, float) or not np.isfinite(value) or value == round(value):
+            return value
+        if abs(value) in _EXACT_EVERYWHERE:
+            return value
+        bits = int(np.float64(value).view(np.uint64))
+        if ((bits * int(self.multiplier)) & (2**64 - 1)) >> 63:
+            return float(np.nextafter(value, np.inf))
+        return value
+
+
+def _operands(args: tuple[object, ...]) -> np.ndarray:
+    """Die Beträge der Eingangszahlen — ein Ergebnis unter ihnen ist exakt."""
+    found = []
+    for value in args:
+        if isinstance(value, (np.ndarray, list, tuple, float, int)):
+            try:
+                array = np.asarray(value, dtype=np.float64).ravel()
+            except TypeError, ValueError:
+                continue
+            if array.size <= 2_000_000:
+                found.append(np.abs(array))
+    return np.concatenate(found) if found else np.zeros(0)
+
+
+@contextlib.contextmanager
+def platform_noise() -> Iterator[None]:
+    """Legt auf jede plattformabhängige Rechnung ein Rauschen von einem ULP."""
+    noise = _Noise()
+    undo: list[Callable[[], None]] = []
+
+    def patch(module: Any, name: str, *, exact_on_operands: bool) -> None:
+        real = getattr(module, name, None)
+        if real is None:
+            return
+
+        def noisy(*args: Any, **kwargs: Any) -> Any:
+            result = real(*args, **kwargs)
+            # ``norm`` über eine Achse ist ``sqrt(add.reduce(x·x))`` — je
+            # Element und damit überall gleich. Nur ohne Achse ruft sie ``dot``.
+            if name == "norm" and (kwargs.get("axis") is not None or len(args) > 2):
+                return result
+            operands = _operands(args) if exact_on_operands else None
+            if isinstance(result, tuple):
+                items = tuple(noise.array(item, operands) for item in result)
+                return type(result)(*items) if hasattr(result, "_fields") else items
+            if isinstance(result, (np.ndarray, np.floating, float)):
+                return noise.array(result, operands)
+            return result
+
+        setattr(module, name, noisy)
+        undo.append(lambda: setattr(module, name, real))
+
+    def patch_math(name: str) -> None:
+        real = getattr(math, name)
+
+        def noisy(*args: Any) -> Any:
+            return noise.scalar(real(*args))
+
+        setattr(math, name, noisy)
+        undo.append(lambda: setattr(math, name, real))
+
+    try:
+        for name in _BLAS_LIKE:
+            patch(np, name, exact_on_operands=True)
+        for name in _NUMPY_TRANSCENDENTAL:
+            patch(np, name, exact_on_operands=False)
+        for name in _LAPACK:
+            patch(np.linalg, name, exact_on_operands=name == "norm")
+        for name in _MATH:
+            patch_math(name)
+        yield
+    finally:
+        for step in reversed(undo):
+            step()
+
+
+def _mesh_print(mesh: Any) -> str:
+    from app.core.geom.mesh import as_mesh_data
+
+    raw = as_mesh_data(mesh).raw
+    return f"{len(raw.faces)}/{fingerprint(raw.vertices)}"
+
+
+def _plate() -> Any:
+    """Eine Platte 60 × 40 × 8 mit zwei Bohrungen — aus festen Maßen, ohne BLAS."""
+    from app.core.deferred import trimesh
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 8.0))
+    plate.vertices = np.asarray(plate.vertices) + np.array([3.0, -2.0, 4.0])
+    first = lathe.cylinder(radius=3.1, height=20.0, sections=64)
+    first.vertices = np.asarray(first.vertices) + np.array([-12.0, 4.0, 4.0])
+    second = lathe.cylinder(radius=4.25, height=20.0, sections=96)
+    second.vertices = np.asarray(second.vertices) + np.array([17.5, -6.0, 4.0])
+    return boolean("difference", [MeshData.of(plate), MeshData.of(first), MeshData.of(second)]).mesh
+
+
+def _registered(name: str, source: Any, **params: object) -> Any:
+    """Eine Operation über ihren Registereintrag, mit dem Vorgabeprofil."""
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    load_operations()
+    entry = SceneObject(id="obj_1", name="Platte", mesh=source)
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    spec = REGISTRY.get(name)
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}, profile=profile),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=20260922,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    return result.outputs[0].mesh
+
+
+def _changed_bore() -> str:
+    """Der Änderungsweg aus RM-187: Senkbohrung mit Nachbarloch, auf Ø 6 verkleinert."""
+    from app.core.knowledge import profiles
+    from tests.helpers import feature_operation, sloping_bore
+
+    mesh, features, hole = sloping_bore()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    result = feature_operation(
+        "resize_hole", mesh, features, hole, profile, diameter=6.0, compensate=False
+    )
+    return _mesh_print(result.outputs[0].mesh)
+
+
+def _turned_plate() -> str:
+    """*Drehen* um die eigene Mitte — um 37 Grad, also keine Vierteldrehung."""
+    return _mesh_print(_registered("rotate_object", _plate(), axis="z", angle=37.0))
+
+
+def _oriented_plate(thorough: bool) -> str:
+    """*Druckoptimal ausrichten* an einer schräg liegenden Platte."""
+    from app.core.geom.transform import apply, rotation
+
+    tilted = apply(_plate(), rotation("x", 33.0))
+    return _mesh_print(_registered("orient_for_print", tilted, thorough=thorough, arrange=False))
+
+
+def _slanted_cut() -> str:
+    """Ein Schnitt mit einer schrägen Ebene, gedeckelt."""
+    from app.core.geom.section import SectionPlane, cut
+
+    normal = (0.3, -0.2, 0.9)
+    length = math.hypot(*normal)
+    plane = SectionPlane(
+        normal=(normal[0] / length, normal[1] / length, normal[2] / length), position=1.7
+    )
+    return _mesh_print(cut(_plate(), plane).mesh)
+
+
+def _aligned_plate() -> str:
+    """Eine Bohrungsachse auf eine schräge zweite gelegt."""
+    from app.core.geom.align import align_matrix
+    from app.core.geom.transform import apply
+    from app.core.types import Feature
+
+    mover = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"axis": (0.2, 0.3, 0.9), "centre": (1.5, -2.0, 3.0)},
+    )
+    target = Feature(
+        id="hole_2",
+        kind="hole",
+        provenance="detected",
+        params={"axis": (-0.4, 0.8, 0.1), "centre": (7.0, 5.0, -1.0)},
+    )
+    return _mesh_print(apply(_plate(), align_matrix(mover, target)))
+
+
+def _posed_plate() -> str:
+    """Eine Stellung über zwei Knochen, mit Winkeln, die keine rechten sind."""
+    from app.core.geom.pose import posed
+    from app.core.types import Bone, Pose
+
+    bones = [
+        Bone(name="a", head=(-30.0, 0.0, 4.0), tail=(0.0, 0.0, 4.0), parent=""),
+        Bone(name="b", head=(0.0, 0.0, 4.0), tail=(30.0, 0.0, 4.0), parent="a"),
+    ]
+    poses = [Pose(bone="a", angles=(0.0, 12.5, 0.0)), Pose(bone="b", angles=(7.0, 30.0, -11.0))]
+    return _mesh_print(posed(_plate(), bones, poses))
+
+
+def _thickened_skin() -> str:
+    """*Offene Fläche schließen* an der Platte ohne ihre Deckfläche."""
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.mesh_ops import _thickened
+
+    raw = _plate().raw.copy()
+    raw.update_faces(np.asarray(raw.triangles_center)[:, 2] <= 7.9)
+    raw.remove_unreferenced_vertices()
+    return _mesh_print(_thickened(MeshData.of(raw), 1.2))
+
+
+def _mended_import() -> str:
+    """Der Import eines Netzes mit Löchern — Ränder werden geohrt und geschlossen."""
+    from app.core.geom.mesh import MeshData
+    from app.core.ingest.loader import normalise
+
+    raw = _plate().raw.copy()
+    centres = np.asarray(raw.triangles_center)
+    near = np.hypot(centres[:, 0] + 12.0, centres[:, 1] - 4.0)
+    keep = ~((centres[:, 2] > 3.0) & (near < 3.2)) & ~(
+        (centres[:, 2] < 1.0) & (near > 6.0) & (near < 20.0)
+    )
+    raw.update_faces(keep)
+    raw.remove_unreferenced_vertices()
+    return _mesh_print(normalise(MeshData.of(raw), "mm").mesh)
+
+
+_WAYS: dict[str, Callable[[], str]] = {
+    "align_to_feature": _aligned_plate,
+    "import_repair": _mended_import,
+    "orient_for_print": lambda: _oriented_plate(True),
+    "orient_heuristic": lambda: _oriented_plate(False),
+    "pose_armature": _posed_plate,
+    "resize_hole": _changed_bore,
+    "rotate_object": _turned_plate,
+    "section_cut": _slanted_cut,
+    "thicken": _thickened_skin,
+}
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("way", sorted(_WAYS))
+def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None:
+    """Derselbe Weg mit und ohne Plattformrauschen — derselbe Fingerabdruck.
+
+    **Der Anlass ist der Änderungsweg aus RM-187**: Am 17.09.2026 trug die
+    geänderte Senkbohrung auf Windows, Ubuntu und macOS drei verschiedene
+    Fingerabdrücke, und die Bohrungskette zerfiel auf dem Mac. Nach der
+    Umstellung der Kreispunkte blieb eine letzte Stelle offen, und dieser Test
+    hat sie auf einer einzigen Maschine gefunden: Die Ebene einer schrägen
+    Mündung kam aus ``np.linalg.svd`` (``prepare_ops._bore_end_planes``), ihre
+    Lage aus ``np.dot`` (``prepare.resize_bore``). Rot war er außerdem für
+    *Drehen*, *Druckoptimal ausrichten*, den schrägen Schnitt, *An Merkmal
+    ausrichten*, *Stellung geben* und *Offene Fläche schließen* (22.09.2026).
+    """
+    quiet = _WAYS[way]()
+    with platform_noise():
+        noisy = _WAYS[way]()
+
+    assert noisy == quiet, f"{way} hängt an einer plattformabhängigen Rechnung"
+
+
+def test_the_noise_reaches_what_it_should() -> None:
+    """Die Gegenprobe: Das Rauschen trifft, was eine andere Maschine anders rechnet.
+
+    Ohne sie wäre der Test darüber auch mit einem Rauschen grün, das nichts
+    ändert — eine Zusicherung über die leere Menge.
+    """
+    values = np.array([0.1, 0.2, 0.3, 0.7])
+
+    def asked() -> tuple[float, float, float]:
+        return (
+            float(np.dot(values, values[::-1])),
+            math.cos(0.3),
+            float(np.linalg.norm(values)),
+        )
+
+    quiet = asked()
+    with platform_noise():
+        noisy = asked()
+        exact = (float(np.dot([0.0, 0.0, 1.0], [2.5, 3.5, 4.25])), math.cos(0.0))
+
+    assert noisy != quiet
+    assert exact == (4.25, 1.0), "was überall exakt ist, bekommt kein Rauschen"
+
+
+def _fingerprints() -> dict[str, str]:
+    """Alle Wege auf einmal — für den Vergleich über zwei BLAS-Kerne."""
+    return {way: _WAYS[way]() for way in sorted(_WAYS)}
+
+
+@pytest.mark.slow
+def test_a_way_through_the_kernel_does_not_follow_the_blas_kernel() -> None:
+    """Dieselben Wege mit einem anderen BLAS-Kern — dieselben Fingerabdrücke.
+
+    ``@`` lässt sich nicht verrauschen, aber der Kern lässt sich tauschen:
+    OpenBLAS wählt ihn nach der CPU und nimmt mit ``OPENBLAS_CORETYPE`` einen
+    anderen. ``Nehalem`` rechnet ohne AVX und ohne FMA — gemessen ändert das
+    Matrixprodukte, ``rotation_about`` bis zum 22.09.2026 eingeschlossen.
+    Wo NumPy nicht auf OpenBLAS steht (Accelerate auf dem Mac) oder die CPU
+    kein x86 ist, gibt es diesen Kern nicht, und der Test sagt es.
+    """
+    blas = str(np.show_config(mode="dicts")["Build Dependencies"]["blas"]["name"])
+    if "openblas" not in blas.lower() or platform.machine().lower() not in ("x86_64", "amd64"):
+        pytest.skip(f"kein austauschbarer OpenBLAS-Kern ({blas}, {platform.machine()})")
+    here = _fingerprints()
+    root = str(Path(__file__).resolve().parents[1])
+    script = (
+        "import json, sys\n"
+        "sys.path.insert(0, sys.argv[1])\n"
+        "from tests.test_platform_identity import _fingerprints\n"
+        "print(json.dumps(_fingerprints()))\n"
+    )
+    finished = subprocess.run(
+        [sys.executable, "-c", script, root],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=dict(os.environ, OPENBLAS_CORETYPE="Nehalem", PYTHONUTF8="1"),
+        cwd=root,
+        timeout=600,
+        check=False,
+    )
+    assert finished.returncode == 0, finished.stderr[-2000:]
+
+    assert json.loads(finished.stdout.strip().splitlines()[-1]) == here

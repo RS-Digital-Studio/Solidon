@@ -863,3 +863,35 @@ def test_moving_an_exact_body_maps_faces_to_triangles_once_per_body(monkeypatch)
         assert (
             after.params.get("centre") != feature.params.get("centre") or not feature.face_indices
         )
+
+
+def test_four_quarter_turns_bring_every_point_back_bit_for_bit() -> None:
+    """Eine Vierteldrehung ist exakt, vier davon sind die Ausgangslage.
+
+    Mit ``cos(90°) = -8,5·10⁻⁵⁰`` statt null trug die Matrix einen Rest neben
+    den Nullen, und über ``@`` rundete BLAS je nach CPU (RM-187). Aus exakten
+    Winkelfunktionen und in fester Reihenfolge ist jede Ecke nach einer vollen
+    Umdrehung wieder dieselbe Zahl.
+    """
+    import numpy as np
+
+    from app.core.geom.transform import composed, moved_points, rotation_about
+
+    corners = np.array([[1.25, -3.5, 7.0], [0.1, 0.2, 0.3], [-40.0, 12.5, 1e-3]])
+    quarter = rotation_about((0.0, 0.0, 1.0), (2.0, -1.0, 0.0), 90.0)
+
+    once = moved_points(corners, quarter)
+    full = moved_points(corners, composed(quarter, quarter, quarter, quarter))
+
+    assert np.array_equal(once[:, 2], corners[:, 2]), "um Z bleibt Z"
+    # x' = cx - (y - cy), y' = cy + (x - cx): Nullen und Einsen, keine Reste.
+    assert np.array_equal(once[0], [2.0 - (-3.5 - -1.0), -1.0 + (1.25 - 2.0), 7.0])
+    assert np.array_equal(full, corners)
+    half = rotation_about((1.0, 0.0, 0.0), (0.0, 0.0, 0.0), 180.0)
+    assert np.array_equal(half[:3, :3], np.diag((1.0, -1.0, -1.0)))
+    # Eine Ecke auf der Y-Achse landet auf der X-Achse — nicht um 10⁻⁴⁹ daneben,
+    # denn danach wären zwei Flächen, die koplanar sein sollen, es nicht mehr.
+    on_axis = moved_points(
+        np.array([[0.0, 6.0, 1.0]]), rotation_about((0.0, 0.0, 1.0), (0.0, 0.0, 0.0), 90.0)
+    )
+    assert np.array_equal(on_axis, [[-6.0, 0.0, 1.0]])

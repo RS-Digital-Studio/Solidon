@@ -82,7 +82,7 @@ def revolve(
     body.merge_vertices()
     if transform is not None:
         # ``moved_points`` und nicht ``apply_transform``: dieselbe Zusage wie
-        # ueberall (RM-187). Der Parameter heisst ``transform`` wie bei
+        # überall (RM-187). Der Parameter heißt ``transform`` wie bei
         # ``trimesh.creation.revolve``, deshalb der Namensimport.
         body.vertices = moved_points(
             np.asarray(body.vertices, dtype=np.float64),
@@ -214,5 +214,11 @@ def rigid_inverse(matrix: NDArray[np.float64]) -> NDArray[np.float64]:
         return np.asarray(np.linalg.inv(raw), dtype=np.float64)
     back = np.eye(4, dtype=np.float64)
     back[:3, :3] = turn.T
-    back[:3, 3] = -(turn.T @ raw[:3, 3])
+    # ``-R^T·t`` Zeile für Zeile über ``units.dot3`` und nicht über ``@``: Das
+    # Matrix-Vektor-Produkt geht durch BLAS, und genau diese Verschiebung
+    # bewegt danach jede Ecke des Netzes (RM-187, 22.09.2026).
+    shift = raw[:3, 3]
+    back[:3, 3] = [
+        -units.dot3((turn[0, row], turn[1, row], turn[2, row]), shift) for row in range(3)
+    ]
     return back

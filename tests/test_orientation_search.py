@@ -16,6 +16,7 @@ from app.core.scene import CancelSignal
 from app.core.slice.analysis import slice_body
 from app.core.slice.orientation import (
     FINALISTS,
+    SUPPORT_FINALISTS,
     best_face_candidate,
     judge,
     search,
@@ -74,7 +75,9 @@ def test_shortlist_matches_the_fully_sliced_geometric_candidates(organic, profil
         profile.smallest_first_layer,
     )
     assert result.best.support_volume <= full.support_volume * 1.05 + 1e-6
-    assert result.tried <= FINALISTS + 1 + len(AXES)
+    # Zwei Listen Finalisten — nach Heuristik und nach geschätztem Stützraum
+    # (RM-190) —, die Achsen und die Ausgangslage; nie das ganze Feld.
+    assert result.tried <= FINALISTS + SUPPORT_FINALISTS + 1 + len(AXES)
 
 
 def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -222,6 +225,7 @@ def test_search_passes_the_profile_footing_limit_to_the_final_choice(
         _footing: float | None = None,
         *,
         overhang_angle: float | None = None,
+        line_width: float | None = None,
     ) -> orientation.Candidate:
         measured.append(direction)
         if direction == baseline:
@@ -349,6 +353,7 @@ def test_the_face_shortlist_is_decided_by_real_support(
         _footing: float | None = None,
         *,
         overhang_angle: float | None = None,
+        line_width: float | None = None,
     ) -> orientation.Candidate:
         seen.append(direction)
         return orientation.Candidate(direction, support[direction], 100.0, 10.0)
@@ -424,6 +429,7 @@ def test_the_face_shortlist_stops_after_a_real_slice(
         _footing: float | None = None,
         *,
         overhang_angle: float | None = None,
+        line_width: float | None = None,
     ) -> orientation.Candidate:
         seen.append(direction)
         signal.cancel()
@@ -451,6 +457,7 @@ def test_the_full_search_stops_after_the_baseline_slice(
         _footing: float | None = None,
         *,
         overhang_angle: float | None = None,
+        line_width: float | None = None,
     ) -> orientation.Candidate:
         seen.append(direction)
         signal.cancel()
@@ -613,3 +620,241 @@ def test_the_search_stands_a_sleeve_on_its_wide_rim_despite_the_proxy(
     assert found.best.direction == (0.0, 0.0, 1.0), "gedreht: der weite Rand kommt nach unten"
     assert found.best.first_layer_area > 300.0
     assert found.best.support_volume < found.baseline.support_volume  # type: ignore[union-attr]
+
+
+def _umbrella() -> MeshData:
+    """Das Schirmdach des Getränkehalters (RM-190), aus den Maßen seines Skripts.
+
+    Roberts eigener Entwurf (``F:\3D Dateien\3D Drucker\02_Getraenkehalter``,
+    ``Getraenkehalter_mit_Schirm.py``): ein flaches Kegeldach mit Rand, Nabe,
+    Gleitbohrung, einer Aussparung hinten und acht Lüftungslöchern — hier mit
+    denselben Maßen neu gebaut, nicht aus der Datei gelesen.
+    """
+    import numpy as np
+
+    from app.core.geom import lathe
+    from app.core.geom.boolean import boolean
+
+    radius, wall, skirt, apex, hub = 101.0, 2.4, 92.0, 130.0, 8.0
+    outline = [
+        (radius, 0.0),
+        (radius, skirt),
+        (hub, apex),
+        (hub, apex - 3.0),
+        (radius - wall, skirt - 1.0),
+        (radius - wall, 0.0),
+        (radius, 0.0),
+    ]
+
+    def standing(body: trimesh.Trimesh, x: float, y: float, bottom: float, top: float):
+        body.vertices = np.asarray(body.vertices) + np.array([x, y, (bottom + top) / 2.0])
+        return MeshData.of(body)
+
+    canopy = MeshData.of(lathe.revolve(outline, sections=96))
+    sleeve = standing(lathe.cylinder(8.0, 48.0, sections=96), 0.0, 0.0, apex - 48.0, apex)
+    canopy = boolean("union", [canopy, sleeve]).mesh
+    notch = trimesh.creation.box(extents=(60.0, 67.0, 45.0))
+    notch.apply_translation((0.0, -81.5, 17.5))
+    cuts = [
+        standing(lathe.cylinder(6.15, 50.0, sections=96), 0.0, 0.0, apex - 49.0, apex + 1.0),
+        MeshData.of(notch),
+    ]
+    for step in range(8):
+        angle = step * 45.0
+        from app.core.units import exact_cos_degrees, exact_sin_degrees
+
+        cuts.append(
+            standing(
+                lathe.cylinder(1.5, 40.0, sections=96),
+                40.0 * exact_cos_degrees(angle),
+                40.0 * exact_sin_degrees(angle),
+                95.0,
+                135.0,
+            )
+        )
+    return boolean("difference", [canopy, *cuts]).mesh
+
+
+@pytest.mark.slow
+def test_the_umbrella_is_not_left_upside_down() -> None:
+    """RM-190: *Druckoptimal ausrichten* ließ den Schirm kopfüber liegen.
+
+    Gemessen am 23.09.2026 an Roberts Getränkehalter: Kopfüber braucht das
+    Dach 459 cm³ Stützraum, um 22 Grad gekippt 164 cm³ bei elfmal so viel
+    Standfläche — aber die Suche schnitt nur ihre acht Finalisten, und die
+    wählt die Vorauswahl nach der **Fläche** der Überhänge. Das flache Dach
+    hängt gekippt über mehr Fläche, nur tiefer; die gute Lage stand in der
+    Vorauswahl auf Rang 123 bis 138 von 204. Dieselbe Lücke an Mast und
+    Halter desselben Entwurfs.
+
+    Verglichen wird mit der Lage, die die Suche bis dahin wählte, gemessen mit
+    demselben Schnitt — keine Zahl aus dem Prüfling.
+    """
+    from app.core.knowledge import profiles
+    from app.core.slice.orientation import SEARCH_LAYER_HEIGHT, stands
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    body = _umbrella()
+    footing = profile.printer.layer_height / 2.0
+    upside_down = judge(
+        body,
+        (0.0, 0.0, 1.0),
+        SEARCH_LAYER_HEIGHT,
+        footing,
+        overhang_angle=profile.overhang_limit_degrees,
+    )
+
+    found = search(body, count=200, profile=profile)
+
+    assert stands(found.best, profile.smallest_first_layer)
+    assert found.best.support_volume < 0.5 * upside_down.support_volume, (
+        f"{found.best.direction}: {found.best.support_volume:.0f} mm³ "
+        f"gegen {upside_down.support_volume:.0f} mm³ kopfüber"
+    )
+
+
+def _pool_holder() -> MeshData:
+    """Der Getränkehalter für den Poolrand (RM-190), aus den Maßen seines Skripts.
+
+    Roberts eigener Entwurf (``Getraenkehalter_Pool_ThreeSixty.py``): ein
+    ovaler Sattel über das Rahmenrohr, ein Arm, ein Tablett mit Steg und zwei
+    Becher mit Abfluss — hier mit denselben Maßen neu gebaut.
+    """
+    import numpy as np
+    import shapely.geometry as sg
+    from shapely.affinity import scale
+
+    from app.core.geom.boolean import boolean
+    from app.core.units import exact_cos_degrees, exact_sin_degrees
+
+    rail_w, rail_h, clear, wall, width, opening = 47.0, 32.0, 1.4, 5.0, 45.0, 150.0
+    flat, corner, pocket_wall, depth, bottom, drain, gap = 84.0, 20.0, 3.5, 80.0, 4.0, 42.0, 12.0
+    rx_in, ry_in = (rail_w + clear) / 2.0, (rail_h + clear) / 2.0
+    rx_out, ry_out = rx_in + wall, ry_in + wall
+    r_out = max(rx_out, ry_out)
+    out_flat = flat + 2.0 * pocket_wall
+    out_half = out_flat / 2.0
+    cup_dx = out_half + gap / 2.0
+    cup_y = r_out + 8.0 + out_half
+
+    def block(x0: float, x1: float, y0: float, y1: float, z0: float, z1: float) -> MeshData:
+        body = trimesh.creation.box(extents=(x1 - x0, y1 - y0, z1 - z0))
+        body.apply_translation(((x0 + x1) / 2.0, (y0 + y1) / 2.0, (z0 + z1) / 2.0))
+        return MeshData.of(body)
+
+    def rounded(size: float, radius: float, z0: float, z1: float, x: float, y: float) -> MeshData:
+        h = size / 2.0 - radius
+        square = sg.Polygon([(-h, -h), (h, -h), (h, h), (-h, h)]).buffer(
+            radius, quad_segs=24, join_style="round"
+        )
+        body = trimesh.creation.extrude_polygon(square, height=z1 - z0)
+        body.apply_translation((x, y, z0))
+        return MeshData.of(body)
+
+    def drum(radius: float, z0: float, z1: float, x: float, y: float) -> MeshData:
+        from app.core.geom import lathe
+
+        body = lathe.cylinder(radius, z1 - z0, sections=64)
+        body.vertices = np.asarray(body.vertices) + np.array([x, y, (z0 + z1) / 2.0])
+        return MeshData.of(body)
+
+    circle = sg.Point(0.0, 0.0).buffer(1.0, quad_segs=96)
+    ring = scale(circle, rx_out, ry_out).difference(scale(circle, rx_in, ry_in))
+    reach = r_out + 3.0
+    steps = [270.0 - opening / 2.0 + opening * index / 59.0 for index in range(60)]
+    wedge = [(0.0, 0.0)] + [
+        (exact_cos_degrees(angle) * reach, exact_sin_degrees(angle) * reach) for angle in steps
+    ]
+    hook = trimesh.creation.extrude_polygon(ring.difference(sg.Polygon(wedge)), height=width)
+    hook.apply_transform(
+        np.array([[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=float)
+    )
+    hook.apply_translation((-width / 2.0, 0.0, 0.0))
+
+    parts = [
+        MeshData.of(hook),
+        block(-width / 2.0, width / 2.0, 18.0, 42.0, -6.0, 24.0),
+        block(-(cup_dx + out_half), cup_dx + out_half, 30.0, 72.0, -6.0, 0.0),
+        block(-cup_dx, cup_dx, 60.0, 108.0, -6.0, 0.0),
+    ]
+    cavities = []
+    for x in (-cup_dx, cup_dx):
+        parts.append(rounded(out_flat, corner + pocket_wall, -depth, 0.0, x, cup_y))
+        cavities.append(rounded(flat, corner, -(depth - bottom), 2.0, x, cup_y))
+        cavities.append(drum(drain / 2.0, -depth - 2.0, -depth + bottom + 1.0, x, cup_y))
+    solid = boolean("union", parts).mesh
+    return boolean("difference", [solid, *cavities]).mesh
+
+
+def _line_holding_footing(body: MeshData, direction, profile: Profile) -> float:
+    """Wie viel der Aufstandsfläche eine Linie tragen kann — sie, um eine halbe
+    Linienbreite nach innen versetzt."""
+    from app.core.geom.orient import rotation_to_down
+    from app.core.slice.orientation import _contact
+
+    contact, _centre = _contact(
+        body, rotation_to_down(direction), profile.printer.layer_height / 2.0
+    )
+    if contact is None:
+        return 0.0
+    return float(contact.buffer(-profile.printer.extrusion_width / 2.0, join_style="mitre").area)
+
+
+def test_a_knife_edge_is_no_footing() -> None:
+    """Ein Quader auf seiner Kante: 20 mm² Aufstand, aber kein Strich darauf druckbar.
+
+    Die Kante berührt das Bett in halber Schichthöhe als Streifen von
+    2 x 0,1 mm Breite — mehr Fläche als die kleinste Aufstandsfläche
+    (``smallest_first_layer``), und doch schmaler als eine Linie. Stehen heißt:
+    Die erste Schicht lässt sich drucken.
+    """
+    import math
+
+    from app.core.knowledge import profiles
+    from app.core.slice.orientation import SEARCH_LAYER_HEIGHT, stands
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    beam = MeshData.of(trimesh.creation.box(extents=(100.0, 40.0, 40.0)))
+    edge = (0.0, -math.sqrt(0.5), -math.sqrt(0.5))
+
+    on_edge = judge(
+        beam,
+        edge,
+        SEARCH_LAYER_HEIGHT,
+        profile.printer.layer_height / 2.0,
+        line_width=profile.printer.extrusion_width,
+    )
+    lying = judge(
+        beam,
+        (0.0, 0.0, -1.0),
+        SEARCH_LAYER_HEIGHT,
+        profile.printer.layer_height / 2.0,
+        line_width=profile.printer.extrusion_width,
+    )
+
+    assert on_edge.first_layer_area >= profile.smallest_first_layer, "sonst prüft das nichts"
+    assert not stands(on_edge, profile.smallest_first_layer)
+    assert stands(lying, profile.smallest_first_layer)
+
+
+@pytest.mark.slow
+def test_the_pool_holder_does_not_stand_on_a_knife_edge() -> None:
+    """RM-190, die Kehrseite: Wer mehr Lagen schneidet, findet auch Kanten.
+
+    Mit der Schätzung des Stützraums in der Vorauswahl fand die Suche am
+    Getränkehalter eine um 48 Grad gekippte Lage mit 93 statt 326 cm³
+    Stützraum — auf drei Kanten, zusammen 36 mm², und keine davon so breit
+    wie eine Linie (am 23.09.2026 gemessen: um eine halbe Linienbreite nach
+    innen versetzt bleibt nichts). Die kleinste Aufstandsfläche galt der
+    Summe, nicht dem, was sich drucken lässt.
+    """
+    from app.core.knowledge import profiles
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    holder = _pool_holder()
+
+    found = search(holder, count=200, profile=profile)
+
+    assert _line_holding_footing(holder, found.best.direction, profile) >= (
+        profile.smallest_first_layer
+    ), f"{found.best.direction} steht auf {found.best.first_layer_area:.1f} mm²"

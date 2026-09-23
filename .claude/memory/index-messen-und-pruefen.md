@@ -46,3 +46,5 @@ Wortgleich aus `MEMORY.md` verlegt am 23.09.2026 (Hauptindex über 17 KB). Jede 
 - [Bündig heißt bündig mit dem Netz](buendig-heisst-buendig-mit-dem-netz.md) · [Naht: wählen, nicht schneiden](naht-nicht-schneiden-sondern-waehlen.md) — Stopfen auf die Facetten.
 - [Ziel erreicht ≠ heil angekommen](ziel-erreicht-heisst-nicht-heil-angekommen.md) — nicht nur die Zielzahl prüfen.
 - [Geteiltes Budget bedient die Reihenfolge](geteiltes-budget-bedient-die-reihenfolge.md) — Budget je Einheit, nicht je Träger.
+- [Mehr Kandidaten prüfen das Urteil](mehr-kandidaten-pruefen-das-urteil.md) — die bessere Vorauswahl stellte den Poolhalter auf eine Kante; Vollfeld fahren, neue Sieger ansehen.
+- [Rauschen auf einer Maschine ersetzt drei Runner](rauschen-auf-einer-maschine-ersetzt-drei-runner.md) — ein ULP auf jede plattformabhängige Rechnung plus BLAS-Kerntausch; `_WAYS` in test_platform_identity.

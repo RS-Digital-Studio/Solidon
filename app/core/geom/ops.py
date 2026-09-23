@@ -27,7 +27,7 @@ from app.core.geom.transform import (
     Anchor,
     Axis,
     anchor_point,
-    apply,
+    composed,
     moved_object,
     rotation,
     scaling,
@@ -190,7 +190,11 @@ def _held_on_bed(
     if max(abs(value) for value in offset) <= EPS_GEOM:
         return moved, matrix, findings
     correction = translation(offset)
-    return moved_object(moved, correction, cancelled=ctx.cancelled), correction @ matrix, findings
+    return (
+        moved_object(moved, correction, cancelled=ctx.cancelled),
+        composed(correction, matrix),
+        findings,
+    )
 
 
 @op_params
@@ -1045,7 +1049,6 @@ class AlignParams(BaseParams):
 
 @register_op(
     name="align_to_feature",
-    result_kind="mesh",
     title=_("An Merkmal ausrichten"),
     category="transform",
     params=AlignParams,
@@ -1113,7 +1116,12 @@ def align_to_feature(ctx: OpContext) -> OpResult:
         )
 
     matrix = align_matrix(moving, wanted, flip=params.flip)
-    aligned = apply(as_mesh_data(source.mesh), matrix)
+    # **Eine starre Bewegung wie Verschieben und Drehen** — und wie dort
+    # bewegt ``moved_object`` den Körper samt Merkmalen. Bis zum 22.09.2026
+    # stand hier ``apply`` am Netz: Ein exakter Körper kam als Dreiecksmodell
+    # zurück, danach war kein Verrunden mehr möglich, und seine Merkmale
+    # blieben an der alten Stelle stehen.
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=aligned)], transform=as_transform(matrix)
+        outputs=[moved_object(source, matrix, cancelled=ctx.cancelled)],
+        transform=as_transform(matrix),
     )

@@ -103,3 +103,45 @@ def test_the_original_body_is_left_alone() -> None:
     before = body.triangle_count
     cut(body, SectionPlane.along("z", 0.0))
     assert body.triangle_count == before, "cutting returns a new body, it does not change one"
+
+
+@pytest.mark.parametrize(
+    "normal", [(1.0, 1.0, 1.0), (0.3, -0.2, 0.9), (-1.0, 0.5, 0.0), (0.0, 0.0, -1.0)]
+)
+def test_an_oblique_cut_through_the_centre_halves_the_cube(normal) -> None:
+    """Jede Ebene durch die Mitte eines punktsymmetrischen Körpers halbiert ihn.
+
+    Seit dem 22.09.2026 schneidet und deckelt ``section`` in einem Rahmen, in
+    dem die Ebene waagerecht liegt, und baut den Deckel selbst (RM-187: der
+    Deckel von ``trimesh`` lag über eine SVD in der Ebene). Die Probe dafür
+    ist die Analytik, nicht der alte Weg.
+    """
+    import math
+
+    length = math.hypot(*normal)
+    plane = SectionPlane(normal=tuple(value / length for value in normal), position=0.0)
+
+    result = cut(solid(), plane)
+
+    assert result.capped
+    assert result.mesh.is_watertight
+    assert result.mesh.volume == pytest.approx(4000.0, rel=1e-9)
+
+
+def test_an_oblique_cut_caps_a_ring_around_its_hole() -> None:
+    """Ein Rohr schräg geschnitten: Der Deckel ist ein Ring, das Loch bleibt offen."""
+    import math
+
+    from app.core.geom import lathe
+    from app.core.geom.mesh import MeshData
+
+    tube = MeshData.of(lathe.annulus(r_min=10.0, r_max=20.0, height=30.0, sections=96))
+    normal = (0.2, 0.1, 0.97)
+    length = math.hypot(*normal)
+
+    result = cut(tube, SectionPlane(normal=tuple(v / length for v in normal), position=0.0))
+
+    assert result.capped
+    assert result.mesh.is_watertight
+    assert result.mesh.volume == pytest.approx(tube.volume / 2.0, rel=1e-9)
+    assert result.mesh.component_count == 1

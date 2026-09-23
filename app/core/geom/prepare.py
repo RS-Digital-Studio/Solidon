@@ -553,14 +553,22 @@ def resize_bore(
         # stehen. An einem Sacklochboden bleibt die gemessene Ebene erhalten.
         vertices = np.asarray(tool.vertices, dtype=float).copy()
         upper = vertices[:, 2] > 0.0
+        turn = to_world[:3, :3]
         for plane in end_planes:
-            normal = to_world[:3, :3].T @ np.asarray(plane.normal, dtype=float)
-            if abs(float(normal[2])) <= EPS_GEOM:
+            # **Elementweise, nicht über ``@`` und ``np.dot``** (RM-187): Beide
+            # gehen durch BLAS, und dessen Rundung hängt an der Maschine —
+            # hier wird aus dem Ergebnis die Höhe jeder Werkzeugecke.
+            normal = tuple(
+                units.dot3((turn[0, column], turn[1, column], turn[2, column]), plane.normal)
+                for column in range(3)
+            )
+            if abs(normal[2]) <= EPS_GEOM:
                 raise bore_geometry_error()
-            position_in_bore = plane.position - float(np.dot(plane.normal, position))
+            position_in_bore = plane.position - units.dot3(plane.normal, position)
             selected = upper if normal[2] > 0.0 else ~upper
             vertices[selected, 2] = (
-                position_in_bore - vertices[selected, :2] @ normal[:2]
+                position_in_bore
+                - (vertices[selected, 0] * normal[0] + vertices[selected, 1] * normal[1])
             ) / normal[2]
         tool.vertices = vertices
     # Im Koordinatensystem der Bohrung rechnen. Ein schräger Zylinder ist

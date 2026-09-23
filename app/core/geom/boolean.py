@@ -65,7 +65,8 @@ class HasVolume(Protocol):
 FULL_CHAIN: tuple[SolverStage, ...] = ("direct", "welded", "jittered", "voxel")
 DRAFT_CHAIN: tuple[SolverStage, ...] = ("direct", "welded")
 
-#: Wie weit Stufe 3 die Eckpunkte bewegt: genug, um ein Zusammenfallen zu
+#: Wie weit Stufe 3 die Eckpunkte bewegt — die Standardabweichung je
+#: Koordinate, als Anteil der Modelldiagonale: genug, um ein Zusammenfallen zu
 #: brechen, weit unter allem, was ein Drucker auflösen könnte.
 JITTER_AMPLITUDE = 1e-4
 
@@ -460,7 +461,10 @@ def _tidied(body: trimesh.Trimesh) -> trimesh.Trimesh:
     if len(body.faces) == 0 or not body.is_watertight:
         return body
     candidate = body.copy()
-    diagonal = float(np.linalg.norm(candidate.extents))
+    extents = candidate.extents
+    # ``math.hypot`` statt ``np.linalg.norm`` (BLAS): Aus der Diagonale wird
+    # die Schweißtoleranz, und die soll auf jeder Maschine dieselbe sein.
+    diagonal = math.hypot(float(extents[0]), float(extents[1]), float(extents[2]))
     tolerance = weld_tolerance(diagonal)
     candidate.merge_vertices(digits_vertex=weld_digits(tolerance))
     corners = candidate.faces
@@ -487,11 +491,21 @@ def _jitter(mesh: MeshData, seed: int | None, index: int) -> MeshData:
 
     Der Startwert wird bei der Operation gespeichert, damit derselbe Stups
     wieder passiert (§11.3) — ohne ihn wäre das Ergebnis unreproduzierbar.
+
+    **Gleichverteilt, und zwar mit Absicht** (RM-187). Bis zum 22.09.2026
+    kam der Stups aus ``Generator.normal``, und NumPy zieht die Normalverteilung
+    über eine Zikkurat, deren Rand und Schwanz ``exp`` und ``log1p`` der
+    Plattform rechnen: gleiche Werte nur „bis auf Rundung", also nicht auf
+    jeder Maschine dieselben. ``Generator.random`` sind die Rohbits des
+    Generators mal 2⁻⁵³ — Ganzzahlarithmetik und eine exakte Multiplikation.
+    Die Breite ``√3 · JITTER_AMPLITUDE`` gibt dieselbe Standardabweichung wie
+    vorher, ohne die seltenen Ausreißer der Glocke.
     """
     generator = np.random.default_rng((seed or 0) + index)
     body = mesh.raw.copy()
-    scale = max(mesh.bounds.diagonal, 1.0) * JITTER_AMPLITUDE
-    body.vertices = body.vertices + generator.normal(scale=scale, size=body.vertices.shape)
+    reach = max(mesh.bounds.diagonal, 1.0) * JITTER_AMPLITUDE * math.sqrt(3.0)
+    shape = np.asarray(body.vertices).shape
+    body.vertices = body.vertices + (generator.random(size=shape) * 2.0 - 1.0) * reach
     return mesh.replacing(body)
 
 
@@ -607,8 +621,13 @@ def _signed_volume(body: trimesh.Trimesh) -> float:
     if not len(triangles):
         return 0.0
     local = triangles - triangles[0, 0]
-    products = np.einsum("ij,ij->i", local[:, 0], np.cross(local[:, 1], local[:, 2]))
-    return math.fsum(products) / 6.0
+    # Das Spatprodukt elementweise, nicht über ``np.einsum`` — das nutzt auf
+    # ARM FMA, und am Vorzeichen dieser Summe hängt, ob ein Ergebnis gilt.
+    first, crossed = local[:, 0], np.cross(local[:, 1], local[:, 2])
+    products = (
+        first[:, 0] * crossed[:, 0] + first[:, 1] * crossed[:, 1] + first[:, 2] * crossed[:, 2]
+    )
+    return math.fsum(products.tolist()) / 6.0
 
 
 def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:

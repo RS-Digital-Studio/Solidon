@@ -8,11 +8,21 @@ Bettmitte, Z ab Bett. Nomineller Bauraum, fester Druckbereich und der separat
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
-from shapely import get_coordinates, make_valid, polygons, union_all
+from shapely import (
+    covers,
+    get_coordinates,
+    intersects_xy,
+    make_valid,
+    polygons,
+    prepare,
+    union_all,
+)
 from shapely.affinity import translate
-from shapely.geometry import Polygon, box
+from shapely.geometry import MultiPoint, Polygon, box
 from shapely.geometry.base import BaseGeometry
 
 from app.core.errors import CHOOSE_PRINTER, ValidationError
@@ -71,8 +81,8 @@ def footprint(mesh: Mesh) -> BaseGeometry:
 
     Eine Hüllbox oder konvexe Hülle würde einen Ring um eine Sperrzone ablehnen,
     obwohl kein Material darin liegt. Deshalb werden projizierte Dreiecke
-    vereinigt. Der Rechteck-Schnelltest in ``fits_on_bed`` spart diese Arbeit,
-    solange schon die ganze Hüllbox freigegeben ist.
+    vereinigt — für die Anordnung, die die Form braucht. Die Frage, ob ein
+    Körper passt, stellt :class:`_Projection` ohne Vereinigung.
     """
     from app.core.geom.mesh import as_mesh_data
 
@@ -100,6 +110,121 @@ def _bounds_inside(bounds: BoundingBox, area: BaseGeometry) -> bool:
     )
 
 
+class _Projection:
+    """Die XY-Projektion eines Körpers, befragt von billig nach teuer.
+
+    **Die Vereinigung aller projizierten Dreiecke ist für die Frage „passt
+    er?" nicht nötig** (Review 23.09.2026, RM-190). Die Kegel des
+    Bowlingspiels aus den Downloads stehen in der 3MF neben der Platte; ihre
+    nächste Randlage ist beim Centauri Carbon 2 die Sperrecke, und
+    ``placement_offset`` vereinigte dort die 83 878 Dreiecke eines Kegels —
+    7,8 s, und *Druckoptimal ausrichten* fragte das für jede seiner 215 Lagen:
+    zwanzig Minuten für einen Kegel.
+
+    Die Projektion liegt in der freigegebenen Fläche, wenn **jedes** ihrer
+    Dreiecke darin liegt — das ist dieselbe Menge, nur ohne Überlagerung. Und
+    die meisten Lagen sind schon vorher entschieden, exakt: Deckt die Fläche
+    die konvexe Hülle der Ecken, deckt sie auch jedes Dreieck darin; liegt
+    eine Ecke außerhalb, liegt ihr Dreieck außerhalb. Erst dazwischen — ein
+    Ring um eine Sperrfläche, eine Ecke der Sperrzone in der Hülle — wird je
+    Dreieck gefragt, an 83 878 Dreiecken in einer Viertelsekunde für den
+    ersten Aufbau und Millisekunden je weitere Lage.
+    """
+
+    def __init__(
+        self,
+        mesh: Mesh,
+        allowed: BaseGeometry,
+        outline: Callable[[], np.ndarray] | None = None,
+    ) -> None:
+        self._mesh = mesh
+        self._allowed = allowed
+        self._outline = outline
+        self._body: Any = None
+        self._points: np.ndarray | None = None
+        self._reach: tuple[np.ndarray, np.ndarray] | None = None
+        self._hull: BaseGeometry | None = None
+        self._triangles: np.ndarray | None = None
+
+    def _raw(self) -> Any:
+        """Das Netz, einmal geholt — ein bewegter Körper wird erst hier bewegt."""
+        if self._body is None:
+            from app.core.geom.mesh import as_mesh_data
+
+            self._body = as_mesh_data(self._mesh).raw
+        return self._body
+
+    @property
+    def points(self) -> np.ndarray:
+        """Die projizierten Ecken, die ein Dreieck benutzt."""
+        if self._points is None:
+            body = self._raw()
+            vertices = np.asarray(body.vertices, dtype=float)
+            used = np.zeros(len(vertices), dtype=bool)
+            used[np.asarray(body.faces, dtype=np.int64).ravel()] = True
+            self._points = vertices[used, :2]
+        return self._points
+
+    @property
+    def reach(self) -> tuple[np.ndarray, np.ndarray]:
+        """Die Grenzen der Projektion — aus der Hüllbox, die nur benutzte Ecken
+        zählt (``MeshData.bounds``), ohne das Netz anzufassen."""
+        if self._reach is None:
+            bounds = self._mesh.bounds
+            self._reach = (
+                np.asarray(bounds.minimum[:2], dtype=float),
+                np.asarray(bounds.maximum[:2], dtype=float),
+            )
+        return self._reach
+
+    @property
+    def hull(self) -> BaseGeometry:
+        """Die konvexe Hülle der Projektion — sie enthält jedes Dreieck.
+
+        Über Qhull in der Ebene statt über ``MultiPoint.convex_hull``: an den
+        42 000 Ecken eines Kegels 5 statt 43 ms, und das je Lage. Eine
+        Projektion ohne Fläche — eine senkrechte Wand von der Seite — ist keine
+        Hülle für Qhull; dann rechnet GEOS sie als Linie.
+        """
+        if self._hull is None:
+            from scipy.spatial import ConvexHull, QhullError
+
+            points = self.points if self._outline is None else self._outline()
+            try:
+                self._hull = Polygon(points[ConvexHull(points).vertices])
+            except QhullError, ValueError:
+                self._hull = MultiPoint(points).convex_hull
+        return self._hull
+
+    @property
+    def triangles(self) -> np.ndarray:
+        """Jedes projizierte Dreieck als Geometrie; eine senkrechte Fläche als Linie."""
+        if self._triangles is None:
+            corners = np.asarray(self._raw().triangles, dtype=float)[:, :, :2]
+            self._triangles = np.asarray(make_valid(polygons(corners)))
+        return self._triangles
+
+    def covered(self, x: float = 0.0, y: float = 0.0) -> bool:
+        """Liegt die um ``(x, y)`` verschobene Projektion in der freigegebenen Fläche?"""
+        if not self._mesh.triangle_count:
+            # Wie zuvor: Eine leere Projektion deckt nichts ab (``covers`` mit
+            # einer leeren Geometrie ist falsch).
+            return False
+        left, front, right, back = self._allowed.bounds
+        low, high = self.reach
+        if low[0] + x < left or low[1] + y < front or high[0] + x > right or high[1] + y > back:
+            return False
+        if self._allowed.covers(translate(self.hull, xoff=x, yoff=y)):
+            return True
+        points = self.points
+        if not intersects_xy(self._allowed, points[:, 0] + x, points[:, 1] + y).all():
+            return False
+        # Die Fläche wird zurückgeschoben, nicht jedes Dreieck vorwärts.
+        region = translate(self._allowed, xoff=-x, yoff=-y)
+        prepare(region)
+        return bool(covers(region, self.triangles).all())
+
+
 def fits_xy(mesh: Mesh, area: BaseGeometry) -> bool:
     """Liegt die gesamte Projektion innerhalb dieser freigegebenen Fläche?"""
     bounds = mesh.bounds
@@ -107,7 +232,7 @@ def fits_xy(mesh: Mesh, area: BaseGeometry) -> bool:
         return False
     allowed = area.buffer(EPS_GEOM, join_style="mitre")
     rectangle = box(*bounds.minimum[:2], *bounds.maximum[:2])
-    return bool(allowed.covers(rectangle) or allowed.covers(footprint(mesh)))
+    return bool(allowed.covers(rectangle) or _Projection(mesh, allowed).covered())
 
 
 def fits_on_bed(mesh: Mesh, printer: PrinterProfile, *, margin: float = 0.0) -> bool:
@@ -120,13 +245,25 @@ def fits_on_bed(mesh: Mesh, printer: PrinterProfile, *, margin: float = 0.0) -> 
     )
 
 
-def placement_offset(mesh: Mesh, printer: PrinterProfile, *, margin: float = 0.0) -> Vec3 | None:
+def placement_offset(
+    mesh: Mesh,
+    printer: PrinterProfile,
+    *,
+    margin: float = 0.0,
+    outline: Callable[[], np.ndarray] | None = None,
+) -> Vec3 | None:
     """Setzt aufs Bett und sucht bei Bedarf die nächste passende XY-Lage.
 
     Die bisherige XY-Lage gewinnt, solange sie passt. Sonst werden Bettmitte,
     Rand- und Sperrkonturkanten deterministisch geprüft. Keine mögliche
     Verschiebung aus dieser Kandidatenmenge ergibt ``None``; das wird niemals
     als Nachweis ausgegeben, dass eine andere Drehung unmöglich wäre.
+
+    ``outline`` liefert, wenn der Aufrufer sie kennt, Punkte in XY, deren
+    konvexe Hülle die der Projektion ist — die äußersten Ecken eines bewegten
+    Körpers (``orient.extreme_points``). Dann braucht die Hülle nicht jede
+    Ecke. Gefragt wird erst, wenn das Rechteck nicht reicht; passt es gleich,
+    kostet der Umriss nichts.
     """
     bounds = mesh.bounds
     if bounds.size[2] > printable_height(printer) + EPS_GEOM:
@@ -140,14 +277,13 @@ def placement_offset(mesh: Mesh, printer: PrinterProfile, *, margin: float = 0.0
     z = -bounds.minimum[2]
     allowed = area.buffer(EPS_GEOM, join_style="mitre")
     rectangle = box(*bounds.minimum[:2], *bounds.maximum[:2])
-    shape = None
+    projection = _Projection(mesh, allowed, outline)
     if _bounds_inside(bounds, area):
         if allowed.covers(rectangle):
             return (0.0, 0.0, z)
         # Ein Ring kann schon richtig um eine Sperrfläche liegen, obwohl
         # sein Rechteck sie überdeckt. Diese Lage gewinnt vor jeder Bewegung.
-        shape = footprint(mesh)
-        if allowed.covers(shape):
+        if projection.covered():
             return (0.0, 0.0, z)
     # Die nächste Lage des Rechtecks innerhalb der Bettbounds ist ein
     # günstiger Kandidat. Passt bereits das ganze Rechteck, ist eine Union
@@ -156,16 +292,19 @@ def placement_offset(mesh: Mesh, printer: PrinterProfile, *, margin: float = 0.0
     y = min(max(0.0, front - bounds.minimum[1]), back - bounds.maximum[1])
     if allowed.covers(translate(rectangle, xoff=x, yoff=y)):
         return (x, y, z)
-    if shape is None:
-        shape = footprint(mesh)
     coordinates = get_coordinates(area)
-    xs = {0.0, -bounds.centre[0], float(area.centroid.x - shape.centroid.x)}
-    ys = {0.0, -bounds.centre[1], float(area.centroid.y - shape.centroid.y)}
+    # Die Mitte der konvexen Hülle, nicht die der Vereinigung: Sie ist ohne
+    # Vereinigung zu haben, und für einen konvexen oder symmetrischen Körper
+    # ist es dieselbe. Ein Kandidat für die Bettmitte, keine Zusage.
+    middle = projection.hull.centroid
+    xs = {0.0, -bounds.centre[0], float(area.centroid.x - middle.x)}
+    ys = {0.0, -bounds.centre[1], float(area.centroid.y - middle.y)}
     for x, y in coordinates:
         xs.update((float(x - bounds.minimum[0]), float(x - bounds.maximum[0])))
         ys.update((float(y - bounds.minimum[1]), float(y - bounds.maximum[1])))
     offsets = sorted(((x, y) for x in xs for y in ys), key=lambda p: (p[0] ** 2 + p[1] ** 2, p))
     for x, y in offsets:
-        if allowed.covers(translate(shape, xoff=x, yoff=y)):
+        # Das Rechteck zuerst: Passt es, passt die Projektion darin auch.
+        if allowed.covers(translate(rectangle, xoff=x, yoff=y)) or projection.covered(x, y):
             return (x, y, z)
     return None

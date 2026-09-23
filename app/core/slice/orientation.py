@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 from shapely.geometry import Point
@@ -60,6 +61,15 @@ SEARCH_TRIANGLES = 20_000
 #: ``FINALISTS + len(AXES)`` plus die Ausgangslage.
 FINALISTS = 8
 
+#: So viele Lagen mit dem kleinsten **geschätzten** Stützraum werden
+#: zusätzlich geschnitten (:attr:`app.core.geom.orient.Orientation.support`).
+#: Die Heuristik ordnet nach Fläche; wie hoch ein Überhang hängt, weiß sie
+#: nicht — an Roberts Getränkehalter stand die beste Lage von Schirm, Mast
+#: und Halter dort auf Rang 182, 51 und 25, nach der Schätzung auf 10, 2
+#: und 5 (RM-190, 23.09.2026). Spiegelgleiche Lagen mit derselben Schätzung
+#: zählen einmal: Sie ergäben denselben Schnitt.
+SUPPORT_FINALISTS = 8
+
 
 #: Stützvolumen innerhalb dieses Anteils voneinander zählen als gleich gut,
 #: und dann entscheidet die Grundfläche. Ohne die Toleranz suchte das
@@ -91,16 +101,32 @@ class Candidate:
     height: float
     stable: bool = True
     """Die Schwerpunktprojektion liegt in der Hülle der tatsächlichen Auflage."""
+    footing: float | None = None
+    """Der Teil der Aufstandsfläche, der eine Linie tragen kann, in mm² — die
+    Auflage um eine halbe Linienbreite nach innen versetzt. ``None`` heißt:
+    ohne Linienbreite beurteilt, dann zählt :attr:`first_layer_area`.
+
+    **Eine Kante ist keine Auflage, auch eine lange nicht** (RM-190,
+    23.09.2026). Roberts Getränkehalter stand um 48 Grad gekippt auf drei
+    Kanten, zusammen 36,5 mm² und damit über der kleinsten Aufstandsfläche —
+    aber jede schmaler als eine Linie, versetzt blieb nichts. Ein Slicer
+    druckt dort keine erste Schicht, und die Lage steht nicht."""
 
 
 def stands(candidate: Candidate, floor: float) -> bool:
-    """Kann diese Lage überhaupt stehen? (§22.2)
+    """Kann diese Lage überhaupt stehen? (§22.2, §28.2)
 
     ``floor`` ist die kleinste Aufstandsfläche, die der Drucker halten kann —
     :attr:`app.core.types.Profile.smallest_first_layer`. Null heißt: nicht
-    gefragt, dann steht jede Lage.
+    gefragt, dann steht jede Lage. Gemessen wird sie an dem, was eine Linie
+    tragen kann (:attr:`Candidate.footing`), wo das beurteilt ist.
     """
-    return candidate.stable and candidate.first_layer_area >= floor
+    return candidate.stable and _footing_of(candidate) >= floor
+
+
+def _footing_of(candidate: Candidate) -> float:
+    """Die Aufstandsfläche, an der das Stehen gemessen wird."""
+    return candidate.first_layer_area if candidate.footing is None else candidate.footing
 
 
 def best_of(candidates: Sequence[Candidate], floor: float = 0.0) -> Candidate:
@@ -163,6 +189,29 @@ class SearchResult:
         return max(0.0, self.baseline.support_volume - self.best.support_volume)
 
 
+def _least_support(scored: Sequence[Orientation], skip: Vec3) -> list[Vec3]:
+    """Die Lagen mit dem kleinsten geschätzten Stützraum, je Gleichstand eine.
+
+    Gleich heißt hier bitgleich in Schätzung, Standfläche, Überhang und Höhe —
+    alle vier sind exakt summiert, also tragen spiegelgleiche Lagen eines
+    symmetrischen Teils dieselben Zahlen und ergäben denselben Schnitt. Das
+    Schirmdach des Getränkehalters hat acht solche Lagen um seine Achse.
+    """
+    chosen: list[Vec3] = []
+    seen: set[tuple[float, float, float, float]] = set()
+    for entry in sorted(scored, key=lambda item: (item.support, item.direction)):
+        if entry.direction == skip:
+            continue
+        key = (entry.support, entry.footprint, entry.overhang, entry.height)
+        if key in seen:
+            continue
+        seen.add(key)
+        chosen.append(entry.direction)
+        if len(chosen) == SUPPORT_FINALISTS:
+            break
+    return chosen
+
+
 def _unique_directions(directions: list[Vec3]) -> list[Vec3]:
     """Entfernt Lagen, die dieselbe Schichtanalyse erneut auslösen würden.
 
@@ -187,9 +236,13 @@ def judge(
     *,
     overhang_angle: float | None = None,
     footing_mesh: MeshData | None = None,
+    line_width: float | None = None,
 ) -> Candidate:
     """Dreht den Körper, bis ``direction`` nach unten zeigt, dann schneiden und
     zählen.
+
+    ``line_width`` ist die Linienbreite des Druckers; mit ihr wird gemessen,
+    wie viel der Auflage eine Linie tragen kann (:attr:`Candidate.footing`).
 
     ``footing_height`` ist die Höhe, in der die Aufstandsfläche gemessen wird
     — die halbe Schichthöhe des **Druckers**, nicht die der Suche. Ohne sie
@@ -240,12 +293,22 @@ def judge(
     first_layer_area = result.first_layer_area
     if footing_mesh is not None:
         first_layer_area = 0.0 if contact is None or contact.is_empty else float(contact.area)
+    footing = None
+    if line_width is not None:
+        # Gehrung statt Rundung: Ein Rückversatz braucht dann keinen Kreisbogen
+        # und damit keine Winkelfunktion der Plattform (RM-187).
+        footing = (
+            0.0
+            if contact is None or contact.is_empty
+            else float(contact.buffer(-line_width / 2.0, join_style="mitre").area)
+        )
     return Candidate(
         direction=direction,
         support_volume=result.support_volume,
         first_layer_area=first_layer_area,
         height=turned.bounds.size[2],
         stable=stable,
+        footing=footing,
     )
 
 
@@ -351,6 +414,7 @@ def best_face_candidate(
                 layer_height,
                 footing,
                 overhang_angle=profile.overhang_limit_degrees,
+                line_width=profile.printer.extrusion_width,
             )
         )
         if cancelled is not None:
@@ -380,6 +444,11 @@ def search(
     """
     floor = profile.smallest_first_layer if profile is not None else 0.0
     footing = profile.printer.layer_height / 2.0 if profile is not None else None
+    # Mit Profil wird gemessen, was eine Linie tragen kann (``Candidate.footing``);
+    # als Schlüsselwort nur dann, wie ``footing_mesh`` darunter.
+    line_width: dict[str, float] = (
+        {"line_width": profile.printer.extrusion_width} if profile is not None else {}
+    )
     if overhang_angle is None and profile is not None:
         overhang_angle = profile.overhang_limit_degrees
     baseline_direction: Vec3 = (0.0, 0.0, -1.0)
@@ -390,7 +459,8 @@ def search(
     # Als Schlüsselwort nur, wenn es ein Original gibt: Wer ``judge`` in einem
     # Test durch eine Attrappe ersetzt, muss den Fall ohne Ersatznetz nicht
     # kennen.
-    footing_on: dict[str, MeshData] = {} if proxy is mesh else {"footing_mesh": mesh}
+    footing_on: dict[str, Any] = {} if proxy is mesh else {"footing_mesh": mesh}
+    footing_on.update(line_width)
 
     def matrix_for(direction: Vec3) -> np.ndarray | None:
         if profile is None:
@@ -476,6 +546,7 @@ def search(
         sliced = _unique_directions(
             [
                 *(entry.direction for entry in finalists),
+                *_least_support(scored, baseline_direction),
                 *(direction for direction in AXES if direction in matrices),
             ]
         )
@@ -522,7 +593,7 @@ def search(
             source="internal",
         )
     ]
-    if floor > 0.0 and best.first_layer_area < floor:
+    if floor > 0.0 and _footing_of(best) < floor:
         findings.append(
             Finding(
                 code="orient.no_footing",
@@ -530,8 +601,11 @@ def search(
                 message=_(
                     "Keine geprüfte Lage steht auf genug Fläche — dieses Teil braucht einen Brim."
                 ),
+                # Dieselbe Zahl, an der entschieden wurde: die Auflage, die eine
+                # Linie trägt. Sonst stünde neben „nicht genug" eine größere Zahl
+                # als die geforderte.
                 values={
-                    "first_layer_mm2": round(best.first_layer_area, 3),
+                    "first_layer_mm2": round(_footing_of(best), 3),
                     "needed_mm2": round(floor, 3),
                 },
                 source="internal",

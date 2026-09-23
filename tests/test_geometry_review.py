@@ -626,7 +626,10 @@ def test_the_lid_reports_the_fallback_stage(profile: Profile) -> None:
 
     result = run("create_lid", entry, profile, thickness=2.4, collar=4.0)
 
+    # Nicht nur „irgendeine Stufe“: eine der Kette, und die zuletzt versuchte.
     assert result.solver is not None
+    assert result.solver.strategy in boolean_module.FULL_CHAIN
+    assert result.solver.attempted[-1] == result.solver.strategy
 
 
 def test_the_screw_lid_reports_the_fallback_stage(profile: Profile) -> None:
@@ -634,7 +637,10 @@ def test_the_screw_lid_reports_the_fallback_stage(profile: Profile) -> None:
 
     result = run("screw_lid", entry, profile, height=8.0, pitch=2.0, wall=2.0, thickness=3.0)
 
+    # Nicht nur „irgendeine Stufe“: eine der Kette, und die zuletzt versuchte.
     assert result.solver is not None
+    assert result.solver.strategy in boolean_module.FULL_CHAIN
+    assert result.solver.attempted[-1] == result.solver.strategy
 
 
 def test_the_elephant_foot_reports_the_fallback_stage(profile: Profile) -> None:
@@ -642,7 +648,10 @@ def test_the_elephant_foot_reports_the_fallback_stage(profile: Profile) -> None:
 
     result = run("compensate_first_layer", entry, profile, height=0.6, amount=0.2)
 
+    # Nicht nur „irgendeine Stufe“: eine der Kette, und die zuletzt versuchte.
     assert result.solver is not None
+    assert result.solver.strategy in boolean_module.FULL_CHAIN
+    assert result.solver.attempted[-1] == result.solver.strategy
 
 
 def test_splitting_with_pins_reports_the_fallback_stage(profile: Profile) -> None:
@@ -650,7 +659,10 @@ def test_splitting_with_pins_reports_the_fallback_stage(profile: Profile) -> Non
 
     result = run("split_pinned", entry, profile, axis="z", position=20.0, pins=2)
 
+    # Nicht nur „irgendeine Stufe“: eine der Kette, und die zuletzt versuchte.
     assert result.solver is not None
+    assert result.solver.strategy in boolean_module.FULL_CHAIN
+    assert result.solver.attempted[-1] == result.solver.strategy
 
 
 @pytest.mark.parametrize(

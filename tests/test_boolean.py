@@ -388,9 +388,45 @@ def test_the_jitter_stage_carries_its_seed() -> None:
     """
     first = boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))], seed=42, stages=("jittered",))
     second = boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))], seed=42, stages=("jittered",))
+    other = boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))], seed=43, stages=("jittered",))
 
     assert first.solver.seed == 42
-    assert first.mesh.volume == pytest.approx(second.mesh.volume, rel=1e-12)
+    # **Gleich heißt bitgleich.** Hier stand ein Volumenvergleich auf zwölf
+    # Stellen, und den bestand auch ein Ergebnis mit anderen Ecken — dieselbe
+    # Datei soll aber dasselbe Netz ergeben, nicht ein ähnlich großes (§11.3).
+    assert np.array_equal(first.mesh.raw.vertices, second.mesh.raw.vertices)
+    assert np.array_equal(first.mesh.raw.faces, second.mesh.raw.faces)
+    # Und der Startwert muss etwas bewirken: Ein Stups, der jeden Startwert
+    # gleich ausführt, bestünde die Zeilen darüber ebenso.
+    assert not np.array_equal(first.mesh.raw.vertices, other.mesh.raw.vertices)
+
+
+def test_the_jitter_stage_draws_the_same_on_every_machine() -> None:
+    """RM-187: Der Stups kommt aus ganzen Zahlen, nicht aus der Mathebibliothek.
+
+    ``Generator.normal`` zieht in NumPy über die Zikkurat, und deren Rand und
+    Schwanz rechnen ``exp`` und ``log1p`` der Plattform — NumPy verspricht
+    dort gleiche Werte nur „bis auf Rundung". Ein Stups, der auf einem Mac um
+    eine letzte Stelle anders fällt, entscheidet bei einem Körper, dessen
+    Flächen genau zusammenfallen, über ein anderes Netz; genau dafür ist die
+    Stufe da. Gleichverteilt aus den Rohbits des Generators ist er dagegen
+    Ganzzahlarithmetik und eine Multiplikation — auf jeder Maschine dieselbe.
+
+    Der Sollwert entsteht hier aus den Rohbits selbst, nicht aus der Stufe.
+    """
+    from app.core.geom import boolean as chain
+
+    body = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=20.0))
+    corners = np.asarray(body.raw.vertices, dtype=float)
+    seed, index = 42, 1
+
+    moved = np.asarray(chain._jitter(body, seed, index).raw.vertices, dtype=float)
+
+    raw = np.random.PCG64(seed + index).random_raw(corners.size)
+    unit = (raw >> np.uint64(11)).astype(np.float64) * 2.0**-53
+    reach = max(body.bounds.diagonal, 1.0) * chain.JITTER_AMPLITUDE * math.sqrt(3.0)
+    expected = corners + (unit.reshape(corners.shape) * 2.0 - 1.0) * reach
+    assert np.array_equal(moved, expected)
 
 
 def test_draft_quality_stops_after_the_second_stage() -> None:

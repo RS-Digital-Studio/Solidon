@@ -23,7 +23,13 @@ import numpy as np
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, Action, NotManifoldError, ValidationError
 from app.core.geom.attributes import transfer
-from app.core.geom.mesh import MeshData, as_mesh_data, max_distance_to_surface, unique_edges
+from app.core.geom.mesh import (
+    MeshData,
+    as_mesh_data,
+    max_distance_to_surface,
+    stable_vertex_normals,
+    unique_edges,
+)
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -98,7 +104,7 @@ SimplificationSolver = Literal["none", "exact", "fast_simplification", "manifold
 SimplificationDeviation = tuple[float, float]
 
 
-def deviation(before: MeshData, after: MeshData) -> float:
+def deviation(before: MeshData, after: MeshData, *, cancelled: CancelToken | None = None) -> float:
     """Wie weit die neue Oberfläche schlimmstenfalls von der alten sitzt, in mm.
 
     Gemessen, nicht geschätzt: jeder Eckpunkt des Ergebnisses wird nach seinem
@@ -129,7 +135,7 @@ def deviation(before: MeshData, after: MeshData) -> float:
         return 0.0
     # Gefragt ist **eine** Zahl, das Maximum — und die kostet an Nadeldreiecken
     # nur dort, wo eine Ecke es noch heben kann (:func:`max_distance_to_surface`).
-    return max_distance_to_surface(before.raw, points[off_vertex])
+    return max_distance_to_surface(before.raw, points[off_vertex], cancelled=cancelled)
 
 
 def decimate(mesh: MeshData, target: int) -> MeshData:
@@ -426,11 +432,32 @@ def _clustered_once(
         & (mapped[:, 0] != mapped[:, 2])
     )
     mapped = mapped[alive]
-    corners = len(counts)
-    ordered = np.sort(mapped, axis=1)
-    triangle_ids = ordered[:, 0] + corners * (ordered[:, 1] + corners * ordered[:, 2])
-    _unique_ids, first = np.unique(triangle_ids, return_index=True)
+    first = _first_of_each_triangle(np.sort(mapped, axis=1), len(counts))
     return merged, mapped[np.sort(first)]
+
+
+#: Bis zu dieser Eckenzahl passt die Kennung eines Dreiecks — seine drei
+#: Ecken als Stellen einer Zahl zur Basis der Eckenzahl — in eine 64-Bit-Zahl:
+#: Die größte ist (2²¹)³ - 1 = 2⁶³ - 1.
+PACKED_CORNERS = 2**21
+
+
+def _first_of_each_triangle(ordered: np.ndarray, corners: int) -> np.ndarray:
+    """Wo jedes Dreieck zum ersten Mal steht — ``ordered`` trägt je Zeile
+    seine Ecken aufsteigend, ``corners`` ist die Zahl der Ecken.
+
+    **Eine Zahl je Dreieck, solange sie passt.** Sie sortiert zehnmal
+    schneller als die Zeilen selbst (siehe :func:`_clustered_once`); darüber
+    liefe sie über, und zwei verschiedene Dreiecke trügen dieselbe Kennung —
+    bei 2²² Ecken etwa ``(0, 1, 2)`` und ``(0, 1, 2 + 2²⁰)``, und eines davon
+    fiele als „doppelt" aus dem Bild. Dann werden die Zeilen verglichen.
+    """
+    if corners <= PACKED_CORNERS:
+        triangle_ids = ordered[:, 0] + corners * (ordered[:, 1] + corners * ordered[:, 2])
+        _unique_ids, first = np.unique(triangle_ids, return_index=True)
+    else:
+        _unique_rows, first = np.unique(ordered, axis=0, return_index=True)
+    return np.asarray(first)
 
 
 #: Ab welchem Verhältnis Punkte zu Dreiecken ein Netz als unverschweißt gilt.
@@ -627,7 +654,9 @@ def _subdivided_on_demand(mesh: MeshData, edge: float) -> MeshData:
     return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
 
 
-def _subdivided_evenly(mesh: MeshData, edge: float) -> MeshData:
+def _subdivided_evenly(
+    mesh: MeshData, edge: float, cancelled: CancelToken | None = None
+) -> MeshData:
     """Jedes Dreieck in vier, so oft, bis auch die längste Kante kurz genug ist.
 
     Konform: es entsteht keine Naht, der Körper bleibt geschlossen. Der Preis
@@ -637,6 +666,8 @@ def _subdivided_evenly(mesh: MeshData, edge: float) -> MeshData:
     vertices = np.asarray(mesh.raw.vertices, dtype=float)
     faces = np.asarray(mesh.raw.faces, dtype=np.int64)
     for _step in range(MAX_SUBDIVISIONS):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
         lengths = np.asarray(body.edges_unique_length, dtype=float)
         if not len(lengths) or float(lengths.max()) <= edge:
@@ -698,7 +729,7 @@ def _too_fine(mesh: MeshData, edge: float, would_be: int) -> ValidationError:
     )
 
 
-def remesh(mesh: MeshData, edge: float) -> MeshData:
+def remesh(mesh: MeshData, edge: float, *, cancelled: CancelToken | None = None) -> MeshData:
     """Teilt jede Kante, die länger als ``edge`` ist, bis keine mehr übrig ist.
 
     Kein vollwertiger Remesher — er unterteilt nur. Das ist, was eine Analyse
@@ -731,10 +762,12 @@ def remesh(mesh: MeshData, edge: float) -> MeshData:
         raise _too_fine(mesh, edge, wanted)
 
     on_demand = _subdivided_on_demand(mesh, edge)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if on_demand.is_watertight or not mesh.is_watertight:
         _log.info("remeshed %d to %d triangles", mesh.triangle_count, on_demand.triangle_count)
         return on_demand
-    even = _subdivided_evenly(mesh, edge)
+    even = _subdivided_evenly(mesh, edge, cancelled)
     _log.info(
         "remeshed %d to %d triangles (evenly, on demand tore the mesh)",
         mesh.triangle_count,
@@ -990,7 +1023,10 @@ def smooth_mesh(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
     after = smooth(before, params.iterations)
-    findings = _deviation_findings(before, after, source.id)
+    # Die Messung danach kostet ein Vielfaches der Rechnung; wer abgebrochen
+    # hat, wartet nicht auf sie (23.09.2026).
+    ctx.cancelled.raise_if_cancelled()
+    findings = _deviation_findings(before, after, source.id, cancelled=ctx.cancelled)
     findings.extend(_smoothing_cost(before, after, source.id, params.iterations))
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
 
@@ -1072,7 +1108,8 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
     params = cast(RemeshParams, ctx.params)
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
-    after = remesh(before, params.edge)
+    after = remesh(before, params.edge, cancelled=ctx.cancelled)
+    ctx.cancelled.raise_if_cancelled()
     findings = [
         Finding(
             code="mesh.remeshed",
@@ -1195,6 +1232,7 @@ def remesh_uniform(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
     after = uniform(before, params.edge, params.deviation)
+    ctx.cancelled.raise_if_cancelled()
     findings = [
         Finding(
             code="mesh.evened",
@@ -1208,7 +1246,7 @@ def remesh_uniform(ctx: OpContext) -> OpResult:
     # Abweichung wird kein Eckpunkt verschoben, und die Messung kostet eine
     # Abstandsabfrage über zehntausende Punkte — für eine Zahl, die null ist.
     if params.deviation > 0.0:
-        findings.extend(_deviation_findings(before, after, source.id))
+        findings.extend(_deviation_findings(before, after, source.id, cancelled=ctx.cancelled))
     else:
         findings.append(
             Finding(
@@ -1278,7 +1316,8 @@ def subdivide_surface(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
     after = subdivided(before, params.edge, params.angle)
-    findings = _deviation_findings(before, after, source.id)
+    ctx.cancelled.raise_if_cancelled()
+    findings = _deviation_findings(before, after, source.id, cancelled=ctx.cancelled)
     findings.append(
         Finding(
             code="mesh.subdivided",
@@ -1404,6 +1443,7 @@ def _deviation_findings(
     object_id: str,
     *,
     moved: float | None = None,
+    cancelled: CancelToken | None = None,
 ) -> list[Finding]:
     """Sagt, was es gekostet hat — gemessen an der Oberfläche, nicht aus
     Zahlen geraten.
@@ -1421,7 +1461,7 @@ def _deviation_findings(
     Einlesen, Export und Agentenzug, und die Familie trägt dieselben zwei
     Handlungen (``FINDING_ACTIONS``).
     """
-    moved = deviation(before, after) if moved is None else moved
+    moved = deviation(before, after, cancelled=cancelled) if moved is None else moved
     limit = max(before.bounds.diagonal, 1.0) * DEVIATION_WARN
     severity: Severity = "warning" if moved > limit else "info"
     findings = [
@@ -1574,6 +1614,7 @@ def thicken(ctx: OpContext) -> OpResult:
                 code="mesh.thickened",
                 severity="info",
                 message=_("Aus einer offenen Fläche wurde ein Körper mit Wandstärke."),
+                object_id=source.id,
             )
         ],
     )
@@ -1595,13 +1636,21 @@ def _thickened(mesh: MeshData, thickness: float) -> MeshData:
 
     **Punktnormalen, nicht Flächennormalen.** Mit Flächennormalen bekommt jedes
     Dreieck seinen eigenen Versatz, und an jeder Kante klafft die Innenseite
-    auseinander.
+    auseinander. Sie kommen aus ``stable_vertex_normals`` — dieselbe
+    Winkelgewichtung wie bei ``trimesh``, aber auf jeder Maschine dieselben
+    Bits: Aus jeder Normalen wird hier eine Ecke der Innenhaut (RM-187).
+
+    **Und die Filamente reisen mit** (§20): Außen- und Innenhaut sind
+    dieselben Dreiecke, und eine Randwand trägt den Slot des Dreiecks, an dessen
+    Kante sie steht. Bis zum 22.09.2026 ging die Zuweisung verloren —
+    ``replacing`` lässt sie bei einer anderen Dreieckszahl fallen, und ein
+    zweifarbiges Schild kam einfarbig aus der Operation.
     """
     import numpy as np
 
     body = mesh.raw
     outer = np.asarray(body.vertices, dtype=float)
-    inner = outer - np.asarray(body.vertex_normals, dtype=float) * thickness
+    inner = outer - stable_vertex_normals(body) * thickness
     count = len(outer)
 
     faces = np.asarray(body.faces, dtype=np.int64)
@@ -1609,8 +1658,15 @@ def _thickened(mesh: MeshData, thickness: float) -> MeshData:
     # Normalen in den Körper hinein.
     flipped = faces[:, ::-1] + count
 
-    unique, counts = unique_edges(np.asarray(body.edges, dtype=np.int64), return_counts=True)
-    border = unique[counts == 1]
+    unique, inverse, counts = unique_edges(
+        np.asarray(body.edges, dtype=np.int64), return_inverse=True, return_counts=True
+    )
+    # Welches Dreieck eine Kante trägt: ``edges`` läuft drei je Dreieck, in
+    # Dreiecksreihenfolge — an einer Randkante gibt es genau eines.
+    carrier = np.zeros(len(unique), dtype=np.int64)
+    carrier[inverse] = np.arange(len(inverse), dtype=np.int64) // 3
+    on_border = counts == 1
+    border = unique[on_border]
     walls = [[first, second, second + count, first + count] for first, second in border.tolist()]
     quads = np.asarray(
         [[wall[0], wall[1], wall[2]] for wall in walls]
@@ -1624,4 +1680,13 @@ def _thickened(mesh: MeshData, thickness: float) -> MeshData:
         process=True,
     )
     built.fix_normals()
-    return mesh.replacing(built)
+    slots: tuple[int, ...] = ()
+    if (
+        mesh.slots
+        and len(mesh.slots) == len(faces)
+        and len(built.faces) == 2 * len(faces) + len(quads)
+    ):
+        own = np.asarray(mesh.slots, dtype=np.int64)
+        wall = own[carrier[on_border]]
+        slots = tuple(int(slot) for slot in np.concatenate([own, own, wall, wall]))
+    return MeshData(raw=built, slots=slots)

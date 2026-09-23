@@ -890,3 +890,32 @@ def test_orienting_carries_the_features_of_an_exact_body(
         assert feature.params["centre"] == pytest.approx(fresh[name].params["centre"], abs=1e-6), (
             name
         )
+
+
+@pytest.mark.parametrize("turn", [0.0, 30.0, 45.0, 60.0, 90.0, 135.0, 210.0, 330.0])
+def test_a_face_at_exactly_the_limit_angle_is_printable(turn: float) -> None:
+    """Eine Fläche genau unter dem Grenzwinkel ist kein Überhang — gleich wie gerundet.
+
+    Eine 45-Grad-Fase liegt mit ihrer Normalen **auf** der Schwelle, und ob sie
+    als Überhang zählte, entschied die letzte Stelle einer Projektion: um die
+    Hochachse gedreht einmal so, einmal anders. An einem CAD-Teil mit Fasen ist
+    das der häufige Fall, nicht der seltene. ``orient.OVERHANG_EDGE`` schiebt
+    die Schwelle um das Rauschen eines Einheitsvektors auf die Seite, die die
+    Regel meint (22.09.2026).
+    """
+    from shapely.geometry import Polygon
+
+    from app.core.geom.orient import evaluate_directions
+    from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
+
+    assert pytest.approx(45.0) == OVERHANG_LIMIT_DEGREES, "sonst misst der Keil nichts"
+    # Ein liegender Keil, dessen einzige Unterseite genau 45 Grad gegen das
+    # Bett steht; er liegt auf einer Kante, eine Grundfläche hat er nicht.
+    section = [(0.0, 0.0), (0.0, 10.0), (10.0, 10.0)]
+    wedge = trimesh.creation.extrude_polygon(Polygon(section), height=20.0)
+    wedge.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2.0, (0.0, 1.0, 0.0)))
+    body = apply(MeshData.of(wedge), rotation("z", turn))
+
+    scored = evaluate_directions(body, [(0.0, 0.0, -1.0)])[0]
+
+    assert scored.overhang == 0.0, f"{scored.overhang:.3f} mm² Überhang bei {turn}°"

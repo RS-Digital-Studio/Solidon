@@ -598,16 +598,49 @@ def test_a_body_that_opens_up_while_being_simplified_says_so(profile: Profile) -
     # auf" — bei 40 000 blieb die Kugel dort dicht. Die Fließkommaordnung des
     # Vereinfachers ist je Architektur eine andere, und die Zusicherung hier
     # ist nicht die Zahl, sondern: **wenn** die Wand aufgeht, sagt es der
-    # Befund. Geprüft wird deshalb am ersten Ziel der Reihe, das sie öffnet;
-    # öffnet keines, sagt der Test das, statt eine ungemessene Zahl zu raten.
+    # Befund — und wenn sie hält, schweigt er.
+    #
+    # **Bis zum 23.09.2026 übersprang sich der Test**, wenn kein Ziel der
+    # Reihe öffnete (RM-114): auf einer Plattform, auf der es so war, galt
+    # „übersprungen" als bestanden. Jetzt gilt die Zusage in beide
+    # Richtungen für jedes Ziel der Reihe, gleich wo sie aufgeht, und der
+    # Befund wird daneben an einem Ausgang geprüft, der sicher offen ist
+    # (``test_the_simplifier_reports_an_open_result_on_every_machine``).
     for triangles in (40_000, 20_000, 30_000, 60_000, 15_000):
         result = run("decimate_mesh", object_of(hohl), profile, triangles=triangles)
-        if not result.outputs[0].mesh.is_watertight:
-            break
-    else:
-        pytest.skip("kein Ziel der Reihe öffnet die Kugel auf dieser Plattform — Reihe neu messen")
+        open_after = not result.outputs[0].mesh.is_watertight
+        codes = [entry.code for entry in result.findings]
+        assert ("mesh.not_watertight" in codes) is open_after, (
+            f"{triangles} Dreiecke: offen={open_after}, Befunde {codes}"
+        )
 
-    assert "mesh.not_watertight" in [entry.code for entry in result.findings]
+
+def test_the_simplifier_reports_an_open_result_on_every_machine(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-114: Der Befund „nicht mehr geschlossen" auf jeder Plattform, ohne Überspringen.
+
+    Welches Ziel die Hohlkugel öffnet, entscheidet die Fließkommaordnung des
+    Vereinfachers, und die ist auf Apple Silicon eine andere. Was die
+    Operation daraus macht, entscheidet sie nicht: Hier liefert der Löser
+    einen Ausgang, der **sicher** offen ist — die Kugel ohne ein Dreieck —,
+    und die Operation muss es sagen, mit der Handlung dazu.
+    """
+    ball = MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=30.0))
+    opened = trimesh.Trimesh(
+        vertices=ball.raw.vertices.copy(), faces=ball.raw.faces[1:3000].copy(), process=False
+    )
+    assert ball.is_watertight and not opened.is_watertight, "sonst prüft der Test nichts"
+    monkeypatch.setattr(
+        mesh_ops,
+        "_decimate_with_solver",
+        lambda mesh, target, cancelled=None: (MeshData.of(opened), "fast_simplification", None),
+    )
+
+    result = run("decimate_mesh", object_of(ball), profile, triangles=3000)
+
+    warning = next(entry for entry in result.findings if entry.code == "mesh.not_watertight")
+    assert warning.severity == "warning"
 
 
 def test_a_simplification_that_holds_stays_quiet(profile: Profile) -> None:

@@ -21,7 +21,7 @@ import numpy as np
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.types import CancelToken, Mesh, SceneObject, Transform, Vec3
-from app.core.units import EPS_DISPLAY, EPS_GEOM, exact_cos_degrees, exact_sin_degrees
+from app.core.units import EPS_DISPLAY, EPS_GEOM, dot3, exact_cos_degrees, exact_sin_degrees
 
 Axis = Literal["x", "y", "z"]
 Anchor = Literal["centre", "origin", "bed"]
@@ -97,6 +97,68 @@ def moved_points(points: np.ndarray, matrix: np.ndarray) -> np.ndarray:
         ),
         axis=1,
     )
+
+
+def turned(vectors: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+    """Richtungen durch den linearen Teil einer Matrix drehen — ohne Verschiebung.
+
+    Dasselbe wie :func:`moved_points` für Normalen und Achsen: elementweise
+    statt ``vectors @ matrix[:3, :3].T``, damit keine BLAS-Rundung der
+    Maschine hineinkommt (RM-187).
+    """
+    cells = np.asarray(matrix, dtype=np.float64)
+    raw = np.asarray(vectors, dtype=np.float64)
+    turn = cells[:3, :3]
+    x, y, z = raw[..., 0], raw[..., 1], raw[..., 2]
+    return np.stack(
+        (
+            turn[0, 0] * x + turn[0, 1] * y + turn[0, 2] * z,
+            turn[1, 0] * x + turn[1, 1] * y + turn[1, 2] * z,
+            turn[2, 0] * x + turn[2, 1] * y + turn[2, 2] * z,
+        ),
+        axis=-1,
+    )
+
+
+def along(points: np.ndarray, axis: Sequence[float] | np.ndarray) -> np.ndarray:
+    """Die Lage jedes Punkts entlang einer Richtung — ``points @ axis`` ohne BLAS.
+
+    Drei Produkte und zwei Summen je Punkt, jede als eigene NumPy-Operation
+    und damit nach IEEE-754 gerundet: auf jeder Maschine dieselben Bits
+    (RM-187). ``axis`` wird nicht normiert.
+    """
+    raw = np.asarray(points, dtype=np.float64)
+    a = (float(axis[0]), float(axis[1]), float(axis[2]))
+    return np.asarray(raw[..., 0] * a[0] + raw[..., 1] * a[1] + raw[..., 2] * a[2])
+
+
+def composed(*matrices: np.ndarray) -> np.ndarray:
+    """Das Produkt 4x4-Matrizen, von links nach rechts — ohne BLAS.
+
+    ``composed(a, b)`` ist ``a @ b``: erst ``b``, dann ``a`` auf einen Punkt
+    angewandt. Jeder Eintrag entsteht als Summe von vier Produkten in fester
+    Reihenfolge, in Pythons ``float``. ``@`` ginge durch BLAS, und dessen
+    Blockung und FMA-Nutzung hängen an der CPU — die gemeldete Bewegung einer
+    Operation, mit der die Auswertung Merkmale nachführt, und jede Matrix,
+    die danach ein Netz bewegt, gehören auf jeder Maschine zu denselben Bits
+    (RM-187).
+    """
+    if not matrices:
+        return np.eye(4, dtype=np.float64)
+    result = [[float(value) for value in row] for row in np.asarray(matrices[-1], dtype=float)]
+    for matrix in reversed(matrices[:-1]):
+        left = [[float(value) for value in row] for row in np.asarray(matrix, dtype=float)]
+        result = [
+            [
+                left[row][0] * result[0][column]
+                + left[row][1] * result[1][column]
+                + left[row][2] * result[2][column]
+                + left[row][3] * result[3][column]
+                for column in range(4)
+            ]
+            for row in range(4)
+        ]
+    return np.asarray(result, dtype=np.float64)
 
 
 def moved(body: object, matrix: np.ndarray) -> None:
@@ -188,10 +250,12 @@ def _carry_cache(source: trimesh.Trimesh, body: trimesh.Trimesh, matrix: np.ndar
         names.extend(_METRIC_IN_CACHE)
     carried = {name: kept.cache[name] for name in names if name in kept.cache}
     if rigid:
-        turn = cells[:3, :3]
+        # Elementweise gedreht (:func:`turned`), nicht über ``@``: Aus den
+        # Normalen entscheidet die Erkennung danach über Ebenen und Kanten,
+        # und dieselbe Frage soll auf jeder Maschine dieselbe Antwort haben.
         for name in ("face_normals", "vertex_normals"):
             if name in kept.cache:
-                carried[name] = np.asarray(kept.cache[name], dtype=np.float64) @ turn.T
+                carried[name] = turned(np.asarray(kept.cache[name], dtype=np.float64), cells)
     if not carried:
         return
     target.verify()
@@ -540,24 +604,26 @@ def rotation_about(direction: Vec3, origin: Vec3, degrees: float) -> np.ndarray:
     mit derselben Matrix (``knowledge/parts/shapes.turned`` und ``exact.turned``).
     """
     axis = np.asarray(direction, dtype=float)
-    length = float(np.linalg.norm(axis))
+    # ``math.hypot`` und ``units.dot3`` statt ``np.linalg.norm`` und ``@``:
+    # beides ginge durch BLAS (RM-187). Bis zum 22.09.2026 stand hier
+    # ``centre - turn @ centre`` — die Verschiebung jeder Drehung um die Mitte
+    # eines Körpers, und damit jede Ecke nach *Drehen*, trug die Rundung der
+    # Maschine.
+    length = math.hypot(float(axis[0]), float(axis[1]), float(axis[2]))
     if length <= EPS_GEOM:
         raise ValueError("a rotation axis needs a direction")
-    x, y, z = axis / length
+    x, y, z = (float(value) for value in axis / length)
     cos, sin = exact_cos_degrees(degrees), exact_sin_degrees(degrees)
     rest = 1.0 - cos
-    turn = np.array(
-        [
-            [cos + x * x * rest, x * y * rest - z * sin, x * z * rest + y * sin],
-            [y * x * rest + z * sin, cos + y * y * rest, y * z * rest - x * sin],
-            [z * x * rest - y * sin, z * y * rest + x * sin, cos + z * z * rest],
-        ],
-        dtype=float,
+    turn = (
+        (cos + x * x * rest, x * y * rest - z * sin, x * z * rest + y * sin),
+        (y * x * rest + z * sin, cos + y * y * rest, y * z * rest - x * sin),
+        (z * x * rest - y * sin, z * y * rest + x * sin, cos + z * z * rest),
     )
     matrix = np.eye(4)
     matrix[:3, :3] = turn
-    centre = np.asarray(origin, dtype=float)
-    matrix[:3, 3] = centre - turn @ centre
+    centre = (float(origin[0]), float(origin[1]), float(origin[2]))
+    matrix[:3, 3] = [centre[row] - dot3(turn[row], centre) for row in range(3)]
     return matrix
 
 

@@ -28,6 +28,29 @@ zusätzlich zu `AGENTS.md`.
 - Jede randomisierte Prozedur nimmt `ctx.seed` und trägt `deterministic=False`.
   Ohne beides ist sie falsch, auch wenn sie funktioniert.
 
+## Dieselbe Datei, dasselbe Teil — auf jeder Maschine (RM-187)
+
+Was zu Geometrie wird oder zwischen Lagen, Flächen oder Kandidaten
+entscheidet, rechnet **ohne** Wege, deren letzte Stelle an der Plattform
+hängt:
+
+- kein BLAS: `np.dot`, `@`, `inner`, `vdot`, `tensordot`, `np.linalg.norm`
+  ohne Achse; `np.einsum` nicht (FMA auf ARM);
+- kein LAPACK: `svd`, `eigh`, `eig`, `lstsq`, `solve`, `inv`, `det` — dort
+  auch das Vorzeichen eines Eigen- oder Singulärvektors nicht;
+- keine Winkel- und Exponentialfunktion aus NumPy oder `math`;
+- kein `x ** 2` (Pythons Potenz ruft `pow` der Plattform) — `x * x`;
+- Zufall nur aus den Rohbits des Generators (`Generator.random`,
+  `integers`), nie `normal` oder andere Verteilungen über `exp`/`log`.
+
+Die Ersatzwerkzeuge stehen in `app/core/geom/CLAUDE.md` (Tabelle
+„Plattformgleich gerechnet"). Wer einen neuen Weg baut, der am Ende
+Geometrie ergibt, nimmt ihn in `tests/test_platform_identity.py` (`_WAYS`)
+auf: Der Test verrauscht jede dieser Rechnungen um ein ULP und tauscht den
+BLAS-Kern, und der Fingerabdruck darf sich nicht rühren. Anzeige, Messung
+für den Bericht und Vorauswahlen, deren Ergebnis danach exakt nachgeprüft
+wird, dürfen schnell rechnen — der Kommentar sagt dann, warum.
+
 ## `scipy.spatial.ConvexHull` gehört nicht in eine Schleife über Flecken
 
 Der Qhull-Wrapper legt **je Aufruf eine Temporärdatei** an (`tempfile.mkstemp`

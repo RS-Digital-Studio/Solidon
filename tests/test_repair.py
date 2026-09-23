@@ -60,10 +60,12 @@ def test_a_doubled_triangle_leaves_as_a_pair_and_closes_the_body() -> None:
     from app.core.geom.repair import branching_edge_count, remove_doubled_faces
 
     cube = trimesh.creation.box((10.0, 10.0, 10.0))
-    # Ein Dreieck ein zweites Mal: dieselben Ecken, dieselbe Stelle.
+    # Ein Dreieck ein zweites Mal, **andersherum umlaufen**: dieselben Ecken,
+    # dieselbe Stelle — die Tasche der Waschschüssel war genau so ein Paar
+    # (Flächen 165 437 und 180 933, gegenläufig; nachgemessen am 23.09.2026).
     doubled = trimesh.Trimesh(
         vertices=cube.vertices.copy(),
-        faces=trimesh.util.vstack_empty([cube.faces, cube.faces[:1]]),
+        faces=trimesh.util.vstack_empty([cube.faces, cube.faces[:1, ::-1]]),
         process=False,
     )
     before = MeshData.of(doubled)
@@ -777,3 +779,97 @@ def test_a_closed_body_gets_no_skip_note() -> None:
 
     codes = {finding.code for finding in result.findings}
     assert "repair.self_intersections_skipped" not in codes
+
+
+@pytest.mark.slow
+def test_a_mesh_written_twice_loses_its_copies_in_linear_time() -> None:
+    """Eine Schale, die ein Export zweimal schrieb, ist eine Gruppe je Dreieck.
+
+    ``remove_doubled_faces`` suchte je Gruppe ihre Mitglieder über alle
+    Dreiecke — quadratisch: An einer Kugel mit 327 680 Dreiecken, zweimal
+    geschrieben, waren das 2·10¹¹ Vergleiche und Minuten beim Import (Review
+    22.09.2026). Jetzt sortiert es einmal. Die Schranke ist grob, damit sie
+    auf einer belasteten Maschine hält; die alte Fassung lag weit darüber.
+    """
+    import time
+
+    from app.core.geom.repair import remove_doubled_faces
+
+    ball = trimesh.creation.icosphere(subdivisions=7, radius=40.0)
+    twice = trimesh.Trimesh(
+        vertices=ball.vertices.copy(),
+        faces=np.vstack([np.asarray(ball.faces), np.asarray(ball.faces)]),
+        process=False,
+    )
+
+    started = time.perf_counter()
+    after, removed = remove_doubled_faces(MeshData.of(twice))
+    elapsed = time.perf_counter() - started
+
+    assert removed == len(ball.faces), "je Paar die Kopie, nicht die Kugel"
+    assert after.triangle_count == len(ball.faces)
+    assert elapsed < 30.0, f"{elapsed:.1f} s für {len(twice.faces)} Dreiecke"
+
+
+def test_a_copy_in_the_same_direction_is_a_duplicate_not_a_pocket() -> None:
+    """Gleich umlaufen heißt: dieselbe Fläche zweimal — eine bleibt.
+
+    Eine Tasche entsteht aus zwei **gegenläufigen** Flächen; ihre Kanten tragen
+    je eine Fläche in jede Richtung, und beide zu streichen schließt das Netz
+    (die Waschschüssel). Zwei gleich umlaufende Kopien sind dagegen dieselbe
+    Fläche doppelt geschrieben. Bis zum 23.09.2026 fielen auch sie paarweise:
+    Die Wand ging mit, und *Reparieren* musste ein Loch stopfen, das es selbst
+    gerissen hatte.
+    """
+    from app.core.geom.repair import remove_doubled_faces
+
+    cube = trimesh.creation.box((10.0, 10.0, 10.0))
+    doubled = trimesh.Trimesh(
+        vertices=cube.vertices.copy(),
+        faces=trimesh.util.vstack_empty([cube.faces, cube.faces[:1]]),
+        process=False,
+    )
+
+    after, removed = remove_doubled_faces(MeshData.of(doubled))
+
+    assert removed == 1, "die Kopie, nicht die Wand"
+    assert after.triangle_count == 12
+    assert after.is_watertight
+    assert open_edge_count(after) == 0
+
+
+def _written_twice(inverted: bool) -> MeshData:
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    second = np.asarray(ball.faces)[:, ::-1] if inverted else np.asarray(ball.faces)
+    return MeshData.of(
+        trimesh.Trimesh(
+            vertices=ball.vertices.copy(),
+            faces=np.vstack([np.asarray(ball.faces), second]),
+            process=False,
+        )
+    )
+
+
+@pytest.mark.parametrize("inverted", [False, True], ids=["same", "inverted"])
+def test_repairing_a_shell_written_twice_keeps_one_shell(inverted: bool) -> None:
+    """*Reparieren* ließ von einer doppelt geschriebenen Schale nichts übrig.
+
+    Gemessen am 23.09.2026: Eine Kugel, deren 1280 Dreiecke ein Export zweimal
+    schrieb, kam aus *Reparieren* mit **null** Dreiecken zurück und dem Satz,
+    das Modell sei noch offen — jedes Dreieck war die Hälfte eines Paares,
+    und jedes Paar fiel. Das Einlesen tat es nicht (dort behält
+    ``unique_faces`` eine Kopie), nur der Knopf.
+
+    Gleich umlaufende Kopien sind Doppelungen und behalten eine. Gegenläufige
+    sind Taschen — außer wenn mit ihnen ein ganzes Teil verschwände: Dann ist
+    es kein Rest einer Tasche, sondern das Teil selbst, und eine Kopie bleibt.
+    """
+    body = _written_twice(inverted)
+
+    healed = repair(body)
+
+    assert healed.mesh.triangle_count == 1280
+    assert healed.mesh.is_watertight
+    assert float(healed.mesh.raw.volume) == pytest.approx(
+        float(trimesh.creation.icosphere(subdivisions=3, radius=20.0).volume), rel=1e-12
+    )

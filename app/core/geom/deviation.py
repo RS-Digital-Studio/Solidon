@@ -907,8 +907,8 @@ def _tighten(facet: _Facet, epsilon: float) -> None:
 # um ein ULP nach außen und bestätigt jede Wurzel durch exaktes Quadrieren;
 # ein Dreieck, dessen Rechnung nicht endlich bleibt, geht den skalaren Weg.
 # Der Torus bekommt hier seine Zeugen und die Rechteckklammer; verfeinert wird
-# nur, was danach noch über der Zielbreite liegt — auf dem skalaren Kantenweg
-# mit dem gemeinsamen Budget je Träger.
+# nur, was danach noch über der Zielbreite liegt — auf dem skalaren Kantenweg,
+# mit einem Budget je Dreieck (:data:`_MAX_REFINEMENTS`).
 
 _SPLIT: Final = 134217729.0  # 2**27 + 1, Veltkamp-Aufspaltung
 _EXACT_PRODUCT_FLOOR: Final = (
@@ -1984,7 +1984,7 @@ def deviation_bounds(
     epsilon_mm: float,
     cancelled: CancelToken | None = None,
 ) -> Iterator[FacetDeviation | None]:
-    """Genau eine Klammer je Originaldreieck; Verfeinerung ist gemeinsam je Aufruf begrenzt.
+    """Genau eine Klammer je Originaldreieck; die Verfeinerung ist je Dreieck begrenzt.
 
     ``None`` bezeichnet ungültige oder nicht endlich einschließbare Daten,
     niemals einen gemessenen Nullabstand. Die Zuordnung zum Patch übernimmt der
@@ -2036,7 +2036,8 @@ def deviation_bounds_grouped(
     ``(n, 3, 3)``-Feld; zurück kommt je Träger eine `DeviationTable` in
     derselben Reihenfolge. ``progress`` erfährt nach jedem Block, wie viele
     Dreiecke von allen fertig sind. Das Verfeinerungsbudget des Torus gilt
-    weiter je Träger.
+    je Dreieck (:data:`_MAX_REFINEMENTS`) — wie viele Träger ein Stapel
+    trägt, ändert an keiner Klammer etwas.
     """
     _checked_epsilon(epsilon_mm)
     if len(patches) != len(triangles):

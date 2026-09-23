@@ -20,9 +20,11 @@ import math
 
 import numpy as np
 
+from app.core import units
 from app.core.errors import Action, AppError
 from app.core.geom.mesh import MeshData
-from app.core.geom.transform import apply
+from app.core.geom.transform import apply, composed, moved_points, translation
+from app.core.geom.transform import rotation_between as shortest_rotation
 from app.core.log import get_logger
 from app.core.types import Feature, Vec3
 from app.core.units import EPS_GEOM
@@ -112,47 +114,42 @@ def align_matrix(source: Feature, target: Feature, flip: bool = False) -> np.nda
     turn = rotation_between(
         source_direction, (float(wanted[0]), float(wanted[1]), float(wanted[2]))
     )
-    moved_point = turn @ np.array([*source_point, 1.0])
-    offset = np.asarray(target_point, dtype=float) - moved_point[:3]
-
-    matrix = np.eye(4)
-    matrix[:3, 3] = offset
-    return np.asarray(matrix @ turn, dtype=float)
+    # Elementweise und über ``composed`` statt ``@`` (RM-187): Mit dieser
+    # Matrix wird der Körper bewegt.
+    moved_point = moved_points(np.array([source_point], dtype=float), turn)[0]
+    offset = np.asarray(target_point, dtype=float) - moved_point
+    return composed(translation((float(offset[0]), float(offset[1]), float(offset[2]))), turn)
 
 
 def rotation_between(source: Vec3, target: Vec3) -> np.ndarray:
-    """Die kürzeste Drehung, die eine Richtung auf eine andere bringt
-    (Rodrigues)."""
+    """Die kürzeste Drehung, die eine Richtung auf eine andere bringt.
+
+    **Die Rechnung steht einmal** — in :func:`app.core.geom.transform.rotation_between`,
+    Rodrigues aus Grundrechenarten. Hier stand bis zum 22.09.2026 eine zweite
+    Fassung über Achse und Winkel, mit ``math.acos``, ``sin`` und ``cos`` der
+    Plattform und Matrixprodukten über BLAS: ein Zwilling, der auf jeder
+    Maschine eine andere letzte Stelle drehte (RM-187).
+
+    **Nur die Gegenrichtung ist eigen, und zwar mit Absicht.** Zeigen die
+    Richtungen gegeneinander, dreht jede senkrechte Achse die eine auf die
+    andere; welche, entscheidet über die Lage des Körpers **um** die Achse.
+    Ausrichtungen, die in Projektdateien stehen, sind mit dieser Wahl gerechnet
+    — X als Hilfsachse, bei einer Richtung nahe X die Y-Achse —, und dieselbe
+    Datei soll dasselbe Teil ergeben (§11.3). Die halbe Drehung ist exakt
+    ``2·a·aᵀ - I`` statt ``I + sin(π)·K + …`` mit ``sin(π) = 1,2·10⁻¹⁶``.
+    """
     first = np.asarray(_unit(source), dtype=float)
     second = np.asarray(_unit(target), dtype=float)
-    axis = np.cross(first, second)
-    length = float(np.linalg.norm(axis))
-    dot = float(np.clip(first @ second, -1.0, 1.0))
-
-    if length <= EPS_GEOM:
-        if dot > 0.0:
-            return np.eye(4)
-        # Entgegengesetzte Richtungen: jede senkrechte Achse dreht ihn, also
-        # eine davon nehmen.
-        helper = np.array([1.0, 0.0, 0.0]) if abs(first[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
-        axis = np.cross(first, helper)
-        length = float(np.linalg.norm(axis))
-        angle = math.pi
-    else:
-        angle = math.acos(dot)
-
-    axis = axis / length
-    cross = np.array(
-        [
-            [0.0, -axis[2], axis[1]],
-            [axis[2], 0.0, -axis[0]],
-            [-axis[1], axis[0], 0.0],
-        ]
-    )
-    turn = np.eye(3) + math.sin(angle) * cross + (1.0 - math.cos(angle)) * (cross @ cross)
-    matrix = np.eye(4)
-    matrix[:3, :3] = turn
-    return matrix
+    across = np.cross(first, second)
+    sine = math.hypot(float(across[0]), float(across[1]), float(across[2]))
+    if sine <= EPS_GEOM and units.dot3(first, second) < 0.0:
+        helper = (1.0, 0.0, 0.0) if abs(first[0]) < 0.9 else (0.0, 1.0, 0.0)
+        axis = np.cross(first, np.asarray(helper))
+        axis = axis / math.hypot(float(axis[0]), float(axis[1]), float(axis[2]))
+        matrix = np.eye(4)
+        matrix[:3, :3] = 2.0 * np.outer(axis, axis) - np.eye(3)
+        return matrix
+    return shortest_rotation(first, second)
 
 
 def align(mesh: MeshData, source: Feature, target: Feature, flip: bool = False) -> MeshData:
@@ -164,7 +161,8 @@ def align(mesh: MeshData, source: Feature, target: Feature, flip: bool = False) 
 
 def _unit(vector: object) -> Vec3:
     values = np.asarray(vector, dtype=float)
-    length = float(np.linalg.norm(values))
+    # ``math.hypot`` statt ``np.linalg.norm`` (BLAS, RM-187).
+    length = math.hypot(float(values[0]), float(values[1]), float(values[2]))
     if length <= EPS_GEOM:
         raise AppError(
             _("An diesem Merkmal lässt sich nichts ausrichten."),

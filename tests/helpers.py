@@ -29,13 +29,14 @@ import struct
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 import trimesh
 
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, new_project
-from app.core.types import Feature, SceneObject, Source
+from app.core.types import Feature, OpResult, Profile, Quality, SceneObject, Source
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -233,3 +234,112 @@ def fill_only_small_holes(monkeypatch: pytest.MonkeyPatch) -> None:
         return result, repair.open_edge_count(result) < before, 0
 
     monkeypatch.setattr(repair, "_filled_with_count", filled)
+
+
+# --- Die schräge Senkbohrung (RM-187) ----------------------------------------------
+#
+# Der Prüfkörper des Änderungswegs: ``test_bore_mouth_resize`` ändert ihn auf
+# jede Art, ``test_platform_identity`` hält fest, dass dabei auf jeder Maschine
+# dieselben Bits herauskommen. Die Sonden unter
+# ``.claude/.state/plattformgleichheit-2026-09-17`` lesen ihn weiter über die
+# alten Namen in ``test_bore_mouth_resize``.
+
+
+def sloping_bore() -> tuple[MeshData, dict[str, Feature], Feature]:
+    """Eigene Reproduktion: Ø9, schräge Senkung Ø11 und Nachbarloch Ø9,5.
+
+    Alle Punkte werden hier aus festen Maßen konstruiert. Der Boden liegt
+    bei z=3+0,04*x, der Zylinder endet bei z=17+0,10*x und die Senkung an der
+    schrägen Außenfläche z=18+0,08*x. Kein Dreieck stammt aus einer Kundendatei.
+    """
+    from app.core import units
+    from app.core.deferred import trimesh
+    from app.core.geom import lathe
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    sections = 120
+    # **Über ``circle_cos_sin`` und nicht über ``np.cos``** (17.09.2026,
+    # RM-187): Dieser Test prüft die Erkennung, nicht die Mathematikbibliothek.
+    # Mit ``np.cos`` baute er auf jeder Plattform ein anderes Eingangsnetz —
+    # 1224 Dreiecke auf Ubuntu, 1226 auf Windows, 1228 auf macOS —, und was er
+    # danach maß, war nicht mehr dieselbe Frage. Auf dem Mac zerfiel darüber
+    # die Bohrungskette, und drei Reparaturen suchten den Fehler in der
+    # Erkennung, wo keiner war.
+    table = np.asarray(units.circle_cos_sin(sections), dtype=float)
+    vertices = []
+    for radius, height, slope in ((4.5, 3.0, 0.04), (4.5, 17.0, 0.10), (5.5, 18.0, 0.08)):
+        x, y = radius * table[:, 0], radius * table[:, 1]
+        vertices.extend(zip(x, y, height + slope * x, strict=True))
+    faces = []
+    for ring in range(2):
+        for at in range(sections):
+            following = (at + 1) % sections
+            lower, upper = ring * sections, (ring + 1) * sections
+            faces.extend(
+                (
+                    (lower + at, lower + following, upper + following),
+                    (lower + at, upper + following, upper + at),
+                )
+            )
+    for ring, height in ((0, 3.0), (2, 18.0)):
+        hub = len(vertices)
+        vertices.append((0.0, 0.0, height))
+        for at in range(sections):
+            faces.append((ring * sections + at, ring * sections + (at + 1) % sections, hub))
+    cavity = trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
+    trimesh.repair.fix_normals(cavity)
+    # Verschoben wird elementweise und nicht über ``apply_translation``: Das
+    # geht als Matrixprodukt durch BLAS, und dieser Weg ist der Prüfstand für
+    # „dieselben Bits auf jeder Maschine" (RM-187, ``test_platform_identity``).
+    stock = trimesh.creation.box(extents=(34.0, 26.0, 18.0))
+    points = np.asarray(stock.vertices) + np.array([5.0, 0.0, 9.0])
+    top = points[:, 2] > 9.0
+    points[top, 2] += 0.08 * points[top, 0]
+    stock.vertices = points
+    neighbour = lathe.cylinder(radius=4.75, height=20.0, sections=120)
+    neighbour.vertices = np.asarray(neighbour.vertices) + np.array([12.0, 0.0, 13.0])
+    mesh = boolean(
+        "difference",
+        [MeshData.of(stock), MeshData.of(cavity), MeshData.of(neighbour)],
+        quality="fine",
+    ).mesh
+    features = detect(mesh)
+    hole = min(
+        (feature for feature in features.values() if feature.kind == "hole"),
+        key=lambda feature: abs(float(feature.params["centre"][0])),
+    )
+    return mesh, features, hole
+
+
+def feature_operation(
+    name: str,
+    mesh: MeshData,
+    features: dict[str, Feature],
+    feature: Feature,
+    profile: Profile,
+    *,
+    quality: Quality = "fine",
+    **params: object,
+) -> OpResult:
+    """Eine Merkmalsoperation durch ihren registrierten Kundenvertrag auswerten."""
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    source = SceneObject(id="obj_1", name="Bohrungsprüfung", mesh=mesh, features=features)
+    spec = REGISTRY.get(name)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(at_feature=feature.id, **params),
+            profile=profile,
+            quality=quality,
+            seed=20260915,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )

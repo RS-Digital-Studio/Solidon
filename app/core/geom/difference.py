@@ -13,6 +13,7 @@ sich nicht rechnen ließ, sagt das, statt eine leere Ansicht zu zeigen, die wie
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import cast
 
@@ -296,7 +297,11 @@ def _changed_region(before: MeshData, after: MeshData) -> tuple[np.ndarray, np.n
     ]
     changed = np.concatenate([part for part in corners if len(part)])
     low, high = changed.min(axis=0), changed.max(axis=0)
-    margin = max(float(np.linalg.norm(high - low)) * CHANGED_REGION_MARGIN, roundoff)
+    span = high - low
+    margin = max(
+        math.hypot(float(span[0]), float(span[1]), float(span[2])) * CHANGED_REGION_MARGIN,
+        roundoff,
+    )
     return low - margin, high + margin
 
 

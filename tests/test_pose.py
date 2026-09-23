@@ -118,7 +118,9 @@ def test_the_distance_is_to_the_segment_not_the_axis() -> None:
 
     field = weights(MeshData.of(moved), two_bones())
 
-    assert field[:, 1].mean() > field[:, 0].mean(), "der nähere Knochen gewinnt"
+    # Auf der Achse lägen beide Knochen im Abstand null; am Segment liegt der
+    # Unterarm 180 mm entfernt, der Oberarm 200 — und zwar für jede Ecke.
+    assert (field[:, 1] > field[:, 0]).all(), "der nähere Knochen gewinnt überall"
 
 
 # --- Vorwärtskinematik ----------------------------------------------------------
@@ -151,6 +153,10 @@ def test_a_bone_turns_about_its_own_head() -> None:
 
     head = np.array([-20.0, 0.0, 0.0, 1.0])
     assert np.allclose((matrices["upper"] @ head)[:3], head[:3], atol=1e-9)
+    # Und die Spitze schwingt um ihn: 20 mm vom Kopf, eine Vierteldrehung um Y
+    # nach unten — nicht um den Ursprung, wo sie bei (0, 0, -0) bliebe.
+    tail = np.array([0.0, 0.0, 0.0, 1.0])
+    assert (matrices["upper"] @ tail)[:3] == pytest.approx((-20.0, 0.0, -20.0), abs=1e-9)
 
 
 def test_bones_are_ordered_parents_first_whatever_the_list_says() -> None:

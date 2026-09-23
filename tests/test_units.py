@@ -485,3 +485,115 @@ def test_a_right_angle_in_degrees_is_exact() -> None:
         assert not any(value == 0.0 and math.copysign(1.0, value) < 0.0 for value in pair)
     matrix = transform.rotation("x", 90.0)
     assert {abs(value) for value in matrix[:3, :3].ravel()} <= {0.0, 1.0}
+
+
+def test_right_angles_in_degrees_are_exact() -> None:
+    """Ein Vielfaches von 90 Grad gibt exakt null oder eins — mit positiver Null.
+
+    Bis zum 22.09.2026 lief die Reihe über den ungekürzten Winkel und traf die
+    Null nur auf die fünfzig Stellen genau, mit denen sie rechnet:
+    ``cos(90°)`` war ``-8,5·10⁻⁵⁰``, ``sin(360°)`` ``-2·10⁻⁴⁹``. Auf jeder
+    Maschine gleich, aber eine Ecke auf der Achse lag nach einer
+    Vierteldrehung um diesen Rest daneben.
+    """
+    import math
+
+    from app.core.units import exact_cos_degrees, exact_sin_degrees
+
+    expected = {
+        0.0: (1.0, 0.0),
+        90.0: (0.0, 1.0),
+        180.0: (-1.0, 0.0),
+        270.0: (0.0, -1.0),
+        360.0: (1.0, 0.0),
+        -90.0: (0.0, -1.0),
+        450.0: (0.0, 1.0),
+        -720.0: (1.0, 0.0),
+    }
+    for degrees, (cos, sin) in expected.items():
+        found = (exact_cos_degrees(degrees), exact_sin_degrees(degrees))
+        assert found == (cos, sin), f"{degrees}°: {found}"
+        for value in found:
+            assert math.copysign(1.0, value) > 0.0 or value != 0.0, f"-0.0 bei {degrees}°"
+    # Spiegelgleiche Winkel sind bitgleich, weil beide aus derselben Achteldrehung kommen.
+    assert exact_cos_degrees(45.0) == exact_sin_degrees(45.0)
+    assert exact_cos_degrees(60.0) == exact_sin_degrees(30.0)
+    assert exact_cos_degrees(-30.0) == exact_cos_degrees(30.0)
+    assert exact_sin_degrees(-30.0) == -exact_sin_degrees(30.0)
+
+
+def test_a_half_turn_lies_on_the_axis_for_any_corner_count() -> None:
+    """Auch ein Sechseck hat seinen halben Umlauf auf der Achse.
+
+    Nur bei einer durch vier teilbaren Teilung standen die Viertelpunkte
+    genau; beim Sechseck lag die gegenüberliegende Ecke bei ``y = -7·10⁻⁵⁰``.
+    Jetzt geht jede Ecke als Bruch eines Umlaufs auf eine Achteldrehung
+    zurück, und Spiegelbilder sind bitgleich.
+    """
+    from app.core.units import circle_point
+
+    assert circle_point(6, 3) == (-1.0, 0.0)
+    assert circle_point(10, 5) == (-1.0, 0.0)
+    for sections in (3, 5, 6, 7, 9, 10, 18, 30, 90):
+        for index in range(1, sections):
+            cos, sin = circle_point(sections, index)
+            mirror_cos, mirror_sin = circle_point(sections, sections - index)
+            assert (cos, sin) == (mirror_cos, -mirror_sin), f"{sections}-Eck, Ecke {index}"
+
+
+def test_the_plane_fit_is_the_singular_value_answer_without_lapack() -> None:
+    """``plane_fit`` beantwortet, was eine SVD beantwortet — mit festem Vorzeichen.
+
+    Die Normale ist die Richtung des kleinsten Singulärwerts, die Restspanne
+    der Singulärwert selbst. Verglichen wird mit ``np.linalg.svd`` auf dieser
+    Maschine; plattformgleich ist daran nur ``plane_fit`` (RM-187).
+    """
+    import numpy as np
+
+    from app.core.units import plane_fit
+
+    rng = np.random.default_rng(20260922)
+    normal = np.array([0.3, -0.5, 0.81])
+    normal /= np.linalg.norm(normal)
+    helper = np.cross(normal, (1.0, 0.0, 0.0))
+    helper /= np.linalg.norm(helper)
+    other = np.cross(normal, helper)
+    plane = [
+        (5.0, -2.0, 7.0) + 30.0 * a * helper + 20.0 * b * other + 0.01 * c * normal
+        for a, b, c in rng.uniform(-1.0, 1.0, size=(200, 3))
+    ]
+
+    centre, found, spread = plane_fit(plane)
+
+    points = np.asarray(plane)
+    _u, singular, rows = np.linalg.svd(points - points.mean(axis=0), full_matrices=False)
+    reference = rows[-1] if rows[-1][np.flatnonzero(np.abs(rows[-1]) > 1e-12)[0]] > 0 else -rows[-1]
+    assert np.allclose(centre, points.mean(axis=0), atol=1e-12)
+    assert np.allclose(found, reference, atol=1e-12)
+    assert spread == pytest.approx(float(singular[-1]), rel=1e-9)
+    first = next(value for value in found if abs(value) > 1e-12)
+    assert first > 0.0, "das Vorzeichen steht fest, nicht wie bei LAPACK"
+
+
+def test_the_symmetric_eigen_solver_diagonalises() -> None:
+    """Jacobi an einer bekannten Matrix: Eigenwerte aufsteigend, Vektoren normiert."""
+    import numpy as np
+
+    from app.core.units import symmetric_eigen3
+
+    matrix = [[4.0, 1.0, 2.0], [1.0, 3.0, 0.5], [2.0, 0.5, 6.0]]
+
+    values, vectors = symmetric_eigen3(matrix)
+
+    reference = np.linalg.eigvalsh(np.asarray(matrix))
+    assert values == pytest.approx(tuple(reference), rel=1e-13)
+    assert list(values) == sorted(values)
+    for value, vector in zip(values, vectors, strict=True):
+        column = np.asarray(vector)
+        assert np.linalg.norm(column) == pytest.approx(1.0, abs=1e-15)
+        assert np.allclose(np.asarray(matrix) @ column, value * column, atol=1e-12)
+    # Eine schon diagonale Matrix bleibt, wie sie ist.
+    assert symmetric_eigen3([[2.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 3.0]]) == (
+        (1.0, 2.0, 3.0),
+        ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+    )

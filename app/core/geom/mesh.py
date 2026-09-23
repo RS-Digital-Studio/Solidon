@@ -15,14 +15,14 @@ import json
 import math
 import zipfile
 from dataclasses import dataclass, field
-from typing import Any, Final
+from typing import Any, Final, cast
 
 import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CHOOSE, PROGRAMMING_ERRORS, GeometryError, ValidationError
 from app.core.log import get_logger
-from app.core.types import BoundingBox, Mesh
+from app.core.types import BoundingBox, CancelToken, Mesh
 from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
 from app.i18n import _
 
@@ -345,6 +345,164 @@ def unique_edges(
     return tuple(results)
 
 
+def stable_normals(mesh: trimesh.Trimesh) -> tuple[np.ndarray, np.ndarray]:
+    """Einheitsnormale und Fläche je Dreieck — auf jeder Maschine dieselben Bits.
+
+    **Nicht ``face_normals`` und ``area_faces`` von ``trimesh``.** Beide
+    normieren über ``np.dot(v * v, [1, 1, 1])``, und das geht durch BLAS: Die
+    letzte Stelle hängt an der CPU (RM-187). Wo aus Normalen und Flächen eine
+    **Entscheidung** wird — welche Lage die beste ist, welche Fläche aufliegt
+    —, reicht das, um auf zwei Maschinen zwei verschiedene Teile zu drucken.
+    Hier entstehen beide aus Kreuzprodukt, Quadratsumme und Wurzel, jede als
+    eigene NumPy-Operation und damit nach IEEE-754 gerundet.
+
+    Ein Dreieck ohne Fläche bekommt die Normale ``(0, 0, 0)``, wie bei
+    ``trimesh``. Das Ergebnis liegt im Cache des Netzes und verfällt mit
+    dessen Geometrie.
+    """
+    cache = getattr(mesh, "_cache", None)
+    if cache is not None:
+        cache.verify()
+        if "solidon_stable_normals" in cache:
+            return cast(tuple[np.ndarray, np.ndarray], cache["solidon_stable_normals"])
+    corners = np.asarray(mesh.triangles, dtype=np.float64)
+    if not len(corners):
+        found = (np.zeros((0, 3)), np.zeros(0))
+    else:
+        cross = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+        doubled = np.sqrt(
+            cross[:, 0] * cross[:, 0] + cross[:, 1] * cross[:, 1] + cross[:, 2] * cross[:, 2]
+        )
+        usable = doubled > 0.0
+        normals = np.zeros_like(cross)
+        normals[usable] = cross[usable] / doubled[usable, None]
+        found = (normals, doubled / 2.0)
+    if cache is not None:
+        cache["solidon_stable_normals"] = found
+    return found
+
+
+_SQRT3: Final = 1.7320508075688772
+_TAN_PI_12: Final = 0.2679491924311227
+_PI_6: Final = 0.5235987755982988
+_PI_2: Final = 1.5707963267948966
+#: ``(-1)ⁿ/(2n+1)`` bis ``n = 14`` — für ``|t| ≤ tan(π/12)`` liegt der erste
+#: weggelassene Term unter 10⁻¹⁸.
+_ATAN_TERMS: Final = tuple(
+    (1.0 if order % 2 == 0 else -1.0) / (2 * order + 1) for order in range(15)
+)
+
+
+def _stable_arctan(values: np.ndarray) -> np.ndarray:
+    """``arctan(t)`` für ``t ≥ 0`` aus Grundrechenarten — auf jeder Maschine
+    dieselben Bits (RM-187).
+
+    Zweimal exakt reduziert — ``t > 1`` über ``π/2 - arctan(1/t)``, ``t >
+    tan(π/12)`` über ``π/6 + arctan((t√3 - 1)/(t + √3))`` —, dann die Reihe im
+    Horner-Schema. Jede Operation ist eine eigene NumPy-Operation und damit
+    nach IEEE-754 gerundet; ``np.arctan`` dagegen wählt seine Umsetzung nach
+    der CPU. Die Abweichung zur wahren Funktion liegt bei wenigen Einheiten
+    der letzten Stelle.
+    """
+    t = np.asarray(values, dtype=np.float64)
+    inverse = t > 1.0
+    with np.errstate(divide="ignore"):
+        s = np.where(inverse, 1.0 / np.where(inverse, t, 1.0), t)
+    shifted = s > _TAN_PI_12
+    s = np.where(shifted, (s * _SQRT3 - 1.0) / (s + _SQRT3), s)
+    square = s * s
+    total = np.full_like(s, _ATAN_TERMS[-1])
+    for coefficient in reversed(_ATAN_TERMS[:-1]):
+        total = total * square + coefficient
+    result = s * total
+    result = np.where(shifted, _PI_6 + result, result)
+    return np.asarray(np.where(inverse, _PI_2 - result, result))
+
+
+def stable_vertex_normals(mesh: trimesh.Trimesh) -> np.ndarray:
+    """Die Eckennormalen, gewichtet mit den Winkeln der Dreiecke an der Ecke —
+    wie ``vertex_normals`` von ``trimesh``, aber auf jeder Maschine dieselben Bits.
+
+    ``trimesh`` misst die Winkel mit ``np.arccos`` und normiert über BLAS;
+    beides rundet je nach CPU anders (RM-187). Wo eine Eckennormale zu
+    Geometrie wird — *Offene Fläche schließen* versetzt jede Ecke entlang
+    ihrer Normalen —, trug damit jede Ecke der Innenhaut die letzte Stelle der
+    Maschine. Hier: Normalen aus :func:`stable_normals`, Winkel als
+    ``2·arctan(|a - b| / |a + b|)`` der Kanteneinheitsvektoren über
+    :func:`_stable_arctan`, die Summe je Ecke in fester Reihenfolge. Ein
+    Dreieck mit einem Winkel unter 10⁻⁸ zählt nicht — dieselbe Regel wie bei
+    ``trimesh``.
+    """
+    vertices = np.asarray(mesh.vertices, dtype=np.float64)
+    faces = np.asarray(mesh.faces, dtype=np.int64)
+    summed = np.zeros((len(vertices), 3), dtype=np.float64)
+    if not len(faces):
+        return summed
+    normals, _areas = stable_normals(mesh)
+    corners = vertices[faces]
+    angles = np.zeros((len(faces), 3), dtype=np.float64)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        for corner in range(2):
+            first = corners[:, (corner + 1) % 3] - corners[:, corner]
+            second = corners[:, (corner + 2) % 3] - corners[:, corner]
+            first_length = np.sqrt((first * first).sum(axis=1))[:, None]
+            second_length = np.sqrt((second * second).sum(axis=1))[:, None]
+            a = np.where(first_length > 0.0, first / first_length, 0.0)
+            b = np.where(second_length > 0.0, second / second_length, 0.0)
+            apart = a - b
+            together = a + b
+            across = np.sqrt((apart * apart).sum(axis=1))
+            along = np.sqrt((together * together).sum(axis=1))
+            ratio = np.where(along > 0.0, across / np.where(along > 0.0, along, 1.0), np.inf)
+            angles[:, corner] = 2.0 * _stable_arctan(ratio)
+    angles[:, 2] = np.pi - angles[:, 0] - angles[:, 1]
+    angles[(angles < 1e-8).any(axis=1) | ~np.isfinite(angles).all(axis=1)] = 0.0
+    for corner in range(3):
+        np.add.at(summed, faces[:, corner], normals * angles[:, corner, None])
+    lengths = np.sqrt((summed * summed).sum(axis=1))
+    usable = lengths > 0.0
+    summed[usable] /= lengths[usable, None]
+    return summed
+
+
+@dataclass(frozen=True)
+class IntegerGrid:
+    """Nichtnegative Werte auf einem gemeinsamen Raster als ganze Zahlen —
+    damit jede Teilsumme exakt und von der Reihenfolge unabhängig ist.
+
+    Eine Gleitkommasumme hängt an der Reihenfolge ihrer Summanden, und zwei
+    spiegelgleiche Lagen eines symmetrischen Teils tragen dieselben Flächen in
+    anderer Reihenfolge: Ihre Summen unterschieden sich in der letzten Stelle,
+    und welche Lage gewann, entschied das Rauschen und nicht die Richtung, die
+    als Gleichstandsregel dahinter steht. Hier wird jeder Wert **einmal** auf
+    ein Raster gelegt, dessen Schritt ``2⁻⁶⁰`` der größtmöglichen Summe ist;
+    eine Summe ganzer Zahlen ist exakt — gleich in welcher Reihenfolge, gleich
+    auf welcher Maschine —, und der Rasterfehler liegt achtzehn Stellen unter
+    der Summe.
+    """
+
+    steps: np.ndarray
+    exponent: int
+
+    @classmethod
+    def of(cls, values: np.ndarray) -> IntegerGrid:
+        raw = np.abs(np.asarray(values, dtype=np.float64))
+        largest = float(raw.max()) if len(raw) else 0.0
+        if not largest or not math.isfinite(largest):
+            return cls(np.zeros(len(raw), dtype=np.int64), 0)
+        exponent = 60 - math.frexp(float(len(raw)) * largest)[1]
+        return cls(np.rint(np.ldexp(raw, exponent)).astype(np.int64), exponent)
+
+    def sums(self, masks: np.ndarray) -> np.ndarray:
+        """Je Zeile von ``masks`` die Summe der gewählten Werte."""
+        chosen = np.where(np.asarray(masks, dtype=bool), self.steps, 0).sum(axis=-1)
+        return np.ldexp(np.asarray(chosen, dtype=np.float64), -self.exponent)
+
+    def total(self) -> float:
+        """Die Summe aller Werte."""
+        return float(np.ldexp(float(int(self.steps.sum())), -self.exponent))
+
+
 def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
     """Zusammenhängende Komponenten als Dreiecksindizes.
 
@@ -575,7 +733,9 @@ class _SurfaceIndex:
         return bound
 
 
-def max_distance_to_surface(body: trimesh.Trimesh, points: np.ndarray) -> float:
+def max_distance_to_surface(
+    body: trimesh.Trimesh, points: np.ndarray, *, cancelled: CancelToken | None = None
+) -> float:
     """Der größte Abstand, den einer der Punkte zur Oberfläche hat — exakt,
     aber nur dort ausgerechnet, wo er das Maximum noch heben kann.
 
@@ -597,6 +757,9 @@ def max_distance_to_surface(body: trimesh.Trimesh, points: np.ndarray) -> float:
     jede Ecke unter den Kugeln langer Dreiecke Hunderte Bewerber hat; hier
     tragen 78 Prozent der Ecken eine Schranke unter dem Maximum und werden nie
     exakt gemessen (22.09.2026).
+
+    ``cancelled`` wird je Portion gefragt: Am Voronoi-Spiderman (885 570
+    Dreiecke) misst die Abweichung nach dem Glätten 5,4 s (23.09.2026).
     """
     queries = np.asarray(points, dtype=float).reshape(-1, 3)
     if not len(queries) or not len(body.faces):
@@ -619,6 +782,8 @@ def max_distance_to_surface(body: trimesh.Trimesh, points: np.ndarray) -> float:
     # Maximum nicht heben.
     alive = np.flatnonzero(bound > max(highest, roundoff))
     while len(alive):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if rounds == 1:
             # Nach dem ersten Maß lohnt die engere Schranke: Sie kostet acht
             # exakte Abstände je Punkt, aber nur für die, die noch im Rennen
@@ -875,12 +1040,28 @@ def ray_hit_distances(
 
 
 def ray_hits(
-    triangles: np.ndarray, origin: np.ndarray, direction: np.ndarray
+    triangles: np.ndarray,
+    origin: np.ndarray,
+    direction: np.ndarray,
+    *,
+    edge_margin: float = 1e-9,
+    minimum_travel: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Positive Strahlparameter mit den zugehörigen ursprünglichen Dreiecksnummern.
 
     Teilmengen verwenden lokale Nummern; der Aufrufer führt seinen Blockbeginn
     hinzu. Kanten können mehrere Treffer tragen, wie bei ``ray_hit_distances``.
+
+    ``edge_margin`` ist, wie weit ein Treffer baryzentrisch neben dem Dreieck
+    noch zählt, ``minimum_travel`` der kleinste Strahlparameter, der ein
+    Treffer ist. Die Wandstärke (``measure.ray_distances``) fragt mit
+    ``EPS_GEOM`` und ``100·EPS_GEOM``: Sie schießt von der Oberfläche aus, und
+    das Dreieck unter dem Startpunkt ist dort kein Gegenüber.
+
+    **Elementweise und nicht über ``np.dot`` oder ``np.einsum``** (RM-187):
+    Aus dem Treffer wird die Materialtiefe eines Stifts oder der Sitz eines
+    gesetzten Bausteins, und beide sollen auf jeder Maschine dieselben sein.
+    ``np.dot`` ging durch BLAS, ``np.einsum`` nutzt auf ARM FMA.
     """
     triangles = np.asarray(triangles, dtype=float)
     origin = np.asarray(origin, dtype=float).reshape(3)
@@ -888,18 +1069,31 @@ def ray_hits(
     edge_one = triangles[:, 1] - triangles[:, 0]
     edge_two = triangles[:, 2] - triangles[:, 0]
     across = np.cross(direction, edge_two)
-    determinant = np.einsum("ij,ij->i", edge_one, across)
+    determinant = _rowwise_dot(edge_one, across)
     parallel = np.abs(determinant) < RAY_PARALLEL_EPS
     # Division erst nach dem Ausblenden der parallelen — sonst rechnet numpy
     # mit inf weiter und meldet Warnungen über Fälle, die keiner nimmt.
     safe = np.where(parallel, 1.0, determinant)
     to_origin = origin - triangles[:, 0]
-    u = np.einsum("ij,ij->i", to_origin, across) / safe
+    u = _rowwise_dot(to_origin, across) / safe
     q = np.cross(to_origin, edge_one)
-    v = np.dot(q, direction) / safe
-    t = np.einsum("ij,ij->i", edge_two, q) / safe
-    inside = ~parallel & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1.0 + 1e-9) & (t > 0.0)
+    v = (q[:, 0] * direction[0] + q[:, 1] * direction[1] + q[:, 2] * direction[2]) / safe
+    t = _rowwise_dot(edge_two, q) / safe
+    inside = (
+        ~parallel
+        & (u >= -edge_margin)
+        & (v >= -edge_margin)
+        & (u + v <= 1.0 + edge_margin)
+        & (t > minimum_travel)
+    )
     return np.asarray(t[inside], dtype=float), np.flatnonzero(inside)
+
+
+def _rowwise_dot(first: np.ndarray, second: np.ndarray) -> np.ndarray:
+    """Zeilenweises Skalarprodukt zweier ``(n, 3)``-Felder, elementweise (RM-187)."""
+    return np.asarray(
+        first[:, 0] * second[:, 0] + first[:, 1] * second[:, 1] + first[:, 2] * second[:, 2]
+    )
 
 
 def distance_to_triangles(triangles: np.ndarray, point: np.ndarray) -> float:

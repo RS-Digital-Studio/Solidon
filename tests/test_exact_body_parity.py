@@ -65,11 +65,13 @@ def _rectangle(width: float, height: float) -> str:
 # Quellen: test_brep, test_prepare, test_features, test_missing_ops und die
 # jeweiligen Familientests. Jede Zeile nennt einen konkreten gültigen Auftrag.
 CASES = [
+    # Ausrichten ist eine starre Bewegung wie Verschieben und Drehen; bis zum
+    # 22.09.2026 machte es aus einem exakten Körper trotzdem ein Netz.
     Case(
         "align_to_feature",
         "alignment",
         {"feature": "top", "target": "obj_2:top"},
-        MESH,
+        KEEP,
         "aligned",
         None,
     ),

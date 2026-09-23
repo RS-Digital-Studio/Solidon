@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from shapely.geometry import Polygon
 
+from app.core import units
 from app.core.errors import ValidationError
 from app.core.geom.sketch_solid import MAX_OUTLINE_POINTS, outline_points
 from app.core.units import EPS_GEOM, MAX_FACET_SAG
@@ -110,10 +111,7 @@ def offset_section(
     if radius <= EPS_GEOM:
         return section
     sag = min(max_sag, MAX_FACET_SAG)
-    angle = 4.0 * math.asin(math.sqrt(min(1.0, sag / (2.0 * radius))))
-    if angle <= 0.0:
-        raise _invalid()
-    steps = max(4, 4 * math.ceil(math.tau / angle / 4.0))
+    steps = _round_steps(radius, sag)
     if steps > MAX_OUTLINE_POINTS:
         raise _invalid()
     moved = section.offset(distance, circular_segments=steps).simplify(EPS_GEOM)
@@ -122,3 +120,28 @@ def offset_section(
     if sum(len(path) for path in moved.to_polygons()) > MAX_OUTLINE_POINTS:
         raise _invalid()
     return moved
+
+
+def _round_steps(radius: float, sag: float) -> int:
+    """Die Eckenzahl eines runden Versatzes: die kleinste durch vier teilbare,
+    deren Sehnen höchstens ``sag`` vom Kreis abstehen.
+
+    **Entschieden an der Bedingung selbst, nicht an ``ceil`` über ``asin``**
+    (RM-187, 23.09.2026). Ein ``n``-Eck steht um ``r·(1 - cos(π/n))`` vom
+    Kreis ab. Die Schätzung über ``math.asin`` liegt meist richtig, aber wo
+    eine Eckenzahl die Grenze genau trifft, kippte ``ceil`` mit der letzten
+    Stelle der Mathematikbibliothek: Um eine Stelle verschoben wurden aus 28
+    Ecken 32. Hier prüft ``units.exact_cos`` — auf jeder Maschine dieselbe
+    Zahl — die Nachbarn der Schätzung, und die Antwort ist die kleinste Zahl,
+    die die Bedingung erfüllt.
+    """
+    angle = 4.0 * math.asin(math.sqrt(min(1.0, sag / (2.0 * radius))))
+    if not angle > 0.0:
+        raise _invalid()
+    limit = 1.0 - sag / radius
+    steps = max(4, 4 * math.ceil(math.tau / angle / 4.0))
+    while steps > 4 and units.exact_cos(math.pi / (steps - 4)) >= limit:
+        steps -= 4
+    while units.exact_cos(math.pi / steps) < limit:
+        steps += 4
+    return steps

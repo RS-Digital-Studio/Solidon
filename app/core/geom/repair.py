@@ -12,16 +12,19 @@ ihren Befunden.
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Final
+from typing import Any, Final, cast
 
 import numpy as np
 
+from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.attributes import transfer
-from app.core.geom.mesh import MeshData, face_components
+from app.core.geom.mesh import MeshData, face_components, stable_normals, unique_edges
+from app.core.geom.transform import along
 from app.core.log import get_logger
 from app.core.types import CancelToken, Finding
 from app.core.units import EPS_GEOM, format_length, weld_digits, weld_tolerance
@@ -74,9 +77,10 @@ def remove_degenerate_faces(mesh: MeshData) -> tuple[MeshData, int]:
 
 
 def remove_doubled_faces(mesh: MeshData) -> tuple[MeshData, int]:
-    """Deckungsgleiche Dreiecke **paarweise** entfernen — beide, nicht eines.
+    """Deckungsgleiche Dreiecke aufräumen: gegenläufige Paare ganz, gleich
+    umlaufende Kopien bis auf eine.
 
-    Zwei Dreiecke mit denselben Ecken sind eine Tasche ohne Volumen. Wer nur
+    Zwei gegenläufige Dreiecke mit denselben Ecken sind eine Tasche ohne Volumen. Wer nur
     eine Kopie streicht, lässt die übrigen Kanten des Paares mit je einer
     Fläche zurück und reißt zwei Ränder auf; das Paar zu streichen schließt
     das Netz. Genau das trennt diesen Schritt von ``unique_faces`` in
@@ -90,8 +94,18 @@ def remove_doubled_faces(mesh: MeshData) -> tuple[MeshData, int]:
     * Das Paar entfernt: 0 Ränder, 0 Verzweigungen, **geschlossen** — und das
       Volumen auf drei Nachkommastellen unverändert (401,869 cm³).
 
-    **Bei ungerader Anzahl bleibt eine Kopie stehen.** Drei deckungsgleiche
-    Dreiecke sind eine Tasche *und* eine Fläche; die Fläche wird gebraucht.
+    **Eine Tasche ist ein gegenläufiges Paar** (nachgemessen am 23.09.2026:
+    die zwei Flächen der Waschschüssel laufen gegeneinander um). Zwei **gleich**
+    umlaufende Kopien sind keine Tasche, sondern dieselbe Fläche doppelt
+    geschrieben — von ihnen bleibt eine. Je Gruppe deckungsgleicher Dreiecke
+    heben sich gegenläufige paarweise auf; bleibt danach eine Richtung übrig,
+    bleibt von ihr genau ein Dreieck. Drei deckungsgleiche sind damit, wie
+    zuvor, eine Tasche *und* eine Fläche.
+
+    **Und nie ein ganzes Teil.** Eine Schale, die ein Export zweimal schrieb,
+    ist lauter Paare; fiele jedes, bliebe von ihr nichts — *Reparieren* gab an
+    einer doppelt geschriebenen Kugel null Dreiecke zurück. Verschwände ein
+    zusammenhängendes Teil vollständig, behält es je Gruppe ihr erstes Dreieck.
     """
     body = mesh.raw.copy()
     before = len(body.faces)
@@ -100,10 +114,61 @@ def remove_doubled_faces(mesh: MeshData) -> tuple[MeshData, int]:
     ordered = np.sort(body.faces, axis=1)
     _unique, inverse, counts = np.unique(ordered, axis=0, return_inverse=True, return_counts=True)
     inverse = np.asarray(inverse).reshape(-1)
-    keep = np.ones(before, dtype=bool)
-    for group in np.flatnonzero(counts > 1):
-        members = np.flatnonzero(inverse == group)
-        keep[members[: len(members) - len(members) % 2]] = False
+    # **Je Gruppe ihre Mitglieder in Flächenreihenfolge, als Feld.** Hier lief
+    # eine Schleife über die Gruppen, und jede suchte ihre Mitglieder über alle
+    # Dreiecke: An einem Netz, das seine Dreiecke doppelt trägt — ein Export,
+    # der dieselbe Schale zweimal schrieb —, war das eine Gruppe je Dreieck
+    # und damit quadratisch (100 000 Paare: zwanzig Milliarden Vergleiche,
+    # Review 22.09.2026). Was bleibt, entscheidet der Umlauf (Docstring).
+    order = np.argsort(inverse, kind="stable")
+    group_of = inverse[order]
+    faces = np.asarray(body.faces, dtype=np.int64)
+    # Umlaufsinn gegenüber der sortierten Folge: gerade Permutation heißt
+    # derselbe Umlauf, ungerade der entgegengesetzte.
+    swaps = (
+        (faces[:, 0] > faces[:, 1]).astype(np.int64)
+        + (faces[:, 0] > faces[:, 2])
+        + (faces[:, 1] > faces[:, 2])
+    )
+    forward = swaps % 2 == 0
+    ahead = np.bincount(inverse, weights=forward, minlength=len(counts)).astype(np.int64)
+    behind = counts - ahead
+    # Bleibt eine Richtung übrig, bleibt ihr erstes Dreieck; sonst keines.
+    survives = (counts > 1) & (ahead != behind)
+    majority = ahead > behind
+    candidate = survives[group_of] & (forward[order] == majority[group_of])
+    first = np.full(len(counts), -1, dtype=np.int64)
+    positions = np.flatnonzero(candidate)
+    first[group_of[positions][::-1]] = positions[::-1]
+    keep = counts[inverse] == 1
+    keep[order[first[first >= 0]]] = True
+    if not keep.all():
+        # Kein zusammenhängendes Teil verschwindet ganz: Dort war es keine
+        # Tasche, sondern das Teil selbst, zweimal geschrieben. Zusammen
+        # hängt, was Ecken teilt — über Kanten allein zerfiele es, denn
+        # ``face_adjacency`` lässt jede Kante mit mehr als zwei Flächen aus,
+        # und an einer Doppelung hat jede Kante vier.
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import connected_components
+
+        corners = len(body.vertices)
+        links = coo_matrix(
+            (
+                np.ones(2 * len(faces), dtype=np.int8),
+                (
+                    np.concatenate([faces[:, 0], faces[:, 1]]),
+                    np.concatenate([faces[:, 1], faces[:, 2]]),
+                ),
+            ),
+            shape=(corners, corners),
+        )
+        pieces, label = connected_components(links, directed=False)
+        piece_of = np.asarray(label)[faces[:, 0]]
+        kept_in = np.bincount(piece_of, weights=keep, minlength=pieces)
+        lost = np.flatnonzero(np.isin(piece_of, np.flatnonzero(kept_in == 0)))
+        if len(lost):
+            _groups, chosen = np.unique(inverse[lost], return_index=True)
+            keep[lost[chosen]] = True
     dropped = int((~keep).sum())
     if not dropped:
         return mesh, 0
@@ -159,8 +224,11 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
 
     Liefert den Körper und wie viele Flächen geteilt wurden.
     """
-    body = mesh.raw.copy()
-    boundary = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
+    # Gelesen wird am Netz selbst: Die Rechnung darunter baut ein neues und
+    # ändert am alten nichts — eine Kopie am Anfang kostete am 1,2-M-Netz
+    # bei jedem Aufruf ein Zehntel einer Sekunde, auch ohne einen Rand.
+    body = mesh.raw
+    boundary = _edge_table(mesh).rows(1)
     if not len(boundary) or len(boundary) > MAX_STITCH_EDGES:
         return mesh, 0
 
@@ -206,13 +274,15 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
     if not splits:
         return mesh, 0
 
-    faces = [list(map(int, face)) for face in body.faces]
-    kept = np.ones(len(faces), dtype=bool)
+    # Nur die geteilten Dreiecke werden Listen — eine Python-Liste je Dreieck
+    # des ganzen Netzes kostete an 1,2 Millionen über eine Sekunde.
+    all_faces = np.asarray(body.faces, dtype=np.int64)
+    kept = np.ones(len(all_faces), dtype=bool)
     added: list[list[int]] = []
     added_from: list[int] = []
     for face_index, cuts in splits.items():
         first, second, vertex = cuts[0]
-        face = faces[face_index]
+        face = [int(entry) for entry in all_faces[face_index]]
         third = next((entry for entry in face if entry not in (first, second)), None)
         if third is None:
             continue
@@ -228,7 +298,7 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
     if not added:
         return mesh, 0
 
-    rebuilt = np.vstack([np.asarray(body.faces)[kept], np.asarray(added, dtype=np.int64)])
+    rebuilt = np.vstack([all_faces[kept], np.asarray(added, dtype=np.int64)])
     # Flächenattribute gehören zur Fläche, nicht zu ihrer ursprünglichen
     # Dreiecksaufteilung. Wird ein Dreieck geteilt, erben beide Hälften seine
     # Herkunft — sonst verliert ausgerechnet die Reparatur die Zuordnung von
@@ -238,7 +308,7 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
         array = np.asarray(values)
         # Fremde Netze dürfen auch skalare Metadaten tragen. Nur ein Wert je
         # Fläche kann beim Teilen eindeutig mit der Fläche weiterreisen.
-        if array.ndim == 0 or len(array) != len(faces):
+        if array.ndim == 0 or len(array) != len(all_faces):
             continue
         face_attributes[name] = np.concatenate([array[kept], array[added_from]], axis=0)
     stitched = trimesh.Trimesh(
@@ -257,15 +327,18 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
 
 def _lies_on(point: np.ndarray, start: np.ndarray, end: np.ndarray) -> bool:
     """Liegt der Punkt auf der Strecke — zwischen den Enden, nicht dahinter?"""
+    # ``math.hypot`` und ``units.dot3`` statt BLAS (RM-187): Ob ein Punkt auf
+    # der Kante sitzt, entscheidet, welches Dreieck geteilt wird.
     along = end - start
-    length = float(np.linalg.norm(along))
+    length = math.hypot(float(along[0]), float(along[1]), float(along[2]))
     if length <= EPS_GEOM:
         return False
     offset = point - start
-    travelled = float(np.dot(offset, along)) / (length * length)
+    travelled = units.dot3(offset, along) / (length * length)
     if not (ON_EDGE_TOLERANCE < travelled < 1.0 - ON_EDGE_TOLERANCE):
         return False
-    distance = float(np.linalg.norm(offset - travelled * along))
+    aside = offset - travelled * along
+    distance = math.hypot(float(aside[0]), float(aside[1]), float(aside[2]))
     return distance <= ON_EDGE_TOLERANCE * max(length, 1.0)
 
 
@@ -358,7 +431,7 @@ def boundary_loops(mesh: MeshData) -> list[list[int]]:
     ``unify_normals`` danach für das ganze Netz.
     """
     body = mesh.raw
-    single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
+    single = _edge_table(mesh).rows(1)
     if not len(single) or len(single) > MAX_FILL_EDGES:
         return []
     directed = np.asarray(body.edges, dtype=np.int64)[single]
@@ -418,7 +491,7 @@ def split_pinched_vertices(mesh: MeshData) -> tuple[MeshData, int]:
     letzten fünfzehn Randkanten.
     """
     body = mesh.raw
-    single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
+    single = _edge_table(mesh).rows(1)
     if not len(single) or len(single) > MAX_FILL_EDGES:
         return mesh, 0
     border = np.asarray(body.edges, dtype=np.int64)[single]
@@ -429,10 +502,19 @@ def split_pinched_vertices(mesh: MeshData) -> tuple[MeshData, int]:
 
     faces = np.asarray(body.faces, dtype=np.int64).copy()
     points = np.asarray(body.vertices, dtype=float)
+    # Die Dreiecke je Sanduhr-Ecke einmal gesucht, nicht je Ecke über alle
+    # Dreiecke: An einem gescannten Netz mit tausend solcher Ecken waren das
+    # tausend Durchgänge über eine Million Dreiecke. Die Menge ändert sich im
+    # Lauf nicht — eine Ersetzung tauscht nur die gerade bearbeitete Ecke aus.
+    hit_rows, hit_columns = np.nonzero(np.isin(faces, pinched))
+    hit_corners = faces[hit_rows, hit_columns]
+    order = np.lexsort((hit_rows, hit_corners))
+    hit_rows, hit_corners = hit_rows[order], hit_corners[order]
     extra: list[np.ndarray] = []
     split = 0
     for corner in pinched.tolist():
-        rows = np.flatnonzero((faces == corner).any(axis=1))
+        low, high = np.searchsorted(hit_corners, [corner, corner + 1])
+        rows = np.unique(hit_rows[low:high])
         if len(rows) < 2:
             continue
         # Die Fächer: Flächen, die sich an dieser Ecke eine Kante teilen,
@@ -534,16 +616,31 @@ def _loop_triangles(points: np.ndarray, loop: list[int]) -> np.ndarray:
     if len(loop) == 3:
         return np.asarray([loop], dtype=np.int64)
 
-    # Die Ausgleichsebene: kleinste Singulärrichtung der zentrierten Ecken.
-    centre = ring.mean(axis=0)
+    # **Die Ebene des Rings nach Newell, nicht über eine SVD** (RM-187,
+    # 22.09.2026). Die SVD ging durch LAPACK und durfte die Normale mit
+    # beiden Vorzeichen liefern — Accelerate auf dem Mac, OpenBLAS sonst —,
+    # und das Vorzeichen entschied, in welcher Richtung geohrt wurde: Dasselbe
+    # Loch bekam beim Import auf jeder Plattform andere Dreiecke. Newells
+    # Flächenvektor, die Summe der Kreuzprodukte aufeinanderfolgender Ecken,
+    # braucht nur Grundrechenarten, summiert exakt (``math.fsum``), und seine
+    # Richtung folgt dem Umlauf des Rings —
+    # derselben Frage, die das Ohren danach stellt.
+    centre = np.asarray(units.exact_centre(ring.tolist()), dtype=np.float64)
     local = ring - centre
-    normal = np.linalg.svd(local, full_matrices=False)[2][-1]
+    following = np.roll(local, -1, axis=0)
+    crosses = np.cross(local, following)
+    newell = np.array([math.fsum(crosses[:, axis].tolist()) for axis in range(3)])
+    size = math.hypot(float(newell[0]), float(newell[1]), float(newell[2]))
+    if size <= EPS_GEOM * EPS_GEOM:
+        return np.zeros((0, 3), dtype=np.int64)
+    normal = newell / size
     basis_u = np.cross(normal, (1.0, 0.0, 0.0) if abs(normal[0]) < 0.9 else (0.0, 1.0, 0.0))
-    length = float(np.linalg.norm(basis_u))
+    length = math.hypot(float(basis_u[0]), float(basis_u[1]), float(basis_u[2]))
     if length <= EPS_GEOM:
         return np.zeros((0, 3), dtype=np.int64)
     basis_u = basis_u / length
-    flat = np.column_stack((local @ basis_u, local @ np.cross(normal, basis_u)))
+    basis_v = np.cross(normal, basis_u)
+    flat = np.column_stack((along(local, basis_u), along(local, basis_v)))
     # Ein Ring, der gegen den Uhrzeigersinn läuft, hat positive Fläche; sonst
     # spiegelt das Ohren die Innen-Außen-Frage.
     ahead = np.roll(flat, -1, axis=0)
@@ -617,7 +714,7 @@ def fill_boundary_loops(mesh: MeshData) -> tuple[MeshData, int, int]:
     # Welcher Slot an welcher Randkante hängt: Die neuen Dreiecke bekommen
     # den ihres Nachbarn, damit eine geschlossene Tasche nicht in einer
     # anderen Farbe dasteht als die Wand um sie herum.
-    single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
+    single = _edge_table(mesh).rows(1)
     slots = np.asarray(mesh.slots, dtype=np.int64) if mesh.slots else None
     slot_at: dict[tuple[int, int], int] = {}
     neighbour_of: dict[tuple[int, int], int] = {}
@@ -633,10 +730,21 @@ def fill_boundary_loops(mesh: MeshData) -> tuple[MeshData, int, int]:
     # Verzweigung — gemessen an einer heruntergeladenen Katze: 15 Ringe
     # geschlossen, neun Kanten mit drei Flächen entstanden. Die Ecken eines
     # Randrings sind oft schon anders verbunden, als der Ring nahelegt.
-    taken: dict[tuple[int, int], int] = {}
-    for first, second in np.asarray(body.edges_sorted, dtype=np.int64).tolist():
-        key = (int(first), int(second))
-        taken[key] = taken.get(key, 0) + 1
+    #
+    # Gezählt werden nur Kanten zwischen Ringecken: Nur solche kann eine
+    # Füllung treffen — ihre Dreiecke nutzen Ringecken und, beim Fächer, eine
+    # neue Mitte. Hier stand ein Wörterbuch über **alle** Kanten, in Python
+    # gebaut: am 1,2-M-Netz dreieinhalb Millionen Einträge je Durchgang und
+    # drei Sekunden.
+    table = _edge_table(mesh)
+    ringed = np.unique(np.concatenate([np.asarray(loop, dtype=np.int64) for loop in loops]))
+    between = np.isin(table.unique[:, 0], ringed) & np.isin(table.unique[:, 1], ringed)
+    taken: dict[tuple[int, int], int] = {
+        (int(first), int(second)): int(count)
+        for (first, second), count in zip(
+            table.unique[between].tolist(), table.counts[between].tolist(), strict=True
+        )
+    }
 
     added: list[np.ndarray] = []
     added_slots: list[int] = []
@@ -648,7 +756,9 @@ def fill_boundary_loops(mesh: MeshData) -> tuple[MeshData, int, int]:
         ring = points[loop]
         # Die Fläche des Rings, gemessen über sein Umlaufintegral — dieselbe
         # Zahl, die ein Dreiecksnetz über dem Ring hätte.
-        centre = ring.mean(axis=0)
+        # Die Mitte wird beim Fächer ein echter Eckpunkt — über
+        # ``exact_centre`` auf jeder Maschine dieselbe (RM-187).
+        centre = np.asarray(units.exact_centre(ring.tolist()), dtype=np.float64)
         spanned = (
             float(
                 np.linalg.norm(
@@ -774,24 +884,34 @@ def resolve_branching_edges(mesh: MeshData) -> tuple[MeshData, int]:
 def _resolve_branching_once(mesh: MeshData) -> tuple[MeshData, int]:
     """Ein Durchgang von :func:`resolve_branching_edges`."""
     body = mesh.raw
-    groups = trimesh.grouping.group_rows(body.edges_sorted, require_count=None)
-    branching = [group for group in groups if len(group) > 2]
+    table = _edge_table(mesh)
+    branching = int(np.count_nonzero(table.counts > 2))
     if not branching:
         return mesh, 0
 
-    areas = np.asarray(body.area_faces, dtype=float)
-    doomed: set[int] = set()
-    for group in branching:
-        faces = sorted({int(row) // 3 for row in group}, key=lambda index: float(areas[index]))
-        # Zwei Nachbarn darf die Kante behalten; alles darüber geht, kleinste
-        # Fläche zuerst.
-        for index in faces[: max(len(faces) - 2, 0)]:
-            doomed.add(index)
-    if not doomed:
+    # Je verzweigter Kante ihre Dreiecke — als Feld und nicht als Liste je
+    # Kante (``group_rows`` über alle Kanten kostete am 1,2-M-Netz Sekunden).
+    # Ein Dreieck zählt je Kante einmal, auch wenn es entartet zwei seiner
+    # Kanten auf dieselbe legt.
+    rows = np.flatnonzero(table.counts[table.inverse] > 2)
+    edges = table.inverse[rows]
+    faces = rows // 3
+    pairs = np.unique(edges * len(body.faces) + faces)
+    edges, faces = pairs // len(body.faces), pairs % len(body.faces)
+    # Zwei Nachbarn darf die Kante behalten; alles darüber geht, kleinste
+    # Fläche zuerst — bei gleicher Fläche die kleinere Nummer, wie zuvor.
+    _normals, areas = stable_normals(body)
+    order = np.lexsort((faces, areas[faces], edges))
+    edges, faces = edges[order], faces[order]
+    first = np.searchsorted(edges, edges, side="left")
+    rank = np.arange(len(edges)) - first
+    size = np.searchsorted(edges, edges, side="right") - first
+    doomed = np.unique(faces[rank < size - 2])
+    if not len(doomed):
         return mesh, 0
 
     keep = np.ones(len(body.faces), dtype=bool)
-    keep[np.fromiter(doomed, dtype=np.int64, count=len(doomed))] = False
+    keep[doomed] = False
     trimmed = body.copy()
     trimmed.update_faces(keep)
     trimmed.remove_unreferenced_vertices()
@@ -804,10 +924,10 @@ def _resolve_branching_once(mesh: MeshData) -> tuple[MeshData, int]:
     # Dreieck weniger heißt bis zu drei offene Kanten mehr — mehr als das ist
     # kein Auflösen, sondern ein Loch.
     opened = open_edge_count(candidate) - open_edge_count(mesh)
-    if branching_edge_count(candidate) >= len(branching) or opened > 3 * len(doomed):
+    if branching_edge_count(candidate) >= branching or opened > 3 * len(doomed):
         return mesh, 0
-    _log.info("resolved %d branching edge(s) by dropping %d face(s)", len(branching), len(doomed))
-    return candidate, len(branching)
+    _log.info("resolved %d branching edge(s) by dropping %d face(s)", branching, len(doomed))
+    return candidate, branching
 
 
 def _filled_with_count(mesh: MeshData) -> tuple[MeshData, bool, int]:
@@ -895,7 +1015,14 @@ def remove_hollow_shells(mesh: MeshData) -> tuple[MeshData, int]:
     if len(pieces) <= 1:
         return mesh, 0
     corners = mesh.raw.vertices[mesh.raw.faces]
-    signed = np.einsum("ij,ij->i", np.cross(corners[:, 0], corners[:, 1]), corners[:, 2]) / 6.0
+    # Elementweise statt ``np.einsum`` (FMA auf ARM, RM-187): Am Betrag
+    # entscheidet sich, ob eine Schale bleibt.
+    crossed = np.cross(corners[:, 0], corners[:, 1])
+    signed = (
+        crossed[:, 0] * corners[:, 2, 0]
+        + crossed[:, 1] * corners[:, 2, 1]
+        + crossed[:, 2] * corners[:, 2, 2]
+    ) / 6.0
     keep = [piece for piece in pieces if abs(float(signed[piece].sum())) > EPS_GEOM]
     if len(keep) == len(pieces) or not keep:
         return mesh, 0
@@ -1367,10 +1494,50 @@ def repair(
     return result
 
 
+@dataclass(frozen=True)
+class _EdgeTable:
+    """Die Kanten eines Netzes, einmal gezählt: ``inverse`` ordnet jede Zeile
+    von ``edges_sorted`` (drei je Dreieck, in Dreiecksreihenfolge) ihrer
+    Kante zu, ``counts`` sagt je Kante, wie viele Dreiecke sie tragen."""
+
+    unique: np.ndarray
+    inverse: np.ndarray
+    counts: np.ndarray
+
+    def rows(self, count: int) -> np.ndarray:
+        """Die Zeilen der Kanten mit genau ``count`` Dreiecken, aufsteigend."""
+        return np.flatnonzero(self.counts[self.inverse] == count)
+
+
+def _edge_table(mesh: MeshData) -> _EdgeTable:
+    """Die Kantenzählung eines Netzes — einmal je Netz, im Cache des Netzes.
+
+    **Eine Zählung statt einer je Frage** (Review 22.09.2026). Offene Ränder,
+    Verzweigungen, Randringe und Sanduhren fragten je ``group_rows`` über alle
+    Kanten, die Reparatur beim Import eines offenen Netzes achtzehnmal: An
+    der Piratenschiff-Baugruppe (1,2 Millionen Dreiecke) kosteten diese
+    Zählungen allein elf der fünfundzwanzig Sekunden. Gezählt wird über eine
+    Kantennummer (:func:`app.core.geom.mesh.unique_edges`); der Cache verfällt
+    mit der Geometrie, und jede Reparaturstufe baut ein neues Netz.
+    """
+    body = mesh.raw
+    cache = getattr(body, "_cache", None)
+    if cache is not None:
+        cache.verify()
+        if "solidon_edge_table" in cache:
+            return cast(_EdgeTable, cache["solidon_edge_table"])
+    unique, inverse, counts = unique_edges(
+        np.asarray(body.edges_sorted, dtype=np.int64), return_inverse=True, return_counts=True
+    )
+    table = _EdgeTable(unique=unique, inverse=inverse, counts=counts)
+    if cache is not None:
+        cache["solidon_edge_table"] = table
+    return table
+
+
 def open_edge_count(mesh: MeshData) -> int:
     """Kanten, die zu genau einem Dreieck gehören — das Maß von „offen"."""
-    single = trimesh.grouping.group_rows(mesh.raw.edges_sorted, require_count=1)
-    return len(single)
+    return int(np.count_nonzero(_edge_table(mesh).counts == 1))
 
 
 def branching_edge_count(mesh: MeshData) -> int:
@@ -1386,5 +1553,4 @@ def branching_edge_count(mesh: MeshData) -> int:
     215 074 Dreiecken: **null** offene Ränder, **eine** verzweigte Kante — und
     der Prüfbericht sprach von fehlenden Wänden.
     """
-    groups = trimesh.grouping.group_rows(mesh.raw.edges_sorted, require_count=None)
-    return sum(1 for group in groups if len(group) > 2)
+    return int(np.count_nonzero(_edge_table(mesh).counts > 2))

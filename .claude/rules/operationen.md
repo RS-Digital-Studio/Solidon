@@ -265,7 +265,7 @@ Die Rückfallkette (§17.2) hat fünf Stufen, und die erreichte Stufe gehört in
 |---|---|---|
 | 1 | direkt | `direct` |
 | 2 | verschweißen, entnadeln — ohne ein dichtes Netz aufzureißen —, erneut | `welded` |
-| 3 | minimale Störung der Eingangsgeometrie | `jittered` (+ Startwert) |
+| 3 | minimale Störung der Eingangsgeometrie, gleichverteilt aus den Rohbits des Generators | `jittered` (+ Startwert) |
 | 4 | voxelbasiert rechnen, zurück vernetzen | `voxel` |
 | 5 | Abbruch mit Befund und Handlungsvorschlag | — |
 
