@@ -21,6 +21,14 @@ Stand 04./05.08.2026, nachrecherchiert am 19.08.2026.
 > offenen Punkte fest. Seit demselben Tag sind sie Paket P0.7 des
 > CAD-Konzepts und stehen unter RM-188.
 
+> **Ergänzung vom 23.09.2026:** Das gesamte Dokument samt Nachträgen gehört
+> zum beschlossenen 0.5.x-Umfang in [RM-188](../ROADMAP.md#rm-188).
+> P0.8 des [CAD-Konzepts](konzept-vollwertiges-cad-2026-09.md) ordnet alle
+> Anforderungen dem heutigen Code, bestehenden Nachweisen und verbleibenden
+> Paketen zu. P0.7 bleibt die Zuordnung der vier Restpunkte; P5.2/P5.3 nehmen
+> alle noch geltenden Bedienanforderungen ab. Historische Zustände und später
+> ersetzte Entscheidungen werden dabei nicht ungeprüft wieder zu Bauaufträgen.
+
 Aus einem Lauf am echten Programm, 4. August 2026. Gestartet über
 `app.ui.app`, bedient über Maus und Tastatur; kein Aufruf über die API. Zum
 Vergleich lief Autodesk Fusion daneben, weil das die Anwendung ist, aus der
@@ -1185,9 +1193,10 @@ Regel dieses Verzeichnisses — offene Arbeit steht im Register und nirgends
 sonst — hat Robert am selben Tag entschieden: Alle vier werden abgearbeitet,
 als Paket **P0.7** des
 [CAD-Konzepts](konzept-vollwertiges-cad-2026-09.md) (§13.2, Reihenfolge
-§13.10), abgehakt unter [RM-188](../ROADMAP.md#rm-188) — nach 0.4.4, vor
-der darauffolgenden Version. Je Punkt fällt die Entscheidung im Paket;
-gestrichen wird nichts still.
+§13.10), abgehakt unter [RM-188](../ROADMAP.md#rm-188) — nach damaliger
+Vorgabe nach 0.4.4, vor der darauffolgenden Version; seit dem 23.09. gilt
+das gemeinsame Abschlussziel 0.5.x (CAD-Konzept §14.4). Je Punkt fällt die
+Entscheidung im Paket; gestrichen wird nichts still.
 
 Zur Außenwelt: Fusions Listenpreis ist weiterhin 703 €/Jahr; die Seite zeigt
 im September 2026 eine Aktion mit 527 € für das erste Jahr. Die Privatnutzung

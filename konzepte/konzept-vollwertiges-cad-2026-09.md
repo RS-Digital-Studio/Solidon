@@ -1,11 +1,10 @@
 # Was Solidon zu einem vollwertigen CAD fehlt
 
-> **Sechste Fassung, 19.09.2026 — Start nach 0.4.4.** 0.4.3 ist veröffentlicht
-> (Tag `v0.4.3` auf `60f052d1`, 18.09.2026; Robert am 19.09.: „ist schon
-> draußen"). Die parallel laufenden Codeänderungen im Baum werden
-> abgeschlossen und als **0.4.4** veröffentlicht; **danach startet der Plan,
-> und er wird vollständig abgearbeitet, bevor die darauffolgende Version
-> hochgeladen wird** (Robert, 19.09.2026, §14.3).
+> **Siebte Fassung, 23.09.2026 — vollständiger Umfang für 0.5.x.** Die
+> Umsetzung läuft nach 0.4.4. Robert nimmt begrenzte Montageorganisation und
+> Maßblatt-Export auf; alle vier übergebenen Konzepte gehören zum gemeinsamen
+> Abschluss in 0.5.x (§14.4). Das ersetzt die frühere Vorgabe, sämtliche
+> Pakete vor der unmittelbar nächsten Version auszuliefern (§14.3).
 >
 > **Was verbindlich ist:** die Pakete in §13.2, ihre Voraussetzungen in §13.6,
 > die Reihenfolge in §13.10 und die Entscheidungen in §14. Alles andere —
@@ -14,7 +13,7 @@
 > [RM-188](../ROADMAP.md#rm-188).
 >
 > **Entscheidungen vom 17.09.2026, technisch geprüft am 18.09.2026, durchgesehen
-> am 19.09.2026.** Die sechzehn Entscheidungen in §14 bleiben bestehen; §14.1
+> am 19.09.2026.** Die sechzehn Entscheidungen in §14 bleiben als Historie erhalten; §14.1
 > ergänzt Roberts Vorgabe vom 18.09.: direkt am Modell mit Maßfeldern und ✓/×.
 > §14.2 beauftragt sämtliche zusätzlichen Ausbauideen; P6/P7 ordnen sie zu.
 > §14.3 nimmt die Empfehlungen der
@@ -22,6 +21,8 @@
 > P0.7, P1.6, P4.0 und die Reihenfolge. Zwei vorgezogene Korrekturen sind
 > bereits gebaut (§13.2). Nach 0.4.4 ist P0.0 mit `cfc5e303` umgesetzt;
 > der laufende Paketstand steht in [RM-188](../ROADMAP.md#rm-188).
+> §14.4 präzisiert die bisherigen Ausschlüsse für Montage und Maßblätter und
+> bindet Bedienkonzept, CAD-Durchsicht und Resin-Konzept vollständig ein.
 >
 > Prüfstand der Geometriesonden: `2148ddfa` (17./18.09.) und `87273de06`
 > (19.09., acht Sonden wiederholt, alle Kernbefunde halten — §19). Die
@@ -48,8 +49,9 @@ Richtung: **Parität.**
 ## 1. Drei Ziele, ein gemeinsamer Bedienweg
 
 1. **Vollwertig** heißt hier: die beschlossenen Konstruktionswege für Druckteile
-   vollständig bedienen. Baugruppen und Zeichnungsableitung bleiben nach §14
-   ausdrücklich außerhalb des Umfangs.
+   vollständig bedienen, einschließlich begrenzter Montageorganisation und
+   exportierbarer Maßblätter (§§13.11/14.4). Dynamische Baugruppen und eine
+   vollständige technische Zeichnungsverwaltung bleiben außerhalb des Umfangs.
 2. **Ohne CAD-Erfahrung, möglichst einfach** heißt: am Körper arbeiten, Maße
    verständlich ändern und Fehler beheben können, ohne die Rechenkerne zu
    kennen. Pauschale Lernzeiten anderer Programme sind ohne vergleichbare
@@ -287,7 +289,7 @@ exakter Bohrung, dann die Operation mit ihren Vorgaben.
 | erzeugt | 27 | Erzeuger ohne Eingang |
 | zwei Eingänge | 6 | die vier Booleschen, `replace_profile_liners`, `check_join_path` — noch nicht gefahren; P2.1 holt sie nach |
 
-Die Matrix wird in P0.0/P2.1 zum Test; jede neue Operation aus P6/P7 liefert
+Die Matrix wird in P0.0/P2.1 zum Test; jede neue Operation aus P6–P9 liefert
 ihre Zeile mit. `delete_object` ist keine erfolgreiche geometrieerhaltende
 Ausgabe. Ein fehlender Zwilling beweist zudem nicht, dass kein mehrstufiger
 exakter Arbeitsweg möglich ist.
@@ -438,15 +440,13 @@ weiterhin änderbar sein.
 | Mesh → exakter Körper **ohne Verlauf** (Segmentierung, Flächenfits, Nähen) | fehlt — Standard bei Fusion *Prismatic* und SolidWorks *Surface From Mesh* | **P4.0** |
 | Mesh → Konstruktion **mit Verlauf** (Nachbau) | fehlt | **RM-022**, P4.1–P4.3 |
 | Abweichungskarte Fit gegen Netz | fehlt; Näherungen nur als Satz | **P1.6** |
-| Baugruppen mit Hierarchie, Instanzen, lebenden Bedingungen | fehlt | **ausgeschlossen** (Robert, 17.09.2026 — §14 Nr. 1) |
-| Zeichnungsableitung mit Bemaßung | fehlt | **ausgeschlossen**; stehende Messbemaßungen im Viewport nach Bauplan §18.3 bleiben bestehen |
+| Montageorganisation und Baugruppen | Ausrichten, Passungs-/Kollisions-/Fügewegprüfung und Ansichtsexplosion vorhanden; Stand 23.09. siehe §13.11 | **P8.1–P8.3:** benannte Gruppen und gespeicherte Montage-/Drucklagen; keine dynamischen Bedingungen oder Instanzhierarchie |
+| Maßblatt und Zeichnungsableitung | Messbemaßungen im Viewport nach Bauplan §18.3 vorhanden | **P8.4/P8.5:** PDF-Maßblatt als Momentaufnahme; vollständige assoziative Zeichnungsverwaltung bleibt ausgeschlossen |
 | Ellipse, Tangente Bogen-an-Bogen | fehlt | Erweiterung von Solver, Editor, Profilbildung und Speicherung |
 
-„Frei“ in dieser Bestandsliste bedeutet nicht beauftragt. §14 Nr. 1 legt den
-Umfang über die Stufen fest. Variable Fillets, zusätzliche Fasenarten,
-Mehrprofil-Loft, neue Merkmalsfamilien, XCAF-Struktur und Verlaufssortierung
-sind damit keine stillen Zusatzpakete. Vor ihrer Aufnahme ist der Umfang
-explizit zu erweitern; die Parität bestehender Handlungen bleibt beauftragt.
+„Frei“ war in dieser historischen Bestandsliste noch kein Auftrag. Den
+geltenden Umfang bestimmen die ausdrücklichen Erweiterungen in §§14.2–14.4
+und die Pakete in §13.2, einschließlich P6/P7 und der Ergänzungen P8/P9.
 
 ### 7.1 Zeichnungsableitung — unterschiedliche Voraussetzungen
 
@@ -479,7 +479,8 @@ Fehler wie in §4 — gemessen wird die Facettierung.
 Diese wenigen Zeiten sind keine belastbare Laufzeitprognose für andere
 Modelle. Weder eine fertige Zeichnungsableitung noch deren Aufwand folgen
 aus einem HLR-Aufruf; Maßbezüge, Ansichten, Beschriftung und Export fehlen
-in dieser Probe. Für die beschlossenen Stufen bleibt das Thema ausgeschlossen.
+in dieser Probe. Seit §14.4 ist ein begrenztes Maßblatt beauftragt; P8.4/P8.5
+müssen genau diese Lücke schließen. Ein HLR-Aufruf ist kein Abnahmenachweis.
 
 ---
 
@@ -940,15 +941,12 @@ definitionsgemäß Netze und sind kein Paritätsbruch.
 
 ## 13. Der Umsetzungsplan
 
-**0.4.3 ist veröffentlicht** — Tag `v0.4.3` auf `60f052d1` vom 18.09.2026,
-`version.json` auf dem Server zeigt 0.4.3, Robert hat es am 19.09. bestätigt.
-**Der Plan startet nach 0.4.4:** Die parallel laufenden Codeänderungen im
-Baum werden abgeschlossen und als 0.4.4 veröffentlicht — bestätigt wie
-0.4.3 über Tag, `version.json` auf dem Server und Roberts Wort. Danach **wird
-der gesamte Umfang abgearbeitet, bevor die darauffolgende Version hochgeladen
-wird** (Robert, 19.09.2026, §14.3): keine weitere Zwischenveröffentlichung,
-keine Auswahl. „Am Stück abarbeiten“ bedeutet eine Folge überprüfbarer
-Pakete in der Reihenfolge aus §13.10, keinen einzigen großen Umbau.
+Der Plan wird seit der Veröffentlichung von 0.4.4 umgesetzt. **Der gesamte
+beschlossene Umfang wird in 0.5.x abgeschlossen** (Robert, 23.09.2026,
+§14.4). Einzelne 0.5.x-Veröffentlichungen dürfen geprüfte Teilstände liefern;
+sie schließen RM-188 nicht vorzeitig. Die Reihenfolge aus §13.10 und die
+Gesamtabnahme P5.3 bleiben verbindlich. Die frühere Release-Vorgabe steht
+als historische Entscheidung in §14.3.
 
 ### 13.1 Verträge und Koexistenz
 
@@ -981,7 +979,9 @@ gespeichert.
 
 Die Bauplanverträge werden **vor** ihrer Implementierung ergänzt:
 §§9/30.1 für Ebenen, §§21/30 für Erkennung und Referenzen, §§15/16/42 für
-Nachbau und Genauigkeit. Die in §14 beschlossenen Entscheidungen werden
+Nachbau und Genauigkeit; zusätzlich §§9/14/18.8/24/29 für Montage und Lagen,
+§§18.3/29 für Maßblätter sowie die Verortung aus Resin-Konzept §7 für P9.
+Die in §14 beschlossenen Entscheidungen werden
 dabei übernommen, nicht erneut zur Wahl gestellt.
 
 ### 13.2 Pakete und überprüfbare Ergebnisse
@@ -1003,6 +1003,7 @@ betroffene Doku.
 | P0.5 / Auswahl dokumentiert | L | Werkzeugentscheidungen und Eintrittsbedingungen stehen in §13.8.1; alle recherchierten Kandidaten sind zugeordnet. Das belegt die Auswahl, nicht die Machbarkeit aller Fachpakete. Deren konkrete Gegenfälle, Vorversuche und Abnahmen bleiben verpflichtend; laufender Stand in RM-188 |
 | P0.6 / derzeit keine zusätzliche Infrastruktur erforderlich | L | Vorhandenen Cythonweg weiterverwenden (§13.8.1). Es ist noch kein Bedarf für einen weiteren nativen Baustein belegt. Belegt ein Fachpaket später eine Lücke, folgen schmale Schnittstelle, Datenbesitz, float64, Abbruch, Referenzvergleich und installierbarer Bau für alle Zielplattformen. P5.3 bleibt offen |
 | P0.7 / implementiert, Release-Abnahme offen | S | **Vier Reste des Bedienprotokolls:** Früher UI-/CLI-Absturzschutz mit redigierten Python-/Threadberichten und nativen Prozessdateien; Supportanhänge sind ein vor dem Versand sichtbarer Schnappschuss. `announce()` ergänzt die Statuszeile um eine passive Klartextquittung am Handlungsort. Hoverbeschriftung bestand bereits unabhängig von der dauerhaften Überlagerung; `always_visible` meint Tiefensichtbarkeit, kein ständiges Anzeigen aller Namen. Der bestehende Fensterfall deckt zusätzlich Wegfahren mit/ohne Auswahl ab. Weitere Importe behalten ihre Dateilage (§17.1); ihre unveränderte vollständige Gruppe erhält über den Bericht einen gemeinsamen, dynamisch berechneten und separat rücknehmbaren Bettversatz. Entwicklungstor und Commit in RM-188; Fenster, Tastatur, DPI und Bildschirmleser erst beim Release |
+| P0.8 / geplant | L | Vollständigen Anforderungsabgleich der vier Dokumente aus §14.4 am aktuellen Code festhalten: je Anforderung Quellabschnitt, gültiger Beschluss, zuständiges Paket beziehungsweise vorhandener RM-/Archivnachweis und noch nötige Abnahme. Bereits Umgesetztes nicht erneut bauen; historische oder ausdrücklich ersetzte Vorschläge mit Begründung kennzeichnen. Kein geltender Punkt bleibt ohne Zuordnung. Die Matrix und ihr Fortschritt gehören zu RM-188 |
 | P1.1 / geplant | L | Zylinder-Maßvertrag und Fit nach §4, einschließlich Kontur statt Schwerpunkt, Achse, Teilabdeckung, Unterteilung und bewusst polygonaler Gegenformen |
 | P1.2 / geplant | XL | Kegel-, Kugel- und Torusfits jeweils gegen eigene Sollkörper; Radien, Lage, Achsen und Winkel prüfen. Fehlklassifikationen dürfen nicht durch gelockerte Tests verdeckt werden |
 | P1.3 / geplant | L | `fits.check` mit gleicher und ungleicher Facettierung plus unabhängiger Kollisionsprobe; grobe/unsichere Maße verständlich kennzeichnen, keinen Nennwert erraten |
@@ -1027,8 +1028,8 @@ betroffene Doku.
 | P4.2 / geplant | XL | Nachbau ausschließlich mit exakter Ausgabe und unabhängiger Formprüfung nach §13.5; unbekannte Geometrie nicht weglassen. Keine Fertigungskompensation beim Kopieren erkannter Maße |
 | P4.3 / geplant | L | Geprüften Nachbau hinter dem Import atomar übernehmen, importiertes Netz verbrauchen, Herkunft und nicht übertragbare Attribute ausweisen. Eine Transaktion einschließlich neuer Parameter; Undo stellt Originalzustand wieder her |
 | P5.1 / geplant | XL | Maßoperationen nach §10.2 und §14.1 familienweise auf direkten Viewport-Editor umstellen: Bohrung/Platzierung → Bewegen/Drehen/Skalieren → weitere Merkmals-/Form-/Bausteinmaße. Nach bestandener Paritätsprobe die zugehörigen Panel-/Dialogeingaben entfernen. „Auf alle“ unter dem Feld, vollständige Sammelvorschau, ein Undo. Jede passende Handlung bleibt einmal erreichbar; fehlende Handlung erklären |
-| P5.2 / geplant | L | Vollständige Auswahlmatrix Körper/Merkmal, Netz/B-Rep am Fenster abnehmen, Hauptwege bei geschlossenem Panel, ✓/× und Enter/Escape, Sammelziele, Abbruch und Undo. Kleines Fenster, HiDPI, hell/dunkel, lange Texte und Tastatur; Oberflächengrenzen bleiben grün |
-| P5.3 / geplant | L | **Gesamtabnahme nach P6/P7 — die Bedingung für das Hochladen der nächsten Version:** installierten Umfang auf Windows/macOS/Linux prüfen: neue OCP-Aufrufe, gewählte Bibliotheken und eigene native Module, Lizenzen, Datenrundreise und Fehlermeldungen. Zehn Kundenwege aus Recherche §4.3 und Zusatzwege aus §13.9 vollständig durchführen; Erstnutzerprüfung und verbleibende Grenzen dokumentieren. Keine automatische Veröffentlichung; Entwicklungsläufe ersetzen diesen Paketnachweis nicht |
+| P5.2 / geplant | L | Vollständige Auswahlmatrix Körper/Merkmal, Netz/B-Rep am Fenster abnehmen, Hauptwege bei geschlossenem Panel, ✓/× und Enter/Escape, Sammelziele, Abbruch und Undo. Kleines Fenster, HiDPI, hell/dunkel, lange Texte und Tastatur; Oberflächengrenzen bleiben grün. Geltende Bedienanforderungen aus P0.8 sowie Gruppen-/Lagenwechsel, Maßblattvorschau und Resin-Befundwege gehören dazu |
+| P5.3 / geplant | L | **Gesamtabnahme nach allen Fachpaketen einschließlich P8/P9 — Abschluss von RM-188 innerhalb 0.5.x:** installierten Umfang auf Windows/macOS/Linux prüfen: neue OCP-Aufrufe, gewählte Bibliotheken und eigene native Module, Lizenzen, Datenrundreise und Fehlermeldungen. Zehn Kundenwege aus Recherche §4.3, Zusatzwege aus §§13.9/13.11 und Resin-Konzept §9 vollständig durchführen; jede geltende Anforderung aus P0.8 mit Nachweis schließen. Erstnutzerprüfung und verbleibende Grenzen dokumentieren. Keine automatische Veröffentlichung; jede Teilveröffentlichung benötigt ihre Release-Abnahme, Entwicklungsläufe ersetzen sie nicht |
 | P6.1 / geplant | XL | Variable Verrundung: Radiuswerte an dauerhaft referenzierten Stellen einer Kante/Kantenkette, Verlaufsvorschau und direkte Maßänderung. Unabhängige Querschnitte prüfen Sollradien, Übergänge und maximale Netzabweichung; unmögliche Radien erzeugen einen Handlungsvorschlag, keine Teiländerung |
 | P6.2 / geplant | L | Fasen mit zwei Abständen oder Abstand/Winkel ergänzen. Bezugsseiten im Viewport kenntlich machen und tauschen; auf schrägen sowie gekrümmten Nachbarflächen Schnittmaße und Winkel prüfen. Bestehende Ein-Abstand-Fasen behalten ihre Bedeutung |
 | P6.3 / geplant | XL | Aushöhlen mit einer oder mehreren frei gewählten Öffnungsflächen, Wandmaß und Richtung. Öffnungen und Innenraum auf Netz/B-Rep prüfen, ungewählte Flächen erhalten; geschlossenes Aushöhlen und vorhandene Entlüftungswege bleiben bedienbar. Dünne/konkave Körper und kollidierende Innenwände als Gegenfälle |
@@ -1042,7 +1043,16 @@ betroffene Doku.
 | P7.1 / geplant | L | Verlaufsschritt an gewählter Stelle einfügen: dortigen Körperzustand anzeigen, Eingaben gegen diesen Zustand auflösen und alle Nachfolger neu auswerten. Atomare Übernahme einschließlich Parameter; Abbruch und Undo stellen die ursprüngliche Folge vollständig her |
 | P7.2 / geplant | L | Schritte abhängigkeitsgerecht umsortieren: gültige Zielpositionen zeigen, abhängige Folge kenntlich machen und vor Übernahme vollständig rechnen. Vorwärtsbezüge, Zyklen und verlorene Merkmale nie still umbiegen; fehlende Bezüge reparierbar anzeigen |
 | P7.3 / geplant | L | Schritte unterdrücken und reaktivieren, Zustand speichern und migrieren. Definierte Behandlung von Körperausgaben, Parametern und abhängigen Nachfolgern; keine stillen Ersatzobjekte. Wiederaktivierung, Undo/Redo, Cache, Wiederöffnung und Agententransaktion prüfen; Verlauf bleibt linear |
-| P7.4 / geplant | XL | STEP-Mehrkörperimport mit Namen, Körper-/Flächenfarben und Transformationslagen über einen geeigneten OCCT-XCAF-Leseweg. Komponenteninstanzen in die flache Szene auflösen, Herkunft erhalten und Körper gezielt auswählbar machen; keine Baugruppenmodellierung. Geometrie, Instanzlagen, Farbpriorität, fehlende Metadaten, Wiederöffnung und Filamentzuordnung prüfen |
+| P7.4 / geplant | XL | STEP-Mehrkörperimport mit Namen, Körper-/Flächenfarben und Transformationslagen über einen geeigneten OCCT-XCAF-Leseweg. Komponenteninstanzen in einzelne Szenenkörper auflösen, Herkunft erhalten und Körper gezielt auswählbar machen; keine dynamische Baugruppenmodellierung. Übergabe an die Montageorganisation aus P8 prüfen, ohne lebende Instanzbeziehungen zu versprechen. Geometrie, Instanzlagen, Farbpriorität, fehlende Metadaten, Wiederöffnung und Filamentzuordnung prüfen |
+| P8.1 / geplant | L | Gruppenvertrag nach §13.11 A: benannte, nicht verschachtelte Gruppen mit stabilen Mitgliedsbezügen und gemeinsamer Auswahl/Sichtbarkeit. Ersetzen, Teilen, Löschen und Zusammenfassen von Mitgliedern eindeutig behandeln; Speicherung/Migration, Cache, Undo/Redo und alte Projekte prüfen |
+| P8.2 / geplant | XL | Montage- und Drucklagen nach §13.11 B additiv speichern, einschließlich Druckplattenzuordnung. Expliziter Wechsel erhält Körperidentität, Maße, Merkmale und Passungsbezüge; Lageverbraucher für Prüfung, Export, Slicer und Ansicht gemeinsam anschließen. Keine Formkopien oder Transformation nur im Renderer; fehlende Mitglieder und Abbruch atomar behandeln |
+| P8.3 / geplant | L | Gruppen und Lagen im bestehenden Objektbaum und am Modell bedienen. Gemeinsames Bewegen sowie vorhandenes Ausrichten, Passungs-, Kollisions- und Fügewegprüfen auf expliziter Lage ausführen; Ansichtsexplosion bleibt davon getrennt. Gehäuse/Deckel/Schrauben montieren, zum Drucken anordnen, Montage wiederherstellen, speichern/öffnen und Undo prüfen (§13.11 C) |
+| P8.4 / geplant | L | Maßblattvertrag nach §13.11 D: ausgewählte Ansichten und Maße aus einem eingefrorenen Modellstand, Teilname, Einheit und eindeutige Standkennung. Maßherkunft und Näherung erhalten, räumliches Maß von projiziertem Abstand unterscheiden; verlorene oder mehrdeutige Bezüge vor Export reparieren oder ausdrücklich entfernen |
+| P8.5 / geplant | L | PDF-Maßblatt mit Vorschau und lesbaren Maßzuordnungen exportieren (§13.11 E). Unabhängige Sollmaße, Netz/B-Rep, Einheitenwechsel, verdeckte Merkmale, lange Texte und mehrere Teile prüfen; Modelländerung während Erzeugung darf keinen gemischten Stand liefern. Ausgegebenes PDF visuell abnehmen; keine automatische spätere Aktualisierung |
+| P9.1 / geplant | L | Resin-Stufe 1 anhand RM-071 nachweisen und Stufe 2 vorbereiten: aktuelle Verbraucher und Entscheidungen aus Resin-Konzept §§7–11 erfassen, Analyseauflösung samt Erkennungsgrenzen messen, Öffnungsvorgaben je Verfahren festlegen und Sollkörper definieren. Bereits erfüllte Punkte bleiben erfüllt; aus alten Marketingfragen folgt kein neuer Bauauftrag |
+| P9.2 / geplant | XL | Saugglockenanalyse mit Ort und Volumen sowie Anschluss an die Orientierungssuche nach Resin-Konzept §5.1. Becher, Hohlkugel und Blindrohr in unterschiedlichen Lagen, dünne Deckel, offene Gegenfälle, Abbruch und Cache gegen unabhängige Sollwerte prüfen; Analysegrenzen aus P9.1 sichtbar halten |
+| P9.3 / geplant | L | Vorhandenes Aushöhlen um Abfluss-/Belüftungsöffnungen nach Druckorientierung erweitern, Resin-Konzept §5.2. Tiefe/hohe Lage, Verbindung zum betroffenen Hohlraum, getrennte Hohlräume und tatsächliche freie Öffnung prüfen; Netz/B-Rep, Wandstärke, Lagewechsel, gespeicherte Parameter und ein Undo abnehmen. Kein zweiter Aushöhlen-Menüweg |
+| P9.4 / geplant | L | Verfahrensbezogene Regeln, Querschnittszuwachs, Inseln und Saugglocken nach Resin-Konzept §5.3 mit Prüfbericht, Steckbrief, Agent und externer Slicer-Übergabe verbinden. Vollständige Abnahme aus dessen §9 einschließlich FDM-Gegenproben, Agenten-Suite vor/nach Regeländerungen, Leistungsmarke beim Release sowie Handbuch/Website/Katalogen; kein eigener Slicer und keine Stützenerzeugung |
 
 Die geplante Operation *Gewinde ändern* durchläuft die vollständige Checkliste
 für neue Ops: Register, Schema, Determinismus, Geometrie, beide Qualitätsstufen,
@@ -1051,7 +1061,7 @@ Bereichsprüfung und Normteilmaße verbindlich. Die Umsetzung wird je
 Bausteingruppe in weitere commit-fähige Teilpakete zerlegt; eine einzelne
 Großänderung über alle 31 ist nicht die Paketgrenze.
 
-Dasselbe gilt für P6/P7: Die Zeilen benennen verpflichtende Lieferpakete.
+Dasselbe gilt für P6–P9: Die Zeilen benennen verpflichtende Lieferpakete.
 Vor ihrer Umsetzung werden XL-Pakete entlang Vertrag, Kernfamilie und
 angeschlossenen Verbrauchern in nummerierte, einzeln commit-fähige Schritte
 zerlegt. Jeder Schritt hat einen unabhängigen Sollfall, eine direkte
@@ -1181,7 +1191,7 @@ P4.0 bis P4.3, Umsetzung nach 0.4.4 im Rahmen des Plans.
 
 | Voraussetzung | Verbraucher |
 |---|---|
-| Veröffentlichung 0.4.3 — **erfüllt** (Tag 18.09., Server und Robert 19.09.); **Veröffentlichung 0.4.4** aus den parallel laufenden Codeänderungen — offen | alle Implementierungspakete |
+| Start nach 0.4.4 — erfolgt; Umsetzung läuft in RM-188 | alle Implementierungspakete; Abschlussziel 0.5.x gemäß §14.4 |
 | P0.0 | zuerst; seine Sonden werden die Regressionstests, auf die P2.1 aufsetzt |
 | P0.1–P0.4, P0.7 | Bediengrundlagen können unabhängig von der neuen Geometrie aufgebaut werden; vollständige Merkmalsbezüge zusätzlich gegen P1.5 abnehmen |
 | P1.1/P1.2: Fits | P1.6 liest sie; P4.0 passt mit ihnen ein |
@@ -1194,14 +1204,18 @@ P4.0 bis P4.3, Umsetzung nach 0.4.4 im Rahmen des Plans.
 | P3.1: gespeicherter Ebenenvertrag | P3.2–P3.5; Parser allein genügt nicht |
 | P4.0: Bereiche, Fits, genähter gültiger Körper | P4.1–P4.3: der Nachbau nimmt die belegten Flächen als Kandidatenquelle |
 | passende exakte Erzeuger, Maßvertrag und unabhängige Formprüfung | P4-Übernahme; keine Pflicht, zuvor sämtliche Skizzenfunktionen zu verbrauchen |
-| P2- und P6/P7-Handlungen festgelegt | P5 endgültige Gliederung; Entwurf und bestehende Bedienfehler können früher geprüft werden |
+| P0.8 und Handlungen aus P2/P6–P9 festgelegt | P5 endgültige Gliederung und vollständige Konzeptabdeckung; bestehende Bedienfehler können früher geprüft werden |
 | **P2.8 grün** (Umschaltpaket) | **jedes P6- und P7-Paket** — kein neues Werkzeug entsteht, solange die bestehenden 57 noch in zwei Welten leben (§13.10) |
 | P0.3/P0.4 und stabile Auswahl-/Merkmalsverträge | P6.1–P6.4 und P6.7: derselbe direkte Eingabeweg für Netz/B-Rep |
 | P3-Ebenen-/Profilvertrag und vorhandene Erzeuger | P6.5a–P6.5c; P6.6a danach mit sämtlichen erzeugenden und schneidenden Verbrauchern abnehmen |
 | P6.6a-Kurvenvertrag | P6.6b-Bedingungen und Löser; keine Solverablösung ohne Vergleich aus §13.8 |
 | P7.1-Vertragsgrundlage für Neuauswertung | P7.2/P7.3; UI erst nach atomarer Vorschau, Referenzprüfung und Speicherrundreise umschalten |
 | P0.5-Importauswahl, P2.2-Attribute und P2.3-Erkennung | P7.4; XCAF-Import einschließlich der fachlichen Auswahl/Handlungen abnehmen |
-| Fachpakete einschließlich P6/P7 und P5.1/P5.2 abgenommen | P5.3: installierter Gesamtweg einschließlich tatsächlich gewählter nativer Ergänzungen |
+| P2.8, stabile Körper-/Merkmalsbezüge und additive Speicherverträge | P8.1 → P8.2 → P8.3; gemeinsamer STEP-Kundenweg zusätzlich nach P7.4 |
+| P0.3/P0.4, P1-Maßherkunft und Auswahlverträge; P8.2 für lagenbezogene Blätter | P8.4 → P8.5; eigene Maße zuerst am Modell auflösen, danach projizieren |
+| Resin-Stufe 1 (RM-071), P9.1 | P9.2 und P9.3; P9.3 mit P6.3 abstimmen, dieselbe Aushöhlen-Operation und Parametersemantik |
+| P9.2/P9.3; P8.2 für gespeicherte Drucklagen | P9.4: aktuelle Drucklage in Analyse, Orientierung und Übergabe verwenden, Lagewechsel entwertet Befunde |
+| Alle Fachpakete einschließlich P8/P9 und P5.1/P5.2 abgenommen; P0.8 vollständig belegt | P5.3: installierter Gesamtweg und Abschluss aller vier Konzepte im beschlossenen Umfang |
 
 Pro kleinem Schritt wird der Importgraph mit **den eigenen geänderten
 Produktionspfaden** befragt, beispielsweise:
@@ -1224,6 +1238,8 @@ Verpflichtende direkte Anschlussprüfungen je Gebiet:
 | P4 | Korpus plus `test_history.py`, `test_project.py` und neue negative Formvergleiche |
 | P6 | Bestehende Geometrie-/B-Rep- und Skizzentests, `test_sketch_ops.py`, `test_sketch_serialize.py`, `test_sketch_end_to_end.py`; unabhängige Sollkörper und direkte Bedienwege aus §13.9 ergänzen |
 | P7 | `test_history.py`, `test_orphans.py`, `test_project.py`, STEP-Korpus und Attributtests; echte Verlaufseingabe und Importauswahl zusätzlich |
+| P8 | Projekt-/Historien-/Referenztests um Gruppen und beide Lagen ergänzen; Export und Prüfungen mit derselben Lage prüfen. Neue Maßblattfälle gegen unabhängige Maße und tatsächliches PDF; Fenster- und visuelle Abnahme beim Release |
+| P9 | Bestehende Profil-, Aushöhlen-, Schichtanalyse-, Orientierungs- und Übergabetests ergänzen; analytische Resin-Sollkörper und FDM-Gegenfälle aus Resin-Konzept §9, dortige Agenten- und Release-Nachweise getrennt ausweisen |
 
 Die 3,2-Millionen-Dreiecke-Probe bleibt ein gesonderter Leistungsnachweis
 mit Laufzeit und Spitzenbedarf ausschließlich beim Release. Auch andere
@@ -1253,7 +1269,7 @@ offen; ein erfolgreiches Teilpaket erledigt nicht die ganze Stufe.
 
 | Entscheidungen aus §14 | Umsetzung |
 |---|---|
-| 1, 2, 16 | Umfang, Release-Sperre und P0 |
+| 1, 2, 16 | Ursprünglicher Umfang und P0; Umfang/Abschlussziel seit §14.4 erweitert |
 | 3 | gesamte P2-Reihe einschließlich P2.7 |
 | 4 | P2.8 nach bestandener Handlungsmatrix |
 | 5, 9, 10, 15 | P2.3, P2.5, P2.6 |
@@ -1264,6 +1280,8 @@ offen; ein erfolgreiches Teilpaket erledigt nicht die ganze Stufe.
 | 12 | P1.4 |
 | Vollständiger technischer Umfang, Nachfrage 18.09. | P0.5/P0.6, P1.5, P5.3 und Zuordnung §13.8 ergänzen die bestehenden Fachpakete |
 | Alle Ausbauideen aus Recherche §6, Antwort „alles“ (§14.2) | P6.1–P6.7 einschließlich Teilpaketen, P7.1–P7.4; direkte Bedienung und Gesamtabnahme über P5 |
+| Begrenzte Montage und Maßblätter (§14.4) | P8.1–P8.5, Verträge §13.11 |
+| Alle vier Konzepte in 0.5.x (§14.4) | P0.8 als vollständige Zuordnung, P9.1–P9.4 für Resin, erweiterte Abnahme P5.2/P5.3 |
 
 ### 13.8 Bibliotheken und Eigenentwicklungen gehören zu den Arbeitspaketen
 
@@ -1459,11 +1477,10 @@ vor Übernahme ausdrücklich angezeigt. Keine stille Geometrievereinfachung,
 keine erfundenen Referenzen und kein Entfernen neuer Funktionen aus dem
 Umfang allein wegen einer ungeeigneten Bibliothek.
 
-### 13.10 Verbindliche Reihenfolge (19.09.2026)
+### 13.10 Verbindliche Reihenfolge (19.09., ergänzt 23.09.2026)
 
-Der Plan startet nach der Veröffentlichung von 0.4.4 und wird vollständig
-abgearbeitet, bevor die darauffolgende Version hochgeladen wird. Die
-Paketnummern sind Familien, keine
+Der Plan läuft seit 0.4.4 und wird vollständig in 0.5.x abgearbeitet (§14.4).
+Die Paketnummern sind Familien, keine
 Reihenfolge; gearbeitet wird in dieser Folge, Nebenläufiges steht in
 derselben Zeile:
 
@@ -1471,14 +1488,16 @@ derselben Zeile:
 |---|---|---|
 | 1 | P0.0 | Kundenfehler von heute, klein, Mechanismus vorhanden |
 | 2 | P2.1 · P2.3 · P1.1 | Nachführung, kanonische Erkennung und Zylindermaß treffen jeden STL- und STEP-Kunden; P2.3 ist Anschlussarbeit an die gemessene OCCT-Fähigkeit |
-| 3 | P0.5 → P0.6 (bei Bedarf) · P0.1 · P0.2 · P0.7 | Zuordnung vor den Fachpaketen; die kleinen Bedienreste daneben |
+| 3 | P0.5 → P0.6 (bei Bedarf) · P0.1 · P0.2 · P0.7 · P0.8 | Zuordnung vor den Fachpaketen; P0.8 ergänzt jetzt den vollständigen Konzeptabgleich, ohne erledigte Pakete neu zu starten |
 | 4 | P0.3 · P0.4 | Maßeditor und Bezüge — die größte Bedienänderung, Verträge fertig; parallel zu 2 und 3 |
 | 5 | P1.2 · P1.3 · P1.6 · P1.4 · P1.5 | Fits, Passung, Abweichungskarte, Zuordnungsbudget, gemeinsamer Merkmalsvertrag |
 | 6 | P2.2 · P2.4 · P2.5 · P2.6 · P2.7 → P2.8 | Handlungen und Bausteine exakt, dann das Umschaltpaket |
 | 7 | P3.1 → P3.2 → P3.3 · P3.4 · P3.5 | Ebenen und Projektion |
 | 8 | P4.0 → P4.1 → P4.2 → P4.3 | erst der exakte Körper ohne Verlauf, dann der Nachbau |
 | 9 | P6.1–P6.7 · P7.1–P7.4 | erst nach P2.8: jede neue Operation entsteht auf beiden Kernen und liefert ihre Matrixzeile mit |
-| 10 | P5.1 → P5.2 → P5.3 | Gesamtabnahme; P5.3 ist die Bedingung für das Hochladen |
+| 10 | P8.1 → P8.2 → P8.3 · P8.4 → P8.5 | Montageorganisation vor Maßblatt-Abnahme in verschiedenen Lagen; Start nach den konkreten Voraussetzungen in §13.6 möglich |
+| 11 | P9.1 → P9.2 · P9.3 → P9.4 | Resin-Stufe 2; Vorbereitung und Kernwege können neben P8 laufen, gemeinsame Lagen-/Aushöhlen-Verbraucher vor Abschluss integrieren |
+| 12 | P5.1 → P5.2 → P5.3 | Gesamtabnahme aller vier Konzepte; Abschluss von RM-188 innerhalb 0.5.x |
 
 Ein Paket beginnt nicht, bevor seine Voraussetzungen aus §13.6 grün sind.
 Für die weitere Entwicklung sind die benötigten Kernverträge und das
@@ -1491,13 +1510,113 @@ Entwicklungstor vor seinem Commit. Ein roter Kernschritt wird nicht auf den
 nächsten gestapelt. Erst seine vollständige Abnahme erlaubt „erledigt“ mit
 Datum; die Gesamtabnahme bleibt P5.3.
 
+### 13.11 Montageorganisation und Maßblätter — Verträge vom 23.09.2026
+
+**Ausgangspunkt, am Stand `00b09a2d` gelesen:** `SceneObject` in
+`app/core/types.py` beschreibt einzelne Körper. `align_to_feature` in
+`geom/ops.py` richtet sie aus; `geom/prepare_ops.py` bietet Kollisions- und
+Fügewegprüfung, letztere ausdrücklich von der Endlage aus. Passungen sind
+bereits ein eigener Vertrag (Bauplan §14). `Viewport.set_explosion()`
+versetzt dagegen nur die Darstellung und verändert weder Dokument noch
+Export. `app/core/drawing.py` erzeugt SVG für Handbuch und Katalog; das ist
+kein fertiger Maßblatt-Export. P8 verbindet diese vorhandenen Wege mit den
+folgenden neuen Verträgen. Vor Umsetzung gilt die vollständige
+Verbraucherprüfung aus §13.1.
+
+**A — Gruppen organisieren vorhandene Körper (P8.1).** Eine benannte Gruppe
+enthält stabile Bezüge auf ihre Mitglieder, keine Kopien ihrer Geometrie.
+Der erste Umfang ist nicht verschachtelt; ein Körper gehört höchstens einer
+Gruppe an. Gruppieren, Auflösen, Umbenennen und gemeinsame Sichtbarkeit
+sind rücknehmbar und speicherbar; Einzelauswahl bleibt möglich. Eindeutige
+eins-zu-eins-Nachfolger übernehmen die Mitgliedschaft. Beim Teilen werden
+alle belegten Nachfolger angeboten, beim Vereinigen verschiedener Gruppen
+wird die Zuordnung ausdrücklich geklärt. Löschen hinterlässt keinen Bezug
+auf einen anderen Körper. Mehrdeutigkeit wird weder per Name noch per
+Nähe geraten. Wiederöffnung und Undo/Redo erhalten dieselbe Zuordnung.
+
+**B — Montagelage und Druckanordnung sind getrennt gespeichert (P8.2).**
+Gespeichert werden starre Lagen derselben Körper, in der Druckanordnung
+zusätzlich ihre Druckplattenzuordnung. Form, Maße, Materialien und
+Merkmalsidentität haben weiter genau eine Quelle im Operationsverlauf.
+Eine Maßänderung gilt deshalb in beiden Lagen; die Montageposition ist
+keine automatisch nachlösende Fügebeziehung. Bei entfallenen oder
+aufgeteilten Körpern gelten die Zuordnungsregeln aus A auch für die Lagen.
+
+Der Nutzer wechselt ausdrücklich zwischen den benannten Lagen und sieht,
+welche aktiv ist. Gemeinsames Bewegen erhält die relativen Positionen der
+Gruppenmitglieder. Lagenänderungen laufen reproduzierbar über Operationen
+beziehungsweise Transaktionen; ein Undo nimmt eine Änderung vollständig
+zurück. Das Datenformat wird additiv mit Version und Migration erweitert;
+alte Projekte behalten beim Öffnen ihre bisherigen Körperlagen. Es gibt
+keine automatische Neuanordnung und keine Formkopie pro Lage.
+
+Passungs-, Kollisions- und Fügewegprüfung benennen die tatsächlich geprüfte
+Lage. Druckanalyse, Anordnen und Slicer-Übergabe verwenden die ausdrücklich
+gewählte Druckanordnung; ohne gespeicherte Druckanordnung bleibt die bisherige
+aktuelle Szene maßgebend. Ein Geometrieexport zeigt vorab, welche Lage er
+ausgibt. Lagenwechsel entwertet lageabhängige Befunde und Caches. Die
+Ansichtsexplosion bleibt eine reine Darstellung und gelangt nie in diese
+Prüfungen, gespeicherten Körperlagen oder Druckexporte.
+
+**C — Vorhandene Handlungen gemeinsam nutzen (P8.3).** Gruppen stehen im
+bestehenden Objektbaum; Ausrichten, Bewegen, Passung, Kollision und Fügeweg
+benutzen ihre vorhandenen Werkzeuge. Es entsteht kein eigener Arbeitsbereich.
+Abnahmeweg: Gehäuse, Deckel und Schrauben gruppieren, ausrichten und in
+Montagelage prüfen; Teile auf Druckplatten anordnen; Montage wiederherstellen;
+Deckelmaß ändern und beide Lagen prüfen; speichern, öffnen, Undo/Redo.
+Dasselbe gilt für Netz-, exakte und gemischte Teile. Ein geteilter Deckel und
+eine gelöschte Schraube sind verpflichtende Gegenfälle. Der Fügeweg bleibt
+die vorhandene Prüfung eines vorgegebenen Wegs, keine Bewegungssimulation.
+
+**D — Ein Maßblatt belegt einen Modellstand (P8.4).** Der Nutzer wählt Teile,
+orthografische Ansichten beziehungsweise eine beschriftete räumliche Ansicht
+und die auszugebenden Maße. Das Blatt trägt Teilnamen, Einheit, Ansichts- und
+Lagenbezeichnung sowie eine eindeutige Kennung des verwendeten Modellstands
+mit Erstellungszeit. Auch ein ungespeicherter Stand muss eindeutig bezeichnet
+sein; ein Zeitstempel allein ersetzt die Standkennung nicht. Das PDF ist
+als Momentaufnahme ausgewiesen und aktualisiert sich später nicht selbst.
+
+Maße kommen aus denselben geprüften Quellen wie im Viewport. Eine erkannte
+Näherung bleibt erkennbar; echte 3D-Abstände werden nicht aus dem kürzeren
+projizierten Linienzug abgelesen. Maßhilfslinien zeigen die zugehörigen
+Merkmale eindeutig. Ein verdeckter Bezug benötigt eine passende weitere
+Ansicht oder eine eindeutige Ortsmarkierung. Fehlende oder mehrdeutige
+Referenzen müssen vor dem Export repariert oder die betroffenen Maße
+ausdrücklich entfernt werden; kein stilles Weglassen. Dokument, ausgewählte
+Lage, Maße und Ansichten werden zusammen eingefroren, damit parallele
+Modelländerungen kein Blatt mit widersprüchlichen Ständen erzeugen.
+
+**E — Lesbarer PDF-Export mit Vorschau (P8.5).** Der Ausgabeweg gehört zu
+den vorhandenen Exporthandlungen. Er zeigt eine Blattvorschau, lässt die
+Maßanordnung korrigieren und erzeugt PDF; Blattmaßstab beziehungsweise
+„nicht maßstäblich“ und Einheit sind eindeutig. Konturen dürfen am Netz
+genähert sein, Maßzahlen aber nicht aus Bildpunkten geschätzt werden.
+Vorhandene Projektions-, Maß- und PDF-Wege zuerst prüfen (§13.8); zusätzliche
+Bibliotheken nur mit belegtem Bedarf und Lizenz-/Plattformnachweis.
+
+Abnahme: gelochte Platte mit bekannten Außenmaßen und Durchmessern, geneigter
+Abstand, verdeckte Bohrung, mehrere Teile, Netz-/B-Rep-Zwillinge und
+Einheitenwechsel. Das erzeugte PDF muss die unabhängig vorgegebenen Werte,
+ihre Herkunft und die richtige Lage enthalten; lange Namen dürfen weder Maße
+abschneiden noch Bezüge verdecken. Erzeugung und Abbruch verändern das Modell
+nicht. Die visuelle Prüfung des tatsächlichen PDFs gehört zum Release.
+
+**Rückfall und Abgrenzung.** P8 wird additiv angeschlossen; vor bestandener
+Integration bleiben die bisherigen Einzelkörper- und Exportwege nutzbar.
+Ein nicht darstellbares Maßblatt meldet einen konkreten Korrekturweg und
+liefert kein scheinbar vollständiges Blatt. Nicht enthalten sind Gelenke,
+ein allgemeiner Baugruppenlöser, Bewegungssimulation, lebende
+Komponenteninstanzen, assoziative Zeichnungsaktualisierung, normgerechte
+Form-/Lagetolerierung und eine Verwaltung technischer Schnittzeichnungen.
+
 ---
 
 ## 14. Die Entscheidungen vom 17.09.2026
 
 Sechzehn Fragen, alle von Robert am selben Tag entschieden. Sie sind oben
 eingearbeitet; hier stehen sie beisammen, damit später nachvollziehbar ist,
-was gewählt wurde — und was damit **nicht** gewählt wurde.
+was gewählt wurde — und was damit **nicht** gewählt wurde. Die spätere
+Erweiterung von Nr. 1 und des Abschlussziels steht ausdrücklich in §14.4.
 
 | # | Frage | Entscheidung |
 |---|---|---|
@@ -1553,8 +1672,9 @@ Cython/C++ sind über §13.8 Teil des Plans; die konkrete Auswahl erfolgt mit
 belegtem Nutzen. Die ursprünglichen 16 Entscheidungen bleiben als
 historischer Beschluss erhalten. Start nach Veröffentlichung von 0.4.3
 (0.4.3 ist draußen, der Start folgt auf 0.4.4 — §14.3) und ausdrückliche Nicht-Ziele aus §15
-bleiben bestehen: Die Frage betraf
-die zusätzlichen CAD-Funktionen, keine Baugruppen oder Zeichnungsableitung.
+blieben bei dieser Entscheidung bestehen: Die Frage betraf die zusätzlichen
+CAD-Funktionen. Die begrenzte Erweiterung für Montage und Maßblätter folgte
+erst am 23.09. (§14.4).
 
 ### 14.3 Start und Ergänzungen, Entscheidung vom 19.09.2026
 
@@ -1577,24 +1697,59 @@ aufgenommen, keine als Auswahl:
 | 23 | §11 | Historischer Schluss vom 19.09.: Open3D scheidet für macOS aus; am 20.09. in §13.8.1 auf fehlenden fertigen Intel-Paketweg präzisiert. Analysis Situs ist eine Portierung |
 | 24 | §13.9 | Menüort und Vorderseite je Paket vor dem ersten Schritt |
 
-Die 16 Entscheidungen vom 17.09. und die Ergänzungen vom 18.09. bleiben
-unverändert. §15 bleibt unverändert: P4.0 liefert keinen Verlauf und keine
-Zusage für jede STL, und die KI-Wege der Wettbewerber (Durchsicht §4) ändern
-an Nr. 6 nichts.
+Die 16 Entscheidungen vom 17.09. und die Ergänzungen vom 18.09. blieben
+bei dieser Entscheidung unverändert, ebenso die damaligen Grenzen aus §15:
+P4.0 liefert keinen Verlauf und keine Zusage für jede STL, und die KI-Wege
+der Wettbewerber (Durchsicht §4) ändern an Nr. 6 nichts. Die spätere
+Erweiterung für Montage und Maßblätter steht in §14.4.
+
+### 14.4 Umfang für 0.5.x, Entscheidung vom 23.09.2026
+
+Robert beauftragt die vorgeschlagenen Ergänzungen: **begrenzte
+Montageorganisation, zunächst keine dynamischen Baugruppen**, und
+**Maßblatt-Export, zunächst keine vollständige Zeichnungsverwaltung**.
+P8 und §13.11 beschreiben den Lieferumfang; der pauschale Ausschluss aus
+§14 Nr. 1 wird dadurch gezielt eingeschränkt. FEM, eigener Slicer,
+Sculpting-Ausbau, Text als Skizzenkontur, assoziative Skizzenmuster und
+allgemeines Versetzen gekrümmter Flächen bleiben ausgeschlossen. Die
+Nachbaugrenze für beliebige STL bleibt bestehen.
+
+**Alle vier übergebenen Dokumente gehören verbindlich in RM-188 und werden
+im beschlossenen Umfang innerhalb 0.5.x vollständig abgearbeitet:**
+
+| Quelle | Zuordnung und Umgang mit vorhandenem Stand |
+|---|---|
+| [CAD-Konzept](konzept-vollwertiges-cad-2026-09.md) | P0–P8 sowie Gesamtabnahme P5; bisher beauftragter Umfang bleibt vollständig erhalten |
+| [Bedienkonzept](konzept-bedienung.md) | Gesamtes Dokument samt Nachträgen über P0.8 abgleichen; vier aufgegriffene Reste in P0.7, direkte Maße/Bezüge in P0.3/P0.4/P5.1 und sämtliche geltenden Bedienanforderungen in P5.2/P5.3 abnehmen |
+| [CAD-Durchsicht](durchsicht-cad-konzepte-2026-09.md) | Korrekturen und Empfehlungen aus §§3/7 sind in §14.3 zugeordnet; P0.8 prüft auch übrige Anforderungen und Nachträge auf vollständige Zuordnung und Nachweis |
+| [Resin-Konzept](konzept-resin-2026-08.md) | Stufe 1 mit Nachweis aus [RM-071](../ROADMAP-ARCHIV.md#rm-071) erhalten; komplette Stufe 2 aus §§5/9 mit P9.1–P9.4 umsetzen und gemeinsam abnehmen |
+
+Alte Zustandsbeschreibungen sind kein Beleg für heutige Fehler. P0.8
+unterscheidet belegte Umsetzung, verbleibende Arbeit und ausdrücklich
+ersetzte Entscheidungen; nichts wird allein wegen seines Alters gestrichen.
+Die Durchsicht wird nicht erneut als Implementierung gezählt. Bereits
+geführte Spezialnachweise bleiben bei ihren RM-Punkten und werden verlinkt.
+Die bisherigen Resin-Ausschlüsse bleiben gültig; technische Restentscheidungen
+aus dessen §11 werden in P9.1 begründet, keine alten Vorschläge still
+übernommen. Offene Arbeit und aktueller Abnahmestand stehen nur in RM-188.
+
+**Abschlussziel ist 0.5.x.** Das ersetzt die frühere Bindung an die unmittelbar
+nächste Veröffentlichung. Ein geprüfter Teilstand darf in einer 0.5.x-Version
+erscheinen; vollständig abgeschlossen ist RM-188 erst mit P5.3 über alle
+vier Quellen einschließlich P8/P9. Die Release-Prüfpflicht gilt für jede
+Veröffentlichung, nicht erst für den Abschluss der Serie.
 
 ---
 
 ## 15. Was hier ausdrücklich **nicht** gebaut wird
 
-0. **Keine Baugruppen und keine Zeichnungsableitung** (Robert, 17.09.2026).
-   Sie waren — anders als die erste Fassung behauptete — nie abgelehnt, nur nie
-   beauftragt; an diesem Tag sind sie es. Für Baugruppen gilt zusätzlich die
-   technische Lage: flache Szene ohne `parent_id`, 3MF wird beim Einlesen
-   verflacht. Eine vollständige aktuelle Prüfung verfügbarer 3D-Löser liegt
-   hier nicht vor; aus der kleinen Kandidatenliste folgt keine allgemeine
-   Nichtverfügbarkeit. **Bauplan §18.3 widerspricht der Entscheidung nicht:**
-   Er verlangt Messbemaßungen im Viewport, kein technisches Zeichnungsblatt.
-   Diese Messfunktion bleibt erhalten.
+0. **Keine dynamischen Baugruppen und keine vollständige technische
+   Zeichnungsverwaltung.** Seit §14.4 sind benannte Gruppen, gespeicherte
+   Montage-/Drucklagen und PDF-Maßblätter ausdrücklich enthalten (§13.11).
+   Gelenke, allgemeiner Baugruppenlöser, Bewegungssimulation, lebende
+   Komponenteninstanzen, assoziative Blattaktualisierung, Form-/Lagetolerierung
+   und Schnittzeichnungsverwaltung gehören nicht dazu. Messbemaßungen im
+   Viewport nach Bauplan §18.3 bleiben die gemeinsame fachliche Grundlage.
 1. Kein Ersatz des Mesh-Kerns durch B-Rep — §30 sagt „neben, nicht statt".
 2. Keine Verzweigungen im Op-Stack, kein Plugin-System, keine Cloud, kein
    Konto, keine Telemetrie, keine Browser-Version, kein eigener Slicer.
@@ -1657,8 +1812,9 @@ später liest, misst am Code nach, bevor er es glaubt.
 
 ## 17. Technische Gegenprüfung vom 18.09.2026
 
-Die sechzehn Produktentscheidungen wurden nicht geändert. Korrigiert wurden
-deren technische Begründung und Umsetzungsvoraussetzungen.
+Die sechzehn Produktentscheidungen wurden bei dieser Gegenprüfung nicht
+geändert. Korrigiert wurden deren technische Begründung und
+Umsetzungsvoraussetzungen. Die spätere Umfangserweiterung steht in §14.4.
 
 | Befund | Korrektur |
 |---|---|
@@ -1669,7 +1825,7 @@ deren technische Begründung und Umsetzungsvoraussetzungen.
 | Netz-Erzeuger und voreingestellte Bohrungskompensation sollten exakte Rekonstruktion tragen | Ausgabeart jeder Op belegen; Kompensation beim Nachbau abschalten (§13.5) |
 | Aushöhlen wurde bei „geschlossen“ an den oben öffnenden exakten Zweig geroutet | Entscheidungstabelle nach tatsächlicher Wirkung (§10.1) |
 | `edge_key` galt als ausreichender assoziativer Bezug | Objektbezug, Zuordnung, Orientierung, Verwaisung und gespeicherter Rückfallrahmen ergänzt (§13.3) |
-| Keine Zeichnungsableitung galt als Widerspruch zu §18.3 | Messbemaßung im Viewport bleibt; kein Widerspruch zur ausgeschlossenen Zeichnungsableitung (§15) |
+| Keine Zeichnungsableitung galt als Widerspruch zu §18.3 | Messbemaßung im Viewport bleibt; kein Widerspruch zum damaligen Ausschluss. Seit §14.4 ist zusätzlich das begrenzte Maßblatt enthalten |
 | „Alles ist ungebaut“, bereits erledigte Punkte und Indexstatus widersprachen sich | Stand getrennt; auch vorhandene Erzeugerbenennung exakter Gewinde berücksichtigt; Paketstatus und Entscheidungszuordnung ergänzt (§13) |
 | Tageswerte, HLR, Rastertreffer und Offscreen-Proben wurden überdehnt | Messung, historische Angabe, Schätzung und ausstehende Abnahme getrennt |
 
@@ -1810,8 +1966,8 @@ vervollständigen, Handlungen auf beiden Kernen durchgängig anschließen,
 Bedienwege direkt am Modell mit Maßfeldern und ✓/× abnehmen (§10.2),
 anschließend den geprüften Nachbau ausbauen. Sämtliche zusätzlichen
 CAD-Funktionen aus Recherche §6 sind inzwischen durch §14.2 beauftragt und
-P6/P7 zugeordnet. Die ursprünglichen 16 Entscheidungen bleiben bestehen;
-0.4.3 ist draußen, der Start folgt auf 0.4.4 (§14.3).
+P6/P7 zugeordnet. Das war der Stand vor dem Start nach 0.4.4 (§14.3);
+§14.4 ergänzt seit dem 23.09. den Umfang und das Abschlussziel 0.5.x.
 RM-188 führt den Gesamtumfang mit allen Paketen als Liste mit Stand, RM-022
 den Nachbau.
 

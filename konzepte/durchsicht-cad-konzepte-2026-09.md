@@ -23,6 +23,14 @@
 > (§14.3: P0.0, P0.7, P1.6, P4.0, Reihenfolge §13.10); die Korrekturen aus
 > §3 stehen an ihren Stellen. Dieses Dokument bleibt als Beleg.
 
+> **Ergänzung vom 23.09.2026:** Diese Durchsicht einschließlich ihrer
+> Nachträge gehört mit CAD-, Bedien- und Resin-Konzept vollständig zum
+> beschlossenen Umfang von [RM-188](../ROADMAP.md#rm-188). Der gemeinsame
+> Abschluss liegt in 0.5.x (CAD-Konzept §14.4); die ältere Release-Vorgabe
+> oben bleibt als historischer Beschluss erhalten. P0.8 prüft die vollständige
+> Zuordnung aller geltenden Empfehlungen und Korrekturen, P5.3 ihre Abnahme.
+> Die Messungen dieser Durchsicht beschreiben weiterhin ihren damaligen Stand.
+
 ---
 
 ## 1. Was nachgemessen wurde

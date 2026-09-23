@@ -4,7 +4,18 @@ Stand 30.08.2026. **Stufe 1 gebaut am 22.09.2026** (RM-071, Nachweis im
 Archiv der Roadmap); was in §4 steht, ist im Code — mit den zwei
 Präzisierungen der Beratschlagung: zwei generische Geräte nach Bauraum, und
 B4 in Stufe 1. Die Bauplan-Verortung aus §7 ist nachgetragen (Roberts
-Ansage vom selben Tag): §4.2, §2.3, §29, §38, §39. Stufe 2 (§5) ist Entwurf.
+Ansage vom selben Tag): §4.2, §2.3, §29, §38, §39.
+
+**Entscheidung vom 23.09.2026:** Das gesamte Konzept gehört zum verbindlichen
+Umfang von 0.5.x unter [RM-188](../ROADMAP.md#rm-188). Stufe 1 bleibt mit
+dem Nachweis aus [RM-071](../ROADMAP-ARCHIV.md#rm-071) erhalten; **Stufe 2
+(§5) ist vollständig beauftragt**, Abnahme nach §9. Die Pakete P9.1–P9.4
+und die gemeinsame Gesamtabnahme stehen im
+[CAD-Konzept §§13–14](konzept-vollwertiges-cad-2026-09.md). Die technischen
+Restentscheidungen aus §11 werden in P9.1 begründet; die alten Fragen zu
+Stufe 1 sind damit kein neuer Auftrag. Die Ausschlüsse aus §6 bleiben gültig.
+Der übrige Text dokumentiert den damaligen Ausgangspunkt; laufende
+Umsetzung und Nachweise werden in RM-188 geführt.
 
 Anlass: Eine Kundenanfrage aus dem Dentalbereich (R. W. D., 30.08.2026 —
 exocad/3shape beruflich, FDM- und Resindrucker privat) fragte nach einer
@@ -262,7 +273,13 @@ mit Resin-Profil, Geometrietests gegen analytische Körper). **Der teuerste
 Einzelposten:** die Regelsammlung — jede Änderung verlangt die Agenten-Suite
 vorher und nachher, rund anderthalb Stunden und echtes Geld je Modelllauf.
 
-## 11. Offene Entscheidungen für Robert
+## 11. Entscheidungen aus dem Entwurf vom 30.08.2026
+
+Stufe 1 ist inzwischen umgesetzt; Stufe 2 ist seit dem 23.09. vollständig
+beauftragt. Diese historische Fragenliste bleibt nachvollziehbar erhalten.
+P9.1 ordnet sie dem heutigen Stand zu und klärt die technischen Restfragen
+(insbesondere Analyseauflösung und Öffnungsvorgaben). Eine Positionierung
+aus Frage 5 wird dadurch nicht automatisch beschlossen.
 
 1. **Wird Stufe 1 gebaut, und vor Stufe 2?** Empfehlung: ja und ja — Stufe 1
    ist, was der Kunde gesagt hat, und ohne Stufe 2 vollständig nutzbar;
@@ -307,6 +324,7 @@ bis hoch, Risiko mittel.** Cupping ist echte Arbeit (Ringverfolgung,
 analytische Testkörper, Leistungsmarke, Orientierungssuche); die Öffnungen
 sind klein; der teuerste Posten ist die Regelsammlung (Agenten-Suite).
 
-**Empfohlene Reihenfolge:** Stufe 1 vollständig, ausliefern, den Kunden
+**Historische Empfehlung vom 30.08., durch die Beauftragung beider Stufen
+für 0.5.x ersetzt:** Stufe 1 vollständig, ausliefern, den Kunden
 fragen, was fehlt — er ist der beste Prüfstand, den dieses Gebiet bekommen
 kann, und er hat angeboten, es zu sein.

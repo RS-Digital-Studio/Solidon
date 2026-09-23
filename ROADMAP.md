@@ -53,7 +53,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-005 — Wahl der Stiftseite gegen das fertige Stützvolumen prüfen](#rm-005) | Geometrie, Erkennung und Druckvorbereitung | Beide Stiftseiten am fertigen Stützvolumen vergleichen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Beschlossen am 17.09.; startet nach 0.4.4 als P4.0–P4.3 des CAD-Plans — erst der exakte Körper ohne Verlauf, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
-| [RM-188 — CAD-Parität und einfache vollständige Kundenwege](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Umsetzung läuft auf main; das Review über alle Änderungen seit 0.4.4 (21./22.09.2026, sechs Pakete, 148 Befunde) ist eingearbeitet und geht mit 0.5.0 hinaus. Der vollständige Umfang bleibt vor der darauffolgenden Version, in der Reihenfolge aus Konzept §13.10 — die Pakete stehen unten als Liste mit Stand |
+| [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Umsetzung läuft; alle vier Konzepte einschließlich vollständigem Bedienabgleich, Montageorganisation, Maßblättern und Resin-Stufe 2 sind verbindlicher Umfang für 0.5.x (Entscheidung 23.09.). Paketstände unten; Abschluss erst nach gemeinsamer Abnahme P5.3 |
 | [RM-189 — Eine Passung verliert ihr Merkmal, und der Fall ist nicht nachgestellt](#rm-189) | Geometrie, Erkennung und Druckvorbereitung | Der Befund trägt seit dem 18.09.2026 einen Weg; die Ursache fehlt — die Schrittfolge von Robert holen oder einen Weg im Korpus finden, der ihn herstellt |
 | [RM-190 — Druckoptimal ausrichten dreht einen Körper nicht, und der Fall ist nicht nachgestellt](#rm-190) | Geometrie, Erkennung und Druckvorbereitung | Zwölf Körper aus Korpus, Downloads und Roberts Regal drehen richtig; den Körper und die Schrittfolge von Robert holen, an denen die Suche stehen bleibt |
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Die neun Platten des Regals je Slicer gegen die Prusa-Ausgabe aufschlüsseln: Stützen, Wände oder Füllung — und die Übergabe der Prusa-Schlüssel danach ergänzen |
@@ -669,8 +669,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 - [ ] **RM-022 — Nachbau als Operationsfolge.** Robert hat den Umfang am
   17.09.2026 entschieden: hinter dem Importschritt eine bearbeitbare Folge
   registrierter Operationen aufbauen. 0.4.3 ist am 18.09. veröffentlicht;
-  die Umsetzung startet nach 0.4.4 als Teil des CAD-Plans und wird vor der
-  darauffolgenden Version abgeschlossen (RM-188). Dem Nachbau geht seit der
+  die Umsetzung gehört seit 0.4.4 zum CAD-Plan und wird nach der ergänzten
+  Entscheidung vom 23.09. innerhalb 0.5.x abgeschlossen (RM-188). Dem Nachbau geht seit der
   Durchsicht vom 19.09. **P4.0** voraus: der exakte Körper **ohne** Verlauf
   aus Segmentierung, Flächenfits und Nähen — das, was Fusion und SolidWorks
   liefern — als Kandidatenquelle und eigener Kundenweg (STL als STEP
@@ -1502,23 +1502,42 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-188"></a>
 
-- [ ] **RM-188 — CAD-Parität und einfache vollständige Kundenwege.** Beschlossener
-  Gesamtumfang vom 17.09.2026 plus voller Ausbau vom 18.09.2026 („alles“).
-  **0.4.3 ist am 18.09.2026 veröffentlicht** (Tag `v0.4.3`, `version.json`
-  auf dem Server); Robert hat am 19.09. entschieden: Die parallel laufenden
-  Codeänderungen werden abgeschlossen und als **0.4.4** veröffentlicht;
-  danach startet die Umsetzung, und **alles wird abgearbeitet, bevor die
-  darauffolgende Version hochgeladen wird.**
+- [ ] **RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x.** Beschlossener
+  Gesamtumfang vom 17.09.2026 plus voller Ausbau vom 18.09.2026 („alles“),
+  ergänzt am **23.09.2026** um Montageorganisation, Maßblätter und die
+  vollständige Zuordnung aller vier von Robert übergebenen Konzepte.
+  **Alles wird innerhalb 0.5.x vollständig abgearbeitet.** Die Umsetzung
+  läuft seit 0.4.4; diese Vorgabe ersetzt die frühere Bindung an die
+  unmittelbar nächste Veröffentlichung. Geprüfte Teilstände dürfen in
+  einzelnen 0.5.x-Versionen erscheinen, ohne RM-188 vorzeitig zu schließen.
   Die Pakete stehen am Ende dieses Eintrags als Liste mit Stand, in der
   Reihenfolge aus Konzept §13.10.
-  Fachliche Quelle und Pakete P0–P7 (CAD-Pakete, nicht die gleichnamigen Projektphasen):
-  [CAD-Konzept](konzepte/konzept-vollwertiges-cad-2026-09.md) §§13–14;
+  Fachliche Quelle und Pakete P0–P9 (Pakete dieses Vorhabens, nicht die gleichnamigen Projektphasen):
+  [CAD-Konzept](konzepte/konzept-vollwertiges-cad-2026-09.md) §§13–14,
+  insbesondere §§13.11/14.4 für die Ergänzungen;
   [vertiefte Prüfung](konzepte/recherche-cad-paritaet-2026-09.md) vom 18.09.
   Es gelten dieselben Handlungen und Bedeutungen für Netz und B-Rep,
   verständliche Maßherkunft und erklärte Grenzen, ohne Kernwahl in der
   Oberfläche. Alle 31 bisher konvertierenden Bausteinpfade gehören dazu.
   Nachbau wird ausschließlich unter RM-022 geführt; RM-181, RM-183, RM-186
   und RM-187 behalten ihre speziellen Leistungs-/Fenster-/Plattformnachweise.
+
+  **Verbindliche Quellen und ihre vollständige Abdeckung:**
+
+  | Konzept | Umfang unter RM-188 | Abschlussnachweis |
+  |---|---|---|
+  | [Vollwertiges CAD](konzepte/konzept-vollwertiges-cad-2026-09.md) | Alle beschlossenen Pakete P0–P8, einschließlich bisherigem P6/P7-Ausbau, Montageorganisation und Maßblättern | Handlungsmatrizen, Fachabnahmen und installierte Kundenwege in P5.3 |
+  | [Bedienung, Gestaltung und Zeichnen](konzepte/konzept-bedienung.md) | Gesamtes Dokument samt Nachträgen in P0.8 zuordnen; P0.7 führt die vier aufgegriffenen Reste, P0.3/P0.4/P5.1 die direkten Eingabewege | Alle noch geltenden Bedienanforderungen in P5.2/P5.3 prüfen, nicht nur die vier alten Restpunkte |
+  | [Durchsicht der CAD-Konzepte](konzepte/durchsicht-cad-konzepte-2026-09.md) | Sämtliche geltenden Korrekturen, Empfehlungen und Nachträge zuordnen; §§3/7 bereits über CAD-Konzept §14.3 in P0.0/P0.7/P1.6/P2.1/P4.0 und Reihenfolge übernommen | P0.8 belegt die vollständige Zuordnung; Nachweise in den Fachpaketen, keine zweite Implementierung derselben Befunde |
+  | [Vorstufe vor dem Resin-Slicer](konzepte/konzept-resin-2026-08.md) | Beide Stufen: Stufe 1 aus [RM-071](ROADMAP-ARCHIV.md#rm-071) erhalten, vollständige Stufe 2 aus §§5/9 in P9.1–P9.4 | Resin- und FDM-Gegenfälle, Orientierung/Öffnungen/Regeln/Übergabe, Agenten- und Release-Nachweise; Gesamtabnahme P5.3 |
+
+  P0.8 hält je Anforderung Quellabschnitt, gültige Entscheidung, Paket oder
+  vorhandenen RM-/Archivnachweis und verbleibende Abnahme fest. Historische
+  Fehlerbeschreibungen werden am heutigen Code geprüft; bereits Erledigtes
+  wird nicht neu gebaut. Ersetzte oder verworfene Vorschläge benötigen einen
+  Entscheidungsbeleg. Keine geltende Anforderung darf ohne Zuordnung bleiben.
+  **P5.3 schließt erst, wenn diese Abdeckung für alle vier Dokumente belegt
+  ist**, einschließlich Bedienkonzept und Resin-Stufe 2.
 
   Auf `2148ddfa` zusätzlich reproduziert: exakte Spiegelung verliert sechs
   Merkmale; Skalieren erzeugt auf beiden Eingangsarten doppelte Flächen mit
@@ -1543,8 +1562,28 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   und Mehrkörper-STEP mit Namen, Farben und Instanzlagen. Konzept §13.9
   ergänzt unabhängige Sollwerte, Kundenwege, Migrations- und Rückfallverträge.
   P5 nimmt auch diese Funktionen direkt am Modell ab; P5.3 schließt erst nach
-  P6/P7 mit installierten Paketen auf allen Zielplattformen. Baugruppen,
-  Zeichnungsableitung und die weiteren ausdrücklichen Nicht-Ziele bleiben ausgenommen.
+  P6–P9 mit installierten Paketen auf allen Zielplattformen. Die präzisierten
+  Nicht-Ziele aus Konzept §15 bleiben ausgenommen.
+
+  **Montage und Maßblätter, Entscheidung 23.09.:** P8.1–P8.3 ergänzen
+  benannte Gruppen, gemeinsame Auswahl/Sichtbarkeit/Bewegung und getrennt
+  gespeicherte Montage- und Drucklagen. Ersetzen, Teilen und Löschen von
+  Mitgliedern, Passungsbezüge, Undo und Wiederöffnung gehören zum Vertrag.
+  Vorhandenes Ausrichten, Kollisions- und Fügewegprüfen wird angeschlossen;
+  die Ansichtsexplosion bleibt reine Darstellung. P8.4/P8.5 liefern ein
+  PDF-Maßblatt aus gewählten Ansichten und Maßen mit Teilnamen, Einheit und
+  eindeutiger Modellstandkennung; Vorschau, lesbare Bezüge und ausgewiesene
+  Näherungen sind Abnahmekriterien. Keine Gelenke/Bewegungssimulation,
+  kein allgemeiner Baugruppenlöser und keine assoziative Zeichnungsverwaltung.
+  Fachliche Verträge, Kundenwege und Rückfall: Konzept §13.11.
+
+  **Resin vollständig:** P9.1 klärt die technischen Restentscheidungen und
+  belegt Stufe 1; P9.2 ergänzt Saugglocken samt Orientierungssuche, P9.3
+  Abfluss-/Belüftungsöffnungen nach Drucklage und P9.4 verfahrensbezogene
+  Regeln samt durchgehendem Kundenweg. Die fachliche Quelle bleibt das
+  Resin-Konzept §§5–11. FDM-Verhalten, externe Slicer-Übergabe und vorhandene
+  Aushöhlen-Wege werden mitgeprüft; eigener Slicer, Stützenerzeugung und
+  Belichtungsprofile bleiben ausgeschlossen.
 
   **Bedienergänzung Robert, 18.09.:** Maße direkt im Viewport bearbeiten,
   Eingabefeld von der Maßlinie absetzen, ✓/× daneben; dieselbe Vorschau und
@@ -1707,6 +1746,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   * **läuft** P2.3 — `3bdaa788`: erster Anschluss für analytische Ebenen und Kreiszylinder aus NURBS: gemeinsame Trägerauskunft für Erkennung und Bearbeitung, echte Trimgrenzen und Materialseite, zusätzliche Koeffizientenprüfung, durchgereichter Abbruch und Cacheentwertung. Der STEP-Kernweg erkennt sechs Flächen und eine Bohrung, ändert Ø6 auf Ø8, speichert, öffnet und nimmt zurück; Quelle und exakter Körper bleiben erhalten. Die unabhängige Gegenprüfung ergänzt periodische Nahttrimmungen und unveränderte Originalflächen bei Defeaturing. Acht weitere Maßfälle sichern wiederholte Radialänderungen sowie schräge Originalränder über enge NURBS-Knoten in beiden Richtungen, auch unter Offset- und Trimmhüllen. `a85cc872` erkennt geschlossene Innenräume einschließlich getrennter Materialinseln, bindet ihre tatsächlichen Quellflächen und erhält die Auswahl bei lokaler Suche. `93979914` ergänzt native Ringe, rationale Ringträger mit vollständigem Koeffizientennachweis und gerundete Restflächen. Angrenzende gleiche Ringstücke werden vereint, getrennte bleiben getrennt; vollständige native Flächen behalten exakte Integrale und Originalauswahl. `851f913a` ergänzt native und rationale Kugelträger mit vollständigem Koeffizientennachweis, beschnittene Kugelflächen und unveränderte Originalbytes über STEP und Historie. Die vollständige Semantik-/Teilflächenparität und weiteren Trägerfamilien bleiben offen.
   * **implementiert, Release-Abnahme offen** P1.1 — `db7d1a5c`: belegte Konturecken statt Schwerpunkte, zentrierte Achsrechnung, wirkliche axiale Grenzen und radiale Dreiecksabstände. Unterteilung, schiefe Schnitte, Teilbögen, große Koordinaten, Spiegelung, bewusste Gegenformen und Abbruch sind geprüft. Offene und geschlossene Langlöcher erhalten die volle Maßgenauigkeit; der zweite offene Kreisfit entfällt. Fitfehler und Netzband bleiben getrennt von Fertigungsspiel. Entwicklungstor grün; Fenster und Leistung bleiben beim Release.
   * **erledigt 20.09., Werkzeugauswahl** P0.5 — vollständige Zuordnung in Konzept §13.8.1; fachliche Machbarkeit, Vorversuche und Paketnachweise bleiben den jeweiligen Fachpaketen zugeordnet. P0.6 benötigt derzeit keine zusätzliche Infrastruktur: vorhandener Cythonweg bleibt Ausgangspunkt, neue native Ergänzungen nur bei belegtem Bedarf. P5.3 bleibt offen.
+  * **offen** P0.8 — vollständiger Abgleich aller vier Konzepte samt Nachträgen: je geltender Anforderung aktueller Code-/Abnahmebeleg oder verbindliches Arbeitspaket; historische und ersetzte Aussagen ausdrücklich kennzeichnen. Quellenübersicht oben, Abnahmekriterium in Konzept §13.2.
   * **implementiert, Release-Abnahme offen** P0.1 — `064e3095`: Positions-Dreier, Einzahltexte, Gründe gesperrter Knöpfe und Rückmeldung zur leeren Skizze sind umgesetzt. Entwicklungstor grün; die ergänzten Fensterfälle laufen erst beim Release.
   * **implementiert, Release-Abnahme offen** P0.2 — `77223ccb`/`064e3095`: Vorschau und Befund nennen Operation, betroffenen Körper und Rückweg einer Konvertierung; beide Körperarten erhalten gleichwertige Baumtexte. Der Agent prüft auch reine Projektparameteränderungen und übernimmt Konvertierungen nicht automatisch. Menü, Merkmalkarte, Gruppen, Platzierung, historische Zwillinge, Filament, Formen und Chat teilen die Prüfung von Auftrag, Dokumentstand, Auswahl und tatsächlich gezeichneter Vorschau. Entwicklungstor grün; Fensterregressionen und reale Kundenabnahme bleiben dem Release vorbehalten.
   * **implementiert, Release-Abnahme offen** P0.7 — `7aaa993d` / `b9b96a91` / `47023b53`: früher UI-/CLI-Absturzschutz mit lokalen Python-/Thread-/nativen Berichten und redigierten festen Supportanhängen. `announce()` hat eine passive Klartextquittung am Maus-/Tastaturort; Abbruch und Dokumentwechsel verwenden dieselbe Meldungsquelle. Die Hoverbeschriftung bestand bereits; `always_visible` betrifft Tiefensichtbarkeit. Der vorhandene Fensterfall prüft zusätzlich Wegfahren mit und ohne Auswahl. Weitere Importe behalten ihre Dateilage (§17.1); der Bericht bietet ihrer unveränderten vollständigen Gruppe gemeinsames Aufsetzen als eigene Undo-Transaktion an. Steht die Gruppe schon auf dem Bett, bleibt am schwebenden Mitglied die wirksame Einzelhandlung. Zwölf Gruppen-Kernfälle grün; die Bauartmatrix erfasst jetzt alle 133 Operationen in 229 bestandenen Prüfungen. Neue Fensterfälle sind vorbereitet, werden aber ausschließlich beim Release ausgeführt; Sichtbarkeit, DPI, Tastatur und Bildschirmleser bleiben offen.
@@ -1761,9 +1801,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   * **offen** P6.7 — Merkmalsmuster linear, kreisförmig, gespiegelt
   * **offen** P7.1 — Verlaufsschritt einfügen; P7.2 — umsortieren; P7.3 — unterdrücken und reaktivieren
   * **offen** P7.4 — STEP-Mehrkörperimport mit Namen, Farben und Instanzlagen
+  * **offen** P8.1 — benannte Gruppen, stabile Mitgliedschaft und Regeln für Ersetzen/Teilen/Löschen, Speicherung und Undo
+  * **offen** P8.2 — Montage- und Drucklagen derselben Körper speichern; Prüfungen, Cache, Druckplatten und Export auf explizite Lage beziehen
+  * **offen** P8.3 — Gruppen-/Lagenbedienung und vorhandene Montageprüfungen; vollständiger Gehäuse-/Deckel-/Schrauben-Kundenweg
+  * **offen** P8.4 — Maßblattvertrag: Ansichten, Maße, Referenzen, Herkunft, Einheit und eindeutiger eingefrorener Modellstand
+  * **offen** P8.5 — PDF-Maßblatt mit Vorschau, lesbarer Bemaßung und visueller Ausgabeprüfung
+  * **offen** P9.1 — Resin-Stufe 1 belegen, technische Restentscheidungen und analytische Sollkörper für Stufe 2 festlegen
+  * **offen** P9.2 — Saugglocken mit Ort/Volumen und orientierungsabhängiger Suche
+  * **offen** P9.3 — Abfluss-/Belüftungsöffnungen nach Drucklage am vorhandenen Aushöhlen-Weg
+  * **offen** P9.4 — Resin-Regeln und vollständige Abnahme aus Resin-Konzept §9, einschließlich FDM-Gegenproben und Slicer-Übergabe
   * **offen** P5.1 — Maßoperationen familienweise auf den Viewport-Editor, Panel-Doppel entfällt
-  * **offen** P5.2 — Auswahlmatrix am Fenster, kleines Fenster, HiDPI, Themen, Tastatur
-  * **offen** P5.3 — Gesamtabnahme auf Windows/macOS/Linux mit installierten Paketen — die Bedingung für das Hochladen
+  * **offen** P5.2 — vollständige geltende Bedienanforderungen aus P0.8, Auswahlmatrix am Fenster, kleines Fenster, HiDPI, Themen, Tastatur; Gruppen/Lagen, Maßblätter und Resin eingeschlossen
+  * **offen** P5.3 — gemeinsame Gesamtabnahme aller vier Konzepte auf Windows/macOS/Linux mit installierten Paketen; Abschluss von RM-188 innerhalb 0.5.x erst mit allen Fach- und Abdeckungsnachweisen
 
 <a id="rm-189"></a>
 
