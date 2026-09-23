@@ -150,9 +150,15 @@ zu den numerischen Formmaßen im Gleichartigkeitsvergleich. Ein gültiger Sitz
 wird im Ersatzweg gegen die wirkliche Geometrie erneut belegt.
 
 Kreisfits zentrieren ihre Punktmenge vor den quadratischen Termen, damit
-eine Translation weder Kondition noch Formentscheidung verändert. Ein
-Stadion muss auch seine schlechteste Konturecke innerhalb der Formtoleranz
-halten; örtliche Mulden werden nicht über den mittleren Fehler geglättet.
+eine Translation weder Kondition noch Formentscheidung verändert. Der
+Kåsa-Ausgleich verwendet skalierte Householder-QR mit Spaltenpivotierung
+und fest summierten Produkten. Er quadriert die Kondition schmaler Bögen
+nicht durch Normalgleichungen und übernimmt keine LAPACK-Rundung als
+Mittelpunkt einer Folgeoperation; ranglose Punktmengen tragen keinen Kreis.
+Die gezielte Kreisfit-Plattformsonde rechnet beide Erkennungen mit geleertem
+Merkmalscache neu. Ein Stadion muss auch seine schlechteste Konturecke
+innerhalb der Formtoleranz halten; örtliche Mulden werden nicht über den
+mittleren Fehler geglättet.
 
 Scharf begrenzte ebene Funktionsflächen hängen an der absoluten
 Erkennungsauflösung, nicht an der größten Fläche des Körpers. Vor der

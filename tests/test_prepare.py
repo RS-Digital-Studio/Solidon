@@ -4329,7 +4329,8 @@ def test_removing_a_bore_asks_about_its_countersink(profile: Profile) -> None:
     assert not gefragt, f"eine Bohrung ohne Senkung hat nichts zu fragen: {gefragt}"
 
 
-def test_a_countersink_can_be_removed_after_its_bore(profile: Profile) -> None:
+@pytest.mark.parametrize("angle", [0.0, 37.0], ids=["flat", "turned"])
+def test_a_countersink_can_be_removed_after_its_bore(profile: Profile, angle: float) -> None:
     """Was allein steht, lässt sich allein entfernen.
 
     Robert am 09.09.2026: „wenn wir die Bohrung löschen, können wir die Senkung
@@ -4344,6 +4345,8 @@ def test_a_countersink_can_be_removed_after_its_bore(profile: Profile) -> None:
     von beidem.
     """
     entry, bore, countersink = _plate_with_a_countersunk_bore()
+    original = as_mesh_data(entry.mesh)
+    full_volume = float(np.prod(original.raw.bounds[1] - original.raw.bounds[0]))
 
     import dataclasses
 
@@ -4353,6 +4356,11 @@ def test_a_countersink_can_be_removed_after_its_bore(profile: Profile) -> None:
         "remove_feature", entry, profile, at_feature=bore, sections="single"
     ).outputs[0]
     assert countersink in ohne_bohrung.features, "die Senkung steht noch da"
+    matrix = np.asarray(rotation("y", angle))
+    matrix[:3, 3] = (3.0, -2.0, 5.0)
+    ohne_bohrung = dataclasses.replace(
+        ohne_bohrung, mesh=apply(as_mesh_data(ohne_bohrung.mesh), matrix)
+    )
 
     # **Dazwischen wird neu erkannt, wie es die Auswertung tut** (``_matched``
     # in ``scene/evaluate.py``). Ohne diesen Schritt trügen die Merkmale die
@@ -4367,8 +4375,7 @@ def test_a_countersink_can_be_removed_after_its_bore(profile: Profile) -> None:
     assert allein not in weg.features, "und sie lässt sich entfernen"
 
     koerper = as_mesh_data(weg.mesh)
-    quader = float(np.prod(koerper.raw.bounds[1] - koerper.raw.bounds[0]))
-    assert koerper.volume == pytest.approx(quader, rel=1e-4), (
+    assert koerper.volume == pytest.approx(full_volume, rel=1e-4), (
         "die Platte ist voll — nicht zu wenig und nicht zu viel gefüllt"
     )
     assert koerper.raw.is_watertight

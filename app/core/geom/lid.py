@@ -17,8 +17,11 @@ einen Deckel, der vor ihr gebaut wurde.
 from __future__ import annotations
 
 import dataclasses
+import math
 from itertools import pairwise
 from typing import Any, Final, cast
+
+import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationError
@@ -156,13 +159,32 @@ def _short_side(shape: Any) -> float | None:
     """
     from shapely.geometry import Polygon as ShapelyPolygon
 
-    box = shape.minimum_rotated_rectangle
-    if not isinstance(box, ShapelyPolygon):
+    hull = shape.convex_hull.normalize()
+    if not isinstance(hull, ShapelyPolygon) or hull.is_empty:
         return None
-    corners = list(box.exterior.coords)[:3]
-    return min(
-        float(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5) for (x0, y0), (x1, y1) in pairwise(corners)
-    )
+    # Eine Seite des flächenkleinsten Rechtecks liegt an einer Hüllkante.
+    # Deren Projektionen liefern die beiden Maße unmittelbar. GEOS baut
+    # stattdessen die vier Ecken zurück und meldet dabei auf macOS/arm64
+    # schon für gültige Rechtecke Division durch null (GEOS #1235).
+    # Wir brauchen nur die Maße, keine rekonstruierten Schnittpunkte.
+    points = np.asarray(hull.exterior.coords, dtype=np.float64)
+    local = points[:-1] - points[0]
+    x, y = local[:, 0], local[:, 1]
+    smallest_area = math.inf
+    shortest = None
+    for start, end in pairwise(points):
+        # Die Richtung vor dem Zentrieren bestimmen: Nahe Randpunkte können
+        # beim Abziehen eines weiter entfernten Ursprungs zusammenrunden.
+        dx, dy = float(end[0] - start[0]), float(end[1] - start[1])
+        length = math.hypot(dx, dy)
+        along = x * (dx / length) + y * (dy / length)
+        across = y * (dx / length) - x * (dy / length)
+        width, height = float(np.ptp(along)), float(np.ptp(across))
+        area = width * height
+        if area < smallest_area:
+            smallest_area = area
+            shortest = min(width, height)
+    return shortest
 
 
 #: Wie fein :func:`_exact_width` die Kanten einer exakten Öffnung abtastet, in
@@ -906,7 +928,8 @@ class LidParams(BaseParams):
     # 3 seit dem Zusammenführen der Durchsicht 0.5.0: Die Weiten der Passung
     # sind die schmale Seite in jeder Drehung (``_narrowest``), nicht die des
     # Hüllrechtecks, und am exakten Gehäuse entsteht der Deckel exakt (P2.8).
-    cache_version="3",
+    # 4: gemeinsame Weitenmessung ohne GEOS-Rechteckrekonstruktion.
+    cache_version="4",
     title=_("Deckel erzeugen"),
     category="parts",
     params=LidParams,
@@ -1265,7 +1288,8 @@ class ScrewLidParams(BaseParams):
     # die schmale Seite in jeder Drehung (``neck_diameters``), der Deckel heißt
     # in jeder Sprache, und am exakten Gehäuse entstehen Hals und Kappe exakt
     # (P2.8).
-    cache_version="3",
+    # 4: gemeinsame Weitenmessung ohne GEOS-Rechteckrekonstruktion.
+    cache_version="4",
     title=_("Drehdeckel erzeugen"),
     category="parts",
     params=ScrewLidParams,

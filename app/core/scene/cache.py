@@ -101,7 +101,10 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   kalibriertes Körpermaterial bohrt neu.
 #: - 26: vollständige Topologieauskunft nach Aufsetzen und Zentrieren beim
 #:   Import; zuvor abgewiesene Folgeoperationen werden neu gerechnet.
-CACHE_FORMAT_VERSION: Final = 26
+#: - 27: Kreisfits mit plattformgleicher QR-Rechnung statt LAPACK; alte
+#:   Mittelpunktwerte und Folgegeometrie werden neu gerechnet. Eigenständige
+#:   Senkungen verwenden ihren echten Boden statt eines neu gefächerten Deckels.
+CACHE_FORMAT_VERSION: Final = 27
 
 
 @dataclass(frozen=True, slots=True)

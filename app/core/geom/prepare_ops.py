@@ -844,9 +844,22 @@ def _feature_body(mesh: MeshData, feature: Feature, *, alone: bool = False) -> M
     Kette, aus der auch der gemeinsame Körper entsteht
     (:func:`_stands_alone`). Derselbe belegte Alleinstand gilt beim Versetzen,
     Kopieren und in der Platzierungsvorschau.
+
+    Ein vorhandener Senkungsboden gehört mit seinen echten Dreiecken dazu:
+    Ein neuer Fächer durch denselben Rand läge bei einem quantisierten Netz
+    neben dem Boden und ließe beim Füllen eine dünne innere Schale stehen.
+    Seine eindeutige Zugehörigkeit liest :func:`_cavity_floor` am ganzen
+    gemeinsamen Rand, wie für die fortgeführte Bodenkennung einer Bohrung.
     """
     rings = (0, 1, 2) if alone else (0, 1)
-    return _body_from_faces(mesh, feature.face_indices, allowed_rings=rings)
+    indices = feature.face_indices
+    if alone and feature.kind == "cone" and is_a_cavity(feature):
+        from app.core.perceive.features import detect
+
+        floor = _cavity_floor(mesh, feature, detect(mesh), None)
+        if floor is not None:
+            indices = (*indices, *floor.face_indices)
+    return _body_from_faces(mesh, indices, allowed_rings=rings)
 
 
 def _stands_alone(mesh: MeshData, feature: Feature, features: Mapping[str, Feature]) -> bool:
@@ -7966,7 +7979,7 @@ def _entrance_edge_findings(
     return []
 
 
-def _bore_floor(
+def _cavity_floor(
     mesh: MeshData,
     bore: Feature,
     features: Mapping[FeatureId, Feature],
@@ -7983,7 +7996,12 @@ def _bore_floor(
     from app.core.perceive.features import _one_body
     from app.core.perceive.relations import boundary_rings, cavity_surface_indices
 
-    if bore.kind != "hole" or not bore.recognised or not bore.face_indices:
+    if (
+        bore.kind not in ("hole", "cone")
+        or not is_a_cavity(bore)
+        or not bore.recognised
+        or not bore.face_indices
+    ):
         return None
     if check_cancelled is not None:
         check_cancelled()
@@ -8079,7 +8097,7 @@ def _floor_carried(
     ``face_8``). Die Operation kennt die Bewegung (``motion``, 4 x 4) und sagt
     der Zuordnung, wo er jetzt liegt — wie für Bohrung und Senkung selbst.
     """
-    floor = _bore_floor(as_mesh_data(mesh), bore, features, None)
+    floor = _cavity_floor(as_mesh_data(mesh), bore, features, None)
     if floor is None:
         return None
     params = dict(floor.params)
@@ -8117,10 +8135,10 @@ def _resized_bore_floor(
     """
     from app.core.units import weld_tolerance
 
-    old = _bore_floor(original, before, previous, check_cancelled)
+    old = _cavity_floor(original, before, previous, check_cancelled)
     if old is None:
         return {}
-    new = _bore_floor(changed, after, detected, check_cancelled, combine=True)
+    new = _cavity_floor(changed, after, detected, check_cancelled, combine=True)
     if new is None:
         return {}
     old_indices, new_indices = list(old.face_indices), list(new.face_indices)

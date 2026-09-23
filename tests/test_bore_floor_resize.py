@@ -200,9 +200,25 @@ def test_sloping_floor_keeps_its_entire_surface_and_identifier(
     assert not [finding for finding in findings if finding.code == "perceive.orphaned"]
 
 
+def test_the_flat_head_of_an_outer_cone_is_not_a_cavity_floor() -> None:
+    """Ein gemeinsamer Rand macht den Kopf eines Außenkegels nicht zum Sackboden."""
+    from app.core.geom import lathe
+    from app.core.geom.prepare_ops import _cavity_floor
+    from app.core.types import is_a_cavity
+
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 8.0))
+    frustum = lathe.revolve([[0.0, 3.0], [6.0, 3.0], [3.0, 10.0], [0.0, 10.0]], sections=48)
+    mesh = MeshData.of(trimesh.boolean.union([plate, frustum]))
+    features = detect(mesh)
+    cone = next(feature for feature in features.values() if feature.kind == "cone")
+    assert mesh.is_watertight and mesh.component_count == 1 and not is_a_cavity(cone)
+
+    assert _cavity_floor(mesh, cone, features, None) is None
+
+
 def test_outer_annuli_and_an_unrelated_coplanar_floor_are_not_bore_floors(profile: Profile):
     """Gleiche Höhe und Achsrichtung ersetzen keine echte gemeinsame Randlinie."""
-    from app.core.geom.prepare_ops import _bore_floor
+    from app.core.geom.prepare_ops import _cavity_floor
 
     first = blind_cylinder()
     other = first.raw.copy()
@@ -215,7 +231,7 @@ def test_outer_annuli_and_an_unrelated_coplanar_floor_are_not_bore_floors(profil
     )
     floor = _floor_at(features, 15.0)
     incomplete = {name: feature for name, feature in features.items() if name != floor.id}
-    assert _bore_floor(mesh, hole, incomplete, None, combine=True) is None
+    assert _cavity_floor(mesh, hole, incomplete, None, combine=True) is None
     source = SceneObject("own", "Zwei eigene Sackbohrungen", mesh, features=features)
     changed, _findings, _result = _resize(source, hole, 8.0, profile)
     other_floor = next(

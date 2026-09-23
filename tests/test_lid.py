@@ -9,6 +9,7 @@ teilen.
 from __future__ import annotations
 
 import math
+import warnings
 
 import numpy as np
 import pytest
@@ -24,6 +25,7 @@ from app.core.perceive.features import detect
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, Profile, Scene, SceneObject
+from app.core.units import EPS_GEOM, exact_cos_degrees, exact_sin_degrees
 
 load_operations()
 
@@ -31,6 +33,77 @@ load_operations()
 #: 1,5 mm Boden, oben offen. Hohlraum 54 x 34.
 OUTER = (60.0, 40.0, 30.0)
 CAVITY = (54.0, 34.0)
+
+
+@pytest.mark.parametrize("angle", [0.0, 37.0, 90.0])
+@pytest.mark.parametrize("offset", [0.0, 1_000_000.0])
+@pytest.mark.parametrize("as_points", [False, True])
+def test_opening_width_needs_no_geos_rectangle_reconstruction(
+    monkeypatch: pytest.MonkeyPatch, angle: float, offset: float, as_points: bool
+) -> None:
+    """Gültige Rechtecke bleiben trotz des GEOS-Warnungsfehlers messbar.
+
+    Auf macOS/arm64 meldet die Rechteckrekonstruktion bereits bei einer
+    normalen Box Division durch null (Shapely #2215, GEOS #1235). Die Sonde
+    stellt diese Bibliotheksantwort auch auf Windows her. Netzpolygon und
+    Randpunkte einer exakten Öffnung müssen dieselbe reale Weite liefern.
+    """
+    import shapely
+    from shapely.geometry import MultiPoint, Polygon
+
+    from app.core.geom.lid import _short_side
+
+    def warned(*_args: object, **_kwargs: object) -> None:
+        warnings.warn(
+            "divide by zero encountered in oriented_envelope", RuntimeWarning, stacklevel=2
+        )
+
+    monkeypatch.setattr(shapely.lib, "oriented_envelope", warned)
+    cosine, sine = exact_cos_degrees(angle), exact_sin_degrees(angle)
+    corners = [
+        (offset + x * cosine - y * sine, -offset + x * sine + y * cosine)
+        for x, y in [(0.0, 0.0), (54.0, 0.0), (54.0, 34.0), (0.0, 34.0)]
+    ]
+    shape = MultiPoint(corners) if as_points else Polygon(corners)
+
+    assert _short_side(shape) == pytest.approx(34.0, abs=EPS_GEOM, rel=0.0)
+
+
+def test_opening_width_belongs_to_the_minimum_area_rectangle() -> None:
+    """Die kürzeste Seite allein wählt nicht das flächenkleinste Rechteck.
+
+    Achsparallel: Fläche 50, Weite 5. An der langen schrägen Kante wäre die
+    Weite 50/sqrt(106) kleiner, die Fläche 5500/106 aber größer als 50.
+    """
+    from shapely.geometry import Polygon
+
+    from app.core.geom.lid import _short_side
+
+    shape = Polygon([(0.0, 0.0), (0.0, 4.0), (1.0, 5.0), (10.0, 0.0)])
+
+    assert _short_side(shape) == pytest.approx(5.0, abs=EPS_GEOM, rel=0.0)
+
+
+def test_opening_width_keeps_tiny_hull_edges_when_moving_the_origin() -> None:
+    """Nahe Randpunkte aus dem exakten Kern können lokal zusammenrunden."""
+    from shapely.geometry import MultiPoint
+
+    from app.core.geom.lid import _short_side
+
+    points = [(-10.0, 0.0), (0.0, 10.0), (math.ulp(10.0) / 4.0, 10.0), (10.0, 0.0), (0.0, -10.0)]
+
+    assert _short_side(MultiPoint(points)) == pytest.approx(math.sqrt(200.0), abs=EPS_GEOM, rel=0.0)
+
+
+@pytest.mark.parametrize("kind", ["empty", "point", "line"])
+def test_degenerate_openings_have_no_rectangle_width(kind: str) -> None:
+    """Leerer Umriss, Punkt und Linie werden nicht zu einer Rechteckbreite."""
+    from shapely.geometry import LineString, Point, Polygon
+
+    from app.core.geom.lid import _short_side
+
+    shape = {"empty": Polygon(), "point": Point(3.0, 4.0), "line": LineString([(0, 0), (5, 5)])}
+    assert _short_side(shape[kind]) is None
 
 
 def housing(material: str | None = None) -> SceneObject:

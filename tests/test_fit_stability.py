@@ -405,6 +405,55 @@ def test_the_contour_carries_the_same_circle_wherever_its_ring_starts() -> None:
     assert radii == {10.0}, f"one circle in every pose, not {sorted(radii)}"
 
 
+@pytest.mark.parametrize(
+    ("span", "centre"),
+    [
+        (360.0, (3.7, -12.1)),
+        (5.0, (3000.0, -2000.0)),
+        (0.1, (0.0, 0.0)),
+        (180.0, (1_000_000.0, -1_000_000.0)),
+    ],
+)
+def test_the_circle_fit_keeps_short_arcs_and_distant_centres(
+    span: float,
+    centre: tuple[float, float],
+) -> None:
+    """Der plattformgleiche Ausgleich behält die Genauigkeit schmaler Bögen.
+
+    Die erwarteten Maße erzeugen die Punkte direkt. Der schmalste Bogen liegt
+    absichtlich unter der Erkennungsschwelle und prüft nur den Zahlenausgleich.
+    """
+    radius = 12.7
+    angles = np.linspace(13.0 - span / 2.0, 13.0 + span / 2.0, 61)
+    points = np.asarray(
+        [
+            (
+                centre[0] + radius * units.exact_cos_degrees(float(angle)),
+                centre[1] + radius * units.exact_sin_degrees(float(angle)),
+            )
+            for angle in angles
+        ]
+    )
+
+    found, measured = features_module._fit_circle(points)
+
+    assert math.hypot(float(found[0]) - centre[0], float(found[1]) - centre[1]) < units.EPS_GEOM
+    assert measured == pytest.approx(radius, abs=units.EPS_GEOM, rel=0.0)
+
+
+@pytest.mark.parametrize(
+    "points",
+    [[(-1.0, 0.0), (0.0, 0.0), (1.0, 0.0)], [(3.0, -2.0)] * 3],
+)
+def test_a_circle_fit_does_not_invent_a_radius_on_a_line(
+    points: list[tuple[float, float]],
+) -> None:
+    """Ein rangloser Ausgleich ist kein Beleg für einen Kreis."""
+    _centre, radius = features_module._fit_circle(np.asarray(points))
+
+    assert units.is_zero(radius)
+
+
 # --- Welche Flecken zusammenfinden, hängt nicht an ihrer Folge ----------------
 
 

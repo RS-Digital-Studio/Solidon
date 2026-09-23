@@ -6441,19 +6441,54 @@ def _plane_basis(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
-    """Algebraische Kreiseinpassung (Kåsa): linear, stabil genug für ein
-    gebohrtes Loch.
+    """Kåsa-Ausgleich im lokalen Maßrahmen, mit pivotierter Householder-QR.
+
+    Die drei Spalten werden orthogonalisiert, ohne die Kondition durch
+    Normalgleichungen zu quadrieren. Produkte, Summen und Rückwärtseinsetzen
+    haben eine feste Reihenfolge; kein BLAS-/LAPACK-Kern bestimmt den
+    Mittelpunkt, an dem eine Folgeoperation ihren Schneidkörper baut.
+    Ein numerisch rangloser Bogen liefert keinen Kreis (Radius null).
     """
-    # Die Quadrate gehören in den lokalen Maßrahmen. Weltkoordinaten machen
-    # dieselbe Kreisform je Plattenposition unterschiedlich schlecht bedingt.
-    origin = points.mean(axis=0)
+    origin = np.array([units.exact_mean(points[:, index].tolist()) for index in range(2)])
     local = points - origin
+    scale = float(np.abs(local).max())
+    if len(points) < 3 or scale <= 0.0:
+        return origin, 0.0
+    local /= scale
     matrix = np.column_stack([local[:, 0], local[:, 1], np.ones(len(points))])
-    target = local[:, 0] ** 2 + local[:, 1] ** 2
-    solution, *_ = np.linalg.lstsq(matrix, target, rcond=None)
+    target = local[:, 0] * local[:, 0] + local[:, 1] * local[:, 1]
+    order = [0, 1, 2]
+    # Die übliche relative Ranggrenze eines Ausgleichs, keine zusätzliche
+    # Geometrietoleranz: Maschinengenauigkeit mal Systemgröße und Spaltennorm.
+    rank_limit = np.finfo(float).eps * max(matrix.shape) * math.sqrt(len(points))
+    for column in range(3):
+        norms = [math.hypot(*matrix[column:, index]) for index in range(column, 3)]
+        pivot = column + int(np.argmax(norms))
+        length = norms[pivot - column]
+        if length <= rank_limit:
+            return origin, 0.0
+        matrix[:, [column, pivot]] = matrix[:, [pivot, column]]
+        order[column], order[pivot] = order[pivot], order[column]
+        direction = matrix[column:, column].copy()
+        diagonal = -math.copysign(length, float(direction[0]))
+        direction[0] -= diagonal
+        direction /= math.hypot(*direction)
+        for remaining in range(column + 1, 3):
+            projection = 2.0 * math.fsum((direction * matrix[column:, remaining]).tolist())
+            matrix[column:, remaining] -= projection * direction
+        projection = 2.0 * math.fsum((direction * target[column:]).tolist())
+        target[column:] -= projection * direction
+        matrix[column, column] = diagonal
+        matrix[column + 1 :, column] = 0.0
+    solved = [0.0, 0.0, 0.0]
+    for row in (2, 1, 0):
+        rest = math.fsum(float(matrix[row, index]) * solved[index] for index in range(row + 1, 3))
+        solved[row] = (float(target[row]) - rest) / float(matrix[row, row])
+    solution = np.empty(3)
+    solution[order] = solved
     centre = np.array([solution[0] / 2.0, solution[1] / 2.0])
-    radius = math.sqrt(max(solution[2] + centre @ centre, 0.0))
-    return centre + origin, radius
+    radius = math.sqrt(max(float(solution[2] + centre[0] * centre[0] + centre[1] * centre[1]), 0.0))
+    return centre * scale + origin, radius * scale
 
 
 def _axial_span(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> tuple[float, float]:

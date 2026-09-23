@@ -362,6 +362,41 @@ def _changed_bore() -> str:
     return _mesh_print(result.outputs[0].mesh)
 
 
+@pytest.mark.parametrize("towards", [np.inf, -np.inf])
+def test_resizing_a_bore_does_not_use_lapack_rounding_for_its_centre(
+    monkeypatch: pytest.MonkeyPatch,
+    towards: float,
+) -> None:
+    """Ein ULP im Kreisfit darf nicht zur Lage des neuen Schneidkörpers werden.
+
+    Die allgemeine Rauschprobe bewegt nur einen Teil der letzten Stellen.
+    Hier wandern gezielt beide Mittelpunktkoeffizienten eines Ausgleichs;
+    der vollständige Änderungsweg muss trotzdem dieselben Netzbytes liefern.
+    Vor jedem Lauf wird die Erkennung neu gerechnet, damit ihr globaler Cache
+    nicht die ungeänderte Antwort des ersten Laufs zurückgibt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.features import forget_cache
+
+    load_operations()
+    forget_cache()
+    before = _changed_bore()
+    original = np.linalg.lstsq
+
+    def rounded(*args: Any, **kwargs: Any) -> Any:
+        solution, *rest = original(*args, **kwargs)
+        changed = solution.copy()
+        changed[:2] = np.nextafter(changed[:2], towards)
+        return changed, *rest
+
+    monkeypatch.setattr(np.linalg, "lstsq", rounded)
+    forget_cache()
+    try:
+        assert _changed_bore() == before
+    finally:
+        forget_cache()
+
+
 def _turned_plate() -> str:
     """*Drehen* um die eigene Mitte — um 37 Grad, also keine Vierteldrehung."""
     return _mesh_print(_registered("rotate_object", _plate(), axis="z", angle=37.0))

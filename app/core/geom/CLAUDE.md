@@ -144,7 +144,13 @@ Tiefe (`collar_hits_wall`) statt einen Deckel auszugeben, der nicht passt.
 Passungsweiten und Hals messen in beiden Kernen die schmale Seite in jeder
 Drehung: am Netz aus dem Polygon (`_narrowest`), exakt aus den Randpunkten
 der Flächen (`_exact_width`, `_short_side` ist die gemeinsame Rechnung); an
-einem runden Rand gilt dort das exakte Hüllrechteck.
+einem runden Rand gilt dort das exakte Hüllrechteck. `_short_side` misst die
+Projektionen auf die Kanten der konvexen Hülle und wählt das Rechteck nach
+kleinster Fläche, nicht nach kleinster Weite. Es benötigt keine
+GEOS-Rekonstruktion der Rechteckecken; deren Division durch null auf
+macOS/arm64 darf eine gültige Öffnung nicht unbrauchbar machen. Kantenrichtungen
+kommen aus den ursprünglichen Randpunkten, die Projektionen aus dem lokalen
+Maßrahmen, damit nahe Randpunkte beim Verschieben nicht zu Nullkanten werden.
 
 Was ein Merkmalsschritt am Netz nur weiterreicht, geht ohne Dreiecksnummern
 hinaus (`_without_old_triangles`, an jeder Netzausgabe von Versetzen,
@@ -329,6 +335,12 @@ Abschnitt und meldet die übrigen; `follow` nimmt den belegten Einlauf mit.
 Eine unvollständige Änderung einer einzelnen Senkung bleibt ausgeschlossen.
 Die geprüfte Eigenständigkeit erreicht Werkzeugbau und Verschluss auch beim
 Versetzen, Verdoppeln und der freien Platzierung samt ihrer Vorschau.
+Eine alleinstehende Senkung übernimmt ihren vorhandenen Boden in den
+Flächenkörper. `_cavity_floor` belegt ihn wie den Boden einer Bohrung am
+vollständigen gemeinsamen Rand; ein neuer Fächer würde einen quantisierten
+Boden anders triangulieren und beim Füllen eine innere Schale zurücklassen.
+Der vorhandene Erkennungsmerker liefert die Bodenflächen, ohne eine zweite
+Herleitung ihrer Zugehörigkeit.
 
 `resize_hole` erhält mit `keep` beim Verkleinern Lage und Außenmaß der anderen Abschnitte.
 Eine entstehende Ringschulter gehört anschließend weiter zur erkannten Kette.
