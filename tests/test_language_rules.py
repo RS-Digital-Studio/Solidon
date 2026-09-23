@@ -730,12 +730,18 @@ def _du_form(text: str) -> str | None:
     """Die erste Du-Form im Text, oder ``None``.
 
     Kleingeschrieben überall, großgeschrieben nur am Satzanfang — mitten im
-    Satz ist ein großes „Lies" oder „Du" kein Wort dieser Anwendung.
+    Satz ist ein großes „Lies" oder „Du" kein Wort dieser Anwendung. Steht
+    „ich" direkt davor oder dahinter, ist es die erste Person: „Mit ihnen
+    entwickle und prüfe ich jede Version" spricht der Entwickler, nicht ein
+    Befehl an den Kunden.
     """
     boundary = r"(?![\wäöüßÄÖÜ])"
     start = r"(?:^|[.!?:;]\s+|[—–]\s+|\n|\(\s*)"
-    lower = re.search(r"(?<![\wäöüßÄÖÜ])(" + "|".join(DU_FORMS_LOWER) + ")" + boundary, text)
-    if lower:
+    lower_forms = r"(?<![\wäöüßÄÖÜ])(" + "|".join(DU_FORMS_LOWER) + ")" + boundary
+    for lower in re.finditer(lower_forms, text):
+        before, after = text[: lower.start()], text[lower.end() :]
+        if re.search(r"\b[Ii]ch\s+$", before) or re.match(r"\s+ich\b", after):
+            continue
         return lower.group(1)
     capital = re.search(start + "(" + "|".join(DU_FORMS_CAPITAL) + ")" + boundary, text)
     if capital:

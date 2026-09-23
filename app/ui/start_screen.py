@@ -907,11 +907,14 @@ class StartScreen(QWidget):
         )
         self.feedback_button.clicked.connect(self.feedbackRequested)
 
-        support_detail = tr("Hilft bei Veröffentlichung, Signierung, Tests und Website")
+        # **Wofür, nicht womit** (Entscheidung Robert, 23.09.2026): Der Satz
+        # nennt, was das Geld trägt; die Anbieter stehen im Zusatz, zusammen
+        # mit dem Wort, das die Grenze zum Kauf zieht.
+        support_detail = tr("Trägt die Werkzeuge und laufenden Kosten der Entwicklung.")
         self.support_button = StartActionCard(
-            tr("Solidon freiwillig unterstützen"),
+            tr("Solidon unterstützen"),
             support_detail,
-            tr("PayPal oder GoFundMe auswählen"),
+            tr("Freiwillig · PayPal oder GoFundMe"),
             "support",
             self,
         )

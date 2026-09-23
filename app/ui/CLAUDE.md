@@ -1319,7 +1319,7 @@ behalten ihre Seite. Vorbelegte Richtungswerte ändern ihre Schemaseite nicht.
 | Datei | Besonderheit |
 |---|---|
 | `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt. `offer_naming=True` hängt vorn den Haken *Maße als Parameter anlegen* an, `names_dimensions()` liest ihn; die Parameter legt das Fenster an (`_named_dimensions`, §13). Die Stückzahl (`produces_from`) ist ein `CountField`: fx wie jedes Zahlenfeld, zur ganzen Zahl aufgelöst, bevor sie den Stapel erreicht (die Kennungen vergibt er vorher). `aim_again` führt nach Escape aus der Platzierung zurück in Stufe 1 (RM-205) |
-| `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung über PayPal oder GoFundMe. Eine Adresse im Browser öffnet `open_link`: ohne Browser liegt sie danach in der Zwischenablage und steht im Satz — `QDesktopServices.openUrl` direkt ruft niemand, der den Rückgabewert nicht liest |
+| `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung über PayPal oder GoFundMe (`DonationDialog`: Satz von Robert, drei Punkte „wofür" mit Symbol, zwei gleichwertige Anbieterknöpfe ohne Akzent, die Grenze als eine `caption`-Zeile, *Ohne Geld helfen* mit Link-Kopie und `feedback_wanted` für den vorhandenen Rückmeldedialog; `AboutDialog.support_wanted` für den Verweis). Eine Adresse im Browser öffnet `open_link`: ohne Browser liegt sie danach in der Zwischenablage und steht im Satz — `QDesktopServices.openUrl` direkt ruft niemand, der den Rückgabewert nicht liest |
 | `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29). An einem Resin-Drucker zeigt er nur, was gilt (`_reduce_for_resin`, `_fit_to_technology` nach einem Druckerwechsel): Drucker, Material, Platten, Programm und *Im Slicer öffnen* als Hauptknopf — Stufe, Wände, Füllung, Vorschläge, Düse, Slicen und Druckdatei sind verborgen, `settings_for_export` gibt keine Werte mit. Ein Programm ohne Familie (`other`) sperrt Slicen mit Grund und lässt Öffnen frei. Vor *Slicen* und *Im Slicer öffnen* fragt `dialogs.confirm_handover`, wenn der Prüfbericht Fehler der gewählten Platten trägt (`_may_hand_over`) |
 | `print_disclosure.py` | Der Hinweis davor: dass diese Werte Erfahrungswerte sind und mit einer 3MF mitreisen — und die Wahl, ob sie das sollen (§29) |
 | weitere | `settings_dialog` · `generate_dialog` (Weg 3) · `recipe_dialog` · `variants_dialog` · `comfy_dialog` · `install_dialog` · `support_dialog` · `update_dialog` · `changes_dialog` |
@@ -1880,7 +1880,7 @@ Vor dem Methodenaufruf abonniert der Dialog `Request.Response` über seinen
 `handle_token`. Erfolg, Abbruch und Fehler beenden den Ablauf; beim Schließen
 trennt der Dialog die Signalverbindung und schließt den Portal-Request.
 
-**Einstellungen** `settings.py` · `survey.py`
+**Einstellungen** `settings.py` · `survey.py` (Bogen, Nutzungsuhr und die zwei Einladungen über der Ansicht: `SurveyNotice` und `SupportNotice` auf der Basis `ViewNotice`, die die oberste freie Stelle zwischen den gemeldeten Karten sucht — `keep_clear_of`, `spot`)
 
 ## Grenzen
 

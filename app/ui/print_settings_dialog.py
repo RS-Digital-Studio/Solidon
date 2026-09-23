@@ -2400,6 +2400,14 @@ class PrintSettingsDialog(QDialog):
     sliced = Signal(object)
     """Die Befunde des Laufs, für den Prüfbericht des Fensters."""
 
+    handedOver = Signal()
+    """Ein Slicer-Start ist gelungen: geslicet oder im Slicer geöffnet.
+
+    Beide Wege senden es erst mit dem Ergebnis — abgebrochen, gescheitert
+    oder vom Prüfbericht aufgehalten kommt hier nichts an. Das Fenster zählt
+    daran die Ergebnisse bis zur Einladung zur Unterstützung
+    (``feedback.record_delivery``)."""
+
     reported = Signal(object)
     """Die Vorprüfung einer Platte, wenn der Slicer danach abbricht.
 
@@ -6266,6 +6274,7 @@ class PrintSettingsDialog(QDialog):
         self.state.setText(
             line.replace("{slicer}", _slicer_title(executable)).replace("{count}", str(count))
         )
+        self.handedOver.emit()
 
     def _handover_crashed(self, detail: str) -> None:
         """Unerwartetes aus beiden Übergabearbeitern gleich behandeln."""
@@ -6354,6 +6363,7 @@ class PrintSettingsDialog(QDialog):
         self._pending_findings = []
         self.slice_comparison = comparison
         self.sliced.emit(outcomes)
+        self.handedOver.emit()
         _log.info(
             "sliced %d plate(s) with %s in %.1f s",
             len(outcomes),

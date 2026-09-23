@@ -849,15 +849,16 @@ QFrame#tourStepRow[tourState="skipped"] {{
     border-left: 3px dashed {line};
 }}
 
-/* Der Unterstützen-Dialog trennt Erklärung und Handlung: Die drei Zusagen
-   stehen als ruhige Karte zusammen, der einzige Weg nach draußen bleibt als
-   Hauptknopf außerhalb. */
-QFrame#donationFacts {{
+/* Der Unterstützen-Dialog zeigt als ruhige Karte, wofür das Geld ist: je
+   Zeile ein Symbol, ein halbfettes Stichwort und ein Satz. Die zwei Wege
+   nach draußen stehen darunter, gleichwertig und ohne Akzent. */
+QFrame#donationPurposes {{
     background: {base};
     border: 1px solid {line};
     border-radius: {NORMAL}px;
 }}
-QFrame#donationFacts QLabel {{ background: transparent; }}
+QFrame#donationPurposes QLabel {{ background: transparent; }}
+QFrame#donationPurposes QLabel#donationPoint {{ font-weight: 600; }}
 
 /* --- Eingaben: der Fokus muss man sehen -------------------------------- */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit {{

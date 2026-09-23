@@ -1896,11 +1896,23 @@ def test_the_support_dialog_opens_the_chosen_provider_only_after_the_click(
     assert dialog.support_button.text() == "PayPal im Browser öffnen"
     assert dialog.gofundme_button.text() == "GoFundMe im Browser öffnen"
     assert dialog.close_button.text() == "Schließen"
+    # Die Grenze steht vollständig in **einer** Zeile (Entscheidung Robert,
+    # 23.09.2026) — leiser gesetzt, aber mit jedem Glied aus Konzept §2.
+    terms = dialog.browser_note.text()
+    for part in (
+        "Freiwillig",
+        "ohne Gegenleistung",
+        "keine Bestellung",
+        "keine Freischaltung",
+        "keine Anrechnung auf einen späteren Kauf",
+        "keine Spendenbescheinigung",
+        "Erst Ihr Klick öffnet",
+        "Daten an den gewählten Anbieter",
+    ):
+        assert part in terms, f"die Grenze verliert „{part}“"
+    assert dialog.browser_note.property("level") == "caption", "optisch zurückgenommen"
     text = "\n".join(label.text() for label in dialog.findChildren(QLabel))
-    assert "keine Bestellung" in text
-    assert "keine Gegenleistung" in text
-    assert "keine zusätzlichen Funktionen" in text
-    assert "Erst nach Ihrem Klick online" in text
+    assert "€" not in text and "EUR" not in text, "keine Beträge — die nennt die Kampagne"
 
     button, url = (
         (dialog.support_button, DONATION_URL)
@@ -1912,6 +1924,352 @@ def test_the_support_dialog_opens_the_chosen_provider_only_after_the_click(
     assert opened == [url]
     dialog.reject()
     assert opened == [url]
+
+
+def test_the_support_dialog_invites_before_it_explains(qt_app: QApplication) -> None:
+    """Oben die Person, dann wofür das Geld ist, dann zwei gleichwertige Wege.
+
+    Robert, 23.09.2026: einladend statt einer Wand aus Rechtstext. Drei knappe
+    Punkte mit Symbol aus dem Satz der Oberfläche, darunter die zwei Anbieter
+    ohne Rangordnung, die Grenze als eine leise Zeile und ein Weg ohne Geld.
+    """
+    from PySide6.QtWidgets import QLabel, QPushButton
+
+    from app.ui import icons
+    from app.ui.dialogs import DonationDialog
+
+    dialog = DonationDialog()
+    dialog.show()
+    qt_app.processEvents()
+    try:
+        assert "Robert" in dialog.personal.text()
+        assert "Bamberg" in dialog.personal.text()
+        assert [point for point, _detail in dialog.purposes] == [
+            "Zwei KI-Werkzeuge",
+            "Laufende Kosten",
+            "Schon selbst bezahlt",
+        ]
+        details = " ".join(detail for _point, detail in dialog.purposes)
+        for named in ("Hosting", "Domain", "Apple", "Signaturzertifikat"):
+            assert named in details
+        for symbol in ("generate", "network", "done"):
+            assert symbol in icons.known(), f"{symbol} fehlt im Symbolsatz"
+        marks = [
+            label
+            for label in dialog.findChildren(QLabel)
+            if label.pixmap() is not None and not label.pixmap().isNull()
+        ]
+        assert len(marks) == 3, "je Punkt ein Symbol"
+        assert all(mark.accessibleName() for mark in marks), "das Symbol trägt sein Wort"
+
+        # Gleichwertig: gleiche Größe, kein Akzent, keiner der beiden empfohlen.
+        paypal, gofundme = dialog.support_button, dialog.gofundme_button
+        assert paypal.sizeHint().height() == gofundme.sizeHint().height()
+        assert abs(paypal.width() - gofundme.width()) <= 1
+        assert not any(button.isDefault() for button in dialog.findChildren(QPushButton)), (
+            "kein Knopf trägt einen Akzent, den niemand bestellt hat"
+        )
+        assert dialog.share_button.text() == "Link zur Website kopieren"
+        assert dialog.feedback_button.text() == "Rückmeldung senden …"
+    finally:
+        dialog.close()
+
+
+def test_helping_without_money_copies_the_site_and_opens_the_existing_feedback(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Weitersagen legt die Adresse ab, Rückmeldung öffnet den vorhandenen Dialog.
+
+    Kein zweiter Weg hinaus: Der Knopf schließt den Unterstützen-Dialog, und das
+    Fenster öffnet danach ``action_feedback`` — denselben Dialog mit demselben
+    einen Sendeknopf wie aus dem Hilfemenü.
+    """
+    from app.branding import WEBSITE_URL
+    from app.ui.dialogs import DonationDialog
+
+    opened: list[object] = []
+    monkeypatch.setattr("app.ui.dialogs.QDesktopServices.openUrl", opened.append)
+    asked: list[str] = []
+    monkeypatch.setattr(window, "action_feedback", lambda kind="idea": asked.append(kind))
+
+    def press_both(dialog: DonationDialog) -> int:
+        previous = QApplication.clipboard().text()
+        try:
+            dialog.share_button.click()
+            assert QApplication.clipboard().text() == WEBSITE_URL
+            assert dialog.share_button.text() == "Link kopiert", "der Klick sagt, dass er wirkte"
+        finally:
+            QApplication.clipboard().setText(previous)
+        dialog.feedback_button.click()
+        return int(dialog.result())
+
+    monkeypatch.setattr(DonationDialog, "exec", press_both)
+
+    window.action_donate()
+
+    assert asked == ["idea"], "der vorhandene Rückmeldedialog geht auf, einmal"
+    assert not opened, "weder Weitersagen noch Rückmeldung öffnen den Browser"
+
+
+def test_the_about_dialog_points_to_the_support_dialog(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Über-Dialog nennt, wer dahintersteht — und daneben den Weg zur Unterstützung."""
+    from app.branding import APP_NAME
+    from app.ui.dialogs import AboutDialog, DonationDialog
+
+    shown: list[str] = []
+    monkeypatch.setattr(AboutDialog, "exec", lambda dialog: dialog.support_button.click() or 0)
+    monkeypatch.setattr(
+        DonationDialog, "exec", lambda dialog: shown.append(dialog.windowTitle()) or 0
+    )
+
+    window.action_about()
+
+    assert shown == [f"{APP_NAME} unterstützen"], "nacheinander, nicht übereinander"
+
+
+def test_the_help_menu_entry_for_support_carries_the_heart(window: MainWindow) -> None:
+    """Sichtbarer im Menü: dasselbe Herz wie auf der Startfläche und ein Satz dazu."""
+    from app.branding import APP_NAME
+
+    entries = [
+        action
+        for menu in window.menuBar().actions()
+        if menu.menu() is not None and menu.text().replace("&", "") == "Hilfe"
+        for action in menu.menu().actions()
+    ]
+    support = next(
+        action
+        for action in entries
+        if action.text().replace("&", "") == f"{APP_NAME} unterstützen …"
+    )
+    assert not support.icon().isNull()
+    assert "freiwillig" in support.statusTip()
+
+
+# --- Einladung zur Unterstützung am Weg der Anwendung (Robert, 23.09.2026) ---
+
+
+@pytest.fixture
+def own_feedback(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Ein eigenes Profil für ``feedback.json`` — die Suite teilt sonst eines."""
+    from app.core import feedback
+
+    folder = tmp_path / "profil"
+    monkeypatch.setattr(feedback, "user_config_dir", lambda: folder)
+    return folder
+
+
+def _export_once(window: MainWindow, monkeypatch: pytest.MonkeyPatch, target: Path) -> None:
+    """Ein Export über den Menüweg: Dateidialog, Arbeiter, Quittung."""
+    from PySide6.QtWidgets import QFileDialog
+
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "STL (*.stl)")),
+    )
+    window.action_export()
+    wait_for_export(window)
+
+
+def test_the_third_export_shows_the_support_line_once(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, own_feedback: Path
+) -> None:
+    """Gezählt wird am echten Export, und die Zeile kommt genau beim dritten.
+
+    Sie nimmt keinen Fokus, sie öffnet nichts von selbst, und nach dem Kreuz
+    kommt sie in dieser Version nicht wieder — auch nicht mit dem vierten.
+    """
+    from app.core import feedback
+
+    window.show()
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    notice = window._support_notice
+    for number in (1, 2, 3):
+        assert not notice.isVisible(), f"vor dem {number}. Export steht nichts da"
+        focused = QApplication.focusWidget()
+        target = tmp_path / f"wuerfel-{number}.stl"
+        _export_once(window, monkeypatch, target)
+        assert target.is_file()
+        assert feedback.read().deliveries == number
+    assert notice.isVisibleTo(window.viewport), "nach dem dritten Export steht die Zeile da"
+    assert QApplication.focusWidget() is focused, "sie nimmt niemandem den Fokus"
+    assert feedback.read().support_invited, "gezeigt heißt gesehen"
+    assert notice.text.text() == str(feedback.SUPPORT_LINE)
+
+    notice.close_button.click()
+    assert not notice.isVisible()
+    _export_once(window, monkeypatch, tmp_path / "wuerfel-4.stl")
+    assert not notice.isVisible(), "in dieser Version nie wieder"
+    assert feedback.read().deliveries == feedback.SUPPORT_AFTER_DELIVERIES
+
+
+def test_declined_and_failed_exports_do_not_count(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, own_feedback: Path
+) -> None:
+    """Abgebrochen am Dateidialog, abgelehnt nach der Prüfung, gescheitert beim Schreiben."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core import feedback
+
+    window.show()
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+
+    # Der Dateidialog wird geschlossen, ohne einen Namen zu wählen.
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: ("", "")))
+    window.action_export()
+    wait_for_export(window)
+    assert feedback.read().deliveries == 0
+
+    # Die Prüfung findet etwas, und der Kunde schreibt nicht.
+    monkeypatch.setattr(
+        main_window_module,
+        "check_before_export",
+        lambda *args, **kwargs: [Finding("fit.collision", "warning", "Überschneidung")],
+    )
+    monkeypatch.setattr(main_window_module, "confirm_export", lambda *args: False)
+    _export_once(window, monkeypatch, tmp_path / "abgelehnt.stl")
+    assert not (tmp_path / "abgelehnt.stl").exists()
+    assert feedback.read().deliveries == 0
+
+    # Das Schreiben scheitert.
+    monkeypatch.setattr(main_window_module, "check_before_export", lambda *a, **k: [])
+    shown: list[object] = []
+    monkeypatch.setattr(main_window_module, "show_error", lambda *args: shown.append(args))
+
+    def refuse(*args: Any, **kwargs: Any) -> Any:
+        raise errors.FileWriteError(str(tmp_path / "gescheitert.stl"), detail="gesperrt")
+
+    monkeypatch.setattr(main_window_module, "write_plan", refuse)
+    _export_once(window, monkeypatch, tmp_path / "gescheitert.stl")
+    assert shown, "der Fehler kam an"
+    assert feedback.read().deliveries == 0
+    assert not window._support_notice.isVisible()
+
+
+def test_a_slicer_start_counts_on_the_way_of_the_application(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, own_feedback: Path
+) -> None:
+    """Slicen im Druckdialog zählt — und die Zeile erscheint erst, wenn er zu ist.
+
+    Zwei Exporte vorher, der Slicer-Start ist der dritte Erfolg. Hinter einem
+    modalen Fenster stünde die Zeile ungesehen; angeboten wird sie danach.
+    """
+    import time
+
+    from app.core import feedback
+    from app.core.slice import gcode
+    from app.ui import print_settings_dialog as dialog_module
+
+    window.show()
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    _export_once(window, monkeypatch, tmp_path / "eins.stl")
+    _export_once(window, monkeypatch, tmp_path / "zwei.stl")
+    assert feedback.read().deliveries == 2
+
+    executable = tmp_path / "prusa-slicer-console.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="prusa")
+    model = tmp_path / "platte.3mf"
+    model.write_bytes(b"")
+    output = tmp_path / "platte.gcode"
+    output.write_text("G1 X1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        dialog_module,
+        "_prepare_plate",
+        lambda _job, plate: dialog_module.PlateRun(
+            plate=plate, model=model, slots=(MaterialSlot(0, ""),)
+        ),
+    )
+    monkeypatch.setattr(
+        dialog_module.handover,
+        "slice_model",
+        lambda *_args, **_kwargs: handover.SliceOutcome(
+            gcode_path=output, metrics=gcode.GcodeMetrics()
+        ),
+    )
+    seen_while_open: list[bool] = []
+
+    class SlicingDialog(dialog_module.PrintSettingsDialog):
+        """Wie ein Kunde, der auf *Slicen* drückt und nach dem Ergebnis schließt."""
+
+        def exec(self) -> int:
+            self.wait_for_slicers()
+            monkeypatch.setattr(self, "_current_setup", lambda: setup)
+            monkeypatch.setattr(self, "_chosen_plates", lambda: [0])
+            monkeypatch.setattr(self, "_plate_slots", list)
+            self._slice()
+            worker = self._worker
+            assert worker is not None and worker.wait(20_000)
+            deadline = time.perf_counter() + 10.0
+            while self._worker is not None and time.perf_counter() < deadline:
+                QApplication.processEvents()
+            seen_while_open.append(window._support_notice.isVisible())
+            return 0
+
+    monkeypatch.setattr(main_window_module, "PrintSettingsDialog", SlicingDialog)
+
+    window.action_print_settings()
+
+    assert feedback.read().deliveries == 3, "der Slicer-Start zählt am Weg der Anwendung"
+    assert seen_while_open == [False], "nicht hinter dem modalen Dialog"
+    assert window._support_notice.isVisibleTo(window.viewport), "danach steht sie da"
+
+
+def test_the_support_line_stays_clear_of_banner_and_cards(
+    window: MainWindow, own_feedback: Path
+) -> None:
+    """Oben mittig zwischen den Karten, unter dem Vorschauband und der Rückfragekarte."""
+    window.resize(1400, 900)
+    window.show()
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(30_000)
+    for _round in range(3):
+        QApplication.processEvents()
+    viewport = window.viewport
+    notice = window._support_notice
+    notice.offer()
+    QApplication.processEvents()
+    margins = viewport._zone_margins
+    assert margins[0] > 0 and margins[1] > 0, "beide Karten stehen"
+    left, right = margins[0], viewport.width() - margins[1]
+    assert notice.x() >= left and notice.x() + notice.width() <= right, (
+        "die Zeile liegt zwischen linker und rechter Karte"
+    )
+    banner = viewport.banner
+    banner.show()
+    banner.adjustSize()
+    banner.move((viewport.width() - banner.width()) // 2, 12)
+    QApplication.processEvents()
+    assert notice.y() >= banner.geometry().bottom(), "sie weicht dem Vorschauband aus"
+    window._survey_notice.ask()
+    QApplication.processEvents()
+    survey = window._survey_notice.geometry()
+    assert not survey.intersects(notice.geometry()), "zwei Einladungen liegen nie übereinander"
+    banner.hide()
+    window._survey_notice.hide()
+    QApplication.processEvents()
+    assert notice.y() == 12, "und rückt nach, wenn oben wieder Platz ist"
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_both_invitations_follow_the_theme(window: MainWindow, theme: str) -> None:
+    """Die Rückfragekarte blieb im hellen Thema dunkel — beide folgen jetzt dem Wechsel."""
+    from app.ui.theme import THEMES
+
+    window.action_theme(theme)
+    try:
+        for notice in (window._survey_notice, window._support_notice):
+            assert THEMES[theme]["window"] in notice.styleSheet(), (
+                f"{notice.objectName()} trägt nicht die Fläche des Themas {theme}"
+            )
+    finally:
+        window.action_theme("dark")
 
 
 @pytest.mark.parametrize("provider", ["paypal", "gofundme"])

@@ -176,7 +176,10 @@ lokal)
 Demo-Version fragt nach 15 aktiven Minuten genau einmal, auch über Neustarts
 hinweg. Antwort, Absage und bereits gezeigte Einladung gelten nur für diese
 Version; der frühere globale Stand wird nicht übernommen. Bekannte Versionen
-behalten ihren Stand auch beim Zurückwechseln.
+behalten ihren Stand auch beim Zurückwechseln. Im selben Versionsstand stehen
+`deliveries` (erfolgreiche Exporte und Slicer-Starts, gezählt bis drei) und
+`support_invited`: Die Einladung zur Unterstützung erscheint je Version einmal
+nach dem dritten Erfolg, in Demo und Kaufversion gleich (`support_due`).
 
 **Technik:** `bootstrap.py` füllt das Register · `lazy.py` verhindert
 Import-Deadlocks zwischen Kernpaketen (siehe unten) · `deferred.py` hält

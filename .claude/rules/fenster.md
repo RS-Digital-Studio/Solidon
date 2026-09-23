@@ -30,6 +30,32 @@ Fortschritt überschreibt sie nicht. Kontextwechsel und Fensterabbau
 beenden ihre Anzeige samt Zeitgeber. Es entsteht weder eine zusätzliche
 Bedienzone noch ein zweites Live-Ereignis für Bildschirmleser.
 
+**Eine Einladung steht über der Ansicht, nie unter einer Karte** (Entscheidung
+Robert, 23.09.2026, für die Zeile zur Unterstützung). Zwei gibt es: die
+Rückfrage nach 15 aktiven Minuten (`SurveyNotice`) und die Zeile zur
+Unterstützung nach dem dritten erfolgreichen Export oder Slicer-Start einer
+Version (`SupportNotice`). Beide sind `survey.ViewNotice`, nicht modal, ohne
+Fokus beim Erscheinen, und sie gehen erst auf einen Klick. Vier Zusagen:
+
+* **Der Platz wird gesucht, nicht angenommen.** Die schwebenden Karten liegen
+  über der Ansicht; eine Einladung darunter sieht niemand (am 1024er Fenster
+  blieben zwischen Objektbaum und Prüfbericht 101 Punkte). `spot` nimmt die
+  oberste freie Stelle zwischen allem, was über `keep_clear_of` gemeldet ist
+  — Zonen, Ansichtsleiste, Vorschauband, Ziehwert-Leiste —, zuerst oben
+  zwischen den Karten, sonst unter der kürzeren. **Wer etwas Neues über die
+  Ansicht legt, meldet es dort an.**
+* **Ausgewichen wird in einer Richtung.** Die Unterstützung weicht der
+  Rückfrage aus, nicht umgekehrt; zwei Karten, die einander ausweichen,
+  schieben sich über ihre Verschiebungsereignisse im Kreis.
+* **Angeboten wird nur, wo sie jemand sieht.** Nicht hinter einem modalen
+  Dialog (der Druckdialog zählt mit dem Ergebnis, angeboten wird nach
+  `exec`), nicht über dem Startbildschirm. Dann kommt sie mit dem nächsten
+  Ergebnis; „gesehen" merkt erst das Zeigen.
+* **Gezählt wird das Ergebnis, nicht der Versuch.** `_announce_written` und
+  `PrintSettingsDialog.handedOver` kommen nur nach geschriebener Datei bzw.
+  gelungenem Slicen oder Öffnen an; Abbruch, Fehler und die Rückfrage vor
+  Fehlern erreichen sie nie.
+
 Höchstens drei sichtbare Zonen: links Objektbaum, Parameter und Verlauf als
 einklappbare Abschnitte; Mitte der Viewport; rechts **entweder** Chat **oder**
 Prüfbericht, umschaltbar und ganz ausblendbar. Die Umschaltung springt zum

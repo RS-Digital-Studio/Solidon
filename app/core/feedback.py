@@ -26,6 +26,16 @@ Zeile, an der die Unterscheidung zwischen Demo und Verkaufsversion hängt —
 ``DEMO_UNTIL`` steht auf einem Datum oder auf ``None``. Der Bogen fragt nach
 dem, was bis zum Release fehlt; mit dem Stichtag verschwindet er im selben
 Zug, ohne dass jemand ein zweites Datum nachziehen muss.
+
+**Und dieselbe Datei trägt die Einladung zur Unterstützung** (Entscheidung
+Robert, 23.09.2026). Nach dem dritten erfolgreichen Export oder Slicer-Start
+einer Version steht einmal eine kleine Zeile über der Ansicht; danach nie
+wieder in dieser Version. Sie hängt **nicht** an der Demo — in der Kaufversion
+und ohne Netz gilt sie genauso, denn ihr Klick öffnet nur den lokalen Dialog,
+und erst dessen Knopf den Browser. Gezählt wird bis drei und nicht weiter:
+keine Spenden, keine Klicks, keine Summen. Sie steht hier und nicht in einem
+eigenen Modul, weil „einmal je Version, lokal, löschbar" dieselbe Auskunft ist
+wie beim Bogen — zwei Dateien mit zwei Versionsständen wären ein Zwilling.
 """
 
 from __future__ import annotations
@@ -78,6 +88,20 @@ OPENING: Final = _(
     "was unten steht."
 )
 
+#: Nach wie vielen erfolgreichen Exporten oder Slicer-Starts einer Version die
+#: Einladung zur Unterstützung erscheint. Drei und nicht eins: Wer einmal
+#: exportiert, probiert noch; wer dreimal etwas fertig hat, arbeitet damit.
+SUPPORT_AFTER_DELIVERIES: Final = 3
+
+#: Die Zeile selbst: zwei kurze Sätze über die Person, die Bitte trägt der
+#: Knopf daneben. Ohne Betrag und ohne Druck, und kurz genug für eine Zeile
+#: zwischen den Karten eines 1600 Punkte breiten Fensters — der Dialog dahinter
+#: erklärt den Rest.
+SUPPORT_LINE: Final = _("Schön, dass Solidon Ihnen hilft. Ich entwickle es allein.")
+SUPPORT_ACCEPT: Final = _("Unterstützen …")
+SUPPORT_CLOSE: Final = _("Hinweis schließen")
+SUPPORT_CLOSE_HINT: Final = _("Schließen. In dieser Version erscheint der Hinweis nicht wieder.")
+
 #: Die Frage nach dem Gesamteindruck und ihre fünf Antworten.
 #:
 #: Als Wort und als Zahl, nicht als Sternenreihe und erst recht nicht als
@@ -128,11 +152,12 @@ QUESTIONS: Final[tuple[Question, ...]] = (
 
 @dataclass(slots=True)
 class Progress:
-    """Was die Anwendung sich je Version über den Bogen merkt — und sonst nichts.
+    """Was die Anwendung sich je Version über Bogen und Einladung merkt — und sonst nichts.
 
-    Vier Werte, alle über den Kunden und keiner über sein Modell: wie lange
+    Sechs Werte, alle über den Kunden und keiner über sein Modell: wie lange
     gearbeitet wurde, wie oft gefragt wurde, ob geantwortet und ob abgelehnt
-    wurde.
+    wurde; dazu, wie viele Ergebnisse bis zur Einladung zur Unterstützung
+    fertig wurden (höchstens drei) und ob sie zu sehen war.
     """
 
     used_seconds: float = 0.0
@@ -149,6 +174,17 @@ class Progress:
     declined: bool = False
     """Ob *Nein danke* geklickt wurde. Getrennt von :attr:`answered`, weil es
     zwei verschiedene Auskünfte sind und nur eine davon eine Rückmeldung ist."""
+
+    deliveries: int = 0
+    """Erfolgreiche Exporte und Slicer-Starts dieser Version — gezählt bis
+    :data:`SUPPORT_AFTER_DELIVERIES` und nicht weiter. Abgebrochenes und
+    Gescheitertes zählt nicht; das entscheidet die Oberfläche, die nur nach
+    einem Ergebnis :func:`record_delivery` ruft."""
+
+    support_invited: bool = False
+    """Ob die Einladung zur Unterstützung in dieser Version zu sehen war.
+    Geschlossen, angeklickt oder einfach dagestanden — alles dasselbe: Sie
+    kommt nicht wieder."""
 
     @property
     def settled(self) -> bool:
@@ -192,6 +228,8 @@ def read() -> Progress:
         invitations=max(0, int(data.get("invitations", fresh.invitations) or 0)),
         answered=bool(data.get("answered", fresh.answered)),
         declined=bool(data.get("declined", fresh.declined)),
+        deliveries=max(0, int(data.get("deliveries", fresh.deliveries) or 0)),
+        support_invited=bool(data.get("support_invited", fresh.support_invited)),
     )
 
 
@@ -274,6 +312,39 @@ def mark_answered() -> Progress:
     in derselben Version gefragt."""
     progress = read()
     progress.answered = True
+    write(progress)
+    return progress
+
+
+def record_delivery() -> Progress:
+    """Ein Export oder Slicer-Start ist gelungen — gezählt bis zur Einladung.
+
+    Danach wird nichts mehr geschrieben: Die Zahl hat nur eine Aufgabe, und
+    wenn die erfüllt ist, gibt es keinen Grund, weiter mitzuschreiben, was
+    jemand mit dem Programm tut.
+    """
+    progress = read()
+    if not progress.support_invited and progress.deliveries < SUPPORT_AFTER_DELIVERIES:
+        progress.deliveries += 1
+        write(progress)
+    return progress
+
+
+def support_due(progress: Progress | None = None) -> bool:
+    """Ob die Einladung zur Unterstützung jetzt gezeigt werden soll.
+
+    Zwei Bedingungen: drei Ergebnisse sind fertig, und sie war in dieser
+    Version noch nicht zu sehen. Demo oder Kaufversion spielt keine Rolle,
+    das Netz auch nicht — der Klick öffnet einen lokalen Dialog.
+    """
+    stand = read() if progress is None else progress
+    return not stand.support_invited and stand.deliveries >= SUPPORT_AFTER_DELIVERIES
+
+
+def mark_support_invited() -> Progress:
+    """Die Zeile steht da; in dieser Version kommt sie nicht wieder."""
+    progress = read()
+    progress.support_invited = True
     write(progress)
     return progress
 

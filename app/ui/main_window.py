@@ -74,7 +74,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
-from app.core import activation, bootstrap, discover, examples, manual, tools, updates
+from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
 from app.core.agent.remote import Deferred as RemoteDeferred
@@ -333,7 +333,7 @@ from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_paths, accepted_url
 from app.ui.style import NORMAL, ROOMY, TIGHT, divider, make_primary, menu_heading, set_level
 from app.ui.support_dialog import SupportDialog, window_shot
-from app.ui.survey import SurveyNotice, UsageClock
+from app.ui.survey import SupportNotice, SurveyNotice, UsageClock
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
 from app.ui.tour import TourPanel
@@ -2746,6 +2746,14 @@ class MainWindow(QMainWindow):
         an und verschwindet nicht von selbst — sie bleibt, bis jemand einen
         ihrer beiden Knöpfe drückt."""
         self._survey_notice.accepted.connect(self._open_survey)
+        self._support_notice = SupportNotice(self.viewport)
+        """Die Zeile zur freiwilligen Unterstützung — einmal je Version nach dem
+        dritten erfolgreichen Export oder Slicer-Start (``feedback.support_due``).
+        Sie weicht der Rückfragekarte aus und nicht umgekehrt: Zwei Karten, die
+        einander ausweichen, schieben sich über ihre Verschiebungssignale im
+        Kreis."""
+        self._support_notice.keep_clear_of(self._survey_notice)
+        self._support_notice.accepted.connect(self.action_donate)
         self._survey_dialog: SupportDialog | None = None
         """Der offene Bogen — festgehalten, weil ein nicht modales Fenster ohne
         Referenz eingesammelt wird, sobald die Methode zurückkehrt."""
@@ -2923,6 +2931,13 @@ class MainWindow(QMainWindow):
         self.right.setObjectName("rightTabs")
         self.overlay = OverlayHost(self.middle_stack, self)
         self.overlay.set_zones(left, self.right_column, bottom)
+        # Die zwei Einladungen liegen in der Ansicht, die schwebenden Karten
+        # darüber: Was unter einer Karte steht, sieht niemand. Beide kennen
+        # deshalb die drei Zonen und die Ansichtsleiste und suchen sich den
+        # freien Platz dazwischen (``ViewNotice.spot``).
+        for notice in (self._survey_notice, self._support_notice):
+            for zone in (left, self.right_column, bottom, self.viewport.view_bar):
+                notice.keep_clear_of(zone)
         self._action_notice = _ActionNotice(self.overlay)
         self._announcement_document = self.session.project.document
         # Parameterzeilen entstehen nach dem Öffnen eines Projekts neu. Ihre
@@ -4123,7 +4138,8 @@ class MainWindow(QMainWindow):
             tr("{app} unterstützen …").format(app=APP_NAME),
             None,
             self.action_donate,
-            tr("Die Weiterentwicklung, Tests und die nächste Version freiwillig mitfinanzieren."),
+            tr("Wofür das Geld ist und wie Sie freiwillig helfen können."),
+            symbol="support",
         )
         self._add_action(
             help_menu,
@@ -6402,10 +6418,30 @@ class MainWindow(QMainWindow):
         self.announce(tr("Anleitung für die 3D-Maus kopiert."))
 
     def action_about(self) -> None:
-        AboutDialog(self).exec()
+        dialog = AboutDialog(self)
+        dialog.exec()
+        wanted = dialog.support_wanted
+        dialog.deleteLater()
+        # Nacheinander und nicht übereinander: zwei modale Fenster gestapelt
+        # heißen zweimal Schließen, bis man wieder am Modell ist.
+        if wanted:
+            self.action_donate()
 
     def action_donate(self) -> None:
-        DonationDialog(self).exec()
+        """Der Unterstützen-Dialog — lokal; erst dessen Knopf öffnet den Browser.
+
+        Wählt jemand dort *Rückmeldung senden …*, geht nach dem Schließen der
+        vorhandene Rückmeldedialog auf: derselbe Weg und derselbe eine
+        Sendeknopf wie aus dem Hilfemenü (``support.send`` hat genau einen
+        Aufrufer), und sein Bildschirmfoto zeigt die Arbeit statt dieses
+        Dialogs.
+        """
+        dialog = DonationDialog(self)
+        dialog.exec()
+        wanted = dialog.feedback_wanted
+        dialog.deleteLater()
+        if wanted:
+            self.action_feedback()
 
     def action_inventory(self) -> None:
         """Öffnet das lokale Lager und behält das Projekt an seinem Platz."""
@@ -6734,6 +6770,9 @@ class MainWindow(QMainWindow):
             lambda outcomes: self._gcode_returned(outcomes, dialog.slice_comparison)
         )
         dialog.reported.connect(self._slicer_findings)
+        # Gezählt wird mit dem Ergebnis, angeboten erst nach dem Dialog: Die
+        # Zeile über der Ansicht stünde sonst hinter einem modalen Fenster.
+        dialog.handedOver.connect(self._count_delivery)
         # Regel 17: „Kein Slicer eingerichtet" sagte, was fehlt, und bot nichts
         # an — an der Stelle, an der jemand gerade slicen wollte. Von hier
         # führt der Weg in die Liste, und danach sieht der Dialog neu nach.
@@ -6762,6 +6801,7 @@ class MainWindow(QMainWindow):
         # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
         # bei der Orca-Familie einige tausend Einträge je Aufruf.
         dialog.deleteLater()
+        self._offer_support()
 
     def _edit_filament_settings(self, slot: object) -> None:
         """Die Druckwerte einer Spule direkt am Filamentwähler (§20, §29).
@@ -7404,6 +7444,33 @@ class MainWindow(QMainWindow):
         self.reveal_export.setToolTip(str(self._export_folder))
         self.reveal_export.setStatusTip(str(self._export_folder))
         self.reveal_export.setVisible(True)
+        # Hier und nicht im Arbeiter: Nur was wirklich geschrieben wurde,
+        # zählt — ein abgebrochener oder gescheiterter Export kommt an dieser
+        # Stelle nie an.
+        self._count_delivery()
+        self._offer_support()
+
+    def _count_delivery(self) -> None:
+        """Ein Export oder Slicer-Start ist gelungen (Entscheidung Robert, 23.09.2026).
+
+        Gezählt wird bis zur Einladung zur Unterstützung und nicht weiter, lokal
+        in ``feedback.json`` (:func:`feedback.record_delivery`).
+        """
+        feedback.record_delivery()
+
+    def _offer_support(self) -> None:
+        """Die Zeile zur Unterstützung zeigen — wenn sie fällig ist und jemand sie sieht.
+
+        Nicht über dem Startbildschirm oder dem Lager: Dort ist die Ansicht
+        verdeckt, und eine Einladung, die niemand sieht, soll diese Version
+        nicht erledigen. Sie kommt dann mit dem nächsten Ergebnis.
+        """
+        notice = self._support_notice
+        if self._close_requested or notice.isVisibleTo(self.viewport):
+            return
+        if not self.viewport.isVisible() or not feedback.support_due():
+            return
+        notice.offer()
 
     def _reveal_export_folder(self) -> None:
         """Den Ordner der zuletzt exportierten Datei im Dateiverwalter öffnen.
@@ -15165,6 +15232,11 @@ class MainWindow(QMainWindow):
         # dieselben Farben wie sie.
         self.veil.set_theme(theme)
         self._action_notice.set_theme(theme)
+        # Die zwei Einladungen über der Ansicht folgen demselben Wechsel. Die
+        # Rückfragekarte blieb bis zum 23.09.2026 im dunklen Thema stehen —
+        # ihr Konstruktor setzte „dark", und niemand reichte das Thema weiter.
+        self._survey_notice.set_theme(theme)
+        self._support_notice.set_theme(theme)
 
     def action_navigation(self, scheme: str) -> None:
         self.viewport.set_navigation(scheme)  # type: ignore[arg-type]

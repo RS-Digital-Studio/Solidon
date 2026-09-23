@@ -1696,6 +1696,95 @@ def test_closing_ignores_a_worker_error_already_waiting_in_qt(
     assert shown == [], "ein vor dem Schließen eingereihter Fehler öffnete danach noch einen Dialog"
 
 
+@pytest.mark.parametrize("outcome", ["sliced", "failed", "cancelled"])
+def test_only_a_finished_slicer_start_counts_as_handed_over(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, outcome: str
+) -> None:
+    """``handedOver`` kommt mit dem Ergebnis — und nur dann (Robert, 23.09.2026).
+
+    Das Fenster zählt daran die Ergebnisse bis zur Einladung zur Unterstützung.
+    Ein Slicer, der scheitert, und ein Lauf, den der Kunde abbricht, sind kein
+    Erfolg und dürfen die Einladung nicht näher bringen.
+    """
+    import types as types_module
+
+    from app.core.errors import ExternalToolError
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "prusa-slicer-console.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="prusa")
+    scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+    model = tmp_path / "platte.3mf"
+    model.write_bytes(b"")
+    output = tmp_path / "platte.gcode"
+    output.write_text("G1 X1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        module,
+        "_prepare_plate",
+        lambda _job, plate: module.PlateRun(plate=plate, model=model, slots=(MaterialSlot(0, ""),)),
+    )
+
+    def slicing(*_args: object, **_kwargs: object) -> handover.SliceOutcome:
+        if outcome == "failed":
+            raise ExternalToolError(tool="slicer", detail="Der Slicer hat abgebrochen.")
+        return handover.SliceOutcome(gcode_path=output, metrics=gcode.GcodeMetrics())
+
+    monkeypatch.setattr(module.handover, "slice_model", slicing)
+    monkeypatch.setattr(module, "show_error", lambda *args, **kwargs: None)
+    handed: list[bool] = []
+    dialog.handedOver.connect(lambda: handed.append(True))
+
+    dialog._slice()
+    worker = dialog._worker
+    assert worker is not None and worker.wait(5_000)
+    if outcome == "cancelled":
+        dialog._cancel_slice()
+    QApplication.processEvents()
+
+    assert handed == ([True] if outcome == "sliced" else []), outcome
+
+
+def test_opening_in_the_slicer_counts_as_handed_over(
+    monkeypatch: pytest.MonkeyPatch, dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """*Im Slicer öffnen* ist ebenso ein Slicer-Start wie *Slicen*."""
+    import types as types_module
+
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    dialog._slicer_path = executable
+    written = tmp_path / "platte.3mf"
+    written.write_bytes(b"x")
+    scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+    monkeypatch.setattr(
+        module,
+        "_prepare_plate",
+        lambda _job, plate: module.PlateRun(
+            plate=plate, model=written, slots=(MaterialSlot(0, ""),), keep_arrangement=False
+        ),
+    )
+    monkeypatch.setattr(module.handover, "open_in_slicer", lambda model, setup: None)
+    handed: list[bool] = []
+    dialog.handedOver.connect(lambda: handed.append(True))
+
+    dialog._open_in_slicer()
+    assert dialog._worker is not None
+    assert dialog._worker.wait(5_000)
+    QApplication.processEvents()
+
+    assert handed == [True]
+
+
 @pytest.mark.parametrize("changed", [False, True])
 def test_cancelling_rejects_a_slice_result_already_waiting_in_qt(
     dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, changed: bool

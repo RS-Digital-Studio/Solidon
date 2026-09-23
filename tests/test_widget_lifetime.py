@@ -496,7 +496,7 @@ def _watchers() -> list[tuple[str, Callable[[], object]]]:
     from app.ui.op_dialog import ValueField
     from app.ui.overlay import CardColumn, OverlayHost
     from app.ui.sketch_editor import SketchPanel
-    from app.ui.survey import SurveyNotice
+    from app.ui.survey import SupportNotice, SurveyNotice
     from app.ui.viewport import Viewport
 
     return [
@@ -505,6 +505,7 @@ def _watchers() -> list[tuple[str, Callable[[], object]]]:
         ("ValueField", lambda: ValueField(ParamSpec(name="w", kind="number", title="Breite"))),
         ("SketchPanel", SketchPanel),
         ("SurveyNotice", SurveyNotice),
+        ("SupportNotice", SupportNotice),
         ("Viewport", Viewport),
         ("OverlayHost", lambda: OverlayHost(QWidget())),
         ("CardColumn", CardColumn),

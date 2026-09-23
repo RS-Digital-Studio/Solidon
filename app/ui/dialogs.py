@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QLocale, Qt, QTimer, QUrl, QUrlQuery, Signal
+from PySide6.QtCore import QLocale, QSize, Qt, QTimer, QUrl, QUrlQuery, Signal
 from PySide6.QtGui import QDesktopServices, QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QTextBrowser,
     QToolButton,
     QVBoxLayout,
@@ -78,6 +79,7 @@ from app.ui.ai_disclosure import (
     ensure_ai_disclosure,
     target_for_backend,
 )
+from app.ui.icons import icon
 from app.ui.labels import (
     UNEXPECTED_CRASH,
     NumberSpin,
@@ -91,7 +93,18 @@ from app.ui.labels import (
 )
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.settings import UiSettings, load_settings
-from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, no_primary, set_level, set_role
+from app.ui.style import (
+    NORMAL,
+    ROOMY,
+    TIGHT,
+    WIDE,
+    make_large_target,
+    make_primary,
+    no_primary,
+    rule,
+    set_level,
+    set_role,
+)
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort. Der Name ist englisch wie jeder andere in
@@ -3062,111 +3075,207 @@ def show_details(error: AppError, parent: QWidget | None = None) -> None:
     box.exec()
 
 
+#: Wie breit der Unterstützen-Dialog mindestens ist. Breit genug, dass die zwei
+#: Anbieterknöpfe in jeder der sechs Sprachen nebeneinander stehen, schmal
+#: genug für ein Fenster von 1024 Punkten.
+DONATION_WIDTH = 600
+
+
 class DonationDialog(QDialog):
-    """Der freiwillige Förderweg — lokal erklärt, erst danach geht es hinaus."""
+    """Der freiwillige Förderweg — lokal erklärt, erst danach geht es hinaus.
+
+    **Einladend statt einer Wand aus Rechtstext** (Entscheidung Robert,
+    23.09.2026). Oben steht ein Satz von ihm als Person, darunter in drei
+    knappen Zeilen mit Symbol, wofür das Geld ist und was schon bezahlt ist,
+    dann die zwei gleichwertigen Knöpfe und darunter **eine** zurückgenommene
+    Zeile mit der Grenze. Ganz unten ein Weg ohne Geld: Weitersagen und die
+    vorhandene Rückmeldung.
+
+    **Die Grenze bleibt vollständig**, nur leiser gesetzt: freiwillig, keine
+    Bestellung, keine Freischaltung, keine Anrechnung auf einen Kauf, keine
+    Spendenbescheinigung, erst der Klick öffnet den Browser des Anbieters
+    (`konzepte/konzept-foerdermodell.md` §2 und §3). Keine Beträge — die
+    ändern sich, die Kampagne nennt sie.
+
+    **Zwei Knöpfe, kein Hauptknopf.** PayPal und GoFundMe sind gleichwertig,
+    und ein Akzent auf einem von beiden wäre eine Empfehlung, die niemand
+    ausgesprochen hat. Die Beschriftungen nennen den Browser, denn genau das
+    passiert — und die Datenschutzerklärung nennt sie wörtlich.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         title = tr("{app} unterstützen").format(app=APP_NAME)
         self.setWindowTitle(title)
-        self.setMinimumWidth(560)
+        self.setMinimumWidth(DONATION_WIDTH)
+        self.feedback_wanted = False
+        """Ob *Rückmeldung senden …* gewählt wurde. Das Fenster öffnet den
+        Rückmeldedialog **nach** diesem, damit dessen Bildschirmfoto die Arbeit
+        zeigt und nicht diesen Dialog."""
 
         heading = QLabel(title, self)
         set_level(heading, "title")
 
-        intro = QLabel(
+        self.personal = QLabel(
             tr(
-                "Wenn Ihnen {app} hilft, können Sie die Weiterentwicklung, Tests und "
-                "die nächste Version mit einer freiwilligen Zahlung unterstützen."
+                "Ich bin Robert aus dem Raum Bamberg und entwickle {app} allein, vom "
+                "Programm bis zum Support. Wenn es Ihnen Arbeit abnimmt, können Sie hier "
+                "etwas zurückgeben."
             ).format(app=APP_NAME),
             self,
         )
-        intro.setWordWrap(True)
-        set_level(intro, "body")
+        self.personal.setWordWrap(True)
+        set_level(self.personal, "body")
 
-        terms = QLabel(
-            tr(
-                "Die Zahlung ist freiwillig. Sie ist keine Bestellung, begründet keine "
-                "Gegenleistung und wird nicht auf einen späteren Kauf angerechnet. Eine "
-                "Spendenbescheinigung können wir nicht ausstellen."
+        purposes_heading = QLabel(tr("Wofür das Geld ist"), self)
+        set_level(purposes_heading, "section")
+
+        purposes = QFrame(self)
+        purposes.setObjectName("donationPurposes")
+        purposes.setAccessibleName(tr("Wofür das Geld ist"))
+        purposes_layout = QVBoxLayout(purposes)
+        purposes_layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        purposes_layout.setSpacing(ROOMY)
+        # Die Symbole kommen aus dem Satz der Oberfläche und stehen immer
+        # neben ihren Worten (Regel 18): Funken für die KI-Werkzeuge, die
+        # Kugel für das Netz, der Haken für das, was erledigt ist.
+        self.purposes: list[tuple[str, str]] = []
+        for symbol, point, detail in (
+            (
+                "generate",
+                tr("Zwei KI-Werkzeuge"),
+                tr("Mit ihnen entwickle und prüfe ich jede Version."),
             ),
-            self,
-        )
-        terms.setWordWrap(True)
+            (
+                "network",
+                tr("Laufende Kosten"),
+                tr("Gewerbe, Hosting und Domain für Website, Downloads und Updates."),
+            ),
+            (
+                "done",
+                tr("Schon selbst bezahlt"),
+                tr("Das Apple-Entwicklerprogramm und das Signaturzertifikat für Windows."),
+            ),
+        ):
+            purposes_layout.addLayout(self._purpose_row(purposes, symbol, point, detail))
+            self.purposes.append((point, detail))
 
         self.browser_note = QLabel(
             tr(
-                "Wählen Sie PayPal oder GoFundMe. Erst Ihr Klick öffnet die Zahlungsseite "
-                "von PayPal oder die Kampagne auf GoFundMe in Ihrem Standardbrowser. "
-                "Dabei werden Daten an den gewählten Anbieter übertragen."
+                "Freiwillig und ohne Gegenleistung: keine Bestellung, keine Freischaltung, "
+                "keine Anrechnung auf einen späteren Kauf, keine Spendenbescheinigung. Erst "
+                "Ihr Klick öffnet PayPal oder GoFundMe in Ihrem Standardbrowser; dabei gehen "
+                "Daten an den gewählten Anbieter."
             ),
             self,
         )
+        self.browser_note.setObjectName("donationTerms")
         self.browser_note.setWordWrap(True)
+        set_level(self.browser_note, "caption")
 
-        facts = QFrame(self)
-        facts.setObjectName("donationFacts")
-        facts.setAccessibleName(tr("Hinweise zur freiwilligen Unterstützung"))
-        facts_layout = QVBoxLayout(facts)
-        facts_layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
-        facts_layout.setSpacing(TIGHT)
+        self.support_button = QPushButton(tr("PayPal im Browser öffnen"), self)
+        self.gofundme_button = QPushButton(tr("GoFundMe im Browser öffnen"), self)
+        providers = QHBoxLayout()
+        providers.setSpacing(NORMAL)
+        payment_hint = self.browser_note.text()
+        for button in (self.support_button, self.gofundme_button):
+            button.setAutoDefault(False)
+            make_large_target(button)
+            button.setToolTip(payment_hint)
+            button.setStatusTip(payment_hint)
+            button.setAccessibleDescription(payment_hint)
+            # Gleich breit, gleich hoch: Keiner der beiden Wege ist der
+            # empfohlene, und das Auge liest Größe als Rang.
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            providers.addWidget(button, 1)
+        self.support_button.clicked.connect(self._open_donation)
+        self.gofundme_button.clicked.connect(self._open_gofundme)
 
-        fact_rows = (
-            (tr("Freiwillig"), terms),
-            (
-                tr("Keine zusätzlichen Funktionen"),
-                QLabel(
-                    tr(
-                        "Die Unterstützung schaltet keine zusätzlichen Funktionen frei. "
-                        "Sie hilft dabei, {app} weiterzuentwickeln."
-                    ).format(app=APP_NAME),
-                    facts,
-                ),
-            ),
-            (tr("Erst nach Ihrem Klick online"), self.browser_note),
+        without_heading = QLabel(tr("Ohne Geld helfen"), self)
+        set_level(without_heading, "section")
+        without = QLabel(
+            tr(
+                "Erzählen Sie anderen von {app}, oder schreiben Sie mir, was besser werden soll."
+            ).format(app=APP_NAME),
+            self,
         )
-        for index, (fact_title, fact_text) in enumerate(fact_rows):
-            fact_heading = QLabel(fact_title, facts)
-            set_level(fact_heading, "section")
-            fact_text.setParent(facts)
-            fact_text.setWordWrap(True)
-            facts_layout.addWidget(fact_heading)
-            facts_layout.addWidget(fact_text)
-            if index < len(fact_rows) - 1:
-                facts_layout.addSpacing(NORMAL)
+        without.setWordWrap(True)
+        self.share_button = QPushButton(tr("Link zur Website kopieren"), self)
+        self.share_button.setToolTip(WEBSITE_URL)
+        self.share_button.setStatusTip(WEBSITE_URL)
+        self.share_button.setAccessibleDescription(WEBSITE_URL)
+        self.share_button.clicked.connect(self._copy_website)
+        self.feedback_button = QPushButton(tr("Rückmeldung senden …"), self)
+        self.feedback_button.setToolTip(
+            tr("Öffnet die Rückmeldung. Gesendet wird erst nach Ihrer Vorschau.")
+        )
+        self.feedback_button.setStatusTip(self.feedback_button.toolTip())
+        self.feedback_button.setAccessibleDescription(self.feedback_button.toolTip())
+        self.feedback_button.clicked.connect(self._want_feedback)
+        helping = QHBoxLayout()
+        helping.setSpacing(NORMAL)
+        for button in (self.share_button, self.feedback_button):
+            button.setAutoDefault(False)
+            helping.addWidget(button)
+        helping.addStretch(1)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         self.close_button = buttons.button(QDialogButtonBox.StandardButton.Close)
         self.close_button.setText(tr("Schließen"))
         self.close_button.setAutoDefault(False)
-        self.support_button = buttons.addButton(
-            tr("PayPal im Browser öffnen"), QDialogButtonBox.ButtonRole.ActionRole
-        )
-        self.gofundme_button = buttons.addButton(
-            tr("GoFundMe im Browser öffnen"), QDialogButtonBox.ButtonRole.ActionRole
-        )
-        payment_hint = self.browser_note.text()
-        for button in (self.support_button, self.gofundme_button):
-            button.setAutoDefault(False)
-            button.setToolTip(payment_hint)
-            button.setStatusTip(payment_hint)
-            button.setAccessibleDescription(payment_hint)
-        self.support_button.clicked.connect(self._open_donation)
-        self.gofundme_button.clicked.connect(self._open_gofundme)
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
-        layout.setSpacing(WIDE)
+        layout.setSpacing(NORMAL)
         layout.addWidget(heading)
-        layout.addWidget(intro)
-        layout.addWidget(facts)
+        layout.addWidget(self.personal)
+        layout.addSpacing(NORMAL)
+        layout.addWidget(purposes_heading)
+        layout.addWidget(purposes)
+        layout.addSpacing(NORMAL)
+        layout.addLayout(providers)
+        layout.addWidget(self.browser_note)
+        layout.addSpacing(ROOMY)
+        layout.addWidget(rule(self))
+        layout.addWidget(without_heading)
+        layout.addWidget(without)
+        layout.addLayout(helping)
+        layout.addSpacing(NORMAL)
         layout.addWidget(buttons)
+        no_primary(self)
         # Qt berechnet den ersten Höhenvorschlag vor der Mindestbreite und
         # verteilt den vermeintlich nötigen Platz danach als große Leerflächen.
         # Die echte Breite entscheidet, wie viele Zeilen die Texte brauchen.
         layout.activate()
         self.resize(self.minimumWidth(), layout.heightForWidth(self.minimumWidth()))
+
+    @staticmethod
+    def _purpose_row(parent: QWidget, symbol: str, point: str, detail: str) -> QHBoxLayout:
+        """Eine Zeile „wofür": Symbol, halbfettes Stichwort, ein Satz darunter."""
+        mark = QLabel(parent)
+        mark.setFixedSize(28, 28)
+        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mark.setPixmap(icon(symbol, mark).pixmap(QSize(24, 24)))
+        # Das Symbol ist Schmuck neben dem Wort; ein Vorleser bekommt das Wort.
+        mark.setAccessibleName(point)
+        headline = QLabel(point, parent)
+        headline.setObjectName("donationPoint")
+        headline.setWordWrap(True)
+        explanation = QLabel(detail, parent)
+        explanation.setWordWrap(True)
+        set_level(explanation, "caption")
+        words = QVBoxLayout()
+        words.setContentsMargins(0, 0, 0, 0)
+        words.setSpacing(TIGHT // 2)
+        words.addWidget(headline)
+        words.addWidget(explanation)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(ROOMY)
+        row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
+        row.addLayout(words, 1)
+        return row
 
     def _open_donation(self) -> None:
         open_donation(self)
@@ -3174,6 +3283,20 @@ class DonationDialog(QDialog):
     def _open_gofundme(self) -> None:
         """Öffnet die Kampagne über denselben Browser- und Fehlerweg."""
         open_donation(self, url=GOFUNDME_URL)
+
+    def _copy_website(self) -> None:
+        """Weitersagen: die Adresse der Website in die Zwischenablage — lokal, ohne Netz.
+
+        Der Knopf sagt danach, dass es geklappt hat; ein Klick ohne sichtbare
+        Folge wird ein zweites Mal geklickt.
+        """
+        QApplication.clipboard().setText(WEBSITE_URL)
+        self.share_button.setText(tr("Link kopiert"))
+
+    def _want_feedback(self) -> None:
+        """Rückmeldung statt Geld: Dieser Dialog schließt, das Fenster öffnet die Rückmeldung."""
+        self.feedback_wanted = True
+        self.accept()
 
 
 class AboutDialog(QDialog):
@@ -3256,11 +3379,31 @@ class AboutDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
+        # **Der Verweis steht neben „eine Person"**, dort, wo der Dialog sagt,
+        # wer dahintersteht (Entscheidung Robert, 23.09.2026). Er öffnet nichts
+        # nach draußen: Das Fenster schließt diesen Dialog und öffnet danach
+        # den lokalen Unterstützen-Dialog.
+        self.support_wanted = False
+        """Ob *{app} unterstützen …* gewählt wurde; das Fenster öffnet danach
+        den Unterstützen-Dialog."""
+        self.support_button = QPushButton(tr("{app} unterstützen …").format(app=APP_NAME), self)
+        self.support_button.setIcon(icon("support", self.support_button))
+        self.support_button.setToolTip(
+            tr("Wofür das Geld ist und wie Sie freiwillig helfen können.")
+        )
+        self.support_button.setStatusTip(self.support_button.toolTip())
+        self.support_button.setAccessibleDescription(self.support_button.toolTip())
+        self.support_button.clicked.connect(self._want_support)
+        self.support_button.setAutoDefault(False)
 
         layout = QVBoxLayout(self)
         layout.addWidget(heading)
         layout.addWidget(rights)
         layout.addWidget(made_by)
+        supporting = QHBoxLayout()
+        supporting.addWidget(self.support_button)
+        supporting.addStretch(1)
+        layout.addLayout(supporting)
         layout.addWidget(support)
         layout.addWidget(licensed)
         layout.addWidget(security_heading)
@@ -3277,6 +3420,11 @@ class AboutDialog(QDialog):
         # akzentuierten Knopf; das ist kein Verstoß gegen „ein Hauptknopf je
         # Fenster", sondern deren Kehrseite.
         no_primary(self)
+
+    def _want_support(self) -> None:
+        """Vom Über-Dialog zum Unterstützen-Dialog — nacheinander, nicht übereinander."""
+        self.support_wanted = True
+        self.accept()
 
 
 def _security_page_url() -> str:

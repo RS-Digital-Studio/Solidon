@@ -253,6 +253,130 @@ def test_the_counter_has_no_way_out() -> None:
         assert forbidden not in source, f"der Bogen sendet nicht selbst: {forbidden}"
 
 
+# --- Die Einladung zur Unterstützung (Entscheidung Robert, 23.09.2026) --------
+
+
+def test_the_support_invitation_comes_after_the_third_delivery() -> None:
+    """Zwei fertige Ergebnisse sind Ausprobieren, das dritte ist Arbeit."""
+    assert feedback.SUPPORT_AFTER_DELIVERIES == 3, "Roberts Zahl vom 23.09.2026"
+
+    feedback.record_delivery()
+    feedback.record_delivery()
+    assert not feedback.support_due(), "nach zwei Ergebnissen bleibt es still"
+
+    feedback.record_delivery()
+    assert feedback.support_due(), "nach dem dritten erscheint die Zeile"
+
+
+def test_the_support_invitation_is_seen_once_per_version_across_restarts(
+    own_config: Path,
+) -> None:
+    """Gezeigt heißt erledigt — auch nach einem Neustart, denn der Stand liegt im Profil."""
+    for _delivery in range(3):
+        feedback.record_delivery()
+    feedback.mark_support_invited()
+
+    assert (own_config / feedback.STATE_FILE).is_file(), "der Stand liegt im Profil"
+    stored = json.loads((own_config / feedback.STATE_FILE).read_text(encoding="utf-8"))
+    assert stored["versions"][branding.APP_VERSION]["support_invited"] is True
+    # Ein Neustart liest nur die Datei; im Prozess bleibt nichts, das ihn trüge.
+    assert not feedback.support_due()
+    for _delivery in range(10):
+        feedback.record_delivery()
+    assert not feedback.support_due(), "in dieser Version nie wieder"
+
+
+def test_a_new_version_invites_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Jede Version zählt ihre eigenen drei — und behält beim Zurückwechseln ihren Stand."""
+    monkeypatch.setattr(branding, "APP_VERSION", "0.5.0")
+    for _delivery in range(3):
+        feedback.record_delivery()
+    feedback.mark_support_invited()
+
+    monkeypatch.setattr(branding, "APP_VERSION", "0.5.1")
+    assert not feedback.support_due()
+    assert feedback.read().deliveries == 0
+    for _delivery in range(3):
+        feedback.record_delivery()
+    assert feedback.support_due(), "die neue Version lädt wieder ein"
+
+    monkeypatch.setattr(branding, "APP_VERSION", "0.5.0")
+    assert not feedback.support_due(), "zurückgewechselt bleibt die alte erledigt"
+
+
+def test_the_count_stops_at_three_and_counts_nothing_else() -> None:
+    """Gezählt wird bis zur Einladung, nicht darüber hinaus — kein Protokoll der Arbeit."""
+    for _delivery in range(7):
+        feedback.record_delivery()
+
+    assert feedback.read().deliveries == feedback.SUPPORT_AFTER_DELIVERIES
+    fields = set(feedback.Progress.__dataclass_fields__)
+    assert fields == {
+        "used_seconds",
+        "invitations",
+        "answered",
+        "declined",
+        "deliveries",
+        "support_invited",
+    }, "kein Spenden-, Klick- oder Betragszähler"
+
+
+@pytest.mark.parametrize("state", ["demo", "sold", "unlocked"])
+def test_the_support_invitation_does_not_depend_on_the_licence(
+    monkeypatch: pytest.MonkeyPatch, state: str
+) -> None:
+    """Demo, Kaufversion und freigeschalteter Rechner laden gleich ein."""
+    cached = {
+        "demo": activation.Activation(days_left=68, deadline=date(2026, 10, 30)),
+        "sold": activation.Activation(days_left=14),
+        "unlocked": activation.Activation(days_left=0),
+    }[state]
+    monkeypatch.setattr(activation, "_cached", cached)
+    for _delivery in range(3):
+        feedback.record_delivery()
+
+    assert feedback.support_due()
+
+
+def test_the_survey_and_the_invitation_keep_each_other(demo: None) -> None:
+    """Ein Stand, zwei Auskünfte: Die Uhr des Bogens schreibt die Zählung nicht weg."""
+    feedback.record_delivery()
+    feedback.record(600)
+    feedback.mark_invited()
+    feedback.record_delivery()
+
+    progress = feedback.read()
+    assert progress.deliveries == 2
+    assert progress.used_seconds == pytest.approx(600)
+    assert progress.invitations == 1
+
+
+def test_a_read_only_profile_never_invites_twice_in_one_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne Schreibrecht beginnt die Zählung beim nächsten Start neu — freundliche Richtung."""
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise OSError("read-only")
+
+    monkeypatch.setattr(Path, "write_text", refuse)
+    for _delivery in range(5):
+        feedback.record_delivery()
+
+    assert not feedback.support_due(), "nichts gespeichert, also nichts fällig"
+
+
+def test_every_text_of_the_support_invitation_can_be_translated() -> None:
+    """Regel 20 — für die Zeile über der Ansicht."""
+    for text in (
+        feedback.SUPPORT_LINE,
+        feedback.SUPPORT_ACCEPT,
+        feedback.SUPPORT_CLOSE,
+        feedback.SUPPORT_CLOSE_HINT,
+    ):
+        assert isinstance(text, TranslatableText), f"fest eingebaut: {text!r}"
+
+
 def test_the_form_hands_over_what_was_filled_in(qt_app: object) -> None:
     """Das Widget sammelt ein, der Kern setzt zusammen — und nichts dazwischen.
 
@@ -507,3 +631,114 @@ def test_the_card_edge_is_quiet_and_the_button_keeps_the_accent() -> None:
     assert knopf and farben["highlight"] in knopf[0], (
         "der Knopf behält den Akzent — er ist die Handlung, um die es geht"
     )
+
+
+# --- Die Zeile zur Unterstützung (Entscheidung Robert, 23.09.2026) ----------
+
+
+def test_the_support_line_marks_itself_seen_and_steals_no_focus(qt_app: object) -> None:
+    """Zeigen heißt gesehen; Kreuz und Knopf blenden sie aus und melden sich."""
+    from PySide6.QtWidgets import QApplication, QLineEdit, QWidget
+
+    from app.ui.survey import SupportNotice
+
+    host = QWidget()
+    host.resize(1200, 700)
+    field = QLineEdit(host)
+    notice = SupportNotice(host)
+    host.show()
+    field.setFocus()
+    QApplication.processEvents()
+    for _delivery in range(feedback.SUPPORT_AFTER_DELIVERIES):
+        feedback.record_delivery()
+    assert feedback.support_due()
+
+    notice.offer()
+    QApplication.processEvents()
+
+    assert notice.isVisible()
+    assert not feedback.support_due(), "gezeigt heißt gesehen — auch ohne Klick"
+    assert QApplication.focusWidget() is field, "wer tippt, tippt weiter"
+
+    closed: list[bool] = []
+    notice.dismissed.connect(lambda: closed.append(True))
+    notice.close_button.click()
+    assert closed == [True] and not notice.isVisible()
+
+    accepted: list[bool] = []
+    notice.accepted.connect(lambda: accepted.append(True))
+    notice.show()
+    notice.give.click()
+    assert accepted == [True] and not notice.isVisible()
+    host.close()
+
+
+def test_the_support_line_speaks_and_stays_quiet(qt_app: object) -> None:
+    """Regel 18 und der Akzenthaushalt: Namen für den Vorleser, kein Akzent, ruhige Kante."""
+    from app.ui.survey import SupportNotice
+    from app.ui.theme import THEMES
+
+    notice = SupportNotice()
+    for theme in ("dark", "light"):
+        notice.set_theme(theme)
+        colours = THEMES[theme]
+        sheet = notice.styleSheet()
+        edge = [part for part in sheet.split("}") if "#supportNotice {" in part]
+        assert edge and colours["line"] in edge[0] and colours["window"] in edge[0]
+        assert colours["highlight"] not in sheet, "die Zeile leuchtet nicht"
+    assert not notice.give.autoDefault() and not notice.give.isDefault()
+    assert notice.accessibleDescription() == str(feedback.SUPPORT_LINE)
+    assert notice.close_button.accessibleName() == str(feedback.SUPPORT_CLOSE)
+    assert notice.close_button.toolTip() == str(feedback.SUPPORT_CLOSE_HINT)
+    assert not notice.close_button.icon().isNull(), "das Kreuz ist ein Zeichen und hat ein Wort"
+    assert notice.heart.pixmap() is not None and not notice.heart.pixmap().isNull()
+    assert notice.give.accessibleDescription() == str(feedback.SUPPORT_LINE)
+
+
+def test_a_notice_finds_the_free_spot_between_the_cards(qt_app: object) -> None:
+    """Oben zwischen den Karten; ist dort kein Platz, unter der kürzeren Karte.
+
+    Gemessen am 1024 Punkte breiten Fenster: Zwischen Objektbaum und
+    Prüfbericht blieben 101 Punkte, und die Zeile lag unter beiden Karten.
+    Die Rechnung ist Geometrie und läuft hier mit Attrappen-Karten.
+    """
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    from app.ui.survey import BOTTOM_ROOM, NOTICE_TOP, SupportNotice
+
+    view = QWidget()
+    view.resize(1400, 800)
+    left = QWidget(view)
+    left.setGeometry(12, 12, 300, 600)
+    right = QWidget(view)
+    right.setGeometry(1400 - 12 - 340, 12, 340, 380)
+    tools = QWidget(view)
+    tools.setGeometry(400, 800 - 60, 600, 48)
+    notice = SupportNotice(view)
+    for card in (left, right, tools):
+        notice.keep_clear_of(card)
+    view.show()
+    QApplication.processEvents()
+
+    notice.offer()
+    QApplication.processEvents()
+    spot = notice.geometry()
+    assert spot.top() == NOTICE_TOP, "oben, wo Platz ist"
+    for card in (left, right, tools):
+        assert not spot.intersects(card.geometry()), f"über einer Karte: {card.geometry()}"
+    gap_centre = (left.geometry().right() + right.geometry().left()) / 2
+    assert abs(spot.center().x() - gap_centre) <= 2, "mittig zwischen den Karten"
+
+    # Schmal: zwischen den Karten kein Platz mehr — unter die kürzere.
+    view.resize(760, 800)
+    right.setGeometry(760 - 12 - 340, 12, 340, 380)
+    QApplication.processEvents()
+    spot = notice.geometry()
+    for card in (left, right, tools):
+        assert not spot.intersects(card.geometry()), f"über einer Karte: {card.geometry()}"
+    assert spot.top() > right.geometry().bottom(), "unter dem Prüfbericht"
+    assert spot.bottom() <= view.height() - BOTTOM_ROOM, "über dem Achsenkreuz"
+    assert notice.text.heightForWidth(notice.text.width()) <= notice.text.height() + 1, (
+        "der umgebrochene Satz passt in die Zeile"
+    )
+    view.close()

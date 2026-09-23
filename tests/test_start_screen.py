@@ -717,14 +717,17 @@ def test_the_start_screen_offers_feedback_and_voluntary_support_as_two_action_ca
 
     assert screen.secondary_actions == [screen.feedback_button, screen.support_button]
     assert screen.feedback_button.accessibleName() == "Feedback geben"
-    assert screen.support_button.accessibleName() == "Solidon freiwillig unterstützen"
+    assert screen.support_button.accessibleName() == "Solidon unterstützen"
     assert "PayPal" not in screen.support_button.accessibleName()
     assert "Eine Person" in screen.feedback_button.detail_label.text()
     assert screen.feedback_button.hint_label.text() == "Vorschau vor dem Senden"
+    # Wofür, nicht womit (Robert, 23.09.2026) — und die Grenze zum Kauf steht
+    # sichtbar im Zusatz und in der Beschreibung für den Bildschirmleser.
     assert screen.support_button.detail_label.text() == (
-        "Hilft bei Veröffentlichung, Signierung, Tests und Website"
+        "Trägt die Werkzeuge und laufenden Kosten der Entwicklung."
     )
-    assert screen.support_button.hint_label.text() == "PayPal oder GoFundMe auswählen"
+    assert screen.support_button.hint_label.text() == "Freiwillig · PayPal oder GoFundMe"
+    assert "Freiwillig" in screen.support_button.accessibleDescription()
     for button in screen.secondary_actions:
         assert isinstance(button, QPushButton)
         assert button.objectName() == "startActionCard"

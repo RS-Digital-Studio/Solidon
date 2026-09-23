@@ -1,13 +1,23 @@
-# Konzept: Finanzierung der Demo-Phase über PayPal
+# Konzept: Finanzierung der Demo-Phase über PayPal und GoFundMe
 
-Stand 28.08.2026. Dieses Dokument ersetzt das am 23.08.2026 entworfene und am
+Stand 23.09.2026. Dieses Dokument ersetzt das am 23.08.2026 entworfene und am
 24./28.08.2026 fortgeschriebene Drei-Stufen-Modell vollständig.
 
-> **Entschieden und umgesetzt:** Während der Demo-Phase gibt es genau einen
-> freiwilligen Finanzierungsweg: den PayPal-Spendenknopf im Aufmacher der
-> Website. Die Zahlung schaltet nichts frei, wird auf keinen späteren Kauf
-> angerechnet und begründet keinen Anspruch auf Support, Vorabversionen,
-> Nennung oder Mitsprache.
+> **Neu entschieden am 23.09.2026 (Robert):** Nach zwei Unterstützungen bei
+> 51 von 5.000 € auf GoFundMe wird der Weg **in der Anwendung** sichtbarer:
+> ein Eintrag im Hilfe-Menü, ein Verweis im Über-Dialog, die Karte auf der
+> Startfläche, ein neu gestalteter Dialog und **einmal je Version** eine kleine
+> Zeile nach dem dritten erfolgreichen Export oder Slicer-Start. Damit fallen
+> zwei Verbote aus §3 (Menüeintrag, selbst erscheinender Hinweis). **Die harte
+> Grenze aus §2 und der Außenweg aus §3 gelten unverändert.** Der Weg in der
+> Anwendung steht in §8.
+
+> **Entschieden und umgesetzt:** Während der Demo-Phase gibt es zwei
+> gleichwertige freiwillige Wege: den gehosteten PayPal-Spendenknopf und die
+> GoFundMe-Kampagne (`branding.GOFUNDME_URL`). Beide öffnen sich erst nach
+> einem ausdrücklichen Klick im Browser. Die Zahlung schaltet nichts frei, wird
+> auf keinen späteren Kauf angerechnet und begründet keinen Anspruch auf
+> Support, Vorabversionen, Nennung oder Mitsprache.
 
 Der alte Entwurf wuchs auf drei Förderstufen, zwei Zahlungsanbieter, eine
 Unterstützerseite, einen Werkstattbrief, einen Eintrag in der Anwendung und
@@ -95,14 +105,21 @@ Das hat vier beabsichtigte Folgen:
 genau einmal dieselbe PayPal-Adresse, und außer dieser ausdrücklichen
 Außenadresse wird beim Seitenaufbau nichts von außen geladen.
 
-**Nicht zu bauen:**
+**Nicht zu bauen** (Stand 23.09.2026):
 
-- kein Menüeintrag „Unterstützen“ in der Anwendung;
+- ~~kein Menüeintrag „Unterstützen“ in der Anwendung~~ — **aufgehoben am
+  23.09.2026**: *Hilfe → {app} unterstützen …* öffnet den lokalen Dialog (§8);
 - keine eigene Förder- oder Unterstützerseite;
-- kein selbst öffnender Hinweis und keine Klickzählung;
+- ~~kein selbst öffnender Hinweis~~ — **aufgehoben am 23.09.2026** für genau
+  eine Zeile je Version (§8); **keine Klickzählung** bleibt;
+- kein eingebettetes Zahlungs-Widget und keine Anfrage an PayPal oder GoFundMe,
+  bevor jemand auf den Anbieterknopf klickt;
 - kein Spendenkonto im Projekt und keine Spenderkennung im Lizenzschlüssel;
+- kein Spenderzustand in Anwendung oder Projektdatei, kein Zähler von Spenden
+  oder Beträgen;
 - keine Verwaltung wiederkehrender Zahlungen in Solidon3D;
-- keine Danksagungsliste im Über-Dialog.
+- keine Danksagungsliste im Über-Dialog; der Über-Dialog trägt nur den Verweis
+  auf den Dialog.
 
 ---
 
@@ -120,7 +137,7 @@ Außenadresse wird beim Seitenaufbau nichts von außen geladen.
 | Ko-fi, Steady oder GitHub Sponsors | gestrichen; PayPal ist bereits eingebaut |
 | Zweiter Anbieter neben dem Merchant of Record | für die Demo-Finanzierung gestrichen |
 | Freier Monatsbetrag je Plattform prüfen | gegenstandslos; PayPal führt den freien Betrag |
-| Menüeintrag unter „Hilfe“ | gestrichen; der Weg steht sichtbar beim Download |
+| Menüeintrag unter „Hilfe“ | am 28.08. gestrichen, **am 23.09.2026 wieder da** als lokaler Dialog ohne Gegenleistung (§8) |
 | Vorabversionen und §-327h-Prüfung dafür | gestrichen; § 327h bleibt nur ein Thema des späteren Verkaufs |
 | Eigene Kündigungsseite für ein Stufenmodell | gestrichen; zu PayPals wiederkehrenden Spenden bleibt nur §6.2 |
 
@@ -214,7 +231,59 @@ Die Finanzierung der Demo-Phase ist fertig, wenn diese Aussagen wahr bleiben:
 - Keine Zahlung schaltet etwas frei oder wird auf einen Kauf angerechnet.
 - Anwendung und Projektdateien enthalten keinerlei Spenderzustand.
 - Verkauf und Spende bleiben zwei getrennte Wege.
+- In der Anwendung geht vor dem Klick auf einen Anbieterknopf nichts hinaus;
+  die Einladung erscheint je Version höchstens einmal (§8).
 
 Diese Punkte sind am 28.08.2026 technisch erfüllt. Offen ist nur die
 steuerliche Einordnung aus §6.1. Sie erweitert das Modell nicht, sondern
 sichert den bereits kleinen Weg ab.
+
+---
+
+## §8 Der Weg in der Anwendung (Entscheidung Robert, 23.09.2026)
+
+Anlass: Die Kampagne stand bei 51 von 5.000 €, zwei Unterstützungen. Der Weg
+war vorhanden, aber leise — eine Karte auf der Startfläche und ein Dialog, der
+vor allem aus Rechtstext bestand.
+
+**Feste Einstiege.** Die Karte auf der Startfläche („Solidon unterstützen",
+darunter wofür, im Zusatz „Freiwillig · PayPal oder GoFundMe"), *Hilfe →
+{app} unterstützen …* mit dem Herz-Symbol und ein Knopf im Über-Dialog neben
+„Solidon entwickelt eine Person". Alle drei öffnen nur den lokalen Dialog.
+
+**Der Dialog.** Oben ein Satz von Robert als Person (Raum Bamberg, allein
+entwickelt), dann in drei Zeilen mit Symbol, wofür das Geld ist: die zwei
+KI-Werkzeuge, mit denen Solidon entwickelt und geprüft wird; Gewerbe, Hosting
+und Domain; und als Beleg für Ernsthaftigkeit, was schon selbst bezahlt ist
+(Apple-Entwicklerprogramm, Windows-Signaturzertifikat). **Keine Beträge** — die
+ändern sich, die Kampagne nennt sie. Darunter zwei gleichwertige Knöpfe ohne
+Akzent (*PayPal im Browser öffnen*, *GoFundMe im Browser öffnen*; die
+Datenschutzerklärung nennt sie wörtlich) und **eine** zurückgenommene Zeile mit
+der vollständigen Grenze aus §2: freiwillig, keine Bestellung, keine
+Freischaltung, keine Anrechnung auf einen späteren Kauf, keine
+Spendenbescheinigung, erst der Klick öffnet den Browser des Anbieters. Zuletzt
+*Ohne Geld helfen*: den Link zur Website kopieren und *Rückmeldung senden …*,
+das den vorhandenen Rückmeldedialog öffnet (kein zweiter Weg hinaus,
+`support.send` hat weiter genau einen Aufrufer).
+
+**Die Einladung, einmal je Version.** Nach dem **dritten erfolgreichen Export
+oder Slicer-Start** einer Version erscheint über der Ansicht eine Zeile: ein
+Herz, „Schön, dass Solidon Ihnen hilft. Ich entwickle es allein.", der Knopf
+*Unterstützen …* und ein Kreuz. Kein Dialog, kein Fokus, keine Unterbrechung.
+Geschlossen, angeklickt oder stehen gelassen — sie kommt in dieser Version nicht
+wieder, auch nicht nach einem Neustart; eine neue Version zählt neu. Sie gilt in
+der Demo, in der Kaufversion und ohne Netz gleich, denn ihr Knopf öffnet nur
+den lokalen Dialog.
+
+**Was gespeichert wird, und was nicht.** In `feedback.json` stehen je Version
+zwei Werte: `deliveries` (gezählt bis drei, dann nicht weiter) und
+`support_invited`. Kein Zähler von Spenden, Beträgen oder Klicks, keine
+Telemetrie, nichts im Projekt. Abgebrochene, abgelehnte und gescheiterte
+Exporte oder Slicer-Läufe zählen nicht. Ein Datenfluss nach außen entsteht
+dadurch nicht; die Datenschutzerklärung bleibt sachlich richtig.
+
+**Wo die Zeile steht.** Oben mittig zwischen den schwebenden Karten; ist dort
+kein Platz (schmale Fenster), unter der kürzeren Karte über Werkzeugzeile und
+Ansichtsleiste. Sie weicht Vorschauband, Ziehwert-Leiste und der Rückfragekarte
+aus. Die Regel dazu steht in `.claude/rules/fenster.md`.
+
