@@ -2,7 +2,8 @@
 
     python tools/run_suite_isolated.py [--release] [muster …]
 
-Fensterdateien laufen ausschließlich mit ``--release``. Leistungsprüfungen
+Fenstertests laufen ausschließlich mit ``--release``; ohne das fährt jede
+Datei ihre Tests ohne Fenster (``-m "not windowed"``). Leistungsprüfungen
 bleiben auch dann dem getrennten Release-Lauf vorbehalten.
 
 **Wofür das da ist.** Ein Absturz reißt die Suite seit Tagen sporadisch ab —
@@ -86,11 +87,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     windowed, plain = split_windowed(files)
-    selected = sorted([*plain, *(windowed if arguments.release else [])])
-    deferred = set(files) - set(selected)
-    if deferred:
-        print("Zurückgestellt: Fensterdateien nur mit --release; Leistung separat beim Release.")
-        for path in sorted(deferred):
+    selected = sorted({*plain, *(windowed if arguments.release else [])})
+    markexpr = "not performance" if arguments.release else "not performance and not windowed"
+    if not arguments.release and windowed:
+        print("Zurückgestellt: die Fenstertests dieser Dateien nur mit --release.")
+        for path in sorted(windowed):
+            print(f"  {path.name}")
+    only_performance = sorted(set(files) - set(plain) - set(windowed))
+    if only_performance:
+        print("Nur Leistungsprüfungen — separat beim Release:")
+        for path in only_performance:
             print(f"  {path.name}")
     if not selected:
         print("Keine regulären Tests ausgewählt; kein Testlauf gestartet.")
@@ -105,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     for path in files:
         try:
             finished = subprocess.run(
-                [str(PYTHON), "-m", "pytest", "-q", "-m", "not performance", str(path)],
+                [str(PYTHON), "-m", "pytest", "-q", "-m", markexpr, str(path)],
                 capture_output=True,
                 text=True,
                 cwd=ROOT,

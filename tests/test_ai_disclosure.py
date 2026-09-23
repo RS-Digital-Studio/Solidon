@@ -389,6 +389,7 @@ def test_provider_specific_privacy_paths_do_not_preload_the_web(
 
 
 def test_only_visible_anthropic_links_open_the_exact_legal_pages(
+    qt_app: QApplication,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     opened: list[str] = []
@@ -407,6 +408,7 @@ def test_only_visible_anthropic_links_open_the_exact_legal_pages(
 
 
 def test_local_privacy_opens_only_the_packaged_read_only_document(
+    qt_app: QApplication,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     shown: list[str] = []

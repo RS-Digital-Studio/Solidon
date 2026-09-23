@@ -10,6 +10,7 @@ import pytest
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect_tori, fit_torus
+from tests.helpers import placed as _placed
 
 
 def _freeform_patch() -> trimesh.Trimesh:
@@ -75,21 +76,6 @@ def _partial_torus(major_sections: int, minor_sections: int) -> tuple[trimesh.Tr
         (np.abs(major_angle) <= math.radians(45.0)) & (np.abs(minor_angle) <= math.radians(60.0))
     )
     return ring, [int(index) for index in patch]
-
-
-def _placed(body: trimesh.Trimesh, scale: float, angle: float) -> trimesh.Trimesh:
-    """Eine starre Lage und ein einheitlicher Maßstab für dieselbe Fläche."""
-    placed = body.copy()
-    placed.apply_scale(scale)
-    placed.apply_transform(
-        trimesh.transformations.rotation_matrix(
-            math.radians(angle),
-            direction=(0.3, -0.8, 0.5),
-            point=(0.0, 0.0, 0.0),
-        )
-    )
-    placed.apply_translation((37.0, -19.0, 83.0))
-    return placed
 
 
 @pytest.mark.parametrize(("scale", "angle"), [(1.0, 0.0), (3.7, 53.0), (0.25, -31.0)])

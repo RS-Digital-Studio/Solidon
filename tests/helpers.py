@@ -25,12 +25,19 @@ hier, dort noch als eigene Kopie.
 from __future__ import annotations
 
 import math
+import struct
+from pathlib import Path
 from typing import Any
 
 import pytest
+import trimesh
 
 from app.core.geom.mesh import as_mesh_data
-from app.core.types import Feature, SceneObject
+from app.core.scene import History, OperationDraft
+from app.core.scene.project import Project, new_project
+from app.core.types import Feature, SceneObject, Source
+
+MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def exact_kernel() -> Any:
@@ -99,3 +106,72 @@ def the_torus(entry: SceneObject) -> Feature:
     found = [feature for feature in entry.features.values() if feature.kind == "torus"]
     assert len(found) == 1, sorted((f.id, f.kind) for f in entry.features.values())
     return found[0]
+
+
+# --- Der Laufzeitkern eines AppImage ------------------------------------------------
+
+
+def tiny_elf_kernel(digest: bytes, body: bytes) -> bytes:
+    """Ein kleinstes ELF64 mit ``.digest_md5`` und der Abschnittstabelle am Ende.
+
+    So liegt der AppImage-Laufzeitkern vor dem Dateisystemabbild; die Länge
+    liest ``make_sbom.appimage_runtime_sha256`` aus dem Kopf
+    (``test_sbom``, ``test_release_evidence``).
+    """
+    names = b"\0.digest_md5\0.shstrtab\0"
+    data = digest + body
+    table = 64 + len(data) + len(names)
+    header = bytearray(64)
+    header[:6] = b"\x7fELF\x02\x01"
+    struct.pack_into("<Q", header, 0x28, table)
+    struct.pack_into("<HHH", header, 0x3A, 64, 3, 2)
+    sections = [
+        bytes(64),
+        struct.pack("<IIQQQQIIQQ", 1, 1, 0, 0, 64, 16, 0, 0, 1, 0),
+        struct.pack("<IIQQQQIIQQ", 13, 3, 0, 0, 64 + len(data), len(names), 0, 0, 1, 0),
+    ]
+    return bytes(header) + data + names + b"".join(sections)
+
+
+# --- Das Startprojekt von Weg 1 -------------------------------------------------
+
+
+def plate_project() -> Project:
+    """Ein Projekt mit der Lochplatte auf dem Stapel — der Startpunkt von Weg 1.
+
+    Stand wortgleich in ``test_agent``, ``test_agent_suite``,
+    ``test_licence_boundary`` und ``test_parts`` (RM-134, gemessen mit
+    ``tools/twin_scan.py`` am 22.09.2026).
+    """
+    made = new_project("centauri-carbon-2", "petg")
+    made.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    made.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    History(made.document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    return made
+
+
+# --- Eine Fläche in fremder Lage ------------------------------------------------
+
+
+def placed(body: trimesh.Trimesh, scale: float, angle: float) -> trimesh.Trimesh:
+    """Eine starre Lage und ein einheitlicher Maßstab für dieselbe Fläche.
+
+    Die Passungsprüfungen für Kegel und Torus (``test_cone_fit_quality``,
+    ``test_torus_fit_quality``) fragen, ob ihr Urteil Lage und Maßstab
+    übersteht — mit derselben Drehachse, damit beide dasselbe prüfen.
+    """
+    result = body.copy()
+    result.apply_scale(scale)
+    result.apply_transform(
+        trimesh.transformations.rotation_matrix(
+            math.radians(angle),
+            direction=(0.3, -0.8, 0.5),
+            point=(0.0, 0.0, 0.0),
+        )
+    )
+    result.apply_translation((37.0, -19.0, 83.0))
+    return result

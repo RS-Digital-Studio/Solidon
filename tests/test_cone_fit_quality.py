@@ -10,6 +10,7 @@ import pytest
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect_cones, fit_cone
+from tests.helpers import placed as _placed
 
 
 def _freeform_patch() -> trimesh.Trimesh:
@@ -92,21 +93,6 @@ def _partial_cone(angular_sections: int, height_sections: int, *, reverse: bool)
     if reverse:
         faces = [(first, third, second) for first, second, third in faces]
     return trimesh.Trimesh(vertices=np.asarray(vertices), faces=faces, process=False)
-
-
-def _placed(body: trimesh.Trimesh, scale: float, angle: float) -> trimesh.Trimesh:
-    """Eine starre Lage und ein einheitlicher Maßstab für dieselbe Fläche."""
-    placed = body.copy()
-    placed.apply_scale(scale)
-    placed.apply_transform(
-        trimesh.transformations.rotation_matrix(
-            math.radians(angle),
-            direction=(0.3, -0.8, 0.5),
-            point=(0.0, 0.0, 0.0),
-        )
-    )
-    placed.apply_translation((37.0, -19.0, 83.0))
-    return placed
 
 
 @pytest.mark.parametrize(("scale", "angle"), [(1.0, 0.0), (3.7, 53.0), (0.5, -31.0)])

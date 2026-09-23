@@ -266,21 +266,31 @@ def selection_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str,
 def test_commands_defer_windows_and_never_run_performance(
     selection_tree: dict[str, Path], release: bool
 ) -> None:
-    """Auch gemischte Dateien folgen dem aufgelösten Fixture- und Markerbestand."""
+    """Getrennt wird je Test: Die Tests ohne Fenster jeder Datei laufen immer,
+    die Fenstertests nur beim Release, Leistung nie.
+
+    Bis zum 22.09.2026 zog ein einziger Fenstertest seine ganze Datei ins
+    Release — gemessen 1709 Tests ohne Fenster außerhalb jedes
+    Entwicklungstors.
+    """
     from tools.affected_tests import commands
 
     lines = commands(selection_tree.values(), release=release)
 
-    assert len(lines) == (4 if release else 1)
+    assert len(lines) == (3 if release else 1)
+    assert lines[0][lines[0].index("--window-group") + 1] == "plain"
     assert [argument for argument in lines[0] if argument.startswith("tests/")] == [
-        "tests/test_plain.py"
+        "tests/test_marked.py",
+        "tests/test_mixed.py",
+        "tests/test_plain.py",
+        "tests/test_window.py",
     ]
     if release:
         assert [line[-1] for line in lines[1:]] == [
             "tests/test_marked.py",
-            "tests/test_mixed.py",
             "tests/test_window.py",
         ]
+        assert all(line[line.index("--window-group") + 1] == "windowed" for line in lines[1:])
     assert all("tests/test_performance.py" not in line for line in lines)
 
 
@@ -322,8 +332,9 @@ def test_file_groups_ignore_case_filters(
 
     windowed, plain = collect_test_groups(tuple(selection_tree.values()), confcutdir=root)
 
-    assert set(windowed) == {selection_tree[name] for name in ("window", "marked", "mixed")}
-    assert plain == (selection_tree["plain"],)
+    # „mixed“ hat nur als Leistungstest ein Fenster — kein Fenstertest also.
+    assert set(windowed) == {selection_tree[name] for name in ("window", "marked")}
+    assert set(plain) == {selection_tree[name] for name in ("plain", "window", "marked", "mixed")}
     assert os.environ.get("PYTEST_ADDOPTS") == before
 
 
@@ -394,31 +405,33 @@ def test_the_actual_core_process_keeps_case_filters(
 
 
 @pytest.mark.parametrize("source", ["environment", "command"])
-def test_a_filtered_window_file_is_wholly_deferred(
+def test_the_plain_tests_of_a_window_file_run_and_its_windows_wait(
     selection_tree: dict[str, Path],
     source: str,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Auch der ausdrücklich gewählte reine Fall einer Fensterdatei läuft erst im Release."""
+    """Der reine Fall einer Fensterdatei läuft sofort, ihr Fenstertest erst im Release."""
     from tools import affected_tests
 
     window = selection_tree["marked"]
-    filters = ["-k", "test_regular", "-m", "not windowed"]
+    filters = ["-k", "test_regular"]
     if source == "environment":
-        monkeypatch.setenv("PYTEST_ADDOPTS", '-k test_regular -m "not windowed"')
+        monkeypatch.setenv("PYTEST_ADDOPTS", "-k test_regular")
     monkeypatch.setattr(
         affected_tests, "affected", lambda _: ({window}, {window: "selbst geändert"})
     )
-    monkeypatch.setattr(affected_tests, "run", lambda _: pytest.fail("a window file was started"))
+    started: list[list[str]] = []
+    monkeypatch.setattr(affected_tests, "run", lambda lines: started.extend(lines) or 0)
 
     assert (
         affected_tests.main([str(window), "--run", *(filters if source == "command" else [])]) == 0
     )
     output = capsys.readouterr().out
-    assert "tests/test_marked.py" in output
-    assert "Zurückgestellt" in output
-    assert "kein Testlauf gestartet" in output
+    assert "Zurückgestellt" in output and "tests/test_marked.py" in output
+    assert len(started) == 1
+    assert started[0][-1] == "tests/test_marked.py"
+    assert started[0][started[0].index("--window-group") + 1] == "plain"
 
 
 def test_a_filtered_core_file_is_never_reported_as_deferred(
@@ -447,9 +460,9 @@ def test_a_named_window_file_is_deferred_but_remains_visible(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Eine ausdrücklich genannte Fensterdatei wird bis zum Release zurückgestellt, steht aber in
-    der Ausgabe — mit Grund bei ``--why``, sonst mit dem Hinweis, dass kein Lauf gestartet
-    wurde.
+    """Die Fenstertests einer ausdrücklich genannten Datei werden bis zum Release
+    zurückgestellt und stehen in der Ausgabe — mit Grund bei ``--why``; ihre Tests
+    ohne Fenster laufen.
     """
     from tools import affected_tests
 
@@ -457,7 +470,8 @@ def test_a_named_window_file_is_deferred_but_remains_visible(
     monkeypatch.setattr(
         affected_tests, "affected", lambda _: ({window}, {window: "selbst geändert"})
     )
-    monkeypatch.setattr(affected_tests, "run", lambda _: pytest.fail("a test process was started"))
+    started: list[list[str]] = []
+    monkeypatch.setattr(affected_tests, "run", lambda lines: started.extend(lines) or 0)
 
     assert affected_tests.main([str(window), mode]) == 0
 
@@ -468,7 +482,10 @@ def test_a_named_window_file_is_deferred_but_remains_visible(
         assert "Zurückgestellt" not in output
     else:
         assert "Zurückgestellt" in output
-        assert "kein Testlauf gestartet" in output
+        if mode == "--split":
+            assert "--window-group plain tests/test_window.py" in output
+        else:
+            assert started and started[0][-1] == "tests/test_window.py"
 
 
 def test_an_only_performance_selection_does_not_start_empty_pytest(
@@ -536,7 +553,8 @@ def test_the_isolated_runner_uses_the_same_release_selection(
 
     assert run_suite_isolated.main(["--release"] if release else []) == 0
     assert [line[-1] for line in calls] == [str(plain), *([str(window)] if release else [])]
-    assert all(line[4:6] == ["-m", "not performance"] for line in calls)
+    expected = "not performance" if release else "not performance and not windowed"
+    assert all(line[4:6] == ["-m", expected] for line in calls)
 
 
 @pytest.mark.parametrize("exit_code", [0, 5, 139])
@@ -556,3 +574,34 @@ def test_a_successful_summary_cannot_hide_the_process_exit(
     assert affected_tests.run([["python", "-m", "pytest", "tests/test_plain.py"]]) == (
         0 if exit_code == 0 else 1
     )
+
+
+def test_the_real_core_process_runs_the_plain_half_of_a_window_file(
+    selection_tree: dict[str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Im echten Kindprozess: der Test ohne Fenster läuft, der mit Fenster nicht.
+
+    Die Fixture ``qt_app`` des Korpus scheitert, sobald sie läuft — ein
+    Fenstertest im regulären Lauf wäre hier rot.
+    """
+    import os
+
+    from tools import affected_tests
+
+    root = selection_tree["plain"].parent.parent
+    both = _write(
+        root,
+        "tests/test_both.py",
+        "def test_window(inherited):\n    raise AssertionError('window ran')\n"
+        "def test_without_window():\n    assert True\n",
+    )
+    monkeypatch.setattr(affected_tests, "affected", lambda _: ({both}, {both: "selbst geändert"}))
+    module_root = str(Path(__file__).resolve().parent.parent)
+    monkeypatch.setenv(
+        "PYTHONPATH", os.pathsep.join((module_root, os.environ.get("PYTHONPATH", "")))
+    )
+
+    assert affected_tests.main([str(both), "--run"]) == 0, capsys.readouterr().out
+    assert "1 passed, 1 deselected" in capsys.readouterr().out

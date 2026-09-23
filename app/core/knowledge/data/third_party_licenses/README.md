@@ -7,6 +7,17 @@ Versionsarchivs. Bei einem Lizenzkopf im Quelltext beschreibt der Eintrag,
 welcher Kommentarmantel entfernt wurde; Lizenzwortlaut und Zuschreibungen
 bleiben unverändert. Hashes verwenden die Zeilennormalisierung des Generators.
 
+`versions` nennt die Fassungen, für die ein Text geprüft ist. Ohne `native`
+ist das die Wheel-Version. Beschreibt der Text die eingebettete native
+Bibliothek (HarfBuzz in `uharfbuzz`, FreeType in `freetype-py`, wgpu-native
+in `wgpu`), nennt `native` deren Laufzeitfamilie, und `versions` zählt deren
+Versionen, wie sie auch die Stückliste liest. Eine neue Wheel-Fassung mit
+derselben Bibliothek braucht dann keinen Eintrag. `versions` des Textes und
+der gleichnamigen `[[runtime]]`-Familie bleiben gleich
+(`test_native_text_pins_and_runtime_families_name_the_same_versions`). Für eine
+neue Bibliotheksfassung wird der Text an ihrem Tag geladen und verglichen:
+Ist er gleich, kommt nur die Version dazu, sonst ein neuer Text mit Hash.
+
 Die eigentliche Release-Akte entsteht erst aus dem fertigen Kundenartefakt:
 
 ```text
@@ -17,7 +28,8 @@ python tools/make_licence_notices.py --sbom <artefakt>/Solidon3D.cdx.json \
 python tools/make_licence_notices.py --release-check \
   --artifact-root <artefakt> \
   --sbom <artefakt>/Solidon3D.cdx.json \
-  --release-evidence <akte>/release-evidence.json
+  --release-evidence <akte>/release-evidence.json \
+  [--artifact-kind appimage]
 ```
 
 Der zweite Lauf ist ein Release-Tor. Er verlangt:
@@ -28,9 +40,13 @@ Der zweite Lauf ist ein Release-Tor. Er verlangt:
 - exakt eine aus dieser SBOM erzeugte `THIRD-PARTY-NOTICES.md`;
 - gehashte äußere Pakete (`windows-installer`, `appimage` und `flatpak` oder
   `macos-installer`);
-- für Qt, OCCT und GEOS je ein von RS Digital verwahrtes Quellarchiv sowie
-  gehashtes Austausch-/Relink-Material, Kontakt und Bereitstellung bis
-  mindestens drei Jahre nach Freigabe.
+- für jede Familie mit `source_delivery` (Qt, OCCT, GEOS, keyutils und im
+  AppImage dessen Laufzeitkern) ein Quellenangebot von RS Digital mit Kontakt
+  und Bereitstellung bis mindestens drei Jahre nach Freigabe — entweder
+  `archive` mit gehashtem Quellarchiv und Austausch-/Relink-Material oder
+  `written-offer` mit Angebotstext und Austauschweg;
+- mit `--artifact-kind appimage` den vorangestellten Laufzeitkern in der
+  Stückliste des AppImage-Inhalts, ohne diese Sorte seine Abwesenheit.
 
 Die Evidenzdatei hat Schema 1. Alle Dateipfade sind relativ zu ihrer Ablage:
 
@@ -64,21 +80,28 @@ Die Evidenzdatei hat Schema 1. Alle Dateipfade sind relativ zu ihrer Ablage:
 }
 ```
 
-Ein URL-Hinweis ersetzt kein verwahrtes Archiv. `method = "written-offer"`
-ändert nur die Auslieferungsform; auch dann muss das angebotene Archiv beim
-Release vorhanden und gehasht sein.
+Ein URL-Hinweis ersetzt kein Quellenangebot. `written-offer` ist der Weg, den
+`--write-evidence` schreibt und die CI nimmt; das Tor prüft dabei Text, Kontakt,
+Frist und Austauschweg, ein genanntes Archiv zusätzlich mit Hash. **Ob RS
+Digital die angebotenen Quellen zur Freigabe außerdem selbst verwahren muss,
+entscheidet das Tor nicht** — hier stand bis zum 22.09.2026, es müsse so sein,
+während die Prüfung es seit dem 02.09.2026 nicht verlangte. Das ist eine
+Rechtsfrage (`/legal-review`), keine technische.
 
-## Noch zwingend im Paketbau zu liefern
+## Der Laufzeitkern des AppImage
 
 Der AppImage-Type-2-Runtime wird dem AppImage vorangestellt und gehört deshalb
-zum ausgelieferten Binärbestand. Seine eigene Lizenzakte nennt statisch
-eingebettete Fremdteile, darunter libfuse. Der derzeitige SBOM-Erzeuger sieht
-diesen äußeren Runtime-Block noch nicht. Linux bleibt deshalb absichtlich rot,
-bis die Endartefakt-SBOM den Runtime `20251108` samt exakten Versionen seiner
-statisch eingebundenen Bestandteile ausweist und das vollständige zugehörige
-Quellarchiv belegt ist.
+zum ausgelieferten Binärbestand, aber nie zum App-Baum.
+`tools/make_linux_packages.py --appimage` schreibt deshalb im AppDir eine
+eigene Stückliste und Beilage: den App-Baum und den Laufzeitkern `20251108`
+(nur mit der geprüften Datei, `make_sbom.APPIMAGE_RUNTIME_SHA256`), samt der
+statisch eingebundenen Bestandteile mit Version und Beleg
+(`make_sbom.APPIMAGE_RUNTIME_STATIC`: libfuse, squashfuse, zstd, zlib, musl,
+mimalloc) und ihren Texten im Katalog. Die Linux-Releaseakte packt das
+AppImage aus und prüft diesen Inhalt mit `--artifact-kind appimage`, Archiv
+und Flatpak ohne.
 
-Ebenso akzeptiert das Tor für libffi nur eine exakte Version, nicht bloß eine
+Außerdem akzeptiert das Tor für libffi nur eine exakte Version, nicht bloß eine
 ABI-Nummer, und für GCC-/MSVC-Runtimes nicht nur die Compilerangabe. Diese
 Versionen müssen aus den fertigen Binärdateien oder einer gehashten
 Build-Provenienz in die SBOM übernommen werden.

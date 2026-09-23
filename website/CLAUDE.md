@@ -66,7 +66,8 @@ Seitenaufruf erreichbar; ihre Texte kommen ebenfalls aus den Katalogen.
   `tools/check_activation.py` über HTTPS abgenommen.
 - **Große Dateien reißen die Verbindung.** Rund 1,8 MB/s, und mehrere Pakete
   am Stück gehen schief. **Ein halbes Paket sieht ganz aus** — deshalb am Ende
-  `--nachpruefen`.
+  `--nachpruefen`, vor der Freigabe mit `--mit-pruefsumme`: Die Länge fängt
+  den Abbruch, erst die Prüfsumme eine vollständige, aber falsche Datei.
 - **`stamp_assets.py` läuft als Letztes**, nach allen Bilder- und
   Seitenläufen.
 - **Ein sichtbarer Beleg braucht eine belegte Rechtekette.** Prompt oder

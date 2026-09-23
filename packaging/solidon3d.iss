@@ -157,6 +157,17 @@ Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\shell\open\comm
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#ProjectSuffix}"; ValueData: ""
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#PartFileSuffix}"; ValueData: "";   Flags: uninsdeletevalue
 
+; **Ein Update ersetzt den Laufzeitbaum, statt ihn zu überschreiben.** [Files]
+; legt nur hin, was die neue Version mitbringt; was eine ältere trug und die
+; neue nicht mehr, blieb liegen — nach dem Wechsel auf Python 3.14 etwa
+; ``python313.dll`` samt den Erweiterungen und Qt-Plugins der alten Fassung.
+; Qt lädt beim Start jede Bibliothek in seinen Plugin-Ordnern, und die
+; installierte Anwendung wich still von ihrer Stückliste und ihrer
+; Lizenzbeilage ab. ``_internal`` gehört ausschließlich dem Paket; Projekte,
+; Einstellungen und Filamentlager liegen im Nutzerprofil.
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\_internal"
+
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 

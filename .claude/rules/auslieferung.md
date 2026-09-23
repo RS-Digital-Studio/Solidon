@@ -58,9 +58,9 @@ Paket bedeuten:
   gegen die tatsächlichen Grenzdateien. Sie laufen auch ohne lokalen Build
   und verändern kein vorhandenes Release-Artefakt.
 - **Eine Abhängigkeitsrechnung darf sagen, dass etwas fehlt — nie, dass
-  etwas weg darf.** Was aus dem Paket entfernt wird (Systembibliotheken des
-  Linux-Grundbestands, die GPL-Terminalmodule), wird **benannt** und
-  begründet (`make_linux_packages.HOST_PROVIDED_LIBRARIES`); die Rechnung
+  etwas weg darf.** Was aus dem Paket entfernt wird (der GTK-Stapel hinter
+  Qts GTK-Erscheinungsbild, die GPL-Terminalmodule), wird **benannt** und
+  begründet (`make_linux_packages.ORPHANED_LIBRARIES`); die Rechnung
   prüft nur die Gegenrichtung gegen den eingecheckten Korpus, und eine
   offene Kante ist ein Fehler. „Ist überall vorhanden" ist keine Messung.
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from email.message import Message
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from packaging.utils import canonicalize_name
 
 from app.branding import APP_NAME, APP_VERSION, DISTRIBUTION_NAME
 from app.core.knowledge import licences
+from tests.helpers import tiny_elf_kernel
 from tools import make_sbom
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -582,6 +584,32 @@ def test_linux_and_macos_artifacts_carry_owners_for_every_native_file(
     assert components["MIT Kerberos"]["licenses"] == [{"expression": "MIT"}]
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="CPythons DLLs-Ordner gibt es nur unter Windows"
+)
+def test_every_cpython_extension_module_belongs_to_cpython(tmp_path: Path) -> None:
+    """Jede Erweiterung aus CPythons ``DLLs``-Ordner ist Teil der CPython-Laufzeit.
+
+    Die Windows-Releaseakte von 0.4.4 (Lauf 35464068433) war rot mit
+    „Native Dateien ohne Besitzer: _internal/_zstd.pyd" — ein Modul, das es
+    erst seit Python 3.14 gibt, und die Präfixliste kannte es nicht. Die
+    Liste wird hier gegen den Interpreter gehalten, mit dem gebaut wird:
+    Bringt ein neues CPython ein neues Modul mit, wird dieser Test rot und
+    nicht erst die Releaseakte am Tag.
+    """
+    modules = sorted((Path(sys.base_prefix) / "DLLs").glob("*.pyd"))
+    assert modules, "ohne DLLs-Ordner prüft dieser Test nichts"
+    for module in modules:
+        target = tmp_path / "_internal" / module.name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"MZ\x90\x00native")
+
+    owners = {entry.path: entry.owner for entry in make_sbom.artifact_files(tmp_path)}
+
+    assert {path: owner for path, owner in owners.items() if owner != "cpython"} == {}
+    assert len(owners) == len(modules)
+
+
 def test_a_debian_package_version_is_read_from_its_library(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -607,3 +635,25 @@ def test_a_debian_package_version_is_read_from_its_library(
 
     monkeypatch.setattr(make_sbom.shutil, "which", lambda name: None)
     assert make_sbom._dpkg_version("libxcb-cursor.so.0") == ("unbekannt", "dpkg-query fehlt")
+
+
+def test_the_appimage_kernel_is_recognised_despite_its_filled_checksum(tmp_path: Path) -> None:
+    """appimagetool füllt ``.digest_md5`` im vorangestellten Kern; derselbe Kern
+    bleibt derselbe, ein anderer Körper ist ein anderer.
+
+    Gemessen am AppImage 0.4.4: 16 Bytes Unterschied zur festen
+    Veröffentlichung, alle in diesem Abschnitt.
+    """
+    empty = tmp_path / "leer.AppImage"
+    filled = tmp_path / "gefuellt.AppImage"
+    other = tmp_path / "anders.AppImage"
+    empty.write_bytes(tiny_elf_kernel(bytes(16), b"Kern") + b"hsqs-Abbild")
+    filled.write_bytes(tiny_elf_kernel(b"\x11" * 16, b"Kern") + b"anderes Abbild")
+    other.write_bytes(tiny_elf_kernel(bytes(16), b"Kerx") + b"hsqs-Abbild")
+
+    reference = make_sbom.appimage_runtime_sha256(empty)
+    assert make_sbom.appimage_runtime_sha256(filled) == reference
+    assert make_sbom.appimage_runtime_sha256(other) != reference
+    (tmp_path / "kein.AppImage").write_bytes(b"#!/bin/sh")
+    with pytest.raises(RuntimeError, match="ELF"):
+        make_sbom.appimage_runtime_sha256(tmp_path / "kein.AppImage")

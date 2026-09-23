@@ -7024,6 +7024,7 @@ ACTIONS_WITHOUT_A_CONSTANT = {
     "sketch.enter_height",
     "sketch.flip_plane",
     "sketch.pick_face",
+    "sketch.pick_plane",
     "sketch.use_all_regions",
     "sketch.use_global_plane",
     "smaller_bodies",

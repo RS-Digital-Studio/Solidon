@@ -219,3 +219,35 @@ def test_the_appimage_tool_and_embedded_runtime_are_fixed_and_verified() -> None
     assert "choco install" not in workflow, (
         "ein ungepinnter Paketmanagerlauf lädt ausführbaren Code"
     )
+
+
+def test_the_release_gate_blocks_on_every_platform() -> None:
+    """RM-115: Die Releaseakte hält den Release an, statt zu warnen.
+
+    Im Tag-Lauf von 0.4.4 (35464068433) war sie auf allen drei Plattformen rot
+    und veröffentlichte trotzdem — die Warnung stand im Lauf, gelesen hat sie
+    niemand. Jeder Aufruf von ``make_licence_notices`` in den drei Prüfjobs
+    muss den Job mit seinem Exit-Code beenden können, und die Prüfumgebung
+    trägt die Distribution, aus der der Bootloader-Text kommt.
+    """
+    for name in ("linux-release-check", "windows-release-check", "macos-release-check"):
+        job = _job(name)
+        calls = [line for line in job.splitlines() if "tools.make_licence_notices" in line]
+        assert calls, name
+        assert "nicht blockierend" not in job, name
+        assert "$global:LASTEXITCODE = 0" not in job, name
+        assert not [line for line in calls if "|| " in line], name
+        assert '-e ".[geom,ui,agent,brep]" pyinstaller' in job, name
+    windows = _job("windows-release-check")
+    assert windows.count("if ($LASTEXITCODE -ne 0) { throw") >= 2
+
+
+def test_the_linux_gate_checks_the_appimage_content_with_its_runtime() -> None:
+    """Das AppImage trägt den Laufzeitkern, Archiv und Flatpak nicht — geprüft
+    werden beide Stücklisten, jede mit ihrer Sorte."""
+    job = _job("linux-release-check")
+    assert "--appimage-extract" in job
+    assert "set -euo pipefail" in job
+    assert "--release-check --artifact-kind appimage" in job
+    assert '--write-evidence --sbom "$appimage_sbom"' in job
+    assert job.count("--release-check") == 2

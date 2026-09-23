@@ -43,9 +43,10 @@ from app.core.ingest.loader import normalise
 from app.core.perceive.maps import overhang_map
 from app.core.scene import History, OperationDraft
 from app.core.scene.evaluate import evaluate
-from app.core.scene.project import Project, ProjectSources, load, new_project, save
+from app.core.scene.project import ProjectSources, load, new_project, save
 from app.core.slice.analysis import cross_section
-from app.core.types import PrintSettings, Profile, SceneObject, Source
+from app.core.types import PrintSettings, Profile, SceneObject
+from tests.helpers import plate_project as _project
 from tests.scripted_backend import ScriptedBackend
 from tools.make_licence_keys import make_key, public_key, sign
 
@@ -105,19 +106,6 @@ def _license(monkeypatch: pytest.MonkeyPatch) -> None:
         "_cached",
         activation.Activation(licence=licence, certificate=_certificate()),
     )
-
-
-def _project() -> Project:
-    """Ein Projekt mit einer geladenen Platte — gebaut, solange offen ist."""
-    made = new_project("centauri-carbon-2", "petg")
-    made.document.sources["src_1"] = Source(
-        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
-    )
-    made.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
-    History(made.document).apply(
-        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
-    )
-    return made
 
 
 def _body():

@@ -31,10 +31,12 @@ berührt; das Tor sagt, ob der Stand *insgesamt* trägt. Vor dem Commit läuft
 ``/pruefen``, hier läuft, was dazwischen schnell Auskunft gibt.
 
 **Fenster und Leistung nur beim Release.** Die reine Auswahl nennt weiter
-alle betroffenen Dateien. ``--run`` und ``--split`` stellen Fensterdateien
-zurück; erst ``--release`` nimmt sie als eigene Prozesse dazu. Die Trennung
-liest den Fixture-Graphen wie ``suite-getrennt.sh``. Leistungsprüfungen laufen
-auch beim Release separat und niemals über dieses Werkzeug.
+alle betroffenen Dateien. ``--run`` und ``--split`` fahren deren Tests ohne
+Fenster (``-m "not windowed"``) und stellen die Fenstertests zurück; erst
+``--release`` nimmt sie je Datei als eigene Prozesse dazu (``-m windowed``).
+Getrennt wird je Test, nicht je Datei — der Fixture-Graph entscheidet wie in
+``suite-getrennt.sh``. Leistungsprüfungen laufen auch beim Release separat und
+niemals über dieses Werkzeug.
 """
 
 from __future__ import annotations
@@ -303,7 +305,11 @@ def affected(
 
 
 def split_windowed(files: Iterable[Path]) -> tuple[list[Path], list[Path]]:
-    """Nicht-Leistungstests nach Fensterbedarf teilen, ohne sie auszuführen."""
+    """Dateien mit Fenstertests und Dateien mit Tests ohne Fenster, ohne sie auszuführen.
+
+    Eine Datei kann in beiden Listen stehen: Ihre Tests ohne Fenster laufen
+    im regulären Aufruf, ihre Fenstertests nur beim Release.
+    """
     from tools.list_windowed_tests import collect_test_groups
 
     ordered = sorted(files)
@@ -347,11 +353,23 @@ def _commands(
         base.extend(("-k", keyword))
     if markexpr is not None:
         base.extend(("-m", markexpr))
+    # Die Fenstertrennung ergänzt der Laufplugin (``--window-group``) — so
+    # bleibt ein ``-m`` aus Umgebung oder Konfiguration wirksam.
     lines: list[list[str]] = []
     if plain:
-        lines.append([*base, *(str(path.relative_to(ROOT).as_posix()) for path in plain)])
+        lines.append(
+            [
+                *base,
+                "--window-group",
+                "plain",
+                *(str(path.relative_to(ROOT).as_posix()) for path in plain),
+            ]
+        )
     if release:
-        lines.extend([*base, str(path.relative_to(ROOT).as_posix())] for path in windowed)
+        lines.extend(
+            [*base, "--window-group", "windowed", str(path.relative_to(ROOT).as_posix())]
+            for path in windowed
+        )
     return lines
 
 
@@ -428,10 +446,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     print()
     windowed, plain = split_windowed(files)
-    deferred = files - set(plain) - (set(windowed) if arguments.release else set())
+    deferred = sorted(set(windowed) if not arguments.release else set())
+    only_performance = sorted(files - set(plain) - set(windowed))
     if deferred:
-        print("Zurückgestellt: Fensterdateien nur mit --release; Leistung separat beim Release.")
-        for path in sorted(deferred):
+        print("Zurückgestellt: die Fenstertests dieser Dateien nur mit --release.")
+        for path in deferred:
+            print(f"  {path.relative_to(ROOT).as_posix()}")
+    if only_performance:
+        print("Nur Leistungsprüfungen — separat beim Release:")
+        for path in only_performance:
             print(f"  {path.relative_to(ROOT).as_posix()}")
     lines = _commands(
         windowed,

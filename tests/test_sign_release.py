@@ -319,19 +319,21 @@ def test_an_invalid_application_signature_stops_before_the_installer_is_built(
     assert not output.exists()
 
 
-def test_a_failing_release_check_warns_but_still_delivers_the_signed_installer(
-    signing: dict[str, object], capsys: pytest.CaptureFixture[str]
+def test_a_failing_release_check_stops_before_the_installer_is_delivered(
+    signing: dict[str, object],
 ) -> None:
-    """Kein Release hängt an einer Prüfung, die zum ersten Mal läuft — wie in der CI."""
+    """RM-115: Die Releaseakte hält an, wie in der CI — kein signierter Installer
+    ohne vollständige Belege. Bis 0.5.0 warnte sie nur."""
     tools = signing["tools"]
     assert isinstance(tools, FakeTools)
     tools.evidence_fails = True
 
-    result = _go(signing)
+    with pytest.raises(sign_release.SigningError, match="Release-Evidenz"):
+        _go(signing)
 
-    assert result.is_file() and result.read_bytes().endswith(FakeTools.SIGNATURE)
-    output = capsys.readouterr().out
-    assert "WARNUNG" in output and "Register" in output
+    output = signing["output"]
+    assert isinstance(output, Path)
+    assert not output.exists() or not list(output.glob("*.exe"))
     assert [call[2] for call in tools.calls if call[1].endswith("make_licence_notices.py")] == [
         "--write-evidence"
     ], "nach einer nicht geschriebenen Evidenz gibt es nichts zu prüfen"

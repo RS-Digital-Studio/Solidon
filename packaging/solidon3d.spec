@@ -291,6 +291,12 @@ analysis = Analysis(
     noarchive=False,
 )
 
+# **Die Karten der Entwickler-Agenten reisen nicht mit.** Die Datenordner
+# gehen als Ganzes ins Paket, und vier davon tragen eine ``CLAUDE.md`` —
+# interne Arbeitsnotizen, gemessen im Windows-Paket 0.4.4 unter
+# ``_internal/app/…`` (Lauf 35464068433). Zur Laufzeit liest sie niemand.
+analysis.datas = [entry for entry in analysis.datas if Path(entry[0]).name != "CLAUDE.md"]
+
 # **Die gemeinsame Build-Grenze für jede Plattform.** Erst Analysis weiß,
 # welche der installierten Laufzeitdistributionen im Kundenpaket liegen. Die
 # Liste der Besitzer entsteht deshalb aus ihren tatsächlichen
@@ -319,9 +325,9 @@ if sys.platform == "win32":
         )
     ]
 
-# Linux: Das GTK-3-Erscheinungsbild von Qt und die Bibliotheken, die jedes
-# Linux mit einem Fenster selbst hat, bleiben draußen — welche und warum, steht
-# an der Liste in ``make_linux_packages``. Was bleibt, inventarisiert
+# Linux: Das GTK-3-Erscheinungsbild von Qt und der GTK-Stapel, der nur an ihm
+# hing, bleiben draußen — welche und warum, steht an der Liste in
+# ``make_linux_packages.ORPHANED_LIBRARIES``; glib, dbus und Co. reisen mit. Was bleibt, inventarisiert
 # ``make_sbom`` je Familie; eine fremde Datei ohne Besitzer lässt die
 # Releaseakte nicht durch.
 if sys.platform.startswith("linux"):

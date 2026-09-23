@@ -3,7 +3,7 @@ name: pruefen
 description: >
   Führt Solidons betroffene Kerntests oder das Entwicklungstor aus und berichtet
   echte Prozessausgänge und Testzahlen. Ohne Argument Kerntests, ruff check,
-  ruff format --check und mypy. Fensterdateien und Leistungsprüfungen laufen
+  ruff format --check und mypy. Fenstertests und Leistungsprüfungen laufen
   ausschließlich beim Release mit --release.
 argument-hint: "[optional: betroffene Dateien] [--release nur beim Release]"
 allowed-tools: Bash, Read, Grep, Glob
@@ -17,14 +17,15 @@ Mit Dateipfaden oder nach einem einzelnen Arbeitsschritt laufen die betroffenen
 Kerntests über `tools/affected_tests.py --run`. Nenne die Dateien ausdrücklich:
 Ohne Dateiliste untersucht das Werkzeug auch fremde lokale Änderungen.
 Meldet der Importgraph, dass die vollständige Suite betroffen ist, läuft die
-gesamte Kernsammlung. Fensterdateien und Leistungstests bleiben auch bei einer
+gesamte Kernsammlung. Fenstertests und Leistungstests bleiben auch bei einer
 gezielten Dateiauswahl bis zum Release zurückgestellt. Das ist keine fehlende
 Umgebung und kein Anlass, sie mit einem direkten Pytest-Aufruf nachzuholen.
 Keine vollständige Suite allein wegen eines kleinen Doku-Edits.
 
 Ohne Argument oder vor einem beauftragten Commit läuft das Entwicklungstor:
-Kerntests ohne Fensterdateien und ohne `performance`, dazu Ruff, Format und mypy.
-**Fensterdateien und Leistungsprüfungen laufen ausschließlich beim Release.**
+alle Tests ohne Fenster (`not windowed`) und ohne `performance`, dazu Ruff,
+Format und mypy.
+**Fenstertests und Leistungsprüfungen laufen ausschließlich beim Release.**
 Nur dort wählt `--release` das zusätzliche Release-Tor. Die Option autorisiert
 weder einen Paketbau noch eine Veröffentlichung.
 Ein bereits vollständig grüner Nachweis für denselben relevanten Stand muss
@@ -60,14 +61,16 @@ Ein laufender oder abgebrochener Prozess hat noch kein bestandenes Ergebnis.
 
 ## Entwicklungstor und Release-Tor
 
-Der normale Lauf enthält die Kernsammlung. Beim Release kommen separate
-Prozesse für Fensterdateien hinzu. Die aktuelle Aufteilung liegt in
+Der normale Lauf enthält alle Tests ohne Fenster. Beim Release kommen
+separate Prozesse für die Fenstertests je Datei hinzu. Die aktuelle Aufteilung liegt in
 `.claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh`, die
 Fenstererkennung in `tools/list_windowed_tests.py`. Das Skript nimmt Fenster
 nur mit `--release` hinzu und lässt Leistungstests immer aus. Beim Release
 gehören die Leistungstests als eigener Lauf auf der Referenzmaschine dazu.
-Als Fensterdatei zählt jede Datei mit `qt_app` im Fixture-Graphen oder einem
-`windowed`-Test; der Marker erfasst auch Fenster in Unterprozessen.
+Getrennt wird je Test: `tests/conftest.py` gibt jedem Test mit `qt_app` im
+Fixture-Graphen den Marker `windowed`, Fenster in Unterprozessen tragen ihn
+ausdrücklich. Das reguläre Tor wählt `not windowed`, das Release-Tor fährt je
+Datei mit Fenstertests `windowed`.
 
 Setze `SUITE_PYTHON` auf den geprüften absoluten Interpreterpfad. Unter
 PowerShell beispielsweise `$env:SUITE_PYTHON = $testPython`. Die regulären

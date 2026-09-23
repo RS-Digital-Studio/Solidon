@@ -560,10 +560,13 @@ done
     assert sorted(calls.read_text(encoding="utf-8").splitlines()) == sorted(expected)
     all_calls = (tmp_path / "all-calls.txt").read_text(encoding="utf-8").splitlines()
     core_call = next(line for line in all_calls if "-n auto" in line)
-    assert "--ignore=tests/test_fake.py" in core_call
-    assert "--ignore=tests/test_print_settings_ui.py" in core_call
-    assert "--ignore=tests/test_render_factory.py" in core_call
+    # Je Test getrennt: Der Kernlauf nimmt keine Datei heraus, sondern wählt
+    # die Fenstertests über den Marker ab (22.09.2026).
+    assert "--ignore" not in core_call
+    assert "not windowed" in core_call
     assert all("not performance" in line for line in all_calls if "-m pytest" in line)
+    window_calls = [line for line in all_calls if "-m pytest" in line and "-n auto" not in line]
+    assert all("-m windowed and not performance" in line for line in window_calls), window_calls
 
 
 def test_every_linux_ci_path_that_uses_pygfx_has_a_vulkan_adapter() -> None:
@@ -1137,8 +1140,17 @@ def test_the_appimage_build_passes_the_verified_runtime_explicitly(
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(tool.subprocess, "run", run)
+    # Stückliste und Beilage des AppImage-Inhalts entstehen im AppDir, bevor
+    # appimagetool packt; der Weg selbst steht in test_licence_notices.
+    embedded: list[tuple[Path, Path]] = []
+    monkeypatch.setattr(
+        tool,
+        "embed_appimage_runtime",
+        lambda tree, kernel: embedded.append((tree, kernel)) or tree,
+    )
 
     assert tool.build_appimage() == 0
+    assert embedded == [(output / f"{tool.APP_NAME}.AppDir" / "usr" / "bin", runtime)]
     assert len(commands) == 1
     assert commands[0][1:3] == ["--runtime-file", str(runtime.resolve())]
     installed_mime = (
@@ -1151,6 +1163,30 @@ def test_the_appimage_build_passes_the_verified_runtime_explicitly(
         / f"{tool.APP_ID}.xml"
     )
     assert installed_mime.read_bytes() == mime_file.read_bytes()
+
+
+def test_an_appimage_without_its_runtime_record_is_not_packed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ohne Stückliste des Laufzeitkerns kein AppImage — sonst wäre die
+    Releaseakte am Tag rot, und zwar erst dort."""
+    from tools import make_linux_packages as tool
+
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / tool.APP_NAME).write_bytes(b"Programm")
+    runtime = tmp_path / "runtime-x86_64"
+    runtime.write_bytes(b"fremder Kern")
+    monkeypatch.setattr(tool, "SOURCE_DIR", source)
+    monkeypatch.setattr(tool, "OUTPUT_DIR", tmp_path / "dist")
+    monkeypatch.setattr(tool.shutil, "which", lambda _name: str(tmp_path / "appimagetool"))
+    monkeypatch.setenv(tool.APPIMAGE_RUNTIME_ENV, str(runtime))
+    calls: list[object] = []
+    monkeypatch.setattr(tool.subprocess, "run", lambda *args, **kwargs: calls.append(args))
+
+    assert tool.build_appimage() == 1
+    assert not calls, "appimagetool darf ohne Stückliste nicht laufen"
+    assert "Stückliste des AppImage nicht geschrieben" in capsys.readouterr().out
 
 
 def test_the_flatpak_source_is_the_app_and_not_the_output_folder() -> None:
@@ -2127,3 +2163,120 @@ def test_the_minimum_system_versions_on_the_website_match_installer_and_bundle()
         assert f"macOS {mac.group(1)}" in text, (
             f"{page.relative_to(ROOT)} nennt nicht macOS {mac.group(1)}"
         )
+
+
+class _FakeRegistry:
+    """Die wenigen ``winreg``-Aufrufe, die ``compiler_version`` braucht."""
+
+    HKEY_CURRENT_USER = "HKCU"
+    HKEY_LOCAL_MACHINE = "HKLM"
+
+    def __init__(self, entries: dict[str, dict[str, str]]) -> None:
+        self.entries = entries
+
+    class _Key:
+        def __init__(self, path: str) -> None:
+            self.path = path
+
+        def __enter__(self) -> _FakeRegistry._Key:
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            return None
+
+    def OpenKey(self, parent: object, path: str) -> _FakeRegistry._Key:  # noqa: N802
+        if isinstance(parent, _FakeRegistry._Key):
+            return _FakeRegistry._Key(f"{parent.path}\\{path}")
+        if parent != "HKCU":
+            raise OSError("nicht da")
+        return _FakeRegistry._Key(path)
+
+    def EnumKey(self, key: _FakeRegistry._Key, index: int) -> str:  # noqa: N802
+        names = sorted(self.entries)
+        if index >= len(names):
+            raise OSError("Ende")
+        return names[index]
+
+    def QueryValueEx(self, key: _FakeRegistry._Key, value: str) -> tuple[str, int]:  # noqa: N802
+        return self.entries[key.path.rsplit("\\", 1)[1]][value], 1
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="die Fassung steht in der Windows-Registry")
+def test_the_inno_setup_version_comes_from_its_uninstall_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-055: Die Fassung des Installer-Compilers steht im Protokoll.
+
+    Nicht aus der Datei: ``ISCC.exe`` von Inno Setup 7.1.0 trägt „0.0.0.0",
+    der Chocolatey-Shim des Runners ebenso (Lauf 35464068433). Der
+    Deinstallationseintrag des Ordners, in dem der Compiler liegt, nennt sie.
+    """
+    from tools import make_installer
+
+    six = tmp_path / "Inno Setup 6"
+    seven = tmp_path / "Inno Setup 7"
+    for folder in (six, seven):
+        folder.mkdir()
+        (folder / "ISCC.exe").write_bytes(b"MZ")
+    registry = _FakeRegistry(
+        {
+            "Inno Setup 6_is1": {"InstallLocation": f"{six}\\", "DisplayVersion": "6.7.3"},
+            "Inno Setup 7_is1": {"InstallLocation": f"{seven}\\", "DisplayVersion": "7.1.0"},
+            "Anderes_is1": {"InstallLocation": f"{tmp_path}\\", "DisplayVersion": "9.9"},
+        }
+    )
+    monkeypatch.setitem(sys.modules, "winreg", registry)
+
+    assert make_installer.compiler_version(seven / "ISCC.exe") == "7.1.0"
+    assert make_installer.compiler_version(six / "ISCC.exe") == "6.7.3"
+    assert make_installer.compiler_version(tmp_path / "ISCC.exe") == ""
+
+
+def test_the_ci_logs_the_real_inno_setup_version() -> None:
+    """Der Runner legt einen Chocolatey-Shim auf den PATH; gesucht wird zuerst
+    am Installationsort, und die Fassung kommt aus dem Deinstallationseintrag."""
+    workflow = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    job = workflow.split("\n  windows-installer:", 1)[1].split("\n  windows-release-check:", 1)[0]
+    assert job.index("Inno Setup 6\\ISCC.exe") < job.index("Get-Command ISCC")
+    assert "Inno Setup *_is1" in job and "DisplayVersion" in job
+    assert ".VersionInfo.ProductVersion" not in job
+    assert "throw" in job.split("$innoVersion -notmatch", 1)[1].split("\n", 1)[0]
+
+
+def test_the_agent_maps_stay_out_of_the_customer_package() -> None:
+    """Die ``CLAUDE.md`` der Datenordner sind Arbeitsnotizen, kein Paketinhalt.
+
+    Das Windows-Paket 0.4.4 trug vier davon unter ``_internal/app/``. Die
+    Spec nimmt die Ordner als Ganzes; gefiltert wird deshalb nach der
+    Analyse, und mindestens einer der mitgenommenen Ordner trägt eine Karte —
+    sonst prüfte dieser Test nichts.
+    """
+    spec = (ROOT / "packaging" / "solidon3d.spec").read_text(encoding="utf-8")
+    filtered = (
+        'analysis.datas = [entry for entry in analysis.datas if Path(entry[0]).name != "CLAUDE.md"]'
+    )
+    assert filtered in spec
+    assert spec.index('!= "CLAUDE.md"') < spec.index("distributions_for_analysis(")
+    shipped = ("app/core/knowledge/data", "app/i18n/locales", "app/examples")
+    assert any((ROOT / folder / "CLAUDE.md").is_file() for folder in shipped)
+
+
+def test_an_update_replaces_the_runtime_tree_instead_of_layering_it() -> None:
+    """Ein Update räumt ``_internal``, bevor die neue Version ihn hinlegt.
+
+    ``[Files]`` allein überschreibt nur, was die neue Version mitbringt; nach
+    dem Wechsel von Python 3.13 auf 3.14 blieben ``python313.dll`` und die
+    alten Erweiterungen im Installationsordner liegen, und die installierte
+    Anwendung wich von Stückliste und Lizenzbeilage ab. Kompiliert mit Inno
+    Setup 6.7.3 und 7.1.0 (22.09.2026).
+    """
+    script = (ROOT / "packaging" / "solidon3d.iss").read_text(encoding="utf-8")
+    section = script.split("[InstallDelete]", 1)
+    assert len(section) == 2, "kein [InstallDelete] — ein Update schichtet auf die alte Fassung"
+    entries = [
+        line.strip()
+        for line in section[1].split("\n[", 1)[0].splitlines()
+        if line.strip() and not line.strip().startswith(";")
+    ]
+    assert entries == ['Type: filesandordirs; Name: "{app}\\_internal"'], entries
+    assert script.index("\n[InstallDelete]\n") < script.index("\n[Files]\n")

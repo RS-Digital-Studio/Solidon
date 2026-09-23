@@ -2374,7 +2374,7 @@ def test_a_promised_package_without_a_size_is_not_reported_as_fine(
         encoding="utf-8",
     )
     monkeypatch.setattr(upload, "LOCAL_ROOT", tmp_path)
-    monkeypatch.setattr(upload, "read_access", lambda: {"public": "https://example.org/"})
+    monkeypatch.setattr(upload, "public_base", lambda: "https://example.org/")
 
     class Antwort:
         url = "https://example.org/dl/Solidon3D-9.9.9-x86_64.AppImage"
@@ -2398,6 +2398,105 @@ def test_a_promised_package_without_a_size_is_not_reported_as_fine(
     assert code == 1, "ohne Sollwert darf der Lauf nicht mit Erfolg enden"
     assert "OHNE MASS" in ausgabe, f"die Auskunft fehlt: {ausgabe!r}"
     assert "  ok " not in ausgabe, f"siebzehn Bytes galten als vollständig: {ausgabe!r}"
+
+
+class _PublicAnswer:
+    """Eine öffentliche Antwort mit Kopfzeile und Körper, wie ``_open_public`` sie gibt."""
+
+    def __init__(self, url: str, body: bytes) -> None:
+        self.url = url
+        self.headers = {"Content-Length": str(len(body))}
+        self._body = body
+
+    def read(self, size: int = -1) -> bytes:
+        chunk, self._body = (
+            (self._body, b"") if size < 0 else (self._body[:size], self._body[size:])
+        )
+        return chunk
+
+    def __enter__(self) -> _PublicAnswer:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+
+def _promised_site(root: Path, name: str, body: bytes) -> None:
+    """Eine Website, deren ``version.json`` genau ``name`` mit Größe und Hash verspricht."""
+    import hashlib
+
+    (root / "dl").mkdir()
+    (root / "version.json").write_text(
+        json.dumps(
+            {
+                "version": "9.9.9",
+                "packages": {
+                    "windows": {
+                        "file": name,
+                        "url": f"https://example.org/dl/{name}",
+                        "size": len(body),
+                        "sha256": hashlib.sha256(body).hexdigest(),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_the_download_check_asks_for_no_ftp_password(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--nachpruefen`` fragt über HTTP wie ein Kunde — ohne Zugangsdatei.
+
+    Bis zum 22.09.2026 las es die Adresse über ``read_access`` und brach auf
+    jedem Rechner ohne vollständige ``.webserver.json`` mit „Passwort
+    eintragen" ab, obwohl es kein Passwort braucht.
+    """
+    import tools.upload_website as upload
+
+    name = "Solidon3D-Setup-9.9.9.exe"
+    body = b"Setup" * 10
+    _promised_site(tmp_path, name, body)
+    monkeypatch.setattr(upload, "LOCAL_ROOT", tmp_path)
+    monkeypatch.setattr(upload, "ACCESS_FILE", tmp_path / "gibt-es-nicht.json")
+    asked: list[str] = []
+
+    def answer(request: object, timeout: float) -> _PublicAnswer:
+        address = request.full_url  # type: ignore[attr-defined]
+        asked.append(address)
+        return _PublicAnswer(address, body)
+
+    monkeypatch.setattr(upload, "_open_public", answer)
+
+    assert upload.verify_downloads() == 0, capsys.readouterr().out
+    assert asked == [f"https://solidon3d.de/dl/{name}"]
+
+
+def test_the_checksum_check_finds_a_complete_but_wrong_package(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RM-117: Die Länge stimmt, der Inhalt nicht — nur die Prüfsumme sieht es."""
+    import tools.upload_website as upload
+
+    name = "Solidon3D-Setup-9.9.9.exe"
+    body = b"Setup" * 10
+    _promised_site(tmp_path, name, body)
+    monkeypatch.setattr(upload, "LOCAL_ROOT", tmp_path)
+    monkeypatch.setattr(upload, "public_base", lambda: "https://example.org/")
+    served = {"body": b"Satup" * 10}
+
+    def answer(request: object, timeout: float) -> _PublicAnswer:
+        return _PublicAnswer(request.full_url, served["body"])  # type: ignore[attr-defined]
+
+    monkeypatch.setattr(upload, "_open_public", answer)
+
+    assert upload.verify_downloads() == 0, "ohne Prüfsumme genügt die Länge"
+    capsys.readouterr()
+    assert upload.verify_downloads(checksums=True) == 1
+    assert "PRÜFSUMME" in capsys.readouterr().out
+    served["body"] = body
+    assert upload.verify_downloads(checksums=True) == 0
 
 
 @pytest.mark.parametrize(
@@ -2643,3 +2742,18 @@ def test_activation_deployment_closes_private_files_and_checks_both_services(
         if failed_stage == "chmod":
             assert server.writes == 0 and not probes
     assert server.closed
+
+
+def test_the_message_hook_finds_the_interpreter_from_a_worktree() -> None:
+    """Der Umlauthook sucht seine Umgebung wie der Sprachhook am Hauptklon.
+
+    Er nahm ``.venv/Scripts/python.exe`` relativ und sonst das nackte
+    ``python``: In einem Worktree lief er damit mit irgendeinem Interpreter
+    vom PATH, ohne die Umlautliste des Übersetzungstests, und ohne ``python``
+    auf dem PATH scheiterte jeder Commit (22.09.2026).
+    """
+    hook = (Path(__file__).parent.parent / ".githooks" / "commit-msg").read_text(encoding="utf-8")
+    assignments = [line.strip() for line in hook.splitlines() if line.strip().startswith("PY=")]
+    assert assignments, "der Hook wählt keinen Interpreter mehr"
+    assert all(line.startswith('PY="$wurzel/') for line in assignments), assignments
+    assert "--git-common-dir" in hook

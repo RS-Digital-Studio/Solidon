@@ -69,7 +69,7 @@ jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 
 **Messen und Prüfen** (keines davon ist ein Testlauf)
 
-`run_suite_isolated.py` (je Testdatei ein Prozess; Fensterdateien nur mit
+`run_suite_isolated.py` (je Testdatei ein Prozess; Fenstertests nur mit
 `--release`, Leistung stets getrennt beim Release) · `run_agent_suite.py`
 (39 Referenzanfragen, **kostet Geld**) · `run_model_suite.py` (die Kette über
 echte Modelle) · `run_ui_audit.py` (der ganze Bestand durch die laufende
@@ -83,9 +83,10 @@ Anfrage-SHA-256) · `check_support.py` (kommt die Rückmeldung an?) ·
 Vorratsschlüssel zuordnen, Käufer im externen Schlüsselarchiv finden,
 Serverzustand lesen und Geräteplätze verwalten) ·
 `qt_trace.py` (pytest-Erweiterung für die Jagd auf den Abriss beim Aufräumen) ·
-`list_windowed_tests.py` (Fensterdateien aus Pytests aufgelöstem Fixture-Graphen
-oder dem Marker `windowed` für Fenster außerhalb der `qt_app`-Fixture,
-insbesondere in Kindprozessen) ·
+`list_windowed_tests.py` (Dateien mit Fenstertests aus Pytests aufgelöstem
+Fixture-Graphen oder dem Marker `windowed` für Fenster außerhalb der
+`qt_app`-Fixture, insbesondere in Kindprozessen; setzt den Marker für
+`tests/conftest.py`, und `--window-group` wählt als Laufplugin je Test) ·
 `twin_scan.py` (doppelte Stellen und Zwillinge in einem Baum: sieben Fragen von
 Konstanten über wortgleiche und strukturgleiche Körper bis zu Kommentaren, die
 eine Kopie zugeben — **welche Klasse ein Fund hat, entscheidet der Code**, die
@@ -101,17 +102,19 @@ die Vollständigkeit der Karten; die Durchsichten liegen in `.claude/audits/`) �
 Importgraphen über `app/`, `tools/` und `tests/`, dazu die Baumleser und die
 Tests, die eine geänderte Textdatei beim Namen nennen; `--why`, `--split`,
 `--run`; reine Auswahl und `--why` nennen alle betroffenen Dateien,
-`--split` und `--run` nehmen Fensterdateien erst mit `--release` auf und lassen
+`--split` und `--run` fahren die Tests ohne Fenster, nehmen Fenstertests erst mit
+`--release` auf und lassen
 Leistung stets draußen. `list_windowed_tests` liefert aus derselben Sammlung
-die Fenstergruppe und die übrigen Dateien mit nicht-performance Tests;
-reine Leistungsdateien lösen keinen leeren pytest-Lauf aus. Die Einteilung
-liest jeden aufgelösten Fall vor der Abwahl: `-k`, `-m`, `--deselect` und
-Filter aus `PYTEST_ADDOPTS` oder der Pytest-Konfiguration ändern nicht die
-Dateigruppe. Schon ein Fensterfall stellt die ganze Datei zurück, auch wenn
-dieser Fall zusätzlich `performance` trägt. Der eigentliche betroffene Lauf
-behält die Filter; `-k` und `-m` lassen sich auch direkt am Werkzeug angeben.
-Das ausdrücklich geladene Laufplugin in `list_windowed_tests` verknüpft den
-wirksamen Markerfilter mit `not performance`, statt ihn zu überschreiben) ·
+die Dateien mit Fenstertests und die Dateien mit Tests ohne Fenster — eine
+Datei kann in beiden stehen; reine Leistungsdateien lösen keinen leeren
+pytest-Lauf aus. Die Einteilung liest jeden aufgelösten Fall vor der Abwahl:
+`-k`, `-m`, `--deselect` und Filter aus `PYTEST_ADDOPTS` oder der
+Pytest-Konfiguration ändern nicht die Gruppen; ein Fensterfall mit
+`performance` zählt zu keiner. Der eigentliche betroffene Lauf behält die
+Filter; `-k` und `-m` lassen sich auch direkt am Werkzeug angeben. Das
+ausdrücklich geladene Laufplugin in `list_windowed_tests` verknüpft den
+wirksamen Markerfilter mit `not performance` und mit der Gruppe aus
+`--window-group`, statt ihn zu überschreiben) ·
 `count_new_windows.py` (welche Fenster während eines Befehls aufgehen — Klasse,
 Titel, Prozess; die Sichtprüfung aus RM-100 als Messung, zwanzig Abtastungen je
 Sekunde über `EnumWindows`, Exit 1 bei einem neuen Konsolenfenster) ·

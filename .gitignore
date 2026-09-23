@@ -168,7 +168,3 @@ tools/.window-bench-profile/
 /*.obj
 /*.step
 /*.png
-# `mushroom.stl` liegt seit dem 25.08.2026 getrackt in der Wurzel und wird von
-# keiner Datei genannt. Sie hier zu verdecken hieße, sie zu vergessen; ob sie
-# bleibt, entscheidet jemand, der weiß, wofür sie da war.
-!/mushroom.stl

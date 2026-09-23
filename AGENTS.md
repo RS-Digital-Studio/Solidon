@@ -184,7 +184,7 @@ Dialoge.
 - **Kleine Schritte, und je Schritt nur die betroffenen Tests.** Nach jedem
   Schritt laufen die Tests der Dateien, die er berührt
   (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab); die
-  Kernsammlung ohne Fensterdateien und Leistung mit ruff, format und mypy ist
+  Sammlung ohne Fenstertests und Leistung mit ruff, format und mypy ist
   das Tor **vor dem Commit**,
   nicht der Takt der Arbeit (Entscheidung Robert, 02.09.2026 — an dem Tag
   gingen Stunden für Läufe drauf, die nichts über die Änderung sagten). Ein

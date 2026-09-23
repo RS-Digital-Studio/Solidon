@@ -58,10 +58,10 @@ bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh
 .venv\Scripts\python.exe -m mypy
 ```
 
-Diese vier sind zusammen das Entwicklungstor: Kernsammlung ohne Fensterdateien
-und Leistung, Ruff, Formatierung und mypy. `/pruefen` fasst sie zusammen —
+Diese vier sind zusammen das Entwicklungstor: alle Tests ohne Fenster und
+Leistung, Ruff, Formatierung und mypy. `/pruefen` fasst sie zusammen —
 **vor dem Commit**, nicht nach jedem Schritt. Je Schritt laufen nur die
-betroffenen Kern- und statischen Tests. **Fensterdateien und Leistungsprüfungen
+betroffenen Kern- und statischen Tests. **Fenstertests und Leistungsprüfungen
 laufen ausschließlich beim Release**, auch nicht als betroffene Teilmenge:
 
 ```
@@ -71,7 +71,7 @@ laufen ausschließlich beim Release**, auch nicht als betroffene Teilmenge:
 ```
 
 `--why` nennt je Testdatei den Grund, `--split` zeigt die regulären Aufrufe.
-Fensterdateien und Leistung bleiben bis zum Release zurückgestellt;
+Fenstertests und Leistung bleiben bis zum Release zurückgestellt;
 `--release` schaltet die getrennten Fensterläufe hinzu. **Ohne Argumente nimmt es alle ungestageten
 Änderungen im Baum**; wer nur bestimmte meint, nennt sie. Bei Änderungen an `i18n`, `types.py`, `errors.py`
 oder `log.py` meldet es „das ist die Suite" — dann direkt `/pruefen`.
@@ -79,8 +79,8 @@ oder `log.py` meldet es „das ist die Suite" — dann direkt `/pruefen`.
 **`pytest -q` am Stück kommt seit dem 16.08.2026 nicht mehr durch.** Rund 22
 Minuten, dann ein nativer Abriss bei über 3 GB, ohne Ergebniszeile — die Suite
 baut in einem Prozess über siebenhundert Fenster mit Ansicht nacheinander auf,
-und irgendwann reißt eine Grenze. Das Entwicklungstor lässt diese Dateien
-vollständig aus. **Beim Release** laufen sie mit `--release` in getrennten
+und irgendwann reißt eine Grenze. Das Entwicklungstor lässt die Fenstertests
+aus. **Beim Release** laufen sie mit `--release` je Datei in getrennten
 Prozessen; die Leistungsprüfung folgt separat auf der Referenzmaschine:
 
 ```
@@ -88,10 +88,15 @@ bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh --relea
 .venv\Scripts\python.exe -m pytest -q -m performance   # ausschließlich beim Release (§31)
 ```
 
-Das Skript sucht die Fensterdateien selbst (`tools/list_windowed_tests.py` liest
-den Fixture-Graphen und den Marker `windowed`). Jede Datei mit einem `qt_app`-
-oder `windowed`-Test gehört zur Fenstergruppe. Tests, die ein Fenster im
-Unterprozess öffnen, tragen `@pytest.mark.windowed`; eine gesonderte Dateiliste
+**Getrennt wird je Test, nicht je Datei** (seit 22.09.2026). `tests/conftest.py`
+gibt jedem Test mit `qt_app` im Fixture-Graphen den Marker `windowed`; Tests,
+die ein Fenster im Unterprozess öffnen, tragen ihn ausdrücklich. Das
+Entwicklungstor wählt mit `-m "not windowed"` ab, das Release-Tor fährt je
+Datei, die einen Fenstertest trägt (`tools/list_windowed_tests.py`), nur deren
+Fenstertests. Vorher nahm ein einziger Fenstertest seine ganze Datei aus dem
+Tor — 1709 Tests ohne Fenster, darunter fast ganz `test_translations`,
+`test_print_settings` und `test_toolchain`. Ein Test, der ein Widget baut,
+fordert `qt_app` an; ohne sie stürzt er im Tor ab. Eine gesonderte Dateiliste
 wird nicht gepflegt. Das Skript liegt unter `.claude/.state/` und ist
 seit dem 22.08.2026 eingecheckt — vorher schloss `.gitignore` den ganzen Ordner
 aus, und ein frischer Klon hatte damit den einzigen Weg nicht, auf dem das Tor
@@ -363,8 +368,9 @@ raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
   fährt `test_language_rules` und unabhängig von dessen Ergebnis
   `tools/check_new_texts.py`. Sprachbefunde zu Dateien **aus diesem Commit**
   und fehlende Übersetzungen seiner neuen Texte verhindern den Commit.
-  `test_translations` ist eine Fensterdatei und läuft ausschließlich beim
-  Release, ebenso wie alle anderen Fensterdateien und Leistungsprüfungen.
+  `test_translations` läuft mit seinen Tests ohne Fenster im Entwicklungstor;
+  nur sein Fenstertest und die übrigen Fenster- und Leistungsprüfungen laufen
+  ausschließlich beim Release.
   `SOLIDON_KEIN_TOR=1` schaltet den Hook für einen Lauf ganz ab.
   Beides läuft nur, wenn `core.hooksPath` auf `.githooks` zeigt — `check_env`
   meldet es beim Sitzungsstart, und `tests/test_toolchain.py` prüft zusätzlich,

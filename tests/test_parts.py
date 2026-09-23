@@ -38,7 +38,8 @@ from app.core.knowledge.parts.registry import PartRegistry, PartSpec, register_p
 from app.core.registry import REGISTRY, op_params, param
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
-from app.core.types import BaseParams, PartResult, Profile, Source
+from app.core.types import BaseParams, PartResult, Profile
+from tests.helpers import plate_project as project_with_plate
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -2932,18 +2933,6 @@ def test_a_part_operation_carries_its_own_parameters_and_a_place() -> None:
     assert {"size", "depth", "countersink"} <= names, "the part's own parameters"
     assert {"x", "y", "z", "axis", "angle"} <= names, "and where it goes"
     assert spec.category == "parts"
-
-
-def project_with_plate() -> Project:
-    made = new_project("centauri-carbon-2", "petg")
-    made.document.sources["src_1"] = Source(
-        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
-    )
-    made.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
-    History(made.document).apply(
-        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
-    )
-    return made
 
 
 def test_a_subtractive_part_removes_material(profile: Profile) -> None:

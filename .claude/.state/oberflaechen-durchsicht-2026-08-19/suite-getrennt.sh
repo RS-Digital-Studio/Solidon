@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reguläres Tor ohne Fenster und Leistung; --release nimmt die Fenster dazu.
+# Reguläres Tor ohne Fenstertests und Leistung; --release nimmt die Fenster dazu.
 # Leistungsprüfungen bleiben dem getrennten Release-Lauf vorbehalten.
 #
 # In einem Prozess baut die Suite über siebenhundert VTK-Fenster nacheinander
@@ -10,6 +10,13 @@
 # Die Fenstergruppe kommt aus Pytests aufgelöstem Fixture-Graphen:
 # tools/list_windowed_tests.py findet auch mittelbare qt_app-Abhängigkeiten.
 # Neue Testdateien brauchen deshalb keinen handgepflegten Eintrag.
+#
+# **Getrennt wird je Test, nicht je Datei** (22.09.2026). ``tests/conftest.py``
+# gibt jedem Test mit ``qt_app`` den Marker ``windowed``; das reguläre Tor
+# fährt alles mit ``not windowed``, das Release-Tor je Fensterdatei nur deren
+# Fenstertests. Vorher schloss ein einziger Fenstertest seine ganze Datei aus
+# dem regulären Tor aus — gemessen 1709 Tests ohne Fenster, darunter fast alle
+# aus test_translations, test_print_settings und test_toolchain.
 set -u
 
 # **Das Skript fährt eine Kopie seiner selbst, und zwar aus einem gemessenen
@@ -49,7 +56,7 @@ for option in "$@"; do
     --release) RELEASE=1 ;;
     --help|-h)
       echo "Aufruf: suite-getrennt.sh [--release]"
-      echo "Standard: ohne Fenster und Leistung. --release: zusätzlich Fensterdateien."
+      echo "Standard: alle Tests ohne Fenster und Leistung. --release: zusätzlich die Fenstertests."
       exit 0 ;;
     *) echo "Unbekannte Option: $option. Verwende --help." >&2; exit 2 ;;
   esac
@@ -134,7 +141,9 @@ fi
 # Der Prüfstand will nur die Entscheidungsfunktionen (siehe den Ausstieg
 # weiter unten) und braucht die Dateiliste nicht — sie zu erheben kostet
 # einen Python-Start je Aufruf, und der Test ruft achtmal.
-if [ -n "${SUITE_NUR_FUNKTIONEN:-}" ]; then
+# Gebraucht wird die Liste nur beim Release; das reguläre Tor wählt die
+# Fenstertests über den Marker ab und braucht keine Dateiliste.
+if [ -n "${SUITE_NUR_FUNKTIONEN:-}" ] || [ "$RELEASE" -eq 0 ]; then
   windowed=""
 else
   if windowed=$("$PY" tools/list_windowed_tests.py); then
@@ -145,8 +154,6 @@ else
     exit 1
   fi
 fi
-ignores=""
-for file in $windowed; do ignores="$ignores --ignore=$file"; done
 
 # Jeder gestartete Prozess muss mit Exit 0 enden. Eine Zusammenfassung oder
 # vollständige Fortschrittszeichen können einen nativen Abbruch nicht heilen.
@@ -287,12 +294,13 @@ trap 'rm -f "$protokoll"' EXIT
 # Direkt in die Datei schreiben und den Prozessstatus vor jeder Ausgabe sichern.
 # -u hält die Fortschrittszeichen im laufenden Protokoll aktuell.
 if [ "$RELEASE" -eq 0 ]; then
-  echo "Reguläres Tor: Fensterdateien und Leistungsprüfungen bleiben bis zum Release zurückgestellt."
+  echo "Reguläres Tor: Fenstertests und Leistungsprüfungen bleiben bis zum Release zurückgestellt."
 else
-  echo "Release-Tor: Fensterdateien laufen mit; Leistungsprüfungen folgen getrennt."
+  echo "Release-Tor: die Fenstertests laufen je Datei mit; Leistungsprüfungen folgen getrennt."
 fi
-echo "=== der Rest in einem Zug (-n $KERNE) ==="
-PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "not performance" $ignores -n "$KERNE" > "$protokoll" 2>&1
+echo "=== alle Tests ohne Fenster in einem Zug (-n $KERNE) ==="
+PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "not performance and not windowed" -n "$KERNE" \
+  > "$protokoll" 2>&1
 status=$?
 cat "$protokoll"
 echo "--> Exit $status"
@@ -306,10 +314,6 @@ if [ -z "$sammelgruppe" ]; then
 elif zaehlt_als_fehler "$status" "$protokoll"; then
   fails=$((fails + 1))
   schlecht="$schlecht rest-in-einem-zug(Exit:$status)"
-fi
-
-if [ "$RELEASE" -eq 0 ]; then
-  windowed=""
 fi
 
 #: Wie viele Tests eine Portion höchstens umfasst.
@@ -346,7 +350,7 @@ MINDEST=${SUITE_MIN_PORTION:-4}
 # nichts.
 namen_von() {
   local gesammelt
-  gesammelt=$("$PY" -m pytest --collect-only -q -m "not performance" "$1") || return $?
+  gesammelt=$("$PY" -m pytest --collect-only -q -m "windowed and not performance" "$1") || return $?
   printf '%s\n' "$gesammelt" | grep -E "^tests/" | tr -d "\r"
 }
 
@@ -371,7 +375,8 @@ for file in $windowed; do
   # Datei ursprünglich größer oder kleiner als diese Obergrenze war.
   if [ "$anzahl" -eq 0 ]; then
     echo "=== $file ==="
-    PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "not performance" "$file" > "$protokoll" 2>&1
+    PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "windowed and not performance" "$file" \
+      > "$protokoll" 2>&1
     status=$?
     cat "$protokoll"
     echo "--> Exit $status"
@@ -427,7 +432,7 @@ for file in $windowed; do
     while IFS= read -r name; do
       [ -n "$name" ] && portion+=("$name")
     done < <(printf '%s\n' "$namen" | sed -n "${von},${bis}p")
-    PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "not performance" "${portion[@]}" \
+    PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "windowed and not performance" "${portion[@]}" \
       > "$protokoll" 2>&1
     status=$?
     cat "$protokoll"

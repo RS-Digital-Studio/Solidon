@@ -138,8 +138,12 @@ Bei einem beauftragten Website-Release:
    Ausgabe und Prozessausgang je Upload lesen.
 6. Seiten und signierte Versionsdatei über die passende geprüfte Dateiauswahl
    hochladen. `--fehlend` nimmt Pakete aus und ersetzt ihren Upload nicht.
-7. `upload_website.py --nachpruefen` gegen den Server ausführen. Lokale Dateien
-   und ein erfolgreicher Uploadaufruf belegen nicht den ausgelieferten Inhalt.
+7. `upload_website.py --nachpruefen --mit-pruefsumme` gegen den Server
+   ausführen, bevor `version.json` hochgeht: Jede versprochene Datei wird ganz
+   geladen und ihre SHA-256 gegen `website/dl/` oder das Manifest gehalten
+   (rund ein Gigabyte). Ohne den Zusatz prüft der Lauf nur die Länge. Lokale
+   Dateien und ein erfolgreicher Uploadaufruf belegen nicht den ausgelieferten
+   Inhalt.
    Bei visuellen Änderungen zusätzlich `.agents/skills/website-review/SKILL.md` auf den Zielseiten.
 8. Alte Pakete zunächst mit `--alte-pakete` nur auflisten. Löschen mit
    zusätzlichem `--wirklich` nur im beauftragten Bereinigungsumfang und nach

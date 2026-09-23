@@ -14,17 +14,45 @@ ist, lehnt er ab.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 from pathlib import Path
 
 import pytest
 
 from app.branding import APP_VERSION
+from tests.helpers import tiny_elf_kernel
 from tools import make_licence_notices as notices
+from tools import make_sbom
+
+#: Der Laufzeitkern vor dem Abbild des Probe-AppImage.
+KERNEL = tiny_elf_kernel(bytes(16), b"Probekern")
+
+
+@pytest.fixture(autouse=True)
+def _probe_kernel_is_the_pinned_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Probe-AppImages tragen ``KERNEL``; er gilt hier als die feste Veröffentlichung."""
+    monkeypatch.setattr(make_sbom, "APPIMAGE_RUNTIME_SHA256", hashlib.sha256(KERNEL).hexdigest())
 
 
 def _sbom(path: Path, target: str = "linux-x86_64") -> Path:
-    """Eine Endartefakt-SBOM mit den Familien, die ein Quellenangebot brauchen."""
+    """Eine Endartefakt-SBOM mit den Familien, die ein Quellenangebot brauchen.
+
+    Auf Linux ist es die Stückliste des AppImage-Inhalts und trägt dessen
+    Laufzeitkern; die Windows-Stückliste trägt ihn nicht.
+    """
+    runtime = (
+        [
+            {
+                "type": "library",
+                "name": "appimage-type2-runtime",
+                "version": "20251108",
+                "purl": "pkg:generic/appimage-type2-runtime@20251108",
+            }
+        ]
+        if target.startswith("linux")
+        else []
+    )
     document = {
         "metadata": {
             "component": {"name": "Solidon3D", "version": APP_VERSION},
@@ -38,12 +66,7 @@ def _sbom(path: Path, target: str = "linux-x86_64") -> Path:
                 "version": "3.13.1",
                 "purl": "pkg:generic/geos@3.13.1",
             },
-            {
-                "type": "library",
-                "name": "appimage-type2-runtime",
-                "version": "20251108",
-                "purl": "pkg:generic/appimage-type2-runtime@20251108",
-            },
+            *runtime,
         ],
     }
     sbom = path / "Solidon3D.cdx.json"
@@ -55,7 +78,7 @@ def _packages(root: Path) -> dict[str, Path]:
     root.mkdir(parents=True, exist_ok=True)
     appimage = root / "Solidon3D-0.0.0-x86_64.AppImage"
     flatpak = root / "Solidon3D-0.0.0-x86_64.flatpak"
-    appimage.write_bytes(b"appimage")
+    appimage.write_bytes(KERNEL + b"hsqs-Abbild")
     flatpak.write_bytes(b"flatpak")
     return {"appimage": appimage, "flatpak": flatpak}
 
@@ -81,7 +104,9 @@ def test_what_the_writer_lays_down_the_checker_accepts(tmp_path: Path) -> None:
         assert entry["version"] in entry["offer_text"]
         assert entry["available_until"] >= "2029-09-03"
     # Der Prüfer nimmt die Datei an, wie sie liegt.
-    notices._verify_release_evidence(evidence, json.loads(sbom.read_text(encoding="utf-8")))
+    notices._verify_release_evidence(
+        evidence, json.loads(sbom.read_text(encoding="utf-8")), artifact_kind="appimage"
+    )
 
 
 def test_a_changed_package_is_refused(tmp_path: Path) -> None:
@@ -94,7 +119,9 @@ def test_a_changed_package_is_refused(tmp_path: Path) -> None:
     packages["flatpak"].write_bytes(b"flatpak, afterwards changed")
 
     with pytest.raises(RuntimeError, match="SHA-256"):
-        notices._verify_release_evidence(evidence, json.loads(sbom.read_text(encoding="utf-8")))
+        notices._verify_release_evidence(
+            evidence, json.loads(sbom.read_text(encoding="utf-8")), artifact_kind="appimage"
+        )
 
 
 def test_a_missing_outer_package_is_refused_before_anything_is_written(tmp_path: Path) -> None:
@@ -129,7 +156,9 @@ def test_a_written_offer_without_text_is_no_offer(tmp_path: Path) -> None:
     evidence.write_text(json.dumps(document), encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="keinen Text"):
-        notices._verify_release_evidence(evidence, json.loads(sbom.read_text(encoding="utf-8")))
+        notices._verify_release_evidence(
+            evidence, json.loads(sbom.read_text(encoding="utf-8")), artifact_kind="appimage"
+        )
 
 
 def test_an_offer_shorter_than_three_years_is_refused(tmp_path: Path) -> None:
@@ -144,7 +173,9 @@ def test_an_offer_shorter_than_three_years_is_refused(tmp_path: Path) -> None:
     evidence.write_text(json.dumps(document), encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="drei Jahre"):
-        notices._verify_release_evidence(evidence, json.loads(sbom.read_text(encoding="utf-8")))
+        notices._verify_release_evidence(
+            evidence, json.loads(sbom.read_text(encoding="utf-8")), artifact_kind="appimage"
+        )
 
 
 def test_an_archive_provision_still_needs_its_files(tmp_path: Path) -> None:
@@ -160,7 +191,9 @@ def test_an_archive_provision_still_needs_its_files(tmp_path: Path) -> None:
     evidence.write_text(json.dumps(document), encoding="utf-8")
 
     with pytest.raises((RuntimeError, KeyError)):
-        notices._verify_release_evidence(evidence, json.loads(sbom.read_text(encoding="utf-8")))
+        notices._verify_release_evidence(
+            evidence, json.loads(sbom.read_text(encoding="utf-8")), artifact_kind="appimage"
+        )
 
 
 def test_the_command_line_writes_the_same_file(tmp_path: Path) -> None:
@@ -200,3 +233,24 @@ def test_the_command_line_writes_the_same_file(tmp_path: Path) -> None:
     assert document["target"] == "windows-x86_64"
     assert document["packages"][0]["kind"] == "windows-installer"
     notices._verify_release_evidence(evidence, json.loads(sbom.read_text(encoding="utf-8")))
+
+
+def test_an_appimage_with_a_foreign_kernel_is_refused(tmp_path: Path) -> None:
+    """Die Stückliste nennt den Kern, das gehashte Paket muss ihn tragen.
+
+    appimagetool füllt dabei ``.digest_md5`` — das ist derselbe Kern
+    (am AppImage 0.4.4 gemessen: genau diese 16 Bytes wichen ab).
+    """
+    sbom = _sbom(tmp_path)
+    build = tmp_path / "build"
+    evidence = build / "release-evidence.json"
+    packages = _packages(build)
+    packages["appimage"].write_bytes(tiny_elf_kernel(b"\x42" * 16, b"Probekern") + b"hsqs")
+    notices.write_release_evidence(sbom, evidence, packages, release_date=dt.date(2026, 9, 2))
+    document = json.loads(sbom.read_text(encoding="utf-8"))
+    notices._verify_release_evidence(evidence, document, artifact_kind="appimage")
+
+    packages["appimage"].write_bytes(tiny_elf_kernel(bytes(16), b"Fremdkern") + b"hsqs")
+    notices.write_release_evidence(sbom, evidence, packages, release_date=dt.date(2026, 9, 2))
+    with pytest.raises(RuntimeError, match="anderen Laufzeitkern"):
+        notices._verify_release_evidence(evidence, document, artifact_kind="appimage")

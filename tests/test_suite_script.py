@@ -309,10 +309,13 @@ def test_a_clean_stub_suite_has_a_successful_process_exit(tmp_path: Path, releas
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Läufe mit Fehler: 0" in result.stdout
     calls = (tmp_path / "calls.txt").read_text(encoding="utf-8")
-    assert "--ignore=tests/test_fake.py" in calls
-    assert ("--collect-only" in calls) is release
+    # Je Test getrennt: keine Datei fällt aus dem regulären Tor, und die
+    # Fensterprozesse fahren nur die Fenstertests ihrer Datei.
+    assert "--ignore" not in calls
+    assert "-m not performance and not windowed -n" in calls
+    assert ("list_windowed_tests.py" in calls) is release
+    assert ("--collect-only -q -m windowed and not performance" in calls) is release
     assert ("tests/test_fake.py::test_0" in calls) is release
-    assert "not performance" in calls
 
 
 def test_an_empty_core_collection_cannot_pass_the_regular_gate(tmp_path: Path) -> None:
@@ -323,10 +326,10 @@ def test_an_empty_core_collection_cannot_pass_the_regular_gate(tmp_path: Path) -
 
 def test_a_failed_windowed_collection_does_not_run_the_core_group(tmp_path: Path) -> None:
     """Auch eine teilweise ausgegebene Fensterliste darf den Fehler nicht verdecken."""
-    result = fake_suite(tmp_path, FAKE_LIST_EXIT="3")
+    result = fake_suite(tmp_path, release=True, FAKE_LIST_EXIT="3")
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Exit 3" in result.stderr
-    assert "Rest in einem Zug" not in result.stdout
+    assert "in einem Zug" not in result.stdout
 
 
 def test_a_failed_node_collection_is_not_run_as_a_partial_list(tmp_path: Path) -> None:

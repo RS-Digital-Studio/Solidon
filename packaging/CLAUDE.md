@@ -136,11 +136,13 @@ nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
   zusätzlich den stehen gebliebenen COLLECT-Zwischenordner.
 - **Das Linux-Paket nimmt Systembibliotheken nur mit Familie mit.** Die Spec
   lässt auf Linux das GTK-3-Erscheinungsbild von Qt (`platformthemes/libqgtk3`)
-  und den Grundbestand jedes Linux draußen — X11-Kern, fontconfig, freetype,
-  glib/dbus/systemd — nach der Liste in `make_linux_packages.HOST_PROVIDED_LIBRARIES`,
-  dazu die Terminalmodule `readline`/`curses` (libreadline ist GPL-3, Regel 15).
-  Was bleibt — libxcb mit den xcb-util-Bibliotheken, xkbcommon, die
-  Kerberos-Familie —, ordnet `make_sbom.LINUX_LIBRARY_FAMILIES` je Soname
+  und den GTK-Stapel, der nur an ihm hing, draußen — die Liste in
+  `make_linux_packages.ORPHANED_LIBRARIES` —, dazu die Terminalmodule
+  `readline`/`curses` (libreadline ist GPL-3, Regel 15). Alles andere reist
+  mit, auch glib, dbus, systemd, fontconfig und freetype: Qt hängt hart daran,
+  und „ist überall vorhanden" ist keine Messung. Was bleibt — libxcb mit den
+  xcb-util-Bibliotheken, xkbcommon, die Kerberos-Familie, der glib-Stapel und
+  die Kompressionsbibliotheken —, ordnet `make_sbom.LINUX_LIBRARY_FAMILIES` je Soname
   einer Familie zu, und `dpkg-query` liest beim Bau die Fassung aus dem Paket
   des Bauservers. Symlinks zählen nicht als Datei, CPythons `lib-dynload`
   gehört CPython, `<name>.libs` seiner Distribution. Eine native Datei ohne
@@ -153,7 +155,10 @@ nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
   nicht mit. Das Schema-2-JSON bleibt in der CRA-/Buildakte. Vor der
   äußersten Veröffentlichung prüft `--release-check` fail-closed die
   Endartefakt-SBOM, Schema-1-Evidenz, äußeren Pakete, exakte Versionen sowie
-  erforderliche Quellarchive und Relink-Materialien. Diese Prüfung läuft
+  die Quellenangebote; sie hält seit 0.5.0 den Release an, statt zu warnen
+  (RM-115). Das AppImage trägt eine eigene Stückliste mit dem vorangestellten
+  Laufzeitkern (`make_linux_packages.embed_appimage_runtime`) und wird
+  ausgepackt mit `--artifact-kind appimage` geprüft. Diese Prüfung läuft
   ungeschützt und erst nach der Signierung; ein Signierjob führt keinen
   Repositorycode dafür aus. Auf Windows schreibt `sign_release.py` die
   Evidenz nach der lokalen Signatur neu und wiederholt die Prüfung, weil

@@ -47,6 +47,13 @@ DEFAULT_INDEX = REPOSITORY / ".claude" / "memory" / "MEMORY.md"
 #: Wie lange auf eine fremde Sperre gewartet wird, bevor der Lauf aufgibt.
 LOCK_TIMEOUT_SECONDS = 10.0
 
+#: Wie lange ``os.replace`` einen fremden Griff auf dem Index abwartet. Unter
+#: Windows öffnen Defender und die Suche eine eben umbenannte Datei ohne
+#: ``FILE_SHARE_DELETE``; der nächste Austausch bekommt dann „Zugriff
+#: verweigert", obwohl jede Sitzung sich an die Sperre hält (Release-Lauf
+#: vom 22.09.2026). Der Griff ist nach Millisekunden weg.
+REPLACE_TIMEOUT_SECONDS = 2.0
+
 #: Ein Eintrag, wie ihn ``tests/test_directory_docs.py`` sucht: ``[Titel](datei.md)``.
 #: Wer eine Zeile ohne diesen Bau einfügt, legt sie ab, wo der Wächter sie
 #: nicht findet — und der meldet sie dann als fehlenden Zeiger.
@@ -161,6 +168,19 @@ def check_only_one_line_appeared(before: list[str], after: list[str], line: str)
     raise IndexWriteError("Neben der neuen Zeile hätte sich eine andere geändert.")
 
 
+def _replace_patiently(source: Path, target: Path) -> None:
+    """``source.replace(target)``, mit Geduld für einen kurz gehaltenen Zielgriff."""
+    deadline = monotonic() + REPLACE_TIMEOUT_SECONDS
+    while True:
+        try:
+            source.replace(target)
+            return
+        except PermissionError:
+            if monotonic() >= deadline:
+                raise
+            sleep(0.05)
+
+
 def insert(index: Path, line: str, *, section: str | None = None) -> int:
     """Fügt ``line`` ein und gibt ihre Zeilennummer zurück (1-basiert).
 
@@ -206,7 +226,7 @@ def insert(index: Path, line: str, *, section: str | None = None) -> int:
                 # leere `MEMORY.md` zurück. Fünf Stellen im Haus machen es so.
                 sink.flush()
                 os.fsync(sink.fileno())
-            Path(temporary).replace(index)
+            _replace_patiently(Path(temporary), index)
         except BaseException:
             Path(temporary).unlink(missing_ok=True)
             raise

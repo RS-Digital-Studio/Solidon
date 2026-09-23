@@ -14,14 +14,20 @@ Regelwerks.
 ## Entwicklung und Release
 
 Nach Entwicklungsschritten laufen nur betroffene Kern- und statische Tests.
-Vor regulären Commits gehören die Kernsammlung ohne Fensterdateien und
-Leistung sowie Ruff, Formatierung und mypy zum Entwicklungstor.
-**Fensterdateien und Leistungsprüfungen laufen ausschließlich beim Release**,
-auch nicht als gezielte Teilmenge während der Entwicklung. Die Fenstergruppe
-wird über Pytests Fixture-Graphen (`qt_app`) und den Marker `windowed` erkannt.
-Tests, die ein Fenster in einem Unterprozess öffnen, tragen ausdrücklich
-`@pytest.mark.windowed`. Schon ein solcher Test stellt die gesamte Datei bis
-zum Release zurück. Dort wird sie getrennt ausgeführt; Leistung folgt separat.
+Vor regulären Commits gehören alle Tests ohne Fenster und Leistung sowie
+Ruff, Formatierung und mypy zum Entwicklungstor.
+**Fenstertests und Leistungsprüfungen laufen ausschließlich beim Release**,
+auch nicht als gezielte Teilmenge während der Entwicklung. Fenstertests
+werden über Pytests Fixture-Graphen (`qt_app`) und den Marker `windowed`
+erkannt; `tests/conftest.py` setzt den Marker für jeden `qt_app`-Test.
+Tests, die ein Fenster in einem Unterprozess öffnen, tragen ihn ausdrücklich.
+**Getrennt wird je Test, nicht je Datei** (22.09.2026): Bis dahin stellte ein
+einziger Fenstertest seine ganze Datei bis zum Release zurück, und 1709 Tests
+ohne Fenster liefen in keinem Entwicklungstor und in der CI nur unter Windows —
+drei Befunde lagen darunter. Wer ein Widget baut, fordert deshalb `qt_app` an:
+Ohne die Fixture lief ein solcher Test bisher nur, weil ein Nachbar in
+derselben Datei die Anwendung schon erzeugt hatte; im Tor stürzt er ab.
+Beim Release läuft jede Datei mit Fenstertests getrennt; Leistung folgt separat.
 `/pruefen --release` beschreibt den
 vollständigen Umfang. Ein grüner Entwicklungslauf ist kein Release-Nachweis.
 
@@ -978,8 +984,8 @@ nicht das Gefühl:** `tools/affected_tests.py` liest, wer ein geändertes
 Modul mittelbar importiert, wer den Baum liest (`rglob`, `walk_packages`)
 und wer eine geänderte Nicht-Python-Datei beim Namen nennt — `--why` nennt
 je Datei den Grund, `--split` die regulären Aufrufe, `--run` fährt sie ohne
-Fensterdateien und Leistung. Nur beim Release schaltet `--release` die
-Fenstergruppe hinzu; die Leistungsprüfung bleibt ein eigener Release-Lauf.
+Fenstertests und Leistung. Nur beim Release schaltet `--release` die
+Fenstertests hinzu; die Leistungsprüfung bleibt ein eigener Release-Lauf.
 Die Auswahl ist das Werkzeug *zwischen* den Schritten; das Entwicklungstor
 vor dem Commit bleibt `/pruefen`. Eine Änderung an `types.py` oder `errors.py`
 berührt über den Graphen fast alles, und das Werkzeug sagt das dann auch.

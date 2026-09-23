@@ -11,8 +11,19 @@
 
 [ -n "$SOLIDON_KEIN_TOR" ] && exit 0
 
-PY=".venv/Scripts/python.exe"
-[ -x "$PY" ] || PY="python"
+# **Die Umgebung liegt am Hauptklon, nicht am Arbeitsverzeichnis** — dieselbe
+# Suche wie im pre-commit. Hier stand der relative Pfad `.venv/…` mit dem
+# nackten `python` als Rückfall: In einem `git worktree` gibt es keine `.venv`,
+# und der Rückfall nahm, was gerade auf dem PATH stand — ohne die Umlautliste
+# des Übersetzungstests, und auf einem Rechner ohne `python` scheiterte jeder
+# Commit an „command not found" (22.09.2026).
+wurzel=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+PY="$wurzel/.venv/Scripts/python.exe"
+[ -x "$PY" ] || PY="$wurzel/.venv/bin/python"
+if [ ! -x "$PY" ]; then
+  echo "commit-msg: keine .venv unter $wurzel gefunden, keine Umlautprüfung." >&2
+  exit 0
+fi
 
 "$PY" tools/check_message.py "$1" || exit 1
 exit 0

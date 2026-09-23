@@ -18,20 +18,12 @@ import pytest
 
 from app.core.bootstrap import load_operations
 from app.core.types import Profile, SceneObject
+from tests.helpers import exact_kernel as _kernel
 from tests.test_missing_ops import run
 
 PLATE = (60.0, 40.0, 10.0)
 RADIUS = 3.0
 BORE_AREA = math.pi * RADIUS * RADIUS
-
-
-def _kernel() -> Any:
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
-    from app.core.brep import edit
-
-    return edit
 
 
 def _bored_plate() -> SceneObject:

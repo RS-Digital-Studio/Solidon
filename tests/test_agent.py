@@ -33,8 +33,8 @@ from app.core.types import (
     Profile,
     Scene,
     Severity,
-    Source,
 )
+from tests.helpers import plate_project
 from tests.scripted_backend import ScriptedBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -43,15 +43,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 @pytest.fixture
 def project() -> Project:
     """Ein Projekt mit einer Platte auf dem Stapel — der Startpunkt von Weg 1."""
-    made = new_project("centauri-carbon-2", "petg")
-    made.document.sources["src_1"] = Source(
-        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
-    )
-    made.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
-    History(made.document).apply(
-        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
-    )
-    return made
+    return plate_project()
 
 
 def scene_of(project: Project, profile: Profile) -> Scene:

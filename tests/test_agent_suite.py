@@ -32,8 +32,9 @@ from app.core.backends.llm import Reply, ToolCall
 from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
-from app.core.types import Profile, Source
+from app.core.types import Profile
 from tests.agent_cases import AMBIGUOUS, CASES, Case
+from tests.helpers import plate_project
 from tests.scripted_backend import ScriptedBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -41,15 +42,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 @pytest.fixture
 def project() -> Project:
-    made = new_project("centauri-carbon-2", "petg")
-    made.document.sources["src_1"] = Source(
-        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
-    )
-    made.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
-    History(made.document).apply(
-        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
-    )
-    return made
+    return plate_project()
 
 
 def good_answer(case: Case) -> list[Reply]:

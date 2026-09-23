@@ -26,6 +26,7 @@ entweder die Neugierigen oder die Dauernutzer.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -884,6 +885,35 @@ def build_tarball() -> int:
     return 0
 
 
+def embed_appimage_runtime(tree: Path, runtime: Path) -> Path:
+    """Schreibt Stückliste und Lizenzbeilage des AppImage-Inhalts mit dem Laufzeitkern.
+
+    ``tree`` ist die Kopie des App-Baums im AppDir, nie ``dist`` selbst: Das
+    Archiv und das Flatpak tragen den Kern nicht, und ihre Stückliste darf ihn
+    deshalb auch nicht nennen. Die Beilage entsteht neu aus der ergänzten
+    Stückliste — dieselbe Regel wie im Paketjob, und dieselbe, die
+    ``make_licence_notices --release-check --artifact-kind appimage`` danach
+    am ausgepackten AppImage prüft. Gibt den Pfad der Stückliste zurück.
+    """
+    from tools import make_licence_notices, make_sbom
+
+    sboms = sorted(tree.rglob(make_sbom.ARTIFACT_SBOM_NAME))
+    notices = sorted(tree.rglob(make_licence_notices.OUTPUT.name))
+    if len(sboms) != 1 or len(notices) != 1:
+        raise RuntimeError(
+            f"Im AppDir {tree} liegen {len(sboms)} Stücklisten und {len(notices)} "
+            "Lizenzbeilagen, erwartet ist je eine. Den Paketbau mit Stückliste und "
+            "Lizenzbeilage wiederholen."
+        )
+    bom = make_sbom.with_appimage_runtime(json.loads(sboms[0].read_text(encoding="utf-8")), runtime)
+    sboms[0].write_text(make_sbom.render_bom(bom), encoding="utf-8", newline="\n")
+    components = make_licence_notices.collect_artifact_components(bom)
+    notices[0].write_text(
+        make_licence_notices.render_notices(components), encoding="utf-8", newline="\n"
+    )
+    return sboms[0]
+
+
 def build_appimage() -> int:
     """Packt den Bau als AppImage — eine Datei, die ohne Installation läuft.
 
@@ -912,6 +942,11 @@ def build_appimage() -> int:
         shutil.rmtree(appdir)
     (appdir / "usr").mkdir(parents=True)
     shutil.copytree(SOURCE_DIR, appdir / "usr" / "bin")
+    try:
+        embed_appimage_runtime(appdir / "usr" / "bin", runtime)
+    except (OSError, ValueError, RuntimeError) as problem:
+        print(f"Stückliste des AppImage nicht geschrieben: {problem}")
+        return 1
 
     mime_target = appdir / "usr" / "share" / "mime" / "packages" / f"{APP_ID}.xml"
     mime_target.parent.mkdir(parents=True)

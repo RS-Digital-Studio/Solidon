@@ -97,9 +97,40 @@ def test_a_failed_replace_keeps_the_index_and_reports_the_path(
         raise PermissionError("Datei gesperrt")
 
     monkeypatch.setattr(Path, "replace", refuse)
+    # Ein bleibender Griff: die Geduld für einen kurzen (siehe unten) nicht absitzen.
+    monkeypatch.setattr(memory_index, "REPLACE_TIMEOUT_SECONDS", 0.0)
     assert memory_index.main(["--index", str(path), "--line", "- [Probe](probe.md)"]) == 1
     assert str(path) in capsys.readouterr().err
     assert path.read_text(encoding="utf-8") == BEISPIEL
+    assert not list(tmp_path.glob(".memory-index-*"))
+
+
+def test_a_briefly_held_index_is_replaced_on_the_next_try(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Griff, den ein Virenscanner kurz auf die frische Datei hält, ist kein Fehler.
+
+    Im Release-Lauf vom 22.09.2026 schlug ``test_two_processes_writing_at_once``
+    fehl: ``os.replace`` bekam unter Windows ``[WinError 5] Zugriff
+    verweigert``, obwohl beide Prozesse sich an die Sperre hielten. Den
+    Zieldatei-Griff hält dann ein Dritter — Defender oder die Suche öffnen
+    eine eben umbenannte Datei ohne ``FILE_SHARE_DELETE``. Ein zweiter
+    Versuch kurz danach gelingt.
+    """
+    path = _index(tmp_path)
+    original = Path.replace
+    refusals = [PermissionError(13, "Zugriff verweigert")]
+
+    def briefly_held(source: Path, target: Path) -> Path:
+        if refusals:
+            raise refusals.pop()
+        return original(source, target)
+
+    monkeypatch.setattr(Path, "replace", briefly_held)
+    memory_index.insert(path, "- [Neuer](neuer.md) — dazu.", section="Diese Maschine")
+
+    assert "- [Neuer](neuer.md) — dazu." in path.read_text(encoding="utf-8")
+    assert not refusals
     assert not list(tmp_path.glob(".memory-index-*"))
 
 

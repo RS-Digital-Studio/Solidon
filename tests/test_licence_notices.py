@@ -218,6 +218,90 @@ def test_fixed_texts_are_hash_checked_and_tied_to_the_target_version(
         temporary.unlink()
 
 
+class _RenumberedDistribution:
+    """Dieselbe installierte Distribution unter einer anderen Wheel-Version."""
+
+    def __init__(self, wrapped: Any, version: str) -> None:
+        self._wrapped = wrapped
+        self.version = version
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._wrapped, name)
+
+
+def _renumber_wheel(monkeypatch: pytest.MonkeyPatch, package: str, version: str) -> None:
+    """Lässt ``package`` als neue Wheel-Fassung mit unveränderter Bibliothek erscheinen."""
+    original = make_licence_notices.metadata.distribution
+
+    def distribution(name: str) -> Any:
+        found = original(name)
+        if licences.normalise(name) == licences.normalise(package):
+            return _RenumberedDistribution(found, version)
+        return found
+
+    monkeypatch.setattr(make_licence_notices.metadata, "distribution", distribution)
+
+
+def test_a_wheel_patch_with_the_verified_native_library_keeps_its_notice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der HarfBuzz-Text gilt der eingebetteten HarfBuzz-Fassung, nicht der Wheel-Nummer.
+
+    Am 22.09.2026 war der Versionswächter rot, weil uharfbuzz 0.56.2 erschien:
+    Der Text war an die Wheel-Version 0.56.1 gebunden, obwohl er die
+    mitgelieferte Bibliothek beschreibt. Eine neue Wheel-Fassung mit derselben,
+    geprüften Bibliothek hat denselben Lizenztext.
+    """
+    _renumber_wheel(monkeypatch, "uharfbuzz", "0.56.99")
+    component = next(
+        entry
+        for entry in make_licence_notices.collect_components()
+        if licences.normalise(entry.name) == "uharfbuzz"
+    )
+    assert component.version == "0.56.99"
+    assert "HarfBuzz-14.4.0-COPYING.txt" in {text.name for text in component.texts}
+
+
+def test_an_unverified_native_library_stops_the_notice_with_a_way_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bringt ein Wheel eine ungeprüfte Bibliothek mit, bleibt die Beilage rot —
+    und sagt, welche Fassung es ist und was zu tun ist."""
+    from tools import make_sbom
+
+    original = make_sbom.native_library_version
+
+    def native(slug: str, package: Any) -> str:
+        return "99.0.0" if slug == "uharfbuzz-native" else original(slug, package)
+
+    monkeypatch.setattr(make_sbom, "native_library_version", native)
+    with pytest.raises(RuntimeError, match="passt nicht") as caught:
+        make_licence_notices.collect_components()
+    message = str(caught.value)
+    assert "99.0.0" in message
+    assert "third_party_licenses.toml" in message and "vergleichen" in message
+
+
+def test_native_text_pins_and_runtime_families_name_the_same_versions() -> None:
+    """Ein an die Bibliothek gebundener Text und ihre Laufzeitfamilie halten
+    dieselbe geprüfte Liste — sonst ist die Beilage grün und die Paketakte rot."""
+    with make_licence_notices.FIXED_MANIFEST.open("rb") as stream:
+        document = tomllib.load(stream)
+    policies = make_licence_notices._runtime_policies()
+    bound = [entry for entry in document["text"] if entry.get("native")]
+    assert {entry["native"] for entry in bound} >= {
+        "uharfbuzz-native",
+        "freetype-py-native",
+        "wgpu-native",
+    }
+    for entry in bound:
+        policy = policies[entry["native"]]
+        assert set(entry["versions"]) == set(policy.versions), entry["path"]
+        assert {licences.normalise(name) for name in entry["packages"]} == {
+            licences.normalise(policy.notice_package)
+        }, entry["path"]
+
+
 def test_qt_open_source_route_contains_lgpl_and_its_gpl_basis() -> None:
     component = next(
         entry
@@ -341,17 +425,19 @@ def test_linux_release_refuses_an_uninventoried_appimage_runtime(tmp_path: Path)
         encoding="utf-8",
     )
 
+    sbom: dict[str, Any] = {
+        "metadata": {
+            "component": {"version": APP_VERSION},
+            "properties": [{"name": "solidon:target-platform", "value": "linux-x86_64"}],
+        },
+        "components": [],
+    }
     with pytest.raises(RuntimeError, match="AppImage type-2 runtime fehlt"):
-        make_licence_notices._verify_release_evidence(
-            evidence,
-            {
-                "metadata": {
-                    "component": {"version": APP_VERSION},
-                    "properties": [{"name": "solidon:target-platform", "value": "linux-x86_64"}],
-                },
-                "components": [],
-            },
-        )
+        make_licence_notices._verify_release_evidence(evidence, sbom, artifact_kind="appimage")
+    # Der App-Baum und das Flatpak tragen den Kern nicht und müssen ihn auch
+    # nicht nennen: Bis zum 22.09.2026 verlangte die Prüfung ihn von jeder
+    # Linux-Stückliste, und die Linux-Releaseakte war ohne Ausweg rot.
+    make_licence_notices._verify_release_evidence(evidence, sbom)
 
 
 def _write_hashed(root: Path, name: str, content: bytes) -> tuple[str, str]:
@@ -498,3 +584,118 @@ def test_end_artifact_notice_sbom_and_source_archives_reconcile(tmp_path: Path) 
     verified = make_licence_notices.verify_release(artifact, sbom_path, evidence)
 
     assert verified == components
+
+
+def test_the_appimage_content_names_its_runtime_and_passes_the_release_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Weg des AppImage: App-Baum kopieren, Laufzeitkern eintragen, prüfen.
+
+    ``make_linux_packages.embed_appimage_runtime`` schreibt Stückliste und
+    Beilage des AppImage-Inhalts; ``verify_release`` mit ``appimage`` nimmt
+    sie an, ohne diese Sorte weist er dieselbe Stückliste ab. Die Beilage
+    nennt jeden statisch eingebundenen Bestandteil mit seinem Text.
+    """
+    from tools import make_linux_packages, make_sbom
+
+    artifact = tmp_path / "artifact"
+    for binary in (artifact / "Solidon3D.exe", artifact / "_internal" / "python313.dll"):
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        binary.write_bytes(b"MZ\x90\x00native")
+    runtime_policy = make_licence_notices._runtime_policies()["cpython"]
+    sbom = make_sbom.build_bom(
+        customer_artifact=artifact,
+        platform="win-amd64",
+        python_version=min(runtime_policy.versions),
+    )
+    sbom_path = artifact / "_internal" / "Solidon3D.cdx.json"
+    sbom_path.write_text(json.dumps(sbom), encoding="utf-8")
+    (artifact / "THIRD-PARTY-NOTICES.md").write_text("vorher\n", encoding="utf-8")
+    runtime = tmp_path / "runtime-x86_64"
+    runtime.write_bytes(b"\x7fELF-Laufzeitkern")
+    monkeypatch.setattr(
+        make_sbom, "APPIMAGE_RUNTIME_SHA256", hashlib.sha256(runtime.read_bytes()).hexdigest()
+    )
+
+    written = make_linux_packages.embed_appimage_runtime(artifact, runtime)
+
+    document = json.loads(written.read_text(encoding="utf-8"))
+    runtime_entry = next(
+        entry
+        for entry in document["components"]
+        if entry.get("purl") == "pkg:generic/appimage-type2-runtime@20251108"
+    )
+    static = [
+        item["value"]
+        for item in runtime_entry["properties"]
+        if item["name"] == "solidon:static-component"
+    ]
+    assert [value.split(" ", 1)[0] for value in static] == [
+        "libfuse",
+        "squashfuse",
+        "zstd",
+        "zlib",
+        "musl",
+        "mimalloc",
+    ]
+    notice = (artifact / "THIRD-PARTY-NOTICES.md").read_text(encoding="utf-8")
+    for text in (
+        "AppImage-type2-runtime-dd6cebe.txt",
+        "LGPL-2.1.txt",
+        "squashfuse-0.5.2.txt",
+        "zstd-1.5.5.txt",
+        "zlib-1.3.txt",
+        "musl-1.2.5.txt",
+        "mimalloc-2.1.7.txt",
+    ):
+        assert f"#### {text}" in notice, text
+    evidence = _release_evidence(tmp_path, document)
+    offers = json.loads(evidence.read_text(encoding="utf-8"))
+    offers["source_provisions"].append(
+        {
+            "component_id": "appimage-type2-runtime",
+            "version": "20251108",
+            "issuer": "RS Digital",
+            "contact": "opensource@rs-digital.example",
+            "method": "written-offer",
+            "offer_text": "Quelltext auf Anfrage.",
+            "relink_method": "shared-library-replacement",
+            "available_until": "2030-09-01",
+        }
+    )
+    evidence.write_text(json.dumps(offers), encoding="utf-8")
+
+    make_licence_notices.verify_release(artifact, written, evidence, artifact_kind="appimage")
+    with pytest.raises(RuntimeError, match="kein AppImage-Inhalt"):
+        make_licence_notices.verify_release(artifact, written, evidence)
+
+
+def test_a_foreign_appimage_runtime_is_refused(tmp_path: Path) -> None:
+    """Ein anderer Laufzeitkern trüge andere statische Bestandteile."""
+    from tools import make_sbom
+
+    runtime = tmp_path / "runtime-x86_64"
+    runtime.write_bytes(b"anderer Kern")
+    with pytest.raises(RuntimeError, match="SHA-256"):
+        make_sbom.with_appimage_runtime(
+            {"metadata": {"component": {"bom-ref": "x"}}, "components": [], "dependencies": []},
+            runtime,
+        )
+
+
+def test_a_missing_notice_distribution_names_the_install_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Releaseakte 0.4.4 starb auf Linux und macOS mit einem Stapelabzug,
+    weil ``pyinstaller`` in der Prüfumgebung fehlte (Lauf 35464068433)."""
+    original = make_licence_notices.metadata.distribution
+
+    def without_pyinstaller(name: str) -> Any:
+        if licences.normalise(name) == "pyinstaller":
+            raise make_licence_notices.metadata.PackageNotFoundError(name)
+        return original(name)
+
+    monkeypatch.setattr(make_licence_notices.metadata, "distribution", without_pyinstaller)
+    policy = make_licence_notices._runtime_policies()["pyinstaller-bootloader"]
+    with pytest.raises(RuntimeError, match=r"pip install -c constraints\.txt pyinstaller"):
+        make_licence_notices._runtime_texts(policy, "6.22.2")

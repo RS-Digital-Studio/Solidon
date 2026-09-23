@@ -70,6 +70,57 @@ def find_compiler() -> Path | None:
     return None
 
 
+def compiler_version(compiler: Path) -> str:
+    """Die installierte Inno-Setup-Fassung zu ``compiler``, leer, wo keine bekannt ist.
+
+    Für das Protokoll des Installerbaus (RM-055): Welche Fassung gebaut hat,
+    stand bis 0.4.4 nirgends, und der erste Versuch las die Dateiversion — die
+    Inno Setup nicht pflegt: ``ISCC.exe`` 7.1.0 trägt „0.0.0.0", und auf dem
+    Runner war es obendrein ein Chocolatey-Shim (gemessen am 22.09.2026).
+    Verlässlich ist der Deinstallationseintrag, den der Inno-Installer selbst
+    anlegt (``Inno Setup N_is1``): ``DisplayVersion`` für genau den Ordner,
+    in dem ``compiler`` liegt.
+    """
+    if sys.platform != "win32":
+        return ""
+    import winreg
+
+    folder = str(compiler.resolve().parent).rstrip("\\").casefold()
+    uninstall = r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+    places = (
+        (winreg.HKEY_CURRENT_USER, uninstall),
+        (winreg.HKEY_LOCAL_MACHINE, uninstall),
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+        ),
+    )
+    for hive, path in places:
+        try:
+            parent = winreg.OpenKey(hive, path)
+        except OSError:
+            continue
+        with parent:
+            index = 0
+            while True:
+                try:
+                    name = winreg.EnumKey(parent, index)
+                except OSError:
+                    break
+                index += 1
+                if not (name.startswith("Inno Setup") and name.endswith("_is1")):
+                    continue
+                try:
+                    with winreg.OpenKey(parent, name) as entry:
+                        location = str(winreg.QueryValueEx(entry, "InstallLocation")[0])
+                        version = str(winreg.QueryValueEx(entry, "DisplayVersion")[0])
+                except OSError:
+                    continue
+                if location.rstrip("\\").casefold() == folder:
+                    return version
+    return ""
+
+
 def manifest_reason(manifest_file: Path | None = None) -> str:
     """Warum das signierte Manifest nicht zu den Grenzdateien passt — leer,
     wenn es passt.

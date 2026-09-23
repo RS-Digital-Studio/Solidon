@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import hashlib
 import json
 import platform
 import re
 import shutil
 import ssl
+import struct
 import subprocess
 import sys
 import sysconfig
@@ -63,8 +65,8 @@ MSVC_RUNTIME_PREFIXES: Final = (
 #: Systembibliotheken, die das Linux-Paket bewusst mitnimmt, als Familien mit
 #: ihren Sonamen-Präfixen (kleingeschrieben). Reihenfolge zählt: Die
 #: xcb-util-Bibliotheken heißen alle ``libxcb-…`` und stehen deshalb vor
-#: ``libxcb`` selbst. Was das Paket dem Rechner überlässt, steht in
-#: ``make_linux_packages.HOST_PROVIDED_LIBRARIES``.
+#: ``libxcb`` selbst. Was das Paket bewusst nicht mitnimmt, steht in
+#: ``make_linux_packages.ORPHANED_LIBRARIES``.
 LINUX_LIBRARY_FAMILIES: Final = (
     ("xcb-util-cursor", ("libxcb-cursor.",)),
     ("xcb-util-image", ("libxcb-image.",)),
@@ -457,12 +459,23 @@ def _runtime_owner(relative: str) -> str:
             "_multiprocessing",
             "_overlapped",
             "_queue",
+            "_remote_debugging",
             "_socket",
+            "_sqlite3",
             "_ssl",
+            "_test",
+            "_tkinter",
             "_uuid",
+            # Seit Python 3.14; die Windows-Releaseakte von 0.4.4 war daran rot
+            # („_internal/_zstd.pyd ohne Besitzer"). Die Liste hält
+            # ``test_every_cpython_extension_module_belongs_to_cpython`` gegen
+            # den ``DLLs``-Ordner des bauenden Interpreters.
+            "_zoneinfo",
+            "_zstd",
             "pyexpat",
             "select.",
             "unicodedata",
+            "winsound",
         )
     ):
         return "cpython"
@@ -1013,6 +1026,21 @@ def _native_version(component: NativeComponent, package: metadata.Distribution) 
     return package.version
 
 
+def native_library_version(slug: str, package: metadata.Distribution) -> str:
+    """Die Version der nativen Hauptbibliothek ``slug``, die ``package`` mitbringt.
+
+    Dieselbe Zahl, die die Stückliste trägt. Die Lizenzbeilage prüft daran
+    Texte, die der eingebetteten Bibliothek gelten und nicht dem Wheel.
+    """
+    component = next((entry for entry in NATIVE_COMPONENTS if entry.slug == slug), None)
+    if component is None:
+        raise RuntimeError(
+            f"Keine native Hauptbibliothek {slug} in make_sbom.NATIVE_COMPONENTS. "
+            "Den Namen in third_party_licenses.toml mit der Liste abgleichen."
+        )
+    return _native_version(component, package)
+
+
 def _purl(name: str, version: str) -> str:
     package = quote(canonicalize_name(name), safe=".-_")
     release = quote(version, safe=".-_+")
@@ -1252,6 +1280,127 @@ def build_bom(
         "components": components,
         "dependencies": dependencies,
     }
+
+
+#: Der AppImage-Laufzeitkern, den ``build.yml`` von der festen Veröffentlichung
+#: lädt und vor jedes AppImage setzt. Er liegt nicht im App-Baum, sondern vor
+#: dem Dateisystemabbild — PyInstallers Analyse sieht ihn deshalb nie.
+APPIMAGE_RUNTIME_ID: Final = "appimage-type2-runtime"
+APPIMAGE_RUNTIME_VERSION: Final = "20251108"
+APPIMAGE_RUNTIME_SHA256: Final = "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
+APPIMAGE_RUNTIME_LICENCE: Final = "MIT AND LGPL-2.1-only AND BSD-2-Clause AND BSD-3-Clause AND Zlib"
+
+#: Was der Laufzeitkern statisch in sich trägt, mit Version und Beleg. Gemessen
+#: am 22.09.2026 an genau der Datei mit der SHA-256 oben und am Bauskript
+#: ihres Quellstands (type2-runtime ``dd6cebe``): libfuse, zstd und zlib nennen
+#: ihre Version selbst in der Datei; squashfuse lädt das Bauskript als Archiv
+#: mit Prüfsumme; musl und mimalloc kommen aus dem Alpine-3.21-Chroot des
+#: Baus, dessen Paketindex für mimalloc2 seit dem 23.07.2024 nur 2.1.7-r0 kennt
+#: und für musl nur Revisionen von 1.2.5.
+APPIMAGE_RUNTIME_STATIC: Final = (
+    ("libfuse", "3.15.0", "LGPL-2.1-only", "Versionszeichenkette in der Laufzeitdatei"),
+    ("squashfuse", "0.5.2", "BSD-2-Clause", "Bauskript install-dependencies.sh, SHA-256"),
+    ("zstd", "1.5.6", "BSD-3-Clause", "Versionszeichenkette in der Laufzeitdatei"),
+    ("zlib", "1.3.1", "Zlib", "Versionszeichenkette inflate 1.3.1 in der Laufzeitdatei"),
+    ("musl", "1.2.5", "MIT", "Alpine-3.21-Bau-Chroot, musl 1.2.5-r*"),
+    ("mimalloc", "2.1.7", "MIT", "Alpine-3.21-Bau-Chroot, mimalloc2 2.1.7-r0"),
+)
+
+
+#: Abschnitte des Laufzeitkerns, die ``appimagetool`` im fertigen AppImage
+#: füllt: Prüfsumme, Aktualisierungsangabe, Signatur. In der festen
+#: Veröffentlichung stehen sie auf null. Im AppImage 0.4.4 unterschied sich der
+#: vorangestellte Kern von ihr in genau 16 Bytes, alle in ``.digest_md5``
+#: (gemessen am 22.09.2026).
+APPIMAGE_RUNTIME_FILLED_SECTIONS: Final = (".digest_md5", ".upd_info", ".sha256_sig", ".sig_key")
+
+
+def appimage_runtime_sha256(appimage: Path) -> str:
+    """SHA-256 des vorangestellten Laufzeitkerns, gefüllte Abschnitte genullt.
+
+    Die Länge liest der ELF-Kopf: Die Abschnittstabelle steht am Ende des
+    Kerns, danach beginnt das Dateisystemabbild. Stimmt die Zahl mit
+    :data:`APPIMAGE_RUNTIME_SHA256`, trägt das AppImage genau den Kern, den
+    seine Stückliste nennt.
+    """
+    with appimage.open("rb") as stream:
+        header = stream.read(64)
+        if len(header) < 64 or header[:6] != b"\x7fELF\x02\x01":
+            raise RuntimeError(
+                f"{appimage} beginnt nicht mit einem 64-Bit-ELF-Laufzeitkern. "
+                "Das AppImage mit tools/make_linux_packages.py --appimage neu bauen."
+            )
+        offset = struct.unpack_from("<Q", header, 0x28)[0]
+        entry_size, count, names_index = struct.unpack_from("<HHH", header, 0x3A)
+        stream.seek(0)
+        kernel = bytearray(stream.read(offset + entry_size * count))
+    sections = [
+        struct.unpack_from("<IIQQQQIIQQ", kernel, offset + index * entry_size)
+        for index in range(count)
+    ]
+    names = sections[names_index][4]
+    for section in sections:
+        start = names + section[0]
+        name = bytes(kernel[start : kernel.index(b"\0", start)]).decode("ascii", "replace")
+        if name in APPIMAGE_RUNTIME_FILLED_SECTIONS:
+            kernel[section[4] : section[4] + section[5]] = bytes(section[5])
+    return hashlib.sha256(kernel).hexdigest()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def with_appimage_runtime(bom: Mapping[str, Any], runtime_file: Path) -> dict[str, Any]:
+    """Die Stückliste des AppImage-Inhalts: der App-Baum und sein Laufzeitkern.
+
+    Der Kern wird Teil der Kundendatei, aber nie Teil des App-Baums — bis
+    0.4.4 fehlte er deshalb in jeder Stückliste, und die Linux-Releaseakte war
+    an genau dieser Stelle rot. Er kommt nur mit genau der geprüften Datei
+    hinein: Eine andere Fassung trüge andere statische Bestandteile, und die
+    stünden dann falsch in der Akte.
+    """
+    actual = _file_sha256(runtime_file)
+    if actual != APPIMAGE_RUNTIME_SHA256:
+        raise RuntimeError(
+            f"{runtime_file} hat SHA-256 {actual}, geprüft ist {APPIMAGE_RUNTIME_SHA256} "
+            f"({APPIMAGE_RUNTIME_ID} {APPIMAGE_RUNTIME_VERSION}). Die feste Laufzeitdatei "
+            "laden oder die neue Fassung samt statischer Bestandteile hier eintragen."
+        )
+    document: dict[str, Any] = json.loads(json.dumps(bom))
+    component = _runtime_component(
+        APPIMAGE_RUNTIME_ID,
+        "AppImage type-2 runtime",
+        APPIMAGE_RUNTIME_VERSION,
+        APPIMAGE_RUNTIME_LICENCE,
+        "https://github.com/AppImage/type2-runtime",
+        f"SHA-256 der festen Veröffentlichung {APPIMAGE_RUNTIME_SHA256}",
+    )
+    component["properties"].extend(
+        {"name": "solidon:static-component", "value": f"{name} {version} ({licence}): {source}"}
+        for name, version, licence, source in APPIMAGE_RUNTIME_STATIC
+    )
+    reference = str(component["bom-ref"])
+    components = [
+        entry for entry in document.get("components", []) if entry.get("bom-ref") != reference
+    ]
+    components.append(component)
+    components.sort(key=lambda entry: (str(entry["name"]).casefold(), entry["version"]))
+    document["components"] = components
+    product = str(document["metadata"]["component"]["bom-ref"])
+    dependencies = [
+        entry for entry in document.get("dependencies", []) if entry.get("ref") != reference
+    ]
+    for entry in dependencies:
+        if entry.get("ref") == product:
+            entry["dependsOn"] = sorted({*entry.get("dependsOn", []), reference})
+    dependencies.append({"ref": reference, "dependsOn": []})
+    document["dependencies"] = dependencies
+    return document
 
 
 def render_bom(bom: Mapping[str, Any]) -> str:

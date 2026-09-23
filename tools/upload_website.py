@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import ftplib
+import hashlib
 import ipaddress
 import json
 import os
@@ -41,6 +42,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from app.branding import WEBSITE_URL  # noqa: E402 - Repositorypfad gilt erst ab hier
 from app.core.http import (  # noqa: E402 - Repositorypfad gilt erst ab hier
     RejectRedirects,
     ResponseDeadlineError,
@@ -657,6 +659,31 @@ def promised_sizes(payload: dict[str, Any]) -> dict[str, int]:
     return sizes
 
 
+def promised_hashes(payload: dict[str, Any]) -> dict[str, str]:
+    """Die SHA-256 je versprochener Datei, wie ``version.json`` sie nennt."""
+    hashes: dict[str, str] = {}
+    for entry in payload.get("packages", {}).values():
+        if not isinstance(entry, dict):
+            continue
+        value = str(entry.get("sha256", "")).strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", value):
+            continue
+        for field in ("url", "file"):
+            name = str(entry.get(field, "")).split("/")[-1]
+            if name:
+                hashes[name] = value
+    return hashes
+
+
+def _sha256_file(path: Path) -> str:
+    """SHA-256 einer lokalen Datei, in Happen gelesen."""
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(_CHECKSUM_CHUNK):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def promised_files(payload: dict[str, Any]) -> set[str]:
     """Jeder Dateiname, den ``version.json`` nennt — aus **beiden** Feldern.
 
@@ -858,8 +885,57 @@ def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> 
     return [path for path in files if path.name != "version.json"]
 
 
-def verify_downloads() -> int:
+def public_base() -> str:
+    """Die öffentliche Adresse für den Abruf — ohne das FTPS-Passwort zu verlangen.
+
+    ``--nachpruefen`` fragt über HTTP wie ein Kunde und braucht keinen Zugang.
+    Bis zum 22.09.2026 las es die Adresse trotzdem über :func:`read_access`,
+    und das bricht ohne vollständige Zugangsdatei mit „Es gibt keine
+    .webserver.json … Passwort eintragen" ab — auf jedem Rechner außer dem
+    einen, der hochlädt. Eine vorhandene Datei darf die Adresse weiter
+    umlenken; ohne sie gilt die der Anwendung.
+    """
+    configured = ""
+    if ACCESS_FILE.is_file():
+        require_private_access_file()
+        try:
+            configured = str(
+                json.loads(ACCESS_FILE.read_text(encoding="utf-8")).get("public", "")
+            ).strip()
+        except OSError, ValueError, AttributeError:
+            configured = ""
+    return configured or WEBSITE_URL
+
+
+#: Wie groß ein Lesehappen beim Nachrechnen der Prüfsumme ist.
+_CHECKSUM_CHUNK = 1024 * 1024
+
+
+def _download_digest(request: urllib.request.Request, address: str) -> tuple[int, str]:
+    """Lädt eine öffentliche Datei vollständig und liefert Länge und SHA-256."""
+    digest = hashlib.sha256()
+    length = 0
+    with _open_public(request, timeout=PUBLIC_TIMEOUT_SECONDS) as answer:
+        final = _public_address(response_url(answer, address))
+        if not same_origin(address, final):
+            raise OSError("unerwartete Weiterleitung")
+        while chunk := answer.read(_CHECKSUM_CHUNK):
+            length += len(chunk)
+            if length > MAX_REMOTE_PACKAGE_BYTES:
+                raise OSError("die Antwort ist größer als jedes Paket")
+            digest.update(chunk)
+    return length, digest.hexdigest()
+
+
+def verify_downloads(*, checksums: bool = False) -> int:
     """Ruft jede versprochene Datei ab — über HTTP, wie ein Kunde.
+
+    Ohne ``checksums`` genügt die Kopfzeile: Länge gegen Sollwert. Mit
+    ``checksums`` (``--mit-pruefsumme``) wird jede Datei vollständig geladen
+    und ihre SHA-256 gegen die lokale Datei oder das Manifest gehalten — rund
+    ein Gigabyte je Lauf, dafür fällt auch eine vollständig übertragene, aber
+    falsche Datei auf (RM-117). Der Lauf gehört vor die Freigabe von
+    ``version.json``, nicht in jeden Upload.
 
     **Lokal gegen lokal sagt nichts darüber, was oben liegt.** Am 23.08.2026
     (0.1.3) zeigten die Seiten in sechs Sprachen auf vier gelöschte Dateien,
@@ -878,12 +954,14 @@ def verify_downloads() -> int:
     """
     promised: set[str] = set()
     sizes: dict[str, int] = {}
+    hashes: dict[str, str] = {}
 
     version_file = LOCAL_ROOT / "version.json"
     if version_file.is_file():
         payload = json.loads(version_file.read_text(encoding="utf-8"))
         promised |= promised_files(payload)
         sizes = promised_sizes(payload)
+        hashes = promised_hashes(payload)
 
     for page in LOCAL_ROOT.glob("*/index.html"):
         promised.update(_LINKED.findall(page.read_text(encoding="utf-8", errors="ignore")))
@@ -896,9 +974,7 @@ def verify_downloads() -> int:
         return 0
 
     try:
-        base = _public_address(
-            str(read_access().get("public", "https://solidon3d.de/")).rstrip("/")
-        )
+        base = _public_address(public_base().rstrip("/"))
     except ValueError as problem:
         raise SystemExit(
             "Die öffentliche Prüfadresse muss HTTPS ohne Zugangsdaten, "
@@ -922,15 +998,29 @@ def verify_downloads() -> int:
         # Falle beschrieben und die Stelle ist trotzdem hineingefallen; sie
         # war nur für den einen der beiden Fälle geschlossen.
         expected = local.stat().st_size if local.is_file() else sizes.get(name, 0)
+        expected_hash = _sha256_file(local) if checksums and local.is_file() else hashes.get(name)
         address = _public_address(f"{base}/dl/{name}")
-        request = urllib.request.Request(address, method="HEAD")
+        request = urllib.request.Request(address, method="GET" if checksums else "HEAD")
         try:
-            with _open_public(request, timeout=PUBLIC_TIMEOUT_SECONDS) as answer:
-                final = _public_address(response_url(answer, address))
-                if not same_origin(address, final):
-                    raise OSError("unerwartete Weiterleitung")
-                length = int(answer.headers.get("Content-Length") or 0)
-            if not expected:
+            carried = ""
+            if checksums:
+                length, carried = _download_digest(request, address)
+            else:
+                with _open_public(request, timeout=PUBLIC_TIMEOUT_SECONDS) as answer:
+                    final = _public_address(response_url(answer, address))
+                    if not same_origin(address, final):
+                        raise OSError("unerwartete Weiterleitung")
+                    length = int(answer.headers.get("Content-Length") or 0)
+            if checksums and not expected_hash:
+                print(
+                    f"  OHNE PRÜFSUMME  {name}: kein Sollwert — die Datei liegt nicht unter "
+                    "website/dl/ und steht in keinem Manifest."
+                )
+                unmeasured.append(name)
+            elif checksums and carried != expected_hash:
+                print(f"  PRÜFSUMME  {name}: oben {carried[:16]}…, hier {expected_hash[:16]}…")
+                broken.append(name)
+            elif not expected:
                 print(
                     f"  OHNE MASS  {name}: kein Sollwert — die Datei liegt nicht unter "
                     "website/dl/ und steht in keinem Manifest."
@@ -1290,6 +1380,13 @@ def main() -> int:
         "— gegen den Server, nicht gegen die Platte",
     )
     parser.add_argument(
+        "--mit-pruefsumme",
+        dest="checksums",
+        action="store_true",
+        help="mit --nachpruefen: jede Datei ganz laden und ihre SHA-256 vergleichen "
+        "(rund ein Gigabyte je Lauf)",
+    )
+    parser.add_argument(
         "--vorlage",
         dest="template",
         action="store_true",
@@ -1314,7 +1411,7 @@ def main() -> int:
 
     if arguments.verify:
         # Braucht kein FTP: gefragt wird über HTTP, wie ein Kunde fragt.
-        return verify_downloads()
+        return verify_downloads(checksums=arguments.checksums)
 
     if arguments.since:
         files = files_since(arguments.since)

@@ -154,9 +154,12 @@ jobs:
 
       - name: Tests
         # Die Kern- und Fensterverträge laufen getrennt; jedes Nichtnull-Ergebnis
-        # sperrt das Paket. Fensterdateien werden über den Fixture-Graphen gefunden
-        # und ausschließlich beim Release je Prozess geprüft. Eigene
-        # Fensterprozesse tragen den Marker windowed und werden mit ausgeschlossen.
+        # sperrt das Paket. Fenstertests trägt `tests/conftest.py` den Marker
+        # windowed ein (qt_app oder ausdrücklich); sie laufen ausschließlich
+        # beim Release je Datei in eigenen Prozessen. **Getrennt wird je Test,
+        # nicht je Datei** (22.09.2026): Vorher nahm ein einziger Fenstertest
+        # seine ganze Datei aus diesem Schritt, und 1709 Tests ohne Fenster
+        # liefen auf Linux und macOS nie.
         # Leistungsbudgets gelten nur beim Release auf der lokalen Referenzmaschine (§31).
         shell: bash
         env:
@@ -165,22 +168,17 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           set -euo pipefail
-          # Wie lokal in suite-getrennt.sh: die Fenstergruppe aus Pytests
-          # aufgelöstem Fixture-Graphen, nicht aus einer Textsuche — die
-          # erwischte Dateien, die über eine Ansicht schreiben, statt eine zu
-          # bauen, und übersah mittelbare qt_app-Abhängigkeiten.
-          windowed=$(python tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
-          ignores=""
-          for file in $windowed; do ignores="$ignores --ignore=$file"; done
+          # Wie lokal in suite-getrennt.sh: Die Fenstertests wählt der Marker
+          # ab, den conftest.py aus Pytests aufgelöstem Fixture-Graphen setzt —
+          # keine Textsuche und keine Dateiliste.
           # Xvfb nur, wo es eines gibt.
           if [ "$RUNNER_OS" = "Linux" ]; then
             run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
           else
             run() { python -m pytest -q "$@"; }
           fi
-          # -n auto verteilt nur die Kernfälle auf eigene Workerprozesse.
-          # $ignores nimmt alle Fensterdateien aus dem aufgelösten
-          # Fixture-Graphen heraus; Fenster werden hier nicht mitverteilt.
+          # -n auto verteilt nur die Kernfälle auf eigene Workerprozesse;
+          # Fenster werden hier nicht mitverteilt.
 
           # Jeder Nichtnull-Exit bleibt ein Fehllauf (tests/CLAUDE.md).
           # Eine Wiederholung darf einen nativen Abbruch genauso wenig
@@ -188,7 +186,7 @@ jobs:
           # Die früheren Vollbereichsläufe der Bausteine sind aus der Suite
           # entfernt. Ihre verbleibenden Geometrie- und Vertragsprüfungen
           # gehören wie die anderen Kernfälle in dieses Tor.
-          run -n auto -m "not performance and not rendered" $ignores
+          run -n auto -m "not performance and not rendered and not windowed"
 
       - name: Plattformübergreifende Fensterverträge (Release)
         # Druckdialog und native Rendererprozesse behalten ihre bisherige
@@ -205,7 +203,7 @@ jobs:
             run() { python -m pytest -q "$@"; }
           fi
           for file in tests/test_print_settings_ui.py tests/test_render_factory.py; do
-            run -m "not performance and not rendered" "$file"
+            run -m "windowed and not performance and not rendered" "$file"
           done
 
       - name: Fensterdateien
@@ -262,7 +260,7 @@ jobs:
               tests/test_print_settings_ui.py|tests/test_render_factory.py) continue ;;
             esac
             geprueft=$((geprueft + 1))
-            if run -m "not performance and not rendered" "$file"; then
+            if run -m "windowed and not performance and not rendered" "$file"; then
               gruen=$((gruen + 1))
             else
               rot="$rot $file($?)"
@@ -629,8 +627,10 @@ jobs:
         # (`packages_distributions`) und importiert `tools.make_sbom` → `app`:
         # ohne die Extras des Paketjobs wäre jede native Datei „ohne Besitzer"
         # und der erste Import ein ImportError. Gemessen am 02.09.2026 — der
-        # Job hatte bis dahin nie ein echtes Artefakt gesehen.
-        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]"
+        # Job hatte bis dahin nie ein echtes Artefakt gesehen. Dazu
+        # `pyinstaller`: Der Lizenztext des Bootloaders kommt aus dieser
+        # Distribution, wie im Paketjob; ohne sie starb die Akte von 0.4.4 hier.
+        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]" pyinstaller
       - name: Äußere Linux-Pakete und App-Baum laden
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -668,16 +668,33 @@ jobs:
           [ -n "$artifact" ] || { echo "Solidon3D-App-Baum fehlt im Linux-Archiv."; exit 1; }
           sbom=$(find "$artifact" -type f -name Solidon3D.cdx.json)
           [ "$(printf '%s\n' "$sbom" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { echo "Die Linux-Endartefakt-SBOM fehlt oder ist mehrdeutig."; exit 1; }
+          # **Das AppImage wird ausgepackt und für sich geprüft.** Sein Inhalt
+          # trägt eine eigene Stückliste mit dem vorangestellten Laufzeitkern
+          # (make_linux_packages.embed_appimage_runtime); Archiv und Flatpak
+          # tragen ihn nicht. `--appimage-extract` ist eine Funktion des
+          # Laufzeitkerns selbst und braucht kein FUSE.
+          chmod +x "$appimage"
+          appimage_file=$(readlink -f "$appimage")
+          mkdir appimage-content
+          ( cd appimage-content && "$appimage_file" --appimage-extract > /dev/null )
+          appimage_root=appimage-content/squashfs-root/usr/bin
+          [ -d "$appimage_root" ] || { echo "Der App-Baum fehlt im ausgepackten AppImage."; exit 1; }
+          appimage_sbom=$(find "$appimage_root" -type f -name Solidon3D.cdx.json)
+          [ "$(printf '%s\n' "$appimage_sbom" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { echo "Die Stückliste des AppImage fehlt oder ist mehrdeutig."; exit 1; }
           # Die Evidenz entsteht hier, wo äußere Pakete und SBOM zusammenliegen,
           # und wird gleich danach geprüft: Hashes der Pakete, Quellenangebote je
-          # LGPL-Familie, Frist. Bis zum 02.09.2026 schrieb sie niemand.
-          # **Die Releaseakte meldet, sie blockiert nicht** (Entscheidung Robert,
-          # 02.09.2026): Sie hat bis heute keinen Tag-Lauf gesehen, und kein Release
-          # hängt an einer Prüfung, die zum ersten Mal läuft. Was sie findet, steht
-          # als Warnung im Lauf und wird behoben; dann wird sie wieder scharf.
-          python -m tools.make_licence_notices --write-evidence --sbom "$sbom" --release-evidence build/release-evidence.json \
-            --package "appimage=build/$(basename "$appimage")" --package "flatpak=build/$(basename "$flatpak")" || echo "::warning::Releaseakte: Evidenz nicht geschrieben — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
-          python -m tools.make_licence_notices --release-check --artifact-root "$artifact" --sbom "$sbom" --release-evidence build/release-evidence.json || echo "::warning::Releaseakte: Belege unvollständig — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
+          # LGPL-Familie, Frist. Sie kommt aus der Stückliste des AppImage, der
+          # größeren der beiden: Sie nennt zusätzlich den Laufzeitkern und
+          # damit dessen Quellenangebot.
+          # **Seit 0.5.0 blockiert die Releaseakte** (RM-115). Bis dahin meldete
+          # sie nur (Entscheidung Robert, 02.09.2026), und im Tag-Lauf von
+          # 0.4.4 war sie auf allen drei Plattformen rot, ohne dass es jemand
+          # sah: pyinstaller fehlte hier, `_zstd.pyd` hatte keinen Besitzer,
+          # und den Laufzeitkern des AppImage nannte keine Stückliste.
+          python -m tools.make_licence_notices --write-evidence --sbom "$appimage_sbom" --release-evidence build/release-evidence.json \
+            --package "appimage=build/$(basename "$appimage")" --package "flatpak=build/$(basename "$flatpak")"
+          python -m tools.make_licence_notices --release-check --artifact-root "$artifact" --sbom "$sbom" --release-evidence build/release-evidence.json
+          python -m tools.make_licence_notices --release-check --artifact-kind appimage --artifact-root "$appimage_root" --sbom "$appimage_sbom" --release-evidence build/release-evidence.json
       - name: Geprüfte Linux-Pakete veröffentlichen
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -765,10 +782,14 @@ jobs:
       - name: Installer aus der geprüften Übergabe bauen
         shell: pwsh
         run: |
-          $compiler = (Get-Command ISCC -ErrorAction SilentlyContinue).Source
           # Version 7 vor 6, wie in tools/make_installer.py: Das Runner-Image trägt
-          # heute 6, und das Skript läuft unter beiden.
-          if (-not $compiler) { $compiler = @('C:\Program Files (x86)\Inno Setup 7\ISCC.exe', 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe') | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1 }
+          # heute 6, und das Skript läuft unter beiden. **Die Installationsorte
+          # zuerst, der PATH zuletzt:** Auf dem Runner ist `ISCC` auf dem PATH
+          # ein Chocolatey-Shim, und dessen Dateiversion ist „0.0.0.0 -
+          # Chocolatey Shim: 1.0.0" — genau das stand im Protokoll von 0.4.4
+          # (Lauf 35464068433) statt der Inno-Setup-Fassung.
+          $compiler = @('C:\Program Files (x86)\Inno Setup 7\ISCC.exe', 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe') | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $compiler) { $compiler = (Get-Command ISCC -ErrorAction SilentlyContinue).Source }
           if (-not $compiler) { throw "Inno Setup (7 oder 6) fehlt auf dem GitHub-Runner." }
           # **Welche Fassung gebaut hat, gehört ins Protokoll** (RM-055). Der
           # Griff oben nimmt, was da ist — heute 6, morgen 7 —, und bisher stand
@@ -777,7 +798,12 @@ jobs:
           # nicht `ISCC` ohne Argumente: Der Aufruf gibt zwar den Banner aus,
           # endet aber mit einem Nichtnull-Code, und ein Schritt mit
           # `$LASTEXITCODE`-Prüfung daneben stürbe daran.
-          $innoVersion = (Get-Item -LiteralPath $compiler).VersionInfo.ProductVersion
+          # Die Fassung steht im Deinstallationseintrag, den der Inno-Installer
+          # anlegt — nicht in der Datei: ISCC.exe trägt „0.0.0.0" (Inno Setup
+          # 7.1.0 gemessen), und derselbe Weg steht in make_installer.compiler_version.
+          $folder = (Split-Path -Parent (Resolve-Path -LiteralPath $compiler).Path).TrimEnd('\')
+          $innoVersion = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -like 'Inno Setup *_is1' -and $_.InstallLocation -and $_.InstallLocation.TrimEnd('\') -ieq $folder } | Select-Object -First 1).DisplayVersion
+          if ($innoVersion -notmatch '^[67]\.\d+') { throw "Die Inno-Setup-Fassung zu $compiler steht in keinem Deinstallationseintrag. Inno Setup mit seinem Installer einrichten." }
           Write-Host "Inno Setup: $compiler ($innoVersion)"
           if ($env:GITHUB_STEP_SUMMARY) {
             "Inno Setup: ``$compiler`` ($innoVersion)" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
@@ -824,8 +850,10 @@ jobs:
         # (`packages_distributions`) und importiert `tools.make_sbom` → `app`:
         # ohne die Extras des Paketjobs wäre jede native Datei „ohne Besitzer"
         # und der erste Import ein ImportError. Gemessen am 02.09.2026 — der
-        # Job hatte bis dahin nie ein echtes Artefakt gesehen.
-        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]"
+        # Job hatte bis dahin nie ein echtes Artefakt gesehen. Dazu
+        # `pyinstaller`: Der Lizenztext des Bootloaders kommt aus dieser
+        # Distribution, wie im Paketjob; ohne sie starb die Akte von 0.4.4 hier.
+        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]" pyinstaller
       - name: Finalen Installer laden
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -854,17 +882,11 @@ jobs:
           # `build/` gibt es hier nicht — siehe Linux-Prüfjob.
           New-Item -ItemType Directory -Force build | Out-Null
           Copy-Item -LiteralPath $setup[0].FullName -Destination build/$($setup[0].Name)
-          # **Die Releaseakte meldet, sie blockiert nicht** (Entscheidung Robert,
-          # 02.09.2026): Sie hat bis heute keinen Tag-Lauf gesehen, und kein Release
-          # hängt an einer Prüfung, die zum ersten Mal läuft. Was sie findet, steht
-          # als Warnung im Lauf und wird behoben; dann wird sie wieder scharf.
-          # **Und der Fehlercode wird zurückgesetzt.** Ein PowerShell-Schritt
-          # endet mit dem letzten `$LASTEXITCODE`; eine Warnung setzt ihn nicht
-          # zurück, und der Job war trotz „nicht blockierend" rot (Tag-Lauf 10).
+          # **Seit 0.5.0 blockiert die Releaseakte** (RM-115) — siehe Linux-Prüfjob.
           python -m tools.make_licence_notices --write-evidence --sbom $sbomPath --release-evidence build/release-evidence.json --package "windows-installer=build/$($setup[0].Name)"
-          if ($LASTEXITCODE -ne 0) { Write-Warning "::warning::Releaseakte: Die Windows-Release-Evidenz wurde nicht geschrieben — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"; $global:LASTEXITCODE = 0 }
+          if ($LASTEXITCODE -ne 0) { throw "Die Windows-Release-Evidenz wurde nicht geschrieben. Die Meldung darüber nennt den Grund." }
           python -m tools.make_licence_notices --release-check --artifact-root $artifactRoot --sbom $sbomPath --release-evidence build/release-evidence.json
-          if ($LASTEXITCODE -ne 0) { Write-Warning "::warning::Releaseakte: Die Windows-Releasebelege sind unvollständig — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"; $global:LASTEXITCODE = 0 }
+          if ($LASTEXITCODE -ne 0) { throw "Die Windows-Releasebelege sind unvollständig. Die Meldung darüber nennt den Grund." }
       - name: Geprüften Installer veröffentlichen
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1298,8 +1320,10 @@ jobs:
         # (`packages_distributions`) und importiert `tools.make_sbom` → `app`:
         # ohne die Extras des Paketjobs wäre jede native Datei „ohne Besitzer"
         # und der erste Import ein ImportError. Gemessen am 02.09.2026 — der
-        # Job hatte bis dahin nie ein echtes Artefakt gesehen.
-        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]"
+        # Job hatte bis dahin nie ein echtes Artefakt gesehen. Dazu
+        # `pyinstaller`: Der Lizenztext des Bootloaders kommt aus dieser
+        # Distribution, wie im Paketjob; ohne sie starb die Akte von 0.4.4 hier.
+        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]" pyinstaller
       - name: Finalen Installer laden
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1334,12 +1358,9 @@ jobs:
           cp "$package" "build/$(basename "$package")"
           sbom=$(find release-app/Solidon3D.app -type f -name Solidon3D.cdx.json)
           [ "$(printf '%s\n' "$sbom" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { echo "Die macOS-Endartefakt-SBOM fehlt oder ist mehrdeutig."; exit 1; }
-          # **Die Releaseakte meldet, sie blockiert nicht** (Entscheidung Robert,
-          # 02.09.2026): Sie hat bis heute keinen Tag-Lauf gesehen, und kein Release
-          # hängt an einer Prüfung, die zum ersten Mal läuft. Was sie findet, steht
-          # als Warnung im Lauf und wird behoben; dann wird sie wieder scharf.
-          python -m tools.make_licence_notices --write-evidence --sbom "$sbom" --release-evidence build/release-evidence.json --package "macos-installer=build/$(basename "$package")" || echo "::warning::Releaseakte: Evidenz nicht geschrieben — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
-          python -m tools.make_licence_notices --release-check --artifact-root release-app/Solidon3D.app --sbom "$sbom" --release-evidence build/release-evidence.json || echo "::warning::Releaseakte: Belege unvollständig — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
+          # **Seit 0.5.0 blockiert die Releaseakte** (RM-115) — siehe Linux-Prüfjob.
+          python -m tools.make_licence_notices --write-evidence --sbom "$sbom" --release-evidence build/release-evidence.json --package "macos-installer=build/$(basename "$package")"
+          python -m tools.make_licence_notices --release-check --artifact-root release-app/Solidon3D.app --sbom "$sbom" --release-evidence build/release-evidence.json
       - name: Geprüften Mac-Bau veröffentlichen
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1411,21 +1432,12 @@ jobs:
       - name: Tests
         env:
           QT_QPA_PLATFORM: offscreen
-        # Der Versionswächter prüft reguläre Verträge. Fensterdateien und
+        # Der Versionswächter prüft reguläre Verträge. Fenstertests und
         # Leistungsprüfungen bleiben dem Release vorbehalten.
         shell: bash
         run: |
           set -euo pipefail
-          # Wie lokal in suite-getrennt.sh: die Fenstergruppe aus Pytests
-          # aufgelöstem Fixture-Graphen, nicht aus einer Textsuche — die
-          # erwischte Dateien, die über eine Ansicht schreiben, statt eine zu
-          # bauen, und übersah mittelbare qt_app-Abhängigkeiten.
-          windowed=$(python tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
-          if [ -z "$(echo "$windowed" | tr -d '[:space:]')" ]; then
-            echo "::error::Die Fenstergruppe ist leer."
-            exit 1
-          fi
-          ignores=""
-          for file in $windowed; do ignores="$ignores --ignore=$file"; done
+          # Wie im Suite-Job: Die Fenstertests wählt der Marker ab, den
+          # conftest.py aus dem Fixture-Graphen setzt; alle übrigen laufen.
           run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
-          run -n auto -m "not performance and not rendered" $ignores
+          run -n auto -m "not performance and not rendered and not windowed"

@@ -366,6 +366,9 @@ def build_installer(stage: Path, handoff: dict[str, Any]) -> Path:
             "(winget install JRSoftware.InnoSetup) oder ISCC auf den PATH legen."
         )
     resolved = {key: resolve_handoff_path(stage, str(handoff[key])) for key in FIXED_PATHS}
+    # Welche Fassung gebaut hat, gehört ins Protokoll (RM-055) — dieselbe
+    # Zeile wie im CI-Job, der den unsignierten Installer baut.
+    print(f"Inno Setup: {compiler} ({make_installer.compiler_version(compiler) or 'unbekannt'})")
     completed = _run(
         [
             str(compiler),
@@ -400,19 +403,18 @@ def write_checksum(target: Path) -> Path:
     return checksum
 
 
-def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: Path) -> str:
+def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: Path) -> None:
     """Schreibt die Release-Evidenz für den signierten Installer und prüft die Akte.
 
     Dieselben zwei Aufrufe wie im CI-Prüfjob ``windows-release-check``. Der
     Installer wird vorher in die Ablage der Evidenz kopiert, weil der Prüfer
     nur relative Pfade darin auflöst.
 
-    Liefert leer, wenn beides gelungen ist, sonst die Warnung. Ein Fehlschlag
-    dieser zwei Schritte hält die Kette **nicht** an — Entscheidung Robert,
-    02.09.2026, dieselbe wie in der CI: Kein Release hängt an einer Prüfung,
-    die zum ersten Mal läuft. Was fehlt, kommt ins Register. Eine fehlende
-    SBOM im Arbeitsordner bleibt dagegen ein Halt, weil sie den gebundenen
-    App-Baum selbst betrifft.
+    **Seit 0.5.0 hält ein Fehlschlag die Kette an** (RM-115), wie in der CI.
+    Bis dahin warnte er nur (Entscheidung Robert, 02.09.2026: kein Release an
+    einer Prüfung, die zum ersten Mal läuft) — und im Tag-Lauf von 0.4.4 war
+    die Windows-Akte rot, weil ``_zstd.pyd`` keinen Besitzer hatte, ohne dass
+    es jemand las. Gegen genau dieses Artefakt ist sie mit der Korrektur grün.
     """
     artifact_root = resolve_handoff_path(stage, str(handoff["source_dir"]))
     sboms = sorted(artifact_root.rglob(ARTIFACT_SBOM_NAME))
@@ -437,9 +439,9 @@ def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: P
         check=False,
     )
     if written.returncode != 0:
-        return (
-            "Die Release-Evidenz wurde nicht geschrieben — Ausgabe darüber lesen; "
-            "die Umgebung braucht die Extras geom, ui, agent und brep."
+        raise SigningError(
+            "Die Release-Evidenz wurde nicht geschrieben — Ausgabe darüber lesen; die "
+            "Umgebung braucht die Extras geom, ui, agent und brep sowie pyinstaller."
         )
     checked = _run(
         [
@@ -456,8 +458,11 @@ def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: P
         check=False,
     )
     if checked.returncode != 0:
-        return "Die Releasebelege passen nicht zum signierten Installer — Ausgabe darüber lesen."
-    return ""
+        raise SigningError(
+            "Die Releasebelege passen nicht zum signierten Installer — Ausgabe darüber "
+            "lesen, beheben und die Kette neu starten. Der signierte Installer wird "
+            "nicht abgelegt."
+        )
 
 
 def run(
@@ -496,13 +501,7 @@ def run(
     sign_file(tool, setup, subject=subject, thumbprint=thumbprint, timestamp_url=timestamp_url)
     checksum = write_checksum(setup)
     _step("Release-Evidenz schreiben und Releaseakte prüfen")
-    warning = release_check(stage, handoff, setup, evidence)
-    if warning:
-        print(f"WARNUNG: {warning}")
-        print(
-            "Der signierte Installer wird trotzdem abgelegt — kein Release hängt an einer "
-            "Prüfung, die zum ersten Mal läuft. Den Befund ins Register von ROADMAP.md."
-        )
+    release_check(stage, handoff, setup, evidence)
     output_dir.mkdir(parents=True, exist_ok=True)
     result = output_dir / setup.name
     expected_hash = _sha256(setup)

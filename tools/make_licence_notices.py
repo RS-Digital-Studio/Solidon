@@ -121,13 +121,29 @@ def _wheel_texts(package: metadata.Distribution) -> tuple[NoticeText, ...]:
     return tuple(found)
 
 
+@dataclass(frozen=True, slots=True)
+class TextPin:
+    """Für welche Fassungen ein festgeschriebener Text geprüft ist.
+
+    ``native`` nennt die Laufzeitfamilie, deren Version gilt: Ein Text, der
+    die eingebettete Bibliothek beschreibt (HarfBuzz in uharfbuzz), hängt an
+    deren Version und nicht an der Wheel-Nummer. Am 22.09.2026 machte
+    uharfbuzz 0.56.2 den Versionswächter rot, weil der Text an 0.56.1 hing —
+    obwohl die Frage nur war, ob HarfBuzz denselben Text trägt. Leer heißt:
+    die Wheel-Version gilt.
+    """
+
+    versions: frozenset[str]
+    native: str = ""
+
+
 def _fixed_records(
     record_key: str = "packages",
-) -> dict[str, list[tuple[set[str], NoticeText]]]:
+) -> dict[str, list[tuple[TextPin, NoticeText]]]:
     """Prüft Ergänzungen und ordnet sie Paketen oder Laufzeitfamilien zu."""
     with FIXED_MANIFEST.open("rb") as stream:
         document: dict[str, Any] = tomllib.load(stream)
-    records: dict[str, list[tuple[set[str], NoticeText]]] = {}
+    records: dict[str, list[tuple[TextPin, NoticeText]]] = {}
     for entry in document.get("text", []):
         relative = Path(str(entry["path"]))
         path = FIXED_ROOT / relative
@@ -140,10 +156,36 @@ def _fixed_records(
                 "Prüfen Sie Quelle und Manifest gemeinsam."
             )
         notice = NoticeText(relative.name, str(entry["source"]), content, actual)
-        versions = {str(value) for value in entry.get("versions", [])}
+        pin = TextPin(
+            frozenset(str(value) for value in entry.get("versions", [])),
+            str(entry.get("native", "")),
+        )
         for package in entry.get(record_key, []):
-            records.setdefault(licences.normalise(str(package)), []).append((versions, notice))
+            records.setdefault(licences.normalise(str(package)), []).append((pin, notice))
     return records
+
+
+def _check_pin(pin: TextPin, package: metadata.Distribution, notice: NoticeText) -> None:
+    """Hält einen festgeschriebenen Text an die Fassung, für die er geprüft ist."""
+    if not pin.versions:
+        return
+    name = str(package.metadata["Name"])
+    if pin.native:
+        from tools import make_sbom
+
+        version = make_sbom.native_library_version(pin.native, package)
+        subject = f"{name} {package.version} bringt {pin.native} {version} mit; das"
+    else:
+        version = package.version
+        subject = f"{name} {version}"
+    if version in pin.versions:
+        return
+    raise RuntimeError(
+        f"{subject} passt nicht zur festgeschriebenen Lizenztextfassung für "
+        f"{', '.join(sorted(pin.versions))} ({notice.name}). Den Lizenztext der neuen "
+        f"Fassung mit {notice.source} vergleichen: bei gleichem Inhalt die Version in "
+        f"{FIXED_MANIFEST.name} ergänzen, sonst den neuen Text mit SHA-256 eintragen."
+    )
 
 
 def _runtime_policies() -> dict[str, RuntimePolicy]:
@@ -188,12 +230,8 @@ def collect_components() -> tuple[ComponentNotice, ...]:
         if not licences.licence_allowed(expression, policy):
             raise RuntimeError(f"{name} {package.version}: {expression} ist nicht freigegeben.")
         texts = list(_wheel_texts(package))
-        for versions, notice in fixed.get(key, []):
-            if versions and package.version not in versions:
-                raise RuntimeError(
-                    f"{name} {package.version} passt nicht zur festgeschriebenen "
-                    f"Lizenztextfassung für {', '.join(sorted(versions))}."
-                )
+        for pin, notice in fixed.get(key, []):
+            _check_pin(pin, package, notice)
             texts.append(notice)
         if not texts:
             raise RuntimeError(
@@ -268,21 +306,27 @@ def _runtime_texts(policy: RuntimePolicy, version: str) -> tuple[NoticeText, ...
     if policy.notice_source == "python-runtime":
         texts.append(_python_runtime_text())
     if policy.notice_package:
-        package = metadata.distribution(policy.notice_package)
-        texts.extend(_wheel_texts(package))
-        for versions, notice in _fixed_records().get(licences.normalise(policy.notice_package), []):
-            if versions and package.version not in versions:
-                raise RuntimeError(
-                    f"{package.metadata['Name']} {package.version} passt nicht zur "
-                    "festgeschriebenen Textfassung."
-                )
-            texts.append(notice)
-    for versions, notice in _fixed_records("runtime").get(
-        licences.normalise(policy.identifier), []
-    ):
-        if versions and version not in versions:
+        try:
+            package = metadata.distribution(policy.notice_package)
+        except metadata.PackageNotFoundError as missing:
+            # Die Releaseakte-Jobs 0.4.4 starben hier mit einem Stapelabzug:
+            # Der Bootloader-Text kommt aus der pyinstaller-Distribution, und
+            # die Prüfumgebung hatte sie nicht (Lauf 35464068433).
             raise RuntimeError(
-                f"{policy.name} {version} passt nicht zur festgeschriebenen Textfassung."
+                f"Die Lizenztexte für {policy.name} stammen aus der Distribution "
+                f"{policy.notice_package}, die in dieser Umgebung fehlt. Sie mit "
+                f"`pip install -c constraints.txt {policy.notice_package}` nachinstallieren."
+            ) from missing
+        texts.extend(_wheel_texts(package))
+        for pin, notice in _fixed_records().get(licences.normalise(policy.notice_package), []):
+            _check_pin(pin, package, notice)
+            texts.append(notice)
+    for pin, notice in _fixed_records("runtime").get(licences.normalise(policy.identifier), []):
+        if pin.versions and version not in pin.versions:
+            raise RuntimeError(
+                f"{policy.name} {version} passt nicht zur festgeschriebenen Textfassung "
+                f"({notice.name}). Den Text mit {notice.source} vergleichen und die "
+                f"Version in {FIXED_MANIFEST.name} ergänzen oder den neuen Text eintragen."
             )
         texts.append(notice)
     unique = {text.sha256: text for text in texts}
@@ -312,7 +356,11 @@ def collect_artifact_components(sbom: dict[str, Any]) -> tuple[ComponentNotice, 
         if name != policy.name or not version:
             raise RuntimeError(f"Unstimmige SBOM-Akte für Laufzeitfamilie {identifier}.")
         if policy.versions and version not in policy.versions:
-            raise RuntimeError(f"{policy.name} {version} passt nicht zur geprüften Quellenfassung.")
+            raise RuntimeError(
+                f"{policy.name} {version} passt nicht zur geprüften Quellenfassung "
+                f"({', '.join(sorted(policy.versions))}). Lizenztext und Quelle der neuen "
+                f"Fassung prüfen und sie in {FIXED_MANIFEST.name} unter {identifier} ergänzen."
+            )
         version_source = next(
             (
                 str(item.get("value", ""))
@@ -666,11 +714,26 @@ def write_release_evidence(
     return evidence
 
 
+#: Artefaktsorten, deren Inhalt mehr trägt als der App-Baum. Ein AppImage setzt
+#: den Laufzeitkern vor das Dateisystemabbild; seine Stückliste muss ihn nennen.
+ARTIFACT_KINDS: Final = ("appimage",)
+APPIMAGE_RUNTIME: Final = "appimage-type2-runtime"
+
+
 def _verify_release_evidence(
     evidence_path: Path,
     sbom: dict[str, Any],
+    *,
+    artifact_kind: str | None = None,
 ) -> None:
-    """Prüft Quellarchive, Austauschmaterial und äußere Plattformpakete."""
+    """Prüft Quellarchive, Austauschmaterial und äußere Plattformpakete.
+
+    ``artifact_kind="appimage"`` heißt: geprüft wird der Inhalt des AppImage,
+    und dessen Stückliste muss den eingebetteten Laufzeitkern tragen. Bis zum
+    22.09.2026 verlangte die Prüfung ihn von **jeder** Linux-Stückliste — auch
+    von der des App-Baums, der ihn nie enthält, und von der des Flatpak. Die
+    Linux-Releaseakte war damit ohne Ausweg rot.
+    """
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
     if evidence.get("schema") != 1 or evidence.get("product_version") != APP_VERSION:
         raise RuntimeError("Release-Evidenzschema oder Produktversion passt nicht.")
@@ -711,9 +774,36 @@ def _verify_release_evidence(
         for entry in sbom.get("components", [])
         if isinstance(entry, dict) and _generic_identifier(entry)
     }
-    if target.casefold().startswith("linux") and "appimage-type2-runtime" not in versions:
+    if artifact_kind not in (None, *ARTIFACT_KINDS):
+        raise RuntimeError(f"Unbekannte Artefaktsorte {artifact_kind}.")
+    embedded = APPIMAGE_RUNTIME in versions
+    if artifact_kind == "appimage" and not embedded:
         raise RuntimeError(
-            "Der eingebettete AppImage type-2 runtime fehlt in der Endartefakt-SBOM."
+            "Der eingebettete AppImage type-2 runtime fehlt in der Endartefakt-SBOM. "
+            "Das AppImage mit tools/make_linux_packages.py --appimage neu bauen; es "
+            "schreibt die Stückliste des AppImage-Inhalts samt Laufzeitkern."
+        )
+    if artifact_kind == "appimage":
+        # Die Stückliste sagt, welcher Kern vorn steht; die Datei muss es auch
+        # tragen. Geprüft am gehashten Paket aus der Evidenz, nicht an einer
+        # Annahme über den Bau.
+        from tools import make_sbom
+
+        for entry in package_entries:
+            if entry.get("kind") != "appimage":
+                continue
+            carried = make_sbom.appimage_runtime_sha256(_evidence_file(root, entry["path"]))
+            if carried != make_sbom.APPIMAGE_RUNTIME_SHA256:
+                raise RuntimeError(
+                    f"{entry['path']} trägt einen anderen Laufzeitkern (SHA-256 {carried}) "
+                    f"als {APPIMAGE_RUNTIME} {versions[APPIMAGE_RUNTIME]} der Stückliste. "
+                    "Das AppImage mit der festen Laufzeitdatei neu bauen."
+                )
+    if artifact_kind != "appimage" and embedded:
+        raise RuntimeError(
+            "Die Stückliste nennt den AppImage-Laufzeitkern, geprüft wird aber kein "
+            "AppImage-Inhalt. Für das AppImage --artifact-kind appimage setzen, sonst "
+            "die Stückliste des App-Baums nehmen."
         )
     required = {
         identifier
@@ -765,6 +855,8 @@ def verify_release(
     artifact_root: Path,
     sbom_path: Path,
     evidence_path: Path,
+    *,
+    artifact_kind: str | None = None,
 ) -> tuple[ComponentNotice, ...]:
     """Prüft Notice, SBOM, native Dateien und Quellbelege am Endartefakt."""
     from tools import make_sbom
@@ -799,7 +891,7 @@ def verify_release(
         raise RuntimeError(f"{OUTPUT.name} liegt im Endartefakt {len(notice_files)}-mal vor.")
     if notice_files[0].read_text(encoding="utf-8") != render_notices(components):
         raise RuntimeError("Lizenzbeilage wurde nicht aus der Endartefakt-SBOM erzeugt.")
-    _verify_release_evidence(evidence_path, sbom)
+    _verify_release_evidence(evidence_path, sbom, artifact_kind=artifact_kind)
     return components
 
 
@@ -828,6 +920,11 @@ def main() -> int:
     parser.add_argument("--artifact-root", type=Path)
     parser.add_argument("--release-evidence", type=Path)
     parser.add_argument("--release-check", action="store_true")
+    parser.add_argument(
+        "--artifact-kind",
+        choices=ARTIFACT_KINDS,
+        help="appimage: der geprüfte Baum ist der Inhalt eines AppImage",
+    )
     parser.add_argument("--check", action="store_true")
     # **Nur ein Name für den Normallauf.** `bump_version.DERIVED` ruft jedes
     # Werkzeug, das eine abgeleitete Datei schreibt, mit `--files`; ohne diesen
@@ -878,6 +975,7 @@ def main() -> int:
                 arguments.artifact_root,
                 arguments.sbom,
                 arguments.release_evidence,
+                artifact_kind=arguments.artifact_kind,
             )
         except (OSError, KeyError, ValueError, RuntimeError) as exc:
             print(f"Release-Lizenzprüfung rot: {exc}")

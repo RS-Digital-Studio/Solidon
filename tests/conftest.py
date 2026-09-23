@@ -88,6 +88,19 @@ def pytest_sessionstart(session: pytest.Session) -> None:
         pytest.exit(EXACT_KERNEL_MISSING_IN_CI, returncode=1)
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Jeder Test mit ``qt_app`` trägt ``windowed`` — bevor ``-m`` abwählt.
+
+    Das reguläre Tor wählt Fenster je Test ab (``-m "not windowed"``), nicht
+    mehr je Datei; die Regel und ihr Anlass stehen in
+    ``tools/list_windowed_tests.py``.
+    """
+    from tools.list_windowed_tests import mark_windowed_items
+
+    mark_windowed_items(items)
+
+
 #: Der tatsächlich ausgelieferte Testbeginn. Die Suite aktiviert den
 #: erhaltenen Pfad darunter für seine Mechaniktests wieder.
 _SHIPPED_TRIAL_FROM = activation_store.TRIAL_FROM
