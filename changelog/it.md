@@ -40,6 +40,17 @@ scrive in `website/version.json`.
 - Un motivo si rimuove con un clic o si rimette con nuovo passo, larghezza di cella e profondità. Le celle restano dov'erano.
 - Una texture intorno a un cilindro segue la curvatura: le scanalature sono ugualmente profonde, e un motivo lungo tutta la circonferenza si chiude senza giunzione. Il passo va al valore che torna.
 
+### Disegno
+
+- Disegnare su una parte scelta mostra solo quella parte nella vista; le altre restano nascoste finché «Mostra vicine» non le fa tornare.
+- Estrudere su una faccia scelta ora unisce il nuovo corpo invece di fermarsi — prima non andava mai oltre lo schizzo.
+- Una tasca taglia dove l'avete disegnata, anche quando la faccia non è centrata sulla parte.
+- Raccordare e smussare un rettangolo quotato lascia le sue quote invariate.
+- Se disegnate con più parti scelte, Solidon chiede su quale; la destinazione si cambia in qualsiasi momento nella barra.
+- Esc non butta più via uno schizzo già iniziato.
+- Uno schizzo già estruso si può riutilizzare per la tasca successiva, senza ridisegnarlo.
+- Un clic su una faccia offre direttamente «Disegna qui» e «Disegna foro o incavo».
+
 ### Modificare sul modello esatto
 
 - I corpi base nascono sempre con facce e spigoli reali. La casella «Modificare facce e spigoli più tardi» è sparita; i progetti vecchi si calcolano senza cambiamenti.
@@ -73,6 +84,14 @@ scrive in `website/version.json`.
 - I campi quota restano dove erano quando cambiate un valore. La quota nel cui campo scrivete si illumina nella vista.
 - Le manopole per l’asola funzionano anche mentre le quote del foro stanno nella vista: Applica trasforma allora il foro in asola — con un nuovo diametro accanto in un solo passo, nella nuova larghezza.
 
+### Cronologia
+
+- Nella cronologia si può ora inserire un nuovo passaggio prima di uno esistente, non solo aggiungerlo in fondo.
+- Un passaggio della cronologia si trascina con il mouse in un altro punto, oppure si sposta riga per riga.
+- Un passaggio si può disattivare e riattivare più tardi senza eliminarlo; i passaggi dipendenti restano in sospeso con lui.
+- Se un passaggio successivo fa riferimento a una caratteristica che la riorganizzazione ha rinominato, Solidon la segue e lo segnala.
+- Se riorganizzare la cronologia fermasse un passaggio successivo, Solidon rifiuta e non cambia nulla.
+
 ### Verificare e stampare
 
 - Le stampanti a resina sono arrivate: due apparecchi generici per volume di stampa stanno nell'elenco, e una propria si crea con dimensione del pixel e parete minima.
@@ -89,6 +108,7 @@ scrive in `website/version.json`.
 - La ricerca dell'orientamento su un modello con oltre un milione di triangoli richiede cinque secondi invece di mezzo minuto.
 - Le distanze molto piccole compaiono nella mappa di analisi come decimali, non come potenze di dieci.
 - Lo scostamento di forma su raccordi e anelli è preciso come su piani e cilindri, e la mappa si calcola più rapidamente di prima.
+- La ventola del pezzo segue di nuovo la curva del profilo della stampante, invece di girare a piena velocità a ogni strato.
 
 ### Importare
 
@@ -98,6 +118,9 @@ scrive in `website/version.json`.
 - Un pezzo cavo importato si può riempire con un reticolo: Solidon determina il vano interno attraverso lo sfiato e dice di averlo determinato così.
 - Ridurre i triangoli non lacera più i modelli chiusi. Dove la forma non consente altro, il rapporto indica in quante parti il modello si è diviso.
 - Ridurre i triangoli raggiunge ora il suo obiettivo anche su boccole, anelli e scatole con aperture.
+- Un assieme STEP importato arriva come corpi separati, ciascuno con il proprio nome e i propri colori di faccia, invece di un tutto fuso insieme.
+- Prima di acquisire un assieme STEP, scegliete quali corpi vi servono; una parte specchiata resta uno specchio.
+- L'esportazione STEP scrive nomi e colori di faccia nel file; una parte riletta conserva il suo nome invariato.
 
 ### Uso e sistema
 
@@ -111,6 +134,10 @@ scrive in `website/version.json`.
 - Annulla risponde subito invece che dopo due secondi e mezzo.
 - Mentre digita un numero l'anteprima compare in mezzo secondo, ognuna successiva in un ottavo di quel tempo.
 - Svuotare calcola un quinto più in fretta.
+- Una voce di menu e un avviso discreto nella vista portano al sostegno volontario di Solidon tramite PayPal o GoFundMe.
+- La scheda del sondaggio mostra ora i colori giusti anche nel tema chiaro.
+
+- L’applicazione Windows e il programma di installazione sono firmati digitalmente. La firma conferma l’identità dell’autore e permette di rilevare modifiche successive.
 
 ## 0.4.4
 

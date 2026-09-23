@@ -25,6 +25,9 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-23 | [Griffmuster schließen wieder zum Träger (23.09.2026)](#griffmuster-schließen-wieder-zum-träger-23092026) |
+| 2026-09-23 | [Die sichtbaren Aufnahmefehler von 0.5.0 sind behoben (23.09.2026)](#die-sichtbaren-aufnahmefehler-von-050-sind-behoben-23092026) |
+| 2026-09-23 | [Die Durchsicht vor 0.5.0 und ihre Pakete (23.09.2026)](#die-durchsicht-vor-050-und-ihre-pakete-23092026) |
 | 2026-09-22 | [Der Import schließt, was offen ist (22.09.2026)](#der-import-schließt-was-offen-ist-22092026) |
 | 2026-09-22 | [Ein Wabenmuster ist ein Merkmal, nicht 1 199 Flächen (22.09.2026)](#ein-wabenmuster-ist-ein-merkmal-nicht-1-199-flächen-22092026) |
 | 2026-09-22 | [Resin-Stufe 1 und die Exportauflösung (22.09.2026)](#resin-stufe-1-und-die-exportauflösung-22092026) |
@@ -29911,3 +29914,618 @@ alles andere soll noch vor 0.5.0 fertig sein"). Gebaut auf `rm-207-muster`, am
   keine so langen Wörter. `tests/test_website.py` 388 grün nach `tools/stamp_assets.py`.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-zeilen-laufen-zu-lang-31082026).
+
+---
+
+## Die Durchsicht vor 0.5.0 und ihre Pakete (23.09.2026)
+
+Roberts Auftrag am 22.09.2026: vor 0.5.0 die ganze 0.4er-Reihe durchsehen,
+alles beheben und optimieren, auch die übrigen RM-Punkte. Sechzehn Prüfer nach
+Gebiet in eigenen Arbeitsbäumen, danach Bauaufträge für P4.0, P6, P7, RM-174,
+RM-208 und RM-050; übernommen in der Reihenfolge Kern → Export → Doku →
+Dialoge → Fenster → Viewport. Die Berichte liegen im Review-Ordner der
+Sitzung; hier stehen die zweiundzwanzig Punkte, die damit am 23.09.2026
+geschlossen sind. Was die Durchsicht neu gefunden hat, steht als RM-212 bis
+RM-237 im Register von `ROADMAP.md`, die Paketstände für 0.5.0 an RM-188.
+
+<a id="rm-005"></a>
+
+- [x] **RM-005 — Wahl der Stiftseite gegen das fertige Stützvolumen prüfen.**
+  Gemessen und gebaut am 23.09.2026 (Durchsicht 0.5.0, Paket formops,
+  `54f922e0`). Am Balken `crossed_overhangs` (Centauri Carbon 2, PETG) trägt
+  an der gewählten Naht die Seite B die Stifte mit 12 % weniger Stütze
+  (3 754 gegen 3 298 mm³); am Baum ohne Schale ist es umgekehrt, A braucht
+  1 128 mm³, B 11 557. Eine feste Seite ist also falsch. Auto Split baut
+  deshalb je Naht beide Zuordnungen fertig, orientiert sie und nimmt B nur,
+  wenn das mehr als 5 % Stützvolumen spart; eine Lage, die nicht steht, zählt
+  als unbezahlbar. Gespeichert als `pins_on_b` an `split_pinned` und
+  `split_line` (Vorgabe falsch, alte Projekte unverändert), die Passungen aus
+  `apply_planned` zeigen richtig herum. Nachweis:
+  `test_the_pins_go_to_the_half_that_needs_less_support`,
+  `test_a_seam_with_pins_on_b_keeps_its_pairs_the_right_way_round`.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#p10--auto-split-mit-verstiftung).
+
+<a id="rm-024"></a>
+
+- [x] **RM-024 — Gespeicherte Zuordnungsantworten im echten Konfliktfall abnehmen.**
+  Abgenommen am 23.09.2026 (Durchsicht 0.5.0, Paket beziehungen, `f64e17c7`)
+  an dem Körper, den der Punkt suchte: Schraubenhalter mit Wabenmuster,
+  Passung auf Bohrungen und Senkungen, danach *Dreiecke verringern* auf 5 000.
+  Vorher kamen vier Fragen zu eindeutigen Bohrungspaaren und eine Frage mit
+  „Nicht weiterführen" als einziger Antwort für ein Merkmal, das niemand
+  benutzt; eine ohne Wahl geschlossene Frage endete still. Jetzt: Bohrungen
+  ohne Frage, Senkungen zwei echte Fragen, die Antwort gespeichert, zweiter
+  Lauf und Wiederöffnen ohne Rückfrage mit denselben Namen an denselben
+  Stellen; eine ohne Wahl geschlossene Frage hält am Schritt mit Befund
+  (`QuestionDeclined` → `QUESTION_LEFT_OPEN`, *Eingabe korrigieren* und
+  *Verlauf zeigen*). Dabei behoben: die Kostenhülle je
+  Zusammenhangskomponente (keine Fragen mehr zu eindeutigen Paaren),
+  verwiesene Merkmale werden zuerst gefragt, unverwiesene ohne Wahl nicht mehr.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#das-fundament-der-wahrnehmung-22082026).
+
+<a id="rm-074"></a>
+
+- [x] **RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen.**
+  Abgenommen am 23.09.2026 (Durchsicht 0.5.0, Paket ansicht, `7ff34c67`) am
+  einzigen Beispielprojekt mit einem verorteten Befund,
+  `passung-nach-materialwechsel.p3d`: Klick auf die Zeile im Prüfbericht,
+  die Kamera fliegt 205 mm zur Stelle — und im Bild stand nur der Satz, kein
+  Ring. Drei Ursachen: Der Ring nahm seinen Radius auch in der Perspektive aus
+  `parallel_scale()` und war kleiner als ein Bildpunkt, sein Ort lag im
+  Deckel, und der Satz stand quer über seiner Linie. Jetzt Maßstab nur in der
+  Orthografie, der Ring an seiner Stelle vor dem Material (`keep_in_front`),
+  der Satz in der Oben-Richtung der Kamera (`FINDING_LABEL_REACH`). Bildbeleg
+  vorher/nachher am echten Renderer (offscreen, 1600 × 1000), Test
+  `test_the_finding_ring_stands_in_front_of_the_material_at_its_place`, am
+  Stand davor rot. Am Korpus `F:\3D Dateien` trägt kein Befund einen Ort.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-zeichenmodus-und-der-viewport-bekommen-ihre-durchsicht-30082026).
+
+<a id="rm-078"></a>
+
+- [x] **RM-078 — Ladezeit generierter Beispielmodelle an der Orientierung messen.**
+  Gemessen am 23.09.2026 (Durchsicht 0.5.0, Paket schicht, `546eff16`). Das
+  Eulenprojekt steht nicht mehr im Bestand; die beiden generierten Beispiele
+  öffnen im Kern in 1,7 s (`weg3-generiert-aufbereiten.p3d`, `load` 1,0 s,
+  `repair` 0,4 s) und 1,8 s (`weg4-figur-formen`). Die damalige Ursache,
+  `orient_for_print` am ungefilterten Netz, kostet an einer TripoSG-Figur mit
+  325 244 Dreiecken heute 3,3 s. Die lange Wartezeit großer Teile auf einem
+  Bett mit Sperrzone, die ebenfalls wie Stillstand aussah, ist im selben
+  Paket behoben (Besteckeinsatz 49 → 8,4 s, `build_area`).
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#befunde-aus-dem-weg-dreh-31082026).
+
+<a id="rm-080"></a>
+
+- [x] **RM-080 — Restumfang der Trennen-Serie mit aktuellem Code abgleichen.**
+  Abgeschlossen am 23.09.2026 (Durchsicht 0.5.0). Die Sichtflächen-Sperre (T8)
+  stand seit dem 14.09.2026. **T3, schräge Ebenen** (`54f922e0`): ein
+  Normalenfächer aus zwölf Richtungen als zweite Stufe, wenn die beste
+  achsparallele Naht über `HINT_THRESHOLD` liegt, deterministisch über
+  `units.circle_point`, abbrechbar, als `split_line` im Verlauf. **T6
+  Symmetrie** (`0367d202`): `symmetry.mirror_plane` misst Spiegelebenen an der
+  Oberfläche; eine Spiegelebene mit gleicher Konturzahl und ohne Einschnürung
+  steht in der Stützvolumen-Auswahl vorn, die Stücke beiderseits werden
+  gespiegelt geschnitten (`split.symmetric`). **T7 Schnittfolge**:
+  `_plan_step` plant die Folge, Stücke vor Klebestellen, `PLAN_BUDGET`
+  Probeschnitte, `split.fewest_parts` nur bei erreichter unterer Schranke.
+  **T9 Schaustück**: `zu-gross-automatisch-teilen` (Wandleiste 600 mm, drei
+  Stücke à 200 mm, vier Passungen, Tour, Rechtekette wie die elf anderen).
+  Mitbehoben: Stiftzugabe nur an der Hälfte mit Stiften, Trennung an Lücken
+  zwischen losen Teilen, Sperrzonen des Betts, Passungen früherer Nähte
+  wandern mit, Rand gleich dem Anordnungsabstand. Korpus: Keilschloss ×1,5
+  von 6 auf 4 Teile ohne Splitter, Schraubendreherhalter ×2,6 von 11 auf 8
+  Teile und 148 → 59 s. Bewusste Grenze: Spiegelebenen nur quer zu den drei
+  Achsen (eine gekippte käme aus LAPACK und wäre plattformabhängig).
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#sinnvolles-trennen--die-serie-31082026).
+
+<a id="rm-086"></a>
+
+- [x] **RM-086 — Achsenkonvention beim GLB-Import mit Migration klären.**
+  Erledigt am 23.09.2026 (Durchsicht 0.5.0, Paket szene, `56f70000`). Import
+  und Migration standen seit dem 15.09.2026: Der Importplan speichert für
+  `.glb`/`.gltf` `coordinates="gltf"`, `load` dreht einmal um x+90° und liest
+  Meter, die Migration 24 → 25 schreibt `legacy_raw` in alte Ladeschritte und
+  jede gespeicherte `edited_ops`-Fassung. Nachgemessen an fünf echten GLB aus
+  `F:\3D Dateien`: alle aufrecht, Meterfrage wie vorgesehen;
+  `generated_glb_v24.p3d` behält nach der Migration Lage und Maße. Offen war
+  der Generatorweg: Er las TripoSG-Ausgaben roh und legte jedes erzeugte
+  Modell auf den Rücken. Er speichert jetzt `gltf` mit der Einheit mm; alte
+  Projekte behalten `legacy_raw`. Nachweis
+  `test_import_formats.py::test_a_generated_glb_stands_upright_and_gets_one_working_size`.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
+
+<a id="rm-106"></a>
+
+- [x] **RM-106 — Plattformunterschiede der Projektdateien dem richtigen Ursprung zuordnen.**
+  Erledigt am 23.09.2026 (Durchsicht 0.5.0, Paket szene, `56f70000`). Zwei
+  Quellen, beide belegt: das schreibende System im ZIP-Kopf (0 unter Windows,
+  3 unter Linux und macOS) und die Deflate-Bibliothek (Windows-CPython 3.14
+  packt mit zlib-ng 2.2.4, Linux und macOS mit zlib 1.3.1). Entpackt sind die
+  Inhalte gleich. Solidon setzt jetzt das Systemfeld fest
+  (`project.CONTAINER_SYSTEM`); die Kompression bleibt plattformabhängig, denn
+  eine eigene Deflate-Bibliothek wäre eine neue native Abhängigkeit ohne
+  Kundennutzen. Der Vertrag heißt „inhaltsgleich, nicht bytegleich" und wird
+  über `project.content_digest` geprüft (`dateiformat.md`, Szenenkarte);
+  eingecheckte Beleg- und Beispieldateien bleiben an ihre Originalbytes gebunden.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
+
+<a id="rm-117"></a>
+
+- [x] **RM-117 — Öffentliche Downloadlinks vollständig in die Paketprüfung aufnehmen.**
+  Erledigt am 23.09.2026 (Durchsicht 0.5.0, Paket auslieferung, `920c609a`).
+  Die zwei Reste vom 10.09.2026 sind zu: `upload_website.py --nachpruefen`
+  verlangte die FTPS-Zugangsdatei, obwohl es nur über HTTP fragt
+  (`public_base()` nimmt jetzt die Adresse aus der Datei oder `WEBSITE_URL`),
+  und der neue Schalter `--mit-pruefsumme` lädt jede versprochene Datei ganz
+  und vergleicht SHA-256 gegen `website/dl/` oder `version.json`. Gegen den
+  Server gefahren für 0.4.4: ohne Zusatz viermal in Ordnung und das AppImage
+  „OHNE MASS" (liegt nicht unter `website/dl/`), mit Zusatz und dem
+  CI-AppImage als Sollwert alle fünf Pakete vollständig und mit richtiger
+  Prüfsumme (rund 1,1 GB geladen). Nachweis
+  `test_the_download_check_asks_for_no_ftp_password`,
+  `test_the_checksum_check_finds_a_complete_but_wrong_package`; `/erzeugen`
+  Schritt 7 nennt den Zusatz.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#030-ist-draußen-03092026).
+
+<a id="rm-128"></a>
+
+- [x] **RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden.**
+  Abgenommen am 23.09.2026 an allen 17 Teilen von
+  `pirate+ship+with+sails_stls` (Durchsicht 0.5.0, Paket beziehungen,
+  `f64e17c7`). Zapfen bieten Versetzen, Ändern, Drehen, Verdoppeln und
+  Entfernen; „Zum Langloch ziehen" steht grau mit Grund. Ebene Flächen
+  verweisen im Merkmalfenster mit **einem** Satz (`NOT_APPLICABLE["face"]`)
+  auf ihre Flächenhandlungen, die in der Karte stehen (43 Operationen über
+  `applies_to`). Über den Kundenweg gefahren: *Fläche versetzen* +1 und
+  −0,5 mm sowie *Bohrung setzen* Ø 1,5 an jeder ebenen Fläche der Zylinder und
+  von Assembly_B — vollständig, dicht, Volumen wie gerechnet (+19,63 /
+  −9,82 / −4,53 mm³ an der Ø-5-Fläche). Segel und Gesamtbaugruppe tragen keine
+  Merkmale (Freiform beziehungsweise über der Grenze), und die Erkennung sagt
+  es. Beobachtung für den Netzkern: `obj_11_Cylinder_B` besteht aus zwei sich
+  überlappenden Schalen, die die erste geschweißte Boolesche still vereinigt
+  (RM-221). Torus- und Gewindehandlungen laufen unter RM-188.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#neunzehn-kundendateien-durch-die-oberfläche-gefahren-04092026).
+
+<a id="rm-133"></a>
+
+- [x] **RM-133 — Rückmeldung zur Volumenänderung beim Merkmaldrehen entscheiden.**
+  Entschieden von Robert am 23.09.2026: kein Hinweis zur Volumenänderung. Die
+  Änderung beim Kippen ist erwartbar und korrekt (der längere Schlauch,
+  π·r²·(t/cos α − t)); ein Satz dazu wäre der pauschale Warnsatz, den die
+  Abnahme ausschließt. Gebaut wurden stattdessen die drei Folgen, die der
+  Kunde ändern kann (Durchsicht 0.5.0, Paket beziehungen, `f64e17c7`):
+  seitlicher Austritt (`bore.over_the_edge`, bestand), Verlust des
+  Durchgangs nur noch, wo er wirklich passiert — eine gekippte
+  Durchgangsbohrung bleibt durchgehend, am Netz wie am exakten Körper, und
+  „geht nicht mehr durch" zählt nur Material unmittelbar hinter dem
+  Werkzeug —, und der Anschnitt eines Nachbarhohlraums
+  (`bore.neighbour_opened`/`neighbour_wall_thin`, mit dem Winkel als Ausweg).
+  Am schrägen Bohrungsfall (Platte 80 × 60 × 10): Mitte 30° vorher „nicht
+  mehr durch" (+4,1 mm³), jetzt durchgehend (−43,3 mm³, gerechnet 43,7);
+  Kante 45° `over_the_edge`; zum Nachbarn 40° neu `bore.neighbour_opened`.
+  Die Senkungskette zieht beim Kippen weiter eine flache Rinne (RM-220).
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#was-die-erkennung-erklärt--und-was-nicht-04092026).
+
+<a id="rm-138"></a>
+
+- [x] **RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten.**
+  Entschieden von Robert am 23.09.2026: Alte Bausteinstände reisen nicht mit,
+  die Migrationsmeldung reicht — unter der Bedingung, dass sie je Baustein
+  sagt, was sich geändert hat. Gebaut (Durchsicht 0.5.0, Kern in `71d50168`,
+  Meldung in `56f70000`): Beim Öffnen eines Projekts aus einem älteren
+  Bibliotheksstand nennt der Prüfbericht die geänderten Bausteine mit
+  Katalogtitel und darunter je Maßwirkung seit dem Speichern eine übersetzte
+  Zeile aus dem Änderungsverlauf (`parts.change`); eine gemeinsame Änderung
+  steht einmal mit allen Namen. Geänderte eigene Rezepte, deren gespeicherter
+  Stand in der Datei liegt, bieten zusätzlich „Gespeicherten Stand verwenden";
+  eigene `.py`-Bausteine erklären den neuen Stand als Migration (Regel 13).
+  Bauplan §24.4 ist nachgezogen. Nachweis
+  `test_parts_catalog.py::test_a_project_from_an_older_library_is_told_what_moved`,
+  `…::test_a_library_12_project_is_told_about_all_three_geometry_fixes`,
+  `test_recipes.py::test_the_saved_state_of_an_own_part_can_be_chosen_again`.
+
+  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-144"></a>
+
+- [x] **RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen.**
+  Erledigt am 23.09.2026 (Durchsicht 0.5.0, Pakete dienste `736d4a46` und
+  schicht `546eff16`). `read_analysis` mit `orientation` wurde über MCP
+  abgelehnt; jetzt rechnet die Analyse im Faden des Servers auf einer
+  Momentaufnahme der Szene (`run_remote` gibt einen `RemoteDeferred` zurück),
+  das Fenster bleibt bedienbar, das Beenden bricht ab, und nach 120 s endet
+  der Aufruf mit Satz statt zu hängen. Zeitüberschreitung und ausgeschaltete
+  Brücke kommen nicht mehr als „Unerwarteter Fehler" an.
+
+  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-147"></a>
+
+- [x] **RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen.**
+  Abgeschlossen am 23.09.2026. Die Kanten- und Flächenarbeit an beiden
+  Kernen, Zeiger, Rechtsklick und Flächengriff standen; offen waren fünf
+  zugesagte Kundenwege, und die Durchsicht 0.5.0 (Paket merkmalsops,
+  `00b09a2d`) hat sie am Code nachgemessen: Der parametrische Lochkreis mit
+  gleichem Vertrag in Dialog, Kommandozeile und Agent steht seit `6564c781`
+  (`sketch_pocket`/`sketch_extrude` mit `shape=bolt_circle`, über die
+  Kommandozeile gefahren, Exit 0), die physische Kennzeichnung der Varianten
+  seit `3fe25af4` (`scene/variants._marked`, gravierte Zahl mit Mindestwand),
+  RM-087 und RM-127/RM-140 waren abgeschlossen. Der fünfte, RM-138, ist mit
+  `56f70000` zu.
+
+<a id="rm-163"></a>
+
+- [x] **RM-163 — Bambu Studio druckt einen Mehrfarbauftrag halb und meldet Erfolg.**
+  Die letzte Trennung ist gemessen (Durchsicht 0.5.0, Pakete szene
+  `56f70000` und formops `54f922e0`): Bambu Studio 2.3 slict über die
+  Kommandozeile Bambus eigene Mehrfarbdatei (P1S und X1C, `; filament: 1,2`,
+  rund 50 Wechsel) und Solidons Übergabe derselben Geometrie für P1S, X1C und
+  Creality K1 richtig mehrfarbig (je 52–53 Wechsel). Datei und Übergabe sind
+  in Ordnung. Halb gedruckt wurde nur für einen Drucker, den Bambu Studio
+  nicht führt — den Centauri Carbon 2; dort warnt Solidon vor dem Lauf
+  (`slicer.printer_unknown` mit *Anderen Slicer wählen*, ohne
+  Maschinenprofil `slicer.machine_unset`), und Bambus eigene Absage
+  (`result.json`, −17) steht in der Slicerausgabe. Solidons einziger eigener
+  Anteil war eine übergebene Spule ohne Dreieck; seit F14 gehen keine
+  verwaisten Spulen mehr in die Baugruppe. `gcode.spool_left_out` bleibt als
+  Wächter.
+
+<a id="rm-165"></a>
+
+- [x] **RM-165 — Über `mushroom.stl` in der Wurzel entscheiden.**
+  Erledigt am 23.09.2026. Die Datei war von keiner Datei genannt und kam als
+  Nebenprodukt eines kaputten Index-Commits herein (`af0ece17`/`f934a422`).
+  Sie ist mit `920c609a` aus dem Stamm entfernt, samt der Ausnahme in
+  `.gitignore`, und liegt auf Roberts Wunsch bytegleich unter
+  `F:\3D Dateien\mushroom.stl`.
+
+<a id="rm-181"></a>
+
+- [x] **RM-181 — Handlungsliste und Baugruppenladen an dichten Netzen weiter vermessen.**
+  Erledigt am 23.09.2026 (Durchsicht 0.5.0, Pakete beziehungen `f64e17c7`
+  und sitzung `85dec7cb`). Je Klick wird nichts mehr am ganzen Körper neu
+  gerechnet: Ebenenmaske, fast ebene Seiten, eigener Körper, verschweißte
+  Kopie, Oberflächenindex und Randringe je Körper gemerkt, Ringsuche in
+  Randnummerierung, Schultervorauswahl, Hüllquader vor dem Flächenvergleich;
+  im Fenster fragt ein Merkmalklick den Kern je Merkmal und Auswertung einmal.
+  Median kalt je Merkmal an zwölf Korpusmodellen 0,2–15 ms (vorher bis
+  297 ms), teuerster Klick am Gartenschlauchhalter 3,7 → 0,6 s, erster Klick
+  dort im selben Prozess 2,78 → 1,03 s; die Abnahme „unter 50 ms je Merkmal"
+  ist erfüllt. Die 3MF der 19 Uhrenteile liegt auf der Messmaschine nicht
+  vor; ersatzweise die drei größten Körper des Piratenschiffs einzeln gegen
+  §31: 7,9 bis 18,3 s je 200 000 Dreiecke. Das ist die Erkennung selbst und
+  steht unter RM-132.
+
+  [Befund](ROADMAP-ARCHIV.md#vierunddreißig-modelle-aus-dem-netz-erkennung-bearbeitung-leistung-15092026).
+
+<a id="rm-189"></a>
+
+- [x] **RM-189 — Eine Passung verliert ihr Merkmal, und der Fall ist nicht nachgestellt.**
+  Nachgestellt und behoben am 23.09.2026 (Durchsicht 0.5.0, Paket
+  beziehungen, `f64e17c7`). Wege im Korpus: drill-holder mit zweimal
+  *Glätten* verliert alle 29 Bohrungen, mit *Dreiecke verringern* auf 5 000
+  sieben; der Backpack-Halter verliert mit Verringern zwei, der Besenhalter
+  mit *Dreiecke angleichen* eine; die Dose mit Deckel keine. Der Verlust ist
+  richtig — ein Netz, das die Form glättet, trägt keine Bohrung mehr —, aber
+  er war nicht erklärt: `_with_features` meldete den Verlust am Schritt nur
+  für erzeugte Merkmale. Jetzt meldet jedes Merkmal, auf das eine Passung
+  oder ein späterer Schritt zeigt, seinen Verlust am verursachenden Schritt
+  (`perceive.referenced_lost`, Warnung mit *Eingabe korrigieren* und
+  *Verlauf zeigen*, Verbraucher in `values["where"]`), nur für Verbraucher
+  nach dem Schritt, und der Passungsbefund sagt, dass das Merkmal fehlt oder
+  nach einem späteren Schritt nicht mehr erkennbar ist. Nachweis
+  `test_matching.py::test_a_referenced_detected_feature_that_is_gone_names_its_step`.
+
+<a id="rm-190"></a>
+
+- [x] **RM-190 — Druckoptimal ausrichten dreht einen Körper nicht, und der Fall ist nicht nachgestellt.**
+  Gefunden und behoben am 23.09.2026 (Durchsicht 0.5.0, Paket netzkern,
+  `a559e947`) an Roberts eigenem Entwurf `3D Drucker/02_Getraenkehalter`
+  (Mast, Schirm, zwei Halter). Drei Ursachen: Die Suche schnitt nur die
+  Finalisten einer Vorauswahl nach Überhangfläche — die beste Lage von
+  Schirm und Mast stand dort auf Rang 182 und 51 —; jetzt zusätzlich die
+  acht mit dem kleinsten geschätzten Stützraum (`SUPPORT_FINALISTS`). Mast
+  6 612 → 3 220 mm³, Schirm 459 325 → 163 574 mm³ bei elfmal so viel
+  Standfläche. Mit mehr Kandidaten stellte die Suche große Halter auf Kanten;
+  stehen heißt jetzt, dass eine Linie trägt (`Candidate.footing`,
+  `orient.no_footing`). Und ein Körper neben dem Bett nahe der Sperrecke des
+  Centauri Carbon 2 vereinigte je Lage alle projizierten Dreiecke — zwanzig
+  Minuten je Bowlingkegel, jetzt vier Sekunden. Tests: Schirm und Poolhalter
+  aus den Maßen ihrer Skripte, Kante am Quader, Kegel neben dem Bett.
+
+<a id="rm-203"></a>
+
+- [x] **RM-203 — Die Ansicht rechnet je Bild und je Klick, was sie je Auswertung rechnen könnte.**
+  Erledigt am 23.09.2026 (Durchsicht 0.5.0, Paket ansicht, `7ff34c67`), alle
+  vier Posten je vorher und nachher am echten wgpu-Renderer gemessen:
+  Kanten, Schattenhüllen und Punktnormalen entstehen im `_SceneMeshWorker`
+  (272–335 → 36–40 ms im Hauptthread); `_redraw_feature_patch` an der
+  Senkplatte: Fläche 300 → 63 ms, Kette 1 100 → 175 ms — die Abnahme „unter
+  100 ms an der Fläche" ist erfüllt; der historische Bohrschritt je Wechsel
+  226 → 33 ms ohne Arbeiter; der Zeiger fragt im Takt statt erst im
+  Stillstand, die Stelle steht 64 ms statt 5,5 s nach der Bewegung.
+
+<a id="rm-206"></a>
+
+- [x] **RM-206 — Die Bereichsprüfung eines Bausteins zählt Dreieckspaare in Python.**
+  Erledigt am 22./23.09.2026 (Durchsicht 0.5.0, Paket bausteine,
+  `71d50168`). `geom/intersections.py` ist die eine
+  Selbstdurchdringungsrechnung für Netzfehlerkarte und Bereichstest: Sweep
+  entlang der günstigsten Achse, nach dem Nachtrag in Scheiben entlang einer
+  zweiten, dann die vollständige Paarprüfung als Feld einschließlich
+  koplanarer Überdeckung und gemeinsamer Ecken — der Zweig, den die schnelle
+  Fassung verloren hätte, ist dabei. 126 Bausteinkörper 302 → 20,9 s bei
+  identischen Antworten, 300 Zufallssuppen ohne Abweichung; `range_check`
+  verliert 950 Zeilen BVH- und VTK-Code. `bvh_follows_a_helix` 0,48 s,
+  `hook_count` 1,3 s, `test_parts.py` 34,3 s (Arbeitsmaschine, zweiter Lauf).
+  Die Karte findet jetzt auch deckungsgleiche Dreiecke und Schnitte durch
+  eine gemeinsame Ecke, und dadurch fiel ein gebrochener Bereich des
+  Schlüssellochs auf (21 Ecken, behoben). Der Bereichslauf aller 35
+  Bausteine schreibt seinen Nachweis nach `part_ranges.toml`
+  (`tools/check_part_ranges.py`).
+
+<a id="rm-208"></a>
+
+- [x] **RM-208 — Die Kundenwege Verschieben, Bearbeiten, Erkennen und Vorschau auf Zeit.**
+  Robert am 22.09.2026: „mach einen kompletten performancefix von merkmalen, operationen,
+  verschieben, bearbeiten, erkennen … und ob alles überhaupt nötig ist". Gemessen am echten
+  Fenster (offscreen, `MainWindow` wie die Anwendung) an der viermal unterteilten Lochplatte
+  (203 776 Dreiecke, vier Bohrungen) und am Kundenmodell „washing bowl" (215 073 Dreiecke,
+  offen, 113 Merkmale), je Schritt bis das Fenster wieder still ist:
+
+  | Weg | vorher | nachher | was weggefallen ist |
+  |---|---:|---:|---|
+  | Öffnen (Platte) | 7,2 s | 2,6 s | Vorschaubild 5,5 s (siehe unten); `load` lief nach der Einheitenantwort ein zweites Mal |
+  | Verschieben | 8,6 s | 0,5 s | Erkennung am bewegten Netz (`carry_detection`), Vorschaubild, Import, Ketten und Kennzahlen am bewegten Netz (`transform._carry_cache`) |
+  | Drehen | 8,5 s | 0,6 s | dasselbe |
+  | Bohren | 8,3 s | 1,8 s | Vorschaubild; was bleibt, ist die Erkennung am neuen Netz |
+  | Undo | 2,6 s | 0,2 s | Vorschaubild |
+  | Klick auf eine Bohrung | 1,9 s | 0,2 s | vollständiger Flächenvergleich der vier Bohrungen (`_same_surface_patch` fragt erst die Ecken), Punkte je Bohrung als Zeilen sortiert |
+  | Vorschau je getippter Zahl (Bohrung ändern) | 2,2 s | 1,1 s | Erkennung am Vorschaukörper (`detect_features=False`) |
+  | Verschieben, Kundenmodell | ≈ 23 s | 0,5 s | wie oben |
+  | Erkennung, Kundenmodell | ≈ 21 s | 9,6 s | Fächerfrage in Python (368 217 Aufrufe), Ecken je Fleck als Zeilen sortiert |
+
+  Die Ursachen, jede mit Beleg im Code: `fast_simplification` steht an CAD-Exporten mit
+  Fächern um jede Bohrung still (vier Sekunden, 197 458 von 203 776 Dreiecken bleiben) — das
+  Vorschaubild des Objektbaums lief darüber und zeichnete danach ein SVG aus 197 000 Dreiecken
+  (`mesh_ops.decimate_for_display`, Rückfall der Operation bei weit verfehltem Ziel);
+  `record_answers` änderte den Schlüssel des Importschritts, und der Cache kannte nur den alten
+  (`evaluate._key_after_answers`); die Erkennung lief nach jedem Verschieben vollständig, obwohl
+  die Zuordnung danach nichts anderes fand als vorher (`features.carry_detection`); die
+  Hohlraumketten des Objektbaums entstanden im Hauptthread und ihr Schlüssel nannte die Lage
+  (`relations._candidate_key`, `session._warm_metrics`); `np.unique(axis=0)` an Kanten und
+  Ecken (`mesh.unique_edges`, `features._canonical_vertices`). Nachweise:
+  `test_matching.py` (bewegter Zwilling, Beleg statt Zusage, der Weg durch die Auswertung),
+  `test_evaluation.py` (beantworteter Schlüssel, Vorschau ohne Erkennung, Erkennung wo ein
+  Folgeschritt sie braucht), `test_missing_ops.py` (Nadelplatte, offenes Netz, Slots, Rückfall
+  der Operation).
+
+  **Zweite Runde am selben Tag** („dann sauber das offene abarbeiten"): Der Löser der
+  Rundformen rechnet an höchstens `FIT_SOLVER_POINTS` Stützpunkten und misst danach an
+  allen (`_large_facet_faces` an der Schüssel 2,7 → 1,0 s); die Fächerfrage läuft ohne
+  `scipy`-Graph; Facettenfragen und Mündungsprüfung sind Felder statt Schleifen; die
+  Differenzansicht beschneidet beide Körper auf die Änderungsbox (`compare` 0,64 → 0,25 s);
+  die grobe Vorschaustufe greift auch beim Ändern eines Schritts (`_coarse_steps_before`,
+  40 ms je Zahl ab der zweiten); `on_surface` sammelt seine Kandidaten als Matrix und
+  siebt exakt (7,7 → 4,1 s an 51 000 Ecken gegen die Nadelplatte), und `deviation` misst
+  nur, was neben einer alten Ecke liegt. Ergebnisse der Erkennung an acht Körpern
+  zeichengleich; Erkennung Platte 0,99 s, Kundenmodell 7,3 s.
+
+  **Dritte Runde** („alles sauber abgearbeitet, nichts mehr offen oder verschoben"):
+
+  * *Die erste Vorschau am Fächerexport.* Keine Entscheidung über Entwurfsqualität mehr
+    nötig — die Operation bleibt genau und ist trotzdem schnell: Vor jedem Solver läuft das
+    exakte Vorspiel (`_exactly_flattened`, `manifold3d.simplify(0)`), das Ecken auf ebenen
+    und geraden Nachbarschaften herausnimmt, ohne eine zu bewegen — geprüft an Dichtheit,
+    Teilzahl und Volumen. Nadelplatte 203 776 → 814 Dreiecke, `_decimate_with_solver`
+    11,6 → 0,32 s; Solver `"exact"`. Am Sitzungsweg (Öffnen, Bohren, Durchmesser tippen)
+    kostet die erste Vorschau 8,3 → 0,57 s, jede weitere 0,13 s (unter Fremdlast). An echten
+    Nadeln (Zylinder aus 2 048 Sektionen, Besenhalter mit 97 Prozent Nadeln) findet es
+    nichts, und der Kern-Rückfall bleibt.
+  * *Die Abweichungsmessung.* `mesh.max_distance_to_surface` stellt die eine Frage der
+    Dezimierung — das Maximum — und misst exakt nur die Punkte, deren Schranke es noch heben
+    kann: Schranke aus dem nächsten Schwerpunkt, nach dem ersten Maß die engere aus acht
+    Schwerpunkten und den Dreiecken an den nächsten Ecken, dann in wachsenden Portionen.
+    Besenhalter-Ecken gegen seine Kernvereinfachung 2,9 → 0,25 s, Kugeln 0,24 → 0,09 s;
+    `on_surface` selbst baut seinen Index einmal (`_SurfaceIndex`). Der Rückfall am
+    Besenhalter 3,9 → 1,4 s, am Zylinder 2 048 unter 0,8 s.
+  * *Das Kundenmodell.* Die Freiformhaut aus RM-193: 7,3 → 3,0 s unter Fremdlast, 65
+    Merkmale wie zuvor. Die Abnahme „unter drei Sekunden" ist damit an der Grenze und auf
+    ruhiger Maschine zu bestätigen; §31 (eine Sekunde) bleibt bei RM-193 offen, mit Zahlen.
+  * *Die Übertragung der Erkennung.* Beim Vergleich am Korpus fiel auf, dass
+    `moved_features` jede Richtung auf eins streckte — die Normale einer gerundeten Seite ist
+    aber das flächengewichtete Mittel und kurz; eine mitgeführte Erkennung sagte damit etwas
+    anderes als eine frische am bewegten Netz (19 von 125 Körpern). Nur Einheitsvektoren
+    werden wieder welche.
+  * *Der Korpus `F:\3D Dateien`, gefahren* — 170 Modelldateien (STL, 3MF, STEP, GLB, bis
+    67 MB), je Datei ein Unterprozess am alten Stand (Worktree am HEAD) und einer am neuen,
+    beide über den Ladeweg der `load`-Operation (3MF je Körper, STEP über
+    `brep.features.features_of`, sonst `read_model`, jeder Körper durch `normalise`):
+    **463 Körper, 455 zeichengleich** — Art, Kennung, Dreiecksmenge und jeder Parameter auf
+    vier Nachkommastellen. Erkennung über alle Körper **2 907 → 1 017 s**; die größten
+    Einzelwerte: Piratenschiff-Baugruppe (1 223 836 Dreiecke) 476 → 36 s, Desk-Gangster-Katze
+    (1 440 046) 287 → 27 s, Zauberturm-Figuren 42 bis 99 → 5 bis 11 s, Mausoleum-Drache
+    (2 330 374) 154 → 37 s.
+
+    Die acht Abweichungen, jede geprüft: **sechs Figurenteile** (drei Katzenspielzeuge, zwei
+    Teile eines Katzen-Handyhalters, ein Möbelstück aus `chufang.3mf`) verlieren ihre einzige
+    „gerundete Seite", weil sie jetzt als Freiform gelten — genau das, was die Regel sagt (auf
+    einer Figur wäre die ganze Haut eine Seite, und die sagt nichts); **ein Möbelstück**
+    verliert dazu drei Verrundungen und einen Ring aus demselben Grund; und am
+    **Pool-Brunnen-Rohr** stehen dieselben 32 Merkmale mit denselben Kennungen, aber zwei
+    Ring-Ausreißer (Durchmesser 19,7 m und 16,9 m an einem 130-mm-Teil) wandern um 0,7
+    Prozent in ihrer Mitte, weil der Löser an 4 096 statt 9 716 Stützpunkten rechnet.
+
+    Zwei Beobachtungen nebenbei: Der **alte** Stand riss am Drachen einmal von drei Läufen
+    nativ ab (Zugriffsverletzung bei 2,33 Mio. Dreiecken, kein Python-Traceback) — der neue
+    lief dreimal sauber. Und die Übertragung der Erkennung auf ein bewegtes Netz
+    (`carry_detection`) gibt an 370 von 458 Körpern dieselbe Antwort wie eine frische
+    Erkennung; die 88 übrigen sind Zahlen in der letzten Stelle und keine anderen Merkmale.
+
+  **Vierte Runde (23.09.2026): die grobe Vorschau und ihre Wartezeit.** Robert hat
+  entschieden, dass die grobe Vorschau den Anzeigeweg nehmen darf — Kern nach Sehnenfehler,
+  dann Raster, ohne Messung; sie ist ein Bild, übernommen wird genau.
+
+  * *Die Operation.* `decimate_mesh` hat hinten den Parameter *Methode*
+    (`measured` als Vorgabe, `fast` ruft `decimate_for_display` und misst nichts,
+    Befund `mesh.simplified_unmeasured`; `cache_version="2"`). Die Sitzung legt ihn über
+    `_coarse_params` an beiden Stellen an.
+  * *Der Merker.* `evaluate` cacht erst nach einem vollständigen Durchlauf; die
+    Verkleinerung stand in der Auswertung der Vorschau und ging mit jeder abgelösten Anfrage
+    verloren (die 27–30 s je Loslassen aus dem Ansicht-Bericht). `_coarse_before` rechnet
+    jetzt zuerst, unter eigenem Signal und mit Sperre; `supersede_preview` löst ab,
+    `cancel_preview` hält an.
+  * *Der Rückweg.* Das Netz des gemessenen Wegs war an den Platten offen, die grobe
+    Vorschau langsamer als die genaue, und an Eiffelturm, Voronoi-Spiderman und
+    Piratenschiff sagte sie „Auch die letzte Rückfallstufe …", wo die genaue ein Ergebnis
+    hat. Gibt der Kern am groben Netz auf (`_kernel_gave_up`), rechnet die Vorschau genau.
+  * *Die Wartezeit.* Über zwei Sekunden Balken und *Abbrechen* (Fortschrittsbesitzer
+    `"preview"`); Abbrechen lässt das Modell stehen und sagt es im Band.
+
+  Gemessen (`sonden/vorschau/probe_preview.py`, Tabelle in `wartezeit.md`, „Die grobe
+  Vorschaustufe"): Lochplatte 815 104 Dreiecke erste Zahl 62,1 → 0,96 s, jede weitere
+  22,5–24,4 → 0,17–0,21 s, Ändern eines Schritts 32,7 → 0,34 s; 203 776 Dreiecke 14,2 →
+  0,23 s und 3,4 → 0,05 s. Nachweise: `test_missing_ops.py` (Anzeigeweg ohne Messung,
+  Abweichung ≤ `MAX_FACET_SAG`, Bohrung erkennbar), `test_evaluation.py` (Merker über eine
+  abgelöste Vorschau, genauer Rückweg), `test_operation_ui.py` (Balken und *Abbrechen*,
+  Fenstertest beim Release).
+
+  **Abgeschlossen am 23.09.2026 mit der vierten Runde (`a4f2428c`).** Die
+  Kundenwege Verschieben, Drehen, Bohren, Undo, Klick auf eine Bohrung,
+  Vorschau je Zahl und Erkennung sind je Runde gemessen und umgebaut; die
+  grobe Vorschau nimmt nach Roberts Entscheidung den Anzeigeweg, merkt sich
+  die Verkleinerung, rechnet bei einer Kernabsage genau und zeigt über zwei
+  Sekunden Balken und *Abbrechen*. Die drei Reste unten stehen als RM-212 im
+  Register, die Abnahme am echten Fenster in RM-213.
+
+  Offen und außerhalb dieser Runde: `manifold3d.simplify` hält den GIL — die erste grobe
+  Vorschau steht einmal je Körper im Hauptthread (Platte 0,57 s, Spiderman 2,0 s; der alte
+  Weg ebenso, aber bei jeder abgelösten Vorschau). Die Suche des Anzeigewegs läuft an
+  Netzen, die der Kern nicht unter das Ziel bringt, sechs Schritte lang, bevor das Raster
+  drankommt (Spiderman 4,1 s, Piratenschiff 4,8 s). Beides gehört zur Ansicht und zum
+  Netzkern. Und die genaue Vorschau großer Teile bleibt, was sie ist (Senkplatte 8–15 s);
+  sie hat jetzt Balken und *Abbrechen*, schneller wird sie erst mit dem lokalen Tausch des
+  Hohlraums (Bericht Ansicht).
+
+<a id="rm-211"></a>
+
+- [x] **RM-211 — Drei Verrundungen mit derselben Mitte tragen eine geratene Nummer.**
+  Behoben am 23.09.2026 (Durchsicht 0.5.0, Paket erkennung, `3fa7d719`).
+  Jede Merkmalsnummer entsteht über `features.numbering_order`: nach der
+  Mitte, bei zusammenfallenden Mitten (Maximumnorm, über Ketten) nach Maß,
+  Länge, Lage und Ecken — Langloch, Muster, Gewinde und Hohlraum
+  eingeschlossen; konzentrische Merkmale mit dem kleinen Radius zuerst (eine
+  Setzung, keine Messung, für alle Arten gleich). Wer allein steht, behält
+  seine Nummer. Korpus mit Namen, die Dreiecke rückwärts gespeichert: vorher
+  wurden 5 von 101 Körpern umbenannt, jetzt keiner. Die einmalige
+  Umbenennung gegen den alten Stand trifft nur Merkmale, deren Nummer bisher
+  an der Fleckfolge hing. Mit B7 (Eckenordnung statt Dateiordnung) hängt die
+  Erkennung nicht mehr an der Reihenfolge der Dreiecke: umgekehrte Folge an
+  101 Körpern gleich.
+
+
+## Die sichtbaren Aufnahmefehler von 0.5.0 sind behoben (23.09.2026)
+
+RM-237 ist abgeschlossen. Der Druckbedarf verwendet dieselbe Filamentbeschriftung
+wie die Buchung (`slot_title`); 48 Druckdialogtests sind grün. Maß- und
+Griffkarten werden gemeinsam verteilt, die Skizze entsteht auf der gewählten
+Fläche; 316 Skizzenfälle und 14 gezielte Fälle sind grün. Die Aufnahmeprofile
+tragen in allen sechs Sprachen ihren übersetzten Anzeigenamen.
+
+Alle 54 Handbuchbilder und 72 Websitebilder wurden erneuert und angesehen.
+Der französische Filamenttext ist nach der Nachprüfung vollständig sichtbar.
+Die sechs Formen-Loops warten vor der Aufnahme auf die echte Druckanalyse;
+Poster sowie Start, Mitte und Ende zeigen durchgehend 0 Fehler, 2 Warnungen
+und 10 Hinweise. Die acht gebündelten Auswertungshinweise bleiben dabei
+ebenso erhalten wie die zwei zusätzlichen Analysehinweise.
+
+Nachweise: `codex-abschlussreview-ui.md`, `codex-bilder-handbuch.md`,
+`codex-bilder-website-*.md` und `codex-filme-sichtpruefung.md` in der
+Release-Durchsicht. Das vollständige Release-Tor und die weitergehenden
+nativen Kundenwege bleiben getrennt unter RM-213 geführt.
+
+### Befund vor dem Abschluss
+
+Der folgende übernommene Befund dokumentiert den damaligen Ausgangsstand;
+die darin noch ausstehenden Medienarbeiten sind durch die Nachweise oben erledigt.
+
+<a id="rm-237"></a>
+
+- [x] **RM-237 — Drei Fehler, die in den neuen Website-Bildern zu sehen sind.**
+  Beim Aufnehmen im echten, maximierten Fenster gesehen (Paket website,
+  `6759555d`; jeder steht im Bild, solange er offen ist): Im Druckdialog
+  steht „: Einzelbedarf erst nach dem Slicen bekannt." — vor dem Doppelpunkt
+  fehlt der Name, weil `line.slot.name` leer ist
+  (`print_settings_dialog.py:1966`, Stichprobe bestätigt; Bild
+  `schritt-druck*`). Im Skizzenmodus lagen die beiden Griffkarten
+  *Hochziehen* und *Abtragen* übereinander — keine Bedingungsbeschriftungen;
+  das Wortgemisch steht auch im alten Handbuchbild
+  `app/images/manual/de/sketch-mode.png` (`beleg-skizze*`). Und der
+  Druckername der Beispielaufnahmen bleibt in allen Sprachen deutsch
+  („Allgemeiner FDM-Drucker 220 mm"), weil `make_figures.SAMPLE_PRINTER` die
+  Profilkennung nimmt — gewollt, für einen englischen Kunden aber sichtbar
+  deutsch. Weg: der Slotname mit Rückfall auf „Slot n" und der Anzeigename
+  des Profils über `tr()`; die zugehörigen Aufnahmen danach erneuern.
+
+  **Paket skizzenlabel geprüft, Übernahme noch offen:** Maß- und Griffkarten
+  werden gemeinsam im Bild verteilt, ohne eine Karte zu verlieren. Sechs
+  neue Kerntests und eine native Sonde belegen getrennte, lesbare Karten.
+  Außerdem erzeugt `make_figures.figure_sketch(plane)` die Beispielzeichnung
+  nun direkt auf der gewählten Fläche; zuvor enthielt sie bereits Striche
+  auf XY, weshalb eine spätere Ansichtswechsel-Anweisung ihre Zeichenebene
+  absichtlich nicht versetzte. Der reguläre Kundenweg mit leerer Skizze auf
+  einer gewählten Fläche funktionierte in der Gegenprobe. Die neue native
+  Werkzeugsonde endet mit Exit 0 und zeigt das Ergebnis auf der Dose
+  (z = 40 bis 50 mm), statt im Inneren bei z = 0. `make_web_images` verwendet
+  denselben korrigierten Werkzeugweg. Die beiden zusätzlich gefundenen
+  Kundenfälle zur parallelen Blickrichtung und zum Ebenenfeld werden im
+  laufenden Skizzenpaket behoben und unter RM-213 abgenommen.
+
+  Abnahme bleibt offen: Druckdialog, `sketch-mode`, `sketch-result` und
+  `beleg-skizze` nach der Übernahme neu aufnehmen und ansehen; den
+  Formen-Loop `weg4-formen*` mit acht statt 55 Hinweisen erneuern. Der
+  deutsche Druckername ist ein gesonderter Rest. Das vollständige Release-Tor
+  und die Kundenwege folgen unter RM-213.
+
+## Griffmuster schließen wieder zum Träger (23.09.2026)
+
+RM-236 ist mit `d104ac75d` abgeschlossen. Erkennung und Musteroperationen
+teilen dieselben Zellgrenzen und denselben Mündungssaum; Stopfen und
+Schneidwerkzeuge erhalten den dafür nötigen Überstand. Entfernen und
+Stilwechsel hinterlassen in den sechs Abschlussfällen jeweils einen
+wasserdichten Körper ohne eingeschlossenen Hohlraum. Der glatte Träger hat
+weiter das unabhängig aus dem regelmäßigen 96-Eck hergeleitete Volumen
+21 190,613870566365 mm³. Die Testtoleranzen wurden nicht aufgeweicht.
+
+Die sechs betroffenen Kerndateien der Testsuite ergeben im Muster-Arbeitsbaum
+und nach der Übernahme auf main jeweils 683 bestandene Tests, Exit 0.
+Ruff, Formatprüfung und mypy im Muster-Arbeitsbaum: jeweils Exit 0. Die
+integrierte Release-Abnahme ist ein eigener Nachweis. Bericht und Messwerte
+werden zur Auslieferung unter `Releases/0.5.0/Nachweise/` erhalten.
+
+### Befund vor dem Abschluss
+
+<a id="rm-236"></a>
+
+- [x] **RM-236 — Ein Muster um einen Griff zu entfernen oder zu ersetzen hinterlässt Hohlräume und lose Teile.**
+  Gefunden im Tor nach der Übernahme von exakt und erkennung
+  (`tore/tor-exakt-erkennung.txt` auf `3fa7d719`): fünf Fälle in
+  `tests/test_pattern_features.py` sind einzeln und deterministisch rot —
+  Entfernen und Ersetzen eines Musters um einen Griff ergeben eingeschlossene
+  Hohlräume, drei bis fünf Komponenten und ein Volumen über dem Soll. Ursache
+  laut Übernahmebericht: die Wechselwirkung der neuen Mustererkennung (erkennung
+  B8/B9: Muster um Zylinder werden nach dem Ändern wieder gelesen, Rillen mit
+  breitem Boden sind ein Muster) mit den Musteroperationen aus formops und
+  merkmalsops. Der Geometrie-Auftrag muster behebt sie (`d104ac75d`).
+  Abnahme: die fünf Fälle grün, Volumen exakt zurück auf den Träger, ein Körper,
+  kein Hohlraum. Mit seiner Übernahme wandert der Punkt ins Archiv; bleibt ein
+  Rest, gehört er als Absatz zu RM-225.

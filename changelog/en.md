@@ -40,6 +40,17 @@ it into `website/version.json`.
 - A pattern can be removed with one click or set again with a new pitch, cell width and depth. The cells stay where they were.
 - A texture around a cylinder follows the curve: grooves are equally deep everywhere, and a pattern around the full circumference closes without a seam. The pitch moves to the value that fits.
 
+### Drawing
+
+- Drawing on a chosen part shows only that part in the view; the others stay hidden until *Show neighbours* brings them back.
+- Extruding on a chosen face now attaches the new body instead of stopping — before, it never got past the sketch.
+- A pocket cuts where you drew it, even when the face is not centred on the part.
+- Rounding and chamfering a dimensioned rectangle leaves its dimensions unchanged.
+- Drawing with several parts selected asks which one you mean; the target can be switched at any time in the bar.
+- Escape no longer discards a sketch you have started.
+- An already extruded sketch can be reused for the next pocket, without drawing it again.
+- Clicking a face offers *Draw here* and *Draw hole or cutout* directly.
+
 ### Editing on the exact model
 
 - Primitives are always created with true faces and edges. The checkbox “Edit faces and edges later” is gone; old projects compute unchanged.
@@ -73,6 +84,14 @@ it into `website/version.json`.
 - The dimension fields stay where they were when you change a value. The dimension whose field you type in lights up in the view.
 - The slot knobs also work while the bore’s dimensions stand in the view: Apply then pulls the slot — with a new diameter beside it in one step, at the new width.
 
+### History
+
+- A new step can now be inserted before an existing one in the history, not only appended at the end.
+- A step in the history can be dragged to another place with the mouse, or moved line by line.
+- A step can be switched off and later on again without deleting it; dependent steps rest with it.
+- If a later step refers to a feature that the rearrangement has renamed, Solidon follows it and reports so.
+- If rearranging the history would stop a later step, Solidon declines and changes nothing.
+
 ### Checking and printing
 
 - Resin printers have arrived: two generic devices by build volume are in the printer list, and your own can be added with pixel size and minimum wall.
@@ -89,6 +108,7 @@ it into `website/version.json`.
 - The orientation search on a model with over a million triangles takes five seconds instead of half a minute.
 - Very small distances appear in the analysis map as decimals, not as powers of ten.
 - Shape deviation on fillets and rings is now as precise as on planes and cylinders — and the map computes faster than before.
+- The part cooling fan again follows the curve from the printer profile, instead of running at full speed on every layer.
 
 ### Importing
 
@@ -98,6 +118,9 @@ it into `website/version.json`.
 - An imported hollowed part can be filled with a lattice: Solidon finds the cavity through the vent hole and says that this is how it found it.
 - Reducing triangles no longer tears closed models apart. Where the shape allows nothing else, the report names the number of parts the model fell into.
 - Reducing triangles now reaches its target on sleeves, rings and housings with openings as well.
+- An imported STEP assembly arrives as separate bodies with their own names and face colours, not merged into one shape.
+- Before taking over a STEP assembly, you choose which bodies you need; a mirrored part stays a mirror image.
+- STEP export writes names and face colours into the file; a part read back in keeps its name unchanged.
 
 ### Operation and system
 
@@ -111,6 +134,10 @@ it into `website/version.json`.
 - Undo answers immediately instead of after two and a half seconds.
 - While you type a number the preview appears after half a second, each further one after an eighth of that.
 - Hollowing out computes a fifth faster.
+- A menu entry and a quiet note in the view lead to voluntarily supporting Solidon via PayPal or GoFundMe.
+- The survey card now shows the right colours in the light theme too.
+
+- The Windows application and installer are digitally signed. The signature confirms the publisher and makes later changes detectable.
 
 ## 0.4.4
 

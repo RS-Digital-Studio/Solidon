@@ -65,6 +65,17 @@ Nutzen da und sonst nichts.
 - Ein Muster lässt sich mit einem Klick entfernen oder mit neuer Teilung, Zellbreite und Tiefe neu setzen. Die Zellen bleiben, wo sie waren.
 - Eine Textur um einen Zylinder folgt der Rundung: Rillen sind überall gleich tief, und ein Muster um den ganzen Umfang schließt ohne Naht. Die Teilung rückt dafür auf das Maß, das aufgeht.
 
+### Zeichnen
+
+- Zeichnen auf einem gewählten Teil zeigt nur noch dieses Teil im Bild; die übrigen bleiben verborgen, bis *Nachbarn zeigen* sie wieder einblendet.
+- Hochziehen auf einer gewählten Fläche fügt den neuen Körper an, statt anzuhalten — vorher ging es nie über die Skizze hinaus.
+- Eine Tasche schneidet dort, wo Sie sie gezeichnet haben, auch wenn die Fläche nicht in der Mitte des Teils liegt.
+- Verrunden und Fasen an einem bemaßten Rechteck lassen dessen Maße unverändert.
+- Zeichnen Sie an mehreren gewählten Teilen, fragt Solidon, an welchem; das Ziel lässt sich in der Leiste jederzeit wechseln.
+- Escape wirft eine begonnene Zeichnung nicht mehr weg.
+- Eine schon hochgezogene Zeichnung lässt sich für die nächste Tasche weiterverwenden, ohne sie neu zu zeichnen.
+- Ein Klick auf eine Fläche bietet *Hier zeichnen* und *Loch oder Aussparung zeichnen* direkt an.
+
 ### Bearbeiten am exakten Modell
 
 - Grundkörper entstehen immer mit echten Flächen und Kanten. Der Haken „Flächen und Kanten später bearbeiten“ ist gefallen; alte Projekte rechnen unverändert.
@@ -98,6 +109,14 @@ Nutzen da und sonst nichts.
 - Die Maßfelder bleiben stehen, wo sie standen, wenn Sie einen Wert ändern. Das Maß, in dessen Feld Sie tippen, leuchtet im Bild.
 - Die Knöpfe zum Langloch wirken auch, während die Maße der Bohrung im Bild stehen: Übernehmen zieht dann das Langloch — mit einem neuen Durchmesser daneben in einem Schritt, in der neuen Breite.
 
+### Verlauf
+
+- Im Verlauf lässt sich ein neuer Schritt vor einem vorhandenen einfügen, statt ihn nur ans Ende anzuhängen.
+- Ein Schritt im Verlauf lässt sich mit der Maus an eine andere Stelle ziehen oder Zeile für Zeile verschieben.
+- Ein Schritt lässt sich ausschalten und später wieder einschalten, ohne ihn zu löschen; abhängige Schritte ruhen mit.
+- Verweist ein späterer Schritt auf ein Merkmal, das der Umbau umbenannt hat, folgt Solidon ihm und meldet es.
+- Würde ein Umbau des Verlaufs einen späteren Schritt anhalten, sagt Solidon ab und ändert nichts.
+
 ### Prüfen und Drucken
 
 - Resin-Drucker sind da: Zwei allgemeine Geräte nach Bauraum stehen in der Druckerliste, ein eigener lässt sich mit Pixelgröße und Mindestwand anlegen.
@@ -114,6 +133,7 @@ Nutzen da und sonst nichts.
 - Die Orientierungssuche an einem Modell mit über einer Million Dreiecken dauert fünf Sekunden statt einer halben Minute.
 - Sehr kleine Abstände stehen in der Analysekarte als Dezimalzahl, nicht als Zehnerpotenz.
 - Die Formabweichung an Rundungen und Ringen ist so genau wie an Ebenen und Zylindern — und die Karte rechnet dabei schneller als vorher.
+- Der Bauteillüfter folgt wieder der Kurve aus dem Druckerprofil, statt bei jeder Schicht auf voller Drehzahl zu laufen.
 
 ### Einlesen
 
@@ -123,6 +143,9 @@ Nutzen da und sonst nichts.
 - Ein eingelesenes ausgehöhltes Teil lässt sich mit einem Gitter füllen: Solidon bestimmt den Innenraum über die Entlüftungsbohrung und sagt, dass es ihn so bestimmt hat.
 - Dreiecke verringern zerreißt geschlossene Modelle nicht mehr. Wo die Form es nicht anders zulässt, nennt der Prüfbericht die Zahl der Teile, in die das Modell zerfallen ist.
 - Dreiecke verringern erreicht sein Ziel jetzt auch an Hülsen, Ringen und Gehäusen mit Durchbrüchen.
+- Eine eingelesene STEP-Baugruppe kommt als einzelne Körper mit ihren Namen und Flächenfarben, nicht als ein verschmolzenes Ganzes.
+- Vor der Übernahme einer STEP-Baugruppe wählen Sie, welche Körper Sie brauchen; ein gespiegeltes Teil bleibt ein Spiegelbild.
+- Der STEP-Export schreibt Namen und Flächenfarben in die Datei; ein wieder eingelesenes Teil trägt seinen Namen unverändert.
 
 ### Bedienung und System
 
@@ -136,6 +159,10 @@ Nutzen da und sonst nichts.
 - Rückgängig antwortet sofort statt nach zweieinhalb Sekunden.
 - Beim Tippen einer Zahl steht die Vorschau nach einer halben Sekunde, jede weitere nach einem Achtel davon.
 - Aushöhlen rechnet ein Fünftel schneller.
+- Ein Menüpunkt und ein leiser Hinweis in der Ansicht führen zur freiwilligen Unterstützung von Solidon über PayPal oder GoFundMe.
+- Die Karte des Fragebogens zeigt jetzt auch im hellen Thema die richtigen Farben.
+
+- Die Windows-Anwendung und die Setup-Datei sind digital signiert. Die Signatur bestätigt den Herausgeber und macht nachträgliche Änderungen erkennbar.
 
 ## 0.4.4
 

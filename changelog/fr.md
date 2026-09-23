@@ -41,6 +41,17 @@ dans `website/version.json`.
 - Un motif se supprime d'un clic ou se repose avec un nouveau pas, une nouvelle largeur de cellule et une nouvelle profondeur. Les cellules restent où elles étaient.
 - Une texture autour d'un cylindre suit la courbure : les rainures ont partout la même profondeur, et un motif sur toute la circonférence se referme sans couture. Le pas passe à la valeur qui convient.
 
+### Dessin
+
+- Dessiner sur une pièce choisie ne montre plus que cette pièce dans la vue ; les autres restent masquées jusqu'à ce que « Afficher les voisines » les fasse revenir.
+- Extruder sur une face choisie rattache désormais le nouveau corps au lieu de s'arrêter — avant, ça ne dépassait jamais l'esquisse.
+- Une poche coupe là où vous l'avez dessinée, même quand la face n'est pas centrée sur la pièce.
+- Arrondir et chanfreiner un rectangle coté laisse ses cotes inchangées.
+- Si vous dessinez avec plusieurs pièces choisies, Solidon demande sur laquelle ; la cible se change à tout moment dans la barre.
+- Échap ne jette plus un dessin déjà commencé.
+- Une esquisse déjà extrudée se réutilise pour la poche suivante, sans la redessiner.
+- Un clic sur une face propose directement « Dessiner ici » et « Dessiner un trou ou une découpe ».
+
 ### Modifier sur le modèle exact
 
 - Les corps de base sont toujours créés avec de vraies faces et arêtes. La case « Modifier faces et arêtes plus tard » a disparu ; les anciens projets se calculent sans changement.
@@ -74,6 +85,14 @@ dans `website/version.json`.
 - Les champs de cote restent où ils étaient quand vous changez une valeur. La cote dont vous éditez le champ s’allume dans la vue.
 - Les poignées du trou oblong agissent aussi pendant que les cotes du perçage sont dans la vue : Appliquer étire alors le trou oblong — avec un nouveau diamètre, en une étape et à la nouvelle largeur.
 
+### Historique
+
+- Dans l'historique, une nouvelle étape peut désormais s'insérer avant une étape existante, pas seulement s'ajouter à la fin.
+- Une étape de l'historique se fait glisser à la souris vers un autre endroit, ou se déplace ligne par ligne.
+- Une étape se désactive et se réactive plus tard sans être supprimée ; les étapes qui en dépendent restent en veille avec elle.
+- Si une étape ultérieure fait référence à une caractéristique que le remaniement a renommée, Solidon la suit et le signale.
+- Si remanier l'historique devait arrêter une étape ultérieure, Solidon refuse et ne change rien.
+
 ### Vérifier et imprimer
 
 - Les imprimantes résine sont là : deux appareils génériques par volume d'impression figurent dans la liste, et la vôtre se crée avec taille de pixel et paroi minimale.
@@ -90,6 +109,7 @@ dans `website/version.json`.
 - La recherche d'orientation sur un modèle de plus d'un million de triangles prend cinq secondes au lieu d'une demi-minute.
 - Les très petites distances apparaissent dans la carte d'analyse en décimales, pas en puissances de dix.
 - L'écart de forme sur les congés et les anneaux est aussi précis que sur les plans et les cylindres, et la carte se calcule plus vite qu'avant.
+- Le ventilateur de pièce suit à nouveau la courbe du profil d'imprimante, au lieu de tourner à pleine vitesse à chaque couche.
 
 ### Importer
 
@@ -99,6 +119,9 @@ dans `website/version.json`.
 - Une pièce creuse importée peut être remplie d'une structure en treillis : Solidon détermine le volume intérieur par l'évent et indique qu'il l'a déterminé ainsi.
 - Réduire les triangles ne déchire plus les modèles fermés. Là où la forme ne permet rien d'autre, le rapport indique en combien de morceaux le modèle s'est séparé.
 - Réduire les triangles atteint désormais sa cible aussi sur les douilles, les anneaux et les boîtiers percés.
+- Un assemblage STEP importé arrive comme des corps séparés, chacun avec son nom et ses couleurs de face, au lieu d'un tout fusionné.
+- Avant de reprendre un assemblage STEP, vous choisissez les corps dont vous avez besoin ; une pièce en miroir reste un reflet.
+- L'export STEP écrit les noms et les couleurs de face dans le fichier ; une pièce relue garde son nom inchangé.
 
 ### Utilisation et système
 
@@ -112,6 +135,10 @@ dans `website/version.json`.
 - Annuler répond immédiatement au lieu de deux secondes et demie.
 - Pendant que vous tapez un nombre, l'aperçu apparaît en une demi-seconde, chaque suivant en un huitième de ce temps.
 - L'évidement calcule un cinquième plus vite.
+- Une entrée de menu et une note discrète dans la vue mènent à un soutien volontaire de Solidon via PayPal ou GoFundMe.
+- La carte du questionnaire affiche désormais les bonnes couleurs dans le thème clair aussi.
+
+- L’application Windows et son programme d’installation sont signés numériquement. La signature confirme l’identité de l’éditeur et permet de détecter les modifications ultérieures.
 
 ## 0.4.4
 

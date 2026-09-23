@@ -41,6 +41,17 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un patrón se elimina con un clic o se vuelve a poner con nuevo paso, ancho de celda y profundidad. Las celdas se quedan donde estaban.
 - Una textura alrededor de un cilindro sigue la curvatura: las ranuras tienen la misma profundidad y un patrón en toda la circunferencia cierra sin costura. El paso se ajusta al valor que encaja.
 
+### Dibujo
+
+- Dibujar sobre una pieza elegida muestra solo esa pieza en la vista; las demás quedan ocultas hasta que «Mostrar vecinas» las devuelve.
+- Extruir sobre una cara elegida ahora une el nuevo cuerpo en vez de detenerse; antes nunca pasaba del boceto.
+- Una cavidad corta donde usted la ha dibujado, aunque la cara no esté centrada en la pieza.
+- Redondear y biselar un rectángulo acotado deja sus medidas sin cambios.
+- Si dibuja con varias piezas elegidas, Solidon pregunta en cuál; el destino se puede cambiar en cualquier momento en la barra.
+- Escape ya no descarta un boceto que ha empezado.
+- Un boceto ya extruido se puede reutilizar para la siguiente cavidad, sin volver a dibujarlo.
+- Un clic en una cara ofrece directamente «Dibujar aquí» y «Dibujar agujero o hueco».
+
 ### Editar sobre el modelo exacto
 
 - Los cuerpos básicos se crean siempre con caras y aristas reales. La casilla «Editar caras y aristas más tarde» ha desaparecido; los proyectos antiguos se calculan sin cambios.
@@ -74,6 +85,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los campos de cota se quedan donde estaban cuando cambia un valor. La cota en cuyo campo escribe se ilumina en la vista.
 - Los tiradores para la ranura también funcionan mientras las cotas del taladro están en la vista: Aplicar estira entonces la ranura — con un diámetro nuevo al lado en un solo paso, con el nuevo ancho.
 
+### Historial
+
+- En el historial ahora se puede insertar un paso nuevo antes de uno existente, no solo añadirlo al final.
+- Un paso del historial se puede arrastrar con el ratón a otro lugar, o moverlo línea a línea.
+- Un paso se puede desactivar y volver a activar más tarde sin borrarlo; los pasos dependientes quedan en reposo con él.
+- Si un paso posterior hace referencia a una característica que el reordenamiento ha renombrado, Solidon la sigue y lo indica.
+- Si reordenar el historial detendría un paso posterior, Solidon lo rechaza y no cambia nada.
+
 ### Comprobar e imprimir
 
 - Han llegado las impresoras de resina: dos equipos genéricos por volumen de impresión están en la lista, y una propia se puede crear con tamaño de píxel y pared mínima.
@@ -90,6 +109,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La búsqueda de orientación en un modelo con más de un millón de triángulos tarda cinco segundos en lugar de medio minuto.
 - Las distancias muy pequeñas aparecen en el mapa de análisis como decimales, no como potencias de diez.
 - La desviación de forma en redondeos y anillos es tan precisa como en planos y cilindros, y el mapa se calcula más rápido que antes.
+- El ventilador de pieza vuelve a seguir la curva del perfil de la impresora, en vez de ir a máxima velocidad en cada capa.
 
 ### Importar
 
@@ -99,6 +119,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una pieza hueca importada se puede rellenar con una celosía: Solidon determina el hueco interior a través del respiradero y dice que lo ha determinado así.
 - Reducir triángulos ya no rompe los modelos cerrados. Donde la forma no permite otra cosa, el informe indica en cuántas piezas se ha dividido el modelo.
 - Reducir triángulos alcanza ahora su objetivo también en casquillos, anillos y carcasas con aberturas.
+- Un ensamblaje STEP importado llega como cuerpos independientes con su propio nombre y colores de cara, en lugar de un conjunto fundido en uno solo.
+- Antes de incorporar un ensamblaje STEP, usted elige qué cuerpos necesita; una pieza reflejada sigue siendo un reflejo.
+- La exportación STEP escribe nombres y colores de cara en el archivo; una pieza vuelta a leer conserva su nombre sin cambios.
 
 ### Manejo y sistema
 
@@ -112,6 +135,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Deshacer responde al instante en lugar de tras dos segundos y medio.
 - Al teclear un número la vista previa aparece en medio segundo, y cada siguiente en un octavo de ese tiempo.
 - Vaciar calcula una quinta parte más rápido.
+- Una entrada del menú y un aviso discreto en la vista llevan a apoyar Solidon voluntariamente por PayPal o GoFundMe.
+- La tarjeta de la encuesta muestra ahora los colores correctos también en el tema claro.
+
+- La aplicación y el instalador de Windows están firmados digitalmente. La firma confirma quién los publica y permite detectar cambios posteriores.
 
 ## 0.4.4
 

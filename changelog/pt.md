@@ -40,6 +40,17 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um padrão remove-se com um clique ou volta a pôr-se com novo passo, largura de célula e profundidade. As células ficam onde estavam.
 - Uma textura à volta de um cilindro segue a curvatura: as ranhuras têm a mesma profundidade, e um padrão à volta de toda a circunferência fecha sem costura. O passo passa para o valor que fecha.
 
+### Desenho
+
+- Desenhar numa peça escolhida mostra apenas essa peça na vista; as restantes ficam ocultas até «Mostrar vizinhas» as trazer de volta.
+- Extrudir numa face escolhida agora anexa o novo corpo em vez de parar — antes nunca passava do esboço.
+- Uma cavidade corta onde a desenhou, mesmo quando a face não está centrada na peça.
+- Arredondar e chanfrar um retângulo cotado deixa as suas cotas inalteradas.
+- Se desenhar com várias peças escolhidas, o Solidon pergunta em qual; o destino pode ser trocado a qualquer momento na barra.
+- Escape já não descarta um esboço que começou.
+- Um esboço já extrudido pode ser reutilizado para a próxima cavidade, sem o desenhar de novo.
+- Um clique numa face oferece diretamente «Desenhar aqui» e «Desenhar furo ou recorte».
+
 ### Editar no modelo exato
 
 - Os corpos básicos são sempre criados com faces e arestas reais. A opção «Editar faces e arestas mais tarde» desapareceu; projetos antigos calculam-se sem alterações.
@@ -73,6 +84,14 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os campos de cota ficam onde estavam quando altera um valor. A cota em cujo campo escreve acende-se na vista.
 - Os botões para o furo oblongo também funcionam enquanto as cotas do furo estão na vista: Aplicar puxa então o furo oblongo — com um diâmetro novo ao lado num só passo, na nova largura.
 
+### Histórico
+
+- No histórico já se pode inserir um novo passo antes de um existente, não apenas acrescentá-lo ao fim.
+- Um passo do histórico arrasta-se com o rato para outro lugar, ou move-se linha a linha.
+- Um passo pode ser desligado e voltado a ligar mais tarde sem o apagar; os passos dependentes ficam em repouso com ele.
+- Se um passo posterior faz referência a uma característica que a reorganização renomeou, o Solidon segue-a e comunica-o.
+- Se reorganizar o histórico fosse parar um passo posterior, o Solidon recusa e não muda nada.
+
 ### Verificar e imprimir
 
 - As impressoras de resina chegaram: dois aparelhos genéricos por volume de impressão estão na lista, e uma própria cria-se com tamanho do píxel e parede mínima.
@@ -89,6 +108,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A procura de orientação num modelo com mais de um milhão de triângulos demora cinco segundos em vez de meio minuto.
 - Distâncias muito pequenas aparecem no mapa de análise como decimais, não como potências de dez.
 - O desvio de forma em arredondamentos e anéis é tão preciso como em planos e cilindros, e o mapa é calculado mais depressa do que antes.
+- A ventoinha da peça volta a seguir a curva do perfil da impressora, em vez de girar à velocidade máxima em cada camada.
 
 ### Importar
 
@@ -98,6 +118,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma peça oca importada pode ser preenchida com uma treliça: o Solidon determina o espaço interior através do respiro e diz que o determinou assim.
 - Reduzir triângulos já não rasga modelos fechados. Onde a forma não permite outra coisa, o relatório indica em quantas partes o modelo se dividiu.
 - Reduzir triângulos alcança agora o seu objetivo também em casquilhos, anéis e caixas com aberturas.
+- Um conjunto STEP importado chega como corpos separados, cada um com o seu nome e cores de face, em vez de um todo fundido.
+- Antes de incorporar um conjunto STEP, escolhe quais os corpos de que precisa; uma peça espelhada continua a ser um reflexo.
+- A exportação STEP escreve nomes e cores de face no ficheiro; uma peça relida mantém o seu nome inalterado.
 
 ### Utilização e sistema
 
@@ -111,6 +134,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Anular responde de imediato em vez de após dois segundos e meio.
 - Enquanto escreve um número, a pré-visualização surge em meio segundo, e cada seguinte num oitavo desse tempo.
 - Esvaziar calcula um quinto mais depressa.
+- Uma entrada de menu e um aviso discreto na vista levam ao apoio voluntário ao Solidon via PayPal ou GoFundMe.
+- O cartão do questionário mostra agora as cores certas também no tema claro.
+
+- A aplicação Windows e o instalador têm assinatura digital. A assinatura confirma a identidade do editor e permite detetar alterações posteriores.
 
 ## 0.4.4
 
