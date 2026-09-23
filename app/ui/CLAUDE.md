@@ -215,8 +215,10 @@ dieser Bindung vor, nicht aus inzwischen neu aufgebauten Panelzeilen.
 `bore_step_of` und `bore_action` liefern eindeutig belegte ursprüngliche
 Bohrungswerte; ihre Vorschau rechnet alle Folgeschritte. Unberührte Ausdrücke
 und historische Koordinaten bleiben erhalten. Erkannte Bohrungen ohne
-solche Herkunft ändern über `resize_hole` Durchmesser und Lage; ihre Tiefe
-bleibt gemessene Auskunft. Beginn, Auswahlbindung und Verwerfen stehen in
+solche Herkunft ändern über `resize_hole` Durchmesser, Lage und Tiefe — die
+Tiefe ist ein Feld mit dem gemessenen Wert, leer oder unverändert bleibt sie.
+An einer Gruppe reist sie nur, wenn sie am gewählten Loch geändert wurde
+(`relations.params_for_members(op=…)`). Beginn, Auswahlbindung und Verwerfen stehen in
 Bauplan §18.11 und `.claude/rules/griffe.md`.
 
 Historische Flächenhilfen gehören ausschließlich zur dargestellten

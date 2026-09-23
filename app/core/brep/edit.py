@@ -32,6 +32,7 @@ from app.core.brep.kernel import (
 )
 from app.core.errors import (
     CANCEL,
+    CHANGE_SELECTION,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     GeometryError,
@@ -39,6 +40,7 @@ from app.core.errors import (
     OperationCancelled,
 )
 from app.core.geom.edges import EDGE_CHOICES as SHARED_EDGE_CHOICES
+from app.core.geom.edges import ChamferShape, chamfer_reaches
 from app.core.geom.edges import EdgeChoice as SharedEdgeChoice
 from app.core.geom.edges import choose as choose_by_place
 from app.core.geom.edges import named_edges as edges_named
@@ -473,11 +475,18 @@ def chamfer(
     keys: Sequence[str] = (),
     *,
     selected_edges: Sequence[int] | None = None,
+    shape: ChamferShape | None = None,
 ) -> Solid:
-    """Bricht die gewählten Kanten im 45-Grad-Winkel.
+    """Bricht die gewählten Kanten im 45-Grad-Winkel — oder mit ``shape`` asymmetrisch.
 
     ``keys`` und ``selected_edges`` wie bei :func:`fillet`: einzelne Kanten
     haben Vorrang vor der Gruppe, eine ausdrückliche Auswahl vor beidem.
+
+    **Zwei Abstände oder Abstand und Winkel** (P6.2): Je Kante werden die
+    beiden angrenzenden Flächen an ihrer Mitte gefragt, welche die
+    Bezugsfläche ist und wie weit jede zurückweicht — dieselben Zeilen wie
+    am Netz (``geom.edges.chamfer_reaches``) —, und ``BRepFilletAPI`` bekommt
+    beide Abstände samt der Fläche, auf der der erste gilt.
     """
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer
@@ -486,11 +495,80 @@ def chamfer(
     working = replace(solid)
     chosen = _edges_for(working, choice, keys, checked)
 
-    _fits_the_wall(working, distance, chosen, "chamfer")
+    asymmetric = shape is not None and (shape.second is not None or shape.angle is not None)
+    reaches: list[tuple[Any, float, float]] = []
+    if asymmetric:
+        for entry in chosen:
+            (first_face, first_normal), (_second_face, second_normal) = _faces_at_edge(
+                working, entry
+            )
+            one, two = chamfer_reaches(distance, shape, first_normal, second_normal)
+            reaches.append((first_face, one, two))
+    widest = max((max(one, two) for _face, one, two in reaches), default=distance)
+    _fits_the_wall(working, widest, chosen, "chamfer")
     builder = BRepFilletAPI_MakeChamfer(working.shape)
-    for entry in chosen:
-        builder.Add(distance, entry.edge)
+    for index, entry in enumerate(chosen):
+        if asymmetric:
+            face, one, two = reaches[index]
+            builder.Add(one, two, entry.edge, face)
+        else:
+            builder.Add(distance, entry.edge)
     return _built(working, builder, "chamfer", distance, len(chosen))
+
+
+def _faces_at_edge(solid: Solid, entry: EdgeInfo) -> list[tuple[Any, tuple[float, float, float]]]:
+    """Die zwei Flächen an einer Kante mit ihrer nach außen zeigenden Normale an der Kantenmitte.
+
+    Die Normale kommt aus der Fläche selbst (``BRepLProp_SLProps``) am
+    Fußpunkt der Kantenmitte, mit der Orientierung der Fläche im Körper — an
+    einer ebenen Fläche die Ebenennormale, an einer gekrümmten die an dieser
+    Stelle.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepLProp import BRepLProp_SLProps
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED
+    from OCP.TopExp import TopExp
+    from OCP.TopoDS import TopoDS
+
+    neighbours = NeighbourMap()
+    TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
+    if not neighbours.Contains(entry.edge):
+        raise _chamfer_sides_unknown()
+    found: list[tuple[Any, tuple[float, float, float]]] = []
+    for shape in neighbours.FindFromKey(entry.edge):
+        face = TopoDS.Face(shape)
+        if any(face.IsSame(known) for known, _normal in found):
+            continue
+        projector = GeomAPI_ProjectPointOnSurf(gp_Pnt(*entry.middle), BRep_Tool.Surface_s(face))
+        if projector.NbPoints() < 1:
+            raise _chamfer_sides_unknown()
+        u, v = projector.LowerDistanceParameters()
+        props = BRepLProp_SLProps(BRepAdaptor_Surface(face), u, v, 1, 1e-6)
+        if not props.IsNormalDefined():
+            raise _chamfer_sides_unknown()
+        normal = props.Normal()
+        sign = -1.0 if face.Orientation() == TopAbs_REVERSED else 1.0
+        found.append((face, (sign * normal.X(), sign * normal.Y(), sign * normal.Z())))
+    if len(found) != 2:
+        raise _chamfer_sides_unknown()
+    return found
+
+
+def _chamfer_sides_unknown() -> GeometryError:
+    """Eine Kante, an der sich die zwei Flächen einer Fase nicht bestimmen lassen."""
+    return GeometryError(
+        detail=_(
+            "An dieser Kante lassen sich die beiden Flächen der Fase nicht bestimmen. "
+            "Wählen Sie gleiche Breiten oder eine andere Kante."
+        ),
+        suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+    )
 
 
 def _wall_not_proven() -> GeometryError:
@@ -621,9 +699,18 @@ def _too_large(kind: str) -> Any:
     0,2 mm geht, 0,5 mm und darüber nicht — der Satz kommt also im Normalfall
     und nicht im Ausnahmefall.
     """
+    # **Und der Satz nennt den Weg** (Übertrag der Durchsicht v0.4.1): Allein
+    # stand er da wie ein Titel. Wo die Ursache die Berührlinien sind, ersetzt
+    # ihn ``geom.edge_ops`` durch den Satz mit dem größten Maß, das passt.
     if kind == "chamfer":
-        return _("Die Breite ist für diese Kanten zu groß.")
-    return _("Der Radius ist für diese Kanten zu groß.")
+        return _(
+            "Die Breite ist für diese Kanten zu groß. Wählen Sie eine kleinere Breite "
+            "oder weniger Kanten."
+        )
+    return _(
+        "Der Radius ist für diese Kanten zu groß. Wählen Sie einen kleineren Radius "
+        "oder weniger Kanten."
+    )
 
 
 def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> Solid:
@@ -1012,6 +1099,8 @@ def fill_bore(
     length: float = 0.0,
     angle_deg: float = 0.0,
     opening: tuple[Vec3, Vec3] | None = None,
+    planes: Sequence[SectionPlane] = (),
+    within: Solid | None = None,
 ) -> Solid:
     """Schließt eine erkannte Bohrung wieder — das Gegenstück zum Bohren.
 
@@ -1029,11 +1118,25 @@ def fill_bore(
     Umkreises. Axial bleibt er exakt: Die Mündungen liegen in ebenen Flächen,
     und die tesselliert OpenCASCADE ohne Sehnenfehler; eine Zugabe dort ließe
     einen Zapfen stehen, den beim exakten Körper nichts wieder abschneidet.
+
+    **Und die Mündungen liegen nicht immer quer zur Achse.** ``planes`` sind
+    die Ebenen der Randringe (``prepare_ops._bore_end_planes``, am
+    Netz-Zwilling gemessen); gibt der Aufrufer sie, wird der Stopfen dort
+    begrenzt statt an seinen Deckeln. An einer um 17,5° gekippten Bohrung
+    durch eine 10-mm-Platte standen die Deckel sonst oben und unten bis
+    1,8 mm über der Platte (22.09.2026) — ``depth`` ist dann die Achsspanne der
+    Wand, und die reicht an der einen Seite der Ellipse über die Fläche.
+    Wo die Ränder keine Ebenen hergeben, begrenzt ``within`` (die konvexe
+    Hülle, wie am Netz ``prepare.shell``).
     """
     if length > diameter + EPS_GEOM:
         tool = _slot_tool(position, direction, diameter, depth, length, angle_deg, 2.0 * EPS_GEOM)
     else:
         tool = _centred_bore(position, direction, diameter, depth, EPS_GEOM)
+    if planes:
+        tool = clipped_bore_tool(tool, planes)
+    elif within is not None:
+        tool = boolean("intersection", [tool, within])
     if opening is not None:
         # Der Stopfen endet an der tatsächlichen Außenebene. Sonst wächst
         # beim Versetzen einer Randöffnung Material außerhalb des Bauteils.

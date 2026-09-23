@@ -1114,8 +1114,11 @@ def normalise(
             cache.verify()
             cache["is_watertight"] = bool(closed)
             cache["solidon_component_count"] = components
+        # Das Volumen über ``MeshData`` — dasselbe Integral wie trimesh, ohne
+        # dessen Trägheitsmomente, und unter dem Schlüssel, den ``volume``
+        # später liest (RM-208).
         for figure in ("volume", "area"):
-            getattr(body, figure)
+            getattr(MeshData.of(body), figure)
     if not closed and len(body.faces):
         # Der Satz steht nur noch, wo die Reparatur oben nicht durchkam — sie
         # läuft vorher und schließt, was zu schließen ist.

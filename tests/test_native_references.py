@@ -514,6 +514,14 @@ def test_only_later_consumers_and_active_fits_are_needed() -> None:
 # --- Ende zu Ende am exakten Körper ------------------------------------------------------
 
 
+#: *Fläche versetzen* in der älteren Form — über eine Richtung statt über die
+#: gewählte Fläche. Seit dem 23.09.2026 belegt die Operation mit gewählter
+#: Fläche ihre Übergänge selbst (``faces.pushed_features``), und die Deckfläche
+#: behält ihren Namen; diese Tests brauchen einen Umbau **ohne** Beleg, und
+#: den gibt die Richtungsform weiter.
+_UNPROVEN_PUSH: dict[str, float] = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
+
+
 def _box_project(profile: Profile):
     if not pytest.importorskip("app.core.brep.kernel").available():
         pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
@@ -548,7 +556,11 @@ def test_a_fit_on_a_face_stops_the_step_that_rebuilds_the_exact_body(profile: Pr
     )
     history.apply(
         "Fläche versetzen",
-        [OperationDraft(op="push_face", inputs=("obj_1",), params={"face": top, "distance": 15.0})],
+        [
+            OperationDraft(
+                op="push_face", inputs=("obj_1",), params={**_UNPROVEN_PUSH, "distance": 15.0}
+            )
+        ],
     )
 
     result = evaluate(project.document, profile, sources=sources)
@@ -570,7 +582,11 @@ def test_a_later_step_that_needs_the_moved_face_stops_the_rebuild(profile: Profi
     project, history, sources, top, _bottom = _box_project(profile)
     history.apply(
         "Fläche versetzen",
-        [OperationDraft(op="push_face", inputs=("obj_1",), params={"face": top, "distance": 15.0})],
+        [
+            OperationDraft(
+                op="push_face", inputs=("obj_1",), params={**_UNPROVEN_PUSH, "distance": 15.0}
+            )
+        ],
     )
     alone = evaluate(project.document, profile, sources=sources)
     assert alone.complete, "nur der eigene Bezug: kein Verbraucher danach, kein Halt"
@@ -586,6 +602,28 @@ def test_a_later_step_that_needs_the_moved_face_stops_the_rebuild(profile: Profi
     assert FeatureRef("obj_1", top) in result.blocked_references
     stop = [f for f in result.scene.report.findings if f.op_id == result.stopped_at]
     assert stop and str(stop[0].values["where"]).startswith("Operation")
+
+
+def test_pushing_the_chosen_face_proves_its_own_continuation(profile: Profile) -> None:
+    """Mit gewählter Fläche belegt *Fläche versetzen* den Übergang selbst (23.09.2026).
+
+    Die Passung auf der Deckfläche hält danach nicht an; die Deckfläche heißt,
+    wie sie hieß, und liegt 15 mm höher.
+    """
+    project, history, sources, top, bottom = _box_project(profile)
+    project.document.fits.append(
+        Fit(name="deckel", a=FeatureRef("obj_1", top), b=FeatureRef("obj_1", bottom), kind="flush")
+    )
+    history.apply(
+        "Fläche versetzen",
+        [OperationDraft(op="push_face", inputs=("obj_1",), params={"face": top, "distance": 15.0})],
+    )
+
+    result = evaluate(project.document, profile, sources=sources)
+
+    assert result.complete and not result.blocked_references
+    moved = result.scene.objects["obj_1"].features[top]
+    assert moved.kind == "face" and moved.params["centre"][2] == pytest.approx(35.0)
 
 
 def test_a_step_that_passes_the_faces_through_is_free(profile: Profile) -> None:
@@ -755,7 +793,9 @@ def _pushed_project(profile: Profile, distance: float = 15.0):
         "Fläche versetzen",
         [
             OperationDraft(
-                op="push_face", inputs=("obj_1",), params={"face": top, "distance": distance}
+                op="push_face",
+                inputs=("obj_1",),
+                params={**_UNPROVEN_PUSH, "distance": distance},
             )
         ],
     )
@@ -865,7 +905,7 @@ def test_the_customer_chooses_the_face_that_carries_the_reference_on(
 
 def test_another_producer_version_asks_again(profile: Profile) -> None:
     """Der Scope ist die Fassung des Erzeugers: ein anderer Versatz, eine neue Frage."""
-    project, history, sources, top, _bottom = _pushed_project(profile)
+    project, history, sources, _top, _bottom = _pushed_project(profile)
     push_id = project.document.ops[-1].id
     chooser = _Chooser(35.0)
     first = evaluate(
@@ -873,7 +913,7 @@ def test_another_producer_version_asks_again(profile: Profile) -> None:
     )
     assert first.complete and history.record_matches(first.matches)
 
-    history.change_params(push_id, {"face": top, "distance": 16.0})
+    history.change_params(push_id, {**_UNPROVEN_PUSH, "distance": 16.0})
     later = _Chooser(36.0)
     second = evaluate(
         project.document, profile, sources=sources, ask=later, question_context=later.context

@@ -49,7 +49,7 @@ from app.core.geom.measure import SHARP_EDGE_ANGLE
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import remove_hollow_shells
 from app.core.log import get_logger
-from app.core.types import CancelToken, Feature, Mesh, Quality, Vec3, is_a_cavity
+from app.core.types import CancelToken, Feature, Finding, Mesh, Quality, Vec3, is_a_cavity
 from app.core.units import (
     EPS_GEOM,
     MAX_FACET_ANGLE,
@@ -510,7 +510,11 @@ def choose[AnyEdge: SelectableEdge](edges: Sequence[AnyEdge], choice: EdgeChoice
     if choice == "horizontal":
         return [entry for entry in edges if entry.flat]
 
-    heights = [entry.middle[2] for entry in edges]
+    # **Die Höhe der waagerechten Kanten, nicht aller** (22.09.2026). Eine
+    # schräge Kante hat ihre Mitte zwischen ihren Enden: Am Walmdach lagen die
+    # Mitten der Grate bei 12,5, die Traufen bei 10, und „oben" suchte
+    # waagerechte Kanten auf 12,5 — es gab keine.
+    heights = [entry.middle[2] for entry in edges if entry.flat]
     if not heights:
         return []
     wanted_height = max(heights) if choice == "top" else min(heights)
@@ -650,6 +654,83 @@ MIN_ARC_STEPS = 4
 EDGE_OVERSHOOT = 0.01
 
 
+@dataclass(frozen=True, slots=True)
+class ChamferShape:
+    """Wie eine Fase ihre zwei Flächen zurücknimmt, wenn es nicht beide gleich sind (P6.2).
+
+    Die Breite der Operation gilt auf der **Bezugsfläche**; die Gegenfläche
+    bekommt ``second`` — oder, mit ``angle``, so viel, dass die Fasenfläche
+    unter diesem Winkel zur Bezugsfläche steht. Welche der beiden Flächen einer
+    Kante die Bezugsfläche ist, sagt :func:`reference_first`; ``flipped``
+    tauscht das. Beide Kerne rechnen mit denselben drei Zeilen
+    (:func:`chamfer_reaches`), damit dieselbe Eingabe an einem Netz und an
+    einem exakten Körper dieselbe Fase gibt.
+    """
+
+    second: float | None = None
+    angle: float | None = None
+    flipped: bool = False
+
+
+def reference_first(one: Sequence[float], two: Sequence[float]) -> bool:
+    """Ob die Fläche mit der Normale ``one`` die Bezugsfläche ist — gegen ``two``.
+
+    Die Regel ist eine, die man am Teil sieht: die Fläche, die am weitesten
+    nach **oben** zeigt; bei gleicher Höhe die, die weiter nach **hinten**
+    zeigt, dann die weiter **rechts**. An einer oberen Kante ist das die
+    Oberseite, an einer senkrechten Kante vorn rechts die rechte Seite.
+    """
+    for axis in (2, 1, 0):
+        gap = float(one[axis]) - float(two[axis])
+        if abs(gap) > 1e-6:
+            return gap > 0.0
+    return True
+
+
+def chamfer_reaches(
+    distance: float,
+    shape: ChamferShape | None,
+    one: Sequence[float],
+    two: Sequence[float],
+) -> tuple[float, float]:
+    """Wie weit die Fase auf der Fläche ``one`` und auf der Fläche ``two`` zurücknimmt.
+
+    Ohne ``shape`` beide gleich — die Bedeutung aller bisherigen Fasen. Mit
+    Winkel folgt die zweite Rücknahme aus dem Sinussatz im Dreieck aus Kante
+    und den beiden Berührlinien: ``b = a · sin(w) / sin(t + w)``, mit dem
+    Fasenwinkel ``w`` und dem Winkel ``t`` zwischen den beiden Flächen quer zur
+    Kante (bei einem Quader 90°, dann ``b = a · tan(w)``). Trifft die
+    Fasenfläche die Gegenfläche nicht mehr (``t + w`` ab 180°), ist das eine
+    Absage mit dem größten Winkel.
+    """
+    if shape is None or (shape.second is None and shape.angle is None):
+        return distance, distance
+    reference_is_one = reference_first(one, two) != shape.flipped
+    if shape.angle is not None:
+        cosine = -float(np.clip(np.dot(np.asarray(one, float), np.asarray(two, float)), -1.0, 1.0))
+        between = math.degrees(math.acos(float(np.clip(cosine, -1.0, 1.0))))
+        if between + shape.angle >= 180.0 - 1e-6:
+            raise ValidationError(
+                "angle",
+                _(
+                    "Unter diesem Winkel trifft die Fase die zweite Fläche nicht. "
+                    "Wählen Sie einen Winkel unter {largest:.1f} Grad.",
+                    largest=180.0 - between,
+                ),
+                value=shape.angle,
+                constraint="chamfer_angle",
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        other = (
+            distance
+            * units.exact_sin_degrees(shape.angle)
+            / units.exact_sin_degrees(between + shape.angle)
+        )
+    else:
+        other = float(cast(float, shape.second))
+    return (distance, other) if reference_is_one else (other, distance)
+
+
 def rounding_tool(
     entry: MeshEdge,
     radius: float,
@@ -659,6 +740,7 @@ def rounding_tool(
     extend_ends: bool = True,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
+    shape: ChamferShape | None = None,
 ) -> MeshData:
     """Der Körper, der aus einer Kante eine Rundung oder eine Fase macht.
 
@@ -730,27 +812,12 @@ def rounding_tool(
             subtracted=subtracted,
             min_steps=min_steps,
             flank_overlap=flank_overlap,
+            shape=shape,
         )
         if wedge is not None:
             pieces.append(wedge)
     if not pieces:
-        # **Und der Satz spricht nicht vom Maß.** Bis zum 13.09.2026 stand hier
-        # „Das Maß ist für diese Kante zu groß — wählen Sie ein kleineres", und
-        # das war in jedem Fall falsch, in dem er erschien: :func:`_wedge`
-        # scheitert am **Winkel** zwischen den zwei Flächen und nie an
-        # ``radius``. Gemessen am ``generated_figure`` des Korpus bekam
-        # derselbe Körper denselben Satz bei R = 0,001 wie bei R = 2,0. Ein
-        # kleinerer Radius versucht dasselbe noch einmal, und Regel 17 verlangt
-        # eine Handlung, die weiterführt.
-        raise GeometryError(
-            detail=_(
-                "An dieser Kante stoßen keine zwei Flächen unter einem Winkel "
-                "zusammen — das Netz ist dort gefaltet oder eben. Reparieren Sie "
-                "das Modell, oder wählen Sie eine andere Kante."
-            ),
-            suggestions=(REPAIR_AND_RETRY, CHANGE_SELECTION, CANCEL),
-            values={"radius": radius},
-        )
+        raise _without_an_angle(radius)
     if len(pieces) == 1:
         return pieces[0]
     # **In einem Zug und nicht paarweise.** Der erste Anlauf faltete die Stücke
@@ -760,6 +827,62 @@ def rounding_tool(
     # richtiges Volumen, aber ``body_count`` zählte drei Teile, und der
     # Prüfbericht meldet so etwas dem Kunden als Zerfall.
     return boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
+
+
+def _without_an_angle(radius: float) -> GeometryError:
+    """Der Satz für einen Zug, an dem keine zwei Flächen unter einem Winkel stoßen.
+
+    **Und der Satz spricht nicht vom Maß.** Bis zum 13.09.2026 stand hier
+    „Das Maß ist für diese Kante zu groß — wählen Sie ein kleineres", und das
+    war in jedem Fall falsch, in dem er erschien: :func:`_wedge` scheitert am
+    **Winkel** zwischen den zwei Flächen und nie an ``radius``. Gemessen am
+    ``generated_figure`` des Korpus bekam derselbe Körper denselben Satz bei
+    R = 0,001 wie bei R = 2,0. Ein kleinerer Radius versucht dasselbe noch
+    einmal, und Regel 17 verlangt eine Handlung, die weiterführt.
+    """
+    return GeometryError(
+        detail=_(
+            "An dieser Kante stoßen keine zwei Flächen unter einem Winkel "
+            "zusammen — das Netz ist dort gefaltet oder eben. Reparieren Sie "
+            "das Modell, oder wählen Sie eine andere Kante."
+        ),
+        suggestions=(REPAIR_AND_RETRY, CHANGE_SELECTION, CANCEL),
+        values={"radius": radius},
+    )
+
+
+def workable(entry: MeshEdge) -> bool:
+    """Ob an diesem Zug überhaupt ein Werkzeug entsteht — unabhängig vom Maß.
+
+    Dieselben Bedingungen, an denen :func:`_wedge` ein Stück verwirft: ein
+    Stück ohne Länge, zwei entgegengesetzte Normalen (eine Wand ohne Dicke,
+    zwei Hälften Wand an Wand) oder ein Winkel, der keine Kante ist. Trägt kein
+    Stück, gibt es an diesem Zug nichts zu runden oder zu fasen — gleich mit
+    welchem Maß.
+    """
+    if not entry.normals:
+        return False
+    points = np.asarray(entry.points, dtype=float)
+    for index, (first, second) in enumerate(entry.normals):
+        along = points[index + 1] - points[index]
+        reach = float(np.linalg.norm(along))
+        if reach <= EPS_GEOM:
+            continue
+        along = along / reach
+        one = np.asarray(first, dtype=float)
+        two = np.asarray(second, dtype=float)
+        into = (one + two) if not entry.convex else -(one + two)
+        weight = float(np.linalg.norm(into))
+        if weight <= EPS_GEOM:
+            continue
+        half = (math.pi - math.acos(float(np.clip(np.dot(one, two), -1.0, 1.0)))) / 2.0
+        if half <= EPS_GEOM or half >= math.pi / 2.0 - EPS_GEOM:
+            continue
+        into = into / weight
+        if _along_face(one, along, into) is None or _along_face(two, along, into) is None:
+            continue
+        return True
+    return False
 
 
 def _wedge(
@@ -773,12 +896,14 @@ def _wedge(
     subtracted: bool,
     min_steps: int = 0,
     flank_overlap: float = 0.0,
+    shape: ChamferShape | None = None,
 ) -> MeshData | None:
     """Ein Stück des Werkzeugs — das Prisma über einem Querschnitt.
 
     ``convex`` sagt, auf welcher Seite der Kante der Zwickel liegt;
     ``subtracted``, ob er vom Körper abgezogen wird. Beim Verrunden ist das
-    dasselbe, beim Wegnehmen einer Rundung nicht.
+    dasselbe, beim Wegnehmen einer Rundung nicht. ``shape`` gibt einer Fase
+    zwei verschiedene Rücknahmen (:func:`chamfer_reaches`).
     """
     along = end - start
     reach = float(np.linalg.norm(along))
@@ -812,14 +937,15 @@ def _wedge(
     # gleich unter welchem Winkel sie stehen — so ist es auch im exakten Kern
     # beschrieben („auf jeder der beiden Flächen").
     tangent = radius / math.tan(half) if rounded else radius
+    tangents = (tangent, tangent) if rounded else chamfer_reaches(radius, shape, first, second)
     # Die Richtungen entlang der beiden Flächen, weg von der Kante.
     towards_one = _along_face(one, along, into)
     towards_two = _along_face(two, along, into)
     if towards_one is None or towards_two is None:
         return None
 
-    first_touch = start + tangent * towards_one
-    second_touch = start + tangent * towards_two
+    first_touch = start + tangents[0] * towards_one
+    second_touch = start + tangents[1] * towards_two
     bow: list[np.ndarray] = []
     if rounded:
         centre = start + radius / units.exact_sin(half) * into
@@ -967,6 +1093,7 @@ def round_edges(
     selected_edges: Sequence[int] | None = None,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
+    narrowest: float = MAX_FACET_SAG,
 ) -> BooleanOutcome:
     """Verrundet die gewählten Kanten eines Netzes — dieselbe Handlung wie
     ``brep.edit.fillet``, an einem Körper, der keine Topologie hat.
@@ -986,6 +1113,7 @@ def round_edges(
         rounded=True,
         quality=quality,
         cancelled=cancelled,
+        narrowest=narrowest,
     )
 
 
@@ -998,12 +1126,15 @@ def bevel_edges(
     selected_edges: Sequence[int] | None = None,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
+    narrowest: float = MAX_FACET_SAG,
+    shape: ChamferShape | None = None,
 ) -> BooleanOutcome:
     """Fast die gewählten Kanten — dieselbe Handlung wie ``brep.edit.chamfer``.
 
     ``distance`` ist die Rücknahme auf **jeder** der beiden Flächen, wie im
-    exakten Kern. Am Netz ist die Fase der genauere der beiden Fälle: Sie ist
-    eine Ebene, und eine Ebene hat ein Netz exakt — hier weicht nichts ab.
+    exakten Kern — oder, mit ``shape``, auf der Bezugsfläche (P6.2). Am Netz
+    ist die Fase der genauere der beiden Fälle: Sie ist eine Ebene, und eine
+    Ebene hat ein Netz exakt — hier weicht nichts ab.
     """
     return _worked_edges(
         mesh,
@@ -1014,6 +1145,8 @@ def bevel_edges(
         rounded=False,
         quality=quality,
         cancelled=cancelled,
+        narrowest=narrowest,
+        shape=shape,
     )
 
 
@@ -1281,19 +1414,38 @@ def _corner_ball(radius: float) -> np.ndarray:
 
 
 def _chamfer_contacts(
-    star: list[tuple[MeshEdge, int]], normals: np.ndarray, size: float, sign: float
+    star: list[tuple[MeshEdge, int]],
+    normals: np.ndarray,
+    size: float,
+    sign: float,
+    shape: ChamferShape | None = None,
 ) -> np.ndarray:
-    """Schnittpunkte der beiden Fasenflanken auf jeder ursprünglichen Fläche."""
+    """Schnittpunkte der beiden Fasenflanken auf jeder ursprünglichen Fläche.
+
+    Jede Fase ist hier ihre Ebene durch die beiden Berührlinien. Bei gleicher
+    Breite steht sie senkrecht auf der Winkelhalbierenden; mit zwei Breiten
+    (:func:`chamfer_reaches`) ist sie gekippt, und ihre Normale kommt aus der
+    Kante und der Linie zwischen den Berührpunkten.
+    """
     boundaries: list[tuple[np.ndarray, float, np.ndarray]] = []
     for entry, end in star:
-        pair = sign * np.asarray(entry.normals[end], dtype=float)
+        original = np.asarray(entry.normals[end], dtype=float)
+        pair = sign * original
         along = np.asarray(entry.points[1 if end == 0 else -2]) - entry.points[end]
         along /= float(np.linalg.norm(along))
         bisector = pair.sum(axis=0)
         bisector /= float(np.linalg.norm(bisector))
-        inward = _along_face(pair[0], along, -bisector)
-        assert inward is not None
-        boundaries.append((bisector, float(size * np.dot(bisector, inward)), pair))
+        first_in = _along_face(pair[0], along, -bisector)
+        second_in = _along_face(pair[1], along, -bisector)
+        assert first_in is not None and second_in is not None
+        reach_one, reach_two = chamfer_reaches(size, shape, original[0], original[1])
+        first_touch = first_in * reach_one
+        second_touch = second_in * reach_two
+        plane = np.cross(along, second_touch - first_touch)
+        plane /= float(np.linalg.norm(plane))
+        if float(plane @ bisector) < 0.0:
+            plane = -plane
+        boundaries.append((plane, float(plane @ first_touch), pair))
     contacts: list[np.ndarray] = []
     for normal in normals:
         touching = [
@@ -1316,6 +1468,7 @@ def _corner_tools(
     ball_vertices: np.ndarray,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
+    shape: ChamferShape | None = None,
 ) -> tuple[BooleanKind, MeshData, list[BooleanOutcome]] | None:
     """Die Eckfläche verbindet die Flanken am ursprünglichen gemeinsamen Knoten.
 
@@ -1336,7 +1489,7 @@ def _corner_tools(
     vertex = np.asarray(entry.points[end])
     kind: BooleanKind = "difference" if entry.convex else "union"
     if not rounded:
-        contacts = _chamfer_contacts(star, normals, size, sign)
+        contacts = _chamfer_contacts(star, normals, size, sign, shape)
         # Drei Kontaktpunkte und der Knoten sind das Wenigste, woraus eine
         # Haube entsteht; darunter gibt es keine (siehe :func:`_corner_hull`).
         if len(contacts) < 3:
@@ -1443,6 +1596,10 @@ def _check_corner_region(
                 "ein kleineres Maß oder bearbeiten Sie die Kanten einzeln."
             ),
             values={"size": size},
+            # Der Satz nennt zwei Wege, und beide sind Handlungen am Schritt —
+            # nicht „Reparieren", die Vorgabe des Geometriefehlers: Am Netz ist
+            # hier nichts kaputt, die Ecke ist nur zu eng für das Maß.
+            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
         )
     return clipped
 
@@ -1481,15 +1638,428 @@ def _worked_edges(
     rounded: bool,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
+    narrowest: float = MAX_FACET_SAG,
+    shape: ChamferShape | None = None,
 ) -> BooleanOutcome:
-    """Löst die Auswahl im Weltsystem und rechnet gemischte Ecken in ihrem Rahmen."""
+    """Löst die Auswahl im Weltsystem und rechnet gemischte Ecken in ihrem Rahmen.
+
+    **Eine Gruppe nimmt, was sich bearbeiten lässt** (22.09.2026). „Alle
+    Kanten" hielt am ersten Zug an, an dem keine zwei Flächen unter einem
+    Winkel stoßen — an zusammengesetzten Kundenteilen, deren Hälften Wand an
+    Wand stehen, blockierten 39 solche Züge die übrigen 927 (Übertrag der
+    Durchsicht v0.4.1). Wer eine Gruppe wählt, meint die Kanten, die es gibt;
+    der Rest wird übersprungen und im Befund ``edges.skipped`` gezählt. Eine
+    ausdrücklich benannte Kante hält weiter an (§21.3) — dort ist genau sie
+    gemeint.
+    """
     entries = edges_of(mesh)
     chosen = selected_or_wanted(entries, choice, keys, selected_edges)
+    skipped = 0
+    if selected_edges is None and not keys and choice != "named":
+        kept = [entry for entry in chosen if workable(entry)]
+        skipped = len(chosen) - len(kept)
+        if not kept:
+            raise _without_an_angle(size)
+        chosen = kept
+    largest = contact_band_limit(
+        entries,
+        chosen,
+        size,
+        rounded=rounded,
+        tolerance=weld_tolerance(mesh.bounds.diagonal),
+        narrowest=narrowest,
+        shape=shape,
+    )
+    if largest is not None:
+        raise too_large_for_the_faces(size, largest, rounded=rounded)
+    outcome = _grouped_edge_work(
+        mesh,
+        entries,
+        chosen,
+        size,
+        rounded=rounded,
+        quality=quality,
+        cancelled=cancelled,
+        shape=shape,
+    )
+    if skipped:
+        outcome.findings.append(_skipped_finding(skipped, len(chosen)))
+    return outcome
+
+
+#: Wie viele Stellen je Kantenstück die Berührlinien höchstens prüfen — genug,
+#: dass eine Bohrung neben einer langen Kante nicht zwischen zwei Proben liegt,
+#: und begrenzt, damit ein langer Zug nicht tausend Strahlen kostet.
+_BAND_SAMPLES: Final = 8
+
+
+def contact_band_limit(
+    entries: Sequence[MeshEdge],
+    chosen: Sequence[MeshEdge],
+    size: float,
+    *,
+    rounded: bool,
+    tolerance: float,
+    narrowest: float = MAX_FACET_SAG,
+    shape: ChamferShape | None = None,
+) -> float | None:
+    """Das Maß, unter dem die Berührlinien aller gewählten Kanten auf ihren Flächen
+    bleiben — ``None``, wenn das eingetragene passt.
+
+    Mit zwei Fasenbreiten (``shape``) reicht jede Seite so weit, wie
+    :func:`chamfer_reaches` sagt, und die Antwort ist die größte Breite der
+    Bezugsfläche, bei der beide — im selben Verhältnis — passen.
+
+    **Die Frage, die der exakte Kern mit seinem Scheitern beantwortet, und das
+    Netz gar nicht stellte** (22.09.2026). Eine Rundung berührt jede ihrer zwei
+    Flächen im Abstand ``R / tan(θ/2)`` von der Kante, eine Fase im Abstand
+    ihrer Breite. Reicht die Fläche nicht so weit — oder liegt dort schon die
+    Berührlinie einer anderen gewählten Kante —, gibt es die Rundung nicht:
+    OpenCASCADE lehnt ab, und das Netz schnitt weiter und machte eine 3-mm-Wand
+    still niedriger (Fase 2,9 mm: 18,6 statt 20 mm hoch). Gefragt wird mit
+    Strahlen in der Ebene jeder Fläche, quer zur Kante: Die nächste scharfe
+    Kante, die in derselben Ebene liegt, ist dort der Rand der Fläche.
+    Gleichstand zählt als zu groß: Eine Fläche, die auf eine Linie schrumpft,
+    baut der exakte Kern nicht, und beide Kerne sollen dasselbe sagen.
+
+    ``narrowest`` ist die schmalste Fläche, die zählt: Was schmaler ist, gibt
+    es im Druck nicht, und eine Rundung, die darüber hinweggeht, verliert
+    nichts, was jemand sieht. Die Operation nennt dafür das kleinste Detail
+    des Druckers (``PrinterProfile.smallest_detail``); ohne Drucker bleibt es
+    bei der Sehnengrenze.
+
+    **Wo zwei Kanten einen Knoten teilen, laufen sie dort ineinander.** Ist die
+    andere gewählt, ist das der Eckanschluss (``_corner_tools``, am exakten
+    Kern die Eckverrundung), und ihre Streifen dürfen sich überlappen. Ist sie
+    es nicht, läuft die Rundung am Ende der eigenen Kante in sie aus, solange
+    der Treffer näher am gemeinsamen Knoten liegt, als die Berührlinie
+    reicht — gemessen am Tetraeder mit drei Rundungen an einer Ecke: Am
+    fernen Ende jeder Kante schnitt der Strahl die dritte Kante 3,5 mm vor dem
+    Knoten, bei 5,8 mm Reichweite.
+
+    **Gerechnet als Feld über alle Strahlen.** Die erste Fassung ging die
+    Treffer in Python durch und fragte die Nachbarn über die Mitten der
+    Kantenstücke mit dem Radius des längsten Stücks — an ``BowlingGame.3mf``
+    (349 128 Dreiecke, „alle Kanten") 19 s. Jetzt sucht der Baum über Punkte,
+    die entlang jedes Stücks im Abstand der größten Reichweite liegen.
+    """
+    from scipy.spatial import cKDTree
+
+    if not chosen or size <= EPS_GEOM:
+        return None
+    chosen_ids = {id(entry) for entry in chosen}
+    chains = [entry for entry in entries if entry.normals]
+    if not chains:
+        return None
+    counts = np.asarray([len(entry.normals) for entry in chains], dtype=np.int64)
+    first = np.concatenate(
+        [np.asarray(entry.points, dtype=float)[: len(entry.normals)] for entry in chains]
+    )
+    last = np.concatenate(
+        [np.asarray(entry.points, dtype=float)[1 : len(entry.normals) + 1] for entry in chains]
+    )
+    normals = np.concatenate([np.asarray(entry.normals, dtype=float) for entry in chains])
+    owners = np.repeat(np.arange(len(chains)), counts)
+    convex = np.repeat(np.asarray([entry.convex for entry in chains], dtype=bool), counts)
+    chosen_chain = np.asarray([id(entry) in chosen_ids for entry in chains], dtype=bool)
+    if not chosen_chain.any():
+        return None
+    reach = _reaches(normals, size, rounded=rounded)
+    # Jede Seite greift ``grows · size + fixed`` weit: mit dem Maß wachsend, oder
+    # fest — die zweite Breite einer Fase mit zwei Abständen wächst nicht mit.
+    grows = np.stack((reach, reach), axis=1) / size
+    fixed = np.zeros_like(grows)
+    if not rounded and shape is not None:
+        sided = np.asarray(
+            [chamfer_reaches(size, shape, pair[0], pair[1]) for pair in normals], dtype=float
+        )
+        if shape.angle is None and shape.second is not None:
+            fixed_side = np.isclose(sided, float(shape.second)) & ~np.isclose(sided, size)
+            if abs(float(shape.second) - size) <= EPS_GEOM:
+                fixed_side[:] = False
+            grows = np.where(fixed_side, 0.0, sided / size)
+            fixed = np.where(fixed_side, sided, 0.0)
+        else:
+            grows = sided / size
+        reach = sided.max(axis=1)
+    sided = grows * size + fixed
+
+    # Die Strahlen: je gewähltem Stück bis zu acht Stellen, je Seite einer.
+    picked = np.flatnonzero(chosen_chain[owners] & np.isfinite(reach))
+    span = last[picked] - first[picked]
+    lengths = np.linalg.norm(span, axis=1)
+    good = lengths > EPS_GEOM
+    picked, span, lengths = picked[good], span[good], lengths[good]
+    along = span / lengths[:, None]
+    one, two = normals[picked, 0], normals[picked, 1]
+    into = np.where(convex[picked][:, None], -(one + two), one + two)
+    weight = np.linalg.norm(into, axis=1)
+    good = weight > EPS_GEOM
+    picked, span, lengths, along, one, two, into = (
+        picked[good],
+        span[good],
+        lengths[good],
+        along[good],
+        one[good],
+        two[good],
+        into[good] / weight[good][:, None],
+    )
+    if not len(picked):
+        return None
+    samples = np.clip(
+        np.ceil(lengths / np.maximum(reach[picked], EPS_GEOM)), 1, _BAND_SAMPLES
+    ).astype(np.int64)
+    owner_rows: list[np.ndarray] = []
+    origin_rows: list[np.ndarray] = []
+    head_rows: list[np.ndarray] = []
+    face_rows: list[np.ndarray] = []
+    walk_rows: list[np.ndarray] = []
+    wanted_rows: list[np.ndarray] = []
+    growing_rows: list[np.ndarray] = []
+    for number, side in enumerate((one, two)):
+        direction = np.cross(side, along)
+        size_of = np.linalg.norm(direction, axis=1)
+        valid = size_of > EPS_GEOM
+        direction = direction / np.where(valid, size_of, 1.0)[:, None]
+        flip = np.einsum("ij,ij->i", direction, into) <= 0.0
+        direction[flip] *= -1.0
+        index = np.repeat(np.arange(len(picked)), samples)
+        position = np.concatenate([(np.arange(count) + 0.5) / count for count in samples])
+        index, position = index[valid[index]], position[valid[index]]
+        owner_rows.append(picked[index])
+        origin_rows.append(first[picked[index]] + span[index] * position[:, None])
+        head_rows.append(direction[index])
+        face_rows.append(side[index])
+        walk_rows.append(along[index])
+        wanted_rows.append(sided[picked[index], number])
+        growing_rows.append(grows[picked[index], number])
+    mine = np.concatenate(owner_rows)
+    if not len(mine):
+        return None
+    origin = np.concatenate(origin_rows)
+    head = np.concatenate(head_rows)
+    face = np.concatenate(face_rows)
+    walk = np.concatenate(walk_rows)
+    wanted = np.concatenate(wanted_rows)
+    growing = np.concatenate(growing_rows)
+
+    # Kandidaten: Stücke, die einem Strahl näher kommen, als jede Überlappung reicht.
+    chosen_reach = reach[chosen_chain[owners] & np.isfinite(reach)]
+    limit = float(wanted.max() + (chosen_reach.max() if len(chosen_reach) else 0.0)) + tolerance
+    spacing = max(limit, EPS_GEOM)
+    lengths_all = np.linalg.norm(last - first, axis=1)
+    steps = np.maximum(np.ceil(lengths_all / spacing).astype(np.int64), 1)
+    segment_of = np.repeat(np.arange(len(first)), steps + 1)
+    fraction = np.concatenate([np.linspace(0.0, 1.0, count + 1) for count in steps])
+    points = first[segment_of] + (last[segment_of] - first[segment_of]) * fraction[:, None]
+    tree = cKDTree(points)
+    near = tree.query_ball_point(origin, limit + spacing / 2.0 + tolerance)
+    sizes = np.fromiter((len(found) for found in near), dtype=np.int64, count=len(near))
+    if not sizes.sum():
+        return None
+    rows = np.repeat(np.arange(len(origin)), sizes)
+    columns = segment_of[np.fromiter((i for found in near for i in found), dtype=np.int64)]
+    pair = np.unique(rows * len(first) + columns)
+    rows, columns = pair // len(first), pair % len(first)
+    keep = columns != mine[rows]
+    rows, columns = rows[keep], columns[keep]
+
+    start_point = first[columns] - origin[rows]
+    stop_point = last[columns] - origin[rows]
+    planar = (np.abs(np.einsum("ij,ij->i", start_point, face[rows])) <= tolerance) & (
+        np.abs(np.einsum("ij,ij->i", stop_point, face[rows])) <= tolerance
+    )
+    start_u = np.einsum("ij,ij->i", start_point, head[rows])
+    start_v = np.einsum("ij,ij->i", start_point, walk[rows])
+    stop_u = np.einsum("ij,ij->i", stop_point, head[rows])
+    stop_v = np.einsum("ij,ij->i", stop_point, walk[rows])
+    across = start_v - stop_v
+    crossing = planar & (np.abs(across) > EPS_GEOM)
+    share = np.where(crossing, start_v / np.where(crossing, across, 1.0), -1.0)
+    crossing &= (share >= -1e-9) & (share <= 1.0 + 1e-9)
+    distance = start_u + share * (stop_u - start_u)
+    crossing &= distance > tolerance
+    rows, columns, distance = rows[crossing], columns[crossing], distance[crossing]
+    if not len(rows):
+        return None
+    # Je Strahl der nächste Treffer: der Rand der Fläche an dieser Stelle.
+    order = np.lexsort((distance, rows))
+    rows, columns, distance = rows[order], columns[order], distance[order]
+    nearest = np.concatenate(([True], rows[1:] != rows[:-1]))
+    rows, columns, width = rows[nearest], columns[nearest], distance[nearest]
+
+    mine_chain = owners[mine[rows]]
+    other_chain = owners[columns]
+    other_chosen = chosen_chain[other_chain]
+    facing_one = np.einsum("ij,ij->i", normals[columns, 0], face[rows]) > 1.0 - 1e-6
+    facing_two = np.einsum("ij,ij->i", normals[columns, 1], face[rows]) > 1.0 - 1e-6
+    facing = facing_one | facing_two
+    # Die Nachbarkante greift auf **dieser** Fläche so weit, wie ihre Seite auf ihr reicht.
+    beside = np.where(facing_one, sided[columns, 0], sided[columns, 1])
+    beside_grows = np.where(facing_one, grows[columns, 0], grows[columns, 1])
+    counted = other_chosen & facing
+    other_reach = np.where(counted, np.nan_to_num(beside, posinf=0.0), 0.0)
+    needed = wanted[rows] + other_reach
+    # Der Anteil, der mit dem Maß wächst; der Rest steht fest (zweite Breite).
+    scaling = growing[rows] + np.where(counted, np.nan_to_num(beside_grows, posinf=0.0), 0.0)
+    violating = (width >= narrowest) & (needed >= width - tolerance)
+    if not violating.any():
+        return None
+    rows, width, needed = rows[violating], width[violating], needed[violating]
+    scaling = scaling[violating]
+    mine_chain, other_chain = mine_chain[violating], other_chain[violating]
+    other_chosen = other_chosen[violating]
+    ends = np.asarray(
+        [
+            (entry.node_indices[0], entry.node_indices[-1]) if entry.node_indices else (-1, -2)
+            for entry in chains
+        ],
+        dtype=np.int64,
+    )
+    tips = np.asarray([(entry.points[0], entry.points[-1]) for entry in chains], dtype=float)
+    hit = origin[rows] + head[rows] * width[:, None]
+    foreign = other_chain != mine_chain
+    connected = np.zeros(len(rows), dtype=bool)
+    close = np.zeros(len(rows), dtype=bool)
+    for mine_end in (0, 1):
+        for other_end in (0, 1):
+            shared = foreign & (ends[mine_chain, mine_end] == ends[other_chain, other_end])
+            connected |= shared
+            corner = tips[mine_chain, mine_end]
+            close |= shared & (np.linalg.norm(hit - corner, axis=1) <= needed + tolerance)
+    skipped = (connected & other_chosen) | close
+    if skipped.all():
+        return None
+    width, needed, scaling = width[~skipped], needed[~skipped], scaling[~skipped]
+    steady = needed - scaling * size
+    alone = (scaling <= EPS_GEOM) | (steady >= width - tolerance)
+    if bool(np.any(alone)) and shape is not None and shape.second is not None:
+        # Schon die feste zweite Breite passt nicht — mit der ersten ist das
+        # nicht zu lösen, und der Satz nennt, welche Zahl zu groß ist.
+        count = np.maximum(np.rint(steady[alone] / float(shape.second)), 1.0)
+        room = (width[alone] - scaling[alone] * size) / count
+        raise too_large_for_the_faces(
+            float(shape.second),
+            float(max(np.min(room), 0.0)),
+            rounded=False,
+            second=True,
+        )
+    usable = scaling > EPS_GEOM
+    return float(((width[usable] - steady[usable]) / scaling[usable]).min())
+
+
+def _reaches(normals: np.ndarray, size: float, *, rounded: bool) -> np.ndarray:
+    """:func:`_reach` für ein ganzes Feld von Normalenpaaren."""
+    if not rounded:
+        return np.full(len(normals), float(size))
+    dots = np.clip(np.einsum("ij,ij->i", normals[:, 0], normals[:, 1]), -1.0, 1.0)
+    half = (math.pi - np.arccos(dots)) / 2.0
+    valid = (half > EPS_GEOM) & (half < math.pi / 2.0 - EPS_GEOM)
+    return np.where(valid, size / np.tan(np.where(valid, half, 1.0)), np.inf)
+
+
+def _reach(pair: np.ndarray, size: float, *, rounded: bool) -> float:
+    """Wie weit eine Rundung oder Fase auf ihren Flächen von der Kante greift."""
+    if not rounded:
+        return size
+    one, two = pair
+    half = (math.pi - math.acos(float(np.clip(np.dot(one, two), -1.0, 1.0)))) / 2.0
+    if half <= EPS_GEOM or half >= math.pi / 2.0 - EPS_GEOM:
+        return math.inf
+    return size / math.tan(half)
+
+
+def too_large_for_the_faces(
+    size: float, largest: float, *, rounded: bool, second: bool = False
+) -> GeometryError:
+    """Der eine Satz beider Kerne, wenn die Berührlinien nicht auf die Flächen passen.
+
+    ``second`` sagt, dass die feste zweite Breite einer Fase zu groß ist (P6.2).
+    """
+    from app.core.units import format_length
+
+    shown = format_length(max(largest, 0.0))
+    if second:
+        return GeometryError(
+            detail=_(
+                "Die zweite Breite ist für diese Kanten zu groß: Auf einer angrenzenden "
+                "Fläche bleibt kein Platz für die Fase. Wählen Sie eine zweite Breite "
+                "unter {largest}, oder bearbeiten Sie weniger Kanten.",
+                largest=shown,
+            ),
+            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+            values={"size_mm": round(size, 3), "largest_mm": largest, "field": "second_distance"},
+        )
+    return GeometryError(
+        detail=(
+            _(
+                "Der Radius ist für diese Kanten zu groß: Auf einer angrenzenden Fläche "
+                "bleibt kein Platz für die Rundung. Wählen Sie einen Radius unter {largest}, "
+                "oder bearbeiten Sie weniger Kanten.",
+                largest=shown,
+            )
+            if rounded
+            else _(
+                "Die Breite ist für diese Kanten zu groß: Auf einer angrenzenden Fläche "
+                "bleibt kein Platz für die Fase. Wählen Sie eine Breite unter {largest}, "
+                "oder bearbeiten Sie weniger Kanten.",
+                largest=shown,
+            )
+        ),
+        suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+        values={"size_mm": round(size, 3), "largest_mm": largest},
+    )
+
+
+def _skipped_finding(skipped: int, worked: int) -> Finding:
+    """Wie viele Kanten einer Gruppe ausgelassen wurden — und warum."""
+    return Finding(
+        code="edges.skipped",
+        severity="warning",
+        message=_(
+            "Einige Kanten dieser Auswahl wurden ausgelassen: Dort stoßen keine zwei "
+            "Flächen unter einem Winkel zusammen, etwa wo zwei Teile Wand an Wand "
+            "stehen. Die übrigen Kanten sind bearbeitet."
+        ),
+        values={"skipped": skipped, "worked": worked},
+    )
+
+
+def _grouped_edge_work(
+    mesh: MeshData,
+    entries: Sequence[MeshEdge],
+    chosen: Sequence[MeshEdge],
+    size: float,
+    *,
+    rounded: bool,
+    quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
+    shape: ChamferShape | None = None,
+) -> BooleanOutcome:
+    """Die gewählten Züge in unabhängigen Gruppen, gemischte Ecken in ihrem Rahmen."""
     groups = _selected_edge_groups(chosen)
     mixed = any(_mixed_corner_frame(star) is not None for star in _corner_stars(entries, chosen))
+    if mixed and shape is not None and (shape.second is not None or shape.angle is not None):
+        # Der gemischte Eckanschluss (außen und innen an einem Knoten) ist für
+        # gleiche Breiten gebaut; für zwei verschiedene gibt es ihn nicht.
+        raise GeometryError(
+            detail=_(
+                "Zwei verschiedene Fasenbreiten gehen nicht an einer Ecke, an der "
+                "eine Außen- und eine Innenkante zusammentreffen. Wählen Sie gleiche "
+                "Breiten, oder lassen Sie eine der Kanten an dieser Ecke aus."
+            ),
+            suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+        )
     if len(groups) == 1 or not mixed:
         return _placed_edge_work(
-            mesh, entries, chosen, size, rounded=rounded, quality=quality, cancelled=cancelled
+            mesh,
+            entries,
+            chosen,
+            size,
+            rounded=rounded,
+            quality=quality,
+            cancelled=cancelled,
+            shape=shape,
         )
     runs: list[BooleanOutcome] = []
     body = mesh
@@ -1513,6 +2083,7 @@ def _placed_edge_work(
     rounded: bool,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
+    shape: ChamferShape | None = None,
 ) -> BooleanOutcome:
     """Rechnet eine unabhängige Auswahlgruppe mit ihrer unveränderten Ausgangstopologie."""
     frame = next(
@@ -1525,7 +2096,14 @@ def _placed_edge_work(
     )
     if frame is None:
         return _edge_work(
-            mesh, entries, chosen, size, rounded=rounded, quality=quality, cancelled=cancelled
+            mesh,
+            entries,
+            chosen,
+            size,
+            rounded=rounded,
+            quality=quality,
+            cancelled=cancelled,
+            shape=shape,
         )
     raw = mesh.raw.copy()
     delta = np.asarray(raw.vertices) - frame[:3, 3]
@@ -1589,6 +2167,7 @@ def _edge_work(
     rounded: bool,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
+    shape: ChamferShape | None = None,
 ) -> BooleanOutcome:
     """Der gemeinsame Weg von Verrundung und Fase.
 
@@ -1626,6 +2205,7 @@ def _edge_work(
             extend_ends=id(entry) not in refined_ids,
             quality=quality,
             cancelled=cancelled,
+            shape=shape,
         )
         (outer if entry.convex else inner).append(tool)
     runs: list[BooleanOutcome] = []
@@ -1640,6 +2220,7 @@ def _edge_work(
             ball_vertices=ball_vertices,
             quality=quality,
             cancelled=cancelled,
+            shape=shape,
         )
         if prepared is not None:
             kind, tool, preparation = prepared
@@ -1861,6 +2442,7 @@ def unround(
     *,
     quality: Quality = "fine",
     features: Mapping[str, Feature] | None = None,
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Nimmt eine erkannte Rundung weg und stellt die scharfe Kante her.
 
@@ -1895,7 +2477,7 @@ def unround(
             ),
         )
     kind: BooleanKind = "union" if corner.convex else "difference"
-    outcome = boolean(kind, [mesh, filler], quality=quality)
+    outcome = boolean(kind, [mesh, filler], quality=quality, cancelled=cancelled)
     return BooleanOutcome(mesh=outcome.mesh, solver=outcome.solver, findings=list(outcome.findings))
 
 
@@ -1906,6 +2488,7 @@ def reround(
     *,
     quality: Quality = "fine",
     features: Mapping[str, Feature] | None = None,
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Ändert den Radius einer erkannten Rundung oder belegten Zylinderwand.
 
@@ -1927,13 +2510,13 @@ def reround(
             _("Ohne Radius entsteht keine Rundung. Dieser Wert muss größer als null sein."),
             value=radius,
         )
-    radial = radial_rounding(mesh, feature, radius, quality=quality)
+    radial = radial_rounding(mesh, feature, radius, quality=quality, cancelled=cancelled)
     if radial is not None:
         return radial
     corner = sharp_corner(mesh, feature, features=features)
-    taken = unround(mesh, feature, quality=quality, features=features)
+    taken = unround(mesh, feature, quality=quality, features=features, cancelled=cancelled)
     key = edge_key(_placed(corner))
-    again = round_edges(taken.mesh, radius, "named", [key], quality=quality)
+    again = round_edges(taken.mesh, radius, "named", [key], quality=quality, cancelled=cancelled)
     return BooleanOutcome(
         mesh=again.mesh,
         solver=deepest([taken.solver, again.solver]) or again.solver,
@@ -1942,7 +2525,12 @@ def reround(
 
 
 def radial_rounding(
-    mesh: MeshData, feature: Feature, radius: float, *, quality: Quality = "fine"
+    mesh: MeshData,
+    feature: Feature,
+    radius: float,
+    *,
+    quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome | None:
     """Ändert einen belegten Zylindermantel nur innerhalb seiner ausgewählten Haut.
 
@@ -2031,6 +2619,7 @@ def radial_rounding(
         [mesh, MeshData.of(skin)],
         quality=quality,
         allow_empty=True,
+        cancelled=cancelled,
     )
     outcome.mesh, _shells = remove_hollow_shells(outcome.mesh)
     validate_radial_change(mesh, outcome.mesh, float(skin.volume), float(skin.area))

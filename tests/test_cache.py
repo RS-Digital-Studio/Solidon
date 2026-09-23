@@ -1911,5 +1911,5 @@ def test_disk_results_come_back_with_warm_figures(tmp_path: Path) -> None:
     fresh = disk.get("figures")
     assert fresh is not None
     figures = fresh.objects[0].mesh.raw._cache
-    for name in ("mass_properties", "area", "is_watertight", "solidon_component_count"):
+    for name in ("solidon_volume", "area", "is_watertight", "solidon_component_count"):
         assert name in figures, f"{name} must already be known when the window asks"

@@ -30,7 +30,7 @@ import numpy as np
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, BooleanFailedError
 from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, enclosed_volume
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
 from app.core.log import get_logger
 from app.core.types import (
@@ -459,7 +459,6 @@ def _tidied(body: trimesh.Trimesh) -> trimesh.Trimesh:
     """
     if len(body.faces) == 0 or not body.is_watertight:
         return body
-    volume = float(body.volume)
     candidate = body.copy()
     diagonal = float(np.linalg.norm(candidate.extents))
     tolerance = weld_tolerance(diagonal)
@@ -475,7 +474,9 @@ def _tidied(body: trimesh.Trimesh) -> trimesh.Trimesh:
     candidate.remove_unreferenced_vertices()
     if len(candidate.vertices) == len(body.vertices) and len(candidate.faces) == len(body.faces):
         return body
-    if candidate.is_watertight and is_close(float(candidate.volume), volume):
+    # Das Volumen erst hier, und nur dann (RM-208): Meist verschweißt nichts,
+    # und ``trimesh.volume`` kostete an 203 776 Dreiecken 0,29 s für nichts.
+    if candidate.is_watertight and is_close(enclosed_volume(candidate), enclosed_volume(body)):
         return candidate
     return body
 

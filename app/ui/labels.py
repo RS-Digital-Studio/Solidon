@@ -36,6 +36,7 @@ from app.core.perceive.actions import measure_explanation, measure_qualifier
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import REGISTRY
 from app.core.registry import group_title as group_title
+from app.core.scene.placement import SIDE_NAMES
 from app.core.types import Feature, FeatureId, Finding, SceneObject, measure_status
 from app.core.units import (
     DEGREE_UNIT,
@@ -990,6 +991,16 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # Hohlraums geschieht (``remove_feature.sections``). „Nachfragen“ ist die
     # Vorgabe: Der Kern entscheidet die Mehrdeutigkeit nicht selbst (Regel 21).
     "ask": _("Nachfragen"),
+    "ask_side": _("Nachfragen"),
+    "equal_distances": _("Gleiche Breite"),
+    "two_distances": _("Zwei Abstände"),
+    "distance_angle": _("Abstand und Winkel"),
+    "right_side": SIDE_NAMES[0][0],
+    "left_side": SIDE_NAMES[0][1],
+    "back_side": SIDE_NAMES[1][0],
+    "front_side": SIDE_NAMES[1][1],
+    "top_side": SIDE_NAMES[2][0],
+    "bottom_side": SIDE_NAMES[2][1],
     "chain": _("Ganzer Hohlraum"),
     "single": _("Nur das gewählte Merkmal"),
     # **Die Druckeinstellungen waren die zweite Feldquelle, und sie stand hier
@@ -1157,6 +1168,20 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "ask": _(
         "Hat der Hohlraum mehrere Abschnitte, wird vor dem Entfernen gefragt, ob alle mitgehen."
     ),
+    "ask_side": _(
+        "Wird aus einer Durchgangsbohrung ein Sackloch, wird gefragt, welche Seite offen bleibt."
+    ),
+    "equal_distances": _("Die Fase nimmt beide Flächen gleich weit zurück."),
+    "two_distances": _(
+        "Die Fase nimmt die Bezugsfläche und die zweite Fläche verschieden weit zurück."
+    ),
+    "distance_angle": _("Ein Abstand auf der Bezugsfläche und der Winkel der Fase zu ihr."),
+    "right_side": _("Die Bohrung bleibt zur rechten Seite hin offen."),
+    "left_side": _("Die Bohrung bleibt zur linken Seite hin offen."),
+    "back_side": _("Die Bohrung bleibt zur Rückseite hin offen."),
+    "front_side": _("Die Bohrung bleibt zur Vorderseite hin offen."),
+    "top_side": _("Die Bohrung bleibt zur Oberseite hin offen."),
+    "bottom_side": _("Die Bohrung bleibt zur Unterseite hin offen."),
     "chain": _("Bohrung und Senkung gehen zusammen weg — der ganze zusammenhängende Hohlraum."),
     "single": _("Nur der gewählte Abschnitt wird geschlossen; die übrigen bleiben stehen."),
     "aligned": _("Die Naht liegt übereinander an einer Kante — dort fällt sie am wenigsten auf."),
@@ -1258,6 +1283,12 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # ``ingest.threemf``: was eine 3MF an Hilfsteilen und Aussparungen des
     # Slicers überging, bevor kein druckbarer Körper blieb.
     "skipped": _("Übersprungen"),
+    # ``edges.skipped``: wie viele Kanten einer Gruppe bearbeitet wurden.
+    "worked": _("Bearbeitet"),
+    # ``hollow.fewer_vents``: wie viele Entlüftungen Platz fanden.
+    "placed": _("Gesetzt"),
+    # ``resize_hole``: an welchen Seiten eine Bohrung austritt.
+    "ends": _("Austrittsseiten"),
     "sliced": _("Mit Schichtanalyse geprüft"),
     "solver": _("Rechenstufe"),
     "stopped_at": _("Angehalten bei Schritt"),
@@ -2048,14 +2079,10 @@ def explain_choices(box: QComboBox) -> None:
 #: Wie eine Fläche heißt, deren Normale in diese Richtung zeigt. Die Reihenfolge
 #: ist die der Achsen; ein Vorzeichen entscheidet zwischen den beiden Namen.
 #:
-#: Als ``_()``-Literale und nicht als nackte Zeichenketten mit ``tr()``
-#: darüber: der Extraktor liest den Quelltext, und ``tr(variable)`` sieht er
-#: nicht. Sechs Namen wären stumm ins Englische durchgereicht worden.
-_SIDES: tuple[tuple[TranslatableText, TranslatableText], ...] = (
-    (_("Rechte Seite"), _("Linke Seite")),
-    (_("Rückseite"), _("Vorderseite")),
-    (_("Oberseite"), _("Unterseite")),
-)
+#: Die Tabelle steht im Kern (``scene.placement.SIDE_NAMES``), weil *Bohrung
+#: ändern* mit denselben Namen fragt, welche Seite offen bleibt — dort als
+#: ``_()``-Literale, damit der Extraktor sie sieht.
+_SIDES: tuple[tuple[TranslatableText, TranslatableText], ...] = SIDE_NAMES
 
 #: Ab wann eine Normale als achsparallel gilt. Darunter ist die Fläche schräg,
 #: und ein Seitenname wäre eine Behauptung.

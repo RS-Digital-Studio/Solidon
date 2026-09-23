@@ -851,3 +851,101 @@ def test_native_push_rejects_an_unproven_carrier_without_selecting_by_position(
     after = io.BytesIO()
     BRepTools.Write_s(source.mesh.shape, after)
     assert before.getvalue() == after.getvalue()
+
+
+def _pushed(kernel: str, profile: Profile, pick: str, distance: float):
+    """Eine Platte 60 x 40 x 10 mit Sackloch; eine Fläche versetzen, samt Zuordnung."""
+    import importlib
+
+    from app.core.types import Operation
+    from tests.test_bore_depth import _blind
+
+    source = _blind(kernel)
+    faces_by_side = {}
+    for name, feature in source.features.items():
+        if feature.kind != "face":
+            continue
+        normal = np.asarray(feature.params["normal"], dtype=float)
+        centre = np.asarray(feature.params["centre"], dtype=float)
+        if abs(centre[2] - 4.0) < 1e-4:
+            continue  # der Sackboden
+        side = {
+            (0, 0, 1): "top",
+            (0, 0, -1): "bottom",
+            (1, 0, 0): "right",
+            (-1, 0, 0): "left",
+            (0, 1, 0): "back",
+            (0, -1, 0): "front",
+        }[tuple(round(v) for v in normal)]
+        faces_by_side[side] = name
+    load_operations()
+    spec = REGISTRY.get("push_face")
+    values = {"face": faces_by_side[pick], "distance": distance}
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(**values),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda *_args: None,
+            ask=lambda *_args: pytest.fail("unexpected question"),
+            cancelled=NeverCancelled(),
+        )
+    )
+    findings = list(result.findings)
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    changed = evaluation._with_features(
+        result.outputs[0],
+        source.features,
+        Operation(9, "push_face", params=values),
+        lambda *_args: pytest.fail("unexpected matching question"),
+        findings,
+        previous_bounds=source.mesh.bounds,
+        continuations=result.feature_continuations[0] if result.feature_continuations else (),
+    )
+    return source, faces_by_side, changed, findings
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("pick", "distance"),
+    [("top", 5.0), ("top", -3.0), ("right", 4.0)],
+    ids=["oben-raus", "oben-rein", "rechts-raus"],
+)
+def test_a_pushed_face_and_its_growing_neighbours_keep_their_names(
+    profile: Profile, kernel: str, pick: str, distance: float
+) -> None:
+    """Nach *Fläche versetzen* heißt jede Seite der Platte, wie sie hieß.
+
+    Gemessen am 23.09.2026 an einer Platte 60 x 40 x 10, Oberseite um 5 mm
+    hinaus: Am Netz verloren die vier Seitenwände ihre Namen (viermal
+    ``perceive.orphaned``) — sie waren um die Hälfte gewachsen, und die
+    Zuordnung fand sie nicht wieder. Am exakten Körper blieben die Seiten in
+    zwei Teilflächen zerschnitten, und die Namen wurden still neu vergeben:
+    ``face_3`` war vorher die Oberseite und danach ein Streifen der
+    Vorderseite. Eine Skizze auf der Oberseite stand damit auf einer anderen
+    Fläche, und niemand sagte es.
+    """
+    source, sides, changed, findings = _pushed(kernel, profile, pick, distance)
+
+    assert "perceive.orphaned" not in [finding.code for finding in findings]
+    for side, name in sides.items():
+        feature = changed.features.get(name)
+        assert feature is not None and feature.kind == "face", f"{side}: {name} fehlt"
+        before = np.asarray(source.features[name].params["normal"], dtype=float)
+        assert np.allclose(feature.params["normal"], before, atol=1e-6), (
+            f"{side} heißt jetzt anders"
+        )
+    moved = changed.features[sides[pick]]
+    normal = np.asarray(source.features[sides[pick]].params["normal"], dtype=float)
+    offset = (
+        np.asarray(moved.params["centre"])
+        - np.asarray(source.features[sides[pick]].params["centre"])
+    ) @ normal
+    assert offset == pytest.approx(distance, abs=1e-6)
+    planar = [f for f in changed.features.values() if f.kind == "face"]
+    assert len(planar) == len([f for f in source.features.values() if f.kind == "face"]), (
+        "keine Seite zerfällt in Teilflächen"
+    )

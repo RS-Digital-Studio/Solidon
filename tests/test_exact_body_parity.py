@@ -507,7 +507,7 @@ CASES = [
         None,
     ),
     Case(
-        "resize_feature", "pin", {"at_feature": "pin", "diameter": 8.0}, MESH, "pin_diameter", 8.0
+        "resize_feature", "pin", {"at_feature": "pin", "diameter": 8.0}, KEEP, "pin_diameter", 8.0
     ),
     Case(
         "resize_hole",

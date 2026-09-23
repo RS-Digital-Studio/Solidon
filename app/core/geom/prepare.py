@@ -310,6 +310,18 @@ def mouth_over_the_edge(
     was :func:`_flank_is_open` über die ganze Länge zufriedenstellte.
 
     ``inward`` zeigt von der Mündung in den Körper.
+
+    **Der Kranz liegt in der Fläche, aus der die Bohrung kommt** (22.09.2026).
+    Hier stand der Kreis quer zur Achse, und der passt nur zu einer Mündung
+    quer zur Achse: Eine schräge Bohrung mündet als Ellipse in einer ebenen
+    Platte, und ihr Querkreis ragt dort an der hohen Seite über die Fläche —
+    an einer um 45° gekippten Bohrung mitten in einer 10-mm-Platte auch einen
+    halben Radius tief noch um 1,1 mm. Jede schräge Bohrung, die versetzt oder
+    gedreht wurde, meldete damit „über die Kante". Der Kranz ist deshalb die
+    Mündungsellipse in der getroffenen Fläche, einen viertel und einen halben
+    Radius entlang der Achse ins Material geschoben; die um 60° gedrehte
+    Bohrung, die unten neben der Platte austritt, hat ihre Ellipse dort zur
+    Hälfte in der Luft und meldet es weiter.
     """
     vector = np.asarray(inward, dtype=float)
     length = float(np.linalg.norm(vector))
@@ -323,8 +335,14 @@ def mouth_over_the_edge(
     from app.core.geom.mesh import on_surface
 
     rim = _rim_around(unit, radius)
+    mouth = np.asarray(position, dtype=float)
+    face = _mouth_face(body, mouth, unit)
+    if face is not None:
+        mouth, normal = face
+        # Je Kranzpunkt entlang der Achse bis in die Ebene der Mündungsfläche.
+        rim = rim - np.outer((rim @ normal) / float(normal @ unit), unit)
     depths = radius * np.asarray(_MOUTH_DEPTHS, dtype=float)
-    samples = np.asarray(position, dtype=float) + rim[None, :, :] + depths[:, None, None] * unit
+    samples = mouth + rim[None, :, :] + depths[:, None, None] * unit
     flat = samples.reshape(-1, 3)
     closest, _distance, triangle = on_surface(body.raw, flat)
     normals = np.asarray(body.raw.face_normals)[triangle]
@@ -333,6 +351,34 @@ def mouth_over_the_edge(
     if bool(inside.all(axis=1).any()):
         return []
     return [_edge_finding(diameter, over)]
+
+
+def _mouth_face(
+    body: MeshData, position: np.ndarray, inward: np.ndarray
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Wo die Achse von ``position`` aus in den Körper eintritt: Punkt und Flächennormale.
+
+    Gemessen mit einem Strahl, exakt und ohne Raumindex
+    (:func:`~app.core.geom.mesh.ray_hits`), angesetzt einen Radius vor der
+    Stelle, damit eine Mündung, die genau auf ihr liegt, getroffen wird.
+    ``None``, wo der Strahl nichts trifft oder die Fläche fast längs der Achse
+    liegt — dann bleibt es beim Kreis quer zur Achse.
+    """
+    from app.core.geom.mesh import ray_hits
+
+    triangles = np.asarray(body.raw.triangles, dtype=float)
+    if not len(triangles):
+        return None
+    back = float(body.bounds.diagonal) * 1e-3 + EPS_DISPLAY
+    start = position - inward * back
+    distances, hit = ray_hits(triangles, start, inward)
+    if not len(distances):
+        return None
+    first = int(np.argmin(distances))
+    normal = np.asarray(body.raw.face_normals[int(hit[first])], dtype=float)
+    if abs(float(normal @ inward)) <= 0.1:
+        return None
+    return start + inward * float(distances[first]), normal
 
 
 #: An welchen Tiefen hinter einer Mündung :func:`mouth_over_the_edge` den Kranz
@@ -1021,10 +1067,11 @@ def slot_ends(
     Langloch an beiden Enden fragen: Dort liegt es am weitesten außen, und dort
     reißt eine Flanke auf, während die Mitte noch tief im Material steckt.
     """
-    turn = math.radians(angle_deg)
-    along = np.asarray(frame.x_axis, dtype=float) * math.cos(turn) + np.asarray(
+    # Dieselben exakten Winkelfunktionen wie :func:`slot_profile` (RM-187) —
+    # die Enden, an denen geprüft wird, liegen dort, wo geschnitten wird.
+    along = np.asarray(frame.x_axis, dtype=float) * units.exact_cos_degrees(angle_deg) + np.asarray(
         frame.y_axis, dtype=float
-    ) * math.sin(turn)
+    ) * units.exact_sin_degrees(angle_deg)
     centre = np.asarray(position, dtype=float)
     first = centre - along * (travel / 2.0)
     second = centre + along * (travel / 2.0)
@@ -1284,9 +1331,7 @@ def drill(
         into = _into_the_material(mesh, axis, position)
         local_z = alignment[:3, :3] @ np.array([0.0, 0.0, 1.0])
         if float(np.sign(local_z[AXIS_INDEX[axis]])) == into:
-            transform.moved(
-                cylinder, trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0))
-            )
+            transform.moved(cylinder, transform.rotation("x", 180.0))
         transform.moved(cylinder, alignment)
         along = np.zeros(3)
         along[AXIS_INDEX[axis]] = into
@@ -1356,13 +1401,15 @@ def countersink(
     narrows = np.zeros(3)
     narrows[AXIS_INDEX[axis]] = -outward
 
-    cone = trimesh.creation.cone(radius=diameter / 2.0, height=depth, sections=BORE_SECTIONS)
+    # Über ``lathe`` (RM-187): ``trimesh.creation.cone`` nimmt seine Ecken aus
+    # ``np.cos``, und das rechnet je CPU anders.
+    cone = lathe.revolve([[0.0, 0.0], [diameter / 2.0, 0.0], [0.0, depth]], sections=BORE_SECTIONS)
     # Der Kegel kommt auf seiner Basis stehend heraus, Spitze nach oben. Eine
     # Senkung ist andersherum: am weitesten an der Fläche, enger werdend ins
     # Material. Umgedreht läuft er von null abwärts, was genau das ist — und
     # er wird um die Überlappung angehoben, damit die zwei Flächen nicht
-    # zusammenfallen (§39).
-    transform.moved(cone, trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
+    # zusammenfallen (§39). Die halbe Drehung ist exakt (``transform.rotation``).
+    transform.moved(cone, transform.rotation("x", 180.0))
     cone.apply_translation([0.0, 0.0, BOOLEAN_OVERLAP])
     transform.moved(cone, transform.rotation_between(np.array([0.0, 0.0, -1.0]), narrows))
     cone.apply_translation(at)
@@ -1375,6 +1422,18 @@ def countersink(
     nothing = without_effect(mesh, outcome.mesh, "difference", profile)
     if nothing is not None:
         findings.append(nothing)
+    # **Und wie beim Bohren die Kante** (22.09.2026): Der Kegel ist an der
+    # Mündung so weit wie der Schraubenkopf, und nahe einer Außenwand reißt er
+    # sie auf. Jeder andere Weg, der einen Hohlraum setzt, fragte das seit dem
+    # 15.09.2026; das Senken nicht.
+    findings.extend(
+        mouth_over_the_edge(
+            mesh,
+            (float(at[0]), float(at[1]), float(at[2])),
+            (float(narrows[0]), float(narrows[1]), float(narrows[2])),
+            diameter,
+        )
+    )
     return BoreResult(
         mesh=outcome.mesh,
         solver=outcome.solver,
@@ -1713,9 +1772,9 @@ def _axis_alignment(axis: Axis) -> np.ndarray:
     """Zylinder werden entlang Z gebaut; auf die gewünschte Achse drehen."""
     if axis == "z":
         return np.eye(4)
-    angle = math.radians(90.0)
-    direction = (0.0, 1.0, 0.0) if axis == "x" else (1.0, 0.0, 0.0)
-    return np.asarray(trimesh.transformations.rotation_matrix(angle, direction), dtype=float)
+    # Ein rechter Winkel aus den exakten Winkelfunktionen (RM-187): Mit
+    # ``math.radians(90)`` trug jede Ecke des gedrehten Zylinders 6·10⁻¹⁷.
+    return np.asarray(transform.rotation("y" if axis == "x" else "x", 90.0), dtype=float)
 
 
 def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshData, list[Finding]]:

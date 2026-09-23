@@ -1479,6 +1479,8 @@ def params_for_members(
     picked: FeatureId,
     members: Sequence[FeatureId],
     features: Mapping[FeatureId, Feature],
+    *,
+    op: str = "",
 ) -> dict[FeatureId, dict[str, Any]]:
     """Die Werte einer Handlung für jedes Mitglied ihrer Gruppe.
 
@@ -1494,15 +1496,24 @@ def params_for_members(
     Mitglied nur, was am gewählten genannt war; eine ungenannte Achse bleibt
     ungenannt (RM-154). Ein Mitglied ohne gemessene Mitte bekommt keine
     Stelle. Das gewählte Merkmal bekommt seine Werte, wie sie sind.
+
+    **Ein Maß, das leer „bleibt" heißt, reist nur, wenn es geändert wurde**
+    (``op`` nennt die Operation, 23.09.2026). Die Tiefe von *Bohrung ändern*
+    steht im Merkmalfenster mit dem gemessenen Wert des gewählten Lochs; wer
+    nur den Durchmesser einer Gruppe ändert, meint nicht, dass alle Löcher
+    dessen Tiefe bekommen. Unverändert steht sie für die übrigen Mitglieder
+    deshalb leer — jedes behält seine eigene —, geändert gilt sie allen.
     """
     named = tuple(params.get(axis) for axis in _PLACE_AXES)
     anchor = _centre_of(features.get(picked))
+    untouched = _unchanged_optional_measures(op, params, features.get(picked))
     result: dict[FeatureId, dict[str, Any]] = {}
     for member in members:
         if member == picked:
             result[member] = {**params, "at_feature": member}
             continue
         values = {key: value for key, value in params.items() if key not in _PLACE_AXES}
+        values.update(dict.fromkeys(untouched))
         values["at_feature"] = member
         centre = _centre_of(features.get(member))
         if anchor is not None and centre is not None:
@@ -1511,6 +1522,43 @@ def params_for_members(
                     values[axis] = own + (float(value) - base)
         result[member] = values
     return result
+
+
+def _optional_measures(spec: Any) -> tuple[str, ...]:
+    """Die Längenfelder, die leer „bleibt, wie es ist" heißen und ein gemessenes Maß lesen."""
+    return tuple(
+        entry.name
+        for entry in spec.params.spec()
+        if getattr(entry, "optional", False)
+        and entry.unit == "mm"
+        and (source := feature_value_source(entry.name)) is not None
+        and source[1] is None
+    )
+
+
+def _unchanged_optional_measures(
+    op: str, params: Mapping[str, Any], picked: Feature | None
+) -> tuple[str, ...]:
+    """Welche dieser Felder am gewählten Merkmal unverändert stehen.
+
+    Verglichen auf eine halbe Anzeigestelle — das Feld zeigt das gemessene
+    Maß gerundet, und wer es stehen lässt, ändert es nicht.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.units import EPS_DISPLAY
+
+    if not op or picked is None or not REGISTRY.has(op):
+        return ()
+    unchanged = []
+    for name in _optional_measures(REGISTRY.get(op)):
+        value = params.get(name)
+        source = feature_value_source(name, picked)
+        measured = picked.params.get(source[0]) if source is not None else None
+        if value is None or measured is None or not _is_number(measured):
+            continue
+        if abs(float(value) - float(measured)) <= EPS_DISPLAY / 2.0:
+            unchanged.append(name)
+    return tuple(unchanged)
 
 
 def _centre_of(feature: Feature | None) -> tuple[float, float, float] | None:
@@ -1698,7 +1746,9 @@ def _target_dimensions(spec: Any, feature: Feature) -> tuple[str, ...]:
     dimensions = set()
     for entry in spec.params.spec():
         source = feature_value_source(entry.name, feature)
-        if source is None:
+        # Ein Feld, das leer „bleibt" heißt, ist kein Ausgangsmaß der Gruppe:
+        # Unverändert behält jedes Mitglied das eigene (:func:`params_for_members`).
+        if source is None or getattr(entry, "optional", False):
             continue
         key, index = source
         if (

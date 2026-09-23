@@ -26,6 +26,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from app.core import units
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.geom.transform import apply, translation
@@ -159,18 +160,17 @@ def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality)
         body.apply_translation([0.0, 0.0, diameter / 2.0])
         return MeshData.of(body)
     if name == "create_torus":
-        import trimesh
+        from app.core.geom.prepare_ops import ring_of_revolution
 
         outer_diameter = float(values["outer_diameter"])
         tube_diameter = float(values["tube_diameter"])
         tube_fits_the_ring(outer_diameter, tube_diameter)
         minor_radius = tube_diameter / 2.0
         segments = _round_segments(int(values["segments"]), quality)
-        body = trimesh.creation.torus(
-            major_radius=(outer_diameter - tube_diameter) / 2.0,
-            minor_radius=minor_radius,
-            major_sections=segments,
-            minor_sections=segments,
+        # Dieselben Ecken auf jeder Maschine (RM-187): ``trimesh.creation.torus``
+        # rechnet sie mit ``np.cos``.
+        body = ring_of_revolution(
+            (outer_diameter - tube_diameter) / 2.0, minor_radius, segments, segments
         )
         body.apply_translation([0.0, 0.0, minor_radius])
         return MeshData.of(body)
@@ -539,9 +539,11 @@ def placement_transform(params: PositionedPrimitiveParams) -> Transform:
     # (Robert, 09.09.2026: „verschieben und drehen wie unter dem
     # Bewegungsmenü").
     turn = np.eye(4)
-    angle = math.radians(float(params.angle))
-    if not is_zero(angle):
-        cosine, sine = math.cos(angle), math.sin(angle)
+    if not is_zero(float(params.angle)):
+        # Aus den exakten Winkelfunktionen (RM-187): Ein Quader, um 90° um
+        # seine Hochachse gedreht, trug sonst ``math.cos(π/2)`` in jeder Ecke.
+        cosine = units.exact_cos_degrees(float(params.angle))
+        sine = units.exact_sin_degrees(float(params.angle))
         turn[:3, :3] = ((cosine, -sine, 0.0), (sine, cosine, 0.0), (0.0, 0.0, 1.0))
 
     length = math.hypot(*direction)

@@ -20,6 +20,7 @@ braucht.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 from typing import Final, NoReturn
 
@@ -182,7 +183,7 @@ def hollow(
         _step(progress, cancelled, 0.8, _("Entlüftungen bohren"))
         try:
             body, placed, drilled = _vent(
-                body, cavity, vent_diameter, vents, quality, progress, cancelled
+                body, cavity, vent_diameter, vents, quality, progress, cancelled, field=field
             )
         except BooleanFailedError as failure:
             _the_hull_or_the_chain(mesh, failure)
@@ -196,6 +197,23 @@ def hollow(
                         "Es war keine Stelle für eine Entlüftung zu finden — "
                         "ein geschlossener Hohlraum drückt beim Drucken die Decke hoch."
                     ),
+                )
+            )
+        elif len(placed) < vents:
+            # Weniger, als verlangt, und das wird gesagt: Der Hohlraum ist
+            # offen, aber wer drei Entlüftungen eingetragen hat, soll nicht
+            # im Bericht nachzählen müssen, dass es eine wurde.
+            findings.append(
+                Finding(
+                    code="hollow.fewer_vents",
+                    severity="info",
+                    message=_(
+                        "Am Boden des Hohlraums war nur Platz für {placed} von {wanted} "
+                        "Entlüftungen. Der Hohlraum ist offen.",
+                        placed=len(placed),
+                        wanted=vents,
+                    ),
+                    values={"placed": len(placed), "wanted": vents},
                 )
             )
 
@@ -575,6 +593,8 @@ def _vent(
     quality: Quality,
     progress: ProgressFn | None = None,
     cancelled: CancelToken | None = None,
+    *,
+    field: tuple[np.ndarray, Vec3, float] | None = None,
 ) -> tuple[MeshData, tuple[Vec3, ...], list[SolverInfo | None]]:
     """Bohrt vom Hohlraum nach unten durch den Boden.
 
@@ -588,50 +608,129 @@ def _vent(
     über der Decke**. Aus „einer Entlüftung im Boden" wurde ein durchgehendes
     Loch, und eine Dose, die zu bleiben hatte, war oben offen. Jetzt endet er
     im Hohlraum, einen Millimeter über dessen Boden.
+
+    **Und dort, wo der Hohlraum ist** (22.09.2026). Die Stellen lagen auf einer
+    Linie durch die Mitte des Hüllquaders des Hohlraums, und die Bohrer endeten
+    einen Millimeter über seinem tiefsten Punkt — an einem Ring lag die Mitte
+    im Loch, an einem L im freien Winkel, an einer Kugel lag der Boden neben
+    der Mitte höher. Der Bohrer traf Luft oder Wand, gezählt wurde er trotzdem,
+    und der Hohlraum blieb geschlossen. Die Stellen kommen jetzt aus dem Raster
+    des Hohlraums (:func:`_vent_spots`): nur wo der ganze Bohrerquerschnitt
+    unter Hohlraum liegt, der Bohrer reicht bis über den höchsten Boden unter
+    ihm, und eine Entlüftung zählt erst, wenn sie Material abgetragen hat.
     """
     from app.core.geom.transform import apply, translation
 
-    inside = cavity.bounds
     outside = body.bounds
     stages: list[SolverInfo | None] = []
-    if inside.size[2] <= EPS_GEOM:
-        return body, (), stages
-
-    spots: list[Vec3] = []
-    for index in range(count):
-        # Entlang X über die Mitte des Hohlraums verteilt, damit mehrere
-        # Entlüftungen nicht in derselben Ecke landen.
-        share = (2 * index + 1) / (2 * count)
-        x = inside.minimum[0] + inside.size[0] * share
-        spots.append((float(x), float(inside.centre[1]), 0.0))
+    if field is not None:
+        spots = _vent_spots(field, diameter, count)
+    else:
+        spots = _spots_on_a_line(cavity, count)
 
     drilled = body
     placed: list[Vec3] = []
     # Von zwei Millimetern unter dem Boden bis knapp in den Hohlraum hinein.
     bottom = float(outside.minimum[2]) - 2.0
-    top = float(inside.minimum[2]) + VENT_BREAKTHROUGH
-    height = top - bottom
-    if height <= EPS_GEOM:
-        return body, (), stages
-    for index, spot in enumerate(spots, start=1):
+    for index, (x, y, floor) in enumerate(spots, start=1):
         _step(progress, cancelled, 0.8 + 0.15 * index / len(spots), _("Entlüftungen bohren"))
+        top = floor + VENT_BREAKTHROUGH
+        height = top - bottom
+        if height <= EPS_GEOM:
+            continue
         # 32 Sektionen standen hier nie im Quelltext — sie waren die Vorgabe
         # von ``trimesh.creation.cylinder``. Jetzt stehen sie da, denn eine
         # Zahl, die das Ergebnis bestimmt, gehört nicht in eine fremde
         # Bibliothek (17.09.2026, RM-187).
         tool = lathe.cylinder(radius=diameter / 2.0, height=height, sections=VENT_SECTIONS)
-        tool = apply(
-            MeshData.of(tool),
-            translation((spot[0], spot[1], bottom + height / 2.0)),
-        )
+        tool = apply(MeshData.of(tool), translation((x, y, bottom + height / 2.0)))
         try:
             outcome = boolean("difference", [drilled, tool], quality=quality, cancelled=cancelled)
-            drilled, stage = outcome.mesh, outcome.solver
         except PROGRAMMING_ERRORS:
             raise
         except Exception as problem:  # eine Entlüftung, die nicht geht, ist nicht fatal
-            _log.info("vent at %s failed: %s", spot, problem)
+            _log.info("vent at %s failed: %s", (x, y), problem)
             continue
-        placed.append(spot)
-        stages.append(stage)
+        if drilled.volume - outcome.mesh.volume <= EPS_GEOM:
+            # Nichts abgetragen heißt: kein Loch — und keine Entlüftung.
+            continue
+        drilled = outcome.mesh
+        placed.append((float(x), float(y), 0.0))
+        stages.append(outcome.solver)
     return drilled, tuple(placed), stages
+
+
+def _vent_spots(
+    field: tuple[np.ndarray, Vec3, float], diameter: float, count: int
+) -> list[tuple[float, float, float]]:
+    """Wo Entlüftungen den Hohlraum sicher treffen: Stelle und Boden darüber.
+
+    Gerechnet am eingezogenen Raster, aus dem der Hohlraum entsteht. Eine
+    Stelle taugt, wenn der ganze Bohrerquerschnitt unter Hohlraum liegt
+    (die Grundfläche des Hohlraums, um den Bohrerradius eingezogen). Ihr Boden
+    ist der **höchste** Boden unter diesem Querschnitt — bis dorthin muss der
+    Bohrer reichen, sonst bleibt an einer Seite eine Haut. Genommen werden die
+    tiefsten Stellen, und mehrere so weit voneinander wie möglich; weniger,
+    als verlangt, wenn der Hohlraum nicht mehr getrennte Stellen hergibt.
+    """
+    from scipy import ndimage
+
+    inner, origin, pitch = field
+    footprint = inner.any(axis=2)
+    if not footprint.any():
+        return []
+    reach = max(1, math.ceil(diameter / 2.0 / pitch))
+    offsets = np.arange(-reach, reach + 1)
+    disk = (offsets[:, None] ** 2 + offsets[None, :] ** 2) <= reach**2
+    usable = ndimage.binary_erosion(footprint, structure=disk)
+    if not usable.any():
+        return []
+    lowest = np.argmax(inner, axis=2)
+    highest_floor = ndimage.maximum_filter(
+        np.where(footprint, lowest, np.iinfo(np.int64).max // 2), footprint=disk, mode="nearest"
+    )
+    cells = np.argwhere(usable)
+    floors = highest_floor[usable]
+    # Der tiefste Boden und alles, was höchstens einen Bohrerdurchmesser
+    # darüber liegt — dort ist der Weg durch den Boden am kürzesten, und die
+    # Öffnung sitzt unten, wo sie auf der Druckplatte liegt.
+    band = floors <= floors.min() + 2 * reach
+    cells, floors = cells[band], floors[band]
+    middle = cells.mean(axis=0)
+    first = int(np.lexsort((np.linalg.norm(cells - middle, axis=1), floors))[0])
+    chosen = [first]
+    gaps = np.linalg.norm(cells - cells[first], axis=1)
+    while len(chosen) < count:
+        candidate = int(np.argmax(gaps))
+        if gaps[candidate] * pitch < diameter * 2.0:
+            break
+        chosen.append(candidate)
+        gaps = np.minimum(gaps, np.linalg.norm(cells - cells[candidate], axis=1))
+    spots = []
+    for index in chosen:
+        i, j = cells[index]
+        # Die Zellmitte liegt auf dem Gitterpunkt; die Hohlraumgrenze liegt
+        # eine halbe Zelle unter der ersten gefüllten.
+        spots.append(
+            (
+                float(origin[0] + i * pitch),
+                float(origin[1] + j * pitch),
+                float(origin[2] + (floors[index] - 0.5) * pitch),
+            )
+        )
+    return spots
+
+
+def _spots_on_a_line(cavity: MeshData, count: int) -> list[tuple[float, float, float]]:
+    """Der alte Weg ohne Raster: entlang X über die Mitte des Hohlraums verteilt."""
+    inside = cavity.bounds
+    if inside.size[2] <= EPS_GEOM:
+        return []
+    return [
+        (
+            float(inside.minimum[0] + inside.size[0] * (2 * index + 1) / (2 * count)),
+            float(inside.centre[1]),
+            float(inside.minimum[2]),
+        )
+        for index in range(count)
+    ]

@@ -607,6 +607,9 @@ def normal_fields_of(spec: OperationSpec) -> tuple[str, str, str]:
 #: soll nur stehen, was das gewählte Merkmal betrifft (Robert, 09.09.2026).
 _ASKED_FIELDS: Final[dict[str, frozenset[str]]] = {
     "remove_feature": frozenset({"sections"}),
+    # Welche Seite offen bleibt, gibt es nur, wo eine Durchgangsbohrung zum
+    # Sackloch wird — an jedem Sackloch wäre das Feld ohne Gegenstand.
+    "resize_hole": frozenset({"open_side"}),
 }
 
 

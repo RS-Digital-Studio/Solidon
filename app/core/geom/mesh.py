@@ -78,7 +78,21 @@ class MeshData:
         # die Boolesche Kette ein leeres Ergebnis durchlassen durfte.
         if self.triangle_count == 0:
             return 0.0
-        return float(self.raw.volume)
+        # **Ohne Trägheitsmomente und einmal je Netz** (RM-208, 23.09.2026):
+        # ``trimesh.volume`` rechnet über ``mass_properties`` Schwerpunkt und
+        # Trägheit mit — an der Lochplatte mit 203 776 Dreiecken 0,29 s, von
+        # denen das Volumen 0,07 braucht. Gefragt wird es nach jedem Bohren
+        # (``without_effect``). Dasselbe Integral, auf den Ursprung bezogen wie
+        # bei trimesh, damit auch ein offenes Netz dieselbe Zahl behält.
+        cache = getattr(self.raw, "_cache", None)
+        if cache is not None:
+            cache.verify()
+            if "solidon_volume" in cache:
+                return float(cache["solidon_volume"])
+        volume = enclosed_volume(self.raw)
+        if cache is not None:
+            cache["solidon_volume"] = volume
+        return volume
 
     @property
     def area(self) -> float:
@@ -392,6 +406,21 @@ def _adjacency_by_place(mesh: trimesh.Trimesh) -> np.ndarray:
     faces = np.asarray(place, dtype=np.int64)[np.asarray(mesh.faces, dtype=np.int64)]
     welded = np.asarray(trimesh.graph.face_adjacency(faces=faces), dtype=np.int64).reshape(-1, 2)
     return np.vstack([stored, welded])
+
+
+def enclosed_volume(body: trimesh.Trimesh) -> float:
+    """Das Volumenintegral über die Oberfläche, bezogen auf den Ursprung.
+
+    Dieselbe Formel wie ``trimesh.triangles.mass_properties``, ohne Schwerpunkt
+    und Trägheit, summiert mit ``math.fsum`` — an 203 776 Dreiecken 0,07 statt
+    0,29 s. Für ein geschlossenes Netz das Volumen, für ein offenes eine Zahl,
+    die an der Lage hängt; so war sie es vorher auch.
+    """
+    triangles = np.asarray(body.triangles, dtype=np.float64)
+    if not len(triangles):
+        return 0.0
+    products = np.einsum("ij,ij->i", triangles[:, 0], np.cross(triangles[:, 1], triangles[:, 2]))
+    return math.fsum(products) / 6.0
 
 
 def on_surface(

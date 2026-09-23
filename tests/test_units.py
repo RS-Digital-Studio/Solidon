@@ -455,3 +455,33 @@ def test_exact_cos_and_sin_agree_with_the_library() -> None:
     for angle in (0.0, 0.7, -3.9, 1.5707963267948966, 100.0, -0.000001, math.tau * 3):
         assert abs(exact_cos(angle) - math.cos(angle)) < 1e-15, f"cos bei {angle}"
         assert abs(exact_sin(angle) - math.sin(angle)) < 1e-15, f"sin bei {angle}"
+
+
+def test_a_right_angle_in_degrees_is_exact() -> None:
+    """``exact_cos_degrees(90)`` ist null — nicht -8,5·10⁻⁵⁰.
+
+    Die Reihe rechnet mit 50 Stellen von π, und ihr Rest bei 90° und 180° war
+    winzig, aber nicht null: ``transform.rotation("x", 90)`` trug ihn in der
+    Matrix, und ein um 90° gekipptes Merkmal hatte eine Achse mit dritter
+    Komponente -8,5·10⁻⁵⁰ (22.09.2026). Die Karte ``geom/CLAUDE.md`` sagte
+    zu, ein rechter Winkel und eine halbe Drehung seien exakt.
+    """
+    import math
+
+    from app.core.geom import transform
+    from app.core.units import exact_cos_degrees, exact_sin_degrees
+
+    for degrees, expected in (
+        (0.0, (1.0, 0.0)),
+        (90.0, (0.0, 1.0)),
+        (180.0, (-1.0, 0.0)),
+        (270.0, (0.0, -1.0)),
+        (-90.0, (0.0, -1.0)),
+        (360.0, (1.0, 0.0)),
+        (450.0, (0.0, 1.0)),
+    ):
+        pair = (exact_cos_degrees(degrees), exact_sin_degrees(degrees))
+        assert pair == expected, degrees
+        assert not any(value == 0.0 and math.copysign(1.0, value) < 0.0 for value in pair)
+    matrix = transform.rotation("x", 90.0)
+    assert {abs(value) for value in matrix[:3, :3].ravel()} <= {0.0, 1.0}

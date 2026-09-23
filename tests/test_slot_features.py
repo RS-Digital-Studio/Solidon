@@ -2026,3 +2026,60 @@ def test_the_flanks_of_a_slot_are_no_faces_of_their_own(profile: Profile) -> Non
     ]
     assert not swallowed, swallowed
     assert sum(feature.kind == "face" for feature in found.values()) >= 6
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_both_ways_to_a_slot_cut_the_same_slot(profile: Profile, kernel: str) -> None:
+    """Bohren mit dem Haken *Langloch* und Bohren, dann *Zum Langloch ziehen*,
+    sind derselbe Auftrag — und ergeben dasselbe Loch (Übertrag der Durchsicht
+    v0.4.1, Punkt 2).
+
+    Bis zum 22.09.2026 nicht: Der Zug an einer runden Bohrung legte die Zugabe
+    aus §39 auf den Durchmesser, und aus 5,000 × 20,000 wurde 5,020 × 20,020 —
+    an beiden Kernen, und ``BoreResult.diameter`` nannte dabei die 5,000. Die
+    Zugabe hielt den Langlochkörper von der runden Wand fern; seit der Zug die
+    alte Öffnung zuerst schließt, gibt es diese Wand nicht mehr, und der
+    Schnitt geht in volles Material wie beim Bohren.
+    """
+    common = {
+        "diameter": 5.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 5.0,
+        "axis": "z",
+        "nx": 0.0,
+        "ny": 0.0,
+        "nz": 1.0,
+        "compensate": False,
+    }
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+
+        body: object = edit.box(60.0, 40.0, 10.0)
+    else:
+        body = plate()
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, kind=kernel)  # type: ignore[arg-type]
+
+    def recognised(result: SceneObject) -> SceneObject:
+        if kernel == "brep":
+            return dataclasses.replace(result, features=features_of(result.mesh))
+        return dataclasses.replace(result, features=detect(as_mesh_data(result.mesh)))
+
+    drilled = recognised(
+        run_op("drill_hole", entry, profile, slotted=True, slot_length=20.0, **common)
+    )
+    bored = recognised(run_op("drill_hole", entry, profile, **common))
+    hole = next(name for name, feature in bored.features.items() if feature.kind == "hole")
+    pulled = recognised(run_op("slot_hole", bored, profile, at_feature=hole, slot_length=20.0))
+
+    exact = kernel == "brep"
+    stadium = 24000.0 - (math.pi * 2.5**2 + 5.0 * 15.0) * 10.0
+    for result in (drilled, pulled):
+        slot = next(feature for feature in result.features.values() if feature.kind == "slot")
+        assert slot.params["diameter"] == pytest.approx(5.0, abs=1e-6 if exact else 1e-3)
+        assert slot.params["length"] == pytest.approx(20.0, abs=1e-6 if exact else 1e-3)
+        if exact:
+            assert result.mesh.volume == pytest.approx(stadium, rel=1e-9)
+    assert pulled.mesh.volume == pytest.approx(drilled.mesh.volume, rel=1e-6 if exact else 2e-4)

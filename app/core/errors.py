@@ -318,6 +318,8 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         # Anzahlen mit Unter- oder Obergrenze.
         "corner_count",
         "pattern_count",
+        # Der Winkel einer Fase muss die zweite Fläche noch treffen (P6.2).
+        "chamfer_angle",
         # Der Rohrdurchmesser eines Rings muss unter seinem Ringdurchmesser bleiben (P2.6).
         "torus_tube",
         # Die Gangtiefe einer Steigung muss unter dem Radius bleiben (P2.6).

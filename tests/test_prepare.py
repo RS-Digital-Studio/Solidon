@@ -6064,3 +6064,253 @@ def test_cutting_away_an_open_body_says_the_cut_stays_open(profile: Profile) -> 
     assert found, [f.code for f in result.findings]
     assert found[0].object_id == "obj_1"
     assert REPAIR_AND_RETRY in found[0].suggestions
+
+
+@pytest.mark.parametrize("tilt", [17.5, 45.0])
+def test_closing_a_tilted_bore_ends_in_the_faces_it_opens(profile: Profile, tilt: float) -> None:
+    """Eine schräge Bohrung geht zu, ohne Beulen über der Platte zu hinterlassen.
+
+    Der Stopfen aus den Kennzahlen hat Deckel quer zu **seiner** Achse, die
+    Mündungen einer schrägen Bohrung liegen aber in den Plattenflächen. Die
+    Begrenzung auf die Achsspanne der Wand (``_between_the_mouths``) ließ ihn
+    deshalb auf einer Seite jeder Mündung über die Fläche stehen — gemessen am
+    22.09.2026 an einer 10-mm-Platte: *Merkmal entfernen* ergab bei 17,5° eine
+    Platte von 13,6 mm Höhe und 54 053,9 statt 54 000 mm³, bei 45° 18,5 mm und
+    54 171,0; *Merkmal verschieben* ließ dieselben Beulen an der alten Stelle
+    stehen. Begrenzt wird deshalb an den Ebenen der Randringe, wo die Bohrung
+    wirklich endet.
+    """
+    radians = math.radians(tilt)
+    tilted = (math.sin(radians), 0.0, math.cos(radians))
+    mesh = drill(
+        MeshData.of(trimesh.creation.box(extents=(90.0, 60.0, 10.0))),
+        position=(0.0, 0.0, 5.0),
+        axis="z",
+        normal=tilted,
+        diameter=6.0,
+        depth=0.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    bore = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+
+    removed = _run_op("remove_feature", entry, profile, at_feature=bore).outputs[0].mesh
+    assert removed.bounds.minimum[2] == pytest.approx(-5.0, abs=1e-6)
+    assert removed.bounds.maximum[2] == pytest.approx(5.0, abs=1e-6)
+    assert removed.volume == pytest.approx(90.0 * 60.0 * 10.0, abs=1e-3)
+
+    moved = _run_op("move_feature", entry, profile, at_feature=bore, x=12.0, y=6.0, z=0.0)
+    body = moved.outputs[0].mesh
+    assert body.bounds.minimum[2] == pytest.approx(-5.0, abs=1e-6)
+    assert body.bounds.maximum[2] == pytest.approx(5.0, abs=1e-6)
+    assert body.volume == pytest.approx(mesh.volume, abs=0.05)
+    assert not any(finding.code == "bore.over_the_edge" for finding in moved.findings)
+
+
+def _plate_with_a_stud() -> tuple[SceneObject, str, float]:
+    """Platte 60 × 40 × 10 (z 0 … 10) mit einem Zapfen Ø 8 × 8 bei x = -15."""
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    stud = trimesh.creation.cylinder(radius=4.0, height=8.0, sections=48)
+    stud.apply_translation((-15.0, 0.0, 14.0))
+    body = boolean("union", [MeshData.of(plate), MeshData.of(stud)]).mesh
+    features = detect(body)
+    pin = next(name for name, feature in features.items() if feature.kind == "pin")
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=features)
+    return entry, pin, float(body.volume) - 24000.0
+
+
+def test_a_moved_or_copied_pin_keeps_its_height_and_leaves_a_flat_plate(
+    profile: Profile,
+) -> None:
+    """Ein Zapfen wandert, ohne zu wachsen, und hinterlässt keine Delle.
+
+    Das Werkzeug aus Kennzahlen trug an **beiden** Enden die Zugabe aus §39:
+    Der gesetzte Zapfen stand danach 0,02 mm höher, und das Abtragen an der
+    alten Stelle schnitt 0,02 mm in die Platte (gemessen 22.09.2026: Spitze
+    18,02 statt 18,0 nach jedem Versetzen, Verdoppeln und Ändern; eine Delle
+    Ø 8 an der alten Stelle). Wer einen Zapfen fünfmal versetzt, hätte ihn
+    0,1 mm länger. Jetzt kommt das Werkzeug aus den eigenen Flächen, mit der
+    Zugabe nur dort, wo Luft ist, und mit einem Sockel nur in die Platte.
+    """
+    entry, pin, stud = _plate_with_a_stud()
+    centre = entry.features[pin].params["centre"]
+
+    moved = _run_op("move_feature", entry, profile, at_feature=pin, x=15.0, y=5.0, z=centre[2])
+    body = as_mesh_data(moved.outputs[0].mesh)
+    assert body.raw.is_watertight and body.component_count == 1
+    assert body.bounds.maximum[2] == pytest.approx(18.0, abs=1e-6)
+    assert body.volume == pytest.approx(24000.0 + stud, abs=1e-6)
+
+    copied = _run_op(
+        "duplicate_feature", entry, profile, at_feature=pin, x=15.0, y=5.0, z=centre[2]
+    )
+    body = as_mesh_data(copied.outputs[0].mesh)
+    assert body.bounds.maximum[2] == pytest.approx(18.0, abs=1e-6)
+    assert body.volume == pytest.approx(24000.0 + 2.0 * stud, abs=1e-6)
+
+
+def test_a_resized_pin_keeps_its_height(profile: Profile) -> None:
+    """Ein breiterer Zapfen ist genauso hoch wie der alte — nicht 0,02 mm höher.
+
+    Soll: der neue Querschnitt (48-Eck, Umkreis Ø 10) über 8 mm Höhe auf der
+    unveränderten Platte.
+    """
+    entry, pin, _stud = _plate_with_a_stud()
+
+    resized = _run_op("resize_feature", entry, profile, at_feature=pin, diameter=10.0)
+    body = as_mesh_data(resized.outputs[0].mesh)
+    polygon = 0.5 * 48 * 5.0**2 * math.sin(2.0 * math.pi / 48)
+    assert body.raw.is_watertight and body.component_count == 1
+    assert body.bounds.maximum[2] == pytest.approx(18.0, abs=1e-6)
+    assert body.volume == pytest.approx(24000.0 + polygon * 8.0, abs=1e-6)
+
+
+def test_a_tilted_pin_stands_on_the_plate_all_around(profile: Profile) -> None:
+    """Gekippt um seine Mitte, reicht der Zapfen in die Platte, statt auf einer
+    Seite über ihr zu schweben.
+
+    Der exakte Kern tut das seit P2.4 (``_exact_rotate_pin``); am Netz hob der
+    Zylinder aus Kennzahlen um 10° gekippt an der hohen Seite 0,7 mm von der
+    Platte ab (gemessen 22.09.2026). Geprüft wird unter der hohen Seite, knapp
+    über der Plattenoberseite: Dort ist Material.
+    """
+    entry, pin, _stud = _plate_with_a_stud()
+
+    turned = _run_op("rotate_feature", entry, profile, at_feature=pin, axis="x", angle=10.0)
+    body = as_mesh_data(turned.outputs[0].mesh)
+    assert body.raw.is_watertight and body.component_count == 1
+    # Die Achse steht nach dem Kippen in der yz-Ebene; ihr Schnitt mit z = 10,05
+    # ist eine Ellipse um die Achse. Ihre Punkte am Rand, 0,3 mm nach innen.
+    radians = math.radians(10.0)
+    axis = np.asarray((0.0, -math.sin(radians), math.cos(radians)))
+    centre = np.asarray((-15.0, 0.0, 14.0))
+    level = 10.05
+    through = centre + axis * (level - centre[2]) / axis[2]
+    rim = []
+    for step in range(12):
+        angle = 2.0 * math.pi * step / 12
+        radial = np.asarray((math.cos(angle), math.sin(angle) * axis[2], 0.0))
+        radial = radial - axis * float(radial @ axis)
+        radial /= np.linalg.norm(radial)
+        point = through + radial * 3.7
+        rim.append(point + axis * (level - point[2]) / axis[2])
+    # Innen und außen über den Raumwinkel: Die nächste Fläche sagt es an der
+    # Kehle zwischen Zapfen und Platte nicht eindeutig.
+    from tests.test_slot_features import _inside
+
+    assert bool(_inside(body, [tuple(point) for point in rim]).all()), (
+        "unter der hohen Seite fehlt Material"
+    )
+
+
+def test_a_right_angle_turns_a_feature_exactly_on_every_machine() -> None:
+    """Merkmal drehen, Langlochenden und die Lage einer Grundform drehen einen
+    rechten Winkel exakt — aus ``units.exact_cos_degrees`` und nicht aus
+    ``math.cos(math.radians(…))`` (RM-187).
+
+    ``math.cos(math.pi / 2)`` ist 6,1·10⁻¹⁷ und nicht null; die Achse einer um
+    90° gekippten Bohrung trug diesen Rest als dritte Komponente, der Quader
+    einer um 90° gedrehten Grundform ihn in jeder Ecke. Dieselbe Regel steht an
+    ``transform.rotation_about``; diese drei Stellen gingen an ihr vorbei.
+    """
+    from app.core.geom.prepare import slot_ends
+    from app.core.geom.prepare_ops import _turned_vector
+    from app.core.geom.primitive_ops import BoxParams, placement_transform
+    from app.core.sketch.planes import frame_of
+
+    assert _turned_vector((0.0, 0.0, 1.0), "x", 90.0) == (0.0, -1.0, 0.0)
+    assert _turned_vector((0.0, 0.0, 1.0), "y", -90.0) == (-1.0, 0.0, 0.0)
+
+    first, second = slot_ends(
+        (0.0, 0.0, 0.0), frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)), 10.0, 90.0
+    )
+    assert {first[0], second[0]} == {0.0} or {first[1], second[1]} == {0.0}
+
+    matrix = np.asarray(placement_transform(BoxParams(angle=90.0)))
+    assert set(np.unique(np.abs(matrix[:3, :3]))) <= {0.0, 1.0}
+
+
+def test_feature_tools_of_revolution_carry_the_same_bits_everywhere() -> None:
+    """Kegel und Ring der Merkmalshandlungen haben ihre Ecken aus ``units.circle_point``.
+
+    ``trimesh.creation.cone`` und ``torus`` rechnen mit ``np.cos``, und das
+    wählt seine Umsetzung nach der CPU (RM-187): An 48 Stellen eines
+    48-Ecks lagen 39 Kosinus neben dem Wert, den ``circle_point`` auf jeder
+    Maschine gibt (gemessen 22.09.2026). ``lathe`` ersetzt die Ecken; hier
+    liefen der Kegel von *Merkmal versetzen* und *Senken*, der Ring von *Wulst
+    und Kehle* und der Ring-Grundkörper noch daran vorbei.
+    """
+    from app.core import units
+    from app.core.geom.prepare_ops import _feature_solid, _torus_ring_mesh
+    from app.core.geom.primitive_ops import primitive_local_tool
+    from app.core.types import Feature
+
+    sections = 48
+    circle = np.asarray([units.circle_point(sections, k) for k in range(sections)])
+
+    cone = Feature(
+        id="cone_1",
+        kind="cone",
+        provenance="detected",
+        params={"diameter": 10.0, "depth": 6.0, "centre": (0.0, 0.0, 0.0), "axis": (0, 0, 1)},
+    )
+    body = _feature_solid(cone, (0.0, 0.0, 0.0), oversize=0.0).raw
+    rim = np.asarray(body.vertices)[np.linalg.norm(np.asarray(body.vertices)[:, :2], axis=1) > 1.0]
+    expected = {tuple(point) for point in (circle * 5.0).tolist()}
+    assert {tuple(point) for point in rim[:, :2].tolist()} <= expected
+
+    ring = _torus_ring_mesh((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 40.0, 8.0).raw
+    minor = {4.0 * sin for _cos, sin in units.circle_cos_sin(sections)}
+    assert {float(z) for z in np.asarray(ring.vertices)[:, 2]} <= minor
+
+    torus = primitive_local_tool(
+        "create_torus", {"outer_diameter": 40.0, "tube_diameter": 8.0, "segments": 32}, "fine"
+    ).raw
+    tube = {4.0 * sin + 4.0 for _cos, sin in units.circle_cos_sin(32)}
+    assert {float(z) for z in np.asarray(torus.vertices)[:, 2]} <= tube
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_countersink_over_the_edge_says_so(profile: Profile, kernel: str) -> None:
+    """Senken an einer Bohrung nahe der Kante: Der Kegel reißt die Flanke auf, und
+    beide Kerne sagen es wie beim Bohren (``bore.over_the_edge``).
+
+    *Bohren*, *Versetzen*, *Verdoppeln*, *Drehen*, *Ändern* und *Zum Langloch
+    ziehen* fragten seit dem 15.09.2026 nach der Kante; *Senken* setzt einen
+    Kegel Ø 8,4 an eine Mündung und fragte nicht — an einer Bohrung Ø 4 drei
+    Millimeter vor der Kante der Platte stand danach eine offene Flanke, und
+    der Bericht schwieg (22.09.2026).
+    """
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+
+        body: object = edit.cut_bore(
+            edit.box(60.0, 40.0, 10.0),
+            position=(27.0, 0.0, 5.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=4.0,
+            depth=10.0,
+        )
+        top = 10.0
+    else:
+        plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+        body = drill(
+            MeshData.of(plate),
+            position=(27.0, 0.0, 5.0),
+            axis="z",
+            diameter=4.0,
+            depth=0.0,
+            profile=profile,
+            compensate=False,
+        ).mesh
+        top = 5.0
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, kind=kernel)  # type: ignore[arg-type]
+
+    sunk = _run_op("countersink_hole", entry, profile, diameter=8.4, x=27.0, y=0.0, z=top)
+    assert "bore.over_the_edge" in [finding.code for finding in sunk.findings]
+
+    inside = _run_op("countersink_hole", entry, profile, diameter=5.0, x=27.0, y=0.0, z=top)
+    assert "bore.over_the_edge" not in [finding.code for finding in inside.findings]

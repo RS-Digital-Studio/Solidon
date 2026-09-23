@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import trimesh
 
 from app.core.geom.mesh import read_mesh
@@ -44,7 +45,7 @@ def test_the_figures_the_window_reads_are_already_known_after_normalise() -> Non
     mesh = read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl")
     result = normalise(mesh, "mm", weld_is_reading=True)
     figures = result.mesh.raw._cache
-    for name in ("is_watertight", "mass_properties", "area", "solidon_component_count"):
+    for name in ("is_watertight", "solidon_volume", "area", "solidon_component_count"):
         assert name in figures, f"{name} gehört in den Arbeiter, nicht ins Fenster"
     assert result.mesh.component_count == 1
     assert result.mesh.volume > 0.0
@@ -62,3 +63,30 @@ def test_an_inverted_mesh_still_says_its_faces_were_turned() -> None:
     assert result.mesh.volume > 0.0
     plain = normalise(MeshData.of(trimesh.creation.box()), "mm", weld_is_reading=True)
     assert "ingest.normals_flipped" not in [finding.code for finding in plain.findings]
+
+
+def test_the_volume_is_trimeshs_integral_without_the_inertia() -> None:
+    """``MeshData.volume`` rechnet dasselbe Integral wie trimesh, nur ohne Trägheit (RM-208).
+
+    Auch an einem offenen Netz dieselbe Zahl — sie hängt dort an der Lage, und
+    so war sie es vorher. Und sie verfällt mit der Geometrie: Wer die Ecken
+    verschiebt, bekommt das neue Volumen und nicht das gemerkte.
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+
+    closed = trimesh.creation.torus(major_radius=20.0, minor_radius=5.0)
+    closed.apply_translation((30.0, -10.0, 4.0))
+    opened = trimesh.creation.box(extents=(10.0, 20.0, 30.0))
+    opened.apply_translation((5.0, 7.0, 9.0))
+    opened.update_faces(np.arange(len(opened.faces)) != 0)
+    for body in (closed, opened):
+        expected = float(body.copy().volume)
+        assert MeshData.of(body).volume == pytest.approx(expected, rel=1e-12, abs=1e-9)
+
+    box = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    data = MeshData.of(box)
+    assert data.volume == pytest.approx(1000.0)
+    box.vertices = box.vertices * 2.0
+    assert MeshData.of(box).volume == pytest.approx(8000.0), "das Volumen verfällt mit dem Netz"

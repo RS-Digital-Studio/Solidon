@@ -576,3 +576,45 @@ def test_the_values_for_each_member_keep_every_place_where_it_is() -> None:
         {"at_feature": "hole_1", "diameter": 6.5}, "hole_1", members, features
     )
     assert each["hole_2"] == {"at_feature": "hole_2", "diameter": 6.5}
+
+
+def test_an_unchanged_depth_stays_with_each_hole_of_a_group() -> None:
+    """Die Tiefe reist nur, wenn sie am gewählten Loch geändert wurde (23.09.2026).
+
+    Seit *Bohrung ändern* die Tiefe als Feld trägt, steht dort der gemessene
+    Wert des gewählten Lochs. Wer an einer Gruppe nur den Durchmesser ändert,
+    darf die anderen Löcher nicht auf diese Tiefe setzen — und die Gruppe darf
+    nicht an unterschiedlichen Tiefen zerfallen.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    features = {
+        name: Feature(
+            id=name,
+            kind="hole",
+            provenance="detected",
+            params={"diameter": 5.0, "depth": depth, "centre": (x, 0.0, 0.0)},
+        )
+        for name, depth, x in (("hole_1", 6.0, 0.0), ("hole_2", 9.0, 20.0))
+    }
+    members = ("hole_1", "hole_2")
+
+    kept = params_for_members(
+        {"at_feature": "hole_1", "diameter": 6.5, "depth": 6.004},
+        "hole_1",
+        members,
+        features,
+        op="resize_hole",
+    )
+    assert kept["hole_1"]["depth"] == pytest.approx(6.004)
+    assert kept["hole_2"]["depth"] is None, "jede Bohrung behält ihre eigene Tiefe"
+
+    changed = params_for_members(
+        {"at_feature": "hole_1", "diameter": 6.5, "depth": 8.0},
+        "hole_1",
+        members,
+        features,
+        op="resize_hole",
+    )
+    assert changed["hole_2"]["depth"] == pytest.approx(8.0), "geändert gilt sie allen"

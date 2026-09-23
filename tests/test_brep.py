@@ -1301,19 +1301,18 @@ def test_a_selection_that_matches_nothing_says_so() -> None:
         edit.fillet(edit.cylinder(10.0, 20.0), 1.0, "vertical")
 
 
-def test_the_same_radius_gets_two_answers_and_the_caveat_says_so() -> None:
-    """Derselbe Radius, zwei Antworten — und der Kunde erfährt es vorher.
+def test_the_same_radius_gets_the_same_answer_on_both_kernels() -> None:
+    """Derselbe Radius, dieselbe Antwort — am Netz wie am exakten Körper.
 
     Gemessen am 14.09.2026 an einem Hohlkasten 40 x 30 x 20 mit 3 mm Wand
-    (offen nach oben): Über **alle** Kanten nimmt das Netz einen Radius von
-    2 mm an und gibt einen dichten Einteiler zurück; der exakte Kern sagt
-    denselben Radius ab, weil OpenCASCADE daraus einen ungültigen Solid baut.
-    Eine Operation, die an beiden Kernen rechnet und an einem davon früher
-    aufhört, muss das sagen — sonst liest der Kunde „Der Radius ist für diese
-    Kanten zu groß." an einem Teil, das er am Netz gerade noch gerundet hat.
-
-    Der Ausweg im Satz heißt, wie er im Menü heißt: Deshalb steht der Titel
-    von ``brep_to_mesh`` hier und keine Umschreibung.
+    (offen nach oben): Über **alle** Kanten nahm das Netz einen Radius von
+    2 mm an, der exakte Kern sagte ihn ab, und ein Vorbehalt im Register
+    erklärte den Unterschied. Am 22.09.2026 gemessen, *wie* das Netz ihn
+    annahm: Zwei Bänder zu je 2 mm auf einer 3 mm breiten Stirnfläche
+    überlappen, und die Wand kam still niedriger heraus. Seither stellen beide
+    Kerne dieselbe Frage (``edges.contact_band_limit``) und sagen denselben
+    Radius mit demselben größten Wert ab; der Vorbehalt über zwei Antworten
+    ist gefallen.
     """
     from app.core.geom.edges import round_edges
     from app.core.geom.mesh import MeshData
@@ -1326,15 +1325,19 @@ def test_the_same_radius_gets_two_answers_and_the_caveat_says_so() -> None:
         edit.fillet(kasten, 2.0, "all")
 
     netz = MeshData.of(tessellate(kasten.shape, 0.05).raw)
-    gerundet = round_edges(netz, 2.0, "all", quality="draft")
-    assert gerundet.mesh.is_watertight, "am Netz kommt derselbe Radius durch"
-    assert gerundet.mesh.volume < netz.volume, "und er trägt Material ab"
+    with pytest.raises(GeometryError) as abgesagt:
+        round_edges(netz, 2.0, "all", quality="draft")
+    assert abgesagt.value.values["largest_mm"] == pytest.approx(1.5, abs=0.01)
+    assert abgesagt.value.suggestions, "die Absage nennt einen Ausweg"
+
+    gerundet = round_edges(netz, 1.4, "all", quality="draft")
+    assert gerundet.mesh.is_watertight, "unter der Grenze rundet das Netz"
+    assert gerundet.mesh.bounds.size[2] == pytest.approx(20.0, abs=1e-6), (
+        "und die Wand bleibt so hoch, wie sie war"
+    )
 
     grenze = str(REGISTRY.get("fillet_edges").caveat)
-    assert "3 mm" in grenze and "2 mm" in grenze, f"die gemessene Grenze fehlt: {grenze}"
-    assert str(REGISTRY.get("brep_to_mesh").title) in grenze, (
-        f"der Ausweg heißt, wie er im Menü heißt: {grenze}"
-    )
+    assert "3 mm" not in grenze, f"der Vorbehalt über zwei Antworten ist gefallen: {grenze}"
 
 
 # --- which edges ----------------------------------------------------------------

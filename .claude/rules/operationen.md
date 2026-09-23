@@ -676,14 +676,16 @@ unter der Schweißtoleranz und Dreiecke mit doppeltem Index fallen weg, und
 Kundenweg STL → Operation → STL → Import steht als Test in
 `tests/test_export.py`.
 
-**Und sie gilt dem ersten Zug** (11.09.2026). An einem Langloch, das schon
-eines ist, gibt es diese Wand nicht mehr — die Flanken des Werkzeugs liegen
-auf den Flanken des Lochs, und das rechnen beide Kerne auf Stufe 1. Mit der
-Zugabe wurde das Loch bei **jedem** Zug breiter: am Netz 5,2057, 5,2213,
-5,2371 an einer Bohrung von 5,1901, am exakten Körper je Zug genau die
-Zugabe. `slot_hole` gibt sie deshalb nur an einer runden Bohrung mit
-(`overlap` an beiden `slot_bore`); ein Langloch, das dreimal nachgezogen
-wird, nimmt dieselbe Schraube wie nach dem ersten Mal (Fund des Reviews).
+**Und ein Langloch bekommt sie nie** (seit 23.09.2026; vorher „nur beim
+ersten Zug", 11.09.2026). Mit der Zugabe wurde das Loch bei jedem Zug
+breiter — am Netz 5,2057, 5,2213, 5,2371 an einer Bohrung von 5,1901 —, und
+beim ersten Zug kam es um genau sie zu breit und zu lang heraus: 5,02 x 20,02,
+wo *Bohrung setzen* mit dem Haken *Langloch* 5,00 x 20,00 schneidet. Zwei Wege
+zum selben Auftrag, zwei Maße. `slot_hole` schließt deshalb auch die **runde**
+Bohrung vor dem ersten Zug (`closes_the_old`) und schneidet aus vollem
+Material ohne Zugabe (`overlap=0.0`) — die Wand, von der die Zugabe fernhielt,
+gibt es dann nicht mehr. Beide Wege und beide Kerne schneiden dasselbe
+Langloch (`test_slot_features.test_both_ways_to_a_slot_cut_the_same_slot`).
 
 ## Die kürzeste Länge eines Langlochs ist gemessen, nicht gesetzt (11.09.2026)
 

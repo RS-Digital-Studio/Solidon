@@ -462,6 +462,10 @@ _NOT_A_RANGE = frozenset(
         # Eine Öffnungsfläche, die zu einem anderen Körper gehört, schräg liegt
         # oder innen sitzt (RM-087): eine andere Fläche ist der Weg, keine Zahl.
         "foreign_feature", "not_axis_aligned", "not_outside",
+        # Die Tiefe einer Bohrung (23.09.2026): welche Seite offen ist, lässt sich
+        # nicht bestimmen, oder die genannte Seite ist keine ihrer Mündungen —
+        # eine andere Seite oder ein leeres Feld ist der Weg, keine Zahl.
+        "not_an_end", "open_side_unknown",
         # Eine vorgegebene Ausgabekennung, die es schon gibt (CORE-01): kein Feld.
         "output_taken",
         "point_count",

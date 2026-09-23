@@ -13622,7 +13622,7 @@ class MainWindow(QMainWindow):
             or len(feature_ids) != len(group.members)
         ):
             return None
-        each = params_for_members(params, picked, feature_ids, body.features if body else {})
+        each = params_for_members(params, picked, feature_ids, body.features if body else {}, op=op)
         drafts = [
             OperationDraft(op=op, inputs=(selected,), params=each[feature_id])
             for feature_id in feature_ids

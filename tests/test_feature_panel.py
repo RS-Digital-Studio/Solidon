@@ -2927,12 +2927,14 @@ def test_measure_fields_keep_the_bound_feature_after_the_panel_changes(
         values = feature_field_values(action.fields, editors, action.fixed, feature_id=identifier)
         assert values["at_feature"] == identifier
         assert values["diameter"] == pytest.approx(9.0)
-        assert "depth" not in values
         assert all(editor.accessibleName() for editor in editors.values())
+        # Die Tiefe ist seit dem 23.09.2026 ein Feld mit dem gemessenen Wert —
+        # und steht nicht mehr zusätzlich als gesperrte Auskunft daneben.
         if "depth" in feature.params:
-            assert any(
-                label.accessibleName() == "Gemessene Tiefe" for label in group.findChildren(QLabel)
-            )
+            assert values["depth"] == pytest.approx(float(feature.params["depth"]))
+        assert not any(
+            label.accessibleName() == "Gemessene Tiefe" for label in group.findChildren(QLabel)
+        )
     finally:
         owner.close()
         owner.deleteLater()

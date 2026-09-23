@@ -31,15 +31,17 @@ import dataclasses
 from collections.abc import Sequence
 from typing import Literal, cast
 
-from app.core.geom.boolean import HasVolume
+from app.core.errors import GeometryError
+from app.core.geom.boolean import BooleanOutcome, HasVolume
 from app.core.geom.edges import (
     EDGE_CHOICES,
+    ChamferShape,
     EdgeChoice,
     bead_edges,
     bevel_edges,
     round_edges,
 )
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
     BaseParams,
@@ -50,8 +52,11 @@ from app.core.types import (
     Profile,
     SceneObject,
 )
-from app.core.units import EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
+
+#: Wie eine Fase bemaßt ist (P6.2): gleich breit, zwei Abstände, Abstand und Winkel.
+CHAMFER_MODES: tuple[str, ...] = ("equal_distances", "two_distances", "distance_angle")
 
 #: Dieselbe Auswahl bei Verrundung und Fase — deshalb steht der Satz einmal hier.
 _CHOICE_DOC = _(
@@ -115,21 +120,24 @@ class FilletParams(BaseParams):
 
 @register_op(
     name="fillet_edges",
-    cache_version="7",
+    # 8: die Berührlinien werden an beiden Kernen geprüft, und eine Gruppe
+    # lässt gefaltete Züge aus (22.09.2026).
+    cache_version="8",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
     consumes=1,
     produces=1,
     doc=_("Rundet die gewählten Kanten ab — an einem exakten Körper wie an einem Netz."),
+    # **Der zweite Teil des Vorbehalts ist gefallen** (22.09.2026). Er sagte,
+    # das Netz nehme am 3-mm-Kasten noch 2 mm an, wo der exakte Körper
+    # ablehnt — und das Netz nahm sie an, indem es die Wand still niedriger
+    # schnitt. Seit beide Kerne dieselbe Frage stellen
+    # (``edges.contact_band_limit``), lehnen beide ab, mit demselben Satz.
     caveat=_(
         "An einem Netz besteht die Rundung aus geraden Stücken statt aus einer "
         "Kurve. Sie weichen um weniger ab, als eine Düse auflöst; wer eine echte "
-        "Kurve braucht, arbeitet an einem exakten Körper weiter. Dort ist der "
-        "Radius enger begrenzt: An einem Kasten mit 3 mm Wand nimmt das Netz über "
-        "alle Kanten noch 2 mm an, der exakte Körper lehnt denselben Radius ab. "
-        "Dann hilft ein kleinerer Radius oder „Flächenbearbeitung beenden“, um am "
-        "Netz zu runden."
+        "Kurve braucht, arbeitet an einem exakten Körper weiter."
     ),
 )
 def fillet_edges(ctx: OpContext) -> OpResult:
@@ -151,7 +159,53 @@ class ChamferParams(BaseParams):
         unit="mm",
         minimum=0.01,
         maximum=100.0,
-        doc=_("Wie weit die Fase die Kante zurücknimmt, auf jeder der beiden Flächen."),
+        doc=_(
+            "Wie weit die Fase die Kante zurücknimmt — auf beiden Flächen, oder bei zwei "
+            "Abständen und bei Abstand und Winkel auf der Bezugsfläche."
+        ),
+    )
+    # **P6.2 — Fasen mit zwei Abständen oder Abstand und Winkel.** Die
+    # Vorgabe bleibt die gleiche Breite auf beiden Seiten; jede gespeicherte
+    # Fase behält damit ihre Bedeutung.
+    mode: str = param(
+        title=_("Bemaßung"),
+        default="equal_distances",
+        choices=CHAMFER_MODES,
+        doc=_(
+            "Gleiche Breite auf beiden Flächen, zwei verschiedene Abstände oder ein "
+            "Abstand mit dem Winkel der Fase zur Bezugsfläche."
+        ),
+    )
+    second_distance: float = param(
+        title=_("Zweiter Abstand"),
+        default=1.0,
+        unit="mm",
+        minimum=0.01,
+        maximum=100.0,
+        doc=_("Wie weit die Fase auf der zweiten Fläche zurücknimmt."),
+        depends_on=("mode", ("two_distances",)),
+    )
+    angle: float = param(
+        title=_("Winkel"),
+        default=45.0,
+        unit=DEGREE_UNIT,
+        minimum=1.0,
+        maximum=89.0,
+        doc=_(
+            "Unter welchem Winkel die Fase zur Bezugsfläche steht. 45 Grad an einer "
+            "rechtwinkligen Kante ist die gleiche Breite auf beiden Seiten."
+        ),
+        depends_on=("mode", ("distance_angle",)),
+    )
+    flip_sides: bool = param(
+        title=_("Seiten tauschen"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Nimmt die andere Fläche als Bezugsfläche. Ohne Haken ist es die Fläche, die "
+            "am weitesten nach oben zeigt, bei gleicher Höhe die hintere, dann die rechte."
+        ),
+        depends_on=("mode", ("two_distances", "distance_angle")),
     )
     edges: str = param(
         title=_("Kanten"),
@@ -171,13 +225,26 @@ class ChamferParams(BaseParams):
 
 @register_op(
     name="chamfer_edges",
-    cache_version="7",
+    # 8: wie beim Verrunden (22.09.2026).
+    # 9: zwei Abstände oder Abstand und Winkel (P6.2, 23.09.2026).
+    cache_version="9",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,
     consumes=1,
     produces=1,
-    doc=_("Bricht die gewählten Kanten unter 45 Grad — an einem exakten Körper wie an einem Netz."),
+    doc=_(
+        "Bricht die gewählten Kanten — gleich breit, mit zwei Abständen oder mit Abstand "
+        "und Winkel, an einem exakten Körper wie an einem Netz."
+    ),
+    # Gemessen am 23.09.2026 am Quader 40 x 30 x 20, alle Kanten, 2 und 1 mm:
+    # Netz 23 656,0 mm³ (ebene Ecke durch die drei Berührpunkte), exakter
+    # Körper 23 655,0 (gewölbte Ecke) — bei Abstand und Winkel beide gleich.
+    caveat=_(
+        "Wo drei Fasen mit verschiedenen Abständen an einer Ecke zusammentreffen, "
+        "schließt der exakte Körper die Ecke gewölbt und das Netz eben. Die Kanten "
+        "selbst sind an beiden gleich."
+    ),
 )
 def chamfer_edges(ctx: OpContext) -> OpResult:
     params = cast(ChamferParams, ctx.params)
@@ -187,7 +254,17 @@ def chamfer_edges(ctx: OpContext) -> OpResult:
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
         rounded=False,
+        shape=chamfer_shape(params),
     )
+
+
+def chamfer_shape(params: ChamferParams) -> ChamferShape | None:
+    """Die Form der Fase aus den Parametern — ``None`` für die gleiche Breite."""
+    if params.mode == "two_distances":
+        return ChamferShape(second=float(params.second_distance), flipped=bool(params.flip_sides))
+    if params.mode == "distance_angle":
+        return ChamferShape(angle=float(params.angle), flipped=bool(params.flip_sides))
+    return None
 
 
 @op_params
@@ -281,6 +358,7 @@ def _worked(
     keys: tuple[str, ...],
     *,
     rounded: bool,
+    shape: ChamferShape | None = None,
 ) -> OpResult:
     """Der gemeinsame Rumpf beider Operationen — der Körper wählt den Kern.
 
@@ -304,10 +382,24 @@ def _worked(
             profile=ctx.profile,
             rounded=rounded,
             cancelled=ctx.cancelled,
+            shape=shape,
         )
 
     body = as_mesh_data(source.mesh)
-    work = round_edges if rounded else bevel_edges
+    if not rounded:
+        outcome = bevel_edges(
+            body,
+            size,
+            choice,
+            keys,
+            selected_edges=bound,
+            quality=ctx.quality,
+            cancelled=ctx.cancelled,
+            narrowest=narrowest_face(ctx.profile),
+            shape=shape,
+        )
+        return _edge_result(ctx, source, body, outcome, rounded=False)
+    work = round_edges
     # **Abbrechbar, weil es dauern kann.** Gemessen an einer Lochplatte mit
     # 60 Bohrungen (7932 Dreiecke, 132 Kantenzüge): 2,7 s für die Fase über
     # alle Kanten, 6,9 s für die Verrundung. Ohne das Token liefe der Klick
@@ -320,7 +412,20 @@ def _worked(
         selected_edges=bound,
         quality=ctx.quality,
         cancelled=ctx.cancelled,
+        narrowest=narrowest_face(ctx.profile),
     )
+    return _edge_result(ctx, source, body, outcome, rounded=rounded)
+
+
+def _edge_result(
+    ctx: OpContext,
+    source: SceneObject,
+    body: MeshData,
+    outcome: BooleanOutcome,
+    *,
+    rounded: bool,
+) -> OpResult:
+    """Das Ergebnis am Netz — gleich für Rundung und Fase."""
     empty = _too_small_to_see(
         body, outcome.mesh, ctx.profile, kind="fillet" if rounded else "chamfer"
     )
@@ -347,6 +452,7 @@ def _on_a_solid(
     profile: Profile | None,
     rounded: bool,
     cancelled: CancelToken,
+    shape: ChamferShape | None = None,
 ) -> OpResult:
     """Der exakte Weg — träge geholt, weil OpenCASCADE optional ist (§36).
 
@@ -358,8 +464,27 @@ def _on_a_solid(
     from app.core.brep.features import features_of
     from app.core.brep.kernel import Solid
 
-    work = edit.fillet if rounded else edit.chamfer
-    solid = work(cast(Solid, source.mesh), size, choice, keys, selected_edges=selected_edges)
+    try:
+        if rounded:
+            solid = edit.fillet(
+                cast(Solid, source.mesh), size, choice, keys, selected_edges=selected_edges
+            )
+        else:
+            solid = edit.chamfer(
+                cast(Solid, source.mesh),
+                size,
+                choice,
+                keys,
+                selected_edges=selected_edges,
+                shape=shape,
+            )
+    except GeometryError as refused:
+        explained = _why_it_does_not_fit(
+            source, size, choice, keys, selected_edges, rounded, narrowest_face(profile), shape
+        )
+        if explained is None:
+            raise
+        raise explained from refused
     empty = _too_small_to_see(source.mesh, solid, profile, kind="fillet" if rounded else "chamfer")
     return OpResult(
         outputs=[
@@ -369,6 +494,62 @@ def _on_a_solid(
         ],
         findings=[dataclasses.replace(empty, object_id=source.id)] if empty is not None else [],
     )
+
+
+def _why_it_does_not_fit(
+    source: SceneObject,
+    size: float,
+    choice: EdgeChoice,
+    keys: tuple[str, ...],
+    selected_edges: Sequence[int] | None,
+    rounded: bool,
+    narrowest: float,
+    shape: ChamferShape | None = None,
+) -> GeometryError | None:
+    """Warum der exakte Kern abgelehnt hat — mit demselben Satz wie am Netz, wo er passt.
+
+    OpenCASCADE sagt nur, dass der Bau nicht gelang. Die häufigste Ursache ist
+    dieselbe, die das Netz vorab prüft (``edges.contact_band_limit``): Die
+    Berührlinien passen nicht auf die angrenzenden Flächen. Gefragt wird an
+    der Tessellierung des Körpers, deren ebene Flächen exakt sind; findet sich
+    dort der Grund, bekommt der Kunde das größte Maß, das passt — sonst bleibt
+    die Absage des Kerns (Übertrag der Durchsicht v0.4.1, Punkt 3).
+    """
+    from app.core.geom.edges import contact_band_limit, edges_of, too_large_for_the_faces, wanted
+    from app.core.units import weld_tolerance
+
+    if selected_edges is not None:
+        return None
+    mesh = as_mesh_data(source.mesh)
+    entries = edges_of(mesh)
+    try:
+        chosen = wanted(entries, choice, keys)
+    except GeometryError:
+        return None
+    try:
+        largest = contact_band_limit(
+            entries,
+            chosen,
+            size,
+            rounded=rounded,
+            tolerance=weld_tolerance(mesh.bounds.diagonal),
+            narrowest=narrowest,
+            shape=shape,
+        )
+    except GeometryError as second:
+        # Die zweite Breite passt schon allein nicht — derselbe Satz wie am Netz.
+        return second
+    return None if largest is None else too_large_for_the_faces(size, largest, rounded=rounded)
+
+
+def narrowest_face(profile: Profile | None) -> float:
+    """Die schmalste Fläche, die eine Berührlinie tragen muss — das kleinste Detail
+    des Druckers, ohne Drucker die Sehnengrenze (``edges.contact_band_limit``)."""
+    from app.core.units import MAX_FACET_SAG
+
+    if profile is None:
+        return MAX_FACET_SAG
+    return max(MAX_FACET_SAG, float(profile.printer.smallest_detail))
 
 
 __all__ = [

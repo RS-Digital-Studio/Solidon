@@ -441,7 +441,10 @@ def test_follow_at_a_new_place_moves_shaft_and_countersink_together(
         # nächste Schritt, der die Bohrung braucht, die Kette an.
         assert len(result.feature_continuations) == 1
         continued = {c.source.feature_id: c.target for c in result.feature_continuations[0]}
-        assert continued == {hole.id: hole.id, sink.id: sink.id}
+        assert continued.items() >= {hole.id: hole.id, sink.id: sink.id}.items()
+        # Seit dem 23.09.2026 reist auch der Sackboden belegt mit — und nur er.
+        extra = set(continued) - {hole.id, sink.id}
+        assert all(features[name].kind == "face" for name in extra), extra
 
 
 def test_follow_at_a_new_place_keeps_the_axial_level_of_the_recut(profile: Profile) -> None:

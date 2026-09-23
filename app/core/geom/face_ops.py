@@ -26,10 +26,18 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
-from app.core.geom.faces import draft_vertical, push_face
+from app.core.geom.faces import draft_vertical, push_face, pushed_features
 from app.core.geom.mesh import as_mesh_data
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Feature, OpContext, OpResult, SceneObject
+from app.core.types import (
+    BaseParams,
+    Feature,
+    FeatureContinuation,
+    FeatureRef,
+    OpContext,
+    OpResult,
+    SceneObject,
+)
 from app.core.units import DEGREE_UNIT
 from app.i18n import _
 
@@ -81,7 +89,8 @@ class PushFaceParams(BaseParams):
 
 @register_op(
     name="push_face",
-    cache_version="4",
+    # 5: Nachbarwände bleiben eine Fläche, und alle Namen reisen mit (23.09.2026).
+    cache_version="5",
     title=_("Fläche versetzen"),
     category="shaping",
     params=PushFaceParams,
@@ -116,8 +125,16 @@ def push_face_op(ctx: OpContext) -> OpResult:
     if chosen is None:
         raise _no_face()
     outcome = push_face(body, chosen, params.distance, quality=ctx.quality, cancelled=ctx.cancelled)
+    # Die Merkmale reisen mit, die versetzte Fläche und ihre gewachsenen
+    # Nachbarn an ihrem neuen Ort (:func:`faces.pushed_features`) — die
+    # Auswertung findet sie dort wieder, statt sie zu verwaisen.
+    carried = {
+        name: dataclasses.replace(feature, face_indices=(), surface_patches=())
+        for name, feature in source.features.items()
+    }
+    carried.update(pushed_features(body, source.features, chosen, params.distance))
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
+        outputs=[dataclasses.replace(source, mesh=outcome.mesh, features=carried)],
         solver=outcome.solver,
         findings=[dataclasses.replace(entry, object_id=source.id) for entry in outcome.findings],
     )
@@ -219,16 +236,39 @@ def _on_a_solid(ctx: OpContext, params: PushFaceParams, chosen: Feature | None) 
     moved = profiles.push_faces(
         body, direction, params.distance, selected_faces=selected_faces, cancelled=ctx.cancelled
     )
-    # ``features_of`` wie bei jeder anderen B-Rep-Op: Mit ``features={}``
-    # hatte der Körper nach „Fläche versetzen" keine anklickbaren Flächen
-    # mehr — „Auf dieser Fläche zeichnen", die exakte Bohrung und jede
-    # Passung liefen ins Leere (Gesamtreview D-5).
+    if chosen is None:
+        # ``features_of`` wie bei jeder anderen B-Rep-Op: Mit ``features={}``
+        # hatte der Körper nach „Fläche versetzen" keine anklickbaren Flächen
+        # mehr — „Auf dieser Fläche zeichnen", die exakte Bohrung und jede
+        # Passung liefen ins Leere (Gesamtreview D-5).
+        return OpResult(
+            outputs=[
+                dataclasses.replace(
+                    source, mesh=moved, features=features_of(moved, cancelled=ctx.cancelled)
+                )
+            ]
+        )
+    # **Mit der gewählten Fläche sagt die Operation, wo sie jetzt liegt** —
+    # und wo ihre Nachbarn gewachsen sind (``faces.pushed_features``). Die
+    # native Erkennung nummeriert frisch; ohne diese Erwartung trug
+    # ``face_3`` vorher die Oberseite und danach einen Streifen der
+    # Vorderseite (gemessen 23.09.2026). Belegt wird wie bei den
+    # Hohlraumhandlungen (``_exact_features_after``).
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.prepare_ops import _exact_features_after
+
+    expected = pushed_features(as_mesh_data(body), source.features, chosen, params.distance)
+    features, continued, _lost = _exact_features_after(
+        source, moved, expected=list(expected.values()), cancelled=ctx.cancelled
+    )
     return OpResult(
-        outputs=[
-            dataclasses.replace(
-                source, mesh=moved, features=features_of(moved, cancelled=ctx.cancelled)
-            )
-        ]
+        outputs=[dataclasses.replace(source, mesh=moved, kind="brep", features=features)],
+        feature_continuations=(
+            tuple(
+                FeatureContinuation(FeatureRef(source.id, old_id), new_id)
+                for old_id, new_id in continued
+            ),
+        ),
     )
 
 

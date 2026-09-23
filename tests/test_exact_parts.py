@@ -296,8 +296,12 @@ def test_nut_trap_exact_is_pocket_channel_and_bolt_in_one_body() -> None:
     mesh = _built("nut_trap", False, **values)
     assert mesh.mesh.bounds.maximum == pytest.approx(tool.bounds.maximum, abs=1e-6)
     assert mesh.mesh.bounds.minimum == pytest.approx(tool.bounds.minimum, abs=1e-6)
-    # Nur der Bolzen ist facettiert.
-    assert 1.0 - (1.0 - FACET) * bolt * 20.0 / expected < mesh.mesh.volume / tool.volume < 1.0
+    # Nur der Bolzen ist facettiert. Die Untergrenze **ist** der Facettenverlust
+    # des Bolzens, das Netz trifft sie bis auf die letzten Stellen — verglichen
+    # wird deshalb mit einem Rundungsspielraum, nicht mit ``<`` auf der Grenze
+    # (seit ``MeshData.volume`` mit ``math.fsum`` summiert, lag es 10⁻¹³ darunter).
+    lower = 1.0 - (1.0 - FACET) * bolt * 20.0 / expected
+    assert lower - 1e-9 < mesh.mesh.volume / tool.volume < 1.0
     # Nach unten gedreht: dieselbe Lage wie am Netz, gemessen an den Hüllen.
     below = _sound(_built("nut_trap", True, **{**values, "direction": "bottom"}).mesh)
     below_mesh = _built("nut_trap", False, **{**values, "direction": "bottom"}).mesh

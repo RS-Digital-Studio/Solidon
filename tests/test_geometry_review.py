@@ -954,3 +954,44 @@ def test_a_feature_survives_being_moved_through_the_registry() -> None:
     moved = moved_features({"f": feature}, np.eye(4).tolist())["f"]
 
     assert moved == replace(feature, params=dict(feature.params))
+
+
+def _ring_and_ell() -> list[tuple[str, MeshData]]:
+    """Ein Ring und ein L — zwei Körper, deren Hohlraum die Mitte seines Hüllquaders nicht hat."""
+    import trimesh as _trimesh
+
+    from app.core.geom.boolean import boolean
+
+    ring = _trimesh.creation.torus(
+        major_radius=30.0, minor_radius=10.0, major_sections=64, minor_sections=32
+    )
+    ring.apply_translation((0.0, 0.0, 10.0))
+    first = _trimesh.creation.box(extents=(60.0, 20.0, 20.0))
+    first.apply_translation((0.0, -20.0, 10.0))
+    second = _trimesh.creation.box(extents=(20.0, 60.0, 20.0))
+    second.apply_translation((-20.0, 0.0, 10.0))
+    ell = boolean("union", [MeshData.of(first), MeshData.of(second)]).mesh
+    return [("Ring", MeshData.of(ring)), ("L", ell)]
+
+
+@pytest.mark.parametrize("vents", [1, 2])
+@pytest.mark.parametrize("index", [0, 1], ids=["ring", "ell"])
+def test_every_vent_opens_the_cavity_it_is_counted_for(vents: int, index: int) -> None:
+    """Eine gesetzte Entlüftung öffnet den Hohlraum — auch an einem Ring und einem L.
+
+    Die Stellen lagen auf einer Linie durch die Mitte des Hüllquaders, und dort
+    ist bei einem Ring das Loch in der Mitte, bei einem L der freie Winkel. Der
+    Bohrer traf Luft, der Bericht zählte ihn trotzdem als Entlüftung, und der
+    Hohlraum blieb geschlossen (gemessen 22.09.2026: Ring mit einer und zwei
+    Entlüftungen, L mit einer — zwei Schalen, kein ``hollow.no_vent``). Beim
+    FDM-Druck drückt ein geschlossener Hohlraum die Decke hoch, beim Harzdruck
+    bleibt das Harz darin.
+    """
+    name, body = _ring_and_ell()[index]
+
+    result = hollow(body, 2.0, vents=vents)
+
+    shells = len(result.mesh.raw.split(only_watertight=False))
+    assert shells == 1, f"{name}: der Hohlraum ist noch geschlossen ({shells} Schalen)"
+    assert len(result.vents) == vents
+    assert "hollow.no_vent" not in {finding.code for finding in result.findings}

@@ -2013,3 +2013,356 @@ def test_a_fillet_beside_a_nearly_flat_wall_still_comes_off() -> None:
     bent_found = detect(bent)
     assert any(entry.kind == "curved_face" for entry in bent_found.values())
     assert not nearly_flat_mask(bent.raw, bent_found).any(), "ein Bogen ist keine Wand"
+
+
+def _slit_block() -> MeshData:
+    """Ein Block 20 × 20 × 10 mit einem Schlitz ohne Breite von oben bis zur halben Höhe.
+
+    Die zwei Schlitzwände liegen deckungsgleich mit entgegengesetzten Normalen
+    — dieselbe Lage wie an zusammengesetzten Kundenteilen, deren Hälften Wand
+    an Wand stehen (``Naht-zusammengesetzt.stl``: drei solche Züge unter 389).
+    Am Schlitzgrund stoßen die Wände unter keinem Winkel zusammen; dort gibt
+    es nichts zu runden.
+    """
+    profile = [(-10, 0), (10, 0), (10, 10), (0, 10), (0, 5), (0, 10), (-10, 10)]
+    triangles = [(0, 1, 4), (1, 2, 3), (1, 3, 4), (0, 4, 5), (0, 5, 6)]
+    count = len(profile)
+    vertices = [(x, -10.0, z) for x, z in profile] + [(x, 10.0, z) for x, z in profile]
+    faces = []
+    for a, b, c in triangles:
+        faces.extend(((a, c, b), (a + count, b + count, c + count)))
+    for index in range(count):
+        following = (index + 1) % count
+        faces.extend(
+            ((index, following, following + count), (index, following + count, index + count))
+        )
+    body = trimesh.Trimesh(np.asarray(vertices, dtype=float), np.asarray(faces), process=False)
+    trimesh.repair.fix_normals(body)
+    return MeshData.of(body)
+
+
+@pytest.mark.parametrize("work", [round_edges, bevel_edges], ids=["verrunden", "fasen"])
+def test_a_group_of_edges_leaves_out_what_cannot_be_worked_and_says_so(
+    work: Callable[..., Any],
+) -> None:
+    """„Alle Kanten" hält nicht am ersten gefalteten Zug an (Übertrag der
+    Durchsicht v0.4.1, Punkt 4).
+
+    Bis zum 22.09.2026 warf ein einziger Zug ohne Winkel die ganze Gruppe um:
+    39 solche Züge unter 966 blockierten die übrigen 927, und der Kunde las,
+    er solle das Modell reparieren. Wer eine **Gruppe** wählt, meint die
+    Kanten, die sich bearbeiten lassen; übersprungen wird der Rest, und der
+    Bericht nennt die Zahl. Eine **benannte** Kante hält weiter an — wer sie
+    einzeln gewählt hat, soll erfahren, dass genau sie nicht geht.
+    """
+    body = _slit_block()
+    chains = edges_of(body)
+    folded = [
+        entry
+        for entry in chains
+        if all(float(np.dot(first, second)) < -1.0 + 1e-9 for first, second in entry.normals)
+    ]
+    assert len(folded) == 1, "der Schlitzgrund ist der eine gefaltete Zug"
+
+    outcome = work(body, 0.5, "all")
+
+    assert outcome.mesh.is_watertight
+    assert outcome.mesh.volume < body.volume - 1.0, "die übrigen Kanten sind bearbeitet"
+    skipped = [finding for finding in outcome.findings if finding.code == "edges.skipped"]
+    assert len(skipped) == 1, [finding.code for finding in outcome.findings]
+    assert skipped[0].values["skipped"] == 1
+    assert skipped[0].values["worked"] == len(chains) - 1
+
+    with pytest.raises(GeometryError):
+        work(body, 0.5, "named", [edge_key(folded[0])])
+
+
+@pytest.mark.parametrize(
+    ("op", "field", "fits", "too_large"),
+    [("fillet_edges", "radius", 1.4, 2.0), ("chamfer_edges", "distance", 1.4, 2.9)],
+    ids=["verrunden", "fasen"],
+)
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_both_kernels_refuse_what_does_not_fit_on_a_thin_wall(
+    op: str, field: str, fits: float, too_large: float, kernel: str
+) -> None:
+    """Die oberen Kanten einer 3-mm-Wand, verrundet oder gefast: dieselbe Antwort
+    an beiden Kernen (Übertrag der Durchsicht v0.4.1, Punkt 3).
+
+    Auf der 3 mm breiten Stirnfläche treffen sich die Berührlinien beider
+    Kanten, sobald das Maß die halbe Breite erreicht. Der exakte Kern lehnte
+    ab 1,5 mm ab („Der Radius ist für diese Kanten zu groß."), das Netz rechnete
+    weiter und machte die Wand still niedriger — gemessen am 22.09.2026: Fase
+    2,9 mm ergab 18,6 statt 20 mm Höhe, Verrundung 2,0 mm 19,93 mm. Jetzt
+    sagen beide dasselbe, mit dem größten Maß, das passt.
+    """
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+
+        body: Any = edit.box(40.0, 3.0, 20.0)
+    else:
+        body = MeshData.of(trimesh.creation.box(extents=(40.0, 3.0, 20.0)))
+    entry = SceneObject(id="obj_1", name="Wand", mesh=body, kind=kernel)
+    height = body.bounds.size[2]
+
+    fitted = run(op, entry, **{field: fits, "edges": "top"}).outputs[0]
+    assert fitted.mesh.bounds.size[2] == pytest.approx(height, abs=1e-6)
+
+    with pytest.raises(GeometryError) as refused:
+        run(op, entry, **{field: too_large, "edges": "top"})
+    assert refused.value.values["largest_mm"] == pytest.approx(1.5, abs=1e-6)
+    assert "1.50 mm" in str(refused.value.detail) or "1,50 mm" in str(refused.value.detail)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_changed_fillet_keeps_its_name_for_the_next_step(kernel: str) -> None:
+    """Wer eine Rundung zweimal ändert, ändert zweimal dieselbe (§21.2).
+
+    Am Netz verlor die geänderte Rundung ihren Namen: ``_after_the_fillet``
+    strich ihn wie beim Entfernen, die Auswertung vergab einen neuen
+    (``fillet_5`` statt ``fillet_1``), und der nächste Schritt, der auf
+    ``fillet_1`` zeigte, hielt an — „Dieses Merkmal gibt es an diesem Objekt
+    nicht" (gemessen 22.09.2026 am Quader mit vier Rundungen). Der exakte
+    Kern führte den Namen weiter; jetzt tun es beide.
+    """
+    import dataclasses as _dataclasses
+
+    from app.core.registry import OperationSpec, Registry
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+
+        body: Any = edit.box(40.0, 30.0, 20.0)
+    else:
+        body = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 20.0)))
+    load_operations()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    project = new_project("centauri-carbon-2", "petg")
+    registry = Registry()
+    for spec in REGISTRY.all():
+        registry.register(spec)
+    seed = SceneObject(id="", name="Quader", mesh=body, kind=kernel)
+    registry.register(
+        OperationSpec(
+            name="probe_body",
+            title="Quader",
+            category="primitive",
+            params=BaseParams,
+            fn=lambda ctx: OpResult(outputs=[_dataclasses.replace(seed)]),
+            consumes=0,
+            produces=1,
+        )
+    )
+    history = History(project.document, registry=registry)
+    history.apply("Quader", [OperationDraft(op="probe_body")])
+    target = project.document.ops[0].outputs[0]
+
+    def step(op: str, **params: Any) -> SceneObject:
+        history.apply(op, [OperationDraft(op=op, inputs=(target,), params=params, seed=1)])
+        result = evaluate(
+            project.document,
+            profile,
+            registry=registry,
+            sources=ProjectSources(project),
+            ask=lambda question, choices: choices[0],
+        )
+        assert result.complete, [
+            (finding.code, str(finding.message)) for finding in result.scene.report.findings
+        ]
+        return result.scene.objects[target]
+
+    rounded = step("fillet_edges", radius=2.0, edges="vertical")
+    name = min(n for n, f in rounded.features.items() if f.kind == "fillet")
+    wider = step("resize_feature", at_feature=name, diameter=6.0)
+    assert name in wider.features, sorted(wider.features)
+    assert float(wider.features[name].params["radius"]) == pytest.approx(3.0, abs=0.05)
+    again = step("resize_feature", at_feature=name, diameter=5.0)
+    assert float(again.features[name].params["radius"]) == pytest.approx(2.5, abs=0.05)
+
+
+def test_the_top_edges_of_a_hip_roof_house_are_its_eaves() -> None:
+    """„Oben" meint die höchsten **waagerechten** Kanten — nicht die Höhe, die eine
+    schräge Kante in ihrer Mitte hat.
+
+    ``choose`` nahm das Maximum über die Mitten **aller** Kanten und suchte dann
+    waagerechte auf dieser Höhe. Bei einem Walmdach liegen die Mitten der vier
+    Gratkanten bei 12,5, die Traufen bei 10: Gefunden wurde nichts, und der
+    Kunde las „Zu dieser Auswahl gehört keine Kante" (22.09.2026). Dieselbe
+    Auswahl gilt am exakten Kern (``brep.edit`` ruft ``choose``).
+    """
+    from app.core.geom.edges import choose
+
+    walls = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+    walls.apply_translation((0.0, 0.0, 5.0))
+    roof = trimesh.Trimesh(
+        vertices=[(-10, -10, 10), (10, -10, 10), (10, 10, 10), (-10, 10, 10), (0, 0, 15)],
+        faces=[(0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4), (0, 2, 1), (0, 3, 2)],
+    )
+    house = boolean("union", [MeshData.of(walls), MeshData.of(roof)]).mesh
+
+    top = choose(edges_of(house), "top")
+
+    assert len(top) == 4, [entry.middle for entry in top]
+    assert all(entry.middle[2] == pytest.approx(10.0, abs=1e-9) for entry in top)
+
+
+# --- P6.2: Fasen mit zwei Abständen oder Abstand und Winkel ----------------------------------
+
+
+def _chamfer_box(kernel: str) -> SceneObject:
+    """Ein Quader 40 x 30 x 20 in beiden Kernen."""
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+
+        body: Any = edit.box(40.0, 30.0, 20.0)
+    else:
+        body = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 20.0)))
+    return SceneObject(id="obj_1", name="Quader", mesh=body, kind=kernel)
+
+
+def _volume_of(entry: SceneObject) -> float:
+    """Am exakten Körper das native Volumen, am Netz das des Netzes."""
+    return float(entry.mesh.volume)
+
+
+def _top_frustum(width: float, depth: float, height: float, top: float, side: float) -> float:
+    """Ein Quader, dessen vier obere Kanten gefast sind: ``top`` auf der Oberseite,
+    ``side`` die Seitenwände hinunter. Oben ein Prismatoid, gerechnet mit der
+    Simpsonregel, die für ihn exakt ist."""
+    lower = width * depth
+    upper = (width - 2.0 * top) * (depth - 2.0 * top)
+    middle = (width - top) * (depth - top)
+    return width * depth * (height - side) + side / 6.0 * (lower + upper + 4.0 * middle)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("params", "top", "side"),
+    [
+        ({"mode": "two_distances", "distance": 2.0, "second_distance": 1.0}, 2.0, 1.0),
+        (
+            {"mode": "two_distances", "distance": 2.0, "second_distance": 1.0, "flip_sides": True},
+            1.0,
+            2.0,
+        ),
+        (
+            {"mode": "distance_angle", "distance": 2.0, "angle": 30.0},
+            2.0,
+            2.0 * math.tan(math.radians(30.0)),
+        ),
+    ],
+    ids=["zwei-abstaende", "getauscht", "abstand-winkel"],
+)
+def test_an_asymmetric_chamfer_on_the_top_edges_is_the_frustum(
+    kernel: str, params: dict[str, Any], top: float, side: float
+) -> None:
+    """Die vier oberen Kanten asymmetrisch gefast: oben ``top``, an den Seiten ``side``.
+
+    Bezugsfläche ist an einer oberen Kante die Oberseite (sie zeigt am weitesten
+    nach oben); *Seiten tauschen* nimmt die Seitenwand. Mit Winkel 30° zur
+    Oberseite reicht die Fase an der Seite ``2 · tan 30°`` hinunter. Beide
+    Kerne treffen das Prismatoid, das Netz so genau wie der exakte Körper —
+    eine Fase ist eine Ebene.
+    """
+    entry = _chamfer_box(kernel)
+
+    result = run("chamfer_edges", entry, edges="top", **params).outputs[0]
+
+    expected = _top_frustum(40.0, 30.0, 20.0, top, side)
+    assert _volume_of(result) == pytest.approx(expected, abs=1e-6)
+    body = as_mesh(result)
+    assert body.is_watertight
+    points = np.asarray(body.raw.vertices)
+    highest = points[:, 2].max()
+    crown = points[np.abs(points[:, 2] - highest) <= 1e-6]
+    assert np.abs(crown[:, 0]).max() == pytest.approx(20.0 - top, abs=1e-6)
+    assert np.abs(crown[:, 1]).max() == pytest.approx(15.0 - top, abs=1e-6)
+
+
+def as_mesh(entry: SceneObject) -> MeshData:
+    from app.core.geom.mesh import as_mesh_data
+
+    return as_mesh_data(entry.mesh)
+
+
+@pytest.mark.parametrize(
+    ("mode", "corner_gap"),
+    [("two_distances", 1.0), ("distance_angle", 0.0)],
+    ids=["zwei-abstaende", "abstand-winkel"],
+)
+def test_both_kernels_chamfer_every_box_edge_alike(mode: str, corner_gap: float) -> None:
+    """Alle zwölf Kanten, asymmetrisch: An den Ecken treffen sich drei gekippte Fasen.
+
+    Das Netz schließt jede Ecke mit der ebenen Dreiecksfläche durch die drei
+    Berührpunkte (``_chamfer_contacts``) — der Sollwert daneben ist genau das,
+    als Schnitt von Halbräumen gerechnet: 23 656,0 mm³ bei 2 und 1 mm,
+    23 603,7357 bei 2 mm und 30°. Der exakte Körper trifft das bei Abstand und
+    Winkel auf 10⁻⁶; bei zwei Abständen schließt OpenCASCADE die acht Ecken mit
+    einer gewölbten Fläche und nimmt zusammen 1,0 mm³ mehr (gemessen
+    23.09.2026). Die Kanten selbst sind in beiden Kernen gleich; der
+    Unterschied steht als Vorbehalt im Register.
+    """
+    values = {"mode": mode, "distance": 2.0, "second_distance": 1.0, "angle": 30.0}
+    mesh = run("chamfer_edges", _chamfer_box("mesh"), edges="all", **values).outputs[0]
+    exact = run("chamfer_edges", _chamfer_box("brep"), edges="all", **values).outputs[0]
+
+    model = {"two_distances": 23656.0, "distance_angle": 23603.735723}[mode]
+    assert as_mesh(mesh).is_watertight
+    assert _volume_of(mesh) == pytest.approx(model, abs=1e-5)
+    assert _volume_of(exact) == pytest.approx(model - corner_gap, abs=1e-5)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_second_distance_that_does_not_fit_says_which_number_is_too_large(
+    kernel: str,
+) -> None:
+    """Eine 3 mm breite Wand, Seiten getauscht: Die zweite Breite gilt oben und ist zu groß."""
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+
+        body: Any = edit.box(40.0, 3.0, 20.0)
+    else:
+        body = MeshData.of(trimesh.creation.box(extents=(40.0, 3.0, 20.0)))
+    entry = SceneObject(id="obj_1", name="Wand", mesh=body, kind=kernel)
+    values = {"mode": "two_distances", "distance": 1.0, "flip_sides": True, "edges": "top"}
+
+    fitted = run("chamfer_edges", entry, second_distance=1.4, **values).outputs[0]
+    assert fitted.mesh.bounds.size[2] == pytest.approx(20.0, abs=1e-6)
+
+    with pytest.raises(GeometryError) as refused:
+        run("chamfer_edges", entry, second_distance=1.6, **values)
+    assert refused.value.values["field"] == "second_distance"
+    assert refused.value.values["largest_mm"] == pytest.approx(1.5, abs=1e-6)
+    assert refused.value.suggestions
+
+
+def test_an_angle_that_misses_the_second_face_is_refused_with_the_largest() -> None:
+    """An einer stumpfen Kante (135°) trifft eine Fase unter 60° die Gegenfläche nicht."""
+    from app.core.errors import ValidationError
+    from app.core.geom.edges import ChamferShape, chamfer_reaches
+
+    one = (0.0, 0.0, 1.0)
+    two = (math.sin(math.radians(45.0)), 0.0, math.cos(math.radians(45.0)))
+    # Zwischen den Flächen quer zur Kante liegen 135°; 40° passen, 50° nicht.
+    first, second = chamfer_reaches(1.0, ChamferShape(angle=40.0), one, two)
+    assert first == pytest.approx(1.0)
+    assert second == pytest.approx(math.sin(math.radians(40.0)) / math.sin(math.radians(175.0)))
+    with pytest.raises(ValidationError) as refused:
+        chamfer_reaches(1.0, ChamferShape(angle=50.0), one, two)
+    assert refused.value.suggestions
+    assert "45" in str(refused.value.detail)
+
+
+def test_the_reference_face_is_the_one_facing_up_then_back_then_right() -> None:
+    from app.core.geom.edges import reference_first
+
+    assert reference_first((0.0, 0.0, 1.0), (1.0, 0.0, 0.0))
+    assert not reference_first((0.0, -1.0, 0.0), (0.0, 0.0, 1.0))
+    assert reference_first((0.0, 1.0, 0.0), (1.0, 0.0, 0.0))
+    assert reference_first((1.0, 0.0, 0.0), (0.0, -1.0, 0.0))

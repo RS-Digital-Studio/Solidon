@@ -696,9 +696,23 @@ def exact_sin_degrees(degrees: float) -> float:
     return _exact_degrees(float(degrees))[1]
 
 
+#: Kosinus und Sinus der Vierteldrehungen — exakt, ohne Reihe.
+_QUARTER_TURNS: Final = ((1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0))
+
+
 @functools.lru_cache(maxsize=ANGLE_CACHE)
 def _exact_degrees(degrees: float) -> tuple[float, float]:
-    """Kosinus und Sinus zu einem Gradwinkel, ohne vorher zu runden."""
+    """Kosinus und Sinus zu einem Gradwinkel, ohne vorher zu runden.
+
+    **Ein Vielfaches von 90° kommt aus der Tabelle** (22.09.2026). Die Reihe
+    rechnet mit 50 Stellen von π, und ihr Rest bei 90° war -8,5·10⁻⁵⁰ statt
+    null: winzig, aber eine Zahl — ``transform.rotation("x", 90)`` trug ihn in
+    die Matrix, und eine um 90° gekippte Bohrung hatte eine Achse mit dieser
+    dritten Komponente. Zugesagt war, ein rechter Winkel sei exakt.
+    """
+    turns, rest = divmod(degrees, 90.0)
+    if rest == 0.0 and math.isfinite(turns):
+        return _QUARTER_TURNS[int(turns) % 4]
     with decimal.localcontext() as context:
         context.prec = EXACT_DIGITS
         angle = _reduced(decimal.Decimal(degrees) * _PI / decimal.Decimal(180))

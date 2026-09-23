@@ -134,7 +134,6 @@ from app.ui.labels import (
     kind_requirement,
     length,
     localised,
-    measure_text,
     spoiled_the_exact_body,
     value_line,
     value_text,
@@ -7120,14 +7119,6 @@ class FeaturePanel(QWidget):
             editor.setAccessibleName(f"{action.title} — {field.label}")
             form.addRow(label, editor)
             widgets[str(field.name)] = editor
-        if op == "resize_hole" and feature is not None and "depth" in feature.params:
-            measured = QLabel(measure_text(feature, "depth"), box)
-            measured.setAccessibleName(tr("Gemessene Tiefe"))
-            hint = feature_measure_tip(feature, "depth")
-            measured.setToolTip(hint)
-            measured.setStatusTip(hint)
-            measured.setAccessibleDescription(hint)
-            form.addRow(tr("Gemessene Tiefe"), measured)
         return action, box, widgets
 
     def measure_group(self, op: str) -> Any:

@@ -717,7 +717,11 @@ beschädigte Texte bei ihrer Auswertung.
 Öffnung liegt oben oder an der gewählten Seite: `open_towards` ist eine
 Achsrichtung, `_mouth` zieht den äußersten Querschnitt des Hohlraums in dieser
 Richtung durch, und die Operation leitet sie aus der Normalen der Fläche in
-`open_at` ab, RM-087) ·
+`open_at` ab, RM-087. Die Entlüftungen sitzen, wo der Hohlraum ist:
+`_vent_spots` nimmt die Stellen aus dem Raster, an denen der ganze
+Bohrerquerschnitt unter Hohlraum liegt, bohrt bis über den höchsten Boden
+darunter und zählt eine Entlüftung erst, wenn sie Material abgetragen hat —
+weniger Platz als verlangt sagt `hollow.fewer_vents`) ·
 `lid.py` (ein Deckel für eine Öffnung — auch vor einer Seitenöffnung:
 `opening_frame` nimmt jede achsparallele **Außen**fläche, `create_lid` dreht den
 Körper mit `upright_normal` nach oben, baut wie immer und dreht Deckel und
@@ -828,6 +832,8 @@ Stopfen am Merkmal ist `_exact_cavity_filled`, der aus Zahlen wird an
 ist ein Hohlraum ohne Rand: Sein Körper sind seine Schalen
 (`edit.void_body` — die Innenschale ohne die Inseln darin), gefüllt beim
 Entfernen, gefüllt und um die Insel herum neu geschnitten beim Versetzen.
+Seit dem 23.09.2026 gilt das auch für *Merkmal ändern* an Zapfen, Kegel und
+Kugel (`_exact_resize_by_faces`; vorher `result_kind="mesh"`).
 Damit bleibt am exakten Körper keine Merkmalshandlung mehr, die vernetzt;
 `evaluate.exact_became_mesh` ist der Befund für die Operationen, die es
 noch tun (Netzwerkzeuge wie Glätten und Dezimieren, siehe die
@@ -1032,6 +1038,15 @@ für Entfernen **und** Ändern über `complete_faces_of_triangles`, und
 `brep.edit.reround` belegt die scharfe Ersatzkante aus der Builder-Historie
 statt die nächste an der alten Mitte zu nehmen (`brep/CLAUDE.md`).
 
+**Mit gewählter Fläche sagt `push_face`, wo die Flächen danach liegen**
+(`faces.pushed_features`): die gewählte um den Weg entlang ihrer Normalen,
+jede ebene Nachbarwand um den Streifen aus gemeinsamer Kantenlänge und Weg in
+ihrer Ebene gewachsen. Am Netz reisen diese Erwartungen als Merkmale mit, am
+exakten Körper belegt `prepare_ops._exact_features_after` die Übergänge, und
+`brep.profiles.push_faces` legt die Seitenwände mit `edit.unified` wieder zu
+je einer Fläche zusammen. Ohne das verloren die Seiten ihre Namen oder
+bekamen still fremde.
+
 `edge_ops.py` — *Verrunden*, *Fase anbringen* und *Wulst anlegen* im Register, **kernübergreifend**
 (und alle drei lesen `ctx.bound_edges` — die von der Auswertung vor dem Cache
 gebundene Kantenauswahl geht als `selected_edges` an den Kern, der Wulst mit
@@ -1117,6 +1132,25 @@ reicht dafür nicht. Mehr als drei Ebenen werden gemeinsam versetzt:
 Gibt es mehrere Offsetzentren, verbindet sie die Minkowski-Summe des
 versetzten lokalen Polyeders mit der Kugel. Die facettierte Kugel wird je
 Operation einmal erzeugt und hält die Sehnenabweichung im Dreiecksinneren ein.
+
+**Ob eine Rundung oder Fase auf ihre Flächen passt, fragen beide Kerne vorher
+gleich** (`contact_band_limit`): Strahlen in der Ebene jeder Fläche quer zur
+Kante, der nächste Treffer ist der Rand der Fläche, die Berührlinie einer
+gewählten Nachbarkante zählt mit. Passt es nicht, sagt `too_large_for_the_faces`
+das größte Maß; der exakte Kern fragt dasselbe, wenn OpenCASCADE abgelehnt hat
+(`edge_ops._why_it_does_not_fit`). Schmaler als `edge_ops.narrowest_face`
+(kleinstes Druckerdetail) zählt nicht. Eine **Gruppe** („alle", „oben" …)
+überspringt Züge, an denen keine zwei Flächen unter einem Winkel stoßen
+(`workable`, Befund `edges.skipped`); eine benannte Kante hält an.
+
+**Fasen mit zwei Abständen oder Abstand und Winkel** (P6.2): `ChamferShape`
+trägt die zweite Rücknahme oder den Winkel, `reference_first` bestimmt die
+Bezugsfläche (am weitesten nach oben, dann hinten, dann rechts; `flip_sides`
+tauscht), `chamfer_reaches` rechnet beide Rücknahmen — dieselben Zeilen für
+`_wedge`, `_chamfer_contacts`, die Bandprüfung und `brep.edit.chamfer`
+(`_faces_at_edge`, `Add(d1, d2, Kante, Fläche)`). An einer gemischten Ecke
+(außen und innen) sagen sie ab. Wo drei ungleiche Fasen sich treffen, schließt
+das Netz die Ecke eben, OpenCASCADE gewölbt — der Vorbehalt steht im Register.
 
 Fasen verbinden die tatsächlichen Schnittpunkte ihrer Flanken auf den
 Nachbarflächen. Bei mehr als drei Flächen schließt deren ebene oder

@@ -22,7 +22,8 @@ gehören.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from dataclasses import replace
 from typing import Final
 
 import numpy as np
@@ -38,7 +39,7 @@ from app.core.errors import (
 from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
-from app.core.types import CancelToken, Feature, Finding, Quality, Vec3
+from app.core.types import CancelToken, Feature, FeatureId, Finding, Quality, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -123,6 +124,109 @@ def face_normal(feature: Feature) -> Vec3:
     return tuple(float(value) for value in raw / length)  # type: ignore[return-value]
 
 
+def pushed_features(
+    mesh: MeshData,
+    features: Mapping[FeatureId, Feature],
+    chosen: Feature,
+    distance: float,
+) -> dict[FeatureId, Feature]:
+    """Wo die ebenen Flächen nach dem Versetzen liegen — die gewählte und ihre Nachbarn.
+
+    **Die Operation weiß es, die Zuordnung müsste es raten** (23.09.2026).
+    Die gewählte Fläche wandert um den Weg entlang ihrer Normalen, und jede
+    ebene Nachbarwand wächst um einen Streifen: so lang wie die gemeinsame
+    Kante, so breit, wie der Weg in ihrer Ebene reicht. An einer Platte
+    60 x 40 x 10, Oberseite 5 mm hinaus, wuchsen die Seiten um die Hälfte,
+    ihre Mitte stieg um 2,5 mm — die Zuordnung fand sie nicht wieder, und am
+    Netz standen vier ``perceive.orphaned``, am exakten Körper vier stille
+    Umbenennungen. Mit den erwarteten Maßen findet sie beide Kerne.
+
+    ``mesh`` ist das Netz, dessen Dreiecke ``face_indices`` benennt — am
+    exakten Körper seine Tessellierung. Gekrümmte Nachbarn bekommen keine
+    Erwartung; sie ordnet die Auswertung zu wie jede andere Fläche.
+    """
+    from app.core.units import weld_digits, weld_tolerance
+
+    normal = np.asarray(chosen.params["normal"], dtype=np.float64)
+    normal /= max(float(np.linalg.norm(normal)), EPS_GEOM)
+    centre = np.asarray(chosen.params["centre"], dtype=np.float64) + normal * distance
+    moved: dict[FeatureId, Feature] = {
+        chosen.id: _expected_face(chosen, centre, float(chosen.params.get("area", 0.0)))
+    }
+    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
+    digits = weld_digits(weld_tolerance(mesh.bounds.diagonal))
+
+    def rim(indices: tuple[int, ...]) -> dict[tuple[tuple[float, ...], ...], np.ndarray]:
+        """Die Randkanten einer Dreiecksmenge, geschlüsselt über gerundete Ecken."""
+        counted: dict[tuple[tuple[float, ...], ...], list[np.ndarray]] = {}
+        for index in indices:
+            if not 0 <= index < len(triangles):
+                continue
+            corners = triangles[index]
+            for first, second in ((0, 1), (1, 2), (2, 0)):
+                a, b = corners[first], corners[second]
+                key = tuple(sorted((tuple(np.round(a, digits)), tuple(np.round(b, digits)))))
+                counted.setdefault(key, []).append(np.stack((a, b)))
+        return {key: found[0] for key, found in counted.items() if len(found) == 1}
+
+    chosen_rim = rim(chosen.face_indices)
+    for name, other in features.items():
+        if (
+            name == chosen.id
+            or other.kind != "face"
+            or not other.face_indices
+            or not isinstance(other.params.get("normal"), tuple | list)
+        ):
+            continue
+        shared = [chosen_rim[key] for key in rim(other.face_indices) if key in chosen_rim]
+        if not shared:
+            continue
+        lengths = np.array([float(np.linalg.norm(b - a)) for a, b in shared])
+        length = float(lengths.sum())
+        if length <= EPS_GEOM:
+            continue
+        middle = (
+            sum(
+                ((a + b) / 2.0 * weight for (a, b), weight in zip(shared, lengths, strict=True)),
+                start=np.zeros(3),
+            )
+            / length
+        )
+        a, b = shared[int(np.argmax(lengths))]
+        along = (b - a) / float(np.linalg.norm(b - a))
+        side = np.asarray(other.params["normal"], dtype=np.float64)
+        inward = np.cross(side, along)
+        inward /= max(float(np.linalg.norm(inward)), EPS_GEOM)
+        if float(inward @ normal) < 0.0:
+            inward = -inward
+        reach = float(inward @ normal)
+        if reach <= 0.1:
+            continue
+        width = distance / reach
+        area = float(other.params.get("area", 0.0))
+        strip = length * width
+        grown = area + strip
+        if area <= EPS_GEOM or grown <= EPS_GEOM:
+            continue
+        old_centre = np.asarray(other.params["centre"], dtype=np.float64)
+        new_centre = (area * old_centre + strip * (middle + inward * width / 2.0)) / grown
+        moved[name] = _expected_face(other, new_centre, grown)
+    return moved
+
+
+def _expected_face(feature: Feature, centre: np.ndarray, area: float) -> Feature:
+    """Ein Flächenmerkmal mit neuer Mitte und Fläche, als Erwartung der Operation."""
+    params = {
+        **feature.params,
+        "centre": (float(centre[0]), float(centre[1]), float(centre[2])),
+    }
+    if "area" in feature.params:
+        params["area"] = area
+    return replace(
+        feature, params=params, provenance="generated", face_indices=(), surface_patches=()
+    )
+
+
 def push_face(
     mesh: MeshData,
     feature: Feature,
@@ -151,7 +255,7 @@ def push_face(
     tool = _prism_over(mesh, feature, distance)
     kind: BooleanKind = "union" if distance > 0.0 else "difference"
     outcome = boolean(kind, [mesh, tool], quality=quality, cancelled=cancelled)
-    if outcome.mesh.raw.volume <= EPS_GEOM:
+    if outcome.mesh.volume <= EPS_GEOM:
         raise GeometryError(
             detail=_(
                 "Mit diesem Weg bleibt vom Körper nichts übrig — kleiner "
@@ -344,7 +448,7 @@ def draft_vertical(
         tools.append(_prism_from(mesh, triangles, _wedge))
 
     outcome = boolean("difference", [mesh, *tools], quality=quality, cancelled=cancelled)
-    if outcome.mesh.raw.volume <= EPS_GEOM:
+    if outcome.mesh.volume <= EPS_GEOM:
         raise GeometryError(
             detail=_("Mit diesem Winkel bleibt vom Körper nichts übrig — kleiner anstellen."),
             values={"angle_deg": round(angle_deg, 2)},

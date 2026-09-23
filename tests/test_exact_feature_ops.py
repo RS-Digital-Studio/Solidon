@@ -1063,3 +1063,115 @@ def test_moving_a_void_keeps_the_body_exact_and_takes_the_island_along(
     assert moved.params["centre"] == pytest.approx((8.0, 0.0, 10.0), abs=1e-9)
     assert moved.params["volume"] == pytest.approx(air.params["volume"], rel=1e-9)
     assert _round_trip_volume(solid) == pytest.approx(solid.volume, rel=1e-9)
+
+
+def test_closing_a_tilted_bore_keeps_the_plate_flat(profile: Profile) -> None:
+    """Der exakte Stopfen einer schrägen Bohrung endet in den Plattenflächen.
+
+    ``edit.fill_bore`` baute ihn als Zylinder der Achslänge der Wand mit
+    Deckeln quer zur Achse; an einer um 17,5° gekippten Bohrung durch eine
+    10-mm-Platte stand er damit oben und unten bis 1,8 mm über der Platte
+    (gemessen 22.09.2026: Hüllquader z -1,88 … 11,80, beim Versetzen 56 mm³
+    zu viel und ein falscher Kantenbefund). Begrenzt wird an den Ebenen der
+    Randringe — dieselbe Frage wie am Netz.
+    """
+    edit = _kernel()
+    from app.core.brep.features import features_of
+
+    radians = math.radians(17.5)
+    tilted = (math.sin(radians), 0.0, math.cos(radians))
+    body = edit.cut_bore(
+        edit.box(90.0, 60.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=tilted,
+        diameter=6.0,
+        depth=30.0,
+    )
+    source = SceneObject(
+        id="obj_1", name="Platte", mesh=body, kind="brep", features=features_of(body)
+    )
+    hole = _the_one(source, "hole")
+    low, high = body.bounds.minimum[2], body.bounds.maximum[2]
+
+    removed = run("remove_feature", source, profile, at_feature=hole.id).outputs[0]
+    assert removed.kind == "brep"
+    assert removed.mesh.volume == pytest.approx(90.0 * 60.0 * 10.0, rel=1e-9)
+    assert removed.mesh.bounds.minimum[2] == pytest.approx(low, abs=1e-6)
+    assert removed.mesh.bounds.maximum[2] == pytest.approx(high, abs=1e-6)
+
+    result = run("move_feature", source, profile, at_feature=hole.id, x=12.0, y=6.0, z=5.0)
+    moved = _exact_and_proven(result, source, hole.id)
+    assert moved.mesh.volume == pytest.approx(body.volume, rel=1e-9)
+    assert moved.mesh.bounds.maximum[2] == pytest.approx(high, abs=1e-6)
+    assert not any(finding.code == "bore.over_the_edge" for finding in result.findings)
+
+
+@pytest.mark.parametrize(
+    ("kind", "diameter", "expected"),
+    [
+        ("pin", 8.0, math.pi * 16.0 * 8.0),
+        ("sphere", 12.0, 2.0 / 3.0 * math.pi * 6.0**3),
+        ("cone", 14.0, math.pi * 8.4 / 3.0 * (49.0 + 19.6 + 7.84)),
+    ],
+    ids=["zapfen", "kuppe", "kegelstumpf"],
+)
+def test_resizing_a_material_feature_keeps_the_body_exact(
+    profile: Profile, kind: str, diameter: float, expected: float
+) -> None:
+    """*Merkmal ändern* an Zapfen, Kuppe und Kegelstumpf lässt den Körper exakt.
+
+    P2.4 sagte „am exakten Körper vernetzt keine Merkmalshandlung mehr" — und
+    ``resize_feature`` tat es an genau diesen drei Arten (die Paritätstabelle
+    führte es als ``MESH``, 22.09.2026): Der Körper kam als Netz zurück, Fase,
+    Formschräge und STEP-Export waren danach fort. Jetzt: an der alten Stelle
+    der Körper aus den nativen Flächen abgetragen, an derselben Stelle das
+    Merkmal im neuen Maß gesetzt — der Zapfen aus Kennzahlen mit derselben
+    Höhe, Kuppe und Kegel um ihre gemessene Mitte gestreckt, die in der
+    Grundfläche liegt. Soll: das Volumen der Form im neuen Maß, analytisch.
+    """
+    load_operations()
+    source = _material_plate(kind)
+    feature = _the_one(source, kind)
+
+    result = run("resize_feature", source, profile, at_feature=feature.id, diameter=diameter)
+
+    output = _exact_and_proven(result, source, feature.id)
+    assert output.mesh.volume == pytest.approx(24000.0 + expected, rel=1e-9)
+    changed = _the_one(output, kind)
+    assert changed.params["diameter"] == pytest.approx(diameter, abs=1e-6)
+    assert output.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)
+    assert _round_trip_volume(output.mesh) == pytest.approx(output.mesh.volume, rel=1e-9)
+
+
+def test_a_standalone_countersink_moved_over_the_edge_says_so_like_the_mesh(
+    profile: Profile,
+) -> None:
+    """Eine allein stehende Senkung über die Kante versetzt oder kopiert: Beide
+    Kerne sagen ``bore.over_the_edge``.
+
+    Am Netz fragt ``_edge_findings`` seit dem 15.09.2026 jeden Weg, der einen
+    Hohlraum neu setzt; der exakte Weg aus den Flächen (``_exact_move_by_faces``,
+    ``_exact_duplicate_by_faces``) gab ``findings=[]`` zurück — die Senkung Ø 12
+    zwei Millimeter vor der Kante einer 60er Platte riss auf, und nur das Netz
+    sagte es (22.09.2026).
+    """
+    load_operations()
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    source = _countersunk_plate(profile)
+    hole, _cone = _chain_of(source)
+    alone = run("remove_feature", source, profile, at_feature=hole.id, sections="single").outputs[0]
+    sink = _the_one(alone, "cone")
+    tessellated = MeshData.of(alone.mesh.to_mesh(deflection=0.02).raw)
+    meshed = SceneObject(
+        id="obj_1", name="Platte", mesh=tessellated, kind="mesh", features=detect(tessellated)
+    )
+    meshed_sink = _the_one(meshed, "cone")
+
+    for op in ("move_feature", "duplicate_feature"):
+        for entry, chosen in ((alone, sink), (meshed, meshed_sink)):
+            centre = chosen.params["centre"]
+            result = run(op, entry, profile, at_feature=chosen.id, x=26.0, y=0.0, z=centre[2])
+            codes = [finding.code for finding in result.findings]
+            assert "bore.over_the_edge" in codes, (op, entry.kind, codes)

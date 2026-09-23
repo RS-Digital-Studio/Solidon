@@ -1472,6 +1472,18 @@ def push_faces(
             outcome,
             cancelled=cancelled,
         )
+    # **Die Nachbarwände wachsen, sie zerfallen nicht** (23.09.2026): Die
+    # Vereinigung mit dem Prisma ließ jede Seitenwand als zwei Teilflächen
+    # stehen — die alte und den Streifen darüber. Eine Skizze auf der Seite
+    # sah nur eine Hälfte, und die Erkennung zählte zehn Flächen an einem
+    # Quader. ``unified`` legt sie zusammen, Filamentgrenzen bleiben.
+    from app.core.brep.edit import unified
+
+    # Vorher gefragt: ``unified`` baut und kopiert eine weitere Form, und nach
+    # einem Abbruch rechnete sie noch für ein Ergebnis, das niemand abholt.
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    outcome = unified(outcome)
     # Und das Ergebnis muss ein Körper sein: distance = -25 auf einem 20 mm
     # hohen Quader gab Volumen null, null Befunde — ein Schritt im Verlauf,
     # nichts im Bild, und gesagt wurde nichts (Gesamtreview D-6).
