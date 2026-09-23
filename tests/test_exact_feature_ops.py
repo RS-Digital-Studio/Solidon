@@ -1175,3 +1175,66 @@ def test_a_standalone_countersink_moved_over_the_edge_says_so_like_the_mesh(
             result = run(op, entry, profile, at_feature=chosen.id, x=26.0, y=0.0, z=centre[2])
             codes = [finding.code for finding in result.findings]
             assert "bore.over_the_edge" in codes, (op, entry.kind, codes)
+
+
+# --- derselbe Kegel als NURBS (P2.3) ----------------------------------------------
+
+
+def _as_nurbs(entry: SceneObject) -> SceneObject:
+    """Derselbe Körper mit jeder Fläche als NURBS, wie manche Programme STEP schreiben."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    body = Solid(BRepBuilderAPI_NurbsConvert(entry.mesh.shape, True).Shape())
+    return SceneObject(
+        id=entry.id, name=entry.name, mesh=body, kind="brep", features=features_of(body)
+    )
+
+
+@pytest.mark.parametrize("action", ["move", "duplicate", "rotate", "remove"])
+def test_a_nurbs_taper_is_handled_like_an_analytic_one(action: str, profile: Profile) -> None:
+    """Versetzen, Verdoppeln, Kippen und Entfernen am Kegelstumpf aus NURBS (P2.3).
+
+    Bis zum 22.09.2026 hatte ein NURBS-Kegel kein Merkmal, an dem eine dieser
+    Handlungen ansetzen konnte. Jetzt gilt am NURBS-Körper, was am
+    analytischen gilt: Volumen aus der Analytik (Versetzen, Verdoppeln,
+    Entfernen) und beim Kippen dasselbe wie am analytischen Körper, dessen
+    Weg ``test_rotating_a_taper_keeps_it_rooted_in_the_plate`` gegen einen
+    unabhängig gebauten Kegel hält. ``edit.cone_extent`` liest die Enden
+    dafür am belegten Träger.
+    """
+    load_operations()
+    analytic = _material_plate("cone")
+    source = _as_nurbs(analytic)
+    taper = _the_one(source, "cone")
+    assert taper.params["centre"] == pytest.approx((-20.0, 0.0, 10.0), abs=1e-9)
+    assert taper.params["diameter"] == pytest.approx(10.0, abs=1e-9)
+
+    requests: dict[str, dict[str, Any]] = {
+        "move": {"op": "move_feature", "x": -5.0, "y": 8.0, "z": 10.0},
+        "duplicate": {"op": "duplicate_feature", "x": 10.0, "y": -8.0, "z": 10.0},
+        "rotate": {"op": "rotate_feature", "axis": "x", "angle": 30.0},
+        "remove": {"op": "remove_feature", "sections": "single"},
+    }
+    request = dict(requests[action])
+    op = request.pop("op")
+    result = run(op, source, profile, at_feature=taper.id, **request)
+
+    output = result.outputs[0]
+    solid: Any = output.mesh
+    assert output.kind == "brep" and solid.is_closed and solid.solid_count == 1
+    assert not any(finding.converts_exact_body for finding in result.findings)
+    expected = {
+        "move": 24000.0 + TAPER_VOLUME,
+        "duplicate": 24000.0 + 2.0 * TAPER_VOLUME,
+        "remove": 24000.0,
+    }
+    if action == "rotate":
+        reference = run(op, analytic, profile, at_feature=_the_one(analytic, "cone").id, **request)
+        assert solid.volume == pytest.approx(reference.outputs[0].mesh.volume, rel=1e-9)
+    else:
+        assert solid.volume == pytest.approx(expected[action], rel=1e-9)
+    cones = [feature for feature in output.features.values() if feature.kind == "cone"]
+    assert len(cones) == {"move": 1, "duplicate": 2, "rotate": 1, "remove": 0}[action]

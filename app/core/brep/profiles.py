@@ -420,7 +420,8 @@ def sweep_path(profile: Profile, path: Profile, plane: str = "plane:xz") -> Soli
     builder = BRepOffsetAPI_MakePipeShell(spine)
     builder.SetTransitionMode(BRepBuilderAPI_RightCorner)
     builder.Add(_wire(profile, _lift_xy), False, False)
-    solid = _finished(builder, _("Entlang dieser Bahn lässt sich der Querschnitt nicht führen."))
+    refusal = _("Entlang dieser Bahn lässt sich der Querschnitt nicht führen.")
+    solid = _finished(builder, refusal)
     # ``MakePipeShell`` liefert eine Schale; erst ``MakeSolid`` schließt sie zu
     # einem Körper. Ohne das wäre das Ergebnis hohl und ohne Volumen — und der
     # Fehler zeigte sich erst beim Schneiden oder Exportieren.
@@ -433,7 +434,7 @@ def sweep_path(profile: Profile, path: Profile, plane: str = "plane:xz") -> Soli
     # MakePipeShell nimmt einen Draht, keine Fläche mit Innenkonturen. Jedes
     # Loch folgt derselben Bahn und wird wie beim Loft vom Außenkörper abgezogen.
     for hole in profile.holes:
-        solid = _fuzzy_boolean("difference", solid, sweep_path(hole, path, plane))
+        solid = _fuzzy_boolean("difference", solid, sweep_path(hole, path, plane), refusal)
     return solid
 
 
@@ -503,15 +504,12 @@ def loft(
                 "sich kein Übergang aufspannen."
             ),
         )
+    no_passage = _("Aus einem der gezeichneten Löcher entsteht kein Durchzug.")
     for below, above in zip(bottom.holes, top.holes, strict=True):
         drill = BRepOffsetAPI_ThruSections(True, False)
         drill.AddWire(_wire(below, lift))
         drill.AddWire(_wire(above, lifted))
-        solid = _fuzzy_boolean(
-            "difference",
-            solid,
-            _finished(drill, _("Aus einem der gezeichneten Löcher entsteht kein Durchzug.")),
-        )
+        solid = _fuzzy_boolean("difference", solid, _finished(drill, no_passage), no_passage)
     return solid
 
 
@@ -611,16 +609,24 @@ def draft_vertical(
         )
     neutral = gp_Pln(gp_Ax3(gp_Pnt(0.0, 0.0, solid.bounds.minimum[2]), gp_Dir(0.0, 0.0, 1.0)))
     builder = BRepOffsetAPI_DraftAngle(working.shape)
+    refusal = _("Die Formschräge lässt sich an diesen Flächen nicht anlegen.")
     for face in uprights:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        builder.Add(face, gp_Dir(0.0, 0.0, 1.0), math.radians(angle_deg), neutral)
-    return _finished(
-        builder,
-        _("Die Formschräge lässt sich an diesen Flächen nicht anlegen."),
-        working,
-        cancelled=cancelled,
-    )
+        # **``Add`` rechnet schon**, nicht erst ``Build``: An einer
+        # B-Spline-Wand wirft es ``Standard_ConstructionError``, und außerhalb
+        # der Übersetzung kam das als „unerwarteter Fehler" mit der Bitte um
+        # einen Fehlerbericht an (22.09.2026, NURBS-Platte aus STEP).
+        try:
+            builder.Add(face, gp_Dir(0.0, 0.0, 1.0), math.radians(angle_deg), neutral)
+            added = builder.AddDone()
+        except PROGRAMMING_ERRORS:
+            raise
+        except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
+            raise GeometryError(detail=refusal, suggestions=(CORRECT_INPUT, CANCEL)) from problem
+        if not added:
+            raise GeometryError(detail=refusal, suggestions=(CORRECT_INPUT, CANCEL))
+    return _finished(builder, refusal, working, cancelled=cancelled)
 
 
 #: Gewindetiefe je Steigung: 5H/8 des scharfen Dreiecksprofils (metrisches ISO).
@@ -674,14 +680,17 @@ def thread_ridge(major: float, pitch: float) -> tuple[Point2, ...]:
     )
 
 
-def threaded_rod(major: float, pitch: float, length: float) -> Solid:
+def threaded_rod(
+    major: float, pitch: float, length: float, *, cancelled: CancelToken | None = None
+) -> Solid:
     """Ein Bolzen mit exaktem Außengewinde: Kern und Gang als **ein** genähter Körper.
 
     Kein Sweep, keine Vereinigung mehr (RM-195): :func:`helical_thread` näht
     Flanken, Kamm und Fußstreifen aus Regelflächen zwischen geteilten
     Helixkanten, mit einem Umlauf Vorlauf unter dem Bett und einem über der
-    Länge, und der Schnitt auf Länge ist ein Zylinder gegen Ebenen und
-    BSpline-Flächen — der Schnitt, den der Kern zuverlässig kann. Das Profil
+    Länge, und der Schnitt auf Länge ist ein Quader, dessen Boden und Deckel
+    als Ebenen die BSpline-Flächen treffen — der Schnitt, den der Kern
+    zuverlässig kann. Das Profil
     ist dasselbe wie beim Sweep (:func:`thread_ridge`); die Flanken sind exakt
     die Regelflächen der Schraubbewegung, wo der Sweep sie als Spline neunten
     Grades genähert hatte. Gemessen (21.09.2026): M6 x 1, L 12 in 0,2 s statt
@@ -690,9 +699,13 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     Registereintrag RM-195 dafür hielt.
 
     Die Absage bei zu großer Steigung, zu kurzer Länge und einem Bolzen, der
-    doch nicht geschlossen ist, bleibt (:func:`_checked_rod`)."""
+    doch nicht geschlossen ist, bleibt (:func:`_checked_rod`). Ein langer
+    Bolzen hat Hunderte Flächen; ``cancelled`` wird je Umlauf, vor und nach
+    jedem nativen Schritt gefragt.
+    """
     require()
-    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.gp import gp_Pnt
 
     from app.core.brep import edit
 
@@ -715,12 +728,30 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
         )
 
     turns = math.ceil(length / pitch) + 2
-    whole = helical_thread(core_radius, pitch, turns, thread_ridge(major, pitch), start=-pitch)
-    slab = Solid(BRepPrimAPI_MakeCylinder(major / 2.0 + 1.0, length).Shape())
+    profile = thread_ridge(major, pitch)
+    whole = helical_thread(core_radius, pitch, turns, profile, start=-pitch, cancelled=cancelled)
+    # **Auf Länge mit einem Quader, nicht mit einem Zylinder.** Der Mantel
+    # eines Schnittzylinders umhüllt jede Gangfläche, und die Boolesche prüfte
+    # jede davon gegen ihn: 1,4 s am M3 x 0,5 x 60. Die Seiten eines Quaders
+    # liegen neben dem Gewinde, nur Boden und Deckel treffen Flächen, und
+    # schneiden tun sie dasselbe (0,74 s, gleiche Flächen, gleiches Volumen;
+    # gemessen 22.09.2026).
+    reach = major + 2.0
+    slab = Solid(
+        BRepPrimAPI_MakeBox(gp_Pnt(-reach / 2.0, -reach / 2.0, 0.0), reach, reach, length).Shape()
+    )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     rod = edit.boolean("intersection", [whole, slab])
-    # **Ein Bolzen ohne Gang ist keiner** (B3, P2.5): Über dem Kern muss
-    # Volumen liegen, sonst hat der Schnitt den Gang verloren.
-    rod = _checked_rod(rod, major, pitch, at_least=math.pi * core_radius**2 * length)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    # **Ein Bolzen ohne Gang ist keiner** (B3, P2.5): Über dem Kern muss der
+    # Gang liegen — mindestens die Hälfte seines Volumens nach Pappus, damit
+    # das grobe Volumen der Prüfung (10⁻⁷) die Frage sicher entscheidet.
+    core = math.pi * core_radius**2 * length
+    rod = _checked_rod(
+        rod, major, pitch, at_least=core + 0.5 * _ridge_volume(profile, pitch, length)
+    )
 
     # **Die Vernetzung folgt der Steigung.** Die Standardfeinheit (0,05 mm)
     # ist für einen Gewindegang von einem Viertelmillimeter zu grob: Der Körper
@@ -735,6 +766,23 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     return _finely_meshed(rod, min(DEFLECTION, pitch / 20.0))
 
 
+def _ridge_volume(ridge: Sequence[Point2], pitch: float, length: float) -> float:
+    """Das Volumen des Gangs über dem Kern: Pappus je Umlauf, Umläufe je Länge.
+
+    Das Profil in (radial, axial) schließt am Fuß; Fläche und radialer
+    Schwerpunkt über die Schuhbandformel, derselbe Weg wie im Test, der die
+    Analytik gegen den Körper hält.
+    """
+    corners = [*ridge, ridge[0]]
+    area = 0.0
+    moment = 0.0
+    for (r_a, z_a), (r_b, z_b) in pairwise(corners):
+        cross = r_a * z_b - r_b * z_a
+        area += cross
+        moment += (r_a + r_b) * cross
+    return 2.0 * math.pi * abs(moment) / 6.0 * (length / pitch)
+
+
 def helical_thread(
     root_radius: float,
     pitch: float,
@@ -742,6 +790,9 @@ def helical_thread(
     ridge: Sequence[Point2],
     *,
     start: float,
+    starts: int = 1,
+    taper: float = 0.0,
+    cancelled: CancelToken | None = None,
 ) -> Solid:
     """Kern und Gang eines Gewindes als **ein** genähter Körper — ohne Boolesche Operation.
 
@@ -761,15 +812,26 @@ def helical_thread(
     ``_HELIX_PRECISION``; mit OCCTs Vorgabe von 10⁻⁵ waren es 2·10⁻⁷, und die
     Hülle eines M10-Bolzens saß 3 µm neben der Achse).
 
-    ``ridge`` ist das Gangprofil **eines** Umlaufs in der Ebene (radial,
+    ``ridge`` ist das Gangprofil **eines** Gangs in der Ebene (radial,
     axial), vom Fuß ``(root_radius, 0)`` bis zum letzten Gangpunkt
     ``(root_radius, dz)`` mit ``dz < pitch``; den Fußstreifen bis zum nächsten
-    Umlauf ergänzt die Funktion. Die Helix beginnt bei Winkel null auf der
-    Höhe ``start`` und läuft ``turns`` Umläufe. Beide Rampen liegen unter
-    ``start + pitch`` und über ``start + turns * pitch`` — wer den Körper mit
+    Gang ergänzt die Funktion. Die Helix beginnt bei Winkel null auf der Höhe
+    ``start`` und läuft ``turns`` Umläufe. Beide Rampen liegen unter
+    ``start + lead`` und über ``start + turns * lead`` — wer den Körper mit
     einem Umlauf Vorlauf baut und danach auf Länge schneidet, schneidet sie
     weg. Ein Innengewinde-Werkzeug ist dieselbe Form: Fuß an der Bohrung, Gang
     nach außen.
+
+    ``starts`` Gänge teilen sich einen Umlauf: Der Vorschub ist
+    ``starts * pitch``, und jeder Gang sitzt um eine Teilung über dem vorigen
+    — dieselben Flächenarten, nur mehr davon je Umlauf. ``taper`` ist der
+    halbe Kegelwinkel im Bogenmaß (ein kegeliges Rohrgewinde): Jeder
+    Profilpunkt läuft dann auf einem Kegel statt einem Zylinder, sein Radius
+    wächst je Millimeter Höhe um ``tan(taper)``, und die Radien in ``ridge``
+    gelten auf der Höhe ``start``. Die Regelflächen zwischen zwei Helices
+    derselben Steigung verbinden Punkte gleichen Winkels; auf einem Kegel
+    liegen beide auf derselben Mantellinie, der Fußstreifen bleibt also
+    Kegelmantel.
     """
     require()
     from OCP.BRepBuilderAPI import (
@@ -781,13 +843,18 @@ def helical_thread(
     )
     from OCP.BRepFill import BRepFill
     from OCP.BRepLib import BRepLib
-    from OCP.Geom import Geom_CylindricalSurface
+    from OCP.Geom import Geom_ConicalSurface, Geom_CylindricalSurface
     from OCP.Geom2d import Geom2d_Line
-    from OCP.gp import gp_Ax2d, gp_Ax3, gp_Dir2d, gp_Pnt, gp_Pnt2d
+    from OCP.gp import gp_Ax2d, gp_Ax3, gp_Dir, gp_Dir2d, gp_Pnt, gp_Pnt2d
     from OCP.TopoDS import TopoDS
 
-    if turns < 1 or len(ridge) < 2:
-        raise InternalError(detail="a helical thread needs a ridge and at least one turn")
+    def check() -> None:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+
+    check()
+    if turns < 1 or len(ridge) < 2 or starts < 1:
+        raise InternalError(detail="a helical thread needs a ridge, a start and at least one turn")
     if not (
         is_close(ridge[0][0], root_radius)
         and is_zero(ridge[0][1])
@@ -795,15 +862,38 @@ def helical_thread(
         and ridge[-1][1] < pitch
     ):
         raise InternalError(detail="the ridge must start and end on the root radius")
-    # Eine Zylinderfläche je Profilpunkt — nach seinem Index, nicht nach dem
-    # Radius: Ein Fließkommawert taugt nicht als Schlüssel (Regel 6).
-    surfaces = [Geom_CylindricalSurface(gp_Ax3(), radial) for radial, _axial in ridge]
+    if not (math.isfinite(taper) and 0.0 <= taper < math.pi / 4.0):
+        raise InternalError(detail="the half angle of a tapered thread must lie below 45 degrees")
+    lead = starts * pitch
+    slope = math.tan(taper)
+    # Eine Trägerfläche je Profilpunkt — nach seinem Index, nicht nach dem
+    # Radius: Ein Fließkommawert taugt nicht als Schlüssel (Regel 6). Ohne
+    # Kegel ist der Parameter längs der Fläche die Höhe, mit Kegel die
+    # Mantellinie ab der Höhe ``start``.
+    stretch = 1.0 / math.cos(taper)
+    surfaces: list[Any]
+    if taper > 0.0:
+        frame = gp_Ax3(gp_Pnt(0.0, 0.0, start), gp_Dir(0.0, 0.0, 1.0))
+        surfaces = [Geom_ConicalSurface(frame, taper, radial) for radial, _axial in ridge]
+    else:
+        surfaces = [Geom_CylindricalSurface(gp_Ax3(), radial) for radial, _axial in ridge]
+
+    def along(height: float) -> float:
+        """Wo die Höhe ``height`` auf der Trägerfläche liegt."""
+        return (height - start) * stretch if taper > 0.0 else height
+
+    def radius(radial: float, height: float) -> float:
+        """Der Radius eines Profilpunkts auf der Höhe ``height``."""
+        return radial + (height - start) * slope
+
+    rise = lead * stretch if taper > 0.0 else lead
 
     def helix(point: int, origin: float) -> Any:
-        """Ein Umlauf auf dem Zylinder des Profilpunkts, ab Winkel null auf Höhe ``origin``."""
-        line = Geom2d_Line(gp_Ax2d(gp_Pnt2d(0.0, origin), gp_Dir2d(2.0 * math.pi, pitch)))
+        """Ein Umlauf auf der Fläche des Profilpunkts, ab Winkel null auf Höhe ``origin``."""
+        check()
+        line = Geom2d_Line(gp_Ax2d(gp_Pnt2d(0.0, along(origin)), gp_Dir2d(2.0 * math.pi, rise)))
         edge = BRepBuilderAPI_MakeEdge(
-            line, surfaces[point], 0.0, math.hypot(2.0 * math.pi, pitch)
+            line, surfaces[point], 0.0, math.hypot(2.0 * math.pi, rise)
         ).Edge()
         BRepLib.BuildCurves3d_s(edge, _HELIX_PRECISION)
         return edge
@@ -813,23 +903,36 @@ def helical_thread(
 
     faces: list[Any] = []
     # Die Fußhelix je Umlaufanfang — eine mehr als Umläufe, die letzte trägt die obere Rampe.
-    feet = [helix(0, start + turn * pitch) for turn in range(turns + 1)]
+    feet = [helix(0, start + turn * lead) for turn in range(turns + 1)]
     for turn in range(turns):
-        level = start + turn * pitch
-        row = [feet[turn]] + [
-            helix(point, level + axial) for point, (_radial, axial) in enumerate(ridge) if point
-        ]
+        level = start + turn * lead
+        # Je Gang sein Profil, eine Teilung über dem vorigen; der Fuß des
+        # ersten ist die Fußhelix dieses Umlaufs, die des nächsten Umlaufs
+        # schließt die Reihe.
+        row = [feet[turn]]
+        for course in range(starts):
+            row.extend(
+                helix(point, level + course * pitch + axial)
+                for point, (_radial, axial) in enumerate(ridge)
+                if point or course
+            )
         for index in range(len(row) - 1):
             faces.append(BRepFill.Face_s(row[index], row[index + 1]))
         faces.append(BRepFill.Face_s(row[-1], feet[turn + 1]))
 
     def close_end(level: float, foot: Any) -> None:
         """Die Rampe von der Achse zur Fußhelix und die ebene Fläche bei Winkel null."""
-        axis = segment((0.0, 0.0, level), (0.0, 0.0, level + pitch))
+        check()
+        axis = segment((0.0, 0.0, level), (0.0, 0.0, level + lead))
         faces.append(BRepFill.Face_s(axis, foot))
         corners: list[Vec3] = [(0.0, 0.0, level)]
-        corners.extend((radius, 0.0, level + dz) for radius, dz in ridge)
-        corners.extend([(root_radius, 0.0, level + pitch), (0.0, 0.0, level + pitch)])
+        for course in range(starts):
+            corners.extend(
+                (radius(radial, level + course * pitch + dz), 0.0, level + course * pitch + dz)
+                for radial, dz in ridge
+            )
+        top = level + lead
+        corners.extend([(radius(root_radius, top), 0.0, top), (0.0, 0.0, top)])
         outline = BRepBuilderAPI_MakeWire()
         for one, other in pairwise(corners):
             outline.Add(segment(one, other))
@@ -837,12 +940,14 @@ def helical_thread(
         faces.append(BRepBuilderAPI_MakeFace(outline.Wire(), True).Face())
 
     close_end(start, feet[0])
-    close_end(start + turns * pitch, feet[turns])
+    close_end(start + turns * lead, feet[turns])
 
+    check()
     sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
     for face in faces:
         sewing.Add(face)
     sewing.Perform()
+    check()
     if sewing.NbFreeEdges() or sewing.NbMultipleEdges():
         raise GeometryError(
             detail=_("Aus dieser Steigung entsteht kein Gewindegang."),
@@ -890,23 +995,19 @@ def _finely_meshed(rod: Solid, fineness: float) -> Solid:
 
 
 def _checked_rod(solid: Solid, major: float, pitch: float, *, at_least: float = 0.0) -> Solid:
-    """Nachsehen, was die Vereinigung von Kern und Gang wirklich ergeben hat.
+    """Nachsehen, was der Schnitt auf Länge wirklich ergeben hat.
 
-    Sie gelingt nicht bei jeder Kombination, und das Schema verspricht mehr,
-    als sie hält: zwischen 2 und 100 mm Durchmesser und 0,25 bis 8 mm Steigung
-    ist nur ein Teil verlässlich. Ab 50 mm kam **nie** ein geschlossener Körper
-    heraus, bei 100 mm und 1 mm Steigung einer mit null Volumen und null
-    Komponenten — und niemand sagte etwas. Ein offener B-Rep-Körper trägt
-    weder den STEP-Export noch eine weitere Operation; er ist kein Ergebnis,
-    das man jemandem in die Hand gibt.
+    Der Gewindebolzen entsteht genäht (:func:`helical_thread`) und wird danach
+    mit einem Quader auf Länge geschnitten. Was dabei den Gang verliert,
+    offen bleibt oder zerfällt, ist kein Ergebnis, das man jemandem in die
+    Hand gibt: Ein offener exakter Körper trägt weder den STEP-Export noch
+    eine weitere Operation. Bis RM-195 vereinigte der Bolzen einen Sweep mit
+    dem Kern, und der verlor den Gang an neun von 23 Rasterlängen still.
 
-    **Vor der Absage steht eine Rettungsstufe** (§17.2 dem Geist nach): OCCT
-    näht die helikale Fläche je nach Version unterschiedlich sauber an den
-    Kern. M6 mit einem Millimeter Steigung — das gewöhnlichste Gewinde, das es
-    gibt — kam hier geschlossen heraus und auf dem Linux-Runner offen. Was
+    **Vor der Absage steht eine Rettungsstufe** (§17.2 dem Geist nach): Was
     rechnerisch zusammengehört, schließt ``ShapeFix``; es verschiebt keine
-    Fläche, es näht. Erst wenn auch das nichts hilft, ist die Kombination
-    wirklich keine.
+    Fläche, es näht (:func:`_sewn`). Erst wenn auch das nichts hilft, ist die
+    Kombination wirklich keine.
     """
     if not _is_sound_rod(solid, at_least=at_least):
         solid = _sewn(solid)
@@ -931,9 +1032,9 @@ def _is_sound_rod(solid: Solid, *, at_least: float = 0.0) -> bool:
     """Ob dieser Bolzen etwas ist, das man weiterreichen kann: Volumen über
     ``at_least``, geschlossen, ein Stück.
 
-    ``at_least`` ist das Volumen des Kerns, wenn Kern und Gang vereinigt
-    werden: Ein Ergebnis, das nicht darüber liegt, hat den Gang still
-    verloren (B3, P2.5). Für den Gang allein bleibt die Grenze null.
+    ``at_least`` ist das Volumen, das ein Bolzen **mit** Gang mindestens hat
+    (Kern und halber Gang, :func:`threaded_rod`): Was nicht darüber liegt,
+    hat den Gang still verloren (B3, P2.5).
 
     **Gefragt wird der Körper, nicht sein Netz.** Hier standen
     ``is_watertight`` und ``component_count``, und beide beantworten die Frage
@@ -941,13 +1042,20 @@ def _is_sound_rod(solid: Solid, *, at_least: float = 0.0) -> bool:
     ausfällt. Auf dem macOS-Runner kam M6 mit richtigem Volumen und als ein
     Stück heraus und galt trotzdem als undicht, weil die Vernetzung der
     Gewindeflanke dort ritzte; die Absage traf einen Bolzen, der gelungen war.
-    Ob die Dreiecke dicht sind, ist eine eigene Frage — sie gehört zum
-    STL-Export und nicht zu der, ob die Vereinigung geklappt hat.
+
+    **Und das Volumen ist ein grobes** (``properties.estimated_volume``): Die
+    Frage lautet „liegt der Gang über dem Kern?", und die entscheidet ein
+    Wert auf 10⁻⁷ so sicher wie einer auf 10⁻⁹ — in einem Vierzigstel der
+    Zeit. Das Integral auf ``INTEGRAL_RELATIVE_ERROR`` kostete an einem
+    M3 x 0,5 x 60 dreieinhalb Sekunden und fiel danach mit der Kopie für die
+    feinere Vernetzung weg (22.09.2026).
     """
+    from app.core.brep.properties import estimated_volume
+
     return (
-        solid.volume > max(EPS_GEOM, at_least + EPS_GEOM)
+        solid.solid_count == 1
         and solid.is_closed
-        and solid.solid_count == 1
+        and estimated_volume(solid.shape) > max(EPS_GEOM, at_least + EPS_GEOM)
     )
 
 
@@ -956,68 +1064,54 @@ def _rod_state(solid: Solid) -> str:
 
     **Eine Absage ohne Messwert ist eine Absage ohne Diagnose.** Der Bolzen
     kann auf drei Arten unbrauchbar sein — kein Volumen, offen, zerfallen —,
-    und welche es war, stand nirgends. Auf dieser Maschine ist das
-    gleichgültig, weil hier alles schließt; auf dem Linux-Runner war es der
-    Unterschied zwischen einer Vermutung und einer Ursache.
+    und welche es war, stand nirgends. Gezählt wird am Körper, wie in
+    :func:`_is_sound_rod`, nicht an seinem Netz.
     """
+    from app.core.brep.properties import estimated_volume
+
     return (
-        f"volume={solid.volume:.3f} watertight={solid.is_watertight} "
-        f"components={solid.component_count}"
+        f"volume={estimated_volume(solid.shape):.3f} closed={solid.is_closed} "
+        f"solids={solid.solid_count}"
     )
 
 
-def _sewn(solid: Solid, tolerance: float = 0.0) -> Solid:
+def _sewn(solid: Solid) -> Solid:
     """Offene Nähte schließen, ohne die Geometrie zu verrücken.
 
     ``ShapeFix_Shape`` ist OCCTs eigener Weg dafür. Er wird hier **nur** als
     zweiter Anlauf gerufen: Was beim ersten Mal geschlossen herauskam, geht
     unverändert weiter — eine Reparatur, die immer läuft, kostet Zeit und
-    verdeckt, dass sie gebraucht wurde.
-
-    ``tolerance`` sagt, wie weit auseinander zwei Kanten liegen dürfen, damit
-    er sie noch zusammenzieht; ohne Angabe bleibt es bei der Toleranz, die die
-    Form mitbringt. Auf dem macOS-Runner reichte die nicht: Der Bolzen kam als
-    **ein** Stück heraus (`components=1`, Volumen wie erwartet) und war
-    trotzdem nicht dicht — eine offene Naht, keine zwei Teile wie unter Linux.
-    Dieselbe Rechnung, andere Übersetzung, andere Stelle, an der eine Zahl
-    kippt.
-
-    Weit aufmachen darf man ihn nicht: Was über die Naht hinausgeht, verrückt
-    Flächen, und dann stimmt das Gewinde nicht mehr. Deshalb kommt die Grenze
-    von der Größe, um die es geht — der Steigung —, und nicht als runde Zahl.
+    verdeckt, dass sie gebraucht wurde. Die Toleranz ist die, die die Form
+    mitbringt: Was über die Naht hinausgeht, verrückt Flächen, und dann
+    stimmt das Gewinde nicht mehr. (Bis RM-195 nahm der Sweep-Bolzen hier
+    eine Grenze aus der Steigung an; der genähte Bolzen braucht keine.)
     """
     from OCP.ShapeFix import ShapeFix_Shape
 
     working = replace(solid)
     fix = ShapeFix_Shape(working.shape)
-    if tolerance > 0.0:
-        fix.SetPrecision(tolerance)
-        fix.SetMaxTolerance(tolerance)
     fix.Perform()
     return working.replacing(fix.Shape(), history=fix.Context())
 
 
-def _fuzzy_boolean(kind: str, first: Solid, second: Solid, tolerance: float = EPS_GEOM) -> Solid:
-    """Boolesch mit kleiner Fuzzy-Toleranz — für Flächen, die sich nur berühren.
+def _fuzzy_boolean(
+    kind: str, first: Solid, second: Solid, sentence: Any, tolerance: float = EPS_GEOM
+) -> Solid:
+    """Boolesch mit kleiner Fuzzy-Toleranz — für die Löcher von Durchzug und Bahn.
 
-    Seit RM-195 fügt sie keinen Gewindebolzen mehr zusammen: Kern und Gang
-    entstehen genäht (:func:`helical_thread`). Geblieben sind die Löcher eines
-    gezogenen und eines übergeblendeten Umrisses (:func:`sweep_path`,
-    :func:`loft`), die derselben Bahn folgen wie der Außenkörper und deshalb
-    an ihren Enden dessen Flächen berühren.
+    Die Löcher eines Umrisses übernehmen ``ThruSections`` und ``MakePipeShell``
+    nicht; jedes wird als eigener Körper derselben Bahn abgezogen, und dessen
+    Flanken stoßen genau dort an die des Außenkörpers, wo Umriss und Loch
+    einander berühren. ``sentence`` ist der Satz des Aufrufers, wenn es nicht
+    gelingt: **Der Satz gehört dem Weg, nicht dem Werkzeug** — hier stand bis
+    zum 22.09.2026 die Absage des alten Gewindebolzens („Kern und Gang des
+    Gewindes …"), und ein Loch im Durchzug scheiterte mit einem Satz über ein
+    Gewinde, das es nicht gab.
     """
     operation = boolean_builder(kind, first.shape, second.shape, tolerance=tolerance)
-    # **Nicht „fehlgeschlagen"** (Regel 17), und nicht mehr der Satz über Kern
-    # und Gang eines Gewindes: Bis zum 22.09.2026 las ein Kunde, dessen
-    # gezogener Umriss sein Loch nicht schneiden ließ, von Durchmesser und
-    # Steigung — Maße, die sein Umriss gar nicht hat.
     return _finished(
         operation,
-        _(
-            "Ein Loch der Zeichnung ließ sich nicht aus dem Körper schneiden. Das "
-            "passiert, wenn zwei Flächen sich nur berühren statt zu überlappen. "
-            "Verschieben Sie das Loch ein wenig oder ändern Sie seine Größe."
-        ),
+        sentence,
         first,
         others=() if kind == "difference" else (second,),
     )
@@ -1122,6 +1216,69 @@ def offset_face(face: Any, distance: float) -> Any:
             ),
         )
     return BRepBuilderAPI_MakeFace(wires[0], True).Face()
+
+
+def shrunk_faces(face: Any, distance: float) -> tuple[Any, ...]:
+    """Die Fläche um ``distance`` nach innen versetzt — jedes Stück für sich, nach oben gerichtet.
+
+    Das exakte Gegenstück zu ``buffer(-distance)`` am Netz, dem Kragen eines
+    Deckels (``geom.lid``): Jeder Punkt des Ergebnisses liegt mindestens
+    ``distance`` vom Rand entfernt, ein Bogen bleibt ein Bogen mit kleinerem
+    Radius, und an einer einspringenden Ecke — einer Wandecke, die in den
+    Hohlraum ragt — läuft der Versatz im Bogen um sie herum
+    (``GeomAbs_Arc``). Die Gehrung des Netzwegs (``join_style=2``) nimmt dort
+    ein wenig mehr weg; beide halten das Spiel. **Gemessen, nicht gewählt:**
+    ``GeomAbs_Intersection`` scheiterte an zwei von vier echten Modellen
+    (``Cat_1.stp``, ``Cat_2.stp``: Ränder aus Kreisbögen), der Bogen an
+    keinem. Anders als bei :func:`offset_face` darf die Kontur dabei in
+    Stücke zerfallen — eine Taille, schmaler als der Versatz, gibt zwei
+    Kragen, wie am Netz.
+    """
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
+    from OCP.GeomAbs import GeomAbs_Arc
+    from OCP.TopAbs import TopAbs_WIRE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    if distance <= EPS_GEOM:
+        return (upward(face),)
+    offset = BRepOffsetAPI_MakeOffset(TopoDS.Face(face), GeomAbs_Arc)
+    try:
+        offset.Perform(-distance)
+        done = offset.IsDone()
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
+        raise GeometryError(detail=OFFSET_FAILED, suggestions=(CORRECT_INPUT, CANCEL)) from problem
+    if not done:
+        raise GeometryError(detail=OFFSET_FAILED, suggestions=(CORRECT_INPUT, CANCEL))
+    faces: list[Any] = []
+    explorer = TopExp_Explorer(offset.Shape(), TopAbs_WIRE)
+    while explorer.More():
+        made = BRepBuilderAPI_MakeFace(TopoDS.Wire(explorer.Current()), True)
+        explorer.Next()
+        if made.IsDone():
+            faces.append(upward(made.Face()))
+    return tuple(faces)
+
+
+def upward(face: Any) -> Any:
+    """Dieselbe ebene Fläche, nach oben gerichtet — ein Prisma darüber wächst nach außen.
+
+    Eine Fläche aus einem Draht erbt dessen Umlaufsinn: Aus dem Innenrand
+    eines Querschnitts wird eine Fläche, die nach unten zeigt. Gefragt wird
+    die Ebene samt Orientierung der Fläche, nicht der Draht.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.TopAbs import TopAbs_REVERSED
+    from OCP.TopoDS import TopoDS
+
+    up = float(BRepAdaptor_Surface(face).Plane().Axis().Direction().Z())
+    if face.Orientation() == TopAbs_REVERSED:
+        up = -up
+    return face if up > 0.0 else TopoDS.Face(face.Reversed())
 
 
 def face_boolean(kind: str, first: Any, second: Any) -> Any:

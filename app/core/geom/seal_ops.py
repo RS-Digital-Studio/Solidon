@@ -24,7 +24,7 @@ from app.core.geom.seal import (
 )
 from app.core.knowledge import profiles
 from app.core.knowledge.parts.section import Section
-from app.core.knowledge.parts.shapes import mesh_only
+from app.core.knowledge.parts.shapes import building, mesh_only
 from app.core.registry import op_params, param, register_op
 from app.core.sketch.planes import feature_plane, frame_in_scene
 from app.core.sketch.profile import Profile as SketchProfile
@@ -32,6 +32,7 @@ from app.core.sketch.profile import profile_of
 from app.core.sketch.serialize import sketch_from_text
 from app.core.types import (
     BaseParams,
+    BRepBody,
     CancelToken,
     Feature,
     FeatureRef,
@@ -439,6 +440,9 @@ def _counterface(
 
 @register_op(
     name="create_seal",
+    # 2 seit der Durchsicht 0.5.0: Am exakten Träger entstehen Nut und Dichtung
+    # exakt (P2.8) — ein alter Eintrag hielte dort das Netz fest.
+    cache_version="2",
     title=_("Dichtnut mit Dichtung"),
     category="prepare",
     params=CreateSealParams,
@@ -485,19 +489,26 @@ def create_seal(ctx: OpContext) -> OpResult:
     findings: list[Finding] = []
     path, frame, plane, answered = _path(ctx, p, findings)
     ctx.progress(0.1, str(_("Dichtweg und Restwand prüfen")))
-    geometry = seal_geometry(
-        path,
-        groove_width=p.groove_width,
-        groove_depth=p.groove_depth,
-        protrusion=p.protrusion,
-        gasket_width=p.gasket_width,
-        section=p.section,
-        offset=p.offset,
-        check_cancelled=ctx.cancelled.raise_if_cancelled,
-    )
-    # Der Erzeuger rechnet am Netz, bis P2.8 die Kernwahl regelt — die Dichtung
-    # selbst ist längst eine Form mit zwei Auswertern.
-    gasket_body = mesh_only(geometry.gasket)
+    # **Die Dichtung folgt ihrem Träger** (P2.8): an einem exakten Körper
+    # exakt — die Form hat zwei Auswerter (``knowledge.parts.shapes``), und die
+    # Nut schneidet dort :func:`_exact_groove` aus dem exakten Band statt
+    # ``cut_regions`` aus dem Vieleck. Bis zum 22.09.2026 kam die Dichtung
+    # immer als Netz, auch neben einem exakten Träger: kein STEP, keine
+    # Verrundung, und die Maße nur so genau wie die Sehnen.
+    exact = isinstance(ctx.inputs[0].mesh, BRepBody)
+    with building("brep" if exact else "mesh") as notes:
+        geometry = seal_geometry(
+            path,
+            groove_width=p.groove_width,
+            groove_depth=p.groove_depth,
+            protrusion=p.protrusion,
+            gasket_width=p.gasket_width,
+            section=p.section,
+            offset=p.offset,
+            check_cancelled=ctx.cancelled.raise_if_cancelled,
+        )
+    findings.extend(notes)
+    gasket_body: Any = geometry.gasket if exact else mesh_only(geometry.gasket)
     section = Section.of(path).offset(p.offset)
     band = _band(section, p.groove_width, ctx.cancelled.raise_if_cancelled)
     footprint = polygons_of(band.cross)[0]
@@ -518,27 +529,40 @@ def create_seal(ctx: OpContext) -> OpResult:
                 "Breite oder Tiefe oder verschieben Sie den Dichtweg."
             ),
         )
-    cut_frame = frame_in_scene(plane, ctx.scene)
-    if cut_frame is None:
-        # Kein ``assert``: Eine Ebene, die zwischen Suche und Schnitt verloren
-        # geht, ist eine Auskunft mit Weg nach vorn, kein Programmabbruch
-        # ohne Vorschlag (Regel 17).
-        raise _invalid(
-            "path_sketch", _("Wählen Sie eine vorhandene Zeichenebene für den Dichtweg.")
-        )
-    cut_polygon = _polygon_in_frame(footprint, frame, cut_frame)
+    matrix = cast(Transform, tuple(tuple(float(v) for v in row) for row in _matrix(frame)))
     ctx.progress(0.45, str(_("Dichtnut schneiden")))
-    cut = cut_regions(
-        ctx, [polygon_profile(cut_polygon)], plane, depth=p.groove_depth, through=False
-    )
+    if exact:
+        carrier, cut_findings = _exact_groove(ctx, geometry.groove, matrix)
+        cut_solver = None
+    else:
+        cut_frame = frame_in_scene(plane, ctx.scene)
+        if cut_frame is None:
+            # Kein ``assert``: Eine Ebene, die zwischen Suche und Schnitt verloren
+            # geht, ist eine Auskunft mit Weg nach vorn, kein Programmabbruch
+            # ohne Vorschlag (Regel 17).
+            raise _invalid(
+                "path_sketch", _("Wählen Sie eine vorhandene Zeichenebene für den Dichtweg.")
+            )
+        cut_polygon = _polygon_in_frame(footprint, frame, cut_frame)
+        cut = cut_regions(
+            ctx, [polygon_profile(cut_polygon)], plane, depth=p.groove_depth, through=False
+        )
+        carrier, cut_findings, cut_solver = cut.outputs[0], list(cut.findings), cut.solver
     body = _named_floor(
-        _body_material(ctx, cut.outputs[0], p.body_material, findings),
+        _body_material(ctx, carrier, p.body_material, findings),
         frame,
         footprint,
         p.groove_depth,
         cancelled=ctx.cancelled,
     )
-    gasket_mesh = _placed(gasket_body, frame)
+    if exact:
+        from app.core.brep import edit
+
+        gasket_placed: Any = edit.transformed(gasket_body, matrix, cancelled=ctx.cancelled)
+        gasket_mesh = as_mesh_data(gasket_placed)
+    else:
+        gasket_mesh = _placed(gasket_body, frame)
+        gasket_placed = gasket_mesh
     collision = _measured_boolean(ctx, "intersection", as_mesh_data(body.mesh), gasket_mesh)
     if _thicker_than_shown(collision.mesh.volume, gasket_mesh.raw.area):
         raise _invalid(
@@ -549,14 +573,18 @@ def create_seal(ctx: OpContext) -> OpResult:
             ),
         )
     features = moved_features(
-        seal_features(gasket_body, gasket=True, rounded=p.section == "round"),
-        cast(Transform, tuple(tuple(float(v) for v in row) for row in _matrix(frame))),
+        seal_features(gasket_body, gasket=True, rounded=p.section == "round"), matrix
     )
     gasket = SceneObject(
-        "", _("Dichtung"), gasket_mesh, features=features, material=p.gasket_material
+        "",
+        _("Dichtung"),
+        gasket_placed,
+        kind="brep" if exact else "mesh",
+        features=features,
+        material=p.gasket_material,
     )
     gasket_footprint = cross_section(
-        gasket_body, -p.groove_depth + (p.groove_depth + p.protrusion) / 2
+        as_mesh_data(gasket_body), -p.groove_depth + (p.groove_depth + p.protrusion) / 2
     )
     if gasket_footprint is None:
         raise _closed_path()
@@ -574,7 +602,36 @@ def create_seal(ctx: OpContext) -> OpResult:
     )
     return OpResult(
         outputs=[body, gasket],
-        solver=deepest((cut.solver, missing.solver, collision.solver)),
-        findings=[*findings, *cut.findings],
+        solver=deepest((cut_solver, missing.solver, collision.solver)),
+        findings=[*findings, *cut_findings],
         answered=answered,
     )
+
+
+def _exact_groove(
+    ctx: OpContext, groove: Any, matrix: Transform
+) -> tuple[SceneObject, list[Finding]]:
+    """Die Nut am exakten Träger: das exakte Band, abgezogen — keine Sehnen im Körper.
+
+    Der Netzweg schneidet die Nut über ``cut_regions`` aus dem Vieleck des
+    Querschnitts (``polygon_profile``); am exakten Träger entstand daraus eine
+    Nut aus lauter kleinen ebenen Flächen, um die Sehnenabweichung zu flach —
+    im STEP ein Vieleck, im Volumen 0,05 % zu wenig (Kreisring Ø 10, gemessen
+    22.09.2026). Hier kommt dasselbe Band mit echten Bögen (``seal_geometry``
+    unter dem exakten Kern) an dieselbe Stelle wie die Dichtung.
+    """
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.boolean import without_effect
+
+    source = ctx.inputs[0]
+    host = cast(Any, source.mesh)
+    tool = edit.transformed(groove, matrix, cancelled=ctx.cancelled)
+    ctx.cancelled.raise_if_cancelled()
+    solid = edit.unified(edit.boolean("difference", [host, tool]))
+    ctx.cancelled.raise_if_cancelled()
+    nothing = without_effect(host, solid, "difference", ctx.profile)
+    carrier = replace(
+        source, mesh=solid, kind="brep", features=features_of(solid, cancelled=ctx.cancelled)
+    )
+    return carrier, [nothing] if nothing is not None else []

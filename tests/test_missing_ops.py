@@ -27,6 +27,7 @@ from app.core.knowledge import profiles
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, Profile, Scene, SceneObject
+from app.core.units import EPS_GEOM
 
 SVG = (
     b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
@@ -1173,6 +1174,247 @@ def test_a_label_on_the_body_stays_quiet(profile: Profile) -> None:
     )
 
     assert "boolean.without_effect" not in {finding.code for finding in result.findings}
+
+
+def _glyph_area(text: str, size: float, font: str = "DejaVu Sans") -> float:
+    """Die Fläche eines Schriftzugs aus den Kurven seiner Glyphen — Green über jedes Stück.
+
+    Unabhängig vom Prüfling: Die Codes des Glyphenpfads werden hier selbst
+    gelesen (Strecke, quadratische und kubische Bézier-Kurve), und das
+    Linienintegral ½∮(x dy − y dx) ist für ein Polynom mit acht
+    Gauß-Legendre-Knoten exakt. Ohne überlappende Konturen (DejaVu) ist die
+    nonzero-Füllung der Betrag der Summe.
+    """
+    import math
+
+    from matplotlib.path import Path as MplPath
+    from matplotlib.textpath import TextPath
+
+    from app.core.geom.label_ops import font_properties
+
+    path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font, "regular"))
+    nodes, weights = np.polynomial.legendre.leggauss(8)
+
+    def integral(poles: np.ndarray) -> float:
+        degree = len(poles) - 1
+        derivative = degree * np.diff(poles, axis=0)
+        total = 0.0
+        for node, weight in zip(nodes, weights, strict=True):
+            t = (node + 1.0) / 2.0
+            basis = [
+                math.comb(degree, k) * (1 - t) ** (degree - k) * t**k for k in range(degree + 1)
+            ]
+            slope = [
+                math.comb(degree - 1, k) * (1 - t) ** (degree - 1 - k) * t**k for k in range(degree)
+            ]
+            x, y = np.asarray(basis) @ poles
+            dx, dy = np.asarray(slope) @ derivative
+            total += 0.25 * (x * dy - y * dx) * weight
+        return total
+
+    area = 0.0
+    start = last = None
+    index = 0
+    codes, vertices = path.codes, path.vertices
+    while index < len(codes):
+        code = codes[index]
+        if code == MplPath.MOVETO:
+            start = last = vertices[index]
+            index += 1
+        elif code == MplPath.LINETO:
+            area += integral(np.asarray([last, vertices[index]]))
+            last = vertices[index]
+            index += 1
+        elif code == MplPath.CURVE3:
+            area += integral(np.asarray([last, *vertices[index : index + 2]]))
+            last = vertices[index + 1]
+            index += 2
+        elif code == MplPath.CURVE4:
+            area += integral(np.asarray([last, *vertices[index : index + 3]]))
+            last = vertices[index + 2]
+            index += 3
+        else:
+            if last is not None and start is not None:
+                area += integral(np.asarray([last, start]))
+            last = start
+            index += 1
+    return abs(area)
+
+
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+def test_text_on_an_exact_body_stays_exact_and_follows_the_curves(
+    mode: str, profile: Profile
+) -> None:
+    """Text am exakten Körper: der Körper bleibt exakt, die Buchstaben sind die Kurven (P2.8).
+
+    Bis zum 22.09.2026 machte *Text aufbringen* aus jedem exakten Körper ein
+    Dreiecksmodell — ein beschriftetes STEP-Teil verlor Flächen, Kanten und
+    den STEP-Export. Jetzt ändert sich das Volumen um genau die Fläche der
+    Glyphenkurven mal die Tiefe (Sollwert aus Green, unabhängig vom
+    Prüfling), auf 10⁻⁹ — ein Vieleck träfe das nicht: „Oo8" hat nur Kurven.
+    """
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit, step
+    from app.core.brep.features import features_of
+
+    box = edit.box(40.0, 20.0, 4.0)
+    entry = SceneObject(id="obj_1", name="Platte", mesh=box, kind="brep", features=features_of(box))
+    result = run("label_text", entry, profile, text="Oo8", size=8.0, depth=0.6, z=4.0, mode=mode)
+
+    output = result.outputs[0]
+    assert output.kind == "brep"
+    assert isinstance(output.mesh, kernel.Solid)
+    assert output.mesh.is_closed and output.mesh.solid_count == 1
+    change = output.mesh.volume - box.volume
+    expected = _glyph_area("Oo8", 8.0) * 0.6
+    assert abs(change) == pytest.approx(expected, rel=1e-9)
+    assert (change > 0) == (mode == "raised")
+    height = 4.6 if mode == "raised" else 4.0
+    # Die Hülle trägt die Kantentoleranz der Kurvenflächen (10⁻⁷), nicht mehr.
+    assert output.mesh.bounds.size[2] == pytest.approx(height, abs=EPS_GEOM)
+    assert not result.findings
+    assert step.read(step.write(output.mesh)).volume == pytest.approx(output.mesh.volume, rel=1e-9)
+
+
+def test_exact_text_with_its_own_filament_keeps_the_slot_on_its_faces(profile: Profile) -> None:
+    """Erhabene Schrift in einem eigenen Filament: die Buchstabenflächen tragen den Slot."""
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    box = edit.box(40.0, 20.0, 4.0)
+    entry = SceneObject(id="obj_1", name="Platte", mesh=box, kind="brep", features=features_of(box))
+    result = run(
+        "label_text", entry, profile, text="H", size=8.0, depth=0.6, z=4.0, mode="raised", slot=2
+    )
+
+    body = result.outputs[0].mesh
+    assert set(body.face_slots) == {0, 2}
+    raised = [
+        index
+        for index in range(body.face_count)
+        if body.face_properties(index).centre[2] > 4.0 + 1e-6
+    ]
+    assert raised and all(body.face_slots[index] == 2 for index in raised)
+    assert [(slot.index, str(slot.name)) for slot in result.outputs[0].material_slots] == [
+        (0, "Körper"),
+        (2, "Beschriftung"),
+    ]
+
+
+def test_exact_engraved_text_carries_its_slot_in_its_walls_and_floor(profile: Profile) -> None:
+    """Vertieft trägt die Schrift ihren Slot auch am exakten Körper in den Rillen.
+
+    Am Netz gilt das seit dem 22.09.2026 (``cut_slot``, siehe
+    :func:`test_engraved_lettering_carries_its_slot_in_its_walls_and_floor`).
+    Beim Zusammenführen der Durchsicht 0.5.0 kam der exakte Weg dazu, und dort
+    nahm die exakte Differenz nur die Flächen des Körpers mit: Das Feld
+    *Filament* stand wieder ohne Wirkung da — schlechter als vorher, denn bis
+    dahin wurde ein exakter Körper vernetzt und bekam die Rillen gefärbt.
+    """
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    box = edit.box(40.0, 20.0, 4.0)
+    entry = SceneObject(id="obj_1", name="Platte", mesh=box, kind="brep", features=features_of(box))
+    result = run(
+        "label_text", entry, profile, text="H", size=8.0, depth=0.6, z=4.0, mode="engraved", slot=2
+    )
+
+    body = result.outputs[0].mesh
+    assert result.outputs[0].kind == "brep"
+    centres = [body.face_properties(index).centre[2] for index in range(body.face_count)]
+    floor = [index for index, z in enumerate(centres) if abs(z - 3.4) < 1e-6]
+    top = [index for index, z in enumerate(centres) if abs(z - 4.0) < 1e-6]
+    walls = [index for index, z in enumerate(centres) if 3.4 + 1e-6 < z < 4.0 - 1e-6]
+    assert floor and all(body.face_slots[index] == 2 for index in floor), "der Rillenboden"
+    assert walls and all(body.face_slots[index] == 2 for index in walls), "die Rillenwände"
+    assert top and all(body.face_slots[index] == 0 for index in top), "die Oberseite bleibt"
+    assert [(slot.index, str(slot.name)) for slot in result.outputs[0].material_slots] == [
+        (0, "Körper"),
+        (2, "Beschriftung"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("font", "text"), [("Comfortaa", "Dancing"), ("Dancing Script", "Solidon")]
+)
+def test_exact_letters_fill_overlapping_strokes_like_the_font(font: str, text: str) -> None:
+    """Überlappende Striche füllen auch exakt — die ebene Faltung nach dem Drehsinn.
+
+    Comfortaa und Dancing Script lassen Konturen einander decken; die Summe der
+    Konturflächen zählt die Deckung doppelt (0,7 bis 2,5 % zu viel), die
+    gerade-ungerade-Regel gar nicht. ``brep.lettering`` vereinigt im Drehsinn
+    der größten Kontur und zieht die gegenläufigen ab. Sollwert: ein Raster
+    von 0,02 mm über dicht abgetasteten Kurven (64 Punkte je Kurve), gezählt
+    nach der Umlaufzahl — unabhängig vom Prüfling, auf 10⁻³.
+    """
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    import shapely
+    from matplotlib.path import Path as MplPath
+    from matplotlib.textpath import TextPath
+    from shapely.geometry import LinearRing, Polygon
+
+    from app.core.brep import lettering
+    from app.core.geom.label_ops import font_properties
+
+    path = TextPath((0.0, 0.0), text, size=10.0, prop=font_properties(font, "regular"))
+    rings: list[list[tuple[float, float]]] = []
+    current: list[tuple[float, float]] = []
+    last = (0.0, 0.0)
+    index = 0
+    while index < len(path.codes):
+        code = path.codes[index]
+        if code == MplPath.MOVETO:
+            if len(current) >= 3:
+                rings.append(current)
+            current = [tuple(path.vertices[index])]
+            last = current[0]
+            index += 1
+        elif code == MplPath.LINETO:
+            last = tuple(path.vertices[index])
+            current.append(last)
+            index += 1
+        elif code in (MplPath.CURVE3, MplPath.CURVE4):
+            count = 2 if code == MplPath.CURVE3 else 3
+            poles = np.asarray([last, *path.vertices[index : index + count]])
+            degree = len(poles) - 1
+            for t in np.linspace(0.0, 1.0, 65)[1:]:
+                weights = [
+                    math.comb(degree, k) * (1 - t) ** (degree - k) * t**k for k in range(degree + 1)
+                ]
+                current.append(tuple(np.asarray(weights) @ poles))
+            last = current[-1]
+            index += count
+        else:
+            index += 1
+    if len(current) >= 3:
+        rings.append(current)
+    points = np.asarray([point for ring in rings for point in ring])
+    step = 0.02
+    xs = np.arange(points[:, 0].min(), points[:, 0].max(), step) + step / 2.0
+    ys = np.arange(points[:, 1].min(), points[:, 1].max(), step) + step / 2.0
+    grid_x, grid_y = np.meshgrid(xs, ys)
+    winding = np.zeros(grid_x.shape, dtype=int)
+    for ring in rings:
+        linear = LinearRing(ring)
+        inside = shapely.contains_xy(Polygon(linear).buffer(0), grid_x, grid_y)
+        winding += np.where(inside, 1 if linear.is_ccw else -1, 0)
+    expected = np.count_nonzero(winding) * step * step
+
+    body = lettering.letters(path, 1.0)
+
+    assert body.is_closed
+    assert body.volume == pytest.approx(expected, rel=1e-3)
 
 
 def test_a_label_without_text_is_a_user_error(profile: Profile) -> None:

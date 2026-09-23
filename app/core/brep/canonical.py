@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from app.core.brep.kernel import box_limits, untrimmed_surface
+from app.core.brep.kernel import box_limits, nearest_distance, untrimmed_surface
 from app.core.errors import PROGRAMMING_ERRORS, OperationCancelled
 from app.core.log import get_logger
 from app.core.types import CancelToken, Vec3
@@ -60,7 +60,27 @@ class SphereSurface:
     inward: bool
 
 
-Surface = PlaneSurface | CylinderSurface | TorusSurface | SphereSurface
+@dataclass(frozen=True, slots=True)
+class ConeSurface:
+    """Kreiskegel aus einer Spline-Fläche: Spitze, gerichtete Nappe, axiale Spanne, Materialseite.
+
+    ``axis`` zeigt von der Spitze in die belegte Nappe, zum weiten Ende;
+    ``near`` und ``far`` sind die axialen Abstände der Flächengrenzen von der
+    Spitze, ``turn`` die Winkelabdeckung im Bogenmaß — dieselben Auskünfte,
+    die ein nativer Kegel über seine V-Grenzen gibt (``features._cone_nappe``).
+    """
+
+    cone: Any
+    apex: Vec3
+    axis: Vec3
+    half_angle: float
+    near: float
+    far: float
+    turn: float
+    inward: bool
+
+
+Surface = PlaneSurface | CylinderSurface | TorusSurface | SphereSurface | ConeSurface
 
 
 def _check(cancelled: CancelToken | None) -> None:
@@ -341,6 +361,28 @@ def _matches(
     return True
 
 
+def _ruled(adaptor: Any) -> bool:
+    """Ob die Spline-Fläche in einer Richtung linear ist — dann trägt sie Strecken.
+
+    Eine Kugel und ein Ring enthalten keine einzige Strecke; eine Fläche vom
+    Grad eins in U oder V besteht aus ihnen (auch rational: eine rationale
+    Strecke bleibt eine Strecke). Sie braucht die Einpassung von Kugel und Ring
+    gar nicht erst: An einem genähten Gewindebolzen M3 x 0,5 x 60 sind das
+    362 Regelflächen und 1,2 s für zwei Antworten, die „nein" heißen müssen
+    (Review 22.09.2026).
+    """
+    from OCP.GeomAbs import GeomAbs_BezierSurface, GeomAbs_BSplineSurface
+
+    kind = adaptor.GetType()
+    if kind == GeomAbs_BSplineSurface:
+        surface = adaptor.BSpline()
+    elif kind == GeomAbs_BezierSurface:
+        surface = adaptor.Bezier()
+    else:
+        return False
+    return bool(surface.UDegree() == 1 or surface.VDegree() == 1)
+
+
 def _sphere_surface(face: Any, adaptor: Any, cancelled: CancelToken | None) -> SphereSurface | None:
     """Native Kugel oder vollständig geprüfter rationaler Träger auf einer privaten Kopie."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
@@ -517,18 +559,22 @@ def _torus_surface(face: Any, adaptor: Any, cancelled: CancelToken | None) -> To
     return TorusSurface(candidate, normal.Dot(gp_Vec(middle, point)) < 0.0)
 
 
-def _cylinder_limits(
-    face: Any, cylinder: Any, cancelled: CancelToken | None
+def _axial_limits(
+    face: Any, position: Any, target: Any, cancelled: CancelToken | None
 ) -> tuple[float, float, float] | None:
-    """Misst axial an der Originalform und Winkel an ihren tatsächlichen Randkurven."""
+    """Misst axial an der Originalform und Winkel an ihren tatsächlichen Randkurven.
+
+    ``position`` ist der Rahmen, in dessen Z die Spanne gemessen wird (die
+    Lage des Zylinders; beim Kegel die Spitze mit der Achse in die Nappe),
+    ``target`` die Drehfläche, auf die die Randkurven für den Winkel
+    projiziert werden — ihr U ist der Umlaufwinkel.
+    """
     from OCP.Bnd import Bnd_Box, Bnd_Box2d
     from OCP.BndLib import BndLib_Add2dCurve
     from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepBndLib import BRepBndLib
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Transform
-    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-    from OCP.Geom import Geom_CylindricalSurface
     from OCP.GeomProjLib import GeomProjLib
     from OCP.gp import gp_Ax3, gp_Dir, gp_Pln, gp_Pnt, gp_Trsf
     from OCP.TopAbs import TopAbs_EDGE
@@ -537,7 +583,7 @@ def _cylinder_limits(
 
     _check(cancelled)
     transform = gp_Trsf()
-    transform.SetTransformation(cylinder.Position())
+    transform.SetTransformation(position)
     local = BRepBuilderAPI_Transform(face, transform, True).Shape()
     bounds = Bnd_Box()
     BRepBndLib.AddOptimal_s(local, bounds, False, False)
@@ -558,14 +604,13 @@ def _cylinder_limits(
             limits[1] - reach,
             limits[4] + reach,
         ).Face()
-        distance = BRepExtrema_DistShapeShape(local, target_face)
+        away = nearest_distance(local, target_face)
         _check(cancelled)
-        if not distance.IsDone():
+        if away is None:
             return None
-        measured.append(height + distance.Value() if index == 0 else height - distance.Value())
+        measured.append(height + away if index == 0 else height - away)
     first, last = measured
     intervals = []
-    target = Geom_CylindricalSurface(cylinder)
     walk = TopExp_Explorer(face, TopAbs_EDGE)
     while walk.More():
         _check(cancelled)
@@ -604,6 +649,234 @@ def _cylinder_limits(
     if not all(math.isfinite(value) for value in (first, last, turn)) or not last > first:
         return None
     return first, last, min(turn, math.tau)
+
+
+#: Wie oft ein Bézier-Abschnitt zur Kegelspitze hin halbiert wird, bis der
+#: Rest in ``EPS_GEOM`` um die Spitze liegt. Von 100 mm auf 10⁻⁶ mm sind es 27
+#: Halbierungen; die Zahl ist eine Arbeitsgrenze, keine Toleranz.
+_APEX_SPLITS = 64
+
+
+def _halved(homogeneous: Any, dimension: int, toward_end: bool) -> tuple[Any, Any]:
+    """Teilt einen rationalen Bézier-Abschnitt in der Mitte seines Parameters (de Casteljau).
+
+    ``homogeneous`` trägt je Pol ``(w·x, w·y, w·z, w)``; in diesen Koordinaten
+    ist die Teilung exakt. Zurück kommen die Hälfte am gewählten Rand von
+    ``dimension`` — am letzten Index, wenn ``toward_end`` — und die andere.
+    """
+    points = np.moveaxis(homogeneous, dimension, 0)
+    first, last = [points[0]], [points[-1]]
+    work = points
+    for _ in range(1, points.shape[0]):
+        work = 0.5 * (work[:-1] + work[1:])
+        first.append(work[0])
+        last.append(work[-1])
+    low = np.moveaxis(np.stack(first), 0, dimension)
+    high = np.moveaxis(np.stack(last[::-1]), 0, dimension)
+    return (high, low) if toward_end else (low, high)
+
+
+def _apart_from_the_apex(
+    poles: Any, weights: Any, origin: Any, cancelled: CancelToken | None
+) -> list[tuple[Any, Any]] | None:
+    """Die Teile eines Bézier-Abschnitts, deren Polhülle die Kegelspitze nicht berührt.
+
+    Ein Kegel, der bis in seine Spitze reicht — die Bohrspitze eines
+    Sacklochs, ein spitzer Stift —, hat dort einen Abschnitt, dessen Polreihe
+    an einem Rand ganz auf der Spitze liegt, und dort teilt die Schranke von
+    :func:`_cone_matches` durch null. Der Abschnitt wird deshalb zur Spitze
+    hin halbiert, bis der Rest ganz in ``EPS_GEOM`` um sie liegt: Seine Punkte
+    sind Konvexkombinationen der Pole, und die Spitze liegt auf dem Kegel.
+    Jede abgetrennte Hälfte prüft der Aufrufer wie jeden anderen Abschnitt.
+    Berührt die Hülle die Spitze anders als mit genau einer Randreihe, bleibt
+    die Fläche ohne Befund.
+    """
+    distance = np.linalg.norm(poles - origin, axis=-1)
+    if float(distance.min()) > EPS_GEOM:
+        return [(poles, weights)]
+    if float(distance.max()) <= EPS_GEOM:
+        return []
+    ends = [
+        (dimension, toward_end)
+        for dimension in (0, 1)
+        for toward_end in (False, True)
+        if float(np.take(distance, -1 if toward_end else 0, axis=dimension).max()) <= EPS_GEOM
+    ]
+    if len(ends) != 1:
+        return None
+    dimension, toward_end = ends[0]
+    current = np.concatenate((poles * weights[..., None], weights[..., None]), axis=-1)
+    pieces = []
+    for _ in range(_APEX_SPLITS):
+        _check(cancelled)
+        near, far = _halved(current, dimension, toward_end)
+        far_weights = far[..., 3]
+        pieces.append(
+            (far[..., :3] / far_weights[..., None], far_weights / float(far_weights.max()))
+        )
+        current = near
+        points = current[..., :3] / current[..., 3:]
+        if float(np.linalg.norm(points - origin, axis=-1).max()) <= EPS_GEOM:
+            return pieces
+    return None
+
+
+def _cone_matches(
+    adaptor: Any, apex: Any, axis: Any, half_angle: float, cancelled: CancelToken | None
+) -> float | None:
+    """Prüft jeden rationalen Bézier-Abschnitt gegen den Kreiskegel — und nennt die Nappe.
+
+    In der Kegelbasis mit Spitze ``A``, Achse ``a`` und ``t = tan(Halbwinkel)``
+    gilt auf der Fläche ``x² + y² - t²z² = 0``. Homogen mit den Gewichten sind
+    das Bernstein-Koeffizienten von ``X² + Y² - t²Z²`` (dieselbe Rechnung wie am
+    Zylinder, :func:`_matches`). Mit dem Achsabstand ``r`` zerfällt der
+    Ausdruck in ``(r - tz)(r + tz)``, und der Abstand eines Punkts zur
+    Kegelfläche ist höchstens ``|r - tz|·cos(Halbwinkel)``. Weil ``z`` über der
+    Polhülle nicht unter ``z_min`` fällt, ist ``r + tz ≥ t·z_min``; so begrenzt
+    ``max|F|·cos / (t·z_min·w_min²)`` den Abstand ohne Punktstichprobe.
+    Reicht die Fläche bis in die Spitze, übernimmt :func:`_apart_from_the_apex`
+    die Teilung davor. Schließt die Polhülle die Spitze anders ein (beide
+    Nappen), bleibt die Fläche ohne Befund — dieselbe Regel wie am nativen
+    Kegel. Zurück kommt das Vorzeichen der belegten Nappe entlang ``axis``
+    oder ``None``.
+    """
+    patches = _bezier_patches(adaptor, cancelled)
+    if patches is None:
+        return None
+    tangent = math.tan(half_angle)
+    cosine = math.cos(half_angle)
+    if not (math.isfinite(tangent) and tangent > 0.0):
+        return None
+    origin = np.asarray(apex.Coord(), dtype=np.float64)
+    direction = np.asarray(axis.Coord(), dtype=np.float64)
+    helper = np.array((1.0, 0.0, 0.0)) if abs(direction[0]) < 0.9 else np.array((0.0, 1.0, 0.0))
+    across = np.cross(direction, helper)
+    across /= np.linalg.norm(across)
+    upward = np.cross(direction, across)
+    remaining = _MAX_COEFFICIENT_PRODUCTS
+    side = 0.0
+    for patch in patches:
+        _check(cancelled)
+        data = _patch_data(patch, cancelled)
+        if data is None:
+            return None
+        pieces = _apart_from_the_apex(*data, origin, cancelled)
+        if pieces is None:
+            return None
+        for poles, weights in pieces:
+            _check(cancelled)
+            remaining -= 3 * weights.size**2
+            if remaining < 0:
+                return None
+            relative = poles - origin
+            along = relative @ direction
+            nappe = 1.0 if float(along.min()) > 0.0 else (-1.0 if float(along.max()) < 0.0 else 0.0)
+            if nappe == 0.0 or (side and nappe != side):
+                return None
+            side = nappe
+            nearest = float(np.min(np.abs(along)))
+            scale = float(np.max(np.abs(along)))
+            if not (math.isfinite(scale) and scale > 0.0 and nearest > 0.0):
+                return None
+            x = weights * (relative @ across) / scale
+            y = weights * (relative @ upward) / scale
+            z = weights * along / scale
+            residual = (
+                _product(x, x, cancelled)
+                + _product(y, y, cancelled)
+                - tangent**2 * _product(z, z, cancelled)
+            )
+            bound = (
+                float(np.max(np.abs(residual)))
+                * scale**2
+                * cosine
+                / (tangent * nearest * float(weights.min()) ** 2)
+            )
+            if not math.isfinite(bound) or bound > EPS_GEOM:
+                return None
+    return side or None
+
+
+def _cone_surface(face: Any, adaptor: Any, cancelled: CancelToken | None) -> ConeSurface | None:
+    """Ein rationaler Kegelträger, erkannt an einer privaten Kopie und vollständig geprüft.
+
+    Der native Kegel (``GeomAbs_Cone``) bleibt beim bisherigen Weg in
+    ``features``; hier geht es um dieselbe Fläche als B-Spline, wie manche
+    Programme jede Fläche nach STEP schreiben. Bis zum 22.09.2026 kam eine
+    solche Senkung als „gerundete Seite" in den Baum und trug keine Maße
+    (P2.3). Die axiale Spanne kommt wie am Zylinder aus Abständen zu äußeren
+    Messebenen, der Winkel aus den projizierten Randkurven.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.Geom import Geom_ConicalSurface
+    from OCP.GeomAbs import GeomAbs_BezierSurface, GeomAbs_BSplineSurface
+    from OCP.gp import gp_Ax3, gp_Cone, gp_Dir, gp_Vec
+    from OCP.ShapeAnalysis import ShapeAnalysis_CanonicalRecognition
+
+    kind = adaptor.GetType()
+    if kind not in (GeomAbs_BezierSurface, GeomAbs_BSplineSurface):
+        return None
+    working = (adaptor.Bezier() if kind == GeomAbs_BezierSurface else adaptor.BSpline()).Copy()
+    local_origin = np.asarray(working.Pole(1, 1).Coord(), dtype=float)
+    working.Translate(gp_Vec(*(-local_origin)))
+    _check(cancelled)
+    local_face = BRepBuilderAPI_MakeFace(
+        working,
+        adaptor.FirstUParameter(),
+        adaptor.LastUParameter(),
+        adaptor.FirstVParameter(),
+        adaptor.LastVParameter(),
+        EPS_GEOM,
+    ).Face()
+    recognizer = ShapeAnalysis_CanonicalRecognition(local_face)
+    candidate = gp_Cone()
+    matched = recognizer.IsCone(EPS_GEOM, candidate)
+    _check(cancelled)
+    if not matched or recognizer.GetStatus() != 0:
+        return None
+    gap = float(recognizer.GetGap())
+    if not math.isfinite(gap) or not 0.0 <= gap <= EPS_GEOM:
+        return None
+    candidate.Translate(gp_Vec(*local_origin))
+    half_angle = abs(float(candidate.SemiAngle()))
+    if not EPS_GEOM < half_angle < math.pi / 2.0 - EPS_GEOM:
+        return None
+    apex = candidate.Apex()
+    direction = candidate.Axis().Direction()
+    side = _cone_matches(adaptor, apex, direction, half_angle, cancelled)
+    if side is None:
+        return None
+    into = gp_Dir(side * direction.X(), side * direction.Y(), side * direction.Z())
+    limits = _axial_limits(face, gp_Ax3(apex, into), Geom_ConicalSurface(candidate), cancelled)
+    if limits is None:
+        return None
+    near, far, turn = limits
+    # Ein Kegel bis in die Spitze beginnt bei null; ``_axial_limits`` misst
+    # dort Rundungsrauschen, und darunter liegt nichts (``_cone_matches``
+    # hat die Nappe belegt).
+    if not (-EPS_GEOM <= near < far and far > EPS_GEOM):
+        return None
+    near = max(near, 0.0)
+    measured = surface_sample(face)
+    _check(cancelled)
+    if measured is None:
+        return None
+    point, normal = measured
+    axis = gp_Vec(into)
+    radial = gp_Vec(apex, point)
+    radial.Subtract(axis.Multiplied(radial.Dot(axis)))
+    if radial.Magnitude() <= EPS_GEOM:
+        return None
+    return ConeSurface(
+        cone=candidate,
+        apex=(float(apex.X()), float(apex.Y()), float(apex.Z())),
+        axis=(float(into.X()), float(into.Y()), float(into.Z())),
+        half_angle=half_angle,
+        near=near,
+        far=far,
+        turn=turn,
+        inward=normal.Dot(radial) < 0.0,
+    )
 
 
 def _candidate(
@@ -650,17 +923,74 @@ def _candidate(
         method = recognizer.IsPlane if plane else recognizer.IsCylinder
         matched = method(EPS_GEOM, probe)
         _check(cancelled)
-        if not matched or recognizer.GetStatus() != 0:
-            continue
-        gap = float(recognizer.GetGap())
-        if (
-            math.isfinite(gap)
-            and 0.0 <= gap <= EPS_GEOM
-            and _matches(adaptor, probe, plane, cancelled, offset=offset)
-        ):
-            _check(cancelled)
-            return probe, plane
+        if matched and recognizer.GetStatus() == 0:
+            gap = float(recognizer.GetGap())
+            if (
+                math.isfinite(gap)
+                and 0.0 <= gap <= EPS_GEOM
+                and _matches(adaptor, probe, plane, cancelled, offset=offset)
+            ):
+                _check(cancelled)
+                return probe, plane
+        if plane:
+            # Versagt der Erkenner an einer Ebene, sprechen ihre Pole
+            # (:func:`_pole_plane`); belegt wird der Kandidat wie jeder andere.
+            fitted = _pole_plane(adaptor, cancelled)
+            if fitted is not None and _matches(adaptor, fitted, True, cancelled, offset=offset):
+                _check(cancelled)
+                return fitted, True
     return None
+
+
+def _pole_plane(adaptor: Any, cancelled: CancelToken | None) -> Any | None:
+    """Die Ebene durch die Pole einer Spline-Fläche, wenn alle in ``EPS_GEOM`` darauf liegen.
+
+    ``ShapeAnalysis_CanonicalRecognition.IsPlane`` versagt an großen
+    gespiegelten Ebenen (Lücke -1): Ein Quader 300 x 300 x 30 mit Bohrung,
+    gespiegelt und um 31° gedreht, verlor als NURBS fünf seiner sechs Ebenen,
+    bei 1000 mm alle sechs, und kam als gerundete Flächen ohne Maß in den Baum
+    (gemessen 22.09.2026). Seine Pole lagen dabei auf 10⁻¹⁴ in einer Ebene.
+    Die Ausgleichsebene durch sie ist deshalb ein Kandidat wie der des
+    Erkenners, und mit positiven Gewichten liegt jeder Flächenpunkt in der
+    konvexen Hülle der Pole — die Bernstein-Prüfung in :func:`_matches`
+    bestätigt ihn trotzdem, damit Offset und Trimmung denselben Weg gehen.
+    """
+    from OCP.GeomAbs import GeomAbs_BezierSurface
+    from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
+
+    surface = adaptor.Bezier() if adaptor.GetType() == GeomAbs_BezierSurface else adaptor.BSpline()
+    rows, columns = int(surface.NbUPoles()), int(surface.NbVPoles())
+    if rows * columns > _MAX_COEFFICIENT_PRODUCTS:
+        return None
+    # Erst die vier Eckpole: Liegen sie nicht in einer Ebene, ist die Fläche
+    # keine — die Regelflächen eines Gewindes fallen hier heraus, ohne dass
+    # jeder ihrer Pole gelesen wird.
+    corners = np.asarray(
+        [surface.Pole(row, column).Coord() for row in (1, rows) for column in (1, columns)],
+        dtype=np.float64,
+    )
+    span = corners - corners[0]
+    across = np.cross(span[1], span[2])
+    size = float(np.linalg.norm(across))
+    if size > EPS_GEOM**2 and abs(float(span[3] @ across)) / size > EPS_GEOM:
+        return None
+    poles = np.empty((rows * columns, 3), dtype=np.float64)
+    for row in range(rows):
+        _check(cancelled)
+        for column in range(columns):
+            if not surface.Weight(row + 1, column + 1) > 0.0:
+                return None
+            poles[row * columns + column] = surface.Pole(row + 1, column + 1).Coord()
+    if not np.isfinite(poles).all():
+        return None
+    centre = poles.mean(axis=0)
+    _, singular, directions = np.linalg.svd(poles - centre, full_matrices=False)
+    if len(singular) < 3 or not singular[1] > EPS_GEOM:
+        return None
+    normal = directions[2]
+    if float(np.max(np.abs((poles - centre) @ normal))) > EPS_GEOM:
+        return None
+    return gp_Pln(gp_Pnt(*(float(value) for value in centre)), gp_Dir(*(float(v) for v in normal)))
 
 
 def _offset_candidate(
@@ -734,6 +1064,13 @@ def describe(face: Any, *, cancelled: CancelToken | None = None) -> Surface | No
             else _candidate(face, adaptor, cancelled)
         )
         if found is None:
+            # Ein Kegel ist eine Regelfläche: erst er, dann erst die Absage an
+            # Kugel und Ring, die keine Strecke enthalten.
+            cone = _cone_surface(face, adaptor, cancelled)
+            if cone is not None:
+                return cone
+            if _ruled(adaptor):
+                return None
             sphere = _sphere_surface(face, adaptor, cancelled)
             return sphere if sphere is not None else _torus_surface(face, adaptor, cancelled)
         candidate, plane = found
@@ -756,7 +1093,11 @@ def describe(face: Any, *, cancelled: CancelToken | None = None) -> Surface | No
             first, last = float(adaptor.FirstVParameter()), float(adaptor.LastVParameter())
             turn = abs(float(adaptor.LastUParameter() - adaptor.FirstUParameter()))
         else:
-            limits = _cylinder_limits(face, candidate, cancelled)
+            from OCP.Geom import Geom_CylindricalSurface
+
+            limits = _axial_limits(
+                face, candidate.Position(), Geom_CylindricalSurface(candidate), cancelled
+            )
             if limits is None:
                 return None
             first, last, turn = limits

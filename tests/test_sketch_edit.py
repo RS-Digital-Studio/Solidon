@@ -612,6 +612,120 @@ def test_projecting_beside_the_body_says_so() -> None:
         edit.project(empty, box)
 
 
+def _exact_plate() -> object:
+    """Platte 60 x 40 x 10 mit einer Bohrung Ø 8 bei (−10 | 5) und einem Langloch."""
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit as brep_edit
+
+    plate = brep_edit.box(60.0, 40.0, 10.0)
+    plate = brep_edit.cut_bore(
+        plate, position=(-10.0, 5.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=8.0, depth=12.0
+    )
+    return brep_edit.slot_bore(
+        plate,
+        position=(15.0, -5.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=10.0,
+        length=16.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+
+
+def test_a_section_through_an_exact_body_keeps_its_circles_and_arcs() -> None:
+    """P3.5: Der exakte Körper wird exakt geschnitten, nicht seine Vernetzung.
+
+    Am Netz kam die Bohrung als Vieleck aus kurzen Strecken in die Zeichnung
+    — ohne Mitte, an der eine Bemaßung hängen könnte. Jetzt ist sie ein Kreis
+    mit Mittelpunkt und Radius, das Langloch zwei Halbkreise, der Rand vier
+    Strecken, und alles ist Hilfsgeometrie. Sollwerte aus den Baumaßen oben.
+    """
+    plate = _exact_plate()
+    empty = Sketch(plane="plane:xy", elements=())
+    frame_origin = (0.0, 0.0, 5.0)
+
+    class _Frame:
+        origin = frame_origin
+        normal = (0.0, 0.0, 1.0)
+        x_axis = (1.0, 0.0, 0.0)
+        y_axis = (0.0, 1.0, 0.0)
+
+    projected = edit.project(empty, plate, _Frame())
+
+    kinds = sorted(element.kind for element in projected.elements)
+    assert kinds == ["arc", "arc", "circle", "line", "line", "line", "line", "line", "line"]
+    assert all(element.construction for element in projected.elements)
+    (circle,) = [element for element in projected.elements if element.kind == "circle"]
+    centre, rim = circle.points
+    assert centre == pytest.approx((-10.0, 5.0), abs=1e-9)
+    assert math.dist(centre, rim) == pytest.approx(4.0, abs=1e-9)
+    arcs = [element for element in projected.elements if element.kind == "arc"]
+    assert sorted(round(arc.points[0][0], 9) for arc in arcs) == pytest.approx([10.0, 20.0])
+    for arc in arcs:
+        middle, start, end = arc.points
+        assert math.dist(middle, start) == pytest.approx(3.0, abs=1e-9)
+        assert math.dist(middle, end) == pytest.approx(3.0, abs=1e-9)
+        # Gegen den Uhrzeigersinn von Anfang nach Ende — der Halbkreis zeigt
+        # vom Langloch weg, also liegt seine Wölbung außen.
+        sweep = (
+            math.atan2(end[1] - middle[1], end[0] - middle[0])
+            - math.atan2(start[1] - middle[1], start[0] - middle[0])
+        ) % math.tau
+        assert sweep == pytest.approx(math.pi, abs=1e-9)
+        bulge_angle = math.atan2(start[1] - middle[1], start[0] - middle[0]) + sweep / 2.0
+        outward = 1.0 if middle[0] > 15.0 else -1.0
+        assert math.cos(bulge_angle) * outward == pytest.approx(1.0, abs=1e-9)
+    xs = [
+        point[0]
+        for element in projected.elements
+        if element.kind == "line"
+        for point in element.points
+    ]
+    assert max(xs) == pytest.approx(30.0, abs=1e-9) and min(xs) == pytest.approx(-30.0, abs=1e-9)
+
+
+def test_an_oblique_section_of_an_exact_cylinder_becomes_a_curve() -> None:
+    """Was weder Strecke noch Kreis ist — die Ellipse eines schräg geschnittenen
+    Zylinders —, kommt als Kurve durch Punkte auf der echten Schnittlinie."""
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit as brep_edit
+
+    tilt = math.radians(30.0)
+
+    class _Frame:
+        origin = (0.0, 0.0, 15.0)
+        normal = (0.0, -math.sin(tilt), math.cos(tilt))
+        x_axis = (1.0, 0.0, 0.0)
+        y_axis = (0.0, math.cos(tilt), math.sin(tilt))
+
+    cylinder = brep_edit.cylinder(20.0, 30.0)
+    projected = edit.project(Sketch(plane="plane:xy", elements=()), cylinder, _Frame())
+
+    assert [element.kind for element in projected.elements] == ["spline"]
+    for x, y in projected.elements[0].points:
+        # Die Ellipse mit den Halbachsen 10 und 10 / cos 30°.
+        assert (x / 10.0) ** 2 + (y * math.cos(tilt) / 10.0) ** 2 == pytest.approx(1.0, abs=1e-6)
+
+
+def test_a_section_beside_an_exact_body_says_so() -> None:
+    """Regel 17 gilt auch am exakten Weg: kein Schnitt, eine Aussage."""
+    plate = _exact_plate()
+
+    class _Frame:
+        origin = (0.0, 0.0, 50.0)
+        normal = (0.0, 0.0, 1.0)
+        x_axis = (1.0, 0.0, 0.0)
+        y_axis = (0.0, 1.0, 0.0)
+
+    with pytest.raises(ValidationError):
+        edit.project(Sketch(plane="plane:xy", elements=()), plate, _Frame())
+
+
 # --- Verrunden und Fase -----------------------------------------------------------
 
 

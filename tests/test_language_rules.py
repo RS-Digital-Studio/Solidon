@@ -599,85 +599,216 @@ def test_the_interface_loads_qt_types_before_the_first_window() -> None:
     )
 
 
-#: Sätze, die mit Absicht duzen: Beschreibungen der Werkzeuge an das
-#: Sprachmodell und Beispiele, die der Kunde selbst an den Agenten schreibt.
-#: Beides spricht nicht den Kunden an. Wer hier etwas einträgt, hat einen
-#: Satz, der ans Modell geht — alles andere siezt (AGENTS.md, Oberflächentexte).
-_DU_ON_PURPOSE: frozenset[str] = frozenset(
-    {
-        "Lege ein Hauptmaß als Projektparameter an, statt es als Zahl zu setzen.",
-        "Lege ein Passungspaar an. Die Toleranz kommt aus dem Materialprofil.",
-        "Lies den Steckbrief der Szene neu — mit den Merkmalen und IDs, die deine "
-        "bisherigen Schritte erzeugt haben.",
-        "Lies den Prüfbericht, wahlweise nur ab einer Schwere.",
-        "Lies eine Analyse: Druckbarkeit (Überhang, Inseln, Brücken), Zeit- und "
-        "Materialschätzung, Einstellungsrat oder Orientierungssuche. Nur lesend, "
-        "Herkunft wird ausgewiesen.",
-        "Mach die Wandstärke 3 mm",
-        "Nimm eine Transaktion aus dem Verlauf zurück.",
-        "Sage das in deiner Antwort, bevor der Nutzer entscheidet.",
-        "Skizzen zeichnet der Nutzer selbst — benutze die Grundformen und Maße.",
-        "Suche einen passenden Baustein, bevor du Geometrie selbst zusammensetzt.",
-        "Teile das Teil, damit es auf das Bett passt",
-        "Ändere den Wert eines bestehenden Projektparameters.",
-    }
-)
+#: Befehlsformen und Fürwörter der Du-Anrede. **Kuratiert**, aus demselben
+#: Grund wie :data:`GERMAN_STEMS`: „Stelle", „Suche" und „Versuch" sind am
+#: Satzanfang Hauptwörter und stehen deshalb nur kleingeschrieben hier.
+DU_FORMS_LOWER = [
+    "öffne",
+    "wähle",
+    "prüfe",
+    "klicke",
+    "gib",
+    "nimm",
+    "zeichne",
+    "lies",
+    "schau",
+    "tippe",
+    "ziehe",
+    "drücke",
+    "speichere",
+    "starte",
+    "ändere",
+    "entferne",
+    "verschiebe",
+    "schließe",
+    "füge",
+    "nutze",
+    "verwende",
+    "stell",
+    "leg",
+    "mach",
+    "setz",
+    "probier",
+    "versuch",
+    "such",
+    "lade",
+    "du",
+    "dich",
+    "dir",
+    "dein",
+    "deine",
+    "deinen",
+    "deinem",
+    "deiner",
+    "deines",
+]
+DU_FORMS_CAPITAL = [
+    "Ordne",
+    "Erzeuge",
+    "Setze",
+    "Versuche",
+    "Repariere",
+    "Lege",
+    "Installiere",
+    "Trage",
+    "Richte",
+    "Sieh",
+    "Lass",
+    "Benutze",
+    "Mach",
+    "Halte",
+    "Exportiere",
+    "Importiere",
+    "Wiederhole",
+    "Aktiviere",
+    "Deaktiviere",
+    "Sage",
+    "Öffne",
+    "Wähle",
+    "Prüfe",
+    "Klicke",
+    "Gib",
+    "Nimm",
+    "Zeichne",
+    "Lies",
+    "Schau",
+    "Tippe",
+    "Ziehe",
+    "Drücke",
+    "Speichere",
+    "Starte",
+    "Ändere",
+    "Entferne",
+    "Verschiebe",
+    "Schließe",
+    "Füge",
+    "Nutze",
+    "Verwende",
+    "Probier",
+    "Du",
+    "Dich",
+    "Dir",
+    "Dein",
+    "Deine",
+    "Deinen",
+    "Deinem",
+    "Deiner",
+    "Deines",
+]
 
-#: Imperative der zweiten Person, wie sie in einem Oberflächensatz stehen
-#: würden. ``Teile``, ``Stelle`` und ``Lege`` sind auch Nomen oder Konjunktive
-#: — gesucht wird deshalb am Satzanfang und nach einem Gedankenstrich.
-#: ``Suche`` fehlt mit Absicht: „Suche abgebrochen" ist ein Nomen, und ein
-#: duzendes „suche" fängt die Prüfung auf ``du`` daneben.
-_DU_VERBS = (
-    "Ordne|Erzeuge|Wähle|Prüfe|Öffne|Lade|Setze|Entferne|Nimm|Gib|Versuche|Speichere|"
-    "Ändere|Repariere|Verschiebe|Lege|Teile|Schließe|Starte|Installiere|Trage|Richte|"
-    "Klicke|Ziehe|Drücke|Tippe|Sieh|Schau|Warte|Lass|Nutze|Benutze|Verwende|Füge|Stelle|"
-    "Mach|Halte|Exportiere|Importiere|Wiederhole|Aktiviere|Deaktiviere|Lies|Sage"
+
+#: „Stelle" und „Teile" sind Nomen und Befehlsform zugleich. Am Satzanfang
+#: zählen sie nur, wenn ein Wort folgt und der Text kein Knopftitel ist
+#: (:func:`_noun_title`) — „Stelle den Schritt um." duzt, „Stelle im Bild
+#: wählen" nicht.
+DU_FORMS_AMBIGUOUS = ["Stelle", "Teile"]
+
+#: Sätze, die der Kunde selbst an den Agenten schreibt — Beispiele im Chat.
+#: Sie sprechen nicht den Kunden an, sondern sind seine Worte.
+CUSTOMER_WRITES = frozenset(
+    {
+        "Mach die Wandstärke 3 mm",
+        "Teile das Teil, damit es auf das Bett passt",
+    }
 )
 
 
 def _noun_title(text: str) -> bool:
     """Ein Knopftitel wie „Stelle im Bild wählen" ist ein Nomen mit Infinitiv.
 
-    „Stelle" und „Teile" sind Nomen und Befehlsform zugleich. Ein Titel ohne
-    Satzzeichen, der mit dem Infinitiv endet, duzt niemanden; „Stelle den
-    Schritt um." endet mit Punkt und bleibt ein Befund.
+    Ein Titel ohne Satzzeichen, der mit dem Infinitiv endet, duzt niemanden;
+    „Stelle den Schritt um." endet mit Punkt und bleibt ein Befund.
     """
     words = text.split()
-    return (
-        words[0] in {"Stelle", "Teile"}
-        and not re.search(r"[.!?:;]", text)
-        and re.fullmatch(r"\w+en", words[-1]) is not None
+    return len(words) <= 2 or (
+        not re.search(r"[.!?:;]", text) and re.fullmatch(r"\w+en", words[-1]) is not None
     )
 
 
-def test_customer_texts_say_sie() -> None:
-    """Die Oberfläche siezt — auch in einem Befund, der tief im Kern entsteht.
+def _du_form(text: str) -> str | None:
+    """Die erste Du-Form im Text, oder ``None``.
 
-    Gefunden in der Durchsicht 0.5.0 an fünf Sätzen, die den Kunden duzten:
-    „Ordne sie in den betroffenen Folgeschritten neu zu", „erzeuge sie im
-    Ursprungsprogramm neu", „Öffne sie lokal …", „Stelle den Schritt …" und
-    „Rückfrage an dich". Geprüft wird die deutsche Quelle jedes Katalogs,
-    also jeder Satz, den der Kunde lesen kann.
+    Kleingeschrieben überall, großgeschrieben nur am Satzanfang — mitten im
+    Satz ist ein großes „Lies" oder „Du" kein Wort dieser Anwendung.
     """
-    import json
-    import re
+    boundary = r"(?![\wäöüßÄÖÜ])"
+    start = r"(?:^|[.!?:;]\s+|[—–]\s+|\n|\(\s*)"
+    lower = re.search(r"(?<![\wäöüßÄÖÜ])(" + "|".join(DU_FORMS_LOWER) + ")" + boundary, text)
+    if lower:
+        return lower.group(1)
+    capital = re.search(start + "(" + "|".join(DU_FORMS_CAPITAL) + ")" + boundary, text)
+    if capital:
+        return capital.group(1)
+    ambiguous = re.search(start + "(" + "|".join(DU_FORMS_AMBIGUOUS) + r")\s+(?!Sie\b)\S", text)
+    if ambiguous and not _noun_title(text):
+        return ambiguous.group(1)
+    return None
 
-    catalog = json.loads((PACKAGE_DIR / "i18n" / "locales" / "en.json").read_text("utf-8"))
-    assert len(catalog) > 1000, "der Katalog wurde nicht gelesen — die Prüfung sähe nichts"
-    opening = re.compile(rf"(^|[.!?:;]\s+|\(\s*)({_DU_VERBS})\s+(?!Sie\b)\S")
-    dashed = re.compile(rf"[—–]\s+({_DU_VERBS.lower()})\s+(sie|es|ihn|den|die|das)\b")
-    pronoun = re.compile(r"\b(du|dich|dir|dein|deine|deinen|deinem|deiner)\b", re.IGNORECASE)
-    offending = sorted(
-        text
-        for text in catalog
-        if text not in _DU_ON_PURPOSE
-        and (opening.search(text) or dashed.search(text) or pronoun.search(text))
-        # ``Teile``, ``Stelle`` allein sind Nomen: Knopf- und Spaltentitel.
-        and len(text.split()) > 2
-        and not _noun_title(text)
+
+def test_the_agent_status_line_addresses_the_customer_formally() -> None:
+    """Die Statuszeile des Agenten geht an den Kunden — und siezt ihn.
+
+    ``test_no_customer_text_says_du`` nimmt ``app/core/agent`` aus, weil dort
+    die Sätze an das Sprachmodell stehen. Die Beschriftungen, die
+    ``AgentSession._label_for`` während eines Werkzeugs in die Statuszeile
+    schreibt, liest aber der Kunde; bis zum 23.09.2026 stand dort
+    „Rückfrage an dich".
+    """
+    from types import SimpleNamespace
+
+    from app.core.agent import tools
+    from app.core.agent.session import AgentSession
+
+    names = [
+        tools.ASK_USER,
+        tools.UNDO_TRANSACTION,
+        tools.ADD_PARAMETER,
+        tools.SET_PARAMETER,
+        tools.ADD_FIT,
+        tools.READ_REPORT,
+        tools.FIND_PART,
+        tools.READ_DIGEST,
+        tools.READ_STANDARD,
+        tools.READ_ANALYSIS,
+        tools.SET_PRINT_TARGET,
+    ]
+    labels = [AgentSession._label_for(SimpleNamespace(registry=None), name) for name in names]  # type: ignore[arg-type]
+    assert all(label != name for label, name in zip(labels, names, strict=True))
+    found = [label for label in labels if _du_form(label) is not None]
+    assert not found, found
+
+
+def test_no_customer_text_says_du() -> None:
+    """Die Anwendung siezt ihre Kunden — jeder Satz, den ``tr()`` sieht.
+
+    Am 22.09.2026 standen drei Sätze in Du-Form in Meldungen: „…oder öffne
+    eine STEP-Datei" (exakter Körper verlangt), „wähle die Fläche im
+    betroffenen Schritt neu" (verwaister Verweis) und „Öffne sie lokal …"
+    (GLTF mit Begleitdateien). Ausgenommen ist ``app/core/agent``: Dort
+    stehen die Werkzeugbeschreibungen und Anweisungen an das Sprachmodell,
+    und das wird geduzt (``.claude/rules/grenzen.md``, „Agent und Mensch
+    bekommen verschiedene Anreden"). Dieselbe Prüfung über den Agenten ist
+    die Gegenprobe: Findet sie dort nichts, prüft sie nichts. Hier und nicht
+    in ``test_wording``, weil diese Datei vor jedem Commit an ``app/`` läuft
+    und jene eine Fensterdatei ist, die erst das Release-Tor fährt.
+    """
+    from app.i18n.extract import EXTRA_SOURCES, message_ids
+
+    agent = PACKAGE_DIR / "core" / "agent"
+    customer = [path for path in sorted(PACKAGE_DIR.rglob("*.py")) if agent not in path.parents]
+    texts = message_ids([*customer, *EXTRA_SOURCES])
+    assert len(texts) > 1000, f"nur {len(texts)} Texte — dann prüft das nichts"
+
+    found = sorted(
+        f"„{form}“: {text.split(chr(4))[-1][:120]}"
+        for text in texts
+        if text.split(chr(4))[-1] not in CUSTOMER_WRITES
+        and (form := _du_form(text.split(chr(4))[-1])) is not None
     )
-    assert not offending, f"Diese Sätze duzen den Kunden: {offending}"
+    assert not found, f"{len(found)} Texte duzen den Kunden:\n" + "\n".join(found)
+
+    to_the_model = message_ids(sorted(agent.rglob("*.py")))
+    assert any(_du_form(text) for text in to_the_model), "die Gegenprobe fand keine Du-Form"
 
 
 def test_customer_texts_quote_no_internal_keys() -> None:

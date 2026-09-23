@@ -390,27 +390,37 @@ def outlines(
 ) -> list[Any]:
     """Die Buchstaben als Polygone, in Millimetern, auf dem Ursprung sitzend."""
     from matplotlib.textpath import TextPath
+
+    path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font, style))
+    rings = [np.asarray(entry, dtype=float) for entry in path.to_polygons()]
+    return nonzero_fill([entry for entry in rings if len(entry) >= 4])
+
+
+def nonzero_fill(rings: Sequence[Any]) -> list[Any]:
+    """Die gefüllten Bereiche geschlossener Ringe nach der Füllregel der Schrift.
+
+    **Nonzero, nicht gerade-ungerade** — TrueType und CFF füllen, wo die
+    Umlaufzahl der Konturen nicht null ist. Ein Buchstabe wie „o" kommt als
+    zwei Ringe gegenläufigen Drehsinns: außen plus eins, im Loch plus eins
+    minus eins, also null. Bis zum 22.09.2026 stand hier ein symmetrischer
+    Unterschied über alle Ringe, der Größe nach — und der macht aus zwei
+    **gleichsinnig überlappenden** Konturen ein Loch, wo sie sich decken. Die
+    Striche von Comfortaa und Dancing Script überlappen so: „Mama" in
+    Comfortaa verlor bei 10 mm Schrifthöhe 2,4 mm², „Dancing" 1,97 mm² (2,5 %
+    der Fläche), erhaben gedruckt standen Schlitze in den Buchstaben. DejaVu
+    und Liberation überlappen nie und kommen unverändert heraus.
+
+    Die Ränder aller Ringe werden verknotet und in Zellen zerlegt
+    (``polygonize``); eine Zelle bleibt, wenn die Umlaufzahl an einem ihrer
+    inneren Punkte nicht null ist (:func:`_winding`, gezählt an den Kanten der
+    Ringe selbst — auch ein Ring, der sich selbst schneidet, zählt richtig).
+    """
     from shapely import polygonize
     from shapely.geometry import LineString
     from shapely.ops import unary_union
 
-    path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font, style))
-    rings = [np.asarray(entry, dtype=float) for entry in path.to_polygons()]
-    rings = [entry for entry in rings if len(entry) >= 4]
     if not rings:
         return []
-
-    # **Gefüllt wird nach der Umlaufzahl, wie die Schrift es meint.** Ein
-    # Buchstabe wie „o" kommt als zwei Ringe gegensinnigen Umlaufs, und das
-    # Loch ist, wo sie sich aufheben. Eine variable Schrift (Comfortaa,
-    # Dancing Script) legt ihre Striche außerdem übereinander und überlässt
-    # das Vereinigen dem Zeichnen. Bis zum 22.09.2026 stand hier eine
-    # symmetrische Differenz über alle Ringe — Parität statt Umlaufzahl —, und
-    # wo zwei Striche sich überlappten, blieb ein Loch: „Mama" in Comfortaa auf
-    # 10 mm verlor 2,4 mm², erhaben gedruckt standen Schlitze in den Buchstaben.
-    #
-    # Die Ränder aller Ringe werden verknotet und in Zellen zerlegt; jede Zelle
-    # bleibt, wenn die Umlaufzahl an einem ihrer inneren Punkte nicht null ist.
     noded = unary_union([LineString(ring) for ring in rings])
     cells = polygonize(list(getattr(noded, "geoms", [noded])))
     kept = [
@@ -771,13 +781,118 @@ def _too_fine(
     )
 
 
+def placement_matrix(
+    centre: Vec3,
+    lift: float,
+    position: Vec3,
+    normal: Vec3,
+    angle: float,
+) -> np.ndarray:
+    """Die eine Matrix, die :func:`local_text_body` und :func:`place` hintereinander anwenden.
+
+    Zentrieren auf die Mitte des Schriftzugs samt Hub, Drehung um Z, Ausrichten
+    auf die Flächennormale (aufrecht wie :func:`place` es beschreibt) und
+    Verschieben an den Ort — derselbe Weg, als ein Produkt, für einen Körper,
+    der sich nicht Dreieck für Dreieck bewegen lässt.
+    """
+    matrix = translation((-centre[0], -centre[1], lift))
+    if angle:
+        matrix = rotation("z", angle) @ matrix
+    direction = np.asarray(normal, dtype=float)
+    length = float(np.linalg.norm(direction))
+    if length > EPS_GEOM:
+        from app.core.sketch.planes import frame_of
+
+        outward = direction / length
+        frame = frame_of((float(outward[0]), float(outward[1]), float(outward[2])), position)
+        turn = np.eye(4)
+        turn[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+        matrix = turn @ matrix
+    return cast(np.ndarray, translation(position) @ matrix)
+
+
+def _exact_letters(
+    text: str,
+    size: float,
+    font: str,
+    style: str,
+    height: float,
+    *,
+    cancelled: Any = None,
+) -> Any:
+    """Die Buchstaben als exakter Körper, stehend auf Z = 0 (``brep.lettering``)."""
+    from matplotlib.textpath import TextPath
+
+    from app.core.brep import lettering
+
+    path = TextPath((0.0, 0.0), text, size=size, prop=font_properties(font, style))
+    return lettering.letters(path, height, cancelled=cancelled)
+
+
+def _label_exact(ctx: OpContext, params: LabelParams, source: SceneObject) -> OpResult:
+    """Text am exakten Körper — die Schrift aus ihren Kurven, der Körper bleibt exakt (P2.8).
+
+    Bis zum 22.09.2026 machte *Text aufbringen* aus jedem exakten Körper ein
+    Dreiecksmodell (``result_kind="mesh"``): Wer ein STEP-Teil beschriftete,
+    verlor Flächen, Kanten, Verrunden und den STEP-Export. Jetzt kommen die
+    Buchstaben als Prismen über den Kurven der Schrift (``brep.lettering``),
+    liegen mit derselben Matrix wie am Netz (:func:`placement_matrix`) und
+    werden exakt vereinigt oder abgezogen. Die drei Auskünfte des Netzwegs —
+    wirkungslos, danebengefallen, im Körper versteckt — fragen dieselben
+    Kennzahlen am exakten Körper.
+    """
+    from dataclasses import replace
+
+    from app.core.brep import edit
+    from app.core.geom.ops import as_transform
+
+    mode = cast(Placement, params.mode)
+    height = params.depth + BOOLEAN_OVERLAP
+    letters = _exact_letters(
+        params.text, params.size, params.font, params.style, height, cancelled=ctx.cancelled
+    )
+    body = cast(Any, source.mesh)
+    slots = list(source.material_slots)
+    if params.slot:
+        # Wie am Netz: erhaben tragen die Buchstaben den Slot in die
+        # Vereinigung, vertieft bekommen ihn Wände und Böden der Rillen.
+        if mode == "raised":
+            letters = replace(letters, face_slots=(params.slot,) * letters.face_count)
+        slots = _with_slot_named(slots, params.slot)
+    lift = -BOOLEAN_OVERLAP if mode == "raised" else -params.depth
+    matrix = placement_matrix(
+        letters.bounds.centre,
+        lift,
+        (params.x, params.y, params.z),
+        (params.nx, params.ny, params.nz),
+        params.angle,
+    )
+    placed = edit.transformed(letters, as_transform(matrix), cancelled=ctx.cancelled)
+    kind: BooleanKind = "union" if mode == "raised" else "difference"
+    ctx.cancelled.raise_if_cancelled()
+    cut_slot = params.slot if mode == "engraved" else 0
+    result = edit.unified(edit.boolean(kind, [body, placed], cut_slot=cut_slot))
+    ctx.cancelled.raise_if_cancelled()
+    nothing = without_effect(body, result, kind, ctx.profile)
+    apart = _fell_apart(body, result, mode)
+    buried = _buried(placed, body, result, mode)
+    fine = _too_fine(params.text, params.size, params.font, params.style, ctx.profile)
+    _log.info("labelled an exact body with %r, %s", params.text, mode)
+    return OpResult(
+        outputs=[
+            dataclasses.replace(source, mesh=result, kind="brep", features={}, material_slots=slots)
+        ],
+        findings=[finding for finding in (nothing, apart, buried, fine) if finding is not None],
+    )
+
+
 @register_op(
     name="label_text",
-    result_kind="mesh",
-    # 2 seit dem 22.09.2026: Die Buchstaben füllen nach der Umlaufzahl
-    # (``outlines``) — überlappende Striche einer variablen Schrift bleiben voll
-    # —, und vertieft trägt die Schrift ihren Slot in den Rillen.
-    cache_version="2",
+    # 3 seit dem Zusammenführen der Durchsicht 0.5.0: Die Buchstaben füllen
+    # nach der Umlaufzahl (``nonzero_fill``) — überlappende Striche einer
+    # variablen Schrift bleiben voll —, vertieft trägt die Schrift ihren Slot in
+    # den Rillen, und am exakten Körper bleibt der Körper exakt (P2.8).
+    cache_version="3",
     title=_("Text aufbringen"),
     category="label",
     params=LabelParams,
@@ -798,6 +913,11 @@ def label_text(ctx: OpContext) -> OpResult:
             detail=_("Ohne Text gibt es nichts aufzubringen."),
             constraint="empty",
         )
+
+    from app.core.types import BRepBody
+
+    if isinstance(source.mesh, BRepBody):
+        return _label_exact(ctx, params, source)
 
     mode = cast(Placement, params.mode)
 

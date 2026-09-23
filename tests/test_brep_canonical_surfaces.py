@@ -527,6 +527,7 @@ def test_a_local_deformation_cannot_hide_behind_a_zero_reported_gap(
         return SimpleNamespace(
             IsPlane=lambda tolerance, plane: candidate_kind == "plane",
             IsCylinder=is_cylinder,
+            IsCone=lambda tolerance, cone: False,
             IsSphere=lambda tolerance, sphere: False,
             GetGap=lambda: 0.0,
             GetStatus=lambda: 0,
@@ -696,3 +697,308 @@ def test_a_pre_cancelled_native_consumer_does_not_start_recognition(operation: s
             edit.radial_rounding(source, (0.0, 0.0, 5.0), 3.0, 4.0, cancelled=cancelled)
     assert not source._cache
     assert len(features_of(source)) == 7
+
+
+# --- Kegel aus NURBS (P2.3) -----------------------------------------------------------
+
+
+def _countersunk_plate() -> Solid:
+    """60 × 40 × 10 mm, Bohrung Ø5 bei (-10, 0) mit Senkung Ø10 / 90° von oben."""
+    from app.core.geom.prepare import drill_outline
+    from app.core.sketch.planes import frame_of
+
+    outline = drill_outline(
+        diameter=5.0,
+        depth=10.0,
+        profile=None,
+        compensate=False,
+        widening_diameter=10.0,
+        widening_depth=0.0,
+        transition_angle=90.0,
+    )
+    return edit.bore_profile(
+        edit.box(60.0, 40.0, 10.0), outline, frame_of((0.0, 0.0, 1.0), (-10.0, 0.0, 10.0))
+    )
+
+
+def _cone_on_plate(top: float) -> Solid:
+    """Ein Kegel Ø12 unten, ``top`` oben, 10 mm hoch, auf einer Platte 40 × 40 × 5."""
+    return edit.boolean(
+        "union",
+        [edit.box(40.0, 40.0, 5.0), edit.moved(edit.cone(12.0, top, 10.0), (0.0, 0.0, 5.0))],
+    )
+
+
+def _drilled_blind_hole() -> Solid:
+    """Ein Sackloch Ø6 mit 118°-Bohrspitze, 8 mm zylindrisch unter der Oberseite."""
+    tip = 3.0 / math.tan(math.radians(59.0))
+    tool = edit.boolean(
+        "union",
+        [
+            edit.moved(edit.cylinder(6.0, 8.0), (0.0, 0.0, 12.0)),
+            edit.moved(edit.cone(0.0, 6.0, tip), (0.0, 0.0, 12.0 - tip)),
+        ],
+    )
+    return edit.boolean("difference", [edit.box(40.0, 40.0, 20.0), tool])
+
+
+#: Je Körper: Bau, Merkmalsarten und der Kegel aus den Konstruktionsmaßen —
+#: Durchmesser und Mitte am weiten Ende, Winkel, Achse von der Spitze in die
+#: Nappe, Spitze, Senkung ja/nein.
+CONES: dict[str, tuple[Any, dict[str, int], dict[str, Any]]] = {
+    "countersink": (
+        _countersunk_plate,
+        {"face": 6, "hole": 1, "cone": 1},
+        {
+            "diameter": 10.0,
+            "angle": 90.0,
+            "axis": (0.0, 0.0, 1.0),
+            "centre": (-10.0, 0.0, 10.0),
+            "apex": (-10.0, 0.0, 5.0),
+            "recess": True,
+        },
+    ),
+    "frustum": (
+        lambda: _cone_on_plate(6.0),
+        {"face": 7, "cone": 1},
+        {
+            "diameter": 12.0,
+            "angle": 2.0 * math.degrees(math.atan(0.3)),
+            "axis": (0.0, 0.0, -1.0),
+            "centre": (0.0, 0.0, 5.0),
+            "apex": (0.0, 0.0, 25.0),
+            "recess": False,
+        },
+    ),
+    "pointed": (
+        lambda: _cone_on_plate(0.0),
+        {"face": 6, "cone": 1},
+        {
+            "diameter": 12.0,
+            "angle": 2.0 * math.degrees(math.atan(0.6)),
+            "axis": (0.0, 0.0, -1.0),
+            "centre": (0.0, 0.0, 5.0),
+            "apex": (0.0, 0.0, 15.0),
+            "recess": False,
+        },
+    ),
+    "drill_point": (
+        _drilled_blind_hole,
+        {"face": 6, "hole": 1, "cone": 1},
+        {
+            "diameter": 6.0,
+            "angle": 118.0,
+            "axis": (0.0, 0.0, 1.0),
+            "centre": (0.0, 0.0, 12.0),
+            "apex": (0.0, 0.0, 12.0 - 3.0 / math.tan(math.radians(59.0))),
+            "recess": True,
+        },
+    ),
+}
+
+
+@pytest.mark.parametrize("representation", ["analytic", "nurbs", "step"])
+@pytest.mark.parametrize("placed", [False, True])
+@pytest.mark.parametrize("name", sorted(CONES))
+def test_a_nurbs_cone_keeps_its_measures(name: str, placed: bool, representation: str) -> None:
+    """Senkung, Stumpf, Spitze und Bohrspitze tragen als NURBS dieselben Kegelmaße (P2.3).
+
+    Bis zum 22.09.2026 kam ein Kegel aus einer Datei, die jede Fläche als
+    NURBS schreibt, als gerundete Fläche ohne Maße in den Baum: keine Senkung
+    an der gesenkten Bohrung, kein Winkel, keine Achse. Sollwerte aus den
+    Konstruktionsmaßen, gedreht, gespiegelt und verschoben wie die Platte oben.
+    Die zwei Kegel bis in die Spitze belegt ``canonical._apart_from_the_apex``.
+    """
+    build, kinds, expected = CONES[name]
+    source = build()
+    transform = np.eye(4)
+    if placed:
+        transform = trimesh.transformations.rotation_matrix(math.radians(31.0), (1.0, 2.0, 3.0))
+        transform[:3, 0] *= -1.0
+        transform[:3, 3] = (17.0, -9.0, 13.0)
+        source = edit.transformed(source, transform)
+    if representation != "analytic":
+        source = _nurbs(source)
+    if representation == "step":
+        source = step.read(step.write(source))
+
+    found = features_of(source)
+    assert Counter(feature.kind for feature in found.values()) == kinds
+    cone = next(feature for feature in found.values() if feature.kind == "cone")
+    point = transform @ np.array((*expected["centre"], 1.0))
+    apex = transform @ np.array((*expected["apex"], 1.0))
+    axis = transform[:3, :3] @ np.asarray(expected["axis"])
+    assert cone.params["diameter"] == pytest.approx(expected["diameter"], abs=EPS_GEOM)
+    assert cone.params["angle"] == pytest.approx(expected["angle"], abs=1e-9)
+    assert cone.params["axis"] == pytest.approx(axis, abs=EPS_GEOM)
+    assert cone.params["centre"] == pytest.approx(point[:3], abs=EPS_GEOM)
+    assert cone.params["recess"] is expected["recess"]
+    assert not cone.params.get("partial")
+    assert cone.measure_sources["diameter"] == "native"
+    patches = [patch for patch in cone.surface_patches if patch.kind == "cone"]
+    assert len(patches) == 1 and patches[0].source == "native"
+    assert patches[0].params["apex"] == pytest.approx(apex[:3], abs=EPS_GEOM)
+    assert patches[0].params["half_angle"] == pytest.approx(
+        math.radians(expected["angle"] / 2.0), abs=1e-9
+    )
+
+
+def test_a_deformed_nurbs_cone_is_no_cone() -> None:
+    """Ein Pol um 1 % nach außen: Die Koeffizientenprüfung lässt den Kegel nicht zu."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.GeomAbs import GeomAbs_BSplineSurface
+
+    from app.core.brep.canonical import ConeSurface, describe
+
+    source = _nurbs(_cone_on_plate(6.0))
+    face = next(
+        face
+        for face in source.faces()
+        if BRepAdaptor_Surface(face).GetType() == GeomAbs_BSplineSurface
+        and isinstance(describe(face), ConeSurface)
+    )
+    surface = BRepAdaptor_Surface(face).BSpline().Copy()
+    row, column = surface.NbUPoles() // 2, surface.NbVPoles()
+    pole = surface.Pole(row, column)
+    pole.SetX(pole.X() * 1.01)
+    pole.SetY(pole.Y() * 1.01)
+    surface.SetPole(row, column, pole)
+    deformed = BRepBuilderAPI_MakeFace(surface, EPS_GEOM).Face()
+    assert not isinstance(describe(deformed), ConeSurface)
+
+
+def test_a_cone_candidate_cannot_hide_a_deformation_behind_a_zero_gap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Meldet der Erkenner den richtigen Kegel mit Lücke null, belegen die Koeffizienten.
+
+    Dasselbe Muster wie an Ebene und Zylinder oben: Ein Vorschlag des
+    Erkenners ist ein Kandidat, kein Beweis. Hier nennt er für die verformte
+    Fläche den unverformten Kegel und behauptet, er passe genau — die
+    Bernstein-Prüfung in ``_cone_matches`` findet den einen verschobenen Pol.
+    """
+    import OCP.ShapeAnalysis as ShapeAnalysis
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.GeomAbs import GeomAbs_BSplineSurface
+    from OCP.gp import gp_Vec
+
+    from app.core.brep.canonical import ConeSurface, describe
+
+    source = _nurbs(_cone_on_plate(6.0))
+    face, found = next(
+        (face, described)
+        for face in source.faces()
+        if BRepAdaptor_Surface(face).GetType() == GeomAbs_BSplineSurface
+        and isinstance(described := describe(face), ConeSurface)
+    )
+    surface = BRepAdaptor_Surface(face).BSpline().Copy()
+    row, column = surface.NbUPoles() // 2, surface.NbVPoles()
+    pole = surface.Pole(row, column)
+    pole.SetX(pole.X() * 1.01)
+    pole.SetY(pole.Y() * 1.01)
+    surface.SetPole(row, column, pole)
+    deformed = BRepBuilderAPI_MakeFace(surface, EPS_GEOM).Face()
+    # ``_cone_surface`` fragt an einer Kopie, deren erster Pol im Ursprung liegt.
+    local = found.cone.Translated(gp_Vec(*(-value for value in surface.Pole(1, 1).Coord())))
+
+    class Claiming:
+        """Ein Erkenner, der den unverformten Kegel mit Lücke null meldet."""
+
+        def __init__(self, _face: object) -> None:
+            pass
+
+        def IsPlane(self, tolerance: float, plane: object) -> bool:  # noqa: N802 - Name der externen OCP-API
+            return False
+
+        def IsCylinder(self, tolerance: float, cylinder: object) -> bool:  # noqa: N802 - Name der externen OCP-API
+            return False
+
+        def IsSphere(self, tolerance: float, sphere: object) -> bool:  # noqa: N802 - Name der externen OCP-API
+            return False
+
+        def IsCone(self, tolerance: float, cone: Any) -> bool:  # noqa: N802 - Name der externen OCP-API
+            cone.SetPosition(local.Position())
+            cone.SetRadius(local.RefRadius())
+            cone.SetSemiAngle(local.SemiAngle())
+            return True
+
+        def GetGap(self) -> float:  # noqa: N802 - Name der externen OCP-API
+            return 0.0
+
+        def GetStatus(self) -> int:  # noqa: N802 - Name der externen OCP-API
+            return 0
+
+    monkeypatch.setattr(ShapeAnalysis, "ShapeAnalysis_CanonicalRecognition", Claiming)
+    assert not isinstance(describe(deformed), ConeSurface)
+    monkeypatch.undo()
+    # Die Gegenprobe: Dieselbe Behauptung an der unverformten Fläche hält.
+    assert isinstance(describe(face), ConeSurface)
+
+
+@pytest.mark.parametrize(("size", "angle"), [(300.0, 31.0), (1000.0, 31.0), (1000.0, 77.0)])
+def test_a_large_mirrored_nurbs_plate_keeps_its_planes(size: float, angle: float) -> None:
+    """Große gespiegelte NURBS-Ebenen bleiben Ebenen — auch wo OCCTs Erkenner versagt.
+
+    ``ShapeAnalysis_CanonicalRecognition.IsPlane`` meldet an einem gespiegelten
+    Quader 300 × 300 × 30 unter 31° für fünf seiner sechs Ebenen die Lücke -1,
+    bei 1000 mm für alle sechs; sie kamen als gerundete Flächen ohne Maß in
+    den Baum (22.09.2026). Die Pole liegen auf 10⁻¹⁴ in ihrer Ebene, und
+    ``canonical._pole_plane`` nimmt sie als Kandidaten.
+    """
+    body = edit.cut_bore(
+        edit.box(size, size, size / 10.0),
+        position=(size / 5.0, 0.0, size / 20.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=size / 4.0,
+        depth=size,
+    )
+    transform = trimesh.transformations.rotation_matrix(math.radians(angle), (1.0, 2.0, 3.0))
+    transform[:3, 0] *= -1.0
+    transform[:3, 3] = (17.0, -9.0, 13.0)
+    source = _nurbs(edit.transformed(body, transform))
+    found = features_of(source)
+    assert Counter(feature.kind for feature in found.values()) == {"face": 6, "hole": 1}
+    normals = sorted(
+        tuple(round(value, 9) + 0.0 for value in feature.params["normal"])
+        for feature in found.values()
+        if feature.kind == "face"
+    )
+    expected = sorted(
+        tuple(round(float(value), 9) + 0.0 for value in sign * transform[:3, column])
+        for column in range(3)
+        for sign in (-1.0, 1.0)
+    )
+    assert normals == pytest.approx(expected, abs=1e-9)
+
+
+def test_the_nearest_distance_is_the_same_on_one_or_all_cores() -> None:
+    """Die Abstandsfrage auf allen Kernen gibt dieselbe Zahl wie auf einem.
+
+    ``kernel.nearest_distance`` verteilt große Fragen (Probelinien gegen die
+    Nachbarn einer NURBS-Bohrung) über alle Kerne — an ``build_tray_v3.step``
+    als NURBS summiert 3,0 → 0,7 s (22.09.2026). Gebraucht wird nur das
+    Minimum; es darf sich dadurch nicht ändern.
+    """
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.gp import gp_Ax1, gp_Dir, gp_Lin, gp_Pnt
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep.kernel import nearest_distance
+
+    source = _nurbs(_plate())
+    probes = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(probes)
+    for step_index in range(16):
+        angle = math.tau * step_index / 16
+        point = gp_Pnt(1.8 * math.cos(angle), 1.8 * math.sin(angle), 5.0)
+        line = gp_Lin(gp_Ax1(point, gp_Dir(0.0, 0.0, 1.0)))
+        builder.Add(probes, BRepBuilderAPI_MakeEdge(line, -40.0, 40.0).Edge())
+    for other in (source.shape, *source.faces()):
+        single = BRepExtrema_DistShapeShape(probes, other)
+        assert single.IsDone()
+        assert nearest_distance(probes, other) == pytest.approx(single.Value(), abs=1e-12)

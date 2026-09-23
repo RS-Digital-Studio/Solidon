@@ -459,6 +459,27 @@ def test_a_multi_start_thread_is_refused_instead_of_becoming_single(profile: Pro
     assert caught.value.suggestions
 
 
+@pytest.mark.parametrize("operation", ["resize_feature", "remove_feature"])
+def test_a_tapered_thread_is_refused_instead_of_cut_with_cylinders(
+    operation: str, profile: Profile
+) -> None:
+    """Ein kegeliges Rohrgewinde wird weder zylindrisch neu geschnitten noch entfernt.
+
+    Hülle, Kern und Füllung der Gewindehandlungen sind Zylinder; an einem
+    Kegel (1:16, ``konisch.step``) trügen sie ein Ende ab und ließen das andere
+    stehen. Der Leser kennt den Kegel seit dem 22.09.2026 (P2.5), die
+    Handlungen sagen deshalb ab statt still falsch zu schneiden.
+    """
+    _kernel()
+    source, thread = _recognised("brep", _corpus("konisch"))
+    assert thread.params["taper"] > 0.0
+    values = {"diameter": 12.0, "pitch": 1.5} if operation == "resize_feature" else {}
+    with pytest.raises(ValidationError) as caught:
+        run(operation, source, profile, at_feature=thread.id, **values)
+    assert caught.value.constraint == "tapered"
+    assert caught.value.suggestions
+
+
 def test_closing_a_blind_generated_thread_leaves_no_pocket(profile: Profile) -> None:
     """Hinter dem Grund liegt Material: Der Stopfen greift hinein statt davor zu enden.
 

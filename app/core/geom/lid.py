@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import dataclasses
 from itertools import pairwise
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from app.core.deferred import trimesh
-from app.core.errors import ValidationError
+from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationError
 from app.core.geom import lathe, transform
 from app.core.geom.autosplit import upright_normal
-from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest
+from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest, shared_volume
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import RIDGE_SHARE, mesh_only, moved, thread_body
@@ -35,6 +35,7 @@ from app.core.scene.placement import dominant_axis, faces_up
 from app.core.slice.analysis import cross_section
 from app.core.types import (
     BaseParams,
+    BRepBody,
     CancelToken,
     Feature,
     Finding,
@@ -129,24 +130,91 @@ def _narrowest(cavities: list[Any]) -> float:
     45 Grad gedrehten quadratischen Fach von 30 mm stand damit 42,4 mm in der
     Passung, die Diagonale — ein Maß, das es am Teil nicht gibt.
     """
-    from shapely.geometry import Polygon as ShapelyPolygon
-
     widths: list[float] = []
     for cavity in cavities:
-        box = cavity.minimum_rotated_rectangle
-        if not isinstance(box, ShapelyPolygon):
+        if isinstance(cavity, _ExactCavity):
+            # Am exakten Körper gemessen, als er geschnitten wurde (:func:`_exact_width`).
+            widths.append(cavity.narrowest)
+            continue
+        side = _short_side(cavity)
+        if side is None:
             # Ein entarteter Umriss hat keine Breite; das Hüllrechteck sagt dann
             # wenigstens die eine, die er hat.
             left, bottom, right, top = cavity.bounds
             widths.append(min(right - left, top - bottom))
             continue
-        corners = list(box.exterior.coords)[:3]
-        sides = [
-            float(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5)
-            for (x0, y0), (x1, y1) in pairwise(corners)
-        ]
-        widths.append(min(sides))
+        widths.append(side)
     return float(min(widths)) if widths else 0.0
+
+
+def _short_side(shape: Any) -> float | None:
+    """Die kürzere Seite des kleinsten umschließenden Rechtecks in jeder Drehung.
+
+    ``None``, wenn es keines gibt — ein entarteter Umriss oder ein einzelner
+    Punkt. Gefragt vom Polygon am Netz und von den Randpunkten einer exakten
+    Öffnung (:func:`_exact_width`): eine Rechnung, nicht zwei.
+    """
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    box = shape.minimum_rotated_rectangle
+    if not isinstance(box, ShapelyPolygon):
+        return None
+    corners = list(box.exterior.coords)[:3]
+    return min(
+        float(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5) for (x0, y0), (x1, y1) in pairwise(corners)
+    )
+
+
+#: Wie fein :func:`_exact_width` die Kanten einer exakten Öffnung abtastet, in
+#: Millimetern. An einem runden Rand liegt das Rechteck aus den Punkten um
+#: höchstens das Doppelte innen; die Weite geht auf vier Stellen gerundet in
+#: die Passung (``_measurable``).
+WIDTH_SAG: Final = 1e-3
+
+
+def _exact_width(faces: list[Any], *, cancelled: CancelToken | None = None) -> float:
+    """Die schmale Seite ebener exakter Flächen in XY, in jeder Drehung — wie am Netz.
+
+    Das kleinste umschließende Rechteck braucht Punkte; sie kommen von den
+    Kanten der Flächen, nach Abweichung ``WIDTH_SAG`` abgetastet, die Ecken
+    genau. Gerade Ränder bestimmt es damit exakt. An einem runden Rand läge
+    es bis zu zweimal ``WIDTH_SAG`` innen — dort gilt das achsparallele
+    Hüllrechteck, das ohne Kantentoleranz gemessen ist und nie schmaler als
+    die Drehung: Eine runde Öffnung von 40 mm misst 40, ein um 45 Grad
+    gedrehtes Quadrat von 30 mm misst 30 und nicht seine Diagonale.
+    """
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepBndLib import BRepBndLib
+    from OCP.GCPnts import GCPnts_QuasiUniformDeflection
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+    from shapely.geometry import MultiPoint
+
+    from app.core.brep.kernel import box_limits
+
+    box = Bnd_Box()
+    points: list[tuple[float, float]] = []
+    for entry in faces:
+        BRepBndLib.AddOptimal_s(entry, box, False, False)
+        edges = TopExp_Explorer(entry, TopAbs_EDGE)
+        while edges.More():
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            curve = BRepAdaptor_Curve(TopoDS.Edge(edges.Current()))
+            sampler = GCPnts_QuasiUniformDeflection(curve, WIDTH_SAG)
+            if sampler.IsDone():
+                for index in range(1, sampler.NbPoints() + 1):
+                    point = sampler.Value(index)
+                    points.append((float(point.X()), float(point.Y())))
+            edges.Next()
+    low_x, low_y, _low_z, high_x, high_y, _high_z = box_limits(box)
+    aligned = float(min(high_x - low_x, high_y - low_y))
+    turned = _short_side(MultiPoint(points)) if len(points) >= 3 else None
+    if turned is None or turned >= aligned - 2.0 * WIDTH_SAG:
+        return aligned
+    return turned
 
 
 def _measurable(
@@ -234,23 +302,288 @@ def opening(mesh: MeshData, z: float) -> tuple[Any, list[Any]]:
 
     section = cross_section(mesh, z)
     if section is None or section.is_empty:
-        raise ValidationError(
-            field="z",
-            detail=_("Auf dieser Höhe schneidet die Ebene den Körper nicht."),
-            value=round(z, 2),
-            constraint="no_section",
-        )
+        raise _no_section(z)
 
     parts = list(getattr(section, "geoms", [section]))
     cavities = [ring for part in parts for ring in _holes_of(part) if ring.area >= MIN_CAVITY]
     if not cavities:
-        raise ValidationError(
-            field="z",
-            detail=_("Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen."),
-            value=round(z, 2),
-            constraint="no_cavity",
-        )
+        raise _no_cavity(z)
     return unary_union([_filled(part) for part in parts]), cavities
+
+
+def _no_section(z: float) -> ValidationError:
+    """Die Ebene trifft den Körper nicht — derselbe Satz für Netz und exakten Körper."""
+    return ValidationError(
+        field="z",
+        detail=_("Auf dieser Höhe schneidet die Ebene den Körper nicht."),
+        value=round(z, 2),
+        constraint="no_section",
+    )
+
+
+def _no_cavity(z: float) -> ValidationError:
+    """Der Körper ist auf der Höhe massiv — derselbe Satz für Netz und exakten Körper."""
+    return ValidationError(
+        field="z",
+        detail=_("Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen."),
+        value=round(z, 2),
+        constraint="no_cavity",
+    )
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _ExactCavity:
+    """Ein Hohlraum am exakten Körper, mit den Maßen, nach denen die Merkmale fragen.
+
+    ``_area_of`` und ``_centre_of`` lesen am Netz ein shapely-Polygon:
+    ``area`` und ``centroid``. Der exakte Hohlraum antwortet unter denselben
+    Namen aus seiner Fläche — Inhalt und Schwerpunkt als Integral, der
+    Hüllquader ohne Kantentoleranz —, damit die Passungsmaße eine Rechnung
+    bleiben und nicht zwei. Die schmale Seite in jeder Drehung
+    (``narrowest``, :func:`_exact_width`) misst er beim Schneiden mit; am Netz
+    rechnet :func:`_narrowest` sie aus dem Polygon.
+    """
+
+    face: Any
+    area: float
+    centroid: Any
+    bounds: tuple[float, float, float, float]
+    narrowest: float
+
+
+def exact_opening(
+    solid: Any, z: float, *, cancelled: CancelToken | None = None
+) -> tuple[list[Any], list[_ExactCavity]]:
+    """Die Öffnung am exakten Körper: gefüllte Umrisse und Hohlräume auf dieser Höhe.
+
+    Das Gegenstück zu :func:`opening`, aus den Flächen statt aus der
+    Vernetzung geschnitten (``brep.section.horizontal_regions``): Ein
+    gerundeter Hohlraum bleibt gerundet, und der Kragen, der daraus entsteht,
+    liegt an der echten Wand und nicht an ihrer Sehne. Dieselbe Grenze für
+    eine Bohrung (``MIN_CAVITY``), dieselben Absagen.
+    """
+    from app.core.brep.section import horizontal_regions
+
+    regions = horizontal_regions(solid, z, cancelled=cancelled)
+    if not regions:
+        raise _no_section(z)
+    cavities: list[_ExactCavity] = []
+    for region in regions:
+        for hole in region.holes:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            measured = _measured(hole, cancelled=cancelled)
+            if measured.area >= MIN_CAVITY:
+                cavities.append(measured)
+    if not cavities:
+        raise _no_cavity(z)
+    return [region.outline for region in regions], cavities
+
+
+def _measured(face: Any, *, cancelled: CancelToken | None = None) -> _ExactCavity:
+    """Inhalt, Schwerpunkt und Hüllrechteck einer ebenen Fläche in XY."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    from shapely.geometry import Point
+
+    from app.core.brep.kernel import box_limits
+    from app.core.brep.properties import properties
+
+    measured = properties(face, "surface", cancelled=cancelled)
+    box = Bnd_Box()
+    BRepBndLib.AddOptimal_s(face, box, False, False)
+    low_x, low_y, _low_z, high_x, high_y, _high_z = box_limits(box)
+    return _ExactCavity(
+        face,
+        float(measured.mass),
+        Point(measured.centre[0], measured.centre[1]),
+        (float(low_x), float(low_y), float(high_x), float(high_y)),
+        _exact_width([face], cancelled=cancelled),
+    )
+
+
+def collar_footprints(cavities: list[Any], blocked: Any | None) -> list[Any]:
+    """Wo ein Kragen hinab darf: der Hohlraum am Rand ohne das, was am Kragenboden im Weg steht.
+
+    Geschnitten wird knapp unter dem Rand (``BELOW_RIM``) und am Boden des
+    Kragens. Bei einem Deckelsitz, einer gefasten oder verrundeten Innenkante
+    und einer Formschräge ist der Rand die weiteste Stelle; ein Kragen aus
+    diesem Schnitt allein ragte darunter in die Wand. Der Grundriss ist
+    deshalb der Hohlraum oben, vermindert um das Material unten — die engste
+    Öffnung über die Kragentiefe, soweit zwei Schnitte sie zeigen. Was
+    dazwischen vorsteht, fängt :func:`collar_collision`.
+    """
+    if blocked is None or blocked.is_empty:
+        return list(cavities)
+    free: list[Any] = []
+    for cavity in cavities:
+        rest = cavity.difference(blocked)
+        pieces = [
+            piece
+            for piece in getattr(rest, "geoms", [rest])
+            if piece.geom_type == "Polygon" and piece.area > EPS_GEOM
+        ]
+        # Bleibt nichts, liegt der Kragenboden im Boden des Hohlraums: Der
+        # Hohlraum bleibt der Grundriss, und die Prüfung gegen den Körper
+        # nennt die freie Tiefe. Den Kragen still wegzulassen wäre geraten.
+        free.extend(pieces or [cavity])
+    return free
+
+
+def exact_footprints(
+    cavities: list[_ExactCavity],
+    solid: Any,
+    z: float,
+    top: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> list[_ExactCavity]:
+    """:func:`collar_footprints` am exakten Körper — das Material am Kragenboden abgezogen.
+
+    ``z`` ist die Höhe des zweiten Schnitts, ``top`` die der Hohlräume. Die
+    Flächen liegen in zwei Ebenen, und eine Boolesche zwischen ihnen fände
+    nichts Gemeinsames: Das Material wird deshalb in die Ebene der Hohlräume
+    gehoben, wie der Netzweg beide Schnitte in derselben Zeichenebene
+    vergleicht. Trifft der zweite Schnitt nichts, bleibt der Hohlraum.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.gp import gp_Trsf, gp_Vec
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    from app.core.brep import profiles
+    from app.core.brep.section import horizontal_regions
+
+    regions = horizontal_regions(solid, z, cancelled=cancelled)
+    if not regions:
+        return list(cavities)
+    lift = gp_Trsf()
+    lift.SetTranslation(gp_Vec(0.0, 0.0, top - z))
+    material = BRepBuilderAPI_Transform(
+        _compound([region.face for region in regions]), lift, True
+    ).Shape()
+    free: list[_ExactCavity] = []
+    for cavity in cavities:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        rest = profiles.face_boolean("difference", cavity.face, material)
+        pieces: list[_ExactCavity] = []
+        walk = TopExp_Explorer(rest, TopAbs_FACE)
+        while walk.More():
+            piece = _measured(profiles.upward(TopoDS.Face(walk.Current())), cancelled=cancelled)
+            walk.Next()
+            if piece.area > EPS_GEOM:
+                pieces.append(piece)
+        # Wie am Netz: Bleibt nichts, bleibt der Hohlraum, und die Prüfung
+        # gegen den Körper nennt die freie Tiefe (:func:`collar_footprints`).
+        free.extend(pieces or [cavity])
+    return free
+
+
+def _compound(shapes: list[Any]) -> Any:
+    """Mehrere Formen als ein Werkzeug für eine Boolesche."""
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    compound, builder = TopoDS_Compound(), BRep_Builder()
+    builder.MakeCompound(compound)
+    for shape in shapes:
+        builder.Add(compound, shape)
+    return compound
+
+
+def _collar_hits_wall(free: float, collar: float) -> ValidationError:
+    """Der Kragen ragt in die Wand — mit der Tiefe, bis zu der er frei wäre."""
+    return ValidationError(
+        field="collar",
+        detail=_(
+            "Der Kragen stößt unter dem Rand auf die Wand. Wählen Sie eine "
+            "Kragentiefe bis zur freien Tiefe oder null."
+        ),
+        value=round(collar, 2),
+        constraint="collar_hits_wall",
+        values={"free_depth_mm": round(max(free, 0.0), 2), "collar_mm": round(collar, 2)},
+    )
+
+
+def collar_collision(
+    collars: list[Any], housing: Any, *, cancelled: CancelToken | None = None
+) -> float | None:
+    """Die höchste Stelle, an der ein exakter Kragen in die Wand ragt — ``None``, wenn keiner.
+
+    Berührung zählt nicht: Erst ein gemeinsamer Teil mit mehr Volumen als
+    eine Schicht von ``EPS_GEOM`` über der Kragenfläche ist ein Stoß. Die
+    Frage geht über ``boolean_builder``: Das Gehäuse ist hier oft die Form
+    des Eingangs selbst, und eine Boolesche ohne ``SetNonDestructive`` darf
+    die Toleranzen ihrer Argumente ändern.
+    """
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    from app.core.brep.kernel import boolean_builder, box_limits
+
+    highest: float | None = None
+    for collar in collars:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        common = boolean_builder("intersection", collar.shape, housing.shape)
+        common.Build()
+        if not common.IsDone():
+            continue
+        props = GProp_GProps()
+        BRepGProp.VolumeProperties_s(common.Shape(), props)
+        extent = collar.bounds.size
+        if abs(float(props.Mass())) <= EPS_GEOM * float(extent[0]) * float(extent[1]):
+            continue
+        box = Bnd_Box()
+        BRepBndLib.AddOptimal_s(common.Shape(), box, False, False)
+        top = box_limits(box)[5]
+        highest = top if highest is None else max(highest, top)
+    return highest
+
+
+def exact_build(
+    outlines: list[Any],
+    footprints: list[_ExactCavity],
+    *,
+    thickness: float,
+    collar: float,
+    clearance: float,
+    z: float,
+    lift: float,
+    housing: Any,
+    cancelled: CancelToken | None = None,
+) -> Any:
+    """Platte plus Kragen als exakter Körper — dieselbe Bauweise wie :func:`build`.
+
+    Die Flächen liegen in der Schnittebene, ``lift`` darunter auf der Höhe
+    ``z`` der Öffnung: Die Platte wächst von dort um ``thickness`` nach oben,
+    jeder Kragen reicht ``collar`` hinab. Der Kragen ist sein Grundriss
+    (:func:`exact_footprints`), um das halbe Spiel je Seite eingezogen
+    (``profiles.shrunk_faces``); an einer einspringenden Ecke läuft er im
+    Bogen um sie herum, wo die Gehrung des Netzwegs etwas mehr wegnimmt. Ragt
+    ein Kragen trotzdem in das Gehäuse, entsteht kein Deckel, sondern die
+    Absage mit der freien Tiefe.
+    """
+    from app.core.brep import edit, profiles
+
+    plates = [profiles.prism(face, thickness, bottom=lift) for face in outlines]
+    collars = []
+    for footprint in footprints if collar > EPS_GEOM else []:
+        for piece in profiles.shrunk_faces(footprint.face, clearance / 2.0):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            collars.append(profiles.prism(piece, collar, bottom=lift - collar))
+    top = collar_collision(collars, housing, cancelled=cancelled)
+    if top is not None:
+        raise _collar_hits_wall(z - top, collar)
+    bodies = [*plates, *collars]
+    if len(bodies) == 1:
+        return bodies[0]
+    return edit.unified(edit.boolean("union", bodies))
 
 
 def _filled(part: Any) -> Any:
@@ -426,12 +759,13 @@ def _face_named(source: SceneObject, name: str) -> Feature:
 
 def build(
     outline: Any,
-    cavities: list[Any],
+    footprints: list[Any],
     *,
     thickness: float,
     collar: float,
     clearance: float,
     z: float,
+    housing: MeshData | None = None,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
 ) -> tuple[MeshData, SolverInfo | None]:
@@ -440,7 +774,10 @@ def build(
     Die Platte deckt den ganzen Umriss ab, damit sie aussieht wie die Box, zu
     der sie gehört. Der Kragen greift in jeden Hohlraum hinab — eine
     unterteilte Box bekommt einen je Fach, denn genau das hält den Deckel vom
-    Verdrehen ab.
+    Verdrehen ab. ``footprints`` sind die Grundrisse der Kragen
+    (:func:`collar_footprints`); mit ``housing`` wird jeder Kragen gegen das
+    Gehäuse geprüft, und ragt einer hinein, entsteht kein Deckel, sondern die
+    Absage mit der freien Tiefe.
     """
     plates = [
         trimesh.creation.extrude_polygon(piece, height=thickness)
@@ -449,17 +786,22 @@ def build(
     for plate in plates:
         plate.apply_translation((0.0, 0.0, z))
 
-    bodies = list(plates)
-    for cavity in cavities if collar > EPS_GEOM else []:
+    collars = []
+    for footprint in footprints if collar > EPS_GEOM else []:
         # Halbes Spiel je Seite, denn ``clearance`` ist ein Durchmessermaß.
-        shrunk = cavity.buffer(-clearance / 2.0, join_style=2)
+        shrunk = footprint.buffer(-clearance / 2.0, join_style=2)
         if shrunk.is_empty or shrunk.area <= EPS_GEOM:
             continue
         for piece in getattr(shrunk, "geoms", [shrunk]):
             body = trimesh.creation.extrude_polygon(piece, height=collar)
             body.apply_translation((0.0, 0.0, z - collar))
-            bodies.append(body)
+            collars.append(body)
+    if housing is not None:
+        top = _mesh_collar_collision(collars, housing, quality=quality, cancelled=cancelled)
+        if top is not None:
+            raise _collar_hits_wall(z - top, collar)
 
+    bodies = [*plates, *collars]
     if len(bodies) == 1:
         return MeshData.of(bodies[0]), None
     joined = MeshData.of(bodies[0])
@@ -471,6 +813,34 @@ def build(
         joined = outcome.mesh
         stages.append(outcome.solver)
     return joined, deepest(stages)
+
+
+def _mesh_collar_collision(
+    collars: list[Any],
+    housing: MeshData,
+    *,
+    quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
+) -> float | None:
+    """:func:`collar_collision` am Netz: die höchste Stelle eines Stoßes oder ``None``."""
+    highest: float | None = None
+    for collar in collars:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        low, high = collar.bounds
+        if shared_volume(collar, housing.raw) <= EPS_GEOM * float(high[0] - low[0]) * float(
+            high[1] - low[1]
+        ):
+            continue
+        common = boolean(
+            "intersection",
+            [MeshData.of(collar), housing],
+            quality=quality,
+            cancelled=cancelled,
+        ).mesh
+        top = float(common.bounds.maximum[2]) if common.triangle_count else float(high[2])
+        highest = top if highest is None else max(highest, top)
+    return highest
 
 
 @op_params
@@ -533,9 +903,10 @@ class LidParams(BaseParams):
 
 @register_op(
     name="create_lid",
-    # 2 seit dem 22.09.2026: Die Weiten der Passung sind die schmale Seite in
-    # jeder Drehung (``_narrowest``), nicht die des Hüllrechtecks.
-    cache_version="2",
+    # 3 seit dem Zusammenführen der Durchsicht 0.5.0: Die Weiten der Passung
+    # sind die schmale Seite in jeder Drehung (``_narrowest``), nicht die des
+    # Hüllrechtecks, und am exakten Gehäuse entsteht der Deckel exakt (P2.8).
+    cache_version="3",
     title=_("Deckel erzeugen"),
     category="parts",
     params=LidParams,
@@ -559,7 +930,11 @@ def create_lid(ctx: OpContext) -> OpResult:
     """
     params = cast(LidParams, ctx.params)
     source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
+    # **Der Körper entscheidet** (P2.8, Konzept §10.1): Am exakten Gehäuse
+    # entsteht der Deckel exakt, aus dessen Flächen geschnitten — bis zum
+    # 23.09.2026 kam er dort als Netz heraus, und sein Kragen lag an den
+    # Sehnen der Vernetzung statt an der Wand.
+    exact = isinstance(source.mesh, BRepBody)
 
     # **Gebaut wird immer nach oben** — auch für eine Seitenöffnung (RM-087).
     # Der Körper wird so gedreht, dass die gewählte Fläche nach oben zeigt,
@@ -571,9 +946,29 @@ def create_lid(ctx: OpContext) -> OpResult:
     # die Einheit, sonst eine Drehung, deren Transponierte zurückführt.
     turn = upright_normal(direction)
     turned_back = turn.T
-    if direction != _UP:
-        mesh = transform.apply(mesh, turn)
-    outline, cavities = opening(mesh, z - BELOW_RIM)
+    cavities: list[Any]
+    footprints: list[Any]
+    # Der zweite Schnitt liegt knapp über dem Kragenboden, wie der erste
+    # knapp unter dem Rand; ein Kragen, der kaum tiefer reicht als dieser
+    # Abstand, braucht ihn nicht.
+    floor = z - params.collar + BELOW_RIM
+    if exact:
+        upright = _turned(source.mesh, turn, direction, cancelled=ctx.cancelled)
+        outlines, cavities = exact_opening(upright, z - BELOW_RIM, cancelled=ctx.cancelled)
+        footprints = (
+            exact_footprints(cavities, upright, floor, z - BELOW_RIM, cancelled=ctx.cancelled)
+            if params.collar > 2.0 * BELOW_RIM
+            else list(cavities)
+        )
+    else:
+        mesh = as_mesh_data(source.mesh)
+        if direction != _UP:
+            mesh = transform.apply(mesh, turn)
+        outline, cavities = opening(mesh, z - BELOW_RIM)
+        footprints = collar_footprints(
+            cavities,
+            cross_section(mesh, floor) if params.collar > 2.0 * BELOW_RIM else None,
+        )
 
     clearance = params.clearance
     if not clearance:
@@ -585,26 +980,48 @@ def create_lid(ctx: OpContext) -> OpResult:
             )
         clearance = for_object(ctx.profile, source).material.clearance
 
-    body, solver = build(
-        outline,
-        cavities,
-        thickness=params.thickness,
-        collar=params.collar,
-        clearance=clearance,
-        z=z,
-        quality=ctx.quality,
-        cancelled=ctx.cancelled,
-    )
+    body: Any
+    solver: SolverInfo | None = None
+    if exact:
+        body = exact_build(
+            outlines,
+            footprints,
+            thickness=params.thickness,
+            collar=params.collar,
+            clearance=clearance,
+            z=z,
+            lift=BELOW_RIM,
+            housing=upright,
+            cancelled=ctx.cancelled,
+        )
+    else:
+        body, solver = build(
+            outline,
+            footprints,
+            thickness=params.thickness,
+            collar=params.collar,
+            clearance=clearance,
+            z=z,
+            housing=mesh,
+            quality=ctx.quality,
+            cancelled=ctx.cancelled,
+        )
 
     _log.info("lid over %d cavities at z=%.2f, clearance %.2f", len(cavities), z, clearance)
     cavity_features = _with_cavity(source, cavities, z)
-    collar_features = _collar_feature(cavities, z, params.collar, clearance)
+    # Das Kragenmerkmal beschreibt den Kragen, der entstanden ist: Wo die
+    # Öffnung darunter enger wird, ist er schmaler als der Hohlraum am Rand.
+    collar_features = _collar_feature(footprints, z, params.collar, clearance) if footprints else {}
     if direction != _UP:
         # Träge, weil ``geom`` die Wahrnehmung nicht eifrig laden darf
         # (Paketrichtung, ``test_core_package_direction``).
         from app.core.perceive.matching import moved_features
 
-        body = transform.apply(body, turned_back)
+        body = (
+            _turned(body, turned_back, direction, cancelled=ctx.cancelled)
+            if exact
+            else transform.apply(body, turned_back)
+        )
         # Nur das neue Merkmal wird zurückgedreht — die übrigen des Gehäuses
         # haben den aufgerichteten Raum nie gesehen.
         cavity_features = {
@@ -612,6 +1029,14 @@ def create_lid(ctx: OpContext) -> OpResult:
             **moved_features({CAVITY_FEATURE: cavity_features[CAVITY_FEATURE]}, _rows(turned_back)),
         }
         collar_features = moved_features(collar_features, _rows(turned_back))
+    lid_features: dict[str, Feature] = dict(collar_features)
+    if exact:
+        # Ein exakter Körper bringt seine Merkmale aus der Topologie mit
+        # (``evaluate._with_features`` erkennt an ihm nicht neu); der Kragen
+        # bleibt das benannte Merkmal der Passung.
+        from app.core.brep.features import features_of
+
+        lid_features = {**features_of(body, cancelled=ctx.cancelled), **collar_features}
     # Das Gehäuse bleibt der erste Ausgang: eine Op mit consumes=1 ersetzt im
     # Stapel ihre Eingabe durch ihre Ausgaben — mit nur dem Deckel als Ausgang
     # fraß „Deckel erzeugen" das Gehäuse. Die Op-Tests riefen die Funktion
@@ -633,8 +1058,9 @@ def create_lid(ctx: OpContext) -> OpResult:
                 # ist schlechter als keiner; der Zusammenhang steht im Verlauf.
                 name=params.name or _("Deckel"),
                 mesh=body,
+                kind="brep" if exact else "mesh",
                 material=source.material,
-                features=collar_features,
+                features=lid_features,
             ),
         ],
         findings=[
@@ -653,6 +1079,23 @@ def create_lid(ctx: OpContext) -> OpResult:
             )
         ],
     )
+
+
+def _turned(
+    solid: Any, matrix: Any, direction: Vec3, *, cancelled: CancelToken | None = None
+) -> Any:
+    """Den exakten Körper mit dieser Matrix drehen — für die Decke gar nicht.
+
+    ``direction`` ist die Richtung der Öffnung: Zeigt sie nach oben, ist die
+    Drehung die Einheit, und der Körper bleibt, wie er ist. ``edit.transformed``
+    kopiert und prüft, und das kostet an einem großen Gehäuse mehr als der
+    ganze Deckel.
+    """
+    if direction == _UP:
+        return solid
+    from app.core.brep import edit
+
+    return edit.transformed(solid, _rows(matrix), cancelled=cancelled)
 
 
 def _rows(matrix: Any) -> Any:
@@ -683,7 +1126,7 @@ SKIRT_RELIEF = 0.6
 NECK_SECTIONS = 96
 
 
-def neck_diameters(outline: Any, cavities: list[Any]) -> tuple[float, float]:
+def neck_diameters(outline_width: float, cavities: list[Any]) -> tuple[float, float]:
     """Außen- und Bohrungsdurchmesser eines Halses, der zu dieser Öffnung passt.
 
     Beide kommen von der schmaleren Seite, nicht aus einem eingepassten Kreis:
@@ -695,9 +1138,11 @@ def neck_diameters(outline: Any, cavities: list[Any]) -> tuple[float, float]:
     22.09.2026 kam sie aus dem achsparallelen Hüllrechteck, und an einer um
     45 Grad gedrehten quadratischen Dose von 50 mm war das die Diagonale —
     ein Hals von 70,7 mm, zehn Millimeter über jeder Seite.
+    ``outline_width`` ist die des Umrisses — am Netz aus dem Polygon, exakt
+    aus den Flächen (:func:`_exact_width`).
     """
     widest = max(cavities, key=lambda ring: ring.area)
-    return _narrowest([outline]), _narrowest([widest])
+    return outline_width, _narrowest([widest])
 
 
 def _pipe(
@@ -816,10 +1261,11 @@ class ScrewLidParams(BaseParams):
 
 @register_op(
     name="screw_lid",
-    result_kind="mesh",
-    # 2 seit dem 22.09.2026: Hals und Bohrung messen die schmale Seite in jeder
-    # Drehung (``neck_diameters``), und der Deckel heißt in jeder Sprache.
-    cache_version="2",
+    # 3 seit dem Zusammenführen der Durchsicht 0.5.0: Hals und Bohrung messen
+    # die schmale Seite in jeder Drehung (``neck_diameters``), der Deckel heißt
+    # in jeder Sprache, und am exakten Gehäuse entstehen Hals und Kappe exakt
+    # (P2.8).
+    cache_version="3",
     title=_("Drehdeckel erzeugen"),
     category="parts",
     params=ScrewLidParams,
@@ -849,7 +1295,10 @@ def screw_lid(ctx: OpContext) -> OpResult:
     """
     params = cast(ScrewLidParams, ctx.params)
     source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
+    # **Der Körper entscheidet** (P2.8, Konzept §10.1): Am exakten Gehäuse
+    # entstehen Hals und Kappe exakt — bis zum 23.09.2026 vernetzte diese
+    # Operation das Gehäuse und gab beides als Netz zurück.
+    exact = isinstance(source.mesh, BRepBody)
 
     # Dieselbe Drehung wie beim eingeschobenen Deckel (RM-087): Der Hals
     # wächst immer nach oben, und zurück vor die Seitenöffnung dreht ihn die
@@ -858,9 +1307,17 @@ def screw_lid(ctx: OpContext) -> OpResult:
     z, direction = opening_frame(source, params.at_feature, params.z)
     turn = upright_normal(direction)
     turned_back = turn.T
-    if direction != _UP:
-        mesh = transform.apply(mesh, turn)
-    outline, cavities = opening(mesh, z - BELOW_RIM)
+    cavities: list[Any]
+    if exact:
+        upright = _turned(source.mesh, turn, direction, cancelled=ctx.cancelled)
+        outlines, cavities = exact_opening(upright, z - BELOW_RIM, cancelled=ctx.cancelled)
+        outline_width = _exact_width(outlines, cancelled=ctx.cancelled)
+    else:
+        mesh = as_mesh_data(source.mesh)
+        if direction != _UP:
+            mesh = transform.apply(mesh, turn)
+        outline, cavities = opening(mesh, z - BELOW_RIM)
+        outline_width = _narrowest([outline])
 
     clearance = params.clearance
     if not clearance:
@@ -872,7 +1329,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
             )
         clearance = for_object(ctx.profile, source).material.clearance
 
-    major, bore = neck_diameters(outline, cavities)
+    major, bore = neck_diameters(outline_width, cavities)
     if params.neck:
         major = params.neck
 
@@ -887,32 +1344,51 @@ def screw_lid(ctx: OpContext) -> OpResult:
             values={"neck_mm": round(major, 2), "bore_mm": round(bore, 2)},
         )
 
-    # Der Kern trägt den Gang, ist also zwei Gangtiefen schmaler als das
-    # Gewinde breit: auf einen Hals mit vollem Durchmesser vereinigt säße der
-    # Gang im Material und änderte gar nichts.
-    neck = _pipe(core + 2.0 * BOOLEAN_OVERLAP, bore, params.height, z, ctx.quality, ctx.cancelled)
-    bounded = boolean(
-        "intersection",
-        [
-            mesh_only(thread_body(major, params.pitch, params.height)),
-            _pipe(major * 2.0, 0.0, params.height, 0.0),
-        ],
-        quality=ctx.quality,
-        cancelled=ctx.cancelled,
-    )
-    turns = _lifted(bounded.mesh, z)
     left, bottom, right, top = max(cavities, key=lambda ring: ring.area).bounds
     centre_x, centre_y = (left + right) / 2.0, (bottom + top) / 2.0
-    neck = mesh_only(moved(neck, (centre_x, centre_y, 0.0)))
-    turns = mesh_only(moved(turns, (centre_x, centre_y, 0.0)))
-    with_neck = boolean("union", [mesh, neck], quality=ctx.quality, cancelled=ctx.cancelled)
-    with_thread = boolean(
-        "union", [with_neck.mesh, turns], quality=ctx.quality, cancelled=ctx.cancelled
-    )
-    threaded = with_thread.mesh
-
-    lid, cap_solver = _screw_cap(major, params, clearance, ctx.quality, ctx.cancelled)
-    solver = deepest([bounded.solver, with_neck.solver, with_thread.solver, cap_solver])
+    threaded: Any
+    lid: Any
+    solver: SolverInfo | None = None
+    neck_faces: tuple[int, ...] = ()
+    cap_faces: tuple[int, ...] = ()
+    if exact:
+        threaded, neck_faces = exact_screw_neck(
+            upright,
+            major,
+            bore,
+            (centre_x, centre_y),
+            z,
+            params.height,
+            params.pitch,
+            cancelled=ctx.cancelled,
+        )
+        lid, cap_faces = exact_screw_cap(major, params, clearance, cancelled=ctx.cancelled)
+    else:
+        # Der Kern trägt den Gang, ist also zwei Gangtiefen schmaler als das
+        # Gewinde breit: auf einen Hals mit vollem Durchmesser vereinigt säße
+        # der Gang im Material und änderte gar nichts.
+        neck = _pipe(
+            core + 2.0 * BOOLEAN_OVERLAP, bore, params.height, z, ctx.quality, ctx.cancelled
+        )
+        bounded = boolean(
+            "intersection",
+            [
+                mesh_only(thread_body(major, params.pitch, params.height)),
+                _pipe(major * 2.0, 0.0, params.height, 0.0),
+            ],
+            quality=ctx.quality,
+            cancelled=ctx.cancelled,
+        )
+        turns = _lifted(bounded.mesh, z)
+        neck = mesh_only(moved(neck, (centre_x, centre_y, 0.0)))
+        turns = mesh_only(moved(turns, (centre_x, centre_y, 0.0)))
+        with_neck = boolean("union", [mesh, neck], quality=ctx.quality, cancelled=ctx.cancelled)
+        with_thread = boolean(
+            "union", [with_neck.mesh, turns], quality=ctx.quality, cancelled=ctx.cancelled
+        )
+        threaded = with_thread.mesh
+        lid, cap_solver = _screw_cap(major, params, clearance, ctx.quality, ctx.cancelled)
+        solver = deepest([bounded.solver, with_neck.solver, with_thread.solver, cap_solver])
 
     neck_thread = Feature(
         id=NECK_THREAD_FEATURE,
@@ -952,15 +1428,40 @@ def screw_lid(ctx: OpContext) -> OpResult:
     if direction != _UP:
         from app.core.perceive.matching import moved_features
 
-        threaded = transform.apply(threaded, turned_back)
+        if exact:
+            from app.core.brep import edit
+
+            threaded, face_map = edit.transformed_with_faces(
+                threaded, _rows(turned_back), cancelled=ctx.cancelled
+            )
+            neck_faces = tuple(face_map[index] for index in neck_faces)
+        else:
+            threaded = transform.apply(threaded, turned_back)
         neck_features = moved_features(neck_features, _rows(turned_back))
+    container_features: dict[str, Feature] = dict(neck_features)
+    cap_features: dict[str, Feature] = {CAP_THREAD_FEATURE: cap_thread}
+    if exact:
+        # Beide Gewinde kennt die Operation genau: Sie werden an ihren Flächen
+        # benannt und nicht noch einmal gelesen (``known_threads``, wie beim
+        # Gewindebolzen). Die übrigen Merkmale kommen aus der Topologie.
+        from app.core.brep.features import features_of
+
+        known_neck = dataclasses.replace(
+            neck_features[NECK_THREAD_FEATURE], face_indices=_triangles(threaded, neck_faces)
+        )
+        container_features = features_of(
+            threaded, cancelled=ctx.cancelled, known_threads=(known_neck,)
+        )
+        known_cap = dataclasses.replace(cap_thread, face_indices=_triangles(lid, cap_faces))
+        cap_features = features_of(lid, cancelled=ctx.cancelled, known_threads=(known_cap,))
     return OpResult(
         solver=solver,
         outputs=[
             dataclasses.replace(
                 source,
                 mesh=threaded,
-                features=neck_features,
+                kind="brep" if exact else "mesh",
+                features=container_features,
             ),
             SceneObject(
                 id="",
@@ -968,8 +1469,9 @@ def screw_lid(ctx: OpContext) -> OpResult:
                 # eingefrorenes Wort.
                 name=ctx.scene.unused_name(_("Drehdeckel")),
                 mesh=lid,
+                kind="brep" if exact else "mesh",
                 material=source.material,
-                features={CAP_THREAD_FEATURE: cap_thread},
+                features=cap_features,
             ),
         ],
         findings=[
@@ -1005,9 +1507,7 @@ def _screw_cap(
 
     Das offene Ende steht auf Z = 0 — so druckt er ohne jede Stütze.
     """
-    skirt = params.height + SKIRT_RELIEF
-    inside = major - 2.0 * params.pitch * RIDGE_SHARE + clearance
-    outer = major + 2.0 * clearance + 2.0 * params.wall
+    skirt, inside, outer = _cap_sizes(major, params, clearance)
 
     body = lathe.cylinder(
         radius=outer / 2.0, height=skirt + params.thickness, sections=NECK_SECTIONS
@@ -1039,3 +1539,134 @@ def _screw_cap(
         "difference", [MeshData.of(body), bounded.mesh], quality=quality, cancelled=cancelled
     )
     return cut.mesh, deepest([cutter.solver, bounded.solver, cut.solver])
+
+
+def _cap_sizes(
+    major: float, params: ScrewLidParams, clearance: float
+) -> tuple[float, float, float]:
+    """Schürzenhöhe, Kernbohrung und Außendurchmesser der Kappe — eine Rechnung für beide Kerne.
+
+    Die Schürze ist um ``SKIRT_RELIEF`` höher als der Hals, die Bohrung der
+    Kern des Halses plus Spiel (ein Durchmessermaß), der Mantel das Gewinde
+    plus Spiel plus zweimal die Wand.
+    """
+    skirt = params.height + SKIRT_RELIEF
+    inside = major - 2.0 * params.pitch * RIDGE_SHARE + clearance
+    outer = major + 2.0 * clearance + 2.0 * params.wall
+    return skirt, inside, outer
+
+
+def _helical_faces(solid: Any, *, above: float | None = None) -> tuple[int, ...]:
+    """Die Flächen eines genähten Gewindes: alles, was weder eben noch ein Zylinder ist.
+
+    ``profiles.helical_thread`` baut Kern, Flanken und Kamm aus Regelflächen
+    zwischen Helixkanten (P2.7); eben sind nur die Schnitte auf Länge,
+    zylindrisch nur Bohrung und Mantel. ``above`` beschränkt die Frage auf das,
+    was darüber liegt — am Gehäuse den Hals über dem Rand, gefragt an der
+    Mitte des Parameterbereichs jeder Fläche.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepTools import BRepTools
+    from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane
+
+    found: list[int] = []
+    for index, native in enumerate(solid.faces()):
+        adaptor = BRepAdaptor_Surface(native)
+        if adaptor.GetType() in (GeomAbs_Plane, GeomAbs_Cylinder):
+            continue
+        if above is not None:
+            first_u, last_u, first_v, last_v = BRepTools.UVBounds_s(native)
+            middle = adaptor.Value((first_u + last_u) / 2.0, (first_v + last_v) / 2.0)
+            if float(middle.Z()) <= above:
+                continue
+        found.append(index)
+    return tuple(found)
+
+
+def _triangles(solid: Any, faces: tuple[int, ...]) -> tuple[int, ...]:
+    """Die Dreiecksnummern dieser Flächen in der Vernetzung des Körpers — die Merkmalsnummern."""
+    return tuple(sorted({triangle for face in faces for triangle in solid.triangles_of_face(face)}))
+
+
+def _exact_checked(solid: Any) -> Any:
+    """Hals und Deckel sind je ein geschlossener Körper — sonst die Absage mit Vorschlag."""
+    if not solid.is_closed or solid.solid_count != 1:
+        raise GeometryError(
+            detail=_(
+                "Gewindehals und Deckel ließen sich exakt nicht bilden. "
+                "Ändern Sie Steigung oder Gewindehöhe."
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return solid
+
+
+def exact_screw_neck(
+    housing: Any,
+    major: float,
+    bore: float,
+    centre: tuple[float, float],
+    z: float,
+    height: float,
+    pitch: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> tuple[Any, tuple[int, ...]]:
+    """Den Gewindehals auf das exakte Gehäuse setzen — mit den Flächen seines Gewindes.
+
+    Kern und Gang entstehen als ein genähter Körper (``build.threaded`` im
+    exakten Kern, P2.7), gleich auf der Höhe der Öffnung; die Bohrung setzt
+    den Hohlraum fort. Die Wendel beginnt eine Steigung unter ihrem unteren
+    Ende, ihre Phase liegt am Rand also bei null — dieselbe wie die der Nut in
+    der Kappe (:func:`exact_screw_cap`), und die Kappe geht ohne Drehen über
+    den Hals.
+    """
+    from app.core.brep import edit
+    from app.core.knowledge.parts.build import threaded as threaded_form
+    from app.core.knowledge.parts.shapes import building
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    with building("brep"):
+        rod = threaded_form(major, pitch, height, bottom=z)
+    tool = edit.moved(edit.cylinder(bore, height + 2.0), (0.0, 0.0, z - 1.0))
+    neck = edit.boolean("difference", [cast(Any, rod), tool])
+    if abs(centre[0]) > EPS_GEOM or abs(centre[1]) > EPS_GEOM:
+        neck = edit.moved(neck, (centre[0], centre[1], 0.0))
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    joined = _exact_checked(edit.unified(edit.boolean("union", [housing, neck])))
+    return joined, _helical_faces(joined, above=z)
+
+
+def exact_screw_cap(
+    major: float,
+    params: ScrewLidParams,
+    clearance: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> tuple[Any, tuple[int, ...]]:
+    """Die Kappe als exakter Körper — Mantel minus Kernbohrung minus Nut, in einem Schnitt.
+
+    Das Werkzeug ist ein Innengewinde aus dem exakten Kern (``build.threaded``
+    mit ``internal``): die Bohrung auf Kern plus Spiel, der Gang nach außen.
+    Es beginnt eine Steigung unter dem offenen Ende und reicht bis zur Decke
+    der Schürze — die Nut läuft über die ganze Schürze, und ihre Phase am
+    offenen Ende ist die des Halses am Rand.
+    """
+    from app.core.brep import edit
+    from app.core.knowledge.parts.build import threaded as threaded_form
+    from app.core.knowledge.parts.shapes import building
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    skirt, inside, outer = _cap_sizes(major, params, clearance)
+    with building("brep"):
+        cutter = threaded_form(
+            inside, params.pitch, skirt + params.pitch, internal=True, bottom=-params.pitch
+        )
+    body = edit.cylinder(outer, skirt + params.thickness)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    cap = _exact_checked(edit.unified(edit.boolean("difference", [body, cast(Any, cutter)])))
+    return cap, _helical_faces(cap)

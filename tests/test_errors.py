@@ -385,6 +385,11 @@ _NOT_A_RANGE = frozenset(
         "seal_support_face", "seal_dimensions", "seal_geometry",
         # Art und Belegung einer Auswahl sind keine Zahlenspanne.
         "feature_kind", "empty_feature", "slots_full",
+        # Die Gestalt eines Gewindes (P2.5-Rest): Ein kegeliges oder
+        # mehrgängiges Gewinde bekommt kein Gegenstück aus der Bibliothek, und
+        # Ändern oder Entfernen setzen keine Zylinder an einen Kegel. Das ist
+        # eine Eigenschaft des gewählten Merkmals, keine Zahl in einem Feld.
+        "thread_shape", "tapered",
         # Schrift und Schnitt einer Beschriftung: eine Familie, die dieser
         # Rechner nicht hat, und ein Schnitt, den es in dieser Familie nicht
         # gibt. Beides sind Einträge in zwei kurzen Listen — es gibt kein Feld,

@@ -522,6 +522,7 @@ def test_narrow_nurbs_bulge_cannot_hide_behind_a_sphere_candidate(
         lambda face: SimpleNamespace(
             IsPlane=lambda tolerance, plane: False,
             IsCylinder=lambda tolerance, cylinder: False,
+            IsCone=lambda tolerance, cone: False,
             IsSphere=wrong_sphere,
             GetGap=lambda: 0.0,
             GetStatus=lambda: 0,

@@ -387,6 +387,9 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         # Und eines, das gegen das **gemessene** Maß des gewählten Merkmals
         # verstößt: Ein Langloch lässt sich nur länger ziehen.
         "slot_growth",
+        # Die Kragentiefe eines Deckels gegen die gemessene freie Tiefe der
+        # Öffnung: Tiefer ragt die Wand in den Kragen.
+        "collar_hits_wall",
     }
 )
 

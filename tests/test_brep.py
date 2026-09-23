@@ -27,6 +27,8 @@ from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.project import ProjectSources, new_project
+from app.core.sketch.profile import Profile as Outline
+from app.core.sketch.profile import ProfileSegment as Segment
 from app.core.types import Mesh, OpContext, Profile, Scene, SceneObject, Source, kind_of
 from app.core.units import EPS_DISPLAY, EPS_GEOM
 
@@ -1080,6 +1082,54 @@ def test_the_body_answers_from_the_kernel_not_from_the_triangles() -> None:
     assert (solid.face_count, solid.edge_count) == (6, 12)
 
 
+def _nurbs(solid: Solid) -> Solid:
+    """Derselbe Körper mit jeder Fläche und Kurve als NURBS — wie aus manchem STEP."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+
+    return Solid(BRepBuilderAPI_NurbsConvert(solid.shape, True).Shape())
+
+
+def _open_box() -> Solid:
+    """Ein Quader ohne Deckel: fünf Flächen, genäht, vier freie Kanten am Rand."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+
+    sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
+    faces = TopExp_Explorer(block().shape, TopAbs_FACE)
+    kept = 0
+    while faces.More():
+        if kept < 5:
+            sewing.Add(faces.Current())
+        kept += 1
+        faces.Next()
+    sewing.Perform()
+    return Solid(sewing.SewedShape())
+
+
+def test_an_open_shell_or_a_lone_face_is_not_closed() -> None:
+    """``is_closed`` fragt nach freien Kanten — und fand bis zum 22.09.2026 nie eine.
+
+    ``ShapeAnalysis_Shell.CheckOrientedShells`` zeichnet freie Kanten nur mit
+    ``alsofree`` auf; ohne das Argument meldete ``HasFreeEdges`` immer nein,
+    und ein Kasten ohne Deckel, sogar eine einzelne Fläche, galt als
+    geschlossen. Jede Prüfung, die darauf baute — ``_built`` nach Verrunden
+    und Fase, ``transformed``, der Gewindebolzen, die Vereinigung der
+    Bausteine —, sah deshalb nur die Körperzahl.
+    """
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    assert block().is_closed
+    assert edit.cylinder(10.0, 5.0).is_closed
+    assert edit.sphere(8.0).is_closed
+    assert edit.cone(10.0, 0.0, 5.0).is_closed, "die Spitze ist eine entartete Kante, keine freie"
+    assert not _open_box().is_closed
+    lone = Solid(TopoDS.Face(TopExp_Explorer(block().shape, TopAbs_FACE).Current()))
+    assert not lone.is_closed
+
+
 def test_the_bounding_box_comes_from_the_shape_not_from_the_triangles() -> None:
     """Der Hüllquader eines exakten Körpers ist exakt (§30, Regel 6).
 
@@ -1101,7 +1151,49 @@ def test_the_bounding_box_comes_from_the_shape_not_from_the_triangles() -> None:
     assert solid.to_mesh().bounds.size[0] < 50.0 - EPS_GEOM
 
 
-def test_a_fillet_on_a_reference_edge_is_geometrically_exact() -> None:
+def test_the_bounding_box_is_measured_once_per_body() -> None:
+    """Der Hüllquader wird je Körper einmal gemessen, wie Volumen und Fläche.
+
+    ``AddOptimal`` kostete an ``build_tray_v3.step`` 0,37 s je Frage, und das
+    Fenster fragt bei jeder Auswertung für jedes Objekt — Kopfzeile,
+    Objektbaum, Ansicht, Platzierung —, im Hauptthread (Review 22.09.2026).
+    Dasselbe Objekt beim zweiten Mal heißt: nicht noch einmal gemessen. Eine
+    private Kopie misst neu und kommt auf dieselben Zahlen.
+    """
+    from dataclasses import replace
+
+    solid = edit.cylinder(diameter=50.0, height=40.0)
+    first = solid.bounds
+    assert solid.bounds is first
+    copy = replace(solid)
+    assert copy.bounds == first
+    # Verschoben reist der Hüllquader mit — und ist derselbe, den der Körper
+    # selbst mäße.
+    moved = edit.moved(solid, (5.0, -3.0, 2.0))
+    carried = moved._cache["bounds"]
+    del moved._cache["bounds"]
+    assert moved.bounds == carried
+    assert carried.minimum == pytest.approx((-20.0, -28.0, 2.0), abs=EPS_GEOM)
+
+
+def test_closedness_is_asked_once_per_body() -> None:
+    """``is_closed`` geht über jede Kante — und wird je Körper einmal gerechnet.
+
+    Gefragt wird nach jedem Verrunden, Bewegen, Schneiden und in der
+    Erkennung, am Gewindebolzen M3 x 0,5 x 60 mehrmals je Schritt über 365
+    Flächen (Review 22.09.2026). Die gemerkte Antwort ist dieselbe, auch für
+    eine offene Schale.
+    """
+    solid = edit.cylinder(diameter=10.0, height=5.0)
+    assert "closed" not in solid._cache
+    assert solid.is_closed
+    assert solid._cache["closed"] is True
+    assert solid.is_closed
+    shell = _open_box()
+    assert not shell.is_closed
+    assert shell._cache["closed"] is False
+    assert not shell.is_closed
+
     """§40 für P12. Vier Stehende mit r gerundet: die Rechnung ist geschlossen."""
     radius = 3.0
 
@@ -1265,6 +1357,9 @@ def test_a_failed_difference_names_the_editing_not_a_connection(
             pass
 
         def SetNonDestructive(self, _value: bool) -> None:  # noqa: N802
+            pass
+
+        def SetRunParallel(self, _value: bool) -> None:  # noqa: N802
             pass
 
         def SetArguments(self, _values: object) -> None:  # noqa: N802
@@ -2240,8 +2335,9 @@ def test_a_corner_fillet_leaves_no_degenerate_triangles() -> None:
         lambda: profiles.shell_open_top(edit.sphere(20.0), 1.0),
         lambda: profiles.draft_vertical(edit.sphere(20.0), 5.0),
         lambda: profiles.push_faces(edit.box(40.0, 30.0, 20.0), (0.0, 0.0, 1.0), -25.0),
+        lambda: profiles.draft_vertical(_nurbs(edit.box(60.0, 40.0, 10.0)), 3.0),
     ],
-    ids=["shell_open_top", "draft_vertical", "push_faces"],
+    ids=["shell_open_top", "draft_vertical", "push_faces", "draft_on_nurbs"],
 )
 def test_a_refusal_of_the_exact_kernel_offers_no_mesh_repair(attempt: Callable[[], Any]) -> None:
     """Wo der exakte Kern absagt, heißt der Weg nach vorn „Eingabe korrigieren".
@@ -2249,6 +2345,13 @@ def test_a_refusal_of_the_exact_kernel_offers_no_mesh_repair(attempt: Callable[[
     Ohne eigene Vorschläge erbte die Absage „Reparieren und erneut versuchen"
     und „Stellen zeigen" — Netzreparatur und offene Kanten gibt es an einem
     B-Rep-Körper nicht (Review 21.09.2026; ``edit.boolean`` sagte es schon).
+
+    **Und die Formschräge an einer NURBS-Wand kam gar nicht als Absage an**
+    (22.09.2026): ``BRepOffsetAPI_DraftAngle.Add`` wirft an einer
+    B-Spline-Fläche ``Standard_ConstructionError``, und der Aufruf stand
+    außerhalb der Fehlerübersetzung — der Kunde las „unerwarteter Fehler" und
+    wurde um einen Fehlerbericht gebeten, an einem STEP-Teil aus einem
+    Programm, das jede Fläche als NURBS schreibt.
     """
     from app.core.errors import CANCEL, CORRECT_INPUT, REPAIR_AND_RETRY, SHOW_LOCATIONS
 
@@ -2257,6 +2360,62 @@ def test_a_refusal_of_the_exact_kernel_offers_no_mesh_repair(attempt: Callable[[
     offered = [action.id for action in caught.value.suggestions]
     assert CORRECT_INPUT.id in offered and CANCEL.id in offered
     assert REPAIR_AND_RETRY.id not in offered and SHOW_LOCATIONS.id not in offered
+
+
+@pytest.mark.parametrize(
+    ("build", "sentence"),
+    [
+        (
+            lambda outline: profiles.loft(outline, outline, 10.0),
+            "Aus einem der gezeichneten Löcher entsteht kein Durchzug.",
+        ),
+        (
+            lambda outline: profiles.sweep_path(
+                outline,
+                Outline(segments=(Segment("line", (0.0, 0.0), (0.0, 30.0)),)),
+            ),
+            "Entlang dieser Bahn lässt sich der Querschnitt nicht führen.",
+        ),
+    ],
+    ids=["loft", "sweep_path"],
+)
+def test_a_hole_that_cannot_be_cut_is_refused_with_the_sentence_of_its_way(
+    build: Callable[[Any], Solid], sentence: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scheitert das Abziehen eines gezeichneten Lochs, spricht die Absage vom Loch.
+
+    ``_fuzzy_boolean`` trug bis zum 22.09.2026 den Satz des alten
+    Gewindebolzens („Kern und Gang des Gewindes ließen sich nicht zu einem
+    Körper verbinden …") — seit RM-195 rufen es nur noch Durchzug und Bahn,
+    und ein Loch im Durchzug scheiterte mit einem Satz über ein Gewinde, das
+    es nicht gab. Das Scheitern wird hier erzwungen: Der Kern schneidet
+    diese Löcher, und eine Eingabe, an der er es nicht kann, wäre eine
+    Frage der OCCT-Version.
+    """
+
+    class Refusing:
+        """Ein Boolescher Builder, der nicht fertig wird."""
+
+        def Build(self) -> None:  # noqa: N802 - Name der externen OCP-API
+            return None
+
+        def IsDone(self) -> bool:  # noqa: N802 - Name der externen OCP-API
+            return False
+
+    monkeypatch.setattr(profiles, "boolean_builder", lambda *args, **kwargs: Refusing())
+    square = Outline(
+        segments=(
+            Segment("line", (-10.0, -10.0), (10.0, -10.0)),
+            Segment("line", (10.0, -10.0), (10.0, 10.0)),
+            Segment("line", (10.0, 10.0), (-10.0, 10.0)),
+            Segment("line", (-10.0, 10.0), (-10.0, -10.0)),
+        ),
+        holes=(Outline(circle=((0.0, 0.0), 3.0)),),
+    )
+    with pytest.raises(GeometryError) as caught:
+        build(square)
+    assert caught.value.detail == sentence
+    assert "Gewinde" not in str(caught.value.detail)
 
 
 def test_the_exact_box_takes_corner_and_place_in_one_motion(
@@ -3493,3 +3652,139 @@ def test_a_turned_body_carries_its_top_face_along(creator: str, profile: Profile
     assert face.params["centre"] == pytest.approx(
         _turned_about_x(centre_before, pivot, angle), abs=1e-6
     )
+
+
+class _CountingToken:
+    """Ein Abbruch nach ``limit`` Prüfungen — und ein Zähler, wie oft gefragt wurde."""
+
+    def __init__(self, limit: int | None) -> None:
+        self.limit = limit
+        self.calls = 0
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.limit is not None and self.calls >= self.limit
+
+    def raise_if_cancelled(self) -> None:
+        from app.core.errors import OperationCancelled
+
+        self.calls += 1
+        if self.limit is not None and self.calls >= self.limit:
+            raise OperationCancelled()
+
+
+@pytest.mark.parametrize("work", ["fillet", "chamfer"])
+def test_fillet_and_chamfer_ask_for_cancellation_while_they_work(work: str) -> None:
+    """Verrunden und Fase fragen den Abbruch — an Wandkarte, Kanten, Bau und Prüfung.
+
+    Bis zum 22.09.2026 nahmen ``edit.fillet`` und ``edit.chamfer`` keinen
+    Token an: Wandkarte, Kantenwahl, der native Bau und die Prüfung danach
+    liefen durch, und *Abbrechen* griff erst in der Erkennung am fertigen
+    Körper. An jeder Stelle abgebrochen, bleibt der Eingang, wie er war.
+    """
+    from app.core.errors import OperationCancelled
+
+    operation = edit.fillet if work == "fillet" else edit.chamfer
+    source = block()
+    volume = source.volume
+    counting = _CountingToken(limit=None)
+    done = operation(source, 1.0, "top", cancelled=counting)
+    assert done.solid_count == 1 and done.volume < volume
+    asked = counting.calls
+    assert asked >= 8, asked
+    for limit in sorted({1, 2, asked // 2, asked - 1, asked}):
+        early = _CountingToken(limit=limit)
+        with pytest.raises(OperationCancelled):
+            operation(source, 1.0, "top", cancelled=early)
+        assert early.calls == limit
+    assert source.volume == pytest.approx(volume, abs=EPS_GEOM)
+
+
+def _bezier_prism_face() -> tuple[Any, float]:
+    """Eine ebene Fläche unter einem kubischen Bogen, mit ihrer Fläche aus Green.
+
+    Der Bogen läuft von (0, 0) über die Pole (3, 6) und (7, 6) nach (10, 0),
+    die Sehne schließt. ½∮(x dy − y dx) ist für das Polynom mit acht
+    Gauß-Legendre-Knoten exakt; die Sehne auf der x-Achse trägt nichts.
+    """
+    import numpy as np
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeEdge,
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakeWire,
+    )
+    from OCP.collections import Array1_gp_Pnt
+    from OCP.Geom import Geom_BezierCurve
+    from OCP.gp import gp_Pnt
+
+    poles = [(0.0, 0.0), (3.0, 6.0), (7.0, 6.0), (10.0, 0.0)]
+    array = Array1_gp_Pnt(1, 4)
+    for number, (x, y) in enumerate(poles, start=1):
+        array.SetValue(number, gp_Pnt(x, y, 0.0))
+    wire = BRepBuilderAPI_MakeWire(
+        BRepBuilderAPI_MakeEdge(Geom_BezierCurve(array)).Edge(),
+        BRepBuilderAPI_MakeEdge(gp_Pnt(10.0, 0.0, 0.0), gp_Pnt(0.0, 0.0, 0.0)).Edge(),
+    ).Wire()
+    face = BRepBuilderAPI_MakeFace(wire, True).Face()
+    points = np.asarray(poles)
+    nodes, weights = np.polynomial.legendre.leggauss(8)
+    area = 0.0
+    for node, weight in zip(nodes, weights, strict=True):
+        t = (node + 1.0) / 2.0
+        basis = np.asarray([(1 - t) ** 3, 3 * t * (1 - t) ** 2, 3 * t**2 * (1 - t), t**3])
+        slope = np.asarray([(1 - t) ** 2, 2 * t * (1 - t), t**2])
+        x, y = basis @ points
+        dx, dy = slope @ (3.0 * np.diff(points, axis=0))
+        area += 0.25 * (x * dy - y * dx) * weight
+    return face, abs(area)
+
+
+@pytest.mark.parametrize("sweep", ["extrusion", "revolution"])
+def test_the_integration_ladder_splits_swept_faces_completely(sweep: str) -> None:
+    """Die Teilung einer Extrusion und einer Drehfläche deckt ihre ganze Fläche (Leiter).
+
+    ``ShapeUpgrade_SplitSurface`` schnitt eine Extrusion nicht in der Richtung
+    ihrer Basiskurve und eine Drehfläche nicht in der ihres Profils; die
+    Teilung deckte die Hälfte, dann ein Viertel, die Leiter kam nie zusammen,
+    und jedes Volumen eines Körpers mit solchen Flächen fiel in den
+    Python-Rückfall — erhabene Schrift auf einem Quader 75 s (22.09.2026).
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.BRepGProp import BRepGProp
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
+    from OCP.collections import Array1_gp_Pnt
+    from OCP.Geom import Geom_BezierCurve
+    from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Vec
+    from OCP.GProp import GProp_GProps
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    from app.core.brep import properties
+
+    def area(shape: Any) -> float:
+        props = GProp_GProps()
+        BRepGProp.SurfaceProperties_s(shape, props)
+        return float(props.Mass())
+
+    array = Array1_gp_Pnt(1, 4)
+    for number, (x, z) in enumerate([(5.0, 0.0), (8.0, 3.0), (4.0, 6.0), (6.0, 9.0)], start=1):
+        array.SetValue(number, gp_Pnt(x, 0.0, z))
+    edge = BRepBuilderAPI_MakeEdge(Geom_BezierCurve(array)).Edge()
+    swept = (
+        BRepPrimAPI_MakePrism(edge, gp_Vec(0.0, 7.0, 0.0)).Shape()
+        if sweep == "extrusion"
+        else BRepPrimAPI_MakeRevol(edge, gp_Ax1(gp_Pnt(), gp_Dir(0.0, 0.0, 1.0)), 2.0).Shape()
+    )
+    face = TopoDS.Face(TopExp_Explorer(swept, TopAbs_FACE).Current())
+    whole = area(face)
+    for subdivisions in (1, 2, 4):
+        patches = properties._patches(face, subdivisions)
+        assert len(patches) == subdivisions**2
+        assert sum(area(patch) for patch in patches) == pytest.approx(whole, rel=1e-9)
+
+    if sweep == "extrusion":
+        base, expected = _bezier_prism_face()
+        prism = BRepPrimAPI_MakePrism(base, gp_Vec(0.0, 0.0, 3.0)).Shape()
+        measured = properties._spanned_volume(prism)
+        assert measured.mass == pytest.approx(3.0 * expected, rel=1e-9)

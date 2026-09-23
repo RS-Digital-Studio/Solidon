@@ -26,17 +26,19 @@ zusammen, nachdem jede Fläche für sich beschrieben ist.
 from __future__ import annotations
 
 import math
-from dataclasses import replace
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from typing import Any
 
 from app.core.brep.canonical import (
+    ConeSurface,
     CylinderSurface,
     PlaneSurface,
     SphereSurface,
     Surface,
     TorusSurface,
 )
-from app.core.brep.kernel import Solid, boolean_builder
+from app.core.brep.kernel import Solid, boolean_builder, listed, nearest_distance
 from app.core.brep.properties import properties
 from app.core.log import get_logger
 from app.core.types import (
@@ -81,6 +83,28 @@ def _oriented(direction: Any) -> Vec3:
 #: ihre Nachbarschaft (``perceive.relations``), nicht der Winkel.
 FULL_TURN = 300.0 / 360.0
 
+
+@dataclass(frozen=True, slots=True)
+class _ThroughQuestion:
+    """Die Frage „durchgehend?" an eine Bohrung — gestellt erst, wenn sie bleibt.
+
+    :func:`_axis_covered` misst Abstände zwischen Probelinien und den
+    Nachbarflächen des Mantels; an den B-Spline-Flanken eines Gewindes kostet
+    das 0,2 s je Probe. Jeder Fußstreifen eines Innengewindes ist ein voller
+    Zylindermantel und damit zunächst eine Bohrung, die das Gewinde danach
+    als Phantom verdrängt: An ``innen_zweigaengig.step`` gingen 4,3 von 5,0 s
+    der Erkennung in Antworten, die niemand las (Review 22.09.2026).
+    :func:`features_of` beantwortet die Frage deshalb nach dem Gewinde, nur
+    für die Bohrungen, die es noch gibt. ``first`` und ``last`` sind die
+    Achsgrenzen der Probelinien, die Reichweite schon eingerechnet.
+    """
+
+    face: Any
+    cylinder: Any
+    first: float
+    last: float
+
+
 #: Wie viele Nachbarflächen einer kugeligen Fläche selbst Kantenverrundungen
 #: sein müssen, damit sie als Ecke gilt — die Stelle, an der verrundete Kanten
 #: zusammenlaufen. Zwei, weil eine Ecke aus mindestens zwei Kanten entsteht.
@@ -103,9 +127,21 @@ CORNER_NEIGHBOURS = 2
 # dasselbe Loch.
 
 
-def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[FeatureId, Feature]:
+def features_of(
+    solid: Solid,
+    *,
+    cancelled: CancelToken | None = None,
+    known_threads: Sequence[Feature] | None = None,
+) -> dict[FeatureId, Feature]:
     """Löcher und ebene Flächen, aus der Topologie abgelesen statt
     eingepasst.
+
+    ``known_threads`` sind Gewinde, die der Erzeuger kennt (``thread_exact``):
+    An ihrer Stelle wird nicht gelesen, sie verdrängen aber dieselben
+    Phantome wie ein gelesenes. Den Bolzen, den der Erzeuger eben genäht
+    hat, las der Leser sonst noch einmal — am M3 x 0,5 x 60 2,7 von 4 Sekunden
+    der Erkennung, für eine Auskunft, die danach überschrieben wurde
+    (Review 22.09.2026).
     """
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
     from OCP.collections import (
@@ -138,9 +174,23 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
     named: dict[int, FeatureId] = {}
     surfaces: dict[int, Surface | None] = {}
     surface_patches: dict[int, SurfacePatch] = {}
+    # Die Flächen eines Gewindes, das der Erzeuger kennt, werden nicht erst
+    # beschrieben: Was dort entstünde — Zapfen, Kegel, Rundungen auf der
+    # Wendel —, verdrängt das Gewinde unten ohnehin als Phantom. Am
+    # M3 x 0,5 x 60 sind das 363 Regelflächen und 0,6 s Trägerprüfung, dazu
+    # eine Klassierung am ganzen Bolzen (0,4 s) für eine angeschnittene
+    # Fußfläche (Review 22.09.2026).
+    covered = (
+        {face for thread in known_threads for face in solid.faces_of_triangles(thread.face_indices)}
+        if known_threads
+        else set()
+    )
     for index, face in enumerate(solid.faces()):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
+        if index in covered:
+            surfaces[index] = None
+            continue
         surfaces[index] = solid.surface(index, cancelled=cancelled)
         native_patch = _native_patch(solid, index, surfaces[index], cancelled=cancelled)
         if native_patch is not None:
@@ -168,7 +218,9 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
             provenance="detected",
             params=params,
             measure_sources={
-                name: "native" for name, value in params.items() if not isinstance(value, bool)
+                name: "native"
+                for name, value in params.items()
+                if not isinstance(value, (bool, _ThroughQuestion))
             },
             # Eine Topologiefläche besteht im Viewport aus vielen Dreiecken.
             # Der nackte ``index`` gehört zur B-Rep-Flächenliste und wäre als
@@ -189,7 +241,7 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
         surfaces,
         cancelled=cancelled,
     )
-    found = _mouth_chamfers_folded(solid, found, named, neighbours, surfaces, cancelled=cancelled)
+    found = _mouth_chamfers_folded(solid, found, named, surfaces, cancelled=cancelled)
 
     # **Ein Gewinde statt einer Handvoll Erfundener** — dieselbe Regel wie am
     # Netz, gemessen an den Kanten statt an der Konzentration der Dreiecke
@@ -198,10 +250,16 @@ def features_of(solid: Solid, *, cancelled: CancelToken | None = None) -> dict[F
     from app.core.brep.thread import thread_features
     from app.core.perceive.features import without_phantoms_on
 
-    for thread in thread_features(solid, cancelled=cancelled):
+    threads = (
+        list(known_threads)
+        if known_threads is not None
+        else thread_features(solid, cancelled=cancelled)
+    )
+    for thread in threads:
         found = without_phantoms_on(found, thread.face_indices)
         found[thread.id] = thread
         counts["thread"] = counts.get("thread", 0) + 1
+    found = _through_answered(found, neighbours, tolerance, cancelled=cancelled)
 
     # Der offene Mantel hat an beiden Kernen denselben Randvertrag. Die
     # Dreiecksnummern der Tessellierung sind bereits die Merkmalsnummern.
@@ -338,6 +396,11 @@ def _native_patch(
             "ring_radius": float(surface.torus.MajorRadius()),
             "tube_radius": float(surface.torus.MinorRadius()),
         }
+    elif isinstance(surface, ConeSurface):
+        # Der rationale Kegel (P2.3): Spitze, Achse in die belegte Nappe und
+        # Halbwinkel — dieselben drei Auskünfte wie am nativen darunter.
+        kind = "cone"
+        params = {"apex": surface.apex, "axis": surface.axis, "half_angle": surface.half_angle}
     else:
         adaptor = BRepAdaptor_Surface(solid.faces()[index])
         if adaptor.GetType() != GeomAbs_Cone:
@@ -563,6 +626,12 @@ def _void_features(solid: Solid, *, cancelled: CancelToken | None = None) -> lis
 
     check()
     bodies = mapped(solid.shape, TopAbs_SOLID)
+    # **Ohne Innenschale keine Kammer** — und das ist der Normalfall. Die
+    # Gültigkeitsprüfung darunter ging über den ganzen Körper, auch wenn jeder
+    # Körper genau eine Schale hat: am Gewindebolzen M3 x 0,5 x 60 0,21 s je
+    # Erkennung für eine Antwort, die die Schalenzahl schon gab (22.09.2026).
+    if mapped(solid.shape, TopAbs_SHELL).Extent() <= bodies.Extent():
+        return []
     if not bodies.Extent() or not solid.is_closed or not BRepCheck_Analyzer(solid.shape).IsValid():
         return []
     original_faces = solid.faces()
@@ -626,7 +695,7 @@ def _void_features(solid: Solid, *, cancelled: CancelToken | None = None) -> lis
                             if result_faces.Contains(candidate):
                                 represented.add(result_faces.FindIndex(candidate))
                             if cut is not None:
-                                for modified in cut.Modified(candidate):
+                                for modified in listed(cut.Modified(candidate)):
                                     if result_faces.Contains(modified):
                                         represented.add(result_faces.FindIndex(modified))
                         if represented:
@@ -722,12 +791,11 @@ def _slots_instead_of_half_bores(
     Dieselbe Entscheidung und dieselbe Begründung wie bei
     :data:`app.core.perceive.slots.SWALLOWED_BY_A_SLOT`.
 
-    **Gerechnet wird nur um die Bögen herum.** Die Nachbarschaft wird für die
-    Bögen und ihre Nachbarn gebaut, nicht für jede Fläche des Körpers — ein
-    STEP-Körper mit zweitausend Flächen hat davon meist keine zwei.
+    **Gerechnet wird nur um die Bögen herum.** Gefragt wird die Nachbarschaft
+    der Bögen und ihrer Nachbarn, nicht jeder Fläche des Körpers — ein
+    STEP-Körper mit zweitausend Flächen hat davon meist keine zwei. Die
+    Nachbarkarte selbst baut der Körper einmal (``Solid.face_neighbours``).
     """
-    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
-
     # Träge, wie jeder Import von ``brep`` nach ``perceive``
     # (``tests/test_core_package_direction.py``): Die Karte erlaubt die
     # Richtung nur im Funktionskörper.
@@ -757,15 +825,10 @@ def _slots_instead_of_half_bores(
     if len(arcs) < 2:
         return found
 
-    # Die Nummer einer Fläche in ``faces`` — über dieselbe Karte, aus der
-    # ``Solid.faces`` die Liste gebaut hat, in O(1) statt über einen
-    # ``IsSame``-Vergleich mit jeder Fläche des Körpers.
-    numbered = ShapeMap()
-    for face in faces:
-        numbered.Add(face)
-
+    # Die Nachbarn einer Fläche kennt der Körper selbst, einmal gebaut
+    # (``Solid.face_neighbours``) — nicht je Frage über einen Explorer.
     def neighbours_of(index: int) -> set[int]:
-        return _neighbouring_faces(faces[index], neighbours, numbered)
+        return set(solid.face_neighbours(index))
 
     # Von den Nachbarn eines Bogens interessiert nur, was eine Flanke sein
     # kann: eine Ebene längs zur Achse. Deckel und Boden einer Platte grenzen
@@ -869,8 +932,6 @@ def _seam_split_cylinders_joined(
     :func:`_cylinder_group_extent` misst deshalb beides im Rahmen der
     ersten Fläche und vereinigt Bögen und Spannen.
     """
-    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
-
     from app.core.perceive.slots import PARALLEL_AXES, SAME_RADIUS
 
     cylinders = [
@@ -883,9 +944,7 @@ def _seam_split_cylinders_joined(
     if len(cylinders) < 2:
         return found
     faces = solid.faces()
-    numbered = ShapeMap()
-    for face in faces:
-        numbered.Add(face)
+    candidates = set(cylinders)
 
     def same_line(one: Any, other: Any) -> bool:
         axis, second = one.Axis().Direction(), other.Axis().Direction()
@@ -910,8 +969,8 @@ def _seam_split_cylinders_joined(
             current = frontier.pop()
             surface = surfaces[current]
             assert isinstance(surface, CylinderSurface)
-            for other in _neighbouring_faces(faces[current], neighbours, numbered):
-                if other in seen or other not in cylinders:
+            for other in sorted(solid.face_neighbours(current)):
+                if other in seen or other not in candidates:
                     continue
                 candidate = surfaces[other]
                 assert isinstance(candidate, CylinderSurface)
@@ -972,14 +1031,8 @@ def _seam_split_cylinders_joined(
                 "depth": depth,
             }
             if first.inward:
-                params["through"] = not _axis_covered(
-                    neighbours,
-                    faces[group[0]],
-                    cylinder,
-                    low - reach,
-                    high + reach,
-                    tolerance,
-                    cancelled=cancelled,
+                params["through"] = _ThroughQuestion(
+                    faces[group[0]], cylinder, low - reach, high + reach
                 )
                 if turn < math.tau - EPS_GEOM:
                     params["partial"] = True
@@ -1000,7 +1053,9 @@ def _seam_split_cylinders_joined(
             provenance="detected",
             params=params,
             measure_sources={
-                name: "native" for name, value in params.items() if not isinstance(value, bool)
+                name: "native"
+                for name, value in params.items()
+                if not isinstance(value, (bool, _ThroughQuestion))
             },
             face_indices=tuple(sorted(indices)),
         )
@@ -1106,7 +1161,6 @@ def _mouth_chamfers_folded(
     solid: Solid,
     found: dict[FeatureId, Feature],
     named: dict[int, FeatureId],
-    neighbours: Any,
     surfaces: dict[int, Surface | None],
     *,
     cancelled: CancelToken | None = None,
@@ -1136,8 +1190,6 @@ def _mouth_chamfers_folded(
     der abschließende Zuschnitt in :func:`features_of` liest sie von den
     nativen Flächen ab. Maße des Langlochs bleiben die Nennmaße ohne Fase.
     """
-    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
-
     from app.core.perceive.slots import ACROSS_THE_AXIS
     from app.core.units import exact_cos_degrees
 
@@ -1155,16 +1207,9 @@ def _mouth_chamfers_folded(
     ]
     if not slots or not cones:
         return found
-    faces = solid.faces()
-    numbered = ShapeMap()
-    for face in faces:
-        numbered.Add(face)
-    touching: dict[int, set[int]] = {}
 
-    def neighbours_of(index: int) -> set[int]:
-        if index not in touching:
-            touching[index] = _neighbouring_faces(faces[index], neighbours, numbered)
-        return touching[index]
+    def neighbours_of(index: int) -> frozenset[int]:
+        return solid.face_neighbours(index)
 
     folded: dict[FeatureId, set[int]] = {}
     for index, _identifier in cones:
@@ -1185,8 +1230,8 @@ def _mouth_chamfers_folded(
         axis = slot.params["axis"]
         members = slots[name]
         flanks: set[int] = set()
-        for piece in pieces:
-            for index in neighbours_of(piece):
+        for piece in sorted(pieces):
+            for index in sorted(neighbours_of(piece)):
                 if index in members or index in pieces or index in flanks:
                     continue
                 surface = surfaces.get(index)
@@ -1214,25 +1259,6 @@ def _mouth_chamfers_folded(
         # Nennmaße ohne die Fase — wie am Netz.
         found[name] = replace(slot, face_indices=tuple(sorted(indices)))
     return found
-
-
-def _neighbouring_faces(face: Any, neighbours: Any, numbered: Any) -> set[int]:
-    """Die Nummern der Flächen, die an ``face`` grenzen — über ``numbered``."""
-    from OCP.TopAbs import TopAbs_EDGE
-    from OCP.TopExp import TopExp_Explorer
-
-    touching: set[int] = set()
-    walk = TopExp_Explorer(face, TopAbs_EDGE)
-    while walk.More():
-        edge = walk.Current()
-        walk.Next()
-        for other in neighbours.FindFromKey(edge):
-            if other.IsSame(face):
-                continue
-            number = numbered.FindIndex(other)
-            if number > 0:
-                touching.add(number - 1)
-    return touching
 
 
 def _flanks_of_a_slot(
@@ -1263,7 +1289,7 @@ def _flanks_of_a_slot(
 
     shared = around.get(first, set()) & around.get(second, set())
     flanks: list[int] = []
-    for index in shared:
+    for index in sorted(shared):
         surface = surface_of(index)
         if not isinstance(surface, PlaneSurface):
             continue
@@ -1530,15 +1556,7 @@ def _describe(
             # Dasselbe Wort wie auf der Netzseite, und der Steckbrief liest es
             # („Durchgang" oder „Sackloch"). Ohne den Schlüssel stand an jeder
             # exakten Bohrung „Sackloch", auch an einem Loch durch eine Platte.
-            params["through"] = not _axis_covered(
-                neighbours,
-                face,
-                cylinder,
-                first_v - reach,
-                last_v + reach,
-                tolerance,
-                cancelled=cancelled,
-            )
+            params["through"] = _ThroughQuestion(face, cylinder, first_v - reach, last_v + reach)
             # **Angeschnitten, nicht verworfen**: ein Mantel unter der vollen
             # Umdrehung ist eine Bohrung, die ein Nachbar geöffnet hat — eine
             # zweite Bohrung, ein Rand. Dasselbe Wort wie am Netz
@@ -1547,6 +1565,28 @@ def _describe(
             if turn < math.tau - EPS_GEOM:
                 params["partial"] = True
         return "hole" if hollow else "pin", params
+
+    if isinstance(surface, ConeSurface):
+        # **Derselbe Kegel als B-Spline** (P2.3): Manche Programme schreiben
+        # jede Fläche als NURBS nach STEP, und eine Senkung oder ein
+        # Kegelstumpf kam dann als gerundete Fläche ohne Maße in den Baum.
+        # ``canonical`` hat den Träger an allen Bézier-Koeffizienten belegt;
+        # die Maße sind die des nativen Zweigs darunter — Durchmesser und
+        # Mitte am weiten Ende, Achse von der Spitze in die Nappe.
+        axis = surface.axis
+        wide = surface.far
+        return "cone", {
+            "diameter": 2.0 * wide * math.tan(surface.half_angle),
+            "angle": math.degrees(surface.half_angle) * 2.0,
+            "axis": axis,
+            "centre": (
+                surface.apex[0] + wide * axis[0],
+                surface.apex[1] + wide * axis[1],
+                surface.apex[2] + wide * axis[2],
+            ),
+            "recess": surface.inward,
+            **({"partial": True} if surface.turn < FULL_TURN * math.tau else {}),
+        }
 
     if kind == GeomAbs_Cone:
         span = _cone_nappe(adaptor, cancelled=cancelled)
@@ -1612,6 +1652,38 @@ def _axis_point(cylinder: Any, along: float) -> Vec3:
     )
 
 
+def _through_answered(
+    found: dict[FeatureId, Feature],
+    neighbours: Any,
+    tolerance: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> dict[FeatureId, Feature]:
+    """Beantwortet die aufgeschobenen Fragen „durchgehend?" (:class:`_ThroughQuestion`).
+
+    Erst hier, nach dem Gewinde: Was es als Phantom verdrängt hat, fragt
+    niemand mehr. In der Reihenfolge der Kennungen, damit dieselbe Eingabe
+    dieselben Fragen in derselben Folge stellt.
+    """
+    answered = dict(found)
+    for identifier in sorted(found):
+        feature = found[identifier]
+        question = feature.params.get("through")
+        if not isinstance(question, _ThroughQuestion):
+            continue
+        through = not _axis_covered(
+            neighbours,
+            question.face,
+            question.cylinder,
+            question.first,
+            question.last,
+            tolerance,
+            cancelled=cancelled,
+        )
+        answered[identifier] = replace(feature, params={**feature.params, "through": through})
+    return answered
+
+
 def _axis_covered(
     neighbours: Any,
     face: Any,
@@ -1656,11 +1728,12 @@ def _axis_covered(
     Platte, Sackloch, Spitzenbohrung, schräger Austritt, zylindrische und
     kegelige Senkung, U-Profil, Kugelfräser, Kreuzbohrung, Stufenbohrung.
     """
+    from OCP.BRep import BRep_Builder
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
-    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
     from OCP.gp import gp_Ax1, gp_Lin, gp_Pnt
     from OCP.TopAbs import TopAbs_EDGE
     from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS_Compound
 
     # Träge, damit ``brep`` keine eifrige Kante zur Wahrnehmung bekommt.
     from app.core.perceive.features import THROUGH_RINGS, THROUGH_SAMPLES
@@ -1672,30 +1745,46 @@ def _axis_covered(
             cancelled.raise_if_cancelled()
         edge = walk.Current()
         walk.Next()
-        for other in neighbours.FindFromKey(edge):
+        for other in listed(neighbours.FindFromKey(edge)):
             if other.IsSame(face) or any(other.IsSame(known) for known in seen):
                 continue
             seen.append(other)
     if not seen:
         return False
 
-    def covered(line: Any) -> bool:
-        probe = BRepBuilderAPI_MakeEdge(line, first, last).Edge()
-        for other in seen:
-            if cancelled is not None:
-                cancelled.raise_if_cancelled()
-            distance = BRepExtrema_DistShapeShape(probe, other)
-            if distance.IsDone() and distance.Value() <= tolerance:
-                return True
-        return False
+    def assembled(shapes: Any) -> Any:
+        """Ein Verbund, der nur liest — keine neue Geometrie, keine Kopie."""
+        builder = BRep_Builder()
+        compound = TopoDS_Compound()
+        builder.MakeCompound(compound)
+        for shape in shapes:
+            builder.Add(compound, shape)
+        return compound
+
+    # **Ein Abstand je Probe, nicht je Probe und Nachbar.** Gefragt ist, ob
+    # irgendeine der Linien irgendeinem Nachbarn auf ``tolerance`` nahekommt —
+    # das ist der kleinste Abstand zwischen beiden Verbünden. Einzeln gefragt
+    # waren es an einer Durchgangsbohrung 17 Linien mal jeder Nachbar, an
+    # zwei Bohrungen des Teppichclips aus STEP 1,4 s (Review 22.09.2026).
+    around = assembled(seen)
+
+    def covered(lines: list[Any]) -> bool:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        probe = assembled(BRepBuilderAPI_MakeEdge(line, first, last).Edge() for line in lines)
+        away = nearest_distance(probe, around)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        return away is not None and away <= tolerance
 
     axis = cylinder.Axis()
-    if covered(gp_Lin(axis)):
+    if covered([gp_Lin(axis)]):
         return True
     origin = cylinder.Location()
     direction = axis.Direction()
     across, along = cylinder.XAxis().Direction(), cylinder.YAxis().Direction()
     radius = float(cylinder.Radius())
+    rings: list[Any] = []
     for share in THROUGH_RINGS:
         for sample in range(THROUGH_SAMPLES):
             angle = math.tau * sample / THROUGH_SAMPLES
@@ -1706,9 +1795,8 @@ def _axis_covered(
                 origin.Y() + reach_x * across.Y() + reach_y * along.Y(),
                 origin.Z() + reach_x * across.Z() + reach_y * along.Z(),
             )
-            if covered(gp_Lin(gp_Ax1(point, direction))):
-                return True
-    return False
+            rings.append(gp_Lin(gp_Ax1(point, direction)))
+    return covered(rings)
 
 
 def _axis_in_material(inside: Any, cylinder: Any, centre: Any) -> bool:
@@ -1772,7 +1860,7 @@ def _rounded_neighbours(
             cancelled.raise_if_cancelled()
         edge = walk.Current()
         walk.Next()
-        for other in neighbours.FindFromKey(edge):
+        for other in listed(neighbours.FindFromKey(edge)):
             if other.IsSame(face):
                 continue
             number = solid.face_index(other)

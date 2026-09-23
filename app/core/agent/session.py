@@ -954,6 +954,8 @@ class AgentSession:
     def _label_for(self, name: str) -> str:
         """Was in der Statuszeile steht, während dieses Werkzeug läuft."""
         extras = {
+            # An den Kunden, nicht an das Modell: Die Statuszeile siezt
+            # (``test_the_agent_status_line_addresses_the_customer_formally``).
             ASK_USER: tr("Rückfrage an Sie"),
             UNDO_TRANSACTION: tr("Merkt eine Rücknahme vor"),
             ADD_PARAMETER: tr("Legt einen Parameter an"),

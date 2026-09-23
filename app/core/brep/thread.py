@@ -56,7 +56,7 @@ from typing import Any, Final
 import numpy as np
 from numpy.typing import NDArray
 
-from app.core.brep.kernel import Solid, require
+from app.core.brep.kernel import Solid, listed, require
 from app.core.deferred import least_squares
 from app.core.log import get_logger
 from app.core.types import CancelToken, Feature, FeatureId, MeasureSource, Vec3
@@ -86,6 +86,15 @@ LEAD_TOLERANCE: Final = 2e-3
 #: Wann zwei Zylinderachsen des Körpers dieselbe sind — im Skalarprodukt, für
 #: die Startkandidaten der Achseinpassung.
 SAME_START_AXIS: Final = 1e-6
+
+#: Wie viele Auswertungen eine Achseinpassung höchstens bekommt — ein
+#: Arbeitsbudget, keine Genauigkeit. Eine Wendel von einem guten Start (die
+#: SVD-Hauptrichtung, ein Kernzylinder) kommt in vier bis neun zusammen,
+#: ein schlechter Start einer echten Wendel in höchstens 104 (gezählt am
+#: Korpus, 22.09.2026). Ohne Grenze liefen die Kantenzüge einer Verrundung,
+#: die sich um keine Achse winden, bis zur Vorgabe von scipy (500 je Start):
+#: acht solche Läufe waren an ``Cat_3.stp`` die halbe Merkmalserkennung.
+FIT_EVALUATIONS: Final = 200
 
 #: Unter einer vollen Umdrehung ist eine Steigung eine Vermutung, keine Messung.
 MIN_TURNS_FOR_PITCH: Final = 1.0
@@ -134,6 +143,15 @@ class Winding:
     low: float
     high: float
     phase: float
+    taper: float = 0.0
+    """Anstieg des Radius je Millimeter entlang der Achse — null am Zylinder.
+
+    Liegt der Zug auf einem Kegel, ist ``radius`` der Radius am Fußpunkt
+    ``centre``, sonst das Mittel über den Zug."""
+
+
+#: Wann zwei Züge denselben Kegel meinen — im Anstieg des Radius je Millimeter.
+TAPER_TOLERANCE: Final = 1e-3
 
 
 @dataclass(frozen=True)
@@ -160,6 +178,10 @@ class ThreadReading:
     """``native``, wenn ein Kernzylinder die Achse bestätigt hat, sonst ``fit``."""
     members: tuple[Winding, ...] = field(default_factory=tuple)
     """Die Züge, die das Gewinde tragen — ihre Kanten nennen seine Flächen."""
+    taper: float = 0.0
+    """Halber Kegelwinkel im Bogenmaß, positiv, wenn der Durchmesser entlang
+    ``axis`` wächst — null an einem zylindrischen Gewinde. Kamm- und Fußradius
+    gelten dann in der Mitte ``centre``."""
 
     @property
     def diameter(self) -> float | None:
@@ -238,39 +260,36 @@ def _ordered_points(pieces: list[NDArray[np.float64]]) -> NDArray[np.float64]:
     remaining = [points for points in pieces if len(points)]
     if not remaining:
         return np.zeros((0, 3))
-
-    def loose(points: NDArray[np.float64]) -> int:
-        """Wie viele Enden dieses Stücks an kein anderes passen — am Kettenende beginnen."""
-        count = 0
-        for end in (points[0], points[-1]):
-            near = any(
-                np.linalg.norm(end - other[0]) <= SHARED_VERTEX_GAP
-                or np.linalg.norm(end - other[-1]) <= SHARED_VERTEX_GAP
-                for other in remaining
-                if other is not points
-            )
-            count += 0 if near else 1
-        return count
-
-    remaining.sort(key=lambda points: -loose(points))
+    # **Die Enden als Felder, nicht je Paar gefragt.** Dieselbe Rechnung wie
+    # vorher Stück gegen Stück in Python — an den 180 Stücken eines Zugs des
+    # genähten M3 x 0,5 x 60 waren das 97 000 Normen und 0,6 s (Review
+    # 22.09.2026). Reihenfolge und Gleichstände bleiben dieselben: Die
+    # Sortierung ist stabil, und ``argmin`` nimmt wie die Schleife den
+    # ersten kleinsten Abstand in der Folge Anfang, Ende, nächstes Stück.
+    count = len(remaining)
+    heads = np.asarray([points[0] for points in remaining])
+    tails = np.asarray([points[-1] for points in remaining])
+    ends = np.concatenate((heads, tails))
+    gaps = np.linalg.norm(ends[:, None, :] - ends[None, :, :], axis=2) <= SHARED_VERTEX_GAP
+    own = np.arange(2 * count) % count
+    gaps[own[:, None] == own[None, :]] = False
+    matched = gaps.any(axis=1)
+    loose = (~matched[:count]).astype(int) + (~matched[count:]).astype(int)
+    order = sorted(range(count), key=lambda index: -loose[index])
+    remaining = [remaining[index] for index in order]
     current = remaining.pop(0)
-    if loose(current) == 1 and any(
-        np.linalg.norm(current[0] - other[0]) <= SHARED_VERTEX_GAP
-        or np.linalg.norm(current[0] - other[-1]) <= SHARED_VERTEX_GAP
-        for other in remaining
-    ):
+    first = order[0]
+    if loose[first] == 1 and matched[first]:
         current = current[::-1]
     ordered = [current]
     while remaining:
         tail = ordered[-1][-1]
-        best, best_gap, flip = 0, math.inf, False
-        for slot, points in enumerate(remaining):
-            for reverse, end in ((False, points[0]), (True, points[-1])):
-                gap = float(np.linalg.norm(tail - end))
-                if gap < best_gap:
-                    best, best_gap, flip = slot, gap, reverse
-        points = remaining.pop(best)
-        ordered.append(points[::-1] if flip else points)
+        candidates = np.empty((len(remaining) * 2, 3))
+        candidates[0::2] = [points[0] for points in remaining]
+        candidates[1::2] = [points[-1] for points in remaining]
+        nearest = int(np.argmin(np.linalg.norm(candidates - tail, axis=1)))
+        points = remaining.pop(nearest // 2)
+        ordered.append(points[::-1] if nearest % 2 else points)
     return np.vstack(ordered)
 
 
@@ -344,7 +363,7 @@ def candidate_chains(
     ends = {index: _end_tangents(edge) for index, edge in enumerate(edges) if candidate[index]}
     for slot in range(1, by_vertex.Extent() + 1):
         _check(check_cancelled)
-        siblings = [edge_map.FindIndex(item) - 1 for item in by_vertex.FindFromIndex(slot)]
+        siblings = [edge_map.FindIndex(item) - 1 for item in listed(by_vertex.FindFromIndex(slot))]
         siblings = [index for index in siblings if index >= 0 and candidate[index]]
         for one in siblings:
             for other in siblings:
@@ -470,9 +489,55 @@ def fit_axis(
             across = relative - np.outer(along, axis)
             return np.asarray(np.linalg.norm(across, axis=1) - radius, dtype=float)
 
+        def jacobian(
+            values: NDArray[np.float64],
+            start_axis: NDArray[np.float64] = start_axis,
+            first: NDArray[np.float64] = first,
+            second: NDArray[np.float64] = second,
+        ) -> NDArray[np.float64]:
+            """Die Ableitungen des radialen Abstands nach den fünf Unbekannten.
+
+            **Ausgerechnet, nicht abgetastet.** Mit Differenzenquotienten rief
+            die Ausgleichsrechnung den Rest je Schritt sechsmal auf und
+            verbrachte an ``Cat_3.stp`` — einem Teil ohne Gewinde — 3,1 von
+            4,8 Sekunden der Merkmalserkennung darin (Review 22.09.2026).
+            Mit ``w = s + a e1 + b e2``, der Achse ``u = w / |w|``, dem Rest
+            ``q = p - f`` und seinem Anteil ``s = q u`` entlang, ``d`` quer zur
+            Achse, gilt ``d|d|/da = -s (d e1) / (|w| |d|)`` und
+            ``d|d|/dc = -(d e1) / |d|`` (``c`` verschiebt den Fußpunkt entlang
+            ``e1``), entsprechend für ``b`` und ``d`` mit ``e2``, und
+            ``d|d|/dr = -1``.
+            """
+            _check(check_cancelled)
+            direction = start_axis + values[0] * first + values[1] * second
+            length = float(np.linalg.norm(direction))
+            axis = direction / length
+            foot = centre + values[2] * first + values[3] * second
+            relative = points - foot
+            along = relative @ axis
+            across = relative - np.outer(along, axis)
+            distance = np.maximum(np.linalg.norm(across, axis=1), np.finfo(float).tiny)
+            on_first = (across @ first) / distance
+            on_second = (across @ second) / distance
+            return np.column_stack(
+                (
+                    -along * on_first / length,
+                    -along * on_second / length,
+                    -on_first,
+                    -on_second,
+                    -np.ones(len(points)),
+                )
+            )
+
         along0 = offset @ start_axis
         radius0 = float(np.linalg.norm(offset - np.outer(along0, start_axis), axis=1).mean())
-        fit = least_squares(residual, np.array([0.0, 0.0, 0.0, 0.0, radius0]), method="lm")
+        fit = least_squares(
+            residual,
+            np.array([0.0, 0.0, 0.0, 0.0, radius0]),
+            jac=jacobian,
+            method="lm",
+            max_nfev=FIT_EVALUATIONS,
+        )
         axis, foot, radius = unpack(fit.x)
         if radius <= EPS_GEOM:
             continue
@@ -497,6 +562,107 @@ def fit_axis(
     return axis, foot, radius, spread, confirmed
 
 
+def _tapered(along: NDArray[np.float64], radii: NDArray[np.float64]) -> tuple[float, float, float]:
+    """Radius am Fußpunkt, Anstieg je Millimeter entlang der Achse und Reststreuung.
+
+    Die Gerade ``r = r0 + k·z`` durch die Radien eines Zugs. Ein zylindrisches
+    Gewinde hat ``k ≈ 0``; ein kegeliges Rohrgewinde (1:16 auf den
+    Durchmesser) ``k = 1/32``.
+    """
+    design = np.column_stack((np.ones(len(along)), along))
+    coefficients, *_ = np.linalg.lstsq(design, radii, rcond=None)
+    spread = float(np.abs(design @ coefficients - radii).max())
+    return float(coefficients[0]), float(coefficients[1]), spread
+
+
+def _is_tapered(along: NDArray[np.float64], slope: float, radius: float) -> bool:
+    """Ob der Radius eines Zugs über seine Länge merklich wächst — ein Kegel, kein Zylinder.
+
+    Gemessen wird die Änderung über die ganze Spanne gegen dieselbe
+    Radiustoleranz, mit der Züge zu einer Wendel gruppiert werden: Was darunter
+    bleibt, ist ein Zylinder mit Rauschen.
+    """
+    span = float(along.max() - along.min())
+    return abs(slope) * span > RADIUS_TOLERANCE * max(1.0, radius)
+
+
+def fit_cone_axis(
+    points: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    foot: NDArray[np.float64],
+    radius: float,
+    slope: float,
+    check_cancelled: Cancel = None,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], float, float, float]:
+    """Der Kegel, auf dem die Punkte liegen: Achse, Fußpunkt, Radius am Fuß, Anstieg, Streuung.
+
+    Dieselbe Ausgleichsrechnung wie :func:`fit_axis`, mit einer sechsten
+    Unbekannten: Der Sollradius ist ``r0 + k·s`` statt ``r``, ``s`` der Anteil
+    entlang der Achse. Gestartet wird an der Zylinderachse, die schon passt —
+    an einem kegeligen Gewinde liegt sie wenige Hundertstel neben der wahren,
+    und die Wendel wich dort um 6 µm ab (``konisch.step``, 22.09.2026).
+    Ableitungen ausgerechnet: zu denen des Zylinders kommt je Unbekannte der
+    Anteil ``-k·ds``, mit ``ds/da = (q e1 - s (u e1)) / |w|`` und
+    ``ds/dc = -(u e1)``, dazu ``d/dk = -s``.
+    """
+    _check(check_cancelled)
+    start_axis = np.asarray(axis, dtype=float)
+    start_axis = start_axis / np.linalg.norm(start_axis)
+    first, second = _basis(start_axis)
+    base = np.asarray(foot, dtype=float)
+
+    def unpack(values: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        direction = start_axis + values[0] * first + values[1] * second
+        return direction / np.linalg.norm(direction), base + values[2] * first + values[3] * second
+
+    def residual(values: NDArray[np.float64]) -> NDArray[np.float64]:
+        _check(check_cancelled)
+        unit, origin = unpack(values)
+        relative = points - origin
+        along = relative @ unit
+        across = relative - np.outer(along, unit)
+        return np.asarray(
+            np.linalg.norm(across, axis=1) - values[4] - values[5] * along, dtype=float
+        )
+
+    def jacobian(values: NDArray[np.float64]) -> NDArray[np.float64]:
+        _check(check_cancelled)
+        direction = start_axis + values[0] * first + values[1] * second
+        length = float(np.linalg.norm(direction))
+        unit = direction / length
+        origin = base + values[2] * first + values[3] * second
+        relative = points - origin
+        along = relative @ unit
+        across = relative - np.outer(along, unit)
+        distance = np.maximum(np.linalg.norm(across, axis=1), np.finfo(float).tiny)
+        on_first = (across @ first) / distance
+        on_second = (across @ second) / distance
+        slope_now = values[5]
+        tilt_first = (relative @ first - along * float(unit @ first)) / length
+        tilt_second = (relative @ second - along * float(unit @ second)) / length
+        return np.column_stack(
+            (
+                -along * on_first / length - slope_now * tilt_first,
+                -along * on_second / length - slope_now * tilt_second,
+                -on_first + slope_now * float(unit @ first),
+                -on_second + slope_now * float(unit @ second),
+                -np.ones(len(points)),
+                -along,
+            )
+        )
+
+    fit = least_squares(
+        residual,
+        np.array([0.0, 0.0, 0.0, 0.0, radius, slope]),
+        jac=jacobian,
+        method="lm",
+        max_nfev=FIT_EVALUATIONS,
+    )
+    unit, origin = unpack(fit.x)
+    spread = float(np.abs(residual(fit.x)).max())
+    return unit, origin, float(fit.x[4]), float(fit.x[5]), spread
+
+
 # --- Wendel je Zug ------------------------------------------------------------------------
 
 
@@ -505,26 +671,49 @@ def measure_winding(
     starts: Sequence[NDArray[np.float64]] | None = None,
     frame: tuple[NDArray[np.float64], NDArray[np.float64]] | None = None,
     check_cancelled: Cancel = None,
+    *,
+    tapered: bool = False,
 ) -> tuple[Winding, bool] | None:
     """Vorschub, Händigkeit und Wendelabweichung eines Zugs — oder nichts.
 
     Mit ``frame`` (Achse, Fußpunkt) wird nicht neu eingepasst: So bekommen
     alle Züge eines Körpers dieselbe Basis, und ihre Phasen sind vergleichbar.
     Das zweite Ergebnis sagt, ob ein Zylindernachbar die Achse bestätigt hat.
+
+    **Ein Zug darf auf einem Kegel liegen** (P2.5, kegelige Rohrgewinde):
+    Wächst sein Radius entlang der Achse über die Radiustoleranz hinaus, wird
+    ein Kegel eingepasst (:func:`fit_cone_axis`), und der Zug trägt den
+    Anstieg ``taper`` und seinen Radius am Fußpunkt. Im Rahmen eines
+    kegeligen Bezugszugs (``tapered``) bekommt jeder Zug dieselbe Gerade
+    ``r = r0 + k·z``. Ein zylindrisches Gewinde bleibt, wie es war: Radius
+    als Mittel, kein Anstieg.
     """
     points = chain.points
     if len(points) < 8:
         return None
     native = False
+    slope = 0.0
     if frame is None:
         axis, foot, radius, spread, native = fit_axis(points, starts, check_cancelled)
+        if radius > EPS_GEOM:
+            relative = points - foot
+            along = relative @ axis
+            radii = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+            base, rising, linear = _tapered(along, radii)
+            if _is_tapered(along, rising, radius) and linear < spread:
+                axis, foot, radius, slope, spread = fit_cone_axis(
+                    points, axis, foot, base, rising, check_cancelled
+                )
     else:
         axis, foot = frame
         relative = points - foot
         along = relative @ axis
         radii = np.linalg.norm(relative - np.outer(along, axis), axis=1)
-        radius = float(radii.mean())
-        spread = float(np.abs(radii - radius).max())
+        if tapered:
+            radius, slope, spread = _tapered(along, radii)
+        else:
+            radius = float(radii.mean())
+            spread = float(np.abs(radii - radius).max())
     if radius <= EPS_GEOM:
         return None
     first, second = _basis(axis)
@@ -556,6 +745,7 @@ def measure_winding(
         low=float(along.min()),
         high=float(along.max()),
         phase=phase,
+        taper=slope,
     )
     return winding, native
 
@@ -586,7 +776,7 @@ def _faces_at(solid: Solid, chains: Sequence[Chain], check_cancelled: Cancel) ->
             slot = by_edge.FindIndex(edge_map.FindKey(index + 1))
             if slot == 0:
                 continue
-            for face in by_edge.FindFromIndex(slot):
+            for face in listed(by_edge.FindFromIndex(slot)):
                 if face_map.Contains(face):
                     found.add(face_map.FindIndex(face) - 1)
     return sorted(found)
@@ -751,10 +941,13 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
     first_pass.sort(key=lambda w: -w.turns)
     reference = first_pass[0]
     frame = (np.asarray(reference.axis), np.asarray(reference.centre))
+    # Ein kegeliger Bezugszug gibt allen Zügen die Gerade ``r = r0 + k·z``;
+    # ihre Radien gelten dann am selben Fußpunkt und sind vergleichbar.
+    tapered = reference.taper != 0.0
     windings: list[Winding] = []
     for winding in first_pass:
         _check(check_cancelled)
-        again = measure_winding(winding.chain, None, frame, check_cancelled)
+        again = measure_winding(winding.chain, None, frame, check_cancelled, tapered=tapered)
         if again is not None:
             windings.append(again[0])
     lead_group = [
@@ -764,6 +957,7 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
         and w.handedness == reference.handedness
         and w.deviation <= HELIX_DEVIATION_SHARE * reference.lead
         and w.radius_spread <= RADIUS_TOLERANCE * max(1.0, w.radius)
+        and abs(w.taper - reference.taper) <= TAPER_TOLERANCE
     ]
     if not lead_group:
         return ThreadReading(
@@ -785,7 +979,13 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
             centre=reference.centre,
             turns=total_turns,
         )
-    radii = sorted(float(np.mean([w.radius for w in group])) for group in helices)
+    low = min(w.low for w in lead_group)
+    high = max(w.high for w in lead_group)
+    # Kamm und Fuß in der Mitte der belegten Länge — am Zylinder überall
+    # dieselben Radien, am Kegel dort, wo auch ``centre`` liegt.
+    slope = float(np.mean([w.taper for w in lead_group])) if tapered else 0.0
+    grown = slope * (low + high) / 2.0
+    radii = sorted(float(np.mean([w.radius for w in group])) + grown for group in helices)
     outer, inner = max(radii), min(radii)
     outside = material_outside(solid, reference, check_cancelled)
     if outside is None:
@@ -832,8 +1032,6 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
             handedness=reference.handedness,
             turns=total_turns,
         )
-    low = min(w.low for w in lead_group)
-    high = max(w.high for w in lead_group)
     axis = np.asarray(reference.axis)
     middle = np.asarray(reference.centre) + axis * (low + high) / 2.0
     return ThreadReading(
@@ -854,6 +1052,7 @@ def read_thread(solid: Solid, *, cancelled: CancelToken | None = None) -> Thread
         uncertainty=max(w.deviation for w in lead_group),
         axis_source="native" if confirmed else "fit",
         members=tuple(lead_group),
+        taper=math.atan(slope),
     )
 
 
@@ -899,6 +1098,11 @@ def thread_features(solid: Solid, *, cancelled: CancelToken | None = None) -> li
         "turns": reading.turns,
         "uncertainty": reading.uncertainty,
     }
+    if reading.taper != 0.0:
+        # Nur am kegeligen Gewinde: der halbe Kegelwinkel in Grad, positiv,
+        # wenn der Durchmesser entlang ``axis`` wächst. Kamm, Fuß und
+        # Nenndurchmesser gelten in der Mitte (``centre``).
+        params["taper"] = math.degrees(reading.taper)
     sources: dict[str, MeasureSource] = {
         name: "native"
         for name, value in params.items()

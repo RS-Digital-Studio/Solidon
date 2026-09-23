@@ -147,6 +147,46 @@ def seam_helix(diameter: float, height: float, pitch: float, depth: float) -> So
     return _fuzzy_union(core, ridge, pitch, core.volume * 1.0001)
 
 
+#: Der halbe Kegelwinkel eines Rohrgewindes: 1:16 auf den Durchmesser.
+PIPE_TAPER = math.atan(1.0 / 32.0)
+
+
+def sewn_rod(
+    major: float, pitch: float, length: float, *, starts: int = 1, taper: float = 0.0
+) -> Solid:
+    """Ein genähter Bolzen mit ``starts`` Gängen, auf ``length`` geschnitten (P2.5-Rest).
+
+    Dasselbe ISO-nahe Profil wie ``profiles.threaded_rod``; ``major`` ist der
+    Kamm-Ø auf der Höhe null, ein kegeliges Gewinde wird von dort mit
+    ``tan(taper)`` je Millimeter weiter. Genäht statt vereinigt: Der
+    mehrgängige Sweep-Körper oben braucht die Fuzzy-Leiter und Sekunden.
+    """
+    ridge = profiles.thread_ridge(major, pitch)
+    lead = starts * pitch
+    turns = math.ceil(length / lead) + 2
+    # Die Radien des Profils gelten auf der Höhe ``start``; auf null soll der
+    # Kamm ``major`` sein, darunter ist der Kegel um ``lead · tan`` schmaler.
+    start = -lead
+    shifted = [(radial + start * math.tan(taper), axial) for radial, axial in ridge]
+    whole = profiles.helical_thread(
+        shifted[0][0], pitch, turns, shifted, start=start, starts=starts, taper=taper
+    )
+    reach = major + 2.0 + 2.0 * length * math.tan(taper)
+    return edit.boolean("intersection", [whole, edit.box(reach, reach, length)])
+
+
+def internal_multi_start(
+    major: float, pitch: float, starts: int, depth: float, play: float, size: float = 24.0
+) -> Solid:
+    """Mehrgängige Gewindebohrung: Block minus genähter Bolzen mit Spiel, unter der Mündung."""
+    tool = edit.moved(
+        sewn_rod(major + play, pitch, depth + 2.0 * starts * pitch, starts=starts),
+        (0.0, 0.0, -depth - starts * pitch),
+    )
+    block = edit.moved(edit.box(size, size, depth), (0.0, 0.0, -depth))
+    return edit.boolean("difference", [block, tool])
+
+
 BODIES = {
     # Name: (Erzeuger, Konstruktionsmaße) — die Sollwerte des Tests folgen daraus.
     "m6_rechts": lambda: profiles.threaded_rod(6.0, 1.0, 12.0),
@@ -154,6 +194,9 @@ BODIES = {
     "m8_innen": lambda: internal_block(8.0, 1.25, 10.0, 0.2),
     "zweigaengig": lambda: multi_start(8.0, 1.0, 2, 12.0),
     "gegen_naht": lambda: seam_helix(6.0, 12.0, 1.0, 0.02),
+    "dreigaengig": lambda: sewn_rod(10.0, 1.0, 12.0, starts=3),
+    "innen_zweigaengig": lambda: internal_multi_start(10.0, 1.25, 2, 12.0, 0.2),
+    "konisch": lambda: sewn_rod(10.0, 1.5, 12.0, taper=PIPE_TAPER),
 }
 
 

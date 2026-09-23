@@ -6,6 +6,7 @@ import math
 from collections import Counter
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -171,3 +172,81 @@ def test_import_cancellation_reaches_surface_recognition_without_caching_a_parti
     )
     assert retried.complete and len(cache) == 1
     _check_plate(retried.scene.objects["obj_1"], 6.0)
+
+
+def _box_shell(drop: int | None = None) -> Solid:
+    """Die sechs Flächen eines Quaders 10 × 20 × 30 als genähte Schale, ohne Körper.
+
+    Mit ``drop`` fehlt diese Fläche — dann ist die Schale offen.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+
+    sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
+    faces = TopExp_Explorer(edit.box(10.0, 20.0, 30.0).shape, TopAbs_FACE)
+    index = 0
+    while faces.More():
+        if index != drop:
+            sewing.Add(faces.Current())
+        index += 1
+        faces.Next()
+    sewing.Perform()
+    return Solid(sewing.SewedShape())
+
+
+def _loaded(payload: bytes, profile: Profile) -> tuple[SceneObject, list[Any]]:
+    """Der echte Einleseweg: Importplan, Verlauf, Auswertung."""
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    project.sources["src_1"] = payload
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/teil.step", sha256=""
+    )
+    plan = import_plan("src_1", "teil.step", payload)
+    assert plan.draft.op == "load_step"
+    History(project.document).apply(plan.title, [plan.draft])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    return result.scene.objects["obj_1"], list(result.scene.report.findings)
+
+
+def test_a_closed_surface_model_is_read_as_a_solid(profile: Profile) -> None:
+    """Ein Flächenmodell (``SHELL_BASED_SURFACE_MODEL``) mit dichter Schale ist ein Körper.
+
+    Manche Programme schreiben ein Teil als dichte Schale ohne Volumenkörper.
+    Bis zum 22.09.2026 kam es so an: null Volumenkörper, und jede Handlung,
+    die „ein Stück" prüft, sagte ab, obwohl nichts fehlte. Die Datei hier
+    schreibt OpenCASCADE selbst aus der genähten Schale eines Quaders.
+    """
+    payload = step.write(_box_shell())
+    assert b"SHELL_BASED_SURFACE_MODEL" in payload
+    assert b"MANIFOLD_SOLID_BREP" not in payload
+    entry, findings = _loaded(payload, profile)
+    body = entry.mesh
+    assert isinstance(body, Solid)
+    assert body.solid_count == 1 and body.is_closed
+    assert body.volume == pytest.approx(6000.0, abs=EPS_GEOM)
+    assert "ingest.not_watertight" not in {finding.code for finding in findings}
+    moved = edit.moved(body, (5.0, 0.0, 0.0))
+    assert moved.solid_count == 1 and moved.volume == pytest.approx(6000.0, abs=EPS_GEOM)
+
+
+def test_an_open_surface_model_says_so_and_points_to_repair(profile: Profile) -> None:
+    """Eine offene Schale kommt an, bleibt offen — und der Befund sagt, was hilft.
+
+    Bis zum 22.09.2026 kam sie ohne Wort an, mit einem „Volumen" aus der
+    offenen Hülle und einem ``is_closed``, das immer Ja sagte. Jetzt steht
+    derselbe Befund da wie beim offenen Netz, mit der Zahl der offenen
+    Kanten: vier, der Rand der fehlenden Fläche.
+    """
+    payload = step.write(_box_shell(drop=5))
+    entry, findings = _loaded(payload, profile)
+    body = entry.mesh
+    assert isinstance(body, Solid)
+    assert not body.is_closed and body.solid_count == 0
+    warnings = [finding for finding in findings if finding.code == "ingest.not_watertight"]
+    assert len(warnings) == 1
+    assert warnings[0].severity == "warning"
+    assert warnings[0].values["open_edges"] == 4
+    assert "Reparieren" in str(warnings[0].message)

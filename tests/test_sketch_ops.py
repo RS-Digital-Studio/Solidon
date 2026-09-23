@@ -1160,7 +1160,7 @@ def test_a_rod_that_did_not_close_is_refused_instead_of_handed_over() -> None:
             gp_Ax2(gp_Pnt(50.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0)), 3.0, 12.0
         ).Shape()
     )
-    apart = profiles._fuzzy_boolean("union", near, far)
+    apart = profiles._fuzzy_boolean("union", near, far, "Zwei Stücke bleiben zwei.")
     assert apart.component_count == 2, "ohne zwei Stücke prüft dieser Test nichts"
 
     with pytest.raises(AppError) as raised:

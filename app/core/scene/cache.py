@@ -439,7 +439,7 @@ _DAMAGED_ENTRY: Final = (
 
 
 def _warm_figures(mesh: Mesh) -> None:
-    """Volumen, Fläche, Dichtheit und Teilezahl einmal hier anfassen — im Arbeiter.
+    """Volumen, Fläche, Dichtheit, Teilezahl und Hüllquader einmal hier anfassen — im Arbeiter.
 
     Ein Netz von der Platte kommt mit kalten Kennzahlen, und wer sie zuerst
     liest, ist der Hauptthread: der Objektbaum (`describe_selection`), die
@@ -447,10 +447,12 @@ def _warm_figures(mesh: Mesh) -> None:
     Öffnen 1,5 Sekunden im Fenster — Trägheitstensor, Zusammenhang und
     Dichtheit —, während der erste Lauf sie längst im Arbeiter gerechnet
     hatte (Review, 21.09.2026). trimesh merkt sich die Zahlen am Netz; hier
-    gerechnet, liest das Fenster sie nur noch ab.
+    gerechnet, liest das Fenster sie nur noch ab. Der exakte Körper misst
+    seinen Hüllquader an der Form, an ``build_tray_v3.step`` 0,47 s, und
+    merkt ihn sich seit dem 22.09.2026 ebenso.
     """
     with suppress(Exception):
-        for figure in ("volume", "area", "is_watertight", "component_count"):
+        for figure in ("volume", "area", "is_watertight", "component_count", "bounds"):
             getattr(mesh, figure)
 
 

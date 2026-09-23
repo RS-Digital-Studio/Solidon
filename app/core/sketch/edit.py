@@ -525,9 +525,11 @@ def project(sketch: Sketch, mesh: object, frame: object = None) -> Sketch:
     schon in der Zeichnung steht, kommt nicht doppelt.
 
     ``frame`` ist der Rahmen einer Flächenebene oder ``None`` für eine der
-    drei Grundebenen. ``mesh`` ist ein ``MeshData`` — nicht typisiert, weil
-    dieses Modul sonst die Geometrie-Schicht importieren müsste, nur um einen
-    Namen zu nennen.
+    drei Grundebenen. ``mesh`` ist ein ``MeshData`` oder ein exakter Körper —
+    nicht typisiert, weil dieses Modul sonst die Geometrie-Schicht importieren
+    müsste, nur um einen Namen zu nennen. **Ein exakter Körper wird exakt
+    geschnitten** (P3.5, :func:`_exact_section`): Kreise, Bögen und Strecken
+    statt eines Sehnenzugs aus seiner Vernetzung.
     """
     import numpy as np
 
@@ -539,6 +541,15 @@ def project(sketch: Sketch, mesh: object, frame: object = None) -> Sketch:
     else:
         origin, normal = BASE_PLANES.get(sketch.plane, BASE_PLANES["plane:xy"])
         x_axis, y_axis = _axes_for(sketch.plane)
+
+    exact = _exact_section(mesh, origin, x_axis, y_axis)
+    if exact is not None:
+        if not exact:
+            raise ValidationError(
+                "plane",
+                _("Diese Ebene schneidet den Körper nicht — dort gibt es keine Kante."),
+            )
+        return _held_projection(sketch, [exact])
 
     body = mesh.raw  # type: ignore[attr-defined]
     section = body.section(plane_origin=np.asarray(origin), plane_normal=np.asarray(normal))
@@ -576,6 +587,11 @@ def project(sketch: Sketch, mesh: object, frame: object = None) -> Sketch:
             "plane",
             _("Der Schnitt ergibt keine Kante, an der sich zeichnen ließe."),
         )
+    return _held_projection(sketch, chains)
+
+
+def _held_projection(sketch: Sketch, chains: Sequence[tuple[SketchElement, ...]]) -> Sketch:
+    """Die Schnittkurven fest an die Zeichnung — exakt wie am Netz (:func:`_held_copy`)."""
     grown, fresh = _held_copy(sketch, chains)
     if not fresh:
         raise ValidationError(
@@ -584,6 +600,39 @@ def project(sketch: Sketch, mesh: object, frame: object = None) -> Sketch:
             constraint="already_there",
         )
     return grown
+
+
+def _exact_section(
+    body: object,
+    origin: tuple[float, ...],
+    x_axis: tuple[float, ...],
+    y_axis: tuple[float, ...],
+) -> tuple[SketchElement, ...] | None:
+    """Der exakte Schnitt eines exakten Körpers als Hilfsgeometrie — sonst ``None`` (P3.5).
+
+    Am Netz liefert ``trimesh`` einen Sehnenzug, und eine Bohrung kommt als
+    Vieleck aus Dutzenden kurzer Strecken in die Zeichnung — ohne Mitte, an
+    der sich eine Bemaßung festmachen ließe. Am exakten Körper schneidet
+    ``brep.section`` die Ebene mit den echten Flächen: Kreise bleiben Kreise,
+    Bögen Bögen, und was keines von beiden ist, wird eine Kurve. Ein Netz
+    bekommt ``None`` und nimmt den bisherigen Weg; der exakte Kern wird träge
+    geholt, denn ohne ihn gibt es keinen exakten Körper.
+    """
+    from app.core.brep.kernel import Solid
+
+    if not isinstance(body, Solid):
+        return None
+    from app.core.brep.section import plane_section
+
+    curves = plane_section(
+        body,
+        (float(origin[0]), float(origin[1]), float(origin[2])),
+        (float(x_axis[0]), float(x_axis[1]), float(x_axis[2])),
+        (float(y_axis[0]), float(y_axis[1]), float(y_axis[2])),
+    )
+    return tuple(
+        SketchElement(kind=curve.kind, points=curve.points, construction=True) for curve in curves
+    )
 
 
 def _axes_for(plane: str) -> tuple[tuple[float, float, float], tuple[float, float, float]]:

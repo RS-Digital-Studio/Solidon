@@ -116,6 +116,7 @@ from app.core.types import (
     Vec3,
     is_a_cavity,
     thread_is_left_handed,
+    thread_is_tapered,
     vec3_or_none,
 )
 from app.core.units import (
@@ -2764,6 +2765,14 @@ FEATURE_WITHOUT_AXIS: Final = _(
 #: neu zu schneiden machte still ein eingängiges daraus — dieselbe Absage wie links.
 THREAD_MULTI_START: Final = _(
     "Ein mehrgängiges Gewinde lässt sich hier nicht neu schneiden. Setzen Sie es als Baustein neu."
+)
+
+#: Die Werkzeuge der Gewindehandlungen sind Zylinder (Hülle, Kern, Füllung).
+#: An einem kegeligen Gewinde (P2.5, Rohrgewinde) trügen sie ein Ende ab und
+#: ließen das andere stehen — dann lieber die Absage.
+THREAD_TAPERED: Final = _(
+    "Ein kegeliges Gewinde lässt sich hier weder ändern noch entfernen. "
+    "Wählen Sie ein anderes Merkmal."
 )
 
 NO_OWN_BODY: Final = _(
@@ -9531,7 +9540,19 @@ def _resize_torus(
 
 
 def _thread_frame(feature: Feature) -> tuple[np.ndarray, np.ndarray, float]:
-    """Mitte, Einheitsachse und bewendelte Länge — oder die Absage ohne Strecke."""
+    """Mitte, Einheitsachse und bewendelte Länge — oder die Absage ohne Strecke.
+
+    Und die Absage am Kegel: Ändern und Entfernen gehen beide hier durch, und
+    ihre Werkzeuge sind Zylinder.
+    """
+    if thread_is_tapered(feature):
+        raise ValidationError(
+            field="at_feature",
+            detail=THREAD_TAPERED,
+            values={"feature": feature.id},
+            constraint="tapered",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
     raw_length = feature.params.get("length", 0.0)
     length = float(raw_length) if isinstance(raw_length, int | float) else 0.0
     if not math.isfinite(length) or length <= EPS_GEOM:

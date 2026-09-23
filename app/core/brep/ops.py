@@ -422,17 +422,32 @@ def load_step(ctx: OpContext) -> OpResult:
     solid = step.read(ctx.sources.read(params.source))
     name = params.name or Path(source.path).stem
     entry = _object(name, solid, cancelled=ctx.cancelled)
-    return OpResult(
-        outputs=[entry],
-        findings=[
+    findings = [
+        Finding(
+            code="brep.loaded",
+            severity="info",
+            message=_("Flächen und Kanten lassen sich einzeln weiterbearbeiten."),
+            values={"faces": solid.face_count, "edges": solid.edge_count},
+        )
+    ]
+    if not solid.is_closed:
+        # **Dieselbe Auskunft wie beim Netz** (``ingest.not_watertight``):
+        # Eine offene Fläche aus STEP hat kein Volumen, das ein Slicer füllen
+        # könnte, und „Reparieren" schließt sie am Netz. Bis zum 22.09.2026
+        # kam eine offene Schale hier ohne Wort an — mit einem „Volumen"
+        # aus der offenen Hülle (833 mm³ für fünf Seiten eines 10er-Würfels)
+        # und einem ``is_closed``, das immer Ja sagte.
+        findings.append(
             Finding(
-                code="brep.loaded",
-                severity="info",
-                message=_("Flächen und Kanten lassen sich einzeln weiterbearbeiten."),
-                values={"faces": solid.face_count, "edges": solid.edge_count},
+                code="ingest.not_watertight",
+                severity="warning",
+                message=_(
+                    "Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen."
+                ),
+                values={"open_edges": step.open_edge_count(solid)},
             )
-        ],
-    )
+        )
+    return OpResult(outputs=[entry], findings=findings)
 
 
 @op_params
@@ -580,19 +595,34 @@ def thread_exact(ctx: OpContext) -> OpResult:
     placement = placement_transform(params)
     matrix = np.asarray(placement, dtype=float)
     solid = edit.transformed(
-        profiles.threaded_rod(params.diameter, params.pitch, params.length),
+        profiles.threaded_rod(
+            params.diameter, params.pitch, params.length, cancelled=ctx.cancelled
+        ),
         placement,
         cancelled=ctx.cancelled,
     )
-    entry = _object(params.name or str(_("Gewindebolzen")), solid, cancelled=ctx.cancelled)
     # Der Erzeuger kennt den Gang genau; die analytischen Einzelflächen allein
-    # beschreiben seine Steigung nicht. Planare Anschnitte bleiben separat
-    # auswählbar, der übrige Mantel gehört zum benannten Gewinde.
+    # beschreiben seine Steigung nicht. Die ebenen Anschnitte bleiben separat
+    # auswählbar, der übrige Mantel gehört zum benannten Gewinde — und der
+    # Leser für eingelesene Gewinde muss ihn nicht erst suchen
+    # (``features_of(known_threads=…)``).
+    #
+    # **Eben sind genau die zwei Schnittflächen des Quaders**, mit dem
+    # ``threaded_rod`` den Bolzen auf Länge schneidet: Ihr Träger ist eine
+    # ``Geom_Plane``, jede Gangfläche eine Regelfläche, und die Platzierung
+    # ist eine Ähnlichkeit, die Trägerarten erhält. Gefragt wird deshalb die
+    # Art des nativen Trägers wie in ``canonical.horizontal_area``, nicht der
+    # Beweis der Trägerprüfung — der ging über jede Gangfläche, am
+    # M3 x 0,5 x 60 363 Flächen und 0,47 s für zwei bekannte Antworten
+    # (Review 23.09.2026).
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Plane
+
     ends = {
-        index
-        for feature in entry.features.values()
-        if feature.kind == "face"
-        for index in feature.face_indices
+        triangle
+        for index, face in enumerate(solid.faces())
+        if BRepAdaptor_Surface(face, False).GetType() == GeomAbs_Plane
+        for triangle in solid.triangles_of_face(index)
     }
     # **Das Merkmal beschreibt dieselbe Lage wie der Körper.** Mitte und Achse
     # gingen als feste Zahlen ein — richtig, solange der Bolzen immer im
@@ -603,7 +633,7 @@ def thread_exact(ctx: OpContext) -> OpResult:
     centre = (float(middle[0]), float(middle[1]), float(middle[2]))
     pointing = matrix[:3, :3] @ (0.0, 0.0, 1.0)
     axis = (float(pointing[0]), float(pointing[1]), float(pointing[2]))
-    entry.features["thread_1"] = Feature(
+    thread = Feature(
         id="thread_1",
         kind="thread",
         provenance="generated",
@@ -618,6 +648,13 @@ def thread_exact(ctx: OpContext) -> OpResult:
             "internal": False,
         },
         face_indices=tuple(index for index in range(solid.triangle_count) if index not in ends),
+    )
+    entry = SceneObject(
+        id="",
+        name=params.name or str(_("Gewindebolzen")),
+        mesh=solid,
+        kind="brep",
+        features=features_of(solid, cancelled=ctx.cancelled, known_threads=(thread,)),
     )
     return OpResult(outputs=[entry])
 

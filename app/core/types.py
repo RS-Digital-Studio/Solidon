@@ -479,6 +479,20 @@ def thread_is_left_handed(feature: Feature) -> bool:
     return feature.measure_sources.get("handedness", "parameter") != "fit"
 
 
+def thread_is_tapered(feature: Feature) -> bool:
+    """Ist dieses Gewinde kegelig — ein Rohrgewinde, dessen Durchmesser wächst?
+
+    Der exakte Leser nennt dann ``taper``, den halben Kegelwinkel (P2.5).
+    Neuschneiden, Entfernen und das Gegenstück bauen mit Zylindern; an einem
+    Kegel trügen sie ein Ende ab und ließen das andere stehen. Die eine Frage
+    für alle drei, wie :func:`thread_is_left_handed`.
+    """
+    if feature.kind != "thread":
+        return False
+    taper = feature.params.get("taper", 0.0)
+    return isinstance(taper, int | float) and not isinstance(taper, bool) and taper != 0.0
+
+
 def is_a_cavity(feature: Feature) -> bool:
     """Ist dieses Merkmal ein Hohlraum oder Materie?
 

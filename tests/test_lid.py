@@ -8,6 +8,8 @@ teilen.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 import trimesh
@@ -219,6 +221,299 @@ def test_a_small_compartment_still_gets_a_collar(profile: Profile) -> None:
 
     assert result.findings[0].values["cavities"] == 2
     assert shared_volume(result.outputs[1].mesh.raw, body) < 1e-6
+
+
+# --- der exakte Deckel ----------------------------------------------------------
+
+#: Das Spiel der exakten Deckeltests, ausdrücklich statt aus dem Profil: Die
+#: Sollwerte rechnen damit, und ein neu kalibriertes PETG soll sie nicht
+#: verschieben.
+EXACT_PLAY = 0.3
+
+
+def _kernel():
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    return kernel
+
+
+def exact_box_housing(
+    outer: tuple[float, float, float],
+    pockets: list[tuple[tuple[float, float, float], tuple[float, float, float]]],
+    *,
+    outer_radius: float = 0.0,
+    pocket_radius: float = 0.0,
+    material: str | None = None,
+) -> SceneObject:
+    """Ein exaktes Gehäuse: ein Quader, aus dem Taschen (Maße, Mitte unten) ausgespart sind."""
+    _kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    body = edit.box(*outer)
+    if outer_radius:
+        body = edit.fillet(body, outer_radius, "vertical")
+    for size, bottom in pockets:
+        pocket = edit.moved(edit.box(*size), bottom)
+        if pocket_radius:
+            pocket = edit.fillet(pocket, pocket_radius, "vertical")
+        body = edit.boolean("difference", [body, pocket])
+    return SceneObject(
+        id="obj_1",
+        name="Gehäuse",
+        mesh=body,
+        kind="brep",
+        material=material,
+        features=features_of(body),
+    )
+
+
+def _shared_exact_volume(first, second) -> float:
+    """Das gemeinsame Volumen zweier exakter Körper — unabhängig vom Prüfling gerechnet."""
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(BRepAlgoAPI_Common(first.shape, second.shape).Shape(), props)
+    return abs(float(props.Mass()))
+
+
+def _cylinder_faces(solid) -> int:
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Cylinder
+
+    return sum(BRepAdaptor_Surface(face).GetType() == GeomAbs_Cylinder for face in solid.faces())
+
+
+def test_an_exact_housing_gets_an_exact_lid(profile: Profile) -> None:
+    """Am exakten Gehäuse entsteht der Deckel exakt (P2.8: die Bearbeitung fragt den Körper).
+
+    Bis zum 23.09.2026 kam er als Netz neben einem exakten Gehäuse heraus —
+    ohne STEP, ohne Verrundung an den eigenen Kanten, und sein Kragen war aus
+    der Vernetzung des Gehäuses geschnitten statt aus dessen Flächen. Die
+    Sollwerte sind geschlossen: Platte 60 × 40 × 2,4, Kragen um das halbe
+    Spiel je Seite eingezogen, 4 tief.
+    """
+    kernel = _kernel()
+    from app.core.brep import step
+    from app.core.geom.lid import CAVITY_FEATURE, COLLAR_FEATURE
+
+    entry = exact_box_housing((60.0, 40.0, 30.0), [((54.0, 34.0, 28.0), (0.0, 0.0, 3.0))])
+    result = make_lid(entry, profile, thickness=2.4, collar=4.0, clearance=EXACT_PLAY)
+    housing_out, lid = result.outputs
+
+    assert housing_out.kind == "brep" and housing_out.mesh is entry.mesh
+    assert lid.kind == "brep"
+    assert isinstance(lid.mesh, kernel.Solid)
+    assert lid.mesh.is_closed and lid.mesh.solid_count == 1
+    expected = 60.0 * 40.0 * 2.4 + (54.0 - EXACT_PLAY) * (34.0 - EXACT_PLAY) * 4.0
+    assert lid.mesh.volume == pytest.approx(expected, rel=1e-9)
+    assert lid.mesh.bounds.minimum == pytest.approx((-30.0, -20.0, 26.0), abs=1e-6)
+    assert lid.mesh.bounds.maximum == pytest.approx((30.0, 20.0, 32.4), abs=1e-6)
+    assert _shared_exact_volume(lid.mesh, entry.mesh) < 1e-9
+    assert lid.features[COLLAR_FEATURE].params["diameter"] == pytest.approx(34.0 - EXACT_PLAY)
+    assert housing_out.features[CAVITY_FEATURE].params["diameter"] == pytest.approx(34.0)
+    assert any(
+        feature.kind == "face" for name, feature in lid.features.items() if name != COLLAR_FEATURE
+    )
+    assert step.read(step.write(lid.mesh)).volume == pytest.approx(lid.mesh.volume, rel=1e-9)
+
+
+def test_the_exact_collar_keeps_the_arcs_of_a_rounded_housing(profile: Profile) -> None:
+    """Eine gerundete Dose: Platte und Kragen tragen echte Viertelkreise.
+
+    Außen r = 6, innen r = 3; der Kragen ist die Tasche um das halbe Spiel
+    eingezogen, also mit r = 3 − Spiel/2 an den Ecken. Ein Vieleck aus der
+    Vernetzung träfe die geschlossene Fläche nicht auf 10⁻⁹.
+    """
+    _kernel()
+    entry = exact_box_housing(
+        (60.0, 40.0, 30.0),
+        [((54.0, 34.0, 28.0), (0.0, 0.0, 3.0))],
+        outer_radius=6.0,
+        pocket_radius=3.0,
+    )
+    lid = make_lid(entry, profile, thickness=2.4, collar=4.0, clearance=EXACT_PLAY).outputs[1]
+
+    corner = 4.0 - math.pi
+    plate = 60.0 * 40.0 - corner * 6.0**2
+    collar = (54.0 - EXACT_PLAY) * (34.0 - EXACT_PLAY) - corner * (3.0 - EXACT_PLAY / 2.0) ** 2
+    assert lid.mesh.volume == pytest.approx(plate * 2.4 + collar * 4.0, rel=1e-9)
+    assert _cylinder_faces(lid.mesh) == 8, "vier Ecken der Platte, vier des Kragens"
+    assert _shared_exact_volume(lid.mesh, entry.mesh) < 1e-9
+
+
+def test_the_exact_lid_closes_a_side_opening(profile: Profile) -> None:
+    """RM-087 am exakten Körper: die Front als Deckel, gebaut nach oben und zurückgedreht."""
+    _kernel()
+    entry = exact_box_housing((40.0, 30.0, 20.0), [((40.0, 26.0, 16.0), (2.0, 0.0, 2.0))])
+    front = next(
+        name
+        for name, feature in entry.features.items()
+        if feature.kind == "face"
+        and feature.params["normal"][0] > 0.99
+        and feature.params["centre"][0] == pytest.approx(20.0)
+    )
+    result = make_lid(
+        entry, profile, thickness=2.4, collar=4.0, clearance=EXACT_PLAY, at_feature=front
+    )
+    lid = result.outputs[1].mesh
+
+    expected = 30.0 * 20.0 * 2.4 + (26.0 - EXACT_PLAY) * (16.0 - EXACT_PLAY) * 4.0
+    assert lid.volume == pytest.approx(expected, rel=1e-9)
+    assert lid.bounds.minimum == pytest.approx((16.0, -15.0, 0.0), abs=1e-6)
+    assert lid.bounds.maximum == pytest.approx((22.4, 15.0, 20.0), abs=1e-6)
+    assert result.findings[0].values["opening"] == "+x"
+    assert _shared_exact_volume(lid, entry.mesh) < 1e-9
+
+
+def test_two_exact_compartments_get_two_collars(profile: Profile) -> None:
+    """Zwei Fächer, zwei Kragen, ein Körper — wie am Netz."""
+    _kernel()
+    entry = exact_box_housing(
+        (80.0, 40.0, 20.0),
+        [((30.0, 34.0, 18.0), (-20.0, 0.0, 2.0)), ((30.0, 34.0, 18.0), (20.0, 0.0, 2.0))],
+    )
+    result = make_lid(entry, profile, thickness=2.0, collar=3.0, clearance=EXACT_PLAY)
+    lid = result.outputs[1].mesh
+
+    assert result.findings[0].values["cavities"] == 2
+    assert lid.solid_count == 1
+    expected = 80.0 * 40.0 * 2.0 + 2.0 * (30.0 - EXACT_PLAY) * (34.0 - EXACT_PLAY) * 3.0
+    assert lid.volume == pytest.approx(expected, rel=1e-9)
+
+
+def test_a_solid_exact_body_has_nothing_to_close(profile: Profile) -> None:
+    """Derselbe Satz wie am Netz, wenn der exakte Körper auf der Höhe massiv ist."""
+    _kernel()
+    entry = exact_box_housing((40.0, 40.0, 20.0), [])
+
+    with pytest.raises(ValidationError) as problem:
+        make_lid(entry, profile, collar=4.0, clearance=EXACT_PLAY)
+
+    assert problem.value.constraint == "no_cavity"
+
+
+# --- der Kragen und die Wand darunter -------------------------------------------
+
+#: Ein Gehäuse mit einer Stufe am Rand: die Tasche 54 x 34, darüber 2 mm tief
+#: eine Aufnahme 56 x 36 — ein Deckelsitz, wie ihn viele Kästen haben. Der
+#: Schnitt knapp unter dem Rand liegt in der Aufnahme; vier Millimeter tiefer
+#: ist die Öffnung die Tasche.
+STEPPED = [((54.0, 34.0, 28.0), (0.0, 0.0, 3.0)), ((56.0, 36.0, 3.0), (0.0, 0.0, 28.0))]
+
+#: Eine Leiste mitten in der Kragentiefe: die Tasche 54 x 34, aber zwischen
+#: 27 und 28 mm Höhe nur 50 x 30. Oben und unten ist die Öffnung dieselbe —
+#: die Leiste sieht nur, wer den Kragen gegen den Körper prüft.
+LEDGE = [
+    ((54.0, 34.0, 24.0), (0.0, 0.0, 3.0)),
+    ((50.0, 30.0, 1.0), (0.0, 0.0, 27.0)),
+    ((54.0, 34.0, 3.0), (0.0, 0.0, 28.0)),
+]
+
+
+def mesh_box_housing(
+    outer: tuple[float, float, float],
+    pockets: list[tuple[tuple[float, float, float], tuple[float, float, float]]],
+) -> SceneObject:
+    """Dasselbe Gehäuse wie :func:`exact_box_housing`, als Netz."""
+    body = trimesh.creation.box(extents=outer)
+    body.apply_translation((0.0, 0.0, outer[2] / 2.0))
+    cutters = []
+    for size, bottom in pockets:
+        pocket = trimesh.creation.box(extents=size)
+        pocket.apply_translation((bottom[0], bottom[1], bottom[2] + size[2] / 2.0))
+        cutters.append(pocket)
+    return SceneObject(
+        id="obj_1",
+        name="Gehäuse",
+        mesh=MeshData.of(trimesh.boolean.difference([body, *cutters])),
+    )
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_stepped_rim_takes_the_collar_from_below(profile: Profile, kind: str) -> None:
+    """Der Kragen folgt der engsten Öffnung über seine Tiefe, nicht dem Schnitt am Rand.
+
+    Bis zum 23.09.2026 wurde er aus dem Schnitt 0,1 mm unter dem Rand
+    geschnitten — bei einem Deckelsitz, einer gefasten oder verrundeten
+    Innenkante oder einer Formschräge ist das die weiteste Stelle, und der
+    Kragen ragte darunter in die Wand: an der Wanne ``build_tray_v3.step``
+    3860 mm³ Überschneidung, am Netz wie am exakten Körper, ohne ein Wort.
+    Jetzt schneidet die Öffnung am Kragenboden mit: Der Kragen ist die
+    Tasche 54 × 34, eingezogen um das halbe Spiel.
+    """
+    if kind == "brep":
+        _kernel()
+        entry = exact_box_housing((60.0, 40.0, 30.0), STEPPED)
+    else:
+        entry = mesh_box_housing((60.0, 40.0, 30.0), STEPPED)
+    from app.core.geom.lid import COLLAR_FEATURE
+
+    result = make_lid(entry, profile, thickness=2.4, collar=4.0, clearance=EXACT_PLAY)
+    lid = result.outputs[1]
+
+    expected = 60.0 * 40.0 * 2.4 + (54.0 - EXACT_PLAY) * (34.0 - EXACT_PLAY) * 4.0
+    assert lid.mesh.volume == pytest.approx(expected, rel=1e-9)
+    if kind == "brep":
+        assert _shared_exact_volume(lid.mesh, entry.mesh) < 1e-9
+    else:
+        assert shared_volume(lid.mesh.raw, entry.mesh.raw) < 1e-6
+    assert lid.features[COLLAR_FEATURE].params["diameter"] == pytest.approx(34.0 - EXACT_PLAY)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_ledge_in_the_collar_depth_is_refused_with_the_free_depth(
+    profile: Profile, kind: str
+) -> None:
+    """Was der Schnitt oben und unten nicht sieht, fängt die Prüfung gegen den Körper.
+
+    Ein Kragen, der in die Wand ragt, passt nicht — und wurde bis zum
+    23.09.2026 trotzdem ausgegeben. Jetzt sagt die Operation, bis zu welcher
+    Tiefe der Kragen frei ist: Die Leiste beginnt 2 mm unter dem Rand. Mit
+    1,9 mm entsteht der Deckel.
+    """
+    if kind == "brep":
+        _kernel()
+        entry = exact_box_housing((60.0, 40.0, 30.0), LEDGE)
+    else:
+        entry = mesh_box_housing((60.0, 40.0, 30.0), LEDGE)
+
+    with pytest.raises(ValidationError) as problem:
+        make_lid(entry, profile, thickness=2.4, collar=4.0, clearance=EXACT_PLAY)
+
+    assert problem.value.field == "collar"
+    assert problem.value.constraint == "collar_hits_wall"
+    assert problem.value.values["free_depth_mm"] == pytest.approx(2.0, abs=0.01)
+    lid = make_lid(entry, profile, thickness=2.4, collar=1.9, clearance=EXACT_PLAY).outputs[1]
+    expected = 60.0 * 40.0 * 2.4 + (54.0 - EXACT_PLAY) * (34.0 - EXACT_PLAY) * 1.9
+    assert lid.mesh.volume == pytest.approx(expected, rel=1e-9)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_collar_deeper_than_the_tray_is_refused_not_dropped(profile: Profile, kind: str) -> None:
+    """Eine flache Schale, 3 mm tief, und ein Kragen von 4 mm: Absage, kein stiller flacher Deckel.
+
+    Der Schnitt am Kragenboden liegt dann im Boden der Schale, und der
+    Grundriss „Hohlraum minus Material unten" wäre leer. Ohne Kragen käme eine
+    Platte heraus, ohne dass jemand gefragt hätte — der Hohlraum bleibt
+    deshalb der Grundriss, und die Prüfung gegen den Körper nennt die freie
+    Tiefe.
+    """
+    tray = [((54.0, 34.0, 4.0), (0.0, 0.0, 7.0))]
+    if kind == "brep":
+        _kernel()
+        entry = exact_box_housing((60.0, 40.0, 10.0), tray)
+    else:
+        entry = mesh_box_housing((60.0, 40.0, 10.0), tray)
+
+    with pytest.raises(ValidationError) as problem:
+        make_lid(entry, profile, thickness=2.0, collar=4.0, clearance=EXACT_PLAY)
+
+    assert problem.value.constraint == "collar_hits_wall"
+    assert problem.value.values["free_depth_mm"] == pytest.approx(3.0, abs=0.01)
 
 
 # --- der Drehdeckel -------------------------------------------------------------
@@ -509,3 +804,179 @@ def test_a_neck_on_a_turned_square_stays_on_its_wall(profile: Profile) -> None:
 
     neck = result.findings[0].values["neck_mm"]
     assert neck == pytest.approx(50.0, abs=0.01), f"der Hals misst {neck} mm auf 50 mm Wand"
+
+
+#: Eine Vierteldrehung halbiert um Z — ``edit.transformed`` nimmt die Matrix.
+_TURNED_45 = (
+    (math.sqrt(0.5), -math.sqrt(0.5), 0.0, 0.0),
+    (math.sqrt(0.5), math.sqrt(0.5), 0.0, 0.0),
+    (0.0, 0.0, 1.0, 0.0),
+    (0.0, 0.0, 0.0, 1.0),
+)
+
+
+def test_a_turned_opening_of_an_exact_housing_is_measured_across_its_narrow_side(
+    profile: Profile,
+) -> None:
+    """Die schmale Seite gilt auch am exakten Gehäuse — nicht die Diagonale.
+
+    Zwei Fassungen trafen beim Zusammenführen der Durchsicht 0.5.0 aufeinander:
+    die schmale Seite in jeder Drehung (am Netz, ``_narrowest``) und der
+    exakte Deckel, der aus dem achsparallelen Hüllrechteck seiner Flächen
+    maß. Ein um 45 Grad gedrehtes quadratisches Fach von 30 mm stünde exakt
+    wieder mit 42,4 mm in der Passung. Sollwert: die Seite des Fachs.
+    """
+    _kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.geom.lid import CAVITY_FEATURE, COLLAR_FEATURE
+
+    pocket = edit.moved(edit.transformed(edit.box(30.0, 30.0, 27.0), _TURNED_45), (0, 0, 3.0))
+    body = edit.boolean("difference", [edit.box(70.0, 70.0, 30.0), pocket])
+    entry = SceneObject(
+        id="obj_1", name="Schachtel", mesh=body, kind="brep", features=features_of(body)
+    )
+
+    housing_out, lid = make_lid(
+        entry, profile, thickness=2.4, collar=4.0, clearance=EXACT_PLAY
+    ).outputs
+
+    assert lid.kind == "brep"
+    assert housing_out.features[CAVITY_FEATURE].params["diameter"] == pytest.approx(30.0, abs=1e-3)
+    assert lid.features[COLLAR_FEATURE].params["diameter"] == pytest.approx(
+        30.0 - EXACT_PLAY, abs=1e-3
+    )
+
+
+def test_an_exact_neck_on_a_turned_square_stays_on_its_wall(profile: Profile) -> None:
+    """Der exakte Hals richtet sich nach der schmalen Seite der gedrehten Dose.
+
+    Wie :func:`test_a_neck_on_a_turned_square_stays_on_its_wall`, am exakten
+    Körper: Das Hüllrechteck der Umrissflächen hätte 70,7 mm gesagt, die
+    schmale Seite ist 50 mm.
+    """
+    _kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    jar = edit.boolean(
+        "difference",
+        [edit.box(50.0, 50.0, 40.0), edit.moved(edit.box(44.0, 44.0, 38.0), (0.0, 0.0, 2.0))],
+    )
+    body = edit.transformed(jar, _TURNED_45)
+    entry = SceneObject(id="obj_1", name="Dose", mesh=body, kind="brep", features=features_of(body))
+
+    result = make_screw_lid(entry, profile, height=8.0, pitch=3.0, clearance=EXACT_PLAY)
+
+    assert result.outputs[0].kind == "brep"
+    neck = result.findings[0].values["neck_mm"]
+    assert neck == pytest.approx(50.0, abs=1e-3), f"der Hals misst {neck} mm auf 50 mm Wand"
+
+
+# --- der exakte Drehdeckel ------------------------------------------------------
+
+
+def exact_jar(
+    radius: float = 20.0,
+    wall: float = 3.0,
+    height: float = 60.0,
+    centre: tuple[float, float] = (0.0, 0.0),
+) -> SceneObject:
+    """Die Dose von :func:`jar` als exakter Körper — Zylinder minus Zylinder."""
+    _kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    outer = edit.cylinder(2.0 * radius, height)
+    inner = edit.moved(edit.cylinder(2.0 * (radius - wall), height), (0.0, 0.0, wall))
+    body = edit.boolean("difference", [outer, inner])
+    if centre != (0.0, 0.0):
+        body = edit.moved(body, (centre[0], centre[1], 0.0))
+    return SceneObject(id="obj_1", name="Dose", mesh=body, kind="brep", features=features_of(body))
+
+
+def _ridge(diameter: float, pitch: float, *, internal: bool = False) -> tuple[float, float]:
+    """Fläche und Schwerpunktradius des Gangprofils — unabhängig vom Prüfling gerechnet.
+
+    Ein Trapez mit den Grundseiten entlang der Achse: am Fuß 0,8 Steigungen
+    breit, am Kamm 0,3, die Tiefe 0,55 Steigungen (``shapes.RIDGE_*``, hier
+    ausgeschrieben). Außen liegt der Fuß eine Tiefe unter dem Durchmesser,
+    innen auf ihm.
+    """
+    depth = 0.55 * pitch
+    root = diameter / 2.0 if internal else diameter / 2.0 - depth
+    wide, narrow = 0.8 * pitch, 0.3 * pitch
+    area = (wide + narrow) / 2.0 * depth
+    return area, root + depth * (wide + 2.0 * narrow) / (3.0 * (wide + narrow))
+
+
+@pytest.mark.parametrize(("height", "pitch"), [(8.0, 3.0), (5.0, 4.0)])
+def test_an_exact_jar_gets_an_exact_screw_lid(
+    profile: Profile, height: float, pitch: float
+) -> None:
+    """Am exakten Gehäuse entstehen Hals und Kappe exakt (P2.8: die Bearbeitung fragt den Körper).
+
+    Bis zum 23.09.2026 kam beides als Netz heraus — auch das Gehäuse selbst
+    verlor Flächen, Kanten und den STEP-Export. Die Sollwerte sind
+    geschlossen: Der Hals ist ein Ring von der Bohrung zum Kern plus dem Gang,
+    dessen Volumen über die Höhe h nach Pappus 2π·r̄·A·h/p ist (die
+    Schnittebenen halten den waagerechten Querschnitt konstant); die Kappe
+    ist der Zylinder minus Kernbohrung minus Nut. Und sie geht ganz über den
+    Hals: gleiche Steigung, gleiche Phase, kein gemeinsames Volumen.
+    """
+    kernel = _kernel()
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    from app.core.brep import edit, step
+    from app.core.geom.lid import SKIRT_RELIEF
+
+    entry = exact_jar()
+    result = make_screw_lid(entry, profile, height=height, pitch=pitch, clearance=EXACT_PLAY)
+    container, cap = result.outputs
+    assert container.kind == cap.kind == "brep"
+    for body in (container.mesh, cap.mesh):
+        assert isinstance(body, kernel.Solid)
+        assert body.is_closed and body.solid_count == 1
+        assert BRepCheck_Analyzer(body.shape).IsValid()
+
+    major, bore, depth = 40.0, 34.0, 0.55 * pitch
+    area, centroid = _ridge(major, pitch)
+    neck = math.pi * ((major / 2.0 - depth) ** 2 - (bore / 2.0) ** 2) * height
+    neck += 2.0 * math.pi * centroid * area * height / pitch
+    assert container.mesh.volume - entry.mesh.volume == pytest.approx(neck, rel=1e-6)
+
+    skirt = height + SKIRT_RELIEF
+    inside = major - 2.0 * depth + EXACT_PLAY
+    outer = major + 2.0 * EXACT_PLAY + 2.0 * 2.4
+    groove_area, groove_centroid = _ridge(inside, pitch, internal=True)
+    expected = math.pi * (outer / 2.0) ** 2 * (skirt + 2.4)
+    expected -= math.pi * (inside / 2.0) ** 2 * skirt
+    expected -= 2.0 * math.pi * groove_centroid * groove_area * skirt / pitch
+    assert cap.mesh.volume == pytest.approx(expected, rel=1e-6)
+
+    assert container.mesh.bounds.maximum[2] == pytest.approx(60.0 + height, abs=1e-6)
+    assert cap.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6)
+    assembled = edit.moved(cap.mesh, (0.0, 0.0, 60.0))
+    assert _shared_exact_volume(container.mesh, assembled) < 1e-6
+
+    neck_thread = container.features[NECK_THREAD_FEATURE]
+    cap_thread = cap.features[CAP_THREAD_FEATURE]
+    assert neck_thread.face_indices and cap_thread.face_indices
+    assert not neck_thread.params["internal"] and cap_thread.params["internal"]
+    threads = [feature for feature in container.features.values() if feature.kind == "thread"]
+    assert threads == [neck_thread], "der Hals ist ein Gewinde, kein zweites daneben"
+    assert step.read(step.write(container.mesh)).volume == pytest.approx(
+        container.mesh.volume, rel=1e-9
+    )
+
+
+def test_the_exact_neck_follows_the_translated_opening(profile: Profile) -> None:
+    """Wie am Netz: Der Hals steht über der verschobenen Öffnung, das Merkmal auch."""
+    _kernel()
+    entry = exact_jar(centre=(50.0, -20.0))
+    neck = make_screw_lid(entry, profile, height=8.0, pitch=3.0, clearance=EXACT_PLAY).outputs[0]
+
+    assert neck.mesh.solid_count == 1
+    assert neck.mesh.bounds.minimum[0] >= 30.0 - 1e-6
+    assert neck.mesh.bounds.maximum[0] <= 70.0 + 1e-6
+    assert neck.features[NECK_THREAD_FEATURE].params["centre"][:2] == pytest.approx((50.0, -20.0))

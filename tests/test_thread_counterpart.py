@@ -162,6 +162,28 @@ def test_only_a_right_hand_thread_gets_a_counterpart() -> None:
     assert caught.value.suggestions
 
 
+@pytest.mark.parametrize(
+    ("shape", "constraint"),
+    [({"starts": 2, "lead": 2.0}, "multi_start"), ({"taper": 1.7899}, "thread_shape")],
+    ids=["zweigaengig", "kegelig"],
+)
+def test_a_multi_start_or_tapered_thread_gets_no_library_counterpart(
+    shape: dict, constraint: str
+) -> None:
+    """Das Bibliotheksgewinde ist eingängig und zylindrisch (P2.5, 22.09.2026).
+
+    Zu einem zweigängigen Bolzen M6 entstand ein eingängiges Gegenstück M6 —
+    halber Vorschub, schraubt nicht; zu einem kegeligen Rohrgewinde eines mit
+    festem Durchmesser. Beides stand als gelungenes Gegenstück im Baum. Die
+    Gangzahl sagt ab wie beim Neuschneiden (``multi_start``), der Kegel mit
+    eigenem Grund.
+    """
+    with pytest.raises(ValidationError) as caught:
+        thread_counterpart_draft(_generated(6.0, 1.0, **shape), "obj_2", {})
+    assert caught.value.constraint == constraint
+    assert caught.value.suggestions
+
+
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
 def test_the_counterpart_lands_in_one_step_and_its_fit_names_both_threads(
     profile: Profile, kind: str

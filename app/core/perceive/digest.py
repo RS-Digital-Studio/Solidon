@@ -767,10 +767,18 @@ def _feature_text(feature_id: str, feature: Feature, shared: str | None) -> str:
             if "starts" in params
             else ""
         )
+        # Und der Kegel eines Rohrgewindes (P2.5): Der Durchmesser gilt dann in
+        # der Mitte, und das Gegenstück aus der Bibliothek passt nicht.
+        taper = (
+            f", {tr('kegelig')} "
+            f"{_measure(feature, 'taper', format_value=lambda value: f'{value:.2f}°')}"
+            if "taper" in params
+            else ""
+        )
         return (
             f"{feature_id}  {shape} {shown('diameter', prefix='Ø ')}, "
-            f"{tr('Steigung')} {shown('pitch')}, {_handedness(feature, shared=shared)}{starts}, "
-            f"{tr('Achse')} {axis}{at}"
+            f"{tr('Steigung')} {shown('pitch')}, {_handedness(feature, shared=shared)}{starts}"
+            f"{taper}, {tr('Achse')} {axis}{at}"
         )
     if feature.kind == "sphere":
         # Dieselbe Unterscheidung wie beim Kegel und aus demselben Grund: Eine

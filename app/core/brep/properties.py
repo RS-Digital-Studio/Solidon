@@ -293,6 +293,8 @@ def _patches(
     from OCP.TopLoc import TopLoc_Location
     from OCP.TopoDS import TopoDS
 
+    from app.core.brep.kernel import untrimmed_surface
+
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     face = TopoDS.Face(BRepBuilderAPI_Copy(original, True, False).Shape())
@@ -309,15 +311,19 @@ def _patches(
     v_values = _split_values(v_source, v_axis, low_v, high_v, subdivisions, cancelled=cancelled)
     if (u_values.Length() - 1) * (v_values.Length() - 1) > _MAX_PATCHES:
         raise _unresolved_integral()
-    splitter = ShapeUpgrade_SplitSurface()
-    splitter.Init(surface, low_u, high_u, low_v, high_v)
-    splitter.SetUSplitValues(u_values)
-    splitter.SetVSplitValues(v_values)
-    splitter.Perform(True)
+    if isinstance(untrimmed_surface(surface, cancelled=cancelled), _segmentable()):
+        splitter = ShapeUpgrade_SplitSurface()
+        splitter.Init(surface, low_u, high_u, low_v, high_v)
+        splitter.SetUSplitValues(u_values)
+        splitter.SetVSplitValues(v_values)
+        splitter.Perform(True)
+        grid = splitter.ResSurfaces()
+    else:
+        grid = _trimmed_grid(surface, u_values, v_values, cancelled=cancelled)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     composer = ShapeFix_ComposeShell()
-    composer.Init(splitter.ResSurfaces(), location, face, _REPARAMETRIZATION_PRECISION)
+    composer.Init(grid, location, face, _REPARAMETRIZATION_PRECISION)
     composer.SetMaxTolerance(_REPARAMETRIZATION_PRECISION)
     # Ohne expliziten Kontext dereferenziert OCCT hier einen leeren Handle.
     composer.SetContext(ShapeBuild_ReShape())
@@ -332,6 +338,50 @@ def _patches(
     if not patches:
         raise _unresolved_integral()
     return patches
+
+
+def _segmentable() -> tuple[type, ...]:
+    """Die Trägerarten, die ``ShapeUpgrade_SplitSurface`` selbst in Stücke schneidet."""
+    from OCP.Geom import Geom_BezierSurface, Geom_BSplineSurface
+
+    return (Geom_BSplineSurface, Geom_BezierSurface)
+
+
+def _trimmed_grid(
+    surface: Any, u_values: Any, v_values: Any, *, cancelled: CancelToken | None = None
+) -> Any:
+    """Das Teilungsgitter aus rechteckig getrimmten Sichten desselben Trägers.
+
+    ``ShapeUpgrade_SplitSurface`` schneidet eine Extrusion **nicht** in der
+    Richtung ihrer Basiskurve und eine Drehfläche nicht in der ihres Profils:
+    Jedes Stück behielt dort die volle Spanne, ``ShapeFix_ComposeShell`` ließ
+    die doppelten fallen, und die Teilung deckte die Hälfte, dann ein
+    Viertel der Fläche. Die Leiter kam so nie zusammen und fiel in den
+    Python-Rückfall — an erhabener Schrift auf einem exakten Quader 75 s für
+    ein Volumen (gemessen 22.09.2026). Getrimmte Sichten behalten die
+    Parametrisierung des Trägers, also passen die Parameterkurven der Fläche
+    unverändert; eine Extrusion und eine Drehfläche aus Bézier-Kurven decken
+    mit 4 und 16 Stücken ihre Fläche auf 10⁻¹².
+    """
+    from OCP.collections import Array1_double, HArray2_Geom_Surface
+    from OCP.Geom import Geom_RectangularTrimmedSurface
+    from OCP.ShapeExtend import ShapeExtend_CompositeSurface
+
+    us = [float(u_values.Value(index)) for index in range(1, u_values.Length() + 1)]
+    vs = [float(v_values.Value(index)) for index in range(1, v_values.Length() + 1)]
+    patches = HArray2_Geom_Surface(1, len(us) - 1, 1, len(vs) - 1)
+    for row, (first_u, last_u) in enumerate(pairwise(us), start=1):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        for column, (first_v, last_v) in enumerate(pairwise(vs), start=1):
+            view = Geom_RectangularTrimmedSurface(surface, first_u, last_u, first_v, last_v)
+            patches.SetValue(row, column, view)
+    u_joints, v_joints = Array1_double(1, len(us)), Array1_double(1, len(vs))
+    for index, value in enumerate(us, start=1):
+        u_joints.SetValue(index, value)
+    for index, value in enumerate(vs, start=1):
+        v_joints.SetValue(index, value)
+    return ShapeExtend_CompositeSurface(patches, u_joints, v_joints)
 
 
 def _local_copy(shape: Any, origin: Vec3, *, cancelled: CancelToken | None = None) -> Any:
@@ -866,6 +916,25 @@ def _surface_sum(
             tuple[Vec3, Vec3, Vec3], tuple(tuple(float(value) for value in row) for row in tensor)
         ),
     )
+
+
+def estimated_volume(shape: Any) -> float:
+    """Ein grobes Volumen für eine Plausibilitätsfrage — **nie** eine Kennzahl des Körpers.
+
+    OCCTs Gauß-Weg mit fester Stützstellenzahl, ohne Knotenzerlegung und ohne
+    Fehlerschranke, nur über geschlossene Schalen. Für „ist hier mehr als der
+    Kern?" genügt das: An genähten Gewindebolzen lag er 10⁻⁷ neben dem
+    Integral auf ``INTEGRAL_RELATIVE_ERROR`` und war 30- bis 45-mal schneller
+    (M3 x 0,5 x 60: 79 ms gegen 3,5 s, gemessen 22.09.2026). Er wird weder
+    gecacht noch veröffentlicht; wer ein Volumen zeigt oder vergleicht, nimmt
+    :func:`properties`.
+    """
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, props, True)
+    return float(props.Mass())
 
 
 def properties(

@@ -90,16 +90,24 @@ def test_named_groove_floor_proof_keeps_the_original_cancel_token(profile, monke
 
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
 def test_one_transaction_produces_real_groove_and_separate_material(kind, profile):
+    """Nut und Dichtung in einem Schritt — am exakten Träger beide exakt (P2.8).
+
+    Bis zum 22.09.2026 kam die Dichtung auch neben einem exakten Träger als
+    Netz (``shapes.mesh_only``); jetzt folgt sie der Bauart ihres Trägers und
+    trifft die Analytik der Kreisringe auf 10⁻⁹ statt auf die Sehnen.
+    """
     entry = cube(kind)
     result = run(entry, profile=profile)
     carrier, gasket = result.outputs
     assert len(result.outputs) == 2
     assert carrier.kind == kind
+    assert gasket.kind == kind
     assert entry.mesh.volume == pytest.approx(8000)
     assert entry.material is None
     assert carrier.material == "petg" and gasket.material == "tpu-95a"
-    assert 8000 - carrier.mesh.volume == pytest.approx(math.pi * 10 * 2 * 2, rel=0.003)
-    assert gasket.mesh.volume == pytest.approx(math.pi * 10 * 1.6 * 2.4, rel=0.003)
+    tolerance = 1e-9 if kind == "brep" else 0.003
+    assert 8000 - carrier.mesh.volume == pytest.approx(math.pi * 10 * 2 * 2, rel=tolerance)
+    assert gasket.mesh.volume == pytest.approx(math.pi * 10 * 1.6 * 2.4, rel=tolerance)
     assert gasket.mesh.bounds.minimum[2] == pytest.approx(8)
     assert gasket.mesh.bounds.maximum[2] == pytest.approx(10.4)
     for output in result.outputs:
@@ -175,6 +183,11 @@ def test_round_and_rectangular_sections_obey_the_same_result_in_both_qualities(
     expected = math.pi * 10 * 1.6 * 2.4 if section == "rectangle" else 2 * math.pi**2 * 5 * 1.2**2
     assert gasket.volume == pytest.approx(expected, rel=0.015)
     assert gasket.is_watertight and gasket.component_count == 1
+    if kind == "brep":
+        # Die exakte Dichtung ist der Ring selbst: Rechteck mal Kreisumfang oder
+        # der Torus 2π²·R·r² — auf 10⁻⁹, nicht auf die Sehnen der Vernetzung.
+        assert result.outputs[1].kind == "brep"
+        assert result.outputs[1].mesh.volume == pytest.approx(expected, rel=1e-9)
 
 
 @pytest.mark.parametrize(

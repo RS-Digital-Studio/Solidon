@@ -578,7 +578,12 @@ def _on_a_solid(
     try:
         if rounded:
             solid = edit.fillet(
-                cast(Solid, source.mesh), size, choice, keys, selected_edges=selected_edges
+                cast(Solid, source.mesh),
+                size,
+                choice,
+                keys,
+                selected_edges=selected_edges,
+                cancelled=cancelled,
             )
         else:
             solid = edit.chamfer(
@@ -588,6 +593,7 @@ def _on_a_solid(
                 keys,
                 selected_edges=selected_edges,
                 shape=shape,
+                cancelled=cancelled,
             )
     except GeometryError as refused:
         explained = _why_it_does_not_fit(

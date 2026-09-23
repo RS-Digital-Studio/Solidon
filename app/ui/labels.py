@@ -37,7 +37,14 @@ from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import REGISTRY
 from app.core.registry import group_title as group_title
 from app.core.scene.placement import SIDE_NAMES
-from app.core.types import Feature, FeatureId, Finding, SceneObject, measure_status
+from app.core.types import (
+    Feature,
+    FeatureId,
+    Finding,
+    SceneObject,
+    measure_status,
+    thread_is_tapered,
+)
 from app.core.units import (
     DEGREE_UNIT,
     LengthUnit,
@@ -1329,6 +1336,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "before": _("Vorher"),
     "blocked_planes": _("Gesperrte Ebenen"),
     "code": _("Fehlerkennung"),
+    # ``geom.lid``: ein Kragen, der in die Wand ragt — gewählte und freie Tiefe.
+    "collar": _("Kragentiefe"),
     "board": _("Lochwand"),
     "bones": _("Knochen"),
     "bore": _("Bohrung"),
@@ -1426,6 +1435,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "excess": _("Überstand"),
     "footprint": _("Standfläche"),
     "formats": _("Formate"),
+    "free_depth": _("Freie Tiefe"),
     "free_dof": _("Freie Freiheitsgrade"),
     "from": _("Von"),
     "gap": _("Spalt"),
@@ -2422,6 +2432,9 @@ def feature_measure(feature: Feature, *, compact: bool = False) -> str:
         starts = feature.params.get("starts")
         if isinstance(starts, int) and not isinstance(starts, bool) and starts > 1:
             text = f"{text} · {tr('Gangzahl')} {starts}"
+        # Ein kegeliges Rohrgewinde ebenso: Sein Durchmesser gilt in der Mitte.
+        if thread_is_tapered(feature):
+            text = f"{text} · {tr('kegelig')}"
         return text
     # **Das Volumen und kein Durchmesser.** Ein Einschluss hat keine Form, die
     # eine Länge beschriebe — er ist, was ein Negativkörper hinterlassen hat,

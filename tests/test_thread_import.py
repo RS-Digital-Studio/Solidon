@@ -77,6 +77,42 @@ BASES: dict[str, dict[str, Any]] = {
         "depth": 0.55 - 0.01,
         "length": 12.0,
     },
+    # P2.5-Rest (22.09.2026): genäht wie der Gewindebolzen, drei Gänge in einem Umlauf.
+    "dreigaengig": {
+        "pitch": 1.0,
+        "lead": 3.0,
+        "starts": 3,
+        "handedness": "right",
+        "internal": False,
+        "diameter": 10.0,
+        "depth": ISO_DEPTH_SHARE * 1.0,
+        "length": 12.0,
+    },
+    # Eine zweigängige Gewindebohrung: Block minus genähter Bolzen Ø 10 mit 0,2 Spiel.
+    "innen_zweigaengig": {
+        "pitch": 1.25,
+        "lead": 2.5,
+        "starts": 2,
+        "handedness": "right",
+        "internal": True,
+        "diameter": 10.2,
+        "depth": ISO_DEPTH_SHARE * 1.25,
+        "length": 12.0,
+    },
+}
+
+#: Das kegelige Rohrgewinde (``make_thread_corpus.sewn_rod`` mit ``PIPE_TAPER``):
+#: Kamm Ø 10 auf der Höhe null, 1:16 auf den Durchmesser, zwölf Millimeter lang.
+#: Kamm, Fuß und Nenndurchmesser gelten in der Mitte, also bei z = 6.
+TAPERED = {
+    "pitch": 1.5,
+    "lead": 1.5,
+    "starts": 1,
+    "handedness": "right",
+    "internal": False,
+    "diameter": 2.0 * (5.0 + 6.0 / 32.0),
+    "depth": ISO_DEPTH_SHARE * 1.5,
+    "length": 12.0,
 }
 
 
@@ -266,6 +302,52 @@ def test_an_imported_thread_names_its_measures(name: str) -> None:
 def test_a_left_hand_thread_is_measured_left(m6: Solid) -> None:
     """Die Spiegelung desselben Bolzens ist links — und sonst in jedem Maß gleich."""
     _expect(_reading(_mirrored(m6)), {**BASES["m6_rechts"], "handedness": "left"})
+
+
+@pytest.mark.parametrize("name", ["m8_innen", "innen_zweigaengig"])
+def test_a_left_hand_internal_thread_is_measured_left(name: str) -> None:
+    """Innen links, ein- und zweigängig (P2.5-Rest): die Spiegelung der Gewindebohrung.
+
+    Die Achse bleibt Z, und die Mitte sitzt unter der Mündung wie beim Original.
+    """
+    reading = _reading(_mirrored(_read(name)))
+    _expect(reading, {**BASES[name], "handedness": "left"})
+    assert reading.centre[2] == pytest.approx(-BASES[name]["length"] / 2.0, abs=1e-6)
+
+
+def test_a_tapered_pipe_thread_names_its_taper() -> None:
+    """Ein kegeliges Rohrgewinde (1:16) liest sich mit Kegelwinkel, Maße in der Mitte (P2.5).
+
+    Bis zum 22.09.2026 passte der Leser nur Zylinder ein: Die Wendeln wichen
+    davon um 6 µm ab, und das Gewinde galt als „Wendelabweichung über 2 %".
+    Sollwerte aus den Konstruktionsmaßen von ``make_thread_corpus.sewn_rod``.
+    """
+    from app.core.brep.features import features_of
+
+    body = _read("konisch")
+    reading = _reading(body)
+    _expect(reading, TAPERED)
+    taper = math.degrees(math.atan(1.0 / 32.0))
+    assert math.degrees(reading.taper) == pytest.approx(taper, abs=1e-6)
+    assert reading.crest_radius == pytest.approx(5.0 + 6.0 / 32.0, abs=1e-6)
+    assert reading.centre[2] == pytest.approx(6.0, abs=1e-6)
+    thread = features_of(body)["thread_1"]
+    assert thread.params["taper"] == pytest.approx(math.degrees(math.atan(1.0 / 32.0)), abs=1e-6)
+    assert thread.measure_sources["taper"] == "native"
+
+
+def test_a_tapered_thread_upside_down_narrows_along_its_axis() -> None:
+    """Umgedreht (die weite Seite unten) wird der Winkel negativ, sonst bleibt alles."""
+    from app.core.brep import edit
+
+    flipped = edit.transformed(
+        _read("konisch"),
+        ((1.0, 0.0, 0.0, 0.0), (0.0, -1.0, 0.0, 0.0), (0.0, 0.0, -1.0, 12.0), (0.0, 0.0, 0.0, 1.0)),
+    )
+    reading = _reading(flipped)
+    _expect(reading, TAPERED)
+    taper = math.degrees(math.atan(1.0 / 32.0))
+    assert math.degrees(reading.taper) == pytest.approx(-taper, abs=1e-6)
 
 
 def test_a_turned_and_shifted_thread_keeps_its_axis(m6: Solid) -> None:
@@ -558,6 +640,31 @@ def test_the_first_gate_adds_up_only_coaxial_pieces() -> None:
     assert not _coaxial(beside, reference)
 
 
+def test_a_chain_is_ordered_from_its_free_end_whatever_order_its_pieces_come_in() -> None:
+    """Ein Zug beginnt an seinem freien Ende, nicht beim ersten Stück der Kantenkarte.
+
+    ``_ordered_points`` sortierte die Stücke nach ihren losen Enden — mit
+    einer Schlüsselfunktion, die dafür die Liste der übrigen Stücke fragte.
+    Während ``list.sort`` ist diese Liste in CPython **leer**; jedes Stück
+    hatte damit zwei lose Enden, die Sortierung tat nichts, und der Zug
+    begann beim ersten Stück der Kantenkarte. Lag das in der Mitte, sprang
+    die Punktfolge vom Ende zurück an den Anfang, und die Winkelentwicklung
+    lief über den Sprung (Review 22.09.2026).
+    """
+    from app.core.brep.thread import _ordered_points
+
+    turns, per_turn = 3, 64
+    angles = np.linspace(0.0, turns * math.tau, turns * per_turn + 1)
+    helix = np.column_stack((3.0 * np.cos(angles), 3.0 * np.sin(angles), angles / math.tau))
+    first, middle, last = helix[:65], helix[64:129], helix[128:]
+    for pieces in ([middle, first, last], [middle, last[::-1], first], [last, middle, first[::-1]]):
+        ordered = _ordered_points(pieces)
+        along = ordered[:, 2]
+        steps = np.diff(along)
+        assert (steps >= -1e-12).all() or (steps <= 1e-12).all(), "ohne Sprung zurück"
+        assert abs(along[-1] - along[0]) == pytest.approx(turns, abs=1e-12)
+
+
 def test_planar_edges_are_sorted_out_after_a_coarse_sampling() -> None:
     """231 Kanten einer verrundeten Lochplatte: grob abgetastet, nichts davon fein.
 
@@ -606,7 +713,10 @@ def test_the_fine_sampling_follows_the_turns(m6: Solid) -> None:
     assert 0.8 * SAMPLES_PER_TURN <= per_turn <= 1.5 * SAMPLES_PER_TURN, per_turn
 
 
-@pytest.mark.parametrize("name", ["m6_rechts", "m10_rechts", "m8_innen"])
+@pytest.mark.parametrize(
+    "name",
+    ["m6_rechts", "m10_rechts", "m8_innen", "dreigaengig", "innen_zweigaengig", "konisch"],
+)
 def test_the_corpus_matches_its_generator(name: str) -> None:
     """Die abgelegte STEP-Datei ist der Körper, den ``make_thread_corpus.py`` heute baut.
 
@@ -614,7 +724,9 @@ def test_the_corpus_matches_its_generator(name: str) -> None:
     Die Datei stammte von 23:18, der Erzeuger änderte sich um 23:36 und dreimal
     am Tag darauf. Seit die Bolzen genäht entstehen (RM-195), kostet der
     Vergleich je Körper unter einer Sekunde; die zwei Sweep-Körper
-    (``zweigaengig``, ``gegen_naht``) prüft ``--check`` von Hand.
+    (``zweigaengig``, ``gegen_naht``) prüft ``--check`` von Hand. Die drei
+    genähten Körper des P2.5-Rests (mehrgängig, innen mehrgängig, kegelig)
+    fährt der Lauf mit.
     """
     import importlib.util
 
@@ -656,3 +768,49 @@ def test_the_thread_volume_and_area_come_from_the_native_compound(
     expected = math.pi * ridge[0][0] ** 2 * 12.0 + 2.0 * math.pi * moment * 12.0
     assert body.volume == pytest.approx(expected, rel=1e-9)
     assert body.area > 0.0
+
+
+def test_only_the_bores_that_remain_are_asked_whether_they_go_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Fußstreifen eines Innengewindes fragt niemand mehr nach dem Durchgang.
+
+    Am genähten Gewinde (RM-195) ist jeder Fußstreifen ein voller
+    Zylindermantel und damit zunächst eine Bohrung; das Gewinde verdrängt sie
+    danach als Phantome. ``_describe`` fragte trotzdem jede, ob sie durchgeht
+    — Abstände zwischen Probelinien und den B-Spline-Flanken, 0,2 s je Probe.
+    Eine Mutter M10 x 1,5 aus Block minus ``threaded_rod``: sieben Fragen und
+    5,3 s Erkennung, danach keine und 0,24 s; ``innen_zweigaengig``: elf
+    Fragen, 4,4 → 0,7 s (Review 22.09.2026). Die Platte daneben hält fest,
+    dass eine bleibende Bohrung ihre Antwort bekommt.
+    """
+    from app.core.brep import edit, features, profiles
+
+    asked: list[Any] = []
+    original = features._axis_covered
+
+    def counting(*args: Any, **kwargs: Any) -> bool:
+        asked.append(args[1])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(features, "_axis_covered", counting)
+    block = edit.moved(edit.box(20.0, 20.0, 10.0), (0.0, 0.0, 1.0))
+    nut = edit.boolean("difference", [block, profiles.threaded_rod(10.0, 1.5, 12.0)])
+    for body in (nut, _read("innen_zweigaengig")):
+        found = features.features_of(body)
+        assert asked == []
+        assert "thread_1" in found
+        assert not [feature for feature in found.values() if feature.kind == "hole"]
+
+    plate = edit.cut_bore(
+        edit.box(40.0, 30.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+    )
+    found = features.features_of(plate)
+    holes = [feature for feature in found.values() if feature.kind == "hole"]
+    assert len(holes) == 1 and holes[0].params["through"] is True
+    assert "through" not in holes[0].measure_sources
+    assert len(asked) == 1

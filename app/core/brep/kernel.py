@@ -22,14 +22,14 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from operator import index as integer_index
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 
 from app.core.errors import CANCEL, INSTALL_MISSING, AppError, InternalError, ValidationError
 from app.core.geom.edges import EDGE_SELECTION_REJECTED, checked_indices
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MAX_SLOTS, BoundingBox, CancelToken
-from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG, is_close
+from app.core.units import EPS_GEOM, MAX_FACET_ANGLE, MAX_FACET_SAG
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -94,15 +94,6 @@ class BRepUnavailable(AppError):
         )
 
 
-def _same_point(a: tuple[float, float, float], b: tuple[float, float, float]) -> bool:
-    """Ob zwei Knoten praktisch zusammenfallen — für den Degeneriert-Test.
-
-    Millimeter gegen ``EPS_GEOM``: identische Koordinaten liegen erst recht
-    darunter, der Bestand bleibt also unverändert grün.
-    """
-    return is_close(a[0], b[0]) and is_close(a[1], b[1]) and is_close(a[2], b[2])
-
-
 def box_limits(box: Any) -> tuple[float, float, float, float, float, float]:
     """Die sechs Grenzen eines ``Bnd_Box``, über seine beiden Eckpunkte.
 
@@ -120,6 +111,75 @@ def box_limits(box: Any) -> tuple[float, float, float, float, float, float]:
         float(high.Y()),
         float(high.Z()),
     )
+
+
+def listed(shapes: Any) -> list[Any]:
+    """Die Formen einer OCCT-Liste (``List_TopoDS_Shape``) als Python-Liste — ohne sie zu iterieren.
+
+    **Die Iteration der Bindung kostet je Element eine Viertelmillisekunde.**
+    Gemessen am 22.09.2026 an ``build_tray_v3.step``: 1716 Nachbarflächen
+    über 858 Kanten, 0,46 s mit ``for face in liste``, 5 ms über ``First`` und
+    ``Last``. Eine Kante hat fast immer zwei Nachbarn und eine Ecke wenige;
+    längere Listen gehen über eine Kopie, die vorn abgetragen wird — die
+    übergebene Liste bleibt, wie sie ist.
+    """
+    from OCP.collections import List_TopoDS_Shape
+
+    count = int(shapes.Size())
+    if count == 0:
+        return []
+    if count == 1:
+        return [shapes.First()]
+    if count == 2:
+        return [shapes.First(), shapes.Last()]
+    remaining = List_TopoDS_Shape()
+    remaining.Assign(shapes)
+    found = []
+    while not remaining.IsEmpty():
+        found.append(remaining.First())
+        remaining.RemoveFirst()
+    return found
+
+
+#: Ab wie vielen Kantenpaaren die Abstandsfrage auf alle Kerne geht. Darunter
+#: kostet das Verteilen mehr, als es spart: Die 350 kleinen Fragen der Erkennung
+#: an ``Cat_3.stp`` als NURBS (je eine Fläche gegen eine Messebene) brauchten
+#: verteilt 0,49 statt 0,45 s. Gemessen 22.09.2026; die Zahl ist eine
+#: Arbeitsgrenze, keine Toleranz.
+PARALLEL_DISTANCE_PAIRS: Final = 64
+
+
+def nearest_distance(first: Any, second: Any) -> float | None:
+    """Der kleinste Abstand zweier Formen — oder ``None``, wenn OpenCASCADE keinen findet.
+
+    **Große Fragen auf allen Kernen** (``SetMultiThread``): Die Abstandsfrage
+    zwischen Probelinien und B-Spline-Flächen ist der teure Teil der Erkennung
+    an einem NURBS-Körper. Summiert über ``features_of`` (Median aus drei, im
+    selben Prozess, 22.09.2026, ein Kern gegen diese Regel):
+    ``build_tray_v3.step`` als NURBS 3,0 → 0,70 s, der Teppichclip als NURBS
+    0,26 → 0,17 s und analytisch 0,11 → 0,025 s — bei gleichem Ergebnis;
+    kleine Fragen bleiben auf einem Kern (:data:`PARALLEL_DISTANCE_PAIRS`).
+    Gebraucht wird nur ``Value``, das Minimum; welche von mehreren gleich
+    nahen Lösungen OpenCASCADE zuerst findet, spielt keine Rolle.
+    """
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp
+
+    counts = []
+    for shape in (first, second):
+        edges = ShapeMap()
+        TopExp.MapShapes_s(shape, TopAbs_EDGE, edges)
+        counts.append(max(1, edges.Extent()))
+    distance = BRepExtrema_DistShapeShape()
+    distance.SetMultiThread(counts[0] * counts[1] >= PARALLEL_DISTANCE_PAIRS)
+    distance.LoadS1(first)
+    distance.LoadS2(second)
+    distance.Perform()
+    if not distance.IsDone():
+        return None
+    return float(distance.Value())
 
 
 def untrimmed_surface(surface: Any, *, cancelled: CancelToken | None = None) -> Any | None:
@@ -248,6 +308,13 @@ def boolean_builder(kind: str, first: Any, second: Any, *, tolerance: float | No
     }[kind]
     operation = maker()
     operation.SetNonDestructive(True)
+    # **Auf allen Kernen** (Review 23.09.2026): Die Schnittphasen der
+    # Booleschen laufen parallel. Gemessen im selben Prozess, abwechselnd:
+    # Gehäuse ``Cat_3.stp`` plus Gewindehals 2,01 → 0,33 s, Gewindebolzen
+    # M3 x 0,5 x 60 auf Länge 2,49 → 1,77 s, kleine Körper unverändert; Topologie,
+    # Flächenreihenfolge und Vernetzung bitgleich zum seriellen Lauf, zwölfmal
+    # hintereinander (``sonden/exakt/s30``, ``s31``).
+    operation.SetRunParallel(True)
     if tolerance is not None:
         operation.SetFuzzyValue(tolerance)
     arguments = List_TopoDS_Shape()
@@ -299,7 +366,7 @@ def carried_face_slots(
             changed = [face]
             if history is not None:
                 if hasattr(history, "Modified"):
-                    changed.extend(history.Modified(face))
+                    changed.extend(listed(history.Modified(face)))
                 else:
                     # ShapeFix liefert seine echte Ersetzung über ShapeBuild_ReShape.
                     modified = history.Apply(face)
@@ -356,7 +423,7 @@ def keep_filament_boundaries(solid: Solid, builder: Any) -> None:
     for index in range(1, neighbours.Extent() + 1):
         slots = {
             solid.face_slots[int(faces.FindIndex(face)) - 1]
-            for face in neighbours.FindFromIndex(index)
+            for face in listed(neighbours.FindFromIndex(index))
         }
         if len(slots) > 1:
             builder.KeepShape(neighbours.FindKey(index))
@@ -431,13 +498,32 @@ class Solid:
         Operationen), fragt hier. Wer wissen will, ob die **Dreiecke** dicht
         sind (STL, Schichtanalyse), fragt :attr:`is_watertight` — beides sind
         richtige Fragen, nur zu verschiedenen Dingen.
+
+        **Geschlossen heißt: eine Schale und keine freie Kante.**
+        ``CheckOrientedShells`` zeichnet freie Kanten nur auf, wenn
+        ``alsofree`` gesetzt ist; ohne das Argument meldete ``HasFreeEdges``
+        nie eine, und bis zum 22.09.2026 galten ein Kasten ohne Deckel und
+        sogar eine einzelne Fläche als geschlossen. Eine Form ohne Schale —
+        eine Fläche, eine Kante — ist es nie. Entartete Kanten (Kegelspitze,
+        Kugelpol) und Nahtkanten zählen dabei nicht als frei.
         """
+        cached = self._cache.get("closed")
+        if cached is not None:
+            return bool(cached)
         from OCP.ShapeAnalysis import ShapeAnalysis_Shell
 
         checker = ShapeAnalysis_Shell()
         checker.LoadShells(self.shape)
-        checker.CheckOrientedShells(self.shape)
-        return not checker.HasFreeEdges()
+        closed = False
+        if checker.NbLoaded():
+            checker.CheckOrientedShells(self.shape, True)
+            closed = not checker.HasFreeEdges()
+        # Einmal je Körper, wie Volumen und Hülle: Die Prüfung geht über jede
+        # Kante, und gefragt wird sie nach jedem Verrunden, Bewegen, Schneiden
+        # und in der Erkennung — am Gewindebolzen M3 x 0,5 x 60 mehrmals je
+        # Schritt über 365 Flächen.
+        self._cache["closed"] = closed
+        return closed
 
     @property
     def solid_count(self) -> int:
@@ -486,6 +572,36 @@ class Solid:
             TopExp.MapShapes_s(self.shape, TopAbs_FACE, numbered)
             self._cache["map:face"] = numbered
         return int(numbered.FindIndex(face)) - 1
+
+    def face_neighbours(self, index: int) -> frozenset[int]:
+        """Die Nummern der Flächen, die über eine Kante an Fläche ``index`` grenzen.
+
+        Einmal je Körper gebaut, aus derselben Nachbarkarte der Kanten, und
+        danach eine Tabellenfrage. Die Erkennung fragte dieselbe Nachbarschaft
+        in drei Durchgängen (Langloch, Nahtzusammenführung, Mündungsfase) je
+        Fläche neu über einen Explorer ab — an ``Cat_3.stp`` 218 Fragen zu
+        2,2 ms (Review 22.09.2026). Eine Fläche ist nicht ihr eigener
+        Nachbar, auch nicht über ihre Nahtkante.
+        """
+        adjacency = self._cache.get("adjacency")
+        if adjacency is None:
+            from OCP.collections import (
+                IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as Ancestors,
+            )
+            from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+            from OCP.TopExp import TopExp
+
+            ancestors = Ancestors()
+            TopExp.MapShapesAndAncestors_s(self.shape, TopAbs_EDGE, TopAbs_FACE, ancestors)
+            touching: list[set[int]] = [set() for _ in range(len(self._copied_faces))]
+            for slot in range(1, ancestors.Extent() + 1):
+                owners = {self.face_index(face) for face in listed(ancestors.FindFromIndex(slot))}
+                owners.discard(-1)
+                for owner in owners:
+                    touching[owner].update(owners)
+            adjacency = tuple(frozenset(entry - {number}) for number, entry in enumerate(touching))
+            self._cache["adjacency"] = adjacency
+        return cast(frozenset[int], adjacency[index])
 
     def surface(self, index: int, *, cancelled: CancelToken | None = None) -> Any:
         """Der geprüfte analytische Träger der Fläche ``index`` — einmal je Körper gelesen.
@@ -754,7 +870,16 @@ class Solid:
         ``AddOptimal_s`` statt ``Add_s``: das eine misst die Flächen, das
         andere nimmt die Triangulation, wo es eine gibt — und die ist hier
         genau das Problem.
+
+        **Einmal je Körper gemessen**, wie Volumen und Fläche: Die optimale
+        Hülle kostet an ``build_tray_v3.step`` 0,37 s, und gefragt wird sie
+        vom Fenster — Kopfzeile, Objektbaum, Ansicht, Platzierung — bei jeder
+        Auswertung für jedes Objekt, im Hauptthread (Review 22.09.2026). Der
+        Körper besitzt seine Form (§30), sie ändert sich nicht mehr.
         """
+        cached = self._cache.get("bounds")
+        if cached is not None:
+            return cast(BoundingBox, cached)
         from OCP.Bnd import Bnd_Box
         from OCP.BRepBndLib import BRepBndLib
 
@@ -764,12 +889,15 @@ class Solid:
         box.SetGap(0.0)
         BRepBndLib.AddOptimal_s(self.shape, box, False, False)
         if box.IsVoid():
-            return self.mesh.bounds
-        low_x, low_y, low_z, high_x, high_y, high_z = box_limits(box)
-        return BoundingBox(
-            (float(low_x), float(low_y), float(low_z)),
-            (float(high_x), float(high_y), float(high_z)),
-        )
+            measured = self.mesh.bounds
+        else:
+            low_x, low_y, low_z, high_x, high_y, high_z = box_limits(box)
+            measured = BoundingBox(
+                (float(low_x), float(low_y), float(low_z)),
+                (float(high_x), float(high_y), float(high_z)),
+            )
+        self._cache["bounds"] = measured
+        return measured
 
     @property
     def is_watertight(self) -> bool:
@@ -917,10 +1045,10 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
     BRepMesh_IncrementalMesh(copied.Shape(), deflection, False, ANGULAR_DEFLECTION, True)
 
     points: list[tuple[float, float, float]] = []
-    faces: list[tuple[int, int, int]] = []
+    corners: list[tuple[int, int, int]] = []
+    owners: list[int] = []
     source_faces = ShapeMap()
     TopExp.MapShapes_s(shape, TopAbs_FACE, source_faces)
-    face_sources: list[int] = []
     for face_index in range(source_faces.Extent()):
         # Die Kopie muss nicht dieselbe Besuchsreihenfolge haben. Der Builder
         # benennt die Kopie jeder Originalfläche; derselbe Indexraum wie faces().
@@ -932,66 +1060,66 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
             continue
 
         transform = location.Transformation()
-        offset = len(points)
+        offset = len(points) - 1
         for index in range(1, triangulation.NbNodes() + 1):
             node = triangulation.Node(index).Transformed(transform)
             points.append((node.X(), node.Y(), node.Z()))
 
         # ModifiedShape liefert die Unterform ohne die im Körper komponierte
         # Orientierung. Der Umlaufsinn stammt deshalb aus der Originalfläche.
+        # Eine umgekehrte Fläche heißt, dass der Umlaufsinn zu drehen ist —
+        # sonst kommt der Körper umgestülpt heraus und jedes Volumen ist
+        # negativ.
         reversed_face = source_face.Orientation() == TopAbs_REVERSED
         for index in range(1, triangulation.NbTriangles() + 1):
             first, second, third = triangulation.Triangle(index).Get()
-            # **Ein Dreieck mit doppeltem Knoten ist keines.** Am Pol einer
-            # Kugelfläche fällt eine ganze Parameterlinie auf einen Punkt
-            # zusammen — Längen- und Breitengrad treffen sich dort —, und
-            # ``BRepMesh`` erzeugt daraus ein Dreieck, dessen zwei Ecken
-            # derselbe Knoten sind. Es hat die Fläche null, trägt zum Volumen
-            # nichts bei und wandert trotzdem bis in die exportierte STL.
-            #
-            # Gemessen am 23.08.2026 an einem Quader mit Verrundungen an allen
-            # Kanten: acht Eckverrundungen, acht Pole, acht solche Dreiecke.
-            # Die Oberfläche ist dabei geschlossen (Euler-Zahl 2, Volumen
-            # unverändert) — **aber ``is_watertight`` meldet „nein"**, weil
-            # trimesh die acht degenerierten Kanten als offen zählt. Das ist
-            # die Prüfung, die viele Werkzeuge fahren, unsere eigenen Tests
-            # eingeschlossen.
-            #
-            # **Geprüft wird über die Koordinaten und nicht über die
-            # Knotennummern** — gemessen am 23.08.2026, weil die naheliegende
-            # Fassung nicht greift: OCCT vergibt am Pol *zwei* Knotennummern
-            # für denselben Ort, und erst trimesh führt sie beim Einlesen
-            # zusammen. Wer die Nummern vergleicht, sieht drei verschiedene
-            # und lässt das Dreieck durch.
-            # Eine umgekehrte Fläche heißt, dass der Umlaufsinn zu drehen ist —
-            # sonst kommt der Körper umgestülpt heraus und jedes Volumen ist
-            # negativ.
-            corners = (third, second, first) if reversed_face else (first, second, third)
-            corner_points = (
-                points[corners[0] - 1 + offset],
-                points[corners[1] - 1 + offset],
-                points[corners[2] - 1 + offset],
+            corners.append(
+                (third + offset, second + offset, first + offset)
+                if reversed_face
+                else (first + offset, second + offset, third + offset)
             )
-            # Über den Abstand, nicht bitgleich (Regel 6): Nach einer echten
-            # Transformation (STEP-Baugruppe mit Location) fallen zwei
-            # Polknoten nicht mehr bitgleich zusammen, und das degenerierte
-            # Dreieck wanderte wieder in die STL.
-            if (
-                _same_point(corner_points[0], corner_points[1])
-                or _same_point(corner_points[1], corner_points[2])
-                or _same_point(corner_points[0], corner_points[2])
-            ):
-                continue
-            faces.append(
-                (corners[0] - 1 + offset, corners[1] - 1 + offset, corners[2] - 1 + offset)
-            )
-            face_sources.append(face_index)
-    if not faces:
+        owners.extend([face_index] * triangulation.NbTriangles())
+    if not corners:
+        return MeshData.of(trimesh.Trimesh())
+    vertices = np.asarray(points, dtype=float)
+    triangles = np.asarray(corners, dtype=np.int64)
+    # **Ein Dreieck mit doppeltem Knoten ist keines.** Am Pol einer
+    # Kugelfläche fällt eine ganze Parameterlinie auf einen Punkt zusammen —
+    # Längen- und Breitengrad treffen sich dort —, und ``BRepMesh`` erzeugt
+    # daraus ein Dreieck, dessen zwei Ecken derselbe Knoten sind. Es hat die
+    # Fläche null, trägt zum Volumen nichts bei und wandert trotzdem bis in die
+    # exportierte STL.
+    #
+    # Gemessen am 23.08.2026 an einem Quader mit Verrundungen an allen Kanten:
+    # acht Eckverrundungen, acht Pole, acht solche Dreiecke. Die Oberfläche ist
+    # dabei geschlossen (Euler-Zahl 2, Volumen unverändert) — **aber
+    # ``is_watertight`` meldet „nein"**, weil trimesh die acht degenerierten
+    # Kanten als offen zählt. Das ist die Prüfung, die viele Werkzeuge fahren,
+    # unsere eigenen Tests eingeschlossen.
+    #
+    # **Geprüft wird über die Koordinaten und nicht über die Knotennummern** —
+    # gemessen am 23.08.2026, weil die naheliegende Fassung nicht greift: OCCT
+    # vergibt am Pol *zwei* Knotennummern für denselben Ort, und erst trimesh
+    # führt sie beim Einlesen zusammen. Wer die Nummern vergleicht, sieht drei
+    # verschiedene und lässt das Dreieck durch. Und über den Abstand, nicht
+    # bitgleich (Regel 6): Nach einer echten Transformation (STEP-Baugruppe
+    # mit Location) fallen zwei Polknoten nicht mehr bitgleich zusammen, und
+    # das degenerierte Dreieck wanderte wieder in die STL. Zwei Ecken fallen
+    # zusammen, wenn jede Koordinate auf ``EPS_GEOM`` gleich ist — gefragt als
+    # Feld für alle Dreiecke auf einmal: Die Schleife je Dreieck war an einem
+    # genähten M3 x 0,5 x 60 mit 20 000 Dreiecken die halbe Tessellierung
+    # (22.09.2026).
+    at = vertices[triangles]
+    degenerate = np.zeros(len(triangles), dtype=bool)
+    for one, other in ((0, 1), (1, 2), (0, 2)):
+        degenerate |= np.all(np.abs(at[:, one] - at[:, other]) <= EPS_GEOM, axis=1)
+    kept = ~degenerate
+    if not kept.any():
         return MeshData.of(trimesh.Trimesh())
     body = trimesh.Trimesh(
-        vertices=np.asarray(points, dtype=float),
-        faces=np.asarray(faces, dtype=np.int64),
-        face_attributes={_FACE_ATTRIBUTE: np.asarray(face_sources, dtype=np.int64)},
+        vertices=vertices,
+        faces=triangles[kept],
+        face_attributes={_FACE_ATTRIBUTE: np.asarray(owners, dtype=np.int64)[kept]},
         process=True,
     )
     _log.info("tessellated a B-Rep body into %d triangles", len(body.faces))

@@ -447,3 +447,32 @@ def test_imported_void_actions_preserve_their_published_meaning(
     assert restored.features[air.id].params["volume"] == pytest.approx(air.params["volume"])
     reopened_history.redo()
     assert run(reopened).scene.objects[source.id].mesh.volume == pytest.approx(output.mesh.volume)
+
+
+def test_a_body_without_an_inner_shell_skips_the_cavity_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne Innenschale keine Kammer — und keine Gültigkeitsprüfung des ganzen Körpers.
+
+    ``_void_features`` prüfte jeden Körper mit ``BRepCheck_Analyzer``, bevor es
+    nach Innenschalen fragte; am Gewindebolzen M3 x 0,5 x 60 0,21 s je
+    Erkennung für eine Antwort, die die Schalenzahl schon gab (Review
+    22.09.2026). Die Kammer daneben wird weiter gefunden.
+    """
+    import OCP.BRepCheck as brep_check  # noqa: N813 - Name der externen OCP-API
+
+    from app.core.brep import edit
+    from app.core.brep.features import _void_features
+
+    checked: list[object] = []
+    original = brep_check.BRepCheck_Analyzer
+
+    def counting(shape: object, *args: object) -> object:
+        checked.append(shape)
+        return original(shape, *args)
+
+    monkeypatch.setattr(brep_check, "BRepCheck_Analyzer", counting)
+    assert _void_features(edit.box(20.0, 20.0, 20.0)) == []
+    assert checked == []
+    assert len(_void_features(_pocket())) == 1
+    assert checked, "mit Innenschale wird weiter geprüft"

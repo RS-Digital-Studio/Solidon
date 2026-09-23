@@ -28,6 +28,8 @@ from app.core.brep.kernel import (
     boolean_builder,
     carried_face_slots,
     keep_filament_boundaries,
+    listed,
+    nearest_distance,
     require,
 )
 from app.core.errors import (
@@ -47,7 +49,7 @@ from app.core.geom.edges import named_edges as edges_named
 from app.core.geom.edges import wanted as edges_wanted
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
-from app.core.types import CancelToken, PlaneFrame, Point2, Transform, Vec3
+from app.core.types import BoundingBox, CancelToken, PlaneFrame, Point2, Transform, Vec3
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close
 from app.i18n import _
 
@@ -546,6 +548,7 @@ def fillet(
     keys: Sequence[str] = (),
     *,
     selected_edges: Sequence[int] | None = None,
+    cancelled: CancelToken | None = None,
 ) -> Solid:
     """Rundet die gewählten Kanten. Exakt, weil die Kante eine Kurve
     ist (§30).
@@ -555,20 +558,24 @@ def fillet(
     sie — nicht alle senkrechten dazu. ``selected_edges`` geht noch einen
     Schritt weiter: Indizes in ``solid.edges()``, am aktuellen Eigentümer
     bestimmt und ohne gerundeten Schlüssel dazwischen — der Weg, den der
-    Radiuswechsel für die belegte scharfe Kante nimmt.
+    Radiuswechsel für die belegte scharfe Kante nimmt. ``cancelled`` wird
+    vor und nach jedem teuren Schritt gefragt: Wandkarte, je Trägerfläche,
+    je Kante, um den nativen Bau und um die Prüfung danach.
     """
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 
+    _check(cancelled)
     checked = None if selected_edges is None else solid.checked_edge_indices(selected_edges)
     working = replace(solid)
     chosen = _edges_for(working, choice, keys, checked)
 
-    _fits_the_wall(working, radius, chosen, "fillet")
+    _fits_the_wall(working, radius, chosen, "fillet", cancelled=cancelled)
     builder = BRepFilletAPI_MakeFillet(working.shape)
     for entry in chosen:
+        _check(cancelled)
         builder.Add(radius, entry.edge)
-    return _built(working, builder, "fillet", radius, len(chosen))
+    return _built(working, builder, "fillet", radius, len(chosen), cancelled=cancelled)
 
 
 def chamfer(
@@ -579,11 +586,13 @@ def chamfer(
     *,
     selected_edges: Sequence[int] | None = None,
     shape: ChamferShape | None = None,
+    cancelled: CancelToken | None = None,
 ) -> Solid:
     """Bricht die gewählten Kanten im 45-Grad-Winkel — oder mit ``shape`` asymmetrisch.
 
-    ``keys`` und ``selected_edges`` wie bei :func:`fillet`: einzelne Kanten
-    haben Vorrang vor der Gruppe, eine ausdrückliche Auswahl vor beidem.
+    ``keys``, ``selected_edges`` und ``cancelled`` wie bei :func:`fillet`:
+    einzelne Kanten haben Vorrang vor der Gruppe, eine ausdrückliche Auswahl
+    vor beidem.
 
     **Zwei Abstände oder Abstand und Winkel** (P6.2): Je Kante werden die
     beiden angrenzenden Flächen an ihrer Mitte gefragt, welche die
@@ -594,6 +603,7 @@ def chamfer(
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer
 
+    _check(cancelled)
     checked = None if selected_edges is None else solid.checked_edge_indices(selected_edges)
     working = replace(solid)
     chosen = _edges_for(working, choice, keys, checked)
@@ -602,21 +612,29 @@ def chamfer(
     reaches: list[tuple[Any, float, float]] = []
     if asymmetric:
         for entry in chosen:
+            _check(cancelled)
             (first_face, first_normal), (_second_face, second_normal) = _faces_at_edge(
                 working, entry
             )
             one, two = chamfer_reaches(distance, shape, first_normal, second_normal)
             reaches.append((first_face, one, two))
     widest = max((max(one, two) for _face, one, two in reaches), default=distance)
-    _fits_the_wall(working, widest, chosen, "chamfer")
+    _fits_the_wall(working, widest, chosen, "chamfer", cancelled=cancelled)
     builder = BRepFilletAPI_MakeChamfer(working.shape)
     for index, entry in enumerate(chosen):
+        _check(cancelled)
         if asymmetric:
             face, one, two = reaches[index]
             builder.Add(one, two, entry.edge, face)
         else:
             builder.Add(distance, entry.edge)
-    return _built(working, builder, "chamfer", distance, len(chosen))
+    return _built(working, builder, "chamfer", distance, len(chosen), cancelled=cancelled)
+
+
+def _check(cancelled: CancelToken | None) -> None:
+    """Fragt den Abbruch — ein Satz statt dreier Zeilen an jeder Stelle."""
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
 
 
 def _faces_at_edge(solid: Solid, entry: EdgeInfo) -> list[tuple[Any, tuple[float, float, float]]]:
@@ -782,12 +800,14 @@ def _edge_wall_faces(solid: Solid, edges: Sequence[EdgeInfo]) -> list[int]:
     for entry in edges:
         if not neighbours.Contains(entry.edge):
             raise _wall_not_proven()
-        for face in neighbours.FindFromKey(entry.edge):
+        for face in listed(neighbours.FindFromKey(entry.edge)):
             wanted.Add(face)
     return [index for index, face in enumerate(solid.faces()) if wanted.Contains(face)]
 
 
-def _thinnest_wall(solid: Solid, edges: Sequence[EdgeInfo]) -> float:
+def _thinnest_wall(
+    solid: Solid, edges: Sequence[EdgeInfo], *, cancelled: CancelToken | None = None
+) -> float:
     """Die dünnste belegte Wand an den Trägerflächen dieser Kanten.
 
     Eine 3-mm-Grundplatte begrenzt keine senkrechte Rundung am massiven
@@ -809,11 +829,14 @@ def _thinnest_wall(solid: Solid, edges: Sequence[EdgeInfo]) -> float:
 
     try:
         mesh = as_mesh_data(solid)
+        _check(cancelled)
         measured = wall_thickness_map(mesh).values
+        _check(cancelled)
         if len(measured) != solid.triangle_count:
             raise _wall_not_proven()
         values: list[float] = []
         for face in _edge_wall_faces(solid, edges):
+            _check(cancelled)
             indices = solid.triangles_of_face(face)
             known = [
                 measured[index]
@@ -834,7 +857,7 @@ def _thinnest_wall(solid: Solid, edges: Sequence[EdgeInfo]) -> float:
             if not known:
                 raise _wall_not_proven()
             values.append(min(known))
-    except GeometryError:
+    except GeometryError, OperationCancelled:
         raise
     except PROGRAMMING_ERRORS:
         raise
@@ -845,9 +868,16 @@ def _thinnest_wall(solid: Solid, edges: Sequence[EdgeInfo]) -> float:
     return min(values)
 
 
-def _fits_the_wall(solid: Solid, size: float, edges: Sequence[EdgeInfo], kind: str) -> None:
+def _fits_the_wall(
+    solid: Solid,
+    size: float,
+    edges: Sequence[EdgeInfo],
+    kind: str,
+    *,
+    cancelled: CancelToken | None = None,
+) -> None:
     """Hält an, wo die Rundung dicker wäre als eine Wand ihrer Trägerflächen."""
-    thinnest = _thinnest_wall(solid, edges)
+    thinnest = _thinnest_wall(solid, edges, cancelled=cancelled)
     if size < thinnest:
         return
     raise GeometryError(
@@ -884,10 +914,19 @@ def _too_large(kind: str) -> Any:
     )
 
 
-def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> Solid:
+def _built(
+    solid: Solid,
+    builder: Any,
+    kind: str,
+    size: float,
+    edges: int,
+    *,
+    cancelled: CancelToken | None = None,
+) -> Solid:
     """Führt den Builder aus und macht aus seinem Scheitern einen Satz, auf
     den jemand reagieren kann.
     """
+    _check(cancelled)
     try:
         builder.Build()
         if not builder.IsDone():
@@ -925,13 +964,16 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
     # scheitert oder der Drucker ihn nicht drucken kann.
     from OCP.BRepCheck import BRepCheck_Analyzer
 
+    _check(cancelled)
     if not BRepCheck_Analyzer(shape).IsValid():
         raise GeometryError(
             detail=_too_large(kind),
             suggestions=(CORRECT_INPUT, CANCEL),
             values={"size_mm": round(size, 3), "edges": edges},
         )
-    outcome = solid.replacing(shape, history=builder)
+    _check(cancelled)
+    outcome = solid.replacing(shape, history=builder, cancelled=cancelled)
+    _check(cancelled)
     if (
         outcome.solid_count != solid.solid_count
         or not outcome.is_closed
@@ -946,9 +988,15 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
     return outcome
 
 
-def boolean(kind: Literal["union", "difference", "intersection"], parts: list[Solid]) -> Solid:
+def boolean(
+    kind: Literal["union", "difference", "intersection"], parts: list[Solid], *, cut_slot: int = 0
+) -> Solid:
     """Präzise Boolesche Ops: keine Tessellation, also keine
     Tessellations-Artefakte (§30).
+
+    ``cut_slot`` gibt bei der Differenz den Flächen, die ein Werkzeug in den
+    Körper schneidet — Wände und Böden —, diesen Slot, wie ``cut_slot`` am Netz
+    (``geom.boolean``). Ohne ihn bleiben sie in Slot null.
 
     Eine Rückfallkette gibt es hier nicht, und das ist keine Auslassung — die
     Kette aus §17.2 existiert, weil Netze sich uneinig sind, was innen ist.
@@ -982,6 +1030,8 @@ def boolean(kind: Literal["union", "difference", "intersection"], parts: list[So
         sources = [(shape, slots)]
         if kind != "difference":
             sources.append((other.shape, other.face_slots))
+        elif cut_slot:
+            sources.append((other.shape, (cut_slot,) * other.face_count))
         slots = carried_face_slots(result, sources, history=operation)
         shape = result
     return Solid(shape, deflection=parts[0].deflection, face_slots=slots)
@@ -1412,10 +1462,16 @@ def cone_extent(solid: Solid, face_indices: Sequence[int]) -> ConeExtent | None:
     der halbe Öffnungswinkel),
     und die Grenzen von ``v`` sind die beiden Enden. Mehrere Flächen desselben
     Kegels (ein Mantel in zwei Hälften) geben dieselben Enden.
+
+    **Derselbe Kegel als B-Spline** (P2.3) nennt seine Enden über den
+    belegten Träger (``canonical.ConeSurface``): Spitze, Achse in die Nappe
+    und die axialen Abstände ``near`` und ``far`` der Flächengrenzen.
     """
     require()
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.GeomAbs import GeomAbs_Cone
+
+    from app.core.brep.canonical import ConeSurface
 
     faces = solid.faces()
     ends: list[tuple[tuple[float, float, float], float]] = []
@@ -1425,7 +1481,23 @@ def cone_extent(solid: Solid, face_indices: Sequence[int]) -> ConeExtent | None:
             return None
         adaptor = BRepAdaptor_Surface(faces[index])
         if adaptor.GetType() != GeomAbs_Cone:
-            return None
+            surface = solid.surface(index)
+            if not isinstance(surface, ConeSurface):
+                return None
+            half_angle = math.degrees(surface.half_angle)
+            slope = math.tan(surface.half_angle)
+            for along in (surface.near, surface.far):
+                ends.append(
+                    (
+                        (
+                            surface.apex[0] + along * surface.axis[0],
+                            surface.apex[1] + along * surface.axis[1],
+                            surface.apex[2] + along * surface.axis[2],
+                        ),
+                        along * slope,
+                    )
+                )
+            continue
         cone = adaptor.Cone()
         angle = float(cone.SemiAngle())
         radius = float(cone.RefRadius())
@@ -1635,7 +1707,9 @@ def solid_from_faces(
             if seen.Contains(edge):
                 continue
             seen.Add(edge)
-            owners = {numbered.FindIndex(other) - 1 for other in neighbours.FindFromKey(edge)}
+            owners = {
+                numbered.FindIndex(other) - 1 for other in listed(neighbours.FindFromKey(edge))
+            }
             if owners - wanted:
                 rim.Append(edge)
     if cancelled is not None:
@@ -1760,16 +1834,27 @@ def transformed_with_faces(
             np.allclose(gram, np.eye(3) * squared_scale, atol=roundoff * squared_scale, rtol=0.0)
         )
         builder: Any
+        # Wessen Form der Builder bekommt, und welche Fläche dieser Form zu
+        # welcher Fläche des Eingangs gehört: ohne Kopie dieselbe Nummer, mit
+        # Kopie deren belegte Abbildung (``_copied_faces``).
+        owner, owned_faces = solid, tuple(range(len(solid._copied_faces)))
         if similarity:
             transform = gp_Trsf()
             transform.SetValues(*(float(value) for value in values[:3].flat))
-            builder = BRepBuilderAPI_Transform(solid.shape, transform, False)
+            builder = BRepBuilderAPI_Transform(owner.shape, transform, False)
         else:
+            # **Auf einer privaten Kopie**: ``BRepBuilderAPI_GTransform`` setzt
+            # trotz ``Copy=True`` das Prüfkennzeichen von Kanten seiner Eingabe
+            # zurück (NURBS-Platte mit Bohrung, Scherung: vier Unterformen,
+            # gemessen 22.09.2026) — und die Eingabe gehört Szene und Cache.
+            # Die Kopie ist ein ``Solid``, damit sie die Filamente mitführt.
+            owner = replace(solid)
+            owned_faces = owner._copied_faces
             general = gp_GTrsf(
                 gp_Mat(*(float(value) for value in linear.flat)),
                 gp_XYZ(*(float(value) for value in values[:3, 3])),
             )
-            builder = BRepBuilderAPI_GTransform(solid.shape, general, True)
+            builder = BRepBuilderAPI_GTransform(owner.shape, general, True)
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if not builder.IsDone() or builder.Shape().IsNull():
@@ -1791,7 +1876,7 @@ def transformed_with_faces(
             raise _invalid_transform(result=True)
         if not BRepCheck_Analyzer(shape).IsValid():
             raise _invalid_transform(result=True)
-        result = solid.replacing(shape, history=builder, cancelled=cancelled)
+        result = owner.replacing(shape, history=builder, cancelled=cancelled)
         if result.solid_count != solid.solid_count or not result.is_closed:
             raise _invalid_transform(result=True)
         if not rigid:
@@ -1810,21 +1895,34 @@ def transformed_with_faces(
             ):
                 raise _invalid_transform(result=True)
         source_faces, target_faces = ShapeMap(), ShapeMap()
-        TopExp.MapShapes_s(solid.shape, TopAbs_FACE, source_faces)
+        TopExp.MapShapes_s(owner.shape, TopAbs_FACE, source_faces)
         TopExp.MapShapes_s(shape, TopAbs_FACE, target_faces)
         mapping = []
-        for index in range(1, source_faces.Extent() + 1):
+        for index in range(len(owned_faces)):
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
             # ModifiedShape verkettet bei GTransform auch die NURBS-Konvertierung.
             # Modified liefert in OCCT 8 bei diesem Builder eine leere Liste.
-            changed = builder.ModifiedShape(source_faces.FindKey(index))
+            changed = builder.ModifiedShape(source_faces.FindKey(owned_faces[index] + 1))
             target = int(target_faces.FindIndex(changed)) - 1
             if target < 0 or target >= len(result._copied_faces):
                 raise _invalid_transform(result=True)
             mapping.append(result._copied_faces[target])
         if sorted(mapping) != list(range(target_faces.Extent())):
             raise _invalid_transform(result=True)
+        # **Eine Verschiebung verschiebt auch den Hüllquader.** Gemessen kostet
+        # er an ``build_tray_v3.step`` 0,47 s, und der erste, der ihn nach
+        # dem Verschieben fragt, ist das Fenster (Review 22.09.2026). Bei
+        # Drehung und Maßstab ist die achsparallele Hülle eine andere — dort
+        # misst der Körper selbst, beim ersten Fragen.
+        known = solid._cache.get("bounds")
+        if known is not None and np.allclose(linear, np.eye(3), atol=roundoff, rtol=0.0):
+            dx, dy, dz = (float(value) for value in values[:3, 3])
+            low, high = known.minimum, known.maximum
+            result._cache["bounds"] = BoundingBox(
+                (low[0] + dx, low[1] + dy, low[2] + dz),
+                (high[0] + dx, high[1] + dy, high[2] + dz),
+            )
         return result, tuple(mapping)
     except OperationCancelled:
         raise
@@ -1935,8 +2033,8 @@ def _unround(
     if face is None:
         raise GeometryError(
             detail=_(
-                "An dieser Stelle findet der Kern keine Rundung mehr — ein Schritt "
-                "davor hat den Körper verändert. Wählen Sie sie neu."
+                "An dieser Stelle ist keine Rundung mehr — ein Schritt davor hat den "
+                "Körper verändert. Wählen Sie sie neu."
             ),
             values={"radius_mm": round(radius, 3)},
             suggestions=(CORRECT_INPUT, CANCEL),
@@ -2014,7 +2112,7 @@ def _sharp_edge_after(
         shared = neighbours.FindIndex(rim.FindKey(index))
         if shared == 0:
             continue
-        for raw in neighbours.FindFromIndex(shared):
+        for raw in listed(neighbours.FindFromIndex(shared)):
             if raw.IsSame(face) or any(raw.IsSame(wall) for wall in walls):
                 continue
             # Die Nachbarkarte gibt nackte Formen zurück; der Träger will die
@@ -2040,7 +2138,7 @@ def _sharp_edge_after(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         edges: set[int] = set()
-        for modified in builder.Modified(wall):
+        for modified in listed(builder.Modified(wall)):
             owned = ShapeMap()
             TopExp.MapShapes_s(modified, TopAbs_EDGE, owned)
             edges.update(
@@ -2063,7 +2161,6 @@ def _cylinder_at(
 ) -> Any | None:
     """Die Zylinderfläche dieses Radius an dieser Stelle — oder ``None``."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
-    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
     from OCP.gp import gp_Pnt
 
     if cancelled is not None:
@@ -2083,12 +2180,11 @@ def _cylinder_at(
             continue
         # Die begrenzte Fläche unterscheidet auch zwei Rundungen auf derselben
         # Achse. Weder die unendliche Achse noch ihr beliebiger Ursprung tun das.
-        distance = BRepExtrema_DistShapeShape(probe, face)
+        away = nearest_distance(probe, face)
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        if not distance.IsDone():
+        if away is None:
             return None
-        away = distance.Value()
         if away < closest:
             best, closest = face, away
     return best

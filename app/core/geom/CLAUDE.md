@@ -132,6 +132,19 @@ umschreibende Hüllwerkzeuge behalten ihre geometrisch nötige Sehnenzugabe.
 `thread_body`-Erzeuger mit `handedness="right"`. Das Innenwerkzeug ändert den
 Materialbereich, nicht den Drehsinn. Lageänderungen benutzen weiterhin den
 gemeinsamen Merkmaltransformationsweg, die Paarprüfung liegt in `scene.fits`.
+**Am exakten Gehäuse bleiben beide Deckel exakt** (P2.8, die Bearbeitung
+fragt den Körper): `exact_opening` schneidet die Öffnung aus den Flächen
+(`brep.section.horizontal_regions`), `exact_build` baut Platte und Kragen,
+`exact_screw_neck` und `exact_screw_cap` nähen Hals und Kappe aus dem exakten
+Bausteingewinde (`build.threaded`), beide Wendeln mit derselben Phase am Rand.
+Der Kragen folgt in beiden Kernen der engsten Öffnung über seine Tiefe
+(`collar_footprints`, `exact_footprints`: Hohlraum am Rand minus Material am
+Kragenboden), und ragt er trotzdem in die Wand, sagt die Operation die freie
+Tiefe (`collar_hits_wall`) statt einen Deckel auszugeben, der nicht passt.
+Passungsweiten und Hals messen in beiden Kernen die schmale Seite in jeder
+Drehung: am Netz aus dem Polygon (`_narrowest`), exakt aus den Randpunkten
+der Flächen (`_exact_width`, `_short_side` ist die gemeinsame Rechnung); an
+einem runden Rand gilt dort das exakte Hüllrechteck.
 
 Was ein Merkmalsschritt am Netz nur weiterreicht, geht ohne Dreiecksnummern
 hinaus (`_without_old_triangles`, an jeder Netzausgabe von Versetzen,

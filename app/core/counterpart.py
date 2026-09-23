@@ -54,6 +54,7 @@ from app.core.types import (
     Scene,
     TransactionId,
     thread_is_left_handed,
+    thread_is_tapered,
 )
 from app.i18n import _
 
@@ -450,7 +451,7 @@ def thread_counterpart_draft(
     # und Teilung zufällig eine Tabellengröße, entstünde still ein eingängiges
     # Gegengewinde, das nicht greift.
     starts = feature.params.get("starts", 1)
-    if isinstance(starts, int | float) and starts > 1:
+    if isinstance(starts, int | float) and not isinstance(starts, bool) and starts > 1:
         raise ValidationError(
             field="at_feature",
             detail=_(
@@ -460,6 +461,21 @@ def thread_counterpart_draft(
             value=feature.id,
             values={"feature": feature.id, "starts": int(starts)},
             constraint="multi_start",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    # **Und ebenso wenig zu einem kegeligen.** Das Bibliotheksgewinde ist
+    # zylindrisch; sein Gegenstück zu einem kegeligen Rohrgewinde hätte einen
+    # festen Durchmesser — beide Teile hätten gepasst, bis jemand sie
+    # zusammenschraubt (P2.5, 22.09.2026).
+    if thread_is_tapered(feature):
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Ein Gegenstück aus der Bibliothek ist zylindrisch. Zu einem kegeligen "
+                "Gewinde passt es nicht."
+            ),
+            value=feature.id,
+            constraint="thread_shape",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
     size = thread_size_for(feature)

@@ -334,6 +334,50 @@ def test_affine_integrals_do_not_modify_source_or_owned_triangulations() -> None
     assert result.face_count == source.face_count == 3
 
 
+@pytest.mark.parametrize(
+    "matrix",
+    [
+        ((1.0, 0.3, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0), (0.0, 0.0, 1.0, 0.0), (0, 0, 0, 1)),
+        ((2.0, 0.0, 0.0, 1.0), (0.0, 1.0, 0.0, 0.0), (0.0, 0.0, 0.5, 0.0), (0, 0, 0, 1)),
+        ((-1.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0), (0.0, 0.0, 1.0, 0.0), (0, 0, 0, 1)),
+    ],
+    ids=["shear", "anisotropic", "mirror"],
+)
+def test_an_affine_transform_leaves_the_nurbs_input_byte_identical(matrix: Any) -> None:
+    """Auch die allgemeine Abbildung arbeitet auf einer privaten Kopie (§30).
+
+    ``BRepBuilderAPI_GTransform`` schreibt an den Kanten seiner Eingabe: An
+    einer NURBS-Platte mit Bohrung setzte eine Scherung das Prüfkennzeichen
+    von vier Unterformen des Eingangs zurück (``0111000`` → ``0101000`` im
+    BRep-Abbild, gemessen 22.09.2026) — an einem Körper, der der Szene und
+    dem Cache gehört.
+    """
+    import io
+
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+    from OCP.BRepTools import BRepTools
+
+    body = edit.cut_bore(
+        edit.box(60.0, 40.0, 10.0),
+        position=(-10.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=8.0,
+        depth=12.0,
+    )
+    source = Solid(BRepBuilderAPI_NurbsConvert(body.shape, True).Shape())
+    before = io.BytesIO()
+    BRepTools.Write_s(source.shape, before)
+    result = edit.transformed(source, matrix)
+    after = io.BytesIO()
+    BRepTools.Write_s(source.shape, after)
+    assert after.getvalue() == before.getvalue()
+    assert result.face_count == source.face_count
+    assert result.volume == pytest.approx(
+        source.volume * abs(float(np.linalg.det(np.asarray(matrix, dtype=float)[:3, :3]))),
+        rel=1e-6,
+    )
+
+
 def test_the_surface_integral_keeps_complex_trimmed_thread_flanks_unchanged() -> None:
     """Das Flächenintegral eines Gewindes lässt Form, Vernetzung und Cache des Körpers stehen.
 
@@ -437,6 +481,10 @@ def test_boolean_options_precede_the_only_build(monkeypatch: pytest.MonkeyPatch,
             assert value
             events.append("protected")
 
+        def SetRunParallel(self, value: bool) -> None:  # noqa: N802
+            assert value
+            events.append("parallel")
+
         def SetFuzzyValue(self, value: float) -> None:  # noqa: N802
             assert value == pytest.approx(EPS_GEOM, rel=0.0)
             events.append("fuzzy")
@@ -455,11 +503,15 @@ def test_boolean_options_precede_the_only_build(monkeypatch: pytest.MonkeyPatch,
         monkeypatch.setattr(brep_api, name, RecordingBoolean)
     edit.boolean(kind, [first, second])
     assert events.count("build") == 1
+    # Parallel auf allen Kernen (Review 23.09.2026): am Gehäuse ``Cat_3.stp``
+    # plus Gewindehals 2,01 → 0,33 s, Ergebnis bitgleich zum seriellen Lauf.
+    assert events.index("parallel") < events.index("build")
     events.clear()
-    profiles._fuzzy_boolean(kind, first, second)
+    profiles._fuzzy_boolean(kind, first, second, "Aus diesem Loch entsteht nichts.")
     assert events.count("build") == 1
     assert events.index("fuzzy") < events.index("build")
     assert events.index("protected") < events.index("build")
+    assert events.index("parallel") < events.index("build")
 
 
 @pytest.mark.parametrize("operation", ["fillet", "chamfer", "shell", "draft", "sew", "push"])

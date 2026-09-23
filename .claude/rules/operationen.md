@@ -90,7 +90,13 @@ bleibt und keine Entlüftung gewünscht ist, sonst der Netzweg mit Befund);
 die fünf Grundkörper entstehen exakt, wo der Kern da ist, ihr Netz-Zwilling
 ist versteckt und über die Befehlspalette erreichbar. Der Haken ist aus beiden
 Dialogen verschwunden; der Kernwechsel eines gespeicherten Schritts steht im
-Kontextmenü des Verlaufs (`History.change_kernel`, `oberflaeche.md`).
+Kontextmenü des Verlaufs (`History.change_kernel`, `oberflaeche.md`). Dieselbe
+Weiche, ohne Zwilling, tragen *Text aufbringen*, *Dichtung erzeugen*, *Deckel
+erzeugen* und *Drehdeckel erzeugen*: Am exakten Träger entsteht exakt, auch
+das neue Teil daneben. **Ein Erzeuger ohne Eingang hat keinen Körper, den er
+fragen könnte** — ob Organizer, Text, Zeichnung und eigenständige Bausteine
+neu exakt entstehen, ist eine offene Entscheidung (ein Zwilling je Erzeuger
+sprengt den Werkzeugsatz des lokalen Modells, `agentenschicht.md`).
 
 **Was der Kunde stattdessen erfährt, steht im `caveat`.** Am Netz ist der
 Bogen ein Sehnenzug; die Grenze dafür (`units.MAX_FACET_SAG`) ist dieselbe,

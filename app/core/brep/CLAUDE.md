@@ -11,10 +11,17 @@ nicht zu einer Vorgabe für erkannte Importformen; Spiegelungen führen sie nach
 **Und ein Bolzen ohne Gang ist keiner** (P2.5, B3): `threaded_rod` lieferte an
 neun von 23 Rasterlängen — jeder halbzahligen Umlaufzahl — den nackten Kern
 zurück, gültig, geschlossen, ein Stück, ohne Meldung; `thread_exact` mit Länge
-2,5 und Steigung 1 erzeugte einen glatten Bolzen. Jede Stufe der Vereinigung
-verlangt seither ein Volumen über dem Kern (`_is_sound_rod(at_least=)`); was
+2,5 und Steigung 1 erzeugte einen glatten Bolzen. Seit RM-195 wird der Bolzen
+genäht statt vereinigt; `_is_sound_rod(at_least=)` verlangt über dem Kern
+mindestens den halben Gang nach Pappus (`_ridge_volume`) und fragt dafür das
+grobe Volumen (`properties.estimated_volume`), nie das veröffentlichte. Was
 den Gang verliert, gilt nicht als gelungen, und am Ende steht die Absage mit
-Vorschlägen. Die Fixture der exakten Gewindetests war selbst so ein Bolzen.
+Vorschlägen. `tests/test_exact_thread_features.py` hält Pappus an vier Längen
+auf 10⁻⁸ — auch an denen, die früher den Gang verloren.
+
+`thread_exact` übergibt sein Gewinde an `features_of(known_threads=…)`: Die
+Flächen, die es benennt, werden dort weder gelesen noch beschrieben — was
+auf ihnen entstünde, verdrängte das Gewinde ohnehin als Phantom.
 
 ## Eigentum an der nativen Form
 
@@ -508,6 +515,20 @@ eifrige Kante zur Wahrnehmung bekommt). Unter einer vollen Umdrehung, bei
 schlechter Wendel oder ohne Rille gibt es einen **Grund** fürs Protokoll
 und nie eine geratene Steigung.
 
+**Kegelige Gewinde** (P2.5-Rest): Wächst der Radius der Wendeln längs der
+Achse (`_is_tapered`), passt `fit_cone_axis` einen Kegel statt eines
+Zylinders ein, `measure_winding(tapered=True)` misst den Radius an der
+Kegelfläche, und Kamm, Fuß und Nenndurchmesser gelten in der Mitte der
+Gewindelänge. `ThreadReading.taper` ist der halbe Kegelwinkel mit Vorzeichen
+(die weite Seite in Achsrichtung positiv), das Merkmal trägt ihn als
+`taper` in Grad. Ändern, Entfernen (`prepare_ops._thread_frame`) und das
+Gegenstück aus der Bibliothek (`counterpart`) sagen an einem kegeligen —
+und das Gegenstück auch an einem mehrgängigen — Gewinde mit Grund ab, statt
+es mit Zylindern zu ersetzen. **Und die Punktfolge eines Zugs beginnt an
+seinem freien Ende** (`_ordered_points`): Die Sortierung über die übrigen
+Stücke fragte während `list.sort` eine leere Liste, und ein zweigängiges
+Innengewinde galt deshalb nicht als Gewinde.
+
 `thread_features` macht daraus das Merkmal im Vertrag des Netzwegs —
 `diameter` bleibt der Nenndurchmesser (außen Kamm, innen Grund) — mit
 `lead`, `starts`, `handedness`, `crest_radius`, `root_radius`, `depth`,
@@ -528,8 +549,9 @@ sind Regelflächen zwischen je zwei Helices (`BRepFill.Face`), die sich ihre
 Kanten teilen; die Enden schließen zwei Rampen von der Achse zur Fußhelix und
 je eine ebene Fläche bei Winkel null. Genäht (`BRepBuilderAPI_Sewing`, keine
 freie Kante), orientiert (`OrientClosedSolid`), danach auf Länge geschnitten
-— und der Schnitt ist ein Zylinder gegen Ebenen und BSpline-Flächen, den der
-Kern zuverlässig kann. Gemessen: 44 Flächen in dreißig Millisekunden, gültig,
+— mit einem Quader, dessen Boden und Deckel als Ebenen die BSpline-Flächen
+treffen: Der Mantel eines Schnittzylinders umhüllte jede Gangfläche, und die
+Boolesche prüfte jede gegen ihn (1,4 statt 0,74 s am M3 × 0,5 × 60). Gemessen: 44 Flächen in dreißig Millisekunden, gültig,
 Volumen der Analytik (Pappus je Umlauf) auf 5·10⁻¹⁰, STEP-Rundreise auf
 10⁻¹⁴. Die Helix ist dabei eine BSpline-Näherung ihrer Linie auf dem
 Zylinder, und wie genau, sagt `_HELIX_PRECISION`: Mit OCCTs Vorgabe von
@@ -547,8 +569,14 @@ M6 × 1, L 12 in 0,3 s statt 15, M10 × 1,5, L 12 in 0,3 s statt 27. Die
 Sekunden des Sweep-Wegs steckten nicht in der Vereinigung (0,3 s), sondern
 in den Volumenintegralen seiner Prüfstufen, und die Sweep-Flächen (Grad 9,
 C⁰ an jedem Knoten) hielten kein Integral auf 10⁻⁹. `_checked_rod` bleibt
-die letzte Absage; `_fuzzy_boolean` und `_sewn` bleiben als geprüfte
-Bausteine. Wer ein neues Gewinde baut, nimmt das Nähen.
+die letzte Absage; `_sewn` bleibt als geprüfter Baustein, und
+`_fuzzy_boolean` zieht nur noch die gezeichneten Löcher von Durchzug und Bahn
+ab — mit dem Satz seines Aufrufers, nie mit einem über ein Gewinde. Wer ein
+neues Gewinde baut, nimmt das Nähen: `helical_thread(starts=, taper=)` näht
+auch mehrgängige (der Vorschub ist `starts · pitch`, je Gang ein Profil eine
+Teilung höher) und kegelige Gewinde (jeder Profilpunkt auf einem Kegel statt
+einem Zylinder); `tests/data/make_thread_corpus.py` baut so die
+Referenzkörper `dreigaengig`, `innen_zweigaengig` und `konisch`.
 
 ## Eine Kante hat einen Schlüssel, keine Nummer
 
@@ -823,15 +851,17 @@ Anwendung gegen die installierte Bindung.
 
 | Datei | Rolle |
 |---|---|
-| `kernel.py` | Der `Solid` und sein Weg ins Netz. `available()`, `BRepUnavailable` |
-| `profiles.py` | Vom Skizzenumriss zum exakten Körper (§30.1) — das größte Modul hier; `helical_thread` näht Kern und Gang eines Gewindes ohne Boolesche Operation; `face_of`, `offset_face`, `face_boolean`, `face_rotated` und `prism` sind die exakte Seite der Querschnitte, aus denen Profilklemmen und Dichtnuten bauen (`knowledge/parts/section.py`); `round_cord` zieht die runde Dichtschnur als Rohrsweep mit runden Ecken am exakten Weg entlang |
+| `kernel.py` | Der `Solid` und sein Weg ins Netz. `available()`, `BRepUnavailable`. `boolean_builder` ist der eine Weg zu einer Booleschen: schützt beide Eingänge (`SetNonDestructive`) und rechnet auf allen Kernen (`SetRunParallel`, Ergebnis bitgleich zum seriellen). Je Körper gemerkt: Volumen, Fläche, Hüllquader, Geschlossenheit (`is_closed`: eine Schale und keine freie Kante), Flächennachbarn (`face_neighbours`); eine reine Verschiebung reicht den Hüllquader weiter. `listed` liest eine OCCT-Liste ohne ihre langsame Iteration; `nearest_distance` ist die eine Abstandsfrage, große Fragen auf allen Kernen (`PARALLEL_DISTANCE_PAIRS`) |
+| `profiles.py` | Vom Skizzenumriss zum exakten Körper (§30.1) — das größte Modul hier; `helical_thread` näht Kern und Gang eines Gewindes ohne Boolesche Operation; `face_of`, `offset_face`, `face_boolean`, `face_rotated` und `prism` sind die exakte Seite der Querschnitte, aus denen Profilklemmen und Dichtnuten bauen (`knowledge/parts/section.py`); `shrunk_faces` versetzt eine Fläche nach innen und darf dabei zerfallen (Deckelkragen), `upward` richtet eine ebene Fläche nach oben; `round_cord` zieht die runde Dichtschnur als Rohrsweep mit runden Ecken am exakten Weg entlang |
 | `ops.py` | Die B-Rep-Operationen im Register (§25, §10) — **ohne** Verrunden und Fase, die stehen in `geom/edge_ops.py`. `mesh_to_exact` (P4.0, Kategorie `mesh`) ist die Umwandlung vom Netz; `brep_to_mesh` die Gegenrichtung. Seit P2.8 die fünf exakten Grundkörper (`create_brep_box` mit `anchor`, `_cylinder`, `_cone`, `_sphere`, `_torus` — sichtbar, wo der Kern da ist; `edit.sphere` und `edit.cone` daneben zu `box`, `cylinder`, `torus`); `drill_brep_hole` und `shell_exact` bleiben registriert und versteckt, weil `prepare_ops.drill_hole` und `hollow_object` sie am exakten Körper selbst rufen |
 | `edit.py` | Einen Körper formen |
-| `features.py` | Merkmale aus der Topologie (§30, §21) |
-| `thread.py` | Gewinde an importierter Geometrie: Kantenzüge nach Bogenlänge, Achse eingepasst, Vorschub und Händigkeit aus der Wendelregression, Gangzahl aus der Periodizität (§21.1, P2.5) |
-| `canonical.py` | Geprüfte Ebenen-, Zylinder-, Kugel- und Ringträger mit wirklichen Flächengrenzen (§30, §21); `horizontal_area` summiert die ebenen Flächen einer Höhe in einer Richtung — die exakte Seite der gezählten Organizer-Flächen (P2.7) |
-| `properties.py` | Volumen und Fläche nativ auf dem knotenzerlegten Verbund mit Leiter, Python-Randintegral als Rückfall (§30, §11) |
-| `step.py` | STEP hinein und hinaus |
+| `features.py` | Merkmale aus der Topologie (§30, §21); „durchgehend?" fragt eine Bohrung erst nach dem Gewinde (`_ThroughQuestion`), damit dessen Fußstreifen nicht mitgefragt werden |
+| `thread.py` | Gewinde an importierter Geometrie: Kantenzüge nach Bogenlänge, Achse eingepasst (Zylinder oder Kegel, analytische Jacobi-Matrix), Vorschub und Händigkeit aus der Wendelregression, Gangzahl aus der Periodizität (§21.1, P2.5) |
+| `canonical.py` | Geprüfte Ebenen-, Zylinder-, Kegel-, Kugel- und Ringträger mit wirklichen Flächengrenzen (§30, §21). Ein Kandidat des Erkenners ist nie der Beweis: Belegt wird über alle rationalen Bézier-Koeffizienten; der Kegel (`ConeSurface`, `_cone_matches`) auch bis in die Spitze (`_apart_from_the_apex` halbiert dorthin); versagt der Erkenner an einer großen gespiegelten Ebene, ist die Ebene durch die Pole der Kandidat (`_pole_plane`). `_axial_limits` misst die Achsspanne für Zylinder und Kegel gleich. `horizontal_area` summiert die ebenen Flächen einer Höhe in einer Richtung — die exakte Seite der gezählten Organizer-Flächen (P2.7) |
+| `properties.py` | Volumen und Fläche nativ auf dem knotenzerlegten Verbund mit Leiter, Python-Randintegral als Rückfall (§30, §11). Extrusionen und Drehflächen teilt `_trimmed_grid` über getrimmte Sichten — `ShapeUpgrade_SplitSurface` schneidet sie in der Richtung ihrer Kurve nicht. `estimated_volume` ist ein grobes Volumen für Plausibilitätsfragen und wird nie veröffentlicht |
+| `section.py` | Der exakte Ebenenschnitt für die Skizzenprojektion (P3.5): Kreise und Bögen als solche, alles andere als Kurve durch Punkte der echten Schnittlinie. `horizontal_regions` gibt den waagerechten Querschnitt als Flächen — Materialstück, gefüllter Umriss, Löcher —, aus denen `geom.lid` den exakten Deckel baut |
+| `lettering.py` | Schrift als exakte Flächen (P2.8): die Glyphenpfade als Strecken und Bézier-Kurven, gefüllt nach der Füllregel der Schrift (nonzero), zu Prismen aufgezogen — `label_text` nimmt sie für einen exakten Körper |
+| `step.py` | STEP hinein und hinaus; eine dichte Schale ohne Körper (Flächenmodell) wird beim Einlesen zum Körper, eine offene meldet `load_step` |
 | `from_mesh.py` | Vom Dreiecksnetz zum exakten Körper ohne Verlauf (P4.0): Bereiche, Ränder, Ecken, Kanten, Flächen, Nähen, beidseitige Messung — siehe „Vom Netz zum exakten Körper" |
 
 ## Grenzen

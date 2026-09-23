@@ -7,7 +7,8 @@ Baustein an einem exakten Träger vernetzte den Träger mit. Seither wählt der
 Aufrufer den Kern (``shapes.building``), und dieselbe Beschreibung ergibt hier
 einen ``Solid``: derselbe Rahmen (auf Z = 0 stehend, in X und Y zentriert),
 dieselben Maße, dieselben Ecken — nur der Kreis ist ein Kreis und kein 48-Eck,
-und der Gewindegang ist ein Sweep statt einer von Hand vernähten Ringfolge.
+und der Gewindegang besteht aus Regelflächen zwischen Helices, genäht mit dem
+Kern (``profiles.helical_thread``), statt aus einer vernähten Ringfolge.
 
 **Eine Formbeschreibung, zwei Auswerter** — keine zweite Funktion je Baustein
 (Konzept §13.8, `zwillinge.md`): Was hier steht, ist je Grundform ein Zwilling,
@@ -39,10 +40,10 @@ if TYPE_CHECKING:
 #: Die Stufenleiter der Vereinigung, in Millimetern: Ohne Toleranz lässt
 #: OpenCASCADE zwei Teile, die sich nur um Rundungsstellen durchdringen, als
 #: zwei Körper stehen; zu fein lässt die Naht offen, zu grob bringt die
-#: Boolesche Operation zum Aufgeben, deshalb mehrere Werte. Der Gewindebolzen
-#: hatte dieselbe Leiter als Anteil der Steigung (``ROD_FUZZ_RATIOS``); seit
-#: RM-195 entsteht er genäht und braucht keine mehr, und die Zahlen stehen nur
-#: noch hier.
+#: Boolesche Operation zum Aufgeben, deshalb mehrere Werte. Ein Baustein hat
+#: kein Maß, an dem sich die Naht orientieren könnte, also stehen die Werte
+#: absolut. (Die Leiter des Gewindebolzens, dieselben drei Zehnerpotenzen als
+#: Anteil der Steigung, ist mit RM-195 gefallen: Er entsteht genäht.)
 UNION_FUZZ_MM: Final = (1e-4, 1e-3, 1e-2)
 
 
@@ -242,9 +243,10 @@ def threaded(
     halten die Rampen der Enden aus dem Schnitt heraus.
 
     ``bottom`` ist die Höhe des unteren Endes: Der Körper entsteht gleich dort,
-    denn jede Bewegung eines fertigen Körpers kostet den exakten Kern zwei
-    Volumenintegrale über BSpline-Flächen (``edit.transformed``), an einem
-    Gewinde fünf Sekunden — der Schnittzylinder zieht stattdessen mit.
+    und der Schnittzylinder zieht mit — eine Bewegung weniger, also eine
+    Kopie und eine Gültigkeitsprüfung weniger (``edit.transformed``; bis
+    RM-196 kostete sie zudem zwei Volumenintegrale, an einem Gewinde fünf
+    Sekunden).
 
     **Ein Unterschied zum Netz, benannt:** Dort ragt der Kern um
     ``BOOLEAN_OVERLAP`` über den Fußradius hinaus, damit ``manifold3d`` die

@@ -630,9 +630,11 @@ class OperationSpec:
     die Operation aus einem exakten Körper ein Dreiecksmodell macht, sonst
     leer: Das Ergebnis behält die Bauart seines Eingangs.
 
-    Dreiundzwanzig Operationen rechnen nur am Netz und vernetzen einen
+    Neunzehn Operationen rechnen nur am Netz und vernetzen einen
     exakten Eingang dafür — Glätten, Reduzieren, Formen, Teilen, die
-    Prägung, der Prüfkörper. Bis zum 22.09.2026 stand diese Auskunft an zwei
+    Prägung, der Prüfkörper (*Text aufbringen* bleibt seit dem 22.09.2026
+    exakt, ``brep.lettering``; *Drehdeckel erzeugen* seit dem 23.09.2026,
+    ``geom.lid.exact_screw_neck``). Bis zum 22.09.2026 stand diese Auskunft an zwei
     Orten, die sich nicht kannten: in der Paritätstabelle von
     ``tests/test_exact_body_parity.py`` (``MESH``) und im Hauptfenster als
     „exakter Eingang vorhanden". Das Fenster braucht sie **vor** der
