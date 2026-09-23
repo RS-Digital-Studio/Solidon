@@ -136,7 +136,7 @@ def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
     # wasserdicht war — ``is_closed`` sagte am exakten Körper sogar True, und
     # er ging ohne Befund in STL-Export und Schichtanalyse (Gesamtreview D-8).
     for loop in bearing:
-        if _crosses_itself(loop):
+        if crosses_itself(loop):
             raise _broken(_("Der Umriss kreuzt sich selbst — die Fläche ist dort nicht eindeutig."))
     return _nested(bearing)
 
@@ -288,8 +288,11 @@ def _outline(profile: Profile) -> list[Point2]:
     return points
 
 
-def _crosses_itself(loop: Profile) -> bool:
+def crosses_itself(loop: Profile) -> bool:
     """Ob zwei Teilstücke der Kette sich in ihrem Inneren schneiden.
+
+    Für einen Umriss wie für eine offene Bahn (``sketch_sweep``, P6.5b): Die
+    Prüfung fragt Paare von Teilstücken und kennt keinen Ringschluss.
 
     Wenn der B-Rep-Kern installiert ist, prüft OpenCASCADE genau die Bögen und
     interpolierenden B-Splines, die später den Körper bilden. Damit kann weder

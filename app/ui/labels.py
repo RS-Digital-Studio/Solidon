@@ -992,6 +992,13 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # Vorgabe: Der Kern entscheidet die Mehrdeutigkeit nicht selbst (Regel 21).
     "ask": _("Nachfragen"),
     "ask_side": _("Nachfragen"),
+    # Die Anfangsrichtung eines Kanals und der Drehsinn eines Übergangs, die
+    # beim Schnitt mit Werkzeug zur Wahl stehen (P6.5b/c).
+    "ask_twist": _("Nachfragen"),
+    "counterclockwise": _("Linksherum"),
+    "clockwise": _("Rechtsherum"),
+    "down": _("Nach unten"),
+    "up": _("Nach oben"),
     "equal_distances": _("Gleiche Breite"),
     "two_distances": _("Zwei Abstände"),
     "distance_angle": _("Abstand und Winkel"),
@@ -1174,6 +1181,14 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "ask_side": _(
         "Wird aus einer Durchgangsbohrung ein Sackloch, wird gefragt, welche Seite offen bleibt."
     ),
+    "ask_twist": _(
+        "Steht der untere Umriss genau zwischen zwei Ecken des oberen, wird gefragt, in welche "
+        "Richtung der Übergang dreht."
+    ),
+    "counterclockwise": _("Gegen den Uhrzeigersinn, von oben auf die Zeichenebene gesehen."),
+    "clockwise": _("Im Uhrzeigersinn, von oben auf die Zeichenebene gesehen."),
+    "down": _("Beginnt an der Oberseite und läuft nach unten in den Körper."),
+    "up": _("Beginnt an der Unterseite und läuft nach oben in den Körper."),
     "equal_distances": _("Die Fase nimmt beide Flächen gleich weit zurück."),
     "two_distances": _(
         "Die Fase nimmt die Bezugsfläche und die zweite Fläche verschieden weit zurück."

@@ -44,7 +44,7 @@ bleibt dadurch abbrechbar, bevor ein Ergebnis in Szene oder Cache erscheint.
 | `shapes.py` | Die Grundformen und die zwei Lochbilder; `grid_centres` hält die gemeinsame mittige Rasterlage für Skizze und Feldschnitt |
 | `planes.py` | Wo eine Skizze liegt; `frame_in_scene` löst eine Ebenenangabe gegen eine Szene mit ihren Projektparametern auf — der Weg für jeden Verbraucher außerhalb der Skizzen-Ops |
 | `edit.py` | Trimmen, Verlängern, Versetzen, Spiegeln — an einer Ecke Verrunden und Fase (`corner_at`, `fillet`, `chamfer`), die vier Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at` — die Lochbilder halten über Bedingungen zwischen den Mitten, nicht über Festpunkte), Projizieren (`project`, ein Ebenenschnitt) und die Flächenkontur (`face_outline`, der Rand der Fläche unter der Zeichnung) |
-| `ops.py` | Die Operationen der Kategorie „Skizze“; `cut_regions` teilt den bestehenden Taschenschnitt mit aufgelösten Feldern, einschließlich Ebene, Durchgang und Z-Bezug |
+| `ops.py` | Die Operationen der Kategorie „Skizze“; `cut_regions` teilt den bestehenden Taschenschnitt mit aufgelösten Feldern, einschließlich Ebene, Durchgang und Z-Bezug (`_cut_span`, auch für den Übergangsschnitt). Die drei Schnitte mit Werkzeug (`sketch_revolve_cut`, `sketch_sweep_cut`, `sketch_loft_cut`) bauen ihr Werkzeug über dieselben Helfer wie die Erzeuger (`_revolve_section`, `_swept`, `_loft_outlines`) und ziehen es über `_cut_with_tool` in beiden Kernen ab |
 | `serialize.py` | **Die ganze Skizze als ein Parameterwert** einer Operation |
 
 ## Warum `serialize.py` der Schlüssel ist
@@ -168,6 +168,40 @@ erhalten.
   wird vorher — dieselbe Ebene, gleich viele getrennte Umrisse; die gleiche
   Zahl der Löcher je Paar prüft `brep.profiles.loft` selbst. Verbunden wird in
   der Reihenfolge von `regions_of`, und der `doc`-Satz sagt das.
+- **Drehen, Führen und Überblenden schneiden auch** (P6.5a–c). Je Werkzeug
+  eine eigene Operation mit einem Eingang, direkt hinter ihrem Erzeuger in der
+  Variantengruppe *Aus Skizze erzeugen …* — kein Umschalter am Erzeuger, weil
+  das Register die Eingangszahl je Operation festschreibt (`grenzen.md`). Das
+  Werkzeug entsteht exakt, wird mit einem geprüften Starrkörperzug an den
+  Zielkörper gelegt und exakt (`brep.edit.boolean`) oder über die
+  Rückfallkette gegen seine Tessellierung (`MAX_FACET_SAG`) abgezogen; die
+  erreichte Stufe steht in `solver`, ein Werkzeug neben dem Körper gibt
+  `boolean.without_effect` mit Vorschlag. Ein ungültiges exaktes Ergebnis
+  (`brep.profiles.is_sound`) geht nicht hinaus: derselbe Schnitt rechnet am
+  Netz weiter, mit `sketch.exact_cut_unsound`; die Umwandlung meldet die
+  Auswertung vor der Übernahme. **Die Nut** legt den Querschnitt des
+  Erzeugers um eine Achse aus Richtung und Punkt oder aus einer Bohrung bzw.
+  einem Zapfen (`axis_feature`; der Punkt sagt dann nur die Höhe entlang der
+  Achse). **Der Kanal** beginnt ohne Angabe an der Ober- oder Unterseite, je
+  nach `heading`, und dreht um die Senkrechte (`turn`). Eine Bahn, die schon
+  in diese Richtung beginnt, bleibt; sonst wird sie um die Querachse ihrer
+  Bahnebene umgedreht (X bei Bogen und Vorderansicht, Y bei der Seitenansicht),
+  damit sie zur gezeichneten Seite abbiegt. **Der Übergang** misst
+  wie die Tasche von der Zeichenebene aus; durchgehend liegt der untere
+  Umriss genau auf der Gegenseite, nicht darüber hinaus.
+- **Eine Bahn wird geprüft, bevor der Kern sie baut** (`_check_path`, für
+  Erzeuger und Schnitt): Kreuzung (`profile.crosses_itself`, dieselbe Prüfung
+  wie für Umrisse) und Biegung enger als der Querschnitt zur Innenseite reicht
+  (Bögen über `arc_through`, Splines an ihren Bézierstücken). Danach fragt
+  `brep.profiles.intersects_itself` den fertigen Körper — `BRepCheck_Analyzer`
+  hält einen Kreis Ø4 um einen Bogen R1 für gültig.
+- **Ein Übergang zwischen zwei Vielecken fragt, wenn er drehen könnte**
+  (`_paired_corners`, nur beim Schnitt): Die Ecken verbinden sich mit den
+  nächsten, gemessen um die Mitte jedes Umrisses; Klickreihenfolge und
+  Drehsinn der Zeichnung zählen nicht. Stehen zwei Zuordnungen gleich nah, geht
+  die Frage über `ctx.ask` und die Antwort als `twist` in den Schritt. Der
+  Erzeuger bleibt bei der Zuordnung von OpenCASCADE (`CheckCompatibility`),
+  damit alte Projekte unverändert rechnen.
 - **Ein Lochbild ist eine Grundform mit mehreren Umrissen** (`bolt_circle`,
   `hole_grid`, RM-147). Sie stehen in `shapes.PATTERN_CHOICES` und nicht in
   `SHAPE_CHOICES`: Nur *Grundform hochziehen* und *Tasche schneiden* rechnen

@@ -468,8 +468,9 @@ VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
         doc=_(
             "Aus einer Grundform oder einer gezeichneten Skizze einen Körper "
             "machen — hochziehen, um eine Achse drehen, an einem Bogen "
-            "entlangführen, zwischen zwei Größen überblenden oder als Tasche "
-            "aus einem vorhandenen Körper schneiden. Die Art steht im Dialog, "
+            "entlangführen, zwischen zwei Größen überblenden — oder mit "
+            "denselben Werkzeugen aus einem vorhandenen Körper schneiden: als "
+            "Tasche, Ringnut, Kanal oder Übergang. Die Art steht im Dialog, "
             "die Grundform ist für alle dieselbe."
         ),
         choice=_("Art"),
@@ -479,18 +480,26 @@ VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
         # musste zurück zur Auswahl (Robert: „man zeichnet zieht kann unten
         # aber nicht mehr abziehen wählen").
         #
-        # Sie ist die einzige der fünf mit einem **Eingang**: `consumes=1`,
+        # Sie war die erste der Gruppe mit einem **Eingang**: `consumes=1`,
         # `applies_to=("face",)`. Ein Umschalter, dessen Ziel eine Bedingung
         # hat, fragt sie vorher — sonst führt er in eine Auswertung, die
         # anhält (`oberflaeche.md`, „Ein Umschalter, dessen Zwilling eine
         # Bedingung hat"). Der Dialog sperrt den Eintrag deshalb, solange kein
         # Körper gewählt ist, und nennt den Grund.
+        #
+        # **Und die drei Schnitte mit Werkzeug gehören seit P6.5 dazu**, je
+        # direkt hinter ihrem Erzeuger (Konzept §10: „Revolve-Cut wird kein
+        # zweiter Eintrag, sondern ein Feld im Dialog"). Sie haben einen
+        # Eingang wie die Tasche und werden ohne Körper gleich gesperrt.
         members=(
             "sketch_extrude",
             "sketch_pocket",
             "sketch_revolve",
+            "sketch_revolve_cut",
             "sketch_sweep",
+            "sketch_sweep_cut",
             "sketch_loft",
+            "sketch_loft_cut",
         ),
     ),
 )

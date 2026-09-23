@@ -817,7 +817,7 @@ beste für kunden daraus, denk auch dran weniger ist manchmal mehr"), und so
 sind sie gefallen:
 
 * **Fertig klappt die Arten direkt auf** (`_fill_finish_menu`): ein Menü am
-  Knopf mit den sechs Skizzen-Operationen des Registers, Hochziehen und Tasche
+  Knopf mit den neun Skizzen-Operationen des Registers, Hochziehen und Tasche
   vorn, jede mit ihrem `doc`-Satz als Tooltip; was nicht geht, ist gesperrt
   und sagt warum (`_update_sketch_actions`). Der Dialog „Was soll daraus
   werden?" mit *Weiter* und *Zurück zum Zeichnen* ist gefallen — zwei Fenster

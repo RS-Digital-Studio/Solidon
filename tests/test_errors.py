@@ -423,6 +423,13 @@ _NOT_A_RANGE = frozenset(
         # Die Bahn eines Sweeps (RM-147 E3): Sie liegt in der Ebene des
         # Querschnitts statt senkrecht dazu, oder sie hat keinen Verlauf.
         "path_plane", "path_start", "no_path",
+        # Eine Bahn, die sich kreuzt oder enger biegt, als der Querschnitt breit
+        # ist (P6.5b): eine Frage der Zeichnung, nicht eines Zahlenfelds — der
+        # Bogenradius steht in der Bahn, nicht im Dialog.
+        "path_crosses", "tight_bend",
+        # Ein Merkmal ohne Achse als Drehachse einer Nut (P6.5a): eine Wahl,
+        # keine Spanne.
+        "no_axis",
         # Die zwei Zeichnungen eines Übergangs (RM-147 E2): eine liegt auf der
         # falschen Ebene, oder beide tragen verschieden viele Umrisse. Beides
         # ist eine Frage der Zeichnung und keine Zahl in einem Feld — „Ein Wert

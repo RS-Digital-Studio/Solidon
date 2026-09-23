@@ -720,6 +720,27 @@ XY-Querschnitt verlaufen. Geprüft wird die exakte Kurvenableitung, damit
 Bögen und Splines nicht nach ihrer Sehne beurteilt werden. Schräger oder
 entarteter Beginn hält vor dem Körperaufbau mit einem Handlungsvorschlag an.
 
+**Gültig heißt nicht selbstschnittfrei.** Eine Bahn, die enger biegt, als der
+Querschnitt breit ist, oder deren Stücke sich zu nahe kommen, ergibt einen
+Körper, den `BRepCheck_Analyzer` durchlässt. `intersects_itself` fragt
+`BRepAlgoAPI_Check` mit Selbstschnittprüfung; die Skizzen-Operationen rufen es
+für jede gezeichnete Bahn und jedes Übergangswerkzeug eines Schnitts (P6.5).
+
+**Und `IsDone` heißt nicht gültig.** `is_sound` fragt `BRepCheck_Analyzer`
+am Ergebnis. Gemessen an `carpet-corner-clip.step` (zwei Teile, aus
+F:D Dateien): Eine Ringnut in der Bohrung Ø9 meldete Erfolg, das Volumen
+sank um genau das Werkzeug, und der Körper war ungültig — die Luft der
+Bohrung galt danach als innen. Die Schnitte mit Werkzeug liefern ein solches
+Ergebnis nicht aus, sondern rechnen am Netz weiter und sagen es
+(`sketch.exact_cut_unsound`). *Tasche schneiden* an derselben Stelle gibt
+denselben ungültigen Körper still zurück — offen, nicht Teil von P6.5.
+
+`loft(..., compatible=False)` schaltet die Eckenzuordnung von OpenCASCADE ab
+(`ThruSections.CheckCompatibility`). Nur wer die Zuordnung selbst entschieden
+hat, nimmt das — der Übergangsschnitt, wenn zwei Zuordnungen gleich nah waren
+und gefragt wurde; bei Gleichstand wählte der Kern sonst nach der letzten
+Stelle einer Summe. Die Vorgabe bleibt `True`, der Erzeuger rechnet wie bisher.
+
 ## Was er einbringt
 
 Was ein Netz nicht geben kann: echte Kanten — und damit Fasen und

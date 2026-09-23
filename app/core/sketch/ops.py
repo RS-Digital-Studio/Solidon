@@ -15,12 +15,20 @@ Der Befund über Freiheitsgrade gehört zur gezeichneten Skizze des Editors.
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import Any, cast
 
 from app.core.brep import edit, profiles
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
-from app.core.errors import CORRECT_INPUT, Action, GeometryError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CORRECT_INPUT,
+    Action,
+    GeometryError,
+    InternalError,
+    ValidationError,
+)
 from app.core.geom.boolean import without_effect
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.sketch import planes, shapes
@@ -34,12 +42,17 @@ from app.core.sketch.planes import (
 )
 from app.core.sketch.profile import (
     Profile,
+    ProfileSegment,
+    arc_through,
     bounds_of,
+    crosses_itself,
     path_of,
     profile_of,
     regions_of,
     scaled,
     shifted,
+    signed_area,
+    spline_controls,
 )
 from app.core.sketch.serialize import sketch_from_text
 from app.core.sketch.solver import solve_sketch
@@ -50,10 +63,12 @@ from app.core.types import (
     OpContext,
     OpResult,
     PlaneFrame,
+    Point2,
     SceneObject,
     SolvedSketch,
+    SolverInfo,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM, is_close, positive_axis
 from app.i18n import _
 
 #: Ein Satz, den drei Parameterschemata teilen — deshalb steht er einmal hier.
@@ -81,6 +96,21 @@ _ROWS_DOC = _("Löcher in y-Richtung, nur beim Lochraster.")
 _HOLE_DIAMETER_DOC = _("Durchmesser jedes einzelnen Lochs, beim Lochkreis und beim Lochraster.")
 _SKETCH_DOC = _(
     "Eine gezeichnete Skizze anstelle der Grundform. Leer heißt: die Grundform oben gilt."
+)
+#: Was die drei Schnitte mit Werkzeug an einem eingelesenen Netz anders machen.
+#: Ein Satz für alle drei, weil es für alle drei derselbe Unterschied ist: Das
+#: Werkzeug wird mit ``units.MAX_FACET_SAG`` vernetzt, derselben Grenze, mit
+#: der der exakte Kern tesselliert (``operationen.md``: ein Unterschied, den
+#: man benennt, ist eine Eigenschaft).
+_MESH_CUT_CAVEAT = _(
+    "An einem eingelesenen Netz besteht der Schnitt aus geraden Stücken statt aus "
+    "Kurven. Sie weichen um weniger ab, als eine Düse auflöst; wer echte Kurven braucht, "
+    "arbeitet an einem exakten Körper weiter."
+)
+#: Die drei Koordinaten eines Achspunkts sagen dasselbe — ein Satz für alle drei.
+_AXIS_POINT_DOC = _(
+    "Ein Punkt auf der Drehachse; auf seiner Höhe entlang der Achse beginnt der "
+    "Querschnitt. Mit einem gewählten Merkmal zählt nur noch diese Höhe."
 )
 
 
@@ -786,6 +816,45 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
     return dataclasses.replace(result, findings=[*findings, *result.findings])
 
 
+@dataclasses.dataclass(frozen=True)
+class _CutSpan:
+    """Wo ein Schnitt von einer Zeichenebene aus beginnt und wie weit der Körper reicht.
+
+    Alle Zahlen entlang der Normalen der Zeichenebene gemessen: ``low`` und
+    ``high`` sind die Enden des Körpers, ``top`` die Oberkante des Schnitts,
+    ``plane_s`` die Lage der Ebene selbst. *Tasche schneiden* und *Durch
+    Überblenden schneiden* fragen dieselbe Frage — eine Antwort (P6.5c).
+    """
+
+    frame: PlaneFrame | None
+    normal: tuple[float, float, float]
+    plane_s: float
+    low: float
+    high: float
+    top: float
+
+
+def _cut_span(ctx: OpContext, body: Any, plane: str, z: float) -> _CutSpan:
+    """Die Oberkante eines Schnitts von dieser Ebene aus, und die Spanne des Körpers."""
+    frame = _frame_of(ctx, plane)
+    if frame is not None:
+        normal = frame.normal
+        plane_s = _along(frame.origin, normal)
+    else:
+        _, normal = profiles.PLANES[plane]
+        plane_s = 0.0
+    low_s, high_s = _span_along(body, normal)
+    # Mit Rahmen liegt die Skizze auf der Fläche — dort beginnt die Tasche;
+    # ein Welt-Z vom Klick hat auf einer schrägen Fläche keine Bedeutung.
+    if frame is not None:
+        top = plane_s
+    elif abs(z) > EPS_GEOM:
+        top = z
+    else:
+        top = high_s
+    return _CutSpan(frame, normal, plane_s, low_s, high_s, top)
+
+
 def cut_regions(
     ctx: OpContext,
     regions: list[Profile],
@@ -805,22 +874,9 @@ def cut_regions(
     body = source.mesh
     findings: list[Finding] = []
     chosen = regions
-    frame = _frame_of(ctx, plane)
-    if frame is not None:
-        normal = frame.normal
-        plane_s = _along(frame.origin, normal)
-    else:
-        _, normal = profiles.PLANES[plane]
-        plane_s = 0.0
-    low_s, high_s = _span_along(body, normal)
-    # Mit Rahmen liegt die Skizze auf der Fläche — dort beginnt die Tasche;
-    # ein Welt-Z vom Klick hat auf einer schrägen Fläche keine Bedeutung.
-    if frame is not None:
-        top = plane_s
-    elif abs(z) > EPS_GEOM:
-        top = z
-    else:
-        top = high_s
+    span = _cut_span(ctx, body, plane, z)
+    frame, normal, plane_s = span.frame, span.normal, span.plane_s
+    low_s, high_s, top = span.low, span.high, span.top
     if through:
         bottom, reach = low_s - 1.0, (high_s - low_s) + 2.0
     else:
@@ -986,9 +1042,8 @@ def sketch_revolve(ctx: OpContext) -> OpResult:
     params = cast(SketchRevolveParams, ctx.params)
     findings: list[Finding] = []
     require()
+    placed = _revolve_section(ctx, params, findings)
     if params.sketch:
-        # Wie gezeichnet: die Skizze kennt ihren Abstand zur Achse selbst.
-        placed = _drawn_profile(ctx, params.sketch, findings)
         drawn_on = _plane_of(params.sketch)
         if drawn_on not in _UPRIGHT_PLANES:
             # **Gedreht wird aufrecht, gleich wo gezeichnet wurde** — und das
@@ -997,7 +1052,8 @@ def sketch_revolve(ctx: OpContext) -> OpResult:
             # Zeichnung liegt; auf der Draufsicht, einer Fläche oder einer
             # abgeleiteten Ebene läge die Zeichnung flach und der Körper
             # stünde trotzdem — ohne diesen Satz sähe das aus wie ein Fehler
-            # der Operation.
+            # der Operation. Nur beim Erzeuger: Der Schnitt dreht um die
+            # gewählte Achse, und dort ist „senkrecht" nicht die Achse.
             findings.append(
                 Finding(
                     code="sketch.revolve_upright",
@@ -1010,33 +1066,49 @@ def sketch_revolve(ctx: OpContext) -> OpResult:
                     values={"plane": drawn_on},
                 )
             )
-    else:
-        profile = _sketch_profile(params.shape, params.length, params.width, params.corners)
-        # **Der gemessene Bereich statt einer Formel je Grundform.** Hier stand
-        # ``offset + length/2`` waagerecht und ``length/2`` beziehungsweise
-        # ``width/2`` senkrecht. Beides ist der halbe **Umkreis**durchmesser
-        # und trifft nur, wo die Form genauso um den Ursprung liegt —
-        # Rechteck, Langloch, Kreis. Ein Vieleck liegt anders, weil seine
-        # untere Kante waagerecht steht:
-        #
-        # * Dreieck, ``length=20``: x reicht bis ±8,66, y von -5 bis +10. Es
-        #   schwebte 5,00 mm über dem Bett, und seine Innenkante stand
-        #   1,34 mm weiter draußen als der Abstand sagt.
-        # * Sechseck, ``length=20``: x stimmt (±10), y reicht nur ±8,66 — der
-        #   Abstand traf, das Bett um 1,34 mm nicht.
-        #
-        # ``bounds_of`` ist bei allen vier Formen exakt (bei Langloch und
-        # Kreis liegt der Scheitel jedes Bogens auf seinem Stützpunkt), und
-        # für Rechteck, Langloch und Kreis kommt dieselbe Verschiebung heraus
-        # wie vorher. Denselben Weg geht ``sketch_loft`` mit der gezeichneten
-        # Skizze.
-        low, _high = bounds_of(profile)
-        placed = shifted(profile, params.offset - low[0], -low[1])
     solid = profiles.revolve(placed, params.angle)
     return OpResult(
         outputs=[_created(params.name, str(_("Rotationskörper")), solid, cancelled=ctx.cancelled)],
         findings=findings,
     )
+
+
+def _revolve_section(
+    ctx: OpContext,
+    params: SketchRevolveParams | SketchRevolveCutParams,
+    findings: list[Finding],
+) -> Profile:
+    """Der Querschnitt eines Drehkörpers, so gelegt, wie die Achse ihn braucht.
+
+    **Eine Stelle für Erzeuger und Schnitt** (P6.5a): Die Nut ist derselbe
+    Drehkörper, nur abgezogen statt hingestellt. Zwei Herleitungen der Lage
+    liefen beim nächsten Fund auseinander — so wie hier einmal der Versatz
+    beim Vieleck (unten).
+    """
+    if params.sketch:
+        # Wie gezeichnet: die Skizze kennt ihren Abstand zur Achse selbst.
+        return _drawn_profile(ctx, params.sketch, findings)
+    profile = _sketch_profile(params.shape, params.length, params.width, params.corners)
+    # **Der gemessene Bereich statt einer Formel je Grundform.** Hier stand
+    # ``offset + length/2`` waagerecht und ``length/2`` beziehungsweise
+    # ``width/2`` senkrecht. Beides ist der halbe **Umkreis**durchmesser
+    # und trifft nur, wo die Form genauso um den Ursprung liegt —
+    # Rechteck, Langloch, Kreis. Ein Vieleck liegt anders, weil seine
+    # untere Kante waagerecht steht:
+    #
+    # * Dreieck, ``length=20``: x reicht bis ±8,66, y von -5 bis +10. Es
+    #   schwebte 5,00 mm über dem Bett, und seine Innenkante stand
+    #   1,34 mm weiter draußen als der Abstand sagt.
+    # * Sechseck, ``length=20``: x stimmt (±10), y reicht nur ±8,66 — der
+    #   Abstand traf, das Bett um 1,34 mm nicht.
+    #
+    # ``bounds_of`` ist bei allen vier Formen exakt (bei Langloch und
+    # Kreis liegt der Scheitel jedes Bogens auf seinem Stützpunkt), und
+    # für Rechteck, Langloch und Kreis kommt dieselbe Verschiebung heraus
+    # wie vorher. Denselben Weg geht ``sketch_loft`` mit der gezeichneten
+    # Skizze.
+    low, _high = bounds_of(profile)
+    return shifted(profile, params.offset - low[0], -low[1])
 
 
 @op_params
@@ -1123,7 +1195,10 @@ class SketchSweepParams(BaseParams):
     name="sketch_sweep",
     title=_("Entlang eines Bogens führen"),
     category="sketch",
-    cache_version="profile-holes-normal-start-1",
+    # ``self-check``: Eine Bahn, die sich kreuzt, zu eng biegt oder mit ihrer
+    # Röhre an sich selbst stößt, gibt seit P6.5 eine Absage statt eines
+    # selbstdurchdringenden Körpers — ein alter Cachetreffer brächte ihn zurück.
+    cache_version="profile-holes-normal-start-self-check-2",
     params=SketchSweepParams,
     consumes=0,
     produces=1,
@@ -1135,6 +1210,33 @@ class SketchSweepParams(BaseParams):
 def sketch_sweep(ctx: OpContext) -> OpResult:
     params = cast(SketchSweepParams, ctx.params)
     findings: list[Finding] = []
+    solid, _upward = _swept(ctx, params, findings)
+    fallback = _("Bahn") if params.along == "drawn" else _("Bogen")
+    return OpResult(
+        outputs=[_created(params.name, str(fallback), solid, cancelled=ctx.cancelled)],
+        findings=findings,
+    )
+
+
+def _swept(
+    ctx: OpContext,
+    params: SketchSweepParams | SketchSweepCutParams,
+    findings: list[Finding],
+) -> tuple[Solid, bool]:
+    """Der geführte Körper, am Ursprung beginnend und senkrecht startend —
+    und ob er nach oben beginnt.
+
+    Der Bogen beginnt immer nach oben; eine gezeichnete Bahn darf nach oben
+    oder nach unten beginnen (``profiles.sweep_path``). Der Schnitt braucht
+    die Richtung, um den Kanal in den Körper statt aus ihm heraus zu führen.
+
+    **Eine Stelle für Erzeuger und Schnitt** (P6.5b), und mit ihr die
+    Prüfungen, die beide brauchen: Eine Bahn, die sich kreuzt, enger biegt
+    als der Querschnitt breit ist oder mit ihrer Röhre an sich selbst
+    anstößt, ergab bis hierher einen Körper, der sich selbst durchdringt —
+    beim Erzeuger still ausgeliefert, beim Schnitt ein Werkzeug, das nicht das
+    Gezeichnete wegnimmt.
+    """
     # **Der Bogen läuft entlang X und Z — das ist seine Definition**, nicht
     # eine vergessene Ebene: Eine Skizze auf einer anderen Ebene wurde bisher
     # stillschweigend wie auf XY gerechnet (Gesamtreview D-2). Abgelehnt
@@ -1161,32 +1263,163 @@ def sketch_sweep(ctx: OpContext) -> OpResult:
     profile = _profile_for(
         ctx, params.sketch, params.shape, params.length, params.width, params.corners, findings
     )
-    if params.along == "drawn":
-        # **Die gezeichnete Bahn** (E3, RM-147): Bis hierher kannte der Sweep
-        # genau eine Kurve — den Kreisbogen aus Radius und Winkel. Alles, was
-        # zweimal abbiegt oder ungleichmäßig krümmt (ein Kabelkanal um zwei
-        # Ecken, ein Griff mit einer Kehle), war damit nicht zu bauen.
-        if not params.path_sketch:
-            raise ValidationError(
-                "path_sketch",
-                _(
-                    "Für die Bahn fehlt die Zeichnung. Zeichnen Sie sie, oder "
-                    "führen Sie den Querschnitt an einem Bogen entlang."
-                ),
-                constraint="empty",
-                suggestions=(CORRECT_INPUT,),
-            )
-        path = path_of(_solved_drawing(ctx, params.path_sketch, findings))
-        solid = profiles.sweep_path(profile, path, _plane_of(params.path_sketch))
-        return OpResult(
-            outputs=[_created(params.name, str(_("Bahn")), solid, cancelled=ctx.cancelled)],
-            findings=findings,
+    if params.along != "drawn":
+        return profiles.sweep_arc(profile, params.bend_radius, params.bend_angle), True
+    # **Die gezeichnete Bahn** (E3, RM-147): Bis hierher kannte der Sweep
+    # genau eine Kurve — den Kreisbogen aus Radius und Winkel. Alles, was
+    # zweimal abbiegt oder ungleichmäßig krümmt (ein Kabelkanal um zwei
+    # Ecken, ein Griff mit einer Kehle), war damit nicht zu bauen.
+    if not params.path_sketch:
+        raise ValidationError(
+            "path_sketch",
+            _(
+                "Für die Bahn fehlt die Zeichnung. Zeichnen Sie sie, oder "
+                "führen Sie den Querschnitt an einem Bogen entlang."
+            ),
+            constraint="empty",
+            suggestions=(CORRECT_INPUT,),
         )
-    solid = profiles.sweep_arc(profile, params.bend_radius, params.bend_angle)
-    return OpResult(
-        outputs=[_created(params.name, str(_("Bogen")), solid, cancelled=ctx.cancelled)],
-        findings=findings,
-    )
+    path = path_of(_solved_drawing(ctx, params.path_sketch, findings))
+    path_plane = _plane_of(params.path_sketch)
+    _check_path(profile, path, path_plane)
+    solid = profiles.sweep_path(profile, path, path_plane)
+    ctx.cancelled.raise_if_cancelled()
+    if profiles.intersects_itself(solid):
+        raise GeometryError(
+            detail=_(
+                "Entlang dieser Bahn trifft der Querschnitt auf sich selbst — zwei "
+                "Stücke der Bahn liegen enger beieinander, als er breit ist. "
+                "Ziehen Sie die Bahn weiter auseinander oder wählen Sie einen "
+                "schmaleren Querschnitt."
+            ),
+            suggestions=(Action("open_sketch", _("Skizze ansehen"), primary=True), CORRECT_INPUT),
+            values={"reason": "tool_intersects_itself"},
+        )
+    return solid, _tangent_at(path.segments[0], 0.0)[1] > 0.0
+
+
+#: Wie viele Stellen je kubischem Splinestück nach seiner Krümmung gefragt
+#: werden. Eine Vorprüfung für einen verständlichen Satz, keine Zusage: Was sie
+#: zwischen zwei Stellen übersieht, findet danach die Selbstschnittprüfung des
+#: Kerns (``profiles.intersects_itself``) — nur mit dem allgemeineren Satz.
+_BEND_SAMPLES = 32
+
+
+def _check_path(profile: Profile, path: Profile, plane: str) -> None:
+    """Hält eine Bahn an, bevor der Kern daraus einen kaputten Körper baut.
+
+    **Zwei Fälle, die man benennen kann:** Die Bahn kreuzt sich selbst, oder
+    sie biegt enger, als der Querschnitt zur Innenseite des Bogens reicht.
+    Der zweite ist tückisch, weil OpenCASCADE daraus einen Körper baut, den
+    seine eigene Gültigkeitsprüfung durchlässt.
+
+    **Welche Seite des Querschnitts zählt,** folgt aus der Bahn: Der
+    Querschnitt liegt am Anfang in XY, und seine Achse in der Bahnebene (x
+    bei einer Bahn auf XZ, y auf YZ) wandert mit der Bahn mit, ohne sich zu
+    verdrehen. Biegt die Bahn nach links, liegt die Mitte des Bogens links
+    der Laufrichtung — am Anfang nach oben ist das die negative Seite dieser
+    Achse, nach unten die positive. Gemessen wird der Querschnitt an seinem
+    Hüllrechteck (``bounds_of``); das liegt nie weiter draußen als der
+    Umriss, die Vorprüfung hält also nur an, wo es sicher nicht geht.
+    """
+    heading = _tangent_at(path.segments[0], 0.0)
+    if abs(heading[0]) > EPS_GEOM * math.hypot(heading[0], heading[1]):
+        # Ein schräger Anfang ist der grundlegendere Fehler, und ohne
+        # senkrechten Anfang gibt es keine Seite, an der sich die Biegung
+        # messen ließe. Den Satz dazu sagt ``profiles.sweep_path`` an der
+        # exakten Kurve.
+        return
+    if crosses_itself(path):
+        raise ValidationError(
+            "path_sketch",
+            _(
+                "Die Bahn kreuzt sich selbst. Zeichnen Sie sie so, dass kein Stück "
+                "ein anderes schneidet."
+            ),
+            constraint="path_crosses",
+            suggestions=(CORRECT_INPUT,),
+        )
+    across = 0 if plane == "plane:xz" else 1
+    low, high = bounds_of(profile)
+    reach = {1.0: high[across], -1.0: -low[across]}
+    # Links der Laufrichtung, auf die Querschnittsachse gelegt: -ty bei der
+    # Anfangsrichtung (tx, ty). Für eine Linkskurve liegt die Mitte dort.
+    left = -1.0 if heading[1] > 0.0 else 1.0
+    for segment in path.segments:
+        for radius, turns_left in _bends(segment):
+            side = left if turns_left else -left
+            if radius <= reach[side] + EPS_GEOM:
+                raise ValidationError(
+                    "path_sketch",
+                    _(
+                        "Die Bahn biegt enger, als der Querschnitt breit ist — die "
+                        "Innenseite des Bogens schnitte sich selbst. Vergrößern Sie den "
+                        "Bogenradius oder wählen Sie einen schmaleren Querschnitt."
+                    ),
+                    value=radius,
+                    constraint="tight_bend",
+                    values={"radius_mm": round(radius, 4), "needed_mm": round(reach[side], 4)},
+                    suggestions=(CORRECT_INPUT,),
+                )
+
+
+def _tangent_at(segment: ProfileSegment, at: float) -> tuple[float, float]:
+    """Die Laufrichtung eines Bahnstücks an seinem Anfang (0) oder Ende (1)."""
+    if segment.kind == "arc" and segment.via is not None:
+        turn = arc_through(segment.start, segment.via, segment.end)
+        if turn is not None:
+            (cx, cy), _radius, sweep = turn
+            point = segment.start if at == 0.0 else segment.end
+            dx, dy = point[0] - cx, point[1] - cy
+            return (-dy, dx) if sweep > 0.0 else (dy, -dx)
+    if segment.kind == "spline":
+        pieces = spline_controls(segment.through or (segment.start, segment.end))
+        piece = pieces[0] if at == 0.0 else pieces[-1]
+        velocity, _curve = _bezier_derivatives(piece, at)
+        return velocity
+    return (segment.end[0] - segment.start[0], segment.end[1] - segment.start[1])
+
+
+def _bends(segment: ProfileSegment) -> list[tuple[float, bool]]:
+    """Die Krümmungsradien eines Bahnstücks, je mit „biegt nach links".
+
+    Eine Strecke biegt nicht; ein Bogen hat einen Radius, und das Vorzeichen
+    seiner Weite sagt die Richtung (``arc_through``: positiv gegen den
+    Uhrzeigersinn, also links herum). Ein Spline wird an
+    :data:`_BEND_SAMPLES` Stellen je Stück gefragt.
+    """
+    if segment.kind == "arc" and segment.via is not None:
+        turn = arc_through(segment.start, segment.via, segment.end)
+        return [] if turn is None else [(turn[1], turn[2] > 0.0)]
+    if segment.kind != "spline":
+        return []
+    found: list[tuple[float, bool]] = []
+    for piece in spline_controls(segment.through or (segment.start, segment.end)):
+        for step in range(_BEND_SAMPLES + 1):
+            velocity, curve = _bezier_derivatives(piece, step / _BEND_SAMPLES)
+            speed = math.hypot(velocity[0], velocity[1])
+            cross = velocity[0] * curve[1] - velocity[1] * curve[0]
+            if speed <= EPS_GEOM or abs(cross) <= EPS_GEOM:
+                continue
+            found.append((speed**3 / abs(cross), cross > 0.0))
+    return found
+
+
+def _bezier_derivatives(
+    piece: tuple[Point2, ...], t: float
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Erste und zweite Ableitung eines kubischen Bézierstücks an der Stelle ``t``."""
+    p0, p1, p2, p3 = piece
+    u = 1.0 - t
+    velocity = [
+        3.0 * (u * u * (p1[k] - p0[k]) + 2.0 * u * t * (p2[k] - p1[k]) + t * t * (p3[k] - p2[k]))
+        for k in (0, 1)
+    ]
+    curve = [
+        6.0 * (u * (p2[k] - 2.0 * p1[k] + p0[k]) + t * (p3[k] - 2.0 * p2[k] + p1[k]))
+        for k in (0, 1)
+    ]
+    return (velocity[0], velocity[1]), (curve[0], curve[1])
 
 
 @op_params
@@ -1277,47 +1510,9 @@ def sketch_loft(ctx: OpContext) -> OpResult:
     params = cast(SketchLoftParams, ctx.params)
     findings: list[Finding] = []
     require()
-    if params.top == "drawn":
-        return _loft_between_drawings(ctx, params, findings)
-    if not params.sketch:
-        # Der Weg des Katalogs: zwei Grundformen, die zweite kleiner gerechnet.
-        # Er bleibt, weil die Grundformen um den Ursprung zentriert liegen und
-        # die Maße direkt aus den Parametern kommen — daran ist nichts zu
-        # skalieren.
-        bottom = _sketch_profile(params.shape, params.length, params.width, params.corners)
-        top = _sketch_profile(
-            params.shape,
-            params.length * params.top_scale,
-            params.width * params.top_scale,
-            params.corners,
-        )
-        solid = profiles.loft(bottom, top, params.height)
-        return OpResult(
-            outputs=[_created(params.name, str(_("Übergang")), solid, cancelled=ctx.cancelled)]
-        )
-
-    # **Die gezeichnete Skizze, und ihre eigene verkleinerte Kopie darüber.**
-    # Diese Operation war die einzige der fünf ohne Skizzenfeld, und der
-    # Fertig-Dialog bot sie trotzdem an: Wer nach dem Zeichnen „Zwischen zwei
-    # Umrissen aufspannen" wählte, bekam einen internen Fehler statt eines
-    # Körpers.
-    #
-    # Skaliert wird um den **Mittelpunkt des Umrisses**, nicht um den
-    # Ursprung: Eine Grundform liegt zentriert, eine Zeichnung liegt irgendwo,
-    # und um den Ursprung verkleinert wanderte sie beim Schrumpfen zum
-    # Nullpunkt — aus einem Pyramidenstumpf würde ein schiefer Keil.
-    plane = _plane_of(params.sketch)
+    plane, pairs = _loft_outlines(ctx, params, findings)
     frame = _frame_of(ctx, plane)
-    chosen = _regions_for(
-        ctx, params.sketch, params.shape, params.length, params.width, params.corners, 0, findings
-    )
-    bodies = []
-    for one in chosen:
-        low, high = bounds_of(one)
-        centre = ((low[0] + high[0]) / 2.0, (low[1] + high[1]) / 2.0)
-        bodies.append(
-            profiles.loft(one, scaled(one, params.top_scale, centre), params.height, plane, frame)
-        )
+    bodies = [profiles.loft(below, above, params.height, plane, frame) for below, above in pairs]
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
     return OpResult(
         outputs=[_created(params.name, str(_("Übergang")), solid, cancelled=ctx.cancelled)],
@@ -1325,9 +1520,56 @@ def sketch_loft(ctx: OpContext) -> OpResult:
     )
 
 
-def _loft_between_drawings(
-    ctx: OpContext, params: SketchLoftParams, findings: list[Finding]
-) -> OpResult:
+def _loft_outlines(
+    ctx: OpContext,
+    params: SketchLoftParams | SketchLoftCutParams,
+    findings: list[Finding],
+) -> tuple[str, list[tuple[Profile, Profile]]]:
+    """Die Ebene und die Umrisspaare eines Übergangs — unten mit oben.
+
+    **Eine Stelle für Erzeuger und Schnitt** (P6.5c). Drei Wege führen zu
+    den Paaren, und jeder bleibt, wie er war:
+
+    * **Zwei Grundformen**, die zweite kleiner gerechnet. Der Weg des
+      Katalogs; die Grundformen liegen um den Ursprung zentriert und die
+      Maße kommen direkt aus den Parametern — daran ist nichts zu skalieren.
+    * **Die gezeichnete Skizze und ihre verkleinerte Kopie.** Skaliert wird
+      um den **Mittelpunkt des Umrisses**, nicht um den Ursprung: Eine
+      Grundform liegt zentriert, eine Zeichnung liegt irgendwo, und um den
+      Ursprung verkleinert wanderte sie beim Schrumpfen zum Nullpunkt — aus
+      einem Pyramidenstumpf würde ein schiefer Keil. (Diese Operation war die
+      einzige der fünf ohne Skizzenfeld, und der Fertig-Dialog bot sie
+      trotzdem an: Wer nach dem Zeichnen „Zwischen zwei Umrissen aufspannen"
+      wählte, bekam einen internen Fehler statt eines Körpers.)
+    * **Zwei Zeichnungen** (:func:`_drawn_pairs`).
+    """
+    if params.top == "drawn":
+        return _drawn_pairs(ctx, params, findings)
+    if not params.sketch:
+        bottom = _sketch_profile(params.shape, params.length, params.width, params.corners)
+        top = _sketch_profile(
+            params.shape,
+            params.length * params.top_scale,
+            params.width * params.top_scale,
+            params.corners,
+        )
+        return "plane:xy", [(bottom, top)]
+    chosen = _regions_for(
+        ctx, params.sketch, params.shape, params.length, params.width, params.corners, 0, findings
+    )
+    pairs = []
+    for one in chosen:
+        low, high = bounds_of(one)
+        centre = ((low[0] + high[0]) / 2.0, (low[1] + high[1]) / 2.0)
+        pairs.append((one, scaled(one, params.top_scale, centre)))
+    return _plane_of(params.sketch), pairs
+
+
+def _drawn_pairs(
+    ctx: OpContext,
+    params: SketchLoftParams | SketchLoftCutParams,
+    findings: list[Finding],
+) -> tuple[str, list[tuple[Profile, Profile]]]:
     """Der Übergang zwischen **zwei gezeichneten** Umrissen (E2, RM-147).
 
     Bis hierher konnte diese Operation nur eine Zeichnung und ihre verkleinerte
@@ -1378,7 +1620,6 @@ def _loft_between_drawings(
             constraint="other_plane",
             suggestions=(CORRECT_INPUT,),
         )
-    frame = _frame_of(ctx, plane)
     lower = _regions_for(
         ctx, params.sketch, params.shape, params.length, params.width, params.corners, 0, findings
     )
@@ -1403,12 +1644,805 @@ def _loft_between_drawings(
             values={"lower_outlines": len(lower), "upper_outlines": len(upper)},
             suggestions=(CORRECT_INPUT,),
         )
-    bodies = [
-        profiles.loft(below, above, params.height, plane, frame)
-        for below, above in zip(lower, upper, strict=True)
-    ]
-    solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
-    return OpResult(
-        outputs=[_created(params.name, str(_("Übergang")), solid, cancelled=ctx.cancelled)],
-        findings=findings,
+    return plane, list(zip(lower, upper, strict=True))
+
+
+# --- Schneiden mit den drei Werkzeugen (CAD-Konzept P6.5a bis c) ---------------
+#
+# **Eigene Operationen und kein Umschalter an den Erzeugern**, entschieden an
+# der Zwillingsregel (`grenzen.md`: eine Operation je Handlung, nicht je
+# Variante). Einen Körper *erzeugen* und aus einem Körper *herausschneiden*
+# sind zwei Handlungen, und das Register sagt es selbst: Ein Erzeuger nimmt
+# nichts (`consumes=0`) und setzt einen neuen Körper; ein Schnitt nimmt den
+# gewählten und gibt ihn verändert unter seiner Kennung zurück
+# (`consumes=1`). Die Eingangszahl steht je Operation fest, und der Stapel
+# vergibt die Kennungen, bevor etwas rechnet (§11) — ein Feld „Hinzufügen/
+# Abziehen" müsste sie je nach Wert ändern. Dasselbe Paar gibt es seit je:
+# *Grundform hochziehen* und *Tasche schneiden*.
+#
+# **Und trotzdem kein zweiter Menüeintrag** (Konzept §10: „Revolve-Cut wird
+# kein zweiter Eintrag, sondern ein Feld im Dialog"): Die drei stehen in der
+# Variantengruppe *Aus Skizze erzeugen …* direkt hinter ihrem Erzeuger — das
+# Feld ist die Art. Werkzeug und Querschnitt kommen aus denselben Helfern wie
+# beim Erzeuger (`_revolve_section`, `_swept`, `_loft_outlines`); was dazukommt,
+# ist die Lage am Zielkörper und die Differenz in beiden Kernen.
+
+
+@op_params
+class SketchRevolveCutParams(BaseParams):
+    shape: str = param(
+        title=_("Grundform"), default="rectangle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
     )
+    length: float = param(
+        title=_("Länge"),
+        default=2.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_(
+            "Ausdehnung des Querschnitts von der Achse weg — bei einer Ringnut ihre "
+            "Tiefe. Beim Kreis und beim Vieleck ist das der Durchmesser."
+        ),
+    )
+    width: float = param(
+        title=_("Breite"),
+        default=3.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_(
+            "Höhe des Querschnitts entlang der Achse — bei einer Ringnut ihre Breite. "
+            "Beim Kreis und beim Vieleck ohne Wirkung."
+        ),
+        depends_on=("shape", ("rectangle", "slot")),
+    )
+    offset: float = param(
+        title=_("Abstand zur Achse"),
+        default=8.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1000.0,
+        doc=_(
+            "Abstand der Innenkante des Querschnitts von der Drehachse — bei einer "
+            "Ringnut an einer Welle der Radius des Nutgrunds."
+        ),
+    )
+    angle: float = param(
+        title=_("Winkel"),
+        default=360.0,
+        unit=DEGREE_UNIT,
+        minimum=1.0,
+        maximum=360.0,
+        placement="advanced",
+        doc=_(
+            "Wie weit um die Achse geschnitten wird. 360 läuft ganz herum, weniger "
+            "gibt eine Teilnut."
+        ),
+    )
+    start_angle: float = param(
+        title=_("Beginn"),
+        default=0.0,
+        unit=DEGREE_UNIT,
+        minimum=0.0,
+        maximum=360.0,
+        placement="advanced",
+        doc=_("Wo eine Teilnut beginnt, um die Achse gemessen. Bei 360 Grad ohne Wirkung."),
+    )
+    axis: str = param(
+        title=_("Achse"),
+        default="z",
+        choices=("z", "x", "y"),
+        placement="advanced",
+        doc=_(
+            "In welche Richtung die Drehachse zeigt. Ist ein rundes Merkmal gewählt, gilt "
+            "dessen Achse."
+        ),
+    )
+    axis_x: float = param(
+        title=_("Achspunkt X"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        doc=_AXIS_POINT_DOC,
+    )
+    axis_y: float = param(
+        title=_("Achspunkt Y"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        doc=_AXIS_POINT_DOC,
+    )
+    axis_z: float = param(
+        title=_("Achspunkt Z"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        doc=_AXIS_POINT_DOC,
+    )
+    axis_feature: str = param(
+        title=_("Achse von"),
+        default="",
+        kind="feature",
+        placement="advanced",
+        doc=_(
+            "Eine Bohrung oder ein Zapfen des Körpers, dessen Achse die Drehachse wird. "
+            "Ein Klick auf das Merkmal trägt es ein; leer heißt: die Achse oben gilt."
+        ),
+    )
+    corners: int = param(
+        title=_("Ecken"),
+        default=6,
+        minimum=3,
+        maximum=64,
+        placement="advanced",
+        doc=_CORNERS_DOC,
+        depends_on=("shape", ("polygon",)),
+    )
+    sketch: str = param(
+        title=_("Skizze"),
+        default="",
+        kind="sketch",
+        placement="advanced",
+        doc=_(
+            "Eine gezeichnete Skizze als Querschnitt: x ist der Abstand von der Achse, y "
+            "die Lage entlang der Achse ab dem Achspunkt — der Abstand oben gilt dann nicht."
+        ),
+    )
+
+
+@register_op(
+    name="sketch_revolve_cut",
+    title=_("Durch Drehen schneiden"),
+    category="sketch",
+    params=SketchRevolveCutParams,
+    consumes=1,
+    produces=1,
+    deterministic=False,
+    caveat=_MESH_CUT_CAVEAT,
+    doc=_(
+        "Dreht einen Querschnitt um eine Achse und nimmt, was er dabei überstreicht, aus "
+        "dem gewählten Körper heraus — eine Ringnut in einer Welle oder in einer Bohrung, "
+        "ganz herum oder als Teilstück."
+    ),
+)
+def sketch_revolve_cut(ctx: OpContext) -> OpResult:
+    params = cast(SketchRevolveCutParams, ctx.params)
+    findings: list[Finding] = []
+    require()
+    from app.core.geom.transform import rotation_about, rotation_between, translation
+
+    tool = profiles.revolve(_revolve_section(ctx, params, findings), params.angle)
+    origin, direction = _revolve_axis(ctx.inputs[0], params)
+    # Der Drehkörper des Erzeugers steht um die Z-Achse durch den Ursprung.
+    # Erst um die eigene Achse auf den Beginn gedreht, dann auf die gewählte
+    # Achse gelegt — beides aus den exakten Winkelfunktionen (RM-187), damit
+    # ein rechter Winkel auf jeder Maschine dieselben Bits trägt.
+    matrix = (
+        translation(origin)
+        @ rotation_between((0.0, 0.0, 1.0), direction)
+        @ rotation_about((0.0, 0.0, 1.0), (0.0, 0.0, 0.0), params.start_angle)
+    )
+    return _cut_with_tool(ctx, _placed(tool, matrix, ctx.cancelled), findings, seed=ctx.seed)
+
+
+#: Die drei Hauptrichtungen, die eine Drehachse ohne gewähltes Merkmal haben kann.
+_AXIS_DIRECTIONS: dict[str, tuple[float, float, float]] = {
+    "x": (1.0, 0.0, 0.0),
+    "y": (0.0, 1.0, 0.0),
+    "z": (0.0, 0.0, 1.0),
+}
+
+
+def _revolve_axis(
+    source: SceneObject, params: SketchRevolveCutParams
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Punkt und Richtung der Drehachse — aus den Feldern oder aus einem runden Merkmal.
+
+    **Mit Merkmal gilt seine Achse, und der Achspunkt wird auf sie gelegt.**
+    Er sagt dann nur noch, wo entlang der Achse der Querschnitt beginnt: Wer
+    an einer stehenden Welle „Achspunkt Z = 18" einträgt, bekommt die Nut auf
+    18 mm Höhe, gleich wo die Welle in X und Y steht. Das Vorzeichen der Achse
+    kommt aus :func:`app.core.units.positive_axis` — dieselbe Wahl, die beide
+    Kerne für Bohrungen treffen.
+    """
+    point = (params.axis_x, params.axis_y, params.axis_z)
+    if not params.axis_feature:
+        return point, _AXIS_DIRECTIONS[params.axis]
+    feature = source.features.get(params.axis_feature)
+    raw_axis = feature.params.get("axis") if feature is not None else None
+    raw_centre = feature.params.get("centre") if feature is not None else None
+    if feature is None or raw_axis is None or raw_centre is None:
+        raise ValidationError(
+            "axis_feature",
+            _(
+                "Dieses Merkmal hat keine Achse. Wählen Sie eine Bohrung oder einen Zapfen, "
+                "oder lassen Sie das Feld leer und geben die Achse von Hand an."
+            ),
+            value=params.axis_feature,
+            constraint="no_axis",
+            suggestions=(
+                Action("sketch.pick_round_feature", _("Ein rundes Merkmal wählen"), primary=True),
+                Action("sketch.clear_axis_feature", _("Die Achse von Hand angeben")),
+            ),
+        )
+    direction = positive_axis([float(value) for value in raw_axis])
+    centre = [float(value) for value in raw_centre]
+    along = sum((point[k] - centre[k]) * direction[k] for k in range(3))
+    return (
+        (
+            centre[0] + along * direction[0],
+            centre[1] + along * direction[1],
+            centre[2] + along * direction[2],
+        ),
+        direction,
+    )
+
+
+@op_params
+class SketchSweepCutParams(BaseParams):
+    shape: str = param(
+        title=_("Grundform"), default="circle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
+    )
+    length: float = param(
+        title=_("Länge"), default=4.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
+    )
+    width: float = param(
+        title=_("Breite"),
+        default=4.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_WIDTH_DOC,
+        depends_on=("shape", ("rectangle", "slot")),
+    )
+    along: str = param(
+        title=_("Bahn"),
+        default="arc",
+        choices=("arc", "drawn"),
+        doc=_(
+            "Woran der Querschnitt entlangläuft: an einem Bogen aus zwei Zahlen oder an "
+            "einer gezeichneten Bahn. Ein gebogener Kanal braucht keine Zeichnung; einer um "
+            "zwei Ecken schon."
+        ),
+    )
+    bend_radius: float = param(
+        title=_("Bogenradius"),
+        default=10.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_(
+            "Radius des Pfades, dem der Querschnitt folgt. Er muss größer sein "
+            "als der halbe Querschnitt, sonst knickt die Innenseite."
+        ),
+        depends_on=("along", ("arc",)),
+    )
+    bend_angle: float = param(
+        title=_("Bogenwinkel"),
+        default=90.0,
+        unit=DEGREE_UNIT,
+        minimum=1.0,
+        maximum=180.0,
+        doc=_("Wie weit der Bogen führt — 90 Grad lenkt den Kanal von senkrecht auf waagerecht."),
+        depends_on=("along", ("arc",)),
+    )
+    # **Die Skizze steht vor der Bahn**, anders als beim Erzeuger: Wer frei
+    # zeichnet und „Fertig" wählt, hat einen geschlossenen Umriss gezeichnet,
+    # und der ist der Querschnitt (``main_window._sketch_param``).
+    sketch: str = param(
+        title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
+    )
+    path_sketch: str = param(
+        title=_("Gezeichnete Bahn"),
+        default="",
+        kind="sketch",
+        placement="advanced",
+        doc=_(
+            "Der Verlauf, dem der Querschnitt folgt — offen gezeichnet, auf der "
+            "Vorder- oder Seitenansicht und am Anfang senkrecht nach oben oder unten. "
+            "Ihr Anfang kommt in den Ursprung: Die Bahn beschreibt einen Verlauf, keinen Ort."
+        ),
+        depends_on=("along", ("drawn",)),
+    )
+    heading: str = param(
+        title=_("Anfangsrichtung"),
+        default="down",
+        choices=("down", "up"),
+        placement="advanced",
+        doc=_(
+            "Ob der Kanal von oben nach unten in den Körper läuft oder von unten nach oben. "
+            "Eine Bahn, die schon so beginnt, bleibt, wie sie ist; sonst wird sie als Ganzes "
+            "umgedreht."
+        ),
+    )
+    x: float = param(
+        title=_("X"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        doc=_("Wo der Kanal beginnt, in X."),
+    )
+    y: float = param(
+        title=_("Y"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        doc=_("Wo der Kanal beginnt, in Y."),
+    )
+    z: float | None = param(
+        title=_("Z"),
+        default=None,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        optional=True,
+        placement="advanced",
+        doc=_(
+            "Auf welcher Höhe der Kanal beginnt. Leer heißt: an der Oberseite des Körpers, "
+            "wenn er nach unten läuft, an der Unterseite, wenn er nach oben läuft."
+        ),
+    )
+    turn: float = param(
+        title=_("Drehung"),
+        default=0.0,
+        unit=DEGREE_UNIT,
+        minimum=0.0,
+        maximum=360.0,
+        placement="advanced",
+        doc=_(
+            "Dreht die Bahn um die Senkrechte durch ihren Anfang. Bei null biegt ein Bogen "
+            "nach +X ab, bei 90 nach +Y."
+        ),
+    )
+    corners: int = param(
+        title=_("Ecken"),
+        default=6,
+        minimum=3,
+        maximum=64,
+        placement="advanced",
+        doc=_CORNERS_DOC,
+        depends_on=("shape", ("polygon",)),
+    )
+
+
+@register_op(
+    name="sketch_sweep_cut",
+    title=_("Entlang einer Bahn schneiden"),
+    category="sketch",
+    params=SketchSweepCutParams,
+    consumes=1,
+    produces=1,
+    deterministic=False,
+    caveat=_MESH_CUT_CAVEAT,
+    doc=_(
+        "Führt einen Querschnitt entlang eines Bogens oder einer gezeichneten Bahn und "
+        "nimmt ihn aus dem gewählten Körper heraus — ein geführter Kanal, der oben "
+        "beginnt und seitlich austreten kann."
+    ),
+)
+def sketch_sweep_cut(ctx: OpContext) -> OpResult:
+    params = cast(SketchSweepCutParams, ctx.params)
+    findings: list[Finding] = []
+    tool, upward = _swept(ctx, params, findings)
+    from app.core.geom.transform import rotation_about, translation
+
+    # Der geführte Körper des Erzeugers beginnt im Ursprung, senkrecht nach oben
+    # oder — bei einer so gezeichneten Bahn — nach unten. Zeigt er anders als
+    # gewünscht, wird er um die Achse gedreht, die in seiner Bahnebene quer
+    # liegt: X bei Bogen und Vorderansicht, Y bei der Seitenansicht. So bleibt
+    # die Bahn in ihrer Ebene und biegt weiter zur selben Seite ab; gespiegelt
+    # wird nur der Querschnitt quer zur Bahnebene. Dann um die Senkrechte, dann
+    # an den Anfang.
+    down = params.heading == "down"
+    across = (
+        (0.0, 1.0, 0.0)
+        if params.along == "drawn" and _plane_of(params.path_sketch) == "plane:yz"
+        else (1.0, 0.0, 0.0)
+    )
+    low, high = _span_along(ctx.inputs[0].mesh, (0.0, 0.0, 1.0))
+    start_z = params.z if params.z is not None else (high if down else low)
+    matrix = (
+        translation((params.x, params.y, start_z))
+        @ rotation_about((0.0, 0.0, 1.0), (0.0, 0.0, 0.0), params.turn)
+        @ rotation_about(across, (0.0, 0.0, 0.0), 180.0 if down == upward else 0.0)
+    )
+    return _cut_with_tool(ctx, _placed(tool, matrix, ctx.cancelled), findings, seed=ctx.seed)
+
+
+@op_params
+class SketchLoftCutParams(BaseParams):
+    shape: str = param(
+        title=_("Grundform"), default="rectangle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
+    )
+    length: float = param(
+        title=_("Länge"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
+    )
+    width: float = param(
+        title=_("Breite"),
+        default=10.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_WIDTH_DOC,
+        depends_on=("shape", ("rectangle", "slot")),
+    )
+    depth: float = param(
+        title=_("Tiefe"),
+        default=10.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Wie tief der Übergang von der Oberkante aus reicht; dort liegt der untere Umriss."),
+        depends_on=("through", (False,)),
+    )
+    top: str = param(
+        title=_("Unterer Umriss"),
+        default="scaled",
+        choices=("scaled", "drawn"),
+        doc=_(
+            "Woher der Umriss am Ende des Übergangs kommt: aus dem oberen gerechnet oder "
+            "als eigene Zeichnung. Ein Trichter braucht nur eine Zahl; ein Übergang von "
+            "eckig auf rund braucht zwei Umrisse."
+        ),
+    )
+    top_scale: float = param(
+        title=_("Verjüngung"),
+        default=0.5,
+        minimum=0.05,
+        maximum=2.0,
+        doc=_(
+            "Größe des unteren Umrisses im Verhältnis zum oberen. 0,5 halbiert ihn — ein "
+            "Trichter; über 1 wird der Übergang nach unten weiter."
+        ),
+        depends_on=("top", ("scaled",)),
+    )
+    top_sketch: str = param(
+        title=_("Untere Zeichnung"),
+        default="",
+        kind="sketch",
+        placement="advanced",
+        doc=_(
+            "Der Umriss am Ende des Übergangs, frei gezeichnet — auf derselben Ebene wie der "
+            "obere und um die Tiefe darunter aufgespannt."
+        ),
+        depends_on=("top", ("drawn",)),
+    )
+    through: bool = param(
+        title=_("Durchgehend"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Reicht von der Oberkante bis zur gegenüberliegenden Seite des Körpers — der "
+            "untere Umriss liegt dann genau dort, die Tiefe zählt nicht."
+        ),
+    )
+    x: float = param(
+        title=_("X"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        doc=_("Mitte des Übergangs in der Zeichenebene, in deren x-Richtung."),
+    )
+    y: float = param(
+        title=_("Y"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        doc=_("Mitte des Übergangs in der Zeichenebene, in deren y-Richtung."),
+    )
+    z: float = param(
+        title=_("Oberkante"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        doc=_(
+            "Wo der Übergang oben beginnt, gemessen senkrecht zur Zeichenebene. Null heißt: "
+            "an der Oberseite des Körpers."
+        ),
+    )
+    twist: str = param(
+        title=_("Drehsinn"),
+        default="ask_twist",
+        choices=("ask_twist", "counterclockwise", "clockwise"),
+        placement="advanced",
+        doc=_(
+            "Nur wenn der untere Umriss genau zwischen zwei Ecken des oberen verdreht ist: "
+            "in welche Richtung der Übergang dreht. Sonst verbinden sich die nächsten Ecken."
+        ),
+    )
+    corners: int = param(
+        title=_("Ecken"),
+        default=6,
+        minimum=3,
+        maximum=64,
+        placement="advanced",
+        doc=_CORNERS_DOC,
+        depends_on=("shape", ("polygon",)),
+    )
+    sketch: str = param(
+        title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
+    )
+
+
+@register_op(
+    name="sketch_loft_cut",
+    title=_("Durch Überblenden schneiden"),
+    category="sketch",
+    params=SketchLoftCutParams,
+    consumes=1,
+    produces=1,
+    deterministic=False,
+    caveat=_MESH_CUT_CAVEAT,
+    doc=_(
+        "Nimmt einen Übergang zwischen zwei Umrissen aus dem gewählten Körper heraus — oben "
+        "die Grundform oder Zeichnung, in der Tiefe ihre verkleinerte Kopie oder eine "
+        "zweite Zeichnung: ein Trichter, ein Kanal von eckig auf rund."
+    ),
+)
+def sketch_loft_cut(ctx: OpContext) -> OpResult:
+    params = cast(SketchLoftCutParams, ctx.params)
+    findings: list[Finding] = []
+    require()
+    plane, pairs = _loft_outlines(ctx, params, findings)
+    answered: dict[str, Any] = {}
+    span = _cut_span(ctx, ctx.inputs[0].mesh, plane, params.z)
+    # Durchgehend reicht **genau** von Fläche zu Fläche und nicht darüber
+    # hinaus wie bei der Tasche: Die beiden Umrisse sollen dort liegen, wo der
+    # Körper aufhört — sonst stünde an der Fläche ein Zwischenquerschnitt statt
+    # des gezeichneten.
+    bottom = span.low if params.through else span.top - params.depth
+    reach = span.top - bottom
+    lift = bottom - span.plane_s
+    tools = []
+    for entry, end in pairs:
+        ctx.cancelled.raise_if_cancelled()
+        entry_at = shifted(entry, params.x, params.y)
+        end_at, aligned = _paired_corners(
+            entry_at, shifted(end, params.x, params.y), params.twist, ctx, answered
+        )
+        body = profiles.loft(end_at, entry_at, reach, plane, span.frame, compatible=not aligned)
+        normal = span.normal
+        tools.append(edit.moved(body, (normal[0] * lift, normal[1] * lift, normal[2] * lift)))
+    tool = tools[0] if len(tools) == 1 else edit.boolean("union", tools)
+    ctx.cancelled.raise_if_cancelled()
+    if profiles.intersects_itself(tool):
+        raise GeometryError(
+            detail=_(
+                "Zwischen diesen beiden Umrissen verdreht sich der Übergang so, dass er sich "
+                "selbst schneidet. Zeichnen Sie den unteren Umriss näher am oberen oder mit "
+                "gleich vielen Ecken."
+            ),
+            suggestions=(Action("open_sketch", _("Skizze ansehen"), primary=True), CORRECT_INPUT),
+            values={"reason": "tool_intersects_itself"},
+        )
+    result = _cut_with_tool(ctx, tool, findings, seed=ctx.seed)
+    return dataclasses.replace(result, answered=answered)
+
+
+def _paired_corners(
+    entry: Profile,
+    end: Profile,
+    twist: str,
+    ctx: OpContext,
+    answered: dict[str, Any],
+) -> tuple[Profile, bool]:
+    """Ordnet die Ecken des unteren Umrisses denen des oberen zu — ohne zu raten.
+
+    **Die Zuordnung ist die Verdrehung.** Zwei Vielecke mit gleich vielen
+    Ecken lassen sich auf so viele Arten verbinden, wie sie Ecken haben; der
+    Übergang dreht sich dabei jedes Mal anders. Welche Ecke zuerst gezeichnet
+    wurde und in welcher Richtung, ist Zufall der Klickreihenfolge — daraus
+    wird nichts gelesen. Verbunden werden die **nächsten** Ecken, gemessen
+    um die Mitte jedes Umrisses (eine versetzte Öffnung dreht nicht).
+
+    **Stehen zwei Zuordnungen gleich nah**, sagt die Zeichnung nicht, welche
+    gemeint ist: ein Quadrat über einem um 45 Grad gedrehten dreht links- oder
+    rechtsherum, und beide Körper sind Spiegelbilder. Dann wird gefragt
+    (Regel 21), und die Antwort reist mit dem Schritt (``answered``).
+    OpenCASCADE entschiede den Gleichstand selbst — nach der letzten Stelle
+    einer Summe, also auf verschiedenen Maschinen womöglich verschieden.
+
+    Zurück kommt der untere Umriss in der gewählten Zuordnung und ob sie
+    gesetzt ist; für Kreise, Bögen, Splines und ungleiche Eckenzahl ordnet
+    weiter der Kern (``profiles.loft(compatible=True)``).
+    """
+    if not (_is_polygon(entry) and _is_polygon(end)) or len(entry.segments) != len(end.segments):
+        return end, False
+    upper = [segment.start for segment in entry.segments]
+    lower = [segment.start for segment in end.segments]
+    if (signed_area(entry) >= 0.0) != (signed_area(end) >= 0.0):
+        lower.reverse()
+    upper_mid, lower_mid = _mean_point(upper), _mean_point(lower)
+    count = len(upper)
+    candidates = []
+    for shift in range(count):
+        squares = []
+        turns = []
+        for index in range(count):
+            a = (upper[index][0] - upper_mid[0], upper[index][1] - upper_mid[1])
+            b = lower[(index + shift) % count]
+            b = (b[0] - lower_mid[0], b[1] - lower_mid[1])
+            squares.append((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
+            turns.append(math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1]))
+        candidates.append((math.sqrt(math.fsum(squares) / count), math.fsum(turns) / count, shift))
+    nearest = min(candidate[0] for candidate in candidates)
+    tied = [candidate for candidate in candidates if is_close(candidate[0], nearest)]
+    if len(tied) == 1:
+        chosen = tied[0]
+    else:
+        sense = twist
+        if sense == "ask_twist":
+            choices = [
+                str(_("Linksherum, gegen den Uhrzeigersinn")),
+                str(_("Rechtsherum, im Uhrzeigersinn")),
+            ]
+            answer = ctx.ask(
+                str(
+                    _(
+                        "Der untere Umriss steht genau zwischen zwei Ecken des oberen. In "
+                        "welche Richtung soll der Übergang drehen — von oben auf die "
+                        "Zeichenebene gesehen?"
+                    )
+                ),
+                choices,
+            )
+            if answer not in choices:
+                raise InternalError(detail="the twist question returned an unknown choice")
+            sense = "counterclockwise" if answer == choices[0] else "clockwise"
+            answered["twist"] = sense
+        pick = max if sense == "counterclockwise" else min
+        chosen = pick(tied, key=lambda candidate: candidate[1])
+    shift = chosen[2]
+    ordered = [lower[(index + shift) % count] for index in range(count)]
+    segments = tuple(
+        ProfileSegment("line", ordered[index], ordered[(index + 1) % count])
+        for index in range(count)
+    )
+    return Profile(segments=segments, holes=end.holes), True
+
+
+def _is_polygon(profile: Profile) -> bool:
+    """Ein Umriss aus lauter Strecken — nur dessen Ecken lassen sich abzählen."""
+    return (
+        profile.circle is None
+        and len(profile.segments) >= 3
+        and all(segment.kind == "line" for segment in profile.segments)
+    )
+
+
+def _mean_point(points: list[Point2]) -> Point2:
+    """Der Eckenmittelpunkt, über ``math.fsum`` auf jeder Maschine dieselbe Zahl."""
+    return (
+        math.fsum(point[0] for point in points) / len(points),
+        math.fsum(point[1] for point in points) / len(points),
+    )
+
+
+def _placed(tool: Solid, matrix: Any, cancelled: CancelToken) -> Solid:
+    """Das Werkzeug an seinem Ort — über denselben geprüften Weg wie jede Bewegung."""
+    from app.core.geom.ops import as_transform
+
+    return edit.transformed(tool, as_transform(matrix), cancelled=cancelled)
+
+
+def _cut_with_tool(
+    ctx: OpContext, tool: Solid, findings: list[Finding], *, seed: int | None
+) -> OpResult:
+    """Zieht das Werkzeug vom gewählten Körper ab — exakt, wo er exakt ist, sonst am Netz.
+
+    **Beide Kerne, und keiner wird umgedeutet.** Ein exakter Körper bleibt
+    exakt (``brep.edit.boolean``); ein eingelesenes Netz geht über die
+    Boolesche Rückfallkette (§17.2) gegen das mit ``units.MAX_FACET_SAG``
+    vernetzte Werkzeug — dieselbe Grenze, mit der der exakte Kern tesselliert.
+    Die erreichte Stufe steht in ``solver``, die Befunde der Kette reisen mit;
+    ``seed`` ist der gespeicherte Startwert der Operation für die gestörte
+    Stufe (Regel 9) — ausdrücklich durchgereicht, damit jede der drei
+    Operationen sichtbar sagt, dass sie ihn liest.
+
+    **Nichts übrig** ist eine Absage mit Weg, kein Körper ohne Volumen, und
+    **nichts abgetragen** ein Befund mit Vorschlag: Das Werkzeug lag neben
+    dem Körper, und der Kunde soll nicht in der Geometrie suchen, was an der
+    Lage liegt.
+
+    **Und ein ungültiges exaktes Ergebnis wird nicht ausgeliefert**
+    (``profiles.is_sound``): Dann rechnet derselbe Schnitt am Netz des
+    Körpers weiter, mit dem Befund ``sketch.exact_cut_unsound``; die
+    Umwandlung selbst meldet die Auswertung vor der Übernahme.
+    """
+    from app.core.geom import boolean as mesh_boolean
+    from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE
+    from app.core.geom.mesh import as_mesh_data
+
+    source = ctx.inputs[0]
+    body = source.mesh
+    ctx.cancelled.raise_if_cancelled()
+    output: SceneObject | None = None
+    solver: SolverInfo | None = None
+    if isinstance(body, Solid):
+        solid = edit.boolean("difference", [body, tool])
+        ctx.cancelled.raise_if_cancelled()
+        if solid.solid_count < 1 or solid.volume <= EPS_GEOM:
+            raise GeometryError(
+                title=NOTHING_LEFT_TITLE,
+                detail=NOTHING_LEFT_DETAIL,
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        if profiles.is_sound(solid):
+            output = dataclasses.replace(
+                source,
+                mesh=solid,
+                kind="brep",
+                features=features_of(solid, cancelled=ctx.cancelled),
+            )
+            solver = SolverInfo(strategy="direct", attempted=("direct",))
+        else:
+            # **Kein ungültiger Körper, auch kein exakter.** Der Schnitt wird
+            # dann am Netz des Körpers gerechnet — dieselbe Form, eine andere
+            # Darstellung —, und das steht im Bericht: hier der Grund, daneben
+            # die Umwandlung, die die Auswertung vor der Übernahme zeigt
+            # (``evaluate.exact_became_mesh``). Rückgängig bringt den exakten
+            # Körper zurück.
+            findings = [
+                *findings,
+                Finding(
+                    code="sketch.exact_cut_unsound",
+                    severity="warning",
+                    message=_(
+                        "Der exakte Kern hat diesen Schnitt an diesem Körper nicht gültig "
+                        "geschlossen. Gerechnet wurde deshalb am Netz; Rückgängig stellt den "
+                        "exakten Körper wieder her."
+                    ),
+                    object_id=source.id,
+                    suggestions=(CORRECT_INPUT,),
+                ),
+            ]
+    if output is None:
+        outcome = mesh_boolean.boolean(
+            "difference",
+            [as_mesh_data(body), tool.mesh],
+            quality=ctx.quality,
+            seed=seed,
+            allow_empty=True,
+            cancelled=ctx.cancelled,
+        )
+        if outcome.mesh.triangle_count == 0:
+            raise GeometryError(
+                title=NOTHING_LEFT_TITLE,
+                detail=NOTHING_LEFT_DETAIL,
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        findings = [*findings, *outcome.findings]
+        # Leeres Wörterbuch, nicht die alten Merkmale: Die Flächen, auf die sie
+        # zeigten, hat der Schnitt gerade verändert — wie bei der Tasche.
+        output = dataclasses.replace(source, mesh=outcome.mesh, kind="mesh", features={})
+        solver = outcome.solver
+    nothing = without_effect(body, output.mesh, "difference", ctx.profile)
+    if nothing is not None:
+        findings = [
+            *findings,
+            dataclasses.replace(
+                nothing,
+                object_id=source.id,
+                suggestions=(
+                    Action("sketch.check_position", _("Lage des Werkzeugs prüfen"), primary=True),
+                    CORRECT_INPUT,
+                ),
+            ),
+        ]
+    return OpResult(outputs=[output], findings=findings, solver=solver)

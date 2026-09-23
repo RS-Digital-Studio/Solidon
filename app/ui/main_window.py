@@ -1679,10 +1679,17 @@ def _sketch_param(op_name: str) -> str:
     Gefragt statt geraten: der Name steht im Schema, und eine zweite Liste
     daneben wäre eine zweite Wahrheit. Operationen ohne Skizzenfeld kommen
     hier nie an — der Modus wird nur für die angeboten, die eines haben.
+
+    **Das Feld ohne Bedingung zuerst** — dieselbe Frage wie in
+    :func:`_has_sketch_param`. Die freie Zeichnung ist ein geschlossener
+    Umriss, also der Querschnitt; *Entlang eines Bogens führen* und *Zwischen
+    zwei Umrissen aufspannen* tragen ihre Bahn und ihren oberen Umriss aber
+    **vor** der Skizze. Die erste Zeile gewann, und nach „Fertig" landete der
+    gezeichnete Querschnitt in der Bahn (P6.5b, gefunden am Schnittweg).
     """
-    for entry in REGISTRY.get(op_name).params.spec():
-        if entry.kind == "sketch":
-            return entry.name
+    fields = [entry for entry in REGISTRY.get(op_name).params.spec() if entry.kind == "sketch"]
+    for entry in sorted(fields, key=lambda entry: bool(entry.depends_on)):
+        return entry.name
     raise InternalError(
         detail=f"{op_name!r} has no sketch parameter",
         values={"op": op_name},
@@ -15453,8 +15460,9 @@ class MainWindow(QMainWindow):
                 for name in group.members:
                     variant.addItem(str(REGISTRY.get(name).title), name)
                     # **Eine Variante mit Eingang fragt ihre Bedingung vorher.**
-                    # Vier der fünf Arten erzeugen aus dem Nichts; *Tasche
-                    # schneiden* braucht einen Körper (`consumes=1`). Ohne
+                    # Vier der acht Arten erzeugen aus dem Nichts; *Tasche
+                    # schneiden* und die drei Schnitte mit Werkzeug (P6.5)
+                    # brauchen einen Körper (`consumes=1`). Ohne
                     # diese Sperre steht sie wählbar in der Liste, der Dialog
                     # geht durch, und die Auswertung hält danach an — dieselbe
                     # Lage, die bei den Zwillingen schon einmal gemessen wurde

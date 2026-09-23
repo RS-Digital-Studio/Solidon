@@ -275,8 +275,8 @@ def hidden_from_the_menu() -> frozenset[str]:
     inzwischen zwei Wege, einen Eintrag zusammenzulegen — den Zwilling in
     einem zweiten Rechenkern (:data:`MENU_TWINS`, seit P2.8 der Netz-Quader
     hinter dem exakten „Quader anlegen") und die Variantengruppe
-    (:func:`variant_members`, die vier Skizzen-Arten unter „Aus Skizze
-    erzeugen …"). Für die Palette ist der Unterschied gleichgültig: Beide
+    (:func:`variant_members`, die Erzeugungs- und Schnittarten unter „Aus
+    Skizze erzeugen …"). Für die Palette ist der Unterschied gleichgültig: Beide
     Male steht die Handlung anderswo, und beide Male soll sie nicht ein
     zweites Mal ungefragt in der Liste stehen.
 

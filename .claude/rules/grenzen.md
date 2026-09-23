@@ -209,7 +209,14 @@ schwerer als das Handbuch — ihre Schritte haben `done=`-Bedingungen und rücke
 nicht weiter.
 
 **Eine Operation je Handlung, nicht je Variante.** Neun Texturmuster sind ein
-Menüeintrag mit einem Auswahlparameter, nicht neun Einträge. Rechteck aus zwei
+Menüeintrag mit einem Auswahlparameter, nicht neun Einträge. **Erzeugen und
+Schneiden mit demselben Werkzeug sind zwei Handlungen** (P6.5): Ein Erzeuger
+nimmt nichts und setzt einen neuen Körper, ein Schnitt nimmt den gewählten und
+setzt ihn fort — die Eingangszahl steht je Operation fest, und der Stapel
+vergibt die Kennungen vor der Rechnung. Deshalb eigene Operationen
+(`sketch_revolve_cut` neben `sketch_revolve`, wie `sketch_pocket` neben
+`sketch_extrude`), aber kein eigener Menüeintrag: Sie stehen in der
+Variantengruppe ihres Erzeugers, das Feld ist die Art (Konzept §10). Rechteck aus zwei
 Ecken oder aus Mitte und Maß ist dasselbe Werkzeug mit einem Umschalter. Die
 Mesh/B-Rep-Zwillinge (Quader, Zylinder, Bohrung, Aushöhlen) sind dieselbe
 Handlung in zwei Rechenkernen: **ein** Eintrag, und `menu_twins()` im Register
@@ -348,7 +355,7 @@ das Feld tippen, zwei Dinge, von denen ein Neuling keines kennt. Nachweis:
 `test_only_a_primitive_offers_to_name_its_dimensions`.
 
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
-wann eine Operation die falsche Wahl ist. Siebenunddreißig von hundertsiebenunddreißig
+wann eine Operation die falsche Wahl ist. Vierzig von hundertvierzig
 Operationen tragen einen (die Zahl prüft `tests/test_registry_consistency.py`;
 ungeprüft altert sie still). Er gehört überall dorthin, wo gewählt wird, nicht
 allein in die Handbuchreferenz: `caveat_line()` (`app/core/registry/surfaces.py`)

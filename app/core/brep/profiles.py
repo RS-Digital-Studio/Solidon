@@ -443,6 +443,8 @@ def loft(
     height: float,
     plane: str = "plane:xy",
     frame: PlaneFrame | None = None,
+    *,
+    compatible: bool = True,
 ) -> Solid:
     """Spannt einen Körper zwischen zwei Umrissen auf — unten auf der Ebene.
 
@@ -454,6 +456,13 @@ def loft(
 
     Der obere Umriss wird um ``height`` entlang der Ebenennormalen gehoben;
     auf XY ist das die Z-Achse und alles bleibt, wie es war.
+
+    ``compatible`` lässt OpenCASCADE die Ecken der beiden Außenumrisse selbst
+    einander zuordnen (``CheckCompatibility``) — die Vorgabe und der Weg des
+    Erzeugers. Wer die Zuordnung schon entschieden hat, weil zwei gleich nahe
+    zur Wahl standen und der Kunde gefragt wurde (``sketch_loft_cut``),
+    schaltet sie ab: Sonst wählte der Kern bei Gleichstand still eine Seite,
+    und welche, hinge an der letzten Stelle einer Summe.
     """
     require()
     from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
@@ -476,6 +485,7 @@ def loft(
         )
 
     builder = BRepOffsetAPI_ThruSections(True, False)
+    builder.CheckCompatibility(compatible)
     builder.AddWire(_wire(bottom, lift))
     builder.AddWire(_wire(top, lifted))
     solid = _finished(builder, _("Zwischen diesen beiden Umrissen entsteht kein Körper."))
@@ -503,6 +513,40 @@ def loft(
             _finished(drill, _("Aus einem der gezeichneten Löcher entsteht kein Durchzug.")),
         )
     return solid
+
+
+def intersects_itself(solid: Solid) -> bool:
+    """Ob ein Werkzeugkörper sich selbst durchdringt (P6.5b/c).
+
+    **Die Gültigkeitsprüfung des Kerns sieht das nicht.** Ein Kreis Ø4 um
+    einen Bogen R1 geführt ergibt einen Körper, den ``BRepCheck_Analyzer``
+    für gültig hält — seine Flächen sind je für sich in Ordnung, sie treffen
+    sich nur gegenseitig. Erst ``BRepAlgoAPI_Check`` mit der Prüfung auf
+    Selbstschnitt findet es; gemessen an drei Bahnen (enger Bogen, zu nahe
+    Rückführung, gekreuzte Bahn) schlug sie an allen dreien an und an der
+    geraden Gegenprobe nicht. Ein solches Werkzeug schnitte trotzdem — nur
+    nicht das, was gezeichnet ist.
+    """
+    require()
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Check
+
+    return not BRepAlgoAPI_Check(solid.shape, True, True).IsValid()
+
+
+def is_sound(solid: Solid) -> bool:
+    """Ob ein Ergebnis des exakten Kerns ein gültiger Körper ist (P6.5).
+
+    **Eine Boolesche Operation kann ungültig gelingen.** Gemessen an einer
+    eingelesenen STEP-Klammer aus zwei Teilen (``carpet-corner-clip.step``):
+    Eine Ringnut in ihrer Bohrung meldete ``IsDone``, das Volumen sank um genau
+    das Werkzeug — und der Körper war ungültig; der Klassierer fand die Luft der
+    Bohrung danach innen und das weggenommene Material noch da. Wer ein exaktes
+    Ergebnis ausliefert, fragt deshalb die Gültigkeit und nicht das Volumen.
+    """
+    require()
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    return solid.solid_count >= 1 and bool(BRepCheck_Analyzer(solid.shape).IsValid())
 
 
 def shell_open_top(

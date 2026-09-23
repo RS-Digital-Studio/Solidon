@@ -1059,6 +1059,76 @@ def test_leaving_the_sketch_mode_empty_starts_no_operation(
         window.deleteLater()
 
 
+def test_the_free_outline_becomes_the_cross_section_after_finish() -> None:
+    """Nach „Fertig" landet der gezeichnete Umriss im Querschnitt, nicht in der Bahn.
+
+    *Entlang eines Bogens führen* und *Zwischen zwei Umrissen aufspannen*
+    tragen ihre Bahn und ihren oberen Umriss **vor** der Skizze, und die erste
+    Zeile mit einer Zeichnung gewann: Der geschlossene Umriss ging in die
+    Bahn, die Operation führte die Grundform aus dem Schema daneben (gefunden
+    am Schnittweg P6.5b). Maßgeblich ist das Feld ohne Bedingung — dieselbe
+    Frage, die ``_has_sketch_param`` stellt.
+    """
+    from app.ui.main_window import _sketch_param
+
+    for name in (
+        "sketch_sweep",
+        "sketch_loft",
+        "sketch_revolve_cut",
+        "sketch_sweep_cut",
+        "sketch_loft_cut",
+    ):
+        assert _sketch_param(name) == "sketch", name
+    assert _sketch_param("field_cut") == "region_sketch", "zwei Felder ohne Bedingung: das erste"
+
+
+@pytest.mark.parametrize("on_body", [False, True])
+def test_the_cuts_with_a_tool_wait_for_a_body_and_take_the_outline(
+    qt_app: QApplication, on_body: bool
+) -> None:
+    """Freies Zeichnen → Operationswahl: Die drei Schnitte brauchen einen Körper.
+
+    Ohne Körper sind sie unter *Fertig* gesperrt und sagen, was fehlt (Regel
+    18, derselbe Satz wie bei der Tasche); über einem Körper führen sie mit
+    der Zeichnung als Querschnitt in ihren Dialog.
+    """
+    from app.core.registry import OperationSpec
+    from app.core.scene import OperationDraft
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    asked: list[tuple[str, dict[str, object]]] = []
+
+    def note(spec: OperationSpec, given: dict[str, object] | None = None, **_rest: object) -> None:
+        asked.append((spec.name, dict(given or {})))
+
+    try:
+        if on_body:
+            window.session.apply("Welle", [OperationDraft(op="create_brep_cylinder")])
+            assert window.session.wait_for_idle(30000)
+        text = sketch_to_text(shapes.rectangle(2.0, 3.0))
+        window.start_sketch("", text)
+        cuts = ("sketch_revolve_cut", "sketch_sweep_cut", "sketch_loft_cut")
+        for name in cuts:
+            action = window._finish_actions[name]
+            assert action.isEnabled() == on_body, name
+            if not on_body:
+                assert "Körper" in action.toolTip(), name
+        if on_body:
+            window.run_operation = note
+            window._finish_actions["sketch_sweep_cut"].trigger()
+            assert asked and asked[0][0] == "sketch_sweep_cut"
+            assert asked[0][1].get("sketch") == text, "die Zeichnung ist der Querschnitt"
+    finally:
+        if window._sketch_panel is not None:
+            window.finish_sketch(keep=False)
+        # Kein ``close()``: Mit einem Körper fragt das Fenster modal nach
+        # ungesicherten Änderungen, und der Test stünde still.
+        window.deleteLater()
+
+
 def test_the_drawn_sketch_reaches_the_operation(qt_app: QApplication) -> None:
     """Was gezeichnet wurde, steht danach im Parameter der Operation.
 
@@ -7637,7 +7707,9 @@ def test_finish_lists_the_kinds_and_says_why_cutting_is_locked(qt_app: QApplicat
         )
         names = list(window._finish_actions)
         assert names[:2] == ["sketch_extrude", "sketch_pocket"], names
-        assert len(names) == 6, names
+        # Sechs bis P6.5; die drei Schnitte mit Werkzeug stehen seither mit
+        # in der Liste, jeder hinter der Tasche nach Titel eingereiht.
+        assert len(names) == 9, names
         assert not any(action.isEnabled() for action in window._finish_actions.values()), (
             "ohne Umriss geht keine — und jede sagt es"
         )

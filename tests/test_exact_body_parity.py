@@ -568,6 +568,15 @@ CASES = [
         "volume",
         1400.0,
     ),
+    # Stumpf 8 x 6 auf 4 x 3 über 6 mm: h/3 · (48 + 12 + 24) = 168 (P6.5c).
+    Case(
+        "sketch_loft_cut",
+        "box",
+        {"shape": "rectangle", "length": 8.0, "width": 6.0, "top_scale": 0.5, "depth": 6.0},
+        KEEP,
+        "volume",
+        3200.0 - 168.0,
+    ),
     Case(
         "sketch_pocket",
         "box",
@@ -584,6 +593,15 @@ CASES = [
         "volume",
         576.0 * math.pi,
     ),
+    # Ringnut in der Deckfläche: r 3 bis 5, 2 mm tief — π (5² - 3²) · 2 (P6.5a).
+    Case(
+        "sketch_revolve_cut",
+        "box",
+        {"shape": "rectangle", "length": 2.0, "width": 3.0, "offset": 3.0, "axis_z": 8.0},
+        KEEP,
+        "volume",
+        3200.0 - 32.0 * math.pi,
+    ),
     Case(
         "sketch_sweep",
         "none",
@@ -598,6 +616,15 @@ CASES = [
         CREATE_EXACT,
         "volume",
         24.0 * math.pi**2,
+    ),
+    # Kanal Ø4 von der Deckfläche nach unten, Viertelbogen R6: π · 2² · (π/2 · 6) (P6.5b).
+    Case(
+        "sketch_sweep_cut",
+        "box",
+        {"shape": "circle", "length": 4.0, "along": "arc", "bend_radius": 6.0, "bend_angle": 90.0},
+        KEEP,
+        "volume",
+        3200.0 - 12.0 * math.pi**2,
     ),
     Case(
         "slot_hole",
