@@ -5159,23 +5159,9 @@ def test_bore_operations_reject_a_zero_axis_before_geometry(
     assert caught.value.constraint == "no_geometry"
 
 
-def test_a_slot_is_only_ever_pulled_longer(profile: Profile) -> None:
-    """Eine kürzere Länge wird abgelehnt, statt stillschweigend nichts zu tun.
-
-    **Der Fall lief zwei Tage lang durch, und er sah dabei wie Erfolg aus.**
-    Die einzige Längenprüfung verglich gegen den *Durchmesser*; an einem
-    bestehenden Langloch ließ sie jede Zahl darüber zu, auch eine kleinere als
-    seine Länge. Gemessen an 20,016 mm mit der Eingabe 12: Der Werkzeugkörper
-    liegt bis auf den Toleranzrand vollständig im vorhandenen Hohlraum,
-    abgetragen werden 1,14 mm³ — das Vielfache der Schwelle, unterhalb derer
-    ``without_effect`` „hat nichts bewirkt" sagt, also schwieg auch die.
-
-    Für den Kunden hieß das: Zahl eintragen, OK drücken, ein Schritt im
-    Verlauf, und am Teil ändert sich nichts. Kein Wort dazu.
-    """
+def test_a_slot_can_be_pulled_shorter_without_losing_rotation(profile: Profile) -> None:
+    """Die kürzere Eingabe schließt die alten Enden; gleiche Länge und Drehen bleiben möglich."""
     import dataclasses
-
-    from app.core.errors import ValidationError
 
     bored = drill(
         plate(), position=(0.0, 0.0, 5.0), axis="z", diameter=5.0, depth=10.0, profile=profile
@@ -5190,12 +5176,11 @@ def test_a_slot_is_only_ever_pulled_longer(profile: Profile) -> None:
     length = float(with_slot.features[slot].params["length"])
     assert length == pytest.approx(20.0, abs=0.1), "die Vorbedingung: ein Langloch von 20 mm"
 
-    with pytest.raises(ValidationError) as fehler:
-        _run_op("slot_hole", with_slot, profile, at_feature=slot, slot_length=12.0)
-
-    assert fehler.value.field == "slot_length"
-    assert fehler.value.constraint == "slot_growth"
-    assert fehler.value.suggestions, "und ein Weg nach vorn steht dabei (Regel 17)"
+    shortened = _run_op("slot_hole", with_slot, profile, at_feature=slot, slot_length=12.0)
+    shorter_body = as_mesh_data(shortened.outputs[0].mesh)
+    shorter = next(found for found in detect(shorter_body).values() if found.kind == "slot")
+    assert float(shorter.params["length"]) == pytest.approx(12.0, abs=0.01)
+    assert shorter_body.volume > with_slot.mesh.volume
 
     # **Die gleiche Länge geht durch, und das ist Absicht.** Hier stand das
     # Gegenteil — `<= current` in der Operation, hier ein zweites

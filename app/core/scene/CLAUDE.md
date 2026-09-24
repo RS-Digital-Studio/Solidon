@@ -2,6 +2,11 @@
 
 Was gerade offen ist und wie daraus Geometrie wird (§12–§16).
 
+Das Platzierungswerkzeug von `resize_hole` erhält am Langloch den bisherigen
+Verstellweg und seine Richtung. Für `slot_hole` folgt die Vorschau der
+Zielbreite einschließlich Materialkompensation; eine fehlende Zielbreite
+übernimmt das gemessene Maß ohne erneuten Zuschlag.
+
 Die Merkmalszuordnung erhält denselben Abbruch wie die Auswertung:
 `matching.match(check_cancelled=watch.raise_if_cancelled)` gilt für native,
 neu erkannte und deklarierte Merkmale. Gespeicherte Antworten werden über
@@ -156,7 +161,10 @@ Netz gegen 1,0000 am exakten Körper ist dieselbe Steigung.
 
 `placement.seat_of` prüft beide Mündungen einer erkannten Bohrung. Bei
 Bohrung und Langloch muss die Flächennormale vom Hohlraum weg zeigen; der
-Sacklochboden ist deshalb keine Trägerfläche. `mouth_outline` gewinnt den
+Sacklochboden ist deshalb keine Trägerfläche. Liegt die Mündung hinter einer
+Fase, sucht ein zweiter Durchgang entlang der Achse bis `mouth_reach` weiter
+(Regel in `operationen.md`); `prepare_tool` zeigt für `slot_hole` mit Länge =
+Breite die runde Bohrung (`prepare.is_round_length`). `mouth_outline` gewinnt den
 Werkzeugumriss aus der konvexen Hülle der Mündungspunkte (§21.1).
 Die Nachbarschaft exakter Originalkanten nutzt den privaten Trimesh-Cache
 als Beschleunigung. Fehlt dessen Lese- oder Schreibschnittstelle, bleibt

@@ -1177,6 +1177,15 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   20. Gefragt ist der Abstand zum **Rand des Teils**; was in einer Aussparung
   liegt, ist keine Antwort darauf. Wo es keine solche Fläche gibt, kommt
   `None` — eine Verrundung mündet nirgends, und geraten wird nichts (Regel 21).
+  **Eine gefaste Mündung liegt nicht in ihrer Fläche**: Die gemessene
+  Bohrungswand endet an der Fase, eine Fasenbreite unter der Oberfläche.
+  `seat_of` sucht deshalb nach dem genauen Durchgang ein zweites Mal entlang
+  der Achse, höchstens einen Radius weit (`mouth_reach`), und darf dabei um
+  `MAX_FACET_SAG` hinter der Mündung liegen — eine eingepasste Wand endet
+  nicht auf den Mikrometer in ihrer Ebene (am Wedge-Lock 3,5 µm). Die Mitte
+  bleibt die gemessene: `surface_values` rechnet von der gefundenen Mündung
+  zurück und nimmt die halbe Tiefe nur, wo sie zwischen Mündung und Fläche
+  passt. Korpus: `plate_chamfered_mouths.stl`.
 - **Ein Sichtstrahl wird am Originalnetz geprüft.** `original_surface_hit()`
   ersetzt unbekannte LOD-Zellen durch Originaldreiecke und berücksichtigt alle
   Schnittebenen. Ihre positive Seite entfällt; künstliche Kappen sind kein

@@ -378,6 +378,49 @@ def plate_chamfer_and_taper() -> None:
     )
 
 
+def plate_chamfered_mouths() -> None:
+    """Zwei gefaste Mündungen, deren Wand unter der Fläche endet (24.09.2026).
+
+    Platte 60 × 40 × 8 mm (z −4 bis 4): links ein Sackloch Ø 9 von unten,
+    6 mm tief, mit 0,6-mm-Fase an der Mündung; rechts ein durchgehendes
+    Langloch Breite 6, Länge 18 mit 0,8-mm-Fasen oben und unten. Die gemessene
+    Bohrungswand endet an der Fase, eine Fasenbreite unter der Oberfläche —
+    ohne die Suche entlang der Achse (``placement.seat_of``, ``mouth_reach``)
+    hatte ein solches Loch keine Trägerfläche und damit keine Maße im Bild.
+    Gebaut mit manifold3d statt trimesh: Die Fasen sind Hüllen aus Kegeln, und
+    die Boolesche Differenz bleibt damit geschlossen.
+    """
+    import manifold3d
+
+    sections = 64
+
+    def cylinder(
+        x: float, y: float, height: float, bottom: float, top: float, z: float
+    ) -> manifold3d.Manifold:
+        return manifold3d.Manifold.cylinder(height, bottom, top, sections).translate((x, y, z))
+
+    plate = manifold3d.Manifold.cube((60.0, 40.0, 8.0), center=True)
+    bore = cylinder(-15.0, 0.0, 6.0 + 1.0, 4.5, 4.5, -4.0 - 1.0)
+    chamfer = cylinder(-15.0, 0.0, 0.6 + 0.5, 4.5 + 0.6 + 0.5, 4.5, -4.0 - 0.5)
+    ends = [(12.0 - 6.0, 0.0), (12.0 + 6.0, 0.0)]
+    slot = manifold3d.Manifold.batch_hull([cylinder(x, y, 10.0, 3.0, 3.0, -5.0) for x, y in ends])
+    top = manifold3d.Manifold.batch_hull(
+        [cylinder(x, y, 0.8 + 0.5, 3.0, 3.0 + 0.8 + 0.5, 4.0 - 0.8) for x, y in ends]
+    )
+    bottom = manifold3d.Manifold.batch_hull(
+        [cylinder(x, y, 0.8 + 0.5, 3.0 + 0.8 + 0.5, 3.0, -4.0 - 0.5) for x, y in ends]
+    )
+    body = (plate - bore - chamfer - slot - top - bottom).to_mesh()
+    write(
+        trimesh.Trimesh(
+            vertices=np.asarray(body.vert_properties)[:, :3],
+            faces=np.asarray(body.tri_verts),
+            process=True,
+        ),
+        "plate_chamfered_mouths.stl",
+    )
+
+
 def degenerate() -> None:
     """Ein Würfel plus ein Null-Flächen-Dreieck, eine Nadel und eine doppelte
     Fläche.
@@ -719,6 +762,7 @@ if __name__ == "__main__":
     post_with_fillet()
     block_with_rounded_edge()
     plate_chamfer_and_taper()
+    plate_chamfered_mouths()
     degenerate()
     broken_open()
     partially_open()

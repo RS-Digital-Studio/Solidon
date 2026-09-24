@@ -394,9 +394,6 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         "cavity_too_small",
         "organizer_radius",
         "organizer_part",
-        # Und eines, das gegen das **gemessene** Maß des gewählten Merkmals
-        # verstößt: Ein Langloch lässt sich nur länger ziehen.
-        "slot_growth",
         # Die Kragentiefe eines Deckels gegen die gemessene freie Tiefe der
         # Öffnung: Tiefer ragt die Wand in den Kragen.
         "collar_hits_wall",

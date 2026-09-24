@@ -62,8 +62,6 @@ from app.core.geom.prepare import (
     BORE_SECTIONS,
     FEATURE_OVERLAP,
     MAX_PLATES,
-    SLOT_NOT_SHORTER,
-    SLOT_TOO_SHORT,
     Arrangement,
     BoreAnchor,
     arrange_on_bed,
@@ -77,6 +75,7 @@ from app.core.geom.prepare import (
     countersink,
     drill,
     edge_findings,
+    is_round_length,
     mouth_over_the_edge,
     named_for,
     over_the_edge_along,
@@ -434,7 +433,7 @@ class DrillParams(BaseParams):
 #: (:func:`prepare.shortest_slot`): Ein Langloch knapp über seinem Durchmesser
 #: erkennt niemand mehr als eines. Die Zahl selbst steht in ``values`` und
 #: darunter im Dialog — ein Platzhalter im Satz bliebe dem Kunden wörtlich
-#: stehen (siehe :data:`prepare.SLOT_NOT_SHORTER`).
+#: stehen.
 SLOT_NEEDS_A_LENGTH: Final = _(
     "Ein Langloch braucht eine Länge deutlich über seinem Durchmesser. Tragen Sie "
     "mindestens die Länge ein, die darunter steht, oder nehmen Sie den Haken heraus, "
@@ -451,6 +450,14 @@ SLOT_NEEDS_A_LENGTH: Final = _(
 #: Kern trifft auf die vierte Stelle. Ein Prozent lässt beiden Raum und trennt
 #: trotzdem 20 von 26.
 _SAME_LENGTH: Final = 0.01
+
+#: Zwischen der Breite und der kürzesten Länge gibt es kein Loch, das die
+#: Erkennung hält — und die Absage nennt beide Auswege: genau die Breite für
+#: eine runde Bohrung, mindestens die Länge darunter für ein Langloch.
+NEITHER_ROUND_NOR_SLOT: Final = _(
+    "Zwischen rund und Langloch gibt es keine Länge. Tragen Sie genau den Durchmesser "
+    "für eine runde Bohrung ein oder mindestens die Länge darunter für ein Langloch."
+)
 
 SLOT_FEATURE_LOST: Final = _(
     "Nach dem Zug lässt sich der verbleibende Ausschnitt an dieser Stelle nicht mehr "
@@ -5587,6 +5594,17 @@ class _DepthPlan:
     """Wie weit der alte Boden wandert — null, wo es keinen alten oder neuen gibt."""
 
 
+def bore_depth_is_unchanged(feature: Feature, depth: float | None) -> bool:
+    """Ob die Eingabe dieselbe Bohrtiefe meint, einschließlich „ganz durch“ und Anzeigerundung."""
+    if depth is None:
+        return True
+    wanted = float(depth)
+    length = _bore_number(feature, "depth")
+    if feature.params.get("through", False):
+        return wanted <= EPS_GEOM or wanted >= length - _SAME_DEPTH
+    return wanted > EPS_GEOM and abs(wanted - length) <= _SAME_DEPTH
+
+
 def _depth_wish(
     ctx: OpContext, source: SceneObject, feature: Feature, params: ResizeHoleParams
 ) -> _DepthWish | Finding | None:
@@ -5605,18 +5623,18 @@ def _depth_wish(
     length = _bore_number(feature, "depth")
     through = bool(feature.params.get("through", False))
     answered: dict[str, str] = {}
-    if through:
-        if wanted <= EPS_GEOM or wanted >= length - _SAME_DEPTH:
+    if bore_depth_is_unchanged(feature, params.depth):
+        if through:
             return Finding(
                 code="bore.already_through",
                 severity="info",
                 message=_("Die Bohrung geht bereits ganz durch."),
                 feature_ids=(feature.id,),
             )
+        return None
+    if through:
         outward = _kept_open(ctx, params, unit, answered)
     else:
-        if wanted > EPS_GEOM and abs(wanted - length) <= _SAME_DEPTH:
-            return None
         air = _toward_the_air(as_mesh_data(source.mesh), feature)
         if air is None:
             raise ValidationError(
@@ -6387,9 +6405,9 @@ class SlotHoleParams(BaseParams):
         # statt eines Langlochs.
         doc=_(
             "Gesamtlänge über beide runden Enden — größer als der Durchmesser "
-            "der Bohrung. Beim Anklicken steht hier sein Doppeltes: ein "
-            "Langloch, in dem sich eine Schraube um einen Durchmesser "
-            "verschieben lässt."
+            "der Bohrung, oder genau der Durchmesser für eine runde Bohrung. "
+            "Beim Anklicken steht hier sein Doppeltes: ein Langloch, in dem "
+            "sich eine Schraube um einen Durchmesser verschieben lässt."
         ),
     )
     slot_angle: float = param(
@@ -6480,8 +6498,8 @@ class SlotHoleParams(BaseParams):
 #: Die Arten, aus denen ein Langloch werden kann.
 #:
 #: Ein **Langloch** steht dabei, und das ist keine Verlegenheit: Die Operation
-#: zieht ein rundes Loch auseinander, und eines, das schon lang ist, noch
-#: weiter. Ohne diesen Eintrag wäre ein erkanntes Langloch eine Sackgasse —
+#: zieht ein rundes Loch auseinander und ändert ein vorhandenes in beide
+#: Richtungen. Ohne diesen Eintrag wäre ein erkanntes Langloch eine Sackgasse —
 #: ein Merkmal, an dem der Klick in einem Menü aus *Ausblenden* endet (§2.6).
 SLOT_FROM: Final[tuple[str, ...]] = ("hole", "slot")
 
@@ -6504,13 +6522,15 @@ SLOT_FEATURE_RENAMED: Final = _(
     name="slot_hole",
     # 5: die Breite als eigener Parameter (22.09.2026).
     # 6: der erste Zug schließt die runde Bohrung und schneidet ohne Zugabe.
-    cache_version="6",
+    # 7: ein verkürztes Langloch schließt zuerst seinen alten Umriss.
+    # 8: genau die Breite als Länge schneidet wieder eine runde Bohrung.
+    cache_version="8",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
     # „Bohrung zum Langloch" an etwas, das keine Bohrung mehr ist. „Ziehen"
-    # trifft beides: aus einem runden Loch ein langes, aus einem langen ein
-    # längeres.
+    # trifft beides: aus einem runden Loch ein langes, die Länge eines
+    # vorhandenen Langlochs in beiden Richtungen ändern.
     title=_("Zum Langloch ziehen"),
     category="holes",
     params=SlotHoleParams,
@@ -6520,10 +6540,10 @@ SLOT_FEATURE_RENAMED: Final = _(
     touches_features=True,
     deterministic=False,
     doc=_(
-        "Zieht eine erkannte Bohrung zu einem Langloch auseinander — oder ein "
-        "Langloch länger. Der Durchmesser bleibt, wie er gemessen wurde; "
-        "eingetragen werden nur Länge und Richtung, und an einem Langloch steht "
-        "seine Richtung schon da."
+        "Zieht eine erkannte Bohrung zu einem Langloch auseinander oder ändert Länge, "
+        "Breite und Richtung eines vorhandenen Langlochs. Die Länge lässt sich "
+        "vergrößern und verkleinern, bis zurück auf die Breite — dann ist es wieder "
+        "eine runde Bohrung. Ohne neue Breite bleibt der gemessene Durchmesser."
     ),
 )
 def slot_hole(ctx: OpContext) -> OpResult:
@@ -6606,49 +6626,36 @@ def slot_hole(ctx: OpContext) -> OpResult:
     widened = not is_close(diameter, measured_diameter)
     depth = _bore_number(feature, "depth")
     through = bool(feature.params.get("through", False))
+    # **Genau die Breite heißt rund** (Robert, 24.09.2026): Wer ein Langloch
+    # bis auf seine Breite zurückzieht, meint die Bohrung, aus der es kam. Die
+    # Breite ist die eingetragene, nicht die mit der Materialtoleranz — gegen
+    # sie rastet auch der Griff (:func:`prepare.is_round_length`). Der
+    # geschnittene Durchmesser gilt ebenso: Mit Toleranzausgleich rastet der
+    # Griff auf ihn, denn er zeigt das Loch, das entsteht.
+    width = params.diameter if params.diameter is not None else measured_diameter
+    rounded = is_round_length(params.slot_length, width) or is_round_length(
+        params.slot_length, diameter
+    )
     # **Gefragt wird gegen den gemessenen Durchmesser**, denn gegen ihn misst
     # auch die Erkennung — und sie ist es, die entscheidet, ob nachher ein
     # Langloch im Objektbaum steht (:func:`prepare.shortest_slot`).
     shortest = shortest_slot(diameter)
-    if params.slot_length < shortest - EPS_GEOM:
+    if not rounded and params.slot_length < shortest - EPS_GEOM:
         raise ValidationError(
             field="slot_length",
             constraint="slot_proportion",
-            detail=SLOT_TOO_SHORT,
+            detail=NEITHER_ROUND_NOR_SLOT,
             value=params.slot_length,
             values={
-                "diameter": format_length(diameter),
+                "diameter": format_length(width),
                 "shortest": format_length(shortest),
             },
         )
-    # **Und an einem Langloch wird gegen seine Länge gefragt, nicht gegen die
-    # Breite.** Die Prüfung darüber deckt den ersten Zug; sie lässt am zweiten
-    # jede Zahl durch, die größer als der Durchmesser ist — auch eine kleinere
-    # als die vorhandene Länge. Gemessen an 20,016 mm mit der Eingabe 12:
-    # abgetragen 0,87 mm³ (der Toleranzrand), kein Befund, das Langloch danach
-    # unverändert. Ein Schritt im Verlauf, der nichts tut und nichts sagt.
-    #
-    # **Echt kürzer, nicht „nicht länger".** Hier stand `<= current`, und das
-    # traf die eigene Vorbelegung: `perceive.actions._slot_value` setzt das Feld
-    # auf die **gemessene** Länge des Langlochs — ausdrücklich, damit kein Feld
-    # mit einer Absage begrüßt. Wer anklickte und OK drückte, las „Dieses
-    # Langloch ist bereits länger als die eingetragene Länge" und darunter
-    # zweimal dieselbe Zahl. Und reines **Drehen** war damit unerreichbar: Ein
-    # Winkel bei unveränderter Länge kam nie bis zur Geometrie (Fund der
-    # Nachkontrolle, 11.09.2026).
-    if feature.kind == "slot":
-        current = _bore_number(feature, "length")
-        if params.slot_length < current - EPS_GEOM:
-            raise ValidationError(
-                field="slot_length",
-                constraint="slot_growth",
-                detail=SLOT_NOT_SHORTER,
-                value=params.slot_length,
-                values={
-                    "previous": format_length(current),
-                    "wanted": format_length(params.slot_length),
-                },
-            )
+    # Beim Verkürzen liegt das Werkzeug im vorhandenen Hohlraum. Deshalb muss
+    # zuerst der alte Umriss geschlossen werden, wie bei einer anderen Breite.
+    shortened = (
+        feature.kind == "slot" and params.slot_length < _bore_number(feature, "length") - EPS_GEOM
+    )
     _reject_oversized("slot_length", params.slot_length, source.mesh, kind="length")
     # Die Vorbelegung am Merkmal liefert dessen Richtung. Jeder übergebene
     # Winkel gilt unverändert, auch null; sonst widerspricht der Schnitt dem Griff.
@@ -6663,7 +6670,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # länger, und dabei behält es Art und Kennung. Der Satz stünde dort über
     # einer Umbenennung, die nicht stattfindet.
     said: list[Finding] = []
-    if feature.kind == "hole":
+    if feature.kind == "hole" and not rounded:
         said.append(
             Finding(
                 code="slot_hole.feature_renamed",
@@ -6675,7 +6682,8 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 values={"feature": feature.id, "length_mm": params.slot_length},
             )
         )
-    turning = _slot_turned(feature, axis, angle)
+    # Ein rundes Loch hat keine Richtung, in die es gedreht wäre.
+    turning = None if rounded else _slot_turned(feature, axis, angle)
     if turning is not None:
         said.append(turning)
 
@@ -6696,7 +6704,14 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # v0.4.1). Zwei Wege zu demselben Auftrag, zwei Maße. Geschlossen gibt es
     # die runde Wand nicht mehr, und das Werkzeug schneidet ohne Zugabe in
     # volles Material — dasselbe Loch wie beim Bohren.
-    closes_the_old = moved or turning is not None or widened or feature.kind == "hole"
+    closes_the_old = moved or turning is not None or widened or shortened or feature.kind == "hole"
+    if rounded and feature.kind == "hole" and not moved and not widened:
+        # Eine runde Bohrung auf ihre eigene Breite gezogen: Geschnitten und
+        # gefüllt würde dasselbe Loch, und der Satz sagt, dass nichts geschah.
+        return OpResult(outputs=[source], findings=[_already_round(feature)])
+    # Die Länge, mit der geschnitten wird. Rund heißt: genau der geschnittene
+    # Durchmesser — :func:`prepare.slot_bore` schneidet dann einen Zylinder.
+    cut_length = diameter if rounded else params.slot_length
     # **Ohne Zugabe, an jedem Zug.** An einem Langloch, das schon eines ist,
     # liegen die Flanken des Werkzeugs auf denen des Lochs, und das rechnen
     # beide Kerne robust; mit Zugabe wuchs es bei **jedem** Zug (gemessen
@@ -6726,16 +6741,24 @@ def slot_hole(ctx: OpContext) -> OpResult:
             # an den Randebenen begrenzt, damit eine schräge Mündung keine
             # Beule über der Fläche zurücklässt.
             started = _exact_cavity_filled(started, feature)
-        solid = edit.slot_bore(
-            started,
-            position=centre,
-            direction=axis,
-            diameter=diameter,
-            depth=_through_bore_depth(started, centre, axis) if through else depth,
-            length=params.slot_length,
-            angle_deg=angle,
-            overlap=overlap,
-        )
+        cut_depth = _through_bore_depth(started, centre, axis) if through else depth
+        if rounded:
+            solid = edit.unified(
+                edit.cut_bore(
+                    started, position=centre, direction=axis, diameter=diameter, depth=cut_depth
+                )
+            )
+        else:
+            solid = edit.slot_bore(
+                started,
+                position=centre,
+                direction=axis,
+                diameter=diameter,
+                depth=cut_depth,
+                length=params.slot_length,
+                angle_deg=angle,
+                overlap=overlap,
+            )
         if solid.volume <= EPS_GEOM or solid.face_count == 0:
             raise GeometryError(
                 title=NOTHING_LEFT_TITLE,
@@ -6749,7 +6772,11 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
         findings: list[Finding] = list(said)
-        nothing = without_effect(source.mesh, solid, "difference", ctx.profile)
+        # Gegen den gefüllten Körper, wie am Netz (``prepare.slot_bore``): Ein
+        # Versetzen oder Verkürzen mit neuer Breite trägt oft gleich viel ab,
+        # wie es füllt, und hieß gegen das Original „nichts abgetragen"
+        # (Review 24.09.2026).
+        nothing = without_effect(started, solid, "difference", ctx.profile)
         if nothing is not None:
             findings.append(nothing)
         # Die Kantenfrage gilt beiden Bogenmittelpunkten, wie beim Verbreitern.
@@ -6761,13 +6788,49 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 position=centre,
                 frame=frame_of(axis, centre),
                 diameter=diameter,
-                travel=slot_travel(diameter=diameter, length=params.slot_length),
+                travel=0.0 if rounded else slot_travel(diameter=diameter, length=cut_length),
                 angle_deg=angle,
                 body=as_mesh_data(source.mesh),
             )
         )
         findings.extend(split_findings(source.mesh, solid))
         exact_features = features_of(solid, cancelled=ctx.cancelled)
+        if rounded:
+            findings.extend(
+                _round_neighbour_findings(
+                    source,
+                    feature,
+                    centre,
+                    axis,
+                    diameter,
+                    cut_depth,
+                    ctx,
+                    moved,
+                    widened,
+                    findings,
+                )
+            )
+            findings.extend(
+                _round_outcome(
+                    feature,
+                    _recognised_round(
+                        exact_features,
+                        feature,
+                        centre=centre,
+                        diameter=diameter,
+                        diagonal=solid.bounds.diagonal,
+                        body_centre=solid.bounds.centre,
+                        check_cancelled=ctx.cancelled.raise_if_cancelled,
+                    ),
+                    diameter,
+                )
+            )
+            return OpResult(
+                outputs=[
+                    dataclasses.replace(source, mesh=solid, kind="brep", features=exact_features)
+                ],
+                findings=findings,
+            )
         # **Dieselbe Auskunft wie am Netz** (Robert, 10.09.2026: „zwischen den
         # beiden soll es keinen unterschied geben bei garnichts"). Wer über den
         # Rand zieht, behält eine erkennbare Randöffnung als Langloch. Ein
@@ -6812,6 +6875,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # bei derselben Zeile in `resize_hole`.
     exact_depth = _mesh_bore_depth(body, feature, axis, depth)
     filled: list[Finding] = []
+    closing_solver = None
     if closes_the_old:
         closing = _closed_at(
             body,
@@ -6824,20 +6888,60 @@ def slot_hole(ctx: OpContext) -> OpResult:
         )
         body = closing.mesh
         filled = list(closing.findings)
+        closing_solver = closing.solver
+    mesh_depth = _through_bore_depth(body, centre, axis) if through else exact_depth
     result = slot_bore(
         body,
         position=centre,
         direction=axis,
         diameter=diameter,
-        depth=_through_bore_depth(body, centre, axis) if through else exact_depth,
+        depth=mesh_depth,
         through=through,
-        length=params.slot_length,
+        length=cut_length,
         angle_deg=angle,
         profile=ctx.profile,
         quality=ctx.quality,
         seed=ctx.seed,
         overlap=overlap,
     )
+    if rounded:
+        from app.core.perceive.features import detect
+
+        found = _recognised_round(
+            detect(result.mesh, check_cancelled=ctx.cancelled.raise_if_cancelled),
+            feature,
+            centre=centre,
+            diameter=diameter,
+            diagonal=result.mesh.bounds.diagonal,
+            body_centre=result.mesh.bounds.centre,
+            check_cancelled=ctx.cancelled.raise_if_cancelled,
+        )
+        # Eine Bohrung, die rund bleibt, behält ihren Namen; aus einem
+        # Langloch wird eine Bohrung, und die bekommt einen neuen.
+        kept = {feature.id: found} if found is not None and feature.kind == "hole" else {}
+        # ``said`` wie im exakten Zweig: Die Materialtoleranz meldet sich an
+        # beiden Kernen (Review 24.09.2026, am Netz fehlte sie).
+        round_findings = [*said, *filled, *result.findings]
+        round_findings.extend(
+            _round_neighbour_findings(
+                source,
+                feature,
+                centre,
+                axis,
+                diameter,
+                mesh_depth,
+                ctx,
+                moved,
+                widened,
+                round_findings,
+            )
+        )
+        round_findings.extend(_round_outcome(feature, found, diameter))
+        return OpResult(
+            outputs=[dataclasses.replace(source, mesh=result.mesh, features={**carried, **kept})],
+            solver=deepest((closing_solver, result.solver)),
+            findings=round_findings,
+        )
     # **Gesucht wird das Langloch, das gerade entstanden ist** — für zwei
     # verschiedene Antworten. Findet es sich nicht, sagt es der Befund unten
     # (Regel 17), statt dass das Merkmal still verschwindet.
@@ -6878,7 +6982,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         findings.append(_slot_no_longer_a_feature(feature, params.slot_length))
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh, features=features)],
-        solver=result.solver,
+        solver=deepest((closing_solver, result.solver)),
         findings=findings,
     )
 
@@ -11375,6 +11479,100 @@ def _recognised_slot(
     ):
         return None
     return dataclasses.replace(candidate, id=feature.id, provenance="generated", created_by=None)
+
+
+def _recognised_round(
+    detected: Mapping[str, Feature],
+    feature: Feature,
+    *,
+    centre: Vec3,
+    diameter: float,
+    diagonal: float,
+    body_centre: Vec3,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Feature | None:
+    """Sucht die runde Bohrung, zu der ein Langloch zurückgezogen wurde.
+
+    Das Geschwister von :func:`_recognised_slot`: Art ``hole`` an der
+    genannten Mitte, mit dem geschnittenen Durchmesser — und nachgeprüft, aus
+    demselben Grund wie dort. ``detected`` kommt am Netz aus
+    :func:`perceive.features.detect`, am exakten Körper aus
+    :func:`brep.features.features_of`.
+    """
+    expected = dataclasses.replace(
+        feature,
+        kind="hole",
+        params={**feature.params, "centre": centre, "diameter": diameter},
+    )
+    found_id = _bore_match_id(
+        detected, expected, body_centre, diagonal, check_cancelled=check_cancelled
+    )
+    if found_id is None:
+        return None
+    candidate = detected[found_id]
+    if candidate.kind != "hole" or not _sits_at(candidate, expected, diagonal):
+        return None
+    return dataclasses.replace(candidate, id=feature.id, provenance="generated", created_by=None)
+
+
+def _round_outcome(feature: Feature, found: Feature | None, diameter: float) -> list[Finding]:
+    """Wieder rund, oder der Bezug ist fort — beide Kerne, ein Satz."""
+    if found is None:
+        return [_bore_no_longer_a_feature(feature, diameter)]
+    if feature.kind != "slot":
+        return []
+    return [
+        Finding(
+            code="slot_hole.round_again",
+            severity="info",
+            message=_("Aus dem Langloch ist wieder eine runde Bohrung geworden."),
+            feature_ids=(feature.id,),
+            values={"feature": feature.id},
+        )
+    ]
+
+
+def _round_neighbour_findings(
+    source: SceneObject,
+    feature: Feature,
+    centre: Vec3,
+    axis: Vec3,
+    diameter: float,
+    depth: float,
+    ctx: OpContext,
+    moved: bool,
+    widened: bool,
+    already: list[Finding],
+) -> list[Finding]:
+    """Die Nachbarwand fragen, wenn die runde Bohrung breiter oder woanders steht.
+
+    Derselbe Prüfumfang wie *Bohrung ändern* (``resize_hole``) und *Merkmal
+    verschieben*: Zwei Wege zu demselben Loch, und nur einer sagte, dass die
+    Wand zur Nachbarbohrung dünn wird oder aufreißt (Review 24.09.2026).
+    Ohne neue Breite und Stelle liegt die Bohrung im alten Umriss und nimmt
+    keiner Wand etwas.
+    """
+    if not (moved or widened):
+        return []
+    return _without_opened_twice(
+        _neighbour_bore_findings(
+            source, feature, _bore_tool_mesh(centre, axis, diameter, depth), ctx, moved=moved
+        ),
+        already,
+    )
+
+
+def _already_round(feature: Feature) -> Finding:
+    """Eine runde Bohrung, auf ihre eigene Breite gezogen, bleibt, wie sie ist."""
+    return Finding(
+        code="slot_hole.already_round",
+        severity="info",
+        message=_(
+            "Die Bohrung ist schon rund. Ziehen Sie sie länger, um ein Langloch daraus zu machen."
+        ),
+        feature_ids=(feature.id,),
+        values={"feature": feature.id},
+    )
 
 
 def _slot_no_longer_a_feature(feature: Feature, length: float) -> Finding:

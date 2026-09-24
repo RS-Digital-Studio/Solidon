@@ -966,6 +966,14 @@ schließt die alte Öffnung wie ein Versetzen und schneidet ohne Zugabe — sons
 stünde ein schmaleres Langloch in der weiteren Bohrung. Zwei Schritte gingen
 nicht: Das Langloch heißt nach dem ersten Zug neu (`SLOT_FEATURE_RENAMED`),
 und der zweite Schritt kennte seinen Namen erst nach der Auswertung.
+Auch eine kürzere Länge schließt zuerst den vorhandenen Umriss und schneidet
+ihn neu, an beiden Kernen über dieselben Wege wie die Breitenänderung.
+Die Untergrenze bleibt `prepare.shortest_slot` für die gewünschte Breite —
+außer genau der Breite selbst (`prepare.is_round_length`): Dann schließt
+`slot_hole` die Öffnung und schneidet eine runde Bohrung, am Netz mit dem
+48-Eck der Bohrwerkzeuge (`prepare.slot_bore` mit Länge = Durchmesser), exakt
+über `edit.cut_bore`; die Suche danach ist `_recognised_round`, die Befunde
+`slot_hole.round_again` und `slot_hole.already_round`.
 **`slot_hole` und `resize_hole` nehmen dabei eine Stelle entgegen** (`x/y/z`,
 **leer** heißt „lass es, wo es ist" — `_named_place` beantwortet das für beide,
 und die Felder sind `optional`, weil die Null an einer Koordinate die Mitte des
@@ -984,6 +992,10 @@ Durchmesser". Zwei Dinge hängen daran und sind beide gemessen: Die Tiefe wird
 fremde Dreiecke), und die Zuordnung sucht das Merkmal an seiner **neuen** Mitte
 — mit der alten meldete der Netz-Weg es als verloren und der exakte warf einen
 Programmfehler.
+
+`bore_depth_is_unchanged` beantwortet für Tiefenoperation und Formwechsel
+dieselbe Frage: Ändert der eingetragene Wert die Bohrung tatsächlich? Leer,
+„ganz durch“ und die halbe Anzeigestelle folgen damit einer gemeinsamen Regel.
 
 Die geometrische Vorauswahl projiziert dieselben Normalenrichtungen in
 begrenzten Gruppen auf Z. Vollständige Netzkopien entstehen erst für die

@@ -662,12 +662,19 @@ def slot_bore(
     11.09.2026, Stufe ``direct`` über drei Züge). Mit der Zugabe wuchs die
     Breite dagegen bei **jedem** Zug: 5,2057, 5,2213, 5,2371 an einem Loch,
     das 5,1901 gemessen war.
+
+    **Und eine Länge gleich dem Durchmesser schneidet rund** (24.09.2026): So
+    kommt ein Langloch, das bis auf seine Breite zurückgezogen wurde, wieder
+    als Bohrung heraus — mit demselben 48-Eck (:data:`BORE_SECTIONS`), mit dem
+    jede Bohrung am Netz geschnitten wird. Der Aufrufer schließt die alte
+    Öffnung vorher; hier wird nur geschnitten.
     """
     from app.core.geom.sketch_solid import extrude_profile
     from app.core.sketch.planes import frame_of
 
-    travel = slot_travel(diameter=diameter, length=length)
-    if travel <= EPS_GEOM:
+    round_bore = is_close(length, diameter)
+    travel = 0.0 if round_bore else slot_travel(diameter=diameter, length=length)
+    if travel <= EPS_GEOM and not round_bore:
         # Nur eine Länge von null kommt hier an — ``slot_travel`` liest sie als
         # „rund" und lehnt alles andere unter der Grenze selbst ab. Der Satz
         # verspricht die Mindestlänge darunter; also steht sie auch hier.
@@ -708,20 +715,25 @@ def slot_bore(
     # einer Blindbohrung bliebe der Boden sonst nicht, wo er gemessen wurde —
     # dieselbe Abwägung wie in :func:`resize_bore`.
     height = depth + (BOOLEAN_OVERLAP * 2.0 if through else 0.0)
-    tool = extrude_profile(
-        slot_profile(
-            radius=(diameter + overlap) / 2.0,
-            travel=travel,
-            angle_deg=angle_deg,
-        ),
-        height,
-        PlaneFrame(
-            origin=(0.0, 0.0, -height / 2.0),
-            x_axis=(1.0, 0.0, 0.0),
-            y_axis=(0.0, 1.0, 0.0),
-            normal=(0.0, 0.0, 1.0),
-        ),
-    )
+    if round_bore:
+        tool = lathe.cylinder(
+            radius=(diameter + overlap) / 2.0, height=height, sections=BORE_SECTIONS
+        )
+    else:
+        tool = extrude_profile(
+            slot_profile(
+                radius=(diameter + overlap) / 2.0,
+                travel=travel,
+                angle_deg=angle_deg,
+            ),
+            height,
+            PlaneFrame(
+                origin=(0.0, 0.0, -height / 2.0),
+                x_axis=(1.0, 0.0, 0.0),
+                y_axis=(0.0, 1.0, 0.0),
+                normal=(0.0, 0.0, 1.0),
+            ),
+        )
     outcome = boolean(
         "difference",
         [mesh.replacing(local_body), MeshData.of(tool)],
@@ -902,29 +914,6 @@ SLOT_SHORTEST_SHARE: Final = 1.10
 #: die Zahl vom Durchmesser abhinge.
 SLOT_SHORTEST_TRAVEL: Final = 0.3
 
-#: Wenn jemand ein vorhandenes Langloch **kürzer** einträgt.
-#:
-#: Der Satz oben deckt den ersten Zug, dieser den zweiten — und der Fall ist
-#: der unauffälligere von beiden. Gemessen an einem Langloch von 20,016 mm,
-#: auf das jemand 12 einträgt: Abgetragen werden 1,14 mm³, nämlich der
-#: Toleranzrand ringsum, und das ist ein Vielfaches der Schwelle, unterhalb
-#: derer :func:`without_effect` „hat nichts bewirkt" sagt. Also schwieg sie.
-#: Im Verlauf stand ein Schritt, am Teil hatte sich nichts geändert, und die
-#: eingetragene Zahl war spurlos verschwunden.
-#:
-#: Warum es nicht geht, gehört in den Satz: Die Operation schneidet, und
-#: Material kommt nicht zurück.
-#:
-#: **Ohne geschweifte Klammern**, und das ist keine Stilfrage: Ein
-#: ``{platzhalter}`` in ``AppError.detail`` bleibt dem Kunden wörtlich stehen —
-#: ``dialogs.show_details`` zeigt den Satz, wie er ist, und hängt die ``values``
-#: als eigene Zeilen darunter. Die beiden Längen stehen deshalb dort.
-SLOT_NOT_SHORTER: Final = _(
-    "Dieses Langloch ist bereits länger als die eingetragene Länge. Eine Operation schneidet "
-    "nur weg — Material kommt nicht zurück. Tragen Sie eine größere Länge ein, oder nehmen "
-    "Sie über Strg+Z den Schritt zurück, mit dem das Langloch entstanden ist."
-)
-
 
 def shortest_slot(diameter: float) -> float:
     """Die kürzeste Gesamtlänge, bei der ein Langloch noch eines ist.
@@ -939,6 +928,23 @@ def shortest_slot(diameter: float) -> float:
     Merkmal ganz verschwindet.
     """
     return diameter + max(SLOT_SHORTEST_TRAVEL, diameter * (SLOT_SHORTEST_SHARE - 1.0))
+
+
+def is_round_length(length: float, width: float) -> bool:
+    """Ob eine Langlochlänge die runde Bohrung meint: genau ihre Breite.
+
+    Zwischen der Breite und :func:`shortest_slot` gibt es keine Länge — dort
+    ist das Loch weder rund noch ein Langloch, das die Erkennung hält. Genau
+    die Breite aber ist eine Form, die es gibt, und wer ein Langloch bis dorthin
+    zurückzieht, meint die Bohrung, aus der es kam (Robert, 24.09.2026: „wenn
+    man ein langloch so zieht, dass es wieder eine normale Bohrung wäre, sollte
+    es kurz einrasten"). Gerechnet auf die halbe Anzeigestufe: Wer die Breite
+    einträgt, die das Feld zeigt, meint sie.
+
+    Griff, Felder und beide Kerne fragen hier — eine zweite Fassung der Frage
+    rastete an einer anderen Stelle, als die Operation annimmt.
+    """
+    return math.isfinite(length) and abs(length - width) < EPS_DISPLAY / 2.0
 
 
 def slot_travel(*, diameter: float, length: float, widening_diameter: float = 0.0) -> float:

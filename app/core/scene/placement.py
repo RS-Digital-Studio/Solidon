@@ -1474,6 +1474,15 @@ def seat_of(
       Absage, ohne sie 15,0 mm zur oberen und 20,0 mm zur rechten Kante. Für
       die Frage nach den **Außenmaßen** ist das Loch ohnehin ohne Belang.
 
+    **Und eine Fase an der Mündung verschiebt die Mündung nicht von der
+    Fläche.** Gemessen wird die zylindrische Wand; eine Fase, Rundung oder
+    Senkung davor gehört nicht dazu, und die gemessene Mündung liegt dann
+    unter der Ebene der Trägerfläche — an der Magnettasche eines Schabers
+    0,19 mm, am Langloch eines Wedge-Lock 0,76 mm (24.09.2026). Findet keine
+    Mündung eine Fläche in ihrer Ebene, gilt die nächste Fläche dahinter,
+    höchstens :func:`mouth_reach` entfernt, **wenn ihre Öffnung die Achse
+    umschließt**; eine Fläche ohne Öffnung dort ist Material und kein Sitz.
+
     ``None`` heißt: Zu diesem Merkmal gibt es keine solche Fläche — eine
     Verrundung an einer Kante hat keine, und ein Merkmal ohne Achse oder Tiefe
     ebenso wenig. Der Aufrufer zeigt dann keine Maße statt falscher.
@@ -1490,11 +1499,35 @@ def seat_of(
     direction = direction / length
     middle = np.asarray(centre, dtype=float)
     half = direction * (float(depth) / 2.0)
-    for mouth, outward in ((_vec(middle + half), direction), (_vec(middle - half), -direction)):
+    mouths = ((_vec(middle + half), direction), (_vec(middle - half), -direction))
+    for mouth, outward in mouths:
         seated = _seat_at(mesh, feature, features, mouth, outward)
         if seated is not None:
             return seated
+    reach = mouth_reach(feature)
+    if reach <= EPS_GEOM:
+        return None
+    for mouth, outward in mouths:
+        seated = _seat_at(mesh, feature, features, mouth, outward, reach=reach)
+        if seated is not None:
+            return seated
     return None
+
+
+def mouth_reach(feature: Feature) -> float:
+    """Wie weit hinter der gemessenen Mündung eines Lochs seine Fläche liegen darf.
+
+    Ein Radius: Eine Fase, Rundung oder Senkung, die tiefer reicht als das
+    Loch breit ist, ist kein Rand der Mündung mehr, sondern eine eigene Stufe.
+    :func:`seat_of` sucht die Trägerfläche höchstens so weit, und
+    :func:`surface_values` nimmt eine Fläche in dieser Reichweite als die
+    eigene Mündung — sonst rückte die Mitte um die Fase in die Achse. Null
+    für alles, was kein Loch oder Langloch ist.
+    """
+    diameter = feature.params.get("diameter")
+    if feature.kind not in ("hole", "slot") or not isinstance(diameter, int | float):
+        return 0.0
+    return max(0.0, float(diameter) / 2.0)
 
 
 def _seat_at(
@@ -1503,15 +1536,23 @@ def _seat_at(
     features: Mapping[str, Feature],
     mouth: Vec3,
     direction: Any,
+    *,
+    reach: float = 0.0,
 ) -> tuple[PreparedSurface, Vec3] | None:
     """Die ebene Fläche, deren Ebene diese Mündung enthält — mit gefüllter Öffnung.
 
-    Der Rumpf von :func:`seat_of`, je Mündungskandidat einmal gerufen.
+    Der Rumpf von :func:`seat_of`, je Mündungskandidat einmal gerufen. Mit
+    ``reach`` liegt die Ebene nicht in der Mündung, sondern bis dahin nach
+    außen hinter ihr; die zurückgegebene Mündung ist dann der Durchstoßpunkt
+    der Achse durch diese Ebene, und nur eine Fläche zählt, deren eigene
+    Öffnung die Achse umschließt.
     """
     from shapely.geometry import Point, Polygon
 
     from app.core.sketch.planes import to_plane
 
+    beyond = reach > EPS_GEOM
+    candidates: list[tuple[float, Feature, Vec3]] = []
     for entry in features.values():
         if entry.kind != "face" or not entry.face_indices:
             continue
@@ -1525,23 +1566,43 @@ def _seat_at(
         # zum Hohlraum zurück. Nur die äußere Mündung zeigt von der Mitte weg.
         if (aligned if feature.kind in ("hole", "slot") else abs(aligned)) < _SEAT_PARALLEL:
             continue
-        if abs(float((np.asarray(mouth) - np.asarray(seat, dtype=float)) @ flat)) > EPS_GEOM:
-            continue
+        offset = float((np.asarray(seat, dtype=float) - np.asarray(mouth)) @ flat)
+        if not beyond:
+            if abs(offset) > EPS_GEOM:
+                continue
+            candidates.append((0.0, entry, mouth))
+        elif -MAX_FACET_SAG <= offset <= reach:
+            # **Auch knapp davor.** Die Wand ist eingepasst, nicht abgelesen:
+            # Am gekürzten Langloch des Wedge-Lock lag die gemessene Mündung
+            # 3,5 µm über ihrer Fläche — für ``EPS_GEOM`` eine andere Ebene.
+            # Entlang der Achse bis in die Ebene, nicht entlang der Normalen:
+            # Die Mitte bleibt auf der Achse, auch wo die Fläche um die
+            # Messgenauigkeit schief steht.
+            candidates.append(
+                (abs(offset), entry, _vec(np.asarray(mouth) + direction * (offset / aligned)))
+            )
+    # Die nächste Ebene zuerst; in der Mündung selbst gilt die Reihenfolge
+    # der Merkmale wie bisher (stabil sortiert, alle Abstände null).
+    for _distance, entry, point in sorted(candidates, key=lambda candidate: candidate[0]):
         try:
             prepared = prepare_surface(mesh, entry.face_indices[0], features)
         except ValidationError:
             continue
         area = prepared.area
         if not isinstance(area, Polygon) or not area.interiors:
-            return replace(prepared, centres=_others(prepared, feature)), mouth
+            if beyond:
+                # Ohne Öffnung um die Achse ist die Fläche dahinter Material —
+                # der Deckel über einem flachen Sackloch, kein Sitz.
+                continue
+            return replace(prepared, centres=_others(prepared, feature)), point
         # **Und die Kanten der eigenen Öffnung zählen nicht mit.** Ein Langloch
         # hat zwei gerade Flanken, und die sind vom Merkmal aus die nächsten
         # Bezugskanten überhaupt: Gemessen an einer Platte 60 x 40 mit einem
         # Langloch Ø 6 auf 20 kamen minus 3,00 und minus 3,30 zurück, also seine eigene
         # halbe Breite. Gefragt ist der Abstand zum **Rand des Teils**; was in
         # einer Aussparung liegt, ist keine Antwort darauf.
-        point = Point(to_plane(prepared.frame, mouth))
-        own = [ring for ring in area.interiors if Polygon(ring).covers(point)]
+        pierced = Point(to_plane(prepared.frame, point))
+        own = [ring for ring in area.interiors if Polygon(ring).covers(pierced)]
         if len(own) != 1:
             continue
         border = own[0]
@@ -1557,7 +1618,7 @@ def _seat_at(
         )
         return replace(
             prepared, area=available, edges=edges, centres=_others(prepared, feature)
-        ), mouth
+        ), point
     return None
 
 
@@ -1958,7 +2019,22 @@ def surface_values(
         # wird, nicht aus der Achse allein.
         facing = float(np.asarray(placement.frame.normal, dtype=float) @ (along / span))
         towards = 1.0 if facing >= 0.0 else -1.0
-        target = _vec(np.asarray(target) - along / span * towards * (float(depth) / 2.0))
+        half = float(depth) / 2.0
+        centre = feature.params.get("centre")
+        if centre is not None:
+            # **Hinter einer Fase liegt die Fläche weiter draußen als die
+            # Mündung** (:func:`seat_of`). Eine Ebene innerhalb von
+            # :func:`mouth_reach` hinter der gemessenen Mündung ist die eigene;
+            # ihr Abstand zur Mitte ersetzt die halbe Tiefe, sonst rückte die
+            # Mitte um die Fase in die Achse — an einem Sackloch hieße das ein
+            # anderes Loch. Dieselbe Spanne wie dort, auch knapp davor.
+            beyond = towards * sum(
+                (float(target[index]) - float(centre[index])) * float(along[index]) / span
+                for index in range(3)
+            )
+            if half - MAX_FACET_SAG <= beyond <= half + mouth_reach(feature):
+                half = beyond
+        target = _vec(np.asarray(target) - along / span * towards * half)
     elif spec.name in {"move_feature", "duplicate_feature"}:
         if feature is None or source is None:
             raise _reject(
@@ -2157,7 +2233,12 @@ def _creation_tool(
             slot_angle=shape.slot_angle,
         )
     if spec.name in {"slot_hole", "resize_hole"}:
-        from app.core.geom.prepare import bore_diameter, drill_tool, slot_travel
+        from app.core.geom.prepare import (
+            bore_diameter,
+            drill_tool,
+            is_round_length,
+            slot_travel,
+        )
 
         # **Ein Loch, das schon da ist, hat seine Maße am Merkmal.** Die zwei
         # Operationen tragen nur, was sich ändern soll — die Länge, den
@@ -2185,14 +2266,31 @@ def _creation_tool(
             )
             length = 0.0
             angle = 0.0
+            if feature.kind == "slot":
+                from app.core.geom.prepare_ops import slot_angle_of
+
+                # Die Breitenänderung erhält wie die Op den vorhandenen Weg.
+                length = float(feature.params["travel"]) + cut
+                angle = slot_angle_of(feature, tuple(feature.params["axis"]))
         else:
-            cut = measured
+            cut = (
+                measured
+                if values.diameter is None
+                else bore_diameter(float(values.diameter), profile, bool(values.compensate))
+            )
             length = float(values.slot_length)
             angle = float(values.slot_angle)
-            # Eine Länge unter dem Durchmesser ist kein Langloch; der Kern
-            # lehnt sie ab, und die Vorschau soll nicht zeigen, was danach
-            # nicht kommt.
-            if slot_travel(diameter=cut, length=length) <= 0.0:
+            # **Genau die Breite heißt rund** (:func:`prepare.is_round_length`),
+            # dieselbe Frage wie im Kern und am Griff: Die Vorschau zeigt die
+            # Bohrung, zu der das Langloch zurückgeht. Sonst ist eine Länge
+            # unter dem Durchmesser kein Langloch; der Kern lehnt sie ab, und
+            # die Vorschau soll nicht zeigen, was danach nicht kommt.
+            width = measured if values.diameter is None else float(values.diameter)
+            if (
+                is_round_length(length, width)
+                or is_round_length(length, cut)
+                or slot_travel(diameter=cut, length=length) <= 0.0
+            ):
                 length = 0.0
         return drill_tool(
             diameter=cut,

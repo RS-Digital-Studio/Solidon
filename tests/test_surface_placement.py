@@ -100,6 +100,101 @@ def test_slot_mouth_preview_keeps_its_full_width_and_length(profile):
     assert np.ptp(outline, axis=0) == pytest.approx([20.0, 5.0], abs=2.0 * MAX_FACET_SAG)
 
 
+@pytest.mark.parametrize("angle", [0.0, 90.0])
+@pytest.mark.parametrize("compensate", [False, True])
+@pytest.mark.parametrize(
+    "op,width", [("resize_hole", 8.0), ("slot_hole", 8.0), ("slot_hole", None)]
+)
+def test_existing_slot_preview_keeps_direction_travel_and_requested_width(
+    profile, angle, compensate, op, width
+):
+    """Breitenänderung erhält den Weg; ein Langlochauftrag zeigt seine Zielbreite."""
+    from app.core.types import SceneObject
+    from app.core.units import MAX_FACET_SAG
+
+    load_operations()
+    feature = Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        params={
+            "diameter": 6.0,
+            "length": 20.0,
+            "travel": 14.0,
+            "depth": 8.0,
+            "centre": (0.0, 0.0, 0.0),
+            "axis": (0.0, 0.0, 1.0),
+            "direction": (math.cos(math.radians(angle)), math.sin(math.radians(angle)), 0.0),
+        },
+    )
+    source = SceneObject(
+        id="obj_1",
+        name="Langlochplatte",
+        mesh=MeshData.of(trimesh.creation.box((40.0, 30.0, 8.0))),
+        features={feature.id: feature},
+    )
+    values = {"at_feature": feature.id, "diameter": width, "compensate": compensate}
+    if op == "slot_hole":
+        values.update(slot_length=24.0, slot_angle=angle)
+    tool = placement.prepare_tool(REGISTRY.get(op), values, profile, source=source)
+    outline = np.asarray(placement.mouth_outline(tool))
+    cut = (
+        6.0
+        if width is None
+        else width + (profile.material.hole_compensation if compensate else 0.0)
+    )
+    length = 14.0 + cut if op == "resize_hole" else 24.0
+    expected = (length, cut) if angle < 45.0 else (cut, length)
+    assert np.ptp(outline, axis=0) == pytest.approx(expected, abs=2.0 * MAX_FACET_SAG)
+
+
+@pytest.mark.parametrize("width", [None, 8.0])
+def test_a_slot_pulled_back_to_its_width_previews_the_round_bore(profile, width):
+    """Länge = Breite zeigt die runde Bohrung, zu der das Langloch zurückgeht.
+
+    Ohne diese Vorschau blieb *Übernehmen* nach dem Einrasten grau: Das
+    Werkzeug fragte ``slot_travel``, das eine Länge unter der Mindestlänge
+    ablehnt, und ohne Werkzeug gibt die Platzierung den Knopf nicht frei
+    (Prüfstand am Scraper-Modell, 24.09.2026). Langloch Ø 6 auf 20 mm; die
+    Mündung ist danach ein Kreis der gewünschten Breite.
+    """
+    from app.core.types import SceneObject
+    from app.core.units import MAX_FACET_SAG
+
+    load_operations()
+    feature = Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        params={
+            "diameter": 6.0,
+            "length": 20.0,
+            "travel": 14.0,
+            "depth": 8.0,
+            "centre": (0.0, 0.0, 0.0),
+            "axis": (0.0, 0.0, 1.0),
+            "direction": (1.0, 0.0, 0.0),
+        },
+    )
+    source = SceneObject(
+        id="obj_1",
+        name="Langlochplatte",
+        mesh=MeshData.of(trimesh.creation.box((40.0, 30.0, 8.0))),
+        features={feature.id: feature},
+    )
+    cut = 6.0 if width is None else width
+    values = {
+        "at_feature": feature.id,
+        "diameter": width,
+        "compensate": False,
+        "slot_length": cut,
+        "slot_angle": 0.0,
+    }
+    tool = placement.prepare_tool(REGISTRY.get("slot_hole"), values, profile, source=source)
+    outline = np.asarray(placement.mouth_outline(tool))
+    assert np.ptp(outline, axis=0) == pytest.approx((cut, cut), abs=2.0 * MAX_FACET_SAG)
+
+
 def test_two_real_edges_replace_the_triangulation_diagonal():
     """Eine Deckfläche hat vier Randkanten; die innere Diagonale taugt nicht als Bezug."""
     mesh = MeshData.of(trimesh.creation.box((40.0, 30.0, 8.0)))
@@ -1580,6 +1675,98 @@ def test_the_flanks_of_a_slot_are_not_its_distance_to_the_edge():
         "keine Kante der eigenen Aussparung"
     )
     assert not prepared.area.interiors, "die Öffnung ist gefüllt"
+
+
+@pytest.mark.parametrize(
+    ("kind", "mouth", "distances", "operation"),
+    [
+        # Sackloch Ø 9 von unten: Wand von z = -3,4 bis 2,0, Fase 0,6 bis z = -4.
+        # Kanten der Unterseite: links x = -30 (15 mm), vorn/hinten y = ±20 (20 mm).
+        ("hole", (-15.0, 0.0, -4.0), [15.0, 20.0], "resize_hole"),
+        # Langloch 6 x 18 durch, Fasen 0,8 oben und unten: Wand von z = -3,2 bis
+        # 3,2. Kanten der Oberseite: rechts x = 30 (18 mm), vorn/hinten 20 mm.
+        ("slot", (12.0, 0.0, 4.0), [18.0, 20.0], "slot_hole"),
+    ],
+)
+def test_a_chamfered_mouth_still_finds_its_carrier_face(kind, mouth, distances, operation):
+    """Eine Fase an der Mündung legt die gemessene Wand unter die Fläche (Robert, 24.09.2026).
+
+    Die Erkennung misst die zylindrische Wand; eine Fase oder Rundung an der
+    Mündung gehört nicht dazu, und die Mündung liegt damit unter der Ebene
+    der Trägerfläche. Gemessen an echten Modellen: Magnettasche des Schabers
+    0,19 mm, Langloch des Wedge-Lock 0,76 mm — beide Male keine Fläche, keine
+    Maße im Bild, und der Platzierungsfluss fiel aufs Zielen mit dem Zeiger
+    zurück. Die Fläche hinter der Fase ist die Trägerfläche, sofern ihre
+    Öffnung die Achse umschließt; die Mitte des Merkmals bleibt, wo sie ist.
+
+    Die Gegenprobe steckt im Sackloch: Über seinem Boden liegt die Oberseite
+    nur 2 mm entfernt, näher als ein Radius, und sie hat dort keine Öffnung.
+    Sie darf nicht die Trägerfläche sein.
+    """
+    from pathlib import Path
+
+    from app.core.perceive.features import detect
+
+    load_operations()
+    mesh = MeshData.of(
+        trimesh.load_mesh(
+            Path(__file__).parent / "data" / "meshes" / "plate_chamfered_mouths.stl",
+            process=True,
+        )
+    )
+    found = detect(mesh)
+    feature = next(entry for entry in found.values() if entry.kind == kind)
+
+    seat = placement.seat_of(mesh, feature, found)
+
+    assert seat is not None, "die Fläche hinter der Fase trägt das Merkmal"
+    prepared, seated = seat
+    assert seated == pytest.approx(mouth, abs=1e-6)
+    spot = placement.at_point(prepared, seated)
+    assert sorted(edge.distance for edge in spot.edges) == pytest.approx(distances, abs=1e-6)
+    values = placement.surface_values(REGISTRY.get(operation), spot, feature=feature)
+    assert (values["x"], values["y"], values["z"]) == pytest.approx(
+        feature.params["centre"], abs=1e-6
+    ), "die Mitte bleibt auf ihrer Höhe, die Fase verschiebt sie nicht"
+
+
+@pytest.mark.parametrize("shift", [-0.0035, 0.0035])
+def test_a_mouth_measured_a_few_microns_off_its_face_still_seats(shift):
+    """Eine eingepasste Wand endet nicht auf den Mikrometer in ihrer Fläche.
+
+    Am Wedge-Lock lag die gemessene Mündung eines gekürzten Langlochs 3,5 µm
+    über ihrer Fläche; für ``EPS_GEOM`` eine andere Ebene, und das Langloch
+    hatte nach dem Übernehmen keine Maße mehr. Nachgestellt an der Lochplatte
+    des Korpus, deren Bohrung Ø 5,2 von z = -4 bis 4 durch die Platte geht:
+    die Mitte um dieselben 3,5 µm entlang der Achse versetzt, in beide
+    Richtungen. Der Sitz bleibt die Oberseite, und die Mitte bleibt die
+    gemessene.
+    """
+    from dataclasses import replace
+    from pathlib import Path
+
+    from app.core.perceive.features import detect
+
+    load_operations()
+    mesh = MeshData.of(
+        trimesh.load_mesh(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
+    )
+    found = detect(mesh)
+    hole = min(
+        (entry for entry in found.values() if entry.kind == "hole"),
+        key=lambda entry: entry.id,
+    )
+    x, y, z = hole.params["centre"]
+    measured = replace(hole, params={**hole.params, "centre": (x, y, z + shift)})
+
+    seat = placement.seat_of(mesh, measured, {**found, measured.id: measured})
+
+    assert seat is not None, "ein Messrest von Mikrometern ist keine andere Fläche"
+    prepared, mouth = seat
+    assert mouth == pytest.approx((x, y, 4.0), abs=1e-9)
+    spot = placement.at_point(prepared, mouth)
+    values = placement.surface_values(REGISTRY.get("resize_hole"), spot, feature=measured)
+    assert (values["x"], values["y"], values["z"]) == pytest.approx((x, y, z + shift), abs=1e-9)
 
 
 def test_a_feature_without_an_axis_gets_no_distances():

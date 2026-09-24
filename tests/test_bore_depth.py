@@ -352,6 +352,36 @@ def test_a_deeper_hole_near_a_neighbour_says_what_it_does_to_the_wall(
     assert not {"bore.neighbour_wall_thin", "bore.neighbour_opened"} & set(run(5.0))
 
 
+@pytest.mark.parametrize(
+    ("through", "depth", "unchanged"),
+    [
+        (False, None, True),
+        (True, None, True),
+        (False, 0.0, False),
+        (True, 0.0, True),
+        (False, 6.0, True),
+        (True, 6.0, True),
+        (False, 6.004, True),
+        (False, 6.006, False),
+        (True, 5.996, True),
+        (True, 5.994, False),
+        (False, 12.0, False),
+        (True, 12.0, True),
+    ],
+)
+def test_the_depth_wish_distinguishes_real_changes_from_display_rounding(
+    through: bool, depth: float | None, unchanged: bool
+) -> None:
+    """Formwechsel und Tiefenoperation lesen denselben Wunsch ohne Geometrie oder Fenster."""
+    from app.core.geom.prepare_ops import bore_depth_is_unchanged
+
+    feature = Feature(
+        id="hole_1", kind="hole", provenance="detected", params={"depth": 6.0, "through": through}
+    )
+
+    assert bore_depth_is_unchanged(feature, depth) is unchanged
+
+
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_an_unchanged_depth_changes_nothing(profile: Profile, kernel: str) -> None:
     blind = _blind(kernel)

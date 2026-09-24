@@ -33,7 +33,7 @@ from app.core.perceive.digest import _feature_line
 from app.core.perceive.features import _fitted, _one_body, detect
 from app.core.perceive.slots import find_slots
 from app.core.registry import REGISTRY
-from app.core.types import Feature, Finding, OpContext, Profile, Scene, SceneObject
+from app.core.types import Feature, Finding, OpContext, Profile, Quality, Scene, SceneObject
 
 
 def plate() -> MeshData:
@@ -675,7 +675,12 @@ def run_op(op: str, entry: SceneObject, profile: Profile, **params: object) -> S
 
 
 def run_op_with_findings(
-    op: str, entry: SceneObject, profile: Profile, **params: object
+    op: str,
+    entry: SceneObject,
+    profile: Profile,
+    *,
+    quality: Quality = "fine",
+    **params: object,
 ) -> tuple[SceneObject, list[Finding]]:
     """Eine Operation fahren und danach neu erkennen, wie die Auswertung es tut."""
     from app.core.scene.cancel import NeverCancelled
@@ -688,7 +693,7 @@ def run_op_with_findings(
             inputs=[entry],
             params=spec.params(**params),
             profile=profile,
-            quality="fine",
+            quality=quality,
             seed=7,
             progress=lambda fraction, text: None,
             ask=lambda question, options: options[0],
@@ -702,6 +707,418 @@ def run_op_with_findings(
 def a_slotted_plate(profile: Profile) -> SceneObject:
     mesh = slotted(profile)
     return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_an_imported_slot_can_be_shortened_without_changing_its_neighbour(
+    profile: Profile, quality: Quality
+) -> None:
+    """Die Korpusplatte bekommt Material an den alten Enden zurück, das Nachbarloch bleibt."""
+    from app.core.geom.prepare_ops import slot_angle_of
+
+    source = Path(__file__).parent / "data" / "meshes" / "plate_coarse_slots.stl"
+    body = MeshData.of(trimesh.load_mesh(source, process=True))
+    before = detect(body)
+    slots = sorted(
+        (feature for feature in before.values() if feature.kind == "slot"),
+        key=lambda feature: float(feature.params["length"]),
+    )
+    assert len(slots) == 2
+    chosen = slots[1]
+    assert body.raw.is_watertight and body.raw.is_winding_consistent
+    assert body.raw.body_count == 1
+    assert chosen.params["length"] == pytest.approx(24.8, abs=0.001)
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=before)
+
+    result, findings = run_op_with_findings(
+        "slot_hole",
+        entry,
+        profile,
+        quality=quality,
+        at_feature=chosen.id,
+        slot_length=12.0,
+        slot_angle=slot_angle_of(chosen, chosen.params["axis"]),
+    )
+
+    changed = as_mesh_data(result.mesh)
+    found = sorted(
+        (feature for feature in result.features.values() if feature.kind == "slot"),
+        key=lambda feature: float(feature.params["length"]),
+    )
+    assert changed.raw.is_watertight and changed.raw.is_winding_consistent
+    assert changed.raw.body_count == 1
+    assert len(found) == 2
+    assert found[0].params["length"] == pytest.approx(7.6, abs=0.001)
+    assert found[0].params["centre"] == pytest.approx(slots[0].params["centre"], abs=0.001)
+    assert found[1].params["length"] == pytest.approx(12.0, abs=0.01)
+    assert found[1].params["diameter"] == pytest.approx(3.8, abs=0.001)
+    assert found[1].params["centre"] == pytest.approx(chosen.params["centre"], abs=0.001)
+    original_arc_area = 8.0 * 1.9**2 * math.sin(math.pi / 8.0)
+    expected_gain = ((24.8 - 12.0) * 3.8 + original_arc_area - math.pi * 1.9**2) * 2.0
+    assert changed.volume - body.volume == pytest.approx(expected_gain, abs=0.1)
+    assert not any(finding.code == "slot_hole.feature_lost" for finding in findings)
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("depth", [0.0, 4.0])
+@pytest.mark.parametrize(("diameter", "length"), [(6.0, 12.0), (4.0, 5.0)])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_slot_can_be_shortened_and_narrowed_in_both_kernels(
+    profile: Profile, quality: Quality, depth: float, diameter: float, length: float, kernel: str
+) -> None:
+    """Beide Maße ändern gemeinsam, auch unter die alte Mindestlänge; der Boden bleibt."""
+    exact = kernel == "brep"
+    if exact:
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+
+        body = edit.box(60.0, 40.0, 10.0)
+    else:
+        body = plate()
+        body.raw.apply_translation((0.0, 0.0, 5.0))
+
+    def recognised(result: SceneObject) -> dict[str, Feature]:
+        return features_of(result.mesh) if exact else detect(as_mesh_data(result.mesh))
+
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, kind=kernel)
+    drilled = run_op(
+        "drill_hole",
+        entry,
+        profile,
+        diameter=6.0,
+        slotted=True,
+        slot_length=24.0,
+        slot_angle=31.0,
+        x=0.0,
+        y=0.0,
+        z=10.0,
+        axis="normal",
+        nx=0.0,
+        ny=0.0,
+        nz=1.0,
+        depth=depth,
+        compensate=False,
+    )
+    drilled = dataclasses.replace(drilled, features=recognised(drilled))
+    before = next(feature for feature in drilled.features.values() if feature.kind == "slot")
+    original_volume = drilled.mesh.volume
+    cut_depth = depth or 10.0
+    assert original_volume == pytest.approx(
+        24000.0 - (math.pi * 9.0 + 6.0 * 18.0) * cut_depth, abs=1e-6 if exact else 0.5
+    )
+
+    result, findings = run_op_with_findings(
+        "slot_hole",
+        drilled,
+        profile,
+        quality=quality,
+        at_feature=before.id,
+        slot_length=length,
+        slot_angle=31.0,
+        diameter=diameter,
+        compensate=False,
+    )
+
+    assert result.kind == kernel
+    changed = as_mesh_data(result.mesh)
+    assert changed.raw.is_watertight and changed.raw.is_winding_consistent
+    assert changed.raw.body_count == 1
+    if exact:
+        assert result.mesh.is_closed
+    assert result.mesh.volume == pytest.approx(
+        24000.0 - (math.pi * (diameter / 2.0) ** 2 + diameter * (length - diameter)) * cut_depth,
+        abs=1e-6 if exact else 0.5,
+    )
+    assert drilled.mesh.volume == pytest.approx(original_volume, abs=1e-6)
+    after = next(feature for feature in recognised(result).values() if feature.kind == "slot")
+    assert after.params["length"] == pytest.approx(length, abs=1e-6 if exact else 0.001)
+    assert after.params["diameter"] == pytest.approx(diameter, abs=1e-6 if exact else 0.001)
+    assert after.params["depth"] == pytest.approx(cut_depth, abs=1e-6 if exact else 0.001)
+    assert after.params["through"] is (depth == 0.0)
+    assert after.params["centre"] == pytest.approx(
+        before.params["centre"], abs=1e-6 if exact else 0.001
+    )
+    assert _direction_angle(after) == pytest.approx(31.0, abs=1e-6 if exact else 0.001)
+    assert not any(finding.code == "slot_hole.feature_lost" for finding in findings)
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("depth", [0.0, 4.0])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_slot_pulled_back_to_its_width_is_a_round_bore_again(
+    profile: Profile, quality: Quality, depth: float, kernel: str
+) -> None:
+    """Genau die Breite als Länge heißt: wieder rund (Robert, 24.09.2026).
+
+    Langloch Ø 6 auf 24 mm in einer Platte 60 x 40 x 10, auf die Länge 6
+    zurückgezogen. Übrig bleibt eine runde Bohrung Ø 6 an der Mitte des
+    Langlochs, so tief wie vorher: am exakten Körper π · 3² · Tiefe
+    abgetragen, am Netz das 48-Eck der Bohrwerkzeuge (``BORE_SECTIONS``),
+    also 24 · 3² · sin(2π / 48) · Tiefe.
+    """
+    exact = kernel == "brep"
+    if exact:
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+
+        body = edit.box(60.0, 40.0, 10.0)
+    else:
+        body = plate()
+        body.raw.apply_translation((0.0, 0.0, 5.0))
+
+    def recognised(result: SceneObject) -> dict[str, Feature]:
+        return features_of(result.mesh) if exact else detect(as_mesh_data(result.mesh))
+
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, kind=kernel)
+    drilled = run_op(
+        "drill_hole",
+        entry,
+        profile,
+        diameter=6.0,
+        slotted=True,
+        slot_length=24.0,
+        slot_angle=31.0,
+        x=0.0,
+        y=0.0,
+        z=10.0,
+        axis="normal",
+        nx=0.0,
+        ny=0.0,
+        nz=1.0,
+        depth=depth,
+        compensate=False,
+    )
+    drilled = dataclasses.replace(drilled, features=recognised(drilled))
+    before = next(feature for feature in drilled.features.values() if feature.kind == "slot")
+
+    result, findings = run_op_with_findings(
+        "slot_hole",
+        drilled,
+        profile,
+        quality=quality,
+        at_feature=before.id,
+        slot_length=float(before.params["diameter"]),
+        slot_angle=31.0,
+    )
+
+    cut_depth = depth or 10.0
+    area = math.pi * 9.0 if exact else 24.0 * 9.0 * math.sin(2.0 * math.pi / 48.0)
+    assert result.kind == kernel
+    changed = as_mesh_data(result.mesh)
+    assert changed.raw.is_watertight and changed.raw.is_winding_consistent
+    assert changed.raw.body_count == 1
+    assert result.mesh.volume == pytest.approx(
+        24000.0 - area * cut_depth, abs=1e-6 if exact else 0.05
+    )
+    after = recognised(result)
+    assert not any(feature.kind == "slot" for feature in after.values())
+    bores = [feature for feature in after.values() if feature.kind == "hole"]
+    assert len(bores) == 1
+    assert bores[0].params["diameter"] == pytest.approx(6.0, abs=1e-6 if exact else 0.01)
+    assert bores[0].params["centre"][:2] == pytest.approx(
+        before.params["centre"][:2], abs=1e-6 if exact else 0.001
+    )
+    assert bores[0].params["depth"] == pytest.approx(cut_depth, abs=1e-6 if exact else 0.001)
+    assert any(finding.code == "slot_hole.round_again" for finding in findings)
+    assert not any(finding.severity == "warning" for finding in findings)
+
+
+def test_both_kernels_report_the_same_when_a_slot_snaps_round_with_tolerance(
+    profile: Profile,
+) -> None:
+    """Zurück auf rund mit Materialtoleranz: beide Kerne sagen dasselbe.
+
+    Am Netz fehlte im runden Zweig ``bore.compensated``, der exakte Kern
+    meldete ihn (Review 24.09.2026). Die Zwillingsregel verlangt dieselbe
+    Antwort auf dieselbe Frage.
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    codes: dict[str, set[str]] = {}
+    for kernel in ("mesh", "brep"):
+        if kernel == "brep":
+            entry = SceneObject(
+                id="obj_1", name="Platte", mesh=edit.box(60.0, 40.0, 10.0), kind="brep"
+            )
+        else:
+            mesh = plate()
+            mesh.raw.apply_translation((0.0, 0.0, 5.0))
+            entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, kind="mesh")
+        drilled = run_op(
+            "drill_hole",
+            entry,
+            profile,
+            diameter=6.0,
+            slotted=True,
+            slot_length=24.0,
+            slot_angle=31.0,
+            x=0.0,
+            y=0.0,
+            z=10.0,
+            axis="normal",
+            nx=0.0,
+            ny=0.0,
+            nz=1.0,
+            depth=0.0,
+            compensate=False,
+        )
+        found = (
+            features_of(drilled.mesh) if kernel == "brep" else detect(as_mesh_data(drilled.mesh))
+        )
+        drilled = dataclasses.replace(drilled, features=found)
+        slot = next(feature for feature in drilled.features.values() if feature.kind == "slot")
+        _result, findings = run_op_with_findings(
+            "slot_hole",
+            drilled,
+            profile,
+            at_feature=slot.id,
+            slot_length=6.0,
+            slot_angle=31.0,
+            diameter=6.0,
+            compensate=True,
+        )
+        codes[kernel] = {finding.code for finding in findings}
+    assert {"bore.compensated", "slot_hole.round_again"} <= codes["mesh"], codes
+    assert codes["mesh"] == codes["brep"], codes
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_wider_round_bore_warns_about_its_neighbour_like_resize_hole(
+    profile: Profile, kernel: str
+) -> None:
+    """Rund und breiter über *Zum Langloch ziehen* prüft die Nachbarwand wie *Bohrung ändern*.
+
+    Zwei Durchgangsbohrungen Ø 5 im Abstand 8 in einer Platte 60 x 40 x 10.
+    Die linke auf Ø 10 gebracht, lässt 0,5 mm Wand zur rechten. *Bohrung
+    ändern* sagte das, derselbe Weg über Länge = Breite = 10 nicht (Review
+    24.09.2026).
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    plate = edit.box(60.0, 40.0, 10.0)
+    for x in (0.0, 8.0):
+        plate = edit.cut_bore(
+            plate, position=(x, 0.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=5.0, depth=12.0
+        )
+    if kernel == "brep":
+        entry = SceneObject("plate", "Platte", plate, kind="brep", features=features_of(plate))
+    else:
+        mesh = as_mesh_data(plate)
+        entry = SceneObject("plate", "Platte", mesh, features=detect(mesh))
+    left = next(
+        feature
+        for feature in entry.features.values()
+        if feature.kind == "hole" and abs(float(feature.params["centre"][0])) < 0.5
+    )
+
+    def codes(op: str, **params: object) -> set[str]:
+        _result, findings = run_op_with_findings(op, entry, profile, at_feature=left.id, **params)
+        return {finding.code for finding in findings}
+
+    resized = codes("resize_hole", diameter=10.0, compensate=False)
+    rounded = codes("slot_hole", slot_length=10.0, slot_angle=0.0, diameter=10.0, compensate=False)
+    wall = {"bore.neighbour_wall_thin", "bore.neighbour_opened"}
+    assert resized & wall, resized
+    assert rounded & wall == resized & wall, (rounded, resized)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_moved_round_bore_is_not_reported_as_cutting_nothing(
+    profile: Profile, kernel: str
+) -> None:
+    """Versetzt trägt die Bohrung so viel ab, wie sie füllt — und das ist kein „nichts".
+
+    Am exakten Kern prüfte ``without_effect`` gegen den ungefüllten Körper:
+    Gleiches Volumen vorher und nachher hieß dort „Der Schnitt hat nichts
+    abgetragen", am Netz nicht (Review 24.09.2026).
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    plate = edit.cut_bore(
+        edit.box(60.0, 40.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=5.0,
+        depth=12.0,
+    )
+    if kernel == "brep":
+        entry = SceneObject("plate", "Platte", plate, kind="brep", features=features_of(plate))
+    else:
+        mesh = as_mesh_data(plate)
+        entry = SceneObject("plate", "Platte", mesh, features=detect(mesh))
+    bore = next(feature for feature in entry.features.values() if feature.kind == "hole")
+    centre = [float(value) for value in bore.params["centre"]]
+
+    _result, findings = run_op_with_findings(
+        "slot_hole",
+        entry,
+        profile,
+        at_feature=bore.id,
+        slot_length=float(bore.params["diameter"]),
+        slot_angle=0.0,
+        x=centre[0] + 12.0,
+        y=centre[1],
+        z=centre[2],
+    )
+    assert "boolean.without_effect" not in {finding.code for finding in findings}
+
+
+def test_a_round_bore_pulled_to_its_own_width_stays_as_it_is(profile: Profile) -> None:
+    """An einer runden Bohrung ändert die Länge ihres Durchmessers nichts — und sagt es."""
+    mesh = drill(
+        plate(), profile=profile, position=(0.0, 0.0, 5.0), axis="z", diameter=5.0, compensate=False
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+    bore = next(feature for feature in entry.features.values() if feature.kind == "hole")
+
+    result, findings = run_op_with_findings(
+        "slot_hole",
+        entry,
+        profile,
+        at_feature=bore.id,
+        slot_length=float(bore.params["diameter"]),
+        slot_angle=0.0,
+    )
+
+    assert result.mesh is entry.mesh, "nichts geschnitten, nichts gefüllt"
+    assert [finding.code for finding in findings] == ["slot_hole.already_round"]
+    assert findings[0].severity == "info"
+
+
+@pytest.mark.parametrize("beyond", [-0.5, 0.2])
+def test_between_round_and_slot_there_is_no_length(profile: Profile, beyond: float) -> None:
+    """Kürzer als die Breite oder zwischen Breite und Mindestlänge bleibt eine Absage.
+
+    Ø 5: rund heißt genau 5, ein Langloch beginnt bei ``shortest_slot(5)`` = 5,5.
+    """
+    entry = a_slotted_plate(profile)
+    slot = next(feature for feature in entry.features.values() if feature.kind == "slot")
+    width = float(slot.params["diameter"])
+    assert shortest_slot(width) > width + 0.2
+
+    with pytest.raises(ValidationError) as caught:
+        run_op_with_findings(
+            "slot_hole",
+            entry,
+            profile,
+            at_feature=slot.id,
+            slot_length=width + beyond,
+            slot_angle=0.0,
+        )
+    assert caught.value.field == "slot_length"
+    # Der Satz nennt beide Auswege mit ihren Zahlen, und eine Handlung steht
+    # daneben (Regel 17) — so viel prüfte der ersetzte Test auch.
+    assert caught.value.constraint == "slot_proportion"
+    assert caught.value.suggestions
+    assert {"diameter", "shortest"} <= set(caught.value.values)
 
 
 def test_pulling_an_existing_slot_keeps_its_direction(profile: Profile) -> None:
