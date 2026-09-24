@@ -25,6 +25,8 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-24 | [Solidon 0.5.0 veröffentlicht (24.09.2026)](#solidon-050-veröffentlicht-24092026) |
+| 2026-09-24 | [Rate-Key ausgeliefert und Gewindebolzen auf Ubuntu belegt (24.09.2026)](#rate-key-ausgeliefert-und-gewindebolzen-auf-ubuntu-belegt-24092026) |
 | 2026-09-23 | [Griffmuster schließen wieder zum Träger (23.09.2026)](#griffmuster-schließen-wieder-zum-träger-23092026) |
 | 2026-09-23 | [Die sichtbaren Aufnahmefehler von 0.5.0 sind behoben (23.09.2026)](#die-sichtbaren-aufnahmefehler-von-050-sind-behoben-23092026) |
 | 2026-09-23 | [Die Durchsicht vor 0.5.0 und ihre Pakete (23.09.2026)](#die-durchsicht-vor-050-und-ihre-pakete-23092026) |
@@ -286,6 +288,395 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 | 2026-09-08 | [Zwei Werkzeuge, zwei Wahrheiten (08.09.2026)](#zwei-werkzeuge-zwei-wahrheiten-08092026) |
 
 ---
+
+## Solidon 0.5.0 veröffentlicht (24.09.2026)
+
+Die fünf Kundenpakete und die Website einschließlich des signierten Update-Manifests
+sind veröffentlicht und durch vollständigen öffentlichen Bytevergleich bestätigt.
+Die älteren Absätze in den folgenden Punkten sind der damalige Befund; der jeweilige
+Abschluss darüber nennt den tatsächlich erreichten Stand.
+
+### Abschluss RM-001
+
+Am 24.09.2026 abgeschlossen: vollständiger erfolgreicher Tagbau `35982366247` auf `0895c4a6`, Anwendung lokal signiert, Installerbau `35999821668` auf `0c58a783`, finales Setup lokal signiert. Beide Windowsdateien haben gültige Certum-Signaturen und Zeitstempel ohne Warnungen. Beide Mac-Architekturen sind mit Anwendung und Installer signiert, notarisiert und durch Gatekeeper angenommen. Alle fünf Kundenpakete sind öffentlich vollständig per HTTPS gehasht. Nachweise: `Releases/0.5.0/Nachweise/signing-35982366247-r2/final-signatures.json`, `installer-phase-complete.json`, `packages-publish-35982366247/packages-published.json` und `review-050/reports/codex-ci-35982366247-unix-packages.json`. SmartScreen-Reputation und Fremdrechnerabnahme sind damit nicht vorweggenommen. Die direkte Certum-Signierung in der CI ist nach Roberts Entscheidung erst für die nächste Version vorgesehen; 0.5.0 verwendet den abgenommenen zweistufigen Weg.
+
+<a id="rm-001-abschluss-050"></a>
+
+- [x] **RM-001 — Signierung und Notarisierung der Kundenpakete belegen.** Windows-Signierung mit dem
+  vorhandenen Certum-Weg sowie Apple-Signierung und Notarisierung abschließen beziehungsweise
+  belegen. Die CI baut die Windows-Übergabe und den unsignierten Installer; `tools/sign_release.py`
+  erledigt die lokale Signierung. Ein vorhandenes Skript belegt weder den Zertifikatszugang noch
+  eine Signatur am Kundenpaket. Offen sind die benötigten Zugänge und die gebundenen
+  Signatur-/Notarisierungsbelege. Abnahme: veröffentlichungsfähiger Installer mit überprüfter
+  Signatur und Zeitstempel beziehungsweise Gatekeeper-/Notarisierungsnachweis für beide
+  Mac-Architekturen; den Fremdrechnerweg mit RM-011 abstimmen.
+
+  **Stand 18.09.2026, nach dem Bau von 0.4.3:** macOS ist vollständig durch — Appsignatur,
+  Installersignatur, Notarisierung und beide Releaseakten waren im Tag-Lauf 35303237593 grün.
+  Windows nicht: Der ausgelieferte `Solidon3D-Setup-0.4.3.exe` trägt **keine** Signatur
+  (`Get-AuthenticodeSignature` sagt `NotSigned`), und die Seite benennt das auch — sie erklärt
+  SmartScreen und sagt, dass Solidon mit eingeschaltetem *Smart App Control* gar nicht startet.
+  Der Grund ist kein Versäumnis: Die **Certum-Verifikation läuft noch** (Robert), und ohne sie
+  gibt es keinen Zugang zur SimplySign-Cloud, aus der der Einmalcode kommt.
+
+  **Was nach der Verifikation zu tun ist, und zwar in dieser Folge** — der letzte Punkt ist der,
+  den man übersieht: `tools/sign_release.py --run 35303237593` holt die Signierübergabe und baut
+  den signierten Installer. Dessen SHA-256 ist danach eine **andere** als die im Download-Kasten
+  und in `website/version.json`. Also: Datei nach `website/dl/`, dann `make_download.py` mit allen
+  fünf Paketen, dann `sign_version.py` (die Unterschrift deckt jedes Feld außer sich selbst),
+  dann der Upload — Paket zuerst, `version.json` zuletzt —, dann `--nachpruefen`. Wer nur die
+  Datei austauscht, veröffentlicht eine Prüfsumme, die nicht mehr stimmt, und jede installierte
+  Fassung verwirft das Update ungelesen.
+
+  **Gemessen am 10.09.2026 beim Bau von 0.4.0** (Lauf 34456150383, Tag `v0.4.0`): Der Weg
+  steht vollständig — `MACOS_SIGNING_MODE` auf `notarized`, alle acht Apple-Geheimnisse
+  gesetzt, und die Kette aus `codesign`, `notarytool`, `stapler` und `productsign` ist im
+  Workflow angelegt, mit `spctl --assess` und `pkgutil --check-signature` als Abnahme.
+  Gescheitert ist er trotzdem, auf beiden Architekturen, an derselben Stelle:
+
+      1 identity imported.
+      2 certificates imported.
+      ***: no identity found
+
+  Das Zertifikat kommt also in den Schlüsselbund; gesucht wird es unter dem Namen aus
+  `APPLE_SIGN_IDENTITY`, und **dieser Name findet sich dort nicht**. Das Geheimnis führt
+  den Zertifikatsnamen ein zweites Mal, und die zweite Fassung weicht ab. Alles danach —
+  Notarisierung, `.pkg`, Installersignatur, Mac-Releaseakte — wurde übersprungen; Windows
+  (159 MB) und Linux (459 MB) sind fertig gebaut und liegen als Artefakte des Laufs.
+
+  **Der Vorschlag, und er macht das Geheimnis überflüssig:** Den Fingerabdruck aus dem
+  Schlüsselbund lesen, den der Schritt gerade selbst angelegt hat — dort liegt genau eine
+  Identität (`security find-identity -v -p codesigning "$keychain"`, erste Spalte). Beim
+  Installer **ohne** `-p codesigning`, weil eine Developer-ID-Installer-Identität unter
+  diesem Filter nicht auftaucht. Der Vertrauensraum bleibt unangetastet: derselbe feste
+  Schritt, kein Checkout, kein Python.
+
+  **Entscheidung Robert, 10.09.2026: 0.4.0 geht unsigniert hinaus, signiert wird ab
+  0.4.1.** Die Repository-Variable `MACOS_SIGNING_MODE` steht dafür auf `unsigned`; der
+  Workflow überspringt dann beide Signierjobs und baut die Paketdatei über *macOS-Installer
+  ohne Signierrechte*. Das entspricht dem Stand von 0.3.5, und die Website erklärt ihn
+  bereits an drei Stellen — FAQ, Prüfhinweis im Download-Kasten und Systemanforderungen
+  nennen die fehlende Notarisierung samt dem Weg über *Datenschutz & Sicherheit* →
+  *Trotzdem öffnen*.
+
+  **Die Reparatur steht seit dem 10.09.2026 im Workflow.** Beide Signierschritte lesen den
+  Fingerabdruck aus dem Schlüsselbund, den sie selbst angelegt haben
+  (`security find-identity`, beim Installer ohne `-p codesigning`, weil eine
+  Developer-ID-Installer-Identität unter dieser Richtlinie nicht auftaucht). Liegt dort nicht
+  genau eine Identität, hält der Schritt an und sagt, was zu prüfen ist, statt zu raten
+  (Regel 21). Die beiden Geheimnisse `APPLE_SIGN_IDENTITY` und `APPLE_INSTALLER_IDENTITY`
+  werden nicht mehr gelesen — ein Name, den zwei Stellen unabhängig voneinander führen, geht
+  irgendwann auseinander; der Fingerabdruck steht nur an einer Stelle. Geprüft wurden das
+  Ausgabeformat von `security find-identity` gegen vier Lagen (eine, keine, zwei Identitäten,
+  Installer allein) und das Verhalten unter `set -euo pipefail` — beide Fehlfälle brechen
+  **mit** ihrer Meldung ab, nicht davor. Der Fingerabdruck wird dabei in Groß- **und**
+  Kleinschreibung gelesen: Die erste Fassung verlangte `[0-9A-F]`, und ein klein
+  geschriebener Wert hätte zu „0 Identitäten" geführt — an einer Stelle, die es hier nicht zu
+  messen gibt, weil kein Mac danebensteht.
+
+  **Was damit nicht gesagt ist:** Alles hinter dem Signieren — Notarisierung, `stapler`,
+  `spctl`, `productsign`, `pkgutil` — ist bis heute **nie gelaufen**; 0.4.0 ist vorher
+  abgebrochen. Der bekannte Fehler kann nicht wiederkommen, neue können auftauchen. Ein
+  Probelauf mit `MACOS_SIGNING_MODE=signed` fährt nur die Signierung und lässt die
+  Notarisierung aus — die kleinere Stufe, um die Kette einmal ohne Apples Gegenstelle zu
+  sehen.
+
+  **Belegt am 14.09.2026 mit 0.4.1** (Lauf 34785006709, Tag `v0.4.1` = 1a357e1a,
+  `MACOS_SIGNING_MODE` = `notarized`): Beide Architekturen signiert, bei Apple notarisiert
+  (arm64 `aab4b062-…`, Accepted), gestapelt, `spctl --assess` sagt „Notarized Developer ID",
+  Installer mit `productsign` signiert und notarisiert, beide Mac-Releaseakten grün. Der Weg
+  brauchte drei Reparaturen hinter dem Fingerabdruck: den Schlüsselbund in die **Suchliste**
+  (`security list-keychains -d user -s`, sonst „no identity found" bei gefundener Identität),
+  die Lizenzbeilage **aus dem Bundle-Root** nach `Contents/MacOS/` („unsealed contents present
+  in the bundle root" — und dort liest die Anwendung sie ohnehin), und einen zweiten Anlauf des
+  x86_64-Jobs, weil Apples Notarisierung über eine Stunde „In Progress" blieb und eine
+  Statusabfrage mit HTTP-Timeout riss (`gh run rerun --failed` desselben Laufs). Die Variable
+  bleibt auf `notarized`.
+
+  **Windows-Stand vom 14.09.2026:** Auf der Arbeitsmaschine lagen weder ein Certum-Zertifikat noch
+  SimplySign Desktop; `tools/sign_release.py` war noch nie gefahren, und 0.4.1 ging wie 0.4.0
+  mit unsigniertem Setup hinaus. Abnahme für Windows: Zugang einrichten, den Signiereingang von
+  Lauf 34785006709 (oder dem nächsten Tag) lokal signieren und das signierte Setup hochladen.
+
+  **Und Windows ist seit dem 14.09.2026 ein Kundenbefund.** Ralph Dietrich, 08:43: „Jetzt
+  fängt WIN11 auch mit dem Käse an — ich muss Smart App Control deaktivieren, damit Solidon3D
+  startet." Smart App Control (Windows 11) lässt nur signierte Anwendungen zu; das unsignierte
+  Setup startet damit gar nicht, und der blaue SmartScreen-Hinweis mit *Trotzdem ausführen*
+  kommt nicht mehr zum Zug. Sein Workaround — Smart App Control ausschalten — hat einen Preis,
+  den ein Kunde kennen muss: Es lässt sich ohne Neuinstallation von Windows nicht wieder
+  einschalten. Die Website nennt seither beides (Prüfhinweis, Systemvoraussetzungen, sechs
+  Sprachen); die Antwort bleibt die Signierung.
+
+  **Der Nebenbefund zur FAQ ist behoben (14.09.2026):** Die Website sagte an vier Stellen je
+  Sprache, die Mac-Version sei „noch nicht notarisiert" und die Notarisierung komme, „sobald das
+  Apple-Konto steht" — vier Tage nachdem 0.4.1 notarisiert im Download-Kasten lag. Prüfhinweis,
+  Systemvoraussetzungen und die FAQ „Läuft das auf einem Mac?" sagen jetzt, dass die Pakete ab
+  0.4.1 notarisiert sind; der Weg über *Trotzdem öffnen* bleibt für eine ältere Version stehen.
+  `make_seo.py` hat die FAQ-Auszeichnung nachgezogen. Hochgeladen wird die Website erst mit
+  dem nächsten Lauf von `upload_website.py` — bis dahin steht der alte Text online.
+
+  **Verbindliche Entscheidung 23.09.2026:** 0.5.0 wird unter Windows mit signierter
+  Anwendung und signiertem Installer veröffentlicht. Die frühere Freigabe für
+  einen unsignierten Stand ist aufgehoben. Beide Programme werden in CI gebaut:
+  App-Bau → lokale Certum-Signatur → Installerbau in CI aus genau dieser App →
+  lokale Certum-Signatur des Installers. Der private Schlüssel und die
+  SimplySign-Anmeldung bleiben außerhalb der CI.
+
+  **Vorbereitung belegt, Endpaket noch offen:** SimplySign Desktop ist eingerichtet;
+  eine separate funktionslose Testdatei wurde mit dem Zertifikat von Robert Schneider
+  und einem Certum-Zeitstempel signiert. `signtool verify /pa /all /tw /v` endete
+  mit Exit 0, ohne Warnung und ohne Fehler. Das ist noch kein Nachweis für die
+  Release-Dateien. Erst nach deren Prüfung folgen die erneuerte Releaseakte,
+  `make_download.py` mit allen fünf Kundenpaketen, die Manifest-Signatur und der
+  Upload: Pakete und Prüfung zuerst, `version.json` zuletzt. Website und
+  GoFundMe nennen die digitale Signatur; verbleibende SmartScreen-Hinweise bei
+  neuen Dateien werden nicht ausgeschlossen.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#p8--erste-veröffentlichung).
+
+### Abschluss RM-115
+
+Am 24.09.2026 abgeschlossen: die verpflichtenden Releaseprüfungen sind am tatsächlichen grünen Tagbau für Linux (App-Baum 97, AppImage 98 Komponenten) und beide notarisierten Mac-Pakete (59/60 Komponenten) erfolgreich. Die endgültige Windows-Releaseakte wurde nach beiden Signaturen erneuert und mit 63 Komponenten geprüft. Nachweise: `Releases/0.5.0/Nachweise/signing-35982366247-r2/release-evidence.json` und `Releases/0.5.0/Nachweise/review-050/reports/codex-ci-35982366247-unix-packages.json`. Die fünf veröffentlichten Endbytes stimmen mit den gebundenen Hashes überein; Zwischenpakete aus roten Läufen wurden nicht verwendet.
+
+<a id="rm-115-abschluss-050"></a>
+
+- [x] **RM-115 — Releaseakte vor Veröffentlichung verbindlich durchsetzen.** Die Warnungen der
+  Releaseakte an aktuellen Kundenartefakten auswerten, alle echten Befunde beheben und anschließend
+  die Prüfung als verpflichtenden Abbruch einrichten. Abnahme: erzeugte Evidence plus erfolgreicher
+  Release-Check auf den unterstützten Paketwegen; Warnungsumgehungen sind entfernt.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
+
+### Abschluss RM-149
+
+Am 24.09.2026 abgeschlossen: nach dem Websitewechsel sind 329 ausgewählte Dateien und insgesamt 528 öffentlich gelesene Dateien einschließlich referenzierter Assets vollständig bytegleich über HTTPS nachgewiesen. Die geschützte Serverkonfiguration wurde vollständig per FTPS verglichen. Sechs Startseiten wurden über ihre kanonischen Verzeichnisadressen geprüft. Der getrennte Vorwarnlauf ist in den CI-Abschlussbelegen dokumentiert; er wird nicht mit dem Taglauf gleichgesetzt. Nachweis: `Releases/0.5.0/Nachweise/website-publish-35982366247/static-verified.json` und `website-published.json`. Die gescheiterten Verbindungsversuche bleiben im Journal erhalten.
+
+<a id="rm-149-abschluss-050"></a>
+
+- [x] **RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen.** Beide am 10.09.2026
+  gemessen, keiner blockiert eine Auslieferung.
+
+  **Der Vorwarnlauf war rot — und es war keine Version** (zugeordnet 14.09.2026). „Neueste
+  Versionen" fährt ohne `constraints.txt` und scheiterte an
+  `test_chat_ui.py::test_a_short_chat_scrolls_its_content_without_covering_the_input[320-576-True]`
+  mit `assert (0 > 0) is True`. Das Protokoll des Laufs `34461828229` (10.09.) sagt, was sich
+  bewegt hatte: **nichts, was Qt berührt** — PySide6 6.11.2 in beiden Jobs, fünf Pakete
+  (contourpy, fonttools, matplotlib, pypdf, ruff) sogar älter als die heutigen Pins. Was sich
+  unterschied, war das **Runner-Abbild**: der grüne Suite-Job lief auf `ubuntu-24.04`
+  20260831.293.1, der rote Vorwarnlauf auf 20260907.300.1, mit anderen Schriften; der Hinweis
+  brach eine Zeile kürzer um, der Inhalt passte bei 320 × 576 hinein, und ein Rollbalken, der
+  nichts zu rollen hat, stand auf null. Lokal beträgt der Rollweg dort 82 Pixel — eine Zeile
+  Schrift. Behoben im Test: Ob gerollt werden muss, wird gemessen (Inhalt höher als sein
+  Fenster) statt für drei Fenstergrößen behauptet; das kleinste Fenster (416) muss weiterhin
+  rollen, sonst prüfte der Test nichts. Keine Grenze in `pyproject.toml`, denn es gab keine
+  Version zu begrenzen. Ob der Vorwarnlauf damit grün ist, sagt der nächste, der startet —
+  zwischen zwei Bauten ist das Repository privat, und dann nimmt GitHub keinen an
+  (RM-176 im Archiv).
+
+  **Der Website-Abgleich meldete sechs Dateien, die nicht abweichen — behoben am 10.09.2026.**
+  Die Ursache lag nicht im Vergleich, sondern in der **Adresse**: `website/.htaccess`
+  beantwortet jede Anfrage nach `…/index.html` mit einer 301 auf `…/`, und der Prüfabruf lehnt
+  Weiterleitungen grundsätzlich ab (`RejectRedirects`). Von dort kam ein `HTTPError` zurück,
+  und `differs` liest den — richtigerweise, fail-closed — als „weicht ab". Betroffen war genau
+  das, was eine solche Regel hat: die sechs `index.html`; die anderen 501 Dateien laufen unter
+  ihrer eigenen Adresse und waren deshalb ruhig.
+
+  `public_url` gibt für eine Startseite jetzt die Verzeichnisadresse zurück — sie verspricht
+  die **ausgelieferte** Adresse, und für `index.html` hat sie eine genannt, die der Server so
+  nicht ausliefert. Der eigene Docstring hatte den Fall dabei benannt („zwischen dem
+  FTP-Verzeichnis und dem, was beim Kunden ankommt, stehen `.htaccess`, Umschreibungen und
+  alles andere, was der Server tut") — richtig gedacht und an der eigenen Startseite
+  übersehen. Nachweis:
+  `tests/test_website.py::test_the_checked_address_of_a_start_page_is_the_one_the_server_answers`
+  liest die Umschreibungsregel aus `.htaccess` und prüft, dass die erzeugte Adresse sie nicht
+  auslöst — damit können die beiden Seiten nicht unabhängig voneinander altern. Gegenprobe
+  gefahren: ohne den Fix ist der Test rot.
+
+  **Offen bleibt der Abgleich gegen den Server**: dass ein zweiter `--fehlend`-Lauf jetzt null
+  meldet, ist am Code belegt und nicht am Netz — das gehört an den nächsten Upload.
+
+### Abschluss RM-162
+
+Am 24.09.2026 abgeschlossen: das öffentlich zurückgelesene Manifest nennt `version=notes_version=0.5.0`, trägt die sechs für 0.5.0 freigegebenen Hinweistexte und eine gültige Ed25519-Signatur. Der vollständige Changelog enthält 94 Punkte je Sprache; die bestehende Rückwärtskompatibilität beschränkt allein das Manifest auf 28 und verweist mit `changes_total=94` auf die vollständige Website. Das Manifest wurde erst nach den fünf vollständigen öffentlichen Paketprüfungen und der Website-Abnahme als letzter Inhalt veröffentlicht. Nachweis: `Releases/0.5.0/Nachweise/website-publish-35982366247/website-published.json`.
+
+<a id="rm-162-abschluss-050"></a>
+
+- [x] **RM-162 — Der Hinweistext der Fassung reiste unverändert mit.** Robert am 12.09.2026:
+  „bei unserem changelog in der app haben wir auch immer drin stehen das bisher größte update,
+  obwohl das nicht stimmt". Nachgemessen: `notes_by_language` in `website/version.json` steht
+  seit **0.3.0** unverändert da und ist über 0.3.1 bis 0.4.0 mitgereist. Der Satz behauptet
+  zweierlei, das nicht stimmt — „Das bisher größte Update" (0.2.0 hatte 75 Punkte, 0.4.0 hat 62)
+  und eine Neuerung aus der Fassung davor („Aus Schritten im Verlauf wird ein eigener Baustein",
+  Zeile 534 des Changelogs, also 0.3.0).
+
+  **Der Riegel steht** (12.09.2026). `notes_version` sagt, für welche Fassung der Satz
+  geschrieben wurde: `write_version` hält den Paketbau an, solange es eine andere nennt, und
+  `_validate_remote_version` weist ein solches Manifest ab. Der Schritt steht als Nummer 2 im
+  Release-Ablauf von `/erzeugen`. Nachweis:
+  `test_a_note_written_for_an_older_release_is_not_accepted` und
+  `test_the_download_build_stops_at_a_note_from_a_former_release`, beide mit Gegenprobe.
+
+  **0.4.0 bleibt, wie es veröffentlicht ist** (Entscheidung Robert, 12.09.2026: „es reicht wenn
+  es ab 0.4.1 passt"). Der Grund dafür ist nicht nur Aufwand: `version.json` ist
+  Ed25519-unterschrieben, und die Unterschrift deckt jedes Feld außer sich selbst. Eine
+  geänderte und nicht neu unterschriebene Datei verwirft **jede** ausgelieferte Installation
+  ungelesen — der Kunde erführe dann von gar keinem Update mehr, und das wäre teurer als ein
+  schiefer Satz. Der private Schlüssel liegt im Passwortmanager (`tools/sign_version.py`).
+
+  **Offen bleibt der Handgriff beim 0.4.1-Bau**, und der Riegel erzwingt ihn: Die sechs Sätze
+  unten in `notes_by_language` eintragen, `"notes_version": "0.4.1"` daneben, dann signieren und
+  hochladen. Geschrieben sind sie aus dem 0.4.1-Abschnitt des Changelogs — Langloch, „Im Bild
+  einstellen", die Handlungen an einem Ort:
+
+  - **de** — Neu ist vor allem das Langloch: Sie setzen es beim Bohren mit einem Haken oder
+    ziehen eine vorhandene Bohrung nachträglich in die Länge. Eine gewählte Bohrung stellen Sie
+    mit „Im Bild einstellen" direkt im Modell ein, mit Griff und Maßlinien. Und die Handlungen
+    an Körper und Merkmal stehen rechts an einem Ort statt in drei Menüs. Die Demo bleibt
+    vollständig und ohne Schlüssel, bis zum 30.10.2026.
+  - **en** — New above all is the slot: you tick a box while drilling, or stretch a bore that is
+    already there. A selected bore you adjust right in the model with *Set in the view*, with a
+    handle and dimension lines. And the actions on a body or a feature now sit in one place on
+    the right instead of in three menus. The demo stays complete and needs no key, until 30
+    October 2026.
+  - **es** — Lo nuevo sobre todo es el agujero alargado: lo marca al taladrar, o estira uno
+    redondo que ya está en la pieza. Un taladro seleccionado lo ajusta directamente en el modelo
+    con «Ajustar en la vista», con tirador y líneas de cota. Y las acciones sobre un cuerpo o una
+    característica están en un solo sitio a la derecha, en vez de en tres menús. La demo sigue
+    completa y sin clave, hasta el 30 de octubre de 2026.
+  - **fr** — Surtout, le trou oblong : vous le cochez en perçant, ou vous étirez un perçage déjà
+    présent. Un perçage sélectionné se règle directement dans le modèle avec « Régler dans la
+    vue », poignée et lignes de cote à l’appui. Et les actions sur un corps ou une forme tiennent
+    en un seul endroit à droite, au lieu de trois menus. La démo reste complète et sans clé,
+    jusqu’au 30 octobre 2026.
+  - **it** — Soprattutto l’asola: la spunti mentre fori, oppure allunghi un foro che c’è già. Un
+    foro selezionato lo imposti direttamente nel modello con «Imposta nella vista», con maniglia
+    e linee di quota. E le azioni su un corpo o una forma stanno in un posto solo, a destra,
+    invece che in tre menu. La demo resta completa e senza chiave, fino al 30 ottobre 2026.
+  - **pt** — Sobretudo o furo oblongo: marca-o ao furar, ou estica um furo que já lá está. Um
+    furo selecionado ajusta-o diretamente no modelo com «Ajustar na vista», com pega e linhas de
+    cota. E as ações sobre um corpo ou uma característica ficam num só sítio à direita, em vez de
+    em três menus. A demo continua completa e sem chave, até 30 de outubro de 2026.
+
+  Abnahme: Der Satz im Update-Fenster von 0.4.1 nennt, was in 0.4.1 neu ist, `notes_version`
+  steht auf `0.4.1`, und `tools/sign_version.py --check` bestätigt die Unterschrift.
+
+### Abschluss RM-182
+
+Am 24.09.2026 abgeschlossen: zum bereits belegten Serverupload mit durchlaufener Lizenzart-/Indexmigration ist nun die öffentliche Website-Abnahme hinzugekommen. Das Angebot zeigt in sechs Sprachen die private und gewerbliche Lizenz mit 69/199 Euro bis 31.01.2027 und 99/249 Euro ab 01.02.2027. Nachweise: `Releases/0.5.0/Nachweise/website-publish-35982366247/static-verified.json` sowie `Releases/0.5.0/Nachweise/review-050/reports/codex-server-upload-final.log`. Die fachliche Rechtsprüfung bleibt unter RM-093 offen; kein echter zweiter Kundengeräteplatz wird durch den synthetischen Lookup behauptet.
+
+<a id="rm-182-abschluss-050"></a>
+
+- [x] **RM-182 — Zwei Lizenzarten bauen, privat und gewerblich.** Roberts Planänderung vom
+  15.09.2026 gibt Solidon eine Unterscheidung, die es bisher ausdrücklich nicht hatte. Drei
+  Befunde aus dem Ist-Code tragen die Arbeit: `EULA.md:61` verspricht heute *„Die gewerbliche
+  Nutzung ist ausdrücklich eingeschlossen und kostet nichts extra"*; `Licence`
+  (`app/core/activation/key.py:90`) trägt vier Felder und keine Lizenzart, und die Nutzlast ist in
+  ihrer Länge streng geprüft, ein angehängtes Byte also kein gültiger Schlüssel; dasselbe Layout
+  steht ein zweites Mal in PHP (`website/api/activation_common.php:583`), jeder Formatwechsel ist
+  damit zweiseitig. Entschieden in
+  [konzept-lizenzarten-2026-09.md](konzepte/konzept-lizenzarten-2026-09.md): gleicher
+  Funktionsumfang für beide Arten (A), Nutzlastformat 2 mit weiter lesbarem Format 1 (B), ein Byte
+  für die Art (C), zwei getrennte Vorräte weil der Hauptschlüssel offline liegt (D), unverändert
+  ein Geräteplatz (E), kein Ablaufdatum (H). Acht Pakete P1 bis P8 stehen dort in §6; die
+  Rechtstexte werden entworfen, nicht freigegeben — die fachliche Prüfung läuft unter RM-093.
+  Abnahme: ein Format-1- und ein Format-2-Schlüssel schalten beide frei, Python und PHP lesen
+  dieselbe Nutzlast zu demselben Digest, die Art steht im Über-Dialog, und `EULA.md` widerspricht
+  dem Preis nicht mehr.
+
+  **Stand 15.09.2026 — gebaut und nachgewiesen:** Format 2 mit weiter lesbarem Format 1 in
+  `key.py` und `activation_common.php`, `--kind` als Pflicht im Vorratswerkzeug samt Archivformat 2,
+  die Lizenzart im Über-Dialog, Handbuch und fünf Katalogen, und die Rechtstexte ohne den
+  Widerspruch. **Die gewerbliche Lizenz hat vier Mehrwerte bekommen** (Robert, 15.09.: zwei
+  Geräteplätze statt einem, Support-Antwort in zwei Werktagen, Weitergabe im Betrieb)
+  — Entscheidung E des Konzepts ist damit gekippt und als
+  Entscheidung K neu gefasst; der Funktionsumfang bleibt gleich. Dabei ist ein Fehler gefunden
+  worden, den nur der Test zeigen konnte: Ein `UNIQUE INDEX one_active_device` erzwang den einen
+  Platz auf Datenbankebene und hätte den zweiten als `service_unavailable` scheitern lassen.
+  PHP 8.5.10 liegt jetzt auf dieser Maschine, die vier zuvor übersprungenen Serverfälle laufen
+  (16 statt 10 bestanden), und dreizehn Mutationen über Kern, Dienst und Werkzeug wurden einzeln
+  gefahren — alle rot.
+
+  **Nachtrag 23.09.2026 — Serverstand ausgeliefert:** Die Lizenzart im
+  Aktivierungsdatensatz und die Migration sind gebaut (`736d4a46`). Nach Sicherung
+  der beiden Endpunktdateien und der Datenbank unter
+  `20260923-200057-rm182-e0de44847922` wurden `api/activation_common.php` und
+  `api/operator.php` atomar ersetzt und bytegenau zurückgelesen. Health-Probe und
+  authentifizierter synthetischer Betreiber-Lookup bestanden, Exit 0. Der Lookup
+  ruft `activation_database()` auf; dessen Schemaweg führt die Lizenzartmigration
+  und `DROP INDEX IF EXISTS one_active_device` aus. Damit ist der Migrationsweg
+  auf dem laufenden Dienst durchlaufen. Dies belegt keinen echten zweiten
+  Kundengeräteplatz. Nachweise:
+  `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-server-upload-final.log` und
+  `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-release-auslieferung.md`.
+
+  **Was offen bleibt:** Die lokal vorbereitete Website mit Lizenzangebot und Preisen
+  muss veröffentlicht und am öffentlichen Stand abgenommen werden. Die fachliche
+  Prüfung der Rechtstexte bleibt unabhängig unter RM-093 offen. **Eine fünfte Leistung ist
+  nach einer Rechtsprüfung am selben Tag gestrichen:** Sicherheitsupdates bis 2033 statt
+  2031 für gewerblich. Der Cyber Resilience Act knüpft den Unterstützungszeitraum an das
+  Produkt und nicht an den Vertrag (Art. 13 Abs. 8: mindestens fünf Jahre), und beide
+  Lizenzarten sind dasselbe Programm — beide bleiben bei 31.10.2031, dem Bestand. Die
+  Durchsicht der Website fand dabei zwei eigene Fehler: `make_legal.py` kennt nur `*`
+  als Listenzeichen und keine Tabellen, und `test_legal.py` sah es nicht.
+
+## Rate-Key ausgeliefert und Gewindebolzen auf Ubuntu belegt (24.09.2026)
+
+Zwei eng begrenzte Wartestellen sind abgeschlossen. Dies ist weder die
+Veröffentlichung von 0.5.0 noch die Freigabe ihrer Pakete oder der Website.
+
+<a id="rm-096"></a>
+
+**RM-096 — Eigenen Rate-Key für Aktivierungsanforderungen einführen: abgeschlossen.**
+Die Pseudonymwurzel der Aktivierungs-Ratenbegrenzung ist vom Signierschlüssel
+getrennt; privater Rate-Key und dokumentierter Deploy-/Rotationsweg sind gebaut
+und getestet (`736d4a46`). Im Register war zuletzt ausschließlich der Upload offen.
+Am 23.09.2026 wurden nach Sicherung der beiden Endpunktdateien und eines
+konsistenten Datenbankschnappschusses `api/activation_common.php` und
+`api/operator.php` atomar bereitgestellt und bytegenau bestätigt. Sicherungskennung:
+`20260923-200057-rm182-e0de44847922`. Health-Probe und authentifizierter
+synthetischer Betreiber-Lookup bestanden; der Lookup durchläuft die neue
+klientbezogene Ratenbegrenzung vor der Datenbankabfrage. Der Uploadrest ist damit
+erledigt, Exit 0. Dies behauptet weder einen produktiven Lasttest noch einen
+absichtlich ausgelösten Kundensperrfall; Schlüsselwerte werden nicht dokumentiert.
+
+Belege: `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-server-upload-final.log` und
+`F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-release-auslieferung.md`, Abschnitt
+„Serverkorrektur abgeschlossen“. Die verbleibende Website-Abnahme des
+Lizenzangebots steht weiterhin unter [RM-182](ROADMAP.md#rm-182).
+[Früherer Befund](#review-vor-der-demo-030-02092026).
+
+<a id="rm-186"></a>
+
+**RM-186 — Stirnfläche eines Gewindebolzens auf Windows und Ubuntu: abgeschlossen.**
+Ausgangspunkt waren drei Fensterprüfungen in `test_analysis_ui.py`, die nach
+`insert_printed_thread` genau ein Merkmal annahmen. Auf Windows trug der Schritt
+neben `printed_thread_thread_1` auch die erzeugte Stirnfläche `face_7`
+(22 mm², 156 Dreiecke, z ≈ 22), nachgestellt an `93ef16e3c` und am damaligen HEAD.
+Seit dem 16.09.2026 prüfen die Fensterfälle die Merkmale des Schritts in beide
+Richtungen und wählen das versprochene Merkmal (`snap_connector_arm_1`) statt der
+ersten erkannten Fläche. Die daraus abgeleitete Behauptung, Ubuntu verliere die
+Stirnfläche unter der Schwelle von `_large_facet_faces`, war jedoch **nicht
+gemessen**: Diese Fensterdatei wurde dort damals nicht ausgeführt. Die
+Durchsicht fand die Fläche auch unter sechs nachgestellten Rechenwegen und
+legte die plattformunabhängige Zusage als Kerntest an (`3fa7d719`).
+
+Der unbedingte Test
+`tests/test_thread_features.py::test_the_end_face_of_a_thread_bolt_belongs_to_its_step`
+prüft genau `face` und `thread` mit Provenienz aus dem Gewindeschritt sowie die
+unabhängig aus dem Netz gelesene Stirnfläche. Er hat weder Fensterfixture noch
+Skip-/Xfail-Bedingung. Im vollständigen grünen Ubuntu-Kernlauf `35952849083`,
+Job `107485122706`, Quellstand `71113912dbecd2b77f1ed9511b4c8e53af95d8b9`,
+ist dieser Test damit enthalten: 17.061 bestanden, 33 übersprungen,
+1 xfail, 1 xpass, 1.548,16 s; Job erfolgreich. **Der Nachweis besteht aus
+Testquellenzuordnung und vollständigem Kernlauf.** Der knappe
+`pytest -q -n auto`-Log druckt keine grüne Einzeltest-ID; eine solche Zeile
+wird nicht behauptet.
+
+Belege: `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-ci-35952849083-unix-packages.md`
+und `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\tore\codex-ci-35952849083-ubuntu.txt`.
+Der getrennte Windows-/Ubuntu-Erkennungsvertrag ist damit belegt. Die Grenzen
+der CI-Fensterabnahme und des neuen roten macOS-Laufs bleiben unter
+[RM-234](ROADMAP.md#rm-234); sie werden durch diesen Abschluss nicht grün.
 
 ## Gegen echte Modelle geprüft
 

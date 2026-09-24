@@ -1,15 +1,12 @@
 # ROADMAP — Arbeitsliste
 
-Abgleich vom **08.09.2026** gegen Bauplan §40, Quelltext, Tests, Paketmetadaten
-und Git-Verlauf, **nachgeführt am 10.09.2026** — jeder offene Punkt einmal am
-heutigen Code nachgemessen; was dabei erledigt, überholt oder falsch
-beschrieben war, steht am Punkt. Der lokale Veröffentlichungsstand ist
-**0.4.4** (`website/version.json`, seit dem 19.09.2026; die Mac-Pakete sind
-signiert und notarisiert, das Windows-Setup nicht, siehe RM-001). Die früheren Durchsichten und Messreihen stehen im
-[Archiv](ROADMAP-ARCHIV.md); dessen
-[Abgleichstabelle](ROADMAP-ARCHIV.md#abgleich-der-gesamten-roadmap-mit-dem-bestand-08092026)
-erklärt für jeden vorher offenen Punkt, ob er bleibt, erledigt, überholt oder
-mit einem anderen Punkt zusammengeführt ist.
+Der ursprüngliche Bauplan-Abgleich vom 08.09.2026 und seine Fortschreibungen stehen im
+[Archiv](ROADMAP-ARCHIV.md). Der Veröffentlichungsstand ist **0.5.0**, veröffentlicht
+am **24.09.2026** (`website/version.json`). Windows-Anwendung und Setup sind digital
+signiert und mit Zeitstempeln geprüft; beide Mac-Pakete sind signiert und notarisiert.
+Alle fünf Kundenpakete sind öffentlich vollständig per HTTPS geprüft. Die gebundenen
+Nachweise stehen unter `Releases/0.5.0/Nachweise/`; die offenen Aufgaben darunter
+führen ihre verbleibende Arbeit oder Abnahme.
 
 Legende: `[ ]` offen · `[~]` teilweise umgesetzt, Abnahme oder Restarbeit offen ·
 `[x]` mit dokumentiertem Nachweis abgeschlossen. Ein historischer Haken ist
@@ -38,11 +35,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | Punkt | steht unter | wartet auf |
 |---|---|---|
 | [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Nativer Ablauf der Dichtnut am Fenster; die übrigen Familien und die Einzeldateiabnahme aller 187 Fälle sind zurückgestellt |
-| [RM-186 — Die Erkennung findet die Stirnfläche eines Gewindebolzens auf Windows, auf Ubuntu nicht](#rm-186) | Geometrie, Erkennung und Druckvorbereitung | Eingegrenzt ohne Linux-Maschine: Die Fläche steht auf Windows unter sechs nachgestellten Rechenwegen; der Ubuntu-Befund war nie gemessen, denn die Datei lief auf Ubuntu nicht (RM-234). Die Zusage steht jetzt als Kerntest in `test_thread_features.py` (`3fa7d719`); offen ist ein grüner Ubuntu-Lauf von ‚Tests‘ mit diesem Test |
-| [RM-001 — Signierung und Notarisierung der Kundenpakete belegen](#rm-001) | Plattformen, Pakete und Grafik | **0.5.0 wird auch unter Windows signiert ausgeliefert** (Robert, 23.09.2026). Certum-Zugang und Zeitstempel sind an einer separaten Probe belegt; Anwendung und Installer werden in CI gebaut, lokal signiert. Offen sind der vollständige CI-Rundlauf und der Nachweis am endgültigen Kundenpaket samt anschließenden Prüfsummen und Upload |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen ist der Ereignistyp dahinter und die Gegenprobe auf Linux und Mac |
-| [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | VTK ist ausgebaut (`5a57e261`): Wandmessung der Bereichsprüfung mit eigenem Strahltest, VTK samt Matplotlib aus Abhängigkeiten, Spec, Lizenzliste und SBOM; offen bleiben die kopierten Bytes und Pufferkosten je großer Szene, gemessen am Fenster |
+| [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | VTK ist ausgebaut (`5a57e261`), die Wandmessung verwendet den eigenen Strahltest. Matplotlib ist seit `9bb1542b` wieder Laufzeitabhängigkeit; die Windows-Lizenzbeilage enthält 50 Komponenten. Offen bleiben die kopierten Bytes und Pufferkosten je großer Szene, gemessen am Fenster; Bereichsprüfungsreste stehen unter RM-214 |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der veröffentlichten 0.4.0-Pakete für Linux und Mac abnehmen |
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Die CI protokolliert jetzt die echte Inno-Setup-Fassung (`920c609a`); offen sind der Flatpak-Lauf auf echter Linux-Grafik und der Feldlauf Installieren/Aktualisieren/Deinstallieren auf fremdem Windows |
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Hänger und übrige Unix-Fenster-/Export-/Chatfälle abnehmen |
@@ -111,7 +106,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-134 — Zusammenführung duplizierter Testhilfen entscheiden](#rm-134) | Tests und Entwicklungswerkzeuge | 41 wortgleiche Gruppen gemessen, vier nach `tests/helpers.py` zusammengeführt (`920c609a`); offen die Fensterfixtures (`window`, `with_a_body`, `on_the_bore_wall`) — Robert entscheidet über die großen |
 | [RM-137 — Sitzungsende im tatsächlichen Editorbetrieb abnehmen](#rm-137) | Tests und Entwicklungswerkzeuge | Echtes SessionEnd und Freigabe des Sitzungsgebiets nach Neustart beobachten |
 | [RM-214 — Die Bereichsprüfung ohne VTK hat keinen Index und keinen Wächter](#rm-214) | Tests und Entwicklungswerkzeuge | Wandmessung O(n²) für große eigene Bausteine, kein Test gegen vtk-Importe, vtk noch in der .venv — Index wie intersections.py, Wächter über sys.modules |
-| [RM-234 — Der einzige Linux-Lauf mit Fensterdateien kommt nie bei ihnen an](#rm-234) | Tests und Entwicklungswerkzeuge | „Neueste Versionen" bricht mit set -euo pipefail vor den Fensterdateien ab; macOS-Gegenprobe des Senkungstests offen — Schritte trennen, beide Ergebnisse melden |
+| [RM-234 — Linux-Fensterabnahme und macOS-Gegenprobe nachweisen](#rm-234) | Tests und Entwicklungswerkzeuge | Gepinnter Ubuntu-Releasejob 107485122706 erreicht die Fensterverträge und besteht; „Neueste Versionen" enthält heute nur Kerntests. Der vollständige macOS-Taglauf 35982366247 ist grün; offen bleibt die unabhängige Ergebnismeldung der Fensterverträge bei rotem Kernschritt |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Plan bis 01.11. mit Takt und Messpunkten liegt vor (`marketing/reichweite/analyse-und-plan.md`, `36487f9b`); drei Facebook-Beiträge für 24., 26. und 28.09. in der Meta Business Suite eingeplant; YouTube-Änderungen (14) freigegeben, in Studio nicht umgesetzt; Video V3 freigegeben, nicht gedreht. Offen: Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -120,15 +115,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-035 — EULA wirksam in den Bestellvorgang einbeziehen](#rm-035) | Veröffentlichung, Betrieb und Vertrieb | Produktgrenzen und EULA im vollständigen Bestellweg rechtlich prüfen |
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
 | [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Kandidat bis 25.10.; letzte Optimierungen 31.10.; Start 01.11.2026 um 10:00 Uhr deutscher Zeit — gebaut in 0.5.0: Abschied mit Pause und Start, ‚heute letzter Tag‘, Hinweis ab 24.10. (`29dcefa4`); offen täglicher Ablaufwächter und Bestell-Webhook |
-| [RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen](#rm-149) | Veröffentlichung, Betrieb und Vertrieb | Beide Funde sind zugeordnet und behoben; offen bleibt nur der Abgleich gegen den Server beim nächsten Upload |
-| [RM-162 — Der Hinweistext der Fassung reiste unverändert mit](#rm-162) | Veröffentlichung, Betrieb und Vertrieb | Der Riegel steht; die sechs Sätze für 0.4.1 stehen bereit und werden beim Bau eingetragen |
 | [RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Meldeweg entschieden (Robert, 23.09.2026: über die Support-Adresse, Antwortfrist zwei Arbeitstage, keine Belohnung, kein PGP; `SECURITY.md`, `SECURITY-INCIDENT.md` und `security.html` sind konform); offen EU-Login, Vertretung, Alarmierung und Probelauf — Roberts Konten |
 | [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Preis bestätigt am 23.09.: zwei Lizenzarten, privat 69 € bis Ende Januar, ab Februar 99 €, gewerblich 199 €, ab Februar 249 €; ‚drei Stufen‘ ist aus Presse und Texten gestrichen (`9145aedc`). Offen: Anbieter, Bestellstrecke, Lieferung, Widerruf und Signierung bis 15.10. |
-| [RM-182 — Zwei Lizenzarten bauen, privat und gewerblich](#rm-182) | Veröffentlichung, Betrieb und Vertrieb | Lizenzart im Serverdatensatz und Migration gebaut (`736d4a46`, PHP 8.5.8 geprüft), Lizenzart im Über- und Freischaltdialog (`29dcefa4`); offen sind der Upload der Serverteile, der `DROP INDEX one_active_device` vor dem ersten gewerblichen Schlüssel und die Website |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
 | [RM-095 — Automatischen Löschlauf auf dem Server belegen](#rm-095) | Veröffentlichung, Betrieb und Vertrieb | Server-Löschlauf, Sicherungen und Ausfallalarm tatsächlich nachweisen |
-| [RM-096 — Eigenen Rate-Key für Aktivierungsanforderungen einführen](#rm-096) | Veröffentlichung, Betrieb und Vertrieb | Rotationsweg gebaut und getestet (`736d4a46`); offen nur der Upload |
-| [RM-115 — Releaseakte vor Veröffentlichung verbindlich durchsetzen](#rm-115) | Veröffentlichung, Betrieb und Vertrieb | Die Releaseakte blockiert auf allen drei Plattformen (`920c609a`), Windows am Artefakt 0.4.4 grün, AppImage-Kern inventarisiert; offen ist der erste CI-Lauf auf Linux und macOS — per `workflow_dispatch` vor dem Tag (erlaubt, Robert 23.09.2026) |
 | [RM-116 — Historische Statistikreste auf dem Server behandeln](#rm-116) | Veröffentlichung, Betrieb und Vertrieb | Öffentlichen Altbestand prüfen und Umgang mit alten Statistikzeilen entscheiden |
 | [RM-145 — CRA-Konformitätsakte zum gesetzlichen Anwendungszeitpunkt vorbereiten](#rm-145) | Veröffentlichung, Betrieb und Vertrieb | Produktklassifizierung, technische Akte und Konformitätsverfahren für 2027 vorbereiten |
 | [RM-038 — Mailrückfall ohne prozentkodierten Berichtstext prüfen](#rm-038) | Kundenrückmeldungen | mailto-Weg gebaut, Rückfall ohne Mailprogramm sagt, was jetzt geht, lange Berichte werden gekürzt (`29dcefa4`, `736d4a46`); offen der Portalweg im ausgelieferten Flatpak |
@@ -208,7 +198,10 @@ G-Code-Rücklesen, Profilabgleich und Kalibrierung sind umgesetzt. Interne Schä
 
 ## P8 — Erste Veröffentlichung
 
-Die Veröffentlichung ist erfolgt; der lokale Downloadstand ist 0.4.0 (`website/version.json`, seit dem 10.09.2026 — die 0.3.5-Dateien sind vom Server geräumt, siehe RM-073). Windows, Flatpak, AppImage und beide Mac-Architekturen sind keine neuen Bauvorhaben mehr. Signierung, Notarisierung, Fremdrechnerabnahme und noch fehlende Betriebsnachweise bleiben offen; siehe RM-001 und RM-002.
+Windows, Flatpak, AppImage und beide Mac-Architekturen sind als 0.5.0 veröffentlicht.
+Signatur-, Notarisierungs- und Releaseaktennachweise sowie der öffentliche Bytevergleich
+gehören zu dieser Auslieferung. Fremdrechnerabnahme und noch fehlende Betriebsnachweise
+bleiben eigene Aufgaben; siehe RM-011 und RM-002.
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p8--erste-veröffentlichung).
 
@@ -270,137 +263,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-001"></a>
 
-- [~] **RM-001 — Signierung und Notarisierung der Kundenpakete belegen.** Windows-Signierung mit dem
-  vorhandenen Certum-Weg sowie Apple-Signierung und Notarisierung abschließen beziehungsweise
-  belegen. Die CI baut die Windows-Übergabe und den unsignierten Installer; `tools/sign_release.py`
-  erledigt die lokale Signierung. Ein vorhandenes Skript belegt weder den Zertifikatszugang noch
-  eine Signatur am Kundenpaket. Offen sind die benötigten Zugänge und die gebundenen
-  Signatur-/Notarisierungsbelege. Abnahme: veröffentlichungsfähiger Installer mit überprüfter
-  Signatur und Zeitstempel beziehungsweise Gatekeeper-/Notarisierungsnachweis für beide
-  Mac-Architekturen; den Fremdrechnerweg mit RM-011 abstimmen.
-
-  **Stand 18.09.2026, nach dem Bau von 0.4.3:** macOS ist vollständig durch — Appsignatur,
-  Installersignatur, Notarisierung und beide Releaseakten waren im Tag-Lauf 35303237593 grün.
-  Windows nicht: Der ausgelieferte `Solidon3D-Setup-0.4.3.exe` trägt **keine** Signatur
-  (`Get-AuthenticodeSignature` sagt `NotSigned`), und die Seite benennt das auch — sie erklärt
-  SmartScreen und sagt, dass Solidon mit eingeschaltetem *Smart App Control* gar nicht startet.
-  Der Grund ist kein Versäumnis: Die **Certum-Verifikation läuft noch** (Robert), und ohne sie
-  gibt es keinen Zugang zur SimplySign-Cloud, aus der der Einmalcode kommt.
-
-  **Was nach der Verifikation zu tun ist, und zwar in dieser Folge** — der letzte Punkt ist der,
-  den man übersieht: `tools/sign_release.py --run 35303237593` holt die Signierübergabe und baut
-  den signierten Installer. Dessen SHA-256 ist danach eine **andere** als die im Download-Kasten
-  und in `website/version.json`. Also: Datei nach `website/dl/`, dann `make_download.py` mit allen
-  fünf Paketen, dann `sign_version.py` (die Unterschrift deckt jedes Feld außer sich selbst),
-  dann der Upload — Paket zuerst, `version.json` zuletzt —, dann `--nachpruefen`. Wer nur die
-  Datei austauscht, veröffentlicht eine Prüfsumme, die nicht mehr stimmt, und jede installierte
-  Fassung verwirft das Update ungelesen.
-
-  **Gemessen am 10.09.2026 beim Bau von 0.4.0** (Lauf 34456150383, Tag `v0.4.0`): Der Weg
-  steht vollständig — `MACOS_SIGNING_MODE` auf `notarized`, alle acht Apple-Geheimnisse
-  gesetzt, und die Kette aus `codesign`, `notarytool`, `stapler` und `productsign` ist im
-  Workflow angelegt, mit `spctl --assess` und `pkgutil --check-signature` als Abnahme.
-  Gescheitert ist er trotzdem, auf beiden Architekturen, an derselben Stelle:
-
-      1 identity imported.
-      2 certificates imported.
-      ***: no identity found
-
-  Das Zertifikat kommt also in den Schlüsselbund; gesucht wird es unter dem Namen aus
-  `APPLE_SIGN_IDENTITY`, und **dieser Name findet sich dort nicht**. Das Geheimnis führt
-  den Zertifikatsnamen ein zweites Mal, und die zweite Fassung weicht ab. Alles danach —
-  Notarisierung, `.pkg`, Installersignatur, Mac-Releaseakte — wurde übersprungen; Windows
-  (159 MB) und Linux (459 MB) sind fertig gebaut und liegen als Artefakte des Laufs.
-
-  **Der Vorschlag, und er macht das Geheimnis überflüssig:** Den Fingerabdruck aus dem
-  Schlüsselbund lesen, den der Schritt gerade selbst angelegt hat — dort liegt genau eine
-  Identität (`security find-identity -v -p codesigning "$keychain"`, erste Spalte). Beim
-  Installer **ohne** `-p codesigning`, weil eine Developer-ID-Installer-Identität unter
-  diesem Filter nicht auftaucht. Der Vertrauensraum bleibt unangetastet: derselbe feste
-  Schritt, kein Checkout, kein Python.
-
-  **Entscheidung Robert, 10.09.2026: 0.4.0 geht unsigniert hinaus, signiert wird ab
-  0.4.1.** Die Repository-Variable `MACOS_SIGNING_MODE` steht dafür auf `unsigned`; der
-  Workflow überspringt dann beide Signierjobs und baut die Paketdatei über *macOS-Installer
-  ohne Signierrechte*. Das entspricht dem Stand von 0.3.5, und die Website erklärt ihn
-  bereits an drei Stellen — FAQ, Prüfhinweis im Download-Kasten und Systemanforderungen
-  nennen die fehlende Notarisierung samt dem Weg über *Datenschutz & Sicherheit* →
-  *Trotzdem öffnen*.
-
-  **Die Reparatur steht seit dem 10.09.2026 im Workflow.** Beide Signierschritte lesen den
-  Fingerabdruck aus dem Schlüsselbund, den sie selbst angelegt haben
-  (`security find-identity`, beim Installer ohne `-p codesigning`, weil eine
-  Developer-ID-Installer-Identität unter dieser Richtlinie nicht auftaucht). Liegt dort nicht
-  genau eine Identität, hält der Schritt an und sagt, was zu prüfen ist, statt zu raten
-  (Regel 21). Die beiden Geheimnisse `APPLE_SIGN_IDENTITY` und `APPLE_INSTALLER_IDENTITY`
-  werden nicht mehr gelesen — ein Name, den zwei Stellen unabhängig voneinander führen, geht
-  irgendwann auseinander; der Fingerabdruck steht nur an einer Stelle. Geprüft wurden das
-  Ausgabeformat von `security find-identity` gegen vier Lagen (eine, keine, zwei Identitäten,
-  Installer allein) und das Verhalten unter `set -euo pipefail` — beide Fehlfälle brechen
-  **mit** ihrer Meldung ab, nicht davor. Der Fingerabdruck wird dabei in Groß- **und**
-  Kleinschreibung gelesen: Die erste Fassung verlangte `[0-9A-F]`, und ein klein
-  geschriebener Wert hätte zu „0 Identitäten" geführt — an einer Stelle, die es hier nicht zu
-  messen gibt, weil kein Mac danebensteht.
-
-  **Was damit nicht gesagt ist:** Alles hinter dem Signieren — Notarisierung, `stapler`,
-  `spctl`, `productsign`, `pkgutil` — ist bis heute **nie gelaufen**; 0.4.0 ist vorher
-  abgebrochen. Der bekannte Fehler kann nicht wiederkommen, neue können auftauchen. Ein
-  Probelauf mit `MACOS_SIGNING_MODE=signed` fährt nur die Signierung und lässt die
-  Notarisierung aus — die kleinere Stufe, um die Kette einmal ohne Apples Gegenstelle zu
-  sehen.
-
-  **Belegt am 14.09.2026 mit 0.4.1** (Lauf 34785006709, Tag `v0.4.1` = 1a357e1a,
-  `MACOS_SIGNING_MODE` = `notarized`): Beide Architekturen signiert, bei Apple notarisiert
-  (arm64 `aab4b062-…`, Accepted), gestapelt, `spctl --assess` sagt „Notarized Developer ID",
-  Installer mit `productsign` signiert und notarisiert, beide Mac-Releaseakten grün. Der Weg
-  brauchte drei Reparaturen hinter dem Fingerabdruck: den Schlüsselbund in die **Suchliste**
-  (`security list-keychains -d user -s`, sonst „no identity found" bei gefundener Identität),
-  die Lizenzbeilage **aus dem Bundle-Root** nach `Contents/MacOS/` („unsealed contents present
-  in the bundle root" — und dort liest die Anwendung sie ohnehin), und einen zweiten Anlauf des
-  x86_64-Jobs, weil Apples Notarisierung über eine Stunde „In Progress" blieb und eine
-  Statusabfrage mit HTTP-Timeout riss (`gh run rerun --failed` desselben Laufs). Die Variable
-  bleibt auf `notarized`.
-
-  **Windows-Stand vom 14.09.2026:** Auf der Arbeitsmaschine lagen weder ein Certum-Zertifikat noch
-  SimplySign Desktop; `tools/sign_release.py` war noch nie gefahren, und 0.4.1 ging wie 0.4.0
-  mit unsigniertem Setup hinaus. Abnahme für Windows: Zugang einrichten, den Signiereingang von
-  Lauf 34785006709 (oder dem nächsten Tag) lokal signieren und das signierte Setup hochladen.
-
-  **Und Windows ist seit dem 14.09.2026 ein Kundenbefund.** Ralph Dietrich, 08:43: „Jetzt
-  fängt WIN11 auch mit dem Käse an — ich muss Smart App Control deaktivieren, damit Solidon3D
-  startet." Smart App Control (Windows 11) lässt nur signierte Anwendungen zu; das unsignierte
-  Setup startet damit gar nicht, und der blaue SmartScreen-Hinweis mit *Trotzdem ausführen*
-  kommt nicht mehr zum Zug. Sein Workaround — Smart App Control ausschalten — hat einen Preis,
-  den ein Kunde kennen muss: Es lässt sich ohne Neuinstallation von Windows nicht wieder
-  einschalten. Die Website nennt seither beides (Prüfhinweis, Systemvoraussetzungen, sechs
-  Sprachen); die Antwort bleibt die Signierung.
-
-  **Der Nebenbefund zur FAQ ist behoben (14.09.2026):** Die Website sagte an vier Stellen je
-  Sprache, die Mac-Version sei „noch nicht notarisiert" und die Notarisierung komme, „sobald das
-  Apple-Konto steht" — vier Tage nachdem 0.4.1 notarisiert im Download-Kasten lag. Prüfhinweis,
-  Systemvoraussetzungen und die FAQ „Läuft das auf einem Mac?" sagen jetzt, dass die Pakete ab
-  0.4.1 notarisiert sind; der Weg über *Trotzdem öffnen* bleibt für eine ältere Version stehen.
-  `make_seo.py` hat die FAQ-Auszeichnung nachgezogen. Hochgeladen wird die Website erst mit
-  dem nächsten Lauf von `upload_website.py` — bis dahin steht der alte Text online.
-
-  **Verbindliche Entscheidung 23.09.2026:** 0.5.0 wird unter Windows mit signierter
-  Anwendung und signiertem Installer veröffentlicht. Die frühere Freigabe für
-  einen unsignierten Stand ist aufgehoben. Beide Programme werden in CI gebaut:
-  App-Bau → lokale Certum-Signatur → Installerbau in CI aus genau dieser App →
-  lokale Certum-Signatur des Installers. Der private Schlüssel und die
-  SimplySign-Anmeldung bleiben außerhalb der CI.
-
-  **Vorbereitung belegt, Endpaket noch offen:** SimplySign Desktop ist eingerichtet;
-  eine separate funktionslose Testdatei wurde mit dem Zertifikat von Robert Schneider
-  und einem Certum-Zeitstempel signiert. `signtool verify /pa /all /tw /v` endete
-  mit Exit 0, ohne Warnung und ohne Fehler. Das ist noch kein Nachweis für die
-  Release-Dateien. Erst nach deren Prüfung folgen die erneuerte Releaseakte,
-  `make_download.py` mit allen fünf Kundenpaketen, die Manifest-Signatur und der
-  Upload: Pakete und Prüfung zuerst, `version.json` zuletzt. Website und
-  GoFundMe nennen die digitale Signatur; verbleibende SmartScreen-Hinweise bei
-  neuen Dateien werden nicht ausgeschlossen.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#p8--erste-veröffentlichung).
+RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
+[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-001-abschluss-050).
 
 <a id="rm-011"></a>
 
@@ -478,16 +342,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 - [~] **RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen.** pygfx ist der einzige
   Renderer; die mehrfachen Normalenläufe und das Halten alter Renderer beim Sprachwechsel sind
-  behoben. Offen bleiben die kopierten Bytes und Pufferkosten je großer Szene sowie der beschlossene
-  Ersatz von VTK in der Baustein-Bereichsprüfung. Abnahme: reproduzierbare Zeit-/Speichermessung am
-  großen Netz; Ersatzprüfung über alle 27 Bausteine mit unveränderten Ergebnissen, danach Lizenz-
-  und Paketbestand ohne VTK. Plattformfenster werden separat abgenommen.
+  behoben. Offen bleiben die kopierten Bytes und Pufferkosten je großer Szene. Abnahme:
+  reproduzierbare Zeit-/Speichermessung am großen Netz. Der beschlossene Ersatz von VTK in der
+  Baustein-Bereichsprüfung ist nachgewiesen; Plattformfenster werden separat abgenommen.
 
   **VTK ausgebaut am 23.09.2026** (`5a57e261`):
   `range_check.local_wall_thickness` misst mit `mesh.ray_hits_batch`
   (Möller-Trumbore als Feld, mit `ray_hits` auf eine Rechnung zusammengelegt)
   statt `vtkStaticCellLocator`, alle 35 Bausteine mit unveränderten Ergebnissen;
-  `THIRD-PARTY-NOTICES.md` hat 42 Komponenten. Die Folgen (Wandmessung ohne
+  `THIRD-PARTY-NOTICES.md` hatte danach 42 Komponenten. **Aktueller Stand:** Matplotlib
+  ist seit `9bb1542b` wieder ausdrücklich Laufzeitabhängigkeit. Nach Erneuerung der lokalen
+  Projektmetadaten enthält die Windows-Entwicklungsvorschau der Lizenzbeilage 50 Komponenten;
+  die Kundenbeilage entsteht weiterhin je Plattform aus deren Endartefakt-SBOM.
+  Nachweis: `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-ci-notices-fix.md` (67 Lizenztests,
+  Generatorprüfung und Umgebungsprüfung jeweils Exit 0). Die Folgen des VTK-Ausbaus (Wandmessung ohne
   räumlichen Index, fehlender Wächter gegen VTK-Importe) stehen als RM-214.
   Offen hier nur die Kopier- und Pufferkosten am Fenster.
 
@@ -1123,20 +991,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-186"></a>
 
-- [ ] **RM-186 — Die Erkennung findet die Stirnfläche eines Gewindebolzens auf
-  Windows, auf Ubuntu nicht.** `insert_printed_thread` am Quader trägt hier
-  neben `printed_thread_thread_1` die Stirnfläche `face_7` (22 mm², 156
-  Dreiecke, z ≈ 22) mit `created_by` des Schritts — richtig, der Baustein hat
-  sie erzeugt. Die Ubuntu-CI meldete denselben Stand ohne sie: Drei Tests in
-  `tests/test_analysis_ui.py`, die „genau ein Merkmal" annahmen, waren hier
-  rot (nachgemessen an `93ef16e3c` im Worktree und am HEAD). Seit dem
-  16.09.2026 zählen sie die Merkmale des Schritts und prüfen die Zusage in
-  beide Richtungen: eines ohne Dach, mehrere unter genau einem; das Merkmal
-  der Maßänderungsprobe ist das versprochene (`snap_connector_arm_1`), nicht
-  die erste erkannte Fläche. Offen: warum die Fläche auf Ubuntu unter die
-  Schwelle von `_large_facet_faces` fällt — gemessen wird das nur auf einer
-  Linux-Maschine. Abnahme: die Ursache ist benannt, und beide Plattformen
-  zählen dieselben Merkmale.
+RM-186 ist mit dem unbedingten Gewindebolzen-Kerntest im vollständigen grünen
+Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemessen.
+[Befund und Abschluss](ROADMAP-ARCHIV.md#rm-186).
 
 <a id="rm-188"></a>
 
@@ -2887,7 +2744,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Bereich mit 16 Ecken 719,5 s. Das ist keine Einzelmessung der Wandprüfung
   und kein Nachweis einer allgemeinen Laufzeitregression der Anwendung.
   Fortschritt, ältere VTK-Läufe und die Messgrenzen stehen in
-  `F:\3D Druck.review-050\reports\codex-bausteinlauf.md`. Größere eigene
+  `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-bausteinlauf.md`. Größere eigene
   `.py`-Bausteine bleiben wegen der quadratischen Wandmessung ebenfalls
   betroffen. Ein Test, der VTK-Importe unter `app/` und
   `tools/` verbietet, fehlt (der Nachweis war ein `grep`); `vtk` liegt weiter in
@@ -2900,8 +2757,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-234"></a>
 
-- [ ] **RM-234 — Der einzige Linux-Lauf mit Fensterdateien kommt nie bei ihnen an.**
-  Eingegrenzt bei RM-186 (Durchsicht 0.5.0, erkennung): Die Fensterdateien
+- [~] **RM-234 — Linux-Fensterabnahme und macOS-Gegenprobe nachweisen.**
+  **Historischer Befund bei RM-186** (Durchsicht 0.5.0, erkennung): Die Fensterdateien
   laufen seit dem 08.09.2026 nur auf Windows und nur beim Release; der einzige
   Ubuntu-Job, der sie fährt („Neueste Versionen", nur `schedule` und
   `workflow_dispatch`), brach am 14.09. vor den Tests ab und blieb am 22.09. an
@@ -2912,9 +2769,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `test_prepare.py::test_a_widened_countersink_over_the_edge_says_so` fehl,
   vermutlich der mit `9307a844` behobene Fall. Weg: Kern- und Fensterschritt im
   Job getrennt laufen lassen und beide Ergebnisse melden; Zusagen, die auf allen
-  Plattformen gelten sollen, als Kerntest (wie der neue RM-186-Test). Abnahme:
-  ein Lauf „Neueste Versionen", der Fensterdateien erreicht, und ein grüner
-  macOS-Lauf mit dem Senkungstest.
+  Plattformen gelten sollen, als Kerntest (wie der neue RM-186-Test).
+
+  **Nachweis vom 24.09.2026:** Im Lauf `35952849083` besteht der gepinnte
+  Ubuntu-Releasejob `107485122706` die Kernsammlung, 210 Fensterverträge
+  (16 abgewählt) und den Renderer-Schritt. „Neueste Versionen" ist heute ausdrücklich
+  auf die Kernsammlung begrenzt und enthält keinen Fensterschritt; dessen früher
+  geforderte Erreichbarkeit dort passt nicht mehr zum Workflow. Der neue macOS-Kernjob
+  `107485122874` bricht beim Poolhalter durch einen nativen Workerabbruch ab,
+  nicht mit einer Assertion des genannten Senkungstests. **Offen bleiben** die
+  unabhängige Ergebnismeldung der Fensterverträge auch bei rotem Kernschritt und
+  ein vollständig grüner macOS-Lauf mit dem Senkungstest. **Nachtrag 24.09.:** Der tatsächliche
+  Taglauf `35982366247` besteht auch auf macOS mit 16.947 Kerntests, 210 Fensterverträgen
+  und drei Renderertests. Der vorherige native GEOS-Absturz ist behoben (`fb53de3c`).
+  Die unabhängige Ergebnismeldung bei rotem Kern bleibt als eigener Rest offen. Kein Gesamtabschluss
+  aus dem grünen Ubuntu-Kern allein. Belege und Grenzen:
+  `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-ci-35952849083-unix-packages.md`.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 
@@ -3036,47 +2906,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-149"></a>
 
-- [ ] **RM-149 — Zwei Funde aus dem Release-Lauf von 0.4.0 zuordnen.** Beide am 10.09.2026
-  gemessen, keiner blockiert eine Auslieferung.
-
-  **Der Vorwarnlauf war rot — und es war keine Version** (zugeordnet 14.09.2026). „Neueste
-  Versionen" fährt ohne `constraints.txt` und scheiterte an
-  `test_chat_ui.py::test_a_short_chat_scrolls_its_content_without_covering_the_input[320-576-True]`
-  mit `assert (0 > 0) is True`. Das Protokoll des Laufs `34461828229` (10.09.) sagt, was sich
-  bewegt hatte: **nichts, was Qt berührt** — PySide6 6.11.2 in beiden Jobs, fünf Pakete
-  (contourpy, fonttools, matplotlib, pypdf, ruff) sogar älter als die heutigen Pins. Was sich
-  unterschied, war das **Runner-Abbild**: der grüne Suite-Job lief auf `ubuntu-24.04`
-  20260831.293.1, der rote Vorwarnlauf auf 20260907.300.1, mit anderen Schriften; der Hinweis
-  brach eine Zeile kürzer um, der Inhalt passte bei 320 × 576 hinein, und ein Rollbalken, der
-  nichts zu rollen hat, stand auf null. Lokal beträgt der Rollweg dort 82 Pixel — eine Zeile
-  Schrift. Behoben im Test: Ob gerollt werden muss, wird gemessen (Inhalt höher als sein
-  Fenster) statt für drei Fenstergrößen behauptet; das kleinste Fenster (416) muss weiterhin
-  rollen, sonst prüfte der Test nichts. Keine Grenze in `pyproject.toml`, denn es gab keine
-  Version zu begrenzen. Ob der Vorwarnlauf damit grün ist, sagt der nächste, der startet —
-  zwischen zwei Bauten ist das Repository privat, und dann nimmt GitHub keinen an
-  (RM-176 im Archiv).
-
-  **Der Website-Abgleich meldete sechs Dateien, die nicht abweichen — behoben am 10.09.2026.**
-  Die Ursache lag nicht im Vergleich, sondern in der **Adresse**: `website/.htaccess`
-  beantwortet jede Anfrage nach `…/index.html` mit einer 301 auf `…/`, und der Prüfabruf lehnt
-  Weiterleitungen grundsätzlich ab (`RejectRedirects`). Von dort kam ein `HTTPError` zurück,
-  und `differs` liest den — richtigerweise, fail-closed — als „weicht ab". Betroffen war genau
-  das, was eine solche Regel hat: die sechs `index.html`; die anderen 501 Dateien laufen unter
-  ihrer eigenen Adresse und waren deshalb ruhig.
-
-  `public_url` gibt für eine Startseite jetzt die Verzeichnisadresse zurück — sie verspricht
-  die **ausgelieferte** Adresse, und für `index.html` hat sie eine genannt, die der Server so
-  nicht ausliefert. Der eigene Docstring hatte den Fall dabei benannt („zwischen dem
-  FTP-Verzeichnis und dem, was beim Kunden ankommt, stehen `.htaccess`, Umschreibungen und
-  alles andere, was der Server tut") — richtig gedacht und an der eigenen Startseite
-  übersehen. Nachweis:
-  `tests/test_website.py::test_the_checked_address_of_a_start_page_is_the_one_the_server_answers`
-  liest die Umschreibungsregel aus `.htaccess` und prüft, dass die erzeugte Adresse sie nicht
-  auslöst — damit können die beiden Seiten nicht unabhängig voneinander altern. Gegenprobe
-  gefahren: ohne den Fix ist der Test rot.
-
-  **Offen bleibt der Abgleich gegen den Server**: dass ein zweiter `--fehlend`-Lauf jetzt null
-  meldet, ist am Code belegt und nicht am Netz — das gehört an den nächsten Upload.
+RM-149 ist mit der Auslieferung von 0.5.0 abgeschlossen.
+[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-149-abschluss-050).
 
 <a id="rm-091"></a>
 
@@ -3118,46 +2949,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-182"></a>
 
-- [ ] **RM-182 — Zwei Lizenzarten bauen, privat und gewerblich.** Roberts Planänderung vom
-  15.09.2026 gibt Solidon eine Unterscheidung, die es bisher ausdrücklich nicht hatte. Drei
-  Befunde aus dem Ist-Code tragen die Arbeit: `EULA.md:61` verspricht heute *„Die gewerbliche
-  Nutzung ist ausdrücklich eingeschlossen und kostet nichts extra"*; `Licence`
-  (`app/core/activation/key.py:90`) trägt vier Felder und keine Lizenzart, und die Nutzlast ist in
-  ihrer Länge streng geprüft, ein angehängtes Byte also kein gültiger Schlüssel; dasselbe Layout
-  steht ein zweites Mal in PHP (`website/api/activation_common.php:583`), jeder Formatwechsel ist
-  damit zweiseitig. Entschieden in
-  [konzept-lizenzarten-2026-09.md](konzepte/konzept-lizenzarten-2026-09.md): gleicher
-  Funktionsumfang für beide Arten (A), Nutzlastformat 2 mit weiter lesbarem Format 1 (B), ein Byte
-  für die Art (C), zwei getrennte Vorräte weil der Hauptschlüssel offline liegt (D), unverändert
-  ein Geräteplatz (E), kein Ablaufdatum (H). Acht Pakete P1 bis P8 stehen dort in §6; die
-  Rechtstexte werden entworfen, nicht freigegeben — die fachliche Prüfung läuft unter RM-093.
-  Abnahme: ein Format-1- und ein Format-2-Schlüssel schalten beide frei, Python und PHP lesen
-  dieselbe Nutzlast zu demselben Digest, die Art steht im Über-Dialog, und `EULA.md` widerspricht
-  dem Preis nicht mehr.
-
-  **Stand 15.09.2026 — gebaut und nachgewiesen:** Format 2 mit weiter lesbarem Format 1 in
-  `key.py` und `activation_common.php`, `--kind` als Pflicht im Vorratswerkzeug samt Archivformat 2,
-  die Lizenzart im Über-Dialog, Handbuch und fünf Katalogen, und die Rechtstexte ohne den
-  Widerspruch. **Die gewerbliche Lizenz hat vier Mehrwerte bekommen** (Robert, 15.09.: zwei
-  Geräteplätze statt einem, Support-Antwort in zwei Werktagen, Weitergabe im Betrieb)
-  — Entscheidung E des Konzepts ist damit gekippt und als
-  Entscheidung K neu gefasst; der Funktionsumfang bleibt gleich. Dabei ist ein Fehler gefunden
-  worden, den nur der Test zeigen konnte: Ein `UNIQUE INDEX one_active_device` erzwang den einen
-  Platz auf Datenbankebene und hätte den zweiten als `service_unavailable` scheitern lassen.
-  PHP 8.5.10 liegt jetzt auf dieser Maschine, die vier zuvor übersprungenen Serverfälle laufen
-  (16 statt 10 bestanden), und dreizehn Mutationen über Kern, Dienst und Werkzeug wurden einzeln
-  gefahren — alle rot.
-
-  **Was offen bleibt:** die Website (auf Roberts Wunsch zurückgenommen, die Seite bleibt
-  preisfrei), die Lizenzart im Aktivierungsdatensatz, und — **vor dem ersten gewerblichen
-  Schlüssel** — der `DROP INDEX one_active_device` auf dem laufenden Dienst. Die Rechtstexte sind
-  ein Entwurf und gehen zur fachlichen Prüfung unter RM-093. **Eine fünfte Leistung ist
-  nach einer Rechtsprüfung am selben Tag gestrichen:** Sicherheitsupdates bis 2033 statt
-  2031 für gewerblich. Der Cyber Resilience Act knüpft den Unterstützungszeitraum an das
-  Produkt und nicht an den Vertrag (Art. 13 Abs. 8: mindestens fünf Jahre), und beide
-  Lizenzarten sind dasselbe Programm — beide bleiben bei 31.10.2031, dem Bestand. Die
-  Durchsicht der Website fand dabei zwei eigene Fehler: `make_legal.py` kennt nur `*`
-  als Listenzeichen und keine Tabellen, und `test_legal.py` sah es nicht.
+RM-182 ist mit der Auslieferung von 0.5.0 abgeschlossen.
+[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-182-abschluss-050).
 
 <a id="rm-093"></a>
 
@@ -3224,21 +3017,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-096"></a>
 
-- [ ] **RM-096 — Eigenen Rate-Key für Aktivierungsanforderungen einführen.** Die Pseudonymwurzel der
-  Aktivierungs-Ratenbegrenzung vom Signierschlüssel trennen und den neuen Schlüssel kontrolliert
-  ausrollen. Abnahme: eigener privater Rate-Key, dokumentierter Deploy-/Rotationsweg und
-  funktionierende Begrenzung ohne Nutzung von activation_seed().
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
+RM-096 ist nach gebautem Rotationsweg und erfolgreichem Serverupload abgeschlossen.
+[Abschluss und Servernachweis](ROADMAP-ARCHIV.md#rm-096).
 
 <a id="rm-115"></a>
 
-- [ ] **RM-115 — Releaseakte vor Veröffentlichung verbindlich durchsetzen.** Die Warnungen der
-  Releaseakte an aktuellen Kundenartefakten auswerten, alle echten Befunde beheben und anschließend
-  die Prüfung als verpflichtenden Abbruch einrichten. Abnahme: erzeugte Evidence plus erfolgreicher
-  Release-Check auf den unterstützten Paketwegen; Warnungsumgehungen sind entfernt.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
+RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
+[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-115-abschluss-050).
 
 <a id="rm-116"></a>
 
@@ -3263,64 +3048,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-162"></a>
 
-- [~] **RM-162 — Der Hinweistext der Fassung reiste unverändert mit.** Robert am 12.09.2026:
-  „bei unserem changelog in der app haben wir auch immer drin stehen das bisher größte update,
-  obwohl das nicht stimmt". Nachgemessen: `notes_by_language` in `website/version.json` steht
-  seit **0.3.0** unverändert da und ist über 0.3.1 bis 0.4.0 mitgereist. Der Satz behauptet
-  zweierlei, das nicht stimmt — „Das bisher größte Update" (0.2.0 hatte 75 Punkte, 0.4.0 hat 62)
-  und eine Neuerung aus der Fassung davor („Aus Schritten im Verlauf wird ein eigener Baustein",
-  Zeile 534 des Changelogs, also 0.3.0).
-
-  **Der Riegel steht** (12.09.2026). `notes_version` sagt, für welche Fassung der Satz
-  geschrieben wurde: `write_version` hält den Paketbau an, solange es eine andere nennt, und
-  `_validate_remote_version` weist ein solches Manifest ab. Der Schritt steht als Nummer 2 im
-  Release-Ablauf von `/erzeugen`. Nachweis:
-  `test_a_note_written_for_an_older_release_is_not_accepted` und
-  `test_the_download_build_stops_at_a_note_from_a_former_release`, beide mit Gegenprobe.
-
-  **0.4.0 bleibt, wie es veröffentlicht ist** (Entscheidung Robert, 12.09.2026: „es reicht wenn
-  es ab 0.4.1 passt"). Der Grund dafür ist nicht nur Aufwand: `version.json` ist
-  Ed25519-unterschrieben, und die Unterschrift deckt jedes Feld außer sich selbst. Eine
-  geänderte und nicht neu unterschriebene Datei verwirft **jede** ausgelieferte Installation
-  ungelesen — der Kunde erführe dann von gar keinem Update mehr, und das wäre teurer als ein
-  schiefer Satz. Der private Schlüssel liegt im Passwortmanager (`tools/sign_version.py`).
-
-  **Offen bleibt der Handgriff beim 0.4.1-Bau**, und der Riegel erzwingt ihn: Die sechs Sätze
-  unten in `notes_by_language` eintragen, `"notes_version": "0.4.1"` daneben, dann signieren und
-  hochladen. Geschrieben sind sie aus dem 0.4.1-Abschnitt des Changelogs — Langloch, „Im Bild
-  einstellen", die Handlungen an einem Ort:
-
-  - **de** — Neu ist vor allem das Langloch: Sie setzen es beim Bohren mit einem Haken oder
-    ziehen eine vorhandene Bohrung nachträglich in die Länge. Eine gewählte Bohrung stellen Sie
-    mit „Im Bild einstellen" direkt im Modell ein, mit Griff und Maßlinien. Und die Handlungen
-    an Körper und Merkmal stehen rechts an einem Ort statt in drei Menüs. Die Demo bleibt
-    vollständig und ohne Schlüssel, bis zum 30.10.2026.
-  - **en** — New above all is the slot: you tick a box while drilling, or stretch a bore that is
-    already there. A selected bore you adjust right in the model with *Set in the view*, with a
-    handle and dimension lines. And the actions on a body or a feature now sit in one place on
-    the right instead of in three menus. The demo stays complete and needs no key, until 30
-    October 2026.
-  - **es** — Lo nuevo sobre todo es el agujero alargado: lo marca al taladrar, o estira uno
-    redondo que ya está en la pieza. Un taladro seleccionado lo ajusta directamente en el modelo
-    con «Ajustar en la vista», con tirador y líneas de cota. Y las acciones sobre un cuerpo o una
-    característica están en un solo sitio a la derecha, en vez de en tres menús. La demo sigue
-    completa y sin clave, hasta el 30 de octubre de 2026.
-  - **fr** — Surtout, le trou oblong : vous le cochez en perçant, ou vous étirez un perçage déjà
-    présent. Un perçage sélectionné se règle directement dans le modèle avec « Régler dans la
-    vue », poignée et lignes de cote à l’appui. Et les actions sur un corps ou une forme tiennent
-    en un seul endroit à droite, au lieu de trois menus. La démo reste complète et sans clé,
-    jusqu’au 30 octobre 2026.
-  - **it** — Soprattutto l’asola: la spunti mentre fori, oppure allunghi un foro che c’è già. Un
-    foro selezionato lo imposti direttamente nel modello con «Imposta nella vista», con maniglia
-    e linee di quota. E le azioni su un corpo o una forma stanno in un posto solo, a destra,
-    invece che in tre menu. La demo resta completa e senza chiave, fino al 30 ottobre 2026.
-  - **pt** — Sobretudo o furo oblongo: marca-o ao furar, ou estica um furo que já lá está. Um
-    furo selecionado ajusta-o diretamente no modelo com «Ajustar na vista», com pega e linhas de
-    cota. E as ações sobre um corpo ou uma característica ficam num só sítio à direita, em vez de
-    em três menus. A demo continua completa e sem chave, até 30 de outubro de 2026.
-
-  Abnahme: Der Satz im Update-Fenster von 0.4.1 nennt, was in 0.4.1 neu ist, `notes_version`
-  steht auf `0.4.1`, und `tools/sign_version.py --check` bestätigt die Unterschrift.
+RM-162 ist mit der Auslieferung von 0.5.0 abgeschlossen.
+[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-162-abschluss-050).
 
 ## Kundenrückmeldungen
 
