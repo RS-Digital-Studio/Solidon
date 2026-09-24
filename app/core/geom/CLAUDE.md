@@ -1409,13 +1409,28 @@ Index** (RM-050, 23.09.2026): `knowledge/parts/range_check.local_wall_thickness`
 ersetzte VTKs `vtkStaticCellLocator` durch `mesh.ray_hits_batch` — dieselbe
 Möller-Trumbore-Rechnung wie `ray_hits`, aber über zwei Achsen zugleich (viele
 Strahlen, dieselben Dreiecke) und blockweise über die Dreiecksachse, damit der
-Speicher begrenzt bleibt. Anders als bei der Selbstdurchdringung gibt es hier
-keinen räumlichen Index über den Dreiecken: Ein Strahl je Dreiecksmittelpunkt
-gegen alle Dreiecke ist quadratisch, aber für die Größenordnung der
-mitgelieferten Bausteine (höchstens einige tausend Dreiecke) auf jeder
-Maschine unter einer Sekunde — gemessen über alle 35 mitgelieferten
-Bausteine, siehe `ROADMAP.md` RM-050. Das Paket `vtk` ist damit keine
-Abhängigkeit mehr.
+Speicher begrenzt bleibt. Das Paket `vtk` ist damit keine Abhängigkeit mehr.
+**Ab `RAY_CULL_PAIRS` Paaren wählt `ray_hits_batch` die Dreiecke je
+Strahlgruppe räumlich vor** (`_culled_ray_hits`): Strahlen nach
+Reichweitenstufe und Ursprungszelle gruppiert, je Gruppe nur die Dreiecke,
+deren Hüllquader den Quader der Strahlstücke bis zur Reichweite berührt;
+ein Treffer gilt bis `RAY_CULL_TAKEN` der Reichweite, sonst fragt die
+nächste Runde bis zu ihm. Die Auswahl entscheidet nur, welche Paare
+gerechnet werden — jedes gerechnete Paar trägt dieselben Bits wie im
+Vollvergleich, Gleichstände behält die kleinste Nummer, und der Beweis steht
+an der Funktion; ausgenommen sind nur fast streifende Treffer an der Grenze
+von `RAY_PARALLEL_EPS`, deren Abstand auch der Vollvergleich nur gerundet
+kennt. Ein negatives `minimum_travel` rechnet voll, und erreicht die Auswahl
+einer Gruppe die Hälfte aller Dreiecke, rechnen deren Strahlen gemeinsam
+voll. Ohne sie war die Wandstärke quadratisch: Die runde Dichtschnur mit
+45 368 Dreiecken rechnete zwei Milliarden Paare in 378 s, mit ihr 171
+Millionen in 24 s (24.09.2026). **Sie lohnt an dünnen Wänden, nicht an
+Vollkörpern**: Liegt der Treffer jenseits der halben Szene, kostet sie bis
+etwa die Hälfte mehr als der Vollvergleich (Kugel mit 5120 Dreiecken 4,2
+gegen 2,6 s); die 35 Bausteine zusammen bleiben gleich schnell. Ein echter
+räumlicher Index für solche Körper steht im Register (`ROADMAP.md`,
+CI-Testlaufzeiten). `tests/test_geometry_review.py` vergleicht bitgleich
+gegen den Einzelstrahl und trägt je Sicherung einen konstruierten Fall.
 
 **Netz, Farbe, Text**
 

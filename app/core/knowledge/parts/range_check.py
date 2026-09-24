@@ -176,10 +176,13 @@ def local_wall_thickness(mesh: Any, cancelled: CancelToken | None = None) -> flo
     nicht am selben Punkt nach einem zweiten, weiter entfernten Austritt
     gesucht.
 
-    Gerechnet wird in ``geom.mesh.ray_hits_batch``: Möller-Trumbore über alle
-    Dreiecke zugleich, blockweise, ohne räumlichen Index (RM-050 — Ersatz für
-    VTKs ``vtkStaticCellLocator``, plattformgleich wie jeder andere Strahl im
-    Kern). Es gibt keine Stichprobe: auch ein kleines Detail mit einem
+    Gerechnet wird in ``geom.mesh.ray_hits_batch``: Möller-Trumbore gegen die
+    räumlich vorausgewählten Dreiecke je Strahlgruppe, blockweise (RM-050 —
+    Ersatz für VTKs ``vtkStaticCellLocator``, plattformgleich wie jeder
+    andere Strahl im Kern; die Auswahl ändert den Aufwand, den Treffer nur an
+    fast streifenden Rändern, die auch der Vollvergleich nur gerundet kennt —
+    Grenze und Kosten stehen an ``ray_hits_batch``). Es gibt keine
+    Stichprobe: auch ein kleines Detail mit einem
     einzigen Dreieck wird vermessen. ``None`` bedeutet, dass der Körper keine
     zwei gegenläufigen Flächen trägt, oder dass der Lauf abgebrochen wurde;
     der Aufrufer unterscheidet beides am Token.

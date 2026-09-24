@@ -567,19 +567,50 @@ def _adjacency_by_place(mesh: trimesh.Trimesh) -> np.ndarray:
     return np.vstack([stored, welded])
 
 
+def triple_products(triangles: np.ndarray) -> np.ndarray:
+    """Das Spatprodukt ``a · cross(b, c)`` je Dreieck ``(n, 3, 3)``.
+
+    Elementweise und nicht über ``np.einsum`` (RM-187): Das nutzt auf ARM FMA,
+    und am Vorzeichen der Summe hängt, ob ein Körper, eine Schale oder ein
+    Ergebnis gilt.
+    """
+    first, crossed = triangles[:, 0], np.cross(triangles[:, 1], triangles[:, 2])
+    return np.asarray(
+        first[:, 0] * crossed[:, 0] + first[:, 1] * crossed[:, 1] + first[:, 2] * crossed[:, 2]
+    )
+
+
 def enclosed_volume(body: trimesh.Trimesh) -> float:
     """Das Volumenintegral über die Oberfläche, bezogen auf den Ursprung.
 
     Dieselbe Formel wie ``trimesh.triangles.mass_properties``, ohne Schwerpunkt
     und Trägheit, summiert mit ``math.fsum`` — an 203 776 Dreiecken 0,07 statt
     0,29 s. Für ein geschlossenes Netz das Volumen, für ein offenes eine Zahl,
-    die an der Lage hängt; so war sie es vorher auch.
+    die an der Lage hängt; so war sie es vorher auch. **Für eine Entscheidung
+    gilt** :func:`signed_volume`: Weit vom Ursprung verliert diese Summe das
+    Volumen eines kleinen Körpers in der Rundung.
     """
     triangles = np.asarray(body.triangles, dtype=np.float64)
     if not len(triangles):
         return 0.0
-    products = np.einsum("ij,ij->i", triangles[:, 0], np.cross(triangles[:, 1], triangles[:, 2]))
-    return math.fsum(products) / 6.0
+    return math.fsum(triple_products(triangles).tolist()) / 6.0
+
+
+def signed_volume(body: trimesh.Trimesh) -> float:
+    """Das Volumenintegral nahe am Körper — die Zahl, an der Entscheidungen hängen.
+
+    Bezogen auf die erste Ecke statt auf den Ursprung. Für ein geschlossenes
+    Netz derselbe Wert wie :func:`enclosed_volume`, nur ohne dessen Verlust
+    weit draußen: Ein Würfel von 1 mm bei 10⁸ mm hatte dort ein Volumen, das
+    allein aus Rundung bestand, und die Reparatur stülpte ihn um (Befund B16
+    der Durchsicht 24.09.2026). Ob ein Netz ein positiver Körper ist, ob ein
+    Boolesches Ergebnis gilt und ob eine Füllung Dicke hat, fragen dieselbe
+    Rechnung.
+    """
+    triangles = np.asarray(body.triangles, dtype=np.float64)
+    if not len(triangles):
+        return 0.0
+    return math.fsum(triple_products(triangles - triangles[0, 0]).tolist()) / 6.0
 
 
 def on_surface(
@@ -1205,6 +1236,39 @@ def _rowwise_dot(first: np.ndarray, second: np.ndarray) -> np.ndarray:
 #: zweiten Dreiecks.
 RAY_BATCH_PAIRS: Final = 200_000
 
+#: Ab wie vielen Strahl-Dreieck-Paaren :func:`ray_hits_batch` die Dreiecke je
+#: Strahlgruppe räumlich vorauswählt. Darunter rechnet sie alle Paare, die
+#: Vorauswahl kostete dort mehr, als sie spart. **Sie lohnt, wo Wände dünn
+#: gegen die Szene sind**: Dichtschnur 13 288 Dreiecke 17,6 → 0,35 s, 45 368
+#: Dreiecke rund 190 → 24 s. Wo der Treffer jenseits der halben Szene liegt —
+#: ein Vollkörper —, kostet sie bis etwa die Hälfte mehr als der
+#: Vollvergleich (Kugel mit 5120 Dreiecken 4,2 gegen 2,6 s); die 35
+#: mitgelieferten Bausteine zusammen bleiben gleich schnell (25.09.2026).
+RAY_CULL_PAIRS: Final = 4 * RAY_BATCH_PAIRS
+
+#: Die erste Reichweite der Vorauswahl als Anteil der Szenendiagonale.
+RAY_CULL_FIRST_REACH: Final = 1.0 / 32.0
+
+#: Bis zu welchem Anteil seiner Reichweite ein Treffer der Vorauswahl gilt.
+#: Der Rest ist der Abstand, den ein ferner, fast streifender Treffer durch
+#: Rundung höchstens gewinnen könnte (Herleitung an :func:`_culled_ray_hits`).
+RAY_CULL_TAKEN: Final = 0.75
+
+#: Um wie viel die Reichweite eines Strahls wächst, der in seiner Runde nichts
+#: getroffen hat. Gemessen am 25.09.2026 über alle Bausteine, zwei Kugeln und
+#: die Dichtschnur: Vier sparte an Vollkörpern eine Runde und übersprang an der
+#: 12-mm-Schnur die Wand (23 → 56 s), in Summe 128 gegen 99 s.
+RAY_CULL_GROWTH: Final = 2.0
+
+#: Wie breit eine Ursprungszelle ist: ``2**(e - RAY_CULL_CELL_SHIFT)`` für eine
+#: Reichweite in ``[2**(e-1), 2**e)``. Kleiner heißt engere Quader, aber mehr
+#: Gruppen, und jede Gruppe fragt alle Hüllquader einmal ab.
+RAY_CULL_CELL_SHIFT: Final = 2
+
+#: Nach so vielen Runden rechnet der Rest im Vollvergleich — eine Grenze für
+#: den Lauf, keine für das Ergebnis.
+RAY_CULL_ROUNDS: Final = 24
+
 
 def ray_hits_batch(
     triangles: np.ndarray,
@@ -1230,6 +1294,23 @@ def ray_hits_batch(
     **Elementweise und nicht über ``np.dot`` oder ``np.einsum``** (RM-187):
     dasselbe Ergebnis auf jeder Maschine.
 
+    **Ab** ``RAY_CULL_PAIRS`` **Paaren mit räumlicher Vorauswahl.** Die
+    Wandstärke schießt von jedem Dreieck aus; ohne Auswahl ist das
+    quadratisch, und an einer Dichtschnur mit 45 000 Dreiecken waren es zwei
+    Milliarden Paare und über sechs Minuten. Die Strahlen werden nach ihrem
+    Ursprung in Zellen gruppiert; je Zelle rechnet dieselbe
+    Möller-Trumbore-Rechnung nur gegen die Dreiecke, deren Hüllquader den
+    Quader berührt, den die Strahlstücke der Zelle bis zur Reichweite
+    überstreichen (:func:`_culled_ray_hits`). Die Auswahl entscheidet nur,
+    **welche** Paare gerechnet werden, nie den Wert eines Paars: Jedes
+    gerechnete Paar trägt dieselben Bits wie im Vollvergleich, gleiche
+    Abstände entscheidet weiter die kleinste Dreiecksnummer, und was die
+    Vorauswahl nicht belegen kann, geht in den Vollvergleich. Die eine
+    Ausnahme sind fast streifende Treffer an der Grenze von
+    ``RAY_PARALLEL_EPS``, deren Abstand auch der Vollvergleich nur gerundet
+    kennt (Herleitung an :func:`_culled_ray_hits`). Ein negatives
+    ``minimum_travel`` — Treffer hinter dem Ursprung — rechnet immer voll.
+
     Zurück kommen je Strahl der kleinste positive Treffer (``np.inf`` ohne
     Treffer) und die zugehörige Dreiecksnummer (``-1`` ohne Treffer). Ein
     Abbruch mitten im Lauf liefert den bis dahin gefundenen Teilstand zurück;
@@ -1239,12 +1320,34 @@ def ray_hits_batch(
     origins = np.asarray(origins, dtype=float)
     directions = np.asarray(directions, dtype=float)
     count = len(origins)
-    best_travel = np.full(count, np.inf)
-    best_face = np.full(count, -1, dtype=np.int64)
     total = len(triangles)
     if not total or not count:
-        return best_travel, best_face
+        return np.full(count, np.inf), np.full(count, -1, dtype=np.int64)
+    if total * count <= RAY_CULL_PAIRS or minimum_travel < 0.0:
+        return _nearest_ray_hits(
+            triangles, origins, directions, edge_margin, minimum_travel, cancelled
+        )
+    return _culled_ray_hits(triangles, origins, directions, edge_margin, minimum_travel, cancelled)
 
+
+def _nearest_ray_hits(
+    triangles: np.ndarray,
+    origins: np.ndarray,
+    directions: np.ndarray,
+    edge_margin: float,
+    minimum_travel: float,
+    cancelled: CancelToken | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Der Vollvergleich: jeder Strahl gegen jedes Dreieck, blockweise.
+
+    Die Blöcke laufen in aufsteigender Dreiecksnummer, und ein späterer Block
+    ersetzt nur einen **echt** kleineren Abstand — gleiche Abstände behält
+    damit die kleinste Nummer, so wie ``np.argmin`` innerhalb eines Blocks.
+    """
+    count = len(origins)
+    total = len(triangles)
+    best_travel = np.full(count, np.inf)
+    best_face = np.full(count, -1, dtype=np.int64)
     block = max(1, min(total, RAY_BATCH_PAIRS // max(1, count)))
     for start in range(0, total, block):
         if cancelled is not None and cancelled.is_cancelled:
@@ -1265,6 +1368,168 @@ def ray_hits_batch(
         better = local_travel < best_travel
         best_travel = np.where(better, local_travel, best_travel)
         best_face = np.where(better, start + local_best, best_face)
+    return best_travel, best_face
+
+
+def _culled_ray_hits(
+    triangles: np.ndarray,
+    origins: np.ndarray,
+    directions: np.ndarray,
+    edge_margin: float,
+    minimum_travel: float,
+    cancelled: CancelToken | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Dieselbe Antwort wie :func:`_nearest_ray_hits`, gegen weniger Dreiecke je Strahl.
+
+    **Warum die Auswahl nichts verliert.** Jeder Strahl trägt eine Reichweite
+    ``R``. Ein Dreieck, dessen Hüllquader den Quader um alle Strahlstücke
+    ``[o, o + R·d/|d|]`` seiner Gruppe nicht berührt, hat keinen Punkt auf
+    diesen Stücken; trifft ein Strahl es, dann jenseits seiner Reichweite. Ein
+    Treffer unter den übrigen gilt deshalb, sobald er bis ``RAY_CULL_TAKEN·R``
+    liegt. Der Abstand bis ``R`` fängt ab, dass Möller-Trumbore den Abstand
+    eines fernen, fast streifenden Dreiecks gerundet rechnet: Der relative
+    Fehler von ``t`` wächst mit ``ε / s``, ``s`` dem Sinus aus Determinante
+    und Kanten, und ein Viertel erreicht er erst bei ``s`` unter etwa
+    ``10⁻¹⁴`` — an Kanten über acht Millimetern und ganz am Rand dessen, was
+    ``RAY_PARALLEL_EPS`` noch als Treffer zählt. Dort war auch der
+    Vollvergleich keine geometrische Aussage mehr. Die Hüllquader sind um das
+    baryzentrische ``edge_margin`` des Treffertests und ein Milliardstel der
+    Szenendiagonale gewachsen, der Quader der Stücke um dasselbe Milliardstel.
+
+    **Die Reichweite wächst je Strahl.** Liegt der gefundene Treffer jenseits
+    der Grenze, fragt die nächste Runde genau bis dorthin und um den
+    Sicherheitsrand weiter — dort gilt er dann, oder ein näherer. Ohne Treffer
+    wächst sie um ``RAY_CULL_GROWTH``. Ab der Szenendiagonale (samt
+    Randzugaben) deckt das Stück jeden möglichen Treffer, und das Ergebnis
+    gilt, auch „kein Treffer". Erreicht die Auswahl einer Gruppe die Hälfte
+    aller Dreiecke, spart sie nichts mehr: Diese Strahlen rechnen am Ende der
+    Runde gemeinsam im Vollvergleich, und ihr Ergebnis gilt sofort. Was nach
+    ``RAY_CULL_ROUNDS`` Runden offen ist, geht ebenso dorthin, und ein
+    Strahl mit nicht endlicher Richtung oder nicht endlichem Ursprung auch.
+    Ein Strahl der Länge null trifft nie — die Determinante ist genau null —
+    und bekommt ``inf`` ohne Rechnung.
+
+    Gruppiert wird nach Reichweitenstufe und Ursprungszelle, die Zelle so
+    breit wie ein Viertel bis die Hälfte der Reichweite. Die Rechnung für die
+    **Auswahl** (Quader, Längen, Stufen) entscheidet nur, welche Paare
+    gerechnet werden: Ein Unterschied in ihrer letzten Stelle verschiebt ein
+    Paar höchstens in eine andere Runde, nie seinen Wert (``kern.md``,
+    Vorauswahl).
+    """
+    count = len(origins)
+    best_travel = np.full(count, np.inf)
+    best_face = np.full(count, -1, dtype=np.int64)
+    lower = triangles.min(axis=1)
+    upper = triangles.max(axis=1)
+    scene_low = np.minimum(lower.min(axis=0), origins.min(axis=0))
+    scene_high = np.maximum(upper.max(axis=0), origins.max(axis=0))
+    span = scene_high - scene_low
+    diagonal = float(np.sqrt(span[0] * span[0] + span[1] * span[1] + span[2] * span[2]))
+    if not math.isfinite(diagonal) or diagonal <= 0.0:
+        # Eine Szene ohne Ausdehnung oder mit nicht endlichen Koordinaten hat
+        # keine Zellen; der Vollvergleich antwortet dort wie bisher.
+        return _nearest_ray_hits(
+            triangles, origins, directions, edge_margin, minimum_travel, cancelled
+        )
+    guard = diagonal * 1e-9 + 1e-12
+    # Ein Treffer zählt baryzentrisch bis ``edge_margin`` neben dem Dreieck —
+    # also höchstens um so viele Kantenlängen außerhalb seines Quaders.
+    slack = (upper - lower).max(axis=1) * (3.0 * max(edge_margin, 0.0)) + guard
+    lower = lower - slack[:, None]
+    upper = upper + slack[:, None]
+    # Jeder Treffer liegt im gewachsenen Quader seines Dreiecks, jeder Ursprung
+    # in der Szene: Weiter als ``complete`` kann kein Treffer entfernt sein.
+    complete = diagonal + 4.0 * float(slack.max()) + 2.0 * guard
+    length = np.sqrt(_rowwise_dot(directions, directions))
+    reach = np.full(count, min(diagonal * RAY_CULL_FIRST_REACH, complete))
+
+    # Ohne Richtung oder mit nicht endlichem Ursprung gibt es kein Strahlstück;
+    # solche Strahlen rechnet am Ende der Vollvergleich.
+    pending = np.flatnonzero(
+        np.isfinite(length) & (length > 0.0) & np.isfinite(origins).all(axis=1)
+    )
+    for _round in range(RAY_CULL_ROUNDS):
+        if not len(pending):
+            break
+        _, level = np.frexp(reach[pending])
+        cell = np.ldexp(1.0, level - RAY_CULL_CELL_SHIFT)
+        cells = np.floor((origins[pending] - scene_low) / cell[:, None]).astype(np.int64)
+        order = np.lexsort((cells[:, 2], cells[:, 1], cells[:, 0], level))
+        keyed = np.column_stack((level, cells))[order]
+        bounds = np.flatnonzero(np.any(keyed[1:] != keyed[:-1], axis=1)) + 1
+        settled = np.zeros(len(pending), dtype=bool)
+        whole: list[np.ndarray] = []
+        for members in np.split(order, bounds):
+            if cancelled is not None and cancelled.is_cancelled:
+                return best_travel, best_face
+            rays = pending[members]
+            ends = origins[rays] + directions[rays] * (reach[rays] / length[rays])[:, None]
+            box_low = np.minimum(origins[rays].min(axis=0), ends.min(axis=0)) - guard
+            box_high = np.maximum(origins[rays].max(axis=0), ends.max(axis=0)) + guard
+            near = np.flatnonzero(
+                np.all(lower <= box_high, axis=1) & np.all(upper >= box_low, axis=1)
+            )
+            final = reach[rays] >= complete
+            if not len(near):
+                settled[members[final]] = True
+                reach[rays] = np.minimum(reach[rays] * RAY_CULL_GROWTH, complete)
+                continue
+            if 2 * len(near) >= len(triangles):
+                whole.append(members)
+                continue
+            travel, face = _nearest_ray_hits(
+                triangles[near],
+                origins[rays],
+                directions[rays],
+                edge_margin,
+                minimum_travel,
+                cancelled,
+            )
+            if cancelled is not None and cancelled.is_cancelled:
+                return best_travel, best_face
+            distance = travel * length[rays]
+            taken = (distance <= reach[rays] * RAY_CULL_TAKEN) | final
+            hit = taken & (face >= 0)
+            best_travel[rays[hit]] = travel[hit]
+            best_face[rays[hit]] = near[face[hit]]
+            settled[members[taken]] = True
+            found = np.isfinite(distance)
+            reach[rays] = np.minimum(
+                np.where(
+                    found,
+                    np.maximum(distance / RAY_CULL_TAKEN * (1.0 + 1e-9), reach[rays]),
+                    reach[rays] * RAY_CULL_GROWTH,
+                ),
+                complete,
+            )
+        if whole:
+            members = np.concatenate(whole)
+            rays = pending[members]
+            travel, face = _nearest_ray_hits(
+                triangles, origins[rays], directions[rays], edge_margin, minimum_travel, cancelled
+            )
+            if cancelled is not None and cancelled.is_cancelled:
+                return best_travel, best_face
+            best_travel[rays] = travel
+            best_face[rays] = face
+            settled[members] = True
+        pending = pending[~settled]
+
+    # Länge null trifft nie und bleibt bei ``inf``; nicht endliche Strahlen
+    # rechnet der Vollvergleich wie bisher.
+    finite = np.isfinite(length) & np.isfinite(origins).all(axis=1)
+    open_rays = np.union1d(pending, np.flatnonzero(~finite))
+    if len(open_rays):
+        travel, face = _nearest_ray_hits(
+            triangles,
+            origins[open_rays],
+            directions[open_rays],
+            edge_margin,
+            minimum_travel,
+            cancelled,
+        )
+        best_travel[open_rays] = travel
+        best_face[open_rays] = face
     return best_travel, best_face
 
 
