@@ -73,12 +73,11 @@ jobs:
   suite:
     name: Suite (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # Windows fährt beim Release Kern und alle Fensterdateien nacheinander.
-    # Der Kern braucht auf dem Runner rund 26 Minuten; die 92 Fensterdateien
-    # liefen nach weiteren 30 Minuten noch mit regelmäßigem Fortschritt.
-    # Deshalb bekommt der gesamte Windows-Job 90 Minuten. Jede der beiden
-    # Prüfgruppen behält ihre eigene Stundenfrist gegen einen Hänger.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 90 || 60 }}
+    # Einheitlich zwei Stunden je Job und begrenzter Prüfgruppe. Auf macOS
+    # brauchte allein der grüne Kern 57:19 Minuten (Lauf 35963463792);
+    # Einrichtung und anschließende Fensterverträge passen nicht in eine
+    # gemeinsame Stunde. Ein Fristablauf bleibt ein roter Lauf.
+    timeout-minutes: 120
     env:
       RELEASE_CHECK: ${{ inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') }}
     strategy:
@@ -154,7 +153,7 @@ jobs:
           python -m mypy
 
       - name: Tests
-        timeout-minutes: 60
+        timeout-minutes: 120
         # Die Kern- und Fensterverträge laufen getrennt; jedes Nichtnull-Ergebnis
         # sperrt das Paket. Fenstertests trägt `tests/conftest.py` den Marker
         # windowed ein (qt_app oder ausdrücklich); sie laufen ausschließlich
@@ -209,7 +208,7 @@ jobs:
           done
 
       - name: Fensterdateien
-        timeout-minutes: 60
+        timeout-minutes: 120
         # Ein Prozess je Datei schützt die Lebensdauergrenze. Ein roter
         # Prozess oder eine fehlende Sammlung sperrt die Paketierung.
         #
@@ -286,6 +285,7 @@ jobs:
     needs: suite
     if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     permissions:
       contents: read
     strategy:
@@ -616,6 +616,7 @@ jobs:
     needs: package
     if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
@@ -718,6 +719,7 @@ jobs:
     needs: package
     if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: windows-latest
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
@@ -839,6 +841,7 @@ jobs:
     needs: windows-installer
     if: inputs.tests_only != true && (success())
     runs-on: windows-latest
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
@@ -906,6 +909,7 @@ jobs:
         (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
         (vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized'))
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     environment: production-signing
     permissions:
       contents: read
@@ -1070,6 +1074,7 @@ jobs:
       (((vars.MACOS_SIGNING_MODE == '' || vars.MACOS_SIGNING_MODE == 'unsigned') && needs.macos-app-sign.result == 'skipped') ||
        ((vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized') && needs.macos-app-sign.result == 'success')))
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     permissions:
       contents: read
     strategy:
@@ -1161,6 +1166,7 @@ jobs:
     needs: macos-package
     if: inputs.tests_only != true && (vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized')
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     environment: production-signing
     permissions:
       contents: read
@@ -1297,6 +1303,7 @@ jobs:
       (((vars.MACOS_SIGNING_MODE == '' || vars.MACOS_SIGNING_MODE == 'unsigned') && needs.macos-installer-sign.result == 'skipped') ||
        ((vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized') && needs.macos-installer-sign.result == 'success')))
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     permissions:
       contents: read
     strategy:
@@ -1385,6 +1392,7 @@ jobs:
     # blockiert nichts — er meldet.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
