@@ -92,6 +92,18 @@ MENU_MARK: Final[str] = (
     'aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg>'
 )
 
+#: Das Markenzeichen der Kopfzeile, identisch mit den von Hand gepflegten
+#: Seiten. Es stand zweimal wortgleich in `make_changelog` und `make_manual`,
+#: und die Rechtstexte aus `make_legal` trugen es gar nicht — dort stand die
+#: Marke ohne den Würfel davor.
+BRAND_MARK: Final[str] = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" '
+    'aria-hidden="true">'
+    '<path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>'
+    '<path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>'
+    "</svg>"
+)
+
 
 def nav_menu(language: str, *, current: str = "", on_home: bool = False, extra: str = "") -> str:
     """Die fünf Verweise in einem Aufklapper, der am Rechner keiner ist.

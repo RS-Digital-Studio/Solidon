@@ -39,7 +39,7 @@ from app.core import figures, manual
 from app.core.bootstrap import load_operations
 from app.i18n import SOURCE_LANGUAGE, install_catalog, language_name, set_language
 from app.i18n.catalog import available_languages, read_catalog
-from tools.site_nav import entries_for, nav_menu, site_text
+from tools.site_nav import BRAND_MARK, entries_for, nav_menu, site_text
 
 ROOT = Path(__file__).resolve().parent.parent
 WEBSITE = ROOT / "website"
@@ -359,15 +359,6 @@ def write_figures(target: Path, language: str) -> tuple[dict[str, str], dict[str
 #: Vorschau beim Teilen. Aus ``branding.WEBSITE_URL``, damit sie an einer
 #: Stelle steht.
 SITE = WEBSITE_URL
-
-#: Das Markenzeichen der Kopfzeile, identisch mit der Startseite.
-BRAND_MARK = (
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" '
-    'aria-hidden="true">'
-    '<path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>'
-    '<path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>'
-    "</svg>"
-)
 
 
 def _switch_target(current: str, other: str) -> str:

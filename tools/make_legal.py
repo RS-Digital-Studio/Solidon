@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.branding import APP_NAME, APP_VENDOR  # noqa: E402
-from tools.site_nav import ENTRIES  # noqa: E402
+from tools.site_nav import BRAND_MARK, ENTRIES  # noqa: E402
 
 WEBSITE = ROOT / "website"
 
@@ -335,7 +335,7 @@ def page(title: str, body: str, siblings: str) -> str:
         f"</head>\n<body>\n\n"
         f'<a class="skip" href="#content">Zum Inhalt springen</a>\n\n'
         f'<header class="site">\n  <div class="wrap">\n'
-        f'    <a class="brand" href="/">Solidon<span>3D</span></a>\n'
+        f'    <a class="brand" href="/">{BRAND_MARK}Solidon<span>3D</span></a>\n'
         f"  </div>\n</header>\n\n"
         f'<main id="content" class="legal">\n  <div class="wrap">\n{body}\n  </div>\n</main>\n\n'
         f'<footer class="site">\n  <div class="wrap">\n'

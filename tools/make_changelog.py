@@ -29,7 +29,7 @@ from app.branding import APP_NAME  # noqa: E402
 from app.core import changes  # noqa: E402
 from app.i18n import SOURCE_LANGUAGE, TranslatableText, _, language_name  # noqa: E402
 from app.i18n.catalog import available_languages, read_catalog  # noqa: E402
-from tools.site_nav import nav_menu  # noqa: E402
+from tools.site_nav import BRAND_MARK, nav_menu  # noqa: E402
 from tools.stamp_assets import stamp_of  # noqa: E402
 
 
@@ -113,15 +113,6 @@ def copy_for(language: str) -> Copy:
 def page_path(language: str) -> str:
     """Der Webpfad einer Sprache, ohne eine feste Sprachliste."""
     return "changelog.html" if language == SOURCE_LANGUAGE else f"{language}/changelog.html"
-
-
-BRAND_MARK = (
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" '
-    'aria-hidden="true">'
-    '<path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>'
-    '<path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>'
-    "</svg>"
-)
 
 
 def path_for(language: str) -> Path:
