@@ -182,6 +182,194 @@ def _ci_record(run_id: str, workflow: str) -> dict[str, object]:
     }
 
 
+def test_an_identical_installer_commit_needs_no_remote_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unveränderte Quellen brauchen keine Ausnahme und keinen zusätzlichen API-Aufruf."""
+    monkeypatch.setattr(sign_release, "_github_metadata", lambda path: pytest.fail(path))
+    sign_release.verify_installer_source("12" * 20, "12" * 20)
+
+
+def _tree_api_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, changes=None):
+    """Git selbst berechnet die Baum-SHAs; der Prüfer liefert nicht seinen eigenen Sollwert."""
+    repository = tmp_path / "git"
+    subprocess.run(["git", "init", "--quiet", str(repository)], check=True)
+    leaves = dict.fromkeys(
+        sign_release.INSTALLER_ORCHESTRATION_FILES, ("blob", "100644", "11" * 20)
+    )
+    leaves.update(
+        {
+            "app/model.py": ("blob", "100644", "22" * 20),
+            "packaging/solidon3d.iss": ("blob", "100644", "33" * 20),
+            "constraints.txt": ("blob", "100644", "44" * 20),
+            "tools/make_installer.py": ("blob", "100644", "55" * 20),
+            "ä.txt": ("blob", "100644", "66" * 20),
+            "app.txt": ("blob", "100644", "77" * 20),
+            "link": ("blob", "120000", "88" * 20),
+            "submodule": ("commit", "160000", "99" * 20),
+        }
+    )
+
+    def tree(values):
+        result = []
+
+        def folder(prefix):
+            children = {}
+            for path, value in values.items():
+                if not path.startswith(prefix):
+                    continue
+                name, slash, _rest = path[len(prefix) :].partition("/")
+                if slash:
+                    children.setdefault(name, None)
+                else:
+                    children[name] = value
+            records = []
+            for name, value in sorted(children.items()):
+                if value is None:
+                    value = ("tree", "040000", folder(prefix + name + "/"))
+                kind, mode, sha = value
+                result.append({"path": prefix + name, "type": kind, "mode": mode, "sha": sha})
+                records.append(f"{mode} {kind} {sha}\t{name}\0")
+            return subprocess.run(
+                ["git", "mktree", "--missing", "-z"],
+                cwd=repository,
+                input="".join(records),
+                capture_output=True,
+                encoding="utf-8",
+                check=True,
+            ).stdout.strip()
+
+        root = folder("")
+        return {"sha": root, "truncated": False, "tree": result}
+
+    original = tree(leaves)
+    amended = leaves.copy()
+    if changes:
+        changes(amended)
+    replacement = tree(amended)
+    responses = {
+        f"compare/{'12' * 20}...{'34' * 20}": {
+            "status": "ahead",
+            "base_commit": {"sha": "12" * 20},
+            "merge_base_commit": {"sha": "12" * 20},
+        },
+        f"git/commits/{'12' * 20}": {"sha": "12" * 20, "tree": {"sha": original["sha"]}},
+        f"git/commits/{'34' * 20}": {"sha": "34" * 20, "tree": {"sha": replacement["sha"]}},
+        f"git/trees/{original['sha']}?recursive=1": original,
+        f"git/trees/{replacement['sha']}?recursive=1": replacement,
+    }
+    monkeypatch.setattr(sign_release, "_github_metadata", lambda path: responses[path])
+    return responses, replacement
+
+
+def test_only_the_named_orchestration_blobs_may_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch geänderte Elternbaum-SHAs und UTF-8-Pfade werden gegen echte Gitobjekte geprüft."""
+
+    def change(leaves):
+        for path in sign_release.INSTALLER_ORCHESTRATION_FILES:
+            leaves[path] = ("blob", "100644", "ab" * 20)
+
+    _tree_api_fixture(tmp_path, monkeypatch, change)
+    sign_release.verify_installer_source("12" * 20, "34" * 20)
+
+
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "app",
+        "package",
+        "dependency",
+        "tool",
+        "new",
+        "deleted",
+        "mode",
+        "symlink",
+        "gitlink",
+        "allowed_deleted",
+        "allowed_mode",
+        "allowed_symlink",
+    ],
+)
+def test_changed_product_or_tree_structure_never_reaches_the_installer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, problem: str
+) -> None:
+    def change(leaves):
+        path = {
+            "app": "app/model.py",
+            "package": "packaging/solidon3d.iss",
+            "dependency": "constraints.txt",
+            "tool": "tools/make_installer.py",
+            "gitlink": "submodule",
+            "symlink": "link",
+        }.get(problem, "app/model.py")
+        if problem.startswith("allowed_"):
+            path = "tools/sign_release.py"
+        if problem in {"deleted", "allowed_deleted"}:
+            del leaves[path]
+        elif problem == "new":
+            leaves["unknown.py"] = ("blob", "100644", "ab" * 20)
+        elif problem in {"mode", "allowed_mode"}:
+            leaves[path] = ("blob", "100755", leaves[path][2])
+        elif problem == "allowed_symlink":
+            leaves[path] = ("blob", "120000", "ab" * 20)
+        else:
+            leaves[path] = (*leaves[path][:2], "ab" * 20)
+
+    _tree_api_fixture(tmp_path, monkeypatch, change)
+    with pytest.raises(sign_release.SigningError):
+        sign_release.verify_installer_source("12" * 20, "34" * 20)
+
+
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "truncated",
+        "missing",
+        "duplicate",
+        "parent",
+        "mode",
+        "path",
+        "root_sha",
+        "commit_sha",
+        "no_tree",
+        "unrelated",
+        "wrong_merge_base",
+    ],
+)
+def test_incomplete_or_foreign_git_evidence_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, problem: str
+) -> None:
+    replies, tree = _tree_api_fixture(tmp_path, monkeypatch)
+    comparison = replies[f"compare/{'12' * 20}...{'34' * 20}"]
+    commit = replies[f"git/commits/{'34' * 20}"]
+    if problem == "truncated":
+        tree["truncated"] = True
+    elif problem == "missing":
+        tree["tree"].pop()
+    elif problem == "duplicate":
+        tree["tree"].append(tree["tree"][0].copy())
+    elif problem == "parent":
+        tree["tree"] = [entry for entry in tree["tree"] if entry["path"] != "app"]
+    elif problem == "mode":
+        tree["tree"][0]["mode"] = "777777"
+    elif problem == "path":
+        tree["tree"][0]["path"] = "../foreign.py"
+    elif problem == "root_sha":
+        tree["sha"] = "ab" * 20
+    elif problem == "commit_sha":
+        commit["sha"] = "ab" * 20
+    elif problem == "no_tree":
+        del commit["tree"]
+    elif problem == "unrelated":
+        comparison["status"] = "diverged"
+    else:
+        comparison["merge_base_commit"]["sha"] = "ab" * 20
+    with pytest.raises(sign_release.SigningError):
+        sign_release.verify_installer_source("12" * 20, "34" * 20)
+
+
 @pytest.fixture
 def signing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     tree = _product_tree(tmp_path / "ci", monkeypatch)
@@ -238,7 +426,12 @@ def _application_phase(signing: dict[str, object], **overrides: object) -> dict[
         setup_name: content,
         setup_name + ".sha256": f"{digest}  {setup_name}\n".encode("ascii"),
         sign_release.INSTALLER_METADATA: json.dumps(
-            {**metadata, "installer_sha256": digest}
+            {
+                **metadata,
+                "installer_sha256": digest,
+                "installer_commit": "12" * 20,
+                "installer_run_id": "456",
+            }
         ).encode(),
     }
     arguments.pop("run_id")
@@ -250,6 +443,48 @@ def _application_phase(signing: dict[str, object], **overrides: object) -> dict[
 
 def _go(signing: dict[str, object], **overrides: object) -> Path:
     return sign_release.sign_installer(**_application_phase(signing, **overrides))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_the_local_installer_phase_checks_the_actual_successor_tree(
+    signing, tmp_path, monkeypatch, allowed
+):
+    """Der lokale Rückweg benutzt denselben echten Baumprüfer wie die Installer-CI."""
+    arguments = _application_phase(signing)
+    tools = signing["tools"]
+    metadata = json.loads(tools.installer_files[sign_release.INSTALLER_METADATA])
+    metadata["installer_commit"] = "34" * 20
+    tools.installer_files[sign_release.INSTALLER_METADATA] = json.dumps(metadata).encode()
+
+    def run(run_id, workflow):
+        result = _ci_record(run_id, workflow)
+        if workflow == sign_release.INSTALLER_WORKFLOW:
+            result["head_sha"] = "34" * 20
+        return result
+
+    monkeypatch.setattr(sign_release, "verify_ci_run", run)
+    path = "tools/sign_release.py" if allowed else "app/model.py"
+    _tree_api_fixture(
+        tmp_path, monkeypatch, lambda leaves: leaves.update({path: ("blob", "100644", "ab" * 20)})
+    )
+    if allowed:
+        assert sign_release.sign_installer(**arguments).is_file()
+    else:
+        with pytest.raises(sign_release.SigningError, match=r"app/model\.py"):
+            sign_release.sign_installer(**arguments)
+        assert [call[1] for call in tools.calls] == ["sign", "verify"]
+
+
+@pytest.mark.parametrize("field", ["installer_commit", "installer_run_id"])
+def test_installer_return_cannot_forge_its_actual_run_or_commit(signing, field):
+    arguments = _application_phase(signing)
+    tools = signing["tools"]
+    metadata = json.loads(tools.installer_files[sign_release.INSTALLER_METADATA])
+    metadata[field] = "99" * 20 if field == "installer_commit" else "999"
+    tools.installer_files[sign_release.INSTALLER_METADATA] = json.dumps(metadata).encode()
+    with pytest.raises(sign_release.SigningError, match="CI-Installer"):
+        sign_release.sign_installer(**arguments)
+    assert len([call for call in tools.calls if call[1] == "sign"]) == 1
 
 
 def _repack(signing: dict[str, object], mutate: object) -> None:

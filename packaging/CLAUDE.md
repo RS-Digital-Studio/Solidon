@@ -67,8 +67,10 @@ Nur wenn die Apple-Angaben vollständig sind und `notarytool`, `stapler` und
 Weg betritt keinen geschützten Job und behält den Gatekeeper-Hinweis.
 
 Windows wird in **zwei CI-Schritten gebaut und dazwischen sowie danach lokal
-signiert**. Die CI hat nur lesenden Repositoryzugriff und keine
-Windows-Signiergeheimnisse. Die verbindliche Reihenfolge lautet:
+signiert**. Der Anwendungsbau hat nur lesenden Repositoryzugriff. Der
+Installerjob benötigt `contents: write` zum Lesen des unveröffentlichten
+Dateientwurfs; Windows-Signiergeheimnisse erhält keiner dieser Jobs.
+Die verbindliche Reihenfolge lautet:
 
 1. `build.yml` baut die Anwendung und übergibt den **vollständigen** App-Baum
    sowie die festen Installer-Eingänge als kanonische relative Pfadliste mit
@@ -80,14 +82,20 @@ Windows-Signiergeheimnisse. Die verbindliche Reihenfolge lautet:
    ausschließlich die Anwendung. Die signierte EXE und ihre Herkunftsakte
    werden als Transport in einem unveröffentlichten Release-Entwurf abgelegt.
 3. `windows-signed-installer.yml` lädt die ursprünglichen Eingänge und die
-   signierte EXE. Der manuelle Workflow auf `main` verlangt denselben Commit
-   wie der erfolgreiche Anwendungslauf: manuell auf `main` oder durch das
-   tatsächliche Versions-Tag am selben Commit ausgelöst. Er prüft Herkunft,
+   signierte EXE. Der erfolgreiche Anwendungslauf wurde manuell auf `main`
+   oder durch das tatsächliche Versions-Tag ausgelöst. Der manuelle
+   Installerworkflow auf `main` darf einen abweichenden Commit nur verwenden,
+   wenn der gemeinsame Herkunftsprüfer die vollständigen Git-Blatteinträge
+   beider Stände außerhalb der eng benannten Signierablauf-Dateien identisch
+   findet. Derselbe Vergleich läuft nochmals vor der lokalen Setupsignatur.
+   Produktquellen und ursprüngliche Installer-Eingänge bleiben unverändert.
+   Er prüft Herkunft,
    Hash, Zeitstempel und Herausgeber, ersetzt nur die EXE und bindet die
    Übergabe neu. Inno Setup 7
    baut den Installer in der CI. Das Artefakt
    `solidon3d-windows-installer-signing-input` enthält Setup, `.sha256` und
-   `windows-installer-build.json`; der Workflow veröffentlicht nichts.
+   `windows-installer-build.json` mit dem tatsächlichen Installercommit und
+   seiner Laufnummer; der Workflow veröffentlicht nichts.
 4. `tools/sign_release.py --phase installer` prüft lokal diesen CI-Rückweg,
    signiert und prüft die Setup-Datei und schreibt Prüfsumme und Releaseakte
    für das endgültige Kundenpaket. Lokal wird kein Installer gebaut.

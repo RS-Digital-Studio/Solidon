@@ -21,18 +21,31 @@ die CI:** Anwendung und Installer werden beide dort gebaut (Entscheidung
 Robert für 0.5.0, 23.09.2026). Das Certum-Zertifikat liegt in der
 SimplySign-Cloud und verlangt einen Einmalcode vom Handy. Die lokale Phase
 `application` von `tools/sign_release.py` prüft die Herkunft aus einem
-erfolgreichen manuellen main-Lauf, das frisch geladene Archiv, jede Prüfsumme
+erfolgreichen manuellen main- oder echten Versions-Tag-Lauf, das frisch geladene Archiv, jede Prüfsumme
 und die Produktangaben, bevor sie die Anwendung signiert.
 
 Ein unveröffentlichter Release-Entwurf transportiert ausschließlich die
 signierte EXE und ihre Herkunftsakte zurück zur CI. Der separate Workflow
-`windows-signed-installer.yml` prüft denselben Quellcommit, Archiv und
+`windows-signed-installer.yml` prüft den Quellcommit, Archiv und
 Anwendung samt Herausgeber und Zeitstempel und baut den Installer ohne
 Signierschlüssel. Die lokale Phase `installer` bindet dessen Rückgabe und
 den verbliebenen Eingangsbaum erneut an die ursprüngliche CI-Übergabe,
 signiert die Setup-Datei und prüft die endgültige Releaseakte. Die genaue
 Aufrufkette steht in `Signierung/README.md`. Der unsignierte Installer des
 gewöhnlichen Hauptbaulaufs bleibt ein internes Prüfpaket.
+
+**Unveröffentlichte GitHub-Entwürfe verlangen Push-Rechte.** Ein Workflow mit
+`contents: read` kann den internen Transport deshalb nicht lesen; der
+Installerjob erhält gezielt `contents: write`, ohne Signiergeheimnisse oder
+automatische Veröffentlichung. Ein Rechtefix darf den bereits geprüften
+Produktstand nicht ersetzen: Bei verschiedenen Anwendungs- und
+Installercommits vergleicht ein gemeinsamer Prüfer beide vollständigen
+Git-Bäume. Nur eng benannte Dateien des Signierablaufs, seiner Tests und
+Dokumentation dürfen abweichen; alle übrigen Blattpfade, Typen, Modi und
+Objekt-SHAs müssen gleich sein. Unvollständige Antworten halten an. Die
+Installerakte nennt den tatsächlichen Installercommit und Lauf, die lokale
+Phase prüft beide erneut. Eine ursprüngliche Anwendungssignatur bleibt an
+ihren Quelllauf gebunden; der Versions-Tag wird dafür nie verschoben.
 
 macOS bleibt in der CI, mit derselben Grenze: Developer-ID-Appsignatur,
 ungeschützter Paketbau und Developer-ID-Installersignatur sind drei Jobs. Die

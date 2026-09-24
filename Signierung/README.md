@@ -146,8 +146,22 @@ prüft das Werkzeug die tatsächliche GitHub-Tagreferenz und ihren Zielcommit;
 ein gleichnamiger Branch genügt nicht. Leichte und einmal annotierte Tags sind
 zulässig. `target_commitish` des Entwurfs nennt denselben vollständigen
 Commit-Hash; eine bewegliche Angabe wie `main` genügt dort nicht. Der
-Installer-Workflow läuft weiterhin manuell auf genau diesem Stand von `main`.
-Bis zu seinem Start darf `main` deshalb nicht weiterwandern.
+Installer-Workflow läuft weiterhin manuell auf `main`. Eine reine Korrektur
+des Signierablaufs darf auf einem späteren Commit erfolgen: Der gemeinsame
+Herkunftsprüfer vergleicht dazu beide vollständigen Git-Bäume und verlangt
+gleiche Blattpfade, Typen, Dateimodi und Objekt-SHAs außerhalb einer kleinen,
+ausdrücklich benannten Liste von Signierwerkzeugen, Workflow, Tests und
+Dokumentation. Abgeschnittene oder fehlerhafte Antworten sperren den Lauf;
+beliebige Produkt-, Abhängigkeits- oder Installeränderungen sind nicht erlaubt.
+Das Versions-Tag und der Quellcommit in der Anwendungssignatur bleiben dabei
+unverändert. Die Installer-Rückgabe nennt ihren eigenen tatsächlichen Commit
+und ihre Laufnummer. Der lokale Signierer prüft beides gegen den erfolgreichen
+Installerlauf und wiederholt denselben Baumvergleich.
+
+Der Installerjob braucht für den unveröffentlichten Transport `contents: write`.
+GitHub macht Release-Entwürfe nur mit Push-Rechten zugänglich; `contents: read`
+genügt dafür nicht. Dieses Recht steht nur am Installerjob, der weder einen
+Release veröffentlicht noch Windows-Signiergeheimnisse erhält.
 
 Der unveröffentlichte Signiertransport erhält einen eigenen Namen mit der
 Quelllaufnummer. Das Versions-Tag bleibt dem eigentlichen Release zugeordnet:
@@ -354,6 +368,8 @@ ungültige Signatur oder unvollständige Releasebelege halten die Veröffentlich
 
 ## Quellen (abgerufen am 02.09.2026)
 
+- GitHub, Zugriff auf unveröffentlichte Release-Entwürfe (für den
+  Installeranschluss geprüft): https://docs.github.com/en/rest/releases/releases#list-releases
 - Certum, aktuelle SimplySign-Desktop-Installation und Code-Signing-Anleitung
   (für die Einrichtung am 23.09.2026 geprüft):
   https://support.certum.eu/en/software/procertum-smartsign/ und

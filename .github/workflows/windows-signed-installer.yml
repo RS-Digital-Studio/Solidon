@@ -1,6 +1,6 @@
 # Windows-Anwendung lokal signieren, Installer hier bauen, Setup lokal signieren.
 # Dieser manuelle Lauf besitzt keine Signierschlüssel. Sämtlicher ausgeführter
-# Repositorycode stammt vom selben Commit wie der erfolgreiche Hauptbaulauf.
+# Produktbaum bleibt gleich; nur benannte Orchestrierungsdateien dürfen abweichen.
 name: Windows-Installer aus signierter Anwendung
 
 on:
@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       source_commit:
-        description: "Vollständige Commit-SHA des Quelllaufs und dieses Workflows"
+        description: "Vollständige Commit-SHA des unveränderten Produkt-Quelllaufs"
         required: true
         type: string
       app_version:
@@ -37,6 +37,9 @@ concurrency:
 
 jobs:
   installer:
+    permissions:
+      contents: write
+      actions: read
     if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     timeout-minutes: 120

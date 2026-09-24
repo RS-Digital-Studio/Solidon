@@ -182,11 +182,15 @@ def test_untrusted_identifiers_never_reach_the_transport(
 @pytest.mark.parametrize(
     "key,value", [("GITHUB_SHA", "00" * 20), ("GITHUB_REF", "refs/heads/other")]
 )
-def test_workflow_code_is_bound_to_the_same_main_commit(
+def test_workflow_code_is_bound_to_the_actual_main_checkout(
     monkeypatch: pytest.MonkeyPatch, key: str, value: str
 ) -> None:
     monkeypatch.setenv("GITHUB_SHA", COMMIT)
     monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    monkeypatch.setenv("GITHUB_RUN_ID", "6789")
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPOSITORY)
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    monkeypatch.setattr(tool, "_checkout_commit", lambda: COMMIT)
     monkeypatch.setenv(key, value)
     with pytest.raises(sign_release.SigningError):
         tool.validate_request(REPOSITORY, RUN_ID, COMMIT, tool.APP_VERSION, RELEASE_ID, DIGEST)
@@ -199,6 +203,10 @@ def ci_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     monkeypatch.setenv("GITHUB_SHA", COMMIT)
     monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    monkeypatch.setenv("GITHUB_RUN_ID", "6789")
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPOSITORY)
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    monkeypatch.setattr(tool, "_checkout_commit", lambda: COMMIT)
     tree = _product_tree(tmp_path / "product", monkeypatch)
     archive = _pack(tree, tmp_path / "artifact")
     unsigned = tree / "dist/Solidon3D/Solidon3D.exe"
@@ -280,12 +288,23 @@ def ci_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return state
 
 
+@pytest.mark.parametrize("installer_commit", [COMMIT, "cd" * 20])
 def test_only_the_exe_changes_and_the_return_contains_exactly_three_files(
     ci_input: dict[str, Any],
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    installer_commit: str,
 ) -> None:
+    monkeypatch.setenv("GITHUB_SHA", installer_commit)
+    monkeypatch.setattr(tool, "_checkout_commit", lambda: installer_commit)
+    checked = []
+    monkeypatch.setattr(
+        sign_release,
+        "verify_installer_source",
+        lambda source, actual: checked.append((source, actual)),
+    )
     tool.prepare(**ci_input["args"])
+    assert checked == [(COMMIT, installer_commit)]
     work = ci_input["args"]["work"]
     stage = work / "stage"
     handoff = sign_release.load_handoff(stage)
@@ -313,7 +332,25 @@ def test_only_the_exe_changes_and_the_return_contains_exactly_three_files(
     assert result == {
         **ci_input["record"],
         "installer_sha256": sign_release._sha256(output / setup_name),
+        "installer_commit": installer_commit,
+        "installer_run_id": "6789",
     }
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("GITHUB_EVENT_NAME", "push"),
+        ("GITHUB_REPOSITORY", "foreign/repo"),
+        ("GITHUB_RUN_ID", "not-a-run"),
+        ("GITHUB_SHA", "main"),
+    ],
+)
+def test_real_installer_context_is_required_before_any_archive(ci_input, monkeypatch, key, value):
+    monkeypatch.setenv(key, value)
+    with pytest.raises(sign_release.SigningError):
+        tool.prepare(**ci_input["args"])
+    assert not ci_input["args"]["work"].exists()
 
 
 @pytest.mark.parametrize(
@@ -398,7 +435,10 @@ def test_inno_six_cannot_build_this_release(
 def test_workflow_only_transports_public_evidence_and_uses_pinned_tools() -> None:
     workflow = Path(".github/workflows/windows-signed-installer.yml").read_text(encoding="utf-8")
     assert "self-hosted" not in workflow and "secrets." not in workflow
-    assert "id-token:" not in workflow and "contents: write" not in workflow
+    assert "id-token:" not in workflow and "write-all" not in workflow
+    permissions = workflow.split("jobs:", 1)
+    assert "contents: read" in permissions[0] and "contents: write" not in permissions[0]
+    assert "    permissions:\n      contents: write\n      actions: read" in permissions[1]
     assert "ref: ${{ github.sha }}" in workflow
     assert "windows-signed-installer" in workflow
     assert "0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f" in workflow

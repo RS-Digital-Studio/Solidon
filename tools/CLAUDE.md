@@ -209,8 +209,13 @@ Desktop-Stringebene; wörtliche Prozentzeichen werden verdoppelt.
 
 `windows_signed_installer.py` ist der schlüssellose CI-Anschluss zwischen
 den beiden lokalen Windows-Signaturen. Er verlangt einen erfolgreichen
-`build.yml`-Lauf, manuell auf `main` oder durch den Versions-Tag ausgelöst,
-am exakt selben Commit wie sein eigener manueller Workflow auf `main`.
+`build.yml`-Lauf, manuell auf `main` oder durch den Versions-Tag ausgelöst.
+Sein eigener manueller Workflow läuft auf `main`. Weicht dessen Commit vom
+Anwendungsbau ab, vergleicht der gemeinsame Herkunftsprüfer beide vollständigen
+Git-Bäume: Pfad, Typ, Dateimodus und Objekt-SHA jedes Blatteintrags müssen
+übereinstimmen, ausgenommen die ausdrücklich benannten Dateien des
+Signierablaufs und dessen Tests und Dokumentation. Unvollständige Baumantworten
+oder andere Änderungen sperren den Installerbau und die lokale Setupsignatur.
 Der gemeinsame Prüfer bindet einen Tag-Lauf zusätzlich an das tatsächliche
 GitHub-Tag `v<APP_VERSION>` und dessen aufgelösten Commit. Dazu kommen das
 ursprüngliche Signierarchiv und ein unveröffentlichter,
@@ -218,7 +223,11 @@ ebenfalls commitgebundener Release-Entwurf mit signierter EXE und Herkunftsakte.
 Archiv, Manifest, Zeitstempel und Herausgeber prüfen die gemeinsamen Helfer
 aus `sign_release.py`. Nur die EXE wird ersetzt und die Übergabe neu gebunden.
 Der feste Inno-7-Compiler baut daraus Setup, SHA-256 und `windows-installer-build.json`
-für die lokale abschließende Setupsignatur; der Workflow veröffentlicht nichts.
+für die lokale abschließende Setupsignatur. Die Rückgabe nennt zusätzlich den
+tatsächlichen Installercommit und Installerlauf; der lokale Prüfer bindet beide
+an den vollständig erfolgreichen CI-Lauf. Der Installerjob benötigt
+`contents: write`, weil GitHub unveröffentlichte Entwürfe nur mit Push-Rechten
+zugänglich macht. Er veröffentlicht nichts und erhält keine Signiergeheimnisse.
 
 `bump_version.py` (die zwei Stellen, die die Version tragen, plus drei
 abgeleitete) · `make_installer.py` (baut lokal oder schreibt mit

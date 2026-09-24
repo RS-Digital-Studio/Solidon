@@ -34,6 +34,7 @@ es wie bisher weiter mit ``make_download.py``.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -45,7 +46,7 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -72,6 +73,19 @@ INSTALLER_METADATA = "windows-installer-build.json"
 REPOSITORY = "RS-Digital-Studio/Solidon"
 BUILD_WORKFLOW = ".github/workflows/build.yml"
 INSTALLER_WORKFLOW = ".github/workflows/windows-signed-installer.yml"
+INSTALLER_ORCHESTRATION_FILES = frozenset(
+    {
+        INSTALLER_WORKFLOW,
+        "tools/sign_release.py",
+        "tools/windows_signed_installer.py",
+        "tests/test_sign_release.py",
+        "tests/test_windows_signed_installer.py",
+        "tools/CLAUDE.md",
+        "packaging/CLAUDE.md",
+        "Signierung/README.md",
+        ".claude/memory/signierung-ist-ein-eigener-vertrauensraum.md",
+    }
+)
 ARCHIVE_NAME = "windows-signing-input.zip"
 DEFAULT_ARCHIVE = ROOT / "dist" / ARCHIVE_NAME
 DEFAULT_STAGE = ROOT / "build" / "signing"
@@ -805,6 +819,123 @@ def verify_ci_run(run_id: str, workflow: str) -> dict[str, Any]:
     return record
 
 
+def _git_tree_leaves(commit: str) -> dict[str, tuple[str, str, str]]:
+    """Prüft Commitbindung und rekonstruiert jeden Baum gegen seine Objekt-SHA."""
+    try:
+        record = _github_metadata(f"git/commits/{commit}")
+        if record["sha"] != commit:
+            raise ValueError("Anderer Commit")
+        root_sha = record["tree"]["sha"]
+        if not isinstance(root_sha, str) or re.fullmatch(r"[0-9a-f]{40}", root_sha) is None:
+            raise ValueError("Root-Baum fehlt")
+        tree = _github_metadata(f"git/trees/{root_sha}?recursive=1")
+        if (
+            tree["sha"] != root_sha
+            or tree["truncated"] is not False
+            or not isinstance(tree["tree"], list)
+        ):
+            raise ValueError("Baum unvollständig")
+        entries: dict[str, tuple[str, str, str]] = {}
+        modes = {
+            "040000": "tree",
+            "100644": "blob",
+            "100755": "blob",
+            "120000": "blob",
+            "160000": "commit",
+        }
+        for item in tree["tree"]:
+            path, kind, mode, sha = (item[key] for key in ("path", "type", "mode", "sha"))
+            if not all(isinstance(value, str) for value in (path, kind, mode, sha)):
+                raise ValueError("Ungültiger Baumeintrag")
+            relative = PurePosixPath(path)
+            if (
+                not path
+                or relative.is_absolute()
+                or relative.as_posix() != path
+                or ".." in relative.parts
+                or "\\" in path
+                or "\x00" in path
+                or path in entries
+                or modes.get(mode) != kind
+                or re.fullmatch(r"[0-9a-f]{40}", sha) is None
+            ):
+                raise ValueError("Ungültiger oder doppelter Baumpfad")
+            entries[path] = (kind, mode, sha)
+        directories = {
+            "": root_sha,
+            **{path: value[2] for path, value in entries.items() if value[0] == "tree"},
+        }
+        children: dict[str, list[tuple[str, tuple[str, str, str]]]] = {
+            path: [] for path in directories
+        }
+        for path, value in entries.items():
+            parent, _, name = path.rpartition("/")
+            if parent not in children:
+                raise ValueError("Elternbaum fehlt")
+            children[parent].append((name, value))
+        for path, expected in directories.items():
+            ordered = sorted(
+                children[path],
+                key=lambda item: (item[0] + ("/" if item[1][0] == "tree" else "")).encode("utf-8"),
+            )
+            content = b"".join(
+                (mode.lstrip("0") + " " + name).encode("utf-8") + b"\x00" + bytes.fromhex(sha)
+                for name, (_kind, mode, sha) in ordered
+            )
+            actual = hashlib.sha1(
+                b"tree " + str(len(content)).encode("ascii") + b"\x00" + content
+            ).hexdigest()
+            if actual != expected:
+                raise ValueError("Bauminhalt passt nicht zur Objekt-SHA")
+        return {path: value for path, value in entries.items() if value[0] != "tree"}
+    except (KeyError, TypeError, ValueError, UnicodeError) as exc:
+        raise SigningError(
+            "Git-Baum ist nicht vollständig gebunden — API-Beleg und Quellcommit prüfen."
+        ) from exc
+
+
+def verify_installer_source(source_commit: str, installer_commit: str) -> None:
+    """Erlaubt nur einen Nachfolgecommit mit unveränderten Produkt- und Paketblättern."""
+    if any(
+        re.fullmatch(r"[0-9a-f]{40}", value) is None for value in (source_commit, installer_commit)
+    ):
+        raise SigningError(
+            "Ungültige Commitbindung — vollständige Quell- und Installer-SHA angeben."
+        )
+    if source_commit == installer_commit:
+        return
+    comparison = _github_metadata(f"compare/{source_commit}...{installer_commit}")
+    try:
+        if (
+            comparison["status"] != "ahead"
+            or comparison["base_commit"]["sha"] != source_commit
+            or comparison["merge_base_commit"]["sha"] != source_commit
+        ):
+            raise ValueError("Kein Nachfolgecommit")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SigningError(
+            "Installer ist kein Nachfolgecommit — Herkunft unverändert lassen."
+        ) from exc
+    source, installer = _git_tree_leaves(source_commit), _git_tree_leaves(installer_commit)
+    if source.keys() != installer.keys():
+        raise SigningError(
+            "Dateibestand des Installercommits weicht ab — Produktbaum unverändert lassen."
+        )
+    for path, original in source.items():
+        current = installer[path]
+        if original == current:
+            continue
+        if (
+            path not in INSTALLER_ORCHESTRATION_FILES
+            or original[:2] != current[:2]
+            or original[0] != "blob"
+            or original[1] not in {"100644", "100755"}
+        ):
+            raise SigningError(
+                f"Installercommit verändert {path} — ausschließlich benannte Orchestrierung ändern."
+            )
+
+
 def signing_metadata(value: object) -> dict[str, Any]:
     """Prüft den kleinen Herkunftsvertrag beider CI-Übergaben vollständig."""
     keys = {
@@ -950,13 +1081,12 @@ def sign_installer(
         )
     source = verify_ci_run(metadata["source_run_id"], BUILD_WORKFLOW)
     installer_run = verify_ci_run(installer_run_id, INSTALLER_WORKFLOW)
-    if any(
-        record["head_sha"].lower() != metadata["source_commit"]
-        for record in (source, installer_run)
-    ):
+    if source["head_sha"].lower() != metadata["source_commit"]:
         raise SigningError(
             "CI-Commits und Signierherkunft weichen ab — passenden Installerlauf auswählen."
         )
+    installer_commit = installer_run["head_sha"].lower()
+    verify_installer_source(metadata["source_commit"], installer_commit)
     # Die umgebundene lokale Übergabe ist kein unabhängiger Herkunftsnachweis.
     # Auch der unveränderte Restbaum bleibt an den ursprünglichen CI-Eingang gebunden.
     with tempfile.TemporaryDirectory(prefix=".source-input-") as directory:
@@ -1029,9 +1159,12 @@ def sign_installer(
             raise SigningError(
                 "Unlesbare Installerherkunft — CI-Installerlauf erneut ausführen."
             ) from exc
-        if returned != {**metadata, "installer_sha256": package_hash} or (
-            checksum_line != f"{package_hash}  {setup_name}"
-        ):
+        if returned != {
+            **metadata,
+            "installer_sha256": package_hash,
+            "installer_commit": installer_commit,
+            "installer_run_id": installer_run_id,
+        } or (checksum_line != f"{package_hash}  {setup_name}"):
             raise SigningError(
                 "CI-Installer, Prüfsumme und Signierherkunft weichen ab — "
                 "passenden CI-Rückweg laden."

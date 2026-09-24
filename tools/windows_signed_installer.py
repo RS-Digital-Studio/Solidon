@@ -37,7 +37,7 @@ def _require(condition: bool, message: str) -> None:
 
 def validate_request(
     repository: str, run_id: str, commit: str, version: str, release_id: str, digest: str
-) -> None:
+) -> dict[str, str]:
     """Prüft alle Fernbezeichner, bevor sie in einen API-Pfad gelangen."""
     _require(_REPOSITORY.fullmatch(repository) is not None, "Ungültiges Repository")
     _require(repository == sign_release.REPOSITORY, "Workflow stammt aus anderem Repository")
@@ -46,10 +46,37 @@ def validate_request(
     _require(_COMMIT.fullmatch(commit) is not None, "Ungültiger Quellcommit")
     _require(_DIGEST.fullmatch(digest) is not None, "Ungültige Anwendungsprüfsumme")
     _require(version == APP_VERSION, "Version weicht vom ausgeführten Quellstand ab")
+    return installer_context()
+
+
+def _checkout_commit() -> str:
+    """Liest den tatsächlich ausgecheckten Werkzeugstand."""
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=sign_release.ROOT,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        timeout=30,
+    ).stdout.strip()
+
+
+def installer_context() -> dict[str, str]:
+    """Bindet Herkunft an die echte CI-Umgebung und ihren tatsächlichen Checkout."""
+    commit = os.environ.get("GITHUB_SHA", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    _require(_COMMIT.fullmatch(commit) is not None, "Ungültiger Installercommit")
+    _require(_RUN_ID.fullmatch(run_id) is not None, "Ungültige Installerlaufnummer")
     _require(
-        commit == os.environ.get("GITHUB_SHA"), "Workflow und Quelllauf sind verschiedene Stände"
+        os.environ.get("GITHUB_REPOSITORY") == sign_release.REPOSITORY, "Fremdes Workflowrepository"
+    )
+    _require(
+        os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch",
+        "Installer wurde nicht manuell gestartet",
     )
     _require(os.environ.get("GITHUB_REF") == "refs/heads/main", "Workflow läuft nicht auf main")
+    _require(_checkout_commit() == commit, "Checkout und tatsächlicher Installercommit weichen ab")
+    return {"installer_commit": commit, "installer_run_id": run_id}
 
 
 def _api(repository: str, suffix: str) -> Any:
@@ -65,10 +92,11 @@ def _api(repository: str, suffix: str) -> Any:
 
 
 def verify_source_run(run_id: str, commit: str) -> None:
-    """Ergänzt die gemeinsame Laufprüfung um den identischen Workflowstand."""
+    """Bindet den erfolgreichen Hauptlauf an den deklarierten Produktcommit."""
     run = sign_release.verify_ci_run(run_id, sign_release.BUILD_WORKFLOW)
     _require(
-        run["head_sha"] == commit, "Quelllauf und ausgeführter Workflow haben verschiedene Commits"
+        run["head_sha"] == commit,
+        "Quelllauf und deklarierter Produktstand haben verschiedene Commits",
     )
 
 
@@ -157,8 +185,9 @@ def prepare(
     work: Path,
 ) -> None:
     """Prüft und bindet den App-Baum, bevor ein Installer gebaut werden darf."""
-    validate_request(repository, run_id, commit, version, release_id, signed_digest)
+    context = validate_request(repository, run_id, commit, version, release_id, signed_digest)
     verify_source_run(run_id, commit)
+    sign_release.verify_installer_source(commit, context["installer_commit"])
     listing = _api(repository, f"actions/runs/{run_id}/artifacts?per_page=100")
     artifacts = listing.get("artifacts", [])
     _require(listing.get("total_count") == len(artifacts), "Artefaktliste ist unvollständig")
@@ -169,6 +198,7 @@ def prepare(
     )
     assets = select_assets(_api(repository, f"releases/{release_id}"), release_id, commit)
     work.mkdir(parents=True, exist_ok=False)
+    (work / "installer-context.json").write_text(json.dumps(context), encoding="utf-8")
     download = work / "download"
     archive = sign_release.download_handoff(run_id, download)
     names = {
@@ -218,6 +248,11 @@ def build(work: Path, compiler: Path, output: Path) -> None:
     """Baut mit Inno 7 und gibt exakt Installer, Prüfsumme und Herkunft weiter."""
     version = make_installer.compiler_version(compiler)
     _require(version == "7.1.0", "Der freigegebene Inno-Setup-Compiler 7.1.0 fehlt")
+    context = installer_context()
+    _require(
+        json.loads((work / "installer-context.json").read_text(encoding="utf-8")) == context,
+        "Installerkontext wurde zwischen Prüfung und Bau verändert",
+    )
     stage = work / "stage"
     handoff = sign_release.load_handoff(stage)
     sign_release.verify_inputs(stage, handoff)
@@ -235,6 +270,7 @@ def build(work: Path, compiler: Path, output: Path) -> None:
     shutil.copyfile(setup, delivered)
     sign_release.write_checksum(delivered)
     record["installer_sha256"] = file_sha256(delivered)
+    record.update(context)
     (output / INSTALLER_RECORD).write_text(
         json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n"
     )
