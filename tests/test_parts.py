@@ -1605,25 +1605,31 @@ def test_range_check_cancels_inside_local_geometry_and_keeps_progress_monotonic(
 @pytest.mark.parametrize("spec", PARTS.all(), ids=ids)
 def test_a_part_names_the_features_it_promised(spec: PartSpec) -> None:
     """§24.1: was die Deklaration verspricht, muss aus der Funktion
-    herauskommen.
+    herauskommen. Leitprinzip 4 verlangt dieselbe Geometrie beim zweiten Bau.
+
+    Beide Aufrufe bekommen frische Parameter; nur das erste Ergebnis trägt
+    zusätzlich die Merkmalsprüfung, statt dafür ein drittes Mal zu bauen.
     """
-    result = spec.fn(spec.params())
-
-    assert result.features, f"{spec.name} returned no features"
-    for name, feature in result.features.items():
-        assert feature.id == name
-        assert feature.provenance == "generated"
-        assert feature.params, f"{spec.name}.{name} carries no dimensions"
-
-
-@pytest.mark.parametrize("spec", PARTS.all(), ids=ids)
-def test_a_part_is_reproducible(spec: PartSpec) -> None:
-    """Leitprinzip 4: dieselben Parameter geben dieselbe Geometrie."""
     first = spec.fn(spec.params())
     second = spec.fn(spec.params())
 
-    assert first.mesh.volume == pytest.approx(second.mesh.volume, rel=1e-9)
-    assert first.mesh.triangle_count == second.mesh.triangle_count
+    # Beide Zusagen melden zusammen; eine rote Merkmalsliste verdeckt keine
+    # fehlende Reproduzierbarkeit.
+    problems = [] if first.features else [f"{spec.name} returned no features"]
+    for name, feature in first.features.items():
+        if feature.id != name:
+            problems.append(f"{spec.name}.{name} carries the id {feature.id!r}")
+        if feature.provenance != "generated":
+            problems.append(f"{spec.name}.{name} has provenance {feature.provenance!r}")
+        if not feature.params:
+            problems.append(f"{spec.name}.{name} carries no dimensions")
+    if first.mesh.volume != pytest.approx(second.mesh.volume, rel=1e-9):
+        problems.append(f"{spec.name}: volume {first.mesh.volume} != {second.mesh.volume}")
+    if first.mesh.triangle_count != second.mesh.triangle_count:
+        problems.append(
+            f"{spec.name}: {first.mesh.triangle_count} != {second.mesh.triangle_count} triangles"
+        )
+    assert not problems, "\n".join(problems)
 
 
 def by_direction(subtractive: bool) -> list[tuple[PartSpec, BaseParams]]:

@@ -12,7 +12,8 @@ gebrochen, die sie schützen sollte.
 Die Erinnerung dazu existierte, war zweimal geschärft worden und hat es
 trotzdem nicht verhindert. Was hilft, ist keine bessere Formulierung, sondern
 **eine Prüfung, die zum Zeitpunkt der Arbeit anschlägt** — dieselbe Einsicht,
-aus der `test_no_source_text_writes_ae_for_a_umlaut` entstanden ist. Der Test
+aus der die Umlautprüfung der Quelltexte in `test_every_text_is_translated`
+(`tests/test_translations.py`) entstanden ist. Der Test
 deckt die Oberflächentexte ab, dieser Wächter die Commit-Meldungen; beide
 lesen dieselbe kuratierte Liste, damit es nicht zwei Wahrheiten gibt.
 

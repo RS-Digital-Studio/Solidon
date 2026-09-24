@@ -257,7 +257,7 @@ UMLAUTS = "äöüÄÖÜß"
 def source_files() -> list[Path]:
     """Die Dateien, gegen die die Sprachprüfung läuft.
 
-    **Die Zusicherung steht hier und nicht in den Tests.** Vier Tests werden
+    **Die Zusicherung steht hier und nicht in den Tests.** Die Prüfung wird
     über diese Liste parametrisiert, und eine leere Parameterliste macht sie
     nicht rot — pytest sammelt dann schlicht **null Tests**, meldet
     ``no tests ran`` und gibt Exit 5. Ein Lauf, der nichts geprüft hat, sieht
@@ -300,23 +300,24 @@ def offences_in(name: str) -> list[str]:
 
 @pytest.mark.parametrize("path", source_files(), ids=lambda path: path.name)
 def test_identifiers_are_english(path: Path) -> None:
+    """Bezeichner und Feld-Doku prüfen denselben, einmal gelesenen Quelltext.
+
+    Die zusammenhängende Prüfung liest auch mit xdist jede Datei nur einmal;
+    veränderte Testquellen gehen weiterhin frisch in die einzelnen Prüfer.
+    """
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    identifiers = identifiers_of(tree)
     offenders = [
         f"{path.name}:{line} {name} -> {', '.join(hits)}"
-        for name, line in identifiers_of(tree)
+        for name, line in identifiers
         if (hits := offences_in(name))
     ]
-    assert not offenders, "\n".join(offenders)
-
-
-@pytest.mark.parametrize("path", source_files(), ids=lambda path: path.name)
-def test_identifiers_have_no_umlauts(path: Path) -> None:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    offenders = [
-        f"{path.name}:{line} {name}"
-        for name, line in identifiers_of(tree)
+    offenders += [
+        f"{path.name}:{line} {name} enthält einen Umlaut"
+        for name, line in identifiers
         if any(character in UMLAUTS for character in name)
     ]
+    offenders += _field_docstring_offenders(path, tree)
     assert not offenders, "\n".join(offenders)
 
 
@@ -517,8 +518,7 @@ def reads_as_english(text: str) -> bool:
     return english >= 2 and english > len(words & GERMAN_MARKERS)
 
 
-@pytest.mark.parametrize("path", source_files(), ids=lambda path: path.name)
-def test_field_docstrings_are_german(path: Path) -> None:
+def _field_docstring_offenders(path: Path, tree: ast.AST) -> list[str]:
     """Auch der Satz hinter einem Feld ist Doku, und Doku ist deutsch.
 
     **Warum das eine eigene Prüfung braucht.** Die Sprachregelung trennt
@@ -534,13 +534,11 @@ def test_field_docstrings_are_german(path: Path) -> None:
     durch den Viewport, beim Nachlesen, ob die Differenzansicht eine zweite
     Kodierung neben der Farbe führt (§19.1 — sie führt drei).
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    offenders = [
-        f"{path.name}:{line} {text.splitlines()[0][:60]}"
+    return [
+        f"{path.name}:{line} englischer Feld-Docstring: {text.splitlines()[0][:60]}"
         for line, text in field_docstrings(tree)
         if len(text) >= 25 and reads_as_english(text)
     ]
-    assert not offenders, "englische Feld-Docstrings:" + chr(10) + chr(10).join(offenders)
 
 
 def _imports_of(tree: ast.Module) -> list[tuple[int, str]]:

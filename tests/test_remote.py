@@ -2,7 +2,7 @@
 
 Vier Auflagen stehen im Konzept, und drei davon lassen sich hier prüfen: kein
 Zugriff von außerhalb, kein Pfadparameter, kein Quelltext. Die vierte — jeder
-Fernaufruf eine Transaktion — prüft `tests/test_ui.py` am laufenden Fenster,
+Fernaufruf eine Transaktion — prüft `tests/test_ui_remote.py` am laufenden Fenster,
 denn sie ist eine Aussage über das Dokument, nicht über das Protokoll.
 
 Geprüft wird die Abweisung **vor** der Rechnung. Ein Aufruf, der erst rechnet

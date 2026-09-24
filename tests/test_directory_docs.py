@@ -19,9 +19,12 @@ Richtungen:
 
 from __future__ import annotations
 
+import os
 import re
 from collections import defaultdict
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 PLAN = ROOT / "3d-agent-bauplan.md"
@@ -60,12 +63,12 @@ def plan_sections() -> set[str]:
 def documented_folders() -> list[Path]:
     """Jedes Verzeichnis unter ``app/``, in dem eigener Code liegt."""
     folders: list[Path] = []
-    for path in sorted((ROOT / "app").rglob("*")):
-        if not path.is_dir() or EXEMPT & set(path.parts):
-            continue
-        if any(child.suffix == ".py" for child in path.iterdir() if child.is_file()):
+    package = ROOT / "app"
+    for path, children, files in package.walk():
+        children[:] = [name for name in children if name not in EXEMPT]
+        if path != package and any(Path(name).suffix == ".py" for name in files):
             folders.append(path)
-    return folders
+    return sorted(folders)
 
 
 def maps() -> list[Path]:
@@ -80,13 +83,59 @@ def maps() -> list[Path]:
     solidon-74, 07.09.2026, behoben am selben Tag). Er blieb dabei nicht still:
     Die Zusicherung über die Zahl der Karten sprang an.
     """
-    skip = {".venv", "build", "dist", "worktrees", "node_modules"}
-    return sorted(
-        path
-        for path in ROOT.rglob("CLAUDE.md")
-        if not skip & set(path.relative_to(ROOT).parts)
-        and "3D Drucker" not in path.relative_to(ROOT).parts
-    )
+    skip = {".venv", "build", "dist", "worktrees", "node_modules", "3D Drucker"}
+    found: list[Path] = []
+    for path, children, files in ROOT.walk():
+        children[:] = [name for name in children if name not in skip]
+        if "CLAUDE.md" in files:
+            found.append(path / "CLAUDE.md")
+    return sorted(found)
+
+
+def test_excluded_map_trees_are_not_entered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ausnahmen unterhalb der Wurzel sparen Traversierung, nicht eigene Karten."""
+    root = tmp_path / "worktrees" / "repo"
+    kept = (root / "CLAUDE.md", root / "app" / "nested" / "CLAUDE.md")
+    excluded = [
+        root / "app" / name
+        for name in (".venv", "build", "dist", "worktrees", "node_modules", "3D Drucker")
+    ]
+    for path in (*kept, *(folder / "deep" / "CLAUDE.md" for folder in excluded)):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("Karte", encoding="utf-8")
+    scan = os.scandir
+
+    def checked_scan(path: str | os.PathLike[str]):
+        assert Path(path) not in excluded, f"excluded directory entered: {path}"
+        return scan(path)
+
+    monkeypatch.setattr(os, "scandir", checked_scan)
+    monkeypatch.setattr(__name__ + ".ROOT", root)
+    assert maps() == sorted(kept)
+
+
+def test_foreign_code_trees_are_not_entered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eigener Code bleibt sichtbar, auch unter einem gleichnamigen Vorfahren."""
+    root = tmp_path / "comfyui" / "repo"
+    package = root / "app"
+    kept = package / "nested"
+    excluded = [package / "nested" / name for name in ("comfyui", "__pycache__")]
+    for folder in (kept, *(folder / "deep" for folder in excluded)):
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "source.py").write_text("", encoding="utf-8")
+    scan = os.scandir
+
+    def checked_scan(path: str | os.PathLike[str]):
+        assert Path(path) not in excluded, f"excluded directory entered: {path}"
+        return scan(path)
+
+    monkeypatch.setattr(os, "scandir", checked_scan)
+    monkeypatch.setattr(__name__ + ".ROOT", root)
+    assert documented_folders() == [kept]
 
 
 def memory_notes() -> list[Path]:

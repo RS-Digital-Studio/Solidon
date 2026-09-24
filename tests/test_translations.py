@@ -148,18 +148,17 @@ LABELLED_WIDGETS = frozenset(
 )
 
 
-@pytest.mark.parametrize(
-    "language", [entry for entry in available_languages() if entry != SOURCE_LANGUAGE]
-)
-def test_every_text_is_translated(language: str) -> None:
+def test_every_text_is_translated() -> None:
     """Jede Sprache, die dasteht, ist fertig.
 
     Nicht nur englisch: die Liste kommt aus dem Katalogverzeichnis, also prüft
     dieser Test jede Sprache, die jemand hinzufügt, vom ersten Lauf an. Eine
     halb übersetzte Datei einzuchecken ist damit keine Option — sie wäre eine
     Sprache in der Auswahl, die mitten im Satz nach Deutsch zurückfällt.
+
+    Alle Kataloge und die Umlautprüfung nutzen dieselbe Extraktion. Das spart
+    auch bei xdist Mehrfacharbeit, ohne Quellen im Anwendungscode zu cachen.
     """
-    catalog = read_catalog(language)
     ids = message_ids()
     # **Ohne diese Zeile ist der Test grün, wenn er nichts findet.** Ein
     # Verbotstest über eine gefilterte Menge prüft nichts, sobald die
@@ -171,11 +170,26 @@ def test_every_text_is_translated(language: str) -> None:
     # Assert-Meldung mit „...“ — wer neun tote Schlüssel hat, sieht drei und
     # muss den Rest außerhalb des Tests nachbauen. Die Zahl im Kopf sagt
     # sofort, ob die Liste vollständig dasteht.
-    missing = sorted(key for key in ids if not catalog.get(key))
-    assert not missing, f"{language}: {len(missing)} ohne Übersetzung\n" + "\n".join(missing)
-
-    orphaned = sorted(key for key in catalog if key not in ids)
-    assert not orphaned, f"{language}: {len(orphaned)} nicht mehr gebraucht\n" + "\n".join(orphaned)
+    languages = [entry for entry in available_languages() if entry != SOURCE_LANGUAGE]
+    assert languages, "keine Übersetzungskataloge gefunden — sonst prüft dieser Test nichts"
+    errors: list[str] = []
+    for language in languages:
+        catalog = read_catalog(language)
+        missing = sorted(key for key in ids if not catalog.get(key))
+        if missing:
+            errors.append(f"{language}: {len(missing)} ohne Übersetzung\n" + "\n".join(missing))
+        orphaned = sorted(key for key in catalog if key not in ids)
+        if orphaned:
+            errors.append(
+                f"{language}: {len(orphaned)} nicht mehr gebraucht\n" + "\n".join(orphaned)
+            )
+    # Zusammengelegt heißt nicht verdeckt: Die Umlautprüfung meldet neben
+    # den Katalogen, nicht an ihrer Stelle.
+    try:
+        _assert_source_text_uses_umlauts(ids)
+    except AssertionError as error:
+        errors.append(str(error))
+    assert not errors, "\n".join(errors)
 
 
 #: Ein Platzhalter im Quelltext: ``{name}``, nicht ``{}`` und nicht ``{0}``.
@@ -467,19 +481,17 @@ class _Literals(ast.NodeVisitor):
             self.free.append(node)
 
 
-@pytest.mark.parametrize("path", sorted(UI_DIR.rglob("*.py")), ids=lambda path: path.name)
-def test_no_hard_wired_file_filter(path: Path) -> None:
+def _file_filter_offenders(path: Path, tree: ast.AST) -> list[str]:
     """AGENTS.md Regel 20 gilt auch für Dateifilter — und für Konstanten.
 
-    ``test_no_hard_wired_text_in_the_surface`` sieht nur Argumente von
-    Anzeige-Aufrufen. ``MODEL_FILTER = "Modelle (*.stl …)"`` stand daneben, auf
+    Die Prüfung der Anzeige-Aufrufe sieht nur deren Argumente.
+    ``MODEL_FILTER = "Modelle (*.stl …)"`` stand daneben, auf
     Modulebene, und erschien deshalb auch in der englischen Oberfläche deutsch.
     Ein Filter ist ein Text wie jeder andere: alles vor der Klammer liest ein
     Mensch.
 
     Ein reiner Formatname („STL (*.stl)") bleibt draußen — er heißt überall so.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     visitor = _Literals()
     visitor.visit(tree)
 
@@ -493,7 +505,7 @@ def test_no_hard_wired_file_filter(path: Path) -> None:
             continue
         offenders.append(f"{path.name}:{node.lineno} {node.value!r}")
 
-    assert not offenders, "file filter that never reaches tr():\n" + "\n".join(offenders)
+    return offenders
 
 
 def test_the_filter_check_would_catch_a_violation() -> None:
@@ -512,9 +524,9 @@ def surface_files() -> list[Path]:
 
 @pytest.mark.parametrize("path", surface_files(), ids=lambda path: path.name)
 def test_no_hard_wired_text_in_the_surface(path: Path) -> None:
-    """AGENTS.md Regel 20: alles, was der Nutzer liest, geht durch tr()."""
+    """Regel 20: Anzeigen und Dateifilter laufen über tr(), mit gemeinsamem AST."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    offenders: list[str] = []
+    offenders = _file_filter_offenders(path, tree)
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -929,7 +941,7 @@ ASCII_STATT_UMLAUT = {
 }
 
 
-def test_no_source_text_writes_ae_for_a_umlaut() -> None:
+def _assert_source_text_uses_umlauts(ids: set[str]) -> None:
     """Ein deutscher Quelltext ist hier nicht nur Text, sondern die **Kennung**.
 
     Deshalb ist ein `ss` statt `ß` hier teurer als anderswo. Er wird zur
@@ -951,7 +963,6 @@ def test_no_source_text_writes_ae_for_a_umlaut() -> None:
     """
     import re as _re
 
-    ids = message_ids()
     assert ids, "keine Oberflächentexte gefunden — dann prüft dieser Test nichts"
 
     muster = _re.compile(

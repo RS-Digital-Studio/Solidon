@@ -4,7 +4,7 @@
 Offscreen, und ohne einen einzigen Dialog zu öffnen: ein Test, der ``exec()``
 aufruft, wartet auf einen Menschen, der nicht da ist. Geprüft wird, was *in*
 den Dialog hineingeht und was aus der Änderung wieder herauskommt — der Dialog
-selbst entsteht aus dem Schema und wird in ``tests/test_ui.py`` geprüft.
+selbst entsteht aus dem Schema und wird in ``tests/test_ui_dialogs.py`` geprüft.
 
 Dieselbe Falle hat eine zweite Tür, und die hat hier einen Nachmittag
 gekostet: ein lebendes ``MainWindow`` beantwortet ``session.failed`` mit einer
@@ -41,8 +41,13 @@ from app.ui.main_window import LID_OPS, MainWindow
 from app.ui.op_dialog import OperationDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests import ui_helpers
+from tests.ui_helpers import session as session
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+# Reine Dialoganzeige braucht einen Elternbaum, aber keinen STL-Import.
+empty_window = ui_helpers.window
 
 
 @pytest.mark.parametrize(
@@ -1904,7 +1909,7 @@ def test_the_description_is_as_tall_as_its_text(qt_app: QApplication) -> None:
 # --- Bilder als Quelle (§25, P16.7) ----------------------------------------------
 
 
-def test_the_image_field_lists_only_images(window: MainWindow) -> None:
+def test_the_image_field_lists_only_images(empty_window: MainWindow) -> None:
     """Das Feld „Bild" bot jede Quelle des Projekts an — also STLs in einem
     Feld dieses Namens, und einen Weg zu einem Bild gab es nicht. Der Befund
     schlug „Ein Bild wählen." vor, eine Handlung, die es nicht gab."""
@@ -1914,7 +1919,7 @@ def test_the_image_field_lists_only_images(window: MainWindow) -> None:
     dialog = OperationDialog(
         spec,
         {},
-        window,
+        empty_window,
         sources={"src_1": "halterung.stl"},
         images={},
         pick_image=None,
@@ -2165,7 +2170,7 @@ def test_a_picker_source_is_bounded_before_it_enters_the_document(
     assert not session.project.sources
 
 
-def test_a_field_without_effect_says_why(window: MainWindow) -> None:
+def test_a_field_without_effect_says_why(empty_window: MainWindow) -> None:
     """*Fläche* wirkt nur, solange *Auflegen* auf „Auf eine Fläche" steht.
 
     Bei jeder anderen Art übergeht die Operation den Wert wortlos — im Dialog
@@ -2174,7 +2179,7 @@ def test_a_field_without_effect_says_why(window: MainWindow) -> None:
     Bedingung gilt; gesperrt und begründet bleibt sie dahinter.
     """
     spec = REGISTRY.get("displace_image")
-    dialog = OperationDialog(spec, {}, window, features={"face_1": "Fläche 1"})
+    dialog = OperationDialog(spec, {}, empty_window, features={"face_1": "Fläche 1"})
 
     editor = dialog._editors["at_feature"]
     label = dialog._rows["at_feature"].labelForField(editor)
@@ -2196,14 +2201,14 @@ def test_a_field_without_effect_says_why(window: MainWindow) -> None:
     assert str(spec.params.spec()[3].doc) == editor.toolTip(), "und der eigene Satz kommt zurück"
 
 
-def test_a_rectangle_shows_only_the_rows_a_rectangle_has(window: MainWindow) -> None:
+def test_a_rectangle_shows_only_the_rows_a_rectangle_has(empty_window: MainWindow) -> None:
     """RM-171: *Grundform hochziehen* trug bei einem Rechteck vier tote Zeilen
     vorn — Löcher, Spalten, Zeilen, Loch-Ø gelten nur für Lochkreis und
     Lochraster. Jetzt stehen vorn die vier Felder eines Rechtecks, und die
     übrigen erscheinen mit der Grundform, die sie braucht."""
     from PySide6.QtWidgets import QComboBox
 
-    dialog = OperationDialog(REGISTRY.get("sketch_extrude"), {}, window)
+    dialog = OperationDialog(REGISTRY.get("sketch_extrude"), {}, empty_window)
     dialog.show()
     try:
         front = [
@@ -2702,14 +2707,14 @@ def _title_of(spec: Any, name: str) -> str:
     raise AssertionError(f"{spec.name}: kein Parameter {name!r}")
 
 
-def test_a_dependent_choice_field_greys_out_with_a_reason(window: MainWindow) -> None:
+def test_a_dependent_choice_field_greys_out_with_a_reason(empty_window: MainWindow) -> None:
     """*Abstand* gilt nur bei der linearen Art — und sagt es, statt zu warten.
 
     Grau allein wäre die halbe Antwort (Regel 18): Wer ein Feld ausgegraut
     sieht, weiß nicht, welcher Schalter es freigibt. Der Tooltip nennt ihn.
     """
     spec = REGISTRY.get("pattern")
-    dialog = OperationDialog(spec, {}, window)
+    dialog = OperationDialog(spec, {}, empty_window)
 
     kind = dialog._editors["kind"]
     spacing = dialog._editors["spacing"]
@@ -2727,7 +2732,7 @@ def test_a_dependent_choice_field_greys_out_with_a_reason(window: MainWindow) ->
     assert _title_of(spec, "kind") in hint, hint
 
 
-def test_a_dependent_field_behind_a_tick_says_which_tick(window: MainWindow) -> None:
+def test_a_dependent_field_behind_a_tick_says_which_tick(empty_window: MainWindow) -> None:
     """Der Haken ist die zweite Sorte, und sie brauchte einen eigenen Satz.
 
     Über ``str()`` verglichen hieße der gesuchte Wert „True", und genau das
@@ -2736,7 +2741,7 @@ def test_a_dependent_field_behind_a_tick_says_which_tick(window: MainWindow) -> 
     folgt, und dass der Satz den Haken benennt statt seinen Wert.
     """
     spec = REGISTRY.get("orient_for_print")
-    dialog = OperationDialog(spec, {}, window)
+    dialog = OperationDialog(spec, {}, empty_window)
 
     thorough = dialog._editors["thorough"]
     candidates = dialog._editors["candidates"]
@@ -2759,7 +2764,9 @@ def _with_caveat() -> list[Any]:
     return [spec for spec in REGISTRY.all() if str(spec.caveat).strip()]
 
 
-def test_the_caveat_reaches_every_surface_that_offers_the_operation(window: MainWindow) -> None:
+def test_the_caveat_reaches_every_surface_that_offers_the_operation(
+    empty_window: MainWindow,
+) -> None:
     """Zwölf Grenzen, und gelesen hat sie allein das Handbuch.
 
     ``caveat`` sagt, wann eine Operation die falsche Wahl ist („Nicht ohne
@@ -2789,18 +2796,18 @@ def test_the_caveat_reaches_every_surface_that_offers_the_operation(window: Main
 
         # Der Menüeintrag: im Tooltip, nicht in der Statuszeile — die ist eine
         # Zeile, und abgeschnitten wäre eine Warnung schlimmer als keine.
-        action = window._operation_action(QMenu(window), spec)
+        action = empty_window._operation_action(QMenu(empty_window), spec)
         assert str(spec.caveat) in action.toolTip(), f"{spec.name}: kein Tooltip"
         assert str(spec.doc) in action.toolTip(), f"{spec.name}: der Satz fehlt daneben"
 
         # Und der Dialog, in dem sie gerade angewendet wird.
-        dialog = OperationDialog(spec, {}, window)
+        dialog = OperationDialog(spec, {}, empty_window)
         assert dialog._caveat is not None, f"{spec.name}: kein Label"
         assert str(spec.caveat) in dialog._caveat.text(), f"{spec.name}: leer"
         assert dialog._caveat.isVisibleTo(dialog), f"{spec.name}: unsichtbar"
 
 
-def test_an_operation_without_a_caveat_shows_no_empty_warning(window: MainWindow) -> None:
+def test_an_operation_without_a_caveat_shows_no_empty_warning(empty_window: MainWindow) -> None:
     """Wo keine Grenze ist, steht keine.
 
     Ein Vorbehalt an jeder Operation wäre keiner mehr — das steht so in der
@@ -2808,7 +2815,7 @@ def test_an_operation_without_a_caveat_shows_no_empty_warning(window: MainWindow
     nimmt und nichts sagt.
     """
     spec = next(entry for entry in REGISTRY.all() if not str(entry.caveat).strip())
-    dialog = OperationDialog(spec, {}, window)
+    dialog = OperationDialog(spec, {}, empty_window)
 
     assert dialog._caveat is not None, "das Label wird immer gebaut"
     assert not dialog._caveat.isVisibleTo(dialog), f"{spec.name}: leeres Warnfeld"
@@ -2830,7 +2837,7 @@ def _length_param(spec: Any) -> Any:
     )
 
 
-def test_a_field_in_inches_takes_inches_and_returns_millimetres(window: MainWindow) -> None:
+def test_a_field_in_inches_takes_inches_and_returns_millimetres(empty_window: MainWindow) -> None:
     """Der Kern bleibt bei Millimetern, das Feld spricht die Anzeigeeinheit.
 
     Vorher trug jedes Feld „[mm]" aus dem Schema und nahm Millimeter, gleich
@@ -2849,7 +2856,7 @@ def test_a_field_in_inches_takes_inches_and_returns_millimetres(window: MainWind
     assert default_mm > 0.0, "der Test braucht eine Vorgabe größer als null"
 
     set_display_unit("in")
-    dialog = OperationDialog(spec, {}, window)
+    dialog = OperationDialog(spec, {}, empty_window)
     field = dialog._editors[entry.name]
 
     # Der gezeigte Wert ist umgerechnet …
@@ -2872,7 +2879,7 @@ def test_a_field_in_inches_takes_inches_and_returns_millimetres(window: MainWind
     assert dialog.values()[entry.name] == pytest.approx(25.4, abs=1e-6)
 
 
-def test_an_angle_stays_in_degrees(window: MainWindow) -> None:
+def test_an_angle_stays_in_degrees(empty_window: MainWindow) -> None:
     """Umgerechnet wird, was eine Länge ist — und sonst nichts.
 
     Dreißig Parameter tragen einen Winkel. „45 Zoll" wäre keine Umschaltung
@@ -2888,11 +2895,11 @@ def test_an_angle_stays_in_degrees(window: MainWindow) -> None:
     set_display_unit("in")
     assert shown_unit(angle) is None, "ein Winkel wird nicht umgerechnet"
 
-    dialog = OperationDialog(spec, {}, window)
+    dialog = OperationDialog(spec, {}, empty_window)
     assert dialog.values()["angle"] == pytest.approx(float(angle.default), abs=1e-6)
 
 
-def test_an_expression_survives_the_unit(window: MainWindow) -> None:
+def test_an_expression_survives_the_unit(empty_window: MainWindow) -> None:
     """Ein Parameterausdruck bleibt wörtlich — in jeder Einheit.
 
     „=@breite/2" umzurechnen hieße, die Bindung in eine Zahl zu verwandeln;
@@ -2904,7 +2911,7 @@ def test_an_expression_survives_the_unit(window: MainWindow) -> None:
     entry = _length_param(spec)
 
     set_display_unit("in")
-    dialog = OperationDialog(spec, {}, window, values={entry.name: "=@breite / 2"})
+    dialog = OperationDialog(spec, {}, empty_window, values={entry.name: "=@breite / 2"})
 
     assert dialog.values()[entry.name] == "=@breite / 2"
 
@@ -2933,7 +2940,7 @@ def test_a_fine_field_keeps_its_precision_in_inches(window: MainWindow) -> None:
     assert in_inches > in_mm
 
 
-def test_looking_at_a_dialog_in_inches_changes_nothing(window: MainWindow) -> None:
+def test_looking_at_a_dialog_in_inches_changes_nothing(empty_window: MainWindow) -> None:
     """Ein Dialog, den man nur ansieht, verschiebt kein Maß.
 
     Der Fund kam aus dem Test darüber: 40 mm sind 1,5748 Zoll, und aus 1,5748
@@ -2953,7 +2960,7 @@ def test_looking_at_a_dialog_in_inches_changes_nothing(window: MainWindow) -> No
         lengths = [entry for entry in spec.params.spec() if entry.unit == "mm"]
         if not lengths:
             continue
-        dialog = OperationDialog(spec, {}, window)
+        dialog = OperationDialog(spec, {}, empty_window)
         entered = dialog.values()
         for entry in lengths:
             if not isinstance(entry.default, (int, float)):
@@ -2966,7 +2973,7 @@ def test_looking_at_a_dialog_in_inches_changes_nothing(window: MainWindow) -> No
     assert not verschoben, "Ansehen hat Maße verschoben:\n" + "\n".join(verschoben)
 
 
-def test_the_condition_reaches_every_surface(window: MainWindow) -> None:
+def test_the_condition_reaches_every_surface(empty_window: MainWindow) -> None:
     """Eine Quelle, vier Oberflächen — das war der Grund für den Umbau.
 
     Die Angabe lag als Tabelle in ``op_dialog`` und hatte damit genau *eine*
@@ -3018,7 +3025,7 @@ def test_the_condition_reaches_every_surface(window: MainWindow) -> None:
         assert named in handbook, f"{spec.name}.{entry.name} fehlt im Handbuch: {named}"
 
         # Und der Dialog: das Feld folgt seinem Umschalter.
-        dialog = OperationDialog(spec, {}, window)
+        dialog = OperationDialog(spec, {}, empty_window)
         if entry.name not in dialog._editors:
             continue
         controller, wanted = entry.depends_on
@@ -3037,7 +3044,7 @@ def test_the_condition_reaches_every_surface(window: MainWindow) -> None:
         assert field.toolTip(), f"{spec.name}.{entry.name}: ausgegraut ohne Begründung"
 
 
-def test_a_nested_condition_follows_the_whole_chain(window: MainWindow) -> None:
+def test_a_nested_condition_follows_the_whole_chain(empty_window: MainWindow) -> None:
     """Ein angehaktes, aber selbst unwirksames Feld darf nichts freischalten.
 
     Beim Schraubenloch lässt sich die Scheibe nur ohne Senkkopf einlassen. Wer
@@ -3055,7 +3062,7 @@ def test_a_nested_condition_follows_the_whole_chain(window: MainWindow) -> None:
     assert "washer" in play_condition
     assert "countersink" in play_condition
 
-    dialog = OperationDialog(spec, {}, window)
+    dialog = OperationDialog(spec, {}, empty_window)
     countersink = dialog._editors["countersink"]
     washer = dialog._editors["washer"]
     play = dialog._editors["play"]
@@ -3117,7 +3124,7 @@ def test_both_ways_into_a_dialog_carry_the_feature_names(
     dialog.reject()
 
 
-def test_a_number_field_stays_as_wide_as_a_number(window: MainWindow) -> None:
+def test_a_number_field_stays_as_wide_as_a_number(empty_window: MainWindow) -> None:
     """Zahlenfelder wuchsen auf die ganze Dialogbreite.
 
     ``QFormLayout`` wächst nach Vorgabe mit, und die Breite des Dialogs kommt vom
@@ -3138,7 +3145,7 @@ def test_a_number_field_stays_as_wide_as_a_number(window: MainWindow) -> None:
     from app.ui.op_dialog import NUMBER_AIR, OperationDialog, ValueField
 
     for name in ("decimate_mesh", "smooth_mesh"):
-        dialog = OperationDialog(REGISTRY.get(name), {"obj_1": "Halterung"}, window)
+        dialog = OperationDialog(REGISTRY.get(name), {"obj_1": "Halterung"}, empty_window)
         try:
             dialog.show()
             dialog.resize(dialog.sizeHint())
@@ -3153,7 +3160,7 @@ def test_a_number_field_stays_as_wide_as_a_number(window: MainWindow) -> None:
             dialog.deleteLater()
 
     # Und das Gegenstück: was den Platz braucht, bekommt ihn weiter.
-    dialog = OperationDialog(REGISTRY.get("pattern"), {"obj_1": "Halterung"}, window)
+    dialog = OperationDialog(REGISTRY.get("pattern"), {"obj_1": "Halterung"}, empty_window)
     try:
         dialog.show()
         dialog.resize(dialog.sizeHint())
@@ -3172,7 +3179,7 @@ def test_a_number_field_stays_as_wide_as_a_number(window: MainWindow) -> None:
         dialog.deleteLater()
 
 
-def test_switching_to_an_expression_starts_from_millimetres(window: MainWindow) -> None:
+def test_switching_to_an_expression_starts_from_millimetres(empty_window: MainWindow) -> None:
     """Der Ausdruck beginnt bei der Größe, nicht bei ihrer Anzeige.
 
     Ein Parameterausdruck rechnet in Millimetern (§13). Vorbelegt wurde er aus
@@ -3189,7 +3196,7 @@ def test_switching_to_an_expression_starts_from_millimetres(window: MainWindow) 
     default_mm = float(entry.default)
 
     set_display_unit("in")
-    dialog = OperationDialog(spec, {}, window)
+    dialog = OperationDialog(spec, {}, empty_window)
     try:
         field = dialog._editors[entry.name]
         assert field.spin.value() == pytest.approx(default_mm / 25.4, abs=1e-4), (
@@ -3219,7 +3226,9 @@ def _rows_of(dialog: OperationDialog) -> list[tuple[str, QWidget, QWidget | None
     return rows
 
 
-def test_every_parameter_explains_itself_at_both_halves_of_its_row(window: MainWindow) -> None:
+def test_every_parameter_explains_itself_at_both_halves_of_its_row(
+    empty_window: MainWindow,
+) -> None:
     """457 Parameter tragen einen ``doc``-Satz, und er stand nur am Feld.
 
     Wer eine Zeile nicht versteht, zeigt auf das unverständliche Wort — auf die
@@ -3235,7 +3244,7 @@ def test_every_parameter_explains_itself_at_both_halves_of_its_row(window: MainW
     without_label = 0
     checked = 0
     for spec in REGISTRY.all():
-        dialog = OperationDialog(spec, {}, window)
+        dialog = OperationDialog(spec, {}, empty_window)
         try:
             docs = {entry.name: str(entry.doc or "") for entry in spec.params.spec()}
             for name, editor, caption in _rows_of(dialog):
@@ -3267,14 +3276,14 @@ def test_every_parameter_explains_itself_at_both_halves_of_its_row(window: MainW
     assert not silent, f"{len(silent)} stumme Hälften:\n" + "\n".join(silent[:25])
 
 
-def test_a_greyed_out_row_says_why_on_both_halves(window: MainWindow) -> None:
+def test_a_greyed_out_row_says_why_on_both_halves(empty_window: MainWindow) -> None:
     """Und bei einer gesperrten Zeile ist der Grund die Auskunft, die zählt.
 
     In ein ausgegrautes Feld zeigt niemand — man zeigt auf das Wort davor und
     fragt, warum es grau ist. Der Grund stand nur im Feld.
     """
     spec = REGISTRY.get("orient_for_print")
-    dialog = OperationDialog(spec, {}, window)
+    dialog = OperationDialog(spec, {}, empty_window)
 
     candidates = dialog._editors["candidates"]
     caption = dialog._rows["candidates"].labelForField(candidates)
@@ -3883,7 +3892,7 @@ def test_the_unit_lives_in_the_value_not_in_the_caption(qt_app: QApplication) ->
         set_display_unit("mm")
 
 
-def test_a_number_field_never_shrinks_below_its_value(window: MainWindow) -> None:
+def test_a_number_field_never_shrinks_below_its_value(empty_window: MainWindow) -> None:
     """Ein Feld, das seinen Wert nicht ganz zeigt, ist kaputt (Robert, 30.08.2026).
 
     Die Zahlenfelder trugen einen Deckel — höchstens so breit wie ihr Wunsch
@@ -3900,7 +3909,7 @@ def test_a_number_field_never_shrinks_below_its_value(window: MainWindow) -> Non
     from PySide6.QtWidgets import QStyle, QStyleOptionSpinBox
 
     spec = REGISTRY.get("drill_hole")
-    dialog = OperationDialog(spec, [], window)
+    dialog = OperationDialog(spec, [], empty_window)
     dialog.show()
     QApplication.processEvents()
 
