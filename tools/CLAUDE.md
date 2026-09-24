@@ -72,6 +72,32 @@ jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 
 **Messen und Prüfen** (keines davon ist ein Testlauf)
 
+Die CI benutzt `run_suite_isolated.py --release --ci-group contracts|windowed`.
+Der Läufer sammelt die ausführbaren Fensterfälle, verteilt sie mit
+`tests/data/ci_window_durations.json` deterministisch und schreibt je Datei
+Prozessprotokoll und JUnit sowie `summary.json`/`summary.md` für die Gruppe.
+Die Ausgabe jedes Prüfprozesses geht zugleich in die Konsole, unter GitHub je
+Datei als einklappbare Gruppe und zwischen angehaltenen Workflow-Befehlen
+(`::stop-commands::`), damit ein Test keine Anmerkung vortäuscht; eine rote
+Datei bekommt eine echte Anmerkung am Lauf, und `summary.md` steht
+zusätzlich im Schrittbericht. Ohne das stand im CI-Protokoll bei einem
+Fehler nur der Dateiname. Hält ein entkommener Nachfahre die Leitung offen,
+endet der Bericht nach `OUTPUT_DRAIN_SECONDS`, und der Kopierfaden leert die
+Leitung weiter, ohne noch zu schreiben.
+`--plan-only` sammelt und plant ohne Ausführung, auch ohne `--release`.
+Die zwei plattformübergreifenden Vertragsdateien sind aus den Windows-Shards
+ausgeschlossen. Neue Dateien bekommen ein Ersatzgewicht und bleiben in der
+Menge. Fehler, leere Auswahl und fehlende oder widersprüchliche Berichte
+bleiben rot. Der Vertrag steht in `konzepte/konzept-ci-testlaufzeiten-2026-09.md`.
+
+`ci_shards.py` ist die Verteilung, die beide Wege teilen: je Datei, längste
+zuerst in die leichteste Gruppe, Gleichstand über Pfad und Gruppennummer. Der
+Läufer nimmt sie für die Fenstergruppen, `tests/conftest.py` für
+`--ci-shard I/N`, mit dem jeder Kernjob seinen Teil der Suite fährt — nach der
+Markerwahl, also verteilt über genau die Menge dieses Laufs, unter xdist in
+jedem Worker gleich. Als Befehl schreibt es eine der zwei Laufzeittabellen aus
+JUnit-Berichten neu (`core` oder `windows`); die Tabellen verteilen nur.
+
 `run_suite_isolated.py` (je Testdatei ein Prozess; Fenstertests nur mit
 `--release`, Leistung stets getrennt beim Release) · `run_agent_suite.py`
 (39 Referenzanfragen, **kostet Geld**) · `run_model_suite.py` (die Kette über

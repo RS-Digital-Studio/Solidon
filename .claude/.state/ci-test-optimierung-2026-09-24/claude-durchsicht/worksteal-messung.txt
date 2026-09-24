@@ -1,0 +1,8 @@
+load Exit=1 Sekunden=356
+worksteal Exit=1 Sekunden=206
+worksteal Exit=1 Sekunden=160
+load Exit=0 Sekunden=213
+load: 3 failed, 6775 passed, 12 skipped in 353.68s (0:05:53)
+worksteal: 3 failed, 6776 passed, 12 skipped in 204.60s (0:03:24)
+worksteal-2: 4 failed, 6779 passed, 12 skipped in 158.19s (0:02:38)
+load-2: 6784 passed, 12 skipped in 211.58s (0:03:31)

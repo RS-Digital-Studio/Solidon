@@ -1,0 +1,3 @@
+rot (gut): jeder Treffer der Auswahl gilt: assert
+rot (gut): ohne Randzugabe am Quader: assert
+rot (gut): Stück nur halb so lang: assert

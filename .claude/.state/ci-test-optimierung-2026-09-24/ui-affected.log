@@ -1,0 +1,6 @@
+tests/test_operation_ui.py  — selbst geändert
+tests/test_ui.py  — selbst geändert
+tests/test_ui_dialogs.py  — selbst geändert
+tests/test_ui_export.py  — selbst geändert
+tests/test_ui_licensing.py  — selbst geändert
+tests/test_ui_remote.py  — selbst geändert

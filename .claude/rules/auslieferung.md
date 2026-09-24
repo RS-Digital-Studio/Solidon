@@ -8,6 +8,18 @@ paths:
 
 # Regeln für Paket, Version und Veröffentlichung
 
+Die CI-Prüfjobs folgen `konzepte/konzept-ci-testlaufzeiten-2026-09.md`.
+Paketbau wartet auf Qualität, jeden Teil der Kernmatrix auf jeder Plattform,
+die plattformübergreifenden Fensterverträge und jede Windows-Fenstergruppe.
+Die Teilmatrix eines Jobs ist genau `0 … N−1` für das `N` in seinem Aufruf;
+wer Teile dazunimmt, ändert beides zusammen. **Ein Release-Lauf trägt
+höchstens 100 Artefakte**: `tools/windows_signed_installer.py` liest die
+Liste mit `per_page=100` und hält fail-closed an, wenn sie unvollständig ist.
+Am 25.09.2026 waren es rund 45; wer Teile oder Berichte dazunimmt, zählt
+nach oder baut dort das Blättern. Ein übersprungener,
+abgebrochener oder roter Pflichtjob darf keine Paketfreigabe ergeben.
+Signierung und Veröffentlichung behalten ihre eigenen Grenzen.
+
 Was **wo liegt**, sagen `tools/CLAUDE.md` und `packaging/CLAUDE.md`; der
 Weg eines Releases in seiner Reihenfolge steht im Skill `/erzeugen`. Hier
 steht, was dabei **einzuhalten** ist — die Entscheidungen, jede mit ihrem

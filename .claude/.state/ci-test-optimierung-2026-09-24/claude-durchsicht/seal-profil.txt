@@ -1,0 +1,18 @@
+bounds [[-30.99844591319561, -30.99378363788128, -12.0], [30.99844591319561, 30.99378363788128, 0.0]]
+wall 11.96073502393355 pairs 171458143 of 2058255424
+         2429503 function calls (2429501 primitive calls) in 28.300 seconds
+
+   Ordered by: internal time
+   List reduced from 117 to 8 due to restriction <8>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    41529    7.044    0.000    7.052    0.000 F:\3D Druck\app\core\geom\mesh.py:1188(_rowwise_dot)
+    58866    5.475    0.000    5.475    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+    20765    5.311    0.000    6.486    0.000 F:\3D Druck\.venv\Lib\site-packages\numpy\_core\numeric.py:1563(cross)
+    10382    4.280    0.000   17.819    0.002 F:\3D Druck\app\core\geom\mesh.py:1151(_ray_triangle_parameters)
+        1    3.499    3.499   28.290   28.290 F:\3D Druck\app\core\geom\mesh.py:1323(_culled_ray_hits)
+    41534    0.593    0.000    0.593    0.000 {method 'astype' of 'numpy.ndarray' objects}
+    10382    0.576    0.000   18.395    0.002 C:\Users\rober\AppData\Local\Temp\claude\F--3D-Druck\eda33e4f-279c-48e3-bf58-acf625bcf116\scratchpad\seal_profile.py:9(counted)
+     9808    0.534    0.000   19.113    0.002 F:\3D Druck\app\core\geom\mesh.py:1282(_nearest_ray_hits)
+
+

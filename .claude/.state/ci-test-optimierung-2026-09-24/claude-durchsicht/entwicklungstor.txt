@@ -1,0 +1,9 @@
+suite: Exit=1
+ruff: Exit=0
+format: Exit=0
+mypy: Exit=0
+FAILED tests/test_parts.py::test_every_shipped_part_carries_a_current_range_proof
+FAILED tests/test_registry_consistency.py::test_no_operation_calls_its_core_function_with_an_argument_it_refuses
+FAILED tests/test_translations.py::test_every_text_is_translated - AssertionE...
+Sammelgruppe: 3 failed, 16640 passed, 25 skipped, 1 xfailed in 471.64s (0:07:51)
+Läufe mit Fehler: 1

@@ -1,0 +1,658 @@
+"""Die CI verteilt vollständig und bleibt bei fehlender Abnahme rot — ohne Qt-Läufe."""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from tools import ci_shards, list_windowed_tests
+from tools import run_suite_isolated as runner
+
+
+def _counts(**extra: int) -> dict[str, int]:
+    """Die zwei vertraglich festen Dateien plus frei gewählte Prüffälle."""
+    return {**dict.fromkeys(runner.CONTRACT_FILES, 1), **extra}
+
+
+def _junit(
+    path: Path, *, tests: int = 1, failed: int = 0, errors: int = 0, skipped: int = 0
+) -> None:
+    """Erzeugt ein kleines vollständiges JUnit-Dokument aus unabhängigen Fallzahlen."""
+    root = ET.Element("testsuites")
+    suite = ET.SubElement(
+        root,
+        "testsuite",
+        tests=str(tests),
+        failures=str(failed),
+        errors=str(errors),
+        skipped=str(skipped),
+    )
+    for index in range(tests):
+        case = ET.SubElement(suite, "testcase", name=f"test_{index}", classname="probe")
+        for boundary, tag in (
+            (failed, "failure"),
+            (failed + errors, "error"),
+            (failed + errors + skipped, "skipped"),
+        ):
+            if index < boundary:
+                ET.SubElement(case, tag)
+                break
+    ET.ElementTree(root).write(path, encoding="utf-8")
+
+
+def test_partition_is_complete_disjoint_and_independent_of_collection_order() -> None:
+    """Unbekanntes bleibt dabei, alte Gewichtseinträge schaffen dagegen keine Testdatei."""
+    counts = _counts(**{"tests/test_a.py": 4, "tests/test_b.py": 2, "tests/test_new.py": 3})
+    weights = {"tests/test_a.py": 9, "tests/test_b.py": 5, "tests/test_removed.py": 100}
+    shards = runner.plan_shards(counts, weights, 7, group="windowed", shard_count=2)
+    assert [[file.path for file in shard] for shard in shards] == [
+        ["tests/test_a.py"],
+        ["tests/test_new.py", "tests/test_b.py"],
+    ]
+    assert (
+        runner.plan_shards(
+            dict(reversed(list(counts.items()))), weights, 7, group="windowed", shard_count=2
+        )
+        == shards
+    )
+    contracts = runner.plan_shards(counts, weights, 7, group="contracts", shard_count=1)
+    groups = [{file.path for file in shard} for shard in (*shards, *contracts)]
+    assert set.union(*groups) == counts.keys()
+    assert sum(map(len, groups)) == len(counts)
+    assert sum(file.expected_tests for shard in (*shards, *contracts) for file in shard) == 11
+
+
+def test_tied_durations_use_the_path_and_then_the_shard_index() -> None:
+    """Dasselbe vollständige Eingangsmaterial erzeugt auf beiden Runnern denselben Plan."""
+    counts = _counts(**{f"tests/test_{name}.py": 1 for name in "dcba"})
+    shards = runner.plan_shards(counts, {}, 4, group="windowed", shard_count=2)
+    assert [[file.path for file in shard] for shard in shards] == [
+        ["tests/test_a.py", "tests/test_c.py"],
+        ["tests/test_b.py", "tests/test_d.py"],
+    ]
+
+
+@pytest.mark.parametrize(
+    "counts,group,size",
+    [
+        ({}, "contracts", 1),
+        (_counts(), "windowed", 1),
+        (_counts(**{"tests/test_a.py": 1}), "windowed", 2),
+        (_counts(**{"tests/test_a.py": 0}), "windowed", 1),
+        (_counts(), "contracts", 2),
+        (_counts(), "unknown", 1),
+    ],
+)
+def test_an_incomplete_or_empty_plan_is_not_an_acceptance(
+    counts: dict[str, int], group: str, size: int
+) -> None:
+    """Leere Shards und verschwundene Plattformverträge werden ausdrücklich abgelehnt."""
+    with pytest.raises(ValueError):
+        runner.plan_shards(counts, {}, 5, group=group, shard_count=size)
+
+
+@pytest.mark.parametrize("table", sorted(ci_shards.TABLES))
+def test_each_duration_table_names_its_origin_and_real_test_files(table: str) -> None:
+    """Eine Tabelle ist ein nachlesbarer Messnachweis, keine handgepflegte Auswahlliste.
+
+    Geprüft wird die Zusage, nicht der Stand: Hier stand die Lauf-ID, die
+    Dateizahl und die Sekunden von ``test_ui.py`` — und jede neu erzeugte
+    Tabelle (``tools/ci_shards.py``) wäre daran rot geworden.
+    """
+    path = ci_shards.TABLES[table]
+    document = json.loads(path.read_text(encoding="utf-8"))
+    weights, fallback = ci_shards.read_durations(path)
+    assert document["source"], "die Tabelle sagt nicht, woher ihre Sekunden kommen"
+    assert len(weights) > 20 and fallback > 0
+    assert all(name.startswith("tests/test_") and name.endswith(".py") for name in weights)
+    if table == "windows":
+        assert weights.keys() >= runner.CONTRACT_FILES
+
+
+@pytest.mark.parametrize("value", [0, -1, True, "4", float("nan"), float("inf")])
+def test_invalid_durations_cannot_silently_distort_the_plan(tmp_path: Path, value: Any) -> None:
+    """Eine fehlerhafte Messdatei wird korrigiert, statt zufällig verteilt."""
+    path = tmp_path / "times.json"
+    path.write_text(
+        json.dumps(
+            {"schema": 1, "durations_seconds": {"test.py": value}, "unknown_file_seconds": 2}
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError):
+        ci_shards.read_durations(path)
+
+
+def test_ci_collection_excludes_generated_and_performance_cases_but_keeps_mixed_files(
+    tmp_path: Path,
+) -> None:
+    """Die Sammlung nutzt echte vererbte Fixtures; die Testkörper werden nie ausgeführt."""
+    (tmp_path / "pytest.ini").write_text(
+        "[pytest]\nmarkers =\n    windowed: probe\n    performance: probe\n    rendered: probe\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "conftest.py").write_text(
+        "import pytest\n@pytest.fixture\ndef qt_app():\n"
+        "    raise AssertionError('collection only')\n"
+        "@pytest.fixture\ndef indirect(qt_app):\n    return qt_app\n",
+        encoding="utf-8",
+    )
+    mixed = tmp_path / "test_mixed.py"
+    mixed.write_text(
+        "import pytest\n"
+        "@pytest.mark.parametrize('value', [1, 2])\ndef test_window(indirect, value): pass\n"
+        "@pytest.mark.windowed\ndef test_external(): pass\n"
+        "@pytest.mark.rendered\ndef test_generated(indirect): pass\n"
+        "@pytest.mark.performance\ndef test_budget(indirect): pass\n"
+        "def test_plain(): pass\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "test_generated.py").write_text(
+        "import pytest\n@pytest.mark.rendered\ndef test_generated(qt_app): pass\n", encoding="utf-8"
+    )
+    assert list_windowed_tests.collect_ci_window_counts((tmp_path,), confcutdir=tmp_path) == {
+        mixed.resolve(): 3
+    }
+
+
+def test_a_broken_collection_does_not_return_a_partial_plan(tmp_path: Path) -> None:
+    """Ein importierbarer Nachbar darf eine kaputte Datei nicht verdecken."""
+    (tmp_path / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+    (tmp_path / "test_broken.py").write_text("def broken(:\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="sammeln"):
+        list_windowed_tests.collect_ci_window_counts((tmp_path,), confcutdir=tmp_path)
+
+
+def test_each_real_pytest_command_preserves_the_fixed_ci_selection(tmp_path: Path) -> None:
+    """Frische Python-Prozesse tragen Marker, JUnit, Dauerbericht und Hängerdiagnose."""
+    command = runner.pytest_command(runner.PlannedFile("tests/test_x.py", 1, 3), tmp_path / "x.xml")
+    assert command[:6] == [str(runner.PYTHON), "-u", "-X", "faulthandler", "-m", "pytest"]
+    assert command[command.index("-m", 6) + 1] == "windowed and not performance and not rendered"
+    assert "faulthandler_timeout=120" in command and "--durations=30" in command
+    assert "-n" not in command and command[-1] == "tests/test_x.py"
+    assert f"--junitxml={tmp_path / 'x.xml'}" in command
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_real_pytest_child_reports_success_and_assertion_failure(
+    tmp_path: Path, failed: bool
+) -> None:
+    """Echter pytest-Prozess ohne Qt und ohne Repository-Fixtures liefert überprüfbares JUnit."""
+    probe = tmp_path / "test_probe.py"
+    probe.write_text(f"def test_probe():\n    assert {not failed!r}\n", encoding="utf-8")
+    config = tmp_path / "pytest.ini"
+    config.write_text("[pytest]\n", encoding="utf-8")
+    junit = tmp_path / "tests__test_probe.xml"
+    result = runner.run_ci_file(
+        runner.PlannedFile("tests/test_probe.py", 1, 1),
+        tmp_path,
+        timeout=30,
+        command=[
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-c",
+            str(config),
+            "--confcutdir",
+            str(tmp_path),
+            f"--junitxml={junit}",
+            str(probe),
+        ],
+    )
+    assert result["success"] is not failed
+    assert result["exit_code"] == int(failed)
+    assert result["counts"]["tests"] == 1
+    assert result["counts"]["failures"] == int(failed)
+    assert result["process_seconds"] > 0
+    assert (tmp_path / result["log"]).is_file()
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["missing", "malformed", "empty", "partial", "failed", "exit5", "crash", "crash_after_junit"],
+)
+def test_green_text_and_old_reports_cannot_hide_incomplete_children(
+    tmp_path: Path, case: str
+) -> None:
+    """Kleine echte Prozesse decken fehlende Berichte und Abbruch nach einer grünen Zeile auf."""
+    junit = tmp_path / "tests__test_probe.xml"
+    _junit(junit)
+    body = "print('1 passed in 0.01s', flush=True)\n"
+    if case == "malformed":
+        body += f"from pathlib import Path\nPath({str(junit)!r}).write_text('<broken')\n"
+    elif case not in {"missing", "exit5", "crash"}:
+        prepared = tmp_path / "prepared.xml"
+        _junit(prepared, tests=0 if case == "empty" else 1, failed=int(case == "failed"))
+        body += f"import shutil\nshutil.copyfile({str(prepared)!r}, {str(junit)!r})\n"
+    if case in {"exit5", "crash", "crash_after_junit"}:
+        body += f"import os\nos._exit({5 if case == 'exit5' else 139})\n"
+    result = runner.run_ci_file(
+        runner.PlannedFile("tests/test_probe.py", 2 if case == "partial" else 1, 1),
+        tmp_path,
+        timeout=10,
+        command=[sys.executable, "-c", body],
+    )
+    assert not result["success"] and result["issues"]
+    assert result["exit_code"] == (
+        {"exit5": 5, "crash": 139, "crash_after_junit": 139}.get(case, 0)
+    )
+    if case == "crash_after_junit":
+        assert result["counts"]["passed"] == 1
+    assert "1 passed" in (tmp_path / result["log"]).read_text(encoding="utf-8")
+    if case == "missing":
+        assert not junit.exists(), "old JUnit survived a new process"
+
+
+def test_timeout_waits_for_the_direct_child_to_end(tmp_path: Path) -> None:
+    """Der Kindprozess schreibt vor dem Warten; nach der Zeitgrenze ist sein echter Exit bekannt."""
+    result = runner.run_ci_file(
+        runner.PlannedFile("tests/test_timeout.py", 1, 1),
+        tmp_path,
+        timeout=5,
+        command=[sys.executable, "-u", "-c", "import time; print('started'); time.sleep(60)"],
+    )
+    assert not result["success"] and result["timed_out"]
+    assert isinstance(result["exit_code"], int) and result["exit_code"] != 0
+    assert result["process_seconds"] < 15
+    assert "started" in (tmp_path / result["log"]).read_text(encoding="utf-8")
+
+
+def _process_alive(pid: int) -> bool:
+    """Fragt die Probe ab; bereits beendete POSIX-Zombies zählen nicht als laufend."""
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        handle = kernel.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False
+        try:
+            code = wintypes.DWORD()
+            assert kernel.GetExitCodeProcess(handle, ctypes.byref(code))
+            return code.value == 259
+        finally:
+            kernel.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    status = Path(f"/proc/{pid}/stat")
+    if status.exists():
+        return status.read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    return True
+
+
+def test_timeout_ends_children_and_grandchildren_without_qt(tmp_path: Path) -> None:
+    """Der echte Prozessbaum hat drei Ebenen; nach Ablauf lebt keine davon weiter."""
+    scripts = [tmp_path / f"probe_{index}.py" for index in range(3)]
+    pids = [tmp_path / f"pid_{index}.txt" for index in range(3)]
+    for index, script in reversed(list(enumerate(scripts))):
+        body = "import os, subprocess, sys, time\nfrom pathlib import Path\n"
+        body += f"Path({str(pids[index])!r}).write_text(str(os.getpid()))\n"
+        if index < 2:
+            body += f"child = subprocess.Popen([sys.executable, {str(scripts[index + 1])!r}])\n"
+        body += "time.sleep(60)\n"
+        script.write_text(body, encoding="utf-8")
+    result = runner.run_ci_file(
+        runner.PlannedFile("tests/test_tree.py", 1, 1),
+        tmp_path,
+        timeout=5,
+        command=[sys.executable, str(scripts[0])],
+    )
+    assert result["timed_out"] and not result["success"]
+    assert all(path.is_file() for path in pids), "probe did not finish starting before timeout"
+    identifiers = [int(path.read_text()) for path in pids]
+    deadline = time.monotonic() + 3
+    alive = [pid for pid in identifiers if _process_alive(pid)]
+    while alive and time.monotonic() < deadline:
+        time.sleep(0.05)
+        alive = [pid for pid in identifiers if _process_alive(pid)]
+    assert not alive, f"processes survived timeout: {alive}"
+
+
+def test_junit_totals_must_match_the_actual_cases(tmp_path: Path) -> None:
+    """Eine formal gültige XML-Datei darf keine fehlenden Fälle versprechen."""
+    path = tmp_path / "results.xml"
+    _junit(path, tests=4, failed=1, errors=1, skipped=1)
+    assert runner.junit_counts(path) == {
+        "tests": 4,
+        "failures": 1,
+        "errors": 1,
+        "skipped": 1,
+        "passed": 1,
+    }
+    path.write_text(
+        path.read_text(encoding="utf-8").replace('tests="4"', 'tests="5"'), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="Fallzahlen"):
+        runner.junit_counts(path)
+
+
+def _mock_collection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zwei Dateifälle und beide Plattformverträge, ohne die echte Suite zu importieren."""
+    counts = _counts(**{"tests/test_a.py": 1, "tests/test_b.py": 1})
+    monkeypatch.setattr(
+        list_windowed_tests,
+        "collect_ci_window_counts",
+        lambda _: {runner.ROOT / path: count for path, count in counts.items()},
+    )
+
+
+def test_planning_without_release_cannot_start_a_test_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Plan ist reviewbar, ohne damit Fensterprüfungen freizugeben."""
+    _mock_collection(monkeypatch)
+    monkeypatch.setattr(
+        runner, "run_ci_file", lambda *args, **kwargs: pytest.fail("plan executed a file")
+    )
+    assert (
+        runner.main(
+            [
+                "--ci-group",
+                "windowed",
+                "--shard-count",
+                "2",
+                "--report-dir",
+                str(tmp_path),
+                "--plan-only",
+            ]
+        )
+        == 0
+    )
+    summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "planned" and summary["results"] == []
+    assert len(summary["plan"]) == 2 and len(summary["selected"]) == 1
+    assert "grün" not in (tmp_path / "summary.md").read_text(encoding="utf-8")
+
+
+def test_a_failed_file_remains_failed_after_a_successful_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beide Dateien laufen und werden berichtet; das letzte Grün ersetzt nie das erste Rot."""
+    _mock_collection(monkeypatch)
+    calls = []
+
+    def run(file: runner.PlannedFile, directory: Path, *, timeout: float) -> dict[str, Any]:
+        calls.append(file.path)
+        junit = directory / (file.path.replace("/", "__").removesuffix(".py") + ".xml")
+        prepared = directory / f"prepared-{len(calls)}.xml"
+        _junit(prepared)
+        body = (
+            f"import shutil; shutil.copyfile({str(prepared)!r}, {str(junit)!r}); "
+            f"raise SystemExit({int(len(calls) == 1)})"
+        )
+        return original(file, directory, timeout=timeout, command=[sys.executable, "-c", body])
+
+    original = runner.run_ci_file
+    monkeypatch.setattr(runner, "run_ci_file", run)
+    assert runner.main(["--release", "--ci-group", "windowed", "--report-dir", str(tmp_path)]) == 1
+    summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    assert len(calls) == 2 and summary["status"] == "failed"
+    assert [result["exit_code"] for result in summary["results"]] == [1, 0]
+    assert all(result["counts"]["tests"] == 1 for result in summary["results"])
+
+
+def test_collection_failure_leaves_a_failed_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch vor dem ersten Datei-Prozess bleibt ein maschinenlesbarer Fehlernachweis."""
+
+    def broken(_: object) -> dict[Path, int]:
+        raise RuntimeError("collection crashed")
+
+    monkeypatch.setattr(list_windowed_tests, "collect_ci_window_counts", broken)
+    assert (
+        runner.main(["--plan-only", "--ci-group", "contracts", "--report-dir", str(tmp_path)]) == 1
+    )
+    summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "failed" and "collection crashed" in summary["issues"][0]
+    assert summary["results"] == []
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--ci-group", "windowed"],
+        ["--release", "--ci-group", "windowed"],
+        ["--plan-only"],
+        ["--plan-only", "--ci-group", "windowed", "--shard-index", "2", "--shard-count", "2"],
+    ],
+)
+def test_invalid_cli_cannot_start_the_runner(tmp_path: Path, arguments: list[str]) -> None:
+    """Releasefreigabe, Berichtsverzeichnis und Shardgrenzen werden vor Sammlung geprüft."""
+    if "--shard-index" in arguments:
+        arguments = [*arguments, "--report-dir", str(tmp_path)]
+    with pytest.raises(SystemExit) as error:
+        runner.main(arguments)
+    assert error.value.code == 2
+
+
+# --- Die Teile der Kernsuite (tools/ci_shards.py) ------------------------------
+
+
+def test_the_core_partition_is_complete_disjoint_and_independent_of_order() -> None:
+    """Jede Datei in genau einem Teil; dieselben Gewichte ergeben überall denselben Plan."""
+    weights = {"tests/test_a.py": 9.0, "tests/test_b.py": 5.0, "tests/test_c.py": 4.0}
+    weights |= {"tests/test_d.py": 4.0, "tests/test_e.py": 1.0}
+    plan = ci_shards.balanced(weights, 3)
+    assert plan == (
+        ("tests/test_a.py",),
+        ("tests/test_b.py", "tests/test_e.py"),
+        ("tests/test_c.py", "tests/test_d.py"),
+    )
+    assert ci_shards.balanced(dict(reversed(list(weights.items()))), 3) == plan
+    groups = [set(group) for group in plan]
+    assert set.union(*groups) == weights.keys() and sum(map(len, groups)) == len(weights)
+    with pytest.raises(ValueError):
+        ci_shards.balanced(weights, 0)
+
+
+@pytest.mark.parametrize("value", ["3/3", "0/0", "-1/3", "a/3", "1", "1/", "/3", "1/3/4"])
+def test_a_shard_outside_its_range_is_a_usage_error(value: str) -> None:
+    """``I/N`` mit ``0 <= I < N`` — alles andere hält den Lauf vor der Sammlung an."""
+
+    class Config:
+        def getoption(self, name: str, default: object = None) -> str:
+            return value
+
+        pluginmanager = None
+
+    with pytest.raises(pytest.UsageError, match="CI-Teil"):
+        ci_shards.register(Config())  # type: ignore[arg-type]
+
+
+def _collected(*extra: str) -> list[str]:
+    """Sammelt echte Testdateien über die echte ``conftest.py`` in einem frischen Prozess."""
+    files = (
+        "tests/test_ci_runner.py",
+        "tests/test_affected_tests.py",
+        "tests/test_suite_script.py",
+        "tests/test_memory_index.py",
+    )
+    done = runner.subprocess.run(
+        [
+            sys.executable,
+            *("-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"),
+            *("-m", "not windowed and not performance and not rendered", *extra, *files),
+        ],
+        cwd=runner.ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    return [line for line in done.stdout.splitlines() if "::" in line]
+
+
+def test_the_core_shards_collect_every_case_exactly_once_and_whole_files() -> None:
+    """``--ci-shard`` am wirklichen Weg: kein Fall fehlt, keiner doppelt, keine Datei zerfällt."""
+    everything = _collected()
+    parts = [_collected("--ci-shard", f"{index}/2") for index in range(2)]
+    assert everything and all(parts)
+    assert sorted(parts[0] + parts[1]) == sorted(everything)
+    files = [{case.split("::", 1)[0] for case in part} for part in parts]
+    assert not files[0] & files[1]
+
+
+def test_a_duration_table_is_rebuilt_from_junit_reports(tmp_path: Path) -> None:
+    """Sekunden je Datei aus den Fällen, Klassen zählen zu ihrer Datei, nichts rundet auf null."""
+    root = ET.Element("testsuites")
+    suite = ET.SubElement(root, "testsuite")
+    for classname, seconds in (
+        ("tests.test_a", "1.5"),
+        ("tests.test_a.TestInner", "2.25"),
+        ("tests.test_b", "0.001"),
+        ("tests.test_c", "40"),
+    ):
+        ET.SubElement(suite, "testcase", classname=classname, name="test_x", time=seconds)
+    report = tmp_path / "junit.xml"
+    ET.ElementTree(root).write(report, encoding="utf-8")
+
+    seconds = ci_shards.junit_file_seconds([report])
+    assert seconds == pytest.approx(
+        {"tests/test_a.py": 3.75, "tests/test_b.py": 0.001, "tests/test_c.py": 40.0}
+    )
+    table = ci_shards.table_from(seconds, [report], "Probe")
+    assert table["durations_seconds"]["tests/test_b.py"] == 0.01
+    assert table["unknown_file_seconds"] == 40.0
+    path = tmp_path / "table.json"
+    path.write_text(json.dumps(table), encoding="utf-8")
+    assert ci_shards.read_durations(path)[0]["tests/test_a.py"] == 3.75
+
+    suite.append(ET.Element("testcase", classname="helpers", name="x", time="1"))
+    ET.ElementTree(root).write(report, encoding="utf-8")
+    with pytest.raises(ValueError, match="Testmodul"):
+        ci_shards.junit_file_seconds([report])
+
+
+def test_a_github_annotation_keeps_its_text_in_one_command() -> None:
+    """Prozent, Zeilenumbruch und in der Überschrift Doppelpunkt und Komma sind maskiert."""
+    line = runner.annotation("error", "tests/a:b,c.py", "50 % rot\nzweite Zeile", github=True)
+    assert line == "::error title=tests/a%3Ab%2Cc.py::50 %25 rot%0Azweite Zeile"
+    assert runner.annotation("error", "tests/a.py", "x", github=False) == "rot: tests/a.py: x"
+
+
+def test_the_console_shows_each_file_and_the_step_summary_the_whole_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """Die Ausgabe steht im CI-Protokoll, nicht nur im Artefakt; die Tabelle im Schrittbericht."""
+    _mock_collection(monkeypatch)
+    step_summary = tmp_path / "step-summary.md"
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(step_summary))
+    calls = []
+
+    def run(file: runner.PlannedFile, directory: Path, *, timeout: float) -> dict[str, Any]:
+        calls.append(file.path)
+        junit = directory / (file.path.replace("/", "__").removesuffix(".py") + ".xml")
+        prepared = directory / f"prepared-{len(calls)}.xml"
+        _junit(prepared)
+        body = (
+            f"import shutil; print('Ausgabe aus {file.path}', flush=True); "
+            f"shutil.copyfile({str(prepared)!r}, {str(junit)!r}); "
+            f"raise SystemExit({int(len(calls) == 1)})"
+        )
+        return original(file, directory, timeout=timeout, command=[sys.executable, "-c", body])
+
+    original = runner.run_ci_file
+    monkeypatch.setattr(runner, "run_ci_file", run)
+    report_dir = tmp_path / "reports"
+    assert (
+        runner.main(["--release", "--ci-group", "windowed", "--report-dir", str(report_dir)]) == 1
+    )
+
+    output = capfd.readouterr().out
+    first, second = calls
+    assert f"::group::{first} (1 Fälle)" in output and f"Ausgabe aus {first}" in output
+    assert f"Ausgabe aus {second}" in output and output.count("::endgroup::") == 2
+    assert f"::error title={first}::" in output and f"::error title={second}::" not in output
+    # Die Prüfausgabe steht zwischen Anhalten und Fortsetzen der Workflow-Befehle.
+    lines = output.splitlines()
+    stop = next(index for index, line in enumerate(lines) if line.startswith("::stop-commands::"))
+    token = lines[stop].removeprefix("::stop-commands::")
+    resume = lines.index(f"::{token}::")
+    assert stop < lines.index(f"Ausgabe aus {first}") < resume < lines.index("::endgroup::")
+    summary = step_summary.read_text(encoding="utf-8")
+    assert summary == (report_dir / "summary.md").read_text(encoding="utf-8") + "\n"
+    assert f"| {first} | 1/1 |" in summary
+
+
+def test_an_escaped_descendant_does_not_hold_the_report_past_the_drain_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Enkel mit geerbter Ausgabe hält die Leitung offen; der Bericht wartet nicht auf ihn.
+
+    Gefunden in der Durchsicht: ``Popen.__exit__`` schloss den Leser, während
+    der Kopierfaden in dessen Lesen blockierte, und wartete damit so lange wie
+    der Enkel lebte — 40 s statt der Nachfrist.
+    """
+    monkeypatch.setattr(runner, "OUTPUT_DRAIN_SECONDS", 1.0)
+    pid_file = tmp_path / "enkel.txt"
+    body = (
+        "import subprocess, sys; from pathlib import Path; "
+        "enkel = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); "
+        f"Path({str(pid_file)!r}).write_text(str(enkel.pid)); print('Kind fertig', flush=True)"
+    )
+    try:
+        result = runner.run_ci_file(
+            runner.PlannedFile("tests/test_escape.py", 1, 1),
+            tmp_path,
+            timeout=20,
+            command=[sys.executable, "-c", body],
+        )
+        assert result["process_seconds"] < 10, result["process_seconds"]
+        assert result["exit_code"] == 0 and result["notes"]
+        assert "Kind fertig" in (tmp_path / result["log"]).read_text(encoding="utf-8")
+    finally:
+        if pid_file.is_file():
+            pid = int(pid_file.read_text())
+            if sys.platform == "win32":
+                runner.subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+            else:
+                os.kill(pid, 9)
+        # Nach dem Enkel endet die Leitung; der Faden schließt sie selbst.
+        import threading
+
+        for thread in threading.enumerate():
+            if thread.name == "Ausgabe tests/test_escape.py":
+                thread.join(10)
+                assert not thread.is_alive(), "die übergebene Leitung wurde nie leer"
+
+
+def test_a_failing_output_target_does_not_stop_draining_the_pipe() -> None:
+    """Fällt Konsole oder Protokoll aus, wird weiter gelesen und ins andere geschrieben."""
+    import io
+
+    class Broken(io.BytesIO):
+        def write(self, data: Any) -> int:
+            raise OSError("Datenträger voll")
+
+    chunks = [b"eins\n", b"zwei\n", b"drei\n"]
+
+    class Source:
+        def read1(self, size: int) -> bytes:
+            return chunks.pop(0) if chunks else b""
+
+    log = io.BytesIO()
+    runner.copy_output(Source(), log, Broken())  # type: ignore[arg-type]
+    assert log.getvalue() == b"eins\nzwei\ndrei\n" and not chunks
+
+    chunks[:] = [b"eins\n", b"zwei\n"]
+    console = io.BytesIO()
+    runner.copy_output(Source(), Broken(), console)  # type: ignore[arg-type]
+    assert console.getvalue() == b"eins\nzwei\n" and not chunks

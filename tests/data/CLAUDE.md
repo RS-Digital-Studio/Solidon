@@ -13,6 +13,14 @@ Der STEP-Baumvergleich normalisiert das Vorzeichen gerundeter Nullwerte in
 Transformationsmatrizen (`z.6f`). Negative Maßwerte und Spiegelungen bleiben
 erhalten; `-0.000000` und `0.000000` bezeichnen dieselbe Lage.
 
+`ci_window_durations.json` enthält historische Sekunden je Fensterdatei,
+`ci_core_durations.json` dasselbe je Datei der Kernsuite — je mit einem
+Ersatzwert für neue Dateien und ihrer Herkunft. Diese Gewichte verteilen
+ausschließlich die aktuell gesammelten Tests; sie bestimmen niemals die
+Auswahl. Neu erzeugt werden sie mit `tools/ci_shards.py` aus den
+JUnit-Berichten eines abgeschlossenen Laufs, nicht von Hand. Den Vertrag und
+die Aufteilung prüfen `test_ci_runner.py` und `test_packaging.py`.
+
 ## Ein Fehlerbild wird eine Datei hier
 
 Das ist die Regel, die diesen Ordner erklärt: **Neue Fehlerbilder werden

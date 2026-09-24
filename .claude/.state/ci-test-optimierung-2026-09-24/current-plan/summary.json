@@ -1,0 +1,711 @@
+{
+  "schema": 1,
+  "group": "windowed",
+  "shard_index": 0,
+  "shard_count": 2,
+  "commit": "",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+  "status": "planned",
+  "plan": [
+    [
+      {
+        "path": "tests/test_ui.py",
+        "expected_tests": 557,
+        "estimated_seconds": 665.03
+      },
+      {
+        "path": "tests/test_install.py",
+        "expected_tests": 41,
+        "estimated_seconds": 55.58
+      },
+      {
+        "path": "tests/test_ui_export.py",
+        "expected_tests": 46,
+        "estimated_seconds": 49.88
+      },
+      {
+        "path": "tests/test_ui_remote.py",
+        "expected_tests": 11,
+        "estimated_seconds": 49.88
+      },
+      {
+        "path": "tests/test_first_run.py",
+        "expected_tests": 79,
+        "estimated_seconds": 46.8
+      },
+      {
+        "path": "tests/test_selection.py",
+        "expected_tests": 65,
+        "estimated_seconds": 41.12
+      },
+      {
+        "path": "tests/test_sculpt_session.py",
+        "expected_tests": 35,
+        "estimated_seconds": 37.16
+      },
+      {
+        "path": "tests/test_locked_says_why.py",
+        "expected_tests": 47,
+        "estimated_seconds": 29.23
+      },
+      {
+        "path": "tests/test_start_screen.py",
+        "expected_tests": 68,
+        "estimated_seconds": 27.5
+      },
+      {
+        "path": "tests/test_ingest.py",
+        "expected_tests": 6,
+        "estimated_seconds": 22.95
+      },
+      {
+        "path": "tests/test_transform_ui.py",
+        "expected_tests": 29,
+        "estimated_seconds": 17.8
+      },
+      {
+        "path": "tests/test_catalog_ui.py",
+        "expected_tests": 36,
+        "estimated_seconds": 16.94
+      },
+      {
+        "path": "tests/test_ai_disclosure.py",
+        "expected_tests": 47,
+        "estimated_seconds": 16.61
+      },
+      {
+        "path": "tests/test_counterpart_ui.py",
+        "expected_tests": 10,
+        "estimated_seconds": 13.6
+      },
+      {
+        "path": "tests/test_split_ui.py",
+        "expected_tests": 14,
+        "estimated_seconds": 12.99
+      },
+      {
+        "path": "tests/test_organizer_dialog.py",
+        "expected_tests": 16,
+        "estimated_seconds": 12.67
+      },
+      {
+        "path": "tests/test_placement_dimensions.py",
+        "expected_tests": 36,
+        "estimated_seconds": 12.38
+      },
+      {
+        "path": "tests/test_sketch_target.py",
+        "expected_tests": 12,
+        "estimated_seconds": 11.1
+      },
+      {
+        "path": "tests/test_filament_assignment.py",
+        "expected_tests": 37,
+        "estimated_seconds": 10.12
+      },
+      {
+        "path": "tests/test_tool_strip.py",
+        "expected_tests": 10,
+        "estimated_seconds": 9.51
+      },
+      {
+        "path": "tests/test_manual.py",
+        "expected_tests": 17,
+        "estimated_seconds": 8.58
+      },
+      {
+        "path": "tests/test_first_run_setup.py",
+        "expected_tests": 17,
+        "estimated_seconds": 7.98
+      },
+      {
+        "path": "tests/test_seal_flow.py",
+        "expected_tests": 9,
+        "estimated_seconds": 7.25
+      },
+      {
+        "path": "tests/test_protection_ui.py",
+        "expected_tests": 4,
+        "estimated_seconds": 5.38
+      },
+      {
+        "path": "tests/test_header.py",
+        "expected_tests": 12,
+        "estimated_seconds": 4.6
+      },
+      {
+        "path": "tests/test_cursors.py",
+        "expected_tests": 23,
+        "estimated_seconds": 4.36
+      },
+      {
+        "path": "tests/test_field_ui.py",
+        "expected_tests": 6,
+        "estimated_seconds": 4.35
+      },
+      {
+        "path": "tests/test_hollow_opening_ui.py",
+        "expected_tests": 2,
+        "estimated_seconds": 4.07
+      },
+      {
+        "path": "tests/test_licence_lines.py",
+        "expected_tests": 13,
+        "estimated_seconds": 3.92
+      },
+      {
+        "path": "tests/test_selection_operations.py",
+        "expected_tests": 20,
+        "estimated_seconds": 3.71
+      },
+      {
+        "path": "tests/test_spacemouse.py",
+        "expected_tests": 17,
+        "estimated_seconds": 3.59
+      },
+      {
+        "path": "tests/test_print_settings.py",
+        "expected_tests": 6,
+        "estimated_seconds": 3.25
+      },
+      {
+        "path": "tests/test_window_memory.py",
+        "expected_tests": 3,
+        "estimated_seconds": 3.15
+      },
+      {
+        "path": "tests/test_history_revision_ui.py",
+        "expected_tests": 4,
+        "estimated_seconds": 2.69
+      },
+      {
+        "path": "tests/test_profile_clamp_ui.py",
+        "expected_tests": 5,
+        "estimated_seconds": 2.51
+      },
+      {
+        "path": "tests/test_remote_server.py",
+        "expected_tests": 6,
+        "estimated_seconds": 1.99
+      },
+      {
+        "path": "tests/test_foreign.py",
+        "expected_tests": 2,
+        "estimated_seconds": 1.77
+      },
+      {
+        "path": "tests/test_loading.py",
+        "expected_tests": 11,
+        "estimated_seconds": 1.5
+      },
+      {
+        "path": "tests/test_toolchain.py",
+        "expected_tests": 2,
+        "estimated_seconds": 1.2
+      },
+      {
+        "path": "tests/test_wording.py",
+        "expected_tests": 1,
+        "estimated_seconds": 1.2
+      },
+      {
+        "path": "tests/test_tour.py",
+        "expected_tests": 3,
+        "estimated_seconds": 0.92
+      },
+      {
+        "path": "tests/test_section_bar.py",
+        "expected_tests": 5,
+        "estimated_seconds": 0.91
+      },
+      {
+        "path": "tests/test_scene_findings.py",
+        "expected_tests": 2,
+        "estimated_seconds": 0.73
+      },
+      {
+        "path": "tests/test_motion.py",
+        "expected_tests": 2,
+        "estimated_seconds": 0.69
+      }
+    ],
+    [
+      {
+        "path": "tests/test_operation_ui.py",
+        "expected_tests": 171,
+        "estimated_seconds": 135.37
+      },
+      {
+        "path": "tests/test_analysis_ui.py",
+        "expected_tests": 190,
+        "estimated_seconds": 134.53
+      },
+      {
+        "path": "tests/test_widget_lifetime.py",
+        "expected_tests": 69,
+        "estimated_seconds": 121.1
+      },
+      {
+        "path": "tests/test_chat_ui.py",
+        "expected_tests": 77,
+        "estimated_seconds": 116.35
+      },
+      {
+        "path": "tests/test_sketch_editor.py",
+        "expected_tests": 303,
+        "estimated_seconds": 98.21
+      },
+      {
+        "path": "tests/test_surface_placement_ui.py",
+        "expected_tests": 106,
+        "estimated_seconds": 91.05
+      },
+      {
+        "path": "tests/test_ui_dialogs.py",
+        "expected_tests": 17,
+        "estimated_seconds": 49.88
+      },
+      {
+        "path": "tests/test_ui_licensing.py",
+        "expected_tests": 28,
+        "estimated_seconds": 49.88
+      },
+      {
+        "path": "tests/test_viewport_decisions.py",
+        "expected_tests": 221,
+        "estimated_seconds": 49.88
+      },
+      {
+        "path": "tests/test_filament_usage_ui.py",
+        "expected_tests": 45,
+        "estimated_seconds": 42.51
+      },
+      {
+        "path": "tests/test_interface_limits.py",
+        "expected_tests": 43,
+        "estimated_seconds": 38.46
+      },
+      {
+        "path": "tests/test_filament_inventory_ui.py",
+        "expected_tests": 69,
+        "estimated_seconds": 30.4
+      },
+      {
+        "path": "tests/test_filament_picker.py",
+        "expected_tests": 74,
+        "estimated_seconds": 28.13
+      },
+      {
+        "path": "tests/test_feature_panel.py",
+        "expected_tests": 81,
+        "estimated_seconds": 26.47
+      },
+      {
+        "path": "tests/test_pose_session.py",
+        "expected_tests": 22,
+        "estimated_seconds": 18.6
+      },
+      {
+        "path": "tests/test_style.py",
+        "expected_tests": 24,
+        "estimated_seconds": 17.38
+      },
+      {
+        "path": "tests/test_split_tool.py",
+        "expected_tests": 29,
+        "estimated_seconds": 16.81
+      },
+      {
+        "path": "tests/test_generate_ui.py",
+        "expected_tests": 53,
+        "estimated_seconds": 13.96
+      },
+      {
+        "path": "tests/test_recipe_dialog.py",
+        "expected_tests": 42,
+        "estimated_seconds": 13.28
+      },
+      {
+        "path": "tests/test_filament_workflow.py",
+        "expected_tests": 32,
+        "estimated_seconds": 12.73
+      },
+      {
+        "path": "tests/test_overlay.py",
+        "expected_tests": 34,
+        "estimated_seconds": 12.45
+      },
+      {
+        "path": "tests/test_local_recognition_ui.py",
+        "expected_tests": 18,
+        "estimated_seconds": 12.04
+      },
+      {
+        "path": "tests/test_local_recognition_flow.py",
+        "expected_tests": 11,
+        "estimated_seconds": 10.84
+      },
+      {
+        "path": "tests/test_value_labels.py",
+        "expected_tests": 52,
+        "estimated_seconds": 9.79
+      },
+      {
+        "path": "tests/test_outline_dialog.py",
+        "expected_tests": 18,
+        "estimated_seconds": 9.3
+      },
+      {
+        "path": "tests/test_calibration.py",
+        "expected_tests": 11,
+        "estimated_seconds": 8.52
+      },
+      {
+        "path": "tests/test_resting_state.py",
+        "expected_tests": 3,
+        "estimated_seconds": 7.51
+      },
+      {
+        "path": "tests/test_mesh_to_exact_ui.py",
+        "expected_tests": 4,
+        "estimated_seconds": 5.57
+      },
+      {
+        "path": "tests/test_leash.py",
+        "expected_tests": 24,
+        "estimated_seconds": 5.39
+      },
+      {
+        "path": "tests/test_variants_ui.py",
+        "expected_tests": 11,
+        "estimated_seconds": 5.25
+      },
+      {
+        "path": "tests/test_feature_pattern_ui.py",
+        "expected_tests": 2,
+        "estimated_seconds": 4.39
+      },
+      {
+        "path": "tests/test_viewport_pending_transform.py",
+        "expected_tests": 15,
+        "estimated_seconds": 4.36
+      },
+      {
+        "path": "tests/test_plates.py",
+        "expected_tests": 15,
+        "estimated_seconds": 4.15
+      },
+      {
+        "path": "tests/test_slot_handle.py",
+        "expected_tests": 14,
+        "estimated_seconds": 4.03
+      },
+      {
+        "path": "tests/test_facts.py",
+        "expected_tests": 8,
+        "estimated_seconds": 3.74
+      },
+      {
+        "path": "tests/test_feature_label_layout.py",
+        "expected_tests": 11,
+        "estimated_seconds": 3.68
+      },
+      {
+        "path": "tests/test_seal_dialog.py",
+        "expected_tests": 9,
+        "estimated_seconds": 3.35
+      },
+      {
+        "path": "tests/test_step_assembly_ui.py",
+        "expected_tests": 7,
+        "estimated_seconds": 3.15
+      },
+      {
+        "path": "tests/test_update_ui.py",
+        "expected_tests": 17,
+        "estimated_seconds": 2.74
+      },
+      {
+        "path": "tests/test_shared_hosting_removed.py",
+        "expected_tests": 1,
+        "estimated_seconds": 2.53
+      },
+      {
+        "path": "tests/test_theme_and_palette.py",
+        "expected_tests": 14,
+        "estimated_seconds": 2.16
+      },
+      {
+        "path": "tests/test_feedback.py",
+        "expected_tests": 11,
+        "estimated_seconds": 1.95
+      },
+      {
+        "path": "tests/test_licence_boundary.py",
+        "expected_tests": 2,
+        "estimated_seconds": 1.57
+      },
+      {
+        "path": "tests/test_print_disclosure.py",
+        "expected_tests": 7,
+        "estimated_seconds": 1.27
+      },
+      {
+        "path": "tests/test_support.py",
+        "expected_tests": 4,
+        "estimated_seconds": 1.11
+      },
+      {
+        "path": "tests/test_changes_view.py",
+        "expected_tests": 5,
+        "estimated_seconds": 1.04
+      },
+      {
+        "path": "tests/test_acceptance_p0.py",
+        "expected_tests": 2,
+        "estimated_seconds": 0.86
+      },
+      {
+        "path": "tests/test_window_chrome.py",
+        "expected_tests": 4,
+        "estimated_seconds": 0.85
+      },
+      {
+        "path": "tests/test_parameter_dialog.py",
+        "expected_tests": 1,
+        "estimated_seconds": 0.55
+      },
+      {
+        "path": "tests/test_translations.py",
+        "expected_tests": 1,
+        "estimated_seconds": 0.53
+      }
+    ]
+  ],
+  "selected": [
+    {
+      "path": "tests/test_ui.py",
+      "expected_tests": 557,
+      "estimated_seconds": 665.03
+    },
+    {
+      "path": "tests/test_install.py",
+      "expected_tests": 41,
+      "estimated_seconds": 55.58
+    },
+    {
+      "path": "tests/test_ui_export.py",
+      "expected_tests": 46,
+      "estimated_seconds": 49.88
+    },
+    {
+      "path": "tests/test_ui_remote.py",
+      "expected_tests": 11,
+      "estimated_seconds": 49.88
+    },
+    {
+      "path": "tests/test_first_run.py",
+      "expected_tests": 79,
+      "estimated_seconds": 46.8
+    },
+    {
+      "path": "tests/test_selection.py",
+      "expected_tests": 65,
+      "estimated_seconds": 41.12
+    },
+    {
+      "path": "tests/test_sculpt_session.py",
+      "expected_tests": 35,
+      "estimated_seconds": 37.16
+    },
+    {
+      "path": "tests/test_locked_says_why.py",
+      "expected_tests": 47,
+      "estimated_seconds": 29.23
+    },
+    {
+      "path": "tests/test_start_screen.py",
+      "expected_tests": 68,
+      "estimated_seconds": 27.5
+    },
+    {
+      "path": "tests/test_ingest.py",
+      "expected_tests": 6,
+      "estimated_seconds": 22.95
+    },
+    {
+      "path": "tests/test_transform_ui.py",
+      "expected_tests": 29,
+      "estimated_seconds": 17.8
+    },
+    {
+      "path": "tests/test_catalog_ui.py",
+      "expected_tests": 36,
+      "estimated_seconds": 16.94
+    },
+    {
+      "path": "tests/test_ai_disclosure.py",
+      "expected_tests": 47,
+      "estimated_seconds": 16.61
+    },
+    {
+      "path": "tests/test_counterpart_ui.py",
+      "expected_tests": 10,
+      "estimated_seconds": 13.6
+    },
+    {
+      "path": "tests/test_split_ui.py",
+      "expected_tests": 14,
+      "estimated_seconds": 12.99
+    },
+    {
+      "path": "tests/test_organizer_dialog.py",
+      "expected_tests": 16,
+      "estimated_seconds": 12.67
+    },
+    {
+      "path": "tests/test_placement_dimensions.py",
+      "expected_tests": 36,
+      "estimated_seconds": 12.38
+    },
+    {
+      "path": "tests/test_sketch_target.py",
+      "expected_tests": 12,
+      "estimated_seconds": 11.1
+    },
+    {
+      "path": "tests/test_filament_assignment.py",
+      "expected_tests": 37,
+      "estimated_seconds": 10.12
+    },
+    {
+      "path": "tests/test_tool_strip.py",
+      "expected_tests": 10,
+      "estimated_seconds": 9.51
+    },
+    {
+      "path": "tests/test_manual.py",
+      "expected_tests": 17,
+      "estimated_seconds": 8.58
+    },
+    {
+      "path": "tests/test_first_run_setup.py",
+      "expected_tests": 17,
+      "estimated_seconds": 7.98
+    },
+    {
+      "path": "tests/test_seal_flow.py",
+      "expected_tests": 9,
+      "estimated_seconds": 7.25
+    },
+    {
+      "path": "tests/test_protection_ui.py",
+      "expected_tests": 4,
+      "estimated_seconds": 5.38
+    },
+    {
+      "path": "tests/test_header.py",
+      "expected_tests": 12,
+      "estimated_seconds": 4.6
+    },
+    {
+      "path": "tests/test_cursors.py",
+      "expected_tests": 23,
+      "estimated_seconds": 4.36
+    },
+    {
+      "path": "tests/test_field_ui.py",
+      "expected_tests": 6,
+      "estimated_seconds": 4.35
+    },
+    {
+      "path": "tests/test_hollow_opening_ui.py",
+      "expected_tests": 2,
+      "estimated_seconds": 4.07
+    },
+    {
+      "path": "tests/test_licence_lines.py",
+      "expected_tests": 13,
+      "estimated_seconds": 3.92
+    },
+    {
+      "path": "tests/test_selection_operations.py",
+      "expected_tests": 20,
+      "estimated_seconds": 3.71
+    },
+    {
+      "path": "tests/test_spacemouse.py",
+      "expected_tests": 17,
+      "estimated_seconds": 3.59
+    },
+    {
+      "path": "tests/test_print_settings.py",
+      "expected_tests": 6,
+      "estimated_seconds": 3.25
+    },
+    {
+      "path": "tests/test_window_memory.py",
+      "expected_tests": 3,
+      "estimated_seconds": 3.15
+    },
+    {
+      "path": "tests/test_history_revision_ui.py",
+      "expected_tests": 4,
+      "estimated_seconds": 2.69
+    },
+    {
+      "path": "tests/test_profile_clamp_ui.py",
+      "expected_tests": 5,
+      "estimated_seconds": 2.51
+    },
+    {
+      "path": "tests/test_remote_server.py",
+      "expected_tests": 6,
+      "estimated_seconds": 1.99
+    },
+    {
+      "path": "tests/test_foreign.py",
+      "expected_tests": 2,
+      "estimated_seconds": 1.77
+    },
+    {
+      "path": "tests/test_loading.py",
+      "expected_tests": 11,
+      "estimated_seconds": 1.5
+    },
+    {
+      "path": "tests/test_toolchain.py",
+      "expected_tests": 2,
+      "estimated_seconds": 1.2
+    },
+    {
+      "path": "tests/test_wording.py",
+      "expected_tests": 1,
+      "estimated_seconds": 1.2
+    },
+    {
+      "path": "tests/test_tour.py",
+      "expected_tests": 3,
+      "estimated_seconds": 0.92
+    },
+    {
+      "path": "tests/test_section_bar.py",
+      "expected_tests": 5,
+      "estimated_seconds": 0.91
+    },
+    {
+      "path": "tests/test_scene_findings.py",
+      "expected_tests": 2,
+      "estimated_seconds": 0.73
+    },
+    {
+      "path": "tests/test_motion.py",
+      "expected_tests": 2,
+      "estimated_seconds": 0.69
+    }
+  ],
+  "results": [],
+  "issues": [],
+  "process_seconds": 14.66950380000344
+}

@@ -1,0 +1,47 @@
+{
+  "original_cases": 886,
+  "current_cases": 894,
+  "lost_cases": [],
+  "duplicate_cases": [],
+  "concurrent_additions": [
+    "test_editing_feature_fields_releases_only_the_split_pointer[None]",
+    "test_editing_feature_fields_releases_only_the_split_pointer[measure]",
+    "test_editing_feature_fields_releases_only_the_split_pointer[split]",
+    "test_editing_feature_fields_releases_only_the_split_pointer[transform]",
+    "test_first_measure_edit_releases_split_but_passive_measures_do_not[None]",
+    "test_first_measure_edit_releases_split_but_passive_measures_do_not[measure]",
+    "test_first_measure_edit_releases_split_but_passive_measures_do_not[split]",
+    "test_first_measure_edit_releases_split_but_passive_measures_do_not[transform]"
+  ],
+  "original_case_metadata_unchanged_except_expected_fixture_swap": true,
+  "ui_test_ast_unchanged": 619,
+  "operation_test_ast_unchanged_except_fixture_alias": 161,
+  "reduced_import_fixtures": [
+    "test_a_dependent_choice_field_greys_out_with_a_reason",
+    "test_a_dependent_field_behind_a_tick_says_which_tick",
+    "test_a_field_in_inches_takes_inches_and_returns_millimetres",
+    "test_a_field_without_effect_says_why",
+    "test_a_greyed_out_row_says_why_on_both_halves",
+    "test_a_nested_condition_follows_the_whole_chain",
+    "test_a_number_field_never_shrinks_below_its_value",
+    "test_a_number_field_stays_as_wide_as_a_number",
+    "test_a_rectangle_shows_only_the_rows_a_rectangle_has",
+    "test_an_angle_stays_in_degrees",
+    "test_an_expression_survives_the_unit",
+    "test_an_operation_without_a_caveat_shows_no_empty_warning",
+    "test_every_parameter_explains_itself_at_both_halves_of_its_row",
+    "test_looking_at_a_dialog_in_inches_changes_nothing",
+    "test_switching_to_an_expression_starts_from_millimetres",
+    "test_the_caveat_reaches_every_surface_that_offers_the_operation",
+    "test_the_condition_reaches_every_surface",
+    "test_the_image_field_lists_only_images"
+  ],
+  "cases_per_file": {
+    "tests/test_ui.py": 606,
+    "tests/test_ui_dialogs.py": 17,
+    "tests/test_ui_export.py": 48,
+    "tests/test_ui_licensing.py": 28,
+    "tests/test_ui_remote.py": 11,
+    "tests/test_operation_ui.py": 184
+  }
+}

@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tests.workflow_helpers import job_block
+
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
 BUILD_WORKFLOW = WORKFLOWS / "build.yml"
@@ -22,12 +24,7 @@ def _workflow() -> str:
 
 def _job(name: str) -> str:
     """Liefert genau einen Jobblock aus dem Bauworkflow."""
-    match = re.search(
-        rf"(?ms)^  {re.escape(name)}:\n.*?(?=^  [a-zA-Z0-9_-]+:\n|\Z)",
-        _workflow(),
-    )
-    assert match is not None, f"Workflow-Job fehlt: {name}"
-    return match.group(0)
+    return job_block(_workflow(), name)
 
 
 def test_every_external_action_is_pinned_to_a_full_commit() -> None:

@@ -1,41 +1,23 @@
-# Automatische Bauläufe für alle Zielplattformen (Bauplan §37.2).
+# Automatische Bauläufe für alle Zielplattformen (Bauplan §37.2), Prüfvertrag
+# nach konzepte/konzept-ci-testlaufzeiten-2026-09.md.
 #
-# Suite und Paketierung tragen eine Reihenfolge. Danach trennen eigene Jobs
-# App-Signatur, ungeschützten Installerbau, Installer-Signatur und abschließende
-# Releaseakte. Nur was grün ist, wird veröffentlicht. Ein Installer aus einer
-# roten Suite ist schlimmer als gar keiner. Die Baujobs arbeiten gegen
-# `constraints.txt`, damit ein Lauf heute dasselbe installiert wie einer in
-# drei Monaten.
+# Qualität, Kernmatrix und Release-Fensterprüfungen rechnen unabhängig; die
+# Paketierung wartet auf alle Pflichtjobs, und nur was grün ist, wird
+# veröffentlicht. Kern und Fenster laufen in Teilen: Die aktuelle
+# Pytest-Sammlung bestimmt die vollständige Menge, Laufzeittabellen verteilen
+# sie nur. Fenster laufen je Datei in einem frischen Prozess. Leistung wird
+# beim Release lokal gemessen, erzeugte Vergleiche bleiben dort. Die
+# Baujobs arbeiten gegen `constraints.txt`; der Versionswächter daneben löst
+# wöchentlich frei auf und meldet, was eine neue Version bricht.
 #
-# Der Versionswächter steht daneben und läuft wöchentlich: er lässt die Versionen frei
-# auflösen und meldet, wenn eine neue etwas bricht. Ohne ihn erfährt man davon
-# erst beim nächsten frischen Klon — und dann mitten in einer anderen Arbeit.
+# Ein Push prüft nur Ubuntu; die volle Matrix mit Paketen läuft bei Tags und
+# beim Handstart. Signiert wird getrennt davon: Windows lokal über
+# tools/sign_release.py und windows-signed-installer.yml (Signierung/README.md),
+# macOS nur im jeweiligen Signierschritt mit dessen Geheimnissen.
 #
-# Die macOS-Signierung braucht externe Identitäten, die nicht in diesem
-# Repository liegen: Developer-IDs und Notarisierungsdaten für Apple.
-# Geheimnisse erreichen nur den jeweiligen Signierschritt. Windows wird hier
-# gebaut und **nicht** signiert: Der Paketjob übergibt den gebundenen App-Baum
-# als Artefakt, und `tools/sign_release.py` signiert ihn lokal mit dem
-# Certum-Cloud-Zertifikat (Signierung/README.md). Danach baut der manuelle
-# Workflow windows-signed-installer.yml aus derselben Übergabe und der lokal
-# signierten Anwendung den Installer; seine Setup-Datei wird zuletzt lokal
-# signiert. Der unsignierte Prüfbau dieses Hauptlaufs wird nicht ausgeliefert.
-#
-# Der tägliche Push läuft nur auf Ubuntu; die volle Matrix mit beiden Macs und
-# die Paketierung laufen bei Tags und beim Handstart (workflow_dispatch).
-# Mit tests_only prüft der Handstart alle vier Paketplattformen ohne Paketbau.
-# Fensterdateien bleiben Tags und manuellen Paketbauten vorbehalten; reine
-# Prüfläufe lassen sie aus. Leistung wird beim Release auf der lokalen
-# Referenzmaschine gemessen.
-#
-# Die Begründung dafür hat sich am 14.08.2026 geändert. Hier stand, das
-# Repository sei privat und private Minuten seien gezählt — macOS zehnfach,
-# Windows doppelt. Es ist seit der Umbenennung auf `Solidon` öffentlich, und
-# damit kosten die Standard-Runner nichts mehr. Was bleibt, ist die
-# Rückmeldezeit: der Ubuntu-Lauf allein braucht schon über zwölf Minuten.
-# Wer die Matrix trotzdem auf jeden Push erweitert, tut das mit einem echten
-# Grund — plattformabhängige Fehler fallen sonst erst am Tag der
-# Veröffentlichung auf, und genau das ist hier schon passiert.
+# Das Repository ist nur für einen Release öffentlich. Dazwischen lehnt
+# GitHub private Läufe nach Sekunden mit einer Abrechnungsmeldung ab — das
+# ist kein Befund, und gemessen wird nur ein Lauf nach dem Umschalten.
 
 name: Bauen
 
@@ -51,7 +33,12 @@ on:
   workflow_dispatch:
     inputs:
       tests_only:
-        description: "Nur prüfen: Windows, Linux und beide Mac-Architekturen, ohne Paketbau oder Signierung"
+        description: "Nur Kernprüfungen: Windows, Linux und macOS ARM, ohne Fenster, Paketbau oder Signierung"
+        type: boolean
+        required: false
+        default: false
+      check_latest:
+        description: "Zusätzlich die neuesten Abhängigkeiten ohne Constraints prüfen"
         type: boolean
         required: false
         default: false
@@ -70,20 +57,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
-  suite:
-    name: Suite (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    # Einheitlich zwei Stunden je Job und begrenzter Prüfgruppe. Auf macOS
-    # brauchte allein der grüne Kern 57:19 Minuten (Lauf 35963463792);
-    # Einrichtung und anschließende Fensterverträge passen nicht in eine
-    # gemeinsame Stunde. Ein Fristablauf bleibt ein roter Lauf.
+  quality:
+    name: Stil und Format
+    runs-on: ubuntu-latest
     timeout-minutes: 120
-    env:
-      RELEASE_CHECK: ${{ inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('["windows-latest", "ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,6 +69,41 @@ jobs:
         with:
           python-version: "3.14.7"
           cache: pip
+          cache-dependency-path: |
+            constraints.txt
+            pyproject.toml
+
+      - name: Prüfwerkzeug
+        run: python -m pip install -c constraints.txt ruff
+      - name: Stil und Format
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+
+  suite:
+    name: Suite (${{ matrix.os }}, Teil ${{ matrix.shard }})
+    # Drei Teile je Plattform, je Datei verteilt (`tools/ci_shards.py`): Jeder
+    # Teil sammelt die ganze Suite und fährt seinen Anteil, zusammen genau
+    # einmal jeden Fall. Die Gewichte stehen in `tests/data/ci_core_durations.json`
+    # und verteilen nur; ohne Aufteilung war macOS mit 41 Minuten der längste Weg.
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('["windows-latest", "ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        shard: [0, 1, 2]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.7"
+          cache: pip
+          cache-dependency-path: |
+            constraints.txt
+            pyproject.toml
 
       - name: Qt-Systembibliotheken und Vulkan (Linux)
         # PySide6 lädt libEGL auch offscreen; ohne sie scheitert schon der
@@ -146,143 +158,181 @@ jobs:
         # Compiler sind auf allen Zielplattformen vorhanden.
         run: python tools/build_slice_core.py
 
-      - name: Stil und Typen
-        run: |
-          python -m ruff check .
-          python -m ruff format --check .
-          python -m mypy
+      - name: Typen auf der Zielplattform
+        # Einmal je Plattform: mypy prüft die Zweige der laufenden Plattform,
+        # nicht die Tests eines Teils.
+        id: types
+        if: matrix.shard == 0
+        run: python -m mypy
 
       - name: Tests
+        # Ein roter Typlauf nimmt Teil 0 nicht seine Tests: Der Job bleibt rot,
+        # und der Bericht zeigt trotzdem, was die Suite sagt.
+        if: success() || steps.types.outcome == 'failure'
         timeout-minutes: 120
-        # Die Kern- und Fensterverträge laufen getrennt; jedes Nichtnull-Ergebnis
-        # sperrt das Paket. Fenstertests trägt `tests/conftest.py` den Marker
-        # windowed ein (qt_app oder ausdrücklich); sie laufen ausschließlich
-        # beim Release je Datei in eigenen Prozessen. **Getrennt wird je Test,
-        # nicht je Datei** (22.09.2026): Vorher nahm ein einziger Fenstertest
-        # seine ganze Datei aus diesem Schritt, und 1709 Tests ohne Fenster
-        # liefen auf Linux und macOS nie.
-        # Leistungsbudgets gelten nur beim Release auf der lokalen Referenzmaschine (§31).
-        shell: bash
-        env:
-          # Rendererprüfungen ohne Fenster bleiben offscreen möglich.
-          # Native Qt-Fensterwege laufen im gesonderten Release-Schritt.
-          QT_QPA_PLATFORM: offscreen
-        run: |
-          set -euo pipefail
-          # Wie lokal in suite-getrennt.sh: Die Fenstertests wählt der Marker
-          # ab, den conftest.py aus Pytests aufgelöstem Fixture-Graphen setzt —
-          # keine Textsuche und keine Dateiliste.
-          # Xvfb nur, wo es eines gibt.
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
-          else
-            run() { python -m pytest -q "$@"; }
-          fi
-          # -n auto verteilt nur die Kernfälle auf eigene Workerprozesse;
-          # Fenster werden hier nicht mitverteilt.
-
-          # Jeder Nichtnull-Exit bleibt ein Fehllauf (tests/CLAUDE.md).
-          # Eine Wiederholung darf einen nativen Abbruch genauso wenig
-          # verschwinden lassen wie eine fehlgeschlagene Assertion.
-          # Die früheren Vollbereichsläufe der Bausteine sind aus der Suite
-          # entfernt. Ihre verbleibenden Geometrie- und Vertragsprüfungen
-          # gehören wie die anderen Kernfälle in dieses Tor.
-          run -n auto -m "not performance and not rendered and not windowed"
-
-      - name: Plattformübergreifende Fensterverträge (Release)
-        # Druckdialog und native Rendererprozesse behalten ihre bisherige
-        # Plattformabnahme beim Release; reguläre Prüfläufe lassen sie aus.
-        if: env.RELEASE_CHECK == 'true'
         shell: bash
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
           set -euo pipefail
+          mkdir -p reports/core
           if [ "$RUNNER_OS" = "Linux" ]; then
             run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
           else
             run() { python -m pytest -q "$@"; }
           fi
-          for file in tests/test_print_settings_ui.py tests/test_render_factory.py; do
-            run -m "windowed and not performance and not rendered" "$file"
-          done
+          # worksteal: Ein Worker, der fertig ist, nimmt Arbeit aus fremden
+          # Schlangen; `load` ließ ihn am Ende warten. Lokal, Teil 0/3 mit -n 4,
+          # beide Reihenfolgen: 354 → 206 s und 213 → 160 s (24.09.2026).
+          run -n auto --dist worksteal --ci-shard ${{ matrix.shard }}/3 -m "not performance and not rendered and not windowed" --durations=30 --durations-min=1 --junitxml=reports/core/junit.xml
+
+      - name: Kernprüfbericht sichern
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-core-${{ matrix.os }}-${{ matrix.shard }}
+          overwrite: true
+          path: reports/core/
+          if-no-files-found: error
+          retention-days: 14
+
+  window-contracts:
+    name: Fensterverträge (${{ matrix.os }})
+    if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.7"
+          cache: pip
+          cache-dependency-path: |
+            constraints.txt
+            pyproject.toml
+
+      - name: Qt-Systembibliotheken und Vulkan (Linux)
+        # PySide6 lädt libEGL auch offscreen; ohne sie scheitert schon der
+        # Import in jedem UI-Test. Dazu Xvfb — die Begründung steht unten beim
+        # Testschritt.
+        #
+        # **Und Vulkan, seit die Ansicht mit pygfx über wgpu zeichnet**
+        # (06.09.2026): ``libvulkan1`` ist der Loader, ``mesa-vulkan-drivers``
+        # bringt lavapipe mit — den Software-Adapter, den ein Runner ohne
+        # Grafikkarte braucht. Ohne beides findet ``factory.available()``
+        # nichts, und jeder Renderertest überspringt sich mit Grund: Der
+        # Lauf bleibt grün und misst den Renderer trotzdem nie. Genau so
+        # war es zwischen dem Ausbau und diesem Schritt.
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libdbus-1-3 xvfb xauth \
+            libgl1-mesa-dri libvulkan1 mesa-vulkan-drivers \
+            fonts-dejavu-core fontconfig \
+            libxkbcommon0 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 \
+            libxcb-xinerama0 libxcb-xkb1 libxcb-sync1 libxcb-glx0
+
+      - name: Abhängigkeiten
+        # Mit `brep`, sonst liefe der zweite Kern nie: seine Tests überspringen
+        # sich, wenn OpenCASCADE fehlt (§30). Gegen `constraints.txt`, damit
+        # dieser Lauf denselben Satz installiert wie der letzte grüne.
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
+
+      - name: Konturverkettung übersetzen
+        # Zur Laufzeit optional, hier aber Pflicht: ohne sie überspringt sich
+        # `tests/test_slice_core.py`, und dann prüft niemand mehr, ob der
+        # übersetzte Weg noch dasselbe rechnet wie der über GEOS.
+        # Compiler sind auf allen Zielplattformen vorhanden.
+        run: python tools/build_slice_core.py
+
+      - name: Plattformübergreifende Fensterverträge
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/run_suite_isolated.py --release --ci-group contracts --report-dir reports/contracts
+          else
+            python tools/run_suite_isolated.py --release --ci-group contracts --report-dir reports/contracts
+          fi
+      - name: Fenstervertragsberichte sichern
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-contracts-${{ matrix.os }}
+          overwrite: true
+          path: reports/contracts/
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    name: Fensterdateien (Windows, Gruppe ${{ matrix.shard }})
+    # Nur Windows (Entscheidung Robert, 08.09.2026): Unter jedem Unix misst
+    # offscreen die Schriftmetrik von fontconfig, und acht Tests je Plattform
+    # prüften damit Breiten, die kein Kunde sieht (ROADMAP-ARCHIV.md). Die
+    # zwei Verträge darüber laufen dagegen auf allen drei Plattformen.
+    if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
+    runs-on: windows-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.7"
+          cache: pip
+          cache-dependency-path: |
+            constraints.txt
+            pyproject.toml
+
+      - name: Abhängigkeiten
+        # Mit `brep`, sonst liefe der zweite Kern nie: seine Tests überspringen
+        # sich, wenn OpenCASCADE fehlt (§30). Gegen `constraints.txt`, damit
+        # dieser Lauf denselben Satz installiert wie der letzte grüne.
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
+
+      - name: Konturverkettung übersetzen
+        # Zur Laufzeit optional, hier aber Pflicht: ohne sie überspringt sich
+        # `tests/test_slice_core.py`, und dann prüft niemand mehr, ob der
+        # übersetzte Weg noch dasselbe rechnet wie der über GEOS.
+        # Compiler sind auf allen Zielplattformen vorhanden.
+        run: python tools/build_slice_core.py
 
       - name: Fensterdateien
-        timeout-minutes: 120
-        # Ein Prozess je Datei schützt die Lebensdauergrenze. Ein roter
-        # Prozess oder eine fehlende Sammlung sperrt die Paketierung.
-        #
-        # **Auf Linux ausgesetzt** (Entscheidung Robert, 08.09.2026). Der
-        # erste vollständige Lauf dieser Gruppe hat dort acht Tests rot
-        # gemeldet, die alle die Schriftart der Umgebung mitmessen: Breiten,
-        # Einrückungen, gezählte Bildpunkte gerenderten Textes. Unter
-        # Windows-`offscreen` rechnet Qt mit einer eingebauten Ersatzschrift,
-        # unter Linux-`offscreen` mit dem, was fontconfig hergibt — und das
-        # sind andere Metriken. Die naheliegende Vermutung, es fehlten
-        # schlicht die Schriften, ist gemessen und widerlegt (53 laut
-        # `fc-list`, die acht blieben). Windows und macOS fahren die Gruppe
-        # weiter und sind dort grün. Die acht Befunde stehen namentlich in
-        # `ROADMAP.md`; wer sie behebt, nimmt diese Zeile wieder heraus.
-        #
-        # **Fortschreibung 08.09.2026: auch macOS.** Nachdem der Tests-Schritt
-        # dort grün wurde, kam die Gruppe auf ARM zum ersten Mal überhaupt
-        # dran und meldete acht Befunde derselben Art — Breiten, Spalten,
-        # Kürzelbeschriftungen, dazu die Lebensdauerfamilie. Sie ist also auf
-        # **keinem** Unix abnahmefähig, nicht nur auf Linux. Die übrige
-        # Fenstergruppe läuft deshalb beim Release auf Windows; auf der
-        # lokalen Referenzmaschine gehört sie ebenfalls erst zum Release.
-        if: runner.os == 'Windows' && env.RELEASE_CHECK == 'true'
         shell: bash
-        env:
-          QT_QPA_PLATFORM: offscreen
         run: |
           set -euo pipefail
-          windowed=$(python tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
-          if [ -z "${windowed// /}" ]; then
-            echo "::error::Die Fenstergruppe enthält keine Testdateien."
-            exit 1
-          fi
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -v -o faulthandler_timeout=120 "$@"; }
-            # Diese Gruppe läuft unter `offscreen`, und dort nimmt Qt seine
-            # Schriften aus fontconfig. Sind dort keine, misst jeder Test, der
-            # eine Textbreite oder eine Spaltenausrichtung prüft, eine
-            # Umgebung, die kein Kunde hat. Die Zahl steht im Protokoll, damit
-            # ein Layoutbefund nicht geraten werden muss.
-            echo "Schriften laut fontconfig: $(fc-list 2>/dev/null | wc -l || echo unbekannt)"
-          else
-            run() { python -m pytest -v -o faulthandler_timeout=120 "$@"; }
-          fi
-          echo "Fensterdateien: $(echo $windowed | wc -w)"
-          gruen=0
-          geprueft=0
-          rot=""
-          for file in $windowed; do
-            case "$file" in
-              tests/test_print_settings_ui.py|tests/test_render_factory.py) continue ;;
-            esac
-            geprueft=$((geprueft + 1))
-            if run -m "windowed and not performance and not rendered" "$file"; then
-              gruen=$((gruen + 1))
-            else
-              rot="$rot $file($?)"
-            fi
-          done
-          echo "### Fensterdateien ($RUNNER_OS)" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Grün: $gruen von $geprueft (Druckdialog und Renderer im vorherigen Schritt)" >> "$GITHUB_STEP_SUMMARY"
-          if [ -n "$rot" ]; then
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "Nicht grün (Datei mit Exit-Code):$rot" >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::Fensterdateien nicht grün:$rot"
-            exit 1
-          else
-            echo "::notice::Alle Fensterdateien liefen grün."
-          fi
+          python tools/run_suite_isolated.py --release --ci-group windowed --shard-index ${{ matrix.shard }} --shard-count 3 --report-dir reports/windows-${{ matrix.shard }}
+      - name: Fensterberichte sichern
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-windows-${{ matrix.shard }}
+          overwrite: true
+          path: reports/windows-${{ matrix.shard }}/
+          if-no-files-found: error
+          retention-days: 14
 
   package:
     name: Paket (${{ matrix.os }})
-    needs: suite
+    needs: [quality, suite, window-contracts, windows]
     if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
@@ -1390,7 +1440,7 @@ jobs:
     # Nur Ubuntu und nur wöchentlich: private Minuten sind gezählt, und für
     # diese Frage genügt eine Plattform. Er hängt an keinem anderen Job und
     # blockiert nichts — er meldet.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.check_latest == true)
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -1448,7 +1498,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p reports/latest
           # Wie im Suite-Job: Die Fenstertests wählt der Marker ab, den
           # conftest.py aus dem Fixture-Graphen setzt; alle übrigen laufen.
           run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
-          run -n auto -m "not performance and not rendered and not windowed"
+          run -n auto -m "not performance and not rendered and not windowed" --durations=30 --durations-min=1 --junitxml=reports/latest/junit.xml
+
+      - name: Versionsprüfbericht sichern
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-latest-ubuntu
+          overwrite: true
+          path: reports/latest/
+          if-no-files-found: error
+          retention-days: 14

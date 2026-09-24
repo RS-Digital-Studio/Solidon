@@ -1,0 +1,4 @@
+maps: dieselben 3364 Bestandspfade, gleiche Reihenfolge
+documented_folders: dieselben 20 Bestandspfade, gleiche Reihenfolge
+maps: alter Weg wie erwartet abgewiesen: excluded directory entered: C:\Users\rober\AppData\Local\Temp\tmp6rfvq9p0\maps\worktrees\repo\app\worktrees\
+documented_folders: alter Weg wie erwartet abgewiesen: excluded directory entered: C:\Users\rober\AppData\Local\Temp\tmp6rfvq9p0\documented_folders\comfyui\repo\app\nested\comfyui\

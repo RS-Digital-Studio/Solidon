@@ -1,0 +1,14 @@
+........................................................................ [ 86%]
+...........                                                              [100%]
+============================ slowest 10 durations =============================
+9.06s call     tests/test_affected_tests.py::test_the_real_graph_knows_this_file
+5.42s call     tests/test_ci_runner.py::test_timeout_ends_children_and_grandchildren_without_qt
+5.40s call     tests/test_ci_runner.py::test_timeout_waits_for_the_direct_child_to_end
+0.68s call     tests/test_affected_tests.py::test_the_actual_core_process_keeps_case_filters[environment]
+0.66s call     tests/test_affected_tests.py::test_the_real_core_process_runs_the_plain_half_of_a_window_file
+0.64s call     tests/test_affected_tests.py::test_the_actual_core_process_keeps_case_filters[command]
+0.64s call     tests/test_affected_tests.py::test_the_actual_core_process_keeps_case_filters[configuration]
+0.64s call     tests/test_ci_runner.py::test_real_pytest_child_reports_success_and_assertion_failure[True]
+0.51s call     tests/test_ci_runner.py::test_real_pytest_child_reports_success_and_assertion_failure[False]
+0.40s call     tests/test_ci_runner.py::test_a_broken_collection_does_not_return_a_partial_plan
+83 passed in 30.98s

@@ -13,6 +13,26 @@ Regelwerks.
 
 ## Entwicklung und Release
 
+Für CI-Aufteilung und wiederverwendete Testvorbereitung gilt der Prüfvertrag
+CI-01 bis CI-08 in `konzepte/konzept-ci-testlaufzeiten-2026-09.md`.
+`test_packaging.py` schützt Jobabhängigkeiten, Plattformen, Releasegrenze
+und Berichte; `test_ci_runner.py` schützt vollständige Partitionen und echte
+Prozessausgänge. Eine Laufzeittabelle verteilt nur die aktuell gesammelte
+Menge. Neue Dateien werden automatisch aufgenommen. Die Kernsuite teilt
+`--ci-shard I/N` je Datei, nach der Markerwahl. Eine neue Fassung einer
+Laufzeittabelle erzeugt `tools/ci_shards.py` aus JUnit-Berichten, samt
+Herkunftsvermerk; keine Zahl wird von Hand eingetragen. Die Fenstertabelle
+stammt noch aus den Protokollzeilen des Ausgangslaufs und bekommt ihre erste
+erzeugte Fassung aus den Berichten des nächsten Release. Beim Verschieben von
+Tests bleiben Fallnamen, Parameter, Marker und aufgelöste Fixtures erhalten.
+Gemeinsame Vorbereitung darf keine veränderliche Eingabe zwischen Tests teilen.
+Zusammengehörige statische Zusicherungen dürfen denselben AST oder dieselbe
+Extraktion in einem Testfall verwenden. Bei einer Zusammenführung müssen
+Parameterwerte und Zusicherungen nachvollziehbar erhalten bleiben; reine
+Fallzahlen sind kein Deckungsnachweis. Determinismus benötigt weiterhin zwei
+unabhängige Bauten. Gemeinsame Fixtures dürfen keine importierte Geometrie
+einsparen, wenn gerade deren Verhalten Gegenstand der Prüfung ist.
+
 Nach Entwicklungsschritten laufen nur betroffene Kern- und statische Tests.
 Vor regulären Commits gehören alle Tests ohne Fenster und Leistung sowie
 Ruff, Formatierung und mypy zum Entwicklungstor.

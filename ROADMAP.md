@@ -34,6 +34,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
+| [CI-Testlaufzeiten — vollständige Prüfungen früher abschließen](#ci-testlaufzeiten) | Tests und Entwicklungswerkzeuge | Konzept CI-01 bis CI-08 beauftragt; unabhängige Jobs, Kern und Fenster in je drei Teilen, Berichte, Testaufteilung, gemeinsame Vorbereitung und behobener Ausreißer umgesetzt; reale Fenster-/CI-Zeitabnahme beim Release |
 | [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Nativer Ablauf der Dichtnut am Fenster; die übrigen Familien und die Einzeldateiabnahme aller 187 Fälle sind zurückgestellt |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen ist der Ereignistyp dahinter und die Gegenprobe auf Linux und Mac |
@@ -2647,6 +2648,32 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   (`ki-modelle.html`, Absatz „Lokaler Chat“) ziehen mit der Neumessung nach.
 
 ## Tests und Entwicklungswerkzeuge
+
+<a id="ci-testlaufzeiten"></a>
+
+- [~] **CI-Testlaufzeiten — vollständige Prüfungen früher abschließen.**
+  Verbindliches [Konzept](konzepte/konzept-ci-testlaufzeiten-2026-09.md), vor
+  Umsetzung erstellt: CI-01 bis CI-08 schützen Auswahl, Prozessisolation,
+  Plattformumfang, Paketfreigabe und Berichte. Umsetzung: unabhängige Kern- und
+  Fensterjobs, Versionswächter als Handstart-Opt-in, gebündelte Quellprüfungen
+  und Bausteinvorbereitung sowie thematische UI-Tests. Durchsicht 24.09.2026:
+  Kernsuite in drei Teilen je Plattform (`--ci-shard`, `tools/ci_shards.py`,
+  Kerntabelle aus einem lokalen JUnit-Lauf), drei Windows-Fenstergruppen,
+  Prüfausgabe wieder im CI-Protokoll und Schrittbericht, und der längste
+  Kernfall behoben: `test_seal_geometry[12.0]` 319 s → 24–34 s über die
+  räumliche Vorauswahl der Wandmessung (Konzept §4.4). Fensterabnahme,
+  gemessener CI-Zeitgewinn und die erste Kerntabelle aus CI-Berichten
+  (`tools/ci_shards.py core …`) bleiben dem nächsten Release vorbehalten —
+  ebenso die erste erzeugte Fenstertabelle: Die heutige stammt aus den
+  Protokollzeilen des Ausgangslaufs und gewichtet `test_ui.py` noch mit den
+  665 s von vor seiner Aufteilung. Offen außerdem: ein echter räumlicher
+  Index für die Wandmessung an Vollkörpern (die Vorauswahl kostet dort bis
+  etwa die Hälfte mehr als der Vollvergleich, `geom/CLAUDE.md`) und das
+  Blättern in `tools/windows_signed_installer.py`, bevor ein Lauf 100
+  Artefakte erreicht (heute rund 45). Nächste Kandidaten nach Dauer:
+  `test_bore_mouth_resize` und `test_bore_floor_resize` mit je einem Fall
+  über 75 s, `test_pattern_features` mit 249 s über 115 Fälle.
+
 
 <a id="rm-020"></a>
 

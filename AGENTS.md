@@ -181,6 +181,11 @@ Dialoge.
 
 ## Arbeitsweise
 
+- **CI-Aufteilung hat einen geprüften Vertrag.** Für Änderungen an Testauswahl,
+  Prozessisolation, Parallelisierung oder Paketabhängigkeiten gilt
+  `konzepte/konzept-ci-testlaufzeiten-2026-09.md`. Die zuständigen Wächter
+  stehen in `tests/test_packaging.py` und `tests/test_ci_runner.py`.
+
 - **Kleine Schritte, und je Schritt nur die betroffenen Tests.** Nach jedem
   Schritt laufen die Tests der Dateien, die er berührt
   (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab); die

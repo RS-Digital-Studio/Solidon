@@ -1,0 +1,93 @@
+........................................................................ [  6%]
+........................................................................ [ 13%]
+........................................................................ [ 20%]
+........................................................................ [ 26%]
+........................................................................ [ 33%]
+........................................................................ [ 40%]
+........................................................................ [ 46%]
+................F....................................................... [ 53%]
+........................................................................ [ 60%]
+........................................................................ [ 66%]
+........................................................................ [ 73%]
+........................................................................ [ 80%]
+........................................................................ [ 86%]
+........................................................................ [ 93%]
+........................................................................ [100%]
+================================== FAILURES ===================================
+___________________ test_excluded_map_trees_are_not_entered ___________________
+
+tmp_path = WindowsPath('C:/Users/rober/AppData/Local/Temp/pytest-of-rober/pytest-26796/test_excluded_map_trees_are_no0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001F9AE9FBA10>
+
+    def test_excluded_map_trees_are_not_entered(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ausnahmen unterhalb der Wurzel sparen Traversierung, nicht eigene Karten."""
+        root = tmp_path / "worktrees" / "repo"
+        kept = (root / "CLAUDE.md", root / "app" / "nested" / "CLAUDE.md")
+        excluded = [
+            root / "app" / name
+            for name in (".venv", "build", "dist", "worktrees", "node_modules", "3D Drucker")
+        ]
+        for path in (*kept, *(folder / "deep" / "CLAUDE.md" for folder in excluded)):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("Karte", encoding="utf-8")
+        scan = os.scandir
+    
+        def checked_scan(path: str | os.PathLike[str]):
+            assert Path(path) not in excluded, f"excluded directory entered: {path}"
+            return scan(path)
+    
+        monkeypatch.setattr(os, "scandir", checked_scan)
+        monkeypatch.setattr(__name__ + ".ROOT", root)
+>       assert maps() == list(kept)
+E       AssertionError: assert [WindowsPath(...o/CLAUDE.md')] == [WindowsPath(...d/CLAUDE.md')]
+E         
+E         At index 0 diff: WindowsPath('C:/Users/rober/AppData/Local/Temp/pytest-of-rober/pytest-26796/test_excluded_map_trees_are_no0/worktrees/repo/app/nested/CLAUDE.md') != WindowsPath('C:/Users/rober/AppData/Local/Temp/pytest-of-rober/pytest-26796/test_excluded_map_trees_are_no0/worktrees/repo/CLAUDE.md')
+E         Use -v to get more diff
+
+tests\test_directory_docs.py:116: AssertionError
+============================ slowest 40 durations =============================
+2.38s call     tests/test_directory_docs.py::test_every_reference_in_a_map_points_at_a_section_that_exists
+2.24s call     tests/test_language_rules.py::test_no_customer_text_says_du
+2.23s call     tests/test_translations.py::test_every_text_is_translated
+2.09s call     tests/test_parts.py::test_a_countersunk_printed_screw_keeps_its_whole_thread_below_the_head[200.0-M2]
+1.99s call     tests/test_directory_docs.py::test_every_rule_number_in_the_rules_names_a_hard_rule
+1.66s call     tests/test_parts.py::test_a_countersunk_printed_screw_keeps_its_whole_thread_below_the_head[200.0-M3]
+1.35s call     tests/test_directory_docs.py::test_the_plan_and_the_maps_are_both_there
+1.20s call     tests/test_parts.py::test_the_same_part_three_times_keeps_three_named_features
+0.92s call     tests/test_parts.py::test_a_countersunk_printed_screw_keeps_its_whole_thread_below_the_head[200.0-M6]
+0.87s call     tests/test_parts.py::test_a_tool_in_a_bore_starts_at_its_mouth
+0.87s call     tests/test_parts.py::test_a_hinge_lying_flat_stays_silent
+0.80s call     tests/test_parts.py::test_a_hinge_standing_on_edge_says_that_it_will_break
+0.73s call     tests/test_parts.py::test_an_external_thread_post_and_an_internal_bore_are_a_matching_pair
+0.67s call     tests/test_parts.py::test_a_countersunk_printed_screw_keeps_its_whole_thread_below_the_head[200.0-M8]
+0.63s call     tests/test_parts.py::test_a_printed_joint_needs_a_gap_the_printer_can_hold
+0.44s call     tests/test_parts.py::test_a_keyhole_with_the_longest_drop_does_not_cross_itself[M2]
+0.42s call     tests/test_parts.py::test_a_part_names_the_features_it_promised[profile_clamp_liner]
+0.42s call     tests/test_parts.py::test_range_check_cancels_inside_local_geometry_and_keeps_progress_monotonic
+0.41s call     tests/test_parts.py::test_a_keyhole_with_the_longest_drop_does_not_cross_itself[M8]
+0.40s call     tests/test_parts.py::test_self_intersection_result_does_not_depend_on_hook_count_or_position
+0.38s call     tests/test_parts.py::test_a_part_that_needs_a_face_says_so_instead_of_guessing
+0.38s call     tests/test_parts.py::test_the_range_check_knows_which_parts_their_host_holds_together
+0.36s call     tests/test_parts.py::test_every_part_operation_runs_on_a_body[insert_printed_screw]
+0.35s call     tests/test_parts.py::test_a_printed_screw_sits_in_its_bore_and_prepares_a_countersink[True]
+0.35s call     tests/test_language_rules.py::test_identifiers_are_english[main_window.py]
+0.34s call     tests/test_parts.py::test_a_printed_screw_sits_in_its_bore_and_prepares_a_countersink[False]
+0.33s call     tests/test_parts.py::test_a_separate_printed_screw_keeps_existing_material_slots[False]
+0.33s call     tests/test_parts.py::test_an_added_part_has_the_component_count_it_declares[printed_screw]
+0.32s call     tests/test_parts.py::test_every_part_operation_runs_on_a_body[insert_printed_nut]
+0.31s call     tests/test_parts.py::test_a_separate_printed_screw_keeps_existing_material_slots[True]
+0.30s call     tests/test_parts.py::test_every_part_operation_runs_on_a_body[insert_printed_thread]
+0.29s call     tests/test_parts.py::test_an_added_part_has_the_component_count_it_declares[printed_nut]
+0.28s call     tests/test_parts.py::test_an_added_part_has_the_component_count_it_declares[printed_thread[False]]
+0.27s call     tests/test_parts.py::test_self_intersection_sweeps_along_a_helix_on_every_axis
+0.25s call     tests/test_language_rules.py::test_identifiers_are_english[viewport.py]
+0.24s call     tests/test_translations.py::test_no_hard_wired_text_in_the_surface[main_window.py]
+0.23s call     tests/test_parts.py::test_the_range_check_counts_declared_exclusions_apart_from_failures
+0.23s call     tests/test_parts.py::test_a_named_thread_says_how_long_its_helix_is
+0.22s call     tests/test_parts.py::test_self_intersection_cancels_on_one_connected_199516_face_body
+0.21s call     tests/test_language_rules.py::test_the_interface_loads_qt_types_before_the_first_window
+=========================== short test summary info ===========================
+FAILED tests/test_directory_docs.py::test_excluded_map_trees_are_not_entered
+1 failed, 1079 passed, 1 deselected in 49.68s

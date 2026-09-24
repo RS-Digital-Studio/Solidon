@@ -1,0 +1,328 @@
+diff --git a/tests/test_directory_docs.py b/tests/test_directory_docs.py
+index 615d0a50f..059bd66f2 100644
+--- a/tests/test_directory_docs.py
++++ b/tests/test_directory_docs.py
+@@ -19,10 +19,13 @@ Richtungen:
+ 
+ from __future__ import annotations
+ 
++import os
+ import re
+ from collections import defaultdict
+ from pathlib import Path
+ 
++import pytest
++
+ ROOT = Path(__file__).resolve().parents[1]
+ PLAN = ROOT / "3d-agent-bauplan.md"
+ MEMORY = ROOT / ".claude" / "memory"
+@@ -60,12 +63,12 @@ def plan_sections() -> set[str]:
+ def documented_folders() -> list[Path]:
+     """Jedes Verzeichnis unter ``app/``, in dem eigener Code liegt."""
+     folders: list[Path] = []
+-    for path in sorted((ROOT / "app").rglob("*")):
+-        if not path.is_dir() or EXEMPT & set(path.parts):
+-            continue
+-        if any(child.suffix == ".py" for child in path.iterdir() if child.is_file()):
++    package = ROOT / "app"
++    for path, children, files in package.walk():
++        children[:] = [name for name in children if name not in EXEMPT]
++        if path != package and any(Path(name).suffix == ".py" for name in files):
+             folders.append(path)
+-    return folders
++    return sorted(folders)
+ 
+ 
+ def maps() -> list[Path]:
+@@ -80,13 +83,59 @@ def maps() -> list[Path]:
+     solidon-74, 07.09.2026, behoben am selben Tag). Er blieb dabei nicht still:
+     Die Zusicherung über die Zahl der Karten sprang an.
+     """
+-    skip = {".venv", "build", "dist", "worktrees", "node_modules"}
+-    return sorted(
+-        path
+-        for path in ROOT.rglob("CLAUDE.md")
+-        if not skip & set(path.relative_to(ROOT).parts)
+-        and "3D Drucker" not in path.relative_to(ROOT).parts
+-    )
++    skip = {".venv", "build", "dist", "worktrees", "node_modules", "3D Drucker"}
++    found: list[Path] = []
++    for path, children, files in ROOT.walk():
++        children[:] = [name for name in children if name not in skip]
++        if "CLAUDE.md" in files:
++            found.append(path / "CLAUDE.md")
++    return sorted(found)
++
++
++def test_excluded_map_trees_are_not_entered(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """Ausnahmen unterhalb der Wurzel sparen Traversierung, nicht eigene Karten."""
++    root = tmp_path / "worktrees" / "repo"
++    kept = (root / "CLAUDE.md", root / "app" / "nested" / "CLAUDE.md")
++    excluded = [
++        root / "app" / name
++        for name in (".venv", "build", "dist", "worktrees", "node_modules", "3D Drucker")
++    ]
++    for path in (*kept, *(folder / "deep" / "CLAUDE.md" for folder in excluded)):
++        path.parent.mkdir(parents=True, exist_ok=True)
++        path.write_text("Karte", encoding="utf-8")
++    scan = os.scandir
++
++    def checked_scan(path: str | os.PathLike[str]):
++        assert Path(path) not in excluded, f"excluded directory entered: {path}"
++        return scan(path)
++
++    monkeypatch.setattr(os, "scandir", checked_scan)
++    monkeypatch.setattr(__name__ + ".ROOT", root)
++    assert maps() == sorted(kept)
++
++
++def test_foreign_code_trees_are_not_entered(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """Eigener Code bleibt sichtbar, auch unter einem gleichnamigen Vorfahren."""
++    root = tmp_path / "comfyui" / "repo"
++    package = root / "app"
++    kept = package / "nested"
++    excluded = [package / "nested" / name for name in ("comfyui", "__pycache__")]
++    for folder in (kept, *(folder / "deep" for folder in excluded)):
++        folder.mkdir(parents=True, exist_ok=True)
++        (folder / "source.py").write_text("", encoding="utf-8")
++    scan = os.scandir
++
++    def checked_scan(path: str | os.PathLike[str]):
++        assert Path(path) not in excluded, f"excluded directory entered: {path}"
++        return scan(path)
++
++    monkeypatch.setattr(os, "scandir", checked_scan)
++    monkeypatch.setattr(__name__ + ".ROOT", root)
++    assert documented_folders() == [kept]
+ 
+ 
+ def memory_notes() -> list[Path]:
+diff --git a/tests/test_language_rules.py b/tests/test_language_rules.py
+index 252e0523c..97b98e93f 100644
+--- a/tests/test_language_rules.py
++++ b/tests/test_language_rules.py
+@@ -257,7 +257,7 @@ UMLAUTS = "äöüÄÖÜß"
+ def source_files() -> list[Path]:
+     """Die Dateien, gegen die die Sprachprüfung läuft.
+ 
+-    **Die Zusicherung steht hier und nicht in den Tests.** Vier Tests werden
++    **Die Zusicherung steht hier und nicht in den Tests.** Die Prüfung wird
+     über diese Liste parametrisiert, und eine leere Parameterliste macht sie
+     nicht rot — pytest sammelt dann schlicht **null Tests**, meldet
+     ``no tests ran`` und gibt Exit 5. Ein Lauf, der nichts geprüft hat, sieht
+@@ -300,23 +300,24 @@ def offences_in(name: str) -> list[str]:
+ 
+ @pytest.mark.parametrize("path", source_files(), ids=lambda path: path.name)
+ def test_identifiers_are_english(path: Path) -> None:
++    """Bezeichner und Feld-Doku prüfen denselben, einmal gelesenen Quelltext.
++
++    Die zusammenhängende Prüfung liest auch mit xdist jede Datei nur einmal;
++    veränderte Testquellen gehen weiterhin frisch in die einzelnen Prüfer.
++    """
+     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
++    identifiers = identifiers_of(tree)
+     offenders = [
+         f"{path.name}:{line} {name} -> {', '.join(hits)}"
+-        for name, line in identifiers_of(tree)
++        for name, line in identifiers
+         if (hits := offences_in(name))
+     ]
+-    assert not offenders, "\n".join(offenders)
+-
+-
+-@pytest.mark.parametrize("path", source_files(), ids=lambda path: path.name)
+-def test_identifiers_have_no_umlauts(path: Path) -> None:
+-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+-    offenders = [
+-        f"{path.name}:{line} {name}"
+-        for name, line in identifiers_of(tree)
++    offenders += [
++        f"{path.name}:{line} {name} enthält einen Umlaut"
++        for name, line in identifiers
+         if any(character in UMLAUTS for character in name)
+     ]
++    offenders += _field_docstring_offenders(path, tree)
+     assert not offenders, "\n".join(offenders)
+ 
+ 
+@@ -517,8 +518,7 @@ def reads_as_english(text: str) -> bool:
+     return english >= 2 and english > len(words & GERMAN_MARKERS)
+ 
+ 
+-@pytest.mark.parametrize("path", source_files(), ids=lambda path: path.name)
+-def test_field_docstrings_are_german(path: Path) -> None:
++def _field_docstring_offenders(path: Path, tree: ast.AST) -> list[str]:
+     """Auch der Satz hinter einem Feld ist Doku, und Doku ist deutsch.
+ 
+     **Warum das eine eigene Prüfung braucht.** Die Sprachregelung trennt
+@@ -534,13 +534,11 @@ def test_field_docstrings_are_german(path: Path) -> None:
+     durch den Viewport, beim Nachlesen, ob die Differenzansicht eine zweite
+     Kodierung neben der Farbe führt (§19.1 — sie führt drei).
+     """
+-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+-    offenders = [
+-        f"{path.name}:{line} {text.splitlines()[0][:60]}"
++    return [
++        f"{path.name}:{line} englischer Feld-Docstring: {text.splitlines()[0][:60]}"
+         for line, text in field_docstrings(tree)
+         if len(text) >= 25 and reads_as_english(text)
+     ]
+-    assert not offenders, "englische Feld-Docstrings:" + chr(10) + chr(10).join(offenders)
+ 
+ 
+ def _imports_of(tree: ast.Module) -> list[tuple[int, str]]:
+diff --git a/tests/test_parts.py b/tests/test_parts.py
+index 2dfa413c1..6aa0a71d9 100644
+--- a/tests/test_parts.py
++++ b/tests/test_parts.py
+@@ -1605,23 +1605,20 @@ def test_range_check_cancels_inside_local_geometry_and_keeps_progress_monotonic(
+ @pytest.mark.parametrize("spec", PARTS.all(), ids=ids)
+ def test_a_part_names_the_features_it_promised(spec: PartSpec) -> None:
+     """§24.1: was die Deklaration verspricht, muss aus der Funktion
+-    herauskommen.
++    herauskommen. Leitprinzip 4 verlangt dieselbe Geometrie beim zweiten Bau.
++
++    Beide Aufrufe bekommen frische Parameter; nur das erste Ergebnis trägt
++    zusätzlich die Merkmalsprüfung, statt dafür ein drittes Mal zu bauen.
+     """
+-    result = spec.fn(spec.params())
++    first = spec.fn(spec.params())
++    second = spec.fn(spec.params())
+ 
+-    assert result.features, f"{spec.name} returned no features"
+-    for name, feature in result.features.items():
++    assert first.features, f"{spec.name} returned no features"
++    for name, feature in first.features.items():
+         assert feature.id == name
+         assert feature.provenance == "generated"
+         assert feature.params, f"{spec.name}.{name} carries no dimensions"
+ 
+-
+-@pytest.mark.parametrize("spec", PARTS.all(), ids=ids)
+-def test_a_part_is_reproducible(spec: PartSpec) -> None:
+-    """Leitprinzip 4: dieselben Parameter geben dieselbe Geometrie."""
+-    first = spec.fn(spec.params())
+-    second = spec.fn(spec.params())
+-
+     assert first.mesh.volume == pytest.approx(second.mesh.volume, rel=1e-9)
+     assert first.mesh.triangle_count == second.mesh.triangle_count
+ 
+diff --git a/tests/test_translations.py b/tests/test_translations.py
+index 1e3407172..47ab9a52f 100644
+--- a/tests/test_translations.py
++++ b/tests/test_translations.py
+@@ -148,18 +148,17 @@ LABELLED_WIDGETS = frozenset(
+ )
+ 
+ 
+-@pytest.mark.parametrize(
+-    "language", [entry for entry in available_languages() if entry != SOURCE_LANGUAGE]
+-)
+-def test_every_text_is_translated(language: str) -> None:
++def test_every_text_is_translated() -> None:
+     """Jede Sprache, die dasteht, ist fertig.
+ 
+     Nicht nur englisch: die Liste kommt aus dem Katalogverzeichnis, also prüft
+     dieser Test jede Sprache, die jemand hinzufügt, vom ersten Lauf an. Eine
+     halb übersetzte Datei einzuchecken ist damit keine Option — sie wäre eine
+     Sprache in der Auswahl, die mitten im Satz nach Deutsch zurückfällt.
++
++    Alle Kataloge und die Umlautprüfung nutzen dieselbe Extraktion. Das spart
++    auch bei xdist Mehrfacharbeit, ohne Quellen im Anwendungscode zu cachen.
+     """
+-    catalog = read_catalog(language)
+     ids = message_ids()
+     # **Ohne diese Zeile ist der Test grün, wenn er nichts findet.** Ein
+     # Verbotstest über eine gefilterte Menge prüft nichts, sobald die
+@@ -171,11 +170,21 @@ def test_every_text_is_translated(language: str) -> None:
+     # Assert-Meldung mit „...“ — wer neun tote Schlüssel hat, sieht drei und
+     # muss den Rest außerhalb des Tests nachbauen. Die Zahl im Kopf sagt
+     # sofort, ob die Liste vollständig dasteht.
+-    missing = sorted(key for key in ids if not catalog.get(key))
+-    assert not missing, f"{language}: {len(missing)} ohne Übersetzung\n" + "\n".join(missing)
+-
+-    orphaned = sorted(key for key in catalog if key not in ids)
+-    assert not orphaned, f"{language}: {len(orphaned)} nicht mehr gebraucht\n" + "\n".join(orphaned)
++    languages = [entry for entry in available_languages() if entry != SOURCE_LANGUAGE]
++    assert languages, "keine Übersetzungskataloge gefunden — sonst prüft dieser Test nichts"
++    errors: list[str] = []
++    for language in languages:
++        catalog = read_catalog(language)
++        missing = sorted(key for key in ids if not catalog.get(key))
++        if missing:
++            errors.append(f"{language}: {len(missing)} ohne Übersetzung\n" + "\n".join(missing))
++        orphaned = sorted(key for key in catalog if key not in ids)
++        if orphaned:
++            errors.append(
++                f"{language}: {len(orphaned)} nicht mehr gebraucht\n" + "\n".join(orphaned)
++            )
++    _assert_source_text_uses_umlauts(ids)
++    assert not errors, "\n".join(errors)
+ 
+ 
+ #: Ein Platzhalter im Quelltext: ``{name}``, nicht ``{}`` und nicht ``{0}``.
+@@ -467,19 +476,17 @@ class _Literals(ast.NodeVisitor):
+             self.free.append(node)
+ 
+ 
+-@pytest.mark.parametrize("path", sorted(UI_DIR.rglob("*.py")), ids=lambda path: path.name)
+-def test_no_hard_wired_file_filter(path: Path) -> None:
++def _file_filter_offenders(path: Path, tree: ast.AST) -> list[str]:
+     """AGENTS.md Regel 20 gilt auch für Dateifilter — und für Konstanten.
+ 
+-    ``test_no_hard_wired_text_in_the_surface`` sieht nur Argumente von
+-    Anzeige-Aufrufen. ``MODEL_FILTER = "Modelle (*.stl …)"`` stand daneben, auf
++    Die Prüfung der Anzeige-Aufrufe sieht nur deren Argumente.
++    ``MODEL_FILTER = "Modelle (*.stl …)"`` stand daneben, auf
+     Modulebene, und erschien deshalb auch in der englischen Oberfläche deutsch.
+     Ein Filter ist ein Text wie jeder andere: alles vor der Klammer liest ein
+     Mensch.
+ 
+     Ein reiner Formatname („STL (*.stl)") bleibt draußen — er heißt überall so.
+     """
+-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+     visitor = _Literals()
+     visitor.visit(tree)
+ 
+@@ -493,7 +500,7 @@ def test_no_hard_wired_file_filter(path: Path) -> None:
+             continue
+         offenders.append(f"{path.name}:{node.lineno} {node.value!r}")
+ 
+-    assert not offenders, "file filter that never reaches tr():\n" + "\n".join(offenders)
++    return offenders
+ 
+ 
+ def test_the_filter_check_would_catch_a_violation() -> None:
+@@ -512,9 +519,9 @@ def surface_files() -> list[Path]:
+ 
+ @pytest.mark.parametrize("path", surface_files(), ids=lambda path: path.name)
+ def test_no_hard_wired_text_in_the_surface(path: Path) -> None:
+-    """AGENTS.md Regel 20: alles, was der Nutzer liest, geht durch tr()."""
++    """Regel 20: Anzeigen und Dateifilter laufen über tr(), mit gemeinsamem AST."""
+     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+-    offenders: list[str] = []
++    offenders = _file_filter_offenders(path, tree)
+ 
+     for node in ast.walk(tree):
+         if not isinstance(node, ast.Call):
+@@ -929,7 +936,7 @@ ASCII_STATT_UMLAUT = {
+ }
+ 
+ 
+-def test_no_source_text_writes_ae_for_a_umlaut() -> None:
++def _assert_source_text_uses_umlauts(ids: set[str]) -> None:
+     """Ein deutscher Quelltext ist hier nicht nur Text, sondern die **Kennung**.
+ 
+     Deshalb ist ein `ss` statt `ß` hier teurer als anderswo. Er wird zur
+@@ -951,7 +958,6 @@ def test_no_source_text_writes_ae_for_a_umlaut() -> None:
+     """
+     import re as _re
+ 
+-    ids = message_ids()
+     assert ids, "keine Oberflächentexte gefunden — dann prüft dieser Test nichts"
+ 
+     muster = _re.compile(

@@ -41,7 +41,7 @@ die findet nur, wer die Wörter schon kennt.
 | **Agent, KI und Erzeugen** | `konzept-agent-vertiefung` · `konzept-erzeugen-agent-oberflaeche-2026-08` · `product-quality-ai-libraries-2026-08` · `konzept-meshy-hyper3d-2026-08` |
 | **Produkt, Verkauf, Veröffentlichung** | `konzept-produktkompass-2026-08` · `konzept-demo-2026-10` · `konzept-demo-zu-1.0-2026-09` · `konzept-veroeffentlichung-1.0` · `konzept-lizenzarten-2026-09` · `konzept-aktivierungsserver-2026-08` · `konzept-foerdermodell` · `konzept-versionspflege-2026-08` · `konzept-kundensicht-2026-08` · `namensentscheidung-solidon` |
 | **Wettbewerb und Maßstab** | `konzept-wettbewerb-2026-08` · `konzept-sindricad` · `durchsicht-website-2026-08` |
-| **Arbeitsweise am Code** | `konzept-zwillinge-2026-09` · `entscheidungen-2026-08-22` |
+| **Arbeitsweise am Code** | `konzept-ci-testlaufzeiten-2026-09` · `konzept-zwillinge-2026-09` · `entscheidungen-2026-08-22` |
 
 **Die Dateinamen sind stabil und werden nicht umbenannt.** Sechsundachtzig
 Stellen zitieren sie — darunter zwölf im Quelltext von `app/`, `tools/` und
@@ -59,6 +59,7 @@ gilt, unten, was nur noch erklärt.
 
 | Dokument | Stand | Thema | Wie es dasteht |
 |---|---|---|---|
+| [konzept-ci-testlaufzeiten-2026-09.md](konzept-ci-testlaufzeiten-2026-09.md) | **24.09.** | Kürzere CI-Läufe mit vollständiger Testmenge und isolierten Fenstern | Beauftragter Prüfvertrag CI-01 bis CI-08; Umsetzung und noch ausstehende Release-Messung im [Arbeitsregister](../ROADMAP.md#ci-testlaufzeiten) |
 | [presse-0-5-0-2026-09.md](presse-0-5-0-2026-09.md) | **22.09.** | Presseentwürfe zu 0.5.0, deutsch und englisch, mit Ausblick auf RM-188 | **Entwurf, nichts versendet.** Zwei Mails und zwei Kurzfassungen, dazu die Liste dessen, was bewusst nicht darin steht. Der Versand hängt am Upload von 0.5.0 — jede Behauptung muss am selben Tag nachprüfbar sein. Verteiler, Wortlaut und Zeitpunkt entscheidet Robert; Zahlen und Paketstand altern mit dem Stichtag |
 | [uebergabe-cad-2026-09-20.md](uebergabe-cad-2026-09-20.md) | **20.09., nach P1.4c.1** | Übergabe der laufenden CAD-Umsetzung an die nächste Session | **Entwicklungsabschluss des direkten Flächenanschlusses, Gesamtauftrag offen.** Paketstand, konkrete Folgegrenzen, Cache-/Formatverträge, Prüfbelege, P2.5-/P2.7-Zuständigkeit und Starttext; Arbeitsregister bleibt RM-188. |
 | [nachweise-cad-p2-7/README.md](nachweise-cad-p2-7/README.md) | **20.09.** | Machbarkeitsnachweise P2.7: alle 35 Bausteine auf dem exakten Kern, Sonden und Übergabematrix | **Nachweise am Stand `1cf405496`, kein Produktweg.** Elf Sonden mit 568 Zusicherungen, alle Prozesse Exit 0; jede Bausteinform über den vorhandenen exakten Satz, Konturversatz und Netzprofil-Gang als Prototyp belegt, Einsetzweg am exakten Träger nachgestellt. Vier Integrationsbefunde und die Übergabematrix je Baustein; der Produktionsanschluss läuft unter [RM-188](../ROADMAP.md#rm-188) P2.7. Die Ausgaben altern mit dem Stand — wer eine Zahl braucht, fährt `run_all.sh` |

@@ -1,0 +1,7 @@
+test_identifiers_are_english[ -> test_identifiers_are_english[: 383 identische Parameter-IDs
+test_identifiers_have_no_umlauts[ -> test_identifiers_are_english[: 383 identische Parameter-IDs
+test_field_docstrings_are_german[ -> test_identifiers_are_english[: 383 identische Parameter-IDs
+test_no_hard_wired_file_filter[ -> test_no_hard_wired_text_in_the_surface[: 86 identische Parameter-IDs
+test_no_hard_wired_text_in_the_surface[ -> test_no_hard_wired_text_in_the_surface[: 86 identische Parameter-IDs
+test_a_part_is_reproducible[ -> test_a_part_names_the_features_it_promised[: 35 identische Parameter-IDs
+test_a_part_names_the_features_it_promised[ -> test_a_part_names_the_features_it_promised[: 35 identische Parameter-IDs

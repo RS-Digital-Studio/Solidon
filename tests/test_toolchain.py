@@ -176,11 +176,17 @@ def test_the_ci_refuses_to_run_without_the_exact_kernel(monkeypatch: pytest.Monk
     assert "build.yml" in conftest.EXACT_KERNEL_MISSING_IN_CI
 
     workflow = (_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    from tests.workflow_helpers import job_block
+
     installs = re.findall(r"pip install[^\n]*\.\[[^\]]*\]", workflow)
     assert installs, "kein pip install mit Extras im Workflow — dann prüft dieser Test nichts"
     assert all("brep" in line for line in installs), (
-        "ein CI-Lauf ohne das Extra brep würde mit dem Wächter rot: " + str(installs)
+        "ein Bau- oder Prüflauf installiert den exakten Kern nicht: " + str(installs)
     )
+    for name in ("suite", "window-contracts", "windows", "latest"):
+        installs = re.findall(r"pip install[^\n]*\.\[[^\]]*\]", job_block(workflow, name))
+        assert installs, f"{name} installiert keine Prüfabhängigkeiten"
+        assert all("brep" in line for line in installs), (name, installs)
 
 
 def test_the_version_is_the_same_in_both_places_that_carry_it() -> None:
@@ -2373,6 +2379,9 @@ def test_no_generated_comparison_runs_in_the_ci() -> None:
     assert not without, "diese Suiteläufe in build.yml wählen ``rendered`` nicht ab: " + " | ".join(
         line[:110] for line in without
     )
+    from tools.run_suite_isolated import CI_MARKER
+
+    assert CI_MARKER == "windowed and not performance and not rendered"
 
     marked = _marked_rendered()
     assert marked, "kein Test trägt den Marker — dann prüft die zweite Hälfte nichts"

@@ -1,0 +1,6 @@
+1.2 seal 1.06 faces 13288
+1.2 wall 0.35 1.1733427667895908
+1.2 selfint 0.22 False
+12.0 seal 1.41 faces 45368
+12.0 wall 24.14 11.96073502393355
+12.0 selfint 0.78 False

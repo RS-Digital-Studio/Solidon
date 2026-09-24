@@ -57,9 +57,11 @@ def mark_windowed_items(items: list[pytest.Item]) -> None:
 class WindowedCollector:
     """Sammelt je Datei, ob sie Fenstertests und ob sie Tests ohne Fenster trägt."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, exclude_rendered: bool = False) -> None:
         self.files: set[Path] = set()
         self.plain_files: set[Path] = set()
+        self.window_counts: dict[Path, int] = {}
+        self.exclude_rendered = exclude_rendered
         self.collected_count = 0
 
     def pytest_itemcollected(self, item: pytest.Item) -> None:
@@ -67,9 +69,12 @@ class WindowedCollector:
         self.collected_count += 1
         if item.get_closest_marker("performance") is not None:
             return
+        if self.exclude_rendered and item.get_closest_marker("rendered") is not None:
+            return
         path = Path(str(item.path)).resolve()
         if needs_a_window(item):
             self.files.add(path)
+            self.window_counts[path] = self.window_counts.get(path, 0) + 1
         else:
             self.plain_files.add(path)
 
@@ -119,7 +124,23 @@ def collect_test_groups(
     Leistungstests zählen zu keiner der beiden Gruppen; eine Datei, die nur
     sie trägt, bleibt draußen.
     """
-    collector = WindowedCollector()
+    collector = _collect(paths, confcutdir=confcutdir)
+    return tuple(sorted(collector.files)), tuple(sorted(collector.plain_files))
+
+
+def collect_ci_window_counts(
+    paths: Sequence[Path], *, confcutdir: Path | None = None
+) -> dict[Path, int]:
+    """Zählt die ausführbaren CI-Fensterfälle ohne Leistung und Erzeugervergleiche."""
+    collector = _collect(paths, confcutdir=confcutdir, exclude_rendered=True)
+    return dict(sorted(collector.window_counts.items()))
+
+
+def _collect(
+    paths: Sequence[Path], *, confcutdir: Path | None, exclude_rendered: bool = False
+) -> WindowedCollector:
+    """Liest den ungefilterten Fixture-Graphen für lokale und CI-Gruppen einmal."""
+    collector = WindowedCollector(exclude_rendered=exclude_rendered)
     # Nur die Sammlung ist ungefiltert. Die Umgebung bleibt für den echten
     # Lauf erhalten; dort verknüpft das Plugin den wirksamen Marker mit dem
     # Leistungsausschluss, statt den Nutzerfilter zu überschreiben.
@@ -135,7 +156,7 @@ def collect_test_groups(
     if outcome != pytest.ExitCode.OK and not only_filtered:
         details = (captured_out.getvalue() + captured_err.getvalue()).strip()
         raise RuntimeError(f"Die Tests ließen sich nicht sammeln (Exit {int(outcome)}).\n{details}")
-    return tuple(sorted(collector.files)), tuple(sorted(collector.plain_files))
+    return collector
 
 
 def main() -> int:

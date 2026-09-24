@@ -64,6 +64,32 @@ Rundungsmerkmale, während echte regelmäßige Vielecke Bezugskanten behalten.
 
 ## Die Fahrweise steht einmal — in `CLAUDE.md`
 
+Der CI-Prüfvertrag steht in `konzepte/konzept-ci-testlaufzeiten-2026-09.md`.
+`test_ci_runner.py` prüft Partitionen, Sammlung, Prozessisolation und Berichte
+des isolierten Läufers ohne echte Fenster. `test_packaging.py` prüft die
+ausgeführten Workflowblöcke und die Paketfreigabe; `workflow_helpers.py`
+grenzt dafür Jobs und Schritte eindeutig ab, ohne ein allgemeiner YAML-Parser
+zu sein. `data/ci_window_durations.json` und `data/ci_core_durations.json`
+tragen historische Gewichte mit Herkunft; die aktuelle Sammlung bestimmt
+weiterhin die vollständige Auswahl. `test_ci_runner.py` sammelt dafür echte
+Testdateien zweimal mit `--ci-shard` und einmal ohne und verlangt dieselben
+Fälle, keinen doppelt und keine Datei geteilt.
+
+`test_ui.py` führt die allgemeinen Kundenwege. Fachliche Teilbereiche liegen
+in `test_ui_dialogs.py`, `test_ui_export.py`, `test_ui_licensing.py` und
+`test_ui_remote.py`. `ui_helpers.py` stellt deren gemeinsame Fixtures und
+Hilfen bereit; jedes Fenster und jede Sitzung bleiben pro Test frisch.
+Anzeige- und Schemafälle in `test_operation_ui.py` verwenden ein leeres
+Fenster, soweit ihre Aussage keine importierte Geometrie benötigt.
+
+Statische Quellprüfungen teilen die Vorbereitung innerhalb eines Testfalls:
+`test_language_rules.py` prüft je Datei denselben AST auf alle Sprachregeln;
+`test_translations.py` extrahiert die Nachrichten einmal für alle Kataloge.
+Prüfungen des Extraktors selbst lesen ihre veränderlichen Quellen frisch.
+`test_directory_docs.py` schneidet ausgeschlossene Verzeichnisse vor dem
+Betreten ab. `test_parts.py` verbindet die Merkmalszusagen mit dem ersten
+von weiterhin zwei unabhängigen Bauten für den Determinismusvergleich.
+
 Wie die Suite gefahren wird — alle Tests ohne Fenster vor dem Commit, Fenstertests
 und Leistungsprüfungen ausschließlich beim Release, `/pruefen` für beide Umfänge und
 `tools/affected_tests.py` je Schritt — steht mit Befehlen und den drei Fallen
@@ -159,7 +185,7 @@ Gezählt am 23.08.2026: 78 deutsche Bezeichner in 27 Dateien. Sie werden
 **nicht** umbenannt — eine Massenänderung in fremden Dateien kostet mehr, als
 sie einbringt. Assert-Meldungen bleiben ebenfalls beim Bestand der Datei.
 
-## `conftest.py` tut drei Dinge, die leicht zu übersehen sind
+## `conftest.py` tut vier Dinge, die leicht zu übersehen sind
 
 - Es setzt `QT_QPA_PLATFORM=offscreen` — Qt-Tests brauchen kein Bild.
 - Es biegt **die Nutzerverzeichnisse in einen Temp-Ordner** um (§38), `HOME`
@@ -171,6 +197,9 @@ sie einbringt. Assert-Meldungen bleiben ebenfalls beim Bestand der Datei.
   Dateien des exakten Kerns still. Lokal bleibt ein fehlender Kern ein Skip —
   über `tests.helpers.exact_kernel()`, das **vor** jedem `OCP`-Import einer
   Testfunktion steht; `test_toolchain.py` prüft die Zusicherung.
+- Mit `--ci-shard I/N` fährt es nur den Teil der Sammlung, den
+  `tools/ci_shards.py` diesem Kernjob zuteilt — ohne den Schalter ändert
+  sich an der Auswahl nichts.
 
 ## `helpers.py` — was mehr als eine Datei braucht
 

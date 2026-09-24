@@ -1,0 +1,13 @@
+................................................................         [100%]
+============================ slowest 10 durations =============================
+0.91s call     tests/test_operation_ui.py::test_a_through_hole_is_a_vent_only_where_it_joins_two_skins
+0.75s call     tests/test_ui.py::test_no_error_action_is_invented_at_the_call_site
+0.09s call     tests/test_ui.py::test_no_window_overrides_the_application_icon
+0.07s call     tests/test_operation_ui.py::test_a_field_without_effect_says_so
+0.03s call     tests/test_operation_ui.py::test_a_pattern_tile_comes_from_the_geometry
+0.02s call     tests/test_operation_ui.py::test_a_picker_source_is_bounded_before_it_enters_the_document[import_image-bild.png]
+0.01s call     tests/test_ui.py::test_no_worker_hands_its_field_to_a_blind_lambda
+0.01s call     tests/test_operation_ui.py::test_a_picker_source_is_bounded_before_it_enters_the_document[embed_model-teil.stl]
+0.01s setup    tests/test_ui.py::test_a_dropped_link_is_taken_like_a_dropped_file
+0.01s call     tests/test_ui.py::test_first_measure_edit_releases_split_but_passive_measures_do_not[None]
+64 passed, 830 deselected in 3.50s

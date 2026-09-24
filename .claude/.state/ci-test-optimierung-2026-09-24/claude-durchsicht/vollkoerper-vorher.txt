@@ -1,0 +1,3 @@
+Kugel 5120: Auswahl 4.0 s, voll 2.5 s, gleich True
+Kugel 20480: Auswahl 50.8 s, voll 43.9 s, gleich True
+Dichtschnur 45368: Auswahl 26.5 s

@@ -1,0 +1,29 @@
+........................................................................ [  5%]
+........................................................................ [ 11%]
+........................................................................ [ 17%]
+........................................................................ [ 23%]
+........................................................................ [ 29%]
+........................................................................ [ 35%]
+........................................................................ [ 41%]
+........................................................................ [ 47%]
+........................................................................ [ 53%]
+........................................................................ [ 59%]
+........................................................................ [ 65%]
+........................................................................ [ 71%]
+........................................................................ [ 77%]
+........................................................................ [ 83%]
+........................................................................ [ 89%]
+........................................................................ [ 95%]
+.....................................................                    [100%]
+============================ slowest 10 durations =============================
+1.38s call     tests/test_value_labels.py::test_no_value_key_speaks_german
+1.33s call     tests/test_value_labels.py::test_every_value_key_has_a_label
+1.33s call     tests/test_value_labels.py::test_the_same_sentence_weighs_the_same
+1.32s call     tests/test_value_labels.py::test_findings_of_the_same_matter_offer_the_same_way_out[arrange.collision]
+1.30s call     tests/test_value_labels.py::test_the_dictionary_carries_nothing_dead
+1.25s call     tests/test_registry_consistency.py::test_no_operation_reads_the_clock_the_environment_or_the_machine
+0.90s call     tests/test_value_labels.py::test_no_bar_nails_a_length_field_to_millimetres
+0.67s call     tests/test_registry_consistency.py::test_every_operation_has_a_test[create_organizer_divider]
+0.33s call     tests/test_registry_consistency.py::test_no_operation_calls_its_core_function_with_an_argument_it_refuses
+0.21s call     tests/test_value_labels.py::test_no_number_reaches_the_user_past_the_localisation[main_window.py]
+1205 passed, 52 deselected in 13.93s

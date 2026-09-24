@@ -68,6 +68,7 @@
 - [Agentenberichte sofort sichern](agentenberichte-sofort-sichern.md) — vollständig als Datei.
 - [Parallele Agenten erschöpfen das Limit](parallele-agenten-erschoepfen-das-nutzungslimit.md) — Bericht fortlaufend, Fortsetzen per SendMessage.
 - [Parallele Reviewer kollidieren](parallele-reviewer-kollidieren-an-den-raendern.md) · [Patchübernahme in den geteilten Baum](patchuebernahme-in-den-geteilten-baum.md) · [Skript im Worktree lädt app aus dem Hauptbaum](skript-im-worktree-laedt-app-aus-dem-hauptbaum.md) — Patches in Reihenfolge; sys.path[0].
+- [Ausreißer vor dem Aufteilen messen](ci-ausreisser-vor-dem-aufteilen-messen.md) — ein Fall von 319 s war ein quadratischer Kernweg; JUnit je Test zuerst.
 
 ## Shell und Git
 

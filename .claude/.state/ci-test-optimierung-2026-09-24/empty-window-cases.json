@@ -1,0 +1,20 @@
+[
+  "test_a_dependent_choice_field_greys_out_with_a_reason",
+  "test_a_dependent_field_behind_a_tick_says_which_tick",
+  "test_a_field_in_inches_takes_inches_and_returns_millimetres",
+  "test_a_field_without_effect_says_why",
+  "test_a_greyed_out_row_says_why_on_both_halves",
+  "test_a_nested_condition_follows_the_whole_chain",
+  "test_a_number_field_never_shrinks_below_its_value",
+  "test_a_number_field_stays_as_wide_as_a_number",
+  "test_a_rectangle_shows_only_the_rows_a_rectangle_has",
+  "test_an_angle_stays_in_degrees",
+  "test_an_expression_survives_the_unit",
+  "test_an_operation_without_a_caveat_shows_no_empty_warning",
+  "test_every_parameter_explains_itself_at_both_halves_of_its_row",
+  "test_looking_at_a_dialog_in_inches_changes_nothing",
+  "test_switching_to_an_expression_starts_from_millimetres",
+  "test_the_caveat_reaches_every_surface_that_offers_the_operation",
+  "test_the_condition_reaches_every_surface",
+  "test_the_image_field_lists_only_images"
+]

@@ -46,6 +46,12 @@ Querschnitte kamen als nichts zurück", nicht „fix: section". Diesen Ton halte
 
 ## Befehle
 
+Die CI-Aufteilung folgt `konzepte/konzept-ci-testlaufzeiten-2026-09.md`:
+Stil, Kernmatrix und Release-Fenstergruppen starten unabhängig; Paketbau
+wartet auf alle Pflichtprüfungen. `tests/test_packaging.py` und
+`tests/test_ci_runner.py` schützen diesen Vertrag. Die lokalen Umfänge
+darunter bleiben Entwicklungstor und zusätzliche Release-Abnahme.
+
 Alles läuft über die virtuelle Umgebung, nie über das System-Python:
 
 Beide Editoren setzen für ihre Unterprozesse `PYTHONUTF8=1`, damit auch unter

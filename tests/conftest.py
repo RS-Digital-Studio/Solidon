@@ -88,6 +88,20 @@ def pytest_sessionstart(session: pytest.Session) -> None:
         pytest.exit(EXACT_KERNEL_MISSING_IN_CI, returncode=1)
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """``--ci-shard I/N``: ein Kernjob fährt seinen Teil der Suite (``tools/ci_shards.py``)."""
+    from tools.ci_shards import add_option
+
+    add_option(parser)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Ohne ``--ci-shard`` ändert sich an der Auswahl nichts."""
+    from tools.ci_shards import register
+
+    register(config)
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Jeder Test mit ``qt_app`` trägt ``windowed`` — bevor ``-m`` abwählt.
