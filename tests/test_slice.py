@@ -247,6 +247,57 @@ def test_the_support_volume_can_be_left_out_where_nobody_reads_it() -> None:
     assert lean.first_layer_area == full.first_layer_area
 
 
+@pytest.mark.parametrize("groups", [15, 16, 17])
+@pytest.mark.parametrize("prepared", [False, True])
+def test_parallel_support_columns_keep_holes_and_boundary_contacts(
+    groups: int, prepared: bool
+) -> None:
+    """Gemeinsames Material darf parallel gelesen werden, auch mit GEOS-Index.
+
+    Je Vierergruppe liegt eine Säule im Material, eine in einem Loch,
+    eine kreuzt den Rand und eine berührt ihn nur. Unter, auf und über
+    der Baumgrenze bleiben jeweils genau zehn Quadratmillimeter übrig.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    import shapely
+
+    below = shapely.box(0.0, 0.0, 1000.0, 1000.0).difference(shapely.box(10.0, 10.0, 990.0, 990.0))
+    if prepared:
+        shapely.prepare(below)
+    pending = []
+    expected = []
+    for group in range(groups):
+        y = 20.0 + 12.0 * group
+        hole = shapely.box(20.0, y, 22.0, y + 2.0)
+        contact = shapely.box(-2.0, y + 8.0, 0.0, y + 10.0)
+        pending.extend(
+            [
+                shapely.box(2.0, y, 4.0, y + 2.0),
+                hole,
+                shapely.box(-1.0, y + 4.0, 1.0, y + 6.0),
+                contact,
+            ]
+        )
+        expected.extend([hole, shapely.box(-1.0, y + 4.0, 0.0, y + 6.0), contact])
+    expected_shape = shapely.union_all(expected)
+    ready = Barrier(3)
+
+    def cut(_worker: int):
+        ready.wait(timeout=10.0)
+        return analysis._above_material(pending, below)
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        results = list(pool.map(cut, range(3)))
+
+    for parts in results:
+        actual = shapely.union_all(parts)
+        assert actual.area == pytest.approx(groups * 10.0)
+        assert actual.equals(expected_shape)
+    assert bool(shapely.is_prepared(below)) is prepared
+
+
 def test_a_layer_that_looks_like_the_one_below_is_measured_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

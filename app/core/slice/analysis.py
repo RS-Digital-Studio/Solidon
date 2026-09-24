@@ -566,7 +566,12 @@ def _above_material(
     unterhalb dieser gemessenen Grenze bleibt er bewusst weg.
     """
     if len(pending) >= SUPPORT_TREE_FROM:
-        touching = shapely.STRtree(pending).query(below, predicate="intersects").tolist()
+        candidates = shapely.STRtree(pending).query(below)
+        # ``below`` teilen alle Säulengruppen. Ein Baum-Prädikat würde dessen
+        # vorbereiteten GEOS-Index nebenläufig erst vervollständigen. Deshalb
+        # nur die Hüllboxen im Baum, dann exakt mit den eigenen Säulen zuerst.
+        parts = np.asarray(pending, dtype=object)[candidates]
+        touching = candidates[shapely.intersects(parts, below)].tolist()
     else:
         parts = np.asarray(pending, dtype=object)
         touching = np.nonzero(shapely.intersects(parts, below))[0].tolist()

@@ -838,7 +838,10 @@ def test_a_knife_edge_is_no_footing() -> None:
 
 
 @pytest.mark.slow
-def test_the_pool_holder_does_not_stand_on_a_knife_edge() -> None:
+@pytest.mark.parametrize("workers", [None, 3], ids=["host", "three-workers"])
+def test_the_pool_holder_does_not_stand_on_a_knife_edge(
+    workers: int | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """RM-190, die Kehrseite: Wer mehr Lagen schneidet, findet auch Kanten.
 
     Mit der Schätzung des Stützraums in der Vorauswahl fand die Suche am
@@ -849,6 +852,12 @@ def test_the_pool_holder_does_not_stand_on_a_knife_edge() -> None:
     Summe, nicht dem, was sich drucken lässt.
     """
     from app.core.knowledge import profiles
+    from app.core.slice import analysis
+
+    if workers is not None:
+        # Drei Arbeiter halten größere Säulengruppen als der Entwicklungs-PC:
+        # So wird der räumliche Index auch dort unter Parallelität benutzt.
+        monkeypatch.setattr(analysis, "_workers", lambda limit: min(limit, workers))
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     holder = _pool_holder()

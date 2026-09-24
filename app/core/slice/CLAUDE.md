@@ -165,7 +165,12 @@ Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
   Ring gegen die übrigen, gerade Tiefe ist Material.
 - **Die Säulen auf Arbeitern.** `_support_volume` teilt die Überhänge
   reihum `SUPPORT_WORKERS` Gruppen zu; keine Säule beschneidet eine andere,
-  die Summe entsteht mit `math.fsum` in fester Folge.
+  die Summe entsteht mit `math.fsum` in fester Folge. Die untere Schicht wird
+  dabei gemeinsam gelesen. `_above_material` benutzt den räumlichen Baum
+  nur für Hüllboxtreffer und prüft diese exakt mit den eigenen Säulenteilen
+  als erstem Operand. Ein vorbereiteter GEOS-Index der gemeinsamen Schicht
+  darf nicht parallel als Prädikatindex verwendet werden: GEOS baut darin
+  weitere Suchstrukturen erst bei der Abfrage auf.
 
 Die Arbeiterzahl der vollständigen Messung steht bei sechs (`FULL_WORKERS`);
 die Messreihe dazu steht an der Konstante.
