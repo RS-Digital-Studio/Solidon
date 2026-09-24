@@ -941,7 +941,7 @@ def build_appimage() -> int:
     if appdir.exists():
         shutil.rmtree(appdir)
     (appdir / "usr").mkdir(parents=True)
-    shutil.copytree(SOURCE_DIR, appdir / "usr" / "bin")
+    shutil.copytree(SOURCE_DIR, appdir / "usr" / "bin", symlinks=True)
     try:
         embed_appimage_runtime(appdir / "usr" / "bin", runtime)
     except (OSError, ValueError, RuntimeError) as problem:

@@ -172,6 +172,11 @@ wirkt nicht — stehen im Kommentar über den beiden Zeilen in `solidon3d.iss`;
   gehört CPython, `<name>.libs` seiner Distribution. Eine native Datei ohne
   Familie lässt `make_licence_notices --release-check` nicht durch — gemessen
   am 0.2.1-Paket waren es 135, am Windows-Paket 30, am macOS-Paket 41.
+  Beim Kopieren des PyInstaller-Baums in Archiv oder AppDir bleiben interne
+  relative Verweise erhalten (`copytree(..., symlinks=True)`). Dereferenzieren
+  erzeugt zusätzliche Bibliothekskopien außerhalb ihres Paketpfads und
+  verändert das native Inventar. Der Verpackungstest prüft die Verweisziele
+  sowie den unveränderten Dateibestand mit seinen Besitzern.
 - **Die Lizenzbeilage** entsteht nach der SBOM mit
   `make_licence_notices.py --sbom`: `THIRD-PARTY-NOTICES.md` liegt genau einmal
   neben der ausführbaren Datei und wird dort auch vom Über-Dialog gelesen. Die

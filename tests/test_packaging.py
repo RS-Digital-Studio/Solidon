@@ -1107,15 +1107,27 @@ def test_the_appimage_build_refuses_an_unpinned_runtime(
 def test_the_appimage_build_passes_the_verified_runtime_explicitly(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """appimagetool bekommt die geprüfte Datei und lädt keinen Ersatz aus dem Netz."""
+    """Der Laufzeitkern wird gebunden, native Paketverweise bleiben echte Verweise."""
     import subprocess
 
     from tools import make_linux_packages as tool
+    from tools import make_sbom
 
     source = tmp_path / "source"
     output = tmp_path / "dist"
     source.mkdir()
     (source / tool.APP_NAME).write_bytes(b"Programm")
+    libraries = {
+        "libQt6Core.so.6": "PySide6/Qt/lib/libQt6Core.so.6",
+        "libgeos-test.so.3.13.1": "shapely.libs/libgeos-test.so.3.13.1",
+    }
+    for alias, relative in libraries.items():
+        target = source / "_internal" / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"\x7fELF\x02\x01\x01" + b"\x00" * 9)
+        (source / "_internal" / alias).symlink_to(Path(relative))
+    before = make_sbom.artifact_files(source)
+    assert {entry.owner for entry in before} == {"pyside6", "shapely"}
     runtime = tmp_path / "runtime-x86_64"
     runtime.write_bytes(b"Laufzeit")
     executable = tmp_path / "appimagetool"
@@ -1163,6 +1175,17 @@ def test_the_appimage_build_passes_the_verified_runtime_explicitly(
         / f"{tool.APP_ID}.xml"
     )
     assert installed_mime.read_bytes() == mime_file.read_bytes()
+    copied = output / f"{tool.APP_NAME}.AppDir" / "usr" / "bin"
+    after = make_sbom.artifact_files(copied)
+    assert after == before, "die AppImage-Kopie hat native Dateien oder ihre Besitzer verändert"
+    for alias, relative in libraries.items():
+        link = copied / "_internal" / alias
+        assert link.is_symlink(), (
+            "ein Laderverweis wurde als besitzerlose Bibliothekskopie abgelegt"
+        )
+        assert link.readlink() == Path(relative)
+        assert link.resolve() == (copied / "_internal" / relative).resolve()
+        assert link.read_bytes() == (source / "_internal" / relative).read_bytes()
 
 
 def test_an_appimage_without_its_runtime_record_is_not_packed(
