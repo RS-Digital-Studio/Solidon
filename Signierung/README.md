@@ -139,17 +139,24 @@ Diese beiden Dateien werden für den beauftragten Release als Assets eines
 **unveröffentlichten GitHub-Release-Entwurfs** hinterlegt. Der separate
 Installer-Workflow lädt sie anhand dieses Entwurfs, vergleicht die Herkunft
 mit dem erfolgreichen Anwendungslauf und prüft Hash, Signatur und das genaue
-Herausgeberzertifikat. Der Anwendungslauf muss über `workflow_dispatch` auf
-`main` gestartet und erfolgreich abgeschlossen sein. `target_commitish` des
-Entwurfs nennt denselben vollständigen Commit-Hash; eine bewegliche Angabe
-wie `main` genügt dort nicht. Auch der Installer-Workflow läuft auf diesem
-Stand von `main`:
+Herausgeberzertifikat. Der Anwendungslauf muss erfolgreich abgeschlossen und
+entweder manuell über `workflow_dispatch` auf `main` oder durch den Push des
+zur Anwendungsversion passenden Tags `v<Version>` gestartet sein. Beim Tag-Lauf
+prüft das Werkzeug die tatsächliche GitHub-Tagreferenz und ihren Zielcommit;
+ein gleichnamiger Branch genügt nicht. Leichte und einmal annotierte Tags sind
+zulässig. `target_commitish` des Entwurfs nennt denselben vollständigen
+Commit-Hash; eine bewegliche Angabe wie `main` genügt dort nicht. Der
+Installer-Workflow läuft weiterhin manuell auf genau diesem Stand von `main`.
+Bis zu seinem Start darf `main` deshalb nicht weiterwandern.
+
+Der unveröffentlichte Signiertransport erhält einen eigenen Namen mit der
+Quelllaufnummer. Das Versions-Tag bleibt dem eigentlichen Release zugeordnet:
 
 ```powershell
 $signing = Get-Content 'dist/signing-<bau-lauf>/windows-application-signature.json' -Raw | ConvertFrom-Json
-$tag = "v$($signing.app_version)"
-gh release create $tag 'dist/signing-<bau-lauf>/Solidon3D.exe' 'dist/signing-<bau-lauf>/windows-application-signature.json' --repo RS-Digital-Studio/Solidon --draft --target $signing.source_commit --title "Solidon3D $($signing.app_version)" --notes 'Unveröffentlichter Signiertransport für den CI-Installerbau.'
-$draftId = gh api "repos/RS-Digital-Studio/Solidon/releases/tags/$tag" --jq '.id'
+$transportTag = "signing-v$($signing.app_version)-$($signing.source_run_id)"
+gh release create $transportTag 'dist/signing-<bau-lauf>/Solidon3D.exe' 'dist/signing-<bau-lauf>/windows-application-signature.json' --repo RS-Digital-Studio/Solidon --draft --target $signing.source_commit --title "Solidon3D $($signing.app_version)" --notes 'Unveröffentlichter Signiertransport für den CI-Installerbau.'
+$draftId = gh api "repos/RS-Digital-Studio/Solidon/releases/tags/$transportTag" --jq '.id'
 gh workflow run windows-signed-installer.yml --repo RS-Digital-Studio/Solidon --ref main -f "build_run_id=$($signing.source_run_id)" -f "source_commit=$($signing.source_commit)" -f "app_version=$($signing.app_version)" -f "draft_release_id=$draftId" -f "signed_app_sha256=$($signing.signed_application_sha256)"
 ```
 

@@ -80,9 +80,11 @@ Windows-Signiergeheimnisse. Die verbindliche Reihenfolge lautet:
    ausschließlich die Anwendung. Die signierte EXE und ihre Herkunftsakte
    werden als Transport in einem unveröffentlichten Release-Entwurf abgelegt.
 3. `windows-signed-installer.yml` lädt die ursprünglichen Eingänge und die
-   signierte EXE. Der Workflow verlangt denselben Commit wie der erfolgreiche
-   manuelle Anwendungslauf auf `main`, prüft Herkunft, Hash, Zeitstempel und
-   Herausgeber, ersetzt nur die EXE und bindet die Übergabe neu. Inno Setup 7
+   signierte EXE. Der manuelle Workflow auf `main` verlangt denselben Commit
+   wie der erfolgreiche Anwendungslauf: manuell auf `main` oder durch das
+   tatsächliche Versions-Tag am selben Commit ausgelöst. Er prüft Herkunft,
+   Hash, Zeitstempel und Herausgeber, ersetzt nur die EXE und bindet die
+   Übergabe neu. Inno Setup 7
    baut den Installer in der CI. Das Artefakt
    `solidon3d-windows-installer-signing-input` enthält Setup, `.sha256` und
    `windows-installer-build.json`; der Workflow veröffentlicht nichts.

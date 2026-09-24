@@ -208,10 +208,13 @@ maskiert zuerst das Exec-Argument, danach dessen Backslashes auf der
 Desktop-Stringebene; wörtliche Prozentzeichen werden verdoppelt.
 
 `windows_signed_installer.py` ist der schlüssellose CI-Anschluss zwischen
-den beiden lokalen Windows-Signaturen. Er verlangt den erfolgreichen
-manuellen `build.yml`-Lauf auf `main` am exakt selben Commit wie sein eigener
-Workflow, das ursprüngliche Signierarchiv und einen unveröffentlichten,
-ebenfalls commitgebundenen Release-Entwurf mit signierter EXE und Herkunftsakte.
+den beiden lokalen Windows-Signaturen. Er verlangt einen erfolgreichen
+`build.yml`-Lauf, manuell auf `main` oder durch den Versions-Tag ausgelöst,
+am exakt selben Commit wie sein eigener manueller Workflow auf `main`.
+Der gemeinsame Prüfer bindet einen Tag-Lauf zusätzlich an das tatsächliche
+GitHub-Tag `v<APP_VERSION>` und dessen aufgelösten Commit. Dazu kommen das
+ursprüngliche Signierarchiv und ein unveröffentlichter,
+ebenfalls commitgebundener Release-Entwurf mit signierter EXE und Herkunftsakte.
 Archiv, Manifest, Zeitstempel und Herausgeber prüfen die gemeinsamen Helfer
 aus `sign_release.py`. Nur die EXE wird ersetzt und die Übergabe neu gebunden.
 Der feste Inno-7-Compiler baut daraus Setup, SHA-256 und `windows-installer-build.json`

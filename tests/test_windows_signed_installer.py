@@ -78,6 +78,44 @@ def test_another_source_cannot_reach_the_installer(
         tool.verify_source_run(RUN_ID, COMMIT)
 
 
+@pytest.mark.parametrize("annotated", [False, True])
+@pytest.mark.parametrize("same_commit", [False, True])
+def test_a_real_release_tag_reaches_only_its_own_installer_commit(
+    monkeypatch: pytest.MonkeyPatch, annotated: bool, same_commit: bool
+) -> None:
+    """Auch der Tag-Hauptbau bleibt an den identischen Installer-Quellstand gebunden."""
+    tag = f"v{tool.APP_VERSION}"
+    run = {**_run_record(), "event": "push", "head_branch": tag}
+    replies = {
+        f"repos/{REPOSITORY}/actions/runs/{RUN_ID}": run,
+        f"repos/{REPOSITORY}/git/ref/tags/{tag}": {
+            "ref": f"refs/tags/{tag}",
+            "object": {
+                "type": "tag" if annotated else "commit",
+                "sha": "34" * 20 if annotated else COMMIT,
+            },
+        },
+        f"repos/{REPOSITORY}/git/tags/{'34' * 20}": {
+            "sha": "34" * 20,
+            "tag": tag,
+            "object": {"type": "commit", "sha": COMMIT},
+        },
+    }
+    monkeypatch.setattr(sign_release.shutil, "which", lambda name: "gh")
+    monkeypatch.setattr(
+        sign_release,
+        "_run",
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command, 0, json.dumps(replies[command[2]])
+        ),
+    )
+    if same_commit:
+        tool.verify_source_run(RUN_ID, COMMIT)
+    else:
+        with pytest.raises(sign_release.SigningError, match="verschiedene Commits"):
+            tool.verify_source_run(RUN_ID, "56" * 20)
+
+
 def test_the_successful_main_run_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sign_release.shutil, "which", lambda name: name)
     monkeypatch.setattr(

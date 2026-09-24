@@ -54,6 +54,7 @@ from app.branding import (
     APP_ID,
     APP_NAME,
     APP_VENDOR,
+    APP_VERSION,
     PART_FILE_MIME_TYPE,
     PART_FILE_SUFFIX,
     PROJECT_SUFFIX,
@@ -718,6 +719,52 @@ def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: P
         )
 
 
+def _github_metadata(suffix: str) -> dict[str, Any]:
+    """Liest eine GitHub-Auskunft aus dem festen Repository ohne Shellauswertung."""
+    try:
+        completed = _run(
+            ["gh", "api", f"repos/{REPOSITORY}/{suffix}"],
+            check=False,
+            capture_output=True,
+            encoding="utf-8",
+            timeout=30,
+        )
+        record = json.loads(completed.stdout)
+        if completed.returncode != 0 or not isinstance(record, dict):
+            raise ValueError("GitHub-Auskunft fehlt")
+    except (OSError, UnicodeError, subprocess.TimeoutExpired, ValueError, TypeError) as exc:
+        raise SigningError(
+            "CI-Lauf oder Release-Tag nicht lesbar — gh-Anmeldung und Verbindung prüfen, "
+            "dann erneut starten."
+        ) from exc
+    return record
+
+
+def _verify_release_tag(commit: str) -> None:
+    """Bindet den echten Versionstag direkt oder einmal annotiert an den Baucommit."""
+    tag = f"v{APP_VERSION}"
+    reference = _github_metadata(f"git/ref/tags/{tag}")
+    try:
+        if reference["ref"] != f"refs/tags/{tag}":
+            raise ValueError("Andere Referenz")
+        target = reference["object"]
+        object_sha = target["sha"]
+        if re.fullmatch(r"[0-9a-fA-F]{40}", object_sha) is None:
+            raise ValueError("Ungültiges Tagziel")
+        if target["type"] == "tag":
+            annotation = _github_metadata(f"git/tags/{object_sha}")
+            if annotation["sha"] != object_sha or annotation["tag"] != tag:
+                raise ValueError("Andere Annotation")
+            target = annotation["object"]
+        if target["type"] != "commit" or target["sha"] != commit:
+            raise ValueError("Tag und Baucommit weichen ab")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SigningError(
+            f"Release-Tag {tag} belegt den Baucommit nicht — echten Versionstag und "
+            "CI-Lauf prüfen, dann den passenden Lauf auswählen."
+        ) from exc
+
+
 def verify_ci_run(run_id: str, workflow: str) -> dict[str, Any]:
     """Bindet einen erfolgreichen GitHub-Lauf an Repository, Workflow und Commit."""
     if re.fullmatch(r"[1-9][0-9]*", run_id) is None:
@@ -726,28 +773,22 @@ def verify_ci_run(run_id: str, workflow: str) -> dict[str, Any]:
         )
     if shutil.which("gh") is None:
         raise SigningError("GitHub CLI fehlt — gh installieren und für das Repository anmelden.")
+    record = _github_metadata(f"actions/runs/{run_id}")
     try:
-        completed = _run(
-            ["gh", "api", f"repos/{REPOSITORY}/actions/runs/{run_id}"],
-            check=False,
-            capture_output=True,
-            encoding="utf-8",
-            timeout=30,
+        manual_main = (
+            record.get("event") == "workflow_dispatch" and record.get("head_branch") == "main"
         )
-    except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
-        raise SigningError(
-            "CI-Lauf nicht lesbar — gh-Anmeldung und Verbindung prüfen, dann erneut starten."
-        ) from exc
-    try:
-        record = json.loads(completed.stdout)
+        release_tag = (
+            workflow == BUILD_WORKFLOW
+            and record.get("event") == "push"
+            and record.get("head_branch") == f"v{APP_VERSION}"
+        )
         if (
-            completed.returncode != 0
-            or not isinstance(record, dict)
+            workflow not in {BUILD_WORKFLOW, INSTALLER_WORKFLOW}
             or str(record.get("id")) != run_id
             or record.get("status") != "completed"
             or record.get("conclusion") != "success"
-            or record.get("event") != "workflow_dispatch"
-            or record.get("head_branch") != "main"
+            or not (manual_main or release_tag)
             or record.get("path") != workflow
             or record.get("repository", {}).get("full_name") != REPOSITORY
             or record.get("head_repository", {}).get("full_name") != REPOSITORY
@@ -759,6 +800,8 @@ def verify_ci_run(run_id: str, workflow: str) -> dict[str, Any]:
             f"CI-Lauf {run_id} ist kein erfolgreich abgeschlossener Lauf von {workflow} "
             f"in {REPOSITORY} — passenden Lauf in GitHub Actions auswählen."
         ) from exc
+    if release_tag:
+        _verify_release_tag(record["head_sha"])
     return record
 
 

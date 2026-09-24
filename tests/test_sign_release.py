@@ -853,6 +853,157 @@ def test_ci_run_requires_the_exact_successful_manual_main_workflow(
         sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW)
 
 
+def _tag_run_api(
+    monkeypatch: pytest.MonkeyPatch, annotated: bool = False
+) -> tuple[dict[str, object], dict[str, object], dict[str, object], list[str]]:
+    """Stellt die drei getrennten API-Auskünfte eines echten Release-Tags bereit."""
+    tag = f"v{make_installer.APP_VERSION}"
+    run = {**_ci_record("123", sign_release.BUILD_WORKFLOW), "event": "push", "head_branch": tag}
+    ref: dict[str, object] = {
+        "ref": f"refs/tags/{tag}",
+        "object": {
+            "type": "tag" if annotated else "commit",
+            "sha": "34" * 20 if annotated else "12" * 20,
+        },
+    }
+    annotation: dict[str, object] = {
+        "sha": "34" * 20,
+        "tag": tag,
+        "object": {"type": "commit", "sha": "12" * 20},
+    }
+    replies = {
+        f"repos/{sign_release.REPOSITORY}/actions/runs/123": run,
+        f"repos/{sign_release.REPOSITORY}/git/ref/tags/{tag}": ref,
+        f"repos/{sign_release.REPOSITORY}/git/tags/{'34' * 20}": annotation,
+    }
+    calls: list[str] = []
+
+    def read(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert command[:2] == ["gh", "api"]
+        calls.append(command[2])
+        return subprocess.CompletedProcess(command, 0, json.dumps(replies[command[2]]))
+
+    monkeypatch.setattr(sign_release.shutil, "which", lambda name: "gh")
+    monkeypatch.setattr(sign_release, "_run", read)
+    return run, ref, annotation, calls
+
+
+@pytest.mark.parametrize("annotated", [False, True])
+def test_a_release_tag_must_resolve_to_the_successful_build_commit(
+    monkeypatch: pytest.MonkeyPatch, annotated: bool
+) -> None:
+    """Leichter und einmal annotierter Tag binden denselben tatsächlichen Baucommit."""
+    run, _ref, _annotation, calls = _tag_run_api(monkeypatch, annotated)
+    assert sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW) == run
+    assert len(calls) == (3 if annotated else 2)
+
+
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "other_version",
+        "pull_request",
+        "other_workflow",
+        "other_repository",
+        "other_head_repository",
+        "unfinished",
+        "failed",
+        "branch_instead_of_tag",
+        "moved_ref",
+        "tree_ref",
+        "missing_ref",
+        "invalid_sha",
+        "annotation_sha",
+        "annotation_name",
+        "moved_annotation",
+        "nested_tag",
+        "tree_annotation",
+    ],
+)
+def test_only_the_current_real_release_tag_can_authorise_signing(
+    monkeypatch: pytest.MonkeyPatch, problem: str
+) -> None:
+    """Ein gleichnamiger Zweig und veränderte oder fremde Tagziele bleiben gesperrt."""
+    annotated = problem in {
+        "annotation_sha",
+        "annotation_name",
+        "moved_annotation",
+        "nested_tag",
+        "tree_annotation",
+    }
+    run, ref, annotation, _calls = _tag_run_api(monkeypatch, annotated)
+    changes: dict[str, tuple[str, object]] = {
+        "other_version": ("head_branch", "v99.0.0"),
+        "pull_request": ("event", "pull_request"),
+        "other_workflow": ("path", ".github/workflows/other.yml"),
+        "other_repository": ("repository", {"full_name": "foreign/repo"}),
+        "other_head_repository": ("head_repository", {"full_name": "foreign/repo"}),
+        "unfinished": ("status", "in_progress"),
+        "failed": ("conclusion", "failure"),
+    }
+    if problem in changes:
+        key, value = changes[problem]
+        run[key] = value
+    elif problem == "branch_instead_of_tag":
+        ref["ref"] = f"refs/heads/v{make_installer.APP_VERSION}"
+    elif problem == "missing_ref":
+        ref.clear()
+    elif problem in {"moved_ref", "tree_ref", "invalid_sha"}:
+        ref["object"] = {
+            "type": "tree" if problem == "tree_ref" else "commit",
+            "sha": "bad" if problem == "invalid_sha" else "56" * 20,
+        }
+    elif problem == "annotation_sha":
+        annotation["sha"] = "56" * 20
+    elif problem == "annotation_name":
+        annotation["tag"] = "v99.0.0"
+    else:
+        annotation["object"] = {
+            "type": {"nested_tag": "tag", "tree_annotation": "tree"}.get(problem, "commit"),
+            "sha": "56" * 20,
+        }
+    with pytest.raises(sign_release.SigningError):
+        sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW)
+
+
+@pytest.mark.parametrize(
+    "workflow", [sign_release.INSTALLER_WORKFLOW, ".github/workflows/other.yml"]
+)
+def test_a_tag_never_authorises_the_installer_or_an_unrecognised_workflow(
+    monkeypatch: pytest.MonkeyPatch, workflow: str
+) -> None:
+    """Die Tag-Ausnahme gilt ausschließlich für den Hauptbau."""
+    run, _ref, _annotation, _calls = _tag_run_api(monkeypatch)
+    run["path"] = workflow
+    with pytest.raises(sign_release.SigningError):
+        sign_release.verify_ci_run("123", workflow)
+
+
+@pytest.mark.parametrize("annotated", [False, True])
+@pytest.mark.parametrize("problem", ["http", "json", "shape", "timeout", "os"])
+def test_an_unreadable_release_tag_stops_before_signing(
+    monkeypatch: pytest.MonkeyPatch, annotated: bool, problem: str
+) -> None:
+    """Jeder fehlende oder unlesbare API-Nachweis hält geschlossen an."""
+    _tag_run_api(monkeypatch, annotated)
+    original = sign_release._run
+
+    def broken(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        marker = "/git/tags/" if annotated else "/git/ref/"
+        if marker not in command[2]:
+            return original(command, **kwargs)
+        if problem == "timeout":
+            raise subprocess.TimeoutExpired("gh", 30)
+        if problem == "os":
+            raise OSError("API unavailable")
+        output = {"http": "{}", "json": "broken", "shape": "[]"}[problem]
+        return subprocess.CompletedProcess(command, 1 if problem == "http" else 0, output)
+
+    monkeypatch.setattr(sign_release, "_run", broken)
+    with pytest.raises(sign_release.SigningError):
+        sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW)
+
+
 def test_ci_metadata_timeout_reports_the_next_step(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ein API-Hänger bleibt ein erklärter Halt, kein Traceback."""
     monkeypatch.setattr(sign_release.shutil, "which", lambda name: "gh")

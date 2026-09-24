@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: "Erfolgreicher main-Lauf von build.yml mit Signierarchiv"
+        description: "Erfolgreicher Versions-Tag- oder manueller main-Lauf von build.yml mit Signierarchiv"
         required: true
         type: string
       source_commit:
