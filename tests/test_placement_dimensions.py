@@ -37,6 +37,205 @@ from app.ui.session import Session
 from tests.test_surface_placement_ui import _Item, _Viewport
 
 
+@pytest.mark.parametrize("quiet", [True, False])
+def test_a_feature_without_a_carrier_face_never_aims_with_the_pointer(quiet):
+    """Ohne Trägerfläche bleibt die Maßgruppe am Merkmal; nur der Dialog zielt.
+
+    Am Schaber (Magnettasche mit gerundeter Mündung) fand ``seat_of`` keine
+    Fläche, und die Maßgruppe fiel aufs Zielen zurück: Beim Zug an einem
+    Langlochknopf rückte die Tasche um 4,6 mm zur Seite und 3,5 mm in die
+    Höhe, und Übernehmen blieb grau. An der Maßgruppe bleibt die Stelle beim
+    Merkmal, und die Felder tragen die Bedienung; der Operationsdialog behält
+    seinen Rückfall aufs Zeigen.
+    """
+    from app.ui.placement_flow import QuietHost
+
+    drawn = []
+    dialog = (
+        QuietHost({"at_feature": "hole_1"}, lambda values: False)
+        if quiet
+        else SimpleNamespace(values=lambda: {"at_feature": "hole_1"})
+    )
+    flow = SimpleNamespace(
+        dialog=dialog,
+        _measure_without_surface=False,
+        _seated_at_feature=True,
+        _refresh_measure_actions=lambda: drawn.append("actions"),
+        redraw=lambda: drawn.append("redraw"),
+    )
+
+    PlacementFlow._no_seat_at_feature(flow)
+
+    assert flow._seated_at_feature is quiet, "am Merkmal zielt der Zeiger nicht"
+    assert flow._measure_without_surface is quiet, "die Felder bleiben die Bedienung"
+    assert drawn == (["actions", "redraw"] if quiet else [])
+
+
+def test_a_moved_draft_seats_its_mouth_on_the_face_and_not_beside_it():
+    """Ein Entwurf mit versetzter Mitte beginnt in der Ebene seiner Fläche.
+
+    Die Maßgruppe von *Zum Langloch ziehen* übernimmt die Mitte eines schon
+    begonnenen Bohrungsentwurfs. Ein Rest dieser Verschiebung entlang der
+    Flächennormalen — eine gerundete Feldzahl — hob die Mündung von der
+    Fläche ab, und ``at_point`` sagte ab, als gäbe es keine. Gerechnet wird an
+    der Lochplatte des Korpus (80 x 50 x 8, Oberseite z = 4): Bohrung Ø 5,2 bei
+    (-25 | -15), 15 mm zur linken und 10 mm zur vorderen Kante; um (2 | 1)
+    versetzt sind es 17 und 11.
+    """
+    from pathlib import Path
+
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.features import detect
+    from app.ui.placement_flow import QuietHost
+
+    load_operations()
+    mesh = MeshData.of(
+        trimesh.load_mesh(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
+    )
+    features = detect(mesh)
+    hole = min((f for f in features.values() if f.kind == "hole"), key=lambda f: f.id)
+    x, y, z = hole.params["centre"]
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=features)
+    host = QuietHost(
+        {"at_feature": hole.id, "x": x + 2.0, "y": y + 1.0, "z": z + 0.004},
+        lambda values: False,
+    )
+    work = []
+    flow = SimpleNamespace(
+        dialog=host,
+        _serial=0,
+        _surface=None,
+        _seated_at_feature=False,
+        _source_feature=lambda: (entry, hole),
+        spec_of=lambda: REGISTRY.get("slot_hole"),
+        session=SimpleNamespace(placement_async=lambda compute, done, failed: work.append(compute)),
+    )
+
+    PlacementFlow._begin_at_feature(flow)
+    prepared, surface = work[0]()
+
+    assert surface.point == pytest.approx((x + 2.0, y + 1.0, 4.0), abs=1e-9)
+    assert sorted(edge.distance for edge in surface.edges) == pytest.approx([11.0, 17.0])
+    assert prepared.frame.normal == pytest.approx((0.0, 0.0, 1.0))
+
+
+@pytest.mark.parametrize("centre", [False, True])
+def test_invalid_dimension_blocks_the_visible_accept_and_recovers(centre):
+    """Beide Abstandseingaben sperren sofort denselben Abschluss und erklären den Rückweg."""
+    shown = SimpleNamespace(enabled=True, text="", visible=False)
+    button = SimpleNamespace(
+        setEnabled=lambda enabled: setattr(shown, "enabled", enabled),
+        setToolTip=lambda _text: None,
+        setStatusTip=lambda _text: None,
+        setAccessibleDescription=lambda _text: None,
+    )
+    note = SimpleNamespace(
+        setText=lambda text: setattr(shown, "text", text),
+        setVisible=lambda visible: setattr(shown, "visible", visible),
+    )
+    frame = PlaneFrame((0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1))
+    edges = (
+        EdgeReference("a", (0, 0, 0), (0, 40, 0), (1, 0, 0), 10),
+        EdgeReference("b", (0, 0, 0), (40, 0, 0), (0, 1, 0), 10),
+    )
+    surface = SurfacePlacement(
+        (10, 10, 0),
+        (0, 0, 1),
+        frame,
+        True,
+        (0,),
+        edges,
+        (CentreReference("hole_1", (0, 0, 0), (10, 10), 14.142135623730951),),
+    )
+    entered = [50.0, 10.0]
+    fields = [SimpleNamespace(value_mm=lambda index=index: entered[index]) for index in range(2)]
+    flow = SimpleNamespace(
+        active=True,
+        _disposed=False,
+        dialog=object(),
+        _surface=surface,
+        _prepared=PreparedSurface(
+            frame,
+            True,
+            (0,),
+            edges,
+            (("hole_1", (0, 0, 0)),),
+            Polygon(((-20, -20), (20, -20), (20, 20), (-20, 20))),
+        ),
+        _centre_id="hole_1",
+        _measures=fields,
+        _centre_measures=fields,
+        _reference_message="",
+        _reference_pick=None,
+        _distance_valid=True,
+        _measure_without_surface=False,
+        _tool_context=object(),
+        _tool_busy=False,
+        session=SimpleNamespace(result_current=True),
+        _display_ready=lambda: True,
+        _slot_drag_takes_the_accept=lambda: False,
+        _pulled_slot=lambda: None,
+        _measure_accept=button,
+        _measure_note=note,
+        _accept=SimpleNamespace(setEnabled=lambda _: None),
+        _note=SimpleNamespace(setText=lambda _: None),
+        _serial=0,
+        _set_values=lambda: None,
+    )
+    flow._refresh_measure_actions = lambda: PlacementFlow._refresh_measure_actions(flow)
+    flow._invalid_distance = lambda message: PlacementFlow._invalid_distance(flow, message)
+    flow.redraw = flow._refresh_measure_actions
+    change = PlacementFlow._centre_changed if centre else PlacementFlow._distance_changed
+    change(flow, entered[0])
+    assert not shown.enabled
+    assert shown.visible and "außerhalb" in shown.text
+    assert flow._surface is surface and entered == [50.0, 10.0]
+    entered[0] = 12.0
+    change(flow, entered[0])
+    assert shown.enabled and flow._distance_valid
+    assert not shown.visible and not shown.text
+    assert flow._surface.point == pytest.approx((12.0, 10.0, 0.0))
+
+    # **Und jeder andere Weg zurück nimmt den Satz mit** (Review 24.09.2026):
+    # Ein Zug am Griff (``move_to``) macht den Abstand gültig, ohne das Feld
+    # anzufassen — der Hinweis „außerhalb" blieb sonst stehen.
+    entered[0] = 50.0
+    change(flow, entered[0])
+    assert shown.visible and "außerhalb" in shown.text
+    flow._distance_valid = True
+    PlacementFlow._refresh_measure_actions(flow)
+    assert not shown.visible and "außerhalb" not in shown.text
+
+
+@pytest.mark.parametrize("centre", [False, True])
+def test_dimension_error_is_visible_in_the_measure_group(qt_app, monkeypatch, centre):
+    """Der Fehler steht an den sichtbaren Maßen, auch wenn die untere Leiste verborgen ist."""
+    from PySide6.QtCore import QSignalBlocker
+
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    try:
+        monkeypatch.setattr(dialog, "values_stand_elsewhere", True)
+        monkeypatch.setattr(flow, "_request_tool", lambda: None)
+        flow.set_measure_fields(QLabel("Maße", viewport), editors=())
+        flow.redraw()
+        assert flow._bar.isHidden() and not flow._measure_accept.isHidden()
+        fields = flow._centre_measures if centre else flow._measures
+        change = flow._centre_changed if centre else flow._distance_changed
+        for value in (50.0, 12.0):
+            with QSignalBlocker(fields[0]):
+                fields[0].set_value_mm(value)
+            change(value)
+            assert flow._measure_accept.isEnabled() == (value < 20.0)
+            assert flow._measure_note.isHidden() == (value < 20.0)
+            if value > 20.0:
+                assert "außerhalb" in flow._measure_note.text()
+    finally:
+        flow.dispose()
+        dialog.close()
+        viewport.close()
+        session.release()
+
+
 def test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface(
     qt_app: QApplication,
 ) -> None:

@@ -837,6 +837,7 @@
   "Das Laden ist unerwartet abgebrochen: {reason}": "Le téléchargement s'est interrompu de façon inattendue : {reason}",
   "Das Lager konnte nicht aktualisiert werden. Angaben und Schreibrechte prüfen und die Handlung erneut wählen.": "Le stock n'a pas pu être mis à jour. Vérifiez les informations et les droits d'écriture, puis relancez l'action.",
   "Das Lager konnte nicht aktualisiert werden. Prüfen Sie die Angaben und versuchen Sie es erneut.": "Le stock n'a pas pu être mis à jour. Vérifiez les informations et réessayez.",
+  "Das Langloch ist wieder die Bohrung von vorher — Strg+Z holt es zurück.": "Le trou oblong est redevenu le perçage d’avant — Ctrl+Z le récupère.",
   "Das Langloch liegt jetzt {angle:.1f} Grad anders als vorher; die alte Richtung ist geschlossen. Wollten Sie es nur verlängern, lassen Sie die Richtung, wie sie stand.": "Le trou oblong est maintenant orienté à {angle:.1f} degrés de sa position précédente ; l’ancienne direction est refermée. Si vous vouliez seulement l’allonger, laissez la direction telle qu’elle était.",
   "Das Langloch steht schon so, wie es eingetragen ist.": "Le trou oblong est déjà tel qu’il est saisi.",
   "Das Lesen der Quelle wurde abgebrochen.": "La lecture de la source a été annulée.",

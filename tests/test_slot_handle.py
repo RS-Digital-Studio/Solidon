@@ -29,7 +29,7 @@ from app.core.registry import REGISTRY
 from app.core.sketch.planes import frame_of
 from app.core.types import Feature, OpContext, Profile, Scene, SceneObject
 from app.ui.render.api import PointerEvent
-from app.ui.slot_handle import SlotHandle, dragged_slot, slot_outline
+from app.ui.slot_handle import SlotHandle, dragged_slot, settled_length, slot_outline
 from tests.render_fakes import RecordingRenderer
 
 #: Der Durchmesser, mit dem hier gebohrt wird — groß genug, dass die Erkennung
@@ -159,38 +159,33 @@ def test_the_drag_at_a_slot_starts_from_the_direction_it_already_has(profile: Pr
     )
 
 
-def test_a_drag_into_the_middle_still_asks_for_something_the_operation_takes(
-    profile: Profile,
-) -> None:
+def test_a_drag_into_the_middle_snaps_to_the_round_bore(profile: Profile) -> None:
     """Eine Geste, die in einer Absage endet, ist keine Bedienung.
 
-    ``slot_hole`` lehnt jede Länge unter :func:`prepare.shortest_slot` ab
-    (``prepare.SLOT_TOO_SHORT``). Der Griff lässt deshalb gar nicht erst kürzer
-    ziehen — auch nicht, wenn der Zeiger auf der Mitte steht.
-
-    **Und der Anschlag wird bis zum Ende geprüft.** Hier stand bis zum
-    11.09.2026 nur, dass die Operation die Länge *annimmt*, und das war die
-    halbe Zusicherung: Der Griff rastete bei ``1.05`` mal Durchmesser, die
-    Operation nahm das an, und die Merkmalserkennung machte daraus eine
-    **Bohrung** — bei größeren Durchmessern gar nichts mehr. Der Kunde zog bis
-    zum Anschlag und hatte danach nichts mehr zum Anklicken. Was zählt, ist
-    also nicht die Annahme, sondern das Merkmal, das danach dasteht.
+    ``slot_hole`` lehnt jede Länge zwischen der Breite und
+    :func:`prepare.shortest_slot` ab. Der Griff zieht deshalb nie dorthin: Die
+    obere Hälfte des Streifens hält die kürzeste Länge, die untere rastet auf
+    die Breite selbst — die runde Bohrung (Robert, 24.09.2026: „wenn man ein
+    langloch so zieht, dass es wieder eine normale Bohrung wäre, sollte es
+    kurz einrasten"). Ein Zeiger auf der Mitte meint also das runde Loch, und
+    die Operation nimmt es an: An einer runden Bohrung ändert sich dann nichts.
     """
     entry = a_drilled_plate(profile)
     bore = the_bore(entry)
-
-    length, _turned = pulled_to(bore, 0.0, 0.0)
-
     # Gegen den **gemessenen** Durchmesser: Die Erkennung liest das facettierte
     # Netz, und das ist nicht auf die Stelle genau der Wert, mit dem gebohrt
     # wurde. Der Griff rechnet mit dem, was am Merkmal steht — wie die
     # Operation auch.
-    assert length == pytest.approx(shortest_slot(float(bore.params["diameter"])))
+    width = float(bore.params["diameter"])
+    shortest = shortest_slot(width)
+
+    assert pulled_to(bore, 0.0, 0.0)[0] == pytest.approx(width), "auf der Mitte: rund"
+    assert pulled_to(bore, 0.0, (width + shortest) / 4.0 - 0.01)[0] == pytest.approx(width)
+    assert pulled_to(bore, 0.0, (width + shortest) / 4.0 + 0.01)[0] == pytest.approx(shortest)
     gezogen = run_op(
-        "slot_hole", entry, profile, at_feature=bore.id, slot_length=length, slot_angle=0.0
+        "slot_hole", entry, profile, at_feature=bore.id, slot_length=width, slot_angle=0.0
     )
-    arten = [feature.kind for feature in gezogen.features.values()]
-    assert arten.count("slot") == 1, f"am Anschlag steht ein Langloch da, gefunden: {arten}"
+    assert gezogen.mesh is entry.mesh, "die runde Bohrung bleibt, wie sie ist"
 
 
 @pytest.mark.parametrize("diameter", [2.0, 5.0, 12.0, 20.0, 40.0])
@@ -210,7 +205,11 @@ def test_the_shortest_slot_is_one_over_the_whole_range(diameter: float, profile:
     )
     bore = next(feature for feature in drilled.features.values() if feature.kind == "hole")
 
-    length, _turned = pulled_to(bore, 0.0, 0.0)
+    # Knapp über der Mitte des Streifens zwischen Breite und kürzester Länge:
+    # Dort hält der Griff den Anschlag, darunter rastet er auf rund.
+    shortest = shortest_slot(float(bore.params["diameter"]))
+    length, _turned = pulled_to(bore, 0.0, 0.99 * shortest / 2.0)
+    assert length == pytest.approx(shortest)
     pulled = run_op(
         "slot_hole", drilled, profile, at_feature=bore.id, slot_length=length, slot_angle=0.0
     )
@@ -319,6 +318,406 @@ def test_a_handle_built_for_a_waiting_drag_shows_its_outline_at_once() -> None:
     assert np.allclose(outline.points, expected), "und zwar der des Zugs, nicht der Bohrung"
 
 
+def test_a_narrower_width_allows_the_handle_to_shrink_below_its_old_width() -> None:
+    """Breite und Länge stammen aus demselben Entwurf, auch beim Verkleinern."""
+    renderer = RecordingRenderer(size=(800, 600))
+    handle = a_handle(renderer, [])
+    handle.set_values(4.5, 0.0, diameter=4.0)
+    assert handle.length == pytest.approx(4.5)
+    assert handle.radius == pytest.approx(2.0)
+    assert np.ptp(handle._outline.points[:, 1]) == pytest.approx(4.0)
+    assert np.ptp(handle._outline.points[:, 0]) == pytest.approx(4.5)
+
+
+@pytest.mark.parametrize("begun", [False, True])
+def test_a_slot_proposal_keeps_the_bore_draft_when_changing_its_measure_fields(begun: bool) -> None:
+    """Der Signalanschluss übergibt einen begonnenen Entwurf ohne fremde Handlung."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+    from app.ui.placement_flow import QuietHost
+
+    host = QuietHost(
+        {
+            "at_feature": "hole_1",
+            "diameter": 7.0,
+            "compensate": True,
+            "x": 11.0,
+            "y": 13.0,
+            "z": 5.0,
+        },
+        lambda values: False,
+    )
+    if begun:
+        host.begin_edit()
+    events = []
+    state = SimpleNamespace(
+        _quiet_placement=SimpleNamespace(spec_of=lambda: SimpleNamespace(name="resize_hole")),
+        _quiet_host=host,
+        _quiet_target=("obj_1", "hole_1"),
+        object_tree=SimpleNamespace(selected=lambda: "obj_1"),
+        end_quiet_placement=lambda: events.append("end"),
+        feature_panel=SimpleNamespace(
+            take_values=lambda op, values: events.append((op, dict(values)))
+        ),
+        _place_from_feature_panel=lambda op, values, **kwargs: events.append(
+            (op, dict(values), kwargs)
+        ),
+    )
+    MainWindow._on_slot_proposed(state, "hole_1", 18.0, 30.0)
+    assert events[0] == "end", "erst den alten Besitzer lösen, dann die Handlung wechseln"
+    assert events[1][0] == events[2][0] == "slot_hole"
+    assert events[2][1] == {**host.values(), "slot_length": 18.0, "slot_angle": 30.0}
+    assert events[2][2] == {"editing": True}, "der erste Zug ist bereits eine Eingabe"
+
+
+@pytest.mark.parametrize(
+    ("running", "armed", "begun", "feature", "handed"),
+    [
+        # Die zwei Zwillinge am Loch geben einander die Maßgruppe weiter.
+        ("resize_hole", "slot_hole", False, "hole_1", True),
+        ("slot_hole", "resize_hole", False, "hole_1", True),
+        # Ein begonnener Entwurf bleibt bei seiner Handlung.
+        ("resize_hole", "slot_hole", True, "hole_1", False),
+        # Ein anderes Merkmal ist kein Zwilling dieses Entwurfs.
+        ("resize_hole", "slot_hole", False, "hole_2", False),
+        # *Merkmal verschieben* hat keinen Weg ins Bild und beendet sie wie bisher.
+        ("resize_hole", "move_feature", False, "hole_1", False),
+    ],
+)
+def test_the_twin_field_in_the_panel_takes_over_the_measures_in_the_view(
+    running: str, armed: str, begun: bool, feature: str, handed: bool
+) -> None:
+    """Ein Klick in das Feld des Zwillings rechts hält die Maße im Bild (24.09.2026).
+
+    An einer Bohrung steht *Bohrung ändern* im Bild und *Zum Langloch ziehen*
+    rechts. Ein Klick in dessen Längenfeld beendete die Maßgruppe: Maßlinien,
+    Knöpfe und Umriss verschwanden, und die Länge wurde ohne jedes Maß zur
+    Kante getippt (Robert: „die maße fehlen auch beim langloch"). Jetzt
+    übernimmt die angefasste Handlung die Maßgruppe, mit den Werten des Felds.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+    from app.ui.placement_flow import QuietHost
+
+    host = QuietHost({"at_feature": "hole_1", "diameter": 5.2}, lambda values: False)
+    if begun:
+        host.begin_edit()
+    started = []
+    state = SimpleNamespace(
+        _quiet_placement=SimpleNamespace(spec_of=lambda: SimpleNamespace(name=running)),
+        _quiet_host=host,
+        _quiet_target=("obj_1", "hole_1"),
+        object_tree=SimpleNamespace(selected=lambda: "obj_1", selected_feature=lambda: "hole_1"),
+        feature_panel=SimpleNamespace(armed_by_tab=lambda: False),
+        _place_from_feature_panel=lambda op, params, **kwargs: started.append(
+            (op, dict(params), kwargs)
+        ),
+    )
+    values = {"at_feature": feature, "slot_length": 18.0, "slot_angle": 0.0}
+
+    assert MainWindow._hand_the_measures_over(state, armed, values) is handed
+    assert started == ([(armed, values, {"editing": False})] if handed else [])
+
+    # **Tab bleibt im Fenster** (Review 24.09.2026): Wer mit der Tastatur in
+    # das Feld des Zwillings geht, holt es nicht ins Bild.
+    started.clear()
+    state.feature_panel = SimpleNamespace(armed_by_tab=lambda: True)
+    assert not MainWindow._hand_the_measures_over(state, armed, values)
+    assert not started
+
+
+@pytest.mark.parametrize("armed_opens_measures", [False, True])
+def test_a_pull_without_measures_starts_an_editable_slot_draft(armed_opens_measures: bool) -> None:
+    """Nach Escape startet der nächste Zug samt Werten und freigegebener Bearbeitung."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+    from app.ui.placement_flow import QuietHost
+
+    values = {"at_feature": "slot_1", "diameter": 4.0, "compensate": False}
+    host = QuietHost(values, lambda values: False)
+    started = []
+
+    def take_values(op, proposed):
+        values.update(proposed)
+        if armed_opens_measures:
+            state._quiet_placement = SimpleNamespace(
+                active=True, spec_of=lambda: SimpleNamespace(name="slot_hole")
+            )
+            state._quiet_host = host
+        return True
+
+    state = SimpleNamespace(
+        _quiet_placement=None,
+        _quiet_host=None,
+        object_tree=SimpleNamespace(selected_feature=lambda: "slot_1"),
+        feature_panel=SimpleNamespace(
+            take_values=take_values, preview_values=lambda: ("slot_hole", dict(values))
+        ),
+        _place_from_feature_panel=lambda op, params, **kwargs: started.append(
+            (op, dict(params), kwargs)
+        ),
+    )
+    MainWindow._on_slot_proposed(state, "slot_1", 12.0, 30.0)
+    if armed_opens_measures:
+        assert host.begun and host.values() == values
+        assert not started
+    else:
+        assert started == [("slot_hole", values, {"editing": True})]
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_a_cross_axis_turn_checks_the_current_draft_before_changing_the_panel(
+    allowed: bool,
+) -> None:
+    """Der Ring darf keine fremde Karte aktivieren, während der Langlochentwurf gebunden ist."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+
+    events = []
+
+    def may_change():
+        events.append("check")
+        return allowed
+
+    state = SimpleNamespace(
+        _quiet_placement=SimpleNamespace(spec_of=lambda: SimpleNamespace(name="slot_hole")),
+        _quiet_command_allowed=may_change,
+        feature_panel=SimpleNamespace(
+            take_values=lambda op, values: events.append((op, values)) or True
+        ),
+    )
+    MainWindow._on_feature_turn_proposed(state, "slot_1", "x", 30.0)
+    assert events == (
+        ["check", ("rotate_feature", {"axis": "x", "angle": 30.0})] if allowed else ["check"]
+    )
+
+
+def test_a_slot_gesture_does_not_discard_an_unfinished_depth_change() -> None:
+    """Eine noch offene Tiefenänderung gehört weiter dem Bohrungsentwurf."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+    from app.ui.placement_flow import QuietHost
+
+    host = QuietHost({"at_feature": "hole_1", "diameter": 6.0, "depth": 4.0}, lambda values: False)
+    host.begin_edit()
+    events = []
+    feature = Feature(
+        id="hole_1", kind="hole", provenance="detected", params={"depth": 10.0, "through": True}
+    )
+    state = SimpleNamespace(
+        _quiet_placement=SimpleNamespace(spec_of=lambda: SimpleNamespace(name="resize_hole")),
+        _quiet_host=host,
+        _quiet_target=("obj_1", "hole_1"),
+        object_tree=SimpleNamespace(selected=lambda: "obj_1"),
+        _selected_feature_object=lambda: feature,
+        viewport=SimpleNamespace(cancel_slot_drag=lambda: events.append("cancel_slot")),
+        _say_the_change_comes_first=lambda: events.append("explain"),
+    )
+    MainWindow._on_slot_proposed(state, "hole_1", 18.0, 30.0)
+    assert events == ["cancel_slot", "explain"]
+    assert host.begun and host.values()["depth"] == pytest.approx(4.0)
+
+
+def test_a_slot_step_takes_the_new_width_from_its_measure_fields(profile: Profile) -> None:
+    """Die Vorschaufreigabe für einen bestehenden Schritt enthält auch seine Breite."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+
+    feature = Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        created_by=2,
+        params={
+            "diameter": 6.0,
+            "length": 20.0,
+            "axis": (0.0, 0.0, 1.0),
+            "direction": (1.0, 0.0, 0.0),
+            "centre": (0.0, 0.0, 0.0),
+        },
+    )
+    entry = SceneObject(
+        id="obj_1",
+        name="Platte",
+        mesh=MeshData.of(trimesh.creation.box()),
+        features={feature.id: feature},
+    )
+    state = SimpleNamespace(
+        object_tree=SimpleNamespace(selected=lambda: entry.id),
+        session=SimpleNamespace(
+            profile=profile,
+            last_result=SimpleNamespace(scene=Scene(objects={entry.id: entry})),
+            project=SimpleNamespace(
+                document=SimpleNamespace(ops=[SimpleNamespace(id=2, op="slot_hole")])
+            ),
+        ),
+    )
+    order = MainWindow._prepare_slot_change(
+        state, feature.id, {"diameter": 4.0, "compensate": False}
+    )
+    assert order.change_op == 2
+    assert order.change_values == {"diameter": 4.0, "compensate": False}
+    assert feature.params["diameter"] == pytest.approx(6.0), "der Entwurf ändert keine Geometrie"
+
+
+@pytest.mark.parametrize("entered, shown", [(5.0, 5.0), (4.3, 4.4), (4.0, 4.0), (1.0, 4.4)])
+def test_a_rebound_slot_draft_survives_until_the_handle_is_rebuilt(
+    entered: float, shown: float
+) -> None:
+    """Der Editorwechsel räumt den Griff ab; sein Entwurf muss den Neuaufbau überleben."""
+    from functools import partial
+    from types import SimpleNamespace
+
+    from app.ui.viewport import Viewport
+
+    renderer = RecordingRenderer(size=(800, 600))
+    state = SimpleNamespace(
+        _slot_target="",
+        _slot_waiting=None,
+        _slot_width=None,
+        _slot_handle=None,
+        renderer=renderer,
+        _face_seat=((0.0, 0.0, 5.0), (0.0, 0.0, 1.0), 3.0),
+        _on_slot_released=lambda *_args: None,
+        _on_slot_interacted=lambda *_args: None,
+        _on_slot_interaction_cancelled=lambda: None,
+        _settled_angle=lambda value: value,
+    )
+    state.waiting_slot_drag = partial(Viewport.waiting_slot_drag, state)
+    feature = Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        params={
+            "length": 20.0,
+            "diameter": 6.0,
+            "axis": (0.0, 0.0, 1.0),
+            "direction": (1.0, 0.0, 0.0),
+        },
+    )
+    Viewport.reshape_slot(state, entered, 30.0, diameter=4.0, feature_id=feature.id)
+    assert state._slot_waiting == pytest.approx((shown, 30.0)), "auch ohne Griff gültig zeichnen"
+    Viewport._attach_slot_handle(state, feature)
+    handle = state._slot_handle
+    assert handle is not None and handle.length == pytest.approx(shown)
+    assert handle.angle == pytest.approx(30.0) and handle.radius == pytest.approx(2.0)
+    assert handle._outline is not None
+
+
+def test_a_slot_draft_moves_its_handles_only_when_the_target_centre_changes() -> None:
+    """Panelkoordinaten versetzen dieselben Griffe; die Rückmeldung baut sie nicht erneut."""
+    from types import SimpleNamespace
+
+    from app.ui.viewport import Viewport
+
+    feature = Feature(
+        id="slot_1", kind="slot", provenance="detected", params={"centre": (1.0, 2.0, 3.0)}
+    )
+    rebuilt = []
+    state = SimpleNamespace(
+        _slot_handle=None,
+        _slot_target="",
+        _slot_width=None,
+        _move_target="",
+        _grip_shift=(0.0, 0.0, 0.0),
+        _gizmo_wanted=True,
+        slot_handle_feature=lambda: feature,
+        set_gizmo=lambda wanted: rebuilt.append((wanted, state._grip_shift)),
+    )
+    for _ in range(2):
+        Viewport.reshape_slot(
+            state, 12.0, 30.0, diameter=4.0, feature_id=feature.id, centre=(7.0, 6.0, 3.0)
+        )
+    assert state._move_target == feature.id
+    assert rebuilt == [(True, (6.0, 4.0, 0.0))]
+
+
+def test_cancelling_the_slot_measures_restores_the_panels_actual_values() -> None:
+    """Abbrechen beendet den Entwurf und liest die noch unveränderte Merkmalskarte neu."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+
+    selected = []
+    state = SimpleNamespace(
+        _leave_the_measures=lambda: True,
+        object_tree=SimpleNamespace(selected_feature=lambda: "slot_1"),
+        _on_feature_selected=selected.append,
+    )
+    MainWindow._cancel_from_feature_panel(state)
+    assert selected == ["slot_1"]
+
+
+def test_accepting_identical_slot_values_keeps_the_outline_while_preparation_is_pending() -> None:
+    """Ein noch nicht möglicher Abschluss erhält den Griff auch ohne neues Wertesignal."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+    from app.ui.placement_flow import QuietHost
+    from app.ui.viewport import Viewport
+
+    values = {"at_feature": "slot_1", "slot_length": 12.0, "slot_angle": 30.0, "diameter": 4.0}
+    host = QuietHost(values, lambda values: False)
+    host.begin_edit()
+    changed = []
+    host.valuesChanged.connect(lambda: changed.append(True))
+    viewport = SimpleNamespace(_slot_handle=None, _slot_target="", _slot_width=None)
+    attempts = []
+    state = SimpleNamespace(
+        _quiet_host=host,
+        _quiet_placement=SimpleNamespace(
+            spec_of=lambda: SimpleNamespace(name="slot_hole"),
+            accept=lambda: attempts.append(viewport._slot_waiting),
+        ),
+        _reshape_slot_from_values=lambda params: Viewport.reshape_slot(
+            viewport,
+            params["slot_length"],
+            params["slot_angle"],
+            diameter=params["diameter"],
+            feature_id=params["at_feature"],
+        ),
+    )
+    MainWindow._on_slot_dragged(state, "slot_1", 12.0, 30.0)
+    assert not changed, "identische Werte liefern kein neues Signal"
+    assert attempts == [(12.0, 30.0)]
+    assert viewport._slot_target == "slot_1" and viewport._slot_width == pytest.approx(4.0)
+    assert host.begun and host.values() == values
+
+
+def test_the_slot_panel_commits_all_fields_of_its_preview() -> None:
+    """Ein wartender Griff darf beim Panelabschluss die Breite nicht abschneiden."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+
+    taken = []
+    state = SimpleNamespace(
+        _quiet_placement=None,
+        _quiet_host=None,
+        _end_changed_quiet_placement=lambda: None,
+        viewport=SimpleNamespace(slot_drag_waits=lambda: True),
+        _apply_placed_feature=lambda op, params: taken.append((op, dict(params))),
+    )
+    values = {
+        "at_feature": "slot_1",
+        "slot_length": 12.0,
+        "slot_angle": 30.0,
+        "diameter": 4.0,
+        "compensate": True,
+        "x": 8.0,
+        "y": 9.0,
+        "z": 5.0,
+    }
+    MainWindow._apply_from_feature_panel(state, "slot_hole", values)
+    assert taken == [("slot_hole", values)]
+
+
 def test_a_foreign_drag_carries_knobs_and_outline_along() -> None:
     """Ein Zug am Bewegungsgriff nimmt Knöpfe und Umriss mit — und lässt sie zurück.
 
@@ -342,9 +741,9 @@ def test_a_foreign_drag_carries_knobs_and_outline_along() -> None:
     )
     handle.set_values(18.0, 0.0)
     before = [np.asarray(knob.position(), dtype=float) for knob in handle.knobs]
-    # Gebaut an der Mindestlänge, gezogen auf 18: Der Versatz der Knöpfe ist
+    # Gebaut an der runden Bohrung, gezogen auf 18: Der Versatz der Knöpfe ist
     # die halbe Differenz — und genau darauf setzt der fremde Zug auf.
-    pulled = 9.0 - shortest_slot(BORE) / 2.0
+    pulled = 9.0 - BORE / 2.0
     assert before[0][0] == pytest.approx(pulled) and before[1][0] == pytest.approx(-pulled)
 
     handle.shift((6.0, 4.0, 0.0))
@@ -409,19 +808,23 @@ def test_the_knobs_report_the_drag_when_they_are_let_go() -> None:
     Die Attrappe blickt entlang der z-Achse; ihr Strahl trifft die Mündung der
     Bohrung damit senkrecht, und der Weg im Bild ist der Weg auf der Ebene.
     """
-    renderer = RecordingRenderer(size=(800, 600))
+    # Zehn Bildpunkte je Millimeter: Der Knopfsitz fällt auf einen ganzen
+    # Bildpunkt, und die Hand greift ihn genau.
+    renderer = RecordingRenderer(size=(800, 600), scale=10.0)
     taken: list[tuple[float, float]] = []
     handle = a_handle(renderer, taken)
 
-    # Der rechte Knopf sitzt am Scheitel, also bei x = 3.
-    seat = renderer.world_to_display((BORE / 2.0, 0.0, 5.0))
-    renderer.item_picks[(round(seat[0]), round(seat[1]))] = handle.knobs[0]
-    handle.handle(PointerEvent("move", int(seat[0]), int(seat[1])))
-    assert handle.handle(PointerEvent("press", int(seat[0]), int(seat[1]), button="left"))
+    # Der rechte Knopf sitzt auf dem Rand der runden Bohrung, x = 3,0 — dort
+    # greift die Hand, und der Knopf wandert um ihren Weg.
+    seat = renderer.world_to_display(handle.knob_seats[0])
+    x, y = round(seat[0]), round(seat[1])
+    renderer.item_picks[(x, y)] = handle.knobs[0]
+    handle.handle(PointerEvent("move", x, y))
+    assert handle.handle(PointerEvent("press", x, y, button="left"))
 
     target = renderer.world_to_display((12.0, 0.0, 5.0))
-    assert handle.handle(PointerEvent("move", int(target[0]), int(target[1])))
-    assert handle.handle(PointerEvent("release", int(target[0]), int(target[1]), button="left"))
+    assert handle.handle(PointerEvent("move", round(target[0]), round(target[1])))
+    assert handle.handle(PointerEvent("release", round(target[0]), round(target[1]), button="left"))
 
     assert len(taken) == 1
     length, angle = taken[0]
@@ -451,24 +854,332 @@ def test_the_drag_stays_symmetric_around_the_centre_of_the_bore() -> None:
     liest sie aus dem Merkmal. Ein Zug, der sie verschöbe, verspräche etwas,
     das der Schnitt nicht einlöst.
     """
-    renderer = RecordingRenderer(size=(800, 600))
+    renderer = RecordingRenderer(size=(800, 600), scale=10.0)
     taken: list[tuple[float, float]] = []
     handle = a_handle(renderer, taken)
 
     # Diesmal der linke Knopf, und gezogen wird nach links.
-    seat = renderer.world_to_display((-BORE / 2.0, 0.0, 5.0))
-    renderer.item_picks[(round(seat[0]), round(seat[1]))] = handle.knobs[1]
-    handle.handle(PointerEvent("move", int(seat[0]), int(seat[1])))
-    handle.handle(PointerEvent("press", int(seat[0]), int(seat[1]), button="left"))
+    seat = renderer.world_to_display(handle.knob_seats[1])
+    x, y = round(seat[0]), round(seat[1])
+    renderer.item_picks[(x, y)] = handle.knobs[1]
+    handle.handle(PointerEvent("move", x, y))
+    handle.handle(PointerEvent("press", x, y, button="left"))
     target = renderer.world_to_display((-10.0, 0.0, 5.0))
-    handle.handle(PointerEvent("move", int(target[0]), int(target[1])))
-    handle.handle(PointerEvent("release", int(target[0]), int(target[1]), button="left"))
+    handle.handle(PointerEvent("move", round(target[0]), round(target[1])))
+    handle.handle(PointerEvent("release", round(target[0]), round(target[1]), button="left"))
 
     length, angle = taken[0]
     assert length == pytest.approx(20.0, abs=0.01)
     # Nach links gezogen heißt dieselbe Achse — der Winkel zeigt zurück auf 0,
     # weil der gegriffene Knopf der gegenüberliegende ist.
     assert angle == pytest.approx(0.0, abs=0.01)
+
+
+def test_a_press_into_the_opening_of_a_slot_moves_the_knob_by_the_pointers_way() -> None:
+    """Wer ins Langloch drückt und zieht, verschiebt den Knopf, er springt nicht.
+
+    Langloch Ø 6 auf 30 mm entlang x, der rechte Knopf am Scheitel x = 15.
+    Gedrückt wird im Endbogen neben dem Knopf, bei (13 | 2), und acht
+    Millimeter zur Mitte gezogen. Der Knopf wandert mit: (15 - 8 | 0), also
+    14 mm lang in der alten Richtung. Vom Zeiger aus gerechnet stünde er bei
+    (5 | 2) — 2 · √29 ≈ 10,8 mm lang und 21,8 Grad gedreht.
+    """
+    renderer = RecordingRenderer(size=(800, 600))
+    taken: list[tuple[float, float]] = []
+    handle = a_handle(renderer, taken)
+    handle.set_values(30.0, 0.0)
+
+    press = renderer.world_to_display((13.0, 2.0, 5.0))
+    assert handle.take_press(PointerEvent("press", int(press[0]), int(press[1]), button="left"), 0)
+    target = renderer.world_to_display((5.0, 2.0, 5.0))
+    handle.handle(PointerEvent("move", int(target[0]), int(target[1])))
+    handle.handle(PointerEvent("release", int(target[0]), int(target[1]), button="left"))
+
+    length, angle = taken[0]
+    assert length == pytest.approx(14.0, abs=0.05)
+    assert angle == pytest.approx(0.0, abs=0.5)
+
+
+def test_a_slot_pulled_back_into_its_bore_snaps_round() -> None:
+    """Zurück bis in das Loch hinein rastet der Zug auf die runde Bohrung.
+
+    Langloch Ø 6 auf 30 mm, der rechte Knopf am Scheitel x = 15. Er wird bis
+    x = 2 zurückgezogen — mitten in die Bohrung, deren Rand bei x = 3 liegt.
+    Gemeldet wird die Breite als Länge, in der Richtung, die galt; der Umriss
+    ist ein Kreis vom Radius 3 um die Mitte, mit derselben Punktzahl wie
+    vorher.
+    """
+    renderer = RecordingRenderer(size=(800, 600), scale=10.0)
+    taken: list[tuple[float, float]] = []
+    handle = a_handle(renderer, taken)
+    handle.set_values(30.0, 20.0)
+    seat = renderer.world_to_display(handle.knob_seats[0])
+    x, y = round(seat[0]), round(seat[1])
+    renderer.item_picks[(x, y)] = handle.knobs[0]
+    handle.handle(PointerEvent("move", x, y))
+    handle.handle(PointerEvent("press", x, y, button="left"))
+    outward = renderer.world_to_display((16.0, 0.0, 5.0))
+    handle.handle(PointerEvent("move", round(outward[0]), round(outward[1])))
+    drawn = len(handle._outline.points)
+    inside = renderer.world_to_display((2.0, 0.0, 5.0))
+    handle.handle(PointerEvent("move", round(inside[0]), round(inside[1])))
+    handle.handle(PointerEvent("release", round(inside[0]), round(inside[1]), button="left"))
+
+    assert taken == [(pytest.approx(BORE), pytest.approx(20.0))]
+    ring = np.asarray(handle._outline.points)
+    assert len(ring) == drawn, "dieselbe Punktzahl — der Renderer tauscht nur Punkte"
+    assert np.hypot(ring[:, 0], ring[:, 1]) == pytest.approx(np.full(len(ring), BORE / 2.0))
+
+
+@pytest.mark.parametrize("knob", [0, 1])
+def test_a_round_bore_pulled_out_and_back_asks_for_nothing(knob: int) -> None:
+    """Eine runde Bohrung, hinaus und wieder auf rund gezogen, ist kein Vorschlag.
+
+    **An beiden Knöpfen.** Am linken spiegelte der Griff die Richtung, die beim
+    Einrasten gar nicht vom Zeiger kam, und aus 0 Grad wurden 180 — ein
+    Vorschlag ohne Wirkung (Review 24.09.2026).
+    """
+    renderer = RecordingRenderer(size=(800, 600), scale=10.0)
+    taken: list[tuple[float, float]] = []
+    cancelled: list[bool] = []
+    handle = a_handle(renderer, taken)
+    handle._cancel = lambda: cancelled.append(True)
+    assert handle.length == pytest.approx(BORE), "die Knöpfe sitzen auf dem Rand"
+    seat = renderer.world_to_display(handle.knob_seats[knob])
+    x, y = round(seat[0]), round(seat[1])
+    renderer.item_picks[(x, y)] = handle.knobs[knob]
+    handle.handle(PointerEvent("move", x, y))
+    handle.handle(PointerEvent("press", x, y, button="left"))
+    side = 1.0 if knob == 0 else -1.0
+    away = renderer.world_to_display((12.0 * side, 5.0 * side, 5.0))
+    handle.handle(PointerEvent("move", round(away[0]), round(away[1])))
+    back = renderer.world_to_display((1.0 * side, 0.5 * side, 5.0))
+    handle.handle(PointerEvent("move", round(back[0]), round(back[1])))
+    assert handle.angle == pytest.approx(0.0), "eingerastet bleibt die Richtung, die galt"
+    handle.handle(PointerEvent("release", round(back[0]), round(back[1]), button="left"))
+
+    assert not taken
+    assert cancelled == [True]
+
+
+def test_a_typed_length_between_round_and_slot_does_not_snap_round() -> None:
+    """Eine eingetragene Zahl rastet nicht: Rund zeigt der Umriss nur genau auf der Breite.
+
+    Zwischen Breite und kürzester Länge lehnt der Schnitt ab
+    (``NEITHER_ROUND_NOR_SLOT``); ein Kreis im Bild verspräche dort die runde
+    Bohrung (Review 24.09.2026). Der Zug rastet weiter (``settled_length``).
+    """
+    renderer = RecordingRenderer(size=(800, 600))
+    handle = a_handle(renderer, [])
+    shortest = shortest_slot(BORE)
+    lower_half = (BORE + shortest) / 2.0 - 0.01
+    assert settled_length(lower_half, BORE) == pytest.approx(BORE), "der Zug rastet hier"
+
+    handle.set_values(lower_half, 0.0)
+    assert handle.length == pytest.approx(shortest), "die Zahl zeigt die kürzeste Länge"
+    handle.set_values(BORE, 0.0)
+    assert handle.length == pytest.approx(BORE), "genau die Breite ist rund"
+
+
+def test_a_round_bore_that_stays_round_proposes_nothing() -> None:
+    """Endet ein Zug oder der Ring an einer runden Bohrung rund, wird nichts vorgeschlagen.
+
+    Übernommen stünde sonst ein Schritt im Verlauf, der nur sagt, dass sie
+    schon rund ist (Review 24.09.2026). Ein Langloch, das rund wird, und eine
+    Bohrung, die länger wird, schlagen weiter vor.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.viewport import Viewport
+
+    proposed: list[tuple[object, ...]] = []
+    cancelled: list[bool] = []
+    feature = {"now": SimpleNamespace(id="hole_1", kind="hole")}
+    view = SimpleNamespace(
+        slot_handle_feature=lambda: feature["now"],
+        _slot_handle=SimpleNamespace(radius=3.0),
+        _slot_borrowed=True,
+        _on_slot_interaction_cancelled=lambda: cancelled.append(True),
+        _end_drag=lambda: None,
+        _repaint_preview=lambda: None,
+        drag_bar=SimpleNamespace(dismiss=lambda: None),
+        slotProposed=SimpleNamespace(emit=lambda *values: proposed.append(values)),
+    )
+
+    Viewport._on_slot_released(view, 6.0, 90.0)  # type: ignore[arg-type]
+    assert cancelled == [True] and not proposed, "rund bleibt rund: kein Vorschlag"
+
+    Viewport._on_slot_released(view, 18.0, 90.0)  # type: ignore[arg-type]
+    assert proposed == [("hole_1", 18.0, 90.0)], "länger gezogen: der Vorschlag steht"
+
+    feature["now"] = SimpleNamespace(id="slot_1", kind="slot")
+    Viewport._on_slot_released(view, 6.0, 90.0)  # type: ignore[arg-type]
+    assert proposed[-1] == ("slot_1", 6.0, 90.0), "ein Langloch, das rund wird, schon"
+    assert cancelled == [True]
+
+
+def test_a_slot_step_pulled_back_to_its_bore_is_taken_out() -> None:
+    """Zurück auf die Bohrung, aus der es kam: Der Schritt fällt, statt zu bleiben.
+
+    Welche Bohrung das war, sagt die Sichtung vor dem Schritt. Geprüft wird an
+    einem Stellvertreter mit genau den Feldern, die die Prüfung liest.
+    """
+    from types import SimpleNamespace
+
+    from app.core.types import FeatureRef, ReferenceSight
+    from app.ui.main_window import MainWindow
+
+    hole = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 6.0, "centre": (10.0, -5.0, 5.0), "axis": (0.0, 0.0, 1.0)},
+    )
+    step = SimpleNamespace(
+        id=2,
+        op="slot_hole",
+        params={
+            "at_feature": "hole_1",
+            "slot_length": 20.0,
+            "slot_angle": 0.0,
+            "x": 10.0,
+            "y": -5.0,
+            "z": 5.0,
+            "diameter": None,
+            "compensate": False,
+        },
+    )
+    sight = ReferenceSight(key="at_feature", ref=FeatureRef("obj_1", "hole_1"), feature=hole)
+    state = SimpleNamespace(
+        session=SimpleNamespace(
+            project=SimpleNamespace(document=SimpleNamespace(ops=[step])),
+            last_result=SimpleNamespace(sights={2: (sight,)}),
+        )
+    )
+
+    def undone(**changes: object) -> bool:
+        return MainWindow._slot_step_undone(state, 2, changes)  # type: ignore[arg-type]
+
+    assert undone(slot_length=6.0), "rund, an ihrer Stelle, in ihrer Breite"
+    assert undone(slot_length=6.004), "die halbe Anzeigestufe ist noch dieselbe Breite"
+    assert not undone(slot_length=12.0), "noch ein Langloch"
+    assert not undone(slot_length=6.0, x=14.0), "versetzt: der Schritt trägt die Stelle"
+    assert not undone(slot_length=6.0, diameter=8.0), "verbreitert: der Schritt trägt die Breite"
+    assert not undone(slot_length=6.0, y="=@lage"), "ein Ausdruck lässt sich nicht nachrechnen"
+    step.params["x"] = 12.0
+    assert not undone(slot_length=6.0), "der Schritt hat die Bohrung schon versetzt"
+
+
+def test_both_ways_to_accept_a_slot_step_meet_in_one_place() -> None:
+    """Merkmalfenster und Maßgruppe schreiben einen Langlochschritt an derselben Stelle.
+
+    Beide übernehmen über ``_commit_preview_order``. Am Scraper-Modell
+    (24.09.2026) saß die Prüfung „zurück auf die Bohrung" nur in
+    ``_change_slot_step``, einer Methode ohne Aufrufer: Das Übernehmen änderte
+    den Schritt auf Länge = Breite, statt ihn fallen zu lassen. Jetzt prüft
+    ``_commit_slot_change`` am gemeinsamen Weg, und die tote Methode ist weg.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow, _PreviewOrder
+
+    committed: list[tuple[int, dict[str, object]]] = []
+    removed: list[list[int]] = []
+    changed: list[tuple[int, dict[str, object]]] = []
+    said: list[str] = []
+    undone = {"now": True}
+    state = SimpleNamespace(
+        session=SimpleNamespace(
+            history=SimpleNamespace(operation=lambda op_id: SimpleNamespace(op="slot_hole")),
+            remove_operations=lambda ids: removed.append(list(ids)) or True,
+            change_params=lambda op_id, values: changed.append((op_id, values)) or True,
+        ),
+        _slot_step_undone=lambda step_id, changes: undone["now"],
+        _slot_named_later=lambda step_id: False,
+        announce=lambda text: said.append(str(text)),
+    )
+    state._commit_slot_change = lambda step_id, changes: (
+        committed.append((step_id, changes))
+        or MainWindow._commit_slot_change(state, step_id, changes)  # type: ignore[arg-type]
+    )
+
+    order = _PreviewOrder(change_op=2, change_values={"slot_length": 6.0})
+    assert MainWindow._commit_preview_order(state, order)  # type: ignore[arg-type]
+    assert committed == [(2, {"slot_length": 6.0})]
+    assert removed == [[2]] and not changed, "zurück auf die Bohrung: der Schritt fällt"
+    assert said, "und es wird gesagt"
+
+    undone["now"] = False
+    assert MainWindow._commit_preview_order(state, order)  # type: ignore[arg-type]
+    assert changed == [(2, {"slot_length": 6.0})], "sonst wird er geändert"
+
+
+def test_a_slot_step_named_by_a_later_step_is_changed_not_taken_out() -> None:
+    """Nennt ein späterer Schritt das Langloch, fällt sein Schritt nicht.
+
+    Eine Fase an ``slot_1`` verwiese sonst auf ein Merkmal, das der Verlauf nie
+    erzeugt hat (Review 24.09.2026). Geändert wird der Schritt trotzdem; der
+    Kern sagt dann, dass aus dem Langloch wieder eine Bohrung geworden ist.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+
+    features = {
+        "slot_1": SimpleNamespace(created_by=2),
+        "hole_2": SimpleNamespace(created_by=None),
+    }
+    ops = [
+        SimpleNamespace(id=1, params={}),
+        SimpleNamespace(id=2, params={"at_feature": "hole_1"}),
+        SimpleNamespace(id=3, params={"at_feature": "hole_2"}),
+    ]
+    removed: list[list[int]] = []
+    changed: list[int] = []
+    state = SimpleNamespace(
+        session=SimpleNamespace(
+            last_result=SimpleNamespace(
+                scene=SimpleNamespace(objects={"obj_1": SimpleNamespace(features=features)})
+            ),
+            project=SimpleNamespace(document=SimpleNamespace(ops=ops)),
+            remove_operations=lambda ids: removed.append(list(ids)) or True,
+            change_params=lambda op_id, values: changed.append(op_id) or True,
+        ),
+        _slot_step_undone=lambda step_id, changes: True,
+        announce=lambda text: None,
+    )
+    state._slot_named_later = lambda step_id: MainWindow._slot_named_later(state, step_id)  # type: ignore[arg-type]
+
+    assert not MainWindow._slot_named_later(state, 2)  # type: ignore[arg-type]
+    assert MainWindow._commit_slot_change(state, 2, {"slot_length": 6.0})  # type: ignore[arg-type]
+    assert removed == [[2]] and not changed, "niemand nennt es: der Schritt fällt"
+
+    ops.append(SimpleNamespace(id=4, params={"at_features": ["slot_1"]}))
+    assert MainWindow._slot_named_later(state, 2)  # type: ignore[arg-type]
+    assert MainWindow._commit_slot_change(state, 2, {"slot_length": 6.0})  # type: ignore[arg-type]
+    assert removed == [[2]] and changed == [2], "genannt: geändert statt entfernt"
+
+
+def test_a_press_into_a_round_bore_pulls_it_out_in_the_hands_direction() -> None:
+    """An der runden Bohrung bleibt der Zug aus der Mitte heraus.
+
+    Sie hat keine Richtung, die zu erhalten wäre: Gedrückt bei (1 | 0) und
+    nach (1 | 8) gezogen, steht der Knopf am Zeiger — √65 von der Mitte,
+    also 2 · √65 ≈ 16,12 mm lang, gedreht um atan(8 / 1) ≈ 82,9 Grad.
+    """
+    renderer = RecordingRenderer(size=(800, 600))
+    taken: list[tuple[float, float]] = []
+    handle = a_handle(renderer, taken)
+
+    press = renderer.world_to_display((1.0, 0.0, 5.0))
+    assert handle.take_press(PointerEvent("press", int(press[0]), int(press[1]), button="left"), 0)
+    target = renderer.world_to_display((1.0, 8.0, 5.0))
+    handle.handle(PointerEvent("move", int(target[0]), int(target[1])))
+    handle.handle(PointerEvent("release", int(target[0]), int(target[1]), button="left"))
+
+    length, angle = taken[0]
+    assert length == pytest.approx(2.0 * math.sqrt(65.0), abs=0.05)
+    assert angle == pytest.approx(math.degrees(math.atan2(8.0, 1.0)), abs=0.5)
 
 
 # --- Wo der Griff sitzt, sagt das Register ----------------------------------------

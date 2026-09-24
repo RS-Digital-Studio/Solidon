@@ -610,6 +610,21 @@ Versetzen. Was bleibt, ist die Auskunft (`slot_hole.turned`, info). **Wer eine
 Operation baut, die eine Geste einlöst, baut die Wirkung, nicht den Hinweis auf
 die andere.**
 
+Dasselbe gilt für eine kürzere Länge: `slot_hole` schließt den alten Umriss,
+bevor es den kürzeren schneidet. Ein kleineres Werkzeug allein trägt an den
+alten Enden nichts auf. Griff, Felder und Operation erlauben die Länge in
+beiden Richtungen bis `prepare.shortest_slot` für die gewünschte Breite —
+**und genau die Breite selbst**: Dann schneidet `slot_hole` wieder eine
+runde Bohrung (Entscheidung Robert, 24.09.2026). Die Frage „ist das rund"
+beantwortet `prepare.is_round_length` für alle — Griff, Felder,
+Vorschauwerkzeug, beide Kerne —, auf die halbe Anzeigestufe genau und gegen
+die eingetragene wie die geschnittene Breite. Dazwischen bleibt es eine
+Absage, die beide Auswege nennt (`NEITHER_ROUND_NOR_SLOT`). Aus einem
+Langloch wird dabei eine Bohrung mit neuem Namen (`slot_hole.round_again`);
+eine runde Bohrung auf ihre eigene Breite gezogen bleibt unangetastet und
+sagt es (`slot_hole.already_round`), statt dasselbe Loch zu füllen und neu
+zu schneiden.
+
 ## Ein Langloch trägt keine Aufweitung, und seine Länge ist nicht sein Weg
 
 Zwei Entscheidungen zum Langloch, beide vom 10.09.2026, beide leicht in die

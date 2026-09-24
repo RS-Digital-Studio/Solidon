@@ -597,6 +597,15 @@ es gibt keinen Ein- und Austritt durch den Mantel, und die quadratische
 Gleichung dazu hat keinen Leitkoeffizienten. Wer dort durch null teilt,
 verliert genau die Draufsicht.
 
+**Und ein Langloch ist im Querschnitt kein Kreis** (24.09.2026). Gerechnet
+wird gegen seinen Umriss — zwei Kreise an den Enden der Mittellinie und das
+Band dazwischen, konvex, also ein Abschnitt je Strahl (`_stadium_span`) —,
+und vom Punkt im Loch führt `_feature_inside` über den Abstand zur
+Mittellinie zum Langloch. Mit dem Kreis um die Mitte allein traf ein Klick in
+das Ende eines Langlochs in der Draufsicht nichts, und ein Druck dort zog den
+Körper statt das Langloch. Wer eine weitere Öffnungsform dazunimmt, gibt ihr
+ihren Umriss, nicht den Kreis ihres Durchmessers.
+
 **Gefragt wird an drei Stellen, und an allen drei derselbe Aufruf**
 (`_aim_at`): Linksklick, Rechtsklick, Zeigersuche. Der Zeiger kostet damit
 einen Oberflächen-Pick je Ruhepause statt eines Blicks in den Tiefenpuffer —

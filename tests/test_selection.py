@@ -823,6 +823,99 @@ def test_bore_span_along_the_axis(window: MainWindow) -> None:
     assert outside is None, "neun Millimeter neben der Achse geht er vorbei"
 
 
+def test_bore_span_sees_the_whole_opening_of_a_slot() -> None:
+    """Ein Langloch ist in der Draufsicht kein Kreis, sondern sein Umriss.
+
+    Mit dem Kreis um die Mitte allein traf ein Klick in die Öffnung nur dort
+    das Langloch, wo es einer runden Bohrung glich; an den Enden fiel er
+    durch, und ein Druck dort zog den Körper statt das Langloch. Langloch
+    Ø 5 mit 10 mm Weg entlang x, 8 mm tief: das Band ist ±5 lang und ±2,5
+    breit, die Enden sind Halbkreise um x = ±5.
+    """
+    from app.ui.viewport import bore_span
+
+    axis = (0.0, 0.0, 1.0)
+    centre = (0.0, 0.0, 0.0)
+    along = (-4.0, 4.0)
+    slot = {"travel": 10.0, "heading": (1.0, 0.0, 0.0)}
+    down = (0.0, 0.0, -1.0)
+
+    for x, y, meant in (
+        (4.0, 0.0, "im Band"),
+        (0.0, 2.0, "quer im Band"),
+        (7.0, 0.0, "im Endbogen, 2 mm hinter der Bogenmitte"),
+        (6.5, 1.5, "im Endbogen schräg, √(1,5² + 1,5²) ≈ 2,12 < 2,5"),
+    ):
+        span = bore_span((x, y, 100.0), down, centre, axis, 2.5, along, **slot)
+        assert span == pytest.approx((96.0, 104.0)), meant
+
+    for x, y, meant in (
+        (8.0, 0.0, "3 mm hinter der Bogenmitte, über den Radius"),
+        (0.0, 3.0, "quer über die halbe Breite"),
+        (7.0, 2.0, "neben dem Endbogen, √(2² + 2²) ≈ 2,83 > 2,5"),
+    ):
+        span = bore_span((x, y, 100.0), down, centre, axis, 2.5, along, **slot)
+        assert span is None, meant
+
+    # Längs durch die Mitte läuft der Strahl von Scheitel zu Scheitel: x = ±7,5.
+    lengthwise = bore_span((-50.0, 0.0, 0.0), (1.0, 0.0, 0.0), centre, axis, 2.5, along, **slot)
+    assert lengthwise == pytest.approx((42.5, 57.5))
+
+    # Quer durch einen Endbogen bei x = 6: nur der Kreis um x = 5 trägt,
+    # y = ±√(2,5² - 1²).
+    half_chord = math.sqrt(2.5 * 2.5 - 1.0)
+    crosswise = bore_span((6.0, -50.0, 0.0), (0.0, 1.0, 0.0), centre, axis, 2.5, along, **slot)
+    assert crosswise == pytest.approx((50.0 - half_chord, 50.0 + half_chord))
+
+    # Ohne Weg bleibt es der Kreis — derselbe Aufruf wie für eine Bohrung.
+    assert bore_span((7.0, 0.0, 100.0), down, centre, axis, 2.5, along) is None
+
+
+def test_a_point_in_the_end_of_a_slot_belongs_to_the_slot() -> None:
+    """Vom Punkt im Loch führt der Weg zum Langloch, auch an seinen Enden.
+
+    :meth:`Viewport._feature_inside` maß gegen die Achse durch die Mitte, und
+    ein Punkt im Endbogen lag weiter von ihr als der Radius — er gehörte
+    keinem Loch, obwohl er mitten in der Öffnung steht. Gerechnet wird ohne
+    Fenster über einen Stellvertreter mit genau den zwei Feldern, die die
+    Methode liest.
+    """
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from app.core.types import Feature
+    from app.ui.viewport import Viewport
+
+    slot = Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        params={
+            "diameter": 5.0,
+            "length": 15.0,
+            "travel": 10.0,
+            "axis": (0.0, 0.0, 1.0),
+            "direction": (1.0, 0.0, 0.0),
+            "centre": (0.0, 0.0, 0.0),
+        },
+    )
+    entry = SimpleNamespace(features={"slot_1": slot})
+    stand_in = SimpleNamespace(
+        _object_at=lambda _point: "obj_1",
+        _result=SimpleNamespace(scene=SimpleNamespace(objects={"obj_1": entry})),
+    )
+
+    def inside(x: float, y: float) -> object:
+        return Viewport._feature_inside(stand_in, np.array([x, y, 2.0]))  # type: ignore[arg-type]
+
+    assert inside(0.0, 0.0) == ("slot_1", 0.0), "in der Mitte"
+    assert inside(7.0, 0.0) == ("slot_1", 0.0), "im Endbogen, 2 mm hinter der Bogenmitte"
+    assert inside(-7.0, 1.0) == ("slot_1", 0.0), "im anderen Endbogen, √5 < 2,5"
+    assert inside(8.0, 0.0) is None, "3 mm hinter der Bogenmitte ist daneben"
+    assert inside(0.0, 3.0) is None, "quer über die halbe Breite ist daneben"
+
+
 def test_a_tool_that_sets_a_place_does_not_look_for_a_bore(window: MainWindow) -> None:
     """Der Bohrungsvorrang gilt der **Auswahl**, nicht jedem Klick.
 

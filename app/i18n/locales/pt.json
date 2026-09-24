@@ -837,6 +837,7 @@
   "Das Laden ist unerwartet abgebrochen: {reason}": "A transferência parou inesperadamente: {reason}",
   "Das Lager konnte nicht aktualisiert werden. Angaben und Schreibrechte prüfen und die Handlung erneut wählen.": "Não foi possível atualizar o inventário. Verifique os dados e as permissões de escrita e volte a escolher a ação.",
   "Das Lager konnte nicht aktualisiert werden. Prüfen Sie die Angaben und versuchen Sie es erneut.": "Não foi possível atualizar o inventário. Verifique os dados e tente novamente.",
+  "Das Langloch ist wieder die Bohrung von vorher — Strg+Z holt es zurück.": "O furo oblongo voltou a ser o furo de antes — Ctrl+Z traz de volta.",
   "Das Langloch liegt jetzt {angle:.1f} Grad anders als vorher; die alte Richtung ist geschlossen. Wollten Sie es nur verlängern, lassen Sie die Richtung, wie sie stand.": "O furo oblongo está agora {angle:.1f} graus rodado em relação a antes; a direção anterior está fechada. Se só queria alongá-lo, deixe a direção como estava.",
   "Das Langloch steht schon so, wie es eingetragen ist.": "O furo oblongo já está tal como foi introduzido.",
   "Das Lesen der Quelle wurde abgebrochen.": "A leitura da origem foi cancelada.",

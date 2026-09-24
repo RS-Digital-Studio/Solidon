@@ -9475,6 +9475,7 @@ class MainWindow(QMainWindow):
         Schritt trägt — derselbe Aufbau wie beim Anklicken des Merkmals.
         """
         if self._leave_the_measures():
+            self._on_feature_selected(self.object_tree.selected_feature())
             return
         approval = self._preview_approval
         if approval is None or approval.owner is not self.feature_panel:
@@ -9482,6 +9483,22 @@ class MainWindow(QMainWindow):
         self._drop_feature_preview()
         self._forget_preview_approval()
         self._on_feature_selected(self.object_tree.selected_feature())
+
+    def _measures_cancelled(self) -> None:
+        """*Abbrechen* in der Maßgruppe: Der Entwurf fällt, und die Auswahl mit ihm.
+
+        Entscheidung Robert, 24.09.2026: „abbrechen = deselektieren". Bis dahin
+        blieb das Merkmal gewählt, rechts stand die Handlung des verworfenen
+        Entwurfs scharf — mit ihrer Vorgabelänge und einem freien Übernehmen —,
+        und im Bild standen weder Maße noch Knöpfe. Jetzt geht der Knopf den
+        Weg des Klicks ins Leere: Was wartet, fällt (ein gezogenes Langloch,
+        ein vorgeschlagenes Versetzen), und nichts ist mehr gewählt. Escape
+        bleibt stufenweise (:meth:`_leave_the_measures`, dann
+        :meth:`_step_selection_out`). Gerufen nach ``finished``: Die
+        Maßgruppe ist dann schon abgeräumt.
+        """
+        self._leave_the_measures()
+        self.object_tree.select_object(None)
 
     def _leave_the_measures(self) -> bool:
         """Escape verlässt die Maße im Bild — und verwirft, was darin wartet.
@@ -12025,6 +12042,15 @@ class MainWindow(QMainWindow):
 
     def _on_feature_turn_proposed(self, feature_id: str, axis: str, angle: float) -> None:
         """Ein Zug am Ring schlägt Achse und Winkel vor — für *Merkmal drehen*."""
+        flow = self._quiet_placement
+        # take_values schaltet die Handlung synchron scharf. Die Wache muss
+        # davor stehen, sonst zeigt das Panel einen abgelehnten Wechsel.
+        if (
+            flow is not None
+            and flow.spec_of().name != "rotate_feature"
+            and not self._quiet_command_allowed()
+        ):
+            return
         if not self.feature_panel.take_values(
             "rotate_feature", {"axis": axis, "angle": float(angle)}
         ):
@@ -12050,28 +12076,62 @@ class MainWindow(QMainWindow):
         Wo das Merkmalfenster die Handlung nicht anbietet, bleibt es beim
         Umriss — eine Zahl, die nirgends steht, wäre schlimmer als keine.
         """
-        if (
-            self._quiet_placement is not None
-            and self._quiet_placement.spec_of().name == "slot_hole"
-        ):
-            self._quiet_host.begin_edit()
-            self._quiet_host.take_placement(
-                {"slot_length": float(length), "slot_angle": float(angle)}
-            )
+        values: dict[str, Any] = {"slot_length": float(length), "slot_angle": float(angle)}
+        flow, host = self._quiet_placement, self._quiet_host
+        if flow is not None and host is not None and flow.spec_of().name == "slot_hole":
+            host.begin_edit()
+            host.take_placement(values)
             return
 
-        if not self.feature_panel.take_values(
-            "slot_hole", {"slot_length": float(length), "slot_angle": float(angle)}
+        if (
+            flow is not None
+            and host is not None
+            and flow.spec_of().name == "resize_hole"
+            and self._quiet_target == (self.object_tree.selected(), feature_id)
         ):
+            from app.core.geom.prepare_ops import bore_depth_is_unchanged
+
+            depth = host.values().get("depth")
+            if depth is not None:
+                feature = self._selected_feature_object()
+                if feature is not None and not bore_depth_is_unchanged(feature, float(depth)):
+                    # Die Langlochoperation trägt keine neue Tiefe. Der
+                    # laufende Bohrungsentwurf bleibt bis zu seinem Abschluss.
+                    self.viewport.cancel_slot_drag()
+                    self._say_the_change_comes_first()
+                    return
+            # Dieselbe Öffnung bekommt eine andere Form. Breite und Lage des
+            # begonnenen Entwurfs gehen mit; ein Wechsel über handlingArmed
+            # würde am alten Entwurf scheitern oder seine Maße verwerfen.
+            values.update(
+                {
+                    name: value
+                    for name, value in host.values().items()
+                    if name in {"diameter", "compensate", "x", "y", "z"}
+                }
+            )
+            values["at_feature"] = feature_id
+            self.end_quiet_placement()
+            self.feature_panel.take_values("slot_hole", values)
+            self._place_from_feature_panel("slot_hole", values, editing=True)
+            return
+
+        if not self.feature_panel.take_values("slot_hole", values):
             self.announce(tr("Die Länge des Langlochs steht rechts im Auswahlfenster."))
-        running = self._quiet_placement is not None and self._quiet_placement.active
-        if not running and self.object_tree.selected_feature() == feature_id:
-            # **Der Zug am Loch selbst holt die Maße ins Bild** (11.09.2026): Er
-            # kam ohne Platzierung (``Viewport._pull_at_the_hole``), und ab jetzt
-            # sollen Knöpfe, Umriss, Griff und Maßlinien stehen wie nach dem
-            # Knopf *Im Bild einstellen* — derselbe Weg, denn es ist derselbe
-            # Zustand: ein Vorschlag, der auf sein Übernehmen wartet.
-            self.feature_panel.request_in_view()
+            return
+        if self.object_tree.selected_feature() != feature_id:
+            return
+        # Das Scharfschalten kann synchron eine passive Maßgruppe aufbauen.
+        # Der Zug ist bereits eine Eingabe — auch nach einem vorherigen Escape.
+        flow, host = self._quiet_placement, self._quiet_host
+        if flow is not None and flow.active:
+            if host is not None and flow.spec_of().name == "slot_hole":
+                host.begin_edit()
+                host.take_placement(values)
+            return
+        entered = self.feature_panel.preview_values()
+        if entered is not None and entered[0] == "slot_hole":
+            self._place_from_feature_panel("slot_hole", entered[1], editing=True)
 
     def _on_slot_dragged(
         self, feature_id: str, length: float, angle: float, place: Any = None
@@ -12091,6 +12151,23 @@ class MainWindow(QMainWindow):
         values: dict[str, Any] = {"slot_length": float(length), "slot_angle": float(angle)}
         if place is not None:
             values.update({"x": float(place[0]), "y": float(place[1]), "z": float(place[2])})
+        flow, host = self._quiet_placement, self._quiet_host
+        if flow is not None and host is not None and flow.spec_of().name == "slot_hole":
+            host.begin_edit()
+            host.take_placement(values)
+            # apply_slot_drag hat den Griffzustand bereits abgeräumt. Bei
+            # identischen Werten bleibt valuesChanged still; auch ein wegen
+            # laufender Vorbereitung abgelehntes Übernehmen behält den Umriss.
+            self._reshape_slot_from_values(host.values())
+            flow.accept()
+            return
+        entered = self.feature_panel.preview_values()
+        if (
+            entered is not None
+            and entered[0] == "slot_hole"
+            and entered[1].get("at_feature") == feature_id
+        ):
+            values = {**entered[1], **values}
         self._feature_step("slot_hole", feature_id, values)
 
     def _commit_preview_order(self, order: _PreviewOrder) -> bool:
@@ -12100,6 +12177,8 @@ class MainWindow(QMainWindow):
             if order.change_name is not None:
                 self.session.change_kernel(order.change_op, order.change_name, values)
                 return self.session.history.operation(order.change_op).op == order.change_name
+            if self.session.history.operation(order.change_op).op == "slot_hole":
+                return self._commit_slot_change(order.change_op, values)
             return self.session.change_params(order.change_op, values)
         if not order.drafts:
             return False
@@ -12224,21 +12303,116 @@ class MainWindow(QMainWindow):
             value = params.get(name)
             if isinstance(value, int | float) and abs(float(value) - was) > EPS_DISPLAY:
                 changed[name] = float(value)
+        diameter = params.get("diameter")
+        if isinstance(diameter, int | float):
+            from app.core.geom.prepare import bore_diameter
+            from app.core.knowledge.profiles import for_object
+
+            compensate = bool(params.get("compensate", False))
+            effective = bore_diameter(
+                float(diameter), for_object(self.session.profile, entry), compensate
+            )
+            if abs(effective - float(feature.params["diameter"])) > EPS_DISPLAY:
+                changed.update(diameter=float(diameter), compensate=compensate)
         return _PreviewOrder(change_op=int(step.id), change_values=changed)
 
-    def _change_slot_step(self, feature_id: str, params: Mapping[str, Any]) -> bool:
-        """Vorschau und Übernahme korrigieren denselben ursprünglichen Langlochschritt."""
-        order = self._prepare_slot_change(feature_id, params)
-        if order is None:
+    def _commit_slot_change(self, step_id: int, changes: dict[str, Any]) -> bool:
+        """Den Langlochschritt ändern — oder ihn fallen lassen, wenn er zurück ist.
+
+        Beide Abschlüsse gehen hier durch, das Übernehmen im Merkmalfenster und
+        das der Maßgruppe im Bild: Beide bereiten ihren Auftrag über
+        :meth:`_prepare_slot_change` vor und schreiben ihn über
+        :meth:`_commit_preview_order`. Steht danach genau die Bohrung da,
+        aus der der Schritt das Langloch gezogen hat
+        (:meth:`_slot_step_undone`), fällt der Schritt, statt als Schritt ohne
+        Wirkung im Verlauf zu stehen; Strg+Z holt ihn zurück.
+        """
+        if not self._slot_step_undone(step_id, changes) or self._slot_named_later(step_id):
+            return self.session.change_params(step_id, changes)
+        if not self.session.remove_operations([step_id]):
             return False
-        if not order.change_values:
-            self.announce(tr("Das Langloch steht schon so, wie es eingetragen ist."))
-            return True
-        owner = self._quiet_host or self.feature_panel
-        if self._preview_can_apply(owner, order):
-            self._drop_feature_preview()
-            assert order.change_op is not None
-            self.session.change_params(order.change_op, dict(order.change_values))
+        self.announce(tr("Das Langloch ist wieder die Bohrung von vorher — Strg+Z holt es zurück."))
+        return True
+
+    def _slot_named_later(self, step_id: int) -> bool:
+        """Ob ein späterer Schritt ein Merkmal nennt, das dieser Schritt erzeugt hat.
+
+        Dann fällt der Schritt nicht, auch wenn er zurück auf seiner Bohrung
+        ist: Eine Fase oder *Bohrung ändern* an ``slot_1`` verwiese sonst auf
+        ein Merkmal, das der Verlauf nie erzeugt hat (Review 24.09.2026).
+        Geändert wird er trotzdem — der Kern sagt dann, dass aus dem Langloch
+        wieder eine runde Bohrung geworden ist.
+        """
+        result = self.session.last_result
+        ops = self.session.project.document.ops
+        index = next((number for number, op in enumerate(ops) if op.id == step_id), None)
+        if result is None or index is None:
+            return False
+        made = {
+            str(name)
+            for entry in result.scene.objects.values()
+            for name, feature in entry.features.items()
+            if getattr(feature, "created_by", None) == step_id
+        }
+
+        def names(value: Any) -> Iterator[str]:
+            if isinstance(value, str):
+                yield value
+            elif isinstance(value, list | tuple):
+                for item in value:
+                    yield from names(item)
+
+        return bool(made) and any(
+            name in made
+            for later in ops[index + 1 :]
+            for value in later.params.values()
+            for name in names(value)
+        )
+
+    def _slot_step_undone(self, step_id: int, changes: Mapping[str, Any]) -> bool:
+        """Ob die Änderung den Langlochschritt auf seine Bohrung zurücksetzt.
+
+        Das ist er, wenn danach genau die Bohrung dasteht, die er gezogen hat:
+        rund (:func:`prepare.is_round_length`), an ihrer Stelle und in ihrer
+        Breite. Welche Bohrung das war, sagt die Sichtung vor dem Schritt
+        (``EvaluationResult.sights``) — das Merkmal, das sein ``at_feature``
+        damals traf. Fehlt sie (etwa mit Einfügemarke), bleibt es beim Ändern:
+        Der Kern sagt dann selbst, dass die Bohrung schon rund ist.
+        """
+        from app.core.geom.prepare import is_round_length
+
+        step = next((op for op in self.session.project.document.ops if op.id == step_id), None)
+        result = self.session.last_result
+        if step is None or result is None:
+            return False
+        params = {**step.params, **changes}
+        named = str(params.get("at_feature") or "")
+        hole = next(
+            (
+                sight.feature
+                for sight in result.sights.get(step_id, ())
+                if sight.ref.feature_id == named and sight.feature is not None
+            ),
+            None,
+        )
+        if hole is None or hole.kind != "hole" or bool(params.get("compensate", False)):
+            return False
+        width = float(hole.params.get("diameter") or 0.0)
+        centre = hole.params.get("centre")
+        length = params.get("slot_length")
+        if centre is None or not isinstance(length, int | float):
+            return False
+        if not is_round_length(float(length), width):
+            return False
+        # Leer heißt „wie gemessen"; ein Ausdruck ist eine Absicht, die sich
+        # hier nicht nachrechnen lässt — dann bleibt der Schritt stehen.
+        wanted = (("diameter", width), *zip(("x", "y", "z"), map(float, centre), strict=True))
+        for name, was in wanted:
+            value = params.get(name)
+            if value is None:
+                continue
+            if not isinstance(value, int | float) or abs(float(value) - was) > EPS_DISPLAY:
+                return False
         return True
 
     def _on_face_dragged(self, feature_id: str, distance: float) -> None:
@@ -14513,15 +14687,10 @@ class MainWindow(QMainWindow):
             if bore is not None:
                 self._place_from_feature_panel(bore.op, dict(bore.params))
             else:
-                # **Ein Langloch aus einem Schritt bekommt seine Maße an
-                # diesem Schritt** (``_change_slot_step``): *Zum Langloch
-                # ziehen* wird scharf, sonst nähme der Weg ins Bild die erste
-                # Handlung — *Bohrung ändern*, die am Langloch den Griff sperrt
-                # (gemessen am 21.09.2026 nach dem Übernehmen eines Zugs).
-                if feature.kind == "slot" and any(
-                    entry.id == getattr(feature, "created_by", None) and entry.op == "slot_hole"
-                    for entry in self.session.project.document.ops
-                ):
+                # Jedes Langloch öffnet Länge, Richtung und Breite, auch nach
+                # einem Import. Die Herkunft entscheidet erst beim Schreiben,
+                # ob sein Erzeugerschritt geändert oder ein neuer angelegt wird.
+                if feature.kind == "slot":
                     self.feature_panel.arm_action("slot_hole")
                 self.feature_panel.request_in_view()
         if self._quiet_placement is None:
@@ -15089,6 +15258,8 @@ class MainWindow(QMainWindow):
         *Übernehmen* ihn geprüft vorfindet. Die Uhr stellt erst ein echter Wert
         (:meth:`_on_feature_values_changed`).
         """
+        if self._hand_the_measures_over(op, params):
+            return
         flow = self._quiet_placement
         if flow is not None and flow.spec_of().name != op:
             if not self._quiet_command_allowed():
@@ -15106,6 +15277,78 @@ class MainWindow(QMainWindow):
             self._set_preview_order(self._quiet_host or self.feature_panel, order)
         self._offer_feature_cancel()
         self._follow_chamfer_sides(op, params)
+
+    def _hand_the_measures_over(
+        self, op: str, params: Mapping[str, Any], *, editing: bool = False
+    ) -> bool:
+        """Der Zwilling im Merkmalfenster übernimmt die Maßgruppe im Bild.
+
+        An einem Loch stehen *Bohrung ändern* und *Zum Langloch ziehen*
+        nebeneinander, die eine als Maßgruppe im Bild, die andere rechts
+        (:data:`~app.ui.panels.LEADS_INTO_THE_VIEW`). Ein Klick in ein Feld der
+        anderen beendete bis zum 24.09.2026 die Maßgruppe: Maßlinien, Knöpfe
+        und Umriss verschwanden, und die Länge wurde ohne jedes Maß zur Kante
+        getippt — genau dort, wo der Zug an den Knöpfen die Maße behält
+        (Robert: „die maße fehlen auch beim langloch die wir bei einer bohrung
+        haben"). Jetzt wechselt die Maßgruppe auf die angefasste Handlung, und
+        der Fokus geht in dasselbe Feld im Bild; rechts steht dann die andere.
+
+        Nur solange nichts begonnen ist: Ein begonnener Entwurf gehört seiner
+        Handlung, und dort sagt :meth:`_quiet_command_allowed` den Rest. Und
+        nur für den Klick: Wer mit Tab durch das Fenster geht, bleibt dort
+        (:meth:`FeaturePanel.armed_by_tab`).
+        """
+        from app.ui.panels import FIELD_PROPERTY, LEADS_INTO_THE_VIEW
+
+        flow, host, target = self._quiet_placement, self._quiet_host, self._quiet_target
+        if (
+            op not in LEADS_INTO_THE_VIEW
+            or flow is None
+            or host is None
+            or target is None
+            or host.begun
+            or flow.spec_of().name == op
+            or flow.spec_of().name not in LEADS_INTO_THE_VIEW
+            or target != (self.object_tree.selected(), self.object_tree.selected_feature())
+            or str(params.get("at_feature") or "") != str(target[1] or "")
+            or self.feature_panel.armed_by_tab()
+        ):
+            return False
+        focused = QApplication.focusWidget()
+        name = None
+        while focused is not None and name is None:
+            name = focused.property(FIELD_PROPERTY)
+            focused = focused.parentWidget()
+        self._place_from_feature_panel(op, dict(params), editing=editing)
+        running = self._quiet_placement
+        if isinstance(name, str) and running is not None and running.spec_of().name == op:
+            window_ref = weakref.ref(self)
+
+            def focus() -> None:
+                window = window_ref()
+                if window is not None and window._quiet_placement is running:
+                    window._focus_measure_field(name)
+
+            # Nach der Ereignisrunde: Der Fokus kommt gerade erst in das Feld
+            # rechts, das die Maßgruppe eben verborgen hat.
+            QTimer.singleShot(0, focus)
+        return True
+
+    def _focus_measure_field(self, name: str) -> None:
+        """Das Feld dieses Parameters in der Maßgruppe bekommt den Fokus."""
+        from app.ui.panels import FIELD_PROPERTY
+
+        flow = self._quiet_placement
+        group = flow.measure_group if flow is not None else None
+        if group is None:
+            return
+        for widget in group.findChildren(QWidget):
+            if widget.property(FIELD_PROPERTY) == name and widget.isVisibleTo(group):
+                spin = getattr(widget, "spin", widget)
+                spin.setFocus(Qt.FocusReason.OtherFocusReason)
+                if isinstance(spin, QAbstractSpinBox):
+                    spin.selectAll()
+                return
 
     def _follow_chamfer_sides(self, op: str, params: Mapping[str, Any]) -> None:
         """Die Marken der Fase an der gewählten Kante folgen den Feldern (P6.2).
@@ -15168,9 +15411,7 @@ class MainWindow(QMainWindow):
         # Sofort und nicht entprellt: Der Umriss ist eine Linie und keine
         # Boolesche, und wer eine Zahl tippt, will sie sehen.
         if op == "slot_hole":
-            self.viewport.reshape_slot(
-                float(params.get("slot_length") or 0.0), float(params.get("slot_angle") or 0.0)
-            )
+            self._reshape_slot_from_values(params)
         self._follow_chamfer_sides(op, params)
         flow, host = self._quiet_placement, self._quiet_host
         if flow is not None and flow.active:
@@ -15199,6 +15440,39 @@ class MainWindow(QMainWindow):
         if approval is not previous:
             self._feature_preview.start()
         self._offer_feature_cancel()
+
+    def _reshape_slot_from_values(self, params: Mapping[str, Any]) -> None:
+        """Griff und Maßgruppe zeigen dieselbe Zielbreite wie der Schnitt."""
+        from app.core.geom.prepare import bore_diameter
+        from app.core.knowledge.profiles import for_object
+
+        selected = self.object_tree.selected()
+        result = self.session.last_result
+        entry = result.scene.objects.get(selected) if result is not None and selected else None
+        feature = entry.features.get(str(params.get("at_feature") or "")) if entry else None
+        if feature is None:
+            return
+        diameter = params.get("diameter")
+        width = (
+            bore_diameter(
+                float(diameter),
+                for_object(self.session.profile, entry),
+                bool(params.get("compensate", False)),
+            )
+            if isinstance(diameter, int | float)
+            else float(feature.params.get("diameter") or 0.0)
+        )
+        if width <= 0.0:
+            return
+        self.viewport.reshape_slot(
+            float(params.get("slot_length") or 0.0),
+            float(params.get("slot_angle") or 0.0),
+            diameter=width,
+            feature_id=feature.id,
+            centre=(float(params["x"]), float(params["y"]), float(params["z"]))
+            if all(isinstance(params.get(axis), int | float) for axis in ("x", "y", "z"))
+            else None,
+        )
 
     def _preview_feature_change(self) -> None:
         """Der tatsächliche Übernahmeauftrag läuft durch denselben Freigabepfad wie im Menü."""
@@ -15254,30 +15528,8 @@ class MainWindow(QMainWindow):
                         return
             flow.accept()
             return
-        # **Und ein Zug am Langlochgriff endet hier ebenso.** Er wartet mit
-        # seinem Umriss im Bild auf eine Bestätigung; seit die Langlochleiste
-        # gefallen ist, ist dieser Knopf sie. Gemeldet wird an das Merkmal,
-        # das **gezogen** wurde — der Viewport hält es seit dem Loslassen fest
-        # (`apply_slot_drag`), und eine inzwischen gewechselte Auswahl meint
-        # ein anderes Loch.
-        if op == "slot_hole" and self.viewport.slot_drag_waits():
-            order = self._prepare_feature_order(op, params)
-            if order is None or not self._preview_can_apply(self.feature_panel, order):
-                return
-            self._remember_feature_edit(params)
-            # Die Stelle kommt aus den Feldern rechts — dort landet der Zug am
-            # Bewegungsgriff ebenso wie eine getippte Zahl.
-            place = (
-                (float(params["x"]), float(params["y"]), float(params["z"]))
-                if all(name in params for name in ("x", "y", "z"))
-                else None
-            )
-            self.viewport.apply_slot_drag(
-                float(params.get("slot_length") or 0.0),
-                float(params.get("slot_angle") or 0.0),
-                place,
-            )
-            return
+        # Auch der Langlochzug übernimmt den vollständigen geprüften Auftrag,
+        # einschließlich Breite und Materialtoleranz aus den Feldern.
         self._apply_placed_feature(op, params)
 
     def _remember_feature_edit(
@@ -15528,7 +15780,9 @@ class MainWindow(QMainWindow):
             bool(params.get("compensate", False)),
         )
 
-    def _place_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
+    def _place_from_feature_panel(
+        self, op: str, params: dict[str, Any], *, editing: bool = False
+    ) -> None:
         """Eine passive Maßgruppe bindet beim ersten Eingriff ihren vollständigen Auftrag."""
         from app.ui.panels import feature_field_values, refresh_feature_fields
         from app.ui.placement_flow import PlacementFlow, QuietHost
@@ -15688,6 +15942,8 @@ class MainWindow(QMainWindow):
             order = prepare(op, host.values())
             if window is None or order is None:
                 return
+            if op == "slot_hole" and host.begun:
+                window._reshape_slot_from_values(host.values())
             if not reading["fields"]:
                 window.feature_panel.take_values(op, host.values(), arm=False)
             previous = window._preview_approval
@@ -15836,6 +16092,7 @@ class MainWindow(QMainWindow):
         host.valuesChanged.connect(show_values)
         host.editStarted.connect(begun)
         host.finished.connect(weak_slot(self, MainWindow.end_quiet_placement))
+        host.cancelled.connect(weak_slot(self, MainWindow._measures_cancelled))
         flow.set_measure_fields(
             fields,
             editors=editors.values(),
@@ -15847,8 +16104,10 @@ class MainWindow(QMainWindow):
         if not flow.active:
             self.end_quiet_placement()
             return
+        if editing:
+            host.begin_edit()
         show_values()
-        self.feature_panel.set_measuring(True, op=op)
+        self.feature_panel.set_measuring(True, op=op, begun=host.begun)
 
     def _end_changed_quiet_placement(self) -> None:
         """Eine Platzierung räumen, sobald die Auswahl eine andere Stelle meint."""

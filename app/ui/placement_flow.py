@@ -182,6 +182,8 @@ class QuietHost(QObject):
     commitStarted = Signal()
     commitFinished = Signal(bool)
     applyStateChanged = Signal()
+    cancelled = Signal()
+    """Nach :meth:`cancel` — der Kunde hat *Abbrechen* gedrückt, nicht Escape."""
 
     values_stand_elsewhere = True
     """Sie stehen im Merkmalfenster — deshalb gibt es ihn überhaupt."""
@@ -298,6 +300,18 @@ class QuietHost(QObject):
         self._finished = True
         self.begun = False
         self.finished.emit(int(QDialog.DialogCode.Rejected))
+
+    def cancel(self) -> None:
+        """*Abbrechen*: verwirft wie :meth:`reject` und sagt es danach eigens.
+
+        ``cancelled`` kommt nach ``finished``: Wer den Träger gebaut hat,
+        räumt ihn zuerst ab und entscheidet dann, was aus der Auswahl wird.
+        Escape und ein Kontextwechsel gehen weiter über :meth:`reject`.
+        """
+        if self._finished:
+            return
+        self.reject()
+        self.cancelled.emit()
 
     # --- die vier Fensterfragen, alle ohne Fenster --------------------------------
 
@@ -1183,7 +1197,7 @@ class PlacementFlow(QObject):
         self._measure_cancel = QPushButton(tr("Abbrechen"), self._measure_box)
         self._measure_cancel.setObjectName("placement_measure_cancel")
         self._measure_cancel.setIcon(icon("cancel", self._measure_cancel))
-        self._measure_cancel.clicked.connect(self.back)
+        self._measure_cancel.clicked.connect(self._cancel_measures)
         measure_actions.addWidget(self._measure_cancel)
         measure_layout.addLayout(measure_actions)
         self._measure_scope_box = QWidget(self._measure_box)
@@ -1248,6 +1262,13 @@ class PlacementFlow(QObject):
         self._held_references: tuple[placement.EdgeReference, ...] | None = None
         self._held_centre = ""
         self._reference_message = ""
+        self._distance_message = ""
+        """Warum der Abstand gerade nicht gilt — gezeigt nur, solange er nicht gilt.
+
+        Ein eigenes Feld und nicht der Bezugshinweis: Jeder Weg, der den
+        Abstand wieder gültig macht (Griff, neue Stelle, Neuaufbau), setzt
+        ``_distance_valid``; der Hinweis daneben blieb sonst mit „außerhalb"
+        stehen, während Übernehmen längst frei war (Review 24.09.2026)."""
         self._reference_boxes: list[QWidget] = []
         # **Der Bezugswechsel steht nicht im Bild** (Robert, 21.09.2026,
         # RM-197: „das mit bezug ändern hintendran brauche ich garnicht").
@@ -1494,11 +1515,15 @@ class PlacementFlow(QObject):
             # Zug und neuer Durchmesser: eine Transaktion aus zwei Schritten
             # (Entscheidung Robert, 22.09.2026).
             information = tr("Übernehmen zieht die Bohrung zum Langloch und ändert die Breite.")
+        distance = "" if self._distance_valid else self._distance_message
         self._measure_note.setText(
-            "\n".join(filter(None, (reason, self._reference_message, information)))
+            "\n".join(filter(None, (reason, distance, self._reference_message, information)))
         )
         self._measure_note.setVisible(
-            (bool(reason) and begun) or bool(self._reference_message) or bool(information)
+            (bool(reason) and begun)
+            or bool(distance)
+            or bool(self._reference_message)
+            or bool(information)
         )
 
     def _size_measure_fields(self, room: QRect) -> None:
@@ -1627,6 +1652,11 @@ class PlacementFlow(QObject):
     def target(self) -> str:
         """Der Körper, auf dem die zuletzt übernommenen Zahlen liegen."""
         return self._object_id
+
+    @property
+    def measure_group(self) -> QWidget | None:
+        """Die Fachfelder der Maßgruppe im Bild — ``None`` ohne Maßgruppe."""
+        return self._measure_group
 
     def can_place(self) -> bool:
         """Ob hier und jetzt platziert werden darf.
@@ -1851,6 +1881,19 @@ class PlacementFlow(QObject):
                 self.pointer(event)
             return True
         return False
+
+    def _cancel_measures(self) -> None:
+        """*Abbrechen* der Maßgruppe — am gewählten Merkmal ein eigener Weg.
+
+        Dort verwirft der Knopf den Entwurf und hebt die Auswahl auf (Robert,
+        24.09.2026: „abbrechen = deselektieren"); das entscheidet, wer den
+        Träger gebaut hat (``QuietHost.cancelled``). Im Dialogweg geht er
+        zurück wie Escape (:meth:`back`).
+        """
+        if isinstance(self.dialog, QuietHost) and not self._disposed:
+            self.dialog.cancel()
+            return
+        self.back()
 
     def back(self) -> None:
         """Escape behält alle Werte, übernimmt aber keinen Schritt.
@@ -2380,24 +2423,36 @@ class PlacementFlow(QObject):
         # :attr:`_seated_at_feature`.
         self._seated_at_feature = True
         mesh = for_a_worker(entry.mesh)
+        values = self.dialog.values()
+        target = None
+        if self.spec_of().name in {"slot_hole", "resize_hole"} and all(
+            isinstance(values.get(axis), int | float) for axis in ("x", "y", "z")
+        ):
+            target = np.asarray([values[axis] for axis in ("x", "y", "z")], dtype=float)
 
         def compute() -> Any:
             seat = placement.seat_of(mesh, feature, entry.features)
             if seat is None:
                 return None
             prepared, mouth = seat
+            if target is not None:
+                # Die Fläche stammt vom bestehenden Loch; ein übergebener
+                # Entwurf kann seine Mitte bereits versetzt haben. Die neue
+                # Mündung behält denselben Abstand zur Mitte wie das Merkmal —
+                # **in der Ebene der Fläche**: Ein Rest entlang der Normalen
+                # (eine gerundete Feldzahl) hebt den Punkt von ihr ab, und
+                # ``at_point`` sagte dann ab, als gäbe es keine Fläche.
+                shift = target - np.asarray(feature.params["centre"], dtype=float)
+                normal = np.asarray(prepared.frame.normal, dtype=float)
+                point = np.asarray(mouth) + shift - normal * float(shift @ normal)
+                mouth = (float(point[0]), float(point[1]), float(point[2]))
             return prepared, placement.at_point(prepared, mouth)
 
         def done(value: Any) -> None:
             if not isValid(self) or self._disposed or not self.active or stamp != self._serial:
                 return
             if value is None:
-                # **Kein Fehler, sondern ein Rückfall auf den gewohnten Weg.**
-                # Eine Verrundung hat keine Trägerfläche, und ein Merkmal auf
-                # einer gekrümmten Fläche gibt keine ebenen Maße her; dort
-                # bleibt es beim Zeigen, statt eine Absage zu melden — und dann
-                # zielt wieder der Zeiger.
-                self._seated_at_feature = False
+                self._no_seat_at_feature()
                 return
             self._prepared, self._surface = value
             self._centre_id = self._surface.centres[0].feature_id if self._surface.centres else ""
@@ -2409,12 +2464,35 @@ class PlacementFlow(QObject):
             self._settle()
 
         def failed(_detail: str) -> None:
-            # **Ohne Trägerfläche zielt wieder der Zeiger.** Eine Verrundung
-            # hat keine, und dort ist das Zeigen der Rückfall, nicht ein
-            # Fehler.
-            self._seated_at_feature = False
+            if isValid(self) and not self._disposed and self.active and stamp == self._serial:
+                self._no_seat_at_feature()
 
         self.session.placement_async(compute, done, failed)
+
+    def _no_seat_at_feature(self) -> None:
+        """Zum vorhandenen Merkmal gibt es keine ebene Trägerfläche — und dann?
+
+        **Im Dialog ein Rückfall auf den gewohnten Weg**: Eine Verrundung hat
+        keine Trägerfläche, und ein Merkmal auf einer gekrümmten Fläche gibt
+        keine ebenen Maße her; dort bleibt es beim Zeigen, statt eine Absage
+        zu melden — und dann zielt wieder der Zeiger.
+
+        **An der Maßgruppe im Bild nicht** (24.09.2026). Dort gehört die Stelle
+        dem Merkmal (:attr:`_seated_at_feature`), und ein Zeiger, der zielt,
+        verschob Bohrung und Langloch bei jeder Mausbewegung über dem Teil: am
+        Schaber rückte die Magnettasche beim Zug an einem Langlochknopf um
+        4,6 mm zur Seite und 3,5 mm in die Höhe, und *Übernehmen* blieb danach
+        grau, ohne einen Satz. Die Felder bleiben dann die Bedienung, wie an
+        einem Verlaufsschritt ohne belegten Sitz (:meth:`_begin_at_bore_step`),
+        und der Hinweis sagt, dass es hier keine Flächenmaße gibt.
+        """
+        if not isinstance(self.dialog, QuietHost):
+            self._seated_at_feature = False
+            return
+        self._measure_without_surface = True
+        self._seated_at_feature = True
+        self._refresh_measure_actions()
+        self.redraw()
 
     def _begin_on_a_face(self, entry: SceneObject) -> None:
         """Ein Baustein sitzt sofort auf einer Fläche — ohne Klick, mit Griff.
@@ -3042,6 +3120,14 @@ class PlacementFlow(QObject):
             )
             self.redraw()
 
+    def _invalid_distance(self, message: str) -> None:
+        """Ungültige Abstände erklären und beide Abschlüsse unmittelbar sperren."""
+        self._distance_valid = False
+        self._distance_message = message
+        self._note.setText(message)
+        self._accept.setEnabled(False)
+        self._refresh_measure_actions()
+
     def _distance_changed(self, _value: float) -> None:
         self._reference_message = ""
         self._reference_pick = None
@@ -3055,11 +3141,9 @@ class PlacementFlow(QObject):
                 (self._measures[0].value_mm(), self._measures[1].value_mm()),
             )
         except ValidationError, ValueError, ArithmeticError:
-            self._distance_valid = False
-            self._note.setText(
+            self._invalid_distance(
                 tr("Diese Abstände liegen außerhalb der Fläche. Kleinere Werte eingeben.")
             )
-            self._accept.setEnabled(False)
             return
         self._frozen = True
         self._distance_valid = True
@@ -3086,11 +3170,9 @@ class PlacementFlow(QObject):
                 (self._centre_measures[0].value_mm(), self._centre_measures[1].value_mm()),
             )
         except ValidationError, ValueError, ArithmeticError:
-            self._distance_valid = False
-            self._note.setText(
+            self._invalid_distance(
                 tr("Diese Abstände liegen außerhalb der Fläche. Andere Werte eingeben.")
             )
-            self._accept.setEnabled(False)
             return
         self._frozen = True
         self._distance_valid = True

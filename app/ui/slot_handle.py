@@ -33,7 +33,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from app.core.geom.prepare import shortest_slot
+from app.core.geom.prepare import is_round_length, shortest_slot
 from app.core.units import EPS_GEOM, is_close
 from app.ui.render import shapes
 from app.ui.render.api import Colour, Item, PointerEvent, Renderer, SurfaceStyle, Vec3
@@ -48,6 +48,12 @@ from app.ui.render.navigator import CLICK_SLACK
 # bekam im Objektbaum eine **Bohrung** statt seines Langlochs — oder gar nichts,
 # und damit nichts mehr zum Anklicken. Die Begründung der Zahl steht bei
 # :data:`app.core.geom.prepare.SLOT_SHORTEST_SHARE`; der Griff fragt.
+#
+# **Und darunter rastet er auf rund** (Robert, 24.09.2026: „wenn man ein
+# langloch so zieht, dass es wieder eine normale Bohrung wäre, sollte es kurz
+# einrasten"). Zwischen der Breite und der kürzesten Länge gibt es kein Loch;
+# ein Zug in diesen Streifen hält die kürzeste Länge bis zu seiner Mitte und
+# fällt darunter auf die Breite — die runde Bohrung (:func:`settled_length`).
 
 #: Wie fein der Umriss abgetastet wird — beide Bögen zusammen.
 #:
@@ -97,6 +103,8 @@ __all__ = [
     "SlotHandle",
     "dragged_slot",
     "plane_axes",
+    "settled_length",
+    "shown_length",
     "slot_outline",
 ]
 
@@ -138,14 +146,51 @@ def dragged_slot(
     ``angle`` ist die Richtung, die gerade gilt. Sie zählt genau dort, wo der
     Zug keine eigene hat: über der Mitte ist jede Richtung gleich weit weg, und
     ein Loch, das dort umspringt, folgt dem Zittern der Hand statt der Absicht.
+    **Und ein rundes Loch hat keine**: Rastet der Zug auf die Breite, bleibt es
+    bei der Richtung, die galt — sonst wäre ein Zug hinaus und zurück ein
+    Vorschlag mit neuer Richtung an einem Loch, das keine hat.
     """
     x_axis, y_axis = plane_axes(axis)
     offset = np.asarray(point, dtype=float) - np.asarray(centre, dtype=float)
     across = float(offset @ x_axis)
     along = float(offset @ y_axis)
     reach = math.hypot(across, along)
-    turned = math.degrees(math.atan2(along, across)) if reach > EPS_GEOM else float(angle)
-    return max(2.0 * reach, shortest_slot(diameter)), _normalised_angle(turned)
+    length = settled_length(2.0 * reach, diameter)
+    if is_round_length(length, diameter) or reach <= EPS_GEOM:
+        return length, _normalised_angle(angle)
+    return length, _normalised_angle(math.degrees(math.atan2(along, across)))
+
+
+def settled_length(length: float, diameter: float) -> float:
+    """Die Länge, die der Griff hält: ein Langloch oder die runde Bohrung.
+
+    Ab :func:`app.core.geom.prepare.shortest_slot` gilt die Länge, wie sie ist.
+    Darunter gibt es kein Langloch, das die Erkennung hält; die untere Hälfte
+    des Streifens rastet deshalb auf die Breite selbst — die runde Bohrung —,
+    die obere auf die kürzeste Länge. Die Mitte als Grenze, weil der Streifen
+    schmal ist (drei Zehntel Millimeter an kleinen Löchern) und beide Formen
+    von dort gleich weit weg sind.
+    """
+    shortest = shortest_slot(diameter)
+    if length >= shortest:
+        return float(length)
+    if length <= (diameter + shortest) / 2.0:
+        return float(diameter)
+    return shortest
+
+
+def shown_length(length: float, diameter: float) -> float:
+    """Die Länge, die eine eingetragene Zahl im Bild zeigt: rund nur genau auf der Breite.
+
+    Anders als der Zug (:func:`settled_length`) rastet eine Zahl nicht. Zwischen
+    Breite und kürzester Länge nimmt der Schnitt nichts an
+    (``NEITHER_ROUND_NOR_SLOT``), und ein Kreis im Bild verspräche dort die
+    runde Bohrung, die er nicht schneidet (Review 24.09.2026). Gezeigt wird
+    dann die kürzeste Länge, und der Grund steht über der Vorschau.
+    """
+    if is_round_length(length, diameter):
+        return float(diameter)
+    return max(float(length), shortest_slot(diameter))
 
 
 def _normalised_angle(angle: float) -> float:
@@ -182,12 +227,26 @@ def slot_outline(
         (float(axis[0]), float(axis[1]), float(axis[2])),
         (float(centre[0]), float(centre[1]), float(centre[2])),
     )
+    per_arc = max(2, segments // 2)
+    if is_round_length(length, diameter):
+        # Rund hat keinen Weg, und :func:`slot_profile` keinen Umriss ohne
+        # einen: Der Kreis ist die Form, auf die der Zug gerastet ist. Gebaut
+        # wie ein Langloch mit zwei Flanken der Länge null — dieselbe
+        # Punktzahl, damit der Renderer beim Einrasten nur Punkte tauscht.
+        radius = diameter / 2.0
+        ring: list[tuple[float, float]] = []
+        for begin in (-math.pi / 2.0, math.pi / 2.0):
+            ring.append((radius * math.cos(begin), radius * math.sin(begin)))
+            for step in range(per_arc):
+                turn = begin + math.pi * step / per_arc
+                ring.append((radius * math.cos(turn), radius * math.sin(turn)))
+        ring.append(ring[0])
+        return np.asarray([to_world(frame, point) for point in ring], dtype=float)
     outline = slot_profile(
         radius=diameter / 2.0,
         travel=slot_travel(diameter=diameter, length=length),
         angle_deg=angle,
     )
-    per_arc = max(2, segments // 2)
     flat: list[tuple[float, float]] = []
     for segment in outline.segments:
         start, end = segment.start, segment.end
@@ -246,13 +305,18 @@ class SlotHandle:
         self._cancel = cancel_callback
         self._settle_angle = settle_angle
         self._press_point = (0, 0)
+        #: Knopf minus Druckpunkt auf der Mündungsebene — null am Knopf,
+        #: gesetzt von :meth:`take_press` für einen Druck ins Loch.
+        self._grab = np.zeros(3)
         self._dragged = False
         self._had_outline = False
         self._centre = np.asarray(centre, dtype=float)
         self._axis = np.asarray(axis, dtype=float)
         self._diameter = float(diameter)
         self._colour = colour
-        self.length = max(float(length), shortest_slot(self._diameter))
+        # Eine runde Bohrung steht mit ihrer Breite da, die Knöpfe auf ihrem
+        # Rand — nicht an der kürzesten Länge eines Langlochs, das es nicht gibt.
+        self.length = shown_length(float(length), self._diameter)
         self.angle = _normalised_angle(angle)
         self._start_length = self.length
         self._start_angle = self.angle
@@ -399,6 +463,13 @@ class SlotHandle:
             self._start_length = self.length
             self._start_angle = self.angle
             self._press_point = (event.x, event.y)
+            # **Der Knopf wandert um den Weg des Zeigers, er springt nicht auf
+            # ihn.** Wer den Knopf neben seiner Mitte greift, hielt ihn sonst
+            # beim ersten Bildpunkt an der Zeigerspitze — an einem Langloch
+            # Ø 3,8 auf 7,6 mm, dessen Knopf so breit ist wie das Loch, waren
+            # das 16 Grad Drehung, bevor die Hand sich bewegt hatte (Prüfstand
+            # am echten Fenster, 24.09.2026).
+            self._grab = self._grab_at(event, self._held)
             self._dragged = False
             self._had_outline = self._outline is not None
             return True
@@ -448,16 +519,42 @@ class SlotHandle:
         schon da ist; die Zeigerbewegung davor hat also keinen Knopf gefunden,
         und :meth:`handle` wiese den Druck ab. Hier sagt der Aufrufer, welcher
         Knopf gemeint ist — der nähere —, und der Druck geht denselben Weg.
+
+        **Am Langloch wandert der Knopf auch hier um den Weg des Zeigers**
+        (:meth:`_grab_at`): Der Druck liegt irgendwo in der Öffnung, und vom
+        Zeiger aus gerechnet sprängen Länge und Richtung beim ersten Bildpunkt
+        auf dessen Lage — seitlich gedrückt um bis zu 90 Grad, in der Mitte auf
+        die Mindestlänge. **An der runden Bohrung nicht:** Sie hat keine
+        Richtung, die zu erhalten wäre, und wer sie anfasst und zieht, zieht
+        sie in die Richtung seiner Hand auf — aus der Mitte heraus.
         """
         self._hovered = index
-        return self.handle(event)
+        if not self.handle(event):
+            return False
+        if is_round_length(self.length, self._diameter):
+            self._grab = np.zeros(3)
+        return True
+
+    def _grab_at(self, event: PointerEvent, index: int | None) -> np.ndarray:
+        """Knopf minus Druckpunkt auf der Mündungsebene — null ohne Schnittpunkt."""
+        ray = None if index is None else self._ray(event)
+        hit = (
+            None
+            if ray is None
+            else ray_plane_hit(ray[0], ray[1], tuple(self._centre), tuple(self._axis))
+        )
+        if hit is None or index is None:
+            return np.zeros(3)
+        seat = np.asarray(self._knob_seat(index, self.length, self.angle), dtype=float)
+        offset: np.ndarray = seat - np.asarray(hit, dtype=float)
+        return offset
 
     def shift(self, offset: Vec3) -> None:
         """Knöpfe und Umriss um ``offset`` versetzen — ein fremder Zug trägt sie mit."""
         self._shift = np.asarray(offset, dtype=float)
         self._redraw()
 
-    def set_values(self, length: float, angle: float) -> None:
+    def set_values(self, length: float, angle: float, *, diameter: float | None = None) -> None:
         """Länge und Richtung von außen — die nachgebesserte Zahl aus der Leiste.
 
         Dieselbe Rechnung wie beim Zug, nur ohne Zeiger: Knöpfe an ihre Stelle,
@@ -465,7 +562,9 @@ class SlotHandle:
         (das Feld nimmt nichts unter dem Durchmesser an) — geklemmt wird
         trotzdem, denn ein Aufrufer ohne Feld gäbe es sonst frei.
         """
-        self.length = max(float(length), shortest_slot(self._diameter))
+        if diameter is not None:
+            self._diameter = float(diameter)
+        self.length = shown_length(float(length), self._diameter)
         self.angle = _normalised_angle(angle)
         self._redraw()
 
@@ -516,14 +615,26 @@ class SlotHandle:
         hit = ray_plane_hit(ray[0], ray[1], tuple(self._centre), tuple(self._axis))
         if hit is None:
             return
+        held = np.asarray(hit, dtype=float) + self._grab
         length, angle = dragged_slot(
-            self._centre, self._axis, self._diameter, hit, angle=self._start_angle
+            self._centre,
+            self._axis,
+            self._diameter,
+            (float(held[0]), float(held[1]), float(held[2])),
+            angle=self._start_angle,
         )
         # Der gegriffene Knopf folgt dem Zeiger — der andere spiegelt ihn. Das
-        # Loch wächst damit um seine Mitte, und die bleibt, wo die Bohrung
-        # gemessen wurde: Sie ist der einzige Wert, den die Operation nicht
-        # mitbekommt (``slot_hole`` liest sie aus dem Merkmal).
-        if self._held == 1:
+        # Loch wächst damit um seine Mitte.
+        #
+        # **Eingerastet auf rund kommt die Richtung nicht vom Zeiger**, sondern
+        # ist die, die galt (:func:`dragged_slot`), und die zählt zum Knopf 0:
+        # Gespiegelt stand sie am linken Knopf um 180 Grad verdreht da, und ein
+        # Zug hinaus und zurück wurde ein Vorschlag ohne Wirkung (Review
+        # 24.09.2026). **Der Fang gilt ihr trotzdem**: Die gemessene Richtung
+        # eines Langlochs trägt Rauschen (am Schaber drei Hundertmillionstel Grad), und ohne
+        # Fang kam es bis in die Felder — das Zurücklesen machte daraus 0,00,
+        # baute das Werkzeug neu, und *Übernehmen* verfiel.
+        if self._held == 1 and not is_round_length(length, self._diameter):
             angle = _normalised_angle(angle + 180.0)
         if self._settle_angle is not None:
             angle = _normalised_angle(self._settle_angle(angle))

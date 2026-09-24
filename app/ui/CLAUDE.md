@@ -216,6 +216,11 @@ vom abgeleiteten `preview_required`. Beide Zwillinge brauchen vor Übernehmen
 das dargestellte aktuelle Ergebnis. `accepted(values)` liefert bool;
 `finished` folgt erst auf Erfolg. Frühes Enter wird nie nachgeholt.
 
+Ungültige Außen- und Mittenabstände erklären sich über denselben sichtbaren
+Maßhinweis und sperren beide Abschlüsse sofort (`_invalid_distance`). Die
+eingegebene Zahl bleibt korrigierbar; eine gültige Korrektur entfernt den
+Hinweis und aktualisiert die Freigabe.
+
 Der Auftrag bindet Dokument, Ergebnis, Körper, Merkmal, Originalschritt und
 belegten Gruppenumfang. Das Hauptfenster bereitet Vorschau und Commit aus
 dieser Bindung vor, nicht aus inzwischen neu aufgebauten Panelzeilen.
@@ -274,7 +279,15 @@ Maßgruppe Übernehmen und Abbrechen, die Knöpfe unten im Panel sind verborgen 
 und mit ihnen der Block der Handlung, deren Maße im Bild stehen (Strich und
 Zeile je Handlung in `_blocks`; RM-199, Robert: „durchmesser ist ja im
 viewport, kann im merkmalpanel entfernt werden"). Die übrigen Handlungen des
-Merkmals bleiben, und mit dem Ende des Messens kommt der Block zurück.
+Merkmals bleiben, und mit dem Ende des Messens kommt der Block zurück. Im
+Zwilling daneben (`LEADS_INTO_THE_VIEW`: *Bohrung ändern* und *Zum Langloch
+ziehen*) weichen außerdem die Felder, die die Maßgruppe schon trägt — Breite
+oder Durchmesser, X, Y, Z, Materialtoleranz (`FeaturePanel._in_the_view`,
+über `_follow_conditions` wie ein Feld mit unerfüllter Bedingung); stehen
+bleiben Länge und Richtung beziehungsweise Tiefe und Änderungsumfang.
+*Abbrechen* der Maßgruppe verwirft den Entwurf und hebt die Auswahl auf, wie
+ein Klick ins Leere (`QuietHost.cancel` → `MainWindow._measures_cancelled`;
+Regel in `griffe.md`); Escape bleibt stufenweise.
 Ohne Messen steht *Abbrechen* unten, solange eine Feldvorschau aus dem Panel
 wartet — ein Merkposten oder eine angeforderte Vorschau, nicht der Auftrag,
 den das Anzeigen eines Merkmals ohnehin bindet (`offer_cancel`,
@@ -885,10 +898,25 @@ Ziels beim Anhängen, und die Vorschau kommt bei jeder Wertänderung neu.
 **Ein Langloch aus einem Schritt ändert diesen Schritt** (15.09.2026). Hat ein
 `slot_hole`-Schritt das Langloch gezogen (`Feature.created_by`), gehen
 *Übernehmen* im Merkmalfenster, die stille Platzierung und der Zug an den
-Langlochknöpfen über `MainWindow._change_slot_step` in **diesen** Schritt —
-kein zweiter im Verlauf, kein Kreuz im Bild. Geschrieben wird nur, was vom
+Langlochknöpfen in **diesen** Schritt (`MainWindow._prepare_slot_change`) —
+kein zweiter im Verlauf, kein Kreuz im Bild. Beide Abschlüsse, Merkmalfenster
+und Maßgruppe (`_commit_preview_order`), schreiben über
+`_commit_slot_change`: Rastet das Langloch auf genau die Bohrung zurück, aus
+der der Schritt es gezogen hat (`_slot_step_undone`, gelesen an
+`EvaluationResult.sights`), fällt der Schritt, mit Quittung und Strg+Z als
+Rückweg (Regel in `griffe.md`). Geschrieben wird nur, was vom
 gemessenen Wert abweicht; die Felder tragen die Toleranz des Schnitts. Ein
 erkanntes Langloch ohne Schritt geht weiter als neuer Schritt an den Kern.
+Alle Langlöcher öffnen dieselbe Maßgruppe für Länge, Richtung und Breite;
+die Herkunft entscheidet nur über den gespeicherten Auftrag. Der Wechsel
+von `resize_hole` zu `slot_hole` übergibt den begonnenen Breiten- und
+Positionsentwurf. Eine noch offene Tiefenänderung bleibt im Bohrungseditor,
+weil die Langlochoperation diese Änderung nicht ausdrückt.
+`_reshape_slot_from_values` führt Maßfelder, Griff und Umriss mit derselben
+effektiven Breite nach. `Viewport.reshape_slot` bindet den Entwurf auch dann,
+wenn sein Griff während des Editorwechsels gerade abgebaut ist.
+Der Panelabschluss übernimmt den vollständigen geprüften Auftrag; das
+verkürzte Griffsignal ersetzt keine Breiten- oder Toleranzparameter.
 
 **Ein Loch hat eine Länge, und die ist eine Geste.** `slot_handle.py` hängt
 zwei Knöpfe an ein gewähltes Loch (`hole` oder `slot` — welche Arten, sagt
@@ -1207,8 +1235,12 @@ und dann den Namen, nicht das zuerst vorbereitete (`_feature_hit`).
 Die Öffnungszielhilfe verlängert keine axialen Bohrungsgrenzen. Seitlicher
 Randfang gilt nur am sichtbaren Eintritt oder bei einem belegten Treffer des
 wirklichen Bohrungszylinders; eine Rückwand bleibt eine Sichtgrenze.
-Nur Bohrungen, Senkungen (`cone` mit `recess`) und Innengewinde bilden axiale
-Öffnungsziele. Rundungen, Ringnuten und äußere Flächen bleiben Dreieckstreffer.
+Nur Bohrungen, Langlöcher, Senkungen (`cone` mit `recess`) und Innengewinde
+bilden axiale Öffnungsziele (`_is_opening_feature`). Ein Langloch zielt mit
+seinem Umriss, nicht mit einem Kreis um die Mitte: `_BoreTarget` trägt Weg und
+Richtung (`_slot_frame`), `bore_span` rechnet dann gegen das Stadion
+(`_stadium_span`), und `_feature_inside` misst gegen die Mittellinie. Rundungen,
+Ringnuten und äußere Flächen bleiben Dreieckstreffer.
 Die Rückrechnung liest den beim Aktoraufbau gespeicherten Versatz und die
 tatsächlich gezeichneten Körper. Während eines neuen Ansichtsauftrags und
 nach dessen Fehler bleibt dieses letzte Bild die Grundlage des Picks;

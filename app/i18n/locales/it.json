@@ -837,6 +837,7 @@
   "Das Laden ist unerwartet abgebrochen: {reason}": "Lo scaricamento si è interrotto in modo imprevisto: {reason}",
   "Das Lager konnte nicht aktualisiert werden. Angaben und Schreibrechte prüfen und die Handlung erneut wählen.": "Impossibile aggiornare il magazzino. Controlla i dati e i permessi di scrittura e scegli di nuovo l'azione.",
   "Das Lager konnte nicht aktualisiert werden. Prüfen Sie die Angaben und versuchen Sie es erneut.": "Impossibile aggiornare il magazzino. Controlla i dati e riprova.",
+  "Das Langloch ist wieder die Bohrung von vorher — Strg+Z holt es zurück.": "L’asola è tornata a essere il foro di prima: Ctrl+Z la riporta.",
   "Das Langloch liegt jetzt {angle:.1f} Grad anders als vorher; die alte Richtung ist geschlossen. Wollten Sie es nur verlängern, lassen Sie die Richtung, wie sie stand.": "L’asola ora è ruotata di {angle:.1f} gradi rispetto a prima; la vecchia direzione è chiusa. Se volevi solo allungarla, lascia la direzione com’era.",
   "Das Langloch steht schon so, wie es eingetragen ist.": "L’asola è già com’è stata inserita.",
   "Das Lesen der Quelle wurde abgebrochen.": "La lettura della sorgente è stata annullata.",

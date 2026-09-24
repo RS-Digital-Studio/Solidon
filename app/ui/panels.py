@@ -5444,6 +5444,11 @@ def _group_reason_texts() -> dict[str, str]:
 #: sie hier ein — und nimmt ihr damit den unmittelbaren Klick.
 LEADS_INTO_THE_VIEW: Final[frozenset[str]] = frozenset({"slot_hole", "resize_hole"})
 
+#: Unter welchem Namen ein Merkmalsfeld sagt, welchen Parameter es trägt —
+#: rechts im Merkmalfenster wie in der Maßgruppe im Bild, damit der Fokus von
+#: einem zum anderen wandern kann (``MainWindow._hand_the_measures_over``).
+FIELD_PROPERTY: Final = "featureField"
+
 
 def feature_field(
     field: Any,
@@ -5741,6 +5746,8 @@ class _ActionRow:
     entries: tuple[Any, ...] = ()
     fixed: tuple[tuple[str, Any], ...] = ()
     step: int | None = None
+    in_view: frozenset[str] = frozenset()
+    """Die Felder, die gerade weichen, weil die Maßgruppe im Bild sie trägt."""
 
 
 def _set_shown(widget: QWidget, visible: bool) -> None:
@@ -6107,6 +6114,10 @@ class FeaturePanel(QWidget):
 
         Die Knöpfe je Handlung sind am 10.09.2026 gefallen; was bleibt, ist
         **einer** unten, und der braucht die Handlungen als Nachschlagewerk."""
+        self._armed_by_tab = False
+        """Ob das laufende Scharfschalten von Tab oder Umschalt+Tab kommt.
+
+        Nur während ``_arm`` aus einem ``FocusIn`` gesetzt (:meth:`armed_by_tab`)."""
         self._armed: str | None = None
         """Welche Handlung der Knopf unten gerade meint.
 
@@ -7299,6 +7310,7 @@ class FeaturePanel(QWidget):
                 # „Durchmesser" allein nicht sagt, welcher — an einer Bohrung
                 # stehen vier Handlungen mit je eigenen Feldern.
                 editor.setAccessibleName(f"{action.title} — {field.label}")
+                editor.setProperty(FIELD_PROPERTY, name)
                 for target in (editor, *row.inner[name]):
                     self._mark(target, row.key)
         if row.button is not None:
@@ -7324,23 +7336,61 @@ class FeaturePanel(QWidget):
         Der Wert bleibt dabei stehen. Wer von „Zwei Abstände" auf „Gleiche
         Breite" und zurück wechselt, findet seinen zweiten Abstand wieder —
         die Operation liest ihn nur, solange er gilt.
+
+        **Und was die Maßgruppe im Bild trägt, verschwindet ebenso**
+        (:meth:`_in_the_view`) — mit demselben Weg zurück, sobald das Messen
+        endet.
         """
         from app.core.registry.params import inactive_dependency
 
-        conditional = [field for field in row.entries if getattr(field, "depends_on", None)]
-        if not conditional:
+        conditional = {
+            str(field.name): field for field in row.entries if getattr(field, "depends_on", None)
+        }
+        in_view = self._in_the_view(row)
+        touched = set(conditional) | in_view | row.in_view
+        row.in_view = in_view
+        if not touched:
             return
-        values = self._row_values(row)
-        for field in conditional:
-            name = str(field.name)
+        values = self._row_values(row) if conditional else {}
+        for name in touched:
             editor = row.widgets.get(name)
             label = row.labels.get(name)
             if editor is None:
                 continue
-            active = inactive_dependency(cast(Any, field), cast(Any, row.entries), values) is None
+            field = conditional.get(name)
+            active = name not in in_view and (
+                field is None
+                or inactive_dependency(cast(Any, field), cast(Any, row.entries), values) is None
+            )
             _set_shown(editor, active)
             if label is not None:
                 _set_shown(label, active)
+
+    def _in_the_view(self, row: _ActionRow) -> frozenset[str]:
+        """Die Felder dieser Zeile, die die Maßgruppe im Bild gerade selbst trägt.
+
+        RM-199 nimmt den Block der Handlung weg, deren Maße im Bild stehen. Ihr
+        Zwilling daneben (:data:`LEADS_INTO_THE_VIEW`) trug dieselben Felder
+        noch einmal: am Langloch unter *Bohrung ändern* den Durchmesser, den
+        die Maßgruppe als Breite führt, an der runden Bohrung unter *Zum
+        Langloch ziehen* die Breite, dazu je X, Y, Z und die Materialtoleranz
+        (Robert, 24.09.2026: „vor allem mit dem merkmalpanel nebenan"). Was
+        der Zwilling allein hat — Länge und Richtung, Tiefe und
+        Änderungsumfang —, bleibt stehen; ein Klick hinein holt ihn ins Bild
+        (``MainWindow._hand_the_measures_over``).
+        """
+        op = self._measure_op
+        if (
+            not self._measuring
+            or op is None
+            or row.op == op
+            or not {row.op, op} <= LEADS_INTO_THE_VIEW
+        ):
+            return frozenset()
+        measured = next((other for other in self._shown_rows.values() if other.op == op), None)
+        if measured is None:
+            return frozenset()
+        return frozenset(row.widgets) & frozenset(measured.widgets)
 
     def toggle_field(self, op: str, name: str) -> bool:
         """Schaltet einen Haken der Handlung ``op`` um — wie ein Klick auf ihn.
@@ -7804,6 +7854,7 @@ class FeaturePanel(QWidget):
             elif isinstance(editor, QAbstractSpinBox | QComboBox):
                 wheel_needs_focus(editor)
             editor.setAccessibleName(f"{action.title} — {field.label}")
+            editor.setProperty(FIELD_PROPERTY, str(field.name))
             form.addRow(label, editor)
             widgets[str(field.name)] = editor
         return action, box, widgets
@@ -7839,6 +7890,9 @@ class FeaturePanel(QWidget):
             _set_shown(row, not twin)
             if line is not None:
                 _set_shown(line, not twin)
+        # Und im Zwilling daneben die Felder, die die Maßgruppe schon trägt.
+        for shown in self._shown_rows.values():
+            self._follow_conditions(shown)
 
     def offer_cancel(self, offered: bool) -> None:
         """Ob *Abbrechen* steht: solange eine Vorschau aus diesem Panel wartet.
@@ -7855,6 +7909,17 @@ class FeaturePanel(QWidget):
         _set_shown(
             self._cancel, self._cancel_offered and not self._measuring and self._apply_stands()
         )
+
+    def armed_by_tab(self) -> bool:
+        """Ob die Handlung gerade über Tab oder Umschalt+Tab scharf wird.
+
+        Wer mit der Tastatur durch das Fenster geht, bleibt im Fenster: Ein
+        Tab aus dem Tiefenfeld in die Länge des Zwillings wechselte sonst die
+        Maßgruppe, der Fokus sprang ins Bild, und das nächste Tab lief dort
+        weiter statt hier (Review 24.09.2026). Gefragt beim ``handlingArmed``
+        derselben Runde (``MainWindow._hand_the_measures_over``).
+        """
+        return self._armed_by_tab
 
     def request_in_view(self) -> None:
         """Denselben Weg nehmen wie der Knopf *Im Bild einstellen* — wenn er steht.
@@ -7968,7 +8033,15 @@ class FeaturePanel(QWidget):
         key = watched.property("handlingKey")
         if event.type() == QEvent.Type.FocusIn:
             if isinstance(key, str):
-                self._arm(key)
+                reason = event.reason() if hasattr(event, "reason") else None
+                self._armed_by_tab = reason in (
+                    Qt.FocusReason.TabFocusReason,
+                    Qt.FocusReason.BacktabFocusReason,
+                )
+                try:
+                    self._arm(key)
+                finally:
+                    self._armed_by_tab = False
         elif (
             event.type() == QEvent.Type.KeyPress
             and isinstance(event, QKeyEvent)

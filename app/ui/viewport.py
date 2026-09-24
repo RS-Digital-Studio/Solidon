@@ -53,7 +53,6 @@ from app.core.geom.mesh import (
     ray_span_in_hull,
 )
 from app.core.geom.mesh_ops import decimate_for_display
-from app.core.geom.prepare import shortest_slot
 from app.core.geom.section import SectionPlane, clip_triangles, cut, plane_patch
 from app.core.geom.transform import (
     Axis,
@@ -136,7 +135,7 @@ from app.ui.render.edges import feature_edges, outline_edges
 from app.ui.render.gizmo import ARROW_SHARE, Gizmo, ray_plane_hit
 from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
 from app.ui.scale_widget import ScaleHandle
-from app.ui.slot_handle import SlotHandle
+from app.ui.slot_handle import SlotHandle, settled_length, shown_length
 from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, slot_colour, viewport_colours
 
@@ -1989,12 +1988,98 @@ FEATURE_REACH_MINIMUM = 0.5
 
 
 def _is_opening_feature(feature: Feature) -> bool:
-    """Nur Bohrung, Senkung oder Innengewinde bezeichnen eine axiale Öffnung."""
+    """Bohrung, Langloch, Senkung oder Innengewinde bezeichnen eine axiale Öffnung.
+
+    **Das Langloch gehört dazu** (24.09.2026). In der Draufsicht liegt unter
+    einem Klick in seine Öffnung so wenig ein Dreieck wie in einer Bohrung;
+    ohne diesen Eintrag wählte der Klick den Körper, und ein Druck in die
+    Öffnung zog nicht das gewählte Langloch kürzer (:meth:`Viewport.
+    _pull_at_the_hole`), sondern verschob die Ansicht — gegriffen wurde nur
+    noch an den zwei Knöpfen.
+    """
     return (
-        feature.kind == "hole"
+        feature.kind in ("hole", "slot")
         or (feature.kind == "cone" and feature.params.get("recess") is True)
         or (feature.kind == "thread" and feature.params.get("internal") is True)
     )
+
+
+def _slot_frame(feature: Feature, line: Any) -> tuple[float, Any]:
+    """Weg und Richtung eines Langlochs quer zu seiner Achse — ``(0, None)`` sonst.
+
+    Der Weg ist der gemessene Abstand der Bogenmitten (``travel``), die
+    Richtung die gemessene Mittellinie, von ihrem Anteil entlang der Achse
+    befreit. Eine Stelle für :meth:`Viewport._prepared_bores` und
+    :meth:`Viewport._feature_inside`.
+    """
+    import numpy as np
+
+    if feature.kind != "slot":
+        return 0.0, None
+    measured = feature.params.get("travel")
+    heading = feature.params.get("direction")
+    if not isinstance(measured, int | float) or heading is None:
+        return 0.0, None
+    travel = float(measured)
+    along = np.asarray(heading, dtype=float)
+    along = along - float(along @ line) * line
+    extent = float(np.linalg.norm(along))
+    if travel <= EPS_GEOM or extent <= EPS_GEOM:
+        return 0.0, None
+    return travel, along / extent
+
+
+def _circle_span(
+    offset: Any, across: Any, lead: float, radius: float
+) -> tuple[float, float] | None:
+    """Wann ein Punkt ``offset + across · t`` im Kreis um null mit ``radius`` liegt."""
+    if lead <= EPS_GEOM:
+        # Parallel zur Achse — ganz innen oder ganz außen.
+        if float(offset @ offset) > radius * radius:
+            return None
+        return (-math.inf, math.inf)
+    middle = 2.0 * float(offset @ across)
+    gap = float(offset @ offset) - radius * radius
+    under = middle * middle - 4.0 * lead * gap
+    if under < 0.0:
+        return None
+    root = math.sqrt(under)
+    return ((-middle - root) / (2.0 * lead), (-middle + root) / (2.0 * lead))
+
+
+def _band_span(value: float, rate: float, half: float) -> tuple[float, float] | None:
+    """Wann ``value + rate · t`` zwischen ``-half`` und ``half`` liegt."""
+    if abs(rate) <= EPS_GEOM:
+        return (-math.inf, math.inf) if abs(value) <= half else None
+    first = (-half - value) / rate
+    second = (half - value) / rate
+    return (min(first, second), max(first, second))
+
+
+def _stadium_span(
+    offset: Any, across: Any, lead: float, heading: Any, side: Any, half: float, radius: float
+) -> tuple[float, float] | None:
+    """Wann der Punkt ``offset + across · t`` im Umriss eines Langlochs liegt.
+
+    Der Umriss ist konvex — zwei Kreise an den Enden der Mittellinie und das
+    Band dazwischen —, und ein Strahl schneidet ihn deshalb in **einem**
+    Abschnitt: vom frühesten Eintritt in eines der drei Stücke bis zum
+    spätesten Austritt.
+    """
+    pieces = [
+        _circle_span(offset + heading * half, across, lead, radius),
+        _circle_span(offset - heading * half, across, lead, radius),
+    ]
+    lengthwise = _band_span(float(offset @ heading), float(across @ heading), half)
+    crosswise = _band_span(float(offset @ side), float(across @ side), radius)
+    if lengthwise is not None and crosswise is not None:
+        enter, leave = max(lengthwise[0], crosswise[0]), min(lengthwise[1], crosswise[1])
+        if enter < leave:
+            pieces.append((enter, leave))
+    found = [piece for piece in pieces if piece is not None]
+    if not found:
+        return None
+    return (min(piece[0] for piece in found), max(piece[1] for piece in found))
 
 
 def bore_span(
@@ -2004,6 +2089,9 @@ def bore_span(
     axis: Vec3,
     radius: float,
     along: tuple[float, float],
+    *,
+    travel: float = 0.0,
+    heading: Any = None,
 ) -> tuple[float, float] | None:
     """Von wo bis wo ein Sichtstrahl im Inneren einer Bohrung läuft.
 
@@ -2026,6 +2114,10 @@ def bore_span(
     Als freie Funktion und nicht als Methode, aus demselben Grund wie
     :func:`is_click`: eine Rechnung über Vektoren soll ohne Renderer prüfbar
     sein.
+
+    **Ein Langloch hat einen Weg** (``travel``, entlang ``heading`` quer zur
+    Achse): Dann ist der Querschnitt kein Kreis, sondern der Umriss des
+    Langlochs um seine Mitte (:func:`_stadium_span`).
     """
     import numpy as np
 
@@ -2042,19 +2134,21 @@ def bore_span(
     offset = start - np.asarray(centre, dtype=float)
     offset = offset - float(offset @ line) * line
     lead = float(across @ across)
-    if lead <= EPS_GEOM:
-        # Parallel zur Achse — ganz innen oder ganz außen.
-        if float(offset @ offset) > radius * radius:
-            return None
-        crosswise = (-math.inf, math.inf)
+    if travel > EPS_GEOM and heading is not None:
+        lengthways = np.asarray(heading, dtype=float)
+        crosswise = _stadium_span(
+            offset,
+            across,
+            lead,
+            lengthways,
+            np.cross(line, lengthways),
+            travel / 2.0,
+            radius,
+        )
     else:
-        middle = 2.0 * float(offset @ across)
-        gap = float(offset @ offset) - radius * radius
-        under = middle * middle - 4.0 * lead * gap
-        if under < 0.0:
-            return None
-        root = math.sqrt(under)
-        crosswise = ((-middle - root) / (2.0 * lead), (-middle + root) / (2.0 * lead))
+        crosswise = _circle_span(offset, across, lead, radius)
+    if crosswise is None:
+        return None
 
     # Entlang der Achse: der Bereich, den das Merkmal überhaupt einnimmt.
     at_start = float(start @ line)
@@ -3932,13 +4026,19 @@ class _SelectionHit(NamedTuple):
 
 
 class _BoreTarget(NamedTuple):
-    """Die für einen Sichtstrahl nötigen Bohrungsmaße, ohne Dreieckskopien."""
+    """Die für einen Sichtstrahl nötigen Bohrungsmaße, ohne Dreieckskopien.
+
+    Ein Langloch trägt dazu seinen Weg und dessen Richtung (:func:`_slot_frame`);
+    an einer Bohrung sind sie null.
+    """
 
     feature_id: FeatureId
     centre: Vec3
     axis: Any
     radius: float
     bounds: tuple[float, float]
+    travel: float = 0.0
+    heading: Any = None
 
 
 class _MeshTask(NamedTuple):
@@ -4724,6 +4824,8 @@ class Viewport(QWidget):
         weg (``_detach_gizmo`` leerte ``_slot_target``): Wer sein gezogenes
         Langloch danach am Bewegungsgriff versetzen wollte, sah es
         zurückspringen (Robert: „ist es wie abbrechen")."""
+        self._slot_width: float | None = None
+        """Die Zielbreite des Maßentwurfs, auch nach einem Neuaufbau des Griffs."""
         self._move_target = ""
         """Das Merkmal, dessen Versetzen auf sein Übernehmen wartet — sonst leer."""
         self._grip_shift: Vec3 = (0.0, 0.0, 0.0)
@@ -5548,6 +5650,7 @@ class Viewport(QWidget):
         self._grip_shift = (0.0, 0.0, 0.0)
         self._slot_target = ""
         self._slot_waiting = None
+        self._slot_width = None
         if self._drag_kind == "slot":
             self._drag_kind = None
             self.drag_bar.dismiss()
@@ -11089,6 +11192,9 @@ class Viewport(QWidget):
 
         Bei mehreren gewinnt die engste: Eine Senkung um eine Bohrung herum
         enthält denselben Punkt, und gemeint ist das, worauf man gezeigt hat.
+
+        Ein Langloch hat statt der Achse eine Mittellinie: gemessen wird dort
+        gegen die Strecke zwischen den Bogenmitten (:func:`_slot_frame`).
         """
         import numpy as np
 
@@ -11117,6 +11223,13 @@ class Viewport(QWidget):
             offset = target - np.asarray(centre, dtype=float)
             # Der Abstand zur Achse: die Länge dessen, was senkrecht auf ihr steht.
             sideways = offset - float(np.dot(offset, direction)) * direction
+            travel, heading = _slot_frame(feature, direction)
+            if heading is not None:
+                # Beim Langloch zur Mittellinie: der Anteil entlang ihr zählt
+                # nur, soweit er über die Bogenmitten hinausreicht.
+                along = float(np.dot(sideways, heading))
+                beyond = max(abs(along) - travel / 2.0, 0.0)
+                sideways = sideways - along * heading + math.copysign(beyond, along) * heading
             if float(np.linalg.norm(sideways)) <= radius:
                 best = feature_id
                 best_radius = radius
@@ -11203,7 +11316,8 @@ class Viewport(QWidget):
             # breit. Derselbe Wert wie beim Klick auf die Fläche eines Merkmals,
             # denn es ist dieselbe Frage — wie weit daneben meint noch dies.
             reach = self._feature_reach(object_id)
-            for feature_id, centre, line, radius, bounds in self._prepared_bores(object_id):
+            for bore in self._prepared_bores(object_id):
+                feature_id, centre, line, radius, bounds = bore[:5]
                 ray_start = (float(start[0]), float(start[1]), float(start[2]))
                 ray_direction = (float(forward[0]), float(forward[1]), float(forward[2]))
                 ray_axis = (float(line[0]), float(line[1]), float(line[2]))
@@ -11214,10 +11328,21 @@ class Viewport(QWidget):
                     ray_axis,
                     radius + reach,
                     bounds,
+                    travel=bore.travel,
+                    heading=bore.heading,
                 )
                 if span is None or span[1] <= 0.0 or span[0] > until + EPS_GEOM:
                     continue
-                visible_span = bore_span(ray_start, ray_direction, centre, ray_axis, radius, bounds)
+                visible_span = bore_span(
+                    ray_start,
+                    ray_direction,
+                    centre,
+                    ray_axis,
+                    radius,
+                    bounds,
+                    travel=bore.travel,
+                    heading=bore.heading,
+                )
                 if visible_span is None or visible_span[0] > until + EPS_GEOM:
                     # Die Zielhilfe gilt seitlich am Öffnungsrand. Sie darf
                     # weder eine Rückwand axial verlängern noch seitliches
@@ -11312,7 +11437,18 @@ class Viewport(QWidget):
             )
             lengthwise = points @ line
             bounds = (float(lengthwise.min()), float(lengthwise.max()))
-            prepared.append(_BoreTarget(feature_id, centre, line, float(diameter) / 2.0, bounds))
+            travel, heading = _slot_frame(feature, line)
+            prepared.append(
+                _BoreTarget(
+                    feature_id,
+                    centre,
+                    line,
+                    float(diameter) / 2.0,
+                    bounds,
+                    travel,
+                    heading,
+                )
+            )
         self._feature_bores[object_id] = prepared
         return prepared
 
@@ -12779,6 +12915,8 @@ class Viewport(QWidget):
         diameter = feature.params.get("diameter")
         if axis is None or diameter is None:
             return
+        if self._slot_width is not None:
+            diameter = self._slot_width
         length = feature.params.get("length") or float(diameter)
         angle = slot_angle_of(feature, (float(axis[0]), float(axis[1]), float(axis[2])))
         waiting = self.waiting_slot_drag(feature.id)
@@ -13465,9 +13603,17 @@ class Viewport(QWidget):
         Leiste steht eine Zahl, und getippt wird die, die man meint. Wer die
         Richtung genau treffen will, tippt sie im Dialog; wer sie im Bild
         zieht, sieht sie im Umriss unter dem Zeiger.
+
+        **Und eingerastet auf rund heißt die Zahl „Bohrung"** — neben dem
+        Kreis im Umriss das Wort, damit das Einrasten nicht allein an der Form
+        hängt (Regel 18).
         """
+        from app.core.geom.prepare import is_round_length
+
         self._drag_kind = "slot"
-        self.drag_bar.follow_length(str(tr("Länge")), length)
+        handle = self._slot_handle
+        rounded = handle is not None and is_round_length(length, 2.0 * handle.radius)
+        self.drag_bar.follow_length(str(tr("Bohrung") if rounded else tr("Länge")), length)
         self._update_slot_labels()
         # Die Marke wächst mit dem Umriss — eine Form für dasselbe Loch.
         if not self._repaint_preview() and self.renderer is not None:
@@ -13517,9 +13663,10 @@ class Viewport(QWidget):
 
         Gebaut wird der Griff erst jetzt, für diesen einen Druck — Scheibe und
         Marke wie in ``set_gizmo``, die Knöpfe dazu —, und der Druck geht an
-        den Knopf, der dem Zeiger näher liegt. Der Zug rechnet wie am Knopf,
-        aus der Mitte heraus: Wer vom Loch wegzieht, sieht das Langloch
-        wachsen. Beim Loslassen kommt der Vorschlag wie immer
+        den Knopf, der dem Zeiger näher liegt. Der Zug rechnet wie am Knopf;
+        der Knopf wandert dabei um den Weg der Hand (``SlotHandle._grab``), nur
+        an der runden Bohrung rechnet er aus der Mitte heraus: Wer vom Loch
+        wegzieht, sieht das Langloch wachsen. Beim Loslassen kommt der Vorschlag wie immer
         (``slotProposed``), und das Fenster holt dazu die Maße ins Bild — ab da
         stehen Knöpfe, Umriss und Griff wie nach dem Knopf.
 
@@ -13579,7 +13726,24 @@ class Viewport(QWidget):
         und erst *Übernehmen* macht daraus eine Operation. Bis dahin ist nichts
         geschehen (Regel 2).
         """
+        from app.core.geom.prepare import is_round_length
+
         chosen = self.slot_handle_feature()
+        if (
+            chosen is not None
+            and self._slot_handle is not None
+            and chosen.kind == "hole"
+            and is_round_length(
+                settled_length(float(length), 2.0 * self._slot_handle.radius),
+                2.0 * self._slot_handle.radius,
+            )
+        ):
+            # **Eine runde Bohrung, die rund bleibt, ist kein Vorschlag**
+            # (Review 24.09.2026): hinaus und zurück, oder der Ring um ihre
+            # Achse. Übernommen stünde ein Schritt im Verlauf, der nur sagt,
+            # dass sie schon rund ist — wie ein Zug zurück zum Ausgangspunkt.
+            self._on_slot_interaction_cancelled()
+            return
         # Ein echter Zug behält den Griff, auch wenn er geliehen war: Ab hier
         # stehen Knöpfe, Umriss und Griff wie nach *Im Bild einstellen*.
         self._slot_borrowed = False
@@ -13599,16 +13763,26 @@ class Viewport(QWidget):
         # ``_drag_kind`` bleibt auf ``"slot"``: Daran hängen Escape (verwirft)
         # und die Eingabetaste (übernimmt) — der Zug ist noch nicht vorbei, er
         # wartet nur auf eine Zahl.
-        diameter = float(chosen.params.get("diameter") or 0.0)
+        diameter = 2.0 * self._slot_handle.radius
         # **Der Vorschlag geht nach rechts, nicht in eine eigene Leiste**
         # (Robert, 11.09.2026: „die untere leiste uns sparen und nur die
         # rechte verwenden mit dem was schon drin ist"). Dort stehen Länge und
         # Richtung als Felder von *Zum Langloch ziehen*, und derselbe Knopf
         # übernimmt, der auch jede getippte Zahl übernimmt. Die untere Leiste
         # trug beides ein zweites Mal.
-        self.slotProposed.emit(chosen.id, max(float(length), shortest_slot(diameter)), float(angle))
+        # Geklemmt wie am Griff — und genau die Breite ist die runde Bohrung,
+        # auf die ein zurückgezogenes Langloch rastet (:func:`settled_length`).
+        self.slotProposed.emit(chosen.id, settled_length(float(length), diameter), float(angle))
 
-    def reshape_slot(self, length: float, angle: float) -> None:
+    def reshape_slot(
+        self,
+        length: float,
+        angle: float,
+        *,
+        diameter: float | None = None,
+        feature_id: str | None = None,
+        centre: Vec3 | None = None,
+    ) -> None:
         """Eine nachgebesserte Zahl bewegt den Umriss, nicht das Modell.
 
         **Von rechts statt von unten** (11.09.2026): Die Zahl kam aus der
@@ -13616,8 +13790,31 @@ class Viewport(QWidget):
         Feldern des Merkmalfensters. Was sie bewegt, ist dasselbe — ein
         Umriss ist eine Auskunft und kein Dokumentzustand (Regel 2).
         """
+        from app.core.units import is_close
+
+        if diameter is not None:
+            self._slot_width = diameter
+        if feature_id is not None:
+            width = self._slot_width
+            if width is None and self._slot_handle is not None:
+                width = 2.0 * self._slot_handle.radius
+            if width is None and (chosen := self.slot_handle_feature()) is not None:
+                width = float(chosen.params["diameter"])
+            self._slot_target = feature_id
+            self._slot_waiting = (
+                shown_length(float(length), width) if width is not None else float(length),
+                float(angle),
+            )
+        if centre is not None and (chosen := self.slot_handle_feature()) is not None:
+            original = chosen.params["centre"]
+            shift = tuple(float(centre[index]) - float(original[index]) for index in range(3))
+            previous = self._grip_shift if self._move_target == chosen.id else (0.0, 0.0, 0.0)
+            if any(not is_close(value, was) for value, was in zip(shift, previous, strict=True)):
+                self._move_target = chosen.id
+                self._grip_shift = (shift[0], shift[1], shift[2])
+                self.set_gizmo(self._gizmo_wanted)
         if self._slot_handle is not None:
-            self._slot_handle.set_values(float(length), float(angle))
+            self._slot_handle.set_values(float(length), float(angle), diameter=diameter)
             self._update_slot_labels()
             if self._slot_target:
                 self._slot_waiting = (
@@ -13652,6 +13849,7 @@ class Viewport(QWidget):
         if self._slot_target:
             self._slot_target = ""
             self._slot_waiting = None
+            self._slot_width = None
             self._drag_kind = "slot"
             self._end_drag()
 
@@ -13852,6 +14050,8 @@ class Viewport(QWidget):
 
             length, angle = slot
             diameter = float(feature.params.get("diameter") or 2.0 * radius)
+            if self._slot_width is not None and self._slot_handle_is_at(feature):
+                diameter = self._slot_width
             ring = slot_outline(
                 centre, feature.params.get("axis") or normal, diameter, length, angle
             )
@@ -13874,7 +14074,6 @@ class Viewport(QWidget):
         gilt, was das Merkmal selbst trägt — ein erkanntes Langloch hat eine
         Länge. Eine Bohrung hat keine, und für sie bleibt der Zylinder.
         """
-        from app.core.geom.prepare import shortest_slot
         from app.core.geom.prepare_ops import slot_angle_of
 
         diameter = feature.params.get("diameter")
@@ -13909,7 +14108,7 @@ class Viewport(QWidget):
         # Geklemmt wie am Griff: Ein erkanntes Langloch an der Kippgrenze
         # soll eine Vorschau bekommen, keine Ausnahme aus ``slot_travel``.
         return (
-            max(float(length), shortest_slot(float(diameter))),
+            shown_length(float(length), float(diameter)),
             slot_angle_of(feature, (float(axis[0]), float(axis[1]), float(axis[2]))),
         )
 

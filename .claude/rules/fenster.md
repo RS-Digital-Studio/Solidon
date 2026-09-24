@@ -385,7 +385,8 @@ zurückschreiben.
 
 **Und ein Langloch aus einem Schritt gehört dazu.** Es ist kein Baustein, aber
 dieselbe Regel: Hat `slot_hole` es gezogen, ändert *Übernehmen* diesen Schritt
-(`_change_slot_step`) und legt keinen zweiten obenauf — der schnitt bis zum
+(`_prepare_slot_change`, geschrieben über `_commit_slot_change`) und legt
+keinen zweiten obenauf — der schnitt bis zum
 15.09.2026 quer über das erste (Robert: „habe ich 2 langlöcher"). Wer eine
 weitere Operation baut, die ein Merkmal aus ihrem eigenen früheren Schritt
 noch einmal anfasst, fragt zuerst `created_by`.

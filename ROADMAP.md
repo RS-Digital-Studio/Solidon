@@ -2030,6 +2030,67 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   breiter und schmaler, und im Fenster mit Strg+Z. Gehört zur laufenden
   Arbeit an P0.3/P0.4.
 
+  **Langlochzug und Maßpanel nachgezogen, 24.09.2026:** Auch eingelesene
+  Langlöcher öffnen ihre Längen-, Breiten- und Lagefelder im Bild. Beim Zug
+  an einer Bohrung wechseln diese Felder gemeinsam zum Langloch; eingetragene
+  Breite und Zielmitte bleiben erhalten. Eine noch offene Tiefenänderung
+  bleibt beim Bohrungsentwurf und verlangt zuerst dessen Abschluss.
+  Umriss, Schnittvorschau und Griff lesen dieselbe wirksame Breite;
+  *Abbrechen* im Merkmalfenster stellt die Istwerte wieder her. Bestehende Langlöcher lassen
+  sich an beiden Kernen verkürzen, auch mit neuer Breite und Richtung:
+  Die Operation schließt die alte Öffnung vor dem neuen Schnitt. Die
+  Mindestlänge bleibt an die neue Breite gebunden. Geometrie, Vorschau und
+  Signalanschlüsse sind ohne Fenster geprüft; die ergänzten Fensterfälle
+  für Auswahl, Übernahme und Undo gehören zur nächsten Release-Abnahme.
+
+  **Review des Langlochzugs, 24.09.2026** (Robert: „noch ein bisschen buggy
+  vor allem mit dem merkmalpanel nebenan und dass man es nicht kleiner
+  schieben kann, die maße fehlen auch beim langloch"). Ein Druck in das Ende
+  eines Langlochs trifft das Langloch — die Zielhilfe rechnet gegen seinen
+  Umriss (`bore_span` mit `travel`/`heading`, `_feature_inside` gegen die
+  Mittellinie); vorher fiel er in der Draufsicht durch das Loch, und die
+  linke Taste zog den Körper. Der Knopf wandert um den Weg der Hand
+  (`SlotHandle._grab`); am Wedge-Lock drehte ein Griff neben der Knopfmitte
+  das Langloch vor der ersten Bewegung um 16 Grad. **Unter der kürzesten
+  Länge rastet der Zug auf die runde Bohrung** (Entscheidung Robert am selben
+  Tag: „sollte es kurz einrasten"): `settled_length`, Kreis im Umriss,
+  „Bohrung" am Zeiger; `slot_hole` mit Länge = Breite
+  (`prepare.is_round_length`) schneidet an beiden Kernen wieder eine runde
+  Bohrung (`slot_hole.round_again`), eine runde Bohrung auf ihre eigene
+  Breite bleibt unangetastet (`slot_hole.already_round`), dazwischen nennt
+  `NEITHER_ROUND_NOR_SLOT` beide Auswege. Übernehmen ist danach nicht mehr
+  grau (`placement.prepare_tool`), und ein aus einem Schritt gezogenes
+  Langloch, das auf genau seine Bohrung zurückrastet, nimmt den Schritt
+  heraus, statt einen ohne Wirkung stehen zu lassen (`_commit_slot_change`).
+  Ein Klick ins Zwillingsfeld rechts wechselt die Maßgruppe, statt sie zu
+  schließen (`_hand_the_measures_over`), und der Zwilling zeigt nur, was er
+  allein hat (`FeaturePanel._in_the_view`: an einer Bohrung Länge und
+  Richtung, an einem Langloch Tiefe und Änderungsumfang). Eine gefaste
+  Mündung findet ihre Trägerfläche (`seat_of`, `mouth_reach`, Korpus
+  `plate_chamfered_mouths.stl`) — vorher hatte ein solches Loch keine Maße
+  im Bild. *Abbrechen* in der Maßgruppe verwirft den Entwurf und hebt die
+  Auswahl auf (Entscheidung Robert: „abbrechen = deselektieren"); vorher
+  blieb das Merkmal ohne Maße und Knöpfe gewählt, und rechts stand die
+  Handlung des verworfenen Entwurfs scharf. Ein Review derselben Nacht
+  (20 Befunde) ist eingearbeitet: der linke Knopf dreht beim Einrasten nicht
+  mehr um 180 Grad, was an einer runden Bohrung rund endet, schlägt nichts
+  vor, eine eingetragene Zahl rastet nicht, der Netzkern meldet die
+  Materialtoleranz wie der exakte, rund und breiter prüft die Nachbarwand wie
+  *Bohrung ändern*, der exakte Kern misst „nichts abgetragen" am gefüllten
+  Körper, der Schritt fällt nicht, wenn ein späterer sein Langloch nennt, Tab
+  bleibt im Merkmalfenster, und `make_corpus.py` baut die neue Korpusdatei.
+  Offen daraus: Escape lässt den verworfenen Entwurf im Merkmalfenster scharf
+  (Entscheidung Robert steht aus), und die Mündungskorrektur in
+  `surface_values` erkennt die eigene Fläche nicht von einer fremden
+  parallelen im Abstand bis zu einem Radius — eine Korrektur nur an der
+  Fläche aus `seat_of` bräche die gerundete Mündung am Schaber, die gar keine
+  hat. Am echten Fenster gefahren an `plate_coarse_slots`,
+  `plate_holes` und aus `F:\3D Dateien` an Scraper und Wedge-Lock:
+  Einrasten, Übernehmen, Rücknahme des Schritts, Zwillingsfelder in beiden
+  Richtungen. Die neuen Tests ohne Fenster waren am Stand davor rot; die
+  neuen Fenstertests (`test_slot_handle.py`, `test_feature_panel.py`) laufen
+  mit der Release-Abnahme.
+
 <a id="rm-198"></a>
 
 - [~] **RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das

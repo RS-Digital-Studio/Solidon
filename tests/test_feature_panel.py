@@ -3226,6 +3226,51 @@ def test_the_original_bore_block_leaves_the_panel_while_its_measures_stand_in_th
         panel.deleteLater()
 
 
+def test_the_twin_beside_the_measures_drops_the_fields_the_view_already_carries(
+    qt_app: QApplication,
+) -> None:
+    """Was die Maßgruppe im Bild trägt, steht auch im Zwilling rechts nicht noch einmal.
+
+    RM-199 nahm nur den Block der gemessenen Handlung weg. An einer Bohrung
+    stand darunter *Zum Langloch ziehen* mit Breite, X, Y, Z und
+    Materialtoleranz — dieselben Zahlen wie im Bild —, und am Langloch
+    *Bohrung ändern* mit dem Durchmesser, den die Maßgruppe als Breite führt
+    (Robert, 24.09.2026: „vor allem mit dem merkmalpanel nebenan"). Was der
+    Zwilling allein hat, bleibt stehen, und *Merkmal verschieben* bleibt, wie
+    RM-199 es entschieden hat.
+    """
+    identifier, feature = a_hole()
+    mesh = plate()
+    panel = FeaturePanel()
+    try:
+        panel.show_feature(identifier, feature, features=features.detect(mesh), mesh=mesh)
+        rows = {row.op: row for row in panel._shown_rows.values()}
+        pull, resize, move = rows["slot_hole"], rows["resize_hole"], rows["move_feature"]
+        shared = set(pull.widgets) & set(resize.widgets)
+        assert shared == {"diameter", "x", "y", "z", "compensate"}, shared
+
+        def shown(row: Any) -> set[str]:
+            return {name for name, editor in row.widgets.items() if not editor.isHidden()}
+
+        before = {op: shown(row) for op, row in rows.items()}
+        panel.set_measuring(True, op="resize_hole")
+        assert shown(pull) == before["slot_hole"] - shared
+        assert {"slot_length", "slot_angle"} <= shown(pull), "Länge und Richtung bleiben"
+        assert all(pull.labels[name].isHidden() for name in shared), "samt Beschriftung"
+        assert shown(move) == before["move_feature"]
+
+        panel.set_measuring(True, op="slot_hole")
+        assert shown(pull) == before["slot_hole"], "die Handlung im Bild behält ihre Felder"
+        assert shown(resize) == before["resize_hole"] - shared
+        assert {"depth", "entrance_mode"} <= shown(resize), "Tiefe und Umfang bleiben"
+
+        panel.set_measuring(False)
+        assert {op: shown(row) for op, row in rows.items()} == before
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
 @pytest.mark.parametrize("op", ["drill_hole", "drill_brep_hole"])
 def test_original_bore_fields_keep_expressions_through_depth_and_hidden_position(
     qt_app: QApplication,

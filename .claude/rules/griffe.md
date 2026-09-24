@@ -23,7 +23,18 @@ auch über den viewport einstellbar/erstellbar/änderbar von bohrung zu langloch
 sein". `app/ui/slot_handle.py` ist die Antwort — zwei Knöpfe an den Enden des
 Lochs, gezogen wird in der Ebene seiner Mündung.
 
-Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
+Für die Griffe gilt:
+
+* **Der Formwechsel behält den begonnenen Entwurf.** Wird aus einer Bohrung
+  durch Ziehen ein Langloch, wechseln die Fachfelder zu Länge, Richtung und
+  Breite. Bereits geänderte Breite und Mitte gehen mit. Der neue Flächenbezug
+  beginnt an dieser Zielmitte, nicht erneut am ursprünglichen Loch. Solange
+  eine Tiefenänderung offen ist, bleibt deren Editor zuständig und der
+  Langlochzug wird mit dem vorhandenen Abschlusshinweis verworfen.
+* **Ein Feldwert überlebt den Neuaufbau seines Griffs.** Länge, Richtung und
+  effektive Breite werden an das gewählte Merkmal gebunden, bevor der Griff
+  aufgebaut wird. Panel und Maßgruppe übernehmen denselben vollständigen
+  Vorschauauftrag; ein Griffsignal darf keine zusätzliche Breite verlieren.
 
 * **Der Winkel kommt aus einer Quelle.** Gezählt wird gegen die x-Achse von
   `sketch.planes.frame_of` — dieselbe, gegen die `prepare.slot_profile`
@@ -34,11 +45,14 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   und misst die Richtung am erkannten Ergebnis nach.
 * **Der Umriss im Bild ist der Umriss des Schnitts.** `slot_outline` baut ihn
   aus `slot_profile` und tastet dessen Bögen über `profile.arc_through` ab. Eine
-  zweite Konstruktion daneben liefe beim nächsten Zuwachs auseinander.
-* **Das Loch wächst um seine Mitte.** Sie ist der eine Wert, den `slot_hole`
-  **nicht** mitbekommt — die Operation liest ihn aus dem Merkmal. Ein Zug, der
-  sie verschöbe, verspräche etwas, das der Schnitt nicht einlöst; deshalb
-  spiegelt der gegenüberliegende Knopf den gegriffenen.
+  zweite Konstruktion daneben liefe beim nächsten Zuwachs auseinander. Nur der
+  Kreis der runden Bohrung entsteht ohne `slot_profile` (das keinen Umriss
+  ohne Weg kennt) — gebaut wie ein Langloch mit zwei Flanken der Länge null,
+  **mit derselben Punktzahl**: Der Renderer tauscht beim Einrasten nur Punkte,
+  und eine andere Zahl wäre ein Fehler im nächsten `update_points`.
+* **Beim Längenziehen bleibt die Mitte stehen.** Der gegenüberliegende Knopf
+  spiegelt den gegriffenen. Ein zusätzliches Versetzen kommt vom Bewegungsgriff
+  oder den Lagefeldern und reist im selben Auftrag mit.
 * **Der Maßeditor einer Bohrung erscheint mit der Auswahl.** Die erste
   Feld- oder Griffbetätigung beginnt den gebundenen Entwurf (§18.11).
   `PlacementFlow` besitzt die Fachfelder und seine Platzierungsgriffe; der
@@ -139,8 +153,18 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
 * **Das gewählte Loch ist selbst der Griff.** Ein Druck der linken Taste auf
   ein gewähltes Loch (oder Langloch), solange keine Platzierung läuft, baut
   den Langlochgriff für diesen einen Zug und gibt ihm den Druck
-  (`_pull_at_the_hole` → `SlotHandle.take_press`, der nähere Knopf); der Zug
-  rechnet wie am Knopf, aus der Mitte heraus. Das Loslassen ist der
+  (`_pull_at_the_hole` → `SlotHandle.take_press`, der nähere Knopf). **Am
+  Langloch zählt die ganze Öffnung** — auch ihre Enden: Die Zielhilfe rechnet
+  gegen den Umriss des Langlochs und nicht gegen einen Kreis um seine Mitte
+  (`bore_span` mit `travel`/`heading`, `_feature_inside` gegen die
+  Mittellinie). Bis zum 24.09.2026 fiel ein Druck in das Ende eines
+  Langlochs in der Draufsicht durch das Loch hindurch, und die linke Taste zog
+  den Körper. **Und der Knopf wandert um den Weg der Hand, er springt nicht
+  auf sie** (`SlotHandle._grab`, `_grab_at`): Wer ihn neben seiner Mitte oder
+  in der Öffnung greift, verschob das Langloch sonst beim ersten Bildpunkt —
+  am Wedge-Lock gemessen 16 Grad Drehung, bevor die Hand sich bewegt hatte.
+  Nur an der runden Bohrung rechnet ein Druck ins Loch aus der Mitte heraus:
+  Sie hat keine Richtung, die zu erhalten wäre. Das Loslassen ist der
   gewohnte Vorschlag (`slotProposed`), und das Fenster holt dazu die Maße ins
   Bild (`_on_slot_proposed` → `request_in_view`) — ab da stehen Knöpfe,
   Umriss, Griff und Maßlinien wie nach dem Knopf. Neben dem Loch bleibt die
@@ -176,7 +200,12 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   Kamera und Scrollen bleiben frei. Fremde Befehle werden nicht vorgemerkt:
   erst Übernehmen oder Abbrechen gibt sie wieder frei. Escape und das
   gemeinsame Abbrechen verwerfen den Entwurf; eine echte Dokument- oder
-  Ergebnisänderung entwertet seinen Bezug. Die eigene synchrone
+  Ergebnisänderung entwertet seinen Bezug. **Abbrechen hebt dazu die Auswahl
+  auf** (Entscheidung Robert, 24.09.2026: „abbrechen = deselektieren";
+  `QuietHost.cancel` → `MainWindow._measures_cancelled`, derselbe Weg wie ein
+  Klick ins Leere). Vorher blieb das Merkmal gewählt, ohne Maße und Knöpfe
+  im Bild, und rechts stand die Handlung des verworfenen Entwurfs scharf.
+  Escape bleibt stufenweise: erst die Maße, dann Merkmal → Körper → nichts. Die eigene synchrone
   Dokumentmeldung beim Commit wartet bis zum booleschen Erfolg des Callbacks.
 * **Die Marke trägt die Langlochform, und sie geht beim Zug mit.** Ein
   wartender Langlochzug (`_slot_waiting`) und ein erkanntes Langloch werden
@@ -189,10 +218,34 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   von Anfang an (`outlined=`), nicht erst mit dem nächsten Zug. Anlass:
   Robert, 11.09.2026, „wenn ich die bohrung zum langloch schiebe im viewport
   und das langloch dann verschiebe fehlt die richtige vorschau".
-* **Kürzer als `prepare.shortest_slot` lässt er sich nicht ziehen.** Der Kern
-  lehnt das ab (`prepare.SLOT_TOO_SHORT`), und eine Geste, die in einer Absage
-  endet, ist keine Bedienung. Der Rückweg zum runden Loch ist Strg+Z und nicht
-  ein Zug, der unterwegs seine Bedeutung wechselt.
+* **Unter `prepare.shortest_slot` rastet er auf die runde Bohrung**
+  (Entscheidung Robert, 24.09.2026: „wenn man ein langloch so zieht, dass es
+  wieder eine normale Bohrung wäre, sollte es kurz einrasten"). Zwischen der
+  Breite und der kürzesten Länge gibt es kein Loch, das die Erkennung hält;
+  `settled_length` hält im oberen halben Streifen die kürzeste Länge und
+  legt den unteren auf die Breite selbst. Rund ist genau die Breite
+  (`prepare.is_round_length`, auf die halbe Anzeigestufe), und dieselbe
+  Funktion fragen Griff, Felder, Vorschauwerkzeug (`placement.prepare_tool`)
+  und beide Kerne. Eingerastet zeigt der Umriss einen Kreis und die Zahl am
+  Zeiger heißt „Bohrung" statt „Länge" — Form und Wort, nicht die Form
+  allein (Regel 18). Die Richtung bleibt beim Einrasten die, die galt — an
+  beiden Knöpfen, auch am gespiegelten: Ein rundes Loch hat keine, und ein
+  Zug hinaus und zurück bleibt so ein Zug ohne Vorschlag; was an einer runden
+  Bohrung rund endet, schlägt nichts vor (`Viewport._on_slot_released`).
+  **Eine eingetragene Zahl rastet nicht** (`shown_length`): Zwischen Breite
+  und kürzester Länge zeigt der Umriss die kürzeste Länge, und der Grund der
+  Absage steht über der Vorschau — ein Kreis dort verspräche die runde
+  Bohrung, die der Schnitt nicht macht. Übernommen macht *Zum Langloch ziehen* mit Länge = Breite wieder
+  eine runde Bohrung; **war das Langloch aus einem Schritt gezogen und steht
+  danach genau die Bohrung da, aus der es kam, fällt der Schritt**
+  (`MainWindow._commit_slot_change`, `_slot_step_undone` liest die Bohrung aus
+  der Sichtung vor dem Schritt), statt als Schritt ohne Wirkung im Verlauf zu
+  stehen — Strg+Z holt ihn zurück, und die Quittung sagt es. **Außer ein
+  späterer Schritt nennt das Langloch** (`_slot_named_later`): Dann wird der
+  Schritt geändert, sonst verwiese eine Fase an `slot_1` auf ein Merkmal, das
+  der Verlauf nie erzeugt hat. Bis zu dieser Entscheidung stand hier:
+  „kürzer lässt er sich nicht ziehen, der Rückweg zum runden Loch ist
+  Strg+Z".
 
   **Die Zahl steht im Kern, nicht hier.** Bis zum 11.09.2026 führte der Griff
   eine eigene (`SHORTEST_SHARE = 1.05`) — und rastete damit genau dort, wo die
@@ -200,6 +253,19 @@ Vier Sachen daran sind Entscheidungen und keine Bequemlichkeit:
   Objektbaum eine Bohrung statt seines Langlochs oder gar nichts mehr. Warum
   die Grenze da liegt, wo sie liegt, steht in
   `.claude/rules/operationen.md`; der Griff und die Leiste fragen.
+* **Ein Klick in das Zwillingsfeld rechts gibt die Maße im Bild nicht auf.**
+  Stehen die Maße von *Bohrung ändern* im Bild, und der Kunde klickt rechts in
+  ein Feld von *Zum Langloch ziehen* (oder umgekehrt), wechselt die Maßgruppe
+  auf den Zwilling, statt zu verschwinden (`MainWindow._hand_the_measures_over`,
+  aus `_on_handling_armed`), und der Fokus geht in dasselbe Feld der neuen
+  Gruppe (`_focus_measure_field`, gefunden über die Feldkennung
+  `panels.FIELD_PROPERTY`). Nur solange nichts begonnen ist und die Handlung
+  demselben Merkmal gilt; ein begonnener Entwurf bleibt, wo er ist. Anlass:
+  Robert, 24.09.2026, „vor allem mit dem merkmalpanel nebenan". **Und der
+  Zwilling rechts zeigt nur, was er allein hat** (`FeaturePanel._in_the_view`):
+  Breite, Durchmesser, X, Y, Z und Materialtoleranz stehen schon im Bild — an
+  einem Langloch stand darunter *Bohrung ändern* mit demselben Wert als
+  Durchmesser, zwei Felder für eine Zahl, von denen nur eines das Bild führt.
 
 Wo er sitzt, sagt das Register (`slot_feature_kinds()` aus dem `applies_to` von
 *Zum Langloch ziehen*) — eine Aufzählung in der Ansicht wüsste beim nächsten
@@ -217,11 +283,13 @@ nicht. Ein Schritt, der beim Loslassen entsteht, wird dann zu einer Kette aus
 Korrekturen statt einer Handlung.
 
 Zwischen Zug und Operation steht deshalb eine dritte Stufe: Der Umriss bleibt
-stehen, `Viewport.slotProposed` schreibt seine zwei Maße in die Felder unter
-*Zum Langloch ziehen* im Merkmalfenster, und erst das Übernehmen dort meldet
-`slotDragged` (über `Viewport.apply_slot_drag`, die eine Stelle, an der aus
-dem Zug ein Schritt wird). Eingabetaste übernimmt, Escape verwirft
-(`_drag_kind` bleibt dafür auf `"slot"`).
+stehen, `Viewport.slotProposed` schreibt Länge und Richtung in den gemeinsamen
+Maßentwurf von *Zum Langloch ziehen*. Übernehmen verarbeitet den vollständigen
+Auftrag einschließlich Breite und Zielmitte. Der Tastaturweg über
+`Viewport.apply_slot_drag` meldet `slotDragged` an denselben Abschluss; er
+ersetzt den Entwurf nicht durch die zwei Griffwerte. Escape verwirft und
+stellt die gemessenen Werte wieder her (`_drag_kind` bleibt dafür auf
+`"slot"`).
 
 **Die Stufe hatte bis zum 11.09.2026 eine eigene Leiste** (`slot_bar.py`),
 unten mittig neben der Leiste der Flächenplatzierung. Das Argument dafür war,
@@ -303,6 +371,14 @@ Nebeneinander offen nahm der eine zurück, was der andere gerade getan hatte.
 Wer den Zug beim Beginn meldet, schließt genau die Maße weg, um die es geht.
 
 ### Wo etwas schon sitzt, zielt der Zeiger nicht
+
+**Auch wenn keine Trägerfläche gefunden wird** (`_no_seat_at_feature`): Die
+gebundene Maßgruppe misst dann ohne Fläche weiter, statt in das Zielen
+zurückzufallen — sonst setzte die nächste Mausbewegung das vorhandene Loch an
+den Zeiger. Und wo eine gefunden wird, liegt die Mündung auch hinter einer
+Fase auf ihr (`placement.seat_of`, `mouth_reach`): Eine gefaste Mündung endet
+nicht in der Ebene ihrer Fläche, und ohne diese Suche hatte das Merkmal keine
+Maße im Bild.
 
 `PlacementFlow._seated_at_feature`: Beginnt die Platzierung an einem
 vorhandenen Merkmal, gehört die Stelle ihm. Eine Mausbewegung darüber verschob

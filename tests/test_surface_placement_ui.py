@@ -1945,6 +1945,51 @@ def _a_selected_hole(window):
     return object_id, hole
 
 
+def test_an_imported_slot_opens_its_own_measures_and_keeps_the_handles_in_sync(
+    qt_app: QApplication,
+) -> None:
+    """Importierte Langlöcher zeigen Länge und Breite direkt an den Kantenmaßen."""
+    window = _window_with_a_renderer()
+    try:
+        window.open_path(MESHES / "plate_coarse_slots.stl")
+        window.session.wait_for_idle()
+        result = window.session.evaluate_now()
+        object_id, entry = next(iter(result.scene.objects.items()))
+        feature = next(feature for feature in entry.features.values() if feature.kind == "slot")
+        window.object_tree.select_object(object_id)
+        window.object_tree.select_feature(object_id, feature.id)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active and flow.spec_of().name == "slot_hole"
+        assert flow._canvas.shown and flow._canvas.lines
+        fields = {
+            field.accessibleName().rsplit(" — ", 1)[-1]: field
+            for field in flow._measure_group.findChildren(LengthSpin)
+        }
+        assert {"Länge des Langlochs", "Breite"} <= fields.keys()
+        fields["Länge des Langlochs"].set_value_mm(12.0)
+        for _ in range(40):
+            QApplication.processEvents()
+        handle = window.viewport._slot_handle
+        assert handle is not None and handle.length == pytest.approx(12.0)
+        armed = window.feature_panel._runs[window.feature_panel._armed]
+        assert armed.op == "slot_hole" and armed.values()["slot_length"] == pytest.approx(12.0)
+        _display_measure_preview(window, flow)
+        before = len(window.session.project.document.ops)
+        flow.accept()
+        for _ in range(120):
+            QApplication.processEvents()
+            window.session.wait_for_idle()
+        assert len(window.session.project.document.ops) == before + 1
+        assert window.session.last_result.stopped_at is None
+        window.session.undo()
+        window.session.wait_for_idle()
+        assert len(window.session.project.document.ops) == before
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
 def _measures_in_the_view(window):
     """Die automatisch angezeigten Maße oder den ausdrücklich gewählten Einstieg abwarten."""
     from PySide6.QtWidgets import QApplication
@@ -3335,7 +3380,12 @@ def test_a_begun_slot_keeps_its_values_on_model_and_outside_clicks(
 
 
 def test_cancel_below_apply_discards_what_waits(qt_app: QApplication) -> None:
-    """Der gemeinsame Abbruch verwirft den Entwurf und erhält die Auswahl."""
+    """Der gemeinsame Abbruch verwirft den Entwurf und hebt die Auswahl auf.
+
+    Bis zum 24.09.2026 blieb die Auswahl stehen, und rechts war die Handlung
+    des verworfenen Entwurfs weiter scharf; seither gilt „abbrechen =
+    deselektieren" (Robert). Escape geht weiter stufenweise.
+    """
     window = _window_with_a_renderer()
     try:
         panel = window.feature_panel
@@ -3343,7 +3393,7 @@ def test_cancel_below_apply_discards_what_waits(qt_app: QApplication) -> None:
         # ``isHidden``: die Knopfzeile hängt unter dem Rollbereich des Docks
         # und nicht mehr am Panel (13.09.2026, ``FeaturePanel.footer``).
         assert panel._cancel.isHidden(), "der Abschluss steht ausschließlich an den Maßen"
-        hole, flow = _a_pulled_slot(window)
+        _hole, flow = _a_pulled_slot(window)
         assert panel._cancel.isHidden() and panel._apply.isHidden()
         assert not flow._measure_cancel.isHidden(), "ein gemeinsamer Abschluss an den Maßen"
         steps = len(window.session.history.operations)
@@ -3353,9 +3403,10 @@ def test_cancel_below_apply_discards_what_waits(qt_app: QApplication) -> None:
         assert not flow.active, "die Maße im Bild sind zu"
         assert not window.viewport.slot_drag_waits(), "der Zug ist verworfen"
         assert len(window.session.history.operations) == steps, "und gerechnet ist nichts"
-        assert window.viewport._selected_feature == hole, "die Auswahl bleibt"
+        assert window.object_tree.selected() is None, "abbrechen = deselektieren"
+        assert window.viewport._selected_feature is None
+        assert panel._armed is None and not panel._runs, "rechts steht nichts scharf"
         assert panel._cancel.isHidden(), "der Knopf geht mit den Maßen"
-        assert not panel._in_view.isHidden(), "der Weg zurück ins Bild steht"
     finally:
         window.end_quiet_placement()
         QApplication.processEvents()
@@ -3801,7 +3852,10 @@ def test_the_measures_stay_in_the_view_while_a_pulled_slot_waits(qt_app: QApplic
             QApplication.processEvents()
             window.session.wait_for_idle()
         assert window.viewport.slot_drag_waits(), "der Zug zum Langloch wartet"
-        assert flow is window._quiet_placement and flow.active, "die Maßgruppe steht weiter"
+        assert not flow.active, "der alte Bohrungseditor ist abgelöst"
+        flow = window._quiet_placement
+        assert flow is not None and flow.active and flow.spec_of().name == "slot_hole"
+        assert flow.dialog.begun, "der Zug hat den gemeinsamen Entwurf begonnen"
 
         def lage() -> tuple[bool, int, int, int]:
             return (
@@ -3865,6 +3919,8 @@ def test_accepting_the_measures_takes_a_pulled_slot_along(qt_app: QApplication) 
         assert window.viewport.slot_drag_waits(), "der Zug zum Langloch wartet"
         pulled = window.viewport.waiting_slot_drag(hole)
         assert pulled is not None and pulled[0] > 0.0
+        flow = window._quiet_placement
+        assert flow is not None and flow.active and flow.spec_of().name == "slot_hole"
 
         before = len(window.session.project.document.ops)
         flow.accept()
@@ -3941,20 +3997,21 @@ def test_a_new_diameter_beside_a_pulled_slot_is_one_step_with_the_new_width(
             window.session.wait_for_idle()
         pulled = window.viewport.waiting_slot_drag(hole)
         assert pulled is not None and pulled[0] > 0.0, "der Zug wartet"
-        assert "zieht die Bohrung zum Langloch" in flow._measure_note.text()
+        flow = window._quiet_placement
+        assert flow is not None and flow.active and flow.spec_of().name == "slot_hole"
 
         fields = {
             field.accessibleName().rsplit(" — ", 1)[-1]: field
             for field in flow._measure_group.findChildren(LengthSpin)
-            if "Bohrung ändern" in field.accessibleName()
+            if "Zum Langloch ziehen" in field.accessibleName()
         }
         wider = float(feature.params["diameter"]) + 1.0
-        fields["Durchmesser"].set_value_mm(wider)
+        fields["Breite"].set_value_mm(wider)
         for _ in range(200):
             QApplication.processEvents()
             window.session.wait_for_idle()
-        assert not window.slot_drag_takes_the_accept("resize_hole", flow.dialog.values())
-        assert "ändert die Breite" in flow._measure_note.text(), flow._measure_note.text()
+        assert flow.dialog.values()["diameter"] == pytest.approx(wider)
+        assert flow.dialog.values()["slot_length"] == pytest.approx(pulled[0])
 
         before = len(window.session.project.document.ops)
         transactions = len(window.session.project.document.transactions)

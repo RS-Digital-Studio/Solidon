@@ -837,6 +837,7 @@
   "Das Laden ist unerwartet abgebrochen: {reason}": "The download stopped unexpectedly: {reason}",
   "Das Lager konnte nicht aktualisiert werden. Angaben und Schreibrechte prüfen und die Handlung erneut wählen.": "The inventory could not be updated. Check the details and write permissions, then select the action again.",
   "Das Lager konnte nicht aktualisiert werden. Prüfen Sie die Angaben und versuchen Sie es erneut.": "The inventory could not be updated. Check the details and try again.",
+  "Das Langloch ist wieder die Bohrung von vorher — Strg+Z holt es zurück.": "The slot is back to the hole it was before — Ctrl+Z brings it back.",
   "Das Langloch liegt jetzt {angle:.1f} Grad anders als vorher; die alte Richtung ist geschlossen. Wollten Sie es nur verlängern, lassen Sie die Richtung, wie sie stand.": "The slot now lies {angle:.1f} degrees differently than before; the old direction is closed. If you only meant to lengthen it, leave the direction as it was.",
   "Das Langloch steht schon so, wie es eingetragen ist.": "The slot already lies the way it is entered.",
   "Das Lesen der Quelle wurde abgebrochen.": "Reading the source was cancelled.",
