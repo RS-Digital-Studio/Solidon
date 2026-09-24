@@ -6871,8 +6871,10 @@ def test_operations_are_greyed_out_until_they_could_run(window: MainWindow) -> N
     assert joining.isEnabled()
 
 
+@pytest.mark.parametrize("theme", ["dark", "light"])
 def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     window: MainWindow,
+    theme: str,
 ) -> None:
     """Der kurze Weg zur Auswahl folgt Auswahl und Menüfreigabe gemeinsam.
 
@@ -6888,7 +6890,9 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     """
     from app.ui.overlay import CARD
     from app.ui.panels import FILTER_FROM
+    from app.ui.style import TARGET_SIZE
 
+    window.action_theme(theme)
     panel = window.selection_operations
     # **Die Karte steht auch ohne Auswahl, aber leer bis auf die Bausteine**
     # (Entscheidung Robert, 18.09.2026). Sie verschwand bis dahin ganz, und
@@ -6961,7 +6965,7 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     assert report.list.geometry().bottom() <= report.height(), "die Liste bleibt in der Karte"
     assert report.search.height() >= 32
     assert report.severity.height() >= 32
-    assert report.to_slicer.height() >= 32
+    assert report.to_slicer.height() >= TARGET_SIZE
     assert panel.catalog_button.isVisibleTo(window.feature_dock)
 
     # **Eine Karte, und die Maske lässt nichts daneben stehen.** Mit zwei
@@ -6970,7 +6974,8 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     assert len(window.right_column.card_rects()) == 1
 
 
-def test_the_left_column_shares_its_height_with_all_four(window: MainWindow) -> None:
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_the_left_column_shares_its_height_with_all_four(window: MainWindow, theme: str) -> None:
     """Der Abnahmenachweis zu P4: alle vier Abschnitte teilen, keiner nimmt.
 
     Vorher teilten nur drei. ``ObjectTree``, ``HistoryPanel`` und
@@ -6982,13 +6987,16 @@ def test_the_left_column_shares_its_height_with_all_four(window: MainWindow) -> 
     gebauten Fenster).
 
     Geprüft wird an Roberts vier Vorgaben vom 07.09.2026: Jeder bekommt
-    wenigstens seinen Boden, keiner mehr als seinen Wunsch, und über drei
-    Fensterhöhen wächst die Zuteilung mit dem Platz statt zu springen.
+    wenigstens seinen Boden, keiner mehr als seinen Wunsch. Unterhalb der
+    Mindesthöhe bleibt die Zuteilung am Boden; zusätzlicher freier Platz
+    wird geteilt, bis alle ihren Wunsch bekommen.
     """
     from PySide6.QtTest import QTest
 
+    from app.ui.overlay import MARGIN, extra_height
     from app.ui.panels import open_section
 
+    window.action_theme(theme)
     _with_two_objects(window)
     for nummer in range(10):
         window.session.project.document.parameters[f"mass_{nummer}"] = Parameter(
@@ -7009,9 +7017,16 @@ def test_the_left_column_shares_its_height_with_all_four(window: MainWindow) -> 
         "Filamente": window.filaments,
     }
     zuteilung: dict[str, list[int]] = {name: [] for name in karten}
-    for height in (600, 900, 1400):
+    knapp = geteilt = voll = False
+    for height in (600, 900, 1100, 1400):
         window.resize(1024, height)
         QTest.qWait(20)
+        host = window.overlay
+        budget = host.height() - 2 * MARGIN - host._bottom_room() - extra_height(host.left)
+        boeden = sum(karte.least_height() for karte in karten.values())
+        wuensche = sum(
+            max(karte.least_height(), karte.wanted_height()) for karte in karten.values()
+        )
         for name, karte in karten.items():
             lage = f"{name} bei Fensterhöhe {height}"
             # **Gemessen wird die Zuteilung, nicht die gelegte Höhe.** Sie ist
@@ -7026,16 +7041,25 @@ def test_the_left_column_shares_its_height_with_all_four(window: MainWindow) -> 
             assert raum <= max(boden, wunsch), (
                 f"{lage}: {raum} zugeteilt, mehr als Boden {boden} und Wunsch {wunsch}"
             )
+            if budget <= boeden:
+                knapp = True
+                assert raum == boden, f"{lage}: ohne freien Platz gilt der Boden"
+            elif budget >= wuensche:
+                voll = True
+                assert raum == max(boden, wunsch), f"{lage}: der volle Wunsch passt"
+            elif name == "Parameter":
+                geteilt = True
+                assert boden < raum < wunsch, f"{lage}: freier Platz muss geteilt werden"
             zuteilung[name].append(raum)
 
     # Und die Parameterkarte, die den Fall veranlasst hat, wächst mit dem
     # Fenster, statt bei jeder Höhe dasselbe zu nehmen. Vor dem Paket nahm sie
     # umgekehrt bei jeder Höhe dasselbe — ihre volle Inhaltshöhe.
-    klein, mittel, gross = zuteilung["Parameter"]
-    assert klein < mittel < gross, (
-        f"die Parameterkarte folgt dem Platz nicht: {zuteilung['Parameter']}"
-    )
-    assert gross == window.parameters.wanted_height(), (
+    assert knapp and geteilt and voll, "die Probe muss alle drei Budgetlagen tatsächlich erreichen"
+    hoehen = zuteilung["Parameter"]
+    assert hoehen == sorted(hoehen), f"mehr Platz verkleinert die Parameterkarte: {hoehen}"
+    assert hoehen[0] < hoehen[-1], f"die Parameterkarte folgt dem Platz nicht: {hoehen}"
+    assert hoehen[-1] == window.parameters.wanted_height(), (
         "und bei genug Platz bekommt sie ihren vollen Wunsch"
     )
 
@@ -16359,7 +16383,7 @@ def test_no_question_box_asks_yes_or_no(window: MainWindow) -> None:
 
 
 def test_the_theme_stands_before_anything_is_shown(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Der Ladebildschirm stand knapp drei Sekunden im Systemgrau.
 
@@ -16377,7 +16401,7 @@ def test_the_theme_stands_before_anything_is_shown(
 
     from app.core.activation import Activation
     from app.ui import app as app_module
-    from app.ui.theme import THEMES
+    from app.ui.theme import THEMES, apply_theme, current_theme
 
     themed = THEMES["dark"]["window"]
     # Die Palette gehört der ganzen Anwendung: wer sie in einem Test umstellt,
@@ -16385,6 +16409,12 @@ def test_the_theme_stands_before_anything_is_shown(
     # Anzeigeeinheit (siehe ``tests/conftest.py``) — nur hier lokal, weil kein
     # zweiter Test das braucht.
     before = qt_app.palette()
+    before_style = qt_app.styleSheet()
+    before_theme = current_theme()
+    # Ein frischer Prozess trägt noch kein Stylesheet. Nur die Palette zu
+    # leeren ließ den Themenmerker eines früheren Tests stehen: main erkannte
+    # dann ein bereits gesetztes Thema und durfte dessen Aufbau überspringen.
+    qt_app.setStyleSheet("")
     qt_app.setPalette(QApplication.style().standardPalette())
     assert qt_app.palette().window().color().name() != themed, (
         "ohne Thema ist die Palette die des Systems — sonst prüft der Test nichts"
@@ -16395,6 +16425,7 @@ def test_the_theme_stands_before_anything_is_shown(
     gone = Activation(licence=None, days_left=0, deadline=datetime.date(2000, 1, 1))
     assert gone.over, "sonst läuft der Test durch den ganzen Start"
     monkeypatch.setattr(app_module.activation, "state", lambda: gone)
+    monkeypatch.setattr(app_module, "load_settings", lambda: UiSettings(theme="dark"))
     # Wie ``test_cli.py``: ``main`` läuft hier im Prozess der Suite, und der
     # Prozessschutz bög sonst ``sys.excepthook`` und ``faulthandler`` von
     # pytest um (Review Rest #5).
@@ -16405,14 +16436,17 @@ def test_the_theme_stands_before_anything_is_shown(
         "app.ui.dialogs.show_expired_demo", lambda state: shown.append(True), raising=False
     )
 
-    assert app_module.main([]) == 1, "eine abgelaufene Demo startet nicht"
-    assert shown == [True], "und sagt es"
     try:
+        assert app_module.main([]) == 1, "eine abgelaufene Demo startet nicht"
+        assert shown == [True], "und sagt es"
         assert qt_app.palette().window().color().name() == themed, (
             "die Palette steht noch auf dem Systemgrau"
         )
     finally:
+        qt_app.setStyleSheet("")
+        apply_theme(qt_app, before_theme)
         qt_app.setPalette(before)
+        qt_app.setStyleSheet(before_style)
 
 
 def test_the_program_start_configures_https_before_reading_the_licence(

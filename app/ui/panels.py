@@ -148,7 +148,16 @@ from app.ui.labels import (
 from app.ui.leash import Worker, WorkerLeash, weak_slot
 from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
-from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_danger, make_primary, rule, set_level
+from app.ui.style import (
+    NORMAL,
+    TARGET_SIZE,
+    TIGHT,
+    make_danger,
+    make_large_target,
+    make_primary,
+    rule,
+    set_level,
+)
 from app.ui.theme import UNDONE_COLOUR
 
 _log = get_logger(__name__)
@@ -4298,14 +4307,14 @@ class ReportPanel(QWidget):
         self.summary.setWordWrap(True)
         # Der letzte Meter: Ist nichts zu beanstanden und liegt ein Körper da,
         # steht der nächste Klick genau hier — nicht drei Menüs weiter.
-        self.to_slicer = QPushButton(tr("An den Slicer übergeben …"), self)
+        self.to_slicer = make_large_target(QPushButton(tr("An den Slicer übergeben …"), self))
         self.to_slicer.setMinimumHeight(TARGET_SIZE)
         self.to_slicer.setToolTip(
             tr("Druckeinstellungen prüfen und das Teil an den eingerichteten Slicer geben.")
         )
         self.to_slicer.setStatusTip(self.to_slicer.toolTip())
-        # Kein Hauptknopf: Im Ruhezustand trägt genau ein Element den Akzent,
-        # und das ist *Auf das Bett setzen* (`tests/test_resting_state.py`).
+        # Kein Hauptknopf: Im Ruhezustand trägt *Bausteine* den Akzent
+        # (`tests/test_resting_state.py`).
         self.to_slicer.setVisible(False)
         self.to_slicer.clicked.connect(self.slicerRequested)
         # Die Kennzahlen darunter: was der Bericht in Sätzen sagt, hier als

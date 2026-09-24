@@ -927,11 +927,6 @@ def test_removing_a_used_local_part_is_immediate_exact_and_points_to_history(
     exact = path.read_bytes()
     catalogs: list[PartCatalog] = []
 
-    def instead_of_exec(dialog: PartCatalog) -> int:
-        catalogs.append(dialog)
-        return int(PartCatalog.DialogCode.Rejected)
-
-    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
     window = MainWindow(Session(), UiSettings())
     document = window.session.project.document
     used_op = 91
@@ -947,9 +942,12 @@ def test_removing_a_used_local_part_is_immediate_exact_and_points_to_history(
     window.history_panel.show_document(document)
     original_ops = tuple(document.ops)
     original_transactions = tuple(document.transactions)
-    try:
-        window.action_catalog()
-        catalog = catalogs[-1]
+
+    def instead_of_exec(catalog: PartCatalog) -> int:
+        # Die Bedienung gehört in die Laufzeit des Dialogs: Nach der Rückkehr
+        # aus exec hält _exec_catalog die Vorschaukette an und gibt ihn frei.
+        catalogs.append(catalog)
+        assert catalog._rendering
         for spec in PARTS.all():
             catalog._previews[spec.name] = QPixmap(1, 1)
         _choose(catalog, name)
@@ -980,12 +978,6 @@ def test_removing_a_used_local_part_is_immediate_exact_and_points_to_history(
         assert tuple(document.ops) == original_ops
         assert tuple(document.transactions) == original_transactions
 
-        catalog.show_affected_step.click()
-        current = window.history_panel.list.currentItem()
-        assert current is not None
-        assert current.data(Qt.ItemDataRole.UserRole) == used_op
-
-        catalog.show()
         catalog.file_undo.click()
         wait_until(lambda: PARTS.has(name), "der echte Rücknahmetoken stellte nichts wieder her")
         wait_until(
@@ -1001,7 +993,21 @@ def test_removing_a_used_local_part_is_immediate_exact_and_points_to_history(
         assert catalog.file_undo.isVisibleTo(catalog)
         assert catalog.chosen() == name
         assert catalog.remove_part.isVisibleTo(catalog)
-        catalog.release()
+
+        # Der Weg in den Verlauf beendet den Katalog. Danach bedient der Kunde
+        # das Hauptfenster und keinen schon freigegebenen Dialog mehr.
+        catalog.show_affected_step.click()
+        current = window.history_panel.list.currentItem()
+        assert current is not None
+        assert current.data(Qt.ItemDataRole.UserRole) == used_op
+        assert not catalog.isVisible()
+        return int(catalog.result())
+
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    try:
+        window.action_catalog()
+        assert len(catalogs) == 1
+        assert not catalogs[0]._rendering, "der beendete Katalog muss seine Vorschaukette freigeben"
     finally:
         PARTS.remove(name)
         REGISTRY.remove(f"insert_{name}")

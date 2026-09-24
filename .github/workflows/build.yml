@@ -73,13 +73,12 @@ jobs:
   suite:
     name: Suite (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # **Eine Frist, damit ein Hänger nach einer Stunde rot wird und nicht nach
-    # sechs.** Die Suite lag bis zum 02.09.2026 bei 19 bis 23 Minuten; an dem
-    # Tag standen drei Läufe je vier Stunden in einer einzigen Testdatei,
-    # bevor GitHub sie abbrach, und niemand hat es gesehen, weil ein laufender
-    # Lauf wie ein langsamer aussieht. Sechzig Minuten sind das Dreifache des
-    # Normalen: Wer sie reißt, hat einen Hänger, keinen langen Lauf.
-    timeout-minutes: 60
+    # Windows fährt beim Release Kern und alle Fensterdateien nacheinander.
+    # Der Kern braucht auf dem Runner rund 26 Minuten; die 92 Fensterdateien
+    # liefen nach weiteren 30 Minuten noch mit regelmäßigem Fortschritt.
+    # Deshalb bekommt der gesamte Windows-Job 90 Minuten. Jede der beiden
+    # Prüfgruppen behält ihre eigene Stundenfrist gegen einen Hänger.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 90 || 60 }}
     env:
       RELEASE_CHECK: ${{ inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') }}
     strategy:
@@ -155,6 +154,7 @@ jobs:
           python -m mypy
 
       - name: Tests
+        timeout-minutes: 60
         # Die Kern- und Fensterverträge laufen getrennt; jedes Nichtnull-Ergebnis
         # sperrt das Paket. Fenstertests trägt `tests/conftest.py` den Marker
         # windowed ein (qt_app oder ausdrücklich); sie laufen ausschließlich
@@ -209,6 +209,7 @@ jobs:
           done
 
       - name: Fensterdateien
+        timeout-minutes: 60
         # Ein Prozess je Datei schützt die Lebensdauergrenze. Ein roter
         # Prozess oder eine fehlende Sammlung sperrt die Paketierung.
         #
@@ -243,7 +244,7 @@ jobs:
             exit 1
           fi
           if [ "$RUNNER_OS" = "Linux" ]; then
-            run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
+            run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -v -o faulthandler_timeout=120 "$@"; }
             # Diese Gruppe läuft unter `offscreen`, und dort nimmt Qt seine
             # Schriften aus fontconfig. Sind dort keine, misst jeder Test, der
             # eine Textbreite oder eine Spaltenausrichtung prüft, eine
@@ -251,7 +252,7 @@ jobs:
             # ein Layoutbefund nicht geraten werden muss.
             echo "Schriften laut fontconfig: $(fc-list 2>/dev/null | wc -l || echo unbekannt)"
           else
-            run() { python -m pytest -q "$@"; }
+            run() { python -m pytest -v -o faulthandler_timeout=120 "$@"; }
           fi
           echo "Fensterdateien: $(echo $windowed | wc -w)"
           gruen=0

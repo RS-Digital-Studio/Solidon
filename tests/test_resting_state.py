@@ -11,13 +11,14 @@ Die Akzentfläche entsteht hier aus dem Stylesheet (``background``), und davon
 weiß ``widget.palette()`` nichts — eine Messung dort zählte null, wo das Auge
 vier sieht. Was ein Kunde sieht, ist, was gemalt wird.
 
-Die Zusage ist herstellbar: Am 30.08.2026 gemessen, in beiden Themen genau ein
-Element (der Knopf „Auf das Bett setzen"). Vorher waren es vier — sie sind mit
-der Werkzeugdämpfung gefallen.
+Ein offener Befund mit empfohlener Handlung ist kein Ruhezustand. Der
+Prüfbericht meldet auch unkalibriertes Material; die ruhige Probe benutzt
+deshalb ein kalibriertes Profil. Der Bausteinkatalog bleibt der Hauptknopf.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.bootstrap import load_operations
+from app.core.knowledge import calibration, profiles
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -88,9 +90,24 @@ def window(qt_app: QApplication) -> MainWindow:
     return MainWindow(Session(), UiSettings())
 
 
+@pytest.fixture
+def calibrated_material(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Ein echtes kalibriertes Profil, ohne Daten anderer Tests zu verändern."""
+    with monkeypatch.context() as patch:
+        patch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+        profiles.reload()
+        material = profiles.material(profiles.DEFAULT_MATERIAL)
+        calibration.apply(
+            calibration.from_measurements(material.id, clearance=material.clearance),
+            directory=tmp_path,
+        )
+        yield
+    profiles.reload()
+
+
 @pytest.mark.parametrize("theme", ["dark", "light"])
 def test_at_rest_only_one_element_carries_the_accent(
-    qt_app: QApplication, window: MainWindow, theme: str
+    qt_app: QApplication, calibrated_material: None, window: MainWindow, theme: str
 ) -> None:
     """Im Ruhezustand leuchtet höchstens eine Stelle.
 
@@ -111,13 +128,22 @@ def test_at_rest_only_one_element_carries_the_accent(
         QApplication.processEvents()
     window.action_theme(theme)
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle()
     for _ in range(60):
         QApplication.processEvents()
+    worker = window._print_findings.worker
+    if worker is not None:
+        assert worker.wait(10_000), "die Druckanalyse muss vor der Ruhemessung enden"
     window.tools.activate(None)
+    window.object_tree.tree.clearSelection()
     for _ in range(20):
         QApplication.processEvents()
 
+    assert window.session.profile.material.calibrated
+    assert not window.session.busy
+    assert window._print_findings.worker is None
+    assert not window.object_tree.selected_objects()
+    assert not window.report.list.selectedItems(), "eine Befundhandlung ist kein Ruhezustand"
     lit = accent_elements(window, theme)
     assert len(lit) <= 1, (
         f"{len(lit)} Elemente tragen im Ruhezustand die Akzentfarbe, erlaubt ist "

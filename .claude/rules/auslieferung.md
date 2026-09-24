@@ -118,6 +118,12 @@ Was daraus folgt:
 
 ## Erzeugtes läuft nicht in der CI
 
+Der Windows-Releasejob fährt Kern und Fensterdateien nacheinander und hat
+deshalb eine gemeinsame Frist von 90 Minuten. Beide Prüfgruppen behalten
+jeweils eine eigene Stundenfrist. Fensterläufe protokollieren die Testnamen;
+bei einem länger stehenden Test liefert `faulthandler` nach zwei Minuten den
+Stapel. Ein Fristablauf bleibt ein roter Lauf und sperrt die Paketierung.
+
 Bilder, Handbuch, Website-Bilder, SEO-Dateien und PDFs entstehen beim
 Paketbau, nicht nach jedem Schritt — und nur die Sprachen und Bilder, deren
 Grundlage sich geändert hat. Ein Test, dessen Grün an einem Erzeugerlauf
