@@ -402,7 +402,7 @@ aus dem Bestand abgeleitet. Es läuft **nach** `make_manual.py` und
   die sie trotzdem anbietet, sagt das Gegenteil dessen, was auf der Seite
   steht. `tests/test_website.py` prüft beide Richtungen.
 * **`FAQPage`-Auszeichnung** in den sechs Startseiten, gelesen aus dem
-  `<div class="faq">`, das dort ohnehin steht. Damit können die elf Fragen als
+  `<div class="faq">`, das dort ohnehin steht. Damit können die Fragen als
   Rich Result erscheinen, und eine KI-Suche zitiert lieber Ausgezeichnetes als
   Erratenes. Die Sprungmarke des Abschnitts heißt je Sprache anders (`fragen`,
   `questions`) und wird abgelesen, nicht angenommen.
@@ -428,10 +428,16 @@ Entwurf ausweist.
 KI-Modelle standen bis zum 14.08.2026 auf der Startseite und machten sie
 vierzehn Bildschirme lang — der Preis begann erst bei Bildschirm elf. Beide
 haben jetzt eigene Seiten, auf der Startseite steht je ein Anriss mit Verweis;
-sie ist damit acht Bildschirme lang und der Preis beginnt bei 4,8. Wer einen
-Anriss ändert, ändert die Unterseite mit: dieselbe Aussage darf nicht zweimal
-verschieden dastehen. Die Angabe **39 Referenzanfragen** bleibt bewusst im
-Anriss der Startseite — `tests/test_website.py` sucht sie dort.
+sie war damit acht Bildschirme lang und der Preis begann bei 4,8. Bis zum
+24.09.2026 war sie durch Doppelungen wieder auf sechzehn gewachsen (bei
+1440 × 900): ein Generatorabschnitt, der Weg 3 wiederholte, zwei
+Funktionsabschnitte hintereinander und ein zweiter Downloadkasten im Preis.
+Zusammengelegt sind es vierzehn, der Preis beginnt nach knapp neun; die Folge
+der Abschnitte steht in `website/CLAUDE.md`. Wer einen Anriss ändert, ändert
+die Unterseite mit: dieselbe Aussage darf nicht zweimal verschieden dastehen.
+Die Angabe **39 Referenzanfragen** steht in allen sechs Startseiten zweimal,
+im Text und groß auf der Karte des Agenten — `tests/test_website.py` prüft
+beide Stellen.
 
 **Start- und Funktionsseiten zeigen die Anwendung im ganzen Fenster.** Alle
 Aufnahmen entstehen im maximierten Hauptfenster auf dem 2560 × 1440-Schirm

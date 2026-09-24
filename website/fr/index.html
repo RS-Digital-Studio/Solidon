@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=a6447f34">
+<link rel="stylesheet" href="../style.css?v=0cbc3391">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -409,12 +409,7 @@
       <ul class="pains">
         <li>
           <q>Le trou est 0,2&nbsp;mm trop petit, et je n'ai pas de CAO.</q>
-          <p><b>Cliquer le perçage, saisir la nouvelle cote.</b> Même dans un STL
-          téléchargé — les perçages ronds sont reconnus comme caractéristiques
-          nommées et l'épaisseur de paroi est mesurée. Ce même perçage peut
-          être déplacé, incliné, dupliqué et supprimé, sans le boucher ni
-          percer à nouveau. Solidon3D n'invente ni poches ni historique CAO
-          perdu.</p>
+          <p><b>Cliquer le perçage, saisir la nouvelle cote.</b> Même dans un STL téléchargé&nbsp;: les perçages sont reconnus comme caractéristiques, et l’épaisseur de paroi à côté est mesurée. Solidon3D n’invente pas d’historique CAO perdu.</p>
         </li>
         <li>
           <q>L'impression a lâché à 80&nbsp;%, à cause d'un îlot.</q>
@@ -455,6 +450,7 @@
           fenêtre, sans passer par le dossier de téléchargements. Lisez le
           rapport de contrôle, cliquez une face ou un perçage — puis dites
           dans le chat ce que cela doit devenir, ou choisissez l’action à droite. Comparez avant/après, appliquez, exportez.</p>
+          <a class="way-more" href="/fr/features.html#recognised-features">Les caractéristiques des modèles téléchargés</a>
         </div>
         <div class="way">
           <div class="turn-wrap">
@@ -474,8 +470,9 @@
           <p>Décrivez ce qu'il vous faut. L'agent crée des paramètres et pose
           des blocs testés — filetages, inserts à chaud, charnières. Tournez
           les chiffres, le modèle suit aussitôt. Essayez le curseur&nbsp;: chacune des 24 images a été calculée à part, pas étirée.</p>
+          <a class="way-more" href="/fr/features.html#building-blocks">Des blocs vérifiés</a>
         </div>
-        <div class="way">
+        <div class="way" id="generated">
           <div class="way-pair">
             <figure>
               <img src="../bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
@@ -490,13 +487,8 @@
           </div>
           <span class="tag">Voie 3 — Modèle généré</span>
           <h3>Préparer un GLB ou STL</h3>
-          <p>Déposez un fichier issu du générateur de votre choix :
-          Solidon3D répare le maillage, le met à l’échelle, vérifie son
-          imprimabilité, puis le découpe ou le goupille au besoin. Sur
-          demande, Solidon3D installe aussi son propre modèle — TripoSG
-          pour la forme, SDXL pour l’image derrière —, pendant que leur
-          chaîne complète de licences et de provenance est encore vérifiée.
-          Les voies 1, 2 et 4 restent entièrement utilisables.</p>
+          <p>Déposez un fichier issu du générateur de votre choix&nbsp;: Solidon3D répare le maillage, le met à l’échelle, le vérifie par rapport à l’imprimante et au matériau, puis le découpe ou le goupille au besoin. Sur demande, Solidon3D installe aussi son propre modèle, TripoSG pour la forme et SDXL pour l’image derrière, sans rien télécharger sans vous le demander. La chaîne complète de licences et de provenance des poids est encore en cours de vérification.</p>
+          <a class="way-more" href="/fr/ai-models.html">Du générateur à la pièce imprimable</a>
         </div>
         <div class="way">
           <video class="weg-film" width="1920" height="1026"
@@ -507,14 +499,8 @@
           </video>
           <span class="tag">Voie 4 — Sculpter</span>
           <h3>Des figurines à la main</h3>
-          <p>Certaines formes ne se cotent pas. Assemblez grossièrement des
-          corps de base, fusionnez-les en douceur, uniformisez le maillage —
-          puis sculptez avec six pinceaux. Toute la séance reste <b>une</b>
-          étape de l'historique, donc modifiable.</p>
-          <p><b>Ce qu'aucun logiciel de sculpture ne fait&nbsp;:</b> pendant
-          que vous sculptez, l'épaisseur de paroi suit. Les zones trop minces
-          s'affichent en chiffres dans le bandeau — pas dans le slicer, une
-          fois la forme finie.</p>
+          <p>Certaines formes ne se cotent pas. Assemblez grossièrement des corps de base, fusionnez-les en douceur, uniformisez le maillage, puis modelez avec six pinceaux. Toute la séance reste <b>une</b> étape de l’historique, donc modifiable. Pendant que vous modelez, l’épaisseur de paroi suit&nbsp;: les zones trop fines s’affichent en chiffres dans la barre, pas dans le slicer.</p>
+          <a class="way-more" href="/fr/features.html#formen">Modeler à la main</a>
         </div>
       </div>
     </div>
@@ -551,70 +537,36 @@
           <figcaption><b>Bac d’atelier</b> Deux crochets à 80 mm, chacun avec une languette ressort&nbsp;: quand vous sortez quelque chose, vous soulevez le bac — et il reste accroché.</figcaption>
         </figure>
       </div>
-
-      <a class="btn ghost" href="/fr/features.html">Voir la fenêtre : toutes les fonctions</a>
     </div>
   </section>
 
   <section id="features" class="tint">
     <div class="wrap">
       <h2>Ce qui fait la différence</h2>
-      <p class="sub">L'essentiel en une phrase chacun —
-      <a href="/fr/features.html">toutes les fonctions en images sur la page des fonctions</a>.</p>
+      <p class="sub">L’essentiel d’un coup d’œil. Chaque outil, avec images et exemples, figure sur la <a href="/fr/features.html">page des fonctions</a>.</p>
+
       <div class="beleg">
         <figure>
           <a href="../bilder/beleg-bericht-fr.webp?v=41cb0cce"><img src="../bilder/beleg-bericht-fr.webp?v=41cb0cce" width="1907" height="1192" loading="lazy" decoding="async"
                alt="Une boîte avec couvercle, en grand dans la vue, et à droite son rapport de contrôle : 0 erreur, 2 avertissements, 6 remarques. Les avertissements signalent que l’ajustement est plus serré que prévu et qu’une face du couvercle est en porte-à-faux et demande des supports ; en dessous, des remarques sur l’évidement, le couvercle et le matériau."></a>
-          <figcaption><b>Le rapport.</b> Ce qui cloche à l'impression y figure avant que le slicer n'y passe le temps — compté par erreur, avertissement et remarque.</figcaption>
+          <figcaption><b>Rapport et analyse des couches.</b> Ce qui cloche à l’impression y figure avant que le slicer n’y passe le temps&nbsp;: surplombs, îlots, parois trop fines et besoin de supports, comptés par erreur, avertissement et remarque. La recherche d’orientation propose la position qui en produit le moins.</figcaption>
         </figure>
         <figure>
           <a href="../bilder/beleg-bausteine-fr.webp?v=e98420bc"><img src="../bilder/beleg-bausteine-fr.webp?v=e98420bc" width="1560" height="1144" loading="lazy" decoding="async"
                alt="Le catalogue des blocs, ouvert par-dessus la fenêtre : les groupes Visserie, Mécanique et Fixation avec insert à chaud, piège à écrou, écrou imprimé, vis, filetage imprimable, trou de vis avec fraisure, charnière à axe, roulement à billes, goupille et alésage, œil de charnière, ergot d’encliquetage, charnière-film, clips, pied, suspension en trou de serrure, poche à aimant, crochet pour panneau perforé, collier et support mural, chacun avec son aperçu et ses dimensions. En bas les boutons Insérer et Enregistrer la sélection comme bloc."></a>
-          <figcaption><b>Des blocs vérifiés en six groupes, dont trois ici.</b> Piège à écrou, insert à chaud, charnière-film, crochet pour panneau perforé — les cotes viennent d'un tableau de pièces normalisées, pas d'une intuition — et chacun est calculé sur toute sa plage de dimensions.</figcaption>
+          <figcaption><b>Des blocs vérifiés, les vôtres aussi.</b> Piège à écrou, insert à chaud, charnière-film, crochet pour panneau perforé&nbsp;: les cotes viennent d’un tableau de pièces normalisées, et chaque bloc est calculé sur toute sa plage de dimensions. Une pièce à vous s’enregistre comme bloc sans programmer&nbsp;; elle voyage comme recette dans chaque fichier de projet.</figcaption>
         </figure>
       </div>
 
-      <ul class="features">
-        <li><b>Un agent IA qui ne devine rien.</b> Une phrase dans le chat
-        devient une proposition qu'un seul Annuler retire entièrement. La
-        géométrie est calculée par du code, jamais par le modèle de langage —
-        et c'est mesuré&nbsp;: une suite de <b>39 requêtes de référence</b>
-        tourne avant et après chaque modification du corpus de règles de
-        l'agent.</li>
-        <li><b>La caractéristique reconnue se laisse saisir.</b> Cliquez un
-        perçage, tirez la poignée ou changez la cote mesurée&nbsp;: déplacer, pivoter, dupliquer, supprimer.
-        L’identité reste, et chaque ajustement qui pointe vers elle garde sa
-        référence.</li>
-        <li><b>Vos propres blocs sans programmer.</b> Construisez-le une fois
-        et enregistrez-le au catalogue comme bloc à vous — avec des cotes
-        réglables et une plage vérifiée. Il voyage comme recette dans chaque
-        fichier de projet qui l'utilise&nbsp;: des étapes et des valeurs, pas
-        un programme.</li>
-        <li><b>L'analyse des couches sans slicer.</b> Surplombs, îlots,
-        portées de pont et volume de support&nbsp;; la recherche
-        d'orientation propose la position qui en produit le moins.</li>
-        <li><b>Des esquisses sous contraintes.</b> Distances, angles, même taille (longueurs et rayons) et milieux
-        tiennent le dessin. Sur un corps exact ou un modèle, le contour reste une courbe exacte — un cercle devient un
-        cylindre, pas un polygone.</li>
-        <li><b>Aller plus loin avec votre modèle.</b> Reliefs à partir d’images, treillis
-        spatiaux, dépouilles, couvercles adaptés et inscriptions multicolores sont
-        aussi inclus. <a href="/fr/features.html#inside">Découvrir les autres
-        outils</a>.</li>
-      </ul>
-      <a class="btn ghost" href="/fr/features.html">Voir toutes les fonctions</a>
-    </div>
-  </section>
-
-  <section id="entwicklung" class="feature-preview tint">
-    <div class="wrap">
-      <h2>Plus de possibilités pour votre pièce</h2>
-      <p class="lead">Modifiez les perçages avec leurs fraisures, divisez les organiseurs sur mesure et créez des champs de trous avec une bordure — vous pouvez ensuite ajuster à nouveau les dimensions. S’y ajoutent un stock de filament qui met à jour les quantités après chaque impression, et un pilotage à distance pour Claude Code et d’autres outils.</p>
+      <span id="entwicklung" aria-hidden="true"></span>
       <div class="feature-card-grid">
+        <article class="feature-card feature-card-number">
+          <div class="feature-card-figure" aria-hidden="true"><b>39</b><span>requêtes de référence</span></div>
+          <div class="feature-card-copy"><h3><a href="/fr/features.html#ai-agent">Un agent IA qui ne devine rien</a></h3><p>Une phrase dans le chat devient une proposition qu’un seul Annuler retire entièrement. La géométrie est calculée par du code, jamais par le modèle de langage, et c’est mesuré&nbsp;: une suite de <b>39 requêtes de référence</b> tourne avant et après chaque modification du corpus de règles de l’agent.</p></div>
+        </article>
         <article class="feature-card">
           <img src="../bilder/feature-bore-edit.webp?v=3230c522" width="1200" height="800" loading="lazy" decoding="async" alt="À gauche, le perçage fraisé d’origine ; à droite, le perçage et la fraisure agrandis ensemble. Les dimensions extérieures de la pièce restent identiques.">
-          <div class="feature-card-copy"><h3><a href="/fr/features.html#bohrung-senkung">Le trou s’agrandit. Son entrée s’adapte.</a></h3><p>Un perçage reconnu comporte souvent plusieurs diamètres : une fraisure en haut, puis
-          un épaulement ou une seconde section en dessous. Lors de la modification,
-          vous choisissez les sections qui vont ensemble.</p></div>
+          <div class="feature-card-copy"><h3><a href="/fr/features.html#bohrung-senkung">Le trou s’agrandit. Son entrée s’adapte.</a></h3><p>Cliquez un perçage reconnu pour le déplacer, le pivoter, le dupliquer ou le recoter. S’il a une fraisure en haut ou un épaulement en dessous, vous décidez de ce qui suit. Chaque ajustement qui pointe vers lui garde sa référence.</p></div>
         </article>
         <article class="feature-card">
           <img src="../bilder/feature-organizer.webp?v=3a9daac4" width="1200" height="800" loading="lazy" decoding="async" alt="Organisateur à six compartiments et cloisons de différentes hauteurs.">
@@ -641,61 +593,29 @@
         </article>
         <article class="feature-card">
           <img src="../bilder/fernsteuerung-mcp.svg?v=59326321" width="1200" height="800" loading="lazy" decoding="async" alt="Schéma : deux fenêtres côte à côte sur un même écran — à gauche un second programme avec une commande envoyée, à droite Solidon3D avec un corps percé et une étape de l’historique surlignée, accompagnée d’une flèche d’annulation. Une ligne relie les deux sans quitter l’écran.">
-          <div class="feature-card-copy"><h3><a href="/fr/features.html#mcp">Pilotage à distance depuis Claude Code</a></h3><p>Solidon3D intègre un serveur MCP : un second programme
-        appelle les mêmes opérations que les menus. Désactivé par défaut, sur
-        votre machine seulement — et chaque appel distant qui modifie quelque
-        chose est une transaction de l’historique qu’un Annuler retire.</p></div>
+          <div class="feature-card-copy"><h3><a href="/fr/features.html#mcp">Pilotage à distance depuis Claude Code</a></h3><p>Un serveur MCP intégré permet à un second programme d’appeler les mêmes opérations que les menus. Il est désactivé par défaut et joignable uniquement sur votre propre machine. Chaque appel distant qui modifie quelque chose est une étape de l’historique qu’un Annuler retire.</p></div>
         </article>
       </div>
-      <a class="btn ghost" href="/fr/features.html#entwicklung">Découvrir les exemples en détail</a>
-    </div>
-  </section>
 
-  <section id="generated">
-    <div class="wrap">
-      <h2>Quand le modèle vient d’un générateur</h2>
-      <p class="sub">Déposez un GLB ou STL, réparez-le, mettez-le à l’échelle,
-      vérifiez-le par rapport à l’imprimante et au matériau, découpez-le et
-      ajoutez des goupilles : cette préparation fonctionne avec les fichiers
-      du générateur de votre choix et sans expérience en CAO. Sur demande,
-      Solidon3D installe aussi son propre modèle — TripoSG pour la forme,
-      SDXL pour l’image derrière —, sans rien télécharger sans le demander ;
-      leur chaîne complète de licences et de provenance est encore
-      vérifiée.</p>
-      <a class="btn ghost" href="/fr/ai-models.html">Du générateur à la pièce imprimable</a>
+      <div class="feature-more">
+        <p><b>Également inclus&nbsp;:</b> des esquisses sous contraintes, où un cercle sur un corps exact reste un cylindre et ne devient jamais un polygone, des reliefs à partir d’images, des treillis spatiaux, des dépouilles, des couvercles adaptés et des inscriptions multicolores.</p>
+        <a class="btn ghost" href="/fr/features.html">Voir toutes les fonctions</a>
+      </div>
     </div>
   </section>
 
   <section id="honest">
     <div class="wrap">
       <h2>Ce que Solidon3D n'est pas</h2>
-      <div class="honest">
-        Mieux vaut le dire avant que le regretter après&nbsp;:
-        <ul>
-          <li><b>Pas un slicer.</b> Solidon3D analyse et prépare&nbsp;; le
-          fichier d'impression vient toujours de votre slicer — Solidon3D lui
-          transmet directement le travail et relit son G-Code en
-          contre-épreuve.</li>
-          <li><b>Pas une bibliothèque de modèles.</b> Les modèles, vous les apportez, de Printables, MakerWorld, Thingiverse ou de votre propre dossier.</li>
-          <li><b>Pas une CAO dans le cloud.</b> Aucun compte, aucun stockage
-          en ligne, aucune télémétrie. Les projets sont des fichiers sur
-          votre machine.</li>
-          <li><b>Aucune garantie de cote sur les maillages générés.</b> Ce
-          qui naît d'un texte ou d'une image est rendu imprimable — la
-          construction à la cote passe par les voies 1 et 2.</li>
-          <li><b>L'IA vient avec ses propres coûts.</b> Le chat tourne avec
-          votre propre clé API — l'usage du modèle est facturé par le
-          fournisseur, typiquement quelques centimes par proposition. En
-          local via Ollama, c'est gratuit&nbsp;; un modèle à la hauteur
-          (environ 14 milliards de paramètres et plus) demande pour cela une
-          carte graphique avec 16&nbsp;Go de mémoire.</li>
-          <li><b>Pas d'équipe.</b> Solidon3D est développé par une seule
-          personne : conception, programme, manuel et assistance. Cela veut dire
-          des chemins courts et une réponse de celui qui l'a construit. Cela veut
-          dire aussi : pas de hotline, pas de réponse à trois heures du matin, et
-          une feuille de route au rythme d'une personne.</li>
-        </ul>
-      </div>
+      <p class="sub">Mieux vaut le dire avant que le regretter après.</p>
+      <ul class="honest-grid">
+        <li><b>Pas un slicer.</b> Solidon3D analyse et prépare&nbsp;; le fichier d’impression vient toujours de votre slicer. Solidon3D lui transmet directement le travail et relit son G-code en contre-épreuve.</li>
+        <li><b>Pas une bibliothèque de modèles.</b> Les modèles, vous les apportez, de Printables, MakerWorld, Thingiverse ou de votre propre dossier.</li>
+        <li><b>Pas une CAO dans le cloud.</b> Aucun compte, aucun stockage en ligne, aucune télémétrie. Les projets sont des fichiers sur votre machine.</li>
+        <li><b>Pas d’équipe.</b> Solidon3D est développé par une seule personne. Cela veut dire des chemins courts et une réponse de celui qui l’a construit. Cela veut dire aussi&nbsp;: pas de hotline, et une feuille de route au rythme d’une personne.</li>
+        <li><b>Aucune garantie de cote sur les maillages générés.</b> Ce qui naît d’un texte ou d’une image est rendu imprimable&nbsp;; la construction à la cote passe par les voies 1 et 2.</li>
+        <li><b>L’IA vient avec ses propres coûts.</b> Le chat tourne avec votre propre clé API, typiquement quelques centimes par proposition. En local via Ollama, c’est gratuit, avec une carte graphique de 16 Go ou plus.</li>
+      </ul>
     </div>
   </section>
 
@@ -714,6 +634,28 @@
         <li><b>À partir du 1er février 2027</b><span>Prix normal</span></li>
       </ol>
       <div class="licences">
+        <article class="licence licence-demo">
+          <h3>Démo</h3>
+          <p class="licence-price licence-free"><b>Gratuite</b> <em>jusqu’au 30/10/2026</em></p>
+          <p class="licence-later">La version 1.0 ouvrira ensuite vos projets.</p>
+          <ul class="price-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Pas amputée&nbsp;: pas de filigrane, pas de blocage d’export, aucune fonction verrouillée</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Sans clé ni compte, le chat avec l’IA est facultatif</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Les projets restent lisibles&nbsp;: ZIP avec du JSON, export en STL, 3MF, OBJ, PLY, GLB et STEP</span></li>
+          </ul>
+          <a class="btn" href="#download"
+             data-release-href data-release-download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
+                 data-release-hide hidden>
+              <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
+            </svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
+                 data-release-show>
+              <path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/>
+            </svg>
+            <span data-release-text="Télécharger la démo">Télécharger la démo</span>
+          </a>
+        </article>
         <article class="licence" data-summary>
           <h3>Privée</h3>
           <p class="licence-price"><b>69&nbsp;€</b> <em>Prix de lancement jusqu’au 31/01/2027</em></p>
@@ -736,70 +678,52 @@
           </ul>
         </article>
       </div>
-      <p class="licence-terms">Les deux licences sont un achat unique au prix final. Est commerciale toute utilisation pour une activité d’entreprise ou indépendante ; la formation, les études et l’enseignement n’en font pas partie. Pour les deux, des mises à jour de sécurité sont promises au moins jusqu’au 31/10/2031. S’appliquent les <a href="/agb.html">conditions de vente</a>, le <a href="/eula.html">contrat de licence</a> et les <a href="/widerruf.html">informations sur la rétractation</a> (en allemand).</p>
-      <div class="price">
-        <div class="price-card">
-          <div class="amount">
-            <b>Gratuite</b>
-            <em>démo jusqu'au 30/10/2026</em>
-          </div>
-          <p class="terms">La démo publiée est gratuite et complète, sans clé et sans compte. La version 1.0 ouvrira ensuite vos projets.</p>
-          <a class="btn" href="#download"
-             data-release-href data-release-download>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
-                 data-release-hide hidden>
-              <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
-            </svg>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
-                 data-release-show>
-              <path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/>
-            </svg>
-            <span data-release-text="Télécharger la démo">Télécharger la démo</span>
-          </a>
-        </div>
-        <div>
-          <ul class="price-list">
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span><b>La démo n'est pas amputée.</b> Pas de filigrane, pas
-              de blocage d'export, pas de fonctions verrouillées — elle a une
-              date de fin, rien d'autre.</span>
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span><b>L’IA reste facultative.</b> La démo complète fonctionne
-              sans chat. Avant le premier contact avec un modèle, Solidon
-              indique si les données vont à Anthropic, à Ollama en local ou à
-              une destination Ollama distante.</span>
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span><b>Vos projets restent lisibles.</b> Un fichier ZIP avec
-              du JSON dedans, export en STL, 3MF, OBJ, PLY, GLB et STEP.</span>
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span><b>Signalez les vulnérabilités confidentiellement.</b> Le
-              <a href="/fr/security.html">contact de sécurité</a> couvre aussi
-              la démo.</span>
-            </li>
-          </ul>
-        </div>
-      </div>
+      <p class="licence-terms">Les deux licences sont un achat unique au prix final. Est commerciale toute utilisation pour une activité d’entreprise ou indépendante ; la formation, les études et l’enseignement n’en font pas partie. Pour les deux, des mises à jour de sécurité sont promises au moins jusqu’au 31/10/2031, et vous signalez les vulnérabilités confidentiellement via le <a href="/fr/security.html">contact de sécurité</a>, démo comprise. S’appliquent les <a href="/agb.html">conditions de vente</a>, le <a href="/eula.html">contrat de licence</a> et les <a href="/widerruf.html">informations sur la rétractation</a> (en allemand).</p>
     </div>
   </section>
 
   <section id="support" class="support tint">
     <div class="wrap">
       <h2>Soutenir Solidon3D</h2>
-      <p class="sub">La démo ne coûte rien, et la soutenir n’y change rien. Si vous souhaitez aider à porter le travail jusqu’à la version 1.0, vous pouvez le faire ici, librement.</p>
+      <p class="sub">La démo ne coûte rien, et la soutenir n’y change rien. Beaucoup reste prévu d’ici la version 1.0. Si vous souhaitez aider à porter ce travail, vous pouvez le faire ici, librement.</p>
+
+      <div class="support-card milestones">
+        <h3>La route vers la 1.0</h3>
+        <div class="milestone-columns">
+          <div>
+            <p class="milestone-label">Fait</p>
+            <ol class="milestone-list">
+              <li class="done"><time datetime="2026-07-27">27/07/2026</time><span>La première ligne de code</span></li>
+              <li class="done"><time datetime="2026-08-20">20/08/2026</time><span>La première démo publique</span></li>
+              <li class="done"><time datetime="2026-08-26">26/08/2026</time><span>Version 0.2 : vos propres blocs sans programmer</span></li>
+              <li class="done"><time datetime="2026-09-03">03/09/2026</time><span>Version 0.3 : dessiner avec des cotes, tout en six langues</span></li>
+              <li class="done"><time datetime="2026-09-10">10/09/2026</time><span>Version 0.4 : le stock de filament</span></li>
+              <li class="done"><time datetime="2026-09-13">13/09/2026</time><span>Version 0.4.1 : paquets Mac notarisés par Apple</span></li>
+              <li class="done is-now"><time datetime="2026-09-24">24/09/2026</time><span><b>Version 0.5, l’actuelle&nbsp;:</b> les éléments des modèles téléchargés reconnus bien plus vite, les cotes directement dans la vue, les imprimantes résine, les paquets Windows signés numériquement</span></li>
+            </ol>
+          </div>
+          <div>
+            <p class="milestone-label">Prévu</p>
+            <ol class="milestone-list">
+              <li class="next"><time>Octobre 2026</time><span><b>Mises à jour 0.5.x</b>
+                <ul class="milestone-plan">
+                  <li><b>Reconstruction&nbsp;:</b> un STL importé devient des étapes de construction modifiables.</li>
+                  <li><b>Assemblage et feuille de cotes&nbsp;:</b> groupes nommés, positions d’assemblage et d’impression enregistrées, feuille de cotes en PDF.</li>
+                  <li><b>Résine&nbsp;:</b> détecter les effets ventouse, trous d’écoulement et d’aération à l’évidement, règles par procédé.</li>
+                  <li><b>Travailler dans la vue&nbsp;:</b> dessiner, coter et saisir chaque cote directement sur le modèle.</li>
+                  <li><b>Corrections et vitesse&nbsp;:</b> grands modèles plus rapides, mêmes résultats sous Windows, macOS et Linux, et ce que vous signalez depuis la démo.</li>
+                </ul></span></li>
+              <li class="next"><time datetime="2026-11-01T10:00:00+01:00">01/11/2026</time><span>Version 1.0</span></li>
+            </ol>
+            <p class="milestone-note">Prévu ne veut pas dire promis&nbsp;: chaque version ne sort qu’une fois vérifiée.</p>
+          </div>
+        </div>
+      </div>
 
       <div class="support-grid">
-        <div class="support-card">
+        <div class="support-card support-about">
           <h3>Qui est derrière</h3>
           <p>Je suis Robert Schneider, électronicien de formation, de la région de Bamberg en Allemagne. Je fais Solidon3D seul, avec mon entreprise RS Digital : le programme, le manuel, ce site et le support. Si vous m’écrivez, c’est moi qui réponds.</p>
-        </div>
-        <div class="support-card">
           <h3>À quoi sert l’argent</h3>
           <ul class="support-list">
             <li><b>Outils de développement :</b> Claude et Codex, les deux outils d’IA avec lesquels je programme, chacun dans sa formule la plus élevée.</li>
@@ -808,43 +732,29 @@
           </ul>
           <p class="support-paid"><b>Déjà payé de ma poche :</b> l’Apple Developer Program, sans lequel les paquets Mac ne s’ouvriraient pas d’un double clic, et le certificat de signature de code Windows de Certum.</p>
         </div>
-      </div>
 
-      <div class="support-card milestones">
-        <h3>Ce qui est fait et ce qui vient</h3>
-        <ol class="milestone-list">
-          <li class="done"><time datetime="2026-07-27">27/07/2026</time><span>La première ligne de code</span></li>
-          <li class="done"><time datetime="2026-08-20">20/08/2026</time><span>La première démo publique</span></li>
-          <li class="done"><time datetime="2026-08-26">26/08/2026</time><span>Version 0.2 : vos propres blocs sans programmer</span></li>
-          <li class="done"><time datetime="2026-09-03">03/09/2026</time><span>Version 0.3 : dessiner avec des cotes, tout en six langues</span></li>
-          <li class="done"><time datetime="2026-09-10">10/09/2026</time><span>Version 0.4 : le stock de filament</span></li>
-          <li class="done"><time datetime="2026-09-13">13/09/2026</time><span>Version 0.4.1 : paquets Mac notarisés par Apple</span></li>
-          <li class="done is-now"><time>Maintenant</time><span>Version 0.5 : les éléments des modèles téléchargés reconnus bien plus vite, les cotes directement dans la vue, les imprimantes résine</span></li>
-          <li class="done"><time>0.5.0</time><span>Application Windows et programme d’installation signés numériquement</span></li>
-          <li class="next"><time datetime="2026-11-01T10:00:00+01:00">01/11/2026</time><span>Version 1.0 (prévue)</span></li>
-        </ol>
-      </div>
-
-      <div class="support-ways">
-        <div class="support-card support-way">
-          <h3>PayPal</h3>
-          <p>Le montant de votre choix, avec un compte PayPal ou une carte. PayPal gère le paiement sur sa propre page.</p>
-        </div>
-        <div class="support-card support-way">
-          <h3>GoFundMe</h3>
-          <p>La campagne de Solidon3D. GoFundMe affiche lui-même où elle en est&nbsp;:</p>
-          <div class="gfm-slot" data-gfm-widget="https://www.gofundme.com/f/solidon3d-stl-anpassen-ohne-cad-bis-version-10/widget/large"
-               data-gfm-title="GoFundMe : état de la campagne Solidon3D">
-            <p class="gfm-note">Seul ce bouton charge l’affichage de GoFundMe. Des données comme votre adresse IP partent alors chez GoFundMe, et l’affichage peut déposer des cookies et charger des services comme Google et Meta. <a href="/datenschutz.html#gofundme-stand">En savoir plus dans la politique de confidentialité</a> (en allemand).</p>
-            <button class="btn ghost gfm-load" type="button" data-gfm-load>Charger l’état actuel depuis GoFundMe</button>
+        <div class="support-give">
+          <div class="support-give-head">
+            <h3>Comment aider</h3>
+            <p>Deux voies pour un même but. Aucun des deux prestataires ne s’ouvre avant votre choix à l’étape suivante.</p>
           </div>
-        </div>
-      </div>
+          <div class="support-ways">
+            <div class="support-card support-way">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h3" stroke-linecap="round"/></svg>
+              <h3>PayPal</h3>
+              <p>Le montant de votre choix, avec un compte PayPal ou une carte. PayPal gère le paiement sur sa propre page.</p>
+            </div>
+            <div class="support-card support-way">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 21V4" stroke-linecap="round"/><path d="M5 4.5h11.5l-2.2 4 2.2 4H5" stroke-linejoin="round"/></svg>
+              <h3>GoFundMe</h3>
+              <p>La campagne de Solidon3D jusqu’à la version 1.0. Son état actuel se charge juste en dessous, directement depuis GoFundMe.</p>
+            </div>
+          </div>
 
-      <div class="donate">
-        <p class="donate-terms">Ce paiement n’est ni une commande ni la contrepartie d’un service et ne sera pas déduit d’un achat ultérieur. Nous ne délivrons pas d’attestation fiscale&nbsp;; ne le traitez pas comme fiscalement déductible. PayPal ou GoFundMe ne s’ouvre qu’après votre choix dans la notice locale&nbsp;; <a href="/datenschutz.html">informations sur la confidentialité</a>.</p>
-        <button class="donate-button" type="button" data-choice="support">Soutenir volontairement <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></button>
-        <dialog class="auswahl donate-dialog" id="wahl-support" aria-label="Soutien volontaire via PayPal ou GoFundMe">
+          <div class="donate">
+            <p class="donate-terms">Ce paiement n’est ni une commande ni la contrepartie d’un service et ne sera pas déduit d’un achat ultérieur. Nous ne délivrons pas d’attestation fiscale&nbsp;; ne le traitez pas comme fiscalement déductible. PayPal ou GoFundMe ne s’ouvre qu’après votre choix dans la notice locale&nbsp;; <a href="/datenschutz.html">informations sur la confidentialité</a>.</p>
+            <button class="donate-button" type="button" data-choice="support">Soutenir volontairement <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></button>
+            <dialog class="auswahl donate-dialog" id="wahl-support" aria-label="Soutien volontaire via PayPal ou GoFundMe">
               <p class="auswahl-titel">Soutenir volontairement</p>
               <p>Le paiement n’est pas une commande, n’accorde aucune contrepartie, ne débloque rien et n’est pas déduit d’un achat ultérieur. Nous ne délivrons pas de reçu fiscal.</p>
               <p>Choisissez PayPal ou GoFundMe. Seul le bouton correspondant ouvre la page externe. Vous quitterez solidon3d.de&nbsp;; la déclaration de confidentialité du prestataire choisi s’appliquera&nbsp;: <a href="https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE">PayPal</a> ou <a href="https://www.gofundme.com/c/privacy">GoFundMe</a>.</p>
@@ -852,11 +762,18 @@
               <a class="btn" href="https://gofund.me/08c5f0edb" rel="noopener noreferrer">Continuer vers GoFundMe</a>
               <form method="dialog"><button class="btn ghost" value="zu">Retour</button></form>
             </dialog>
+          </div>
+        </div>
+      </div>
+
+      <div class="gfm-slot" data-gfm-widget="https://www.gofundme.com/f/solidon3d-stl-anpassen-ohne-cad-bis-version-10/widget/large" data-gfm-title="GoFundMe : état de la campagne Solidon3D">
+        <p class="gfm-note"><b>État de la campagne.</b> Seul ce bouton charge l’affichage de GoFundMe. Des données comme votre adresse IP partent alors chez GoFundMe, et l’affichage peut déposer des cookies et charger des services comme Google et Meta. <a href="/datenschutz.html#gofundme-stand">En savoir plus dans la politique de confidentialité</a> (en allemand).</p>
+        <button class="btn ghost gfm-load" type="button" data-gfm-load>Charger l’état actuel depuis GoFundMe</button>
       </div>
     </div>
   </section>
 
-  <section id="requirements" class="tint">
+  <section id="requirements">
     <div class="wrap">
       <h2>Configuration requise</h2>
       <table class="req">

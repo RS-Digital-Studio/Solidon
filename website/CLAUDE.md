@@ -119,6 +119,13 @@ Klassen, Bänder, Kapitel) werden deshalb immer **über alle sechs Fassungen
 gezählt**, bevor sie als fertig gelten — die Zählung nebeneinander fand den
 Fall in Minuten.
 
+**Und keine Stilregel hängt an einem Sprungziel.** Die Anker heißen je
+Sprache anders (`#unterstuetzen` gegen `#support`, `#generiert` gegen
+`#generated`), und eine Regel auf den deutschen Anker gilt nur in einer
+Fassung. So stand die deutsche Unterstützung wochenlang mit anderem Abstand
+und schmalerem Spendenkasten da als die fünf anderen. Gestaltet wird über
+Klassen; ein Anker ist ein Sprungziel und sonst nichts.
+
 Eine Unterseite ohne Bildspalte trägt am Aufmacher zusätzlich `hero-copy`.
 Damit nutzt der Text auf großen Bildschirmen die Mitte statt links neben
 einer leeren, wie ein Ladefehler wirkenden Spalte zu stehen; auf kleinen
@@ -133,6 +140,36 @@ Kopfzeile; die Zielüberschrift bleibt beim direkten Anspringen darunter sichtba
 `<span>Solid</span>on`, entkommt sie jeder Volltextsuche — nach einer
 Umbenennung bleibt der alte Name genau dort stehen, wo niemand ihn findet.
 Wer umbenennt, sucht auch nach Teilstücken.
+
+## Die Startseite und der Weg bis 1.0
+
+Die Startseite führt jeden Gedanken **einmal**: ein Abschnitt je Frage, und
+was eine Unterseite ausführt, steht hier als Anriss mit einem Verweis. Auf
+den Aufmacher folgen vierzehn Abschnitte in dieser Folge: Ablauf, Download,
+Kennzahlen, drei Schritte, Kennst du das, vier Wege, Ergebnisse,
+Unterschied, was Solidon3D nicht ist, Preis, Unterstützen, Voraussetzungen,
+Fragen, Schluss. Wer einen neuen Abschnitt will, prüft
+zuerst, ob ein bestehender die Frage schon beantwortet — der doppelte
+Generatorabschnitt und die zweite Funktionsleiste waren genau so entstanden.
+
+- **Jeder Weg endet mit einem Verweis** (`.way-more`) auf die Seite, die ihn
+  ausführt. Weg 3 trägt den alten Anker des Generatorabschnitts.
+- **Preis als drei gleichwertige Karten**: Demo, privat, gewerblich. Nur die
+  Demokarte hat einen Knopf; gekauft wird vor dem 1. November nichts.
+  `<article class="licence" data-summary>` bleibt den beiden Lizenzen
+  vorbehalten, denn `make_seo.py` liest daraus `llms.txt`.
+- **Unterstützen**: oben „Der Weg bis 1.0" in zwei Spalten, Geschafft und
+  Geplant; darunter Person und Kosten neben dem Handlungsfeld mit beiden
+  Wegen; ganz unten der Stand der Kampagne, der erst auf Klick lädt. Die
+  geplanten Punkte stammen aus RM-188 und sind von Robert zur Veröffentlichung
+  freigegeben (24.09.2026): Nachbau, Montage und Maßblatt, Resin-Stufe 2,
+  Zeichnen und Maße im Bild, dazu Fehlerbehebungen und Tempo. Der Satz
+  „Geplant heißt nicht zugesagt" gehört dazu.
+- **Bei jedem Release wandert die Zeitleiste mit**: Die neue Version kommt als
+  `li.done is-now` unter Geschafft, die Markierung der vorigen fällt weg, und
+  ein erledigter Planpunkt verschwindet aus Geplant — in allen sechs
+  Fassungen. Ein Planpunkt, der auf der Seite noch als geplant steht, obwohl
+  das Paket ihn längst enthält, ist derselbe Fehler wie ein fehlender.
 
 ## Prüfen
 

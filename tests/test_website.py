@@ -235,17 +235,28 @@ def test_every_language_states_the_same_numbers(page: str) -> None:
 
 def test_the_number_of_agent_cases_on_the_page_matches_the_suite() -> None:
     """Die Seite nennt die Größe der Agenten-Suite — auch diese Zahl wird
-    falsch, sobald ein Referenzfall dazukommt oder wegfällt."""
+    falsch, sobald ein Referenzfall dazukommt oder wegfällt.
+
+    **Jede Nennung, in jeder Sprache.** Seit die Zahl auch groß auf der Karte
+    des Agenten steht (``<b>39</b><span>Referenzanfragen</span>``), gibt es sie
+    je Seite zweimal; geprüft wurde vorher nur die erste Fundstelle, und nur
+    auf Deutsch und Englisch.
+    """
     from tests.agent_cases import ALL_CASES
 
-    for page, pattern in (
-        ("index.html", r"(\d+) Referenzanfragen"),
-        ("en/index.html", r"(\d+) reference requests"),
+    between = r"(?:\s|&nbsp;|</b>\s*<span>)+"
+    for page, words in (
+        ("index.html", "Referenzanfragen"),
+        ("en/index.html", "reference requests"),
+        ("es/index.html", "peticiones de referencia"),
+        ("fr/index.html", "requêtes de référence"),
+        ("it/index.html", "richieste di riferimento"),
+        ("pt/index.html", "pedidos de referência"),
     ):
         text = (WEBSITE / page).read_text(encoding="utf-8")
-        found = re.search(pattern, text)
-        assert found is not None, f"{page} nennt die Suite nicht"
-        assert int(found.group(1)) == len(ALL_CASES), page
+        found = [int(n) for n in re.findall(rf"(\d+){between}{words}", text)]
+        assert len(found) >= 2, f"{page} nennt die Suite nicht in Text und Karte: {found}"
+        assert set(found) == {len(ALL_CASES)}, f"{page}: {found}"
 
 
 def test_no_page_names_a_different_number_of_operations_in_its_text() -> None:

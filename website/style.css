@@ -165,8 +165,7 @@ h1,
 h2,
 h3,
 .brand,
-.stats b,
-.price strong {
+.stats b {
   font-family: "Archivo", system-ui, "Segoe UI", Roboto, sans-serif;
   font-stretch: 110%;
   letter-spacing: -0.018em;
@@ -185,7 +184,7 @@ h3 {
 @media (prefers-color-scheme: dark) {
   body { font-weight: 380; }
 
-  h1, h2, h3, .brand, .stats b, .price strong { font-weight: 620; }
+  h1, h2, h3, .brand, .stats b { font-weight: 620; }
 }
 
 code {
@@ -734,28 +733,6 @@ nav.lang a.cta:hover {
   margin: 0 auto;
 }
 
-/* Die Unterstützung steht nach den vier Wegen und vor den Funktionen: Der
-   Produktkern ist dort gezeigt, die Seite aber noch nicht durch. Der erste
-   Anlauf legte sie hinter den Preis — gemessen auf 75 % der Seitenhöhe, nach
-   neun von zwölf Bildschirmen. „Nicht im Aufmacher" heißt eben nicht „ganz
-   unten"; eine Bitte, die niemand erreicht, ist so wirkungslos wie eine zu
-   frühe (Robert, 30.08.2026). Jetzt sind es 41 %. */
-#unterstuetzen {
-  padding: 1rem 0 3rem;
-}
-
-/* **Genau die Breite der Downloadkarte, an der sie jetzt hängt.** Die 64rem
-   hier stammten aus der Zeit, als die Unterstützung am Seitenende stand und gegen
-   die Fläche um Aufmerksamkeit kämpfte. Seit sie unmittelbar unter dem
-   Download-Kasten sitzt, ist die Rechnung eine andere: Gemessen ergaben die
-   64rem 1024 Punkt gegen 928 darüber — die untere Karte stand links und
-   rechts 48 Punkt über, und zwei Kanten, die um wenige Prozent auseinander
-   liegen, lesen sich nicht als Gestaltung, sondern als Versehen. */
-#unterstuetzen .donate {
-  margin: 0 auto;
-  max-width: 58rem;
-}
-
 /* Ab hier ist Platz für zwei Spalten. Vorher stand das Bildschirmfoto unter
    dem Preiskasten: auf 1920 × 1080 begann es bei 770 px und war an der
    Bildschirmkante abgeschnitten — das beste Verkaufsargument lag unter der
@@ -1041,9 +1018,7 @@ nav.lang a.cta:hover {
    Reihenfolge gleichgültig — und das ist besser als eine richtige
    Reihenfolge, die beim nächsten Einfügen wieder kippt. */
 .download,
-.price-card,
 .way,
-.honest,
 .faq details,
 .release-card,
 .stats {
@@ -1580,6 +1555,21 @@ p.sub {
 
 section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 
+/* **Eine zweite Überschrift im selben Abschnitt beginnt einen neuen Teil.**
+   Auf der KI-Seite stehen drei Überschriften in einem Abschnitt, und jede
+   klebte mit null Abstand an der Fußnote darüber — sie las sich als deren
+   letzte Zeile statt als Anfang. */
+section > .wrap > h2:not(:first-child) { margin-top: 3.5rem; }
+
+/* Folgen zwei Einleitungen aufeinander, sehen sie gleich aus und stehen
+   dicht: Die zweite war sonst hell statt gedämpft und rückte 2rem ab, als
+   gehörte sie nicht mehr dazu. */
+section > .wrap > p.sub:has(+ p.sub) { margin-bottom: 0.9rem; }
+section > .wrap > p.sub + p.sub {
+  margin: 0 0 2rem;
+  color: var(--muted);
+}
+
 /* ── Changelog ────────────────────────────────────────────────────────── */
 
 /* Der Verlauf übernimmt das Raster und die Farben der Verkaufsseiten, ist
@@ -2006,6 +1996,34 @@ ol.steps-list b {
 
 .way p { margin: 0; color: var(--muted); font-size: var(--t-md); }
 
+/* Jeder Weg endet mit einem Verweis auf die Seite, die ihn ausführt. Vorher
+   hatte nur der Generatorweg einen, und zwar als eigener Abschnitt weiter
+   unten, der Weg 3 fast wörtlich wiederholte. */
+.way-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-block-size: var(--target-min);
+  margin-top: 0.5rem;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--t-md);
+  text-decoration: none;
+}
+
+.way-more::after {
+  content: "";
+  width: 0.45em;
+  height: 0.45em;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform var(--step);
+}
+
+.way-more:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.way-more:hover::after { transform: translateX(2px) rotate(45deg); }
+
 /* Die Vignette über jedem Weg: eine kleine Zeichnung, die den Weg vorführt,
    bevor der Text ihn erklärt. Sie erbt Bühne und Farben von ``.figure`` —
    hier steht nur, was in der Karte anders ist. */
@@ -2041,6 +2059,17 @@ ol.steps-list b {
   /* Jede zweite Zeile dreht sich um. Sonst entsteht eine Kante aus lauter
      linksbündigen Bildern, und das Auge hört auf hinzusehen. */
   .showcase.flip > .shot { order: -1; }
+
+  /* **Das Bild läuft neben dem Text mit.** Mittig ausgerichtet stand es neben
+     den langen Zeilen irgendwo auf halber Höhe — bei „Merkmale" 1500 Punkte
+     Text neben einem Bild von 400, mit je 550 Punkten Leere darüber und
+     darunter. Oben bündig und haftend bleibt es im Blick, solange der Text
+     dazu gelesen wird; ist das Bild höher als der Text, steht es wie vorher. */
+  .showcase { align-items: start; }
+  .showcase > .shot {
+    position: sticky;
+    top: 6rem;
+  }
 }
 
 .showcase h3 {
@@ -2097,29 +2126,49 @@ ol.steps-list b {
 
 /* Funktionsübersicht: erst die Kundenaufgabe, Details erst beim Öffnen.
    Neue Modellbilder bleiben sprachneutral; Überschriften und Hinweise stehen
-   als echter Text daneben und wachsen auch in langen Übersetzungen mit. */
+   als echter Text daneben und wachsen auch in langen Übersetzungen mit.
+
+   **Sprungmarken als eine Zeile, nicht als sechs Kästen.** Als Raster standen
+   sechs 450 Punkte breite Karten mit je zwei Wörtern darin und wirkten wie
+   leere Felder, die noch auf ihren Inhalt warten. Als Pillen mit einem Pfeil
+   nach unten sagen sie, was sie sind: Sprünge weiter unten auf der Seite. */
 .feature-topics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 .feature-topics a {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  gap: 0.55rem;
   min-height: var(--target-min);
-  padding: 1rem 1.15rem;
+  padding: 0.5rem 1.1rem;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border-radius: var(--r-pill);
   color: var(--fg);
   font-weight: 650;
   text-decoration: none;
   overflow-wrap: anywhere;
+  transition: border-color var(--step), color var(--step);
 }
-.feature-topics a:hover { border-color: var(--accent); }
+.feature-topics a::after {
+  content: "";
+  flex: none;
+  width: 0.42em;
+  height: 0.42em;
+  margin-top: -0.2em;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(45deg);
+  transition: transform var(--step);
+}
+.feature-topics a:hover { border-color: var(--accent); color: var(--accent); }
+.feature-topics a:hover::after { transform: translateY(2px) rotate(45deg); }
 .feature-topics a[aria-current] {
   font-weight: 750;
-  box-shadow: inset 0 -3px 0 var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .tool-grid {
   display: grid;
@@ -2144,12 +2193,14 @@ ol.steps-list b {
 .tool-card[open] { border-color: var(--accent); }
 .tool-content { padding: 0 1.25rem 1.25rem; }
 .tool-content p { margin: 0; max-width: 60ch; color: var(--muted); }
+/* Gleich hoch in einer Reihe: Oben bündig endeten sechs Karten auf sechs
+   verschiedenen Höhen, und die Reihe sah unfertig aus. */
 .feature-card-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.5rem;
   margin-block: 2rem;
-  align-items: start;
+  align-items: stretch;
 }
 .feature-card {
   min-width: 0;
@@ -2159,6 +2210,56 @@ ol.steps-list b {
   overflow: hidden;
   scroll-margin-top: 6rem;
 }
+
+/* Die Karte ohne Bild trägt an dessen Stelle eine Zahl, auf derselben dunklen
+   Bühne und im selben Seitenverhältnis — so bleibt die Reihe ein Raster. Die
+   Bühne ist in beiden Modi dunkel, deshalb stehen die Farben hier fest. */
+.feature-card-figure {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.2rem;
+  aspect-ratio: 3 / 2;
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 62%),
+    var(--stage);
+  color: #ece9e4;
+}
+
+.feature-card-figure b {
+  font-family: "Archivo", system-ui, "Segoe UI", Roboto, sans-serif;
+  font-stretch: 110%;
+  font-size: clamp(3.5rem, 7vw, 5.5rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: #e08b4e;
+}
+
+.feature-card-figure span {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c9ccd2;
+}
+
+/* Was nicht eigene Karte ist, steht in einem Satz darunter — mit dem einen
+   Verweis des Abschnitts daneben, statt vier gleichlautender. */
+.feature-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+}
+
+.feature-more p {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--muted);
+}
+
+.feature-more p b { color: var(--fg); }
 .feature-card img {
   display: block;
   width: 100%;
@@ -2169,10 +2270,15 @@ ol.steps-list b {
 .feature-card-copy { padding: 1.25rem 1.4rem 1.5rem; }
 .feature-card h3 { margin: 0 0 0.7rem; font-size: var(--t-lg); line-height: 1.3; }
 .feature-card p { margin: 0; color: var(--muted); max-width: 60ch; }
-.feature-card a { color: inherit; text-underline-offset: 0.2em; }
-.feature-preview .lead,
+.feature-card a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  text-underline-offset: 0.25em;
+  transition: color var(--step), text-decoration-color var(--step);
+}
+.feature-card a:hover { color: var(--accent); text-decoration-color: currentColor; }
 #entwicklung > .wrap > .lead { max-width: 64ch; }
-.feature-preview .feature-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .feature-notes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .feature-diagram { margin-top: 1rem; }
 .feature-diagram summary {
@@ -2183,17 +2289,12 @@ ol.steps-list b {
 }
 .feature-diagram .figure { box-shadow: none; }
 .feature-model { display: block; width: 100%; height: auto; border-radius: var(--r-lg); }
-@media (min-width: 62rem) {
-  .feature-topics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 @media (max-width: 46rem) {
-  .feature-card-grid,
-  .feature-preview .feature-card-grid { grid-template-columns: 1fr; }
+  .feature-card-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 36rem) {
   .tool-grid,
-  .feature-card-grid,
-  .feature-topics { grid-template-columns: 1fr; }
+  .feature-card-grid { grid-template-columns: 1fr; }
 }
 
 /* ``figure`` bringt in jedem Browser 40 px Rand links und rechts mit. Ohne
@@ -2255,38 +2356,6 @@ ol.steps-list b {
   font-weight: 600;
 }
 
-/* ── Was drinsteckt ────────────────────────────────────────────────────── */
-
-ul.features {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr));
-  gap: 1rem 2rem;
-}
-
-ul.features li {
-  padding-left: 1.4rem;
-  position: relative;
-}
-
-ul.features li::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.55em;
-  width: 0.55em;
-  height: 0.55em;
-  border-radius: 2px;
-  background: var(--accent);
-  transition: transform var(--step);
-}
-
-ul.features li:hover::before { transform: rotate(45deg) scale(1.15); }
-
-ul.features b { display: inline; }
-
 /* ── Sprungliste der Funktionsseite ────────────────────────────────────── */
 
 /* Zwölf Blöcke sind fünf Bildschirme. Die Liste steht zwischen Aufmacher und
@@ -2335,72 +2404,38 @@ ul.features b { display: inline; }
 
 /* ── Ehrlichkeitsblock ─────────────────────────────────────────────────── */
 
-/* Der einzige Block der Seite, der aus langen Sätzen besteht. Über die volle
-   Breite gezogen wären das Zeilen von 150 Zeichen — die Augen finden den
-   Zeilenanfang nicht wieder. */
-.honest {
-  background: var(--card);
-  border-left: 4px solid var(--accent);
-  border-radius: var(--r-md);
-  padding: 1.25rem 1.5rem;
-  max-width: 58rem;
-  box-shadow: var(--edge);
+/* Sechs Grenzen als Raster statt als Aufzählung in einem Kasten: Der Kasten
+   stand 930 Punkte breit neben 450 Punkten Leere und las sich wie
+   Kleingedrucktes. Jede Grenze ist eine kurze Karte mit Strich links; das
+   Mindestmaß ergibt am breiten Schirm drei Spalten, also zwei volle Reihen,
+   wo vier Spalten eine halbe dritte Reihe ließen. */
+ul.honest-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  gap: 1rem 1.25rem;
 }
 
-.honest ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+ul.honest-grid li {
+  padding: 1rem 1.2rem 1.05rem;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--card);
+  box-shadow: var(--edge);
+  color: var(--muted);
+  font-size: var(--t-md);
+}
 
-.honest li { margin: 0.45rem 0; }
+ul.honest-grid b {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--fg);
+  font-size: var(--t-base);
+}
 
 /* ── Preis ─────────────────────────────────────────────────────────────── */
-
-.price {
-  display: grid;
-  gap: 1.5rem;
-  align-items: start;
-}
-
-@media (min-width: 56rem) {
-  .price { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 2.5rem; }
-}
-
-.price-card {
-  background: var(--card);
-  border-top: 3px solid var(--accent);
-  border-radius: var(--r-lg);
-  padding: 1.75rem;
-  box-shadow: var(--edge);
-}
-
-.price-card .amount {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  margin-bottom: 0.25rem;
-}
-
-.price-card .amount b {
-  font-size: var(--t-3xl);
-  line-height: 1;
-  letter-spacing: -0.03em;
-}
-
-.price-card .amount s {
-  color: var(--muted);
-  font-size: var(--t-lg);
-  text-decoration-thickness: 2px;
-}
-
-.price-card .amount em {
-  font-style: normal;
-  font-size: var(--t-sm);
-  font-weight: 600;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-radius: var(--r-pill);
-  padding: 0.15rem 0.6rem;
-}
-
-.price-card .terms { color: var(--muted); margin: 0 0 0.5rem; }
 
 .price-list {
   list-style: none;
@@ -2972,10 +3007,8 @@ a { color: var(--accent); }
     ol.steps-list li,
     .way,
     .showcase > *,
-    .honest,
-    ul.features li,
-    .price-card,
-    .price > div,
+    ul.honest-grid li,
+    .licence,
     table.req,
     .faq details,
     .closing {
@@ -2997,7 +3030,7 @@ a { color: var(--accent); }
     .pains li:nth-child(2),
     ol.steps-list li:nth-child(2),
     .way:nth-child(2),
-    ul.features li:nth-child(2n) { animation-range: entry 0% cover 15%; }
+    ul.honest-grid li:nth-child(2n) { animation-range: entry 0% cover 15%; }
 
     .pains li:nth-child(3),
     ol.steps-list li:nth-child(3),
@@ -3356,9 +3389,9 @@ a { color: var(--accent); }
   body { background: #fff; color: #000; }
 
   .download,
-  .price-card,
+  .licence,
   .closing,
-  .honest,
+  ul.honest-grid li,
   .faq details,
   .way,
   .pains li {
@@ -3512,9 +3545,8 @@ table.compare .no { color: var(--muted); }
   table.compare th,
   table.compare td { overflow-wrap: anywhere; padding-right: 0.4rem; }
   table.compare th { font-size: 0.75rem; letter-spacing: normal; text-transform: none; }
-  .price > *, .price-list li > span { min-width: 0; overflow-wrap: anywhere; }
-  .price-card .amount { flex-wrap: wrap; }
-  .price-card .amount b { overflow-wrap: normal; }
+  .price-list li > span { min-width: 0; overflow-wrap: anywhere; }
+  .licence-price b { overflow-wrap: normal; }
 }
 
 /* **Die Kante war der falsche Gewinn.** Die Fußnote stand auf 44 rem unter
@@ -3540,11 +3572,6 @@ p.footnote {
   font-size: var(--t-md);
   border-left: 2px solid var(--line);
   padding-left: 1.1rem;
-}
-
-#generiert h3 {
-  margin-top: 2.6rem;
-  font-size: var(--t-lg);
 }
 
 /* --- Schaustücke: die Galerie erzeugter Körper und der Weg dorthin ---------
@@ -3730,7 +3757,7 @@ p.footnote {
   grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
   gap: 1.75rem;
   margin: 2rem 0 2.5rem;
-  align-items: start;
+  align-items: stretch;
 }
 
 .beleg figure {
@@ -3741,13 +3768,24 @@ p.footnote {
   box-shadow: var(--edge);
 }
 
-.beleg figure > a { display: block; }
+/* **Eine Bühne für beide Aufnahmen.** Das Fenster (1907 × 1192) und der
+   Katalog (1560 × 1144) haben verschiedene Seitenverhältnisse; frei
+   nebeneinander endeten die Bilder 70 Punkte versetzt und die Unterschriften
+   mit ihnen. Die Bühne hat das Maß des höheren Bildes, das flachere steht
+   darin mittig auf dem Dunkel der Anwendung — beschnitten wird nichts. */
+.beleg figure > a {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1560 / 1144;
+  background: var(--stage);
+  border-bottom: 1px solid var(--line);
+}
 
 .beleg img {
   display: block;
   width: 100%;
-  height: auto;
-  border-bottom: 1px solid var(--line);
+  height: 100%;
+  object-fit: contain;
 }
 
 .beleg figcaption {
@@ -3878,10 +3916,13 @@ p.footnote {
    Wörtern um. Sie schrumpfen deshalb hier — nicht weil enger schöner wäre,
    sondern weil ein Innenabstand ein Anteil ist und keine Länge.
 
-   Der Block steht am Dateiende, weil `.price-card` (Z. 1092) und `.closing`
-   (Z. 1238) später kommen als die Breakpoints oben; bei gleicher Spezifität
-   gewinnt die letzte Regel, und weiter vorn hätte dieser Block nichts
-   bewirkt. */
+   Die Tabelle ist die Messung vom 27.08.2026; `.honest` und `.price-card`
+   sind seither das Raster `ul.honest-grid` und die Karte `.licence`.
+
+   Der Block steht so weit hinten, weil `.closing` und die Kartenregeln
+   früher kommen als er; bei gleicher Spezifität gewinnt die letzte Regel,
+   und weiter vorn hätte dieser Block nichts bewirkt. Die Regeln der
+   Startseite danach setzen keine Innenabstände für schmale Schirme. */
 @media (max-width: 30rem) {
   .wrap { padding: 0 0.9rem; }
 
@@ -3893,8 +3934,8 @@ p.footnote {
 
   .download { padding: 1rem; }
   .donate { align-items: flex-start; flex-direction: column; }
-  .price-card { padding: 1.1rem; }
-  .honest { padding: 1rem; }
+  .licence { padding: 1.1rem; }
+  ul.honest-grid li { padding: 0.9rem 1rem; }
   .closing { padding: 2.5rem 1rem; }
   .way { padding: 1.1rem 1rem 1rem; }
   .faq details { padding: 0.9rem 1rem; }
@@ -3959,6 +4000,12 @@ footer.site a {
   display: inline-flex;
   align-items: center;
 }
+
+/* Ein kurzer Eintrag wie „Preis" wird auf die Mindestbreite gezogen. Links
+   ausgerichtet stand der Rest des Zielkastens als Lücke hinter dem Wort, und
+   die Leiste las sich unregelmäßig: 33 Punkte vor „Unterstützen", 20 vor
+   jedem anderen Eintrag. Mittig verteilt sich derselbe Rest auf beide Seiten. */
+nav.lang a { justify-content: center; }
 
 nav.lang details.langs li a { width: 100%; }
 
@@ -4372,14 +4419,26 @@ ol.timeline li.is-now span { color: var(--fg); font-weight: 600; }
   }
 }
 
+/* **Drei Karten nebeneinander: jetzt, privat, gewerblich.** Vorher standen
+   die beiden Lizenzen oben und die Demo als dritter Kasten mit eigener Liste
+   darunter — zwei Bauarten für dieselbe Frage „was kostet es?". Jetzt liest
+   sich der Preis von links nach rechts wie die Zeitleiste darüber. Unter
+   56rem stehen die Karten untereinander, darüber immer zu dritt: Mit
+   `auto-fit` blieb bei mittlerer Breite eine Karte allein in der zweiten
+   Reihe stehen. */
 .licences {
   display: grid;
   gap: 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
   align-items: stretch;
 }
 
+@media (min-width: 56rem) {
+  .licences { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 .licence {
+  display: flex;
+  flex-direction: column;
   background: var(--card);
   border-radius: var(--r-lg);
   border-top: 3px solid var(--accent);
@@ -4408,6 +4467,10 @@ ol.timeline li.is-now span { color: var(--fg); font-weight: 600; }
   letter-spacing: -0.03em;
 }
 
+/* „Kostenlos" ist ein Wort und keine Zahl; in voller Größe liefe es in der
+   schmalen Karte gegen den Rand. */
+.licence-free b { font-size: clamp(2.1rem, 3.4vw, var(--t-3xl)); }
+
 .licence-price em {
   font-style: normal;
   font-size: var(--t-sm);
@@ -4424,25 +4487,58 @@ ol.timeline li.is-now span { color: var(--fg); font-weight: 600; }
   font-size: var(--t-md);
 }
 
+/* Der Knopf der Demo sitzt unten in der Karte, auf der Höhe, auf der die
+   beiden anderen Karten enden; den Mindestabstand darüber hält die Liste. */
+.licence > .btn {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.licence-demo .price-list { margin-bottom: 1.25rem; }
+
 .licence-terms {
-  margin: 1.25rem 0 2.5rem;
-  max-width: 70ch;
+  margin: 1.25rem 0 0;
+  max-width: 76ch;
   color: var(--muted);
   font-size: var(--t-md);
 }
 
 /* ── Unterstützen ───────────────────────────────────────────────────────── */
 
-.support-grid,
-/* Oben bündig, nicht gleich hoch: Die GoFundMe-Karte trägt den Platz für
-   die Anzeige und ist deshalb höher. Gestreckt stand die PayPal-Karte mit
-   zwei Zeilen Text über einer leeren Fläche von 200 Punkten. */
-.support-ways {
+/* **Oben der Weg bis 1.0, darunter Person und Handlung nebeneinander.**
+   Vorher standen drei Karten verschieden hoch übereinander, die Meilensteine
+   über die volle Breite mit 800 Punkten Leere daneben, und die PayPal-Karte
+   endete ohne jeden Knopf. Jetzt teilt sich der Weg in Geschafft und Geplant,
+   zwei etwa gleich lange Spalten, und darunter stehen zwei etwa gleich hohe
+   Karten: wer dahintersteht und wofür das Geld ist, daneben wie man hilft. */
+.support-grid {
   display: grid;
   gap: 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
-  align-items: start;
-  margin-bottom: 1.25rem;
+  align-items: stretch;
+}
+
+@media (min-width: 62rem) {
+  .support-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+}
+
+.milestones { margin-bottom: 1.25rem; }
+
+.milestone-columns {
+  display: grid;
+  gap: 1.25rem 2.5rem;
+}
+
+@media (min-width: 56rem) {
+  .milestone-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.milestones .milestone-label {
+  margin: 0.4rem 0 0.8rem;
+  color: var(--accent);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .support-card {
@@ -4456,6 +4552,8 @@ ol.timeline li.is-now span { color: var(--fg); font-weight: 600; }
   margin: 0 0 0.6rem;
   font-size: var(--t-lg);
 }
+
+.support-about h3 + p { margin-bottom: 1.4rem; }
 
 .support-card p {
   margin: 0 0 0.6rem;
@@ -4482,38 +4580,55 @@ ul.support-list b,
   font-size: var(--t-md);
 }
 
-.milestones { margin-bottom: 1.25rem; }
-
 /* **Geschafft und kommend unterscheiden sich an zwei Dingen**: am Zeichen
    (Haken gegen leeren Kreis) und an der Schrift der Zeitangabe — nicht nur an
-   der Farbe. */
+   der Farbe. Die Linie zwischen den Punkten macht aus der Liste einen Weg. */
 ol.milestone-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.55rem;
+  gap: 0.6rem;
 }
 
-ol.milestone-list li {
+ol.milestone-list > li {
+  position: relative;
   display: grid;
-  grid-template-columns: 1.4rem 7.5rem 1fr;
+  grid-template-columns: 1.4rem 7.2rem minmax(0, 1fr);
   gap: 0.6rem;
   align-items: baseline;
   color: var(--muted);
   font-size: var(--t-md);
 }
 
-ol.milestone-list li::before {
+ol.milestone-list > li::before {
   content: "";
-  align-self: center;
+  align-self: start;
+  margin-top: 0.2rem;
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
   border: 2px solid var(--accent);
+  background: var(--card);
+  position: relative;
+  z-index: 1;
 }
 
-ol.milestone-list li.done::before {
+ol.milestone-list > li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: calc(0.5rem - 1px);
+  top: 1.2rem;
+  bottom: -0.8rem;
+  width: 2px;
+  background: var(--line);
+}
+
+ol.milestone-list > li.done::after {
+  background: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+ol.milestone-list > li.done::before {
   background:
     no-repeat center / 0.7rem url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 12 5 5L20 6'/%3E%3C/svg%3E"),
     var(--accent);
@@ -4525,41 +4640,134 @@ ol.milestone-list time {
   font-weight: 600;
 }
 
-ol.milestone-list li.next time { font-weight: 400; font-style: italic; }
+ol.milestone-list > li.next time { font-weight: 400; font-style: italic; }
 
-ol.milestone-list li.is-now span { color: var(--fg); }
+ol.milestone-list > li.is-now span,
+ol.milestone-list > li.next b { color: var(--fg); }
+
+/* Der aktuelle Stand trägt einen Ring um den Haken — die zweite Kodierung
+   neben der fetten Zeile. */
+ol.milestone-list > li.is-now::before {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+ul.milestone-plan {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+}
+
+ul.milestone-plan li {
+  position: relative;
+  padding-left: 1rem;
+}
+
+ul.milestone-plan li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+}
+
+.milestones .milestone-note {
+  max-width: none;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-size: var(--t-sm);
+}
 
 /* Schmaler als 34rem rückt der Text unter das Datum. Nicht im
    30rem-Block: Der letzte davon trägt die Regeln für den ersten
    Handybildschirm, und die Prüfung liest genau ihn. */
 @media (max-width: 34rem) {
-  ol.milestone-list li { grid-template-columns: 1.4rem 1fr; }
-  ol.milestone-list li span { grid-column: 2; }
+  ol.milestone-list > li { grid-template-columns: 1.4rem minmax(0, 1fr); }
+  ol.milestone-list > li span { grid-column: 2; }
 }
 
-/* **Der Platz des GoFundMe-Stands ist gleich groß, ob geladen oder nicht.**
-   Der Platzhalter hält die Höhe, die das Widget ungefähr braucht; lädt es
-   nach dem Klick, meldet es seine wirkliche Höhe selbst (``site.js``). Beim
-   Laden der Seite steht hier nur Text und ein Knopf — nichts, was GoFundMe
-   erreicht. */
-.gfm-slot {
+/* **Die Handlung als ein Feld.** Beide Wege gleichwertig nebeneinander, darunter
+   der rechtliche Satz mit dem einen Knopf, der den lokalen Hinweis öffnet. Der
+   Rand oben in der Akzentfarbe ist derselbe wie bei den Preiskarten. Der Stand
+   der Kampagne steht als eigene Zeile unter beiden Karten: im Feld machte er
+   es 250 Punkte höher als die Karte daneben. */
+.support-give {
   display: grid;
-  align-content: center;
-  justify-items: start;
-  gap: 0.2rem;
-  min-height: 12rem;
-  margin-top: 0.8rem;
-  padding: 1rem 1.1rem;
+  gap: 1.1rem;
+  padding: 1.5rem 1.6rem 1.6rem;
+  border-radius: var(--r-lg);
+  border-top: 3px solid var(--accent);
+  background: var(--card);
+  box-shadow: var(--edge);
+}
+
+.support-give-head h3 { margin: 0 0 0.35rem; font-size: var(--t-xl); }
+.support-give-head p { margin: 0; color: var(--muted); max-width: 70ch; }
+
+.support-ways {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+  align-items: stretch;
+}
+
+/* Innen eine Stufe tiefer als das Feld: dieselbe Karte auf dem Grund der
+   Seite statt auf der Karte, sonst verschwämmen Feld und Wege. */
+.support-way {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  column-gap: 0.9rem;
+  align-items: start;
+  /* Gestreckt auf die Höhe der Nachbarkarte verteilte das Raster den Rest
+     auf die Zeilen, und der kürzere Text rückte vom Titel ab. */
+  align-content: start;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.support-way svg {
+  grid-row: span 2;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0.5rem;
+  border-radius: var(--r-md);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.support-way h3 { margin-bottom: 0.3rem; }
+
+/* **Der Platz des GoFundMe-Stands ist eine Zeile, bis jemand klickt.** Beim
+   Laden der Seite steht hier nur Text und ein Knopf — nichts, was GoFundMe
+   erreicht. Nach dem Klick meldet das Widget seine Höhe selbst (``site.js``);
+   die Zeile wächst dann, weil der Leser es so gewollt hat. */
+.gfm-slot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding: 0.9rem 1.1rem;
   border: 1px dashed color-mix(in srgb, var(--fg) 25%, var(--line));
   border-radius: var(--r-md);
   background: color-mix(in srgb, var(--accent) 4%, var(--bg));
 }
 
+.support-grid + .gfm-slot { margin-top: 1.25rem; }
+
 .gfm-slot .gfm-note {
+  flex: 1 1 28rem;
   margin: 0;
   font-size: var(--t-sm);
   color: var(--muted);
 }
+
+.gfm-slot .gfm-note b { color: var(--fg); }
 
 .gfm-slot .btn { margin-left: 0; }
 
@@ -4573,23 +4781,27 @@ ol.milestone-list li.is-now span { color: var(--fg); }
 .gfm-frame {
   display: block;
   width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
   border: 0;
   border-radius: var(--r-md);
   background: #fff;
 }
 
-/* Die Unterstützung selbst: der rechtliche Satz und der eine Knopf, der den
-   lokalen Hinweis öffnet. Der Satz steht jetzt offen da und nicht mehr in
+/* Der rechtliche Satz und der Knopf: Der Satz steht offen da und nicht in
    einem Aufklapper — wer unterstützen will, soll die Grenze sehen, bevor er
-   klickt. */
+   klickt. Im Feld braucht der Kasten keinen eigenen Rahmen mehr. */
 .support .donate {
   max-width: none;
   margin: 0;
+  padding: 0.25rem 0 0;
+  background: none;
+  box-shadow: none;
   align-items: center;
 }
 
 .support .donate p.donate-terms {
   margin: 0;
-  max-width: 70ch;
+  max-width: 76ch;
   font-size: var(--t-sm);
 }
