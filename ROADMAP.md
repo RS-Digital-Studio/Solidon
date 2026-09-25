@@ -61,7 +61,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-217 — Die Zuordnung meldet doppelt und fragt ohne Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Formen-Beispiel auf acht Hinweise gebündelt, alle Kennungen und Zahlen bleiben erhalten. Offen: remove_feature.gone und perceive.orphaned doppelt, orphaned nach Teilen, Frage unter der Deckfläche, altes Merkmal ohne Markierung — _with_features filtert, question_context trägt das alte Merkmal |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | drill_brep_hole nummeriert nach Lage; Verschieben und Einfügen sagen an build_tray_v3.step ab — eindeutige geometrische Zuordnung behält den Namen wie am Netz |
 | [RM-222 — Die Erkennung einer Durchbohrung am Netz hängt an der Vorgeschichte](#rm-222) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: gleiche Geometrie, mit vorherigem Vergrößern eine Bohrung weniger — beide Stände als Korpusfall, Stelle eingrenzen |
-| [RM-223 — Zwei Netzoperationen sagen das Falsche](#rm-223) | Geometrie, Erkennung und Druckvorbereitung | Angleichen mit 1 mm endet als unerwarteter Fehler (MemoryError), Verfeinern leiht sich den Satz der lokalen Suche — vorab schätzen und absagen, eigener Satz |
 | [RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen](#rm-225) | Geometrie, Erkennung und Druckvorbereitung | Gewürzdeckel: nach Teilung ändern 124 Flächen und kein Muster, nach Entfernen 31 Zusatzflächen und 1,7 mm³ Überlappung — Feld begrenzen, Stirnkappen verschmelzen |
 | [RM-226 — Netz und exakter Kern nennen dieselbe Fläche verschieden](#rm-226) | Geometrie, Erkennung und Druckvorbereitung | Gewölbte Oberseite exakt Verrundung, am Netz gekrümmte Fläche; Fläche versetzen lässt exakt eine koplanare Scheibe stehen — replaces_an_edge an den exakten Kern, gleiche Domäne vereinigen |
 | [RM-227 — Eine Tasche am Teppichclip gibt einen ungültigen exakten Körper mit 0 mm³ Abtrag still zurück](#rm-227) | Geometrie, Erkennung und Druckvorbereitung | sketch_pocket Ø 11 an carpet-corner-clip.step: ungültig, 0 mm³, kein Befund — nach dem Schnitt mit profiles.is_sound prüfen und absagen, dann die Ursache |
@@ -1667,20 +1666,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Stände als Korpusfall einchecken, die Stelle eingrenzen (vermutlich das
   Mitführen gebauter Merkmale gegen die frische Erkennung, `carry_detection`).
   Abnahme: beide Wege liefern dieselben Merkmale.
-
-<a id="rm-223"></a>
-
-- [ ] **RM-223 — Zwei Netzoperationen sagen das Falsche.**
-  Aus der Durchsicht 0.5.0 (beziehungen, `rm189_real.txt`): *Dreiecke
-  angleichen* mit Kantenlänge 1,0 mm am Schraubenhalter (220 mm) rechnet ohne
-  Vorabschätzung, endet in `MemoryError` und kommt als „Im Programm ist ein
-  unerwarteter Fehler …" beim Kunden an (Regel 17). *Kanten verfeinern* an
-  drill-holder und Besenhalter sagt „Dieser Bereich enthält zu viele Dreiecke
-  für die lokale Suche" — den Satz der lokalen Merkmalserkennung
-  (`perceive.local.local_error("budget")`), nicht den des Neuvernetzens. Weg:
-  Dreieckszahl aus Fläche und Kantenlänge vorab schätzen und mit Satz und
-  größerer Kantenlänge als Vorschlag absagen; eigener Satz für das Budget des
-  Verfeinerns. Abnahme: beide Fälle als Test mit dem Satz, den der Kunde liest.
 
 <a id="rm-225"></a>
 

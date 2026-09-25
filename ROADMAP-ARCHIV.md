@@ -29,6 +29,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 | 2026-09-25 | [Große Netze: Speicher, Merkmalsgrenze und die Erkennung an einer Stelle (25.09.2026)](#große-netze-speicher-merkmalsgrenze-und-die-erkennung-an-einer-stelle-25092026) |
 | 2026-09-25 | [Gekippte und versetzte Bohrungen sagen, was sie sind (25.09.2026)](#gekippte-und-versetzte-bohrungen-sagen-was-sie-sind-25092026) |
 | 2026-09-25 | [Das Einlesen großer Netze zählt einmal und liest im Arbeiter (25.09.2026)](#das-einlesen-großer-netze-zählt-einmal-und-liest-im-arbeiter-25092026) |
+| 2026-09-25 | [Kanten verfeinern teilt konform und sagt, was geht (25.09.2026)](#kanten-verfeinern-teilt-konform-und-sagt-was-geht-25092026) |
 | 2026-09-25 | [Ineinandersteckende Teile gehen vereinigt in die Boolesche Kette (25.09.2026)](#ineinandersteckende-teile-gehen-vereinigt-in-die-boolesche-kette-25092026) |
 | 2026-09-25 | [Der Bedienweg „kaputtes Dreiecksmodell → druckbar“ ist abgearbeitet (25.09.2026)](#der-bedienweg-kaputtes-dreiecksmodell--druckbar-ist-abgearbeitet-25092026) |
 | 2026-09-24 | [Solidon 0.5.0 veröffentlicht (24.09.2026)](#solidon-050-veröffentlicht-24092026) |
@@ -31073,6 +31074,59 @@ Dazu aus dem Bericht, je mit Test:
   `normalise` am Schiff 6,0 → 3,62 s mit gleichem Ergebnis an allen 485
   Körpern des Korpus, `open_path` ohne Dateiarbeit im Hauptthread. Das
   Verschweißen baut RM-239 neu.
+
+## Kanten verfeinern teilt konform und sagt, was geht (25.09.2026)
+
+<a id="rm-223"></a>
+
+- [x] **RM-223 — Zwei Netzoperationen sagen das Falsche.**
+  Aus der Durchsicht 0.5.0 (beziehungen, `rm189_real.txt`): *Dreiecke
+  angleichen* mit 1,0 mm am Schraubenhalter ende in `MemoryError` und komme
+  als „unerwarteter Fehler" beim Kunden an; *Kanten verfeinern* an
+  drill-holder und Besenhalter sage „Dieser Bereich enthält zu viele Dreiecke
+  für die lokale Suche". Weg: vorab schätzen und mit Satz und größerer
+  Kantenlänge absagen, eigener Satz für das Budget. Abnahme: beide Fälle als
+  Test mit dem Satz, den der Kunde liest.
+
+  **Nachgemessen am 25.09.2026** (`.claude/.state/rm-223-2026-09-25/`,
+  `netzops-heute.txt`): Beide Sätze kamen nicht mehr. Den Speicherfehler
+  hatte *Kanten verfeinern* gebracht, nicht *Angleichen* — das rechnete an
+  denselben Modellen in 3 bis 10 s. Die lokale Suche hatte am
+  Folgeschritt nach der Vollerkennung angehalten; das hat RM-235 behoben.
+  Geblieben war die Ursache darunter: Das Verfeinern teilte über
+  `trimesh.subdivide_to_size` in Zweierpotenzen, und die Schätzung zählte
+  nur die Fläche. Am Bohrmaschinenhalter bei 1 mm 2 462 910 Dreiecke und
+  859 s bis zum Ergebnis, bei 0,5 mm 8 289 738 und 2 659 s; der
+  Besenhalter kam bei 0,5 mm mit 11 916 394 über die Decke von acht
+  Millionen. Die Schätzung lag um das 18- bis 66-Fache zu tief.
+
+  **Gebaut:** `mesh_ops.remesh` teilt einen geschlossenen Körper konform
+  durch den exakten Kern (`_split_conforming`, `refine_to_length` bis keine
+  Kante mehr zu lang ist, drei Durchgänge an elf Modellen; ein Durchgang
+  ließ die Diagonalen bis zum 3,9-Fachen stehen). Gemessen an elf Modellen
+  aus `F:\3D Dateien` bei 1 mm (`konform-1mm.txt`, `durchgaenge-1mm.txt`):
+  dicht, dasselbe Volumen, dieselbe Teilezahl, zwei- bis viermal weniger
+  Dreiecke. Am Kundenweg (`netzops-konform.txt`) der Bohrmaschinenhalter
+  1 mm in 21 s statt 859 (600 826 Dreiecke), 0,5 mm in 658 s statt 2 659
+  (1 857 870), der Besenhalter 1 mm in 23 s statt 162, 0,5 mm in 257 s statt
+  484 (2 339 196 statt 11 916 394). Slots und Farben kommen über `face_id`
+  vom Herkunftsdreieck; bis dahin kam ein farbiges Netz grau zurück.
+  `estimated_triangles` zählt Fläche und geteilte Kanten (Besenhalter:
+  Fläche allein 58 931, Ergebnis 1 039 274); die Decke zählt zusätzlich je
+  Durchgang. Die vorgeschlagene Kantenlänge sucht `_reachable_edge` an der
+  Zählung des Wegs, der abgelehnt hat — die Wurzelformel nannte am offenen
+  Laptop-Ständer 2,83 mm, und die ergäben 8 551 822 Dreiecke. Ein offenes
+  Netz geht weiter über `trimesh` (seit trimesh 5.1 selbst konform) und
+  bekommt *Netz reparieren* als Vorschlag. Ein `MemoryError` in *Kanten
+  verfeinern*, *Dreiecke angleichen* und *Fläche unterteilen* wird zu
+  „Für diese Kantenlänge reicht der Arbeitsspeicher nicht" mit der
+  doppelten Kantenlänge als Weg. Der Zuwachsbefund nennt den Zuwachs statt
+  eines Wegs, der kaum noch gegangen wird. Nachweis in
+  `tests/test_missing_ops.py` (Schätzung an Nadeldreiecken, Decke gegen eine
+  falsche Schätzung, gehender Vorschlag geschlossen und offen, Speichersatz
+  an allen drei Operationen, Farben, Rückfall bei gegenläufiger Wicklung),
+  `test_subdivision.py` mit den neuen Zahlen, `remesh_mesh` in
+  `test_platform_identity.py`.
 
 ## Große Netze: Speicher, Merkmalsgrenze und die Erkennung an einer Stelle (25.09.2026)
 

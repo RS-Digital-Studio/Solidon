@@ -855,8 +855,10 @@ die Ebene, ein gelesenes Muster legt es über `perceive.patterns.Field.placed`
 ab — auch um einen Zylinder.
 
 **Um einen Zylinder** (`wrap="cylinder"`) teilt `refined_for_bending()` das
-Feld vorher so fein, dass jede Sehne höchstens `BEND_SAG` unter dem Bogen
-hängt (`mesh_ops.refined`, der exakte Kern, konform und je Schale getrennt),
+Feld vorher so fein, dass jede Kante des Feldes höchstens `BEND_SAG` unter
+dem Bogen hängt (`mesh_ops.refined`, ein Durchgang des exakten Kerns, konform
+und je Schale getrennt; die Diagonalen im Inneren einer Fläche bis zum
+Dreifachen, unter `MAX_FACET_SAG`),
 und `wrapped()` biegt danach die Ecken: Rillenböden und Kronen folgen dem
 Zylinder, die Tiefe bleibt die verlangte. Ein Feld, das den Umfang erreicht,
 bekommt über `wrap_pitch()` die Teilung, mit der es aufgeht (Finding
@@ -1571,6 +1573,25 @@ in ein Filament färben) · `texture.py` (von einer Textur zu druckbaren Slots)
 · `label_ops.py` (Text und Logos auf einer Fläche; die Schriften dazu liegen
 in `data/fonts/`)
 
+**Kanten verfeinern** (`remesh`) teilt einen geschlossenen Körper konform
+durch den exakten Kern (`_split_conforming`): `refine_to_length` so oft, bis
+keine Kante mehr über der verlangten Länge liegt — ein Durchgang lässt die
+Diagonalen im Inneren eines geteilten Dreiecks bis zum Vierfachen stehen,
+drei reichten an elf Kundenmodellen. Slots und Farben kommen über `face_id`
+vom Herkunftsdreieck (`_inherited`), nicht über `attributes.transfer`. Nur
+ein offenes Netz und ein dichtes, das der Kern ablehnt, gehen die zwei Wege
+über `trimesh` (`subdivide_to_size` halbiert seit trimesh 5.1 selbst
+konform, braucht aber zwei- bis viermal so viele Dreiecke; gleichmäßig nur,
+wenn es trotzdem aufreißt). Vorab schätzt `estimated_triangles` aus Fläche
+**und** geteilten Kanten — die Fläche allein lag an fein facettierten Netzen
+um das Sechzehnfache zu tief —, der offene Weg fragt die Obergrenze
+`_on_demand_count`, danach zählt jeder Durchgang gegen
+`MAX_REMESH_TRIANGLES`. Die vorgeschlagene Kantenlänge sucht
+`_reachable_edge` an derselben Zählung, mit `ESTIMATE_RESERVE` über einer
+Schätzung; ein offenes Netz bekommt *Netz reparieren* dazu. Ein `MemoryError` wird in
+allen drei Teilungen (`remesh`, `uniform`, `subdivided`) zum Satz mit Weg
+(`_out_of_memory`). `refined` bleibt der eine Durchgang fürs Biegen.
+
 Die Netzoperationen fragen `ctx.cancelled` nach ihrer Rechnung, je Durchgang
 der gleichmäßigen Teilung und je Portion der Abweichungsmessung
 (`deviation(..., cancelled=)`, `max_distance_to_surface(..., cancelled=)`);
@@ -1754,7 +1775,8 @@ was danach eingeschlossen ist, ist der Innenraum; der Befund
 Menüeintrag deshalb nicht mehr. Ein Hüllquader oder eine konvexe Hülle
 ersetzt weiterhin keinen Innenraum.
 
-Neuvernetzung überträgt Slots über `attributes.transfer`; Skulptur-Etappen
+Neuvernetzung überträgt Slots über `attributes.transfer` — außer *Kanten
+verfeinern*, das die Herkunft jedes Dreiecks kennt (siehe oben); Skulptur-Etappen
 verwenden das verlustfreie NPZ statt STL. Beim Lesen aus Projektquellen werden
 NPY-Header und entpackte Größe vor der Array-Allokation geprüft.
 `measure.surface_gap` verwendet den räumlichen Index von Manifold mit

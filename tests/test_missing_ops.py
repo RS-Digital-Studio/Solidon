@@ -549,19 +549,15 @@ def test_a_torn_remesh_says_so_instead_of_claiming_the_shape_is_fine(profile: Pr
 def test_remeshing_an_imported_part_keeps_it_closed_and_says_the_price(
     profile: Profile,
 ) -> None:
-    """Geschlossen bleibt die Bedingung — was es kostet, hat trimesh 5 geändert.
+    """Geschlossen bleibt die Bedingung — und der Preis ist gesunken.
 
-    ``plate_holes`` hat winzige Bohrungsfacetten neben großen Grundflächen. Der
-    bedarfsgerechte Weg schafft 5 mm, zerreißt das Netz dabei aber; der
-    gleichmäßige hält es geschlossen, weil er die winzigen Facetten mitzerteilt.
-
-    Was er dafür verlangt, ist eingebrochen (gemessen am 14.08.2026 an
-    derselben Datei): Aus 796 Dreiecken wurden unter **trimesh 4.12.2**
-    815 104 — Faktor 1024, und die längste Kante lag bei 2,51 mm, also weit
-    unter den verlangten 5. Unter **trimesh 5.0.0** sind es 22 636, Faktor 28,
-    und die längste Kante trifft die 5,0 genau. Der Warnbefund
-    ``mesh.remesh_dense`` bleibt hier deshalb aus; er greift erst ab dem
-    Hundertfachen und hat seinen eigenen Test darunter.
+    ``plate_holes`` hat winzige Bohrungsfacetten neben großen Grundflächen.
+    Aus 796 Dreiecken wurden bei 5 mm unter **trimesh 4.12.2** 815 104 —
+    gleichmäßig geteilt, weil das Teilen nach Bedarf das Netz zerriss —,
+    unter **trimesh 5.0.0** 22 636 (14.08.2026). Seit dem 25.09.2026 teilt
+    der exakte Kern konform und nur, wo eine Kante zu lang ist: **8 982**.
+    Der Warnbefund ``mesh.remesh_dense`` bleibt hier aus; er greift erst ab
+    dem Hundertfachen und hat seinen eigenen Test darunter.
     """
     mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
     entry = SceneObject(id="obj_1", name="Platte", mesh=mesh)
@@ -577,16 +573,20 @@ def test_remeshing_an_imported_part_keeps_it_closed_and_says_the_price(
         "das Netz ist wieder explodiert — dann gehört der Warnbefund geprüft, "
         "nicht diese Schranke gelockert"
     )
+    assert after.triangle_count < 22_636 // 2, "konform geteilt wird nur, wo eine Kante zu lang ist"
 
 
 def test_a_net_that_explodes_says_so(profile: Profile, monkeypatch) -> None:
-    """Der Warnbefund hing an einer Zahl, die trimesh 5 unterschritten hat.
+    """Der Befund hängt an einer Zahl, die der Regelfall nicht mehr erreicht.
 
-    Vor dem Sprung löste ``plate_holes`` ihn von selbst aus — mit dem
+    Vor trimesh 5 löste ``plate_holes`` ihn von selbst aus — mit dem
     Tausendfachen war die Schwelle vom Hundertfachen leicht erreicht. Jetzt
-    liegt derselbe Fall bei Faktor 28, und ohne diesen Test wäre der Pfad
+    liegt derselbe Fall bei Faktor 11, und ohne diesen Test wäre der Pfad
     ungeprüft: Er ist nicht überflüssig geworden, er wird nur seltener
-    gebraucht.
+    gebraucht. Ein grobes CAD-Netz erreicht ihn weiter: der
+    Schraubendreherhalter aus ``F:\\3D Dateien`` bei 1 mm mit 1 868 auf
+    398 134 Dreiecke. Der Satz nennt den Zuwachs und nicht mehr einen Weg,
+    der kaum noch gegangen wird.
     """
     monkeypatch.setattr(mesh_ops, "DENSE_FACTOR", 2)
     mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
@@ -594,8 +594,9 @@ def test_a_net_that_explodes_says_so(profile: Profile, monkeypatch) -> None:
 
     result = run("remesh_mesh", entry, profile, edge=5.0)
 
-    codes = {finding.code for finding in result.findings}
-    assert "mesh.remesh_dense" in codes, "der Sprung gehört gesagt, sonst sucht niemand die Ursache"
+    dense = [finding for finding in result.findings if finding.code == "mesh.remesh_dense"]
+    assert dense, "der Sprung gehört gesagt, sonst sucht niemand die Ursache"
+    assert "gleichmäßig" not in str(dense[0].message), "der Satz behauptete einen Weg"
 
 
 def test_an_edge_length_beyond_reach_names_one_that_works(profile: Profile) -> None:
@@ -613,6 +614,157 @@ def test_an_edge_length_beyond_reach_names_one_that_works(profile: Profile) -> N
 
     assert raised.value.suggestions
     assert "reachable" in raised.value.values or "erreichbar" in str(raised.value.detail)
+
+
+def test_the_estimate_counts_the_long_edges_of_narrow_triangles() -> None:
+    """Ein fein facettiertes Netz besteht aus schmalen Dreiecken mit langer Kante.
+
+    Die Schätzung nach der Fläche allein sah sie nicht: Ein Zylinder aus 256
+    Sektoren und 100 mm Höhe hat 3 299 mm² — bei 1 mm rund 7 600 Dreiecke —,
+    und jede seiner Mantelkanten zerfällt trotzdem in hundert Stücke. Am
+    Besenhalter aus ``F:\\3D Dateien`` lag sie so um das Sechzehnfache zu tief,
+    und die Decke von acht Millionen hielt nicht (RM-223).
+    """
+    cylinder = MeshData.of(trimesh.creation.cylinder(radius=5.0, height=100.0, sections=256))
+
+    estimate = mesh_ops.estimated_triangles(cylinder, 1.0)
+    after = mesh_ops.remesh(cylinder, 1.0)
+
+    assert cylinder.area / (math.sqrt(3.0) / 4.0) < after.triangle_count / 10, (
+        "sonst prüft der Fall nicht, was die Fläche übersieht"
+    )
+    assert 0.8 < after.triangle_count / estimate < 1.25
+
+
+def test_the_ceiling_holds_for_the_result_not_only_for_the_estimate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Schätzung darf sich irren, die Decke nicht.
+
+    Bis zum 25.09.2026 wurde nur vorab geschätzt, und der Besenhalter kam bei
+    0,5 mm mit 11 916 394 Dreiecken über eine Decke von acht Millionen. Jetzt
+    zählt jeder Durchgang nach.
+    """
+    monkeypatch.setattr(mesh_ops, "estimated_triangles", lambda mesh, edge, **_: 0)
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 20_000)
+    plate = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+
+    with pytest.raises(ValidationError) as raised:
+        mesh_ops.remesh(plate, 1.5)
+
+    assert raised.value.values["triangles"] > 20_000
+    assert raised.value.values["reachable"] > 1.5
+    assert raised.value.suggestions
+
+
+@pytest.mark.parametrize("opened", [False, True])
+def test_the_suggested_edge_length_is_one_that_goes(
+    monkeypatch: pytest.MonkeyPatch, opened: bool
+) -> None:
+    """Der Vorschlag muss gehen — sonst ist er keiner (Regel 17).
+
+    Bis zum 25.09.2026 kam er aus der Wurzel des Überschusses. Die geteilten
+    Kanten wachsen aber nur linear und das Teilen nach Bedarf in Vierteln:
+    Am offenen Laptop-Ständer aus ``F:\\3D Dateien`` nannte er bei 2 mm
+    2,83 mm, und die wären wieder abgelehnt worden. Ein offenes Netz bekommt
+    dazu *Netz reparieren*: Geschlossen teilt der exakte Kern, sparsamer.
+    """
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 20_000)
+    plate = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    if opened:
+        raw = plate.raw.copy()
+        raw.update_faces(np.arange(len(raw.faces)) > 1)
+        plate = MeshData.of(raw)
+
+    with pytest.raises(ValidationError) as raised:
+        mesh_ops.remesh(plate, 0.5)
+
+    reachable = raised.value.values["reachable"]
+    assert reachable > 0.5
+    assert mesh_ops.remesh(plate, reachable).triangle_count <= 20_000
+    offered = {action.id for action in raised.value.suggestions}
+    assert ("repair_mesh" in offered) == opened
+
+
+@pytest.mark.parametrize(
+    ("op", "core", "params"),
+    [
+        ("remesh_mesh", "_split_conforming", {"edge": 1.0}),
+        ("remesh_uniform", "_as_mesh", {"edge": 1.0}),
+        ("subdivide_surface", "_as_mesh", {"edge": 1.0}),
+    ],
+)
+def test_running_out_of_memory_is_a_sentence_with_a_way_out(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, op: str, core: str, params: dict
+) -> None:
+    """Kein „unerwarteter Fehler", sondern was los ist und was geht (Regel 17).
+
+    Die Durchsicht 0.5.0 bekam an einem Schraubendreherhalter von 220 mm einen
+    ``MemoryError`` als Programmfehler zu sehen (RM-223). Die Decke ist eine
+    Zahl, der Speicher eines Rechners eine andere.
+    """
+
+    def exhausted(*_args: object, **_kwargs: object) -> MeshData:
+        raise MemoryError
+
+    monkeypatch.setattr(mesh_ops, core, exhausted)
+    entry = SceneObject(id="obj_1", name="Platte", mesh=block(40.0, 30.0, 10.0))
+
+    with pytest.raises(ValidationError) as raised:
+        run(op, entry, profile, **params)
+
+    assert raised.value.constraint == "memory"
+    assert "Arbeitsspeicher" in str(raised.value.detail)
+    assert raised.value.values["reachable"] == pytest.approx(2.0)
+    assert {action.id for action in raised.value.suggestions} == {"use_reachable", "decimate_first"}
+
+
+def test_remeshing_keeps_the_colour_of_every_face(profile: Profile) -> None:
+    """Ein Netz, das seine Farben verliert, verliert seine Filamente (§20).
+
+    Bis zum 25.09.2026 kam ein farbiges Netz aus *Kanten verfeinern* grau
+    zurück; *Farben zu Filamenten* fand danach nichts mehr. Jedes neue Dreieck
+    trägt jetzt die Farbe des alten, aus dem es entstand.
+    """
+    from app.core.geom.texture import face_colours
+
+    body = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+    top = np.asarray(body.face_normals)[:, 2] > 0.5
+    colours = np.where(top[:, None], [[200, 30, 30, 255]], [[30, 30, 200, 255]])
+    body.visual.face_colors = colours.astype(np.uint8)
+    entry = SceneObject(id="obj_1", name="Zweifarbig", mesh=MeshData.of(body))
+
+    after = as_mesh_data(run("remesh_mesh", entry, profile, edge=2.0).outputs[0].mesh)
+
+    carried = face_colours(after.raw)
+    assert carried is not None, "die Farben sind beim Teilen verloren gegangen"
+    upward = np.asarray(after.raw.face_normals)[:, 2] > 0.5
+    assert after.triangle_count > body.faces.shape[0]
+    red = np.array([200.0, 30.0, 30.0]) / 255.0
+    blue = np.array([30.0, 30.0, 200.0]) / 255.0
+    np.testing.assert_allclose(carried[upward], np.broadcast_to(red, carried[upward].shape))
+    np.testing.assert_allclose(carried[~upward], np.broadcast_to(blue, carried[~upward].shape))
+
+
+def test_a_closed_body_the_exact_core_refuses_is_still_refined() -> None:
+    """Dicht, aber gegenläufig gewickelt: Der Kern lehnt ab, ``trimesh`` teilt.
+
+    Der konforme Weg ist der Regelfall, nicht der einzige. Ein Körper, dessen
+    Kanten je zwei Dreiecke tragen, dessen Wicklung aber an einer Stelle
+    kippt, nimmt der exakte Kern nicht an — und darf deshalb nicht leer
+    zurückkommen oder als Programmfehler enden.
+    """
+    box = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    faces = np.asarray(box.faces).copy()
+    faces[0] = faces[0][::-1]
+    turned = MeshData.of(trimesh.Trimesh(vertices=box.vertices, faces=faces, process=False))
+    assert turned.is_watertight and not turned.raw.is_winding_consistent
+
+    after = mesh_ops.remesh(turned, 2.0)
+
+    assert after.triangle_count > 12
+    assert after.is_watertight
+    assert max(mesh_ops.edge_lengths(after)) <= 2.0 + 1e-9
 
 
 # --- hollowing ------------------------------------------------------------------

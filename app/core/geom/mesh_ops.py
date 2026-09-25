@@ -15,13 +15,21 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from collections.abc import Callable
 from typing import Any, Final, Literal, cast
 
 import manifold3d
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import CANCEL, CORRECT_INPUT, Action, NotManifoldError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CORRECT_INPUT,
+    REPAIR_MESH,
+    Action,
+    NotManifoldError,
+    ValidationError,
+)
 from app.core.geom.attributes import transfer
 from app.core.geom.mesh import (
     MeshData,
@@ -32,6 +40,7 @@ from app.core.geom.mesh import (
     unique_edges,
 )
 from app.core.geom.repair import merge_vertices
+from app.core.geom.texture import face_colours
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
@@ -43,7 +52,7 @@ from app.core.types import (
     SceneObject,
     Severity,
 )
-from app.core.units import DEGREE_UNIT, VOLUME_SUM_NOISE
+from app.core.units import DEGREE_UNIT, EPS_GEOM, VOLUME_SUM_NOISE
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -647,11 +656,12 @@ def edge_lengths(mesh: MeshData) -> np.ndarray:
 def _subdivided_on_demand(mesh: MeshData, edge: float) -> MeshData:
     """Jedes Dreieck so oft geteilt, wie **seine** Kanten es verlangen.
 
-    Der billige Weg, und der einzige, der die Zusage genau erfüllt statt sie zu
-    übererfüllen. Er hat einen Haken: an der Naht zwischen zwei verschieden oft
-    geteilten Flächen bleibt ein Punkt auf einer Kante liegen, die ihn nicht
-    kennt — der Körper ist danach oft nicht mehr geschlossen. Ob er es ist,
-    entscheidet der Aufrufer.
+    Der Weg für ein offenes Netz, das der exakte Kern nicht annimmt. Bis
+    trimesh 5.0 ließ er an der Naht zwischen zwei verschieden oft geteilten
+    Flächen einen Punkt auf einer Kante liegen, die ihn nicht kannte; seit
+    5.1 halbiert er jede zu lange Kante an einem gemeinsamen Mittelpunkt und
+    bleibt konform. Ob das Ergebnis geschlossen ist, entscheidet trotzdem der
+    Aufrufer — das ist eine Eigenschaft der Bibliothek, keine Zusage an uns.
     """
     vertices, faces = trimesh.remesh.subdivide_to_size(
         np.asarray(mesh.raw.vertices, dtype=float),
@@ -682,57 +692,220 @@ def _subdivided_evenly(
         if not len(lengths) or float(lengths.max()) <= edge:
             break
         if len(faces) * 4 > MAX_REMESH_TRIANGLES:
-            raise _too_fine(mesh, edge, len(faces) * 4)
+            raise _too_fine(mesh, edge, len(faces) * 4, _even_count(mesh), reserve=1.0)
         vertices, faces = trimesh.remesh.subdivide(vertices, faces)
     body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     body.merge_vertices()
     return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
 
 
-def estimated_triangles(mesh: MeshData, edge: float) -> int:
-    """Wie viele Dreiecke eine Kantenlänge ungefähr ergibt.
+def estimated_triangles(mesh: MeshData, edge: float, *, until_short: bool = False) -> int:
+    """Wie viele Dreiecke konformes Teilen auf ``edge`` ergibt.
 
-    Ein gleichseitiges Dreieck der Kantenlänge ``edge`` deckt
-    ``√3/4 · edge²`` ab; die Oberfläche geteilt durch diese Fläche ist die
-    Zahl, um die es geht. Grob, und das genügt: gefragt ist, ob eine Eingabe
-    in der Größenordnung des Machbaren liegt.
+    Zwei Anteile. Die Fläche: Ein gleichseitiges Dreieck der Kantenlänge
+    ``edge`` deckt ``√3/4 · edge²`` ab. Die Kanten: Jede zerfällt in
+    ``ceil(l / edge)`` Stücke, und ein geteiltes Dreieck mit ``I`` inneren
+    und ``R`` Randpunkten besteht aus ``2I + R - 2`` Dreiecken. Die inneren
+    Punkte zählt die Fläche, die Randpunkte zählen die Kanten — über das
+    ganze Netz ``2 · Σ Stücke - 2F`` Dreiecke zusätzlich zur Fläche.
+
+    Die Fläche allein lag an echten Modellen bis zum Sechzehnfachen zu tief
+    (Besenhalter bei 1 mm: 58 931 geschätzt, 966 870 geteilt). Ein fein
+    facettiertes Netz besteht aus schmalen Dreiecken, deren lange Kante
+    geteilt werden muss, obwohl sie kaum Fläche tragen. Mit beiden Anteilen
+    lag die Schätzung an zehn Modellen aus ``F:\\3D Dateien`` beim 1,0- bis
+    1,24-Fachen des ersten Durchgangs (25.09.2026) — das ist die Zahl für
+    *Dreiecke angleichen* und *Fläche unterteilen*, die einmal teilen.
+
+    ``until_short`` zählt für *Kanten verfeinern*, das teilt, bis keine Kante
+    mehr zu lang ist (:func:`_split_conforming`): Die weiteren Durchgänge
+    teilen die Diagonalen der Gitterzellen noch einmal, und der Anteil der
+    Fläche zählt doppelt. So traf die Zahl an denselben Modellen und an
+    ``plate_holes`` das 0,73- bis 1,10-Fache des Ergebnisses.
 
     Gebraucht wird sie **vor** dem ersten Schnitt. Ohne die Schätzung lief die
     Operation erst minutenlang und scheiterte dann — der teure Weg wurde
     gegangen, um festzustellen, dass er zu teuer ist.
     """
-    if edge <= 0.0:
-        return MAX_REMESH_TRIANGLES + 1
-    per_triangle = math.sqrt(3.0) / 4.0 * edge * edge
-    return int(float(mesh.raw.area) / max(per_triangle, 1e-12))
+    return _conforming_count(mesh, until_short=until_short)(edge)
 
 
-def _too_fine(mesh: MeshData, edge: float, would_be: int) -> ValidationError:
+def _conforming_count(mesh: MeshData, *, until_short: bool) -> Callable[[float], int]:
+    """:func:`estimated_triangles` für beliebig viele Kantenlängen am selben Netz.
+
+    Kantenlängen, Fläche und Dreieckszahl werden einmal gelesen — die Suche
+    nach der erreichbaren Länge (:func:`_too_fine`) fragt zwei Dutzend Mal.
+    """
+    lengths = edge_lengths(mesh)
+    area = float(mesh.raw.area) * (2.0 if until_short else 1.0)
+    faces = mesh.triangle_count
+
+    def count(edge: float) -> int:
+        if edge <= 0.0:
+            return MAX_REMESH_TRIANGLES + 1
+        per_triangle = math.sqrt(3.0) / 4.0 * edge * edge
+        pieces = float(np.ceil(np.maximum(lengths / edge, 1.0)).sum())
+        return int(area / max(per_triangle, 1e-12) + 2.0 * pieces - 2.0 * faces)
+
+    return count
+
+
+def _on_demand_count(mesh: MeshData) -> Callable[[float], int]:
+    """Wie viele Dreiecke das Teilen nach Bedarf (``subdivide_to_size``) ergibt.
+
+    **Eine Obergrenze, keine Schätzung.** Die Halbierung teilt je Durchgang
+    jede Kante über ``edge`` einmal; ein Dreieck, dessen längste Seite ``l``
+    ist, wird darüber höchstens zu ``4^k`` mit ``k = ceil(log2(l / edge))``.
+    Wie viele es wirklich werden, hängt an den Diagonalen, die jede Teilung
+    neu zieht, und ließ sich aus Fläche und Kanten nicht vorhersagen (Faktor
+    1,8 bis 36 an acht Modellen). Gegen die Obergrenze lag das Ergebnis an
+    zwölf Modellen aus ``F:\\3D Dateien`` beim 0,18- bis 0,58-Fachen
+    (25.09.2026) — die Vorprüfung sagt also eher zu früh ab als zu spät, und
+    *Netz reparieren* führt auf den konformen Weg, der genau zählt. Der
+    offene Laptop-Ständer (172 336 Dreiecke) käme bei 2 mm auf höchstens
+    15 943 006.
+
+    ``k`` kommt aus ``frexp`` statt aus ``log2``: Die Zerlegung in Mantisse
+    und Exponent ist exakt, der Logarithmus hängt an der Plattform, und an
+    einer Zweierpotenz entschiede er über ein Viertel mehr oder weniger.
+    """
+    corners = np.asarray(mesh.raw.triangles, dtype=float)
+    longest = np.max(np.linalg.norm(corners - np.roll(corners, -1, axis=1), axis=2), axis=1)
+
+    def count(edge: float) -> int:
+        if edge <= 0.0:
+            return MAX_REMESH_TRIANGLES + 1
+        mantissa, exponent = np.frexp(np.maximum(longest / edge, 1.0))
+        halvings = np.where(mantissa > 0.5, exponent, exponent - 1)
+        return int(np.sum(np.ldexp(1.0, 2 * halvings)))
+
+    return count
+
+
+def _even_count(mesh: MeshData) -> Callable[[float], int]:
+    """Wie viele Dreiecke das gleichmäßige Vierteln (:func:`_subdivided_evenly`) ergibt.
+
+    Jeder Durchgang viertelt alle Dreiecke, bis auch die längste Seite des
+    Netzes kurz genug ist: ``F · 4^k`` mit ``k`` wie in :func:`_on_demand_count`,
+    nur für die längste Seite des ganzen Netzes.
+    """
+    longest = float(edge_lengths(mesh).max(initial=0.0))
+    faces = mesh.triangle_count
+
+    def count(edge: float) -> int:
+        if edge <= 0.0:
+            return MAX_REMESH_TRIANGLES + 1
+        mantissa, exponent = math.frexp(max(longest / edge, 1.0))
+        halvings = exponent if mantissa > 0.5 else exponent - 1
+        return faces << (2 * halvings)
+
+    return count
+
+
+#: Wie viel Luft der Vorschlag einer Kantenlänge über einer **Schätzung**
+#: lässt. Die konforme Zählung traf das Ergebnis an zwölf Modellen beim 0,73-
+#: bis 1,10-Fachen (:func:`estimated_triangles`); ein Vorschlag, der knapp
+#: daneben liegt, wird beim nächsten Versuch wieder abgelehnt. Eine
+#: Obergrenze (:func:`_on_demand_count`) braucht keine Luft.
+ESTIMATE_RESERVE: Final = 1.25
+
+
+def _reachable_edge(
+    count: Callable[[float], int], edge: float, would_be: int, reserve: float
+) -> float | None:
+    """Die kleinste Kantenlänge unter der Decke — an der Zählung gesucht, nicht aus einer Formel.
+
+    Bis zum 25.09.2026 stand hier die Wurzel aus dem Überschuss: Jede
+    Halbierung vervierfache die Dreiecke. Das gilt für die Fläche, aber die
+    geteilten Kanten wachsen nur linear, und das Teilen nach Bedarf springt in
+    Vierteln — am offenen Laptop-Ständer aus ``F:\\3D Dateien`` nannte der
+    Vorschlag bei 2 mm 2,83 mm, und die ergäben 8 551 822 Dreiecke, wieder
+    über der Decke. Gesucht wird deshalb an derselben Zählung, die abgelehnt
+    hat, gestreckt um das, was ein Ergebnis über ihr lag, wenn erst ein
+    Durchgang die Decke gerissen hat — mindestens um ``reserve``. Beide
+    Zählungen fallen mit der Kantenlänge, eine Halbierung der Spanne findet
+    also die Grenze.
+
+    Aufgerundet auf Hundertstel, nicht gerundet: Bei 0,05 mm ergab das Runden
+    wieder 0,05 — der Vorschlag nannte die Zahl, die gerade abgelehnt worden
+    war (Regel 17). ``None``, wenn keine Länge reicht: Ein Netz mit mehr
+    Dreiecken als der Decke wird durch Teilen nie kleiner.
+    """
+    stretch = max(would_be / max(count(edge), 1), reserve)
+
+    def fits(length: float) -> bool:
+        return count(length) * stretch <= MAX_REMESH_TRIANGLES
+
+    low, high = edge, edge * 2.0
+    while not fits(high):
+        if high > 1e6:
+            return None
+        low, high = high, high * 2.0
+    while high - low > 0.001:
+        middle = (low + high) / 2.0
+        if fits(middle):
+            high = middle
+        else:
+            low = middle
+    return math.ceil(high * 100.0) / 100.0
+
+
+def _too_fine(
+    mesh: MeshData,
+    edge: float,
+    would_be: int,
+    count: Callable[[float], int],
+    *,
+    reserve: float = ESTIMATE_RESERVE,
+) -> ValidationError:
     """Sagt, welche Kantenlänge noch ginge — die Zahl kennt nur die Operation.
 
     „Ergäbe mehr Dreiecke, als sich noch rechnen lassen" allein schickt den
     Nutzer ins Raten: er hat eine Zahl eingetippt, sie war zu klein, und die
-    nächste ist auch nur geraten. Jede Halbierung der Kantenlänge vervierfacht
-    die Dreiecke, also lässt sich die erreichbare Länge ausrechnen.
+    nächste ist auch nur geraten. ``count`` ist die Zählung des Wegs, der
+    abgelehnt hat (:func:`_reachable_edge`), ``reserve`` die Luft, die sie
+    braucht — eine Obergrenze gibt ``1.0``. Ein
+    offenes Netz bekommt dazu *Netz reparieren* — geschlossen teilt es der
+    exakte Kern, und der viertelt keine Nadeln.
     """
-    growth = would_be / max(MAX_REMESH_TRIANGLES, 1)
-    # Aufgerundet, nicht gerundet: bei 0,05 mm und knapp gerissener Decke ergab
-    # das Runden auf zwei Stellen wieder 0,05 — der Vorschlag nannte exakt die
-    # Zahl, die gerade abgelehnt worden war, und war damit keiner (Regel 17).
-    # Aufwärts ist zudem die sichere Richtung: eine längere Kante ergibt
-    # weniger Dreiecke, eine kürzere könnte erneut auflaufen.
-    reachable = math.ceil(edge * math.sqrt(growth) * 100.0) / 100.0
+    reachable = _reachable_edge(count, edge, would_be, reserve)
+    values: dict[str, Any] = {"triangles": would_be, "limit": MAX_REMESH_TRIANGLES}
+    suggestions = [Action(id="decimate_first", label=_("Vorher dezimieren."))]
+    if reachable is not None:
+        values["reachable"] = reachable
+        suggestions.insert(
+            0,
+            Action(id="use_reachable", label=_("Die kleinste Kantenlänge nehmen, die noch geht.")),
+        )
+    if not mesh.is_watertight:
+        suggestions.insert(0, REPAIR_MESH)
     return ValidationError(
         field="edge",
         detail=_("Diese Kantenlänge ergäbe mehr Dreiecke, als sich noch rechnen lassen."),
         constraint="maximum",
-        values={
-            "triangles": would_be,
-            "limit": MAX_REMESH_TRIANGLES,
-            "reachable": reachable,
-        },
+        values=values,
+        suggestions=tuple(suggestions),
+    )
+
+
+def _out_of_memory(edge: float) -> ValidationError:
+    """Der Speicher ging aus, bevor die Decke erreicht war — mit dem Weg daran vorbei.
+
+    Die Decke ist eine Zahl, der Arbeitsspeicher eines Rechners eine andere;
+    auf einem mit wenig davon endet das Teilen früher. Bis zum 25.09.2026 kam
+    das beim Kunden als „Im Programm ist ein unerwarteter Fehler" an (RM-223,
+    Regel 17). Eine doppelt so lange Kante braucht ein Viertel der Dreiecke.
+    """
+    return ValidationError(
+        field="edge",
+        detail=_(
+            "Für diese Kantenlänge reicht der Arbeitsspeicher nicht. Eine doppelt so "
+            "lange Kante braucht ein Viertel davon."
+        ),
+        constraint="memory",
+        values={"reachable": math.ceil(edge * 2.0 * 100.0) / 100.0},
         suggestions=(
-            Action(id="use_reachable", label=_("Die kleinste Kantenlänge nehmen, die noch geht.")),
+            Action(id="use_reachable", label=_("Die doppelte Kantenlänge nehmen.")),
             Action(id="decimate_first", label=_("Vorher dezimieren.")),
         ),
     )
@@ -746,43 +919,150 @@ def remesh(mesh: MeshData, edge: float, *, cancelled: CancelToken | None = None)
     einen Punkt, es geht also nichts verloren. Dreiecke dort *gröber* zu
     machen, wo sie dicht sind, ist die Aufgabe der Dezimierung.
 
-    **Zwei Wege, in dieser Reihenfolge** — wie die Rückfallkette der booleschen
-    Operationen, und aus demselben Grund: der billige zuerst, der teure, wenn
-    er muss.
+    **Ein geschlossener Körper geht durch den exakten Netzkern**
+    (:func:`_split_conforming`). Er teilt konform — jede Kante in gleich
+    lange Stücke, und beide Nachbardreiecke kennen jeden neuen Punkt —, also
+    bleibt der Körper dicht, und er teilt nur, wo eine Kante zu lang ist.
+    Gemessen am 25.09.2026 an elf Modellen aus ``F:\\3D Dateien`` bei 1 mm:
+    dicht, dasselbe Volumen, dieselbe Teilezahl, und zwei- bis viermal weniger
+    Dreiecke als der Weg darunter (Bohrmaschinenhalter 600 826 statt 2 462 910,
+    Besenhalter 1 039 274 statt 3 920 652).
 
-    ``subdivide_to_size`` teilt nach Bedarf und ist damit sowohl billiger als
-    auch genauer am Ziel. Er lässt aber an der Naht zwischen zwei verschieden
-    oft geteilten Flächen einen Punkt auf einer Kante liegen, die ihn nicht
-    kennt: bei einem Quader 40 x 30 x 10 waren das 192 offene Kanten und drei
-    Komponenten, und die nächste boolesche Operation fiel darauf auf die
-    Voxelstufe und rundete die Maße.
+    **Darunter die zwei Wege über ``trimesh``**, für ein offenes Netz, das
+    der Kern nicht annimmt, und für ein dichtes, das er trotzdem ablehnt —
+    etwa eines mit gegenläufig gewickelten Teilen. ``subdivide_to_size``
+    halbiert jede zu lange Kante; das braucht zwei- bis viermal so viele
+    Dreiecke wie der konforme Weg, weil eine Kante nur in Zweierpotenzen
+    zerfällt. Bis trimesh 5.0 riss es dabei an den Nähten (Quader
+    40 x 30 x 10: 192 offene Kanten, drei Komponenten); seit 5.1 bleibt es
+    konform. Geht ein dichter Körper trotzdem auf, zieht
+    ``trimesh.remesh.subdivide`` gleichmäßig nach und zerteilt die winzigen
+    Dreiecke mit. Ein Körper, der schon vorher offen war, kann nichts
+    verlieren — für ihn bleibt es beim ersten.
 
-    ``trimesh.remesh.subdivide`` teilt jedes Dreieck in vier und lässt keine
-    solche Naht entstehen — dafür zerteilt es die winzigen mit. Bei
-    ``plate_holes`` (796 Dreiecke, feine Bohrungsfacetten neben großen Flächen)
-    sind das 815 104 Dreiecke statt 63 040 für dasselbe Ziel.
-
-    Also: nach Bedarf teilen, und nur wenn das Ergebnis aufgeht, gleichmäßig
-    nachziehen. Ein Körper, der schon vorher offen war, kann dabei nichts
-    verlieren — für ihn bleibt es beim billigen Weg.
+    **Die Decke gilt dem Ergebnis, nicht der Schätzung.** Vorab wird
+    geschätzt, danach je Durchgang gezählt; bis zum 25.09.2026 hielt nur die
+    Schätzung nach der Fläche, und der Besenhalter kam bei 0,5 mm mit
+    11 916 394 Dreiecken über die Decke von acht Millionen. Geht der Speicher
+    vorher aus, sagt :func:`_out_of_memory` es.
     """
-    wanted = estimated_triangles(mesh, edge)
-    if wanted > MAX_REMESH_TRIANGLES:
-        raise _too_fine(mesh, edge, wanted)
-
-    on_demand = _subdivided_on_demand(mesh, edge)
-    if cancelled is not None:
-        cancelled.raise_if_cancelled()
-    if on_demand.is_watertight or not mesh.is_watertight:
-        _log.info("remeshed %d to %d triangles", mesh.triangle_count, on_demand.triangle_count)
-        return on_demand
-    even = _subdivided_evenly(mesh, edge, cancelled)
+    try:
+        if mesh.is_watertight:
+            # Jeder Weg fragt seine eigene Zählung: Ein offenes Netz geht nie
+            # konform, und ein Vorschlag aus der konformen Zählung wäre dort
+            # wieder abgelehnt worden.
+            wanted = estimated_triangles(mesh, edge, until_short=True)
+            if wanted > MAX_REMESH_TRIANGLES:
+                raise _too_fine(mesh, edge, wanted, _conforming_count(mesh, until_short=True))
+            conforming = _split_conforming(mesh, edge, cancelled)
+            if conforming is not None:
+                _log.info(
+                    "remeshed %d to %d triangles", mesh.triangle_count, conforming.triangle_count
+                )
+                return conforming
+        on_demand_count = _on_demand_count(mesh)
+        wanted = on_demand_count(edge)
+        if wanted > MAX_REMESH_TRIANGLES:
+            raise _too_fine(mesh, edge, wanted, on_demand_count, reserve=1.0)
+        on_demand = _subdivided_on_demand(mesh, edge)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if on_demand.is_watertight or not mesh.is_watertight:
+            _log.info(
+                "remeshed %d to %d triangles on demand",
+                mesh.triangle_count,
+                on_demand.triangle_count,
+            )
+            return on_demand
+        even = _subdivided_evenly(mesh, edge, cancelled)
+    except MemoryError as error:
+        raise _out_of_memory(edge) from error
     _log.info(
         "remeshed %d to %d triangles (evenly, on demand tore the mesh)",
         mesh.triangle_count,
         even.triangle_count,
     )
     return even
+
+
+def _split_conforming(
+    mesh: MeshData, edge: float, cancelled: CancelToken | None
+) -> MeshData | None:
+    """Konform teilen, bis keine Kante mehr über ``edge`` liegt — ``None``, wenn
+    der exakte Kern den Körper nicht annimmt.
+
+    ``refine_to_length`` teilt jede Kante in ``ceil(l / edge)`` Stücke, zieht
+    im Inneren eines Dreiecks aber neue Kanten, und die können länger sein:
+    nach einem Durchgang an echten Modellen bis zum 3,9-Fachen der verlangten
+    Länge, an einem Quader die Diagonale jeder Gitterzelle. Weitere
+    Durchgänge teilen nur noch diese; an elf Modellen reichten drei.
+    :data:`MAX_SUBDIVISIONS` begrenzt die Zahl, die Decke zählt je Durchgang.
+
+    Die Herkunft jedes Dreiecks reist als ``face_id`` durch den Kern — ein
+    geteiltes Dreieck trägt die Nummer des alten, aus dem es stammt. Slots
+    und Farben kommen damit von dort (:func:`_inherited`), statt von der
+    nächstgelegenen Oberfläche gesucht zu werden. Ohne eigene Nummern fasst
+    der Kern koplanare Nachbarn unter einer zusammen, und zwei Filamente auf
+    einer ebenen Fläche wären eines.
+    """
+    faces = np.asarray(mesh.raw.faces, dtype=np.uint64)
+    solid = manifold3d.Manifold(
+        manifold3d.Mesh64(
+            vert_properties=np.asarray(mesh.raw.vertices, dtype=np.float64),
+            tri_verts=faces,
+            face_id=np.arange(len(faces), dtype=np.uint64),
+        )
+    )
+    if solid.is_empty():
+        return None
+    passes = 0
+    while True:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        solid = solid.refine_to_length(edge)
+        built = solid.to_mesh64()
+        corners = np.asarray(built.tri_verts, dtype=np.int64)
+        if len(corners) > MAX_REMESH_TRIANGLES:
+            raise _too_fine(mesh, edge, len(corners), _conforming_count(mesh, until_short=True))
+        points = np.asarray(built.vert_properties[:, :3], dtype=float)
+        passes += 1
+        if passes >= MAX_SUBDIVISIONS or _longest_side(points, corners) <= edge + EPS_GEOM:
+            break
+    body = trimesh.Trimesh(vertices=points, faces=corners, process=False)
+    return _inherited(mesh, body, np.asarray(built.face_id, dtype=np.int64))
+
+
+def _longest_side(points: np.ndarray, corners: np.ndarray) -> float:
+    """Die längste Dreiecksseite, Seite für Seite gemessen.
+
+    Ohne die Kanten erst zu gruppieren — das wäre an acht Millionen Dreiecken
+    ein Sortierlauf je Durchgang. Normen über eine Achse rechnen auf jeder
+    Maschine gleich; an dieser Zahl hängt, ob ein weiterer Durchgang folgt.
+    """
+    longest = 0.0
+    for first, second in ((0, 1), (1, 2), (2, 0)):
+        sides = points[corners[:, second]] - points[corners[:, first]]
+        longest = max(longest, float(np.linalg.norm(sides, axis=1).max(initial=0.0)))
+    return longest
+
+
+def _inherited(mesh: MeshData, body: Any, origin: np.ndarray) -> MeshData:
+    """Slots und Flächenfarben je Dreieck vom alten Dreieck, aus dem es entstand.
+
+    **Ein Netz, das seine Farben verliert, verliert seine Filamente** (§20):
+    Ein erzeugter Körper kommt farbig aus dem Generator, *Farben zu
+    Filamenten* liest genau diese Werte, und vor der Neuvernetzung für ein
+    Relief steht oft das Verfeinern. Bis zum 25.09.2026 kam das Netz daraus
+    grau zurück.
+    """
+    colours = face_colours(mesh.raw)
+    if colours is not None:
+        taken = np.rint(colours[origin] * 255.0).astype(np.uint8)
+        body.visual.face_colors = np.column_stack((taken, np.full(len(taken), 255, dtype=np.uint8)))
+    if len(mesh.slots) != mesh.triangle_count:
+        return MeshData.of(body)
+    slots = np.asarray(mesh.slots, dtype=np.int32)[origin]
+    return MeshData.of(body, tuple(slots.tolist()))
 
 
 # --- gleichmäßig vernetzen und unterteilen ----------------------------------------
@@ -851,7 +1131,15 @@ def _as_mesh(mesh: MeshData, solid: Any) -> MeshData:
 
 
 def refined(mesh: MeshData, edge: float) -> MeshData:
-    """Jede Kante höchstens ``edge`` lang — konform, und jede Schale bleibt ihre eigene.
+    """Ein Durchgang konformes Teilen auf ``edge`` — und jede Schale bleibt ihre eigene.
+
+    **Die Kanten des Eingangs** zerfallen in Stücke von höchstens ``edge``;
+    im Inneren eines geteilten Dreiecks zieht der Kern neue, die länger sein
+    können — an Quadern die Diagonale der Gitterzelle, gemessen bis zum
+    1,8-Fachen (25.09.2026). Fürs Biegen genügt das: Die Sehne hängt dort
+    bis zum Dreifachen von ``texture_ops.BEND_SAG`` durch, und das ist ein
+    Viertel von ``units.MAX_FACET_SAG``, bleibt also darunter. Wer die
+    Zusage für jede Kante braucht, nimmt :func:`remesh`.
 
     Wie :func:`uniform` ohne Vereinfachung, nur ohne das Verschweißen danach:
     ``_as_mesh`` legt zusammenfallende Ecken zusammen, und zwei Schalen, die
@@ -888,9 +1176,12 @@ def uniform(mesh: MeshData, edge: float, deviation: float) -> MeshData:
     """
     wanted = estimated_triangles(mesh, edge)
     if wanted > MAX_REMESH_TRIANGLES:
-        raise _too_fine(mesh, edge, wanted)
+        raise _too_fine(mesh, edge, wanted, _conforming_count(mesh, until_short=False))
     solid = _as_solid(mesh)
-    evened = _as_mesh(mesh, solid.simplify(deviation).refine_to_length(edge))
+    try:
+        evened = _as_mesh(mesh, solid.simplify(deviation).refine_to_length(edge))
+    except MemoryError as error:
+        raise _out_of_memory(edge) from error
     _log.info("evened %d to %d triangles", mesh.triangle_count, evened.triangle_count)
     return evened
 
@@ -917,10 +1208,13 @@ def subdivided(mesh: MeshData, edge: float, angle: float) -> MeshData:
     """
     wanted = estimated_triangles(mesh, edge)
     if wanted > MAX_REMESH_TRIANGLES:
-        raise _too_fine(mesh, edge, wanted)
+        raise _too_fine(mesh, edge, wanted, _conforming_count(mesh, until_short=False))
     solid = _as_solid(mesh)
     smoothed = solid.calculate_normals(0, angle).smooth_by_normals(0)
-    return _as_mesh(mesh, smoothed.refine_to_length(edge))
+    try:
+        return _as_mesh(mesh, smoothed.refine_to_length(edge))
+    except MemoryError as error:
+        raise _out_of_memory(edge) from error
 
 
 # --- operations -------------------------------------------------------------------
@@ -1168,6 +1462,9 @@ class RemeshParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_("Teilt lange Kanten, bis das Netz gleichmäßig ist. Die Form bleibt exakt."),
+    # 2: konform durch den exakten Kern, Slots und Farben je Herkunftsdreieck
+    # (25.09.2026) — dasselbe Projekt ergibt ein anderes, kleineres Netz.
+    cache_version="2",
 )
 def remesh_mesh(ctx: OpContext) -> OpResult:
     params = cast(RemeshParams, ctx.params)
@@ -1184,25 +1481,20 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
             values={"before": before.triangle_count, "after": after.triangle_count},
         )
     ]
-    # Was der zweite Weg kostet, gehört gesagt. Er wird nur gegangen, wenn der
-    # erste das Netz zerrissen hätte, und er zerteilt dabei auch die Dreiecke,
-    # die längst fein genug waren. Danach ist jede weitere Operation langsamer,
-    # und niemand wüsste warum.
-    #
-    # Wie teuer, hat der Sprung auf trimesh 5 verschoben: dieselbe Lochplatte
-    # ging unter 4.12.2 von 796 Dreiecken auf 815 104 (Faktor 1024), unter
-    # 5.0.0 auf 22 636 (Faktor 28). Die Schwelle bleibt, wo sie ist — sie
-    # meint den Sprung, der eine Anzeige lahmlegt, und den gibt es weiter.
-    # Nur löst der Regelfall sie nicht mehr von selbst aus, weshalb
-    # `test_a_net_that_explodes_says_so` sie eigens herunterdreht.
+    # Was das Teilen kostet, gehört gesagt: Danach ist jede weitere Operation
+    # langsamer, und niemand wüsste warum. Der Satz nennt den Zuwachs und
+    # nicht den Weg — bis zum 25.09.2026 sagte er „musste gleichmäßig geteilt
+    # werden, um geschlossen zu bleiben", und seit der konforme Weg der
+    # Regelfall ist, stimmte das fast nie. Ein grobes CAD-Netz wächst bei 1 mm
+    # trotzdem über die Schwelle (Schraubendreherhalter: 1 868 auf 398 134).
     if after.triangle_count > before.triangle_count * DENSE_FACTOR:
         findings.append(
             Finding(
                 code="mesh.remesh_dense",
                 severity="info",
                 message=_(
-                    "Das Netz musste gleichmäßig geteilt werden, um geschlossen zu "
-                    "bleiben — es trägt jetzt deutlich mehr Dreiecke."
+                    "Das Netz hat jetzt über hundertmal so viele Dreiecke. Alles, was "
+                    "danach kommt, rechnet entsprechend länger."
                 ),
                 object_id=source.id,
                 values={"before": before.triangle_count, "after": after.triangle_count},

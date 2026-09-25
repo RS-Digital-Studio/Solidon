@@ -392,6 +392,9 @@ _NOT_A_RANGE = frozenset(
         # Topologie und Suchbudget sind keine unzulässigen Zahlenwerte im Feld.
         "local_boundary", "local_budget", "local_seed", "local_ambiguous_seed",
         "local_no_feature", "local_topology",
+        # Der Arbeitsspeicher beim Neuvernetzen (mesh_ops._out_of_memory): Die
+        # Kantenlänge liegt im Schema, nur dieser Rechner schafft sie nicht.
+        "memory",
         # Die Gestalt eines Gewindes (P2.5-Rest): Ein kegeliges oder
         # mehrgängiges Gewinde bekommt kein Gegenstück aus der Bibliothek, und
         # Ändern oder Entfernen setzen keine Zylinder an einen Kegel. Das ist

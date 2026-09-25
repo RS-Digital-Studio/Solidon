@@ -1,0 +1,46 @@
+gemessen wird F:\3D Druck\app\__init__.py
+drill-holder.3mf bei 0.5 mm: 658.5 s, 1857870 Dreiecke
+  ingest.multiple_components: Das Modell besteht aus 69 Teilen, von denen manche ineinanderstecken.
+  ingest.small_components: Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts.
+  repair.part_inside: 5 Teile liegen ganz in einem anderen. Slicer drucken sie je nach Einstellung hohl oder voll.
+  perceive.too_large: Die vollständige Merkmalserkennung wurde für dieses große Modell ausgelassen. Einzelne Merkmale erkennen Sie an einer Stelle; „Dreiecke verringern“ ermöglicht d
+  perceive.orphaned: Formdetails sind nach diesem Schritt nicht mehr automatisch wiederzuerkennen.
+  mesh.remeshed: Das Netz wurde feiner unterteilt; die Form ist unverändert.
+         106119239 function calls (105975097 primitive calls) in 658.478 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1530 to 30 due to restriction <30>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000  658.520  658.520 F:\3D Druck\app\core\scene\evaluate.py:277(evaluate)
+        1    0.001    0.001  658.520  658.520 F:\3D Druck\app\core\scene\evaluate.py:325(_evaluate)
+        2    0.001    0.000  644.604  322.302 F:\3D Druck\app\core\scene\evaluate.py:2709(_with_features)
+        1    0.000    0.000  644.429  644.429 F:\3D Druck\app\core\scene\evaluate.py:2562(_measured_locally)
+        1    0.076    0.076  644.429  644.429 F:\3D Druck\app\core\scene\evaluate.py:2472(_remeasured)
+        1    1.826    1.826  644.354  644.354 F:\3D Druck\app\core\perceive\local.py:1193(detect_known)
+      317   33.854    0.107  341.457    1.077 F:\3D Druck\app\core\perceive\local.py:519(_recognise_region)
+      702   63.263    0.090  288.437    0.411 F:\3D Druck\app\core\perceive\local.py:211(_region)
+  2414855  248.149    0.000  248.153    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+      279    0.039    0.000  140.931    0.505 F:\3D Druck\app\core\perceive\local.py:1382(_face_seed)
+      317    1.470    0.005  114.118    0.360 F:\3D Druck\app\core\perceive\features.py:9558(detect_voids)
+      576   25.411    0.044  112.649    0.196 F:\3D Druck\app\core\perceive\features.py:9572(_detect_voids)
+   285139    0.265    0.000  103.763    0.000 {method 'min' of 'numpy.ndarray' objects}
+   285139    0.117    0.000  103.498    0.000 F:\3D Druck\.venv\Lib\site-packages\numpy\_core\_methods.py:43(_amin)
+   127454    0.153    0.000  102.806    0.001 {method 'max' of 'numpy.ndarray' objects}
+   127454    0.070    0.000  102.653    0.001 F:\3D Druck\.venv\Lib\site-packages\numpy\_core\_methods.py:39(_amax)
+      317    0.271    0.001   92.403    0.291 F:\3D Druck\app\core\perceive\features.py:8483(face_roles)
+    21873   21.183    0.001   85.000    0.004 F:\3D Druck\app\core\perceive\features.py:9188(_enclosed_volume)
+    21946   16.268    0.001   49.375    0.002 F:\3D Druck\app\core\geom\mesh.py:788(triple_products)
+      510   10.950    0.021   48.907    0.096 F:\3D Druck\app\core\perceive\features.py:8230(_planar_face_entries)
+      510    4.330    0.008   45.262    0.089 F:\3D Druck\app\core\perceive\features.py:8518(_face_roles)
+61962/51933    0.264    0.000   45.165    0.001 F:\3D Druck\app\core\perceive\features.py:5844(remembered)
+  2197746    0.747    0.000   36.801    0.000 F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:358(verify)
+869171/854498    0.479    0.000   36.261    0.000 F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:115(get_cached)
+  2153985    4.174    0.000   36.080    0.000 F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:673(__hash__)
+     1470    6.371    0.004   34.587    0.024 F:\3D Druck\app\core\perceive\features.py:8586(tree_of)
+    39677   21.154    0.001   34.034    0.001 F:\3D Druck\.venv\Lib\site-packages\numpy\_core\numeric.py:1563(cross)
+    96572    0.221    0.000   31.039    0.000 {method 'all' of 'numpy.ndarray' objects}
+    99423    0.082    0.000   30.824    0.000 F:\3D Druck\.venv\Lib\site-packages\numpy\_core\_methods.py:64(_all)
+      283    0.040    0.000   29.439    0.104 F:\3D Druck\app\core\perceive\features.py:4533(_large_facet_faces)
+
+

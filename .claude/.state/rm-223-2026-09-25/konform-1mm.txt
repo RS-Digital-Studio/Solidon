@@ -1,0 +1,23 @@
+gemessen wird C:\Users\rober\AppData\Local\Temp\claude\F--3D-Druck\eda33e4f-279c-48e3-bf58-acf625bcf116\scratchpad\wt\app\__init__.py
+large-screwdriver-holder-with-honeycomb-pattern.stl bei 1.0 mm: 7956 Dreiecke, Volumen 227983.022, Teile 1, dicht True
+  Schätzung Fläche 372505, Σ ceil(l/e)² 1795568, Σ 4^k 3982392
+  konform      506754 Dreiecke, dicht True, Volumen 227983.022, Teile 1, 0.1 s
+            längste Kante danach 2.9519 mm, Volumen Δ +0.000000
+  bisher      1929220 Dreiecke, dicht True, Volumen 227983.022, Teile 1, 2.8 s
+            Faktor bisher/konform 3.8
+  (math.isfinite: True)
+broomholdervcd_d35mm.stl bei 1.0 mm: 59740 Dreiecke, Volumen 40473.782, Teile 3, dicht True
+  Schätzung Fläche 58931, Σ ceil(l/e)² 9555497, Σ 4^k 15493705
+  konform      966870 Dreiecke, dicht True, Volumen 40473.782, Teile 3, 0.3 s
+            längste Kante danach 2.1902 mm, Volumen Δ +0.000000
+  bisher      3920652 Dreiecke, dicht True, Volumen 40473.782, Teile 3, 7.8 s
+            Faktor bisher/konform 4.1
+  (math.isfinite: True)
+drill-holder.3mf bei 1.0 mm: 30562 Dreiecke, Volumen 199252.600, Teile 69, dicht True
+  Schätzung Fläche 137015, Σ ceil(l/e)² 6146575, Σ 4^k 13706473
+  konform      403700 Dreiecke, dicht True, Volumen 199252.600, Teile 69, 0.1 s
+            längste Kante danach 3.8642 mm, Volumen Δ -0.000000
+  bisher      2462910 Dreiecke, dicht True, Volumen 199252.600, Teile 69, 4.6 s
+            Faktor bisher/konform 6.1
+  (math.isfinite: True)
+Exit: 0

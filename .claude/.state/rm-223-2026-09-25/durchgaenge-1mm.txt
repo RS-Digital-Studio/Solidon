@@ -1,0 +1,64 @@
+gemessen wird C:\Users\rober\AppData\Local\Temp\claude\F--3D-Druck\eda33e4f-279c-48e3-bf58-acf625bcf116\scratchpad\wt\app\__init__.py
+large-screwdriver-holder-with-honeycomb-pattern.stl bei 1.0 mm: 7956 Dreiecke, Fläche 161300 mm², dicht True, Teile 1
+  Schätzung 580729 (Fläche allein 372505)
+  Durchgang 1:    506754 Dreiecke, längste 2.9519 mm, 0.14 s
+  Durchgang 2:    965072 Dreiecke, längste 1.4748 mm, 1.19 s
+  Durchgang 3:    970966 Dreiecke, längste 1.0000 mm, 3.24 s
+  Ergebnis dicht True, Volumen Δ +0.000000, Teile 1
+broomholdervcd_d35mm.stl bei 1.0 mm: 59740 Dreiecke, Fläche 25518 mm², dicht True, Teile 3
+  Schätzung 1001141 (Fläche allein 58931)
+  Durchgang 1:    966870 Dreiecke, längste 2.1902 mm, 0.45 s
+  Durchgang 2:   1037902 Dreiecke, längste 1.4937 mm, 2.52 s
+  Durchgang 3:   1039274 Dreiecke, längste 1.0000 mm, 4.63 s
+  Ergebnis dicht True, Volumen Δ +0.000000, Teile 3
+drill-holder.3mf bei 1.0 mm: 30562 Dreiecke, Fläche 59329 mm², dicht True, Teile 69
+  Schätzung 470755 (Fläche allein 137015)
+  Durchgang 1:    403700 Dreiecke, längste 3.8642 mm, 0.19 s
+  Durchgang 2:    592900 Dreiecke, längste 1.4932 mm, 1.20 s
+  Durchgang 3:    600826 Dreiecke, längste 1.0000 mm, 2.66 s
+  Ergebnis dicht True, Volumen Δ -0.000000, Teile 69
+carcassonne-4x4-grid-with-holes-on-bottom.stl bei 1.0 mm: 14508 Dreiecke, Fläche 28737 mm², dicht True, Teile 1
+  Schätzung 202430 (Fläche allein 66366)
+  Durchgang 1:    176762 Dreiecke, längste 3.0941 mm, 0.10 s
+  Durchgang 2:    260434 Dreiecke, längste 1.4281 mm, 0.54 s
+  Durchgang 3:    262316 Dreiecke, längste 1.0000 mm, 1.05 s
+  Ergebnis dicht True, Volumen Δ -0.000000, Teile 1
+parametric-laptop-riser.stl bei 1.0 mm: 172336 Dreiecke, Fläche 142001 mm², dicht False, Teile 21
+  Schätzung 1681844 (Fläche allein 327938)
+  offen — der konforme Weg nimmt es nicht
+mini-pot-x1.stl bei 1.0 mm: 3466 Dreiecke, Fläche 5870 mm², dicht True, Teile 1
+  Schätzung 37137 (Fläche allein 13555)
+  Durchgang 1:     30172 Dreiecke, längste 2.5302 mm, 0.01 s
+  Durchgang 2:     43428 Dreiecke, längste 1.3473 mm, 0.09 s
+  Durchgang 3:     43776 Dreiecke, längste 0.9999 mm, 0.18 s
+  Ergebnis dicht True, Volumen Δ +0.000000, Teile 1
+peruvian-style-ocarina.stl bei 1.0 mm: 38810 Dreiecke, Fläche 14780 mm², dicht True, Teile 1
+  Schätzung 141999 (Fläche allein 34133)
+  Durchgang 1:    114848 Dreiecke, längste 2.0942 mm, 0.12 s
+  Durchgang 2:    128532 Dreiecke, längste 1.4866 mm, 0.39 s
+  Durchgang 3:    128596 Dreiecke, längste 1.0000 mm, 0.67 s
+  Ergebnis dicht True, Volumen Δ -0.000001, Teile 1
+dice_w6_16mm_v00.stl bei 1.0 mm: 250488 Dreiecke, Fläche 1402 mm², dicht True, Teile 1
+  Schätzung 338676 (Fläche allein 3238)
+  Durchgang 1:    336044 Dreiecke, längste 1.7581 mm, 0.62 s
+  Durchgang 2:    338430 Dreiecke, längste 1.2812 mm, 1.43 s
+  Durchgang 3:    338452 Dreiecke, längste 1.0000 mm, 2.21 s
+  Ergebnis dicht True, Volumen Δ +0.000000, Teile 1
+bromyde_press.3mf bei 1.0 mm: 16304 Dreiecke, Fläche 112388 mm², dicht True, Teile 3
+  Schätzung 524720 (Fläche allein 259548)
+  Durchgang 1:    466572 Dreiecke, längste 2.5857 mm, 0.16 s
+  Durchgang 2:    835140 Dreiecke, längste 1.4944 mm, 1.31 s
+  Durchgang 3:    860226 Dreiecke, längste 1.0000 mm, 3.34 s
+  Ergebnis dicht True, Volumen Δ +0.000000, Teile 3
+screwdriver-holder-hex.stl bei 1.0 mm: 1868 Dreiecke, Fläche 69380 mm², dicht True, Teile 1
+  Schätzung 227686 (Fläche allein 160226)
+  Durchgang 1:    198304 Dreiecke, längste 3.9572 mm, 0.07 s
+  Durchgang 2:    384652 Dreiecke, längste 1.4957 mm, 0.56 s
+  Durchgang 3:    398134 Dreiecke, längste 1.0000 mm, 1.47 s
+  Ergebnis dicht True, Volumen Δ +0.000000, Teile 1
+hirnmod_scura_workshop_furnier.stl bei 1.0 mm: 3656 Dreiecke, Fläche 28651 mm², dicht True, Teile 7
+  Schätzung 113029 (Fläche allein 66165)
+  Durchgang 1:     96056 Dreiecke, längste 2.2331 mm, 0.04 s
+  Durchgang 2:    172018 Dreiecke, längste 1.4760 mm, 0.29 s
+  Durchgang 3:    178168 Dreiecke, längste 1.0000 mm, 0.70 s
+  Ergebnis dicht True, Volumen Δ -0.000000, Teile 7

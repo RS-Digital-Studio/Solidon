@@ -1,0 +1,34 @@
+gemessen wird C:\Users\rober\AppData\Local\Temp\claude\F--3D-Druck\eda33e4f-279c-48e3-bf58-acf625bcf116\scratchpad\wt\app\__init__.py
+drill-holder.3mf: 30562 Dreiecke, Fläche 59329 mm², Diagonale 205 mm
+  Kanten verfeinern 1,0 mm: Schätzung 137015 (Grenze 8000000)
+    859.1 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 2462910
+      ingest.small_components: Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts.
+      repair.part_inside: 5 Teile liegen ganz in einem anderen. Slicer drucken sie je nach Einstellung hohl oder voll.
+  Kanten verfeinern 0,5 mm: Schätzung 548061 (Grenze 8000000)
+    2658.6 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 8289738
+      ingest.small_components: Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts.
+      repair.part_inside: 5 Teile liegen ganz in einem anderen. Slicer drucken sie je nach Einstellung hohl oder voll.
+  Dreiecke angleichen 1,0 mm: Schätzung 137015 (Grenze 8000000)
+    6.8 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 405440
+      ingest.small_components: Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts.
+      repair.part_inside: 5 Teile liegen ganz in einem anderen. Slicer drucken sie je nach Einstellung hohl oder voll.
+    0.8 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 405440
+      ingest.small_components: Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts.
+      repair.part_inside: 5 Teile liegen ganz in einem anderen. Slicer drucken sie je nach Einstellung hohl oder voll.
+broomholdervcd_d35mm.stl: 59740 Dreiecke, Fläche 25518 mm², Diagonale 134 mm
+  Kanten verfeinern 1,0 mm: Schätzung 58931 (Grenze 8000000)
+    162.1 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 3920652
+  Kanten verfeinern 0,5 mm: Schätzung 235726 (Grenze 8000000)
+    484.2 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 11916394
+  Dreiecke angleichen 1,0 mm: Schätzung 58931 (Grenze 8000000)
+    10.2 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 971234
+    1.2 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 971234
+large-screwdriver-holder-with-honeycomb-pattern.stl: 7956 Dreiecke, Fläche 161300 mm², Diagonale 252 mm
+  Kanten verfeinern 1,0 mm: Schätzung 372505 (Grenze 8000000)
+    56.7 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 1929220
+  Kanten verfeinern 0,5 mm: Schätzung 1490021 (Grenze 8000000)
+    183.0 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 7575012
+  Dreiecke angleichen 1,0 mm: Schätzung 372505 (Grenze 8000000)
+    2.9 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 502474
+    0.2 s, Spitze des Prozesses 0 MiB, angehalten None, Dreiecke 502474
+Exit: 0

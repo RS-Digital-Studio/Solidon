@@ -467,6 +467,14 @@ def _thickened_skin() -> str:
     return _mesh_print(_thickened(MeshData.of(raw), 1.2))
 
 
+def _refined_plate() -> str:
+    """*Kanten verfeinern* an der Platte — ob ein weiterer Durchgang folgt, entscheidet
+    die längste Kante (RM-223)."""
+    from app.core.geom.mesh_ops import remesh
+
+    return _mesh_print(remesh(_plate(), 3.0))
+
+
 def _mended_import() -> str:
     """Der Import eines Netzes mit Löchern — Ränder werden geohrt und geschlossen."""
     from app.core.geom.mesh import MeshData
@@ -577,6 +585,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "orient_for_print": lambda: _oriented_plate(True),
     "orient_heuristic": lambda: _oriented_plate(False),
     "pose_armature": _posed_plate,
+    "remesh_mesh": _refined_plate,
     "repair_selfint": _resolved_crossings,
     "resize_hole": _changed_bore,
     "rotate_object": _turned_plate,

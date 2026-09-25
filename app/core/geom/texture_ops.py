@@ -929,8 +929,10 @@ def wrapped(body: MeshData, diameter: float) -> MeshData:
     ist das die Vorgabe, und niemand muss etwas eintragen.
 
     Gebogen werden die Ecken — und damit die Flächen dazwischen dem Zylinder
-    folgen, teilt der exakte Kern vorher jede Kante, bis ihre Sehne höchstens
-    :data:`BEND_SAG` unter dem Bogen hängt (:func:`refined_for_bending`).
+    folgen, teilt der exakte Kern vorher jede Kante des Feldes, bis ihre Sehne
+    höchstens :data:`BEND_SAG` unter dem Bogen hängt (:func:`refined_for_bending`;
+    die Diagonalen im Inneren einer Fläche bis zum Dreifachen, siehe
+    ``mesh_ops.refined``).
     Bis zum 22.09.2026 blieben die Elemente gerade: Der Boden einer Rille war
     in der Mitte um die Sehnenabweichung tiefer als an den Rändern, die Krone
     einer Raute flach, und die Wände zweier Nachbarn kippten gegeneinander.

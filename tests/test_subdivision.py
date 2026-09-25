@@ -6,10 +6,9 @@ anzufassen; ``subdivide_surface`` ändert die *Form*, indem es zwischen den
 Dreiecken interpoliert. Beide sind die Vorstufe des Sculptings — ein Pinsel
 verschiebt Eckpunkte, und wo keine sind, entsteht keine Falte.
 
-Die interessanteste Zahl dieser Datei steht in
-``test_uniform_remeshing_costs_a_fraction_of_the_triangles``. Sie ist der
-ganze Grund, warum ``remesh_uniform`` neben ``remesh_mesh`` steht und nicht
-darin.
+Warum ``remesh_uniform`` neben ``remesh_mesh`` steht und nicht darin, sagt
+``test_uniform_remeshing_costs_a_fraction_of_the_triangles``: die zugelassene
+Abweichung, und seit dem 25.09.2026 nur noch sie.
 """
 
 from __future__ import annotations
@@ -117,10 +116,10 @@ def test_uniform_remeshing_evens_out_more_than_splitting_does(
     — an ``plate_holes`` vorher 2,224 und nachher 2,224, auf die vierte Stelle
     identisch. Die Operation machte das Netz feiner, nicht gleichmäßiger.
 
-    trimesh 5 teilt selbst gleichmäßig und kommt auf **0,555** (gemessen am
-    14.08.2026). Der Vorsprung ist damit kleiner geworden, aber er steht:
-    ``remesh_uniform`` liegt bei **0,410** — und braucht dafür ein Fünftel der
-    Dreiecke, siehe den Test darunter.
+    trimesh 5 teilte selbst gleichmäßig und kam auf **0,555** (14.08.2026),
+    der konforme Weg des exakten Kerns seit dem 25.09.2026 auf **0,445**. Der
+    Vorsprung ist damit klein geworden, aber er steht: ``remesh_uniform``
+    liegt bei **0,410**.
     """
     plate = corpus("plate_holes.stl")
     before = spread(plate)
@@ -155,21 +154,28 @@ def test_uniform_remeshing_costs_a_fraction_of_the_triangles(profile: Profile) -
     """Warum es eine eigene Operation ist und keine Zeile in ``remesh_mesh``.
 
     Für dieselbe Zielkantenlänge von 1,5 mm braucht ``remesh_mesh`` auf
-    ``plate_holes`` **160 084** Dreiecke, ``remesh_uniform`` **30 648** —
-    Faktor 5,2 (gemessen am 14.08.2026 unter trimesh 5.0.0).
+    ``plate_holes`` **47 092** Dreiecke, ``remesh_uniform`` **30 648** und mit
+    zugelassenen 0,2 mm Abweichung **16 816** (25.09.2026).
 
-    Hier stand Faktor **hundert**: 3 260 416 gegen rund 30 000. Der Abstand
-    ist eingebrochen, weil trimesh 5 sparsamer teilt, statt jede winzige
-    Bohrungsfacette mitzuzerteilen. Die Operation bleibt die schonendere und
-    die gleichmäßigere — aber ihr Vorsprung trägt sich nicht mehr von selbst.
-    Wer sie infrage stellt, misst neu, statt diese Zahlen fortzuschreiben.
+    Hier stand erst Faktor **hundert** (3 260 416 gegen rund 30 000), unter
+    trimesh 5 Faktor 5,2 (160 084). Seit ``remesh_mesh`` konform durch den
+    exakten Kern teilt, ist ohne Abweichung nur noch die Zusage übrig, die
+    beide trennt: ``remesh_mesh`` hält **jede** Kante unter 1,5 mm,
+    ``remesh_uniform`` lässt die Diagonalen einer Gitterzelle bis 2,8 mm
+    stehen — ungefähr gleich lang ist, was es verspricht. Der Grund für die
+    eigene Operation ist die Abweichung: Nur sie räumt die überflüssig
+    feinen Stellen ab, und das kann keine Zeile in einem Werkzeug, das nie
+    einen Punkt verschiebt. Wer sie infrage stellt, misst neu, statt diese
+    Zahlen fortzuschreiben.
     """
     plate = corpus("plate_holes.stl")
+    split = mesh_ops.remesh(plate, 1.5).triangle_count
 
-    result = run("remesh_uniform", object_of(plate), profile, edge=1.5)
+    evened = run("remesh_uniform", object_of(plate), profile, edge=1.5).outputs[0].mesh
+    cleared = run("remesh_uniform", object_of(plate), profile, edge=1.5, deviation=0.2)
 
-    evened = result.outputs[0].mesh
-    assert evened.triangle_count < mesh_ops.remesh(plate, 1.5).triangle_count / 5
+    assert evened.triangle_count < split
+    assert cleared.outputs[0].mesh.triangle_count < split / 2
     assert evened.triangle_count > plate.triangle_count, "feiner wird es trotzdem"
 
 
