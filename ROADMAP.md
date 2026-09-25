@@ -72,7 +72,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter und Leerfahrt vom Drucker gebaut und im ElegooSlicer belegt; offen: Tempo je Drucker, Orcas Bäume nur vom Bett, Rand bei Füßen |
 | [RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht](#rm-248) | Geometrie, Erkennung und Druckvorbereitung | Fächer vom Randmittelpunkt lässt beim Versetzen 3,6 bis 5,4 mm³ Mulde — den Deckel als Fortsetzung der umgebenden Fläche bauen, an beiden Kernen |
-| [RM-249 — Eine verdoppelte Kette: exakt „verloren“, am Netz ungeprüft](#rm-249) | Geometrie, Erkennung und Druckvorbereitung | An vier Lochplatten, 12 mm quer verdoppelt, findet der exakte Kern Bohrungskopien nicht wieder, das Netz prüft nicht — messen, was die Kopie dort trifft, dann eine Nachkontrolle für beide |
+| [RM-249 — Eine Bohrung über einer Seite innerhalb der Hülle meldet keine Kante](#rm-249) | Geometrie, Erkennung und Druckvorbereitung | Kantenprüfung fragt zuerst den Hüllquader; an gs-100 läuft eine Kopie 3,4 mm über die Seite, ohne Befund — Prüfung über die eigene Tiefe des Merkmals am Netz, dann Nachkontrolle der Kopien an beiden Kernen |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
@@ -1918,7 +1918,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
 <a id="rm-249"></a>
 
-- [ ] **RM-249 — Eine verdoppelte Kette: am exakten Kern „verloren“, am Netz ungeprüft.**
+- [ ] **RM-249 — Eine Bohrung über einer Seite innerhalb der Hülle meldet keine Kante.**
   Gefunden am 25.09.2026 bei RM-245. An den vier Lochplatten, jede
   Schraubbohrung um 12 mm quer verdoppelt, tragen beide Kerne dasselbe
   Volumen ab (auf 2 %: −218,847 zu −218,473 mm³ an der Crimper-Platte), aber
@@ -1927,11 +1927,30 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   oben beide Bohrungskopien, erkannt wird an der Stelle nur ein Kegelstück;
   ebenso an der Goot-Platte zweimal, an pb3041 und an der Crimper-Platte je
   einmal. Das Netz (`_duplicate_cavity_chain`) prüft seine Kopien nicht nach
-  und trägt sie mit ihren Maßen weiter. Weg: an der Kopierstelle messen, was
-  die Kopie dort schneidet und warum die Erkennung die Bohrung nicht findet;
-  dann eine Nachkontrolle für beide Kerne, und eine Kopie, die es nicht gibt,
-  wird an beiden gemeldet. Abnahme: dieselben Befunde an beiden Kernen an
-  den vier Lochplatten, als STEP und als 3MF.
+  und trägt sie mit ihren Maßen weiter.
+  **Nachgemessen am 26.09.2026:** Frisch erkannt findet auch das Netz an der
+  Kopierstelle nur das Kegelstück — der exakte Kern hat recht. Die Platte
+  reicht auf der Höhe der oberen Bohrung (z = 46,25) nur bis x ≈ 13,6, ihr
+  Hüllquader bis x = 20; die Kopie bei x = 12 läuft mit der Zylindersenkung
+  Ø 10 bis x = 17 über die Seite, und **keiner** der beiden Kerne sagt „über
+  die Kante“. Ursache: `prepare.over_the_edge_along` und
+  `prepare.mouth_over_the_edge` fragen zuerst `_axes_over`, den Hüllquader,
+  und kehren zurück, wenn die Scheibe darin bleibt — das Urteil am Netz
+  (`_flank_is_open`, der Kranz an der Mündung) kommt gar nicht erst dran.
+  Den Hüllquader einfach zu streichen trägt nicht: `_flank_is_open` tastet in
+  Schritten eines Sechzehntels der Hüllendiagonale entlang der Achse und fände
+  an einer 3 mm starken Platte keine Tiefe mit dem Kranz ganz im Material —
+  jede Bohrung hieße „über die Kante“. Weg: für ein Merkmal mit Mitte und
+  Tiefe den Kranz über **seine eigene** Tiefe abtasten (ein Viertel, die
+  Hälfte, drei Viertel), am Körper vor dem Schnitt; wo keine dieser Tiefen
+  ihn ganz im Material hat, reißt die Flanke auf. Das gilt für Versetzen,
+  Verdoppeln, Kippen und Muster (`_edge_findings`); *Bohren* fragt mit der
+  gewählten Tiefe genauso. Danach die Nachkontrolle der Kopien am Netz wie am
+  exakten Kern (`_duplicate_cavity_chain` fragt heute nicht), damit eine
+  Kopie, die es nicht gibt, an beiden gemeldet wird. Abnahme: an gs-100 oben
+  um 12 mm quer verdoppelt „über die Kante“ an beiden Kernen, an den übrigen
+  drei Platten dieselben Befunde an beiden Kernen, als STEP und als 3MF; eine
+  Bohrung in einer 1-mm-Platte ohne Kantenbefund.
 
 ## Bedienung und Darstellung
 
