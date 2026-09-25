@@ -114,29 +114,77 @@ Antwort ist: 0 von 3 bei 4096, 8192 und 16384 (jedes Mal abgeschnitten), 3 von
 Modell, das den Auftrag kennt, nicht herumrät. `OLLAMA_CONTEXT_TOKENS` in
 `backends/llm.py` hält den Wert samt Messreihe.
 
-Wer die Werkzeugmenge ändert, prüft diese Zahl nach: `prompt_eval_count` in
-Ollamas Antwort sagt, wie viel wirklich ankam. Liegt es bei etwa der Hälfte des
-Fensters, wurde gekürzt.
-`tools/measure_local_model.py --count-tokens` zählt dafür genau einen
-vollständigen Auftrag und weist Modell, Kontext, Werkzeugzahl und Anfragehash
-aus. Dieser funktionale Zählweg misst keine Geschwindigkeit; Kalt-/Warmläufe
-und Leistungsprüfungen bleiben dem Release vorbehalten.
+**Ob gekürzt wurde, entscheidet die Länge der Anfrage** (`llm.prompt_was_cut`):
+`prompt_eval_count` unter dem, was der gesendete Text mindestens an Token hat,
+oder genau Ollamas Kürzungszahl (halbes Fenster plus `TRUNCATION_KEEPS`) bei
+einer Anfrage, die größer sein kann als das Fenster. Die Werkzeugzahl sagt
+seit dem Angebot (unten) nichts mehr über die Größe. Die Messwerkzeuge fragen
+dieselbe Funktion — was die Anwendung als gekürzt zurückweist, weist auch die
+Messung zurück.
+`tools/measure_local_model.py --count-tokens` zählt die Grundlast eines
+lokalen Zugs — kompakter Prompt, Angebot zu „Hallo.", keine Operation
+ausführlich — und weist Modell, Kontext, Werkzeugzahl und Anfragehash aus.
+Dieser funktionale Zählweg misst keine Geschwindigkeit; Kalt-/Warmläufe und
+Leistungsprüfungen bleiben dem Release vorbehalten.
 
-**Stand 23.09.2026: 142 Operationen, 153 Werkzeuge** — die Zahlen hält
+### Ein lokales Modell bekommt ein Angebot, nicht das ganze Register
+
+**Jede Operation bleibt ein Werkzeug, das sich aufrufen lässt; nur die
+gemeinten stehen mit allen Feldern da** (`agent/offer.py`, Prompt-Version 8).
+Das ist keine Auswahl, die aussortiert — eine Operation, die der Agent nicht
+mehr sieht, wäre eine Betriebsart mit anderem Namen (§2.6). Die Regeln dazu:
+
+- **Ausführlich** stehen die Treffer von `registry.search.rank_operations`
+  über Anfrage und letzte Nutzerbeiträge — **dieselbe** Wortsuche wie die
+  Befehlspalette, kein zweites Ranking daneben (`zwillinge.md`) —, am gewählten
+  Merkmal seine Handlungen aus `ACTION_ORDER`, in leerer Szene die sichtbaren
+  Grundkörper, und was das Modell im Zug angefordert oder über `find_part`
+  gefunden hat. Von sich aus höchstens `DETAILED_LIMIT`, und nur über
+  `MIN_SCORE`.
+- **Alle übrigen als Kurzform**: Titel, `STUB_MARK`, keine Felder. Ihr Aufruf
+  **führt nichts aus**, holt die Felder für den nächsten Schritt und zählt als
+  `Proposal.lookups` — weder als Werkzeugaufruf noch als ungültiger. Die Suite
+  weist ihn getrennt aus.
+- **Registerreihenfolge**, auch wenn eine Kurzform ausführlich wird: Ein
+  unveränderter Anfang der Anfrage bleibt unverändert.
+- **Ein gehostetes Modell sieht jedes Werkzeug ausführlich** (`offer is
+  None`). Es hat Platz, und das Angebot ist eine Antwort auf das Fenster, nicht
+  auf die Werkzeugwahl.
+
+Wer an Rangfolge, Grenze oder Kurzform dreht, fährt `tests/test_tool_offer.py`
+und danach `tools/check_local_model.py` — acht Fälle, drei davon
+Operationen, die ausführlich angeboten werden müssen, einer absichtlich
+mehrdeutig. Gemessen am 25.09.2026 mit qwen3:14b: 30 461 Token für die
+Kurzfassung aller 153 Werkzeuge gegen **7 258** für die Grundlast des
+Angebots.
+
+### Nach dem Zug bleibt das Modell warm — bis ein anderer die Karte braucht
+
+`resource_session` trägt das Modell nach dem Zug mit `resources.keep_warm`
+ein, statt es zu entladen (auf dem Prozessor entlädt es sofort);
+`local_ai_slot(..., holder=...)` gibt beim Betreten jedes fremde warm
+gehaltene Modell frei. **Wer einen neuen lokalen Weg baut, der ein Modell
+lädt, trägt es ein und nennt beim Betreten der Spur seinen Halter** — sonst
+hält es seine `OLLAMA_KEEP_ALIVE` gegen einen ComfyUI-Lauf, der davon nichts
+weiß, und genau diese Lage (zwei Modelle zugleich auf der Karte) ging dem
+Absturz vom 01.09.2026 voraus.
+
+**Jede lokale Antwort hat eine Obergrenze** (`OLLAMA_ANSWER_TOKENS` als
+`num_predict`). Sie gilt einer Schleife, nicht einer langen Antwort: gemma4:12b
+lief bei der Werkzeugprobe in 14 400 Token ohne Ende. Was an der Grenze
+abbricht, meldet die Sitzung als abgeschnitten mit Befund.
+
+**Stand 25.09.2026: 142 Operationen, 153 Werkzeuge** — die Zahlen hält
 `tests/test_registry_consistency.py` gegen Register und `tool_schemas()`.
-Der kompakte Auftrag wurde bei 147 Werkzeugen mit `qwen3:14b`,
-`num_ctx=32768` und `num_predict=1` vollständig mit **27 293 Token** gezählt
-(83,3 Prozent des Fensters, 5 475 Token Rest). Die Werkzeuge danach (P4.0,
-die drei Schnitte mit Werkzeug aus P6.5, *Merkmal vervielfachen* aus P6.7,
-*An Körper anfügen*) und die drei Parameter mehr an *Aushöhlen* sind in
-dieser Zählung nicht enthalten. Einzeln gezählt, je gegen den eigenen
-Stand: die drei Schnitte am langen Satz vor RM-185 2 326 Token,
-*An Körper anfügen* am kurzen Satz 747 Token (28 040 bei 148 Werkzeugen).
-Werkzeugzahl und Tokenzahl in `backends/llm.py` gehören zu derselben Zählung.
-Systemprompt und Werkzeugsatz zusammen waren am 26.08.2026 (90 Operationen,
-nach dem OpenSCAD-Ausbau eines weniger) 149 061 Zeichen im vollen und 110 027
-im kompakten Satz; seither sind weitere Operationen dazugekommen, und die
-Zeichenzahl ist nicht neu gemessen.
+Die Grundlast des Angebots wurde mit `qwen3:14b`, `num_ctx=32768` und
+`num_predict=1` vollständig mit **7 276 Token** gezählt (22,2 Prozent des
+Fensters); ein Zug mit ausführlichen Werkzeugen, Steckbrief und Verlauf kam in
+der Suite auf bis zu 14 215. Werkzeugzahl und Tokenzahl in `backends/llm.py`
+gehören zu derselben Zählung, und
+`test_the_measured_prompt_matches_the_current_tool_count` hält sie zusammen.
+Bis zum 23.09.2026 zählte der kompakte Auftrag aller Werkzeuge 27 293 Token
+bei 147 Werkzeugen (83,3 Prozent); die Chronik der Zählungen steht bei
+`PROMPT_TOKENS`.
 
 Die folgenden früheren Messungen sind historische Vergleiche. Sie ersetzen
 die aktuelle vollständige Tokenzählung nicht und belegen keine heutige
@@ -171,7 +219,11 @@ auch nicht an einem Feld, dessen Satz eine Konvention wiederholt
 (`tools._repeats_a_convention`). Wer die Werkzeugmenge ändert, zählt neu
 (`tools/measure_local_model.py --count-tokens`); der Test
 `test_the_local_window_fits_on_a_sixteen_gigabyte_card_with_room_for_the_scene`
-verlangt unter 28 000 und 4 000 Token Luft.
+verlangt eine Grundlast unter einem Drittel des Fensters und 16 000 Token
+Luft für ausführliche Werkzeuge, Steckbrief und Verlauf. **Eine Ausnahme von
+der Kurzfassung:** Im Angebot tragen ausführliche Bausteine ihre zehn
+Ortsfelder wieder, ohne Satz (`operation_tools(part_placement=True)`) — ohne
+sie setzte qwen3.5:9b Bausteine ohne Stelle.
 
 **Der Steckbrief teilt dasselbe Fenster.** Über `context.CONDENSE_ABOVE_CHARS`
 fasst der lokale Weg gleiche Merkmale zusammen, nennt je Körper nur die

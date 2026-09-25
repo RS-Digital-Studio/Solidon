@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Final, Literal, Protocol
 
 from app.core.backends import keys
-from app.core.backends.resources import local_ai_slot
+from app.core.backends.resources import keep_warm, local_ai_slot
 from app.core.discover import PROBE_SECONDS, UNUSABLE_ADDRESS, is_local_address, opener_for
 from app.core.errors import (
     CANCEL,
@@ -1088,13 +1088,20 @@ def _arguments(value: Any) -> dict[str, Any]:
 DEFAULT_OLLAMA_MODEL = "qwen3:14b"
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
-#: Wie lange Ollama das Modell zwischen zwei Schritten desselben Vorschlags hält.
+#: Wie lange Ollama das Modell nach einer Anfrage hält — zwischen zwei
+#: Schritten desselben Vorschlags und nach dem Zug.
 #:
 #: Ein Werkzeugaufruf und die abschließende Antwort gehören zu einem Zug und
-#: sollen nicht zweimal kalt starten. Nach dem gesamten Zug entlädt
-#: :meth:`OllamaBackend.resource_session` ausdrücklich. Die eine Minute ist nur das
-#: Sicherheitsnetz für einen Prozessabbruch und direkte Diagnoseaufrufe.
-OLLAMA_KEEP_ALIVE = "60s"
+#: sollen nicht zweimal kalt starten; und die nächste Frage kommt meist binnen
+#: einer Minute. **Bis zum 25.09.2026 entlud Solidon nach jedem Zug**, und
+#: jeder Zug zahlte den Modellstart neu: 3 bis 4,5 s auf einer ruhigen Karte,
+#: 56 bis 314 s, sobald der Treiber am Rand des Grafikspeichers umlagerte
+#: (RM-081). Seither bleibt es drei Minuten geladen, und
+#: :func:`~app.core.backends.resources.keep_warm` sorgt dafür, dass ein
+#: anderer Lauf — ComfyUI, ein anderes Modell — die Karte trotzdem frei
+#: bekommt (Entscheidung nach Roberts Vorgabe vom 25.09.2026). Danach entlädt
+#: Ollama von selbst.
+OLLAMA_KEEP_ALIVE = "3m"
 
 #: Wie lange warmgehalten wird, wenn das Modell auf dem Prozessor rechnet.
 #:
@@ -1105,8 +1112,22 @@ OLLAMA_KEEP_ALIVE = "60s"
 #: Abschluss liegen trotzdem nur Sekunden; dafür reicht der kürzere Rückfall.
 #:
 #: Dreißig Sekunden reichen zwischen zwei unmittelbar aufeinanderfolgenden
-#: Schritten. Nach dem Zug gilt ohnehin die ausdrückliche Freigabe.
+#: Schritten. Nach dem Zug wird auf dem Prozessor ausdrücklich entladen: Dort
+#: belegt das Modell den Arbeitsspeicher, den die Anwendung selbst braucht.
 OLLAMA_KEEP_ALIVE_ON_CPU = "30s"
+
+#: Wie viele Token eine einzelne lokale Antwort höchstens erzeugt — Denkblock
+#: eingeschlossen.
+#:
+#: **Gegen eine Schleife, nicht gegen eine lange Antwort.** Am 25.09.2026 lief
+#: gemma4:12b bei der Werkzeugprobe in eine Antwort, die nicht endete: 14 400
+#: Token mit 57 je Sekunde, bis die Wartezeit von zehn Minuten riss — so lange
+#: war die Karte für alles andere belegt. Ein Zug von qwen3:14b erzeugte je
+#: Schritt 480 bis 850 Token, Denkblock eingeschlossen. Achttausend lassen
+#: davon ein Zehnfaches und enden auf einer 16-GB-Karte nach rund drei Minuten;
+#: was darüber hinausläuft, kommt als abgeschnittene Antwort zurück
+#: (``done_reason`` ``length``), und der Vorschlag sagt es mit Befund.
+OLLAMA_ANSWER_TOKENS: Final = 8192
 
 #: Entladen ist eine Verwaltungsanfrage, keine Modellrechnung. Bleibt sie
 #: länger offen, darf der fertige Vorschlag trotzdem zur Oberfläche zurück.
@@ -1283,17 +1304,30 @@ class OllamaBackend:
             # von einer anderen.
             return False
 
+    @property
+    def holder(self) -> str:
+        """Unter welcher Kennung dieses Modell die Karte hält (Adresse und Name)."""
+        return f"ollama:{ollama_endpoint(self.url)}:{self.model}"
+
     @contextmanager
     def resource_session(
         self, cancelled: CancelToken | None, progress: Callable[[str], None] | None = None
     ) -> Iterator[None]:
-        """Hält einen vollständigen Agentenzug exklusiv und räumt danach auf."""
+        """Hält einen vollständigen Agentenzug exklusiv — und das Modell danach warm.
+
+        Auf der Karte bleibt es geladen (:data:`OLLAMA_KEEP_ALIVE`), bis ein
+        anderer Lauf die Spur betritt; auf dem Prozessor wird es sofort
+        entladen, dort belegt es den Arbeitsspeicher der Anwendung.
+        """
         address = ollama_endpoint(self.url)
-        with local_ai_slot(address, cancelled, progress):
+        with local_ai_slot(address, cancelled, progress, holder=self.holder):
             try:
                 yield
             finally:
-                self.release()
+                if self.on_gpu is False or not is_local_address(address):
+                    self.release()
+                else:
+                    keep_warm(self.holder, self.release)
 
     def release(self) -> None:
         """Entlädt ausschließlich ein Ollama auf diesem Rechner."""
@@ -1359,16 +1393,21 @@ class OllamaBackend:
         max_output_tokens: int | None,
         cancelled: CancelToken | None,
     ) -> Reply:
-        # ``max_output_tokens`` wird hier bewusst nicht angewandt: lokal
-        # kostet eine Antwort kein Geld, und ``num_predict`` schnitte sie
-        # mitten im Satz ab, statt etwas zu sparen.
+        # ``max_output_tokens`` gilt hier nicht: Es ist das Zugbudget eines
+        # gehosteten Modells und kostet dort Geld. Lokal begrenzt
+        # :data:`OLLAMA_ANSWER_TOKENS` die einzelne Antwort — gegen eine
+        # Schleife, nicht gegen eine lange Antwort.
         payload: dict[str, Any] = {
             "model": self.model,
             "stream": False,
             # ``num_ctx`` ist keine Feineinstellung, sondern die Bedingung
             # dafür, dass der Auftrag überhaupt ankommt — siehe
             # :data:`OLLAMA_CONTEXT_TOKENS`.
-            "options": {"temperature": temperature, "num_ctx": OLLAMA_CONTEXT_TOKENS},
+            "options": {
+                "temperature": temperature,
+                "num_ctx": OLLAMA_CONTEXT_TOKENS,
+                "num_predict": OLLAMA_ANSWER_TOKENS,
+            },
             # Zwischen zwei Schritten desselben Vorschlags geladen bleiben
             # (:data:`OLLAMA_KEEP_ALIVE`). Danach entlädt ``resource_session``.
             #
@@ -2019,7 +2058,17 @@ def ollama_tool_check(
         reply = backend.complete([Message(role="user", content=PROBE_REQUEST)], tools=[PROBE_TOOL])
     except AppError, OSError, ValueError:
         return None
+    _stays_warm(backend)
     return reply.wants_tools
+
+
+def _stays_warm(backend: OllamaBackend) -> None:
+    """Ein Modell, das eine Probe geladen hat, bleibt für den ersten Zug warm —
+    und gibt die Karte frei, sobald ein anderer Lauf sie braucht
+    (:func:`~app.core.backends.resources.keep_warm`). Ohne den Eintrag hielte
+    es sie drei Minuten gegen einen ComfyUI-Lauf, der davon nichts weiß."""
+    if is_local_address(ollama_endpoint(backend.url)):
+        keep_warm(backend.holder, backend.release)
 
 
 #: Wie viele Token je Sekunde eine Grafikkarte beim Einlesen mindestens
@@ -2230,6 +2279,7 @@ def ollama_speed(model: str, url: str | None = None, transport: Transport = post
         "model": model,
         "messages": [{"role": "user", "content": PROBE_REQUEST}],
         "stream": False,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
         "options": {"num_ctx": OLLAMA_CONTEXT_TOKENS, "num_predict": 8},
     }
     try:
@@ -2244,6 +2294,7 @@ def ollama_speed(model: str, url: str | None = None, transport: Transport = post
         )
     except AppError, OSError, ValueError:
         return Speed()
+    _stays_warm(backend)
     count = answer.get("prompt_eval_count")
     duration = answer.get("prompt_eval_duration")
     if not isinstance(count, int) or not isinstance(duration, int | float) or duration <= 0:

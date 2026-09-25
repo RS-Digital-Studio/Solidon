@@ -41,6 +41,22 @@ Werkzeuge nicht aufruft, ist dann nicht zu dumm — es hat sie nie gesehen.
 `tools/check_local_model.py` prüft genau das, bevor eine Modellmessung
 etwas aussagt.
 
+**Ob gekürzt wurde, entscheidet die Länge der Anfrage, nicht die
+Werkzeugzahl** (`prompt_was_cut`). Seit dem Werkzeugangebot sagt die Zahl der
+Werkzeuge nichts mehr über die Größe; `request_length` misst den gesendeten
+Text, `least_tokens` und `most_tokens` spannen mit `LEAST_CHARS_PER_TOKEN`
+und `MOST_CHARS_PER_TOKEN` den Bereich auf, den ein Tokenizer daraus zählen
+kann. Gekürzt ist eine Antwort, die weniger zählt, als der Text mindestens
+hat, oder die genau Ollamas Kürzungszahl meldet (halbes Fenster plus
+`TRUNCATION_KEEPS`) bei einer Anfrage, die größer sein kann als das Fenster.
+Die obere Schranke ist mit Absicht weit: gpt-oss packt 7,5 Zeichen in einen
+Token. `tools/measure_local_model.py` fragt dieselbe Funktion.
+
+**Jede lokale Antwort hat eine Obergrenze** (`OLLAMA_ANSWER_TOKENS` als
+`num_predict`), gegen eine Schleife und nicht gegen eine lange Antwort. Was
+dort abbricht, meldet Ollama als `length`, und die Sitzung sagt es mit
+Befund (`TRUNCATED_STOPS`).
+
 Der abbrechbare lokale HTTP-Transport hält den verbundenen Socket bis zum
 Ende des Request-Threads fest. Auch bei HTTP/1.0 und `Connection: close`
 erreicht ein Abbruch damit den Antwortkörper. Der Abbruch unterbricht den
@@ -50,8 +66,10 @@ hergestellt, verhindert die erneute Tokenprüfung das anschließende POST.
 
 `PROMPT_TOKENS` und `PROMPT_TOOL_COUNT` gehören zu derselben gezählten Anfrage.
 Nach einer Änderung am Werkzeugsatz zählt
-`tools/measure_local_model.py --count-tokens` den vollständigen kompakten
-Systemprompt mit allen Werkzeugen und der festen Frage „Hallo.“ genau einmal.
+`tools/measure_local_model.py --count-tokens` den kompakten Systemprompt mit
+dem Werkzeugangebot zur festen Frage „Hallo.“ genau einmal — die Grundlast
+eines lokalen Zugs: alle Werkzeuge, keine Operation ausführlich
+(`measure_local_model.base_tools`, dieselbe Rechnung wie die Sitzung).
 Dieser funktionale Weg verwendet die konfigurierte Modell- und Kontextvorgabe,
 fordert höchstens einen Antworttoken an und gibt den Modellspeicher zurück.
 Er misst keine Geschwindigkeit und benötigt keinen Release-Lauf.
@@ -70,8 +88,16 @@ entfernte, möglicherweise geteilte Server bleiben unberührt. Das
 Warten auf die Spur meldet genau einmal den Grund, bleibt abbrechbar und
 endet spätestens nach zehn Minuten mit einem erneuten Versuch als Vorschlag.
 Eine abgewiesene Chat-Freigabe betritt die Spur nicht und entlädt kein Modell.
-Ollama hält das Modell innerhalb eines vollständigen Agentenvorschlags warm und entlädt es im
-`finally`. ComfyUI erhält beim Abbruch ausschließlich Solidons eigene
+**Nach dem Zug bleibt das Ollama-Modell geladen, bis ein anderer die Karte
+braucht:** `resource_session` trägt es mit `resources.keep_warm(holder,
+release)` ein (auf dem Prozessor entlädt es sofort), und `local_ai_slot(...,
+holder=...)` gibt beim Betreten jedes warm gehaltene Modell frei außer dem
+eigenen. Ein ComfyUI-Lauf nennt keinen Halter und räumt damit die Karte ganz;
+ein zweiter Chat-Zug desselben Modells lädt nicht neu. Die Werkzeugprobe und
+die Geschwindigkeitsmessung tragen ihr Modell ebenso ein (`_stays_warm`),
+sonst hielte es seine drei Minuten `OLLAMA_KEEP_ALIVE` gegen einen Lauf, der
+davon nichts weiß. Die Suite leert die Liste je Test (`tests/conftest.py`).
+ComfyUI erhält beim Abbruch ausschließlich Solidons eigene
 Auftrags-ID über `POST /api/jobs/{job_id}/cancel`. Der Endpunkt prüft und
 unterbricht atomar; `cancelled: false` bestätigt einen bereits beendeten oder
 unbekannten Auftrag. Ohne diese bestätigte Fähigkeit wird nur der eigene

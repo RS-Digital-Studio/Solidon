@@ -355,6 +355,26 @@ def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
     assert OLLAMA_CONTEXT_TOKENS > PROMPT_TOKENS, "so viel brauchen die Werkzeuge allein"
 
 
+def test_a_local_answer_ends_at_its_cap_and_says_so() -> None:
+    """Eine Antwort, die nicht endet, hält die Karte nicht mehr zehn Minuten.
+
+    gemma4:12b lief am 25.09.2026 in 14 400 Token ohne Ende. ``num_predict``
+    begrenzt die einzelne Antwort, und was dort abbricht, kommt als
+    abgeschnitten zurück — die Sitzung meldet es dann mit Befund, statt einen
+    halben Satz für eine Antwort zu nehmen.
+    """
+    from app.core.backends.llm import OLLAMA_ANSWER_TOKENS, OLLAMA_CONTEXT_TOKENS
+
+    cut = ollama_answer() | {"done_reason": "length", "eval_count": OLLAMA_ANSWER_TOKENS}
+    transport = Recorder(cut)
+    reply = OllamaBackend(transport=transport).complete([Message(role="user", content="Halter")])
+
+    _url, _headers, payload = transport.calls[0]
+    assert payload["options"]["num_predict"] == OLLAMA_ANSWER_TOKENS
+    assert OLLAMA_ANSWER_TOKENS < OLLAMA_CONTEXT_TOKENS, "die Grenze muss vor dem Fenster greifen"
+    assert reply.truncated, "eine Antwort an der Grenze ist unvollständig"
+
+
 def test_the_local_window_fits_on_a_sixteen_gigabyte_card_with_room_for_the_scene() -> None:
     """RM-185: 32 768 Token, und davon der größte Teil für Steckbrief und Verlauf.
 
@@ -401,25 +421,72 @@ def test_the_local_model_stays_loaded_between_two_steps() -> None:
     assert OLLAMA_KEEP_ALIVE, "eine leere Angabe ist dasselbe wie keine"
 
 
-def test_a_local_ollama_session_always_unloads_its_model() -> None:
-    """Erfolg oder Ausnahme: außerhalb eines Agentenzugs bleiben keine 15 GB belegt."""
+_UNLOAD = {"messages": [], "stream": False, "keep_alive": 0}
+
+
+def test_a_local_ollama_session_keeps_its_model_warm_until_the_card_is_needed() -> None:
+    """Nach dem Zug bleibt das Modell geladen — bis ein anderer Lauf die Spur betritt.
+
+    Bis zum 25.09.2026 entlud jeder Zug sein Modell, und jeder nächste zahlte
+    den Modellstart neu (RM-081). Jetzt bleibt es warm; ein ComfyUI-Lauf (er
+    nennt kein Modell) gibt es frei, bevor er rechnet, ein zweiter Zug desselben
+    Modells nicht. Auch nach einer Ausnahme: Das Modell ist dann genauso
+    geladen, und der nächste Versuch braucht es.
+    """
+    from app.core.backends import resources
+
     transport = Recorder(ollama_answer())
     backend = OllamaBackend(transport=transport)
 
     with backend.resource_session(None):
         backend.complete([Message(role="user", content="Halter")])
+    assert transport.calls[-1][2].get("keep_alive") != 0, "nach dem Zug wird nicht entladen"
+    assert resources.warm_holders() == (backend.holder,)
 
-    assert transport.calls[-1][2] == {
-        "model": backend.model,
-        "messages": [],
-        "stream": False,
-        "keep_alive": 0,
-    }
+    with backend.resource_session(None):
+        pass
+    assert all(call[2].get("keep_alive") != 0 for call in transport.calls), (
+        "derselbe Zug desselben Modells behält es geladen"
+    )
+
+    with resources.local_ai_slot("http://127.0.0.1:8188", None):
+        assert transport.calls[-1][2] == {"model": backend.model, **_UNLOAD}
+        assert resources.warm_holders() == ()
 
     with pytest.raises(RuntimeError), backend.resource_session(None):
         raise RuntimeError("gezielter Testfehler")
+    assert resources.warm_holders() == (backend.holder,)
 
-    assert transport.calls[-1][2]["keep_alive"] == 0
+
+def test_a_model_on_the_processor_is_unloaded_after_the_turn() -> None:
+    """Auf dem Prozessor belegt das Modell den Arbeitsspeicher der Anwendung."""
+    from app.core.backends import resources
+
+    transport = Recorder(ollama_answer())
+    backend = OllamaBackend(transport=transport)
+    backend.on_gpu = False
+
+    with backend.resource_session(None):
+        pass
+
+    assert transport.calls[-1][2] == {"model": backend.model, **_UNLOAD}
+    assert resources.warm_holders() == ()
+
+
+def test_another_model_frees_the_card_of_the_warm_one() -> None:
+    """Zwei Modelle nebeneinander auf der Karte sind der Absturz vom 01.09.2026."""
+    from app.core.backends import resources
+
+    first = Recorder(ollama_answer())
+    second = Recorder(ollama_answer())
+    one = OllamaBackend(model="erstes:1b", transport=first)
+    other = OllamaBackend(model="zweites:1b", transport=second)
+
+    with one.resource_session(None):
+        pass
+    with other.resource_session(None):
+        assert first.calls[-1][2] == {"model": "erstes:1b", **_UNLOAD}
+    assert resources.warm_holders() == (other.holder,)
 
 
 def test_a_remote_ollama_session_does_not_unload_a_shared_model() -> None:

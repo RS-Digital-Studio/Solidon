@@ -575,10 +575,15 @@ def _the_network_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     Das Original bleibt unter eigenem Namen erreichbar — für den Fall, dass ein
     Test genau die Liste braucht.
     """
-    from app.core.backends import llm
+    from app.core.backends import llm, resources
 
     monkeypatch.setattr(llm, "unpatched_backends", llm.backends, raising=False)
     monkeypatch.setattr(llm, "backends", tuple)
+    # **Und kein warm gehaltenes Modell reist in den nächsten Test** (seit dem
+    # 25.09.2026 bleibt ein Modell nach dem Zug geladen, ``resources.keep_warm``).
+    # Sonst gäbe der erste Test, der die Spur betritt, das Modell eines
+    # Vorgängers frei — über dessen Attrappe.
+    monkeypatch.setattr(resources, "_WARM", {})
 
 
 @pytest.fixture(autouse=True)

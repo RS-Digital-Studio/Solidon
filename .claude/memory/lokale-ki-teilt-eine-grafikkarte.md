@@ -18,8 +18,13 @@ Darum gelten drei Verträge zusammen:
 
 - Lokale Ollama- und ComfyUI-Läufe aus Solidon werden über eine gemeinsame
   Schwerlastspur serialisiert.
-- Ollama bleibt nur zwischen den Schritten eines Agentenvorschlags warm und
-  wird danach auch bei Fehler oder Abbruch mit `keep_alive: 0` entladen.
+- Ollama bleibt nach dem Zug warm (`resources.keep_warm`, seit 25.09.2026,
+  Robert: Warmhalten gewünscht), **aber nie neben einem anderen Modell**: Wer
+  die Spur betritt, gibt jedes fremde warm gehaltene Modell mit
+  `keep_alive: 0` frei (`local_ai_slot(..., holder=)`); ComfyUI nennt keinen
+  Halter und räumt die Karte ganz. Bis dahin wurde nach jedem Zug entladen,
+  und jeder Zug zahlte 3 bis 314 s Modellstart. Auf dem Prozessor wird weiter
+  sofort entladen.
 - ComfyUI erhält beim Abbruch die konkrete `prompt_id`; wartende Aufträge
   werden über `/queue` gelöscht, laufende gezielt über `/interrupt` beendet.
   Nach dem Auftrag gibt `/free` den lokalen Modellcache frei.
