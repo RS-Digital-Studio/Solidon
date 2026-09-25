@@ -444,3 +444,67 @@ def test_a_standing_fraction_gives_no_remaining_time(monkeypatch: pytest.MonkeyP
     finally:
         timing.end()
         timing.deleteLater()
+
+
+def test_a_new_part_of_the_run_is_estimated_from_its_own_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Uhr zählt den ganzen Vorgang, die Restzeit nur die laufende Teilrechnung.
+
+    Ein Vorgang besteht aus Rechnungen, die ihren Anteil je von vorn zählen —
+    Einleseplan, Auswertung, darin Normalisieren und Erkennung. Aus dem Anfang
+    des Vorgangs hochgerechnet, machten eine Minute Einleseplan und zwei
+    Sekunden Auswertung bei zehn Prozent „noch etwa 9 min" daraus
+    (62 s · 0,9 / 0,1), obwohl die Auswertung nach zwanzig Sekunden fertig ist.
+    """
+    import app.ui.loading as loading_module
+
+    now = [100.0]
+    monkeypatch.setattr(loading_module.time, "monotonic", lambda: now[0])
+    timing = ProgressTiming()
+    try:
+        timing.begin()
+        now[0] = 159.0
+        timing.step(0.95, "Modelldateien lesen")
+        now[0] = 160.0
+        timing.step(0.02, "Laden")
+        now[0] = 162.0
+        timing.step(0.1, "Laden")
+
+        assert timing.remaining() == "", "zwei Sekunden der neuen Rechnung sagen nichts"
+        assert timing.time_text == "Verstrichen: 1 min 2 s", "die Uhr des Vorgangs läuft weiter"
+
+        now[0] = 170.0
+        timing.step(0.5, "Laden")
+        assert timing.remaining() == tr("noch etwa {seconds} s").format(seconds=10)
+        assert timing.time_text == "Verstrichen: 1 min 10 s  ·  noch etwa 10 s"
+    finally:
+        timing.end()
+        timing.deleteLater()
+
+
+def test_an_answer_before_a_new_part_does_not_shorten_its_estimate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Antwortzeit vor dem Wechsel gehört der vorigen Teilrechnung, nicht der neuen."""
+    import app.ui.loading as loading_module
+
+    now = [100.0]
+    monkeypatch.setattr(loading_module.time, "monotonic", lambda: now[0])
+    timing = ProgressTiming()
+    try:
+        timing.begin()
+        timing.step(0.5, "Laden")
+        timing.set_waiting(True)
+        now[0] = 160.0
+        timing.step(0.1, "Merkmale erkennen")
+        now[0] = 165.0
+        timing.set_waiting(False)
+        now[0] = 185.0
+        timing.step(0.5, "Merkmale erkennen")
+
+        # 25 s seit dem Wechsel, davon 5 s Antwort: 20 s gerechnet für die Hälfte.
+        assert timing.remaining() == tr("noch etwa {seconds} s").format(seconds=20)
+    finally:
+        timing.end()
+        timing.deleteLater()

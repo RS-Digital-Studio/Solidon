@@ -158,6 +158,12 @@ class ProgressTiming(QObject):
     Der Sekundentakt gehört zum laufenden Vorgang, unabhängig von dessen
     Fortschrittsmeldungen und von Animationen. Antwortzeit zählt als
     verstrichen, geht aber nicht in die Hochrechnung der Rechenzeit ein.
+
+    **Die verstrichene Zeit gehört dem Vorgang, die Restschätzung der
+    Teilrechnung.** Ein Vorgang besteht aus mehreren Rechnungen, die ihren
+    Anteil je von vorn zählen — Einleseplan, Auswertung, darin das
+    Normalisieren und die Erkennung. Beginnt der Anteil wieder kleiner, beginnt
+    eine neue, und hochgerechnet wird nur ihre eigene Zeit.
     """
 
     changed = Signal()
@@ -170,8 +176,16 @@ class ProgressTiming(QObject):
         self.time_text = ""
         self._waiting_since: float | None = None
         self._waited = 0.0
+        """Antwortzeit der laufenden Teilrechnung — sie zählt nicht als Rechenzeit."""
         self._moved_at: float | None = None
         """Wann der gemessene Anteil zuletzt gewachsen ist."""
+        self._counted_from: float | None = None
+        """Seit wann der Anteil der laufenden Teilrechnung zählt.
+
+        Grundlage der Restschätzung. Aus dem Anfang des ganzen Vorgangs
+        hochgerechnet, ergäben eine Minute Einleseplan und danach zehn Prozent
+        Auswertung „noch etwa 9 min" (60 s · 0,9 / 0,1), gleich wie kurz die
+        Auswertung wirklich ist."""
         self._tick = QTimer(self)
         self._tick.setInterval(1000)
         self._tick.timeout.connect(self.refresh)
@@ -186,6 +200,7 @@ class ProgressTiming(QObject):
         self._waiting_since = None
         self._waited = 0.0
         self._moved_at = self.started
+        self._counted_from = self.started
         self._tick.start()
         self.refresh()
 
@@ -193,8 +208,16 @@ class ProgressTiming(QObject):
         """Übernimmt gemessenen Fortschritt; die Uhr erfindet keinen Anteil."""
         self.begin()
         fraction = max(0.0, min(1.0, fraction))
+        now = time.monotonic()
         if fraction > self.fraction:
-            self._moved_at = time.monotonic()
+            self._moved_at = now
+        elif fraction < self.fraction:
+            # Ein kleinerer Anteil beginnt eine neue Teilrechnung: Ihre
+            # Schätzung zählt ab hier, die verstrichene Zeit läuft weiter.
+            self._counted_from = now
+            self._waited = 0.0
+            if self._waiting_since is not None:
+                self._waiting_since = now
         self.fraction = fraction
         self.detail = detail
         self.refresh()
@@ -223,7 +246,8 @@ class ProgressTiming(QObject):
         moment = time.monotonic() if now is None else now
         if self._moved_at is not None and moment - self._moved_at > ESTIMATE_AFTER_S:
             return ""
-        return remaining_time(self.started + self._waited, self.fraction, now=now)
+        counted_from = self.started if self._counted_from is None else self._counted_from
+        return remaining_time(counted_from + self._waited, self.fraction, now=now)
 
     def refresh(self) -> None:
         """Meldet dieselbe Zeitangabe auch ohne neue Fortschrittsmessung."""
@@ -242,6 +266,7 @@ class ProgressTiming(QObject):
         self.time_text = ""
         self._waiting_since = None
         self._waited = 0.0
+        self._counted_from = None
 
 
 class LoadingVeil(QWidget):

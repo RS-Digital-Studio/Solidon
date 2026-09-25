@@ -2034,6 +2034,10 @@ class MainWindow(QMainWindow):
         self._map_cancelled_for: tuple[str | None, Any] | None = None
         """Körper und Kartenart, deren Rechnung der Kunde abgebrochen hat —
         gehalten bis zur nächsten anderen Wahl (``_on_map_changed``)."""
+        self._map_shown_for: ObjectId | None = None
+        """Der Körper der Karte, die :meth:`_show_map` zuletzt gezeigt hat —
+        für eine Legende, die ohne neue Karte neu gebaut wird
+        (:meth:`_refresh_map_units`)."""
         self._slice_cache: SliceResult | None = None
         self._slice_key: tuple[Any, ...] | None = None
         self._slice_worker: Any = None
@@ -13376,7 +13380,7 @@ class MainWindow(QMainWindow):
                 finding, message=self._deviation_witness_text(analysis.witness_distance)
             )
         if target is not None:
-            self._show_finding_at(finding, entry, target)
+            self._show_finding_at(str(finding.message), entry, target)
 
     def _deviation_witness_text(self, distance: float) -> Any:
         """Die Ortsmarke nennt die echte untere Punktdistanz, keine obere Facettenschranke."""
@@ -13384,8 +13388,21 @@ class MainWindow(QMainWindow):
 
     def _show_map(self, analysis: Any, object_id: ObjectId) -> None:
         self.viewport.set_analysis_map(analysis, object_id if analysis else None)
+        self._map_shown_for = object_id if analysis else None
+        self._show_map_legend(analysis, object_id)
+
+    def _show_map_legend(self, analysis: Any, object_id: ObjectId | None) -> None:
+        """Legende und Ausweg der gezeigten Karte — beim Zeigen und bei jedem Neubau.
+
+        Die Legende baut ihre Felder bei jedem Aufruf neu und nimmt den
+        angebotenen Knopf mit (``MapLegend.show_map``). Wer sie neu baut,
+        bietet den Ausweg deshalb wieder an: Beim Wechsel der Anzeigeeinheit
+        fehlte dieser Schritt, und *Reparieren* verschwand von der
+        Netzfehlerkarte, an der sich nichts geändert hatte.
+        """
         self.analysis_bar.show_legend(analysis, self._feature_names(), self.viewport.body_colour())
-        self._offer_repair_on_the_map(analysis, object_id)
+        if object_id:
+            self._offer_repair_on_the_map(analysis, object_id)
 
     def _offer_repair_on_the_map(self, analysis: Any, object_id: ObjectId) -> None:
         """Von der Netzfehlerkarte führt ein Knopf zur Reparatur (Bedienweg B1).
@@ -13459,7 +13476,7 @@ class MainWindow(QMainWindow):
         analysis = self.viewport.analysis_map
         if analysis is None:
             return
-        self.analysis_bar.show_legend(analysis, self._feature_names(), self.viewport.body_colour())
+        self._show_map_legend(analysis, self._map_shown_for)
         mark = self.viewport.finding_mark()
         if (
             analysis.kind == "deviation"
@@ -13708,12 +13725,12 @@ class MainWindow(QMainWindow):
             return
         target = None if kind == "deviation" else maps.location_of(entry, finding)
         if target is not None:
-            self._show_finding_at(finding, entry, target)
+            self._show_finding_at(str(finding.message), entry, target)
         if kind is not None:
             self._analysis_map(kind, entry.id, finding=finding if target is None else None)
 
-    def _show_finding_at(self, finding: Finding, entry: Any, target: Vec3) -> None:
-        """Zur Stelle eines Befunds fliegen und sie markieren.
+    def _show_finding_at(self, title: str, entry: Any, target: Vec3) -> None:
+        """Zur Stelle eines Befunds fliegen und sie markieren, mit ``title`` an der Marke.
 
         **Aus der Szene in die Ansicht, einmal.** Der Ort eines Befunds liegt in
         Szenenkoordinaten; im Bild steht der Körper auf seiner Platte und
@@ -13725,6 +13742,12 @@ class MainWindow(QMainWindow):
         Die Marke ist nötig, weil der Flug allein die Frage nicht beantwortet:
         Wo eine Analysekarte läuft, färbt sie die Stelle ein; wo keine läuft,
         stand der Kunde vor einem Teil, das überall gleich aussieht (§18.4).
+
+        **Ein Weg für jeden Knopf dorthin.** Der Klick auf die Berichtszeile,
+        die nachgeholte Kartenstelle und *Stelle zeigen*
+        (:meth:`_show_error_place`) kommen hierher; *Stelle zeigen* rechnete
+        Abstand und Marke vorher je für sich — ein Zwilling, der beim nächsten
+        Nachbessern des Abstands die eine Stelle vergessen hätte.
         """
         self._finding_awaiting_map = None
         shown = self.viewport.view_point_of(target, entry.id)
@@ -13743,7 +13766,7 @@ class MainWindow(QMainWindow):
         # ein Teil jeder Größe. Gemessen werden konnte es nur an einem: Über
         # alle elf Beispiele trägt genau ein Befund einen Ort.
         self.viewport.fly_to(shown, reach=1.4 * float(entry.mesh.bounds.diagonal))
-        self.viewport.mark_finding(target, str(finding.message), entry.id)
+        self.viewport.mark_finding(target, title, entry.id)
 
     def _show_layers_after_error(self, error: AppError) -> None:
         """*Schichten ansehen*: den Körper des Befunds wählen und die Schichtansicht öffnen.
@@ -13777,12 +13800,9 @@ class MainWindow(QMainWindow):
         self.object_tree.select_object(entry.id)
         if self.object_tree.selected() != entry.id:
             return
-        target = (float(place[0]), float(place[1]), float(place[2]))
-        self._finding_awaiting_map = None
         self.viewport.clear_finding_mark()
-        shown = self.viewport.view_point_of(target, entry.id)
-        self.viewport.fly_to(shown, reach=1.4 * float(entry.mesh.bounds.diagonal))
-        self.viewport.mark_finding(target, str(error.title), entry.id)
+        target = (float(place[0]), float(place[1]), float(place[2]))
+        self._show_finding_at(str(error.title), entry, target)
 
     # --- der Agent (§26) --------------------------------------------------------
 
@@ -15547,9 +15567,7 @@ class MainWindow(QMainWindow):
         self._offer_feature_cancel()
         self._follow_chamfer_sides(op, params)
 
-    def _hand_the_measures_over(
-        self, op: str, params: Mapping[str, Any], *, editing: bool = False
-    ) -> bool:
+    def _hand_the_measures_over(self, op: str, params: Mapping[str, Any]) -> bool:
         """Der Zwilling im Merkmalfenster übernimmt die Maßgruppe im Bild.
 
         An einem Loch stehen *Bohrung ändern* und *Zum Langloch ziehen*
@@ -15588,7 +15606,7 @@ class MainWindow(QMainWindow):
         while focused is not None and name is None:
             name = focused.property(FIELD_PROPERTY)
             focused = focused.parentWidget()
-        self._place_from_feature_panel(op, dict(params), editing=editing)
+        self._place_from_feature_panel(op, dict(params))
         running = self._quiet_placement
         if isinstance(name, str) and running is not None and running.spec_of().name == op:
             window_ref = weakref.ref(self)
@@ -19117,6 +19135,13 @@ class MainWindow(QMainWindow):
         # Stapel tut nichts.
         if QApplication.overrideCursor() is not None:
             QApplication.restoreOverrideCursor()
+        # **Der Name geht mit dem Fehlschlag.** Sonst nahm der nächste
+        # gelungene Import ihn als seinen: Ein Download danach setzte die
+        # Datei, die nicht zu lesen war, in „Zuletzt geöffnet", und eine
+        # Datei danach meldete „Geladen:" mit dem Namen des gescheiterten
+        # Downloads (``_on_import_finished``).
+        self._pending_import = None
+        self._pending_download = ""
         self.status_message.setText(self._announcement)
         show_error(error, self)
 
@@ -21664,9 +21689,15 @@ class MainWindow(QMainWindow):
         self._cancel_gcode()
         self._cancel_export()
         self._cancel_sculpt_check()
+        # Die Kernauskünfte eines Merkmalklicks will niemand mehr sehen. Ohne
+        # Kennung verfällt ihre Antwort wie die eines abgelösten Klicks
+        # (``_answers_arrived``, ``_answers_failed``); sonst baute das
+        # schließende Fenster das Merkmalfenster auf, begann eine neue
+        # Platzierung samt Arbeiter und meldete einen Fehler, den niemand liest.
+        answers, self._answers_worker = self._answers_worker, None
         workers = (
             self._map_worker,
-            self._answers_worker,
+            answers,
             self._slice_worker,
             self._print_findings.worker,
             self._update_worker,

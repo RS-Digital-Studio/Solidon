@@ -1849,14 +1849,15 @@ class GfxRenderer(Renderer):
             # Auswahlfenster 120 ms halb gelegt auf dem Schirm — ohne
             # Überschrift, die Zeilen gequetscht —, und die Ansicht zeigte die
             # neue Auswahl ein Bild vor dem Fenster, das zu ihr gehört. Sechs
-            # solche Bilder waren es je Klick. ``update()`` stellt das Bild in
-            # Qts Malrunde, die nach den Layouts kommt: ein Bild je
-            # Ereignisrunde, in dem alles zueinander passt. Wer es sofort
-            # braucht, ruft :meth:`render_now`. Vor dem ersten Anzeigen bleibt
-            # der Wunsch stehen, und der erste Aufbau zeichnet ihn.
+            # solche Bilder waren es je Klick. Die Bestellung allein genügt:
+            # Der Taktgeber von rendercanvas liest sie und bittet Qt über
+            # ``QWidget.update`` um die Malrunde, die nach den Layouts kommt —
+            # ein Bild je Ereignisrunde, in dem alles zueinander passt.
+            # ``QRenderWidget.update`` selbst ist nur eine zweite Bestellung
+            # (``request_draw``), deshalb steht es hier nicht. Wer das Bild
+            # sofort braucht, ruft :meth:`render_now`. Vor dem ersten Anzeigen
+            # bleibt der Wunsch stehen, und der erste Aufbau zeichnet ihn.
             self._canvas.request_draw(self._draw)
-            if self.widget.isVisible():
-                self.widget.update()
             return
         self._draw()
 

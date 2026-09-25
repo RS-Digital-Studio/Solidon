@@ -3379,3 +3379,25 @@ def test_original_bore_fields_keep_expressions_through_depth_and_hidden_position
         owner.deleteLater()
         panel.close()
         panel.deleteLater()
+
+
+def test_the_waiting_panel_already_shows_its_feature(qt_app: QApplication) -> None:
+    """Das wartende Fenster zeigt sein Merkmal — und nicht zugleich „Kein Merkmal gewählt“.
+
+    Bis zur Antwort des Arbeiters stehen Name und Maß (RM-232). Das Fenster
+    galt dabei als leer (``feature_id`` war ``None``): Ein Aufbau der
+    Menüeinträge in dieser Zeit stellte über ``say_nothing_is_chosen`` den
+    Leersatz unter den Namen, und die Prüfung nach einer neuen Auswertung
+    übersah ein verschwundenes Merkmal.
+    """
+    load_operations()
+    mesh = plate()
+    found = features.detect(mesh)
+    hole_id = next(key for key, value in found.items() if value.kind == "hole")
+    panel = FeaturePanel()
+
+    panel.show_pending(hole_id, found[hole_id])
+    panel.say_nothing_is_chosen(True)
+
+    assert panel.feature_id == hole_id
+    assert panel._empty.isHidden(), "der Leersatz stand unter dem gewählten Merkmal"

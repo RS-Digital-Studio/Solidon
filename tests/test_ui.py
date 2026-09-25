@@ -18193,3 +18193,116 @@ def test_a_link_without_a_browser_lands_on_the_clipboard(
     window._reveal_export_folder()
     assert clipboard.text() == str(tmp_path)
     assert "Zwischenablage" in window.status_message.text()
+
+
+def test_a_failed_import_hands_no_name_to_the_next_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein gescheiterter Import vererbt seinen Namen nicht an den nächsten gelungenen.
+
+    ``_on_import_finished`` nimmt Datei und Download aus zwei Merkern, die der
+    Anfang eines Imports setzt; der Fehlerweg räumte sie nicht ab. Ein
+    Download nach einer unlesbaren Datei setzte diese in „Zuletzt geöffnet",
+    eine Datei nach einem abgewiesenen Download meldete „Geladen:" mit dessen
+    Namen. Stellvertreter statt Fenster: Gefragt ist der Weg über die zwei
+    Slots, nicht ein Dialog.
+    """
+    from types import SimpleNamespace
+
+    shown: list[Any] = []
+    remembered: list[Any] = []
+    said: list[str] = []
+    monkeypatch.setattr(
+        main_window_module, "show_error", lambda error, *_a, **_k: shown.append(error)
+    )
+    monkeypatch.setattr(
+        main_window_module,
+        "QApplication",
+        SimpleNamespace(overrideCursor=lambda: None, restoreOverrideCursor=lambda: None),
+    )
+    view = SimpleNamespace(
+        _pending_import=Path("verschoben.stl"),
+        _pending_download="abgewiesen.3mf",
+        _announcement="Bereit",
+        status_message=SimpleNamespace(setText=lambda _text: None),
+        settings=SimpleNamespace(remember=remembered.append),
+        _store_settings=lambda: None,
+        _show_recent=lambda: None,
+        _show_start_screen=lambda _shown: None,
+        announce=said.append,
+    )
+
+    MainWindow._on_import_failed(view, errors.UserError(title="Diese Datei ließ sich nicht lesen."))
+    MainWindow._on_import_finished(view, True)
+
+    assert shown, "der Fehler kam nicht an"
+    assert remembered == [], "die unlesbare Datei landete in „Zuletzt geöffnet“"
+    assert not any("abgewiesen.3mf" in text for text in said), said
+
+
+def test_show_the_place_flies_and_marks_like_the_report_click() -> None:
+    """*Stelle zeigen* am Befund fliegt und markiert wie der Klick auf seine Zeile.
+
+    Beide Wege rechneten Abstand und Marke je für sich; ein Nachbessern am
+    einen hätte den anderen nicht erreicht (Zwilling, ``zwillinge.md``). Der
+    Knopf geht jetzt über ``_show_finding_at``, und hier stehen beide
+    nebeneinander: derselbe Ansichtspunkt, derselbe Abstand, dieselbe Marke am
+    selben Körper — nur der Titel ist der des Fehlers.
+    """
+    from types import SimpleNamespace
+
+    calls: list[tuple[str, Any]] = []
+    entry = SimpleNamespace(id="obj_1", mesh=SimpleNamespace(bounds=SimpleNamespace(diagonal=50.0)))
+    viewport = SimpleNamespace(
+        view_point_of=lambda point, object_id: (point[0] + 100.0, point[1], point[2]),
+        fly_to=lambda point, reach: calls.append(("fly", (point, reach))),
+        mark_finding=lambda point, title, object_id: calls.append(
+            ("mark", (point, title, object_id))
+        ),
+        clear_finding_mark=lambda: calls.append(("clear", None)),
+    )
+    selected = {"id": ""}
+    view = SimpleNamespace(
+        viewport=viewport,
+        object_tree=SimpleNamespace(
+            select_object=lambda object_id: selected.update(id=object_id),
+            selected=lambda: selected["id"],
+        ),
+        _quiet_command_allowed=lambda: True,
+        _entry_of=lambda _error: entry,
+        _finding_awaiting_map=object(),
+    )
+    view._show_finding_at = lambda *args: MainWindow._show_finding_at(view, *args)  # type: ignore[arg-type]
+    place = (1.0, 2.0, 3.0)
+
+    MainWindow._show_error_place(view, errors.AppError(title="Offen", values={"location": place}))  # type: ignore[arg-type]
+    by_button = [call for call in calls if call[0] != "clear"]
+    calls.clear()
+    MainWindow._show_finding_at(view, "Offen", entry, place)  # type: ignore[arg-type]
+
+    assert by_button == calls
+    assert calls == [("fly", ((101.0, 2.0, 3.0), 70.0)), ("mark", (place, "Offen", "obj_1"))]
+    assert view._finding_awaiting_map is None
+
+
+def test_a_closing_window_takes_no_late_feature_answer(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Kernauskünfte eines Merkmalklicks verfallen, wenn das Fenster zugeht (RM-232).
+
+    Ihre Antwort kommt über ``_answers_arrived`` und ``_answers_failed`` an,
+    und beide fragten anders als die Karten nicht nach dem Schließen: Ein
+    schließendes Fenster baute das Merkmalfenster auf, begann eine Platzierung
+    samt Arbeiter und meldete einen Fehler, den niemand mehr liest.
+    ``wait_for_workers`` lässt den Arbeiter los wie die Karte ihren Auftrag.
+    """
+    from app.ui.main_window import _FeatureAnswersWorker
+
+    reported: list[object] = []
+    monkeypatch.setattr(window, "_on_error", reported.append)
+    late = _FeatureAnswersWorker(lambda: None)  # nie gestartet: gefragt ist nur die Kennung
+    window._answers_worker = late
+
+    window.wait_for_workers(0)
+    window._answers_failed(late, "Traceback …")
+
+    assert window._answers_worker is None
+    assert reported == [], "das schließende Fenster meldete einen Fehler, den niemand liest"

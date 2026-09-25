@@ -7041,3 +7041,48 @@ def test_the_defect_map_offers_the_repair_and_says_when_there_is_nothing(
     repaired = ops[-1].outputs[0]
     window._show_map(crossing, repaired)
     assert window.analysis_bar.legend.action is None, "gleich nach dem Reparieren kein Ring"
+
+
+def test_the_repair_offer_outlives_a_change_of_the_display_unit() -> None:
+    """Ein Neubau der Legende ohne neue Karte bietet *Reparieren* wieder an.
+
+    ``MapLegend.show_map`` baut die Felder neu und nimmt den Knopf mit. Der
+    Einheitenwechsel baut die Legende über ``_refresh_map_units`` neu, und
+    dort fehlte der Ausweg: An derselben Netzfehlerkarte war *Reparieren*
+    nach einem Wechsel auf Zoll verschwunden. Stellvertreter statt Fenster:
+    Gefragt ist, ob beide Wege denselben Ausweg anbieten.
+    """
+    offered: list[tuple[Any, str]] = []
+    legends: list[tuple[Any, ...]] = []
+    viewport = SimpleNamespace(analysis_map=None, body_colour=lambda: "#b0b4ba")
+    viewport.set_analysis_map = lambda analysis, _object: setattr(
+        viewport, "analysis_map", analysis
+    )
+    viewport.finding_mark = lambda: None
+    view = SimpleNamespace(
+        viewport=viewport,
+        analysis_bar=SimpleNamespace(show_legend=lambda *args: legends.append(args)),
+        _feature_names=dict,
+        _offer_repair_on_the_map=lambda analysis, object_id: offered.append((analysis, object_id)),
+    )
+    view._show_map_legend = lambda analysis, object_id: MainWindow._show_map_legend(
+        view,  # type: ignore[arg-type]
+        analysis,
+        object_id,
+    )
+    defects = maps.AnalysisMap(
+        kind="defects",
+        title="Netzfehler",
+        values=(3.0, 0.0),
+        unit="",
+        low=0.0,
+        high=4.0,
+        categories=tuple(str(level) for level in maps.DEFECT_LEVELS),
+    )
+
+    MainWindow._show_map(view, defects, "obj_1")  # type: ignore[arg-type]
+    assert offered == [(defects, "obj_1")]
+
+    MainWindow._refresh_map_units(view)  # type: ignore[arg-type]
+    assert len(legends) == 2, "die Legende wurde nicht neu gebaut"
+    assert offered == [(defects, "obj_1"), (defects, "obj_1")], "der Knopf ging mit der Einheit"

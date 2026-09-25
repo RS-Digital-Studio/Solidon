@@ -418,7 +418,7 @@ def test_the_twin_field_in_the_panel_takes_over_the_measures_in_the_view(
     values = {"at_feature": feature, "slot_length": 18.0, "slot_angle": 0.0}
 
     assert MainWindow._hand_the_measures_over(state, armed, values) is handed
-    assert started == ([(armed, values, {"editing": False})] if handed else [])
+    assert started == ([(armed, values, {})] if handed else [])
 
     # **Tab bleibt im Fenster** (Review 24.09.2026): Wer mit der Tastatur in
     # das Feld des Zwillings geht, holt es nicht ins Bild.

@@ -6495,8 +6495,16 @@ class FeaturePanel(QWidget):
         dahin steht, was schon feststeht, und ein Satz, dass der Rest kommt.
         Eine Zeile zum Klicken gibt es in diesem Zustand nicht — was sie
         anböte, weiß noch niemand.
+
+        **Das Merkmal steht trotzdem schon hier** (:attr:`feature_id`). Ohne
+        es galt das Fenster als leer: Ein ``say_nothing_is_chosen`` aus einem
+        Aufbau der Menüeinträge in dieser Zeit stellte „Kein Merkmal gewählt"
+        unter den Namen des gewählten Merkmals, und die Prüfung nach einer
+        neuen Auswertung (``MainWindow._show_scene``) übersah ein Merkmal,
+        das es nicht mehr gibt.
         """
         self.clear()
+        self._feature_id = feature_id
         _set_shown(self._empty, False)
         heading = QLabel(f"{cavity_name(feature_id, feature, ())}  ·  {feature_measure(feature)}")
         heading.setWordWrap(True)
