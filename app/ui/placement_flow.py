@@ -438,6 +438,31 @@ _worker_copies: OrderedDict[int, tuple[weakref.ref[Any], Any, threading.Lock]] =
 _worker_copies_lock = threading.Lock()
 
 
+def _drop_dead_copies() -> None:
+    """Die Kopien gestorbener Szenennetze vergessen — nur unter :data:`_worker_copies_lock`."""
+    for key in [key for key, held in _worker_copies.items() if held[0]() is None]:
+        del _worker_copies[key]
+
+
+def _forget_dead_copies(_dead: Any) -> None:
+    """Der Nachruf eines Szenennetzes: seine Kopie geht mit — ohne auf das Schloss zu warten.
+
+    **Ein trimesh-Netz stirbt nur in der Speicherbereinigung.** Es hängt in
+    Zyklen (``ray``, ``nearest`` und ``visual`` halten es fest), und die
+    Bereinigung läuft an jeder beliebigen Zuteilung — auch in einem
+    Abschnitt, der das Schloss gerade hält, im selben Faden. Dort auf das
+    Schloss zu warten hieße auf sich selbst warten: Das Fenster stünde für
+    immer. Ist das Schloss belegt, räumt der nächste Zugriff unter ihm die
+    tote Kopie weg (:func:`for_a_worker`).
+    """
+    if not _worker_copies_lock.acquire(blocking=False):
+        return
+    try:
+        _drop_dead_copies()
+    finally:
+        _worker_copies_lock.release()
+
+
 def for_a_worker(mesh: Any) -> Any:
     """Eine eigene Kopie eines Szenennetzes für den Nebenthread.
 
@@ -489,18 +514,14 @@ def for_a_worker(mesh: Any) -> Any:
     raw = source.raw
     key = id(raw)
     with _worker_copies_lock:
+        _drop_dead_copies()
         held = _worker_copies.get(key)
         if held is not None and held[0]() is raw:
             _worker_copies.move_to_end(key)
             return held[1]
     copy = source.replacing(raw.copy(include_cache=True))
-
-    def forget(_dead: Any, key: int = key) -> None:
-        with _worker_copies_lock:
-            _worker_copies.pop(key, None)
-
     with _worker_copies_lock:
-        _worker_copies[key] = (weakref.ref(raw, forget), copy, threading.Lock())
+        _worker_copies[key] = (weakref.ref(raw, _forget_dead_copies), copy, threading.Lock())
         while len(_worker_copies) > WORKER_COPIES_KEPT:
             _worker_copies.popitem(last=False)
     return copy
@@ -3042,13 +3063,17 @@ class PlacementFlow(QObject):
 
     def _set_values(self) -> bool:
         """Nur die vorberechnete Raumlage übertragen; im Qt-Thread keine Geometrie bauen."""
-        if (
-            self._change_op is not None
-            and self._measure_group is not None
-            and (not self._position_edited or self._measure_without_surface)
+        if self._measure_group is not None and (
+            self._measure_without_surface
+            or (self._change_op is not None and not self._position_edited)
         ):
             # Die Mündung ist ein Maßbezug. Sie ersetzt weder ursprüngliche
             # Ausdrücke noch die Ankerlage einer durchgehenden Bohrung.
+            #
+            # **Und ohne Fläche stehen die Werte im Träger** — auch an einem
+            # gewählten Loch ohne Verlaufsschritt (:meth:`_no_seat_at_feature`).
+            # Dort verlangte diese Stelle eine Fläche, die es nicht gibt, und
+            # *Übernehmen* der Maßgruppe verfiel ohne ein Wort.
             return True
         if self._surface is None or self._tool_context is None:
             return False

@@ -71,6 +71,52 @@ def test_a_feature_without_a_carrier_face_never_aims_with_the_pointer(quiet):
     assert drawn == (["actions", "redraw"] if quiet else [])
 
 
+def test_the_measures_without_a_carrier_face_can_be_accepted():
+    """Ohne Trägerfläche übernimmt *Übernehmen* der Maßgruppe, was in den Feldern steht.
+
+    Findet ein gewähltes Loch ohne Verlaufsschritt keine ebene Fläche (eine
+    Bohrung in einer gewölbten Wand, die Magnettasche am Schaber), bleiben
+    die Felder die Bedienung, und die Maßgruppe sagt „Die ursprünglichen
+    Maße bleiben bearbeitbar". Der Knopf war frei, aber ``_set_values``
+    verlangte eine Fläche, und der Klick verfiel ohne ein Wort — nur ein
+    Verlaufsschritt kam durch. Übernommen werden die Werte des Trägers, wie
+    beim Verlaufsschritt ohne belegten Sitz.
+    """
+    from app.ui.placement_flow import QuietHost
+
+    taken: list[dict[str, object]] = []
+    host = QuietHost(
+        {"at_feature": "hole_1", "diameter": 7.0},
+        lambda values: taken.append(dict(values)) is None,
+    )
+    flow = SimpleNamespace(
+        dialog=host,
+        window=SimpleNamespace(),
+        session=SimpleNamespace(result_current=True),
+        active=True,
+        _disposed=False,
+        _accept_pending=False,
+        _reference_pick=None,
+        _interpret_active_fields=lambda: True,
+        _display_ready=lambda: True,
+        _surface=None,
+        _measure_without_surface=True,
+        _measure_group=object(),
+        _change_op=None,
+        _position_edited=False,
+        _tool_busy=False,
+        _tool_context=None,
+        _deepening=False,
+        _slot_drag_takes_the_accept=lambda: False,
+        deepens=lambda: False,
+    )
+    flow._set_values = lambda: PlacementFlow._set_values(flow)  # type: ignore[arg-type]
+
+    PlacementFlow._accept_values(flow, allow_pending=True)  # type: ignore[arg-type]
+
+    assert taken == [{"at_feature": "hole_1", "diameter": 7.0}], "der Klick kam an"
+
+
 def test_a_moved_draft_seats_its_mouth_on_the_face_and_not_beside_it():
     """Ein Entwurf mit versetzter Mitte beginnt in der Ebene seiner Fläche.
 
@@ -1605,6 +1651,46 @@ def test_workers_on_a_shared_copy_take_turns():
     unshared = MeshData.of(trimesh.creation.box((5.0, 5.0, 5.0)))
     compute = lambda: None  # noqa: E731
     assert module.on_the_copy(unshared, compute) is compute, "eine fremde Kopie braucht keins"
+
+
+def test_a_mesh_dying_under_the_copy_lock_never_stops_its_thread(monkeypatch):
+    """Die Speicherbereinigung unter dem Schloss der Arbeiterkopien hält keinen Faden an.
+
+    Ein trimesh-Netz hängt in Zyklen (``ray``, ``nearest``, ``visual`` halten
+    es fest) und stirbt deshalb nur in der Speicherbereinigung — und die läuft
+    an jeder Zuteilung, auch unter dem Schloss, das ``for_a_worker`` und
+    ``on_the_copy`` gerade halten. Der Nachruf des Netzes wartete dort auf
+    dasselbe Schloss im selben Faden: Das Fenster stand für immer. Hier steht
+    ``gc.collect()`` für die Zuteilung, die die Bereinigung auslöst; die
+    tote Kopie räumt danach der nächste Zugriff weg.
+    """
+    import gc
+    import threading
+    from collections import OrderedDict
+
+    from app.ui import placement_flow as module
+
+    # Eine eigene Ablage mit eigenem Schloss: Hinge der Faden doch, bliebe das
+    # Schloss der Anwendung frei, und der übrige Lauf rechnete weiter.
+    monkeypatch.setattr(module, "_worker_copies", OrderedDict())
+    monkeypatch.setattr(module, "_worker_copies_lock", threading.Lock())
+    other = MeshData.of(trimesh.creation.box((5.0, 5.0, 5.0)))
+    dying = MeshData.of(trimesh.creation.box((10.0, 10.0, 10.0)))
+    module.for_a_worker(dying)
+    key = id(dying.raw)
+    del dying
+
+    def collect_under_the_lock() -> None:
+        with module._worker_copies_lock:
+            gc.collect()
+
+    runner = threading.Thread(target=collect_under_the_lock, daemon=True)
+    runner.start()
+    runner.join(10.0)
+
+    assert not runner.is_alive(), "der Nachruf wartete auf das Schloss seines eigenen Fadens"
+    module.for_a_worker(other)
+    assert key not in module._worker_copies, "der nächste Zugriff räumt die tote Kopie weg"
 
 
 def test_the_line_check_skips_far_strokes_and_answers_as_before():

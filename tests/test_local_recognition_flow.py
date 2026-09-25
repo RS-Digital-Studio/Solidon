@@ -374,6 +374,43 @@ def test_surface_picker_position_is_clamped_and_drawn_in_logical_pixels():
     assert positions == [(88, -12)]
 
 
+def test_ending_the_surface_picker_gives_the_keyboard_back_to_the_view():
+    """Nach der Stellenwahl gehört die Tastatur wieder der Ansicht.
+
+    Das Fadenkreuz hält den Fokus, solange gewählt wird. Verbirgt Qt ein
+    fokussiertes Widget, gibt es den Fokus dem nächsten der Kette — das
+    Kreuz entsteht spät und steht dort zuletzt, also bekam ihn das erste
+    Feld des Fensters, und die Pfeiltasten flogen nach Escape oder Enter
+    nicht mehr die Kamera. Gefragt wird das Fenster, nicht ``hasFocus``:
+    In einem inaktiven Fenster merkt es sich das Kreuz trotzdem.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.viewport import Viewport
+
+    happened: list[str] = []
+    holder: dict[str, object] = {}
+    mark = SimpleNamespace(
+        hide=lambda: happened.append("Kreuz verborgen"),
+        window=lambda: SimpleNamespace(focusWidget=lambda: holder["focus"]),
+    )
+    view = SimpleNamespace(
+        _surface_picker=lambda x, y: None,
+        _surface_picker_mark=mark,
+        setFocus=lambda _reason: happened.append("Ansicht fokussiert"),
+    )
+    holder["focus"] = mark
+
+    Viewport.set_surface_picker(view, None)
+
+    assert happened == ["Ansicht fokussiert", "Kreuz verborgen"], "erst zurück, dann verbergen"
+    assert view._surface_picker is None
+    happened.clear()
+    holder["focus"] = object()
+    Viewport.set_surface_picker(view, None)
+    assert happened == ["Kreuz verborgen"], "ein Fokus anderswo bleibt, wo er ist"
+
+
 def test_keyboard_surface_choice_opens_local_recognition_and_cancel_hides_the_crosshair(
     local_window, qt_app, monkeypatch
 ):

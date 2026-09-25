@@ -7072,8 +7072,17 @@ class Viewport(QWidget):
         """Eine ausstehende Oberflächenauswahl auch mit der Tastatur bedienen."""
         self._surface_picker = callback
         if callback is None:
-            if self._surface_picker_mark is not None:
-                self._surface_picker_mark.hide()
+            mark = self._surface_picker_mark
+            if mark is not None:
+                # **Die Tastatur kehrt in die Ansicht zurück.** Verborgen gäbe
+                # Qt den Fokus des Kreuzes dem nächsten Feld der Kette weiter,
+                # und das Kreuz entsteht spät: Es bekam das erste Feld des
+                # Fensters, und die Pfeiltasten flogen nicht mehr die Kamera.
+                # Gefragt wird das Fenster und nicht ``hasFocus`` — ein
+                # inaktives Fenster merkt sich das Kreuz trotzdem.
+                if mark.window().focusWidget() is mark:
+                    self.setFocus(Qt.FocusReason.OtherFocusReason)
+                mark.hide()
             return
         if self.renderer is None:
             return
