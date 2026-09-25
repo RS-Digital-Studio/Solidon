@@ -239,6 +239,11 @@ Fehlerbericht (§33).
   bedienbar
 - Über 10 s: zusätzlich eine Schätzung, wenn möglich
 
+Beim Laden und Auswerten zeigt die Oberfläche außerdem die verstrichene Zeit,
+sekündlich aktualisiert, auch wenn der Fortschrittsanteil gerade unverändert
+bleibt. Verstrichene Zeit und geschätzte Restzeit bleiben unterscheidbar;
+deaktivierte Animationen schalten die Zeitangabe nicht ab.
+
 Die letzte gültige Darstellung bleibt sichtbar (§15.3) — nie ein leerer
 Viewport, nie ein blockierendes Fenster.
 

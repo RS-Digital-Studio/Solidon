@@ -30,6 +30,20 @@ gelten weiter und laden zusätzlich.
 | darüber | Fortschritt mit **Abbrechen**, Oberfläche bedienbar |
 | über 10 s | zusätzlich eine Schätzung, wenn möglich |
 
+**Verstrichene Zeit ist keine Restschätzung.** `loading.ProgressTiming` führt
+einen Sekundentakt für Schleier und Statuszeile gemeinsam; er läuft auch bei
+unverändertem Fortschrittsanteil und ausgeschalteten Animationen. Eine
+Kernfrage lässt die verstrichene Zeit weiterzählen, unterdrückt die
+Restschätzung und zählt ihre Antwortzeit nicht als Rechenzeit. Der Takt endet
+mit Ergebnis, Abbruch, Fehler oder Fensterabbau; Animationen melden keine
+Zeitänderungen an Bildschirmleser.
+Leere Fortschrittsmeldungen können nur eine Teilrechnung beenden, etwa das
+Normalisieren vor der Erkennung. Solange `Session.busy` gilt, bleiben die
+Uhr des Gesamtvorgangs und die laufende Statusanzeige bestehen.
+**Steht der Anteil länger still als die Schwelle der Schätzung, rechnet die
+Uhr nichts hoch** (`ProgressTiming.remaining`); die Antwortzeit einer Frage
+zählt dabei nicht als Stillstand.
+
 Die letzte gültige Darstellung bleibt sichtbar — nie ein leerer Viewport, nie
 ein blockierendes Fenster. Lange Rechnungen laufen nicht im Qt-Hauptthread.
 

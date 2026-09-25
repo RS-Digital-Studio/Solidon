@@ -16,6 +16,7 @@ import sys
 import textwrap
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -25,12 +26,185 @@ from PySide6.QtWidgets import QApplication
 
 from app.i18n import tr
 from app.ui import app as app_module
-from app.ui.loading import ESTIMATE_AFTER_S, ESTIMATE_FROM, LoadingVeil
+from app.ui.loading import (
+    ESTIMATE_AFTER_S,
+    ESTIMATE_FROM,
+    LoadingVeil,
+    ProgressTiming,
+    elapsed_time,
+    remaining_time,
+)
 
 
 def _running(veil: LoadingVeil, seconds: float) -> None:
     """Tut so, als liefe der Lauf schon so lange."""
-    veil._started = time.monotonic() - seconds
+    veil.timing.started = time.monotonic() - seconds
+
+
+@pytest.mark.parametrize(
+    ("passed", "expected"),
+    [
+        (0.0, "Verstrichen: 0 s"),
+        (59.9, "Verstrichen: 59 s"),
+        (60.0, "Verstrichen: 1 min 0 s"),
+        (125.1, "Verstrichen: 2 min 5 s"),
+    ],
+)
+def test_elapsed_time_keeps_seconds_in_long_runs(passed: float, expected: str) -> None:
+    """Minuten verdrängen die Sekunden nicht: Stillstand bleibt sichtbar."""
+    assert elapsed_time(100.0, now=100.0 + passed) == expected
+
+
+def test_elapsed_and_remaining_use_the_same_instant() -> None:
+    """Die Uhr geht ohne neuen Anteil weiter, die Restzeit bleibt eine Schätzung."""
+    assert elapsed_time(100.0, now=130.0) == "Verstrichen: 30 s"
+    assert remaining_time(100.0, 0.5, now=130.0) == "noch etwa 30 s"
+    assert elapsed_time(100.0, now=131.0) == "Verstrichen: 31 s"
+    assert remaining_time(100.0, 0.5, now=131.0) == "noch etwa 30 s"
+
+
+def test_late_completion_does_not_restart_the_clock() -> None:
+    """Ein nachgereichtes leeres Fortschrittssignal bleibt nach Laufende still."""
+    from app.ui.main_window import MainWindow
+
+    timing = ProgressTiming()
+    states: list[dict[str, object]] = []
+    receiver = SimpleNamespace(
+        session=SimpleNamespace(busy=False),
+        _run_timing=timing,
+        _announcement="Bereit",
+        _set_progress_state=lambda _owner, **changes: states.append(changes),
+    )
+    MainWindow._on_progress(receiver, 1.0, "")
+    assert timing.started is None
+    assert not timing._tick.isActive()
+    assert states[-1]["text"] == "Bereit"
+
+
+def test_import_keeps_its_clock_between_normalising_and_recognition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Phasenabschluss vor der Erkennung beendet weder Ladezeit noch Status."""
+    import app.ui.loading as loading_module
+    from app.ui.main_window import MainWindow
+
+    now = [100.0]
+    monkeypatch.setattr(loading_module.time, "monotonic", lambda: now[0])
+    timing = ProgressTiming()
+    # Die Signalfolge wird ohne Ereignisschleife gefahren. Der echte Takt
+    # gehört zu den gesonderten Fensterprüfungen in dieser Datei.
+    monkeypatch.setattr(timing._tick, "start", lambda: None)
+    states: list[dict[str, object]] = []
+    receiver = SimpleNamespace(
+        session=SimpleNamespace(busy=True),
+        _run_timing=timing,
+        _announcement="Bereit",
+        _set_progress_state=lambda _owner, **changes: states.append(changes),
+    )
+    timing.begin()
+    MainWindow._on_progress(receiver, 0.5, "Normalisieren")
+    now[0] = 120.0
+    MainWindow._on_progress(receiver, 1.0, "")
+    assert timing.started == pytest.approx(100.0)
+    assert states == [], "Ein Phasenabschluss darf nicht Bereit anzeigen"
+
+    now[0] = 130.0
+    MainWindow._on_progress(receiver, 0.0, "Merkmale erkennen")
+    MainWindow._refresh_evaluation_progress(receiver)
+    assert timing.started == pytest.approx(100.0)
+    assert states[-1]["text"] == "Merkmale erkennen  ·  0 %  ·  Verstrichen: 30 s"
+    assert states[-1]["accessible_description"] == states[-1]["text"]
+
+    receiver.session.busy = False
+    timing.end()
+    MainWindow._on_progress(receiver, 1.0, "")
+    assert timing.started is None
+    assert not timing._tick.isActive()
+    assert states[-1]["text"] == "Bereit"
+
+
+def test_clock_runs_without_animation_or_new_progress(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Sekundentakt malt weiter, wenn Anteil und Drucksymbol stillstehen."""
+    import app.ui.loading as loading_module
+
+    monkeypatch.setattr(loading_module, "animations_enabled", lambda: False)
+    now = [100.0]
+    monkeypatch.setattr(loading_module.time, "monotonic", lambda: now[0])
+    veil = LoadingVeil()
+    try:
+        veil.begin("Modell wird gelesen")
+        veil.step(0.5, "Merkmale werden erkannt")
+        assert not veil._frames.isActive()
+        assert veil.timing._tick.isActive()
+        assert veil.timing._tick.interval() == 1000
+        now[0] = 173.0
+        veil.timing._tick.timeout.emit()
+        assert "Verstrichen: 1 min 13 s" in veil.accessibleDescription()
+        assert veil._target == pytest.approx(0.5)
+        assert veil._shown == pytest.approx(0.5)
+        veil.end()
+        assert not veil.timing._tick.isActive()
+    finally:
+        veil.end()
+        veil.deleteLater()
+
+
+def test_hiding_the_veil_does_not_stop_the_shared_clock(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Statuszeile braucht die Uhr weiterhin, wenn ein Modell sichtbar ist."""
+    import app.ui.loading as loading_module
+
+    now = [100.0]
+    monkeypatch.setattr(loading_module.time, "monotonic", lambda: now[0])
+    timing = ProgressTiming()
+    veil = LoadingVeil(timing=timing)
+    try:
+        timing.begin()
+        veil.begin("Modell wird gelesen", at_once=True)
+        veil.step(0.5, "Merkmale werden erkannt")
+        veil.end()
+        now[0] = 135.0
+        timing._tick.timeout.emit()
+        assert not veil.showing
+        assert timing._tick.isActive()
+        assert timing.time_text == "Verstrichen: 35 s  ·  noch etwa 35 s"
+        assert timing.time_text in veil.accessibleDescription()
+    finally:
+        timing.end()
+        veil.deleteLater()
+        timing.deleteLater()
+
+
+def test_answer_time_is_elapsed_but_not_estimated_work(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine lange Antwortzeit behauptet weder Fortschritt noch zusätzliche Rechenzeit."""
+    import app.ui.loading as loading_module
+
+    now = [100.0]
+    monkeypatch.setattr(loading_module.time, "monotonic", lambda: now[0])
+    timing = ProgressTiming()
+    try:
+        timing.begin()
+        now[0] = 120.0
+        timing.step(0.5, "Merkmale werden erkannt")
+        timing.set_waiting(True)
+        now[0] = 180.0
+        timing._tick.timeout.emit()
+        assert timing.time_text == "Verstrichen: 1 min 20 s"
+        assert timing.fraction == pytest.approx(0.5)
+        timing.set_waiting(False)
+        assert timing.time_text == "Verstrichen: 1 min 20 s  ·  noch etwa 20 s"
+        timing.end()
+        timing.begin()
+        assert timing.time_text == "Verstrichen: 0 s"
+        assert timing.fraction == pytest.approx(0.0)
+    finally:
+        timing.end()
+        timing.deleteLater()
 
 
 def test_the_first_seconds_get_no_estimate(qt_app: QApplication) -> None:
@@ -250,3 +424,23 @@ def test_the_log_says_when_the_application_ended() -> None:
     umfeld = quelle[start : start + 200]
     assert "_log.info" in umfeld, "und zwar als Zeile, nicht als stiller Rückruf"
     assert "ended" in umfeld, "die Zeile sagt, dass es zu Ende ging"
+
+
+def test_a_standing_fraction_gives_no_remaining_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Steht der Anteil länger still als die Schwelle der Schätzung, gibt es keine
+    Restzeit (Review B8) — sonst stand neben „geschätzt 2 bis 13 min“ ein „noch etwa
+    1 min“, das mit der Uhr wuchs."""
+    import app.ui.loading as loading_module
+
+    now = [100.0]
+    monkeypatch.setattr(loading_module.time, "monotonic", lambda: now[0])
+    timing = ProgressTiming()
+    try:
+        timing.step(0.2, "Merkmale erkennen")
+        now[0] = 115.0
+        timing.step(0.4, "Merkmale erkennen")
+        assert timing.remaining(now=120.0)
+        assert timing.remaining(now=126.0) == ""
+    finally:
+        timing.end()
+        timing.deleteLater()

@@ -3,6 +3,12 @@
 PySide6. Darf `app.core` benutzen, die Gegenrichtung ist verboten (§8). Die
 Oberfläche rechnet keine Geometrie und ändert keine — **sie ruft Ops auf.**
 
+`loading.ProgressTiming` führt für eine Auswertung genau eine Uhr und einen
+Zeittext. Statuszeile und Ladeschleier lesen denselben Sekundentakt, auch ohne
+neue Fortschrittsmeldung oder Animation. Der Schleier kann verschwinden,
+während die Uhr für die Statuszeile weiterläuft. Antwortzeit einer Kernfrage
+zählt als verstrichen, aber nicht als Rechenzeit der Restschätzung.
+
 Nachlaufende Befunde erhalten die gewählte Zeile des Prüfberichts über die
 gemeinsame Befundidentität, auch wenn neue Fehler die Reihenfolge ändern.
 Nur wenn die bisherige Zeile entfällt oder ausgefiltert wird, gilt die

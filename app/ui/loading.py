@@ -32,12 +32,12 @@ from __future__ import annotations
 
 import time
 
-from PySide6.QtCore import QByteArray, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QByteArray, QObject, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QPushButton, QWidget
 
-from app.i18n import tr
+from app.i18n import format_decimal, tr
 from app.ui.icons import application_icon_source, paint_printed_mark
 from app.ui.motion import EASING, FRAME_MS, animations_enabled
 from app.ui.style import ROOMY, WIDE
@@ -104,12 +104,14 @@ BLOCK_HEIGHT = (
     + RAIL_HEIGHT
     + ROOMY
     + DETAIL_HEIGHT
+    + ROOMY
+    + DETAIL_HEIGHT
     + GAP
     + BUTTON_HEIGHT
 )
 
 
-def remaining_time(started: float | None, fraction: float) -> str:
+def remaining_time(started: float | None, fraction: float, *, now: float | None = None) -> str:
     """Was von einer Wartezeit noch aussteht — leer, solange es geraten wäre.
 
     §2.8 verlangt die Schätzung erst über zehn Sekunden, und das ist keine
@@ -128,7 +130,7 @@ def remaining_time(started: float | None, fraction: float) -> str:
     """
     if started is None or fraction < ESTIMATE_FROM:
         return ""
-    passed = time.monotonic() - started
+    passed = (time.monotonic() if now is None else now) - started
     if passed < ESTIMATE_AFTER_S:
         return ""
     left = passed * (1.0 - fraction) / fraction
@@ -137,6 +139,109 @@ def remaining_time(started: float | None, fraction: float) -> str:
     if left < 90.0:
         return tr("noch etwa {seconds} s").format(seconds=round(left / 5.0) * 5)
     return tr("noch etwa {minutes} min").format(minutes=round(left / 60.0))
+
+
+def elapsed_time(started: float, *, now: float | None = None) -> str:
+    """Verstrichene Zeit bleibt auch bei langen Läufen sekundengenau lesbar."""
+    passed = (time.monotonic() if now is None else now) - started
+    minutes, seconds = divmod(int(max(0.0, passed)), 60)
+    if minutes:
+        return tr("Verstrichen: {minutes} min {seconds} s").format(
+            minutes=format_decimal(minutes, 0), seconds=format_decimal(seconds, 0)
+        )
+    return tr("Verstrichen: {seconds} s").format(seconds=format_decimal(seconds, 0))
+
+
+class ProgressTiming(QObject):
+    """Eine Uhr und eine Zeitangabe für Schleier und Statuszeile.
+
+    Der Sekundentakt gehört zum laufenden Vorgang, unabhängig von dessen
+    Fortschrittsmeldungen und von Animationen. Antwortzeit zählt als
+    verstrichen, geht aber nicht in die Hochrechnung der Rechenzeit ein.
+    """
+
+    changed = Signal()
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.started: float | None = None
+        self.fraction = 0.0
+        self.detail = ""
+        self.time_text = ""
+        self._waiting_since: float | None = None
+        self._waited = 0.0
+        self._moved_at: float | None = None
+        """Wann der gemessene Anteil zuletzt gewachsen ist."""
+        self._tick = QTimer(self)
+        self._tick.setInterval(1000)
+        self._tick.timeout.connect(self.refresh)
+
+    def begin(self) -> None:
+        """Startet eine neue Uhr; ein laufender Vorgang behält seinen Anfang."""
+        if self.started is not None:
+            return
+        self.started = time.monotonic()
+        self.fraction = 0.0
+        self.detail = ""
+        self._waiting_since = None
+        self._waited = 0.0
+        self._moved_at = self.started
+        self._tick.start()
+        self.refresh()
+
+    def step(self, fraction: float, detail: str) -> None:
+        """Übernimmt gemessenen Fortschritt; die Uhr erfindet keinen Anteil."""
+        self.begin()
+        fraction = max(0.0, min(1.0, fraction))
+        if fraction > self.fraction:
+            self._moved_at = time.monotonic()
+        self.fraction = fraction
+        self.detail = detail
+        self.refresh()
+
+    def set_waiting(self, waiting: bool) -> None:
+        """Eine Kernfrage hält die Restschätzung an, nicht die verstrichene Zeit."""
+        now = time.monotonic()
+        if waiting and self._waiting_since is None:
+            self._waiting_since = now
+        elif not waiting and self._waiting_since is not None:
+            self._waited += now - self._waiting_since
+            # Die Antwortzeit ist kein Stillstand der Rechnung.
+            if self._moved_at is not None:
+                self._moved_at += now - self._waiting_since
+            self._waiting_since = None
+        self.refresh()
+
+    def remaining(self, *, now: float | None = None) -> str:
+        """Nur tatsächlich gerechnete Zeit wird auf den Rest hochgerechnet."""
+        if self.started is None or self._waiting_since is not None:
+            return ""
+        # **Steht der Anteil still, gibt es nichts hochzurechnen.** Eine lange
+        # Phase ohne Messung — die bestätigte Vollerkennung, die nur ihre
+        # Spanne nennt — schriebe sonst neben „geschätzt 2 bis 13 min“ ein
+        # „noch etwa 1 min“, das mit der Uhr wächst (Review 24.09.2026).
+        moment = time.monotonic() if now is None else now
+        if self._moved_at is not None and moment - self._moved_at > ESTIMATE_AFTER_S:
+            return ""
+        return remaining_time(self.started + self._waited, self.fraction, now=now)
+
+    def refresh(self) -> None:
+        """Meldet dieselbe Zeitangabe auch ohne neue Fortschrittsmessung."""
+        if self.started is None:
+            return
+        now = time.monotonic()
+        elapsed = elapsed_time(self.started, now=now)
+        remaining = self.remaining(now=now)
+        self.time_text = f"{elapsed}  ·  {remaining}" if remaining else elapsed
+        self.changed.emit()
+
+    def end(self) -> None:
+        """Beendet den Takt auch bei Abbruch, Fehler und Fensterabbau."""
+        self._tick.stop()
+        self.started = None
+        self.time_text = ""
+        self._waiting_since = None
+        self._waited = 0.0
 
 
 class LoadingVeil(QWidget):
@@ -168,14 +273,17 @@ class LoadingVeil(QWidget):
     Gesendet nur, wenn sie wirklich stand: ``end`` läuft nach jedem Lauf,
     auch wenn die Verzögerung die Anzeige nie hat erscheinen lassen."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, parent: QWidget | None = None, *, timing: ProgressTiming | None = None
+    ) -> None:
         super().__init__(parent)
         self._renderer = QSvgRenderer(QByteArray(application_icon_source().encode("utf-8")))
         self._theme: Theme = "dark"
         self._headline = ""
         self._detail = ""
-        self._started: float | None = None
-        """Wann dieser Lauf begonnen hat — Grundlage der Restschätzung."""
+        self._owns_timing = timing is None
+        self.timing = timing if timing is not None else ProgressTiming(self)
+        self.timing.changed.connect(self._timing_changed)
         self._target = 0.0
         """Der gemessene Anteil — was die Zahl sagt."""
         self._shown = 0.0
@@ -243,7 +351,8 @@ class LoadingVeil(QWidget):
         self._detail = ""
         self._target = 0.0
         self._shown = 0.0
-        self._started = time.monotonic()
+        self.timing.begin()
+        self._timing_changed()
         if at_once or not animations_enabled():
             # Offscreen sieht niemand ein Aufblitzen, und ein Test, der auf
             # einen Zeitgeber wartet, prüft die Uhr statt das Verhalten.
@@ -253,12 +362,23 @@ class LoadingVeil(QWidget):
 
     def remaining(self) -> str:
         """Was von der Wartezeit noch aussteht — leer, solange es geraten wäre."""
-        return remaining_time(self._started, self._target)
+        return self.timing.remaining()
 
     def step(self, fraction: float, detail: str) -> None:
         """Wie weit der Lauf ist und woran er gerade rechnet."""
-        self._target = max(0.0, min(1.0, fraction))
-        self._detail = detail
+        self.timing.step(fraction, detail)
+
+    def _timing_changed(self) -> None:
+        """Zeittext und gemessener Anteil kommen gemeinsam von der laufenden Uhr."""
+        self._target = self.timing.fraction
+        self._detail = self.timing.detail
+        description = "  ·  ".join(
+            part
+            for part in (self._detail, f"{round(self._target * 100)} %", self.timing.time_text)
+            if part
+        )
+        if self.accessibleDescription() != description:
+            self.setAccessibleDescription(description)
         if not self.showing:
             return
         if not animations_enabled():
@@ -270,6 +390,8 @@ class LoadingVeil(QWidget):
         stood = self.showing
         self._delay.stop()
         self._frames.stop()
+        if self._owns_timing:
+            self.timing.end()
         self.hide()
         if stood:
             self.ended.emit()
@@ -351,6 +473,12 @@ class LoadingVeil(QWidget):
         self._paint_detail(
             painter, QRectF(column.left(), line, column.width(), DETAIL_HEIGHT), text
         )
+        line += DETAIL_HEIGHT + ROOMY
+        painter.drawText(
+            QRectF(column.left(), line, column.width(), DETAIL_HEIGHT),
+            int(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter),
+            self.timing.time_text,
+        )
         painter.end()
 
     def _paint_headline(self, painter: QPainter, area: QRectF) -> None:
@@ -388,12 +516,9 @@ class LoadingVeil(QWidget):
         faded.setAlpha(170)
         painter.setPen(faded)
 
-        # Prozent sagt, wie weit; die Schätzung sagt, wie lange noch. Beide
-        # rechts, damit der laufende Schritt links seine Breite behält.
-        left_over = self.remaining()
+        # Die eigene Zeitzeile hält den laufenden Schritt auch bei langen
+        # Zeitangaben lesbar. Prozent bleibt beim gemessenen Anteil.
         percent = f"{round(self._target * 100)} %"
-        if left_over:
-            percent = f"{percent}  ·  {left_over}"
         metrics = QFontMetrics(font)
         room = area.width() - metrics.horizontalAdvance(percent) - ROOMY
         painter.drawText(

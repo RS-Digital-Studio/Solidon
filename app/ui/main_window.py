@@ -289,7 +289,7 @@ from app.ui.labels import (
 from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
 from app.ui.leash import Worker, WorkerLeash, stop_watching_the_dying, wait_for_all, weak_slot
-from app.ui.loading import BAR_AFTER_MS, DELAY_MS, LoadingVeil, remaining_time
+from app.ui.loading import BAR_AFTER_MS, DELAY_MS, LoadingVeil, ProgressTiming, remaining_time
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
@@ -2112,11 +2112,7 @@ class MainWindow(QMainWindow):
         Prüfbericht ohne einen einzigen Fehler (Robert, 29.08.2026). Gemerkt
         wird deshalb die Herkunft, nicht der Text — ein Vergleich auf den Satz
         bräche beim ersten Sprachwechsel."""
-        self._run_started: float | None = None
-        """Wann der laufende Lauf begann — für die Restzeitschätzung (§2.8).
-
-        Am Fenster und nicht am Balken: Der Balken kennt nur seinen Wert,
-        und aus einem Wert allein lässt sich nicht hochrechnen."""
+        self._run_timing = ProgressTiming(self)
         self._split_fraction = 0.0
         self._split_progress_text = ""
         self._split_determinate = False
@@ -3097,7 +3093,8 @@ class MainWindow(QMainWindow):
         # unten rechts ist richtig, solange ein Modell im Bild steht — beim
         # Öffnen eines Projekts steht dort nichts, und dann war er die einzige
         # Auskunft an der Stelle, an der niemand hinsieht.
-        self.veil = LoadingVeil(self)
+        self.veil = LoadingVeil(self, timing=self._run_timing)
+        self._run_timing.changed.connect(self._refresh_evaluation_progress)
         self.veil.set_theme(self.settings.theme)
         # Der Schleier gehört ausschließlich zur Auswertung einer leeren Szene.
         # Ein Agentenzug oder Split kann parallel laufen und bleibt davon
@@ -19104,39 +19101,43 @@ class MainWindow(QMainWindow):
         self._action_notice.show_message(text, self.overlay.mapFromGlobal(origin))
 
     def _on_progress(self, fraction: float, text: str) -> None:
-        self.veil.step(fraction, text)
         if not text:
-            # Ein leerer Text heißt, der Lauf ist vorbei; dann kommt zurück,
-            # was zuletzt zu sagen war (§2.8).
-            self._run_started = None
+            # Auch Teilrechnungen schließen mit leerem Text ab: Nach dem
+            # Normalisieren folgen beim Import noch Merkmale und Rückfragen.
+            # Erst die ruhende Sitzung beendet den gesamten Vorgang.
+            if self.session.busy:
+                return
+            self._run_timing.end()
             self._set_progress_state(
                 "evaluation",
                 text=self._announcement,
                 value=int(fraction * 100),
             )
             return
-        if self._run_started is None:
-            self._run_started = time.monotonic()
-        # **Über zehn Sekunden zusätzlich eine Schätzung** — die Zeile aus der
-        # Wartezeit-Tabelle galt bisher für genau den Fall nicht, für den sie
-        # geschrieben ist. Sie hing am Ladeschleier, und den gibt es nur bei
-        # leerem Bild; bei jeder langen Rechnung an einem geladenen Modell
-        # stand hier Prozent ohne jede Zeitangabe.
-        left_over = remaining_time(self._run_started, fraction)
+        self._run_timing.step(fraction, text)
+
+    def _refresh_evaluation_progress(self) -> None:
+        """Der Sekundentakt aktualisiert auch einen unveränderten Fortschritt."""
+        timing = self._run_timing
+        if timing.started is None:
+            return
         # Der Prozentwert steht hier und nicht im Balken: dort wanderte der Rand
         # der Füllung unter der Zahl hindurch, und ab 60 % war sie mit 1,69
         # Kontrast auf Bernstein nicht mehr zu lesen. Hier hat sie einen ruhigen
         # Grund — und steht neben dem Schritt, den sie meint.
-        parts = [text, f"{round(fraction * 100)} %"]
-        if left_over:
-            parts.append(left_over)
-        display = "  ·  ".join(parts)
+        display = "  ·  ".join(
+            (
+                timing.detail or tr("Wird berechnet …"),
+                f"{round(timing.fraction * 100)} %",
+                timing.time_text,
+            )
+        )
         self._set_progress_state(
             "evaluation",
             text=display,
             minimum=0,
             maximum=100,
-            value=int(fraction * 100),
+            value=int(timing.fraction * 100),
             accessible_description=display,
         )
 
@@ -19197,6 +19198,10 @@ class MainWindow(QMainWindow):
             self._waiting = False
 
     def _on_busy(self, busy: bool) -> None:
+        if busy:
+            self._run_timing.begin()
+        else:
+            self._run_timing.end()
         if busy:
             # Eine Vorschau, die jetzt noch antwortet, gilt einem Stand, der
             # gerade abgelöst wird (``_preview_is_current`` verlangt Ruhe);
@@ -19431,6 +19436,7 @@ class MainWindow(QMainWindow):
             )
             self._ask_dialog = dialog
             self._ask_request = request
+            self._run_timing.set_waiting(True)
             self._ask_candidates = ()
             dialog.set_ready(not temporary)
             dialog.list.currentItemChanged.connect(
@@ -19476,6 +19482,7 @@ class MainWindow(QMainWindow):
                 if self._ask_dialog is dialog:
                     self._ask_dialog = None
                     self._ask_request = None
+                    self._run_timing.set_waiting(False)
                     if self._ask_candidates:
                         self.viewport.show_candidates()
                         self._ask_candidates = ()
@@ -21376,6 +21383,7 @@ class MainWindow(QMainWindow):
         # dasselbe eine Stufe größer: Wer das Fenster schließt, während
         # gerechnet wird, behält die Sanduhr über dem Schreibtisch.
         self._stop_waiting()
+        self._run_timing.end()
         # Die Sitzung überlebt dieses Fenster — in der Suite gehört sie einem
         # eigenen Fixture, im Betrieb kann ein zweites Fenster folgen. Solange
         # ihre Signale hierher zeigen, ruft das nächste Ergebnis in ein

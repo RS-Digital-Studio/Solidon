@@ -5618,6 +5618,8 @@
   "Verstanden": "Understood",
   "Versteifung": "Stiffening",
   "Versteifungsrippe": "Stiffening rib",
+  "Verstrichen: {minutes} min {seconds} s": "Elapsed: {minutes} min {seconds} s",
+  "Verstrichen: {seconds} s": "Elapsed: {seconds} s",
   "Versuchte Stufen": "Stages tried",
   "Vertieft": "Engraved",
   "Verwendung unklar — prüfen Sie die Ausdrücke im Projekt.": "Usage is unclear — check the expressions in the project.",
