@@ -4052,6 +4052,97 @@ def test_several_large_bodies_of_one_import_share_one_question(monkeypatch):
     assert single == {}
 
 
+def _import_of_two_large_bodies(document, monkeypatch) -> Registry:
+    """Ein Ladeschritt mit zwei Körpern über der (auf 1 gesenkten) Erkennungsgrenze."""
+    from importlib import import_module
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(module, "detect", lambda *_a, **_k: pytest.fail("no full recognition"))
+    own = Registry()
+
+    @register_op(
+        name="load",
+        title=_("Modell einfügen"),
+        category="import",
+        params=EmptyParams,
+        consumes=0,
+        produces=2,
+        doc=_("Testversion."),
+        registry=own,
+    )
+    def two_bodies(ctx: OpContext) -> OpResult:
+        return OpResult(
+            outputs=[
+                SceneObject(id="", name="Teil A", mesh=_small_body()),
+                SceneObject(id="", name="Teil B", mesh=_small_body()),
+            ]
+        )
+
+    History(document, own).apply(_("Laden"), [OperationDraft(op="load")])
+    return own
+
+
+def test_an_answer_outside_the_shared_recognition_question_stops_at_the_import(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die gemeinsame Frage eines Imports hält am Ladeschritt an, statt aus ``evaluate`` zu fliegen.
+
+    Die Frage für **einen** Körper steht im Fang um die Merkmalsbindung: Eine
+    Antwort, die keine der angebotenen ist, wird dort ein Befund am Schritt mit
+    den Antworten als Handlungen. Die gemeinsame Frage für mehrere große Körper
+    stand davor, ohne Fang — dieselbe Antwort flog als ``AmbiguityError`` aus
+    der Auswertung, und statt des Prüfberichts kam ein Absturz des Arbeiters.
+    """
+    registry = _import_of_two_large_bodies(document, monkeypatch)
+    asked: list[str] = []
+
+    def ask(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return "Vielleicht"
+
+    result = evaluate(document, profile, registry=registry, ask=ask)
+
+    assert len(asked) == 1 and "2 Modelle" in asked[0]
+    assert result.stopped_at == document.ops[0].id
+    (stop,) = [entry for entry in result.scene.report.findings if entry.severity == "error"]
+    assert stop.op_id == document.ops[0].id
+    assert "choose:Sofort laden" in {action.id for action in stop.suggestions}
+    assert not result.matches
+
+
+def test_nobody_to_ask_about_the_shared_recognition_asks_no_body_again(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne jemanden zum Fragen kommt die gemeinsame Frage einmal, nicht einmal mehr je Körper.
+
+    ``_ask_once_for_large_bodies`` verspricht dann: Jeder Körper lädt wie nach
+    einer Absage, **ohne Frage**, und nichts wird festgehalten. Tatsächlich
+    fragte danach jeder Körper noch einmal einzeln — die Kommandozeile ohne
+    Eingabe druckte so zu einer Baugruppe mit zwei großen Körpern drei Fragen,
+    von denen keine eine Antwort bekommen konnte.
+    """
+    from app.core.errors import UserError
+
+    registry = _import_of_two_large_bodies(document, monkeypatch)
+    asked: list[str] = []
+
+    def end_of_input(question: str, choices: list[str]) -> str:
+        # Wie ``cli.main.terminal_ask`` bei EOF.
+        asked.append(question)
+        raise UserError(title=_("Diese Frage braucht eine Antwort, und hier ist niemand."))
+
+    result = evaluate(document, profile, registry=registry, ask=end_of_input)
+
+    assert result.complete
+    assert len(asked) == 1 and "2 Modelle" in asked[0]
+    assert not result.matches, "eine Absage, die niemand gegeben hat, gehört nicht in den Stapel"
+    skipped = [
+        entry for entry in result.scene.report.findings if entry.code == "perceive.too_large"
+    ]
+    assert sorted(entry.object_id for entry in skipped) == ["obj_1", "obj_2"]
+
+
 def test_the_answer_to_the_recognition_question_is_told_at_once(monkeypatch, profile):
     """Die Antwort kommt sofort beim Aufrufer an, nicht erst mit dem Ergebnis (Review B18)."""
     from importlib import import_module

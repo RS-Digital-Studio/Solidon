@@ -876,16 +876,24 @@ def _evaluate(
         # **Eine Frage je Import, nicht je Körper** (§21.1): Ein 3MF mit mehreren
         # großen Körpern fragte nacheinander je Körper, jede Frage mit der
         # Schätzung nur dieses einen — die Summe erfuhr niemand.
-        decided: dict[ObjectId, bool] = {}
+        decided: dict[ObjectId, bool | None] = {}
         if operation.op == "load" and detect_features:
-            decided = _ask_once_for_large_bodies(
-                operation,
-                result.objects,
-                watched,
-                prepared_matches,
-                token,
-                on_recognition_answer,
-            )
+            try:
+                decided = _ask_once_for_large_bodies(
+                    operation,
+                    result.objects,
+                    watched,
+                    prepared_matches,
+                    token,
+                    on_recognition_answer,
+                )
+            except AppError as error:
+                # Derselbe Fang wie um die Frage eines einzelnen Körpers in
+                # ``_with_features``: Eine Antwort außerhalb der Wahl ist ein
+                # Befund am Ladeschritt, keine Ausnahme aus der Auswertung.
+                findings.append(_finding_from(error, operation))
+                stopped_at = operation.id
+                break
         for index, produced_object in enumerate(result.objects):
             object_id = operation.outputs[index]
             # §30: ob ein Körper Mesh oder B-Rep ist, folgt aus dem Körper,
@@ -2655,7 +2663,7 @@ def _ask_once_for_large_bodies(
     recorded: dict[str, Any],
     watch: CancelToken,
     on_recognition_answer: RecognitionAnswered | None,
-) -> dict[ObjectId, bool]:
+) -> dict[ObjectId, bool | None]:
     """Fragt einmal für alle großen Körper eines Imports, die noch keine Wahl haben.
 
     Nur bei zwei und mehr: Ein einzelner großer Körper bekommt die Frage mit
@@ -2663,7 +2671,10 @@ def _ask_once_for_large_bodies(
     der Dreiecke und damit der Zeit; der Arbeitsspeicher ebenso als Summe,
     denn der Import hält alle Netze zugleich. Wer niemanden fragen kann, lädt
     wie nach einer Absage und hält nichts fest — dieselbe Regel wie bei einem
-    Körper.
+    Körper. Die Körper stehen dann mit ``None`` in der Antwort: gefragt, aber
+    ohne Wahl. Ohne diesen Eintrag fragte jeder Körper danach noch einmal
+    einzeln, und die Kommandozeile ohne Eingabe druckte je Körper eine Frage,
+    die niemand beantworten konnte.
     """
     waiting: list[tuple[ObjectId, str, str]] = []
     triangles = 0
@@ -2698,8 +2709,8 @@ def _ask_once_for_large_bodies(
     if allowed is None:
         # Niemand zu fragen: Jeder Körper geht dann seinen eigenen Weg ohne
         # Frage und lädt wie nach einer Absage, ohne etwas festzuhalten.
-        return {}
-    decided: dict[ObjectId, bool] = {}
+        return {object_id: None for object_id, _key, _scope in waiting}
+    decided: dict[ObjectId, bool | None] = {}
     for object_id, key, scope in waiting:
         record = {"object_id": object_id, "scope": scope, "allowed": allowed}
         recorded[key] = record
@@ -2732,7 +2743,7 @@ def _with_features(
     detect_features: bool = True,
     recognition_of: dict[ObjectId, _BodyRecognition] | None = None,
     on_recognition_answer: RecognitionAnswered | None = None,
-    decided: Mapping[ObjectId, bool] | None = None,
+    decided: Mapping[ObjectId, bool | None] | None = None,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -2945,10 +2956,12 @@ def _with_features(
         if saved is not None:
             local_only = not saved
         elif decided is not None and entry.id in decided:
-            # Für alle großen Körper dieses Imports schon gefragt und festgehalten.
+            # Für alle großen Körper dieses Imports schon gefragt und
+            # festgehalten — oder ``None``: Es war niemand zu fragen, und
+            # gefragt wird nicht noch einmal je Körper.
             allowed = decided[entry.id]
-            local_only = not allowed
-            fresh = True
+            local_only = allowed is not True
+            fresh = allowed is not None
         elif local_only:
             if say is not None:
                 say(str(_("Merkmale erkennen")))
