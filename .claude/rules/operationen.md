@@ -526,7 +526,8 @@ mit `section.cut`, am exakten Körper mit `edit.clipped_bore_tool`. Und der
 exakte fragt danach die Nachbarwand wie das Netz (`_neighbour_bore_findings`).
 **Eine Senkung ohne Bohrung kippt genauso** — am Netz über `_turned_open_cone`
 (der gemessene Hohlraum, bloß gedreht, behielt auf einer Seite eine Decke),
-am exakten Körper über `_exact_rotate_cone`. **Und wer eine Senkung um ihren
+am exakten Körper über `_exact_rotate_cone`; eine spitze hat nur einen
+Randring, ihre Mündung, und `_bore_end_rims` nimmt ihn als äußeres Ende. **Und wer eine Senkung um ihren
 halben Öffnungswinkel oder mehr kippt, bekommt eine Absage** mit dem größten
 Winkel (`_sink_must_close`): Ihre Flanke liegt dann flacher als die Fläche, und
 das Werkzeug lief als Rinne bis an den Rand des Körpers — 671 mm³ aus einer

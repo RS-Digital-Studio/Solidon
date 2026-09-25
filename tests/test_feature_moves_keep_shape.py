@@ -334,6 +334,7 @@ RIBBED: dict[str, list[tuple[float, float]]] = {
     "gesenktes Sackloch": [(0, 2), (3, 2), (3, 10), (5, 12), (0, 12), (0, 2)],
     "vergrabene Senkung": [(0, 0), (3, 0), (3, 8), (5, 10), (0, 10), (0, 0)],
     "Senkung ohne Bohrung": [(0, 9), (1, 9), (4, 12), (0, 12), (0, 9)],
+    "spitze Senkung": [(0, 8), (4, 12), (0, 12), (0, 8)],
 }
 
 #: Gesenkte Durchgangsbohrung Ø 6 mit 90°-Senkung Ø 10 in der Platte 30 x 24 x 12.
@@ -429,7 +430,9 @@ def test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths(
     Wabenmuster lagen 314 von 714 mm³ in den Waben. Dazu meldeten beide Kerne
     „über die Kante", weil die Achse erst auf der Rippe aus dem Hüllquader trat.
     Eine Senkung ohne Bohrung behielt am Netz auf einer Seite eine Decke (das
-    Volumen stieg um 11 mm³) und schnitt am exakten Körper 80 mm³ aus der Rippe.
+    Volumen stieg um 11 mm³) und schnitt am exakten Körper 80 mm³ aus der Rippe;
+    eine spitze hat nur einen Randring, blieb deshalb ungekappt und schnitt an
+    beiden Kernen 82 mm³ aus ihr.
     """
     from app.core.geom.prepare import FEATURE_OVERLAP
     from tests.test_bore_depth import _evaluated

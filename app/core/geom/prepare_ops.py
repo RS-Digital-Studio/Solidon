@@ -5036,10 +5036,10 @@ def _old_rim_caps(
     ist. Beide Kerne fragen dasselbe — der exakte an seinem Netz-Zwilling.
     """
     rims = _bore_end_planes(body, feature, features, grows=True)
-    if len(rims) != 2:
+    if not rims:
         return ()
     if feature.params.get("through"):
-        return rims
+        return rims if len(rims) == 2 else ()
     if chain is not None and len(chain) >= 2:
         towards = np.asarray(chain[-1].params["centre"], dtype=float) - np.asarray(
             feature.params["centre"], dtype=float
@@ -8636,6 +8636,10 @@ def _bore_end_rims(
     leer, wo die Ränder keine zwei flachen Ringe sind.
 
     Die Luftprobe läuft nur mit ``grows``; ohne gilt jeder Ring als geschlossen.
+    **Ein Kegel darf einen einzigen Ring haben**: Eine spitze Senkung ohne
+    Bohrung läuft in ihre Spitze, und ihr Ring ist die Mündung am weiten Ende.
+    Ohne ihn blieb ihr gekipptes Werkzeug ungekappt und schnitt 82 mm³ aus einer
+    Rippe vor der Fläche (RM-220, 25.09.2026).
     """
     from app.core.perceive.relations import (
         boundary_rings,
@@ -8653,14 +8657,15 @@ def _bore_end_rims(
     # Verschweißen ändert hier weder Flächenreihenfolge noch Eingangsmodell.
     body = _welded(mesh)
     rings = boundary_rings(body, dataclasses.replace(feature, face_indices=tuple(indices)))
-    if rings is None or len(rings) != 2:
+    if rings is None or not (len(rings) == 2 or (len(rings) == 1 and feature.kind == "cone")):
         return ()
     points = np.asarray(body.vertices, dtype=np.float64)
     ends = [points[sorted({vertex for edge in ring for vertex in edge})] for ring in rings]
     axis = _feature_direction(feature)
     ends.sort(key=lambda ring: units.dot3(units.exact_centre(ring.tolist()), axis))
     found: list[_Rim] = []
-    for index, edge in enumerate(ends):
+    # Der einzelne Ring eines Kegels ist das äußere Ende, wie der zweite von zweien.
+    for index, edge in enumerate(ends, start=2 - len(ends)):
         # **Die Ebene eines Rands ohne LAPACK** (RM-187, 22.09.2026). Hier
         # stand ``np.linalg.svd``, und ihre letzte Stelle entschied über jede
         # Ecke des Werkzeugs: Accelerate auf dem Mac und OpenBLAS auf Windows
