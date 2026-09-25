@@ -290,7 +290,7 @@ def test_an_open_model_is_repaired_on_import() -> None:
     Bis dahin stand hier „nicht geschlossen, ‚Reparieren' schließt die offenen
     Stellen" — ein Hinweis auf einen Knopf, den der Kunde erst finden musste,
     und ein Modell, das bis dahin nicht druckbar war. Gemessen am Korpus
-    ``F:D Dateien`` (171 Dateien, 484 Körper): 118 Körper kamen offen herein
+    ``F:\\3D Dateien`` (171 Dateien, 484 Körper): 118 Körper kamen offen herein
     und gehen geschlossen heraus, keiner bleibt offen.
 
     ``broken_open.stl`` fehlen drei Flächen — eine fehlende Wand. Auch sie

@@ -165,6 +165,7 @@ Was nur diese Datei weiß:
 | Lässt ein Versetzen am Netz keine Narben zurück, verliert eine vergrabene Senkung kein Volumen, sagt ein Ring ohne Achse ab, und reist keine alte Dreiecksnummer mit? | `test_feature_moves_keep_shape.py` — vier Züge an der Lochplatte bleiben bei 796 Dreiecken, das Volumen der Senkung auf 10⁻⁹ |
 | Findet die vektorisierte Selbstdurchdringung dieselben Paare wie der skalare Weg? | `test_self_intersections.py` — `geom.intersections` je Paar gegen die skalare Rechnung, deckungsgleiche Dreiecke derselben Ebene, zwölf Treffer zweier Quader |
 | Prüft das Einlesen Dichtheit und Kennzahlen einmal und reicht sie warm weiter? | `test_ingest_figures.py` — `is_watertight` und `volume` zählen ihre Aufrufe |
+| Kommt ein Backslash in einem Pfad als Backslash an statt als Steuerzeichen? | `test_source_escapes.py` — jedes Oktal-Escape außer `\0` und jedes rohe Steuerzeichen in einer nicht rohen Zeichenkette unter `app/`, `tests/`, `tools/`, `website/`, `packaging/`; Hex-Escapes sind die gewollte Form |
 
 ## Der Korpus
 
