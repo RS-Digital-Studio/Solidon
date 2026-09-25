@@ -1,0 +1,28 @@
+<stdin>:16: SyntaxWarning: "\." is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\."? A raw string is also an option.
+<stdin>:16: SyntaxWarning: "\c" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\c"? A raw string is also an option.
+Function                                               called...
+                                                                1    0.000    0.088  F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:115(get_cached)
+                                                                1    0.001    0.695  F:\3D Druck\app\core\geom\mesh.py:582(face_components)
+                                                                1    0.040    0.148  F:\3D Druck\app\core\geom\repair.py:320(_shell_volumes)
+Function                                           called...
+                                                            1    0.001    0.302  F:\3D Druck\app\core\geom\mesh.py:582(face_components)
+                                                            1    0.039    0.114  F:\3D Druck\app\core\geom\repair.py:320(_shell_volumes)
+Function                                               called...
+                                                                3    0.000    0.112  F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:115(get_cached)
+                                                                1    0.061    0.102  F:\3D Druck\app\core\geom\repair.py:1823(_unit_normals)
+                                                                1    0.007    0.939  F:\3D Druck\app\core\geom\repair.py:2043(_flat_fills)
+Function                                              called...
+                                                               1    0.004    1.056  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1155(merge_vertices)
+                                                               1    0.003    0.089  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1401(unique_faces)
+                                                               1    0.000    0.197  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1803(nondegenerate_faces
+                                                               1    0.000    0.053  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:3256(copy)
+                                                               1    0.001    3.158  F:\3D Druck\app\core\geom\repair.py:3028(repair)
+                                                               2    0.001    0.398  F:\3D Druck\app\core\geom\repair.py:3607(is_closed)
+                                                               3    0.000    0.095  {built-in method builtins.getattr}
+Function                                                called...
+                                                                 1    0.000    0.111  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:3256(copy)
+                                                                 1    0.001    0.412  F:\3D Druck\app\core\geom\repair.py:215(wind_consistently)
+                                                                 1    0.000    0.445  F:\3D Druck\app\core\geom\repair.py:398(turn_shells_outward)
+Function                                                           called...
+                                                                            1    0.089    0.130  F:\3D Druck\app\core\geom\mesh.py:349(stable_normals)
+                                                                            2    0.003    0.433  F:\3D Druck\app\core\geom\repair.py:3618(open_edge_count)
