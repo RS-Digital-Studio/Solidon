@@ -4195,6 +4195,58 @@ def test_the_two_bows_of_a_d_are_curved_faces_outside_and_inside() -> None:
     )
 
 
+def test_a_bow_keeps_its_area_when_its_facets_are_split() -> None:
+    """Wird jede Manteldiagonale eines D formgleich geteilt, bleiben die Bögen dieselben.
+
+    Aus jedem Rechteck des Mantels werden vier Dreiecke, und zwei davon
+    berühren keine Rundungsnaht mehr — sie liegen nur an der Diagonale und an
+    der Deckfläche. Gezählt wurde ein Dreieck bis dahin nur an einer Naht;
+    am Besenhalter schrumpften die gerundeten Seiten so von 5 436 auf
+    4 242 mm² (Befund B6 der Erkennungsdurchsicht, 24.09.2026).
+    """
+    letter = _letter("D")
+    before = sorted(
+        round(feature.params["area"], 6)
+        for feature in detect(letter).values()
+        if feature.kind == "curved_face"
+    )
+    body = letter.raw
+    vertices = np.asarray(body.vertices).tolist()
+    faces = np.asarray(body.faces).tolist()
+    normals = np.asarray(body.face_normals)
+    angles = np.asarray(body.face_adjacency_angles)
+    split: dict[int, list[list[int]]] = {}
+    for (first, second), (a, b), angle in zip(
+        np.asarray(body.face_adjacency).tolist(),
+        np.asarray(body.face_adjacency_edges).tolist(),
+        angles,
+        strict=True,
+    ):
+        if angle > 1e-9 or abs(normals[first][2]) > 0.5 or first in split or second in split:
+            continue
+        middle = len(vertices)
+        vertices.append(((np.asarray(vertices[a]) + np.asarray(vertices[b])) / 2.0).tolist())
+        for face in (first, second):
+            corners = faces[face]
+            at = corners.index(a)
+            head, tail = (a, b) if corners[(at + 1) % 3] == b else (b, a)
+            other = next(vertex for vertex in corners if vertex not in (a, b))
+            split[face] = [[head, middle, other], [middle, tail, other]]
+    assert split, "der Mantel hat Diagonalen"
+    rebuilt = [row for index, corners in enumerate(faces) for row in split.get(index, [corners])]
+    divided = MeshData.of(trimesh.Trimesh(np.asarray(vertices), np.asarray(rebuilt), process=False))
+    assert divided.is_watertight and divided.volume == pytest.approx(letter.volume, rel=1e-12)
+
+    forget_cache()
+    after = sorted(
+        round(feature.params["area"], 6)
+        for feature in detect(divided).values()
+        if feature.kind == "curved_face"
+    )
+
+    assert after == pytest.approx(before, rel=1e-9)
+
+
 def test_the_curved_faces_of_a_letter_count_its_bows() -> None:
     """Ein o hat zwei ovale Mäntel, eine 3 zwei Bögen außen und zwei innen.
 

@@ -104,7 +104,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: - 27: Kreisfits mit plattformgleicher QR-Rechnung statt LAPACK; alte
 #:   Mittelpunktwerte und Folgegeometrie werden neu gerechnet. Eigenständige
 #:   Senkungen verwenden ihren echten Boden statt eines neu gefächerten Deckels.
-CACHE_FORMAT_VERSION: Final = 27
+#: - 28 (24.09.2026): eine gerundete Seite nimmt jede koplanare Facette ganz,
+#:   die an ihre Rundungsnaht grenzt — gespeicherte Merkmale sind zu klein.
+CACHE_FORMAT_VERSION: Final = 28
 
 
 @dataclass(frozen=True, slots=True)

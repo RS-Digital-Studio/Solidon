@@ -8236,8 +8236,29 @@ def detect_curved_faces(
         claimed.update(feature.face_indices)
     angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
     smooth = angles < CURVATURE_LIMIT
-    rounded = set(adjacency[(angles > EPS_ANGLE) & smooth].ravel().tolist())
-    free = np.asarray(sorted(rounded - claimed), dtype=np.int64)
+    count = len(body.faces)
+    rounded = np.zeros(count, dtype=bool)
+    rounded[adjacency[(angles > EPS_ANGLE) & smooth].ravel()] = True
+    # **Eine koplanare Facette gehört ganz dazu oder gar nicht** (Befund B6
+    # der Erkennungsdurchsicht, 24.09.2026). Ein Dreieck zählte nur, wenn es
+    # selbst an einer Rundungsnaht lag; war eine Mantelfacette in mehr als zwei
+    # Dreiecke geteilt, fiel ihre Mitte heraus. Am Besenhalter, 199 Kanten
+    # formgleich geteilt, schrumpften die gerundeten Seiten von 5 436 auf
+    # 4 242 mm², und fünf von neun verschwanden.
+    flat = angles <= EPS_ANGLE
+    if rounded.any() and flat.any():
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import connected_components
+
+        graph = coo_matrix(
+            (np.ones(int(flat.sum())), (adjacency[flat, 0], adjacency[flat, 1])),
+            shape=(count, count),
+        )
+        _facets, facet_of = connected_components(graph, directed=False)
+        rounded = np.isin(facet_of, np.unique(facet_of[rounded]))
+    taken = np.zeros(count, dtype=bool)
+    taken[np.asarray(sorted(claimed), dtype=np.int64)] = True
+    free = np.flatnonzero(rounded & ~taken).astype(np.int64)
     if not len(free):
         return []
     keep = np.isin(adjacency[:, 0], free) & np.isin(adjacency[:, 1], free) & smooth
