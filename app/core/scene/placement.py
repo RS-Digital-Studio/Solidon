@@ -1263,22 +1263,64 @@ def prepare_surface(
     RM-232, 25.09.2026) und stirbt mit ihm. An der dichten Platte kostet die
     Oberseite 105 ms, und :func:`seat_of` fragt sie für jede Bohrung darauf
     neu — bei jedem Klick, denn jede Bohrung sitzt auf derselben Fläche und
-    fragt ihr erstes Dreieck. Zur Frage gehören die Namen der Merkmale: Die
-    Mittenbezüge tragen sie, und nach einer Auswertung kann dasselbe Netz
-    anders benannte Merkmale tragen. Die vorbereitete Fläche ist
-    unveränderlich; wer sie erweitert, legt ``replace`` darüber.
+    fragt ihr erstes Dreieck. Zur Frage gehören die Merkmale, soweit der
+    Rumpf sie liest (:func:`_surface_question`): Die Mittenbezüge tragen ihre
+    Namen, und nach einer Auswertung kann dasselbe Netz anders benannte —
+    oder dieselben Namen an vertauschten — Merkmalen tragen. Die vorbereitete
+    Fläche ist unveränderlich; wer sie erweitert, legt ``replace`` darüber.
     """
     from app.core.perceive.features import remembered
 
-    names = None if features is None else tuple(sorted(features))
     prepared: PreparedSurface = remembered(
         "prepared_surface",
         mesh.raw,
         (),
         lambda: _prepared_surface(mesh, face_index, features),
-        extra=(int(face_index), names),
+        extra=(int(face_index), _surface_question(features)),
     )
     return prepared
+
+
+def _surface_question(features: Mapping[str, Feature] | None) -> tuple[Any, ...] | None:
+    """Was :func:`_prepared_surface` aus den Merkmalen liest — als Teil des Merkerschlüssels.
+
+    **Die Namen allein reichen nicht** (Review 25.09.2026): Ein Netz kommt
+    unverändert aus dem Ergebniscache, und eine neu beantwortete Zuordnung
+    kann dieselben Namen an vertauschten Bohrungen tragen. Die gemerkte
+    Fläche nannte dann die eigene Mitte als die der Nachbarbohrung, und
+    :func:`seat_of` nahm die falsche heraus. Genommen werden je Merkmal die
+    Felder, die der Rumpf liest — Kennung, Art, Mitte, Achse, Richtung,
+    Tiefe, Durchmesser, Länge — und die Zahl seiner Dreiecke. Die
+    Dreiecksnummern selbst gehen nicht ein: Am selben Netz gehören zu
+    derselben Art, Lage und denselben Maßen dieselben Dreiecke, und ein
+    Schlüssel über sie kostete an 1,5 Millionen Nummern beim ersten Klick
+    8 bis 12 ms (gemessen am 25.09.2026; der ganze Schlüssel an 5 000
+    Merkmalen 16 ms, gegen 105 ms für die Vorbereitung der dichten Platte).
+    """
+    if features is None:
+        return None
+
+    def number(value: Any) -> float | None:
+        try:
+            return float(value)
+        except TypeError, ValueError:
+            return None
+
+    return tuple(
+        (
+            name,
+            feature.id,
+            feature.kind,
+            vec3_or_none(feature.params.get("centre")),
+            vec3_or_none(feature.params.get("axis")),
+            vec3_or_none(feature.params.get("direction")),
+            number(feature.params.get("depth")),
+            number(feature.params.get("diameter")),
+            number(feature.params.get("length")),
+            len(feature.face_indices),
+        )
+        for name, feature in sorted(features.items())
+    )
 
 
 def _prepared_surface(

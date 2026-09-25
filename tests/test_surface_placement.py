@@ -2593,3 +2593,56 @@ def test_a_prepared_face_is_remembered_per_mesh_triangle_and_feature_names():
     assert placement.prepare_surface(mesh, face, renamed) is not first, "andere Namen, neue Antwort"
     other = MeshData.of(mesh.raw.copy())
     assert placement.prepare_surface(other, face, found) is not first, "anderes Netz, neue Antwort"
+
+
+def test_swapped_feature_names_do_not_read_a_remembered_face():
+    """Dieselben Namen an vertauschten Bohrungen sind eine neue Frage.
+
+    Der Merker von ``prepare_surface`` hing an Netz, Dreieck und den **Namen**
+    der Merkmale. Dasselbe Netz kann aber nach einer neu beantworteten
+    Zuordnung dieselben Namen an vertauschten Merkmalen tragen — das Netz
+    kommt dann unverändert aus dem Ergebniscache. Die gemerkte Fläche nannte
+    danach die eigene Mitte einer Bohrung als die der anderen, und ``seat_of``
+    nahm die falsche heraus: Im Bild stand der Abstand zur eigenen Mitte, null,
+    und der zur Nachbarbohrung fehlte (dieselbe Zusage wie
+    ``_others``, Robert, 10.09.2026).
+    """
+    from dataclasses import replace
+
+    from app.core.geom.prepare import drill
+    from app.core.knowledge import profiles
+    from app.core.perceive.features import detect
+
+    load_operations()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    mesh = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    for position in ((10.0, 5.0, 5.0), (-15.0, -5.0, 5.0)):
+        mesh = drill(
+            mesh, profile=profile, position=position, axis="z", diameter=6.0, compensate=False
+        ).mesh
+    found = detect(mesh)
+    first, second = sorted(
+        (entry for entry in found.values() if entry.kind == "hole"), key=lambda entry: entry.id
+    )
+    swapped = {
+        **found,
+        first.id: replace(second, id=first.id),
+        second.id: replace(first, id=second.id),
+    }
+
+    before, _mouth = placement.seat_of(mesh, found[first.id], found)
+    after, mouth = placement.seat_of(mesh, swapped[first.id], swapped)
+
+    def at_the_mouth(feature: Feature) -> tuple[float, float]:
+        centre = feature.params["centre"]
+        return (float(centre[0]), float(centre[1]))
+
+    (other_before,) = before.centres
+    assert other_before[0] == second.id
+    assert other_before[1][:2] == pytest.approx(at_the_mouth(second))
+    assert mouth[:2] == pytest.approx(at_the_mouth(second)), "die Bohrung heißt jetzt anders"
+    (other_after,) = after.centres
+    assert other_after[0] == second.id
+    assert other_after[1][:2] == pytest.approx(at_the_mouth(first)), (
+        "die andere Bohrung, nicht die eigene Mitte"
+    )
