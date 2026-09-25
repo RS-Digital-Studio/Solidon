@@ -71,6 +71,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
 | [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
 | [RM-244 — Die Schnittsuche endet an Nadeldreiecken am Budget](#rm-244) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: 35 648 von 59 740 Dreiecken in 6,4 s geprüft — messen, welche Paare das Budget verbrauchen, dann vollständig unter dem Budget |
+| [RM-245 — Eine Bohrung mit Erweiterung an beiden Enden lässt sich nicht bearbeiten](#rm-245) | Geometrie, Erkennung und Druckvorbereitung | Vier STEP-Lochplatten: 9 von 9 Schraubbohrungen (Zylindersenkung hinten, Fase vorn) sagen Kippen, Versetzen und Verdoppeln ab — Kettenmodell auf Erweiterungen an beiden Enden ausbauen |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
@@ -1853,6 +1854,32 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   eine Durchdringung zu übersehen. Abnahme: Besenhalter vollständig geprüft
   unter dem Budget, dieselben Paare wie der skalare Weg
   (`tests/test_self_intersections.py`).
+
+<a id="rm-245"></a>
+
+- [ ] **RM-245 — Eine Bohrung mit Erweiterung an beiden Enden lässt sich nicht bearbeiten.**
+  Gefunden am 25.09.2026 beim Nachprüfen von RM-220 an den neuen Modellen aus
+  `F:\3D Dateien`: An allen vier Lochplatten (`pegboard-gs-100-v2.step`,
+  `pegboard-10inch-crimper-v5.step`, `pegboard-pb3041-v4.step`,
+  `pegboard-goot-ceramic-screwdrivers-v3.step`, exakter Kern) sagen *Merkmal
+  drehen*, *Merkmal versetzen* und *Merkmal verdoppeln* an allen neun
+  Schraubbohrungen ab — „Dieses Merkmal geht in einen anderen Hohlraum über".
+  Jede dieser Bohrungen weitet sich an beiden Enden: hinten eine
+  Zylindersenkung Ø 10, 8,5 mm tief, dann Ø 6 auf 1 mm, vorn eine Fase Ø 7
+  (an `pegboard-gs-100-v2.step`: `hole_1`, `hole_3`, `cone_2`).
+  `relations.cavity_chain_state_at` kennt nur Ketten, die sich von der
+  Bohrung aus nach **einer** Seite weiten, und meldet `ambiguous_cavity_chain`;
+  `cavity_refusal` sagt dann `NO_OWN_BODY`. Das ganze Kettenmodell setzt diese
+  eine Richtung voraus: `_BoreEntrance` und `bore_entrance`, `_chain_tool`,
+  `_cavity_plug`/`_chain_plug`, `_old_rim_caps`, die exakten Wege
+  `_exact_chain_*`. **Entscheidung Robert, 25.09.2026:** als eigener Punkt
+  ausbauen. Weg: eine Kette mit der engsten Bohrung in der Mitte und je einer
+  Erweiterungsfolge zu beiden Mündungen — Erkennung, Einlauf, Werkzeug,
+  Stopfen und Kappen je Seite, die Bohrung dazwischen einmal. Abnahme: An den
+  vier Lochplatten, als STEP und als 3MF, gehen Kippen, Versetzen und
+  Verdoppeln jeder Schraubbohrung an beiden Kernen mit denselben Befunden;
+  je Fall ein Test an Netz und exaktem Körper, eine Platte mit Zylindersenkung
+  hinten und Fase vorn.
 
 ## Bedienung und Darstellung
 
