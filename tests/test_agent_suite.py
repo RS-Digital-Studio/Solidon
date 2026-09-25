@@ -76,13 +76,15 @@ def good_answer(case: Case) -> list[Reply]:
             if reading == tools.READ_ANALYSIS
             else {"kind": "screw", "size": "M4"}
         )
-        closing = "Nachgesehen." + (" Steht im Menü." if case.expects_mention else "")
+        closing = "Nachgesehen." + (
+            " Steht bei den Handlungen rechts." if case.expects_mention else ""
+        )
         return [
             Reply(tool_calls=(ToolCall(id="1", name=reading, arguments=arguments),)),
             Reply(text=closing),
         ]
     if case.expects_mention:
-        return [Reply(text="Das steht im Menü Ändern → Bohrung setzen.")]
+        return [Reply(text="Das steht bei den Handlungen rechts → Bohrung ändern.")]
     if case.expects_parameter:
         return [
             Reply(

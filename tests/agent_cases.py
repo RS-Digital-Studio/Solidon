@@ -147,15 +147,20 @@ CASES: tuple[Case, ...] = (
         id="where_menu",
         request="Wie kann ich eine Bohrung größer machen, ohne den Chat zu benutzen?",
         expects_answer_only=True,
-        expects_mention=("Menü",),
-        note="§2.6: der Chat ist auch ein Suchfeld — die Antwort nennt den Menüort.",
+        expects_mention=("Handlungen",),
+        note=(
+            "§2.6: der Chat ist auch ein Suchfeld — die Antwort nennt den Ort. "
+            "Bohrung ändern steht seit dem 11.09.2026 in den Handlungen rechts, "
+            "in keinem Menü; bis zum 25.09. verlangte der Fall das Wort „Menü“ "
+            "und warf damit die richtige Antwort weg."
+        ),
     ),
     Case(
         id="where_hollow",
         request="Wo finde ich das Aushöhlen im Programm?",
         expects_answer_only=True,
-        expects_mention=("Menü",),
-        note="Eine reine Wo-Frage: keine Operation, nur der Ort im Fenster.",
+        expects_mention=("Handlungen",),
+        note="Eine reine Wo-Frage: keine Operation, nur der Ort — die Handlungen rechts.",
     ),
     # --- die drei mehrdeutigen ------------------------------------------------
     Case(
