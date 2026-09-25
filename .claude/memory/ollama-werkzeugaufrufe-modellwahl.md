@@ -8,7 +8,39 @@ metadata:
   modified: 2026-08-31T18:00:00.000Z
 ---
 
-## Ergebnis vom 31.08.2026 — die aktuelle Kundenlage
+## Ergebnis vom 25.09.2026 — mit dem Werkzeugangebot (gilt ab hier)
+
+Seit `agent/offer.py` sieht ein lokales Modell je Anfrage nur die gemeinten
+Operationen mit Feldern, die übrigen als Kurzform; die Grundlast fiel für
+qwen3:14b von 30 461 auf 7 258 Token. **Das hat die Modellfrage verschoben:**
+llama3.1:8b, das unter vollem Register seine Aufrufe als Text schrieb, ruft
+jetzt 8/8 strukturiert auf (rät aber bei der unklaren Anfrage). Wer eine alte
+Tabelle unten liest, liest eine andere Last.
+
+`tools/check_local_model.py`, acht Fälle (fünf Zusatzwerkzeuge, drei
+Operationen, einer mehrdeutig), RTX 4080, Ollama 0.34.3, `num_ctx` 32 768,
+Karte frei vor jedem Lauf. Grafikspeicher = `nvidia-smi`-Unterschied vor/nach
+dem Laden (mehr als `ollama ps` meldet):
+
+| Modell | Probe | Median | Grafikspeicher | Urteil |
+|---|---|---|---|---|
+| qwen3.5:9b | 7/8, zweimal | 6,3 s | 7,4 GB | empfohlen, läuft ab 8-GB-Karte |
+| gpt-oss:20b | 7/8 (fragt beim Bohren nach) | 6,7 s | 12,9 GB | empfohlen |
+| qwen3:14b | 8/8 | 18,0 s (Denkblock) | 13,6 GB | empfohlen |
+| qwen3:30b-a3b | 8/8 | 17,1 s bei 66 % VRAM | > 16 GB | empfohlen |
+| qwen3.5:9b-q8_0 | 6/8 | 7,2 s | 10,6 GB | nein — schlechter als q4 |
+| gemma4:12b | 6/8, zwei Endlosantworten | 11,6 s | 8,9 GB | nein |
+| granite4.1:8b | 6/8, rät | 3,8 s | 10,5 GB | nein |
+| llama3.1:8b | 7/8, rät | 3,3 s | — | nein |
+| mistral-nemo | 4/8, schreibt darüber | 4,3 s | — | nein |
+| qwen2.5-coder:14b | 0/8, JSON als Text | — | — | nein |
+| llama3 | Ollama lehnt Werkzeuge ab | — | — | nein |
+
+Kriterium (Robert: „alle Modelle mit denen es klappt wollen wir empfehlen"):
+mindestens 7/8 **und** bei der mehrdeutigen Anfrage nicht geraten. Die
+Listen stehen in `llm.OLLAMA_SUGGESTIONS` und `llm.OLLAMA_UNSUITABLE`.
+
+## Ergebnis vom 31.08.2026 — damals die Kundenlage, heute Vorgeschichte
 
 Auf der RTX 4080 mit 16 GB, Ollama 0.33.2 und `qwen3:14b` wurde der
 **vollständige** aktuelle Satz aus 106 Werkzeugen (rund 156 KB Schema) neu

@@ -142,8 +142,20 @@
       demande et ne télécharge rien sans te le demander ; les fichiers GLB
       et STL externes restent entièrement utilisables dans tous les cas.</p>
 
-      <h2>Chat local : GPU et CPU mesurés séparément</h2>
-      <p class="footnote">Mesuré le 23.09.2026 avec <b>qwen3:14b</b> sous Ollama et les 147 outils, sur une NVIDIA RTX 4080 avec 16&nbsp;Go de mémoire graphique&nbsp;: le modèle tenait entièrement sur la carte, sans aide du processeur. Un tour a pris 19,8 secondes à froid — Solidon libère la carte après chaque tour, puis le modèle est rechargé — et, modèle déjà chargé, 2,5 secondes en médiane. <b>Si le modèle ne tient pas entièrement dans la mémoire graphique, le processeur s’en mêle et tout devient bien plus lent.</b> L’application indique si Ollama utilise réellement le GPU.</p>
+      <h2>Chat local&nbsp;: quel modèle pour quelle carte</h2>
+      <p class="sub">Le chat fonctionne gratuitement avec Ollama sur votre propre ordinateur. Le modèle doit tenir entièrement dans la mémoire graphique — sinon le processeur s’en mêle et chaque réponse prend plusieurs fois plus de temps. Ces quatre modèles appellent les outils de Solidon de façon fiable et posent une question quand une demande n’est pas claire&nbsp;:</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Modèle</th><th>Mémoire graphique</th><th>Test des outils</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><b>qwen3.5:9b</b></td><td>7,4&nbsp;Go — dès une carte de 8&nbsp;Go</td><td>7 sur 8, environ 6&nbsp;s par requête</td></tr>
+          <tr><td><b>gpt-oss:20b</b></td><td>12,9&nbsp;Go — carte de 16&nbsp;Go</td><td>7 sur 8, environ 7&nbsp;s</td></tr>
+          <tr><td><b>qwen3:14b</b></td><td>13,6&nbsp;Go — carte de 16&nbsp;Go</td><td>8 sur 8, environ 18&nbsp;s — réfléchit avant chaque réponse</td></tr>
+          <tr><td><b>qwen3:30b-a3b</b></td><td>plus de 16&nbsp;Go — sur 16&nbsp;Go, le processeur calcule un tiers</td><td>8 sur 8, environ 17&nbsp;s</td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">Mesuré le 25.09.2026 sur une NVIDIA RTX 4080 avec 16&nbsp;Go sous Ollama 0.34.3. Le test comporte huit demandes qui réclament chacune un outil&nbsp;; pour l’une, volontairement ambiguë, la bonne réponse est de poser une question. À un modèle local, Solidon3D envoie à chaque demande les outils visés avec tous leurs champs et tous les autres sous forme abrégée — la tâche ne fait plus qu’un quart de sa longueur d’avant. Après une réponse, le modèle reste chargé trois minutes, pour que la question suivante n’attende pas son démarrage. <b>Non recommandés</b>, bien que mesurés&nbsp;: gemma4:12b (réponses sans fin), granite4.1:8b et llama3.1:8b (devinent face à une demande ambiguë au lieu de demander), mistral-nemo et qwen2.5-coder:14b (écrivent les appels sous forme de texte). Lors de la configuration, Solidon3D indique si Ollama utilise réellement la carte graphique.</p>
     </div>
   </section>
 

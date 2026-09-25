@@ -910,7 +910,8 @@ def test_a_small_model_gets_the_sentence_from_the_spec() -> None:
 
     assert warning is not None
     assert "Milliarden" in str(warning)
-    assert "RTX 4080" in str(warning)
+    assert "Chat einrichten" in str(warning), "der Weg zu den bewährten Modellen"
+    assert "qwen" not in str(warning), "kein fest genanntes Modell, das veraltet"
     assert "14 GB" not in str(warning)
     assert "Prozessor" in str(warning)
     assert "braucht eine Grafikkarte mit 16 GB" not in str(warning)
@@ -1083,6 +1084,23 @@ def test_every_suggested_model_says_its_size_and_what_it_does() -> None:
         assert str(what), name
     names = [name for name, _size, _what in llm.OLLAMA_SUGGESTIONS]
     assert llm.DEFAULT_OLLAMA_MODEL in names, "das eingestellte Modell steht zur Auswahl"
+
+
+def test_a_model_measured_unsuitable_is_named_but_not_offered() -> None:
+    """Angeboten wird, womit es klappt; das Übrige steht nur beim Installierten.
+
+    Jede Empfehlung nennt den Grafikspeicher, den sie belegt — er ist die
+    Systemanforderung, und ohne ihn lädt jemand ein Modell, das auf seiner
+    Karte in den Prozessor fällt.
+    """
+    offered = {llm.normalised_model_name(name) for name, _size, _what in llm.OLLAMA_SUGGESTIONS}
+    unsuitable = {llm.normalised_model_name(name) for name, _size, _what in llm.OLLAMA_UNSUITABLE}
+    assert unsuitable, "die gemessen ungeeigneten stehen da"
+    assert not offered & unsuitable, "ein Modell ist empfohlen oder nicht, nie beides"
+    for name, _size, what in llm.OLLAMA_SUGGESTIONS:
+        assert "GB Grafikspeicher" in str(what), f"{name}: die Anforderung fehlt"
+    for name, _size, what in llm.OLLAMA_UNSUITABLE:
+        assert llm.known_model_note(name) == what, f"{name}: sein Satz steht beim Installierten"
 
 
 class _PullServer:
@@ -1276,24 +1294,46 @@ def test_a_local_model_gets_more_time_than_a_hosted_one() -> None:
     assert llm.OllamaBackend().transport is llm.post_json_local
 
 
-def test_the_local_model_expectation_separates_gpu_and_cpu_measurements() -> None:
-    """7,8 Token je Sekunde waren der CPU-Rückfall, nicht die GPU-Leistung."""
-    note = str(llm.local_model_expectation())
+def test_the_cpu_warning_names_the_limit_only_when_the_wait_reaches_it() -> None:
+    """Die Zehn-Minuten-Grenze steht im Satz, wenn die Rechnung sie erreicht.
 
-    assert "fünf von fünf" in note
-    assert "zwei Messläufen" in note
-    assert "jeweils fünf von fünf" in note
-    assert "11 bis 26 Sekunden" in note
-    assert "Median rund 17" in note
-    assert "vollständig auf der Grafikkarte" in note
-    assert "7,8 Token je Sekunde" in note
-    assert "Prozessor" in note
-    assert "42 Minuten" in note
-    assert "Zehn-Minuten-Grenze" in note
-    assert "kann so nicht abgeschlossen werden" in note
-    assert "geeignete Grafikkarte" in note
-    assert "gehostetes Modell" in note
-    assert "drei von fünf" not in note
+    Ein Prozessor, der den Auftrag in fünf Minuten einliest, ist langsam und
+    nicht unbrauchbar; ihm die Absage zu schreiben hieße, ihm etwas Falsches
+    zu sagen. Beide Sätze nennen die Wartezeit und einen Weg zu Schnellerem.
+    """
+    slow = llm.Speed(tokens_per_second=llm.PROMPT_TOKENS / (20 * 60))
+    fast = llm.Speed(tokens_per_second=llm.PROMPT_TOKENS / (5 * 60))
+    assert fast.on_gpu is False, "auch der schnellere Fall rechnet auf dem Prozessor"
+
+    stops = str(llm.speed_warning(slow))
+    waits = str(llm.speed_warning(fast))
+    assert "Zehn-Minuten-Grenze" in stops and "nicht abgeschlossen" in stops
+    assert "Zehn-Minuten-Grenze" not in waits and "nicht abgeschlossen" not in waits
+    for text in (stops, waits):
+        assert "{minutes}" in text and "{tokens}" in text and "{rate}" in text
+        assert "Grafikkarte" in text and "gehostetes Modell" in text
+
+
+def test_the_local_model_expectation_separates_gpu_and_cpu_measurements() -> None:
+    """7,8 Token je Sekunde waren der CPU-Rückfall, nicht die GPU-Leistung.
+
+    Und die Messung davor ist die des eingestellten Modells: Bis zum
+    25.09.2026 stand dort fest qwen3:14b, auch über jedem anderen.
+    """
+    for name, _size, measured in (*llm.OLLAMA_SUGGESTIONS, *llm.OLLAMA_UNSUITABLE):
+        note = str(llm.local_model_expectation(name))
+        assert note.startswith(name), f"{name}: der Satz beginnt mit dem Modell"
+        assert str(measured) in note, f"{name}: seine eigene Messung steht dabei"
+        assert "7,8 Token je Sekunde" in note and "Prozessor" in note
+        assert "zehn Minuten" in note, "der CPU-Weg endet vor dem Ergebnis"
+        assert "geeignete Grafikkarte" in note and "gehostetes Modell" in note
+        assert "{" not in note, "die Platzhalter sind gefüllt"
+
+    fremd = str(llm.local_model_expectation("gibt-es-nicht:7b"))
+    assert "keine Messung" in fremd and "Werkzeuge prüfen" in fremd
+    assert str(llm.local_model_expectation()).startswith(llm.DEFAULT_OLLAMA_MODEL), (
+        "ohne Angabe gilt das eingestellte Modell"
+    )
 
 
 # --- Die Adresse, die der Kunde einträgt (24.08.2026) ------------------------------

@@ -144,8 +144,20 @@
       richiesta e non scarica nulla senza chiedere; i file GLB e STL esterni
       restano comunque pienamente utilizzabili.</p>
 
-      <h2>Chat locale: GPU e CPU misurate separatamente</h2>
-      <p class="footnote">Misurato il 23.09.2026 con <b>qwen3:14b</b> in Ollama e tutti i 147 strumenti, su una NVIDIA RTX 4080 con 16&nbsp;GB di memoria grafica: il modello stava tutto sulla scheda, senza aiuto del processore. Un turno ha richiesto 19,8 secondi a freddo — Solidon libera la scheda dopo ogni turno e il modello viene ricaricato — e, con il modello già caricato, 2,5 secondi di mediana. <b>Se il modello non entra tutto nella memoria grafica, il processore interviene e diventa molte volte più lento.</b> L’applicazione mostra se Ollama usa davvero la GPU.</p>
+      <h2>Chat locale: quale modello per quale scheda</h2>
+      <p class="sub">La chat funziona gratis con Ollama sul tuo computer. Il modello deve entrare tutto nella memoria grafica, altrimenti interviene il processore e ogni risposta richiede molte volte di più. Questi quattro richiamano in modo affidabile gli strumenti di Solidon e chiedono quando una richiesta non è chiara:</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Modello</th><th>Memoria grafica</th><th>Prova degli strumenti</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><b>qwen3.5:9b</b></td><td>7,4&nbsp;GB — da una scheda da 8&nbsp;GB</td><td>7 su 8, circa 6&nbsp;s per richiesta</td></tr>
+          <tr><td><b>gpt-oss:20b</b></td><td>12,9&nbsp;GB — scheda da 16&nbsp;GB</td><td>7 su 8, circa 7&nbsp;s</td></tr>
+          <tr><td><b>qwen3:14b</b></td><td>13,6&nbsp;GB — scheda da 16&nbsp;GB</td><td>8 su 8, circa 18&nbsp;s — riflette prima di ogni risposta</td></tr>
+          <tr><td><b>qwen3:30b-a3b</b></td><td>più di 16&nbsp;GB — con 16&nbsp;GB un terzo lo calcola il processore</td><td>8 su 8, circa 17&nbsp;s</td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">Misurato il 25.09.2026 su una NVIDIA RTX 4080 con 16&nbsp;GB in Ollama 0.34.3. La prova è fatta di otto richieste che chiedono ciascuna uno strumento; per una volutamente ambigua, la risposta giusta è chiedere. A un modello locale, Solidon3D invia a ogni richiesta gli strumenti pertinenti con tutti i campi e tutti gli altri in forma breve: così l’incarico è lungo un quarto rispetto a prima. Dopo una risposta il modello resta caricato tre minuti, così la domanda successiva non aspetta il suo avvio. <b>Non consigliati</b>, benché misurati: gemma4:12b (risposte senza fine), granite4.1:8b e llama3.1:8b (tirano a indovinare davanti a una richiesta ambigua invece di chiedere), mistral-nemo e qwen2.5-coder:14b (scrivono le chiamate come testo). Durante la configurazione, Solidon3D mostra se Ollama usa davvero la scheda grafica.</p>
     </div>
   </section>
 

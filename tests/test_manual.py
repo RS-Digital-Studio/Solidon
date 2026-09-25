@@ -163,7 +163,8 @@ def test_written_manual_covers_the_current_demo_and_visible_controls() -> None:
 
     extras = pages["extras"]
     assert "Lokale KI-Arbeit läuft nacheinander" in extras
-    assert "entlädt es das Ollama-Modell" in extras
+    assert "drei Minuten auf der Grafikkarte" in extras
+    assert "gibt Solidon es vorher frei" in extras
     assert "nur den Auftrag, den Solidon selbst gestartet hat" in extras
 
 

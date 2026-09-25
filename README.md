@@ -265,11 +265,26 @@ nicht**: manches große Modell gibt den Aufruf als Fließtext aus statt als
 Aufruf, und dann sieht der Chat aus, als arbeite er, während nichts geschieht.
 
 Entscheidend ist dabei, wie viele Werkzeuge im Spiel sind. Der Agent bietet
-die registrierten Operationen sowie Analyse- und Dialogwerkzeuge an.
-An dieser umfangreichen Werkzeugauswahl scheitern kleinere Modelle,
-die mit einer Handvoll noch alles treffen. Vorgabe ist darum `qwen3:14b`;
-`llama3.1:8b` ist schneller und kleiner, gibt unter der vollen Last aber die
-Mehrzahl der Aufrufe als Text aus.
+alle registrierten Operationen sowie Analyse- und Dialogwerkzeuge an; einem
+lokalen Modell stehen je Anfrage nur die gemeinten mit allen Feldern da, die
+übrigen in Kurzform, die es bei Bedarf nachfordert. Der Auftrag belegt damit
+ein Viertel bis ein Drittel des Kontextfensters statt fast des ganzen.
+
+Empfohlen sind die Modelle, die in der Werkzeugprobe mindestens sieben von
+acht Aufrufen treffen und bei einer unklaren Anfrage nachfragen, statt zu
+raten (`OLLAMA_SUGGESTIONS` in `app/core/backends/llm.py`):
+
+| Modell | Grafikspeicher | Anmerkung |
+|---|---|---|
+| `qwen3.5:9b` | 7,4 GB | läuft ab einer Karte mit 8 GB |
+| `gpt-oss:20b` | 12,9 GB | Karte mit 16 GB |
+| `qwen3:14b` | 13,6 GB | Vorgabe; denkt vor jeder Antwort, Karte mit 16 GB |
+| `qwen3:30b-a3b` | mehr als 16 GB | auf 16 GB rechnet ein Drittel der Prozessor |
+
+Gemessen und nicht empfohlen (`OLLAMA_UNSUITABLE`): `gemma4:12b`,
+`granite4.1:8b`, `llama3.1:8b`, `mistral-nemo`, `qwen2.5-coder:14b`, `llama3`.
+Passt ein Modell nicht ganz in den Grafikspeicher, rechnet der Prozessor mit,
+und jede Antwort dauert ein Vielfaches.
 
 Ob ein Modell die Werkzeuge wirklich aufruft, misst
 

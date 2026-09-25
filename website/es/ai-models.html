@@ -143,8 +143,20 @@
       GLB y STL externos siguen siendo plenamente utilizables en cualquier
       caso.</p>
 
-      <h2>Chat local: GPU y CPU medidas por separado</h2>
-      <p class="footnote">Medido el 23.09.2026 con <b>qwen3:14b</b> en Ollama y las 147 herramientas, en una NVIDIA RTX 4080 con 16&nbsp;GB de memoria gráfica: el modelo estaba entero en la tarjeta, sin ayuda del procesador. Un turno tardó 19,8 segundos en frío — Solidon libera la tarjeta después de cada turno y el modelo se vuelve a cargar — y, con el modelo ya cargado, 2,5 segundos de mediana. <b>Si el modelo no cabe entero en la memoria gráfica, el procesador ayuda y todo va muchas veces más lento.</b> La aplicación indica si Ollama usa de verdad la GPU.</p>
+      <h2>Chat local: qué modelo para qué tarjeta</h2>
+      <p class="sub">El chat funciona gratis con Ollama en tu propio ordenador. El modelo tiene que caber entero en la memoria gráfica; si no, el procesador ayuda y cada respuesta tarda muchas veces más. Estos cuatro llaman con fiabilidad a las herramientas de Solidon y preguntan cuando una consulta no está clara:</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Modelo</th><th>Memoria gráfica</th><th>Prueba de herramientas</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><b>qwen3.5:9b</b></td><td>7,4&nbsp;GB — desde una tarjeta de 8&nbsp;GB</td><td>7 de 8, unos 6&nbsp;s por consulta</td></tr>
+          <tr><td><b>gpt-oss:20b</b></td><td>12,9&nbsp;GB — tarjeta de 16&nbsp;GB</td><td>7 de 8, unos 7&nbsp;s</td></tr>
+          <tr><td><b>qwen3:14b</b></td><td>13,6&nbsp;GB — tarjeta de 16&nbsp;GB</td><td>8 de 8, unos 18&nbsp;s — piensa antes de cada respuesta</td></tr>
+          <tr><td><b>qwen3:30b-a3b</b></td><td>más de 16&nbsp;GB — con 16&nbsp;GB el procesador calcula un tercio</td><td>8 de 8, unos 17&nbsp;s</td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">Medido el 25.09.2026 en una NVIDIA RTX 4080 con 16&nbsp;GB en Ollama 0.34.3. La prueba son ocho consultas que piden cada una una herramienta; en una deliberadamente ambigua, la pregunta de vuelta es la respuesta correcta. A un modelo local, Solidon3D le envía en cada consulta las herramientas pertinentes con todos sus campos y las demás en forma breve, así el encargo ocupa una cuarta parte que antes. Tras una respuesta, el modelo sigue cargado tres minutos para que la siguiente pregunta no espere a que arranque. <b>No recomendados</b>, aunque medidos: gemma4:12b (respuestas sin fin), granite4.1:8b y llama3.1:8b (adivinan ante una consulta ambigua en lugar de preguntar), mistral-nemo y qwen2.5-coder:14b (escriben las llamadas como texto). Al configurarlo, Solidon3D indica si Ollama usa de verdad la tarjeta gráfica.</p>
     </div>
   </section>
 

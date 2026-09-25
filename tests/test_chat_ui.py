@@ -1878,24 +1878,20 @@ def test_a_model_on_a_graphics_card_gets_the_plain_answer(
 def test_the_chat_notice_separates_the_full_gpu_run_from_the_cpu_fallback(
     window: MainWindow,
 ) -> None:
-    """Die gemessene GPU-Leistung steht sichtbar am Ort des lokalen Chats."""
+    """Die gemessene GPU-Leistung steht sichtbar am Ort des lokalen Chats —
+    die des eingestellten Modells, nicht die eines festen."""
     window._ollama_size_answered(None)
 
     text = window.chat.notice.text()
     assert window.chat.notice.isVisibleTo(window.chat)
-    assert "zwei Messläufen" in text
-    assert "jeweils fünf von fünf" in text
-    assert "11 bis 26 Sekunden" in text
-    assert "Median rund 17" in text
-    assert "vollständig auf der Grafikkarte" in text
+    model = llm.configured_ollama_model()
+    assert text.startswith(model)
+    assert str(llm.known_model_note(model)) in text, "seine eigene Messung steht dabei"
     assert "7,8 Token je Sekunde" in text
     assert "Prozessor" in text
-    assert "42 Minuten" in text
-    assert "Zehn-Minuten-Grenze" in text
-    assert "kann so nicht abgeschlossen werden" in text
+    assert "zehn Minuten" in text
     assert "geeignete Grafikkarte" in text
     assert "gehostetes Modell" in text
-    assert "drei von fünf" not in text
 
 
 def test_the_probe_result_keeps_the_buttons_inside_the_visible_dialog(

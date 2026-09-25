@@ -1687,45 +1687,105 @@ def parse_parameter_count(text: str) -> float | None:
 #: Liste der zusätzlichen Programme installiert hatte, stand danach vor einem
 #: Chat, der weiterhin nicht ging — Ollama bringt kein Modell mit, und der
 #: einzige Hinweis darauf war ein Satz mit „ollama pull" darin. Ein Modellname
-#: allein hilft dabei nicht: Zwischen 5 und 9 GB Download liegt eine
+#: allein hilft dabei nicht: Zwischen 7 und 19 GB Download liegt eine
 #: Entscheidung, und ob es Werkzeuge aufruft, ist die eigentliche Frage.
+#:
+#: **Empfohlen wird jedes Modell, mit dem es klappt** (Robert, 25.09.2026) —
+#: und „klappt" heißt gemessen: in ``tools/check_local_model.py`` mindestens
+#: sieben von acht Aufrufen richtig, und bei der absichtlich unklaren Anfrage
+#: gefragt statt geraten (Fragen vor Raten, §26.1). Der Grafikspeicher im Satz
+#: ist die Belegung auf der Karte mit ``num_ctx`` 32 768, gemessen als
+#: Unterschied in ``nvidia-smi`` vor und nach dem Laden — mehr als Ollama in
+#: ``ps`` meldet, weil der Treiber seinen Anteil dazulegt. Er ist die
+#: Systemanforderung: Passt das Modell nicht ganz auf die Karte, rechnet der
+#: Prozessor mit, und jede Antwort dauert ein Vielfaches.
+#:
+#: Gemessen am 25.09.2026 auf einer RTX 4080 (16 GB), Ollama 0.34.3, mit dem
+#: Werkzeugangebot aus ``agent/offer.py`` und dem kompakten Prompt.
 OLLAMA_SUGGESTIONS: Final = (
+    (
+        "qwen3.5:9b",
+        6.6,
+        _(
+            "Belegt 7,4 GB Grafikspeicher. Zweimal geprüft: jeweils sieben von acht "
+            "Aufrufen richtig, rund 6 Sekunden je Anfrage."
+        ),
+    ),
     (
         "qwen3:14b",
         9.3,
         _(
-            "Zweimal geprüft: jeweils fünf von fünf vollständigen Anweisungen "
-            "richtig; 11 bis 26 Sekunden je Anweisung (Median rund 17)."
+            "Belegt 13,6 GB Grafikspeicher. Acht von acht Aufrufen richtig; denkt vor "
+            "jeder Antwort nach, rund 18 Sekunden je Anfrage."
         ),
     ),
     (
         "gpt-oss:20b",
         13.8,
-        _("Am schnellsten: rund 6 Sekunden je Schritt, trifft drei von fünf."),
+        _(
+            "Belegt 12,9 GB Grafikspeicher. Sieben von acht Aufrufen richtig, rund "
+            "7 Sekunden je Anfrage."
+        ),
     ),
-    ("qwen3:8b", 5.2, _("Kleiner und schneller, trifft seltener. Für kurze Anweisungen.")),
     (
         "qwen3:30b-a3b",
         18.6,
-        _("Trifft wie das 14B, braucht aber die doppelte Zeit und den doppelten Platz."),
+        _(
+            "Braucht mehr als 16 GB Grafikspeicher; auf einer 16-GB-Karte rechnet ein "
+            "Drittel auf dem Prozessor, und es bleibt bei rund 17 Sekunden je Anfrage. "
+            "Acht von acht Aufrufen richtig."
+        ),
+    ),
+)
+
+#: Gemessen und **nicht** empfohlen — angeboten wird keines davon. Der Satz
+#: steht trotzdem da, wenn eines installiert ist: Ein Kunde, der es schon hat,
+#: soll lesen, warum der Chat damit nichts tut oder rät, statt drei nackte
+#: Namen zu sehen (:func:`known_model_note`). Dieselbe Messung wie oben.
+OLLAMA_UNSUITABLE: Final = (
+    (
+        "qwen3.5:9b-q8_0",
+        10.7,
+        _(
+            "Belegt 10,6 GB und traf mit sechs von acht seltener als qwen3.5:9b — "
+            "die kleinere Version ist die bessere Wahl."
+        ),
+    ),
+    (
+        "gemma4:12b",
+        7.6,
+        _("Lief bei zwei von acht Anfragen in eine Antwort ohne Ende. Für Solidon ungeeignet."),
+    ),
+    (
+        "granite4.1:8b",
+        5.3,
+        _("Rät bei einer unklaren Anfrage, statt nachzufragen. Für Solidon ungeeignet."),
     ),
     (
         "llama3.1:8b",
         4.9,
-        _("Zwei von fünf Werkzeugaufrufen — nur, wenn die anderen nicht laufen."),
+        _("Rät bei einer unklaren Anfrage, statt nachzufragen. Für Solidon ungeeignet."),
+    ),
+    (
+        "mistral-nemo:latest",
+        7.1,
+        _(
+            "Schreibt bei vier von acht Anfragen über das Werkzeug, statt es "
+            "aufzurufen. Für Solidon ungeeignet."
+        ),
     ),
     (
         "qwen2.5-coder:14b",
         9.0,
         _(
-            "Ruft in dieser Messung kein einziges Werkzeug auf — trotz vierzehn "
-            "Milliarden Parametern."
+            "Schreibt jeden Aufruf als Text hin, statt ihn auszuführen — trotz "
+            "vierzehn Milliarden Parametern. Für Solidon ungeeignet."
         ),
     ),
     (
-        "mistral-nemo:latest",
-        7.1,
-        _("Ruft keine Werkzeuge auf, sondern schreibt darüber. Für Solidon unbrauchbar."),
+        "llama3:latest",
+        4.7,
+        _("Ollama lehnt Werkzeuge für dieses Modell ab. Für Solidon ungeeignet."),
     ),
 )
 
@@ -1745,11 +1805,12 @@ def known_model_suggestion(name: str) -> tuple[float, TranslatableText] | None:
 
     Verglichen wird ohne Kennzeichnung: Ollama führt dasselbe Modell als
     ``mistral-nemo`` und als ``mistral-nemo:latest``, und der Kunde hat es
-    einmal installiert, nicht zweimal.
+    einmal installiert, nicht zweimal. Gesucht wird in beiden Listen — die
+    empfohlenen und die gemessen ungeeigneten.
     """
 
     wanted = normalised_model_name(name)
-    for entry, gigabytes, note in OLLAMA_SUGGESTIONS:
+    for entry, gigabytes, note in (*OLLAMA_SUGGESTIONS, *OLLAMA_UNSUITABLE):
         if normalised_model_name(entry) == wanted:
             return gigabytes, note
     return None
@@ -1759,7 +1820,7 @@ def known_model_note(name: str) -> TranslatableText | None:
     """Der Satz zu einem Modellnamen, oder ``None`` für ein unbekanntes.
 
     Was zu einem installierten Modell danebensteht, wenn es in
-    :data:`OLLAMA_SUGGESTIONS` bekannt ist.
+    :data:`OLLAMA_SUGGESTIONS` oder :data:`OLLAMA_UNSUITABLE` bekannt ist.
 
     **Die Zahl entscheidet die Wahl, und sie stand nur bei den empfohlenen.**
     Ein Kunde mit drei installierten Modellen sah drei nackte Namen; dass
@@ -1981,36 +2042,46 @@ def ollama_size_warning(
     size = parse_parameter_count(str(entry.get("details", {}).get("parameter_size", "")))
     if size is None or size >= OLLAMA_MIN_PARAMETERS:
         return None
+    # Kein Modellname im Satz: Welche sich bewährt haben, sagt die Liste im
+    # Dialog (:data:`OLLAMA_SUGGESTIONS`), und ein zweiter Name hier wäre ein
+    # Zwilling, der beim nächsten Wechsel der Vorgabe stehen bliebe.
     return _(
         "Das lokale Modell hat weniger als 7 Milliarden Parameter — "
-        "Werkzeugaufrufe scheitern damit erfahrungsgemäß. Bewährt hat sich "
-        "qwen3:14b; in der Messung auf einer RTX 4080 lief es vollständig auf "
-        "der Grafikkarte. Ohne passende Grafikkarte fällt Ollama auf den "
-        "Prozessor zurück und wird erheblich langsamer."
+        "Werkzeugaufrufe scheitern damit erfahrungsgemäß. Bewährt haben sich "
+        "die Modelle, die „Bearbeiten → Chat einrichten“ vorschlägt. Ohne "
+        "passende Grafikkarte fällt Ollama auf den Prozessor zurück und wird "
+        "erheblich langsamer."
     )
 
 
-def local_model_expectation() -> TranslatableText:
-    """Was ein lokales Modell hier wirklich leistet — gemessen, nicht geschätzt.
+def local_model_expectation(model: str | None = None) -> TranslatableText:
+    """Was das eingestellte lokale Modell hier leistet — gemessen, nicht geschätzt.
 
     Der Satz gehört an die Stelle, an der jemand Ollama einträgt. Ohne ihn
     erlebt er das Ergebnis als Fehler der Anwendung: Ein Rückfall auf den
     Prozessor beginnt erst nach vielen Minuten zu antworten, während derselbe
     Werkzeugweg auf einer geeigneten Grafikkarte in Sekunden fertig ist.
 
-    Die Zahlen stammen aus ``tools/check_local_model.py`` gegen die 106
-    Werkzeuge dieser Anwendung, nicht aus einer Bestenliste.
+    **Die Messung ist die des eingestellten Modells**, aus derselben Liste,
+    die der Dialog zeigt (:func:`known_model_note`). Bis zum 25.09.2026 stand
+    hier fest die Messung von qwen3:14b — auch unter einem anderen Modell, und
+    dann über ein fremdes. Ein unbekanntes Modell bekommt den Weg zur Probe.
     """
+    name = model or configured_ollama_model()
+    note = known_model_note(name)
+    measured = (
+        _("Für {model} liegt keine Messung vor.", model=name)
+        if note is None
+        else _("{model}, gemessen auf einer RTX 4080: {note}", model=name, note=note)
+    )
     return _(
-        "qwen3:14b hat in zwei Messläufen jeweils fünf von fünf vollständigen "
-        "Anweisungen richtig ausgeführt: auf einer RTX 4080 in 11 bis 26 "
-        "Sekunden je Anweisung (Median rund 17), vollständig auf der "
-        "Grafikkarte. Der gemessene Rückfall auf den Prozessor erreichte nur "
-        "7,8 Token je Sekunde und brauchte rund 42 Minuten bis zum Beginn der "
-        "Antwort. Das überschreitet Solidons Zehn-Minuten-Grenze; ein "
-        "vollständiger Auftrag kann so nicht abgeschlossen werden. Solidon "
-        "zeigt den verwendeten Rechenweg an. Für zügige Antworten braucht es eine geeignete "
-        "Grafikkarte oder einen Schlüssel für ein gehostetes Modell."
+        "{measured} Passt das Modell nicht ganz in den Grafikspeicher, rechnet der "
+        "Prozessor mit — gemessen wurden dort 7,8 Token je Sekunde beim Einlesen, und "
+        "eine Antwort beginnt erst nach vielen Minuten; nach zehn Minuten bricht "
+        "Solidon ab. Welcher Weg hier rechnet, sagt „Werkzeuge prüfen“ unter "
+        "„Bearbeiten → Chat einrichten“. Für zügige Antworten braucht es eine "
+        "geeignete Grafikkarte oder einen Schlüssel für ein gehostetes Modell.",
+        measured=measured,
     )
 
 
@@ -2322,6 +2393,21 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
     """
     if speed.on_gpu is not False or speed.prompt_minutes is None:
         return None
+    # **Die Grenze wird gerechnet, nicht behauptet.** Bis zum 25.09.2026
+    # sagte der Satz unbedingt, der Auftrag werde nicht fertig — bei 27 293
+    # Token stimmte das für jeden Prozessor unter 45 Token je Sekunde. Seit
+    # dem Werkzeugangebot ist der Auftrag ein Drittel so lang, und ein
+    # schneller Prozessor beginnt binnen Minuten. Er bekommt die Wartezeit
+    # ohne Absage.
+    if speed.prompt_minutes * 60.0 < LOCAL_TIMEOUT_SECONDS:
+        return _(
+            "Dieses Modell rechnet auf dem Prozessor, nicht auf der Grafikkarte — "
+            "gemessene {rate} Token je Sekunde beim Einlesen. Der zuletzt gemessene "
+            "Auftrag dieser Anwendung umfasst rund {tokens} Token; bei diesem Umfang "
+            "dauert es hier etwa {minutes} Minuten, bis eine Antwort beginnt. Für "
+            "zügige Antworten braucht es eine geeignete Grafikkarte oder einen "
+            "Schlüssel für ein gehostetes Modell."
+        )
     return _(
         "Dieses Modell rechnet auf dem Prozessor, nicht auf der Grafikkarte — "
         "gemessene {rate} Token je Sekunde beim Einlesen. Der zuletzt gemessene Auftrag "

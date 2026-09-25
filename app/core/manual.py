@@ -1786,9 +1786,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "einem anderen Rechner, gehört seine Adresse in die Liste der "
             "zusätzlichen Programme.\n"
             "2. **Ein Modell holen.** Die Auswahl nennt, was installiert ist, "
-            "und darunter die bewährten mit ihrer Größe. *Modell holen* lädt es "
-            "— fünf bis neun Gigabyte, mit Fortschritt und Abbrechen. Ein "
-            "abgebrochener Download setzt beim nächsten Versuch fort.\n"
+            "und darunter die bewährten mit Download und Grafikspeicher. "
+            "*Modell holen* lädt es — sieben bis neunzehn Gigabyte, mit "
+            "Fortschritt und Abbrechen. Ein abgebrochener Download setzt beim "
+            "nächsten Versuch fort.\n"
             "3. **Werkzeuge prüfen.** Der wichtigste Schritt, und er beantwortet "
             "zwei Fragen. Ob ein Modell Werkzeuge wirklich aufruft, sagt weder "
             "seine Größe noch sein Anbieter — die Probe macht einen echten Zug. "
@@ -1798,15 +1799,15 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "die Grafikkarte nicht nutzt, rechnet es auf dem Prozessor, und "
             "das ist keine andere Geschwindigkeit, "
             "sondern eine andere Größenordnung — gemessen auf einem Rechner mit "
-            "Intel-Arc-Grafik knapp acht Token je Sekunde beim Einlesen. Der "
-            "Auftrag von Solidon ist rund 20 000 Token lang; es dauert dort "
-            "**zweiundvierzig Minuten**, bis eine Antwort überhaupt beginnt. "
-            "Steht das in der Probe, ist es keine Störung, sondern die "
+            "Intel-Arc-Grafik knapp acht Token je Sekunde beim Einlesen. Die "
+            "Probe rechnet aus ihrer Messung aus, **wie lange es auf diesem "
+            "Rechner dauert, bis eine Antwort beginnt**, und sagt es. Steht dort "
+            "eine Wartezeit von Minuten, ist es keine Störung, sondern die "
             "Auskunft: Auf diesem Rechner lohnt der lokale Weg nicht, und ein "
             "kleineres Modell ändert daran wenig.\n\n"
             "**Nach zehn Minuten beendet Solidon eine lokale Anfrage.** Das "
-            "ist die technische Grenze des derzeitigen Transports. Eine "
-            "Messung von zweiundvierzig Minuten bedeutet deshalb nicht nur "
+            "ist die technische Grenze des derzeitigen Transports. Nennt die "
+            "Probe mehr als zehn Minuten, bedeutet das deshalb nicht nur "
             "langes Warten, sondern dass dieser Modellweg auf dem Rechner "
             "nicht verwendbar ist.\n\n"
             "Es gibt weitere lokale Wege, und Solidon richtet sie nicht ein: Ollama "
@@ -1817,16 +1818,15 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Fallen. Wer einen dieser Wege nutzen will, muss ihn passend zu seinem "
             "Rechner prüfen; wer nicht, nimmt einen Schlüssel für ein gehostetes "
             "Modell. Beides ist vertretbar, und alles außer dem Chat läuft ohne beides.\n\n"
-            "Bewährt hat sich **qwen3:14b**: in der aktuellen Probe fünf von "
-            "fünf vollständigen Anweisungen richtig, mit 11 bis 26 Sekunden je "
-            "Anweisung (Median 17) auf einer RTX 4080. Gemessen wurde auf einer "
-            "Grafikkarte mit 16 GB. "
-            "Kleinere Modelle sind schneller und treffen seltener; unter sieben "
-            "Milliarden Parametern scheitern die Aufrufe reproduzierbar.\n\n"
-            "In dieser Probe war das lokale Modell langsamer und traf seltener als ein "
-            "gehostetes — gemessen an fünf Anweisungen auf einer Karte, nicht als Regel "
-            "für jeden Rechner. Für kurze Anweisungen reicht es; für lange Züge lohnt "
-            "ein eigener Schlüssel, und der liegt dann im Schlüsselbund des Systems.\n\n"
+            "**Welche Modelle sich bewährt haben**, steht mit Download, "
+            "Grafikspeicher und Messung im Kapitel *Welche Modelle Solidon "
+            "benutzt*. Das Modell muss ganz in den Grafikspeicher passen; wo es "
+            "das nicht tut, rechnet der Prozessor mit, und jede Antwort dauert "
+            "ein Vielfaches. Unter sieben Milliarden Parametern scheitern die "
+            "Aufrufe reproduzierbar.\n\n"
+            "Für kurze Anweisungen reicht das lokale Modell; für lange Züge "
+            "lohnt ein eigener Schlüssel für ein gehostetes, und der liegt dann "
+            "im Schlüsselbund des Systems.\n\n"
             "## ComfyUI — für das Erzeugen aus Text oder Bild\n\n"
             "**Auch hier ist installiert erst die Hälfte.** ComfyUI braucht "
             "die Knoten, die der Ablauf anspricht, und das Modell, das sie "
@@ -1862,8 +1862,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Schritt im Dialog.\n\n"
             "**Lokale KI-Arbeit läuft nacheinander.** Ollama und ComfyUI teilen "
             "sich häufig dieselbe Grafikkarte; Solidon startet deshalb nicht "
-            "beide gleichzeitig. Nach einem vollständigen Agentenvorschlag "
-            "entlädt es das Ollama-Modell. Nach einer Erzeugung — auch bei "
+            "beide gleichzeitig. Nach einem Agentenvorschlag bleibt das "
+            "Ollama-Modell drei Minuten auf der Grafikkarte, damit die nächste Frage nicht "
+            "auf seinen Start wartet; braucht eine Erzeugung die Karte, gibt "
+            "Solidon es vorher frei. Nach einer Erzeugung — auch bei "
             "Fehler oder Abbruch — gibt ComfyUI Modell und Zwischenspeicher "
             "frei. Ein Abbruch entfernt dabei nur den Auftrag, den Solidon "
             "selbst gestartet hat. Dienste auf einem anderen Rechner bleiben "
@@ -2604,6 +2606,7 @@ def models_text() -> str:
         DEFAULT_OLLAMA_MODEL,
         OLLAMA_MIN_PARAMETERS,
         OLLAMA_SUGGESTIONS,
+        OLLAMA_UNSUITABLE,
     )
     from app.i18n import format_decimal as decimal
 
@@ -2639,12 +2642,22 @@ def models_text() -> str:
             "",
             str(
                 _(
-                    "Fett steht die Vorgabe. Gemessen wurde an fünf Anfragen, die je "
-                    "einen Werkzeugaufruf verlangen — ein Modell, das nur darüber "
+                    "Fett steht die Vorgabe. Gemessen wurde an acht Anfragen, die je "
+                    "einen Werkzeugaufruf verlangen — bei einer absichtlich unklaren "
+                    "ist die Rückfrage der richtige. Ein Modell, das nur darüber "
                     "schreibt, statt ihn auszuführen, antwortet im Chat und tut "
                     "nichts. Deshalb der Knopf *Werkzeuge prüfen*: Weder Größe noch "
                     "Anbieter sagen es voraus."
                 )
+            ),
+            "",
+            f"### {_('Geprüft und nicht empfohlen')}",
+            "",
+            f"| {_('Modell')} | {_('Größe')} | {_('Was gemessen wurde')} |",
+            "|---|---|---|",
+            *(
+                f"| {name} | {decimal(gigabytes, 1)} GB | {note} |"
+                for name, gigabytes, note in OLLAMA_UNSUITABLE
             ),
             "",
             str(

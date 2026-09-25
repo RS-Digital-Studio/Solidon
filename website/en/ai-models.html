@@ -138,8 +138,20 @@
       downloads nothing unasked; external GLB and STL files remain fully
       usable regardless.</p>
 
-      <h2>Local chat: GPU and CPU measured separately</h2>
-      <p class="footnote">Measured on 23 September 2026 with <b>qwen3:14b</b> under Ollama and all 147 tools, on an NVIDIA RTX 4080 with 16&nbsp;GB of graphics memory: the model sat entirely on the card, with no help from the processor. A turn took 19.8 seconds cold — Solidon frees the card after every turn, so the model is loaded again — and a median of 2.5 seconds with the model already loaded. <b>If the model does not fit completely into graphics memory, the processor joins in and it becomes many times slower.</b> The application shows whether Ollama is really using the GPU.</p>
+      <h2>Local chat: which model for which card</h2>
+      <p class="sub">The chat runs free of charge through Ollama on your own computer. The model has to fit entirely into graphics memory — otherwise the processor joins in and every answer takes many times as long. These four call Solidon's tools reliably and ask back when a request is unclear:</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Model</th><th>Graphics memory</th><th>Tool check</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><b>qwen3.5:9b</b></td><td>7.4&nbsp;GB — from an 8&nbsp;GB card</td><td>7 of 8, about 6&nbsp;s per request</td></tr>
+          <tr><td><b>gpt-oss:20b</b></td><td>12.9&nbsp;GB — 16&nbsp;GB card</td><td>7 of 8, about 7&nbsp;s</td></tr>
+          <tr><td><b>qwen3:14b</b></td><td>13.6&nbsp;GB — 16&nbsp;GB card</td><td>8 of 8, about 18&nbsp;s — thinks before every answer</td></tr>
+          <tr><td><b>qwen3:30b-a3b</b></td><td>more than 16&nbsp;GB — on 16&nbsp;GB the processor takes a third</td><td>8 of 8, about 17&nbsp;s</td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">Measured on 25 September 2026 on an NVIDIA RTX 4080 with 16&nbsp;GB under Ollama 0.34.3. The check is eight requests that each call for one tool; for one that is deliberately unclear, asking back is the right answer. For a local model, Solidon3D sends the intended tools with all their fields and all others in short form with each request — which makes the task a quarter as long as before. After an answer the model stays loaded for three minutes, so the next question does not wait for it to start. <b>Not recommended</b>, although measured: gemma4:12b (answers without end), granite4.1:8b and llama3.1:8b (guess on an unclear request instead of asking), mistral-nemo and qwen2.5-coder:14b (write the calls out as text). During setup, Solidon3D shows whether Ollama is really using the graphics card.</p>
     </div>
   </section>
 
