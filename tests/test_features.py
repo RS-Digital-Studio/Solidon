@@ -5236,6 +5236,95 @@ def test_a_notch_too_large_to_be_one_stays_open() -> None:
     assert set(healed) != set(faces), "sechs fehlende Dreiecke sind keine Kerbe"
 
 
+def _notch_closure_by_recounting(body, patch, candidates):
+    """Unabhängiger Sollwert: den gesamten neuen Rand für jede kleine Menge neu zählen."""
+    from collections import Counter
+    from itertools import combinations
+
+    for count in range(1, features_module.NOTCH_AT_MOST + 1):
+        found = []
+        for group in combinations(candidates, count):
+            edges = Counter()
+            for triangle in np.asarray(body.faces)[[*patch, *group]]:
+                a, b, c = map(int, triangle)
+                for start, end in ((a, b), (b, c), (c, a)):
+                    edges[tuple(sorted((start, end)))] += 1
+            if any(number > 2 for number in edges.values()):
+                continue
+            degrees = Counter()
+            for edge, number in edges.items():
+                if number == 1:
+                    degrees.update(edge)
+            if not any(number > 2 for number in degrees.values()):
+                found.append(group)
+        if found:
+            return found[0] if len(found) == 1 else None
+    return None
+
+
+def test_more_frayed_nodes_than_two_triangles_can_touch_never_start_the_search(monkeypatch):
+    """Zwölf ausgefranste Knoten können zwei Dreiecke nicht erreichen; keine Paarsuche nötig."""
+    body = trimesh.creation.revolve([(3.0, 0.0), (6.0, 3.0)], sections=12)
+    patch = list(range(0, len(body.faces), 2))
+    candidates = tuple(range(1, len(body.faces), 2))
+    rim = features_module._rim_of(body, patch)
+    assert rim is not None and len(rim.frayed) == 12
+    assert _notch_closure_by_recounting(body, patch, candidates) is None
+
+    def unexpected(*_args):
+        pytest.fail("an impossible two-triangle closure must not be searched")
+
+    monkeypatch.setattr(features_module, "_edge_codes", unexpected)
+    monkeypatch.setattr(features_module, "_closes", unexpected)
+    assert features_module._closing_set(body, rim, candidates) is None
+
+
+def test_exactly_six_frayed_nodes_can_be_closed_by_two_triangles():
+    """Die notwendige Schranke lässt ihren Randfall zu: zwei getrennte dreieckige Kerben."""
+    corners = np.array(
+        [(0, 0, 0), (2, 0, 0), (1, 2, 0), (1, -1, 0), (3, 2, 0), (-1, 2, 0)], dtype=float
+    )
+    body = trimesh.Trimesh(
+        vertices=np.vstack((corners, corners + np.array((10, 0, 0)))),
+        faces=[
+            (0, 1, 3),
+            (1, 2, 4),
+            (2, 0, 5),
+            (6, 7, 9),
+            (7, 8, 10),
+            (8, 6, 11),
+            (0, 1, 2),
+            (6, 7, 8),
+        ],
+        process=False,
+    )
+    patch, candidates = list(range(6)), (6, 7)
+    rim = features_module._rim_of(body, patch)
+    assert rim is not None and len(rim.frayed) == 6
+    assert _notch_closure_by_recounting(body, patch, candidates) == candidates
+    assert features_module._closing_set(body, rim, candidates) == candidates
+
+
+def test_small_notches_match_a_complete_independent_boundary_recount():
+    """Jede einzelne und doppelte Lücke eines Kegelbands behält die alte Randentscheidung."""
+    from itertools import combinations
+
+    body = trimesh.creation.revolve([(3.0, 0.0), (6.0, 3.0)], sections=12)
+    checked = 0
+    for count in (1, 2):
+        for missing in combinations(range(len(body.faces)), count):
+            patch = [index for index in range(len(body.faces)) if index not in missing]
+            rim = features_module._rim_of(body, patch)
+            if rim is None or not rim.frayed:
+                continue
+            assert len(rim.frayed) <= 6
+            assert features_module._closing_set(body, rim, missing) == _notch_closure_by_recounting(
+                body, patch, missing
+            )
+            checked += 1
+    assert checked == 276
+
+
 def _subdivided(mesh: MeshData, depth: int) -> MeshData:
     """Dieselbe Form, nur feiner trianguliert.
 
@@ -5690,3 +5779,115 @@ def test_a_partial_cone_with_one_clear_owner_still_folds_into_that_slot() -> Non
         for name, slot in slots.items()
     }
     assert sum(1 for kinds in carriers.values() if kinds) == 1, carriers
+
+
+def _slab_with_a_top(amplitude: float = 0.0, bend: float = 0.0, seed: int = 7) -> MeshData:
+    """Ein geschlossener Block 60 × 60 × 6 mit fein unterteilten Tafeln oben und unten.
+
+    ``amplitude`` legt Rauschen auf die Höhe beider Tafeln, wie ein erzeugtes
+    Netz eine ebene Partie trägt; ``bend`` wölbt die obere sanft, wie eine
+    konstruierte Fläche mit großem Radius.
+    """
+    rng = np.random.default_rng(seed)
+    count = 60
+    steps = np.linspace(-30.0, 30.0, count + 1)
+    grid = np.array([(x, y) for y in steps for x in steps])
+    heights = 6.0 + amplitude * (rng.random(len(grid)) - 0.5) - bend * (grid**2).sum(axis=1)
+    top = np.column_stack([grid, heights])
+    bottom = np.column_stack([grid, amplitude * (rng.random(len(grid)) - 0.5)])
+    faces = []
+    for row in range(count):
+        for column in range(count):
+            a = row * (count + 1) + column
+            b, c, d = a + 1, a + count + 1, a + count + 2
+            faces += [(a, b, d), (a, d, c)]
+    shift = len(grid)
+    faces += [(shift + a, shift + c, shift + b) for a, b, c in faces[: 2 * count * count]]
+    ring = (
+        list(range(count))
+        + [column * (count + 1) + count for column in range(count)]
+        + [(count + 1) * (count + 1) - 1 - column for column in range(count)]
+        + [(count - column) * (count + 1) for column in range(count)]
+    )
+    for here, there in zip(ring, ring[1:] + ring[:1], strict=True):
+        faces += [(here, shift + there, there), (here, shift + here, shift + there)]
+    body = trimesh.Trimesh(np.vstack([top, bottom]), faces, process=False)
+    trimesh.repair.fix_normals(body)
+    assert body.is_watertight and body.is_winding_consistent
+    return MeshData.of(body)
+
+
+@pytest.mark.parametrize(
+    ("amplitude", "bend", "rough"),
+    [(0.004, 0.0, True), (0.0005, 0.0, False), (0.0, 1 / 800.0, False), (0.0, 0.0, False)],
+    ids=["verrauscht", "float-fein", "sanft-gekrümmt", "eben"],
+)
+def test_only_noise_makes_a_rough_tafel(amplitude: float, bend: float, rough: bool) -> None:
+    """Rau ist Rauschen, nicht Krümmung und nicht die letzte Stelle (RM-235).
+
+    Ein erzeugtes Netz trägt ebene Partien als Tafel, deren Knicke in beide
+    Richtungen gehen; eine sanft gekrümmte konstruierte Fläche biegt sich in
+    eine, und fast ebene CAD-Flächen knicken unter einem Zehntelgrad. Nur die
+    erste Tafel ist rau — die anderen zwei scheitern an derselben
+    Ebenheitsprüfung und dürfen trotzdem nicht zur Haut zählen.
+    """
+    body = _slab_with_a_top(amplitude, bend).raw
+    planar = features_module._large_facet_faces(body)
+    tafeln = float(body.area_faces[np.abs(body.face_normals[:, 2]) > 0.9].sum())
+    share = features_module._rough_facet_area(body, planar)
+    if rough:
+        assert share == pytest.approx(tafeln, rel=0.01), (share, tafeln)
+    else:
+        assert share == 0.0
+
+
+def test_rough_tafeln_make_a_body_skin_on_their_own() -> None:
+    """Raue Tafeln machen den Körper zur Haut, auch wo die Splitter es nicht tun.
+
+    Am erzeugten Puppenhausbett lagen 57 Prozent der Oberfläche in
+    verrauschten Tafeln und 34 Prozent in Splittern; die Splitterregel sah
+    nur die zweiten, und 96 893 Splitter wurden eingepasst (25.09.2026). Hier:
+    der Scan-Körper der Tests neben einem Block, dessen Deckfläche
+    verrauscht beziehungsweise sanft gewölbt ist. Nur die verrauschte zählt.
+    """
+    blob = _scan_like_blob().raw
+    for amplitude, bend, skin in ((0.004, 0.0, True), (0.0, 1 / 800.0, False)):
+        slab = _slab_with_a_top(amplitude, bend).raw
+        joined = MeshData.of(trimesh.util.concatenate([blob, slab]))
+        rough = features_module._rough_facet_area(
+            joined.raw, features_module._large_facet_faces(joined.raw)
+        )
+        assert (rough >= features_module.FREEFORM_ROUGH_SHARE * float(joined.raw.area)) is skin
+        forget_cache()
+        assert features_module._fitted(joined).freeform_skin is skin, (amplitude, bend)
+
+
+def test_the_facet_verdict_and_the_patches_stop_between_their_steps() -> None:
+    """Facettenurteil, Flecken und Krümmungssprünge prüfen den Abbruch unterwegs.
+
+    Am Drachen mit 2,3 Millionen Dreiecken lagen sie bis zu 9,6 s ohne
+    Prüfung hintereinander, und so lange wartete *Abbrechen* (§15.6,
+    25.09.2026). Jeder Rumpf fragt jetzt zwischen seinen Schritten; ein
+    Abbruch in der Mitte kommt beim Aufrufer an.
+    """
+    from app.core.errors import OperationCancelled
+
+    body = trimesh.creation.cylinder(radius=10.0, height=20.0, sections=64)
+    faces = list(range(len(body.faces)))
+    runs = {
+        "Facettenurteil": lambda check: features_module._facet_verdicts_read(body, check),
+        "Flecken": lambda check: features_module._connected_patches_read(body, faces, check),
+        "Krümmungssprünge": lambda check: features_module._curvature_jumps(body, check),
+    }
+    for name, run in runs.items():
+        counted: list[int] = []
+        run(lambda counted=counted: counted.append(1))
+        assert len(counted) >= 2, (name, len(counted))
+
+        def cancel_on_the_second(seen: list[int] = []) -> None:  # noqa: B006
+            seen.append(1)
+            if len(seen) == 2:
+                raise OperationCancelled
+
+        with pytest.raises(OperationCancelled):
+            run(cancel_on_the_second)

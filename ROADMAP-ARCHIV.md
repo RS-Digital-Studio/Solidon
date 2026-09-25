@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-25 | [Große Netze: Speicher, Merkmalsgrenze und die Erkennung an einer Stelle (25.09.2026)](#große-netze-speicher-merkmalsgrenze-und-die-erkennung-an-einer-stelle-25092026) |
 | 2026-09-25 | [Gekippte und versetzte Bohrungen sagen, was sie sind (25.09.2026)](#gekippte-und-versetzte-bohrungen-sagen-was-sie-sind-25092026) |
 | 2026-09-25 | [Das Einlesen großer Netze zählt einmal und liest im Arbeiter (25.09.2026)](#das-einlesen-großer-netze-zählt-einmal-und-liest-im-arbeiter-25092026) |
 | 2026-09-25 | [Ineinandersteckende Teile gehen vereinigt in die Boolesche Kette (25.09.2026)](#ineinandersteckende-teile-gehen-vereinigt-in-die-boolesche-kette-25092026) |
@@ -31071,6 +31072,180 @@ Dazu aus dem Bericht, je mit Test:
   `normalise` am Schiff 6,0 → 3,62 s mit gleichem Ergebnis an allen 485
   Körpern des Korpus, `open_path` ohne Dateiarbeit im Hauptthread. Das
   Verschweißen baut RM-239 neu.
+
+## Große Netze: Speicher, Merkmalsgrenze und die Erkennung an einer Stelle (25.09.2026)
+
+<a id="rm-235"></a>
+
+- [x] **RM-235 — Die Erkennung läuft an sehr großen Netzen in den Speicher oder über ihre Grenze.**
+  Aus der Durchsicht 0.5.0 (szene 27, beziehungen): Am Puppenhausbett (1,2 Mio.
+  Dreiecke) warf die Erkennung einen `MemoryError` in `features._fitted` — der
+  Halt ist seither sauber (ein Programmfehler der Erkennung reißt die Auswertung
+  nicht mehr ab), die Ursache liegt in der Erkennung. Der Gartenschlauchhalter
+  lädt in 52–116 s (Erkennung rund 60 s), und die Kumiko-Schale liefert 7 321
+  Merkmale über der Grenze von 5 000 und steht danach ganz ohne Merkmale. Weg:
+  den Speicherbedarf in `_fitted` an einem Netz dieser Größe messen und
+  begrenzen (Stapel statt einer Matrix); über der Merkmalsgrenze die gefundenen
+  Merkmale nach Gewicht behalten und den Rest melden, statt alles zu verwerfen.
+  Abnahme: Puppenhausbett ohne Speicherfehler unter der automatischen Grenze
+  (seit 24.09.2026 1,5 Mio.), Kumiko mit ihren wichtigsten Merkmalen und einem
+  Satz über den Rest.
+
+  **Kumiko ist seit dem 25.09.2026 abgenommen:** Über `FEATURE_LIMIT_COUNT`
+  behält die Auswertung zuerst, was mit denselben Dreiecken schon da war, dann
+  die Merkmale mit der größten Oberfläche (`evaluate._heaviest`), und ordnet
+  genau diese zu; `perceive.too_many` sagt, dass es mehr waren. Die Schale
+  (94 990 Dreiecke, 7 326 Merkmale) steht mit 5 000 Merkmalen samt ihren vier
+  großen Deckflächen da. Nach Verschieben, Skalieren um 1,1 und Strecken in y
+  um 1,2 wechseln 0, 0 und 11 Namen — so viele wie ganz ohne Grenze; nach der
+  Größe allein waren es 136 und 1 814, und aus 5 000 Merkmalen wurden 5 898.
+
+  **Das Puppenhausbett ist seit dem 25.09.2026 abgenommen**
+  (`F:\3D Dateien\3D Drucker\Puppenhaus\moebel\bett.glb`, 1 229 570
+  Dreiecke, als Zoll gelesen): Die Vollerkennung läuft ohne Speicherfehler
+  durch, Spitze 2,1 GB, davon 1,2 GB schon das eingelesene Netz. Sie dauerte
+  aber 174 s für null Merkmale, und über 30 s davon waren Felder in
+  Netzgröße je Fleck — in der Stützpunktlesung, der Bogenzählung und der
+  Wendelsuche. Jetzt 98 s, an 15 Modellen Merkmal für Merkmal gleich
+  (Gartenschlauchhalter 55 → 29 s, Kumiko 18 → 12 s, Drache 46 → 39 s).
+  Der Rest war die Einpassung von 96 893 Splittern: Das Bett galt nicht als
+  Haut, weil 63 Prozent seiner Oberfläche in großen Facetten liegen —
+  verrauschte Tafeln mit bis zu 4,3° Streuung, weder Fläche noch Fleck —, und
+  erst die Zählung am Ende verwarf seine 5 508 Kugeln. Die Tafeln zur Haut zu
+  zählen schied aus: Konstruierte Teile tragen ebenso viel solcher
+  Facettenfläche (Wedge-Lock 40, Siebhalter 35, Kugelbahnteile bis
+  41 Prozent), sanft gekrümmte Flächen, die an derselben Ebenheitsprüfung
+  scheitern.
+
+  **Am selben Tag gelöst über raue Tafeln** (`features._rough_facet_area`):
+  Rauschen trennt sich von Krümmung erst an der Mischung der Knickrichtungen,
+  und von Float32 an der Knickstärke. Eine große Facette ohne Ebene ist rau,
+  wenn ihre Knicke gemischt (`FREEFORM_ROUGH_MIX`, 0,3) und stark
+  (`FREEFORM_ROUGH_BEND`, 90-%-Wert 0,1°) sind; ab `FREEFORM_ROUGH_SHARE`
+  (40 Prozent der Oberfläche) ist der Körper für sich eine Haut. Gemessen an
+  189 Körpern mit verrauschten Facetten aus `F:\3D Dateien`: erzeugte Möbel,
+  Figurenteile und Zaubersockel 50 bis 96 Prozent, danach nichts bis 30,
+  Konstruiertes höchstens 23. Die rauen Tafeln stattdessen zur Splittersumme
+  zu zählen ist gemessen und verworfen: `宠物便便器.3mf`, konstruiert und mit
+  56 Prozent Splittern, kippte über die Schwelle. Bett 106 → 26,5 s im selben
+  Lauf, Stuhl 27 → 6,2 s, an 20 Modellen dieselben Merkmale. Nachweis:
+  `test_only_noise_makes_a_rough_tafel` und
+  `test_rough_tafeln_make_a_body_skin_on_their_own`.
+
+  **Seit dem 24.09.2026 kostet der Speicherfehler beim Laden nur die
+  Erkennung** (`scene.evaluate._with_features`): Das Modell lädt ohne sie,
+  `perceive.too_large` sagt es als Warnung, die Absage wird festgehalten, und
+  *Alle Merkmale erkennen* holt sie später nach. Dringlicher geworden ist der
+  Punkt trotzdem: Mit der Anhebung liegt das Puppenhausbett jetzt in der
+  automatischen Erkennung, und bis fünf Millionen darf sie nach Bestätigung
+  laufen. Gemessen am 24.09.2026 (unter Fremdlast, je Import ein Prozess,
+  Einlesen eingeschlossen): Drache 2 330 374 Dreiecke 59–70 s Erkennung,
+  3 859 MiB Spitze; Gartenschlauchhalter 392 532 Dreiecke 46 s, 601 MiB.
+  Die längste Lücke zwischen zwei Abbruchprüfungen lag am Drachen bei 9,1 s
+  (`_large_facet_faces`, `body.facets`) — so lange kann *Abbrechen* dort warten.
+  **Seit dem 25.09.2026** prüfen Facettenurteil, Flecken, Krümmungssprünge und
+  Facettenmitten zwischen ihren Schritten, und die Kerbenschließung beginnt
+  keine Paarsuche, die ihren Rand nicht schließen kann (`_closing_set`: mehr
+  als `3 * NOTCH_AT_MOST` fransige Knoten) — ohne diese Schranke lief sie am
+  Drachen unter Last 21,5 s am Stück durch 706 000 Prüfungen. Die längste
+  Lücke ist jetzt 3,1 s, je ein Schritt am großen Fleck: die
+  Stützpunktlesung eines Ringfits, `body.facets` aus trimesh (2,5 s, nicht
+  teilbar) und die Kerbenschließung (2,2 s). Nachweis:
+  `test_the_facet_verdict_and_the_patches_stop_between_their_steps` und die
+  drei Kerbentests in `test_features.py`.
+
+  Nachgezogen am 24.09.2026 aus dem Erkennungs-Review der Reparatursitzung
+  (B10, B5): Nach bestätigter Vollerkennung hielt **jeder** Folgeschritt mit
+  „zu viele Dreiecke für die lokale Suche“ an, auch ein Verschieben um 5 mm —
+  die Zustimmung gilt jetzt dem Körper (`evaluate.recognition_of`), und die
+  örtliche Nachmessung hält nur für benötigte Merkmale an. Die lokale Suche
+  fand am Drachen an 18 von 18 Stellen nichts; jetzt gehört die ebene Facette
+  am Treffer immer dazu, das Budget zählt nur den Teil, der am Treffer hängt,
+  und ein Wechsel zwischen Suchrand und Budget an derselben Stelle endet in
+  einer Aussage statt in zwei Knöpfen, die einander zurückschicken. Die vier
+  Fußsohlen — alles, was die Vollerkennung dort findet — erkennt die lokale
+  Suche bei jedem Suchradius von 4 bis 10 mm in 1,5 bis 4 s. Am Drachen mit
+  den echten Grenzen: Laden mit Bestätigung 80 s, danach Skalieren 60 s mit
+  denselben vier Flächen, Verschieben 0,7 s.
+
+  Nachgezogen am 25.09.2026 aus dem Review dieser Arbeit (20 Befunde): Der
+  Rückweg *Alle Merkmale erkennen* hängt am Körper und überlebt Folgeschritte,
+  an einer Sammelzeile für alle Körper; ein Speicherfehler beim Laden unter der
+  Grenze lässt die Folgeschritte stehen, und ein gescheiterter Lauf wiederholt
+  sich im Prozess nicht; die Langlochflanke gilt nicht als Fläche, eine Ebene
+  über dem Budget macht die Stelle nicht unerkennbar, und der Dialog listet die
+  ebene Fläche am Treffer; die Antwort auf die Frage steht sofort fest, nach
+  einem Abbruch lädt *Ohne Merkmalserkennung laden*, und mehrere große Körper
+  bekommen eine gemeinsame Frage. Die Kommandozeile fragt je Befehl einmal.
+
+  Nachgezogen am 25.09.2026 aus der zweiten Runde (N1–N5 und die Reste von
+  B10, B11, B14, B17–B19): Die an der Stelle gefundene Sohle kam am Drachen
+  nicht in der Szene an — die Auswertung maß am unveränderten Netz nach und
+  verwarf sie. Unveränderte Dreiecke werden nicht mehr nachgemessen, und die
+  Nachmessung sucht wie an einer Stelle (Facette, zusammenhängender Teil,
+  erst der eigene Umfang); am Drachen steht die Sohle danach und nach dem
+  Skalieren im Baum, an der dichten Lochplatte die Bohrung auch nach
+  *Dreiecke verringern*. Nach einem Speicherfehler versucht eine neue
+  Entscheidung es wirklich neu, und die Absage behält ihren Grund; der
+  Rückweg steht nur, wo am Ladeschritt eine Wahl steht; die Frage nennt ihn;
+  ein gespeichertes „Ja“ lässt sich nach einem Abbruch zurücknehmen; die
+  Kommandozeile hat `recognize`; und die Langlochflanke gilt an der Stelle
+  nicht als Fläche.
+
+  Nachgezogen am 25.09.2026 aus der dritten Runde (R1–R7): Ob eine an der
+  Stelle gefundene Fläche eine ist, sagt jetzt die Ebenenregel der
+  Vollerkennung am ganzen Körper (`features.planar_facet`) — vorher meldete
+  die Stelle den unterteilten Mantel eines Zapfens beim Vorgaberadius als
+  Fläche, dazu Taschenwände, Zapfenflanken und Kanalsohlen. Der Langlochgang
+  kostet an einer Deckfläche mit 8 192 Randkanten 3 s statt 19,6 s. Ein
+  abgebrochener Lauf nach einem Speicherfehler wiederholt ihn nicht mehr; die
+  Absage kommt sofort an. Eine gespeicherte Zustimmung wird nur noch gemeldet,
+  wo sie die lange Erkennung wirklich startet. Die Nachmessung verliert ein
+  benötigtes Merkmal nicht mehr still an eine Insel in seiner Ebene, und ein
+  starres Verschieben übernimmt die mitbewegten Merkmale ohne Suche.
+  `recognize --on` fragt wie der Knopf im Fenster. Gemessen am Drachen: alle
+  vier Sohlen an der Stelle und nach Skalieren und zwei Verschiebungen.
+
+  Nachgezogen am 25.09.2026 aus der vierten Runde (S1–S6) und an zehn
+  Modellen aus `F:\3D Dateien`: Der Mantelnachweis an der Stelle flutet den
+  ganzen Fleck und prüft wachsende Teile — eine weiche Abflachung auf einer
+  Kugelkuppe kam sonst als „zu viele Dreiecke“; nur die ganze Facette ist
+  eine Fläche; die Rollenprüfung fragt dieselbe Auskunft statt eines Wegs,
+  der am Schaber mit „zu viele Dreiecke“ abbrach; die Nachmessung wird je
+  Netz und Merkmalen gemerkt; eine Hohlkehle kostet keinen Gang je Randkante;
+  `recognize --on` weist unbekannte Kennungen ab. An sieben der zehn Modelle
+  stimmt die Stelle an jeder geprüften Facette mit der Vollerkennung überein.
+  Offen blieben danach die Wabenwände des Schraubendreherhalters (die
+  Vollerkennung faltet sie in ein Muster, die Stelle meldete Flächen), die
+  Magnettaschen des Schabers (Ø 9, 1,3 tief — über die gerundete Mündung
+  gehen sie glatt in die gewölbte Oberseite über, und die galt als Suchrand)
+  und das Ø 34 des Besenhalters (gekrümmte Flächen). Gesenkte Bohrungen
+  brauchten einen Suchradius über die Senkung hinaus.
+
+  **Am selben Tag abgearbeitet:** Die Sperre über den glatten Suchrand reicht
+  nur bis zum nächsten Krümmungssprung (`features.curvature_jumps`, am ganzen
+  Körper), und hinter einem Knick oder Sprung muss der Nachbar einer
+  Hohlraumwand kein vollständiges Merkmal sein — die Magnettaschen des
+  Schabers kommen an der Stelle. Eine gerundete Seite misst ihre
+  Mindestfläche am ganzen Körper statt am Ausschnitt, der Ausschnitt wird
+  nicht noch einmal verschweißt (`features.as_its_own_body`: am Schaber
+  verlor eine Deckfläche sonst sechs ihrer 239 Dreiecke), und reicht das
+  Merkmal am Treffer über den Suchrand, heißt die Antwort Suchrand — bis dahin
+  kam ein Nachbar, der ganz im Radius lag, allein und ohne Auswahl. Das Ø 34
+  des Besenhalters liegt über zwei von drei getrennten Teilen, die einander
+  nicht durchdringen: Die Vollerkennung des ganzen Körpers setzt aus beiden
+  Halbschalen eine Bohrung zusammen (354 und 320 Dreiecke), die Stelle
+  meldet den Bogen des angeklickten Teils als Verrundung Ø 34,00 — dieselben
+  320 Dreiecke, die die Erkennung dieses Teils allein findet; ein zweiter
+  Körper gehört nicht zur Auswahl (`_connected_to`). Wabenmuster und
+  Senkungen sind Verhalten und stehen so in `app/core/perceive/CLAUDE.md`:
+  Das Muster kommt, sobald sein Feld im Suchradius liegt (bei 5 und 15 mm
+  Flächen, bei 30 mm Suchrand), die gesenkte Bohrung mit einem Radius über
+  die Senkung hinaus, und bis dahin bietet die Stelle den größeren an.
+  Nachweis: `test_a_pocket_with_a_rounded_mouth_is_found_under_a_dome`,
+  `test_a_rounded_side_is_measured_against_the_whole_body`,
+  `test_a_search_region_is_never_welded_again` und die angeklickte Stelle in
+  `test_the_flank_of_a_cut_slot_is_not_a_face`.
 
 ## Gekippte und versetzte Bohrungen sagen, was sie sind (25.09.2026)
 

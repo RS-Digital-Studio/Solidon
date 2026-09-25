@@ -273,14 +273,24 @@ def _connected_to(mesh: MeshData, indices: np.ndarray, seed: int) -> np.ndarray:
 
 
 def _part(mesh: MeshData, indices: np.ndarray) -> MeshData:
-    """Nur umnummerieren, niemals schneiden, reparieren oder Dreiecke erzeugen."""
+    """Nur umnummerieren, niemals schneiden, reparieren oder Dreiecke erzeugen.
+
+    **Auch nicht verschweißen.** Der Ausschnitt stammt aus dem schon
+    verschweißten Körper, aber sein Schnittrand ist offen, und ``detect``
+    hielt ihn deshalb für ungeschweißt: ``_one_body`` legte Ecken innerhalb
+    der Toleranz *seiner* Diagonale zusammen, die am ganzen Körper getrennt
+    sind. Am Schaber verlor eine Deckfläche so sechs ihrer 239 Dreiecke, und
+    die Stelle fand sie bei 5 mm nicht (25.09.2026).
+    """
     faces = np.asarray(mesh.raw.faces)[indices]
     vertices, inverse = np.unique(faces.ravel(), return_inverse=True)
-    return MeshData.of(
+    part = MeshData.of(
         trimesh.Trimesh(
             np.asarray(mesh.raw.vertices)[vertices], inverse.reshape(-1, 3), process=False
         )
     )
+    detection.as_its_own_body(part)
+    return part
 
 
 def _seeds(
@@ -536,19 +546,39 @@ def _recognise_region(
     cut = pairs[crossing]
     inner_cut = np.where(inside[cut[:, 0]], cut[:, 0], cut[:, 1])
     angles = np.degrees(np.asarray(body.face_adjacency_angles)[crossing])
-    continuing = {int(index) for index in inner_cut[angles < detection.CURVATURE_LIMIT]}
+    at_the_rim = {int(index) for index in inner_cut[angles < detection.CURVATURE_LIMIT]}
     # Ein Fit kann seine äußerste Dreiecksreihe bereits verworfen haben.
     # Deshalb gilt der unvollständige Rand für die ganze glatt verbundene
-    # Oberfläche, nicht nur für die zufällig veröffentlichten Randdreiecke.
-    smooth = inside[pairs].all(axis=1) & (
-        np.degrees(np.asarray(body.face_adjacency_angles)) < detection.CURVATURE_LIMIT
-    )
-    for component in trimesh.graph.connected_components(
-        pairs[smooth], nodes=indices, engine="scipy"
-    ):
-        _check(check)
-        if not continuing.isdisjoint(component):
-            continuing.update(int(index) for index in component)
+    # Oberfläche, nicht nur für die zufällig veröffentlichten Randdreiecke —
+    # **für eine eingepasste Form bis zum nächsten Krümmungssprung**, an dem
+    # auch die Vollerkennung eine Fläche in Stücke trennt
+    # (``features.curvature_jumps``, am ganzen Körper). Die Magnettaschen des
+    # Schabers gehen über eine gerundete Mündung glatt in die gewölbte
+    # Oberseite über: Der Ausschnitt fand jede Tasche genau wie die
+    # Vollerkennung, und die Sperre über die Oberseite verwarf sie bei jedem
+    # Radius (25.09.2026). Hinter einem Sprung liegt eine andere Fläche; die
+    # eigene Fortsetzung eines Fits trägt dieselbe Krümmung. **Eine gerundete
+    # Seite ist dagegen ein Rest** — was nach allen Einpassungen übrig bleibt,
+    # und wie viel das ist, hängt am Ausschnitt: Am Schaber kamen sonst Stücke
+    # von 38 bis 92 Dreiecken einer Seite heraus, die die Vollerkennung als eine
+    # mit 8 840 führt. Für sie gilt weiter die ganze glatte Fläche.
+    angle_soft = np.degrees(np.asarray(body.face_adjacency_angles)) < detection.CURVATURE_LIMIT
+    soft_seams = angle_soft & (detection.curvature_jumps(body, check) <= detection.CURVATURE_JUMP)
+    smooth = inside[pairs].all(axis=1) & angle_soft
+
+    def spread(seams: np.ndarray) -> set[int]:
+        """Die Randdreiecke samt allem, was über ``seams`` mit ihnen zusammenhängt."""
+        reached = set(at_the_rim)
+        for component in trimesh.graph.connected_components(
+            pairs[seams], nodes=indices, engine="scipy"
+        ):
+            _check(check)
+            if not reached.isdisjoint(component):
+                reached.update(int(index) for index in component)
+        return reached
+
+    continuing = spread(smooth & soft_seams)
+    continuing_surface = spread(smooth)
     mapped = {
         name: replace(
             feature,
@@ -700,27 +730,42 @@ def _recognise_region(
             body, feature.face_indices, limit=MANTLE_PROOF_LIMIT, check_cancelled=check
         )
 
+    # **Eine gerundete Seite misst sich am ganzen Körper.** Die Vollerkennung
+    # nimmt sie ab einem Hundertstel seiner Oberfläche (``CURVED_SIDE_SHARE``),
+    # der Ausschnitt ab einem Hundertstel des Ausschnitts — am Schaber kamen so
+    # 14 Stücke heraus, die die Vollerkennung nirgends führt (25.09.2026).
+    side_floor = max(detection.MIN_FACE_AREA, float(body.area) * detection.CURVED_SIDE_SHARE)
+    face_areas = np.asarray(body.area_faces, dtype=float)
+
     def bounded(feature: Feature) -> bool:
-        return continuing.isdisjoint(feature.face_indices) and _inside_radius(
+        blocked = continuing_surface if feature.kind == "curved_face" else continuing
+        return blocked.isdisjoint(feature.face_indices) and _inside_radius(
             body, feature, point, radius
         )
 
-    def is_complete(feature: Feature) -> bool:
+    def within(feature: Feature) -> bool:
+        """Ob das Merkmal diesseits des Suchrands endet — die Randfrage allein."""
         if feature.kind != "face":
             return bounded(feature)
+        cut_off = None if continues_tangentially(feature) else cut_facet(feature)
+        if cut_off is None:
+            return bounded(feature)
+        return not cut_off and (
+            proven_faces.issuperset(feature.face_indices)
+            or _inside_radius(body, feature, point, radius)
+        )
+
+    def is_complete(feature: Feature) -> bool:
+        if feature.kind == "curved_face":
+            large = float(face_areas[list(feature.face_indices)].sum()) >= side_floor
+            return large and within(feature)
+        if feature.kind != "face":
+            return within(feature)
         # Erst der Suchrand, dann die Ebenenregel: Eine abgeschnittene Fläche
         # ist keine, gleich was der Mantelnachweis sagte — an einem fein
         # unterteilten Zylinder gingen sonst 5 von 5,8 s an Flächen, die der
         # Rand danach verwarf (Review S3).
-        cut_off = None if continues_tangentially(feature) else cut_facet(feature)
-        if cut_off is None:
-            inside = bounded(feature)
-        else:
-            inside = not cut_off and (
-                proven_faces.issuperset(feature.face_indices)
-                or _inside_radius(body, feature, point, radius)
-            )
-        return inside and planar_in_full(feature)
+        return within(feature) and planar_in_full(feature)
 
     complete = {name: feature for name, feature in mapped.items() if is_complete(feature)}
     # Eine Randschleife aus dem Ausschnitt ist kein Defekt des Originalnetzes.
@@ -797,14 +842,21 @@ def _recognise_region(
             continue
         members = np.zeros(mesh.triangle_count, dtype=bool)
         members[list(feature.face_indices)] = True
-        boundary = pairs[members[pairs[:, 0]] != members[pairs[:, 1]]]
+        seams = members[pairs[:, 0]] != members[pairs[:, 1]]
+        boundary = pairs[seams]
         neighbours = np.where(members[boundary[:, 0]], boundary[:, 1], boundary[:, 0])
         # Ohne die Mündungs-/Bodendreiecke fehlt der Abschlussnachweis auch
         # dann, wenn der Zylindermantel selbst vollständig ist.
         if not inside[neighbours].all():
             refused.add(name)
             continue
-        if any(int(index) not in flat and int(index) not in owners for index in neighbours):
+        # Wo die Wand glatt weiterläuft, muss der Nachbar belegt sein — eben
+        # oder ein vollständiges Merkmal —, sonst setzt sich hinter ihm
+        # vielleicht die Wand fort. Hinter einem Knick oder Krümmungssprung
+        # beginnt eine andere Fläche: An der gerundeten Mündung einer
+        # Magnettasche sind das Dreiecke der Rundung, die kein Merkmal trägt.
+        continued = neighbours[soft_seams[seams]]
+        if any(int(index) not in flat and int(index) not in owners for index in continued):
             refused.add(name)
             continue
         # Eine unvollständige Aufweitung darf nicht als Nachbar wegfallen und
@@ -883,13 +935,22 @@ def _recognise_region(
     curved_pairs = pairs[
         smooth & (np.degrees(np.asarray(body.face_adjacency_angles)) > detection.EPS_ANGLE)
     ]
-    open_curvature = not continuing.isdisjoint(curved_pairs.ravel())
+    open_curvature = not continuing_surface.isdisjoint(curved_pairs.ravel())
     selected = tuple(
         name
         for name, feature in numbered.items()
         if not set(seeds).isdisjoint(feature.face_indices)
     )
-    if not numbered:
+    # **Gefragt ist die angeklickte Stelle.** Ist ihr eigenes Merkmal am
+    # Suchrand abgeschnitten, sagt die Antwort das, auch wenn daneben
+    # vollständige Merkmale liegen: Am Schaber stand bei 5 mm eine Liste aus
+    # zwei Verrundungen da, ohne die angeklickte Deckfläche und ohne Wort zum
+    # Suchrand (25.09.2026). Der Rückweg ist der größere Radius.
+    cut_at_the_seed = not selected and any(
+        not set(seeds).isdisjoint(feature.face_indices) and not within(feature)
+        for feature in unfinished
+    )
+    if not numbered or cut_at_the_seed:
         return LocalDetection(
             examined_faces=tuple(int(index) for index in indices),
             reason="boundary" if len(cut) else "no_feature",

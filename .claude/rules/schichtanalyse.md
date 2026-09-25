@@ -610,6 +610,20 @@ für alle draußen, auch für den Zahntechniker.
   und nicht die Zahl. Und an den Splittern selbst: Drache 27 554, Schüssel
   7 385, Scan-Körper 1 640 gegen Kapsel, Ellipsoid, Buchstabe und
   `generated_figure.stl` mit null bis einem.
+* **Raue Tafeln machen einen Körper für sich zur Haut** (RM-235,
+  25.09.2026): große Facetten, die an der Ebenheitsprüfung scheitern und
+  deren Knicke gemischt und stark sind (`features._rough_facet_area`,
+  `FREEFORM_ROUGH_SHARE`, `_MIX`, `_BEND`). Ein erzeugtes Netz trägt ebene
+  Partien als verrauschte Tafel — weder Fläche noch Fleck —, und die
+  Splitterregel sieht sie nicht: Das Puppenhausbett galt mit 34 Prozent
+  Splittern nicht als Haut, und 96 893 Splitter wurden eingepasst. Zwei Wege
+  sind gemessen und verworfen, und beide kosten Konstruiertes: **alle**
+  verrauschten Facetten zu zählen (sanft gekrümmte CAD-Flächen scheitern an
+  derselben Prüfung — Wedge-Lock 40, Siebhalter 35 Prozent) und die rauen
+  Tafeln **zur Splittersumme** zu zählen (ein konstruiertes Teil mit
+  56 Prozent Splittern kippte). Als eigener Auslöser trennt der raue Anteil
+  breit: erzeugte Möbel, Figurenteile, Zaubersockel 50 bis 96 Prozent,
+  danach nichts bis 30, Konstruiertes höchstens 23.
 
 ### Was an einer Bohrung hängt, bleibt (10.09.2026)
 

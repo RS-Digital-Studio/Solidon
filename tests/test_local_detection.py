@@ -958,18 +958,30 @@ def _coarse_slot_flank() -> tuple[MeshData, int, tuple[float, ...], tuple[float,
     return mesh, face, tuple(point), tuple(mesh.raw.face_normals[face])
 
 
-@pytest.mark.parametrize(("radius", "kinds"), [(6.0, []), (11.0, ["slot"])])
-def test_the_flank_of_a_cut_slot_is_not_a_face(radius: float, kinds: list[str]) -> None:
+@pytest.mark.parametrize(
+    ("radius", "kinds", "reason"),
+    [(6.0, [], "boundary"), (11.0, [], "boundary"), (13.0, ["slot", "slot"], None)],
+)
+def test_the_flank_of_a_cut_slot_is_not_a_face(
+    radius: float, kinds: list[str], reason: str | None
+) -> None:
     """Die ebene Flanke geht tangential in die Bögen über (Review B5).
 
     Die Vollerkennung schluckt sie ins Langloch; ist das Langloch angeschnitten,
     ist sie deshalb kein ganzes Merkmal — ihre Facette allein beweist nichts.
+    **Und die Antwort gilt der angeklickten Stelle**: Bei 11 mm liegt das
+    Langloch daneben ganz im Suchradius, das angeklickte reicht bis 12,6 mm.
+    Bis zum 25.09.2026 kam dann das andere allein und ohne Auswahl, als wäre
+    es gemeint; jetzt heißt es Suchrand, und ab 13 mm sind beide da.
     """
     from app.core.perceive.local import detect_local
 
     mesh, face, point, normal = _coarse_slot_flank()
     result = detect_local(mesh, point, normal=normal, radius=radius, seed_faces=(face,))
     assert sorted(feature.kind for feature in result.features.values()) == kinds
+    assert result.reason == reason
+    if kinds:
+        assert [face in result.features[name].face_indices for name in result.selected] == [True]
 
 
 def test_a_plane_beyond_the_budget_leaves_the_search_as_it_was(
@@ -1643,3 +1655,142 @@ def test_a_face_in_a_cove_takes_no_walk_along_its_rim(monkeypatch: pytest.Monkey
         for candidate in found.features.values()
     ), found.reason
     assert walks == []
+
+
+def _magnet_pocket_under_a_dome() -> MeshData:
+    """Eine gewölbte Scheibe (Kugel R 120, Ø 80) mit Tasche Ø 9 in der Mitte.
+
+    Die Mündung ist mit r 1 gerundet und geht tangential in die Wölbung über —
+    wie die Magnettaschen des Schabers aus `F:\\3D Dateien`: Taschenwand,
+    Rundung und Oberseite sind über glatte Nähte ein Fleck, und die Oberseite
+    läuft über jeden Suchradius um die Tasche hinaus.
+    """
+    import math
+
+    dome, wall, fillet, top = 120.0, 4.5, 1.0, 10.0
+    centre = top - dome
+    fillet_x = wall + fillet
+    fillet_z = centre + math.sqrt((dome - fillet) ** 2 - fillet_x**2)
+    rim = math.atan2(fillet_z - centre, fillet_x)
+    outer = 40.0
+    profile = [(0.0, 0.0), (outer, 0.0)]
+    start = math.acos(outer / dome)
+    for step in range(41):
+        angle = start + (rim - start) * step / 40
+        profile.append((dome * math.cos(angle), centre + dome * math.sin(angle)))
+    for step in range(1, 13):
+        angle = rim + (math.pi - rim) * step / 12
+        profile.append((fillet_x + fillet * math.cos(angle), fillet_z + fillet * math.sin(angle)))
+    floor = fillet_z - 1.3
+    profile += [(wall, floor), (0.0, floor)]
+    return MeshData.of(trimesh.creation.revolve(profile, sections=64))
+
+
+def test_a_pocket_with_a_rounded_mouth_is_found_under_a_dome() -> None:
+    """Die Randsperre endet am Krümmungssprung, nicht an der glatten Oberseite.
+
+    Die Wölbung läuft über den Suchrand hinaus, und die Sperre dafür galt der
+    ganzen glatt verbundenen Fläche — Wölbung, Rundung und Taschenwand. Der
+    Ausschnitt fand die Bohrung genau wie die Vollerkennung, und die Stelle
+    verwarf sie bei jedem Radius; am Schaber alle fünf Magnettaschen
+    (25.09.2026). Zwischen Wand, Rundung und Wölbung springt die Krümmung, und
+    dahinter liegt eine andere Fläche. Die Dreiecke der Rundung tragen dabei
+    kein Merkmal — ein Mündungsnachbar hinter einem Sprung muss keines tragen.
+    """
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = _magnet_pocket_under_a_dome()
+    assert mesh.raw.is_watertight and mesh.raw.is_winding_consistent
+    holes = [feature for feature in detection.detect(mesh).values() if feature.kind == "hole"]
+    assert len(holes) == 1
+    hole = holes[0]
+    assert hole.params["diameter"] == pytest.approx(9.0, abs=1e-3)
+    seed = _middle_seed(mesh, np.asarray(hole.face_indices))
+    found = local.detect_local(
+        mesh,
+        tuple(np.asarray(mesh.raw.triangles_center)[seed]),
+        normal=tuple(np.asarray(mesh.raw.face_normals)[seed]),
+        radius=10.0,
+        seed_faces=(seed,),
+    )
+    assert any(
+        candidate.kind == "hole" and set(candidate.face_indices) == set(hole.face_indices)
+        for candidate in found.features.values()
+    ), (found.reason, sorted((c.kind, len(c.face_indices)) for c in found.features.values()))
+
+
+def test_a_rounded_side_is_measured_against_the_whole_body() -> None:
+    """Eine gerundete Seite braucht ein Hundertstel des Körpers, nicht des Ausschnitts.
+
+    Die Vollerkennung nimmt eine gerundete Seite ab ``CURVED_SIDE_SHARE`` der
+    Oberfläche des Körpers; die Erkennung am Ausschnitt maß dieselbe Schwelle
+    an der Fläche des Ausschnitts. Am Schaber kamen so 14 Stücke heraus, die
+    die Vollerkennung nirgends führt (25.09.2026). Hier: die Seite einer
+    elliptischen Erhebung auf einer großen Platte.
+    """
+    import manifold3d as m3
+
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    ellipse = m3.CrossSection.circle(1.0, 96).scale((6.0, 3.0))
+    bump = m3.Manifold.extrude(ellipse, 3.0).translate((0.0, 0.0, 4.0))
+    plate = m3.Manifold.cube((100.0, 100.0, 4.0)).translate((-50.0, -50.0, 0.0))
+    # Fein unterteilt wie ein echtes Netz: Sonst reichen die zwei Dreiecke der
+    # Deckfläche weit über den Suchradius, und schon der Ausschnitt ist so
+    # groß, dass seine eigene Schwelle die Seite sperrt.
+    solid = (plate + bump).to_mesh()
+    fine = trimesh.Trimesh(
+        np.asarray(solid.vert_properties)[:, :3], np.asarray(solid.tri_verts)
+    ).subdivide_to_size(max_edge=3.0)
+    mesh = MeshData.of(fine)
+    assert mesh.raw.is_watertight
+    full = detection.detect(mesh)
+    assert not any(feature.kind == "curved_face" for feature in full.values())
+    stitched = detection._one_body(mesh)
+    centres = np.asarray(stitched.raw.triangles_center)
+    normals = np.asarray(stitched.raw.face_normals)
+    side = np.flatnonzero(
+        (np.abs(normals[:, 2]) < 0.1) & (centres[:, 2] > 4.0) & (np.abs(centres[:, 0]) < 7.0)
+    )
+    seed = int(side[0])
+    found = local.detect_local(
+        stitched,
+        tuple(centres[seed]),
+        normal=tuple(normals[seed]),
+        radius=12.0,
+        seed_faces=(seed,),
+    )
+    assert not any(feature.kind == "curved_face" for feature in found.features.values()), sorted(
+        (feature.kind, len(feature.face_indices)) for feature in found.features.values()
+    )
+
+
+def test_a_search_region_is_never_welded_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Ausschnitt stammt aus dem verschweißten Körper und bleibt, wie er ist.
+
+    Sein Schnittrand ist offen, und ``detect`` hielt ihn deshalb für
+    ungeschweißt: ``_one_body`` verschweißte ihn mit der Toleranz seiner
+    eigenen Diagonale und legte Ecken zusammen, die am Körper getrennt sind.
+    Am Schaber verlor eine Deckfläche so sechs ihrer 239 Dreiecke, und die
+    Stelle fand sie bei 5 mm nicht (25.09.2026). Gezählt wird, ob für einen
+    Ausschnitt verschweißt wird — der ganze Körper hier ist schon dicht.
+    """
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = blind_cylinder()
+    assert detection.fully_stitched(mesh.raw)
+    welded: list[int] = []
+    real = detection.merge_vertices
+
+    def counted(target: Any, *args: Any, **kwargs: Any) -> Any:
+        welded.append(target.triangle_count)
+        return real(target, *args, **kwargs)
+
+    monkeypatch.setattr(detection, "merge_vertices", counted)
+    face, point, normal = bore_seed(mesh)
+    result = local.detect_local(mesh, point, normal=normal, radius=8, seed_faces=(face,))
+    assert result.complete
+    assert welded == []

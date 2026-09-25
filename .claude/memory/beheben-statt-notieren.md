@@ -23,11 +23,19 @@ wenn die Notiz gut begründet ist. Das gilt ausdrücklich auch für
 Optimierungen: Eine Stelle, die messbar langsam ist, wird beschleunigt, nicht
 als „Befund" gemeldet.
 
+Bekräftigt am 25.09.2026, als ich RM-235 mit „Rest in eigene Punkte teilen"
+abschließen wollte: „daran denken, dass alles abgearbeitet ist und du keine
+offenen Punkte hinterlässt, verschieben oder später sind keine Ausrede." Ein
+neuer Registerpunkt für eigene Restarbeit ist dasselbe Liegenlassen unter
+anderem Namen.
+
 **How to apply:**
 - Fund → Messung → Behebung → Test, in dieser Sitzung. Das Register ist für
   das, was eine **Entscheidung** von Robert braucht oder eine Sache außerhalb
   des Repositorys (ein Mac, ein Zertifikat, ein Konto) — nicht für Arbeit,
   die ich selbst tun kann.
+- Vor dem Schlussbericht jede „Offen:"-Zeile, die ich selbst geschrieben habe,
+  abarbeiten — nicht umbenennen, nicht in einen neuen Punkt verschieben.
 - „Zu groß für heute" ist keine Begründung, solange Robert wartet: sagen, was
   es kostet, und bauen. Er entscheidet über Umfang, nicht ich.
 - Liegt die Datei bei einer anderen Sitzung: die Messung liefern und die

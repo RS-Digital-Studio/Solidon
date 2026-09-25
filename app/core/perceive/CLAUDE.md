@@ -322,8 +322,21 @@ Träger, und jede Rille wäre ein Randstück. Zerfallen beide gleich, trägt der
 prüft einen Originaltreffer und veröffentlicht nur vollständig belegte
 Merkmalsflächen mit globalen Dreiecksnummern. Ein Ausschnitt erzeugt keine
 Randöffnung des Originals. Eine glatte Fortsetzung über den Suchrand sperrt
-den ganzen betroffenen Fleck; Hohlraumketten benötigen alle Abschnitte,
-vollständige Anschlussringe und unbeschädigte Boden-/Mündungskanten.
+die glatt verbundene Fläche bis zum nächsten Krümmungssprung — derselben
+Grenze, an der die Nachtrennung Stücke bildet (`features.curvature_jumps`,
+am ganzen Körper, denn am Schnittrand fehlen dem Ausschnitt die Nachbarn):
+Hinter dem Sprung liegt eine andere Fläche, die eigene Fortsetzung eines Fits
+trägt dieselbe Krümmung. Hohlraumketten benötigen alle Abschnitte,
+vollständige Anschlussringe und unbeschädigte Boden-/Mündungskanten; wo die
+Wand glatt weiterläuft, muss der Nachbar eben oder ein vollständiges Merkmal
+sein, hinter einem Knick oder Sprung nicht — so kommen die Magnettaschen des
+Schabers mit gerundeter Mündung unter der gewölbten Oberseite.
+**Ein Muster kommt an der Stelle, wenn sein Feld im Suchradius liegt**: Am
+Wabenhalter stehen bei 5 und 15 mm die Wände als Flächen da (aus wenigen
+Zellen entsteht kein Muster), bei 30 mm sagt die Stelle Suchrand, ab dem
+ganzen Feld kommt das Muster der Vollerkennung. Ebenso braucht eine gesenkte
+Bohrung einen Radius über die Senkung hinaus — die Kette ist erst dann
+vollständig, und bis dahin bietet die Stelle den größeren Radius an.
 Die Innenrolle einer Ebene kommt aus räumlich passenden Originalfacetten,
 auch wenn der belegende Rand außerhalb der Suchkugel liegt. Nur ein
 tatsächlich passender Beleg darf einen vollständigen Mantelfit auslösen.
@@ -849,7 +862,13 @@ Verweis bleibt je Merkmal eine Warnung
   aufgebaut, ohne einen weiteren globalen Cache. Auch die Nachtrennung nach
   Krümmung baut die Flächennachbarschaft einmal für alle ungeeigneten Flecken
   auf und prüft den Abbruch zwischen ihnen. Ihre Schwellen und die Reihenfolge
-  der Kanten bleiben dabei dieselben.
+  der Kanten bleiben dabei dieselben. Facettenurteil (`_facet_verdicts`),
+  Flecken (`_connected_patches`), Krümmungssprünge (`curvature_jumps`) und
+  Facettenmitten (`facet_middles`, blockweise) prüfen zwischen ihren
+  Schritten: Am Drachen lagen sie bis zu 9,6 s am Stück, jetzt höchstens
+  3,1 s unter Last — je ein Schritt am großen Fleck: die Stützpunktlesung
+  eines Ringfits, `body.facets` aus trimesh (2,5 s, nicht teilbar) und die
+  Kerbenschließung.
   **Geteilt wird nur, was jemand liest** (RM-132): `_fitted` sagt der
   Nachtrennung über `worth_splitting`, welche Flecken groß genug zum
   Einpassen sind, und für die übrigen kommt der Fleck ungeteilt zurück. Ein
@@ -874,7 +893,13 @@ Verweis bleibt je Merkmal eine Warnung
   Ecke — 20 s bei 300 000, sechs Minuten bei 1,3 Millionen) und den
   Nachbarindex (`_neighbour_index`, je Körper einmal im Cache von trimesh),
   und `_closes`
-  prüft eine Kandidatenmenge an ihren eigenen Kanten. Die erste Fassung lief
+  prüft eine Kandidatenmenge an ihren eigenen Kanten. Vor der Kombinationssuche
+  verwirft `_closing_set` ausschließlich unmögliche Fälle: Jedes ergänzte
+  Dreieck kann höchstens drei ausgefranste Knoten berühren; mehr als
+  `3 * NOTCH_AT_MOST` Knoten können daher niemals gemeinsam geschlossen werden.
+  Am Rand dieser notwendigen Schranke bleibt die bisherige Prüfung unverändert;
+  es entsteht weder ein weiterer Cache noch eine neue Geometrietoleranz.
+  Die erste Fassung lief
   je Kandidatenmenge noch einmal über den ganzen Fleck und alle Paare des
   Netzes — am Drachen aus TripoSG (325 244 Dreiecke, ein Fleck mit 307 063
   und 65 Kandidaten) waren das 264 von 482 Sekunden. Denselben Index liest
@@ -1057,7 +1082,12 @@ Verweis bleibt je Merkmal eine Warnung
   und Buchstabenbogen zerfallen nicht und bleiben, was sie waren. Drache aus
   TripoSG 37,7 → 4,2 s, Roberts Schüssel 7,3 → 2,9 s, Zauberturm-Figuren
   41 bis 132 s → 6 bis 13 s, Katze 26 → 6,5 s — unter Fremdlast, mit
-  denselben Merkmalen.
+  denselben Merkmalen. **Raue Tafeln machen einen Körper für sich zur Haut**
+  (`_rough_facet_area`: große Facetten ohne Ebene, deren Knicke gemischt und
+  stark sind, ab `FREEFORM_ROUGH_SHARE` der Oberfläche) — ein erzeugtes Netz
+  trägt ebene Partien als verrauschte Tafel, die die Splitterregel nicht
+  sieht; die Messung an beiden Seiten steht an der Konstanten und in
+  `.claude/rules/schichtanalyse.md`.
 - **Das Urteil zählt nur Flecken ohne Grundform, und es fällt in einer
   eigenen Runde.** `_fitted` läuft zweistufig: erst `classify` über alle
   Flecken, dann `_split_patches_by_curvature` über die gescheiterten, dann

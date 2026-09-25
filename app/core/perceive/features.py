@@ -906,6 +906,37 @@ FREEFORM_SPLINTERS: Final = 100
 #: 13.
 FREEFORM_PIECE_SHARE: Final = 0.001
 
+#: Ab welchem Anteil an der Oberfläche **raue Tafeln** einen Körper für sich
+#: zur Haut machen (RM-235, 25.09.2026). Eine raue Tafel ist eine große
+#: Facette, die an der Ebenheitsprüfung scheitert und deren Knicke Rauschen
+#: tragen und keine Krümmung (:data:`FREEFORM_ROUGH_MIX`,
+#: :data:`FREEFORM_ROUGH_BEND`): Sie ist weder Fläche noch Fleck, und die
+#: Splitterregel darüber sieht sie nicht. Das erzeugte Puppenhausbett trägt
+#: 57 Prozent seiner Oberfläche darin, galt mit 34 Prozent Splittern nicht als
+#: Haut, und seine 96 893 Splitter wurden eingepasst — 98 von 100 Sekunden
+#: für null Merkmale.
+#:
+#: **Gemessen an beiden Seiten** (``F:\3D Dateien``, 189 Körper mit
+#: verrauschten Facetten): Erzeugte Möbel, Figurenteile und die Sockel des
+#: Zauberturms liegen bei 50 bis 96 Prozent, der nächste Körper bei 30 (ein
+#: Kleinteil des Piratenschiffs), Konstruiertes höchstens bei 23 (ein Teil
+#: der Kugelbahn), die Siebhalter bei 15. Die Tafeln stattdessen zur
+#: Splittersumme zu zählen, ist ebenfalls gemessen und verworfen: Ein
+#: konstruiertes Teil mit 56 Prozent Splittern kippte dabei über die Schwelle.
+FREEFORM_ROUGH_SHARE: Final = 0.4
+
+#: Wie gemischt die Knicke einer Tafel sein müssen, damit sie rau heißt: der
+#: kleinere Anteil konvexer oder konkaver Knicke, mit dem Winkel gewogen.
+#: Eine sanft gekrümmte Fläche biegt sich in eine Richtung (nahe null),
+#: Rauschen in beide (nahe einhalb).
+FREEFORM_ROUGH_MIX: Final = 0.3
+
+#: … und wie stark: der 90-Prozent-Wert ihrer Knickwinkel in Grad. Darunter
+#: liegt das Float32-Rauschen fast ebener CAD-Flächen — am Wedge-Lock bleiben
+#: gemischte Knicke unter 0,1 Grad, und 40 Prozent seiner Oberfläche wären
+#: sonst rau.
+FREEFORM_ROUGH_BEND: Final = 0.1
+
 #: Was auf einer Freiform keine Merkmale sind: die vier eingepassten
 #: Rundformen. Bohrung und Zapfen bleiben — eine Zylindereinpassung verlangt
 #: Normalen senkrecht zur Achse und einen engen Kreis, das erfüllt eine
@@ -1124,6 +1155,17 @@ def _one_body(mesh: MeshData) -> MeshData:
     # Merker seines eigenen Körpers zu halten hielte den Körper für immer.
     welded: MeshData | None = remembered("one_body", mesh.raw, (), lambda: _welded(mesh))
     return welded if welded is not None else mesh
+
+
+def as_its_own_body(mesh: MeshData) -> None:
+    """Merkt sich, dass ``mesh`` schon die Geometrie ist, die :func:`_one_body` meint.
+
+    Für einen Ausschnitt aus einem verschweißten Körper (``local._part``):
+    Sein Schnittrand ist offen, :func:`fully_stitched` verneint deshalb, und
+    ein Verschweißen mit der Toleranz des Ausschnitts änderte seine Topologie
+    gegen die des Körpers, aus dem er stammt.
+    """
+    remembered("one_body", mesh.raw, (), lambda: None)
 
 
 def _welded(mesh: MeshData) -> MeshData | None:
@@ -2080,7 +2122,9 @@ def _fitted(
         # und in welcher Folge die Zusammenlegung die Stücke sieht.
         # :func:`in_body_order` ist unabhängig von der Dreiecksfolge, aber nicht
         # drehfest; die Fläche ist beides.
-        patches = _in_size_order(body, _connected_patches(body, curved))
+        patches = _in_size_order(
+            body, _connected_patches(body, curved, check_cancelled=check_cancelled)
+        )
 
         def splinters_in(pieces: list[list[int]]) -> int:
             """Wie viele Stücke unter :data:`FREEFORM_PIECE_SHARE` der Oberfläche liegen."""
@@ -2130,7 +2174,7 @@ def _fitted(
         if unresolved:
             if check_cancelled is not None:
                 check_cancelled()
-            jumps = _curvature_jumps(body)
+            jumps = curvature_jumps(body, check_cancelled)
             # Nur die Flecken, deren Stücke unten überhaupt gelesen werden
             # (RM-132) — ein Stück ist nie größer als sein Fleck.
             worth_splitting = np.zeros(len(patches), dtype=bool)
@@ -2150,6 +2194,7 @@ def _fitted(
                     and splinters_in(curvature_splits[index]) >= FREEFORM_SPLINTERS
                 )
                 > total_area * FREEFORM_SKIN_SHARE
+                or _rough_facet_area(body, planar) >= total_area * FREEFORM_ROUGH_SHARE
             )
 
         # **Zuletzt die Stücke.** Sie kommen nach allen ganzen Flecken und
@@ -4330,6 +4375,72 @@ def _facet_areas(body: trimesh.Trimesh, facets: Sequence[np.ndarray]) -> list[fl
     return summed
 
 
+def _rough_facet_area(body: trimesh.Trimesh, planar: set[int]) -> float:
+    """Der Inhalt der rauen Tafeln: große Facetten, die Rauschen tragen (RM-235).
+
+    Rau ist eine Facette aus ``planar``, deren Normalen nicht innerhalb
+    :data:`EPS_ANGLE` der ersten liegen — dieselbe Prüfung, an der
+    :func:`_planar_face_entries` eine Fläche scheitern lässt — und deren
+    innere Knicke gemischt (:data:`FREEFORM_ROUGH_MIX`) und stark genug
+    (:data:`FREEFORM_ROUGH_BEND`) sind. Gerechnet für alle Facetten in einem
+    Zug. Die Knickwinkel kommen aus ``face_adjacency_angles`` wie bei der
+    Nachtrennung (:func:`_connected_patches`); alles danach rechnet ohne BLAS,
+    mit Grundrechenarten und Zählsummen, denn das Urteil wählt, was
+    eingepasst wird (RM-187). An einer Schwelle hängt es am Korpus nicht: Der
+    raue Anteil liegt zwischen 30 und 50 Prozent bei keinem Körper.
+    """
+    facets = body.facets
+    if not len(facets) or not planar:
+        return 0.0
+    lengths = np.fromiter((len(facet) for facet in facets), dtype=np.int64, count=len(facets))
+    members = np.concatenate([np.asarray(facet, dtype=np.int64) for facet in facets])
+    owner = np.repeat(np.arange(len(facets)), lengths)
+    starts = np.concatenate(([0], np.cumsum(lengths)[:-1]))
+    in_planar = np.zeros(len(body.faces), dtype=bool)
+    in_planar[np.fromiter(planar, dtype=np.int64, count=len(planar))] = True
+    all_planar = np.bincount(owner, weights=~in_planar[members], minlength=len(facets)) == 0
+    normals = np.asarray(body.face_normals, dtype=float)
+    first = normals[members[starts]]
+    agreement = (normals[members] * first[owner]).sum(axis=1)
+    level = np.minimum.reduceat(agreement, starts) >= units.exact_cos_degrees(EPS_ANGLE)
+    candidates = all_planar & ~level
+    if not candidates.any():
+        return 0.0
+    facet_of = np.full(len(body.faces), -1, dtype=np.int64)
+    facet_of[members] = owner
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+    convex = np.asarray(body.face_adjacency_convex, dtype=bool)
+    within = facet_of[pairs[:, 0]]
+    inner = (within >= 0) & (within == facet_of[pairs[:, 1]]) & (angles > EPS_ANGLE)
+    within, bends, outward = within[inner], angles[inner], convex[inner]
+    bulging = np.bincount(within, weights=bends * outward, minlength=len(facets))
+    hollow = np.bincount(within, weights=bends * ~outward, minlength=len(facets))
+    total = bulging + hollow
+    mixed = np.divide(
+        np.minimum(bulging, hollow), total, out=np.zeros(len(facets)), where=total > 0.0
+    )
+    # Der 90-Prozent-Wert je Facette wie ``np.percentile``: linear zwischen den
+    # zwei Nachbarn an der Stelle 0,9 · (n - 1) der sortierten Knicke.
+    order = np.lexsort((bends, within))
+    within, bends = within[order], bends[order]
+    counts = np.bincount(within, minlength=len(facets))
+    group = np.concatenate(([0], np.cumsum(counts)[:-1]))
+    position = 0.9 * np.maximum(counts - 1, 0)
+    low = np.floor(position).astype(np.int64)
+    high = np.minimum(low + 1, np.maximum(counts - 1, 0))
+    strong = np.zeros(len(facets))
+    present = counts > 0
+    base = group[present]
+    below, above = bends[base + low[present]], bends[base + high[present]]
+    strong[present] = below + (above - below) * (position[present] - low[present])
+    rough = candidates & (mixed >= FREEFORM_ROUGH_MIX) & (strong >= FREEFORM_ROUGH_BEND)
+    areas = np.bincount(
+        owner, weights=np.asarray(body.area_faces, dtype=float)[members], minlength=len(facets)
+    )
+    return float(areas[rough].sum())
+
+
 def _large_facet_faces(
     body: trimesh.Trimesh,
     *,
@@ -4395,15 +4506,25 @@ def _facet_verdicts(
         "facet_verdicts",
         body,
         (),
-        lambda: _facet_verdicts_read(body),
+        lambda: _facet_verdicts_read(body, check_cancelled),
         check_cancelled=check_cancelled,
     )
     return result
 
 
-def _facet_verdicts_read(body: trimesh.Trimesh) -> _FacetVerdicts:
-    """Der Rumpf von :func:`_facet_verdicts` — die Antwort merkt sich die Hülle."""
+def _facet_verdicts_read(
+    body: trimesh.Trimesh, check_cancelled: Callable[[], None] | None = None
+) -> _FacetVerdicts:
+    """Der Rumpf von :func:`_facet_verdicts` — die Antwort merkt sich die Hülle.
+
+    Geprüft wird der Abbruch zwischen den Schritten: Am Drachen mit 2,3
+    Millionen Dreiecken lagen Facetten, Rundungsnähte, kleine Flächen und die
+    Flecken danach 5,3 s ohne Prüfung hintereinander (25.09.2026); übrig ist
+    ``body.facets`` selbst, ein Aufruf von 1,8 s.
+    """
     facets = list(body.facets)
+    if check_cancelled is not None:
+        check_cancelled()
     count = len(body.faces)
     if not facets:
         empty = np.zeros(0, dtype=np.int64)
@@ -4422,6 +4543,8 @@ def _facet_verdicts_read(body: trimesh.Trimesh) -> _FacetVerdicts:
     # zweite Weg bleibt davon unberührt: ein Fleck aus vielen koplanaren
     # Dreiecken ist eine Fläche, auch wenn er auf einer Rundung sitzt.
     curved = _curved_faces(body)
+    if check_cancelled is not None:
+        check_cancelled()
     # **Gemessen an der Gesamtoberfläche, nicht an der größten Facette.** Der
     # naheliegende Maßstab ist der falsche, und der Körper, der es zeigt, ist
     # der Torus: Er besteht **nur** aus Mantelstreifen, seine größte Facette
@@ -4445,6 +4568,8 @@ def _facet_verdicts_read(body: trimesh.Trimesh) -> _FacetVerdicts:
     # Der Anteil statt des Vorkommens trennt es nicht: die Streifen liegen bei
     # 0,00 bis 0,85, die echte Deckfläche bei 0,15.
     apart = _facets_standing_apart(body, facets, curved)
+    if check_cancelled is not None:
+        check_cancelled()
     # **Je Facette eine Zahl, nicht je Dreieck eine Mengenfrage.** Die
     # Comprehensions darunter fragten an der unterteilten Lochplatte
     # 115 000-mal ``index in curved`` (gemessen am 22.09.2026: 60 ms je
@@ -4545,7 +4670,7 @@ def _large_facet_faces_read(
     protected = planar - recoverable
     candidates = _all_but(len(body.faces), protected)
     mesh = MeshData.of(body)
-    for patch in _connected_patches(body, candidates):
+    for patch in _connected_patches(body, candidates, check_cancelled=check_cancelled):
         if check_cancelled is not None:
             check_cancelled()
         if len(patch) < MIN_PATCH_FACES or recoverable.isdisjoint(patch):
@@ -5509,12 +5634,20 @@ CACHE_LIMIT_PER_QUESTION = 4096
 #: an denen die Mündungsprobe einer Bohrung jede Frage stellt
 #: (``prepare_ops.bore_entrance``), wiegen am Gartenschlauchhalter mit 392 532
 #: Dreiecken je rund 15 und 75 Megabyte; viertausend davon hielte kein Rechner.
-#: Die Facette je Dreieck der Wendelsuche (``helix._facet_of_face``) trägt
-#: eine Zahl je Dreieck. Die vorbereitete Trägerfläche der Platzierung
+#: Die Facette je Dreieck der Wendelsuche (``helix._facet_of_face``) und der
+#: Krümmungssprung je Nachbarschaft (:func:`curvature_jumps`) tragen eine Zahl
+#: je Dreieck oder Paar. Die vorbereitete Trägerfläche der Platzierung
 #: (``placement.prepare_surface``) trägt die ganze Kontur einer Fläche und
 #: gehört mit derselben Grenze dazu.
 WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
-    {"support", "merged_copy", "surface_index", "facet_of_face", "prepared_surface"}
+    {
+        "support",
+        "merged_copy",
+        "surface_index",
+        "facet_of_face",
+        "curvature_jumps",
+        "prepared_surface",
+    }
 )
 
 
@@ -7056,7 +7189,9 @@ def _faces_beside(body: trimesh.Trimesh, patch: Sequence[int]) -> np.ndarray:
     return members[~inside[members]]
 
 
-def facet_middles(body: trimesh.Trimesh) -> np.ndarray:
+def facet_middles(
+    body: trimesh.Trimesh, check_cancelled: Callable[[], None] | None = None
+) -> np.ndarray:
     """Zu jedem Dreieck die Mitte der **ebenen Fläche**, auf der es liegt.
 
     **Nicht sein eigener Schwerpunkt**, und der Unterschied ist keine Feinheit:
@@ -7072,7 +7207,12 @@ def facet_middles(body: trimesh.Trimesh) -> np.ndarray:
     """
     middles = np.asarray(body.triangles_center, dtype=float).copy()
     areas = np.asarray(body.area_faces, dtype=float)
-    for facet in body.facets:
+    for number, facet in enumerate(body.facets):
+        # Je Facette eine Schleifenrunde, am Drachen 3 s am Stück: geprüft wird
+        # blockweise. Die Summe je Facette bleibt dieselbe — an ihrer letzten
+        # Stelle hängen Radien und Trennungen.
+        if check_cancelled is not None and number % FIT_SCAN_BLOCK == 0:
+            check_cancelled()
         members = np.asarray(facet)
         weight = areas[members].sum()
         if weight <= EPS_GEOM:
@@ -7081,7 +7221,9 @@ def facet_middles(body: trimesh.Trimesh) -> np.ndarray:
     return middles
 
 
-def pair_radii(body: trimesh.Trimesh) -> np.ndarray:
+def pair_radii(
+    body: trimesh.Trimesh, check_cancelled: Callable[[], None] | None = None
+) -> np.ndarray:
     """Der Krümmungsradius über jede Nachbarschaft zweier Dreiecke, in mm.
 
     Radius ist Bogenlänge durch Winkel. Beide naheliegenden Strecken sind die
@@ -7103,7 +7245,7 @@ def pair_radii(body: trimesh.Trimesh) -> np.ndarray:
     along = body.vertices[edges[:, 1]] - body.vertices[edges[:, 0]]
     along = along / np.maximum(np.linalg.norm(along, axis=1), EPS_GEOM)[:, None]
 
-    middles = facet_middles(body)
+    middles = facet_middles(body, check_cancelled)
     span = middles[pairs[:, 1]] - middles[pairs[:, 0]]
     across = np.linalg.norm(span - np.einsum("ij,ij->i", span, along)[:, None] * along, axis=1)
     return np.where(np.degrees(angles) >= FLAT_ANGLE, across / np.maximum(angles, EPS_GEOM), np.inf)
@@ -7140,7 +7282,9 @@ def _face_radii(body: trimesh.Trimesh, pairs: np.ndarray, radii: np.ndarray) -> 
     return found
 
 
-def _curvature_jumps(body: trimesh.Trimesh) -> np.ndarray:
+def _curvature_jumps(
+    body: trimesh.Trimesh, check_cancelled: Callable[[], None] | None = None
+) -> np.ndarray:
     """Der Sprung des Krümmungsradius über jede Nachbarschaft, als Anteil.
 
     **Einmal je Körper, nicht einmal je Fleck.** Sie ist hier eine eigene
@@ -7155,7 +7299,10 @@ def _curvature_jumps(body: trimesh.Trimesh) -> np.ndarray:
     if not len(pairs):
         return np.zeros(0, dtype=float)
 
-    radii = _face_radii(body, pairs, pair_radii(body))
+    across = pair_radii(body, check_cancelled)
+    if check_cancelled is not None:
+        check_cancelled()
+    radii = _face_radii(body, pairs, across)
     first, second = radii[pairs[:, 0]], radii[pairs[:, 1]]
     # Nur wo **beide** Seiten einen Radius haben, gibt es einen Sprung. Zwei
     # ebene Nachbarn tragen ``inf``, und deren Differenz wäre ``nan`` — kein
@@ -7173,6 +7320,27 @@ def _curvature_jumps(body: trimesh.Trimesh) -> np.ndarray:
         where=measured,
     )
     return jump
+
+
+def curvature_jumps(
+    body: trimesh.Trimesh, check_cancelled: Callable[[], None] | None = None
+) -> np.ndarray:
+    """:func:`_curvature_jumps`, einmal je Körper gemerkt.
+
+    Die Nachtrennung trennt an diesen Sprüngen, und die Erkennung an einer
+    Stelle begrenzt an denselben ihre Randsperre (``local._recognise_region``)
+    — am ganzen Körper gerechnet, denn am Schnittrand eines Ausschnitts fehlen
+    die Nachbarn, aus denen der Radius eines Dreiecks kommt. Am Drachen kostet
+    die erste Frage 3 s, geprüft wird der Abbruch dazwischen.
+    """
+    result: np.ndarray = remembered(
+        "curvature_jumps",
+        body,
+        (),
+        lambda: _curvature_jumps(body, check_cancelled),
+        check_cancelled=check_cancelled,
+    )
+    return result
 
 
 def _split_patches_by_curvature(
@@ -7349,7 +7517,11 @@ def _neighbour_index(body: trimesh.Trimesh) -> tuple[np.ndarray, np.ndarray]:
     return neighbours, pair_rows
 
 
-def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int]]:
+def _connected_patches(
+    body: trimesh.Trimesh,
+    faces: list[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[list[int]]:
     """Gruppiert die gegebenen Dreiecke in zusammenhängende Flecken.
 
     **Ein Fleck endet an einer Kante.** Zusammenhängend allein war die falsche
@@ -7374,13 +7546,22 @@ def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int
         "connected_patches",
         body,
         faces,
-        lambda: _connected_patches_read(body, faces),
+        lambda: _connected_patches_read(body, faces, check_cancelled),
+        check_cancelled=check_cancelled,
     )
     return result
 
 
-def _connected_patches_read(body: trimesh.Trimesh, faces: list[int]) -> list[list[int]]:
-    """Der Rumpf von :func:`_connected_patches` — die Antwort merkt sich die Hülle."""
+def _connected_patches_read(
+    body: trimesh.Trimesh,
+    faces: list[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[list[int]]:
+    """Der Rumpf von :func:`_connected_patches` — die Antwort merkt sich die Hülle.
+
+    Mit Abbruchprüfung zwischen Nähten, Zusammenhang, Kerben und Ordnung: Am
+    Drachen kosteten die vier zusammen 4,2 s am Stück (25.09.2026).
+    """
     pairs = np.asarray(body.face_adjacency)
     adjacency = pairs[:0]
     if len(pairs):
@@ -7403,6 +7584,8 @@ def _connected_patches_read(body: trimesh.Trimesh, faces: list[int]) -> list[lis
         wanted = np.zeros(len(body.faces), dtype=bool)
         wanted[indices] = True
         neighbours, pair_rows = _neighbour_index(body)
+        if check_cancelled is not None:
+            check_cancelled()
         chosen = neighbours[indices]
         present = chosen >= 0
         present[present] = wanted[chosen[present]]
@@ -7413,10 +7596,17 @@ def _connected_patches_read(body: trimesh.Trimesh, faces: list[int]) -> list[lis
         rows = np.flatnonzero(seen)
         angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[rows])
         adjacency = pairs[rows[angles < CURVATURE_LIMIT]]
+    if check_cancelled is not None:
+        check_cancelled()
     if not len(adjacency):
         return in_body_order(body, [[index] for index in faces])
     groups = trimesh.graph.connected_components(adjacency, nodes=np.asarray(faces), engine="scipy")
-    return in_body_order(body, _without_notches(body, [group.tolist() for group in groups]))
+    if check_cancelled is not None:
+        check_cancelled()
+    closed = _without_notches(body, [group.tolist() for group in groups])
+    if check_cancelled is not None:
+        check_cancelled()
+    return in_body_order(body, closed)
 
 
 def in_body_order(body: trimesh.Trimesh, groups: Sequence[Sequence[int]]) -> list[list[int]]:
@@ -7772,7 +7962,10 @@ def _closing_set(
     Randknoten mit mehr als zwei Randkanten. An geschlossenen Netzen ist das
     dieselbe Antwort; an offenen die ehrlichere.
     """
-    if not candidates:
+    # Jeder ausgefranste Knoten muss eine Kante der ergänzten Dreiecke tragen.
+    # Mehr als drei Knoten je Dreieck sind unerreichbar; keine Kombination
+    # kann dann den Rand schließen, unabhängig von der Zahl der Kandidaten.
+    if not candidates or len(rim.frayed) > 3 * NOTCH_AT_MOST:
         return None
     corners = len(body.vertices)
     triangles = np.asarray(body.faces)
