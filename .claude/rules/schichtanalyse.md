@@ -149,6 +149,22 @@ zusammenhängende Stück (`largest_overhang_patch`); ein Ergebnis, das seine
 Stücke nicht mitbringt, gilt schichtweise als eines. Lange freie Stege fängt
 die Brückenregel weiter ab.
 
+**Eine Decke im Kanal verlangt keine Stütze auf dem Modell** (25.09.2026).
+„Überall" war die Antwort auf jede Säule, die auf dem Modell endet — auch auf
+die im Wasserkanal der Waschschüssel, den der Slicer daraufhin 40 mm hoch mit
+Stütze füllte (Robert: „sinnlos und gehen durch das Modell"). Gefragt wird
+jetzt je Stück (`analysis.model_support`): Fasst der freie Raum unmittelbar
+**unter** der Decke keinen Kreis von `CHANNEL_WIDTH` (30 mm), der das Stück
+enthält, liegt sie in einem Kanal und schließt sich als Brücke oder Gewölbe.
+Unter der Decke, nicht auf halber Höhe: Der Kanal der Schüssel ist dort 42 mm
+weit und unter seinem Gewölbe 22. Kanalstücke fallen aus dem Stützbedarf, und
+was außen auf dem Modell aufsetzt, zählt nur über dieselben zwei Wege wie der
+Stützbedarf selbst (ein Stück über `OVERHANG_LAYER_WORTH_SUPPORT` oder die
+Summe über `OVERHANG_WORTH_SUPPORT`). Gegenfälle mit Zahl stehen an der
+Konstante: Tisch, Kasten mit Innenregal (74 mm), verschlossener Hohlkörper
+(54 mm) und weiter Tunnel (65 mm) behalten „überall". Wer die Grenze
+anfasst, misst beide Reihen nach und fährt die Schüssel im Slicer.
+
 **Mehrere Körper werden gemeinsam beurteilt.** `advise.combine` berücksichtigt
 auch Körper, deren Einstellungen bereits passen. Ein einzelner Würfel darf
 deshalb die Stützen eines anderen Körpers nicht abschalten. Filamentwerte

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 import numpy as np
 import shapely
@@ -2585,8 +2585,18 @@ def _measure_batch(
 # --- Urteile über den ganzen Körper ---------------------------------------------
 
 
-def total_overhang(result: SliceResult) -> float:
-    return float(sum(layer.overhang_area for layer in result.layers))
+def total_overhang(
+    result: SliceResult, *, without: frozenset[tuple[int, int]] = frozenset()
+) -> float:
+    """Die Überhangfläche aller Schichten, in mm².
+
+    ``without`` nennt Stücke (Schicht, Stück), die nicht zählen — die
+    Kanaldecken aus :func:`model_support`.
+    """
+    total = float(sum(layer.overhang_area for layer in result.layers))
+    for index, number in without:
+        total -= _piece_area(result.layers[index].overhangs[number])
+    return max(total, 0.0)
 
 
 def worst_overhang(result: SliceResult) -> float:
@@ -2604,7 +2614,9 @@ def worst_overhang(result: SliceResult) -> float:
     return float(max((layer.overhang_area for layer in result.layers), default=0.0))
 
 
-def largest_overhang_patch(result: SliceResult) -> float:
+def largest_overhang_patch(
+    result: SliceResult, *, without: frozenset[tuple[int, int]] = frozenset()
+) -> float:
     """Die größte **zusammenhängende** Überhangfläche irgendwo im Körper (§22.2).
 
     Die Schichtsumme (:func:`worst_overhang`) kennt den Unterschied nicht,
@@ -2623,17 +2635,21 @@ def largest_overhang_patch(result: SliceResult) -> float:
     NumPy: Es sind tausende kleine Stücke, und keines ist eine
     Geometriefrage. Am Gitterbecher (476 Schichten mal 56 Stücke) kostete
     der NumPy-Weg 287 ms je Vorschlagsrechnung, dieser 19.
+
+    ``without`` nennt Stücke (Schicht, Stück), die nicht zählen — die
+    Kanaldecken aus :func:`model_support`.
     """
     largest = 0.0
-    for layer in result.layers:
+    for index, layer in enumerate(result.layers):
         if layer.overhang_area <= EPS_GEOM:
             continue
         if not layer.overhangs:
             largest = max(largest, float(layer.overhang_area))
             continue
-        for piece in layer.overhangs:
-            area = ring_area(piece.outline) - sum(ring_area(hole) for hole in piece.holes)
-            largest = max(largest, area)
+        for number, piece in enumerate(layer.overhangs):
+            if (index, number) in without:
+                continue
+            largest = max(largest, _piece_area(piece))
     return largest
 
 
@@ -2642,9 +2658,58 @@ def island_layers(result: SliceResult) -> tuple[float, ...]:
     return tuple(layer.z for layer in result.layers if layer.islands)
 
 
+#: Bis zu welcher lichten Weite ein Raum, in dem eine Stützsäule auf dem
+#: Modell stünde, als **Kanal** gilt, in Millimetern (§22.2).
+#:
+#: Die Grenze ist eine Brücke, keine Toleranz: Eine Kanaldecke bis zu dieser
+#: Weite schließt sich als Gewölbe oder Brücke über den beiden Wänden, mit
+#: Durchhang, aber haltend — das Doppelte dessen, ab dem der Bericht eine
+#: Decke meldet (``advise.SPAN_INTERESTING``). Eine Stütze darin bekäme man
+#: nicht mehr heraus, und sie versperrt den Kanal. Gemessen an der
+#: Waschschüssel (25.09.2026): Der Wasserkanal vom Becher zur Düse ist 22 mm
+#: weit, und alle 412 mm² Überhang über Modellmaterial liegen darin. Zum
+#: Vergleich an denselben Probekörpern: Tunnel 20 mm und Rohrbogen 20 mm sind
+#: Kanäle; ein offener Kasten mit Innenregal (74 mm), ein verschlossener
+#: Hohlkörper (54 mm) und ein breiter Tunnel (65 mm) sind es nicht — dort
+#: trägt die Decke nicht und die Stütze ist erreichbar.
+CHANNEL_WIDTH: Final = 30.0
+
+
+@dataclass(frozen=True, slots=True)
+class ModelSupport:
+    """Wo Stützsäulen auf dem **Modell** statt auf der Platte enden (§22.2).
+
+    Getrennt nach außen und Kanal: Außen muss die Stütze auf dem Modell
+    ansetzen dürfen, sonst sackt die Decke ab (der Tisch); im Kanal trägt
+    sich die Decke selbst, und eine Stütze dort bleibt für immer darin (die
+    Waschschüssel). Flächen in mm², Stücke als (Schicht, Stück) in
+    ``LayerInfo.overhangs``.
+    """
+
+    open_patch: float = 0.0
+    """Die größte Fläche eines Stücks, die außerhalb eines Kanals auf dem Modell aufsetzt."""
+    open_area: float = 0.0
+    """Wie viel außerhalb von Kanälen insgesamt auf dem Modell aufsetzt."""
+    channels: frozenset[tuple[int, int]] = frozenset()
+    """Die Überhangstücke, deren Säule in einem Kanal auf dem Modell endet."""
+    channel_layers: frozenset[int] = frozenset()
+    """Schichten, deren Überhang ganz aus solchen Stücken besteht."""
+    channel_area: float = 0.0
+    channel_at: tuple[float, float, float] | None = None
+    """Wo das größte Kanalstück hängt — für den Ort eines Befunds."""
+
+
 def support_on_model(result: SliceResult) -> bool:
-    """Endet eine Stützsäule auf dem **Modell** statt auf der Druckplatte?
-    (§22.2)
+    """Endet eine Stützsäule außerhalb eines Kanals auf dem **Modell**? (§22.2)
+
+    Die Kurzform von :func:`model_support` für den, der nur Ja oder Nein
+    braucht.
+    """
+    return model_support(result).open_patch > EPS_GEOM
+
+
+def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> ModelSupport:
+    """Welche Stützsäulen auf dem Modell enden, und ob in einem Kanal (§22.2).
 
     Die Frage, an der „Stützen nur von der Platte" hängt. Geschlossen wurde
     sie aus „keine Insel", und das ist etwas anderes: Ein Tisch — Bodenplatte
@@ -2653,31 +2718,144 @@ def support_on_model(result: SliceResult) -> bool:
     jede Stütze darunter steht auf der Bodenplatte. Der Vorschlag
     ``build_plate`` ließ die Tischplatte im Druck absacken.
 
+    **Und nicht jede Säule auf dem Modell ist ein Grund für „überall".** Die
+    Waschschüssel (25.09.2026) führt Wasser von einem Becher durch einen
+    Kanal zu einer Düse; mit „Stützen überall" füllte der Slicer den Kanal
+    auf 40 mm Höhe mit Stütze, die niemand mehr herausbekommt — Robert:
+    „die Stützen sind sinnlos und gehen durch das Modell". Eine Säule steht
+    in einem Kanal, wenn der freie Raum um sie herum auf halber Höhe keinen
+    Kreis von ``channel_width`` fasst, der sie enthält (:func:`_in_a_channel`).
+
     Gerechnet wird derselbe Durchgang von oben nach unten wie beim
-    Stützvolumen (:func:`_support_volume`), nur wird nichts summiert: Sobald
-    eine Säule oberhalb der ersten Schicht an Material verliert, steht sie auf
-    dem Modell, und die Antwort ist da. Der übliche Fall — alles erreicht die
-    Platte — geht dafür durch alle Schichten; er kostet an einem Körper mit
-    327 000 Dreiecken die Größenordnung des Stützvolumens selbst, rund vierzig
-    Millisekunden, und läuft einmal je Analyse statt je Kandidat.
+    Stützvolumen (:func:`_support_volume`), nur je Stück: Wo ein Teil einer
+    Säule an Material verliert, setzt es dort auf, und dieser Ort wird
+    einmal befragt. Der übliche Fall — alles erreicht die Platte — geht durch
+    alle Schichten und stellt keine Kanalfrage.
     """
+    layers = result.layers
+    areas: list[float] = []
+    names: list[tuple[int, int]] = []
+    pieces: list[ShapelyPolygon] = []
     pending: list[ShapelyPolygon] = []
-    for index in range(len(result.layers) - 1, 0, -1):
-        layer = result.layers[index]
-        if layer.overhangs:
-            pending += [
-                ShapelyPolygon(contour.outline, contour.holes) for contour in layer.overhangs
-            ]
+    owners: list[int] = []
+    landed: dict[int, tuple[int, float]] = {}
+    for index in range(len(layers) - 1, 0, -1):
+        for number, contour in enumerate(layers[index].overhangs):
+            owners.append(len(areas))
+            names.append((index, number))
+            areas.append(_piece_area(contour))
+            pieces.append(ShapelyPolygon(contour.outline, contour.holes))
+            pending.append(pieces[-1])
         if not pending:
             continue
-        below = _layer_shape(result.layers[index - 1])
+        below = _material(layers[index - 1])
         if below.is_empty:
             continue
-        standing = _total_area(pending)
-        pending = _above_material(pending, below)
-        if standing - _total_area(pending) > EPS_GEOM:
-            return True
-    return False
+        # Vorbereitet, weil hunderte Säulen dieselbe Schicht fragen; der
+        # Durchgang läuft in einem Faden, und die Schicht gehört nur ihm.
+        # **Die Schicht steht vorn**: GEOS nutzt die Vorbereitung nur am
+        # ersten Argument — umgekehrt kostete die Frage an der Waschschüssel
+        # 1,5 s.
+        shapely.prepare(below)
+        parts = np.asarray(pending, dtype=object)
+        if len(pending) >= SUPPORT_TREE_FROM:
+            candidates = shapely.STRtree(pending).query(below)
+            touching = candidates[shapely.intersects(below, parts[candidates])]
+        else:
+            touching = np.nonzero(shapely.intersects(below, parts))[0]
+        if not len(touching):
+            continue
+        hit = set(touching.tolist())
+        kept = [part for number, part in enumerate(pending) if number not in hit]
+        kept_owners = [owner for number, owner in enumerate(owners) if number not in hit]
+        for number in touching.tolist():
+            part, owner = pending[number], owners[number]
+            rest = _areas_of(part.difference(below))
+            lost = float(part.area) - sum(float(piece.area) for piece in rest)
+            if lost > EPS_GEOM:
+                low, before = landed.get(owner, (index - 1, 0.0))
+                landed[owner] = (low, before + lost)
+            kept += rest
+            kept_owners += [owner] * len(rest)
+        pending, owners = kept, kept_owners
+
+    if not landed:
+        return ModelSupport()
+    shapes: dict[int, ShapelyPolygon] = {}
+    open_patch = 0.0
+    open_area = 0.0
+    channels: set[int] = set()
+    places: dict[int, Any] = {}
+    for owner, (low, area) in landed.items():
+        # **Gemessen wird unmittelbar unter der Decke**, nicht auf halber
+        # Höhe der Säule. Die Frage ist, ob sich die Decke selbst schließt,
+        # und das entscheidet die Weite, die sie überspannen muss: Der
+        # Wasserkanal der Waschschüssel ist auf halber Höhe 42 mm weit und
+        # unter seinem Gewölbe 22 mm. Eine flache Decke über einem weiten
+        # Raum bleibt dabei weit — der Tisch, der Kasten mit Innenregal.
+        # Gefragt wird am Stück selbst: Wo seine Säule aufsetzt, kann der
+        # Raum weiter sein als unter der Decke (der Boden des Kanals).
+        under = max(names[owner][0] - 1, low + 1)
+        if under not in shapes:
+            shapes[under] = _material(layers[under])
+        places[owner] = pieces[owner].representative_point()
+        if _in_a_channel(shapes[under], places[owner], channel_width):
+            channels.add(owner)
+        else:
+            open_patch = max(open_patch, area)
+            open_area += area
+
+    chosen = frozenset(names[owner] for owner in channels)
+    counted: dict[int, int] = {}
+    for index, _number in chosen:
+        counted[index] = counted.get(index, 0) + 1
+    widest = max(channels, key=lambda owner: (areas[owner], names[owner]), default=None)
+    at = None
+    if widest is not None:
+        point = places[widest]
+        at = (float(point.x), float(point.y), float(layers[names[widest][0]].z))
+    return ModelSupport(
+        open_patch=open_patch,
+        open_area=open_area,
+        channels=chosen,
+        channel_layers=frozenset(
+            index for index, count in counted.items() if count == len(layers[index].overhangs)
+        ),
+        channel_area=float(sum(areas[owner] for owner in channels)),
+        channel_at=at,
+    )
+
+
+def _material(layer: LayerInfo) -> ShapelyPolygon:
+    """Die Fläche einer Schicht für Prädikate und Differenzen, ohne Vereinigung.
+
+    Die Konturen kommen aus einer gültigen Fläche (:func:`_to_polygons`) und
+    überschneiden sich nicht; :func:`_layer_shape` vereinigt sie trotzdem, und
+    an der Waschschüssel mit zwanzig Konturen je Schicht kostete das
+    0,4 s von 2,9 für eine Frage, die keine Vereinigung braucht.
+    """
+    parts = [ShapelyPolygon(contour.outline, contour.holes) for contour in layer.contours]
+    if not parts:
+        return ShapelyPolygon()
+    return parts[0] if len(parts) == 1 else MultiPolygon(parts)
+
+
+def _in_a_channel(shape: ShapelyPolygon, point: Any, width: float) -> bool:
+    """Fasst der freie Raum um ``point`` keinen Kreis der Weite ``width``, der ihn enthält?
+
+    Ein Kreis vom Radius r, der den Punkt enthält, liegt ganz im Quadrat mit
+    der halben Kante 2r um ihn. Gefragt wird deshalb nur dieses Fenster: Das
+    Material wird darauf zugeschnitten, der freie Raum erodiert, und ein
+    Mittelpunkt im Abstand höchstens r vom Punkt heißt „weit". Der
+    Fensterrand begrenzt dabei keinen Kreis, der zählen könnte.
+    """
+    radius = width / 2.0
+    reach = 2.0 * radius + OVERHANG_MARGIN
+    x, y = float(point.x), float(point.y)
+    window = shapely.box(x - reach, y - reach, x + reach, y + reach)
+    material = shapely.clip_by_rect(shape, x - reach, y - reach, x + reach, y + reach)
+    core = window.difference(material).buffer(-radius)
+    return bool(core.is_empty or core.distance(point) > radius)
 
 
 def _total_area(parts: list[ShapelyPolygon]) -> float:
@@ -2685,6 +2863,11 @@ def _total_area(parts: list[ShapelyPolygon]) -> float:
     if not parts:
         return 0.0
     return float(shapely.area(np.asarray(parts, dtype=object)).sum())
+
+
+def _piece_area(piece: Polygon) -> float:
+    """Die Fläche eines Überhangstücks, ohne GEOS (:func:`largest_overhang_patch`)."""
+    return ring_area(piece.outline) - sum(ring_area(hole) for hole in piece.holes)
 
 
 def taper_length(shape: ShapelyPolygon) -> float:

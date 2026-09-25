@@ -24,6 +24,7 @@ from app.core.slice import advise
 from app.core.slice.analysis import (
     WIDTH_INTERESTING,
     minimum_width,
+    model_support,
     narrowest,
     slice_body,
     spanning_width,
@@ -242,6 +243,52 @@ def test_the_table_keeps_supports_everywhere() -> None:
 def test_the_cantilever_may_stay_on_the_plate() -> None:
     """Die Gegenprobe, sonst wäre die Regel nur abgeschaltet."""
     assert placement_advice(bracket()) == "build_plate"
+
+
+# --- Eine Decke im Kanal verlangt keine Stütze auf dem Modell -------------------
+
+
+def tunnel_block(width: float) -> MeshData:
+    """Ein Block, quer hindurch ein Tunnel von ``width`` mal 20 mm, offen an
+    beiden Enden, und oben eine Kragplatte 40 auf 40 über das Bett hinaus.
+
+    Die Kragplatte braucht Stützen, und die erreichen das Bett. Die
+    Tunneldecke hängt über dem Tunnelboden — über Modellmaterial.
+    """
+    block = brick(width + 40.0, 40.0, 40.0, (0.0, 0.0, 20.0))
+    tunnel = brick(width, 50.0, 20.0, (0.0, 0.0, 18.0))
+    arm = brick(40.0, 40.0, 5.0, (width / 2.0 + 40.0, 0.0, 37.5))
+    body = trimesh.boolean.union([trimesh.boolean.difference([block, tunnel]), arm])
+    return place_on_bed(MeshData.of(body))
+
+
+def test_a_ceiling_in_a_narrow_tunnel_is_a_channel() -> None:
+    """Die Waschschüssel (25.09.2026): Mit „Stützen überall" füllte der
+    Slicer ihren Wasserkanal mit Stütze, die niemand mehr herausbekommt. Die
+    Decke eines schmalen Kanals schließt sich selbst.
+    """
+    model = model_support(slice_body(tunnel_block(20.0), 0.5))
+
+    assert model.channels, "die Tunneldecke steht über dem Tunnelboden"
+    assert model.open_patch == pytest.approx(0.0), "außen setzt nichts auf dem Modell auf"
+    assert model.channel_at is not None
+    assert model.channel_at[2] == pytest.approx(28.0, abs=0.5), "der Ort ist die Decke"
+
+
+def test_a_wide_tunnel_is_no_channel() -> None:
+    """Die Gegenprobe: 65 mm überbrückt keine Decke, und die Stütze darunter
+    ist erreichbar."""
+    model = model_support(slice_body(tunnel_block(65.0), 0.5))
+
+    assert not model.channels
+    assert model.open_patch > 1000.0
+
+
+def test_a_channel_ceiling_leaves_the_supports_on_the_plate() -> None:
+    """Vorher blieb „überall" stehen, weil eine Säule auf dem Modell endet —
+    in der Tunneldecke, dort, wo sie den Tunnel füllt."""
+    assert placement_advice(tunnel_block(20.0)) == "build_plate"
+    assert placement_advice(tunnel_block(65.0)) is None, "der weite Tunnel braucht sie"
 
 
 # --- Die Aufstandsfläche gehört dem Drucker, nicht der Suche --------------------

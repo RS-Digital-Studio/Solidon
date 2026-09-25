@@ -32,8 +32,8 @@ from app.core.slice.analysis import (
     _layer_shape,
     island_layers,
     largest_overhang_patch,
+    model_support,
     narrowest_measured,
-    support_on_model,
     tapered_layers,
     thinnest_spot,
     total_overhang,
@@ -631,8 +631,14 @@ def _from_geometry(
     advice: list[SettingAdvice] = []
 
     islands = island_layers(result)
-    overhang = total_overhang(result)
-    patch = largest_overhang_patch(result)
+    # Kanaldecken zählen nicht: Sie tragen sich selbst, und eine Stütze darin
+    # käme nicht mehr heraus (:func:`model_support`, die Waschschüssel vom
+    # 25.09.2026). Ohne diese Ausnahme schaltete ein Wasserkanal die Stützen
+    # ein und verlangte zugleich, dass sie auf dem Modell ansetzen — genau dort,
+    # wo sie ihn füllen.
+    model = model_support(result)
+    overhang = total_overhang(result, without=model.channels)
+    patch = largest_overhang_patch(result, without=model.channels)
     # Die Summe allein reicht nicht, und der Unterschied entscheidet: ein
     # Becher sammelte über dreihundertachtunddreißig Schichten
     # zweihundertvierzig Quadratmillimeter und bekam dieselbe Warnung wie ein
@@ -660,7 +666,11 @@ def _from_geometry(
         bool(islands)
         or patch > OVERHANG_LAYER_WORTH_SUPPORT
         or (overhang > OVERHANG_WORTH_SUPPORT and patch > OVERHANG_LAYER_MINIMUM)
-        or any(layer.bridge_width > SPAN_INTERESTING for layer in result.layers)
+        or any(
+            layer.bridge_width > SPAN_INTERESTING
+            for index, layer in enumerate(result.layers)
+            if index not in model.channel_layers
+        )
     )
 
     if needs_support and settings.support.style == "none":
@@ -694,8 +704,18 @@ def _from_geometry(
     # 40 auf 40 — hat keine Insel und 1 492 mm² Überhang auf einer Schicht,
     # und jede Stütze darunter endet auf der Bodenplatte. Der Vorschlag
     # ``build_plate`` ließ die Tischplatte absacken. Gefragt wird deshalb die
-    # Geometrie und nicht ein Nebenbefund (:func:`support_on_model`).
-    on_model = support_on_model(result) if needs_support else False
+    # Geometrie und nicht ein Nebenbefund (:func:`model_support`).
+    #
+    # **Und „auf dem Modell“ heißt außen und so viel, dass es selbst Stütze
+    # bräuchte.** Eine Säule im Kanal zählt nicht (oben), und was außen auf
+    # dem Modell aufsetzt, misst sich an denselben zwei Wegen wie der
+    # Stützbedarf selbst: An der Waschschüssel blieb neben der Kanaldecke ein
+    # Rest von 11 mm² an der Düsenmündung, und der allein verlangte, dass die
+    # Stützen des ganzen Teils überall ansetzen — wieder im Kanal.
+    on_model = needs_support and (
+        model.open_patch > OVERHANG_LAYER_WORTH_SUPPORT
+        or (model.open_area > OVERHANG_WORTH_SUPPORT and model.open_patch > OVERHANG_LAYER_MINIMUM)
+    )
     if needs_support and on_model and settings.support.placement == "build_plate":
         advice.append(
             _advice(
@@ -721,6 +741,11 @@ def _from_geometry(
                 path="support.placement",
                 value="build_plate",
                 reason=_(
+                    "Die übrigen Decken liegen in schmalen Kanälen und tragen sich "
+                    "selbst. Stützen darin kämen nicht mehr heraus."
+                )
+                if model.channels
+                else _(
                     "Alle Überhänge erreichen das Bett. Stützen auf dem Modell "
                     "hinterlassen Narben, die keine sein müssen."
                 ),
