@@ -18,6 +18,7 @@ from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.perceive import features as detection
+from app.core.perceive.helix import _facet_of_face
 from app.core.perceive.matching import DIAMETER_TOLERANCE, match, transformed_features
 from app.core.perceive.relations import cavity_chains
 from app.core.perceive.surfaces import clipped_patches, reindexed_patches
@@ -237,21 +238,6 @@ def _region(
         selected.append(indices)
     _check(check)
     return np.concatenate(selected) if selected else np.empty(0, dtype=np.int64)
-
-
-def _facet_labels(body: Any) -> np.ndarray:
-    """Je Dreieck die Nummer seiner ebenen Facette am ganzen Netz, sonst -1.
-
-    Dieselbe Gruppierung, aus der die Vollerkennung ihre ebenen Flächen liest
-    (``body.facets``); trimesh merkt sie sich am Körper, und am Drachen mit
-    2,3 Millionen Dreiecken kostet sie beim ersten Mal 2,2 s.
-    """
-    facets = body.facets
-    labels = np.full(len(body.faces), -1, dtype=np.int64)
-    if len(facets):
-        sizes = np.fromiter((len(facet) for facet in facets), dtype=np.int64, count=len(facets))
-        labels[np.concatenate(facets)] = np.repeat(np.arange(len(facets), dtype=np.int64), sizes)
-    return labels
 
 
 def _connected_to(mesh: MeshData, indices: np.ndarray, seed: int) -> np.ndarray:
@@ -1119,16 +1105,14 @@ def detect_local(
     # Suchradius hinaus: Ihre Facette begrenzt sie selbst. Am Drachen lag
     # zwischen „Suchrand“ und „zu viele Dreiecke“ kein Radius, der eine
     # Fußsohle ganz fasste — die Vollerkennung findet genau diese vier.
-    labels = _facet_labels(stitched.raw)
+    labels = _facet_of_face(stitched.raw)
     plane = np.flatnonzero(labels == labels[seed]) if labels[seed] >= 0 else np.empty(0, np.int64)
     if len(plane) > LOCAL_FACE_LIMIT:
         # Eine Ebene über dem Budget trägt die Suche nicht; dann gilt der
         # begrenzte Bereich wie ohne sie, und ein kleinerer Suchradius hilft.
         plane = np.empty(0, np.int64)
-    # Hängt an der Stelle mehr als das Budget, bleibt die Facette allein.
-    crowded = len(indices) > LOCAL_FACE_LIMIT
-    indices = plane if crowded else np.union1d(indices, plane)
-    if not len(indices) or len(indices) > LOCAL_FACE_LIMIT:
+    indices, crowded = _with_its_facet(indices, plane)
+    if not len(indices):
         return LocalDetection(reason="budget")
     result = _recognise_region(
         stitched, indices, seeds, check_cancelled, place, radius, proven=plane
@@ -1138,8 +1122,29 @@ def detect_local(
     return replace(result, reason="budget") if crowded and result.reason else result
 
 
+def _with_its_facet(indices: np.ndarray, plane: np.ndarray) -> tuple[np.ndarray, bool]:
+    """Der Suchbereich samt der Facette am Treffer — und ob das Budget dafür reichte.
+
+    **Hängt an der Stelle mehr als das Budget, bleibt die Facette allein**,
+    und die Stelle ist der Bereich *mit* seiner Facette: Bis zum 25.09.2026
+    fiel die Facette nur zurück, wenn der Bereich schon selbst über dem
+    Budget lag. Brachte erst die Facette ihn darüber, sagte die Suche „zu
+    viele Dreiecke — wählen Sie einen kleineren Bereich“, und ein größerer
+    Radius fand die Fläche. ``plane`` passt selbst ins Budget oder ist leer;
+    ein leeres Ergebnis heißt dann: nichts, was ins Budget passt.
+    """
+    joined = np.union1d(indices, plane)
+    if len(joined) <= LOCAL_FACE_LIMIT:
+        return joined, False
+    return plane, True
+
+
 _KNOWN: OrderedDict[bytes, dict[FeatureId, Feature]] = OrderedDict()
 _KNOWN_LOCK = threading.Lock()
+
+#: Wovon eine Suche in :func:`detect_known` abhängt: Dreiecke, Facette, belegter
+#: Suchumfang, Suchradius und die Mitte der Kugel als Bytes.
+type _SearchKey = tuple[tuple[int, ...], tuple[int, ...], float, float, bytes]
 
 
 def forget_known() -> None:
@@ -1239,11 +1244,16 @@ def detect_known(
     labels: np.ndarray | None = None
     facet_areas: np.ndarray | None = None
     gathered: list[Feature] = []
-    # Je Suchbereich einmal gerechnet und einmal gesammelt; ob ein Merkmal
-    # anhält, entscheidet es selbst an diesem Ergebnis — sonst verdeckte ein
-    # unbenötigtes Merkmal ein benötigtes mit demselben Bereich.
-    results: dict[tuple[tuple[int, ...], tuple[int, ...], float], LocalDetection] = {}
-    gathered_keys: set[tuple[tuple[int, ...], tuple[int, ...], float]] = set()
+    # Je Suche einmal gerechnet und einmal gesammelt; ob ein Merkmal anhält,
+    # entscheidet es selbst an diesem Ergebnis — sonst verdeckte ein
+    # unbenötigtes Merkmal ein benötigtes mit derselben Suche. **Die Suche ist
+    # mehr als ihr Würfel**: Was als vollständig gilt, misst sich an der Kugel
+    # um die Mitte (``_inside_radius``). Zwei Würfel mit denselben Dreiecken um
+    # verschiedene Mitten teilten sonst ein Ergebnis, und eine Bohrung hielt
+    # mit der Kugel ihres Nachbarn am Suchrand an, obwohl sie in ihrer eigenen
+    # vollständig lag.
+    results: dict[_SearchKey, LocalDetection] = {}
+    gathered_keys: set[_SearchKey] = set()
     for name, feature in features.items():
         _check(check_cancelled)
         needed = required is None or name in required
@@ -1282,7 +1292,7 @@ def detect_known(
         plane = np.empty(0, dtype=np.int64)
         if feature.kind == "face":
             if labels is None or facet_areas is None:
-                labels = _facet_labels(stitched.raw)
+                labels = _facet_of_face(stitched.raw)
                 grouped = labels >= 0
                 facet_areas = np.bincount(
                     labels[grouped],
@@ -1305,17 +1315,18 @@ def detect_known(
         for radius in radii:
             indices = _region(stitched, centre, radius, check_cancelled, bounded=False)
             assert indices is not None
-            if len(indices) > LOCAL_FACE_LIMIT and seed is not None:
+            if len(indices) + len(plane) > LOCAL_FACE_LIMIT and seed is not None:
                 indices = _connected_to(stitched, indices, seed)
-            crowded = len(indices) > LOCAL_FACE_LIMIT
-            indices = plane if crowded else np.union1d(indices, plane)
-            if len(indices) > LOCAL_FACE_LIMIT or (crowded and not len(indices)):
+            indices, crowded = _with_its_facet(indices, plane)
+            if crowded and not len(indices):
                 failure = "budget"
                 continue
-            key = (
+            key: _SearchKey = (
                 tuple(int(index) for index in indices),
                 tuple(int(index) for index in plane),
                 radii[-1],
+                radius,
+                np.asarray(centre, dtype=np.float64).tobytes(),
             )
             result = results.get(key)
             if result is None:

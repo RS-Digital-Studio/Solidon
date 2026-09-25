@@ -624,3 +624,87 @@ def test_a_body_without_a_helix_keeps_every_feature() -> None:
     found = detect(plate)
     assert [f for f in found.values() if f.kind == "thread"] == []
     assert len([f for f in found.values() if f.kind == "hole"]) == 4
+
+
+def test_the_sharp_chains_come_out_as_the_scan_over_every_label_gave_them() -> None:
+    """Die Züge je Etikett einmal sortiert statt je Etikett über alle Kanten verglichen.
+
+    ``_sharp_chain_edges`` verglich für **jedes** Etikett alle scharfen Kanten
+    — auch für die vielen, die unter :data:`MIN_CHAIN_EDGES` bleiben. An einem
+    Lochblech mit 2 500 Löchern sind das 5 001 Züge mal 160 012 Kanten, 0,92 s
+    für null Züge (25.09.2026). Sortiert kommen dieselben Züge in derselben
+    Folge, und in jedem dieselben Kanten in derselben Reihenfolge.
+    """
+    import manifold3d as m3
+
+    from app.core.perceive import helix
+
+    plate = m3.Manifold.cube((60.0, 40.0, 2.0))
+    wide = [
+        m3.Manifold.cylinder(4.0, 5.0, 5.0, 256).translate((12.0 + 18.0 * i, 12.0, -1.0))
+        for i in range(3)
+    ]
+    narrow = [
+        m3.Manifold.cylinder(4.0, 1.0, 1.0, 32).translate((4.0 + 5.5 * i, 32.0, -1.0))
+        for i in range(10)
+    ]
+    solid = plate - m3.Manifold.batch_boolean([*wide, *narrow], m3.OpType.Add)
+    out = solid.to_mesh()
+    body = trimesh.Trimesh(
+        np.asarray(out.vert_properties)[:, :3], np.asarray(out.tri_verts), process=False
+    )
+
+    # Der unabhängige Sollwert: je Etikett ein Vergleich über alle Kanten.
+    angles = np.degrees(body.face_adjacency_angles)
+    edges = body.face_adjacency_edges[angles > helix.SHARP_EDGE_LIMIT]
+    labels = trimesh.graph.connected_component_labels(edges, node_count=len(body.vertices))
+    belongs = labels[edges[:, 0]]
+    expected = [
+        edges[belongs == label]
+        for label in np.unique(belongs)
+        if int((belongs == label).sum()) >= helix.MIN_CHAIN_EDGES
+    ]
+
+    chains = helix._sharp_chain_edges(body)
+
+    assert len(expected) == 6, "drei weite Löcher mit je zwei Rändern tragen einen langen Zug"
+    assert len(chains) == len(expected)
+    for chain, wanted in zip(chains, expected, strict=True):
+        np.testing.assert_array_equal(chain, wanted)
+
+
+def test_a_flat_rim_is_not_searched_for_a_helix(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein ebener Rand steigt nicht — um seine Achse wird keine Wendel gesucht.
+
+    Der Rand einer fein geteilten Bohrung ist ein scharfer Zug über der
+    Mindestlänge und ein Kreis um seine Achse; die Suche zog dort je Quantil
+    vier Kreise nach und prüfte danach den Kamm, der keine einzige steigende
+    Kante trägt. An einer Platte mit hundert Bohrungen zu 256 Segmenten waren
+    das 8,6 von 13 Sekunden der Wendelsuche (25.09.2026). Eine Kante zählt nur,
+    wenn sie steigt — dieselbe Antwort, nur ohne Rechnung.
+    """
+    import manifold3d as m3
+
+    from app.core.perceive import helix
+
+    plate = m3.Manifold.cube((30.0, 30.0, 4.0)) - m3.Manifold.cylinder(
+        6.0, 6.0, 6.0, 256
+    ).translate((15.0, 15.0, -1.0))
+    out = plate.to_mesh()
+    body = trimesh.Trimesh(
+        np.asarray(out.vert_properties)[:, :3], np.asarray(out.tri_verts), process=False
+    )
+    chains = helix._sharp_chain_edges(body)
+    assert len(chains) == 2, "zwei Ränder zu je 256 Kanten"
+    crests: list[int] = []
+    real = helix._resolved_crest
+
+    def counted(*args, **kwargs):  # type: ignore[no-untyped-def]
+        crests.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(helix, "_resolved_crest", counted)
+
+    assert [helix._resolved_helix(body, chain) for chain in chains] == [None, None]
+    assert [helix._measured_helix(body, chain) for chain in chains] == [None, None]
+    assert not crests

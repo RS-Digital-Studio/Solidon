@@ -5989,3 +5989,60 @@ def test_the_facet_verdict_and_the_patches_stop_between_their_steps() -> None:
 
         with pytest.raises(OperationCancelled):
             run(cancel_on_the_second)
+
+
+def test_a_refinement_that_turns_a_triangle_is_not_the_same_surface() -> None:
+    """Ein umgedrehtes Teildreieck ist eine andere Oberfläche, auch in derselben Ebene.
+
+    ``refined_twin`` belegte je Ursprung die Ebene und den Inhalt, nicht die
+    Richtung: Ein Teilstück mit vertauschtem Umlaufsinn liegt in seiner Ebene
+    und deckt denselben Inhalt — übertragen wurde trotzdem, und die Merkmale
+    trugen danach Innen und Außen eines Dreiecks, das nach der anderen Seite
+    zeigt (``inward``, ``inner``, das Tor des einheitlichen Umlaufsinns bei
+    den Einschlüssen).
+    """
+    from app.core.geom.mesh_ops import remesh
+
+    mesh = plate()
+    refined = remesh(mesh, 2.0)
+    origin = features_module.refined_twin(mesh, refined)
+    assert origin is not None, "die echte Teilung trägt ihre Herkunft"
+    faces = np.asarray(refined.raw.faces).copy()
+    faces[0] = faces[0][[0, 2, 1]]
+    turned = MeshData.of(trimesh.Trimesh(np.asarray(refined.raw.vertices), faces, process=False))
+    features_module.note_refinement(mesh, turned, origin)
+
+    assert not turned.raw.is_winding_consistent
+    assert features_module.refined_twin(mesh, turned) is None
+
+
+def test_a_refined_open_mesh_counts_its_open_edges_anew() -> None:
+    """Die Teilung setzt neue Ecken auf den offenen Rand — die Stelle wird neu gezählt.
+
+    Eine offene Stelle zählt Kanten und mittelt Ecken des Netzes, nicht der
+    Oberfläche. Übertragen stand nach *Kanten verfeinern* an einem Kasten
+    ohne Deckel weiter „4 offene Kanten“, wo das feinere Netz 32 trägt; die
+    frische Erkennung desselben Netzes sagte 32.
+    """
+    from app.core.geom.mesh_ops import remesh
+
+    box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    kept = np.flatnonzero(np.asarray(box.face_normals)[:, 2] < 0.5)
+    opened = MeshData.of(
+        trimesh.Trimesh(np.asarray(box.vertices), np.asarray(box.faces)[kept], process=False)
+    )
+    forget_cache()
+    before = [f.params["open_edges"] for f in detect(opened).values() if f.kind == "edge_loop"]
+    assert before == [4], "der offene Deckel ist eine Stelle mit vier Kanten"
+    refined = remesh(opened, 4.0)
+    origin = features_module.refined_twin(opened, refined)
+    assert origin is not None, "das Verfeinern belegt seine Herkunft"
+    features_module.carry_refined_detection(opened, refined, origin)
+
+    loops = [dict(f.params) for f in detect(refined).values() if f.kind == "edge_loop"]
+    fresh = [
+        dict(f.params)
+        for f in features_module.detect_edge_loops(features_module._one_body(refined))
+    ]
+    assert loops == fresh
+    assert fresh[0]["open_edges"] > 4

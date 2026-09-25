@@ -418,13 +418,22 @@ def _sharp_chain_edges(
         edges, node_count=len(body.vertices)
     )
     belongs = labels[edges[:, 0]]
+    # **Einmal nach Zug sortiert, nicht je Zug über alle Kanten verglichen.**
+    # Die Maske je Etikett kostete jeden Zug einen Durchgang über sämtliche
+    # scharfen Kanten, auch die vielen unter der Mindestlänge: an einem
+    # Lochblech mit 2 500 Löchern 5 001 Züge mal 160 012 Kanten, 0,92 s für
+    # null Züge (25.09.2026). Die stabile Sortierung hält die Kanten jedes
+    # Zugs in ihrer Folge, die Züge kommen aufsteigend wie aus ``np.unique``.
+    order = np.argsort(belongs, kind="stable")
+    ordered = belongs[order]
+    starts = np.flatnonzero(np.r_[True, ordered[1:] != ordered[:-1]])
+    ends = np.r_[starts[1:], len(order)]
     chains: list[NDArray[np.int64]] = []
-    for label in np.unique(belongs):
+    for start, end in zip(starts.tolist(), ends.tolist(), strict=True):
         if check_cancelled is not None:
             check_cancelled()
-        mine = belongs == label
-        if int(mine.sum()) >= MIN_CHAIN_EDGES:
-            chains.append(np.asarray(edges[mine], dtype=np.int64))
+        if end - start >= MIN_CHAIN_EDGES:
+            chains.append(np.asarray(edges[order[start:end]], dtype=np.int64))
     return chains
 
 
@@ -437,26 +446,36 @@ def _candidate_axes(
     angrenzenden Ebenen: Bei einem breiten kurzen Gewinde zeigt die längste
     Hauptachse quer zur Wendel, die Stirnfläche aber nicht.
     """
+    from app.core.perceive.features import _vertex_faces_index
+
     vertex_ids = np.unique(edges)
     points = np.asarray(body.vertices[vertex_ids], dtype=float)
     origin = points.mean(axis=0)
     local = points - origin
     _, _, principal = np.linalg.svd(local, full_matrices=False)
     candidates = list(principal)
-    touching = np.zeros(len(body.vertices), dtype=bool)
-    touching[vertex_ids] = True
     # Welche Facetten den Zug berühren, für alle auf einmal: Die Schleife fragte
     # jede Facette einzeln, größte zuerst, und lief an einem Körper, dessen Zug
     # keine der großen berührt, durch Tausende — am Drachen aus TripoSG 0,3 s
     # für vier kleine Züge (23.09.2026). Dieselbe Folge, dieselbe Auswahl.
+    # **Und gefragt werden die Dreiecke an den Ecken des Zugs, nicht alle**
+    # (Index Ecke → Dreiecke, einmal je Körper): Eine Maske über alle Dreiecke
+    # kostete je Zug 25 ms, an einer Platte mit hundert fein geteilten
+    # Bohrungen und 200 Zügen 5 von 20 Sekunden der Wendelsuche (25.09.2026).
     facets = body.facets
     facet_touches = np.zeros(len(facets), dtype=bool)
     if len(facets):
         owner = _facet_of_face(body)
-        near = touching[np.asarray(body.faces)].any(axis=1) & (owner >= 0)
-        facet_touches[owner[near]] = True
+        ranges, vertex_faces = _vertex_faces_index(body)
+        begin = ranges[vertex_ids]
+        lengths = ranges[vertex_ids + 1] - begin
+        places = np.repeat(begin - (np.cumsum(lengths) - lengths), lengths) + np.arange(
+            int(lengths.sum())
+        )
+        near = owner[vertex_faces[places]]
+        facet_touches[near[near >= 0]] = True
     added = 0
-    order = np.argsort(body.facets_area)[::-1]
+    order = _facets_by_area(body)
     for index in order[facet_touches[order]]:
         normal = np.asarray(body.facets_normal[index], dtype=float)
         # Flächenlose Nachbardreiecke können eine Facette ohne Richtung bilden.
@@ -471,12 +490,32 @@ def _candidate_axes(
     return origin, local, candidates
 
 
+def _facets_by_area(body: trimesh.Trimesh) -> NDArray[np.intp]:
+    """Die Facetten des Körpers, die größte zuerst — einmal je Körper sortiert.
+
+    :func:`_candidate_axes` sortierte sie je Kantenzug neu, und das zweimal je
+    Zug: an einer Platte mit hundert fein geteilten Bohrungen 400-mal 25 600
+    Facetten (25.09.2026). Dieselbe Sortierung derselben Flächen gibt dieselbe
+    Folge, auch bei gleich großen Facetten; wer sie liest, ändert sie nicht.
+    """
+    from app.core.perceive.features import remembered
+
+    result: NDArray[np.intp] = remembered(
+        "facets_by_area", body, (), lambda: np.argsort(body.facets_area)[::-1]
+    )
+    return result
+
+
 def _facet_of_face(body: trimesh.Trimesh) -> NDArray[np.int64]:
     """Je Dreieck die Nummer seiner Facette, ``-1`` außerhalb jeder Facette.
 
     Einmal je Körper: :func:`_candidate_axes` fragt je Kantenzug, und am
     erzeugten Puppenhausbett baute jede Frage dieselbe Zuordnung über 963 549
-    Facettendreiecke neu — 130 Fragen, 8,7 Sekunden (25.09.2026).
+    Facettendreiecke neu — 130 Fragen, 8,7 Sekunden (25.09.2026). **Die eine
+    Stelle für diese Zuordnung**: Die Erkennung an einer Stelle liest daraus
+    die Facette am Treffer (``local.detect_local``, ``local.detect_known``);
+    bis zum 25.09.2026 baute sie dieselbe Tabelle bei jedem Aufruf selbst.
+    Das Feld wird geteilt — wer es liest, ändert es nicht.
     """
     from app.core.perceive.features import remembered
 
@@ -510,12 +549,15 @@ def _resolved_helix(
     from app.core.perceive.features import _fit_circle, _plane_basis
 
     origin, local, candidates = _candidate_axes(body, edges)
+    steps = _edge_steps(body, edges)
 
     best: Helix | None = None
     for candidate in candidates:
         if check_cancelled is not None:
             check_cancelled()
         axis = np.asarray(positive_axis(tuple(float(value) for value in candidate)), dtype=float)
+        if not _rises_along(steps, axis):
+            continue
         first, second = _plane_basis(axis)
         flat = np.column_stack((local @ first, local @ second))
         initial, _ = _fit_circle(flat)
@@ -541,6 +583,36 @@ def _resolved_helix(
                 if result is not None and (best is None or result.length > best.length):
                     best = result
     return best
+
+
+#: Bis zu welchem Anstieg entlang einer Achse keine Kante eines Zugs zur Wendel
+#: beitragen kann — keine neue Toleranz, sondern die Schranke der zwei Leser
+#: selbst: Der Kamm verlangt ``|Δz · Δθ| > EPS_GEOM`` mit ``|Δθ| ≤ π``
+#: (:func:`_resolved_crest`), die Kantenlesung ``|Δz| > EPS_GEOM``
+#: (:func:`_slope_reading`). Die Hälfte der engeren lässt der Rundung Platz,
+#: denn beide rechnen den Anstieg von ihrer Mitte aus.
+NO_RISE: Final = EPS_GEOM / (2.0 * math.pi)
+
+
+def _edge_steps(body: trimesh.Trimesh, edges: NDArray[np.int64]) -> NDArray[np.float64]:
+    """Der Kantenvektor jeder Kante eines Zugs, einmal je Zug gelesen."""
+    vertices = np.asarray(body.vertices, dtype=float)
+    return np.asarray(vertices[edges[:, 1]] - vertices[edges[:, 0]], dtype=float)
+
+
+def _rises_along(steps: NDArray[np.float64], axis: NDArray[np.float64]) -> bool:
+    """Ob eine Kante des Zugs entlang der Achse steigt — sonst gibt es um sie keine Wendel.
+
+    **Ein ebener Rand steigt nicht.** Der Rand einer fein geteilten Bohrung ist
+    ein scharfer Zug über der Mindestlänge und ein Kreis um seine Achse; beide
+    Leser zogen dort Kreise nach und fanden danach keine einzige steigende
+    Kante. An einer Platte mit hundert Bohrungen zu 256 Segmenten waren das
+    8,6 von 13 Sekunden der Wendelsuche (25.09.2026). Die Antwort ist dieselbe:
+    Ohne Anstieg über :data:`NO_RISE` trägt keine Kante zu Kamm oder Schar bei.
+    Elementweise gerechnet (RM-187), wie die Leser danach.
+    """
+    rise = steps[:, 0] * axis[0] + steps[:, 1] * axis[1] + steps[:, 2] * axis[2]
+    return bool(len(rise)) and float(np.abs(rise).max()) > NO_RISE
 
 
 def _resolved_crest(
@@ -1060,11 +1132,14 @@ def _measured_helix(
     origin, local, candidates = _candidate_axes(body, edges)
     if hint is not None:
         candidates = [np.asarray(hint.axis, dtype=float), *candidates]
+    steps = _edge_steps(body, edges)
     found: list[Helix] = []
     for candidate in candidates:
         if check_cancelled is not None:
             check_cancelled()
         axis = np.asarray(positive_axis(tuple(float(value) for value in candidate)), dtype=float)
+        if not _rises_along(steps, axis):
+            continue
         first, second = _plane_basis(axis)
         circle, _radius = _fit_circle(np.column_stack((local @ first, local @ second)))
         centre = origin + first * float(circle[0]) + second * float(circle[1])

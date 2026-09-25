@@ -1588,9 +1588,10 @@ def refined_twin(source: MeshData, refined: MeshData) -> np.ndarray | None:
     Das Gegenstück zu :func:`moved_twin` für eine Teilung: Der Vermerk aus
     :func:`note_refinement` muss zu genau diesem Eingang gehören (derselbe
     Abdruck), jede Ecke eines neuen Dreiecks liegt in der Ebene seines
-    Ursprungs, und die neuen Dreiecke eines Ursprungs decken zusammen genau
-    seine Fläche. Dann ist die Oberfläche dieselbe, und jede Dreiecksnummer
-    eines Merkmals lebt in den Dreiecken weiter, die aus ihr hervorgingen.
+    Ursprungs, jedes neue Dreieck zeigt nach derselben Seite wie er, und die
+    neuen Dreiecke eines Ursprungs decken zusammen genau seine Fläche. Dann
+    ist die Oberfläche dieselbe, und jede Dreiecksnummer eines Merkmals lebt
+    in den Dreiecken weiter, die aus ihr hervorgingen.
     Die Grenze ist :data:`MOVED_TWIN_TOLERANCE`, je Ecke für die Ebene und je
     Umfang für die Fläche — eine Rechengrenze, keine Geometrietoleranz.
 
@@ -1633,7 +1634,16 @@ def refined_twin(source: MeshData, refined: MeshData) -> np.ndarray | None:
         if np.abs((offset * unit).sum(axis=1)).max(initial=0.0) > MOVED_TWIN_TOLERANCE:
             return None
     new = points[corners]
-    pieces = np.linalg.norm(np.cross(new[:, 1] - new[:, 0], new[:, 2] - new[:, 0]), axis=1)
+    crossed = np.cross(new[:, 1] - new[:, 0], new[:, 2] - new[:, 0])
+    # **Und nach derselben Seite.** In seiner Ebene liegt jedes neue Dreieck
+    # schon; längs der alten Normalen misst es deshalb seinen ganzen Inhalt —
+    # oder dessen Gegenteil, wenn die Teilung es umgedreht hat. Ebene und
+    # Inhalt allein ließen ein umgedrehtes Stück durch, und die übertragenen
+    # Merkmale trugen danach Innen und Außen der anderen Seite.
+    facing = (crossed[flat] * unit).sum(axis=1)
+    if (facing < -MOVED_TWIN_TOLERANCE * perimeter[origin][flat]).any():
+        return None
+    pieces = np.linalg.norm(crossed, axis=1)
     covered = np.bincount(origin, weights=pieces, minlength=count)
     if (np.abs(covered - doubled) > MOVED_TWIN_TOLERANCE * perimeter).any():
         return None
@@ -1692,13 +1702,20 @@ def carry_refined_detection(
     Wie :func:`carry_detection` für eine Bewegung: ``detect`` beantwortet das
     feinere Netz danach aus dem Merker. ``origin`` kommt aus
     :func:`refined_twin` — ohne den Beleg wird nicht gerufen.
+
+    **Eine offene Stelle reist nicht mit.** Sie ist eine Auskunft über das
+    Netz und nicht über die Oberfläche: :func:`detect_edge_loops` zählt die
+    Kanten ohne Partner und mittelt die Ecken des Rands, und die Teilung setzt
+    neue darauf. An einem Kasten ohne Deckel stand übertragen weiter „4 offene
+    Kanten“, wo das feinere Netz 32 trägt (25.09.2026). Ein offenes Netz wird
+    deshalb erkannt wie vor dieser Abkürzung.
     """
     if check_cancelled is not None:
         check_cancelled()
     source_key = _mesh_key(source)
     with _CACHE_LOCK:
         known = _FEATURE_CACHE.get(source_key)
-    if known is None:
+    if known is None or any(feature.kind == "edge_loop" for feature in known.values()):
         return False
     refined_key = _mesh_key(refined)
     if _cached_detection(refined_key) is not None:
@@ -4643,7 +4660,9 @@ def _rough_facet_area(body: trimesh.Trimesh, planar: set[int]) -> float:
     starts = np.concatenate(([0], np.cumsum(lengths)[:-1]))
     in_planar = np.zeros(len(body.faces), dtype=bool)
     in_planar[np.fromiter(planar, dtype=np.int64, count=len(planar))] = True
-    all_planar = np.bincount(owner, weights=~in_planar[members], minlength=len(facets)) == 0
+    # Gezählt, nicht gewogen: Eine Summe aus Gewichten wäre eine Fließkommazahl,
+    # und die verglich man mit ``==`` (Regel 6).
+    all_planar = np.bincount(owner[~in_planar[members]], minlength=len(facets)) == 0
     normals = np.asarray(body.face_normals, dtype=float)
     first = normals[members[starts]]
     agreement = (normals[members] * first[owner]).sum(axis=1)
@@ -5879,9 +5898,10 @@ CACHE_LIMIT_PER_QUESTION = 4096
 #: an denen die Mündungsprobe einer Bohrung jede Frage stellt
 #: (``prepare_ops.bore_entrance``), wiegen am Gartenschlauchhalter mit 392 532
 #: Dreiecken je rund 15 und 75 Megabyte; viertausend davon hielte kein Rechner.
-#: Die Facette je Dreieck der Wendelsuche (``helix._facet_of_face``) und der
+#: Die Facette je Dreieck der Wendelsuche (``helix._facet_of_face``), die nach
+#: Größe sortierten Facetten (``helix._facets_by_area``) und der
 #: Krümmungssprung je Nachbarschaft (:func:`curvature_jumps`) tragen eine Zahl
-#: je Dreieck oder Paar. Die vorbereitete Trägerfläche der Platzierung
+#: je Dreieck, Facette oder Paar. Die vorbereitete Trägerfläche der Platzierung
 #: (``placement.prepare_surface``) trägt die ganze Kontur einer Fläche und
 #: gehört mit derselben Grenze dazu.
 WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
@@ -5890,6 +5910,7 @@ WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
         "merged_copy",
         "surface_index",
         "facet_of_face",
+        "facets_by_area",
         "curvature_jumps",
         "face_radii",
         "prepared_surface",

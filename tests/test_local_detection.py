@@ -13,6 +13,7 @@ import trimesh
 
 from app.core import units
 from app.core.geom.mesh import MeshData
+from app.core.perceive.helix import _facet_of_face
 
 DATA = Path(__file__).parent / "data"
 
@@ -929,6 +930,40 @@ def test_the_budget_counts_what_hangs_together_at_the_spot(
     assert any(feature.kind == "face" for feature in result.features.values())
 
 
+@pytest.mark.parametrize("radius", [3.0, 6.0, 12.0])
+def test_a_facet_that_tips_the_budget_is_searched_alone(
+    monkeypatch: pytest.MonkeyPatch, radius: float
+) -> None:
+    """Bereich samt Facette über dem Budget: gesucht wird die Facette allein.
+
+    Dieselbe Regel wie für einen Bereich, der schon selbst über dem Budget
+    liegt. Bis dahin sagte die Stelle an der Kante einer Deckfläche bei 3 und
+    6 mm „zu viele Dreiecke — wählen Sie einen kleineren Bereich“, und ab
+    12 mm fand sie die Fläche: Ein kleinerer Radius half nie, ein größerer
+    immer.
+    """
+    from app.core.perceive import local
+
+    mesh = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 5.0)).subdivide().subdivide())
+    normals = np.asarray(mesh.raw.face_normals)
+    centres = np.asarray(mesh.raw.triangles_center)
+    top = np.flatnonzero(normals[:, 2] > 0.999)
+    edge = int(top[np.argmax(centres[top][:, 1])])
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", len(top) + 2)
+
+    result = local.detect_local(
+        mesh,
+        tuple(centres[edge]),
+        normal=tuple(normals[edge]),
+        radius=radius,
+        seed_faces=(edge,),
+    )
+
+    assert result.reason is None
+    faces = [feature for feature in result.features.values() if feature.kind == "face"]
+    assert [set(feature.face_indices) for feature in faces] == [set(top.tolist())]
+
+
 def test_a_needed_feature_is_not_hidden_behind_an_unneeded_one_with_the_same_region() -> None:
     """Zwei Merkmale mit demselben Suchbereich: Das benötigte hält an, auch wenn das
     unbenötigte davor übersprungen wurde (Review B6)."""
@@ -947,6 +982,34 @@ def test_a_needed_feature_is_not_hidden_behind_an_unneeded_one_with_the_same_reg
     with pytest.raises(ValidationError) as caught:
         detect_known(mesh, known, required={"hole_2"})
     assert caught.value.constraint == "local_boundary"
+
+
+def test_a_needed_feature_is_measured_in_its_own_search_sphere() -> None:
+    """Derselbe Suchwürfel ist nicht dieselbe Suche: Die Kugel gehört dem Merkmal.
+
+    Um die Sackbohrung und um einen unbenötigten Nachbarn 3 mm darüber fassen
+    die Würfel dieselben Dreiecke, die Kugel des Nachbarn aber nicht den Boden
+    der Bohrung (6,26 mm von seiner Mitte bei einem Suchradius von 6). Geteilt
+    wurde das Ergebnis nach dem Würfel allein: Die Bohrung bekam die Suche des
+    Nachbarn und hielt am Suchrand an, obwohl sie in ihrer eigenen Kugel
+    vollständig liegt — genau das, wovor das Teilen schützen sollte.
+    """
+    from app.core.perceive import local
+
+    mesh = blind_cylinder()
+    face, point, normal = bore_seed(mesh)
+    found = local.detect_local(mesh, point, normal=normal, radius=8, seed_faces=(face,)).features
+    hole = next(feature for feature in found.values() if feature.kind == "hole")
+    # Ohne belegten Suchumfang sucht jede Bohrung im Würfel ihres Durchmessers.
+    params = {key: value for key, value in hole.params.items() if key != "local_search_radius"}
+    bore = replace(hole, id="hole_2", params=params)
+    above = replace(hole, id="hole_1", params={**params, "centre": (0.0, 0.0, 20.5)})
+
+    alone = local.detect_known(mesh, {"hole_2": bore}, required={"hole_2"})
+    beside = local.detect_known(mesh, {"hole_1": above, "hole_2": bore}, required={"hole_2"})
+
+    assert any(feature.kind == "hole" for feature in alone.values())
+    assert beside == alone
 
 
 def _coarse_slot_flank() -> tuple[MeshData, int, tuple[float, ...], tuple[float, ...]]:
@@ -994,7 +1057,7 @@ def test_a_plane_beyond_the_budget_leaves_the_search_as_it_was(
 
     mesh = MeshData.of(trimesh.load(DATA / "meshes" / "plate_holes.stl"))
     stitched = detection._one_body(mesh)
-    labels = local._facet_labels(stitched.raw)
+    labels = _facet_of_face(stitched.raw)
     normals = np.asarray(stitched.raw.face_normals)
     top = max(
         (np.flatnonzero(labels == label) for label in np.unique(labels[labels >= 0])),
@@ -1209,7 +1272,7 @@ def _fits_the_face(stitched: MeshData, face: Any) -> Any:
     """Die Probe aus ``detect_known``: Kann die Facette eines Dreiecks ``face`` sein?"""
     from app.core.perceive import local
 
-    labels = local._facet_labels(stitched.raw)
+    labels = _facet_of_face(stitched.raw)
     grouped = labels >= 0
     areas = np.bincount(
         labels[grouped], weights=np.asarray(stitched.raw.area_faces, dtype=float)[grouped]
@@ -1293,7 +1356,7 @@ def test_a_spot_calls_a_facet_a_face_exactly_when_the_full_recognition_does(name
         for feature in detection.detect(mesh).values()
         if feature.kind == "face"
     }
-    labels = local._facet_labels(stitched.raw)
+    labels = _facet_of_face(stitched.raw)
     facets = [np.flatnonzero(labels == label) for label in np.unique(labels[labels >= 0])]
     facets = [facet for facet in facets if len(facet) > 1]
     assert any(tuple(facet.tolist()) not in faces for facet in facets), "kein Gegenfall im Körper"
@@ -1512,7 +1575,7 @@ def test_a_mantle_larger_than_the_proof_limit_is_still_no_face(
     }
     normals = np.asarray(stitched.raw.face_normals)
     centres = np.asarray(stitched.raw.triangles_center)
-    labels = local._facet_labels(stitched.raw)
+    labels = _facet_of_face(stitched.raw)
     mantle = [
         np.flatnonzero(labels == label)
         for label in np.unique(labels[labels >= 0])
@@ -1585,7 +1648,7 @@ def test_a_cut_off_face_is_not_asked_about_its_plane(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(detection, "planar_facet", counted)
     normals = np.asarray(stitched.raw.face_normals)
     centres = np.asarray(stitched.raw.triangles_center)
-    labels = local._facet_labels(stitched.raw)
+    labels = _facet_of_face(stitched.raw)
     side = np.flatnonzero((np.abs(normals[:, 2]) < 1e-6) & (centres[:, 2] > 5.0))
     strip = np.flatnonzero(labels == labels[side[0]])
     seed = _middle_seed(stitched, strip)
