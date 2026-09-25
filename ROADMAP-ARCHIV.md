@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-25 | [Der Bedienweg „kaputtes Dreiecksmodell → druckbar“ ist abgearbeitet (25.09.2026)](#der-bedienweg-kaputtes-dreiecksmodell--druckbar-ist-abgearbeitet-25092026) |
 | 2026-09-24 | [Solidon 0.5.0 veröffentlicht (24.09.2026)](#solidon-050-veröffentlicht-24092026) |
 | 2026-09-24 | [Rate-Key ausgeliefert und Gewindebolzen auf Ubuntu belegt (24.09.2026)](#rate-key-ausgeliefert-und-gewindebolzen-auf-ubuntu-belegt-24092026) |
 | 2026-09-23 | [Griffmuster schließen wieder zum Träger (23.09.2026)](#griffmuster-schließen-wieder-zum-träger-23092026) |
@@ -30920,3 +30921,62 @@ werden zur Auslieferung unter `Releases/0.5.0/Nachweise/` erhalten.
   Abnahme: die fünf Fälle grün, Volumen exakt zurück auf den Träger, ein Körper,
   kein Hohlraum. Mit seiner Übernahme wandert der Punkt ins Archiv; bleibt ein
   Rest, gehört er als Absatz zu RM-225.
+
+## Der Bedienweg „kaputtes Dreiecksmodell → druckbar“ ist abgearbeitet (25.09.2026)
+
+Aus der Bedienweg-Durchsicht vom 24.09.2026
+(`.claude/.state/dreieck-reparatur-claude-2026-09-24/bericht-bedienweg.md`,
+Wege A bis E). Die Reparatursitzung hatte A2, C1 bis C4, D1, D2, D5 und B2
+eingelöst; der Rest und RM-241 sind am 25.09.2026 nachgezogen, jede Wahl nach
+Roberts Vorgabe „das Beste für den Kunden, den Druck und das Modell".
+Stand je Punkt in `.claude/.state/bedienweg-abarbeitung-2026-09-25/stand.md`.
+
+<a id="rm-241"></a>
+
+- [x] **RM-241 — Zwei Fragen an das Schließen beim Import.**
+  1. *Offen lassen* setzt nur noch `wide_holes=False` (*Große Öffnungen
+     schließen*, an `LoadParams` und `RepairParams`): kleine Löcher, Nähte und
+     überzählige Flächen gehen weiter zu, der Bericht sagt
+     `repair.wide_hole_kept` mit *Dicke geben* und *Stellen zeigen*. Je Körper
+     statt je Datei ist verworfen: Eine Baugruppe mit mehreren großen
+     Öffnungen ist selten, und ein Schalter je Körper wäre im Dialog eine
+     Liste. Nachweis: `test_leaving_the_wide_opening_open_still_closes_the_small_holes`
+     (`partially_open.stl`: ein Loch zu, die Wand offen),
+     `test_leaving_wide_openings_open_on_import_names_what_stays_open`.
+  2. Lose offene Splitter gehen beim Schließen weiter, mit Befund — sie
+     umschließen nichts, drucken nicht und ließen jede Boolesche Operation
+     scheitern. Bauplan §17.1 Schritt 5 trägt den Zusatz mit Vermerk.
+
+Dazu aus dem Bericht, je mit Test:
+
+- **A1** *Stelle zeigen* an der großen Öffnung (`SHOW_LOCATION`: Flug und
+  Marke, der Ort reist über `panels.as_error`).
+- **A3** Das Volumen der Flosse stimmt seit dem Umbau des Reparaturkerns
+  (8 000 mm³); eine Volumenwarnung ist verworfen — ein offenes oder
+  verzweigtes Netz hat vor dem Schließen kein belastbares Volumen.
+- **A4** Die Zeilen „… blieben stehen, weil …" (Verschweißen, leere Dreiecke)
+  stehen nur noch im Protokoll: am Korpus `F:\3D Dateien` 41 und 23 von 485
+  Körpern, ohne Wirkung und ohne Handlung. Eine Sammelzeile ist verworfen —
+  nach dem Aufräumen bleiben am Import höchstens zwei kurze Hinweise.
+- **A5** Ineinandersteckende Teile nennt der Import mit *Überschneidungen
+  auflösen* vor *In Einzelteile zerlegen* (`repair.parts_that_cross`, nur
+  Paare zweier Teile, frühes Ende). Korpus: 16 von 56 mehrteiligen Körpern
+  (Piratenschiff, Bohrhalter, Spiderman), 3,9 s für alle 485 Körper — der
+  erste Anlauf über alle Dreiecke kostete 14,0 s.
+- **A6** `perceive.voids_unreadable` kurz, mit *Schichten ansehen* und
+  *Stellen zeigen*.
+- **B1** An der Netzfehlerkarte ein Knopf *Reparieren*, ohne Fehler der Satz
+  „Keine Netzfehler gefunden.".
+- **B3** „in Ordnung" (und „unbeteiligt" der Passungskarte) in Körperfarbe;
+  Bild und Legende lesen dieselbe Tabelle (`palette.category_colours`).
+- **C5** Am Reparaturschritt kein Satz mehr über verlorene Formdetails ohne
+  Verweis; ein Verlust mit Verweis bleibt ein eigener Befund.
+- **D3** bleibt, wie es ist: Die Suche nach Überschneidungen gehört jedem
+  ausdrücklichen Reparaturschritt (Migration 34 → 35 bietet an alten
+  Schritten darüber das Auflösen an); ihre Ursache, die eigene Lochfüllung,
+  ist im Reparaturkern behoben.
+- **D4** `ingest.not_watertight` sagt den Zustand; die Handlung steht im Knopf.
+- **D6** Die große Öffnung bleibt eine Warnung: Am Korpus trifft sie keinen
+  Körper, und wo sie trifft, hat Solidon eine große Fläche erfunden, die den
+  Druck verändert — dafür sind Bericht und Exportfrage da.
+- **E** (große Modelle) gehört zu RM-238 und ist dort eingelöst.

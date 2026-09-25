@@ -239,7 +239,14 @@ def test_an_open_surface_model_says_so_and_points_to_repair(profile: Profile) ->
     offenen Hülle und einem ``is_closed``, das immer Ja sagte. Jetzt steht
     derselbe Befund da wie beim offenen Netz, mit der Zahl der offenen
     Kanten: vier, der Rand der fehlenden Fläche.
+
+    **Der Satz sagt den Zustand, der Knopf den Weg** (Bedienweg D4,
+    25.09.2026): Der Rat „Reparieren schließt die offenen Stellen" stand im
+    Satz und als Knopf darunter. Der Knopf kommt aus ``panels.FINDING_ACTIONS``
+    und führt zur Reparatur.
     """
+    from app.ui.panels import FINDING_ACTIONS
+
     payload = step.write(_box_shell(drop=5))
     entry, findings = _loaded(payload, profile)
     body = entry.mesh
@@ -249,4 +256,5 @@ def test_an_open_surface_model_says_so_and_points_to_repair(profile: Profile) ->
     assert len(warnings) == 1
     assert warnings[0].severity == "warning"
     assert warnings[0].values["open_edges"] == 4
-    assert "Reparieren" in str(warnings[0].message)
+    assert str(warnings[0].message) == "Das Modell ist nicht geschlossen."
+    assert FINDING_ACTIONS["ingest.not_watertight"][0].id == "repair_and_retry"

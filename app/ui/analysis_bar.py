@@ -326,7 +326,8 @@ class AnalysisBar(QWidget):
                 "defects",
                 tr("Netzfehler"),
                 tr(
-                    "Zeigt Löcher, doppelte Flächen und Stellen, an denen das Netz nicht dicht ist."
+                    "Zeigt Löcher, überzählige Flächen, Überschneidungen und Außenseiten, "
+                    "die gegeneinander zeigen."
                 ),
             ),
             (

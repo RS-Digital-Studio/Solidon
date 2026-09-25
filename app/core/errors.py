@@ -71,6 +71,26 @@ CHANGE_SELECTION = Action("change_selection", _("Andere Objekte wählen"), prima
 PICK_PLANE = Action("sketch.pick_plane", _("Eine andere Ebene wählen"), primary=True)
 REPAIR_AND_RETRY = Action("repair_and_retry", _("Reparieren und erneut versuchen"), primary=True)
 SHOW_LOCATIONS = Action("show_locations", _("Stellen zeigen"))
+#: Zum Ort eines Befunds fliegen und ihn markieren — für eine Stelle, die
+#: keine Karte färbt: Eine eben geschlossene Öffnung ist kein Netzfehler mehr,
+#: und *Stellen zeigen* öffnete darüber eine Netzfehlerkarte ohne Befund.
+SHOW_LOCATION = Action("show_location", _("Stelle zeigen"))
+#: Den Körper in der Schichtansicht zeigen: Eingeschlossene Luft steht dort als
+#: Loch im Querschnitt, und genau das ist die Frage, die ein unlesbarer
+#: Einschluss offenlässt (``perceive.voids_unreadable``).
+SHOW_LAYERS = Action("show_layers", _("Schichten ansehen"), primary=True)
+#: Den Reparaturschritt mit „Überschneidungen auflösen“ neu rechnen — ohne
+#: Dialog, als eine rücknehmbare Änderung des Schritts (Regel 19). An einem
+#: Befund ohne Reparaturschritt legt sie einen an.
+RESOLVE_INTERSECTIONS = Action(
+    "resolve_intersections", _("Überschneidungen auflösen"), primary=True
+)
+#: Eine vom Einlesen oder Reparieren erfundene Fläche zurücknehmen: Der Schritt
+#: rechnet ohne „Offene Stellen schließen“ (Entscheidung Robert, 24.09.2026).
+LEAVE_OPEN = Action("leave_open", _("Offen lassen"))
+#: Einer Fläche ohne Dicke eine geben — *Offene Fläche schließen* mit der
+#: Mindestwand des Profils vorbelegt.
+GIVE_THICKNESS = Action("give_thickness", _("Dicke geben"), primary=True)
 #: Im Bericht ist noch keine Stelle gewählt; „an dieser Stelle“ sagt das
 #: Kontextmenü, wo der Klick sie schon genannt hat.
 RECOGNIZE_LOCAL = Action("recognize_local", _("Merkmale an einer Stelle erkennen"))

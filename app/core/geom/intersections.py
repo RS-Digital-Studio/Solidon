@@ -19,8 +19,12 @@ Gerechnet wird in zwei Stufen:
   X gezählt träfe jeder Gang jeden anderen; ein Baum aus 166 000 Dreiecken
   überdeckt sich auf jeder Achse zu Hunderten. Die übrigen Achsen filtern
   danach als Feld. Nichts wird gekappt: Das
-  Budget ``max_pairs`` gibt es nur für die Karte, die ehrlich sagt, was sie
-  gefunden hat; der Bereichstest prüft jedes Paar.
+  Budget ``max_pairs`` gibt es nur für Karte und Reparatur, die ehrlich sagen,
+  was sie gefunden haben; der Bereichstest prüft jedes Paar. **Gezählt werden
+  die Paare nach diesem Filter** (Durchsicht 24.09.2026): Sie kosten die
+  Rechenzeit, rund zwei Mikrosekunden je Paar. Die Rohpaare des Sweeps sagten
+  darüber wenig — ein Besenhalter mit langen Splitterdreiecken brachte 22
+  Millionen davon für 3,2 Millionen echte Kandidaten, ein Spiderman 49 für 6.
 * **Das Paar selbst**, je Block als ``(m, 3, 3)``: Ecken beider Dreiecke, die
   innerhalb ``EPS_GEOM`` zusammenfallen, sind *ein* topologischer Punkt und
   werden auf ihre gemeinsame Mitte gelegt — eine gemeinsame Kante ist
@@ -41,11 +45,16 @@ Gerechnet wird in zwei Stufen:
 
 Nullflächen haben keine Oberfläche, die etwas durchdringen könnte, und gehen
 vorher heraus.
+
+**Gerechnet wird ohne** ``np.einsum`` (RM-187): Ob ein Paar sich schneidet,
+entscheidet über das Ergebnis einer Reparatur, und ``einsum`` darf auf ARM
+mit FMA runden. Die Skalarprodukte stehen als Grundrechenarten
+(:func:`_dot_rows`, :func:`_dot_grid`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Final
 
@@ -67,6 +76,26 @@ PAIR_BLOCK: Final = 65_536
 
 class _CancelledError(Exception):
     """Abbruch mitten in einer Stufe — die Aufrufer übersetzen ihn."""
+
+
+def _dot_rows(points: np.ndarray, direction: np.ndarray) -> np.ndarray:
+    """Je Paar ``k`` und Ecke ``v`` das Skalarprodukt ``points[k, v] · direction[k]``.
+
+    ``points`` ist ``(k, v, 3)``, ``direction`` ``(k, 3)`` — elementweise, ohne
+    BLAS und ohne ``einsum`` (RM-187).
+    """
+    return np.asarray(
+        points[:, :, 0] * direction[:, None, 0]
+        + points[:, :, 1] * direction[:, None, 1]
+        + points[:, :, 2] * direction[:, None, 2]
+    )
+
+
+def _dot_grid(axes: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """Je Paar ``k`` jede Achse ``e`` gegen jede Ecke ``v`` in der Ebene: ``(k, e, v)``."""
+    return np.asarray(
+        axes[:, :, None, 0] * points[:, None, :, 0] + axes[:, :, None, 1] * points[:, None, :, 1]
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,10 +254,18 @@ def _plan(low: np.ndarray, high: np.ndarray) -> _Plan:
 
 @dataclass(slots=True)
 class _Search:
-    """Wie weit die Kandidatensuche kam — ``complete`` fällt nur mit ``max_pairs``."""
+    """Wie weit die Kandidatensuche kam — ``complete`` fällt nur mit ``max_pairs``.
+
+    ``progress`` bekommt den Anteil der Sweep-Einträge, die schon durchlaufen
+    sind — eine Zahl zwischen null und eins, je Block einmal. Endet die Suche
+    vorzeitig, nennt ``unchecked`` die Dreiecke (Nummern der Oberfläche), deren
+    Paare nicht alle geprüft sind; alle übrigen sind es.
+    """
 
     max_pairs: int | None = None
     complete: bool = True
+    progress: Callable[[float], None] | None = None
+    unchecked: np.ndarray | None = None
 
 
 def _candidates(
@@ -247,11 +284,14 @@ def _candidates(
     others = [dimension for dimension in range(3) if dimension != plan.axis]
     counts = entries.counts
     total = np.cumsum(counts)
+    overall = float(total[-1]) if len(total) else 0.0
     positions = np.arange(len(counts))
     counted = 0
     begin = 0
     while begin < len(counts):
         _check(cancelled)
+        if search.progress is not None and overall > 0.0:
+            search.progress(float(total[begin - 1]) / overall if begin else 0.0)
         # So viele Einträge, dass ihre Paare zusammen etwa SWEEP_PAIRS ergeben —
         # mindestens einer, auch wenn er allein mehr hat.
         before = int(total[begin - 1]) if begin else 0
@@ -263,10 +303,6 @@ def _candidates(
         amount = int(size.sum())
         if not amount:
             continue
-        counted += amount
-        if search.max_pairs is not None and counted > search.max_pairs:
-            search.complete = False
-            return
         left = np.repeat(block, size)
         steps = np.arange(amount) - np.repeat(np.cumsum(size) - size, size)
         right = left + 1 + steps
@@ -280,9 +316,24 @@ def _candidates(
             corner = np.maximum(low[first, plan.bins], low[second, plan.bins])
             home = np.floor((corner - entries.origin) / plan.width).astype(np.int64)
             apart |= home != entries.slab[left]
-        first, second = first[~apart], second[~apart]
-        for start in range(0, len(first), PAIR_BLOCK):
-            yield first[start : start + PAIR_BLOCK], second[start : start + PAIR_BLOCK]
+        first, second, left = first[~apart], second[~apart], left[~apart]
+        if search.max_pairs is not None and counted + len(first) > search.max_pairs:
+            search.complete = False
+            # Die Paare stehen nach ihrem linken Eintrag geordnet. Geprüft wird
+            # bis zum ersten Eintrag, dessen Paare nicht mehr alle ins Budget
+            # passen; jedes Paar eines Eintrags steht bei ihm, und ein
+            # Dreieck, dessen Einträge alle davor liegen, ist ganz geprüft.
+            allowed = max(search.max_pairs - counted, 0)
+            cut = int(left[allowed]) if allowed < len(left) else end
+            keep = left < cut
+            search.unchecked = np.unique(entries.triangle[cut:])
+            first, second = first[keep], second[keep]
+            for offset in range(0, len(first), PAIR_BLOCK):
+                yield first[offset : offset + PAIR_BLOCK], second[offset : offset + PAIR_BLOCK]
+            return
+        counted += len(first)
+        for offset in range(0, len(first), PAIR_BLOCK):
+            yield first[offset : offset + PAIR_BLOCK], second[offset : offset + PAIR_BLOCK]
 
 
 def _intervals_on_line(
@@ -294,7 +345,7 @@ def _intervals_on_line(
     Grenze ihres Dreiecks liegt; dazu kommt jede Kante mit echtem
     Vorzeichenwechsel. Ohne beides ist das Intervall leer (``inf``/``-inf``).
     """
-    projection = np.einsum("kvd,kd->kv", triangle, direction)
+    projection = _dot_rows(triangle, direction)
     span = np.linalg.norm(np.ptp(triangle, axis=1), axis=1)
     numeric = 64.0 * np.finfo(float).eps * np.maximum(1.0, span)
     low = np.full(len(triangle), np.inf)
@@ -343,8 +394,8 @@ def coplanar_overlap(first: np.ndarray, second: np.ndarray, normal: np.ndarray) 
         )
         axes = np.stack((-edges[:, :, 1], edges[:, :, 0]), axis=2)
         axis_length = np.linalg.norm(axes, axis=2)
-        first_projection = np.einsum("ked,kvd->kev", axes, first_2d)
-        second_projection = np.einsum("ked,kvd->kev", axes, second_2d)
+        first_projection = _dot_grid(axes, first_2d)
+        second_projection = _dot_grid(axes, second_2d)
         overlap = np.minimum(
             first_projection.max(axis=2), second_projection.max(axis=2)
         ) - np.maximum(first_projection.min(axis=2), second_projection.min(axis=2))
@@ -353,21 +404,34 @@ def coplanar_overlap(first: np.ndarray, second: np.ndarray, normal: np.ndarray) 
 
 
 def crossing_pairs(
-    first: np.ndarray, second: np.ndarray, first_faces: np.ndarray, second_faces: np.ndarray
-) -> np.ndarray:
+    first: np.ndarray,
+    second: np.ndarray,
+    first_faces: np.ndarray,
+    second_faces: np.ndarray,
+    *,
+    with_coplanar: bool = False,
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """Je Paar, ob die zwei Dreiecke einander über ihre gemeinsamen Punkte hinaus schneiden.
 
     ``first`` und ``second`` sind ``(m, 3, 3)``, ``*_faces`` die Eckennummern
-    je Dreieck ``(m, 3)`` — nur für die doppelte Zelle gebraucht.
+    je Dreieck ``(m, 3)`` — nur für die doppelte Zelle gebraucht. Mit
+    ``with_coplanar`` kommt daneben, welche Paare in derselben Ebene liegen:
+    Eine deckungsgleiche Überlagerung löst die Reparatur, eine echte
+    Eigenkreuzung einer Schale nicht.
     """
     count = len(first)
     hit = np.zeros(count, dtype=bool)
+    flat = np.zeros(count, dtype=bool)
     if not count:
-        return hit
+        return (hit, flat) if with_coplanar else hit
     # Ecken, die innerhalb der Geometrietoleranz zusammenfallen, sind ein
     # topologischer Punkt: beide Dreiecke bekommen dieselbe Darstellung.
     difference = first[:, :, None, :] - second[:, None, :, :]
-    close = np.einsum("mabk,mabk->mab", difference, difference) <= EPS_GEOM * EPS_GEOM
+    close = (
+        difference[..., 0] * difference[..., 0]
+        + difference[..., 1] * difference[..., 1]
+        + difference[..., 2] * difference[..., 2]
+    ) <= EPS_GEOM * EPS_GEOM
     first_matched = close.any(axis=2)
     second_matched = close.any(axis=1)
     partner = np.take_along_axis(second, close.argmax(axis=2)[:, :, None], axis=1)
@@ -383,12 +447,9 @@ def crossing_pairs(
     first_length = np.where(usable, first_length, 1.0)
     second_length = np.where(usable, second_length, 1.0)
     first_distance = (
-        np.einsum("kvd,kd->kv", first - second[:, 0, None, :], second_normal)
-        / second_length[:, None]
+        _dot_rows(first - second[:, 0, None, :], second_normal) / second_length[:, None]
     )
-    second_distance = (
-        np.einsum("kvd,kd->kv", second - first[:, 0, None, :], first_normal) / first_length[:, None]
-    )
+    second_distance = _dot_rows(second - first[:, 0, None, :], first_normal) / first_length[:, None]
     possible = usable & ~(
         np.all(first_distance > EPS_GEOM, axis=1)
         | np.all(first_distance < -EPS_GEOM, axis=1)
@@ -413,7 +474,7 @@ def crossing_pairs(
 
     steep = np.flatnonzero(possible & ~coplanar)
     if not len(steep):
-        return hit
+        return (hit, flat) if with_coplanar else hit
     unit = direction[steep] / direction_length[steep, None]
     first_low, first_high = _intervals_on_line(first[steep], first_distance[steep], unit)
     second_low, second_high = _intervals_on_line(second[steep], second_distance[steep], unit)
@@ -425,7 +486,7 @@ def crossing_pairs(
     # Was die beiden Dreiecke teilen, liegt auf der Schnittgeraden: Eine
     # Überdeckung, die ganz darin liegt, ist Nachbarschaft.
     shared = first_matched[steep]
-    projection = np.einsum("kvd,kd->kv", first[steep], unit)
+    projection = _dot_rows(first[steep], unit)
     shared_low = np.min(np.where(shared, projection, np.inf), axis=1)
     shared_high = np.max(np.where(shared, projection, -np.inf), axis=1)
     point = high - low <= EPS_GEOM
@@ -434,23 +495,25 @@ def crossing_pairs(
     reaches_past = (low < shared_low - EPS_GEOM) | (high > shared_high + EPS_GEOM)
     beyond = np.where(point, point_elsewhere, reaches_past)
     hit[steep] = np.where(shared.any(axis=1), beyond, True)
-    return hit
+    return (hit, flat) if with_coplanar else hit
 
 
 def _pairs_that_cross(
     surface: _Surface, cancelled: CancelToken | None, search: _Search
-) -> Iterator[tuple[np.ndarray, np.ndarray]]:
-    """Je Kandidatenblock die Paare, die sich wirklich schneiden (Nummern im Netz)."""
+) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Je Kandidatenblock die Paare, die sich wirklich schneiden (Nummern im Netz),
+    und welche davon in derselben Ebene liegen."""
     for first, second in _candidates(surface, cancelled, search):
         _check(cancelled)
-        crossed = crossing_pairs(
+        crossed, coplanar = crossing_pairs(
             surface.triangles[first],
             surface.triangles[second],
             surface.faces[first],
             surface.faces[second],
+            with_coplanar=True,
         )
         if np.any(crossed):
-            yield surface.kept[first[crossed]], surface.kept[second[crossed]]
+            yield surface.kept[first[crossed]], surface.kept[second[crossed]], coplanar[crossed]
 
 
 def intersects(
@@ -472,6 +535,74 @@ def intersects(
     return False
 
 
+@dataclass(frozen=True, slots=True)
+class Crossings:
+    """Die Paare, die sich schneiden, und ob die Suche alles gesehen hat.
+
+    ``first`` und ``second`` nennen die Dreiecke im Eingangsnetz, ``coplanar``
+    je Paar, ob beide in derselben Ebene liegen.
+    """
+
+    first: np.ndarray
+    second: np.ndarray
+    coplanar: np.ndarray
+    complete: bool
+    checked: np.ndarray | None = None
+    """Je Dreieck des Eingangs, ob alle seine Paare geprüft sind — ``None``,
+    wenn die Suche vollständig war. Nullflächen gelten als geprüft: Sie
+    können nichts durchdringen."""
+
+    @property
+    def faces(self) -> tuple[int, ...]:
+        """Die Dreiecke, die an einem der Paare beteiligt sind, aufsteigend."""
+        return tuple(int(index) for index in np.unique(np.concatenate([self.first, self.second])))
+
+
+def crossing_face_pairs(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    cancelled: CancelToken | None = None,
+    *,
+    max_pairs: int | None = None,
+    progress: Callable[[float], None] | None = None,
+) -> Crossings:
+    """Die Paare, die sich schneiden — und ob die Suche vollständig war.
+
+    ``max_pairs`` begrenzt die Kandidaten nach dem Achsenfilter; darüber endet
+    die Suche und meldet mit ``complete=False``, dass sie nicht alles gesehen
+    hat. Was sie bis dahin gefunden hat, schneidet wirklich. ``progress``
+    bekommt je Block den durchlaufenen Anteil.
+    """
+    empty = np.zeros(0, dtype=np.int64)
+    surface = _surface(vertices, faces)
+    if surface is None:
+        return Crossings(empty, empty, np.zeros(0, dtype=bool), True)
+    firsts: list[np.ndarray] = []
+    seconds: list[np.ndarray] = []
+    flats: list[np.ndarray] = []
+    search = _Search(max_pairs=max_pairs, progress=progress)
+    try:
+        for first, second, coplanar in _pairs_that_cross(surface, cancelled, search):
+            firsts.append(first)
+            seconds.append(second)
+            flats.append(coplanar)
+    except _CancelledError:
+        raise OperationCancelled from None
+    checked: np.ndarray | None = None
+    if search.unchecked is not None:
+        checked = np.ones(len(np.asarray(faces).reshape(-1, 3)), dtype=bool)
+        checked[surface.kept[search.unchecked]] = False
+    if not firsts:
+        return Crossings(empty, empty, np.zeros(0, dtype=bool), search.complete, checked)
+    return Crossings(
+        np.concatenate(firsts).astype(np.int64),
+        np.concatenate(seconds).astype(np.int64),
+        np.concatenate(flats),
+        search.complete,
+        checked,
+    )
+
+
 def crossing_faces(
     vertices: np.ndarray,
     faces: np.ndarray,
@@ -481,19 +612,8 @@ def crossing_faces(
 ) -> tuple[tuple[int, ...], bool]:
     """Die Dreiecke, die ein anderes schneiden — und ob die Suche vollständig war.
 
-    ``max_pairs`` begrenzt die Kandidaten des Sweeps; darüber endet die Suche
-    und meldet mit ``False``, dass sie nicht alles gesehen hat. Was sie bis
-    dahin gefunden hat, schneidet wirklich.
+    Die Kurzform von :func:`crossing_face_pairs` für die, die nur die Dreiecke
+    brauchen.
     """
-    surface = _surface(vertices, faces)
-    if surface is None:
-        return (), True
-    hit: set[int] = set()
-    search = _Search(max_pairs=max_pairs)
-    try:
-        for first, second in _pairs_that_cross(surface, cancelled, search):
-            hit.update(int(index) for index in first)
-            hit.update(int(index) for index in second)
-    except _CancelledError:
-        raise OperationCancelled from None
-    return tuple(sorted(hit)), search.complete
+    found = crossing_face_pairs(vertices, faces, cancelled, max_pairs=max_pairs)
+    return found.faces, found.complete

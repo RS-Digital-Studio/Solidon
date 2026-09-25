@@ -1,0 +1,8 @@
+{
+  "stock_size": [100.0, 100.0, 100.0],
+  "pin_centre": [70.0, 0.0, 0.0],
+  "pin_diameter": 4.0,
+  "pin_depth": 3.0,
+  "pin_sections": 32,
+  "changed_diameter": 3.0
+}

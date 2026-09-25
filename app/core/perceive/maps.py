@@ -107,14 +107,22 @@ WALL_SCALE_FACTOR = 5.0
 #: feste deutsche Zeichenketten hier und liefen an ``tr()`` vorbei bis in die
 #: Legende (Regel 20). Aufgelöst wird erst beim Bauen der Karte
 #: (:func:`_named`) — beim Import steht die Sprache noch nicht fest.
+#:
+#: **Dieselben Wörter wie im Prüfbericht** (Durchsicht 24.09.2026): Die Stufen
+#: hießen „offene Kante", „verzweigte Kante" und „Durchdringung", die Befunde
+#: daneben sprechen von Löchern, überzähligen Flächen und Überschneidungen.
 DEFECT_LEVELS: Final = (
     _("in Ordnung"),
-    _("offene Kante"),
-    _("verzweigte Kante"),
+    _("Loch"),
+    _("überzählige Fläche"),
     # **Die dritte Stufe ist die einzige räumliche** (RM-143). Die zwei
     # darüber stehen in der Kantentabelle; zwei Wände, die einander
     # schneiden, haben lauter saubere Kanten mit je zwei Flächen.
-    _("Durchdringung"),
+    _("Überschneidung"),
+    # **Die vierte stand im Bericht und fehlte hier** (Durchsicht 24.09.2026):
+    # „An 12 Kanten zeigen die Außenseiten gegeneinander" trug „Stellen
+    # zeigen", und die Karte kannte diese Kanten nicht.
+    _("Außenseiten gegeneinander"),
 )
 
 #: Flächenkategorien der Passungskarte, ebenso übersetzbar.
@@ -868,6 +876,12 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
 
 # --- Netzdefekte ----------------------------------------------------------------
 
+#: Wie viele Kandidatenpaare die Netzfehlerkarte höchstens prüft — rund vier
+#: Sekunden bei zwei Mikrosekunden je Paar; §31 gibt einer Karte drei im
+#: Hintergrund. Fest und nicht auf die Uhr, damit dieselbe Datei auf jedem
+#: Rechner dieselbe Karte zeigt.
+DEFECT_MAP_PAIRS: Final = 2_000_000
+
 
 def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> AnalysisMap:
     """Offene Kanten, verzweigte Kanten und Durchdringungen, je Dreieck (§18.4).
@@ -879,13 +893,19 @@ def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> Analysis
     genau deshalb sah die Karte an `broken_selfint.stl` nichts.
 
     Sie ist die teuerste der drei und steht deshalb zuletzt: Ihre Suche ist
-    räumlich (`repair.self_intersecting_faces`), nicht tabellarisch, und
-    deckelt sich selbst an der Zahl der geprüften Paare.
+    räumlich (`repair.crossings_of`), nicht tabellarisch, und deckelt sich an
+    :data:`DEFECT_MAP_PAIRS` geprüften Paaren — die Reparatur prüft mit ihrem
+    größeren Budget, und hat sie das Netz schon ganz geprüft, liest die Karte
+    ihre Antwort. **Was die Suche nicht erreicht hat, ist unbekannt, nicht
+    alles** (Befund B3 der Durchsicht 24.09.2026): Bis dahin färbte eine
+    vorzeitig beendete Suche jede fehlerfreie Fläche grau, auch die schon
+    geprüften.
     """
-    from app.core.geom.repair import self_intersecting_faces
+    from app.core.geom.repair import crossed_edge_faces, crossings_of
 
     body = mesh.raw
     values = np.zeros(len(body.faces), dtype=float)
+    complete = True
     if len(body.faces):
         edges = np.asarray(body.edges_sorted)
         groups = trimesh.grouping.group_rows(edges, require_count=None)
@@ -902,8 +922,23 @@ def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> Analysis
         # — wer die nächste Karte wählt, wartet trotzdem nicht auf diese.
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        for face in self_intersecting_faces(mesh, cancelled):
+        # Gegeneinander zeigende Außenseiten stehen in der Kantentabelle wie
+        # offene Ränder; eine Durchdringung darüber wiegt schwerer und färbt.
+        for face in crossed_edge_faces(mesh).tolist():
+            values[face] = max(values[face], 4.0)
+        crossings = crossings_of(mesh, cancelled, budget=DEFECT_MAP_PAIRS)
+        complete = crossings.complete
+        for face in crossings.faces:
             values[face] = 3.0
+        if not complete:
+            # Belegte Fehler bleiben sichtbar; unbekannt ist, was die Suche
+            # nicht ganz geprüft hat.
+            unchecked = (
+                np.ones(len(values), dtype=bool)
+                if crossings.checked is None
+                else ~crossings.checked
+            )
+            values[unchecked & (values < 1.0)] = np.nan
 
     return AnalysisMap(
         kind="defects",
@@ -911,10 +946,20 @@ def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> Analysis
         values=tuple(float(value) for value in values),
         unit="",
         low=0.0,
-        high=3.0,
+        high=4.0,
         highlighted=tuple(int(index) for index in np.nonzero(values > 0.0)[0]),
         threshold=1.0,
         categories=_named(DEFECT_LEVELS),
+        note=_(
+            "Die Suche nach Überschneidungen ist unvollständig. Markierte Fehler sind "
+            "bestätigt; weitere sind möglich."
+        )
+        if not complete
+        # Eine Karte ohne Fehler färbte das Modell einfarbig und sagte nichts.
+        else _("Keine Netzfehler gefunden.")
+        if not np.any(values > 0.0)
+        else None,
+        unknown_note=_("Überschneidungen nicht vollständig geprüft") if not complete else None,
     )
 
 

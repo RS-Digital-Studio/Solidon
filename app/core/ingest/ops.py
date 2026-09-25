@@ -30,6 +30,7 @@ from app.core.ingest.loader import (
     check_limits,
     check_unpacked,
     detect_unit,
+    moved_findings,
     normalise,
     plausible_reach,
     read_model,
@@ -120,7 +121,7 @@ class LoadParams(BaseParams):
         ),
     )
     remove_degenerate: bool = param(
-        title=_("Entartete Dreiecke entfernen"),
+        title=_("Leere Dreiecke entfernen"),
         default=True,
         placement="advanced",
         doc=_(
@@ -133,6 +134,27 @@ class LoadParams(BaseParams):
         default=True,
         placement="advanced",
         doc=_("Richtet aus, wo außen ist. Ohne das erscheinen Flächen dunkel oder fehlen."),
+    )
+    #: Der Rückweg für eine Fläche, die das Einlesen erfunden hat
+    #: (Entscheidung Robert, 24.09.2026): „Offen lassen" am Befund der großen
+    #: Öffnung schaltet ihn am Ladeschritt aus. Vorgabe an — ein älteres
+    #: Projekt ohne den Wert schließt, wie es immer geschlossen hat.
+    mend: bool = param(
+        title=_("Offene Stellen schließen"),
+        default=True,
+        placement="advanced",
+        doc=_("Schließt Löcher gleich beim Einlesen. Große Öffnungen nennt der Prüfbericht."),
+    )
+    #: *Offen lassen* schaltet nur diesen Wert ab (RM-241): Eine Vase, deren
+    #: Öffnung gewollt ist, bekommt ihre Risse trotzdem geschlossen. Gilt für
+    #: jeden Körper der Datei — eine Baugruppe mit mehreren großen Öffnungen
+    #: ist selten, und ein Schalter je Körper wäre im Dialog eine Liste.
+    wide_holes: bool = param(
+        title=_("Große Öffnungen schließen"),
+        default=True,
+        placement="advanced",
+        depends_on=("mend", (True,)),
+        doc=_("Aus lässt Öffnungen offen, die eine neue große Fläche bräuchten."),
     )
     copy: int = param(
         title=_("Kopie"),
@@ -150,7 +172,10 @@ class LoadParams(BaseParams):
     name="load",
     # Der Befund ``ingest.very_large`` reist in der rohen Ausgabe mit; ein
     # geänderter Satz darüber verlangt einen neuen Eintrag, keinen alten.
-    cache_version="3",
+    # 4: Das Schließen in Schritt 4b füllt Löcher in ihrer Form, Außen gilt
+    # je Schale (Durchsicht der Reparatur, 24.09.2026) — dieselbe Datei
+    # ergibt ein anderes Netz als unter 3.
+    cache_version="4",
     # Heißt wie der Knopf in Werkzeugleiste und Datei-Menü — zwei Namen für
     # dieselbe Handlung ließen den Kunden einen Unterschied suchen.
     title=_("Modell einfügen"),
@@ -315,6 +340,8 @@ def load(ctx: OpContext) -> OpResult:
             weld_is_reading=suffix.lower() == ".stl",
             remove_degenerate=params.remove_degenerate,
             unify_normals=params.unify_normals,
+            mend=params.mend,
+            wide_holes=params.wide_holes,
             # Jeden Körper für sich auf Z = 0 abzusetzen nähme einem Gehäuse den
             # Deckel ab und stapelte die Teile aufeinander. Eine Baugruppe geht
             # deshalb **gemeinsam** aufs Bett, unten nach der Schleife — nicht
@@ -325,6 +352,7 @@ def load(ctx: OpContext) -> OpResult:
             # rückt gemeinsam in die Mitte, unten nach der Schleife.
             centre=params.centre and len(parts) == 1,
             progress=ctx.progress,
+            cancelled=ctx.cancelled,
         )
         outputs.append(
             SceneObject(id="", name=part.name, mesh=result.mesh, material_slots=list(part.slots))
@@ -502,6 +530,8 @@ def _group_on_bed(
     moved = [
         dataclasses.replace(entry, mesh=apply(as_mesh_data(entry.mesh), lift)) for entry in outputs
     ]
+    # Ein Befund mit Ort zeigt auf den Körper, und der steht jetzt woanders.
+    findings[:] = moved_findings(findings, offset)
     findings.append(
         group_on_bed_finding(offset, place_on_bed=place_on_bed, centre=centre, several=True)
     )

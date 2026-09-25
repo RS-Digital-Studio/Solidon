@@ -26,6 +26,7 @@ from app.core.geom.attributes import transfer
 from app.core.geom.mesh import (
     MeshData,
     as_mesh_data,
+    face_components,
     max_distance_to_surface,
     stable_vertex_normals,
     unique_edges,
@@ -1646,7 +1647,11 @@ def thicken(ctx: OpContext) -> OpResult:
 
     Ein Körper, der schon einer ist, bekommt **keine** zweite Haut, sondern
     eine Meldung. Ihn stillschweigend zu verdoppeln wäre ein Ergebnis, das
-    aussieht wie das Original und beim Schneiden auffällt.
+    aussieht wie das Original und beim Schneiden auffällt. **Dasselbe gilt je
+    Teil** (Review R6, 24.09.2026): Neben einem geschlossenen Würfel bekam ein
+    loses Blatt seine Wand — und der Würfel eine zweite, positive Innenhaut,
+    15 057 statt 8 115 mm³. Aufgetragen werden nur die offenen Teile
+    (:func:`_thickened_open_parts`).
     """
     params = cast(ThickenParams, ctx.params)
     source = ctx.inputs[0]
@@ -1670,7 +1675,7 @@ def thicken(ctx: OpContext) -> OpResult:
             ],
         )
 
-    thickened = _thickened(before, params.thickness)
+    thickened = _thickened_open_parts(before, params.thickness)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=thickened, features={})],
         findings=[
@@ -1682,6 +1687,35 @@ def thicken(ctx: OpContext) -> OpResult:
             )
         ],
     )
+
+
+def _thickened_open_parts(mesh: MeshData, thickness: float) -> MeshData:
+    """Nur die Teile mit offenem Rand auftragen; geschlossene bleiben, wie sie sind."""
+    import numpy as np
+
+    body = mesh.raw
+    _unique, inverse, counts = unique_edges(
+        np.asarray(body.edges, dtype=np.int64), return_inverse=True, return_counts=True
+    )
+    on_rim = np.zeros(len(body.faces), dtype=bool)
+    on_rim[np.flatnonzero(counts[inverse] == 1) // 3] = True
+    opened = np.zeros(len(body.faces), dtype=bool)
+    for piece in face_components(body):
+        if on_rim[piece].any():
+            opened[piece] = True
+    if opened.all() or not opened.any():
+        return _thickened(mesh, thickness)
+
+    def part(mask: np.ndarray) -> MeshData:
+        chosen = np.flatnonzero(mask)
+        raw = body.submesh([chosen], append=True, repair=False)
+        slots = tuple(mesh.slots[int(index)] for index in chosen) if mesh.slots else ()
+        return MeshData(raw=cast(trimesh.Trimesh, raw), slots=slots)
+
+    kept, grown = part(~opened), _thickened(part(opened), thickness)
+    joined = cast(trimesh.Trimesh, trimesh.util.concatenate([kept.raw, grown.raw]))
+    slots = kept.slots + grown.slots if kept.slots and grown.slots else ()
+    return MeshData(raw=joined, slots=slots)
 
 
 def _thickened(mesh: MeshData, thickness: float) -> MeshData:

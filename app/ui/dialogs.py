@@ -2684,7 +2684,16 @@ def show_expired_demo(state: activation.Activation) -> None:
 #: *Eine andere Ebene wählen* öffnet den Schritt mit dem Cursor im Ebenenfeld —
 #: derselbe Weg wie *Eingabe korrigieren*, also dieselbe Bedingung.
 NEEDS_OP: Final = frozenset(
-    {"correct_input", "show_step_values", "recount_and_retry", "sketch.pick_plane"}
+    {
+        "correct_input",
+        "show_step_values",
+        "recount_and_retry",
+        "sketch.pick_plane",
+        # Beide ändern den Schritt, an dem der Befund steht (Durchsicht
+        # 24.09.2026): ohne Schrittkennung gäbe es nichts zu ändern.
+        "resolve_intersections",
+        "leave_open",
+    }
 )
 
 

@@ -1495,6 +1495,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "handedness": _("Gangrichtung"),
     "groups": _("Gruppen"),
     "height": _("Höhe"),
+    # ``geom.repair``: geschlossene oder offene Stellen, gezählt als Ringe.
+    "holes": _("Löcher"),
     # ``scene.evaluate``: der Eingang eines Schritts, dessen Ausgaben fehlen.
     "input_name": _("Eingang"),
     "input_object": _("Eingangskörper"),

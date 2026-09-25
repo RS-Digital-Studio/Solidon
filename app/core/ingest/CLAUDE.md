@@ -55,7 +55,22 @@ Nullwirkung ersetzt sie nicht.
   `F:\3D Dateien` gehen damit 118 von 484 Körpern geschlossen heraus, die
   offen hereinkamen, und keiner bleibt offen. Die Befunde der Reparatur reisen
   in denselben Bericht; die Regel und ihre drei Sätze stehen in
-  `.claude/rules/dateiformat.md`.
+  `.claude/rules/dateiformat.md`. Der Ladeschritt trägt dafür `mend`
+  (*Offene Stellen schließen*, Vorgabe an) und `wide_holes` (*Große
+  Öffnungen schließen*, hängt an `mend`); *Offen lassen* an der großen
+  Öffnung schaltet nur `wide_holes` ab — die kleinen Löcher gehen weiter zu.
+  Ob die Teile eines geschlossenen Körpers ineinanderstecken, fragt
+  `_count_components` über `geom.repair.parts_that_cross`.
+- **Außen fragt der Import wie die Reparatur** (`geom.repair`): Schritt 4
+  macht die Wicklung einheitlich (`wind_consistently`) und richtet am dichten
+  Netz jede freie Schale nach außen (`turn_shells_outward`); eine Schale, die
+  ganz in einer anderen liegt, meldet `repair.part_inside` mit Ort, der beim
+  Aufsetzen mitwandert — außer Schritt 4b hat repariert und es dort schon
+  gesagt. Gezählt wird beim Verschweißen nur, was zusammengelegt wurde
+  (`used_vertex_count`); unbenutzte Ecken sind kein Verschweißen. Schritt 4b
+  folgt dem Schalter *Außenseiten angleichen* und dem Abbruch des
+  Ladeschritts (`normalise(cancelled=)`); ein Befundort wandert beim
+  Aufsetzen mit, auch bei einer Baugruppe (`moved_findings`).
 - **Dieselbe Schale zweimal** (`loader._without_doubled_shell`): Reißt das
   Verschweißen ein geschlossenes Netz auf, weil eine Kopie derselben Schale
   mit eigenen Ecken daneben liegt, bleibt von deckungsgleichen Dreiecken das

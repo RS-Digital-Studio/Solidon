@@ -101,6 +101,7 @@ from app.core.errors import (
     SCALE_TO_FIT,
     SHOW_DETAILS,
     SHOW_HISTORY,
+    SHOW_LOCATION,
     SHOW_LOCATIONS,
     SHOW_STEP_VALUES,
     SPLIT_ALONG_LINE,
@@ -584,7 +585,17 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
 #: Auswertung trägt die Objektkennung an Operationsbefunde nach; fehlt sie
 #: trotzdem, wäre „Stellen zeigen" wieder stilles Raten (Regel 21).
 _LOCATED_REPAIR_FINDINGS: Final = frozenset(
-    {"repair.still_open", "repair.still_branching", "repair.self_intersections_skipped"}
+    {
+        "repair.still_open",
+        "repair.still_branching",
+        "repair.self_intersections_skipped",
+        "repair.self_intersections_detected",
+        "repair.self_intersections_unresolved",
+        "repair.self_intersections_incomplete",
+        "repair.self_crossing",
+        "repair.no_thickness",
+        "repair.normals_inconsistent",
+    }
 )
 
 #: Kennungen der Befunde, die aus einer Ausnahme einer Operation entstanden
@@ -738,7 +749,13 @@ def actions_for_document(
         offered = [action for action in offered if action.id != REPAIR_AND_RETRY.id]
     target = _object_for_finding(finding, document)
     if target is None or (live_objects is not None and target not in live_objects):
-        offered = [action for action in offered if action.id != SHOW_LOCATIONS.id]
+        offered = [
+            action for action in offered if action.id not in {SHOW_LOCATIONS.id, SHOW_LOCATION.id}
+        ]
+    if finding.location is None:
+        # Eine Sammelzeile über verschiedene Orte trägt keinen (siehe unten),
+        # und ohne Ort hätte der Knopf kein Ziel.
+        offered = [action for action in offered if action.id != SHOW_LOCATION.id]
     if target is not None and live_objects is not None and target not in live_objects:
         # *Dreiecke verringern* öffnet die Operation für die aktuelle Auswahl;
         # ist der Körper des Befunds verbraucht, träfe sie einen anderen
@@ -806,6 +823,9 @@ def as_error(
         # Ausschließlich der beim Angebotsaufbau aus der tatsächlichen Szene
         # gebundene Umfang. Historische Ausgaben sind keine lebenden Körper.
         values["import_group"] = import_group
+    if finding.location is not None:
+        # *Stelle zeigen* fliegt dorthin; der Fehler kennt sonst keinen Ort.
+        values.setdefault("location", tuple(float(value) for value in finding.location))
     return AppError(
         title=finding.message,
         detail=str(detail) if detail is not None else None,

@@ -177,9 +177,9 @@ def _not_closed(solid: Solid, name: str = "") -> list[Finding]:
         Finding(
             code="ingest.not_watertight",
             severity="warning",
-            message=_(
-                "Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen."
-            ),
+            # Derselbe Satz wie beim Netzimport (``loader``): Die Handlung
+            # steht im Knopf daneben, nicht im Satz.
+            message=_("Das Modell ist nicht geschlossen."),
             values=values,
         )
     ]

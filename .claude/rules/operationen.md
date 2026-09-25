@@ -384,6 +384,23 @@ geschlossen" steht im Präsens und beschreibt einen Zustand, den es nicht mehr
 gibt; als Hinweis wäre der Satz nicht milder, sondern falsch. Übrig bleibt der
 Satz des Schritts, der es behoben hat, und der erzählt die ganze Geschichte.
 
+**Und ein Zustandssatz, den der Endstand widerlegt, fällt auch ohne späteren
+Befund** (`evaluate._without_outdated`, 24.09.2026). „Nicht geschlossen" an
+einem Körper, der am Ende dicht ist (`CLOSED_STATE_CODES`), und „aus mehreren
+Teilen" oder „ein Teil im Teil" an einem, der am Ende ein Stück ist
+(`ONE_PIECE_CODES`), und „Außenseiten gegeneinander" an einem einheitlich
+gewickelten (`WOUND_STATE_CODES`), sagen Präsens über einen Zustand, den es
+nicht mehr gibt — gleich welcher Schritt ihn aufgehoben hat. Wer einen neuen
+Befund über Dichtheit, Teilezahl oder Wicklung baut, trägt ihn in eine der
+drei Mengen ein.
+
+**Die Reparatur löst Überschneidungen von sich aus auf** (Entscheidung Robert,
+24.09.2026): `RepairParams.self_intersections` steht auf an. Gespeicherte
+Schritte behalten, was sie hatten — die Migration 34→35 schreibt dort `False`
+hinein (`_keep_repairs_as_they_were`), und ein Befund bietet
+*Überschneidungen auflösen* an. Eine Schale, die sich selbst kreuzt, wird
+dabei benannt und nicht vereinigt (`repair.self_crossing`).
+
 **Und was aus einem Verhältnis entsteht, wird gar nicht erst je Schritt
 gefragt.** `SETTLED_BY` streicht nachträglich, was ein späterer Schritt behoben
 hat — das setzt voraus, dass es einen zweiten Befund gibt, der die Heilung

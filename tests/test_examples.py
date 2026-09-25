@@ -382,13 +382,10 @@ def test_no_example_greets_with_a_contradiction(evaluated) -> None:
 #: weil jemand die Zahl anpasst. Hier trägt jede Ausnahme ihren eigenen Satz,
 #: und eine **neue** Warnung ist sofort rot.
 _ERLAUBTE_BEGRUESSUNG: Final[dict[str, dict[str, str]]] = {
-    "weg3-generiert-aufbereiten": {
-        # Wahr und am Platz: Der erzeugte Körper bringt Kleinstteile mit, das
-        # Beispiel räumt sie weg, und der Befund sagt genau das. Eine Warnung,
-        # die etwas Wahres über den gezeigten Weg sagt, gehört in ein Beispiel
-        # — sie ist Teil dessen, was es vorführt.
-        "repair.components_removed": "zeigt, was Weg 3 mit erzeugten Netzen tut",
-    },
+    # „Weg 3 generiert aufbereiten" stand hier mit „Kleinstteile entfernt"
+    # — bis die Zeile am 24.09.2026 ein Hinweis wurde: Weggeräumter Staub ist
+    # erledigt, nicht zu prüfen. Das Beispiel sagt es weiter, nur nicht mehr
+    # als Warnung.
     "passung-nach-materialwechsel": {
         # **Hier ist die Warnung der Inhalt.** Das Beispiel führt vor, was
         # geschieht, wenn ein Deckel aus weicherem Material kommen soll: Er

@@ -41,9 +41,10 @@ Achse, `math.hypot`/`math.fsum` und NumPys paarweise Summe. Was dafür da ist:
 | Mitte einer Punktwolke | `units.exact_centre` |
 | Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_vertex_normals` |
 | Summen, deren Gleichstand eine Lage entscheidet | `mesh.IntegerGrid` |
+| Spatprodukte, eingeschlossenes Volumen mit Vorzeichen | `mesh.triple_products`, `mesh.signed_volume` (körpernah) |
 | Zufall (Stufe 3 der Kette) | `Generator.random` aus den Rohbits, nie `normal` |
 
-`tests/test_platform_identity.py` prüft neun Wege durch den Kern auf einer
+`tests/test_platform_identity.py` prüft die Wege in `_WAYS` auf einer
 Maschine: jede plattformabhängige Rechnung bekommt ein Rauschen von einem ULP
 (`platform_noise`), und ein zweiter Lauf tauscht den BLAS-Kern
 (`OPENBLAS_CORETYPE`). Wer einen Weg baut, der am Ende Geometrie oder eine
@@ -452,11 +453,111 @@ jetzt Millisekunden). Und
 unverändert zurück: Ein exakter Körper bleibt exakt, statt als Netz mit
 „nichts zu reparieren" zurückzukommen.
 
-`repair()` übernimmt Verschweißen und Dreiecksbereinigung nur, wenn ein
-geschlossener Eingang danach geschlossen bleibt. Andernfalls bleiben das
-Netz und seine Materialzuweisungen erhalten; ein Befund nennt den ausgelassenen
-Schritt. Die Zusicherung entspricht `ingest.loader.normalise`. Die einzelnen
-Reparaturhilfen bleiben für ausdrücklich gesteuerte Reparaturketten verfügbar.
+`repair()` übernimmt Verschweißen und Dreiecksbereinigung nur, wenn das Netz
+danach nicht schlechter ist — gewogen über die Summe offener und verzweigter
+Kanten (`_tears_it_further`). Andernfalls bleiben das Netz und seine
+Materialzuweisungen erhalten; ein Befund nennt den ausgelassenen Schritt.
+**Der Import fragt enger** (`ingest.loader.normalise`, Schritt 2): Er nimmt
+ein Verschweißen nur zurück, das einen dichten Eingang aufreißt. Die beiden
+Regeln sind nicht dieselbe, und eine Punktgruppe, die zwei Blätter einer
+Fläche zu einer verzweigten Kante schnürt, wird an keiner der beiden Stellen
+einzeln entschieden — siehe Register. Die einzelnen Reparaturhilfen bleiben
+für ausdrücklich gesteuerte Reparaturketten verfügbar.
+
+Normalenkorrekturen vergleichen die Reihenfolge der Dreiecksecken; eine
+geänderte Windung muss das Volumen nicht ändern. Beim Vernähen und Schließen
+reisen Flächenfarben und Materialslots von den jeweiligen Ausgangsflächen
+mit. Neue Lochflächen verfolgen dafür sämtliche Randkanten und die beim
+Füllen entstehenden Diagonalen.
+
+Der ausdrückliche Reparaturschritt prüft Durchdringungen auch bei ausgeschalteter
+Auflösung und bietet die passende Einstellung an. Die automatische Lochfüllung
+beim Import aktiviert diese zusätzliche Diagnose nicht: Dort gehört kein
+Korrekturvorschlag für Reparatureinstellungen an den Ladeschritt.
+Durchdringungen werden vor und nach ihrer Auflösung räumlich geprüft. Nur eine
+vollständig geprüfte direkte Float64-Vereinigung gilt als behoben und trägt
+den Solver `direct`. Geschlossene positive Schalen sind einzelne Operanden;
+unklar zugeordnete Innenschalen bleiben unverändert. Ein unvollständiger oder
+erfolgloser Versuch liefert einen Restbefund mit Handlung. Bei geänderter
+Geometrie deklariert die Reparatur keine alten Merkmale erneut; die gemeinsame
+Erkennung führt die Merkmale am Ergebnis nach.
+
+**Die Schnittsuche läuft einmal je Netz und weiß, wie weit sie kam**
+(`repair.crossings_of`, `intersections.Crossings`). Ihr Paarbudget zählt die
+**gefilterten** Paare — die, deren Hüllen sich wirklich überlappen —, nicht die
+Sweep-Kandidaten; es wächst mit dem Netz (`INTERSECTION_PAIRS_PER_TRIANGLE`,
+mindestens `MAX_INTERSECTION_PAIRS`). **Am offenen oder gegeneinander
+gewickelten Netz und über `perceive.maps.MAP_LIMIT_TRIANGLES` gilt nur der
+Sockel** (`_intersection_findings`): Dort löst die Reparatur nichts auf, und
+am Drachen kostete das mitwachsende Budget 70 s für „nichts zu tun". Jede
+gefundene Überschneidung bekommt eine Zeile — auch an einem verkehrten oder
+flachen Körper —, und nach einem Auflösen mit unvollständiger Suche steht der
+Hinweis daneben. Reicht es nicht, meldet `Crossings`
+`complete=False` und die Dreiecke, die bis dahin geprüft sind (`checked`);
+die Netzfehlerkarte zeigt die übrigen als ungeprüft statt als sauber. Das
+Ergebnis liegt im Cache des Netzes: Reparatur, Befund und Karte fragen
+dieselbe Rechnung, der Fortschritt läuft über `ctx.progress`.
+`_crossing_shape` sagt, **wer** sich kreuzt — verschiedene Schalen, eine
+deckungsgleiche Überlagerung oder eine Schale mit sich selbst. Nur die ersten
+beiden löst die Vereinigung auf; eine Schale, die sich selbst kreuzt
+(`repair.self_crossing`, die gefaltete Röhre), wird benannt und nicht
+vereinigt — `[netz, netz]` löste sie am Korpus nie und kostete am
+Piratenschiff 49 s. Nachgeprüft wird nach dem Vereinigen nur, was in der Nähe
+der alten Schnitte liegt.
+
+**Ein Ring wird in der Reihenfolge gefüllt, die seine Form am wenigsten
+verbiegt** (`_fill_loops`, eine Warteschlange aus `_FillJob`):
+
+1. **Zwei koaxiale Ringe mit gegeneinander gerichteten Nachbarn sind eine
+   fehlende Wand** und bekommen ein Band (`_band_between`, `BAND_PARALLEL`):
+   Bohrungswand und Senkungskegel kommen zurück statt zweier Deckel.
+   Kreuzt das Band vorhandene Flächen (`_band_crosses`) oder verbinden die
+   Wände die Ringe schon — Rohr ohne Deckel, Kugel ohne Pole —, wird jeder
+   Ring für sich gefüllt.
+2. **Ringe in einer Ebene, einer im anderen, sind eine Fläche mit Löchern**
+   (`_bridged_holes`): eine Triangulierung mit Brückenkanten statt fünf
+   übereinanderliegender Scheiben — die fehlende Oberseite einer Lochplatte
+   lässt die vier Durchgänge offen.
+3. **Ein Ring bis `SMOOTH_FILL_CORNERS` Ecken geht über alle
+   Triangulierungen** (`_smoothest_fill`, nach Liepa): zuerst der kleinste
+   größte Knick gegen die Nachbarn, dann die kleinste Fläche. So kommen die
+   Dreiecke einer Verrundung, eine Würfelkante und ein Viertel einer
+   Bohrungswand als dieselben zurück.
+4. **Größere Ringe gehen über Ohren** (`_loop_triangles`: verkettete Liste,
+   Menge der Reflexecken, Abbruch je `EARS_PER_CANCEL_CHECK`), und keine
+   Diagonale auf eine Kante, die schon zwei Flächen trägt. Der Fächer über der
+   Ringmitte bleibt der letzte Rückfall; gefaltete Füllungen (`_folds`) gelten
+   nie.
+
+Eine Füllung erbt Slot und Farbe zuerst vom eigenen Rand, dann von der
+geerbten Diagonale. Eine Fläche ohne Dicke bleibt offen (`_flat_fills`,
+`repair.no_thickness` mit *Dicke geben*, das nur die offenen Teile aufträgt:
+`mesh_ops._thickened_open_parts`); lose offene Splitter unter
+`SMALL_COMPONENT_SHARE` der größten Komponente fallen nach dem Füllen weg
+(`remove_open_splinters`, `repair.splinters_removed`), und was danach noch
+als flacher Ring offen steht, zählt `_flat_still_open` am Endstand — die
+Bilanz des Füllers gilt dem Netz vor dem Entfernen. Beide Paarungen der
+Ringe (Band, Fläche mit Löchern) sieben vorab über ganze Felder; je Paar in
+Python kostete eine Kugel mit 1 500 Dreieckslöchern 78 s. Der Füller fragt
+den Abbruch je Ring, und der Import reicht ihn durch (`normalise(cancelled=)`).
+
+**Außen ist je Verschachtelungsbaum** (`turn_shells_outward` über
+`_Shells.containers`, die eine umhüllende Schale beim ersten Strahl einmal
+ausschneidet): Eine freie Schale muss positiv sein; ist sie negativ, dreht sie
+sich samt allem, was belegt in ihr liegt, und ein richtiger Hohlkörper
+daneben bleibt, wie er ist. Ein einzelner Körper braucht dafür nur sein
+Vorzeichen. Eine positive Schale **im Material** einer anderen — die Summe der
+Vorzeichen aller umschließenden Schalen ist mindestens eins — wird nicht
+geraten, sondern gemeldet (`parts_inside_parts`, `repair.part_inside` mit Ort
+und *In Einzelteile zerlegen*, aus Import und Reparatur derselbe Befund); eine
+Kugel frei im Hohlraum liegt in Luft und ist keiner. Die Wicklung macht `wind_consistently`
+einheitlich: über die Kantentabelle und einen Breitenbaum aus
+`scipy.sparse.csgraph`, je Teil wird die kleinere Hälfte gedreht (an der
+Gähnenden Katze 0,4 statt 13 bis 23 s in trimeshs `fix_winding`). Jedes
+Vorzeichen, an dem eine Entscheidung hängt, kommt aus `mesh.signed_volume`
+oder der schalennahen Summe in `_shell_volumes`, nie aus dem
+ursprungsbezogenen `enclosed_volume`: Ein Würfel von 1 mm bei 10⁸ mm hatte
+dort ein Volumen aus Rundung.
 
 **Die Kantenwarnung misst am Hüllquader nur vor.** `over_the_edge_along`
 meldet eine offene Flanke, wenn die Mündungsscheibe über die Hülle ragt — das
@@ -640,9 +741,10 @@ rechnet sie am ganzen Körper) · `intersections.py` (Selbstdurchdringung als Fe
 auflösen (`resolve_branching_edges` — dort liegen Flächen übereinander, die
 kleinste geht), Sanduhr-Ecken auftrennen (`split_pinched_vertices` — zwei
 Löcher, die sich eine Ecke teilen, sind zwei Ringe), Ränder vernähen und
-Ringe schließen (`boundary_loops` + `fill_boundary_loops`: Ohren in der
-Ebene nach Newell, Fächer über die exakte Ringmitte als Rückfall, und **keine
-Fläche auf eine Kante, die schon zwei trägt**); deckungsgleiche Dreiecke
+Ringe schließen (`boundary_loops` + `fill_boundary_loops`, in der Reihenfolge
+oben: Band, Fläche mit Löchern, glatteste Triangulierung, Ohren nach Newell,
+Fächer als Rückfall, und **keine Fläche auf eine Kante, die schon zwei
+trägt**); deckungsgleiche Dreiecke
 (`remove_doubled_faces`): gegenläufige Paare sind Taschen und fallen paarweise,
 gleich umlaufende Kopien sind Doppelungen und behalten eine, und kein
 zusammenhängendes Teil verschwindet ganz; jede Frage nach Rändern und

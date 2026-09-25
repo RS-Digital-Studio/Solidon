@@ -483,6 +483,70 @@ def _mended_import() -> str:
     return _mesh_print(normalise(MeshData.of(raw), "mm").mesh)
 
 
+def _resolved_crossings() -> str:
+    """*Reparieren* mit „Überschneidungen auflösen" an zwei ineinandergesteckten Schalen.
+
+    Ob vereinigt wird, entscheiden die Schnittsuche und das Vorzeichen jedes
+    Schalenvolumens (Befund B17 der Durchsicht 24.09.2026).
+    """
+    from app.core.deferred import trimesh
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import apply, rotation
+
+    peg = MeshData.of(trimesh.creation.box(extents=(14.0, 9.0, 20.0)))
+    turned = apply(peg, rotation("z", 23.0)).raw.copy()
+    turned.vertices = np.asarray(turned.vertices) + np.array([17.0, 6.0, 5.0])
+    crossing = MeshData.of(trimesh.util.concatenate([_plate().raw, turned]))
+    return _mesh_print(_registered("repair", crossing, self_intersections=True))
+
+
+def _plate_without(select: Callable[[np.ndarray, np.ndarray], np.ndarray]) -> Any:
+    """Die Platte ohne die Dreiecke, die ``select(mitten, normalen)`` nennt."""
+    from app.core.geom.mesh import MeshData
+
+    raw = _plate().raw.copy()
+    centres = np.asarray(raw.triangles_center)
+    normals = np.asarray(raw.face_normals)
+    raw.update_faces(~select(centres, normals))
+    raw.remove_unreferenced_vertices()
+    return MeshData.of(raw)
+
+
+def _bore_wall_band() -> str:
+    """*Reparieren* an der Platte ohne die Wand der ersten Bohrung — ein Band (Review R11)."""
+    from app.core.geom.repair import repair
+
+    def wall(centres: np.ndarray, normals: np.ndarray) -> np.ndarray:
+        across = np.hypot(centres[:, 0] + 12.0, centres[:, 1] - 4.0)
+        return np.asarray((across < 3.3) & (np.abs(normals[:, 2]) < 0.5))
+
+    return _mesh_print(repair(_plate_without(wall)).mesh)
+
+
+def _top_with_holes() -> str:
+    """*Reparieren* an der Platte ohne ihre Oberseite — eine Fläche mit zwei Löchern."""
+    from app.core.geom.repair import repair
+
+    def top(centres: np.ndarray, normals: np.ndarray) -> np.ndarray:
+        return np.asarray((centres[:, 2] > 7.99) & (normals[:, 2] > 0.9))
+
+    return _mesh_print(repair(_plate_without(top)).mesh)
+
+
+def _inverted_hollow() -> str:
+    """Ein Hohlkörper, ganz verkehrt herum — der Strahl entscheidet, was sich dreht."""
+    from app.core.deferred import trimesh
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.repair import unify_normals
+
+    cavity = trimesh.creation.box(extents=(5.0, 4.0, 3.0))
+    cavity.vertices = np.asarray(cavity.vertices) + np.array([3.5, -2.5, 4.0])
+    cavity.invert()
+    hollow = trimesh.util.concatenate([_plate().raw.copy(), cavity])
+    hollow.invert()
+    return _mesh_print(unify_normals(MeshData.of(hollow))[0])
+
+
 def _step_assembly() -> str:
     """Eine STEP-Baugruppe in Weltlage (P7.4): verschachtelt, eine Instanz gespiegelt.
 
@@ -506,10 +570,14 @@ def _step_assembly() -> str:
 
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
+    "fill_band": _bore_wall_band,
+    "fill_bridged": _top_with_holes,
     "import_repair": _mended_import,
+    "inverted_hollow": _inverted_hollow,
     "orient_for_print": lambda: _oriented_plate(True),
     "orient_heuristic": lambda: _oriented_plate(False),
     "pose_armature": _posed_plate,
+    "repair_selfint": _resolved_crossings,
     "resize_hole": _changed_bore,
     "rotate_object": _turned_plate,
     "section_cut": _slanted_cut,

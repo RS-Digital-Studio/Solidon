@@ -176,7 +176,9 @@ def test_welding_that_would_tear_the_mesh_open_is_taken_back() -> None:
     assert result.mesh.vertex_count == 16, "die geteilten Ecken stehen noch"
     assert not result.info.welded
     codes = {finding.code for finding in result.findings}
-    assert "ingest.weld_skipped" in codes
+    # Stehen gelassen ist keine Zeile im Bericht (Bedienweg A4): Geschehen
+    # ist nichts, und der Kunde kann nichts tun. ``info.welded`` sagt es.
+    assert "ingest.weld_skipped" not in codes
     assert "ingest.not_watertight" not in codes
 
 
@@ -239,7 +241,7 @@ def test_removing_degenerate_faces_that_would_tear_the_mesh_open_is_taken_back()
     assert result.mesh.triangle_count == 12, "das flache Dreieck steht noch"
     assert result.info.removed_triangles == 0
     codes = {finding.code for finding in result.findings}
-    assert "ingest.degenerate_kept" in codes
+    assert "ingest.degenerate_kept" not in codes, "stehen gelassen ist keine Zeile (A4)"
     assert "ingest.degenerate_removed" not in codes
     assert "ingest.not_watertight" not in codes
 
@@ -303,6 +305,170 @@ def test_an_open_model_is_repaired_on_import() -> None:
     assert "repair.holes_filled" in codes, "und der Bericht sagt, was geschlossen wurde"
     wide = next(f for f in result.findings if f.code == "repair.wide_hole_filled")
     assert wide.severity == "warning"
+
+
+def test_an_open_model_turned_inside_out_comes_in_facing_outward() -> None:
+    """Erst am geschlossenen Netz lässt sich fragen, wo außen ist.
+
+    Das Angleichen der Außenseiten sieht ein offenes Netz; ist es durchweg
+    gleich herum gewickelt, nur eben innen-außen verkehrt, gibt es nichts zu
+    richten, und das Vorzeichen des Volumens trägt an einem offenen Körper
+    keine Aussage. Danach schloss das Lochfüllen das Netz in der Wicklung
+    seiner Nachbarn — und der Würfel kam geschlossen und umgestülpt aus dem
+    Import, Volumen −8 000 mm³ (Durchsicht 24.09.2026). Das Schließen fragt
+    seither selbst nach außen.
+    """
+    import numpy as np
+
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide()
+    body.invert()
+    keep = np.ones(len(body.faces), dtype=bool)
+    keep[0] = False
+    body.update_faces(keep)
+    body.remove_unreferenced_vertices()
+    assert body.is_winding_consistent and not body.is_watertight
+
+    result = normalise(MeshData.of(body), "mm")
+
+    assert result.mesh.is_watertight
+    assert result.mesh.raw.volume == pytest.approx(8000.0, rel=1e-9)
+    codes = [finding.code for finding in result.findings]
+    assert codes.count("repair.normals_flipped") + codes.count("ingest.normals_flipped") == 1, (
+        "eine Zeile für die Außenseiten, auch wenn beide Stufen richten"
+    )
+
+
+def test_closing_on_import_leaves_the_outsides_alone_when_asked_to() -> None:
+    """*Außenseiten angleichen: aus* gilt auch für das Schließen in Schritt 4b (Review R8)."""
+    import numpy as np
+
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide()
+    body.invert()
+    keep = np.ones(len(body.faces), dtype=bool)
+    keep[0] = False
+    body.update_faces(keep)
+    body.remove_unreferenced_vertices()
+
+    result = normalise(MeshData.of(body), "mm", unify_normals=False)
+
+    codes = {finding.code for finding in result.findings}
+    assert "repair.normals_flipped" not in codes and "ingest.normals_flipped" not in codes
+    assert result.mesh.raw.volume < 0.0, "verkehrt, wie angefordert"
+
+
+def test_the_place_of_a_finding_moves_with_an_assembly_set_on_the_bed() -> None:
+    """Eine Baugruppe geht gemeinsam aufs Bett — und der Ort ihrer Befunde mit ihr.
+
+    Das Nachführen stand nur im Weg eines einzelnen Körpers; an einer 3MF mit
+    großer Öffnung zeigte der Klick danach ins Leere (Review R7, 24.09.2026).
+    """
+    from app.core.ingest.ops import _group_on_bed
+    from app.core.types import SceneObject
+
+    first = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    first.apply_translation((100.0, 100.0, 50.0))
+    second = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    second.apply_translation((120.0, 100.0, 50.0))
+    outputs = [
+        SceneObject(id="", name="eins", mesh=MeshData.of(first)),
+        SceneObject(id="", name="zwei", mesh=MeshData.of(second)),
+    ]
+    findings = [
+        Finding(
+            code="repair.wide_hole_filled",
+            severity="warning",
+            message="",
+            location=(100.0, 100.0, 55.0),
+        )
+    ]
+
+    moved = _group_on_bed(outputs, findings, place_on_bed=True, centre=False)
+
+    low = moved[0].mesh.bounds.minimum
+    assert low[2] == pytest.approx(0.0)
+    # Die Oberseite des ersten Würfels, wo die Öffnung war, liegt jetzt bei 10.
+    assert findings[0].location == pytest.approx((100.0, 100.0, 10.0))
+
+
+def test_closing_holes_on_import_stops_when_asked_to() -> None:
+    """Das Schließen beim Einlesen fragt den Abbruch (§15.6, Review R10, 24.09.2026).
+
+    Schritt 4b fährt die ganze Füllkette der Reparatur; vorher kannte
+    ``normalise`` kein Abbruchsignal, und *Abbrechen* griff erst danach.
+    """
+    import numpy as np
+
+    from app.core.errors import OperationCancelled
+
+    class Signal:
+        """Meldet den Abbruch ab der zweiten Frage — mitten im Schließen."""
+
+        asked = 0
+
+        def raise_if_cancelled(self) -> None:
+            self.asked += 1
+            if self.asked > 1:
+                raise OperationCancelled()
+
+    sphere = trimesh.creation.icosphere(subdivisions=4, radius=20.0)
+    keep = np.ones(len(sphere.faces), dtype=bool)
+    keep[::40] = False
+    sphere.update_faces(keep)
+    signal = Signal()
+
+    with pytest.raises(OperationCancelled):
+        normalise(MeshData.of(sphere), "mm", cancelled=signal)  # type: ignore[arg-type]
+    assert signal.asked >= 2
+
+
+def test_a_part_inside_a_part_is_named_on_import_where_it_now_is() -> None:
+    """Der Import sagt es wie die Reparatur — und der Ort folgt dem Aufsetzen."""
+    inner = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    inner.apply_translation((2.0, 1.0, 0.5))
+    both = trimesh.util.concatenate([trimesh.creation.box(extents=(20.0, 20.0, 20.0)), inner])
+
+    result = normalise(MeshData.of(both), "mm", place_on_bed=True)
+
+    inside = [entry for entry in result.findings if entry.code == "repair.part_inside"]
+    assert len(inside) == 1
+    # Aufgesetzt steht die Außenschale mit ihrer Unterseite auf null, die
+    # Mitte der Innenschale also 10 mm höher als in der Datei.
+    assert float(result.mesh.raw.bounds[0][2]) == pytest.approx(0.0)
+    assert inside[0].location == pytest.approx((2.0, 1.0, 10.5))
+
+
+def test_the_place_of_a_wide_opening_moves_with_the_body() -> None:
+    """Der Klick auf „große Öffnung" fliegt dorthin, wo die Öffnung jetzt ist.
+
+    Das Schließen misst den Ort am Körper, wie er aus der Datei kam; das
+    Aufsetzen auf das Bett schiebt ihn danach. Ohne Nachführen zeigte die
+    Marke um die Höhe des Aufsetzens neben die Stelle.
+    """
+    kept = normalise(mesh_of("broken_open.stl"), "mm")
+    placed = normalise(mesh_of("broken_open.stl"), "mm", place_on_bed=True)
+
+    def wide_at(result: Any) -> tuple[float, float, float]:
+        finding = next(f for f in result.findings if f.code == "repair.wide_hole_filled")
+        assert finding.location is not None
+        return finding.location
+
+    shift = placed.mesh.bounds.minimum[2] - kept.mesh.bounds.minimum[2]
+    assert shift == pytest.approx(10.0), "sonst prüft der Test nichts"
+    assert wide_at(placed)[2] - wide_at(kept)[2] == pytest.approx(shift)
+    assert wide_at(placed)[:2] == pytest.approx(wide_at(kept)[:2])
+
+
+def test_mending_on_import_can_be_left_out() -> None:
+    """„Offene Stellen schließen" aus: Das Modell kommt, wie es ist, und der
+    Bericht sagt, dass es offen ist (Entscheidung Robert, 24.09.2026 — der
+    Rückweg zu „Offen lassen")."""
+    result = normalise(mesh_of("broken_open.stl"), "mm", mend=False)
+
+    assert not result.mesh.is_watertight
+    codes = {finding.code for finding in result.findings}
+    assert "ingest.not_watertight" in codes
+    assert "repair.holes_filled" not in codes
+    assert "repair.wide_hole_filled" not in codes
 
 
 def test_small_components_are_reported_and_kept() -> None:
@@ -2123,3 +2289,62 @@ def test_a_saved_project_is_never_only_imported(tmp_path: Path) -> None:
 
     assert is_only_imported(session.project.document), "am Dokument ändert das Speichern nichts"
     assert not session.only_imported, "die Sitzung hat jetzt eine Datei"
+
+
+def test_leaving_wide_openings_open_on_import_names_what_stays_open() -> None:
+    """*Offen lassen* am Ladeschritt: die große Öffnung bleibt, mit Ort und Weg (RM-241)."""
+    result = normalise(mesh_of("broken_open.stl"), "mm", wide_holes=False)
+
+    assert not result.mesh.is_watertight
+    codes = {finding.code for finding in result.findings}
+    assert "repair.wide_hole_filled" not in codes
+    assert "ingest.not_watertight" not in codes, "ein Satz über dieselben Ränder genügt"
+    kept = next(finding for finding in result.findings if finding.code == "repair.wide_hole_kept")
+    assert str(kept.message) == "Eine große Öffnung bleibt offen."
+    assert kept.location is not None
+
+
+def _two_boxes(offset: float) -> MeshData:
+    """Zwei Würfel mit 20 mm Kante, der zweite um ``offset`` entlang X verschoben."""
+    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second.apply_translation((offset, 0.0, 0.0))
+    return MeshData.of(trimesh.util.concatenate([first, second]))
+
+
+def test_parts_that_stick_into_each_other_are_named_on_import() -> None:
+    """Zwei ineinandergeschobene Würfel: der Satz sagt es, und der erste Knopf löst es auf.
+
+    Befund A5 der Bedienweg-Durchsicht (24.09.2026): Vorher stand nur „Das
+    Modell besteht aus mehreren Teilen" mit *In Einzelteile zerlegen* — zerlegt
+    wären es zwei Teile am selben Ort.
+    """
+    result = normalise(_two_boxes(10.0), "mm")
+
+    finding = next(f for f in result.findings if f.code == "ingest.multiple_components")
+    assert str(finding.message) == "Das Modell besteht aus zwei Teilen, die ineinanderstecken."
+    assert [action.id for action in finding.suggestions] == [
+        "resolve_intersections",
+        "split_bodies",
+    ]
+    assert finding.location is not None
+    assert -10.0 <= finding.location[0] <= 20.0
+
+
+def test_parts_apart_or_with_play_keep_the_plain_sentence() -> None:
+    """Die Gegenprobe: getrennte Teile und ein Ring mit Spiel um einen Stift.
+
+    Der Ring hat einen Hüllquader, der den Stift umschließt, und keine einzige
+    gemeinsame Stelle — ein Kettenglied, ein Druck-im-Stück-Gelenk. Dort
+    steckt nichts ineinander, und *Überschneidungen auflösen* hätte nichts zu tun.
+    """
+    apart = normalise(_two_boxes(30.0), "mm")
+    finding = next(f for f in apart.findings if f.code == "ingest.multiple_components")
+    assert str(finding.message) == "Das Modell besteht aus mehreren Teilen."
+    assert not finding.suggestions
+
+    pin = trimesh.creation.cylinder(radius=4.0, height=20.0, sections=48)
+    ring = trimesh.creation.annulus(r_min=6.0, r_max=8.0, height=5.0, sections=48)
+    loose = normalise(MeshData.of(trimesh.util.concatenate([pin, ring])), "mm")
+    finding = next(f for f in loose.findings if f.code == "ingest.multiple_components")
+    assert str(finding.message) == "Das Modell besteht aus mehreren Teilen."

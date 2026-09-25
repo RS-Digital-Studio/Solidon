@@ -2296,3 +2296,33 @@ def test_thickening_keeps_the_filaments_and_names_its_body(profile: Profile) -> 
     expected = (centres[clear, 0] > 0.0).astype(int)
     assert np.array_equal(np.asarray(body.slots)[clear], expected)
     assert {finding.object_id for finding in result.findings} == {"obj_1"}
+
+
+def test_thickening_a_sheet_beside_a_closed_part_leaves_the_part_alone(profile: Profile) -> None:
+    """Nur das Blatt bekommt seine Wand; der Würfel daneben keine zweite Innenhaut.
+
+    *Dicke geben* steht auch am Befund „Ein Teil des Modells ist eine Fläche
+    ohne Dicke". Die Operation trug bis dahin jede Fläche des Körpers auf, und
+    der Würfel neben dem Blatt kam mit einer zweiten, positiven Innenschale
+    heraus — 15 057 statt 8 115 mm³ (Review R6, 24.09.2026).
+    """
+    from app.core.geom.mesh import face_components
+
+    cube = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    sheet = trimesh.Trimesh(
+        vertices=[[30.0, 0.0, 0.0], [42.0, 0.0, 0.0], [42.0, 12.0, 0.0], [30.0, 12.0, 0.0]],
+        faces=[[0, 1, 2], [0, 2, 3]],
+        process=False,
+    )
+    entry = SceneObject(
+        id="obj_1",
+        name="Würfel und Blatt",
+        mesh=MeshData.of(trimesh.util.concatenate([cube, sheet])),
+    )
+
+    body = run("thicken", entry, profile, thickness=0.8).outputs[0].mesh
+
+    assert body.is_watertight
+    pieces = face_components(body.raw)
+    assert len(pieces) == 2, "ein Würfel und ein Blatt mit Wand — keine dritte Schale"
+    assert body.volume == pytest.approx(8000.0 + 12.0 * 12.0 * 0.8, rel=1e-9)

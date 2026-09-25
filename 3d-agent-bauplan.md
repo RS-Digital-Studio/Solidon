@@ -1121,6 +1121,12 @@ baut daraus das normalisierte Szenenobjekt über dieselbe Eingangskette:
 3. **Entartete Dreiecke entfernen** (Nullfläche, Nadeln, Dubletten).
 4. **Normalen vereinheitlichen**, Orientierung prüfen.
 5. **Komponenten zählen**, Kleinstteile melden statt still zu löschen.
+   Lose **offene** Splitter unter der Kleinstteilgrenze, die nichts
+   umschließen und nicht drucken, gehen beim Schließen offener Stellen
+   mit Befund; *Offene Stellen schließen* aus lässt sie stehen. Stecken
+   Teile ineinander, sagt der Befund es und bietet das Auflösen an
+   (Entscheidung nach Roberts Vorgabe vom 25.09.2026: das Beste für
+   Kunde, Druck und Modell, RM-241).
 6. **Lage**: Schwerpunkt ermitteln, Aufsetzen auf das Bett und Zentrieren
    darauf anbieten — nicht erzwingen. **Das erste Modell eines Projekts** kommt
    aufgesetzt und mittig herein (Entscheidung Robert, 03.09.2026): Ein leeres

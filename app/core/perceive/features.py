@@ -31,7 +31,13 @@ import numpy as np
 
 from app.core import units
 from app.core.deferred import cKDTree, least_squares, trimesh
-from app.core.geom.mesh import MeshData, face_components, fully_stitched, unique_edges
+from app.core.geom.mesh import (
+    MeshData,
+    face_components,
+    fully_stitched,
+    triple_products,
+    unique_edges,
+)
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
@@ -8719,11 +8725,18 @@ def _enclosed_volume(
     Normalen nach außen zeigen, schließt positives Volumen ein; zeigen sie
     nach innen, ist es negativ. Erst ihre geometrische Verschachtelung belegt
     eine Luftkammer statt eines umgestülpten Körpers.
+
+    **Nahe an der Schale und elementweise** — dieselbe Rechnung wie
+    ``geom.repair._shell_volumes`` (Review R14, 24.09.2026): Auf den Ursprung
+    bezogen bestand das Volumen eines kleinen Teils weit draußen aus Rundung,
+    und ``np.einsum`` rechnet auf ARM mit FMA (RM-187).
     """
     if triangles is None:
         triangles = body.vertices[body.faces[faces]]
-    first, second, third = triangles[:, 0], triangles[:, 1], triangles[:, 2]
-    return float(np.einsum("ij,ij->i", first, np.cross(second, third)).sum() / 6.0)
+    corners = np.asarray(triangles, dtype=np.float64)
+    if not len(corners):
+        return 0.0
+    return math.fsum(triple_products(corners - corners[0, 0]).tolist()) / 6.0
 
 
 #: Die Enthaltenseinsprüfung verwendet ausschließlich den direkten Float64-Kern,
@@ -8887,8 +8900,15 @@ def _point_inside_shell(
         true_area = np.linalg.norm(normals, axis=1)
         parallel = np.abs(determinant) <= _RAY_MARGIN * true_area
         if parallel.any():
+            # Elementweise und nicht über ``np.einsum`` (RM-187): Seit die
+            # Reparatur mit diesem Strahl entscheidet, ob eine Schale gedreht
+            # wird, darf FMA auf ARM das Ergebnis nicht verschieben (Review R11).
+            offset = point - corners[parallel, 0]
+            facing = normals[parallel]
             distance = np.abs(
-                np.einsum("ij,ij->i", point - corners[parallel, 0], normals[parallel])
+                offset[:, 0] * facing[:, 0]
+                + offset[:, 1] * facing[:, 1]
+                + offset[:, 2] * facing[:, 2]
             ) / np.maximum(true_area[parallel], EPS_GEOM)
             if np.any(distance <= EPS_GEOM):
                 continue
@@ -8909,7 +8929,13 @@ def _point_inside_shell(
             continue
         if not inside.any():
             return False
-        hit = np.einsum("ij,ij->i", weights[inside], corners[inside][:, :, axis])
+        heights = corners[inside][:, :, axis]
+        chosen = weights[inside]
+        hit = (
+            chosen[:, 0] * heights[:, 0]
+            + chosen[:, 1] * heights[:, 1]
+            + chosen[:, 2] * heights[:, 2]
+        )
         ahead = sign * (hit - point[axis])
         scale = np.abs(corners[inside][:, :, axis]).max(axis=1) + abs(float(point[axis]))
         if np.any(np.abs(ahead) <= _RAY_MARGIN * np.maximum(scale, 1.0)):

@@ -73,6 +73,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-229 — Anordnen legt ein zu großes Teil über die Kante, und geteilte Stücke heißen nach einem Buchstabenpfad](#rm-229) | Geometrie, Erkennung und Druckvorbereitung | 108,5 bei freigegebenen 108 statt einer Mitte mit kleinerem Rand; „B A · Stifte" für ein Stück mit Stiften und Löchern — Rand zuerst verkleinern, Nummerierung entscheiden |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
 | [RM-235 — Die Erkennung läuft an sehr großen Netzen in den Speicher oder über ihre Grenze](#rm-235) | Geometrie, Erkennung und Druckvorbereitung | MemoryError in features._fitted am Puppenhausbett, Kumiko mit 7 321 Merkmalen danach ohne jedes — Speicher begrenzen, über der Grenze nach Gewicht behalten. Seit 24.09.2026 kostet ein Speicherfehler beim Laden nur die Erkennung, nicht den Import; die Ursache in `_fitted` bleibt offen |
+| [RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe](#rm-239) | Geometrie, Erkennung und Druckvorbereitung | Siebhalter-Ring mit Riss: die Heilung überwiegt, 12 Eckpaare zu 0,015 µm werden zusammengelegt, 24 Dreiecke fallen — Gruppen nach Flächenblatt trennen, ohne Dreieckssuppen aufzureißen; Import- und Reparaturregel zusammenlegen |
+| [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
@@ -1936,6 +1938,51 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `recognize --on` fragt wie der Knopf im Fenster. Gemessen am Drachen: alle
   vier Sohlen an der Stelle und nach Skalieren und zwei Verschiebungen.
 
+<a id="rm-239"></a>
+
+- [ ] **RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe.**
+  Aus der Durchsicht der Dreieckserkennung und Reparatur (24.09.2026, Befund
+  B8 der Erkennung, B16 der Reparatur). Der Ring aus `Siebhalter+X1C.3mf`
+  (7 996 Dreiecke, Schweißtoleranz 0,092 µm) trägt 12 Eckpaare im Abstand
+  0,015 µm auf zwei Blättern derselben Fläche. Unbeschädigt bleibt er
+  unverschweißt (`repair.weld_skipped`, sonst 18 verzweigte Kanten); mit einem
+  Riss daneben (74 offene Kanten) überwiegt die Heilung in der Summe
+  (`repair._tears_it_further`), die Paare werden zusammengelegt, 24 Dreiecke
+  fallen, und aus 16 Flächen werden 28. Der Import fragt dieselbe Sache anders
+  — er nimmt nur ein Verschweißen zurück, das einen dichten Eingang aufreißt
+  (`ingest.loader.normalise`, Schritt 2) —, und die Karte behauptete bis heute,
+  beides sei dasselbe. **Warum es nicht in dieser Durchsicht behoben ist:** Eine
+  Gruppe, deren Zusammenlegen ein Dreieck plattdrückt oder eine Kante verzweigt,
+  einfach getrennt zu lassen, reißt jede Dreieckssuppe auf — dort ist jede
+  Gruppe ein Zusammenlegen aller Kopien einer Ecke, und eine gehaltene Gruppe
+  hinterließe um diese Ecke einen offenen Kranz. Die Gruppe muss nach dem
+  Flächenblatt getrennt werden, zu dem ihre Kopien gehören, und das ist eine
+  Frage an die Nachbarschaft, die erst das Verschweißen herstellt. Abnahme:
+  Würfel mit zwei 10⁻⁸ mm getrennten Ecken auf zwei Blättern plus Riss →
+  Riss geschlossen, Ecken getrennt, Dreieckszahl gleich; jede STL des Korpus
+  kommt so dicht heraus wie heute; Import und Reparatur fragen dieselbe
+  Funktion.
+
+<a id="rm-240"></a>
+
+- [ ] **RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück.**
+  Aus derselben Durchsicht (Befund B4 der Erkennung). Fehlt ein Teil einer
+  Bohrungswand, ist der Rand ein einziger Ring aus zwei Bögen und zwei
+  Mantellinien. Seit dem 24.09.2026 füllt die Reparatur Ringe bis 32 Ecken
+  über alle Triangulierungen (`repair._smoothest_fill`): Ein Viertel der Wand
+  an `plate_holes.stl` (26 Ecken) kommt als Wand zurück, die Platte behält
+  vier Bohrungen und ihr Volumen. Die halbe Wand (50 Ecken) schließt weiter
+  flach — dort ist die flache Schließung aus zwei Halbkreisen und einem
+  Rechteck kleiner als der halbe Mantel (62,8 gegen 65,3 mm²), und der Knick
+  gegen die Nachbarn ist in beiden Fällen ein rechter Winkel; die Platte hat
+  danach drei Bohrungen, eine gerundete Seite und 25,9 mm³ mehr. Welche
+  Schließung gemeint war, sagt nur die Form der Restwand. Weg: Wo die
+  Erkennung am beschädigten Netz die Restwand als Zylinder (oder Kegel) belegt,
+  setzt die Füllung sie mit denselben Teilungen fort, statt nach Knick und
+  Fläche zu wählen. Abnahme: halbe und Dreiviertelwand an `plate_holes.stl`
+  und der Senkungskegel an `plate_countersunk.stl` kommen mit vier Bohrungen
+  und dem Volumen der unbeschädigten Platte zurück; eine gerade Wand mit
+  fehlendem Stück bleibt eben.
 
 ## Bedienung und Darstellung
 

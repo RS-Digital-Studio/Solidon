@@ -20,11 +20,12 @@ hinein geändert wurde.
 from __future__ import annotations
 
 import base64
+import dataclasses
 import json
 import math
 import mimetypes
 import struct
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -33,7 +34,13 @@ from urllib.parse import unquote, urlsplit
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import CANCEL, CHOOSE_ANOTHER_FILE, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CHOOSE_ANOTHER_FILE,
+    RESOLVE_INTERSECTIONS,
+    SPLIT_BODIES,
+    ValidationError,
+)
 from app.core.geom.mesh import (
     TRIMESH_SUFFIXES,
     MeshData,
@@ -41,14 +48,18 @@ from app.core.geom.mesh import (
     face_components,
     read_mesh,
 )
-from app.core.geom.repair import SMALL_COMPONENT_SHARE, open_edge_count
+from app.core.geom.repair import (
+    SMALL_COMPONENT_SHARE,
+    open_edge_count,
+    parts_can_be_merged,
+    parts_that_cross,
+)
 from app.core.log import get_logger
 from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
-from app.core.types import BoundingBox, Finding, IngestInfo, ProgressFn, Vec3
+from app.core.types import BoundingBox, CancelToken, Finding, IngestInfo, ProgressFn, Vec3
 from app.core.units import (
     EPS_GEOM,
     LengthUnit,
-    format_length,
     to_mm,
     weld_digits,
     weld_tolerance,
@@ -857,6 +868,29 @@ def bed_offset(bounds: BoundingBox, *, place_on_bed: bool = False, centre: bool 
     )
 
 
+def moved_findings(findings: Sequence[Finding], offset: Sequence[float]) -> list[Finding]:
+    """Die Befunde mit ihrem Ort um denselben Versatz wie ihr Körper verschoben.
+
+    Eine Stelle für beide Wege aufs Bett (Review R7, 24.09.2026): den eines
+    einzelnen Körpers in :func:`normalise` und den einer Baugruppe in
+    ``ingest.ops._group_on_bed``. Dort fehlte das Nachführen, und der Klick
+    auf die große Öffnung einer 3MF flog ins Leere.
+    """
+    return [
+        dataclasses.replace(
+            entry,
+            location=(
+                entry.location[0] + float(offset[0]),
+                entry.location[1] + float(offset[1]),
+                entry.location[2] + float(offset[2]),
+            ),
+        )
+        if entry.location is not None
+        else entry
+        for entry in findings
+    ]
+
+
 def normalise(
     mesh: MeshData,
     unit: LengthUnit,
@@ -866,9 +900,11 @@ def normalise(
     remove_degenerate: bool = True,
     unify_normals: bool = True,
     mend: bool = True,
+    wide_holes: bool = True,
     place_on_bed: bool = False,
     centre: bool = False,
     progress: ProgressFn = _silent,
+    cancelled: CancelToken | None = None,
 ) -> IngestResult:
     """Führt die sechs Schritte aus und meldet, was sie getan haben.
 
@@ -876,6 +912,8 @@ def normalise(
     Prüfungen, die ein offenes Netz **brauchen** — die Fehlerkarte, der Schnitt
     ohne Deckel, die Warnung des Aushöhlens: Sie messen, was ein Defekt
     auslöst, und ein Import, der ihn vorher behebt, nimmt ihnen den Gegenstand.
+    ``wide_holes=False`` lässt dabei nur die großen Öffnungen offen (*Offen
+    lassen*, RM-241).
 
     ``weld_is_reading`` sagt, dass das Verschweißen zum **Lesen** des Formats
     gehört und kein Befund ist: Eine STL speichert jedes Dreieck mit eigenen
@@ -886,6 +924,11 @@ def normalise(
     ``info.welded`` sagt es; bei einem Format mit Punktliste (OBJ, PLY, 3MF)
     bleibt der Befund, denn dort sind doppelte Punkte eine Eigenschaft der
     Datei.
+
+    ``cancelled`` reicht der Ladeschritt herein (§15.6): Das Schließen in
+    Schritt 4b fährt die ganze Füllkette der Reparatur, und an einem Netz mit
+    vielen Löchern ist das der längste Weg des Imports (Review R10,
+    24.09.2026).
     """
     findings: list[Finding] = []
     body: trimesh.Trimesh = mesh.raw.copy()
@@ -936,8 +979,12 @@ def normalise(
     if len(body.faces) and len(body.vertices) == 3 * len(body.faces):
         closed = False
     if weld and len(body.faces):
+        from app.core.geom.repair import used_vertex_count
+
         progress(0.2, str(_("Punkte verschweißen")))
-        before = len(body.vertices)
+        # Unbenutzte Ecken zählen nicht: Das Verschweißen räumt sie mit weg,
+        # und das ist kein Zusammenlegen (derselbe Zähler wie die Reparatur).
+        before = used_vertex_count(body)
         tolerance = weld_tolerance(diagonal)
         # **Gefragt wird am verschweißten Netz, nicht vorher** (Durchsicht
         # 0.5.0, Zusatz aus dem Paket „netzkern"). Ob das Netz vorher dicht
@@ -948,7 +995,7 @@ def normalise(
         # Sie war nie dicht.
         unwelded = body.copy() if closed is not False else None
         body.merge_vertices(digits_vertex=weld_digits(tolerance))
-        welded = len(body.vertices) < before
+        welded = used_vertex_count(body) < before
         if welded:
             closed = bool(body.is_watertight) if unwelded is not None else None
         opened = (
@@ -993,31 +1040,25 @@ def normalise(
             body = unwelded
             welded = False
             closed = True
-            findings.append(
-                Finding(
-                    code="ingest.weld_skipped",
-                    severity="info",
-                    message=_(
-                        "Doppelte Punkte blieben stehen — sie zu verschweißen hätte das "
-                        "geschlossene Netz aufgerissen."
-                    ),
-                    values={"tolerance": format_length(tolerance)},
-                )
-            )
+            # **Was stehen bleibt, ist keine Zeile im Bericht** (Bedienweg A4,
+            # 25.09.2026): Geschehen ist nichts, und der Kunde kann nichts tun —
+            # am Korpus ``F:\3D Dateien`` stand der Satz an 41 beziehungsweise 23
+            # von 485 Körpern. Das Protokoll behält ihn für den Support.
+            _log.info("weld skipped on import: it would have torn the mesh")
         elif welded and not weld_is_reading:
             findings.append(
                 Finding(
                     code="ingest.welded",
                     severity="info",
                     message=_("Doppelte Punkte wurden verschweißt."),
-                    values={"removed": before - len(body.vertices)},
+                    values={"removed": before - used_vertex_count(body)},
                 )
             )
 
     # 3 — entartete Dreiecke: null Fläche, Nadeln, Duplikate.
     removed = 0
     if remove_degenerate and len(body.faces):
-        progress(0.4, str(_("Entartete Dreiecke entfernen")))
+        progress(0.4, str(_("Leere Dreiecke entfernen")))
         before = len(body.faces)
         was_closed = bool(body.is_watertight) if closed is None else closed
         closed = was_closed
@@ -1057,17 +1098,11 @@ def normalise(
             slots = intact_slots
             removed = 0
             closed = True
-            findings.append(
-                Finding(
-                    code="ingest.degenerate_kept",
-                    severity="info",
-                    message=_(
-                        "Entartete Dreiecke blieben stehen — sie zu entfernen hätte das "
-                        "geschlossene Netz aufgerissen."
-                    ),
-                    values={"kept": kept},
-                )
-            )
+            # **Was stehen bleibt, ist keine Zeile im Bericht** (Bedienweg A4,
+            # 25.09.2026): Geschehen ist nichts, und der Kunde kann nichts tun —
+            # am Korpus ``F:\3D Dateien`` stand der Satz an 41 beziehungsweise 23
+            # von 485 Körpern. Das Protokoll behält ihn für den Support.
+            _log.info("degenerate kept on import: removing %d would tear the mesh", kept)
         elif removed:
             findings.append(
                 Finding(
@@ -1083,7 +1118,7 @@ def normalise(
                     # Prüfbericht bei jedem zweiten Import gelb aufgehen, ohne
                     # dass jemand etwas tun konnte.
                     severity="info",
-                    message=_("Entartete Dreiecke wurden entfernt."),
+                    message=_("Leere Dreiecke wurden entfernt."),
                     values={"removed": removed},
                 )
             )
@@ -1094,18 +1129,27 @@ def normalise(
     # für eine Frage nach dem Vorzeichen.
     if closed is None and len(body.faces):
         closed = bool(body.is_watertight)
+    # **Außen ist je Schale, nicht je Körper** — dieselbe Regel wie die
+    # Reparatur (:func:`app.core.geom.repair.turn_shells_outward`), nicht mehr
+    # ``trimesh.repair.fix_inversion``, das nur das Gesamtvolumen fragt. Zwei
+    # Stellen für dieselbe Frage hatten zwei Antworten: Die Reparatur richtete
+    # einen umgestülpten Würfel neben einem richtigen, der Import nicht.
+    from app.core.geom.repair import turn_shells_outward, wind_consistently
+
+    flipped = False
     if unify_normals and len(body.faces):
         progress(0.6, str(_("Außenseiten angleichen")))
         faces_before = np.array(body.faces, copy=True)
-        trimesh.repair.fix_winding(body)
+        wind_consistently(body)
         if closed:
-            trimesh.repair.fix_inversion(body)
-        if not np.array_equal(np.asarray(body.faces), faces_before):
+            turn_shells_outward(body)
+        flipped = not np.array_equal(np.asarray(body.faces), faces_before)
+        if flipped:
             findings.append(
                 Finding(
                     code="ingest.normals_flipped",
                     severity="info",
-                    message=_("Die Ausrichtung der Flächen wurde korrigiert."),
+                    message=_("Die Außenseiten wurden angeglichen."),
                 )
             )
 
@@ -1128,6 +1172,7 @@ def normalise(
     # sondern nur offene Ränder: Jede ihrer Kanten gehört zu einem Dreieck.
     # Dort etwas zu schließen hieße, das Netz zu erfinden, und wer ``weld=False``
     # sagt, will genau das nicht.
+    mended_here = False
     if mend and weld and len(body.faces) and (closed is False or not body.is_watertight):
         from app.core.geom.repair import repair as repair_mesh
 
@@ -1136,11 +1181,26 @@ def normalise(
             MeshData(raw=body, slots=tuple(int(slot) for slot in slots))
             if slots is not None and len(slots) == len(body.faces)
             else mesh.replacing(body),
-            # Was hier schon gelaufen ist, läuft nicht zweimal.
+            # Was hier schon gelaufen ist, läuft nicht zweimal — die
+            # Außenseiten aber doch: **Erst am geschlossenen Netz lässt sich
+            # fragen, wo außen ist** (Durchsicht 24.09.2026). Schritt 4 sah das
+            # Netz offen und konnte es nur einheitlich machen; stand es
+            # einheitlich verkehrt, kam der Körper geschlossen und umgestülpt
+            # an — Volumen minus 8 000 an einem Würfel, und der Bericht sagte
+            # „korrigiert". Wer *Außenseiten angleichen* am Ladeschritt
+            # abschaltet, bekommt es auch hier nicht (Review R8).
             weld=False,
             degenerate=False,
-            normals=False,
+            normals=unify_normals,
+            wide_holes=wide_holes,
+            cancelled=cancelled,
         )
+        mended_here = True
+        if flipped:
+            # Eine Zeile für die Außenseiten, auch wenn beide Stufen richten.
+            mended.findings = [
+                entry for entry in mended.findings if entry.code != "repair.normals_flipped"
+            ]
         if mended.changed:
             body = mended.mesh.raw
             slots = (
@@ -1153,11 +1213,22 @@ def normalise(
             # ``None`` an dieser Stelle wurde dort zu ``False``, und ein
             # geschlossener Körper meldete sich als offen.
             closed = bool(body.is_watertight)
-            findings.extend(mended.findings)
+        findings.extend(mended.findings)
 
     # 5 — Komponenten. Kleine werden gemeldet, nie still verworfen.
     progress(0.8, str(_("Komponenten zählen")))
-    components = _count_components(body, findings)
+    components = _count_components(
+        body, findings, closed=bool(closed) and unify_normals, cancelled=cancelled
+    )
+    # Ein Teil im Teil sagt der Bericht, statt es zu raten — dieselbe Frage
+    # und derselbe Befund wie beim Reparieren, das in Schritt 4b schon selbst
+    # gefragt hat (:func:`app.core.geom.repair.parts_inside_parts`).
+    if unify_normals and closed and not mended_here and components > 1:
+        from app.core.geom.repair import part_inside_finding, parts_inside_parts
+
+        places = parts_inside_parts(body)
+        if places:
+            findings.append(part_inside_finding(places, components))
     # trimesh berechnet Dichtheit und Umlaufsinn gemeinsam. Die reine
     # Verschiebung verwirft beide Cachewerte; zurückgelegt werden sie als Paar.
     winding = bool(body.is_winding_consistent) if len(body.faces) else False
@@ -1170,7 +1241,11 @@ def normalise(
             (float(low[0]), float(low[1]), float(low[2])),
             (float(high[0]), float(high[1]), float(high[2])),
         )
-        body.apply_translation(bed_offset(box, place_on_bed=place_on_bed, centre=centre))
+        offset = bed_offset(box, place_on_bed=place_on_bed, centre=centre)
+        body.apply_translation(offset)
+        # Ein Befund mit Ort — die große Öffnung der Reparatur — zeigt auf die
+        # Stelle am Körper, und der steht jetzt woanders.
+        findings = moved_findings(findings, offset)
 
     too_fine = _too_fine(len(body.faces))
     if too_fine is not None:
@@ -1191,20 +1266,24 @@ def normalise(
         # später liest (RM-208).
         for figure in ("volume", "area"):
             getattr(MeshData.of(body), figure)
-    if not closed and len(body.faces):
-        # Der Satz steht nur noch, wo die Reparatur oben nicht durchkam — sie
-        # läuft vorher und schließt, was zu schließen ist.
+    if not closed and len(body.faces) and not mended_here:
+        # Der Satz steht nur noch, wo die Reparatur oben nicht lief — etwa mit
+        # „Offene Stellen schließen" aus. Lief sie und blieb etwas offen, sagt
+        # sie es selbst, mit der Zahl der Stellen (``repair.still_open``,
+        # ``repair.no_thickness``); zwei Zeilen über dieselben Ränder waren
+        # eine zu viel, und „Reparieren" hätte dieselben Mittel noch einmal
+        # versucht (Durchsicht 24.09.2026).
         findings.append(
             Finding(
                 code="ingest.not_watertight",
                 severity="warning",
-                # **Und was jetzt hilft** (§2.7, Regel 17). Das war der
-                # häufigste Befund beim Einlesen eines heruntergeladenen
-                # Modells, und er sagte nur, was nicht stimmt — der Nachbar
-                # eine Zeile darüber nennt seine Handlung seit je.
-                message=_(
-                    "Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen."
-                ),
+                # **Was jetzt hilft, steht im Knopf** (§2.7, Regel 17): Seit das
+                # Einlesen selbst schließt, kommt der Satz nur noch, wo jemand
+                # „Offene Stellen schließen" abgeschaltet hat oder nicht
+                # verschweißt wird — dann schließt *Reparieren* wirklich etwas.
+                # Der Rat im Satz nannte einen anderen Namen als der Knopf
+                # daneben (Bedienweg D4, 24.09.2026).
+                message=_("Das Modell ist nicht geschlossen."),
                 values={"open_edges": open_edge_count(MeshData.of(body))},
             )
         )
@@ -1292,21 +1371,59 @@ def _without_doubled_shell(
     return single, keep
 
 
-def _count_components(body: trimesh.Trimesh, findings: list[Finding]) -> int:
+def _count_components(
+    body: trimesh.Trimesh,
+    findings: list[Finding],
+    *,
+    closed: bool = False,
+    cancelled: CancelToken | None = None,
+) -> int:
+    """Die Teile zählen und sagen, was aus ihrer Zahl folgt.
+
+    **Stecken die Teile ineinander, sagt der Satz es** (Befund A5 der
+    Bedienweg-Durchsicht, 24.09.2026): Dann ist *Überschneidungen auflösen*
+    der erste Knopf und *In Einzelteile zerlegen* der zweite — zerlegt wären es
+    zwei Teile am selben Ort. Gefragt wird nur am geschlossenen, einheitlich
+    ausgerichteten Netz (``closed``), denn nur dort trägt das Auflösen
+    (:func:`~app.core.geom.repair.parts_can_be_merged`).
+    """
     pieces = face_components(body)
     if len(pieces) <= 1:
         return len(pieces)
     sizes = [float(body.area_faces[piece].sum()) for piece in pieces]
     largest = max(sizes)
     small = [size for size in sizes if size < largest * SMALL_COMPONENT_SHARE]
-    findings.append(
-        Finding(
-            code="ingest.multiple_components",
-            severity="info",
-            message=_("Das Modell besteht aus mehreren Teilen."),
-            values={"components": len(pieces)},
+    crossing = parts_that_cross(body, pieces, cancelled) if closed else None
+    if crossing is not None:
+        findings.append(
+            Finding(
+                code="ingest.multiple_components",
+                severity="info",
+                # Gefunden ist ein Paar, nicht alle: Bei 69 Teilen des
+                # Bohrhalters stecken nicht alle 69 ineinander.
+                message=_("Das Modell besteht aus zwei Teilen, die ineinanderstecken.")
+                if len(pieces) == 2
+                else _(
+                    "Das Modell besteht aus {components} Teilen, von denen manche "
+                    "ineinanderstecken.",
+                    components=len(pieces),
+                ),
+                values={"components": len(pieces)},
+                location=crossing,
+                suggestions=(RESOLVE_INTERSECTIONS, SPLIT_BODIES)
+                if parts_can_be_merged(MeshData.of(body))
+                else (SPLIT_BODIES,),
+            )
         )
-    )
+    else:
+        findings.append(
+            Finding(
+                code="ingest.multiple_components",
+                severity="info",
+                message=_("Das Modell besteht aus mehreren Teilen."),
+                values={"components": len(pieces)},
+            )
+        )
     if small:
         findings.append(
             Finding(

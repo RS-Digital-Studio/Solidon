@@ -345,7 +345,7 @@ def test_repair_names_the_success_and_the_wide_hole(profile: Profile) -> None:
     wieder Reparieren.
 
     Der Ringfüller schließt jetzt beide. Der Bericht sagt damit zweierlei: wie
-    viele Kanten geschlossen wurden, und dass eine der Öffnungen groß genug
+    viele Löcher geschlossen wurden, und dass eine der Öffnungen groß genug
     war, um sie anzusehen — dort ist eine Fläche entstanden, die im Modell
     nicht war.
     """
@@ -363,11 +363,10 @@ def test_repair_names_the_success_and_the_wide_hole(profile: Profile) -> None:
     filled = next(finding for finding in result.findings if finding.code == "repair.holes_filled")
     wide = next(finding for finding in result.findings if finding.code == "repair.wide_hole_filled")
     after = open_edge_count(result.outputs[0].mesh)
-    assert filled.values == {"before": before, "after": after}
-    assert (
-        str(filled.message)
-        == f"{before - after} von {before} offenen Kanten geschlossen; {after} bleiben offen."
-    )
+    # Gezählt werden Stellen, nicht Randkanten: zwei Ringe, zwei Löcher. Die
+    # Kanten bleiben in den Werten für den Tooltip.
+    assert filled.values == {"holes": 2, "before": before, "after": after}
+    assert str(filled.message) == "2 Löcher wurden geschlossen."
     assert before > 0 and after == 0, "der Prüfling kommt geschlossen heraus"
     assert "repair.still_open" not in codes
     assert wide.severity == "warning" and wide.values["walls"] >= 1
@@ -385,10 +384,8 @@ def test_a_complete_hole_repair_counts_every_open_edge(profile: Profile) -> None
     )
 
     filled = next(finding for finding in result.findings if finding.code == "repair.holes_filled")
-    assert filled.values == {"before": before, "after": 0}
-    assert (
-        str(filled.message) == f"{before} von {before} offenen Kanten geschlossen; 0 bleiben offen."
-    )
+    assert filled.values == {"holes": 1, "before": before, "after": 0}
+    assert str(filled.message) == "Ein Loch wurde geschlossen."
     assert result.outputs[0].mesh.is_watertight
     assert "repair.still_open" not in [finding.code for finding in result.findings]
 

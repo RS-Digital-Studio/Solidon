@@ -211,6 +211,7 @@ from app.core.types import (
     FitKind,
     MaterialSlot,
     ObjectId,
+    Operation,
     Origin,
     Parameter,
     ParamSpec,
@@ -13647,6 +13648,45 @@ class MainWindow(QMainWindow):
         self.viewport.fly_to(shown, reach=1.4 * float(entry.mesh.bounds.diagonal))
         self.viewport.mark_finding(target, str(finding.message), entry.id)
 
+    def _show_layers_after_error(self, error: AppError) -> None:
+        """*Schichten ansehen*: den Körper des Befunds wählen und die Schichtansicht öffnen.
+
+        Eingeschlossene Luft steht im Querschnitt als Loch — die Antwort auf
+        „ob das Modell Lufteinschlüsse hat, ließ sich nicht sicher lesen".
+        """
+        if not self._quiet_command_allowed():
+            return
+        entry = self._entry_of(error)
+        if entry is None:
+            return
+        self.object_tree.select_object(entry.id)
+        if self.object_tree.selected() == entry.id:
+            self.tools.activate("layers")
+
+    def _show_error_place(self, error: AppError) -> None:
+        """*Stelle zeigen*: zum Ort des Befunds fliegen und ihn markieren.
+
+        Für eine Stelle, die keine Karte färbt — eine eben geschlossene große
+        Öffnung ist kein Netzfehler mehr. Derselbe Flug und dieselbe Marke wie
+        beim Klick auf die Zeile (:meth:`_show_finding_at`); der Knopf macht
+        sichtbar, was der Klick schon kann.
+        """
+        if not self._quiet_command_allowed():
+            return
+        entry = self._entry_of(error)
+        place = error.values.get("location")
+        if entry is None or not isinstance(place, (tuple, list)) or len(place) != 3:
+            return
+        self.object_tree.select_object(entry.id)
+        if self.object_tree.selected() != entry.id:
+            return
+        target = (float(place[0]), float(place[1]), float(place[2]))
+        self._finding_awaiting_map = None
+        self.viewport.clear_finding_mark()
+        shown = self.viewport.view_point_of(target, entry.id)
+        self.viewport.fly_to(shown, reach=1.4 * float(entry.mesh.bounds.diagonal))
+        self.viewport.mark_finding(target, str(error.title), entry.id)
+
     # --- der Agent (§26) --------------------------------------------------------
 
     def _on_request_sent(self, request: str) -> None:
@@ -19621,6 +19661,8 @@ class MainWindow(QMainWindow):
             "report_error": lambda error: self.report_error(error),
             "show_details": lambda error: show_details(error, self),
             "show_locations": self._show_error_location,
+            "show_location": self._show_error_place,
+            "show_layers": self._show_layers_after_error,
             "recognize_local": lambda error: self.local_features().from_report(error),
             "recognize_fully": lambda error: self._recognize_fully(error),
             # Die Rücknahme-Warnung des Agenten zeigt in den Verlauf — dort
@@ -19636,6 +19678,12 @@ class MainWindow(QMainWindow):
             "repair_and_retry": self._repair_after_error,
             "release_protection": self._release_protection_after_error,
             "remove_small_parts": self._remove_small_parts,
+            # Die drei Rückwege der Reparatur (Durchsicht 24.09.2026): den Schritt
+            # mit dem Haken neu rechnen, die große Öffnung offen lassen, der
+            # Fläche ohne Dicke eine Wand geben.
+            "resolve_intersections": self._resolve_intersections_after_error,
+            "leave_open": self._leave_open_after_error,
+            "give_thickness": self._give_thickness_after_error,
             "split_bodies": self._split_into_bodies_after_error,
             "split_model": self._split_after_error,
             "split_and_retry": self._split_and_retry_after_error,
@@ -20001,6 +20049,12 @@ class MainWindow(QMainWindow):
 
         Kein Bestätigungsdialog (Regel 19): Die Handlung ist eine Operation im
         Verlauf, und Strg+Z nimmt sie zurück.
+
+        **Und nur das.** Seit „Überschneidungen auflösen" in der Vorgabe an
+        steht (Entscheidung Robert, 24.09.2026), hätte derselbe Schritt
+        nebenbei ineinandersteckende Teile verschmolzen — ein Knopf, der mehr
+        tut, als er sagt. Steckt etwas ineinander, sagt es der Bericht danach
+        mit eigenem Knopf.
         """
         object_id = self._object_of(error)
         if object_id is None:
@@ -20011,10 +20065,68 @@ class MainWindow(QMainWindow):
                 OperationDraft(
                     op="repair",
                     inputs=(object_id,),
-                    params={"small_components": True},
+                    params={"small_components": True, "self_intersections": False},
                 )
             ],
         )
+
+    def _step_of(self, error: AppError) -> Operation | None:
+        """Der Schritt, den ein Befund nennt — oder keiner."""
+        if error.op_id is None:
+            return None
+        return next(
+            (step for step in self.session.project.document.ops if step.id == error.op_id), None
+        )
+
+    def _resolve_intersections_after_error(self, error: AppError) -> None:
+        """*Überschneidungen auflösen*: derselbe Reparaturschritt mit dem Haken.
+
+        Der Befund steht an einem Schritt, der mit „Überschneidungen auflösen:
+        aus" rechnet — ein alter aus der Zeit vor der Vorgabe (Migration
+        34 → 35) oder einer, an dem der Kunde den Haken genommen hat. Der Schritt
+        wird geändert und nicht ein zweiter angelegt (§15.4); Strg+Z nimmt es
+        zurück (Regel 19). Ohne Reparaturschritt entsteht ein neuer.
+        """
+        step = self._step_of(error)
+        if step is not None and step.op == "repair":
+            self.session.change_params(step.id, {**step.params, "self_intersections": True})
+            return
+        object_id = self._object_of(error)
+        if object_id is None:
+            return
+        self.session.apply(
+            REGISTRY.get("repair").title,
+            [OperationDraft(op="repair", inputs=(object_id,), params={"self_intersections": True})],
+        )
+
+    def _leave_open_after_error(self, error: AppError) -> None:
+        """*Offen lassen*: der Schritt, der die große Öffnung geschlossen hat, lässt sie offen.
+
+        Am Lade- wie am Reparaturschritt heißt der Schalter „Große Öffnungen
+        schließen" (``wide_holes``): Die kleinen Löcher gehen weiter zu, nur die
+        große bleibt, wie sie war (RM-241 — vorher schaltete der Knopf das
+        Schließen ganz ab, und Risse und Nähte blieben mit offen). Der Schritt
+        wird geändert, nicht ergänzt; Strg+Z nimmt es zurück.
+        """
+        step = self._step_of(error)
+        if step is None or step.op not in {"load", "repair"}:
+            return
+        self.session.change_params(step.id, {**step.params, "wide_holes": False})
+
+    def _give_thickness_after_error(self, error: AppError) -> None:
+        """*Dicke geben*: *Offene Fläche schließen* für die Fläche ohne Dicke.
+
+        Der Dialog geht auf, mit der Mindestwand des Materials vorbelegt — die
+        Stärke ist eine Entscheidung des Kunden, und der Dialog zeigt sie vorn
+        (Entscheidung Robert, 24.09.2026).
+        """
+        object_id = self._object_of(error)
+        if object_id is None:
+            return
+        given: dict[str, Any] = {}
+        with suppress(AppError):
+            given["thickness"] = float(self.session.profile.minimum_wall_thickness)
+        self.run_operation(REGISTRY.get("thicken"), given, on_bodies=(object_id,))
 
     def _split_into_bodies_after_error(self, error: AppError) -> None:
         """Ein Modell aus mehreren Teilen zerlegen — der Knopf am Befund, der es sagt.

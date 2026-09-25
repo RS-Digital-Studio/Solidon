@@ -3491,3 +3491,80 @@ def test_v33_migration_does_not_invent_a_recognition_choice(monkeypatch, profile
     assert result.complete and len(asked) == 1
     assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(8000)
     assert result.scene.objects["obj_1"].features
+
+
+def test_v34_repair_steps_on_both_undo_sides_keep_their_old_setting() -> None:
+    """34 → 35 erfasst auch die gespeicherten Fassungen eines Reparaturschritts.
+
+    Strg+Z legt eine Fassung aus ``changes.before``/``after`` zurück; ohne den
+    Schlüssel hätte sie danach still vereinigt (Review R22, 24.09.2026). Ein
+    fremder Schritt und ein Eintrag, der gar kein Verlaufsstand ist, bleiben,
+    wie sie sind.
+    """
+    from app.core.scene.migrations import _keep_repairs_as_they_were
+
+    data = {
+        "ops": [],
+        "transactions": [
+            {
+                "changes": {
+                    "before": {"edited_ops": {"3": {"op": "repair", "params": {}}}},
+                    "after": {
+                        "edited_ops": {
+                            "3": {"op": "repair", "params": {"fill_holes": False}},
+                            "4": {"op": "drill_hole", "params": {}},
+                        }
+                    },
+                    "note": {"edited_ops": {"5": {"op": "repair", "params": {}}}},
+                }
+            },
+            {"changes": ["kein Verlaufsstand"]},
+        ],
+    }
+
+    migrated = _keep_repairs_as_they_were(data)
+
+    changes = migrated["transactions"][0]["changes"]
+    assert changes["before"]["edited_ops"]["3"]["params"] == {"self_intersections": False}
+    assert changes["after"]["edited_ops"]["3"]["params"] == {
+        "fill_holes": False,
+        "self_intersections": False,
+    }
+    assert changes["after"]["edited_ops"]["4"]["params"] == {}
+    assert changes["note"]["edited_ops"]["5"]["params"] == {}
+
+
+def test_v34_repair_steps_keep_leaving_crossings_alone(profile) -> None:
+    """34 → 35: Ein alter Reparaturschritt vereinigt beim Öffnen nicht still.
+
+    Seit dem 24.09.2026 löst *Reparieren* Überschneidungen von sich aus auf
+    (Entscheidung Robert). Ein Schritt speichert nur, was von der Vorgabe
+    abweicht; ``repair_v34.p3d`` trägt deshalb einen Reparaturschritt ohne
+    den Schlüssel, so wie ihn „Reparieren und erneut versuchen" schrieb. Er
+    rechnet weiter, wie er rechnete — der Befund nennt die Überschneidung und
+    bietet das Auflösen an —, und ein neuer Schritt nimmt die neue Vorgabe.
+    """
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    path = Path(__file__).parent / "data" / "projects" / "repair_v34.p3d"
+    original = project_data(path)
+    assert original["format_version"] == 34
+    assert "self_intersections" not in original["ops"][-1]["params"], "sonst prüft er nichts"
+
+    project = load(path)
+    step = project.document.ops[-1]
+    assert (step.op, step.params) == ("repair", {"self_intersections": False})
+
+    before = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert before.complete
+    found = {finding.code: finding for finding in before.scene.report.findings}
+    assert "repair.self_intersections" not in found, "nichts still vereinigt"
+    detected = found["repair.self_intersections_detected"]
+    assert next(action.id for action in detected.suggestions) == "resolve_intersections"
+
+    History(project.document).apply(
+        _("Reparieren"), [OperationDraft(op="repair", inputs=("obj_1",))]
+    )
+    after = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert "repair.self_intersections" in {f.code for f in after.scene.report.findings}

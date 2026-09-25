@@ -21,8 +21,8 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS, GeometryError
-from app.core.geom.boolean import _signed_volume, boolean
-from app.core.geom.mesh import MeshData, as_mesh_data, face_components
+from app.core.geom.boolean import boolean
+from app.core.geom.mesh import MeshData, as_mesh_data, face_components, signed_volume
 from app.core.log import get_logger
 from app.core.types import (
     Finding,
@@ -634,7 +634,7 @@ def _without_contact_shells(mesh: MeshData) -> MeshData:
             * float(np.max(np.abs(part.vertices)))
             * float(part.area)
         )
-        if abs(_signed_volume(part)) > roundoff:
+        if abs(signed_volume(part)) > roundoff:
             kept.append(faces)
     if len(kept) == len(groups):
         return mesh

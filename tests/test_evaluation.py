@@ -3167,7 +3167,13 @@ def test_shells_the_recognition_could_not_read_become_a_warning(
     assert unreadable[0].values["shells"] == 2
     assert unreadable[0].object_id == "obj_1" and unreadable[0].op_id == 1
     gesagt = str(unreadable[0].message)
-    assert "Schalen" in gesagt and "Slicer" in gesagt, gesagt
+    assert "Lufteinschlüsse" in gesagt, gesagt
+    # Der Rat steckt im Knopf (Bedienweg A6): Wer einen Weg nennt, bietet ihn an.
+    assert "Slicer" not in gesagt and "Reparieren" not in gesagt, gesagt
+    assert [action.id for action in unreadable[0].suggestions] == [
+        "show_layers",
+        "show_locations",
+    ]
 
 
 def test_readable_shells_get_no_such_warning(monkeypatch: pytest.MonkeyPatch) -> None:

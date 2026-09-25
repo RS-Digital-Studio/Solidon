@@ -129,7 +129,7 @@ def test_a_weld_that_is_taken_back_keeps_its_answer(monkeypatch) -> None:
 
     result = normalise(MeshData.of(touching), "mm")
 
-    assert "ingest.weld_skipped" in [finding.code for finding in result.findings]
+    assert not result.info.welded, "das Verschweißen blieb aus"
     assert result.mesh.is_watertight
     assert len(calls) == 2, f"{len(calls)} Fragen nach der Dichtheit"
 

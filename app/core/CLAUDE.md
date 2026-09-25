@@ -132,7 +132,8 @@ seine Schritte in **eine** Transaktion, und was kein Schritt ist, reist als
 Bausteinschritte und die Passung dazwischen; ein Undo nimmt alles drei.
 
 **Und die Kennung eines erzeugten Merkmals wird gelesen, nicht vorausgesagt.**
-Sie entsteht bei der Auswertung (`evaluate._renamed`), nicht beim Anlegen des
+Sie entsteht bei der Auswertung (`evaluate._with_features` über
+`perceive.matching.apply_mapping`), nicht beim Anlegen des
 Schritts. Deshalb sind es dort zwei Aufrufe: `apply_counterpart` legt die
 Geometrie an, `attach_fit` liest die Namen aus der gerechneten Szene und hängt
 die Passung an dieselbe Transaktion.

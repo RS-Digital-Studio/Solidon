@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 34
+FORMAT_VERSION: Final = 35
 
 
 @dataclass(frozen=True, slots=True)
@@ -857,6 +857,36 @@ def _allow_large_recognition_answers(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _keep_repairs_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
+    """34 → 35: Gespeicherte Reparaturschritte lösen Überschneidungen nicht auf.
+
+    Seit dem 24.09.2026 löst *Reparieren* Überschneidungen von sich aus auf
+    (Entscheidung Robert). Ein Schritt speichert nur, was von der Vorgabe
+    abweicht — auch der aus „Reparieren und erneut versuchen" trägt leere
+    Parameter —, und ein alter Schritt ohne den Schlüssel hätte beim Öffnen
+    still vereinigt, was er vorher nur gemeldet hat. Er bekommt deshalb den
+    Wert, mit dem er damals rechnete; der Befund daran bietet das Auflösen an.
+    Auch sämtliche gespeicherten Änderungsseiten werden erfasst — nur die zwei
+    Seiten ``before`` und ``after``; was ``changes`` sonst trägt, ist kein
+    Verlaufsstand.
+    """
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        changes = transaction.get("changes")
+        if not isinstance(changes, dict):
+            continue
+        for side in ("before", "after"):
+            state = changes.get(side)
+            if isinstance(state, dict) and isinstance(state.get("edited_ops"), dict):
+                operations.extend(state["edited_ops"].values())
+    for operation in operations:
+        if isinstance(operation, dict) and operation.get("op") == "repair":
+            params = operation.setdefault("params", {})
+            if isinstance(params, dict):
+                params.setdefault("self_intersections", False)
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -892,6 +922,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=31, to_version=32, apply=_allow_suppressed_steps),
     Step(from_version=32, to_version=33, apply=_read_step_assemblies),
     Step(from_version=33, to_version=34, apply=_allow_large_recognition_answers),
+    Step(from_version=34, to_version=35, apply=_keep_repairs_as_they_were),
 )
 
 

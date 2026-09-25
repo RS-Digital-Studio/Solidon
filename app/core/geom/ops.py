@@ -639,10 +639,46 @@ def mirror_object(ctx: OpContext) -> OpResult:
 
 @op_params
 class RepairParams(BaseParams):
+    """Was *Reparieren* tut.
+
+    **Vorn steht, was nach dem Einlesen noch etwas ändert** (Durchsicht
+    24.09.2026). Verschweißen, leere Dreiecke und Außenseiten erledigt schon
+    der Import; vorn stand allein das Lochfüllen, das er ebenfalls fährt, und
+    die zwei Schalter, die danach noch wirken, lagen hinter der Klappe.
+    """
+
     fill_holes: bool = param(
         title=_("Offene Stellen schließen"),
         default=True,
-        doc=_("Schließt kleine Löcher. Fehlende Wände kann das nicht ersetzen."),
+        doc=_("Schließt Löcher. Große Öffnungen nennt der Prüfbericht."),
+    )
+    #: Der Rückweg *Offen lassen* an einer großen Öffnung (RM-241): Die kleinen
+    #: Löcher gehen weiter zu, nur die große bleibt, wie sie war. Vorgabe an —
+    #: ein älterer Schritt ohne den Wert schließt, wie er immer geschlossen hat.
+    wide_holes: bool = param(
+        title=_("Große Öffnungen schließen"),
+        default=True,
+        placement="advanced",
+        depends_on=("fill_holes", (True,)),
+        doc=_("Aus lässt Öffnungen offen, die eine neue große Fläche bräuchten."),
+    )
+    #: **Vorgabe an** (Entscheidung Robert, 24.09.2026). Die Suche läuft beim
+    #: Reparieren ohnehin; aufgelöst wird nur, was die Nachprüfung als
+    #: schnittfrei belegt, sonst bleibt das Teil unverändert. Ältere Schritte
+    #: ohne diesen Wert behalten über die Migration 34 → 35 „aus".
+    self_intersections: bool = param(
+        title=_("Überschneidungen auflösen"),
+        default=True,
+        doc=_(
+            "Verschmilzt Teile, die ineinanderstecken. Was nicht sicher geht, bleibt unverändert."
+        ),
+    )
+    small_components: bool = param(
+        title=_("Kleinstteile entfernen"),
+        default=False,
+        # Offene Splitter gehen beim Löcherschließen ohnehin; der Haken nimmt
+        # auch geschlossene Kleinstteile (Review R18).
+        doc=_("Entfernt auch geschlossene Teile, die viel kleiner sind als das Hauptteil."),
     )
     weld: bool = param(
         title=_("Punkte verschweißen"),
@@ -654,7 +690,7 @@ class RepairParams(BaseParams):
         ),
     )
     degenerate: bool = param(
-        title=_("Entartete Dreiecke entfernen"),
+        title=_("Leere Dreiecke entfernen"),
         default=True,
         placement="advanced",
         doc=_("Dreiecke ohne Fläche. Sie stören jede spätere Rechnung und tragen nichts."),
@@ -665,25 +701,11 @@ class RepairParams(BaseParams):
         placement="advanced",
         doc=_("Richtet aus, wo außen ist. Ohne das erscheinen Flächen dunkel oder verschwinden."),
     )
-    small_components: bool = param(
-        title=_("Kleinstteile löschen"),
-        default=False,
-        placement="advanced",
-        doc=_("Standardmäßig aus: gelöscht wird nur, was ausdrücklich gelöscht werden soll."),
-    )
-    self_intersections: bool = param(
-        title=_("Selbstdurchdringungen auflösen"),
-        default=False,
-        placement="advanced",
-        doc=_(
-            "Rechnet Flächen neu, die sich gegenseitig durchdringen. Hilft bei "
-            "erzeugten Netzen und kostet Genauigkeit — deshalb aus, bis es gebraucht wird."
-        ),
-    )
 
 
 @register_op(
     name="repair",
+    cache_version="3",
     title=_("Reparieren"),
     category="repair",
     params=RepairParams,
@@ -696,7 +718,10 @@ class RepairParams(BaseParams):
     # den häufigsten Defekt fehlte der kürzeste Weg vom Sehen zum Tun (§2.6).
     applies_to=("edge_loop",),
     shortcut="Ctrl+Shift+R",
-    doc=_("Schließt Löcher, entfernt entartete Dreiecke und richtet die Flächen aus."),
+    doc=_(
+        "Schließt Löcher, entfernt fehlerhafte Dreiecke, gleicht die Außenseiten an und "
+        "löst Überschneidungen auf."
+    ),
 )
 def repair_object(ctx: OpContext) -> OpResult:
     params = cast(RepairParams, ctx.params)
@@ -707,8 +732,12 @@ def repair_object(ctx: OpContext) -> OpResult:
         degenerate=params.degenerate,
         normals=params.normals,
         holes=params.fill_holes,
+        wide_holes=params.wide_holes,
         small_components=params.small_components,
         self_intersections=params.self_intersections,
+        inspect_intersections=True,
+        cancelled=ctx.cancelled,
+        progress=ctx.progress,
     )
     findings = list(result.findings)
     if not result.changed and not findings:
@@ -737,8 +766,13 @@ def repair_object(ctx: OpContext) -> OpResult:
     # Geändert hat die Reparatur nur, was sie geändert hat; der Eingang
     # behält Kern und Merkmale.
     return OpResult(
-        outputs=[source if not result.changed else dataclasses.replace(source, mesh=result.mesh)],
+        outputs=[
+            source
+            if not result.changed
+            else dataclasses.replace(source, mesh=result.mesh, features={})
+        ],
         findings=findings,
+        solver=result.solver,
     )
 
 

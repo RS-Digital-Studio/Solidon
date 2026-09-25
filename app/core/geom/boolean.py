@@ -30,7 +30,7 @@ import numpy as np
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, BooleanFailedError
 from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
-from app.core.geom.mesh import MeshData, enclosed_volume
+from app.core.geom.mesh import MeshData, enclosed_volume, signed_volume
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
 from app.core.log import get_logger
 from app.core.types import (
@@ -366,7 +366,7 @@ def _kernel(kind: BooleanKind, bodies: list[trimesh.Trimesh], like: MeshData) ->
     import manifold3d
 
     if not all(
-        body.is_watertight and body.is_winding_consistent and _signed_volume(body) > 0.0
+        body.is_watertight and body.is_winding_consistent and signed_volume(body) > 0.0
         for body in bodies
     ):
         raise ValueError("Not all meshes are positive closed volumes")
@@ -612,22 +612,7 @@ def shared_volume(first: trimesh.Trimesh, second: trimesh.Trimesh) -> float:
         return 0.0
     if shared is None or shared.triangle_count == 0:
         return 0.0
-    return _signed_volume(shared.raw)
-
-
-def _signed_volume(body: trimesh.Trimesh) -> float:
-    """Volumenintegral ohne Schwerpunktdivision, nahe am Körper ausgewertet."""
-    triangles = np.asarray(body.triangles, dtype=np.float64)
-    if not len(triangles):
-        return 0.0
-    local = triangles - triangles[0, 0]
-    # Das Spatprodukt elementweise, nicht über ``np.einsum`` — das nutzt auf
-    # ARM FMA, und am Vorzeichen dieser Summe hängt, ob ein Ergebnis gilt.
-    first, crossed = local[:, 0], np.cross(local[:, 1], local[:, 2])
-    products = (
-        first[:, 0] * crossed[:, 0] + first[:, 1] * crossed[:, 1] + first[:, 2] * crossed[:, 2]
-    )
-    return math.fsum(products.tolist()) / 6.0
+    return signed_volume(shared.raw)
 
 
 def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
@@ -655,7 +640,7 @@ def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
     # Kontaktreste entfernt bereits ``_native_contact`` anhand der nativen
     # Rechengrenze; ein echter kleiner Schnitt muss als Messwert erhalten
     # bleiben. Ob er für eine Passung oder Restwand zählt, prüft der Aufrufer.
-    return bool(mesh.raw.is_watertight) and _signed_volume(mesh.raw) > 0.0
+    return bool(mesh.raw.is_watertight) and signed_volume(mesh.raw) > 0.0
 
 
 def _findings_for(stage: SolverStage) -> list[Finding]:

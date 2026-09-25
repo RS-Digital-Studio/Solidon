@@ -429,7 +429,7 @@ def test_the_defect_map_finds_the_open_edges() -> None:
     analysis = maps.defect_map(broken)
 
     assert analysis.highlighted, "the missing wall leaves open edges behind"
-    assert analysis.categories[1] == "offene Kante"
+    assert analysis.categories[1] == "Loch"
 
 
 def test_a_clean_body_has_a_clean_map() -> None:
@@ -438,6 +438,52 @@ def test_a_clean_body_has_a_clean_map() -> None:
 
     assert analysis.highlighted == ()
     assert set(analysis.values) == {0.0}
+    # Einfarbig allein sagte nichts; die Leiste nennt das Ergebnis.
+    assert str(analysis.note) == "Keine Netzfehler gefunden."
+
+
+def test_an_incomplete_defect_search_does_not_clear_unchecked_faces(monkeypatch) -> None:
+    """Eine begrenzte Suche ist keine Entwarnung für die restliche Oberfläche."""
+    monkeypatch.setattr(maps, "DEFECT_MAP_PAIRS", 0)
+    analysis = maps.defect_map(cube())
+
+    assert analysis.unknown_count == len(analysis.values)
+    assert analysis.highlighted == ()
+    assert analysis.note and analysis.unknown_note
+
+
+def test_an_incomplete_defect_search_keeps_proven_boundary_errors(monkeypatch) -> None:
+    """Ungeprüfte Durchdringungen verdecken keine belegten offenen Kanten."""
+    monkeypatch.setattr(maps, "DEFECT_MAP_PAIRS", 0)
+    body = trimesh.creation.box()
+    body.update_faces(np.arange(len(body.faces)) != 0)
+    analysis = maps.defect_map(MeshData.of(body))
+
+    assert analysis.highlighted
+    assert all(analysis.values[index] >= 1.0 for index in analysis.highlighted)
+    assert analysis.unknown_count > 0
+    assert analysis.note
+
+
+def test_a_partly_searched_defect_map_knows_what_it_checked(monkeypatch) -> None:
+    """Unbekannt ist, was die Suche nicht erreicht hat — nicht alles.
+
+    Bis zur Durchsicht färbte eine vorzeitig beendete Suche jede fehlerfreie
+    Fläche grau, auch die schon geprüften (Befund B3 der Durchsicht
+    24.09.2026). Eine Kugel aus 1 280 Dreiecken, mit einem Budget für einen
+    Teil ihrer Paare: ein Teil geprüft, ein Teil unbekannt.
+    """
+    import math
+
+    sphere = trimesh.creation.icosphere(subdivisions=3, radius=10.0)
+    monkeypatch.setattr(maps, "DEFECT_MAP_PAIRS", 2000)
+
+    analysis = maps.defect_map(MeshData.of(sphere))
+
+    checked = sum(1 for value in analysis.values if not math.isnan(value))
+    assert 0 < analysis.unknown_count < len(analysis.values)
+    assert checked > 0, "was geprüft ist, steht als geprüft da"
+    assert analysis.note
 
 
 def test_the_defect_map_marks_where_the_body_runs_through_itself() -> None:
@@ -461,7 +507,7 @@ def test_the_defect_map_marks_where_the_body_runs_through_itself() -> None:
     assert durchdrungen, "die zwei Quader laufen durcheinander, und die Karte schweigt"
     assert set(durchdrungen) <= set(analysis.highlighted), "die Stellen sind nicht auffindbar"
     # Regel 18: Die Bedeutung steht als Wort daneben, nicht nur als Farbe.
-    assert analysis.categories[3] == "Durchdringung"
+    assert analysis.categories[3] == "Überschneidung"
 
 
 def test_a_clean_body_is_not_called_self_intersecting() -> None:
@@ -1231,3 +1277,22 @@ def test_the_support_map_marks_the_same_triangles_as_a_triangle_by_triangle_sear
     assert set(zu_fuss) == set(schichtweise.tolist()), (
         f"schichtweise markiert {len(schichtweise)} Dreiecke, Dreieck für Dreieck {len(zu_fuss)}"
     )
+
+
+def test_the_defect_map_shows_where_outsides_face_each_other() -> None:
+    """„An 3 Kanten zeigen die Außenseiten gegeneinander" führt zu Stellen im Bild.
+
+    Der Befund trug *Stellen zeigen*, und die Karte kannte diese Kanten nicht
+    (Durchsicht 24.09.2026). Ein Würfel mit einem umgedrehten Dreieck: das
+    Dreieck und seine drei Nachbarn tragen die vierte Stufe.
+    """
+    body = trimesh.creation.box()
+    faces = np.asarray(body.faces).copy()
+    faces[0] = faces[0][::-1]
+    turned = MeshData.of(trimesh.Trimesh(vertices=body.vertices, faces=faces, process=False))
+
+    analysis = maps.defect_map(turned)
+
+    marked = {index for index, value in enumerate(analysis.values) if value == 4.0}
+    assert 0 in marked and len(marked) == 4
+    assert str(analysis.categories[4]) == "Außenseiten gegeneinander"

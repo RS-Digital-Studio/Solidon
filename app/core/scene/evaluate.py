@@ -36,6 +36,8 @@ from app.core.errors import (
     REACTIVATE_STEP,
     SHOW_DETAILS,
     SHOW_HISTORY,
+    SHOW_LAYERS,
+    SHOW_LOCATIONS,
     SHOW_STEP_VALUES,
     SUPPRESS_STEP,
     AmbiguityError,
@@ -1173,7 +1175,7 @@ def _evaluate(
     # Erst heilen, dann entdoppeln: Was ein späterer Schritt aufgehoben hat,
     # soll gar nicht erst in den Vergleich — sonst überlebte von zwei
     # geheilten Befunden der letzte die Streichung nicht und der erste doch.
-    settled = _without_repeats(_without_settled(findings))
+    settled = _without_repeats(_without_outdated(_without_settled(findings), scene))
     if len(settled) != len(findings):
         scene = dataclasses.replace(scene, report=Report(tuple(settled)))
     token.raise_if_cancelled()
@@ -1247,7 +1249,57 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
     # Analysekarten melden ihre Ablehnung beim Klick selbst, und ein halb
     # erledigter Rat kostet mehr Vertrauen, als er nützt.
     "ingest.very_large": frozenset({"mesh.deviation"}),
+    # **Überschneidungen: Der spätere Satz beschreibt den Zustand** (Befund B6
+    # der Durchsicht 24.09.2026). Ein Reparieren mit Auflösung sagt, ob es
+    # gelang, ob es scheiterte oder warum es nicht ging — daneben stand der
+    # frühere Fund weiter, und zwei Aussagen über dieselben Stellen widersprachen
+    # sich. Vollständig geprüft heißt die Auflösung auch: nichts mehr offen.
+    "repair.self_intersections_detected": frozenset(
+        {
+            "repair.self_intersections",
+            "repair.self_intersections_unresolved",
+            "repair.self_intersections_skipped",
+            "repair.self_crossing",
+        }
+    ),
+    "repair.self_intersections_incomplete": frozenset({"repair.self_intersections"}),
 }
+
+#: Befunde, die einen **Zustand** des Körpers aussagen — offen, verzweigt,
+#: ohne Dicke — und am Endstand nicht mehr stimmen, wenn der Körper dort
+#: geschlossen ist. Sie werden am fertigen Körper gefragt, nicht über einen
+#: Heiler (:func:`_without_outdated`): Was den Körper schließt, kann jede
+#: Operation sein — *Kleine Teile entfernen*, *Offene Fläche schließen*, eine
+#: Vereinigung —, und eine Tabelle der Heiler wüsste beim nächsten Weg nichts
+#: davon (Befund B6 der Durchsicht 24.09.2026: „Eine offene Stelle ließ sich
+#: nicht sicher schließen" stand als Warnung über einem Körper, den der
+#: nächste Schritt geschlossen hatte).
+CLOSED_STATE_CODES: Final = frozenset(
+    {
+        "ingest.not_watertight",
+        "repair.still_open",
+        "repair.still_branching",
+        "repair.no_thickness",
+        "repair.wide_hole_kept",
+        "mesh.not_watertight",
+    }
+)
+
+#: Und die, die „mehr als ein Teil" aussagen — am Endstand gestrichen, wenn
+#: der Körper dort aus einem Stück besteht. Ein Teil im Teil gehört dazu:
+#: Ohne zweite Schale gibt es keines.
+ONE_PIECE_CODES: Final = frozenset(
+    {
+        "ingest.multiple_components",
+        "ingest.small_components",
+        "mesh.components_split",
+        "repair.part_inside",
+    }
+)
+
+#: Und „an N Kanten zeigen die Außenseiten gegeneinander" — gestrichen, wenn der
+#: Körper am Endstand einheitlich gewickelt ist (Review R19, 24.09.2026).
+WOUND_STATE_CODES: Final = frozenset({"repair.normals_inconsistent"})
 
 
 def _conversion_findings(
@@ -1409,6 +1461,60 @@ def _without_settled(findings: Sequence[Finding]) -> list[Finding]:
             for other in findings
         ):
             continue
+        kept.append(entry)
+    return kept
+
+
+def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding]:
+    """Streicht Zustandsbefunde, die am fertigen Körper nicht mehr stimmen.
+
+    „Das Modell ist nicht geschlossen" steht im Präsens; ist der Körper am
+    Endstand geschlossen, ist der Satz falsch, gleich welcher Schritt dazwischen
+    geschlossen hat (:data:`CLOSED_STATE_CODES`). Ebenso „besteht aus
+    mehreren Teilen" an einem Körper, der am Ende ein Stück ist
+    (:data:`ONE_PIECE_CODES`), und gegeneinander zeigende Außenseiten an einem
+    einheitlich gewickelten (:data:`WOUND_STATE_CODES`). Ein Befund ohne Körper
+    oder an einem Körper, den es am Ende nicht mehr gibt, bleibt — über ihn
+    weiß der Endstand nichts.
+    """
+    if not any(
+        entry.code in CLOSED_STATE_CODES
+        or entry.code in ONE_PIECE_CODES
+        or entry.code in WOUND_STATE_CODES
+        for entry in findings
+    ):
+        return list(findings)
+    closed: dict[ObjectId, bool] = {}
+    whole: dict[ObjectId, bool] = {}
+    wound: dict[ObjectId, bool] = {}
+
+    def body_of(entry: Finding) -> SceneObject | None:
+        if entry.object_id is None:
+            return None
+        found = scene.objects.get(entry.object_id)
+        return found if found is not None and found.mesh is not None else None
+
+    kept: list[Finding] = []
+    for entry in findings:
+        body = body_of(entry)
+        # Gefragt wird, was der Körper von sich weiß; wer es nicht weiß (ein
+        # Körper ohne diese Auskunft), behält seinen Befund.
+        if body is not None and entry.code in CLOSED_STATE_CODES:
+            if body.id not in closed:
+                closed[body.id] = getattr(body.mesh, "is_watertight", False) is True
+            if closed[body.id]:
+                continue
+        if body is not None and entry.code in ONE_PIECE_CODES:
+            if body.id not in whole:
+                whole[body.id] = getattr(body.mesh, "component_count", 0) == 1
+            if whole[body.id]:
+                continue
+        if body is not None and entry.code in WOUND_STATE_CODES:
+            if body.id not in wound:
+                raw = getattr(body.mesh, "raw", None)
+                wound[body.id] = getattr(raw, "is_winding_consistent", False) is True
+            if wound[body.id]:
+                continue
         kept.append(entry)
     return kept
 
@@ -3131,14 +3237,16 @@ def _with_features(
             Finding(
                 code="perceive.voids_unreadable",
                 severity="warning",
-                message=_(
-                    "Dieses Modell besteht aus mehreren Schalen, und ob eine davon ein "
-                    "Lufteinschluss ist, ließ sich nicht sicher lesen. Reparieren Sie das "
-                    "Netz, oder prüfen Sie es im Slicer auf eingeschlossene Luft."
-                ),
+                # **Der Rat steckt im Knopf, nicht im Satz** (Bedienweg A6,
+                # 24.09.2026): „Reparieren Sie das Netz, oder prüfen Sie es im
+                # Slicer" nannte zwei Wege ohne Knopf, und nach dem Reparieren
+                # stand derselbe Satz da. Eingeschlossene Luft zeigt der
+                # Querschnitt als Loch — das ist die Frage, die offen blieb.
+                message=_("Ob das Modell Lufteinschlüsse hat, ließ sich nicht sicher lesen."),
                 object_id=entry.id,
                 op_id=operation.id,
                 values={"shells": unreadable},
+                suggestions=(SHOW_LAYERS, SHOW_LOCATIONS),
             )
         )
 
@@ -3547,7 +3655,14 @@ def _with_features(
     # Verlust **mit** Verweis ist oben schon als eigener Befund gemeldet und
     # wird hier nie mitgezählt.
     for defect, gone in quiet.items():
-        if not gone:
+        # **Nach dem Reparieren schweigt der Verlust ohne Verweis** (Bedienweg
+        # C5, 24.09.2026). Die Reparatur ändert das Netz mit Absicht, und was
+        # dabei seinen Namen verliert, hat an einem heruntergeladenen Modell
+        # niemand benannt: „Formdetails sind nicht mehr wiederzuerkennen"
+        # klang dort, als sei etwas kaputtgegangen, und die geschlossenen
+        # Stellen sagt ``repair.holes_filled`` schon. Ein Verlust **mit**
+        # Verweis ist oben gemeldet und bleibt es.
+        if not gone or operation.op == "repair":
             continue
         several = len(gone) > 1
         said: dict[str, Any] = {"feature": ", ".join(gone)}

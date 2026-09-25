@@ -62,6 +62,47 @@ from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
 
 
+def test_the_repair_buttons_ask_for_exactly_what_they_say() -> None:
+    """Die Knöpfe der Reparaturbefunde, ohne Fenster: je Knopf genau sein Schalter.
+
+    *Kleine Teile entfernen* verschmilzt nichts, seit „Überschneidungen
+    auflösen" in der Vorgabe an steht; *Überschneidungen auflösen* ändert einen
+    vorhandenen Reparaturschritt statt einen zweiten anzulegen (§15.4), und
+    ohne ihn legt es einen an (Durchsicht 24.09.2026).
+    """
+    from types import SimpleNamespace
+
+    from app.core.bootstrap import load_operations
+    from app.core.types import Operation
+
+    load_operations()
+    applied: list[tuple[OperationDraft, ...]] = []
+    changed: list[tuple[int, dict[str, object]]] = []
+    step: list[Operation | None] = [None]
+    view = SimpleNamespace(
+        _object_of=lambda _error: "obj_1",
+        _step_of=lambda _error: step[0],
+        session=SimpleNamespace(
+            apply=lambda _title, drafts: applied.append(tuple(drafts)),
+            change_params=lambda op_id, params: changed.append((op_id, dict(params))),
+        ),
+    )
+
+    MainWindow._remove_small_parts(view, object())
+    assert applied[-1][0].params == {"small_components": True, "self_intersections": False}
+
+    MainWindow._resolve_intersections_after_error(view, object())
+    assert applied[-1][0].op == "repair"
+    assert applied[-1][0].params == {"self_intersections": True}
+
+    step[0] = Operation(
+        id=2, op="repair", inputs=("obj_1",), outputs=("obj_1",), params={"fill_holes": True}
+    )
+    MainWindow._resolve_intersections_after_error(view, object())
+    assert changed == [(2, {"fill_holes": True, "self_intersections": True})]
+    assert len(applied) == 2, "kein zweiter Reparaturschritt"
+
+
 def _accept_after_preview(window: MainWindow, dialog: OperationDialog) -> None:
     """Übernehmen, sobald die Vorschau dargestellt ist — so wie der Kunde.
 
@@ -5074,6 +5115,76 @@ def test_the_small_parts_button_removes_them_and_not_merely_runs(window: MainWin
     )
 
 
+def test_leaving_the_wide_opening_open_changes_the_load_step(window: MainWindow) -> None:
+    """*Offen lassen* nimmt dem Ladeschritt das Schließen der großen Öffnungen.
+
+    Der Knopf entstand mit der Durchsicht vom 24.09.2026 (Entscheidung
+    Robert); seit RM-241 schaltet er nur „Große Öffnungen schließen" ab, die
+    kleinen Löcher gehen weiter zu. Gezählt wird die Wirkung — der Körper ist
+    wieder offen — und dass kein zweiter Schritt entsteht.
+    """
+    from app.ui.panels import actions_for, as_error
+
+    window.open_path(MESHES / "broken_open.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    wide = next(f for f in result.scene.report.findings if f.code == "repair.wide_hole_filled")
+    handlers = window.error_handlers()
+    assert [action.id for action in actions_for(wide) if action.id in handlers] == [
+        "show_location",
+        "leave_open",
+    ]
+    steps = len(window.session.project.document.ops)
+
+    handlers["leave_open"](as_error(wide, window.session.project.document))
+    window.session.wait_for_idle()
+
+    document = window.session.project.document
+    assert len(document.ops) == steps, "geändert, nicht ergänzt"
+    load = next(step for step in document.ops if step.op == "load")
+    assert load.params["wide_holes"] is False
+    assert load.params.get("mend", True) is True, "die kleinen Löcher gehen weiter zu"
+    opened = window.session.evaluate_now()
+    body = next(iter(opened.scene.objects.values()))
+    assert body.mesh is not None and not body.mesh.is_watertight
+    assert "give_thickness" in handlers, "der dritte Rückweg hat seinen Draht"
+
+
+def test_resolving_intersections_changes_the_repair_step(window: MainWindow) -> None:
+    """*Überschneidungen auflösen* rechnet denselben Reparaturschritt mit dem Haken.
+
+    Der Befund steht an einem Schritt, der „aus" trägt — ein alter oder einer,
+    an dem der Kunde den Haken genommen hat (Durchsicht 24.09.2026).
+    """
+    from app.ui.panels import actions_for, as_error
+
+    window.open_path(MESHES / "broken_selfint.stl")
+    window.session.wait_for_idle()
+    first = next(iter(window.session.evaluate_now().scene.objects))
+    handlers = window.error_handlers()
+    window.session.apply(
+        "Reparieren",
+        [OperationDraft(op="repair", inputs=(first,), params={"self_intersections": False})],
+    )
+    window.session.wait_for_idle()
+    crossing = window.session.evaluate_now()
+    detected = next(
+        f for f in crossing.scene.report.findings if f.code == "repair.self_intersections_detected"
+    )
+    assert "resolve_intersections" in [action.id for action in actions_for(detected)]
+    steps = len(window.session.project.document.ops)
+
+    handlers["resolve_intersections"](as_error(detected, window.session.project.document))
+    window.session.wait_for_idle()
+
+    document = window.session.project.document
+    assert len(document.ops) == steps
+    assert document.ops[-1].params["self_intersections"] is True
+    resolved = window.session.evaluate_now()
+    assert "repair.self_intersections" in {f.code for f in resolved.scene.report.findings}
+
+
 def test_a_chosen_finding_survives_a_second_report(window: MainWindow) -> None:
     """Eine Wahl des Kunden überschreibt die Vorauswahl nicht (§2.4).
 
@@ -7871,6 +7982,26 @@ def test_repair_remainders_show_locations_only_for_a_known_body() -> None:
         unlocated = Finding(code=code, severity="warning", message="x")
         assert [action.id for action in actions_for(located)] == ["show_locations"]
         assert actions_for(unlocated) == ()
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "repair.self_intersections_detected",
+        "repair.self_intersections_unresolved",
+        "repair.self_intersections_incomplete",
+    ],
+)
+def test_intersection_repair_advice_never_targets_an_unrelated_selection(code: str) -> None:
+    """Auch mit ausdrücklichem Vorschlag bleibt der Befund an seinen Körper gebunden."""
+    from app.core.errors import SHOW_LOCATIONS
+    from app.core.types import Finding
+    from app.ui.panels import actions_for
+
+    finding = Finding(code, "warning", "x", suggestions=(SHOW_LOCATIONS,))
+    assert actions_for(finding) == ()
+    located = dataclasses.replace(finding, object_id="obj_1")
+    assert actions_for(located) == (SHOW_LOCATIONS,)
 
 
 def test_an_attempted_repair_is_not_offered_twice_regardless_of_its_finding() -> None:

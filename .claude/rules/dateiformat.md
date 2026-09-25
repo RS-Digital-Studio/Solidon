@@ -175,6 +175,47 @@ Drei Sätze dazu:
   hier dieselben Befunde — und wer das Ergebnis nicht will, nimmt den
   Ladeschritt mit Strg+Z zurück.
 
+Und diese Grenzen, entschieden von Robert am 24.09.2026 und nach seiner
+Vorgabe vom 25.09.2026 („das Beste für den Kunden, den Druck und das Modell“):
+
+* **Eine große Öffnung wird geschlossen, aber mit Ort und Rückweg.**
+  `repair.wide_hole_filled` trägt die Stelle der größten Öffnung, *Stelle
+  zeigen* und *Offen lassen*. **Offen lassen gilt der großen Öffnung, nicht
+  jedem Loch** (RM-241, Entscheidung nach Roberts Vorgabe vom 25.09.2026:
+  das Beste für Kunde, Druck und Modell): Es setzt am Ladeschritt
+  `wide_holes=False` (*Große Öffnungen schließen*), die kleinen Löcher,
+  Nähte und überzähligen Flächen gehen weiter zu, und der Bericht sagt
+  `repair.wide_hole_kept` mit *Dicke geben* — eine offene Fläche druckt erst
+  mit einer Wand. Vorher schaltete der Knopf `mend` ganz ab. Der Schalter
+  gilt jedem Körper der Datei; eine Baugruppe mit mehreren großen Öffnungen
+  ist selten, und ein Schalter je Körper wäre im Dialog eine Liste. Ein Ort
+  wandert beim Aufsetzen mit dem Körper.
+* **Lose offene Splitter gehen beim Schließen, mit Satz** (RM-241, dieselbe
+  Entscheidung): Ein offenes Stück unter `SMALL_COMPONENT_SHARE` des größten
+  Teils umschließt nichts, druckt nicht und ließ jede Boolesche Operation
+  daran scheitern. `repair.splinters_removed` nennt es; *Offene Stellen
+  schließen* aus lässt es stehen. Geschlossene Kleinstteile werden weiter nur
+  gemeldet (`ingest.small_components`) — §17.1 Schritt 5 trägt den Zusatz.
+* **Stecken Teile ineinander, sagt es der Satz** (Bedienweg A5):
+  `ingest.multiple_components` fragt am geschlossenen Netz, ob zwei Teile
+  einander quer durchdringen (`repair.parts_that_cross`: nur Paare zweier
+  Teile im Überlapp ihrer Hüllquader, frühes Ende, eigenes Budget) — dann
+  „… die ineinanderstecken" mit *Überschneidungen auflösen* vor *In
+  Einzelteile zerlegen*. Berührung an einer Fläche und Spiel wie bei einem
+  Kettenglied zählen nicht. Am Korpus `F:\3D Dateien`: 16 von 56
+  mehrteiligen Körpern, 3,9 s für alle 485 Körper.
+* **Was stehen bleibt, ist keine Zeile** (Bedienweg A4): Ein Verschweißen oder
+  Entfernen leerer Dreiecke, das zurückgenommen wurde, weil es das Netz
+  aufgerissen hätte, geht ins Protokoll, nicht in den Bericht — geschehen ist
+  nichts, und der Kunde kann nichts tun (am Korpus 41 und 23 von 485 Körpern).
+* **Eine Fläche ohne Dicke bleibt offen.** Ihren Rand zu schließen legte eine
+  zweite Fläche deckungsgleich auf die erste; der Bericht sagt
+  `repair.no_thickness` mit *Dicke geben*.
+* **Was sich nicht entscheiden lässt, wird gemeldet, nicht gerichtet.** Eine
+  Schale, die ganz in einer anderen liegt und nach außen zeigt, ist ein
+  verkehrter Hohlraum oder ein doppeltes Teil (`repair.part_inside`, mit Ort);
+  Import und Reparatur sagen es mit demselben Befund.
+
 Die Eingangsstufe ist die Op `load`, damit ihre Parameter im Stack sichtbar
 und änderbar bleiben.
 
