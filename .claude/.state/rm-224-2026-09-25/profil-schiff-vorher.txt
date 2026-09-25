@@ -1,0 +1,86 @@
+         12376 function calls (12310 primitive calls) in 9.165 seconds
+
+   Ordered by: cumulative time
+   List reduced from 444 to 45 due to restriction <45>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.001    0.001    9.165    9.165 F:\3D Druck\app\core\ingest\loader.py:894(normalise)
+        1    0.001    0.001    5.778    5.778 F:\3D Druck\app\core\geom\repair.py:3019(repair)
+    67/42    0.001    0.000    3.055    0.073 F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:115(get_cached)
+       13    0.033    0.003    2.280    0.175 F:\3D Druck\.venv\Lib\site-packages\numpy\lib\_arraysetops_impl.py:145(unique)
+       13    0.576    0.044    2.247    0.173 F:\3D Druck\.venv\Lib\site-packages\numpy\lib\_arraysetops_impl.py:350(_unique1d)
+       21    2.230    0.106    2.230    0.106 {method 'argsort' of 'numpy.ndarray' objects}
+        1    0.003    0.003    2.017    2.017 F:\3D Druck\app\core\geom\repair.py:2452(_filled_rounds)
+        2    0.045    0.022    2.013    1.006 F:\3D Druck\app\core\geom\repair.py:2083(_fill_loops)
+        5    0.007    0.001    1.846    0.369 F:\3D Druck\app\core\geom\mesh.py:507(face_components)
+        1    0.006    0.006    1.741    1.741 F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1155(merge_vertices)
+        1    0.112    0.112    1.735    1.735 F:\3D Druck\.venv\Lib\site-packages\trimesh\grouping.py:24(merge_vertices)
+       18    0.015    0.001    1.648    0.092 F:\3D Druck\app\core\geom\repair.py:3595(_edge_table)
+        2    0.005    0.003    1.581    0.791 F:\3D Druck\.venv\Lib\site-packages\trimesh\grouping.py:458(unique_rows)
+        1    0.000    0.000    1.518    1.518 F:\3D Druck\app\core\geom\repair.py:301(unify_normals)
+        4    0.238    0.059    1.469    0.367 F:\3D Druck\app\core\geom\mesh.py:312(unique_edges)
+        1    0.037    0.037    1.458    1.458 F:\3D Druck\.venv\Lib\site-packages\trimesh\grouping.py:277(unique_ordered)
+        4    0.223    0.056    1.175    0.294 F:\3D Druck\.venv\Lib\site-packages\trimesh\grouping.py:547(group_rows)
+        1    0.000    0.000    1.145    1.145 F:\3D Druck\app\core\geom\repair.py:2350(resolve_branching_edges)
+        2    0.026    0.013    1.145    0.573 F:\3D Druck\app\core\geom\repair.py:2387(_resolve_branching_once)
+        1    0.011    0.011    1.094    1.094 F:\3D Druck\app\core\geom\repair.py:2037(_flat_fills)
+        2    0.007    0.004    1.074    0.537 F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1722(is_watertight)
+        5    0.000    0.000    1.003    0.201 F:\3D Druck\app\core\geom\mesh.py:552(_adjacency_by_place)
+        2    0.003    0.001    0.988    0.494 F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1456(face_adjacency)
+        2    0.182    0.091    0.985    0.493 F:\3D Druck\.venv\Lib\site-packages\trimesh\graph.py:45(face_adjacency)
+        5    0.158    0.032    0.826    0.165 F:\3D Druck\.venv\Lib\site-packages\trimesh\graph.py:396(connected_components)
+        1    0.000    0.000    0.800    0.800 F:\3D Druck\app\core\geom\repair.py:392(turn_shells_outward)
+        1    0.003    0.003    0.799    0.799 F:\3D Druck\app\core\geom\repair.py:346(__init__)
+       15    0.781    0.052    0.781    0.052 {method 'sort' of 'numpy.ndarray' objects}
+        9    0.000    0.000    0.781    0.087 F:\3D Druck\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:941(sort)
+        2    0.119    0.060    0.723    0.361 F:\3D Druck\.venv\Lib\site-packages\trimesh\graph.py:867(is_watertight)
+       25    0.457    0.018    0.655    0.026 F:\3D Druck\.venv\Lib\site-packages\numpy\_core\numeric.py:1563(cross)
+        1    0.005    0.005    0.598    0.598 F:\3D Druck\app\core\geom\repair.py:3409(_crossed_edge_count)
+        4    0.000    0.000    0.596    0.149 F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:2826(area_faces)
+        1    0.059    0.059    0.593    0.593 F:\3D Druck\app\core\geom\repair.py:3387(crossed_edge_faces)
+        5    0.051    0.010    0.573    0.115 F:\3D Druck\.venv\Lib\site-packages\trimesh\graph.py:432(components_csgraph)
+        6    0.010    0.002    0.546    0.091 F:\3D Druck\app\core\geom\repair.py:3621(open_edge_count)
+        2    0.000    0.000    0.538    0.269 F:\3D Druck\app\core\geom\repair.py:214(wind_consistently)
+        1    0.000    0.000    0.529    0.529 F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1704(is_winding_consistent)
+        4    0.000    0.000    0.494    0.124 F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1012(edges_sorted)
+        4    0.009    0.002    0.493    0.123 F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:921(triangles_cross)
+        5    0.216    0.043    0.485    0.097 F:\3D Druck\.venv\Lib\site-packages\trimesh\graph.py:501(connected_component_labels)
+      120    0.453    0.004    0.453    0.004 {method 'reduce' of 'numpy.ufunc' objects}
+        4    0.136    0.034    0.439    0.110 F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:22(cross)
+        2    0.000    0.000    0.428    0.214 F:\3D Druck\app\core\geom\repair.py:1054(_hole_rings)
+        2    0.101    0.050    0.414    0.207 F:\3D Druck\app\core\geom\repair.py:314(_shell_volumes)
+
+
+         12376 function calls (12310 primitive calls) in 9.165 seconds
+
+   Ordered by: internal time
+   List reduced from 444 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       21    2.230    0.106    2.230    0.106 {method 'argsort' of 'numpy.ndarray' objects}
+       15    0.781    0.052    0.781    0.052 {method 'sort' of 'numpy.ndarray' objects}
+       13    0.576    0.044    2.247    0.173 F:\3D Druck\.venv\Lib\site-packages\numpy\lib\_arraysetops_impl.py:350(_unique1d)
+       25    0.457    0.018    0.655    0.026 F:\3D Druck\.venv\Lib\site-packages\numpy\_core\numeric.py:1563(cross)
+      120    0.453    0.004    0.453    0.004 {method 'reduce' of 'numpy.ufunc' objects}
+       80    0.299    0.004    0.299    0.004 {method 'astype' of 'numpy.ndarray' objects}
+        6    0.273    0.046    0.400    0.067 F:\3D Druck\.venv\Lib\site-packages\trimesh\grouping.py:170(hashable_rows)
+        4    0.238    0.059    1.469    0.367 F:\3D Druck\app\core\geom\mesh.py:312(unique_edges)
+        4    0.223    0.056    1.175    0.294 F:\3D Druck\.venv\Lib\site-packages\trimesh\grouping.py:547(group_rows)
+        5    0.216    0.043    0.485    0.097 F:\3D Druck\.venv\Lib\site-packages\trimesh\graph.py:501(connected_component_labels)
+        2    0.182    0.091    0.985    0.493 F:\3D Druck\.venv\Lib\site-packages\trimesh\graph.py:45(face_adjacency)
+        5    0.158    0.032    0.826    0.165 F:\3D Druck\.venv\Lib\site-packages\trimesh\graph.py:396(connected_components)
+        4    0.147    0.037    0.147    0.037 F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:882(triangles)
+        3    0.136    0.045    0.377    0.126 F:\3D Druck\app\core\geom\mesh.py:570(triple_products)
+        4    0.136    0.034    0.439    0.110 F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:22(cross)
+        2    0.119    0.060    0.723    0.361 F:\3D Druck\.venv\Lib\site-packages\trimesh\graph.py:867(is_watertight)
+      211    0.119    0.001    0.119    0.001 {method 'tobytes' of 'numpy.ndarray' objects}
+        4    0.115    0.029    0.241    0.060 F:\3D Druck\.venv\Lib\site-packages\trimesh\geometry.py:92(faces_to_edges)
+        1    0.112    0.112    1.735    1.735 F:\3D Druck\.venv\Lib\site-packages\trimesh\grouping.py:24(merge_vertices)
+        1    0.109    0.109    0.163    0.163 F:\3D Druck\app\core\geom\mesh.py:349(stable_normals)
+        1    0.104    0.104    0.124    0.124 F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:432(extents)
+        2    0.101    0.050    0.414    0.207 F:\3D Druck\app\core\geom\repair.py:314(_shell_volumes)
+       10    0.099    0.010    0.099    0.010 {method 'copy' of 'numpy.ndarray' objects}
+       83    0.094    0.001    0.094    0.001 {method 'reshape' of 'numpy.ndarray' objects}
+        7    0.089    0.013    0.099    0.014 F:\3D Druck\app\core\geom\repair.py:3590(rows)
+
+

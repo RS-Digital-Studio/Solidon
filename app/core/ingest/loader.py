@@ -50,6 +50,7 @@ from app.core.geom.mesh import (
 )
 from app.core.geom.repair import (
     SMALL_COMPONENT_SHARE,
+    is_closed,
     open_edge_count,
     parts_can_be_merged,
     parts_that_cross,
@@ -997,7 +998,7 @@ def normalise(
         body.merge_vertices(digits_vertex=weld_digits(tolerance))
         welded = used_vertex_count(body) < before
         if welded:
-            closed = bool(body.is_watertight) if unwelded is not None else None
+            closed = is_closed(body) if unwelded is not None else None
         opened = (
             welded and closed is False and unwelded is not None and bool(unwelded.is_watertight)
         )
@@ -1060,7 +1061,7 @@ def normalise(
     if remove_degenerate and len(body.faces):
         progress(0.4, str(_("Leere Dreiecke entfernen")))
         before = len(body.faces)
-        was_closed = bool(body.is_watertight) if closed is None else closed
+        was_closed = is_closed(body) if closed is None else closed
         closed = was_closed
         intact = body.copy() if was_closed else None
         intact_slots = slots
@@ -1128,7 +1129,7 @@ def normalise(
     # ``body.volume`` rechnet den ganzen Trägheitstensor, 490 ms am 1,3-M-Netz,
     # für eine Frage nach dem Vorzeichen.
     if closed is None and len(body.faces):
-        closed = bool(body.is_watertight)
+        closed = is_closed(body)
     # **Außen ist je Schale, nicht je Körper** — dieselbe Regel wie die
     # Reparatur (:func:`app.core.geom.repair.turn_shells_outward`), nicht mehr
     # ``trimesh.repair.fix_inversion``, das nur das Gesamtvolumen fragt. Zwei
@@ -1212,7 +1213,7 @@ def normalise(
             # unten im Cache des Netzes, das der Hauptthread abliest; ein
             # ``None`` an dieser Stelle wurde dort zu ``False``, und ein
             # geschlossener Körper meldete sich als offen.
-            closed = bool(body.is_watertight)
+            closed = is_closed(body)
         findings.extend(mended.findings)
 
     # 5 — Komponenten. Kleine werden gemeldet, nie still verworfen.

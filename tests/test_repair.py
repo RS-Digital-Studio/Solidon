@@ -2270,3 +2270,61 @@ def test_a_repair_says_nothing_about_lost_names_nobody_uses(
         if finding.code in {"perceive.orphaned", "perceive.mended"} and finding.op_id == repaired
     ]
     assert not lost, [dict(finding.values) for finding in lost]
+
+
+def _edge_count_cases() -> dict[str, trimesh.Trimesh]:
+    """Die Grenzfälle der Kantenzählung: dicht, offen, verkehrt, verzweigt, Suppe."""
+    closed = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    opened = closed.copy()
+    opened.update_faces(np.arange(1, len(opened.faces)))
+    flipped = closed.copy()
+    faces = np.asarray(flipped.faces).copy()
+    faces[0] = faces[0][::-1]
+    flipped = trimesh.Trimesh(vertices=flipped.vertices, faces=faces, process=False)
+    right = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    right.apply_translation((10.0, 10.0, 0.0))
+    branching = trimesh.util.concatenate([closed, right])
+    branching.merge_vertices()
+    soup = trimesh.Trimesh(
+        vertices=np.asarray(closed.triangles).reshape(-1, 3),
+        faces=np.arange(3 * len(closed.faces)).reshape(-1, 3),
+        process=False,
+    )
+    plate = read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl").raw
+    welded = plate.copy()
+    welded.merge_vertices()
+    return {
+        "dicht": closed,
+        "offen": opened,
+        "verkehrt": flipped,
+        "verzweigt": branching,
+        "Suppe": soup,
+        "Platte roh": plate,
+        "Platte verschweißt": welded,
+    }
+
+
+@pytest.mark.parametrize("case", list(_edge_count_cases()))
+def test_the_edge_count_answers_like_trimesh(case: str) -> None:
+    """Dichtheit, Umlaufsinn und Nachbarschaft aus einer Kantenzählung (RM-224).
+
+    ``mesh.edge_table`` legt ``is_watertight`` und ``is_winding_consistent`` in
+    trimeshs Cache und gibt ``face_components`` die Nachbarschaft — beides
+    muss trimeshs Antwort sein, sonst sagt der Import „geschlossen" über ein
+    offenes Netz. Am Korpus ``F:\\3D Dateien`` gegengeprüft (970 Vergleiche);
+    hier die Grenzfälle, an denen die Zählung kippen könnte.
+    """
+    from app.core.geom.mesh import edge_table
+
+    body = _edge_count_cases()[case]
+    expected = trimesh.graph.is_watertight(edges=body.edges, edges_sorted=body.edges_sorted)
+    pairs = {tuple(pair) for pair in np.asarray(body.face_adjacency, dtype=np.int64).tolist()}
+
+    fresh = body.copy()
+    table = edge_table(fresh)
+
+    assert (fresh.is_watertight, fresh.is_winding_consistent) == (
+        bool(expected[0]),
+        bool(expected[1]),
+    )
+    assert {tuple(pair) for pair in table.face_pairs().tolist()} == pairs

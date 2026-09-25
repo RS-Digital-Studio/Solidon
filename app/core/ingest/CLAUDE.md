@@ -81,7 +81,9 @@ Nullwirkung ersetzt sie nicht.
 - **Dichtheit wird gefragt, wenn die Antwort gebraucht wird**, und am Stand,
   der gilt: erst am verschweißten Netz, am unverschweißten nur, wenn das
   Verschweißen es aufgerissen hat; das zurückgelegte Netz behält seine
-  Antwort. `tests/test_ingest_figures.py` zählt die Fragen.
+  Antwort. Gefragt wird über `repair.is_closed`: Die Kantenzählung
+  (`mesh.edge_table`) beantwortet es und bleibt für Reparatur und Teilezahl
+  liegen. `tests/test_ingest_figures.py` zählt die Fragen.
 - **Dichtheit und Umlaufsinn reisen als Paar.** trimesh berechnet beide über
   dieselbe Topologieprüfung. `normalise` bewahrt vor Aufsetzen oder Zentrieren
   beide Antworten und legt sie danach gemeinsam zurück; ein halber Cache

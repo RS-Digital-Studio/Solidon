@@ -79,3 +79,4 @@
 - [Kette mit ; läuft nach dem Kill weiter](kette-mit-semikolon-laeuft-nach-dem-kill-weiter.md) · [Agent-Edits schreiben CRLF](agent-edits-schreiben-crlf.md)
 - [Checkout-Reflex löscht eigene Arbeit](checkout-reflex-loescht-eigene-arbeit.md) · [Git-Identität](git-identitaet-mitgeben.md) · [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md)
 - [Patch auf modifizierte Datei](datei-die-vor-dem-patch-modifiziert-war-geht-nur-als-blob.md) · [Katalogschreiber überschreibt still](katalogschreiber-ueberschreibt-still.md) · [Geteilter Index veraltet](geteilter-index-nach-fremdem-commit-veraltet.md) · [Fremder Commit nimmt Hunks mit](fremder-commit-nimmt-unfertige-hunks-mit.md)
+- [Nullkontext-Hunk verschmilzt fremde Zeilen](nullkontext-hunk-verschmilzt-fremde-zeilen.md) — Hunk-Auswahl am Anker schneiden, Stufe gegen den Hauptbaum diffen.

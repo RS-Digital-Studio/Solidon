@@ -739,7 +739,11 @@ trimesh zu einem Körper macht — kein 3MF, kein Dateiformatwissen darüber
 hinaus, das liegt in `ingest/`; `unique_edges` beantwortet „welche Kanten,
 wie oft" über eine Kantennummer statt über `np.unique(axis=0)` — viermal
 schneller an 180 000 Kanten, und die Randringe der Merkmalsketten, die
-Rückwand-Prüfung der Bausteine und die Fleckennachbarschaft fragen es)
+Rückwand-Prüfung der Bausteine und die Fleckennachbarschaft fragen es;
+`edge_table` ist die eine Kantenzählung je Netz — Reparatur, Teilezerlegung
+(`face_components`, gemerkt je Netz) und Dichtheit lesen sie, und
+`is_watertight` samt Umlaufsinn legt sie mit trimeshs Definition in dessen
+Cache, statt die Kanten ein zweites Mal gruppieren zu lassen, RM-224)
 · `boolean.py` (die Kette
 oben) · `difference.py` (die Differenzansicht §18.7 — sie beschneidet beide
 Körper zuerst auf den Quader, in dem sich ihre Häute unterscheiden

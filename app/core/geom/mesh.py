@@ -504,6 +504,81 @@ class IntegerGrid:
         return float(np.ldexp(float(int(self.steps.sum())), -self.exponent))
 
 
+@dataclass(frozen=True)
+class EdgeTable:
+    """Die Kanten eines Netzes, einmal gezählt: ``inverse`` ordnet jede Zeile
+    von ``edges_sorted`` (drei je Dreieck, in Dreiecksreihenfolge) ihrer
+    Kante zu, ``counts`` sagt je Kante, wie viele Dreiecke sie tragen."""
+
+    unique: np.ndarray
+    inverse: np.ndarray
+    counts: np.ndarray
+
+    def rows(self, count: int) -> np.ndarray:
+        """Die Zeilen der Kanten mit genau ``count`` Dreiecken, aufsteigend."""
+        return np.flatnonzero(self.counts[self.inverse] == count)
+
+    def face_pairs(self) -> np.ndarray:
+        """Je Kante mit genau zwei Dreiecken das Paar, kleinere Nummer zuerst.
+
+        Dieselbe Menge wie trimeshs ``face_adjacency`` (ohne ein Dreieck, das
+        mit sich selbst eine Kante teilt), ohne dafür alle Kanten ein zweites
+        Mal zu gruppieren. Die Reihenfolge der Paare ist eine andere; wer
+        daraus Zusammenhänge zählt, bekommt dieselben Teile.
+        """
+        rows = self.rows(2)
+        if not len(rows):
+            return np.zeros((0, 2), dtype=np.int64)
+        paired = rows[np.argsort(self.inverse[rows], kind="stable")] // 3
+        pairs = np.sort(paired.reshape(-1, 2), axis=1)
+        return np.asarray(pairs[pairs[:, 0] != pairs[:, 1]])
+
+
+#: Wo :func:`edge_table` die Zählung im Cache des Netzes ablegt.
+_EDGE_TABLE_KEY: Final = "solidon_edge_table"
+
+
+def edge_table(body: trimesh.Trimesh) -> EdgeTable:
+    """Die Kantenzählung eines Netzes — einmal je Netz, im Cache des Netzes.
+
+    Gezählt wird über eine Kantennummer (:func:`unique_edges`); der Cache
+    verfällt mit der Geometrie. Offene Ränder, Verzweigungen, Randringe und
+    Sanduhren der Reparatur lesen sie, die Teilezerlegung
+    (:func:`face_components`) liest daraus die Nachbarschaft.
+
+    **Und dieselbe Zählung beantwortet ``is_watertight``** (RM-224). trimesh
+    gruppiert dafür alle Kanten ein zweites Mal — am Piratenschiff eine halbe
+    Sekunde je Netz. Die Antwort und der Umlaufsinn, den trimesh daneben
+    ablegt, kommen deshalb von hier in dessen Cache, mit trimeshs Definition
+    (:func:`trimesh.graph.is_watertight`): dicht, wenn jede Kante genau zwei
+    Dreiecke trägt; einheitlich gewickelt, wenn jede solche Kante in ihren
+    zwei Dreiecken gegenläufig steht — gezählt über die Richtung je Zeile,
+    ohne die Paare zu sortieren. Gegen trimesh geprüft an allen 485 Körpern
+    aus ``F:\\3D Dateien``, roh und verschweißt.
+    """
+    cache = getattr(body, "_cache", None)
+    if cache is not None and _EDGE_TABLE_KEY in cache:
+        return cast(EdgeTable, cache[_EDGE_TABLE_KEY])
+    unique, inverse, counts = unique_edges(
+        np.asarray(body.edges_sorted, dtype=np.int64), return_inverse=True, return_counts=True
+    )
+    table = EdgeTable(unique=unique, inverse=inverse, counts=counts)
+    if cache is not None:
+        cache[_EDGE_TABLE_KEY] = table
+        if len(counts) and "is_watertight" not in cache:
+            directed = np.asarray(body.edges, dtype=np.int64)
+            up = np.bincount(
+                inverse, weights=directed[:, 0] < directed[:, 1], minlength=len(counts)
+            )
+            down = np.bincount(
+                inverse, weights=directed[:, 0] > directed[:, 1], minlength=len(counts)
+            )
+            pairs = counts == 2
+            cache["is_watertight"] = bool(np.all(pairs))
+            cache["is_winding_consistent"] = bool(np.array_equal(up[pairs], down[pairs]))
+    return table
+
+
 def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
     """Zusammenhängende Komponenten als Dreiecksindizes.
 
@@ -538,15 +613,34 @@ def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
     wie bei ``repair.merge_vertices`` und ``perceive.features``:
     ``trimesh.scale`` ist die Diagonale des Hüllquaders, also derselbe Wert wie
     ``MeshData.bounds.diagonal`` (nachgemessen, auf die letzte Stelle gleich).
+
+    **Einmal je Netz** (RM-224): Das Einlesen fragte dasselbe Netz bis zu
+    dreimal — Teilezahl, Schalen, Durchdringung —, am Piratenschiff mit
+    1,2 Millionen Dreiecken 0,4 s je Frage. Die Teile liegen im Cache des
+    Netzes und verfallen mit seiner Geometrie; sie sind schreibgeschützt,
+    die Liste darum ist je Aufruf neu.
     """
     count = len(mesh.faces)
     if count == 0:
         return []
-    return list(
-        trimesh.graph.connected_components(
+    cache = getattr(mesh, "_cache", None)
+    if cache is not None and _COMPONENTS_KEY in cache:
+        return list(cast("tuple[np.ndarray, ...]", cache[_COMPONENTS_KEY]))
+    pieces = tuple(
+        np.asarray(piece, dtype=np.int64)
+        for piece in trimesh.graph.connected_components(
             _adjacency_by_place(mesh), nodes=np.arange(count), engine="scipy"
         )
     )
+    for piece in pieces:
+        piece.flags.writeable = False
+    if cache is not None:
+        cache[_COMPONENTS_KEY] = pieces
+    return list(pieces)
+
+
+#: Wo :func:`face_components` seine Teile im Cache des Netzes ablegt.
+_COMPONENTS_KEY: Final = "solidon_face_components"
 
 
 def _adjacency_by_place(mesh: trimesh.Trimesh) -> np.ndarray:
@@ -557,8 +651,10 @@ def _adjacency_by_place(mesh: trimesh.Trimesh) -> np.ndarray:
     bestehende Verbindung kosten könnte. Beide zusammen sind die Frage, die
     gemeint ist — der Grund steht bei :func:`face_components`.
     """
-    stored = np.asarray(mesh.face_adjacency, dtype=np.int64).reshape(-1, 2)
-    if fully_stitched(mesh):
+    stored = edge_table(mesh).face_pairs()
+    # Dieselbe Frage wie :func:`fully_stitched`, an denselben Paaren — über
+    # ``face_adjacency`` gestellt, gruppierte trimesh die Kanten doch noch.
+    if len(mesh.faces) and 2 * len(stored) >= 3 * len(mesh.faces):
         return stored
     digits = weld_digits(weld_tolerance(float(mesh.scale)))
     _, place = trimesh.grouping.unique_rows(np.asarray(mesh.vertices, dtype=float), digits=digits)

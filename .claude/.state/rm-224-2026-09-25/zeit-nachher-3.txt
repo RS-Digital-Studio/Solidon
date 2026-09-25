@@ -1,0 +1,7 @@
+gemessen wird F:\3D Druck\app\__init__.py
+  Lauf: 7.655 s
+  Lauf: 7.986 s
+  Lauf: 7.845 s
+obj_15_Assembly.stl: Median 7.845 s über 3 Läufe
+  Befunde: ['ingest.very_large', 'repair.branching_resolved', 'repair.holes_filled']
+  Dreiecke 1223836, dicht True, Wicklung True, Teile 1, Volumen 284140.958464

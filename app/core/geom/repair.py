@@ -34,12 +34,13 @@ from app.core.errors import (
 from app.core.geom.attributes import transfer
 from app.core.geom.intersections import Crossings
 from app.core.geom.mesh import (
+    EdgeTable,
     MeshData,
+    edge_table,
     face_components,
     signed_volume,
     stable_normals,
     triple_products,
-    unique_edges,
 )
 from app.core.geom.transform import along
 from app.core.log import get_logger
@@ -235,7 +236,12 @@ def wind_consistently(body: trimesh.Trimesh) -> None:
     übrigen Kanten (:func:`crossed_edge_faces`). Nur ganze Zahlen, keine
     Plattformfrage (RM-187). Das Netz wird dabei verändert.
     """
-    if not len(body.faces) or body.is_winding_consistent:
+    if not len(body.faces):
+        return
+    # Die Kantenzählung legt den Umlaufsinn in trimeshs Cache — sonst gruppierte
+    # trimesh für diese eine Frage alle Kanten ein zweites Mal (RM-224).
+    edge_table(body)
+    if body.is_winding_consistent:
         return
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import breadth_first_order, connected_components
@@ -2543,8 +2549,11 @@ def _filled_with_count(mesh: MeshData) -> tuple[MeshData, bool, int]:
 
 
 def fill_holes(mesh: MeshData, stitch: bool = True) -> tuple[MeshData, bool]:
-    """Schließt offene Kanten. Nur kleine Löcher — eine fehlende Wand kann
-    trimesh nicht überbrücken.
+    """Schließt offene Kanten — über den eigenen Ringfüller, in der Reihenfolge
+    von :func:`_fill_loops`: Band, Fläche mit Löchern, glatteste
+    Triangulierung, Ohren, Fächer. Auch eine fehlende Wand kommt so zurück;
+    eine Fläche ohne Dicke bleibt offen (RM-224: Hier stand bis zum
+    25.09.2026 „nur kleine Löcher", aus der Zeit von trimeshs Füller).
 
     Das Vernähen läuft zuerst: eine T-Kreuzung sieht aus wie ein Loch und ist
     keines, und der Füller lässt sie exakt, wie er sie fand (siehe
@@ -3577,45 +3586,33 @@ def _intersection_findings(
         )
 
 
-@dataclass(frozen=True)
-class _EdgeTable:
-    """Die Kanten eines Netzes, einmal gezählt: ``inverse`` ordnet jede Zeile
-    von ``edges_sorted`` (drei je Dreieck, in Dreiecksreihenfolge) ihrer
-    Kante zu, ``counts`` sagt je Kante, wie viele Dreiecke sie tragen."""
-
-    unique: np.ndarray
-    inverse: np.ndarray
-    counts: np.ndarray
-
-    def rows(self, count: int) -> np.ndarray:
-        """Die Zeilen der Kanten mit genau ``count`` Dreiecken, aufsteigend."""
-        return np.flatnonzero(self.counts[self.inverse] == count)
+#: Die Kantenzählung wohnt in :mod:`app.core.geom.mesh` (RM-224): Dort
+#: fragen sie auch die Teilezerlegung und die Dichtheit, und eine Zählung je
+#: Netz reicht für alle.
+_EdgeTable = EdgeTable
 
 
-def _edge_table(mesh: MeshData) -> _EdgeTable:
-    """Die Kantenzählung eines Netzes — einmal je Netz, im Cache des Netzes.
+def _edge_table(mesh: MeshData) -> EdgeTable:
+    """Die Kantenzählung eines Netzes — :func:`app.core.geom.mesh.edge_table`.
 
     **Eine Zählung statt einer je Frage** (Review 22.09.2026). Offene Ränder,
     Verzweigungen, Randringe und Sanduhren fragten je ``group_rows`` über alle
     Kanten, die Reparatur beim Import eines offenen Netzes achtzehnmal: An
     der Piratenschiff-Baugruppe (1,2 Millionen Dreiecke) kosteten diese
-    Zählungen allein elf der fünfundzwanzig Sekunden. Gezählt wird über eine
-    Kantennummer (:func:`app.core.geom.mesh.unique_edges`); der Cache verfällt
-    mit der Geometrie, und jede Reparaturstufe baut ein neues Netz.
+    Zählungen allein elf der fünfundzwanzig Sekunden.
     """
-    body = mesh.raw
-    cache = getattr(body, "_cache", None)
-    if cache is not None:
-        cache.verify()
-        if "solidon_edge_table" in cache:
-            return cast(_EdgeTable, cache["solidon_edge_table"])
-    unique, inverse, counts = unique_edges(
-        np.asarray(body.edges_sorted, dtype=np.int64), return_inverse=True, return_counts=True
-    )
-    table = _EdgeTable(unique=unique, inverse=inverse, counts=counts)
-    if cache is not None:
-        cache["solidon_edge_table"] = table
-    return table
+    return edge_table(mesh.raw)
+
+
+def is_closed(body: trimesh.Trimesh) -> bool:
+    """``is_watertight`` über die Kantenzählung — die Tabelle bleibt für die Reparatur liegen.
+
+    Der Import fragt ein Netz zuerst, ob es dicht ist, und repariert es danach;
+    über trimesh gefragt wäre das eine Gruppierung aller Kanten mehr (RM-224).
+    """
+    if len(body.faces):
+        edge_table(body)
+    return bool(body.is_watertight)
 
 
 def open_edge_count(mesh: MeshData) -> int:

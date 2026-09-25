@@ -22,22 +22,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 def test_a_triangle_soup_is_welded_before_anyone_asks_whether_it_is_closed(monkeypatch) -> None:
     """Eine STL speichert jedes Dreieck mit eigenen Ecken und ist vor dem Verschweißen
     nie dicht — das braucht keine Zählung über alle Kanten. Danach genügt eine."""
-    import threading
-
-    calls: list[int] = []
-    original = trimesh.graph.is_watertight
-    # Gezählt wird nur, was ``normalise`` in diesem Thread fragt. Im geteilten
-    # Torlauf rechnet im selben Prozess mitunter noch ein Hintergrundthread
-    # eines früheren Tests an einem anderen Netz, und dessen Aufruf landete
-    # in dieser Zählung (``assert 2 == 1`` am 23.09.2026, einzeln grün).
-    here = threading.get_ident()
-
-    def counted(*args, **kwargs):
-        if threading.get_ident() == here:
-            calls.append(1)
-        return original(*args, **kwargs)
-
-    monkeypatch.setattr(trimesh.graph, "is_watertight", counted)
+    calls = _counting_watertight(monkeypatch)
     mesh = read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl")
     assert mesh.raw.vertices.shape[0] == 3 * mesh.raw.faces.shape[0], (
         "eine Suppe, wie STL sie speichert"
@@ -71,14 +56,38 @@ def test_a_mesh_with_shared_corners_asks_once_whether_it_is_closed(monkeypatch) 
 
 
 def _counting_watertight(monkeypatch) -> list[int]:
+    """Zählt jede Frage „dicht?" des Einlesens — an trimesh oder an die Kantenzählung.
+
+    Seit RM-224 (25.09.2026) fragt ``normalise`` über ``repair.is_closed``: Die
+    Kantenzählung legt die Antwort in trimeshs Cache, und trimesh selbst wird
+    dafür gar nicht mehr gefragt. Gezählt werden beide Wege; eine Kantenzählung,
+    die für die Teilezahl entsteht, ist keine Frage nach der Dichtheit. Nur, was
+    in diesem Thread gefragt wird: Im geteilten Torlauf rechnet im selben
+    Prozess mitunter noch ein Hintergrundthread eines früheren Tests an einem
+    anderen Netz, und dessen Aufruf landete in dieser Zählung (``assert 2 == 1``
+    am 23.09.2026, einzeln grün).
+    """
+    import threading
+
+    from app.core.ingest import loader
+
     calls: list[int] = []
+    here = threading.get_ident()
     original = trimesh.graph.is_watertight
+    asked = loader.is_closed
 
     def counted(*args, **kwargs):
-        calls.append(1)
+        if threading.get_ident() == here:
+            calls.append(1)
         return original(*args, **kwargs)
 
+    def counted_closed(body):
+        if threading.get_ident() == here:
+            calls.append(1)
+        return asked(body)
+
     monkeypatch.setattr(trimesh.graph, "is_watertight", counted)
+    monkeypatch.setattr(loader, "is_closed", counted_closed)
     return calls
 
 

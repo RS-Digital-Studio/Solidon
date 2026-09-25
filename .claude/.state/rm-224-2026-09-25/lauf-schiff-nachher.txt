@@ -1,0 +1,4 @@
+gemessen wird F:\3D Druck\app\__init__.py
+obj_15_Assembly.stl: 1223836 Dreiecke, normalise 5.967 s
+Befunde: ['repair.branching_resolved', 'repair.holes_filled', 'ingest.very_large']
+Ergebnis: dicht True, Teile 1
