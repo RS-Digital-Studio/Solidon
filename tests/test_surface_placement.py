@@ -2532,3 +2532,23 @@ def test_bore_twins_share_surface_values_tool_and_actual_cut(profile, kind, dept
     elif shape == "slotted":
         expected += 36.0 * drilled_depth
     assert body.mesh.volume - changed_body.mesh.volume == pytest.approx(expected, rel=0.015)
+
+
+def test_a_prepared_face_is_remembered_per_mesh_triangle_and_feature_names():
+    """Dieselbe Fläche wird am selben Netz einmal vorbereitet (RM-232).
+
+    ``seat_of`` fragt für jede Bohrung auf einer Fläche deren erstes Dreieck,
+    und an der dichten Platte kostete die Oberseite jedes Mal 105 ms. Die
+    Antwort gehört zu Netz, Dreieck und den Namen der Merkmale — ihre
+    Mittenbezüge tragen die Namen.
+    """
+    mesh, found = _plate_with()
+    face = _top(mesh)
+
+    first = placement.prepare_surface(mesh, face, found)
+
+    assert placement.prepare_surface(mesh, face, found) is first, "dieselbe Frage, dieselbe Antwort"
+    renamed = {f"renamed_{name}": entry for name, entry in found.items()}
+    assert placement.prepare_surface(mesh, face, renamed) is not first, "andere Namen, neue Antwort"
+    other = MeshData.of(mesh.raw.copy())
+    assert placement.prepare_surface(other, face, found) is not first, "anderes Netz, neue Antwort"

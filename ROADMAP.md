@@ -93,7 +93,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Roberts Geste nachgestellt und verlegt (`7ff34c67`: je Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s → 1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-215 — 276 Befundstellen enden ohne Handlung](#rm-215) | Bedienung und Darstellung | Sollliste C1: 97 Warnungen und sieben Fehler ohne Weg, darunter fit.violated, gcode.spool_left_out, join.blocked, orient.support_likely — Test für alle, dann gebietsweise nachziehen |
-| [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Dreimal redraw je Klick, prepare_surface im Hauptfaden (bis 1–2 s), erster Klick zahlt bore_entrance und _shoulder_connections, app-weite Filter — nachmessen, dann verlegen |
+| [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Am 25.09.2026 nachgemessen und zwei Schritte gebaut: Arbeiterkopie und Trägerfläche je Netz gemerkt, Feldanordnung mit Vorfilter — Bohrung zu Bohrung am echten Fenster −25 bis −33 %. Offen: der erste Klick (Kernauskünfte und Markierung im Hauptfaden, kalte Fläche hält den GIL) und die Zeichnungen je Klick |
 | [RM-233 — Fünf Kleinigkeiten aus den Durchsichten, am Code bestätigt](#rm-233) | Bedienung und Darstellung | autosave wirft im Zeitgeber, Skizzen-Kontextmenü wird nie freigegeben, Objektnamen in der Sprache des Augenblicks, „Schwerpunkt" statt Hüllquadermitte, Rückfragekarte fest 520 Punkte |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -2586,6 +2586,26 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   beschränken, die sie brauchen. Abnahme: Klick bis Ruhe unter 100 ms am
   Wabenhalter und unter 300 ms an der dichten Platte, gemessen mit
   `click_probe --ab`.
+
+  **Nachgemessen am 25.09.2026** (Stand `1fc5ecc5`, eigene Sonde mit Zeit bis
+  Ruhe und längster Lücke im Hauptfaden): `prepare_surface` lief schon im
+  Arbeiter, aber an einer **frischen Kopie je Fluss** — und jeder
+  Merkmalklick baut einen Fluss. Offscreen kostete der Arbeiter an der
+  dichten Platte 250–520 ms je Bohrungsklick für dieselbe Oberseite. Gebaut:
+  `for_a_worker` behält die Kopie je Szenennetz (zwei Netze, mit Schloss,
+  `on_the_copy`), `prepare_surface` merkt seine Antwort am Netz, und die
+  Feldanordnung prüft Striche erst, wenn ihr Hüllrechteck das Feld erreicht
+  (24 000 Schnittproben je Klick am echten Fenster, fast alle gegen ferne
+  Striche). Bohrung zu Bohrung bis zur Fläche am echten Fenster, abwechselnd
+  gemessen: Wabenhalter 375–434 → 296–308 ms, dichte Platte 522–524 →
+  349–356 ms; offscreen bis Ruhe an der Platte 307 → 133 ms. **Offen:** Der
+  erste Klick an einem Körper (Wabenhalter ~500 ms, Platte ~850 ms) zahlt im
+  Hauptfaden die Kernauskünfte (`FeaturePanel._answers_for`, 78–150 ms) und
+  die Markierung (`_redraw_feature_patch`, 44–140 ms), und die kalte
+  Trägerfläche im Arbeiter hält den GIL (bis 600 ms Lücke); am echten
+  Fenster kosten dazu Sichtbarkeitswechsel im Merkmalfenster und die Bilder
+  je Klick. Die drei `redraw` in `_place_from_feature_panel` sind billig
+  (um 2 ms) — die Maßgruppe bestellt ihr Bild ohnehin gebündelt.
 
 <a id="rm-233"></a>
 

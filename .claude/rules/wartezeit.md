@@ -1065,6 +1065,14 @@ Zwei Sätze, die dazugehören:
   (`_surface_mesh`). Eine frische Kopie hat leere Merker, und jede Frage baute
   Nachbarschaft und Normalen des ganzen Netzes neu. Die Fragen laufen
   nacheinander (`_surface_busy`), die Kopie teilt also niemand.
+* **Und nicht je Fluss** (RM-232, 25.09.2026). Jeder Merkmalklick baut einen
+  neuen Platzierungsfluss; `for_a_worker` behält die Kopie deshalb je
+  Szenennetz (die letzten `WORKER_COPIES_KEPT`, sie stirbt mit ihrem Netz),
+  und `placement.prepare_surface` merkt seine Antwort am Netz. Weil jetzt der
+  Arbeiter eines abgelösten Flusses noch an derselben Kopie rechnen kann,
+  läuft jede Rechnung an ihr unter ihrem Schloss (`on_the_copy`). Gemessen an
+  der dichten Platte (204 000 Dreiecke), Bohrung zu Bohrung am echten
+  Fenster: 522 → 352 ms bis zur Fläche.
 
 Und die Vorbereitung selbst zählt, statt zu verschneiden:
 `placement._patch_area` baut die Fläche aus ihrem Rand (Kanten mit einem

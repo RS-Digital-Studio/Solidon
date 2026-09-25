@@ -1291,7 +1291,9 @@ Dieselbe Trennung gilt für die Platzierung: `placement_flow.for_a_worker`
 kopiert das Szenennetz **im Hauptthread**, bevor `prepare_surface`, `seat_of`
 oder `original_surface_hit` im Nebenthread darauf rechnen — sie füllen sonst
 dieselben trägen trimesh-Caches, an denen der Hauptthread währenddessen
-Hüllquader, Dreiecke und Kanten liest.
+Hüllquader, Dreiecke und Kanten liest. Die Kopie bleibt je Szenennetz über
+den Fluss hinaus, und wer an ihr rechnet, tut es unter ihrem Schloss
+(`on_the_copy`; Regel in `wartezeit.md`).
 Auch die Durchsicht der Druckplatte liest die zuletzt aufgebaute Szene und
 deren sichtbare Körpermenge. Ihre Entscheidung wird bis zu einem Wechsel
 dieser beiden Eingaben behalten; Kamerabewegungen lösen keine erneute exakte

@@ -1234,7 +1234,34 @@ def _patch_area(xy: np.ndarray) -> BaseGeometry:
 def prepare_surface(
     mesh: MeshData, face_index: int, features: Mapping[str, Feature] | None = None
 ) -> PreparedSurface:
-    """Originalfläche und Maße einmal vorbereiten; der Aufrufer hält den Kontext im Cache."""
+    """Originalfläche und Maße einmal vorbereiten — je Netz, Dreieck und Merkmalen einmal.
+
+    **Die Antwort wird am Netz gemerkt** (``perceive.features.remembered``,
+    RM-232, 25.09.2026) und stirbt mit ihm. An der dichten Platte kostet die
+    Oberseite 105 ms, und :func:`seat_of` fragt sie für jede Bohrung darauf
+    neu — bei jedem Klick, denn jede Bohrung sitzt auf derselben Fläche und
+    fragt ihr erstes Dreieck. Zur Frage gehören die Namen der Merkmale: Die
+    Mittenbezüge tragen sie, und nach einer Auswertung kann dasselbe Netz
+    anders benannte Merkmale tragen. Die vorbereitete Fläche ist
+    unveränderlich; wer sie erweitert, legt ``replace`` darüber.
+    """
+    from app.core.perceive.features import remembered
+
+    names = None if features is None else tuple(sorted(features))
+    prepared: PreparedSurface = remembered(
+        "prepared_surface",
+        mesh.raw,
+        (),
+        lambda: _prepared_surface(mesh, face_index, features),
+        extra=(int(face_index), names),
+    )
+    return prepared
+
+
+def _prepared_surface(
+    mesh: MeshData, face_index: int, features: Mapping[str, Feature] | None
+) -> PreparedSurface:
+    """Der Rumpf von :func:`prepare_surface`, ohne Merker."""
     from shapely import prepare
     from shapely.geometry import Point
 

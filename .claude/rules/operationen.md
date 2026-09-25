@@ -1184,8 +1184,10 @@ Bis zum 06.09.2026 standen diese Regeln in der Karte `app/core/scene/CLAUDE.md`;
 eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
 
 - **Oberflächenplatzierung verändert kein Dokument.** `prepare_surface()`
-  bestimmt die zusammenhängende Originalfläche und ihre Randtopologie einmal;
-  der Worker hält den unveränderlichen Kontext je Netz und Patch im Cache.
+  bestimmt die zusammenhängende Originalfläche und ihre Randtopologie einmal
+  und merkt sie am Netz, je Dreieck und Merkmalsnamen (`remembered`, dieselbe
+  Grenze wie die Stützpunktlesung); der Worker hält den unveränderlichen
+  Kontext zusätzlich je Patch.
   `at_point()`, `point_with_distances()` und `point_with_centre()` verwenden
   dieselbe Flächenprüfung einschließlich Aussparungen. Zwei geradlinige
   Bezugskanten müssen unabhängig sein; Triangulationsdiagonalen und belegte

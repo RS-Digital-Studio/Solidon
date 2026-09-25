@@ -5484,7 +5484,11 @@ CACHE_LIMIT_PER_QUESTION = 4096
 #: an denen die Mündungsprobe einer Bohrung jede Frage stellt
 #: (``prepare_ops.bore_entrance``), wiegen am Gartenschlauchhalter mit 392 532
 #: Dreiecken je rund 15 und 75 Megabyte; viertausend davon hielte kein Rechner.
-WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset({"support", "merged_copy", "surface_index"})
+#: Die vorbereitete Trägerfläche der Platzierung (``placement.prepare_surface``)
+#: trägt die ganze Kontur einer Fläche und gehört mit derselben Grenze dazu.
+WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
+    {"support", "merged_copy", "surface_index", "prepared_surface"}
+)
 
 
 #: Die zuletzt gebildeten Abdrücke je Listenobjekt — mit der Liste selbst als

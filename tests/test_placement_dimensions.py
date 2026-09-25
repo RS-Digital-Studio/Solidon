@@ -1502,3 +1502,94 @@ def _layout(
     qt_app.processEvents()
     flow.redraw()
     return flow, session, viewport, dialog
+
+
+def test_the_worker_copy_outlives_the_flow_and_dies_with_its_mesh():
+    """Jeder Merkmalklick baut einen Fluss, aber nicht jedes Mal eine kalte Kopie (RM-232).
+
+    An der dichten Platte bereitete der Arbeiter dieselbe Oberseite bei jedem
+    Bohrungsklick an einer frischen Kopie vor — ohne ihre Merker 280 statt
+    120 ms. Die Kopie bleibt deshalb je Szenennetz, bleibt dabei getrennt vom
+    Netz, das das Fenster liest, und geht mit ihm.
+    """
+    import gc
+
+    from app.ui import placement_flow as module
+
+    first = MeshData.of(trimesh.creation.box((10.0, 10.0, 10.0)))
+    second = MeshData.of(trimesh.creation.box((20.0, 10.0, 10.0)))
+    copy = module.for_a_worker(first)
+
+    assert module.for_a_worker(first) is copy, "derselbe Körper, dieselbe Kopie"
+    assert copy is not first and not np.shares_memory(copy.raw.vertices, first.raw.vertices)
+    assert module.for_a_worker(second) is not copy
+    key = id(first.raw)
+    assert key in module._worker_copies
+    del first
+    gc.collect()
+    assert key not in module._worker_copies, "die Kopie geht mit ihrem Netz"
+
+
+def test_workers_on_a_shared_copy_take_turns():
+    """Zwei Arbeiter an derselben Kopie rechnen nacheinander (RM-232).
+
+    Die trägen trimesh-Merker sind nicht threadsicher; seit die Kopie über den
+    Fluss hinaus bleibt, kann der Arbeiter eines abgelösten Flusses noch
+    laufen, wenn der nächste beginnt.
+    """
+    from app.ui import placement_flow as module
+
+    mesh = MeshData.of(trimesh.creation.box((10.0, 10.0, 10.0)))
+    copy = module.for_a_worker(mesh)
+    lock = module._worker_copies[id(mesh.raw)][2]
+    seen = []
+
+    run = module.on_the_copy(copy, lambda: seen.append(lock.locked()) or "fertig")
+
+    assert run() == "fertig"
+    assert seen == [True], "gerechnet wird unter dem Schloss der Kopie"
+    unshared = MeshData.of(trimesh.creation.box((5.0, 5.0, 5.0)))
+    compute = lambda: None  # noqa: E731
+    assert module.on_the_copy(unshared, compute) is compute, "eine fremde Kopie braucht keins"
+
+
+def test_the_line_check_skips_far_strokes_and_answers_as_before():
+    """Der Vorfilter über das Hüllrechteck ändert keine Antwort (RM-232).
+
+    Geprüft an Zufallsfällen gegen die Rechnung ohne Vorfilter — Striche weit
+    weg, durch das Feld, mit einem Ende darin, entlang eines Rands.
+    """
+    import random
+
+    from PySide6.QtCore import QRectF
+
+    from app.ui.placement_flow import _clear_of_lines
+
+    def without_filter(rect: QRect, lines) -> bool:
+        grown = QRectF(rect.adjusted(-SPACE, -SPACE, SPACE, SPACE))
+        corners = (grown.topLeft(), grown.topRight(), grown.bottomRight(), grown.bottomLeft())
+        edges = tuple(zip(corners, (*corners[1:], corners[0]), strict=True))
+        for start, end in lines:
+            if grown.contains(start) or grown.contains(end):
+                return False
+            if any(_crosses((start, end), edge) for edge in edges):
+                return False
+        return True
+
+    chance = random.Random(232)
+    for _case in range(3000):
+        rect = QRect(chance.randint(0, 400), chance.randint(0, 300), 90, 28)
+        lines = [
+            (
+                QPointF(chance.uniform(-50, 550), chance.uniform(-50, 400)),
+                QPointF(chance.uniform(-50, 550), chance.uniform(-50, 400)),
+            )
+            for _line in range(chance.randint(0, 6))
+        ]
+        # Dazu ein Strich genau entlang eines Rands des gewachsenen Felds.
+        if chance.random() < 0.2:
+            edge_y = float(rect.top() - SPACE)
+            lines.append(
+                (QPointF(rect.left() - 40.0, edge_y), QPointF(rect.right() + 40.0, edge_y))
+            )
+        assert _clear_of_lines(rect, lines) == without_filter(rect, lines)

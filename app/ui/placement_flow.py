@@ -8,6 +8,9 @@ bleibt der einzige Weg ins Dokument.
 from __future__ import annotations
 
 import math
+import threading
+import weakref
+from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from itertools import pairwise, product
 from typing import Any, Final, Protocol, cast, runtime_checkable
@@ -340,6 +343,15 @@ class QuietHost(QObject):
 UPWARD_FACE: Final = 0.7
 
 
+#: Wie viele Szenennetze ihre Arbeiterkopie über einen Fluss hinaus behalten.
+#: Gewählt wird meist am selben Körper; zwei decken den Wechsel zwischen zwei
+#: Teilen, ohne jedes angeklickte Netz ein zweites Mal im Speicher zu halten.
+WORKER_COPIES_KEPT: Final = 2
+
+_worker_copies: OrderedDict[int, tuple[weakref.ref[Any], Any, threading.Lock]] = OrderedDict()
+_worker_copies_lock = threading.Lock()
+
+
 def for_a_worker(mesh: Any) -> Any:
     """Eine eigene Kopie eines Szenennetzes für den Nebenthread.
 
@@ -358,9 +370,57 @@ def for_a_worker(mesh: Any) -> Any:
     Ein exakter Körper gibt seine Anzeigetessellation ab — genau das tat der
     Aufruf ``as_mesh_data(entry.mesh)`` vorher an dieser Stelle auch, nur eben
     im falschen Thread.
+
+    **Und die Kopie bleibt über den Fluss hinaus** (RM-232, 25.09.2026). Jeder
+    Merkmalklick baut einen neuen Fluss, und eine frische Kopie hat leere
+    Merker: An der dichten Platte (204 000 Dreiecke) bereitete der Arbeiter
+    dieselbe Oberseite bei jedem Bohrungsklick kalt vor, 280 statt 120 ms,
+    und `placement.prepare_surface` merkt sich seine Antwort am Netz — an
+    einer neuen Kopie nie. Behalten werden die Kopien der letzten
+    :data:`WORKER_COPIES_KEPT` Netze; stirbt das Original, geht seine Kopie
+    mit. Weil sich jetzt zwei Arbeiter eine Kopie teilen können — der eines
+    abgelösten Flusses läuft noch aus —, rechnet jeder unter ihrem Schloss
+    (:func:`on_the_copy`).
     """
     source = as_mesh_data(mesh)
-    return source.replacing(source.raw.copy())
+    raw = source.raw
+    key = id(raw)
+    with _worker_copies_lock:
+        held = _worker_copies.get(key)
+        if held is not None and held[0]() is raw:
+            _worker_copies.move_to_end(key)
+            return held[1]
+    copy = source.replacing(raw.copy())
+
+    def forget(_dead: Any, key: int = key) -> None:
+        with _worker_copies_lock:
+            _worker_copies.pop(key, None)
+
+    with _worker_copies_lock:
+        _worker_copies[key] = (weakref.ref(raw, forget), copy, threading.Lock())
+        while len(_worker_copies) > WORKER_COPIES_KEPT:
+            _worker_copies.popitem(last=False)
+    return copy
+
+
+def on_the_copy(copy: Any, compute: Callable[[], Any]) -> Callable[[], Any]:
+    """Eine Rechnung, die unter dem Schloss der geteilten Kopie läuft.
+
+    Die trägen trimesh-Merker sind nicht threadsicher (:func:`for_a_worker`);
+    zwei Arbeiter an derselben Kopie rechnen deshalb nacheinander. Das Schloss
+    wird im Hauptthread nachgeschlagen, gehalten wird es im Arbeiter. Eine
+    Kopie, die nicht mehr geteilt wird, braucht keines.
+    """
+    with _worker_copies_lock:
+        lock = next((held[2] for held in _worker_copies.values() if held[1] is copy), None)
+    if lock is None:
+        return compute
+
+    def locked() -> Any:
+        with lock:
+            return compute()
+
+    return locked
 
 
 def starts_by_itself(spec: OperationSpec) -> bool:
@@ -494,8 +554,15 @@ def _clear_of_lines(rect: QRect, lines: Sequence[tuple[QPointF, QPointF]]) -> bo
     Plattenkante, und ein Feld, das breiter ist als der Abstand der Bohrung
     zur Kante, träfe sie an jedem nahen Platz — dann gewann ein ferner freier
     Platz, dreihundert Punkte vom Maß weg (Review 22.09.2026).
+
+    **Ein Strich, dessen Hüllrechteck das Feld nicht erreicht, wird nicht
+    geprüft** (RM-232, 25.09.2026): Er kann es weder schneiden noch einen
+    Endpunkt darin haben. Die Platzsuche stellt die Frage für jeden
+    Kandidaten gegen jeden Strich; am echten Fenster waren das 24 000
+    Schnittproben und 130 ms je Merkmalklick, fast alle gegen ferne Striche.
     """
     grown = QRectF(rect.adjusted(-SPACE, -SPACE, SPACE, SPACE))
+    left, top, right, bottom = grown.left(), grown.top(), grown.right(), grown.bottom()
     corners = (
         grown.topLeft(),
         grown.topRight(),
@@ -504,6 +571,14 @@ def _clear_of_lines(rect: QRect, lines: Sequence[tuple[QPointF, QPointF]]) -> bo
     )
     edges = tuple(zip(corners, (*corners[1:], corners[0]), strict=True))
     for start, end in lines:
+        start_x, start_y, end_x, end_y = start.x(), start.y(), end.x(), end.y()
+        if (
+            max(start_x, end_x) < left
+            or min(start_x, end_x) > right
+            or max(start_y, end_y) < top
+            or min(start_y, end_y) > bottom
+        ):
+            continue
         if grown.contains(start) or grown.contains(end):
             return False
         if any(_crosses((start, end), edge) for edge in edges):
@@ -2367,7 +2442,7 @@ class PlacementFlow(QObject):
                     tr("Andere Fläche wählen oder die Werte bearbeiten.") + " " + detail
                 )
 
-        self.session.placement_async(compute, done, failed)
+        self.session.placement_async(on_the_copy(mesh, compute), done, failed)
 
     def _begin_at_bore_step(self) -> None:
         """Die ursprüngliche Bohrstelle ausschließlich am historischen Eingang ablesen."""
@@ -2414,7 +2489,7 @@ class PlacementFlow(QObject):
             self._distance_valid = True
             self._settle()
 
-        self.session.placement_async(compute, done, lambda _detail: done(None))
+        self.session.placement_async(on_the_copy(mesh, compute), done, lambda _detail: done(None))
 
     def _begin_at_feature(self) -> None:
         """Beginnt dort, wo das gewählte Merkmal schon sitzt — ohne Klick (§18.5).
@@ -2501,7 +2576,7 @@ class PlacementFlow(QObject):
             if isValid(self) and not self._disposed and self.active and stamp == self._serial:
                 self._no_seat_at_feature()
 
-        self.session.placement_async(compute, done, failed)
+        self.session.placement_async(on_the_copy(mesh, compute), done, failed)
 
     def _no_seat_at_feature(self) -> None:
         """Zum vorhandenen Merkmal gibt es keine ebene Trägerfläche — und dann?
@@ -2638,7 +2713,7 @@ class PlacementFlow(QObject):
             # zielt der Zeiger, wie vor diesem Weg auch.
             return
 
-        self.session.placement_async(compute, done, failed)
+        self.session.placement_async(on_the_copy(mesh, compute), done, failed)
 
     def _hole_to_seat_in(self, entry: SceneObject) -> Feature | None:
         """Die Bohrung, in die ein Baustein von selbst gesetzt wird — sonst ``None``.
@@ -3135,7 +3210,7 @@ class PlacementFlow(QObject):
             ):
                 self._reference_hit_ready(index, candidates)
 
-        self.session.placement_async(compute, done, lambda _detail: done(()))
+        self.session.placement_async(on_the_copy(mesh, compute), done, lambda _detail: done(()))
 
     def _reference_hit_ready(self, index: int, candidates: tuple[tuple[str, str], ...]) -> None:
         """Eine belegte Modellwahl abschließen, niemals den Maßentwurf übernehmen."""
@@ -4475,19 +4550,20 @@ class PlacementFlow(QObject):
                 for rect in taken:
                     xs.update((rect.left() - width - SPACE, rect.right() + SPACE + 1))
                     ys.update((rect.top() - height - SPACE, rect.bottom() + SPACE + 1))
-                admissible = [
-                    QRect(x, y, width, height)
-                    for x in xs
-                    for y in ys
-                    if left <= x <= right
-                    and top <= y <= bottom
-                    and not any(
-                        QRect(x, y, width, height).intersects(
-                            rect.adjusted(-SPACE, -SPACE, SPACE, SPACE)
-                        )
-                        for rect in taken
-                    )
-                ]
+                # Die Abstandsränder der belegten Plätze einmal bilden, nicht je
+                # Kandidat und Platz neu (RM-232) — dieselbe Reihenfolge wie
+                # vorher, x außen, y innen.
+                spread = [rect.adjusted(-SPACE, -SPACE, SPACE, SPACE) for rect in taken]
+                admissible = []
+                for x in xs:
+                    if not left <= x <= right:
+                        continue
+                    for y in ys:
+                        if not top <= y <= bottom:
+                            continue
+                        candidate = QRect(x, y, width, height)
+                        if not any(candidate.intersects(rect) for rect in spread):
+                            admissible.append(candidate)
                 if not admissible:
                     return None
 
