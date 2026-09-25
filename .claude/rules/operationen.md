@@ -522,7 +522,10 @@ Zugabe nur an offenen Mündungen: **die äußere immer**, auch unter einem
 Deckel — dort ohne Zugabe, der Deckel bleibt —, **die ferne nur bei einer
 Durchgangsbohrung**; am Sackloch ist sie der Boden, und der kippt mit. Beide
 Kerne fragen dasselbe, der exakte an seinem Netz-Zwilling, und kappen am Netz
-mit `section.cut`, am exakten Körper mit `edit.clipped_bore_tool`. Und der
+mit `section.cut`, am exakten Körper mit `edit.clipped_bore_tool`; scheitert
+der ebene Schnitt — an der Öffnung eines Mini-Topfs, die Ebenen 0,44 mm
+auseinander —, kappen Quader über die Boolesche Kette (`_boxed_in`), und nur
+wenn auch das nichts Geschlossenes gibt, bleibt das Werkzeug ungekappt. Und der
 exakte fragt danach die Nachbarwand wie das Netz (`_neighbour_bore_findings`).
 **Eine Senkung ohne Bohrung kippt genauso** — am Netz über `_turned_open_cone`
 (der gemessene Hohlraum, bloß gedreht, behielt auf einer Seite eine Decke),
@@ -580,10 +583,15 @@ auf 5 setzte, hätte eine Haut von 0,022 mm über der Mündung stehen lassen.
 **Und eine Mündung, die an der neuen Stelle unter Material liegt, wird
 gemeldet** (`_mouth_covered`, `{op}.mouth_covered`): Eine Sackbohrung hat keinen
 Durchgang, den sie verlieren könnte, und schwieg — an einer schrägen
-Außenfläche um 3 mm quer versetzt lag die Senkung unter 0,24 mm Material. Am
-exakten Körper fragt `_exact_through_checked` zusätzlich die Säule im
-Schlauch, um die Facettengrenze schlanker: Die Erkennung nennt eine Bohrung
-in eine vergrabene Senkung durchgehend.
+Außenfläche um 3 mm quer versetzt lag die Senkung unter 0,24 mm Material.
+Zugedeckt heißt: vor mindestens der Hälfte des Rands Material
+(`COVERED_SHARE`) — eine einzelne Kantenprobe antwortet mit dem Vorzeichen der
+falschen Fläche. Am exakten Körper fragt `_exact_through_checked` zusätzlich
+die Säule im Schlauch, um die Facettengrenze schlanker: Die Erkennung nennt
+eine Bohrung in eine vergrabene Senkung durchgehend. **Und die Säule liegt im
+Werkzeug** (`_inscribed_radius`): Versetzt wird das Vieleck der Datei, und eine
+Säule 0,02 mm unter dem Durchmesser traf an einem 32-Eck jede Sehne — „geht
+nicht mehr durch" an einer glatt versetzten Bohrung einer Furnierplatte.
 
 **Gemeldet wird, was am Ergebnis steht** (`_measured_on`). Der exakte Kern
 erkennt nach jeder Merkmalshandlung neu; das Netz trug beim Versetzen, Kippen

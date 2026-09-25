@@ -664,6 +664,11 @@ PARAMETRIC_KINDS: Final = ("hole", "pin", "slot")
 #: Boolesche zuverlässig bricht (§39).
 FEATURE_SECTIONS: Final = BORE_SECTIONS
 
+#: Ab welchem Anteil der Proben vor einem Rand im Material eine Mündung als
+#: zugedeckt gilt (:func:`_mouth_covered`): Eine Haut liegt vor dem ganzen
+#: Ring, eine falsch antwortende Kantenprobe vor einem Punkt von 32.
+COVERED_SHARE: Final = 0.5
+
 #: Wie weit der Rand eines Hohlraums im Mittel neben seiner Ausgleichsebene
 #: liegen darf, damit der Stopfen ihn noch mit einem Fächer schließt — als
 #: Anteil seines Durchmessers (:func:`_body_from_faces`, ``curved_rims``). Eine
@@ -1438,8 +1443,20 @@ def _no_longer_through(
     112 mm weiter die Waben — „geht nicht mehr durch" (RM-133, 23.09.2026).
     Ein Rest, der erst jenseits des Werkzeugendes beginnt, liegt hinter Luft
     (:func:`_behind_the_cut`); die Bohrung ist durch ihre Wand hindurch.
+
+    **Und die Säule liegt im Werkzeug** (25.09.2026). Eine Bohrung aus einer
+    STL-Datei ist ein Vieleck, versetzt wird ihr Flächenkörper: An einer
+    Furnierplatte, 0,6 mm dick, Bohrungen Ø 6,1 als 32-Eck, reichte die Säule
+    mit 0,02 mm unter dem Durchmesser über dessen Innenkreis hinaus, und an jeder Sehne blieb
+    ein Splitter von 0,0001 mm³ in ihr — „geht nicht mehr durch" nach 1,5 mm
+    quer, bei unverändertem Volumen. Mit ``tool`` nimmt die Säule deshalb
+    höchstens den Innenkreis seiner Wand (:func:`_inscribed_radius`).
     """
     diameter = float(feature.params.get("diameter", 0.0)) - FEATURE_OVERLAP
+    if tool is not None:
+        inscribed = _inscribed_radius(tool, centre, _feature_direction(feature))
+        if inscribed is not None:
+            diameter = min(diameter, 2.0 * inscribed - FEATURE_OVERLAP)
     if diameter <= EPS_GEOM:
         return False
     reach = float(np.linalg.norm(mesh.bounds.size)) * 2.0
@@ -1473,6 +1490,38 @@ def _no_longer_through(
     if tool is None:
         return True
     return not _behind_the_cut(remaining, tool, centre, _feature_direction(feature))
+
+
+def _inscribed_radius(tool: MeshData, centre: Vec3, direction: Vec3) -> float | None:
+    """Der kleinste Abstand einer Wandfläche des Werkzeugs von seiner Achse —
+    der Innenkreis seines Vielecks; ``None`` ohne Wand längs der Achse.
+
+    Gezählt werden die Dreiecke, deren Normale quer zur Achse steht: die Wand
+    eines Zylinders. Senkungen und Deckel stehen schräg oder quer und zählen
+    nicht; an einer Kette gibt so die engste Bohrung das Maß.
+    """
+    raw = tool.raw
+    if not len(raw.faces):
+        return None
+    axis = np.asarray(direction, dtype=np.float64)
+    axis /= math.hypot(*(float(value) for value in axis))
+    normals = np.asarray(raw.face_normals, dtype=np.float64)
+    along = normals[:, 0] * axis[0] + normals[:, 1] * axis[1] + normals[:, 2] * axis[2]
+    wall = np.abs(along) < _WALL_ACROSS
+    if not bool(wall.any()):
+        return None
+    corners = np.asarray(raw.triangles, dtype=np.float64)[wall, 0] - np.asarray(centre)
+    facing = normals[wall]
+    distances = np.abs(
+        corners[:, 0] * facing[:, 0] + corners[:, 1] * facing[:, 1] + corners[:, 2] * facing[:, 2]
+    )
+    return float(distances.min())
+
+
+#: Wie weit die Normale eines Wanddreiecks von der Querrichtung abweichen darf,
+#: als Kosinus zur Achse: Die Wand eines Zylinders steht quer (0), der Kegel
+#: einer 120°-Senkung bei 0,5 — ein Zehntel trennt beide.
+_WALL_ACROSS: Final = 0.1
 
 
 def _behind_the_cut(remaining: Any, tool: MeshData, centre: Vec3, direction: Vec3) -> bool:
@@ -5053,10 +5102,47 @@ def _old_rim_caps(
 
 
 def _within_the_old_rims(tool: MeshData, caps: Sequence[SectionPlane]) -> MeshData:
-    """Ein gekipptes Netzwerkzeug an den Ebenen aus :func:`_old_rim_caps` gekappt."""
+    """Ein gekipptes Netzwerkzeug an den Ebenen aus :func:`_old_rim_caps` gekappt.
+
+    **Scheitert der ebene Schnitt, kappen Quader** (25.09.2026). An der Öffnung
+    eines Mini-Topfs — Ø 28 in einer 0,3 mm dünnen Wand, die Ebenen 0,44 mm
+    auseinander — kam das gekippte Werkzeug aus :func:`_cut_at_the_rims` ohne
+    geschlossenen Deckel zurück, und hier stand dann das ungekappte: 59 mm³
+    Abtrag vor den alten Mündungen, genau der Fehler, den die Kappe verhindert.
+    Je Ebene ein Quader auf ihrer Innenseite, groß genug für das ganze
+    Werkzeug, über die Boolesche Kette geschnitten; erst wenn auch das nichts
+    Geschlossenes hergibt, bleibt das Werkzeug, wie es ist.
+    """
     if not caps:
         return tool
-    return _cut_at_the_rims(tool, caps) or tool
+    clipped = _cut_at_the_rims(tool, caps)
+    if clipped is not None:
+        return clipped
+    return _boxed_in(tool, caps) or tool
+
+
+def _boxed_in(tool: MeshData, planes: Sequence[SectionPlane]) -> MeshData | None:
+    """``tool`` auf der Innenseite jeder Ebene, über die Boolesche Kette — ``None``,
+    wo das keinen geschlossenen Körper ergibt."""
+    size = 4.0 * float(tool.bounds.diagonal) + 1.0
+    middle = np.asarray(tool.bounds.centre, dtype=np.float64)
+    boxes = []
+    for plane in planes:
+        normal = np.asarray(plane.normal, dtype=np.float64)
+        normal /= math.hypot(*(float(value) for value in normal))
+        # Der Fußpunkt der Werkzeugmitte auf der Ebene: Dort liegt die obere
+        # Fläche des Quaders, und er reicht nach innen und nach allen Seiten
+        # über das Werkzeug hinaus.
+        foot = middle - normal * (units.dot3(normal, middle) - plane.position)
+        box = trimesh.creation.box(extents=(size, size, size))
+        transform.moved(box, transform.rotation_between([0.0, 0.0, 1.0], normal))
+        box.apply_translation(foot - normal * (size / 2.0))
+        boxes.append(MeshData.of(box))
+    outcome = boolean("intersection", [tool, *boxes], quality="fine", seed=None, allow_empty=True)
+    body = outcome.mesh
+    if not len(body.raw.faces) or not body.is_watertight or body.volume <= EPS_GEOM:
+        return None
+    return body
 
 
 def _turned_open_cone(
@@ -5261,6 +5347,14 @@ def _surface_index(mesh: MeshData) -> Any:
 
 def _mouth_is_open(mesh: MeshData, edge: NDArray[np.float64], normal: NDArray[np.float64]) -> bool:
     """Vor dem gesamten Rand liegt Luft; ein Sacklochboden bleibt geschlossen."""
+    return _share_in_material(mesh, edge, normal) == 0.0
+
+
+def _share_in_material(
+    mesh: MeshData, edge: NDArray[np.float64], normal: NDArray[np.float64]
+) -> float:
+    """Welcher Anteil der Proben knapp vor dem Rand im Material liegt — die Probe
+    von :func:`_mouth_is_open`, gezählt statt nur gefragt."""
     from app.core.geom.mesh import on_surface
 
     inward = edge.mean(axis=0) - edge
@@ -5269,7 +5363,7 @@ def _mouth_is_open(mesh: MeshData, edge: NDArray[np.float64], normal: NDArray[np
     closest, _, at = on_surface(mesh.raw, probes, index=_surface_index(mesh))
     body_normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
     signed = np.einsum("ij,ij->i", probes - closest, body_normals[at])
-    return bool(np.all(signed > EPS_GEOM))
+    return float(np.count_nonzero(signed <= EPS_GEOM)) / float(max(len(signed), 1))
 
 
 def _past_the_mouths(mesh: MeshData, cavity: MeshData) -> MeshData:
@@ -8714,8 +8808,14 @@ def _mouth_covered(
     Mündung der Senkung 0,24 mm unter der Fläche, zugedeckt von einer Haut aus
     Material — eine Druckschicht, und die Senkung war von außen zu (RM-220,
     25.09.2026). Gefragt wird mit derselben Luftprobe wie an der alten Stelle
-    (:func:`_mouth_is_open`), am Ring der alten Mündung, um ``travel``
+    (:func:`_share_in_material`), am Ring der alten Mündung, um ``travel``
     verschoben. Wo schon ``no_longer_through`` steht, ist das gesagt.
+
+    **Zugedeckt heißt: vor mindestens der Hälfte des Rands Material**
+    (:data:`COVERED_SHARE`). Eine Haut liegt vor dem ganzen Ring; eine einzelne
+    Probe an einer Kante antwortet dagegen mit dem Vorzeichen der falschen
+    Fläche — an einer Furnierplatte meldete eine glatt durchgeschnittene Kopie
+    so „unter Material", weil einer von 32 Punkten daneben lag.
     """
     if any(finding.code == f"{op}.no_longer_through" for finding in findings):
         return []
@@ -8723,7 +8823,8 @@ def _mouth_covered(
         if not rim.open:
             continue
         normal = np.asarray(rim.plane.normal, dtype=np.float64)
-        if _mouth_is_open(after, rim.points + _seated(travel, normal), normal):
+        moved = rim.points + _seated(travel, normal)
+        if _share_in_material(after, moved, normal) < COVERED_SHARE:
             continue
         return [
             Finding(
