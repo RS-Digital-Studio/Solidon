@@ -2068,6 +2068,70 @@ def test_a_clicked_hole_can_really_be_accepted(qt_app: QApplication) -> None:
         window.release()
 
 
+def test_the_next_hole_takes_over_the_floating_widgets_of_the_last(qt_app: QApplication) -> None:
+    """Von Bohrung zu Bohrung bleiben Maßkarte, Kantenmaße und Maßtinte dieselben (RM-232).
+
+    Jeder Merkmalklick baut einen neuen Fluss, und bis zum 25.09.2026 baute
+    jeder auch seine Widgets über der Grafikfläche neu: am echten Fenster neun
+    native Fenster anlegen, zeigen, verbergen und löschen, rund 40 ms je
+    Klick. Der Vorgänger legt sie beim Abbau ab (``_park_floating``), der
+    Nachfolger übernimmt sie — dieselben Objekte, ohne eine Verbindung zum
+    alten Fluss, und ihre Felder arbeiten für den neuen Träger.
+    """
+    from PySide6.QtCore import SIGNAL
+
+    from app.ui.labels import _WheelNeedsFocus
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, first_hole = _a_selected_hole(window)
+        first = _measures_in_the_view(window)
+        assert first is not None and first.active and first._surface is not None
+        kept = (first._measure_box, first._canvas, *first._measures, *first._reference_boxes)
+        listeners = (
+            first._measure_cancel.receivers(SIGNAL("clicked(bool)")),
+            first._measures[0].receivers(SIGNAL("valueChangedMm(double)")),
+        )
+        entry = window.session.last_result.scene.objects[object_id]
+        second_hole = next(
+            identifier
+            for identifier, feature in entry.features.items()
+            if feature.kind == "hole" and identifier != first_hole
+        )
+        window.object_tree.select_feature(object_id, second_hole)
+        second = _measures_in_the_view(window)
+        assert second is not None and second is not first and second.active
+        assert not first.active and first._links == [], "der alte Fluss hält nichts mehr"
+        assert (
+            second._measure_box,
+            second._canvas,
+            *second._measures,
+            *second._reference_boxes,
+        ) == kept, "dieselben Widgets und dieselbe Tinte"
+        assert (
+            second._measure_cancel.receivers(SIGNAL("clicked(bool)")),
+            second._measures[0].receivers(SIGNAL("valueChangedMm(double)")),
+        ) == listeners, "je Signal genau die Verbindungen eines Flusses"
+        assert all(
+            len(field.findChildren(_WheelNeedsFocus)) == 1
+            for field in (*second._measures, second._depth_measure, *second._centre_measures)
+        ), "der Radfilter wird nicht verdoppelt"
+        assert second._surface is not None and not second._measure_box.isHidden()
+        heard: list[str] = []
+        first.dialog.valuesChanged.connect(lambda *_args: heard.append("alt"))
+        second.dialog.valuesChanged.connect(lambda *_args: heard.append("neu"))
+        field = second._measures[0]
+        assert not field.isHidden(), "das Kantenmaß steht für die neue Bohrung"
+        field.set_value_mm(field.value_mm() + 1.0)
+        for _ in range(20):
+            QApplication.processEvents()
+        assert "neu" in heard and "alt" not in heard, "das Feld arbeitet für den neuen Träger"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_passive_measures_can_be_replaced_but_a_begun_draft_cannot(
     qt_app: QApplication,
 ) -> None:

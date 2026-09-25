@@ -354,6 +354,71 @@ def test_a_card_covers_what_lies_behind_it() -> None:
     )
 
 
+def test_only_what_lies_over_the_view_gets_its_own_window(qt_app: QApplication) -> None:
+    """Eine native Grafikfläche steckt ihre Geschwister nicht mehr an (RM-232).
+
+    Ohne ``AA_DontCreateNativeWidgetSiblings`` machte Qt jede Ebene über der
+    wgpu-Fläche nativ, samt allen ihren Geschwistern: am Wabenhalter 140 von
+    854 Widgets, die ganze Andockleiste darunter, und ein Bohrungsklick legte
+    30 Fenster an. Nativ bleibt jetzt nur, was über der Fläche liegt — die
+    Karten des Trägers; ihr Inhalt und alles daneben malt ohne eigenes Fenster.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QHBoxLayout
+
+    from app.ui.overlay import keep_widgets_alien
+
+    keep_widgets_alien()
+    native = Qt.WidgetAttribute.WA_NativeWindow
+    top = QWidget()
+    row = QHBoxLayout(top)
+    view = QWidget()
+    canvas = QWidget(view)
+    canvas.setAttribute(native)
+    host = OverlayHost(view)
+    beside = QWidget()
+    inside = QLabel("daneben", beside)
+    row.addWidget(host)
+    row.addWidget(beside)
+    zones = (QWidget(), QWidget(), QWidget())
+    contents = [QLabel("Karte", zone) for zone in zones]
+    host.set_zones(*zones)
+    later = QLabel("später dazu", host)
+    top.show()
+    top.resize(800, 500)
+    qt_app.processEvents()
+    try:
+        assert canvas.testAttribute(native) and view.testAttribute(native)
+        assert all(zone.testAttribute(native) for zone in zones), "die Karten liegen über ihr"
+        assert later.testAttribute(native), "auch was später dazukommt"
+        assert not any(label.testAttribute(native) for label in contents), "ihr Inhalt nicht"
+        assert not beside.testAttribute(native) and not inside.testAttribute(native), (
+            "und was daneben liegt, steckt sie nicht mehr an"
+        )
+    finally:
+        top.close()
+        top.deleteLater()
+        qt_app.processEvents()
+
+
+def test_the_window_keeps_native_windows_to_the_overlays(window: MainWindow) -> None:
+    """Am echten Fenster: die Andockleiste ohne eigenes Fenster, die Leisten der Ansicht mit.
+
+    Das Merkmalfenster entstand als Kind des Hauptfensters, wurde dort nativ
+    und nahm es beim Umzug in die Andockleiste mit — mit ihm jede Zeile, die
+    es je baute (RM-232). Die Leisten der Ansicht sind ihre direkten Kinder
+    und liegen über der Grafikfläche; sie brauchen das Fenster.
+    """
+    from PySide6.QtCore import Qt
+
+    native = Qt.WidgetAttribute.WA_NativeWindow
+    panel = window.feature_panel
+    assert not panel.testAttribute(native)
+    assert not any(child.testAttribute(native) for child in panel.findChildren(QWidget))
+    assert window.viewport.view_bar.testAttribute(native)
+    assert window.viewport.banner.testAttribute(native)
+
+
 def test_the_host_survives_zones_that_arrive_late(qt_app: QApplication) -> None:
     """``setParent`` löst sofort ein Resize aus — vor den Zonen.
 

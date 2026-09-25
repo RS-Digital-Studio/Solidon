@@ -28,6 +28,7 @@ from typing import Protocol, TypeGuard
 
 from PySide6.QtCore import (
     QAbstractItemModel,
+    QChildEvent,
     QEasingCurve,
     QEvent,
     QModelIndex,
@@ -40,7 +41,14 @@ from PySide6.QtCore import (
     QTimer,
 )
 from PySide6.QtGui import QPainterPath, QRegion
-from PySide6.QtWidgets import QAbstractItemView, QScrollArea, QTreeView, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QScrollArea,
+    QTreeView,
+    QVBoxLayout,
+    QWidget,
+)
 from shiboken6 import isValid
 
 from app.ui.leash import stop_watching_the_dying
@@ -195,6 +203,50 @@ CARD = "overlayCard"
 #: herum, ab der Kopfzeile der Liste fehlte rechts alles, ab „Verlauf" auch
 #: links. Von der Kante, an der die Karte aufhört, blieb ein Haken oben links.
 CARD_PADDING = 1
+
+
+def keep_widgets_alien() -> None:
+    """Ein natives Fenster steckt seine Geschwister nicht an.
+
+    Die Grafikfläche des Renderers ist ein natives Fenster
+    (``present_method="screen"``). Ohne diese Regel macht Qt dann jede Ebene
+    darüber nativ **samt allen ihren Geschwistern**, und ein Elternteil, in das
+    ein natives Widget umzieht, zwingt jedes spätere Kind dazu. Am Wabenhalter
+    standen so 140 von 854 Widgets als eigene Windows-Fenster da, darunter die
+    ganze Andockleiste mit Merkmalfenster und Auswahlhandlungen. Das
+    Merkmalfenster entstand als Kind des Hauptfensters und nahm die Nativität
+    beim Umzug mit. Ein Bohrungsklick legte dadurch 30 Fenster an, und jedes
+    ``setVisible`` kostete 1,3 ms mit sofortigem Malen. Gemessen am 25.09.2026
+    am echten Fenster (RM-232): Bohrung zu Bohrung 346 → 146 ms am Wabenhalter,
+    382 → 177 ms an der dichten Platte.
+
+    Was über der Fläche liegen muss, wird ausdrücklich nativ
+    (:func:`hold_above_the_view`). Gesetzt wird die Regel dort, wo die Fläche
+    entsteht, vor ihrem Aufbau; sie gilt für den ganzen Prozess, und ein
+    zweiter Aufruf ändert nichts.
+    """
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontCreateNativeWidgetSiblings)
+
+
+def hold_above_the_view(event: QChildEvent) -> None:
+    """Ein direktes Kind über der Grafikfläche bekommt ein eigenes natives Fenster.
+
+    Für ``childEvent`` der Ansicht und des :class:`OverlayHost`. Ein
+    Kind ohne natives Fenster malt Qt in die Fläche seines Elternteils, und die
+    liegt **unter** dem nativen Fenster des Renderers. Eine Karte, ein Banner
+    oder die Maßgruppe wären dort unsichtbar. Die Kinder dieser Kinder bleiben
+    ohne eigenes Fenster und malen in das ihres Elternteils.
+
+    Gesetzt wird beim Polieren (``ChildPolished``), also vor dem ersten
+    Zeigen. Das trifft auch Kinder, die später entstehen oder umziehen. Zu
+    ``ChildAdded`` ist ein Kind unter Umständen noch nicht fertig gebaut.
+    Eigene Fenster wie Menüs und Dialoge bleiben, was sie sind.
+    """
+    if event.type() != QEvent.Type.ChildPolished:
+        return
+    child = event.child()
+    if isinstance(child, QWidget) and not child.isWindow():
+        child.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
 
 
 def living[T: QWidget](zone: QWidget, wanted: type[T]) -> list[T]:
@@ -589,6 +641,11 @@ class OverlayHost(QWidget):
 
         self.view = view
         view.setParent(self)
+
+    def childEvent(self, event: QChildEvent) -> None:  # noqa: N802 — Qt-Name
+        """Karten und Schleier liegen über der Grafikfläche (:func:`hold_above_the_view`)."""
+        hold_above_the_view(event)
+        super().childEvent(event)
 
     def set_zones(self, left: QWidget, right: QWidget, bottom: QWidget) -> None:
         """Die drei Zonen anmelden. Reihenfolge legt fest, was oben liegt."""

@@ -21,7 +21,16 @@ from dataclasses import replace
 from itertools import pairwise, product
 from typing import Any, Final, Literal, NamedTuple
 
-from PySide6.QtCore import QElapsedTimer, QEvent, QPoint, QPointF, Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QChildEvent,
+    QElapsedTimer,
+    QEvent,
+    QPoint,
+    QPointF,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QFont, QFontMetricsF, QGuiApplication, QKeySequence, QMouseEvent
 from PySide6.QtWidgets import (
     QFrame,
@@ -108,6 +117,7 @@ from app.ui.labels import (
 )
 from app.ui.leash import Worker, WorkerLeash, stop_watching_the_dying, weak_slot
 from app.ui.motion import ACCENT_MS, animations_enabled, mix, tween
+from app.ui.overlay import hold_above_the_view, keep_widgets_alien
 from app.ui.palette import (
     DIFF_PALETTES,
     LAYER_WIDTHS,
@@ -5249,6 +5259,9 @@ class Viewport(QWidget):
 
         from app.ui.render.factory import make_renderer
 
+        # Vor der Fläche: Sie ist ein natives Fenster und steckte sonst jede
+        # Ebene darüber samt Geschwistern an (``overlay.keep_widgets_alien``).
+        keep_widgets_alien()
         self.renderer = make_renderer(self)
         widget = self.renderer.widget
         # Qt malt hier nichts, der Renderer malt alles.
@@ -12551,6 +12564,11 @@ class Viewport(QWidget):
         self._refresh_preview_banner()
         if self.renderer is not None:
             self._draw()
+
+    def childEvent(self, event: QChildEvent) -> None:  # noqa: N802 — Qt-Name
+        """Banner, Leisten und Maßgruppe liegen über der Grafikfläche (``overlay``)."""
+        hold_above_the_view(event)
+        super().childEvent(event)
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         super().resizeEvent(event)
