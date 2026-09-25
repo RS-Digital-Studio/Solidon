@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-25 | [Gekippte und versetzte Bohrungen sagen, was sie sind (25.09.2026)](#gekippte-und-versetzte-bohrungen-sagen-was-sie-sind-25092026) |
 | 2026-09-25 | [Das Einlesen großer Netze zählt einmal und liest im Arbeiter (25.09.2026)](#das-einlesen-großer-netze-zählt-einmal-und-liest-im-arbeiter-25092026) |
 | 2026-09-25 | [Ineinandersteckende Teile gehen vereinigt in die Boolesche Kette (25.09.2026)](#ineinandersteckende-teile-gehen-vereinigt-in-die-boolesche-kette-25092026) |
 | 2026-09-25 | [Der Bedienweg „kaputtes Dreiecksmodell → druckbar“ ist abgearbeitet (25.09.2026)](#der-bedienweg-kaputtes-dreiecksmodell--druckbar-ist-abgearbeitet-25092026) |
@@ -31070,3 +31071,58 @@ Dazu aus dem Bericht, je mit Test:
   `normalise` am Schiff 6,0 → 3,62 s mit gleichem Ergebnis an allen 485
   Körpern des Korpus, `open_path` ohne Dateiarbeit im Hauptthread. Das
   Verschweißen baut RM-239 neu.
+
+## Gekippte und versetzte Bohrungen sagen, was sie sind (25.09.2026)
+
+<a id="rm-220"></a>
+
+- [x] **RM-220 — Kippen und Versetzen einer gesenkten Bohrung: drei Reste.**
+  Aus der Durchsicht 0.5.0 (Paket beziehungen). Nachgemessen am 25.09.2026 an
+  einer Platte 30 × 24 × 12 mit Rippe über der Senkung und Fuß unter der
+  Unterseite, am Schraubenhalter mit Wabenmuster und an den Korpusplatten,
+  jeweils an beiden Kernen:
+  **(a) Die Rinne.** Die Verlängerung über die Mündung schnitt, was davor
+  steht: 738 mm³ in der Rippe an beiden Kernen, 948 mm³ durch den Deckel einer
+  vergrabenen Senkung, am Schraubenhalter 314 von 714 mm³ in den Waben; der
+  exakte Kern bohrte eine gekippte Durchgangsbohrung über die ganze Hülle
+  durch Rippe und Fuß (70 und 153 mm³, das Netz 0,9 und 19). Jetzt endet jedes
+  gekippte Werkzeug an den alten Randebenen (`_old_rim_caps`): die äußere
+  immer, unter einem Deckel ohne Zugabe, die ferne nur bei einer
+  Durchgangsbohrung; vor den Mündungen wird an keinem Kern etwas abgetragen,
+  und beide Kerne tragen auf 0,6 % dasselbe ab. Nebenbei behoben: Die
+  Kantenprüfung fragte die Austritte am Hüllquader und meldete „über die
+  Kante" auf der Rippe und in den Waben (am Schraubenhalter bei 20° und 30°);
+  sie fragt jetzt den ersten Durchstoß der Achse, und eine Senkung nur an
+  ihrem weiten Ende. Und das Netz setzte beim Kippen einer einzelnen Bohrung
+  `through` nicht zurück, obwohl der Befund „geht nicht mehr durch" kam.
+  Eine Senkung ohne Bohrung kippt genauso: Am Netz behielt der bloß gedrehte
+  Hohlraum auf einer Seite eine Decke (das Volumen stieg um 11 mm³), am
+  exakten Körper schnitt sie 80 mm³ aus der Rippe; jetzt 21,65 zu 21,67 mm³
+  bei 20°. Und ab dem halben Öffnungswinkel schließt sich eine gekippte
+  Senkung nicht mehr — sie lief als Rinne bis an den Rand (671 mm³ aus einer
+  Platte von 8 256, „über die Kante" als einziger Satz); die Operation sagt
+  jetzt mit dem größten Winkel ab (`_sink_must_close`).
+  **(b) Die Erklärung.** Das Netz trug nach dem Versetzen, Kippen und
+  Verdoppeln die alten Maße weiter — nach außen versetzt stand die Senkung als
+  Ø 8,8 vor der Fläche, am Körper mit Ø 6,8 in ihr. Jetzt wird wie am exakten
+  Körper am Ergebnis gemessen (`_measured_on`). Versetzt wird an beiden Kernen
+  starr (`_exact_rigid_cut`; der exakte Kern bohrte bis dahin über die ganze
+  Hülle), ein Einrücken bis zur Facettengrenze gilt als Messrauschen, eine
+  Mündung unter Material wird gemeldet (`mouth_covered` — an einer schrägen
+  Außenfläche lag die Senkung sonst still unter 0,24 mm Material), und eine
+  Bohrung in eine vergrabene Senkung sagt auch am exakten Körper, dass sie
+  nicht mehr durchgeht. Ein Durchgang, der als Sackloch zurückkommt, bleibt
+  am exakten Körper derselbe (`_free_along_the_axis`).
+  **(c) Die Nachbarwand.** `_exact_rotate_cavity` und `_exact_rotate_chain`
+  fragen sie wie das Netz; um 30° gekippt meldeten beide Kerne 0,64 bzw.
+  0,65 mm Restwand und 0,064 bzw. 0,063 mm an der schlichten Bohrung.
+  Nachweis: `tests/test_feature_moves_keep_shape.py` —
+  `test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths` (vier
+  Bohrungsarten), `test_a_tilted_bore_reports_its_neighbour_on_both_kernels`,
+  `test_a_countersunk_bore_moved_along_its_axis_says_what_it_is_there`,
+  `test_a_blind_countersink_set_under_the_surface_says_its_mouth_is_covered`,
+  `test_a_through_bore_set_along_its_axis_leaves_material_on_both_kernels`,
+  `test_a_countersink_tilted_past_its_flank_is_refused_with_the_largest_angle`,
+  je an Netz und exaktem Körper. Am Schraubenhalter mit Wabenmuster trägt die
+  gekippte Befestigungsbohrung bei 10°, 20°, 30° und 40° vor der Rückwand
+  nichts mehr ab, „über die Kante" bei 20° und 30° ist fort.

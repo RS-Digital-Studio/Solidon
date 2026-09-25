@@ -61,7 +61,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-217 — Die Zuordnung meldet doppelt und fragt ohne Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Formen-Beispiel auf acht Hinweise gebündelt, alle Kennungen und Zahlen bleiben erhalten. Offen: remove_feature.gone und perceive.orphaned doppelt, orphaned nach Teilen, Frage unter der Deckfläche, altes Merkmal ohne Markierung — _with_features filtert, question_context trägt das alte Merkmal |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | drill_brep_hole nummeriert nach Lage; Verschieben und Einfügen sagen an build_tray_v3.step ab — eindeutige geometrische Zuordnung behält den Namen wie am Netz |
 | [RM-219 — Rundungen aus langen Nadeldreiecken werden kaum als Zylinder erkannt](#rm-219) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: 12 148 Ebenen, 17 Zylinder, Umwandlung 150 s — Streifen schmaler Dreiecke gemeinsam einpassen, Korpus mit Namen gegenprüfen |
-| [RM-220 — Kippen und Versetzen einer gesenkten Bohrung: drei Reste](#rm-220) | Geometrie, Erkennung und Druckvorbereitung | Rinne von 713,9 mm³ beim Kippen, falsche Senkungsmaße nach dem Versetzen, keine Nachbarwandprüfung am exakten Körper — kappen oder nennen, messen statt erklären |
 | [RM-222 — Die Erkennung einer Durchbohrung am Netz hängt an der Vorgeschichte](#rm-222) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: gleiche Geometrie, mit vorherigem Vergrößern eine Bohrung weniger — beide Stände als Korpusfall, Stelle eingrenzen |
 | [RM-223 — Zwei Netzoperationen sagen das Falsche](#rm-223) | Geometrie, Erkennung und Druckvorbereitung | Angleichen mit 1 mm endet als unerwarteter Fehler (MemoryError), Verfeinern leiht sich den Satz der lokalen Suche — vorab schätzen und absagen, eigener Satz |
 | [RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen](#rm-225) | Geometrie, Erkennung und Druckvorbereitung | Gewürzdeckel: nach Teilung ändern 124 Flächen und kein Muster, nach Entfernen 31 Zusatzflächen und 1,7 mm³ Überlappung — Feld begrenzen, Stirnkappen verschmelzen |
@@ -1667,23 +1666,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   (Sehnenzug über mehrere Nadeln statt je Fleck), gegen den Korpus mit Namen
   prüfen. Abnahme: Besenhalter mit seinen Rundungen als Zylinder, Umwandlung
   unter 30 s, keine Änderung an den übrigen Korpuskörpern.
-
-<a id="rm-220"></a>
-
-- [ ] **RM-220 — Kippen und Versetzen einer gesenkten Bohrung: drei Reste.**
-  Aus der Durchsicht 0.5.0 (Paket beziehungen, „Für andere Gebiete"), jeder
-  gemessen: Die Senkungskette zieht beim Kippen eine lange flache Rinne —
-  Schraubenhalter, Bohrung mit 90°-Senkung um 30° gekippt, 713,9 mm³ abgetragen
-  auf 24,5 × 22,4 × 38,4 mm (`probe_rm133_loss.py`; `_cone_past_a_tilted_face`
-  führt den Kegel fort, bis er die Fläche überall verlässt). `move_feature`
-  entlang der Achse einer gesenkten Bohrung erklärt die mitbewegte Senkung mit
-  unveränderten Maßen, obwohl sie danach angeschnitten ist (`probe_cone2b.py`).
-  Und die exakten Wege `_exact_rotate_cavity`/`_exact_rotate_chain` prüfen die
-  Nachbarwand nicht — `bore.neighbour_opened` gilt nur am Netz. Weg: die
-  Fortführung an der Wand kappen oder die Länge der Rinne als Befund nennen
-  (Vorschlag des Berichts), die Erklärung aus dem Ergebnis messen statt aus den
-  Parametern, die Nachbarprüfung in beide exakten Wege. Abnahme: je Fall ein
-  Test, am Netz und am exakten Körper gleich.
 
 <a id="rm-222"></a>
 

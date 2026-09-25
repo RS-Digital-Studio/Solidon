@@ -511,6 +511,30 @@ Abnahme: 30° an der gesenkten Bohrung ergibt eine gekippte Senkung über einer
 gekippten, durchgehenden Bohrung, und `detect` findet beide mit derselben
 Achse (`test_turning_a_countersunk_bore_takes_its_sink_along`).
 
+**Und was über die Mündung hinausreicht, endet an der alten Randebene**
+(`_old_rim_caps`, RM-220). Vor der Fläche liegt sonst Luft; wo dort Material
+steht, nahm die Verlängerung es mit — an einer Platte mit Rippe über der
+Senkung 738 mm³ an beiden Kernen, am Schraubenhalter mit Wabenmuster 314 von
+714 mm³ in den Waben, und der exakte Kern bohrte eine gekippte
+Durchgangsbohrung über die ganze Hülle durch Rippe und Fuß. Die Ebenen sind
+die echten Randringe bis zur äußeren Mündung (`_bore_end_planes`), mit der
+Zugabe nur an offenen Mündungen: **die äußere immer**, auch unter einem
+Deckel — dort ohne Zugabe, der Deckel bleibt —, **die ferne nur bei einer
+Durchgangsbohrung**; am Sackloch ist sie der Boden, und der kippt mit. Beide
+Kerne fragen dasselbe, der exakte an seinem Netz-Zwilling, und kappen am Netz
+mit `section.cut`, am exakten Körper mit `edit.clipped_bore_tool`. Und der
+exakte fragt danach die Nachbarwand wie das Netz (`_neighbour_bore_findings`).
+**Eine Senkung ohne Bohrung kippt genauso** — am Netz über `_turned_open_cone`
+(der gemessene Hohlraum, bloß gedreht, behielt auf einer Seite eine Decke),
+am exakten Körper über `_exact_rotate_cone`. **Und wer eine Senkung um ihren
+halben Öffnungswinkel oder mehr kippt, bekommt eine Absage** mit dem größten
+Winkel (`_sink_must_close`): Ihre Flanke liegt dann flacher als die Fläche, und
+das Werkzeug lief als Rinne bis an den Rand des Körpers — 671 mm³ aus einer
+Platte von 8 256. Abnahme:
+`test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths`,
+`test_a_tilted_bore_reports_its_neighbour_on_both_kernels`,
+`test_a_countersink_tilted_past_its_flank_is_refused_with_the_largest_angle`.
+
 **Wer eine Kette nur versetzt, verlängert den exakten Körper an seinen
 Mündungen** (`_past_the_mouths`). Das Werkzeug aus Kennzahlen stand am
 15.09.2026 einen Tag lang auch hier — und trug je Versetzen bis zu 0,9 mm³ mehr
@@ -526,6 +550,35 @@ deren Mündung unter der Oberfläche liegt, ist ein vergrabener Hohlraum mit
 einem Deckel aus Material, und ein Werkzeug, das dort um die Zugabe über die
 Ebene hinausreicht, trug bei jedem Versetzen ein Scheibchen ab — 1,33 mm³ an
 Ø 9,2 (Review, 21.09.2026).
+
+**Versetzt und verdoppelt wird starr, an beiden Kernen** (RM-220). Eine
+Bohrung ist danach so lang wie vorher; entlang ihrer Achse oder in dickeres
+Material gesetzt, bleibt Material stehen, und `no_longer_through` sagt es
+(entschieden am 03.09.2026). Der exakte Kern schnitt eine Durchgangsbohrung
+über die ganze Zielhülle und blieb dort durchgehend; jetzt endet sie an ihren
+alten Randebenen, um die Bewegung mitgenommen (`_exact_rigid_cut`,
+`_moved_rims`). **Ein Einrücken bis zur Facettengrenze ist Messrauschen**
+(`_seated`): Die Mitte einer gekippten Bohrung lag bei z = 4,9576, und wer sie
+auf 5 setzte, hätte eine Haut von 0,022 mm über der Mündung stehen lassen.
+**Und eine Mündung, die an der neuen Stelle unter Material liegt, wird
+gemeldet** (`_mouth_covered`, `{op}.mouth_covered`): Eine Sackbohrung hat keinen
+Durchgang, den sie verlieren könnte, und schwieg — an einer schrägen
+Außenfläche um 3 mm quer versetzt lag die Senkung unter 0,24 mm Material. Am
+exakten Körper fragt `_exact_through_checked` zusätzlich die Säule im
+Schlauch, um die Facettengrenze schlanker: Die Erkennung nennt eine Bohrung
+in eine vergrabene Senkung durchgehend.
+
+**Gemeldet wird, was am Ergebnis steht** (`_measured_on`). Der exakte Kern
+erkennt nach jeder Merkmalshandlung neu; das Netz trug beim Versetzen, Kippen
+und Verdoppeln die alten Maße weiter — eine Senkung, 1 mm entlang ihrer Achse
+nach außen versetzt, stand als Ø 8,8 vor der Fläche, am Körper mit Ø 6,8 in
+ihr. Gesucht wird wie am exakten Körper (`_bore_match_id`, `_same_cone`); der
+Öffnungswinkel eines Kegels am Netz trägt dabei den Facettenfehler
+(`FACETED_CONE_ANGLE`, 89,80° statt 90°). Wo die Wand das gesetzte Maß trägt,
+bleibt es (`_with_nominal_bore`). **Ein Durchgang, der nicht mehr durchgeht,
+bleibt derselbe** (`_free_along_the_axis`): Er kommt als Sackloch zurück, und
+der exakte Kern hielt ihn für verloren, solange die Mitte entlang der Achse
+nicht frei war.
 
 **Und was das Schließen an der alten Stelle zurücklässt, wird zusammengelegt**
 (`_without_scars`): Der Stopfen endet an der Hülle in den Deckelflächen, und
@@ -699,7 +752,12 @@ Volumen, weil der Pfropfen die ganze Bohrung füllte und das Messer nur noch
 teilweise traf. `prepare_ops._edge_findings` fragt je Abschnitt des gesetzten
 Hohlraums am gefüllten Körper vor dem Schnitt — an der neuen Mitte, an den
 beiden Enden eines Langlochs und an den **Austritten** der Achse aus dem
-Hüllquader — und meldet höchstens einmal. Angeschlossen sind alle sechs Wege:
+Körper — und meldet höchstens einmal. Der Austritt ist der erste Durchstoß
+der Achse durch die Oberfläche, höchstens der Rand des Hüllquaders
+(`_axis_exits`, RM-220): Am Quader gefragt, lag er über jedem Vorsprung, auf
+einer Rippe oder in den Waben des Schraubenhalters, und deren Kante meldete
+„über die Kante". Eine Senkung mündet nur an ihrem weiten Ende; am engen fragt
+die Bohrung mit ihrem eigenen Durchmesser. Angeschlossen sind alle sechs Wege:
 Versetzen und Verdoppeln einzeln, als Kette und frei platziert mit Normale,
 Drehen einzeln und als Kette, und Ändern (das Review fand die letzten drei
 stumm). An einem Austritt fragt `prepare.mouth_over_the_edge` nur den halben

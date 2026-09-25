@@ -2467,10 +2467,18 @@ def test_turning_a_countersunk_bore_takes_its_sink_along(profile: Profile, picke
     for name in (bore, cone):
         axis = tuple(float(v) for v in out.features[name].params["axis"])
         assert abs(float(np.dot(axis, wanted))) == pytest.approx(1.0, abs=1e-6), (name, axis)
-    # Gedreht um die Mitte des gewählten Abschnitts: die bleibt, wo sie war.
-    pivot = entry.features[bore if picked == "hole" else cone].params["centre"]
-    kept = out.features[bore if picked == "hole" else cone].params["centre"]
-    assert tuple(float(v) for v in kept) == pytest.approx(tuple(float(v) for v in pivot), abs=1e-6)
+    # Gedreht um die Mitte des gewählten Abschnitts: Sie liegt danach auf dessen
+    # Achse. **Nicht mehr an seiner Mitte** (RM-220, 25.09.2026): Die Merkmale
+    # sind am Ergebnis gemessen, wie am exakten Körper, und die Mitte einer
+    # Wand, die an schrägen Mündungen endet, wandert entlang der Achse — hier
+    # um 1,4 mm.
+    chosen = bore if picked == "hole" else cone
+    pivot = np.asarray(entry.features[chosen].params["centre"], dtype=float)
+    kept = np.asarray(out.features[chosen].params["centre"], dtype=float)
+    unit = np.asarray(out.features[chosen].params["axis"], dtype=float)
+    offset = pivot - kept
+    across = offset - float(offset @ unit) * unit
+    assert float(np.linalg.norm(across)) == pytest.approx(0.0, abs=1e-3), (pivot, kept)
     assert out.features[bore].params["through"] is True
 
     # Und die Erkennung sieht es genauso: Bohrung und Senkung, eine Achse.

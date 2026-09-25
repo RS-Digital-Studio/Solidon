@@ -369,6 +369,13 @@ def test_follow_at_a_new_place_keeps_the_axial_level_of_the_recut(profile: Profi
     alten Mitte vorbelegt und nur x ändert, will die Kette in der Ebene
     versetzen — Schaft und Senkung stehen danach auf derselben Höhe wie nach
     demselben Neuschnitt ohne Stelle.
+
+    **Die Höhe der Senkung ist ihre Spitze, nicht ihr Rand** (RM-220,
+    25.09.2026). Die Senkung wird am Ergebnis gemessen, und ihr weitester Rand
+    hängt an der Fläche, die ihn schneidet: 3 mm weiter läuft sie in die
+    Nachbarbohrung, und ihr höchster verbliebener Punkt liegt 0,09 mm tiefer.
+    Die Außenfläche steigt dort um 0,24 mm, die starr versetzte Mündung liegt
+    darunter, und der Schritt sagt es (``mouth_covered``).
     """
     mesh, features, hole = _sloping_bore()
     centre = tuple(float(v) for v in hole.params["centre"])
@@ -395,15 +402,24 @@ def test_follow_at_a_new_place_keeps_the_axial_level_of_the_recut(profile: Profi
         y=centre[1],
         z=centre[2],
     )
+
+    def level(feature: Feature) -> float:
+        """Die Höhe eines Schafts an seiner Mitte, die einer Senkung an ihrer Spitze."""
+        height = float(feature.params["centre"][2])
+        if feature.kind != "cone":
+            return height
+        half = math.radians(float(feature.params["angle"]) / 2.0)
+        return height - float(feature.params["diameter"]) / 2.0 / math.tan(half)
+
     for kind in ("hole", "cone"):
         before = next(f for f in still.outputs[0].features.values() if f.kind == kind)
         after = next(f for f in moved.outputs[0].features.values() if f.kind == kind)
-        assert after.params["centre"][2] == pytest.approx(before.params["centre"][2], abs=1e-3), (
-            kind
-        )
+        assert level(after) == pytest.approx(level(before), abs=0.01), kind
         assert after.params["centre"][0] == pytest.approx(
             before.params["centre"][0] + 3.0, abs=0.05
         )
+    assert "move_feature.mouth_covered" in [finding.code for finding in moved.findings]
+    assert "move_feature.mouth_covered" not in [finding.code for finding in still.findings]
 
 
 def test_follow_at_a_new_place_measures_the_neighbour_wall_there(profile: Profile) -> None:
