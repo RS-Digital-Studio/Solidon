@@ -282,6 +282,28 @@ def map_colour(fraction: float, ramp: tuple[str, ...] = VIRIDIS) -> str:
     return ramp[round(position)]
 
 
+#: Karten, deren erste Stufe „nichts zu sagen" heißt — die Netzfehler („in
+#: Ordnung") und die Passungen („unbeteiligt"). Diese Stufe trägt die
+#: Körperfarbe und nicht den dunkelsten Ton der Rampe (Bedienweg B3,
+#: 24.09.2026): Sonst stand das ganze Modell violett da, und ein einzelnes
+#: Fehlerdreieck ging darin unter. Die Stufen darüber behalten ihre Farben.
+NEUTRAL_FIRST_MAPS: Final = frozenset({"defects", "fits"})
+
+
+def category_colours(count: int, neutral: str | None = None) -> tuple[str, ...]:
+    """Die Farben benannter Kartenstufen, in ihrer Reihenfolge.
+
+    Eine Tabelle für Bild **und** Legende: Die Ansicht färbte die Stufen über
+    eine lineare Rampe, die Legende über den nächsten Rampenton — dieselbe
+    Stufe in zwei leicht verschiedenen Farben. ``neutral`` ersetzt die erste
+    (:data:`NEUTRAL_FIRST_MAPS`).
+    """
+    colours = [map_colour(index / max(count - 1, 1)) for index in range(count)]
+    if neutral is not None and colours:
+        colours[0] = neutral
+    return tuple(colours)
+
+
 def is_monotonic(ramp: tuple[str, ...]) -> bool:
     """True, wenn die Helligkeit Schritt für Schritt steigt — die
     Eigenschaft, die einem Regenbogen fehlt.

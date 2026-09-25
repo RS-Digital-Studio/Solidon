@@ -1,0 +1,7 @@
+B3 kategorisch: True
+B3 Tabelle gleich: True
+B3 erste Farbe: #b9c4d0 Körper: #b9c4d0
+B1 ohne Fehler Knopf: None
+B1 ohne Fehler Satz: Herkunft: intern geschätzt · Keine Netzfehler gefunden.
+B1 mit Fehler Knopf: Reparieren == Reparieren
+B1 Schritte: 1 -> 2 repair ('obj_1',)

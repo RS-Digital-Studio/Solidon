@@ -111,9 +111,11 @@ from app.ui.motion import ACCENT_MS, animations_enabled, mix, tween
 from app.ui.palette import (
     DIFF_PALETTES,
     LAYER_WIDTHS,
+    NEUTRAL_FIRST_MAPS,
     ROLES,
     VIRIDIS,
     DiffPalette,
+    category_colours,
     readable_on,
     text_colour,
 )
@@ -6786,7 +6788,22 @@ class Viewport(QWidget):
             points = local + offset
             scalars = self._scalars_for(object_id, len(faces))
             cell_colours: CellColours | None = None
-            if scalars is not None and self._map is not None:
+            if (
+                scalars is not None
+                and self._map is not None
+                and self._map.kind in NEUTRAL_FIRST_MAPS
+            ):
+                # Benannte Stufen mit „in Ordnung" zuerst: dieselbe Tabelle wie
+                # die Legende, die erste Stufe in der Körperfarbe (Bedienweg B3).
+                levels = len(self._map.categories)
+                cell_colours = CellColours(
+                    scalars,
+                    colormap=category_colours(levels, self._object_colour),
+                    limits=(0.0, float(max(levels - 1, 1))),
+                    categorical=True,
+                    nan_colour="#4a4f57",
+                )
+            elif scalars is not None and self._map is not None:
                 low, high = self._map.display_limits
                 cell_colours = CellColours(
                     scalars,
@@ -9343,6 +9360,10 @@ class Viewport(QWidget):
             self._draw()
 
     # --- analysis maps (§18.4) --------------------------------------------------
+
+    def body_colour(self) -> str:
+        """Die Körperfarbe des Themas — die Legende färbt „in Ordnung" damit."""
+        return str(self._object_colour)
 
     def set_analysis_map(self, analysis: AnalysisMap | None, object_id: ObjectId | None) -> None:
         """Färbt einen Körper nach den Zahlen einer Karte, oder nimmt die Karte

@@ -13355,14 +13355,82 @@ class MainWindow(QMainWindow):
 
     def _show_map(self, analysis: Any, object_id: ObjectId) -> None:
         self.viewport.set_analysis_map(analysis, object_id if analysis else None)
-        self.analysis_bar.show_legend(analysis, self._feature_names())
+        self.analysis_bar.show_legend(analysis, self._feature_names(), self.viewport.body_colour())
+        self._offer_repair_on_the_map(analysis, object_id)
+
+    def _offer_repair_on_the_map(self, analysis: Any, object_id: ObjectId) -> None:
+        """Von der Netzfehlerkarte führt ein Knopf zur Reparatur (Bedienweg B1).
+
+        Wer die markierten Stellen sah, musste zurück in den Bericht oder die
+        Gruppe *Reparatur* in der Auswahlkarte suchen. Der Knopf heißt wie die
+        Operation und tut, was sie mit ihrer Vorgabe tut — Löcher schließen,
+        Außenseiten angleichen, Überschneidungen auflösen; ein engerer Name
+        versprach weniger, als der Schritt tut. Ohne Fehler steht der Satz der
+        Karte („Keine Netzfehler gefunden.") und kein Knopf.
+
+        **Und nur, wo ein Reparieren etwas ändern kann** (Einwand der
+        Reparatursitzung, 25.09.2026): Was das Schließen beim Einlesen offen
+        ließ, schließt ein zweites Reparieren mit denselben Mitteln meist auch
+        nicht, und ein Knopf gleich nach einem Reparaturschritt wäre ein Ring.
+        Nach einem Einlesen mit *Offene Stellen schließen* hilft es deshalb nur
+        an Überschneidungen (Stufe 3) — die löst erst die Reparatur auf.
+        """
+        if analysis is None or analysis.kind != "defects" or not object_id:
+            return
+        levels = {int(value) for value in analysis.values if value > 0.0}
+        if not levels or not self._repair_can_help(object_id, levels):
+            return
+        self.analysis_bar.legend.offer(
+            str(REGISTRY.get("repair").title),
+            weak_slot(self, MainWindow._repair_from_the_map, object_id),
+        )
+
+    def _repair_can_help(self, object_id: ObjectId, levels: set[int]) -> bool:
+        """Ob *Reparieren* an den gezeigten Stufen dieses Körpers etwas ändern kann.
+
+        Gefragt wird der Schritt, der den Körper zuletzt ausgegeben hat: nach
+        einer Reparatur nichts (ein Ring), nach einem Einlesen, das verschweißt
+        und geschlossen hat, nur Überschneidungen (Stufe 3); nach jedem anderen
+        Schritt jede Stufe — ein Abziehen, das Löcher reißt, hat niemand
+        repariert.
+        """
+        last = next(
+            (
+                step
+                for step in reversed(self.session.project.document.ops)
+                if object_id in step.outputs
+            ),
+            None,
+        )
+        if last is None:
+            return True
+        if last.op == "repair":
+            return False
+        mended = (
+            last.op == "load"
+            and bool(last.params.get("mend", True))
+            and bool(last.params.get("weld", True))
+        )
+        return 3 in levels if mended else True
+
+    def _repair_from_the_map(self, object_id: ObjectId) -> None:
+        """*Reparieren* am Körper der Karte, als nächster Schritt — Strg+Z nimmt es zurück."""
+        if not self._quiet_command_allowed():
+            return
+        result = self.session.last_result
+        if result is None or object_id not in result.scene.objects:
+            return
+        self.session.apply(
+            REGISTRY.get("repair").title,
+            [OperationDraft(op="repair", inputs=(object_id,))],
+        )
 
     def _refresh_map_units(self) -> None:
         """Die Anzeige liest fertige Werte neu, ohne Rechnung oder Kamerafahrt."""
         analysis = self.viewport.analysis_map
         if analysis is None:
             return
-        self.analysis_bar.show_legend(analysis, self._feature_names())
+        self.analysis_bar.show_legend(analysis, self._feature_names(), self.viewport.body_colour())
         mark = self.viewport.finding_mark()
         if (
             analysis.kind == "deviation"

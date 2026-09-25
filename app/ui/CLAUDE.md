@@ -1386,6 +1386,16 @@ deren Legende weiterhin physische Millimeterwerte nennt und die Abstufung
 ausweist. Der Viewport reicht die transformierten Werte an den Renderer;
 Messwerte, Schwellwerte und Hervorhebungen bleiben unverändert.
 
+Benannte Stufen färben Bild und Legende aus **einer** Tabelle
+(`palette.category_colours`). Bei den Karten aus `NEUTRAL_FIRST_MAPS`
+(Netzfehler, Passungen) trägt die erste Stufe — „in Ordnung", „unbeteiligt" —
+die Körperfarbe (`Viewport.body_colour`, als `neutral` an `show_legend`); die
+Stufen darüber behalten die Rampe. An der Netzfehlerkarte steht in der Legende
+*Reparieren*, wenn ein Schritt dort etwas ändern kann
+(`MainWindow._offer_repair_on_the_map`, `_repair_can_help`): nicht gleich nach
+einem Reparaturschritt, nach einem schließenden Einlesen nur an
+Überschneidungen. Der Klick legt genau einen Reparaturschritt an.
+
 Die Formabweichung zeigt obere Abstandsgrenzen ganzer Dreiecksflächen. Ihre
 Legende nennt ausgewertete und unbekannte Flächen; bei vollständig unbekannter
 Karte entfallen Zahlenrampe und Maximum. Das Maximalintervall gilt ausschließlich

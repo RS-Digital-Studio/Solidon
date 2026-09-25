@@ -6917,3 +6917,127 @@ def test_a_bundle_of_summarised_losses_announces_the_same_count_everywhere(
         assert f"2 × {tr('Hinweis')}" in panel.summary.text()
     finally:
         panel.deleteLater()
+
+
+def test_the_defect_legend_paints_all_right_in_the_body_colour() -> None:
+    """Bedienweg B3: „in Ordnung" trägt die Körperfarbe, nicht den dunkelsten Rampenton.
+
+    Sonst stand das ganze Modell violett da, und ein einzelnes Fehlerdreieck
+    ging darin unter. Die Stufen darüber behalten ihre Farben — dieselbe
+    Tabelle, aus der die Ansicht färbt (``palette.category_colours``).
+    """
+    from app.ui.analysis_bar import _legend_entries
+    from app.ui.palette import category_colours
+
+    levels = tuple(str(level) for level in maps.DEFECT_LEVELS)
+    defects = maps.AnalysisMap(
+        kind="defects",
+        title="Netzfehler",
+        values=(0.0, 3.0),
+        unit="",
+        low=0.0,
+        high=4.0,
+        categories=levels,
+    )
+    entries = _legend_entries(defects, None, "#abcdef")
+    assert entries[0] == (levels[0], "#abcdef")
+    assert [colour for _label, colour in entries[1:]] == list(category_colours(len(levels))[1:])
+
+    features = dataclasses.replace(defects, kind="features")
+    plain = _legend_entries(features, None, "#abcdef")
+    assert plain[0][1] != "#abcdef", "nur Karten mit „in Ordnung“ zuerst tragen die Körperfarbe"
+
+
+def test_the_viewport_paints_the_defect_levels_from_the_legend_table(qt_app: QApplication) -> None:
+    """Bild und Legende lesen dieselbe Tabelle; die erste Stufe ist der Körper (B3)."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.palette import category_colours
+    from app.ui.viewport import Viewport
+
+    body = MeshData(trimesh.creation.box(extents=(20.0, 20.0, 10.0)))
+    result = EvaluationResult(
+        scene=Scene(objects={"obj_1": SceneObject(id="obj_1", name="Halter", mesh=body)})
+    )
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    viewport.show_scene(result)
+    levels = tuple(str(level) for level in maps.DEFECT_LEVELS)
+    values = [0.0] * body.triangle_count
+    values[0] = 3.0
+    defects = maps.AnalysisMap(
+        kind="defects",
+        title="Netzfehler",
+        values=tuple(values),
+        unit="",
+        low=0.0,
+        high=4.0,
+        categories=levels,
+    )
+
+    viewport.set_analysis_map(defects, "obj_1")
+
+    drawn = [entry for kind, entry in renderer.drawn if entry.get("cell_colours") is not None]
+    assert drawn, renderer.names()
+    colours = drawn[-1]["cell_colours"]
+    assert colours.categorical
+    assert tuple(colours.colormap) == category_colours(len(levels), viewport.body_colour())
+
+
+def test_the_defect_map_offers_the_repair_and_says_when_there_is_nothing(
+    window: MainWindow,
+) -> None:
+    """Bedienweg B1: Von der Netzfehlerkarte führt ein Knopf zur Reparatur.
+
+    Ohne Fehler steht der Satz der Karte und kein Knopf. Nach einem Einlesen,
+    das schon geschlossen hat, hilft ein Reparieren nur an Überschneidungen —
+    an einem Loch, das die Importreparatur offen ließ, stünde ein Knopf ins
+    Leere. An einer Überschneidung heißt der Knopf wie die Operation, und ein
+    Klick legt genau einen Reparaturschritt am Körper der Karte an; danach
+    kommt er nicht wieder (ein Ring).
+    """
+    result = window.session.last_result
+    assert result is not None
+    object_id = next(iter(result.scene.objects))
+    body = result.scene.objects[object_id].mesh
+    levels = tuple(str(level) for level in maps.DEFECT_LEVELS)
+    clean = maps.AnalysisMap(
+        kind="defects",
+        title="Netzfehler",
+        values=(0.0,) * body.triangle_count,
+        unit="",
+        low=0.0,
+        high=4.0,
+        categories=levels,
+        note="Keine Netzfehler gefunden.",
+    )
+
+    window._show_map(clean, object_id)
+    assert window.analysis_bar.legend.action is None
+    assert "Keine Netzfehler gefunden." in window.analysis_bar.legend.note.text()
+
+    hole = dataclasses.replace(clean, values=(1.0,) + (0.0,) * (body.triangle_count - 1), note=None)
+    window._show_map(hole, object_id)
+    assert window.analysis_bar.legend.action is None, "das Einlesen hat schon geschlossen"
+
+    crossing = dataclasses.replace(
+        clean, values=(3.0,) + (0.0,) * (body.triangle_count - 1), note=None
+    )
+    window._show_map(crossing, object_id)
+    button = window.analysis_bar.legend.action
+    assert button is not None and button.text() == tr("Reparieren")
+    steps = len(window.session.project.document.ops)
+
+    button.click()
+    window.session.wait_for_idle()
+
+    ops = window.session.project.document.ops
+    assert len(ops) == steps + 1
+    assert ops[-1].op == "repair" and ops[-1].inputs == (object_id,)
+    repaired = ops[-1].outputs[0]
+    window._show_map(crossing, repaired)
+    assert window.analysis_bar.legend.action is None, "gleich nach dem Reparieren kein Ring"

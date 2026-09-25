@@ -32,7 +32,16 @@ from app.core.types import SliceResult
 from app.i18n import tr
 from app.ui.labels import TrackSlider, area, length, length_bound
 from app.ui.leash import weak_slot
-from app.ui.palette import LAYER_WIDTHS, ROLES, VIRIDIS, Role, map_colour, readable_on
+from app.ui.palette import (
+    LAYER_WIDTHS,
+    NEUTRAL_FIRST_MAPS,
+    ROLES,
+    VIRIDIS,
+    Role,
+    category_colours,
+    map_colour,
+    readable_on,
+)
 from app.ui.panels import origin_label
 from app.ui.style import NORMAL, TIGHT, make_primary
 from app.ui.tool_strip import BarComboBox
@@ -101,9 +110,14 @@ class MapLegend(QWidget):
         """
 
     def show_map(
-        self, analysis: AnalysisMap | None, names: Mapping[str, str] | None = None
+        self,
+        analysis: AnalysisMap | None,
+        names: Mapping[str, str] | None = None,
+        neutral: str | None = None,
     ) -> None:
-        """Die Legende zur Karte. ``names`` übersetzt interne Kennungen.
+        """Die Legende zur Karte. ``names`` übersetzt interne Kennungen,
+        ``neutral`` ist die Farbe der ersten Stufe, wo sie „in Ordnung" heißt
+        (:data:`~app.ui.palette.NEUTRAL_FIRST_MAPS`) — die Körperfarbe der Ansicht.
 
         Die Merkmalskarte führt ihre Stufen als Provenienz-IDs — so gehören
         sie in die Karte, und so stünden sie ohne diese Zuordnung auch in der
@@ -135,7 +149,7 @@ class MapLegend(QWidget):
             self.note.setAccessibleDescription("")
             return
 
-        shown = _legend_entries(analysis, names)
+        shown = _legend_entries(analysis, names, neutral)
         extra = len(shown) - LEGEND_MAX_ENTRIES
         if extra > 0:
             # Beispiele über die ganze Karte verteilen: Die ersten acht von
@@ -250,7 +264,7 @@ class MapLegend(QWidget):
 
 
 def _legend_entries(
-    analysis: AnalysisMap, names: Mapping[str, str] | None = None
+    analysis: AnalysisMap, names: Mapping[str, str] | None = None, neutral: str | None = None
 ) -> list[tuple[str, str]]:
     """Beschriftungen und Farben: benannte Stufen, wo es welche gibt, sonst
     eine Rampe.
@@ -262,10 +276,12 @@ def _legend_entries(
     if not analysis.known:
         return []
     if analysis.categories:
-        count = len(analysis.categories)
+        colours = category_colours(
+            len(analysis.categories), neutral if analysis.kind in NEUTRAL_FIRST_MAPS else None
+        )
         return [
-            (str((names or {}).get(name, name)), map_colour(index / max(count - 1, 1)))
-            for index, name in enumerate(analysis.categories)
+            (str((names or {}).get(name, name)), colour)
+            for name, colour in zip(analysis.categories, colours, strict=True)
         ]
 
     entries: list[tuple[str, str]] = []
@@ -399,10 +415,14 @@ class AnalysisBar(QWidget):
                 self.selector.setCurrentIndex(index)
 
     def show_legend(
-        self, analysis: AnalysisMap | None, names: Mapping[str, str] | None = None
+        self,
+        analysis: AnalysisMap | None,
+        names: Mapping[str, str] | None = None,
+        neutral: str | None = None,
     ) -> None:
-        """Die Legende zur Karte; ``names`` übersetzt interne Kennungen."""
-        self.legend.show_map(analysis, names)
+        """Die Legende zur Karte; ``names`` übersetzt interne Kennungen,
+        ``neutral`` färbt die Stufe „in Ordnung" wie der Körper."""
+        self.legend.show_map(analysis, names, neutral)
 
     def show_problem(self, message: str, action: str = "", on_action: Any = None) -> None:
         """Eine Karte, die sich nicht bauen ließ, sagt das, statt nichts zu
