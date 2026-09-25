@@ -1,0 +1,6 @@
+v5_baumstark_bett Slicer-Exit 0
+  Zeit 1d 6h 15m 25s, Filament 418.08 g, Stützbahn gesamt 908 m
+  Schicht 1: Stütze 53333 mm, Modell 3386 mm, Leerfahrten 679 (>2 mm: 274)
+  Schicht 2: Stütze 8798 mm, Modell 3714 mm, Leerfahrten 6670 (>2 mm: 2653)
+  Schicht 3: Stütze 8767 mm, Modell 3786 mm, Leerfahrten 6422 (>2 mm: 2533)
+  Stütze in der Kammer: 657 mm Bahn

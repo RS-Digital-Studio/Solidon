@@ -39,7 +39,7 @@ Die Module hier **laden und lösen auf**; die Werte selbst liegen daneben:
 
 | Datei | Inhalt |
 |---|---|
-| `printers.toml` | Druckerprofile — sechzehn FDM-Geräte und zwei Resin-Geräte nach Bauraum (`technology = "resin"`, Pixelgröße und Mindestwand statt Düse und Bahn) |
+| `printers.toml` | Druckerprofile — sechzehn FDM-Geräte und zwei Resin-Geräte nach Bauraum (`technology = "resin"`, Pixelgröße und Mindestwand statt Düse und Bahn); `travel_speed` aus dem Standardprozess des Herstellers |
 | `materials.toml` | Materialprofile — hier stehen die Toleranzen; `resin` ist das Harz, mit `technology = "resin"` |
 | `print_settings.toml` | Druckeinstellungen je Stufe |
 | `standards.toml` | Normteilmaße |

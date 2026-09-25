@@ -427,6 +427,25 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
     advice: list[SettingAdvice] = []
     printer = profile.printer
 
+    # **Und was sie kann, auch** — die Leerfahrt. Ein Projekt trägt seine
+    # Einstellungen selbst, und eines von vor ``PrinterProfile.travel_speed``
+    # fährt mit der allgemeinen Vorgabe: die Waschschüssel mit 150 statt 500
+    # mm/s, und in dieser Zeit läuft die Düse zwischen den Inseln aus.
+    # Schneller als der Drucker wird nichts vorgeschlagen; wer dort bewusst
+    # langsamer fährt, behält es, wenn er den Vorschlag abwählt.
+    if printer.travel_speed is not None and settings.speed.travel < printer.travel_speed:
+        advice.append(
+            _advice(
+                settings,
+                path="speed.travel",
+                value=printer.travel_speed,
+                reason=_(
+                    "Dieser Drucker fährt leer schneller. Je länger die Leerfahrt dauert, "
+                    "desto mehr läuft die Düse aus und zieht Fäden."
+                ),
+            )
+        )
+
     wanted = settings_table.MAX_LAYER_RATIO * printer.nozzle_diameter
     if settings.layers.layer_height > wanted:
         advice.append(

@@ -227,6 +227,9 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
             bridge=float(stage["speed_bridge"]),
             acceleration=float(stage["acceleration"]),
             outer_wall_acceleration=float(stage["outer_wall_acceleration"]),
+            # Die Leerfahrt gehört dem Drucker, nicht der Stufe
+            # (``PrinterProfile.travel_speed``); ohne Angabe gilt die Vorgabe.
+            **({} if printer.travel_speed is None else {"travel": printer.travel_speed}),
         ),
         support=SupportSettings(),
         adhesion=AdhesionSettings(kind=_adhesion(stuff.get("adhesion", "skirt"))),

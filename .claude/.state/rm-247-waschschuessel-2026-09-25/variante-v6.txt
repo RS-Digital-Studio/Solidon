@@ -1,0 +1,6 @@
+v6_gitter_bett_schnell Slicer-Exit 0
+  Zeit 1d 1h 6m 13s, Filament 415.25 g, Stützbahn gesamt 876 m
+  Schicht 1: Stütze 55508 mm, Modell 3386 mm, Leerfahrten 365 (>2 mm: 161)
+  Schicht 2: Stütze 8052 mm, Modell 3714 mm, Leerfahrten 529 (>2 mm: 170)
+  Schicht 3: Stütze 8002 mm, Modell 3786 mm, Leerfahrten 531 (>2 mm: 172)
+  Stütze in der Kammer: 299 mm Bahn

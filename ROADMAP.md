@@ -71,6 +71,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
 | [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
 | [RM-245 — Eine Bohrung mit Erweiterung an beiden Enden lässt sich nicht bearbeiten](#rm-245) | Geometrie, Erkennung und Druckvorbereitung | Vier STEP-Lochplatten: 9 von 9 Schraubbohrungen (Zylindersenkung hinten, Fase vorn) sagen Kippen, Versetzen und Verdoppeln ab — Kettenmodell auf Erweiterungen an beiden Enden ausbauen |
+| [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter und Leerfahrt vom Drucker gebaut und im ElegooSlicer belegt; offen: Tempo je Drucker, Orcas Bäume nur vom Bett, die falsche 258-mm-Brücke, Rand bei Füßen |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
@@ -1864,6 +1865,53 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Verdoppeln jeder Schraubbohrung an beiden Kernen mit denselben Befunden;
   je Fall ein Test an Netz und exaktem Körper, eine Platte mit Zylindersenkung
   hinten und Fase vorn.
+
+<a id="rm-247"></a>
+
+- [~] **RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken.**
+  Robert, 25.09.2026, an `F:\3D Dateien\HydroBowl+–+Smart+Fruit+&+Veggie+Washer (1)\washing bowl v1.stl`
+  auf dem Centauri Carbon 2 mit ElegooSlicer: „schon bei 1-2 schichten
+  ziehen wir fäden, verschieben die Stützen, die Stützen die der Slicer macht
+  sind auch sinnlos und gehen durch das Modell" — und dazu: „sowas sollten
+  wir dann aber immer für jedes Modell und Slicer/Drucker richtig
+  einstellen". Die Übergabe (`open-in-slicer\solidon.3mf`) trug Gitterstützen
+  „überall", Elegoos Muster `rectilinear` und 150 mm/s Leerfahrt. Im
+  ElegooSlicer nachgeschnitten: Schicht 1 aus 55 m Stütze gegen 3 m Modell,
+  ab Schicht 2 lose Einzellinien im Abstand von 2,8 mm, 530 Leerfahrten je
+  Schicht, und 22,9 m Stütze im Wasserkanal vom Becher zur Düse, die niemand
+  mehr herausbekommt. Sonden und Varianten:
+  `.claude/.state/rm-247-waschschuessel-2026-09-25/`.
+
+  **Gebaut**, jeweils mit Test:
+  - `analysis.model_support` trennt Säulen, die außen auf dem Modell
+    aufsetzen, von Kanaldecken (freier Raum unter der Decke fasst keinen
+    Kreis von 30 mm); Kanalstücke fallen aus Stützbedarf und „überall". Die
+    Schüssel bekommt damit „Gitter, nur vom Bett" mit dem Kanal als Grund.
+    Im Slicer mit diesen Werten: 0,3 m statt 22,9 m im Kanal, Kanaldecke als
+    Brücke.
+  - „Gitter" geht als `rectilinear-grid` an Orca und PrusaSlicer, als `grid`
+    an Cura (Linienabstand mal zwei); Bäume behalten das Herstellermuster.
+  - `PrinterProfile.travel_speed` aus dem Standardprozess der
+    Herstellerprofile (CC2 500, A1 700, MK4S 300 …); ein älteres Projekt
+    bekommt sie als Vorschlag.
+
+  **Offen, gemessen:**
+  - **Tempo je Drucker.** Solidons Stufe „Standard" fährt 40/60/80 mm/s, Elegoos
+    CC2-Profil 160/200/200 — dieselbe Schüssel 25 h 46 min gegen 13 h 22 min.
+    Wie die Leerfahrt gehört die Tempogrenze der Maschine (samt Volumenstrom
+    des Hotends, `max_flow` ist heute ein Materialwert „für ein
+    Standard-Hotend").
+  - **Orcas organische Bäume „nur vom Bett"** wachsen trotzdem in den Kanal
+    und führen ihre Stämme durch die Wand zum Bett (6,2 m). Klassische Bäume
+    (`tree_strong`) halten ihn frei, erzeugen aber 6 670 Leerfahrten in
+    Schicht 2. Übergibt Solidon Bäume mit Kanälen, braucht es eine Stützsperre
+    in der 3MF oder eine andere Baumart — noch nicht gebaut.
+  - **Eine falsche Brücke von 258 mm** meldet der Bericht an der Schüssel bei
+    z = 27,6: Ein 45-Grad-Streifen um die ganze Wand hängt dort an einem
+    breiten Stück, und die Ringregel in `_bridge_width` misst den Innenraum.
+  - **Haftung auf zwölf kleinen Füßen.** Nutzer des Designerprofils auf
+    MakerWorld melden „hintere Ecke hebt sich und Stringing"; ein Rand-Vorschlag
+    für viele kleine Aufstandsinseln ist nicht bewertet.
 
 ## Bedienung und Darstellung
 

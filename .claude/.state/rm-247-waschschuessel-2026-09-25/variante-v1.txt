@@ -1,0 +1,6 @@
+v1_elegoo Slicer-Exit 0
+  Zeit 13h 21m 39s, Filament 335.72 g, Stützbahn gesamt 564 m
+  Schicht 1: Stütze 27011 mm, Modell 2932 mm, Leerfahrten 261 (>2 mm: 173)
+  Schicht 2: Stütze 10592 mm, Modell 3699 mm, Leerfahrten 556 (>2 mm: 266)
+  Schicht 3: Stütze 10346 mm, Modell 3769 mm, Leerfahrten 621 (>2 mm: 266)
+  Stütze in der Kammer: 3126 mm Bahn

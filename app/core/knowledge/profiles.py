@@ -148,10 +148,32 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
         # Weniger als eine Düse druckt nichts; eine fehlende Angabe heißt
         # eine — das ist der Bestand der Tabelle und der übliche Drucker.
         nozzles=max(1, int(table.get("nozzles", 1))),
+        travel_speed=_positive_or_none(table.get("travel_speed"), f"{identifier}.travel_speed"),
     )
     printable_area(result)
     printable_height(result)
     return result
+
+
+def _positive_or_none(value: object, field: str) -> float | None:
+    """Eine freiwillige Geschwindigkeit: fehlt sie, gilt die Vorgabe.
+
+    Null, eine negative oder keine Zahl wäre ein Kopf, der nicht fährt — das
+    ist kein Profil, sondern ein Tippfehler, und er wird gesagt (Regel 17).
+    """
+    if value is None:
+        return None
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except TypeError, ValueError:
+        number = math.nan
+    if not math.isfinite(number) or number <= 0.0:
+        raise ValidationError(
+            field=field,
+            detail=_("Die Leerfahrt muss eine Geschwindigkeit über null in mm/s sein."),
+            values={"value": str(value)},
+        )
+    return number
 
 
 def _printer_contour(points: Any) -> tuple[tuple[float, float], ...]:

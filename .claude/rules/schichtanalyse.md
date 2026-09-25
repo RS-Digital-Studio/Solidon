@@ -60,7 +60,12 @@ Drei Sachen, die dabei nicht verhandelbar sind:
 
 - **Aufgelöst wird aus drei Ebenen** — Qualitätsstufe, Material, Drucker, in
   dieser Reihenfolge. Die Düse skaliert die Schichthöhe, die Maschinengrenzen
-  deckeln die Temperatur, ein offener Bauraum bekommt keine Kammertemperatur.
+  deckeln die Temperatur, ein offener Bauraum bekommt keine Kammertemperatur,
+  und **die Leerfahrt kommt vom Drucker** (`PrinterProfile.travel_speed`, aus
+  dem Standardprozess des Herstellerprofils). Ein Projekt von vorher bekommt
+  sie als Vorschlag. Anlass: Die Waschschüssel ging mit den allgemeinen
+  150 mm/s an einen Centauri Carbon 2, dessen Hersteller 500 fährt, bei 530
+  Leerfahrten je Schicht — und zog ab Schicht 1 Fäden.
 - **Was Solidon meint, wird geschrieben, auch das Muster.** „Gitter" ging bis
   zum 25.09.2026 als An/Aus und Art hinaus, das Muster blieb beim Hersteller —
   bei Elegoo `rectilinear`, Linien in einer Richtung, die als freistehende

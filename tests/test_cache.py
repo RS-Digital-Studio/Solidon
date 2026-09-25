@@ -390,6 +390,7 @@ _PRINTER_FIELDS_NO_OPERATION_READS: dict[str, str] = {
     "enclosed": "Druckeinstellungen und Materialrat, keine Geometrie",
     "bed_temperature_max": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
     "nozzle_temperature_max": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "travel_speed": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
 }
 _MATERIAL_FIELDS_NO_OPERATION_READS: dict[str, str] = {
     "title": "nur Anzeige; die Kennung steht im Schlüssel",

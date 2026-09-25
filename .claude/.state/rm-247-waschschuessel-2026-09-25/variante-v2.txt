@@ -1,0 +1,6 @@
+v2_baum Slicer-Exit 0
+  Zeit 1d 6h 14m 17s, Filament 422.12 g, Stützbahn gesamt 959 m
+  Schicht 1: Stütze 38143 mm, Modell 3386 mm, Leerfahrten 469 (>2 mm: 285)
+  Schicht 2: Stütze 9961 mm, Modell 3714 mm, Leerfahrten 911 (>2 mm: 380)
+  Schicht 3: Stütze 9996 mm, Modell 3786 mm, Leerfahrten 980 (>2 mm: 419)
+  Stütze in der Kammer: 10520 mm Bahn

@@ -16,6 +16,10 @@
 # Wechselstation (AMS, CFS) macht daraus keine zweite: Sie spült bei jedem
 # Filamentwechsel. Wer einen Prusa XL mit mehreren Köpfen oder einen IDEX
 # fährt, trägt die Zahl in seinem eigenen Profil ein (Druckdialog, „Düsen").
+# travel_speed ist die Leerfahrt in mm/s — eine Eigenschaft der Maschine, nicht
+# der Qualitätsstufe. Ohne Angabe gilt Solidons Vorgabe (150). Die Werte stammen
+# aus dem Standardprozess des Herstellerprofils im Bestand von OrcaSlicer
+# (25.09.2026); Drucker ohne eigenen Wert dort tragen keinen.
 # Konturen: XY relativ zur nominellen Bettmitte; Z ab Bett. Ohne Kontur gilt
 # das nominale Rechteck. Brim-/Skirt-Ränder gehören zum Auftrag, nicht hierher.
 
@@ -42,6 +46,7 @@ extrusion_width = 0.42
 enclosed = true
 bed_temperature_max = 110
 nozzle_temperature_max = 350
+travel_speed = 500.0
 
 [elegoo-neptune-4]
 title = "Elegoo Neptune 4"
@@ -53,6 +58,7 @@ extrusion_width = 0.42
 enclosed = false
 bed_temperature_max = 110
 nozzle_temperature_max = 300
+travel_speed = 500.0
 
 [elegoo-neptune-4-plus]
 title = "Elegoo Neptune 4 Plus"
@@ -64,6 +70,7 @@ extrusion_width = 0.42
 enclosed = false
 bed_temperature_max = 100
 nozzle_temperature_max = 300
+travel_speed = 500.0
 
 [bambu-a1]
 title = "Bambu Lab A1"
@@ -75,6 +82,7 @@ extrusion_width = 0.42
 enclosed = false
 bed_temperature_max = 100
 nozzle_temperature_max = 300
+travel_speed = 700.0
 
 [bambu-a1-mini]
 title = "Bambu Lab A1 mini"
@@ -86,6 +94,7 @@ extrusion_width = 0.42
 enclosed = false
 bed_temperature_max = 80
 nozzle_temperature_max = 300
+travel_speed = 700.0
 
 [bambu-p1s]
 title = "Bambu Lab P1S"
@@ -100,6 +109,7 @@ extrusion_width = 0.42
 enclosed = true
 bed_temperature_max = 100
 nozzle_temperature_max = 300
+travel_speed = 500.0
 
 [bambu-x1c]
 title = "Bambu Lab X1 Carbon"
@@ -113,6 +123,7 @@ extrusion_width = 0.42
 enclosed = true
 bed_temperature_max = 110
 nozzle_temperature_max = 300
+travel_speed = 500.0
 
 [prusa-mk4s]
 title = "Prusa MK4S"
@@ -124,6 +135,7 @@ extrusion_width = 0.45
 enclosed = false
 bed_temperature_max = 120
 nozzle_temperature_max = 290
+travel_speed = 300.0
 
 [prusa-mini]
 title = "Prusa MINI+"
@@ -135,6 +147,7 @@ extrusion_width = 0.45
 enclosed = false
 bed_temperature_max = 100
 nozzle_temperature_max = 280
+travel_speed = 150.0
 
 [prusa-xl]
 title = "Prusa XL"
@@ -146,6 +159,7 @@ extrusion_width = 0.45
 enclosed = false
 bed_temperature_max = 120
 nozzle_temperature_max = 290
+travel_speed = 400.0
 
 [creality-k1]
 title = "Creality K1"
@@ -157,6 +171,7 @@ extrusion_width = 0.42
 enclosed = true
 bed_temperature_max = 100
 nozzle_temperature_max = 300
+travel_speed = 500.0
 
 [creality-k1-max]
 title = "Creality K1 Max"
@@ -168,6 +183,7 @@ extrusion_width = 0.42
 enclosed = true
 bed_temperature_max = 100
 nozzle_temperature_max = 300
+travel_speed = 500.0
 
 [creality-ender3-v3]
 title = "Creality Ender-3 V3"
@@ -190,6 +206,7 @@ extrusion_width = 0.42
 enclosed = false
 bed_temperature_max = 110
 nozzle_temperature_max = 260
+travel_speed = 120.0
 
 [sovol-sv06]
 title = "Sovol SV06"
@@ -201,6 +218,7 @@ extrusion_width = 0.42
 enclosed = false
 bed_temperature_max = 100
 nozzle_temperature_max = 300
+travel_speed = 150.0
 
 # --- Resin (MSLA) --------------------------------------------------------------
 #

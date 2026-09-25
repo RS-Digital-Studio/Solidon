@@ -783,6 +783,17 @@ class PrinterProfile:
     legen (§29). Zwei Düsen (IDEX, H2D) drucken zwei Filamente ohne Spülgang,
     ein Werkzeugwechsler mit fünf Köpfen fünf.
     """
+    travel_speed: float | None = None
+    """Wie schnell der Kopf leer fährt, in mm/s — eine Eigenschaft der Maschine.
+
+    Keine Qualitätsstufe fragt danach, und das Material auch nicht: Die
+    Leerfahrt ist die Zeit, in der die Düse ausläuft, und ein schneller
+    CoreXY-Drucker fährt sie in einem Drittel. An der Waschschüssel
+    (25.09.2026) übergab Solidon dem Centauri Carbon 2 die allgemeinen
+    150 mm/s statt der 500 seines Herstellerprofils, bei 530 Leerfahrten je
+    Schicht — und schon in den ersten Schichten zog der Druck Fäden. Ohne
+    Angabe gilt die Vorgabe von :class:`SpeedSettings`.
+    """
 
     @property
     def is_resin(self) -> bool:

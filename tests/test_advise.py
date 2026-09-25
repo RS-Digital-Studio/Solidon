@@ -7,6 +7,11 @@ geurteilt haben — jeder mit dem Körper, der sie widerlegt hat.
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
+from app.core.errors import ValidationError
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import advise
 from app.core.slice.analysis import WIDTH_INTERESTING
@@ -17,6 +22,7 @@ from app.core.types import (
     Profile,
     SettingAdvice,
     SliceResult,
+    SpeedSettings,
 )
 
 SQUARE = ((0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0))
@@ -574,3 +580,40 @@ def test_one_ceiling_of_the_same_area_still_gets_supports() -> None:
 
     chosen = next(entry for entry in entries if entry.path == "support.style")
     assert chosen.value == "grid"
+
+
+# --- Die Leerfahrt gehört dem Drucker -------------------------------------------
+
+
+def test_the_travel_speed_comes_from_the_printer() -> None:
+    """Der Centauri Carbon 2 fährt leer mit 500 mm/s (Standardprozess seines
+    Herstellerprofils, eingetragen in ``printers.toml``); die Waschschüssel
+    ging mit den allgemeinen 150 hinaus und zog Fäden (25.09.2026)."""
+    fast = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    plain = print_settings.resolve(profiles.make_profile("generic-220", "pla"))
+
+    assert profiles.printer("centauri-carbon-2").travel_speed == 500.0
+    assert fast.speed.travel == 500.0
+    assert profiles.printer("generic-220").travel_speed is None
+    assert plain.speed.travel == SpeedSettings().travel, "ohne Angabe die Vorgabe"
+
+
+def test_an_older_project_is_offered_the_printers_travel_speed() -> None:
+    """Ein Projekt trägt seine Einstellungen selbst — eines von vorher fährt
+    weiter mit 150, bis der Vorschlag es auf die Maschine hebt."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    current = print_settings.resolve(profile)
+    older = print_settings.with_path(current, "speed.travel", 150.0)
+
+    offered = [entry for entry in advise.advise(older, profile) if entry.path == "speed.travel"]
+    assert [number(entry) for entry in offered] == [500.0]
+    assert "speed.travel" not in paths(advise.advise(current, profile)), "schon da"
+    plain = profiles.make_profile("generic-220", "pla")
+    assert "speed.travel" not in paths(advise.advise(print_settings.resolve(plain), plain))
+
+
+def test_a_travel_speed_that_does_not_move_is_refused() -> None:
+    table = {"title": "Probe", "build_volume": [200.0, 200.0, 200.0], "travel_speed": 0}
+
+    with pytest.raises(ValidationError):
+        profiles._printer_from_table("probe", table, Path("printers.toml"))
