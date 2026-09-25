@@ -1,0 +1,15 @@
+
+# geladen: complete=True stopped_at=None Fragen=[]
+  obj_1: [('hole_1', 'hole', 5.2), ('hole_2', 'hole', 5.2), ('hole_3', 'hole', 5.2), ('hole_4', 'hole', 5.2)]
+  obj_2: [('pin_1', 'pin', 4.9)]
+
+# mit Passung: complete=True stopped_at=None Fragen=[]
+  warning fit.violated op=None {'fit': 'Stift', 'actual': '0.30 mm', 'expected': '0.25 mm'}
+  obj_1: [('hole_1', 'hole', 5.2), ('hole_2', 'hole', 5.2), ('hole_3', 'hole', 5.2), ('hole_4', 'hole', 5.2)]
+  obj_2: [('pin_1', 'pin', 4.9)]
+
+# nach Reparatur des Bohrungskörpers: complete=True stopped_at=None Fragen=[]
+  info repair.components_removed op=3 {'removed': 1}
+  warning fit.violated op=None {'fit': 'Stift', 'actual': '0.30 mm', 'expected': '0.25 mm'}
+  obj_1: [('hole_1', 'hole', 5.2), ('hole_2', 'hole', 5.2), ('hole_3', 'hole', 5.2), ('hole_4', 'hole', 5.2)]
+  obj_2: [('pin_1', 'pin', 4.9)]

@@ -1,0 +1,70 @@
+.F.F......                                                               [100%]
+================================== FAILURES ===================================
+____________________ test_a_fold_is_never_taken_as_a_fill _____________________
+
+    def test_a_fold_is_never_taken_as_a_fill() -> None:
+        """Ein Ring, der von seiner Mitte aus nicht ganz zu sehen ist, bleibt offen.
+    
+        Der Fächer über die Mitte klappt dort rückwärts über seine Nachbarn — ein
+        geschlossenes Netz mit einer Durchdringung, das der Bericht als gefülltes
+        Loch zählte. Ein U-förmiger Ring in der Ebene: Die Ohren schließen ihn,
+        der Fächer allein nicht.
+        """
+        from app.core.geom.repair import _folds, _loop_fan, _ring_normal
+    
+        ring = np.asarray(
+            [
+                [0, 0, 0],
+                [30, 0, 0],
+                [30, 30, 0],
+                [20, 30, 0],
+                [20, 5, 0],
+                [10, 5, 0],
+                [10, 30, 0],
+                [0, 30, 0],
+            ],
+            dtype=float,
+        )
+        loop = list(range(len(ring)))
+        centre = ring.mean(axis=0)
+        normal = _ring_normal(ring, centre)
+        assert normal is not None
+        reachable = np.vstack([ring, centre[None, :]])
+    
+>       assert _folds(reachable[_loop_fan(loop, len(ring))], normal), "der Fächer klappt um"
+E       AssertionError: der Fächer klappt um
+E       assert False
+E        +  where False = <function Mutant.pytest_configure.<locals>.<lambda> at 0x0000020F964CC720>(array([[[ 0.  ,  0.  ,  0.  ],\n        [30.  ,  0.  ,  0.  ],\n        [15.  , 16.25,  0.  ]],\n\n       [[30.  ,  0.  , ...[15.  , 16.25,  0.  ]],\n\n       [[ 0.  , 30.  ,  0.  ],\n        [ 0.  ,  0.  ,  0.  ],\n        [15.  , 16.25,  0.  ]]]), array([0., 0., 1.]))
+
+tests\test_repair.py:444: AssertionError
+_________________ test_a_window_around_a_cylinder_stays_open __________________
+
+    def test_a_window_around_a_cylinder_stays_open() -> None:
+        """Die Gegenprobe: Ein Fenster über gut 240° des Umfangs ist kein Loch.
+    
+        Ein flacher Deckel darüber läge als Membran quer durch das Innere — HEAD
+        schloss es so, mit 7 656 statt rund 9 425 mm³. Offen und gesagt ist die
+        ehrliche Antwort.
+        """
+        cylinder = trimesh.creation.cylinder(radius=10.0, height=30.0, sections=64)
+        cylinder = cylinder.subdivide().subdivide()
+        centres = cylinder.triangles_center
+        side = np.abs(np.hypot(centres[:, 0], centres[:, 1]) - 10.0) < 1.0
+        window = side & (centres[:, 0] > -5.0) & (np.abs(centres[:, 2]) < 8.0)
+        opened = MeshData.of(
+            trimesh.Trimesh(vertices=cylinder.vertices.copy(), faces=cylinder.faces[~window])
+        )
+    
+        result = repair(opened)
+    
+>       assert not result.mesh.is_watertight
+E       AssertionError: assert not True
+E        +  where True = MeshData(raw=<trimesh.Trimesh(vertices.shape=(1882, 3), faces.shape=(3760, 3))>, slots=(), cavity=None).is_watertight
+E        +    where MeshData(raw=<trimesh.Trimesh(vertices.shape=(1882, 3), faces.shape=(3760, 3))>, slots=(), cavity=None) = RepairResult(mesh=MeshData(raw=<trimesh.Trimesh(vertices.shape=(1882, 3), faces.shape=(3760, 3))>, slots=(), cavity=No...{'holes': 1, 'before': 348, 'after': 0}, location=None, source='internal', suggestions=())], changed=True, solver=None).mesh
+
+tests\test_repair.py:1633: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_repair.py::test_a_fold_is_never_taken_as_a_fill - Assertion...
+FAILED tests/test_repair.py::test_a_window_around_a_cylinder_stays_open - Ass...
+2 failed, 8 passed, 97 deselected in 2.98s
+pytest exit 1

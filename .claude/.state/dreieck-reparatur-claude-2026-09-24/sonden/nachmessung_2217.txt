@@ -1,0 +1,72 @@
+Thu Sep 24 22:17:41     2026
+== B1 dbg1
+face_2 3915.294 (0.0, -0.0, 1.0) [-0.0, 0.0, 4.0] 202
+face_3 640.0 (0.0, -1.0, 0.0) [0.0, -25.0, 0.0] 2
+face_4 640.0 (0.0, 1.0, 0.0) [0.0, 25.0, 0.0] 2
+face_5 400.0 (-1.0, 0.0, 0.0) [-40.0, 0.0, 0.0] 2
+face_6 400.0 (1.0, 0.0, -0.0) [40.0, 0.0, 0.0] 2
+---- Selbstdurchdringung und Importweg
+self-intersections repaired: 0 True
+self-intersections pristine: 0 True
+import: 796 True ['ingest.welded', 'repair.holes_filled']
+import faces: [('face', 400.0), ('face', 400.0), ('face', 640.0), ('face', 640.0), ('face', 3915.3), ('face', 3915.3)]
+import kinds: {'hole': 4, 'face': 6}
+self-intersections import: 0 True
+== B2 dbg2
+5%-Fall: Flächen gleich wie unbeschädigt: True
+  abweichende Dreiecke: 0
+  Teil 18360 Volumen 9727.01 davon abweichend 0
+  Teil 18048 Volumen 10228.65 davon abweichend 0
+  Teil 23332 Volumen 20518.12 davon abweichend 0
+  Gesamtvolumen P 40473.78 R 40473.78
+---- Importweg: ein Körper vollständig umgedreht in der Datei
+  Befunde: ['ingest.welded', 'ingest.normals_flipped', 'ingest.multiple_components']
+  Teil 18360 Volumen 9727.01
+  Teil 18048 Volumen 10228.65
+  Teil 23332 Volumen 20518.12
+  Bohrungen unbeschädigt: [(5.44, (-49.6, 31.3, 0.0)), (5.44, (49.6, 31.3, 0.0)), (34.0, (0.0, 0.0, 0.0))]
+  Bohrungen importiert  : [(5.44, (-49.6, 31.3, 0.0)), (5.44, (49.6, 31.3, 0.0)), (34.0, (0.0, 0.0, 0.0))]
+  Arten unbeschädigt: {'hole': 3, 'fillet': 12, 'cone': 2, 'face': 36, 'curved_face': 9}
+  Arten importiert  : {'hole': 3, 'fillet': 12, 'cone': 2, 'face': 36, 'curved_face': 9}
+  Reparatur danach: False []
+== B5 dbg7
+Ausdehnung [88.9, 31.5, 57.8] Fläche 10837.0
+Unterseite: Dreiecke 3274 Fläche 198.8 Ausdehnung [84.8, 27.8, 0.0]
+r=5: Bereich=12837 reason=boundary Merkmale=[] (1.9s)
+r=6: Bereich=16817 reason=boundary Merkmale=[] (1.5s)
+r=7: Bereich=23447 reason=boundary Merkmale=[] (1.8s)
+r=8: Bereich=39161 reason=boundary Merkmale=[] (2.4s)
+r=10: Bereich=>50000 reason=budget Merkmale=[] (0.1s)
+r=12: Bereich=>50000 reason=budget Merkmale=[] (0.1s)
+r=15: Bereich=>50000 reason=budget Merkmale=[] (0.1s)
+== B6 dbg9
+   fehlt: curved_face[area=836.354] @ (-20.96, 14.47, -0.00) n=940
+   fehlt: curved_face[area=822.720] @ (21.78, 20.96, 0.00) n=640
+   fehlt: curved_face[area=647.847] @ (-38.75, 17.79, -0.63) n=555
+   fehlt: curved_face[area=262.772] @ (0.58, 22.65, 0.00) n=582
+   neu:   curved_face[area=678.975] @ (-19.77, 14.03, -0.00) n=650
+   neu:   curved_face[area=602.551] @ (-38.63, 17.00, -0.67) n=442
+   neu:   curved_face[area=544.599] @ (24.95, 22.24, -0.01) n=284
+   neu:   curved_face[area=439.491] @ (18.90, 12.08, 0.00) n=246
+1x1-bin: 1944->1956 Volumen 21906.699->21906.699
+   vorher {'cone': 4, 'face': 87, 'curved_face': 2} nachher {'cone': 4, 'face': 87, 'curved_face': 2}
+Wedge-Lock (Base): 2292->2306 Volumen 5474.429->5474.429
+   vorher {'fillet': 14, 'cone': 16, 'face': 7, 'slot': 1, 'curved_face': 4} nachher {'fillet': 14, 'cone': 16, 'face': 7, 'slot': 1, 'curved_face': 4}
+post_with_fillet: 2704->2722 Volumen 25072.283->25072.283
+   vorher {'pin': 1, 'torus': 1, 'face': 7} nachher {'pin': 1, 'torus': 1, 'face': 7}
+---- Besenhalter: beanspruchte Fläche je Merkmal vor/nach der Teilung
+  gerundete Seiten gesamt: 5436.070 -> 4241.840 mm²
+== B10 p8
+
+# geladen, Vollerkennung bestätigt (danach repair): 4.8s complete=True stopped_at=None Merkmale=62 Fragen=[('„broomholdervcd_d35mm“ hat 0,1 Millionen Dreiecke. Die vollständige Merkmalserkennung daue', ['Sofort laden', 'Mit Merkmalserkennung laden'])]
+  Befund warning ingest.not_watertight op=1 'Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen.' {'open_edges': 179220}
+
+# nach repair: 22.3s complete=False stopped_at=2 Merkmale=62 Fragen=[('„broomholdervcd_d35mm“ hat 0,1 Millionen Dreiecke. Die vollständige Merkmalserkennung daue', ['Sofort laden', 'Mit Merkmalserkennung laden'])]
+  Befund warning ingest.not_watertight op=1 'Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen.' {'open_edges': 179220}
+  Befund error op.repair.ValidationError op=2 'Dieser Bereich enthält zu viele Dreiecke für die lokale Suche. Wählen Sie einen kleineren Bereich oder verringern Sie zuerst die Dreiecke.' {'field': '', 'constraint': 'local_budget', 'kind': 'Die Eingabe war so nicht verwendbar.'}
+
+# geladen, Vollerkennung bestätigt (danach translate_object): 5.2s complete=True stopped_at=None Merkmale=62 Fragen=[('„broomholdervcd_d35mm“ hat 0,1 Millionen Dreiecke. Die vollständige Merkmalserkennung daue', ['Sofort laden', 'Mit Merkmalserkennung laden'])]
+
+# nach translate_object: 6.2s complete=False stopped_at=2 Merkmale=62 Fragen=[('„broomholdervcd_d35mm“ hat 0,1 Millionen Dreiecke. Die vollständige Merkmalserkennung daue', ['Sofort laden', 'Mit Merkmalserkennung laden'])]
+  Befund error op.translate_object.ValidationError op=2 'Dieser Bereich enthält zu viele Dreiecke für die lokale Suche. Wählen Sie einen kleineren Bereich oder verringern Sie zuerst die Dreiecke.' {'field': '', 'constraint': 'local_budget', 'kind': 'Die Eingabe war so nicht verwendbar.'}
+Thu Sep 24 22:19:24     2026

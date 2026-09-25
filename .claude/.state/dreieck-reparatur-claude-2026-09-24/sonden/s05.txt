@@ -1,0 +1,18 @@
+3D Drucker/13_Besteckkorb_Abtropfkorb/Modular/Besteckkorb_Modular.3mf | Modul B · Mitte links: tri=8672 extents=[113.5, 67.5, 120.0] längste Kante median=6.14 p90=75.95
+   Plan=_Plan(axis=0, bins=1, width=9.890879999999925) (0.13s) Sweep-Paare=2,696,223 (einfach je Achse [5706003, 6271660, 19384330])
+   mit Budget: 0 Dreiecke, vollständig=False, 1.31s | ohne Budget: 0 Dreiecke, 1.72s
+3D Drucker/13_Besteckkorb_Abtropfkorb/Besteckkorb_PETG-PRO-Grau.3mf | Besteckkorb: tri=13988 extents=[180.0, 148.5, 160.0] längste Kante median=8.08 p90=64.16
+   Plan=_Plan(axis=1, bins=0, width=10.774239999999963) (0.16s) Sweep-Paare=4,581,680 (einfach je Achse [10852810, 11729633, 77655013])
+   mit Budget: 0 Dreiecke, vollständig=False, 1.41s | ohne Budget: 0 Dreiecke, 3.00s
+3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/Screen-Cover_RS.3mf | Cover (schwarz): tri=21638 extents=[148.6, 88.2, 4.5] längste Kante median=0.51 p90=14.16
+   Plan=_Plan(axis=1, bins=0, width=8.092803199999935) (0.48s) Sweep-Paare=2,607,190 (einfach je Achse [15855851, 16029207, 57526646])
+   mit Budget: 0 Dreiecke, vollständig=False, 1.43s | ohne Budget: 0 Dreiecke, 1.67s
+3D Drucker/04_Community-Modelle/rasenrotor_alle_1.3mf | main: tri=17224 extents=[111.8, 129.0, 75.0] längste Kante median=1.00 p90=13.56
+   Plan=_Plan(axis=1, bins=0, width=1.807795763015747) (0.13s) Sweep-Paare=2,066,662 (einfach je Achse [16564890, 7892512, 13153490])
+   mit Budget: 0 Dreiecke, vollständig=False, 0.58s | ohne Budget: 0 Dreiecke, 0.62s
+drill-holder.3mf | Körper 1: tri=30562 extents=[185.0, 34.6, 80.0] längste Kante median=1.10 p90=19.39
+   Plan=_Plan(axis=0, bins=1, width=2.0) (0.23s) Sweep-Paare=1,765,870 (einfach je Achse [8867055, 53439558, 69311817])
+   mit Budget: 10645 Dreiecke, vollständig=True, 0.94s | ohne Budget: 10645 Dreiecke, 0.92s
+3D Drucker/15_CC2-Werkzeugbox/CC2-Werkzeugbox_Druckbereit.3mf | Kofferschale B: tri=20230 extents=[218.0, 119.0, 27.0] längste Kante median=2.28 p90=9.60
+   Plan=_Plan(axis=1, bins=0, width=2.708359999999857) (0.14s) Sweep-Paare=1,659,761 (einfach je Achse [6132382, 19636693, 103379558])
+   mit Budget: 6 Dreiecke, vollständig=True, 1.14s | ohne Budget: 6 Dreiecke, 1.15s

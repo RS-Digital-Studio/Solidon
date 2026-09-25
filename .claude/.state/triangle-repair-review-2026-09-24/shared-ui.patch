@@ -1,0 +1,343 @@
+diff --git a/app/ui/CLAUDE.md b/app/ui/CLAUDE.md
+index 571fdd7d1..b44f2688a 100644
+--- a/app/ui/CLAUDE.md
++++ b/app/ui/CLAUDE.md
+@@ -3,6 +3,12 @@
+ PySide6. Darf `app.core` benutzen, die Gegenrichtung ist verboten (§8). Die
+ Oberfläche rechnet keine Geometrie und ändert keine — **sie ruft Ops auf.**
+ 
++`loading.ProgressTiming` führt für eine Auswertung genau eine Uhr und einen
++Zeittext. Statuszeile und Ladeschleier lesen denselben Sekundentakt, auch ohne
++neue Fortschrittsmeldung oder Animation. Der Schleier kann verschwinden,
++während die Uhr für die Statuszeile weiterläuft. Antwortzeit einer Kernfrage
++zählt als verstrichen, aber nicht als Rechenzeit der Restschätzung.
++
+ Nachlaufende Befunde erhalten die gewählte Zeile des Prüfberichts über die
+ gemeinsame Befundidentität, auch wenn neue Fehler die Reihenfolge ändern.
+ Nur wenn die bisherige Zeile entfällt oder ausgefiltert wird, gilt die
+@@ -216,6 +222,21 @@ vom abgeleiteten `preview_required`. Beide Zwillinge brauchen vor Übernehmen
+ das dargestellte aktuelle Ergebnis. `accepted(values)` liefert bool;
+ `finished` folgt erst auf Erfolg. Frühes Enter wird nie nachgeholt.
+ 
++Ein begonnener Maßentwurf hält seine Auswahl auch gegenüber Berichtsklicks,
++direkten Gesteneditoren und lokaler Erkennung. Diese Nutzereinstiege prüfen
++`_quiet_command_allowed` vor dem ersten Zustandswechsel. Passive Maße geben
++ihren Eingabeweg beim Werkzeugwechsel frei. Dokument-Undo/Redo wartet auf
++den Abschluss des Entwurfs; das eigene Undo von Skizze, Formen und Skelett
++behält Vorrang. Ein fremder Drehring prüft die Sperre vor `take_values`,
++damit eine abgelehnte Handlung nicht schon im Panel aktiv wird.
++Die Wiederherstellung einer verworfenen Zeichnung prüft denselben Einstieg,
++bevor sie das aufgehobene Exemplar verbraucht.
++
++Ungültige Außen- und Mittenabstände erklären sich über denselben sichtbaren
++Maßhinweis und sperren beide Abschlüsse sofort (`_invalid_distance`). Die
++eingegebene Zahl bleibt korrigierbar; eine gültige Korrektur entfernt den
++Hinweis und aktualisiert die Freigabe.
++
+ Der Auftrag bindet Dokument, Ergebnis, Körper, Merkmal, Originalschritt und
+ belegten Gruppenumfang. Das Hauptfenster bereitet Vorschau und Commit aus
+ dieser Bindung vor, nicht aus inzwischen neu aufgebauten Panelzeilen.
+@@ -349,6 +370,9 @@ Merkmalhandlungen entstehen dort. Radiuswechsel entwerten Auswahl und Freigabe
+ sofort; nur die jüngste Generation wird angezeigt. Originaltreffer und beantwortete
+ Mehrdeutigkeit reisen im Erkennungsauftrag mit. Erkennung und Bearbeitung teilen
+ Vorschau und Übernahme; `preview_revision` schützt auch die Fehlerfreigabe.
++Die Fehlerursache `local_<reason>` bleibt beim Übergang vom Auswertungsbefund
++zum Dialog erhalten. Treffer- und Topologiefehler bieten über `pickRequested`
++eine neue Stellenauswahl an; Radius- und Bereichsfehler führen zum Radiusfeld.
+ `local_recognition_flow.py` hält die Erkundung ausschließlich in der temporären
+ Ansicht. Erst die Dialogannahme schreibt eine gemeinsame `Session.apply`-Transaktion.
+ Abbruch und Projektwechsel säubern Vorschau, Auswahlgriff und Rückfragen;
+@@ -889,6 +913,16 @@ Langlochknöpfen über `MainWindow._change_slot_step` in **diesen** Schritt —
+ kein zweiter im Verlauf, kein Kreuz im Bild. Geschrieben wird nur, was vom
+ gemessenen Wert abweicht; die Felder tragen die Toleranz des Schnitts. Ein
+ erkanntes Langloch ohne Schritt geht weiter als neuer Schritt an den Kern.
++Alle Langlöcher öffnen dieselbe Maßgruppe für Länge, Richtung und Breite;
++die Herkunft entscheidet nur über den gespeicherten Auftrag. Der Wechsel
++von `resize_hole` zu `slot_hole` übergibt den begonnenen Breiten- und
++Positionsentwurf. Eine noch offene Tiefenänderung bleibt im Bohrungseditor,
++weil die Langlochoperation diese Änderung nicht ausdrückt.
++`_reshape_slot_from_values` führt Maßfelder, Griff und Umriss mit derselben
++effektiven Breite nach. `Viewport.reshape_slot` bindet den Entwurf auch dann,
++wenn sein Griff während des Editorwechsels gerade abgebaut ist.
++Der Panelabschluss übernimmt den vollständigen geprüften Auftrag; das
++verkürzte Griffsignal ersetzt keine Breiten- oder Toleranzparameter.
+ 
+ **Ein Loch hat eine Länge, und die ist eine Geste.** `slot_handle.py` hängt
+ zwei Knöpfe an ein gewähltes Loch (`hole` oder `slot` — welche Arten, sagt
+diff --git a/tests/test_local_recognition_ui.py b/tests/test_local_recognition_ui.py
+index 553671374..9793a7ec0 100644
+--- a/tests/test_local_recognition_ui.py
++++ b/tests/test_local_recognition_ui.py
+@@ -21,6 +21,126 @@ from tests.test_local_detection import blind_cylinder, bore_seed
+ from tests.test_outline_dialog import _until
+ 
+ 
++@pytest.mark.parametrize("entry", ["arm", "begin"])
++def test_local_recognition_entry_keeps_the_pending_measure_owner(entry):
++    """Menü und direkter Rechtsklick nehmen einem Maßentwurf keine Eingabe weg."""
++    from types import SimpleNamespace
++
++    from app.ui.local_recognition_flow import LocalRecognitionFlow
++    from app.ui.main_window import MainWindow
++
++    notices = []
++    host = SimpleNamespace(begun=True, committing=False)
++    view = SimpleNamespace(_quiet_host=host)
++    view._quiet_selection_allowed = lambda: MainWindow._quiet_selection_allowed(view)
++    view._say_the_change_comes_first = lambda: notices.append("finish-draft")
++    view._quiet_command_allowed = lambda: MainWindow._quiet_command_allowed(view)
++    flow = SimpleNamespace(view=view)
++    hit = ("obj_1", (0.0, 0.0, 0.0), 0, None)
++
++    getattr(LocalRecognitionFlow, entry)(flow, *(() if entry == "arm" else (hit,)))
++
++    assert view._quiet_host is host
++    assert notices == ["finish-draft"]
++
++
++def test_local_recognition_replaces_passive_measures_before_taking_the_pointer():
++    """Der erlaubte Wechsel räumt den alten Besitzer vor dem neuen Zeiger ab."""
++    from types import SimpleNamespace
++
++    from app.ui.local_recognition_flow import LocalRecognitionFlow
++
++    calls = []
++    view = SimpleNamespace(
++        _quiet_command_allowed=lambda: True,
++        _quiet_host=object(),
++        _op_dialog=None,
++        session=SimpleNamespace(busy=False, last_result=object()),
++        end_quiet_placement=lambda: calls.append("end-measures"),
++        viewport=SimpleNamespace(set_placement_pointer=lambda pointer: calls.append(pointer)),
++        announce=lambda text: calls.append("notice"),
++    )
++    flow = SimpleNamespace(
++        view=view, invalidate=lambda: calls.append("invalidate"), pointer="local-pointer"
++    )
++
++    LocalRecognitionFlow.arm(flow)
++
++    assert calls == ["invalidate", "end-measures", "local-pointer", "notice"]
++    assert flow.armed
++
++
++@pytest.mark.parametrize(
++    ("constraint", "expected"),
++    [
++        ("local_seed", "point"),
++        ("local_ambiguous_seed", "point"),
++        ("local_topology", "point"),
++        ("local_boundary", "radius"),
++        ("local_budget", "radius"),
++        ("minimum", "radius"),
++    ],
++)
++def test_local_error_correction_follows_the_structured_cause(monkeypatch, constraint, expected):
++    """Ein Ortsfehler wählt neu; eine Bereichsgrenze führt weiter zum Radius."""
++    from types import SimpleNamespace
++    from unittest.mock import Mock
++
++    from app.core.errors import ValidationError
++    from app.ui.local_recognition import LocalRecognitionDialog, ValueField
++
++    chosen = []
++    errors = []
++    monkeypatch.setattr(ValueField, "setFocus", lambda _field: chosen.append("radius"))
++    dialog = Mock(
++        _closed=False,
++        _revision=4,
++        state=SimpleNamespace(
++            set_error=lambda problem, handlers: errors.append((problem, handlers))
++        ),
++        pickRequested=SimpleNamespace(emit=lambda: chosen.append("point")),
++    )
++    problem = ValidationError(constraint=constraint)
++
++    LocalRecognitionDialog._failed(dialog, 4, problem)
++    errors[0][1]["correct_input"](problem)
++
++    assert chosen == [expected]
++    assert any(str(action.label) == "Andere Stelle wählen" for action in problem.suggestions) == (
++        expected == "point"
++    )
++    dialog.save_button.setEnabled.assert_called_once_with(False)
++    dialog.edit_button.setEnabled.assert_called_once_with(False)
++
++
++def test_local_worker_preserves_the_error_cause_for_the_dialog(monkeypatch):
++    """Der Umweg über den Auswertungsbefund verliert die Ursache nicht."""
++    from types import SimpleNamespace
++    from unittest.mock import Mock
++
++    import app.ui.local_recognition as local
++
++    finding = Finding(
++        "op.detect_region.ValidationError",
++        "error",
++        "Die gewählte Stelle ist ungültig.",
++        values={"constraint": "local_seed"},
++    )
++    result = SimpleNamespace(
++        complete=False, scene=SimpleNamespace(report=SimpleNamespace(findings=[finding]))
++    )
++    monkeypatch.setattr(local, "History", lambda _document: Mock())
++    monkeypatch.setattr(local, "evaluate", lambda *_args, **_kwargs: result)
++    worker = Mock(document={}, original_ray=None, revision=7)
++
++    local._RecognitionWorker.work(worker)
++
++    revision, problem = worker.failed.emit.call_args.args
++    assert revision == 7
++    assert problem.values == {"constraint": "local_seed"}
++    worker.ready.emit.assert_not_called()
++
++
+ def make_dialog(
+     profile,
+     monkeypatch,
+@@ -39,6 +159,7 @@ def make_dialog(
+     evaluation = importlib.import_module("app.core.scene.evaluate")
+     if not full_detection:
+         monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
++        monkeypatch.setattr(evaluation, "CONFIRMED_FEATURE_LIMIT_TRIANGLES", 1)
+     project = new_project()
+     project.document.parameters = {parameter.name: parameter for parameter in parameters}
+     project.sources["src_1"] = (blind_cylinder().raw if raw is None else raw).export(
+@@ -489,6 +610,13 @@ def test_ray_with_no_original_hit_never_uses_the_lod_placeholder(qt_app, profile
+         assert dialog.inspection is None
+         assert not dialog.save_button.isEnabled()
+         assert "Stelle" in dialog.state.text()
++        requested = []
++        dialog.pickRequested.connect(lambda: requested.append(True))
++        button = next(
++            button for button in dialog.state._buttons if button.text() == "Andere Stelle wählen"
++        )
++        button.click()
++        assert requested == [True]
+     finally:
+         dispose(dialog, qt_app)
+ 
+diff --git a/tests/test_ui.py b/tests/test_ui.py
+index d48a39a95..2b771167e 100644
+--- a/tests/test_ui.py
++++ b/tests/test_ui.py
+@@ -61,6 +61,92 @@ from app.ui.settings import UiSettings
+ MESHES = Path(__file__).parent / "data" / "meshes"
+ 
+ 
++@pytest.mark.parametrize("command", ["start_sketch", "start_sculpt", "start_armature"])
++def test_gesture_editor_entry_keeps_an_unaccepted_measure_draft(command: str) -> None:
++    """Auch die direkten Toolbar-Einstiege erhalten den begonnenen Maßentwurf."""
++    from types import SimpleNamespace
++
++    notices: list[str] = []
++    host = SimpleNamespace(begun=True, committing=False, values={"diameter": 7.0})
++    view = SimpleNamespace(_quiet_host=host, announce=notices.append)
++    view._quiet_selection_allowed = lambda: MainWindow._quiet_selection_allowed(view)
++    view._say_the_change_comes_first = lambda: MainWindow._say_the_change_comes_first(view)
++    view._quiet_command_allowed = lambda: MainWindow._quiet_command_allowed(view)
++
++    arguments = ("",) if command == "start_sketch" else ()
++    getattr(MainWindow, command)(view, *arguments)
++
++    assert view._quiet_host is host
++    assert host.values == {"diameter": 7.0}
++    assert notices == [tr("Die aktuelle Änderung zuerst übernehmen oder abbrechen.")]
++
++
++@pytest.mark.parametrize("command", ["action_undo", "action_redo"])
++@pytest.mark.parametrize("begun", [False, True])
++def test_document_history_waits_only_for_a_begun_measure_draft(command: str, begun: bool) -> None:
++    """Passive Maße erlauben Undo; ein offener Entwurf behält seine Bezugsgeometrie."""
++    from types import SimpleNamespace
++
++    calls: list[str] = []
++    view = SimpleNamespace(
++        _quiet_host=SimpleNamespace(begun=begun, committing=False),
++        restore_discarded_sketch=lambda: False,
++        undo_sculpt_stroke=lambda: False,
++        undo_bone=lambda: False,
++        session=SimpleNamespace(
++            undo=lambda: calls.append("undo"), redo=lambda: calls.append("redo")
++        ),
++    )
++    view._quiet_selection_allowed = lambda: MainWindow._quiet_selection_allowed(view)
++    view._say_the_change_comes_first = lambda: calls.append("finish-draft")
++    view._quiet_command_allowed = lambda: MainWindow._quiet_command_allowed(view)
++
++    getattr(MainWindow, command)(view)
++
++    assert calls == (["finish-draft"] if begun else [command.removeprefix("action_")])
++
++
++@pytest.mark.parametrize("handled_by", ["sketch", "sculpt", "bone"])
++def test_editor_undo_keeps_priority_over_document_history(handled_by: str) -> None:
++    """Das eigene Gesten-Undo bleibt vor der Sperre für fremde Dokumentbefehle."""
++    from types import SimpleNamespace
++
++    calls: list[str] = []
++
++    def undo(kind: str) -> bool:
++        calls.append(kind)
++        return handled_by == kind
++
++    view = SimpleNamespace(
++        restore_discarded_sketch=lambda: undo("sketch"),
++        undo_sculpt_stroke=lambda: undo("sculpt"),
++        undo_bone=lambda: undo("bone"),
++    )
++    MainWindow.action_undo(view)
++    assert (
++        calls == ["sketch", "sculpt", "bone"][: ["sketch", "sculpt", "bone"].index(handled_by) + 1]
++    )
++
++
++def test_a_blocked_sketch_restore_keeps_the_discarded_drawing() -> None:
++    """Undo verliert keine aufgehobene Zeichnung, wenn ein Maßentwurf den Einstieg hält."""
++    from types import SimpleNamespace
++
++    calls: list[str] = []
++    drawing = object()
++    view = SimpleNamespace(
++        _quiet_host=SimpleNamespace(begun=True, committing=False),
++        _discarded_sketch=drawing,
++    )
++    view._quiet_selection_allowed = lambda: MainWindow._quiet_selection_allowed(view)
++    view._say_the_change_comes_first = lambda: calls.append("finish-draft")
++    view._quiet_command_allowed = lambda: MainWindow._quiet_command_allowed(view)
++
++    assert MainWindow.restore_discarded_sketch(view)
++    assert view._discarded_sketch is drawing
++    assert calls == ["finish-draft"]
++
++
+ def _accept_after_preview(window: MainWindow, dialog: OperationDialog) -> None:
+     """Übernehmen, sobald die Vorschau dargestellt ist — so wie der Kunde.
+ 
+@@ -8257,6 +8343,26 @@ def test_repair_remainders_show_locations_only_for_a_known_body() -> None:
+         assert actions_for(unlocated) == ()
+ 
+ 
++@pytest.mark.parametrize(
++    "code",
++    [
++        "repair.self_intersections_detected",
++        "repair.self_intersections_unresolved",
++        "repair.self_intersections_incomplete",
++    ],
++)
++def test_intersection_repair_advice_never_targets_an_unrelated_selection(code: str) -> None:
++    """Auch mit ausdrücklichem Vorschlag bleibt der Befund an seinen Körper gebunden."""
++    from app.core.errors import SHOW_LOCATIONS
++    from app.core.types import Finding
++    from app.ui.panels import actions_for
++
++    finding = Finding(code, "warning", "x", suggestions=(SHOW_LOCATIONS,))
++    assert actions_for(finding) == ()
++    located = dataclasses.replace(finding, object_id="obj_1")
++    assert actions_for(located) == (SHOW_LOCATIONS,)
++
++
+ def test_an_attempted_repair_is_not_offered_twice_regardless_of_its_finding() -> None:
+     """Auch „nichts zu reparieren“ öffnet denselben Reparaturring nicht erneut.
+ 

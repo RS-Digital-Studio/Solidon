@@ -1,0 +1,438 @@
+def repair(
+    mesh: MeshData,
+    *,
+    weld: bool = True,
+    degenerate: bool = True,
+    normals: bool = True,
+    holes: bool = True,
+    small_components: bool = False,
+    self_intersections: bool = False,
+    inspect_intersections: bool = False,
+    cancelled: CancelToken | None = None,
+) -> RepairResult:
+    """Führt die gewünschten Schritte in der Reihenfolge aus, die jeden
+    einzelnen billiger macht.
+
+    ``inspect_intersections`` ergänzt die Diagnose am ausdrücklichen
+    Reparaturschritt. Die automatische Importaufbereitung schließt nur die
+    offenen Stellen und bietet keine Einstellungen dieses Schritts an.
+    ``self_intersections`` prüft auch ohne den Diagnoseschalter.
+
+    **Die Sätze sprechen die Wörter des Kunden** (Durchsicht 24.09.2026):
+    Loch, Lücke, leere und doppelte Dreiecke, überzählige Flächen,
+    Außenseiten, Überschneidungen — nicht Kante, Naht, entartet, verzweigt
+    oder Selbstdurchdringung. Gezählt werden Stellen, nicht Randkanten: Ein
+    Rohrende sind 48 Kanten und eine offene Stelle.
+    """
+    result = RepairResult(mesh=mesh)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+
+    if weld:
+        candidate, removed = merge_vertices(result.mesh)
+        # Dieselbe Zusicherung wie beim Import: nahe Punkte können zu zwei
+        # getrennten Schalen gehören. Das Zusammenlegen darf deren Kanten
+        # nicht zu nichtmannigfaltigen Verbindungen machen.
+        if removed and _tears_it_further(result.mesh, candidate):
+            result.findings.append(
+                Finding(
+                    code="repair.weld_skipped",
+                    severity="info",
+                    message=_(
+                        "Doppelte Punkte blieben stehen, weil das Verschweißen das Modell "
+                        "aufgerissen hätte."
+                    ),
+                    values={"tolerance": weld_tolerance(result.mesh.bounds.diagonal)},
+                )
+            )
+        elif removed:
+            result.mesh = candidate
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.welded",
+                    severity="info",
+                    message=_("Doppelte Punkte wurden verschweißt."),
+                    values={"removed": removed},
+                )
+            )
+
+    if degenerate:
+        # **Vor den entarteten Dreiecken, und das ist die Reihenfolge, auf die
+        # es ankommt.** ``remove_degenerate_faces`` ruft ``unique_faces`` und
+        # behält damit von zwei deckungsgleichen Dreiecken eines — die Tasche
+        # ohne Volumen wird zur offenen Stelle. Fällt das Paar vorher, ist für
+        # den Schritt danach nichts mehr zu tun.
+        candidate, doubled = remove_doubled_faces(result.mesh)
+        if doubled and not _tears_it_further(result.mesh, candidate):
+            result.mesh = candidate
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.doubled_removed",
+                    severity="info",
+                    message=_("Doppelte Dreiecke wurden entfernt."),
+                    values={"removed": doubled},
+                )
+            )
+
+        candidate, removed = remove_degenerate_faces(result.mesh)
+        # Auch ein flaches Dreieck kann zwei Nachbarflächen topologisch
+        # verbinden. Ein geschlossener Eingang bleibt einschließlich seiner
+        # Materialzuweisungen erhalten, wenn das Entfernen ihn öffnen würde.
+        if removed and _tears_it_further(result.mesh, candidate):
+            result.findings.append(
+                Finding(
+                    code="repair.degenerate_kept",
+                    severity="info",
+                    message=_(
+                        "Leere Dreiecke blieben stehen, weil ihr Entfernen das Modell "
+                        "aufgerissen hätte."
+                    ),
+                    values={"kept": removed},
+                )
+            )
+        elif removed:
+            result.mesh = candidate
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.degenerate_removed",
+                    severity="info",
+                    message=_("Leere Dreiecke wurden entfernt."),
+                    values={"removed": removed},
+                )
+            )
+
+    if small_components:
+        result.mesh, dropped = remove_small_components(result.mesh)
+        if dropped:
+            result.changed = True
+            # Ein Hinweis und keine Warnung: Der Kunde hat genau das verlangt,
+            # und Strg+Z holt die Teile zurück. Die Teilezahl danach reist mit,
+            # damit „besteht aus mehreren Teilen" am Endstand fallen kann.
+            result.findings.append(
+                Finding(
+                    code="repair.components_removed",
+                    severity="info",
+                    message=_("{removed} Kleinstteile wurden entfernt.", removed=dropped)
+                    if dropped > 1
+                    else _("Ein Kleinstteil wurde entfernt."),
+                    values={"removed": dropped},
+                )
+            )
+
+    filled = _Filled(result.mesh)
+    if holes:
+        # **Zuerst die Verzweigungen, dann die Löcher.** Eine Kante mit drei
+        # Nachbarn ist kein Loch, und der Füller kann sie nicht sehen; was das
+        # Auflösen öffnet, schließt er dagegen gleich mit.
+        result.mesh, unbranched = resolve_branching_edges(result.mesh)
+        if unbranched:
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.branching_resolved",
+                    severity="info",
+                    message=_(
+                        "Überzählige Flächen an {edges} Kanten wurden entfernt.",
+                        edges=unbranched,
+                    )
+                    if unbranched > 1
+                    else _("Eine überzählige Fläche an einer Kante wurde entfernt."),
+                    values={"edges": unbranched},
+                )
+            )
+
+        # Getrennt gemeldet, weil es ein anderer Defekt mit anderer Antwort
+        # ist: eine Naht ist eine Fläche, der ein Punkt fehlte, ein Loch eine
+        # Fläche, die fehlte. Wer den Bericht liest, erkennt, ob sein Modell
+        # eine Lücke hatte oder nur einen Buchhaltungsfehler.
+        result.mesh, seams = stitch_t_junctions(result.mesh)
+        if seams:
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.t_junctions",
+                    severity="info",
+                    message=_("Lücken an Nähten wurden geschlossen."),
+                    values={"seams": seams},
+                )
+            )
+
+        # **Gezählt wird erst nach dem Vernähen.** Vorher gezählt, schrieb die
+        # Meldung die vernähten Kanten dem Löcherschließen zu. Die Naht hat
+        # ihre eigene Zeile darüber. `_filled_rounds` vernäht nicht noch
+        # einmal — es erneut zu zahlen war der gemessene Faktor 2,1.
+        open_before = open_edge_count(result.mesh)
+        filled = _filled_rounds(result.mesh)
+        result.mesh = filled.mesh
+        open_after = open_edge_count(result.mesh)
+        if filled.wide:
+            # **Eine große Öffnung wird geschlossen und gesagt** — mit dem Ort
+            # der größten, damit der Klick auf die Zeile dorthin fliegt, und
+            # mit dem Rückweg: Wer die Fläche nicht wollte, lässt den Schritt
+            # ohne Lochfüllen rechnen (Entscheidung Robert, 24.09.2026).
+            result.findings.append(
+                Finding(
+                    code="repair.wide_hole_filled",
+                    severity="warning",
+                    message=_(
+                        "{walls} große Öffnungen wurden mit neuen Flächen geschlossen.",
+                        walls=filled.wide,
+                    )
+                    if filled.wide > 1
+                    else _("Eine große Öffnung wurde mit einer neuen Fläche geschlossen."),
+                    values={"walls": filled.wide},
+                    location=filled.widest,
+                    suggestions=(LEAVE_OPEN,),
+                )
+            )
+        if filled.closed:
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.holes_filled",
+                    severity="info",
+                    message=_("{holes} Löcher wurden geschlossen.", holes=filled.closed)
+                    if filled.closed > 1
+                    else _("Ein Loch wurde geschlossen."),
+                    values={"holes": filled.closed, "before": open_before, "after": open_after},
+                )
+            )
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if normals:
+        result.mesh, flipped = unify_normals(result.mesh)
+        if flipped:
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.normals_flipped",
+                    severity="info",
+                    message=_("Die Außenseiten wurden angeglichen."),
+                )
+            )
+        # **Angeglichen heißt einheitlich — sonst sagt es der Bericht.** Wo
+        # zwei Schalen sich an einer Naht berühren, bleiben Kanten, die beide
+        # Nachbarn gleich herum laufen; ``fix_winding`` kann sie nicht richten,
+        # und ein solcher Körper ist für jede Boolesche Operation kein Volumen.
+        crossed = _crossed_edge_count(result.mesh)
+        if crossed:
+            result.findings.append(
+                Finding(
+                    code="repair.normals_inconsistent",
+                    severity="warning",
+                    message=_(
+                        "An {edges} Kanten zeigen die Außenseiten gegeneinander.", edges=crossed
+                    )
+                    if crossed > 1
+                    else _("An einer Kante zeigen die Außenseiten gegeneinander."),
+                    values={"edges": crossed},
+                    suggestions=(SHOW_LOCATIONS,),
+                )
+            )
+
+    # **Zuletzt, und das ist der Fund.** Der Schritt stand vor dem
+    # Löcherschließen und konnte dort nie arbeiten: Er braucht ein Volumen, und
+    # eines wird das Netz erst durch Schließen *und* Außenseiten angleichen.
+    if self_intersections or inspect_intersections:
+        _intersection_findings(result, self_intersections=self_intersections, cancelled=cancelled)
+
+    # **Eine Fläche ohne Dicke ist kein Loch** (Entscheidung Robert,
+    # 24.09.2026): Ihr Rand bleibt offen, und der Bericht sagt, was hilft.
+    # Ein loses Splitterdreieck ist dagegen ein Kleinstteil und kein
+    # Befund dieser Art — gemeldet wird erst ab dem Anteil, ab dem ein
+    # Einzelteil nicht mehr „sehr klein" heißt.
+    total_area = result.mesh.area
+    sheet = filled.flat_area >= SMALL_COMPONENT_SHARE * total_area and filled.flat_edges > 0
+    if sheet:
+        result.findings.append(
+            Finding(
+                code="repair.no_thickness",
+                severity="warning",
+                message=_("Das Modell ist eine Fläche ohne Dicke.")
+                if filled.flat_area >= 0.5 * total_area
+                else _("Ein Teil des Modells ist eine Fläche ohne Dicke."),
+                values={"open_edges": filled.flat_edges},
+                suggestions=(GIVE_THICKNESS, SHOW_LOCATIONS),
+            )
+        )
+
+    open_edges = open_edge_count(result.mesh)
+    branching = branching_edge_count(result.mesh)
+    if sheet:
+        # Die Ränder der Fläche ohne Dicke hat der Befund darüber schon genannt.
+        open_edges = max(0, open_edges - filled.flat_edges)
+    if open_edges or branching:
+        # **Zwei Gründe, und sie verlangen verschiedene Sätze.** „Offen" stimmt
+        # für Ränder; ein Netz kann aber null davon haben und trotzdem kein
+        # Volumen einschließen, weil an einer Kante drei Flächen zusammenlaufen
+        # (Waschschüssel, 16.09.2026). Der frühere Folgesatz schickte den
+        # Kunden im Kreis; die Oberfläche führt von hier zu den Stellen (§2.7).
+        places = _open_places(result.mesh) if open_edges else 0
+        result.findings.append(
+            Finding(
+                code="repair.still_branching" if branching else "repair.still_open",
+                severity="warning",
+                message=_still_open_text(places, open_edges, branching),
+                values={"open_edges": open_edges, "branching_edges": branching, "holes": places}
+                if branching
+                else {"open_edges": open_edges, "holes": places},
+            )
+        )
+    return result
+
+
+def _still_open_text(places: int, open_edges: int, branching: int) -> Any:
+    """Der Satz über das, was die Reparatur nicht sicher beheben konnte."""
+    if branching and open_edges:
+        return _(
+            "Offene Stellen und überzählige Flächen an {edges} Kanten ließen sich nicht "
+            "sicher beheben.",
+            edges=branching,
+        )
+    if branching:
+        return (
+            _(
+                "An {edges} Kanten hängen überzählige Flächen, die sich nicht sicher "
+                "entfernen ließen.",
+                edges=branching,
+            )
+            if branching > 1
+            else _(
+                "An einer Kante hängt eine überzählige Fläche, die sich nicht sicher "
+                "entfernen ließ."
+            )
+        )
+    if places > 1:
+        return _("{holes} offene Stellen ließen sich nicht sicher schließen.", holes=places)
+    if places == 1:
+        return _("Eine offene Stelle ließ sich nicht sicher schließen.")
+    return _("Offene Stellen ließen sich nicht sicher schließen.")
+
+
+def _open_places(mesh: MeshData) -> int:
+    """Wie viele offene Stellen ein Netz hat — Ringe, nicht Randkanten.
+
+    Null, wo sich die Ränder nicht zu Ringen verketten lassen; der Satz sagt
+    dann „offene Stellen" ohne Zahl.
+    """
+    return len(_hole_rings(mesh)[1])
+
+
+def _crossed_edge_count(mesh: MeshData) -> int:
+    """Kanten mit zwei Flächen, die beide in derselben Richtung laufen.
+
+    Dort zeigen die Außenseiten gegeneinander; ``is_winding_consistent`` sagt
+    nur ja oder nein, der Bericht braucht die Zahl.
+    """
+    table = _edge_table(mesh)
+    rows = table.rows(2)
+    if not len(rows):
+        return 0
+    directed = np.asarray(mesh.raw.edges, dtype=np.int64)[rows]
+    forward = directed[:, 0] < directed[:, 1]
+    edge = table.inverse[rows]
+    order = np.argsort(edge, kind="stable")
+    edge, forward = edge[order], forward[order]
+    # Je Kante zwei Zeilen nebeneinander; gleiche Richtung heißt verkehrt.
+    return int(np.count_nonzero(forward[0::2] == forward[1::2]))
+
+
+def _intersection_findings(
+    result: RepairResult, *, self_intersections: bool, cancelled: CancelToken | None
+) -> None:
+    """Überschneidungen suchen, wo gewünscht auflösen, und sagen, was geschah.
+
+    **Gesagt wird nur, was es gibt.** Ohne einen Fund steht keine Zeile da —
+    auch nicht „übersprungen": Ein Satz über einen Schritt, der nichts zu tun
+    gehabt hätte, schickt den Kunden auf eine Suche. Und zum Auflösen geraten
+    wird nur, wo es tragen kann (:func:`_intersections_resolvable`); sonst
+    endete der Rat in der nächsten Warnung (Durchsicht 24.09.2026: vier von
+    zwölf Körpern des Korpus).
+    """
+    found, complete = self_intersection_check(result.mesh, cancelled)
+    if not found:
+        if not complete:
+            result.findings.append(
+                Finding(
+                    code="repair.self_intersections_incomplete",
+                    severity="info",
+                    message=_(
+                        "Die Suche nach Überschneidungen wurde vorzeitig beendet; es kann "
+                        "welche geben."
+                    ),
+                )
+            )
+        return
+    blocked = _intersections_resolvable(result.mesh)
+    if self_intersections and blocked is None:
+        result.mesh, rebuilt = resolve_self_intersections(
+            result.mesh, cancelled, checked_faces=found
+        )
+        if rebuilt:
+            result.changed = True
+            result.solver = SolverInfo(strategy="direct", attempted=("direct",))
+            result.findings.append(
+                Finding(
+                    code="repair.self_intersections",
+                    severity="info",
+                    message=_("Überschneidungen wurden aufgelöst."),
+                    values={"parts": result.mesh.component_count},
+                )
+            )
+            return
+    if not self_intersections:
+        result.findings.append(
+            Finding(
+                code="repair.self_intersections_detected",
+                severity="warning",
+                message=_("Teile des Modells überschneiden sich."),
+                suggestions=(RESOLVE_INTERSECTIONS, SHOW_LOCATIONS)
+                if blocked is None
+                else (SHOW_LOCATIONS,),
+            )
+        )
+    elif blocked in ("open", "winding"):
+        result.findings.append(
+            Finding(
+                code="repair.self_intersections_skipped",
+                severity="warning",
+                message=_("Überschneidungen lassen sich erst an einem geschlossenen Modell auflösen.")
+                if blocked == "open"
+                else _(
+                    "Überschneidungen lassen sich nicht auflösen, solange Außenseiten "
+                    "gegeneinander zeigen."
+                ),
+                values={"reason": blocked},
+                suggestions=(SHOW_LOCATIONS,),
+            )
+        )
+    elif blocked != "flat":
+        # Eine Fläche ohne Dicke hat ihren eigenen Befund; hier bliebe nur
+        # der Fall, den die Vereinigung nicht sicher lösen konnte.
+        result.findings.append(
+            Finding(
+                code="repair.self_intersections_unresolved",
+                severity="warning",
+                message=_(
+                    "Die Überschneidungen ließen sich nicht sicher auflösen. Viele Slicer "
+                    "drucken solche Stellen trotzdem richtig."
+                ),
+                values={"reason": blocked or "kernel"},
+                suggestions=(SHOW_LOCATIONS,),
+            )
+        )
+    if not complete:
+        result.findings.append(
+            Finding(
+                code="repair.self_intersections_incomplete",
+                severity="info",
+                message=_(
+                    "Die Suche nach Überschneidungen wurde vorzeitig beendet; es kann "
+                    "weitere geben."
+                ),
+            )
+        )

@@ -1,0 +1,101 @@
+diff --git a/app/core/perceive/CLAUDE.md b/app/core/perceive/CLAUDE.md
+index 7d903e036..3756995a3 100644
+--- a/app/core/perceive/CLAUDE.md
++++ b/app/core/perceive/CLAUDE.md
+@@ -594,6 +594,12 @@ Krümmung nutzt eine monotone Asinh-Skala mit `EPS_DISPLAY` als linearem Bereich
+ Null bleibt endlich, große nahezu ebene Radien verdrängen kleine Verrundungen
+ nicht aus der Farbrampe, und kein Wert wird gekappt oder verschwiegen.
+ 
++Die Netzfehlerkarte übernimmt den Vollständigkeitsstatus der räumlichen
++Durchdringungssuche aus `repair.self_intersection_check`. Greift deren
++Paarbudget, bleiben belegte Fehler markiert; die übrigen Flächen gelten als
++unbekannt (`nan`). Die Legende nennt die unvollständige Prüfung ausdrücklich.
++Eine leere Trefferliste aus einer begrenzten Suche ist keine Entwarnung.
++
+ Die Formabweichungskarte liest ausschließlich vorhandene `SurfacePatch`-Belege
+ und prüft gefüllte Originaldreiecke. Identische Träger teilen die Rechnung;
+ widersprüchliche, fehlende oder numerisch nicht begrenzbare Anteile bleiben
+diff --git a/app/core/perceive/maps.py b/app/core/perceive/maps.py
+index 140d56808..1e553bd43 100644
+--- a/app/core/perceive/maps.py
++++ b/app/core/perceive/maps.py
+@@ -882,10 +882,11 @@ def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> Analysis
+     räumlich (`repair.self_intersecting_faces`), nicht tabellarisch, und
+     deckelt sich selbst an der Zahl der geprüften Paare.
+     """
+-    from app.core.geom.repair import self_intersecting_faces
++    from app.core.geom.repair import self_intersection_check
+ 
+     body = mesh.raw
+     values = np.zeros(len(body.faces), dtype=float)
++    complete = True
+     if len(body.faces):
+         edges = np.asarray(body.edges_sorted)
+         groups = trimesh.grouping.group_rows(edges, require_count=None)
+@@ -902,8 +903,13 @@ def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> Analysis
+         # — wer die nächste Karte wählt, wartet trotzdem nicht auf diese.
+         if cancelled is not None:
+             cancelled.raise_if_cancelled()
+-        for face in self_intersecting_faces(mesh, cancelled):
++        crossing, complete = self_intersection_check(mesh, cancelled)
++        for face in crossing:
+             values[face] = 3.0
++        if not complete:
++            # Die Suche kennt nur ihre Treffer, nicht alle ungeprüften Paare.
++            # Belegte Kantenfehler bleiben sichtbar; der Rest ist unbekannt.
++            values[values < 1.0] = np.nan
+ 
+     return AnalysisMap(
+         kind="defects",
+@@ -915,6 +921,13 @@ def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> Analysis
+         highlighted=tuple(int(index) for index in np.nonzero(values > 0.0)[0]),
+         threshold=1.0,
+         categories=_named(DEFECT_LEVELS),
++        note=_(
++            "Die Suche nach Durchdringungen ist unvollständig. Markierte Fehler sind "
++            "bestätigt; weitere sind möglich."
++        )
++        if not complete
++        else None,
++        unknown_note=_("Durchdringungen nicht vollständig geprüft") if not complete else None,
+     )
+ 
+ 
+diff --git a/tests/test_maps.py b/tests/test_maps.py
+index 7cfa64dee..945363ed0 100644
+--- a/tests/test_maps.py
++++ b/tests/test_maps.py
+@@ -440,6 +440,33 @@ def test_a_clean_body_has_a_clean_map() -> None:
+     assert set(analysis.values) == {0.0}
+ 
+ 
++def test_an_incomplete_defect_search_does_not_clear_unchecked_faces(monkeypatch) -> None:
++    """Eine begrenzte Suche ist keine Entwarnung für die restliche Oberfläche."""
++    from app.core.geom import repair
++
++    monkeypatch.setattr(repair, "MAX_INTERSECTION_PAIRS", 0)
++    analysis = maps.defect_map(cube())
++
++    assert analysis.unknown_count == len(analysis.values)
++    assert analysis.highlighted == ()
++    assert analysis.note and analysis.unknown_note
++
++
++def test_an_incomplete_defect_search_keeps_proven_boundary_errors(monkeypatch) -> None:
++    """Ungeprüfte Durchdringungen verdecken keine belegten offenen Kanten."""
++    from app.core.geom import repair
++
++    monkeypatch.setattr(repair, "MAX_INTERSECTION_PAIRS", 0)
++    body = trimesh.creation.box()
++    body.update_faces(np.arange(len(body.faces)) != 0)
++    analysis = maps.defect_map(MeshData.of(body))
++
++    assert analysis.highlighted
++    assert all(analysis.values[index] >= 1.0 for index in analysis.highlighted)
++    assert analysis.unknown_count > 0
++    assert analysis.note
++
++
+ def test_the_defect_map_marks_where_the_body_runs_through_itself() -> None:
+     """Bauplan §18.4 verspricht Durchdringungen, und die Karte fand keine (RM-143).
+ 

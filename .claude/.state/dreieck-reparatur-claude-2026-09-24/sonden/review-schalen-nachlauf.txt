@@ -1,0 +1,33 @@
+A vorher shells: [-10648.0, -1000.0, 8000.0]
+A repair()
+  codes: ['repair.normals_flipped', 'repair.part_inside']
+    repair.normals_flipped info Die Außenseiten wurden angeglichen. {} []
+    repair.part_inside warning Ein Teil liegt ganz in einem anderen. Slicer drucken es je nach Einstellung hohl oder voll. {'parts': 1} []
+  shells: [1000.0, 8000.0, 10648.0] facts: {'tri': 36, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 19648.0, 'parts': 3}
+
+B vorher shells: [-14015.5, 519.093, 33221.927]
+B repair()
+  codes: ['repair.part_inside']
+    repair.part_inside warning Ein Teil liegt ganz in einem anderen. Slicer drucken es je nach Einstellung hohl oder voll. {'parts': 1} []
+  shells: [-14015.5, 519.093, 33221.927] facts: {'tri': 3840, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 19725.519, 'parts': 3}
+B parts_inside_parts: [(0.0, 0.0, 0.0)]
+
+C repair()
+  codes: ['repair.splinters_removed', 'repair.no_thickness']
+    repair.splinters_removed info 20 lose Splitter wurden entfernt. {'removed': 20} []
+    repair.no_thickness warning Ein Teil des Modells ist eine Fläche ohne Dicke. {'open_edges': 60} ['give_thickness', 'show_locations']
+  shells: [8000.0] facts: {'tri': 12, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8000.0, 'parts': 1}
+
+C2 Zylinderfenster allein: ['repair.still_open'] {'tri': 171, 'open': 87, 'branch': 0, 'tight': False, 'wound': True, 'vol': 2924.814, 'parts': 1}
+C2 repair()
+  codes: ['repair.splinters_removed', 'repair.no_thickness', 'repair.still_open']
+    repair.splinters_removed info 20 lose Splitter wurden entfernt. {'removed': 20} []
+    repair.no_thickness warning Ein Teil des Modells ist eine Fläche ohne Dicke. {'open_edges': 60} ['give_thickness', 'show_locations']
+    repair.still_open warning Eine offene Stelle ließ sich nicht sicher schließen. {'open_edges': 27, 'holes': 1} []
+  shells: [2924.814, 8000.0] facts: {'tri': 183, 'open': 87, 'branch': 0, 'tight': False, 'wound': True, 'vol': 5004.152, 'parts': 2}
+
+D repair()
+  codes: ['repair.no_thickness']
+    repair.no_thickness warning Ein Teil des Modells ist eine Fläche ohne Dicke. {'open_edges': 4} ['give_thickness', 'show_locations']
+  shells: [0.0, 8000.0] facts: {'tri': 14, 'open': 4, 'branch': 0, 'tight': False, 'wound': True, 'vol': 7520.0, 'parts': 2}
+D nach thicken(0,8): shells [115.2, 6941.899, 8000.0] facts {'tri': 36, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 15057.099, 'parts': 3}

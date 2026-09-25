@@ -1,0 +1,115 @@
+
+# A0 vor der Reparatur
+  complete=True stopped_at=None
+  Befund info    ingest.multiple_components op=1 {'components': 2}
+  Befund warning ingest.small_components op=1 {'count': 1}
+  Befund info    bore.compensated op=2 {'nominal': '4.00 mm', 'cut': '4.20 mm'}
+  Befund info    arrange.below_bed op=None {'axes': 'z', 'excess': '4.00 mm', 'plate': 1}
+  Körper obj_1 tri=1004 wt=True reserviert=['face_1', 'face_10', 'face_11', 'face_12', 'face_2', 'face_3', 'face_4', 'face_5', 'face_6', 'face_7', 'face_8', 'face_9', 'hole_1', 'hole_2', 'hole_3', 'hole_4', 'hole_5']
+    face_1:face[area=3901.479]@(-0.04, -0.04, -4.00) prov=detected rec=True by=None n=252 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_10:face[area=0.360]@(80.00, 0.30, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_11:face[area=0.360]@(80.00, 0.00, -0.30) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_12:face[area=0.360]@(80.30, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_2:face[area=3901.479]@(-0.04, -0.04, 4.00) prov=detected rec=True by=None n=252 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_3:face[area=640.000]@(0.00, -25.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_4:face[area=640.000]@(0.00, 25.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_5:face[area=400.000]@(-40.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_6:face[area=400.000]@(40.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_7:face[area=0.360]@(79.70, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_8:face[area=0.360]@(80.00, 0.00, 0.30) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_9:face[area=0.360]@(80.00, -0.30, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    hole_1:hole[diameter=5.200, depth=8.000]@(-25.00, -15.00, 0.00) prov=detected rec=True by=None n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+    hole_2:hole[diameter=5.200, depth=8.000]@(-25.00, 15.00, 0.00) prov=detected rec=True by=None n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+    hole_3:hole[diameter=5.200, depth=8.000]@(25.00, -15.00, 0.00) prov=detected rec=True by=None n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+    hole_4:hole[diameter=5.200, depth=8.000]@(25.00, 15.00, 0.00) prov=detected rec=True by=None n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+    hole_5:hole[diameter=4.200, depth=8.000]@(10.00, 10.00, 0.00) prov=detected rec=True by=2 n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+  Bohrungen vor der Reparatur: ['hole_1', 'hole_2', 'hole_3', 'hole_4', 'hole_5']
+
+# A1 nach Reparatur (Kleinstteil) + Passung + Folgeschritte
+  complete=True stopped_at=None
+  Befund info    ingest.multiple_components op=1 {'components': 2}
+  Befund info    bore.compensated op=2 {'nominal': '4.00 mm', 'cut': '4.20 mm'}
+  Befund warning repair.components_removed op=3 {'removed': 1}
+  Befund warning fit.not_measurable op=None {'fit': 'probe', 'a': 'obj_1:hole_1', 'b': 'obj_1:hole_2'}
+  Befund info    arrange.below_bed op=None {'axes': 'z', 'excess': '4.00 mm', 'plate': 1}
+  Körper obj_1 tri=992 wt=True reserviert=['face_1', 'face_10', 'face_11', 'face_12', 'face_2', 'face_3', 'face_4', 'face_5', 'face_6', 'face_7', 'face_8', 'face_9', 'hole_1', 'hole_2', 'hole_3', 'hole_4', 'hole_5']
+    face_1:face[area=3894.462]@(0.01, -0.06, -4.00) prov=detected rec=True by=None n=252 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_2:face[area=3894.462]@(0.01, -0.06, 4.00) prov=detected rec=True by=None n=252 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_3:face[area=640.000]@(0.00, -25.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_4:face[area=640.000]@(0.00, 25.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_5:face[area=400.000]@(-40.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_6:face[area=400.000]@(40.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    hole_1:hole[diameter=5.200, depth=8.000]@(-25.00, -15.00, 0.00) prov=detected rec=True by=None n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+    hole_2:hole[diameter=6.000, depth=8.000]@(-25.00, 15.00, 0.00) prov=generated rec=True by=4 n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+    hole_3:hole[diameter=5.200, depth=8.000]@(25.00, -15.00, 0.00) prov=detected rec=True by=None n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+    hole_4:hole[diameter=5.200, depth=8.000]@(25.00, 15.00, 0.00) prov=detected rec=True by=None n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+    hole_5:hole[diameter=4.200, depth=8.000]@(10.00, 10.00, 0.00) prov=detected rec=True by=2 n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+
+# B0 ungeschweißt geladen
+  complete=True stopped_at=None
+  Befund info    ingest.degenerate_removed op=1 {'removed': 80}
+  Befund warning ingest.not_watertight op=1 {'open_edges': 912}
+  Befund info    arrange.below_bed op=None {'axes': 'z', 'excess': '4.00 mm', 'plate': 1}
+  Körper obj_1 tri=304 wt=False reserviert=['cone_1', 'face_1', 'face_2', 'face_3', 'face_4', 'face_5', 'face_6', 'hole_1']
+    cone_1:cone[diameter=10.000]@(-0.00, -0.00, 4.00) prov=detected rec=True by=None n=96 src={'diameter': 'fit', 'angle': 'fit', 'axis': 'fit', 'centre': 'fit'}
+    face_1:face[area=2378.823]@(0.00, 0.00, -4.00) prov=detected rec=True by=None n=52 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_2:face[area=2321.684]@(0.00, -0.00, 4.00) prov=detected rec=True by=None n=52 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_3:face[area=480.000]@(0.00, -20.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_4:face[area=480.000]@(0.00, 20.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_5:face[area=320.000]@(-30.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_6:face[area=320.000]@(30.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    hole_1:hole[diameter=5.200, depth=5.600]@(0.00, -0.00, -1.20) prov=detected rec=True by=None n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+
+# B1 ungeschweißt geladen, repariert, Bohrung geändert
+  complete=True stopped_at=None
+  Befund info    ingest.degenerate_removed op=1 {'removed': 80}
+  Befund warning ingest.not_watertight op=1 {'open_edges': 912}
+  Befund info    repair.welded op=2 {'removed': 760}
+  Befund info    resize.widening_kept op=3 {'widening': 'cone_1', 'outer': 9.999999978476799, 'diameter': 6.0, 'previous': 5.199999952779914}
+  Befund warning fit.not_measurable op=None {'fit': 'probe', 'a': 'obj_1:hole_1', 'b': 'obj_1:cone_1'}
+  Befund info    arrange.below_bed op=None {'axes': 'z', 'excess': '4.00 mm', 'plate': 1}
+  Körper obj_1 tri=400 wt=True reserviert=['cone_1', 'face_1', 'face_2', 'face_3', 'face_4', 'face_5', 'face_6', 'hole_1']
+    cone_1:cone[diameter=10.000]@(0.00, 0.00, 4.00) prov=detected rec=True by=None n=144 src={'diameter': 'fit', 'angle': 'fit', 'axis': 'fit', 'centre': 'fit'}
+    face_1:face[area=2371.806]@(-0.00, 0.00, -4.00) prov=detected rec=True by=None n=52 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_2:face[area=2321.684]@(-0.00, 0.00, 4.00) prov=detected rec=True by=None n=52 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_3:face[area=480.000]@(0.00, -20.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_4:face[area=480.000]@(0.00, 20.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_5:face[area=320.000]@(-30.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_6:face[area=320.000]@(30.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    hole_1:hole[diameter=6.000, depth=6.000]@(0.00, -0.00, -1.00) prov=generated rec=True by=3 n=144 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+
+# C0 zwei Quader, gebohrt
+  complete=True stopped_at=None
+  Befund info    ingest.multiple_components op=1 {'components': 2}
+  Befund info    bore.compensated op=2 {'nominal': '4.00 mm', 'cut': '4.20 mm'}
+  Befund info    arrange.below_bed op=None {'axes': 'z', 'excess': '10.00 mm', 'plate': 1}
+  Körper obj_1 tri=220 wt=True reserviert=['face_1', 'face_10', 'face_11', 'face_12', 'face_2', 'face_3', 'face_4', 'face_5', 'face_6', 'face_7', 'face_8', 'face_9', 'hole_1']
+    face_1:face[area=400.000]@(-10.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_10:face[area=400.000]@(12.00, 10.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_11:face[area=400.000]@(12.00, 0.00, -10.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_12:face[area=400.000]@(22.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_2:face[area=386.185]@(0.18, -0.00, 10.00) prov=detected rec=True by=None n=52 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_3:face[area=400.000]@(0.00, -10.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_4:face[area=400.000]@(0.00, 10.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_5:face[area=386.185]@(0.18, -0.00, -10.00) prov=detected rec=True by=None n=52 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_6:face[area=400.000]@(10.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_7:face[area=400.000]@(2.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_8:face[area=400.000]@(12.00, 0.00, 10.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_9:face[area=400.000]@(12.00, -10.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    hole_1:hole[diameter=4.200, depth=20.000]@(-5.00, -0.00, 0.00) prov=detected rec=True by=2 n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}
+
+# C1 Durchdringung aufgelöst, Bohrung geändert
+  complete=True stopped_at=None
+  Befund info    ingest.multiple_components op=1 {'components': 2}
+  Befund info    bore.compensated op=2 {'nominal': '4.00 mm', 'cut': '4.20 mm'}
+  Befund info    perceive.orphaned op=3 {'feature': 'face_8, face_4, face_10, face_6, face_5, face_2, face_3, face_7, face_9, face_11', 'count': 10}
+  Befund info    repair.self_intersections op=3 
+  Befund info    arrange.below_bed op=None {'axes': 'z', 'excess': '10.00 mm', 'plate': 1}
+  Körper obj_1 tri=224 wt=True reserviert=['face_1', 'face_10', 'face_11', 'face_12', 'face_13', 'face_14', 'face_15', 'face_16', 'face_2', 'face_3', 'face_4', 'face_5', 'face_6', 'face_7', 'face_8', 'face_9', 'hole_1']
+    face_1:face[area=400.000]@(-10.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_12:face[area=400.000]@(22.00, 0.00, 0.00) prov=detected rec=True by=None n=2 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_13:face[area=640.000]@(6.00, -10.00, 0.00) prov=detected rec=True by=None n=4 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_14:face[area=640.000]@(6.00, 10.00, 0.00) prov=detected rec=True by=None n=4 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_15:face[area=620.421]@(6.35, 0.00, -10.00) prov=detected rec=True by=None n=58 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    face_16:face[area=620.421]@(6.35, -0.00, 10.00) prov=detected rec=True by=None n=58 src={'area': 'facets', 'normal': 'facets', 'centre': 'facets'}
+    hole_1:hole[diameter=5.000, depth=20.000]@(-5.00, -0.00, 0.00) prov=generated rec=True by=4 n=96 src={'diameter': 'fit', 'axis': 'fit', 'centre': 'fit', 'depth': 'facets'}

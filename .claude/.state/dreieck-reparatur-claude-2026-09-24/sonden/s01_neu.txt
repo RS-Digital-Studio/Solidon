@@ -1,0 +1,65 @@
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:302: RuntimeWarning: divide by zero encountered in divide
+  center_mass = integrated[1:4] / volume
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:316: RuntimeWarning: invalid value encountered in scalar multiply
+  integrated[5] + integrated[6] - (volume * (center_mass[[1, 2]] ** 2).sum())
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:319: RuntimeWarning: invalid value encountered in scalar multiply
+  integrated[4] + integrated[6] - (volume * (center_mass[[0, 2]] ** 2).sum())
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:322: RuntimeWarning: invalid value encountered in scalar multiply
+  integrated[4] + integrated[5] - (volume * (center_mass[[0, 1]] ** 2).sum())
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:324: RuntimeWarning: invalid value encountered in scalar multiply
+  inertia[0, 1] = -(integrated[7] - (volume * np.prod(center_mass[[0, 1]])))
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:325: RuntimeWarning: invalid value encountered in scalar multiply
+  inertia[1, 2] = -(integrated[8] - (volume * np.prod(center_mass[[1, 2]])))
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:326: RuntimeWarning: invalid value encountered in scalar multiply
+  inertia[0, 2] = -(integrated[9] - (volume * np.prod(center_mass[[0, 2]])))
+
+=== A broken_selfint (zwei Schalen)
+vorher: {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 16000.0, 'parts': 2, 'x_faces': 12, 'x_complete': True, 'x_s': 0.0}
+NEU  changed=True 0.01s -> {'tri': 36, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 14272.0, 'parts': 1, 'x_faces': 0, 'x_complete': True, 'x_s': 0.0}
+HEAD changed=True 0.00s -> {'tri': 60, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 12544.0, 'parts': 1, 'x_faces': 20, 'x_complete': True, 'x_s': 0.01}
+repair(neu, SI an) 0.02s: ['repair.self_intersections'] {'tri': 36, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 14272.0, 'parts': 1}
+repair(HEAD, SI an) 0.00s: ['repair.self_intersections'] {'tri': 60, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 12544.0, 'parts': 1}
+
+=== B Achterröhre (eine Schale)
+vorher: {'tri': 2304, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 821.671, 'parts': 1, 'x_faces': 88, 'x_complete': True, 'x_s': 0.09}
+NEU  changed=False 0.13s -> {'tri': 2304, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 821.671, 'parts': 1, 'x_faces': 88, 'x_complete': True, 'x_s': 0.04}
+HEAD changed=True 0.08s -> {'tri': 2546, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 788.01, 'parts': 1, 'x_faces': 73, 'x_complete': True, 'x_s': 0.05}
+repair(neu, SI an) 0.18s: ['repair.welded', 'repair.self_intersections_unresolved'] {'tri': 2304, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 821.671, 'parts': 1}
+repair(HEAD, SI an) 0.06s: ['repair.welded', 'repair.self_intersections'] {'tri': 2544, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 787.977, 'parts': 1}
+
+=== C generated_figure.stl
+vorher: {'tri': 3372, 'open': 18, 'branch': 8, 'tight': False, 'wound': False, 'vol': 2991.114, 'parts': 6, 'x_faces': 0, 'x_complete': True, 'x_s': 0.08}
+NEU  changed=False 0.00s -> {'tri': 3372, 'open': 18, 'branch': 8, 'tight': False, 'wound': False, 'vol': 2991.114, 'parts': 6, 'x_faces': 0, 'x_complete': True, 'x_s': 0.07}
+HEAD changed=False 0.00s -> {'tri': 3372, 'open': 18, 'branch': 8, 'tight': False, 'wound': False, 'vol': 2991.114, 'parts': 6, 'x_faces': 0, 'x_complete': True, 'x_s': 0.08}
+repair(neu, SI an) 0.21s: ['repair.degenerate_removed', 'repair.holes_filled', 'repair.normals_flipped'] {'tri': 3370, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 5033.194, 'parts': 2}
+repair(HEAD, SI an) 0.25s: ['repair.degenerate_removed', 'repair.holes_filled', 'repair.normals_flipped', 'repair.self_intersections'] {'tri': 3368, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 5033.194, 'parts': 1}
+
+=== D Innenschale + überlappende Außenschalen
+vorher: {'tri': 36, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 15992.0, 'parts': 3, 'x_faces': 12, 'x_complete': True, 'x_s': 0.0}
+NEU  changed=False 0.00s -> {'tri': 36, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 15992.0, 'parts': 3, 'x_faces': 12, 'x_complete': True, 'x_s': 0.0}
+HEAD changed=True 0.00s -> {'tri': 72, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 12536.0, 'parts': 2, 'x_faces': 20, 'x_complete': True, 'x_s': 0.0}
+repair(neu, SI an) 0.01s: ['repair.self_intersections_unresolved'] {'tri': 36, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 15992.0, 'parts': 3}
+repair(HEAD, SI an) 0.00s: ['repair.self_intersections'] {'tri': 72, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 12536.0, 'parts': 2}
+
+=== E Achterröhre mit innerer Röhre (Hohlkörper)
+vorher: {'tri': 4608, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 730.375, 'parts': 2, 'x_faces': 184, 'x_complete': True, 'x_s': 0.12}
+NEU  changed=False 0.10s -> {'tri': 4608, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 730.375, 'parts': 2, 'x_faces': 184, 'x_complete': True, 'x_s': 0.11}
+HEAD changed=True 0.16s -> {'tri': 5550, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 704.78, 'parts': 1, 'x_faces': 553, 'x_complete': True, 'x_s': 0.17}
+repair(neu, SI an) 0.15s: ['repair.welded', 'repair.self_intersections_unresolved'] {'tri': 4608, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 730.375, 'parts': 2}
+repair(HEAD, SI an) 0.19s: ['repair.welded', 'repair.self_intersections'] {'tri': 5540, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 704.728, 'parts': 1}
+
+=== F zwei überlappende Würfel, einer umgestülpt
+vorher: {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 0.0, 'parts': 2, 'x_faces': 12, 'x_complete': True, 'x_s': 0.0}
+NEU  changed=False 0.00s -> {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 0.0, 'parts': 2, 'x_faces': 12, 'x_complete': True, 'x_s': 0.0}
+HEAD changed=False 0.01s -> {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 0.0, 'parts': 2, 'x_faces': 12, 'x_complete': True, 'x_s': 0.0}
+repair(neu, SI an) 0.00s: ['repair.self_intersections_skipped'] {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 0.0, 'parts': 2}
+repair(HEAD, SI an) 0.00s: ['repair.self_intersections_skipped'] {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 0.0, 'parts': 2}
+
+=== G Kugel ganz im Würfel (zwei positive Schalen)
+vorher: {'tri': 1292, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8265.775, 'parts': 2, 'x_faces': 0, 'x_complete': True, 'x_s': 0.03}
+NEU  changed=False 0.02s -> {'tri': 1292, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8265.775, 'parts': 2, 'x_faces': 0, 'x_complete': True, 'x_s': 0.03}
+HEAD changed=True 0.04s -> {'tri': 1292, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 7735.139, 'parts': 2, 'x_faces': 0, 'x_complete': True, 'x_s': 0.03}
+repair(neu, SI an) 0.03s: [] {'tri': 1292, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8265.775, 'parts': 2}
+repair(HEAD, SI an) 0.04s: ['repair.self_intersections'] {'tri': 1292, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 7735.139, 'parts': 2}
+
+fertig

@@ -1,0 +1,30 @@
+repair.py 02c5a9f7 18:32:17
+[B1] zwei Würfel: changed=True vol=14272.0 (Soll 14272)
+[B2] STL-Suppe: ['ingest.normals_flipped', 'repair.holes_filled'] vol=-8000.0 (Soll +8000)
+[B2] offener umgestülpter Würfel: ['repair.wide_hole_filled', 'repair.holes_filled'] vol=-8000.0
+[B3] Besteckkorb 8672: [] 1.75s
+[B3] drill-holder SI an: ['repair.self_intersections'] parts=4 4.70s
+[B4] Achterröhre Vorgabe: [('repair.welded', []), ('repair.self_intersections_detected', ['resolve_intersections', 'show_locations'])]
+[B4] Achterröhre SI an: ['repair.welded', 'repair.self_intersections_unresolved']
+[B5] Naht Import: ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components'] {'tri': 600, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 66359.48, 'parts': 2}
+[B5] Naht Reparieren: ['repair.weld_skipped', 'repair.self_intersections_detected'] {'tri': 600, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 66359.48, 'parts': 2}
+vorher: {'tri': 1152, 'open': 0, 'branch': 0, 'tight': True, 'wound': False, 'vol': -13803.145, 'parts': 1}
+unify_normals flipped= True {'tri': 1152, 'open': 0, 'branch': 0, 'tight': True, 'wound': False, 'vol': 69.635, 'parts': 1}
+repair: ['repair.normals_flipped', 'repair.normals_inconsistent', 'repair.self_intersections_detected'] {'tri': 1152, 'open': 0, 'branch': 0, 'tight': True, 'wound': False, 'vol': 69.635, 'parts': 1}
+    repair.normals_flipped | Die Außenseiten wurden angeglichen.
+    repair.normals_inconsistent | An 12 Kanten zeigen die Außenseiten gegeneinander.
+    repair.self_intersections_detected | Teile des Modells überschneiden sich.
+[B7] generated_figure repair: ['repair.degenerate_removed', 'repair.holes_filled', 'repair.normals_flipped', 'repair.still_open'] Teilvolumina=[5033.194, 0.0] {'tri': 3369, 'open': 3, 'branch': 0, 'tight': False, 'wound': True, 'vol': 5033.188, 'parts': 2}
+[B7] generated_figure Import: ['ingest.degenerate_removed', 'ingest.normals_flipped', 'repair.holes_filled', 'repair.still_open', 'ingest.multiple_components', 'ingest.small_components', 'ingest.not_watertight'] {'tri': 3369, 'open': 3, 'branch': 0, 'tight': False, 'wound': True, 'vol': 5033.188, 'parts': 2}
+[B8] broken_open: location=(6.0, 2.0, -2.0) suggestions=['leave_open']
+[B9] freistehend umgestülpt: ['repair.normals_flipped'] Teile=[8000.0, 8000.0]
+[B9] Hohlkörper richtig: [] Teile=[8000.0, -1000.0]
+[B9] Innenschale positiv (mehrdeutig): [] Teile=[8000.0, 1000.0]
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:302: RuntimeWarning: divide by zero encountered in divide
+  center_mass = integrated[1:4] / volume
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:302: RuntimeWarning: invalid value encountered in divide
+  center_mass = integrated[1:4] / volume
+[B9] Import freistehend umgestülpt: ['ingest.multiple_components'] Teile=[8000.0, -8000.0]
+[B10] zweifarbiges Loch: 4 von 16 Fülldreiecken mit fremdem Slot
+[B14] Schale z<-2: ['repair.welded', 'repair.still_open'] tight=False
+[B16] Würfel 1 mm bei 1e8: umgestülpt=True danach Volumen lokal=-1.000

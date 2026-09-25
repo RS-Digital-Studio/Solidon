@@ -1,0 +1,33 @@
+...................................F.................................... [ 93%]
+.....                                                                    [100%]
+================================== FAILURES ===================================
+___________ test_a_partly_searched_defect_map_knows_what_it_checked ___________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000029FFFF50AD0>
+
+    def test_a_partly_searched_defect_map_knows_what_it_checked(monkeypatch) -> None:
+        """Unbekannt ist, was die Suche nicht erreicht hat — nicht alles.
+    
+        Bis zur Durchsicht färbte eine vorzeitig beendete Suche jede fehlerfreie
+        Fläche grau, auch die schon geprüften (Befund B3 der Durchsicht
+        24.09.2026). Eine Kugel aus 1 280 Dreiecken, mit einem Budget für einen
+        Teil ihrer Paare: ein Teil geprüft, ein Teil unbekannt.
+        """
+        import math
+    
+        sphere = trimesh.creation.icosphere(subdivisions=3, radius=10.0)
+        monkeypatch.setattr(maps, "DEFECT_MAP_PAIRS", 2000)
+    
+        analysis = maps.defect_map(MeshData.of(sphere))
+    
+        checked = sum(1 for value in analysis.values if not math.isnan(value))
+>       assert 0 < analysis.unknown_count < len(analysis.values)
+E       AssertionError: assert 1280 < 1280
+E        +  where 1280 = AnalysisMap(kind='defects', title=TranslatableText(msgid='Netzfehler', context=None, values=None), values=(nan, nan, n...le='linear', maximum_interval=None, numerical_error=None, witness_point=None, witness_face=None, witness_distance=None).unknown_count
+E        +  and   1280 = len((nan, nan, nan, nan, nan, nan, ...))
+E        +    where (nan, nan, nan, nan, nan, nan, ...) = AnalysisMap(kind='defects', title=TranslatableText(msgid='Netzfehler', context=None, values=None), values=(nan, nan, n...le='linear', maximum_interval=None, numerical_error=None, witness_point=None, witness_face=None, witness_distance=None).values
+
+tests\test_maps.py:482: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_maps.py::test_a_partly_searched_defect_map_knows_what_it_checked
+1 failed, 76 passed in 12.17s

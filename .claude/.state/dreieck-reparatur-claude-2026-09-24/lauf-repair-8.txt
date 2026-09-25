@@ -1,0 +1,41 @@
+........................F............................................... [ 32%]
+........................................................................ [ 65%]
+........................................................................ [ 98%]
+...                                                                      [100%]
+================================== FAILURES ===================================
+__________________ test_a_missing_wall_is_closed_and_said_so __________________
+
+    def test_a_missing_wall_is_closed_and_said_so() -> None:
+        """§34: ``broken_open.stl`` fehlen drei Flächen — eine Wand, kein Loch.
+    
+        **Bis zum 22.09.2026 blieb sie offen**, und der Befund sagte, warum. Das
+        war der falsche Dienst: Der Kunde will drucken, und ein Modell, das die
+        Reparatur mit einem Loch zurückgibt, hilft ihm nicht (Entscheidung Robert:
+        „alles bei der Reparatur beheben"). Geschlossen wird jetzt auch die Wand —
+        und weil dort eine Fläche entsteht, die im Modell nicht war, sagt es eine
+        **Warnung**, die den Blick darauf lenkt; zurücknehmen lässt sich der
+        Schritt mit Strg+Z.
+        """
+        body, _welded = merge_vertices(raw("broken_open.stl"))
+        assert open_edge_count(body) > 0
+    
+        result = repair(body)
+    
+        assert result.mesh.is_watertight, "der Körper kommt geschlossen zurück"
+        codes = {finding.code for finding in result.findings}
+        assert "repair.wide_hole_filled" in codes, "und die große Öffnung steht als Warnung da"
+        assert "repair.still_open" not in codes
+        wide = next(f for f in result.findings if f.code == "repair.wide_hole_filled")
+        assert wide.severity == "warning"
+        # Der Klick auf die Zeile fliegt zur Öffnung, und der Rückweg ist ein
+        # Knopf (Entscheidung Robert, 24.09.2026): „Offen lassen".
+        assert [action.id for action in wide.suggestions] == ["leave_open"]
+        assert wide.location is not None
+>       low, high = body.bounds.min, body.bounds.max
+                    ^^^^^^^^^^^^^^^
+E       AttributeError: 'BoundingBox' object has no attribute 'min'
+
+tests\test_repair.py:478: AttributeError
+=========================== short test summary info ===========================
+FAILED tests/test_repair.py::test_a_missing_wall_is_closed_and_said_so - Attr...
+1 failed, 218 passed, 2 deselected in 22.28s

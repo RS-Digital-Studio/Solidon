@@ -1,0 +1,4 @@
+100 Kugeln (32000 Dreiecke): repair 2.2 s {'_filled_rounds': 0.0, 'unify_normals': 0.03, 'crossings_of': 0.77, '_intersections_resolvable': 0.05, '_still_crosses': 0.69, 'resolve_self_intersections': 1.24, 'parts_inside_parts': 0.01}
+  Befunde: ['repair.self_intersections'] {'tri': 31428, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 10499.239, 'parts': 54}
+400 Kugeln (128000 Dreiecke): repair 13.3 s {'_filled_rounds': 0.0, 'unify_normals': 0.18, 'crossings_of': 4.95, '_intersections_resolvable': 0.35, '_still_crosses': 4.3, 'resolve_self_intersections': 7.2, 'parts_inside_parts': 0.1}
+  Befunde: ['repair.self_intersections'] {'tri': 119814, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 34930.257, 'parts': 16}

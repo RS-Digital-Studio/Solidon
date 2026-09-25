@@ -1,0 +1,47 @@
+
+# torus_ring.stl: 2304 △ {'torus': 1}
+  torus Tiefe 1: 6 △ entfernt, 4 gefüllt, open=0 Durchdringungen=0 Befunde=['repair.welded', 'repair.holes_filled']
+      Arten {'torus': 1} -> {'torus': 1}
+      torus vorher torus[diameter=40.000] n=2304; nachher ['torus[diameter=40.000] n=2302']
+      Fülldreiecke bei: {'torus[diameter=40.000] n=2302': 4}
+  torus Tiefe 2: 24 △ entfernt, 10 gefüllt, open=0 Durchdringungen=0 Befunde=['repair.welded', 'repair.holes_filled']
+      Arten {'torus': 1} -> {'torus': 1}
+      torus vorher torus[diameter=40.000] n=2304; nachher ['torus[diameter=40.000] n=2290']
+      Fülldreiecke bei: {'torus[diameter=40.000] n=2290': 10}
+  torus Tiefe 3: 54 △ entfernt, 16 gefüllt, open=0 Durchdringungen=0 Befunde=['repair.welded', 'repair.holes_filled']
+      Arten {'torus': 1} -> {'torus': 1}
+      torus vorher torus[diameter=40.000] n=2304; nachher ['torus[diameter=40.000] n=2265']
+      Fülldreiecke bei: {'torus[diameter=40.000] n=2265': 15}
+
+# sphere_socket.stl: 718 △ {'sphere': 1, 'face': 6}
+  sphere Tiefe 1: 6 △ entfernt, 4 gefüllt, open=0 Durchdringungen=0 Befunde=['repair.welded', 'repair.holes_filled']
+      Arten {'sphere': 1, 'face': 6} -> {'sphere': 1, 'face': 6}
+      sphere vorher sphere[diameter=16.000] n=656; nachher ['sphere[diameter=16.000] n=654']
+      Fülldreiecke bei: {'sphere[diameter=16.000] n=654': 4}
+  sphere Tiefe 2: 24 △ entfernt, 10 gefüllt, open=0 Durchdringungen=0 Befunde=['repair.welded', 'repair.holes_filled']
+      Arten {'sphere': 1, 'face': 6} -> {'sphere': 1, 'face': 6}
+      sphere vorher sphere[diameter=16.000] n=656; nachher ['sphere[diameter=16.000] n=641']
+      Fülldreiecke bei: {'sphere[diameter=16.000] n=641': 9}
+  sphere Tiefe 3: 54 △ entfernt, 16 gefüllt, open=0 Durchdringungen=0 Befunde=['repair.welded', 'repair.holes_filled']
+      Arten {'sphere': 1, 'face': 6} -> {'sphere': 1, 'face': 6}
+      sphere vorher sphere[diameter=16.000] n=656; nachher ['sphere[diameter=16.000] n=617']
+      Fülldreiecke bei: {'sphere[diameter=16.000] n=617': 15}
+
+# post_with_fillet.stl: 2704 △ {'pin': 1, 'torus': 1, 'face': 7}
+  pin Tiefe 1: Bereich verlässt das Merkmal, übersprungen
+  torus Tiefe 1: 6 △ entfernt, 4 gefüllt, open=0 Durchdringungen=4 Befunde=['repair.welded', 'repair.holes_filled']
+      Arten {'pin': 1, 'torus': 1, 'face': 7} -> {'pin': 1, 'torus': 1, 'face': 7}
+      torus vorher torus[diameter=18.000] n=2015; nachher ['torus[diameter=18.000] n=2008']
+      Fülldreiecke bei: {}
+  torus Tiefe 2: 24 △ entfernt, 10 gefüllt, open=0 Durchdringungen=4 Befunde=['repair.welded', 'repair.holes_filled']
+      Arten {'pin': 1, 'torus': 1, 'face': 7} -> {'pin': 1, 'torus': 1, 'face': 7}
+      torus vorher torus[diameter=18.000] n=2015; nachher ['torus[diameter=18.000] n=1991']
+      Fülldreiecke bei: {'torus[diameter=18.000] n=1991': 4}
+  torus Tiefe 3: 54 △ entfernt, 16 gefüllt, open=0 Durchdringungen=4 Befunde=['repair.welded', 'repair.holes_filled']
+      Arten {'pin': 1, 'torus': 1, 'face': 7} -> {'pin': 1, 'torus': 1, 'face': 7}
+      torus vorher torus[diameter=18.000] n=2015; nachher ['torus[diameter=18.000] n=1958']
+      Fülldreiecke bei: {'torus[diameter=18.000] n=1958': 4}
+
+# block_with_rounded_edge.stl: 108 △ {'fillet': 1, 'face': 6}
+
+# near_sphere_ellipsoid.stl: 1280 △ {'curved_face': 1}

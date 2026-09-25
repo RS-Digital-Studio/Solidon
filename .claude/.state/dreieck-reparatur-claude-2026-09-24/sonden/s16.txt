@@ -1,0 +1,34 @@
+repair.py 1af26c21
+3D Drucker\16_CC2-Auffangrinne\Naht-zusammengesetzt.stl | Naht-zusammengesetzt.s: 0.0s
+   18:04 : tight=True open=0 wound=False vol=66322.799  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components']
+   jetzt : tight=True open=0 wound=True vol=66359.48  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components']
+Blessed+Family+–+Heart+Script+Decor.3mf | Blessed Family – Heart: 0.1s
+   18:04 : tight=True open=0 wound=True vol=146215.314  ['repair.branching_resolved', 'repair.holes_filled']
+   jetzt : tight=True open=0 wound=True vol=146265.442  ['repair.branching_resolved', 'repair.holes_filled']
+er\04_Community-Modelle\Flaschenhalter_4er_material.3mf | Bottle-holder-v3 v5: 0.4s
+   18:04 : tight=True open=0 wound=True vol=351077.58  ['ingest.welded', 'repair.branching_resolved', 'repair.holes_filled']
+   jetzt : tight=False open=3 wound=True vol=351078.167  ['ingest.welded', 'repair.branching_resolved', 'repair.still_open', 'ingest.multiple_components', 'ingest.small_components', 'ingest.not_watertight']
+04_Community-Modelle\Gaehnende-Katze_Figur_material.3mf | kitek ziewa: 16.3s
+   18:04 : tight=True open=0 wound=False vol=98557.432  ['ingest.welded', 'ingest.degenerate_removed', 'ingest.normals_flipped', 'repair.branching_resolved', 'repair.holes_filled']
+   jetzt : tight=False open=19 wound=True vol=98557.844  ['ingest.welded', 'ingest.degenerate_removed', 'ingest.normals_flipped', 'repair.branching_resolved', 'repair.holes_filled', 'repair.still_open', 'ingest.not_watertight']
++with+sails_stls\obj_10_ship sails 3d model.stl_1_B.stl | obj_10_ship sails 3d m: 1.4s
+   18:04 : tight=True open=0 wound=True vol=2127.346  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components']
+   jetzt : tight=True open=0 wound=True vol=2127.346  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components']
++with+sails_stls\obj_16_ship sails 3d model.stl_1_B.stl | obj_16_ship sails 3d m: 1.6s
+   18:04 : tight=True open=0 wound=True vol=2127.346  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components']
+   jetzt : tight=True open=0 wound=True vol=2127.346  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components']
+p+with+sails_stls\obj_3_ship sails 3d model.stl_1_B.stl | obj_3_ship sails 3d mo: 1.5s
+   18:04 : tight=True open=0 wound=True vol=2305.268  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components']
+   jetzt : tight=True open=0 wound=True vol=2305.268  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components']
+p+with+sails_stls\obj_4_ship sails 3d model.stl_1_B.stl | obj_4_ship sails 3d mo: 1.4s
+   18:04 : tight=True open=0 wound=True vol=1240.183  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components']
+   jetzt : tight=True open=0 wound=True vol=1240.183  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components']
+Wizard+Tower+Staunton+Elegoo.3mf | Wizard Tower Staunton.: 0.6s
+   18:04 : tight=True open=0 wound=True vol=15952.298  ['repair.holes_filled']
+   jetzt : tight=True open=0 wound=True vol=15952.298  ['repair.holes_filled']
+pirate+ship+with+sails_stls\obj_15_Assembly.stl | obj_15_Assembly.stl: 4.5s
+   18:04 : tight=True open=0 wound=True vol=284140.959  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.very_large']
+   jetzt : tight=True open=0 wound=True vol=284140.959  ['repair.branching_resolved', 'repair.holes_filled', 'ingest.very_large']
+chufang.3mf | 红色 7: 0.1s
+   18:04 : tight=True open=0 wound=True vol=1068.578  ['repair.holes_filled']
+   jetzt : tight=True open=0 wound=True vol=1068.578  ['repair.holes_filled']

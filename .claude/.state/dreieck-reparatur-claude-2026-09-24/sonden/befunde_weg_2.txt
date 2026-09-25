@@ -1,0 +1,288 @@
+== durchdringung.stl (1284 Bytes)
+  Import 1.04 s
+  -- nach Import: vollständig=True angehalten=None
+     [info] ingest.multiple_components op=1 obj=obj_1
+        Text: Das Modell besteht aus mehreren Teilen.
+        Knöpfe: In Einzelteile zerlegen   Werte: {'components': 2}
+  Reparieren (Vorgabe) 0.01 s
+  -- nach Reparieren (Vorgabe): vollständig=True angehalten=None
+     [info] ingest.multiple_components op=1 obj=obj_1
+        Text: Das Modell besteht aus mehreren Teilen.
+        Knöpfe: In Einzelteile zerlegen   Werte: {'components': 2}
+     [warning] repair.self_intersections_detected op=2 obj=obj_1
+        Text: Flächen durchdringen sich. Aktivieren Sie unter „Weitere Einstellungen“ die Option „Selbstdurchdringungen auflösen“.
+        Knöpfe: Eingabe korrigieren, Stellen zeigen   Werte: {}
+  Reparieren (Durchdringungen) 0.04 s
+  -- nach zweitem Reparieren mit Durchdringungen: vollständig=True angehalten=None
+     [info] ingest.multiple_components op=1 obj=obj_1
+        Text: Das Modell besteht aus mehreren Teilen.
+        Knöpfe: In Einzelteile zerlegen   Werte: {'components': 2}
+     [warning] repair.self_intersections_detected op=2 obj=obj_1
+        Text: Flächen durchdringen sich. Aktivieren Sie unter „Weitere Einstellungen“ die Option „Selbstdurchdringungen auflösen“.
+        Knöpfe: Eingabe korrigieren, Stellen zeigen   Werte: {}
+     [info] perceive.orphaned op=3 obj=obj_1
+        Text: Formdetails sind nach diesem Schritt nicht mehr automatisch wiederzuerkennen.
+        Knöpfe: —   Werte: {'feature': 'face_2, face_4, face_6, face_7, face_9, face_11', 'count': 6}
+     [info] repair.self_intersections op=3 obj=obj_1
+        Text: Selbstdurchdringungen wurden aufgelöst.
+        Knöpfe: —   Werte: {}
+
+== flosse.stl (734 Bytes)
+  Import 0.01 s
+  -- nach Import: vollständig=True angehalten=None
+     [info] repair.branching_resolved op=1 obj=obj_1
+        Text: An einer Kante lagen Flächen übereinander — die überzählige wurde entfernt.
+        Knöpfe: —   Werte: {'edges': 1}
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 1}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 4 von 4 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 4, 'after': 0}
+  Reparieren (Vorgabe) 0.01 s
+  -- nach Reparieren (Vorgabe): vollständig=True angehalten=None
+     [info] repair.branching_resolved op=1 obj=obj_1
+        Text: An einer Kante lagen Flächen übereinander — die überzählige wurde entfernt.
+        Knöpfe: —   Werte: {'edges': 1}
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 1}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 4 von 4 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 4, 'after': 0}
+     [info] repair.nothing_to_do op=2 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+  Reparieren (Durchdringungen) 0.01 s
+  -- nach zweitem Reparieren mit Durchdringungen: vollständig=True angehalten=None
+     [info] repair.branching_resolved op=1 obj=obj_1
+        Text: An einer Kante lagen Flächen übereinander — die überzählige wurde entfernt.
+        Knöpfe: —   Werte: {'edges': 1}
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 1}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 4 von 4 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 4, 'after': 0}
+     [info] repair.nothing_to_do op=3 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+
+== gedrehte_flaechen.stl (684 Bytes)
+  Import 0.01 s
+  -- nach Import: vollständig=True angehalten=None
+     [info] ingest.normals_flipped op=1 obj=obj_1
+        Text: Die Ausrichtung der Flächen wurde korrigiert.
+        Knöpfe: —   Werte: {}
+  Reparieren (Vorgabe) 0.01 s
+  -- nach Reparieren (Vorgabe): vollständig=True angehalten=None
+     [info] ingest.normals_flipped op=1 obj=obj_1
+        Text: Die Ausrichtung der Flächen wurde korrigiert.
+        Knöpfe: —   Werte: {}
+     [info] repair.nothing_to_do op=2 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+  Reparieren (Durchdringungen) 0.01 s
+  -- nach zweitem Reparieren mit Durchdringungen: vollständig=True angehalten=None
+     [info] ingest.normals_flipped op=1 obj=obj_1
+        Text: Die Ausrichtung der Flächen wurde korrigiert.
+        Knöpfe: —   Werte: {}
+     [info] repair.nothing_to_do op=3 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+
+== kugel_ohne_kappe.stl (204484 Bytes)
+  Import 0.05 s
+  -- nach Import: vollständig=True angehalten=None
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 1}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 88 von 88 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 88, 'after': 0}
+  Reparieren (Vorgabe) 0.10 s
+  -- nach Reparieren (Vorgabe): vollständig=True angehalten=None
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 1}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 88 von 88 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 88, 'after': 0}
+     [info] repair.nothing_to_do op=2 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+  Reparieren (Durchdringungen) 0.17 s
+  -- nach zweitem Reparieren mit Durchdringungen: vollständig=True angehalten=None
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 1}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 88 von 88 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 88, 'after': 0}
+     [info] repair.nothing_to_do op=3 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+
+== loch_und_kruemel.stl (10184 Bytes)
+  Import 0.02 s
+  -- nach Import: vollständig=True angehalten=None
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 6 von 6 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 6, 'after': 0}
+     [info] ingest.multiple_components op=1 obj=obj_1
+        Text: Das Modell besteht aus mehreren Teilen.
+        Knöpfe: In Einzelteile zerlegen   Werte: {'components': 2}
+     [warning] ingest.small_components op=1 obj=obj_1
+        Text: Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts.
+        Knöpfe: Kleine Teile entfernen   Werte: {'count': 1}
+  Reparieren (Vorgabe) 0.02 s
+  -- nach Reparieren (Vorgabe): vollständig=True angehalten=None
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 6 von 6 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 6, 'after': 0}
+     [info] ingest.multiple_components op=1 obj=obj_1
+        Text: Das Modell besteht aus mehreren Teilen.
+        Knöpfe: In Einzelteile zerlegen   Werte: {'components': 2}
+     [warning] ingest.small_components op=1 obj=obj_1
+        Text: Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts.
+        Knöpfe: Kleine Teile entfernen   Werte: {'count': 1}
+     [info] repair.weld_skipped op=2 obj=obj_1
+        Text: Doppelte Punkte blieben stehen — sie zu verschweißen hätte das Netz weiter aufgerissen.
+        Knöpfe: —   Werte: {'tolerance': '0.00 mm'}
+     [warning] repair.self_intersections_detected op=2 obj=obj_1
+        Text: Flächen durchdringen sich. Aktivieren Sie unter „Weitere Einstellungen“ die Option „Selbstdurchdringungen auflösen“.
+        Knöpfe: Eingabe korrigieren, Stellen zeigen   Werte: {}
+  Reparieren (Durchdringungen) 0.04 s
+  -- nach zweitem Reparieren mit Durchdringungen: vollständig=True angehalten=None
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 6 von 6 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 6, 'after': 0}
+     [info] ingest.multiple_components op=1 obj=obj_1
+        Text: Das Modell besteht aus mehreren Teilen.
+        Knöpfe: In Einzelteile zerlegen   Werte: {'components': 2}
+     [warning] ingest.small_components op=1 obj=obj_1
+        Text: Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts.
+        Knöpfe: Kleine Teile entfernen   Werte: {'count': 1}
+     [warning] repair.self_intersections_detected op=2 obj=obj_1
+        Text: Flächen durchdringen sich. Aktivieren Sie unter „Weitere Einstellungen“ die Option „Selbstdurchdringungen auflösen“.
+        Knöpfe: Eingabe korrigieren, Stellen zeigen   Werte: {}
+     [info] repair.weld_skipped op=3 obj=obj_1
+        Text: Doppelte Punkte blieben stehen — sie zu verschweißen hätte das Netz weiter aufgerissen.
+        Knöpfe: —   Werte: {'tolerance': '0.00 mm'}
+     [info] repair.self_intersections op=3 obj=obj_1
+        Text: Selbstdurchdringungen wurden aufgelöst.
+        Knöpfe: —   Werte: {}
+
+== offene_flaeche.stl (184 Bytes)
+  Import 0.00 s
+  -- nach Import: vollständig=True angehalten=None
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 1}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 4 von 4 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 4, 'after': 0}
+  Reparieren (Vorgabe) 0.00 s
+  -- nach Reparieren (Vorgabe): vollständig=True angehalten=None
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 1}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 4 von 4 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 4, 'after': 0}
+     [warning] repair.self_intersections_detected op=2 obj=obj_1
+        Text: Flächen durchdringen sich. Aktivieren Sie unter „Weitere Einstellungen“ die Option „Selbstdurchdringungen auflösen“.
+        Knöpfe: Eingabe korrigieren, Stellen zeigen   Werte: {}
+  Reparieren (Durchdringungen) 0.01 s
+  -- nach zweitem Reparieren mit Durchdringungen: vollständig=True angehalten=None
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 1}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 4 von 4 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 4, 'after': 0}
+     [warning] repair.self_intersections_detected op=2 obj=obj_1
+        Text: Flächen durchdringen sich. Aktivieren Sie unter „Weitere Einstellungen“ die Option „Selbstdurchdringungen auflösen“.
+        Knöpfe: Eingabe korrigieren, Stellen zeigen   Werte: {}
+     [info] repair.self_intersections_skipped op=3 obj=obj_1
+        Text: Die Durchdringungsreparatur braucht einen geschlossenen Körper mit korrekt ausgerichteten Außenseiten. Prüfen Sie die markierten Stellen und die Einstellungen zum Schließen und Ausrichten.
+        Knöpfe: Stellen zeigen   Werte: {}
+
+== rohr_ohne_deckel.stl (4884 Bytes)
+  Import 0.02 s
+  -- nach Import: vollständig=True angehalten=None
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: 2 große Öffnungen wurden geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 2}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 96 von 96 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 96, 'after': 0}
+  Reparieren (Vorgabe) 0.02 s
+  -- nach Reparieren (Vorgabe): vollständig=True angehalten=None
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: 2 große Öffnungen wurden geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 2}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 96 von 96 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 96, 'after': 0}
+     [info] repair.nothing_to_do op=2 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+  Reparieren (Durchdringungen) 0.03 s
+  -- nach zweitem Reparieren mit Durchdringungen: vollständig=True angehalten=None
+     [warning] repair.wide_hole_filled op=1 obj=obj_1
+        Text: 2 große Öffnungen wurden geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört.
+        Knöpfe: —   Werte: {'walls': 2}
+     [info] repair.holes_filled op=1 obj=obj_1
+        Text: 96 von 96 offenen Kanten geschlossen; 0 bleiben offen.
+        Knöpfe: —   Werte: {'before': 96, 'after': 0}
+     [info] repair.nothing_to_do op=3 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+
+== t_stoss.stl (734 Bytes)
+  Import 0.01 s
+  -- nach Import: vollständig=True angehalten=None
+     [info] repair.t_junctions op=1 obj=obj_1
+        Text: Kanten mit einem Punkt darauf wurden vernäht.
+        Knöpfe: —   Werte: {'seams': 1}
+  Reparieren (Vorgabe) 0.01 s
+  -- nach Reparieren (Vorgabe): vollständig=True angehalten=None
+     [info] repair.t_junctions op=1 obj=obj_1
+        Text: Kanten mit einem Punkt darauf wurden vernäht.
+        Knöpfe: —   Werte: {'seams': 1}
+     [info] repair.nothing_to_do op=2 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+  Reparieren (Durchdringungen) 0.02 s
+  -- nach zweitem Reparieren mit Durchdringungen: vollständig=True angehalten=None
+     [info] repair.t_junctions op=1 obj=obj_1
+        Text: Kanten mit einem Punkt darauf wurden vernäht.
+        Knöpfe: —   Werte: {'seams': 1}
+     [info] repair.nothing_to_do op=3 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+
+== umgestuelpt.stl (684 Bytes)
+  Import 0.00 s
+  -- nach Import: vollständig=True angehalten=None
+     [info] ingest.normals_flipped op=1 obj=obj_1
+        Text: Die Ausrichtung der Flächen wurde korrigiert.
+        Knöpfe: —   Werte: {}
+  Reparieren (Vorgabe) 0.01 s
+  -- nach Reparieren (Vorgabe): vollständig=True angehalten=None
+     [info] ingest.normals_flipped op=1 obj=obj_1
+        Text: Die Ausrichtung der Flächen wurde korrigiert.
+        Knöpfe: —   Werte: {}
+     [info] repair.nothing_to_do op=2 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+  Reparieren (Durchdringungen) 0.02 s
+  -- nach zweitem Reparieren mit Durchdringungen: vollständig=True angehalten=None
+     [info] ingest.normals_flipped op=1 obj=obj_1
+        Text: Die Ausrichtung der Flächen wurde korrigiert.
+        Knöpfe: —   Werte: {}
+     [info] repair.nothing_to_do op=3 obj=obj_1
+        Text: An diesem Netz war nichts zu reparieren.
+        Knöpfe: —   Werte: {}
+

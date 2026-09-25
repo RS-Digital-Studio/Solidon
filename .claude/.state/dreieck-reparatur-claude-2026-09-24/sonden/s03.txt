@@ -1,0 +1,34 @@
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:302: RuntimeWarning: divide by zero encountered in divide
+  center_mass = integrated[1:4] / volume
+F:\3D Druck\.venv\Lib\site-packages\trimesh\triangles.py:302: RuntimeWarning: invalid value encountered in divide
+  center_mass = integrated[1:4] / volume
+=== 3a generated_figure nach Reparatur: Teile
+['repair.degenerate_removed', 'repair.holes_filled', 'repair.normals_flipped'] {'tri': 3370, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 5033.194, 'parts': 2, 'x_faces': 0, 'x_complete': True, 'x_s': 0.09}
+Teilvolumina: [5033.194, 0.0]
+  Teil 3368 Dreiecke, Hülle [[-10.0, -10.0, -10.0], [13.0, 10.0, 18.0]]
+  Teil 2 Dreiecke, Hülle [[18.0, 0.0, 0.0], [18.4, 0.3, 0.2]]
+
+=== 3b offener, ganz umgestülpter Würfel durch den Import
+Import: ['repair.wide_hole_filled', 'repair.holes_filled'] {'tri': 12, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': -8000.0, 'parts': 1}
+Reparieren: ['repair.wide_hole_filled', 'repair.holes_filled', 'repair.normals_flipped'] {'tri': 12, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8000.0, 'parts': 1}
+Import unterteilt: ['repair.wide_hole_filled', 'repair.holes_filled'] {'tri': 198, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': -8000.0, 'parts': 1}
+
+=== 3c zweifarbiges Loch: welche Farbe/Slot bekommen die Füllflächen?
+NEU: Füllflächen 22, links 10 davon falsch 0, rechts 12 davon falsch 1; Farbe rot links 10/10, rot rechts 1/12; dicht=True
+HEAD: Füllflächen 22, links 10 davon falsch 0, rechts 12 davon falsch 1; Farbe rot links 10/10, rot rechts 1/12; dicht=True
+
+=== 3d zwei getrennte Würfel, einer umgestülpt (kein Überlapp)
+vorher: {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 0.0, 'parts': 2} [8000.0, -8000.0]
+Reparieren: [] {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 0.0, 'parts': 2} [8000.0, -8000.0]
+Import: ['ingest.multiple_components'] {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 0.0, 'parts': 2} [8000.0, -8000.0]
+
+=== 3e Hohlkörper mit richtig orientierter Innenschale (Soll: unverändert)
+Reparieren: [] {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 7000.0, 'parts': 2} [8000.0, -1000.0]
+
+=== 3f Hohlkörper, Innenschale falsch herum (zeigt in den Hohlraum hinein = positiv)
+vorher: {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 9000.0, 'parts': 2} [8000.0, 1000.0]
+Reparieren: [] {'tri': 24, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 9000.0, 'parts': 2} [8000.0, 1000.0]
+
+=== 3g ganzer Körper umgestülpt und geschlossen
+Reparieren: ['repair.normals_flipped'] {'tri': 12, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8000.0, 'parts': 1}
+Import: ['ingest.normals_flipped'] {'tri': 12, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8000.0, 'parts': 1}

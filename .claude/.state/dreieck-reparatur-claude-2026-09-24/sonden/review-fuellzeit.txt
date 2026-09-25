@@ -1,0 +1,36 @@
+G1 1 500 Dreieckslöcher Dreiecke 80420 offen 4500
+  Ringe: 1500 Längen: [3]
+  _fill_jobs: 77.85 s
+  Aufträge: 1500 Bänder: 0
+  _fill_loops (neu): 68.16 s
+  neu: 1500 geschlossen {'tri': 81920, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 523527.967, 'parts': 1}
+  fill_boundary_loops (HEAD): 0.06 s
+  HEAD: 1500 geschlossen {'tri': 81920, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 523527.967, 'parts': 1}
+
+G2 400 Eckfächer Dreiecke 79521 offen 2399
+  Ringe: 400 Längen: [5, 6]
+  _fill_jobs: 0.03 s
+  Aufträge: 400 Bänder: 0
+  _fill_loops (neu): 0.23 s
+  neu: 400 geschlossen {'tri': 81120, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 523525.57, 'parts': 1}
+  fill_boundary_loops (HEAD): 0.08 s
+  HEAD: 400 geschlossen {'tri': 81120, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 523525.245, 'parts': 1}
+
+G3 Lochblech 12 x 12 ohne Bohrungswände Dreiecke 14412 offen 13824
+  Ringe: 288 Längen: [48]
+  _fill_jobs: 0.50 s
+  Aufträge: 144 Bänder: 144
+  _fill_loops (neu): 1.87 s
+  neu: 144 geschlossen {'tri': 28236, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 110804.596, 'parts': 1}
+  fill_boundary_loops (HEAD): 0.37 s
+  HEAD: 288 geschlossen {'tri': 27660, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 135200.0, 'parts': 1}
+
+G4 300 Flecken Dreiecke 320480 offen 3600
+  Ringe: 300 Längen: [12]
+  _fill_jobs: 0.01 s
+  Aufträge: 300 Bänder: 0
+  _fill_loops (neu): 0.70 s
+  neu: 300 geschlossen {'tri': 323480, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 2144581.204, 'parts': 1}
+  fill_boundary_loops (HEAD): 0.11 s
+  HEAD: 300 geschlossen {'tri': 323480, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 2144578.254, 'parts': 1}
+

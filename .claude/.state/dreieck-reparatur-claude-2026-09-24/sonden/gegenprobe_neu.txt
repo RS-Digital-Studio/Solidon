@@ -1,0 +1,15 @@
+== repair_head
+  flosse: Dreiecke=14 dicht=True Vol=7000.0 ['repair.branching_resolved', 'repair.holes_filled', 'repair.wide_hole_filled']
+  blatt: Dreiecke=4 dicht=True Vol=0.0 ['repair.holes_filled', 'repair.wide_hole_filled']
+  dreieck: Dreiecke=2 dicht=True Vol=0.0 ['repair.holes_filled', 'repair.wide_hole_filled']
+  umgestuelpt: Dreiecke=24 dicht=True Vol=0.0 []
+== repair_stand_1804
+  flosse: Dreiecke=14 dicht=True Vol=7000.0 ['repair.branching_resolved', 'repair.holes_filled', 'repair.wide_hole_filled']
+  blatt: Dreiecke=4 dicht=True Vol=0.0 ['repair.holes_filled', 'repair.wide_hole_filled']
+  dreieck: Dreiecke=2 dicht=True Vol=0.0 ['repair.holes_filled', 'repair.wide_hole_filled']
+  umgestuelpt: Dreiecke=24 dicht=True Vol=0.0 []
+== repair_stand_1814
+  flosse: Dreiecke=14 dicht=True Vol=7000.0 ['repair.branching_resolved', 'repair.holes_filled', 'repair.wide_hole_filled']
+  blatt: Dreiecke=4 dicht=True Vol=0.0 ['repair.holes_filled', 'repair.wide_hole_filled']
+  dreieck: Dreiecke=2 dicht=True Vol=0.0 ['repair.holes_filled', 'repair.wide_hole_filled']
+  umgestuelpt: Dreiecke=24 dicht=True Vol=0.0 []

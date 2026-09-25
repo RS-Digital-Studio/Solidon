@@ -1,0 +1,46 @@
+.................................FF..................................... [ 42%]
+........................................................................ [ 85%]
+........................                                                 [100%]
+================================== FAILURES ===================================
+_______ test_an_incomplete_defect_search_does_not_clear_unchecked_faces _______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000020ABB459780>
+
+    def test_an_incomplete_defect_search_does_not_clear_unchecked_faces(monkeypatch) -> None:
+        """Eine begrenzte Suche ist keine Entwarnung für die restliche Oberfläche."""
+        from app.core.geom import repair
+    
+        monkeypatch.setattr(repair, "intersection_budget", lambda _triangles: 0)
+        analysis = maps.defect_map(cube())
+    
+>       assert analysis.unknown_count == len(analysis.values)
+E       AssertionError: assert 0 == 12
+E        +  where 0 = AnalysisMap(kind='defects', title=TranslatableText(msgid='Netzfehler', context=None, values=None), values=(0.0, 0.0, 0...le='linear', maximum_interval=None, numerical_error=None, witness_point=None, witness_face=None, witness_distance=None).unknown_count
+E        +  and   12 = len((0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ...))
+E        +    where (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ...) = AnalysisMap(kind='defects', title=TranslatableText(msgid='Netzfehler', context=None, values=None), values=(0.0, 0.0, 0...le='linear', maximum_interval=None, numerical_error=None, witness_point=None, witness_face=None, witness_distance=None).values
+
+tests\test_maps.py:450: AssertionError
+________ test_an_incomplete_defect_search_keeps_proven_boundary_errors ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000020ABF6DB700>
+
+    def test_an_incomplete_defect_search_keeps_proven_boundary_errors(monkeypatch) -> None:
+        """Ungeprüfte Durchdringungen verdecken keine belegten offenen Kanten."""
+        from app.core.geom import repair
+    
+        monkeypatch.setattr(repair, "intersection_budget", lambda _triangles: 0)
+        body = trimesh.creation.box()
+        body.update_faces(np.arange(len(body.faces)) != 0)
+        analysis = maps.defect_map(MeshData.of(body))
+    
+        assert analysis.highlighted
+        assert all(analysis.values[index] >= 1.0 for index in analysis.highlighted)
+>       assert analysis.unknown_count > 0
+E       AssertionError: assert 0 > 0
+E        +  where 0 = AnalysisMap(kind='defects', title=TranslatableText(msgid='Netzfehler', context=None, values=None), values=(1.0, 1.0, 0...le='linear', maximum_interval=None, numerical_error=None, witness_point=None, witness_face=None, witness_distance=None).unknown_count
+
+tests\test_maps.py:466: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_maps.py::test_an_incomplete_defect_search_does_not_clear_unchecked_faces
+FAILED tests/test_maps.py::test_an_incomplete_defect_search_keeps_proven_boundary_errors
+2 failed, 166 passed, 2 deselected in 12.93s

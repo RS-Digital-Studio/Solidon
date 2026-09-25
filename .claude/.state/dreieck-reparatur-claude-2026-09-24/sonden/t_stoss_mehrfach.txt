@@ -1,0 +1,5 @@
+offen vorher: 11 dicht: False
+vernäht (ein Durchgang): 3 offen danach: 4 dicht: False
+repair(): dicht: True offen: 0 Volumen: 1000.0
+   repair.t_junctions info Kanten mit einem Punkt darauf wurden vernäht.
+   repair.holes_filled info 4 von 4 offenen Kanten geschlossen; 0 bleiben offen.

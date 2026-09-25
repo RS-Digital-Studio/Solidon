@@ -1,0 +1,6 @@
+E Befund vor dem Aufsetzen: [('repair.wide_hole_filled', (100.0, 100.0, 60.0))]
+E Körper 'offen' danach: min (-27.5, -10.0, 0.0) max (-7.5, 10.0, 20.0)
+E Befund nach dem Aufsetzen: [('repair.wide_hole_filled', (100.0, 100.0, 60.0))]
+
+F Befunde: ['repair.wide_hole_filled', 'repair.holes_filled', 'repair.normals_flipped']
+F Fakten: {'tri': 12, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8000.0, 'parts': 1}

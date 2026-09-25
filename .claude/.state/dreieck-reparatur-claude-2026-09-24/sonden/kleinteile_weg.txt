@@ -1,0 +1,9 @@
+== two_components.stl: Teile nach Entfernen = 1
+   [info] ingest.multiple_components: Das Modell besteht aus mehreren Teilen.  Knöpfe: In Einzelteile zerlegen
+   [warning] repair.components_removed: Kleinstteile wurden gelöscht.  Knöpfe: —
+== loch_und_kruemel.stl: Teile nach Entfernen = 1
+   [info] repair.holes_filled: 6 von 6 offenen Kanten geschlossen; 0 bleiben offen.  Knöpfe: —
+   [info] ingest.multiple_components: Das Modell besteht aus mehreren Teilen.  Knöpfe: In Einzelteile zerlegen
+   [info] repair.weld_skipped: Doppelte Punkte blieben stehen — sie zu verschweißen hätte das Netz weiter aufgerissen.  Knöpfe: —
+   [warning] repair.components_removed: Kleinstteile wurden gelöscht.  Knöpfe: —
+   [warning] repair.self_intersections_detected: Flächen durchdringen sich. Aktivieren Sie unter „Weitere Einstellungen“ die Option „Selbstdurchdringungen auflösen“.  Knöpfe: Eingabe korrigieren, Stellen zeigen

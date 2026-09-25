@@ -1,0 +1,5 @@
+roh verschweißt: {'tri': 600, 'open': 0, 'branch': 4, 'tight': False, 'wound': True, 'vol': 66358.773, 'parts': 3}
+Import ohne Füllen: ['ingest.multiple_components', 'ingest.not_watertight'] {'tri': 600, 'open': 0, 'branch': 4, 'tight': False, 'wound': True, 'vol': 66358.773, 'parts': 3}
+Import mit Füllen: ['repair.branching_resolved', 'repair.holes_filled', 'repair.still_open', 'ingest.multiple_components', 'ingest.not_watertight'] {'tri': 600, 'open': 4, 'branch': 0, 'tight': False, 'wound': False, 'vol': 66362.565, 'parts': 2}
+Defektkarte ohne Füllen: {'in Ordnung': 446, 'offene Kante': 0, 'verzweigte Kante': 7, 'Durchdringung': 147} unbekannt 0
+Defektkarte mit Füllen: {'in Ordnung': 450, 'offene Kante': 3, 'verzweigte Kante': 0, 'Durchdringung': 147} unbekannt 0

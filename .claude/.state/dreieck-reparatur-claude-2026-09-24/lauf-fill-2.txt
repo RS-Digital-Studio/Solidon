@@ -1,0 +1,35 @@
+..F.                                                                     [100%]
+================================== FAILURES ===================================
+__________________ test_a_fill_takes_the_slot_of_its_own_rim __________________
+
+    def test_a_fill_takes_the_slot_of_its_own_rim() -> None:
+        """Ein Fülldreieck mit einer Randkante trägt den Slot, den diese Kante trägt.
+    
+        An einem Loch zwischen zwei Filamenten trugen vier von sechzehn
+        Fülldreiecken einen Slot, den keine ihrer Randkanten trug: Eine Diagonale
+        erbte den Slot ihres ersten Dreiecks und stand vor der eigenen Randkante
+        (Befund B10 der Durchsicht 24.09.2026). Im Druck war das ein
+        Filamentwechsel mitten im Deckel.
+        """
+        body = trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide().subdivide().subdivide()
+        centres = body.triangles_center
+        hole = (centres[:, 2] > 9.99) & (np.abs(centres[:, 0]) < 4.0) & (np.abs(centres[:, 1]) < 4.0)
+        body = trimesh.Trimesh(vertices=body.vertices.copy(), faces=body.faces[~hole], process=False)
+        slots = np.where(body.triangles_center[:, 0] < 0.0, 1, 2)
+        source = MeshData.of(body, slots=tuple(int(slot) for slot in slots))
+        rim: dict[tuple[int, int], int] = {}
+        edges_seen: dict[tuple[int, int], list[int]] = {}
+        for index, face in enumerate(np.asarray(body.faces).tolist()):
+            for first, second in ((face[0], face[1]), (face[1], face[2]), (face[2], face[0])):
+                edges_seen.setdefault((min(first, second), max(first, second)), []).append(index)
+        rim = {edge: int(slots[owners[0]]) for edge, owners in edges_seen.items() if len(owners) == 1}
+    
+        filled, closed, _wide = fill_boundary_loops(source)
+    
+>       assert closed == 1
+E       assert 3 == 1
+
+tests\test_repair.py:1555: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_repair.py::test_a_fill_takes_the_slot_of_its_own_rim - asse...
+1 failed, 3 passed, 77 deselected in 3.19s

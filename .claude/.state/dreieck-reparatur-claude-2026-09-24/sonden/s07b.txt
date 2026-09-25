@@ -1,0 +1,79 @@
+
+=== broken_selfint.stl  Schritte: load + [{}, {'self_intersections': True}]
+vollständig: True angehalten bei: None
+Endkörper: dicht= True Teile= 1 Volumen= 14272.0
+  op1 info    ingest.multiple_components                 Das Modell besteht aus mehreren Teilen. []
+  op2 warning repair.self_intersections_detected         Flächen durchdringen sich. Aktivieren Sie unter „Weitere Einstellungen“ die Option „Selbstdurchdringungen aufl ['correct_input', 'show_locations']
+  op3 info    perceive.orphaned                          Formdetails sind nach diesem Schritt nicht mehr automatisch wiederzuerkennen. []
+  op3 info    repair.self_intersections                  Selbstdurchdringungen wurden aufgelöst. []
+  opNone info    arrange.below_bed                          Ein Objekt steckt unter dem Druckbett. []
+
+=== obj_8_Cylinder_B.stl  Schritte: load + [{'self_intersections': True}]
+vollständig: True angehalten bei: None
+Endkörper: dicht= True Teile= 1 Volumen= 833.461
+  op1 info    ingest.multiple_components                 Das Modell besteht aus mehreren Teilen. []
+  op2 info    perceive.orphaned                          Formdetails sind nach diesem Schritt nicht mehr automatisch wiederzuerkennen. []
+  op2 info    repair.self_intersections                  Selbstdurchdringungen wurden aufgelöst. []
+  opNone info    arrange.off_the_plate                      Ein Objekt liegt außerhalb des Druckbetts. []
+
+=== broken_open.stl  Schritte: load + [{}]
+vollständig: True angehalten bei: None
+Endkörper: dicht= True Teile= 1 Volumen= 8000.0
+  op1 warning repair.wide_hole_filled                    Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört. []
+  op1 info    repair.holes_filled                        5 von 5 offenen Kanten geschlossen; 0 bleiben offen. []
+  op2 info    repair.nothing_to_do                       An diesem Netz war nichts zu reparieren. []
+  opNone info    arrange.below_bed                          Ein Objekt steckt unter dem Druckbett. []
+
+=== partially_open.stl  Schritte: load + [{}]
+vollständig: True angehalten bei: None
+Endkörper: dicht= True Teile= 1 Volumen= 8000.0
+  op1 warning repair.wide_hole_filled                    Eine große Öffnung wurde geschlossen — prüfen Sie, ob dort wirklich eine Fläche hingehört. []
+  op1 info    repair.holes_filled                        19 von 19 offenen Kanten geschlossen; 0 bleiben offen. []
+  op2 info    repair.nothing_to_do                       An diesem Netz war nichts zu reparieren. []
+  opNone info    arrange.below_bed                          Ein Objekt steckt unter dem Druckbett. []
+
+=== generated_figure.stl  Schritte: load + [{'self_intersections': True}]
+vollständig: True angehalten bei: None
+Endkörper: dicht= True Teile= 2 Volumen= 5033.194
+  op1 info    ingest.degenerate_removed                  Entartete Dreiecke wurden entfernt. []
+  op1 info    ingest.normals_flipped                     Die Ausrichtung der Flächen wurde korrigiert. []
+  op1 info    repair.holes_filled                        18 von 18 offenen Kanten geschlossen; 0 bleiben offen. []
+  op1 info    ingest.multiple_components                 Das Modell besteht aus mehreren Teilen. []
+  op1 warning ingest.small_components                    Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts. []
+  op2 info    repair.degenerate_kept                     Entartete Dreiecke blieben stehen — sie zu entfernen hätte das Netz weiter aufgerissen. []
+  opNone info    arrange.below_bed                          Ein Objekt steckt unter dem Druckbett. []
+
+=== Naht-zusammengesetzt.stl  Schritte: load + []
+vollständig: True angehalten bei: None
+Endkörper: dicht= False Teile= 2 Volumen= 66362.565
+  op1 info    repair.branching_resolved                  An 4 Kanten lagen Flächen übereinander — die überzähligen wurden entfernt. []
+  op1 info    repair.holes_filled                        12 von 16 offenen Kanten geschlossen; 4 bleiben offen. []
+  op1 warning repair.still_open                          Einige offene Ränder ließen sich nicht sicher schließen. Prüfen Sie die markierten Stellen. []
+  op1 info    ingest.multiple_components                 Das Modell besteht aus mehreren Teilen. []
+  op1 warning ingest.not_watertight                      Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen. []
+  opNone warning arrange.out_of_build_volume                Ein Objekt steht über den Bauraum hinaus. []
+
+=== Naht-zusammengesetzt.stl  Schritte: load + [{}]
+vollständig: True angehalten bei: None
+Endkörper: dicht= False Teile= 2 Volumen= 66362.565
+  op1 info    repair.branching_resolved                  An 4 Kanten lagen Flächen übereinander — die überzähligen wurden entfernt. []
+  op1 info    repair.holes_filled                        12 von 16 offenen Kanten geschlossen; 4 bleiben offen. []
+  op1 info    ingest.multiple_components                 Das Modell besteht aus mehreren Teilen. []
+  op1 warning ingest.not_watertight                      Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen. []
+  op2 info    repair.weld_skipped                        Doppelte Punkte blieben stehen — sie zu verschweißen hätte das Netz weiter aufgerissen. []
+  op2 warning repair.self_intersections_detected         Flächen durchdringen sich. Aktivieren Sie unter „Weitere Einstellungen“ die Option „Selbstdurchdringungen aufl ['correct_input', 'show_locations']
+  op2 warning repair.still_open                          Einige offene Ränder ließen sich nicht sicher schließen. Prüfen Sie die markierten Stellen. []
+  opNone warning arrange.out_of_build_volume                Ein Objekt steht über den Bauraum hinaus. []
+
+=== Naht-zusammengesetzt.stl  Schritte: load + [{}, {'self_intersections': True}]
+vollständig: True angehalten bei: None
+Endkörper: dicht= False Teile= 2 Volumen= 66362.565
+  op1 info    repair.branching_resolved                  An 4 Kanten lagen Flächen übereinander — die überzähligen wurden entfernt. []
+  op1 info    repair.holes_filled                        12 von 16 offenen Kanten geschlossen; 4 bleiben offen. []
+  op1 info    ingest.multiple_components                 Das Modell besteht aus mehreren Teilen. []
+  op1 warning ingest.not_watertight                      Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen. []
+  op2 warning repair.self_intersections_detected         Flächen durchdringen sich. Aktivieren Sie unter „Weitere Einstellungen“ die Option „Selbstdurchdringungen aufl ['correct_input', 'show_locations']
+  op3 info    repair.weld_skipped                        Doppelte Punkte blieben stehen — sie zu verschweißen hätte das Netz weiter aufgerissen. []
+  op3 info    repair.self_intersections_skipped          Die Durchdringungsreparatur braucht einen geschlossenen Körper mit korrekt ausgerichteten Außenseiten. Prüfen  ['show_locations']
+  op3 warning repair.still_open                          Einige offene Ränder ließen sich nicht sicher schließen. Prüfen Sie die markierten Stellen. []
+  opNone warning arrange.out_of_build_volume                Ein Objekt steht über den Bauraum hinaus. []
