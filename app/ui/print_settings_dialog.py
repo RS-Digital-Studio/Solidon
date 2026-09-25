@@ -3192,7 +3192,7 @@ class PrintSettingsDialog(QDialog):
         von sechsundfünfzig Zeilen, ohne dass eine davon gemeint wäre — ein
         Treffer, der ein Drittel des Dialogs trifft, ist keiner.
 
-        Gefaltet wie in der Befehlspalette (``command_palette.fold``): „ä" wird
+        Gefaltet wie in der Befehlspalette (``registry.search.fold``): „ä" wird
         zu „ae", damit „aushoehlen" und „Aushöhlen" dasselbe finden. Zwei
         Aufgaben, eine Tabelle — nicht zu verwechseln mit der Sortierfaltung,
         wo „ä" wie „a" zählt.
@@ -3211,7 +3211,7 @@ class PrintSettingsDialog(QDialog):
         werden deshalb gleich geschrieben, der Begriff wie der Heuhaufen.
         """
         from app.core.export.slicer_keys import keys_for
-        from app.ui.command_palette import fold
+        from app.core.registry.search import fold
 
         def flatten(text: str) -> str:
             """Gefaltet, und der Unterstrich als Leerzeichen."""

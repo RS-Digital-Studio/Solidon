@@ -24,66 +24,12 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.registry import PaletteEntry, menu_twins, palette_entries, variant_members
+from app.core.registry.search import STEM_LENGTH, stem_of, synonyms_for
+
+# Ausdrücklich weitergereicht: Die Faltung lebt seit dem 25.09.2026 in
+# ``registry.search``, und das Hauptfenster liest sie noch von hier.
+from app.core.registry.search import fold as fold
 from app.i18n import tr
-
-#: Wie ein Umlaut auf einer Tastatur ohne Umlaute geschrieben wird.
-#:
-#: Beide Richtungen zählen, und deshalb wird auf **beiden** Seiten gefaltet:
-#: Wer „aushoehlen" tippt, meint „Aushöhlen"; wer „Größe" tippt, soll auch das
-#: finden, was im Register „groesse" heißt. Gefaltet wird nur der Vergleich —
-#: angezeigt bleibt, was dasteht.
-#:
-#: **Nicht dasselbe wie ``i18n.sort_key``**, und das ist Absicht: Sortiert wird
-#: nach DIN 5007-1, wo „ä" wie „a" zählt, damit „Ändern" zwischen „Analyse" und
-#: „Anordnen" steht. Gesucht wird nach der Ersatzschreibweise der Tastatur, wo
-#: „ä" zu „ae" wird. Eine Tabelle für beides täte einer von beiden Aufgaben
-#: unrecht.
-_FOLDED: Final[dict[str, str]] = {
-    "ä": "ae",
-    "ö": "oe",
-    "ü": "ue",
-    "ß": "ss",
-    "á": "a",
-    "à": "a",
-    "â": "a",
-    "é": "e",
-    "è": "e",
-    "ê": "e",
-    "í": "i",
-    "ì": "i",
-    "î": "i",
-    "ó": "o",
-    "ò": "o",
-    "ô": "o",
-    "ú": "u",
-    "ù": "u",
-    "û": "u",
-    "ç": "c",
-    "ñ": "n",
-}
-
-
-def fold(text: str) -> str:
-    """Kleinschreibung, Umlaute ausgeschrieben, Akzente weg."""
-    lowered = text.casefold()
-    return "".join(_FOLDED.get(letter, letter) for letter in lowered)
-
-
-#: Ab wie vielen Zeichen ein Wortstamm als Suchbegriff durchgeht.
-#:
-#: Vier, weil darunter jedes zweite Wort passt: „ver" fände Verrunden,
-#: Vereinigen, Versetzen und Verstiften zugleich.
-STEM_LENGTH: Final = 4
-
-#: Wie viele Zeichen eine Beugung höchstens abschneiden darf.
-#:
-#: Die Untergrenze allein genügt nicht — sie war der Fehler. „gibtsnicht"
-#: fand acht Einträge, weil die ersten vier Zeichen „gibt" in acht
-#: Beschreibungen stehen; die Zeile „Kein Befehl passt zu …" kam nie zum
-#: Vorschein. Ein Stamm ist ein *gekürztes* Wort, kein beliebiger Anfang:
-#: „bohren" → „bohr" wirft zwei Zeichen weg, „skalieren" → „skalier" drei.
-#: Darüber ist es ein anderes Wort.
-STEM_CUT: Final = 3
 
 
 def native_key(shortcut: str) -> str:
@@ -107,13 +53,6 @@ def native_key(shortcut: str) -> str:
     if not shortcut:
         return ""
     return QKeySequence(shortcut).toString(QKeySequence.SequenceFormat.NativeText) or shortcut
-
-
-def stem_of(word: str) -> str:
-    """Der Suchstamm eines Wortes — kurz genug für die Beugung, lang genug
-    für die Bedeutung.
-    """
-    return word[: max(STEM_LENGTH, len(word) - STEM_CUT)]
 
 
 def rank(entry: PaletteEntry, query: str) -> int:
@@ -161,111 +100,6 @@ def rank(entry: PaletteEntry, query: str) -> int:
     if all(stem_of(part) in title for part in parts if len(part) >= STEM_LENGTH):
         return 4
     return 5
-
-
-#: Wörter, die ein Kunde tippt, und die Operationen, die er damit meint.
-#:
-#: **Gemessen, nicht geraten.** Am 23.08.2026 wurden 42 Wörter durchprobiert,
-#: wie sie jemand tippt, der noch nie in unserem Register gelesen hat —
-#: Alltagswörter, Slicer-Wörter, und die aus anderen CAD-Programmen. Zehn
-#: davon fanden **nichts**: nicht das Falsche, sondern gar nichts, und die
-#: Palette antwortete „Kein Befehl passt".
-#:
-#: Der Docstring unten sagt, eine Synonymtabelle decke so etwas „nie
-#: vollständig" ab. Das stimmt und ist kein Grund, sie wegzulassen: Die
-#: Faltung und der Wortstamm tragen weit — „aushoehlen" findet das Aushöhlen,
-#: „bohren" die Bohrung —, aber sie tragen nicht über die Wortgrenze. „Fase
-#: anbringen" und „Kante brechen" haben keinen gemeinsamen Buchstabenanfang,
-#: und keine Rechnung der Welt findet das eine über das andere.
-#:
-#: **Nur wo das gemeinte Wort im Titel nicht vorkommt.** „Spiegeln" steht
-#: nicht hier, weil die Operation so heißt; „bohren" auch nicht, weil der
-#: Stamm es findet. Was hier steht, ist der Rest.
-#:
-#: ``tests/test_theme_and_palette.py`` prüft beides: dass jedes Wort seine
-#: Operation findet, und dass jedes Ziel im Register existiert — ein Synonym,
-#: dessen Operation umbenannt wurde, zeigt sonst stumm ins Leere.
-SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
-    "fillet_edges": ("abrunden", "rundung", "radius"),
-    "chamfer_edges": ("kante brechen", "abschraegen", "45 grad"),
-    "pattern": ("array", "vervielfaeltigen", "wiederholen"),
-    "split_pinned": ("zerschneiden", "halbieren", "durchschneiden"),
-    "union_objects": ("zusammenfuegen", "verschmelzen", "verbinden"),
-    "subtract_objects": ("ausschneiden", "aussparen", "wegnehmen"),
-    "label_text": ("gravieren", "beschriften", "praegen"),
-    "decimate_mesh": ("vereinfachen", "reduzieren", "leichter machen"),
-    "hollow_object": ("aushoehlen", "leer machen", "exakt", "brep", "echte kanten"),
-    # Versteckter Zwilling (``MENU_TWINS``): kein Menüeintrag, also ist die
-    # Palette neben dem Verlauf sein einziger direkter Weg.
-    "shell_exact": ("exakt aushoehlen", "brep aushoehlen"),
-    # **„exakt" gehört an beide Hälften eines Paares**, seit die Grundliste den
-    # Zwilling nicht mehr auflistet (:func:`matches`). Wer das Wort tippt, will
-    # zwei Wege sehen: die Direktwahl des exakten Kerns **und** den Eintrag,
-    # dessen Dialog den Haken trägt — und der ist meist der bessere, weil er
-    # alle Felder zeigt. Ohne diese Zeilen fände er nur den ersten.
-    #
-    # „echte kanten" steht daneben, weil es das Wort ist, mit dem die
-    # ``doc``-Sätze den Unterschied erklären, ohne „exakt" zu benutzen: „Legt
-    # einen Quader mit echten Kanten an."
-    # **Nur diese drei Wörter, keine Zugaben.** Der erste Anlauf hängte
-    # „loch bohren" an ``drill_hole`` — und machte damit die Suche nach
-    # „bohren" zu einem *genauen* Treffer. Daran hing ein fremder Test: Der
-    # Wortstamm-Rückfall greift laut ``_refilter`` erst, wenn die genaue Suche
-    # leer ausgeht, und „bohren" gegen „Bohrung setzen" war sein Prüffall. Ein
-    # Synonym, das der Stamm ohnehin schon findet, bringt nichts und nimmt
-    # einer Zusicherung ihren Fall.
-    "create_box": ("exakt", "brep", "echte kanten"),
-    "create_brep_box": ("exakt", "brep", "echte kanten"),
-    "create_cylinder": ("exakt", "brep", "echte kanten"),
-    "create_brep_cylinder": ("exakt", "brep", "echte kanten"),
-    "create_cone": ("exakt", "brep", "echte kanten"),
-    "create_brep_cone": ("exakt", "brep", "echte kanten"),
-    "create_sphere": ("exakt", "brep", "echte kanten"),
-    "create_brep_sphere": ("exakt", "brep", "echte kanten"),
-    "create_torus": ("exakt", "brep", "echte kanten"),
-    "create_brep_torus": ("exakt", "brep", "echte kanten"),
-    "drill_hole": ("exakt", "brep", "echte kanten"),
-    "drill_brep_hole": ("exakt", "brep", "echte kanten"),
-    "repair_mesh": ("loecher schliessen", "reparieren", "flicken"),
-    # **Die gewöhnlichsten Wörter fehlten**, und das fiel niemandem auf, weil
-    # niemand sie sucht, der das Register kennt: „kopieren" und „loeschen"
-    # führten ins Leere, obwohl es beides gibt. Gemessen an vierzig Wörtern,
-    # mit denen ein Kunde suchen würde — sechs fanden nichts, und keines davon
-    # war ein Fachbegriff.
-    "duplicate_object": ("kopieren", "klonen", "zweites teil"),
-    "delete_object": ("loeschen", "wegwerfen", "rauswerfen"),
-    "load": ("oeffnen", "importieren", "stl", "datei"),
-    # Beide heißen seit dem Filament-Umbau „färben" und stehen im Menü
-    # nebeneinander; die Suchwörter trennen sie nach dem, was der Kunde
-    # meint — das ganze Teil oder die eine Fläche. „Pinseln" und „anmalen"
-    # sind geblieben: Wer sie tippt, sucht das, was der Pinsel einmal tat,
-    # und findet jetzt die Füllung.
-    "assign_slot": ("faerben", "einfaerben", "farbe zuweisen", "ganzes teil"),
-    # **Ohne jedes „faerben", auch nicht in einem längeren Wort.** Seit der
-    # Umbenennung tragen beide Titel das Wort („Filament zuweisen", „Filament auf eine
-    # färben"), also entscheidet es nichts mehr — und als Synonym stand es
-    # zusätzlich an beiden. Wer „färben" tippte, bekam die Fläche, weil bei
-    # Gleichstand die Reihenfolge im Register zählt.
-    #
-    # Gestrichen wurde deshalb auch „flaeche einfaerben": Gesucht wird per
-    # Teilzeichenkette, und darin **steckt** „faerben". Ein Synonym, das das
-    # gesuchte Wort enthält, ohne es zu meinen, wirkt wie eines, das es meint.
-    # Das Wort allein gehört dem Teil; die Fläche findet, wer „flaeche" tippt.
-    "paint_slot": ("anmalen", "pinseln", "flaeche"),
-    # Ein Logo ist ein Bild, und ein Bild wird hier zu einer Höhe. Beide Wörter
-    # stehen im Kopf dessen, der es aufbringen will, und keines im Titel.
-    "displace_image": ("logo", "foto", "bild aufbringen"),
-}
-
-
-def synonyms_for(name: str) -> str:
-    """Die Kundenwörter dieser Operation, als ein Stück Suchtext.
-
-    Gefaltet gespeichert und gefaltet gesucht — die Tabelle oben schreibt
-    „aushoehlen" und nicht „aushöhlen", damit beide Schreibweisen denselben
-    Weg nehmen.
-    """
-    return " ".join(SYNONYMS.get(name, ()))
 
 
 def hidden_from_the_menu() -> frozenset[str]:

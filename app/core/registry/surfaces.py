@@ -423,7 +423,7 @@ def palette_entries(
     # Menüleiste — nicht bloß ``str``: 23 der 85 Titel tragen einen Umlaut, und
     # nach Codepunkt verglichen landet „Überhangfächer" hinter allem anderen,
     # weil „Ü" hinter „z" steht. Nicht zu verwechseln mit der Suchfaltung der
-    # Palette (``command_palette.fold``, „ä" → „ae"): hier zählt „ä" wie „a"
+    # Palette (``registry.search.fold``, „ä" → „ae"): hier zählt „ä" wie „a"
     # nach DIN 5007-1, dort wie es auf einer Tastatur ohne Umlaute geschrieben
     # wird.
     specs.sort(key=lambda spec: sort_key(spec.title))
