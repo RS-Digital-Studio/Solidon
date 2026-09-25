@@ -52,7 +52,7 @@ for _variable in (
 from app.core import discover
 from app.core.activation import store as activation_store
 from app.core.knowledge import profiles
-from app.core.perceive import features
+from app.core.perceive import features, local
 from app.core.types import BoundingBox, Document, Profile, SceneObject
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
@@ -536,8 +536,13 @@ def _remembered_features_stay_out_of_it() -> None:
     mal. Der Test hat recht und bleibt, wie er ist; falsch war die fehlende
     Isolation. Dieselbe Begründung wie bei ``discover.forget_cache()`` weiter
     oben (§38).
+
+    Dasselbe gilt für die gemerkten örtlichen Nachmessungen
+    (``local.forget_known``): Ein Test, der die Suche zählt oder abklemmt,
+    bekäme sonst das Ergebnis eines Vorgängers mit denselben Merkmalen.
     """
     features.forget_cache()
+    local.forget_known()
 
 
 @pytest.fixture(autouse=True)

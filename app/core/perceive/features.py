@@ -4315,8 +4315,6 @@ def _large_facet_faces(
     body: trimesh.Trimesh,
     *,
     check_cancelled: Callable[[], None] | None = None,
-    requested: set[int] | None = None,
-    check_patch_size: Callable[[int], None] | None = None,
 ) -> set[int]:
     """Ebene Flecken von den Streifen einer gekrümmten Haut unterscheiden.
 
@@ -4328,26 +4326,20 @@ def _large_facet_faces(
 
     Die Antwort für den ganzen Körper wird gemerkt (:func:`remembered`):
     Jeder Klick auf eine Bohrung fragte sie zweimal, je 0,17 s an der
-    Lochplatte mit 360 000 Dreiecken (gemessen am 22.09.2026). Die lokale
-    Erkennung mit ``requested`` oder Flächenbudget rechnet weiter selbst.
+    Lochplatte mit 360 000 Dreiecken (gemessen am 22.09.2026). Wer nur einzelne
+    Facetten fragt — die Erkennung an einer Stelle —, fragt
+    :func:`planar_facet`: dieselbe Regel, begrenzt auf ihren Fleck.
     """
     if check_cancelled is not None:
         check_cancelled()
-    if requested is None and check_patch_size is None:
-        planar: set[int] = remembered(
-            "large_facet_faces",
-            body,
-            (),
-            lambda: _large_facet_faces_read(body, check_cancelled=check_cancelled),
-            check_cancelled=check_cancelled,
-        )
-        return set(planar)
-    return _large_facet_faces_read(
+    planar: set[int] = remembered(
+        "large_facet_faces",
         body,
+        (),
+        lambda: _large_facet_faces_read(body, check_cancelled=check_cancelled),
         check_cancelled=check_cancelled,
-        requested=requested,
-        check_patch_size=check_patch_size,
     )
+    return set(planar)
 
 
 @dataclass(frozen=True, slots=True)
@@ -4521,8 +4513,6 @@ def _large_facet_faces_read(
     body: trimesh.Trimesh,
     *,
     check_cancelled: Callable[[], None] | None = None,
-    requested: set[int] | None = None,
-    check_patch_size: Callable[[int], None] | None = None,
 ) -> set[int]:
     """Der Rumpf von :func:`_large_facet_faces` — die Antwort merkt sich die Hülle."""
     verdicts = _facet_verdicts(body, check_cancelled=check_cancelled)
@@ -4531,7 +4521,7 @@ def _large_facet_faces_read(
     members, owner = verdicts.members, verdicts.owner
     planar = set(members[verdicts.planar[owner]].tolist())
     recoverable = set(members[verdicts.recoverable[owner]].tolist())
-    if not recoverable or (requested is not None and requested.isdisjoint(recoverable)):
+    if not recoverable:
         return planar
     protected = planar - recoverable
     candidates = _all_but(len(body.faces), protected)
@@ -4539,14 +4529,8 @@ def _large_facet_faces_read(
     for patch in _connected_patches(body, candidates):
         if check_cancelled is not None:
             check_cancelled()
-        if (
-            len(patch) < MIN_PATCH_FACES
-            or recoverable.isdisjoint(patch)
-            or (requested is not None and requested.isdisjoint(patch))
-        ):
+        if len(patch) < MIN_PATCH_FACES or recoverable.isdisjoint(patch):
             continue
-        if check_patch_size is not None:
-            check_patch_size(len(patch))
         if _a_sliver(body, patch):
             continue
         if _round_surface(body, mesh, patch, check_cancelled=check_cancelled):
@@ -4560,8 +4544,14 @@ def planar_facet(
     *,
     limit: int,
     check_cancelled: Callable[[], None] | None = None,
-) -> bool | None:
-    """Ob die Vollerkennung diese Dreiecke als ebene Fläche führt (Review R1).
+) -> bool:
+    """Ob die Ebenenregel der Vollerkennung diese Dreiecke als eben einstuft (Review R1).
+
+    Gefragt ist nur die Ebenenregel, nicht jede Bedingung einer Fläche:
+    Mindestinhalt und Normalenstreuung (:func:`_planar_face_entries`) hängen
+    allein an der Facette und stellt die Erkennung am Ausschnitt schon selbst
+    — die großen, fast ebenen Facetten der Drachenhaut bekommen hier ``True``
+    und kommen an der Stelle trotzdem nicht als Fläche (Review S5).
 
     Dieselbe Regel wie :func:`_large_facet_faces`, am **ganzen** Körper: das
     Urteil je Facette (:func:`_facet_verdicts`) und, wo der Mantelnachweis
@@ -4572,33 +4562,77 @@ def planar_facet(
     meldete den Mantel eines Zapfens als ebene Fläche — dazu Taschenwände,
     Zapfenflanken und Kanalsohlen, die die Vollerkennung nicht führt.
 
-    Begrenzt ist nur der Fleck: Er wächst höchstens bis ``limit`` Dreiecke
-    (:func:`_patch_around`). Wird er größer — zwei Sohlen des Drachen hängen
-    über weiche Kanten an seiner ganzen Haut —, entscheidet der Teil, der
-    gewachsen ist: Passt auf ihn keine Rundform, passt sie auf das Ganze erst
-    recht nicht, und die Facette bleibt eben. Passt eine
-    (:func:`_could_be_round`), bleibt die Frage offen: ``None``.
+    **Der Fleck wird ganz geflutet** (:func:`_patch_around`, Ring um Ring),
+    **geprüft wird zuerst an wachsenden Teilen**: ab ``limit`` Dreiecken der
+    Teil in der Reihenfolge der Ringe, dann der doppelt so große und so fort.
+    Trägt ein Teil keine Rundform (:func:`_could_be_round`), trägt das Ganze
+    erst recht keine, und die Facette bleibt eben — so bleiben die zwei Sohlen
+    des Drachen, die über weiche Kanten an seiner Haut hängen, Flächen, ohne
+    dass zwei Millionen Dreiecke eingepasst werden. Trägt jeder Teil eine, wird
+    der ganze Fleck geprüft wie in der Vollerkennung: Die Abflachung eines
+    Knaufs sitzt auf einer Kugelkuppe, ihr erster Teil passt auf eine Kugel,
+    das Ganze samt Mantel auf nichts (Review S1). Unter ``limit`` beginnt die
+    Prüfung gleich am Ganzen — ein kleiner Teil eines Mantels passt auf gar
+    keine Einpassung (gemessen: unter 512 Dreiecken keiner der Prüfkörper,
+    darüber alle), und der Schluss vom Teil aufs Ganze gilt nur für große
+    Teile.
 
     Nicht nachgebildet ist, was benachbarte Flecken beim Schließen ihrer
     fransigen Ränder an sich nehmen (:func:`_without_notches` rechnet sie in
     der Vollerkennung der Reihe nach); der eigene Fleck wird geschlossen wie
-    dort.
+    dort. Die Antwort merkt sich die Hülle je Facette.
     """
-    verdicts = _facet_verdicts(body, check_cancelled=check_cancelled)
     indices = np.unique(np.asarray(list(triangles), dtype=np.int64))
+    result: bool = remembered(
+        "planar_facet",
+        body,
+        indices.tolist(),
+        lambda: _planar_facet_read(body, indices, limit, check_cancelled),
+        extra=limit,
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _planar_facet_read(
+    body: trimesh.Trimesh,
+    indices: np.ndarray,
+    limit: int,
+    check_cancelled: Callable[[], None] | None,
+) -> bool:
+    """Der Rumpf von :func:`planar_facet` — die Antwort merkt sich die Hülle."""
+    verdicts = _facet_verdicts(body, check_cancelled=check_cancelled)
     if not len(indices) or not len(verdicts.planar):
         return False
     labels = np.unique(verdicts.label[indices])
     if (labels < 0).any() or not verdicts.planar[labels].all():
         return False
+    # **Die ganze Facette oder keine**: Die Vollerkennung führt eine Fläche mit
+    # allen Dreiecken ihrer Facette. Am Ausschnitt beanspruchten Nachbarmerkmale
+    # am Schaber sechs von 239 Dreiecken einer Deckfläche, und die Stelle meldete
+    # den Rest als vollständige Fläche.
+    sizes = np.bincount(verdicts.owner, minlength=len(verdicts.planar))
+    if int(sizes[labels].sum()) != len(indices):
+        return False
     recoverable = labels[verdicts.recoverable[labels]]
     if not len(recoverable):
         return True
     seeds = indices[np.isin(verdicts.label[indices], recoverable)]
-    patch, whole = _patch_around(body, seeds, verdicts.candidate, limit, check_cancelled)
-    if not whole:
-        grown = in_body_order(body, [patch])[0]
-        return None if _could_be_round(body, grown, check_cancelled=check_cancelled) else True
+    rings = _patch_around(body, seeds, verdicts.candidate, check_cancelled)
+    total = sum(len(ring) for ring in rings)
+    size, taken, parts = limit, 0, []
+    for ring in rings:
+        if size >= total:
+            break
+        parts.append(ring)
+        taken += len(ring)
+        if taken < size:
+            continue
+        part = in_body_order(body, [np.concatenate(parts).tolist()])[0]
+        if not _could_be_round(body, part, check_cancelled=check_cancelled):
+            return True
+        size *= 2
+    patch = np.concatenate(rings).tolist()
     requested = set(indices.tolist())
     labelled = verdicts.label >= 0
     mesh = MeshData.of(body)
@@ -4623,33 +4657,33 @@ def _patch_around(
     body: trimesh.Trimesh,
     seeds: np.ndarray,
     candidate: np.ndarray,
-    limit: int,
     check_cancelled: Callable[[], None] | None,
-) -> tuple[list[int], bool]:
-    """Der Fleck um ``seeds`` wie in :func:`_connected_patches`, höchstens bis ``limit``.
+) -> list[np.ndarray]:
+    """Der Fleck um ``seeds`` wie in :func:`_connected_patches`, Ring um Ring.
 
     Gewachsen wird über dieselben Nähte — unter :data:`CURVATURE_LIMIT` und nur
-    zwischen Dreiecken, die ``candidate`` zulässt —, Runde um Runde und nur
-    über die Nachbarn der letzten Runde: kein Feld in Netzgröße je Frage. Der
-    Wahrheitswert sagt, ob der Fleck vollständig ist.
+    zwischen Dreiecken, die ``candidate`` zulässt — und je Runde nur über die
+    Nachbarn der letzten; die Ringe kommen in dieser Folge zurück, damit ein
+    wachsender Teil immer um die Facette herum liegt.
     """
     neighbours, rows = _neighbour_index(body)
     angles = np.asarray(body.face_adjacency_angles, dtype=float)
-    seen = {int(index) for index in seeds}
-    frontier = np.asarray(sorted(seen), dtype=np.int64)
-    while len(frontier):
+    seen = np.zeros(len(body.faces), dtype=bool)
+    frontier = np.unique(np.asarray(seeds, dtype=np.int64))
+    seen[frontier] = True
+    rings = [frontier]
+    while True:
         if check_cancelled is not None:
             check_cancelled()
-        if len(seen) > limit:
-            return sorted(seen), False
         near, via = neighbours[frontier].ravel(), rows[frontier].ravel()
         present = near >= 0
         near, via = near[present], via[present]
-        passable = candidate[near] & (np.degrees(angles[via]) < CURVATURE_LIMIT)
-        fresh = [index for index in np.unique(near[passable]).tolist() if index not in seen]
-        seen.update(fresh)
-        frontier = np.asarray(fresh, dtype=np.int64)
-    return sorted(seen), len(seen) <= limit
+        passable = candidate[near] & ~seen[near] & (np.degrees(angles[via]) < CURVATURE_LIMIT)
+        frontier = np.unique(near[passable])
+        if not len(frontier):
+            return rings
+        seen[frontier] = True
+        rings.append(frontier)
 
 
 def _could_be_round(
@@ -8005,10 +8039,17 @@ def face_roles(
     mesh: MeshData,
     features: Sequence[Feature],
     *,
+    limit: int,
     check_cancelled: Callable[[], None] | None = None,
-    check_patch_size: Callable[[int], None] | None = None,
 ) -> dict[FeatureId, bool]:
-    """Nur angefragte Ebenen anhand räumlich passender Originalfacetten einordnen."""
+    """Nur angefragte Ebenen anhand räumlich passender Originalfacetten einordnen.
+
+    Ob eine Gegenfacette als Ebene zählt, sagt dieselbe Auskunft wie für die
+    Fläche selbst (:func:`planar_facet` mit ``limit``). Bis zum 25.09.2026
+    fragte die Rollenprüfung einen eigenen, begrenzten Weg, der über dem
+    Budget der Stelle abbrach: Am Schaber kam eine Deckfläche der
+    Vollerkennung an der Stelle als „zu viele Dreiecke“ zurück.
+    """
     if not features:
         return {}
     entries = _planar_face_entries(mesh, check_cancelled=check_cancelled, all_facets=True)
@@ -8018,14 +8059,12 @@ def face_roles(
         """Nur ein räumlich passender Beleg benötigt die aufwendige Mantelgegenprobe."""
         first = int(facet[0])
         if first not in accepted:
-            requested = {int(index) for index in facet}
-            planar = _large_facet_faces(
+            accepted[first] = planar_facet(
                 mesh.raw,
+                [int(index) for index in facet],
+                limit=limit,
                 check_cancelled=check_cancelled,
-                requested=requested,
-                check_patch_size=check_patch_size,
             )
-            accepted[first] = requested <= planar
         return accepted[first]
 
     return _face_roles(mesh, features, entries, check_cancelled, eligible)

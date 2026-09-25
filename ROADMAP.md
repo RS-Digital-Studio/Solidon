@@ -1936,6 +1936,23 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `recognize --on` fragt wie der Knopf im Fenster. Gemessen am Drachen: alle
   vier Sohlen an der Stelle und nach Skalieren und zwei Verschiebungen.
 
+  Nachgezogen am 25.09.2026 aus der vierten Runde (S1–S6) und an zehn
+  Modellen aus `F:\3D Dateien`: Der Mantelnachweis an der Stelle flutet den
+  ganzen Fleck und prüft wachsende Teile — eine weiche Abflachung auf einer
+  Kugelkuppe kam sonst als „zu viele Dreiecke“; nur die ganze Facette ist
+  eine Fläche; die Rollenprüfung fragt dieselbe Auskunft statt eines Wegs,
+  der am Schaber mit „zu viele Dreiecke“ abbrach; die Nachmessung wird je
+  Netz und Merkmalen gemerkt; eine Hohlkehle kostet keinen Gang je Randkante;
+  `recognize --on` weist unbekannte Kennungen ab. An sieben der zehn Modelle
+  stimmt die Stelle an jeder geprüften Facette mit der Vollerkennung überein.
+  **Offen:** Die Wabenwände des Schraubendreherhalters faltet die
+  Vollerkennung in ein Muster, die Stelle meldet sie als Flächen (aus wenigen
+  Zellen entsteht kein Muster); die Magnettaschen des Schabers (Ø 9, 1,3 tief)
+  findet die Stelle bei keinem Radius als Bohrung — über die gerundete Mündung
+  gehen sie glatt in die gewölbte Oberseite über, und die gilt als Suchrand;
+  das Ø 34 des Besenhalters kommt als gekrümmte Flächen (Nadeldreiecke,
+  RM-219). Beides war vor dieser Runde ebenso. Gesenkte Bohrungen brauchen
+  einen Suchradius über die Senkung hinaus und kommen dann vollständig.
 
 ## Bedienung und Darstellung
 

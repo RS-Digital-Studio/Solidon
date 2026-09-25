@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
+import hashlib
 import math
+import threading
+from collections import OrderedDict
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, Final
@@ -98,12 +102,15 @@ def recognition_gigabytes(triangles: int) -> int:
 #: Die Großmodellproben benötigen 471 bis 5120 Dreiecke; 50 000 begrenzt die
 #: Fitphase auch bei dichter Oberfläche und lässt für die Abschlussflächen Platz.
 LOCAL_FACE_LIMIT: Final = 50_000
-#: So groß darf der Fleck werden, über den die Stelle den Mantelnachweis der
-#: Vollerkennung rechnet (:func:`features.planar_facet`). Er kostet eine
-#: Flutung und vier Einpassungen, nicht ``detect``, und hat deshalb ein
-#: eigenes Budget: Die Deckfläche eines Zylinders mit fein aufgelöster
-#: Verrundung hängt über sie und den Mantel an 147 000 Dreiecken.
+#: Ab dieser Größe prüft der Mantelnachweis an der Stelle zuerst Teile des
+#: Flecks (:func:`features.planar_facet`): Trägt schon ein Teil dieser Größe
+#: keine Rundform, trägt das Ganze keine. Darunter wird gleich das Ganze
+#: geprüft — die Deckfläche eines Zylinders mit fein aufgelöster Verrundung
+#: hängt über sie und den Mantel an 147 000 Dreiecken, die Sohle des Drachen an
+#: seiner ganzen Haut.
 MANTLE_PROOF_LIMIT: Final = 250_000
+#: So viele Nachmessungen merkt sich der Prozess (:func:`detect_known`).
+KNOWN_MEMORY_LIMIT: Final = 32
 #: Wie weit ein Rundungsstück über koplanare Dreiecke verfolgt wird: Ein Stück
 #: aus einem Streifen von Dreiecken braucht je Dreieck eine Runde.
 PIECE_ROUNDS: Final = 8
@@ -137,9 +144,6 @@ class LocalDetection:
     seed_choices: tuple[int, ...] = ()
     unfinished: tuple[Feature, ...] = ()
     open_curvature: bool = False
-    #: Eine gefundene Fläche blieb offen, weil ihr Mantelnachweis über das
-    #: Budget reicht (:func:`features.planar_facet`).
-    undecided: bool = False
 
     @property
     def complete(self) -> bool:
@@ -202,12 +206,6 @@ def _check(callback: Callable[[], None] | None) -> None:
     """Abbruch ohne einen zweiten Zustand oder einen globalen Arbeiter."""
     if callback is not None:
         callback()
-
-
-def _check_patch_size(count: int) -> None:
-    """Auch entfernte Rollenbelege dürfen das lokale Fitbudget nicht umgehen."""
-    if count > LOCAL_FACE_LIMIT:
-        raise local_error("budget")
 
 
 def _region(
@@ -378,6 +376,46 @@ class _Seams:
             np.asarray(body.face_adjacency_edges),
             angles,
         )
+
+
+def _may_turn_round(
+    seams: _Seams,
+    starts: np.ndarray,
+    own: np.ndarray,
+    normal: np.ndarray,
+    check: Callable[[], None] | None,
+) -> bool:
+    """Ob die Rundung hinter den Randkanten überhaupt bis zur Gegenflanke wendet.
+
+    Die notwendige Bedingung für jeden Gang von :func:`_turns_round_like_a_slot_end`,
+    einmal für alle Randkanten gefragt (Review R2, vierte Runde): Ein Gang geht
+    nur über Nähte unter :data:`features.CURVATURE_LIMIT` und nie in die Fläche;
+    trägt kein so erreichbares Dreieck eine Normale gegen die Fläche, kann keiner
+    „ja“ sagen. An einer Hohlkehle mit 8 192 Stücken ging bis dahin jede
+    Randkante bis zur Wand — 3,7 s für eine Antwort, die hier in einem Zug steht.
+    Wächst die Rundung über :data:`MANTLE_PROOF_LIMIT`, bleibt die Frage bei den
+    Gängen.
+    """
+    opposite = -units.exact_cos_degrees(180.0 - SLOT_END_TURN_DEGREES)
+    seen = np.zeros(len(seams.normals), dtype=bool)
+    seen[own] = True
+    frontier = np.unique(starts)
+    seen[frontier] = True
+    count = len(frontier)
+    while len(frontier):
+        _check(check)
+        if float((seams.normals[frontier] * normal).sum(axis=1).min()) <= opposite:
+            return True
+        if count > MANTLE_PROOF_LIMIT:
+            return True
+        near, via = seams.neighbours[frontier].ravel(), seams.rows[frontier].ravel()
+        present = near >= 0
+        near, via = near[present], via[present]
+        passable = ~seen[near] & (seams.angles[via] < detection.CURVATURE_LIMIT)
+        frontier = np.unique(near[passable])
+        seen[frontier] = True
+        count += len(frontier)
+    return False
 
 
 def _turns_round_like_a_slot_end(
@@ -588,7 +626,7 @@ def _recognise_region(
         offsets = surface.centres[rim_starts] - (ends[:, 0] + ends[:, 1]) / 2.0
         hollow = (offsets * normal).sum(axis=1) > 0.0
         rim_rows, rim_starts = rim_rows[hollow], rim_starts[hollow]
-        if not len(rim_rows):
+        if not len(rim_rows) or not _may_turn_round(surface, rim_starts, own, normal, check):
             return False
         order = np.argsort(rim_rows, kind="stable")
         along = units.exact_cos_degrees(ALONG_THE_RIM_DEGREES)
@@ -655,33 +693,34 @@ def _recognise_region(
                 return True
         return False
 
-    undecided = False
-
     def planar_in_full(feature: Feature) -> bool:
         # **Ob eine Fläche eine ist, sagt die Regel der Vollerkennung am ganzen
         # Körper** (Review R1) — nicht der Ausschnitt, an dem ``detect`` lief.
-        nonlocal undecided
-        verdict = detection.planar_facet(
+        return detection.planar_facet(
             body, feature.face_indices, limit=MANTLE_PROOF_LIMIT, check_cancelled=check
         )
-        if verdict is None:
-            undecided = True
-        return bool(verdict)
 
-    def is_complete(feature: Feature) -> bool:
-        if feature.kind == "face" and not planar_in_full(feature):
-            return False
-        if feature.kind == "face" and not continues_tangentially(feature):
-            cut_off = cut_facet(feature)
-            if cut_off is not None:
-                if cut_off:
-                    return False
-                if proven_faces.issuperset(feature.face_indices):
-                    return True
-                return _inside_radius(body, feature, point, radius)
+    def bounded(feature: Feature) -> bool:
         return continuing.isdisjoint(feature.face_indices) and _inside_radius(
             body, feature, point, radius
         )
+
+    def is_complete(feature: Feature) -> bool:
+        if feature.kind != "face":
+            return bounded(feature)
+        # Erst der Suchrand, dann die Ebenenregel: Eine abgeschnittene Fläche
+        # ist keine, gleich was der Mantelnachweis sagte — an einem fein
+        # unterteilten Zylinder gingen sonst 5 von 5,8 s an Flächen, die der
+        # Rand danach verwarf (Review S3).
+        cut_off = None if continues_tangentially(feature) else cut_facet(feature)
+        if cut_off is None:
+            inside = bounded(feature)
+        else:
+            inside = not cut_off and (
+                proven_faces.issuperset(feature.face_indices)
+                or _inside_radius(body, feature, point, radius)
+            )
+        return inside and planar_in_full(feature)
 
     complete = {name: feature for name, feature in mapped.items() if is_complete(feature)}
     # Eine Randschleife aus dem Ausschnitt ist kein Defekt des Originalnetzes.
@@ -804,8 +843,8 @@ def _recognise_region(
     roles = detection.face_roles(
         mesh,
         [feature for feature in complete.values() if feature.kind == "face"],
+        limit=MANTLE_PROOF_LIMIT,
         check_cancelled=check,
-        check_patch_size=_check_patch_size,
     )
     bounds = detection._ThroughBounds(body)
     verified: list[Feature] = []
@@ -853,10 +892,9 @@ def _recognise_region(
     if not numbered:
         return LocalDetection(
             examined_faces=tuple(int(index) for index in indices),
-            reason="budget" if undecided else "boundary" if len(cut) else "no_feature",
+            reason="boundary" if len(cut) else "no_feature",
             unfinished=unfinished,
             open_curvature=open_curvature,
-            undecided=undecided,
         )
     return LocalDetection(
         numbered,
@@ -864,7 +902,6 @@ def _recognise_region(
         tuple(int(index) for index in indices),
         unfinished=unfinished,
         open_curvature=open_curvature,
-        undecided=undecided,
     )
 
 
@@ -1040,6 +1077,58 @@ def detect_local(
     return replace(result, reason="budget") if crowded and result.reason else result
 
 
+_KNOWN: OrderedDict[bytes, dict[FeatureId, Feature]] = OrderedDict()
+_KNOWN_LOCK = threading.Lock()
+
+
+def forget_known() -> None:
+    """Vergisst die gemerkten Nachmessungen — für Tests und Messungen."""
+    with _KNOWN_LOCK:
+        _KNOWN.clear()
+
+
+def _plain(value: Any) -> Any:
+    """Ein Wert als ausgeschriebene Grundform — für einen Abdruck ohne gekürzte Felder."""
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return tuple(
+            (item.name, _plain(getattr(value, item.name))) for item in dataclasses.fields(value)
+        )
+    if isinstance(value, Mapping):
+        return tuple(sorted((str(key), _plain(item)) for key, item in value.items()))
+    if isinstance(value, np.ndarray):
+        return ("array", value.dtype.str, value.shape, value.tobytes())
+    if isinstance(value, (list, tuple)):
+        return tuple(_plain(item) for item in value)
+    if isinstance(value, (float, np.floating)):
+        return float(value).hex()
+    if isinstance(value, np.integer):
+        return int(value)
+    return value
+
+
+def _known_key(
+    mesh: MeshData,
+    features: Mapping[FeatureId, Feature],
+    required: Collection[FeatureId] | None,
+    standing: Collection[FeatureId],
+) -> bytes:
+    """Wovon eine Nachmessung abhängt: Netz, Merkmale, Anspruch, Budgets."""
+    digest = hashlib.blake2b(digest_size=20)
+    digest.update(detection._mesh_key(mesh))
+    digest.update(
+        repr(
+            (
+                tuple((name, _plain(features[name])) for name in sorted(features)),
+                None if required is None else tuple(sorted(required)),
+                tuple(sorted(standing)),
+                LOCAL_FACE_LIMIT,
+                MANTLE_PROOF_LIMIT,
+            )
+        ).encode("utf-8")
+    )
+    return digest.digest()
+
+
 def detect_known(
     mesh: MeshData,
     features: Mapping[FeatureId, Feature],
@@ -1070,8 +1159,20 @@ def detect_known(
     (Review R6). Sie werden übernommen, nicht gesucht: Die Nachmessung
     einer starren Bewegung kann ihr Ergebnis nicht ändern und kostete am
     Drachen je Verschieben und Auswertung vier bis sechs Sekunden mehr.
+
+    **Und dieselbe Nachmessung wird einmal gerechnet** (Review S2): Das
+    Ergebnis ist eine reine Funktion von Netz, Merkmalen, Anspruch und
+    Budgets (:func:`_known_key`); die Auswertung fragt sie bei jedem Lauf,
+    auch ohne Änderung, und am skalierten Drachen kostete jeder Lauf 6,3 s.
+    Ein Halt wird nicht gemerkt — er ist selten und fragt wieder.
     """
     _check(check_cancelled)
+    memo_key = _known_key(mesh, features, required, standing)
+    with _KNOWN_LOCK:
+        remembered = _KNOWN.get(memo_key)
+        if remembered is not None:
+            _KNOWN.move_to_end(memo_key)
+            return dict(remembered)
     stitched = detection._one_body(mesh)
     reach = max(EPS_GEOM, weld_tolerance(mesh.bounds.diagonal))
     labels: np.ndarray | None = None
@@ -1198,7 +1299,7 @@ def detect_known(
             if (blocked or crowded) and not _query_is_complete(
                 stitched, feature, result.features, check_cancelled=check_cancelled
             ):
-                failure = "budget" if crowded or result.undecided else "boundary"
+                failure = "budget" if crowded else "boundary"
                 continue
             failure = None
             if key not in gathered_keys:
@@ -1209,7 +1310,12 @@ def detect_known(
             if not needed:
                 continue
             raise local_error(failure)
-    return _numbered(gathered)
+    measured = _numbered(gathered)
+    with _KNOWN_LOCK:
+        _KNOWN[memo_key] = dict(measured)
+        while len(_KNOWN) > KNOWN_MEMORY_LIMIT:
+            _KNOWN.popitem(last=False)
+    return measured
 
 
 def _face_seed(

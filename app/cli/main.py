@@ -624,6 +624,17 @@ def command_recognize(args: argparse.Namespace) -> int:
     loaded = sorted(
         {object_id for entry in document.ops if entry.op == "load" for object_id in entry.outputs}
     )
+    # Eine unbekannte Kennung geht nicht still unter, wie beim Export
+    # (Review S6).
+    known = sorted({object_id for entry in document.ops for object_id in entry.outputs})
+    unknown = [object_id for object_id in args.on or () if object_id not in known]
+    if unknown:
+        raise ValidationError(
+            field="on",
+            detail=tr("Dieses Objekt gibt es in der Szene nicht."),
+            constraint="unknown_object",
+            values={"requested": ", ".join(unknown), "known": ", ".join(known)},
+        )
     wanted = args.on or loaded
     chosen = [
         object_id
