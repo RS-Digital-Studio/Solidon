@@ -1,0 +1,48 @@
+=== qwen3:14b num_ctx=32768  vorher: 1538 MiB
+{"eval_count": 1, "model": "qwen3:14b", "num_ctx": 32768, "prompt_eval_count": 7258, "request_sha256": "28a3a8ced0de4aafb86b347a898a2b11c5ac8d7d4565eef63791340a3907b360", "tool_count": 153}
+qwen3:14b    bdbd181c33f2    14 GB    100% GPU     32768      About a minute from now    
+    nachher: 15466 MiB
+=== qwen3:14b num_ctx=65536  vorher: 1517 MiB
+{"eval_count": 1, "model": "qwen3:14b", "num_ctx": 65536, "prompt_eval_count": 7258, "request_sha256": "d5497faf4c58fe2719a92f1bb6f52d76c6e7a05d7e22e51d4ff4d07a382dfbca", "tool_count": 153}
+qwen3:14b    bdbd181c33f2    16 GB    10%/90% CPU/GPU    40960      About a minute from now    
+    nachher: 15615 MiB
+=== qwen3.5:9b num_ctx=32768  vorher: 1405 MiB
+{"eval_count": 1, "model": "qwen3.5:9b", "num_ctx": 32768, "prompt_eval_count": 9201, "request_sha256": "39c29cb8afe7d133d8c9cbc77aadbd30eb26f1eced5407e205154ace5cfc93b9", "tool_count": 153}
+qwen3.5:9b    6488c96fa5fa    6.6 GB    100% GPU     32768      About a minute from now    
+    nachher: 8953 MiB
+=== qwen3.5:9b num_ctx=65536  vorher: 1330 MiB
+{"eval_count": 1, "model": "qwen3.5:9b", "num_ctx": 65536, "prompt_eval_count": 9201, "request_sha256": "9e78f255f54f29e37942f838eed861e98a4144f08c010625323e06c1712719d2", "tool_count": 153}
+qwen3.5:9b    6488c96fa5fa    8.0 GB    100% GPU     65536      About a minute from now    
+    nachher: 10486 MiB
+=== qwen3.5:9b-q8_0 num_ctx=32768  vorher: 1590 MiB
+{"eval_count": 1, "model": "qwen3.5:9b-q8_0", "num_ctx": 32768, "prompt_eval_count": 9201, "request_sha256": "79411d3cbbd5dc2fd9fea31c1851c0bea40cde89e768dfaa131de1306c42fa41", "tool_count": 153}
+qwen3.5:9b-q8_0    441ec31e4d2a    10 GB    100% GPU     32768      About a minute from now    
+    nachher: 12405 MiB
+=== qwen3.5:9b-q8_0 num_ctx=65536  vorher: 1524 MiB
+{"eval_count": 1, "model": "qwen3.5:9b-q8_0", "num_ctx": 65536, "prompt_eval_count": 9201, "request_sha256": "9ac1b9bb77ba8ae25202d6dd9b9a1ceca336800bd0b96462c6c3a7b9a9b596f4", "tool_count": 153}
+qwen3.5:9b-q8_0    441ec31e4d2a    11 GB    100% GPU     65536      About a minute from now    
+    nachher: 13577 MiB
+=== gemma4:12b num_ctx=32768  vorher: 1727 MiB
+{"eval_count": 1, "model": "gemma4:12b", "num_ctx": 32768, "prompt_eval_count": 6542, "request_sha256": "596f1a1a6e97b14e39f46efbf66a8c09ad5bde3f29e9b1e34fb7a0a482a13e5a", "tool_count": 153}
+gemma4:12b    4eb23ef187e2    8.4 GB    100% GPU     32768      About a minute from now    
+    nachher: 10809 MiB
+=== gemma4:12b num_ctx=65536  vorher: 1726 MiB
+{"eval_count": 1, "model": "gemma4:12b", "num_ctx": 65536, "prompt_eval_count": 6542, "request_sha256": "1f16c9dcc61edec5e015e011f79fd4806d7cb75c8d1d3ee543eece52ef5c8081", "tool_count": 153}
+gemma4:12b    4eb23ef187e2    8.5 GB    100% GPU     65536      About a minute from now    
+    nachher: 11434 MiB
+=== granite4.1:8b num_ctx=32768  vorher: 1823 MiB
+{"eval_count": 1, "model": "granite4.1:8b", "num_ctx": 32768, "prompt_eval_count": 7668, "request_sha256": "ac3598c84a33b2cdc730d53200d639224c2b5ccda425ea71f5139a5213da83a1", "tool_count": 153}
+granite4.1:8b    444af1c4b2fe    10 GB    100% GPU     32768      About a minute from now    
+    nachher: 12304 MiB
+=== granite4.1:8b num_ctx=65536  vorher: 1780 MiB
+{"eval_count": 1, "model": "granite4.1:8b", "num_ctx": 65536, "prompt_eval_count": 7668, "request_sha256": "99eba5f5ab62c5a4da52a6da3ad857d84b8debec8c53a9062725d643b8b5b044", "tool_count": 153}
+granite4.1:8b    444af1c4b2fe    16 GB    14%/86% CPU/GPU    65536      About a minute from now    
+    nachher: 15586 MiB
+=== gpt-oss:20b num_ctx=32768  vorher: 1788 MiB
+{"eval_count": 1, "model": "gpt-oss:20b", "num_ctx": 32768, "prompt_eval_count": 4283, "request_sha256": "b7b405b3d7c30975cc7c29c838d14a90d9752a25d9be55c58f3a2964858c0777", "tool_count": 153}
+gpt-oss:20b    17052f91a42e    12 GB    100% GPU     32768      About a minute from now    
+    nachher: 14967 MiB
+=== gpt-oss:20b num_ctx=65536  vorher: 1700 MiB
+{"eval_count": 1, "model": "gpt-oss:20b", "num_ctx": 65536, "prompt_eval_count": 4283, "request_sha256": "27ef9b6f3e01c19e12a76fc23b8bbf30ff2418261a16c3960c41c07923db7b81", "tool_count": 153}
+gpt-oss:20b    17052f91a42e    12 GB    100% GPU     65536      About a minute from now    
+    nachher: 15573 MiB

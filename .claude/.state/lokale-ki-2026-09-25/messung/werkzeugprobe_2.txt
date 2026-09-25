@@ -1,0 +1,64 @@
+Werkzeuge: 153 (21 KB Grundlast)
+
+  entladen (unload)
+  llama3.1:8b
+    strukturiert 8/8 · richtig 7/8 · Median 3.3 s je Anfrage · Karte (100 % im VRAM)
+    add_parameter      ok       7.2s    7714 Token  ['add_parameter']
+    read_report        ok       2.4s    7706 Token  ['read_report']
+    find_part          ok       3.2s    8368 Token  ['find_part']
+    undo_transaction   ok       3.1s    8228 Token  ['undo_transaction']
+    ask_user           falsch   2.8s    7705 Token  ['scale_object']
+    translate_object   ok       4.1s    8573 Token  ['translate_object']
+    rotate_object      ok       3.5s    8820 Token  ['rotate_object']
+    drill_brep_hole/drill_hole ok       4.4s    9775 Token  ['drill_hole']
+
+  entladen (unload)
+  mistral-nemo:latest
+    strukturiert 4/8 · richtig 4/8 · Median 4.3 s je Anfrage · Karte (100 % im VRAM)
+    add_parameter      ok      12.1s    7429 Token  ['add_parameter']
+    read_report        ok       2.5s    7420 Token  ['read_report']
+    find_part          ok       4.0s    8073 Token  ['find_part']
+    undo_transaction   ok       3.9s    7926 Token  ['undo_transaction']
+    ask_user           Prosa    4.4s  'Um das Objekt etwas größer zu machen, können Sie die Skali'
+    translate_object   Prosa    4.7s  'OK, verschiebe obj_1 um 10 mm nach rechts.\n\nVerschiebung u'
+    rotate_object      Prosa    4.2s  'Ruf ``rotate_object`` mit ``objects`` gleich ``["obj_1"]``'
+    drill_brep_hole/drill_hole Prosa    5.8s  'Um ein Loch mit einem Durchmesser von 5 mm in die Mitte de'
+
+  entladen (unload)
+  qwen2.5-coder:14b
+    strukturiert 0/8 · richtig 0/8 · Median 5.3 s je Anfrage · Prozessor (92 % im VRAM)
+    add_parameter      Prosa   12.2s  '{\n  "name": "add_parameter",\n  "arguments": {\n    "name": '
+    read_report        Prosa    3.0s  '```json\n{\n  "name": "read_report",\n  "arguments": {}\n}\n```'
+    find_part          Prosa    4.7s  '{\n  "name": "find_part",\n  "arguments": {\n    "description'
+    undo_transaction   Prosa    4.6s  '{\n  "name": "undo_transaction",\n  "arguments": {\n    "tran'
+    ask_user           Prosa    4.9s  '```json\n{\n  "name": "ask_user",\n  "arguments": {\n    "ques'
+    translate_object   Prosa    7.3s  '```json\n{\n  "name": "translate_object",\n  "arguments": {\n '
+    rotate_object      Prosa    5.6s  '{\n  "name": "rotate_object",\n  "arguments": {\n    "objects'
+    drill_brep_hole/drill_hole Prosa    7.9s  '```json\n{\n  "name": "drill_hole",\n  "arguments": {\n    "ob'
+
+  entladen (unload)
+  qwen3:30b-a3b
+    strukturiert 8/8 · richtig 8/8 · Median 17.1 s je Anfrage · Prozessor (66 % im VRAM)
+    add_parameter      ok      28.2s    7335 Token  ['add_parameter']
+    read_report        ok      16.7s    7327 Token  ['read_report']
+    find_part          ok      13.0s    7988 Token  ['find_part']
+    undo_transaction   ok       9.8s    7859 Token  ['undo_transaction']
+    ask_user           ok      17.4s    7324 Token  ['ask_user']
+    translate_object   ok      23.8s    8195 Token  ['translate_object']
+    rotate_object      ok      13.0s    8438 Token  ['rotate_object']
+    drill_brep_hole/drill_hole ok      49.3s    9403 Token  ['drill_hole']
+
+  entladen (unload)
+  llama3:latest
+    strukturiert 0/8 · richtig 0/8 · Median 0.0 s je Anfrage · ungemessen
+    add_parameter      Fehler  BackendUnavailable: Das Sprachmodell hat nicht geantwortet.: {"error":"registry.ollama.ai/library/llama3:latest does not support tools"}
+    read_report        Fehler  BackendUnavailable: Das Sprachmodell hat nicht geantwortet.: {"error":"registry.ollama.ai/library/llama3:latest does not support tools"}
+    find_part          Fehler  BackendUnavailable: Das Sprachmodell hat nicht geantwortet.: {"error":"registry.ollama.ai/library/llama3:latest does not support tools"}
+    undo_transaction   Fehler  BackendUnavailable: Das Sprachmodell hat nicht geantwortet.: {"error":"registry.ollama.ai/library/llama3:latest does not support tools"}
+    ask_user           Fehler  BackendUnavailable: Das Sprachmodell hat nicht geantwortet.: {"error":"registry.ollama.ai/library/llama3:latest does not support tools"}
+    translate_object   Fehler  BackendUnavailable: Das Sprachmodell hat nicht geantwortet.: {"error":"registry.ollama.ai/library/llama3:latest does not support tools"}
+    rotate_object      Fehler  BackendUnavailable: Das Sprachmodell hat nicht geantwortet.: {"error":"registry.ollama.ai/library/llama3:latest does not support tools"}
+    drill_brep_hole/drill_hole Fehler  BackendUnavailable: Das Sprachmodell hat nicht geantwortet.: {"error":"registry.ollama.ai/library/llama3:latest does not support tools"}
+
+Brauchbar: qwen3:30b-a3b
+Exit: 0

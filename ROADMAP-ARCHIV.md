@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-25 | [Das lokale Modell bekommt ein Angebot statt des ganzen Registers (25.09.2026)](#das-lokale-modell-bekommt-ein-angebot-statt-des-ganzen-registers-25092026) |
 | 2026-09-25 | [Die Schnittsuche an Nadeldreiecken: die Trennprüfung (25.09.2026)](#die-schnittsuche-an-nadeldreiecken-die-trennprüfung-25092026) |
 | 2026-09-25 | [Nadeldreiecke: die Gewinderegel und die Bögen eines Prismas (25.09.2026)](#nadeldreiecke-die-gewinderegel-und-die-bögen-eines-prismas-25092026) |
 | 2026-09-25 | [Große Netze: Speicher, Merkmalsgrenze und die Erkennung an einer Stelle (25.09.2026)](#große-netze-speicher-merkmalsgrenze-und-die-erkennung-an-einer-stelle-25092026) |
@@ -31495,3 +31496,191 @@ Dazu aus dem Bericht, je mit Test:
   Fächerdeckeln unter einem Budget, das der alte Weg nicht schaffte). Der
   Bausteinnachweis ist neu gefahren: `intersections.py` steht in seinem
   Abdruck.
+
+## Das lokale Modell bekommt ein Angebot statt des ganzen Registers (25.09.2026)
+
+<a id="rm-173"></a>
+
+- [x] **RM-173 — Der Platz im Kontextfenster des lokalen Modells geht aus.** Gemessen am
+  14.09.2026 beim Abschluss von RM-054: Auftrag und die 121 kompakten Werkzeugschemata kosten
+  **31 465 Token**, das Fenster hat 32 768 (`OLLAMA_CONTEXT_TOKENS`) — 96,0 %. Für Steckbrief,
+  Prüfbericht, Verlauf und die Frage selbst bleiben 1 303 Token, und Ollama schneidet einen
+  Prompt über dem Fenster **vorn** ab: Das Erste, was fehlte, wäre der Auftrag — und niemand
+  sähe es (Regel 21 in ihrer stillsten Form; am 03.09. fiel die Bausteinquote aus genau diesem
+  Grund von 3/3 auf 0/3, siehe `test_backends`). Seit dem 08.09. sind es 3 184 Token mehr bei
+  zwei Werkzeugen mehr; jede weitere Operation kostet in dieser Größenordnung.
+
+  **Das Fenster lässt sich auf der Karte nicht heben:** Mit `num_ctx` 40 960 meldet `ollama ps`
+  für qwen3:14b 16 GB und `10 %/90 % CPU/GPU` — das Modell läuft von der RTX 4080 über, und der
+  Prozessorweg ist 72-mal langsamer (Messreihe vom 31.08.). Eine Auswahl, die Operationen
+  aussortiert, wäre eine Betriebsart mit anderem Namen und ist ausgeschlossen (`AGENTS.md`).
+  Bleibt: **weniger Text je Werkzeug.** Kandidaten, jeder zu messen: die `doc`-Sätze der
+  Parameter im kompakten Schema noch einmal kürzen oder in den Systemprompt heben, wo sie
+  einmal statt je Werkzeug stehen (das Muster von `objects` und den sechs Platzierungsangaben,
+  das am 31.08. 4 520 Token brachte); Enumerationen und Vorgabewerte nur dort ausschreiben, wo
+  das Modell sie ohne Beispiel verfehlt; die `caveat`-Zeile nur bei Operationen, deren Grenze
+  im Register steht.
+
+  **Und ein Wächter, der den Überlauf sagt statt schweigt:** Vor dem Absenden die Nutzlast
+  gegen `OLLAMA_CONTEXT_TOKENS` rechnen (die Zählung liefert `prompt_eval_count` des ersten
+  Zugs; eine Näherung aus der Zeichenzahl reicht als Vorwarnung) und im Chat melden, wenn
+  Steckbrief oder Verlauf gekürzt werden mussten — nicht still einen halben Auftrag schicken.
+
+  Abnahme: `tools/measure_local_model.py` unter 85 % des Fensters mit vollem Werkzeugbestand,
+  die Agenten-Suite vorher und nachher ohne Quotenverlust (§39), und ein Test, der einen zu
+  langen Prompt als Befund im Chat zeigt.
+
+  **Stand vom Abend des 14.09.2026.** Der Wächter steht (`e4856ff6`): Ollama kürzt einen Prompt
+  über dem Fenster still auf etwa die Hälfte (4 098 Token gegen 2 048 kamen als 1 026 zurück),
+  und `OllamaBackend` wirft seither `BackendPromptTruncated`, wenn eine Antwort mit vollem
+  Werkzeugsatz weniger als sechzig Prozent der gemessenen Werkzeuglast meldet. Beim ersten Lauf
+  fand er `tools/check_local_model.py`, das über Wochen das volle Schema geschickt und ein
+  halbiertes gemessen hatte. **Was Ollama sieht, ist gemessen:** `pattern`, `minimum`,
+  `maximum` und `default` verwirft es vor dem Rendern — der Bindungs-Regex an 618 Feldern kam
+  nie an, das Modell wusste nie, dass ein Feld `@name` nimmt; das sagt jetzt der kompakte
+  Systemprompt. Ein echter Zug mit **einer** Platte kostet 32 132 Token (98,1 %).
+
+  Die Anteile: Parameterbeschreibungen 11,7k, Gerüst aus Namen und Typen 12,4k,
+  Werkzeugbeschreibungen 4,7k, Systemprompt 1,4k, Enums 1,2k. Gemessene Kürzungen ohne
+  Fähigkeitsverlust: Konventionstexte einmal im Prompt statt je Feld („— siehe Position X",
+  `name`, `play`, `angle`; die eigenen Sätze von `x` und `nx` bleiben) und Zahlenfelder als
+  `number` statt `["number", "string"]` — zusammen **28 440 Token** (86,8 %, Kaltstart 18,7 s
+  statt 22,9). Im Fünf-Fälle-Check kippt das „Nimm die letzte Änderung zurück" von
+  `undo_transaction` zu `ask_user`, deterministisch, und zwar bei jeder der beiden Kürzungen
+  allein — eine Kippstelle des Modells, keine verlorene Information. Deshalb läuft die
+  Agenten-Suite (39 Fälle) am Abend zweimal im Worktree: Basis `e4856ff6` und dieselbe mit
+  Kürzung; der Commit folgt dem Ergebnis. Weitere gemessene Wege, beide eine Entscheidung:
+  Rückseitenparameter (`placement="advanced"`, 550 von 884) ohne Text 25 797 Token; ganz weg
+  20 311 — **ausgeschlossen**, weil bei *Bohrung* `x`, `y`, `z` hinten liegen und das Modell
+  dann kein Loch mehr setzen könnte.
+
+  **Die zweite Gestalt der Kürzung, aus dem Protokoll des Suitelaufs (14.09.2026, 19:30):**
+  Der erste Schritt eines Zugs endete bei 32 680 von 32 768 Token; der zweite begann mit
+  32 300, erzeugte 847 — und llama.cpp schrieb `stop processing: n_tokens = 16765, truncated =
+  1`: Kontext geschoben, die Mitte des Auftrags verworfen, die Antwort auf dem Rest gerechnet.
+  Die Antwort trägt kein Zeichen davon; `prompt_eval_count` zählt den ganzen Prompt, und der
+  erste Wächter sieht nichts. Mit dem heutigen Prompt bleiben nach dem ersten Schritt rund
+  600 Token — jede denkende Antwort ist länger. **Der zweite Wächter** rechnet deshalb Eingabe
+  plus Ausgabe gegen das Fenster (`BackendContextShifted`, mit Test); die Kürzung auf 28 440
+  ist damit keine Kür mehr, sondern das, was den zweiten Schritt wieder in das Fenster bringt.
+  Dazu gehört die Frage, ob qwen3 im Chat denken soll: 484 und 847 Token Ausgabe je Schritt
+  sind zum größten Teil Denkblock, bei 33 Token/s eine halbe Minute je Schritt — `think:
+  false` ist eine Anfrageoption, und ob die Quote es überlebt, sagt die Suite (nach den zwei
+  laufenden Läufen).
+
+  Und was das Protokoll außerdem sagt: `llama-server started in 146.25 seconds` — der
+  Modellstart, nicht der Prompt, kostet nach jedem entladenen Zug die Minuten, sobald der
+  Rechner unter Last steht (die Suite lief neben den Torläufen dreier anderer Sitzungen);
+  ruhig gemessen waren es 18,7 s für alles. Das Warmhalten zwischen den Zügen — 16 s je Zug
+  gespart, entladen erst vor einem Weg-3-Lauf — bleibt eine Entscheidung für Robert, weil
+  der Vertrag aus dem Absturz vom 01.09. lautet: nach dem Zug entladen.
+
+  **Das Suiteergebnis (Nacht auf den 15.09.2026), beide Läufe im Worktree unter derselben
+  Fremdlast:** Basis `e4856ff6` (31 465 Token) **20/39** gut beantwortet, gefragt 3/3,
+  schemagültig im ersten Versuch 74/148 = 50 %, Baustein statt eigener Geometrie 1/13,
+  Hauptmaße als Parameter 2/3, 3,1 Schritte im Mittel — 3 h 24 min. Mit der Kürzung
+  (28 440 Token, endgültige Fassung: `play` und die vier Geschwisterachsen ohne Feldtext,
+  Zahlenfelder als Zahl, Konventionen und Bindung einmal im Prompt) **24/39**, gefragt 2/3,
+  schemagültig 117/162 = 72 %, Baustein 7/13, Hauptmaße 1/3, 3,3 Schritte — 2 h 43 min.
+  Was kippte: *Mach das Teil dünner* fragte in der Basis nach dem Wert und riet mit der
+  Kürzung (`fit_to_size`, `scale_object`, zweimal `hollow_object`) — dieselbe Kippstelle wie
+  beim Zurücknehmen im Fünf-Fälle-Check; und *Wo finde ich das Aushöhlen* lief in der Basis in
+  den ersten Wächter (Ollama kürzte 32 881 auf 16 386) und führte mit der Kürzung das Aushöhlen
+  aus, statt den Ort zu nennen. Beides steht gegen vier Fälle mehr, 22 Punkte Schemagültigkeit
+  und sechs Bausteine, die vorher eigene Geometrie waren. **Die Kürzung ist drin**, mit dem
+  Wächtertest, der `CONVENTION_SENTENCES` am Register hält und jedes Feld ohne Text im Prompt
+  wiederfindet. Ohne Bewertung bleibt die Zeit: Unter Fremdlast schwankte allein der
+  Modellstart zwischen 56 und 314 s je Zug, beide Läufe hatten je zwei Zeitüberschreitungen.
+
+  **Der dritte Lauf, dieselbe Kürzung ohne Denkblock** (`think: false` in jeder Anfrage,
+  00:40 bis 03:10): **23/39** gut, gefragt 2/3, schemagültig 95/132 = 72 %, Baustein 5/13,
+  Hauptmaße 3/3, 3,6 Schritte — keine Zeitüberschreitung, 37 statt 45 ungültige Aufrufe. Die
+  Quote ist dieselbe wie mit Denkblock (ein Fall, im Rauschen); was sich ändert, ist die Zeit:
+  Der zweite Schritt eines Zugs antwortet in 0,7 bis 1,5 s statt 7 bis 36 s, der erste erzeugt
+  rund 100 statt 400 bis 850 Token — je Zug eine halbe Minute Modellzeit weniger, und der
+  Kontextschub aus dem Denkblock entfällt. **Der Vorschlag:** `think: false` an jedes Modell
+  schicken, dessen `/api/show` die Fähigkeit `thinking` nennt (Ollama lehnt die Option bei
+  anderen ab). Das ist eine Verhaltensänderung des lokalen Chats, keine Kürzung — Robert
+  entscheidet; gebaut ist es ein Nachmittag mit Test.
+
+  **`PROMPT_TOKENS` ist gemessen:** 28 616 Token für die eingebaute Fassung (03:07, drei warme
+  Züge 2,3 bis 7,1 s), 87,3 % des Fensters, 4 152 Token Rest. Der Kaltstart derselben Messung
+  — 188 s — steht bei RM-081, denn er ist keine Eigenschaft des Prompts.
+
+  **Offen sind Entscheidungen, keine Messungen:** Denkmodus (oben), Warmhalten zwischen den
+  Zügen (RM-081), Flächenliste im Steckbrief (die 111 Merkmale von *Drucker kalibrieren* sind
+  36 Flächenzeilen je Körper; die zwölf größten plus Zähler wären die Hälfte des Steckbriefs)
+  und der KV-Cache in `q8_0` am Dienst, der das Fenster auf 40 960 heben könnte (RM-081).
+
+  **Abgeschlossen am 25.09.2026.** Der Platz kommt aus dem Werkzeugangebot
+  (`agent/offer.py`): Die Grundlast eines lokalen Zugs zählt 7 276 statt
+  30 461 Token, 22 Prozent des Fensters; ein Zug mit ausführlichen Werkzeugen,
+  Steckbrief und Verlauf kam in der Suite auf höchstens 14 215. Der Wächter
+  prüft seither die Anfragelänge statt der Werkzeugzahl (`prompt_was_cut`).
+  Warmhalten und `q8_0` stehen bei RM-081. Nachweis:
+  `tests/test_tool_offer.py`, `test_the_local_window_fits_on_a_sixteen_gigabyte_card_with_room_for_the_scene`,
+  die Zählung in `PROMPT_TOKENS`.
+
+<a id="rm-185"></a>
+
+- [x] **RM-185 — Das kompakte Werkzeugschema passt nicht mehr ins Fenster des
+  lokalen Modells.** Am 16.09.2026 mit 142 Werkzeugen gemessen: **36 546 Token**
+  gegen `num_ctx` 32 768 (111,5 %). Die erste Messung mit dem Fenster selbst
+  meldete 16 386 — die Hälfte plus zwei, also Ollamas stille Kürzung, keine
+  Ersparnis; ungekürzt gezählt mit 65 536. Mit 40 960 liegt qwen3:14b noch zu
+  89 % im VRAM (warm 4,3 bis 4,5 s statt 2,4), aber Steckbrief, Prüfbericht und
+  Verlauf kommen obendrauf, und auch dieses Fenster wäre voll. Die 21 Werkzeuge
+  seit dem 15.09.2026 (Organizer, Felder, Lochbilder, Profilklemme, Dichtnut)
+  haben das Schema über das Fenster geschoben. **Wirkung beim Kunden:** Wer mit
+  dem Vorgabemodell chattet, bekommt bei jedem Zug die Kürzungsmeldung mit
+  ihren Handlungen (`BackendPromptTruncated`); der gehostete Weg ist nicht
+  betroffen. `PROMPT_TOKENS` und `PROMPT_TOOL_COUNT` tragen die Messung,
+  `test_the_local_backend_opens_a_window_big_enough_for_the_tools` steht als
+  striktes xfail. Der Platz muss aus dem Schema kommen (Fortsetzung von
+  RM-173): kürzere Beschreibungen, Parameter ohne Wiederholung, oder eine
+  Entscheidung Roberts über eine gestufte Werkzeugauswahl (RM-081). Abnahme:
+  eine ungekürzte Messung unter 32 768 mit Platz für 4 000 Token Kontext, und
+  das xfail fällt.
+
+  **Gemessen am 16.09.2026, abends, mit 143 Werkzeugen (36 731 Token):**
+  Bei `num_ctx` 32 768 mit passendem Prompt (100 Werkzeuge, 29 042 Token)
+  antwortet qwen3:14b mit 41 Token/s, ein warmer Zug dauert 6,3 s. Bei
+  40 960 mit allen 143 liegen 11 % des Modells auf dem Prozessor: 11 Token/s,
+  18 s je Zug — **3,8-mal langsamer**. Das Fenster zu heben ist also ein
+  Preis, keine Lösung. Die risikofreien Kürzungen im kompakten Schema
+  (Werkzeugbeschreibung auf den ersten Satz, ohne „Wann nicht") bringen rund
+  3 500 Token — nicht genug. Der Hebel ist die Zahl der Parameter: 1 293,
+  davon rund 550 Ortsfelder (x, y, z, nx, ny, nz, axis, angle) an 60
+  Werkzeugen. Sie zu einem Ortsfeld zu bündeln oder eine gestufte
+  Werkzeugauswahl (RM-081) sind Änderungen an der Werkzeugschnittstelle und
+  brauchen die Agenten-Suite vorher und nachher — eine Entscheidung Roberts.
+
+  **Entschieden am 16.09.2026, abends:** Das Fenster steht auf 40 960
+  (Robert: „18 s sind in Ordnung, bis 30 alles ok"). Die Kürzungsmeldung ist
+  damit beim Vorgabemodell weg, das xfail ist gefallen, und die Prüfung des
+  Schiebefalls rechnet relativ zum Fenster. Was bleibt, ist der Preis: 11 %
+  des Modells auf dem Prozessor, 18 s je warmer Zug statt 6,3. Abnahme jetzt:
+  eine ungekürzte Messung des Schemas unter 28 000 Token — dann kommt 32 768
+  zurück, und der Vorgabeweg ist wieder so schnell wie am 14.09.2026.
+
+  **Gemessen am 23.09.2026** (dienste B1): Werkzeugschema 37 836 → 27 293 Token,
+  Fenster wieder 32 768, Modell 100 % auf der Karte, Kaltstart 19,8 s, warmer
+  Zug 2,5 s; Suite 21/39 gehalten, gefragt 3/3. Die Abnahme „unter 28 000“ war
+  damit erfüllt — bis die Operationen der Pakete P4.0, P6 und P7 dazukamen. Die
+  Kosten je Werkzeug liegen bei 120 bis 750 Token (p7verlauf, zeichnenbau).
+  **Entscheidung 23.09.2026** (Robert): Die Neumessung mit qwen3:14b findet
+  nicht vor 0.5.0 statt, sondern auf dem Weg zu 0.5.1. Bis dahin führt ein
+  eigener Test den Vergleich von `PROMPT_TOOL_COUNT` mit der Werkzeugzahl mit
+  nicht strenger xfail-Marke (Grund: RM-185, 0.5.1). Die Zahlen der KI-Seite
+  (`ki-modelle.html`, Absatz „Lokaler Chat“) ziehen mit der Neumessung nach.
+
+  **Abgeschlossen am 25.09.2026.** Ungekürzt gezählt: **7 276 Token bei 153
+  Werkzeugen** (qwen3:14b, Ollama 0.34.3, `num_ctx` 32 768, SHA-256
+  `a66f67da…cbd9ce`) — die Abnahme „unter 28 000 mit Platz für 4 000 Token
+  Kontext" ist mit 25 000 Token Luft erfüllt, die xfail-Marke des
+  Zählvergleichs ist entfernt. Der Weg war die gestufte Auswahl als Angebot:
+  Jede Operation bleibt ein Werkzeug, ausführlich stehen die gemeinten
+  (Wortsuche der Befehlspalette, `registry/search.py`), die übrigen als
+  Kurzform, deren Aufruf nur die Felder holt. Die Zahlen der KI-Seite sind
+  nachgezogen (`ki-modelle.html` und die fünf Übersetzungen). Nachweis:
+  `tests/test_tool_offer.py`, `test_the_measured_prompt_matches_the_current_tool_count`.

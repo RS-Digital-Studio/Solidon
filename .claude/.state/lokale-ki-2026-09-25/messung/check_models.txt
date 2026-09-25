@@ -1,0 +1,14 @@
+Werkzeuge: 153 (21 KB Grundlast)
+
+  entladen (unload)
+  qwen3.5:9b
+    strukturiert 7/8 · richtig 7/8 · Median 6.9 s je Anfrage · Karte (100 % im VRAM)
+    add_parameter      ok      12.9s    9248 Token  ['add_parameter']
+    read_report        ok       3.3s    9238 Token  ['read_report']
+    find_part          ok       5.7s    9949 Token  ['find_part']
+    undo_transaction   Prosa    6.7s  'Ich kann keine Änderung rückgängig machen, da dies der Anf'
+    ask_user           ok       7.5s    9238 Token  ['ask_user']
+    translate_object   ok       7.1s   10165 Token  ['translate_object']
+    rotate_object      ok       6.1s   10486 Token  ['rotate_object']
+    drill_brep_hole/drill_hole ok      11.8s   11533 Token  ['drill_hole']
+

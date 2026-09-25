@@ -1,0 +1,1 @@
+{"eval_count": 1, "model": "qwen3:14b", "num_ctx": 32768, "prompt_eval_count": 7276, "request_sha256": "a66f67dae56492664bc4b762938c2b534e5777c084bd0bdd840b962f37cbd9ce", "tool_count": 153}

@@ -1,0 +1,76 @@
+Werkzeuge: 153 (21 KB Grundlast)
+
+  entladen (unload)
+  qwen3.5:9b
+    strukturiert 7/8 · richtig 7/8 · Median 6.3 s je Anfrage · Karte (100 % im VRAM)
+    add_parameter      ok       9.1s    9280 Token  ['add_parameter']
+    read_report        ok       3.2s    9270 Token  ['read_report']
+    find_part          ok       5.4s    9981 Token  ['find_part']
+    undo_transaction   ok       5.5s    9847 Token  ['undo_transaction']
+    ask_user           Prosa    5.9s  'Die Anfrage ist mehrdeutig: Welche Dimension soll vergröße'
+    translate_object   ok      10.3s   10197 Token  ['translate_object']
+    rotate_object      ok       6.7s   10518 Token  ['rotate_object']
+    drill_brep_hole/drill_hole ok      16.7s   11565 Token  ['drill_hole']
+
+  entladen (unload)
+  qwen3:14b
+    strukturiert 8/8 · richtig 8/8 · Median 18.0 s je Anfrage · Karte (100 % im VRAM)
+    add_parameter      ok      20.3s    7335 Token  ['add_parameter']
+    read_report        ok       6.9s    7327 Token  ['read_report']
+    find_part          ok       7.3s    7988 Token  ['find_part']
+    undo_transaction   ok      11.3s    7859 Token  ['undo_transaction']
+    ask_user           ok      15.8s    7324 Token  ['ask_user']
+    translate_object   ok      24.1s    8195 Token  ['translate_object']
+    rotate_object      ok      47.7s    8438 Token  ['rotate_object']
+    drill_brep_hole/drill_hole ok      39.3s    9403 Token  ['drill_hole']
+
+  entladen (unload)
+  gpt-oss:20b
+    strukturiert 8/8 · richtig 7/8 · Median 6.7 s je Anfrage · Karte (100 % im VRAM)
+    add_parameter      ok      12.2s    4350 Token  ['add_parameter']
+    read_report        ok       7.3s    4342 Token  ['read_report']
+    find_part          ok       4.5s    4854 Token  ['find_part']
+    undo_transaction   ok       3.8s    4730 Token  ['undo_transaction']
+    ask_user           ok       7.1s    4341 Token  ['ask_user']
+    translate_object   ok       4.7s    5059 Token  ['translate_object']
+    rotate_object      ok      12.7s    5250 Token  ['rotate_object']
+    drill_brep_hole/drill_hole falsch   6.4s    5990 Token  ['ask_user']
+
+  entladen (unload)
+  qwen3.5:9b-q8_0
+    strukturiert 7/8 · richtig 6/8 · Median 7.2 s je Anfrage · Karte (100 % im VRAM)
+    add_parameter      ok      13.3s    9280 Token  ['add_parameter']
+    read_report        ok       3.5s    9270 Token  ['read_report']
+    find_part          ok       5.9s    9981 Token  ['find_part']
+    undo_transaction   ok       6.0s    9847 Token  ['undo_transaction']
+    ask_user           Prosa    7.3s  'Ich muss wissen, wie viel größer das Objekt werden soll. "'
+    translate_object   ok       7.9s   10197 Token  ['translate_object']
+    rotate_object      ok       7.1s   10518 Token  ['rotate_object']
+    drill_brep_hole/drill_hole falsch  13.9s   11565 Token  ['ask_user']
+
+  entladen (unload)
+  granite4.1:8b
+    strukturiert 8/8 · richtig 6/8 · Median 3.8 s je Anfrage · Karte (100 % im VRAM)
+    add_parameter      ok       7.9s    7741 Token  ['add_parameter']
+    read_report        ok       2.5s    7734 Token  ['read_report']
+    find_part          ok       3.4s    8397 Token  ['find_part']
+    undo_transaction   ok       3.2s    8269 Token  ['undo_transaction']
+    ask_user           falsch   3.0s    7732 Token  ['scale_object']
+    translate_object   ok       4.4s    8614 Token  ['translate_object']
+    rotate_object      ok       4.3s    8854 Token  ['rotate_object']
+    drill_brep_hole/drill_hole falsch   5.1s    9834 Token  ['ask_user']
+
+  entladen (unload)
+  gemma4:12b
+    strukturiert 6/8 · richtig 6/8 · Median 11.6 s je Anfrage · Karte (100 % im VRAM)
+    add_parameter      ok      13.5s    6621 Token  ['add_parameter']
+    read_report        ok       5.4s    6613 Token  ['read_report']
+    find_part          ok       7.0s    7327 Token  ['find_part']
+    undo_transaction   ok       6.1s    7206 Token  ['undo_transaction']
+    ask_user           ok       9.8s    6611 Token  ['ask_user']
+    translate_object   Prosa  147.0s  ''
+    rotate_object      ok      14.6s    7861 Token  ['rotate_object']
+    drill_brep_hole/drill_hole Prosa  146.6s  ''
+
+Brauchbar: qwen3:14b
+Exit: 0

@@ -1,0 +1,1976 @@
+{
+ "model": "qwen3.5:9b",
+ "root": "C:/Users/rober/AppData/Local/Temp/claude/F--3D-Druck/c532d8f7-8f49-4adc-93d0-1ed2d7f07f4e/scratchpad/ki/neu",
+ "results": [
+  {
+   "id": "move",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "translate_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "",
+   "seconds": 16.9,
+   "requests": [
+    {
+     "seconds": 12.77,
+     "in": 11027,
+     "out": 301,
+     "load_s": 5.0,
+     "prompt_s": 2.08,
+     "tools": 153
+    },
+    {
+     "seconds": 2.88,
+     "in": 11126,
+     "out": 53,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "rotate",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "rotate_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "",
+   "seconds": 9.5,
+   "requests": [
+    {
+     "seconds": 6.53,
+     "in": 11387,
+     "out": 173,
+     "load_s": 0.0,
+     "prompt_s": 2.26,
+     "tools": 153
+    },
+    {
+     "seconds": 2.97,
+     "in": 11498,
+     "out": 63,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "on_bed",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "place_on_bed"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "",
+   "seconds": 8.7,
+   "requests": [
+    {
+     "seconds": 5.92,
+     "in": 11346,
+     "out": 121,
+     "load_s": 0.0,
+     "prompt_s": 2.27,
+     "tools": 153
+    },
+    {
+     "seconds": 2.74,
+     "in": 11434,
+     "out": 41,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "scale",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "scale_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "",
+   "seconds": 9.4,
+   "requests": [
+    {
+     "seconds": 6.45,
+     "in": 10393,
+     "out": 180,
+     "load_s": 0.0,
+     "prompt_s": 2.1,
+     "tools": 153
+    },
+    {
+     "seconds": 2.9,
+     "in": 10505,
+     "out": 56,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "repair",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "repair",
+    "place_on_bed"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 4,
+   "error": "",
+   "answer": "",
+   "seconds": 19.9,
+   "requests": [
+    {
+     "seconds": 7.67,
+     "in": 10843,
+     "out": 285,
+     "load_s": 0.01,
+     "prompt_s": 2.14,
+     "tools": 153
+    },
+    {
+     "seconds": 4.19,
+     "in": 11005,
+     "out": 158,
+     "load_s": 0.0,
+     "prompt_s": 0.16,
+     "tools": 153
+    },
+    {
+     "seconds": 5.18,
+     "in": 11120,
+     "out": 66,
+     "load_s": 0.0,
+     "prompt_s": 2.2,
+     "tools": 153
+    },
+    {
+     "seconds": 2.7,
+     "in": 11208,
+     "out": 33,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "stopped": ""
+  },
+  {
+   "id": "orient",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "orient_for_print"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Die Druckorientierung wurde geprüft. Das Teil befindet sich bereits in einer günstigen Lage – es braucht kaum Stützen.",
+   "seconds": 10.7,
+   "requests": [
+    {
+     "seconds": 7.21,
+     "in": 10447,
+     "out": 241,
+     "load_s": 0.0,
+     "prompt_s": 2.08,
+     "tools": 153
+    },
+    {
+     "seconds": 3.36,
+     "in": 10519,
+     "out": 93,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "split",
+   "good": true,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "split_pinned"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 3,
+   "error": "",
+   "answer": "",
+   "seconds": 17.9,
+   "requests": [
+    {
+     "seconds": 10.12,
+     "in": 10142,
+     "out": 505,
+     "load_s": 0.0,
+     "prompt_s": 2.01,
+     "tools": 153
+    },
+    {
+     "seconds": 4.19,
+     "in": 10265,
+     "out": 166,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 3.55,
+     "in": 11416,
+     "out": 90,
+     "load_s": 0.0,
+     "prompt_s": 0.42,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "drill",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "drill_hole"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "",
+   "seconds": 15.5,
+   "requests": [
+    {
+     "seconds": 11.59,
+     "in": 12628,
+     "out": 576,
+     "load_s": 0.0,
+     "prompt_s": 2.52,
+     "tools": 153
+    },
+    {
+     "seconds": 3.86,
+     "in": 12838,
+     "out": 128,
+     "load_s": 0.01,
+     "prompt_s": 0.2,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "drill_on_feature",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "",
+   "seconds": 111.7,
+   "requests": [
+    {
+     "seconds": 10.9,
+     "in": 12480,
+     "out": 515,
+     "load_s": 0.0,
+     "prompt_s": 2.49,
+     "tools": 153
+    },
+    {
+     "seconds": 100.73,
+     "in": 12644,
+     "out": 8192,
+     "load_s": 0.0,
+     "prompt_s": 0.16,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": "truncated"
+  },
+  {
+   "id": "duplicate",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "duplicate_object",
+    "translate_object"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 4,
+   "error": "",
+   "answer": "",
+   "seconds": 28.8,
+   "requests": [
+    {
+     "seconds": 7.02,
+     "in": 10271,
+     "out": 229,
+     "load_s": 0.0,
+     "prompt_s": 2.07,
+     "tools": 153
+    },
+    {
+     "seconds": 11.31,
+     "in": 10898,
+     "out": 768,
+     "load_s": 0.0,
+     "prompt_s": 0.29,
+     "tools": 153
+    },
+    {
+     "seconds": 7.51,
+     "in": 11069,
+     "out": 276,
+     "load_s": 0.0,
+     "prompt_s": 2.23,
+     "tools": 153
+    },
+    {
+     "seconds": 2.85,
+     "in": 11209,
+     "out": 41,
+     "load_s": 0.01,
+     "prompt_s": 0.16,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "stopped": ""
+  },
+  {
+   "id": "parameter",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": true,
+   "ops": [],
+   "parameters": 1,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "",
+   "seconds": 11.7,
+   "requests": [
+    {
+     "seconds": 8.85,
+     "in": 9893,
+     "out": 395,
+     "load_s": 0.0,
+     "prompt_s": 2.0,
+     "tools": 153
+    },
+    {
+     "seconds": 2.76,
+     "in": 9991,
+     "out": 45,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "question",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Die Platte ist 8.0 mm dick. Das ergibt sich aus der Abmessung 80.0 × 50.0 × 8.0 mm und der Lage in Z-Richtung von -4.0 bis +4.0 mm.",
+   "seconds": 6.5,
+   "requests": [
+    {
+     "seconds": 6.47,
+     "in": 10055,
+     "out": 188,
+     "load_s": 0.0,
+     "prompt_s": 2.03,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "printable",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Teil lässt sich gut drucken: Es hat keine Überhänge und benötigt keine Stützen. Die erste Schicht ist flach auf dem Bett (face_1 oder face_2), was ideal ist. Die vier Bohrungen sind durchgehend und passen gut in die PETG-Platte.\n\nAllerdings zeigt der Prüfbericht, dass das Objekt unter dem Druckb",
+   "seconds": 9.9,
+   "requests": [
+    {
+     "seconds": 5.84,
+     "in": 10378,
+     "out": 130,
+     "load_s": 0.01,
+     "prompt_s": 2.08,
+     "tools": 153
+    },
+    {
+     "seconds": 3.91,
+     "in": 10483,
+     "out": 142,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "how_long",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Der Druck dauert ungefähr 70 Minuten. Das entspricht etwa 18 g Material (14,4 cm³), ohne Stützen und Haftungshilfe.",
+   "seconds": 9.1,
+   "requests": [
+    {
+     "seconds": 5.48,
+     "in": 10041,
+     "out": 104,
+     "load_s": 0.0,
+     "prompt_s": 2.04,
+     "tools": 153
+    },
+    {
+     "seconds": 3.54,
+     "in": 10159,
+     "out": 107,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "core_hole",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Für ein M4-Gewinde beträgt das Kernloch **3.3 mm**.\n\nDas bedeutet:\n- Nennmaß: 4 mm\n- Kernloch (tap): 3.3 mm\n- Durchgangsloch (clearance): 4.5 mm",
+   "seconds": 10.2,
+   "requests": [
+    {
+     "seconds": 5.93,
+     "in": 10165,
+     "out": 143,
+     "load_s": 0.01,
+     "prompt_s": 2.06,
+     "tools": 153
+    },
+    {
+     "seconds": 4.19,
+     "in": 10291,
+     "out": 166,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "switch_material",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Projektmaterial wurde von PETG auf PLA umgestellt.",
+   "seconds": 8.5,
+   "requests": [
+    {
+     "seconds": 5.99,
+     "in": 10219,
+     "out": 143,
+     "load_s": 0.01,
+     "prompt_s": 2.07,
+     "tools": 153
+    },
+    {
+     "seconds": 2.43,
+     "in": 10305,
+     "out": 15,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "where_menu",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Um eine Bohrung größer zu machen, gibt es zwei Hauptwege:\n\n**1. resize_hole (empfohlen)**\n- Ändert den Durchmesser einer bestehenden Bohrung direkt\n- Feld `at_feature`: Name der Bohrung (z.B. \"hole_1\")\n- Feld `diameter`: Neuer Durchmesser in mm\n- Feld `compensate`: Auf true setzen, damit die Bohrung",
+   "seconds": 11.0,
+   "requests": [
+    {
+     "seconds": 10.99,
+     "in": 11891,
+     "out": 546,
+     "load_s": 0.0,
+     "prompt_s": 2.35,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "where_hollow",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Das Aushöhlen findest du unter zwei Werkzeugen:\n\n1. **`hollow_object`** – Das ist das Hauptwerkzeug zum Aushöhlen. Es erlaubt dir, Entlüftungen vorzusehen und bestimmte Flächen offen zu lassen. Ort: Handlungen rechts (bei gewähltem Körper) → Aushöhlen.\n\n2. **`shell_exact`** – Eine Alternative, die i",
+   "seconds": 8.3,
+   "requests": [
+    {
+     "seconds": 8.22,
+     "in": 10337,
+     "out": 341,
+     "load_s": 0.01,
+     "prompt_s": 2.02,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "which_hole",
+   "good": false,
+   "asked": false,
+   "ambiguous": true,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Ich sehe vier Bohrungen (hole_1 bis hole_4) mit jeweils 5.20 mm Durchmesser. Welche Bohrung soll vergrößert werden? Alle vier, oder nur eine bestimmte?",
+   "seconds": 7.2,
+   "requests": [
+    {
+     "seconds": 7.19,
+     "in": 10967,
+     "out": 238,
+     "load_s": 0.0,
+     "prompt_s": 2.2,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "how_much_thinner",
+   "good": true,
+   "asked": true,
+   "ambiguous": true,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "scale_object"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 4,
+   "error": "",
+   "answer": "",
+   "seconds": 24.7,
+   "requests": [
+    {
+     "seconds": 7.14,
+     "in": 10282,
+     "out": 241,
+     "load_s": 0.0,
+     "prompt_s": 2.05,
+     "tools": 153
+    },
+    {
+     "seconds": 7.57,
+     "in": 10365,
+     "out": 458,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 6.82,
+     "in": 10588,
+     "out": 219,
+     "load_s": 0.0,
+     "prompt_s": 2.09,
+     "tools": 153
+    },
+    {
+     "seconds": 3.14,
+     "in": 10703,
+     "out": 77,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "stopped": ""
+  },
+  {
+   "id": "join_what",
+   "good": false,
+   "asked": false,
+   "ambiguous": true,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Die Szene enthält nur ein Objekt (obj_1 \"plate_holes\"). Der Prüfbericht meldet, dass dieses Objekt unter dem Druckbett liegt.\n\nWas meinst du mit \"beiden Teilen\"? Gibt es ein zweites Teil, das nicht im Steckbrief erscheint? Oder möchtest du das vorhandene Teil auf das Druckbett setzen?",
+   "seconds": 8.6,
+   "requests": [
+    {
+     "seconds": 8.59,
+     "in": 9924,
+     "out": 374,
+     "load_s": 0.0,
+     "prompt_s": 1.98,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "bracket",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": true,
+   "ops": [
+    "create_box"
+   ],
+   "parameters": 0,
+   "calls": 6,
+   "invalid": 1,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 66.6,
+   "requests": [
+    {
+     "seconds": 7.39,
+     "in": 12057,
+     "out": 238,
+     "load_s": 0.01,
+     "prompt_s": 2.26,
+     "tools": 153
+    },
+    {
+     "seconds": 8.79,
+     "in": 12814,
+     "out": 343,
+     "load_s": 0.01,
+     "prompt_s": 2.55,
+     "tools": 153
+    },
+    {
+     "seconds": 12.97,
+     "in": 12922,
+     "out": 915,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 6.96,
+     "in": 13066,
+     "out": 396,
+     "load_s": 0.01,
+     "prompt_s": 0.15,
+     "tools": 153
+    },
+    {
+     "seconds": 6.18,
+     "in": 13311,
+     "out": 115,
+     "load_s": 0.0,
+     "prompt_s": 2.58,
+     "tools": 153
+    },
+    {
+     "seconds": 6.46,
+     "in": 13730,
+     "out": 349,
+     "load_s": 0.0,
+     "prompt_s": 0.27,
+     "tools": 153
+    },
+    {
+     "seconds": 10.92,
+     "in": 14038,
+     "out": 504,
+     "load_s": 0.0,
+     "prompt_s": 2.77,
+     "tools": 153
+    },
+    {
+     "seconds": 6.89,
+     "in": 14215,
+     "out": 386,
+     "load_s": 0.0,
+     "prompt_s": 0.17,
+     "tools": 153
+    }
+   ],
+   "lookups": 2,
+   "stopped": "steps"
+  },
+  {
+   "id": "magnet_lid",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Die Anfrage ist mehrdeutig: Ich brauche weitere Informationen für den Deckel mit Magnettaschen.\n\n**Frage:**\n- Welcher Durchmesser soll der Behälter haben?\n- Wie hoch soll er sein?\n- Soll ich das Gehäuse selbst erstellen oder hast du bereits ein passendes Teil?\n\nBitte gib mir diese Maße und kläre, ob",
+   "seconds": 18.6,
+   "requests": [
+    {
+     "seconds": 9.59,
+     "in": 11279,
+     "out": 437,
+     "load_s": 0.01,
+     "prompt_s": 2.25,
+     "tools": 153
+    },
+    {
+     "seconds": 8.97,
+     "in": 11976,
+     "out": 376,
+     "load_s": 0.01,
+     "prompt_s": 2.37,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "wall_holder",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box"
+   ],
+   "parameters": 0,
+   "calls": 7,
+   "invalid": 1,
+   "steps": 8,
+   "error": "",
+   "answer": "Ich erstelle einen Wandhalter mit den Maßen 30 mm breit, 150 mm hoch, 5 mm dick, für M4-Schrauben mit 4 Löchern und einem 2 mm vorkragenden Steg.",
+   "seconds": 52.3,
+   "requests": [
+    {
+     "seconds": 10.6,
+     "in": 11127,
+     "out": 530,
+     "load_s": 0.0,
+     "prompt_s": 2.21,
+     "tools": 153
+    },
+    {
+     "seconds": 4.11,
+     "in": 11366,
+     "out": 157,
+     "load_s": 0.0,
+     "prompt_s": 0.2,
+     "tools": 153
+    },
+    {
+     "seconds": 3.98,
+     "in": 11575,
+     "out": 144,
+     "load_s": 0.0,
+     "prompt_s": 0.18,
+     "tools": 153
+    },
+    {
+     "seconds": 10.94,
+     "in": 12022,
+     "out": 736,
+     "load_s": 0.0,
+     "prompt_s": 0.26,
+     "tools": 153
+    },
+    {
+     "seconds": 6.45,
+     "in": 12330,
+     "out": 150,
+     "load_s": 0.0,
+     "prompt_s": 2.46,
+     "tools": 153
+    },
+    {
+     "seconds": 4.88,
+     "in": 12531,
+     "out": 223,
+     "load_s": 0.01,
+     "prompt_s": 0.18,
+     "tools": 153
+    },
+    {
+     "seconds": 5.9,
+     "in": 12732,
+     "out": 310,
+     "load_s": 0.0,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 4.86,
+     "in": 12845,
+     "out": 224,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "stopped": "steps"
+  },
+  {
+   "id": "cable_exit",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_box"
+   ],
+   "parameters": 0,
+   "calls": 7,
+   "invalid": 0,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 54.7,
+   "requests": [
+    {
+     "seconds": 9.67,
+     "in": 11122,
+     "out": 447,
+     "load_s": 0.0,
+     "prompt_s": 2.23,
+     "tools": 153
+    },
+    {
+     "seconds": 6.21,
+     "in": 11232,
+     "out": 343,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 7.5,
+     "in": 11343,
+     "out": 449,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 7.24,
+     "in": 11437,
+     "out": 431,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 9.98,
+     "in": 11735,
+     "out": 460,
+     "load_s": 0.01,
+     "prompt_s": 2.35,
+     "tools": 153
+    },
+    {
+     "seconds": 5.66,
+     "in": 12158,
+     "out": 280,
+     "load_s": 0.0,
+     "prompt_s": 0.3,
+     "tools": 153
+    },
+    {
+     "seconds": 4.17,
+     "in": 12324,
+     "out": 161,
+     "load_s": 0.0,
+     "prompt_s": 0.18,
+     "tools": 153
+    },
+    {
+     "seconds": 4.23,
+     "in": 12434,
+     "out": 167,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "stopped": "steps"
+  },
+  {
+   "id": "threaded_stud",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "thread_exact"
+   ],
+   "parameters": 0,
+   "calls": 3,
+   "invalid": 0,
+   "steps": 4,
+   "error": "",
+   "answer": "Ich erstelle einen M6-Gewindezapfen mit 12 mm Länge an der Position (0, 0, 0) mit der Richtung nach oben (nx=0, ny=0, nz=1).",
+   "seconds": 24.2,
+   "requests": [
+    {
+     "seconds": 10.39,
+     "in": 11189,
+     "out": 496,
+     "load_s": 0.0,
+     "prompt_s": 2.24,
+     "tools": 153
+    },
+    {
+     "seconds": 5.53,
+     "in": 11298,
+     "out": 283,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 4.32,
+     "in": 11468,
+     "out": 175,
+     "load_s": 0.0,
+     "prompt_s": 0.16,
+     "tools": 153
+    },
+    {
+     "seconds": 3.71,
+     "in": 11899,
+     "out": 114,
+     "load_s": 0.0,
+     "prompt_s": 0.28,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "nut_plate",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box"
+   ],
+   "parameters": 0,
+   "calls": 8,
+   "invalid": 0,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 55.9,
+   "requests": [
+    {
+     "seconds": 6.23,
+     "in": 11240,
+     "out": 151,
+     "load_s": 0.0,
+     "prompt_s": 2.25,
+     "tools": 153
+    },
+    {
+     "seconds": 21.01,
+     "in": 12702,
+     "out": 1388,
+     "load_s": 0.0,
+     "prompt_s": 2.49,
+     "tools": 153
+    },
+    {
+     "seconds": 6.06,
+     "in": 12803,
+     "out": 326,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 4.72,
+     "in": 13256,
+     "out": 199,
+     "load_s": 0.01,
+     "prompt_s": 0.27,
+     "tools": 153
+    },
+    {
+     "seconds": 4.28,
+     "in": 13432,
+     "out": 169,
+     "load_s": 0.0,
+     "prompt_s": 0.16,
+     "tools": 153
+    },
+    {
+     "seconds": 4.29,
+     "in": 13608,
+     "out": 173,
+     "load_s": 0.0,
+     "prompt_s": 0.16,
+     "tools": 153
+    },
+    {
+     "seconds": 5.09,
+     "in": 13784,
+     "out": 233,
+     "load_s": 0.0,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 4.1,
+     "in": 13911,
+     "out": 159,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": "steps"
+  },
+  {
+   "id": "spacer",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_cylinder",
+    "create_brep_cylinder"
+   ],
+   "parameters": 0,
+   "calls": 6,
+   "invalid": 1,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 63.8,
+   "requests": [
+    {
+     "seconds": 6.16,
+     "in": 11390,
+     "out": 133,
+     "load_s": 0.0,
+     "prompt_s": 2.3,
+     "tools": 153
+    },
+    {
+     "seconds": 10.52,
+     "in": 12164,
+     "out": 497,
+     "load_s": 0.01,
+     "prompt_s": 2.4,
+     "tools": 153
+    },
+    {
+     "seconds": 4.46,
+     "in": 12439,
+     "out": 180,
+     "load_s": 0.0,
+     "prompt_s": 0.21,
+     "tools": 153
+    },
+    {
+     "seconds": 8.53,
+     "in": 12605,
+     "out": 533,
+     "load_s": 0.0,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 7.2,
+     "in": 12750,
+     "out": 414,
+     "load_s": 0.01,
+     "prompt_s": 0.16,
+     "tools": 153
+    },
+    {
+     "seconds": 3.65,
+     "in": 13050,
+     "out": 115,
+     "load_s": 0.0,
+     "prompt_s": 0.2,
+     "tools": 153
+    },
+    {
+     "seconds": 16.6,
+     "in": 13581,
+     "out": 1204,
+     "load_s": 0.0,
+     "prompt_s": 0.32,
+     "tools": 153
+    },
+    {
+     "seconds": 6.61,
+     "in": 14025,
+     "out": 129,
+     "load_s": 0.0,
+     "prompt_s": 2.79,
+     "tools": 153
+    }
+   ],
+   "lookups": 2,
+   "stopped": "steps"
+  },
+  {
+   "id": "hinge",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box"
+   ],
+   "parameters": 0,
+   "calls": 8,
+   "invalid": 1,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 52.7,
+   "requests": [
+    {
+     "seconds": 9.21,
+     "in": 11320,
+     "out": 400,
+     "load_s": 0.0,
+     "prompt_s": 2.26,
+     "tools": 153
+    },
+    {
+     "seconds": 5.74,
+     "in": 11472,
+     "out": 297,
+     "load_s": 0.0,
+     "prompt_s": 0.15,
+     "tools": 153
+    },
+    {
+     "seconds": 5.41,
+     "in": 11661,
+     "out": 265,
+     "load_s": 0.0,
+     "prompt_s": 0.16,
+     "tools": 153
+    },
+    {
+     "seconds": 5.54,
+     "in": 11809,
+     "out": 275,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 5.54,
+     "in": 11957,
+     "out": 264,
+     "load_s": 0.0,
+     "prompt_s": 0.15,
+     "tools": 153
+    },
+    {
+     "seconds": 6.93,
+     "in": 12391,
+     "out": 396,
+     "load_s": 0.0,
+     "prompt_s": 0.24,
+     "tools": 153
+    },
+    {
+     "seconds": 5.32,
+     "in": 12583,
+     "out": 261,
+     "load_s": 0.01,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 8.98,
+     "in": 13001,
+     "out": 567,
+     "load_s": 0.0,
+     "prompt_s": 0.25,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": "steps"
+  },
+  {
+   "id": "snap_box",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_box"
+   ],
+   "parameters": 0,
+   "calls": 6,
+   "invalid": 1,
+   "steps": 8,
+   "error": "",
+   "answer": "Ich habe eine Box erstellt. Jetzt muss ich entscheiden, wo der Schnappverschluss hin soll. Typischerweise wird ein Schnappverschluss an einer Kante oder Ecke angebracht. Ich frage nach, wo genau der Verschluss sein soll.",
+   "seconds": 49.0,
+   "requests": [
+    {
+     "seconds": 7.07,
+     "in": 11096,
+     "out": 221,
+     "load_s": 0.0,
+     "prompt_s": 2.23,
+     "tools": 153
+    },
+    {
+     "seconds": 4.1,
+     "in": 11197,
+     "out": 159,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 4.1,
+     "in": 11632,
+     "out": 148,
+     "load_s": 0.0,
+     "prompt_s": 0.27,
+     "tools": 153
+    },
+    {
+     "seconds": 3.52,
+     "in": 11806,
+     "out": 106,
+     "load_s": 0.0,
+     "prompt_s": 0.18,
+     "tools": 153
+    },
+    {
+     "seconds": 8.48,
+     "in": 12091,
+     "out": 328,
+     "load_s": 0.01,
+     "prompt_s": 2.41,
+     "tools": 153
+    },
+    {
+     "seconds": 3.52,
+     "in": 12225,
+     "out": 104,
+     "load_s": 0.0,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 11.14,
+     "in": 12397,
+     "out": 748,
+     "load_s": 0.0,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 7.02,
+     "in": 12841,
+     "out": 193,
+     "load_s": 0.0,
+     "prompt_s": 2.49,
+     "tools": 153
+    }
+   ],
+   "lookups": 2,
+   "stopped": "steps"
+  },
+  {
+   "id": "keyhole_back",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box"
+   ],
+   "parameters": 1,
+   "calls": 8,
+   "invalid": 1,
+   "steps": 8,
+   "error": "",
+   "answer": "Die Box wurde erstellt. Jetzt brauche ich noch die Maße für die Schlüsselloch-Aufhängung: Welches Schraubenmaß soll in der Wand sein (M2-M8), wie tief soll die Aussparung gehen, und wie weit soll das Teil nach dem Einhängen absinken?",
+   "seconds": 42.3,
+   "requests": [
+    {
+     "seconds": 8.92,
+     "in": 11096,
+     "out": 380,
+     "load_s": 0.01,
+     "prompt_s": 2.22,
+     "tools": 153
+    },
+    {
+     "seconds": 3.72,
+     "in": 11212,
+     "out": 119,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 3.81,
+     "in": 11350,
+     "out": 135,
+     "load_s": 0.0,
+     "prompt_s": 0.15,
+     "tools": 153
+    },
+    {
+     "seconds": 7.04,
+     "in": 11457,
+     "out": 415,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 6.28,
+     "in": 11939,
+     "out": 338,
+     "load_s": 0.01,
+     "prompt_s": 0.26,
+     "tools": 153
+    },
+    {
+     "seconds": 4.17,
+     "in": 12159,
+     "out": 160,
+     "load_s": 0.01,
+     "prompt_s": 0.18,
+     "tools": 153
+    },
+    {
+     "seconds": 3.83,
+     "in": 12319,
+     "out": 131,
+     "load_s": 0.0,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 4.4,
+     "in": 12467,
+     "out": 183,
+     "load_s": 0.0,
+     "prompt_s": 0.15,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": "steps"
+  },
+  {
+   "id": "stiffen",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Die Anfrage ist mehrdeutig: Es existiert noch kein Objekt in der Szene. Welche Wand soll versteift werden und welche Abmessungen sollen die Rippe haben?",
+   "seconds": 6.9,
+   "requests": [
+    {
+     "seconds": 6.88,
+     "in": 11505,
+     "out": 202,
+     "load_s": 0.01,
+     "prompt_s": 2.26,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "dowels",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Ich muss mehr Informationen einholen, bevor ich Passstifte setzen kann:\n\n1. Wie viele Passstifte werden benötigt?\n2. Welcher Durchmesser soll verwendet werden (z.B. M4, M5)?\n3. Welche Länge haben die Passstifte?\n4. An welchen Positionen sollen sie gesetzt werden?\n\nDie Szene hat aktuell 0 Objekte - w",
+   "seconds": 7.7,
+   "requests": [
+    {
+     "seconds": 7.69,
+     "in": 11200,
+     "out": 285,
+     "load_s": 0.0,
+     "prompt_s": 2.17,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "inserts",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Ich muss nachfragen: Es sind aktuell keine Objekte in der Szene vorhanden. Soll ich zuerst ein Objekt (z.B. einen Quader) erstellen, oder gibt es bereits ein Objekt, das nicht im Steckbrief erscheint?",
+   "seconds": 7.4,
+   "requests": [
+    {
+     "seconds": 7.33,
+     "in": 11139,
+     "out": 250,
+     "load_s": 0.0,
+     "prompt_s": 2.18,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "parameterise",
+   "good": true,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": true,
+   "ops": [
+    "create_box"
+   ],
+   "parameters": 2,
+   "calls": 4,
+   "invalid": 0,
+   "steps": 6,
+   "error": "",
+   "answer": "Ich habe die Breite und Höhe als Projektparameter angelegt und einen Quader erstellt, der diese Parameter für seine Abmessungen verwendet.",
+   "seconds": 25.6,
+   "requests": [
+    {
+     "seconds": 6.47,
+     "in": 11171,
+     "out": 174,
+     "load_s": 0.01,
+     "prompt_s": 2.22,
+     "tools": 153
+    },
+    {
+     "seconds": 3.3,
+     "in": 11260,
+     "out": 86,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 5.76,
+     "in": 11575,
+     "out": 103,
+     "load_s": 0.0,
+     "prompt_s": 2.27,
+     "tools": 153
+    },
+    {
+     "seconds": 3.17,
+     "in": 11713,
+     "out": 77,
+     "load_s": 0.0,
+     "prompt_s": 0.16,
+     "tools": 153
+    },
+    {
+     "seconds": 3.18,
+     "in": 11812,
+     "out": 80,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 3.73,
+     "in": 12228,
+     "out": 116,
+     "load_s": 0.0,
+     "prompt_s": 0.28,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "stopped": ""
+  },
+  {
+   "id": "free_shape",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "create_cylinder",
+    "create_cylinder",
+    "sketch_loft_cut",
+    "delete_object"
+   ],
+   "parameters": 0,
+   "calls": 6,
+   "invalid": 1,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 67.4,
+   "requests": [
+    {
+     "seconds": 10.13,
+     "in": 11563,
+     "out": 478,
+     "load_s": 0.0,
+     "prompt_s": 2.3,
+     "tools": 153
+    },
+    {
+     "seconds": 14.22,
+     "in": 11676,
+     "out": 1023,
+     "load_s": 0.0,
+     "prompt_s": 0.15,
+     "tools": 153
+    },
+    {
+     "seconds": 3.62,
+     "in": 11843,
+     "out": 109,
+     "load_s": 0.01,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 10.25,
+     "in": 12055,
+     "out": 488,
+     "load_s": 0.0,
+     "prompt_s": 2.34,
+     "tools": 153
+    },
+    {
+     "seconds": 4.84,
+     "in": 12389,
+     "out": 215,
+     "load_s": 0.01,
+     "prompt_s": 0.24,
+     "tools": 153
+    },
+    {
+     "seconds": 7.3,
+     "in": 12739,
+     "out": 428,
+     "load_s": 0.0,
+     "prompt_s": 0.23,
+     "tools": 153
+    },
+    {
+     "seconds": 6.84,
+     "in": 12996,
+     "out": 386,
+     "load_s": 0.0,
+     "prompt_s": 0.24,
+     "tools": 153
+    },
+    {
+     "seconds": 10.11,
+     "in": 13087,
+     "out": 452,
+     "load_s": 0.0,
+     "prompt_s": 2.6,
+     "tools": 153
+    }
+   ],
+   "lookups": 2,
+   "stopped": "steps"
+  },
+  {
+   "id": "hex_base",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "",
+   "seconds": 107.3,
+   "requests": [
+    {
+     "seconds": 5.9,
+     "in": 11147,
+     "out": 123,
+     "load_s": 0.0,
+     "prompt_s": 2.23,
+     "tools": 153
+    },
+    {
+     "seconds": 101.32,
+     "in": 11899,
+     "out": 8192,
+     "load_s": 0.0,
+     "prompt_s": 2.35,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": "truncated"
+  },
+  {
+   "id": "pocket_plate",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "sketch_pocket"
+   ],
+   "parameters": 0,
+   "calls": 3,
+   "invalid": 0,
+   "steps": 4,
+   "error": "",
+   "answer": "Deckel 60×60×4 mm mit rechteckiger Tasche 40×40 mm und 2 mm Tiefe erstellt.",
+   "seconds": 30.7,
+   "requests": [
+    {
+     "seconds": 10.02,
+     "in": 11597,
+     "out": 459,
+     "load_s": 0.0,
+     "prompt_s": 2.31,
+     "tools": 153
+    },
+    {
+     "seconds": 10.98,
+     "in": 13225,
+     "out": 521,
+     "load_s": 0.0,
+     "prompt_s": 2.61,
+     "tools": 153
+    },
+    {
+     "seconds": 5.99,
+     "in": 13654,
+     "out": 310,
+     "load_s": 0.0,
+     "prompt_s": 0.25,
+     "tools": 153
+    },
+    {
+     "seconds": 3.66,
+     "in": 14058,
+     "out": 112,
+     "load_s": 0.0,
+     "prompt_s": 0.25,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "stopped": ""
+  },
+  {
+   "id": "handrail_bend",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "sketch_sweep",
+    "orient_for_print"
+   ],
+   "parameters": 0,
+   "calls": 3,
+   "invalid": 1,
+   "steps": 5,
+   "error": "",
+   "answer": "Ich erstelle einen runden Handlauf-Bogen mit 12 mm Durchmesser, 60 mm Bogenradius und 90 Grad Winkel.",
+   "seconds": 36.3,
+   "requests": [
+    {
+     "seconds": 12.16,
+     "in": 11607,
+     "out": 653,
+     "load_s": 0.0,
+     "prompt_s": 2.33,
+     "tools": 153
+    },
+    {
+     "seconds": 11.01,
+     "in": 11820,
+     "out": 748,
+     "load_s": 0.0,
+     "prompt_s": 0.18,
+     "tools": 153
+    },
+    {
+     "seconds": 3.48,
+     "in": 12156,
+     "out": 100,
+     "load_s": 0.01,
+     "prompt_s": 0.23,
+     "tools": 153
+    },
+    {
+     "seconds": 5.08,
+     "in": 12418,
+     "out": 34,
+     "load_s": 0.0,
+     "prompt_s": 2.45,
+     "tools": 153
+    },
+    {
+     "seconds": 3.62,
+     "in": 12494,
+     "out": 116,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "stopped": ""
+  }
+ ]
+}
