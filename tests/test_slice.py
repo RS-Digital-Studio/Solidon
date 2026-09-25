@@ -1158,6 +1158,33 @@ def test_an_open_side_does_not_shorten_a_bridge() -> None:
     assert max(layer.bridge_width for layer in result.layers) == pytest.approx(30.0, abs=0.2)
 
 
+def test_a_self_supporting_strip_with_one_wider_spot_is_no_long_bridge() -> None:
+    """Ein 45-Grad-Streifen entlang einer Wand trägt sich selbst, auch mit
+    einer breiteren Stelle.
+
+    Die Waschschüssel (25.09.2026) meldete eine Decke von 258 mm: Ihr Streifen
+    lief 190 mm an der Außenwand entlang, fast überall schmaler als zwei
+    Bahnen, und hatte einen Kern von 0,65 mm². Ohne beidseitig getragene
+    Richtung galt die Diagonale des ganzen Streifens. Hier ein Bogen von 300
+    Grad an einem Ring R 40, 0,3 mm breit, mit einer Stelle von 1,5 auf 2 mm.
+    """
+    from shapely.geometry import Point, box
+
+    wall = (
+        Point(0.0, 0.0)
+        .buffer(40.0, quad_segs=64)
+        .difference(Point(0.0, 0.0).buffer(38.0, quad_segs=64))
+    )
+    arc = Point(0.0, 0.0).buffer(40.3, quad_segs=64).difference(wall.convex_hull)
+    arc = arc.difference(box(38.0, -12.0, 42.0, 12.0))
+    spot = box(-41.5, -1.0, -39.9, 1.0)
+    shape = wall.union(arc).union(spot)
+
+    span = analysis._bridge_width(shape, wall, 0.84)
+
+    assert 0.0 < span < 5.0, "gemessen wird die Stelle, nicht der Streifen"
+
+
 def test_a_forty_five_degree_transition_spans_nothing() -> None:
     """Derselbe Becher mit kegeligem Übergang — die Zahl geht auf null.
 

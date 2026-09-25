@@ -32,3 +32,16 @@ die halbe Höhe erklärt dann scheinbar falsche Kennzahlen. Vergleichswerte für
 den 20-mm-Würfel bei Standardqualität stehen in `ROADMAP.md` unter „Cura läuft
 Ende zu Ende". Siehe [[zeichnen-an-fusion-orientieren]] für dieselbe Methode
 gegenüber Fusion.
+
+**Nachtrag 25.09.2026 (Waschschüssel, RM-247):** Auch ElegooSlicer und
+OrcaSlicer liegen hier (`C:\Program Files\ElegooSlicer\elegoo-slicer.exe`,
+`C:\Program Files\OrcaSlicer\`). Eine Solidon-Übergabe (3MF mit
+`Metadata/project_settings.config`) schneidet
+`elegoo-slicer.exe --arrange 0 --slice 0 --outputdir <ordner> <datei.3mf>` in
+rund 20 s zu `plate_1.gcode`; die Bahnarten stehen als `;TYPE:`, die Schichten
+als `;Z:`. Varianten entstehen, indem man in der Kopie der 3MF nur
+`project_settings.config` ändert — die Sonden dazu liegen in
+`.claude/.state/rm-247-waschschuessel-2026-09-25/`. Gelernt dabei: Orcas
+organische Bäume wachsen auch mit „nur vom Bett" in geschlossene Kanäle und
+führen die Stämme durch die Wand; `bridge_no_support` hält Stützen aus
+gewölbten Kanaldecken nicht heraus. Siehe [[uebergabe-je-modell-slicer-drucker]].

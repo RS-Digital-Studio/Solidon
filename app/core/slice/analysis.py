@@ -2229,7 +2229,23 @@ def _bridge_width(
         # Weite die Spannweite; ist er selbst eine Fläche (eine Decke über
         # einem Hohlraum), zählt seine eigene.
         holes = [ShapelyPolygon(ring) for ring in part.interiors]
-        spans = [hole.difference(supported) for hole in holes] if holes else [part]
+        if holes:
+            spans = [hole.difference(supported) for hole in holes]
+        else:
+            # **Gemessen wird nur, was breiter als zwei Bahnen ist**, nicht
+            # das ganze Stück. Die Frage oben gilt der Schicht, und ein Stück
+            # besteht sie schon mit einer einzigen breiteren Stelle: An der
+            # Waschschüssel (25.09.2026) war es ein 45-Grad-Streifen entlang
+            # der Außenwand, 190 mm lang, fast überall schmaler als zwei Bahnen,
+            # mit 0,65 mm² Kern. Ohne beidseitig getragene Richtung nahm
+            # :func:`_supported_span` seine Diagonale, und der Bericht meldete
+            # eine Decke von 258 mm. Der Streifen trägt sich selbst; übrig
+            # bleibt die Stelle, die wirklich frei hängt.
+            half = bridge_from / 2.0
+            core = _eroded(part, half)
+            if core.is_empty:
+                continue
+            spans = _areas_of(core.buffer(half, quad_segs=1, join_style="mitre").intersection(part))
         for span in spans:
             if not span.is_empty:
                 widest = max(

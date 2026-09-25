@@ -24,6 +24,7 @@
 - [Übersetzung neu](uebersetzung-neu-statt-flicken.md) · [Weg nie bis zum Ende](weg-nie-bis-zum-ende-gemessen.md) · [Mehrsitzungs-Setup ausgebaut](mehrsitzungs-setup-ist-ausgebaut.md) · [Rechtemodus bleibt bypass](rechtemodus-bleibt-bypass.md)
 - [Changelog ist das Vorbild](changelog-seite-ist-das-gestaltungsvorbild.md) — Robert 24.09.2026: gleich hohe Karten, ein Gedanke je Karte; die Seite bleibt, wie sie ist.
 - [Wahl selbst treffen](wahl-nach-kunde-druck-modell-selbst-treffen.md) — Varianten nicht vorlegen: das Beste für Kunde, Druck und Modell, begründet umsetzen.
+- [Übergabe je Modell, Slicer, Drucker](uebergabe-je-modell-slicer-drucker.md) — Robert 25.09.2026 (Waschschüssel): im echten Slicer belegen, Herstellerprofil als Maßstab; RM-247.
 
 ## Produkt und Entscheidungen
 
@@ -87,4 +88,5 @@
 - [Checkout-Reflex löscht eigene Arbeit](checkout-reflex-loescht-eigene-arbeit.md) · [Git-Identität](git-identitaet-mitgeben.md) · [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md)
 - [Patch auf modifizierte Datei](datei-die-vor-dem-patch-modifiziert-war-geht-nur-als-blob.md) · [Katalogschreiber überschreibt still](katalogschreiber-ueberschreibt-still.md) · [Geteilter Index veraltet](geteilter-index-nach-fremdem-commit-veraltet.md) · [Fremder Commit nimmt Hunks mit](fremder-commit-nimmt-unfertige-hunks-mit.md)
 - [Nullkontext-Hunk verschmilzt fremde Zeilen](nullkontext-hunk-verschmilzt-fremde-zeilen.md) — Hunk-Auswahl am Anker schneiden, Stufe gegen den Hauptbaum diffen.
+- [Schreiben vor dem Lesen leert die Datei](oeffnen-zum-schreiben-vor-dem-lesen-leert-die-datei.md) — open('w').write(f(open().read())) kürzt zuerst; ROADMAP samt fremder Arbeit am 25.09. geleert.
 - [Vorgebauter Stand veraltet mit dem HEAD](vorgebauter-stand-veraltet-mit-dem-head.md) — vor dem Commit `git log <bau-head>..HEAD -- datei`; sonst nimmt er fremde Commits zurück.
