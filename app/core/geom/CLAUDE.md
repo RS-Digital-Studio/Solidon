@@ -676,6 +676,16 @@ Iterieren schnell bleibt (§31).
 
 `tests/test_boolean.py` erzwingt jede Stufe einzeln.
 
+**Vor der ersten Stufe gehen ineinandersteckende Teile eines Eingangs
+vereinigt hinein** (`_parts_united_first`, RM-221). An Schalen, die einander
+durchdringen, rechnet der Kern nichts Verlässliches: Eine Vereinigung blieb
+zweiteilig oder verschmolz still, eine Bohrung machte aus zwei Teilen drei
+oder vier, und das Volumen zählte den gemeinsamen Raum doppelt. Gefragt wird
+`repair.parts_that_cross` (nur bei mehr als einem Teil, gemerkt je Netz),
+vereinigt über `repair.resolve_self_intersections` — denselben Weg wie
+*Überschneidungen auflösen* —, und der Befund `boolean.parts_united` sagt es.
+Scheitert die Vorfrage oder das Vereinigen, bleibt der Eingang, wie er war.
+
 Ein geschlossenes Ergebnis mit positivem Volumen bleibt auch als kleiner
 Messkörper gültig. `EPS_GEOM` ist eine Längentoleranz und kein Mindestvolumen;
 Kontaktreste entscheidet `_native_contact` an der Float64-Rechengrenze.

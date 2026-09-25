@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-25 | [Ineinandersteckende Teile gehen vereinigt in die Boolesche Kette (25.09.2026)](#ineinandersteckende-teile-gehen-vereinigt-in-die-boolesche-kette-25092026) |
 | 2026-09-25 | [Der Bedienweg „kaputtes Dreiecksmodell → druckbar“ ist abgearbeitet (25.09.2026)](#der-bedienweg-kaputtes-dreiecksmodell--druckbar-ist-abgearbeitet-25092026) |
 | 2026-09-24 | [Solidon 0.5.0 veröffentlicht (24.09.2026)](#solidon-050-veröffentlicht-24092026) |
 | 2026-09-24 | [Rate-Key ausgeliefert und Gewindebolzen auf Ubuntu belegt (24.09.2026)](#rate-key-ausgeliefert-und-gewindebolzen-auf-ubuntu-belegt-24092026) |
@@ -30980,3 +30981,30 @@ Dazu aus dem Bericht, je mit Test:
   Körper, und wo sie trifft, hat Solidon eine große Fläche erfunden, die den
   Druck verändert — dafür sind Bericht und Exportfrage da.
 - **E** (große Modelle) gehört zu RM-238 und ist dort eingelöst.
+
+## Ineinandersteckende Teile gehen vereinigt in die Boolesche Kette (25.09.2026)
+
+<a id="rm-221"></a>
+
+- [x] **RM-221 — Zwei überlappende Schalen vereinigt die erste geschweißte Boolesche still.**
+  Nachgemessen am 25.09.2026 (`.claude/.state/rm-221-2026-09-25/`): Am
+  Piratenschiff (`obj_11_Cylinder_B.stl`) lief *Fläche versetzen* +1 mm
+  inzwischen über die direkte Stufe und verschmolz die zwei Zylinder
+  weiterhin still — Teile 2 → 1, 843,48 statt 833,46 + 19,63 mm³, kein
+  Befund. An zwei ineinandergeschobenen Würfeln war es schlimmer: Die
+  Vereinigung blieb zweiteilig, eine Differenz machte aus zwei Teilen drei
+  oder vier, und das Volumen zählte den gemeinsamen Raum doppelt. Der Kern
+  rechnet an Schalen, die einander durchdringen, nichts Verlässliches.
+  **Entschieden nach Roberts Vorgabe (das Beste für Kunde, Druck und
+  Modell):** nicht absagen, sondern vorher vereinigen — der Slicer druckt
+  solche Teile ohnehin als eines. `boolean._parts_united_first` fragt
+  `repair.parts_that_cross` (nur bei mehr als einem Teil, gemerkt je Netz)
+  und vereinigt über `repair.resolve_self_intersections`, denselben Weg wie
+  *Überschneidungen auflösen*; der Befund `boolean.parts_united` sagt es.
+  Das Volumen ist danach das des Drucks. Der Import nennt ineinandersteckende
+  Teile seit A5 ohnehin (`ingest.multiple_components` mit *Überschneidungen
+  auflösen*). Nachweis:
+  `test_parts_that_stick_into_each_other_are_united_first_and_it_says_so`
+  (Vereinigung, Bohrung neben und im gemeinsamen Raum; ohne den Fix zwei
+  Teile und doppeltes Volumen) und
+  `test_parts_that_only_share_a_tool_are_not_named_as_united`.

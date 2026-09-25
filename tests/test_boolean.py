@@ -18,7 +18,7 @@ import trimesh
 from app.core.bootstrap import load_operations
 from app.core.errors import BooleanFailedError, GeometryError
 from app.core.geom.attributes import used_slots, with_slot
-from app.core.geom.boolean import DRAFT_CHAIN, FULL_CHAIN, boolean, shared_volume
+from app.core.geom.boolean import DRAFT_CHAIN, FULL_CHAIN, BooleanKind, boolean, shared_volume
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.knowledge import profiles
@@ -298,6 +298,86 @@ def test_union_of_two_overlapping_cubes() -> None:
     assert result.mesh.is_watertight
     assert result.mesh.volume == pytest.approx(12000.0, rel=1e-6), "8000 + 8000 - 4000 overlap"
     assert not result.findings, "the plain case has nothing to report"
+
+
+def _two_cubes_in_one(offset: float) -> MeshData:
+    """Ein Körper aus zwei Würfeln mit 20 mm Kante, der zweite um ``offset`` entlang X."""
+    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second.apply_translation((offset, 0.0, 0.0))
+    return MeshData.of(trimesh.util.concatenate([first, second]))
+
+
+@pytest.mark.parametrize(
+    ("kind", "tool", "volume"),
+    [
+        # Ein Würfel 4 mm auf der Oberseite, 1 mm eingesenkt: 12 000 + 4·4·3.
+        ("union", ((0.0, 0.0, 11.0), 4.0), 12048.0),
+        # Ein Würfel 2 mm halb in der Oberseite, nur im ersten Teil und im
+        # gemeinsamen Raum: je 12 000 - 2·2·1.
+        ("difference", ((-8.0, 0.0, 10.0), 2.0), 11996.0),
+        ("difference", ((5.0, 0.0, 10.0), 2.0), 11996.0),
+    ],
+    ids=["union", "difference beside", "difference inside"],
+)
+def test_parts_that_stick_into_each_other_are_united_first_and_it_says_so(
+    kind: BooleanKind, tool: tuple[tuple[float, float, float], float], volume: float
+) -> None:
+    """RM-221: An zwei ineinandersteckenden Teilen rechnete der Kern Beliebiges.
+
+    Am Piratenschiff (``obj_11_Cylinder_B.stl``) verschmolz *Fläche versetzen*
+    die zwei Zylinder still — 2 → 1 Teile, +10,01 statt +19,63 mm³, kein Wort.
+    An zwei ineinandergeschobenen Würfeln blieb die Vereinigung zweiteilig, und
+    eine Differenz machte aus zwei Teilen drei oder vier (gemessen 25.09.2026).
+    Gedruckt werden die Teile ohnehin als eines; die Kette vereinigt sie
+    deshalb zuerst, wie *Überschneidungen auflösen* es tut, und sagt es. Das
+    Volumen ist danach das des Drucks — der gemeinsame Raum zählt einmal.
+    """
+    body = _two_cubes_in_one(10.0)
+    assert body.component_count == 2
+    assert body.volume == pytest.approx(16000.0), "vorher zählt der gemeinsame Raum doppelt"
+    place, size = tool
+
+    result = boolean(kind, [body, box(size, place)])
+
+    assert result.mesh.component_count == 1
+    assert result.mesh.volume == pytest.approx(volume, rel=1e-9)
+    united = [finding for finding in result.findings if finding.code == "boolean.parts_united"]
+    assert len(united) == 1, [finding.code for finding in result.findings]
+    assert united[0].severity == "info"
+    assert united[0].location is not None
+    assert -10.0 <= united[0].location[0] <= 20.0, "der Ort liegt am Körper"
+
+
+def test_a_tool_made_of_crossing_pieces_is_left_to_the_kernel() -> None:
+    """Bei Differenz und Schnittmenge gilt die Vorvereinigung dem bearbeiteten Körper.
+
+    Ein Werkzeug baut Solidon selbst, und manche bestehen aus Stücken, die
+    einander überschneiden — das Gitter von *Gitter füllen* an jedem Knoten.
+    Über ihm stand sonst „Ineinandersteckende Teile wurden dabei vereinigt"
+    zu Teilen, die der Kunde nie hatte.
+    """
+    body = box(20.0, (0.0, 0.0, 0.0))
+    tool = _two_cubes_in_one(10.0)
+    tool.raw.apply_translation((-15.0, 0.0, 12.0))
+
+    kinds: tuple[BooleanKind, ...] = ("difference", "intersection")
+    for kind in kinds:
+        result = boolean(kind, [body, tool], allow_empty=True)
+        assert "boolean.parts_united" not in [finding.code for finding in result.findings], kind
+
+
+def test_parts_that_only_share_a_tool_are_not_named_as_united() -> None:
+    """Zwei getrennte Würfel, verbunden durch einen Steg: eine gewöhnliche Vereinigung."""
+    apart = _two_cubes_in_one(30.0)
+    bar = trimesh.creation.box(extents=(40.0, 4.0, 4.0))
+    bar.apply_translation((15.0, 0.0, 0.0))
+
+    result = boolean("union", [apart, MeshData.of(bar)])
+
+    assert result.mesh.component_count == 1
+    assert result.mesh.volume == pytest.approx(16000.0 + 10.0 * 4.0 * 4.0, rel=1e-9)
+    assert "boolean.parts_united" not in [finding.code for finding in result.findings]
 
 
 def test_difference_removes_the_overlap() -> None:

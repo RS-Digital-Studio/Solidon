@@ -62,7 +62,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | drill_brep_hole nummeriert nach Lage; Verschieben und Einfügen sagen an build_tray_v3.step ab — eindeutige geometrische Zuordnung behält den Namen wie am Netz |
 | [RM-219 — Rundungen aus langen Nadeldreiecken werden kaum als Zylinder erkannt](#rm-219) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: 12 148 Ebenen, 17 Zylinder, Umwandlung 150 s — Streifen schmaler Dreiecke gemeinsam einpassen, Korpus mit Namen gegenprüfen |
 | [RM-220 — Kippen und Versetzen einer gesenkten Bohrung: drei Reste](#rm-220) | Geometrie, Erkennung und Druckvorbereitung | Rinne von 713,9 mm³ beim Kippen, falsche Senkungsmaße nach dem Versetzen, keine Nachbarwandprüfung am exakten Körper — kappen oder nennen, messen statt erklären |
-| [RM-221 — Zwei überlappende Schalen vereinigt die erste geschweißte Boolesche still](#rm-221) | Geometrie, Erkennung und Druckvorbereitung | obj_11 aus dem Piratenschiff: Teile 2 → 1, +10,01 statt +19,63 mm³, nur boolean.welded — überlappende Schalen vorher erkennen und melden oder absagen |
 | [RM-222 — Die Erkennung einer Durchbohrung am Netz hängt an der Vorgeschichte](#rm-222) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: gleiche Geometrie, mit vorherigem Vergrößern eine Bohrung weniger — beide Stände als Korpusfall, Stelle eingrenzen |
 | [RM-223 — Zwei Netzoperationen sagen das Falsche](#rm-223) | Geometrie, Erkennung und Druckvorbereitung | Angleichen mit 1 mm endet als unerwarteter Fehler (MemoryError), Verfeinern leiht sich den Satz der lokalen Suche — vorab schätzen und absagen, eigener Satz |
 | [RM-224 — Das Einlesen großer Netze rechnet Kanten mehrfach und im Hauptthread](#rm-224) | Geometrie, Erkennung und Druckvorbereitung | normalise am 1,2-M-Netz: Kanten zweimal gruppiert, Zwilling _open_edge_count, 3MF-Durchsicht und Lesen im Hauptthread — eine Kantentabelle je Netz, Dateiarbeit in den Arbeiter |
@@ -1686,22 +1685,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   (Vorschlag des Berichts), die Erklärung aus dem Ergebnis messen statt aus den
   Parametern, die Nachbarprüfung in beide exakten Wege. Abnahme: je Fall ein
   Test, am Netz und am exakten Körper gleich.
-
-<a id="rm-221"></a>
-
-- [ ] **RM-221 — Zwei überlappende Schalen vereinigt die erste geschweißte Boolesche still.**
-  Gefunden bei der Abnahme von RM-128 (Durchsicht 0.5.0, beziehungen,
-  `probe_rm128_ops.py`): `obj_11_Cylinder_B.stl` aus dem Piratenschiff besteht
-  aus zwei sich überlappenden Schalen. *Fläche versetzen* +1 mm läuft über die
-  geschweißte Stufe der Rückfallkette, vereinigt beide Schalen (Teile 2 → 1),
-  und das Volumen wächst um 10,01 statt 19,63 mm³; der Kunde sieht nur den
-  Hinweis `boolean.welded`. Das ist ein falsches Ergebnis mit einer Auskunft,
-  die es nicht erklärt. Weg: Test zuerst mit dem Körper (oder einem nachgebauten
-  Paar überlappender Zylinder); vor der geschweißten Stufe überlappende Schalen
-  erkennen und entweder beim Einlesen melden (wie die doppelt geschriebene
-  Schale, szene 31) oder die Operation mit Satz und Weg absagen. Abnahme:
-  Volumen wie gerechnet oder eine Absage mit *Reparieren* als Weg — nie ein
-  stiller Zusammenschluss.
 
 <a id="rm-222"></a>
 

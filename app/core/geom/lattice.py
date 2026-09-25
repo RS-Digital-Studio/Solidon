@@ -443,9 +443,12 @@ def lattice_fill(ctx: OpContext) -> OpResult:
     # Innenraum verhindert außen angefügte Gitterstücke an runden oder konkaven Wänden.
     if ctx.progress is not None:
         ctx.progress(0.6, str(_("Gitter beschneiden")))
+    # Der Innenraum zuerst: Er gehört zum Körper, das Gitter ist das
+    # Werkzeug — und nur am ersten Eingang einer Schnittmenge fragt die Kette,
+    # ob Teile ineinanderstecken (``boolean._parts_united_first``).
     inside = boolean(
         "intersection",
-        [grid, cavity],
+        [cavity, grid],
         quality=ctx.quality,
         allow_empty=True,
         cancelled=ctx.cancelled,

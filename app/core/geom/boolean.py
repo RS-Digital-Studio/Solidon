@@ -23,7 +23,7 @@ import dataclasses
 import math
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Final, Literal, Protocol
+from typing import Any, Final, Literal, Protocol, cast
 
 import numpy as np
 
@@ -31,7 +31,12 @@ from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, BooleanFailedError
 from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
 from app.core.geom.mesh import MeshData, enclosed_volume, signed_volume
-from app.core.geom.repair import merge_vertices, remove_degenerate_faces
+from app.core.geom.repair import (
+    merge_vertices,
+    parts_that_cross,
+    remove_degenerate_faces,
+    resolve_self_intersections,
+)
 from app.core.log import get_logger
 from app.core.types import (
     BRepBody,
@@ -41,6 +46,7 @@ from app.core.types import (
     Quality,
     SolverInfo,
     SolverStage,
+    Vec3,
 )
 from app.core.units import EPS_GEOM, is_close, weld_digits, weld_tolerance
 from app.i18n import TranslatableText, _
@@ -164,6 +170,7 @@ def boolean(
         raise ValueError("a boolean operation needs at least two bodies")
 
     chain = stages if stages is not None else (FULL_CHAIN if quality == "fine" else DRAFT_CHAIN)
+    meshes, united = _parts_united_first(kind, meshes, cancelled)
     attempted: list[SolverStage] = []
     emptied = False
     """Ob eine Stufe sauber gerechnet hat und dabei nichts übrig blieb.
@@ -212,7 +219,7 @@ def boolean(
                 attempted=tuple(attempted),
                 seed=seed if stage == "jittered" else None,
             ),
-            findings=list(_findings_for(stage)),
+            findings=[*united, *_findings_for(stage)],
         )
 
     if emptied and "voxel" not in attempted:
@@ -267,6 +274,89 @@ def boolean(
         attempted=tuple(attempted),
         seed=seed,
     )
+
+
+#: Wo :func:`_united_parts` seine Antwort im Cache des Netzes ablegt.
+_UNITED_KEY: Final = "solidon_parts_united"
+
+
+def _parts_united_first(
+    kind: BooleanKind, meshes: list[MeshData], cancelled: CancelToken | None
+) -> tuple[list[MeshData], list[Finding]]:
+    """Ineinandersteckende Teile eines Eingangs zuerst vereinigen — und es sagen.
+
+    **An Schalen, die einander durchdringen, rechnet der Kern nichts
+    Verlässliches** (RM-221). Am Piratenschiff (``obj_11_Cylinder_B.stl``)
+    verschmolz *Fläche versetzen* +1 mm die zwei Zylinder still — Teile 2 → 1,
+    +10,01 statt +19,63 mm³, kein Befund. An zwei ineinandergeschobenen
+    Würfeln blieb dieselbe Vereinigung zweiteilig, und eine Bohrung machte aus
+    zwei Teilen drei oder vier (gemessen 25.09.2026). Gedruckt werden solche
+    Teile ohnehin als eines: Der Slicer vereinigt sie. Die Kette vereinigt sie
+    deshalb vorher auf demselben Weg wie *Überschneidungen auflösen*
+    (:func:`~app.core.geom.repair.resolve_self_intersections`: jede Schale ein
+    Operand, nachgeprüft) — danach ist das Volumen das des Drucks, der
+    gemeinsame Raum zählt einmal.
+
+    Gilt nur, wo die Vorfrage es belegt (:func:`~app.core.geom.repair.parts_that_cross`);
+    sagt sie nichts oder scheitert das Vereinigen, bleibt der Eingang, wie er
+    war. Ein Befund je Operation, auch wenn mehrere Eingänge es brauchten.
+
+    **Gefragt wird der Körper, an dem gearbeitet wird** — bei Differenz und
+    Schnittmenge der erste Eingang, bei der Vereinigung jeder. Was danach
+    kommt, ist dort ein Werkzeug, das Solidon selbst baut: Das Gitter von
+    *Gitter füllen* besteht aus Streben, die sich an jedem Knoten
+    überschneiden, und über ihm stand sonst ein Satz über Teile, die der
+    Kunde nie hatte.
+    """
+    prepared: list[MeshData] = []
+    place: Vec3 | None = None
+    for index, mesh in enumerate(meshes):
+        if index and kind != "union":
+            prepared.append(mesh)
+            continue
+        united = _united_parts(mesh, cancelled)
+        if united is None:
+            prepared.append(mesh)
+            continue
+        body, where = united
+        prepared.append(body)
+        place = where if place is None else place
+    if place is None:
+        return meshes, []
+    return prepared, [
+        Finding(
+            code="boolean.parts_united",
+            severity="info",
+            message=_(
+                "Ineinandersteckende Teile wurden dabei vereinigt. "
+                "Ihr gemeinsamer Raum zählt jetzt einmal, wie im Druck."
+            ),
+            location=place,
+        )
+    ]
+
+
+def _united_parts(mesh: MeshData, cancelled: CancelToken | None) -> tuple[MeshData, Vec3] | None:
+    """Der Eingang mit vereinigten Teilen und ein Ort der Durchdringung — oder ``None``.
+
+    Einmal je Netz: Die Antwort liegt im Cache des Netzes und verfällt mit
+    seiner Geometrie. Die Vorschau fragt denselben Körper bei jeder getippten
+    Zahl, und ein Körper aus einem Stück kostet nur die gemerkte Teilezahl.
+    """
+    if mesh.triangle_count == 0 or mesh.component_count < 2:
+        return None
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is not None and _UNITED_KEY in cache:
+        return cast("tuple[MeshData, Vec3] | None", cache[_UNITED_KEY])
+    answer: tuple[MeshData, Vec3] | None = None
+    place = parts_that_cross(mesh.raw, cancelled=cancelled)
+    if place is not None:
+        resolved, done = resolve_self_intersections(mesh, cancelled)
+        if done:
+            answer = (resolved, place)
+    if cache is not None:
+        cache[_UNITED_KEY] = answer
+    return answer
 
 
 def _keep_slots(

@@ -314,6 +314,13 @@ Die Rückfallkette (§17.2) hat fünf Stufen, und die erreichte Stufe gehört in
 
 Stufe 4 kostet Genauigkeit und wird im Prüfbericht ausgewiesen, nie
 stillschweigend verwendet. In Entwurfsqualität endet die Kette nach Stufe 2.
+
+**Ein Eingang, dessen Teile einander durchdringen, wird vorher vereinigt —
+mit Befund, nie still** (RM-221, `boolean.parts_united`). Der Slicer druckt
+solche Teile ohnehin als eines; an ihnen einzeln zu rechnen gab Ergebnisse,
+die weder das Modell noch den Druck beschrieben. Wer eine Operation baut,
+die mehrschalige Körper an den Kern gibt, geht deshalb durch `boolean()` und
+nicht an ihm vorbei.
 Nach `voxel` ist die Materialslot-Zuweisung neu zu übertragen — die Vernetzung
 wurde ersetzt (§20).
 
