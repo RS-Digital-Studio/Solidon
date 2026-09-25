@@ -34,8 +34,10 @@ from app.core.geom.attributes import transfer
 from app.core.geom.mesh import (
     MeshData,
     as_mesh_data,
+    edge_table,
     face_components,
     max_distance_to_surface,
+    signed_volume,
     stable_vertex_normals,
     unique_edges,
 )
@@ -2002,15 +2004,14 @@ def thicken(ctx: OpContext) -> OpResult:
 
 
 def _thickened_open_parts(mesh: MeshData, thickness: float) -> MeshData:
-    """Nur die Teile mit offenem Rand auftragen; geschlossene bleiben, wie sie sind."""
-    import numpy as np
+    """Nur die Teile mit offenem Rand auftragen; geschlossene bleiben, wie sie sind.
 
+    Die Randkanten liest die Kantenzählung des Netzes (``edge_table``) —
+    dieselbe, aus der ``face_components`` gleich danach die Teile zieht.
+    """
     body = mesh.raw
-    _unique, inverse, counts = unique_edges(
-        np.asarray(body.edges, dtype=np.int64), return_inverse=True, return_counts=True
-    )
     on_rim = np.zeros(len(body.faces), dtype=bool)
-    on_rim[np.flatnonzero(counts[inverse] == 1) // 3] = True
+    on_rim[edge_table(body).rows(1) // 3] = True
     opened = np.zeros(len(body.faces), dtype=bool)
     for piece in face_components(body):
         if on_rim[piece].any():
@@ -2068,28 +2069,52 @@ def _thickened(mesh: MeshData, thickness: float) -> MeshData:
     # Normalen in den Körper hinein.
     flipped = faces[:, ::-1] + count
 
-    unique, inverse, counts = unique_edges(
-        np.asarray(body.edges, dtype=np.int64), return_inverse=True, return_counts=True
-    )
+    edges = np.asarray(body.edges, dtype=np.int64)
+    unique, inverse, counts = unique_edges(edges, return_inverse=True, return_counts=True)
     # Welches Dreieck eine Kante trägt: ``edges`` läuft drei je Dreieck, in
-    # Dreiecksreihenfolge — an einer Randkante gibt es genau eines.
-    carrier = np.zeros(len(unique), dtype=np.int64)
-    carrier[inverse] = np.arange(len(inverse), dtype=np.int64) // 3
+    # Dreiecksreihenfolge — an einer Randkante gibt es genau eines. ``row``
+    # ist ihre Zeile, und dort steht sie in der Umlaufrichtung ihres Dreiecks.
+    row = np.zeros(len(unique), dtype=np.int64)
+    row[inverse] = np.arange(len(inverse), dtype=np.int64)
+    carrier = row // 3
     on_border = counts == 1
-    border = unique[on_border]
-    walls = [[first, second, second + count, first + count] for first, second in border.tolist()]
-    quads = np.asarray(
-        [[wall[0], wall[1], wall[2]] for wall in walls]
-        + [[wall[0], wall[2], wall[3]] for wall in walls],
-        dtype=np.int64,
-    ).reshape(-1, 3)
+    first = unique[on_border, 0]
+    start, end = edges[row[on_border], 0], edges[row[on_border], 1]
+    # **Die Randwand läuft gegen ihr Dreieck** — oben von ``end`` nach
+    # ``start``, unten auf der Innenhaut andersherum —, und dann ist der Körper
+    # schon beim Bauen einheitlich gewickelt. Geteilt wird jedes Viereck an
+    # derselben Diagonale wie bisher: von der kleineren Ecke zur Innenecke
+    # der größeren.
+    # Bis zum 25.09.2026 standen die Wände in der Richtung der sortierten
+    # Kante, also zur Hälfte verkehrt, und ``fix_normals`` drehte sie über
+    # das ganze Netz zurecht: an einer offenen Halbkugel mit 61 000 Dreiecken
+    # 36 der 38 Sekunden des Schritts (Durchsicht seit 0.5.0).
+    # Dieselben Ecken in derselben Folge, die ``fix_normals`` bisher daraus
+    # machte: Wo die sortierte Kante mit ihrem Dreieck lief, drehte es die
+    # beiden Wanddreiecke um.
+    forward = (start == first)[:, None]
+    upper = np.where(
+        forward,
+        np.column_stack((end + count, end, start)),
+        np.column_stack((end, start, start + count)),
+    )
+    lower = np.where(
+        forward,
+        np.column_stack((start + count, end + count, start)),
+        np.column_stack((end, start + count, end + count)),
+    )
+    quads = np.vstack([upper, lower]).astype(np.int64)
 
     built = trimesh.Trimesh(
         vertices=np.vstack([outer, inner]),
         faces=np.vstack([faces, flipped, quads]) if len(quads) else np.vstack([faces, flipped]),
         process=True,
     )
-    built.fix_normals()
+    # Gewendet wird nur noch, was der Bau nicht einheitlich hergibt — ein
+    # Blatt, das selbst uneinheitlich gewickelt ist, oder eines, dessen Ecken
+    # beim Verarbeiten zusammenfallen.
+    if not (built.is_winding_consistent and signed_volume(built) > 0.0):
+        built.fix_normals()
     slots: tuple[int, ...] = ()
     if (
         mesh.slots

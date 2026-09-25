@@ -28,6 +28,7 @@ from app.core.errors import (
     RESIZE_THE_WIDENING,
     SPLIT_AND_RETRY,
     SPLIT_MODEL,
+    BooleanFailedError,
     GeometryError,
     InternalError,
     ValidationError,
@@ -35,6 +36,7 @@ from app.core.errors import (
 from app.core.geom import lathe, transform
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
+    DRAFT_CHAIN,
     NOTHING_LEFT_DETAIL,
     NOTHING_LEFT_TITLE,
     BooleanKind,
@@ -1498,16 +1500,22 @@ def _inscribed_radius(tool: MeshData, centre: Vec3, direction: Vec3) -> float | 
 
     Gezählt werden die Dreiecke, deren Normale quer zur Achse steht: die Wand
     eines Zylinders. Senkungen und Deckel stehen schräg oder quer und zählen
-    nicht; an einer Kette gibt so die engste Bohrung das Maß.
+    nicht; an einer Kette gibt so die engste Bohrung das Maß. **Ein Dreieck
+    ohne Fläche zählt nie** (Durchsicht seit 0.5.0): Seine Normale ist null,
+    stand damit „quer" und im Abstand null, und die Säule schrumpfte auf
+    nichts. Die Normalen kommen aus ``stable_normals`` (RM-187), denn aus dem
+    Abstand wird die Säule, an der „geht nicht mehr durch" hängt.
     """
+    from app.core.geom.mesh import stable_normals
+
     raw = tool.raw
     if not len(raw.faces):
         return None
     axis = np.asarray(direction, dtype=np.float64)
     axis /= math.hypot(*(float(value) for value in axis))
-    normals = np.asarray(raw.face_normals, dtype=np.float64)
+    normals, areas = stable_normals(raw)
     along = normals[:, 0] * axis[0] + normals[:, 1] * axis[1] + normals[:, 2] * axis[2]
-    wall = np.abs(along) < _WALL_ACROSS
+    wall = (np.abs(along) < _WALL_ACROSS) & (areas > 0.0)
     if not bool(wall.any()):
         return None
     corners = np.asarray(raw.triangles, dtype=np.float64)[wall, 0] - np.asarray(centre)
@@ -1578,6 +1586,7 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
         # den sie bekommt — an der Mitte einer um 60° gedrehten Bohrung war
         # alles im Kasten, ihr unterer Austritt lag 2,3 mm neben der Platte.
         exits = _axis_exits(body, centre, _feature_direction(feature))
+        cone = None
         if feature.kind == "cone":
             # **Eine Senkung mündet nur an ihrem weiten Ende** (RM-220): Am
             # engen geht die Bohrung weiter, und die fragt ihren eigenen
@@ -1585,15 +1594,30 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
             # gekippten Senkung Ø 10 an der Unterseite über der Nachbarbohrung
             # 10 mm daneben — „über die Kante", an beiden Kernen.
             exits = exits[:1]
+            # **Und dort mit ihrem Kegel** (Durchsicht seit 0.5.0): Der Kranz ist
+            # der Schnitt des Kegels mit der Fläche, nicht der Kreis seines
+            # weiten Endes (``prepare.mouth_over_the_edge``).
+            cone = _sink_cone(feature)
         for exit_point, inward in exits:
             found = mouth_over_the_edge(
                 body,
                 cast(Vec3, tuple(float(value) for value in exit_point)),
                 cast(Vec3, tuple(float(value) for value in inward)),
                 diameter,
+                cone=cone,
             )
             if found:
                 return found
+        if cone is not None:
+            # **Die Senkung fragt nur ihre Mündung.** Der Kranz über die ganze
+            # Länge (``over_the_edge_along``) ist der Kreis des weiten Endes und
+            # bleibt es bis in jede Tiefe; der Kegel wird aber zur Spitze hin
+            # enger. Eine um 35° gekippte Senkung Ø 8 einen Millimeter vor der
+            # Seitenfläche hieß damit „über die Kante", obwohl keine Seite Fläche
+            # verlor. Der Kegel unter der Mündung ist die Hülle aus ihrem Schnitt
+            # und der Spitze; liegen beide in einem konvexen Körper, liegt er es
+            # auch.
+            continue
         positions = [centre]
         if feature.kind == "slot":
             # Ein Langloch reißt an einem Ende auf, während seine Mitte tief im
@@ -1616,6 +1640,24 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
             if found:
                 return found
     return []
+
+
+def _sink_cone(feature: Feature) -> tuple[Vec3, float] | None:
+    """Spitze und halber Öffnungswinkel eines Kegelmerkmals — ``None`` ohne Maß.
+
+    Die Mitte eines Kegels liegt an seinem weiten Ende, seine Achse zeigt
+    von der Spitze dorthin (an beiden Kernen gemessen); die Spitze liegt um
+    ``r / tan(halber Winkel)`` dahinter. Die Winkelfunktionen kommen aus
+    ``units`` (RM-187), denn aus der Spitze wird der Kranz eines Befunds.
+    """
+    half = float(feature.params.get("angle", 0.0)) / 2.0
+    radius = float(feature.params.get("diameter", 0.0)) / 2.0
+    if radius <= EPS_GEOM or not EPS_DISPLAY < half < 90.0 - EPS_DISPLAY:
+        return None
+    outward = np.asarray(_feature_direction(feature), dtype=np.float64)
+    reach = radius * units.exact_cos_degrees(half) / units.exact_sin_degrees(half)
+    apex = np.asarray(feature.params["centre"], dtype=np.float64) - outward * reach
+    return (float(apex[0]), float(apex[1]), float(apex[2])), half
 
 
 def _axis_exits(
@@ -4841,7 +4883,9 @@ def rotate_feature(ctx: OpContext) -> OpResult:
             params.angle,
         )
     if tool is not None:
-        tool = _within_the_old_rims(tool, _old_rim_caps(body, feature, source.features))
+        tool = _within_the_old_rims(
+            tool, _old_rim_caps(body, feature, source.features), cancelled=ctx.cancelled
+        )
     else:
         tool = _placing_tool(ctx, body, source, spun, centre, cavity, axis=turned_axis)
     placed = boolean(
@@ -4912,7 +4956,9 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=placed.mesh, features=carried)],
         findings=findings,
-        solver=placed.solver,
+        # Beide Schritte, wie beim Versetzen: Fiel das Schließen an der alten
+        # Stelle zurück, gilt diese Stufe samt Startwert für das Ergebnis (§17.2).
+        solver=deepest((closed.solver, placed.solver)),
     )
 
 
@@ -4986,7 +5032,9 @@ def _rotate_cavity_chain(
     turned = tool.raw.copy()
     transform.moved(turned, matrix)
     turned_tool = _within_the_old_rims(
-        MeshData.of(turned), _old_rim_caps(body, chain[0], source.features, chain)
+        MeshData.of(turned),
+        _old_rim_caps(body, chain[0], source.features, chain),
+        cancelled=ctx.cancelled,
     )
     ctx.progress(0.6, str(_("Der Hohlraum wird gedreht gesetzt …")))
     placed = boolean(
@@ -5101,7 +5149,9 @@ def _old_rim_caps(
     return tuple(plane for plane in rims if units.dot3(plane.normal, towards) > 0.0)
 
 
-def _within_the_old_rims(tool: MeshData, caps: Sequence[SectionPlane]) -> MeshData:
+def _within_the_old_rims(
+    tool: MeshData, caps: Sequence[SectionPlane], *, cancelled: CancelToken | None
+) -> MeshData:
     """Ein gekipptes Netzwerkzeug an den Ebenen aus :func:`_old_rim_caps` gekappt.
 
     **Scheitert der ebene Schnitt, kappen Quader** (25.09.2026). An der Öffnung
@@ -5118,12 +5168,24 @@ def _within_the_old_rims(tool: MeshData, caps: Sequence[SectionPlane]) -> MeshDa
     clipped = _cut_at_the_rims(tool, caps)
     if clipped is not None:
         return clipped
-    return _boxed_in(tool, caps) or tool
+    return _boxed_in(tool, caps, cancelled=cancelled) or tool
 
 
-def _boxed_in(tool: MeshData, planes: Sequence[SectionPlane]) -> MeshData | None:
-    """``tool`` auf der Innenseite jeder Ebene, über die Boolesche Kette — ``None``,
-    wo das keinen geschlossenen Körper ergibt."""
+def _boxed_in(
+    tool: MeshData, planes: Sequence[SectionPlane], *, cancelled: CancelToken | None
+) -> MeshData | None:
+    """``tool`` auf der Innenseite jeder Ebene — ``None``, wo das keinen
+    geschlossenen Körper ergibt.
+
+    **Nur auf den verlustfreien Stufen** (``DRAFT_CHAIN``, in jeder Qualität).
+    Die Kappe begrenzt ein Werkzeug, das ohne sie schon rechnet; gestört oder
+    auf Voxeln gerechnet, veränderte sie seine Form still — der Befund dazu
+    ginge mit dem Werkzeug verloren, und die Stufe stünde nicht im Schritt
+    (§17.2). Bis zum 25.09.2026 lief die Schnittmenge in feiner Qualität über
+    alle vier Stufen, mit dem Startwert null statt dem des Schritts und ohne
+    Abbruchmarke; hielt keine Stufe, brach der ganze Schritt ab, statt beim
+    ungekappten Werkzeug zu bleiben.
+    """
     size = 4.0 * float(tool.bounds.diagonal) + 1.0
     middle = np.asarray(tool.bounds.centre, dtype=np.float64)
     boxes = []
@@ -5138,7 +5200,19 @@ def _boxed_in(tool: MeshData, planes: Sequence[SectionPlane]) -> MeshData | None
         transform.moved(box, transform.rotation_between([0.0, 0.0, 1.0], normal))
         box.apply_translation(foot - normal * (size / 2.0))
         boxes.append(MeshData.of(box))
-    outcome = boolean("intersection", [tool, *boxes], quality="fine", seed=None, allow_empty=True)
+    try:
+        outcome = boolean(
+            "intersection",
+            [tool, *boxes],
+            stages=DRAFT_CHAIN,
+            allow_empty=True,
+            cancelled=cancelled,
+        )
+    except BooleanFailedError:
+        # Der dokumentierte Rückfall: Das Werkzeug bleibt ungekappt
+        # (:func:`_within_the_old_rims`). Ein Abbruch ist keine solche Absage
+        # und geht als ``OperationCancelled`` weiter.
+        return None
     body = outcome.mesh
     if not len(body.raw.faces) or not body.is_watertight or body.volume <= EPS_GEOM:
         return None
@@ -5185,11 +5259,15 @@ def _turned_open_cone(
     slope = math.tan(math.radians(half))
     narrow = max(0.0, wide - depth * slope)
     beyond = _cone_past_a_tilted_face(0.0, wide, half, tilt, at_most=float(body.bounds.diagonal))
+    # Das obere Ende samt Zugabe liegt auf derselben Flanke: Mit dem Radius der
+    # Weiterführung ohne Zugabe lief der Mantel über die ganze Länge steiler als
+    # der gemessene Kegel — an einer 90°-Senkung 0,02 mm am oberen Rand.
+    top = beyond + FEATURE_OVERLAP
     outline = [
         [0.0, -depth],
         [narrow, -depth],
-        [wide + beyond * slope, beyond + FEATURE_OVERLAP],
-        [0.0, beyond + FEATURE_OVERLAP],
+        [wide + top * slope, top],
+        [0.0, top],
     ]
     solid = lathe.revolve(outline, sections=FEATURE_SECTIONS)
     transform.moved(solid, transform.rotation_between([0.0, 0.0, 1.0], outward))
@@ -5347,7 +5425,9 @@ def _surface_index(mesh: MeshData) -> Any:
 
 def _mouth_is_open(mesh: MeshData, edge: NDArray[np.float64], normal: NDArray[np.float64]) -> bool:
     """Vor dem gesamten Rand liegt Luft; ein Sacklochboden bleibt geschlossen."""
-    return _share_in_material(mesh, edge, normal) == 0.0
+    # Ein Anteil aus Zählungen, nie negativ — gefragt wird „keine Probe im
+    # Material", ohne Gleichheit auf Fließkomma (Regel 6).
+    return _share_in_material(mesh, edge, normal) <= 0.0
 
 
 def _share_in_material(
@@ -9686,7 +9766,15 @@ def _exact_rotate_cavity(
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     filled = _exact_cavity_filled(solid, feature)
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
-    findings: list[Finding] = []
+    expected = dataclasses.replace(
+        spun, params={**spun.params, "axis": turned_axis}, provenance="generated"
+    )
+    # **Erst die Kante, dann die Nachbarwand** — dieselbe Reihenfolge wie am
+    # Netz (``rotate_feature``): ``_without_opened_twice`` streicht „über die
+    # Kante" nur aus dem, was schon in der Liste steht. Stand der Kantenbefund
+    # erst danach darin, meldete der exakte Körper eine in die Nachbarin
+    # gekippte Bohrung zweimal (Durchsicht seit 0.5.0, 25.09.2026).
+    findings = _edge_findings(as_mesh_data(filled), [expected])
     if feature.kind == "hole":
         tool = _exact_cavity_tool(filled, spun, centre, turned_axis)
         if feature.params.get("through"):
@@ -9700,10 +9788,6 @@ def _exact_rotate_cavity(
         )
     else:
         placed = _exact_cavity_cut(filled, spun, centre, turned_axis)
-    expected = dataclasses.replace(
-        spun, params={**spun.params, "axis": turned_axis}, provenance="generated"
-    )
-    findings = [*_edge_findings(as_mesh_data(filled), [expected]), *findings]
     return _exact_cavity_result(
         ctx, source, placed, op="rotate_feature", expected=expected, findings=findings
     )
@@ -12143,6 +12227,14 @@ def _exact_rotate_cone(
     )
     findings: list[Finding] = []
     if cavity:
+        # **Und die Kante, wie am Netz** (``rotate_feature``, an derselben Mitte
+        # mit der gekippten Achse): Hier fehlte die Frage ganz, und eine
+        # Senkung, die gekippt aus der Seitenfläche lief, blieb am exakten
+        # Körper still (Durchsicht seit 0.5.0, 25.09.2026).
+        tilted = dataclasses.replace(
+            feature, params={**feature.params, "axis": turned_axis}, provenance="generated"
+        )
+        findings += _edge_findings(as_mesh_data(cleared), [tilted])
         # Wie an der Kette: Was über die Mündung hinausragt, endet an der alten
         # Randebene, und die Nachbarwand wird gefragt (RM-220). Ohne die Kappe
         # schnitt die um 30° gekippte Senkung 80 mm³ aus einer Rippe davor.
@@ -12225,10 +12317,11 @@ def _free_along_the_axis(candidate: Feature, expected: Feature) -> bool:
         return False
     if candidate.params.get("through"):
         return True
+    # Ohne BLAS (RM-187): Die Antwort entscheidet, welcher Fund das Merkmal ist.
     axis = np.asarray(_bore_vector(expected, "axis"), dtype=float)
-    axis /= np.linalg.norm(axis)
-    along = float(
-        (np.asarray(_bore_vector(candidate, "centre")) - _bore_vector(expected, "centre")) @ axis
+    axis /= math.hypot(float(axis[0]), float(axis[1]), float(axis[2]))
+    along = units.dot3(
+        np.asarray(_bore_vector(candidate, "centre")) - _bore_vector(expected, "centre"), axis
     )
     reach = (_depth_of(expected) + _depth_of(candidate)) / 2.0
     return abs(along) <= reach

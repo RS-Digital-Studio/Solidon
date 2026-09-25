@@ -291,7 +291,12 @@ def over_the_edge_along(
 
 
 def mouth_over_the_edge(
-    body: MeshData, position: Vec3, inward: Vec3, diameter: float
+    body: MeshData,
+    position: Vec3,
+    inward: Vec3,
+    diameter: float,
+    *,
+    cone: tuple[Vec3, float] | None = None,
 ) -> list[Finding]:
     """Ob eine **Mündung** an dieser Stelle aufreißt — die Frage für den Austritt
     einer gekippten Bohrung.
@@ -322,6 +327,16 @@ def mouth_over_the_edge(
     Radius entlang der Achse ins Material geschoben; die um 60° gedrehte
     Bohrung, die unten neben der Platte austritt, hat ihre Ellipse dort zur
     Hälfte in der Luft und meldet es weiter.
+
+    **Eine Senkung mündet mit ihrem Kegel, nicht mit einem Zylinder**
+    (``cone``: Spitze und halber Öffnungswinkel; Durchsicht seit 0.5.0,
+    25.09.2026). Ihr Kranz ist der Schnitt des Kegels mit der Mündungsfläche —
+    je Mantellinie von der Spitze bis in die Fläche, nicht parallel zur Achse.
+    Gekippt liegt eine Flanke flach, und der Schnitt reicht weit über den
+    Kreis hinaus: An einer Platte 30 x 24 x 12 schnitt eine um 30° gekippte
+    Senkbohrung Ø 10 22,6 mm² aus der Seitenfläche, an beiden Kernen, und der
+    Kreis sah ringsum Material; von einer Kante weg gekippt, meldete er eine
+    offene Flanke, die es nicht gab. Ohne Mündungsfläche bleibt es beim Kreis.
     """
     vector = np.asarray(inward, dtype=float)
     length = float(np.linalg.norm(vector))
@@ -329,18 +344,24 @@ def mouth_over_the_edge(
     if length <= EPS_GEOM or radius <= EPS_GEOM:
         return []
     unit = vector / length
-    over = _axes_over(body, position, unit, radius)
-    if not over:
-        return []
+    section = None if cone is None else _cone_section(body, position, unit, cone)
+    if section is not None:
+        mouth, rim, over = section
+        if not over:
+            return []
+    else:
+        over = _axes_over(body, position, unit, radius)
+        if not over:
+            return []
+        rim = _rim_around(unit, radius)
+        mouth = np.asarray(position, dtype=float)
+        face = _mouth_face(body, mouth, unit)
+        if face is not None:
+            mouth, normal = face
+            # Je Kranzpunkt entlang der Achse bis in die Ebene der Mündungsfläche.
+            rim = rim - np.outer((rim @ normal) / float(normal @ unit), unit)
     from app.core.geom.mesh import on_surface
 
-    rim = _rim_around(unit, radius)
-    mouth = np.asarray(position, dtype=float)
-    face = _mouth_face(body, mouth, unit)
-    if face is not None:
-        mouth, normal = face
-        # Je Kranzpunkt entlang der Achse bis in die Ebene der Mündungsfläche.
-        rim = rim - np.outer((rim @ normal) / float(normal @ unit), unit)
     depths = radius * np.asarray(_MOUTH_DEPTHS, dtype=float)
     samples = mouth + rim[None, :, :] + depths[:, None, None] * unit
     flat = samples.reshape(-1, 3)
@@ -379,6 +400,57 @@ def _mouth_face(
     if abs(float(normal @ inward)) <= 0.1:
         return None
     return start + inward * float(distances[first]), normal
+
+
+def _cone_section(
+    body: MeshData, position: Vec3, unit: np.ndarray, cone: tuple[Vec3, float]
+) -> tuple[np.ndarray, np.ndarray, list[str]] | None:
+    """Der Schnitt eines Senkungskegels mit seiner Mündungsfläche: Mündungspunkt,
+    Kranz relativ zu ihm und die Achsen, über deren Hüllquader er ragt.
+
+    ``cone`` ist die Spitze und der halbe Öffnungswinkel in Grad, ``unit``
+    die Achse in den Körper. Je Punkt des Kranzes eine Mantellinie, von der
+    Spitze nach außen bis in die Ebene der Mündungsfläche. Zwei der Linien
+    liegen in der Ebene aus Achse und Flächennormale, denn dort reicht ein
+    gekippter Kegel am weitesten: flach auf der einen, steil auf der anderen
+    Seite. ``None``, wo die Fläche fehlt, die Spitze nicht hinter ihr liegt
+    oder eine Mantellinie die Fläche nie erreicht — dann bleibt es beim Kreis.
+    Gerechnet elementweise und mit den Winkelfunktionen aus ``units``
+    (RM-187): Aus dem Kranz wird ein Befund.
+    """
+    face = _mouth_face(body, np.asarray(position, dtype=float), unit)
+    if face is None:
+        return None
+    mouth, normal = face
+    apex, half_angle = cone
+    tip = np.asarray(apex, dtype=float)
+    across = normal - unit * units.dot3(normal, unit)
+    width = math.hypot(float(across[0]), float(across[1]), float(across[2]))
+    if width <= EPS_GEOM:
+        # Die Achse steht senkrecht auf der Fläche: Jede Richtung ist gleich.
+        directions = _rim_around(unit, 1.0)
+    else:
+        first = across / width
+        second = np.cross(unit, first)
+        table = np.asarray(units.circle_cos_sin(_RIM_POINTS), dtype=float)
+        directions = table[:, 0][:, None] * first + table[:, 1][:, None] * second
+    lines = directions * units.exact_sin_degrees(half_angle) - unit * units.exact_cos_degrees(
+        half_angle
+    )
+    rise = lines[:, 0] * normal[0] + lines[:, 1] * normal[1] + lines[:, 2] * normal[2]
+    height = units.dot3(mouth - tip, normal)
+    if height <= EPS_GEOM or not bool(np.all(rise > EPS_GEOM)):
+        return None
+    points = tip + lines * (height / rise)[:, None]
+    lower = np.asarray(body.bounds.minimum, dtype=float)
+    upper = np.asarray(body.bounds.maximum, dtype=float)
+    over = [
+        name
+        for index, name in enumerate("xyz")
+        if bool(np.any(points[:, index] < lower[index] - EPS_GEOM))
+        or bool(np.any(points[:, index] > upper[index] + EPS_GEOM))
+    ]
+    return mouth, points - mouth, over
 
 
 #: An welchen Tiefen hinter einer Mündung :func:`mouth_over_the_edge` den Kranz

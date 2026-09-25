@@ -30,7 +30,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import import_plan
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, checksum, new_project
-from app.core.types import Feature, Finding, Profile, SceneObject, Source
+from app.core.types import Feature, Finding, Profile, Quality, SceneObject, Source
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -414,6 +414,30 @@ def _beyond(mesh: MeshData, height: float, *, above: bool) -> float:
     return abs(float(kept.volume)) if len(kept.raw.faces) else 0.0
 
 
+def _sides_lost(before: SceneObject, after: SceneObject) -> float:
+    """Wie viel Fläche die vier Seiten der Platte 30 × 24 verloren haben, in mm².
+
+    Gezählt werden die Dreiecke in den Ebenen x = ±15 und y = ±12 mit ihrer
+    Normale nach außen — ein Schnitt, der aus einer Seite läuft, nimmt ihr
+    Fläche; einer, der sie nicht berührt, lässt sie, wie sie war.
+    """
+
+    def sides(entry: SceneObject) -> float:
+        raw = as_mesh_data(entry.mesh).raw
+        corners = np.asarray(raw.triangles, dtype=np.float64)
+        normals = np.asarray(raw.face_normals, dtype=np.float64)
+        areas = np.asarray(raw.area_faces, dtype=np.float64)
+        total = 0.0
+        for index, value in ((0, 15.0), (0, -15.0), (1, 12.0), (1, -12.0)):
+            on = (np.abs(corners[:, :, index] - value).max(axis=1) < 1e-6) & (
+                normals[:, index] * np.sign(value) > 0.99
+            )
+            total += float(areas[on].sum())
+        return total
+
+    return sides(before) - sides(after)
+
+
 @pytest.mark.parametrize("case", list(RIBBED))
 def test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths(
     profile: Profile, case: str
@@ -433,6 +457,17 @@ def test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths(
     Volumen stieg um 11 mm³) und schnitt am exakten Körper 80 mm³ aus der Rippe;
     eine spitze hat nur einen Randring, blieb deshalb ungekappt und schnitt an
     beiden Kernen 82 mm³ aus ihr.
+
+    **„Über die Kante" heißt dabei, dass eine Seitenfläche aufgeht** — nicht
+    „nie" (Durchsicht seit 0.5.0, 25.09.2026). Um die Bohrungsmitte gekippt,
+    läuft die flache Flanke einer 90°-Senkung Ø 10 aus der 24 mm breiten
+    Platte: 22,6 mm² der Seite y = -12 fehlten danach an der gesenkten
+    Bohrung, 19 mm² am gesenkten Sackloch und an der vergrabenen Senkung, an
+    beiden Kernen — und beide schwiegen, denn der Kranz war der Kreis des
+    weiten Endes statt des Kegelschnitts. Und gleich viel abgetragen heißt
+    gleiches Volumen danach: Der Vergleich des Abtrags allein zählt an einer
+    Senkung ohne Bohrung einen Splitter zweimal, wo die Facetten des alten und
+    des gekippten Kegels sich kreuzen.
     """
     from app.core.geom.prepare import FEATURE_OVERLAP
     from tests.test_bore_depth import _evaluated
@@ -451,10 +486,11 @@ def test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths(
         )
         assert _beyond(lost, -FEATURE_OVERLAP, above=False) == pytest.approx(0.0, abs=0.01), kernel
         codes = _warnings(findings)
-        assert "bore.over_the_edge" not in codes, (kernel, codes)
+        opened = _sides_lost(source, changed) > 1.0
+        assert ("bore.over_the_edge" in codes) is opened, (kernel, codes, opened)
         cones = [feature for feature in changed.features.values() if feature.kind == "cone"]
         seen[kernel] = (
-            float(lost.volume),
+            float(source.mesh.volume) - float(changed.mesh.volume),
             codes,
             bool(changed.features[hole.id].params.get("through")),
             [float(cone.params["diameter"]) for cone in cones],
@@ -730,3 +766,250 @@ def test_a_copy_set_beside_its_original_says_what_is_left_of_the_wall(
         source, profile, "duplicate_feature", at_feature=hole.id, x=x - wide - 2.0, y=y, z=z
     )
     assert not [code for code in _warnings(findings) if code.startswith("bore.neighbour_")]
+
+
+# --- Durchsicht seit 0.5.0 (25.09.2026) ------------------------------------------------
+
+
+def _raw_as(op: str, entry: SceneObject, profile: Profile, *, quality: Quality, **params: object):
+    """Wie :func:`_raw`, mit wählbarer Qualität — der Entwurf ist, womit gedreht wird."""
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    load_operations()
+    spec = REGISTRY.get(op)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality=quality,
+            seed=11,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+@pytest.mark.parametrize("angle", [40.0, -40.0])
+def test_a_tilted_bore_that_opens_its_neighbour_is_no_edge_on_either_kernel(
+    profile: Profile, angle: float
+) -> None:
+    """Reißt die gekippte Bohrung die Wand zur Nachbarin auf, sagen beide Kerne nur das.
+
+    Um 40° gekippt öffnet die schlichte Durchgangsbohrung die Wand zur Bohrung
+    10 mm daneben — zur Nachbarin hin mit der oberen, von ihr weg mit der
+    unteren Mündung. Am Netz steht dann allein ``bore.neighbour_opened``:
+    ``_without_opened_twice`` streicht „über die Kante" daneben, denn die
+    Mündung der Nachbarin ist keine Kante. ``_exact_rotate_cavity`` nahm den
+    Kantenbefund erst **nach** dieser Frage in die Liste, und der exakte Körper
+    meldete beide (Durchsicht seit 0.5.0, 25.09.2026). Bei 30° bleibt die Wand
+    stehen, dort fiel es nicht auf
+    (``test_a_tilted_bore_reports_its_neighbour_on_both_kernels``).
+    """
+    from tests.test_bore_depth import _evaluated
+
+    seen = {}
+    for kernel in ("mesh", "brep"):
+        source = _with_neighbour(kernel, RIBBED["durchgehend"])
+        hole = min(
+            (feature for feature in source.features.values() if feature.kind == "hole"),
+            key=lambda feature: abs(float(feature.params["centre"][0])),
+        )
+        _changed, findings = _evaluated(
+            source, profile, "rotate_feature", at_feature=hole.id, axis="y", angle=angle
+        )
+        codes = _warnings(findings)
+        assert "bore.neighbour_opened" in codes, (kernel, codes)
+        assert "bore.over_the_edge" not in codes, (kernel, codes)
+        seen[kernel] = codes
+    assert seen["mesh"] == seen["brep"]
+
+
+def test_tilting_a_bore_writes_the_stage_its_closing_needed(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Stufe, die das Schließen an der alten Stelle brauchte, steht im Schritt (§17.2).
+
+    *Merkmal drehen* rechnet zwei Boolesche Schritte: an der alten Stelle
+    schließen, an der neuen setzen. Gemeldet wurde nur der zweite — fiel das
+    Schließen auf die Störstufe zurück, stand im Schritt trotzdem ``direct``,
+    und ihr Startwert fehlte. Versetzen und die Kette melden die tiefste der
+    Stufen (``deepest``); hier wird es an ``_closed_at`` erzwungen.
+    """
+    import dataclasses
+
+    from app.core.types import SolverInfo
+
+    closed_at = prepare_ops._closed_at
+
+    def jittered(*args: Any, **kwargs: Any) -> Any:
+        outcome = closed_at(*args, **kwargs)
+        return dataclasses.replace(
+            outcome,
+            solver=SolverInfo(
+                strategy="jittered", attempted=("direct", "welded", "jittered"), seed=11
+            ),
+        )
+
+    monkeypatch.setattr(prepare_ops, "_closed_at", jittered)
+    source = _bored("mesh", RIBBED["durchgehend"], ribbed=False)
+    result = _raw_as(
+        "rotate_feature",
+        source,
+        profile,
+        quality="fine",
+        at_feature=_narrowest_hole(source).id,
+        axis="x",
+        angle=20.0,
+    )
+    assert result.solver is not None
+    assert result.solver.strategy == "jittered", result.solver
+    assert result.solver.seed == 11
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_boxes_cap_a_tilted_bore_only_on_the_lossless_stages(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, quality: Quality
+) -> None:
+    """Die Quaderkappe rechnet ohne Störung und ohne Raster — hält sie nicht, bleibt das
+    Werkzeug ungekappt, wie ``_within_the_old_rims`` es sagt.
+
+    Scheitert der ebene Schnitt an den alten Randebenen, kappen Quader
+    (``_boxed_in``). Deren Schnittmenge lief bis zum 25.09.2026 in feiner
+    Qualität über die ganze Kette, mit dem Startwert null statt dem des
+    Schritts und ohne Abbruchmarke: Im Entwurf konnte das Werkzeug still auf
+    Voxeln entstehen, und der Befund dazu ging mit dem verworfenen Ergebnis
+    verloren; scheiterte die ganze Kette, brach der Schritt ab, statt beim
+    ungekappten Werkzeug zu bleiben. Hier scheitert jede Stufe der Kappe.
+    """
+    from app.core.geom import boolean as chain
+
+    monkeypatch.setattr(prepare_ops, "_cut_at_the_rims", lambda *_args: None)
+    tried: list[str] = []
+    run_stage = chain._run_stage
+
+    def capping_fails(kind: Any, meshes: Any, stage: Any, seed: Any) -> Any:
+        if kind == "intersection" and len(meshes) > 2:
+            tried.append(stage)
+            raise ValueError("Probe: die Kappe hält auf keiner Stufe")
+        return run_stage(kind, meshes, stage, seed)
+
+    monkeypatch.setattr(chain, "_run_stage", capping_fails)
+    source = _bored("mesh", RIBBED["gesenkt"], ribbed=True)
+    result = _raw_as(
+        "rotate_feature",
+        source,
+        profile,
+        quality=quality,
+        at_feature=_narrowest_hole(source).id,
+        axis="x",
+        angle=30.0,
+    )
+    assert result.outputs[0].mesh.is_watertight
+    assert tried, "die Kappe über Quader ist gefragt worden"
+    assert set(tried) <= {"direct", "welded"}, tried
+
+
+def test_a_tilted_countersink_keeps_its_flank_beyond_the_mouth(profile: Profile) -> None:
+    """Das Werkzeug der gekippten Senkung ohne Bohrung ist ihr Kegel — auch im Überstand.
+
+    ``_turned_open_cone`` führt den Kegel über das weite Ende hinaus weiter und
+    gibt ihm dort die Zugabe aus §39 dazu. Am oberen Ende stand der Radius der
+    Weiterführung **ohne** diese Zugabe: Die Flanke lief über die ganze Länge
+    etwas steiler als die gemessene, um 30° gekippt eine 90°-Senkung Ø 8 mit
+    0,014 mm Abstand zum Kegel am oberen Rand. Sollwert: jede Mantelecke liegt
+    auf dem Kegel aus den Kennzahlen der Senkung, gekippt wie sie.
+    """
+    from app.core.geom import transform
+
+    source = _bored("mesh", RIBBED["Senkung ohne Bohrung"], ribbed=False)
+    sink = _narrowest_hole(source)
+    assert sink.kind == "cone"
+    centre = tuple(float(value) for value in sink.params["centre"])
+    matrix = np.asarray(transform.rotation("x", 30.0, centre), dtype=np.float64)
+    tool = prepare_ops._turned_open_cone(as_mesh_data(source.mesh), sink, matrix, 30.0)
+    assert tool is not None
+
+    half = np.radians(float(sink.params["angle"]) / 2.0)
+    radius = float(sink.params["diameter"]) / 2.0
+    outward = np.asarray(sink.params["axis"], dtype=np.float64)
+    outward /= np.linalg.norm(outward)
+    apex = np.asarray(centre) - outward * (radius / np.tan(half))
+    apex = matrix[:3, :3] @ apex + matrix[:3, 3]
+    turned = matrix[:3, :3] @ outward
+    relative = np.asarray(tool.raw.vertices, dtype=np.float64) - apex
+    along = relative @ turned
+    across = np.linalg.norm(relative - np.outer(along, turned), axis=1)
+    mantle = across > 1e-6
+    assert mantle.sum() >= 2 * prepare_ops.FEATURE_SECTIONS
+    assert np.abs(across[mantle] - along[mantle] * np.tan(half)).max() < 1e-9
+
+
+@pytest.mark.parametrize("case", ["Senkung ohne Bohrung", "spitze Senkung"])
+@pytest.mark.parametrize("angle", [30.0, -35.0])
+def test_a_countersink_tilted_near_a_side_says_what_the_side_shows(
+    profile: Profile, case: str, angle: float
+) -> None:
+    """Eine Senkung Ø 8 einen Millimeter vor der Seitenfläche, gekippt: „über die
+    Kante" genau dann, wenn eine Seite der Platte danach Fläche verloren hat —
+    an beiden Kernen.
+
+    Zur Kante hin gekippt, läuft die flache Flanke aus der Seite (30°: 10 mm²
+    der Seite x = 15 fehlen); von ihr weg nicht. Beide Kerne schwiegen zur
+    Kante hin, und das Netz meldete die Flanke von ihr weg: Der Kranz war der
+    Kreis des weiten Endes statt des Schnitts des Kegels mit der Oberseite,
+    und der Kreis über die ganze Länge blieb so weit wie die Mündung. Der
+    exakte Körper fragte die Kante gar nicht (``_exact_rotate_cone``;
+    Durchsicht seit 0.5.0, 25.09.2026).
+    """
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+    from tests.test_bore_depth import _evaluated
+
+    for kernel in ("mesh", "brep"):
+        solid = edit.bore_profile(
+            edit.box(30.0, 24.0, 12.0), list(RIBBED[case]), frame_of((0, 0, 1), (10.0, 0, 0))
+        )
+        source = _body(kernel, solid)
+        sink = _narrowest_hole(source)
+        changed, findings = _evaluated(
+            source, profile, "rotate_feature", at_feature=sink.id, axis="y", angle=angle
+        )
+        opened = _sides_lost(source, changed) > 1.0
+        assert opened is (angle > 0.0), (kernel, _sides_lost(source, changed))
+        codes = _warnings(findings)
+        assert ("bore.over_the_edge" in codes) is opened, (kernel, codes)
+
+
+def test_a_needle_in_the_tool_is_no_wall_of_the_through_column() -> None:
+    """Ein Dreieck ohne Fläche im Werkzeug ist keine Wand, an der die Säule endet.
+
+    Die Durchgangsprüfung nimmt als Säule höchstens den Innenkreis der
+    Werkzeugwand (``_inscribed_radius``). Ein Dreieck ohne Fläche trägt die
+    Normale null, stand damit „quer zur Achse" und im Abstand null: Die Säule
+    schrumpfte auf nichts, und „geht nicht mehr durch" blieb aus. Werkzeuge
+    aus den eigenen Dreiecken eines Körpers (``_past_the_mouths``) tragen
+    solche Nadeln mit, wo der Import sie behielt, damit das Netz dicht bleibt.
+    Sollwert: der Innenkreis des 48-Ecks, 3 · cos(π/48).
+    """
+    import math
+
+    import trimesh
+
+    from app.core.geom import lathe
+
+    column = lathe.cylinder(radius=3.0, height=10.0, sections=48)
+    count = len(column.vertices)
+    needle = trimesh.Trimesh(
+        np.vstack([column.vertices, [[3.0, 0.0, 0.0], [3.0, 0.0, 0.0], [3.0, 0.0, 1.0]]]),
+        np.vstack([column.faces, [[count, count + 1, count + 2]]]),
+        process=False,
+    )
+    inscribed = 3.0 * math.cos(math.pi / 48.0)
+    for tool in (column, needle):
+        radius = prepare_ops._inscribed_radius(MeshData.of(tool), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        assert radius == pytest.approx(inscribed, abs=1e-9), len(tool.faces)
