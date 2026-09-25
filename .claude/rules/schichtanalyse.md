@@ -655,6 +655,57 @@ Und die Folge, die den Anlass erst sichtbar machte: Ohne die Senkung findet
 `relations.cavity_chain_at` die Kette Bohrung-Senkung-Bohrung nicht mehr. Ein
 weggefiltertes Merkmal nimmt die Nachbarschaften mit, die es trägt.
 
+## Ohne Wendel ist ein Gewinde eine Fläche, deren Gänge ineinanderlaufen (25.09.2026, RM-219)
+
+`features._without_thread_turns` verwirft Zylinder ohne Wendelbeleg nur, wenn
+sie **an einem Teil** liegen, **dieselbe Materialseite** tragen und jeder
+weitere Abschnitt in den Lauf **hineinläuft und mehr Neues bringt, als er mit
+ihm teilt** (`_one_run`). Jede dieser Bedingungen folgt aus der Wendel selbst:
+eine Fläche, eine Seite, eine stetig steigende Helix. Keine braucht eine neue
+Zahl.
+
+Vorher genügten ein Radius im Vertrag der Fitstreuung (acht Prozent) und ein
+Fortschritt über der Schweißtoleranz. Gemessen über 208 Dateien und die
+gedruckten Gewinde M3 bis M8 mit abgeschalteter Wendelsuche: Die Regel fand
+kein belegtes Gewinde — die gedruckten bilden gar keinen Stapel, die Düse
+`Pool-Fountain_Nozzle` fängt die Wendelsuche —, verwarf aber in 13 Dateien
+echte Zylinder: die Flaschentaschen R 49 und Säulen R 22 des Flaschenhalters
+(Wandstücke, die um Hundertstel versetzt beginnen), den Mantel R 15 der Düse,
+die Bögen der Buchstaben am Screen-Cover, 30 von 45 Zylindern am Besenhalter.
+
+**Wer die Regel anfasst, misst beide Seiten**: gedruckte Gewinde ohne
+Wendelsuche (bilden sie einen Stapel, und wird er erkannt?) und den ganzen
+Korpus je Stapel mit Radiusstreuung, Materialseite und Überlappung der
+Abschnitte. Eine Rückfallregel, die im Korpus nie ihren Fall trifft, zeigt
+dort nur ihre Fehlgriffe.
+
+## Ein Bogen hat einen Radius und liegt auf seinem Kreis (25.09.2026, RM-219)
+
+`features._arcs_of_a_prism` trennt extrudierte Umrisse in ihre Bögen, und
+`_exactly_an_arc` nimmt ein Stück nur als gezeichneten Bogen an. Drei Sätze,
+alle am Korpus gemessen:
+
+* **Jede glatte Kurve ist auf kurzer Strecke ein Kreis.** Ihr Abstand zum
+  Kreis wächst mit der dritten Potenz der Länge; Splinestücke von vier bis
+  acht Streifen treffen einen Kreis bis auf Hundertstel eines Mikrometers
+  (Werkzeugbox, Eiffelturm) und bestehen `fit_cylinder`. Eine Kreisprüfung an
+  kurzen Stücken beweist nichts über Konstruktionsabsicht — sie beweist erst
+  etwas, wenn das Stück zusammen mit einem über das ganze Stück gleichen
+  Radius und genauen Ecken kommt.
+* **Die Trennschwelle liegt über dem Rauschen, nicht darin.** Der Radius je
+  Dreieck streut an einem CAD-Prisma bis 2,4 Prozent; bei 2 Prozent Schwelle
+  schnitt die Trennung echte Bögen an zufälligen Stellen und Splines in
+  Stücke, die auf Kreise passten. `PRISM_ARC_JUMP` steht in der Lücke bis zum
+  kleinsten gezeichneten Wechsel (6,3 Prozent).
+* **Wo die Schätzung selbst Rauschen ist, wird nicht getrennt**
+  (`PRISM_QUIET_SHARE`). Das kostet wenige echte Bögen in lauten Stücken; sie
+  bleiben, was sie vorher waren.
+
+Wer eine der drei Zahlen anfasst, misst beide Seiten: die Bögen des
+Besenhalters und der anderen Konstruktionen (Radien mit wenigen
+Nachkommastellen, genau rund) gegen Schriftzüge, Logos, Griffe und den
+Eiffelturm, je Datei die neuen Verrundungen mit Kreisfehler und Radius.
+
 ## Ein Hohlraum ohne Weg nach außen ist keine Bohrung (10.09.2026)
 
 Dasselbe Modell trug acht eigene geschlossene Schalen mit **negativem**

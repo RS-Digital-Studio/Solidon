@@ -4266,6 +4266,104 @@ def test_the_curved_faces_of_a_letter_count_its_bows() -> None:
     assert not [f for f in found.values() if f.kind == "curved_face"]
 
 
+def _arc(
+    centre: tuple[float, float], radius: float, start: float, stop: float
+) -> list[tuple[float, float]]:
+    """Ein Bogen in Schritten von einem Grad, wie ein CAD-Export ihn tesselliert."""
+    steps = round(abs(stop - start))
+    return [
+        (
+            centre[0] + radius * math.cos(math.radians(start + (stop - start) * step / steps)),
+            centre[1] + radius * math.sin(math.radians(start + (stop - start) * step / steps)),
+        )
+        for step in range(steps + 1)
+    ]
+
+
+def _extruded(outline: list[tuple[float, float]]) -> MeshData:
+    """Der Umriss 20 mm hoch aufgezogen: Streifen über die ganze Höhe, Nadeldreiecke."""
+    from shapely.geometry import Polygon
+
+    return MeshData.of(trimesh.creation.extrude_polygon(Polygon(outline), 20.0))
+
+
+def test_tangent_arcs_of_an_extrusion_are_each_a_fillet() -> None:
+    """Zwei tangentiale Bögen R 5 und R 8 eines Prismas sind zwei Verrundungen (RM-219).
+
+    Die Nachtrennung trennt erst am doppelten Radius (``CURVATURE_JUMP``), und
+    auf beide Bögen zusammen passt kein Zylinder: Bis zum 25.09.2026 stand hier
+    eine gerundete Seite, am Besenhalter acht davon mit Bögen von R 0,54 bis
+    R 5,44. An einem Prisma trennt ``_arcs_of_a_prism`` an jedem Radiuswechsel.
+    """
+    outline = [
+        (0.0, 0.0),
+        *_arc((20.0, 5.0), 5.0, -90.0, 0.0)[:-1],
+        *_arc((17.0, 5.0), 8.0, 0.0, 90.0),
+        (0.0, 13.0),
+    ]
+    forget_cache()
+    found = detect(_extruded(outline))
+
+    rounds = sorted(float(f.params["radius"]) for f in found.values() if f.kind == "fillet")
+    assert rounds == pytest.approx([5.0, 8.0], rel=1e-9)
+    assert not [f for f in found.values() if f.kind == "curved_face"]
+
+
+def test_a_prism_with_restless_radii_is_not_cut_into_arcs() -> None:
+    """Springt der Radius je Dreieck an vielen Nähten, ist er Rauschen und kein Umriss.
+
+    Derselbe Umriss aus R 5 und R 8, die Ecken um ±2 µm radial verrauscht: Der
+    Radius je Dreieck springt dann an fast jeder Naht über ``PRISM_ARC_JUMP``,
+    wie an Schriftzügen und Logos des Korpus (dort an 17 bis 58 Prozent der
+    Nähte, an den Bögen einer Konstruktion höchstens an 6,9). Zerlegt, fielen
+    Splitter heraus, die als kurze Stücke auf einen Kreis passen.
+    """
+    rng = np.random.default_rng(219)
+    clean = [
+        *_arc((20.0, 5.0), 5.0, -90.0, 0.0)[:-1],
+        *_arc((17.0, 5.0), 8.0, 0.0, 90.0),
+    ]
+    centres = [(20.0, 5.0)] * 90 + [(17.0, 5.0)] * 91
+    restless = []
+    for (x, y), (cx, cy) in zip(clean, centres, strict=True):
+        radius = math.hypot(x - cx, y - cy)
+        push = 0.002 * (2.0 * rng.random() - 1.0) / radius
+        restless.append((x + (x - cx) * push, y + (y - cy) * push))
+
+    def arcs_of(profile: list[tuple[float, float]]) -> list[list[int]]:
+        body = _extruded([(0.0, 0.0), *profile, (0.0, 13.0)]).raw
+        normals = np.asarray(body.face_normals)
+        side = [int(i) for i in np.flatnonzero(np.abs(normals[:, 2]) < 0.5)]
+        piece = [
+            i for i in side if abs(normals[i, 1] + 1.0) > 1e-6 and abs(normals[i, 0] + 1.0) > 1e-6
+        ]
+        piece = [i for i in piece if abs(normals[i, 1] - 1.0) > 1e-6]
+        return features_module._arcs_of_a_prism(body, piece)
+
+    assert len(arcs_of(clean)) >= 2, "ohne Rauschen trennt die Bogentrennung die zwei Bögen"
+    assert arcs_of(restless) == []
+
+
+def test_an_elliptic_extrusion_stays_one_curved_face() -> None:
+    """Die Gegenrichtung: Wandert die Krümmung stetig, entsteht keine Verrundung.
+
+    Die Trennung schneidet dort nicht — kein Nachbar weicht um zwei Prozent
+    ab —, und auf den ganzen Ellipsenbogen passt kein Kreis.
+    """
+    outline = [
+        (0.0, 0.0),
+        *[
+            (20.0 + 10.0 * math.cos(math.radians(turn)), 8.0 + 8.0 * math.sin(math.radians(turn)))
+            for turn in range(-90, 91)
+        ],
+        (0.0, 16.0),
+    ]
+    forget_cache()
+    found = detect(_extruded(outline))
+
+    assert [f.kind for f in found.values() if f.kind != "face"] == ["curved_face"]
+
+
 @pytest.mark.parametrize(
     "name",
     [

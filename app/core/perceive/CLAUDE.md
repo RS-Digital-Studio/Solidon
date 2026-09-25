@@ -1148,11 +1148,38 @@ Verweis bleibt je Merkmal eine Warnung
   geometrisch gerichtet. Der Torus behält die gemessene Normale seiner
   Symmetrieebene, da sie keine Längsrichtung darstellt.
 - **Gewindegänge schreiten entlang der Achse fort.** Drei gleich dicke Fits
-  zählen nur, wenn jeder weitere Abschnitt den lückenlosen Lauf um mehr als
-  die Schweißtoleranz verlängert. Eine geometrisch erkannte Wendel entfernt
-  ihre über die Flächenmehrheit belegten Fits bereits vorher, unabhängig von
-  deren Zahl. Verschachtelte Restflecken einer geänderten Bohrung ohne diesen
-  Wendelbeleg bleiben Merkmale.
+  zählen nur, wenn sie an einem Teil liegen (`face_components`), dieselbe
+  Materialseite tragen und jeder weitere Abschnitt in den Lauf hineinläuft
+  und mehr Neues bringt, als er mit ihm teilt (`_one_run`, RM-219). Eine
+  geometrisch erkannte Wendel entfernt ihre über die Flächenmehrheit belegten
+  Fits bereits vorher, unabhängig von deren Zahl. Verschachtelte Restflecken
+  einer geänderten Bohrung ohne diesen Wendelbeleg bleiben Merkmale — ebenso
+  die Wandstücke, die um Hundertstel versetzt beginnen (die Flaschentaschen
+  R 49 des Flaschenhalters), Absätze, die sich nur berühren (der Zapfen
+  R 4,76 · R 5,10 · R 4,76 am Besenhalter), und Bögen getrennter Teile.
+  Gemessen am 25.09.2026 über 208 Dateien und die gedruckten Gewinde M3 bis
+  M8: Ohne Wendelbeleg fand die Regel vorher kein belegtes Gewinde, verwarf
+  aber in 13 Dateien echte Zylinder.
+- **Die Bögen eines Prismas werden einzeln eingepasst** (`_arcs_of_a_prism`,
+  vierte Runde in `_fitted`, RM-219). Ein extrudierter Umriss aus
+  tangentialen Bögen und Geraden bleibt nach `CURVATURE_JUMP` ein Stück, auf
+  das kein Zylinder passt. Steht jede Normale eines solchen Stücks quer zu
+  einer Achse und ist sein Radius je Dreieck ruhig (`face_radii`, einmal je
+  Körper; höchstens `PRISM_QUIET_SHARE` der Nähte springen), wird es an
+  jedem Wechsel über `PRISM_ARC_JUMP` (5 %, in der Lücke zwischen dem
+  Rauschen von 2,4 % und dem kleinsten gezeichneten Wechsel von 6,3 %) und an
+  jedem Übergang zwischen Bogen und Gerade getrennt. Ein Stück zählt nur als
+  gezeichneter Bogen (`_exactly_an_arc`): ein Radius über das ganze Stück und
+  die Ecken in der Schweißtoleranz auf seinem Kreis. Alles davon ist
+  gemessen: An Schriftzügen, Logos und Griffen springt der Radius an jeder
+  dritten Naht, die Streben des Eiffelturms wandern um zwei bis drei Prozent
+  je Streifen, und kurze Splinestücke passen um Mikrometer auf einen Kreis —
+  genau genug für `fit_cylinder`, nicht für einen CAD-Bogen. Am Besenhalter
+  zerfallen seine acht gerundeten Seiten in Bögen mit den Radien der
+  Konstruktion (R 0,54 bis R 5,44; zusammen mit dem Fix der Gewinderegel
+  93 statt 12 Verrundungen), und *In Flächen und Kanten umwandeln* fiel von
+  64 auf 14 s; die Bögen der Buchstaben und ein Ellipsenbogen bleiben in
+  dieser Runde gerundete Seiten.
 - **Der Merkmals-Cache hat zwei Schranken.** `CACHE_LIMIT` zählt
   Einträge, `CACHE_INDEX_LIMIT` ihr Gewicht in Flächenindizes —
   ein Eintrag für ein 400 000-Dreieck-Modell wiegt 3,9 MiB, und

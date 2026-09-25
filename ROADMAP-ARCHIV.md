@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-25 | [Nadeldreiecke: die Gewinderegel und die Bögen eines Prismas (25.09.2026)](#nadeldreiecke-die-gewinderegel-und-die-bögen-eines-prismas-25092026) |
 | 2026-09-25 | [Große Netze: Speicher, Merkmalsgrenze und die Erkennung an einer Stelle (25.09.2026)](#große-netze-speicher-merkmalsgrenze-und-die-erkennung-an-einer-stelle-25092026) |
 | 2026-09-25 | [Gekippte und versetzte Bohrungen sagen, was sie sind (25.09.2026)](#gekippte-und-versetzte-bohrungen-sagen-was-sie-sind-25092026) |
 | 2026-09-25 | [Das Einlesen großer Netze zählt einmal und liest im Arbeiter (25.09.2026)](#das-einlesen-großer-netze-zählt-einmal-und-liest-im-arbeiter-25092026) |
@@ -31301,3 +31302,71 @@ Dazu aus dem Bericht, je mit Test:
   je an Netz und exaktem Körper. Am Schraubenhalter mit Wabenmuster trägt die
   gekippte Befestigungsbohrung bei 10°, 20°, 30° und 40° vor der Rückwand
   nichts mehr ab, „über die Kante" bei 20° und 30° ist fort.
+
+## Nadeldreiecke: die Gewinderegel und die Bögen eines Prismas (25.09.2026)
+
+<a id="rm-219"></a>
+
+- [x] **RM-219 — Rundungen aus langen Nadeldreiecken werden kaum als Zylinder erkannt.**
+  Gemessen beim Bau von P4.0 (Bericht p40): Der Besenhalter (59 740 Dreiecke)
+  zerfällt in 12 148 Ebenen und 17 Zylinder, *In Flächen und Kanten umwandeln*
+  braucht 150 s und liefert einen gültigen, aber facettierten Körper. Die
+  Umwandlung ist nicht der Hebel — sie nimmt, was die Erkennung hergibt.
+  Dasselbe Netz ist der Ausreißer der Selbstdurchdringung (bausteine B15:
+  3,2 Mio. echte Kandidaten, weil Nachbardreiecke fast immer eine Ecke teilen).
+  Weg: in der Erkennung schmale Dreiecke eines Streifens gemeinsam einpassen
+  (Sehnenzug über mehrere Nadeln statt je Fleck), gegen den Korpus mit Namen
+  prüfen. Abnahme: Besenhalter mit seinen Rundungen als Zylinder, Umwandlung
+  unter 30 s, keine Änderung an den übrigen Korpuskörpern.
+
+  **Abgeschlossen am 25.09.2026 — die Nadeln waren nicht die Ursache.** Zwei
+  Fehler der Erkennung, beide über den ganzen Korpus gemessen.
+
+  Die Gewinderegel ohne Wendelbeleg (`features._without_thread_turns`) nahm am
+  Besenhalter 30 von 45 Zylindern weg, darunter zwölf Bohrungen Ø 6,12 und
+  Ø 5,44: Ein abgesetzter Zapfen R 4,76 · R 5,10 · R 4,76 und Bögen zweier
+  getrennter Teile galten als drei Gewindegänge, weil jeder Fortschritt über
+  der Schweißtoleranz als Gang zählte und Radien innerhalb der Fitstreuung
+  (8 Prozent) als gleich. Über 208 Dateien und die gedruckten Gewinde M3 bis
+  M8 ohne Wendelsuche fand sie kein belegtes Gewinde, verwarf aber in 13
+  Dateien echte Zylinder — die Flaschentaschen R 49 des Flaschenhalters, der
+  Mantel R 15 der Pool-Düse. Jetzt verlangt sie ein Teil, eine Materialseite
+  und Gänge, die ineinanderlaufen und mehr Neues bringen, als sie teilen.
+
+  Und die gerundeten Seiten des Besenhalters sind Umrisse aus tangentialen
+  Bögen (R 0,54 bis R 5,44 in Schritten von einem Grad) und Geraden;
+  `CURVATURE_JUMP` trennt sie erst beim doppelten Radius. Eine vierte Runde in
+  `_fitted` trennt ruhige Prismen an jedem Radiuswechsel über fünf Prozent
+  (`_arcs_of_a_prism`) und nimmt ein Stück nur als gezeichneten Bogen an —
+  ein Radius über das ganze Stück, die Ecken in der Schweißtoleranz auf dem
+  Kreis (`_exactly_an_arc`). Der Sehnenzug über mehrere Nadeln war nicht
+  nötig: An einem Prisma reicht jeder Streifen über die ganze Höhe, und der
+  Radius je Dreieck ist dort genau genug. Zwei Irrwege sind gemessen: Bei zwei
+  Prozent Schwelle zerfielen Schriftzüge, Logos, Griffe und die Streben des
+  Eiffelturms in Stücke, die auf Kreise passen (am Flaschenhalter 79 neue
+  „Verrundungen"), und weder Kreisfehler noch Radiusstreuung allein trennten
+  sie von echten Bögen.
+
+  Am Besenhalter: 152 statt 62 Merkmale — neun Bohrungen, sechs Zapfen,
+  93 Verrundungen mit den Radien der Konstruktion, von den gerundeten Seiten
+  sechs Splitter zu drei und vier Dreiecken. *In Flächen und Kanten
+  umwandeln* 150 → 14 s (64 s vor diesen Fixes), 282 Ebenen statt 12 148 und
+  113 Zylinder statt 17, das Volumen trifft das Netz auf 0,05 mm³.
+
+  **Die übrigen Korpuskörper ändern sich — dort, wo die Regel falsch lag.** Von
+  203 Netzdateien bleiben 181 Merkmal für Merkmal gleich, von 24 neuen 20, von
+  neun STEP-Dateien alle. Die übrigen gewinnen zurück, was die Gewinderegel
+  verwarf (Flaschenhalter 19 Stücke der Flaschentaschen, Pool-Düse vier, das
+  Mamiya-Teil eine Durchgangsbohrung Ø 1,80 und drei Mantelstücke R 2,36),
+  oder gezeichnete Bögen aus ruhigen Prismen, alle genau rund (Bohrerhalter
+  vier R 5,000, Laptopständer R 16,150, Schraubendreherhalter R 20,000 und
+  R 15,000, Besteckkörbe, Schwammablage und Werkzeugboxen je ein bis zwei).
+  Mit zurück kamen am Screen-Cover 23 bis 25 Splinestücke der Buchstaben
+  „RS" und am Eiffelturm vier Strebenstücke, die die normale Runde als
+  Verrundungen einpasst — vorher verdeckte sie nur die fehlerhafte Regel; das
+  steht als RM-243 im Register. Erkennungszeit über den Korpus 426 → 431 s.
+  Nachweis: `test_thread_turn_fragments.py` (getrennte Teile, Wandstücke,
+  Absätze, Materialseite, Steckverbindung) und `test_features.py`
+  (tangentiale Bögen eines Prismas, verrauschte Radien, Ellipsenbogen). Die
+  Nebenbemerkung zur Selbstdurchdringung steht als RM-244 im Register: Die
+  Schnittsuche endet am Besenhalter heute nach 6,4 s am Budget.

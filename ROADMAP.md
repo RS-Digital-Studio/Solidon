@@ -60,7 +60,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-216 — Ein erzeugtes Flächenmerkmal behält nach einer Änderung seine alte Fläche](#rm-216) | Geometrie, Erkennung und Druckvorbereitung | Nach einer Bohrung trägt face_top weiter 2 400 statt 2 349,878 mm² — Kennzahlen gebauter Merkmale aus den nachgeführten Dreiecken neu messen (Sonde s35_stale_area) |
 | [RM-217 — Die Zuordnung meldet doppelt und fragt ohne Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Formen-Beispiel auf acht Hinweise gebündelt, alle Kennungen und Zahlen bleiben erhalten. Offen: remove_feature.gone und perceive.orphaned doppelt, orphaned nach Teilen, Frage unter der Deckfläche, altes Merkmal ohne Markierung — _with_features filtert, question_context trägt das alte Merkmal |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | drill_brep_hole nummeriert nach Lage; Verschieben und Einfügen sagen an build_tray_v3.step ab — eindeutige geometrische Zuordnung behält den Namen wie am Netz |
-| [RM-219 — Rundungen aus langen Nadeldreiecken werden kaum als Zylinder erkannt](#rm-219) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: 12 148 Ebenen, 17 Zylinder, Umwandlung 150 s — Streifen schmaler Dreiecke gemeinsam einpassen, Korpus mit Namen gegenprüfen |
 | [RM-222 — Die Erkennung einer Durchbohrung am Netz hängt an der Vorgeschichte](#rm-222) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: gleiche Geometrie, mit vorherigem Vergrößern eine Bohrung weniger — beide Stände als Korpusfall, Stelle eingrenzen |
 | [RM-223 — Zwei Netzoperationen sagen das Falsche](#rm-223) | Geometrie, Erkennung und Druckvorbereitung | Angleichen mit 1 mm endet als unerwarteter Fehler (MemoryError), Verfeinern leiht sich den Satz der lokalen Suche — vorab schätzen und absagen, eigener Satz |
 | [RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen](#rm-225) | Geometrie, Erkennung und Druckvorbereitung | Gewürzdeckel: nach Teilung ändern 124 Flächen und kein Muster, nach Entfernen 31 Zusatzflächen und 1,7 mm³ Überlappung — Feld begrenzen, Stirnkappen verschmelzen |
@@ -71,6 +70,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
 | [RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe](#rm-239) | Geometrie, Erkennung und Druckvorbereitung | Siebhalter-Ring mit Riss: die Heilung überwiegt, 12 Eckpaare zu 0,015 µm werden zusammengelegt, 24 Dreiecke fallen — Gruppen nach Flächenblatt trennen, ohne Dreieckssuppen aufzureißen; Import- und Reparaturregel zusammenlegen |
 | [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
+| [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
+| [RM-244 — Die Schnittsuche endet an Nadeldreiecken am Budget](#rm-244) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: 35 648 von 59 740 Dreiecken in 6,4 s geprüft — messen, welche Paare das Budget verbrauchen, dann vollständig unter dem Budget |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
@@ -1652,20 +1653,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Bohrung B vor A, Einfügen zwischen und rechts rechnen durch, Namen und
   Passungen folgen ihrem Merkmal, Strg+Z stellt den Stand bitgleich her.
 
-<a id="rm-219"></a>
-
-- [ ] **RM-219 — Rundungen aus langen Nadeldreiecken werden kaum als Zylinder erkannt.**
-  Gemessen beim Bau von P4.0 (Bericht p40): Der Besenhalter (59 740 Dreiecke)
-  zerfällt in 12 148 Ebenen und 17 Zylinder, *In Flächen und Kanten umwandeln*
-  braucht 150 s und liefert einen gültigen, aber facettierten Körper. Die
-  Umwandlung ist nicht der Hebel — sie nimmt, was die Erkennung hergibt.
-  Dasselbe Netz ist der Ausreißer der Selbstdurchdringung (bausteine B15:
-  3,2 Mio. echte Kandidaten, weil Nachbardreiecke fast immer eine Ecke teilen).
-  Weg: in der Erkennung schmale Dreiecke eines Streifens gemeinsam einpassen
-  (Sehnenzug über mehrere Nadeln statt je Fleck), gegen den Korpus mit Namen
-  prüfen. Abnahme: Besenhalter mit seinen Rundungen als Zylinder, Umwandlung
-  unter 30 s, keine Änderung an den übrigen Korpuskörpern.
-
 <a id="rm-222"></a>
 
 - [ ] **RM-222 — Die Erkennung einer Durchbohrung am Netz hängt an der Vorgeschichte.**
@@ -1845,6 +1832,42 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   und der Senkungskegel an `plate_countersunk.stl` kommen mit vier Bohrungen
   und dem Volumen der unbeschädigten Platte zurück; eine gerade Wand mit
   fehlendem Stück bleibt eben.
+
+<a id="rm-243"></a>
+
+- [ ] **RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst.**
+  Gefunden beim Abschluss von RM-219 (25.09.2026). Die Nachtrennung
+  (`CURVATURE_JUMP`) zerlegt einen Umriss mit verrauschtem Radius je Dreieck
+  in kurze Stücke, und ein Stück von vier bis acht Streifen trifft einen
+  Kreis auf Mikrometer — `fit_cylinder` nimmt es an. Am Screen-Cover
+  (`Screen-Cover_RS.stl`, `…_Basis.stl`, `…_RS.3mf`) werden so die Buchstaben
+  „RS" zu 23 bis 25 Verrundungen mit wandernden Radien (11,05 · 11,21 ·
+  11,34 · 11,46 … mm, 2 bis 10 µm neben dem Kreis); bis RM-219 verwarf sie die
+  fehlerhafte Gewinderegel, und die Seiten trugen gar kein Merkmal. Dieselbe
+  Klasse am Eiffelturm (sechs neue Strebenstücke für zwei alte). Die am
+  Prisma bewährten Größen trennen in der normalen Runde nicht: Die echten,
+  aber µm-rauen Flaschentaschen R 49 des Flaschenhalters haben dieselbe
+  Kreisabweichung und ein ebenso lautes Radiusfeld. Weg: an den Stücken eines Flecks prüfen, ob
+  sie zusammen einen Umriss mit stetig wanderndem Radius bilden (benachbart,
+  tangential, Radius und Mitte wandern ohne Sprung) — dann ist der Fleck eine
+  gerundete Seite; die Flaschentaschen als Gegenfall. Abnahme: Screen-Cover
+  ohne Verrundungen an den Buchstaben, Flaschenhalter, Besenhalter und die
+  übrigen Korpuskörper Merkmal für Merkmal gleich.
+
+<a id="rm-244"></a>
+
+- [ ] **RM-244 — Die Schnittsuche endet an Nadeldreiecken am Budget.**
+  Aus RM-219 (Nebenbemerkung, Befund B15 der Bausteine) und am 25.09.2026
+  nachgemessen: `repair.crossings_of` am Besenhalter (59 740 Dreiecke,
+  Median-Seitenverhältnis 131) prüft in 6,4 s 35 648 der 59 740 Dreiecke und
+  endet am Budget von zwei Millionen Paaren (`complete=False`). Die
+  Netzfehlerkarte zeigt den Rest als unbekannt, und *Überschneidungen
+  auflösen* weiß nicht, ob der Körper sauber ist. Lange Nadeln haben große
+  Hüllquader, und Nachbardreiecke teilen fast immer eine Ecke. Weg: messen,
+  welche Paare das Budget verbrauchen, und sie billiger ausschließen, ohne
+  eine Durchdringung zu übersehen. Abnahme: Besenhalter vollständig geprüft
+  unter dem Budget, dieselben Paare wie der skalare Weg
+  (`tests/test_self_intersections.py`).
 
 ## Bedienung und Darstellung
 

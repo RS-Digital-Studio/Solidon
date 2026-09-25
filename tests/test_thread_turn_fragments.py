@@ -2,25 +2,37 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
 from app.core.deferred import trimesh
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.fasteners import ThreadParams, printed_thread
 from app.core.perceive.features import CylinderFit, _fitted, _without_thread_turns
 
 
 def _fits_for(
     entries: tuple[tuple[float, tuple[float, float]], ...],
+    *,
+    connected: bool = False,
 ) -> tuple[trimesh.Trimesh, list[tuple[CylinderFit, list[int]]]]:
-    """Zylinderfits mit echten, getrennten axialen Patch-Ausdehnungen."""
+    """Zylinderfits mit echten, getrennten axialen Patch-Ausdehnungen.
+
+    Ohne ``connected`` ist jedes Dreieck ein Teil für sich; mit verbinden zwei
+    Brückendreiecke je Nachbarpaar alle zu einem Körper, wie die Gänge eines
+    Gewindes auf einer Fläche liegen.
+    """
     vertices: list[tuple[float, float, float]] = []
     faces: list[tuple[int, int, int]] = []
     found: list[tuple[CylinderFit, list[int]]] = []
     for radius, (low, high) in entries:
         offset = len(vertices)
         vertices.extend(((radius, 0.0, low), (0.0, radius, high), (-radius, 0.0, low)))
+        if connected and offset:
+            faces.append((offset - 2, offset - 1, offset))
+            faces.append((offset, offset + 1, offset - 1))
         faces.append((offset, offset + 1, offset + 2))
         found.append(
             (
@@ -70,10 +82,93 @@ def test_progressing_overlapping_turns_are_still_filtered() -> None:
             (2.458, (1.00, 4.40)),
             (2.457, (4.20, 8.00)),
             (2.994, (0.20, 8.00)),
-        )
+        ),
+        connected=True,
     )
 
     assert _without_thread_turns(body, found) == []
+
+
+def test_turns_on_separate_parts_are_no_thread() -> None:
+    """Derselbe fortschreitende Lauf, aber jeder Abschnitt auf einem eigenen Teil.
+
+    Ein Gewinde ist eine zusammenhängende Fläche; Abschnitte getrennter Teile
+    können keine Gänge einer Wendel sein. Der Besenhalter
+    (``broomholdervcd_d35mm.stl``) besteht aus drei Teilen übereinander, die
+    sich in der Höhe um 0,48 mm überlappen: Vier koaxiale Bögen R 5,10 aus
+    zwei Teilen ergaben einen Lauf aus drei Abschnitten, und mit ihm verwarf
+    die Erkennung 30 von 45 Zylindern — darunter zwölf Bohrungen Ø 6,12 und
+    Ø 5,44, die durch alle drei Teile gehen (25.09.2026, RM-219).
+    """
+    body, found = _fits_for(
+        (
+            (2.457, (0.0, 1.20)),
+            (2.458, (1.00, 4.40)),
+            (2.457, (4.20, 8.00)),
+            (2.994, (0.20, 8.00)),
+        )
+    )
+
+    assert _without_thread_turns(body, found) == found
+
+
+def test_pieces_of_one_wall_that_start_hundredths_apart_are_no_thread() -> None:
+    """Die Stücke einer Wand teilen fast ihre ganze Höhe und bringen kaum Neues.
+
+    Am Flaschenhalter begannen die Stücke der Flaschentaschen R 49 bei −0,05,
+    −0,03 und 0,00 mm und endeten bei 159,96 bis 160,00; jede Verschiebung über
+    der Schweißtoleranz zählte als Gang, und die Regel verwarf die Taschen
+    (25.09.2026, RM-219).
+    """
+    body, found = _fits_for(
+        ((49.0, (-0.05, 159.96)), (48.999, (-0.03, 159.97)), (48.993, (0.0, 160.0))),
+        connected=True,
+    )
+
+    assert _without_thread_turns(body, found) == found
+
+
+def test_sections_that_only_touch_are_no_thread() -> None:
+    """Aufeinandergesetzte Absätze laufen nicht ineinander, wie Gänge es tun.
+
+    Die abgesetzten Ränder des Screen-Covers: R 24,867, 24,975 und 25,084 mm,
+    jeder genau auf dem vorigen.
+    """
+    body, found = _fits_for(
+        ((24.867, (0.0, 1.0)), (24.975, (1.0, 2.0)), (25.084, (2.0, 3.0))), connected=True
+    )
+
+    assert _without_thread_turns(body, found) == found
+
+
+def test_turns_facing_both_ways_are_no_thread() -> None:
+    """Die Gänge eines Gewindes tragen alle dieselbe Materialseite."""
+    body, found = _fits_for(
+        ((2.457, (0.0, 1.20)), (2.458, (1.00, 4.40)), (2.457, (4.20, 8.00))), connected=True
+    )
+    mixed = [found[0], (replace(found[1][0], inward=False), found[1][1]), found[2]]
+
+    assert _without_thread_turns(body, mixed) == mixed
+
+
+def test_a_pin_joint_of_separate_parts_keeps_its_cylinders() -> None:
+    """Zapfen, Rohr, Zapfen — drei Teile, alle Ø 6, in der Höhe je 0,2 mm überlappend.
+
+    Am Netz derselbe Aufbau wie am Besenhalter: koaxial, gleicher Radius, und
+    jede Spanne verlängert den Lauf. Zusammengelegt wird nichts — Zapfen und
+    Bohrung sind verschiedene Flächen, die Zapfen berühren sich nicht —, und
+    jedes Stück ist ein eigener Teil, also keine Wendel.
+    """
+    pins = [trimesh.creation.cylinder(radius=3.0, height=10.0, sections=64) for _ in range(2)]
+    tube = trimesh.creation.annulus(r_min=3.0, r_max=6.0, height=10.0, sections=64)
+    for number, part in enumerate((pins[0], tube, pins[1])):
+        part.apply_translation((0.0, 0.0, 5.0 + number * 9.8))
+    mesh = MeshData.of(trimesh.util.concatenate([*pins, tube]))
+
+    fits = sorted((round(fit.radius, 2), fit.inward) for fit, _patch in _fitted(mesh).cylinders)
+
+    # Zwei Zapfen und die Bohrung R 3, dazu der Mantel des Rohrs R 6.
+    assert fits == [(3.0, False), (3.0, False), (3.0, True), (6.0, False)]
 
 
 def test_an_overlapping_m3_thread_keeps_its_geometric_helix_proof() -> None:

@@ -815,6 +815,40 @@ SINK_FIT_LIMIT = 0.25
 #: was getrennt gehört, und lässt beisammen, was eine Fläche ist.
 CURVATURE_JUMP = 0.5
 
+#: Wie weit zwei Nachbarn **eines Prismas** im Radius auseinanderliegen dürfen,
+#: bevor ein Bogen dort endet — als Anteil des größeren (RM-219, 25.09.2026).
+#:
+#: Ein extrudierter Umriss aus tangentialen Bögen ist ein Fleck, und
+#: :data:`CURVATURE_JUMP` trennt erst ab dem Doppelten: Am Besenhalter blieben
+#: R 1,36 und R 2,72, R 4,76 und R 5,44 beisammen, dazu die Geraden zwischen
+#: ihnen, und auf keine seiner acht gerundeten Seiten passte ein Zylinder. An
+#: einem Prisma ist der Radius genau, weil jeder Streifen über die ganze Höhe
+#: reicht. **Der Wert liegt in der Lücke zwischen Rauschen und Zeichnung**:
+#: Innerhalb eines Bogens des Besenhalters streut der Radius um höchstens
+#: 2,4 Prozent, der kleinste gezeichnete Wechsel des Korpus beträgt
+#: 6,3 Prozent (R 5,10 gegen 5,44). Zwei Prozent lagen im Rauschen — sie
+#: zerlegten Bögen an zufälligen Stellen und die geschwungenen Streben des
+#: Eiffelturms, deren Radius um zwei bis drei Prozent je Streifen wandert, in
+#: kurze Stücke, die auf Kreise passten. Wo der Radius öfter springt, ist er
+#: Rauschen, und getrennt wird nicht (:data:`PRISM_QUIET_SHARE`); ein Stück
+#: zählt nur als gezeichneter Bogen (:func:`_exactly_an_arc`).
+PRISM_ARC_JUMP: Final = 0.05
+
+#: Ab welchem Anteil springender Nähte die Radien eines Prismas Rauschen sind
+#: und kein Umriss aus Bögen (RM-219, 25.09.2026).
+#:
+#: Der Radius je Dreieck ist nur so genau wie die Vernetzung. An einem
+#: CAD-Export mit gleichmäßig unterteilten Bögen springt er selten — in jedem
+#: Stück des Besenhalters an höchstens 1,3 Prozent der Nähte, und das sind die
+#: Grenzen seiner Bögen. An Schriftzügen, Logos und frei geformten Griffen
+#: springt er an jeder dritten, und dort zerfällt der Umriss in Splitter von
+#: sechs bis zehn Dreiecken, die genau genug auf Kreise passen: gemessen an 15
+#: Dateien des Korpus, zurückgehalten Radien wie 4,637, 1,256 und 5,283 am
+#: Bohrerhalter oder 21,6 bis 21,8 am Toilettenpapierhalter bei 12 bis 69 Prozent
+#: springender Nähte. Wenige echte Bögen in lauten Stücken bleiben dabei, was
+#: sie vorher waren — R 2 an der Schwammablage bei 13 Prozent.
+PRISM_QUIET_SHARE: Final = 0.1
+
 #: Ab welchem Anteil Kugeln und Ringe an **allen** Merkmalen das Modell eine
 #: Freiform ist — ein Scan, eine Figur, ein Segel.
 #:
@@ -2225,6 +2259,7 @@ def _fitted(
             # Jedes Stück wird gefragt, nicht nur bis zum ersten Treffer — die
             # Liste ist Absicht, kein ``any`` mit Kurzschluss.
             classified = [classify(piece) for piece in pieces] if split_apart else []
+            leftovers: list[list[int]] = [] if split_apart else [patch]
             for piece, known in zip(pieces, classified, strict=False):
                 if not known:
                     separated = _cylinder_beside_a_torus(
@@ -2232,21 +2267,37 @@ def _fitted(
                     )
                     if separated is not None:
                         found.append(separated)
-            if any(classified):
+                    else:
+                        leftovers.append(piece)
+            if not any(classified):
+                # **Dritte Runde, für den Mantel eines knapp aufgezogenen
+                # Langlochs** (RM-155): kein Zylinder, weil der Weg zu groß
+                # ist, und keine zwei Bögen, weil die Flanken für die
+                # Krümmungstrennung zu schmal sind. Als Ganzes ist er trotzdem
+                # eine Form — ein Prisma über einem Stadion —, und die wird hier
+                # eingepasst. Nach dem Split und nicht davor: Was zwei Bögen
+                # ergibt, setzt :mod:`app.core.perceive.slots` zusammen wie
+                # bisher.
+                stadium = fit_stadium(body, patch)
+                if stadium is not None and stadium.good and stadium.inward:
+                    stadiums.append((stadium, patch))
+                    tori.drop_patch(patch)
+                    continue
+            # **Vierte Runde, für die Bögen eines Prismas** (RM-219): Ein
+            # extrudierter Umriss aus tangentialen Bögen und Geraden zerfällt
+            # nach :data:`CURVATURE_JUMP` nicht, und auf das Ganze passt kein
+            # Zylinder. An einem Prisma ist der Radius genau genug, um an
+            # jedem Wechsel zu trennen (:func:`_arcs_of_a_prism`); eingepasst
+            # wird ein Stück nur, wenn es ein gezeichneter Bogen ist (:func:`_exactly_an_arc`).
+            arcs = [
+                classify(arc)
+                for leftover in leftovers
+                for arc in _arcs_of_a_prism(body, leftover, check_cancelled)
+                if _exactly_an_arc(body, arc, check_cancelled)
+            ]
+            if any(classified) or any(arcs):
                 # Belegte Teilflächen ersetzen die unsichere Gesamtdeutung;
                 # dieselben Dreiecke zählen nicht zusätzlich als verworfener Ring.
-                tori.drop_patch(patch)
-                continue
-            # **Dritte Runde, für den Mantel eines knapp aufgezogenen
-            # Langlochs** (RM-155): kein Zylinder, weil der Weg zu groß ist,
-            # und keine zwei Bögen, weil die Flanken für die Krümmungstrennung
-            # zu schmal sind. Als Ganzes ist er trotzdem eine Form — ein
-            # Prisma über einem Stadion —, und die wird hier eingepasst. Nach
-            # dem Split und nicht davor: Was zwei Bögen ergibt, setzt
-            # :mod:`app.core.perceive.slots` zusammen wie bisher.
-            stadium = fit_stadium(body, patch)
-            if stadium is not None and stadium.good and stadium.inward:
-                stadiums.append((stadium, patch))
                 tori.drop_patch(patch)
 
         if check_cancelled is not None:
@@ -2845,6 +2896,14 @@ def _split_off_fillets(body: trimesh.Trimesh, found: Cylinders) -> tuple[Cylinde
     return whole, fillets
 
 
+def _shell_of_each_face(body: trimesh.Trimesh) -> np.ndarray:
+    """Zu jedem Dreieck die Nummer seines Teils (:func:`face_components`, je Netz gemerkt)."""
+    shell = np.empty(len(body.faces), dtype=np.intp)
+    for number, component in enumerate(face_components(body)):
+        shell[component] = number
+    return shell
+
+
 def _without_thread_turns(
     body: trimesh.Trimesh,
     found: Cylinders,
@@ -2901,6 +2960,20 @@ def _without_thread_turns(
     zusammenführen; der Flächenbeleg bleibt derselbe. Ohne Wendelbeleg gilt
     weiterhin ausschließlich der fortschreitende Lauf aus mindestens drei
     Abschnitten. Verschachtelte Reste einer Bohrungswand reichen nicht.
+
+    **Und ein Gewinde ist eine Fläche an einem Teil, deren Gänge in eine
+    Richtung zeigen und ineinanderlaufen** (RM-219, 25.09.2026): Gänge, Kern
+    und Auslauf liegen auf demselben Teil (:func:`face_components`), die
+    Gänge tragen dieselbe Materialseite, und jeder läuft in den nächsten
+    (:func:`_one_run`). Über 208 Dateien des Korpus und alle gedruckten
+    Gewinde hat die Regel ohne Wendelbeleg vorher kein belegtes Gewinde
+    gefunden, aber in 13 Dateien echte Zylinder verworfen: am Flaschenhalter
+    die Flaschentaschen R 49 über die volle Höhe, weil ihre Wandstücke um
+    Hundertstel versetzt beginnen; am Besenhalter 30 von 45 Zylindern,
+    darunter zwölf Bohrungen Ø 6,12 und Ø 5,44, weil ein abgesetzter Zapfen
+    R 4,76 · R 5,10 · R 4,76 und Bögen zweier Teile als Lauf galten; am
+    Screen-Cover die Bögen der Buchstaben. Ein zusammengelegter Fit über
+    mehrere Teile ist kein Gang.
     """
     for helix in helices:
         faces = set(helix.face_indices)
@@ -2914,10 +2987,16 @@ def _without_thread_turns(
     axes = np.asarray([fit.axis for fit, _patch in found], dtype=float)
     centres = np.asarray([fit.centre for fit, _patch in found], dtype=float)
     radii = np.asarray([fit.radius for fit, _patch in found], dtype=float)
+    shells = _shell_of_each_face(body)
+    parts = np.full(len(found), -1, dtype=np.intp)
+    for index, (_fit, patch) in enumerate(found):
+        on = np.unique(shells[np.asarray(patch, dtype=np.intp)])
+        if len(on) == 1:
+            parts[index] = on[0]
     parallel_limit = units.exact_cos_degrees(SINK_AXIS_LIMIT)
     used: set[int] = set()
     for index, (fit, _patch) in enumerate(found):
-        if index in used:
+        if index in used or parts[index] < 0:
             continue
         axis = axes[index]
         offset = centres - centres[index]
@@ -2927,6 +3006,7 @@ def _without_thread_turns(
         coaxial = np.flatnonzero(
             (np.abs(axes @ axis) >= parallel_limit)
             & (np.linalg.norm(across, axis=1) <= fit.radius * SINK_FIT_LIMIT)
+            & (parts == parts[index])
         ).tolist()
         stack = [
             index,
@@ -2935,6 +3015,7 @@ def _without_thread_turns(
                 for other_index in coaxial
                 if other_index != index
                 and other_index not in used
+                and found[other_index][0].inward is fit.inward
                 and abs(radii[other_index] - fit.radius) <= fit.radius * CYLINDER_TOLERANCE
             ),
         ]
@@ -2979,21 +3060,29 @@ def _one_run(
 
     Die Frage, die ein Gewinde von einem Stapel Wände trennt: Die Gänge einer
     Helix gehen ineinander über, zwei Bohrungen durch zwei Wände haben eine
-    Lücke dazwischen. Berührung zählt als Zusammenhang — ``EPS_GEOM`` ist die
+    Lücke dazwischen. Berührung hält den Lauf zusammen — ``EPS_GEOM`` ist die
     Toleranz, mit der :func:`_same_cylinder` dieselbe Frage für ein Paar
-    beantwortet. Ein Abschnitt zählt nur, wenn er die bisher erreichte Spanne
-    um mehr als die Schweißtoleranz des Netzes verlängert. Damit werden
-    verschachtelte Fragmente derselben Wand nicht zu mehreren Gewindegängen.
+    beantwortet —, aber ein weiterer Gang ist nur ein Abschnitt, der die bisher
+    erreichte Spanne um mehr als die Schweißtoleranz überlappt und sie um mehr
+    verlängert, als er mit ihr teilt. Damit werden weder verschachtelte
+    Fragmente derselben Wand noch aufeinandergesetzte Absätze zu Gewindegängen.
     """
     ordered = sorted(spans, key=lambda span: (span[0], -span[1]))
-    last_start = ordered[0][0]
     reach = ordered[0][1]
     advancing = 1
     for low, high in ordered[1:]:
         if low > reach + EPS_GEOM:
             return False
-        if low > last_start + advance_tolerance and high > reach + advance_tolerance:
-            last_start = low
+        # **Ein Gang läuft in den nächsten und bringt mehr Neues, als er teilt**
+        # (RM-219, 25.09.2026). Die Stücke einer Wand beginnen und enden um
+        # Hundertstel versetzt, und jede Verschiebung über der Schweißtoleranz
+        # galt als Gang: am Flaschenhalter die Flaschentaschen über 160 mm,
+        # 0,01 mm neu, an den Buchstaben des Screen-Covers Bögen über dieselbe
+        # Höhe. Und Absätze, die sich nur berühren, laufen nicht ineinander —
+        # die Windungen eines Gewindes tun es, weil die Helix stetig steigt.
+        shared = reach - low
+        new = high - reach
+        if shared > advance_tolerance and new > shared:
             advancing += 1
         reach = max(reach, high)
     return advancing >= THREAD_TURNS
@@ -5646,6 +5735,7 @@ WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
         "surface_index",
         "facet_of_face",
         "curvature_jumps",
+        "face_radii",
         "prepared_surface",
     }
 )
@@ -7251,6 +7341,132 @@ def pair_radii(
     return np.where(np.degrees(angles) >= FLAT_ANGLE, across / np.maximum(angles, EPS_GEOM), np.inf)
 
 
+def face_radii(
+    body: trimesh.Trimesh, check_cancelled: Callable[[], None] | None = None
+) -> np.ndarray:
+    """:func:`_face_radii` über alle Nähte des Körpers, einmal je Körper gemerkt.
+
+    Die Nachtrennung liest daraus die Sprünge (:func:`curvature_jumps`), die
+    Trennung der Bögen eines Prismas die Radien selbst (:func:`_arcs_of_a_prism`).
+    """
+    result: np.ndarray = remembered(
+        "face_radii",
+        body,
+        (),
+        lambda: _face_radii(
+            body, np.asarray(body.face_adjacency), pair_radii(body, check_cancelled)
+        ),
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _arcs_of_a_prism(
+    body: trimesh.Trimesh,
+    piece: Sequence[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[list[int]]:
+    """Die Bögen und Geraden eines Prismas, getrennt an jedem Radiuswechsel — oder nichts.
+
+    Prisma heißt: Jede Normale steht quer zu einer Achse, im Vertrag von
+    :data:`UPRIGHT_TO_AXIS` wie bei :func:`fit_cylinder`. Die Achse ist das
+    Kreuzprodukt der ersten Normale mit der, die am meisten quer zu ihr
+    steht; steht keine um :data:`MIN_ROUND_ARC` quer, trägt das Stück keinen
+    Bogen, der zählte — auch zwei gegenüberliegende ebene Seiten nicht.
+    Getrennt wird, wo sich der Radius zweier Nachbarn um
+    mehr als :data:`PRISM_ARC_JUMP` ändert und wo ein Bogen in eine Gerade
+    übergeht (ein Radius endlich, der andere nicht, :func:`face_radii`) —
+    aber nur, wenn die Radien ruhig sind: Springen sie an mehr als
+    :data:`PRISM_QUIET_SHARE` der Nähte, ist die Schätzung Rauschen, und
+    getrennt wird nichts. Zurück kommen die Stücke in der Ordnung des Körpers,
+    und nur, wenn es mehr als eines sind.
+
+    Gelesen wird am Nachbarindex und in der Nummerierung des Stücks, ohne Feld
+    über das ganze Netz — ein solches je Fleck kostete am Puppenhausbett über
+    30 Sekunden. Entschieden wird mit Grundrechenarten (RM-187); die Winkel
+    kommen aus ``face_adjacency_angles`` wie bei der Nachtrennung.
+    """
+    indices = np.asarray(piece, dtype=np.intp)
+    if len(indices) < MIN_PATCH_FACES:
+        return []
+    normals = np.asarray(body.face_normals, dtype=float)[indices]
+    first = normals[0]
+    across = int(np.argmin(np.abs((normals * first).sum(axis=1))))
+    axis = np.cross(first, normals[across])
+    length = math.sqrt(float(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]))
+    if length < units.exact_sin_degrees(MIN_ROUND_ARC):
+        return []
+    axis = axis / length
+    if float(np.abs((normals * axis).sum(axis=1)).max()) > UPRIGHT_TO_AXIS:
+        return []
+    radii = face_radii(body, check_cancelled)
+    neighbours, rows = _neighbour_index(body)
+    ordered = np.sort(indices)
+    beside = neighbours[ordered]
+    spot = np.minimum(np.searchsorted(ordered, np.maximum(beside, 0)), len(ordered) - 1)
+    member = (beside >= 0) & (ordered[spot] == beside)
+    # Jede Naht zweimal gesehen, einmal von jeder Seite: Die kleinere Nummer spricht.
+    own = np.broadcast_to(np.arange(len(ordered))[:, None], beside.shape)
+    use = member & (spot > own)
+    near, far = radii[ordered[own[use]]], radii[ordered[spot[use]]]
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[rows[ordered][use]])
+    rounded = np.isfinite(near) & np.isfinite(far)
+    steady = ~np.isfinite(near) & ~np.isfinite(far)
+    steady[rounded] = np.abs(near[rounded] - far[rounded]) <= PRISM_ARC_JUMP * np.maximum(
+        near[rounded], far[rounded]
+    )
+    jumping = int(np.count_nonzero(rounded & ~steady))
+    if jumping > PRISM_QUIET_SHARE * int(np.count_nonzero(rounded)):
+        return []
+    keep = steady & (angles < CURVATURE_LIMIT)
+    if check_cancelled is not None:
+        check_cancelled()
+    groups = trimesh.graph.connected_components(
+        np.column_stack((own[use][keep], spot[use][keep])),
+        nodes=np.arange(len(ordered)),
+        engine="scipy",
+    )
+    if len(groups) < 2:
+        return []
+    return in_body_order(body, [ordered[np.asarray(group)].tolist() for group in groups])
+
+
+def _exactly_an_arc(
+    body: trimesh.Trimesh,
+    arc: list[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Ob ein Stück aus :func:`_arcs_of_a_prism` ein gezeichneter Bogen ist.
+
+    Zwei Bedingungen, beide aus der Sache. **Ein Bogen hat einen Radius**: Die
+    Trennung sichert nur, dass zwei Nachbarn um höchstens
+    :data:`PRISM_ARC_JUMP` auseinanderliegen; über das ganze Stück darf der
+    Radius je Dreieck (:func:`face_radii`) nicht weiter wandern. Und **ein
+    CAD-Export legt seine Ecken auf den Kreis**, bis auf die Rundung seiner
+    Zahlen — die liegt unter der Schweißtoleranz, einem Millionstel der
+    Diagonale.
+
+    Gemessen am 25.09.2026 (RM-219): Die Bögen des Besenhalters liegen unter
+    0,003 µm neben dem Kreis, ihr Radius streut um höchstens 2,4 Prozent. Die
+    geschwungenen Streben des Eiffelturms passen stückweise auf Kreise, aber ihr
+    Radius wandert in einem Stück um bis zu 12 Prozent; Stücke der
+    Flaschentaschen, Schriftzüge und Griffe liegen 1 bis 10 µm neben dem Kreis
+    — genau genug für :func:`fit_cylinder`, nicht für einen gezeichneten Bogen.
+    """
+    radii = face_radii(body, check_cancelled)[np.asarray(arc, dtype=np.intp)]
+    radii = radii[np.isfinite(radii)]
+    if len(radii) and float(radii.max() - radii.min()) > PRISM_ARC_JUMP * float(radii.max()):
+        return False
+    fit = fit_cylinder(body, arc, check_cancelled=check_cancelled)
+    if fit is None or fit.fit_error is None:
+        return False
+    extents = np.asarray(body.extents, dtype=float)
+    diagonal = math.sqrt(
+        float(extents[0] * extents[0] + extents[1] * extents[1] + extents[2] * extents[2])
+    )
+    return fit.fit_error <= weld_tolerance(diagonal)
+
+
 def _face_radii(body: trimesh.Trimesh, pairs: np.ndarray, radii: np.ndarray) -> np.ndarray:
     """Je Dreieck der engste Radius unter seinen **sanften** Nachbarn.
 
@@ -7299,10 +7515,9 @@ def _curvature_jumps(
     if not len(pairs):
         return np.zeros(0, dtype=float)
 
-    across = pair_radii(body, check_cancelled)
+    radii = face_radii(body, check_cancelled)
     if check_cancelled is not None:
         check_cancelled()
-    radii = _face_radii(body, pairs, across)
     first, second = radii[pairs[:, 0]], radii[pairs[:, 1]]
     # Nur wo **beide** Seiten einen Radius haben, gibt es einen Sprung. Zwei
     # ebene Nachbarn tragen ``inf``, und deren Differenz wäre ``nan`` — kein
@@ -8322,9 +8537,7 @@ def _face_roles(
 
     normals = np.asarray([body.face_normals[facet[0]] for facet, _a, _c in entries], dtype=float)
     centres = np.asarray([centre for _f, _a, centre in entries], dtype=float)
-    shell = np.empty(len(body.faces), dtype=np.intp)
-    for number, component in enumerate(face_components(body)):
-        shell[component] = number
+    shell = _shell_of_each_face(body)
     entry_shells = np.asarray([shell[int(facet[0])] for facet, _a, _c in entries])
     vertices = np.asarray(body.vertices)
     faces = np.asarray(body.faces)

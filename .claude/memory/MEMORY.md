@@ -73,6 +73,8 @@
 - [Ausreißer vor dem Aufteilen messen](ci-ausreisser-vor-dem-aufteilen-messen.md) — ein Fall von 319 s war ein quadratischer Kernweg; JUnit je Test zuerst.
 - [csgraph antwortet in int32](csgraph-antwortet-in-int32.md) — Kantennummer a·n+b läuft ab 46 000 Dreiecken still über; sofort int64.
 - [Verrauschte Tafel ≠ Haut](verrauschte-tafel-trennt-nicht-von-sanfter-kruemmung.md) — erst gemischte, starke Knicke trennen Rauschen von Krümmung; eigener Auslöser, nie zur Summe.
+- [Rückfallregel an ihren Treffern messen](rueckfallregel-an-ihren-treffern-messen.md) — zählen, was sie verwirft; ein Fortschritt über der Schweißtoleranz ist Rauschen.
+- [Kurzes Splinestück besteht jede Kreisprüfung](kurzes-splinestueck-besteht-jede-kreispruefung.md) — erst gleicher Radius über das ganze Stück plus genaue Ecken belegen einen Bogen.
 
 ## Shell und Git
 
