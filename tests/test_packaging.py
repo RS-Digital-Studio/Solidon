@@ -478,7 +478,11 @@ def _assert_ci_dependencies(workflow: str) -> None:
     assert needs is not None, "Paketabhängigkeiten fehlen"
     assert {name.strip() for name in needs.group(1).split(",")} == required
     condition = re.search(r"^    if: (.+)$", package, flags=re.MULTILINE)
-    assert condition is not None and "always()" not in condition.group(1)
+    assert condition is not None
+    # Ohne Statusfunktion gilt ``success()`` über alle ``needs``. ``always()``,
+    # ``cancelled()`` und ``failure()`` heben das auf — auch ``!cancelled()``
+    # gäbe das Paket nach einem roten Pflichtjob frei.
+    assert not re.search(r"\b(always|cancelled|failure)\(\)", condition.group(1))
     for name in required:
         block = job_block(workflow, name)
         assert not re.search(r"^    needs:", block, flags=re.MULTILINE), name
@@ -512,6 +516,11 @@ def test_the_package_waits_for_every_independent_required_check() -> None:
     "before,after",
     [
         ("needs: [quality, suite, window-contracts, windows]", "needs: [quality, suite]"),
+        (
+            "windows]\n    if: inputs.tests_only",
+            "windows]\n    if: (!cancelled()) && inputs.tests_only",
+        ),
+        ("windows]\n    if: inputs.tests_only", "windows]\n    if: always() && inputs.tests_only"),
         ("shard: [0, 1, 2]", "shard: [0, 1]"),
         ("shard: [0, 1, 2]\n    env:", "shard: [0, 2]\n    env:"),
         ("--shard-count 3", "--shard-count 4"),
@@ -768,10 +777,6 @@ def test_ci_preserves_the_first_failed_process_exit(
     if shell is None:
         pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     fake_python = """
-if [ "$1" = "tools/list_windowed_tests.py" ]; then
-  printf 'tests/test_fake.py\r\n'
-  exit 0
-fi
 if [ ! -f "$CALLS" ]; then
   printf 'called\n' >> "$CALLS"
   exit "$FIRST_EXIT"

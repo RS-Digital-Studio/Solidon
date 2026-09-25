@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
@@ -16,9 +17,54 @@ from tools import ci_shards, list_windowed_tests
 from tools import run_suite_isolated as runner
 
 
+@pytest.fixture(autouse=True)
+def _outside_github_actions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Jeder Test hier rechnet ohne die Umgebung des GitHub-Schritts, der ihn fährt.
+
+    Unter GitHub Actions trägt jeder Schritt ``GITHUB_ACTIONS`` und
+    ``GITHUB_STEP_SUMMARY``. Drei Tests riefen den Läufer mit dieser Umgebung
+    und hängten ihre erfundenen Fenstergruppen — „Stand: failed", eine rote
+    ``tests/test_a.py`` — an den Schrittbericht des Kernjobs, der sie fuhr.
+    Wer die Umgebung braucht, setzt sie im Test selbst.
+    """
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+
+
 def _counts(**extra: int) -> dict[str, int]:
     """Die zwei vertraglich festen Dateien plus frei gewählte Prüffälle."""
     return {**dict.fromkeys(runner.CONTRACT_FILES, 1), **extra}
+
+
+def test_these_tests_leave_the_step_summary_of_the_real_job_alone(tmp_path: Path) -> None:
+    """Die Läufertests schreiben nichts in den Schrittbericht des Jobs, der sie fährt.
+
+    Lokal fehlt ``GITHUB_STEP_SUMMARY``, und ohne die Fixture oben bliebe
+    dieser Fehler deshalb überall außer in der CI unsichtbar. Gefahren werden
+    die drei Tests, die dort ihre erfundenen Fenstergruppen hinterließen.
+    """
+    page = tmp_path / "step-summary.md"
+    tests = (
+        "test_planning_without_release_cannot_start_a_test_process",
+        "test_a_failed_file_remains_failed_after_a_successful_file",
+        "test_collection_failure_leaves_a_failed_report",
+    )
+    done = subprocess.run(
+        [
+            sys.executable,
+            *("-m", "pytest", "-q", "-p", "no:cacheprovider"),
+            *(f"tests/test_ci_runner.py::{name}" for name in tests),
+        ],
+        cwd=runner.ROOT,
+        env={**os.environ, "GITHUB_ACTIONS": "true", "GITHUB_STEP_SUMMARY": str(page)},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "3 passed" in done.stdout, done.stdout
+    assert not page.exists() or not page.read_text(encoding="utf-8"), page.read_text("utf-8")
 
 
 def _junit(
@@ -113,7 +159,26 @@ def test_each_duration_table_names_its_origin_and_real_test_files(table: str) ->
     assert len(weights) > 20 and fallback > 0
     assert all(name.startswith("tests/test_") and name.endswith(".py") for name in weights)
     if table == "windows":
-        assert weights.keys() >= runner.CONTRACT_FILES
+        missing = sorted(runner.CONTRACT_FILES - weights.keys())
+        assert not missing, (
+            f"der Fenstertabelle fehlen {missing}: Sie kommt aus den Windows-Gruppen "
+            "und den Windows-Berichten der Fensterverträge (Aufruf in tools/ci_shards.py)"
+        )
+
+
+def test_the_documented_table_command_covers_every_windows_report() -> None:
+    """Der beschriebene Aufruf erzeugt eine Fenstertabelle, die der Test oben annimmt.
+
+    Dort stand nur ``tests-windows-*``. Die zwei Fensterverträge laufen unter
+    Windows aber in ``tests-contracts-windows-latest`` — eine Tabelle nach
+    dieser Anleitung hätte sie nicht getragen, und die erste erzeugte Fassung
+    wäre an der Prüfung oben rot geworden, ohne dass jemand wüsste, warum.
+    """
+    documentation = ci_shards.__doc__ or ""
+    assert "ci_shards.py windows" in documentation
+    command = documentation.split("ci_shards.py windows", 1)[1].split("\n\n", 1)[0]
+    assert "berichte/tests-windows-*/tests__*.xml" in command
+    assert "berichte/tests-contracts-windows-latest/tests__*.xml" in command
 
 
 @pytest.mark.parametrize("value", [0, -1, True, "4", float("nan"), float("inf")])
@@ -163,11 +228,24 @@ def test_ci_collection_excludes_generated_and_performance_cases_but_keeps_mixed_
 
 
 def test_a_broken_collection_does_not_return_a_partial_plan(tmp_path: Path) -> None:
-    """Ein importierbarer Nachbar darf eine kaputte Datei nicht verdecken."""
+    """Ein importierbarer Nachbar darf eine kaputte Datei nicht verdecken.
+
+    Die Meldung nennt den Fehler und nicht jeden gesammelten Fall davor: Über
+    die ganze Suite waren das 1,9 MB Fallkennungen, mehr als GitHub im
+    Schrittbericht eines Schritts annimmt (1 MiB) — der Grund des Abbruchs
+    stand dann nur noch im Artefakt.
+    """
     (tmp_path / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
     (tmp_path / "test_broken.py").write_text("def broken(:\n", encoding="utf-8")
-    with pytest.raises(RuntimeError, match="sammeln"):
+    (tmp_path / "test_many.py").write_text(
+        "import pytest\n@pytest.mark.parametrize('n', range(40))\ndef test_case(n): pass\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="sammeln") as raised:
         list_windowed_tests.collect_ci_window_counts((tmp_path,), confcutdir=tmp_path)
+    message = str(raised.value)
+    assert "test_broken.py" in message and "SyntaxError" in message
+    assert "test_case[" not in message, "die Meldung trägt die ganze Fallliste"
 
 
 def test_each_real_pytest_command_preserves_the_fixed_ci_selection(tmp_path: Path) -> None:
@@ -423,6 +501,72 @@ def test_collection_failure_leaves_a_failed_report(
     assert summary["results"] == []
 
 
+def test_a_collection_failure_stands_in_the_log_and_not_only_in_the_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """Scheitert die Sammlung, sagt das CI-Protokoll warum — als Anmerkung und im Wortlaut.
+
+    Vorher stand dort nur ``failed: …/summary.md``. Der Grund lag im Artefakt
+    und im Schrittbericht — und dort, mit der ganzen Fallliste davor, über der
+    Grenze von 1 MiB, die GitHub je Schritt annimmt. Die Ausgabe von pytest
+    bleibt dabei Text, auch eine Zeile, die wie ein Workflow-Befehl aussieht.
+    """
+
+    def broken(_: object) -> dict[Path, int]:
+        raise RuntimeError(
+            "Die Tests ließen sich nicht sammeln (Exit 2).\n"
+            "::error::vorgetäuscht\n"
+            "E   ImportError: kaputt"
+        )
+
+    monkeypatch.setattr(list_windowed_tests, "collect_ci_window_counts", broken)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert (
+        runner.main(["--plan-only", "--ci-group", "contracts", "--report-dir", str(tmp_path)]) == 1
+    )
+    lines = capfd.readouterr().out.splitlines()
+    stop = next(index for index, line in enumerate(lines) if line.startswith("::stop-commands::"))
+    resume = lines.index(f"::{lines[stop].removeprefix('::stop-commands::')}::")
+    assert stop < lines.index("::error::vorgetäuscht") < resume
+    assert stop < lines.index("E   ImportError: kaputt") < resume
+    headline = "CI-Auswahl oder Bericht prüfen: Die Tests ließen sich nicht sammeln (Exit 2)."
+    assert f"::error title=CI-Gruppe contracts::{headline}" in lines[resume:]
+
+
+def test_the_resume_token_gets_its_own_line_after_a_cut_off_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """Ein Prozess, der mitten in einer Zeile endet, hält die Workflow-Befehle nicht an.
+
+    ``pytest -v`` schreibt den Testnamen vor dem Ergebnis. Kommen Zeitgrenze
+    oder ein Absturz ohne Traceback dazwischen, fehlt der Zeilenumbruch, und
+    die Fortsetzung stand hinter dem Testnamen: GitHub erkannte sie nicht,
+    und jede weitere Gruppe und Anmerkung des Jobs blieb Text — auch die rote
+    Anmerkung der Datei, die gerade gescheitert war.
+    """
+    _mock_collection(monkeypatch)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+    def run(file: runner.PlannedFile, directory: Path, *, timeout: float) -> dict[str, Any]:
+        body = f"import sys; sys.stdout.write('{file.path}::test_hangs '); raise SystemExit(1)"
+        return original(file, directory, timeout=timeout, command=[sys.executable, "-c", body])
+
+    original = runner.run_ci_file
+    monkeypatch.setattr(runner, "run_ci_file", run)
+    assert runner.main(["--release", "--ci-group", "windowed", "--report-dir", str(tmp_path)]) == 1
+
+    lines = capfd.readouterr().out.splitlines()
+    tokens = [
+        line.removeprefix("::stop-commands::")
+        for line in lines
+        if line.startswith("::stop-commands::")
+    ]
+    assert len(tokens) == 2
+    assert all(f"::{token}::" in lines for token in tokens)
+    assert lines.count("::endgroup::") == 2
+    assert sum(line.startswith("::error title=tests/test_") for line in lines) == 2
+
+
 @pytest.mark.parametrize(
     "arguments",
     [
@@ -430,6 +574,10 @@ def test_collection_failure_leaves_a_failed_report(
         ["--release", "--ci-group", "windowed"],
         ["--plan-only"],
         ["--plan-only", "--ci-group", "windowed", "--shard-index", "2", "--shard-count", "2"],
+        # Ein Muster ohne Treffer: Fiele die Prüfung weg, endete der Lauf
+        # ohne Prozess statt mit einem rekursiven Lauf dieser Datei.
+        ["--timeout", "0", "no_file_matches_this"],
+        ["--timeout", "nan", "no_file_matches_this"],
     ],
 )
 def test_invalid_cli_cannot_start_the_runner(tmp_path: Path, arguments: list[str]) -> None:
@@ -439,6 +587,22 @@ def test_invalid_cli_cannot_start_the_runner(tmp_path: Path, arguments: list[str
     with pytest.raises(SystemExit) as error:
         runner.main(arguments)
     assert error.value.code == 2
+
+
+def test_the_local_run_keeps_the_time_limit_it_was_given(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--timeout`` galt nur den CI-Gruppen; lokal lief jede Datei still mit 900 s weiter."""
+    from tools import affected_tests
+
+    limits: list[float] = []
+
+    def finished(command: list[str], **options: Any) -> subprocess.CompletedProcess[str]:
+        limits.append(options["timeout"])
+        return subprocess.CompletedProcess(command, 0, "1 passed in 0.01s\n", "")
+
+    monkeypatch.setattr(affected_tests, "split_windowed", lambda files: ([], list(files)))
+    monkeypatch.setattr(subprocess, "run", finished)
+    assert runner.main(["--timeout", "42", "test_ci_runner"]) == 0
+    assert limits == [42.0]
 
 
 # --- Die Teile der Kernsuite (tools/ci_shards.py) ------------------------------

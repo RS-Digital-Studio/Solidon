@@ -43,6 +43,7 @@ darum steht dieses Werkzeug hier.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -54,7 +55,7 @@ import sys
 import threading
 import time
 import xml.etree.ElementTree as ET
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import IO, Any
@@ -409,6 +410,7 @@ def run_ci(arguments: argparse.Namespace) -> int:
         "issues": [],
     }
     started = time.monotonic()
+    github = os.environ.get("GITHUB_ACTIONS") == "true"
     write_ci_summary(report_dir, summary)
     try:
         counts = {
@@ -425,19 +427,15 @@ def run_ci(arguments: argparse.Namespace) -> int:
         summary["status"] = "planned" if arguments.plan_only else "running"
         write_ci_summary(report_dir, summary)
         if not arguments.plan_only:
-            github = os.environ.get("GITHUB_ACTIONS") == "true"
             for file in selected:
                 heading = f"{file.path} ({file.expected_tests} Fälle)"
                 print(f"::group::{heading}" if github else f"Prüfe {heading}", flush=True)
-                # Was ein Test ausgibt, ist kein Workflow-Befehl: Eine Zeile mit
-                # ``::error::`` oder ``::add-mask::`` bliebe sonst nicht Text.
-                token = secrets.token_hex(16)
-                if github:
-                    print(f"::stop-commands::{token}", flush=True)
-                result = run_ci_file(file, report_dir, timeout=arguments.timeout)
-                if github:
-                    print(f"::{token}::", flush=True)
-                    print("::endgroup::", flush=True)
+                try:
+                    with verbatim_output(github=github):
+                        result = run_ci_file(file, report_dir, timeout=arguments.timeout)
+                finally:
+                    if github:
+                        print("::endgroup::", flush=True)
                 for note in result["notes"]:
                     print(annotation("warning", file.path, note, github=github), flush=True)
                 if not result["success"]:
@@ -453,12 +451,45 @@ def run_ci(arguments: argparse.Namespace) -> int:
         summary["status"] = "failed"
     summary["process_seconds"] = time.monotonic() - started
     write_ci_summary(report_dir, summary)
+    # Ein Sammlungs- oder Planungsfehler gehört ins Protokoll, nicht nur in die
+    # Übersicht: Dort stand sonst allein ``failed: …/summary.md``. Der Wortlaut
+    # von pytest bleibt dabei Text, die erste Zeile wird die Anmerkung.
+    for issue in summary["issues"]:
+        headline, _, details = issue.partition("\n")
+        if details:
+            with verbatim_output(github=github):
+                print(details, flush=True)
+        title = f"CI-Gruppe {summary['group']}"
+        print(annotation("error", title, headline, github=github), flush=True)
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if step_summary:
         with Path(step_summary).open("a", encoding="utf-8") as page:
             page.write((report_dir / "summary.md").read_text(encoding="utf-8") + "\n")
     print(f"{summary['status']}: {report_dir / 'summary.md'}", flush=True)
     return int(summary["status"] == "failed")
+
+
+@contextlib.contextmanager
+def verbatim_output(*, github: bool) -> Iterator[None]:
+    """Was darin ausgegeben wird, bleibt Text — auch eine Zeile mit ``::error::``.
+
+    Unter GitHub hält ``::stop-commands::`` die Workflow-Befehle an, bis das
+    Zeichen wiederkommt. **Das Zeichen braucht eine eigene Zeile.** Ein
+    abgebrochener Prüfprozess endet oft mitten in einer: ``pytest -v``
+    schreibt den Testnamen vor dem Ergebnis, und die Zeitgrenze oder ein
+    Absturz ohne Traceback kommt dazwischen. Hinter dem Rest dieser Zeile
+    erkennt GitHub die Fortsetzung nicht, und jede weitere Gruppe und
+    Anmerkung des Jobs bliebe Text — auch die der Datei, die gerade rot wurde.
+    """
+    token = secrets.token_hex(16)
+    if github:
+        print(f"::stop-commands::{token}", flush=True)
+    try:
+        yield
+    finally:
+        print(flush=True)
+        if github:
+            print(f"::{token}::", flush=True)
 
 
 def annotation(level: str, path: str, message: str, *, github: bool) -> str:
@@ -506,8 +537,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--shard-count", type=int, default=1)
     parser.add_argument("--report-dir", type=Path)
     parser.add_argument("--plan-only", action="store_true", help="nur sammeln und aufteilen")
-    parser.add_argument("--timeout", type=float, default=BUDGET_SECONDS)
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=BUDGET_SECONDS,
+        help="Sekunden je Datei einschließlich Abbau, lokal wie in der CI",
+    )
     arguments = parser.parse_args(argv)
+    if not math.isfinite(arguments.timeout) or arguments.timeout <= 0:
+        parser.error("Die Zeitgrenze muss positiv und endlich sein.")
     if arguments.ci_group:
         if not arguments.release and not arguments.plan_only:
             parser.error("CI-Fensterläufe brauchen --release; nur --plan-only sammelt ohne Lauf.")
@@ -515,8 +553,6 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("CI-Gruppen brauchen --report-dir und erlauben keine Dateifilter.")
         if not 0 <= arguments.shard_index < arguments.shard_count:
             parser.error("Shardindex muss zwischen 0 und Shardanzahl minus 1 liegen.")
-        if not math.isfinite(arguments.timeout) or arguments.timeout <= 0:
-            parser.error("Die Zeitgrenze muss positiv und endlich sein.")
         return run_ci(arguments)
     if (
         arguments.plan_only
@@ -525,10 +561,12 @@ def main(argv: list[str] | None = None) -> int:
         or arguments.shard_index
     ):
         parser.error("Planung, Shards und Berichte brauchen eine --ci-group.")
-    return run_local(tuple(arguments.patterns), release=arguments.release)
+    return run_local(
+        tuple(arguments.patterns), release=arguments.release, timeout=arguments.timeout
+    )
 
 
-def run_local(patterns: tuple[str, ...], *, release: bool) -> int:
+def run_local(patterns: tuple[str, ...], *, release: bool, timeout: float = BUDGET_SECONDS) -> int:
     """Bewahrt den lokalen Dateimusterlauf und seine bestehende Markerwahl."""
     from tools.affected_tests import split_windowed
 
@@ -566,10 +604,10 @@ def run_local(patterns: tuple[str, ...], *, release: bool) -> int:
                 capture_output=True,
                 text=True,
                 cwd=ROOT,
-                timeout=BUDGET_SECONDS,
+                timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            failed.append((path.name, f"über {BUDGET_SECONDS} s"))
+            failed.append((path.name, f"über {timeout:g} s"))
             print(f"  {path.name:42s} Zeitgrenze")
             continue
 

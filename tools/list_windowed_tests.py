@@ -144,7 +144,13 @@ def _collect(
     # Nur die Sammlung ist ungefiltert. Die Umgebung bleibt für den echten
     # Lauf erhalten; dort verknüpft das Plugin den wirksamen Marker mit dem
     # Leistungsausschluss, statt den Nutzerfilter zu überschreiben.
-    arguments = ["--collect-only", "-q", "-k", "", "-m", ""]
+    #
+    # ``-qq``: eine Zeile je Datei statt je Fall. Die Ausgabe dient nur der
+    # Fehlermeldung unten, und mit ``-q`` stand dort vor dem eigentlichen
+    # Fehler jede Fallkennung der Suite — gemessen am 25.09.2026 1,9 MB in
+    # 20 699 Zeilen gegen 11 KB in 363, und mehr, als GitHub in den
+    # Schrittbericht eines Schritts aufnimmt (1 MiB).
+    arguments = ["--collect-only", "-qq", "-k", "", "-m", ""]
     if confcutdir is not None:
         arguments.extend(("--confcutdir", str(confcutdir)))
     arguments.extend(str(path) for path in paths)

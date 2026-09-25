@@ -2,12 +2,16 @@
 
     gh run download <lauf> --pattern "tests-*" --dir berichte
     .venv\\Scripts\\python.exe tools/ci_shards.py core berichte/tests-core-ubuntu-*/junit.xml
-    .venv\\Scripts\\python.exe tools/ci_shards.py windows berichte/tests-windows-*/tests__*.xml
+    .venv\\Scripts\\python.exe tools/ci_shards.py windows berichte/tests-windows-*/tests__*.xml \\
+        berichte/tests-contracts-windows-latest/tests__*.xml
 
 ``gh run download`` legt je Artefakt einen Ordner mit dessen Namen an. Die
 Kerntabelle nimmt die Berichte **einer** Plattform — alle drei Teile, sonst
 fehlen Dateien und bekommen nur das Ersatzgewicht; gemischt über Plattformen
-summierte sie dieselbe Datei dreimal.
+summierte sie dieselbe Datei dreimal. Die Fenstertabelle nimmt die drei
+Windows-Gruppen **und** die Windows-Berichte der zwei Fensterverträge: Diese
+verteilt sie nicht, sie führt aber jede Fensterdatei, die unter Windows läuft,
+und ``tests/test_ci_runner.py`` verlangt beide Verträge darin.
 
 Zwei Verbraucher teilen diese Verteilung: ``run_suite_isolated.py`` legt die
 Fensterdateien auf die Windows-Gruppen, und ``tests/conftest.py`` wählt mit
@@ -122,11 +126,19 @@ class CoreShard:
         self, config: pytest.Config, items: list[pytest.Item]
     ) -> None:
         root = Path(str(config.rootpath)).resolve()
-        files = {file_of_item(item, root) for item in items}
-        plan = balanced({name: self.weights.get(name, self.fallback) for name in files}, self.count)
-        mine = set(plan[self.index])
-        kept = [item for item in items if file_of_item(item, root) in mine]
-        dropped = [item for item in items if file_of_item(item, root) not in mine]
+        # Einmal je Datei aufgelöst, nicht je Fall und Durchgang: ``resolve``
+        # fragt das Dateisystem, und dreimal über rund 17 000 Fälle kostete
+        # das jeden Prozess Sekunden (gemessen am 25.09.2026).
+        names: dict[Path, str] = {}
+        files = []
+        for item in items:
+            if item.path not in names:
+                names[item.path] = file_of_item(item, root)
+            files.append(names[item.path])
+        weights = {name: self.weights.get(name, self.fallback) for name in names.values()}
+        mine = set(balanced(weights, self.count)[self.index])
+        kept = [item for item, name in zip(items, files, strict=True) if name in mine]
+        dropped = [item for item, name in zip(items, files, strict=True) if name not in mine]
         if dropped:
             config.hook.pytest_deselected(items=dropped)
         items[:] = kept
