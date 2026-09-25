@@ -3336,6 +3336,32 @@ def test_a_through_bore_moved_along_its_axis_says_it_no_longer_goes_through(
     assert along.outputs[0].mesh.raw.volume > bored.raw.volume, "Material ist stehengeblieben"
 
 
+@pytest.mark.parametrize("op", ["move_feature", "duplicate_feature"])
+def test_a_coarse_bore_set_across_stays_through(profile: Profile, op: str) -> None:
+    """Eine Bohrung als 32-Eck, quer versetzt oder verdoppelt, geht weiter durch.
+
+    Versetzt wird der Flächenkörper der Bohrung, und dessen Wand ist das
+    Vieleck der Datei. Die Säule der Durchgangsprüfung war 0,02 mm dünner als
+    der Durchmesser, also dicker als der Innenkreis eines 32-Ecks Ø 6,1: An
+    einer Furnierplatte aus ``F:\\3D Dateien`` blieb an jeder Sehne ein Splitter
+    von 0,0001 mm³ in ihr, und der Schritt sagte „geht nicht mehr durch"
+    (25.09.2026). Jetzt liegt die Säule im Innenkreis des Werkzeugs.
+    """
+    plate = trimesh.creation.box(extents=(40.0, 40.0, 0.6))
+    plate.apply_translation((0.0, 0.0, 0.3))
+    bore = trimesh.creation.cylinder(radius=3.05, height=2.0, sections=32)
+    bore.apply_translation((0.0, 0.0, 0.3))
+    mesh = boolean("difference", [MeshData.of(plate), MeshData.of(bore)]).mesh
+    entry = SceneObject(id="obj_1", name="Furnier", mesh=mesh, features=detect(mesh))
+    hole = next(name for name, found in entry.features.items() if found.kind == "hole")
+    assert entry.features[hole].params.get("through"), "sonst prüft dieser Test nichts"
+    x, y, z = (float(value) for value in entry.features[hole].params["centre"])
+
+    result = _run_op(op, entry, profile, at_feature=hole, x=x, y=y + 9.1, z=z)
+
+    assert f"{op}.no_longer_through" not in [found.code for found in result.findings]
+
+
 def test_a_recognised_feature_can_be_duplicated(profile: Profile) -> None:
     """Der weiteste Weg von allen, bis heute (3d-druck-d4, 03.09.2026).
 

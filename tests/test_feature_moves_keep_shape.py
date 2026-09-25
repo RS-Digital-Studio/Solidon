@@ -466,6 +466,33 @@ def test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths(
     assert mesh[3] == pytest.approx(brep[3], abs=0.1), "die Senkung ist am Ergebnis gemessen"
 
 
+def test_a_tilted_bore_is_capped_where_the_flat_cut_fails(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kommt der ebene Schnitt an den alten Randebenen ohne Deckel zurück, kappen Quader.
+
+    An der Öffnung eines Mini-Topfs (Ø 28 in 0,3 mm Wand) scheiterte der
+    Schnitt, und das ungekappte Werkzeug trug 59 mm³ vor den Mündungen ab
+    (25.09.2026). Die Lage wird an ``_cut_at_the_rims`` gestellt.
+    """
+    from app.core.geom.prepare import FEATURE_OVERLAP
+    from tests.test_bore_depth import _evaluated
+
+    source = _bored("mesh", RIBBED["gesenkt"], ribbed=True)
+    monkeypatch.setattr(prepare_ops, "_cut_at_the_rims", lambda *_args: None)
+    changed, _findings = _evaluated(
+        source,
+        profile,
+        "rotate_feature",
+        at_feature=_narrowest_hole(source).id,
+        axis="x",
+        angle=30.0,
+    )
+    lost = _removed(source, changed)
+    assert _beyond(lost, 12.0 + FEATURE_OVERLAP, above=True) == pytest.approx(0.0, abs=0.01)
+    assert _beyond(lost, -FEATURE_OVERLAP, above=False) == pytest.approx(0.0, abs=0.01)
+
+
 def _with_neighbour(kernel: str, outline: Sequence[tuple[float, float]]) -> SceneObject:
     """Platte 40 × 24 × 12, bei x = 0 eine Bohrung aus ``outline``, bei x = 10 eine
     Durchgangsbohrung Ø 6 — 4 mm Wand zwischen den Schäften."""
