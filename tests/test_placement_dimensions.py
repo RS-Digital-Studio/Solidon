@@ -219,7 +219,12 @@ def test_dimension_error_is_visible_in_the_measure_group(qt_app, monkeypatch, ce
     try:
         monkeypatch.setattr(dialog, "values_stand_elsewhere", True)
         monkeypatch.setattr(flow, "_request_tool", lambda: None)
-        flow.set_measure_fields(QLabel("Maße", viewport), editors=())
+        flow.set_measure_fields(
+            QLabel("Maße", viewport),
+            editors=(),
+            interpret=lambda: True,
+            refresh=lambda _values: None,
+        )
         flow.redraw()
         assert flow._bar.isHidden() and not flow._measure_accept.isHidden()
         fields = flow._centre_measures if centre else flow._measures
