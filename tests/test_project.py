@@ -3392,3 +3392,102 @@ def test_seam_and_lid_fits_of_a_v29_file_follow_their_bodies() -> None:
         if finding.code == "fit.violated"
     }
     assert not violated & {"deckel", "stift_2", "stift_3"}, violated
+
+
+@pytest.mark.parametrize("location", ["stack", "before", "after"])
+@pytest.mark.parametrize(
+    "damage",
+    ["integer", "string", "missing", "extra", "scope", "body", "key", "memory_yes", "memory_no"],
+)
+def test_large_recognition_answer_schema_is_strict_in_every_history_version(
+    filled, tmp_path, location, damage
+):
+    """Eine manipulierte Freigabe gilt weder im Stapel noch auf einer Undo-Seite."""
+    from app.core.perceive.match_records import recognition_answer_key
+
+    path = save(filled, tmp_path / "recognition-answer.p3d")
+    data = project_data(path)
+    record = {"object_id": "obj_1", "scope": "a" * 32, "allowed": True}
+    key = recognition_answer_key("obj_1")
+    if damage == "integer":
+        record["allowed"] = 1
+    elif damage == "string":
+        record["allowed"] = "true"
+    elif damage == "missing":
+        del record["allowed"]
+    elif damage == "extra":
+        record["unexpected"] = True
+    elif damage == "scope":
+        record["scope"] = "not-a-mesh-hash"
+    elif damage == "body":
+        record["object_id"] = "obj_foreign"
+        key = recognition_answer_key("obj_foreign")
+    elif damage == "key":
+        key = recognition_answer_key("obj_foreign")
+    elif damage == "memory_yes":
+        # Der Speichergrund steht nur an einer Absage (Review B11).
+        record["out_of_memory"] = True
+    elif damage == "memory_no":
+        record["allowed"] = False
+        record["out_of_memory"] = False
+    stored = deepcopy(data["ops"][0])
+    stored["matches"] = {key: record}
+    if location == "stack":
+        data["ops"][0] = stored
+    else:
+        data["transactions"][0]["changes"] = {
+            "before": {},
+            "after": {},
+            location: {"edited_ops": {str(stored["id"]): stored}},
+        }
+    _rewrite_project_entry(path, data)
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+    assert caught.value.constraint == "damaged"
+
+
+def test_a_decline_after_running_out_of_memory_keeps_its_reason(filled, tmp_path):
+    """Eine Absage aus einem Speicherfehler trägt ihren Grund durch Speichern und Öffnen.
+
+    Der Befund der späteren Läufe nennt ihn weiter (Review B11); vorher stand
+    ab dem zweiten Lauf der Hinweis auf eine ausgelassene Erkennung da, und
+    *Alle Merkmale erkennen* wieder als Hauptknopf.
+    """
+    from app.core.perceive.match_records import recognition_answer_key
+
+    path = save(filled, tmp_path / "recognition-memory.p3d")
+    data = project_data(path)
+    key = recognition_answer_key("obj_1")
+    record = {"object_id": "obj_1", "scope": "a" * 32, "allowed": False, "out_of_memory": True}
+    data["ops"][0]["matches"] = {key: record}
+    _rewrite_project_entry(path, data)
+    assert load(path).document.ops[0].matches[key] == record
+
+
+def test_v33_migration_does_not_invent_a_recognition_choice(monkeypatch, profile):
+    """Die alte Projektdatenstruktur bleibt erhalten, und ihr echter Stapel rechnet weiter."""
+    from importlib import import_module
+
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    path = Path(__file__).parent / "data" / "projects" / "recognition_v33.p3d"
+    original = project_data(path)
+    upgraded = migrate(deepcopy(original))
+    assert upgraded == {**original, "format_version": FORMAT_VERSION}
+    project = load(path)
+    assert all(
+        not any(key.startswith("recognition-answer:") for key in op.matches)
+        for op in project.document.ops
+    )
+    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1)
+    asked = []
+
+    def ask(question, choices):
+        asked.append(question)
+        return choices[1]
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project), ask=ask)
+    assert result.complete and len(asked) == 1
+    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(8000)
+    assert result.scene.objects["obj_1"].features

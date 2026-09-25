@@ -2324,6 +2324,12 @@ def test_an_unexpected_error_in_the_recognition_stops_at_its_step(
     Im Fenster endete die Auswertung damit als abgestürzter Arbeiter, ohne
     Prüfbericht und ohne den Schritt, an dem es lag; die Operation selbst hat
     diesen Fang seit dem Gesamtreview.
+
+    **Der Speicherfehler selbst hat am Ladeschritt seit dem 24.09.2026 einen
+    eigenen Rückweg** (das Modell lädt ohne Vollerkennung,
+    ``test_running_out_of_memory_costs_the_recognition_not_the_import``).
+    Geprüft wird hier der allgemeine Fang, also mit einem Fehler, für den es
+    keinen Rückweg gibt.
     """
     from importlib import import_module
 
@@ -2336,7 +2342,7 @@ def test_an_unexpected_error_in_the_recognition_stops_at_its_step(
     evaluate_module = import_module("app.core.scene.evaluate")
 
     def exhausted(*_args: object, **_kwargs: object) -> object:
-        raise MemoryError("kein Speicher für die Erkennung")
+        raise RuntimeError("kein Speicher für die Erkennung")
 
     load_operations()
     monkeypatch.setattr(evaluate_module, "detect", exhausted)
@@ -2362,7 +2368,7 @@ def test_an_unexpected_error_in_the_recognition_stops_at_its_step(
     finding = next(
         entry for entry in result.scene.report.findings if entry.code == "op.load.InternalError"
     )
-    assert finding.values["detail"] == "MemoryError: kein Speicher für die Erkennung"
+    assert finding.values["detail"] == "RuntimeError: kein Speicher für die Erkennung"
     assert any(r.levelno == logging.ERROR and r.exc_info for r in caplog.records), (
         "kein Traceback im Protokoll"
     )
@@ -2683,7 +2689,7 @@ def _small_body() -> object:
 
 @pytest.mark.parametrize(
     ("triangles", "recognized"),
-    [(392_532, True), (885_570, True), (1_000_000, True), (1_000_001, False)],
+    [(392_532, True), (885_570, True), (1_500_000, True), (1_500_001, False)],
 )
 def test_fine_customer_meshes_reach_recognition_with_a_bounded_budget(
     monkeypatch: pytest.MonkeyPatch, triangles: int, recognized: bool
@@ -2725,7 +2731,7 @@ def test_fine_customer_meshes_reach_recognition_with_a_bounded_budget(
     limited = [finding for finding in findings if finding.code == "perceive.too_large"]
     assert bool(limited) is not recognized
     if limited:
-        assert limited[0].values == {"triangles": triangles, "limit": 1_000_000}
+        assert limited[0].values == {"triangles": triangles, "limit": 1_500_000}
 
 
 def test_a_named_feature_keeps_the_surface_found_in_the_current_mesh(
@@ -3182,3 +3188,1016 @@ def test_readable_shells_get_no_such_warning(monkeypatch: pytest.MonkeyPatch) ->
     )
 
     assert [item.code for item in findings if item.code == "perceive.voids_unreadable"] == []
+
+
+@pytest.mark.parametrize("triangles", [1_500_001, 2_330_374, 5_000_000])
+@pytest.mark.parametrize("choice", [0, 1, "closed", "cancel"])
+def test_large_import_asks_before_recognition_and_keeps_original(monkeypatch, triangles, choice):
+    """Die Warnung eröffnet den großen Pfad; Absage lädt, echter Abbruch beendet ihn."""
+    from importlib import import_module
+
+    from app.core.errors import QuestionDeclined
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Operation
+
+    module = import_module("app.core.scene.evaluate")
+    mesh = _small_body()
+    monkeypatch.setattr(MeshData, "triangle_count", property(lambda _body: triangles))
+    calls, asked, progress, recorded, findings = [], [], [], {}, []
+    monkeypatch.setattr(module, "detect", lambda body, **_: calls.append(body) or _many_features(1))
+    monkeypatch.setattr(module, "freeform_dropped", lambda _: 0)
+    body = SceneObject("obj_1", "Großes Teil", mesh)
+
+    from app.core.perceive.local import recognition_gigabytes, recognition_minutes
+
+    minimum, maximum = recognition_minutes(triangles)
+    millions = f"{triangles / 1_000_000:.1f}".replace(".", ",")
+
+    def ask(question, choices):
+        assert progress[-1] == "Merkmale erkennen" and not calls
+        assert f"{millions} Millionen Dreiecke" in question
+        assert f"geschätzt {minimum} bis {maximum} Minuten" in question
+        assert f"etwa {recognition_gigabytes(triangles)} GB Arbeitsspeicher" in question
+        assert "langsamen Rechnern länger" in question
+        assert choices[0] == "Sofort laden", "die sichere Wahl steht vorn"
+        asked.append(question)
+        if choice == "closed":
+            raise QuestionDeclined()
+        if choice == "cancel":
+            raise OperationCancelled()
+        return choices[choice]
+
+    def run():
+        return module._with_features(
+            body,
+            {},
+            Operation(1, "load", outputs=("obj_1",)),
+            module._WatchedAsk(ask),
+            findings,
+            recorded=recorded,
+            say=progress.append,
+        )
+
+    if choice == "cancel":
+        with pytest.raises(OperationCancelled):
+            run()
+        assert not calls and not recorded
+        return
+    result = run()
+    assert len(asked) == 1
+    assert result.mesh is mesh
+    assert bool(result.features) is (choice == 1)
+    assert bool(calls) is (choice == 1)
+    assert next(iter(recorded.values()))["allowed"] is (choice == 1)
+    assert any(f.code == "perceive.too_large" for f in findings) is (choice != 1)
+    # Während der langen Erkennung nennt die Zeile dieselbe Spanne wie die Frage.
+    estimate = f"Merkmale erkennen, geschätzt {minimum} bis {maximum} min"
+    assert (progress[-1] == estimate) is (choice == 1)
+
+
+@pytest.mark.parametrize(
+    ("operation", "triangles", "detect_features"),
+    [("load", 5_000_001, True), ("repair", 2_330_374, True), ("load", 2_330_374, False)],
+)
+def test_large_recognition_never_asks_above_cap_after_import_or_for_preview(
+    monkeypatch, operation, triangles, detect_features
+):
+    """Die Bestätigung gilt nur dem Laden innerhalb der Obergrenze, nie der Vorschau."""
+    from importlib import import_module
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Operation
+
+    module = import_module("app.core.scene.evaluate")
+    mesh = _small_body()
+    monkeypatch.setattr(MeshData, "triangle_count", property(lambda _: triangles))
+    monkeypatch.setattr(module, "detect", lambda *_a, **_k: pytest.fail("unexpected full scan"))
+    records = {}
+    result = module._with_features(
+        SceneObject("obj_1", "Teil", mesh),
+        {},
+        Operation(1, operation, outputs=("obj_1",)),
+        lambda *_: pytest.fail("unexpected question"),
+        [],
+        recorded=records,
+        detect_features=detect_features,
+    )
+    assert result.mesh is mesh and not result.features and not records
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_large_recognition_answer_survives_save_cache_undo_and_changed_source(
+    monkeypatch, tmp_path, profile, allowed
+):
+    """Echter Import mit kleinem Testbudget: Cache ist kein Ersatz für die gespeicherte Wahl."""
+    from importlib import import_module
+
+    from app.core.geom.mesh import MeshCodec
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.cache import DiskCache
+    from app.core.scene.project import ProjectSources, checksum, load, new_project, save
+    from app.core.types import Source
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
+    project.sources["src_1"] = _small_body().raw.export(file_type="stl")
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft("load", params={"source": "src_1", "unit": "mm"})])
+    cache_path = tmp_path / "cache"
+    cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=cache_path))
+    asked = []
+
+    def answer(question, choices):
+        asked.append(question)
+        return choices[int(allowed)]
+
+    def run(project, cache, ask):
+        return evaluate(
+            project.document, profile, sources=ProjectSources(project), cache=cache, ask=ask
+        )
+
+    first = run(project, cache, answer)
+    assert first.complete and len(asked) == 1
+    assert bool(first.scene.objects["obj_1"].features) is allowed
+    assert history.record_matches(first.matches)
+    recorded = dict(project.document.ops[0].matches)
+
+    def refuse(*_):
+        pytest.fail("an unchanged saved choice must not ask again")
+
+    second = run(project, cache, refuse)
+    assert second.complete and not second.matches
+    assert second.scene.objects["obj_1"].features == first.scene.objects["obj_1"].features
+    history.undo()
+    history.redo()
+    assert project.document.ops[0].matches == recorded
+    assert run(project, cache, refuse).complete
+    reopened = load(save(project, tmp_path / "large.p3d"))
+    forget_cache()
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=cache_path))
+    again = run(reopened, cold, refuse)
+    assert again.complete and not again.matches
+    assert bool(again.scene.objects["obj_1"].features) is allowed
+
+    if allowed:
+        from app.core.registry import REGISTRY
+
+        registry = Registry()
+        registry.register(REGISTRY.get("load"))
+
+        @op_params
+        class InspectParams(BaseParams):
+            at: str = param(title=_("Merkmal"), kind="feature")
+
+        @register_op(
+            name="inspect_large_face",
+            title=_("Merkmal prüfen"),
+            category="scene",
+            params=InspectParams,
+            registry=registry,
+        )
+        def inspect(ctx):
+            assert ctx.params.at in ctx.inputs[0].features
+            return OpResult(outputs=list(ctx.inputs))
+
+        face = next(iter(again.scene.objects["obj_1"].features))
+        preview_history = History(reopened.document, registry=registry)
+        preview_history.apply(
+            "Merkmal prüfen",
+            [OperationDraft("inspect_large_face", inputs=("obj_1",), params={"at": face})],
+        )
+        for clear_features in (False, True):
+            if clear_features:
+                forget_cache()
+            preview = evaluate(
+                reopened.document,
+                profile,
+                sources=ProjectSources(reopened),
+                registry=registry,
+                cache=cold,
+                ask=refuse,
+                detect_features=False,
+            )
+            assert preview.complete
+            assert face in preview.scene.objects["obj_1"].features
+        preview_history.undo()
+
+    # Gleiche Dreieckszahl und Kennung, andere Koordinaten: erneut entscheiden.
+    different = _small_body().raw.copy()
+    different.apply_scale((1.2, 1, 1))
+    reopened.sources["src_1"] = different.export(file_type="stl")
+    reopened.document.sources["src_1"] = dataclasses.replace(
+        reopened.document.sources["src_1"], sha256=checksum(reopened.sources["src_1"])
+    )
+    changed = run(reopened, cold, answer)
+    assert changed.complete and len(asked) == 2
+    assert changed.matches
+    assert (
+        next(iter(changed.matches[1].values()))["scope"] != next(iter(recorded.values()))["scope"]
+    )
+
+
+def test_declined_recognition_does_not_poison_a_later_acceptance(monkeypatch, profile):
+    """Die gleiche Geometrie kann nach einer Absage in einem zweiten Import erkannt werden."""
+    from importlib import import_module
+
+    from app.core.types import Operation
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    mesh = _small_body()
+    declined = module._with_features(
+        SceneObject("obj_1", "Teil", mesh),
+        {},
+        Operation(1, "load", outputs=("obj_1",)),
+        lambda _, choices: choices[0],
+        [],
+        recorded={},
+    )
+    accepted = module._with_features(
+        SceneObject("obj_2", "Teil", mesh),
+        {},
+        Operation(2, "load", outputs=("obj_2",)),
+        lambda _, choices: choices[1],
+        [],
+        recorded={},
+    )
+    assert not declined.features and accepted.features
+    assert declined.mesh is accepted.mesh is mesh
+
+
+def test_recognition_estimate_contains_the_reference_and_preserves_generation_budget():
+    """Die Warnung behauptet keine Sekundenpräzision und erhöht nicht das KI-Ausgabebudget."""
+    from app.core.generate import GENERATED_TRIANGLE_LIMIT, GENERATED_TRIANGLE_TARGET
+    from app.core.perceive.local import (
+        CONFIRMED_FEATURE_LIMIT_TRIANGLES,
+        FEATURE_LIMIT_TRIANGLES,
+        RECOGNITION_REFERENCE_SECONDS,
+        RECOGNITION_REFERENCE_TRIANGLES,
+        recognition_minutes,
+    )
+
+    assert FEATURE_LIMIT_TRIANGLES == 1_500_000
+    assert CONFIRMED_FEATURE_LIMIT_TRIANGLES == 5_000_000
+    assert (GENERATED_TRIANGLE_LIMIT, GENERATED_TRIANGLE_TARGET) == (1_000_000, 750_000)
+    assert GENERATED_TRIANGLE_LIMIT <= FEATURE_LIMIT_TRIANGLES, (
+        "ein erzeugtes Netz über der Erkennungsgrenze verlöre seine Merkmale"
+    )
+    lower, upper = recognition_minutes(RECOGNITION_REFERENCE_TRIANGLES)
+    assert lower * 60 <= RECOGNITION_REFERENCE_SECONDS <= upper * 60
+    assert 1 <= lower < upper
+
+
+def test_recognition_memory_estimate_covers_the_measured_imports():
+    """Die Speicherangabe der Frage liegt über jedem gemessenen Spitzenbedarf.
+
+    Gemessen am 24.09.2026 je Import in einem eigenen Prozess, Einlesen
+    eingeschlossen: Gartenschlauchhalter 392 532 Dreiecke 601 MiB, Piratenschiff
+    1 223 836 Dreiecke 2 163 MiB (RM-042), Drache 2 330 374 Dreiecke 3 859 MiB.
+    """
+    from app.core.perceive.local import recognition_gigabytes
+
+    for triangles, mebibytes in ((392_532, 601), (1_223_836, 2_163), (2_330_374, 3_859)):
+        assert recognition_gigabytes(triangles) * 1_000_000_000 >= mebibytes * 2**20
+    assert recognition_gigabytes(1) == 1, "nie null Gigabyte"
+
+
+@pytest.mark.parametrize("nobody", ["refuse", "end_of_input"])
+def test_a_large_import_without_anyone_to_ask_loads_like_a_declined_one(monkeypatch, nobody):
+    """Kommandozeile ohne Eingabe und Aufrufer ohne Dialog laden weiter — ohne festzuhalten.
+
+    Vor der Anhebung der Grenze lud ein Modell mit zwei Millionen Dreiecken
+    dort mit begrenzter Erkennung. Die neue Frage darf daraus keinen Halt
+    machen, und eine Absage, die niemand gegeben hat, gehört nicht in den
+    Stapel: Das nächste Fenster fragt.
+    """
+    from importlib import import_module
+
+    from app.core.errors import UserError
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Operation
+
+    module = import_module("app.core.scene.evaluate")
+    mesh = _small_body()
+    monkeypatch.setattr(MeshData, "triangle_count", property(lambda _: 2_330_374))
+    monkeypatch.setattr(module, "detect", lambda *_a, **_k: pytest.fail("unexpected full scan"))
+
+    def end_of_input(question, choices):
+        # Wie ``cli.main.terminal_ask`` bei EOF.
+        raise UserError(title=_("Diese Frage braucht eine Antwort, und hier ist niemand."))
+
+    ask = module._refuse_to_guess if nobody == "refuse" else end_of_input
+    recorded, findings = {}, []
+    result = module._with_features(
+        SceneObject("obj_1", "Teil", mesh),
+        {},
+        Operation(1, "load", outputs=("obj_1",)),
+        module._WatchedAsk(ask),
+        findings,
+        recorded=recorded,
+    )
+    assert result.mesh is mesh and not result.features
+    assert not recorded
+    assert [finding.code for finding in findings] == ["perceive.too_large"]
+
+
+def test_a_large_import_through_the_default_question_completes(monkeypatch, profile):
+    """Ende zu Ende: ``evaluate`` ohne ``ask`` rechnet den Import durch."""
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
+    project.sources["src_1"] = _small_body().raw.export(file_type="stl")
+    History(project.document).apply(
+        "Laden", [OperationDraft("load", params={"source": "src_1", "unit": "mm"})]
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    assert not result.matches
+    assert "perceive.too_large" in {finding.code for finding in result.scene.report.findings}
+
+
+def test_a_confirmed_large_import_reaches_the_disk_cache(monkeypatch, tmp_path, profile):
+    """Die Erkennungsfrage macht den rohen Import nicht zu einem Ergebnis nur der Sitzung.
+
+    Gefragt wird nach der Operation, und ihre Ausgabe hängt nicht an der
+    Antwort. Als Frage des Schritts gezählt, ging der Import eines großen
+    Modells nie auf die Platte — und jedes Öffnen las die Datei neu.
+    """
+    from importlib import import_module
+
+    from app.core.geom.mesh import MeshCodec
+    from app.core.ingest import ops as ingest_ops
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.cache import DiskCache
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
+    project.sources["src_1"] = _small_body().raw.export(file_type="stl")
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft("load", params={"source": "src_1", "unit": "mm"})])
+    reads = []
+    normalise = ingest_ops.normalise
+
+    def counted(*args, **kwargs):
+        reads.append(1)
+        return normalise(*args, **kwargs)
+
+    monkeypatch.setattr(ingest_ops, "normalise", counted)
+    directory = tmp_path / "cache"
+
+    first = evaluate(
+        project.document,
+        profile,
+        sources=ProjectSources(project),
+        cache=ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory)),
+        ask=lambda _question, choices: choices[1],
+    )
+    assert first.complete and first.scene.objects["obj_1"].features
+    assert history.record_matches(first.matches)
+    assert reads == [1]
+
+    forget_cache()
+    reopened = evaluate(
+        project.document,
+        profile,
+        sources=ProjectSources(project),
+        cache=ResultCache(disk=DiskCache(codec=MeshCodec(), directory=directory)),
+        ask=lambda *_: pytest.fail("the saved choice must not ask again"),
+    )
+    assert reopened.complete and reopened.scene.objects["obj_1"].features
+    assert reads == [1], "der Import kam von der Platte und wurde nicht neu gelesen"
+
+
+@pytest.mark.parametrize("triangles", [None, 2_330_374])
+def test_running_out_of_memory_costs_the_recognition_not_the_import(monkeypatch, triangles):
+    """Ein Speicherfehler der Erkennung lässt das Modell stehen und wiederholt sich nicht.
+
+    ``None`` ist ein Import unter der automatischen Grenze, die Zahl einer
+    darüber mit Zustimmung (RM-235: ``MemoryError`` in ``features._fitted``
+    schon bei 1,2 Millionen Dreiecken). Vorher hielt der Ladeschritt an, und
+    nach dem Warten stand kein Modell da.
+    """
+    from importlib import import_module
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Operation
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(import_module("app.core.perceive.local"), "_OUT_OF_MEMORY", set())
+    mesh = _small_body()
+    if triangles is not None:
+        monkeypatch.setattr(MeshData, "triangle_count", property(lambda _: triangles))
+
+    def out_of_memory(*_args, **_kwargs):
+        raise MemoryError
+
+    monkeypatch.setattr(module, "detect", out_of_memory)
+    recorded, findings = {}, []
+    operation = Operation(1, "load", outputs=("obj_1",))
+    body = SceneObject("obj_1", "Teil", mesh)
+    result = module._with_features(
+        body, {}, operation, lambda _question, choices: choices[1], findings, recorded=recorded
+    )
+    assert result.mesh is mesh and not result.features
+    assert [(finding.code, finding.severity) for finding in findings] == [
+        ("perceive.too_large", "warning")
+    ]
+    assert "Arbeitsspeicher" in str(findings[0].message)
+    assert "Alle Merkmale erkennen" in str(findings[0].message), "die Absage steht am Schritt"
+    assert [(record["allowed"], record.get("out_of_memory")) for record in recorded.values()] == [
+        (False, True)
+    ]
+
+    # Der nächste Lauf liest die Absage und versucht es nicht noch einmal —
+    # und sagt weiter, warum (Review B11): eine Warnung über den Speicher,
+    # nicht der Hinweis auf eine ausgelassene Erkennung.
+    monkeypatch.setattr(module, "detect", lambda *_a, **_k: pytest.fail("the run repeated"))
+    later: list = []
+    again = module._with_features(
+        body,
+        {},
+        dataclasses.replace(operation, matches=dict(recorded)),
+        lambda *_: pytest.fail("unexpected question"),
+        later,
+        recorded={},
+    )
+    assert again.mesh is mesh and not again.features
+    assert [(finding.code, finding.severity) for finding in later] == [
+        ("perceive.too_large", "warning")
+    ]
+    assert str(later[0].message) == str(findings[0].message)
+    assert later[0].values["memory"] >= 1
+
+
+def test_a_memory_error_outside_the_import_still_stops_the_step(monkeypatch):
+    """Nur die Erkennung eines geladenen Körpers hat einen Rückweg ohne sie."""
+    from importlib import import_module
+
+    from app.core.types import Operation
+
+    module = import_module("app.core.scene.evaluate")
+
+    def out_of_memory(*_args, **_kwargs):
+        raise MemoryError
+
+    monkeypatch.setattr(module, "detect", out_of_memory)
+    with pytest.raises(MemoryError):
+        module._with_features(
+            SceneObject("obj_1", "Teil", _small_body()),
+            {},
+            Operation(2, "repair", inputs=("obj_1",), outputs=("obj_1",)),
+            lambda *_: pytest.fail("unexpected question"),
+            [],
+            recorded={},
+        )
+
+
+def test_a_declined_recognition_can_be_asked_again(monkeypatch, profile):
+    """Eine Absage beim Laden ist keine Sackgasse bis zum Neuladen der Datei.
+
+    ``History.reopen_recognition`` nimmt die gespeicherte Wahl zurück, und die
+    nächste Auswertung stellt dieselbe Frage mit Zeitschätzung wieder; die
+    neue Antwort gilt, und der Befund mit dem Rückweg verschwindet.
+    """
+    from importlib import import_module
+
+    from app.core.perceive.match_records import recognition_answer_key
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
+    project.sources["src_1"] = _small_body().raw.export(file_type="stl")
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft("load", params={"source": "src_1", "unit": "mm"})])
+    asked = []
+
+    def answer(allowed):
+        def ask(question, choices):
+            asked.append(question)
+            return choices[int(allowed)]
+
+        return ask
+
+    def run(ask):
+        return evaluate(project.document, profile, sources=ProjectSources(project), ask=ask)
+
+    declined = run(answer(False))
+    assert history.record_matches(declined.matches)
+    assert not declined.scene.objects["obj_1"].features
+    assert "„Alle Merkmale erkennen“" in next(
+        str(finding.message)
+        for finding in declined.scene.report.findings
+        if finding.code == "perceive.too_large"
+    )
+
+    assert history.reopen_recognition(("obj_1",))
+    assert recognition_answer_key("obj_1") not in project.document.ops[0].matches
+    assert not history.reopen_recognition(("obj_1",)), "nichts mehr zurückzunehmen"
+
+    accepted = run(answer(True))
+    assert len(asked) == 2, "die Frage kam wieder"
+    assert accepted.scene.objects["obj_1"].features
+    assert "perceive.too_large" not in {f.code for f in accepted.scene.report.findings}
+    assert history.record_matches(accepted.matches)
+    assert run(lambda *_: pytest.fail("the new answer holds")).scene.objects["obj_1"].features
+
+
+def _confirmed_large_box(monkeypatch, profile, second):
+    """Ein Quader, der als großes Netz gilt, geladen und von ``second`` weiterbearbeitet."""
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
+    project.sources["src_1"] = _small_body().raw.export(file_type="stl")
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft("load", params={"source": "src_1", "unit": "mm"})])
+    history.apply("Weiter", [second])
+
+    def run(allowed):
+        return evaluate(
+            project.document,
+            profile,
+            sources=ProjectSources(project),
+            ask=lambda _question, choices: choices[int(allowed)],
+        )
+
+    return run
+
+
+@pytest.mark.parametrize(
+    "second",
+    [
+        OperationDraft("scale_object", inputs=("obj_1",), params={"factor": 1.5}),
+        OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0}),
+    ],
+    ids=["scale", "translate"],
+)
+def test_a_confirmed_recognition_holds_for_the_later_steps_of_the_body(
+    monkeypatch, profile, second
+):
+    """Die Zustimmung beim Laden gilt dem Körper, nicht dem einen Netz (RM-235, B10).
+
+    Vorher fiel der erste Folgeschritt auf die örtliche Nachmessung aller
+    bekannten Merkmale zurück, und die hielt an jedem großen an — nach einem
+    Verschieben um 5 mm stand „zu viele Dreiecke für die lokale Suche“ im
+    Bericht. Jetzt erkennt der Folgeschritt vollständig nach; die örtliche
+    Nachmessung wird gar nicht erst gefragt.
+    """
+    from app.core.perceive import local
+
+    monkeypatch.setattr(
+        local, "detect_known", lambda *_a, **_k: pytest.fail("the step fell back to local")
+    )
+    result = _confirmed_large_box(monkeypatch, profile, second)(True)
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    assert result.scene.objects["obj_1"].features
+    assert "perceive.too_large" not in {f.code for f in result.scene.report.findings}
+
+
+def test_a_declined_recognition_keeps_the_later_steps_local(monkeypatch, profile):
+    """Wer abgelehnt hat, bekommt auch im Folgeschritt keine lange Vollerkennung."""
+    from importlib import import_module
+
+    monkeypatch.setattr(
+        import_module("app.core.scene.evaluate"),
+        "detect",
+        lambda *_a, **_k: pytest.fail("the full recognition ran"),
+    )
+    second = OperationDraft("scale_object", inputs=("obj_1",), params={"factor": 1.5})
+    result = _confirmed_large_box(monkeypatch, profile, second)(False)
+    assert result.complete
+    assert not result.scene.objects["obj_1"].features
+    assert "perceive.too_large" in {f.code for f in result.scene.report.findings}
+
+
+def test_the_way_back_to_the_full_recognition_survives_a_follow_up_step(monkeypatch, profile):
+    """Nach einem Verschieben trägt der Befund weiter „Alle Merkmale erkennen“ (Review B1).
+
+    Die Wahl gehört dem Körper; vorher verlor der Befund des Folgeschritts den
+    Satz mit dem Rückweg, und im Bericht blieb nur „Dreiecke verringern“.
+    """
+    second = OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
+    result = _confirmed_large_box(monkeypatch, profile, second)(False)
+    messages = [
+        str(finding.message)
+        for finding in result.scene.report.findings
+        if finding.code == "perceive.too_large"
+    ]
+    assert messages
+    assert all("„Alle Merkmale erkennen“" in message for message in messages)
+
+
+def _loaded_box_with(second):
+    """Ein kleiner Quader, geladen und von ``second`` weiterbearbeitet."""
+    from app.core.scene.project import new_project
+    from app.core.types import Source
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
+    project.sources["src_1"] = _small_body().raw.export(file_type="stl")
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft("load", params={"source": "src_1", "unit": "mm"})])
+    history.apply("Weiter", [second])
+    return project, history
+
+
+def test_a_memory_error_below_the_limit_keeps_the_later_steps_standing(monkeypatch, profile):
+    """Speicherfehler beim Laden unter der automatischen Grenze, danach Skalieren (Review B2).
+
+    Vorher lief der Folgeschritt wieder in die volle Erkennung, derselbe Fehler
+    kam als Programmfehler am Schritt, und das Modell ließ sich nicht einmal
+    verschieben — bei jeder Auswertung.
+    """
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(import_module("app.core.perceive.local"), "_OUT_OF_MEMORY", set())
+    tried = []
+
+    def out_of_memory(mesh, **_kwargs):
+        tried.append(mesh.triangle_count)
+        raise MemoryError
+
+    monkeypatch.setattr(module, "detect", out_of_memory)
+    project, history = _loaded_box_with(
+        OperationDraft("scale_object", inputs=("obj_1",), params={"factor": 1.5})
+    )
+    for _run in range(2):
+        result = evaluate(
+            project.document,
+            profile,
+            sources=ProjectSources(project),
+            ask=lambda *_: pytest.fail("below the limit nobody is asked"),
+        )
+        assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
+        history.record_matches(result.matches)
+    assert len(tried) == 1, "nur der Ladeschritt versuchte es, und nur beim ersten Lauf"
+
+
+def test_a_memory_error_after_a_confirmation_is_not_repeated(monkeypatch, profile):
+    """Ein bestätigter Folgeschritt, der am Speicher scheitert, versucht es nicht bei jeder
+    Auswertung neu (Review B3) — am echten Netz kostete jeder Versuch Minuten."""
+    from importlib import import_module
+
+    import numpy as np
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(import_module("app.core.perceive.local"), "_OUT_OF_MEMORY", set())
+    original = module.detect
+    failed = []
+
+    def scaled_fails(mesh, **kwargs):
+        if float(np.ptp(np.asarray(mesh.raw.vertices)[:, 0])) > 25.0:
+            failed.append(1)
+            raise MemoryError
+        return original(mesh, **kwargs)
+
+    monkeypatch.setattr(module, "detect", scaled_fails)
+    second = OperationDraft("scale_object", inputs=("obj_1",), params={"factor": 1.5})
+    run = _confirmed_large_box(monkeypatch, profile, second)
+    first, again = run(True), run(True)
+    assert first.complete and again.complete
+    assert len(failed) == 1
+    assert any(
+        finding.code == "perceive.too_large" and finding.severity == "warning"
+        for finding in again.scene.report.findings
+    )
+
+
+def test_a_feature_that_cannot_be_remeasured_speaks_the_language_of_the_step(monkeypatch):
+    """Hält die örtliche Nachmessung an einem gewöhnlichen Schritt an, nennt der Satz,
+    was dort hilft — nicht den Suchradius, den der Schritt nicht hat (Review B20)."""
+    from importlib import import_module
+
+    from app.core.errors import DECIMATE_MESH, UserError
+    from app.core.perceive import local
+
+    module = import_module("app.core.scene.evaluate")
+
+    def budget(*_args, **_kwargs):
+        raise local.local_error("budget")
+
+    monkeypatch.setattr(local, "detect_known", budget)
+    with pytest.raises(UserError) as caught:
+        module._remeasured(
+            SceneObject("obj_1", "Teil", _small_body()), {}, {"hole_1"}, module.NeverCancelled()
+        )
+    assert DECIMATE_MESH in caught.value.suggestions
+    assert "Suchradius" not in str(caught.value.title)
+    assert caught.value.object_id == "obj_1"
+
+
+def test_several_large_bodies_of_one_import_share_one_question(monkeypatch):
+    """Mehrere große Körper eines Imports: eine Frage mit der Summe (Review B14).
+
+    Vorher kam je Körper eine Frage mit der Schätzung nur dieses einen; die
+    Summe erfuhr niemand.
+    """
+    from importlib import import_module
+
+    from app.core.types import Operation
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    operation = Operation(1, "load", outputs=("obj_1", "obj_2"))
+    produced = [
+        SceneObject("a", "Teil A", _small_body()),
+        SceneObject("b", "Teil B", _small_body()),
+    ]
+    asked, recorded, told = [], {}, []
+
+    def ask(question, choices):
+        asked.append(question)
+        return choices[1]
+
+    decided = module._ask_once_for_large_bodies(
+        operation,
+        produced,
+        ask,
+        recorded,
+        module.NeverCancelled(),
+        lambda op_id, key, record: told.append((op_id, key, record["allowed"])),
+    )
+
+    assert decided == {"obj_1": True, "obj_2": True}
+    assert len(asked) == 1 and "2 Modelle" in asked[0]
+    # Die Frage sagt, wo sich eine Absage zurücknehmen lässt (Review B14).
+    assert "„Alle Merkmale erkennen“ im Prüfbericht" in asked[0]
+    assert sorted(record["object_id"] for record in recorded.values()) == ["obj_1", "obj_2"]
+    assert [allowed for _op, _key, allowed in told] == [True, True]
+    single = module._ask_once_for_large_bodies(
+        Operation(1, "load", outputs=("obj_1",)),
+        produced[:1],
+        lambda *_: pytest.fail("one body is asked on its own"),
+        {},
+        module.NeverCancelled(),
+        None,
+    )
+    assert single == {}
+
+
+def test_the_answer_to_the_recognition_question_is_told_at_once(monkeypatch, profile):
+    """Die Antwort kommt sofort beim Aufrufer an, nicht erst mit dem Ergebnis (Review B18)."""
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    project, _history = _loaded_box_with(
+        OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
+    )
+    told = []
+    result = evaluate(
+        project.document,
+        profile,
+        sources=ProjectSources(project),
+        ask=lambda _question, choices: choices[1],
+        on_recognition_answer=lambda op_id, key, record: told.append((op_id, dict(record))),
+    )
+    assert result.complete
+    # Genau einmal: Der Folgeschritt bewegt nur, der Merker trägt die
+    # Erkennung, und eine lange Erkennung startet dort nicht (Review R5).
+    assert told == [(1, {"object_id": "obj_1", "scope": told[0][1]["scope"], "allowed": True})]
+
+
+def _detect_failing_once(module, monkeypatch):
+    """Der erste Aufruf von ``detect`` läuft in den Speicher, jeder weitere rechnet."""
+    real = module.detect
+    calls: list[int] = []
+
+    def detect(mesh, **kwargs):
+        calls.append(mesh.triangle_count)
+        if len(calls) == 1:
+            raise MemoryError
+        return real(mesh, **kwargs)
+
+    monkeypatch.setattr(module, "detect", detect)
+    return calls
+
+
+@pytest.mark.parametrize("limit", [None, 1])
+def test_a_new_decision_after_running_out_of_memory_tries_again(monkeypatch, profile, limit):
+    """Nach dem Speicherfehler entscheidet „Alle Merkmale erkennen“ neu (Review N2).
+
+    ``None`` lädt unter der automatischen Grenze, ``1`` darüber mit Zustimmung.
+    Vorher meldete der Prozessmerker nach der neuen Entscheidung sofort
+    denselben Speicherfehler, ohne dass ``detect`` einmal lief — der Kunde,
+    der Programme geschlossen hatte, kam nur über einen Neustart weiter.
+    """
+    from importlib import import_module
+
+    from app.core.perceive import local
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(local, "_OUT_OF_MEMORY", set())
+    if limit is not None:
+        monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", limit)
+    project, history = _loaded_box_with(
+        OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
+    )
+    calls = _detect_failing_once(module, monkeypatch)
+
+    def run():
+        result = evaluate(
+            project.document,
+            profile,
+            sources=ProjectSources(project),
+            ask=lambda _question, choices: choices[1],
+        )
+        history.record_matches(result.matches)
+        return result
+
+    failed = run()
+    assert failed.complete and not failed.scene.objects["obj_1"].features
+    assert len(calls) == 1
+
+    # Über der Grenze ist die Antwort auf die neue Frage die neue
+    # Entscheidung; unter ihr gibt es keine Frage, und den Merker leert,
+    # wer neu entscheiden lässt — Fenster und Kommandozeile (Review R3).
+    assert history.reopen_recognition(("obj_1",))
+    if limit is None:
+        local.forget_out_of_memory()
+    retried = run()
+    assert len(calls) >= 2, "die neue Entscheidung hat einen Versuch bekommen"
+    assert retried.scene.objects["obj_1"].features
+    assert not any(
+        finding.code == "perceive.too_large" for finding in retried.scene.report.findings
+    )
+
+
+def test_the_same_mesh_in_another_project_is_a_new_decision(monkeypatch, profile):
+    """Derselbe Import in einem neuen Projekt fragt den Speichermerker nicht (Review N2)."""
+    from importlib import import_module
+
+    from app.core.perceive import local
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(local, "_OUT_OF_MEMORY", set())
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    first, _history = _loaded_box_with(
+        OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
+    )
+    calls = _detect_failing_once(module, monkeypatch)
+    evaluate(
+        first.document,
+        profile,
+        sources=ProjectSources(first),
+        ask=lambda _question, choices: choices[1],
+    )
+    assert calls == [calls[0]]
+    other, _other_history = _loaded_box_with(
+        OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
+    )
+    fresh = evaluate(
+        other.document,
+        profile,
+        sources=ProjectSources(other),
+        ask=lambda _question, choices: choices[1],
+    )
+    assert len(calls) >= 2
+    assert fresh.scene.objects["obj_1"].features
+
+
+def test_a_body_that_grows_past_the_limit_offers_no_way_back(monkeypatch, profile):
+    """Unter der Grenze geladen, danach gewachsen: kein Rückweg im Satz (Review N3).
+
+    Die Frage gibt es nur am Ladeschritt, und der hatte nichts zu fragen. Der
+    Befund versprach „Alle Merkmale erkennen“, und der Klick rechnete neu,
+    ohne dass eine Frage kam.
+    """
+    from importlib import import_module
+
+    from app.core.scene.history import recognition_reopenable
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    project, history = _loaded_box_with(
+        OperationDraft("subdivide_surface", inputs=("obj_1",), params={"edge": 4.0})
+    )
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", _small_body().triangle_count)
+    result = evaluate(
+        project.document,
+        profile,
+        sources=ProjectSources(project),
+        ask=lambda *_: pytest.fail("nothing to ask: the load step is below the limit"),
+    )
+    history.record_matches(result.matches)
+    (finding,) = [f for f in result.scene.report.findings if f.code == "perceive.too_large"]
+    assert finding.op_id == 2
+    assert result.scene.objects["obj_1"].mesh.triangle_count > _small_body().triangle_count
+    assert "Alle Merkmale erkennen" not in str(finding.message)
+    assert "Dreiecke verringern" in str(finding.message)
+    assert not recognition_reopenable(project.document, "obj_1")
+    assert not history.reopen_recognition(("obj_1",))
+
+
+def test_a_saved_confirmation_is_told_when_the_long_recognition_starts(monkeypatch, profile):
+    """Auch ein „Ja“ aus der Datei kommt beim Aufrufer an (Review B18).
+
+    Ohne das bot ein Abbruch beim Wiederöffnen keinen Weg zum Modell: Die
+    Sitzung kannte nur Antworten, die in diesem Lauf gegeben wurden.
+    """
+    from importlib import import_module
+
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    project, history = _loaded_box_with(
+        OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
+    )
+    first = evaluate(
+        project.document,
+        profile,
+        sources=ProjectSources(project),
+        ask=lambda _question, choices: choices[1],
+    )
+    history.record_matches(first.matches)
+
+    def reopen() -> list:
+        told: list = []
+        evaluate(
+            project.document,
+            profile,
+            sources=ProjectSources(project),
+            ask=lambda *_: pytest.fail("the saved choice must not ask again"),
+            on_recognition_answer=lambda op_id, key, record: told.append((op_id, dict(record))),
+        )
+        return told
+
+    # Der Merker kennt das Netz: Es startet keine lange Erkennung, und
+    # gemeldet wird nichts — sonst böte ein Abbruch irgendeiner Rechnung an,
+    # eine längst fertige Erkennung zurückzunehmen (Review R5).
+    assert reopen() == []
+
+    # Kennt er es nicht, startet sie, und die gespeicherte Zustimmung kommt an.
+    monkeypatch.setattr(module, "known_detection", lambda _mesh: None)
+    told = reopen()
+    assert told and {(op_id, record["allowed"]) for op_id, record in told} == {(1, True)}
+    assert told[0][1]["object_id"] == "obj_1"
+
+
+def test_an_unrecorded_memory_decline_does_not_repeat_the_long_run(monkeypatch, profile):
+    """Kommt die Absage nach dem Speicherfehler nicht am Ladeschritt an, läuft
+    derselbe Minutenlauf nicht noch einmal (Review R3).
+
+    Ein Lauf, den der Kunde abbricht oder eine Änderung überholt, hält sein
+    Ergebnis nie fest; ``evaluate_now`` tut es nie. Vorher galt der nächste
+    Lauf dann als neue Entscheidung und übersprang den Merker. Die Absage geht
+    deshalb sofort an den Aufrufer, wie eine Antwort.
+    """
+    from importlib import import_module
+
+    from app.core.perceive import local
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(local, "_OUT_OF_MEMORY", set())
+    project, _history = _loaded_box_with(
+        OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})
+    )
+    calls: list[int] = []
+
+    def out_of_memory(mesh, **_kwargs):
+        calls.append(mesh.triangle_count)
+        raise MemoryError
+
+    monkeypatch.setattr(module, "detect", out_of_memory)
+    told: list = []
+    for _run in range(2):
+        result = evaluate(
+            project.document,
+            profile,
+            sources=ProjectSources(project),
+            ask=lambda *_: pytest.fail("below the limit nobody is asked"),
+            on_recognition_answer=lambda op_id, key, record: told.append((op_id, dict(record))),
+        )
+        assert result.complete and not result.scene.objects["obj_1"].features
+    assert len(calls) == 1, "der zweite Lauf hat den Speicherfehler nicht wiederholt"
+    assert told[0][0] == 1
+    assert (told[0][1]["allowed"], told[0][1]["out_of_memory"]) == (False, True)

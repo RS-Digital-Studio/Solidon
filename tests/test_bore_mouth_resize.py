@@ -704,6 +704,7 @@ def test_large_mesh_resize_keeps_the_real_blind_depth(profile: Profile, monkeypa
     from tests.test_local_detection import blind_cylinder, bore_seed
 
     mesh = blind_cylinder(dense=True)
+    monkeypatch.setattr(local, "FEATURE_LIMIT_TRIANGLES", 1_000_000)
     assert mesh.triangle_count > local.FEATURE_LIMIT_TRIANGLES
     face, point, normal = bore_seed(mesh)
     found = local.detect_local(mesh, point, normal=normal, radius=8, seed_faces=(face,))

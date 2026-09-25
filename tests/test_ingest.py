@@ -384,16 +384,20 @@ def test_the_warning_about_a_fine_mesh_holds_at_the_limit_it_names() -> None:
     setzte die Kartengrenze als die kleinere ein und wurde am 04.09.2026 rot,
     als sie auf 900 000 stieg — über die Merkmalsgrenze. Rot war er zu Recht,
     aber aus dem falschen Grund: Nicht die Zusage hatte sich geändert, nur
-    ihre Lage. Geprüft wird deshalb, was ``_too_fine`` selbst tut — die
-    kleinere Grenze nennt ihre Ablehnung allein, die größere nennt beide —,
-    und welche welche ist, leitet der Test ab.
+    ihre Lage. Geprüft wird deshalb, was ``_too_fine`` selbst tut, und welche
+    Grenze die kleinere ist, leitet der Test ab.
+
+    **Über die Erkennung sagt der Satz nichts mehr** (24.09.2026). Bis zur
+    bestätigbaren Grenze entscheidet die Frage beim Laden, darüber meldet
+    ``perceive.too_large`` am Körper, was ausgelassen wurde; ein zweiter Satz
+    darüber stand mit denselben Knöpfen darunter.
     """
     from app.core.ingest import loader
+    from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES
     from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
     from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 
     kleiner = min(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES)
-    groesser = max(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES)
     zuerst_die_karten = MAP_LIMIT_TRIANGLES < FEATURE_LIMIT_TRIANGLES
 
     assert kleiner == loader.HEAVY_TRIANGLES
@@ -405,11 +409,11 @@ def test_the_warning_about_a_fine_mesh_holds_at_the_limit_it_names() -> None:
     assert laeuft_noch not in str(dazwischen.message), f"{laeuft_noch} läuft hier noch"
     assert "Dreiecke verringern" in str(dazwischen.message), "Regel 17: was jetzt hilft"
 
-    darueber = loader._too_fine(groesser + 1)
-    assert darueber is not None
-    assert "Merkmalserkennung" in str(darueber.message), "und hier lehnt auch sie ab"
-    assert "Analysekarten" in str(darueber.message), "und die Karten ebenso"
-    assert darueber.values["triangles"] == groesser + 1
+    for triangles in (FEATURE_LIMIT_TRIANGLES + 1, CONFIRMED_FEATURE_LIMIT_TRIANGLES + 1):
+        darueber = loader._too_fine(triangles)
+        assert darueber is not None
+        assert darueber.message == dazwischen.message, "ein Satz für die Karten, keiner mehr"
+        assert darueber.values["triangles"] == triangles
 
 
 def test_import_limits_are_stated_clearly() -> None:

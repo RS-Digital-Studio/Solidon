@@ -3408,6 +3408,17 @@ class MainWindow(QMainWindow):
         self.reveal_export.clicked.connect(self._reveal_export_folder)
         self._export_folder: Path | None = None
         bar.addPermanentWidget(self.reveal_export)
+        # **Nach einem Abbruch der langen Vollerkennung ein Weg zum Modell**
+        # (§21.1): Wer abbricht, weil es zu lange dauert, sah bis dahin den
+        # Stand vor dem Import und keinen Knopf, der ohne Erkennung lädt.
+        # Sichtbar nur mit der Ansage des Abbruchs, wie *Ordner zeigen*.
+        self.skip_recognition = QToolButton(self)
+        self.skip_recognition.setAutoRaise(True)
+        self.skip_recognition.setText(tr("Ohne Merkmalserkennung laden"))
+        self.skip_recognition.setAccessibleName(tr("Ohne Merkmalserkennung laden"))
+        self.skip_recognition.setVisible(False)
+        self.skip_recognition.clicked.connect(self._load_without_recognition)
+        bar.addPermanentWidget(self.skip_recognition)
         bar.addPermanentWidget(self.status_message)
         bar.addPermanentWidget(self.progress)
         bar.addPermanentWidget(self.cancel_button)
@@ -5024,7 +5035,7 @@ class MainWindow(QMainWindow):
                 for identifier, entry in result.scene.objects.items()
             ):
                 return None
-            return tr("Wählen Sie eine sichtbare Oberfläche eines Dreiecksnetzes.")
+            return tr("Dafür braucht es ein sichtbares Dreiecksmodell in der Ansicht.")
         if spec.takes_whole_scene:
             if objects <= 0:
                 return str(_NEEDS_BODY)
@@ -18697,6 +18708,9 @@ class MainWindow(QMainWindow):
             self._pending_scene = None
 
     def _show_scene(self, result: EvaluationResult) -> None:
+        # Ein fertiger Lauf hat nichts mehr abzubrechen: *Ohne
+        # Merkmalserkennung laden* gehört zur Ansage eines Abbruchs (Review N4).
+        self.skip_recognition.setVisible(False)
         self._refresh_parameters()
         # Neue Geometrie heißt: jede Karte und jeder Schnitt sind veraltet.
         self._cancel_map_worker()
@@ -19083,6 +19097,8 @@ class MainWindow(QMainWindow):
         # Export stellt ihn nach seiner eigenen wieder hin.
         if hasattr(self, "reveal_export"):
             self.reveal_export.setVisible(False)
+        if hasattr(self, "skip_recognition"):
+            self.skip_recognition.setVisible(False)
         if self._active_progress_owner() is None:
             self.status_message.setText(text)
         else:
@@ -19298,6 +19314,13 @@ class MainWindow(QMainWindow):
                 "eine Änderung am Stapel rechnet weiter."
             )
         )
+        if self.session.recognition_interrupted():
+            self.skip_recognition.setVisible(True)
+
+    def _load_without_recognition(self) -> None:
+        """*Ohne Merkmalserkennung laden* nach einem Abbruch der langen Erkennung."""
+        self.skip_recognition.setVisible(False)
+        self.session.load_without_recognition()
 
     def _update_veil(self, busy: bool) -> None:
         """Die Ladeanzeige gilt dem leeren Bild, nicht jeder Rechnung.
@@ -19598,6 +19621,8 @@ class MainWindow(QMainWindow):
             "report_error": lambda error: self.report_error(error),
             "show_details": lambda error: show_details(error, self),
             "show_locations": self._show_error_location,
+            "recognize_local": lambda error: self.local_features().from_report(error),
+            "recognize_fully": lambda error: self._recognize_fully(error),
             # Die Rücknahme-Warnung des Agenten zeigt in den Verlauf — dort
             # stehen die Transaktionen, die eine Annahme mitnähme (H-1).
             "show_history": lambda _error: self._flash_area("history"),
@@ -19794,6 +19819,23 @@ class MainWindow(QMainWindow):
             return error.object_id
         chosen = self.object_tree.selected_objects()
         return chosen[0] if chosen else None
+
+    def _recognize_fully(self, error: AppError) -> None:
+        """*Alle Merkmale erkennen*: die Frage vor der Vollerkennung erneut stellen (§21.1).
+
+        Die Körper kommen aus dem Befund, nie aus der Auswahl — an einer
+        Sammelzeile alle ihre Körper (``recognition_objects``), sonst der des
+        Befunds; den Ladeschritt sucht ``History.reopen_recognition`` selbst.
+        Gefragt wird danach mit Zeitschätzung und Speicherbedarf wie beim
+        Laden; die Bestätigung bleibt dieselbe, nur der Weg dorthin ist neu.
+        """
+        if not self._quiet_command_allowed():
+            return
+        bodies = tuple(error.values.get("recognition_objects") or ())
+        if not bodies and error.object_id:
+            bodies = (error.object_id,)
+        if bodies:
+            self.session.reopen_recognition(bodies)
 
     def _resize_the_widening(self, error: AppError) -> None:
         """„Senkung mitziehen" öffnet ihre Größe, mit dem passenden Maß darin.

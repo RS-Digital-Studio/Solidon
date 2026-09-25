@@ -71,6 +71,26 @@ CHANGE_SELECTION = Action("change_selection", _("Andere Objekte wählen"), prima
 PICK_PLANE = Action("sketch.pick_plane", _("Eine andere Ebene wählen"), primary=True)
 REPAIR_AND_RETRY = Action("repair_and_retry", _("Reparieren und erneut versuchen"), primary=True)
 SHOW_LOCATIONS = Action("show_locations", _("Stellen zeigen"))
+#: Im Bericht ist noch keine Stelle gewählt; „an dieser Stelle“ sagt das
+#: Kontextmenü, wo der Klick sie schon genannt hat.
+RECOGNIZE_LOCAL = Action("recognize_local", _("Merkmale an einer Stelle erkennen"))
+#: Die ausgelassene Vollerkennung eines großen Imports nachholen (§21.1): Die
+#: gespeicherte Wahl wird zurückgenommen, und die Frage mit Zeitschätzung
+#: kommt wieder — die Bestätigung bleibt dieselbe wie beim Laden. Unter der
+#: automatischen Grenze, wo nur ein Speicherfehler eine Absage festhält,
+#: läuft die Erkennung gleich erneut.
+RECOGNIZE_FULLY = Action("recognize_fully", _("Alle Merkmale erkennen"), primary=True)
+#: Die Wege der lokalen Merkmalserkennung, wenn eine Suche nichts Ganzes fand —
+#: je Fehlergrund in der Reihenfolge, in der sein Satz sie nennt
+#: (``ui.local_recognition._LOCAL_WAYS``). Eingelöst werden sie im Dialog der
+#: Suche: Nur er kennt Suchradius und Stelle.
+PICK_ELSEWHERE = Action("pick_elsewhere", _("Andere Stelle wählen"), primary=True)
+ENLARGE_RADIUS = Action("enlarge_radius", _("Suchradius vergrößern"), primary=True)
+SHRINK_RADIUS = Action("shrink_radius", _("Suchradius verkleinern"), primary=True)
+#: Öffnet *Netz reparieren* für den Körper der Suche. Anders als
+#: ``REPAIR_AND_RETRY`` gibt es keinen gescheiterten Schritt, der danach neu
+#: liefe — die Stelle wählt man am reparierten Netz neu.
+REPAIR_MESH = Action("repair_mesh", _("Netz reparieren"), primary=True)
 #: Die Senkung über einer geänderten Bohrung im selben Verhältnis mitziehen.
 #:
 #: **Regel 17 verlangt eine Handlung, und „ändern Sie die Senkung auch"

@@ -93,6 +93,8 @@ from app.core.errors import (
     DECIMATE_MESH,
     EXPORT_AS_MESH,
     PLACE_ON_BED,
+    RECOGNIZE_FULLY,
+    RECOGNIZE_LOCAL,
     RELEASE_PROTECTION,
     REMOVE_SMALL_PARTS,
     REPAIR_AND_RETRY,
@@ -111,11 +113,12 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.log import get_logger
 from app.core.perceive.actions import measure_explanation, measure_qualifier
+from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, shown_of_twins
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.history import StepNeed, repair_is_available
+from app.core.scene.history import StepNeed, recognition_reopenable, repair_is_available
 from app.core.types import Document, Feature, Finding, MaterialSlot, ObjectId, OpId, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import TranslatableText, sort_key, tr
@@ -509,7 +512,12 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # auf der gerade gewählten Auswahl oder, ohne sie, in einer Meldung.
     # Dieselbe Handlung hängt seit je am geworfenen Fehler der Analysekarten
     # (``app/core/perceive/maps.py``); nur der Befund kannte sie nicht.
-    "perceive.too_large": (DECIMATE_MESH,),
+    # **Und die ausgelassene Vollerkennung kommt zurück** (§21.1): Bis zur
+    # bestätigbaren Grenze nimmt *Alle Merkmale erkennen* die gespeicherte
+    # Wahl des Ladeschritts zurück, und die Frage mit Zeitschätzung kommt
+    # wieder (``_recognition_reopenable``). Vorher war eine Absage eine
+    # Sackgasse bis zum Neuladen der Datei.
+    "perceive.too_large": (RECOGNIZE_FULLY, RECOGNIZE_LOCAL, DECIMATE_MESH),
     # **Und seit dem Nachmittag auch der andere.** Der Absatz darüber begründet,
     # warum ``ingest.very_large`` den Knopf **nicht** bekam: Er trug keine
     # Objektkennung, und eine Handlung ohne Ziel landet auf der zufälligen
@@ -518,6 +526,11 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # die Begründung von oben für ihn genauso, und ihn jetzt stumm zu lassen
     # wäre derselbe Fehler in neuer Gestalt: Sein Text ist der, der „Dreiecke
     # verringern" beim Namen nennt, und der Knopf stünde an der Zeile daneben.
+    #
+    # Seit dem 24.09.2026 spricht er nur noch über die Karten (die Erkennung
+    # meldet ``perceive.too_large`` selbst), und damit gehört die lokale
+    # Erkennung nicht mehr an ihn: Bis 1,5 Millionen Dreiecke ist längst
+    # alles erkannt, und darüber steht der Knopf am Befund darunter.
     "ingest.very_large": (DECIMATE_MESH,),
     # **Dritter Melder derselben Sache, und er stand ohne Menü da.** „Nicht
     # geschlossen" meldet der Kern an drei Stellen: beim Einlesen, beim
@@ -627,6 +640,49 @@ def _object_for_finding(finding: Finding, document: Document | None) -> ObjectId
     return operation.inputs[0]
 
 
+def _local_targets(
+    finding: Finding,
+    document: Document | None,
+    live_objects: Mapping[ObjectId, SceneObject] | None,
+    bodies: tuple[ObjectId, ...] = (),
+) -> tuple[ObjectId, ...]:
+    """Nur die noch vorhandenen Netze der Befundzeile, nie die aktuelle Auswahl."""
+    if live_objects is None:
+        return ()
+    target = _object_for_finding(finding, document)
+    candidates = bodies or ((target,) if target is not None else ())
+    return tuple(
+        dict.fromkeys(
+            identifier
+            for identifier in candidates
+            if identifier in live_objects and live_objects[identifier].kind == "mesh"
+        )
+    )
+
+
+def _recognition_reopenable(finding: Finding, document: Document | None) -> bool:
+    """Ob sich die ausgelassene Vollerkennung eines Körpers nachholen lässt (§21.1).
+
+    Die Wahl gehört dem **Körper** und steht an seinem Ladeschritt — der
+    Befund darf an jedem Folgeschritt stehen: Nach einem Verschieben trägt
+    der des Verschiebens den Knopf, und ohne das verschwand der Rückweg mit
+    dem ersten Folgeschritt (Review 24.09.2026). **Und nur, wo eine Wahl
+    steht** (``history.recognition_reopenable``, dieselbe Auskunft, nach der
+    der Befund seinen Satz wählt): Ein Körper, der erst nach dem Laden über
+    die Grenze wuchs, bekam den Knopf, und der Klick rechnete neu, ohne dass
+    eine Frage kam (Review N3, 25.09.2026). Ein verbrauchter Körper behält
+    ihn, wie der Satz ihn behält — die Schritte bis zum Verbrauch lesen seine
+    Merkmale. Über der bestätigbaren Grenze gibt es keine Vollerkennung, auch
+    nicht nach einer neuen Frage.
+    """
+    if finding.code != "perceive.too_large" or document is None or finding.object_id is None:
+        return False
+    triangles = finding.values.get("triangles")
+    if not isinstance(triangles, int | float) or triangles > CONFIRMED_FEATURE_LIMIT_TRIANGLES:
+        return False
+    return recognition_reopenable(document, finding.object_id)
+
+
 def _repair_was_attempted(finding: Finding, document: Document | None) -> bool:
     """Ob derselbe aktive Zug alle Eingänge unmittelbar davor repariert hat.
 
@@ -662,9 +718,15 @@ def actions_for_document(
     document: Document | None,
     *,
     stopped_at: OpId | None = None,
-    live_objects: Collection[ObjectId] | None = None,
+    live_objects: Mapping[ObjectId, SceneObject] | None = None,
+    bodies: tuple[ObjectId, ...] = (),
 ) -> tuple[Action, ...]:
-    """Nur im aktuellen Dokument ausführbare Handlungen anbieten."""
+    """Nur im aktuellen Dokument ausführbare Handlungen anbieten.
+
+    ``live_objects`` sind die Körper des Ergebnisses samt Art: Die lokale
+    Erkennung wird nur an einem vorhandenen Netz angeboten, und eine bloße
+    Kennungsmenge hätte sie still aus jeder Zeile genommen.
+    """
     offered = list(actions_for(finding))
     if _repair_was_attempted(finding, document) or not repair_is_available(
         document,
@@ -677,6 +739,24 @@ def actions_for_document(
     target = _object_for_finding(finding, document)
     if target is None or (live_objects is not None and target not in live_objects):
         offered = [action for action in offered if action.id != SHOW_LOCATIONS.id]
+    if target is not None and live_objects is not None and target not in live_objects:
+        # *Dreiecke verringern* öffnet die Operation für die aktuelle Auswahl;
+        # ist der Körper des Befunds verbraucht, träfe sie einen anderen
+        # (Review R7).
+        offered = [action for action in offered if action.id != DECIMATE_MESH.id]
+    if any(action.id == RECOGNIZE_LOCAL.id for action in offered) and not _local_targets(
+        finding, document, live_objects, bodies
+    ):
+        offered = [action for action in offered if action.id != RECOGNIZE_LOCAL.id]
+    if not _recognition_reopenable(finding, document):
+        offered = [action for action in offered if action.id != RECOGNIZE_FULLY.id]
+    elif finding.severity == "warning":
+        # Am Speicherfehler ist die Vollerkennung der Lauf, der gerade am
+        # Speicher scheiterte: Sie bleibt als Weg, aber als letzter und nicht
+        # hervorgehoben; vorn stehen, was der Satz nennt.
+        offered = [action for action in offered if action.id != RECOGNIZE_FULLY.id] + [
+            dataclasses.replace(RECOGNIZE_FULLY, primary=False)
+        ]
     if _import_group_for(finding, document, live_objects or ()):
         offered = [
             dataclasses.replace(action, label=tr("Gemeinsam auf das Bett setzen"))
@@ -4435,6 +4515,7 @@ class ReportPanel(QWidget):
                     self._document,
                     stopped_at=self._stopped_at,
                     live_objects=self._live_objects,
+                    bodies=items[0].data(_BODIES_ROLE) or (),
                 )
                 if action.id in handlers
             ]
@@ -4502,6 +4583,26 @@ class ReportPanel(QWidget):
         # rücknehmbaren Handlung, und die verbietet Regel 19.
         bodies: tuple[str, ...] = item.data(_BODIES_ROLE) or ()
         handler = handlers_of(self).get(action_id)
+        if finding is not None and handler is not None and action_id == RECOGNIZE_LOCAL.id:
+            # Der nächste Oberflächenklick wählt genau einen der genannten Körper.
+            # Kein mehrfaches Öffnen, kein Rückfall auf die zufällige Baum-Auswahl.
+            targets = _local_targets(finding, self._document, self._live_objects, bodies)
+            if not targets:
+                return
+            error = as_error(finding, self._document)
+            error.values["local_objects"] = targets
+            handler(error)
+            return
+        if finding is not None and handler is not None and action_id == RECOGNIZE_FULLY.id:
+            # Eine Sammelzeile nimmt die Wahl aller ihrer Körper zurück — eine
+            # Auswertung, je Körper die Frage; sonst blieb die der übrigen
+            # stehen, ohne dass die Zeile es sagte.
+            error = as_error(finding, self._document)
+            error.values["recognition_objects"] = bodies or (
+                (finding.object_id,) if finding.object_id else ()
+            )
+            handler(error)
+            return
         # Drei Wege für eine Sammelzeile, und der Unterschied ist, was die
         # Handlung meint. Eine **Operation** (der Name steht im Register) wird
         # ein Schritt je gewähltem Körper in einer Transaktion. Eine Handlung,
@@ -4797,6 +4898,7 @@ class ReportPanel(QWidget):
                     self._document,
                     stopped_at=self._stopped_at,
                     live_objects=self._live_objects,
+                    bodies=item.data(_BODIES_ROLE) or (),
                 )
             ):
                 self.list.setCurrentRow(row)
@@ -5158,6 +5260,7 @@ class ReportPanel(QWidget):
             self._document,
             stopped_at=self._stopped_at,
             live_objects=self._live_objects,
+            bodies=item.data(_BODIES_ROLE) or (),
         )
         handlers = handlers_of(self)
         offered = [action for action in offers if action.id in handlers]

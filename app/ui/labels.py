@@ -1402,7 +1402,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # kommt aus ``_VALUE_UNITS`` und steht am Wert, nicht in der Beschriftung.
     "clearance_min": _("Untere Grenze des Spiels"),
     "clearance_max": _("Obere Grenze des Spiels"),
-    "comfortable": _("Bequem"),
+    "comfortable": _("Grenze der Analysekarten"),
     "components": _("Komponenten"),
     "constraint": _("Bedingung"),
     "contours": _("Konturen"),
@@ -1528,6 +1528,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "library_now": _("Bausteinstand jetzt"),
     "loose": _("Lose Stücke"),
     "materials": _("Materialien"),
+    # ``perceive.too_large`` nach einem Speicherfehler: der geschätzte
+    # Spitzenbedarf der Vollerkennung, ganze GB (``local.recognition_gigabytes``).
+    "memory": _("Nötiger Arbeitsspeicher"),
     "lost": _("Verloren"),
     "major": _("Hauptversion"),
     "machine": _("Maschine"),
@@ -1750,6 +1753,8 @@ def value_text(key: str, value: object) -> str:
         return f"{localised_value(value)} mm³/s"
     elif key == "stress":
         return f"{localised_value(value)} MPa"
+    elif key == "memory":
+        return f"{localised_value(value)} GB"
     for suffix, unit, show in _VALUE_UNITS:
         if not key.endswith(suffix):
             continue

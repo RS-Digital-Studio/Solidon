@@ -44,7 +44,6 @@ from app.core.geom.mesh import (
 from app.core.geom.repair import SMALL_COMPONENT_SHARE, open_edge_count
 from app.core.log import get_logger
 from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
-from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 from app.core.types import BoundingBox, Finding, IngestInfo, ProgressFn, Vec3
 from app.core.units import (
     EPS_GEOM,
@@ -99,10 +98,10 @@ _ARCHIVE_COMPARE_BYTES: Final = 64 * 1024
 #: **Keine eigene Zahl.** Hier stand 500 000, und damit gab es drei Schwellen
 #: für dieselbe Frage: Die Karten verweigern ab 120 000, die Merkmalserkennung
 #: ab 200 000 (§31) — die Meldung versprach also, was längst geschehen war,
-#: und zwischen 200 000 und 500 000 schwieg sie ganz. Sie ist jetzt die
-#: kleinere der beiden echten Grenzen, und wer eine davon verschiebt,
-#: verschiebt diese mit.
-HEAVY_TRIANGLES: Final = min(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES)
+#: und zwischen 200 000 und 500 000 schwieg sie ganz. Sie ist die Grenze der
+#: Analysekarten: Ob die Merkmalserkennung ausgelassen wird, entscheidet seit
+#: dem 24.09.2026 die Frage beim Laden (§21.1), und das meldet der Körper.
+HEAVY_TRIANGLES: Final = MAP_LIMIT_TRIANGLES
 
 #: Was ein druckbares Teil üblicherweise misst, in Millimetern — die
 #: Untergrenze fest, die Obergrenze als Vorgabe ohne Drucker. Mit Drucker
@@ -1237,10 +1236,14 @@ def _too_fine(triangles: int) -> Finding | None:
     Ausweg dazu: Ein Modell dieser Größe macht jeden späteren Schritt langsam,
     und ein Teil der Analyse antwortet gar nicht mehr.
 
-    **Zwei Sätze, weil es zwei Grenzen sind.** Der eine Satz für beide log
-    zwischen 120 000 und 200 000: Dort lehnen die Karten ab, die
-    Merkmalserkennung läuft weiter. Ein Befund, der mehr behauptet, als
-    stimmt, kostet den nächsten seinen Kredit.
+    **Der Satz spricht über die Karten, die Erkennung meldet sich selbst.**
+    Der eine Satz für beide log zwischen 120 000 und 200 000: Dort lehnten
+    die Karten ab, die Merkmalserkennung lief weiter. Seit die Vollerkennung
+    großer Importe nach einer Frage läuft (§21.1), weiß der Loader nicht
+    einmal mehr, ob sie ablehnt — ein Satz über sie wäre nach einem Ja wie
+    nach einem Nein falsch, und am selben Körper stand ``perceive.too_large``
+    mit denselben Knöpfen darunter. Was die Erkennung auslässt, sagt deshalb
+    allein dieser Befund der Auswertung, am Körper und mit seinen Wegen.
 
     Genannt wird die **Operation**, nicht der Menüweg: Hier stand „Netz →
     Dezimieren", und beides war falsch — das Menü heißt *Ändern*, die
@@ -1250,25 +1253,12 @@ def _too_fine(triangles: int) -> Finding | None:
     """
     if triangles <= HEAVY_TRIANGLES:
         return None
-    if triangles > max(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES):
-        message = _(
-            "Dieses Modell ist sehr fein vernetzt. Analysekarten und "
-            "Merkmalserkennung lehnen ab; „Dreiecke verringern“ hilft."
-        )
-    elif MAP_LIMIT_TRIANGLES < FEATURE_LIMIT_TRIANGLES:
-        message = _(
-            "Dieses Modell ist fein vernetzt. Die Analysekarten lehnen ab; "
-            "„Dreiecke verringern“ hilft."
-        )
-    else:
-        message = _(
-            "Dieses Modell ist fein vernetzt. Die Merkmalserkennung lehnt ab; "
-            "„Dreiecke verringern“ hilft."
-        )
     return Finding(
         code="ingest.very_large",
         severity="warning",
-        message=message,
+        message=_(
+            "Für die Analysekarten ist dieses Modell zu fein vernetzt. „Dreiecke verringern“ hilft."
+        ),
         values={"triangles": triangles, "comfortable": HEAVY_TRIANGLES},
     )
 

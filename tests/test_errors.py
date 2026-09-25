@@ -388,6 +388,10 @@ _NOT_A_RANGE = frozenset(
         "seal_support_face", "seal_dimensions", "seal_geometry",
         # Art und Belegung einer Auswahl sind keine Zahlenspanne.
         "feature_kind", "empty_feature", "slots_full",
+        # Die lokale Suche liefert keinen vollständigen Formnachweis: Auswahl,
+        # Topologie und Suchbudget sind keine unzulässigen Zahlenwerte im Feld.
+        "local_boundary", "local_budget", "local_seed", "local_ambiguous_seed",
+        "local_no_feature", "local_topology",
         # Die Gestalt eines Gewindes (P2.5-Rest): Ein kegeliges oder
         # mehrgängiges Gewinde bekommt kein Gegenstück aus der Bibliothek, und
         # Ändern oder Entfernen setzen keine Zylinder an einen Kegel. Das ist

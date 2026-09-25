@@ -368,6 +368,39 @@ Merkmalhandlungen entstehen dort. Radiuswechsel entwerten Auswahl und Freigabe
 sofort; nur die jüngste Generation wird angezeigt. Originaltreffer und beantwortete
 Mehrdeutigkeit reisen im Erkennungsauftrag mit. Erkennung und Bearbeitung teilen
 Vorschau und Übernahme; `preview_revision` schützt auch die Fehlerfreigabe.
+Die Fehlerursache `local_<reason>` bleibt beim Übergang vom Auswertungsbefund
+zum Dialog erhalten. Je Grund stehen die Wege, die sein Satz nennt, als Knöpfe
+da (`local_recognition._LOCAL_WAYS`, der erste als Hauptknopf): *Andere Stelle
+wählen* über `pickRequested`, *Suchradius vergrößern* und *verkleinern* um
+`RADIUS_STEP` mit sofortiger neuer Suche (ein Ausdruck im Feld bleibt und
+bekommt den Fokus), *Dreiecke verringern* und *Netz reparieren* über
+`operationRequested` — der Ablauf schließt die Suche und öffnet die Operation
+für genau diesen Körper. Ein Grund ohne Eintrag führt weiter ins Suchradiusfeld.
+Die ebene Fläche am Treffer steht immer in der Liste, auch über den
+Suchradius hinaus (`_with_the_face_at_the_seed`); jedes andere Merkmal nur, wenn
+es ganz im Suchraum liegt. Der Pendelschutz (`local_exhausted`) spricht erst,
+wenn Suchrand und Budget höchstens einen `RADIUS_STEP` auseinanderliegen, und
+ein Fund setzt ihn zurück. *Alle Merkmale erkennen* hängt am Körper, nicht am
+Schritt des Befunds, und steht nur, wo am Ladeschritt eine Wahl steht
+(`panels._recognition_reopenable` über `history.recognition_reopenable`);
+eine Sammelzeile gibt alle ihre Körper mit (`recognition_objects`), und
+`Session.reopen_recognition` tut ohne gespeicherte Wahl nichts, sonst
+vergisst es auch den Speichermerker. Nach einem Abbruch während der
+bestätigten Vollerkennung — auch unter einer gespeicherten Zustimmung — steht
+*Ohne Merkmalserkennung laden* in der Statuszeile
+(`Session.load_without_recognition`); ein fertiger Lauf nimmt ihn weg
+(`_show_scene`). Die Antwort selbst setzt den Stern im Titel, sobald sie
+ankommt (`_record_recognition_answer` sendet `projectChanged`).
+Kann die Auswahl nicht beginnen, sagt `LocalRecognitionFlow._refusal` warum:
+Rechnung läuft, exakter Körper (Satz aus `labels.kind_requirement`), kein
+Treffer — der Einstieg aus dem Bericht kehrte vorher stumm zurück.
+Der Großmodellbericht startet denselben Ablauf und bindet die Stellenauswahl
+an die Körper seines Befunds. Bei Sammelzeilen bestimmt der Oberflächenklick
+einen dieser Körper; eine fremde Baumauswahl bleibt ohne Bedeutung.
+Im bereits aktiven Auswahlzustand bietet `Viewport.set_surface_picker` ein
+Fadenkreuz mit Pfeiltasten, Umschalt für Feinschritte und Enter zur Auswahl.
+Maus und Tastatur führen über denselben Originaltreffer. Abbruch, Dialogöffnung
+und Projektwechsel entfernen Fadenkreuz und Tastaturbindung gemeinsam.
 `local_recognition_flow.py` hält die Erkundung ausschließlich in der temporären
 Ansicht. Erst die Dialogannahme schreibt eine gemeinsame `Session.apply`-Transaktion.
 Abbruch und Projektwechsel säubern Vorschau, Auswahlgriff und Rückfragen;

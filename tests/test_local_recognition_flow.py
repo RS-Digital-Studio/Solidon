@@ -26,6 +26,7 @@ def local_window(qt_app, monkeypatch, tmp_path):
     load_operations()
     evaluation = importlib.import_module("app.core.scene.evaluate")
     monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(evaluation, "CONFIRMED_FEATURE_LIMIT_TRIANGLES", 1)
     path = tmp_path / "blind.stl"
     path.write_bytes(blind_cylinder().raw.export(file_type="stl"))
     window = MainWindow(Session(), UiSettings())
@@ -161,6 +162,33 @@ def test_palette_click_and_escape_share_the_local_flow(local_window, qt_app, mon
     assert len(window.session.project.document.ops) == 1
 
 
+def test_bad_surface_can_be_picked_again_without_a_document_change(
+    local_window, qt_app, monkeypatch
+):
+    """Der Fehlerknopf räumt die Erkundung ab und nimmt den nächsten Originaltreffer an."""
+    from app.core.perceive.local import local_error
+
+    window = local_window
+    flow, dialog = start(window, qt_app)
+    document = copy.deepcopy(window.session.project.document)
+    dialog._failed(dialog._revision, local_error("seed"))
+    button = next(
+        button for button in dialog.state._buttons if button.text() == "Andere Stelle wählen"
+    )
+
+    button.click()
+
+    assert flow.dialog is None
+    assert flow.armed
+    assert window.session.project.document == document
+    monkeypatch.setattr(window.viewport, "placement_hit", lambda x, y: surface_hit(window))
+    assert flow.pointer(PointerEvent(kind="release", x=5, y=7, button="left"))
+    assert flow.dialog is not None and flow.dialog is not dialog
+    _until(qt_app, flow.dialog.save_button.isEnabled)
+    assert window.session.project.document == document
+    flow.dialog.reject()
+
+
 def test_failed_preview_stays_visible_and_cannot_be_accepted(local_window, qt_app, monkeypatch):
     flow, dialog = start(local_window, qt_app)
 
@@ -280,3 +308,157 @@ def test_a_recalculation_in_between_does_not_swallow_the_accepted_edit(local_win
     assert session.wait_for_idle(30000)
     assert [op.op for op in session.project.document.ops[-2:]] == ["detect_region", "resize_hole"]
     assert len(session.project.document.transactions) == len(document.transactions) + 1
+
+
+@pytest.mark.parametrize("ratio", (1.0, 1.5, 2.0))
+def test_surface_picker_keys_use_device_pixels_and_keep_unrelated_keys(ratio):
+    """Der Tastaturtreffer folgt demselben Pixelvertrag wie die Maus, ohne Fenster."""
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+
+    from app.ui.viewport import Viewport
+
+    picks, placements = [], []
+    view = SimpleNamespace(
+        _surface_picker=lambda x, y: picks.append((x, y)),
+        _surface_picker_point=(100.0, 50.0),
+        renderer=object(),
+        _device_pixels=lambda value: value * ratio,
+        _place_surface_picker=lambda: placements.append(True),
+    )
+
+    def press(key, modifier=Qt.KeyboardModifier.NoModifier, repeat=False):
+        event = QKeyEvent(QEvent.Type.KeyPress, key, modifier, "", repeat)
+        return Viewport._surface_picker_key(view, event)
+
+    assert press(Qt.Key.Key_Right)
+    assert press(Qt.Key.Key_Up, Qt.KeyboardModifier.ShiftModifier)
+    assert view._surface_picker_point == pytest.approx((100 + 8 * ratio, 50 - ratio))
+    assert len(placements) == 2
+    assert press(Qt.Key.Key_Return)
+    assert picks == [view._surface_picker_point]
+    assert press(Qt.Key.Key_Return, repeat=True)
+    assert len(picks) == 1
+    assert not press(Qt.Key.Key_Escape)
+    assert not press(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert not press(Qt.Key.Key_Left, Qt.KeyboardModifier.AltModifier)
+    view._surface_picker = None
+    assert not press(Qt.Key.Key_Right)
+
+
+def test_surface_picker_position_is_clamped_and_drawn_in_logical_pixels():
+    """Eine kleine Ansicht hält den Treffer im Bild und das Kreuz darüber."""
+    from types import SimpleNamespace
+
+    from app.ui.viewport import Viewport
+
+    positions = []
+    mark = SimpleNamespace(
+        width=lambda: 24,
+        height=lambda: 24,
+        move=lambda x, y: positions.append((x, y)),
+        show=lambda: None,
+        raise_=lambda: None,
+    )
+    view = SimpleNamespace(
+        _surface_picker=lambda x, y: None,
+        _surface_picker_point=(500.0, -10.0),
+        _surface_picker_mark=mark,
+        renderer=SimpleNamespace(view_size=lambda: (201, 101), widget=None),
+        _device_ratio=lambda: 2.0,
+    )
+    Viewport._place_surface_picker(view)
+    assert view._surface_picker_point == (200.0, 0.0)
+    assert positions == [(88, -12)]
+
+
+def test_keyboard_surface_choice_opens_local_recognition_and_cancel_hides_the_crosshair(
+    local_window, qt_app, monkeypatch
+):
+    """Pfeile und Eingabe erreichen dieselbe Vorschau wie ein Modellklick."""
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    window = local_window
+    viewport = window.viewport
+    flow = window.local_features()
+    # Der echte Renderer gehört zur visuellen Release-Abnahme; hier wird nur
+    # der Anschluss der Qt-Tasten an die bestehende Originaltrefferprüfung geprüft.
+    monkeypatch.setattr(
+        viewport,
+        "renderer",
+        SimpleNamespace(view_size=lambda: (800, 600), device_ratio=lambda: 1.0, widget=None),
+    )
+    hits = []
+    original_hit = surface_hit(window)
+
+    def hit(x, y):
+        hits.append((x, y))
+        return original_hit
+
+    monkeypatch.setattr(viewport, "placement_hit", hit)
+    chosen = []
+    monkeypatch.setattr(flow, "begin", lambda found: chosen.append(found))
+    flow.arm()
+    assert viewport._surface_picker_mark is not None
+    assert not viewport._surface_picker_mark.isHidden()
+    QTest.keyClick(viewport, Qt.Key.Key_Right)
+    QTest.keyClick(viewport, Qt.Key.Key_Return)
+    assert hits == [(408.0, 300.0)]
+    assert chosen == [original_hit]
+    flow.invalidate()
+    assert viewport._surface_picker_mark.isHidden()
+    assert viewport._surface_picker is None
+
+
+def test_recognize_fully_reopens_the_question_of_its_load_step(local_window, monkeypatch):
+    """*Alle Merkmale erkennen* geht an den Ladeschritt und Körper des Befunds.
+
+    Nie an die Auswahl: Ohne Körper oder Schritt im Befund geschieht nichts,
+    statt die Wahl eines anderen Körpers zurückzunehmen.
+    """
+    from app.core.errors import AppError
+
+    window = local_window
+    calls = []
+    monkeypatch.setattr(
+        window.session,
+        "reopen_recognition",
+        lambda object_ids: calls.append(tuple(object_ids)),
+    )
+    handler = window.error_handlers()["recognize_fully"]
+
+    handler(AppError(title="Großes Modell", object_id="obj_1", op_id=1))
+    handler(AppError(title="Großes Modell", op_id=1))
+    handler(AppError(title="Großes Modell", values={"recognition_objects": ("a", "b")}))
+
+    assert calls == [("obj_1",), ("a", "b")]
+
+
+def test_a_local_way_to_decimate_closes_the_search_and_opens_the_operation(
+    local_window, qt_app, monkeypatch
+):
+    """*Dreiecke verringern* am Budgetfehler: Suche zu, Operation für genau diesen Körper."""
+    from app.core.perceive.local import local_error
+
+    window = local_window
+    flow, dialog = start(window, qt_app)
+    body = next(iter(window.session.last_result.scene.objects))
+    opened = []
+    monkeypatch.setattr(window, "run_operation", lambda spec, *a, **k: opened.append(spec.name))
+    document = copy.deepcopy(window.session.project.document)
+
+    dialog._failed(dialog._revision, local_error("budget"))
+    button = next(
+        button for button in dialog.state._buttons if button.text() == "Dreiecke verringern"
+    )
+    button.click()
+
+    assert flow.dialog is None
+    assert opened == ["decimate_mesh"]
+    assert tuple(window.object_tree.selected_objects()) == (body,)
+    assert window.session.project.document == document

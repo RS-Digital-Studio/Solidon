@@ -335,6 +335,15 @@ def test_answers_to_questions_of_the_evaluation_stay_free(
         "die Antwort auf eine Frage der Auswertung bleibt frei"
     )
     assert history.record_matches({1: {"at_feature": "hole_1"}}), "die Zuordnungsantwort ebenso"
+    # Und die Erkennungsfrage eines großen Imports wieder zu stellen (§21.1)
+    # ändert kein Teil: Die Wahl ist eine Antwort, und was danach gewählt
+    # wird, schreibt wieder ``record_matches`` fest.
+    from app.core.perceive.match_records import recognition_answer_key
+
+    key = recognition_answer_key("obj_1")
+    record = {"object_id": "obj_1", "scope": "a" * 32, "allowed": False}
+    assert history.record_matches({1: {key: record}})
+    assert history.reopen_recognition(("obj_1",)), "das erneute Fragen bleibt frei"
 
 
 def test_a_licence_lets_a_step_be_reparametrised(monkeypatch: pytest.MonkeyPatch) -> None:

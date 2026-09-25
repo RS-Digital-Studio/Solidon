@@ -104,6 +104,27 @@ Einzelantworten liegen ab Format 27 unverändert unter `legacy`, auch in
 beiden gespeicherten `edited_ops`-Seiten. Die Migration erfindet keine Lage
 oder Körperzuständigkeit; unbrauchbare Altabdrücke bleiben lediglich lesbar.
 
+Die Frage vor der langen Vollerkennung (§21.1; was sie zusagt, steht in
+`kern.md`) hat ihre Orte in `evaluate.py`: `_full_recognition_allowed` für
+einen großen Körper, `_ask_once_for_large_bodies` für mehrere aus einem
+Import, beide über `_asked_about_recognition`, `_recognition_choice` für
+die gespeicherte Wahl am Ladeschritt (`recognition-answer:`, an
+Ausgabekörper und Netzinhalt gebunden, dieselbe strikte Struktur wie der
+Projektleser aus `perceive.match_records`), `_skipped_recognition` für den
+Befund `perceive.too_large` in seinen vier Fassungen.
+`_WatchedAsk.optional` zählt sie nicht als Frage des Schritts, damit der
+Import auf die Platte geht. `recognition_of` baut je Lauf die Wahl je Körper
+(`_BodyRecognition`), die Folgeschritte lesen; der Speicherfehler-Rückweg
+steht in `_with_features`, der Merker dazu in `perceive.local`;
+`_remeasured` übersetzt einen Halt der örtlichen Nachmessung in den Satz des
+Schritts. `on_recognition_answer` meldet eine Antwort sofort, die Sitzung hält
+sie fest. `History.reopen_recognition` nimmt die Wahl je Körper am
+Ladeschritt zurück, ohne Transaktion und ohne Lizenzgrenze wie
+`record_matches`; `history.recognition_reopenable` sagt Panel und
+Kommandozeile, ob es etwas zurückzunehmen gibt. Die Prüfung erfolgt nach dem
+rohen Operationscache und vor jeder Erkennung; eine Absage schreibt keinen
+leeren Eintrag in den Erkennungsmerker.
+
 `History.record_matches` ersetzt ganze Einträge ohne weitere Transaktion
 und übernimmt ihre verschachtelten Werte als eigene Kopie. Vor Undo/Redo
 sichert die gerade verlassene Änderungsseite ihre aktuellen Antworten nur
@@ -630,7 +651,13 @@ Einzelteile zerlegen* statt der Reparatur, beide über `_retried_after`),
 fünf Schritte eines Formatwechsels). Die Dreiecksgrenze der
 Merkmalerkennung, `FEATURE_LIMIT_TRIANGLES`, liegt in `perceive/local.py`;
 `evaluate.py` exportiert den bisherigen Namen weiter. Oberhalb der Grenze
-prüft `detect_known` bereits belegte Merkmale örtlich am vollständigen Netz.
+misst `_measured_locally` bekannte Merkmale örtlich nach (`detect_known`,
+mit `required` aus `_needed_after`), bei unveränderten Dreiecken
+(`_same_triangles`) gar nicht und nach einer belegten starren Bewegung nur,
+was die Bewegung nicht exakt trägt (`standing`, derselbe Beleg
+`perceive.features.moved_twin` wie für `carry_detection`);
+`recognition_of` trägt die Ladewahl je Körper durch den Lauf. Was dabei
+gilt, steht in `kern.md`.
 
 **Ein exakter Körper wird nicht neu erkannt.** Die Erkennung misst an
 Dreiecken; ein `Solid` hat keine, seine Merkmale liest

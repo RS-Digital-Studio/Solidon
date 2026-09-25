@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, Final
 
@@ -12,27 +12,115 @@ import numpy as np
 from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
-from app.core.geom.mesh import MeshData, face_components
+from app.core.geom.mesh import MeshData
 from app.core.perceive import features as detection
-from app.core.perceive.matching import match, transformed_features
+from app.core.perceive.matching import DIAMETER_TOLERANCE, match, transformed_features
 from app.core.perceive.relations import cavity_chains
 from app.core.perceive.surfaces import clipped_patches, reindexed_patches
 from app.core.types import Feature, FeatureId, Transform, Vec3, is_a_cavity
 from app.core.units import EPS_GEOM, match_tolerance, weld_tolerance
 from app.i18n import _
 
-#: Feine Kundennetze werden unverändert erkannt: Schlauchhalter und Figur mit
-#: rund 400 000 beziehungsweise 900 000 Dreiecken benötigen kalt 7 bis 13 Sekunden,
-#: aus dem Cache unter 50 Millisekunden. Die Schranke bleibt: ein Schiff mit
-#: 1,22 Millionen Dreiecken benötigt 157 Sekunden und deutlich mehr Speicher.
-#: Die Topologie entscheidet mit: auf 990 000 reduziert bleibt es bei 123 Sekunden.
-#: §31 bleibt das Leistungsziel; dieses Budget begrenzt die zugelassenen Netze.
-FEATURE_LIMIT_TRIANGLES = 1_000_000
+#: Automatische Vollerkennung; darüber bleibt die lokale Suche verfügbar.
+FEATURE_LIMIT_TRIANGLES = 1_500_000
+#: Vollerkennung größerer Importe nur nach ausdrücklicher gespeicherter Wahl.
+CONFIRMED_FEATURE_LIMIT_TRIANGLES: Final = 5_000_000
+#: Belegte Referenzprobe, allein die Erkennung ohne Einlesen: Der Drache mit
+#: 2 330 374 Dreiecken brauchte 59 bis 72 Sekunden, je Dreieck 25 bis 31 µs.
+#: Gerechnet wird mit dem langsameren Lauf; Zeit und Aufschlag dienen
+#: ausschließlich der Anzeige.
+RECOGNITION_REFERENCE_TRIANGLES: Final = 2_330_374
+RECOGNITION_REFERENCE_SECONDS: Final = 72
+#: Die Topologie streut stärker als der Rechner: je Dreieck 31 µs am Drachen,
+#: 32 µs am Piratenschiff, 118 µs am Gartenschlauchhalter (24.09.2026).
+RECOGNITION_TIME_FACTOR: Final = 5
+#: Spitzenbedarf des ganzen Imports je Dreieck, Einlesen eingeschlossen:
+#: 1 600 Byte am Gartenschlauchhalter, 1 660 am Drachen, 1 770 am Schiff.
+RECOGNITION_BYTES_PER_TRIANGLE: Final = 1_800
+
+
+def recognition_minutes(triangles: int) -> tuple[int, int]:
+    """Grobe Zeitspanne, keine Zusage: 2 330 374 Dreiecke dauerten 72 Sekunden.
+
+    Topologie und Rechner bestimmen die wirkliche Dauer. Die obere Schätzung
+    erhält den fünffachen Zeitansatz; die Minuten werden unten ab- und oben
+    aufgerundet. Die Warnung nennt ausdrücklich mögliche längere Laufzeiten.
+    """
+    minute_basis = RECOGNITION_REFERENCE_TRIANGLES * 60
+    measured = triangles * RECOGNITION_REFERENCE_SECONDS
+    return (
+        max(1, measured // minute_basis),
+        max(2, (measured * RECOGNITION_TIME_FACTOR + minute_basis - 1) // minute_basis),
+    )
+
+
+#: Netze, deren Vollerkennung in diesem Prozess am Arbeitsspeicher scheiterte
+#: (Netzabdruck aus ``features._mesh_key``). Kein Dokumentzustand: Er
+#: verhindert nur, dass dasselbe Netz bei jeder Auswertung Minuten bis zum
+#: selben Fehler rechnet; das Ergebnis ist dasselbe wie beim ersten Rückfall.
+_OUT_OF_MEMORY: set[bytes] = set()
+#: Mehr Netze merkt sich der Prozess nicht; darüber beginnt er von vorn.
+OUT_OF_MEMORY_LIMIT: Final = 64
+
+
+def remember_out_of_memory(mesh: MeshData) -> None:
+    """Hält fest, dass die Vollerkennung dieses Netzes am Speicher scheiterte."""
+    if len(_OUT_OF_MEMORY) >= OUT_OF_MEMORY_LIMIT:
+        _OUT_OF_MEMORY.clear()
+    _OUT_OF_MEMORY.add(detection._mesh_key(mesh))
+
+
+def ran_out_of_memory(mesh: MeshData) -> bool:
+    """Ob die Vollerkennung dieses Netzes in diesem Prozess schon scheiterte."""
+    return bool(_OUT_OF_MEMORY) and detection._mesh_key(mesh) in _OUT_OF_MEMORY
+
+
+def forget_out_of_memory() -> None:
+    """Vergisst jeden gemerkten Speicherfehler — nach einem ausdrücklichen neuen Versuch.
+
+    *Alle Merkmale erkennen* und ein anderes Projekt sind eine neue
+    Entscheidung: Wer nach dem Fehler Programme schließt und es erneut
+    versucht, bekam sonst ohne einen Versuch denselben Satz (Review N2).
+    """
+    _OUT_OF_MEMORY.clear()
+
+
+def recognition_gigabytes(triangles: int) -> int:
+    """Arbeitsspeicher der Vollerkennung in ganzen GB, aufgerundet.
+
+    Genannt wird der Bedarf des ganzen Vorgangs: Ein Rechner, der ihn nicht
+    hat, lagert aus oder bricht die Erkennung mit einem Speicherfehler ab.
+    """
+    return max(1, -(-triangles * RECOGNITION_BYTES_PER_TRIANGLE // 1_000_000_000))
+
 
 #: Ausführungsbudget für einen lokalen Fit, keine Lockerung einer Formtoleranz.
 #: Die Großmodellproben benötigen 471 bis 5120 Dreiecke; 50 000 begrenzt die
 #: Fitphase auch bei dichter Oberfläche und lässt für die Abschlussflächen Platz.
 LOCAL_FACE_LIMIT: Final = 50_000
+#: So groß darf der Fleck werden, über den die Stelle den Mantelnachweis der
+#: Vollerkennung rechnet (:func:`features.planar_facet`). Er kostet eine
+#: Flutung und vier Einpassungen, nicht ``detect``, und hat deshalb ein
+#: eigenes Budget: Die Deckfläche eines Zylinders mit fein aufgelöster
+#: Verrundung hängt über sie und den Mantel an 147 000 Dreiecken.
+MANTLE_PROOF_LIMIT: Final = 250_000
+#: Wie weit ein Rundungsstück über koplanare Dreiecke verfolgt wird: Ein Stück
+#: aus einem Streifen von Dreiecken braucht je Dreieck eine Runde.
+PIECE_ROUNDS: Final = 8
+#: Wann ein Knick „parallel zur Randkante“ läuft: Bei einer Rundung liegen alle
+#: Knicke längs derselben Achse; die Ecke eines Stumpfs steht 45° und mehr quer.
+ALONG_THE_RIM_DEGREES: Final = 10.0
+#: Wie weit sich eine hohle Rundung hinter der Flanke umwenden muss, damit sie
+#: ein Langlochende ist und keine Verrundung: Ein Halbzylinder wendet die
+#: Normale bis zur Gegenflanke, 180°, eine Verrundung an einer rechtwinkligen
+#: Kante um 90°. Ein Ende aus zwei Stücken je Halbkreis steht schon bei 135°,
+#: seine Gegenflanke bei 180° — die Grenze liegt dazwischen.
+SLOT_END_TURN_DEGREES: Final = 150.0
+#: So viele Rundungsstücke verfolgt der Gang höchstens.
+ROUND_STEPS: Final = 256
+#: Ein Stück, das mehr als doppelt so breit ist wie das erste der Rundung, ist
+#: keine Rundung mehr, sondern die nächste Fläche: Dort endet der Gang.
+STRIP_GROWTH: Final = 2.0
 #: Ein Originaldurchgang belegt höchstens diese Dreiecke gleichzeitig und
 #: prüft danach den Abbruch. Ein 1,4-Millionen-Netz braucht 22 solche Blöcke.
 SCAN_BLOCK: Final = 65_536
@@ -49,6 +137,9 @@ class LocalDetection:
     seed_choices: tuple[int, ...] = ()
     unfinished: tuple[Feature, ...] = ()
     open_curvature: bool = False
+    #: Eine gefundene Fläche blieb offen, weil ihr Mantelnachweis über das
+    #: Budget reicht (:func:`features.planar_facet`).
+    undecided: bool = False
 
     @property
     def complete(self) -> bool:
@@ -58,29 +149,53 @@ class LocalDetection:
 
 def local_error(reason: str) -> ValidationError:
     """Jeder nicht abgeschlossene Auftrag nennt einen ausführbaren Rückweg."""
-    messages = {
-        "boundary": _(
-            "Das Merkmal setzt sich über den Suchbereich hinaus fort. "
-            "Vergrößern Sie den Suchradius oder wählen Sie eine andere Stelle."
+    errors = {
+        "boundary": ValidationError(
+            constraint="local_boundary",
+            detail=_(
+                "Das Merkmal setzt sich über den Suchbereich hinaus fort. "
+                "Vergrößern Sie den Suchradius oder wählen Sie eine andere Stelle."
+            ),
+            suggestions=[CORRECT_INPUT, CANCEL],
         ),
-        "budget": _(
-            "Dieser Bereich enthält zu viele Dreiecke für die lokale Suche. "
-            "Wählen Sie einen kleineren Bereich oder verringern Sie zuerst die Dreiecke."
+        "budget": ValidationError(
+            constraint="local_budget",
+            detail=_(
+                "Dieser Bereich enthält zu viele Dreiecke für die lokale Suche. "
+                "Wählen Sie einen kleineren Bereich oder verringern Sie zuerst die Dreiecke."
+            ),
+            suggestions=[CORRECT_INPUT, CANCEL],
         ),
-        "seed": _("Die gewählte Stelle liegt nicht mehr auf dieser Fläche. Wählen Sie sie erneut."),
-        "ambiguous_seed": _(
-            "An dieser Stelle liegen mehrere Flächen. Wählen Sie die gemeinte Fläche."
+        "seed": ValidationError(
+            constraint="local_seed",
+            detail=_(
+                "Die gewählte Stelle liegt nicht mehr auf dieser Fläche. Wählen Sie sie erneut."
+            ),
+            suggestions=[CORRECT_INPUT, CANCEL],
         ),
-        "no_feature": _(
-            "Hier wurde kein vollständig bestimmtes Merkmal gefunden. "
-            "Wählen Sie eine andere Stelle oder vergrößern Sie den Suchradius."
+        "ambiguous_seed": ValidationError(
+            constraint="local_ambiguous_seed",
+            detail=_("An dieser Stelle liegen mehrere Flächen. Wählen Sie die gemeinte Fläche."),
+            suggestions=[CORRECT_INPUT, CANCEL],
         ),
-        "topology": _(
-            "Die Begrenzung dieses Merkmals ist nicht eindeutig. "
-            "Reparieren Sie das Netz oder wählen Sie eine andere Stelle."
+        "no_feature": ValidationError(
+            constraint="local_no_feature",
+            detail=_(
+                "Hier wurde kein vollständig bestimmtes Merkmal gefunden. "
+                "Wählen Sie eine andere Stelle oder vergrößern Sie den Suchradius."
+            ),
+            suggestions=[CORRECT_INPUT, CANCEL],
+        ),
+        "topology": ValidationError(
+            constraint="local_topology",
+            detail=_(
+                "Die Begrenzung dieses Merkmals ist nicht eindeutig. "
+                "Reparieren Sie das Netz oder wählen Sie eine andere Stelle."
+            ),
+            suggestions=[CORRECT_INPUT, CANCEL],
         ),
     }
-    return ValidationError(detail=messages[reason], suggestions=[CORRECT_INPUT, CANCEL])
+    return errors[reason]
 
 
 def _check(callback: Callable[[], None] | None) -> None:
@@ -96,9 +211,19 @@ def _check_patch_size(count: int) -> None:
 
 
 def _region(
-    mesh: MeshData, point: np.ndarray, radius: float, check: Callable[[], None] | None
+    mesh: MeshData,
+    point: np.ndarray,
+    radius: float,
+    check: Callable[[], None] | None,
+    *,
+    bounded: bool = True,
 ) -> np.ndarray | None:
-    """Konservative Dreieckshüllen: ein langer Rand darf nicht am Schwerpunkt fehlen."""
+    """Konservative Dreieckshüllen: ein langer Rand darf nicht am Schwerpunkt fehlen.
+
+    ``None`` heißt: mehr als :data:`LOCAL_FACE_LIMIT` Dreiecke. Mit
+    ``bounded=False`` kommt der ganze Würfel zurück — für den Treffer am Punkt
+    und für den Teil, der mit ihm zusammenhängt (:func:`detect_local`).
+    """
     selected: list[np.ndarray] = []
     count = 0
     vertices, faces = np.asarray(mesh.raw.vertices), np.asarray(mesh.raw.faces)
@@ -109,11 +234,44 @@ def _region(
         keep &= (triangles.max(axis=1) >= point - radius).all(axis=1)
         indices = np.flatnonzero(keep) + start
         count += len(indices)
-        if count > LOCAL_FACE_LIMIT:
+        if bounded and count > LOCAL_FACE_LIMIT:
             return None
         selected.append(indices)
     _check(check)
     return np.concatenate(selected) if selected else np.empty(0, dtype=np.int64)
+
+
+def _facet_labels(body: Any) -> np.ndarray:
+    """Je Dreieck die Nummer seiner ebenen Facette am ganzen Netz, sonst -1.
+
+    Dieselbe Gruppierung, aus der die Vollerkennung ihre ebenen Flächen liest
+    (``body.facets``); trimesh merkt sie sich am Körper, und am Drachen mit
+    2,3 Millionen Dreiecken kostet sie beim ersten Mal 2,2 s.
+    """
+    facets = body.facets
+    labels = np.full(len(body.faces), -1, dtype=np.int64)
+    if len(facets):
+        sizes = np.fromiter((len(facet) for facet in facets), dtype=np.int64, count=len(facets))
+        labels[np.concatenate(facets)] = np.repeat(np.arange(len(facets), dtype=np.int64), sizes)
+    return labels
+
+
+def _connected_to(mesh: MeshData, indices: np.ndarray, seed: int) -> np.ndarray:
+    """Der Teil des Würfels, der über gemeinsame Kanten am Treffer hängt.
+
+    Am ganzen, bereits verschweißten Netz gefragt, ohne ein Teilnetz zu bauen:
+    Ein Würfel über der Budgetgrenze kann Hunderttausende Dreiecke tragen.
+    """
+    inside = np.zeros(mesh.triangle_count, dtype=bool)
+    inside[indices] = True
+    pairs = np.asarray(mesh.raw.face_adjacency)
+    within = pairs[inside[pairs[:, 0]] & inside[pairs[:, 1]]]
+    for component in trimesh.graph.connected_components(
+        within, nodes=indices, engine="scipy", min_len=1
+    ):
+        if seed in component:
+            return np.sort(np.asarray(component, dtype=np.int64))
+    return np.asarray([seed], dtype=np.int64)
 
 
 def _part(mesh: MeshData, indices: np.ndarray) -> MeshData:
@@ -140,9 +298,8 @@ def _seeds(
     closest = closest_point(triangles, np.broadcast_to(point, (len(indices), 3)))
     tolerance = max(EPS_GEOM, weld_tolerance(mesh.bounds.diagonal))
     on_surface = np.linalg.norm(closest - point, axis=1) <= tolerance
-    aligned = np.asarray(mesh.raw.face_normals)[indices] @ normal >= units.exact_cos_degrees(
-        detection.EPS_ANGLE
-    )
+    facing = (np.asarray(mesh.raw.face_normals)[indices] * normal).sum(axis=1)
+    aligned = facing >= units.exact_cos_degrees(detection.EPS_ANGLE)
     found = indices[on_surface & aligned]
     preferred = sorted({int(index) for index in hints}.intersection(found))
     if not len(found):
@@ -188,6 +345,129 @@ def _numbered(features: Sequence[Feature]) -> dict[FeatureId, Feature]:
     return result
 
 
+@dataclass(frozen=True, slots=True)
+class _Seams:
+    """Was der Langlochgang je Dreieck und Naht liest — einmal je Fläche geholt.
+
+    Jeder Zugriff auf ein Feld am Körper geht durch den Merker von trimesh,
+    und der prüft dabei die Daten: An einer Deckfläche mit 8 192 Randkanten
+    kosteten die Zugriffe allein 0,7 s. ``angles`` sind die Knicke aller
+    Nachbarpaare in Grad.
+    """
+
+    neighbours: np.ndarray
+    rows: np.ndarray
+    normals: np.ndarray
+    centres: np.ndarray
+    vertices: np.ndarray
+    faces: np.ndarray
+    edges: np.ndarray
+    angles: np.ndarray
+
+    @classmethod
+    def of(cls, body: Any, angles: np.ndarray) -> _Seams:
+        """Die Felder eines Körpers, einmal gelesen."""
+        neighbours, rows = detection._neighbour_index(body)
+        return cls(
+            neighbours,
+            rows,
+            np.asarray(body.face_normals),
+            np.asarray(body.triangles_center),
+            np.asarray(body.vertices),
+            np.asarray(body.faces),
+            np.asarray(body.face_adjacency_edges),
+            angles,
+        )
+
+
+def _turns_round_like_a_slot_end(
+    seams: _Seams,
+    start: int,
+    normal: np.ndarray,
+    along: np.ndarray,
+    face: Collection[int],
+) -> bool:
+    """Ob die Rundung hinter einer Flankenkante ein Langlochende ist (Review N5).
+
+    Hohl muss sie sein — sie wölbt sich zur Seite der Flächennormalen, um die
+    Luft des Lochs; das prüft :func:`_recognise_region` für alle Randkanten
+    zugleich, bevor der Gang beginnt —, und sie muss die Normale bis zur
+    Gegenflanke umwenden.
+    Gegangen wird Stück für Stück quer zur Randkante: über jeden Knick, der
+    parallel zu ihr läuft, bis ein Stück breiter wird als eine Rundung
+    (``STRIP_GROWTH``) oder keines mehr folgt. Eine Verrundung an einer
+    Außenkante ist nicht hohl, eine in einer Innenecke endet nach 90° an ihrer
+    Wand; beides schluckt die Vollerkennung in kein Langloch. Ob eine solche
+    Fläche überhaupt eine ist, entscheidet nicht dieser Gang, sondern die
+    Ebenenregel der Vollerkennung (:func:`features.planar_facet`). ``face``
+    sind die Dreiecke der Fläche selbst. Gemerkt wird nur, was der Gang
+    berührt — kein Feld in Netzgröße je Randkante (Review R2: 19,6 s an einer
+    Deckfläche mit 8 192 Randkanten).
+    """
+    neighbours, rows = seams.neighbours, seams.rows
+    face_normals, vertices, faces = seams.normals, seams.vertices, seams.faces
+    edges, angles = seams.edges, seams.angles
+    parallel = units.exact_cos_degrees(ALONG_THE_RIM_DEGREES)
+    opposite = -units.exact_cos_degrees(180.0 - SLOT_END_TURN_DEGREES)
+    visited: set[int] = set()
+
+    def piece_of(seed: int) -> np.ndarray:
+        # Ein Stück der Rundung ist eine koplanare Gruppe, wenige Runden weit.
+        piece, frontier, seen = [seed], [seed], {seed}
+        for _round in range(PIECE_ROUNDS):
+            reached = []
+            for triangle in frontier:
+                for other, row in zip(neighbours[triangle], rows[triangle], strict=True):
+                    if other < 0 or other in seen or other in visited or other in face:
+                        continue
+                    if angles[row] <= detection.EPS_ANGLE:
+                        seen.add(int(other))
+                        reached.append(int(other))
+            if not reached:
+                break
+            piece.extend(reached)
+            frontier = reached
+        return np.asarray(piece, dtype=np.int64)
+
+    def width_of(piece: np.ndarray, facing: np.ndarray) -> float:
+        across = np.cross(facing, along)
+        across = across / math.sqrt(float((across * across).sum()))
+        heights = (vertices[faces[piece]].reshape(-1, 3) * across).sum(axis=1)
+        return float(heights.max() - heights.min())
+
+    current = piece_of(start)
+    first_width: float | None = None
+    for _step in range(ROUND_STEPS):
+        facing = face_normals[current[0]]
+        if float((facing * normal).sum()) <= opposite:
+            return True
+        width = width_of(current, facing)
+        if first_width is None:
+            first_width = width
+        elif width > STRIP_GROWTH * first_width:
+            return False
+        visited.update(int(index) for index in current)
+        following: int | None = None
+        for triangle in current:
+            for other, row in zip(neighbours[triangle], rows[triangle], strict=True):
+                if other < 0 or other in visited or other in face:
+                    continue
+                if not detection.EPS_ANGLE < angles[row] < detection.CURVATURE_LIMIT:
+                    continue
+                edge = vertices[edges[row]]
+                direction = edge[1] - edge[0]
+                length = math.sqrt(float((direction * direction).sum()))
+                if length > 0.0 and abs(float((direction * along).sum())) / length >= parallel:
+                    following = int(other)
+                    break
+            if following is not None:
+                break
+        if following is None:
+            return False
+        current = piece_of(following)
+    return False
+
+
 def _recognise_region(
     mesh: MeshData,
     indices: np.ndarray,
@@ -195,8 +475,17 @@ def _recognise_region(
     check: Callable[[], None] | None,
     point: np.ndarray,
     radius: float,
+    proven: Collection[int] = (),
+    recorded: float | None = None,
 ) -> LocalDetection:
-    """Fits am Ausschnitt, Begrenzung und Hohlraum am vollständigen Original."""
+    """Fits am Ausschnitt, Begrenzung und Hohlraum am vollständigen Original.
+
+    ``proven`` ist die ebene Facette am Treffer: Sie ist durch ihre eigenen
+    Kanten vollständig begrenzt und gilt deshalb auch dann, wenn sie über den
+    Suchradius hinausreicht. ``recorded`` ist der Suchumfang, den die
+    gefundenen Merkmale als ``local_search_radius`` weitertragen, wenn er
+    größer ist als der gerade durchsuchte (:func:`detect_known`).
+    """
     _check(check)
     local = _part(mesh, indices)
     found = detection.detect(local, check_cancelled=check)
@@ -233,12 +522,168 @@ def _recognise_region(
         for name, feature in found.items()
         if feature.face_indices and feature.kind not in {"edge_loop", "void"}
     }
-    complete = {
-        name: feature
-        for name, feature in mapped.items()
-        if continuing.isdisjoint(feature.face_indices)
-        and _inside_radius(body, feature, point, radius)
-    }
+    # **Eine ebene Fläche ist vollständig, wenn ihre Facette es ist.** Die
+    # Regel darüber gilt Fits, die ihre äußerste Reihe verworfen haben können;
+    # eine Facette hat keinen Fit, ihre Grenze ist die letzte koplanare Kante.
+    # Ohne diese Unterscheidung galt jede Fläche als abgeschnitten, deren Rand
+    # weich in eine Rundung übergeht — am Drachen alle vier Fußsohlen, deren
+    # Kanten unter 30° knicken (24.09.2026).
+    #
+    # Gefragt wird an den Facetten des Bereichs samt seinem Randring: Setzt sich
+    # eine Facette über den Rand fort, liegt ihr koplanarer Nachbar im Ring. Die
+    # Facetten des ganzen Netzes kosteten an 3,26 Millionen Dreiecken 3,2 s je
+    # Folgeschritt (Review 24.09.2026).
+    ring: np.ndarray | None = None
+    ring_facets: Any = None
+    ring_labels: np.ndarray | None = None
+    proven_faces = {int(index) for index in proven}
+    all_angles = np.degrees(np.asarray(body.face_adjacency_angles))
+
+    def cut_facet(feature: Feature) -> bool | None:
+        nonlocal ring, ring_facets, ring_labels
+        if ring_labels is None:
+            ring = np.union1d(indices, cut.ravel())
+            ring_facets = [ring[np.asarray(facet)] for facet in _part(mesh, ring).raw.facets]
+            ring_labels = np.full(len(ring), -1, dtype=np.int64)
+            for label, members in enumerate(ring_facets):
+                ring_labels[np.searchsorted(ring, members)] = label
+        assert ring is not None
+        own = ring_labels[np.searchsorted(ring, np.asarray(feature.face_indices))]
+        if (own < 0).any():
+            return None
+        return not all(inside[ring_facets[label]].all() for label in np.unique(own))
+
+    def continues_tangentially(feature: Feature) -> bool:
+        """Ob die Fläche die Flanke eines Langlochs ist: stetig in ein Langlochende.
+
+        Die Flanke eines Langlochs ist eine ganze Facette, geht aber tangential
+        in die Bögen über, und die Vollerkennung schluckt sie ins Langloch. Ein
+        Zylinder aus n Stücken knickt je Kante um 360°/n, an der tangentialen
+        Ebene um die Hälfte davon — und sein nächster Knick läuft **parallel**
+        zur Randkante. Eine Fußsohle knickt stärker in ihre Nachbarn, als diese
+        in sich knicken; die ebenen Seiten eines Stumpfs knicken an ihren Ecken,
+        quer zur Randkante. Beides ist keine Rundung. **Und eine Verrundung ist
+        kein Langlochende** (:func:`_turns_round_like_a_slot_end`): Die
+        Vollerkennung schluckt eine Flanke nur in ein Langloch, und eine Fläche
+        an einer Verrundung blieb sonst „abgeschnitten“, bis sie ganz im
+        Suchradius lag (Review N5).
+        """
+        members = {int(index) for index in feature.face_indices}
+        own = np.asarray(sorted(members), dtype=np.int64)
+        surface = _Seams.of(body, all_angles)
+        neighbours, rows = surface.neighbours, surface.rows
+        edges, vertices = surface.edges, surface.vertices
+        # Randkanten: ein Nachbar außerhalb der Fläche, über einen weichen Knick.
+        around, via = neighbours[own].ravel(), rows[own].ravel()
+        outside = around >= 0
+        outside[outside] = ~np.isin(around[outside], own)
+        rim_rows = via[outside]
+        soft = all_angles[rim_rows] < detection.CURVATURE_LIMIT
+        rim_rows, rim_starts = rim_rows[soft], around[outside][soft]
+        normal = np.asarray(feature.params["normal"], dtype=float)
+        # Nur hinter einer hohlen Rundung kann ein Langlochende liegen: Sie
+        # wölbt sich zur Seite der Flächennormalen. An der Verrundung einer
+        # Außenkante fällt so jede Randkante weg, bevor ein Stück entsteht.
+        ends = vertices[edges[rim_rows]]
+        offsets = surface.centres[rim_starts] - (ends[:, 0] + ends[:, 1]) / 2.0
+        hollow = (offsets * normal).sum(axis=1) > 0.0
+        rim_rows, rim_starts = rim_rows[hollow], rim_starts[hollow]
+        if not len(rim_rows):
+            return False
+        order = np.argsort(rim_rows, kind="stable")
+        along = units.exact_cos_degrees(ALONG_THE_RIM_DEGREES)
+
+        pieces: list[tuple[int, int, set[int], list[int]]] = []
+        wanted: list[int] = []
+        for row, start in zip(rim_rows[order].tolist(), rim_starts[order].tolist(), strict=True):
+            # Ein Stück der Rundung besteht oft aus mehreren koplanaren
+            # Dreiecken; der Knick zum nächsten Stück liegt am Partner.
+            piece, frontier = {start}, [start]
+            for _round in range(PIECE_ROUNDS):
+                reached = []
+                for triangle in frontier:
+                    for other, seam in zip(neighbours[triangle], rows[triangle], strict=True):
+                        if (
+                            other >= 0
+                            and other not in piece
+                            and other not in members
+                            and all_angles[seam] <= detection.EPS_ANGLE
+                        ):
+                            piece.add(int(other))
+                            reached.append(int(other))
+                if not reached:
+                    break
+                frontier = reached
+            seams = [
+                int(seam)
+                for triangle in piece
+                for other, seam in zip(neighbours[triangle], rows[triangle], strict=True)
+                if other >= 0
+                and other not in piece
+                and other not in members
+                and detection.EPS_ANGLE < all_angles[seam] < detection.CURVATURE_LIMIT
+            ]
+            pieces.append((row, start, piece, seams))
+            wanted.append(row)
+            wanted.extend(seams)
+        # Die Richtungen aller beteiligten Kanten in einem Zug, nicht je Knick:
+        # An einer Deckfläche mit 8 192 Randkanten waren es sonst 50 000
+        # einzelne Rechnungen.
+        needed = np.unique(np.asarray(wanted, dtype=np.int64))
+        ends = vertices[edges[needed]]
+        steps = ends[:, 1] - ends[:, 0]
+        lengths = np.sqrt((steps * steps).sum(axis=1))
+        units_of = steps / np.where(lengths > 0.0, lengths, 1.0)[:, None]
+        direction = dict(zip(needed.tolist(), units_of.tolist(), strict=True))
+        for row, start, _piece, seams in pieces:
+            rim = direction[row]
+            leaving = [
+                float(all_angles[seam])
+                for seam in seams
+                if abs(
+                    direction[seam][0] * rim[0]
+                    + direction[seam][1] * rim[1]
+                    + direction[seam][2] * rim[2]
+                )
+                >= along
+            ]
+            if (
+                leaving
+                and all_angles[row] <= min(leaving)
+                and _turns_round_like_a_slot_end(surface, start, normal, np.asarray(rim), members)
+            ):
+                return True
+        return False
+
+    undecided = False
+
+    def planar_in_full(feature: Feature) -> bool:
+        # **Ob eine Fläche eine ist, sagt die Regel der Vollerkennung am ganzen
+        # Körper** (Review R1) — nicht der Ausschnitt, an dem ``detect`` lief.
+        nonlocal undecided
+        verdict = detection.planar_facet(
+            body, feature.face_indices, limit=MANTLE_PROOF_LIMIT, check_cancelled=check
+        )
+        if verdict is None:
+            undecided = True
+        return bool(verdict)
+
+    def is_complete(feature: Feature) -> bool:
+        if feature.kind == "face" and not planar_in_full(feature):
+            return False
+        if feature.kind == "face" and not continues_tangentially(feature):
+            cut_off = cut_facet(feature)
+            if cut_off is not None:
+                if cut_off:
+                    return False
+                if proven_faces.issuperset(feature.face_indices):
+                    return True
+                return _inside_radius(body, feature, point, radius)
+        return continuing.isdisjoint(feature.face_indices) and _inside_radius(
+            body, feature, point, radius
+        )
+
+    complete = {name: feature for name, feature in mapped.items() if is_complete(feature)}
     # Eine Randschleife aus dem Ausschnitt ist kein Defekt des Originalnetzes.
     # Einschlüsse werden ausschließlich am ganzen Netz eingeordnet.
     voids = detection.detect_voids(mesh, check_cancelled=check)
@@ -388,7 +833,8 @@ def _recognise_region(
                 feature,
                 params={
                     **feature.params,
-                    "local_search_radius": radius + (shift if shift > EPS_GEOM else 0.0),
+                    "local_search_radius": max(radius, recorded or 0.0)
+                    + (shift if shift > EPS_GEOM else 0.0),
                 },
             )
         verified.append(feature)
@@ -407,9 +853,10 @@ def _recognise_region(
     if not numbered:
         return LocalDetection(
             examined_faces=tuple(int(index) for index in indices),
-            reason="boundary" if len(cut) else "no_feature",
+            reason="budget" if undecided else "boundary" if len(cut) else "no_feature",
             unfinished=unfinished,
             open_curvature=open_curvature,
+            undecided=undecided,
         )
     return LocalDetection(
         numbered,
@@ -417,6 +864,7 @@ def _recognise_region(
         tuple(int(index) for index in indices),
         unfinished=unfinished,
         open_curvature=open_curvature,
+        undecided=undecided,
     )
 
 
@@ -514,11 +962,11 @@ def _query_is_complete(
         axis = detection.axis_of(expected)
         if axis is None:
             return False
-        along = float(offset @ axis)
+        along = float((offset * axis).sum())
         if abs(along) > float(candidate.params.get("depth") or 0.0) / 2.0 + tolerance:
             return False
         offset -= along * axis
-    return bool(np.linalg.norm(offset) <= tolerance)
+    return math.sqrt(float((offset * offset).sum())) <= tolerance
 
 
 def detect_local(
@@ -544,43 +992,103 @@ def detect_local(
     ):
         raise local_error("seed")
     direction /= np.linalg.norm(direction)
-    indices = _region(mesh, place, radius, check_cancelled)
-    if indices is None:
-        return LocalDetection(reason="budget")
-    if not len(indices):
-        return LocalDetection(reason="seed")
     _check(check_cancelled)
     stitched = detection._one_body(mesh)
     _check(check_cancelled)
-    seeds = _seeds(stitched, indices, place, direction, seed_faces)
+    # Der Treffer braucht nur die Dreiecke am Punkt, nicht den ganzen Würfel:
+    # Sonst entschied das Budget des Suchbereichs schon darüber, ob überhaupt
+    # eine Stelle gewählt ist.
+    reach = max(EPS_GEOM, weld_tolerance(mesh.bounds.diagonal))
+    near = _region(stitched, place, reach, check_cancelled, bounded=False)
+    if near is None or not len(near):
+        return LocalDetection(reason="seed")
+    seeds = _seeds(stitched, near, place, direction, seed_faces)
     if not seeds:
         return LocalDetection(reason="seed")
     if len(seeds) > 1:
         return LocalDetection(reason="ambiguous_seed", seed_choices=seeds)
-    # Ein naher zweiter Körper wird nicht zur gleichen Auswahl. Die Flutung
-    # läuft nur im betrachteten Teil und verändert seine Originalindizes nicht.
-    local = _part(stitched, indices)
-    connected = next(
-        component for component in face_components(local.raw) if seeds[0] in indices[component]
+    seed = seeds[0]
+    indices = _region(stitched, place, radius, check_cancelled, bounded=False)
+    assert indices is not None
+    _check(check_cancelled)
+    # Ein naher zweiter Körper wird nicht zur gleichen Auswahl, und **das
+    # Budget gilt dem, was zur Stelle gehört** (RM-235): Der Würfel zählte jede
+    # dichte Fläche in seiner Ecke mit, auch eine, die mit der angeklickten
+    # nichts zu tun hat; am Drachen reichte schon ein Suchradius von 8 mm über
+    # die Grenze. Die Flutung verändert keine Originalindizes.
+    indices = _connected_to(stitched, indices, seed)
+    # **Die ebene Fläche am Treffer gehört immer dazu**, auch über den
+    # Suchradius hinaus: Ihre Facette begrenzt sie selbst. Am Drachen lag
+    # zwischen „Suchrand“ und „zu viele Dreiecke“ kein Radius, der eine
+    # Fußsohle ganz fasste — die Vollerkennung findet genau diese vier.
+    labels = _facet_labels(stitched.raw)
+    plane = np.flatnonzero(labels == labels[seed]) if labels[seed] >= 0 else np.empty(0, np.int64)
+    if len(plane) > LOCAL_FACE_LIMIT:
+        # Eine Ebene über dem Budget trägt die Suche nicht; dann gilt der
+        # begrenzte Bereich wie ohne sie, und ein kleinerer Suchradius hilft.
+        plane = np.empty(0, np.int64)
+    # Hängt an der Stelle mehr als das Budget, bleibt die Facette allein.
+    crowded = len(indices) > LOCAL_FACE_LIMIT
+    indices = plane if crowded else np.union1d(indices, plane)
+    if not len(indices) or len(indices) > LOCAL_FACE_LIMIT:
+        return LocalDetection(reason="budget")
+    result = _recognise_region(
+        stitched, indices, seeds, check_cancelled, place, radius, proven=plane
     )
-    indices = indices[connected]
-    return _recognise_region(stitched, indices, seeds, check_cancelled, place, radius)
+    # Fand die Facette allein nichts, lag es am Budget und nicht am Suchrand:
+    # Gesucht war der ganze Teil im Suchradius.
+    return replace(result, reason="budget") if crowded and result.reason else result
 
 
 def detect_known(
     mesh: MeshData,
     features: Mapping[FeatureId, Feature],
     *,
+    required: Collection[FeatureId] | None = None,
+    standing: Collection[FeatureId] = (),
     check_cancelled: Callable[[], None] | None = None,
 ) -> dict[FeatureId, Feature]:
-    """Bekannte Merkmale nach einer Änderung lokal messen, dann wie üblich zuordnen."""
+    """Bekannte Merkmale nach einer Änderung lokal messen, dann wie üblich zuordnen.
+
+    ``required`` nennt die Merkmale, die ein späterer Schritt oder eine Passung
+    noch braucht; ``None`` heißt alle. Nur für sie hält eine Umgebung an, die
+    sich nicht nachmessen lässt (Suchrand, Budget). Jedes andere Merkmal fehlt
+    dann im Ergebnis und verliert seine Belegung wie am Netz üblich — vorher
+    hielt ein einziges großes Merkmal, das niemand brauchte, den ganzen
+    Schritt an (RM-235).
+
+    **Gesucht wird wie an einer Stelle** (Review 25.09.2026): Eine ebene Fläche
+    bringt ihre Facette mit, und über dem Budget zählt nur der Teil, der an ihr
+    hängt (:func:`detect_local`). Und zuerst im eigenen Umfang des Merkmals,
+    erst danach im belegten Suchumfang: Der schließt die ganze Umgebung der
+    ursprünglichen Stelle ein. Vorher fand die Suche am Drachen eine Fußsohle,
+    und die Nachmessung im nächsten Schritt verwarf sie wieder — ihr Würfel
+    fasste 50 000 Dreiecke mehr als die Sohle.
+
+    ``standing`` nennt Merkmale, deren Belege am neuen Netz unverändert
+    gelten — nach einer belegten starren Bewegung die exakt mitbewegten
+    (Review R6). Sie werden übernommen, nicht gesucht: Die Nachmessung
+    einer starren Bewegung kann ihr Ergebnis nicht ändern und kostete am
+    Drachen je Verschieben und Auswertung vier bis sechs Sekunden mehr.
+    """
     _check(check_cancelled)
     stitched = detection._one_body(mesh)
+    reach = max(EPS_GEOM, weld_tolerance(mesh.bounds.diagonal))
+    labels: np.ndarray | None = None
+    facet_areas: np.ndarray | None = None
     gathered: list[Feature] = []
-    visited: set[tuple[int, ...]] = set()
-    for feature in features.values():
+    # Je Suchbereich einmal gerechnet und einmal gesammelt; ob ein Merkmal
+    # anhält, entscheidet es selbst an diesem Ergebnis — sonst verdeckte ein
+    # unbenötigtes Merkmal ein benötigtes mit demselben Bereich.
+    results: dict[tuple[tuple[int, ...], tuple[int, ...], float], LocalDetection] = {}
+    gathered_keys: set[tuple[tuple[int, ...], tuple[int, ...], float]] = set()
+    for name, feature in features.items():
         _check(check_cancelled)
+        needed = required is None or name in required
         if feature.provenance == "generated" and not feature.recognised:
+            continue
+        if name in standing and feature.face_indices:
+            gathered.append(feature)
             continue
         centre = detection.centre_of(feature)
         if centre is None:
@@ -602,43 +1110,171 @@ def detect_known(
         area = float(feature.params.get("area") or 0.0)
         if area > 0.0:
             extent = max(extent, 2.0 * math.sqrt(area / math.pi))
-        radius = max(extent, float(feature.params.get("local_search_radius") or 0.0))
-        if radius <= EPS_GEOM:
-            if feature.provenance == "generated" and not feature.recognised:
+        searched = float(feature.params.get("local_search_radius") or 0.0)
+        radii = sorted({value for value in (extent, searched) if value > EPS_GEOM})
+        if not radii:
+            if not needed:
                 continue
             raise local_error("boundary")
-        indices = _region(stitched, centre, radius, check_cancelled)
-        if indices is None:
-            raise local_error("budget")
-        key = tuple(int(index) for index in indices)
-        if key in visited:
-            continue
-        visited.add(key)
-        result = (
-            _recognise_region(stitched, indices, (), check_cancelled, centre, radius)
-            if len(indices)
-            else LocalDetection(reason="no_feature")
-        )
-        # Ein ganz verschlossenes Loch darf verschwinden. Große ebene
-        # Kontextflächen allein belegen keinen abgeschnittenen Lochrest.
-        # Ein gekrümmter Suchrand oder eine unvollständige Höhlung dagegen
-        # verhindert eine Aussage über das Verschwinden des Vorgängers.
-        blocked = result.open_curvature or any(
-            candidate.kind != "face" for candidate in result.unfinished
-        )
+        seed: int | None = None
+        plane = np.empty(0, dtype=np.int64)
         if feature.kind == "face":
-            normal = np.asarray(feature.params["normal"], dtype=float)
-            blocked |= any(
-                candidate.kind == "face"
-                and np.dot(normal, np.asarray(candidate.params["normal"]))
-                >= units.exact_cos_degrees(detection.EPS_ANGLE)
-                and abs(float((np.asarray(candidate.params["centre"]) - centre) @ normal))
-                <= EPS_GEOM
-                for candidate in result.unfinished
+            if labels is None or facet_areas is None:
+                labels = _facet_labels(stitched.raw)
+                grouped = labels >= 0
+                facet_areas = np.bincount(
+                    labels[grouped],
+                    weights=np.asarray(stitched.raw.area_faces, dtype=float)[grouped],
+                )
+            seed = _face_seed(
+                stitched,
+                centre,
+                np.asarray(feature.params["normal"], dtype=float),
+                reach,
+                radii[-1],
+                check_cancelled,
+                _same_face(labels, facet_areas, area),
             )
-        if blocked and not _query_is_complete(
-            stitched, feature, result.features, check_cancelled=check_cancelled
-        ):
-            raise local_error("boundary")
-        gathered.extend(result.features.values())
+            if seed is not None:
+                plane = np.flatnonzero(labels == labels[seed])
+                if len(plane) > LOCAL_FACE_LIMIT:
+                    plane = np.empty(0, dtype=np.int64)
+        failure: str | None = "budget"
+        for radius in radii:
+            indices = _region(stitched, centre, radius, check_cancelled, bounded=False)
+            assert indices is not None
+            if len(indices) > LOCAL_FACE_LIMIT and seed is not None:
+                indices = _connected_to(stitched, indices, seed)
+            crowded = len(indices) > LOCAL_FACE_LIMIT
+            indices = plane if crowded else np.union1d(indices, plane)
+            if len(indices) > LOCAL_FACE_LIMIT or (crowded and not len(indices)):
+                failure = "budget"
+                continue
+            key = (
+                tuple(int(index) for index in indices),
+                tuple(int(index) for index in plane),
+                radii[-1],
+            )
+            result = results.get(key)
+            if result is None:
+                result = (
+                    _recognise_region(
+                        stitched,
+                        indices,
+                        (),
+                        check_cancelled,
+                        centre,
+                        radius,
+                        proven=plane,
+                        recorded=radii[-1],
+                    )
+                    if len(indices)
+                    else LocalDetection(reason="no_feature")
+                )
+                results[key] = result
+            # Ein ganz verschlossenes Loch darf verschwinden. Große ebene
+            # Kontextflächen allein belegen keinen abgeschnittenen Lochrest.
+            # Ein gekrümmter Suchrand oder eine unvollständige Höhlung dagegen
+            # verhindert eine Aussage über das Verschwinden des Vorgängers.
+            blocked = result.open_curvature or any(
+                candidate.kind != "face" for candidate in result.unfinished
+            )
+            if feature.kind == "face":
+                normal = np.asarray(feature.params["normal"], dtype=float)
+                blocked |= any(
+                    candidate.kind == "face"
+                    and float((normal * np.asarray(candidate.params["normal"])).sum())
+                    >= units.exact_cos_degrees(detection.EPS_ANGLE)
+                    and abs(
+                        float(((np.asarray(candidate.params["centre"]) - centre) * normal).sum())
+                    )
+                    <= EPS_GEOM
+                    for candidate in result.unfinished
+                )
+            # **Hat nur die Facette gesucht, muss sie das Merkmal liefern**
+            # (Review R4), wie in :func:`detect_local`: Sonst traf die Suche
+            # eine andere Fläche in derselben Ebene, und das benötigte Merkmal
+            # fiel still weg, statt am Budget anzuhalten.
+            if (blocked or crowded) and not _query_is_complete(
+                stitched, feature, result.features, check_cancelled=check_cancelled
+            ):
+                failure = "budget" if crowded or result.undecided else "boundary"
+                continue
+            failure = None
+            if key not in gathered_keys:
+                gathered_keys.add(key)
+                gathered.extend(result.features.values())
+            break
+        if failure is not None:
+            if not needed:
+                continue
+            raise local_error(failure)
     return _numbered(gathered)
+
+
+def _face_seed(
+    mesh: MeshData,
+    centre: np.ndarray,
+    normal: np.ndarray,
+    reach: float,
+    radius: float,
+    check: Callable[[], None] | None,
+    fits: Callable[[int], bool],
+) -> int | None:
+    """Ein Dreieck der bekannten ebenen Fläche am neuen Netz — oder keines.
+
+    Zuerst das Dreieck an der Flächenmitte, wie ein Treffer an der Stelle.
+    Liegt die Mitte nicht auf der Fläche — ein Ring, eine Platte mit Bohrung
+    in der Mitte —, dann das nächste Dreieck in ihrer Ebene mit ihrer Normalen.
+    Liegen an der Mitte mehrere Flächen übereinander, wird nicht gewählt
+    (Regel 21); die Nachmessung sucht dann ohne Facette.
+
+    **Und nur ein Dreieck, dessen Facette die Fläche sein kann** (``fits``,
+    Review R4): Eine Insel in einer Ringnut liegt so hoch wie die Deckfläche
+    um sie herum, und die Mitte der Deckfläche liegt auf ihr.
+    """
+    near = _region(mesh, centre, reach, check, bounded=False)
+    assert near is not None
+    if len(near):
+        seeds = [seed for seed in _seeds(mesh, near, centre, normal, ()) if fits(seed)]
+        if len(seeds) == 1:
+            return seeds[0]
+        if seeds:
+            return None
+    region = _region(mesh, centre, radius, check, bounded=False)
+    assert region is not None
+    if not len(region):
+        return None
+    normals = np.asarray(mesh.raw.face_normals)[region]
+    aligned = (normals * normal).sum(axis=1) >= units.exact_cos_degrees(detection.EPS_ANGLE)
+    offset = np.asarray(mesh.raw.triangles_center)[region] - centre
+    height = np.abs((offset * normal).sum(axis=1))
+    on_plane = aligned & (height <= reach)
+    if not on_plane.any():
+        return None
+    distances = (offset[on_plane] * offset[on_plane]).sum(axis=1)
+    for candidate in region[on_plane][np.argsort(distances, kind="stable")].tolist():
+        if fits(int(candidate)):
+            return int(candidate)
+    return None
+
+
+def _same_face(labels: np.ndarray, areas: np.ndarray, area: float) -> Callable[[int], bool]:
+    """Ob die Facette eines Dreiecks die bekannte Fläche sein kann.
+
+    Mit derselben Grenze, mit der die Zuordnung die Größe einer Fläche
+    vergleicht (:data:`matching.DIAMETER_TOLERANCE` — im Merkmalsvektor
+    einer Fläche steht ihr Inhalt an der Stelle des Durchmessers): Eine
+    Facette, die sie nicht als dieselbe Fläche nähme, trägt die Suche nicht.
+    """
+
+    def fits(triangle: int) -> bool:
+        label = int(labels[triangle])
+        if label < 0:
+            return False
+        if area <= EPS_GEOM:
+            return True
+        found = float(areas[label])
+        return abs(found - area) <= DIAMETER_TOLERANCE * max(found, area)
+
+    return fits

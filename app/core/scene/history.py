@@ -39,7 +39,7 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.log import get_logger
-from app.core.perceive.match_records import EDGE_DOMAIN, domain_of
+from app.core.perceive.match_records import EDGE_DOMAIN, domain_of, recognition_answer_key
 from app.core.registry import REGISTRY, VARIABLE, Registry, needed_inputs
 from app.core.registry.params import body_keys
 from app.core.scene import bundling
@@ -199,6 +199,37 @@ def repair_is_available(
         else _living_objects(tuple(sorted(document.ops, key=lambda entry: entry.id)))
     )
     return object_id is not None and object_id in available
+
+
+def recognition_reopenable(
+    document: Document, object_id: ObjectId, *, declined_only: bool = False
+) -> bool:
+    """Ob am Ladeschritt eines Körpers eine Erkennungswahl steht (§21.1).
+
+    Die eine Auskunft für den Knopf *Alle Merkmale erkennen* und für
+    :meth:`History.reopen_recognition`: Zurücknehmen lässt sich nur eine Wahl,
+    die dasteht. Ein Körper, der unter der Grenze geladen und erst danach
+    größer wurde, hat keine — die Frage gibt es nur am Ladeschritt, und der
+    Knopf rechnete dort den Stapel neu, ohne dass eine kam (Review N3,
+    25.09.2026). Die Auswertung sagt dasselbe am Befund aus
+    ``evaluate._BodyRecognition.answer``. ``declined_only`` fragt nur nach
+    einer Absage — nachzuholen gibt es nur, was ausgelassen wurde.
+    """
+    key = recognition_answer_key(object_id)
+    for index in _answering_load_steps(document, {key}):
+        record = document.ops[index].matches[key]
+        if not declined_only or (isinstance(record, Mapping) and record.get("allowed") is False):
+            return True
+    return False
+
+
+def _answering_load_steps(document: Document, keys: Collection[str]) -> list[int]:
+    """Die Ladeschritte, die eine dieser Erkennungswahlen tragen, nach Platz im Stapel."""
+    return [
+        index
+        for index, entry in enumerate(document.ops)
+        if entry.op == "load" and not set(keys).isdisjoint(entry.matches)
+    ]
 
 
 def _copy_operation_matches(
@@ -1168,6 +1199,32 @@ class History:
             if merged == dict(entry.matches):
                 continue
             self.document.ops[index] = dataclasses.replace(entry, matches=deepcopy(merged))
+            changed = True
+        return changed
+
+    def reopen_recognition(self, object_ids: Collection[ObjectId]) -> bool:
+        """Nimmt die gespeicherte Erkennungswahl geladener Körper zurück (§21.1).
+
+        Die Wahl gehört dem Körper und steht an dem Ladeschritt, der ihn
+        ausgibt — gefunden wird sie dort, gleich an welchem Schritt der Befund
+        stand, der den Knopf trug. Die nächste Auswertung stellt die Frage vor
+        der langen Vollerkennung wieder, mit Zeitschätzung und Speicherbedarf;
+        was dann gewählt wird, schreibt :meth:`record_matches` fest. Ohne
+        diesen Weg war eine Absage eine Sackgasse bis zum Neuladen der Datei.
+
+        **Keine Transaktion und keine Lizenzgrenze**, aus demselben Grund wie
+        bei :meth:`record_matches`: Die Wahl ist keine Handlung am Teil,
+        sondern die Antwort auf eine Frage der Auswertung, und die Geometrie
+        ändert sich nicht. Gibt zurück, ob eine Wahl dastand.
+        """
+        wanted = {recognition_answer_key(object_id) for object_id in object_ids}
+        changed = False
+        for index in _answering_load_steps(self.document, wanted):
+            entry = self.document.ops[index]
+            remaining = {
+                name: record for name, record in entry.matches.items() if name not in wanted
+            }
+            self.document.ops[index] = dataclasses.replace(entry, matches=deepcopy(remaining))
             changed = True
         return changed
 

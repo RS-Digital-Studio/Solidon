@@ -6,6 +6,7 @@ import copy
 import secrets
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from typing import Final
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -24,7 +25,13 @@ from PySide6.QtWidgets import (
 
 from app.core.errors import (
     CORRECT_INPUT,
+    DECIMATE_MESH,
+    ENLARGE_RADIUS,
+    PICK_ELSEWHERE,
+    REPAIR_MESH,
     RETRY,
+    SHRINK_RADIUS,
+    Action,
     AppError,
     InternalError,
     OperationCancelled,
@@ -41,7 +48,8 @@ from app.core.scene import EvaluationResult, History, OperationDraft, evaluate
 from app.core.scene.cache import ResultCache
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.placement import original_surface_hit
-from app.core.types import Document, Finding, Profile, Scene, SourceAccess, Vec3
+from app.core.types import Document, Feature, Finding, Profile, Scene, SourceAccess, Vec3
+from app.core.units import is_close
 from app.i18n import tr
 from app.ui.dialogs import AskDialog, ErrorNotice
 from app.ui.labels import feature_label
@@ -49,6 +57,30 @@ from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, w
 from app.ui.op_dialog import OperationDialog, ValueField
 from app.ui.session import AskRequest
 from app.ui.style import NORMAL, ROOMY, make_primary, no_primary
+
+#: Die Wege je Fehlergrund, in der Reihenfolge, in der sein Satz sie nennt
+#: (``perceive.local.local_error``). Bis zum 24.09.2026 bot jeder Grund einen
+#: Knopf für zwei genannte Wege, und der führte bei den Bereichsgründen nur
+#: in das Suchradiusfeld — Fokus, Tippen, Warten statt eines Klicks.
+_LOCAL_WAYS: Final[Mapping[str, tuple[str, ...]]] = {
+    "local_boundary": ("enlarge_radius", "pick_elsewhere"),
+    "local_no_feature": ("pick_elsewhere", "enlarge_radius"),
+    "local_budget": ("shrink_radius", "decimate_mesh"),
+    "local_topology": ("repair_mesh", "pick_elsewhere"),
+    "local_seed": ("pick_elsewhere",),
+    "local_ambiguous_seed": ("pick_elsewhere",),
+    # Beide Radiusgründe an derselben Stelle: Kein Radius dazwischen hilft.
+    "local_exhausted": ("pick_elsewhere", "decimate_mesh"),
+}
+#: Die zwei Gründe, zwischen denen ein Radius pendeln kann: zu eng, zu dicht.
+_RADIUS_LIMITS: Final = frozenset({"local_boundary", "local_budget"})
+_LOCAL_ACTIONS: Final[Mapping[str, Action]] = {
+    action.id: action
+    for action in (PICK_ELSEWHERE, ENLARGE_RADIUS, SHRINK_RADIUS, DECIMATE_MESH, REPAIR_MESH)
+}
+#: Ein Klick auf *Suchradius vergrößern* nimmt die Hälfte dazu, *verkleinern*
+#: ein Drittel weg — genug, dass die nächste Suche etwas anderes sieht.
+RADIUS_STEP: Final = 1.5
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,10 +185,15 @@ class _RecognitionWorker(Worker):
                 if problems:
                     finding = problems[-1]
                     raise UserError(
-                        finding.message, suggestions=finding.suggestions or (CORRECT_INPUT,)
+                        finding.message,
+                        suggestions=finding.suggestions or (CORRECT_INPUT,),
+                        values=dict(finding.values),
                     )
                 raise UserError(
-                    tr("Die Erkennung konnte nicht abgeschlossen werden. Ändern Sie den Radius."),
+                    tr(
+                        "Die Erkennung konnte nicht abgeschlossen werden. "
+                        "Ändern Sie den Suchradius."
+                    ),
                     suggestions=(CORRECT_INPUT,),
                 )
             answered = result.answers.get(transaction.ops[-1], {})
@@ -173,6 +210,9 @@ class _RecognitionWorker(Worker):
                 (params.x, params.y, params.z),
                 radius=params.radius,
                 check_cancelled=self.cancelled.raise_if_cancelled,
+            )
+            choices = _with_the_face_at_the_seed(
+                entry.features, choices, int(draft.params.get("seed_face", -1))
             )
             actions = {}
             for name in choices:
@@ -204,18 +244,43 @@ class _RecognitionWorker(Worker):
         super().release_finished_references()
 
 
+def _with_the_face_at_the_seed(
+    features: Mapping[str, Feature], choices: Sequence[str], seed_face: int
+) -> tuple[str, ...]:
+    """Die Auswahlliste, vorn die ebene Fläche am Treffer.
+
+    Sie gilt über ihre Facette als vollständig, auch wo sie über den Suchradius
+    hinausreicht (``perceive.local._recognise_region``); der Radiusfilter nahm
+    sie wieder heraus, und die Liste blieb leer, obwohl der Kern sie gefunden
+    hatte. Jedes andere Merkmal zeigt die Liste weiter nur, wenn es ganz im
+    Suchraum liegt.
+    """
+    at_seed = tuple(
+        name
+        for name, feature in features.items()
+        if seed_face >= 0
+        and feature.kind == "face"
+        and feature.recognised
+        and seed_face in feature.face_indices
+        and name not in choices
+    )
+    return (*at_seed, *choices)
+
+
 def _found_text(count: int) -> str:
     """Was die Suche gefunden hat — in der Zahl, die dasteht, und mit dem Weg weiter.
 
     „1 vollständige Merkmale gefunden." und „0 vollständige Merkmale
     gefunden." standen bis zum 22.09.2026 im Fenster; beim zweiten fehlte
     dazu, was jetzt hilft — und *Nur Merkmale übernehmen* stand grau daneben.
+    „Vollständig" ist die Prüfgröße des Kerns; gezeigt wird nur, was sie
+    bestanden hat, also heißt es hier schlicht „gefunden" (24.09.2026).
     """
     if count == 0:
-        return tr("Kein vollständiges Merkmal gefunden. Vergrößern Sie den Radius.")
+        return tr("Kein ganzes Merkmal im Suchradius. Vergrößern Sie ihn.")
     if count == 1:
-        return tr("1 vollständiges Merkmal gefunden.")
-    return tr("{count} vollständige Merkmale gefunden.").format(count=count)
+        return tr("1 Merkmal gefunden.")
+    return tr("{count} Merkmale gefunden.").format(count=count)
 
 
 class LocalRecognitionDialog(QDialog):
@@ -226,6 +291,9 @@ class LocalRecognitionDialog(QDialog):
     previewRequested = Signal(object)
     previewCleared = Signal()
     draftsReady = Signal(object)
+    pickRequested = Signal()
+    operationRequested = Signal(str, str)
+    """Eine Operation am Körper der Suche statt eines weiteren Suchlaufs (Name, Körper)."""
 
     def __init__(
         self,
@@ -260,6 +328,11 @@ class LocalRecognitionDialog(QDialog):
         self._place["seed_face"] = seed_face
         self._closed, self._pending = False, False
         self._revision, self._ready_revision = 0, -1
+        self._limits: dict[str, float] = {}
+        """Der größte Suchradius mit Suchrand und der kleinste mit Budget, seit
+        dem letzten Fund an dieser Stelle (``_RADIUS_LIMITS``)."""
+        self._searched_radius: float | None = None
+        """Der Suchradius des laufenden Suchauftrags — ein Ausdruck zählt nicht."""
         self._worker: _RecognitionWorker | None = None
         self._leash = WorkerLeash(self)
         self.inspection: LocalRecognitionResult | None = None
@@ -288,13 +361,14 @@ class LocalRecognitionDialog(QDialog):
         layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
         layout.setSpacing(NORMAL)
         heading = QLabel(
-            tr("Vergrößern Sie den Radius, bis das gewünschte Merkmal vollständig erfasst ist."),
+            tr("Vergrößern Sie den Suchradius, bis das gewünschte Merkmal ganz darin liegt."),
             self,
         )
         heading.setWordWrap(True)
         layout.addWidget(heading)
         form = QFormLayout()
         radius_spec = next(entry for entry in DetectRegionParams.spec() if entry.name == "radius")
+        self._radius_spec = radius_spec
         self.radius = ValueField(radius_spec, radius, self._parameters, self)
         self.radius.setAccessibleName(str(radius_spec.title))
         form.addRow(str(radius_spec.title), self.radius)
@@ -307,7 +381,7 @@ class LocalRecognitionDialog(QDialog):
         self.progress.setAccessibleName(tr("Merkmale erkennen"))
         self.progress.hide()
         layout.addWidget(self.progress)
-        label = QLabel(tr("Vollständige Merkmale"), self)
+        label = QLabel(tr("Gefundene Merkmale"), self)
         self.features = QListWidget(self)
         self.features.setAccessibleName(label.text())
         label.setBuddy(self.features)
@@ -368,8 +442,14 @@ class LocalRecognitionDialog(QDialog):
         if self._closed or not self._pending or self._worker is not None:
             return
         self._pending = False
+        radius = self.radius.value()
+        self._searched_radius = (
+            float(radius)
+            if isinstance(radius, int | float) and not isinstance(radius, bool)
+            else None
+        )
         draft = OperationDraft(
-            "detect_region", (self._object_id,), {**self._place, "radius": self.radius.value()}
+            "detect_region", (self._object_id,), {**self._place, "radius": radius}
         )
         worker = _RecognitionWorker(
             self._document,
@@ -404,6 +484,8 @@ class LocalRecognitionDialog(QDialog):
         if self._closed or revision != self._revision:
             return
         self.inspection, self._ready_revision = result, revision
+        # Ein Fund widerlegt jede frühere Aussage „kein Radius hilft“.
+        self._limits.clear()
         for name in self._place:
             self._place[name] = result.detect_draft.params[name]
         self._original_ray = None
@@ -628,11 +710,91 @@ class LocalRecognitionDialog(QDialog):
             return
         self._wait_timer.stop()
         self.progress.hide()
-        self.state.set_error(
-            problem, {"correct_input": weak_slot(self.radius, ValueField.setFocus)}
-        )
+        handlers = {"correct_input": weak_slot(self.radius, ValueField.setFocus)}
+        constraint = problem.values.get("constraint") if isinstance(problem, AppError) else None
+        searched = self._searched_radius if isinstance(self._searched_radius, float) else None
+        if constraint in _RADIUS_LIMITS and searched is not None:
+            if constraint == "local_boundary":
+                self._limits[constraint] = max(self._limits.get(constraint, searched), searched)
+            else:
+                self._limits[constraint] = min(self._limits.get(constraint, searched), searched)
+            narrow = self._limits.get("local_boundary")
+            wide = self._limits.get("local_budget")
+            if (
+                narrow is not None
+                and wide is not None
+                and (wide <= narrow * RADIUS_STEP or is_close(wide, narrow * RADIUS_STEP))
+            ):
+                # **Kein Pendel zwischen „vergrößern“ und „verkleinern“.** An einer
+                # Freiform des Drachen meldete ein kleiner Radius den Suchrand und
+                # der nächstgrößere schon das Budget — zwei Knöpfe, die einander
+                # zurückschickten (RM-235). Liegen beide Gründe nicht weiter als
+                # ein Schritt auseinander, hilft kein Radius dazwischen; dann steht
+                # eine Aussage mit den zwei Wegen, die dort noch helfen.
+                constraint = "local_exhausted"
+                problem = UserError(
+                    tr(
+                        "Hier gibt es kein ganzes Merkmal, und für einen größeren Suchradius "
+                        "ist das Netz zu fein. Wählen Sie eine andere Stelle oder verringern "
+                        "Sie die Dreiecke."
+                    ),
+                    values={"constraint": constraint},
+                )
+        ways = _LOCAL_WAYS.get(constraint) if isinstance(constraint, str) else None
+        if isinstance(problem, AppError) and ways is not None:
+            # Ein anderer Suchradius ersetzt keinen ungültigen Oberflächentreffer,
+            # und eine andere Stelle keinen zu engen Bereich: je Grund die Wege,
+            # die sein Satz nennt, der erste als Hauptknopf.
+            problem.suggestions = tuple(
+                replace(_LOCAL_ACTIONS[name], primary=index == 0) for index, name in enumerate(ways)
+            )
+            handlers = {
+                "pick_elsewhere": weak_slot(self, LocalRecognitionDialog._pick_elsewhere),
+                "enlarge_radius": weak_slot(
+                    self, LocalRecognitionDialog._scale_radius, RADIUS_STEP
+                ),
+                "shrink_radius": weak_slot(
+                    self, LocalRecognitionDialog._scale_radius, 1.0 / RADIUS_STEP
+                ),
+                "decimate_mesh": weak_slot(
+                    self, LocalRecognitionDialog._run_on_the_body, "decimate_mesh"
+                ),
+                "repair_mesh": weak_slot(self, LocalRecognitionDialog._run_on_the_body, "repair"),
+            }
+        self.state.set_error(problem, handlers)
         self.save_button.setEnabled(False)
         self.edit_button.setEnabled(False)
+
+    def _pick_elsewhere(self) -> None:
+        """Die Stelle war es, nicht der Bereich: zurück zur Auswahl im Bild."""
+        self.pickRequested.emit()
+
+    def _scale_radius(self, factor: float) -> None:
+        """Der Suchradius einen Schritt weiter oder enger, und gleich neu gesucht.
+
+        Ein Ausdruck (``=@r``) bleibt, was er ist — ihn in eine Zahl zu
+        verwandeln nähme dem Kunden seine Bindung; dann bekommt das Feld den
+        Fokus wie vorher. Ebenso an einer Grenze des Felds, wo sich nichts mehr
+        bewegen ließe.
+        """
+        current = self.radius.value()
+        if isinstance(current, bool) or not isinstance(current, (int, float)):
+            self.radius.setFocus()
+            return
+        wanted = float(current) * factor
+        spec = self._radius_spec
+        if spec.minimum is not None:
+            wanted = max(wanted, float(spec.minimum))
+        if spec.maximum is not None:
+            wanted = min(wanted, float(spec.maximum))
+        if is_close(wanted, float(current)):
+            self.radius.setFocus()
+            return
+        self.radius.set_value(wanted)
+
+    def _run_on_the_body(self, operation: str) -> None:
+        """Erst den Körper ändern, dann weitersuchen — der Weg geht über das Fenster."""
+        self.operationRequested.emit(operation, self._object_id)
 
     def _aborted(self, revision: int) -> None:
         if not self._closed and revision == self._revision:

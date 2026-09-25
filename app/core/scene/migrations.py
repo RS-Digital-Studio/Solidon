@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 33
+FORMAT_VERSION: Final = 34
 
 
 @dataclass(frozen=True, slots=True)
@@ -846,6 +846,17 @@ def _read_step_assemblies(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _allow_large_recognition_answers(data: dict[str, Any]) -> dict[str, Any]:
+    """33 → 34: Vollerkennung großer Importe trägt eine ausdrückliche Antwort.
+
+    Alte Projekte enthalten keine solche Wahl. Nichts wird freigegeben oder
+    umgeschrieben; große Ladeschritte fragen erst bei ihrer nächsten Auswertung.
+    Ältere Leser kennen die neue ``matches``-Domäne nicht und sollen das
+    Projekt als neuer erkennen, statt eine gültige Antwort als Schaden zu melden.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -880,6 +891,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=30, to_version=31, apply=_allow_curve_sketches),
     Step(from_version=31, to_version=32, apply=_allow_suppressed_steps),
     Step(from_version=32, to_version=33, apply=_read_step_assemblies),
+    Step(from_version=33, to_version=34, apply=_allow_large_recognition_answers),
 )
 
 

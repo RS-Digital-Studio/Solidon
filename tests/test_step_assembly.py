@@ -677,10 +677,10 @@ def test_reopening_gives_the_same_bodies_names_positions_and_colours(
 def test_a_step_import_saved_before_the_assembly_reader_keeps_its_one_body(
     profile: Profile,
 ) -> None:
-    """32 → 33: Ein alter Schritt ohne ``bodies`` rechnet wie vorher — ein Körper."""
+    """Ein alter Schritt ohne ``bodies`` bleibt nach allen Migrationen ein Körper."""
     project = load(PROJECTS / "step_assembly_v32.p3d")
 
-    assert project.document.format_version == FORMAT_VERSION == 33
+    assert project.document.format_version == FORMAT_VERSION
     assert "bodies" not in project.document.ops[0].params
     (entry,) = scene_of(project, profile).values()
     assert str(entry.name) == "gehaeuse"

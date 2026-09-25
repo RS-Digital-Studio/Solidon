@@ -32,6 +32,7 @@ from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
     CORRECT_INPUT,
+    DECIMATE_MESH,
     REACTIVATE_STEP,
     SHOW_DETAILS,
     SHOW_HISTORY,
@@ -43,22 +44,33 @@ from app.core.errors import (
     NativeReferenceLost,
     OperationCancelled,
     QuestionDeclined,
+    UserError,
+    ValidationError,
 )
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.profiles import analysis_limits, for_process
 from app.core.log import get_logger
 from app.core.perceive.features import (
     DETECTABLE_KINDS,
+    _mesh_key,
     carry_detection,
     centre_of,
     detect,
     freeform_dropped,
     known_detection,
+    moved_twin,
     recognised_as_freeform,
     unreadable_void_shells,
 )
+from app.core.perceive.local import (
+    CONFIRMED_FEATURE_LIMIT_TRIANGLES,
+    ran_out_of_memory,
+    recognition_gigabytes,
+    recognition_minutes,
+    remember_out_of_memory,
+    rigid_transform,
+)
 from app.core.perceive.local import FEATURE_LIMIT_TRIANGLES as FEATURE_LIMIT_TRIANGLES
-from app.core.perceive.local import rigid_transform
 from app.core.perceive.match_decisions import (
     MAPPING_NO_LONGER_VALID,
     conflict_groups,
@@ -70,7 +82,9 @@ from app.core.perceive.match_records import (
     GROUP_DOMAIN,
     NATIVE_DOMAIN,
     group_key,
+    recognition_answer_key,
     valid_fingerprint,
+    validate_recognition_answer,
 )
 from app.core.perceive.matching import (
     FeatureTransform,
@@ -126,7 +140,7 @@ from app.core.types import (
     kind_of,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, MAX_FACET_SAG, is_close
-from app.i18n import TranslatableText, _, source_text, tr
+from app.i18n import TranslatableText, _, format_decimal, source_text, tr
 
 _log = get_logger(__name__)
 
@@ -186,7 +200,7 @@ class EvaluationResult:
     Aufrufer schreibt sie zurück in den Stapel, damit dieselbe Datei gleich
     nachrechnet."""
     matches: Mapping[OpId, Mapping[str, Any]] = field(default_factory=dict)
-    """Antworten auf mehrdeutige Merkmalszuordnungen (§15.7, §21.3).
+    """Antworten auf Merkmalszuordnungen und große Erkennungsaufträge (§15.7, §21).
 
     **Der Unterschied zu ``solvers`` ist die Richtung**, und er ist derselbe
     wie zwischen ``solvers`` und ``answers``: Eine Rückfallstufe ist ein
@@ -243,6 +257,9 @@ Antworttoken und seinen Zug trägt."""
 
 type QuestionContext = Callable[[EvaluationResult | None, tuple[QuestionCandidate, ...]], None]
 type FeatureQuestionContext = Callable[[SceneObject | None, tuple[FeatureId, ...]], None]
+#: Wer die Antwort auf die Frage vor der langen Vollerkennung sofort erfährt:
+#: Ladeschritt, Schlüssel und Eintrag, wie ``record_matches`` sie nimmt.
+type RecognitionAnswered = Callable[[OpId, str, Mapping[str, Any]], None]
 
 
 def _silent_progress(fraction: float, text: str) -> None:
@@ -268,6 +285,7 @@ def evaluate(
     sources: SourceAccess | None = None,
     question_context: QuestionContext | None = None,
     detect_features: bool = True,
+    on_recognition_answer: RecognitionAnswered | None = None,
 ) -> EvaluationResult:
     """Rechnet die Szene, die das Dokument beschreibt.
 
@@ -276,6 +294,10 @@ def evaluate(
     sie braucht; was der Merker kennt, kommt trotzdem. Die Szene einer solchen
     Auswertung trägt an frisch gerechneten Körpern keine erkannten Merkmale
     und ist damit kein Dokumentstand — sie ist ein Bild.
+
+    ``on_recognition_answer`` erfährt die Antwort auf die Frage vor der langen
+    Vollerkennung sofort, nicht erst mit dem Ergebnis (§21.1): Wer sie gleich
+    festhält, fragt nach einer Unterbrechung nicht noch einmal.
     """
     result = _evaluate(
         document,
@@ -289,6 +311,7 @@ def evaluate(
         sources=sources,
         question_context=question_context,
         detect_features=detect_features,
+        on_recognition_answer=on_recognition_answer,
     )
     try:
         usage = parameter_uses(document, registry) if document.parameters else {}
@@ -310,6 +333,7 @@ def _evaluate(
     sources: SourceAccess | None,
     question_context: QuestionContext | None,
     detect_features: bool = True,
+    on_recognition_answer: RecognitionAnswered | None = None,
 ) -> EvaluationResult:
     """Geometrie und Befunde auswerten; auch ein Halt erhält anschließend Verwendungsdaten."""
     profile = for_process(profile, document.print_settings)
@@ -330,6 +354,11 @@ def _evaluate(
     # Teilhashes je Merkmalsobjekt, für diese Auswertung: Ein Merkmal, das
     # unverändert durch den Stapel reist, wird einmal gehasht, nicht je Schritt.
     feature_memo: FeatureMemo = {}
+    # Die Ladewahl je Körper zur Vollerkennung (§21.1): am Ladeschritt
+    # entschieden, von jedem Folgeschritt desselben Körpers gelesen. Jede
+    # Auswertung baut sie in Stapelreihenfolge neu auf — sie ist eine Folge
+    # des Dokuments, kein zweiter Zustand daneben.
+    recognition_of: dict[ObjectId, _BodyRecognition] = {}
     findings: list[Finding] = []
     # Grenzen gelten auch für Ausdrücke (Gesamtreview B-15): ``max=60`` mit
     # ``=@a*10`` ergab 600, und niemand sagte etwas. Die Eingabe prüft der
@@ -839,6 +868,19 @@ def _evaluate(
         # Körper desselben Namens sind keine Zuordnung, sondern eine Wahl,
         # und die trifft hier niemand.
         produced_by_name: dict[str, ObjectId | None] = {}
+        # **Eine Frage je Import, nicht je Körper** (§21.1): Ein 3MF mit mehreren
+        # großen Körpern fragte nacheinander je Körper, jede Frage mit der
+        # Schätzung nur dieses einen — die Summe erfuhr niemand.
+        decided: dict[ObjectId, bool] = {}
+        if operation.op == "load" and detect_features:
+            decided = _ask_once_for_large_bodies(
+                operation,
+                result.objects,
+                watched,
+                prepared_matches,
+                token,
+                on_recognition_answer,
+            )
         for index, produced_object in enumerate(result.objects):
             object_id = operation.outputs[index]
             # §30: ob ein Körper Mesh oder B-Rep ist, folgt aus dem Körper,
@@ -893,6 +935,9 @@ def _evaluate(
                     # prüft ``carry_detection`` am Netz, nicht am Index.
                     source_mesh=inputs[index].mesh if index < len(inputs) else None,
                     detect_features=detect_features,
+                    recognition_of=recognition_of,
+                    on_recognition_answer=on_recognition_answer,
+                    decided=decided,
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -2200,6 +2245,322 @@ def _answer_matches(
         recorded.update(pending_records)
 
 
+@dataclass(slots=True)
+class _BodyRecognition:
+    """Was der Ladeschritt eines Körpers über seine Vollerkennung entschieden hat.
+
+    ``allowed`` ist die Wahl: ``True`` zugestimmt, ``False`` abgelehnt, ``None``
+    ohne Wahl (unter der automatischen Grenze oder niemand zu fragen).
+    ``declined_at`` ist die Dreieckszahl, an der die Vollerkennung dieses
+    Körpers am Arbeitsspeicher scheiterte: Ein Folgeschritt mit mindestens so
+    vielen Dreiecken versucht es nicht noch einmal.
+
+    ``answer`` nennt Ladeschritt, Schlüssel und Netzabdruck der Wahl, die am
+    Ladeschritt steht oder mit diesem Lauf dort ankommt — ``None``, wo keine
+    steht. Nur dann gibt es etwas zurückzunehmen, und nur dann sagt ein Befund
+    „Alle Merkmale erkennen“ (``History.recognition_reopenable`` fragt
+    dasselbe am Dokument). Ein Körper, der unter der Grenze geladen und erst
+    danach größer wurde, hat keine: Die Frage gibt es nur am Ladeschritt.
+    """
+
+    allowed: bool | None
+    declined_at: int | None = None
+    answer: tuple[OpId, str, str] | None = None
+
+
+def _recognition_choice(
+    entry: SceneObject, operation: Operation, watch: CancelToken
+) -> tuple[str, str, bool | None, bool]:
+    """Schlüssel, Netzabdruck und gespeicherte Erkennungswahl eines geladenen Körpers.
+
+    ``None`` heißt: Für diesen Körper und diesen Netzinhalt steht keine Wahl
+    im Schritt. Eine Absage gehört wie eine Zustimmung zum Ladeschritt; sie
+    wird nie in den geometrischen Erkennungsmerker geschrieben und kann eine
+    spätere Zustimmung deshalb nicht durch ein scheinbar leeres Ergebnis
+    überdecken. Der vierte Wert sagt, ob die Absage aus einem Speicherfehler
+    stammt (``out_of_memory``).
+    """
+    assert isinstance(entry.mesh, MeshData)
+    watch.raise_if_cancelled()
+    scope = _mesh_key(entry.mesh).hex()
+    watch.raise_if_cancelled()
+    key = recognition_answer_key(entry.id)
+    saved = operation.matches.get(key)
+    if saved is None:
+        return key, scope, None, False
+    try:
+        validate_recognition_answer(key, saved, operation.outputs)
+    except ValueError:
+        # Ungeprüfte API-Eingaben erteilen nie eine Freigabe. Projektdateien
+        # werden bereits beim Lesen strikt gegen dieselbe Struktur geprüft.
+        return key, scope, None, False
+    if saved["scope"] != scope:
+        return key, scope, None, False
+    return key, scope, bool(saved["allowed"]), saved.get("out_of_memory") is True
+
+
+def _full_recognition_allowed(
+    entry: SceneObject,
+    key: str,
+    scope: str,
+    ask: Any,
+    recorded: dict[str, dict[str, Any]] | None,
+    watch: CancelToken,
+) -> bool | None:
+    """Fragt vor der langen Vollerkennung eines großen Imports (§21.1).
+
+    ``None`` heißt: Es war niemand zu fragen.
+
+    **Wer niemanden fragen kann, lädt wie ohne Zustimmung** — die
+    Kommandozeile ohne Eingabe, ein Aufrufer ohne Dialog. Die Frage ist ein
+    Angebot und kein Hindernis: Ohne diesen Weg brach ein Import, der vor der
+    Anhebung der Grenze mit begrenzter Erkennung lud, mit einer Rückfrage ab.
+    Festgehalten wird dann nichts; das nächste Fenster fragt.
+    """
+    assert isinstance(entry.mesh, MeshData)
+    triangles = entry.mesh.triangle_count
+    minimum, maximum = recognition_minutes(triangles)
+    question = tr(
+        "„{name}“ hat {triangles} Millionen Dreiecke. Die vollständige Merkmalserkennung "
+        "dauert geschätzt {minimum} bis {maximum} Minuten, auf langsamen Rechnern länger, "
+        "und braucht etwa {memory} GB Arbeitsspeicher. Ohne sie erscheint das Modell "
+        "sofort, und „Alle Merkmale erkennen“ im Prüfbericht holt sie später nach.",
+        name=str(entry.name),
+        triangles=format_decimal(triangles / 1_000_000, 1),
+        minimum=format_decimal(minimum, 0),
+        maximum=format_decimal(maximum, 0),
+        memory=format_decimal(recognition_gigabytes(triangles), 0),
+    )
+    allowed = _asked_about_recognition(ask, question, watch)
+    if allowed is not None and recorded is not None:
+        recorded[key] = {"object_id": entry.id, "scope": scope, "allowed": allowed}
+    return allowed
+
+
+def _asked_about_recognition(ask: Any, question: str, watch: CancelToken) -> bool | None:
+    """Stellt die Frage vor der langen Vollerkennung; ``None`` heißt: niemand zu fragen.
+
+    Eine Stelle für den einen Körper und den ganzen Import (§21.1): dieselben
+    zwei Antworten, dieselbe Absage beim Schließen ohne Wahl, derselbe Weg,
+    wenn niemand da ist. Bis zum Review vom 25.09.2026 stand das zweimal
+    wörtlich im Modul.
+    """
+    choices = [tr("Sofort laden"), tr("Mit Merkmalserkennung laden")]
+    try:
+        answer = (
+            ask.optional(question, choices)
+            if isinstance(ask, _WatchedAsk)
+            else ask(question, choices)
+        )
+    except QuestionDeclined:
+        answer = choices[0]
+    except UserError:
+        watch.raise_if_cancelled()
+        return None
+    watch.raise_if_cancelled()
+    if answer not in choices:
+        raise AmbiguityError(question, candidates=tuple(choices))
+    return answer == choices[1]
+
+
+def _remeasured(
+    entry: SceneObject,
+    candidates: Mapping[FeatureId, Feature],
+    required: set[FeatureId],
+    watch: CancelToken,
+    standing: Collection[FeatureId] = (),
+) -> dict[FeatureId, Feature]:
+    """Bekannte Merkmale örtlich nachmessen — mit dem Satz dieses Schritts.
+
+    ``detect_known`` spricht die Sprache der Suche an einer Stelle
+    („Vergrößern Sie den Suchradius“). Hält sie an einem gewöhnlichen
+    Schritt an, weil ein benötigtes Merkmal sich nicht nachmessen lässt, hat
+    der Schritt weder Suchradius noch Stelle; der Satz nennt deshalb, was an
+    ihm hilft.
+    """
+    from app.core.perceive.local import detect_known
+
+    assert isinstance(entry.mesh, MeshData)
+    try:
+        return detect_known(
+            entry.mesh,
+            candidates,
+            required=required,
+            standing=standing,
+            check_cancelled=watch.raise_if_cancelled,
+        )
+    except ValidationError as error:
+        if not str(error.constraint or "").startswith("local_"):
+            raise
+        raise UserError(
+            _(
+                "Nach diesem Schritt lässt sich ein Merkmal, das ein späterer Schritt oder "
+                "eine Passung braucht, an diesem großen Modell nicht sicher wiederfinden. "
+                "„Dreiecke verringern“ hilft, oder ändern Sie den Schritt."
+            ),
+            suggestions=(DECIMATE_MESH, CORRECT_INPUT),
+            object_id=entry.id,
+        ) from error
+
+
+def _same_triangles(source: Mesh | None, mesh: MeshData) -> bool:
+    """Ob die Ausgabe dieselben Dreiecke trägt wie der Eingang an derselben Stelle."""
+    if source is mesh:
+        return True
+    return (
+        isinstance(source, MeshData)
+        and source.triangle_count == mesh.triangle_count
+        and _mesh_key(source) == _mesh_key(mesh)
+    )
+
+
+def _measured_locally(
+    entry: SceneObject,
+    known: Mapping[FeatureId, Feature],
+    required: set[FeatureId],
+    unchanged: bool,
+    watch: CancelToken,
+    standing: Collection[FeatureId] = (),
+) -> dict[FeatureId, Feature]:
+    """Die bekannten Merkmale eines großen Netzes nach einem Schritt.
+
+    **Dieselben Dreiecke brauchen keine Nachmessung** (Review 25.09.2026):
+    ``detect_region`` und jeder Schritt, der nur Merkmale oder Attribute
+    anhängt, gibt das Netz unverändert aus, und jeder Beleg gilt mit seinen
+    Dreiecksnummern weiter. Nachgemessen verwarf die Auswertung am Drachen die
+    eben an der Stelle gefundene Fußsohle im selben Schritt, und der Dialog
+    sagte „Kein ganzes Merkmal im Suchradius“ zu einem Radius, der sie fasste.
+
+    **Und ein starr bewegtes Netz nur, was die Bewegung nicht exakt trägt**
+    (``standing``, Review R6): Dieselben Dreiecke an bewegten Ecken
+    (:func:`perceive.features.moved_twin`) lassen jeden Beleg gelten.
+    """
+    if not unchanged:
+        return _remeasured(entry, known, required, watch, standing)
+    return {
+        name: feature
+        for name, feature in known.items()
+        if feature.face_indices
+        and not (feature.provenance == "generated" and not feature.recognised)
+    }
+
+
+def _skipped_recognition(
+    entry: SceneObject, operation: Operation, *, reopenable: bool, out_of_memory: bool
+) -> Finding:
+    """Der Befund, dass die Vollerkennung eines großen Körpers ausgelassen wurde.
+
+    **Der Satz nennt „Alle Merkmale erkennen“ nur, wo es etwas zurückzunehmen
+    gibt** — eine Wahl am Ladeschritt (``reopenable``, dieselbe Auskunft wie
+    ``History.recognition_reopenable``). Ein Körper, der erst nach dem Laden
+    über die Grenze wuchs, hatte nie eine; dort versprach der Befund den
+    Knopf, und der Klick tat nichts (Review N3, 25.09.2026). **Und ein
+    Speicherfehler bleibt ein Speicherfehler**, auch in den Läufen nach dem
+    ersten: Die Absage trägt ihren Grund, der Befund bleibt eine Warnung, und
+    der Knopf steht hinten (Review B11).
+    """
+    assert isinstance(entry.mesh, MeshData)
+    triangles = entry.mesh.triangle_count
+    values: dict[str, Any] = {"triangles": triangles, "limit": FEATURE_LIMIT_TRIANGLES}
+    if out_of_memory:
+        values["memory"] = recognition_gigabytes(triangles)
+        message = (
+            _(
+                "Für die vollständige Merkmalserkennung reichte der Arbeitsspeicher nicht. "
+                "„Alle Merkmale erkennen“ versucht es erneut; „Dreiecke verringern“ hilft."
+            )
+            if reopenable
+            else _(
+                "Für die vollständige Merkmalserkennung reichte der Arbeitsspeicher "
+                "nicht. Einzelne Merkmale erkennen Sie an einer Stelle; "
+                "„Dreiecke verringern“ hilft."
+            )
+        )
+    else:
+        message = (
+            _(
+                "Die vollständige Merkmalserkennung wurde für dieses große Modell "
+                "ausgelassen. „Alle Merkmale erkennen“ holt sie nach; einzelne "
+                "Merkmale erkennen Sie auch an einer Stelle."
+            )
+            if reopenable
+            else _(
+                "Die vollständige Merkmalserkennung wurde für dieses große Modell "
+                "ausgelassen. Einzelne Merkmale erkennen Sie an einer Stelle; "
+                "„Dreiecke verringern“ ermöglicht die automatische Erkennung."
+            )
+        )
+    return Finding(
+        code="perceive.too_large",
+        severity="warning" if out_of_memory else "info",
+        message=message,
+        object_id=entry.id,
+        op_id=operation.id,
+        values=values,
+    )
+
+
+def _ask_once_for_large_bodies(
+    operation: Operation,
+    produced: Sequence[SceneObject],
+    ask: Any,
+    recorded: dict[str, Any],
+    watch: CancelToken,
+    on_recognition_answer: RecognitionAnswered | None,
+) -> dict[ObjectId, bool]:
+    """Fragt einmal für alle großen Körper eines Imports, die noch keine Wahl haben.
+
+    Nur bei zwei und mehr: Ein einzelner großer Körper bekommt die Frage mit
+    seinem Namen in :func:`_full_recognition_allowed`. Genannt wird die Summe
+    der Dreiecke und damit der Zeit; der Arbeitsspeicher ebenso als Summe,
+    denn der Import hält alle Netze zugleich. Wer niemanden fragen kann, lädt
+    wie nach einer Absage und hält nichts fest — dieselbe Regel wie bei einem
+    Körper.
+    """
+    waiting: list[tuple[ObjectId, str, str]] = []
+    triangles = 0
+    for index, body in enumerate(produced):
+        mesh = body.mesh
+        if not isinstance(mesh, MeshData):
+            continue
+        count = mesh.triangle_count
+        if not FEATURE_LIMIT_TRIANGLES < count <= CONFIRMED_FEATURE_LIMIT_TRIANGLES:
+            continue
+        object_id = operation.outputs[index]
+        placed = dataclasses.replace(body, id=object_id)
+        key, scope, saved, _starved = _recognition_choice(placed, operation, watch)
+        if saved is None:
+            waiting.append((object_id, key, scope))
+            triangles += count
+    if len(waiting) < 2:
+        return {}
+    minimum, maximum = recognition_minutes(triangles)
+    question = tr(
+        "{count} Modelle haben zusammen {triangles} Millionen Dreiecke. Die vollständige "
+        "Merkmalserkennung dauert geschätzt {minimum} bis {maximum} Minuten, auf langsamen "
+        "Rechnern länger, und braucht etwa {memory} GB Arbeitsspeicher. Ohne sie erscheinen "
+        "die Modelle sofort, und „Alle Merkmale erkennen“ im Prüfbericht holt sie später nach.",
+        count=format_decimal(len(waiting), 0),
+        triangles=format_decimal(triangles / 1_000_000, 1),
+        minimum=format_decimal(minimum, 0),
+        maximum=format_decimal(maximum, 0),
+        memory=format_decimal(recognition_gigabytes(triangles), 0),
+    )
+    allowed = _asked_about_recognition(ask, question, watch)
+    if allowed is None:
+        # Niemand zu fragen: Jeder Körper geht dann seinen eigenen Weg ohne
+        # Frage und lädt wie nach einer Absage, ohne etwas festzuhalten.
+        return {}
+    decided: dict[ObjectId, bool] = {}
+    for object_id, key, scope in waiting:
+        record = {"object_id": object_id, "scope": scope, "allowed": allowed}
+        recorded[key] = record
+        if on_recognition_answer is not None:
+            on_recognition_answer(operation.id, key, record)
+        decided[object_id] = allowed
+    return decided
+
+
 def _with_features(
     entry: SceneObject,
     previous: dict[str, Any],
@@ -2221,9 +2582,20 @@ def _with_features(
     scope: str | None = None,
     source_mesh: Mesh | None = None,
     detect_features: bool = True,
+    recognition_of: dict[ObjectId, _BodyRecognition] | None = None,
+    on_recognition_answer: RecognitionAnswered | None = None,
+    decided: Mapping[ObjectId, bool] | None = None,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
+
+    ``recognition_of`` hält je Körper die Ladewahl zur Vollerkennung (§21.1).
+    Der Ladeschritt trägt sie ein, jeder Folgeschritt desselben Körpers liest
+    sie: Ohne das fiel der erste Schritt nach einer bestätigten Vollerkennung
+    auf die örtliche Nachmessung aller bekannten Merkmale zurück, die an jedem
+    großen Merkmal anhielt — „zu viele Dreiecke für die lokale Suche“ nach
+    einem Verschieben um 5 mm. Und nach einem Speicherfehler beim Laden lief
+    jeder Folgeschritt in denselben Fehler, als Programmfehler am Schritt.
 
     ``source_mesh`` ist das Netz des Eingangs, aus dem diese Ausgabe entstand —
     bei einer gemeldeten Bewegung der Beleg dafür, dass nicht neu erkannt
@@ -2404,17 +2776,74 @@ def _with_features(
             )
         return exact_entry
     local_only = mesh.triangle_count > FEATURE_LIMIT_TRIANGLES
+    # Gefragt wird nur oberhalb der automatischen Grenze; eine gespeicherte
+    # Wahl gilt für jeden geladenen Körper bis zur bestätigbaren Grenze —
+    # auch die Absage, die ein Speicherfehler weiter unten festhält.
+    choice: tuple[str, str] | None = None
+    # **Neu entschieden hat nur, wer in diesem Lauf gefragt wurde** — einzeln
+    # oder in der gemeinsamen Frage des Imports. Dort gilt der Speichermerker
+    # des Prozesses nicht (Review N2). Eine fehlende Wahl allein ist keine
+    # Entscheidung: Kam die Absage nach einem Speicherfehler nicht am
+    # Ladeschritt an — abgebrochen, überholt, nie festgehalten —, lief sonst
+    # derselbe Minutenlauf bis zum selben Fehler noch einmal (Review R3).
+    fresh = False
+    out_of_memory = False
+    state = recognition_of.get(entry.id) if recognition_of is not None else None
+    within = mesh.triangle_count <= CONFIRMED_FEATURE_LIMIT_TRIANGLES
+    if operation.op == "load" and within:
+        key, mesh_scope, saved, out_of_memory = _recognition_choice(entry, operation, watch)
+        choice = (key, mesh_scope)
+        allowed = saved
+        if saved is not None:
+            local_only = not saved
+        elif decided is not None and entry.id in decided:
+            # Für alle großen Körper dieses Imports schon gefragt und festgehalten.
+            allowed = decided[entry.id]
+            local_only = not allowed
+            fresh = True
+        elif local_only:
+            if say is not None:
+                say(str(_("Merkmale erkennen")))
+            allowed = (
+                _full_recognition_allowed(entry, key, mesh_scope, ask, recorded, watch)
+                if detect_features
+                else None
+            )
+            local_only = allowed is not True
+            fresh = allowed is not None
+            if allowed is not None and on_recognition_answer is not None:
+                on_recognition_answer(
+                    operation.id,
+                    key,
+                    {"object_id": entry.id, "scope": mesh_scope, "allowed": allowed},
+                )
+        # Eine Absage unter der automatischen Grenze kann nur ein Speicherfehler
+        # festgehalten haben — dort gefragt wird nie.
+        state = _BodyRecognition(
+            allowed,
+            mesh.triangle_count
+            if saved is False and (out_of_memory or mesh.triangle_count <= FEATURE_LIMIT_TRIANGLES)
+            else None,
+            (operation.id, key, mesh_scope) if allowed is not None else None,
+        )
+        if recognition_of is not None:
+            recognition_of[entry.id] = state
+    elif state is not None and within:
+        if state.declined_at is not None and mesh.triangle_count >= state.declined_at:
+            # An dieser Größe lief die Vollerkennung schon einmal in den Speicher.
+            local_only = True
+            out_of_memory = True
+        elif state.allowed is True:
+            # Die Zustimmung galt dem Körper, nicht dem einen Netz: Ein
+            # Folgeschritt erkennt vollständig nach, ohne neue Frage.
+            local_only = False
+    elif not within:
+        state = None
+    reopenable = state is not None and state.answer is not None
     if local_only:
-        from app.core.perceive.local import detect_known
-
         findings.append(
-            Finding(
-                code="perceive.too_large",
-                severity="info",
-                message=_("Für die Merkmalserkennung ist dieses Modell zu groß."),
-                object_id=entry.id,
-                op_id=operation.id,
-                values={"triangles": mesh.triangle_count, "limit": FEATURE_LIMIT_TRIANGLES},
+            _skipped_recognition(
+                entry, operation, reopenable=reopenable, out_of_memory=out_of_memory
             )
         )
         if not previous and not entry.features:
@@ -2488,13 +2917,41 @@ def _with_features(
     }
     watch.raise_if_cancelled()
     if say is not None:
-        say(str(_("Merkmale erkennen")))
+        if not local_only and mesh.triangle_count > FEATURE_LIMIT_TRIANGLES:
+            # Minuten ohne gemessenen Anteil: Die Zeile nennt dieselbe Spanne
+            # wie die Frage, die Uhr daneben die verstrichene Zeit (§2.8).
+            minimum, maximum = recognition_minutes(mesh.triangle_count)
+            say(
+                tr(
+                    "Merkmale erkennen, geschätzt {minimum} bis {maximum} min",
+                    minimum=format_decimal(minimum, 0),
+                    maximum=format_decimal(maximum, 0),
+                )
+            )
+        else:
+            say(str(_("Merkmale erkennen")))
+    # **Anhalten darf die örtliche Nachmessung nur für ein Merkmal, das noch
+    # jemand braucht** (RM-235). Jedes andere verliert seine Belegung wie am
+    # Netz üblich und steht als Hinweis im Bericht; ein starr mitbewegtes
+    # trägt die Bewegung selbst (``rigid_orphans`` weiter unten). Vorher hielt
+    # ein einziges großes, nicht nachmessbares Merkmal jeden Schritt an.
+    required = set(needed) if needed is not None else set(referenced)
+    if operation.op == "arrange_bed" and feature_movement is not None:
+        required.clear()
+    elif transform is not None:
+        required -= transformed.exact
+    known = {**transformed.candidates, **output_features}
+    unchanged = feature_movement is None and _same_triangles(source_mesh, mesh)
+    standing = (
+        transformed.exact
+        if local_only
+        and transform is not None
+        and isinstance(source_mesh, MeshData)
+        and moved_twin(source_mesh, mesh, transform)
+        else frozenset()
+    )
     if local_only:
-        detected = detect_known(
-            mesh,
-            {**transformed.candidates, **output_features},
-            check_cancelled=watch.raise_if_cancelled,
-        )
+        detected = _measured_locally(entry, known, required, unchanged, watch, standing)
     else:
         # **Ein bewegtes Netz wird nicht neu untersucht.** Meldet die
         # Operation eine starre Bewegung und ist die Ausgabe belegbar das
@@ -2525,7 +2982,96 @@ def _with_features(
                 )
             detected = remembered_features
         else:
-            detected = detect(mesh, check_cancelled=watch.raise_if_cancelled)
+            # **Ein Speicherfehler kostet die Erkennung, nicht den Schritt**
+            # (RM-235) — am Ladeschritt und an jedem Folgeschritt eines
+            # geladenen Körpers. Ohne diesen Weg hielt der Ladeschritt an, und
+            # nach Minuten Warten stand kein Modell da. Dasselbe Netz versucht
+            # es in diesem Prozess nicht noch einmal (``ran_out_of_memory``):
+            # Sonst kostete jede Änderung danach dieselben Minuten bis zum
+            # selben Fehler. **Außer nach einer Antwort in diesem Lauf**
+            # (``fresh``): Dort hat eben jemand neu entschieden, und der Merker
+            # meldete sonst ohne einen Versuch denselben Speicherfehler. Die
+            # ausdrücklichen neuen Versuche — *Alle Merkmale erkennen*,
+            # ``recognize``, ein neues Dokument — leeren ihn ohnehin.
+            fallback = choice is not None or state is not None
+            full: dict[FeatureId, Feature] | None = None
+            if not (fallback and not fresh and ran_out_of_memory(mesh)):
+                if (
+                    on_recognition_answer is not None
+                    and not fresh
+                    and state is not None
+                    and state.allowed is True
+                    and state.answer is not None
+                    and mesh.triangle_count > FEATURE_LIMIT_TRIANGLES
+                    and known_detection(mesh) is None
+                ):
+                    # **Eine gespeicherte Zustimmung wird gemeldet, wo sie die
+                    # lange Erkennung startet** (Review B18, R5) — hier, nach
+                    # dem Übertrag auf ein bewegtes Netz und nur ohne Treffer im
+                    # Merker. Wer dann abbricht, bekommt *Ohne
+                    # Merkmalserkennung laden* wie nach einer eben gegebenen
+                    # Antwort. Früher kam die Meldung bei jeder Auswertung, und
+                    # der Abbruch einer beliebigen Rechnung bot an, eine längst
+                    # fertige Erkennung zurückzunehmen.
+                    answer_op, answer_key, answer_scope = state.answer
+                    on_recognition_answer(
+                        answer_op,
+                        answer_key,
+                        {"object_id": entry.id, "scope": answer_scope, "allowed": True},
+                    )
+                try:
+                    full = detect(mesh, check_cancelled=watch.raise_if_cancelled)
+                except MemoryError:
+                    if not fallback:
+                        raise
+                    _log.warning(
+                        "feature recognition of %s ran out of memory at %d triangles",
+                        entry.id,
+                        mesh.triangle_count,
+                    )
+                    remember_out_of_memory(mesh)
+            if full is not None:
+                detected = full
+            else:
+                # Festgehalten wird die Absage am Ladeschritt, mit ihrem Grund,
+                # und die Größe, an der es scheiterte, gilt für die
+                # Folgeschritte dieses Laufs.
+                answer = state.answer if state is not None else None
+                if choice is not None:
+                    key, mesh_scope = choice
+                    answer = (operation.id, key, mesh_scope)
+                    declined = {
+                        "object_id": entry.id,
+                        "scope": mesh_scope,
+                        "allowed": False,
+                        "out_of_memory": True,
+                    }
+                    if recorded is not None:
+                        recorded[key] = declined
+                    # Sofort gemeldet wie eine Antwort, nicht erst mit dem
+                    # Ergebnis: Ein abgebrochener oder überholter Lauf verlöre
+                    # sie sonst (Review R3).
+                    if on_recognition_answer is not None:
+                        on_recognition_answer(operation.id, key, dict(declined))
+                failed = _BodyRecognition(
+                    state.allowed if state is not None and choice is None else False,
+                    mesh.triangle_count,
+                    answer,
+                )
+                if recognition_of is not None:
+                    recognition_of[entry.id] = failed
+                findings.append(
+                    _skipped_recognition(
+                        entry,
+                        operation,
+                        reopenable=answer is not None,
+                        out_of_memory=True,
+                    )
+                )
+                if not previous and not entry.features:
+                    return entry
+                local_only = True
+                detected = _measured_locally(entry, known, required, unchanged, watch)
     watch.raise_if_cancelled()
 
     # **Was auf einer Freiform weggelassen wurde, steht hier, nicht nirgends.**
@@ -3192,6 +3738,17 @@ class _WatchedAsk:
     def __init__(self, ask: AskFn) -> None:
         self._ask = ask
         self.used = False
+
+    def optional(self, question: str, choices: list[str]) -> str:
+        """Eine optionale Vollerkennung darf geschlossen werden; der Import läuft weiter.
+
+        **Sie zählt nicht als Frage des Schritts** (``used`` bleibt): Gefragt
+        wird nach der Operation, ihre rohe Ausgabe hängt nicht an der Antwort,
+        und die Antwort steht danach im Stapel. Als Frage gezählt ging der
+        Import eines großen Modells nie auf die Platte, und jedes Öffnen las
+        die Datei neu — am Drachen 21 bis 36 Sekunden.
+        """
+        return self._ask(question, choices)
 
     def __call__(self, question: str, choices: list[str]) -> str:
         self.used = True

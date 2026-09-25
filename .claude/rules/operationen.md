@@ -1317,9 +1317,11 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   nennt. Eine Szene daraus ist ein Bild und wird nie zum Dokumentstand — wer
   Merkmale aus einer Vorschau liest (der Agent), ruft den genauen Weg.
 
-- **Die Merkmalerkennung nimmt bis zu eine Million Dreiecke je Körper an.**
-  `FEATURE_LIMIT_TRIANGLES` begrenzt die Auswertung; Importhinweise und
-  Generator-Reduktion lesen dieselbe Grenze. Karten, Darstellung und die
+- **Die Merkmalerkennung nimmt bis 1,5 Millionen Dreiecke je Körper
+  automatisch an, beim Laden nach Bestätigung bis fünf Millionen** (§21.1).
+  `FEATURE_LIMIT_TRIANGLES` begrenzt die Auswertung, darüber prüft
+  `detect_known` örtlich; die Generator-Reduktion bleibt darunter
+  (`generate.GENERATED_TRIANGLE_LIMIT`), nie darüber. Karten, Darstellung und die
   höchstens `FEATURE_LIMIT_COUNT` (fünftausend seit dem 22.09.2026)
   zuzuordnenden Merkmale haben eigene Leistungsbudgets.
   Eine Anhebung wird an echten feinen Netzen einschließlich der oberen

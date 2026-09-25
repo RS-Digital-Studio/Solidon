@@ -7276,6 +7276,13 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
         "reload",
         "restore_backup",
         "set_aside_file",
+        # Die Wege der lokalen Merkmalserkennung hängen am Dialog der Suche
+        # (`LocalRecognitionDialog._failed`): Suchradius und Stelle kennt nur
+        # er. ``decimate_mesh`` aus derselben Reihe führt das Fenster aus.
+        "pick_elsewhere",
+        "enlarge_radius",
+        "shrink_radius",
+        "repair_mesh",
     }
 
     for name, value in vars(errors).items():

@@ -318,9 +318,12 @@ def test_a_model_too_dense_to_perceive_offers_the_way_out() -> None:
     # derselbe Fehler in neuer Gestalt: Sein Text ist der, der den Ausweg beim
     # Namen nennt, und der Knopf stünde an der Zeile daneben.
     for code in ("perceive.too_large", "ingest.very_large"):
-        assert FINDING_ACTIONS.get(code) == (DECIMATE_MESH,), (
+        assert DECIMATE_MESH in FINDING_ACTIONS.get(code, ()), (
             f"{code} nennt den Ausweg im Text und muss ihn anbieten"
         )
+    # Seit dem 24.09.2026 spricht ``ingest.very_large`` nur über die Karten;
+    # die Wege der Erkennung stehen an ``perceive.too_large`` am Körper.
+    assert FINDING_ACTIONS["ingest.very_large"] == (DECIMATE_MESH,)
     assert REGISTRY.get("decimate_mesh").consumes == 1, (
         "sie verringert die Dreiecke genau eines Körpers — dessen, den der Klick wählt"
     )
@@ -334,4 +337,4 @@ def test_a_model_too_dense_to_perceive_offers_the_way_out() -> None:
         object_id="obj_1",
         values={"triangles": 367294, "limit": 200000},
     )
-    assert [action.id for action in actions_for(gemeldet)] == ["decimate_mesh"]
+    assert "decimate_mesh" in [action.id for action in actions_for(gemeldet)]

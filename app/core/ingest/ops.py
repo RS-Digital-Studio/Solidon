@@ -148,6 +148,9 @@ class LoadParams(BaseParams):
 
 @register_op(
     name="load",
+    # Der Befund ``ingest.very_large`` reist in der rohen Ausgabe mit; ein
+    # geänderter Satz darüber verlangt einen neuen Eintrag, keinen alten.
+    cache_version="3",
     # Heißt wie der Knopf in Werkzeugleiste und Datei-Menü — zwei Namen für
     # dieselbe Handlung ließen den Kunden einen Unterschied suchen.
     title=_("Modell einfügen"),

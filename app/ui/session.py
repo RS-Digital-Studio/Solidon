@@ -72,6 +72,7 @@ from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.recipe import Recipe
 from app.core.lid_flow import LidApplied, apply_lid
 from app.core.log import get_logger
+from app.core.perceive.local import forget_out_of_memory
 from app.core.registry import REGISTRY
 from app.core.scene import (
     CancelSignal,
@@ -1107,6 +1108,9 @@ class Session(QObject):
     busyChanged = Signal(bool)
     askRequested = Signal(object)
     """Eine Frage an den Nutzer — trägt einen ``AskRequest``."""
+    recognitionAnswered = Signal(int, int, str, object)
+    """Die Antwort auf die Frage vor der Vollerkennung, aus dem Arbeiter gemeldet
+    (Projektgeneration, Ladeschritt, Schlüssel, Eintrag)."""
     questionInvalidated = Signal()
     """Abbruch oder Nachlauf hat den bisherigen Auswertungsauftrag entwertet."""
     proposalReady = Signal(object)
@@ -1312,6 +1316,10 @@ class Session(QObject):
         """Welches Dokument gerade offen ist, als Zähler: ``_reset_for`` zählt
         hoch, und ein Arbeiter, der für ein früheres gestartet wurde, erkennt
         seine Meldung als veraltet (UI-01)."""
+        self._recognition_answers: list[tuple[int, str, dict[str, Any]]] = []
+        """Die Antworten auf die Frage vor der Vollerkennung, die noch auf ihr
+        Ergebnis warten — sofort festgehalten, geleert mit dem fertigen Lauf."""
+        self.recognitionAnswered.connect(self._record_recognition_answer)
         self._analysis_memory: tuple[tuple[Any, ...], tuple[object, ...], dict[str, Any]] | None = (
             None
         )
@@ -1635,6 +1643,9 @@ class Session(QObject):
         # Und ein anderer Stempel: Was ein Arbeiter für das vorige Dokument
         # noch meldet, gilt diesem nicht (UI-01).
         self._project_generation += 1
+        self._recognition_answers.clear()
+        # Ein anderes Projekt ist eine neue Entscheidung, auch über den Speicher.
+        forget_out_of_memory()
         self._dirty = False
         self.last_result = None
         self._coarse_scene = None
@@ -2080,6 +2091,26 @@ class Session(QObject):
             return False
         self._changed()
         return True
+
+    def reopen_recognition(self, object_ids: Sequence[str]) -> None:
+        """Die Frage vor der Vollerkennung geladener Körper erneut stellen (§21.1).
+
+        Die gespeicherte Wahl fällt (``History.reopen_recognition``), und die
+        folgende Auswertung fragt mit Zeitschätzung und Speicherbedarf — je
+        Körper, eine Auswertung für alle; ihre Antwort schreibt
+        ``_on_finished`` wie beim Laden fest. **Ohne gespeicherte Wahl
+        geschieht nichts** (Review N3): Es gäbe nichts zurückzunehmen, und ein
+        neuer Lauf stellte keine Frage — er markierte nur das Projekt.
+
+        Der Speichermerker des Prozesses fällt dabei mit
+        (``local.forget_out_of_memory``): Wer nach einem Speicherfehler
+        Programme schließt und es erneut versucht, bekam sonst ohne einen
+        Versuch denselben Satz (Review N2).
+        """
+        if not self.history.reopen_recognition(object_ids):
+            return
+        forget_out_of_memory()
+        self._changed()
 
     def removal_closure(self, op_ids: Sequence[int]) -> tuple[int, ...]:
         """Gewählte und davon abhängige Schritte für die Nachfrage bestimmen."""
@@ -3671,6 +3702,7 @@ class Session(QObject):
             cancelled=self.cancel_signal,
             cache=self.cache,
             sources=ProjectSources(self.project, base_dir=self.base_dir),
+            on_recognition_answer=self._recognition_answered_in_worker,
         )
         # Bei jedem Lauf und nicht nur beim Öffnen: Solange mit einem
         # mitgebrachten oder einem Ersatzdrucker gerechnet wird, sagt es der
@@ -3722,6 +3754,8 @@ class Session(QObject):
         self._superseded = self._worker
         result = self.run_evaluation("fine")
         self.last_result = result
+        # Wie in ``_on_finished``: Mit dem Ergebnis wartet keine Zustimmung mehr.
+        self._recognition_answers.clear()
         # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
         # Wegräumen hielte sie die **vorige** Szene am Leben — bei einem Netz
         # dieser Größe genau das, was die Stufe einsparen soll. Eine
@@ -4358,6 +4392,68 @@ class Session(QObject):
             )
         )
 
+    def _recognition_answered_in_worker(
+        self, op_id: int, key: str, record: Mapping[str, Any]
+    ) -> None:
+        """Meldet die Antwort vor der Vollerkennung aus dem Arbeiter (§21.1)."""
+        generation = getattr(self._pending, "project_generation", self._project_generation)
+        self.recognitionAnswered.emit(generation, op_id, key, dict(record))
+
+    def _record_recognition_answer(
+        self, generation: int, op_id: int, key: str, record: dict[str, Any]
+    ) -> None:
+        """Hält die Antwort sofort am Stapel fest, nicht erst mit dem Ergebnis.
+
+        Zwischen „Mit Merkmalserkennung laden“ und dem Ende der Erkennung
+        können Minuten liegen, und die Oberfläche bleibt bedienbar (§2.8). Jede
+        Änderung in dieser Zeit bricht den Lauf ab; ohne diesen Weg fand der
+        Nachlauf keine Wahl, fragte noch einmal und begann von vorn (Review
+        24.09.2026).
+        """
+        if generation != self._project_generation:
+            return
+        # Ein Ladeschritt, den ein Strg+Z inzwischen genommen hat, bekommt
+        # nichts mehr, und ohne ihn wartet auch keine Zustimmung (Review N4).
+        if not any(entry.id == op_id for entry in self.project.document.ops):
+            return
+        if self.history.record_matches({op_id: {key: record}}):
+            self._dirty = True
+            # Der Stern im Titel kommt mit der Antwort, nicht erst mit einem
+            # Ergebnis, das womöglich nie kommt.
+            self.projectChanged.emit()
+        # Eine neue Meldung für denselben Körper ersetzt die alte: Nach einer
+        # Zustimmung kann die Absage aus einem Speicherfehler folgen, und die
+        # zurückgenommene Zustimmung böte sonst noch den Knopf nach einem
+        # Abbruch an (Review R3).
+        self._recognition_answers = [
+            entry for entry in self._recognition_answers if entry[:2] != (op_id, key)
+        ]
+        self._recognition_answers.append((op_id, key, record))
+
+    def recognition_interrupted(self) -> bool:
+        """Ob eine bestätigte Vollerkennung noch ohne Ergebnis ist."""
+        return any(record.get("allowed") is True for _op, _key, record in self._recognition_answers)
+
+    def load_without_recognition(self) -> bool:
+        """Nimmt die noch offenen Zustimmungen zurück und rechnet ohne Vollerkennung.
+
+        Der Weg nach einem Abbruch während der langen Erkennung: Wer abbricht,
+        weil es zu lange dauert, will das Modell sehen und nicht den Stand vor
+        dem Import. Die Absage steht danach wie jede andere am Ladeschritt, und
+        *Alle Merkmale erkennen* holt die Erkennung später nach.
+        """
+        declined: dict[int, dict[str, Any]] = {}
+        for op_id, key, record in self._recognition_answers:
+            if record.get("allowed") is True:
+                declined.setdefault(op_id, {})[key] = {**record, "allowed": False}
+        self._recognition_answers.clear()
+        if not declined:
+            return False
+        self.history.record_matches(declined)
+        self._dirty = True
+        self._changed()
+        return True
+
     def ask_from_worker(self, question: str, choices: list[str]) -> str:
         """Reicht die Frage ans Fenster und wartet auf die Antwort."""
         candidates = getattr(self._pending, "candidates", ())
@@ -4450,6 +4546,8 @@ class Session(QObject):
         # und der eine ohne den anderen richtig bleibt.
         answered = self.history.record_answers(result.answers)
         matched = self.history.record_matches(result.matches)
+        # Das Ergebnis steht: Keine Zustimmung wartet mehr auf ihre Erkennung.
+        self._recognition_answers.clear()
         if answered or matched:
             self._dirty = True
             self.projectChanged.emit()

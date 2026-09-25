@@ -6,6 +6,15 @@ woher es kam.
 
 Die Regeln stehen in `.claude/rules/dateiformat.md`.
 
+`loader._too_fine` spricht nur über die Grenze der Analysekarten
+(`ingest.very_large`, Handlung *Dreiecke verringern*). Ob die Merkmalserkennung
+ausgelassen wurde, entscheidet erst die Frage beim Laden, und das meldet
+`perceive.too_large` am Körper — der Loader kennt die Antwort nicht, und ein
+Satz über sie wäre nach einem Ja wie nach einem Nein falsch. Die Frage selbst
+gehört in `scene.evaluate`, wo Ausgabekörper und Netzinhalt für ihre
+gespeicherte Antwort feststehen; der Loader lädt das Original unabhängig von
+dieser Wahl unverändert weiter.
+
 ## Die Karte
 
 | Datei | Rolle |

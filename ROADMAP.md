@@ -72,7 +72,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Lüfterkurve gebaut; offen PLA-Vorgabe je Drucker, Hilfs- und Kammerlüfter, unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
 | [RM-229 — Anordnen legt ein zu großes Teil über die Kante, und geteilte Stücke heißen nach einem Buchstabenpfad](#rm-229) | Geometrie, Erkennung und Druckvorbereitung | 108,5 bei freigegebenen 108 statt einer Mitte mit kleinerem Rand; „B A · Stifte" für ein Stück mit Stiften und Löchern — Rand zuerst verkleinern, Nummerierung entscheiden |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
-| [RM-235 — Die Erkennung läuft an sehr großen Netzen in den Speicher oder über ihre Grenze](#rm-235) | Geometrie, Erkennung und Druckvorbereitung | MemoryError in features._fitted am Puppenhausbett, Kumiko mit 7 321 Merkmalen danach ohne jedes — Speicher begrenzen, über der Grenze nach Gewicht behalten |
+| [RM-235 — Die Erkennung läuft an sehr großen Netzen in den Speicher oder über ihre Grenze](#rm-235) | Geometrie, Erkennung und Druckvorbereitung | MemoryError in features._fitted am Puppenhausbett, Kumiko mit 7 321 Merkmalen danach ohne jedes — Speicher begrenzen, über der Grenze nach Gewicht behalten. Seit 24.09.2026 kostet ein Speicherfehler beim Laden nur die Erkennung, nicht den Import; die Ursache in `_fitted` bleibt offen |
+| [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-205 — Escape in der dritten Stufe der Platzierung springt in den Dialog](#rm-205) | Bedienung und Darstellung | Gebaut (`7ff34c67`, `29dcefa4`): Escape geht je Stufe genau eine zurück (Tiefe → Maße → Zielen → Dialog), ein Klick ins Modell und der Knopf „Stelle im Bild wählen“ führen aus dem Dialog zurück, `surfaceRequested` hat seinen Sender; getestet je Stufe. Offen: Abnahme am Fenster beim Release (RM-213) |
@@ -1867,11 +1868,101 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   den Speicherbedarf in `_fitted` an einem Netz dieser Größe messen und
   begrenzen (Stapel statt einer Matrix); über der Merkmalsgrenze die gefundenen
   Merkmale nach Gewicht behalten und den Rest melden, statt alles zu verwerfen.
-  Abnahme: Puppenhausbett ohne Speicherfehler unter der 1-Mio.-Grenze aus
-  RM-042, Kumiko mit ihren wichtigsten Merkmalen und einem Satz über den Rest.
+  Abnahme: Puppenhausbett ohne Speicherfehler unter der automatischen Grenze
+  (seit 24.09.2026 1,5 Mio.), Kumiko mit ihren wichtigsten Merkmalen und einem
+  Satz über den Rest.
+
+  **Seit dem 24.09.2026 kostet der Speicherfehler beim Laden nur die
+  Erkennung** (`scene.evaluate._with_features`): Das Modell lädt ohne sie,
+  `perceive.too_large` sagt es als Warnung, die Absage wird festgehalten, und
+  *Alle Merkmale erkennen* holt sie später nach. Dringlicher geworden ist der
+  Punkt trotzdem: Mit der Anhebung liegt das Puppenhausbett jetzt in der
+  automatischen Erkennung, und bis fünf Millionen darf sie nach Bestätigung
+  laufen. Gemessen am 24.09.2026 (unter Fremdlast, je Import ein Prozess,
+  Einlesen eingeschlossen): Drache 2 330 374 Dreiecke 59–70 s Erkennung,
+  3 859 MiB Spitze; Gartenschlauchhalter 392 532 Dreiecke 46 s, 601 MiB.
+  Die längste Lücke zwischen zwei Abbruchprüfungen lag am Drachen bei 9,1 s
+  (`_large_facet_faces`, `body.facets`) — so lange kann *Abbrechen* dort warten.
+
+  Nachgezogen am 24.09.2026 aus dem Erkennungs-Review der Reparatursitzung
+  (B10, B5): Nach bestätigter Vollerkennung hielt **jeder** Folgeschritt mit
+  „zu viele Dreiecke für die lokale Suche“ an, auch ein Verschieben um 5 mm —
+  die Zustimmung gilt jetzt dem Körper (`evaluate.recognition_of`), und die
+  örtliche Nachmessung hält nur für benötigte Merkmale an. Die lokale Suche
+  fand am Drachen an 18 von 18 Stellen nichts; jetzt gehört die ebene Facette
+  am Treffer immer dazu, das Budget zählt nur den Teil, der am Treffer hängt,
+  und ein Wechsel zwischen Suchrand und Budget an derselben Stelle endet in
+  einer Aussage statt in zwei Knöpfen, die einander zurückschicken. Die vier
+  Fußsohlen — alles, was die Vollerkennung dort findet — erkennt die lokale
+  Suche bei jedem Suchradius von 4 bis 10 mm in 1,5 bis 4 s. Am Drachen mit
+  den echten Grenzen: Laden mit Bestätigung 80 s, danach Skalieren 60 s mit
+  denselben vier Flächen, Verschieben 0,7 s.
+
+  Nachgezogen am 25.09.2026 aus dem Review dieser Arbeit (20 Befunde): Der
+  Rückweg *Alle Merkmale erkennen* hängt am Körper und überlebt Folgeschritte,
+  an einer Sammelzeile für alle Körper; ein Speicherfehler beim Laden unter der
+  Grenze lässt die Folgeschritte stehen, und ein gescheiterter Lauf wiederholt
+  sich im Prozess nicht; die Langlochflanke gilt nicht als Fläche, eine Ebene
+  über dem Budget macht die Stelle nicht unerkennbar, und der Dialog listet die
+  ebene Fläche am Treffer; die Antwort auf die Frage steht sofort fest, nach
+  einem Abbruch lädt *Ohne Merkmalserkennung laden*, und mehrere große Körper
+  bekommen eine gemeinsame Frage. Die Kommandozeile fragt je Befehl einmal.
+
+  Nachgezogen am 25.09.2026 aus der zweiten Runde (N1–N5 und die Reste von
+  B10, B11, B14, B17–B19): Die an der Stelle gefundene Sohle kam am Drachen
+  nicht in der Szene an — die Auswertung maß am unveränderten Netz nach und
+  verwarf sie. Unveränderte Dreiecke werden nicht mehr nachgemessen, und die
+  Nachmessung sucht wie an einer Stelle (Facette, zusammenhängender Teil,
+  erst der eigene Umfang); am Drachen steht die Sohle danach und nach dem
+  Skalieren im Baum, an der dichten Lochplatte die Bohrung auch nach
+  *Dreiecke verringern*. Nach einem Speicherfehler versucht eine neue
+  Entscheidung es wirklich neu, und die Absage behält ihren Grund; der
+  Rückweg steht nur, wo am Ladeschritt eine Wahl steht; die Frage nennt ihn;
+  ein gespeichertes „Ja“ lässt sich nach einem Abbruch zurücknehmen; die
+  Kommandozeile hat `recognize`; und die Langlochflanke gilt an der Stelle
+  nicht als Fläche.
+
+  Nachgezogen am 25.09.2026 aus der dritten Runde (R1–R7): Ob eine an der
+  Stelle gefundene Fläche eine ist, sagt jetzt die Ebenenregel der
+  Vollerkennung am ganzen Körper (`features.planar_facet`) — vorher meldete
+  die Stelle den unterteilten Mantel eines Zapfens beim Vorgaberadius als
+  Fläche, dazu Taschenwände, Zapfenflanken und Kanalsohlen. Der Langlochgang
+  kostet an einer Deckfläche mit 8 192 Randkanten 3 s statt 19,6 s. Ein
+  abgebrochener Lauf nach einem Speicherfehler wiederholt ihn nicht mehr; die
+  Absage kommt sofort an. Eine gespeicherte Zustimmung wird nur noch gemeldet,
+  wo sie die lange Erkennung wirklich startet. Die Nachmessung verliert ein
+  benötigtes Merkmal nicht mehr still an eine Insel in seiner Ebene, und ein
+  starres Verschieben übernimmt die mitbewegten Merkmale ohne Suche.
+  `recognize --on` fragt wie der Knopf im Fenster. Gemessen am Drachen: alle
+  vier Sohlen an der Stelle und nach Skalieren und zwei Verschiebungen.
 
 
 ## Bedienung und Darstellung
+
+<a id="rm-238"></a>
+
+- [~] **RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen.**
+  Die Großmodellbefunde bieten die lokale Erkennung direkt an. Der nächste
+  Oberflächentreffer bestimmt einen der vom Befund betroffenen Netz-Körper;
+  eine zufällige Baumauswahl ersetzt das Ziel nicht. Eine ungültige Stelle
+  kann erneut gewählt werden, ohne die Erkundung ins Dokument zu übernehmen.
+
+  Menü, Palette und Bericht verwenden `LocalRecognitionFlow.arm`. Während
+  dieser Auswahl bewegt die Tastatur ein sichtbares Fadenkreuz; Enter folgt
+  demselben Originaltreffer wie die Maus, Umschalt ermöglicht Feinschritte.
+  Abbruch, Projektwechsel und Beginn der Erkennung entfernen die Auswahlhilfe.
+  Fensterfälle sind ergänzt. **Offen bleibt ihre native Release-Abnahme**:
+  Bericht → Körper → Stelle → erkannte Form → Änderung und Undo, vollständig
+  mit Tastatur, einschließlich Fokus, Abbruch und Rückkehr bei mehreren DPI-Stufen.
+
+  Nachgezogen am 24.09.2026 aus der Bedienweg-Durchsicht (E1–E7): Der
+  Kartenbefund `ingest.very_large` trägt die lokale Erkennung nicht mehr, der
+  Befund `perceive.too_large` am Ladeschritt dafür *Alle Merkmale erkennen*;
+  jeder Fehlergrund der lokalen Suche bietet die Wege, die sein Satz nennt, als
+  Knöpfe (Suchradius vergrößern oder verkleinern mit sofortiger neuer Suche,
+  andere Stelle, Dreiecke verringern, Netz reparieren); eine Auswahl, die nicht
+  beginnen kann, sagt den Grund; „Suchradius" und „gefunden" statt „Radius" und
+  „vollständig". Die Fensterfälle dazu gehören zur Abnahme oben.
 
 <a id="rm-197"></a>
 

@@ -1375,6 +1375,34 @@ def _remember(
 MOVED_TWIN_TOLERANCE: Final = 1e-7
 
 
+def moved_twin(source: MeshData, moved: MeshData, transform: Any) -> bool:
+    """Ob ``moved`` belegbar das starr bewegte ``source`` ist.
+
+    Die Matrix ist starr (``is_rigid``), das bewegte Netz trägt **dieselben
+    Dreiecke** über denselben Eckennummern, und jede Ecke liegt dort, wo die
+    Matrix die Ecke des Quellnetzes hinbewegt (:data:`MOVED_TWIN_TOLERANCE`).
+    Dann gilt jede Dreiecksnummer eines Merkmals am bewegten Netz weiter.
+    Gefragt von :func:`carry_detection` für den Merker der Vollerkennung und
+    von der Auswertung für die örtliche Nachmessung eines großen Körpers
+    (Review R6) — eine Auskunft, nicht zwei.
+    """
+    from app.core.geom.transform import is_rigid
+
+    matrix = np.asarray(transform, dtype=float)
+    if not is_rigid(matrix):
+        return False
+    source_faces = np.asarray(source.raw.faces)
+    moved_faces = np.asarray(moved.raw.faces)
+    if source_faces.shape != moved_faces.shape or not np.array_equal(source_faces, moved_faces):
+        return False
+    source_vertices = np.asarray(source.raw.vertices, dtype=float)
+    moved_vertices = np.asarray(moved.raw.vertices, dtype=float)
+    if source_vertices.shape != moved_vertices.shape:
+        return False
+    expected = source_vertices @ matrix[:3, :3].T + matrix[:3, 3]
+    return bool(np.allclose(moved_vertices, expected, rtol=0.0, atol=MOVED_TWIN_TOLERANCE))
+
+
 def carry_detection(
     source: MeshData,
     moved: MeshData,
@@ -1391,11 +1419,9 @@ def carry_detection(
     Dreiecken, 3,9 s an einer Freiform mit 200 000 — für eine Antwort, die
     bis auf die Lage schon dastand.
 
-    Übertragen wird nur unter Beleg, nicht auf Zusage der Operation: Die
-    Matrix ist starr (``is_rigid``), das bewegte Netz trägt **dieselben
-    Dreiecke** über denselben Eckennummern, und jede Ecke liegt dort, wo die
-    Matrix die Ecke des Quellnetzes hinbewegt (:data:`MOVED_TWIN_TOLERANCE`).
-    Damit gelten die Dreiecksnummern der gemerkten Merkmale unverändert, und
+    Übertragen wird nur unter Beleg, nicht auf Zusage der Operation
+    (:func:`moved_twin`). Damit gelten die Dreiecksnummern der gemerkten
+    Merkmale unverändert, und
     ihre Maße folgen der Bewegung über :func:`transformed_features` — dieselbe
     Rechnung, mit der ``moved_object`` die mitgeführten Merkmale nachführt.
     Bleibt dabei ein Merkmal hinter der Bewegung zurück (kein ``exact``), wird
@@ -1406,7 +1432,6 @@ def carry_detection(
     Schalen — wandern mit, denn beides sind Eigenschaften der Form, nicht der
     Lage.
     """
-    from app.core.geom.transform import is_rigid
     from app.core.perceive.matching import transformed_features
 
     if check_cancelled is not None:
@@ -1416,19 +1441,7 @@ def carry_detection(
         known = _FEATURE_CACHE.get(source_key)
     if known is None:
         return False
-    matrix = np.asarray(transform, dtype=float)
-    if not is_rigid(matrix):
-        return False
-    source_faces = np.asarray(source.raw.faces)
-    moved_faces = np.asarray(moved.raw.faces)
-    if source_faces.shape != moved_faces.shape or not np.array_equal(source_faces, moved_faces):
-        return False
-    source_vertices = np.asarray(source.raw.vertices, dtype=float)
-    moved_vertices = np.asarray(moved.raw.vertices, dtype=float)
-    if source_vertices.shape != moved_vertices.shape:
-        return False
-    expected = source_vertices @ matrix[:3, :3].T + matrix[:3, 3]
-    if not np.allclose(moved_vertices, expected, rtol=0.0, atol=MOVED_TWIN_TOLERANCE):
+    if not moved_twin(source, moved, transform):
         return False
     if check_cancelled is not None:
         check_cancelled()
@@ -4337,17 +4350,61 @@ def _large_facet_faces(
     )
 
 
-def _large_facet_faces_read(
-    body: trimesh.Trimesh,
-    *,
-    check_cancelled: Callable[[], None] | None = None,
-    requested: set[int] | None = None,
-    check_patch_size: Callable[[int], None] | None = None,
-) -> set[int]:
-    """Der Rumpf von :func:`_large_facet_faces` — die Antwort merkt sich die Hülle."""
+@dataclass(frozen=True, slots=True)
+class _FacetVerdicts:
+    """Die Ebenenregel der Vollerkennung je Facette, vor dem Mantelnachweis.
+
+    ``members`` hält die Dreiecke aller Facetten hintereinander, ``owner`` je
+    Mitglied seine Facette, ``label`` je Dreieck des Körpers seine Facette
+    (``-1`` ohne). ``planar`` sagt je Facette, ob sie sich als Ebene
+    qualifiziert, ``recoverable``, ob der Mantelnachweis sie wieder
+    herausnehmen darf. ``candidate`` markiert je Dreieck, was zu einem
+    Fleck des Mantelnachweises gehören kann: alles außer den geschützten
+    Ebenen.
+    """
+
+    members: np.ndarray
+    owner: np.ndarray
+    label: np.ndarray
+    planar: np.ndarray
+    recoverable: np.ndarray
+    candidate: np.ndarray
+
+
+def _facet_verdicts(
+    body: trimesh.Trimesh, *, check_cancelled: Callable[[], None] | None = None
+) -> _FacetVerdicts:
+    """Das Urteil je Facette, einmal je Körper — für den ganzen Körper wie für eine Stelle.
+
+    :func:`_large_facet_faces` fragte es bei jeder angefragten Facette neu,
+    und die Erkennung an einer Stelle fragt es seit Review R1 für jede
+    gefundene Fläche (:func:`planar_facet`).
+    """
+    result: _FacetVerdicts = remembered(
+        "facet_verdicts",
+        body,
+        (),
+        lambda: _facet_verdicts_read(body),
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _facet_verdicts_read(body: trimesh.Trimesh) -> _FacetVerdicts:
+    """Der Rumpf von :func:`_facet_verdicts` — die Antwort merkt sich die Hülle."""
     facets = list(body.facets)
+    count = len(body.faces)
     if not facets:
-        return set()
+        empty = np.zeros(0, dtype=np.int64)
+        nothing = np.zeros(0, dtype=bool)
+        return _FacetVerdicts(
+            empty,
+            empty,
+            np.full(count, -1, dtype=np.int64),
+            nothing,
+            nothing,
+            np.ones(count, dtype=bool),
+        )
     areas = _facet_areas(body, facets)
     # Ein Mantelstreifen eines Zylinders ist groß genug für eine Fläche und
     # trotzdem keine eigene Ebene — die Naht zu seinen Nachbarn sagt es. Der
@@ -4382,7 +4439,7 @@ def _large_facet_faces_read(
     # 115 000-mal ``index in curved`` (gemessen am 22.09.2026: 60 ms je
     # Erkennung); ``_facet_table`` beantwortet „berührt die Facette eine
     # Rundung" für alle Facetten mit einem ``bincount``.
-    members, owner, sizes, touches_curved = _facet_table(facets, len(body.faces), curved)
+    members, owner, sizes, touches_curved = _facet_table(facets, count, curved)
     area_of = np.asarray(areas, dtype=float)
     stands_apart = np.zeros(len(facets), dtype=bool)
     if apart:
@@ -4393,7 +4450,6 @@ def _large_facet_faces_read(
         | ((area_of >= MIN_FACE_AREA) & ~touches_curved)
         | stands_apart
     )
-    planar = set(members[planar_facets[owner]].tolist())
     # Viele Dreiecke machen aus einem Mantelstreifen noch keine eigenständige
     # Ebene. Das gilt auch dann, wenn der Streifen breiter als
     # ``MIN_SURFACE_WIDTH`` ist: Der Boolesche Kern unterteilt einen
@@ -4411,7 +4467,70 @@ def _large_facet_faces_read(
         recoverable_facets[number] = bool(touches_curved[number]) or _a_sliver(
             body, [int(index) for index in facets[number]]
         )
-    recoverable = set(members[recoverable_facets[owner]].tolist())
+    label = np.full(count, -1, dtype=np.int64)
+    label[members] = owner
+    candidate = np.ones(count, dtype=bool)
+    candidate[members[(planar_facets & ~recoverable_facets)[owner]]] = False
+    return _FacetVerdicts(members, owner, label, planar_facets, recoverable_facets, candidate)
+
+
+def _round_surface(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Der Mantelnachweis: Ist dieser Fleck eine vollständige Rundform?
+
+    Kegel, Kugel, ganzer Zylindermantel oder Torus — was die Vollerkennung
+    auch als Merkmal führen würde. Ein Fleck, der das ist, besteht nicht aus
+    ebenen Flächen, auch wenn seine Streifen viele koplanare Dreiecke tragen.
+    """
+    cone = fit_cone(body, patch, check_cancelled=check_cancelled)
+    ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
+    round_surface = (
+        cone is not None
+        and cone.good
+        and _cone_is_recognisable(body, cone, patch, check_cancelled=check_cancelled)
+        and not _a_ball_fits_far_better(cone, ball)
+    ) or (
+        ball is not None
+        and ball.good
+        and _sphere_is_recognisable(body, ball, patch, check_cancelled=check_cancelled)
+    )
+    if not round_surface:
+        cylinder = fit_cylinder(body, patch, check_cancelled=check_cancelled)
+        round_surface = (
+            cylinder is not None
+            and cylinder.good
+            and _fits_in_the_body(mesh, cylinder)
+            and angular_span(body, cylinder, patch) >= FULL_TURN_SPAN
+        )
+    if not round_surface:
+        ring = fit_torus(body, patch, check_cancelled=check_cancelled)
+        round_surface = (
+            ring is not None
+            and ring.good
+            and _torus_is_recognisable(body, ring, patch, check_cancelled=check_cancelled)
+        )
+    return round_surface
+
+
+def _large_facet_faces_read(
+    body: trimesh.Trimesh,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+    requested: set[int] | None = None,
+    check_patch_size: Callable[[int], None] | None = None,
+) -> set[int]:
+    """Der Rumpf von :func:`_large_facet_faces` — die Antwort merkt sich die Hülle."""
+    verdicts = _facet_verdicts(body, check_cancelled=check_cancelled)
+    if not len(verdicts.planar):
+        return set()
+    members, owner = verdicts.members, verdicts.owner
+    planar = set(members[verdicts.planar[owner]].tolist())
+    recoverable = set(members[verdicts.recoverable[owner]].tolist())
     if not recoverable or (requested is not None and requested.isdisjoint(recoverable)):
         return planar
     protected = planar - recoverable
@@ -4430,36 +4549,133 @@ def _large_facet_faces_read(
             check_patch_size(len(patch))
         if _a_sliver(body, patch):
             continue
-        cone = fit_cone(body, patch, check_cancelled=check_cancelled)
-        ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
-        round_surface = (
-            cone is not None
-            and cone.good
-            and _cone_is_recognisable(body, cone, patch, check_cancelled=check_cancelled)
-            and not _a_ball_fits_far_better(cone, ball)
-        ) or (
-            ball is not None
-            and ball.good
-            and _sphere_is_recognisable(body, ball, patch, check_cancelled=check_cancelled)
-        )
-        if not round_surface:
-            cylinder = fit_cylinder(body, patch, check_cancelled=check_cancelled)
-            round_surface = (
-                cylinder is not None
-                and cylinder.good
-                and _fits_in_the_body(mesh, cylinder)
-                and angular_span(body, cylinder, patch) >= FULL_TURN_SPAN
-            )
-        if not round_surface:
-            ring = fit_torus(body, patch, check_cancelled=check_cancelled)
-            round_surface = (
-                ring is not None
-                and ring.good
-                and _torus_is_recognisable(body, ring, patch, check_cancelled=check_cancelled)
-            )
-        if round_surface:
+        if _round_surface(body, mesh, patch, check_cancelled=check_cancelled):
             planar.difference_update(patch)
     return planar
+
+
+def planar_facet(
+    body: trimesh.Trimesh,
+    triangles: Sequence[int],
+    *,
+    limit: int,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool | None:
+    """Ob die Vollerkennung diese Dreiecke als ebene Fläche führt (Review R1).
+
+    Dieselbe Regel wie :func:`_large_facet_faces`, am **ganzen** Körper: das
+    Urteil je Facette (:func:`_facet_verdicts`) und, wo der Mantelnachweis
+    eine Facette herausnehmen darf, der Nachweis selbst (:func:`_round_surface`)
+    über denselben Fleck. Die Erkennung an einer Stelle rechnet ``detect`` an
+    einem Ausschnitt; dort waren ein Mantelstreifen leicht fünf Prozent der
+    Fläche und ein halber Zapfenmantel kein vollständiger, und die Stelle
+    meldete den Mantel eines Zapfens als ebene Fläche — dazu Taschenwände,
+    Zapfenflanken und Kanalsohlen, die die Vollerkennung nicht führt.
+
+    Begrenzt ist nur der Fleck: Er wächst höchstens bis ``limit`` Dreiecke
+    (:func:`_patch_around`). Wird er größer — zwei Sohlen des Drachen hängen
+    über weiche Kanten an seiner ganzen Haut —, entscheidet der Teil, der
+    gewachsen ist: Passt auf ihn keine Rundform, passt sie auf das Ganze erst
+    recht nicht, und die Facette bleibt eben. Passt eine
+    (:func:`_could_be_round`), bleibt die Frage offen: ``None``.
+
+    Nicht nachgebildet ist, was benachbarte Flecken beim Schließen ihrer
+    fransigen Ränder an sich nehmen (:func:`_without_notches` rechnet sie in
+    der Vollerkennung der Reihe nach); der eigene Fleck wird geschlossen wie
+    dort.
+    """
+    verdicts = _facet_verdicts(body, check_cancelled=check_cancelled)
+    indices = np.unique(np.asarray(list(triangles), dtype=np.int64))
+    if not len(indices) or not len(verdicts.planar):
+        return False
+    labels = np.unique(verdicts.label[indices])
+    if (labels < 0).any() or not verdicts.planar[labels].all():
+        return False
+    recoverable = labels[verdicts.recoverable[labels]]
+    if not len(recoverable):
+        return True
+    seeds = indices[np.isin(verdicts.label[indices], recoverable)]
+    patch, whole = _patch_around(body, seeds, verdicts.candidate, limit, check_cancelled)
+    if not whole:
+        grown = in_body_order(body, [patch])[0]
+        return None if _could_be_round(body, grown, check_cancelled=check_cancelled) else True
+    requested = set(indices.tolist())
+    labelled = verdicts.label >= 0
+    mesh = MeshData.of(body)
+    for group in in_body_order(body, _without_notches(body, [patch], belongs=verdicts.candidate)):
+        if check_cancelled is not None:
+            check_cancelled()
+        chosen = np.asarray(group, dtype=np.int64)
+        if (
+            len(group) < MIN_PATCH_FACES
+            or requested.isdisjoint(group)
+            or not (labelled[chosen] & verdicts.recoverable[verdicts.label[chosen]]).any()
+        ):
+            continue
+        if _a_sliver(body, group):
+            continue
+        if _round_surface(body, mesh, group, check_cancelled=check_cancelled):
+            return False
+    return True
+
+
+def _patch_around(
+    body: trimesh.Trimesh,
+    seeds: np.ndarray,
+    candidate: np.ndarray,
+    limit: int,
+    check_cancelled: Callable[[], None] | None,
+) -> tuple[list[int], bool]:
+    """Der Fleck um ``seeds`` wie in :func:`_connected_patches`, höchstens bis ``limit``.
+
+    Gewachsen wird über dieselben Nähte — unter :data:`CURVATURE_LIMIT` und nur
+    zwischen Dreiecken, die ``candidate`` zulässt —, Runde um Runde und nur
+    über die Nachbarn der letzten Runde: kein Feld in Netzgröße je Frage. Der
+    Wahrheitswert sagt, ob der Fleck vollständig ist.
+    """
+    neighbours, rows = _neighbour_index(body)
+    angles = np.asarray(body.face_adjacency_angles, dtype=float)
+    seen = {int(index) for index in seeds}
+    frontier = np.asarray(sorted(seen), dtype=np.int64)
+    while len(frontier):
+        if check_cancelled is not None:
+            check_cancelled()
+        if len(seen) > limit:
+            return sorted(seen), False
+        near, via = neighbours[frontier].ravel(), rows[frontier].ravel()
+        present = near >= 0
+        near, via = near[present], via[present]
+        passable = candidate[near] & (np.degrees(angles[via]) < CURVATURE_LIMIT)
+        fresh = [index for index in np.unique(near[passable]).tolist() if index not in seen]
+        seen.update(fresh)
+        frontier = np.asarray(fresh, dtype=np.int64)
+    return sorted(seen), len(seen) <= limit
+
+
+def _could_be_round(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Ob ein Teil eines Flecks zu einer Rundform gehören kann.
+
+    Die Gegenfrage zu :func:`_round_surface` für einen Fleck, der nur zum Teil
+    vorliegt: Jeder Teil einer Rundform lässt sich wie sie einpassen, aber der
+    volle Umfang und die Erkennbarkeit fehlen ihm. Gefragt wird deshalb nur,
+    ob eine der vier Einpassungen gelingt — gelingt keine, ist das Ganze keine.
+    """
+    cone = fit_cone(body, patch, check_cancelled=check_cancelled)
+    if cone is not None and cone.good:
+        return True
+    ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
+    if ball is not None and ball.good:
+        return True
+    cylinder = fit_cylinder(body, patch, check_cancelled=check_cancelled)
+    if cylinder is not None and cylinder.good:
+        return True
+    ring = fit_torus(body, patch, check_cancelled=check_cancelled)
+    return ring is not None and ring.good
 
 
 def _patch_axial_midpoint(body: trimesh.Trimesh, patch: list[int], axis: np.ndarray) -> float:
@@ -7416,7 +7632,9 @@ def _candidates_at(body: trimesh.Trimesh, patch: Sequence[int], frayed: frozense
 NOTCH_AT_MOST: Final = 2
 
 
-def _without_notches(body: trimesh.Trimesh, patches: list[list[int]]) -> list[list[int]]:
+def _without_notches(
+    body: trimesh.Trimesh, patches: list[list[int]], *, belongs: np.ndarray | None = None
+) -> list[list[int]]:
     """Fransige Ränder schließen, solange die Menge dafür frei, klein und eindeutig ist.
 
     **Eindeutig heißt: genau eine Menge ihrer Größe** (Regel 21). Am
@@ -7425,8 +7643,14 @@ def _without_notches(body: trimesh.Trimesh, patches: list[list[int]]) -> list[li
     Gesucht wird deshalb die **kleinste** Menge, die es tut; gibt es davon zwei
     derselben Größe, steht dort eine Gabelung, und die zu raten wäre schlimmer,
     als die Kerbe stehen zu lassen.
+
+    **Frei ist, was keinem Fleck gehört.** Ohne ``belongs`` sind das die
+    übergebenen Flecken; wer nur einen Fleck kennt (:func:`planar_facet`),
+    reicht die Dreiecke aller Flecken als Maske herein.
     """
-    taken = {index for patch in patches for index in patch}
+    taken: set[int] = (
+        set() if belongs is not None else {index for patch in patches for index in patch}
+    )
     healed: list[list[int]] = []
     for patch in patches:
         # **Nur Flecken, die überhaupt eingepasst werden** (Leistung, gemessen
@@ -7443,7 +7667,9 @@ def _without_notches(body: trimesh.Trimesh, patches: list[list[int]]) -> list[li
             healed.append(patch)
             continue
         candidates = sorted(
-            face for face in _candidates_at(body, patch, rim.frayed) if face not in taken
+            face
+            for face in _candidates_at(body, patch, rim.frayed)
+            if face not in taken and (belongs is None or not belongs[face])
         )
         closing = _closing_set(body, rim, candidates)
         if closing is None:

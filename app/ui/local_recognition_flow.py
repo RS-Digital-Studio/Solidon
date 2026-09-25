@@ -8,10 +8,13 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtWidgets import QDialog
 
+from app.core.errors import AppError
+from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult, OperationDraft
 from app.core.scene.project import Project, ProjectSources
-from app.core.types import Vec3
+from app.core.types import SceneObject, Vec3
 from app.i18n import _, tr
+from app.ui.labels import kind_requirement
 from app.ui.local_recognition import LocalRecognitionDialog, LocalRecognitionResult
 from app.ui.render.api import PointerEvent
 
@@ -31,27 +34,79 @@ class LocalRecognitionFlow(QObject):
         self._generation: int | None = None
         """Zu welchem Dokument die Auswahl gehört (``Session.project_generation``)."""
         self._drafts: tuple[OperationDraft, ...] = ()
+        self._targets: tuple[str, ...] = ()
         window.session.projectChanged.connect(self.invalidate)
 
     @property
     def active(self) -> bool:
         return self.armed or self.dialog is not None
 
-    def arm(self) -> None:
+    def from_report(self, error: AppError) -> None:
+        """Der Bericht bindet die Auswahl an seine Körper, niemals an die Baumauswahl."""
+        targets = tuple(error.values.get("local_objects", ()))
+        if not targets and error.object_id is not None:
+            targets = (error.object_id,)
+        if targets:
+            self.arm(object_ids=targets)
+
+    def _refusal(self, entry: SceneObject | None) -> str:
+        """Warum hier gerade keine Stelle gewählt werden kann — je Grund ein Satz.
+
+        Bis zum 24.09.2026 kehrte der Einstieg aus dem Bericht während einer
+        Rechnung stumm zurück, und der Klick auf die Oberfläche nannte für eine
+        laufende Rechnung denselben Satz wie für einen exakten Körper — mit
+        einem Wort, das nur ein Konstrukteur kennt.
+        """
+        session = self.view.session
+        if session.busy or session.last_result is None:
+            return tr("Das Modell wird noch gerechnet. Wählen Sie die Stelle, sobald es steht.")
+        if entry is not None and entry.kind != "mesh":
+            reason = kind_requirement(REGISTRY.get("detect_region"), (entry.kind,))
+            if reason:
+                return reason
+        return tr("Hier liegt keine Oberfläche des Modells. Zielen Sie auf das Modell.")
+
+    def arm(self, *, object_ids: tuple[str, ...] = ()) -> None:
         """Menü und Palette sammeln denselben Originaltreffer wie der Rechtsklick."""
-        self.invalidate()
-        if self.view.session.busy or self.view.session.last_result is None:
+        if not self.view._quiet_command_allowed():
             return
+        result = self.view.session.last_result
+        if self.view.session.busy or result is None:
+            self.view.announce(self._refusal(None))
+            return
+        refused = next(
+            (
+                identifier
+                for identifier in object_ids
+                if identifier not in result.scene.objects
+                or result.scene.objects[identifier].kind != "mesh"
+            ),
+            None,
+        )
+        if refused is not None:
+            self.view.announce(self._refusal(result.scene.objects.get(refused)))
+            return
+        self.invalidate()
+        if self.view._quiet_host is not None:
+            self.view.end_quiet_placement()
         if self.view._op_dialog is not None:
             self.view._op_dialog.reject()
+        self._targets = tuple(dict.fromkeys(object_ids))
+        if self._targets:
+            self.view.object_tree.select_objects(self._targets)
         self.armed = True
         self.view.viewport.set_placement_pointer(self.pointer)
+        self.view.viewport.set_surface_picker(self._pick_surface)
         self.view.announce(
             tr(
-                "Klicken Sie auf die Stelle, deren Merkmale Sie erkennen möchten. "
-                "Escape beendet die Auswahl."
+                "Wählen Sie eine Oberfläche: klicken oder mit Pfeiltasten zielen und Enter "
+                "drücken. Escape beendet die Auswahl."
             )
         )
+
+    def _pick_again(self) -> None:
+        """Eine ungültige Stelle ändert nicht die vom Bericht gemeinten Körper."""
+        self.arm(object_ids=self._targets)
 
     def pointer(self, event: PointerEvent) -> bool:
         if not self.active or event.alt or event.ctrl:
@@ -59,20 +114,31 @@ class LocalRecognitionFlow(QObject):
         if event.button != "left" or event.kind not in ("press", "release"):
             return False
         if self.armed and event.kind == "release":
-            hit = self.view.viewport.placement_hit(event.x, event.y)
-            if hit is None:
-                self.view.announce(tr("Auf eine sichtbare Oberfläche zeigen."))
-            else:
-                self.begin(hit)
+            self._pick_surface(event.x, event.y)
         return True
+
+    def _pick_surface(self, x: float, y: float) -> None:
+        """Maus und Tastatur treffen dieselbe sichtbare Originaloberfläche."""
+        if not self.armed:
+            return
+        hit = self.view.viewport.placement_hit(round(x), round(y))
+        if hit is None:
+            self.view.announce(self._refusal(None))
+        else:
+            self.begin(hit)
 
     def begin(self, hit: tuple[str, Vec3, int, tuple[Vec3, Vec3] | None]) -> None:
         """Der gespeicherte Punkt wird vor der ersten Erkennung am Original geprüft."""
+        if not self.view._quiet_command_allowed():
+            return
         result = self.view.session.last_result
         identifier, point, seed, ray = hit
         entry = result.scene.objects.get(identifier) if result is not None else None
         if result is None or entry is None or entry.kind != "mesh" or self.view.session.busy:
-            self.view.announce(tr("Wählen Sie eine sichtbare Oberfläche eines Dreiecksnetzes."))
+            self.view.announce(self._refusal(entry))
+            return
+        if self._targets and identifier not in self._targets:
+            self.view.announce(tr("Wählen Sie eine Oberfläche eines markierten Modells."))
             return
         if ray is None:
             self.view.announce(
@@ -82,7 +148,11 @@ class LocalRecognitionFlow(QObject):
                 )
             )
             return
+        if self.view._quiet_host is not None:
+            self.view.end_quiet_placement()
+        targets = self._targets
         self.invalidate()
+        self._targets = targets
         if self.view._op_dialog is not None:
             self.view._op_dialog.reject()
         self._baseline = result
@@ -114,11 +184,25 @@ class LocalRecognitionFlow(QObject):
         dialog.previewRequested.connect(self._preview)
         dialog.previewCleared.connect(self._restore_inspection)
         dialog.draftsReady.connect(self._remember_drafts)
+        dialog.pickRequested.connect(self._pick_again)
+        dialog.operationRequested.connect(self._run_on_the_body)
         dialog.finished.connect(self._finished)
         self.view.viewport.set_feature_gizmo_blocked(True)
         self.view.viewport.set_placement_pointer(self.pointer)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.show()
+
+    def _run_on_the_body(self, operation: str, object_id: str) -> None:
+        """*Dreiecke verringern* oder *Netz reparieren* am Körper der Suche.
+
+        Die Suche endet dabei — sie gehört dem Netz von vorher —, und der
+        gewohnte Dialog der Operation öffnet für genau diesen Körper; die
+        Stelle wählt man danach am geänderten Netz neu.
+        """
+        if self.dialog is not None:
+            self.dialog.reject()
+        self.view.object_tree.select_objects((object_id,))
+        self.view.run_operation(REGISTRY.get(operation))
 
     def _recognized(self, result: LocalRecognitionResult) -> None:
         if self.dialog is None or self.view.session.last_result is not self._baseline:
@@ -198,8 +282,10 @@ class LocalRecognitionFlow(QObject):
         self._baseline = None
         self._generation = None
         self._drafts = ()
+        self._targets = ()
         self.armed = False
         self.view.viewport.set_placement_pointer(None)
+        self.view.viewport.set_surface_picker(None)
         self.view.viewport.set_feature_gizmo_blocked(False)
         self.view._clear_preview()
         self._show_committed()
@@ -226,6 +312,8 @@ class LocalRecognitionFlow(QObject):
         if self.armed:
             self.armed = False
             self.view.viewport.set_placement_pointer(None)
+            self.view.viewport.set_surface_picker(None)
+        self._targets = ()
 
     def release(self, timeout_ms: int = 2000) -> None:
         dialog = self.dialog

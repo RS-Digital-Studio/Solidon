@@ -25,6 +25,39 @@ zusätzlich zu `AGENTS.md`.
   Verweisprüfung lässt den Verweis stehen. Wer eine neue Frage außerhalb
   eines Schritts stellt, entscheidet dasselbe ausdrücklich — ein stiller
   Abbruch ohne Satz ist keine Antwort (RM-024).
+  Die optionale Vollerkennung großer Importe (§21.1) hat einen ausdrücklichen
+  Fortsetzungsweg: `QuestionDeclined` lädt mit begrenzter Erkennung weiter.
+  Ein echter `OperationCancelled` beendet weiterhin den laufenden Auftrag.
+  **Eine optionale Frage ist kein Hindernis:** Wer niemanden fragen kann
+  (`UserError` aus `ask` — die Vorgabe ohne Dialog, die Kommandozeile ohne
+  Eingabe), lädt wie nach einer Absage und hält nichts fest. Wer eine weitere
+  optionale Frage baut, gibt ihr denselben Rückweg; sonst hält ein Import an,
+  der vorher durchlief.
+  **Die Wahl gilt dem Körper, nicht dem Netz** (`evaluate._BodyRecognition`):
+  Jeder Folgeschritt eines bestätigten Körpers erkennt ohne neue Frage
+  vollständig nach; nach einer Absage erkennt er oberhalb der automatischen
+  Grenze örtlich nach, darunter wieder von selbst. Ist die Vollerkennung am
+  Arbeitsspeicher gescheitert, versucht es kein Folgeschritt mit mindestens so
+  vielen Dreiecken noch einmal, und dasselbe Netz nicht im selben Prozess
+  (`local.ran_out_of_memory`): Ein Speicherfehler kostet die Erkennung, nie
+  den Schritt. **Außer jemand hat neu entschieden:** Nach einer Antwort in
+  diesem Lauf gilt der Merker nicht, und *Alle Merkmale erkennen*,
+  `recognize` wie ein Projektwechsel leeren ihn
+  (`local.forget_out_of_memory`). Eine fehlende Wahl allein ist keine
+  Entscheidung: Kam die Absage nicht am Ladeschritt an, weil der Lauf
+  abbrach, bleibt es beim Merker. Die Absage aus einem Speicherfehler trägt
+  ihren Grund (`out_of_memory` im Eintrag), geht wie eine Antwort sofort an
+  den Aufrufer, und der Befund bleibt in jedem Lauf eine Warnung.
+  **Zurückgenommen wird nur, was am Ladeschritt steht**
+  (`history.recognition_reopenable`): Satz im Befund, Knopf im Bericht und
+  `History.reopen_recognition` fragen dasselbe — ein Körper, der erst nach
+  dem Laden über die Grenze wuchs, hat keine Wahl und bekommt keinen Rückweg.
+  Mehrere große Körper eines Imports bekommen **eine** Frage mit der Summe;
+  die Antwort steht sofort fest (`on_recognition_answer`), nicht erst mit dem
+  Ergebnis, und gemeldet wird auch eine gespeicherte Zustimmung, sobald sie
+  die lange Erkennung startet — unmittelbar vor `detect`, nach dem Übertrag
+  auf ein bewegtes Netz und nur ohne Treffer im Merker, nicht bei jeder
+  Auswertung.
 
 ## Zahlen
 
@@ -275,8 +308,10 @@ echten Marker.
 `History.record_answers` und `record_matches` laufen ohne `require` — mit
 Absicht: Sie schreiben nur fest, was die Auswertung selbst erfragt hat
 (Einheit, Merkmalszuordnung), und ein `require` dort sperrte das **Öffnen**
-einer Datei mit offener Rückfrage. `tests/test_licence_boundary.py` nagelt
-sie ausdrücklich als frei fest, damit die Entscheidung beim nächsten Audit
+einer Datei mit offener Rückfrage. Dasselbe gilt für `reopen_recognition`:
+Es nimmt nur eine solche Antwort zurück (die Erkennungswahl am Ladeschritt),
+damit die Frage wiederkommt. `tests/test_licence_boundary.py` nagelt alle
+drei ausdrücklich als frei fest, damit die Entscheidung beim nächsten Audit
 nicht wieder als Lücke aufgeht.
 
 ## Pfade

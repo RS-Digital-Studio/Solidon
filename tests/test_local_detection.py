@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -14,6 +15,18 @@ from app.core import units
 from app.core.geom.mesh import MeshData
 
 DATA = Path(__file__).parent / "data"
+
+
+@pytest.mark.parametrize(
+    "reason", ["boundary", "budget", "seed", "ambiguous_seed", "no_feature", "topology"]
+)
+def test_local_errors_identify_the_failed_step_independently_of_the_message(reason: str) -> None:
+    """Der Rückweg folgt der Fehlerbedingung, unabhängig von ihrer übersetzten Meldung."""
+    from app.core.perceive.local import local_error
+
+    error = local_error(reason)
+    assert error.constraint == f"local_{reason}"
+    assert error.suggestions
 
 
 @pytest.mark.parametrize("radius", [2.0, 20.0])
@@ -708,9 +721,11 @@ def test_long_thin_plane_keeps_its_measured_scope_after_rotation(monkeypatch) ->
 
 
 def test_large_local_transaction_replays_through_project_disk_cache_and_undo(
-    profile, tmp_path
+    profile, tmp_path, monkeypatch
 ) -> None:
     """Der gespeicherte Erkennungsschritt trägt >1M-Flächen über Änderung und alle Rückwege."""
+    from importlib import import_module
+
     from app.core.bootstrap import load_operations
     from app.core.geom.mesh import MeshCodec
     from app.core.perceive.ops import detect_region
@@ -721,6 +736,8 @@ def test_large_local_transaction_replays_through_project_disk_cache_and_undo(
     from app.core.types import BaseParams, OpResult, SceneObject
     from app.i18n import _
 
+    # Der Test prüft den örtlichen Weg unabhängig vom automatischen Importbudget.
+    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1)
     load_operations()
     assert REGISTRY.get("detect_region").fn is detect_region
     registry = Registry()
@@ -809,3 +826,592 @@ def test_large_local_transaction_replays_through_project_disk_cache_and_undo(
     history.redo()
     redone = evaluate(project.document, profile, registry=registry, cache=cache)
     assert redone.complete and redone.scene.objects["obj_1"].features == changed.features
+
+
+def test_an_unneeded_feature_that_cannot_be_remeasured_does_not_stop_the_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nur ein Merkmal, das noch jemand braucht, hält die örtliche Nachmessung an (B10).
+
+    Vorher hielt ein einziges großes Merkmal jeden Folgeschritt an, auch wenn
+    kein späterer Schritt und keine Passung darauf zeigte.
+    """
+    from app.core.errors import ValidationError
+    from app.core.perceive import local
+
+    mesh = blind_cylinder()
+    face, point, normal = bore_seed(mesh)
+    known = local.detect_local(mesh, point, normal=normal, radius=8, seed_faces=(face,)).features
+    hole = next(feature for feature in known.values() if feature.kind == "hole")
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", 10)
+
+    assert hole.id not in local.detect_known(mesh, {hole.id: hole}, required=())
+    with pytest.raises(ValidationError) as caught:
+        local.detect_known(mesh, {hole.id: hole}, required={hole.id})
+    assert caught.value.constraint == "local_budget"
+    with pytest.raises(ValidationError):
+        local.detect_known(mesh, {hole.id: hole})
+
+
+def _plate_top(mesh: MeshData) -> tuple[int, tuple[float, ...], tuple[float, ...]]:
+    """Das Dreieck der Oberseite, das der Mitte am nächsten liegt."""
+    centres = np.asarray(mesh.raw.triangles_center)
+    normals = np.asarray(mesh.raw.face_normals)
+    top = np.flatnonzero(normals[:, 2] > 0.999)
+    middle = centres[top].mean(axis=0)
+    face = int(top[np.argmin(np.linalg.norm(centres[top] - middle, axis=1))])
+    return face, tuple(centres[face]), tuple(normals[face])
+
+
+def test_a_clicked_face_is_found_whole_beyond_the_search_radius() -> None:
+    """Die ebene Fläche am Treffer begrenzt sich selbst (B5).
+
+    Eine Deckfläche von 40 × 30 mm lag mit dem Suchradius 2 nie ganz darin,
+    und die Suche sagte „vergrößern“ — am Drachen gab es keinen Radius, der
+    eine Fußsohle fasste, bevor das Budget riss.
+    """
+    from app.core.perceive.local import detect_local
+
+    mesh = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 5.0)).subdivide().subdivide())
+    face, point, normal = _plate_top(mesh)
+    result = detect_local(mesh, point, normal=normal, radius=2.0, seed_faces=(face,))
+    assert result.reason is None
+    faces = [feature for feature in result.features.values() if feature.kind == "face"]
+    top = np.flatnonzero(np.asarray(mesh.raw.face_normals)[:, 2] > 0.999)
+    assert [set(feature.face_indices) for feature in faces] == [set(top.tolist())]
+    assert result.selected == (faces[0].id,)
+
+
+def test_a_face_with_a_soft_rim_is_complete() -> None:
+    """Eine Fläche, deren Rand unter 30° in die Nachbarn knickt, ist nicht abgeschnitten.
+
+    Der Suchrand gilt der ganzen glatt verbundenen Oberfläche, weil ein Fit
+    seine äußerste Reihe verworfen haben kann — eine Facette hat keinen Fit.
+    Gemessen an den Fußsohlen des Drachen: Randwinkel ab 24,9°.
+    """
+    from app.core.perceive.local import detect_local
+
+    slope = np.radians(20.0)
+    rise = 10.0 * np.tan(slope)
+    points = [(x, y, 0.0) for x in (-20.0, 20.0) for y in (-20.0, 20.0)]
+    points += [(x, y, rise) for x in (-10.0, 10.0) for y in (-10.0, 10.0)]
+    frustum = trimesh.convex.convex_hull(np.asarray(points))
+    for _ in range(4):
+        frustum = frustum.subdivide()
+    mesh = MeshData.of(frustum)
+    face, point, normal = _plate_top(mesh)
+    result = detect_local(mesh, point, normal=normal, radius=15.0, seed_faces=(face,))
+    assert result.reason is None
+    faces = [feature for feature in result.features.values() if feature.kind == "face"]
+    assert len(faces) == 1
+    assert faces[0].params["area"] == pytest.approx(400.0)
+
+
+def test_the_budget_counts_what_hangs_together_at_the_spot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein fremder dichter Körper im Suchwürfel reißt das Budget der Stelle nicht (B5)."""
+    from app.core.perceive import local
+
+    plate = trimesh.creation.box(extents=(40.0, 30.0, 5.0)).subdivide()
+    dense = trimesh.creation.icosphere(subdivisions=4, radius=4.0)
+    dense.apply_translation((8.0, 0.0, 9.0))
+    mesh = MeshData.of(trimesh.util.concatenate([plate, dense]))
+    face, point, normal = _plate_top(mesh)
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", len(plate.faces) + 10)
+    assert len(dense.faces) > 10
+    result = local.detect_local(mesh, point, normal=normal, radius=15.0, seed_faces=(face,))
+    assert result.reason is None
+    assert any(feature.kind == "face" for feature in result.features.values())
+
+
+def test_a_needed_feature_is_not_hidden_behind_an_unneeded_one_with_the_same_region() -> None:
+    """Zwei Merkmale mit demselben Suchbereich: Das benötigte hält an, auch wenn das
+    unbenötigte davor übersprungen wurde (Review B6)."""
+    from app.core.errors import ValidationError
+    from app.core.perceive.local import detect_known
+    from app.core.types import Feature
+
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=10.0))
+    params = {"centre": (10.0, 0.0, 0.0), "axis": (1.0, 0.0, 0.0), "diameter": 4.0, "depth": 2.0}
+    known = {
+        name: Feature(name, "hole", "detected", params, face_indices=(0,))
+        for name in ("hole_1", "hole_2")
+    }
+
+    assert detect_known(mesh, known, required=()) == {}
+    with pytest.raises(ValidationError) as caught:
+        detect_known(mesh, known, required={"hole_2"})
+    assert caught.value.constraint == "local_boundary"
+
+
+def _coarse_slot_flank() -> tuple[MeshData, int, tuple[float, ...], tuple[float, ...]]:
+    """Die Flanke des langen Langlochs aus ``plate_coarse_slots.stl``."""
+    mesh = MeshData.of(trimesh.load(DATA / "meshes" / "plate_coarse_slots.stl"))
+    centres = np.asarray(mesh.raw.triangles_center)
+    point = np.array([0.0, 3.1, 0.0])
+    face = int(np.argmin(np.linalg.norm(centres - point, axis=1)))
+    return mesh, face, tuple(point), tuple(mesh.raw.face_normals[face])
+
+
+@pytest.mark.parametrize(("radius", "kinds"), [(6.0, []), (11.0, ["slot"])])
+def test_the_flank_of_a_cut_slot_is_not_a_face(radius: float, kinds: list[str]) -> None:
+    """Die ebene Flanke geht tangential in die Bögen über (Review B5).
+
+    Die Vollerkennung schluckt sie ins Langloch; ist das Langloch angeschnitten,
+    ist sie deshalb kein ganzes Merkmal — ihre Facette allein beweist nichts.
+    """
+    from app.core.perceive.local import detect_local
+
+    mesh, face, point, normal = _coarse_slot_flank()
+    result = detect_local(mesh, point, normal=normal, radius=radius, seed_faces=(face,))
+    assert sorted(feature.kind for feature in result.features.values()) == kinds
+
+
+def test_a_plane_beyond_the_budget_leaves_the_search_as_it_was(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine ebene Facette über dem Budget bleibt draußen, und die Bohrung daneben wird
+    gefunden wie vorher (Review B7)."""
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = MeshData.of(trimesh.load(DATA / "meshes" / "plate_holes.stl"))
+    stitched = detection._one_body(mesh)
+    labels = local._facet_labels(stitched.raw)
+    normals = np.asarray(stitched.raw.face_normals)
+    top = max(
+        (np.flatnonzero(labels == label) for label in np.unique(labels[labels >= 0])),
+        key=len,
+    )
+    assert normals[top[0], 2] > 0.999 or normals[top[0], 2] < -0.999
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", len(top) - 1)
+    holes = [f for f in detection.detect(mesh).values() if f.kind == "hole"]
+    centre = np.asarray(holes[0].params["centre"], dtype=float)
+    centres = np.asarray(stitched.raw.triangles_center)
+    near = top[np.argmin(np.linalg.norm(centres[top][:, :2] - centre[:2], axis=1))]
+    result = local.detect_local(
+        mesh,
+        tuple(centres[near]),
+        normal=tuple(normals[near]),
+        radius=float(holes[0].params["diameter"]) * 1.5,
+        seed_faces=(int(near),),
+    )
+    assert result.reason != "budget"
+
+
+def test_a_face_found_at_a_spot_stays_in_the_stack_and_after_a_change(
+    monkeypatch: pytest.MonkeyPatch, profile
+) -> None:
+    """Die an der Stelle gefundene Fläche kommt in der Szene an und behält ihren
+    Namen über einen Schritt, der das Netz ändert (Review N1, 25.09.2026).
+
+    Am Drachen fand die Suche die Sohle, und die Auswertung verwarf sie im
+    selben Schritt: Sie maß am unveränderten Netz nach, und ihr Würfel sprengte
+    das Budget. Das Budget hier fasst die Deckfläche und die Stelle, aber
+    nicht den Würfel der Nachmessung.
+    """
+    from importlib import import_module
+
+    from app.core.bootstrap import load_operations
+    from app.core.perceive import local
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1)
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", 40)
+    raw = trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide().subdivide()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source("src_1", "import", "sources/box.stl", "")
+    project.sources["src_1"] = raw.export(file_type="stl")
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft("load", params={"source": "src_1", "unit": "mm"})])
+
+    def run():
+        result = evaluate(
+            project.document, profile, sources=ProjectSources(project), ask=lambda _q, c: c[0]
+        )
+        assert result.complete, result.error
+        history.record_matches(result.matches)
+        return result
+
+    mesh = run().scene.objects["obj_1"].mesh
+    centres = np.asarray(mesh.raw.triangles_center)
+    top = np.flatnonzero(np.asarray(mesh.raw.face_normals)[:, 2] > 0.999)
+    seed = int(top[np.argmin(np.linalg.norm(centres[top] - centres[top].mean(axis=0), axis=1))])
+    x, y, z = (float(value) for value in centres[seed])
+    history.apply(
+        "Stelle",
+        [
+            OperationDraft(
+                "detect_region",
+                inputs=("obj_1",),
+                params={
+                    "radius": 3.0,
+                    "x": x,
+                    "y": y,
+                    "z": z,
+                    "nx": 0.0,
+                    "ny": 0.0,
+                    "nz": 1.0,
+                    "seed_face": seed,
+                },
+            )
+        ],
+    )
+    evaluation = import_module("app.core.scene.evaluate")
+    remeasured = []
+    real = evaluation._remeasured
+
+    def counted(*args, **kwargs):
+        remeasured.append(args[0].id)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(evaluation, "_remeasured", counted)
+    found = run()
+    faces = {
+        name: feature
+        for name, feature in found.scene.objects["obj_1"].features.items()
+        if feature.kind == "face"
+    }
+    assert [sorted(feature.face_indices) for feature in faces.values()] == [sorted(top.tolist())]
+    assert not any(finding.code == "perceive.orphaned" for finding in found.scene.report.findings)
+    assert remeasured == [], "dieselben Dreiecke werden nicht nachgemessen"
+    (name,) = faces
+
+    # Unterteilen ändert die Dreiecke und meldet keine Bewegung, die das
+    # Merkmal mitnähme: Nachgemessen wird, und über dem Budget trägt die
+    # Facette der Deckfläche allein (128 Dreiecke gegen 768 im Würfel).
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", 200)
+    history.apply(
+        "Unterteilen",
+        [OperationDraft("subdivide_surface", inputs=("obj_1",), params={"edge": 4.0})],
+    )
+    finer = run().scene.objects["obj_1"]
+    assert remeasured, "ein geändertes Netz wird nachgemessen"
+
+    # Verschieben meldet eine starre Bewegung derselben Dreiecke: Die Fläche
+    # geht mit, ohne dass eine Umgebung gesucht wird (Review R6).
+    searches: list[int] = []
+    real_region = local._recognise_region
+
+    def region_counted(*args: Any, **kwargs: Any) -> Any:
+        searches.append(1)
+        return real_region(*args, **kwargs)
+
+    monkeypatch.setattr(local, "_recognise_region", region_counted)
+    run()
+    before = len(searches)
+    searches.clear()
+    history.apply(
+        "Verschieben",
+        [OperationDraft("translate_object", inputs=("obj_1",), params={"dx": 5.0})],
+    )
+    moved = run().scene.objects["obj_1"]
+    assert len(searches) == before, "der neue Schritt sucht nichts"
+    assert moved.features[name].params["area"] == pytest.approx(400.0)
+    assert moved.features[name].params["centre"][0] == pytest.approx(
+        finer.features[name].params["centre"][0] + 5.0
+    )
+    assert finer.mesh.triangle_count > 200
+    assert finer.features[name].kind == "face"
+    assert finer.features[name].params["area"] == pytest.approx(400.0)
+    assert len(finer.features[name].face_indices) > len(top)
+
+
+def test_a_known_face_whose_centre_lies_off_it_is_found_by_its_plane(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Liegt die Mitte einer Fläche in ihrer Bohrung, trägt das nächste Dreieck
+    in ihrer Ebene die Facette (Review N1)."""
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = MeshData.of(trimesh.load(DATA / "meshes" / "plate_holes.stl"))
+    known = detection.detect(mesh)
+    top = max(
+        (feature for feature in known.values() if feature.kind == "face"),
+        key=lambda feature: float(feature.params["area"]),
+    )
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", len(top.face_indices) + 8)
+    stitched = detection._one_body(mesh)
+    seed = local._face_seed(
+        stitched,
+        np.asarray(top.params["centre"], dtype=float),
+        np.asarray(top.params["normal"], dtype=float),
+        units.weld_tolerance(mesh.bounds.diagonal),
+        float(top.params.get("local_search_radius") or 60.0),
+        None,
+        _fits_the_face(stitched, top),
+    )
+    assert seed is not None and seed in set(top.face_indices)
+    result = local.detect_known(mesh, {top.id: top}, required={top.id})
+    assert any(
+        feature.kind == "face" and set(feature.face_indices) == set(top.face_indices)
+        for feature in result.values()
+    )
+
+
+@pytest.mark.parametrize("name", ["block_with_rounded_edge.stl", "post_with_fillet.stl"])
+def test_a_face_beside_a_fillet_is_found_at_a_spot_like_in_the_full_recognition(name: str) -> None:
+    """Die Ausnahme für die Langlochflanke gilt keiner Fläche an einer Verrundung (Review N5).
+
+    Die Vollerkennung schluckt eine Flanke nur in ein Langloch, nicht in eine
+    Verrundung. Die Regel fragte aber jede tangentiale Rundung, und am Block
+    mit verrundeter Kante blieb die Deckfläche bis zum Radius 40 „abgeschnitten“,
+    während die Seite an derselben Rundung schon bei 5 da war.
+    """
+    from app.core.perceive import features as detection
+    from app.core.perceive.local import detect_local
+
+    mesh = MeshData.of(trimesh.load(DATA / "meshes" / name))
+    stitched = detection._one_body(mesh)
+    centres = np.asarray(stitched.raw.triangles_center)
+    normals = np.asarray(stitched.raw.face_normals)
+    faces = [feature for feature in detection.detect(mesh).values() if feature.kind == "face"]
+    assert faces
+    for feature in faces:
+        members = np.asarray(feature.face_indices)
+        middle = centres[members].mean(axis=0)
+        seed = int(members[np.argmin(np.linalg.norm(centres[members] - middle, axis=1))])
+        found = detect_local(
+            stitched,
+            tuple(centres[seed]),
+            normal=tuple(normals[seed]),
+            radius=5.0,
+            seed_faces=(seed,),
+        )
+        assert any(
+            candidate.kind == "face" and set(candidate.face_indices) == set(feature.face_indices)
+            for candidate in found.features.values()
+        ), (feature.id, found.reason)
+
+
+def _fits_the_face(stitched: MeshData, face: Any) -> Any:
+    """Die Probe aus ``detect_known``: Kann die Facette eines Dreiecks ``face`` sein?"""
+    from app.core.perceive import local
+
+    labels = local._facet_labels(stitched.raw)
+    grouped = labels >= 0
+    areas = np.bincount(
+        labels[grouped], weights=np.asarray(stitched.raw.area_faces, dtype=float)[grouped]
+    )
+    return local._same_face(labels, areas, float(face.params["area"]))
+
+
+def _manifold_mesh(solid: Any) -> MeshData:
+    out = solid.to_mesh()
+    return MeshData.of(
+        trimesh.Trimesh(np.asarray(out.vert_properties)[:, :3], np.asarray(out.tri_verts))
+    )
+
+
+def _bodies_beside_round_surfaces() -> dict[str, MeshData]:
+    """Die Körper aus Review R1: Facetten neben Rundungen, die voll keine Flächen sind.
+
+    Eine Tasche mit Eckradius, ein Stadion-Zapfen, ein U-Kanal mit runder
+    Sohle und ein Zapfen Ø 30, dessen Mantel einmal unterteilt ist — acht
+    koplanare Dreiecke je Streifen, wie nach einer Booleschen Operation. Dazu
+    der Quader mit vier verrundeten Kanten, dessen Wände voll Flächen sind.
+    """
+    import manifold3d as m3
+
+    def plate(x: float, y: float, z: float) -> Any:
+        return m3.Manifold.cube((x, y, z)).translate((-x / 2.0, -y / 2.0, 0.0))
+
+    corners = [
+        m3.Manifold.cylinder(10, 2.0, 2.0, 32).translate((sx * 4.0, sy * 2.0, 3.0))
+        for sx in (-1, 1)
+        for sy in (-1, 1)
+    ]
+    ends = [
+        m3.Manifold.cylinder(5, 3.0, 3.0, 32).translate((side * 7.0, 0.0, 2.0)) for side in (-1, 1)
+    ]
+    channel = m3.Manifold.cylinder(60, 3.0, 3.0, 32).rotate((0.0, 90.0, 0.0)).translate(
+        (-30.0, 0.0, 5.0)
+    ) + m3.Manifold.cube((60, 6, 10)).translate((-30.0, -3.0, 5.0))
+    pin = plate(80, 80, 6) + m3.Manifold.cylinder(20, 15.0, 15.0, 48).translate((0.0, 0.0, 2.0))
+    rounded = [
+        m3.Manifold.cylinder(20, 4.0, 4.0, 32).translate((sx * 16.0, sy * 11.0, 0.0))
+        for sx in (-1, 1)
+        for sy in (-1, 1)
+    ]
+    return {
+        "pocket": _manifold_mesh(plate(40, 30, 6) - m3.Manifold.batch_hull(corners)),
+        "stadium_boss": _manifold_mesh(plate(40, 30, 3) + m3.Manifold.batch_hull(ends)),
+        "u_channel": _manifold_mesh(plate(40, 30, 10) - channel),
+        "subdivided_pin": MeshData.of(_manifold_mesh(pin).raw.subdivide()),
+        "rounded_box": _manifold_mesh(m3.Manifold.batch_hull(rounded)),
+    }
+
+
+def _middle_seed(stitched: MeshData, members: np.ndarray) -> int:
+    centres = np.asarray(stitched.raw.triangles_center)
+    middle = centres[members].mean(axis=0)
+    return int(members[np.argmin(np.linalg.norm(centres[members] - middle, axis=1))])
+
+
+@pytest.mark.parametrize(
+    "name", ["pocket", "stadium_boss", "u_channel", "subdivided_pin", "rounded_box"]
+)
+def test_a_spot_calls_a_facet_a_face_exactly_when_the_full_recognition_does(name: str) -> None:
+    """Ob eine gefundene Fläche eine ist, sagt die Ebenenregel am ganzen Körper (Review R1).
+
+    ``detect`` am Ausschnitt hielt einen Mantelstreifen für fünf Prozent der
+    Fläche und einen halben Zapfenmantel für keinen vollständigen: Die Stelle
+    meldete beim Vorgaberadius den Mantel eines Zapfens als Fläche, dazu
+    Taschenwände, Zapfenflanken und Kanalsohlen, die voll keine sind. Geprüft
+    wird in beide Richtungen, an jeder Facette mit mehr als einem Dreieck und
+    bei den Radien, an denen die Review die falschen Flächen maß.
+    """
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = _bodies_beside_round_surfaces()[name]
+    stitched = detection._one_body(mesh)
+    normals = np.asarray(stitched.raw.face_normals)
+    faces = {
+        tuple(sorted(feature.face_indices))
+        for feature in detection.detect(mesh).values()
+        if feature.kind == "face"
+    }
+    labels = local._facet_labels(stitched.raw)
+    facets = [np.flatnonzero(labels == label) for label in np.unique(labels[labels >= 0])]
+    facets = [facet for facet in facets if len(facet) > 1]
+    assert any(tuple(facet.tolist()) not in faces for facet in facets), "kein Gegenfall im Körper"
+    for facet in facets:
+        seed = _middle_seed(stitched, facet)
+        for radius in (2.0, 3.0, 10.0):
+            found = local.detect_local(
+                stitched,
+                tuple(np.asarray(stitched.raw.triangles_center)[seed]),
+                normal=tuple(normals[seed]),
+                radius=radius,
+                seed_faces=(seed,),
+            )
+            reported = any(
+                candidate.kind == "face" and set(candidate.face_indices) == set(facet.tolist())
+                for candidate in found.features.values()
+            )
+            assert reported is (tuple(facet.tolist()) in faces), (name, radius, found.reason)
+
+
+def test_a_face_beside_an_outer_fillet_takes_no_walk_around_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hinter einer gewölbten Rundung liegt kein Langlochende (Review R2).
+
+    Die Hohlprobe gilt allen Randkanten zugleich, bevor ein Stück entsteht;
+    vorher ging die Regel jede Randkante einzeln bis zum Ende, je Kante mit
+    zwei Feldern in Netzgröße — 19,6 s an einer Deckfläche mit 8 192
+    Randkanten.
+    """
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    walks: list[int] = []
+    real = local._turns_round_like_a_slot_end
+
+    def counted(*args: Any, **kwargs: Any) -> bool:
+        walks.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(local, "_turns_round_like_a_slot_end", counted)
+    mesh = _bodies_beside_round_surfaces()["rounded_box"]
+    stitched = detection._one_body(mesh)
+    wall = max(
+        (feature for feature in detection.detect(mesh).values() if feature.kind == "face"),
+        key=lambda feature: abs(float(feature.params["normal"][0])),
+    )
+    members = np.asarray(wall.face_indices)
+    seed = _middle_seed(stitched, members)
+    found = local.detect_local(
+        stitched,
+        tuple(np.asarray(stitched.raw.triangles_center)[seed]),
+        normal=tuple(np.asarray(stitched.raw.face_normals)[seed]),
+        radius=5.0,
+        seed_faces=(seed,),
+    )
+    assert any(
+        candidate.kind == "face" and set(candidate.face_indices) == set(wall.face_indices)
+        for candidate in found.features.values()
+    ), found.reason
+    assert walks == []
+
+
+def _ring_groove_plate() -> MeshData:
+    """Platte 60 x 60 x 5 mit Ringnut: Die Insel ist so hoch wie die Deckfläche."""
+    import manifold3d as m3
+
+    plate = m3.Manifold.cube((60, 60, 5)).translate((-30, -30, 0))
+    outer = m3.Manifold.cylinder(3, 11, 11, 64).translate((0, 0, 3))
+    inner = m3.Manifold.cylinder(3, 8, 8, 64).translate((0, 0, 3))
+    return MeshData.of(_manifold_mesh(plate - (outer - inner)).raw.subdivide().subdivide())
+
+
+def test_a_needed_face_is_not_lost_to_an_island_in_its_plane(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Nachmessung hält am Budget, statt ein benötigtes Merkmal still zu verlieren
+    (Review R4).
+
+    Die Mitte der Deckfläche liegt auf der Insel in der Ringnut. Vorher nahm
+    die Suche ein Dreieck der Insel, suchte über dem Budget nur deren Facette
+    und meldete sie als Ergebnis — die Deckfläche fehlte, und kein Halt
+    sagte es.
+    """
+    from app.core.errors import ValidationError
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = _ring_groove_plate()
+    found = detection.detect(mesh)
+    planes = [f for f in found.values() if f.kind == "face" and f.params["normal"][2] > 0.999]
+    top = max(planes, key=lambda feature: float(feature.params["area"]))
+    island = min(planes, key=lambda feature: abs(float(feature.params["area"]) - np.pi * 64.0))
+    assert len(island.face_indices) < len(top.face_indices)
+    stitched = detection._one_body(mesh)
+    seed = local._face_seed(
+        stitched,
+        np.asarray(top.params["centre"], dtype=float),
+        np.asarray(top.params["normal"], dtype=float),
+        units.weld_tolerance(mesh.bounds.diagonal),
+        60.0,
+        None,
+        _fits_the_face(stitched, top),
+    )
+    assert seed in set(top.face_indices), "die Facette der Insel ist nicht die Deckfläche"
+
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", len(island.face_indices) + 50)
+    with pytest.raises(ValidationError) as halted:
+        local.detect_known(mesh, {top.id: top}, required={top.id})
+    assert halted.value.constraint == "local_budget"
+
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", len(top.face_indices) + 50)
+    result = local.detect_known(mesh, {top.id: top}, required={top.id})
+    assert any(
+        feature.kind == "face" and set(feature.face_indices) == set(top.face_indices)
+        for feature in result.values()
+    )
+
+
+def test_a_rigidly_moved_twin_keeps_its_features_without_a_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Was eine starre Bewegung exakt trägt, wird nicht nachgesucht (Review R6)."""
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    known = {
+        name: feature for name, feature in detection.detect(mesh).items() if feature.kind == "face"
+    }
+    monkeypatch.setattr(
+        local, "_recognise_region", lambda *_a, **_k: pytest.fail("searched although standing")
+    )
+    result = local.detect_known(mesh, known, standing=set(known))
+    assert sorted(sorted(f.face_indices) for f in result.values()) == sorted(
+        sorted(f.face_indices) for f in known.values()
+    )

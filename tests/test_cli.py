@@ -1004,3 +1004,85 @@ def test_a_step_is_inserted_before_another_from_the_command_line(
     )
     ops = [entry.op for entry in load(path).document.ops]
     assert ops == ["create_box", "chamfer_edges", "drill_hole", "drill_hole"]
+
+
+def test_the_command_line_keeps_an_answer_for_its_next_evaluation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Antwort gilt für die übrigen Auswertungen desselben Befehls (Review B10).
+
+    ``export`` wertet zweimal aus; vorher kam die Frage vor der langen
+    Vollerkennung je Befehl zwei- bis dreimal.
+    """
+    from types import SimpleNamespace
+
+    from app.cli import main
+    from app.core.perceive.match_records import recognition_answer_key
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.project import new_project
+
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft("create_box")])
+    key = recognition_answer_key("obj_1")
+    record = {"object_id": "obj_1", "scope": "a" * 32, "allowed": True}
+    monkeypatch.setattr(
+        main, "evaluate", lambda *_args, **_kwargs: SimpleNamespace(matches={1: {key: record}})
+    )
+
+    main.run_evaluation(project, tmp_path / "teil.p3d", quiet=True)
+
+    assert project.document.ops[0].matches[key] == record
+
+
+def test_the_command_line_takes_back_a_skipped_recognition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``recognize`` ist *Alle Merkmale erkennen* im Terminal (Review B10).
+
+    Der Befund nennt den Knopf aus dem Fenster; ohne diesen Befehl ließ sich
+    eine gespeicherte Absage im Terminal nicht zurücknehmen.
+    """
+    from importlib import import_module
+
+    from app.core.perceive.match_records import recognition_answer_key
+
+    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "FEATURE_LIMIT_TRIANGLES", 1)
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path)])
+    monkeypatch.setattr("builtins.input", lambda prompt="": "1")
+    assert main(["import", str(path), str(MESHES / "cube_clean.stl")]) == 0
+    key = recognition_answer_key("obj_1")
+    assert load(path).document.ops[0].matches[key]["allowed"] is False
+    capsys.readouterr()
+
+    asked = []
+
+    def confirm(prompt: str = "") -> str:
+        asked.append(prompt)
+        return "2"
+
+    monkeypatch.setattr("builtins.input", confirm)
+    assert main(["recognize", str(path)]) == 0
+    assert asked, "the question came again"
+    assert load(path).document.ops[0].matches[key]["allowed"] is True
+
+    # Nichts mehr ausgelassen: Der Befehl sagt es, ändert nichts und nennt
+    # den Weg zu einer neuen Entscheidung (Review R7).
+    monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("asked again"))
+    assert main(["recognize", str(path)]) == 1
+    said = capsys.readouterr().err
+    assert "keine Merkmalserkennung ausgelassen" in said
+    assert f"solidon3d recognize {path} --on obj_1" in said
+    assert load(path).document.ops[0].matches[key]["allowed"] is True
+
+    # Genannt, fragt er wie der Knopf im Fenster auch nach einer Zustimmung —
+    # dort, wo ihre Erkennung später am Arbeitsspeicher scheiterte.
+    monkeypatch.setattr("builtins.input", lambda prompt="": "1")
+    assert main(["recognize", str(path), "--on", "obj_1"]) == 0
+    assert load(path).document.ops[0].matches[key]["allowed"] is False
+
+    # Ein Körper ohne gespeicherte Wahl: der Satz, und wer eine hat.
+    assert main(["recognize", str(path), "--on", "obj_9"]) == 1
+    said = capsys.readouterr().err
+    assert "keine gespeicherte Wahl zur Merkmalserkennung" in said
+    assert "obj_1" in said

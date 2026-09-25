@@ -107,9 +107,12 @@ als Op im Operationsstack; ihre Parameter bleiben nachträglich änderbar.
 Kamera, Auswahl und Darstellung ändern das Dokument nicht. Das ist der eigentliche Gewinn des
 non-destruktiven Aufbaus — und er muss spürbar sein, nicht bloß vorhanden.
 Praktisch heißt das: keine Bestätigungsdialoge vor rücknehmbaren Handlungen,
-kein „Möchten Sie wirklich", keine Sackgassen. Die ausdrücklich gewünschte
-Ausnahme ist das Löschen eines Verlaufsschritts: Die Nachfrage nennt die
+kein „Möchten Sie wirklich", keine Sackgassen. Beim ausdrücklich gewünschten
+Nachfragen vor dem Löschen eines Verlaufsschritts nennt die Nachfrage die
 Folge und Strg+Z, besonders wenn abhängige Schritte mit betroffen sind.
+Die lange Merkmalserkennung beim Import ist ebenfalls eine ausdrückliche
+Wahl: Die Frage nennt vorab eine Zeitschätzung und lässt ohne Zustimmung mit
+begrenzter Erkennung laden (§21.1).
 
 ### 2.2 Vier Hauptwege
 
@@ -1398,6 +1401,37 @@ demselben Extruder zugeordnet, auch über mehrere Platten.
 ## 21. Feature-Erkennung und stabile IDs
 
 ### 21.1 Was erkannt wird
+**Größe des Originalnetzes.** Bis einschließlich 1 500 000 Dreiecken läuft
+die vollständige Merkmalserkennung automatisch. Beim Import eines größeren
+Netzes bis einschließlich 5 000 000 Dreiecken wird sie vorher angeboten: mit
+grober geschätzter Dauer, Hinweis auf den höheren Speicherbedarf und der Wahl,
+mit begrenzter Erkennung zu laden. Die Schätzung ist keine Zusage; Form und
+Rechner können die Dauer deutlich verändern. Ablehnen oder Schließen dieser
+Frage lässt das Modell mit der bisherigen begrenzten Erkennung laden; ebenso,
+wenn niemand gefragt werden kann (Kommandozeile ohne Eingabe) — dann wird
+nichts festgehalten. Eine Absage lässt sich am Hinweis im Prüfbericht über
+„Alle Merkmale erkennen" nachholen (auf der Kommandozeile mit `recognize`);
+die Frage kommt dann mit derselben Schätzung wieder, und die Frage selbst nennt
+diesen Weg. Zurückgenommen wird nur eine Wahl, die am Ladeschritt steht.
+Reicht der Arbeitsspeicher für die Erkennung eines geladenen Körpers nicht,
+lädt das Modell ohne sie, und der Prüfbericht sagt es — auch in späteren
+Läufen; „Alle Merkmale erkennen" versucht es danach wirklich neu.
+Oberhalb von 5 000 000 Dreiecken wird keine vollständige Erkennung angeboten;
+die gesonderte Importgrenze und die lokale Merkmalsuche bleiben bestehen.
+Die Entscheidung gilt dem konkreten importierten Körper und seinem Netzinhalt,
+nicht anderen Modellen. Sie bleibt beim erneuten Auswerten, Speichern und
+Öffnen erhalten; veränderter Netzinhalt verlangt eine neue Entscheidung.
+Spätere Bearbeitungsschritte fragen nicht erneut: Die Zustimmung gilt dem
+Körper, und seine Folgeschritte erkennen bis 5 000 000 Dreiecken vollständig
+nach; nach einer Absage prüfen sie oberhalb der automatischen Grenze bekannte
+Merkmale lokal. Scheiterte die Vollerkennung am Arbeitsspeicher, versucht es
+kein Folgeschritt mit mindestens so vielen Dreiecken noch einmal. Nur ein
+Merkmal, das ein späterer Schritt oder eine Passung braucht, hält einen
+Schritt an, wenn es sich lokal nicht nachmessen lässt. Mehrere große Körper
+eines Imports bekommen eine gemeinsame Frage mit der Summe. Die Antwort gilt,
+sobald sie gegeben ist; wer die lange Erkennung abbricht, kann das Modell
+ohne sie laden, auch nach einer gespeicherten Zustimmung.
+
 Bohrungen (Zylinderflächen clustern → Durchmesser, Achse, Tiefe, Durchgang oder
 Sackloch), Zapfen (dieselbe Suche, andersherum gelesen), **Kegel** (Senkung,
 Fase an einer Bohrung, Verjüngung → Öffnungswinkel, Achse, Mitte, Durchmesser),
@@ -2369,6 +2403,16 @@ Zahl gegen diese Obergrenze und misst den Anzeigeweg einschließlich der
 Dezimierung. Die Geometrie des Dokuments bleibt dabei unverändert.
 Ein Nachweis der Merkmalserkennung umfasst mechanische und organische
 Referenzkörper; ein guter Kugelfall belegt nicht jede Freiform.
+
+**Große Importe haben einen eigenen Zeitbereich.** Das Ein-Sekunden-Ziel der
+200-000-Dreiecke-Referenz wird nicht auf die bis zu fünf Millionen Dreiecke
+einer bestätigten Vollerkennung übertragen (§21.1). Dafür nennt die Warnung
+eine größenabhängige Spanne in Minuten mit Reserve für Form und Rechner.
+Diese Spanne ist kein automatischer Zeitabbruch: Der native Import rechnet
+bis zum Ergebnis oder zum Nutzerabbruch weiter und zeigt die verstrichene
+Zeit. Laufzeitnachweise nennen zusätzlich den Speicherbedarf und die längste
+Lücke zwischen Abbruchprüfungen; bestehende kleine Referenzfälle behalten
+ihre Zielwerte.
 
 Projektöffnen wird durch die Anwendung gemessen: importieren, speichern und in
 einer neuen Sitzung wieder öffnen. Ein vorbereiteter Cache-Eintrag allein

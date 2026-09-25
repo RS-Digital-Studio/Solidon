@@ -14,10 +14,25 @@ Geometrie und ändert keine — sie ruft Ops auf.
 **Nichts ist endgültig.** Jede Handlung ist eine Op, jede Op rücknehmbar, jeder
 Wert nachträglich änderbar. Praktisch heißt das: **keine Bestätigungsdialoge
 vor rücknehmbaren Handlungen**, kein „Möchten Sie wirklich", keine Sackgassen
-(Regel 19). Die ausdrücklich gewünschte Ausnahme ist das Löschen im Verlauf:
+(Regel 19). Eine ausdrücklich gewünschte Ausnahme ist das Löschen im Verlauf:
 Die Nachfrage nennt mitbetroffene Schritte und den Rückweg über Strg+Z.
 
-**Und die zweite Ausnahme verlässt das Dokument** (§29, RM-140): Eine
+**Die lange Merkmalserkennung beim Import wird angeboten** (§21.1): Oberhalb
+der automatischen Grenze nennt die Frage die geschätzte Dauer und den höheren
+Speicherbedarf. Die Alternative lädt das Modell mit begrenzter Erkennung;
+auch das Schließen der Frage lässt diesen Weg offen. Eine abgelehnte
+Vollerkennung ist kein abgebrochener Import — **und keine Sackgasse**: Der
+Befund `perceive.too_large` trägt *Alle Merkmale erkennen*, auch an jedem
+Folgeschritt des Körpers, denn die Wahl gehört dem Körper — **und nur, wo am
+Ladeschritt eine Wahl steht** (`panels._recognition_reopenable` über
+`history.recognition_reopenable`, dieselbe Auskunft wie der Satz im Befund);
+auf der Kommandozeile heißt derselbe Weg `recognize`. An einer Sammelzeile
+gilt der Knopf allen
+ihren Körpern, und die Frage kommt mit derselben Schätzung wieder. Am
+Speicherfehler steht er zuletzt und nicht hervorgehoben — vorn steht, was der
+Satz nennt.
+
+**Eine weitere Ausnahme verlässt das Dokument** (§29, RM-140): Eine
 geschriebene Datei holt kein Undo zurück, sie liegt danach auf der Platte und
 im Zweifel im Slicer. Der Export prüft deshalb zuerst, zeigt die Befunde im
 Prüfbericht und fragt dann — mit zwei Knöpfen, von denen einer weitergeht
@@ -732,6 +747,10 @@ Absatz sagt, worauf.
   das der Kern genannt hat, und ersetzt ihn beim Übernehmen (§15.4). Eine
   Handlung, die eine Schrittkennung braucht, steht in `dialogs.NEEDS_OP` und
   wird ohne sie nicht angeboten.
+- **Lokale Formenerkennung aus einem Befund behält dessen Ziel.** Ein
+  Sammelbefund bindet die nächste Oberflächenwahl an seine Körper; erst der
+  Treffer bestimmt einen davon. Die aktuelle Baumauswahl ersetzt dieses Ziel
+  nie. Maus und Tastatur führen über denselben Originaltreffer.
 - **Ein Klick auf einen Befund bleibt nie folgenlos.** Er ist die Geste, die
   §2.7 dem Prüfbericht ausdrücklich verspricht. Zwei Hürden — ein
   Operationsfehler trägt weder Ort noch Merkmale (der Kern gibt ihm `object_id`

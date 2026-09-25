@@ -24,6 +24,47 @@ NATIVE_DOMAIN = "native-group"
 #: (``scope``, sein Objekthash). Die Auswertung liest sie vor dem Cache
 #: (``scene.edge_binding``).
 EDGE_DOMAIN = "edge-answer"
+#: Die ausdrückliche Wahl zur Vollerkennung eines großen Ausgabekörpers.
+#: ``scope`` bindet sie an den Inhalt seines Netzes, ``allowed`` ist boolesch.
+RECOGNITION_DOMAIN = "recognition-answer"
+
+
+def recognition_answer_key(object_id: str) -> str:
+    """Bezeichnet die Erkennungswahl genau eines Ausgabekörpers."""
+    return f"{RECOGNITION_DOMAIN}:" + json.dumps(object_id, ensure_ascii=False)
+
+
+def validate_recognition_answer(key: str, record: object, outputs: Collection[str]) -> None:
+    """Erlaubt nur eine körpergebundene boolesche Wahl mit vollem Netzabdruck.
+
+    ``out_of_memory`` steht nur an einer Absage, und nur als ``True``: Sie kam
+    nicht vom Kunden, sondern aus einem Speicherfehler, und der Befund der
+    späteren Läufe nennt diesen Grund weiter (Review 25.09.2026).
+    """
+    if not isinstance(record, Mapping) or not (
+        {"object_id", "scope", "allowed"}
+        <= set(record)
+        <= {"object_id", "scope", "allowed", "out_of_memory"}
+    ):
+        raise ValueError("recognition_answer")
+    object_id = record["object_id"]
+    if not isinstance(object_id, str) or object_id not in outputs:
+        raise ValueError("object_id")
+    if key != recognition_answer_key(object_id):
+        raise ValueError("key")
+    scope = record["scope"]
+    if (
+        not isinstance(scope, str)
+        or len(scope) != 32
+        or any(character not in "0123456789abcdef" for character in scope)
+    ):
+        raise ValueError("scope")
+    if not isinstance(record["allowed"], bool):
+        raise ValueError("allowed")
+    if "out_of_memory" in record and (
+        record["out_of_memory"] is not True or record["allowed"] is not False
+    ):
+        raise ValueError("out_of_memory")
 
 
 def group_key(object_id: str, old_ids: Iterable[str], *, domain: str = GROUP_DOMAIN) -> str:
@@ -48,7 +89,7 @@ def edge_answer_key(object_id: str, field: str, keys: Sequence[str]) -> str:
 
 def domain_of(key: str) -> str | None:
     """Die Domäne eines gespeicherten Schlüssels — oder nichts bei fremder Form."""
-    for domain in (GROUP_DOMAIN, NATIVE_DOMAIN, EDGE_DOMAIN):
+    for domain in (GROUP_DOMAIN, NATIVE_DOMAIN, EDGE_DOMAIN, RECOGNITION_DOMAIN):
         if key.startswith(f"{domain}:"):
             return domain
     return None
@@ -126,7 +167,7 @@ def validate_group(
     if check_cancelled is not None:
         check_cancelled()
     domain = domain_of(key)
-    if domain is None or domain == EDGE_DOMAIN:
+    if domain not in (GROUP_DOMAIN, NATIVE_DOMAIN):
         raise ValueError("key")
     fields = {"object_id", "old_ids", "candidates", "decisions"}
     if domain == NATIVE_DOMAIN:
@@ -280,11 +321,11 @@ def validate_matches(
     *,
     check_cancelled: Callable[[], None] | None = None,
 ) -> None:
-    """Prüft neue Gruppen und Kantenantworten und erhält lesbare, gegebenenfalls
+    """Prüft Gruppen, Kanten- und Erkennungsantworten und erhält lesbare, gegebenenfalls
     unbrauchbare Altabdrücke.
 
-    Gruppen gehören einem Ausgabekörper, Kantenantworten einem Eingangskörper
-    — die Domäne im Schlüssel entscheidet, gegen welche Liste geprüft wird.
+    Gruppen und Erkennungsantworten gehören einem Ausgabekörper, Kantenantworten
+    einem Eingangskörper — die Domäne im Schlüssel entscheidet über die Liste.
     """
     if check_cancelled is not None:
         check_cancelled()
@@ -303,6 +344,8 @@ def validate_matches(
                     raise ValueError("legacy")
         elif isinstance(key, str) and domain_of(key) == EDGE_DOMAIN:
             validate_edge_answer(key, record, inputs, check_cancelled=check_cancelled)
+        elif isinstance(key, str) and domain_of(key) == RECOGNITION_DOMAIN:
+            validate_recognition_answer(key, record, outputs)
         elif isinstance(key, str):
             validate_group(key, record, outputs, check_cancelled=check_cancelled)
         else:

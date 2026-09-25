@@ -48,7 +48,7 @@ darf keinen vermeintlich eindeutigen Treffer freigeben. Die historischen
 Vorgaben optionaler Achsen- und Maßfelder bleiben unverändert.
 
 `match_records` ist die gemeinsame Quelle für reine JSON-Struktur und
-kanonische, körperqualifizierte Gruppenschlüssel — in drei Domänen:
+kanonische, körperqualifizierte Antwortschlüssel — in vier Domänen:
 `group:` für Netzantworten, `native-group:` für die native Neuwahl am
 umgebauten exakten Körper, die zusätzlich ihren `scope` trägt (die
 Erzeugerfassung, für die die Wahl gilt), und `edge-answer:` für die
@@ -56,7 +56,20 @@ Kantenwahl eines **Verbrauchers** (P1.4c): Sie gehört seinem Eingangskörper,
 einem Feld und dem vollständigen Schlüsselbündel, ihr `scope` ist der
 Objekthash dieses Eingangs, und `validate_matches` prüft sie gegen die
 Eingänge statt gegen die Ausgaben (`validate_edge_answer`; `domain_of` liest
-die Domäne aus dem Schlüssel). `match_decisions` bildet Gruppen, erkennt deren vollständiges
+die Domäne aus dem Schlüssel). `recognition-answer:` hält die ausdrücklich
+bestätigte oder ausgelassene Vollerkennung eines großen importierten
+Ausgabekörpers. Ihr `scope` ist der vorhandene Netzinhaltabdruck aus
+`features._mesh_key`, `allowed` ein strikt boolescher Wert, und eine Absage
+aus einem Speicherfehler trägt zusätzlich `out_of_memory: true`; ein anderer
+Körper oder Netzinhalt gibt nichts frei. Die Importstaffel und grobe
+Schätzung stehen zusammen in `local`: automatische Erkennung bis
+`FEATURE_LIMIT_TRIANGLES`, bestätigte Importe bis
+`CONFIRMED_FEATURE_LIMIT_TRIANGLES`, darüber weiterhin lokale Auswahl;
+`recognition_minutes` gibt die Zeitspanne (Referenz Drache, Aufschlag
+`RECOGNITION_TIME_FACTOR` für die Topologie), `recognition_gigabytes` den
+Spitzenbedarf des ganzen Imports (`RECOGNITION_BYTES_PER_TRIANGLE`). Beide
+sind Anzeige, keine Grenze; die Messungen stehen an den Konstanten.
+`match_decisions` bildet Gruppen, erkennt deren vollständiges
 Kandidatenmuster geometrisch wieder und prüft die gesamte Wahl atomar;
 `resolve_group(scope=...)` gibt eine native Wahl nur für denselben Scope frei
 und eine Netzantwort nie für die native Frage. Kostenrechnung und letzte Injektivitätsgrenze
@@ -323,6 +336,68 @@ Das Flächenbudget begrenzt diese Fits ebenso wie den Ausschnitt; es ändert
 keine Erkennungstoleranz. Überschreitung oder fehlender Abschluss liefern
 einen Handlungsvorschlag, keine Teilgeometrie.
 
+Drei Dinge halten die Suche an großen, dicht vernetzten Netzen brauchbar
+(RM-235, gemessen am Drachen mit 2,3 Millionen Dreiecken):
+
+- **Der Treffer braucht nur die Dreiecke am Punkt** (`_region` mit
+  `bounded=False` in Schweißtoleranz), nicht den ganzen Suchwürfel.
+- **Das Budget gilt dem Teil, der am Treffer hängt** (`_connected_to`), nicht
+  jeder dichten Fläche in der Ecke des Würfels.
+- **Die ebene Facette am Treffer gehört dazu**, auch über den Suchradius
+  hinaus, und gilt als vollständig (`proven` in `_recognise_region`) —
+  solange sie selbst ins Budget passt; eine größere Ebene trägt die Suche
+  nicht, dann gilt der begrenzte Bereich wie ohne sie. Hängt an der Stelle
+  mehr als das Budget, bleibt die Facette allein; findet sie dann nichts,
+  heißt der Grund `budget`.
+
+**Ob eine gefundene Fläche eine ist, sagt die Ebenenregel der Vollerkennung
+am ganzen Körper** (`features.planar_facet`, Review R1) — nicht der
+Ausschnitt, an dem `detect` lief: Dort war ein Mantelstreifen leicht fünf
+Prozent der Fläche und ein halber Zapfenmantel kein vollständiger. Das Urteil
+je Facette (`_facet_verdicts`, einmal je Körper) teilt sie mit
+`_large_facet_faces`, den Mantelnachweis (`_round_surface`) ebenso; nur der
+Fleck dafür wächst begrenzt (`_patch_around`, bis `MANTLE_PROOF_LIMIT`). Wird
+er größer, entscheidet der gewachsene Teil: Passt auf ihn keine Rundform
+(`_could_be_round`), passt sie auf das Ganze nicht — so bleiben die zwei
+Sohlen des Drachen, die über weiche Kanten an seiner Haut hängen, Flächen —,
+sonst bleibt die Frage offen, und der Grund heißt `budget`
+(`LocalDetection.undecided`).
+
+**Eine ebene Fläche ist vollständig, wenn ihre Facette es ist** — gefragt an
+den Facetten des Bereichs samt Randring, nicht des ganzen Netzes: Setzt sich
+eine Facette über den Rand fort, liegt ihr koplanarer Nachbar im Ring. Die
+Sperre über den glatten Suchrand gilt Fits, die ihre äußerste Reihe verworfen
+haben können; eine Facette hat keinen Fit. Ohne die Unterscheidung galt jede
+Fläche als abgeschnitten, deren Rand unter 30° in eine Rundung übergeht — an
+den Fußsohlen des Drachen ab 24,9°. **Ausgenommen ist die Flanke eines
+Langlochs** (`continues_tangentially`): Knickt die Fläche an ihrem Rand
+höchstens so stark wie das Rundungsstück dahinter, läuft dessen nächster
+Knick parallel zur Randkante (`ALONG_THE_RIM_DEGREES`), **und ist die Rundung
+ein Langlochende** (hohl, zur Seite der Flächennormalen gewölbt — geprüft für
+alle Randkanten zugleich, bevor ein Stück entsteht —, und
+`_turns_round_like_a_slot_end` findet, dass sie die Normale bis mindestens
+`SLOT_END_TURN_DEGREES` umwendet), gilt die alte Sperre. Gegangen wird dafür
+Stück für Stück quer zur Randkante über die einmal gelesenen Felder des
+Körpers (`_Seams`), bis ein Stück breiter wird als eine Rundung
+(`STRIP_GROWTH`) oder `ROUND_STEPS` erreicht sind; gemerkt wird nur, was der
+Gang berührt, kein Feld in Netzgröße je Randkante (Review R2: 19,6 s an
+einer Deckfläche mit 8 192 Randkanten, jetzt 3 s samt Mantelnachweis). So
+bleibt die Flanke eines angeschnittenen Langlochs ein Teil des Langlochs,
+wie in der Vollerkennung. **Dieser Gang beantwortet nur die Langlochfrage**:
+Ob eine Fläche an einer Verrundung, in einer Innenecke oder auf einem Mantel
+eine Fläche ist, sagt die Ebenenregel oben.
+
+Ein Netz, dessen Vollerkennung am Arbeitsspeicher scheiterte, merkt sich der
+Prozess (`remember_out_of_memory`, `ran_out_of_memory`, bis
+`OUT_OF_MEMORY_LIMIT` Netze): kein Dokumentzustand, nur kein zweiter
+Minutenlauf bis zum selben Fehler. `forget_out_of_memory` leert ihn nach
+einer neuen Entscheidung — *Alle Merkmale erkennen*, `recognize`, ein
+anderes Projekt.
+
+`local_error` benennt den Grund zusätzlich als `ValidationError.constraint`
+mit dem Präfix `local_`. Die Oberfläche wählt passende Rückwege über diese
+Kennung; übersetzte Fehlersätze sind keine Ablaufsteuerung.
+
 `detect_region` speichert Punkt, Normale, Radius und den optionalen
 Originaltreffer als gewöhnliche Operation. Die Auswahl einer gemeinsam
 triangulierten Fläche ist eindeutig; getrennte übereinanderliegende Flächen
@@ -338,7 +413,29 @@ an ihren Originalpunkten früh und bleibt auch innerhalb großer Flächen
 blockweise abbrechbar. Sie führt keine zweite Erkennung aus.
 
 `detect_known` misst bekannte Merkmale nach einer Operation am großen Netz
-erneut. `local_search_radius` ist ein belegter diagnostischer Suchumfang um
+erneut. **Anhalten darf es nur für ein Merkmal in `required`** — eines, das
+ein späterer Schritt oder eine Passung noch braucht, ohne die starr
+mitbewegten. Jedes andere, dessen Umgebung sich nicht nachmessen lässt
+(Suchrand, Budget), fehlt im Ergebnis und verliert seine Belegung wie am Netz
+üblich; `None` heißt alle. Das Ergebnis je Suchbereich wird einmal gerechnet,
+die Entscheidung trifft jedes Merkmal selbst daran — sonst verdeckte ein
+unbenötigtes Merkmal ein benötigtes mit demselben Bereich. **Gesucht wird wie
+an einer Stelle**: Eine ebene Fläche bringt ihre Facette mit (`_face_seed`:
+das Dreieck an ihrer Mitte, sonst das nächste in ihrer Ebene — an einer
+Platte mit Mittelbohrung liegt die Mitte im Loch —, und nur eines, dessen
+Facette die Zuordnung als dieselbe Fläche nähme, `_same_face` mit
+`matching.DIAMETER_TOLERANCE`: Die Insel einer Ringnut liegt so hoch wie die
+Deckfläche, Review R4), und über dem Budget zählt nur der Teil, der am
+Merkmal hängt (`_connected_to`). Hat nur die Facette gesucht und liefert sie
+das Merkmal nicht, heißt der Grund `budget` — nie ein stilles Fehlen.
+``standing`` nennt Merkmale, deren Belege am neuen Netz unverändert gelten
+(nach einer belegten starren Bewegung die exakt mitbewegten,
+`features.moved_twin`); sie werden übernommen, nicht gesucht (Review R6).
+**Und zuerst im eigenen
+Umfang des Merkmals, dann im belegten Suchumfang** — der schließt die ganze
+Umgebung der ursprünglichen Stelle ein und sprengte an dichten Netzen das
+Budget; weitergetragen wird der größere (`recorded` in `_recognise_region`).
+`local_search_radius` ist ein belegter diagnostischer Suchumfang um
 die Merkmalsmitte, kein Nutzermaß. `transformed_searches` nimmt ihn über den
 größten Dehnungsfaktor der Operation konservativ mit; Flächengröße allein
 bestimmt keinen Radius. Maße werden nur bei nachgewiesen erhaltener Form

@@ -4444,6 +4444,9 @@ class Viewport(QWidget):
         # den Tabulator — wer die Ansicht anklickt, um zu fliegen, hat ihn dann
         # ohnehin.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._surface_picker: Callable[[float, float], None] | None = None
+        self._surface_picker_point = (0.0, 0.0)
+        self._surface_picker_mark: QLabel | None = None
         #: Welche Flugtasten gerade liegen, und der Takt, der sie fährt.
         self._flying: set[str] = set()
         self._flight_timer: QTimer | None = None
@@ -7034,6 +7037,85 @@ class Viewport(QWidget):
         if width < 1 or height < 1:
             return None
         return self._world_at(width // 2, height // 2)
+
+    def set_surface_picker(self, callback: Callable[[float, float], None] | None) -> None:
+        """Eine ausstehende Oberflächenauswahl auch mit der Tastatur bedienen."""
+        self._surface_picker = callback
+        if callback is None:
+            if self._surface_picker_mark is not None:
+                self._surface_picker_mark.hide()
+            return
+        if self.renderer is None:
+            return
+        if self._surface_picker_mark is None:
+            mark = QLabel(self)
+            mark.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            mark.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            mark.setPixmap(cursors.cursor("measure", self).pixmap())
+            mark.adjustSize()
+            mark.setAccessibleName(tr("Stelle auswählen"))
+            mark.setAccessibleDescription(
+                tr(
+                    "Pfeiltasten bewegen das Fadenkreuz, Umschalt bewegt es fein. "
+                    "Eingabe wählt die Stelle, Escape beendet die Auswahl."
+                )
+            )
+            self._surface_picker_mark = mark
+        width, height = self.renderer.view_size()
+        self._surface_picker_point = (width / 2.0, height / 2.0)
+        self._place_surface_picker()
+        self._surface_picker_mark.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _place_surface_picker(self) -> None:
+        """Das Kreuz in Qt-Punkten zeichnen, den Treffer in Gerätepixeln halten."""
+        mark = self._surface_picker_mark
+        renderer = self.renderer
+        if mark is None or renderer is None or self._surface_picker is None:
+            return
+        width, height = renderer.view_size()
+        x, y = self._surface_picker_point
+        x, y = min(max(0.0, x), max(0, width - 1)), min(max(0.0, y), max(0, height - 1))
+        self._surface_picker_point = (x, y)
+        widget = renderer.widget
+        origin = widget.mapTo(self, QPoint()) if widget is not None else QPoint()
+        ratio = self._device_ratio()
+        mark.move(
+            origin.x() + round(x / ratio - mark.width() / 2),
+            origin.y() + round(y / ratio - mark.height() / 2),
+        )
+        mark.show()
+        mark.raise_()
+
+    def _surface_picker_key(self, event: Any) -> bool:
+        """Nur die Tasten der ausstehenden Auswahl verbrauchen."""
+        callback = self._surface_picker
+        if callback is None or self.renderer is None:
+            return False
+        if event.modifiers() & (
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier
+        ):
+            return False
+        key = event.key()
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if not event.isAutoRepeat():
+                callback(*self._surface_picker_point)
+        else:
+            directions = {
+                Qt.Key.Key_Left: (-1, 0),
+                Qt.Key.Key_Right: (1, 0),
+                Qt.Key.Key_Up: (0, -1),
+                Qt.Key.Key_Down: (0, 1),
+            }
+            if key not in directions:
+                return False
+            fine = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+            step = self._device_pixels(1 if fine else 8)
+            dx, dy = directions[key]
+            x, y = self._surface_picker_point
+            self._surface_picker_point = (x + dx * step, y + dy * step)
+            self._place_surface_picker()
+        event.accept()
+        return True
 
     def rotation_centre(self) -> Vec3 | None:
         """Der Punkt, um den gedreht wird — die Mitte der Körper, oder nichts.
@@ -12444,6 +12526,7 @@ class Viewport(QWidget):
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         super().resizeEvent(event)
+        self._place_surface_picker()
         self.banner.place()
         self.view_bar.place()
         self.drag_bar.place()
@@ -15827,6 +15910,8 @@ class Viewport(QWidget):
         Kunden — und der Flug beginnt sofort statt nach der halben Sekunde, die
         das System vor der ersten Wiederholung wartet.
         """
+        if self._surface_picker_key(event):
+            return
         if self._scheme != "solidon" or self.renderer is None:
             super().keyPressEvent(event)
             return

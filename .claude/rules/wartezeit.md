@@ -40,9 +40,18 @@ Zeitänderungen an Bildschirmleser.
 Leere Fortschrittsmeldungen können nur eine Teilrechnung beenden, etwa das
 Normalisieren vor der Erkennung. Solange `Session.busy` gilt, bleiben die
 Uhr des Gesamtvorgangs und die laufende Statusanzeige bestehen.
+**Eine bestätigte Vollerkennung meldet keinen Anteil, aber ihre Spanne**
+(§21.1): Die Zeile heißt dann „Merkmale erkennen, geschätzt 1 bis 6 min" —
+dieselbe Zahl wie die Frage davor, aus `perceive.local.recognition_minutes`
+—, und die Uhr daneben zählt. Eine Restschätzung aus dem Anteil gibt es in
+dieser Phase nicht; `detect` meldet zwischen seinen Phasen keinen Fortschritt.
 **Steht der Anteil länger still als die Schwelle der Schätzung, rechnet die
 Uhr nichts hoch** (`ProgressTiming.remaining`); die Antwortzeit einer Frage
-zählt dabei nicht als Stillstand.
+zählt dabei nicht als Stillstand. Ein Abbruch während der bestätigten
+Vollerkennung bekommt in der Statuszeile *Ohne Merkmalserkennung laden* —
+auch unter einer gespeicherten Zustimmung beim Wiederöffnen, denn die
+Auswertung meldet sie beim Start der Erkennung wie eine eben gegebene. Ein
+fertiger Lauf nimmt den Knopf wieder weg.
 
 Die letzte gültige Darstellung bleibt sichtbar — nie ein leerer Viewport, nie
 ein blockierendes Fenster. Lange Rechnungen laufen nicht im Qt-Hauptthread.

@@ -47,10 +47,11 @@ from app.core.ingest.plan import import_plan, names_in_use
 from app.core.knowledge import profiles
 from app.core.log import configure
 from app.core.paths import installed_language, user_config_dir
+from app.core.perceive.local import forget_out_of_memory
 from app.core.registry import REGISTRY, cli_commands, documentation
 from app.core.registry.params import LIST_KINDS, NUMBER_KINDS, TEXT_KINDS
 from app.core.scene import History, OperationDraft, ResultCache, disk_backed_cache, evaluate
-from app.core.scene.history import RevisionPlan
+from app.core.scene.history import RevisionPlan, recognition_reopenable
 from app.core.scene.project import (
     Project,
     ProjectSources,
@@ -195,7 +196,14 @@ def evaluation_cache() -> ResultCache:
 
 
 def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
-    return evaluate(
+    """Wertet aus und behält die Antworten für die übrigen Läufe des Befehls.
+
+    ``export`` wertet zweimal aus, die Verlaufsbefehle dreimal; ohne das kam
+    jede Frage — auch die vor der langen Vollerkennung eines großen Modells —
+    je Befehl zwei- bis dreimal. Festgehalten wird wie im Fenster am Stapel;
+    in die Datei gelangen die Antworten nur, wenn der Befehl sie speichert.
+    """
+    result = evaluate(
         project.document,
         profile_of(project),
         progress=(lambda fraction, text: None) if quiet else TerminalProgress(),
@@ -203,6 +211,9 @@ def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
         sources=ProjectSources(project, base_dir=path.parent),
         cache=evaluation_cache(),
     )
+    if result.matches:
+        History(project.document).record_matches(result.matches)
+    return result
 
 
 def print_findings(findings: Any) -> None:
@@ -591,6 +602,64 @@ def command_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_recognize(args: argparse.Namespace) -> int:
+    """*Alle Merkmale erkennen* auf der Kommandozeile (§21.1).
+
+    Der Befund nennt den Knopf aus dem Fenster, und das Terminal hatte kein
+    Gegenstück: Eine gespeicherte Absage ließ sich dort nicht zurücknehmen
+    (Review B10, 25.09.2026). Die Auswertung danach fragt wieder. Wer nicht
+    antworten kann, lädt wie beim Import ohne Vollerkennung und hält nichts
+    fest; die nächste Frage kommt dann im Fenster.
+
+    **Genannte Körper bekommen die Auskunft des Fensters** (Review R7): jede
+    Wahl am Ladeschritt, auch eine Zustimmung, deren Erkennung später am
+    Arbeitsspeicher scheiterte — der Befund sagt dort „„Alle Merkmale
+    erkennen“ versucht es erneut“, und der Befehl antwortete, es sei nichts
+    ausgelassen. Ohne Angabe nimmt er nur die Absagen: Eine gelungene
+    Erkennung neu zu erfragen wäre eine Frage ohne Anlass.
+    """
+    path = Path(args.path)
+    project = open_project(path)
+    document = project.document
+    loaded = sorted(
+        {object_id for entry in document.ops if entry.op == "load" for object_id in entry.outputs}
+    )
+    wanted = args.on or loaded
+    chosen = [
+        object_id
+        for object_id in wanted
+        if recognition_reopenable(document, object_id, declined_only=not args.on)
+    ]
+    if not chosen:
+        standing = [
+            object_id for object_id in loaded if recognition_reopenable(document, object_id)
+        ]
+        if args.on:
+            print(
+                tr("Für diese Objekte gibt es keine gespeicherte Wahl zur Merkmalserkennung."),
+                file=sys.stderr,
+            )
+            if standing:
+                print(f"{tr('Gemeint war vielleicht')}: {', '.join(standing)}", file=sys.stderr)
+        else:
+            print(
+                tr("Für diese Objekte wurde keine Merkmalserkennung ausgelassen."), file=sys.stderr
+            )
+            if standing:
+                print(
+                    f"  - {tr('Neu entscheiden')}: solidon3d recognize {args.path} "
+                    f"--on {' '.join(standing)}",
+                    file=sys.stderr,
+                )
+        return 1
+    History(document).reopen_recognition(chosen)
+    forget_out_of_memory()
+    result = run_evaluation(project, path)
+    save(project, path)
+    print_report(result)
+    return 0 if result.complete else 1
+
+
 def command_undo(args: argparse.Namespace) -> int:
     path = Path(args.path)
     project = open_project(path)
@@ -724,6 +793,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--entry", default=None, help=tr("Welches Modell aus einem ZIP-Archiv, Name wie darin")
     )
     importing.set_defaults(handler=command_import)
+
+    recognize = commands.add_parser("recognize", help=tr("Alle Merkmale erkennen"))
+    recognize.add_argument("path")
+    recognize.add_argument("--on", nargs="*", default=None, help=tr("Objekte, z. B. obj_1"))
+    recognize.set_defaults(handler=command_recognize)
 
     undo = commands.add_parser("undo", help=tr("Letzte Transaktion zurücknehmen"))
     undo.add_argument("path")
