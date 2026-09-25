@@ -1039,6 +1039,8 @@ def test_cancelling_outline_import_drops_only_its_pending_source(
     path = tmp_path / "cancel.svg"
     path.write_bytes(SOURCE)
     window.open_path(path)
+    # Gelesen und geplant wird im Arbeiter (RM-224); die Konturwahl öffnet danach.
+    assert window.session.wait_for_idle()
     dialog = window.findChild(OutlineDialog)
     assert dialog is not None
     assert window.session.project.document.sources
@@ -11774,10 +11776,18 @@ def test_import_from_start_keeps_progress_until_the_plan_finishes(
     window.session.busyChanged.connect(seen.append)
     window._show_start_screen(True)
     window.open_path(MESHES / "cube_clean.stl")
-    planner = window.session._plan
     try:
-        assert entered.wait(5)
-        assert planner is not None
+        # Seit RM-224 liest zuerst ein Arbeiter die Datei; der Plan beginnt
+        # erst, wenn dessen Antwort zugestellt ist — also mit laufender
+        # Ereignisschleife, nicht in einem blockierenden Warten.
+        for _turn in range(500):
+            if entered.is_set():
+                break
+            qt_app.processEvents()
+            entered.wait(0.01)
+        assert entered.is_set()
+        planner = window.session._plan
+        assert isinstance(planner, module._PlanWorker)
         if window.session._worker is not None:
             assert window.session._worker.wait(5000)
         qt_app.processEvents()
@@ -12747,15 +12757,16 @@ def test_the_veil_hides_the_native_view_while_it_stands(window: MainWindow) -> N
     assert not window.middle_stack.isHidden(), "mit dem Ende des Schleiers kommt die Ansicht zurück"
 
 
-def test_reading_a_file_stands_under_the_wait_cursor(
+def test_reading_a_file_says_so_while_the_window_stays_free(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """§2.8: bis zwei Sekunden Mauszeiger und Statusleiste.
+    """§2.8: Das Lesen eines Modells hat eine Auskunft und belegt das Fenster nicht.
 
-    Die Sitzung liest synchron — ``load`` für ein Projekt, ``read_bytes`` für
-    ein Modell —, und die Ladeanzeige deckt das nicht: sie hängt am
-    Fortschritt der Auswertung, und der beginnt erst, wenn die Datei gelesen
-    ist. Dazwischen lag ein Fenster ohne jede Auskunft.
+    Bis RM-224 las die Sitzung die Datei synchron unter dem Wartezeiger; die
+    Ladeanzeige deckt das Lesen nicht, und dazwischen lag ein Fenster ohne
+    jede Auskunft. Seither liest ein Arbeiter (``Session._ReadWorker``): Die
+    Statuszeile nennt den Vorgang, die Sitzung meldet sich beschäftigt, und
+    ein Wartezeiger steht nirgends — das Fenster ist dabei bedienbar.
     """
     seen: list[tuple[Any, str]] = []
     real = window.session.import_model_async
@@ -12764,21 +12775,19 @@ def test_reading_a_file_stands_under_the_wait_cursor(
         seen.append((QApplication.overrideCursor(), window.status_message.text()))
         return real(path, *args, **kwargs)
 
-    # ``import_model_async`` statt ``import_model``: Der Einleseplan geht
-    # seit dem asynchronen Umbau dort hindurch. Unterhalb von
-    # ``PLAN_IN_WORKER_ABOVE`` — und diese Datei hat 684 Bytes — läuft er
-    # gerade durch, der Wartezeiger steht also währenddessen wie zuvor.
     monkeypatch.setattr(window.session, "import_model_async", watched)
 
     window.open_path(MESHES / "cube_clean.stl")
+    reading = window.session.busy
+    held = QApplication.overrideCursor()
     window.session.wait_for_idle()
 
     assert seen, "gelesen wurde nichts — der Test misst am falschen Ort"
     cursor, status = seen[0]
-    assert cursor is not None, "gelesen wurde ohne Wartezeiger"
-    assert cursor.shape() == Qt.CursorShape.WaitCursor
     assert status == tr("Modell einfügen …"), "die Statuszeile erklärt den Vorgang nicht"
-    assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
+    assert cursor is None and held is None, "ein Wartezeiger stünde über einem freien Fenster"
+    assert reading, "gelesen wird im Arbeiter, und die Sitzung sagt es"
+    assert [entry.op for entry in window.session.project.document.ops] == ["load"]
 
 
 @pytest.mark.parametrize("starting_fresh", [False, True])
@@ -12815,7 +12824,9 @@ def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
 
     assert seen, "gelesen wurde nichts — der Test misst am falschen Ort"
     cursor, status, announcement = seen[0]
-    assert cursor is not None and cursor.shape() == Qt.CursorShape.WaitCursor
+    # Gelesen wird seit RM-224 im Arbeiter; ein Wartezeiger stünde über einem
+    # freien Fenster (``test_reading_a_file_says_so_while_the_window_stays_free``).
+    assert cursor is None
     assert status == tr("Modell einfügen …"), "der Projektanfang löschte den Ladehinweis"
     expected = "" if starting_fresh else "Bereit"
     assert announcement == expected, "nur ein neues Dokument verwirft die vorige Quittung"
@@ -12844,6 +12855,8 @@ def test_a_broken_file_takes_the_wait_cursor_with_it(
     )
 
     window.open_path(MESHES / "cube_clean.stl")
+    # Gelesen und geplant wird im Arbeiter (RM-224); der Fehler kommt danach.
+    window.session.wait_for_idle()
 
     assert shown, "der Fehler kam nirgends an"
     assert QApplication.overrideCursor() is None, "der Wartezeiger überlebte den Fehler"
@@ -12869,6 +12882,7 @@ def test_a_rejected_file_restores_status_before_showing_the_error(
     )
 
     window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
 
     assert shown, "die Abweisung kam nirgends an"
     _error, cursor, status = shown[0]

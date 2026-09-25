@@ -2086,7 +2086,10 @@ def test_a_late_import_failure_leaves_the_next_project_alone(
     session = Session()
     monkeypatch.setattr(session_module, "PLAN_IN_WORKER_ABOVE", 0)
     gesehen, settle = _await_signal(session)
-    session.import_model_async(kaputt)
+    # Über die Nutzlast: Sie wird sofort eingebettet und im Arbeiter geplant —
+    # genau die Lage dieses Befunds. Eine Datei vom Pfad liest seit RM-224
+    # zuerst ein eigener Arbeiter; die verspätete Lesung prüft der Test darunter.
+    session.import_payload_async(kaputt.name, kaputt.read_bytes())
     assert list(session.project.document.sources) == ["src_1"], "der alte Import trägt src_1"
 
     # Bevor der Arbeiter antwortet: ein neues Projekt mit einer eigenen src_1.
@@ -2099,6 +2102,94 @@ def test_a_late_import_failure_leaves_the_next_project_alone(
     assert "src_1" in session.project.document.sources, "die Quelle des neuen Projekts bleibt"
     assert session.project.sources["src_1"] == ganz, "samt Nutzdaten"
     assert gesehen.get("error") is None, "der alte Fehler gilt dem neuen Projekt nicht"
+
+
+def test_a_model_file_is_read_in_the_worker(qt_app: Any, tmp_path: Path) -> None:
+    """RM-224: ``open_path`` liest keine Datei mehr im Hauptthread.
+
+    Eine Datei auf einem Laufwerk, das nicht antwortet, hielt das Fenster bis
+    zum Zeitlimit des Systems an (gemessen 21 s). Der Aufruf kehrt jetzt
+    zurück, bevor die Datei gelesen ist — sichtbar daran, dass noch keine
+    Quelle eingebettet ist; ohne Grenze gilt das für jede Größe.
+    """
+    from app.ui.session import Session
+
+    modell = tmp_path / "wuerfel.stl"
+    modell.write_bytes(_stl(_cube()))
+    session = Session()
+    gesehen, settle = _await_signal(session)
+
+    session.import_model_async(modell)
+
+    assert not session.project.document.sources, "gelesen wird im Arbeiter, nicht im Aufruf"
+    assert session.busy, "und die Sitzung sagt, dass sie arbeitet"
+    settle()
+    assert gesehen.get("error") is None, gesehen.get("error")
+    assert gesehen.get("accepted") is True, "der Weg muss bis zum Ende laufen"
+    assert [entry.op for entry in session.project.document.ops] == ["load"]
+
+
+def test_a_file_that_cannot_be_read_says_so_with_a_way(qt_app: Any, tmp_path: Path) -> None:
+    """Eine fehlende Datei ist eine Lage des Kunden, kein Programmfehler.
+
+    Im Arbeiter käme ein nacktes ``OSError`` als Absturzbericht an. Es kommt
+    als Hinweis mit *Andere Datei wählen* — derselbe Satz wie in der
+    Quellenwahl eines Dialogs (``loader.unreadable_file``).
+    """
+    from app.core.errors import InternalError, UserError
+    from app.ui.session import Session
+
+    session = Session()
+    gesehen, settle = _await_signal(session)
+
+    session.import_model_async(tmp_path / "verschoben.stl")
+    settle()
+
+    error = gesehen.get("error")
+    assert isinstance(error, UserError) and not isinstance(error, InternalError), error
+    assert str(error.title) == "Diese Datei ließ sich nicht lesen."
+    assert [action.id for action in error.suggestions] == ["choose_another_file", "cancel"]
+    assert not session.project.document.sources and not session.project.document.ops
+
+
+def test_a_read_that_arrives_after_the_project_changed_is_dropped(
+    qt_app: Any, tmp_path: Path
+) -> None:
+    """Die Lesung trägt den Stempel ihres Dokuments, wie der Plan (UI-01).
+
+    Zwischen Aufruf und Antwort des Lesearbeiters kann ein neues Projekt offen
+    sein; die gelesene Datei gehört dann in keines der beiden.
+    """
+    from app.ui.session import Session
+
+    modell = tmp_path / "wuerfel.stl"
+    modell.write_bytes(_stl(_cube()))
+    session = Session()
+
+    session.import_model_async(modell)
+    session.start_new("centauri-carbon-2", "petg")
+    assert session.wait_for_idle(20_000)
+
+    assert not session.project.document.sources, "die alte Lesung bettet nichts ein"
+    assert not session.project.document.ops, "und legt keinen Schritt an"
+
+
+def test_reading_a_file_the_system_refuses_is_a_hint(tmp_path: Path) -> None:
+    """``read_bounded_payload`` übersetzt den ``OSError`` des Systems (RM-224).
+
+    Der Grund des Systems reist als Wert mit; der Dateiname auch, der Pfad
+    nicht — er gehört in keinen Bericht.
+    """
+    from app.core.errors import UserError
+    from app.core.ingest.loader import read_bounded_payload
+
+    with pytest.raises(UserError) as raised:
+        read_bounded_payload(tmp_path / "weg.stl")
+
+    assert [action.id for action in raised.value.suggestions] == ["choose_another_file", "cancel"]
+    assert raised.value.values["path"] == "weg.stl"
+    assert raised.value.values["reason"]
+    assert isinstance(raised.value.__cause__, OSError)
 
 
 def test_the_cleanup_keeps_the_filament_slots_of_the_remaining_triangles() -> None:

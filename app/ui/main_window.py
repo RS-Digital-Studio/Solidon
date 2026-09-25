@@ -1516,7 +1516,11 @@ class _SourceReadWorker(Worker):
         self.cancel = CancelSignal()
 
     def work(self) -> None:
-        from app.core.ingest.loader import read_bounded_payload, read_local_payload
+        from app.core.ingest.loader import (
+            read_bounded_payload,
+            read_local_payload,
+            unreadable_file,
+        )
 
         try:
             payload = (
@@ -1528,16 +1532,9 @@ class _SourceReadWorker(Worker):
             self.failed.emit(problem)
             return
         except OSError as problem:
-            self.failed.emit(
-                UserError(
-                    title=tr("Diese Datei ließ sich nicht lesen."),
-                    detail=tr(
-                        "Sie ist vielleicht verschoben worden, oder das Laufwerk ist "
-                        "gerade nicht erreichbar. Wählen Sie die Datei noch einmal aus."
-                    ),
-                    values={"path": self._path.name, "reason": str(problem)},
-                )
-            )
+            # Das Lesen selbst meldet sich schon als Hinweis; was hier noch
+            # ankommt, stammt aus dem Weg um die Datei (Ordner einer GLTF).
+            self.failed.emit(unreadable_file(self._path, problem))
             return
         if self.cancel.is_cancelled:
             self.stopped.emit()
@@ -5829,12 +5826,13 @@ class MainWindow(QMainWindow):
     def open_path(self, path: Path) -> None:
         """Ein Einstiegspunkt für Menü, Zuletzt-Liste und Drag and Drop.
 
-        Mit Wartezeiger und Statuszeile: Gelesen wird hier synchron — die
-        Projektdatei über ``load``, das Modell über ``path.read_bytes()``. Die
-        Ladeanzeige deckt das **nicht** ab: sie hängt am Fortschritt der
-        Auswertung, und der beginnt erst, wenn die Datei gelesen ist; ihre
-        200 ms Verzögerung kommen obendrauf. Die Statuszeile wird ausdrücklich
-        neu gezeichnet, bevor das Lesen den Hauptthread belegt (§2.8).
+        Eine Projektdatei wird hier synchron gelesen, mit Wartezeiger und
+        Statuszeile, über ``load``. Die Ladeanzeige deckt das **nicht** ab: sie
+        hängt am Fortschritt der Auswertung, und der beginnt erst, wenn die
+        Datei gelesen ist; ihre 200 ms Verzögerung kommen obendrauf. Die
+        Statuszeile wird ausdrücklich neu gezeichnet, bevor das Lesen den
+        Hauptthread belegt (§2.8). Ein Modell liest die Sitzung dagegen im
+        Arbeiter (RM-224, ``Session.import_model_async``).
         """
         if path.suffix.lower() == PART_FILE_SUFFIX:
             self._open_part_file(path)
@@ -5890,16 +5888,12 @@ class MainWindow(QMainWindow):
                 # Der Fehlerfall kommt nicht mehr als Ausnahme zurück, sondern
                 # über ``importFailed``: Wer im Arbeiter plant, kann nicht in
                 # einen Aufrufer werfen, der längst weitergelaufen ist.
-                # **Der Wartezeiger bleibt, und er regelt sich selbst.** Unter
-                # ``PLAN_IN_WORKER_ABOVE`` läuft der Weg gerade durch — dann
-                # steht er, solange gelesen wird, wie eh und je. Darüber kehrt
-                # der Aufruf sofort zurück, der Zeiger verschwindet mit dem
-                # ``with``, und die Ladeanzeige mit ihrem Fortschritt übernimmt.
-                # Eine Fallunterscheidung braucht es dafür nicht.
+                # **Und auch das Lesen läuft dort** (RM-224): Der Aufruf kehrt
+                # sofort zurück, ein Wartezeiger um ihn stünde für nichts, und
+                # die Ladeanzeige übernimmt, sobald die Sitzung beschäftigt ist.
                 self._pending_import = path
                 self._loading_model = True
-                with waiting():
-                    self.session.import_model_async(path)
+                self.session.import_model_async(path)
                 return
         except AppError as error:
             self.status_message.setText(self._announcement)
@@ -6124,12 +6118,11 @@ class MainWindow(QMainWindow):
             self.status_message.repaint()
         # Derselbe Weg wie in ``open_path``, aus demselben Grund: Das Zählen
         # der Körper einer Baugruppe dauert bei 63 MB vierzehn Sekunden, und
-        # die gehören nicht in den Hauptthread. Der Fehler kommt über
-        # ``importFailed``, der Wartezeiger deckt den kurzen Weg.
+        # die gehören nicht in den Hauptthread — das Lesen der Datei auch
+        # nicht (RM-224). Der Fehler kommt über ``importFailed``.
         self._pending_import = Path(name)
         self._loading_model = True
-        with waiting():
-            self.session.import_model_async(Path(name))
+        self.session.import_model_async(Path(name))
 
     def action_import_url(self) -> None:
         """Weg 1 (§2.2), wenn die Datei noch nicht auf dem Bett liegt.
@@ -18938,10 +18931,11 @@ class MainWindow(QMainWindow):
         mit seinen Handlungen, und die Statuszeile zurück auf das, was vor dem
         Ladehinweis dastand.
         """
-        # **Erst den Wartezeiger, dann den Dialog.** Unterhalb von
-        # ``PLAN_IN_WORKER_ABOVE`` läuft der Einleseweg gerade durch, und
-        # dieser Slot steht damit noch **im** ``with waiting()`` des
-        # Aufrufers. Ein Fehlerdialog unter dem Wartezeiger ist genau das
+        # **Erst den Wartezeiger, dann den Dialog.** Ein Download unterhalb von
+        # ``PLAN_IN_WORKER_ABOVE`` läuft gerade durch, und dieser Slot steht
+        # damit noch **im** ``with waiting()`` des Aufrufers (eine Datei vom
+        # Pfad liest und plant seit RM-224 immer im Arbeiter). Ein
+        # Fehlerdialog unter dem Wartezeiger ist genau das
         # Fenster, das zugleich fragt und bittet zu warten — dagegen gibt es
         # seit dem 29.08.2026 einen Test. Über der Schwelle steht hier
         # ohnehin keiner, und ``restoreOverrideCursor`` auf einem leeren

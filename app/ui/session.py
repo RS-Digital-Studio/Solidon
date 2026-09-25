@@ -59,7 +59,7 @@ from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.section import SectionPlane
 from app.core.ingest.archive import is_archive, model_from_archive
-from app.core.ingest.loader import read_bounded_payload, read_local_payload
+from app.core.ingest.loader import read_bounded_payload, read_local_payload, unreadable_file
 from app.core.ingest.plan import (
     ImportPlan,
     import_plan,
@@ -368,6 +368,41 @@ class _ArchiveWorker(Worker):
         """Das Archiv nach seiner Zustellung lösen — es kann Hunderte MB tragen."""
         del self._payload, self._ask
         super().release_finished_references()
+
+
+class _ReadWorker(Worker):
+    """Liest eine Modelldatei von der Platte, bevor irgendetwas eingebettet wird.
+
+    **Ein Dateizugriff ist eine Netzfrage** (RM-224). Liegt das Modell auf
+    einem Laufwerk, das gerade nicht antwortet, wartet Windows sein Zeitlimit
+    ab — gemessen 21 s an einer nicht erreichbaren Adresse —, und so lange
+    stand das Fenster, das die Datei öffnen sollte. Auch im Normalfall ist es
+    Arbeit im Hauptthread, die dort nicht hingehört: rund 180 ms an der
+    Siebhalter-3MF.
+
+    Erwartete Fehler (verschoben, gesperrt, zu groß) kommen aus
+    :func:`read_local_payload` schon als Hinweis mit Weg und gehen über
+    ``failedWith`` hinaus; eingebettet wird im Hauptthread.
+    """
+
+    readyWith = Signal(object)
+    failedWith = Signal(object)
+
+    def __init__(self, path: Path) -> None:
+        super().__init__()
+        self._path = path
+
+    def work(self) -> None:
+        try:
+            payload = read_local_payload(self._path)
+        except AppError as error:
+            self.failedWith.emit(error)
+        except OSError as problem:
+            # Wie in der Quellenwahl: Das Lesen selbst meldet sich schon als
+            # Hinweis, was hier ankommt, stammt aus dem Weg um die Datei.
+            self.failedWith.emit(unreadable_file(self._path, problem))
+        else:
+            self.readyWith.emit(payload)
 
 
 class _PlanWorker(Worker):
@@ -1059,7 +1094,9 @@ def _with_findings(result: EvaluationResult, extra: list[Finding]) -> Evaluation
     return result
 
 
-#: Ab dieser Nutzlast wird der Einleseplan in einem Arbeiter gerechnet.
+#: Ab dieser Nutzlast wird der Einleseplan in einem Arbeiter gerechnet — für
+#: eine Nutzlast ohne Pfad (ein Download). Eine Datei vom Pfad liest
+#: :class:`_ReadWorker`, und ihr Plan läuft danach immer im Arbeiter (RM-224).
 #:
 #: **Gemessen, nicht geschätzt** (03.09.2026, ``import_plan`` über echte
 #: Kundendateien):
@@ -1246,7 +1283,7 @@ class Session(QObject):
         # Ein Arbeiter, der bei einem synchronen Lauf noch rechnete: Sein
         # Ergebnis ist danach älter als der Stand, den ``evaluate_now`` liefert.
         self._superseded: _EvaluationWorker | None = None
-        self._plan: _PlanWorker | _ArchiveWorker | None = None
+        self._plan: _PlanWorker | _ArchiveWorker | _ReadWorker | None = None
         """Der laufende Einleseplan (§2.8) — siehe ``import_payload_async``."""
         self._agent: _AgentWorker | None = None
         self._split: _SplitWorker | None = None
@@ -2477,8 +2514,45 @@ class Session(QObject):
 
         Der synchrone Weg bleibt daneben stehen: Die Kommandozeile und die
         Tests brauchen einen, der wirft statt zu melden.
+
+        **Und schon das Lesen läuft im Arbeiter** (RM-224, :class:`_ReadWorker`):
+        Eine Datei auf einem Laufwerk, das nicht antwortet, hielt das Fenster
+        bis zum Zeitlimit des Systems an. Danach wird im Hauptthread
+        eingebettet und **immer** im Arbeiter geplant: Der Grund für den
+        geraden Weg unter :data:`PLAN_IN_WORKER_ABOVE` — ein Arbeiter
+        verschiebe das Ergebnis hinter die Ereignisschleife, obwohl niemand
+        wartet — gilt nicht mehr, wenn schon das Lesen nachgereicht wird. Damit
+        verlässt auch die Strukturdurchsicht einer 3MF den Hauptthread
+        (Siebhalter 290 bis 634 ms).
         """
-        self.import_payload_async(path.name, read_local_payload(path), unit=unit)
+        worker = _ReadWorker(path)
+        self._plan = worker
+        self.busyChanged.emit(True)
+        worker.finished.connect(partial(self._on_plan_done, worker))
+        stamp = self._project_generation
+
+        def ready(data: object, stamp: int = stamp) -> None:
+            if stamp != self._project_generation:
+                return
+            if self._cancel_by_user and self.cancel_signal.is_cancelled:
+                # Abgebrochen, bevor etwas eingebettet war: Es gibt nichts
+                # zurückzunehmen, nur das Signal zu verbrauchen — wie beim Plan.
+                self._cancel_by_user = False
+                self.cancel_signal.reset()
+                self.importFinished.emit(False)
+                return
+            self._import_payload(
+                path.name, cast(bytes, data), unit=unit, origin=None, in_worker=True
+            )
+
+        def failed(error: object, stamp: int = stamp) -> None:
+            if stamp == self._project_generation:
+                self.importFailed.emit(error)
+
+        worker.readyWith.connect(ready)
+        worker.failedWith.connect(failed)
+        worker.crashed.connect(lambda detail: failed(InternalError(detail=detail)))
+        self._leash.start(worker)
 
     def import_payload_async(
         self,
@@ -2500,6 +2574,28 @@ class Session(QObject):
         eingebettet wird das Modell darin, nie das Archiv mit Bildern und
         Anleitung.
         """
+        self._import_payload(
+            name,
+            payload,
+            unit=unit,
+            origin=origin,
+            in_worker=_plans_in_worker(name, len(payload)),
+        )
+
+    def _import_payload(
+        self,
+        name: str,
+        payload: bytes,
+        *,
+        unit: str,
+        origin: SourceOrigin | None,
+        in_worker: bool,
+    ) -> None:
+        """Einbetten und planen — ``in_worker`` sagt, wo der Plan entsteht.
+
+        Eine Datei vom Pfad kommt mit ``True`` (:meth:`import_model_async`),
+        eine Nutzlast ohne Pfad nach ihrer Größe (:func:`_plans_in_worker`).
+        """
         if is_archive(name):
             self._unpack_archive(name, payload, unit=unit, origin=origin)
             return
@@ -2512,8 +2608,9 @@ class Session(QObject):
         # einen Plan, der in Mikrosekunden steht, verschöbe das Ergebnis hinter
         # die Ereignisschleife, ohne dass jemand darauf gewartet hätte — und
         # jeder Aufrufer müsste danach auf ein Signal warten, auch wenn es
-        # nichts zu warten gab.
-        if not _plans_in_worker(path.name, len(payload)):
+        # nichts zu warten gab. Wer schon gewartet hat, weil die Datei erst
+        # gelesen wurde, plant immer im Arbeiter.
+        if not in_worker:
             try:
                 plan = import_plan(
                     source_id, path.name, payload, unit, first_model=first_model, taken=taken
@@ -2573,7 +2670,7 @@ class Session(QObject):
         def ready(inner: str, data: object, stamp: int = stamp) -> None:
             if stamp != self._project_generation:
                 return
-            self.import_payload_async(inner, cast(bytes, data), unit=unit, origin=origin)
+            self._import_payload(inner, cast(bytes, data), unit=unit, origin=origin, in_worker=True)
 
         def failed(error: object, stamp: int = stamp) -> None:
             if stamp == self._project_generation:

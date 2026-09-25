@@ -90,9 +90,10 @@ halbdurchsichtiges Qt-Widget über dem nativen Renderfenster zeigt die
 Fensterfarbe, nicht die Ansicht dahinter.
 
 **Die Ladeanzeige beginnt später, als das Warten beginnt.** Sie hängt am
-Fortschritt der Auswertung; was *davor* liegt — `load()` für eine Projektdatei,
-`read_bytes()` für ein Modell —, sieht sie nicht, und ihre 200 ms kommen
-obendrauf. Diese Zeile der Tabelle bedient `waiting()` in `main_window.py`, ein
+Fortschritt der Auswertung; was *davor* liegt — `load()` für eine
+Projektdatei —, sieht sie nicht, und ihre 200 ms kommen obendrauf. Ein Modell
+liest die Sitzung seit RM-224 im Arbeiter (siehe unten), dort gibt es dieses
+Loch nicht mehr. Diese Zeile der Tabelle bedient `waiting()` in `main_window.py`, ein
 Kontextmanager um genau eine Rechnung: Datei lesen, Dialog aufbauen, Slicer
 suchen. Als Kontextmanager, weil ein Wartezeiger, der an einem Fehlerausgang
 stehen bleibt, aussieht wie ein hängendes Programm — und eine Frage, die
@@ -109,9 +110,20 @@ von der Platte 0,09 s kostet. Nicht das Lesen ist teuer, sondern das Zählen.
 die Ladeanzeige greift dort sehr wohl: Der Fortschritt läuft über die
 Modelldateien des Archivs, bei einer großen Baugruppe achtundzwanzig Meldungen.
 Unterhalb der Grenze (`PLAN_IN_WORKER_ABOVE`, gemessene 0,18 s je MB, also etwa
-1,4 s bei acht MB) bleibt es beim geraden Weg unter `waiting()` — ein Arbeiter
-für einen Plan, der in Mikrosekunden steht, verschöbe das Ergebnis hinter die
-Ereignisschleife, ohne dass jemand darauf gewartet hätte.
+1,4 s bei acht MB) bleibt es für eine **Nutzlast ohne Pfad** — ein Download —
+beim geraden Weg unter `waiting()`: Ein Arbeiter für einen Plan, der in
+Mikrosekunden steht, verschöbe das Ergebnis hinter die Ereignisschleife, ohne
+dass jemand darauf gewartet hätte.
+
+**Eine Datei vom Pfad liest ein Arbeiter, und ihr Plan läuft immer im
+Arbeiter** (RM-224, `_ReadWorker`). Ein Dateizugriff ist eine Netzfrage — ein
+Laufwerk, das nicht antwortet, hielt das Fenster bis zum Zeitlimit des
+Systems an —, und die Strukturdurchsicht einer 3MF kostete unter der Grenze
+bis 0,6 s im Hauptthread. Ist schon das Lesen nachgereicht, gilt der Grund für
+den geraden Weg nicht mehr; eingebettet wird dazwischen im Hauptthread. Ein
+`OSError` beim Lesen ist ein Hinweis mit Weg (`loader.unreadable_file`), kein
+Absturzbericht. Dasselbe gilt für den Inhalt eines Archivs, das ohnehin im
+Arbeiter entpackt wurde.
 
 **Eine STEP-Datei hat ihre eigene Grenze** (`STEP_PLAN_IN_WORKER_ABOVE`, zwei
 MB, P7.4): Ihr Plan liest die ganze Baugruppe über XCAF, gemessen rund 0,6 s
@@ -122,13 +134,14 @@ gilt, sagt `_plans_in_worker` an der Endung; ein Test, der
 Zwei Fallen dabei, beide gemessen und beide teuer:
 
 **Der Wartezeiger des Aufrufers steht noch, wenn der Weg gerade durchläuft.**
-`with waiting(): self.session.import_model_async(path)` ist richtig — unterhalb
-der Grenze steht der Zeiger, darüber kehrt der Aufruf sofort zurück und die
-Ladeanzeige übernimmt. Aber ein Fehler, der aus dem synchronen Zweig kommt,
-erreicht seinen Slot **innerhalb** dieses `with`, und ein Fehlerdialog unter
-dem Wartezeiger ist genau das Fenster, das zugleich fragt und bittet zu warten.
-`_on_import_failed` nimmt ihn deshalb selbst zurück, bevor es `show_error`
-ruft.
+`with waiting(): self.session.import_payload_async(…)` beim Download ist
+richtig — unterhalb der Grenze steht der Zeiger, darüber kehrt der Aufruf
+sofort zurück und die Ladeanzeige übernimmt. Aber ein Fehler, der aus dem
+synchronen Zweig kommt, erreicht seinen Slot **innerhalb** dieses `with`, und
+ein Fehlerdialog unter dem Wartezeiger ist genau das Fenster, das zugleich
+fragt und bittet zu warten. `_on_import_failed` nimmt ihn deshalb selbst
+zurück, bevor es `show_error` ruft. Um `import_model_async` steht kein
+Wartezeiger mehr — der Aufruf kehrt immer sofort zurück.
 
 **Und `wait_for_idle` muss jeden Arbeitertyp kennen.** Es kannte den neuen
 nicht und kehrte zurück, bevor überhaupt eine Operation auf dem Stapel lag —

@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-25 | [Das Einlesen großer Netze zählt einmal und liest im Arbeiter (25.09.2026)](#das-einlesen-großer-netze-zählt-einmal-und-liest-im-arbeiter-25092026) |
 | 2026-09-25 | [Ineinandersteckende Teile gehen vereinigt in die Boolesche Kette (25.09.2026)](#ineinandersteckende-teile-gehen-vereinigt-in-die-boolesche-kette-25092026) |
 | 2026-09-25 | [Der Bedienweg „kaputtes Dreiecksmodell → druckbar“ ist abgearbeitet (25.09.2026)](#der-bedienweg-kaputtes-dreiecksmodell--druckbar-ist-abgearbeitet-25092026) |
 | 2026-09-24 | [Solidon 0.5.0 veröffentlicht (24.09.2026)](#solidon-050-veröffentlicht-24092026) |
@@ -31008,3 +31009,64 @@ Dazu aus dem Bericht, je mit Test:
   (Vereinigung, Bohrung neben und im gemeinsamen Raum; ohne den Fix zwei
   Teile und doppeltes Volumen) und
   `test_parts_that_only_share_a_tool_are_not_named_as_united`.
+
+## Das Einlesen großer Netze zählt einmal und liest im Arbeiter (25.09.2026)
+
+<a id="rm-224"></a>
+
+- [x] **RM-224 — Das Einlesen großer Netze rechnet Kanten mehrfach und im Hauptthread.**
+  Gemessen in der Durchsicht 0.5.0 (netzkern, szene, fenster) an der
+  Piratenschiff-Baugruppe (1,2 Mio. Dreiecke): `normalise` braucht für
+  `merge_vertices` 3,0 s, `is_watertight` 1,8 s, `fix_inversion` samt
+  `mass_properties` 1,3–1,65 s und `_count_components` 1,16 s; `is_watertight`
+  und `face_adjacency` gruppieren dieselben Kanten je einmal
+  (`trimesh.grouping.group_rows`, je rund 0,4 s), und nach einer Umkehrung
+  rechnet `mass_properties` noch einmal ganz. `ingest.loader._open_edge_count`
+  zählt offene Kanten selbst, neben `repair.open_edge_count` (Zwilling). Im
+  Fenster laufen die 3MF-Strukturdurchsicht (`threemf.scan_assembly`, rund
+  320 ms) und das Lesen der Datei (rund 180 ms) im synchronen Teil von
+  `open_path` (Siebhalter 290–634 ms im Hauptthread). Und der Docstring von
+  `repair.fill_holes` („nur kleine Löcher") stimmt seit `ed233f2c` nicht mehr.
+  Weg: eine Kantentabelle je Netz (`repair._edge_table`) für Dichtheit,
+  Nachbarschaft und Komponenten; den Zwilling auf `repair.open_edge_count`;
+  Strukturdurchsicht und Lesen in den Arbeiter. Abnahme: `normalise` am Schiff
+  ein Drittel schneller mit gleichem Ergebnis, `open_path` ohne Dateiarbeit im
+  Hauptthread.
+
+  **Stand 25.09.2026:** Die Kantenzählung wohnt in `mesh.edge_table`, einmal
+  je Netz. Sie legt `is_watertight` und den Umlaufsinn mit trimeshs Definition
+  in dessen Cache (gegen trimesh an allen 485 Körpern des Korpus roh und
+  verschweißt geprüft, 970 Vergleiche, keine Abweichung; Grenzfälle in
+  `test_the_edge_count_answers_like_trimesh`), gibt `face_components` die
+  Nachbarschaft, und die Teilezerlegung ist je Netz gemerkt; das Einlesen
+  fragt über `repair.is_closed`. Der Zwilling `_open_edge_count` war schon
+  fort, der Docstring von `fill_holes` ist berichtigt. Gemessen am Schiff,
+  abwechselnd alter und neuer Stand unter Fremdlast: 5,85/5,78/6,14/5,91 s
+  gegen 5,58/5,63/5,47/5,04 s, dieselben Befunde, Dreiecke und Volumen
+  (`.claude/.state/rm-224-2026-09-25/`).
+
+  **Danach am selben Tag:** Von den 24 Kantenzählungen eines Imports
+  rechneten vier neu, drei davon leitet die Reparatur jetzt ab.
+  `mesh.without_faces` gilt für jedes Streichen von Dreiecken (Verzweigungen,
+  Splitter, Kleinstteile, Häute, Doppel), `mesh.carry_appended_edges` für die
+  Lochfüllung, und `unify_normals` kopiert mit Cache. Das Vernähen holt seine
+  Randkanten aus der Zählung, das Auflösen der Verzweigungen wägt nur die
+  Dreiecke an ihnen (`mesh.stable_areas`). Am Schiff 5,16 → 3,62 s (Median aus
+  fünf Läufen, `stufen-*.txt`), gegenüber den 6,0 s oben 40 Prozent, mit
+  denselben Befunden, Dreiecken und demselben Volumen. Das Verschweißen
+  (1,06 s) baut RM-239 neu und nimmt seine Geschwindigkeit mit (Absprache mit
+  der Reparatursitzung).
+
+  **Und `open_path` liest nicht mehr im Hauptthread:** Eine Datei vom Pfad
+  liest `session._ReadWorker`; eingebettet wird im Hauptthread, geplant immer
+  im Arbeiter, samt Strukturdurchsicht einer 3MF. Eine fehlende oder
+  gesperrte Datei kommt als Hinweis mit *Andere Datei wählen*
+  (`loader.unreadable_file`); vorher warf der Aufruf einen nackten
+  `FileNotFoundError`. Längste Lücke im Hauptthread vom Aufruf bis zur Antwort
+  (`lesen_im_arbeiter.py`): Siebhalter-3MF 135 → 30 ms, Schiff 128 → 27 ms.
+  Nachweis: `test_reading_a_file_the_system_refuses_is_a_hint` im Tor, die
+  drei Lagen am Fenster in `test_ingest.py` (gelesen im Arbeiter, unlesbare
+  Datei, verspätete Lesung) beim Release. **Die Abnahme ist erfüllt:**
+  `normalise` am Schiff 6,0 → 3,62 s mit gleichem Ergebnis an allen 485
+  Körpern des Korpus, `open_path` ohne Dateiarbeit im Hauptthread. Das
+  Verschweißen baut RM-239 neu.

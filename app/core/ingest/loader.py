@@ -39,6 +39,7 @@ from app.core.errors import (
     CHOOSE_ANOTHER_FILE,
     RESOLVE_INTERSECTIONS,
     SPLIT_BODIES,
+    UserError,
     ValidationError,
 )
 from app.core.geom.mesh import (
@@ -187,12 +188,39 @@ def read_bounded_payload(path: Path) -> bytes:
     20-GiB-Datei erst vollständig in den Speicher und erklärte danach, dass
     sie zu groß war. Der begrenzte Lesezug fängt zusätzlich eine Datei ab,
     die zwischen Größenabfrage und Lesen wächst.
+
+    **Ein ``OSError`` ist eine Lage, kein Programmfehler** (RM-224): eine
+    verschobene Datei, ein getrenntes Laufwerk, fehlende Rechte. Seit das
+    Einlesen im Arbeiter liest, käme er dort als Absturzbericht an; hier wird
+    er zum Hinweis mit Weg, mit den Sätzen, die der Lesearbeiter der
+    Quellenwahl bis dahin selbst formulierte. Der Grund des Systems reist als
+    Wert mit.
     """
-    check_limits(path.stat().st_size, 0)
-    with path.open("rb") as stream:
-        payload = stream.read(MAX_FILE_BYTES + 1)
+    try:
+        check_limits(path.stat().st_size, 0)
+        with path.open("rb") as stream:
+            payload = stream.read(MAX_FILE_BYTES + 1)
+    except OSError as problem:
+        raise unreadable_file(path, problem) from problem
     check_limits(len(payload), 0)
     return payload
+
+
+def unreadable_file(path: Path, problem: OSError) -> UserError:
+    """Der Hinweis für eine Datei, die das System nicht herausgibt.
+
+    Ein Satz für jeden Leseweg — das Einlesen und die Quellenwahl im Dialog
+    fragen beide hier, statt ihn je selbst zu formulieren.
+    """
+    return UserError(
+        title=_("Diese Datei ließ sich nicht lesen."),
+        detail=_(
+            "Sie ist vielleicht verschoben worden, oder das Laufwerk ist "
+            "gerade nicht erreichbar. Wählen Sie die Datei noch einmal aus."
+        ),
+        values={"path": path.name, "reason": problem.strerror or str(problem)},
+        suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+    )
 
 
 def read_local_payload(path: Path) -> bytes:

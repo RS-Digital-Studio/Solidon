@@ -64,7 +64,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-220 — Kippen und Versetzen einer gesenkten Bohrung: drei Reste](#rm-220) | Geometrie, Erkennung und Druckvorbereitung | Rinne von 713,9 mm³ beim Kippen, falsche Senkungsmaße nach dem Versetzen, keine Nachbarwandprüfung am exakten Körper — kappen oder nennen, messen statt erklären |
 | [RM-222 — Die Erkennung einer Durchbohrung am Netz hängt an der Vorgeschichte](#rm-222) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: gleiche Geometrie, mit vorherigem Vergrößern eine Bohrung weniger — beide Stände als Korpusfall, Stelle eingrenzen |
 | [RM-223 — Zwei Netzoperationen sagen das Falsche](#rm-223) | Geometrie, Erkennung und Druckvorbereitung | Angleichen mit 1 mm endet als unerwarteter Fehler (MemoryError), Verfeinern leiht sich den Satz der lokalen Suche — vorab schätzen und absagen, eigener Satz |
-| [RM-224 — Das Einlesen großer Netze rechnet Kanten mehrfach und im Hauptthread](#rm-224) | Geometrie, Erkennung und Druckvorbereitung | Kantenzählung je Netz, in der Reparatur abgeleitet statt neu sortiert: normalise am Schiff 6,0 → 3,6 s, gleiches Ergebnis; in Arbeit: 3MF-Durchsicht und Lesen der Datei in den Arbeiter |
 | [RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen](#rm-225) | Geometrie, Erkennung und Druckvorbereitung | Gewürzdeckel: nach Teilung ändern 124 Flächen und kein Muster, nach Entfernen 31 Zusatzflächen und 1,7 mm³ Überlappung — Feld begrenzen, Stirnkappen verschmelzen |
 | [RM-226 — Netz und exakter Kern nennen dieselbe Fläche verschieden](#rm-226) | Geometrie, Erkennung und Druckvorbereitung | Gewölbte Oberseite exakt Verrundung, am Netz gekrümmte Fläche; Fläche versetzen lässt exakt eine koplanare Scheibe stehen — replaces_an_edge an den exakten Kern, gleiche Domäne vereinigen |
 | [RM-227 — Eine Tasche am Teppichclip gibt einen ungültigen exakten Körper mit 0 mm³ Abtrag still zurück](#rm-227) | Geometrie, Erkennung und Druckvorbereitung | sketch_pocket Ø 11 an carpet-corner-clip.step: ungültig, 0 mm³, kein Befund — nach dem Schnitt mit profiles.is_sound prüfen und absagen, dann die Ursache |
@@ -1714,52 +1713,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Dreieckszahl aus Fläche und Kantenlänge vorab schätzen und mit Satz und
   größerer Kantenlänge als Vorschlag absagen; eigener Satz für das Budget des
   Verfeinerns. Abnahme: beide Fälle als Test mit dem Satz, den der Kunde liest.
-
-<a id="rm-224"></a>
-
-- [ ] **RM-224 — Das Einlesen großer Netze rechnet Kanten mehrfach und im Hauptthread.**
-  Gemessen in der Durchsicht 0.5.0 (netzkern, szene, fenster) an der
-  Piratenschiff-Baugruppe (1,2 Mio. Dreiecke): `normalise` braucht für
-  `merge_vertices` 3,0 s, `is_watertight` 1,8 s, `fix_inversion` samt
-  `mass_properties` 1,3–1,65 s und `_count_components` 1,16 s; `is_watertight`
-  und `face_adjacency` gruppieren dieselben Kanten je einmal
-  (`trimesh.grouping.group_rows`, je rund 0,4 s), und nach einer Umkehrung
-  rechnet `mass_properties` noch einmal ganz. `ingest.loader._open_edge_count`
-  zählt offene Kanten selbst, neben `repair.open_edge_count` (Zwilling). Im
-  Fenster laufen die 3MF-Strukturdurchsicht (`threemf.scan_assembly`, rund
-  320 ms) und das Lesen der Datei (rund 180 ms) im synchronen Teil von
-  `open_path` (Siebhalter 290–634 ms im Hauptthread). Und der Docstring von
-  `repair.fill_holes` („nur kleine Löcher") stimmt seit `ed233f2c` nicht mehr.
-  Weg: eine Kantentabelle je Netz (`repair._edge_table`) für Dichtheit,
-  Nachbarschaft und Komponenten; den Zwilling auf `repair.open_edge_count`;
-  Strukturdurchsicht und Lesen in den Arbeiter. Abnahme: `normalise` am Schiff
-  ein Drittel schneller mit gleichem Ergebnis, `open_path` ohne Dateiarbeit im
-  Hauptthread.
-
-  **Stand 25.09.2026:** Die Kantenzählung wohnt in `mesh.edge_table`, einmal
-  je Netz. Sie legt `is_watertight` und den Umlaufsinn mit trimeshs Definition
-  in dessen Cache (gegen trimesh an allen 485 Körpern des Korpus roh und
-  verschweißt geprüft, 970 Vergleiche, keine Abweichung; Grenzfälle in
-  `test_the_edge_count_answers_like_trimesh`), gibt `face_components` die
-  Nachbarschaft, und die Teilezerlegung ist je Netz gemerkt; das Einlesen
-  fragt über `repair.is_closed`. Der Zwilling `_open_edge_count` war schon
-  fort, der Docstring von `fill_holes` ist berichtigt. Gemessen am Schiff,
-  abwechselnd alter und neuer Stand unter Fremdlast: 5,85/5,78/6,14/5,91 s
-  gegen 5,58/5,63/5,47/5,04 s, dieselben Befunde, Dreiecke und Volumen
-  (`.claude/.state/rm-224-2026-09-25/`).
-
-  **Danach am selben Tag:** Von den 24 Kantenzählungen eines Imports
-  rechneten vier neu, drei davon leitet die Reparatur jetzt ab.
-  `mesh.without_faces` gilt für jedes Streichen von Dreiecken (Verzweigungen,
-  Splitter, Kleinstteile, Häute, Doppel), `mesh.carry_appended_edges` für die
-  Lochfüllung, und `unify_normals` kopiert mit Cache. Das Vernähen holt seine
-  Randkanten aus der Zählung, das Auflösen der Verzweigungen wägt nur die
-  Dreiecke an ihnen (`mesh.stable_areas`). Am Schiff 5,16 → 3,62 s (Median aus
-  fünf Läufen, `stufen-*.txt`), gegenüber den 6,0 s oben 40 Prozent, mit
-  denselben Befunden, Dreiecken und demselben Volumen. Das Verschweißen
-  (1,06 s) baut RM-239 neu und nimmt seine Geschwindigkeit mit (Absprache mit
-  der Reparatursitzung). **In Arbeit:** `open_path` ohne Dateiarbeit im
-  Hauptthread.
 
 <a id="rm-225"></a>
 

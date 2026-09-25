@@ -789,10 +789,12 @@ bevor es jemand wusste:
   Der synchrone Weg steht daneben und bleibt — Kommandozeile und Tests
   brauchen einen, der wirft. Das Fenster braucht einen, der meldet: Bei einer
   3MF zählt `import_plan` die ganze Baugruppe, bevor eine Operation entsteht,
-  und das dauert bei 63 MB vierzehn Sekunden. Oberhalb von
-  `PLAN_IN_WORKER_ABOVE` läuft das im Arbeiter, der Fehler kommt über
-  `importFailed`. Wer in einem Test `session.import_model` patcht, patcht
-  damit einen Weg, den das Fenster nicht mehr geht — fünf Tests in
+  und das dauert bei 63 MB vierzehn Sekunden. Eine Datei vom Pfad liest
+  `_ReadWorker`, geplant wird danach immer im Arbeiter (RM-224); für eine
+  Nutzlast ohne Pfad gilt `PLAN_IN_WORKER_ABOVE`. Der Fehler kommt über
+  `importFailed`, **ein Test wartet also mit `wait_for_idle`**, bevor er nach
+  dem Öffnen etwas prüft. Wer in einem Test `session.import_model` patcht,
+  patcht damit einen Weg, den das Fenster nicht mehr geht — fünf Tests in
   `test_ui.py` hingen daran (03.09.2026).
 
 **Und oberhalb von 150 000 Dreiecken rechnet sie grob.** `Session._preview_outcome`

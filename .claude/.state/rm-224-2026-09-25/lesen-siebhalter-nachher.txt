@@ -1,0 +1,10 @@
+gemessen wird C:\Users\rober\AppData\Local\Temp\claude\F--3D-Druck\eda33e4f-279c-48e3-bf58-acf625bcf116\scratchpad\wt\app\ui\__init__.py
+Lage 1: sofort eingebettet False, angenommen True, Schritte ['load']
+Lage 2: UserError: Diese Datei ließ sich nicht lesen. — ['choose_another_file', 'cancel']
+Lage 3: Leerlauf True, Quellen [], Schritte []
+  Lauf: längste Lücke bis zur Antwort 30 ms
+  Lauf: längste Lücke bis zur Antwort 30 ms
+  Lauf: längste Lücke bis zur Antwort 29 ms
+  Lauf: längste Lücke bis zur Antwort 29 ms
+  Lauf: längste Lücke bis zur Antwort 31 ms
+Siebhalter+X1C.3mf: Median der längsten Lücke 30 ms
