@@ -1,0 +1,31 @@
+gemessen wird F:\3D Druck\app\__init__.py
+  Lauf: 3.585 s
+  Lauf: 3.587 s
+  Lauf: 3.622 s
+  Lauf: 3.795 s
+  Lauf: 3.636 s
+obj_15_Assembly.stl: 1223836 Dreiecke
+Befunde: ['repair.branching_resolved', 'repair.holes_filled', 'ingest.very_large']
+Ergebnis: dicht True, Teile 1, Dreiecke 1223836, Volumen 284140.958464
+Median je Schritt über die Läufe (Aufrufe je Lauf):
+    3.622 s    1x  loader.normalise
+    1.657 s    1x  repair.repair
+    1.024 s    1x  trimesh.merge_vertices
+    0.999 s    1x  repair._filled_rounds
+    0.998 s    2x  repair._fill_loops
+    0.502 s    1x  repair._flat_fills
+    0.399 s   23x  mesh.edge_table
+    0.393 s    2x  repair.is_closed
+    0.279 s    5x  mesh.face_components
+    0.265 s    1x  repair.resolve_branching_edges
+    0.222 s    1x  repair.unify_normals
+    0.194 s    1x  trimesh.nondegenerate_faces
+    0.164 s    1x  mesh._adjacency_by_place
+    0.142 s    1x  repair._crossed_edge_count
+    0.109 s    1x  repair.turn_shells_outward
+    0.090 s    1x  trimesh.unique_faces
+    0.034 s    2x  repair._hole_rings
+    0.009 s    1x  repair.stitch_t_junctions
+    0.006 s    2x  repair.wind_consistently
+    0.000 s    1x  repair.remove_open_splinters
+    0.000 s    1x  loader._count_components

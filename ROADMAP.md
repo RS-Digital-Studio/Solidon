@@ -64,7 +64,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-220 — Kippen und Versetzen einer gesenkten Bohrung: drei Reste](#rm-220) | Geometrie, Erkennung und Druckvorbereitung | Rinne von 713,9 mm³ beim Kippen, falsche Senkungsmaße nach dem Versetzen, keine Nachbarwandprüfung am exakten Körper — kappen oder nennen, messen statt erklären |
 | [RM-222 — Die Erkennung einer Durchbohrung am Netz hängt an der Vorgeschichte](#rm-222) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: gleiche Geometrie, mit vorherigem Vergrößern eine Bohrung weniger — beide Stände als Korpusfall, Stelle eingrenzen |
 | [RM-223 — Zwei Netzoperationen sagen das Falsche](#rm-223) | Geometrie, Erkennung und Druckvorbereitung | Angleichen mit 1 mm endet als unerwarteter Fehler (MemoryError), Verfeinern leiht sich den Satz der lokalen Suche — vorab schätzen und absagen, eigener Satz |
-| [RM-224 — Das Einlesen großer Netze rechnet Kanten mehrfach und im Hauptthread](#rm-224) | Geometrie, Erkennung und Druckvorbereitung | Eine Kantenzählung je Netz steht (normalise am Schiff 6,0 → 5,1–5,3 s, gleiches Ergebnis); in Arbeit: merge_vertices und Füllarbeit für das Drittel, 3MF-Durchsicht und Lesen der Datei in den Arbeiter |
+| [RM-224 — Das Einlesen großer Netze rechnet Kanten mehrfach und im Hauptthread](#rm-224) | Geometrie, Erkennung und Druckvorbereitung | Kantenzählung je Netz, in der Reparatur abgeleitet statt neu sortiert: normalise am Schiff 6,0 → 3,6 s, gleiches Ergebnis; in Arbeit: 3MF-Durchsicht und Lesen der Datei in den Arbeiter |
 | [RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen](#rm-225) | Geometrie, Erkennung und Druckvorbereitung | Gewürzdeckel: nach Teilung ändern 124 Flächen und kein Muster, nach Entfernen 31 Zusatzflächen und 1,7 mm³ Überlappung — Feld begrenzen, Stirnkappen verschmelzen |
 | [RM-226 — Netz und exakter Kern nennen dieselbe Fläche verschieden](#rm-226) | Geometrie, Erkennung und Druckvorbereitung | Gewölbte Oberseite exakt Verrundung, am Netz gekrümmte Fläche; Fläche versetzen lässt exakt eine koplanare Scheibe stehen — replaces_an_edge an den exakten Kern, gleiche Domäne vereinigen |
 | [RM-227 — Eine Tasche am Teppichclip gibt einen ungültigen exakten Körper mit 0 mm³ Abtrag still zurück](#rm-227) | Geometrie, Erkennung und Druckvorbereitung | sketch_pocket Ø 11 an carpet-corner-clip.step: ungültig, 0 mm³, kein Befund — nach dem Schnitt mit profiles.is_sound prüfen und absagen, dann die Ursache |
@@ -1746,10 +1746,19 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   fort, der Docstring von `fill_holes` ist berichtigt. Gemessen am Schiff,
   abwechselnd alter und neuer Stand unter Fremdlast: 5,85/5,78/6,14/5,91 s
   gegen 5,58/5,63/5,47/5,04 s, dieselben Befunde, Dreiecke und Volumen
-  (`.claude/.state/rm-224-2026-09-25/`). **In Arbeit, als nächste Schritte
-  derselben Sitzung:** das Drittel — trimeshs `merge_vertices` (1,1 s) und die
-  eigentliche Füllarbeit der Reparatur (`_fill_loops` 1,7 s,
-  `resolve_branching_edges` 0,6 s) —, und `open_path` ohne Dateiarbeit im
+  (`.claude/.state/rm-224-2026-09-25/`).
+
+  **Danach am selben Tag:** Von den 24 Kantenzählungen eines Imports
+  rechneten vier neu, drei davon leitet die Reparatur jetzt ab.
+  `mesh.without_faces` gilt für jedes Streichen von Dreiecken (Verzweigungen,
+  Splitter, Kleinstteile, Häute, Doppel), `mesh.carry_appended_edges` für die
+  Lochfüllung, und `unify_normals` kopiert mit Cache. Das Vernähen holt seine
+  Randkanten aus der Zählung, das Auflösen der Verzweigungen wägt nur die
+  Dreiecke an ihnen (`mesh.stable_areas`). Am Schiff 5,16 → 3,62 s (Median aus
+  fünf Läufen, `stufen-*.txt`), gegenüber den 6,0 s oben 40 Prozent, mit
+  denselben Befunden, Dreiecken und demselben Volumen. Das Verschweißen
+  (1,06 s) baut RM-239 neu und nimmt seine Geschwindigkeit mit (Absprache mit
+  der Reparatursitzung). **In Arbeit:** `open_path` ohne Dateiarbeit im
   Hauptthread.
 
 <a id="rm-225"></a>

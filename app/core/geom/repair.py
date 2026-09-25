@@ -36,11 +36,13 @@ from app.core.geom.intersections import Crossings
 from app.core.geom.mesh import (
     EdgeTable,
     MeshData,
+    carry_appended_edges,
     edge_table,
     face_components,
     signed_volume,
-    stable_normals,
+    stable_areas,
     triple_products,
+    without_faces,
 )
 from app.core.geom.transform import along
 from app.core.log import get_logger
@@ -139,7 +141,8 @@ def remove_doubled_faces(mesh: MeshData) -> tuple[MeshData, int]:
     einer doppelt geschriebenen Kugel null Dreiecke zurück. Verschwände ein
     zusammenhängendes Teil vollständig, behält es je Gruppe ihr erstes Dreieck.
     """
-    body = mesh.raw.copy()
+    # Nur gelesen; die Kopie mit abgeleiteter Kantenzählung baut ``without_faces``.
+    body = mesh.raw
     before = len(body.faces)
     if not before:
         return mesh, 0
@@ -207,9 +210,7 @@ def remove_doubled_faces(mesh: MeshData) -> tuple[MeshData, int]:
     kept_slots = (
         tuple(mesh.slots[int(index)] for index in np.flatnonzero(keep)) if mesh.slots else ()
     )
-    body.update_faces(keep)
-    body.remove_unreferenced_vertices()
-    return MeshData.of(body, slots=kept_slots), dropped
+    return MeshData.of(without_faces(body, keep), slots=kept_slots), dropped
 
 
 def wind_consistently(body: trimesh.Trimesh) -> None:
@@ -306,8 +307,14 @@ def wind_consistently(body: trimesh.Trimesh) -> None:
 
 def unify_normals(mesh: MeshData) -> tuple[MeshData, bool]:
     """Macht den Umlaufsinn einheitlich und stülpt den Körper nötigenfalls
-    nach außen."""
-    body = mesh.raw.copy()
+    nach außen.
+
+    Die Kopie nimmt den Cache mit (RM-224): Kantenzählung, Umlaufsinn und
+    Teilezerlegung des Netzes stehen dort schon, und ohne ihn rechnete dieser
+    Schritt am Piratenschiff beides ein zweites Mal — 0,8 s. Dreht er
+    Dreiecke, verfällt der Cache der Kopie mit ihrer Geometrie.
+    """
+    body = mesh.raw.copy(include_cache=True)
     before = np.asarray(body.faces).copy()
     wind_consistently(body)
     if body.is_watertight:
@@ -728,11 +735,14 @@ def _stitched_once(mesh: MeshData) -> tuple[MeshData, int]:
     # ändert am alten nichts — eine Kopie am Anfang kostete am 1,2-M-Netz
     # bei jedem Aufruf ein Zehntel einer Sekunde, auch ohne einen Rand.
     body = mesh.raw
-    boundary = _edge_table(mesh).rows(1)
+    table = _edge_table(mesh)
+    boundary = table.rows(1)
     if not len(boundary) or len(boundary) > MAX_STITCH_EDGES:
         return mesh, 0
 
-    edges = body.edges_sorted[boundary]
+    # Die Kanten der Zählung sind sortiert wie ``edges_sorted``; die Zeilen
+    # darüber zu holen spart, sie an einem abgeleiteten Netz neu zu sortieren.
+    edges = table.unique[table.inverse[boundary]]
     points = np.asarray(body.vertices, dtype=float)
     candidates = np.unique(edges)
 
@@ -2034,6 +2044,8 @@ def _assembled(mesh: MeshData, records: Sequence[_RingFill], slots: np.ndarray |
     _carried_colours(
         body, patched, np.concatenate([np.arange(len(body.faces), dtype=np.int64), carried])
     )
+    # Angehängt, nicht umgebaut: Die Kantenzählung kommt aus der alten (RM-224).
+    carry_appended_edges(body, patched)
     slot_values: tuple[int, ...] = ()
     if slots is not None and len(slots) == len(body.faces):
         slot_values = tuple(int(value) for value in np.concatenate([slots, slots[carried]]))
@@ -2419,8 +2431,7 @@ def _resolve_branching_once(mesh: MeshData) -> tuple[MeshData, int]:
     loose = (table.counts[table.inverse] == 1).reshape(-1, 3).sum(axis=1)[faces]
     directed = np.asarray(body.edges, dtype=np.int64)[rows]
     forward = directed[:, 0] < directed[:, 1]
-    _normals, areas = stable_normals(body)
-    order = np.lexsort((faces, -areas[faces], loose, edges))
+    order = np.lexsort((faces, -stable_areas(body, faces), loose, edges))
     edges, faces, forward = edges[order], faces[order], forward[order]
     starts = np.flatnonzero(np.r_[True, edges[1:] != edges[:-1]])
     ends = np.r_[starts[1:], len(edges)]
@@ -2437,9 +2448,7 @@ def _resolve_branching_once(mesh: MeshData) -> tuple[MeshData, int]:
 
     keep = np.ones(len(body.faces), dtype=bool)
     keep[doomed] = False
-    trimmed = body.copy()
-    trimmed.update_faces(keep)
-    trimmed.remove_unreferenced_vertices()
+    trimmed = without_faces(body, keep)
     slots: tuple[int, ...] = ()
     if mesh.slots and len(mesh.slots) == len(body.faces):
         slots = tuple(int(value) for value in np.asarray(mesh.slots, dtype=np.int64)[keep])
@@ -2632,12 +2641,10 @@ def remove_hollow_shells(mesh: MeshData) -> tuple[MeshData, int]:
     if len(keep) == len(pieces) or not keep:
         return mesh, 0
 
-    body = mesh.raw.copy()
-    mask = np.zeros(len(body.faces), dtype=bool)
+    mask = np.zeros(len(mesh.raw.faces), dtype=bool)
     for piece in keep:
         mask[piece] = True
-    body.update_faces(mask)
-    body.remove_unreferenced_vertices()
+    body = without_faces(mesh.raw, mask)
     slots = (
         tuple(slot for slot, kept in zip(mesh.slots, mask, strict=True) if kept)
         if mesh.slots
@@ -2680,9 +2687,7 @@ def remove_open_splinters(
     mask = np.ones(len(mesh.raw.faces), dtype=bool)
     for piece in doomed:
         mask[piece] = False
-    body = mesh.raw.copy()
-    body.update_faces(mask)
-    body.remove_unreferenced_vertices()
+    body = without_faces(mesh.raw, mask)
     slots = (
         tuple(slot for slot, kept in zip(mesh.slots, mask, strict=True) if kept)
         if mesh.slots
@@ -2705,12 +2710,10 @@ def remove_small_components(
     if len(keep) == len(pieces):
         return mesh, 0
 
-    body = mesh.raw.copy()
-    mask = np.zeros(len(body.faces), dtype=bool)
+    mask = np.zeros(len(mesh.raw.faces), dtype=bool)
     for piece in keep:
         mask[piece] = True
-    body.update_faces(mask)
-    body.remove_unreferenced_vertices()
+    body = without_faces(mesh.raw, mask)
     slots = (
         tuple(slot for slot, kept in zip(mesh.slots, mask, strict=True) if kept)
         if mesh.slots

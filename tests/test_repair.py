@@ -2328,3 +2328,62 @@ def test_the_edge_count_answers_like_trimesh(case: str) -> None:
         bool(expected[1]),
     )
     assert {tuple(pair) for pair in table.face_pairs().tolist()} == pairs
+
+
+def _is_the_counted_edge_table(derived_mesh: trimesh.Trimesh) -> None:
+    """Die abgelegte Zählung ist die, die eine frische Zählung desselben Netzes ergäbe."""
+    from app.core.geom import mesh as mesh_module
+
+    assert mesh_module._EDGE_TABLE_KEY in derived_mesh._cache, "abgeleitet, nicht nachgezählt"
+    derived = mesh_module.edge_table(derived_mesh)
+    answers = (derived_mesh.is_watertight, derived_mesh.is_winding_consistent)
+    counted_mesh = trimesh.Trimesh(
+        vertices=np.asarray(derived_mesh.vertices),
+        faces=np.asarray(derived_mesh.faces),
+        process=False,
+    )
+    counted = mesh_module.edge_table(counted_mesh)
+    np.testing.assert_array_equal(derived.unique, counted.unique)
+    np.testing.assert_array_equal(derived.inverse, counted.inverse)
+    np.testing.assert_array_equal(derived.counts, counted.counts)
+    assert answers == (counted_mesh.is_watertight, counted_mesh.is_winding_consistent)
+
+
+@pytest.mark.parametrize("case", list(_edge_count_cases()))
+def test_a_derived_edge_count_is_the_counted_one(case: str) -> None:
+    """Die Reparatur leitet die Kantenzählung ab, statt sie neu zu sortieren (RM-224).
+
+    ``mesh.without_faces`` zieht gestrichene Dreiecke ab und nummeriert die
+    Ecken neu, ``mesh.carry_appended_edges`` fügt angehängte Dreiecke samt
+    neuer Ecke ein. Beides muss die Tabelle einer frischen Zählung ergeben —
+    Kanten, Zeilen, Zähler — und dieselbe Dichtheit und denselben Umlaufsinn;
+    sonst hieße ein offenes Netz nach dem Auflösen einer Verzweigung „dicht".
+    Gestrichen wird jedes dritte Dreieck, so verlieren Ecken ihr letztes;
+    angehängt werden Kopien mit Gegenlauf (Kanten mit drei und vier Dreiecken)
+    und ein Dreieck an einer neuen Mitte.
+    """
+    from app.core.geom.mesh import carry_appended_edges, edge_table, without_faces
+
+    body = _edge_count_cases()[case]
+    edge_table(body)
+    keep = np.ones(len(body.faces), dtype=bool)
+    keep[::3] = False
+
+    trimmed = without_faces(body, keep)
+
+    assert len(trimmed.faces) == int(keep.sum())
+    _is_the_counted_edge_table(trimmed)
+
+    points = np.asarray(trimmed.vertices)
+    rows = np.asarray(trimmed.faces, dtype=np.int64)[:4]
+    extended = trimesh.Trimesh(
+        vertices=np.vstack([points, points.mean(axis=0)]),
+        faces=np.vstack(
+            [trimmed.faces, rows[:, ::-1], rows[:2], [[rows[0, 0], rows[0, 1], len(points)]]]
+        ),
+        process=False,
+    )
+
+    carry_appended_edges(trimmed, extended)
+
+    _is_the_counted_edge_table(extended)

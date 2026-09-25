@@ -1,0 +1,210 @@
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(edge_table\\)'>
+
+Function                                           was called by...
+                                                       ncalls  tottime  cumtime
+F:\3D Druck\app\core\geom\mesh.py:541(edge_table)  <-       2    0.064    0.607  F:\3D Druck\app\core\geom\mesh.py:646(_adjacency_by_place)
+                                                            2    0.060    0.567  F:\3D Druck\app\core\geom\repair.py:215(wind_consistently)
+                                                           18    0.049    0.492  F:\3D Druck\app\core\geom\repair.py:3595(_edge_table)
+                                                            2    0.050    0.488  F:\3D Druck\app\core\geom\repair.py:3607(is_closed)
+
+
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(face_components\\)'>
+
+Function                                                was called by...
+                                                            ncalls  tottime  cumtime
+F:\3D Druck\app\core\geom\mesh.py:582(face_components)  <-       1    0.000    0.000  F:\3D Druck\app\core\geom\mesh.py:108(component_count)
+                                                                 1    0.001    0.350  F:\3D Druck\app\core\geom\repair.py:352(__init__)
+                                                                 1    0.001    0.996  F:\3D Druck\app\core\geom\repair.py:2043(_flat_fills)
+                                                                 1    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:2649(remove_open_splinters)
+                                                                 1    0.000    0.000  F:\3D Druck\app\core\ingest\loader.py:1375(_count_components)
+
+
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(_adjacency_by_place\\)'>
+
+Function                                                    was called by...
+                                                                ncalls  tottime  cumtime
+F:\3D Druck\app\core\geom\mesh.py:646(_adjacency_by_place)  <-       2    0.010    1.036  F:\3D Druck\app\core\geom\mesh.py:582(face_components)
+
+
+   Random listing order was used
+   List reduced from 443 to 2 due to restriction <'\\(merge_vertices\\)'>
+
+Function                                                                    was called by...
+                                                                                ncalls  tottime  cumtime
+F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1155(merge_vertices)    <-       1    0.004    1.274  F:\3D Druck\app\core\ingest\loader.py:895(normalise)
+F:\3D Druck\.venv\Lib\site-packages\trimesh\grouping.py:24(merge_vertices)  <-       1    0.080    1.269  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1155(merge_vertices)
+
+
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(unify_normals\\)'>
+
+Function                                                was called by...
+                                                            ncalls  tottime  cumtime
+F:\3D Druck\app\core\geom\repair.py:307(unify_normals)  <-       1    0.000    1.298  F:\3D Druck\app\core\geom\repair.py:3028(repair)
+
+
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(_flat_fills\\)'>
+
+Function                                               was called by...
+                                                           ncalls  tottime  cumtime
+F:\3D Druck\app\core\geom\repair.py:2043(_flat_fills)  <-       1    0.010    1.351  F:\3D Druck\app\core\geom\repair.py:2089(_fill_loops)
+
+
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(_resolve_branching_once\\)'>
+
+Function                                                           was called by...
+                                                                       ncalls  tottime  cumtime
+F:\3D Druck\app\core\geom\repair.py:2393(_resolve_branching_once)  <-       2    0.025    0.741  F:\3D Druck\app\core\geom\repair.py:2356(resolve_branching_edges)
+
+
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(edges_sorted\\)'>
+
+Function                                                                was called by...
+                                                                            ncalls  tottime  cumtime
+F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1012(edges_sorted)  <-       4    0.000    0.563  F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:115(get_cached)
+
+
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(normalise\\)'>
+
+Function                                              called...
+                                                          ncalls  tottime  cumtime
+F:\3D Druck\app\core\ingest\loader.py:895(normalise)  ->       1    0.000    0.000  <string>:2(__init__)
+                                                               1    0.000    0.000  C:\Users\rober\AppData\Local\Programs\Python\Python314\Lib\logging\__init__.py:1510(info)
+                                                               1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\numeric.py:2452(_array_equal_dispatcher)
+                                                               1    0.003    0.003  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\numeric.py:2471(array_equal)
+                                                               1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\linalg\_linalg.py:2594(_norm_dispatcher)
+                                                               1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\linalg\_linalg.py:2598(norm)
+                                                              15    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:339(faces)
+                                                               2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:485(vertices)
+                                                               1    0.004    1.274  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1155(merge_vertices)
+                                                               2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1259(update_faces)
+                                                               1    0.004    0.109  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1401(unique_faces)
+                                                               1    0.000    0.252  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:1803(nondegenerate_faces)
+                                                               1    0.006    0.007  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:2553(remove_unreferenced_vertices)
+                                                               1    0.000    0.070  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:3256(copy)
+                                                               1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:115(get_cached)
+                                                               1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:358(verify)
+                                                               3    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:439(__setitem__)
+                                                               2    0.000    0.000  F:\3D Druck\app\core\geom\mesh.py:134(of)
+                                                               2    0.000    0.000  F:\3D Druck\app\core\geom\mesh.py:138(replacing)
+                                                               2    0.011    0.011  F:\3D Druck\app\core\geom\repair.py:72(used_vertex_count)
+                                                               1    0.000    0.007  F:\3D Druck\app\core\geom\repair.py:215(wind_consistently)
+                                                               1    0.001    4.209  F:\3D Druck\app\core\geom\repair.py:3028(repair)
+                                                               2    0.001    0.489  F:\3D Druck\app\core\geom\repair.py:3607(is_closed)
+                                                               7    0.000    0.000  F:\3D Druck\app\core\ingest\loader.py:845(_silent)
+                                                               1    0.000    0.000  F:\3D Druck\app\core\ingest\loader.py:1311(_too_fine)
+                                                               1    0.000    0.000  F:\3D Druck\app\core\ingest\loader.py:1375(_count_components)
+                                                               1    0.000    0.000  F:\3D Druck\app\core\units.py:171(to_mm)
+                                                               1    0.000    0.000  F:\3D Druck\app\core\units.py:235(weld_tolerance)
+                                                               1    0.000    0.000  F:\3D Druck\app\core\units.py:241(weld_digits)
+                                                               6    0.000    0.000  F:\3D Druck\app\i18n\__init__.py:124(__str__)
+                                                               6    0.000    0.000  F:\3D Druck\app\i18n\__init__.py:128(_)
+                                                               1    0.000    0.000  {built-in method builtins.abs}
+                                                               3    0.000    0.144  {built-in method builtins.getattr}
+                                                              14    0.000    0.000  {built-in method builtins.len}
+                                                               1    0.004    0.004  {built-in method numpy.array}
+                                                               2    0.000    0.000  {built-in method numpy.asarray}
+                                                               1    0.000    0.000  {method 'append' of 'list' objects}
+                                                               1    0.000    0.000  {method 'extend' of 'list' objects}
+                                                               1    0.000    0.061  {method 'max' of 'numpy.ndarray' objects}
+                                                               1    0.000    0.068  {method 'min' of 'numpy.ndarray' objects}
+
+
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(repair\\)'>
+
+Function                                          called...
+                                                      ncalls  tottime  cumtime
+F:\3D Druck\app\core\geom\repair.py:3028(repair)  ->       1    0.000    0.116  F:\3D Druck\app\core\geom\mesh.py:98(area)
+                                                           1    0.000    0.000  F:\3D Druck\app\core\geom\mesh.py:104(is_watertight)
+                                                           1    0.000    0.000  F:\3D Druck\app\core\geom\mesh.py:108(component_count)
+                                                           1    0.000    1.298  F:\3D Druck\app\core\geom\repair.py:307(unify_normals)
+                                                           1    0.000    0.018  F:\3D Druck\app\core\geom\repair.py:690(stitch_t_junctions)
+                                                           1    0.000    0.742  F:\3D Druck\app\core\geom\repair.py:2356(resolve_branching_edges)
+                                                           1    0.004    1.841  F:\3D Druck\app\core\geom\repair.py:2458(_filled_rounds)
+                                                           1    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:2497(_kept_still_open)
+                                                           1    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:2518(_flat_still_open)
+                                                           1    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:2649(remove_open_splinters)
+                                                           1    0.010    0.185  F:\3D Druck\app\core\geom\repair.py:3418(_crossed_edge_count)
+                                                           3    0.005    0.006  F:\3D Druck\app\core\geom\repair.py:3618(open_edge_count)
+                                                           1    0.002    0.003  F:\3D Druck\app\core\geom\repair.py:3623(branching_edge_count)
+                                                           2    0.000    0.000  F:\3D Druck\app\i18n\__init__.py:128(_)
+                                                           1    0.000    0.000  {built-in method builtins.max}
+                                                           2    0.000    0.000  {method 'append' of 'list' objects}
+
+
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(_filled_rounds\\)'>
+
+Function                                                  called...
+                                                              ncalls  tottime  cumtime
+F:\3D Druck\app\core\geom\repair.py:2458(_filled_rounds)  ->       2    0.046    1.835  F:\3D Druck\app\core\geom\repair.py:2089(_fill_loops)
+                                                                   1    0.001    0.001  F:\3D Druck\app\core\geom\repair.py:3618(open_edge_count)
+
+
+   Random listing order was used
+   List reduced from 443 to 1 due to restriction <'\\(_fill_loops\\)'>
+
+Function                                               called...
+                                                           ncalls  tottime  cumtime
+F:\3D Druck\app\core\geom\repair.py:2089(_fill_loops)  ->       1    0.000    0.000  C:\Users\rober\AppData\Local\Programs\Python\Python314\Lib\logging\__init__.py:1510(info)
+                                                                1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:433(_repeat_dispatcher)
+                                                                1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:437(repeat)
+                                                                1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\multiarray.py:197(concatenate)
+                                                                2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\numeric.py:1222(_roll_dispatcher)
+                                                                2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\numeric.py:1226(roll)
+                                                                2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\numeric.py:1559(_cross_dispatcher)
+                                                                2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\numeric.py:1563(cross)
+                                                                2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\shape_base.py:214(_vhstack_dispatcher)
+                                                                2    0.005    0.005  F:\3D Druck\.venv\Lib\site-packages\numpy\_core\shape_base.py:218(vstack)
+                                                                1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\lib\_arraysetops_impl.py:139(_unique_dispatcher)
+                                                                1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\lib\_arraysetops_impl.py:145(unique)
+                                                                2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\lib\_arraysetops_impl.py:953(_isin_dispatcher)
+                                                                2    0.001    0.018  F:\3D Druck\.venv\Lib\site-packages\numpy\lib\_arraysetops_impl.py:958(isin)
+                                                                2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\linalg\_linalg.py:2594(_norm_dispatcher)
+                                                                2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\numpy\linalg\_linalg.py:2598(norm)
+                                                                2    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:339(faces)
+                                                                1    0.000    0.000  F:\3D Druck\.venv\Lib\site-packages\trimesh\base.py:485(vertices)
+                                                                3    0.000    0.130  F:\3D Druck\.venv\Lib\site-packages\trimesh\caching.py:115(get_cached)
+                                                                1    0.000    0.033  F:\3D Druck\app\core\geom\mesh.py:62(bounds)
+                                                                1    0.009    0.009  F:\3D Druck\app\core\geom\mesh.py:517(rows)
+                                                                2    0.000    0.048  F:\3D Druck\app\core\geom\repair.py:1060(_hole_rings)
+                                                                2    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:1166(_loop_fan)
+                                                                2    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:1182(_ring_normal)
+                                                                2    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:1203(_folds)
+                                                                2    0.000    0.001  F:\3D Druck\app\core\geom\repair.py:1225(_loop_triangles)
+                                                                1    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:1631(_fill_jobs)
+                                                                1    0.081    0.150  F:\3D Druck\app\core\geom\repair.py:1823(_unit_normals)
+                                                                2    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:1832(_smoothest_fill)
+                                                                1    0.004    0.044  F:\3D Druck\app\core\geom\repair.py:2013(_assembled)
+                                                                1    0.010    1.351  F:\3D Druck\app\core\geom\repair.py:2043(_flat_fills)
+                                                               10    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:2203(<genexpr>)
+                                                               12    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:2253(<genexpr>)
+                                                                1    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:2328(<genexpr>)
+                                                                2    0.000    0.000  F:\3D Druck\app\core\geom\repair.py:3595(_edge_table)
+                                                                1    0.000    0.000  F:\3D Druck\app\core\types.py:198(diagonal)
+                                                                1    0.000    0.000  F:\3D Druck\app\core\units.py:235(weld_tolerance)
+                                                                4    0.000    0.000  F:\3D Druck\app\core\units.py:775(exact_centre)
+                                                               24    0.000    0.000  {built-in method builtins.len}
+                                                               40    0.000    0.000  {built-in method builtins.max}
+                                                               34    0.000    0.000  {built-in method builtins.min}
+                                                                1    0.000    0.000  {built-in method builtins.sorted}
+                                                                4    0.000    0.000  {built-in method builtins.sum}
+                                                                1    0.000    0.000  {built-in method numpy.arange}
+                                                               10    0.000    0.000  {built-in method numpy.asarray}
+                                                               12    0.000    0.000  {method 'append' of 'list' objects}
+                                                               22    0.000    0.000  {method 'get' of 'dict' objects}
+                                                                4    0.000    0.000  {method 'items' of 'dict' objects}
+                                                                2    0.000    0.000  {method 'max' of 'numpy.ndarray' objects}
+                                                                4    0.000    0.000  {method 'setdefault' of 'dict' objects}
+                                                                2    0.000    0.000  {method 'sum' of 'numpy.ndarray' objects}
+                                                               11    0.000    0.000  {method 'tolist' of 'numpy.ndarray' objects}
+
+

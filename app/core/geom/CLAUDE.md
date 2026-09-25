@@ -39,7 +39,7 @@ Achse, `math.hypot`/`math.fsum` und NumPys paarweise Summe. Was dafür da ist:
 | Winkelfunktionen | `units.exact_cos`/`exact_sin`, `exact_cos_degrees`, `circle_point` |
 | Ausgleichsebene, symmetrische 3x3-Eigenwerte | `units.plane_fit`, `units.symmetric_eigen3` |
 | Mitte einer Punktwolke | `units.exact_centre` |
-| Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_vertex_normals` |
+| Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_areas` (einzelne Dreiecke), `mesh.stable_vertex_normals` |
 | Summen, deren Gleichstand eine Lage entscheidet | `mesh.IntegerGrid` |
 | Spatprodukte, eingeschlossenes Volumen mit Vorzeichen | `mesh.triple_products`, `mesh.signed_volume` (körpernah) |
 | Zufall (Stufe 3 der Kette) | `Generator.random` aus den Rohbits, nie `normal` |
@@ -743,7 +743,11 @@ Rückwand-Prüfung der Bausteine und die Fleckennachbarschaft fragen es;
 `edge_table` ist die eine Kantenzählung je Netz — Reparatur, Teilezerlegung
 (`face_components`, gemerkt je Netz) und Dichtheit lesen sie, und
 `is_watertight` samt Umlaufsinn legt sie mit trimeshs Definition in dessen
-Cache, statt die Kanten ein zweites Mal gruppieren zu lassen, RM-224)
+Cache, statt die Kanten ein zweites Mal gruppieren zu lassen, RM-224; wer
+einem Netz nur Dreiecke nimmt, nimmt `without_faces`, wer nur welche anhängt,
+ruft `carry_appended_edges` — beide leiten die Zählung ab, statt 3,6
+Millionen Kanten neu zu sortieren; `stable_areas` gibt die Flächen einzelner
+Dreiecke mit denselben Bits wie `stable_normals`)
 · `boolean.py` (die Kette
 oben) · `difference.py` (die Differenzansicht §18.7 — sie beschneidet beide
 Körper zuerst auf den Quader, in dem sich ihre Häute unterscheiden

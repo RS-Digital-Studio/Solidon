@@ -366,21 +366,46 @@ def stable_normals(mesh: trimesh.Trimesh) -> tuple[np.ndarray, np.ndarray]:
         cache.verify()
         if "solidon_stable_normals" in cache:
             return cast(tuple[np.ndarray, np.ndarray], cache["solidon_stable_normals"])
-    corners = np.asarray(mesh.triangles, dtype=np.float64)
-    if not len(corners):
-        found = (np.zeros((0, 3)), np.zeros(0))
-    else:
-        cross = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
-        doubled = np.sqrt(
-            cross[:, 0] * cross[:, 0] + cross[:, 1] * cross[:, 1] + cross[:, 2] * cross[:, 2]
-        )
-        usable = doubled > 0.0
-        normals = np.zeros_like(cross)
-        normals[usable] = cross[usable] / doubled[usable, None]
-        found = (normals, doubled / 2.0)
+    found = _normals_and_areas(np.asarray(mesh.triangles, dtype=np.float64))
     if cache is not None:
         cache["solidon_stable_normals"] = found
     return found
+
+
+def stable_areas(mesh: trimesh.Trimesh, faces: np.ndarray) -> np.ndarray:
+    """Die Flächen der Dreiecke ``faces`` — dieselben Bits wie :func:`stable_normals`.
+
+    Wer nur wenige Dreiecke fragt, bekommt sie ohne das ganze Netz zu rechnen
+    (RM-224: Das Auflösen verzweigter Kanten wog am Piratenschiff vier
+    Dreiecke und rechnete dafür 1,2 Millionen Normalen). Jede Zahl entsteht
+    elementweise, eine Fläche hängt also nicht daran, welche Dreiecke sonst
+    gefragt werden. Steht die Antwort für alle schon im Cache, kommt sie von
+    dort.
+    """
+    cache = getattr(mesh, "_cache", None)
+    if cache is not None:
+        cache.verify()
+        if "solidon_stable_normals" in cache:
+            normals_and_areas = cast(tuple[np.ndarray, np.ndarray], cache["solidon_stable_normals"])
+            return np.asarray(normals_and_areas[1][faces])
+    corners = np.asarray(mesh.vertices, dtype=np.float64)[
+        np.asarray(mesh.faces, dtype=np.int64)[np.asarray(faces, dtype=np.int64)]
+    ]
+    return _normals_and_areas(corners.reshape(-1, 3, 3))[1]
+
+
+def _normals_and_areas(corners: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Einheitsnormale und Fläche je Dreieck ``(n, 3, 3)``, elementweise (RM-187)."""
+    if not len(corners):
+        return np.zeros((0, 3)), np.zeros(0)
+    cross = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    doubled = np.sqrt(
+        cross[:, 0] * cross[:, 0] + cross[:, 1] * cross[:, 1] + cross[:, 2] * cross[:, 2]
+    )
+    usable = doubled > 0.0
+    normals = np.zeros_like(cross)
+    normals[usable] = cross[usable] / doubled[usable, None]
+    return normals, doubled / 2.0
 
 
 _SQRT3: Final = 1.7320508075688772
@@ -563,20 +588,117 @@ def edge_table(body: trimesh.Trimesh) -> EdgeTable:
         np.asarray(body.edges_sorted, dtype=np.int64), return_inverse=True, return_counts=True
     )
     table = EdgeTable(unique=unique, inverse=inverse, counts=counts)
-    if cache is not None:
-        cache[_EDGE_TABLE_KEY] = table
-        if len(counts) and "is_watertight" not in cache:
-            directed = np.asarray(body.edges, dtype=np.int64)
-            up = np.bincount(
-                inverse, weights=directed[:, 0] < directed[:, 1], minlength=len(counts)
-            )
-            down = np.bincount(
-                inverse, weights=directed[:, 0] > directed[:, 1], minlength=len(counts)
-            )
-            pairs = counts == 2
-            cache["is_watertight"] = bool(np.all(pairs))
-            cache["is_winding_consistent"] = bool(np.array_equal(up[pairs], down[pairs]))
+    _remember_edges(body, table)
     return table
+
+
+def _remember_edges(body: trimesh.Trimesh, table: EdgeTable) -> None:
+    """Legt die Kantenzählung in den Cache des Netzes, samt Dichtheit und Umlaufsinn.
+
+    Eine Stelle für beide Wege — gezählt (:func:`edge_table`) und abgeleitet
+    (:func:`without_faces`, :func:`carry_appended_edges`) —, damit trimeshs
+    Antwort nie aus zwei Rechnungen kommt.
+    """
+    cache = getattr(body, "_cache", None)
+    if cache is None:
+        return
+    cache[_EDGE_TABLE_KEY] = table
+    counts, inverse = table.counts, table.inverse
+    if len(counts) and "is_watertight" not in cache:
+        directed = np.asarray(body.edges, dtype=np.int64)
+        up = np.bincount(inverse, weights=directed[:, 0] < directed[:, 1], minlength=len(counts))
+        down = np.bincount(inverse, weights=directed[:, 0] > directed[:, 1], minlength=len(counts))
+        pairs = counts == 2
+        cache["is_watertight"] = bool(np.all(pairs))
+        cache["is_winding_consistent"] = bool(np.array_equal(up[pairs], down[pairs]))
+
+
+def without_faces(body: trimesh.Trimesh, keep: np.ndarray) -> trimesh.Trimesh:
+    """Eine Kopie mit den Dreiecken aus ``keep`` und ohne unbenutzte Ecken.
+
+    Dasselbe wie ``copy``, ``update_faces(keep)`` und
+    ``remove_unreferenced_vertices`` — **aber die Kantenzählung wird
+    abgeleitet, nicht neu sortiert** (RM-224). Die Reparatur nimmt einem Netz
+    Verzweigungen, Splitter und Kleinstteile, und jedes Mal zählte sie danach
+    alle Kanten neu: am Piratenschiff 0,4 s für ein Netz, das vier Dreiecke
+    weniger hatte. Wer Dreiecke streicht, zieht ihre Zeilen von den Zählern ab;
+    Kanten ohne Dreieck fallen weg. Die Ecken behalten beim Aufräumen ihre
+    Reihenfolge (trimesh legt die benutzten dicht zusammen), also bleiben die
+    Kanten sortiert, und jede Zeile gehört weiter zu ihrem Dreieck.
+
+    Hatte ``body`` noch keine Zählung, zählt die Kopie bei Bedarf selbst.
+    ``keep`` ist eine Maske über die Dreiecke.
+    """
+    keep = np.asarray(keep, dtype=bool)
+    trimmed = body.copy()
+    trimmed.update_faces(keep)
+    trimmed.remove_unreferenced_vertices()
+    cache = getattr(body, "_cache", None)
+    if cache is None or _EDGE_TABLE_KEY not in cache:
+        return trimmed
+    table = cast(EdgeTable, cache[_EDGE_TABLE_KEY])
+    rows = (np.flatnonzero(keep)[:, None] * 3 + np.arange(3, dtype=np.int64)).reshape(-1)
+    before = table.inverse[rows]
+    counts = np.bincount(before, minlength=len(table.counts))
+    alive = counts > 0
+    compact = np.cumsum(alive, dtype=np.int64) - 1
+    used = np.zeros(len(body.vertices), dtype=bool)
+    used[np.asarray(body.faces, dtype=np.int64)[keep].reshape(-1)] = True
+    renumbered = np.cumsum(used, dtype=np.int64) - 1
+    _remember_edges(
+        trimmed,
+        EdgeTable(
+            unique=renumbered[table.unique[alive]],
+            inverse=compact[before],
+            counts=counts[alive].astype(np.int64),
+        ),
+    )
+    return trimmed
+
+
+def carry_appended_edges(body: trimesh.Trimesh, extended: trimesh.Trimesh) -> None:
+    """Die Kantenzählung eines Netzes, an das nur Dreiecke und Ecken angehängt wurden.
+
+    ``extended`` trägt die Ecken von ``body`` in derselben Reihenfolge, danach
+    neue, und die Dreiecke von ``body``, danach neue — so baut die Lochfüllung
+    das geflickte Netz (RM-224). Statt alle Kanten neu zu sortieren, werden
+    nur die der neuen Dreiecke in die sortierte Liste eingefügt: Die alten
+    Kanten behalten ihre Reihenfolge und rücken um die Zahl der neuen davor.
+    Ohne Zählung an ``body`` geschieht nichts; ``extended`` zählt dann selbst.
+    """
+    cache = getattr(body, "_cache", None)
+    if cache is None or _EDGE_TABLE_KEY not in cache:
+        return
+    table = cast(EdgeTable, cache[_EDGE_TABLE_KEY])
+    old_count = len(body.faces)
+    added = np.asarray(extended.faces, dtype=np.int64)[old_count:]
+    if not len(added):
+        _remember_edges(extended, table)
+        return
+    width = len(extended.vertices)
+    fresh_rows = np.sort(added[:, [0, 1, 1, 2, 2, 0]].reshape(-1, 2), axis=1)
+    old_codes = table.unique[:, 0] * width + table.unique[:, 1]
+    new_codes = fresh_rows[:, 0] * width + fresh_rows[:, 1]
+    candidates = np.unique(new_codes)
+    known = np.zeros(len(candidates), dtype=bool)
+    if len(old_codes):
+        at = np.minimum(np.searchsorted(old_codes, candidates), len(old_codes) - 1)
+        known = old_codes[at] == candidates
+    unseen = candidates[~known]
+    merged = np.insert(old_codes, np.searchsorted(old_codes, unseen), unseen)
+    moved = np.arange(len(old_codes), dtype=np.int64) + np.searchsorted(unseen, old_codes)
+    inverse = np.concatenate([moved[table.inverse], np.searchsorted(merged, new_codes)])
+    counts = np.zeros(len(merged), dtype=np.int64)
+    counts[moved] = table.counts
+    counts += np.bincount(inverse[len(table.inverse) :], minlength=len(merged))
+    _remember_edges(
+        extended,
+        EdgeTable(
+            unique=np.column_stack((merged // width, merged % width)),
+            inverse=inverse,
+            counts=counts,
+        ),
+    )
 
 
 def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
