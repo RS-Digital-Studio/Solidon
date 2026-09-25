@@ -2676,8 +2676,6 @@ def test_the_planar_faces_of_a_body_are_read_once(monkeypatch: pytest.MonkeyPatc
     assert second == first and runs == 1, "der zweite Aufruf liest die Antwort des ersten"
     second.clear()
     assert module._large_facet_faces(body) == first, "und jeder bekommt seine eigene Menge"
-    module._large_facet_faces(body, requested={0})
-    assert runs == 2, "eine Anfrage nach bestimmten Flecken ist eine andere Frage"
 
 
 def test_the_welded_reading_of_an_unstitched_mesh_is_made_once() -> None:

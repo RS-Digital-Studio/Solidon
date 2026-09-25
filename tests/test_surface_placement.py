@@ -1724,7 +1724,7 @@ def test_a_chamfered_mouth_still_finds_its_carrier_face(kind, mouth, distances, 
     assert seated == pytest.approx(mouth, abs=1e-6)
     spot = placement.at_point(prepared, seated)
     assert sorted(edge.distance for edge in spot.edges) == pytest.approx(distances, abs=1e-6)
-    values = placement.surface_values(REGISTRY.get(operation), spot, feature=feature)
+    values = placement.surface_values(REGISTRY.get(operation), spot, feature=feature, mouth=seated)
     assert (values["x"], values["y"], values["z"]) == pytest.approx(
         feature.params["centre"], abs=1e-6
     ), "die Mitte bleibt auf ihrer Höhe, die Fase verschiebt sie nicht"
@@ -1765,8 +1765,127 @@ def test_a_mouth_measured_a_few_microns_off_its_face_still_seats(shift):
     prepared, mouth = seat
     assert mouth == pytest.approx((x, y, 4.0), abs=1e-9)
     spot = placement.at_point(prepared, mouth)
-    values = placement.surface_values(REGISTRY.get("resize_hole"), spot, feature=measured)
+    values = placement.surface_values(
+        REGISTRY.get("resize_hole"), spot, feature=measured, mouth=mouth
+    )
     assert (values["x"], values["y"], values["z"]) == pytest.approx((x, y, z + shift), abs=1e-9)
+
+
+def test_moving_along_the_face_keeps_the_height_of_a_slightly_tilted_hole():
+    """Die Mitte behält ihre Höhe, auch wenn die gemessene Achse um Rauschen schief steht.
+
+    Am Schaber stand die Achse der Magnettasche 1,5 µrad schief. Gemessen
+    wurde der Abstand zur Mitte am **verschobenen** Punkt, und der wuchs mit
+    dem Versatz: 43 mm weiter lag die Mitte 2,9 µm höher. Beim nächsten
+    Tastendruck im Feld X hielt ``move_to`` das für eine getippte Tiefe, und
+    die Maßgruppe verschwand mitten im Tippen (25.09.2026). Gemessen wird
+    seither an der eigenen Mündung, und die Höhe bleibt auf die letzte Stelle.
+    """
+    from dataclasses import replace
+    from pathlib import Path
+
+    from app.core.perceive.features import detect
+
+    load_operations()
+    mesh = MeshData.of(
+        trimesh.load_mesh(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
+    )
+    found = detect(mesh)
+    hole = min(
+        (entry for entry in found.values() if entry.kind == "hole"),
+        key=lambda entry: entry.id,
+    )
+    tilted = replace(hole, params={**hole.params, "axis": (-6.2e-8, -1.5e-6, 1.0)})
+    prepared, mouth = placement.seat_of(mesh, tilted, {**found, tilted.id: tilted})
+    z = hole.params["centre"][2]
+    spec = REGISTRY.get("resize_hole")
+
+    heights = []
+    for shift in (0.0, 5.0, 10.0):
+        spot = placement.at_point(prepared, (mouth[0] + shift, mouth[1], mouth[2]))
+        values = placement.surface_values(spec, spot, feature=tilted, mouth=mouth)
+        heights.append(values["z"])
+
+    assert heights == pytest.approx([z, z, z], abs=1e-12), "kein Wandern der Mitte mit dem Versatz"
+
+
+def _chamfered_plate():
+    """Die Platte mit den gefasten Mündungen, ihre Merkmale und die zwei Löcher."""
+    from pathlib import Path
+
+    from app.core.perceive.features import detect
+
+    load_operations()
+    mesh = MeshData.of(
+        trimesh.load_mesh(
+            Path(__file__).parent / "data" / "meshes" / "plate_chamfered_mouths.stl",
+            process=True,
+        )
+    )
+    found = detect(mesh)
+    blind = next(entry for entry in found.values() if entry.kind == "hole")
+    slot = next(entry for entry in found.values() if entry.kind == "slot")
+    return mesh, found, blind, slot
+
+
+def _clicked(mesh, found, height, point):
+    """Die Fläche auf der Höhe ``height``, frisch vorbereitet wie nach einem Klick."""
+    face = next(
+        entry
+        for entry in found.values()
+        if entry.kind == "face"
+        and entry.face_indices
+        and abs(abs(float(entry.params["normal"][2])) - 1.0) < 1e-6
+        and abs(float(entry.params["centre"][2]) - height) < 1e-6
+    )
+    prepared = placement.prepare_surface(mesh, face.face_indices[0], found)
+    return prepared, placement.at_point(prepared, point)
+
+
+def test_a_foreign_parallel_face_within_a_radius_is_not_the_own_mouth():
+    """Die Fasenkorrektur gilt der eigenen Fläche, nicht jeder parallelen daneben (G5).
+
+    Das Sackloch Ø 9 der Korpusplatte kommt von unten: Wand von z = -3,4 bis
+    2,0, darüber noch 2 mm Material bis zur Oberseite — näher als ein Radius.
+    Wer das Loch mit einem Klick auf die Oberseite versetzt, meint eine
+    Bohrung von **dort**. Bis zum 25.09.2026 hielt ``surface_values`` die
+    Oberseite für die eigene, gefaste Mündung, weil sie im Fenster bis zu
+    einem Radius hinter der gemessenen lag, und behielt die Höhe der Mitte:
+    Das Werkzeug saß danach 2 mm unter der Oberseite, ein Hohlraum im
+    Material statt einer Bohrung. Die Oberseite hat über dem Loch keine
+    Öffnung; sie ist nicht seine Mündung.
+    """
+    mesh, found, blind, _slot = _chamfered_plate()
+    prepared, spot = _clicked(mesh, found, 4.0, (-15.0, 0.0, 4.0))
+
+    assert placement.mouth_on(prepared, blind, found) is None, "über dem Loch ist Material"
+    values = placement.surface_values(REGISTRY.get("resize_hole"), spot, feature=blind)
+    half = float(blind.params["depth"]) / 2.0
+    assert values["z"] == pytest.approx(4.0 - half, abs=1e-6), (
+        "die Mündung der versetzten Bohrung liegt auf der geklickten Fläche"
+    )
+
+
+@pytest.mark.parametrize(("height", "towards"), [(4.0, 1.0), (-4.0, -1.0)])
+def test_the_own_chamfered_face_found_by_a_click_keeps_the_centre(height, towards):
+    """Frisch geklickt, nicht aus dem Sitz — und trotzdem die eigene Mündung (G5).
+
+    Nach einem Klick auf eine andere Fläche und zurück ist die Fläche des
+    Langlochs frisch vorbereitet, mit ihrer Öffnung, und nicht die gefüllte
+    aus ``seat_of``. ``mouth_on`` erkennt sie an der Öffnung um die Achse —
+    oben wie unten, beide Enden sind 0,8 mm gefast —, und die Mitte bleibt
+    auf halber Höhe der Platte, statt um die Fase in die Achse zu rücken.
+    """
+    mesh, found, _blind, slot = _chamfered_plate()
+    x, y, z = slot.params["centre"]
+    prepared, spot = _clicked(mesh, found, height, (float(x), float(y) + 12.0, height))
+
+    mouth = placement.mouth_on(prepared, slot, found)
+
+    assert mouth == pytest.approx((x, y, height), abs=1e-6), "die Öffnung umschließt die Achse"
+    values = placement.surface_values(REGISTRY.get("slot_hole"), spot, feature=slot, mouth=mouth)
+    assert values["z"] == pytest.approx(z, abs=1e-6), "die Fase verschiebt die Mitte nicht"
+    assert towards * (height - values["z"]) > float(slot.params["depth"]) / 2.0
 
 
 def test_a_feature_without_an_axis_gets_no_distances():

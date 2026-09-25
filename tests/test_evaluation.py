@@ -2818,49 +2818,137 @@ def _many_features(count: int) -> dict[str, object]:
     }
 
 
-def test_too_many_features_stop_the_matching_and_say_so(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Das Sicherheitsnetz hinter der Erkennung: ``match`` wächst quadratisch.
+def test_too_many_features_keep_the_largest_and_say_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Über der Grenze bleiben die größten Merkmale, zugeordnet wie sonst (RM-235).
 
-    Die Dreiecksgrenze daneben schützt davor nicht — sie zählt Dreiecke, und
-    zwischen Dreiecken und Merkmalen liegt kein fester Faktor. Gemessen kostet
-    ``match`` bei 250 Merkmalen 0,63 s, bei 1 000 knapp zehn und bei 2 000
-    vierzig — vor der Vektorisierung; heute 0,3 s bei 1 000 und 0,9 s bei
-    5 000 (22.09.2026), und die Grenze steht bei fünftausend. Ein echtes
-    Modell des Korpus bringt höchstens sechzehn mit.
-
-    Geprüft wird beides: dass **kein** ``match`` läuft (nicht nur, dass es
-    schneller ist), und dass ein Befund sagt, warum. Ohne den zweiten Teil wäre
-    das eine stille Verstümmelung — der Kunde sähe, dass Namen verlorengehen,
-    und fände nirgends den Grund (Regel 17).
+    Die Grenze fängt ab, was die Zuordnung und der Objektbaum nicht mehr
+    tragen — und bis zum 25.09.2026 fiel dahinter **alles** weg: Die
+    Kumiko-Schale (7 295 Flächen) stand ohne ihre vier großen Deckflächen da.
+    Jetzt bleiben ``FEATURE_LIMIT_COUNT`` Merkmale, die mit der größten
+    Oberfläche, und benannt und zugeordnet wird genau diese; der Befund sagt,
+    dass es mehr waren (Regel 17).
     """
     from importlib import import_module
 
     evaluate_module = import_module("app.core.scene.evaluate")
-    from app.core.types import Operation, SceneObject
+    from app.core.types import Feature, Operation, SceneObject
 
-    limit = evaluate_module.FEATURE_LIMIT_COUNT
-    crowd = _many_features(limit + 1)
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(crowd))
-
-    ran: list[int] = []
-    monkeypatch.setattr(
-        evaluate_module,
-        "match",
-        lambda *args, **kwargs: ran.append(1),  # type: ignore[misc,return-value]
-    )
-
-    entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
+    body = _small_body()
+    monkeypatch.setattr(evaluate_module, "FEATURE_LIMIT_COUNT", 3)
+    areas = [float(area) for area in body.raw.area_faces]
+    # Vier Flächen aus verschieden vielen Dreiecken des Quaders: 4, 1, 2, 3.
+    faces = {
+        f"face_{number}": Feature(
+            id=f"face_{number}",
+            kind="face",
+            provenance="detected",
+            params={
+                "centre": (float(number), 0.0, 0.0),
+                "normal": (0.0, 0.0, 1.0),
+                "area": sum(areas[index] for index in triangles),
+            },
+            face_indices=triangles,
+        )
+        for number, triangles in enumerate([(0, 1, 2, 3), (4,), (5, 6), (7, 8, 9)], start=1)
+    }
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(faces))
     findings: list[Finding] = []
     result = evaluate_module._with_features(
-        entry, dict(_many_features(3)), Operation(id=1, op="thicken"), lambda q, c: c[0], findings
+        SceneObject(id="obj_1", name="Teil", mesh=body),
+        {},
+        Operation(id=1, op="load", outputs=("obj_1",)),
+        lambda q, c: c[0],
+        findings,
     )
 
-    assert not ran, "über der Grenze darf keine Zuordnung laufen"
     codes = [item.code for item in findings]
-    assert codes == ["perceive.too_many"], codes
-    values = findings[0].values
-    assert values["features"] == limit + 1 and values["limit"] == limit, values
-    assert result is entry, "was die Operation ausgab, bleibt stehen — geraten wird nicht"
+    assert "perceive.too_many" in codes, codes
+    values = next(item for item in findings if item.code == "perceive.too_many").values
+    assert values == {"features": 4, "limit": 3}
+    kept = sorted(len(feature.face_indices) for feature in result.features.values())
+    assert kept == [2, 3, 4], "die kleinste Fläche fällt, die drei größten bleiben"
+
+
+def test_the_largest_features_are_kept_the_same_way_every_time() -> None:
+    """Bei gleicher Größe entscheiden Art und Dreiecke, nie die Reihenfolge."""
+    from importlib import import_module
+
+    from app.core.types import Feature
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    body = _small_body()
+    features = {
+        name: Feature(id=name, kind="face", provenance="detected", params={}, face_indices=faces)
+        for name, faces in (("a", (0,)), ("b", (1,)), ("c", (2,)), ("d", (3,)))
+    }
+    forward = evaluate_module._heaviest(features, body, 2)
+    backward = evaluate_module._heaviest(dict(reversed(list(features.items()))), body, 2)
+    assert set(forward) == set(backward)
+
+
+def test_over_the_limit_a_stretched_body_keeps_its_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Was vorher behalten war, bleibt es nach dem Strecken (RM-235).
+
+    Ungleichmäßiges Skalieren sortiert die Flächen nach Inhalt um: Am in x
+    gestreckten Würfel wachsen die vier Seiten längs der Streckung, die beiden
+    Stirnseiten nicht. Nach der Größe allein fiele eine behaltene Stirnseite
+    heraus und reiste als starr mitbewegte weiter, und eine Seite käme unter
+    neuem Namen dazu — an der Kumiko-Schale wechselten so 1 814 Namen, und aus
+    5 000 Merkmalen wurden 5 898.
+    """
+    from importlib import import_module
+
+    import numpy as np
+
+    from app.core.geom.ops import as_transform
+    from app.core.geom.transform import apply, scaling
+    from app.core.types import Feature, Operation, SceneObject
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(evaluate_module, "FEATURE_LIMIT_COUNT", 3)
+
+    def sides(mesh: Any, **kwargs: Any) -> dict[str, Feature]:
+        raw = mesh.raw
+        found: dict[str, Feature] = {}
+        for axis, letter in enumerate("xyz"):
+            for sign, mark in ((-1.0, "n"), (1.0, "p")):
+                rows = np.flatnonzero(raw.face_normals[:, axis] * sign > 0.5)
+                name = f"face_{letter}{mark}"
+                found[name] = Feature(
+                    id=name,
+                    kind="face",
+                    provenance="detected",
+                    params={
+                        "centre": tuple(float(v) for v in raw.triangles_center[rows].mean(axis=0)),
+                        "normal": tuple(sign if index == axis else 0.0 for index in range(3)),
+                        "area": float(raw.area_faces[rows].sum()),
+                    },
+                    face_indices=tuple(int(row) for row in rows),
+                )
+        return found
+
+    monkeypatch.setattr(evaluate_module, "detect", sides)
+    body = _small_body()
+    loaded = evaluate_module._with_features(
+        SceneObject(id="obj_1", name="Teil", mesh=body),
+        {},
+        Operation(id=1, op="load", outputs=("obj_1",)),
+        lambda q, c: c[0],
+        [],
+    )
+    assert len(loaded.features) == 3
+    matrix = scaling((3.0, 1.0, 1.0))
+    findings: list[Finding] = []
+    stretched = evaluate_module._with_features(
+        SceneObject(id="obj_1", name="Teil", mesh=apply(body, matrix)),
+        dict(loaded.features),
+        Operation(id=2, op="scale_object", inputs=("obj_1",), outputs=("obj_1",)),
+        lambda q, c: c[0],
+        findings,
+        as_transform(matrix),
+    )
+    assert set(stretched.features) == set(loaded.features)
+    assert "perceive.orphaned" not in [item.code for item in findings]
 
 
 def test_a_model_below_the_feature_limit_is_matched_as_before(

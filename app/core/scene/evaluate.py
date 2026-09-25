@@ -2509,6 +2509,45 @@ def _remeasured(
         ) from error
 
 
+def _heaviest(
+    detected: Mapping[FeatureId, Feature],
+    mesh: MeshData,
+    count: int,
+    before: Collection[tuple[int, ...]] = frozenset(),
+) -> dict[FeatureId, Feature]:
+    """Die ``count`` Merkmale, die über der Grenze bleiben, in fester Folge.
+
+    Zuerst, was mit denselben Dreiecken schon vorher da war (``before``, nur
+    wo die Nummerierung durch den Schritt trägt), dann die mit der größten
+    Oberfläche. Ohne den Vorrang sortierte ungleichmäßiges Skalieren die
+    Wände der Kumiko-Schale an der Grenze um: Die herausgefallenen reisten als
+    starr mitbewegte weiter, die hereingerutschten kamen unter neuem Namen
+    dazu, und aus 5 000 Merkmalen wurden 5 898.
+
+    Gleich große Musterzellen unterscheiden sich nur in Rundungsresten. Die
+    Fläche zählt deshalb auf :data:`EPS_GEOM` gerundet, und bei Gleichstand
+    entscheidet die Lage vor Art und Dreiecksnummern — nie die Reihenfolge im
+    Wörterbuch und nicht die Nummerierung, die ein Boolescher Schritt neu
+    vergibt.
+    """
+    areas = mesh.raw.area_faces
+    centres = mesh.raw.triangles_center
+
+    def weight(
+        item: tuple[FeatureId, Feature],
+    ) -> tuple[bool, int, tuple[int, ...], str, tuple[int, ...]]:
+        feature = item[1]
+        faces = tuple(sorted(int(index) for index in feature.face_indices))
+        if not faces:
+            return True, 0, (), feature.kind, faces
+        rows = list(faces)
+        area = round(float(areas[rows].sum()) / EPS_GEOM)
+        place = tuple(round(float(value) / EPS_GEOM) for value in centres[rows].mean(axis=0))
+        return faces not in before, -area, place, feature.kind, faces
+
+    return dict(sorted(detected.items(), key=weight)[:count])
+
+
 def _same_triangles(source: Mesh | None, mesh: MeshData) -> bool:
     """Ob die Ausgabe dieselben Dreiecke trägt wie der Eingang an derselben Stelle."""
     if source is mesh:
@@ -3250,7 +3289,7 @@ def _with_features(
             )
         )
 
-    # **Und hier hört es auf, wenn es zu viele geworden sind.** Die
+    # **Und hier wird gekürzt, wenn es zu viele geworden sind.** Die
     # Dreiecksgrenze oben zählt Dreiecke; diese zählt, was daraus geworden ist,
     # und die zwei hängen nicht aneinander. Ein ungeschweißtes Netz weit
     # unterhalb der Dreiecksgrenze brachte ein Merkmal je Dreieck mit, und die
@@ -3258,13 +3297,14 @@ def _with_features(
     # ``FEATURE_LIMIT_COUNT`` — die Grenze liegt seit dem Wabenmuster so, dass
     # ein ehrliches Muster darunter bleibt).
     #
-    # **Gar keine Zuordnung und nicht eine halbe.** Die erkannten Merkmale
-    # trotzdem einzuhängen wäre die verlockende Hälfte — und die falsche: Ihre
-    # Namen entstünden dann bei jeder Auswertung neu, und eine Passung, die auf
-    # ``hole_3`` zeigt, zeigte danach still auf ein anderes Loch. Das ist genau
-    # das Raten, das §21.2 verbietet. Übrig bleibt, was die Operation ausgegeben
-    # hat, dazu ein Satz, der sagt warum — dieselbe Bauart wie
-    # ``perceive.too_large``.
+    # **Behalten wird, was zählt, und es wird zugeordnet wie sonst** (RM-235).
+    # Bis zum 25.09.2026 fiel über der Grenze alles weg: Die Kumiko-Schale
+    # (7 295 Flächen, Median 6 mm²) stand ohne jedes Merkmal da, auch ohne ihre
+    # vier großen Deckflächen. Die Grenze behält, was schon da war, dann die
+    # größten (`_heaviest`), und schickt sie durch dieselbe Zuordnung wie jedes
+    # andere Ergebnis — nicht die Hälfte ohne Zuordnung, die jede Auswertung neu
+    # benennte (§21.2). Wer an der Grenze wechselt, verwaist wie jedes
+    # verschwundene Merkmal, mit Befund, wo ein Verweis daran hängt.
     if len(detected) > FEATURE_LIMIT_COUNT:
         findings.append(
             Finding(
@@ -3272,19 +3312,22 @@ def _with_features(
                 severity="info",
                 message=_(
                     "Dieses Modell hat mehr einzelne Merkmale, als Solidon über die "
-                    "Schritte hinweg zuordnet. Ist es ungeschweißt, verschweißen Sie es "
-                    "beim Laden; sonst bleibt es ohne Merkmale bearbeitbar."
+                    "Schritte hinweg zuordnet. Behalten sind die größten; ist es "
+                    "ungeschweißt, verschweißen Sie es beim Laden."
                 ),
                 object_id=entry.id,
                 op_id=operation.id,
                 values={"features": len(detected), "limit": FEATURE_LIMIT_COUNT},
             )
         )
-        return (
-            dataclasses.replace(entry, features=output_features)
-            if feature_movement is not None
-            else entry
+        # Die Dreiecksnummern der bisherigen Merkmale gelten am neuen Netz nur
+        # nach einer Transformation oder bei unveränderten Dreiecken.
+        before = (
+            {tuple(sorted(int(index) for index in item.face_indices)) for item in previous.values()}
+            if transform is not None or unchanged
+            else set()
         )
+        detected = _heaviest(detected, mesh, FEATURE_LIMIT_COUNT, before)
 
     # **Was die Erkennung hier nicht sieht, wird später nicht an ihr gemessen.**
     # Ein Baustein benennt seine Bohrungen beim Bauen; ``detect`` findet sie

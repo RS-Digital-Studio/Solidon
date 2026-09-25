@@ -355,13 +355,25 @@ am ganzen Körper** (`features.planar_facet`, Review R1) — nicht der
 Ausschnitt, an dem `detect` lief: Dort war ein Mantelstreifen leicht fünf
 Prozent der Fläche und ein halber Zapfenmantel kein vollständiger. Das Urteil
 je Facette (`_facet_verdicts`, einmal je Körper) teilt sie mit
-`_large_facet_faces`, den Mantelnachweis (`_round_surface`) ebenso; nur der
-Fleck dafür wächst begrenzt (`_patch_around`, bis `MANTLE_PROOF_LIMIT`). Wird
-er größer, entscheidet der gewachsene Teil: Passt auf ihn keine Rundform
-(`_could_be_round`), passt sie auf das Ganze nicht — so bleiben die zwei
-Sohlen des Drachen, die über weiche Kanten an seiner Haut hängen, Flächen —,
-sonst bleibt die Frage offen, und der Grund heißt `budget`
-(`LocalDetection.undecided`).
+`_large_facet_faces`, den Mantelnachweis (`_round_surface`) ebenso. Der Fleck
+dafür wird ganz geflutet (`_patch_around`, Ring um Ring), geprüft wird zuerst
+an wachsenden Teilen ab `MANTLE_PROOF_LIMIT` Dreiecken: Trägt ein Teil keine
+Rundform (`_could_be_round`), trägt das Ganze keine — so bleiben die zwei
+Sohlen des Drachen, die über weiche Kanten an seiner Haut hängen, Flächen,
+ohne zwei Millionen Dreiecke einzupassen —; trägt jeder Teil eine, wird der
+ganze Fleck geprüft wie in der Vollerkennung (Review S1: die Abflachung eines
+Knaufs, deren erster Teil auf die Kugelkuppe passt). Die Antwort merkt sich
+die Hülle je Facette. **Und nur die ganze Facette ist die Fläche**: Am
+Ausschnitt beanspruchten Nachbarmerkmale am Schaber sechs von 239 Dreiecken
+einer Deckfläche, und die Stelle meldete den Rest als vollständig. Dieselbe
+Auskunft fragt die Rollenprüfung für ihre Gegenfacetten (`face_roles` mit
+`limit`); ihr früherer eigener Weg brach über dem Budget ab. Gefragt ist nur
+die Ebenenregel — Mindestinhalt und Normalenstreuung
+(`_planar_face_entries`) stellt die Erkennung am Ausschnitt selbst, und in
+ein **Muster** falten kann sie aus wenigen Zellen nicht: Die Wabenwände
+eines Schraubendreherhalters führt die Vollerkennung im Muster, die Stelle
+als Flächen. Die Suchrandprüfung kommt vor der Ebenenregel — eine
+abgeschnittene Fläche braucht keinen Mantelnachweis.
 
 **Eine ebene Fläche ist vollständig, wenn ihre Facette es ist** — gefragt an
 den Facetten des Bereichs samt Randring, nicht des ganzen Netzes: Setzt sich
@@ -376,7 +388,10 @@ Knick parallel zur Randkante (`ALONG_THE_RIM_DEGREES`), **und ist die Rundung
 ein Langlochende** (hohl, zur Seite der Flächennormalen gewölbt — geprüft für
 alle Randkanten zugleich, bevor ein Stück entsteht —, und
 `_turns_round_like_a_slot_end` findet, dass sie die Normale bis mindestens
-`SLOT_END_TURN_DEGREES` umwendet), gilt die alte Sperre. Gegangen wird dafür
+`SLOT_END_TURN_DEGREES` umwendet), gilt die alte Sperre. Vorher fragt
+`_may_turn_round` einmal für alle Randkanten, ob die angrenzende Rundung
+überhaupt eine Normale gegen die Fläche trägt — an einer Hohlkehle nie, und
+dann läuft kein Gang. Gegangen wird dafür
 Stück für Stück quer zur Randkante über die einmal gelesenen Felder des
 Körpers (`_Seams`), bis ein Stück breiter wird als eine Rundung
 (`STRIP_GROWTH`) oder `ROUND_STEPS` erreicht sind; gemerkt wird nur, was der
@@ -431,6 +446,10 @@ das Merkmal nicht, heißt der Grund `budget` — nie ein stilles Fehlen.
 ``standing`` nennt Merkmale, deren Belege am neuen Netz unverändert gelten
 (nach einer belegten starren Bewegung die exakt mitbewegten,
 `features.moved_twin`); sie werden übernommen, nicht gesucht (Review R6).
+Dieselbe Nachmessung wird einmal gerechnet: Das Ergebnis ist eine reine
+Funktion von Netz, Merkmalen, Anspruch und Budgets (`_known_key`, bis
+`KNOWN_MEMORY_LIMIT` Einträge); ein Halt wird nicht gemerkt.
+`forget_known` leert den Merker für Tests.
 **Und zuerst im eigenen
 Umfang des Merkmals, dann im belegten Suchumfang** — der schließt die ganze
 Umgebung der ursprünglichen Stelle ein und sprengte an dichten Netzen das

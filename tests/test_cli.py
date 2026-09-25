@@ -1081,8 +1081,10 @@ def test_the_command_line_takes_back_a_skipped_recognition(
     assert main(["recognize", str(path), "--on", "obj_1"]) == 0
     assert load(path).document.ops[0].matches[key]["allowed"] is False
 
-    # Ein Körper ohne gespeicherte Wahl: der Satz, und wer eine hat.
-    assert main(["recognize", str(path), "--on", "obj_9"]) == 1
+    # Eine Kennung, die es nicht gibt, geht nicht still unter (Review S6),
+    # auch nicht neben einer, die es gibt.
+    capsys.readouterr()
+    assert main(["recognize", str(path), "--on", "obj_1", "obj_9"]) == 1
     said = capsys.readouterr().err
-    assert "keine gespeicherte Wahl zur Merkmalserkennung" in said
-    assert "obj_1" in said
+    assert "obj_9" in said
+    assert load(path).document.ops[0].matches[key]["allowed"] is False

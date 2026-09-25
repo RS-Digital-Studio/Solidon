@@ -184,7 +184,10 @@ Netz gegen 1,0000 am exakten Körper ist dieselbe Steigung.
 Bohrung und Langloch muss die Flächennormale vom Hohlraum weg zeigen; der
 Sacklochboden ist deshalb keine Trägerfläche. Liegt die Mündung hinter einer
 Fase, sucht ein zweiter Durchgang entlang der Achse bis `mouth_reach` weiter
-(Regel in `operationen.md`); `prepare_tool` zeigt für `slot_hole` mit Länge =
+(Regel in `operationen.md`); `mouth_on` beantwortet dieselbe Frage an einer
+schon vorbereiteten Fläche, und `surface_values(..., mouth=...)` rückt die
+Mitte nur auf der eigenen Mündungsfläche nicht um die Fase (G5).
+`prepare_tool` zeigt für `slot_hole` mit Länge =
 Breite die runde Bohrung (`prepare.is_round_length`). `mouth_outline` gewinnt den
 Werkzeugumriss aus der konvexen Hülle der Mündungspunkte (§21.1).
 Die Nachbarschaft exakter Originalkanten nutzt den privaten Trimesh-Cache

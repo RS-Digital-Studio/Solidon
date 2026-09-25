@@ -657,31 +657,35 @@ def test_local_floor_role_uses_the_far_original_rim() -> None:
     assert set(floor.face_indices) == set(original.face_indices)
 
 
-def test_original_plane_witness_fits_only_its_relevant_complete_patch() -> None:
-    """Eine ebene Kappe braucht keinen Mantelfit; dessen Budget gilt vor dem ersten Fit."""
-    from app.core.errors import ValidationError
-    from app.core.perceive.features import _large_facet_faces
-    from app.core.perceive.local import local_error
+def test_original_plane_witness_fits_only_its_relevant_complete_patch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine ebene Kappe braucht keinen Mantelfit; der Mantel wird ganz geprüft.
+
+    Der Mantel ist bewusst größer als die Grenze, ab der zuerst Teile geprüft
+    werden: Sein Teil passt auf einen Zylinder, also entscheidet der ganze
+    Fleck — wie in der Vollerkennung, ohne Abbruch am Budget.
+    """
+    from app.core.perceive import features
 
     raw = trimesh.creation.cylinder(radius=10, height=20, sections=64)
     raw = raw.subdivide().subdivide()
     triangles = np.asarray(raw.triangles)
-    cap = set(np.flatnonzero(np.all(np.isclose(triangles[:, :, 2], 10), axis=1)))
-    wall = set(np.flatnonzero(np.ptp(triangles[:, :, 2], axis=1) > 0))
+    cap = np.flatnonzero(np.all(np.isclose(triangles[:, :, 2], 10), axis=1))
+    wall = np.flatnonzero(np.ptp(triangles[:, :, 2], axis=1) > 0)
     assert len(wall) == 2048
-    attempted = []
+    proofs: list[int] = []
+    real = features._round_surface
 
-    def bounded(count: int) -> None:
-        """Der ganze Mantel ist bewusst größer als das Budget dieser Gegenprobe."""
-        attempted.append(count)
-        if count > 2000:
-            raise local_error("budget")
+    def counted(body: Any, mesh: Any, patch: list[int], **kwargs: Any) -> bool:
+        proofs.append(len(patch))
+        return real(body, mesh, patch, **kwargs)
 
-    assert cap <= _large_facet_faces(raw, requested=cap, check_patch_size=bounded)
-    assert not attempted
-    with pytest.raises(ValidationError):
-        _large_facet_faces(raw, requested=wall, check_patch_size=bounded)
-    assert attempted == [2048]
+    monkeypatch.setattr(features, "_round_surface", counted)
+    assert features.planar_facet(raw, cap.tolist(), limit=2000)
+    assert not proofs
+    assert not features.planar_facet(raw, wall.tolist(), limit=2000)
+    assert proofs == [2048]
 
 
 def test_long_thin_plane_keeps_its_measured_scope_after_rotation(monkeypatch) -> None:
@@ -1415,3 +1419,227 @@ def test_a_rigidly_moved_twin_keeps_its_features_without_a_search(
     assert sorted(sorted(f.face_indices) for f in result.values()) == sorted(
         sorted(f.face_indices) for f in known.values()
     )
+
+
+def _knob(segments: int) -> MeshData:
+    """Ein Knauf: Kapsel R 20, oben weich abgeflacht (Ebene bei 97 % des Radius).
+
+    Der Rand der Abflachung knickt um 14°, liegt also auf der Rundung; der
+    Fleck dahinter ist Kuppel, Mantel und zweite Kuppel — als Ganzes keine
+    Rundform, sein erster Teil um die Abflachung aber eine Kugel.
+    """
+    import manifold3d as m3
+
+    top = m3.Manifold.sphere(20.0, segments).translate((0.0, 0.0, 40.0))
+    capsule = m3.Manifold.batch_hull([top, m3.Manifold.sphere(20.0, segments)])
+    cut = m3.Manifold.cube((100, 100, 100)).translate((-50.0, -50.0, 59.4 - 100.0))
+    return _manifold_mesh(capsule ^ cut)
+
+
+def test_a_soft_flat_on_a_dome_stays_a_face_beyond_the_proof_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Passt der erste Teil des Flecks auf eine Rundform, wird weiter geprüft
+    (Review S1).
+
+    Der Schluss vom Teil aufs Ganze gilt nur in einer Richtung: Trägt ein Teil
+    keine Rundform, trägt das Ganze keine. Trug er eine, meldete die Stelle
+    „zu viele Dreiecke“, obwohl die Vollerkennung die Abflachung führt; der
+    angebotene Weg, den Suchradius zu verkleinern, führte in denselben Satz.
+    """
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = _knob(128)
+    flat = max(
+        (feature for feature in detection.detect(mesh).values() if feature.kind == "face"),
+        key=lambda feature: float(feature.params["centre"][2]),
+    )
+    assert float(flat.params["centre"][2]) == pytest.approx(59.4, abs=1e-3)
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", 50_000)
+    monkeypatch.setattr(local, "MANTLE_PROOF_LIMIT", 2_000)
+    stitched = detection._one_body(mesh)
+    assert mesh.triangle_count > 2 * local.MANTLE_PROOF_LIMIT, "der Teil ist kleiner als der Fleck"
+    seed = _middle_seed(stitched, np.asarray(flat.face_indices))
+    found = local.detect_local(
+        stitched,
+        tuple(np.asarray(stitched.raw.triangles_center)[seed]),
+        normal=(0.0, 0.0, 1.0),
+        radius=3.0,
+        seed_faces=(seed,),
+    )
+    assert found.reason is None
+    assert any(
+        candidate.kind == "face" and set(candidate.face_indices) == set(flat.face_indices)
+        for candidate in found.features.values()
+    )
+
+
+def test_a_mantle_larger_than_the_proof_limit_is_still_no_face(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Gegenrichtung zu S1: Ein Mantel über der Grenze bleibt ein Mantel.
+
+    Sein Teil passt auf einen Zylinder, also wächst die Prüfung bis zum ganzen
+    Fleck und findet dort den vollen Umfang — wie die Vollerkennung.
+    """
+    import manifold3d as m3
+
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    solid = m3.Manifold.cube((80, 80, 6)).translate((-40, -40, 0)) + m3.Manifold.cylinder(
+        20, 15.0, 15.0, 48
+    ).translate((0, 0, 2))
+    mesh = MeshData.of(_manifold_mesh(solid).raw.subdivide().subdivide())
+    stitched = detection._one_body(mesh)
+    faces = {
+        tuple(sorted(feature.face_indices))
+        for feature in detection.detect(mesh).values()
+        if feature.kind == "face"
+    }
+    normals = np.asarray(stitched.raw.face_normals)
+    centres = np.asarray(stitched.raw.triangles_center)
+    labels = local._facet_labels(stitched.raw)
+    mantle = [
+        np.flatnonzero(labels == label)
+        for label in np.unique(labels[labels >= 0])
+        if abs(float(normals[np.flatnonzero(labels == label)[0]][2])) < 1e-6
+        and abs(np.hypot(*centres[np.flatnonzero(labels == label)].mean(axis=0)[:2]) - 15.0) < 1.0
+    ]
+    assert mantle and all(tuple(strip.tolist()) not in faces for strip in mantle)
+    monkeypatch.setattr(local, "MANTLE_PROOF_LIMIT", 600)
+    for strip in mantle[::6]:
+        seed = _middle_seed(stitched, strip)
+        found = local.detect_local(
+            stitched,
+            tuple(centres[seed]),
+            normal=tuple(normals[seed]),
+            radius=10.0,
+            seed_faces=(seed,),
+        )
+        assert not any(
+            candidate.kind == "face" and set(candidate.face_indices) == set(strip.tolist())
+            for candidate in found.features.values()
+        ), found.reason
+
+
+def test_the_same_remeasurement_is_computed_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dieselbe Nachmessung wird nicht bei jeder Auswertung neu gerechnet
+    (Review S2); ein anderes Budget ist eine andere Frage."""
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = MeshData.of(trimesh.load(DATA / "meshes" / "plate_holes.stl"))
+    known = {
+        name: feature
+        for name, feature in detection.detect(mesh).items()
+        if feature.kind in {"face", "hole"}
+    }
+    searches: list[int] = []
+    real = local._recognise_region
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        searches.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(local, "_recognise_region", counted)
+    first = local.detect_known(mesh, known)
+    assert searches
+    searched = len(searches)
+    again = local.detect_known(mesh, known)
+    assert len(searches) == searched, "die zweite Frage kam aus dem Merker"
+    assert again == first and again is not first
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", local.LOCAL_FACE_LIMIT + 1)
+    local.detect_known(mesh, known)
+    assert len(searches) > searched
+
+
+def test_a_cut_off_face_is_not_asked_about_its_plane(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Suchrand kommt vor der Ebenenregel (Review S3): Was abgeschnitten
+    ist, braucht keinen Mantelnachweis."""
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = _bodies_beside_round_surfaces()["subdivided_pin"]
+    stitched = detection._one_body(mesh)
+    asked: list[tuple[int, ...]] = []
+    real = detection.planar_facet
+
+    def counted(body: Any, triangles: Any, **kwargs: Any) -> bool:
+        asked.append(tuple(sorted(int(index) for index in triangles)))
+        return real(body, triangles, **kwargs)
+
+    monkeypatch.setattr(detection, "planar_facet", counted)
+    normals = np.asarray(stitched.raw.face_normals)
+    centres = np.asarray(stitched.raw.triangles_center)
+    labels = local._facet_labels(stitched.raw)
+    side = np.flatnonzero((np.abs(normals[:, 2]) < 1e-6) & (centres[:, 2] > 5.0))
+    strip = np.flatnonzero(labels == labels[side[0]])
+    seed = _middle_seed(stitched, strip)
+    local.detect_local(
+        stitched, tuple(centres[seed]), normal=tuple(normals[seed]), radius=3.0, seed_faces=(seed,)
+    )
+    assert asked == [tuple(sorted(strip.tolist()))], (
+        "nur die Facette am Treffer liegt ganz im Bereich"
+    )
+
+
+def _pocket_with_a_cove(segments: int) -> MeshData:
+    """Runde Tasche R 20, 10 tief, mit Hohlkehle r 3 am Boden — in eine Platte."""
+    import math
+
+    import manifold3d as m3
+
+    points = [(0.0, 2.0), (17.0, 2.0)]
+    for step in range(1, 8):
+        angle = math.pi / 2.0 * step / 8
+        points.append((17.0 + 3.0 * math.sin(angle), 5.0 - 3.0 * math.cos(angle)))
+    points += [(20.0, 5.0), (20.0, 13.0), (0.0, 13.0)]
+    pocket = m3.Manifold.revolve(m3.CrossSection([points]), segments)
+    plate = m3.Manifold.cube((60, 60, 12)).translate((-30, -30, 0))
+    return _manifold_mesh(plate - pocket)
+
+
+def test_a_face_in_a_cove_takes_no_walk_along_its_rim(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eine Hohlkehle wendet nur bis zur Wand, nie zur Gegenflanke (Review S4).
+
+    Die Normalenprobe über die ganze an den Rand grenzende Rundung
+    beantwortet das einmal; vorher ging an einem Taschenboden mit 8 192
+    Stücken jede Randkante bis zur Wand — 3,7 s.
+    """
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    walks: list[int] = []
+    real = local._turns_round_like_a_slot_end
+
+    def counted(*args: Any, **kwargs: Any) -> bool:
+        walks.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(local, "_turns_round_like_a_slot_end", counted)
+    mesh = _pocket_with_a_cove(128)
+    stitched = detection._one_body(mesh)
+    floor = min(
+        (
+            feature
+            for feature in detection.detect(mesh).values()
+            if feature.kind == "face" and feature.params["normal"][2] > 0.999
+        ),
+        key=lambda feature: float(feature.params["centre"][2]),
+    )
+    assert float(floor.params["centre"][2]) == pytest.approx(2.0)
+    seed = _middle_seed(stitched, np.asarray(floor.face_indices))
+    found = local.detect_local(
+        stitched,
+        tuple(np.asarray(stitched.raw.triangles_center)[seed]),
+        normal=(0.0, 0.0, 1.0),
+        radius=3.0,
+        seed_faces=(seed,),
+    )
+    assert any(
+        candidate.kind == "face" and set(candidate.face_indices) == set(floor.face_indices)
+        for candidate in found.features.values()
+    ), found.reason
+    assert walks == []

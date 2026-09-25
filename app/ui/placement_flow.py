@@ -1077,6 +1077,11 @@ class PlacementFlow(QObject):
         self._prepared: Any = None
         self._prepared_mesh: Any = None
         self._patch_faces: frozenset[int] = frozenset()
+        #: Die eigene Mündung des Lochs auf ``_prepared`` — ``None``, wenn die
+        #: Fläche nicht die seine ist (``placement.mouth_on``). Sie gehört zu
+        #: genau dieser Fläche und wird mit ihr gesetzt und geräumt: Nur auf
+        #: ihrer Ebene rückt ``surface_values`` die Mitte nicht um eine Fase.
+        self._own_mouth: Any = None
         #: Das Szenennetz und seine eine Kopie für die Flächenfrage im
         #: Arbeiter (:meth:`_next_surface`). Die Kopie bleibt, solange das
         #: Netz bleibt: Ihre trägen Merker — Nachbarschaft, Normalen,
@@ -1085,7 +1090,9 @@ class PlacementFlow(QObject):
         #: Die zuletzt im Arbeiter vorbereitete Fläche, gleich ob ihre Antwort
         #: noch galt: Eine überholte Frage hat die Fläche trotzdem richtig
         #: vorbereitet, und die nächste Bewegung trifft meist dieselbe.
-        self._surface_known: tuple[Any, Any, frozenset[int]] | None = None
+        #: Dazu die eigene Mündung des Lochs auf ihr und die Kennung des
+        #: Lochs, für das sie gefragt wurde.
+        self._surface_known: tuple[Any, Any, frozenset[int], Any, str] | None = None
         #: Wo die linke Taste für den Rückweg aus dem Dialog gedrückt wurde
         #: (:meth:`_resume`) — ``None`` ohne solchen Druck.
         self._resume_press: tuple[int, int] | None = None
@@ -2268,15 +2275,29 @@ class PlacementFlow(QObject):
         # ist -1), und bis zum 22.09.2026 bereitete dann jede Frage die
         # ganze Fläche neu vor, an einer Kopie ohne Merker: an der Senkplatte
         # (311 000 Dreiecke) eine Sekunde je Mausbewegung (RM-203).
-        known, known_faces = None, frozenset[int]()
+        # **Ob die Fläche die eigene Mündung trägt, fragt der Arbeiter mit**
+        # (G5): nur bei einem Loch, das sich selbst versetzt, und nur an
+        # seinem eigenen Körper.
+        source, own = self._source_feature()
+        if own is None or source is None or source.id != object_id:
+            own = None
+        own_id = own.id if own is not None else ""
+        known, known_faces, known_mouth = None, frozenset[int](), None
         if self._prepared is not None and self._prepared_mesh is entry.mesh:
-            known, known_faces = self._prepared, self._patch_faces
+            known, known_faces, known_mouth = self._prepared, self._patch_faces, self._own_mouth
         elif self._surface_known is not None and self._surface_known[0] is entry.mesh:
             known, known_faces = self._surface_known[1], self._surface_known[2]
+            if self._surface_known[4] == own_id:
+                known_mouth = self._surface_known[3]
         self._surface_busy = True
         if self._surface_mesh is None or self._surface_mesh[0] is not entry.mesh:
             self._surface_mesh = (entry.mesh, for_a_worker(entry.mesh))
         mesh = self._surface_mesh[1]
+
+        def mouth_of(context: Any) -> Any:
+            if context is known:
+                return known_mouth
+            return placement.mouth_on(context, own, entry.features) if own is not None else None
 
         def compute() -> Any:
             at, face = point, cell
@@ -2292,7 +2313,7 @@ class PlacementFlow(QObject):
                 if known is not None and face in known_faces
                 else placement.prepare_surface(mesh, face, entry.features)
             )
-            return context, placement.at_point(context, at)
+            return context, placement.at_point(context, at), mouth_of(context)
 
         def done(value: Any) -> None:
             if not isValid(self) or self._disposed:
@@ -2303,6 +2324,8 @@ class PlacementFlow(QObject):
                     entry.mesh,
                     value[0],
                     frozenset(value[0].face_indices),
+                    value[2],
+                    own_id,
                 )
             if self.active and stamp == self._serial:
                 if value is None:
@@ -2313,7 +2336,7 @@ class PlacementFlow(QObject):
                         )
                     )
                 else:
-                    self._prepared, self._surface = value
+                    self._prepared, self._surface, self._own_mouth = value
                     self._centre_id = (
                         self._surface.centres[0].feature_id if self._surface.centres else ""
                     )
@@ -2376,6 +2399,7 @@ class PlacementFlow(QObject):
                 self.redraw()
                 return
             self._prepared, self._surface = value
+            self._own_mouth = None
             self._prepared_mesh = entry.mesh
             self._patch_faces = frozenset(self._surface.face_indices)
             self._object_id = entry.id
@@ -2441,6 +2465,10 @@ class PlacementFlow(QObject):
             if seat is None:
                 return None
             prepared, mouth = seat
+            # Die eigene Mündung bleibt der Durchstoßpunkt der Achse — auch
+            # wenn der Entwurf die Stelle schon versetzt hat: An ihr misst
+            # ``surface_values`` den Abstand zur Mitte (G5).
+            own_mouth = mouth
             if target is not None:
                 # Die Fläche stammt vom bestehenden Loch; ein übergebener
                 # Entwurf kann seine Mitte bereits versetzt haben. Die neue
@@ -2452,7 +2480,7 @@ class PlacementFlow(QObject):
                 normal = np.asarray(prepared.frame.normal, dtype=float)
                 point = np.asarray(mouth) + shift - normal * float(shift @ normal)
                 mouth = (float(point[0]), float(point[1]), float(point[2]))
-            return prepared, placement.at_point(prepared, mouth)
+            return prepared, placement.at_point(prepared, mouth), own_mouth
 
         def done(value: Any) -> None:
             if not isValid(self) or self._disposed or not self.active or stamp != self._serial:
@@ -2460,7 +2488,7 @@ class PlacementFlow(QObject):
             if value is None:
                 self._no_seat_at_feature()
                 return
-            self._prepared, self._surface = value
+            self._prepared, self._surface, self._own_mouth = value
             self._centre_id = self._surface.centres[0].feature_id if self._surface.centres else ""
             self._prepared_mesh = entry.mesh
             self._patch_faces = frozenset(self._surface.face_indices)
@@ -2582,6 +2610,7 @@ class PlacementFlow(QObject):
             if value is None or self._surface is not None:
                 return
             self._prepared, self._surface, in_the_hole = value
+            self._own_mouth = None
             self._centre_id = ""
             self._prepared_mesh = entry.mesh
             self._patch_faces = frozenset(self._surface.face_indices)
@@ -2705,6 +2734,7 @@ class PlacementFlow(QObject):
                     feature=feature,
                     source=source,
                     prepared_tool=self._tool_context,
+                    mouth=self._own_mouth,
                 )
             )
             return True
@@ -2803,6 +2833,7 @@ class PlacementFlow(QObject):
                     self._serial += 1
                     self._surface = None
                     self._prepared = None
+                    self._own_mouth = None
                     self._prepared_mesh = None
                     self._patch_faces = frozenset()
                     self._measure_without_surface = False
@@ -3352,6 +3383,7 @@ class PlacementFlow(QObject):
                     feature=feature,
                     source=source,
                     prepared_tool=self._tool_context,
+                    mouth=self._own_mouth,
                 )
                 # Nur, was die Operation kennt — dieselbe Grenze wie
                 # ``QuietHost.take_placement``: ``surface_values`` liefert auch
@@ -3800,6 +3832,7 @@ class PlacementFlow(QObject):
             self._deferred_document_change = True
             return
         self._prepared = None
+        self._own_mouth = None
         self._prepared_mesh = None
         self._patch_faces = frozenset()
         if self.active:
