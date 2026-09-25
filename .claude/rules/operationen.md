@@ -459,6 +459,40 @@ und der Fall entsteht gar nicht. Er blieb ohne den Fix grün. Was ihn trägt,
 ist die Normale aus dem echten Treffer (`original_surface_hit`), denn erst die
 tesselierte Facette erzeugt den Überstand.
 
+### Und wo die Vorprüfung selbst urteilt, beweist sie es gegen die Toleranzen der genauen
+
+Die Trennprüfung der Schnittsuche (`intersections._separated`, RM-244)
+verwirft Paare, ohne dass die genaue Prüfung sie je sieht — ihr Nein **ist**
+das Urteil. Sie darf deshalb nur verwerfen, was die genaue Prüfung mit all
+ihren Toleranzen ebenfalls verwürfe, und nicht, was „geometrisch offensichtlich
+getrennt" ist. Die genaue Prüfung nimmt eine Lücke unter `EPS_GEOM` als
+Schnitt, legt Ecken innerhalb `EPS_GEOM` zusammen und zählt eine Ecke bis zu
+ihrer Rechengrenze als in der Ebene des Partners. Jede dieser Toleranzen
+brauchte eine eigene Sicherung: einen Abstand, der über allen liegt; eine
+gemeinsame Ecke nur zwischen parallelen Ebenen, weil schräg zueinander kein
+fester Abstand die Toleranz an der Ecke deckt; ein Spiel an der gemeinsamen
+Ecke, das unter der Schwelle eines Treffers bleibt.
+
+**Jede Sicherung hat einen konstruierten Fall, an dem ihr Fehlen einen Treffer
+kostet** (`_pairs_at_the_tolerance` in `tests/test_self_intersections.py`).
+Zufällige Paare und echte Netze fanden keinen davon: Zweitausend Zufallspaare
+und ein Fächer von Nadeln blieben grün, als der Abstand auf null stand. Wer
+eine Vorprüfung dieser Art baut, nimmt jede ihrer Bedingungen einmal heraus
+und sucht den Fall, der dann rot wird — findet er keinen, konstruiert er ihn an
+der Toleranz, die die Bedingung deckt, oder die Bedingung ist überflüssig.
+
+**Und sie bezahlt ihre Rechnung selbst.** Ein Budget, das die genauen
+Prüfungen zählt, zählt die Vorprüfung mit (`SEPARATION_COST`) — sonst liefe
+sie an einem Netz, dessen Paare sie alle trennt, ohne Grenze. Und sie steigt
+früh aus, wo sie nicht trennen kann: Die erste Fassung rechnete jedes Paar
+ganz und kostete an einem organischen Netz fast so viel wie die genaue
+Prüfung, die sie ersparen sollte. **Gemessen wird dabei beides, die
+Vollständigkeit und die Abdeckung dort, wo die Vorprüfung nichts bringt:**
+Ein eigener Anteil für den frühen Ausstieg ließ die Netzfehlerkarte an
+organischen Netzen acht Prozent weniger Dreiecke prüfen — obwohl die Zeit je
+Paar gesunken war, weil die genaue Prüfung gleiche Ecken seither nicht mehr
+zusammenlegt.
+
 ## Eine Zahl beschreibt die Regel, nicht die Lage
 
 `_feature_body` lehnte einen Flächenausschnitt mit zwei Randringen ab, weil

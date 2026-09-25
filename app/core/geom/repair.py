@@ -2785,9 +2785,10 @@ def remove_small_components(
     return MeshData.of(body, slots=slots), len(pieces) - len(keep)
 
 
-#: Wie viele Kandidatenpaare die Durchdringungssuche mindestens prüft —
-#: gezählt nach dem Achsenfilter, also die Paare, die wirklich Rechenzeit
-#: kosten (rund zwei Mikrosekunden je Paar).
+#: Wie viele genaue Paarprüfungen die Durchdringungssuche mindestens bezahlt
+#: — rund zwei Mikrosekunden je Prüfung. Gezählt wird nach dem Achsenfilter;
+#: ein Paar, das die Trennprüfung davor verwirft, kostet einen Bruchteil
+#: (``intersections.SEPARATION_COST``).
 #:
 #: Die Suche ist im schlechtesten Fall quadratisch — ein Netz aus lauter
 #: deckungsgleichen Flächen erzeugt beliebig viele Paare —, und darüber bricht
@@ -2802,15 +2803,17 @@ MAX_INTERSECTION_PAIRS: Final = 2_000_000
 #: 0,8 Millionen; organische Netze liegen dort bei sechs bis sieben Paaren je
 #: Dreieck (Spiderman 885 570 Dreiecke: 5,9 Millionen, Drache 2,33 Millionen:
 #: 14,5 Millionen), und zwölf lassen jedem vollständig Luft. Wer lange
-#: Splitterdreiecke trägt (Besenhalter: 54 je Dreieck), endet nach dem Sockel
-#: von zwei Millionen mit einem Hinweis statt nach neun Sekunden. Das
+#: Splitterdreiecke trägt (Besenhalter: 54 je Dreieck), endete bis zur
+#: Trennprüfung (RM-244) nach dem Sockel von zwei Millionen mit einem Hinweis;
+#: seither trennt sie dort 92 Prozent der Paare, und die Suche kommt nach
+#: fünf Sekunden ans Ende. Das
 #: Fünfhundertfache, das hier einen Nachmittag stand, ließ die Netzfehlerkarte
 #: am Besenhalter 8 und am Spiderman 12 Sekunden rechnen.
 INTERSECTION_PAIRS_PER_TRIANGLE: Final = 12
 
 
 def intersection_budget(triangles: int) -> int:
-    """Wie viele gefilterte Kandidatenpaare die Durchdringungssuche an diesem Netz prüft."""
+    """Wie viele genaue Paarprüfungen die Durchdringungssuche an diesem Netz bezahlt."""
     return max(MAX_INTERSECTION_PAIRS, INTERSECTION_PAIRS_PER_TRIANGLE * triangles)
 
 

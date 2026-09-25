@@ -70,7 +70,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe](#rm-239) | Geometrie, Erkennung und Druckvorbereitung | Siebhalter-Ring mit Riss: die Heilung überwiegt, 12 Eckpaare zu 0,015 µm werden zusammengelegt, 24 Dreiecke fallen — Gruppen nach Flächenblatt trennen, ohne Dreieckssuppen aufzureißen; Import- und Reparaturregel zusammenlegen |
 | [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
 | [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
-| [RM-244 — Die Schnittsuche endet an Nadeldreiecken am Budget](#rm-244) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: 35 648 von 59 740 Dreiecken in 6,4 s geprüft — messen, welche Paare das Budget verbrauchen, dann vollständig unter dem Budget |
 | [RM-245 — Eine Bohrung mit Erweiterung an beiden Enden lässt sich nicht bearbeiten](#rm-245) | Geometrie, Erkennung und Druckvorbereitung | Vier STEP-Lochplatten: 9 von 9 Schraubbohrungen (Zylindersenkung hinten, Fase vorn) sagen Kippen, Versetzen und Verdoppeln ab — Kettenmodell auf Erweiterungen an beiden Enden ausbauen |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
@@ -1839,21 +1838,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   gerundete Seite; die Flaschentaschen als Gegenfall. Abnahme: Screen-Cover
   ohne Verrundungen an den Buchstaben, Flaschenhalter, Besenhalter und die
   übrigen Korpuskörper Merkmal für Merkmal gleich.
-
-<a id="rm-244"></a>
-
-- [ ] **RM-244 — Die Schnittsuche endet an Nadeldreiecken am Budget.**
-  Aus RM-219 (Nebenbemerkung, Befund B15 der Bausteine) und am 25.09.2026
-  nachgemessen: `repair.crossings_of` am Besenhalter (59 740 Dreiecke,
-  Median-Seitenverhältnis 131) prüft in 6,4 s 35 648 der 59 740 Dreiecke und
-  endet am Budget von zwei Millionen Paaren (`complete=False`). Die
-  Netzfehlerkarte zeigt den Rest als unbekannt, und *Überschneidungen
-  auflösen* weiß nicht, ob der Körper sauber ist. Lange Nadeln haben große
-  Hüllquader, und Nachbardreiecke teilen fast immer eine Ecke. Weg: messen,
-  welche Paare das Budget verbrauchen, und sie billiger ausschließen, ohne
-  eine Durchdringung zu übersehen. Abnahme: Besenhalter vollständig geprüft
-  unter dem Budget, dieselben Paare wie der skalare Weg
-  (`tests/test_self_intersections.py`).
 
 <a id="rm-245"></a>
 

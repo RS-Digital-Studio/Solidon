@@ -441,8 +441,10 @@ Bereichstest, vollständig). Kandidaten über Sweep-and-Prune, bei großen
 Netzen in Scheiben entlang einer zweiten Achse — Achsen und Breite wählt
 `_plan` an einer festen Stichprobe (Baum 166 000 Dreiecke: 146 Mio. statt
 8 Mio. Sweep-Paare, 16 s → 5 s; jedes Paar zählt nur in der Scheibe der
-unteren Ecke seiner gemeinsamen Hülle) —, dann je Paar als Feld: Ecken
-innerhalb `EPS_GEOM` sind ein topologischer Punkt, nicht koplanare Paare
+unteren Ecke seiner gemeinsamen Hülle) —, danach die Trennprüfung
+(`_separated`: eine Ebene oder in der Draufsicht eine Kante trennt mit
+Abstand, eine gemeinsame Ecke nur in derselben Ebene; RM-244), dann je Paar
+als Feld: Ecken innerhalb `EPS_GEOM` sind ein topologischer Punkt, nicht koplanare Paare
 entscheiden ihre Schnittstrecken auf der Schnittgeraden, koplanare der
 Trennachsensatz. Die Karte rechnete bis zum 22.09.2026 Möller-Trumbore und sah
 zwei deckungsgleiche Dreiecke derselben Ebene nicht, ebenso wenig ein Paar,
@@ -483,10 +485,13 @@ Geometrie deklariert die Reparatur keine alten Merkmale erneut; die gemeinsame
 Erkennung führt die Merkmale am Ergebnis nach.
 
 **Die Schnittsuche läuft einmal je Netz und weiß, wie weit sie kam**
-(`repair.crossings_of`, `intersections.Crossings`). Ihr Paarbudget zählt die
-**gefilterten** Paare — die, deren Hüllen sich wirklich überlappen —, nicht die
-Sweep-Kandidaten; es wächst mit dem Netz (`INTERSECTION_PAIRS_PER_TRIANGLE`,
-mindestens `MAX_INTERSECTION_PAIRS`). **Am offenen oder gegeneinander
+(`repair.crossings_of`, `intersections.Crossings`). Ihr Budget zählt in
+**genauen Paarprüfungen**: Ein Paar, dessen Hüllen sich wirklich überlappen,
+kostet die ganze Trennprüfung einen Bruchteil (`SEPARATION_COST`) und, was
+sie nicht trennt, die genaue Prüfung dazu; ein Paar, das schon der
+Nummernvergleich an die genaue Prüfung gibt, kostet diese allein. Die
+Sweep-Kandidaten zählen nicht. Das Budget wächst mit dem Netz
+(`INTERSECTION_PAIRS_PER_TRIANGLE`, mindestens `MAX_INTERSECTION_PAIRS`). **Am offenen oder gegeneinander
 gewickelten Netz und über `perceive.maps.MAP_LIMIT_TRIANGLES` gilt nur der
 Sockel** (`_intersection_findings`): Dort löst die Reparatur nichts auf, und
 am Drachen kostete das mitwachsende Budget 70 s für „nichts zu tun". Jede

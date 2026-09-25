@@ -876,9 +876,10 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
 
 # --- Netzdefekte ----------------------------------------------------------------
 
-#: Wie viele Kandidatenpaare die Netzfehlerkarte höchstens prüft — rund vier
-#: Sekunden bei zwei Mikrosekunden je Paar; §31 gibt einer Karte drei im
-#: Hintergrund. Fest und nicht auf die Uhr, damit dieselbe Datei auf jedem
+#: Wie viele genaue Paarprüfungen die Netzfehlerkarte höchstens bezahlt — rund
+#: vier Sekunden bei zwei Mikrosekunden je Prüfung, die Trennprüfung davor
+#: anteilig mitgezählt (``geom.intersections.SEPARATION_COST``); §31 gibt einer
+#: Karte drei im Hintergrund. Fest und nicht auf die Uhr, damit dieselbe Datei auf jedem
 #: Rechner dieselbe Karte zeigt.
 DEFECT_MAP_PAIRS: Final = 2_000_000
 

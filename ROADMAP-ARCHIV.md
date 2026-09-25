@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-25 | [Die Schnittsuche an Nadeldreiecken: die Trennprüfung (25.09.2026)](#die-schnittsuche-an-nadeldreiecken-die-trennprüfung-25092026) |
 | 2026-09-25 | [Nadeldreiecke: die Gewinderegel und die Bögen eines Prismas (25.09.2026)](#nadeldreiecke-die-gewinderegel-und-die-bögen-eines-prismas-25092026) |
 | 2026-09-25 | [Große Netze: Speicher, Merkmalsgrenze und die Erkennung an einer Stelle (25.09.2026)](#große-netze-speicher-merkmalsgrenze-und-die-erkennung-an-einer-stelle-25092026) |
 | 2026-09-25 | [Gekippte und versetzte Bohrungen sagen, was sie sind (25.09.2026)](#gekippte-und-versetzte-bohrungen-sagen-was-sie-sind-25092026) |
@@ -31444,3 +31445,53 @@ Dazu aus dem Bericht, je mit Test:
   (tangentiale Bögen eines Prismas, verrauschte Radien, Ellipsenbogen). Die
   Nebenbemerkung zur Selbstdurchdringung steht als RM-244 im Register: Die
   Schnittsuche endet am Besenhalter heute nach 6,4 s am Budget.
+
+## Die Schnittsuche an Nadeldreiecken: die Trennprüfung (25.09.2026)
+
+<a id="rm-244"></a>
+
+- [x] **RM-244 — Die Schnittsuche endet an Nadeldreiecken am Budget.**
+  Aus RM-219 (Nebenbemerkung, Befund B15 der Bausteine) und am 25.09.2026
+  nachgemessen: `repair.crossings_of` am Besenhalter (59 740 Dreiecke,
+  Median-Seitenverhältnis 131) prüft in 6,4 s 35 648 der 59 740 Dreiecke und
+  endet am Budget von zwei Millionen Paaren (`complete=False`). Die
+  Netzfehlerkarte zeigt den Rest als unbekannt, und *Überschneidungen
+  auflösen* weiß nicht, ob der Körper sauber ist. Lange Nadeln haben große
+  Hüllquader, und Nachbardreiecke teilen fast immer eine Ecke. Weg: messen,
+  welche Paare das Budget verbrauchen, und sie billiger ausschließen, ohne
+  eine Durchdringung zu übersehen. Abnahme: Besenhalter vollständig geprüft
+  unter dem Budget, dieselben Paare wie der skalare Weg
+  (`tests/test_self_intersections.py`).
+
+  **Abgeschlossen am 25.09.2026 — mit einer Trennprüfung vor der genauen.**
+  Die 3,2 Millionen Kandidaten am Besenhalter sind zu 57 Prozent Paare
+  derselben Ebene und zu 36 Prozent Nachbarn an einer Ecke: Nadeln desselben
+  Fächers, die sich nur an der Nabe berühren. `intersections._separated`
+  verwirft vorab, was eine Ebene oder in der Draufsicht eine Kante mit
+  Abstand trennt; eine gemeinsame Ecke darf nur zwischen parallelen Ebenen
+  auf der Trenngeraden liegen. Verworfen wird nur, was auch die genaue
+  Prüfung mit ihren Toleranzen verwürfe, und jede der drei Sicherungen —
+  Abstand über allen Toleranzen, gemeinsame Ecke nur in derselben Ebene, ein
+  halber `EPS_GEOM` Spiel an ihr — hat einen konstruierten Fall, an dem ihr
+  Fehlen einen Treffer kostet; zweitausend Zufallspaare fanden keinen davon.
+  Das Budget zählt weiter genaue Prüfungen, die ganze Trennprüfung kostet
+  `SEPARATION_COST` = 0,5 davon. Und die genaue Prüfung legt gleiche Ecken
+  nicht mehr zusammen — bitgleich, ein Fünftel schneller —, sodass ein Paar
+  mit gemeinsamer Ecke samt Nummernvergleich weniger kostet als vorher ohne.
+  Mit einem eigenen Anteil für den Nummernvergleich prüfte die
+  Netzfehlerkarte an organischen Netzen acht Prozent weniger; gemessen und
+  verworfen.
+
+  Am Besenhalter: vollständig, 59 740 von 59 740 Dreiecken (vorher 35 648),
+  keine Durchdringung, 5,0 bis 5,2 s statt 5,6 s für drei Fünftel. Über 193
+  Dateien aus `F:\3D Dateien` mit dem Budget der Anwendung: 168 in beiden
+  vollständig mit identischen Paaren, fünf jetzt vollständig (Besenhalter,
+  Gewürz, Besteckkorb Modular, zwei Würfel), keine verliert. Die
+  Netzfehlerkarte prüft an allen 27 Netzen zwischen 150 000 und 900 000
+  Dreiecken mehr als vorher (Gähnende Katze 149 186 → 141 299 ungeprüft,
+  Spiderman 588 233 → 579 142, Eiffelturm 228 573 → 187 053), zusammen in
+  135 statt 163 s. Nachweis: `test_self_intersections.py` (Trennprüfung gegen
+  die genaue an Zufall, Fächern und den drei Grenzfällen; ein Zylinder mit
+  Fächerdeckeln unter einem Budget, das der alte Weg nicht schaffte). Der
+  Bausteinnachweis ist neu gefahren: `intersections.py` steht in seinem
+  Abdruck.

@@ -13,6 +13,7 @@ Bereichstest stand — und die Fälle, die der alten Karte fehlten.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -132,6 +133,157 @@ def test_the_field_answers_like_the_scalar_pair_check_on_random_pairs() -> None:
     assert batched.shape == (2000,) and batched.dtype == bool
     assert np.array_equal(batched, expected)
     assert batched.any() and not batched.all(), "beide Antworten kommen vor"
+
+
+def _shared_surface(
+    ones: np.ndarray, others: np.ndarray
+) -> tuple[intersections._Surface, np.ndarray, np.ndarray]:
+    """Die Paare als ein Netz, gleiche Koordinaten unter einer Nummer — wie ein verschweißtes."""
+    corners = np.concatenate([ones, others]).reshape(-1, 3)
+    vertices, faces = np.unique(corners, axis=0, return_inverse=True)
+    faces = faces.reshape(-1, 3)
+    surface = intersections._surface(vertices, faces)
+    assert surface is not None and len(surface.kept) == len(faces), "keine Nullfläche dabei"
+    count = len(ones)
+    return surface, np.arange(count), np.arange(count, 2 * count)
+
+
+def _touching_pairs() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Die Grenzfälle der Trennprüfung: Fächer, Falten, Berührung um EPS_GEOM, Kopien.
+
+    Je Nabe vier Paare, und jedes zweite Dreieck steht um ``lift`` aus der
+    Ebene: nichts, um weniger als ``EPS_GEOM``, um den Abstand der Prüfung
+    herum oder deutlich.
+    """
+    source = np.random.default_rng(25092026)
+    ones, others, lifts = [], [], []
+    for _ in range(400):
+        hub = source.uniform(-1.0, 1.0, 3)
+        angles = np.sort(source.uniform(0.0, 2.0 * np.pi, 4))
+        length = source.uniform(0.5, 3.0, 4)
+        rim = hub + np.column_stack((length * np.cos(angles), length * np.sin(angles), np.zeros(4)))
+        lift = float(source.choice([0.0, 0.0, 1e-7, 1e-6, 3e-6, 0.05]))
+        up, aside = np.array([0.0, 0.0, lift]), np.array([lift, lift, 0.0])
+        own = [hub, rim[0], rim[1]]
+        # Dieselbe Nabe daneben im Fächer, eine Falte über die gemeinsame Kante,
+        # eine Ecke um lift neben einer fremden und eine fast deckungsgleiche Kopie.
+        pairs = (
+            [hub, rim[2], rim[3] + up],
+            [hub, rim[1], hub + 0.5 * (rim[0] - hub) + up],
+            [rim[1] + aside, rim[2], rim[3]],
+            [hub + aside, rim[0] + up + aside, rim[1]],
+        )
+        for other in pairs:
+            ones.append(own)
+            others.append(other)
+            lifts.append(lift)
+    return np.asarray(ones), np.asarray(others), np.asarray(lifts)
+
+
+def _pairs_at_the_tolerance() -> tuple[np.ndarray, np.ndarray]:
+    """Drei Paare, die die genaue Prüfung nur mit ihren Toleranzen kreuzen sieht.
+
+    In der Draufsicht trennt jedes eine Kante, und jedes zeigt eine Sicherung
+    der Trennprüfung. Die ersten zwei teilen eine Ecke. Das erste steht
+    schräg, aber fast parallel (Sinus 2·10⁻⁶): Die
+    zweite Ecke des kurzen Dreiecks liegt innerhalb der Rechengrenze in der
+    Ebene des anderen, und die genaue Prüfung sieht eine Schnittstrecke über
+    die gemeinsame Ecke hinaus — darum trennt die Prüfung eine gemeinsame Ecke
+    nur in derselben Ebene. Im zweiten ist die gemeinsame Ecke die Spitze
+    einer flachen Nadel, 1,2 ``EPS_GEOM`` unter ihrer langen Kante — darum
+    darf sie nur einen halben ``EPS_GEOM`` hinter dem Rand liegen. Das dritte
+    steht senkrecht einen halben ``EPS_GEOM`` neben der Kante des anderen,
+    ohne gemeinsame Ecke: Eine Lücke unter ``EPS_GEOM`` ist für die genaue
+    Prüfung ein Schnitt — darum der Abstand.
+    """
+    theta, phi, rise = 2e-6, 5e-6, 3e-6
+    normal = (
+        -math.sin(phi) * math.sin(theta),
+        math.cos(phi) * math.sin(theta),
+        math.cos(theta),
+    )
+
+    def tilted(x: float, y: float) -> list[float]:
+        return [x, y, -(normal[0] * x + normal[1] * y) / normal[2]]
+
+    corner = [0.0, 0.0, 0.0]
+    tip = [0.0, -1.2e-6, 0.0]
+    ones = [
+        [corner, [0.001, 0.0, 0.0], [0.0005, -0.001, 0.0]],
+        [[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0], tip],
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0]],
+    ]
+    others = [
+        [corner, tilted(math.cos(rise), math.sin(rise)), tilted(0.0, 1.0)],
+        [tip, [0.3, 0.5, 0.0], [-0.3, 0.5, 0.0]],
+        [[0.5, 5e-7, -1.0], [0.5, 5e-7, 1.0], [0.5, 1.0, 0.0]],
+    ]
+    return np.asarray(ones), np.asarray(others)
+
+
+def test_the_separation_never_drops_a_pair_that_crosses() -> None:
+    """Was die Trennprüfung verwirft, schneidet nicht — an Zufall und an den Grenzfällen.
+
+    Die Trennprüfung spart am Besenhalter 96 Prozent der genauen Prüfungen
+    (RM-244). Sie darf dafür keinen Treffer kosten: nicht an einer
+    gemeinsamen Ecke, nicht an einer Falte über eine gemeinsame Kante, nicht
+    an einem Paar, das um Bruchteile von ``EPS_GEOM`` absteht, und nicht an
+    zwei deckungsgleichen Dreiecken unter eigenen Nummern.
+    """
+    ones, others = _random_pairs(2000)
+    fans, folds, lifts = _touching_pairs()
+    tolerant, tolerated = _pairs_at_the_tolerance()
+    answers = {}
+    for name, first_corners, second_corners in (
+        ("zufällig", ones, others),
+        ("an der Toleranz", tolerant, tolerated),
+        ("Fächer", fans, folds),
+    ):
+        surface, first, second = _shared_surface(first_corners, second_corners)
+        separated, _searched = intersections._separated(surface, first, second)
+        crossed = intersections.crossing_pairs(
+            surface.triangles[first],
+            surface.triangles[second],
+            surface.faces[first],
+            surface.faces[second],
+        )
+        assert isinstance(crossed, np.ndarray)
+        assert not np.any(separated & crossed), (name, np.flatnonzero(separated & crossed)[:10])
+        answers[name] = separated, crossed
+    separated, crossed = answers["an der Toleranz"]
+    assert crossed.all(), "die genaue Prüfung sieht alle drei gekreuzt"
+    for name in ("zufällig", "Fächer"):
+        separated, crossed = answers[name]
+        assert separated.any() and crossed.any(), f"{name}: beide Antworten kommen vor"
+    # Zwei Nadeln eines ebenen Fächers berühren sich nur an der Nabe: getrennt.
+    separated, crossed = answers["Fächer"]
+    beside = np.zeros(len(fans), dtype=bool)
+    beside[::4] = True
+    flat_fan = beside & (lifts == 0.0) & ~crossed
+    assert flat_fan.sum() > 50, "der Fächer kommt vor"
+    assert separated[flat_fan].all(), np.flatnonzero(flat_fan & ~separated)[:10]
+
+
+def test_a_fan_of_needles_is_searched_to_the_end() -> None:
+    """Ein Zylinder mit Fächerdeckeln: alle Nadeln eines Deckels treffen sich in der Mitte.
+
+    Das Bild des Besenhalters (RM-244): Jede Nadel überdeckt mit ihrem
+    Hüllquader fast jede andere desselben Deckels, und die genaue Prüfung
+    zählte bis zum Budget. Die Trennprüfung trennt sie an ihrer gemeinsamen
+    Nabe, und die Suche kommt unter demselben Budget ans Ende.
+    """
+    mesh = trimesh.creation.cylinder(radius=10.0, height=5.0, sections=512)
+    surface = intersections._surface(mesh.vertices, mesh.faces)
+    assert surface is not None
+    candidates = sum(
+        len(first)
+        for first, _second in intersections._candidates(surface, None, intersections._Search())
+    )
+    # Der alte Weg zählte jeden Kandidaten ganz; drei Viertel reichten ihm nicht.
+    budget = 3 * candidates // 4
+
+    found = intersections.crossing_face_pairs(mesh.vertices, mesh.faces, max_pairs=budget)
+    assert found.complete and not len(found.first), f"{candidates} Kandidaten, Budget {budget}"
 
 
 def test_two_congruent_triangles_in_one_plane_are_found() -> None:

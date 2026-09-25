@@ -11,7 +11,7 @@ des Bereichstests vollständig, aber als Python-Schleife über die Kontakte
 eines VTK-Filters: 632 ms für 352 Dreiecke, 1,5 s je Ecke am Schraubenloch.
 Hier steht die eine vollständige Rechnung, und sie ist ein Feld.
 
-Gerechnet wird in zwei Stufen:
+Gerechnet wird in drei Stufen:
 
 * **Kandidaten** über Sweep-and-Prune, je nach Netz in Scheiben entlang einer
   zweiten Achse (:func:`_plan` wählt Achsen und Breite an einer Stichprobe) —
@@ -20,11 +20,19 @@ Gerechnet wird in zwei Stufen:
   überdeckt sich auf jeder Achse zu Hunderten. Die übrigen Achsen filtern
   danach als Feld. Nichts wird gekappt: Das
   Budget ``max_pairs`` gibt es nur für Karte und Reparatur, die ehrlich sagen,
-  was sie gefunden haben; der Bereichstest prüft jedes Paar. **Gezählt werden
-  die Paare nach diesem Filter** (Durchsicht 24.09.2026): Sie kosten die
+  was sie gefunden haben; der Bereichstest prüft jedes Paar. **Gezählt wird
+  in genauen Prüfungen** (Durchsicht 24.09.2026, RM-244): Sie kosten die
   Rechenzeit, rund zwei Mikrosekunden je Paar. Die Rohpaare des Sweeps sagten
   darüber wenig — ein Besenhalter mit langen Splitterdreiecken brachte 22
   Millionen davon für 3,2 Millionen echte Kandidaten, ein Spiderman 49 für 6.
+* **Die Trennprüfung** (:func:`_separated`) verwirft, was eine Ebene oder in
+  der Draufsicht eine Kante mit Abstand trennt, und kostet dafür einen
+  Bruchteil (:data:`SEPARATION_COST`). Am
+  Besenhalter trennt sie 92 Prozent der Kandidaten — Nadeln desselben
+  ebenen Fächers, die sich nur an der Nabe berühren —, und die Suche kommt
+  unter dem Budget ans Ende; an einem organischen Netz teilen fast alle
+  Kandidaten eine Ecke und stehen schräg, und dort entscheidet schon der
+  Nummernvergleich, dass die genaue Prüfung folgt.
 * **Das Paar selbst**, je Block als ``(m, 3, 3)``: Ecken beider Dreiecke, die
   innerhalb ``EPS_GEOM`` zusammenfallen, sind *ein* topologischer Punkt und
   werden auf ihre gemeinsame Mitte gelegt — eine gemeinsame Kante ist
@@ -108,6 +116,11 @@ class _Surface:
     triangles: np.ndarray
     low: np.ndarray
     high: np.ndarray
+    normal: np.ndarray
+    """Je Dreieck das Kreuzprodukt seiner Kanten, wie :func:`crossing_pairs` es bildet."""
+    normal_length: np.ndarray
+    margin: float
+    """Der Abstand, ab dem :func:`_separated` zwei Dreiecke getrennt nennt."""
 
 
 def _surface(vertices: np.ndarray, faces: np.ndarray) -> _Surface | None:
@@ -117,9 +130,8 @@ def _surface(vertices: np.ndarray, faces: np.ndarray) -> _Surface | None:
     if len(faces) < 2 or not len(vertices):
         return None
     triangles = vertices[faces]
-    twice_area = np.linalg.norm(
-        np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]), axis=1
-    )
+    normal = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
+    twice_area = np.linalg.norm(normal, axis=1)
     edge_lengths = np.linalg.norm(np.roll(triangles, -1, axis=1) - triangles, axis=2)
     longest = edge_lengths.max(axis=1)
     altitude = np.divide(twice_area, longest, out=np.zeros_like(twice_area), where=longest > 0.0)
@@ -127,13 +139,26 @@ def _surface(vertices: np.ndarray, faces: np.ndarray) -> _Surface | None:
     if len(kept) < 2:
         return None
     triangles = triangles[kept]
+    span = float(np.linalg.norm(np.ptp(triangles, axis=1), axis=1).max())
     return _Surface(
         kept=kept,
         faces=faces[kept],
         triangles=triangles,
         low=triangles.min(axis=1),
         high=triangles.max(axis=1),
+        normal=normal[kept],
+        normal_length=twice_area[kept],
+        margin=2.0 * EPS_GEOM + 4.0 * float(_numeric(span)) / EPS_GEOM,
     )
+
+
+def _numeric(span: float | np.ndarray) -> np.ndarray:
+    """Ab welchem Abstand eine Ecke nicht mehr *in* der Ebene des Partners liegt.
+
+    Die Grenze aus :func:`_intervals_on_line`, für ein Dreieck der Diagonale
+    ``span`` — dort und in :func:`_separated` dieselbe Zahl.
+    """
+    return np.asarray(64.0 * np.finfo(float).eps * np.maximum(1.0, span))
 
 
 def _check(cancelled: CancelToken | None) -> None:
@@ -268,14 +293,199 @@ class _Search:
     unchecked: np.ndarray | None = None
 
 
+#: Was die Trennprüfung eines Paares (:func:`_separated`) gegenüber der
+#: genauen Prüfung kostet, wenn sie es ganz durchläuft. Das Budget zählt in
+#: genauen Prüfungen: Ein Paar, das die Trennprüfung ganz durchläuft, kostet
+#: diesen Anteil, eines, das sie danach durchlässt, dazu eine ganze. Gemessen
+#: am 25.09.2026 an Besenhalter, Spiderman und Mausoleumsdrachen: 0,39 bis
+#: 0,49 der genauen Prüfung allein. Aufgerundet auf Achtel, damit die Summe
+#: der Kosten ohne Rundung läuft — sie entscheidet, wo das Budget endet.
+#:
+#: **Der Nummernvergleich allein kostet nichts extra.** Ein Paar mit
+#: gemeinsamer Ecke, schräg zueinander — die Nachbarn eines organischen
+#: Netzes —, entscheidet er sofort, und es kostet eine genaue Prüfung wie
+#: vorher: Er braucht ein Zehntel davon, und die genaue Prüfung legt gleiche
+#: Ecken seither nicht mehr zusammen, was ein Fünftel kostete (Spiderman
+#: 2,45 µs vorher, 2,2 µs mit Vergleich). Gebucht mit einem eigenen Anteil,
+#: prüfte die Netzfehlerkarte dort in derselben Zeit acht Prozent weniger.
+SEPARATION_COST: Final = 0.5
+
+
+def _separated(
+    surface: _Surface, first: np.ndarray, second: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Welche Kandidatenpaare beweisbar nicht schneiden, ohne die genaue Prüfung.
+
+    Dazu, welche Paare die ganze Trennprüfung durchlaufen haben — die übrigen
+    entscheidet schon der Nummernvergleich, und nur die ganze kostet das
+    Budget etwas (:data:`SEPARATION_COST`).
+
+    Befund RM-244 (25.09.2026): Am Besenhalter mit seinen Nadeldreiecken
+    überdecken sich 3,2 Millionen Hüllquader — 57 Prozent davon in derselben
+    Ebene, 36 Prozent mit gemeinsamer Ecke —, die genaue Prüfung kostete zwei
+    bis drei Mikrosekunden je Paar, und das Budget endete nach 35 648 der
+    59 740 Dreiecke. Fast alle Paare liegen offensichtlich auseinander: Sie trennt
+    eine Ebene oder eine Gerade, mit Abstand.
+
+    Getrennt heißt hier, mit ``surface.margin`` Abstand:
+
+    * **durch eine Ebene** — alle Ecken des einen Dreiecks auf derselben Seite
+      der Ebene des anderen; nur ohne gemeinsame Ecke, denn die liegt in
+      beiden Ebenen;
+    * **durch eine Kante in der Draufsicht** — in der Projektion, die
+      :func:`coplanar_overlap` für das erste Dreieck wählt, liegen quer zu
+      einer der sechs Kanten alle Ecken des einen Dreiecks jenseits des
+      Projektionsintervalls des anderen, dem die Kante gehört. Eine Ecke, die
+      beide Dreiecke unter derselben Nummer tragen, darf dabei auf dem Rand des
+      Intervalls liegen — aber nur, wenn die Ebenen parallel sind. Gemessen
+      wird gegen den Eigner der Kante: Zwei Nadeln eines Fächers teilen die
+      Nabe, und auf der Kante der zweiten liegt deren eigene Ecke auf der
+      Trenngeraden.
+
+    **Warum das nie einen Treffer verwirft.** Bei mehr als ``2·EPS_GEOM``
+    Abstand fällt keine Ecke mit einer des Partners zusammen — die Projektion
+    verkürzt keinen Abstand —, und :func:`crossing_pairs` rechnet mit den
+    Koordinaten, wie sie sind. Die Ebenentrennung verwirft es dort selbst. In
+    derselben Ebene ist die gefundene Kante eine seiner sechs Trennachsen, und
+    auf ihr überdecken sich die beiden höchstens um einen halben ``EPS_GEOM``
+    — ein Treffer verlangt auf jeder Achse mehr als einen ganzen. Schräg
+    zueinander lägen beide Schnittstrecken auf der Schnittgeraden, und eine
+    Überdeckung dort hieße zwei Punkte näher als ``EPS_GEOM``. Der Rest von
+    ``margin`` deckt die Ecken, die die genaue Prüfung mit ihrer Rechengrenze
+    (:func:`_numeric`) in die Ebene des Partners legt: Sie liegen bis zu
+    ``numeric / EPS_GEOM`` neben der Schnittgeraden, denn schräg heißt dort
+    ein Winkel mit Sinus über ``EPS_GEOM``.
+
+    **Eine gemeinsame Ecke nur in derselben Ebene.** Schräg zueinander schließt
+    sich der Abstand zur Trenngeraden an der gemeinsamen Ecke, und dort
+    entscheidet die genaue Prüfung mit ihren Toleranzen — kein fester Abstand
+    hält dagegen. In derselben Ebene entscheidet der Trennachsensatz, und auf
+    der gefundenen Achse ist die Überdeckung null. Eine Nummer und nicht die
+    Lage: Nur dieselbe Nummer sind sicher dieselben Koordinaten.
+
+    Gerechnet wird elementweise (RM-187): Welche Paare getrennt heißen,
+    entscheidet, wo das Budget endet.
+    """
+    # Welche Ecken des einen Dreiecks das andere unter derselben Nummer trägt.
+    same = surface.faces[second][:, :, None] == surface.faces[first][:, None, :]
+    other_shared = same.any(axis=2)
+    count = other_shared.sum(axis=1)
+    result = np.zeros(len(first), dtype=bool)
+    margin = surface.margin
+    # Ohne gemeinsame Ecke zuerst die Ebenen; mit einer kann keine trennen.
+    alone = np.flatnonzero(count == 0)
+    if len(alone):
+        one, other = surface.triangles[first[alone]], surface.triangles[second[alone]]
+        one_normal, other_normal = surface.normal[first[alone]], surface.normal[second[alone]]
+        other_side = (
+            _dot_rows(other - one[:, 0, None, :], one_normal)
+            / (surface.normal_length[first[alone], None])
+        )
+        one_side = (
+            _dot_rows(one - other[:, 0, None, :], other_normal)
+            / (surface.normal_length[second[alone], None])
+        )
+        by_plane = (
+            np.all(other_side > margin, axis=1)
+            | np.all(other_side < -margin, axis=1)
+            | np.all(one_side > margin, axis=1)
+            | np.all(one_side < -margin, axis=1)
+        )
+        result[alone[by_plane]] = True
+        alone = alone[~by_plane]
+    # Mit gemeinsamer Ecke nur in derselben Ebene — schräg bleibt es der
+    # genauen Prüfung, ohne weitere Rechnung.
+    touching = np.flatnonzero((count == 1) | (count == 2))
+    if len(touching):
+        direction = np.cross(surface.normal[first[touching]], surface.normal[second[touching]])
+        parallel = np.linalg.norm(direction, axis=1) <= (
+            0.5
+            * EPS_GEOM
+            * surface.normal_length[first[touching]]
+            * surface.normal_length[second[touching]]
+        )
+        touching = touching[parallel]
+    rest = np.concatenate((alone, touching))
+    searched = np.zeros(len(first), dtype=bool)
+    searched[count == 0] = True
+    searched[touching] = True
+    if not len(rest):
+        return result, searched
+    # Die Draufsicht von coplanar_overlap: die Achse weg, die der Normale des
+    # ersten am nächsten liegt.
+    dominant = np.argmax(np.abs(surface.normal[first[rest]]), axis=1)
+    drop_x, drop_z = (dominant == 0)[:, None], (dominant == 2)[:, None]
+
+    def flat(triangle: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        across = np.where(drop_x, triangle[:, :, 1], triangle[:, :, 0])
+        up = np.where(drop_z, triangle[:, :, 1], triangle[:, :, 2])
+        return across, up
+
+    one_across, one_up = flat(surface.triangles[first[rest]])
+    other_across, other_up = flat(surface.triangles[second[rest]])
+    split = _beyond_an_edge(
+        (one_across, one_up), (other_across, other_up), other_shared[rest], margin
+    )
+    left = np.flatnonzero(~split)
+    split[left] = _beyond_an_edge(
+        (other_across[left], other_up[left]),
+        (one_across[left], one_up[left]),
+        same[rest[left]].any(axis=1),
+        margin,
+    )
+    result[rest] = split
+    return result, searched
+
+
+def _beyond_an_edge(
+    owner: tuple[np.ndarray, np.ndarray],
+    foreign: tuple[np.ndarray, np.ndarray],
+    touching: np.ndarray,
+    margin: float,
+) -> np.ndarray:
+    """Ob quer zu einer Kante des Eigners das andere Dreieck ganz jenseits liegt.
+
+    Beide Dreiecke in der Draufsicht als ``(quer, hoch)`` je Ecke. Je Kante
+    liegt der Eigner zwischen ``low`` und ``high``; das andere muss um
+    ``margin`` darüber oder darunter liegen, und eine gemeinsame Ecke
+    (``touching``) darf auf dem Rand liegen — bis auf einen halben
+    ``EPS_GEOM``: Die Ecken einer Kante liegen nur rechnerisch auf einer Höhe,
+    bis auf die letzte Stelle, und ein Treffer verlangt auf jeder Achse mehr
+    als einen ganzen (:func:`coplanar_overlap`).
+    """
+    owner_across, owner_up = owner
+    foreign_across, foreign_up = foreign
+    found = np.zeros(len(owner_across), dtype=bool)
+    for edge in range(3):
+        following = (edge + 1) % 3
+        edge_across = owner_across[:, following] - owner_across[:, edge]
+        edge_up = owner_up[:, following] - owner_up[:, edge]
+        own = -edge_up[:, None] * owner_across + edge_across[:, None] * owner_up
+        other = -edge_up[:, None] * foreign_across + edge_across[:, None] * foreign_up
+        length = np.sqrt(edge_across * edge_across + edge_up * edge_up)[:, None]
+        gap, slack = margin * length, 0.5 * EPS_GEOM * length
+        high = own.max(axis=1, keepdims=True)
+        low = own.min(axis=1, keepdims=True)
+        found |= np.all((other > high + gap) | (touching & (other >= high - slack)), axis=1)
+        found |= np.all((other < low - gap) | (touching & (other <= low + slack)), axis=1)
+    return found
+
+
 def _candidates(
-    surface: _Surface, cancelled: CancelToken | None, search: _Search, plan: _Plan | None = None
+    surface: _Surface,
+    cancelled: CancelToken | None,
+    search: _Search,
+    plan: _Plan | None = None,
+    *,
+    separate: bool = False,
 ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
     """Alle Paare, deren Hüllquader sich (bis auf ``EPS_GEOM``) überdecken, blockweise.
 
     Endet vorzeitig nur, wenn ``search.max_pairs`` gesetzt ist und die
     Sweep-Paare darüber hinausgehen — dann steht ``search.complete`` auf
-    falsch, und die Antwort ist ehrlich unvollständig.
+    falsch, und die Antwort ist ehrlich unvollständig. Mit ``separate``
+    fallen die Paare weg, die :func:`_separated` trennt, und das Budget zählt
+    nach :data:`SEPARATION_COST`.
     """
     low, high = surface.low, surface.high
     plan = plan or _plan(low, high)
@@ -286,7 +496,7 @@ def _candidates(
     total = np.cumsum(counts)
     overall = float(total[-1]) if len(total) else 0.0
     positions = np.arange(len(counts))
-    counted = 0
+    counted = 0.0
     begin = 0
     while begin < len(counts):
         _check(cancelled)
@@ -317,21 +527,42 @@ def _candidates(
             home = np.floor((corner - entries.origin) / plan.width).astype(np.int64)
             apart |= home != entries.slab[left]
         first, second, left = first[~apart], second[~apart], left[~apart]
-        if search.max_pairs is not None and counted + len(first) > search.max_pairs:
+        open_pairs: np.ndarray | None = None
+        cost: np.ndarray | None = None
+        if separate:
+            open_pairs = np.ones(len(first), dtype=bool)
+            cost = np.zeros(len(first))
+            for offset in range(0, len(first), PAIR_BLOCK):
+                piece = slice(offset, offset + PAIR_BLOCK)
+                separated, searched = _separated(surface, first[piece], second[piece])
+                open_pairs[piece] = ~separated
+                cost[piece] = np.where(searched, SEPARATION_COST, 0.0)
+            cost += open_pairs
+        spent = float(cost.sum()) if cost is not None else float(len(first))
+        if search.max_pairs is not None and counted + spent > search.max_pairs:
             search.complete = False
             # Die Paare stehen nach ihrem linken Eintrag geordnet. Geprüft wird
             # bis zum ersten Eintrag, dessen Paare nicht mehr alle ins Budget
             # passen; jedes Paar eines Eintrags steht bei ihm, und ein
             # Dreieck, dessen Einträge alle davor liegen, ist ganz geprüft.
-            allowed = max(search.max_pairs - counted, 0)
-            cut = int(left[allowed]) if allowed < len(left) else end
+            allowed = max(search.max_pairs - counted, 0.0)
+            fitting = (
+                int(np.searchsorted(np.cumsum(cost), allowed, side="right"))
+                if cost is not None
+                else int(allowed)
+            )
+            cut = int(left[fitting]) if fitting < len(left) else end
             keep = left < cut
             search.unchecked = np.unique(entries.triangle[cut:])
+            if open_pairs is not None:
+                keep &= open_pairs
             first, second = first[keep], second[keep]
             for offset in range(0, len(first), PAIR_BLOCK):
                 yield first[offset : offset + PAIR_BLOCK], second[offset : offset + PAIR_BLOCK]
             return
-        counted += len(first)
+        counted += spent
+        if open_pairs is not None:
+            first, second = first[open_pairs], second[open_pairs]
         for offset in range(0, len(first), PAIR_BLOCK):
             yield first[offset : offset + PAIR_BLOCK], second[offset : offset + PAIR_BLOCK]
 
@@ -346,8 +577,7 @@ def _intervals_on_line(
     Vorzeichenwechsel. Ohne beides ist das Intervall leer (``inf``/``-inf``).
     """
     projection = _dot_rows(triangle, direction)
-    span = np.linalg.norm(np.ptp(triangle, axis=1), axis=1)
-    numeric = 64.0 * np.finfo(float).eps * np.maximum(1.0, span)
+    numeric = _numeric(np.linalg.norm(np.ptp(triangle, axis=1), axis=1))
     low = np.full(len(triangle), np.inf)
     high = np.full(len(triangle), -np.inf)
     for vertex in range(3):
@@ -427,17 +657,27 @@ def crossing_pairs(
     # Ecken, die innerhalb der Geometrietoleranz zusammenfallen, sind ein
     # topologischer Punkt: beide Dreiecke bekommen dieselbe Darstellung.
     difference = first[:, :, None, :] - second[:, None, :, :]
-    close = (
+    squared = (
         difference[..., 0] * difference[..., 0]
         + difference[..., 1] * difference[..., 1]
         + difference[..., 2] * difference[..., 2]
-    ) <= EPS_GEOM * EPS_GEOM
+    )
+    close = squared <= EPS_GEOM * EPS_GEOM
     first_matched = close.any(axis=2)
-    second_matched = close.any(axis=1)
-    partner = np.take_along_axis(second, close.argmax(axis=2)[:, :, None], axis=1)
-    first = np.where(first_matched[:, :, None], (first + partner) / 2.0, first)
-    partner = np.take_along_axis(first, close.argmax(axis=1)[:, :, None], axis=1)
-    second = np.where(second_matched[:, :, None], partner, second)
+    # Gelegt wird nur, wo zwei Ecken nahe, aber nicht gleich sind: Die Mitte
+    # zweier gleicher Ecken ist die Ecke selbst, ohne Rundung. An einem
+    # verschweißten Netz teilen fast alle Nachbarn ihre Ecken genau so, und
+    # das Zusammenlegen kostete dort ein Fünftel der Prüfung (RM-244).
+    moving = np.flatnonzero(np.any(close & (squared > 0.0), axis=(1, 2)))
+    if len(moving):
+        near = close[moving]
+        one, other = first[moving], second[moving]
+        partner = np.take_along_axis(other, near.argmax(axis=2)[:, :, None], axis=1)
+        one = np.where(first_matched[moving][:, :, None], (one + partner) / 2.0, one)
+        partner = np.take_along_axis(one, near.argmax(axis=1)[:, :, None], axis=1)
+        other = np.where(near.any(axis=1)[:, :, None], partner, other)
+        first, second = first.copy(), second.copy()
+        first[moving], second[moving] = one, other
 
     first_normal = np.cross(first[:, 1] - first[:, 0], first[:, 2] - first[:, 0])
     second_normal = np.cross(second[:, 1] - second[:, 0], second[:, 2] - second[:, 0])
@@ -503,7 +743,7 @@ def _pairs_that_cross(
 ) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
     """Je Kandidatenblock die Paare, die sich wirklich schneiden (Nummern im Netz),
     und welche davon in derselben Ebene liegen."""
-    for first, second in _candidates(surface, cancelled, search):
+    for first, second in _candidates(surface, cancelled, search, separate=True):
         _check(cancelled)
         crossed, coplanar = crossing_pairs(
             surface.triangles[first],
