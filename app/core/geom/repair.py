@@ -13,7 +13,7 @@ ihren Befunden.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, cast
 
@@ -343,6 +343,11 @@ def _shell_volumes(body: trimesh.Trimesh, labels: np.ndarray, count: int) -> np.
     return np.bincount(labels, weights=products, minlength=count) / 6.0
 
 
+#: Wie viele Hüllquadervergleiche :meth:`_Shells.containers_of` auf einmal als
+#: Feld hält — ein Megabyte je Vergleich, gleich wie viele Teile der Körper hat.
+_SHELL_BLOCK: Final = 1 << 20
+
+
 class _Shells:
     """Die Schalen eines Netzes: Dreiecke, Volumen, Hüllquader — einmal gelesen.
 
@@ -371,24 +376,36 @@ class _Shells:
             np.maximum.at(self.high, labels, self.triangles.max(axis=1))
         self._outer: dict[int, tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]] = {}
 
-    def containers(self, inner: int) -> list[tuple[int, bool | None]]:
-        """Die Schalen, in denen ``inner`` liegt, mit der Antwort des Strahls.
+    def containers_of(
+        self, inners: Sequence[int]
+    ) -> Iterator[tuple[int, list[tuple[int, bool | None]]]]:
+        """Je Schale aus ``inners`` die Schalen, in denen sie liegt, mit der Antwort des Strahls.
 
         ``True`` ist belegt, ``None`` sagt der Strahl nicht; wer sicher außen
-        liegt, fehlt. Vorab sieben die Hüllquader.
+        liegt, fehlt. Vorab sieben die Hüllquader — **blockweise als Feld und
+        nicht je Schale** (Review 25.09.2026): Ein Durchgang je Schale über alle
+        anderen waren an 16 000 getrennten Würfeln quadratisch viele kleine
+        Feldaufrufe, 18,6 s für :func:`turn_shells_outward` und 24,9 s für
+        :func:`parts_inside_parts`. Kandidaten, Reihenfolge und Strahlen sind
+        dieselben.
         """
-        candidates = np.flatnonzero(
-            np.all(self.low <= self.low[inner], axis=1)
-            & np.all(self.high >= self.high[inner], axis=1)
-        )
-        found: list[tuple[int, bool | None]] = []
-        for other in candidates.tolist():
-            if other == inner:
-                continue
-            answer = self.inside(inner, other)
-            if answer is not False:
-                found.append((other, answer))
-        return found
+        wanted = np.asarray(inners, dtype=np.int64)
+        rows = max(1, _SHELL_BLOCK // max(1, len(self.low)))
+        for start in range(0, len(wanted), rows):
+            block = wanted[start : start + rows]
+            boxed = np.ones((len(block), len(self.low)), dtype=bool)
+            for axis in range(3):
+                boxed &= self.low[None, :, axis] <= self.low[block, None, axis]
+                boxed &= self.high[None, :, axis] >= self.high[block, None, axis]
+            for row, inner in enumerate(block.tolist()):
+                found: list[tuple[int, bool | None]] = []
+                for other in np.flatnonzero(boxed[row]).tolist():
+                    if other == inner:
+                        continue
+                    answer = self.inside(inner, other)
+                    if answer is not False:
+                        found.append((other, answer))
+                yield inner, found
 
     def inside(self, inner: int, outer: int) -> bool | None:
         """Liegt ``inner`` in ``outer``? ``None``, wenn der Strahl es nicht entscheidet."""
@@ -437,15 +454,24 @@ def turn_shells_outward(body: trimesh.Trimesh) -> bool:
             body.invert()
             return True
         return False
-    inside_of = [shells.containers(index) for index in range(count)]
+    if bool(np.all(shells.volumes >= 0.0)):
+        # Lauter richtig gewickelte Teile auch nicht: Gedreht wird nur eine
+        # freie negative Schale samt Inhalt (Review 25.09.2026).
+        return False
+    inside_of = [found for _inner, found in shells.containers_of(range(count))]
+    # Je Schale, was belegt in ihr liegt — einmal gesammelt statt je Wurzel
+    # über alle Schalen gesucht.
+    members_of: list[list[int]] = [[] for _ in range(count)]
+    for member, found in enumerate(inside_of):
+        for other, answer in found:
+            if answer:
+                members_of[other].append(member)
     turn = np.zeros(count, dtype=bool)
     for root in range(count):
         if inside_of[root] or shells.volumes[root] >= 0.0:
             continue
         turn[root] = True
-        for member in range(count):
-            if any(other == root and answer for other, answer in inside_of[member]):
-                turn[member] = True
+        turn[members_of[root]] = True
     if not turn.any():
         return False
     faces = np.asarray(body.faces, dtype=np.int64).copy()
@@ -479,12 +505,8 @@ def parts_inside_parts(body: trimesh.Trimesh) -> list[tuple[float, float, float]
     if len(positive) < 2:
         return []
     places = []
-    for index in positive.tolist():
-        depth = sum(
-            1 if shells.volumes[other] > 0.0 else -1
-            for other, answer in shells.containers(index)
-            if answer
-        )
+    for index, found in shells.containers_of(positive.tolist()):
+        depth = sum(1 if shells.volumes[other] > 0.0 else -1 for other, answer in found if answer)
         if depth >= 1:
             middle = (shells.low[index] + shells.high[index]) / 2.0
             places.append((float(middle[0]), float(middle[1]), float(middle[2])))
@@ -1275,12 +1297,12 @@ def _loop_triangles(
     if normal is None:
         return np.zeros((0, 3), dtype=np.int64)
     local = ring - centre
-    basis_u = np.cross(normal, (1.0, 0.0, 0.0) if abs(normal[0]) < 0.9 else (0.0, 1.0, 0.0))
-    length = math.hypot(float(basis_u[0]), float(basis_u[1]), float(basis_u[2]))
-    if length <= EPS_GEOM:
+    # Dieselbe Ebenenbasis wie die Lochbrücken (:func:`_bridged_holes`) — eine
+    # Rechnung, nicht zwei Fassungen, die ein Kommentar zusammenhält.
+    basis = _plane_basis(normal)
+    if basis is None:
         return np.zeros((0, 3), dtype=np.int64)
-    basis_u = basis_u / length
-    basis_v = np.cross(normal, basis_u)
+    basis_u, basis_v = basis
     flat = np.column_stack((along(local, basis_u), along(local, basis_v)))
     # Ein Ring, der gegen den Uhrzeigersinn läuft, hat positive Fläche; sonst
     # spiegelt das Ohren die Innen-Außen-Frage.
@@ -1377,7 +1399,7 @@ def _loop_triangles(
 
 
 def _plane_basis(normal: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
-    """Zwei Richtungen in der Ebene zu ``normal`` — dieselbe Wahl wie beim Ohrenschneiden."""
+    """Zwei Richtungen in der Ebene zu ``normal`` — für Ohren, Lochbrücken und Mantel dieselbe."""
     basis_u = np.cross(normal, (1.0, 0.0, 0.0) if abs(normal[0]) < 0.9 else (0.0, 1.0, 0.0))
     length = math.hypot(float(basis_u[0]), float(basis_u[1]), float(basis_u[2]))
     if length <= EPS_GEOM:
@@ -1429,6 +1451,16 @@ def _bridged_holes(
         local = points[ids]
         return np.column_stack((along(local, basis_u), along(local, basis_v)))
 
+    def apart(spots: np.ndarray, spot: np.ndarray) -> np.ndarray:
+        """Abstände in der Ebene über Grundrechenarten und ``sqrt``, nicht ``np.hypot``.
+
+        Das rundet je Plattform verschieden, und am Abstand hängt, welche Ecke
+        die Brücke bekommt — damit die Dreiecke der Fläche (RM-187, Review R11).
+        """
+        across = spots[:, 0] - spot[0]
+        down = spots[:, 1] - spot[1]
+        return np.asarray(np.sqrt(across * across + down * down))
+
     polygon = list(outer)
     pending = sorted(holes, key=lambda hole: -float(flat(hole)[:, 0].max()))
     for position, hole in enumerate(pending):
@@ -1441,15 +1473,15 @@ def _bridged_holes(
         rings = [polygon, *pending[position:]]
         firsts = np.vstack([flat(ring) for ring in rings])
         seconds = np.vstack([np.roll(flat(ring), -1, axis=0) for ring in rings])
-        distance = np.hypot(polygon_flat[:, 0] - anchor[0], polygon_flat[:, 1] - anchor[1])
+        distance = apart(polygon_flat, anchor)
         bridge: int | None = None
         for candidate in np.argsort(distance, kind="stable").tolist():
             target = polygon_flat[candidate]
             touching = (
-                (np.hypot(firsts[:, 0] - target[0], firsts[:, 1] - target[1]) <= EPS_GEOM)
-                | (np.hypot(seconds[:, 0] - target[0], seconds[:, 1] - target[1]) <= EPS_GEOM)
-                | (np.hypot(firsts[:, 0] - anchor[0], firsts[:, 1] - anchor[1]) <= EPS_GEOM)
-                | (np.hypot(seconds[:, 0] - anchor[0], seconds[:, 1] - anchor[1]) <= EPS_GEOM)
+                (apart(firsts, target) <= EPS_GEOM)
+                | (apart(seconds, target) <= EPS_GEOM)
+                | (apart(firsts, anchor) <= EPS_GEOM)
+                | (apart(seconds, anchor) <= EPS_GEOM)
             )
             if not _segments_cross(anchor, target, firsts[~touching], seconds[~touching]):
                 bridge = int(candidate)
@@ -1561,35 +1593,11 @@ def _band_between(
         return None
     if float(np.abs(along(local_b, axis)).max()) > tolerance:
         return None
-    flat_a = np.column_stack((along(local_a, basis_u), along(local_a, basis_v)))
-    flat_b = np.column_stack((along(local_b, basis_u), along(local_b, basis_v)))
-    # ``np.sqrt`` über Grundrechenarten statt ``np.hypot``: Das ist eine
-    # Bibliotheksfunktion der Plattform, und am Radius hängt, ob ein Band
-    # entsteht (Review R11, RM-187).
-    radius_a = np.sqrt(flat_a[:, 0] * flat_a[:, 0] + flat_a[:, 1] * flat_a[:, 1])
-    radius_b = np.sqrt(flat_b[:, 0] * flat_b[:, 0] + flat_b[:, 1] * flat_b[:, 1])
-    if float(radius_a.min()) <= tolerance or float(radius_b.min()) <= tolerance:
-        return None
-    scale = math.fsum(radius_b.tolist()) / math.fsum(radius_a.tolist())
-    direction_a = flat_a / radius_a[:, None]
-    direction_b = flat_b / radius_b[:, None]
-    dots = (
-        direction_a[:, 0, None] * direction_b[None, :, 0]
-        + direction_a[:, 1, None] * direction_b[None, :, 1]
-    )
-    match = np.argmax(dots, axis=1)
-    if len(np.unique(match)) != count:
-        return None
-    if float(dots[np.arange(count), match].min()) < 1.0 - BAND_PARALLEL * BAND_PARALLEL:
-        return None
-    reach = max(tolerance, BAND_PARALLEL * float(radius_b.max()))
-    if float(np.abs(radius_b[match] - scale * radius_a).max()) > reach:
-        return None
-    # Der Mantel läuft über jede Randkante in der Richtung ihres Rings; das
-    # geht nur, wenn der zweite Ring gegenläufig um die Achse läuft.
-    step = (match[(np.arange(count) + 1) % count] - match) % count
-    if not bool(np.all(step == count - 1)):
-        return None
+    # **Erst die Nachbarn, dann die Ecken** (Review 25.09.2026). Ob die
+    # vorhandenen Wände die Ringe schon verbinden, kostet eine Frage je
+    # Randkante; die Paarung darunter hält jede Ecke gegen jede. Sie lief
+    # zuerst, und am offenen Rohr mit 4 096 Teilungen kostete sie 3,0 s und
+    # 411 MB für einen Mantel, den diese Probe danach verwarf.
     for ring, centre, toward in ((first, centre_a, axis), (second, centre_b, -axis)):
         faces: list[int] = []
         for index in range(count):
@@ -1604,12 +1612,62 @@ def _band_between(
         side = along(centroids[np.asarray(faces, dtype=np.int64)] - centre, toward)
         if float(side.max()) > tolerance:
             return None
+    flat_a = np.column_stack((along(local_a, basis_u), along(local_a, basis_v)))
+    flat_b = np.column_stack((along(local_b, basis_u), along(local_b, basis_v)))
+    # ``np.sqrt`` über Grundrechenarten statt ``np.hypot``: Das ist eine
+    # Bibliotheksfunktion der Plattform, und am Radius hängt, ob ein Band
+    # entsteht (Review R11, RM-187).
+    radius_a = np.sqrt(flat_a[:, 0] * flat_a[:, 0] + flat_a[:, 1] * flat_a[:, 1])
+    radius_b = np.sqrt(flat_b[:, 0] * flat_b[:, 0] + flat_b[:, 1] * flat_b[:, 1])
+    if float(radius_a.min()) <= tolerance or float(radius_b.min()) <= tolerance:
+        return None
+    scale = math.fsum(radius_b.tolist()) / math.fsum(radius_a.tolist())
+    direction_a = flat_a / radius_a[:, None]
+    direction_b = flat_b / radius_b[:, None]
+    match = _nearest_directions(direction_a, direction_b)
+    if len(np.unique(match)) != count:
+        return None
+    # Dieselben zwei Produkte und dieselbe Summe wie in der Paarung — bitgleich.
+    matched = direction_a[:, 0] * direction_b[match, 0] + direction_a[:, 1] * direction_b[match, 1]
+    if float(matched.min()) < 1.0 - BAND_PARALLEL * BAND_PARALLEL:
+        return None
+    reach = max(tolerance, BAND_PARALLEL * float(radius_b.max()))
+    if float(np.abs(radius_b[match] - scale * radius_a).max()) > reach:
+        return None
+    # Der Mantel läuft über jede Randkante in der Richtung ihres Rings; das
+    # geht nur, wenn der zweite Ring gegenläufig um die Achse läuft.
+    step = (match[(np.arange(count) + 1) % count] - match) % count
+    if not bool(np.all(step == count - 1)):
+        return None
     band: list[list[int]] = []
     for index in range(count):
         here, there = int(match[index]), int(match[(index + 1) % count])
         band.append([first[index], first[(index + 1) % count], second[there]])
         band.append([first[index], second[there], second[here]])
     return np.asarray(band, dtype=np.int64)
+
+
+#: Wie viele Skalarprodukte :func:`_nearest_directions` auf einmal als Feld
+#: hält — zwei Megabyte je Zwischenfeld, gleich wie fein die Ringe sind.
+_DIRECTION_BLOCK: Final = 1 << 18
+
+
+def _nearest_directions(first: np.ndarray, second: np.ndarray) -> np.ndarray:
+    """Je Richtung aus ``first`` die Nummer der ähnlichsten aus ``second``.
+
+    Beide sind ``(n, 2)`` und von Einheitslänge. Dasselbe wie ``argmax`` über
+    das volle Feld der Skalarprodukte, Zeile für Zeile — nur in Blöcken, statt
+    das Feld aus Ecken mal Ecken anzulegen: An zwei Ringen zu je 2 048 Ecken
+    waren das drei Felder zu 33 MB (Review 25.09.2026). Gleichstände
+    entscheidet wie dort die kleinere Nummer.
+    """
+    rows = max(1, _DIRECTION_BLOCK // max(1, len(second)))
+    match = np.empty(len(first), dtype=np.int64)
+    for start in range(0, len(first), rows):
+        part = first[start : start + rows]
+        dots = part[:, 0, None] * second[None, :, 0] + part[:, 1, None] * second[None, :, 1]
+        match[start : start + rows] = np.argmax(dots, axis=1)
+    return match
 
 
 def _band_crosses(
@@ -2624,20 +2682,25 @@ def remove_hollow_shells(mesh: MeshData) -> tuple[MeshData, int]:
     Gerechnet wird das Volumen je Komponente über den Divergenzsatz und nicht
     über ein Teilnetz: Das kostet einen Durchgang statt einer Kopie je Teil,
     und die Materialslots (§20) bleiben dabei an ihren Dreiecken.
+
+    **Nahe an jeder Schale, nicht am Ursprung** (:func:`_shell_volumes`,
+    Review 25.09.2026). Hier stand dieselbe Summe über den Ursprung, die
+    Befund B16 an den anderen Stellen ersetzt hat: Zehn Meter vom Ursprung
+    bestand das Volumen einer Haut aus Rundung, lag über ``EPS_GEOM``, und die
+    Haut blieb stehen.
     """
     pieces = face_components(mesh.raw)
     if len(pieces) <= 1:
         return mesh, 0
-    corners = mesh.raw.vertices[mesh.raw.faces]
-    # Elementweise statt ``np.einsum`` (FMA auf ARM, RM-187): Am Betrag
-    # entscheidet sich, ob eine Schale bleibt.
-    crossed = np.cross(corners[:, 0], corners[:, 1])
-    signed = (
-        crossed[:, 0] * corners[:, 2, 0]
-        + crossed[:, 1] * corners[:, 2, 1]
-        + crossed[:, 2] * corners[:, 2, 2]
-    ) / 6.0
-    keep = [piece for piece in pieces if abs(float(signed[piece].sum())) > EPS_GEOM]
+    labels = np.empty(len(mesh.raw.faces), dtype=np.int64)
+    for index, piece in enumerate(pieces):
+        labels[piece] = index
+    volumes = _shell_volumes(mesh.raw, labels, len(pieces))
+    keep = [
+        piece
+        for piece, volume in zip(pieces, volumes.tolist(), strict=True)
+        if abs(volume) > EPS_GEOM
+    ]
     if len(keep) == len(pieces) or not keep:
         return mesh, 0
 
@@ -2896,6 +2959,7 @@ def resolve_self_intersections(
     cancelled: CancelToken | None = None,
     *,
     checked_faces: tuple[int, ...] | None = None,
+    budget: int | None = None,
 ) -> tuple[MeshData, bool]:
     """Überlappende positive Schalen vereinigen und das Ergebnis nachprüfen.
 
@@ -2910,6 +2974,12 @@ def resolve_self_intersections(
     ``checked_faces`` ist ohne Wirkung und bleibt für ältere Aufrufer: Die
     Prüfung desselben Netzes merkt sich das Netz selbst (:func:`crossings_of`).
 
+    ``budget`` ist das Budget, mit dem der Aufrufer schon gesucht hat
+    (:func:`crossings_of`). **Ohne es suchte das Auflösen ein zweites Mal**
+    (Review 25.09.2026): Über der Kartengrenze hält sich die Diagnose an den
+    Sockel, ihre unvollständige Antwort galt für das mitwachsende Budget
+    nicht, und die volle Suche, die der Sockel sparen sollte, lief doch.
+
     **Nachgeprüft wird, wo geschnitten wurde** (Befund B18 der Durchsicht
     24.09.2026). Die Vereinigung zerlegt nur Dreiecke, die schnitten; was
     außerhalb ihres Hüllquaders liegt, stammt unverändert aus schnittfreien
@@ -2923,7 +2993,7 @@ def resolve_self_intersections(
         cancelled.raise_if_cancelled()
     if not _has_volume(mesh):
         return mesh, False
-    crossings = crossings_of(mesh, cancelled)
+    crossings = crossings_of(mesh, cancelled, budget=budget)
     if not len(crossings.first) or _crossing_shape(mesh, crossings) == "self":
         return mesh, False
     pieces = [
@@ -3501,7 +3571,9 @@ def _intersection_findings(
     elif self_intersections and blocked is None:
         if progress is not None:
             progress(1.0, str(_("Überschneidungen auflösen")))
-        result.mesh, rebuilt = resolve_self_intersections(result.mesh, cancelled)
+        # Mit demselben Budget: Sonst suchte das Auflösen über der Kartengrenze
+        # ein zweites Mal, mit dem mitwachsenden Budget.
+        result.mesh, rebuilt = resolve_self_intersections(result.mesh, cancelled, budget=budget)
         if rebuilt:
             result.changed = True
             result.solver = SolverInfo(strategy="direct", attempted=("direct",))
@@ -3589,14 +3661,11 @@ def _intersection_findings(
         )
 
 
-#: Die Kantenzählung wohnt in :mod:`app.core.geom.mesh` (RM-224): Dort
-#: fragen sie auch die Teilezerlegung und die Dichtheit, und eine Zählung je
-#: Netz reicht für alle.
-_EdgeTable = EdgeTable
-
-
 def _edge_table(mesh: MeshData) -> EdgeTable:
     """Die Kantenzählung eines Netzes — :func:`app.core.geom.mesh.edge_table`.
+
+    Sie wohnt in :mod:`app.core.geom.mesh` (RM-224): Dort fragen sie auch die
+    Teilezerlegung und die Dichtheit, und eine Zählung je Netz reicht für alle.
 
     **Eine Zählung statt einer je Frage** (Review 22.09.2026). Offene Ränder,
     Verzweigungen, Randringe und Sanduhren fragten je ``group_rows`` über alle

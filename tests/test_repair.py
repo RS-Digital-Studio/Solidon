@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -1551,6 +1552,66 @@ def test_a_part_inside_a_part_is_named_and_left_as_it_is() -> None:
     assert result.mesh.volume == pytest.approx(9000.0, rel=1e-12)
 
 
+def test_parts_that_all_face_outward_shoot_no_ray_to_be_turned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lauter richtig gewickelte Teile: Beim Ausrichten fliegt kein Strahl.
+
+    ``turn_shells_outward`` dreht nur, was frei steht und verkehrt ist. Sind
+    alle Schalen positiv, gibt es nichts zu drehen — gefragt wurde trotzdem
+    jede gegen jede, über Hüllquader und Strahl, und 16 000 getrennte Würfel
+    kosteten 18,6 s für „nichts zu tun" (Review 25.09.2026). Ein einzelner
+    Körper brauchte schon keinen Strahl (Review R20), viele richtige auch
+    nicht. Das Teil im Teil bleibt gemeldet: Das fragt ``parts_inside_parts``.
+    """
+    import app.core.perceive.features as features
+    from app.core.geom.repair import parts_inside_parts, turn_shells_outward
+
+    rays: list[int] = []
+    real = features._point_inside_shell
+
+    def counted(*args, **kwargs):  # type: ignore[no-untyped-def]
+        rays.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(features, "_point_inside_shell", counted)
+    inner = [_box(2.0, at=(-6.0 + 4.0 * step, 0.0, 0.0)) for step in range(4)]
+    body = trimesh.util.concatenate([_box(20.0), *inner])
+
+    assert not turn_shells_outward(body)
+    assert rays == [], "nichts zu drehen, nichts zu fragen"
+    assert len(parts_inside_parts(body)) == 4, "das Teil im Teil meldet die andere Frage"
+
+
+@pytest.mark.performance
+def test_many_separate_parts_are_asked_about_their_shells_quickly() -> None:
+    """16 000 getrennte Würfel: Ausrichten und Teil-im-Teil-Frage bleiben kurz.
+
+    Jede Schale fragte die Hüllquader aller anderen einzeln ab — quadratisch,
+    18,6 s für ``turn_shells_outward`` und 24,9 s für ``parts_inside_parts``
+    an einem Netz, an dem nichts zu tun war (Review 25.09.2026). Beim Import
+    lief das ohne Fortschritt. Die Schranke ist bewusst grob.
+    """
+    import time
+
+    from app.core.geom.repair import parts_inside_parts, turn_shells_outward
+
+    side = 26
+    cubes = [
+        _box(1.0, at=(2.0 * (index % side), 2.0 * (index // side % side), 2.0 * (index // side**2)))
+        for index in range(16_000)
+    ]
+    body = trimesh.util.concatenate(cubes)
+
+    started = time.perf_counter()
+    turned = turn_shells_outward(body)
+    nested = parts_inside_parts(body)
+    elapsed = time.perf_counter() - started
+
+    assert not turned and nested == []
+    assert elapsed < 12.0, f"{elapsed:.1f} s — die Schalen dürfen sich nicht paarweise fragen"
+
+
 @pytest.mark.parametrize("case", ["cavity", "apart", "rattle"])
 def test_a_cavity_or_a_part_beside_is_no_part_inside(case: str) -> None:
     """Die Gegenproben: ein richtiger Hohlraum, zwei Teile nebeneinander — und eine Rassel.
@@ -1574,6 +1635,39 @@ def test_a_cavity_or_a_part_beside_is_no_part_inside(case: str) -> None:
     result = repair(both)
 
     assert "repair.part_inside" not in {entry.code for entry in result.findings}
+
+
+@pytest.mark.parametrize("far", [0.0, 1e4, 1e5])
+def test_a_skin_without_thickness_goes_far_from_the_origin_too(far: float) -> None:
+    """Eine Haut ohne Dicke fällt auch zehn Meter vom Ursprung entfernt.
+
+    ``remove_hollow_shells`` summierte das Volumen je Teil über den Ursprung —
+    derselbe Fehler wie Befund B16 der Durchsicht 24.09.2026, dessen Behebung
+    (``_shell_volumes``, ``mesh.signed_volume``) an dieser dritten Stelle
+    vorbeiging. Ab zehn Metern bestand das Volumen der Haut aus Rundung, lag
+    über ``EPS_GEOM``, und der Körper behielt drei Teile statt einem (Review
+    25.09.2026). Die Bereinigung läuft nach Verrunden und Flächenoperationen,
+    also dort, wo der Körper gerade steht.
+    """
+    from app.core.geom.repair import remove_hollow_shells
+
+    # Ein Viereck, beidseitig belegt: dicht, Volumen null — zwei Teile, weil die
+    # Diagonale vier Flächen trägt.
+    skin = trimesh.Trimesh(
+        vertices=[[20.0, 0.0, 0.0], [21.3, 0.0, 0.0], [21.3, 0.7, 0.3], [20.0, 0.7, 0.3]],
+        faces=[[0, 1, 2], [0, 2, 3], [2, 1, 0], [3, 2, 0]],
+        process=False,
+    )
+    both = trimesh.util.concatenate([_box(10.0), skin])
+    both.vertices = np.asarray(both.vertices) + np.array([far, 0.7 * far, 0.3 * far])
+    body = MeshData.of(both)
+    assert body.component_count == 3, "sonst prüft der Test die falsche Ausgangslage"
+
+    cleaned, dropped = remove_hollow_shells(body)
+
+    assert dropped == 2, "beide Hälften der Haut"
+    assert cleaned.component_count == 1
+    assert cleaned.triangle_count == 12, "der Würfel bleibt ganz"
 
 
 @pytest.mark.parametrize("far", [1e8, 1e9])
@@ -2008,6 +2102,81 @@ def test_rings_joined_by_existing_walls_are_capped_not_tunnelled(case: str) -> N
     assert result.mesh.volume == pytest.approx(whole.volume, rel=0.02)
 
 
+def _peak_bytes[T](work: Callable[[], T]) -> tuple[T, int]:
+    """Das Ergebnis von ``work()`` und der höchste Speicherstand dabei (``tracemalloc``)."""
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        outcome = work()
+        return outcome, tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+
+
+def test_a_fine_open_tube_is_capped_without_pairing_its_rings_corner_by_corner() -> None:
+    """Ein fein geteiltes Rohr ohne Deckel wird gedeckelt, ohne Ecke gegen Ecke zu halten.
+
+    ``_band_between`` verglich jede Ecke des einen Rings mit jeder des anderen
+    und fragte erst danach, ob die vorhandenen Wände die Ringe schon verbinden
+    (Review 25.09.2026): Am Rohr mit 4 096 Teilungen kostete die Paarung 3,0
+    von 3,8 s und 411 MB — für einen Mantel, den die Seitenprobe danach
+    verwarf. Mit 2 048 Teilungen waren es 105 MB.
+    """
+    tube = trimesh.creation.cylinder(radius=10.0, height=30.0, sections=2048)
+    tube.update_faces(np.abs(np.asarray(tube.face_normals)[:, 2]) < 0.5)
+    tube.remove_unreferenced_vertices()
+    rim = np.asarray(tube.vertices)[np.asarray(tube.vertices)[:, 2] < 0.0][:, :2]
+    order = np.argsort(np.arctan2(rim[:, 1], rim[:, 0]))
+    x, y = rim[order, 0], rim[order, 1]
+    # Der Deckel ist das Vieleck der Randecken: Fläche nach der Gaußschen Formel.
+    area = abs(float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))) / 2.0
+
+    result, peak = _peak_bytes(lambda: repair(MeshData.of(tube)))
+
+    assert result.mesh.is_watertight
+    assert result.mesh.volume == pytest.approx(area * 30.0, rel=1e-9), "Deckel, kein Mantel"
+    assert peak < 32_000_000, f"{peak / 1e6:.0f} MB — kein Feld aus Ecken mal Ecken"
+
+
+def test_a_band_between_two_fine_rings_needs_no_field_of_every_corner_pair() -> None:
+    """Auch der Mantel, der entsteht, paart die Ecken ohne Feld aus Ecken mal Ecken.
+
+    Zwei koaxiale Ringe zu je 2 048 Ecken, der zweite gegenläufig, die
+    Nachbarflächen je auf der abgewandten Seite: Das ist die fehlende Wand
+    einer fein geteilten Bohrung. Die Paarung hielt dafür drei Felder zu
+    2 048 · 2 048 Zahlen, zusammen 100 MB (Review 25.09.2026).
+    """
+    from app.core.geom import lathe
+    from app.core.geom.repair import _band_between
+
+    count = 2048
+    circle = lathe.circle_points(count, radius=5.0)
+    lower = np.column_stack((circle, np.zeros(count)))
+    upper = np.column_stack((circle, np.full(count, 10.0)))
+    points = np.vstack((lower, upper))
+    first = list(range(count))
+    # Gegenläufig: dieselbe Richtung um die Achse, in umgekehrter Folge.
+    second = [count + (-index) % count for index in range(count)]
+    owner_of = {
+        (
+            min(ring[index], ring[(index + 1) % count]),
+            max(ring[index], ring[(index + 1) % count]),
+        ): (face)
+        for face, ring in enumerate((first, second))
+        for index in range(count)
+    }
+    # Die Nachbarn liegen unter dem unteren und über dem oberen Ring.
+    centroids = np.asarray([[0.0, 0.0, -1.0], [0.0, 0.0, 11.0]])
+
+    band, peak = _peak_bytes(
+        lambda: _band_between(points, first, second, 1e-5, owner_of, centroids)
+    )
+
+    assert band is not None and len(band) == 2 * count, "der Mantel entsteht"
+    assert peak < 16_000_000, f"{peak / 1e6:.0f} MB — kein Feld aus Ecken mal Ecken"
+
+
 @pytest.mark.parametrize("pair", [(88, 64), (96, 72), (97, 74)])
 def test_a_small_hole_in_a_rounding_gets_its_own_triangles_back(pair: tuple[int, int]) -> None:
     """Zwei fehlende Nachbardreiecke einer Verrundung kommen als dieselben zwei zurück.
@@ -2186,6 +2355,106 @@ def test_the_search_goes_only_as_far_as_it_can_help(
 
     expected = None if case == "plain" else module.MAX_INTERSECTION_PAIRS
     assert asked == [expected]
+
+
+def test_resolving_above_the_map_limit_searches_the_body_only_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Über der Kartengrenze sucht auch das Auflösen nur mit dem Sockelbudget.
+
+    Die Diagnose hält sich dort an ``MAX_INTERSECTION_PAIRS`` (Review R12).
+    ``resolve_self_intersections`` fragte die Suche danach aber mit dem
+    mitwachsenden Budget noch einmal — die unvollständige Antwort im Cache galt
+    für das größere Budget nicht —, und über der Grenze lief damit doch die
+    volle Suche, die der Sockel sparen sollte (Review 25.09.2026: an zwei
+    ineinandergesteckten Würfeln ein Lauf mit 1 000 Paaren, danach einer mit
+    4 608). Aufgelöst wird, was gefunden war; der Hinweis daneben sagt, dass
+    die Suche nicht alles sah.
+    """
+    import app.core.geom.repair as module
+    import app.core.perceive.maps as maps
+    from app.core.geom import intersections
+
+    body = MeshData.of(
+        trimesh.util.concatenate(
+            [
+                _box(20.0).subdivide().subdivide(),
+                _box(20.0, (8.0, 5.0, 3.0)).subdivide().subdivide(),
+            ]
+        )
+    )
+    whole = (len(body.raw.vertices), body.triangle_count)
+    searched: list[int | None] = []
+    original = intersections.crossing_face_pairs
+
+    def counted(vertices, faces, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if (len(vertices), len(faces)) == whole:
+            searched.append(kwargs.get("max_pairs"))
+        return original(vertices, faces, *args, **kwargs)
+
+    monkeypatch.setattr(intersections, "crossing_face_pairs", counted)
+    monkeypatch.setattr(maps, "MAP_LIMIT_TRIANGLES", 10)
+    # Ein Sockel, der Schnitte findet, aber nicht alle (148 Paare schneiden,
+    # bei 1 000 geprüften sind es 41).
+    monkeypatch.setattr(module, "MAX_INTERSECTION_PAIRS", 1_000)
+
+    result = repair(body, self_intersections=True)
+
+    assert searched == [1_000], "der Körper wird einmal durchsucht, mit dem Sockel"
+    codes = [finding.code for finding in result.findings]
+    assert "repair.self_intersections" in codes, "aufgelöst ist, was gefunden war"
+    assert "repair.self_intersections_incomplete" in codes
+    # Zwei Würfel von 20 mm, um (8, 5, 3) versetzt: gemeinsam 12 · 15 · 17 mm³.
+    assert result.mesh.volume == pytest.approx(2 * 8000.0 - 12.0 * 15.0 * 17.0, rel=1e-9)
+
+
+def test_the_bridge_to_a_hole_hangs_on_no_platform_rounding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Welche Randecke ein Loch als Brücke bekommt, entscheidet keine Bibliotheksfunktion.
+
+    ``_bridged_holes`` maß die Abstände zum Anker über ``np.hypot``, und das
+    rundet je Plattform verschieden (RM-187; ``test_platform_identity`` führt
+    es unter den Rechnungen, die eine andere Maschine anders runden darf).
+    Review R11 hatte den Ersatz verlangt; ``_band_between`` bekam ihn,
+    ``_bridged_holes`` nicht (Review 25.09.2026). Zwei Randecken, deren
+    Abstand zum Anker eine Stelle auseinanderliegt: Rundet ``hypot`` die
+    nähere eine Stelle auf, bekam das Loch die andere Brücke und die Fläche
+    andere Dreiecke. Der Fingerabdruck der Plattformprobe sah das nicht — er
+    liest die Ecken, und eine Füllung legt keine neuen an.
+    """
+    from app.core.geom.repair import _bridged_holes
+
+    points = np.asarray(
+        [
+            [-10.0, -10.0, 0.0],
+            [10.0, -10.0, 0.0],
+            [10.0, 10.0, 0.0],
+            # hypot(10, 3,000000000000005) liegt genau eine Stelle über hypot(10, 3).
+            [3.000000000000005, 10.0, 0.0],
+            [-3.0, 10.0, 0.0],
+            [-10.0, 10.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.0, -2.0, 0.0],
+            [-1.0, -2.0, 0.0],
+        ]
+    )
+    outer, hole, normal = [0, 1, 2, 3, 4, 5], [6, 7, 8], np.array([0.0, 0.0, 1.0])
+    quiet = _bridged_holes(points, outer, [hole], normal)
+    assert quiet is not None
+    real = np.hypot
+
+    def rounded_up(*args, **kwargs):  # type: ignore[no-untyped-def]
+        """``hypot`` einer Maschine, die den kleinsten Abstand eine Stelle höher rundet."""
+        result = np.array(real(*args, **kwargs), dtype=np.float64)
+        if result.size:
+            nearest = np.unravel_index(int(np.argmin(result)), result.shape)
+            result[nearest] = np.nextafter(result[nearest], np.inf)
+        return result
+
+    monkeypatch.setattr(np, "hypot", rounded_up)
+
+    assert _bridged_holes(points, outer, [hole], normal) == quiet
 
 
 def test_a_band_that_would_run_through_another_part_is_not_built() -> None:
