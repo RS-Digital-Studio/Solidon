@@ -596,12 +596,14 @@ class BackendPromptTruncated(ExternalToolError):
     Bausteinquote fiel am 03.09. aus genau diesem Grund von 3/3 auf 0/3, und
     niemand sah warum.
 
-    Erkannt wird es an der Zahl, die Ollama meldet: Die Werkzeuge allein
-    kosten :data:`PROMPT_TOKENS`; meldet eine Antwort deutlich weniger
-    (:data:`PROMPT_TRUNCATION_FLOOR`), obwohl die Werkzeuge mitgeschickt
-    wurden, ist gekürzt worden. Ein ``ExternalToolError`` und kein
-    Programmfehler: Die Abhilfe ist ein Modell mit größerem Fenster oder ein
-    gehostetes — kein Fehlerbericht.
+    Erkannt wird es an der Zahl, die Ollama meldet, gegen die Länge des
+    gesendeten Texts (:func:`prompt_was_cut`): Weniger Token, als dieser Text
+    mindestens hat, kann kein Modell gezählt haben. Bis zum 25.09.2026 stand
+    hier die Werkzeugzahl als Maß — seit ein lokaler Zug nicht mehr jedes
+    Werkzeug ausführlich schickt (``agent/offer.py``), sagt sie über die Länge
+    nichts mehr. Ein ``ExternalToolError`` und kein Programmfehler: Die Abhilfe
+    ist ein Modell mit größerem Fenster oder ein gehostetes — kein
+    Fehlerbericht.
     """
 
     default_title = _("Der Auftrag passte nicht in das Fenster des Sprachmodells.")
@@ -624,12 +626,11 @@ class BackendPromptTruncated(ExternalToolError):
             values["provider"] = provider
         super().__init__(
             detail=_(
-                "Das lokale Modell hat den Auftrag samt Werkzeugen nicht ganz "
-                "bekommen: Es hat weniger Text verarbeitet, als die Werkzeuge "
-                "allein brauchen — Ollama kürzt still, was nicht in das Fenster "
-                "passt, und die Antwort beruht dann auf einem halben Auftrag. "
-                "Wählen Sie in den Einstellungen ein Modell mit größerem Fenster "
-                "oder ein gehostetes."
+                "Das lokale Modell hat den Auftrag nicht ganz bekommen: Ollama "
+                "kürzt still, was nicht in sein Fenster passt, und die Antwort "
+                "beruht dann auf einem halben Auftrag. Ein kürzerer Chatverlauf "
+                "hilft, sonst ein Modell mit größerem Fenster oder ein "
+                "gehostetes."
             ),
             values=values,
             suggestions=(OPEN_SETTINGS, CANCEL),
@@ -1410,18 +1411,14 @@ class OllamaBackend:
             raise
         self.on_gpu = _ran_on_gpu(answer)
         reply = _from_ollama(answer, self.model)
-        # Nur bei einem Werkzeugsatz, der der gemessenen Last nahekommt: Der
-        # Agent schickt alle; eine Probe mit zwei Werkzeugen kostet weniger als
-        # der Durchschnitt je Werkzeug, und die Erwartung wäre geraten.
-        if len(tools) * 2 >= PROMPT_TOOL_COUNT:
-            expected = tools_cost(len(tools))
-            if 0 < reply.input_tokens < expected * PROMPT_TRUNCATION_FLOOR:
-                raise BackendPromptTruncated(
-                    counted=reply.input_tokens,
-                    expected=expected,
-                    window=OLLAMA_CONTEXT_TOKENS,
-                    provider=self.id,
-                )
+        length = request_length(payload)
+        if prompt_was_cut(reply.input_tokens, length, OLLAMA_CONTEXT_TOKENS):
+            raise BackendPromptTruncated(
+                counted=reply.input_tokens,
+                expected=least_tokens(length),
+                window=OLLAMA_CONTEXT_TOKENS,
+                provider=self.id,
+            )
         # **Und das Fenster kann auch während der Antwort reißen.** Passen
         # Eingabe und Ausgabe zusammen nicht hinein, hat llama.cpp den Kontext
         # geschoben und die Mitte des Auftrags verworfen — ohne ein Zeichen in
@@ -1437,14 +1434,80 @@ class OllamaBackend:
         return reply
 
 
-def tools_cost(count: int) -> int:
-    """Was ``count`` Werkzeuge nach der Messung von :data:`PROMPT_TOKENS`
-    kosten — anteilig, denn Tests und Proben schicken nicht alle.
+#: Wie viele Zeichen des gesendeten JSON ein Token höchstens umfasst — die
+#: Obergrenze, mit der die Länge einer Anfrage ihre **Mindestzahl** an Token
+#: ergibt (:func:`least_tokens`).
+#:
+#: Gemessen am 25.09.2026 an der Grundlast des lokalen Zugs (JSON der
+#: Nachrichten und Werkzeuge ohne Maskierung der Umlaute): qwen3:14b 4,4
+#: Zeichen je Token, qwen3.5:9b 3,5, gemma4:12b 4,9, granite4.1:8b 4,2 —
+#: und **gpt-oss:20b 7,5**. Dessen Vorlage schreibt die Werkzeuge nicht als
+#: JSON, sondern als knappe Typdeklaration; das JSON, das Solidon zählt, ist
+#: dort viel länger als der Text, den das Modell liest. Die Grenze liegt
+#: deshalb bei zehn und nicht knapp über dem Größten, das es heute gibt.
+MOST_CHARS_PER_TOKEN: Final = 10.0
 
-    Öffentlich, weil ``tools/measure_local_model.py`` dieselbe Schwelle
-    braucht: Was die Anwendung als gekürzten Auftrag zurückweist, weist auch
-    die Messung zurück — aus einer Rechnung, nicht aus einer Kopie."""
-    return round(PROMPT_TOKENS * count / PROMPT_TOOL_COUNT)
+#: Wie wenige Zeichen ein Token mindestens umfasst — die Untergrenze, mit der
+#: die Länge einer Anfrage ihre **Höchstzahl** an Token ergibt. Deutsche Prosa
+#: liegt bei 3,5 bis 4 Zeichen je Token, JSON darüber. Eine Anfrage, die auch
+#: so gezählt kleiner ist als das Fenster, kann Ollama nicht gekürzt haben.
+LEAST_CHARS_PER_TOKEN: Final = 2.5
+
+#: Wie weit Ollamas Zählung einer gekürzten Anfrage über der Hälfte des
+#: Fensters liegt: Es behält ``n_keep`` Token vorn und die Hälfte des Rests —
+#: gemessen 16 386 bei 32 768 und 1 026 bei 2 048. Die Marke lässt Luft für
+#: eine andere Vorgabe von ``n_keep``.
+TRUNCATION_KEEPS: Final = 64
+
+
+def request_length(payload: dict[str, Any]) -> int:
+    """Wie viele Zeichen Nachrichten und Werkzeuge einer Anfrage umfassen.
+
+    Ohne die ``\\u``-Maskierung: Ein „ä" ist ein Zeichen und kein
+    sechsstelliges, sonst wüchse die Untergrenze aus :func:`least_tokens` mit
+    jedem Umlaut über die Wirklichkeit hinaus.
+    """
+    return len(json.dumps(payload.get("messages", []), ensure_ascii=False)) + len(
+        json.dumps(payload.get("tools", []), ensure_ascii=False)
+    )
+
+
+def least_tokens(length: int) -> int:
+    """So viele Token hat ein Text dieser Länge mindestens
+    (:data:`MOST_CHARS_PER_TOKEN`)."""
+    return int(length / MOST_CHARS_PER_TOKEN)
+
+
+def most_tokens(length: int) -> int:
+    """So viele Token hat ein Text dieser Länge höchstens
+    (:data:`LEAST_CHARS_PER_TOKEN`)."""
+    return int(length / LEAST_CHARS_PER_TOKEN)
+
+
+def prompt_was_cut(counted: int, length: int, window: int) -> bool:
+    """Ob Ollama eine Anfrage dieser Länge gekürzt hat, als es ``counted``
+    Token zählte.
+
+    Zwei Zeichen, und jedes genügt: **weniger Token, als der Text mindestens
+    hat** — das kann kein Tokenizer gezählt haben —, oder **genau die Zahl,
+    die Ollama nach dem Kürzen meldet** (die Hälfte des Fensters und
+    :data:`TRUNCATION_KEEPS`), bei einer Anfrage, die größer sein **kann** als
+    das Fenster. Das zweite fängt die Kürzung knapp über dem Fenster, wo das
+    erste noch schweigt; und eine Anfrage, die auch reichlich gezählt ins
+    Fenster passt, ist nie gekürzt. Ohne Zählung ist nichts zu sagen.
+
+    Öffentlich, weil ``tools/measure_local_model.py`` dieselbe Frage stellt:
+    Was die Anwendung als gekürzt zurückweist, weist auch die Messung zurück —
+    aus einer Rechnung, nicht aus einer Kopie.
+    """
+    if counted <= 0:
+        return False
+    if counted < least_tokens(length) * PROMPT_TRUNCATION_FLOOR:
+        return True
+    if most_tokens(length) < window:
+        return False
+    half = window // 2
+    return half <= counted <= half + TRUNCATION_KEEPS
 
 
 def _ran_on_gpu(answer: dict[str, Any]) -> bool | None:
@@ -2079,7 +2142,18 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: (bdbd181c33f2), Ollama 0.34.2, ``num_predict`` 1, ``keep_alive`` 0, ein
 #: Ausgabetoken. SHA-256 der Anfrage mit 32 768:
 #: ``728c421340d676cb926088faaf77bf5c1aca43b97b3a0e347cf6c9e92a297329``.
-PROMPT_TOKENS: Final = 27293
+#:
+#: **Am 25.09.2026 mit dem Werkzeugangebot (``agent/offer.py``, Prompt-Version
+#: 8) gezählt: 7 276 Token bei 153 Werkzeugen** — 22,2 % des Fensters. Gezählt
+#: ist seither die Grundlast eines lokalen Zugs: jede Operation in Kurzform,
+#: keine ausführlich, denn „Hallo." meint keine. Eine Anfrage, die Operationen
+#: meint, legt je ausführlichem Werkzeug rund 100 bis 300 Token dazu (in der
+#: Suite bis 14 215 mit Steckbrief und Verlauf). Dieselben 153 Werkzeuge in
+#: der Kurzfassung von vorher kosteten 30 461. qwen3:14b (bdbd181c33f2),
+#: Ollama 0.34.3, ``num_ctx`` 32 768, ``num_predict`` 1, ``keep_alive`` 0, ein
+#: Ausgabetoken. SHA-256 der Anfrage:
+#: ``a66f67dae56492664bc4b762938c2b534e5777c084bd0bdd840b962f37cbd9ce``.
+PROMPT_TOKENS: Final = 7276
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
@@ -2094,19 +2168,15 @@ PROMPT_TOKENS: Final = 27293
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 #:
-#: Die funktionale Zählung vom 21.09.2026 enthält genau diese 147 Werkzeuge
-#: (P2.8: Kegel, Kugel und Ring exakt); Modell, Kontext und Anfragebeleg
-#: stehen bei :data:`PROMPT_TOKENS`.
-PROMPT_TOOL_COUNT: Final = 147
+#: Die funktionale Zählung vom 25.09.2026 enthält genau diese 153 Werkzeuge;
+#: Modell, Kontext und Anfragebeleg stehen bei :data:`PROMPT_TOKENS`.
+PROMPT_TOOL_COUNT: Final = 153
 
-#: Unter diesem Anteil der gemessenen Werkzeuglast gilt eine Antwort als
-#: vorn gekürzt (:class:`BackendPromptTruncated`). Die Schwelle hat Luft nach
-#: beiden Seiten, und beide sind gemessen: Ollama kürzt einen zu langen
-#: Prompt auf etwa die Hälfte (1 026 von 2 048 am 14.09.2026), und ein Modell
-#: mit anderem Tokenizer zählt denselben Text um zehn bis zwanzig Prozent
-#: anders — :data:`PROMPT_TOKENS` stammt von qwen3:14b. Sechzig Prozent
-#: trennen die halbe Zahl von der anders gezählten.
-PROMPT_TRUNCATION_FLOOR: Final = 0.6
+#: Unter diesem Anteil der Mindestzahl aus :func:`least_tokens` gilt eine
+#: Antwort als gekürzt (:func:`prompt_was_cut`). Die Mindestzahl ist schon
+#: eine untere Grenze; die zehn Prozent darunter fangen Rundung und eine
+#: Vorlage, die weniger Token legt, als sie Zeichen spart.
+PROMPT_TRUNCATION_FLOOR: Final = 0.9
 
 
 @dataclass(frozen=True, slots=True)

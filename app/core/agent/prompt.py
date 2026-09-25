@@ -52,7 +52,13 @@ from app.core.knowledge import rules
 #: Feineinstellung ist, die nur eine ausdrückliche Anfrage setzt. Das Schema
 #: fiel damit von 37 836 auf rund 27 000 Token, und das Fenster kam auf
 #: 32 768 zurück.
-PROMPT_VERSION = "7"
+#:
+#: Version 8 sagt dem lokalen Modell, dass nicht jedes Werkzeug mit seinen
+#: Feldern dasteht (``agent/offer.py``): Eine Beschreibung, die mit „…“ endet,
+#: ist eine Ankündigung, und ihr Aufruf holt die Felder. Dazu der Ort im
+#: Fenster, den die ausführlichen Werkzeuge seither tragen. Der Auftrag fiel
+#: damit von 30 461 auf rund 10 000 Token.
+PROMPT_VERSION = "8"
 
 _ROLE = """
 Du bist der Konstruktionsassistent von Solidon, einer Anwendung für druckbare
@@ -143,12 +149,26 @@ und null heißt Wert aus dem kalibrierten Materialprofil.
 #: und den Text der Rückseitenfelder. Jede der drei Kürzungen steht hier als
 #: Satz — ein Feld, das das Modell nicht erklärt bekommt, setzt es falsch.
 _COMPACT_FIELDS_HINT = """
-Die Werkzeuge stehen in Kurzfassung. Längen sind Millimeter, Winkel Grad; am
-Feld steht keine Einheit. Die Bausteine (insert_…) führen die zehn Angaben
-ihrer Stelle — ``x`` bis ``at_features`` oben — nicht auf und nehmen sie
-trotzdem, in genau dieser Bedeutung. Ein Feld ohne Satz oder nur mit seiner
+Die Felder der Werkzeuge stehen in Kurzfassung. Längen sind Millimeter, Winkel
+Grad; am Feld steht keine Einheit. Bei den Bausteinen (insert_…) stehen die zehn
+Angaben ihrer Stelle — ``x`` bis ``at_features`` oben — ohne eigenen Satz; sie
+bedeuten genau das. Ohne ``at_feature``, ``at_features`` oder eine Position weiß
+ein Baustein nicht, wohin. Ein Feld ohne Satz oder nur mit seiner
 Bedingung ist eine Feineinstellung: Setze es nur, wenn die Anfrage einen Wert
 dafür nennt; sonst gilt seine Vorgabe, oft der Wert aus dem Materialprofil.
+"""
+
+#: Was das Werkzeugangebot des lokalen Modells bedeutet (``agent/offer.py``):
+#: Nur die gemeinten Werkzeuge stehen mit Feldern da, die übrigen sind
+#: angekündigt. Ohne diesen Satz hielte das Modell eine Ankündigung für ein
+#: Werkzeug ohne Felder und riefe es leer auf — und läse die Antwort als Fehler.
+_OFFER_HINT = """
+Nicht jedes Werkzeug steht mit seinen Feldern da. Endet eine Beschreibung mit
+„…“, ist das Werkzeug nur angekündigt: Rufe es auf, dann steht es im nächsten
+Schritt mit seinen Feldern da — ausgeführt wird dabei nichts. Danach rufst du
+es mit Werten auf. Die ausführlich beschriebenen Werkzeuge nennen auch ihren
+Ort im Fenster („Ort: …“); fragt jemand, wie etwas geht, nenne ihn neben
+deinem Vorschlag.
 """
 
 #: Der Hinweis auf den Ort — nur für Schemata, die ihn auch tragen.
@@ -190,6 +210,7 @@ def system_prompt(rule_set: rules.RuleSet | None = None, *, compact: bool = Fals
         parts.append(_BINDING_HINT.strip())
         parts.append(_CONVENTIONS_HINT.strip())
         parts.append(_COMPACT_FIELDS_HINT.strip())
+        parts.append(_OFFER_HINT.strip())
     else:
         parts.append(_MENU_HINT.strip())
     return "\n\n".join(parts)

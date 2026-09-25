@@ -399,6 +399,26 @@ def test_an_external_recipe_description_is_framed_and_flattened(source: str) -> 
             assert f"source={source}" in parameter
             assert "x" * 200 not in description, "der Fremdtext wird gekürzt, nicht geflutet"
 
+        # **Und das Angebot des lokalen Modells** (``agent/offer.py``) setzt
+        # Titel und Menüweg selbst in die Beschreibung — beide enden mit dem
+        # fremden Titel. In Kurzform wie ausführlich steht er gerahmt da.
+        from app.core.agent.offer import ToolOffer
+        from app.i18n import tr
+
+        offer = ToolOffer.for_request(REGISTRY, ["Hallo."])
+        stub = next(entry for entry in offer.schemas() if entry["name"] == op)
+        assert stub["description"].startswith(str(tools.FOREIGN_RECIPE_NOTICE)), (
+            "die Kurzform nennt den fremden Titel nur gerahmt"
+        )
+        assert "\n" not in stub["description"]
+        offer.promote([op])
+        detailed = next(entry for entry in offer.schemas() if entry["name"] == op)
+        place = detailed["description"].split(f" {tr('Ort')}: ", 1)[1]
+        assert place.startswith(str(tools.FOREIGN_RECIPE_NOTICE)), (
+            "auch der Menüweg endet mit dem fremden Titel und steht gerahmt da"
+        )
+        assert "\n" not in detailed["description"]
+
         # Gegenprobe: eine eingebaute Operation trägt unseren eigenen, vertrauten
         # Text und bekommt keinen Fremdtext-Rahmen.
         builtin = next(entry for entry in tools.operation_tools() if entry["name"] == "drill_hole")
@@ -1763,12 +1783,8 @@ def test_the_compact_schema_keeps_every_tool() -> None:
     assert kleine < grosse * 0.85, "unter fünfzehn Prozent Ersparnis lohnt der Sonderweg nicht"
 
 
-@pytest.mark.xfail(
-    reason="RM-185: Tokenmessung auf Roberts Wunsch vor 0.5.1 nachholen und Marke entfernen",
-    strict=False,
-)
 def test_the_measured_prompt_matches_the_current_tool_count() -> None:
-    """Nur der Messstand wartet auf 0.5.1; die Vollständigkeit bleibt scharf geprüft."""
+    """Eine neue Operation ist der Anlass für eine neue Zählung (RM-185)."""
     from app.core.agent.tools import tool_schemas
     from app.core.backends import llm
 
@@ -2137,6 +2153,10 @@ def test_a_part_takes_the_placement_its_compact_tool_leaves_out(
     Feld. Das trägt nur, solange die Sitzung gegen das **Register** prüft und
     nicht gegen die Kurzfassung: Ein Modell, das dem Prompt folgt und ``x``
     schickt, darf keinen „unbekannten Parameter" zurückbekommen.
+
+    Seit dem Werkzeugangebot (``agent/offer.py``) trägt ein ausführlich
+    angebotener Baustein seine Ortsfelder wieder — ohne Satz. Die Zusage gilt
+    unverändert: Geprüft wird gegen das Register.
     """
 
     class LocalLike(ScriptedBackend):
@@ -2176,7 +2196,10 @@ def test_a_part_takes_the_placement_its_compact_tool_leaves_out(
     proposal = agent.propose("Setz ein M3-Schraubenloch bei x 6, y 4")
 
     angebot = next(entry for entry in LocalLike.schemas if entry["name"] == "insert_screw_hole")
-    assert "x" not in angebot["input_schema"]["properties"], "die Kurzfassung ist gefahren"
+    assert "x" in angebot["input_schema"]["properties"], "das Angebot ist gefahren"
+    assert "description" not in angebot["input_schema"]["properties"]["x"], (
+        "die Kurzfassung ist gefahren: das Feld ohne Satz"
+    )
     assert proposal.invalid_calls == 0, proposal.findings
     assert [draft.op for draft in proposal.drafts] == ["insert_screw_hole"]
     assert proposal.drafts[0].params["x"] == 6.0

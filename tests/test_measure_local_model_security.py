@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 
 from app.core.agent.prompt import system_prompt
-from app.core.agent.tools import tool_schemas
 from app.core.backends import llm
+from app.core.bootstrap import load_operations
 from app.core.http import ResponseTooLargeError
 from app.core.json_boundary import StrictJsonError
 from tools import measure_local_model
@@ -122,13 +122,17 @@ def _complete_count() -> dict[str, object]:
 def _truncation_floor() -> int:
     """Die kleinste Tokenzahl, die das Werkzeug noch als ungekürzt annimmt.
 
-    Dieselbe Rechnung wie in ``measure_local_model.py``: Was die mitgeschickten
-    Werkzeuge kosten (``llm.tools_cost``), mal dem Anteil, unter dem Ollama
-    den Auftrag gekürzt haben muss (``PROMPT_TRUNCATION_FLOOR``). Bis zum
-    21.09.2026 stand hier ``OLLAMA_CONTEXT_TOKENS // 2 + 2`` — eine Zahl, die
-    zufällig darunter lag und mit jeder Werkzeugliste anders weit.
+    Dieselbe Rechnung wie in ``measure_local_model.py``: die Mindestzahl, die
+    der gesendete Text hat (``llm.least_tokens`` über ``llm.request_length``),
+    mal dem Anteil, unter dem Ollama den Auftrag gekürzt haben muss
+    (``PROMPT_TRUNCATION_FLOOR``). Bis zum 25.09.2026 stand hier die
+    Werkzeugzahl als Maß — seit der lokale Zug nicht mehr jedes Werkzeug
+    ausführlich schickt, sagt sie über die Länge nichts mehr.
     """
-    return math.ceil(llm.tools_cost(len(tool_schemas())) * llm.PROMPT_TRUNCATION_FLOOR)
+    load_operations()
+    sent = measure_local_model._payload("qwen3:14b", measure_local_model.base_tools(), keep_alive=0)
+    least = llm.least_tokens(llm.request_length(json.loads(sent)))
+    return math.ceil(least * llm.PROMPT_TRUNCATION_FLOOR)
 
 
 def test_token_count_sends_every_tool_once_and_identifies_the_actual_request(
@@ -139,7 +143,7 @@ def test_token_count_sends_every_tool_once_and_identifies_the_actual_request(
     assert status == 0
     assert len(requests) == 1
     payload = json.loads(requests[0])
-    schemas = list(tool_schemas(compact=True))
+    schemas = measure_local_model.base_tools()
     assert payload["messages"] == [
         {"role": "system", "content": system_prompt(compact=True)},
         {"role": "user", "content": "Hallo."},

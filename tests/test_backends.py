@@ -356,21 +356,26 @@ def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
 
 
 def test_the_local_window_fits_on_a_sixteen_gigabyte_card_with_room_for_the_scene() -> None:
-    """RM-185: 32 768 Token, und davon mindestens 4 000 für Steckbrief und Verlauf.
+    """RM-185: 32 768 Token, und davon der größte Teil für Steckbrief und Verlauf.
 
     Mit 40 960 lag qwen3:14b auf einer RTX 4080 zu elf Prozent auf dem
     Prozessor — 11 statt 41 Token je Sekunde, 18 s je warmem Zug statt 6,3
     (gemessen am 16.09.2026). Das größere Fenster war der Preis eines
-    Werkzeugschemas von 36 731 Token. Die Kurzfassung (Prompt-Version 7)
-    zählt 27 293; die Abnahme verlangt unter 28 000 und Platz für 4 000 Token
-    Kontext. Wer eine Operation dazulegt und neu misst, sieht hier, ob das
-    Fenster noch trägt — statt es still wieder zu heben.
+    Werkzeugschemas von 36 731 Token. Seit dem Werkzeugangebot zählt die
+    Grundlast 7 276 (25.09.2026); ein Zug mit zehn ausführlichen Werkzeugen,
+    Steckbrief und Verlauf kam in der Suite auf 14 215. Wer eine Operation
+    dazulegt und neu zählt, sieht hier, ob das Fenster noch trägt — statt es
+    still wieder zu heben.
     """
     from app.core.backends.llm import OLLAMA_CONTEXT_TOKENS, PROMPT_TOKENS
 
     assert OLLAMA_CONTEXT_TOKENS == 32768
-    assert PROMPT_TOKENS < 28000, "RM-185: das Werkzeugschema passt nicht mehr in 28 000 Token"
-    assert PROMPT_TOKENS + 4000 <= OLLAMA_CONTEXT_TOKENS, "kein Platz für Steckbrief und Verlauf"
+    assert PROMPT_TOKENS < OLLAMA_CONTEXT_TOKENS // 3, (
+        "die Grundlast des Angebots belegt mehr als ein Drittel des Fensters"
+    )
+    assert PROMPT_TOKENS + 16000 <= OLLAMA_CONTEXT_TOKENS, (
+        "kein Platz für ausführliche Werkzeuge, Steckbrief und Verlauf"
+    )
 
 
 def test_the_local_model_stays_loaded_between_two_steps() -> None:
@@ -1912,45 +1917,54 @@ def test_the_content_type_is_no_secret_and_travels_over_plain_http(
     assert len(opened) == 1, "ein Zugangswert reist über blankes HTTP weiter nicht"
 
 
+def _request_of(tokens: int) -> list[dict[str, Any]]:
+    """Werkzeuge, deren Text mindestens ``tokens`` Token hat
+    (``llm.MOST_CHARS_PER_TOKEN`` Zeichen je Token, die Obergrenze)."""
+    text = "x" * int(tokens * llm.MOST_CHARS_PER_TOKEN)
+    return [{"name": "tool_1", "description": text, "input_schema": {}}]
+
+
 def test_a_prompt_that_ollama_cut_in_silence_is_said_and_not_answered() -> None:
     """Ollama kürzt einen Prompt über dem Fenster, ohne es zu sagen (RM-173).
 
     Gemessen am 14.09.2026: 4 098 Token gegen ein Fenster von 2 048 kamen als
     ``prompt_eval_count`` 1 026 zurück — kein Hinweis, kein ``done_reason``.
     Bei Solidon stünde in der Lücke der Auftrag; die Antwort auf einen halben
-    Auftrag sieht aus wie eine ganze. Erkannt wird es an der Zahl: Die
-    Werkzeuge allein kosten ``PROMPT_TOKENS``, und wer mit allen Werkzeugen
-    fragt und weniger als sechzig Prozent davon zurückgemeldet bekommt, hat
-    eine gekürzte Antwort — die wird als Fehler mit Ausweg gesagt (Regel 17,
-    Regel 21), nicht als Vorschlag weitergereicht.
+    Auftrag sieht aus wie eine ganze. Erkannt wird es an der Länge des
+    gesendeten Texts (``llm.prompt_was_cut``): Weniger Token, als er mindestens
+    hat, oder die halbe Fenstergröße, obwohl er mehr hat — und dann als Fehler
+    mit Ausweg gesagt (Regel 17, Regel 21), nicht als Vorschlag weitergereicht.
+    Bis zum 25.09.2026 war das Maß die Werkzeugzahl; seit der lokale Zug nicht
+    mehr jedes Werkzeug ausführlich schickt, sagt sie über die Länge nichts.
     """
-    from app.core.backends.llm import PROMPT_TOKENS, PROMPT_TOOL_COUNT
-
-    tools = [{"name": f"tool_{index}", "input_schema": {}} for index in range(PROMPT_TOOL_COUNT)]
-    half = {**ollama_answer(), "prompt_eval_count": PROMPT_TOKENS // 2}
-    backend = OllamaBackend(transport=Recorder(half))
+    window = llm.OLLAMA_CONTEXT_TOKENS
+    kept = window // 2 + 2
+    tools = _request_of(window)
+    cut = {**ollama_answer(), "prompt_eval_count": kept}
+    backend = OllamaBackend(transport=Recorder(cut))
 
     with pytest.raises(llm.BackendPromptTruncated) as caught:
         backend.complete([Message(role="user", content="Halter")], tools=tools)
-    assert caught.value.values["counted"] == PROMPT_TOKENS // 2
-    assert caught.value.values["expected"] == PROMPT_TOKENS
-    assert caught.value.values["window"] == llm.OLLAMA_CONTEXT_TOKENS
+    assert caught.value.values["counted"] == kept
+    assert caught.value.values["expected"] >= window
+    assert caught.value.values["window"] == window
     assert caught.value.suggestions, "ein Fehler ohne Ausweg ist keiner (Regel 17)"
 
-    # Die Gegenproben: Ohne Werkzeuge gibt es keine Erwartung; mit wenigen
-    # Werkzeugen (unter der Hälfte des Registers) kostet eines weniger als der
-    # Durchschnitt, und die Erwartung wäre geraten — keine Prüfung; und eine
-    # Antwort ohne Zählung (0) ist ungemessen, nicht gekürzt.
+    # Die Gegenproben: ein Auftrag, der ins Fenster passt und so viele Token
+    # meldet, wie er hat; ein kleiner mit einer kleinen Zahl (die Werkzeugprobe
+    # des Einrichtungsdialogs); und eine Antwort ohne Zählung (0) ist
+    # ungemessen, nicht gekürzt.
+    fits = _request_of(window // 3)
+    whole = {**ollama_answer(), "prompt_eval_count": window // 3 + 100}
     assert (
-        OllamaBackend(transport=Recorder(half))
-        .complete([Message(role="user", content="Halter")])
-        .input_tokens
-        == PROMPT_TOKENS // 2
+        OllamaBackend(transport=Recorder(whole))
+        .complete([Message(role="user", content="Halter")], tools=fits)
+        .wants_tools
     )
     few = {**ollama_answer(), "prompt_eval_count": 90}
     assert (
         OllamaBackend(transport=Recorder(few))
-        .complete([Message(role="user", content="Halter")], tools=tools[:2])
+        .complete([Message(role="user", content="Halter")], tools=_request_of(20))
         .wants_tools
     )
     silent = {**ollama_answer(), "prompt_eval_count": 0}
@@ -1959,6 +1973,32 @@ def test_a_prompt_that_ollama_cut_in_silence_is_said_and_not_answered() -> None:
         .complete([Message(role="user", content="Halter")], tools=tools)
         .wants_tools
     )
+
+
+@pytest.mark.parametrize(
+    ("counted", "least", "window", "cut"),
+    [
+        # Die Messung vom 14.09.2026: 4 098 Token gegen 2 048 kamen als 1 026.
+        (1026, 3000, 2048, True),
+        # Dieselbe halbe Zahl bei einem Text, der auch reichlich gezählt ins
+        # Fenster passt: Das ist seine wirkliche Länge, keine Kürzung.
+        (1026, 150, 2048, False),
+        # Weniger Token, als der Text mindestens hat — das zählt kein Tokenizer.
+        (10_000, 20_000, 32_768, True),
+        # So viele, wie er hat: ganz.
+        (20_000, 20_000, 32_768, False),
+        # Knapp über dem Fenster gekürzt: Die Untergrenze schweigt, die Zahl
+        # nach dem Kürzen nicht.
+        (16_386, 15_000, 32_768, True),
+        (0, 20_000, 32_768, False),
+    ],
+)
+def test_a_cut_prompt_is_told_by_its_length_not_by_its_tools(
+    counted: int, least: int, window: int, cut: bool
+) -> None:
+    length = int(least * llm.MOST_CHARS_PER_TOKEN)
+    assert llm.least_tokens(length) == least
+    assert llm.prompt_was_cut(counted, length, window) is cut
 
 
 def test_an_answer_that_pushed_the_task_out_of_the_window_is_said_and_not_answered() -> None:

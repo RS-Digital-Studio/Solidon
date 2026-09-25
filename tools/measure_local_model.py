@@ -33,10 +33,21 @@ Zeit-, Karten- oder Warmmessung. Die JSON-Auskunft nennt Modell, Kontext,
 Werkzeugzahl und den SHA-256 der tatsächlich gesendeten Anfrage. Eine
 erkennbare Kürzung oder eine unvollständige Antwort liefert keinen Zählwert.
 
+**Gezählt wird die Grundlast, wie die Anwendung sie schickt** — der kompakte
+Systemprompt und das Werkzeugangebot eines lokalen Zugs
+(``agent/offer.py``) zu einer Frage, die keine Operation meint: jede
+Operation angekündigt, keine ausführlich. Was ein wirklicher Zug dazulegt,
+sind die gemeinten Werkzeuge (höchstens ``DETAILED_LIMIT``), der Steckbrief
+und der Verlauf.
+
+``--context`` öffnet ein anderes Fenster als die Vorgabe — für ein Modell,
+dessen Grafikspeicher mehr trägt.
+
     python tools/measure_local_model.py
     python tools/measure_local_model.py --model qwen3:14b --runs 5
     python tools/measure_local_model.py --tools 0 --runs 3
     python tools/measure_local_model.py --count-tokens
+    python tools/measure_local_model.py --count-tokens --model qwen3.5:9b --context 65536
 """
 
 from __future__ import annotations
@@ -54,15 +65,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.core.agent.offer import ToolOffer
 from app.core.agent.prompt import system_prompt
-from app.core.agent.tools import tool_schemas
 from app.core.backends.llm import (
     DEFAULT_OLLAMA_MODEL,
     GPU_PROMPT_TOKENS_PER_SECOND,
     OLLAMA_CONTEXT_TOKENS,
-    PROMPT_TRUNCATION_FLOOR,
     ollama_endpoint,
-    tools_cost,
+    prompt_was_cut,
+    request_length,
 )
 from app.core.bootstrap import load_operations
 from app.core.discover import opener_for
@@ -84,6 +95,21 @@ MEASURE_KEEP_ALIVE = "10m"
 MAX_STATE_RESPONSE_BYTES = 1024 * 1024
 MAX_CHAT_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_UNLOAD_RESPONSE_BYTES = 64 * 1024
+
+#: Die Frage des Zählwegs. Sie meint keine Operation — gezählt wird damit die
+#: Grundlast, nicht ein zufällig gemeintes Werkzeug.
+QUESTION = "Hallo."
+
+
+def base_tools() -> list[dict[str, object]]:
+    """Das Werkzeugangebot eines lokalen Zugs zu :data:`QUESTION`.
+
+    Dieselbe Rechnung wie in der Sitzung (``AgentSession._offer_for``), nicht
+    eine Kopie: Was die Anwendung schickt, zählt die Messung.
+    """
+    from app.core.registry import REGISTRY
+
+    return list(ToolOffer.for_turn(REGISTRY, [QUESTION]).schemas())
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,17 +179,23 @@ def model_state() -> tuple[bool | None, int | None]:
     return share >= 99, share
 
 
-def _payload(model: str, tools: list[dict[str, object]], *, keep_alive: str | int) -> bytes:
+def _payload(
+    model: str,
+    tools: list[dict[str, object]],
+    *,
+    keep_alive: str | int,
+    window: int = OLLAMA_CONTEXT_TOKENS,
+) -> bytes:
     """Dieselbe vollständige Anfrage für Tokenzählung und Zeitmessung."""
     return json.dumps(
         {
             "model": model,
             "stream": False,
             "keep_alive": keep_alive,
-            "options": {"temperature": 0.0, "num_ctx": OLLAMA_CONTEXT_TOKENS, "num_predict": 1},
+            "options": {"temperature": 0.0, "num_ctx": window, "num_predict": 1},
             "messages": [
                 {"role": "system", "content": system_prompt(compact=True)},
-                {"role": "user", "content": "Hallo."},
+                {"role": "user", "content": QUESTION},
             ],
             "tools": [
                 {
@@ -197,9 +229,11 @@ def _chat(payload: bytes) -> dict[str, object]:
         )
 
 
-def _count_tokens(model: str, tools: list[dict[str, object]]) -> dict[str, object]:
+def _count_tokens(
+    model: str, tools: list[dict[str, object]], window: int = OLLAMA_CONTEXT_TOKENS
+) -> dict[str, object]:
     """Zählt einen Auftrag; fehlende oder gekürzte Auskunft ist keine neue Referenz."""
-    payload = _payload(model, tools, keep_alive=0)
+    payload = _payload(model, tools, keep_alive=0, window=window)
     data = _chat(payload)
     counted, produced = data.get("prompt_eval_count"), data.get("eval_count")
     if (
@@ -214,17 +248,17 @@ def _count_tokens(model: str, tools: list[dict[str, object]]) -> dict[str, objec
         or not 0 <= produced <= 1
     ):
         raise ValueError("Ollama liefert keine vollständige Tokenauskunft. Erneut zählen.")
-    if counted < tools_cost(len(tools)) * PROMPT_TRUNCATION_FLOOR:
+    if prompt_was_cut(counted, request_length(json.loads(payload)), window):
         raise ValueError(
             "Ollama hat den Auftrag offenbar gekürzt. Kontext und Modell prüfen, dann neu zählen."
         )
-    if counted + produced >= OLLAMA_CONTEXT_TOKENS:
+    if counted + produced >= window:
         raise ValueError(
             "Ollamas Kontextfenster ist voll. Kontext und Modell prüfen, dann neu zählen."
         )
     return {
         "model": model,
-        "num_ctx": OLLAMA_CONTEXT_TOKENS,
+        "num_ctx": window,
         "tool_count": len(tools),
         "prompt_eval_count": counted,
         "eval_count": produced,
@@ -232,9 +266,11 @@ def _count_tokens(model: str, tools: list[dict[str, object]]) -> dict[str, objec
     }
 
 
-def _ask(model: str, tools: list[dict[str, object]]) -> Turn | None:
+def _ask(
+    model: str, tools: list[dict[str, object]], window: int = OLLAMA_CONTEXT_TOKENS
+) -> Turn | None:
     """Ein Zug. ``None``, wenn die Gegenseite nicht antwortet."""
-    payload = _payload(model, tools, keep_alive=MEASURE_KEEP_ALIVE)
+    payload = _payload(model, tools, keep_alive=MEASURE_KEEP_ALIVE, window=window)
     started = time.monotonic()
     try:
         data = _chat(payload)
@@ -335,20 +371,26 @@ def main() -> int:
         default=-1,
         help="Wie viele Werkzeuge; -1 heißt alle, 0 heißt keine (Nullpunkt)",
     )
+    parser.add_argument(
+        "--context",
+        type=int,
+        default=OLLAMA_CONTEXT_TOKENS,
+        help=f"Kontextfenster in Token (Vorgabe {OLLAMA_CONTEXT_TOKENS})",
+    )
     arguments = parser.parse_args()
     if arguments.count_tokens and arguments.tools != -1:
         parser.error("--count-tokens verlangt alle Werkzeuge; --tools weglassen.")
 
-    # Ohne das ist das Register leer und ``tool_schemas`` liefert sieben statt
-    # der vollen Zahl — eine Messung gegen eine Nutzlast, die es nicht gibt.
+    # Ohne das ist das Register leer und das Angebot enthält nur die
+    # Zusatzwerkzeuge — eine Messung gegen eine Nutzlast, die es nicht gibt.
     load_operations()
-    schemas = list(tool_schemas(compact=True))
+    schemas = base_tools()
     if arguments.tools >= 0:
         schemas = schemas[: arguments.tools]
 
     if arguments.count_tokens:
         try:
-            counted = _count_tokens(arguments.model, schemas)
+            counted = _count_tokens(arguments.model, schemas, arguments.context)
         except (urllib.error.URLError, OSError, ValueError, TimeoutError) as error:
             print(f"Tokenzählung nicht abgeschlossen: {error}", file=sys.stderr)
             print("Ollama und das installierte Modell prüfen, dann erneut zählen.", file=sys.stderr)
@@ -356,7 +398,7 @@ def main() -> int:
         print(json.dumps(counted, ensure_ascii=False, sort_keys=True))
         return 0
 
-    print(f"{arguments.model} — {len(schemas)} Werkzeuge, num_ctx {OLLAMA_CONTEXT_TOKENS}")
+    print(f"{arguments.model} — {len(schemas)} Werkzeuge, num_ctx {arguments.context}")
     # Kein Anführungszeichen im f-String: Das deutsche Schlusszeichen beendet
     # ihn, und die Fehlermeldung zeigt auf eine ganz andere Stelle.
     print(f"  Ab {GPU_PROMPT_TOKENS_PER_SECOND:.0f} Token/s gilt es als Karte\n")
@@ -366,11 +408,11 @@ def main() -> int:
         # einem warmen Lauf misst nichts — deshalb wird vorher entladen.
         unload(arguments.model)
         print("  Kaltstart …")
-        cold = _ask(arguments.model, schemas)
+        cold = _ask(arguments.model, schemas, arguments.context)
         warm = []
         for number in range(arguments.runs):
             print(f"  warmer Zug {number + 1}/{arguments.runs} …")
-            turn = _ask(arguments.model, schemas)
+            turn = _ask(arguments.model, schemas, arguments.context)
             if turn is not None:
                 warm.append(turn)
     finally:

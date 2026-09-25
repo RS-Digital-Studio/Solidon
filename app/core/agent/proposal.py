@@ -77,6 +77,10 @@ class Proposal:
     dass eine Boolesche Operation am Netz scheitert, ist ein Ergebnis der
     Rechnung und kein Fehlgriff des Aufrufers — die Quote misst das Modell,
     nicht das Netz."""
+    lookups: int = 0
+    """Aufrufe einer Kurzform, die nur ihre Felder geholt haben
+    (:mod:`app.core.agent.offer`). Sie sind keine Werkzeugaufrufe im Sinn
+    von §40 und stehen deshalb weder im Nenner noch unter den ungültigen."""
     stopped: str = ""
     """Gesetzt, wenn der Zug nicht von selbst geendet hat.
 

@@ -22,15 +22,16 @@ from __future__ import annotations
 
 import copy
 import re
-from collections.abc import Callable, Container
+from collections.abc import Callable, Container, Sequence
 from dataclasses import dataclass, field, replace
 from math import isfinite
-from typing import Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 
 from app.core import activation, expressions
 from app.core.agent import checks
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
 from app.core.agent.context import CONDENSE_ABOVE_CHARS, build_messages
+from app.core.agent.offer import ToolOffer
 from app.core.agent.prompt import PROMPT_VERSION
 from app.core.agent.proposal import Proposal, Question
 from app.core.agent.tools import (
@@ -76,6 +77,9 @@ from app.core.types import (
     SourceAccess,
 )
 from app.i18n import _, tr
+
+if TYPE_CHECKING:
+    from app.core.knowledge.parts.registry import PartSpec
 
 _log = get_logger(__name__)
 
@@ -356,6 +360,10 @@ class AgentSession:
     """Gerenderte Ansichten der Szene (§23), beschriftete PNG-Bilder. Sie
     erreichen nur ein Backend mit ``supports_images`` — der Textpfad bleibt
     vollständig, Bilder sind Zugabe (Leitprinzip 8)."""
+    offer: ToolOffer | None = field(default=None, init=False, repr=False)
+    """Das Werkzeugangebot des laufenden Zugs, wenn ein lokales Modell ihn
+    rechnet (:mod:`app.core.agent.offer`) — sonst ``None``, und das Modell
+    bekommt jede Operation ausführlich."""
 
     def propose(self, request: str) -> Proposal:
         """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts
@@ -384,6 +392,7 @@ class AgentSession:
         # Stand der Menü-Hinweis im Prompt, während die Schemata den Ort
         # weggelassen hatten, folgte das Modell einer Zusage ins Leere.
         compact = self.backend.id == "ollama"
+        self.offer = self._offer_for(request, working, scene) if compact else None
         messages = build_messages(
             request,
             working,
@@ -393,14 +402,15 @@ class AgentSession:
             views=self.views if self.backend.supports_images else (),
             compact=compact,
         )
-        # Ein lokales Modell bekommt dieselben Werkzeuge, nur knapper
-        # beschrieben. Gemessen: qwen3:14b traf drei von fünf und brauchte für
-        # einen einzigen Aufruf bis zu zwei Minuten — damals bei 88 Werkzeugen
-        # mit 104 KB Schema. Am 31.08.2026 sind es **106 Werkzeuge**, voll
-        # 151 KB und kompakt 95 KB; die Grundlast des kompakten Satzes wiegt
-        # gemessene 19 641 Token gegen 24 161 vorher. Was fehlt, ist nicht
-        # Können, sondern Platz — aber die Enge wächst nicht mehr von selbst.
-        tools = list(tool_schemas(self.registry, compact=compact))
+        # Ein lokales Modell bekommt dieselben Werkzeuge, aber nur die
+        # gemeinten mit allen Feldern (:class:`ToolOffer`). Mit 153 Werkzeugen
+        # in Kurzfassung kostete der Auftrag am 25.09.2026 30 461 von 32 768
+        # Token — was fehlte, war nicht Können, sondern Platz.
+        tools = (
+            self.offer.schemas()
+            if self.offer is not None
+            else list(tool_schemas(self.registry, compact=compact))
+        )
 
         # Was der Zug vom Budget verbraucht hat — **gewichtet** (§26.5,
         # :data:`MAX_TOKENS`). Eine eigene Zahl neben den beiden im Vorschlag:
@@ -487,6 +497,14 @@ class AgentSession:
                 Message(role="assistant", content=reply.text, tool_calls=reply.tool_calls)
             )
             for call in reply.tool_calls:
+                if self.offer is not None and self.offer.is_stub(call.name):
+                    # Eine Kurzform ausgeführt wäre geraten: Das Modell kennt
+                    # ihre Felder nicht (Regel 21). Der Aufruf holt sie; er ist
+                    # kein Operationsaufruf und zählt deshalb nicht mit.
+                    proposal.lookups += 1
+                    answer = self.offer.introduce(call.name)
+                    messages.append(Message(role="tool", tool_call_id=call.id, content=answer))
+                    continue
                 proposal.tool_calls += 1
                 self._progress(proposal.steps, self._label_for(call.name))
                 previous_scene = scene
@@ -499,6 +517,10 @@ class AgentSession:
                     pending_document_check = False
                     checked = _DocumentState.of(proposal, working)
                 messages.append(Message(role="tool", tool_call_id=call.id, content=answer))
+            if self.offer is not None:
+                # Was dieser Schritt angefordert oder gefunden hat, steht im
+                # nächsten mit allen Feldern da.
+                tools = self.offer.schemas()
 
             if proposal.steps >= self.max_steps:
                 proposal.stopped = "steps"
@@ -606,7 +628,15 @@ class AgentSession:
             return report_text(scene, arguments.get("severity")), scene
         if name == FIND_PART:
             proposal.readings.append(name)
-            return find_part_text(arguments.get("description", "")), scene
+            description = str(arguments.get("description", ""))
+            found = found_parts(description)
+            if self.offer is not None:
+                from app.core.knowledge.parts.ops import op_name
+
+                # Was die Bibliothek nennt, ist das, was das Modell als Nächstes
+                # aufruft — also steht es im nächsten Schritt ausführlich da.
+                self.offer.promote(op_name(spec.name) for spec in found)
+            return find_part_text(description, found), scene
         if name == READ_DIGEST:
             # Der Steckbrief der Arbeitskopie — mit allem, was die bisherigen
             # Schritte dieses Zuges erzeugt haben (Konzept Agent-Vertiefung 3.1).
@@ -947,6 +977,29 @@ class AgentSession:
 
     # --- helpers ----------------------------------------------------------------
 
+    def _offer_for(self, request: str, document: Document, scene: Scene) -> ToolOffer:
+        """Das Werkzeugangebot eines lokalen Zugs (:mod:`app.core.agent.offer`).
+
+        Gesucht wird in der Anfrage **und** in den letzten Beiträgen des
+        Nutzers: „und jetzt 2 mm tiefer" nennt keine Operation, der Satz davor
+        schon. Bevorzugt wird, was zur gewählten Stelle passt — und in einer
+        leeren Szene, was einen ersten Körper anlegt; dort hat eine Operation,
+        die einen Körper braucht, nichts, woran sie wirken könnte.
+        """
+        said = [entry.text for entry in document.chat if entry.role == "user"]
+        kind = None
+        if self.selection is not None:
+            object_id, feature_id = self.selection
+            chosen = scene.objects.get(object_id)
+            feature = chosen.features.get(feature_id) if chosen and feature_id else None
+            kind = feature.kind if feature is not None else None
+        return ToolOffer.for_turn(
+            self.registry,
+            [request, *said[-RECENT_REQUESTS:]],
+            selected_kind=kind,
+            empty_scene=not scene.objects,
+        )
+
     def _progress(self, step: int, label: str) -> None:
         if self.progress is not None:
             self.progress(step, label)
@@ -1158,21 +1211,38 @@ def _error_text(error: AppError) -> str:
     return " ".join(parts).strip()
 
 
-def find_part_text(description: str) -> str:
+#: Wie viele Bausteine ``find_part`` nennt — und damit auch, wie viele das
+#: Werkzeugangebot eines lokalen Zugs danach ausführlich zeigt.
+FOUND_PARTS: Final = 6
+
+#: Wie viele frühere Nutzerbeiträge die Werkzeugsuche eines lokalen Zugs
+#: mitliest (:meth:`AgentSession._offer_for`).
+RECENT_REQUESTS: Final = 2
+
+
+def found_parts(description: str) -> tuple[PartSpec, ...]:
+    """Die Bausteine, die ``find_part`` zu dieser Beschreibung nennt."""
+    from app.core.knowledge.parts import PARTS
+
+    return tuple(PARTS.search(description)[:FOUND_PARTS])
+
+
+def find_part_text(description: str, found: Sequence[PartSpec] | None = None) -> str:
     """§26.2: in der Bibliothek nachsehen, bevor Geometrie von Hand entsteht.
 
     Die Antwort nennt die Operation, nicht nur den Baustein: was das Modell mit
     einem Fund tut, ist ihn aufzurufen, und einen Namen, den es raten muss,
-    rät es falsch.
+    rät es falsch. ``found`` ist das Suchergebnis, wenn der Aufrufer es schon
+    hat — die Sitzung braucht es auch für das Werkzeugangebot.
     """
-    from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts.ops import op_name
 
-    found = PARTS.search(description)
+    if found is None:
+        found = found_parts(description)
     if not found:
         return tr("Dazu gibt es keinen Baustein.")
     lines: list[str] = []
-    for spec in found[:6]:
+    for spec in found:
         operation = op_name(spec.name)
         if is_untrusted_recipe_source(spec.source):
             # Das Suchergebnis ist eine Tool-Nachricht und damit niedriger

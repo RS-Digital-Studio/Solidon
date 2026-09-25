@@ -19,6 +19,7 @@ context.py    Steckbrief + Systemprompt + Regelsammlung  ──> was er sieht
 session.py    der Zug: Modell fragen, Werkzeug rufen, wiederholen
    │              │
    │              ├─ tools.py     was er tun kann (aus dem Register!)
+   │              ├─ offer.py     was ein lokales Modell davon ausführlich sieht
    │              ├─ analysis.py  Analysen als Werkzeugantwort
    │              └─ checks.py    nach JEDER Operation prüfen
    ▼
@@ -36,6 +37,7 @@ apply.py      annehmen oder verwerfen — beides vollständig
 | `context.py` | Was der Agent zu sehen bekommt (§26.1) |
 | `prompt.py` | Der Systemprompt (§26.1, §39) |
 | `tools.py` | Was er tun kann (§26.2) |
+| `offer.py` | Was ein lokales Modell davon je Schritt ausführlich sieht — jedes Werkzeug bleibt aufrufbar |
 | `analysis.py` | Analysen als Werkzeugantwort |
 | `checks.py` | Die Prüfung nach jeder Operation eines Vorschlags (§26.5) |
 | `proposal.py` | `Proposal`, `Question` |
@@ -106,6 +108,35 @@ kompakten, und das kompakte bekommt jedes lokale Modell.
 Deshalb entscheidet `session.py` **einmal**, ob kompakt gefahren wird, und
 reicht dieselbe Antwort an beide Seiten. Wer dem Prompt eine Zusage über die
 Werkzeuge hinzufügt, baut den Wächter dazu.
+
+## Ein lokales Modell sieht jedes Werkzeug, aber nicht jedes ausführlich
+
+`session.py` entscheidet einmal, ob kompakt gefahren wird (`backend.id ==
+"ollama"`), und dann baut `offer.ToolOffer` das Angebot des Zugs: jede
+Operation in Registerreihenfolge, **ausführlich** — Kurzfassung der Felder aus
+`tools.operation_tools(compact=True, part_placement=True)` plus „Ort: …",
+Bausteine also mit ihren zehn Ortsfeldern ohne Satz — nur die gemeinten, alle
+übrigen als **Kurzform** (Titel, `STUB_MARK` am Ende, keine Felder). Gemeint
+heißt: `registry.search.rank_operations` über die Anfrage und die letzten
+Nutzerbeiträge (dieselbe Faltung, dieselben Stämme, dieselben Kundenwörter wie
+die Befehlspalette), dazu an einem gewählten Merkmal die Handlungen aus
+`perceive.actions.ACTION_ORDER` und in einer leeren Szene die sichtbaren
+Grundkörper — höchstens `DETAILED_LIMIT` von sich aus. Titel und Menüweg,
+die das Angebot selbst in eine Beschreibung setzt, gehen durch
+`tools.framed_if_foreign`: Bei einem mitgereisten Rezept enden beide mit
+dessen fremdem Titel (§32).
+
+Ruft das Modell eine Kurzform auf, **wird nichts ausgeführt**: Die Sitzung
+antwortet mit `ToolOffer.introduce`, zählt den Aufruf unter
+`Proposal.lookups` (nicht unter `tool_calls`, nicht unter `invalid_calls`) und
+schickt ab dem nächsten Schritt das ausführliche Schema. Was `find_part`
+findet, steht im nächsten Schritt ebenfalls ausführlich da. Der Prompt sagt
+beides in `prompt._OFFER_HINT` (Prompt-Version 8).
+
+Gemessen am 25.09.2026 mit qwen3:14b: 30 461 Token für die Kurzfassung aller
+153 Werkzeuge gegen 7 258 für die Grundlast des Angebots.
+`tests/test_tool_offer.py` hält die Zusagen: keine Operation verschwindet,
+eine Kurzform führt nichts aus, das Angebot bleibt unter einem Drittel.
 
 ## Fragen statt raten
 

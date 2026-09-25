@@ -106,6 +106,18 @@ def untrusted_recipe_text(source: str, text: object) -> str:
     )
 
 
+def framed_if_foreign(name: str, text: object) -> str:
+    """Ein Text zu einer Operation — gerahmt, wenn sie ein fremdes Rezept ist (§32).
+
+    Für jeden, der Titel oder Menüweg einer Operation selbst in eine
+    Werkzeugbeschreibung setzt: Beide enden bei einem Rezept mit dessen
+    fremdem Titel, und ungerahmt stünde er an der Stelle, die das Modell als
+    Systemwissen liest.
+    """
+    source = _foreign_recipe_source(name)
+    return untrusted_recipe_text(source, text) if source is not None else str(text)
+
+
 def _parameter_tail(entry: ParamSpec, schema: tuple[ParamSpec, ...]) -> str:
     """Was ``json_schema`` hinter den doc-Satz eines Parameters hängt.
 
@@ -304,10 +316,15 @@ def tool_schemas(
 
 
 def operation_tools(
-    registry: Registry | None = None, *, compact: bool = False
+    registry: Registry | None = None, *, compact: bool = False, part_placement: bool = False
 ) -> tuple[dict[str, Any], ...]:
     """Das Register als Werkzeuge, jedes mit den Objekten, auf denen es
     arbeitet.
+
+    ``part_placement`` hält kompakt die zehn Ortsfelder der Bausteine — mit
+    Namen und Typ, ohne Satz, denn ihre Bedeutung steht im Prompt. Das
+    Werkzeugangebot eines lokalen Modells (``agent/offer.py``) zeigt nur
+    wenige Bausteine ausführlich, und dort sind sie ihren Platz wert.
     """
     source = registry or REGISTRY
     own = _own_placement_sentences(source) if compact else frozenset()
@@ -403,7 +420,11 @@ def operation_tools(
         # sagt: dass jeder Baustein diese zehn Angaben nimmt und was sie
         # bedeuten. Angenommen werden sie unverändert; die Sitzung prüft
         # gegen das Register und nicht gegen die Kurzfassung.
-        if compact and all(name in properties for name in PART_PLACEMENT_PARAMS):
+        if (
+            compact
+            and not part_placement
+            and all(name in properties for name in PART_PLACEMENT_PARAMS)
+        ):
             for name in PART_PLACEMENT_PARAMS:
                 del properties[name]
             parameters["required"] = [

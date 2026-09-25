@@ -56,6 +56,7 @@ class Outcome:
     parameters: int = 0
     calls: int = 0
     invalid: int = 0
+    lookups: int = 0
     steps: int = 0
     readings: tuple[str, ...] = ()
     target: bool = False
@@ -170,6 +171,7 @@ def run_case(case: Case, backend: LLMBackend) -> Outcome:
     outcome.parameters = len(proposal.parameters)
     outcome.calls = proposal.tool_calls
     outcome.invalid = proposal.invalid_calls
+    outcome.lookups = proposal.lookups
     outcome.steps = proposal.steps
     outcome.readings = tuple(proposal.readings)
     outcome.target = proposal.print_target is not None
@@ -258,8 +260,10 @@ def main() -> int:
         outcomes.append(outcome)
         marker = "ok " if outcome.good else "-- "
         detail = outcome.error or ", ".join(outcome.operations) or "keine Operation"
-        notes = ("  [gefragt]" if outcome.asked else "") + (
-            f"  [{outcome.invalid} ungültig]" if outcome.invalid else ""
+        notes = (
+            ("  [gefragt]" if outcome.asked else "")
+            + (f"  [{outcome.invalid} ungültig]" if outcome.invalid else "")
+            + (f"  [{outcome.lookups} nachgefordert]" if outcome.lookups else "")
         )
         print(f"{marker}{case.id:20} {detail}{notes}")
 
@@ -295,6 +299,11 @@ def main() -> int:
         made = sum(1 for entry in wanted_parameters if entry.parameters)
         print(f"Hauptmaße als Parameter: {made}/{len(wanted_parameters)}")
 
+    # Eine aufgerufene Kurzform holt nur die Felder (``agent/offer.py``): kein
+    # Werkzeugaufruf im Sinn von §40, aber ein Schritt, den das Angebot kostet.
+    lookups = sum(entry.lookups for entry in outcomes)
+    if lookups:
+        print(f"Felder nachgefordert (keine Werkzeugaufrufe): {lookups}")
     print(f"Schritte im Mittel: {sum(e.steps for e in outcomes) / max(len(outcomes), 1):.1f}")
     return 0 if good == len(outcomes) else 1
 
