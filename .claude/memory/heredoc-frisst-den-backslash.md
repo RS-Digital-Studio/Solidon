@@ -2,7 +2,10 @@
 name: heredoc-frisst-den-backslash
 description: "Ein \\n in einem Shell-Heredoc wird zum echten Zeilenumbruch und zerreißt die Datei, die es schreiben soll."
 metadata:
+  node_type: memory
   type: feedback
+  originSessionId: eda33e4f-279c-48e3-bf58-acf625bcf116
+  modified: 2026-09-25T11:21:55.546Z
 ---
 
 Am 10.09.2026 zweimal hintereinander dieselbe Sache: Ein Python-Schnipsel als
@@ -25,6 +28,14 @@ waren. Für eine einzelne Ersetzung ohne Escapes reicht das Edit-Werkzeug.
 Backslash — `\n`, `\r`, `\t`, eine Regex —, gehört er nicht in ein Heredoc.
 Das ist dieselbe Grenze wie in
 [[deutscher-text-geht-nicht-durch-die-shell]], nur eine Zeichenklasse weiter.
+
+**Die stille Gestalt davon, und sie überlebt jeden Lauf** (25.09.2026): Ein
+Pfad wie ``F:\3D Dateien`` in einem gewöhnlichen Docstring ist für Python ein
+Oktal-Escape — die Datei kompiliert, kein Test wird rot, und im Docstring
+steht das Steuerzeichen 0x03. Sechs Docstrings in `tests/` trugen es, einer
+davon roh als Byte. Seither meldet `tests/test_source_escapes.py`
+jedes Oktal-Escape außer `\0` und jedes rohe Steuerzeichen; geschrieben wird
+``F:\\3D`` oder ein roher String.
 
 **Und ein Nachbar davon:** Wer den Umlaut umgeht, um das Escaping zu
 vermeiden, tauscht einen Fehler gegen einen anderen — „zerreisst" statt

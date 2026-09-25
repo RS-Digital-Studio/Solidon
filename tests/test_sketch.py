@@ -2426,7 +2426,7 @@ def test_one_answer_for_how_far_an_arc_runs() -> None:
 def test_an_outline_of_thousands_of_fixed_edges_stays_solvable() -> None:
     """Eine übernommene Kontur mit 2624 festen Strecken ist lösbar.
 
-    So viele hat eine Seitenfläche des Besenhalters aus ``F:\3D Dateien``
+    So viele hat eine Seitenfläche des Besenhalters aus ``F:\\3D Dateien``
     (``broomholdervcd_d35mm.stl``, gemessen 23.09.2026). Der Löser zählte die
     Zeilen von ``fixed`` ins Budget der dichten Matrix — 881 MB — und sagte
     „mehr Punkte und Bedingungen, als der Löser verarbeitet" über Geometrie,
