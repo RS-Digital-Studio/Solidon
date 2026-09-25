@@ -783,7 +783,8 @@ def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
     width = _as_float(written.get("line_width"))
     density = settings.support.density
     if width:
-        distance = width * slicer_keys.CURA_SUPPORT_CROSSINGS / density if density > 0.0 else 0.0
+        crossings = slicer_keys.CURA_SUPPORT_CROSSINGS.get(settings.support.style, 1.0)
+        distance = width * crossings / density if density > 0.0 else 0.0
         written["support_line_distance"] = f"{distance:g}"
         # Auf den eben gerechneten Abstand, nicht noch einmal auf die Breite:
         # zwei Formeln für dieselbe Sache laufen irgendwann auseinander.

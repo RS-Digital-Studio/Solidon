@@ -145,6 +145,20 @@ def _mapped(table: dict[str, str], fallback: str = "") -> Callable[[object], str
     return convert
 
 
+def _only(table: dict[str, str]) -> Callable[[object], str]:
+    """Für die genannten Werte eine Angabe, sonst Schweigen.
+
+    :func:`_mapped` gibt ohne Treffer den Wert selbst weiter; hier bleibt der
+    Text leer, und ein leerer Text geht nicht hinaus (``handover.as_mapping``)
+    — der Wert des Herstellers gilt dann weiter.
+    """
+
+    def convert(value: object) -> str:
+        return table.get(str(value), "")
+
+    return convert
+
+
 def _support_on(value: object) -> str:
     return "0" if str(value) == "none" else "1"
 
@@ -256,6 +270,14 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("retraction.avoid_crossing_walls", "avoid_crossing_perimeters", _flag),
     ("support.style", "support_material", _support_on),
     ("support.style", "support_material_style", _mapped(_PRUSA_SUPPORT_STYLE, "grid")),
+    # „Gitter" heißt Gitter: Das Muster des Herstellers ist bei der Orca-Familie
+    # und bei PrusaSlicer oft ``rectilinear`` — Linien, die in jeder Schicht in
+    # dieselbe Richtung laufen und als freistehende Wände umkippen. Gemessen an
+    # der Waschschüssel (25.09.2026) mit Elegoos Muster: ab Schicht 2 lose
+    # Einzellinien im Abstand von 2,8 mm, und im Druck verschoben sie sich.
+    # ``rectilinear-grid`` wechselt die Richtung je Schicht und steht. Für
+    # Bäume schweigt die Zeile: Dort gilt das Muster des Herstellers.
+    ("support.style", "support_material_pattern", _only({"grid": "rectilinear-grid"})),
     ("support.placement", "support_material_buildplate_only", _mapped({"build_plate": "1"}, "0")),
     ("support.threshold_angle", "support_material_threshold", _angle_from_horizontal),
     ("support.z_gap", "support_material_contact_distance", _number),
@@ -374,6 +396,8 @@ ORCA: Final[tuple[Row, ...]] = (
     # wirkungslos — der Slicer meldet nichts, er stützt bloß nicht.
     ("support.style", "enable_support", _support_on),
     ("support.style", "support_type", _mapped(_ORCA_SUPPORT_TYPE, "normal(auto)")),
+    # Dasselbe Kreuzmuster wie bei PrusaSlicer, siehe dort.
+    ("support.style", "support_base_pattern", _only({"grid": "rectilinear-grid"})),
     ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "1"}, "0")),
     ("support.threshold_angle", "support_threshold_angle", _angle_from_horizontal),
     ("support.z_gap", "support_top_z_distance", _number),
@@ -490,6 +514,10 @@ CURA: Final[tuple[Row, ...]] = (
     # An/Aus — wer Baumstützen einstellte, druckte Gitterstützen, und
     # `verify()` sah nichts, weil der Schlüssel nie geschrieben wurde.
     ("support.style", "support_structure", _mapped({"tree": "tree"}, "normal")),
+    # Curas Vorgabe ``zigzag`` ist eine Linienschar in einer Richtung; „Gitter"
+    # ist bei Cura ``grid``, gekreuzt in jeder Schicht. Den Linienabstand dazu
+    # rechnet ``handover`` mit ``CURA_SUPPORT_CROSSINGS``.
+    ("support.style", "support_pattern", _only({"grid": "grid"})),
     ("support.placement", "support_type", _mapped({"build_plate": "buildplate"}, "everywhere")),
     # Hier **ohne** Umrechnung: Cura zählt gegen die Senkrechte, so wie
     # Solidon. Die beiden anderen Familien drehen die Zählweise um, siehe
@@ -739,9 +767,11 @@ CURA_INFILL_CROSSINGS: Final[dict[str, float]] = {
     "gyroid": 1.0,
 }
 
-#: Dasselbe für die Stützfüllung. Solidon schreibt ``support_pattern`` nicht,
-#: es bleibt bei Curas ``zigzag`` — einer Linienschar.
-CURA_SUPPORT_CROSSINGS: Final = 1.0
+#: Dasselbe für die Stützfüllung, je Stützart. ``grid`` kreuzt sich in jeder
+#: Schicht, und die fdmprinter-Definition rechnet ``support_line_distance``
+#: dafür mit dem Faktor zwei (nachgelesen in Cura 5.13); ohne Eintrag gilt
+#: eins — beim Baum bleibt Curas ``zigzag``, eine Linienschar.
+CURA_SUPPORT_CROSSINGS: Final[dict[str, float]] = {"grid": 2.0}
 
 #: Wie ein Material beim Slicer heißt. Fast immer die Solidon-Kennung in
 #: Großbuchstaben — nur wo die Schreibweisen auseinandergehen, steht ein

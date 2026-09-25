@@ -61,6 +61,12 @@ Drei Sachen, die dabei nicht verhandelbar sind:
 - **Aufgelöst wird aus drei Ebenen** — Qualitätsstufe, Material, Drucker, in
   dieser Reihenfolge. Die Düse skaliert die Schichthöhe, die Maschinengrenzen
   deckeln die Temperatur, ein offener Bauraum bekommt keine Kammertemperatur.
+- **Was Solidon meint, wird geschrieben, auch das Muster.** „Gitter" ging bis
+  zum 25.09.2026 als An/Aus und Art hinaus, das Muster blieb beim Hersteller —
+  bei Elegoo `rectilinear`, Linien in einer Richtung, die als freistehende
+  Wände umkippen. `rectilinear-grid` (Orca, PrusaSlicer) und `grid` (Cura,
+  Linienabstand mal zwei) halten das Versprechen des Feldes; Bäume behalten
+  das Muster des Herstellers (`slicer_keys._only`).
 - **Das Maschinenprofil wird nicht erfunden.** Bettform, Anfahrwege, Start-
   und Endcode kennt Solidon nicht; sie kommen aus dem Bestand des Slicers.
   Bei der Orca-Familie gilt das auch für das Prozessprofil: Solidon liest das

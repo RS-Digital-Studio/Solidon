@@ -924,6 +924,39 @@ def test_support_on_actually_reaches_the_slicer() -> None:
     assert cura["support_structure"] == "tree"
 
 
+def test_grid_supports_reach_every_slicer_as_a_grid() -> None:
+    """„Gitter" kam als Elegoos ``rectilinear`` an: Linien in einer Richtung,
+    die ab Schicht 2 als freistehende Wände umkippten (Waschschüssel,
+    25.09.2026). Bäume behalten das Muster des Herstellers.
+    """
+    base = print_settings.resolve(profiles.make_profile())
+    grid = print_settings.with_path(base, "support.style", "grid")
+    tree = print_settings.with_path(base, "support.style", "tree")
+
+    assert handover.as_mapping(grid, "orca")["support_base_pattern"] == "rectilinear-grid"
+    assert handover.as_mapping(grid, "prusa")["support_material_pattern"] == "rectilinear-grid"
+    assert handover.as_mapping(grid, "cura")["support_pattern"] == "grid"
+    assert "support_base_pattern" not in handover.as_mapping(tree, "orca")
+    assert "support_material_pattern" not in handover.as_mapping(tree, "prusa")
+    assert "support_pattern" not in handover.as_mapping(tree, "cura")
+
+
+def test_a_cura_grid_keeps_its_density() -> None:
+    """Cura rechnet ``support_line_distance`` für ``grid`` mit dem Faktor zwei
+    (fdmprinter-Definition): Dieselbe Dichte heißt beim Gitter den doppelten
+    Linienabstand, sonst wäre die Stütze doppelt so dicht wie eingestellt."""
+    base = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "tree"
+    )
+    grid = print_settings.with_path(base, "support.style", "grid")
+    profile = profiles.make_profile()
+
+    lines = float(handover.values_for(base, profile, "cura")["support_line_distance"])
+    crossed = float(handover.values_for(grid, profile, "cura")["support_line_distance"])
+
+    assert crossed == pytest.approx(2.0 * lines)
+
+
 #: Was die Orca-Familie an diesen Stellen annimmt, abgelesen am ausgelieferten
 #: Profilbestand von OrcaSlicer und seinen Ablegern. Ein Name daneben fällt
 #: still auf die Vorgabe zurück — geprüft wird deshalb hier und nicht im Druck.
