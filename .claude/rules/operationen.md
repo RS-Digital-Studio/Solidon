@@ -1338,7 +1338,11 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   `detect_known` örtlich; die Generator-Reduktion bleibt darunter
   (`generate.GENERATED_TRIANGLE_LIMIT`), nie darüber. Karten, Darstellung und die
   höchstens `FEATURE_LIMIT_COUNT` (fünftausend seit dem 22.09.2026)
-  zuzuordnenden Merkmale haben eigene Leistungsbudgets.
+  zuzuordnenden Merkmale haben eigene Leistungsbudgets. Über der Merkmalsgrenze
+  bleibt zuerst, was mit denselben Dreiecken schon da war, dann die mit der
+  größten Oberfläche, und zugeordnet wird wie sonst (`evaluate._heaviest`,
+  RM-235) — nie eine Hälfte ohne Zuordnung, nie eine Auswahl, die ein
+  Skalieren umsortiert.
   Eine Anhebung wird an echten feinen Netzen einschließlich der oberen
   Gegenprobe gemessen; die Geometrie wird für die Erkennung nicht reduziert.
 - **`OpContext.scene` ist nur lesend** (Regel 3). Ops erzeugen Objekte, sie

@@ -72,7 +72,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Lüfterkurve gebaut; offen PLA-Vorgabe je Drucker, Hilfs- und Kammerlüfter, unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
 | [RM-229 — Anordnen legt ein zu großes Teil über die Kante, und geteilte Stücke heißen nach einem Buchstabenpfad](#rm-229) | Geometrie, Erkennung und Druckvorbereitung | 108,5 bei freigegebenen 108 statt einer Mitte mit kleinerem Rand; „B A · Stifte" für ein Stück mit Stiften und Löchern — Rand zuerst verkleinern, Nummerierung entscheiden |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
-| [RM-235 — Die Erkennung läuft an sehr großen Netzen in den Speicher oder über ihre Grenze](#rm-235) | Geometrie, Erkennung und Druckvorbereitung | MemoryError in features._fitted am Puppenhausbett, Kumiko mit 7 321 Merkmalen danach ohne jedes — Speicher begrenzen, über der Grenze nach Gewicht behalten. Seit 24.09.2026 kostet ein Speicherfehler beim Laden nur die Erkennung, nicht den Import; die Ursache in `_fitted` bleibt offen |
+| [RM-235 — Die Erkennung läuft an sehr großen Netzen in den Speicher oder über ihre Grenze](#rm-235) | Geometrie, Erkennung und Druckvorbereitung | MemoryError in features._fitted am Puppenhausbett — Speicher begrenzen. Seit 24.09.2026 kostet ein Speicherfehler beim Laden nur die Erkennung, nicht den Import; seit 25.09.2026 behält Kumiko über der Grenze ihre 5 000 größten Merkmale; die Ursache in `_fitted` bleibt offen |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
@@ -1871,6 +1871,16 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Abnahme: Puppenhausbett ohne Speicherfehler unter der automatischen Grenze
   (seit 24.09.2026 1,5 Mio.), Kumiko mit ihren wichtigsten Merkmalen und einem
   Satz über den Rest.
+
+  **Kumiko ist seit dem 25.09.2026 abgenommen:** Über `FEATURE_LIMIT_COUNT`
+  behält die Auswertung zuerst, was mit denselben Dreiecken schon da war, dann
+  die Merkmale mit der größten Oberfläche (`evaluate._heaviest`), und ordnet
+  genau diese zu; `perceive.too_many` sagt, dass es mehr waren. Die Schale
+  (94 990 Dreiecke, 7 326 Merkmale) steht mit 5 000 Merkmalen samt ihren vier
+  großen Deckflächen da. Nach Verschieben, Skalieren um 1,1 und Strecken in y
+  um 1,2 wechseln 0, 0 und 11 Namen — so viele wie ganz ohne Grenze; nach der
+  Größe allein waren es 136 und 1 814, und aus 5 000 Merkmalen wurden 5 898.
+  Offen bleibt der Speicherbedarf in `_fitted`.
 
   **Seit dem 24.09.2026 kostet der Speicherfehler beim Laden nur die
   Erkennung** (`scene.evaluate._with_features`): Das Modell lädt ohne sie,
