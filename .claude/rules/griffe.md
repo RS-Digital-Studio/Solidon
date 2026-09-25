@@ -205,7 +205,10 @@ Für die Griffe gilt:
   `QuietHost.cancel` → `MainWindow._measures_cancelled`, derselbe Weg wie ein
   Klick ins Leere). Vorher blieb das Merkmal gewählt, ohne Maße und Knöpfe
   im Bild, und rechts stand die Handlung des verworfenen Entwurfs scharf.
-  Escape bleibt stufenweise: erst die Maße, dann Merkmal → Körper → nichts. Die eigene synchrone
+  **Escape tut dasselbe** (Entscheidung Robert, 25.09.2026: „wie abbrechen
+  zurücknehmen und abwählen"): im Maßfeld über `PlacementFlow.step_back`,
+  sonst über `MainWindow._escape`. Bis dahin verließ es nur die Maße, und
+  rechts blieb der verworfene Entwurf scharf. Die eigene synchrone
   Dokumentmeldung beim Commit wartet bis zum booleschen Erfolg des Callbacks.
 * **Die Marke trägt die Langlochform, und sie geht beim Zug mit.** Ein
   wartender Langlochzug (`_slot_waiting`) und ein erkanntes Langloch werden

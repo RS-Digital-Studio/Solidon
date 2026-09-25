@@ -306,7 +306,9 @@ class QuietHost(QObject):
 
         ``cancelled`` kommt nach ``finished``: Wer den Träger gebaut hat,
         räumt ihn zuerst ab und entscheidet dann, was aus der Auswahl wird.
-        Escape und ein Kontextwechsel gehen weiter über :meth:`reject`.
+        Escape in der Maßgruppe kommt ebenfalls hierher
+        (``PlacementFlow.step_back``); ein Kontextwechsel geht weiter über
+        :meth:`reject`.
         """
         if self._finished:
             return
@@ -1816,11 +1818,15 @@ class PlacementFlow(QObject):
           Klick auf das Modell wieder hierher (:meth:`_resume`).
 
         Zuerst nimmt Escape einen offenen Bezugswahlmodus zurück, sonst
-        nichts. Wo es nur eine Stufe gibt — am gewählten Merkmal
-        (``QuietHost``) und beim Ändern eines Schritts —, geht es wie bisher
-        ganz zurück.
+        nichts. Beim Ändern eines Schritts gibt es nur eine Stufe, dort geht
+        es wie bisher ganz zurück. **Am gewählten Merkmal (``QuietHost``) tut
+        Escape, was Abbrechen tut** (Entscheidung Robert, 25.09.2026: „wie
+        abbrechen zurücknehmen und abwählen"): :meth:`_cancel_measures`.
         """
         if self._disposed or self._cancel_reference_pick():
+            return
+        if isinstance(self.dialog, QuietHost):
+            self._cancel_measures()
             return
         if not self.active:
             self.back()

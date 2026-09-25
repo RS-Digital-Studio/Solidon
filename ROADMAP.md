@@ -87,7 +87,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Nachtragstext für §9 und §30.1 liegt im Bericht skizze der Durchsicht 0.5.0 bereit (neu geschrieben, der Wortlaut W2 lag nicht mehr vor), dazu die Vorschläge aus p66 (Ellipse, drei Bedingungsarten), p6c (drei Schnitte), zeichnenbau und p7verlauf. Robert sagt den Nachtrag an und entscheidet dabei, ob eine neue Bedingungsart die Formatversion hebt (p66 hat sie mit Format 31 gehoben, Satz 5 des Nachtrags sagt nein) |
 | [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Umgesetzt und im Review vom 21./22.09.2026 nachgezogen (Griff überlebt ein Bild mitten im Zug, Radraste über einem Maßfeld zoomt, erstes Escape nimmt nur die Bezugswahl zurück); die Fensterdateien der Ansicht liefen dabei grün (456 Fälle). Offen bleibt allein die Abnahme am echten Fenster beim Release 0.5.0 |
 | [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den echten Startweg beim Release 0.5.0 noch einmal fahren, und ob Windows D3D12 als Backend bekommt, bleibt eine eigene Entscheidung |
-| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; Escape, und sie stehen wieder; auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`) |
+| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem 25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`) |
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Roberts Geste nachgestellt und verlegt (`7ff34c67`: je Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s → 1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-215 — 276 Befundstellen enden ohne Handlung](#rm-215) | Bedienung und Darstellung | Sollliste C1: 97 Warnungen und sieben Fehler ohne Weg, darunter fit.violated, gcode.spool_left_out, join.blocked, orient.support_likely — Test für alle, dann gebietsweise nachziehen |
@@ -2079,8 +2079,12 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   *Bohrung ändern*, der exakte Kern misst „nichts abgetragen" am gefüllten
   Körper, der Schritt fällt nicht, wenn ein späterer sein Langloch nennt, Tab
   bleibt im Merkmalfenster, und `make_corpus.py` baut die neue Korpusdatei.
-  Offen daraus: Escape lässt den verworfenen Entwurf im Merkmalfenster scharf
-  (Entscheidung Robert steht aus), und die Mündungskorrektur in
+  Escape tut seit dem 25.09.2026 dasselbe wie *Abbrechen* (Robert: „wie
+  abbrechen zurücknehmen und abwählen") — vorher blieb der verworfene
+  Entwurf im Merkmalfenster scharf —, und beim Übernehmen liest die
+  Maßgruppe nur die getippten Felder neu: Das Zurücklesen einer feineren
+  Zahl, als das Feld zeigt, baute das Werkzeug neu, und der Klick verfiel
+  still. Offen daraus: die Mündungskorrektur in
   `surface_values` erkennt die eigene Fläche nicht von einer fremden
   parallelen im Abstand bis zu einem Radius — eine Korrektur nur an der
   Fläche aus `seat_of` bräche die gerundete Mündung am Schaber, die gar keine
@@ -2152,7 +2156,9 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Bohrschritts (`offer_bore_step`) blieb neben der Maßgruppe stehen; er trägt
   sich seither in `_blocks` ein und weicht mit den übrigen. Abnahme, offen
   beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine
-  Koordinaten; Escape, und sie stehen wieder.
+  Koordinaten; endet die Maßgruppe, stehen sie wieder. Escape und Abbrechen
+  wählen dabei seit dem 25.09.2026 ab (Entscheidung Robert), rechts steht
+  danach nichts mehr.
 
 <a id="rm-200"></a>
 

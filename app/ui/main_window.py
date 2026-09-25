@@ -9458,6 +9458,12 @@ class MainWindow(QMainWindow):
             self.tools.close_tool()
             return
         if self._leave_the_measures():
+            # **Wie Abbrechen: zurücknehmen und abwählen** (Entscheidung Robert,
+            # 25.09.2026). Bis dahin verließ Escape nur die Maße; rechts blieb
+            # der verworfene Entwurf scharf — nach einem Zug auf 18 mm stand
+            # dort die 18 mit freiem Übernehmen —, und erst das nächste Escape
+            # ging aus der Auswahl.
+            self.object_tree.select_object(None)
             return
         if self.session.inserting is not None:
             self.session.stop_inserting()
@@ -9492,10 +9498,10 @@ class MainWindow(QMainWindow):
         Entwurfs scharf — mit ihrer Vorgabelänge und einem freien Übernehmen —,
         und im Bild standen weder Maße noch Knöpfe. Jetzt geht der Knopf den
         Weg des Klicks ins Leere: Was wartet, fällt (ein gezogenes Langloch,
-        ein vorgeschlagenes Versetzen), und nichts ist mehr gewählt. Escape
-        bleibt stufenweise (:meth:`_leave_the_measures`, dann
-        :meth:`_step_selection_out`). Gerufen nach ``finished``: Die
-        Maßgruppe ist dann schon abgeräumt.
+        ein vorgeschlagenes Versetzen), und nichts ist mehr gewählt. Escape tut
+        seit dem 25.09.2026 dasselbe (Robert: „wie abbrechen zurücknehmen und
+        abwählen"; :meth:`_escape`, ``PlacementFlow.step_back``). Gerufen nach
+        ``finished``: Die Maßgruppe ist dann schon abgeräumt.
         """
         self._leave_the_measures()
         self.object_tree.select_object(None)
@@ -9506,10 +9512,11 @@ class MainWindow(QMainWindow):
         Die stille Platzierung hat kein Fenster und damit kein Kreuz; ihr
         Ausgang ist diese Taste. Verworfen wird, was noch kein Schritt ist: ein
         gezogenes Langloch, das auf sein Übernehmen wartet, ein am Griff
-        vorgeschlagenes Versetzen. Gerechnet ist bis dahin nichts (Regel 2),
-        die Auswahl bleibt stehen — das nächste Escape geht dann eine Stufe
-        weiter, wie immer. Anlass: Robert, 11.09.2026, „kann auch den modus
-        nicht mehr verlassen".
+        vorgeschlagenes Versetzen. Gerechnet ist bis dahin nichts (Regel 2).
+        Die Auswahl hebt der Aufrufer auf (:meth:`_escape`,
+        :meth:`_measures_cancelled`, Entscheidung Robert, 25.09.2026).
+        Anlass: Robert, 11.09.2026, „kann auch den modus nicht mehr
+        verlassen".
         """
         waiting = self.viewport.slot_drag_waits() or self.viewport.move_proposal_waits()
         running = self._quiet_placement is not None and self._quiet_placement.active
@@ -15976,6 +15983,15 @@ class MainWindow(QMainWindow):
                     )
                     for spin in spins:
                         if not spin.isVisibleTo(editor):
+                            continue
+                        # **Nur, was getippt wurde, wird neu gelesen.** Ein Feld
+                        # zeigt zwei Nachkommastellen; ``interpretText`` machte
+                        # aus einer gemessenen Richtung mit Rauschen oder der
+                        # Breite 9,000002 die gezeigte Zahl, der Entwurf galt als
+                        # geändert, das Werkzeug wurde neu gebaut, und der Klick
+                        # auf *Übernehmen* verfiel still (24.09.2026, Schaber).
+                        line = spin.lineEdit()
+                        if line is not None and not line.isModified():
                             continue
                         if not spin.hasAcceptableInput():
                             spin.setFocus()

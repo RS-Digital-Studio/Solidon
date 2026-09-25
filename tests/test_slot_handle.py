@@ -981,6 +981,50 @@ def test_a_typed_length_between_round_and_slot_does_not_snap_round() -> None:
     assert handle.length == pytest.approx(BORE), "genau die Breite ist rund"
 
 
+def test_escape_at_the_measures_discards_and_deselects_like_cancel() -> None:
+    """Escape tut an der Maßgruppe, was Abbrechen tut (Robert, 25.09.2026).
+
+    Zwei Wege kommen an: die Taste des Fensters (``MainWindow._escape``) und
+    Escape in einem Maßfeld (``PlacementFlow.step_back``). Beide verwerfen
+    und wählen ab; ein Bezugswahlmodus nimmt das erste Escape weiter für
+    sich.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+    from app.ui.placement_flow import PlacementFlow, QuietHost
+
+    chosen: list[object] = []
+    window = SimpleNamespace(
+        _local_features=None,
+        session=SimpleNamespace(split_running=False, inserting=None),
+        _sketch_panel=None,
+        _armature_target=None,
+        _sculpt_target=None,
+        tools=SimpleNamespace(active=lambda: None),
+        _leave_the_measures=lambda: True,
+        object_tree=SimpleNamespace(select_object=chosen.append),
+        _step_selection_out=lambda: pytest.fail("Escape ging an den Maßen vorbei"),
+    )
+    MainWindow._escape(window)  # type: ignore[arg-type]
+    assert chosen == [None], "die Taste des Fensters wählt ab"
+
+    cancelled: list[bool] = []
+    picking = {"now": True}
+    flow = SimpleNamespace(
+        _disposed=False,
+        dialog=QuietHost({}, lambda values: False),
+        _cancel_reference_pick=lambda: picking["now"],
+        _cancel_measures=lambda: cancelled.append(True),
+        back=lambda: pytest.fail("Escape im Maßfeld ging den alten Weg"),
+    )
+    PlacementFlow.step_back(flow)  # type: ignore[arg-type]
+    assert not cancelled, "erst geht die Bezugswahl"
+    picking["now"] = False
+    PlacementFlow.step_back(flow)  # type: ignore[arg-type]
+    assert cancelled == [True], "dann wie Abbrechen"
+
+
 def test_a_round_bore_that_stays_round_proposes_nothing() -> None:
     """Endet ein Zug oder der Ring an einer runden Bohrung rund, wird nichts vorgeschlagen.
 

@@ -3849,16 +3849,18 @@ def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: Main
     )
 
 
-def test_the_next_hole_hides_its_twins_too_and_escape_brings_them_back(
+def test_the_next_hole_hides_its_twins_too_and_the_end_brings_them_back(
     window: MainWindow,
 ) -> None:
-    """RM-199 mit der nächsten Bohrung und dem Ausgang über Escape.
+    """RM-199 mit der nächsten Bohrung und dem Ende der Maße.
 
     Die Abnahme aus dem Register: Bohrung wählen, rechts kein Durchmesser und
-    keine Koordinaten; Escape, und sie stehen wieder. Seit das Merkmalfenster
-    seine Zeilen von Bohrung zu Bohrung weiterverwendet (RM-204), wandert
-    dabei eine Zeile, die gerade als Zwilling versteckt war — sie muss an der
-    nächsten Bohrung wieder weichen und nach Escape wieder dastehen.
+    keine Koordinaten; endet die Maßgruppe, stehen sie wieder. Seit das
+    Merkmalfenster seine Zeilen von Bohrung zu Bohrung weiterverwendet
+    (RM-204), wandert dabei eine Zeile, die gerade als Zwilling versteckt war
+    — sie muss an der nächsten Bohrung wieder weichen und danach wieder
+    dastehen. Bis zum 25.09.2026 war Escape dieser Ausgang; seither wählt es
+    ab wie *Abbrechen* (Entscheidung Robert), und rechts steht nichts mehr.
     """
     from render_fakes import RecordingRenderer
 
@@ -3888,12 +3890,23 @@ def test_the_next_hole_hides_its_twins_too_and_escape_brings_them_back(
         assert not any("Bohrung ändern" in name for name in shown()), sorted(shown())
         assert any("Merkmal verschieben" in name for name in shown())
 
-    window._escape()
+    window.end_quiet_placement()
     for _ in range(10):
         QApplication.processEvents()
 
     assert window._quiet_placement is None and not panel._measuring
     assert {"Bohrung ändern — Durchmesser", "Bohrung ändern — X"} <= shown(), sorted(shown())
+
+    window.object_tree.select_feature(object_id, holes[0])
+    for _ in range(40):
+        QApplication.processEvents()
+    assert window._quiet_placement is not None
+    window._escape()
+    for _ in range(10):
+        QApplication.processEvents()
+    assert window._quiet_placement is None and window.object_tree.selected() is None, (
+        "Escape nimmt zurück und wählt ab"
+    )
 
 
 def test_a_refused_measure_shows_the_reason_of_the_core_not_a_generic_sentence(

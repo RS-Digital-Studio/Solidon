@@ -287,7 +287,7 @@ oder Durchmesser, X, Y, Z, Materialtoleranz (`FeaturePanel._in_the_view`,
 bleiben Länge und Richtung beziehungsweise Tiefe und Änderungsumfang.
 *Abbrechen* der Maßgruppe verwirft den Entwurf und hebt die Auswahl auf, wie
 ein Klick ins Leere (`QuietHost.cancel` → `MainWindow._measures_cancelled`;
-Regel in `griffe.md`); Escape bleibt stufenweise.
+Regel in `griffe.md`); Escape tut dasselbe (`_escape`, `PlacementFlow.step_back`).
 Ohne Messen steht *Abbrechen* unten, solange eine Feldvorschau aus dem Panel
 wartet — ein Merkposten oder eine angeforderte Vorschau, nicht der Auftrag,
 den das Anzeigen eines Merkmals ohnehin bindet (`offer_cancel`,
@@ -1189,9 +1189,9 @@ Dialog führt ein Klick auf das Modell zurück und setzt dort die Stelle
 der Dialog zeigt dazu seinen Platzierungssatz und den Tastaturknopf
 `aim_again` weiter. `show_placement_hint(on, paused=...)` hält beide Aussagen
 getrennt: Der Fluss meldet bei `back()` die Pause, beim aktiven Zielen und
-beim endgültigen Ende verschwindet der Rückkehrknopf. Am gewählten Merkmal
-(`QuietHost`) und beim Ändern eines Schritts gibt es nur eine Stufe, dort
-geht Escape ganz zurück. Die Mausbewegung fragt im 16-ms-Takt nach der
+beim endgültigen Ende verschwindet der Rückkehrknopf. Beim Ändern eines
+Schritts gibt es nur eine Stufe, dort geht Escape ganz zurück; am gewählten
+Merkmal (`QuietHost`) tut es, was *Abbrechen* tut — verwerfen und abwählen. Die Mausbewegung fragt im 16-ms-Takt nach der
 Fläche, nicht erst im Stillstand: eine Frage zur Zeit, ihr Ende nimmt die
 jüngste Stelle, und eine überholte Antwort behält die vorbereitete Fläche
 (`_surface_known`) samt der einen Netzkopie des Arbeiters (`_surface_mesh`). Beim Bearbeiten eines historischen Schritts

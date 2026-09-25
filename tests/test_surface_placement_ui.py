@@ -2334,14 +2334,15 @@ def test_pulling_a_slot_and_moving_it_at_the_grip_is_one_step(qt_app: QApplicati
 
 
 def test_escape_leaves_the_measures_and_discards_what_waits(qt_app: QApplication) -> None:
-    """Escape ist der Ausgang aus den Maßen — und verwirft, was noch kein Schritt ist.
+    """Escape ist der Ausgang aus den Maßen — es verwirft und wählt ab wie Abbrechen.
 
     Die stille Platzierung hat kein Fenster und kein Kreuz. Bis zum
     11.09.2026 fing ihr Ereignisfilter Escape nur ab, solange kein Langlochzug
     wartete; wartete einer, ließ sie die Taste durch, und die ging eine Stufe
     Auswahl zurück — die Maße blieben stehen (Robert: „kann auch den modus
-    nicht mehr verlassen"). Jetzt gilt die Stufung des Fensters: erst das
-    Werkzeug, dann die Auswahl.
+    nicht mehr verlassen"). Bis zum 25.09.2026 blieb danach die Auswahl
+    stehen, und rechts stand der verworfene Entwurf scharf; seither nimmt
+    Escape zurück und wählt ab (Entscheidung Robert).
     """
     from app.ui.op_dialog import OperationDialog
 
@@ -2366,15 +2367,8 @@ def test_escape_leaves_the_measures_and_discards_what_waits(qt_app: QApplication
         assert [o.op for o in window.session.history.operations] == vorher, (
             "verworfen, nicht gerechnet"
         )
-        assert window.object_tree.selected_feature() == hole, (
-            "die Auswahl bleibt — erst das Werkzeug"
-        )
-
-        window._escape()
-        QApplication.processEvents()
-        assert window.object_tree.selected_feature() is None, (
-            "das zweite Escape geht die Stufe zurück"
-        )
+        assert window.object_tree.selected() is None, "und abgewählt wie bei Abbrechen"
+        assert window.object_tree.selected_feature() != hole
     finally:
         window.end_quiet_placement()
         for open_dialog in window.findChildren(OperationDialog):
