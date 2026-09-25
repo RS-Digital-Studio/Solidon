@@ -1888,6 +1888,66 @@ def test_the_core_answers_a_feature_once_per_evaluation(
     assert asked[-1] == first_id and len(asked) == 3, "eine neue Merkmalsliste fragt neu"
 
 
+def test_an_answer_from_the_worker_builds_the_panel_without_asking_the_core(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Was der Arbeiter geantwortet hat, baut dasselbe Fenster wie die eigene Frage (RM-232).
+
+    An einem großen Körper rechnet ``feature_answers`` im Arbeiter, und das
+    Fenster bekommt die Antwort über ``remember_answers``, bevor es aufbaut.
+    Der Aufbau fragt den Kern dann nicht noch einmal — sonst wäre der Weg in
+    den Arbeiter umsonst —, und er zeigt Zeile für Zeile, was ein Fenster
+    zeigt, das selbst gefragt hat. Eine andere Merkmalsliste erbt nichts.
+    """
+    from app.core.perceive import actions as actions_module
+    from app.ui.panels import feature_answers
+
+    load_operations()
+    mesh = plate()
+    found = features.detect(mesh)
+    hole_id = next(key for key, value in found.items() if value.kind == "hole")
+    hole = found[hole_id]
+    asked = FeaturePanel()
+    asked.show_feature(hole_id, hole, features=found, mesh=mesh)
+    answers = feature_answers(hole_id, hole, found, mesh)
+    panel = FeaturePanel()
+    assert panel.known_answers(hole_id, hole, found, mesh) is None
+
+    panel.remember_answers(hole_id, hole, found, mesh, answers)
+    monkeypatch.setattr(
+        actions_module, "actions_for", lambda *_a, **_k: pytest.fail("der Kern wurde gefragt")
+    )
+    panel.show_feature(hole_id, hole, features=found, mesh=mesh)
+
+    assert panel.known_answers(hole_id, hole, found, mesh) is answers
+    assert panel.known_answers(hole_id, hole, dict(found), mesh) is None
+    assert _panel_state(panel) == _panel_state(asked)
+
+
+def test_the_waiting_panel_names_the_feature_and_offers_nothing(qt_app: QApplication) -> None:
+    """Bis die Handlungen da sind, stehen Name, Maß und ein Satz — und keine Zeile (RM-232)."""
+    from PySide6.QtWidgets import QLabel
+
+    from app.i18n import tr
+    from app.ui.panels import cavity_name, feature_measure
+
+    load_operations()
+    mesh = plate()
+    found = features.detect(mesh)
+    hole_id = next(key for key, value in found.items() if value.kind == "hole")
+    panel = FeaturePanel()
+    panel.show_feature(hole_id, found[hole_id], features=found, mesh=mesh)
+    assert panel._runs, "vorher bot das Fenster etwas an"
+
+    panel.show_pending(hole_id, found[hole_id])
+
+    texts = [label.text() for label in panel.findChildren(QLabel) if label.isVisibleTo(panel)]
+    heading = f"{cavity_name(hole_id, found[hole_id], ())}  ·  {feature_measure(found[hole_id])}"
+    assert heading in texts
+    assert tr("Die Handlungen werden ermittelt …") in texts
+    assert not panel._runs, "keine Zeile, die etwas anbietet"
+
+
 def test_a_partly_reused_panel_matches_a_fresh_one_and_tabs_like_the_eye(
     qt_app: QApplication,
 ) -> None:

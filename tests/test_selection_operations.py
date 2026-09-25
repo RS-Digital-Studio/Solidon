@@ -734,3 +734,35 @@ def test_the_draft_stands_on_the_body_and_at_a_face_but_not_at_a_hole(qt_app: QA
     assert panel._fits_the_level("draft_faces")
     panel.set_context(1, _availability(1), feature_kind="hole")
     assert not panel._fits_the_level("draft_faces")
+
+
+def test_the_operation_list_asks_for_the_height_of_its_visible_buttons(
+    qt_app: QApplication,
+) -> None:
+    """Die Liste verlangt, was ihre sichtbaren Knöpfe brauchen, nicht den Aufbaustand (RM-232).
+
+    ``QScrollArea.sizeHint`` merkt sich die Wunschhöhe des Inhalts beim ersten
+    Fragen; beim Aufbau stehen alle Handlungen da. An einer Bohrung sind es
+    drei Knöpfe, und die Liste verlangte weiter 24 Zeilen: Zusammen mit dem
+    Merkmalfenster stand der Inhalt des Auswahlfensters an der Kante seines
+    Sichtfelds, und der Rollbalken sprang an und brach alle Texte neu um.
+    Eine lange Liste bleibt bei der Grenze und rollt in sich.
+    """
+    from app.ui.selection_operations import LIST_LINES_AT_MOST
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.resize(244, 900)
+    panel.show()
+    tallest = LIST_LINES_AT_MOST * panel.scroller.fontMetrics().height()
+    panel.set_context(1, _availability(1))
+    QApplication.processEvents()
+    assert panel.scroller.sizeHint().height() <= tallest
+
+    panel.set_context(1, _availability(1), feature_kind="hole", label="Platte · Bohrung 1")
+    QApplication.processEvents()
+    content = panel.scroller.widget()
+    assert content is not None
+    wanted = content.sizeHint().height() + 2 * panel.scroller.frameWidth()
+    assert wanted < tallest, "an einer Bohrung stehen nur wenige Knöpfe"
+    assert panel.scroller.sizeHint().height() == wanted

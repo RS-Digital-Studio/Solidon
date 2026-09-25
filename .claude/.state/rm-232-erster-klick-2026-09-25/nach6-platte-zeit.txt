@@ -1,0 +1,89 @@
+fehlt Viewport _feature_geometry
+fehlt Viewport set_slot_handle
+geladen in 2.44 s
+Druckbefunde laufen noch: True
+auf Druckbefunde gewartet: 0.55 s
+obj_1 203776 10
+          0.0 +  34.8 ms ObjectTree.select_feature
+          0.0 +  34.6 ms   ObjectTree._restore
+          0.6 +  34.0 ms     MainWindow._on_feature_selected
+          0.6 +  27.6 ms       Viewport.select_feature
+          0.6 +  27.5 ms         Viewport._redraw_features
+          0.6 +  27.2 ms           Viewport._redraw_feature_patch
+         28.2 +   3.2 ms       MainWindow._update_actions
+         29.1 +   2.0 ms         SelectionOperationsPanel.set_context
+         31.5 +   3.0 ms       MainWindow._show_feature_fields
+         35.1 + 117.3 ms feature_answers [Arbeiter]
+        153.2 +  33.3 ms MainWindow._show_feature_fields
+        153.3 +  11.6 ms   FeaturePanel.show_feature
+        166.8 +  19.2 ms   MainWindow._place_from_feature_panel
+        166.8 +   7.5 ms     FeaturePanel.set_measuring
+        180.4 +   1.7 ms     PlacementFlow.set_measure_fields
+        182.2 +   2.9 ms     PlacementFlow.start
+        183.1 +   1.7 ms       PlacementFlow._request_tool
+        183.2 +   1.5 ms         PlacementFlow.redraw
+        186.1 +   2.9 ms prepare_tool [Arbeiter]
+        186.4 + 130.8 ms seat_of [Arbeiter]
+        186.5 + 116.4 ms prepare_surface [Arbeiter]
+        317.2 +   5.0 ms at_point [Arbeiter]
+        323.3 +   6.5 ms PlacementFlow._settle
+        323.4 +   6.4 ms   PlacementFlow.redraw
+hole_1         hole       synchron    34.8 ms  bis Ruhe   333.1 ms  längste Lücke   39 ms  Befunde ruhig
+          0.0 +  37.9 ms ObjectTree.select_feature
+          0.0 +  37.7 ms   ObjectTree._restore
+          0.2 +   6.1 ms     MainWindow._on_tree_selection
+          0.2 +   6.1 ms       MainWindow._on_selection
+          0.8 +   4.9 ms         FeaturePanel.set_measuring
+          6.3 +  31.4 ms     MainWindow._on_feature_selected
+          6.3 +  27.9 ms       Viewport.select_feature
+          6.3 +  27.8 ms         Viewport._redraw_features
+          6.3 +  27.5 ms           Viewport._redraw_feature_patch
+         34.3 +   2.0 ms       MainWindow._update_actions
+         38.3 +  50.1 ms feature_answers [Arbeiter]
+         89.5 +  29.9 ms MainWindow._show_feature_fields
+         89.6 +  11.5 ms   FeaturePanel.show_feature
+        101.2 +  18.3 ms   MainWindow._place_from_feature_panel
+        101.2 +   7.2 ms     FeaturePanel.set_measuring
+        114.0 +   1.7 ms     PlacementFlow.set_measure_fields
+        115.7 +   2.7 ms     PlacementFlow.start
+        116.5 +   1.7 ms       PlacementFlow._request_tool
+        119.5 +  22.3 ms seat_of [Arbeiter]
+        141.8 +   4.7 ms at_point [Arbeiter]
+        167.1 +   6.5 ms PlacementFlow._settle
+        167.1 +   6.4 ms   PlacementFlow.redraw
+hole_2         hole       synchron    37.9 ms  bis Ruhe   173.6 ms  längste Lücke   40 ms  Befunde ruhig
+hole: bis Ruhe Median 173.6 ms (ohne ersten), erster 333.1 ms; Lücke Median 40 ms, max 40 ms
+  ObjectTree._restore                              44.8 ms je Klick   2.5 Aufrufe
+  MainWindow._on_feature_selected                  39.4 ms je Klick   2.5 Aufrufe
+  ObjectTree.select_feature                        36.3 ms je Klick   1.0 Aufrufe
+  MainWindow._show_feature_fields                  33.8 ms je Klick   2.0 Aufrufe
+  Viewport.select_feature                          27.9 ms je Klick   2.5 Aufrufe
+  Viewport._redraw_features                        27.8 ms je Klick   3.5 Aufrufe
+  Viewport._redraw_feature_patch                   27.4 ms je Klick   3.5 Aufrufe
+  MainWindow._place_from_feature_panel             18.7 ms je Klick   1.0 Aufrufe
+  MainWindow._update_actions                       11.8 ms je Klick   4.5 Aufrufe
+  FeaturePanel.show_feature                        11.6 ms je Klick   1.0 Aufrufe
+  FeaturePanel.set_measuring                       10.6 ms je Klick   3.0 Aufrufe
+  PlacementFlow.redraw                              9.6 ms je Klick   7.0 Aufrufe
+  PlacementFlow._settle                             6.5 ms je Klick   1.0 Aufrufe
+  MainWindow._on_tree_selection                     5.1 ms je Klick   2.5 Aufrufe
+  MainWindow._on_selection                          5.1 ms je Klick   2.5 Aufrufe
+  SelectionOperationsPanel.set_context              4.2 ms je Klick   4.5 Aufrufe
+  PlacementFlow.start                               2.8 ms je Klick   1.0 Aufrufe
+  Viewport.set_gizmo                                1.8 ms je Klick  10.5 Aufrufe
+  PlacementFlow.set_measure_fields                  1.7 ms je Klick   1.0 Aufrufe
+  PlacementFlow._request_tool                       1.7 ms je Klick   1.0 Aufrufe
+  Viewport._attach_slot_handle                      0.5 ms je Klick   2.0 Aufrufe
+  Viewport.select                                   0.3 ms je Klick   3.5 Aufrufe
+  PlacementFlow._set_values                         0.1 ms je Klick   2.0 Aufrufe
+  PlacementFlow._begin_at_feature                   0.1 ms je Klick   1.0 Aufrufe
+  MainWindow._body_facts_of_selection               0.0 ms je Klick   8.0 Aufrufe
+  MainWindow._lid_reason                            0.0 ms je Klick   4.0 Aufrufe
+  MainWindow._on_features_selected                  0.0 ms je Klick   2.5 Aufrufe
+  FeaturePanel._answers_for                         0.0 ms je Klick   1.0 Aufrufe
+  feature_answers [Arbeiter]             2 Aufrufe  zusammen    167.4 ms  größter   117.3 ms
+  seat_of [Arbeiter]                     2 Aufrufe  zusammen    153.1 ms  größter   130.8 ms
+  prepare_surface [Arbeiter]             2 Aufrufe  zusammen    116.4 ms  größter   116.4 ms
+  at_point [Arbeiter]                    2 Aufrufe  zusammen      9.7 ms  größter     5.0 ms
+  prepare_tool [Arbeiter]                2 Aufrufe  zusammen      3.7 ms  größter     2.9 ms
+  bore_entrance [Arbeiter]               2 Aufrufe  zusammen      0.1 ms  größter     0.0 ms

@@ -774,3 +774,34 @@ def test_what_is_drawn_in_front_is_picked_in_front(renderer: Renderer) -> None:
     renderer.render()
     assert renderer.pick_item(x, y) is body, "ohne keep_in_front gewinnt die Fläche davor"
     assert plain is not None
+
+
+def test_render_orders_a_frame_and_render_now_draws_it_at_once() -> None:
+    """Am sichtbaren Fenster bestellt ``render`` das Bild, ``render_now`` zeichnet sofort (RM-232).
+
+    ``force_draw`` ist ``repaint()``, und das malt das ganze Fenster auf der
+    Stelle — auch ein Auswahlfenster, dessen Layout noch aussteht: Nach einem
+    Bohrungsklick stand es 120 ms halb gelegt auf dem Schirm. ``update()``
+    stellt das Bild in Qts Malrunde nach den Layouts. Stellvertreter statt
+    Fenster: Gefragt ist, welcher Weg genommen wird, nicht das Bild.
+    """
+    from types import SimpleNamespace
+
+    calls: list[str] = []
+    canvas = SimpleNamespace(
+        request_draw=lambda _draw: calls.append("bestellt"),
+        force_draw=lambda: calls.append("sofort"),
+    )
+    widget = SimpleNamespace(isVisible=lambda: True, update=lambda: calls.append("Malrunde"))
+    stand_in = SimpleNamespace(widget=widget, _canvas=canvas, _draw=lambda: calls.append("direkt"))
+
+    GfxRenderer.render(stand_in)  # type: ignore[arg-type]
+    assert calls == ["bestellt", "Malrunde"]
+    calls.clear()
+    GfxRenderer.render_now(stand_in)  # type: ignore[arg-type]
+    assert calls == ["bestellt", "sofort"]
+    calls.clear()
+    windowless = SimpleNamespace(widget=None, _draw=lambda: calls.append("direkt"))
+    GfxRenderer.render(windowless)  # type: ignore[arg-type]
+    GfxRenderer.render_now(windowless)  # type: ignore[arg-type]
+    assert calls == ["direkt", "direkt"], "ohne Fenster zeichnen beide sofort"

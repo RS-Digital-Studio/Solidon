@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Final, override
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QGridLayout,
@@ -281,6 +281,46 @@ def feature_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, .
     )
 
 
+#: Wie viele Schriftzeilen die Operationsliste höchstens verlangt — dieselbe
+#: Grenze, die ``QScrollArea.sizeHint`` selbst zieht. Darüber rollt die Liste
+#: in sich, statt das Auswahlfenster zu strecken.
+LIST_LINES_AT_MOST: Final = 24
+
+
+class _ListScroller(QScrollArea):
+    """Der Rollbereich der Operationsliste — so hoch, wie die sichtbaren Knöpfe es verlangen.
+
+    **Qt fragt seinen Inhalt nur einmal** (RM-232, 25.09.2026):
+    ``QScrollArea.sizeHint`` merkt sich die Wunschhöhe des Inhalts beim
+    ersten Fragen, und das war beim Aufbau, als alle Handlungen sichtbar
+    waren. An einer Bohrung stehen darin drei Knöpfe, 81 Punkte hoch; die
+    Liste verlangte weiter 384. Zusammen mit dem Merkmalfenster lag der
+    Inhalt des Auswahlfensters damit an der Kante seines Sichtfelds (1231
+    gegen 1225 Punkte an der dichten Platte): Kamen die Maße im Bild, sprang
+    der Rollbalken an, das Fenster wurde schmaler, alle Texte brachen neu um
+    — und blieben so. Hier wird der Inhalt bei jeder Frage gefragt, und
+    jeder Umbau seines Layouts meldet die neue Höhe nach oben weiter.
+    """
+
+    @override
+    def sizeHint(self) -> QSize:
+        hint = super().sizeHint()
+        content = self.widget()
+        if content is None:
+            return hint
+        tallest = LIST_LINES_AT_MOST * self.fontMetrics().height()
+        wanted = content.sizeHint().height() + 2 * self.frameWidth()
+        return QSize(hint.width(), min(wanted, tallest))
+
+    @override
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # ``setWidget`` hat den Rollbereich selbst als Filter am Inhalt
+        # eingetragen; ein neu gelegter Inhalt heißt eine neue Wunschhöhe.
+        if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
+            self.updateGeometry()
+        return super().eventFilter(watched, event)
+
+
 class SelectionOperationsPanel(QWidget):
     """Alle Handlungen für die aktuelle Auswahl, dauerhaft aufgebaut."""
 
@@ -447,7 +487,7 @@ class SelectionOperationsPanel(QWidget):
             self._groups[title] = (section, toggle, tuple(buttons))
         content_layout.addStretch(1)
 
-        self.scroller = QScrollArea(self)
+        self.scroller = _ListScroller(self)
         self.scroller.setWidget(content)
         self.scroller.setWidgetResizable(True)
         self.scroller.setFrameShape(QScrollArea.Shape.NoFrame)

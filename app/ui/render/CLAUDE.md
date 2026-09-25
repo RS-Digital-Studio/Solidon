@@ -103,10 +103,14 @@ Drehringe an. Die übrigen Gizmos behalten ihre Drehfunktion.
   Hervorhebung entsteht kein zusätzliches Bild; ein laufender Zug behält
   seine Hervorhebung und endet erst mit dem Loslassen.
 * **Zeichnen an einer Stelle.** Kein Aufruf hier zeichnet von selbst;
-  `render()` ruft der Viewport in `_draw`. Am Widget zeichnet `render()`
-  **synchron** (`force_draw`), sobald es sichtbar ist — `request_draw` allein
-  stellte nur einen Wunsch in die Ereignisschleife, und eine Messung zählte
-  dann Wünsche statt Bilder. Ohne Fenster zeichnet `screenshot()` selbst.
+  `render()` ruft der Viewport in `_draw`. Am sichtbaren Widget **bestellt**
+  `render()` das Bild für Qts Malrunde (`update()`), `render_now()` zeichnet
+  sofort (`force_draw`) — das eine für jedes Bild, das andere nur, wo es in
+  derselben Runde auf dem Schirm stehen muss (das erste Bild einer Vorschau).
+  `force_draw` ist `repaint()` und malt das ganze Fenster mit, auch halb
+  gelegte Nachbarn (RM-232, Regel in `ansicht.md`). Wer Bilder zählen will,
+  zählt `render_now` oder die Malereignisse, nicht die Bestellungen. Ohne
+  Fenster zeichnen beide sofort, und `screenshot()` zeichnet selbst.
 * **Das Achsenkreuz hat eine orthografische Kamera** (`AXES_VIEW_SPAN`,
   Pfeillängen von Rand zu Rand des Feldes). Mit Perspektive war ein Pfeil zur
   Kamera hin ein Viertel länger als einer quer dazu, und die Buchstaben
@@ -248,8 +252,8 @@ Aufbauprofil.
 Drei Dinge daran haben je einen Lauf gekostet, bevor die Zahlen stimmten, und
 gelten weiter: rendercanvas zeigt ein Qt-Widget von sich aus über eine
 **Bitmap** an (zurücklesen, `QPainter`; 20 ms je Bild — deshalb
-`present_method="screen"`), `render()` am Widget muss **synchron** zeichnen
-(`force_draw`), sonst zählt eine Messung Wünsche statt Bilder, und das erste
+`present_method="screen"`), eine Messung zählt Bilder und nicht Wünsche
+(`render_now`, seit `render()` am Widget bestellt), und das erste
 Bild eines Netzes übersetzt die Shader — am 3,15-Millionen-Baum vier
 Sekunden, davon rund eine für die Pipelines, eine für die Punktnormalen, die
 pygfx auf der CPU rechnet, und eine für den Pufferupload; jedes weitere Bild

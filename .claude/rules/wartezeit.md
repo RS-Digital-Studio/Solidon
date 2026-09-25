@@ -1086,6 +1086,22 @@ Zwei Sätze, die dazugehören:
   läuft jede Rechnung an ihr unter ihrem Schloss (`on_the_copy`). Gemessen an
   der dichten Platte (204 000 Dreiecke), Bohrung zu Bohrung am echten
   Fenster: 522 → 352 ms bis zur Fläche.
+* **Und mit den Merkern des Originals** (RM-232, 25.09.2026). Eine Kopie ohne
+  Cache rechnete Nachbarschaft, Kanten und Normalen neu, die das Original seit
+  der Erkennung hat; `copy(include_cache=True)` übernimmt sie flach, und die
+  Felder darin sind schreibgeschützt. Die Kernauskünfte einer Bohrung an der
+  dichten Platte kosteten an der leeren Kopie 529 ms, an der mitgenommenen
+  264 — die Kopie selbst beide Male 3 ms.
+* **Was das Merkmalfenster den Kern fragt, fragt an einem großen Körper der
+  Arbeiter** (RM-232). Ab `ANSWERS_IN_WORKER_FROM` Dreiecken laufen
+  Hohlraumkette, Handlungen und Gleichartige in `_FeatureAnswersWorker` an
+  der Arbeiterkopie; darunter kosten sie unter 50 ms, und ein Wartezustand
+  flackerte nur. Bis zur Antwort steht, was feststeht (Name, Maß, ein Satz),
+  und nichts, das etwas anböte. Die Antwort gilt ihrem Merkmal und ihrer
+  Auswertung — auch die eines abgelösten Arbeiters wird gemerkt, gebaut wird
+  nur, was noch gewählt ist; ein Absturz ist ein Fehlerbericht und kein
+  ewiges Warten. Erster Bohrungsklick an der Platte: 172 → 36 ms im
+  Hauptfaden, längste Lücke 171 → 52 ms.
 
 Und die Vorbereitung selbst zählt, statt zu verschneiden:
 `placement._patch_area` baut die Fläche aus ihrem Rand (Kanten mit einem

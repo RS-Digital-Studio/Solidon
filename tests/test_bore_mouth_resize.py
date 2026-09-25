@@ -496,7 +496,7 @@ def test_moving_a_bore_without_the_entrance_reports_the_neighbour_it_opens(
     Die Nachbarprüfung lief nur bei einer Vergrößerung, und ``drill`` gab sein
     Werkzeug nicht heraus: Eine versetzte Bohrung, die in die Nachbarbohrung
     hineinläuft, kam ohne ein Wort (Review 22.09.2026, A3; am Halter und am
-    Bohrerhalter aus ``F:\\3D Dateien`` nachgestellt). Der Satz nennt die
+    Bohrerhalter aus ``F:\3D Dateien`` nachgestellt). Der Satz nennt die
     Stelle als Ausweg, nicht den Durchmesser.
     """
     mesh, features, hole = _sloping_bore()

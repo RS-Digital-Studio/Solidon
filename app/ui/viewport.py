@@ -7183,8 +7183,15 @@ class Viewport(QWidget):
         # sich nichts geändert hat.
         self._order_by_depth()
         self._layout_feature_labels()
-        self.renderer.render()
-        if self._difference_is_ready():
+        ready = self._difference_is_ready()
+        if ready and self._displayed_difference is not self._difference:
+            # **Die Freigabe hängt am gezeigten Bild** (``differenceApplied``):
+            # Das erste Bild einer Vorschau steht, bevor sie gemeldet wird.
+            # Jedes andere bestellt der Renderer für die nächste Malrunde.
+            self.renderer.render_now()
+        else:
+            self.renderer.render()
+        if ready:
             self._displayed_difference = self._difference
             self.differenceApplied.emit(self._difference)
 

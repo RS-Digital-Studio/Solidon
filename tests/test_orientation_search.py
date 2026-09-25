@@ -625,7 +625,7 @@ def test_the_search_stands_a_sleeve_on_its_wide_rim_despite_the_proxy(
 def _umbrella() -> MeshData:
     """Das Schirmdach des Getränkehalters (RM-190), aus den Maßen seines Skripts.
 
-    Roberts eigener Entwurf (``F:\\3D Dateien\\3D Drucker\\02_Getraenkehalter``,
+    Roberts eigener Entwurf (``F:\3D Dateien\3D Drucker\02_Getraenkehalter``,
     ``Getraenkehalter_mit_Schirm.py``): ein flaches Kegeldach mit Rand, Nabe,
     Gleitbohrung, einer Aussparung hinten und acht Lüftungslöchern — hier mit
     denselben Maßen neu gebaut, nicht aus der Datei gelesen.

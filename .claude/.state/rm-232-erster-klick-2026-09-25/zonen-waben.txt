@@ -1,0 +1,14 @@
+   9  QWidget:overlayCard Move
+   3  CardColumn:cardColumn Move
+   1  CardColumn:cardColumn Resize 400x454->400x458
+   1  CardColumn:cardColumn Resize 400x458->400x459
+   1  QWidget:overlayCard Resize 300x424->300x597
+   1  QWidget:overlayCard Resize 300x597->300x680
+   1  QWidget:overlayCard Resize 300x680->300x735
+   1  CardColumn:cardColumn Resize 400x459->400x460
+   1  QWidget:overlayCard Resize 300x735->300x775
+   1  QWidget:overlayCard Resize 300x775->300x814
+   1  QWidget:overlayCard Resize 300x814->300x826
+   1  QWidget:overlayCard Resize 300x826->300x830
+   1  QWidget:overlayCard Resize 300x830->300x831
+   1  QWidget:overlayCard Resize 300x831->300x832

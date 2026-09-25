@@ -1,0 +1,7 @@
+geladen in 0.98 s
+Druckbefunde laufen noch: True
+auf Druckbefunde gewartet: 2.67 s
+obj_1 7956 31
+hole_1         hole       synchron    51.3 ms  bis Ruhe   274.6 ms  längste Lücke   52 ms  Befunde ruhig
+hole_2         hole       synchron    35.3 ms  bis Ruhe    61.1 ms  längste Lücke   37 ms  Befunde ruhig
+hole: bis Ruhe Median 61.1 ms (ohne ersten), erster 274.6 ms; Lücke Median 37 ms, max 52 ms

@@ -1,0 +1,6 @@
+  24  main:239 <- <module>:288 <- _run_code:88 <- _run_module_code:98 <- run_path:294
+   2  set_measure_fields:1516 <- _place_from_feature_panel:16389 <- _row_in_view:7642 <- request_in_view:8129 <- _show_feature_fields:14896
+   2  _request_tool:2967 <- start:1835 <- _place_from_feature_panel:16396 <- _row_in_view:7642 <- request_in_view:8129
+   2  start:1855 <- _place_from_feature_panel:16396 <- _row_in_view:7642 <- request_in_view:8129 <- _show_feature_fields:14896
+   2  done:3036 <- <lambda>:3133 <- main:239 <- <module>:288 <- _run_code:88
+   2  _settle:3381 <- done:2581 <- <lambda>:3133 <- main:239 <- <module>:288

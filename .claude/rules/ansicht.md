@@ -1161,6 +1161,53 @@ mehr je Bild dreht (`render/CLAUDE.md`), kostet eine Bewegung am
 Platzierungsgriff 13,6 → 8,8 ms und ein Takt der 3D-Maus an 815 000
 Dreiecken 16,7 → 8,7 ms.
 
+### Die Ansicht bestellt ihr Bild — und nichts über ihr malt vorzeitig (RM-232, 25.09.2026)
+
+Robert: „es werden auch beim auswahlpanel oder dem panel von der bohrung in
+dem viewport anderes bzw das im viewport an einer anderen stelle gezeigt
+bevor die ansicht wieder passt". Bild für Bild aufgenommen, stimmte das
+dreifach: Das Auswahlfenster stand nach jedem Bohrungsklick einmal gequetscht
+da (Zeilen höher als ihr Platz, ohne Überschrift, 90–150 ms), die Karte
+*Bohrung ändern* stand zuerst oben rechts neben dem Prüfbericht und sprang
+dann neben die Bohrung, und ein Rollbalken schaltete sich an und brach alle
+Texte neu um. Vier Sätze gegen Zwischenbilder:
+
+* **`render()` bestellt, `render_now()` zeichnet sofort.** `force_draw` ist
+  `repaint()`, und das malt das **ganze Fenster** auf der Stelle — auch
+  Nachbarn, deren Layout noch aussteht. Am sichtbaren Fenster stellt
+  `render()` das Bild in Qts Malrunde nach den Layouts. Sofort zeichnet nur,
+  wer das Bild in derselben Runde braucht: das erste Bild einer Vorschau,
+  weil die Freigabe von *Übernehmen* daran hängt (`differenceApplied`).
+  Picks laufen über einen eigenen Durchgang und hängen am angezeigten Bild
+  nicht.
+* **Ein Widget über der Grafikfläche ein-, aus- oder nach vorn zu holen
+  malt ebenfalls sofort.** `show`, `hide`, `setVisible`, `raise_` an einem
+  Kind der Ansicht über der nativen wgpu-Fläche — das ist Qt, kein Aufruf
+  von uns. Wer es tut, hat vorher alles umgestellt, was im selben Bild
+  stehen soll: das Merkmalfenster auf „Messen" **vor** dem Start der
+  Maßgruppe (`MainWindow._place_from_feature_panel`), die Layouts gelegt
+  (`MainWindow._lay_out_now`), und eine Karte, deren Platz noch gerechnet
+  wird, bleibt verborgen (`PlacementFlow._seat_waits`) — auch ihr `raise_`.
+* **Ein neuer Inhalt legt seine Layouts sofort.** Die Höhe des
+  Auswahlfensters pflanzt sich über vier Stufen fort (Merkmalfenster,
+  Rollinhalt, Rollbereich, Knopfzeile), jede in einer eigenen
+  Ereignisrunde, und die Malrunde kam dazwischen. `_lay_out_now` arbeitet
+  die Anfragen am Ende jedes Aufbaus ab (`LAYOUT_HOPS`).
+* **Ein `QScrollArea` fragt seinen Inhalt nur einmal.** Seine Wunschhöhe
+  stammt vom ersten Fragen und bleibt stehen; die Operationsliste verlangte
+  so an einer Bohrung weiter die 384 Punkte vom Aufbau, als alle Handlungen
+  sichtbar waren, für drei Knöpfe von 81. Ein Rollbereich, dessen Inhalt
+  wechselt, fragt ihn bei jeder Frage neu und meldet jeden Umbau nach oben
+  (`selection_operations._ListScroller`).
+
+**Gemessen wird an den Malereignissen, nicht an Bildschirmfotos.** Eine
+Aufnahme des Fensters kostet bei 3413 Punkten Breite rund 50 ms und
+verschiebt die Folge, die sie aufnehmen soll. Der Prüfstand zählt die
+`Paint`-Ereignisse des Rollinhalts und prüft bei jedem, ob die Höhe schon zu
+seinem Minimum und die Knopfzeile zu ihrer Wunschhöhe passt; der Stapel zeigt,
+wer gemalt hat (`.claude/.state/rm-232-erster-klick-2026-09-25/scenario_malen.py`).
+Vorher: je Bohrungsklick zwei bis sechs gequetschte Bilder; nachher keines.
+
 ### Jeder Ansichts-Setter prüft auf Änderung
 
 Sieben von acht Szenenaufbauten waren unnötig — ein Klick auf einen Körper,

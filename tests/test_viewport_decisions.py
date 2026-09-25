@@ -8799,3 +8799,36 @@ def test_the_chamfer_marks_say_one_and_two_and_the_angle_stands_at_the_reference
     angled = chamfer_mark_texts(marks, {"mode": "distance_angle", "angle": 30.0})
     assert angled[0] == f"1 · {length(2.0)} · 30°"
     assert angled[1] == f"2 · {length(1.5)}", "der Winkel steht nur an der Bezugsfläche"
+
+
+def test_the_first_frame_of_a_preview_is_drawn_before_it_is_reported() -> None:
+    """Die Freigabe von *Übernehmen* hängt am gezeigten Bild (RM-232).
+
+    Seit ``render`` am Fenster nur bestellt, würde ``differenceApplied`` eine
+    Vorschau melden, die noch nicht auf dem Schirm steht. Das erste Bild einer
+    fertigen Vorschau zeichnet die Ansicht deshalb sofort (``render_now``);
+    jedes weitere — Kamera, Auswahl — bestellt sie.
+    """
+    from app.ui.viewport import Viewport
+
+    difference = object()
+    drawn: list[str] = []
+    reported: list[object] = []
+    view = SimpleNamespace(
+        renderer=SimpleNamespace(
+            render=lambda: drawn.append("bestellt"), render_now=lambda: drawn.append("sofort")
+        ),
+        _order_by_depth=lambda: None,
+        _layout_feature_labels=lambda: None,
+        _difference_is_ready=lambda: True,
+        _difference=difference,
+        _displayed_difference=None,
+        differenceApplied=SimpleNamespace(emit=reported.append),
+    )
+
+    Viewport._draw(view)  # type: ignore[arg-type]
+    Viewport._draw(view)  # type: ignore[arg-type]
+
+    assert drawn == ["sofort", "bestellt"]
+    assert reported == [difference, difference]
+    assert view._displayed_difference is difference

@@ -523,7 +523,21 @@ class Renderer(ABC):
     # --- Bild ---------------------------------------------------------------------
 
     @abstractmethod
-    def render(self) -> None: ...
+    def render(self) -> None:
+        """Das Bild bestellen; am sichtbaren Fenster zeichnet es die nächste Malrunde.
+
+        Einmal je Ereignisrunde und nach den Layouts des Fensters — ein
+        sofortiges Bild malte das ganze Fenster mit, auch halb umgebaute
+        Nachbarn (``GfxRenderer.render``). Wer das Bild in derselben Runde auf
+        dem Schirm braucht, nimmt :meth:`render_now`.
+        """
+
+    def render_now(self) -> None:
+        """Das Bild sofort zeichnen — für den, der es in derselben Runde braucht.
+
+        Ohne Fenster ist :meth:`render` schon sofort; das gilt dann für beide.
+        """
+        self.render()
 
     @abstractmethod
     def screenshot(self) -> np.ndarray:

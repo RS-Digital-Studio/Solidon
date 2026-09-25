@@ -1,0 +1,1600 @@
+........................................................................ [ 24%]
+...................................FFFF................................. [ 48%]
+........................................................................ [ 73%]
+........................................................................ [ 97%]
+.......                                                                  [100%]
+================================== FAILURES ===================================
+__ test_first_measure_edit_releases_split_but_passive_measures_do_not[None] ___
+
+active = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000021C607431C0>
+
+    @pytest.mark.parametrize("active", [None, "split", "measure", "transform"])
+    def test_first_measure_edit_releases_split_but_passive_measures_do_not(
+        active: str | None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Die echte Host-Verdrahtung gibt den Zeiger erst bei der ersten Eingabe weiter."""
+        from types import SimpleNamespace
+    
+        from app.core.bootstrap import load_operations
+        from app.ui import placement_flow
+    
+        load_operations()
+        closed: list[str] = []
+        measuring: list[dict[str, Any]] = []
+    
+        class View:
+            """Schwache Referenz ohne ein Fenster für die tatsächliche Anschlussmethode."""
+    
+        view: Any = View()
+        view.tools = SimpleNamespace(active=lambda: active, close_tool=lambda: closed.append("split"))
+        view._quiet_command_allowed = lambda: True
+        view._quiet_placement = None
+        view._drop_feature_preview = lambda: None
+        view.end_quiet_placement = lambda: None
+        view.object_tree = SimpleNamespace(selected=lambda: "obj_1", selected_feature=lambda: "hole")
+        action = SimpleNamespace(fixed={}, fields=[])
+        view.feature_panel = SimpleNamespace(
+            measure_fields=lambda *args, **kwargs: (action, object(), {}),
+            measure_group=lambda op: None,
+            set_measuring=lambda enabled, **kwargs: measuring.append(kwargs),
+        )
+        view.session = SimpleNamespace(
+            last_result=None, project=SimpleNamespace(document=object()), result_current=False
+        )
+        view.viewport = SimpleNamespace(set_feature_gizmo_blocked=lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            placement_flow,
+            "PlacementFlow",
+            lambda *args, **kwargs: SimpleNamespace(
+                active=True, set_measure_fields=lambda *args, **kwargs: None, start=lambda: None
+            ),
+        )
+    
+>       MainWindow._place_from_feature_panel(view, "resize_hole", {"at_feature": "hole"})
+
+tests\test_ui.py:376: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_ui.test_first_measure_edit_releases_split_but_passive_measures_do_not.<locals>.View object at 0x0000021C28995010>
+op = 'resize_hole', params = {'at_feature': 'hole'}, editing = False
+
+    def _place_from_feature_panel(
+        self, op: str, params: dict[str, Any], *, editing: bool = False
+    ) -> None:
+        """Eine passive Maßgruppe bindet beim ersten Eingriff ihren vollständigen Auftrag."""
+        from app.ui.panels import feature_field_values, refresh_feature_fields
+        from app.ui.placement_flow import PlacementFlow, QuietHost
+    
+        if not REGISTRY.has(op) or not self._quiet_command_allowed():
+            return
+        object_id = self.object_tree.selected()
+        if object_id is None:
+            self.announce(_needs_objects(0))
+            return
+        # **Dieselbe Stelle, dieselbe Handlung: die Maße stehen schon.** Die
+        # Wiederherstellung einer Auswahl meldet sie wie neu, und ein Neubau
+        # der Maßgruppe verwarf einen begonnenen Entwurf samt seiner Werte
+        # (gemessen am 21.09.2026, ``test_ui``).
+        running = self._quiet_placement
+        if (
+            running is not None
+            and running.active
+            and running.spec_of().name == op
+            and self._quiet_target == (object_id, self.object_tree.selected_feature())
+        ):
+            return
+        self._drop_feature_preview()
+        self.end_quiet_placement()
+        result = self.session.last_result
+        body = result.scene.objects.get(object_id) if result is not None else None
+        feature_id = str(params.get("at_feature") or self.object_tree.selected_feature() or "")
+        built = self.feature_panel.measure_fields(
+            op, self.viewport, feature=body.features.get(feature_id) if body is not None else None
+        )
+        if built is None:
+            return
+        action, fields, editors = built
+        spec = REGISTRY.get(op)
+        document = self.session.project.document
+        target = (object_id, self.object_tree.selected_feature())
+        step = getattr(action, "step", None)
+        operation = self.session.history.operation(step) if step is not None else None
+        original = deepcopy(operation.params) if operation is not None else {}
+        untouched_defaults = {
+            entry.name: entry.default for entry in spec.params.spec() if entry.name not in original
+        }
+        inputs = tuple(operation.inputs) if operation is not None else (object_id,)
+        group = self.feature_panel.measure_group(op) if operation is None else None
+        members = tuple(member.target for member in group.members) if group is not None else ()
+        every = QCheckBox(fields) if len(members) > 1 else None
+        if every is not None:
+            every.setText(tr("Auf alle {count} gleichartigen anwenden").format(count=len(members)))
+            every.setAccessibleDescription(
+                tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
+            )
+        window_ref = weakref.ref(self)
+        scope_ref = weakref.ref(every) if every is not None else None
+        editor_refs = {name: weakref.ref(editor) for name, editor in editors.items()}
+        # **Wer gerade liest, schreibt nicht zurück.** Jeder Tastendruck geht
+        # als Wert in den Entwurf, und zwei Rückwege — die Maßgruppe im Bild
+        # und das Merkmalfenster — schrieben ihn synchron und formatiert in
+        # dasselbe Feld, mit dem Cursor an der alten Stelle: Aus „8,00" wurde
+        # „8,00,00 mm" und daraus 800 Millimeter (gemessen am 21.09.2026 an
+        # zehn Fenstertests). Der Fokus verrät den Tipper offscreen nicht;
+        # der Aufrufer weiß es.
+        reading = {"fields": False}
+    
+        def current_editors() -> dict[str, QWidget]:
+            return {
+                name: editor
+                for name, reference in editor_refs.items()
+                if (editor := reference()) is not None and isValid(editor)
+            }
+    
+        def prepare(name: str, values: Mapping[str, Any]) -> _PreviewOrder | None:
+            window = window_ref()
+            host = host_ref()
+            if (
+                window is None
+                or host is None
+                or window._quiet_host is not host
+                or name != op
+                or window.session.project.document is not document
+                or window.session.last_result is not result
+                or not window.session.result_current
+            ):
+                return None
+            if step is not None:
+                return _PreviewOrder(change_op=step, change_values={**original, **values})
+            scope = scope_ref() if scope_ref is not None else None
+            if scope is not None and isValid(scope) and scope.isChecked():
+                return window._prepare_group_order(
+                    op,
+                    values,
+                    members,
+                    object_id=object_id,
+                    result=result,
+                    selected_feature=feature_id,
+                )
+            if op == "slot_hole" and feature_id:
+                changed = window._prepare_slot_change(
+                    feature_id, values, object_id=object_id, result=result
+                )
+                if changed is not None:
+                    return changed
+            if op == "resize_hole" and feature_id:
+                pulled = window.viewport.waiting_slot_drag(feature_id)
+                if pulled is not None and window._diameter_changed(op, values):
+                    return window._slot_with_width(feature_id, pulled, values, inputs)
+            return _PreviewOrder(
+                drafts=(OperationDraft(op=op, inputs=inputs, params=dict(values)),)
+            )
+    
+        def apply_placement(values: Mapping[str, Any]) -> bool:
+            window = window_ref()
+            if window is None or prepare(op, values) is None:
+                return False
+            return window._apply_placed_feature(op, values)
+    
+        host = QuietHost(
+            {**dict(action.fixed), **params},
+            apply_placement,
+            known=[field.name for field in spec.params.spec()],
+        )
+        host.requires_displayed_preview = True
+        host_ref = weakref.ref(host)
+    
+        def current_preview(defer: bool = False) -> bool:
+            """Die Frage nach der Freigabe — und mit ``defer`` der wartende Klick."""
+            window = window_ref()
+            host = host_ref()
+            if host is None:
+                return False
+            order = prepare(op, host.values())
+            return (
+                window is not None
+                and order is not None
+                and window._preview_can_apply(host, order, then=host.accept if defer else None)
+            )
+    
+        def defer_accept() -> None:
+            """Ein Klick vor der Vorschau wartet auf sie (``QuietHost.preview_defer``)."""
+            current_preview(defer=True)
+    
+        host.preview_check = current_preview
+        # ``QuietHost`` kennt den Haken noch nicht als Feld (Paket E:
+        # ``preview_defer`` an ``PlacementHost`` und ``QuietHost.accept``).
+        host.preview_defer = defer_accept
+        flow = PlacementFlow(host, self, lambda: spec, lambda: inputs, change_op=step)
+        self._quiet_host = host
+        self._quiet_placement = flow
+        self._quiet_target = target
+        self._quiet_order = prepare
+        self.viewport.set_feature_gizmo_blocked(op != "slot_hole", knobs=True)
+    
+        def show_values() -> None:
+            window = window_ref()
+            host = host_ref()
+            if host is None:
+                return
+            order = prepare(op, host.values())
+            if window is None or order is None:
+                return
+            if op == "slot_hole" and host.begun:
+                window._reshape_slot_from_values(host.values())
+            if not reading["fields"]:
+                window.feature_panel.take_values(op, host.values(), arm=False)
+            previous = window._preview_approval
+            approval = window._set_preview_order(host, order)
+            if not host.begun:
+                # **Gebunden, nicht gerechnet.** Beim Aufbau der Maßgruppe
+                # stehen die gemessenen Werte im Träger, und eine Vorschau
+                # damit zeigte nur, was schon da ist — mit einem Band „Keine
+                # Vorschau: Die Bohrung hat bereits diesen Durchmesser" als
+                # Absagegrund (Review Fenster #4). Die Uhr stellt der erste
+                # Zug oder die erste getippte Zahl (``editStarted``).
+                return
+            window._feature_pending = (op, dict(host.values()))
+            if approval is not previous:
+                window._feature_preview.start()
+    
+        def read_fields(*_ignored: Any, interpret: bool = False) -> bool:
+            window, host = window_ref(), host_ref()
+            if window is None or host is None or window._quiet_host is not host:
+                return False
+            editors = current_editors()
+            if len(editors) != len(editor_refs):
+                return False
+            if interpret:
+                for editor in editors.values():
+                    spins = (
+                        [editor]
+                        if isinstance(editor, QAbstractSpinBox)
+                        else editor.findChildren(QAbstractSpinBox)
+                    )
+                    for spin in spins:
+                        if not spin.isVisibleTo(editor):
+                            continue
+                        # **Nur, was getippt wurde, wird neu gelesen.** Ein Feld
+                        # zeigt zwei Nachkommastellen; ``interpretText`` machte
+                        # aus einer gemessenen Richtung mit Rauschen oder der
+                        # Breite 9,000002 die gezeigte Zahl, der Entwurf galt als
+                        # geändert, das Werkzeug wurde neu gebaut, und der Klick
+                        # auf *Übernehmen* verfiel still (24.09.2026, Schaber).
+                        line = spin.lineEdit()
+                        if line is not None and not line.isModified():
+                            continue
+                        if not spin.hasAcceptableInput():
+                            spin.setFocus()
+                            window.announce(tr("Geben Sie eine gültige Zahl ein."))
+                            return False
+                        spin.interpretText()
+            try:
+                values = feature_field_values(
+                    action.fields,
+                    editors,
+                    feature_id=str(params.get("at_feature")) if params.get("at_feature") else None,
+                )
+            except AppError as exc:
+                host.block_apply(str(exc))
+                return False
+            if operation is not None:
+                # **Nicht angezeigte Werte bleiben unverändert im Auftrag**
+                # (``bore_action``). Ein Feld, das der Schritt nie trug und das
+                # nur seine Vorgabe zeigt — *Langloch* an einer runden
+                # Bohrung —, schriebe sonst einen neuen Wert in einen alten
+                # Schritt (gemessen am 21.09.2026 an zehn Fenstertests). Was
+                # der Kunde anfasst, weicht von der Vorgabe ab und geht mit.
+                values = {
+                    name: value
+                    for name, value in values.items()
+                    if name in original or untouched_defaults.get(name, _NO_DEFAULT) != value
+                }
+            reading["fields"] = True
+            try:
+                # **Eine getippte Koordinate führt die Stelle** — dieselbe
+                # Regel wie am Panelfeld (``_on_feature_values_changed``):
+                # Innerhalb der Fläche wandern Maßlinien und Werkzeug mit,
+                # sonst schrieb das nächste Neuzeichnen die Flächenposition
+                # über die Zahl zurück (gemessen am 21.09.2026, ``test_ui``).
+                flow = window._quiet_placement
+                previous_values = host.values()
+                axes = ("x", "y", "z")
+                moved = all(
+                    isinstance(values.get(axis), int | float)
+                    and isinstance(previous_values.get(axis), int | float)
+                    for axis in axes
+                ) and any(
+                    not is_close(float(values[axis]), float(previous_values[axis])) for axis in axes
+                )
+                if moved and flow is not None and flow.active:
+                    if flow.move_to(
+                        tuple(float(values[axis]) for axis in axes), on_plane_only=True
+                    ):
+                        host.take_placement({k: v for k, v in values.items() if k not in axes})
+                    else:
+                        # Freie Koordinaten dürfen die Trägerfläche verlassen —
+                        # dann gilt die normale Feldvorschau mit den Werten,
+                        # und die steht rechts: Die Maßgruppe geht mit der
+                        # Platzierung, und was in ihr getippt war, muss vorher
+                        # hinüber, sonst zeigte das Panel danach die alte Zahl
+                        # (gemessen am 21.09.2026, ``test_ui``).
+                        host.take_placement(values)
+                        handed = dict(values)
+    
+                        def hand_over() -> None:
+                            window, host = window_ref(), host_ref()
+                            if (
+                                window is not None
+                                and host is not None
+                                and window._quiet_host is host
+                            ):
+                                window._hand_quiet_placement_to_panel(op, handed)
+    
+                        QTimer.singleShot(0, hand_over)
+                else:
+                    host.take_placement(values)
+            finally:
+                reading["fields"] = False
+            return True
+    
+        def refresh(values: Mapping[str, Any]) -> None:
+            if reading["fields"]:
+                return
+            focused = QApplication.focusWidget()
+            untouched = {
+                name: editor
+                for name, editor in current_editors().items()
+                if (focused is None or (focused is not editor and not editor.isAncestorOf(focused)))
+                and not any(line.isModified() for line in editor.findChildren(QLineEdit))
+            }
+            refresh_feature_fields(action.fields, untouched, values)
+    
+        def begun() -> None:
+            window, host = window_ref(), host_ref()
+            if window is not None and host is not None and window._quiet_host is host:
+                if window.tools.active() == "split":
+                    window.tools.close_tool()
+                window.feature_panel.set_measuring(True, op=op, begun=True)
+    
+        def scope_changed(_checked: bool) -> None:
+            host = host_ref()
+            if host is not None:
+                host.begin_edit()
+                show_values()
+    
+        for editor in editors.values():
+            if isinstance(editor, QCheckBox):
+                editor.toggled.connect(read_fields)
+            elif isinstance(editor, QComboBox):
+                editor.currentIndexChanged.connect(read_fields)
+            else:
+                signal = getattr(editor, "valueChangedMm", None)
+                if signal is None:
+                    signal = getattr(editor, "valueChanged", None)
+                if signal is None:
+                    signal = getattr(editor, "changed", None)
+                if signal is not None:
+                    signal.connect(read_fields)
+        if every is not None:
+            every.toggled.connect(scope_changed)
+        host.valuesChanged.connect(show_values)
+        host.editStarted.connect(begun)
+        host.finished.connect(weak_slot(self, MainWindow.end_quiet_placement))
+        host.cancelled.connect(weak_slot(self, MainWindow._measures_cancelled))
+        flow.set_measure_fields(
+            fields,
+            editors=editors.values(),
+            interpret=lambda: read_fields(interpret=True),
+            refresh=refresh,
+            scope=every,
+        )
+        # **Erst umstellen, dann starten** (RM-232, 25.09.2026). Der Start
+        # blendet Felder über der Grafikfläche ein, und das malt das ganze
+        # Fenster sofort — stand das Merkmalfenster da noch vor dem Messen,
+        # zeigte es einen Augenblick die Zeilen und Knöpfe, die die Maßgruppe
+        # gleich übernimmt, gequetscht in eine Höhe, die ihnen nicht reichte.
+        self.feature_panel.set_measuring(True, op=op, begun=editing)
+>       self._lay_out_now()
+        ^^^^^^^^^^^^^^^^^
+E       AttributeError: 'View' object has no attribute '_lay_out_now'
+
+app\ui\main_window.py:16418: AttributeError
+__ test_first_measure_edit_releases_split_but_passive_measures_do_not[split] __
+
+active = 'split'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000021C6D7A3A10>
+
+    @pytest.mark.parametrize("active", [None, "split", "measure", "transform"])
+    def test_first_measure_edit_releases_split_but_passive_measures_do_not(
+        active: str | None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Die echte Host-Verdrahtung gibt den Zeiger erst bei der ersten Eingabe weiter."""
+        from types import SimpleNamespace
+    
+        from app.core.bootstrap import load_operations
+        from app.ui import placement_flow
+    
+        load_operations()
+        closed: list[str] = []
+        measuring: list[dict[str, Any]] = []
+    
+        class View:
+            """Schwache Referenz ohne ein Fenster für die tatsächliche Anschlussmethode."""
+    
+        view: Any = View()
+        view.tools = SimpleNamespace(active=lambda: active, close_tool=lambda: closed.append("split"))
+        view._quiet_command_allowed = lambda: True
+        view._quiet_placement = None
+        view._drop_feature_preview = lambda: None
+        view.end_quiet_placement = lambda: None
+        view.object_tree = SimpleNamespace(selected=lambda: "obj_1", selected_feature=lambda: "hole")
+        action = SimpleNamespace(fixed={}, fields=[])
+        view.feature_panel = SimpleNamespace(
+            measure_fields=lambda *args, **kwargs: (action, object(), {}),
+            measure_group=lambda op: None,
+            set_measuring=lambda enabled, **kwargs: measuring.append(kwargs),
+        )
+        view.session = SimpleNamespace(
+            last_result=None, project=SimpleNamespace(document=object()), result_current=False
+        )
+        view.viewport = SimpleNamespace(set_feature_gizmo_blocked=lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            placement_flow,
+            "PlacementFlow",
+            lambda *args, **kwargs: SimpleNamespace(
+                active=True, set_measure_fields=lambda *args, **kwargs: None, start=lambda: None
+            ),
+        )
+    
+>       MainWindow._place_from_feature_panel(view, "resize_hole", {"at_feature": "hole"})
+
+tests\test_ui.py:376: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_ui.test_first_measure_edit_releases_split_but_passive_measures_do_not.<locals>.View object at 0x0000021C68C63380>
+op = 'resize_hole', params = {'at_feature': 'hole'}, editing = False
+
+    def _place_from_feature_panel(
+        self, op: str, params: dict[str, Any], *, editing: bool = False
+    ) -> None:
+        """Eine passive Maßgruppe bindet beim ersten Eingriff ihren vollständigen Auftrag."""
+        from app.ui.panels import feature_field_values, refresh_feature_fields
+        from app.ui.placement_flow import PlacementFlow, QuietHost
+    
+        if not REGISTRY.has(op) or not self._quiet_command_allowed():
+            return
+        object_id = self.object_tree.selected()
+        if object_id is None:
+            self.announce(_needs_objects(0))
+            return
+        # **Dieselbe Stelle, dieselbe Handlung: die Maße stehen schon.** Die
+        # Wiederherstellung einer Auswahl meldet sie wie neu, und ein Neubau
+        # der Maßgruppe verwarf einen begonnenen Entwurf samt seiner Werte
+        # (gemessen am 21.09.2026, ``test_ui``).
+        running = self._quiet_placement
+        if (
+            running is not None
+            and running.active
+            and running.spec_of().name == op
+            and self._quiet_target == (object_id, self.object_tree.selected_feature())
+        ):
+            return
+        self._drop_feature_preview()
+        self.end_quiet_placement()
+        result = self.session.last_result
+        body = result.scene.objects.get(object_id) if result is not None else None
+        feature_id = str(params.get("at_feature") or self.object_tree.selected_feature() or "")
+        built = self.feature_panel.measure_fields(
+            op, self.viewport, feature=body.features.get(feature_id) if body is not None else None
+        )
+        if built is None:
+            return
+        action, fields, editors = built
+        spec = REGISTRY.get(op)
+        document = self.session.project.document
+        target = (object_id, self.object_tree.selected_feature())
+        step = getattr(action, "step", None)
+        operation = self.session.history.operation(step) if step is not None else None
+        original = deepcopy(operation.params) if operation is not None else {}
+        untouched_defaults = {
+            entry.name: entry.default for entry in spec.params.spec() if entry.name not in original
+        }
+        inputs = tuple(operation.inputs) if operation is not None else (object_id,)
+        group = self.feature_panel.measure_group(op) if operation is None else None
+        members = tuple(member.target for member in group.members) if group is not None else ()
+        every = QCheckBox(fields) if len(members) > 1 else None
+        if every is not None:
+            every.setText(tr("Auf alle {count} gleichartigen anwenden").format(count=len(members)))
+            every.setAccessibleDescription(
+                tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
+            )
+        window_ref = weakref.ref(self)
+        scope_ref = weakref.ref(every) if every is not None else None
+        editor_refs = {name: weakref.ref(editor) for name, editor in editors.items()}
+        # **Wer gerade liest, schreibt nicht zurück.** Jeder Tastendruck geht
+        # als Wert in den Entwurf, und zwei Rückwege — die Maßgruppe im Bild
+        # und das Merkmalfenster — schrieben ihn synchron und formatiert in
+        # dasselbe Feld, mit dem Cursor an der alten Stelle: Aus „8,00" wurde
+        # „8,00,00 mm" und daraus 800 Millimeter (gemessen am 21.09.2026 an
+        # zehn Fenstertests). Der Fokus verrät den Tipper offscreen nicht;
+        # der Aufrufer weiß es.
+        reading = {"fields": False}
+    
+        def current_editors() -> dict[str, QWidget]:
+            return {
+                name: editor
+                for name, reference in editor_refs.items()
+                if (editor := reference()) is not None and isValid(editor)
+            }
+    
+        def prepare(name: str, values: Mapping[str, Any]) -> _PreviewOrder | None:
+            window = window_ref()
+            host = host_ref()
+            if (
+                window is None
+                or host is None
+                or window._quiet_host is not host
+                or name != op
+                or window.session.project.document is not document
+                or window.session.last_result is not result
+                or not window.session.result_current
+            ):
+                return None
+            if step is not None:
+                return _PreviewOrder(change_op=step, change_values={**original, **values})
+            scope = scope_ref() if scope_ref is not None else None
+            if scope is not None and isValid(scope) and scope.isChecked():
+                return window._prepare_group_order(
+                    op,
+                    values,
+                    members,
+                    object_id=object_id,
+                    result=result,
+                    selected_feature=feature_id,
+                )
+            if op == "slot_hole" and feature_id:
+                changed = window._prepare_slot_change(
+                    feature_id, values, object_id=object_id, result=result
+                )
+                if changed is not None:
+                    return changed
+            if op == "resize_hole" and feature_id:
+                pulled = window.viewport.waiting_slot_drag(feature_id)
+                if pulled is not None and window._diameter_changed(op, values):
+                    return window._slot_with_width(feature_id, pulled, values, inputs)
+            return _PreviewOrder(
+                drafts=(OperationDraft(op=op, inputs=inputs, params=dict(values)),)
+            )
+    
+        def apply_placement(values: Mapping[str, Any]) -> bool:
+            window = window_ref()
+            if window is None or prepare(op, values) is None:
+                return False
+            return window._apply_placed_feature(op, values)
+    
+        host = QuietHost(
+            {**dict(action.fixed), **params},
+            apply_placement,
+            known=[field.name for field in spec.params.spec()],
+        )
+        host.requires_displayed_preview = True
+        host_ref = weakref.ref(host)
+    
+        def current_preview(defer: bool = False) -> bool:
+            """Die Frage nach der Freigabe — und mit ``defer`` der wartende Klick."""
+            window = window_ref()
+            host = host_ref()
+            if host is None:
+                return False
+            order = prepare(op, host.values())
+            return (
+                window is not None
+                and order is not None
+                and window._preview_can_apply(host, order, then=host.accept if defer else None)
+            )
+    
+        def defer_accept() -> None:
+            """Ein Klick vor der Vorschau wartet auf sie (``QuietHost.preview_defer``)."""
+            current_preview(defer=True)
+    
+        host.preview_check = current_preview
+        # ``QuietHost`` kennt den Haken noch nicht als Feld (Paket E:
+        # ``preview_defer`` an ``PlacementHost`` und ``QuietHost.accept``).
+        host.preview_defer = defer_accept
+        flow = PlacementFlow(host, self, lambda: spec, lambda: inputs, change_op=step)
+        self._quiet_host = host
+        self._quiet_placement = flow
+        self._quiet_target = target
+        self._quiet_order = prepare
+        self.viewport.set_feature_gizmo_blocked(op != "slot_hole", knobs=True)
+    
+        def show_values() -> None:
+            window = window_ref()
+            host = host_ref()
+            if host is None:
+                return
+            order = prepare(op, host.values())
+            if window is None or order is None:
+                return
+            if op == "slot_hole" and host.begun:
+                window._reshape_slot_from_values(host.values())
+            if not reading["fields"]:
+                window.feature_panel.take_values(op, host.values(), arm=False)
+            previous = window._preview_approval
+            approval = window._set_preview_order(host, order)
+            if not host.begun:
+                # **Gebunden, nicht gerechnet.** Beim Aufbau der Maßgruppe
+                # stehen die gemessenen Werte im Träger, und eine Vorschau
+                # damit zeigte nur, was schon da ist — mit einem Band „Keine
+                # Vorschau: Die Bohrung hat bereits diesen Durchmesser" als
+                # Absagegrund (Review Fenster #4). Die Uhr stellt der erste
+                # Zug oder die erste getippte Zahl (``editStarted``).
+                return
+            window._feature_pending = (op, dict(host.values()))
+            if approval is not previous:
+                window._feature_preview.start()
+    
+        def read_fields(*_ignored: Any, interpret: bool = False) -> bool:
+            window, host = window_ref(), host_ref()
+            if window is None or host is None or window._quiet_host is not host:
+                return False
+            editors = current_editors()
+            if len(editors) != len(editor_refs):
+                return False
+            if interpret:
+                for editor in editors.values():
+                    spins = (
+                        [editor]
+                        if isinstance(editor, QAbstractSpinBox)
+                        else editor.findChildren(QAbstractSpinBox)
+                    )
+                    for spin in spins:
+                        if not spin.isVisibleTo(editor):
+                            continue
+                        # **Nur, was getippt wurde, wird neu gelesen.** Ein Feld
+                        # zeigt zwei Nachkommastellen; ``interpretText`` machte
+                        # aus einer gemessenen Richtung mit Rauschen oder der
+                        # Breite 9,000002 die gezeigte Zahl, der Entwurf galt als
+                        # geändert, das Werkzeug wurde neu gebaut, und der Klick
+                        # auf *Übernehmen* verfiel still (24.09.2026, Schaber).
+                        line = spin.lineEdit()
+                        if line is not None and not line.isModified():
+                            continue
+                        if not spin.hasAcceptableInput():
+                            spin.setFocus()
+                            window.announce(tr("Geben Sie eine gültige Zahl ein."))
+                            return False
+                        spin.interpretText()
+            try:
+                values = feature_field_values(
+                    action.fields,
+                    editors,
+                    feature_id=str(params.get("at_feature")) if params.get("at_feature") else None,
+                )
+            except AppError as exc:
+                host.block_apply(str(exc))
+                return False
+            if operation is not None:
+                # **Nicht angezeigte Werte bleiben unverändert im Auftrag**
+                # (``bore_action``). Ein Feld, das der Schritt nie trug und das
+                # nur seine Vorgabe zeigt — *Langloch* an einer runden
+                # Bohrung —, schriebe sonst einen neuen Wert in einen alten
+                # Schritt (gemessen am 21.09.2026 an zehn Fenstertests). Was
+                # der Kunde anfasst, weicht von der Vorgabe ab und geht mit.
+                values = {
+                    name: value
+                    for name, value in values.items()
+                    if name in original or untouched_defaults.get(name, _NO_DEFAULT) != value
+                }
+            reading["fields"] = True
+            try:
+                # **Eine getippte Koordinate führt die Stelle** — dieselbe
+                # Regel wie am Panelfeld (``_on_feature_values_changed``):
+                # Innerhalb der Fläche wandern Maßlinien und Werkzeug mit,
+                # sonst schrieb das nächste Neuzeichnen die Flächenposition
+                # über die Zahl zurück (gemessen am 21.09.2026, ``test_ui``).
+                flow = window._quiet_placement
+                previous_values = host.values()
+                axes = ("x", "y", "z")
+                moved = all(
+                    isinstance(values.get(axis), int | float)
+                    and isinstance(previous_values.get(axis), int | float)
+                    for axis in axes
+                ) and any(
+                    not is_close(float(values[axis]), float(previous_values[axis])) for axis in axes
+                )
+                if moved and flow is not None and flow.active:
+                    if flow.move_to(
+                        tuple(float(values[axis]) for axis in axes), on_plane_only=True
+                    ):
+                        host.take_placement({k: v for k, v in values.items() if k not in axes})
+                    else:
+                        # Freie Koordinaten dürfen die Trägerfläche verlassen —
+                        # dann gilt die normale Feldvorschau mit den Werten,
+                        # und die steht rechts: Die Maßgruppe geht mit der
+                        # Platzierung, und was in ihr getippt war, muss vorher
+                        # hinüber, sonst zeigte das Panel danach die alte Zahl
+                        # (gemessen am 21.09.2026, ``test_ui``).
+                        host.take_placement(values)
+                        handed = dict(values)
+    
+                        def hand_over() -> None:
+                            window, host = window_ref(), host_ref()
+                            if (
+                                window is not None
+                                and host is not None
+                                and window._quiet_host is host
+                            ):
+                                window._hand_quiet_placement_to_panel(op, handed)
+    
+                        QTimer.singleShot(0, hand_over)
+                else:
+                    host.take_placement(values)
+            finally:
+                reading["fields"] = False
+            return True
+    
+        def refresh(values: Mapping[str, Any]) -> None:
+            if reading["fields"]:
+                return
+            focused = QApplication.focusWidget()
+            untouched = {
+                name: editor
+                for name, editor in current_editors().items()
+                if (focused is None or (focused is not editor and not editor.isAncestorOf(focused)))
+                and not any(line.isModified() for line in editor.findChildren(QLineEdit))
+            }
+            refresh_feature_fields(action.fields, untouched, values)
+    
+        def begun() -> None:
+            window, host = window_ref(), host_ref()
+            if window is not None and host is not None and window._quiet_host is host:
+                if window.tools.active() == "split":
+                    window.tools.close_tool()
+                window.feature_panel.set_measuring(True, op=op, begun=True)
+    
+        def scope_changed(_checked: bool) -> None:
+            host = host_ref()
+            if host is not None:
+                host.begin_edit()
+                show_values()
+    
+        for editor in editors.values():
+            if isinstance(editor, QCheckBox):
+                editor.toggled.connect(read_fields)
+            elif isinstance(editor, QComboBox):
+                editor.currentIndexChanged.connect(read_fields)
+            else:
+                signal = getattr(editor, "valueChangedMm", None)
+                if signal is None:
+                    signal = getattr(editor, "valueChanged", None)
+                if signal is None:
+                    signal = getattr(editor, "changed", None)
+                if signal is not None:
+                    signal.connect(read_fields)
+        if every is not None:
+            every.toggled.connect(scope_changed)
+        host.valuesChanged.connect(show_values)
+        host.editStarted.connect(begun)
+        host.finished.connect(weak_slot(self, MainWindow.end_quiet_placement))
+        host.cancelled.connect(weak_slot(self, MainWindow._measures_cancelled))
+        flow.set_measure_fields(
+            fields,
+            editors=editors.values(),
+            interpret=lambda: read_fields(interpret=True),
+            refresh=refresh,
+            scope=every,
+        )
+        # **Erst umstellen, dann starten** (RM-232, 25.09.2026). Der Start
+        # blendet Felder über der Grafikfläche ein, und das malt das ganze
+        # Fenster sofort — stand das Merkmalfenster da noch vor dem Messen,
+        # zeigte es einen Augenblick die Zeilen und Knöpfe, die die Maßgruppe
+        # gleich übernimmt, gequetscht in eine Höhe, die ihnen nicht reichte.
+        self.feature_panel.set_measuring(True, op=op, begun=editing)
+>       self._lay_out_now()
+        ^^^^^^^^^^^^^^^^^
+E       AttributeError: 'View' object has no attribute '_lay_out_now'
+
+app\ui\main_window.py:16418: AttributeError
+_ test_first_measure_edit_releases_split_but_passive_measures_do_not[measure] _
+
+active = 'measure'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000021C28F30210>
+
+    @pytest.mark.parametrize("active", [None, "split", "measure", "transform"])
+    def test_first_measure_edit_releases_split_but_passive_measures_do_not(
+        active: str | None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Die echte Host-Verdrahtung gibt den Zeiger erst bei der ersten Eingabe weiter."""
+        from types import SimpleNamespace
+    
+        from app.core.bootstrap import load_operations
+        from app.ui import placement_flow
+    
+        load_operations()
+        closed: list[str] = []
+        measuring: list[dict[str, Any]] = []
+    
+        class View:
+            """Schwache Referenz ohne ein Fenster für die tatsächliche Anschlussmethode."""
+    
+        view: Any = View()
+        view.tools = SimpleNamespace(active=lambda: active, close_tool=lambda: closed.append("split"))
+        view._quiet_command_allowed = lambda: True
+        view._quiet_placement = None
+        view._drop_feature_preview = lambda: None
+        view.end_quiet_placement = lambda: None
+        view.object_tree = SimpleNamespace(selected=lambda: "obj_1", selected_feature=lambda: "hole")
+        action = SimpleNamespace(fixed={}, fields=[])
+        view.feature_panel = SimpleNamespace(
+            measure_fields=lambda *args, **kwargs: (action, object(), {}),
+            measure_group=lambda op: None,
+            set_measuring=lambda enabled, **kwargs: measuring.append(kwargs),
+        )
+        view.session = SimpleNamespace(
+            last_result=None, project=SimpleNamespace(document=object()), result_current=False
+        )
+        view.viewport = SimpleNamespace(set_feature_gizmo_blocked=lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            placement_flow,
+            "PlacementFlow",
+            lambda *args, **kwargs: SimpleNamespace(
+                active=True, set_measure_fields=lambda *args, **kwargs: None, start=lambda: None
+            ),
+        )
+    
+>       MainWindow._place_from_feature_panel(view, "resize_hole", {"at_feature": "hole"})
+
+tests\test_ui.py:376: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_ui.test_first_measure_edit_releases_split_but_passive_measures_do_not.<locals>.View object at 0x0000021C68C61A90>
+op = 'resize_hole', params = {'at_feature': 'hole'}, editing = False
+
+    def _place_from_feature_panel(
+        self, op: str, params: dict[str, Any], *, editing: bool = False
+    ) -> None:
+        """Eine passive Maßgruppe bindet beim ersten Eingriff ihren vollständigen Auftrag."""
+        from app.ui.panels import feature_field_values, refresh_feature_fields
+        from app.ui.placement_flow import PlacementFlow, QuietHost
+    
+        if not REGISTRY.has(op) or not self._quiet_command_allowed():
+            return
+        object_id = self.object_tree.selected()
+        if object_id is None:
+            self.announce(_needs_objects(0))
+            return
+        # **Dieselbe Stelle, dieselbe Handlung: die Maße stehen schon.** Die
+        # Wiederherstellung einer Auswahl meldet sie wie neu, und ein Neubau
+        # der Maßgruppe verwarf einen begonnenen Entwurf samt seiner Werte
+        # (gemessen am 21.09.2026, ``test_ui``).
+        running = self._quiet_placement
+        if (
+            running is not None
+            and running.active
+            and running.spec_of().name == op
+            and self._quiet_target == (object_id, self.object_tree.selected_feature())
+        ):
+            return
+        self._drop_feature_preview()
+        self.end_quiet_placement()
+        result = self.session.last_result
+        body = result.scene.objects.get(object_id) if result is not None else None
+        feature_id = str(params.get("at_feature") or self.object_tree.selected_feature() or "")
+        built = self.feature_panel.measure_fields(
+            op, self.viewport, feature=body.features.get(feature_id) if body is not None else None
+        )
+        if built is None:
+            return
+        action, fields, editors = built
+        spec = REGISTRY.get(op)
+        document = self.session.project.document
+        target = (object_id, self.object_tree.selected_feature())
+        step = getattr(action, "step", None)
+        operation = self.session.history.operation(step) if step is not None else None
+        original = deepcopy(operation.params) if operation is not None else {}
+        untouched_defaults = {
+            entry.name: entry.default for entry in spec.params.spec() if entry.name not in original
+        }
+        inputs = tuple(operation.inputs) if operation is not None else (object_id,)
+        group = self.feature_panel.measure_group(op) if operation is None else None
+        members = tuple(member.target for member in group.members) if group is not None else ()
+        every = QCheckBox(fields) if len(members) > 1 else None
+        if every is not None:
+            every.setText(tr("Auf alle {count} gleichartigen anwenden").format(count=len(members)))
+            every.setAccessibleDescription(
+                tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
+            )
+        window_ref = weakref.ref(self)
+        scope_ref = weakref.ref(every) if every is not None else None
+        editor_refs = {name: weakref.ref(editor) for name, editor in editors.items()}
+        # **Wer gerade liest, schreibt nicht zurück.** Jeder Tastendruck geht
+        # als Wert in den Entwurf, und zwei Rückwege — die Maßgruppe im Bild
+        # und das Merkmalfenster — schrieben ihn synchron und formatiert in
+        # dasselbe Feld, mit dem Cursor an der alten Stelle: Aus „8,00" wurde
+        # „8,00,00 mm" und daraus 800 Millimeter (gemessen am 21.09.2026 an
+        # zehn Fenstertests). Der Fokus verrät den Tipper offscreen nicht;
+        # der Aufrufer weiß es.
+        reading = {"fields": False}
+    
+        def current_editors() -> dict[str, QWidget]:
+            return {
+                name: editor
+                for name, reference in editor_refs.items()
+                if (editor := reference()) is not None and isValid(editor)
+            }
+    
+        def prepare(name: str, values: Mapping[str, Any]) -> _PreviewOrder | None:
+            window = window_ref()
+            host = host_ref()
+            if (
+                window is None
+                or host is None
+                or window._quiet_host is not host
+                or name != op
+                or window.session.project.document is not document
+                or window.session.last_result is not result
+                or not window.session.result_current
+            ):
+                return None
+            if step is not None:
+                return _PreviewOrder(change_op=step, change_values={**original, **values})
+            scope = scope_ref() if scope_ref is not None else None
+            if scope is not None and isValid(scope) and scope.isChecked():
+                return window._prepare_group_order(
+                    op,
+                    values,
+                    members,
+                    object_id=object_id,
+                    result=result,
+                    selected_feature=feature_id,
+                )
+            if op == "slot_hole" and feature_id:
+                changed = window._prepare_slot_change(
+                    feature_id, values, object_id=object_id, result=result
+                )
+                if changed is not None:
+                    return changed
+            if op == "resize_hole" and feature_id:
+                pulled = window.viewport.waiting_slot_drag(feature_id)
+                if pulled is not None and window._diameter_changed(op, values):
+                    return window._slot_with_width(feature_id, pulled, values, inputs)
+            return _PreviewOrder(
+                drafts=(OperationDraft(op=op, inputs=inputs, params=dict(values)),)
+            )
+    
+        def apply_placement(values: Mapping[str, Any]) -> bool:
+            window = window_ref()
+            if window is None or prepare(op, values) is None:
+                return False
+            return window._apply_placed_feature(op, values)
+    
+        host = QuietHost(
+            {**dict(action.fixed), **params},
+            apply_placement,
+            known=[field.name for field in spec.params.spec()],
+        )
+        host.requires_displayed_preview = True
+        host_ref = weakref.ref(host)
+    
+        def current_preview(defer: bool = False) -> bool:
+            """Die Frage nach der Freigabe — und mit ``defer`` der wartende Klick."""
+            window = window_ref()
+            host = host_ref()
+            if host is None:
+                return False
+            order = prepare(op, host.values())
+            return (
+                window is not None
+                and order is not None
+                and window._preview_can_apply(host, order, then=host.accept if defer else None)
+            )
+    
+        def defer_accept() -> None:
+            """Ein Klick vor der Vorschau wartet auf sie (``QuietHost.preview_defer``)."""
+            current_preview(defer=True)
+    
+        host.preview_check = current_preview
+        # ``QuietHost`` kennt den Haken noch nicht als Feld (Paket E:
+        # ``preview_defer`` an ``PlacementHost`` und ``QuietHost.accept``).
+        host.preview_defer = defer_accept
+        flow = PlacementFlow(host, self, lambda: spec, lambda: inputs, change_op=step)
+        self._quiet_host = host
+        self._quiet_placement = flow
+        self._quiet_target = target
+        self._quiet_order = prepare
+        self.viewport.set_feature_gizmo_blocked(op != "slot_hole", knobs=True)
+    
+        def show_values() -> None:
+            window = window_ref()
+            host = host_ref()
+            if host is None:
+                return
+            order = prepare(op, host.values())
+            if window is None or order is None:
+                return
+            if op == "slot_hole" and host.begun:
+                window._reshape_slot_from_values(host.values())
+            if not reading["fields"]:
+                window.feature_panel.take_values(op, host.values(), arm=False)
+            previous = window._preview_approval
+            approval = window._set_preview_order(host, order)
+            if not host.begun:
+                # **Gebunden, nicht gerechnet.** Beim Aufbau der Maßgruppe
+                # stehen die gemessenen Werte im Träger, und eine Vorschau
+                # damit zeigte nur, was schon da ist — mit einem Band „Keine
+                # Vorschau: Die Bohrung hat bereits diesen Durchmesser" als
+                # Absagegrund (Review Fenster #4). Die Uhr stellt der erste
+                # Zug oder die erste getippte Zahl (``editStarted``).
+                return
+            window._feature_pending = (op, dict(host.values()))
+            if approval is not previous:
+                window._feature_preview.start()
+    
+        def read_fields(*_ignored: Any, interpret: bool = False) -> bool:
+            window, host = window_ref(), host_ref()
+            if window is None or host is None or window._quiet_host is not host:
+                return False
+            editors = current_editors()
+            if len(editors) != len(editor_refs):
+                return False
+            if interpret:
+                for editor in editors.values():
+                    spins = (
+                        [editor]
+                        if isinstance(editor, QAbstractSpinBox)
+                        else editor.findChildren(QAbstractSpinBox)
+                    )
+                    for spin in spins:
+                        if not spin.isVisibleTo(editor):
+                            continue
+                        # **Nur, was getippt wurde, wird neu gelesen.** Ein Feld
+                        # zeigt zwei Nachkommastellen; ``interpretText`` machte
+                        # aus einer gemessenen Richtung mit Rauschen oder der
+                        # Breite 9,000002 die gezeigte Zahl, der Entwurf galt als
+                        # geändert, das Werkzeug wurde neu gebaut, und der Klick
+                        # auf *Übernehmen* verfiel still (24.09.2026, Schaber).
+                        line = spin.lineEdit()
+                        if line is not None and not line.isModified():
+                            continue
+                        if not spin.hasAcceptableInput():
+                            spin.setFocus()
+                            window.announce(tr("Geben Sie eine gültige Zahl ein."))
+                            return False
+                        spin.interpretText()
+            try:
+                values = feature_field_values(
+                    action.fields,
+                    editors,
+                    feature_id=str(params.get("at_feature")) if params.get("at_feature") else None,
+                )
+            except AppError as exc:
+                host.block_apply(str(exc))
+                return False
+            if operation is not None:
+                # **Nicht angezeigte Werte bleiben unverändert im Auftrag**
+                # (``bore_action``). Ein Feld, das der Schritt nie trug und das
+                # nur seine Vorgabe zeigt — *Langloch* an einer runden
+                # Bohrung —, schriebe sonst einen neuen Wert in einen alten
+                # Schritt (gemessen am 21.09.2026 an zehn Fenstertests). Was
+                # der Kunde anfasst, weicht von der Vorgabe ab und geht mit.
+                values = {
+                    name: value
+                    for name, value in values.items()
+                    if name in original or untouched_defaults.get(name, _NO_DEFAULT) != value
+                }
+            reading["fields"] = True
+            try:
+                # **Eine getippte Koordinate führt die Stelle** — dieselbe
+                # Regel wie am Panelfeld (``_on_feature_values_changed``):
+                # Innerhalb der Fläche wandern Maßlinien und Werkzeug mit,
+                # sonst schrieb das nächste Neuzeichnen die Flächenposition
+                # über die Zahl zurück (gemessen am 21.09.2026, ``test_ui``).
+                flow = window._quiet_placement
+                previous_values = host.values()
+                axes = ("x", "y", "z")
+                moved = all(
+                    isinstance(values.get(axis), int | float)
+                    and isinstance(previous_values.get(axis), int | float)
+                    for axis in axes
+                ) and any(
+                    not is_close(float(values[axis]), float(previous_values[axis])) for axis in axes
+                )
+                if moved and flow is not None and flow.active:
+                    if flow.move_to(
+                        tuple(float(values[axis]) for axis in axes), on_plane_only=True
+                    ):
+                        host.take_placement({k: v for k, v in values.items() if k not in axes})
+                    else:
+                        # Freie Koordinaten dürfen die Trägerfläche verlassen —
+                        # dann gilt die normale Feldvorschau mit den Werten,
+                        # und die steht rechts: Die Maßgruppe geht mit der
+                        # Platzierung, und was in ihr getippt war, muss vorher
+                        # hinüber, sonst zeigte das Panel danach die alte Zahl
+                        # (gemessen am 21.09.2026, ``test_ui``).
+                        host.take_placement(values)
+                        handed = dict(values)
+    
+                        def hand_over() -> None:
+                            window, host = window_ref(), host_ref()
+                            if (
+                                window is not None
+                                and host is not None
+                                and window._quiet_host is host
+                            ):
+                                window._hand_quiet_placement_to_panel(op, handed)
+    
+                        QTimer.singleShot(0, hand_over)
+                else:
+                    host.take_placement(values)
+            finally:
+                reading["fields"] = False
+            return True
+    
+        def refresh(values: Mapping[str, Any]) -> None:
+            if reading["fields"]:
+                return
+            focused = QApplication.focusWidget()
+            untouched = {
+                name: editor
+                for name, editor in current_editors().items()
+                if (focused is None or (focused is not editor and not editor.isAncestorOf(focused)))
+                and not any(line.isModified() for line in editor.findChildren(QLineEdit))
+            }
+            refresh_feature_fields(action.fields, untouched, values)
+    
+        def begun() -> None:
+            window, host = window_ref(), host_ref()
+            if window is not None and host is not None and window._quiet_host is host:
+                if window.tools.active() == "split":
+                    window.tools.close_tool()
+                window.feature_panel.set_measuring(True, op=op, begun=True)
+    
+        def scope_changed(_checked: bool) -> None:
+            host = host_ref()
+            if host is not None:
+                host.begin_edit()
+                show_values()
+    
+        for editor in editors.values():
+            if isinstance(editor, QCheckBox):
+                editor.toggled.connect(read_fields)
+            elif isinstance(editor, QComboBox):
+                editor.currentIndexChanged.connect(read_fields)
+            else:
+                signal = getattr(editor, "valueChangedMm", None)
+                if signal is None:
+                    signal = getattr(editor, "valueChanged", None)
+                if signal is None:
+                    signal = getattr(editor, "changed", None)
+                if signal is not None:
+                    signal.connect(read_fields)
+        if every is not None:
+            every.toggled.connect(scope_changed)
+        host.valuesChanged.connect(show_values)
+        host.editStarted.connect(begun)
+        host.finished.connect(weak_slot(self, MainWindow.end_quiet_placement))
+        host.cancelled.connect(weak_slot(self, MainWindow._measures_cancelled))
+        flow.set_measure_fields(
+            fields,
+            editors=editors.values(),
+            interpret=lambda: read_fields(interpret=True),
+            refresh=refresh,
+            scope=every,
+        )
+        # **Erst umstellen, dann starten** (RM-232, 25.09.2026). Der Start
+        # blendet Felder über der Grafikfläche ein, und das malt das ganze
+        # Fenster sofort — stand das Merkmalfenster da noch vor dem Messen,
+        # zeigte es einen Augenblick die Zeilen und Knöpfe, die die Maßgruppe
+        # gleich übernimmt, gequetscht in eine Höhe, die ihnen nicht reichte.
+        self.feature_panel.set_measuring(True, op=op, begun=editing)
+>       self._lay_out_now()
+        ^^^^^^^^^^^^^^^^^
+E       AttributeError: 'View' object has no attribute '_lay_out_now'
+
+app\ui\main_window.py:16418: AttributeError
+_ test_first_measure_edit_releases_split_but_passive_measures_do_not[transform] _
+
+active = 'transform'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000021C607423C0>
+
+    @pytest.mark.parametrize("active", [None, "split", "measure", "transform"])
+    def test_first_measure_edit_releases_split_but_passive_measures_do_not(
+        active: str | None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Die echte Host-Verdrahtung gibt den Zeiger erst bei der ersten Eingabe weiter."""
+        from types import SimpleNamespace
+    
+        from app.core.bootstrap import load_operations
+        from app.ui import placement_flow
+    
+        load_operations()
+        closed: list[str] = []
+        measuring: list[dict[str, Any]] = []
+    
+        class View:
+            """Schwache Referenz ohne ein Fenster für die tatsächliche Anschlussmethode."""
+    
+        view: Any = View()
+        view.tools = SimpleNamespace(active=lambda: active, close_tool=lambda: closed.append("split"))
+        view._quiet_command_allowed = lambda: True
+        view._quiet_placement = None
+        view._drop_feature_preview = lambda: None
+        view.end_quiet_placement = lambda: None
+        view.object_tree = SimpleNamespace(selected=lambda: "obj_1", selected_feature=lambda: "hole")
+        action = SimpleNamespace(fixed={}, fields=[])
+        view.feature_panel = SimpleNamespace(
+            measure_fields=lambda *args, **kwargs: (action, object(), {}),
+            measure_group=lambda op: None,
+            set_measuring=lambda enabled, **kwargs: measuring.append(kwargs),
+        )
+        view.session = SimpleNamespace(
+            last_result=None, project=SimpleNamespace(document=object()), result_current=False
+        )
+        view.viewport = SimpleNamespace(set_feature_gizmo_blocked=lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            placement_flow,
+            "PlacementFlow",
+            lambda *args, **kwargs: SimpleNamespace(
+                active=True, set_measure_fields=lambda *args, **kwargs: None, start=lambda: None
+            ),
+        )
+    
+>       MainWindow._place_from_feature_panel(view, "resize_hole", {"at_feature": "hole"})
+
+tests\test_ui.py:376: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_ui.test_first_measure_edit_releases_split_but_passive_measures_do_not.<locals>.View object at 0x0000021C68C61BE0>
+op = 'resize_hole', params = {'at_feature': 'hole'}, editing = False
+
+    def _place_from_feature_panel(
+        self, op: str, params: dict[str, Any], *, editing: bool = False
+    ) -> None:
+        """Eine passive Maßgruppe bindet beim ersten Eingriff ihren vollständigen Auftrag."""
+        from app.ui.panels import feature_field_values, refresh_feature_fields
+        from app.ui.placement_flow import PlacementFlow, QuietHost
+    
+        if not REGISTRY.has(op) or not self._quiet_command_allowed():
+            return
+        object_id = self.object_tree.selected()
+        if object_id is None:
+            self.announce(_needs_objects(0))
+            return
+        # **Dieselbe Stelle, dieselbe Handlung: die Maße stehen schon.** Die
+        # Wiederherstellung einer Auswahl meldet sie wie neu, und ein Neubau
+        # der Maßgruppe verwarf einen begonnenen Entwurf samt seiner Werte
+        # (gemessen am 21.09.2026, ``test_ui``).
+        running = self._quiet_placement
+        if (
+            running is not None
+            and running.active
+            and running.spec_of().name == op
+            and self._quiet_target == (object_id, self.object_tree.selected_feature())
+        ):
+            return
+        self._drop_feature_preview()
+        self.end_quiet_placement()
+        result = self.session.last_result
+        body = result.scene.objects.get(object_id) if result is not None else None
+        feature_id = str(params.get("at_feature") or self.object_tree.selected_feature() or "")
+        built = self.feature_panel.measure_fields(
+            op, self.viewport, feature=body.features.get(feature_id) if body is not None else None
+        )
+        if built is None:
+            return
+        action, fields, editors = built
+        spec = REGISTRY.get(op)
+        document = self.session.project.document
+        target = (object_id, self.object_tree.selected_feature())
+        step = getattr(action, "step", None)
+        operation = self.session.history.operation(step) if step is not None else None
+        original = deepcopy(operation.params) if operation is not None else {}
+        untouched_defaults = {
+            entry.name: entry.default for entry in spec.params.spec() if entry.name not in original
+        }
+        inputs = tuple(operation.inputs) if operation is not None else (object_id,)
+        group = self.feature_panel.measure_group(op) if operation is None else None
+        members = tuple(member.target for member in group.members) if group is not None else ()
+        every = QCheckBox(fields) if len(members) > 1 else None
+        if every is not None:
+            every.setText(tr("Auf alle {count} gleichartigen anwenden").format(count=len(members)))
+            every.setAccessibleDescription(
+                tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
+            )
+        window_ref = weakref.ref(self)
+        scope_ref = weakref.ref(every) if every is not None else None
+        editor_refs = {name: weakref.ref(editor) for name, editor in editors.items()}
+        # **Wer gerade liest, schreibt nicht zurück.** Jeder Tastendruck geht
+        # als Wert in den Entwurf, und zwei Rückwege — die Maßgruppe im Bild
+        # und das Merkmalfenster — schrieben ihn synchron und formatiert in
+        # dasselbe Feld, mit dem Cursor an der alten Stelle: Aus „8,00" wurde
+        # „8,00,00 mm" und daraus 800 Millimeter (gemessen am 21.09.2026 an
+        # zehn Fenstertests). Der Fokus verrät den Tipper offscreen nicht;
+        # der Aufrufer weiß es.
+        reading = {"fields": False}
+    
+        def current_editors() -> dict[str, QWidget]:
+            return {
+                name: editor
+                for name, reference in editor_refs.items()
+                if (editor := reference()) is not None and isValid(editor)
+            }
+    
+        def prepare(name: str, values: Mapping[str, Any]) -> _PreviewOrder | None:
+            window = window_ref()
+            host = host_ref()
+            if (
+                window is None
+                or host is None
+                or window._quiet_host is not host
+                or name != op
+                or window.session.project.document is not document
+                or window.session.last_result is not result
+                or not window.session.result_current
+            ):
+                return None
+            if step is not None:
+                return _PreviewOrder(change_op=step, change_values={**original, **values})
+            scope = scope_ref() if scope_ref is not None else None
+            if scope is not None and isValid(scope) and scope.isChecked():
+                return window._prepare_group_order(
+                    op,
+                    values,
+                    members,
+                    object_id=object_id,
+                    result=result,
+                    selected_feature=feature_id,
+                )
+            if op == "slot_hole" and feature_id:
+                changed = window._prepare_slot_change(
+                    feature_id, values, object_id=object_id, result=result
+                )
+                if changed is not None:
+                    return changed
+            if op == "resize_hole" and feature_id:
+                pulled = window.viewport.waiting_slot_drag(feature_id)
+                if pulled is not None and window._diameter_changed(op, values):
+                    return window._slot_with_width(feature_id, pulled, values, inputs)
+            return _PreviewOrder(
+                drafts=(OperationDraft(op=op, inputs=inputs, params=dict(values)),)
+            )
+    
+        def apply_placement(values: Mapping[str, Any]) -> bool:
+            window = window_ref()
+            if window is None or prepare(op, values) is None:
+                return False
+            return window._apply_placed_feature(op, values)
+    
+        host = QuietHost(
+            {**dict(action.fixed), **params},
+            apply_placement,
+            known=[field.name for field in spec.params.spec()],
+        )
+        host.requires_displayed_preview = True
+        host_ref = weakref.ref(host)
+    
+        def current_preview(defer: bool = False) -> bool:
+            """Die Frage nach der Freigabe — und mit ``defer`` der wartende Klick."""
+            window = window_ref()
+            host = host_ref()
+            if host is None:
+                return False
+            order = prepare(op, host.values())
+            return (
+                window is not None
+                and order is not None
+                and window._preview_can_apply(host, order, then=host.accept if defer else None)
+            )
+    
+        def defer_accept() -> None:
+            """Ein Klick vor der Vorschau wartet auf sie (``QuietHost.preview_defer``)."""
+            current_preview(defer=True)
+    
+        host.preview_check = current_preview
+        # ``QuietHost`` kennt den Haken noch nicht als Feld (Paket E:
+        # ``preview_defer`` an ``PlacementHost`` und ``QuietHost.accept``).
+        host.preview_defer = defer_accept
+        flow = PlacementFlow(host, self, lambda: spec, lambda: inputs, change_op=step)
+        self._quiet_host = host
+        self._quiet_placement = flow
+        self._quiet_target = target
+        self._quiet_order = prepare
+        self.viewport.set_feature_gizmo_blocked(op != "slot_hole", knobs=True)
+    
+        def show_values() -> None:
+            window = window_ref()
+            host = host_ref()
+            if host is None:
+                return
+            order = prepare(op, host.values())
+            if window is None or order is None:
+                return
+            if op == "slot_hole" and host.begun:
+                window._reshape_slot_from_values(host.values())
+            if not reading["fields"]:
+                window.feature_panel.take_values(op, host.values(), arm=False)
+            previous = window._preview_approval
+            approval = window._set_preview_order(host, order)
+            if not host.begun:
+                # **Gebunden, nicht gerechnet.** Beim Aufbau der Maßgruppe
+                # stehen die gemessenen Werte im Träger, und eine Vorschau
+                # damit zeigte nur, was schon da ist — mit einem Band „Keine
+                # Vorschau: Die Bohrung hat bereits diesen Durchmesser" als
+                # Absagegrund (Review Fenster #4). Die Uhr stellt der erste
+                # Zug oder die erste getippte Zahl (``editStarted``).
+                return
+            window._feature_pending = (op, dict(host.values()))
+            if approval is not previous:
+                window._feature_preview.start()
+    
+        def read_fields(*_ignored: Any, interpret: bool = False) -> bool:
+            window, host = window_ref(), host_ref()
+            if window is None or host is None or window._quiet_host is not host:
+                return False
+            editors = current_editors()
+            if len(editors) != len(editor_refs):
+                return False
+            if interpret:
+                for editor in editors.values():
+                    spins = (
+                        [editor]
+                        if isinstance(editor, QAbstractSpinBox)
+                        else editor.findChildren(QAbstractSpinBox)
+                    )
+                    for spin in spins:
+                        if not spin.isVisibleTo(editor):
+                            continue
+                        # **Nur, was getippt wurde, wird neu gelesen.** Ein Feld
+                        # zeigt zwei Nachkommastellen; ``interpretText`` machte
+                        # aus einer gemessenen Richtung mit Rauschen oder der
+                        # Breite 9,000002 die gezeigte Zahl, der Entwurf galt als
+                        # geändert, das Werkzeug wurde neu gebaut, und der Klick
+                        # auf *Übernehmen* verfiel still (24.09.2026, Schaber).
+                        line = spin.lineEdit()
+                        if line is not None and not line.isModified():
+                            continue
+                        if not spin.hasAcceptableInput():
+                            spin.setFocus()
+                            window.announce(tr("Geben Sie eine gültige Zahl ein."))
+                            return False
+                        spin.interpretText()
+            try:
+                values = feature_field_values(
+                    action.fields,
+                    editors,
+                    feature_id=str(params.get("at_feature")) if params.get("at_feature") else None,
+                )
+            except AppError as exc:
+                host.block_apply(str(exc))
+                return False
+            if operation is not None:
+                # **Nicht angezeigte Werte bleiben unverändert im Auftrag**
+                # (``bore_action``). Ein Feld, das der Schritt nie trug und das
+                # nur seine Vorgabe zeigt — *Langloch* an einer runden
+                # Bohrung —, schriebe sonst einen neuen Wert in einen alten
+                # Schritt (gemessen am 21.09.2026 an zehn Fenstertests). Was
+                # der Kunde anfasst, weicht von der Vorgabe ab und geht mit.
+                values = {
+                    name: value
+                    for name, value in values.items()
+                    if name in original or untouched_defaults.get(name, _NO_DEFAULT) != value
+                }
+            reading["fields"] = True
+            try:
+                # **Eine getippte Koordinate führt die Stelle** — dieselbe
+                # Regel wie am Panelfeld (``_on_feature_values_changed``):
+                # Innerhalb der Fläche wandern Maßlinien und Werkzeug mit,
+                # sonst schrieb das nächste Neuzeichnen die Flächenposition
+                # über die Zahl zurück (gemessen am 21.09.2026, ``test_ui``).
+                flow = window._quiet_placement
+                previous_values = host.values()
+                axes = ("x", "y", "z")
+                moved = all(
+                    isinstance(values.get(axis), int | float)
+                    and isinstance(previous_values.get(axis), int | float)
+                    for axis in axes
+                ) and any(
+                    not is_close(float(values[axis]), float(previous_values[axis])) for axis in axes
+                )
+                if moved and flow is not None and flow.active:
+                    if flow.move_to(
+                        tuple(float(values[axis]) for axis in axes), on_plane_only=True
+                    ):
+                        host.take_placement({k: v for k, v in values.items() if k not in axes})
+                    else:
+                        # Freie Koordinaten dürfen die Trägerfläche verlassen —
+                        # dann gilt die normale Feldvorschau mit den Werten,
+                        # und die steht rechts: Die Maßgruppe geht mit der
+                        # Platzierung, und was in ihr getippt war, muss vorher
+                        # hinüber, sonst zeigte das Panel danach die alte Zahl
+                        # (gemessen am 21.09.2026, ``test_ui``).
+                        host.take_placement(values)
+                        handed = dict(values)
+    
+                        def hand_over() -> None:
+                            window, host = window_ref(), host_ref()
+                            if (
+                                window is not None
+                                and host is not None
+                                and window._quiet_host is host
+                            ):
+                                window._hand_quiet_placement_to_panel(op, handed)
+    
+                        QTimer.singleShot(0, hand_over)
+                else:
+                    host.take_placement(values)
+            finally:
+                reading["fields"] = False
+            return True
+    
+        def refresh(values: Mapping[str, Any]) -> None:
+            if reading["fields"]:
+                return
+            focused = QApplication.focusWidget()
+            untouched = {
+                name: editor
+                for name, editor in current_editors().items()
+                if (focused is None or (focused is not editor and not editor.isAncestorOf(focused)))
+                and not any(line.isModified() for line in editor.findChildren(QLineEdit))
+            }
+            refresh_feature_fields(action.fields, untouched, values)
+    
+        def begun() -> None:
+            window, host = window_ref(), host_ref()
+            if window is not None and host is not None and window._quiet_host is host:
+                if window.tools.active() == "split":
+                    window.tools.close_tool()
+                window.feature_panel.set_measuring(True, op=op, begun=True)
+    
+        def scope_changed(_checked: bool) -> None:
+            host = host_ref()
+            if host is not None:
+                host.begin_edit()
+                show_values()
+    
+        for editor in editors.values():
+            if isinstance(editor, QCheckBox):
+                editor.toggled.connect(read_fields)
+            elif isinstance(editor, QComboBox):
+                editor.currentIndexChanged.connect(read_fields)
+            else:
+                signal = getattr(editor, "valueChangedMm", None)
+                if signal is None:
+                    signal = getattr(editor, "valueChanged", None)
+                if signal is None:
+                    signal = getattr(editor, "changed", None)
+                if signal is not None:
+                    signal.connect(read_fields)
+        if every is not None:
+            every.toggled.connect(scope_changed)
+        host.valuesChanged.connect(show_values)
+        host.editStarted.connect(begun)
+        host.finished.connect(weak_slot(self, MainWindow.end_quiet_placement))
+        host.cancelled.connect(weak_slot(self, MainWindow._measures_cancelled))
+        flow.set_measure_fields(
+            fields,
+            editors=editors.values(),
+            interpret=lambda: read_fields(interpret=True),
+            refresh=refresh,
+            scope=every,
+        )
+        # **Erst umstellen, dann starten** (RM-232, 25.09.2026). Der Start
+        # blendet Felder über der Grafikfläche ein, und das malt das ganze
+        # Fenster sofort — stand das Merkmalfenster da noch vor dem Messen,
+        # zeigte es einen Augenblick die Zeilen und Knöpfe, die die Maßgruppe
+        # gleich übernimmt, gequetscht in eine Höhe, die ihnen nicht reichte.
+        self.feature_panel.set_measuring(True, op=op, begun=editing)
+>       self._lay_out_now()
+        ^^^^^^^^^^^^^^^^^
+E       AttributeError: 'View' object has no attribute '_lay_out_now'
+
+app\ui\main_window.py:16418: AttributeError
+=========================== short test summary info ===========================
+FAILED tests/test_ui.py::test_first_measure_edit_releases_split_but_passive_measures_do_not[None]
+FAILED tests/test_ui.py::test_first_measure_edit_releases_split_but_passive_measures_do_not[split]
+FAILED tests/test_ui.py::test_first_measure_edit_releases_split_but_passive_measures_do_not[measure]
+FAILED tests/test_ui.py::test_first_measure_edit_releases_split_but_passive_measures_do_not[transform]
+4 failed, 291 passed, 1310 deselected in 20.24s

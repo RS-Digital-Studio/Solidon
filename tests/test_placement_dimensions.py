@@ -1530,6 +1530,60 @@ def test_the_worker_copy_outlives_the_flow_and_dies_with_its_mesh():
     assert key not in module._worker_copies, "die Kopie geht mit ihrem Netz"
 
 
+def test_the_worker_copy_brings_the_merkers_of_its_original():
+    """Die Arbeiterkopie übernimmt die trimesh-Merker des Originals (RM-232).
+
+    Ohne sie rechnete der Arbeiter Nachbarschaft, Kanten und Normalen, die das
+    Original längst hat, noch einmal: An der dichten Platte kosteten die
+    Kernauskünfte des Merkmalfensters an der leeren Kopie 529 ms, an der
+    mitgenommenen 264. Übernommen wird flach — dieselben schreibgeschützten
+    Felder —, und was die Kopie danach selbst merkt, bleibt bei ihr.
+    """
+    from app.ui import placement_flow as module
+
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=2))
+    adjacency = mesh.raw.face_adjacency
+    normals = mesh.raw.face_normals
+
+    copy = module.for_a_worker(mesh)
+
+    assert copy.raw.face_adjacency is adjacency, "ohne Neuberechnung übernommen"
+    assert copy.raw.face_normals is normals
+    assert not adjacency.flags.writeable and not normals.flags.writeable
+    assert "vertex_faces" not in mesh.raw._cache.cache
+    copy.raw.vertex_faces  # noqa: B018 — die Kopie merkt sich selbst etwas
+    assert "vertex_faces" not in mesh.raw._cache.cache, "das Original bleibt, wie es war"
+
+
+@pytest.mark.parametrize(
+    ("surface", "waits", "serial", "coming"),
+    [
+        (None, 3, 3, True),
+        (None, None, 3, False),
+        (None, 2, 3, False),
+        ("fläche", 3, 3, False),
+    ],
+    ids=["wartet", "keine Anfrage", "abgelöst", "Fläche da"],
+)
+def test_the_measure_card_waits_only_for_a_seat_that_is_still_coming(
+    surface, waits, serial, coming
+):
+    """Die Maßkarte steht erst an ihrem Platz im Bild, nie vorher am Rückfallplatz (RM-232).
+
+    Solange die Trägerfläche am gewählten Merkmal gerechnet wird, legte der
+    Fluss die Karte *Bohrung ändern* oben rechts neben den Prüfbericht; 150 ms
+    später sprang sie neben die Bohrung. Eine abgelöste Anfrage hält die
+    Karte nicht fest: Kommt für sie keine Fläche, gilt der Rückfall.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.placement_flow import PlacementFlow
+
+    flow = SimpleNamespace(_surface=surface, _seat_waits=waits, _serial=serial)
+
+    assert PlacementFlow._seat_is_coming(flow) is coming  # type: ignore[arg-type]
+
+
 def test_workers_on_a_shared_copy_take_turns():
     """Zwei Arbeiter an derselben Kopie rechnen nacheinander (RM-232).
 

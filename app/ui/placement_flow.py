@@ -381,6 +381,23 @@ def for_a_worker(mesh: Any) -> Any:
     mit. Weil sich jetzt zwei Arbeiter eine Kopie teilen können — der eines
     abgelösten Flusses läuft noch aus —, rechnet jeder unter ihrem Schloss
     (:func:`on_the_copy`).
+
+    **Und die Kopie nimmt die trimesh-Merker des Originals mit.** trimesh
+    übernimmt sie flach: dieselben Felder, schreibgeschützt, und die übrigen
+    Einträge (Kantenzählung, Teile, Facetten) liest niemand schreibend. Ohne
+    sie rechnete der Arbeiter Nachbarschaft, Kanten und Normalen, die das
+    Original längst hat, noch einmal — an der dichten Platte kosteten die
+    Kernauskünfte des Merkmalfensters an der leeren Kopie 529 ms, an der
+    mitgenommenen 264, und die Kopie selbst beide Male 3 ms.
+
+    **Eine Kopie je Netz, nicht je Aufgabe** (gemessen am 25.09.2026). Die
+    Kernauskünfte des Merkmalfensters an einer zweiten Kopie neben der
+    Trägerfläche an dieser zu rechnen, gewann in der Kernsonde 160 ms und
+    verlor am Fenster: Drei Fäden teilten sich den GIL, die Trägerfläche
+    brauchte 334 statt 200 ms, und was die Auskünfte an Merkern der Kopie
+    füllen, fehlte danach ``at_point`` (77 statt 7 ms). Nacheinander an einer
+    Kopie stand die Maßgruppe der dichten Platte nach 420 ms, nebeneinander
+    nach 500.
     """
     source = as_mesh_data(mesh)
     raw = source.raw
@@ -390,7 +407,7 @@ def for_a_worker(mesh: Any) -> Any:
         if held is not None and held[0]() is raw:
             _worker_copies.move_to_end(key)
             return held[1]
-    copy = source.replacing(raw.copy())
+    copy = source.replacing(raw.copy(include_cache=True))
 
     def forget(_dead: Any, key: int = key) -> None:
         with _worker_copies_lock:
@@ -1209,6 +1226,16 @@ class PlacementFlow(QObject):
         einem **Klick** — der ist die ausdrückliche Ansage, das Loch woanders
         hinzusetzen. Beim Setzen einer neuen Bohrung wird er nie gesetzt, dort
         ändert sich nichts."""
+        self._seat_waits: int | None = None
+        """Für welche Anfrage (:attr:`_serial`) die Trägerfläche von selbst kommt.
+
+        **Bis dahin steht die Maßkarte nicht im Bild** (RM-232, 25.09.2026).
+        Ohne Fläche legt :meth:`redraw` sie oben rechts ab — richtig für ein
+        Werkzeug, das noch nirgends sitzt, und falsch, solange die Fläche am
+        gewählten Merkmal schon unterwegs ist: Dort stand die Karte *Bohrung
+        ändern* an der dichten Platte 150 ms neben dem Prüfbericht und sprang
+        dann neben die Bohrung. Eine abgelöste Anfrage zählt nicht mehr; ohne
+        Fläche danach gilt der Rückfall wie immer."""
         self._deepening = False
         #: Ob die Tiefe angehalten ist. Der Klick in der Tiefenstufe friert sie
         #: ein, damit die Maus sie nicht weiter verstellt, während man zum Knopf
@@ -1645,7 +1672,11 @@ class PlacementFlow(QObject):
         self._measure_scroll.setFixedHeight(max(1, min(height, room.height() - chrome - distances)))
         self._measure_box.setMaximumSize(max(width, 1), max(room.height(), 1))
         self._measure_box.adjustSize()
-        self._measure_box.show()
+        self._measure_box.setVisible(not self._seat_is_coming())
+
+    def _seat_is_coming(self) -> bool:
+        """Ob die Trägerfläche am Merkmal gerade gerechnet wird (:attr:`_seat_waits`)."""
+        return self._surface is None and self._seat_waits == self._serial
 
     def _begin_edit(self) -> None:
         """Eine Nutzergeste beginnt den stillen Entwurf, nie seine bloße Anzeige."""
@@ -1824,6 +1855,11 @@ class PlacementFlow(QObject):
         self._accept.setEnabled(False)
         self.viewport.setFocus(Qt.FocusReason.OtherFocusReason)
         if self._change_op is None:
+            # Die Fläche am Merkmal kommt gleich — schon die Neuzeichnung des
+            # Werkzeugauftrags legt die Maßkarte sonst an den Rückfallplatz,
+            # und ein Widget über der Grafikfläche einzublenden malt das
+            # ganze Fenster sofort, samt halb umgebautem Auswahlfenster.
+            self._seat_waits = self._serial if self._source_feature()[1] is not None else None
             self._request_tool()
             self._begin_at_feature()
         else:
@@ -2512,8 +2548,10 @@ class PlacementFlow(QObject):
         """
         entry, feature = self._source_feature()
         if entry is None or self._surface is not None:
+            self._seat_waits = None
             return
         if feature is None:
+            self._seat_waits = None
             self._begin_on_a_face(entry)
             return
         stamp = self._serial
@@ -2527,6 +2565,7 @@ class PlacementFlow(QObject):
         # sie doch woanders hinsetzen will, klickt; siehe
         # :attr:`_seated_at_feature`.
         self._seated_at_feature = True
+        self._seat_waits = stamp
         mesh = for_a_worker(entry.mesh)
         values = self.dialog.values()
         target = None
@@ -2558,7 +2597,11 @@ class PlacementFlow(QObject):
             return prepared, placement.at_point(prepared, mouth), own_mouth
 
         def done(value: Any) -> None:
-            if not isValid(self) or self._disposed or not self.active or stamp != self._serial:
+            if not isValid(self) or self._disposed:
+                return
+            if self._seat_waits == stamp:
+                self._seat_waits = None
+            if not self.active or stamp != self._serial:
                 return
             if value is None:
                 self._no_seat_at_feature()
@@ -2573,7 +2616,11 @@ class PlacementFlow(QObject):
             self._settle()
 
         def failed(_detail: str) -> None:
-            if isValid(self) and not self._disposed and self.active and stamp == self._serial:
+            if not isValid(self) or self._disposed:
+                return
+            if self._seat_waits == stamp:
+                self._seat_waits = None
+            if self.active and stamp == self._serial:
                 self._no_seat_at_feature()
 
         self.session.placement_async(on_the_copy(mesh, compute), done, failed)
@@ -2648,6 +2695,7 @@ class PlacementFlow(QObject):
         if hole is None and (face is None or not face.face_indices):
             return
         stamp = self._serial
+        self._seat_waits = stamp
         object_id = entry.id
         first = int(face.face_indices[0]) if face is not None and face.face_indices else -1
         features = entry.features
@@ -2680,9 +2728,16 @@ class PlacementFlow(QObject):
             return prepared, placement.at_point(prepared, seat), False
 
         def done(value: Any) -> None:
-            if not isValid(self) or self._disposed or not self.active or stamp != self._serial:
+            if not isValid(self) or self._disposed:
+                return
+            if self._seat_waits == stamp:
+                self._seat_waits = None
+            if not self.active or stamp != self._serial:
                 return
             if value is None or self._surface is not None:
+                # Ohne Sitz zielt der Zeiger; die Maßkarte gehört dann an
+                # ihren Rückfallplatz.
+                self.redraw()
                 return
             self._prepared, self._surface, in_the_hole = value
             self._own_mouth = None
@@ -2711,7 +2766,9 @@ class PlacementFlow(QObject):
         def failed(_detail: str) -> None:
             # Eine Fläche, auf der nichts sitzen kann, ist kein Fehler: Dann
             # zielt der Zeiger, wie vor diesem Weg auch.
-            return
+            if isValid(self) and not self._disposed and self._seat_waits == stamp:
+                self._seat_waits = None
+                self.redraw()
 
         self.session.placement_async(on_the_copy(mesh, compute), done, failed)
 
@@ -4207,7 +4264,9 @@ class PlacementFlow(QObject):
                 item.set_visible(tool_valid and local_visible and not has_outline)
         if not local_visible:
             self._canvas.hide()
-            if self._measure_group is not None:
+            # Eine wartende Karte bleibt, wo sie ist: auch ``raise_`` malt über
+            # der Grafikfläche das ganze Fenster sofort (:attr:`_seat_waits`).
+            if self._measure_group is not None and not self._seat_is_coming():
                 self._measure_box.move(
                     max(measure_room.left(), measure_room.right() - self._measure_box.width() + 1),
                     measure_room.top(),

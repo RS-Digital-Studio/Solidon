@@ -458,7 +458,7 @@ def test_an_unsound_exact_cut_is_not_delivered_but_cut_on_the_mesh(
 ) -> None:
     """Eine gültig gemeldete, aber ungültige exakte Differenz geht nicht hinaus.
 
-    Gemessen an ``carpet-corner-clip.step`` (F:\\3D Dateien): Die Nut in der
+    Gemessen an ``carpet-corner-clip.step`` (F:\3D Dateien): Die Nut in der
     Bohrung sank das Volumen um genau das Werkzeug, der Körper war ungültig,
     und der Klassierer fand die Luft der Bohrung danach innen. Hier wird der
     Fall erzwungen, damit der Rückweg einmal gefahren wird — wie jede Stufe der

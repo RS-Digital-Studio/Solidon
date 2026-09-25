@@ -1840,12 +1840,28 @@ class GfxRenderer(Renderer):
 
     def render(self) -> None:
         if self.widget is not None:
-            # Synchron wie VTKs ``Render()``: ``request_draw`` allein stellte
-            # nur einen Wunsch in die Ereignisschleife, und der Viewport
-            # wüsste nicht, wann das Bild steht — eine Messung zählte dann
-            # Wünsche statt Bilder (0,9 ms je Stellung, 05.09.2026). Vor dem
-            # ersten Anzeigen gibt es nichts zu erzwingen; dann bleibt der
-            # Wunsch stehen, und der erste Aufbau zeichnet ihn.
+            # **Bestellt, nicht erzwungen** (RM-232, 25.09.2026). Bis dahin
+            # zeichnete ``render()`` synchron wie VTKs ``Render()`` — damit
+            # eine Messung Bilder und nicht Wünsche zählte (0,9 ms je
+            # Stellung, 05.09.2026). ``force_draw`` ist aber ``repaint()``, und
+            # das malt das **ganze Fenster** sofort, samt der Nachbarn, deren
+            # Layout noch aussteht: Nach einem Bohrungsklick stand das
+            # Auswahlfenster 120 ms halb gelegt auf dem Schirm — ohne
+            # Überschrift, die Zeilen gequetscht —, und die Ansicht zeigte die
+            # neue Auswahl ein Bild vor dem Fenster, das zu ihr gehört. Sechs
+            # solche Bilder waren es je Klick. ``update()`` stellt das Bild in
+            # Qts Malrunde, die nach den Layouts kommt: ein Bild je
+            # Ereignisrunde, in dem alles zueinander passt. Wer es sofort
+            # braucht, ruft :meth:`render_now`. Vor dem ersten Anzeigen bleibt
+            # der Wunsch stehen, und der erste Aufbau zeichnet ihn.
+            self._canvas.request_draw(self._draw)
+            if self.widget.isVisible():
+                self.widget.update()
+            return
+        self._draw()
+
+    def render_now(self) -> None:
+        if self.widget is not None:
             self._canvas.request_draw(self._draw)
             if self.widget.isVisible():
                 self._canvas.force_draw()

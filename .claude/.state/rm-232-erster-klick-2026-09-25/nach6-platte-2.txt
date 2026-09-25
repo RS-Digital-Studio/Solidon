@@ -1,0 +1,18 @@
+geladen in 2.50 s
+Druckbefunde laufen noch: True
+auf Druckbefunde gewartet: 0.56 s
+obj_1 203776 10
+hole_1         hole       synchron    37.2 ms  bis Ruhe   333.6 ms  längste Lücke   39 ms  Befunde ruhig
+hole_2         hole       synchron    36.6 ms  bis Ruhe   162.9 ms  längste Lücke   37 ms  Befunde ruhig
+face_1         face       synchron    41.4 ms  bis Ruhe    58.2 ms  längste Lücke   43 ms  Befunde ruhig
+face_2         face       synchron    32.0 ms  bis Ruhe    47.3 ms  längste Lücke   32 ms  Befunde ruhig
+hole_1         hole       synchron    47.5 ms  bis Ruhe    86.0 ms  längste Lücke   48 ms  Befunde ruhig
+hole_2         hole       synchron    37.1 ms  bis Ruhe    71.8 ms  längste Lücke   40 ms  Befunde ruhig
+hole: bis Ruhe Median 86.0 ms (ohne ersten), erster 333.6 ms; Lücke Median 40 ms, max 48 ms
+face: bis Ruhe Median 47.3 ms (ohne ersten), erster 58.2 ms; Lücke Median 32 ms, max 43 ms
+  seat_of [Arbeiter]                     4 Aufrufe  zusammen    197.5 ms  größter   130.9 ms
+  feature_answers [Arbeiter]             4 Aufrufe  zusammen    168.4 ms  größter   117.3 ms
+  prepare_surface [Arbeiter]             4 Aufrufe  zusammen    115.6 ms  größter   115.5 ms
+  at_point [Arbeiter]                    4 Aufrufe  zusammen     21.0 ms  größter     5.9 ms
+  prepare_tool [Arbeiter]                4 Aufrufe  zusammen      6.1 ms  größter     2.6 ms
+  bore_entrance [Arbeiter]               2 Aufrufe  zusammen      0.1 ms  größter     0.0 ms

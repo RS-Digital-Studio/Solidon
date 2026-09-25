@@ -1976,13 +1976,15 @@ def _complete_shape_comparison(
     # Der Vergleich zweier Ausschnitte wird je Körper gemerkt: Das Merkmal-
     # fenster fragt ihn bei jedem Klick für jede Handlung, der Steckbrief
     # noch einmal — an der Lochplatte mit 360 000 Dreiecken 0,47 s je Klick
-    # für vier Bohrungen (gemessen am 22.09.2026).
+    # für vier Bohrungen (gemessen am 22.09.2026). **Und ungeordnet:** Der
+    # Vergleich prüft beide Richtungen, Bohrung 2 gegen 1 ist dieselbe Frage
+    # wie 1 gegen 2 — an der dichten Platte kostete jede 10 ms (RM-232).
     same: bool = remembered(
         "same_surface_patch",
         _one_body(context.mesh).raw,
         (),
         lambda: _same_surface_patch(reference_patch, candidate_patch),
-        extra=(_shape_key(reference), _shape_key(candidate)),
+        extra=frozenset((_shape_key(reference), _shape_key(candidate))),
     )
     if not same:
         return "different", None

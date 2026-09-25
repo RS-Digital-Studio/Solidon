@@ -92,7 +92,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Roberts Geste nachgestellt und verlegt (`7ff34c67`: je Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s → 1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-215 — 276 Befundstellen enden ohne Handlung](#rm-215) | Bedienung und Darstellung | Sollliste C1: 97 Warnungen und sieben Fehler ohne Weg, darunter fit.violated, gcode.spool_left_out, join.blocked, orient.support_likely — Test für alle, dann gebietsweise nachziehen |
-| [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Am 25.09.2026 nachgemessen und zwei Schritte gebaut: Arbeiterkopie und Trägerfläche je Netz gemerkt, Feldanordnung mit Vorfilter — Bohrung zu Bohrung am echten Fenster −25 bis −33 %. Offen: der erste Klick (Kernauskünfte und Markierung im Hauptfaden, kalte Fläche hält den GIL) und die Zeichnungen je Klick |
+| [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Erster Klick: Kernauskünfte im Arbeiter, Hauptfaden 172 → 36 ms, längste Lücke 171 → 52 ms; keine Zwischenbilder mehr (Ansicht bestellt ihr Bild, Maßkarte wartet auf ihren Platz). Am echten Fenster bleibt Bohrung zu Bohrung bei 350 ms: 140 native Widgets über der Grafikfläche, die Maßgruppe baut je Klick neu |
 | [RM-233 — Fünf Kleinigkeiten aus den Durchsichten, am Code bestätigt](#rm-233) | Bedienung und Darstellung | autosave wirft im Zeitgeber, Skizzen-Kontextmenü wird nie freigegeben, Objektnamen in der Sprache des Augenblicks, „Schwerpunkt" statt Hüllquadermitte, Rückfragekarte fest 520 Punkte |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -2602,6 +2602,34 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Fenster kosten dazu Sichtbarkeitswechsel im Merkmalfenster und die Bilder
   je Klick. Die drei `redraw` in `_place_from_feature_panel` sind billig
   (um 2 ms) — die Maßgruppe bestellt ihr Bild ohnehin gebündelt.
+
+  **Weitergebaut am 25.09.2026** (Sonden und Messungen unter
+  `.claude/.state/rm-232-erster-klick-2026-09-25/`). Die Kernauskünfte des
+  Merkmalfensters rechnet an einem Körper ab 20 000 Dreiecken der Arbeiter
+  (`MainWindow._answer_in_worker`, `panels.feature_answers`), an der
+  Arbeiterkopie, die jetzt die trimesh-Merker des Originals mitnimmt; die
+  Nachbarschaft der Platzierung liest den Eckenrang des Körpers
+  (`features.vertex_rank`, 114 → 30 ms), die Übergänge einer Bohrung werden
+  ab ihrer Wand gesucht statt im ganzen Netz (an 277 Bohrungen dieselbe
+  Antwort, 404 → 100 ms). Erster Bohrungsklick an der dichten Platte, offscreen:
+  172 → 36 ms im Hauptfaden, längste Lücke 171 → 52 ms, bis Ruhe 850 → 334 ms;
+  Bohrung zu Bohrung 72–89 ms. **Und die Zwischenbilder sind weg** (Robert:
+  „das panel von der bohrung in dem viewport an einer anderen stelle
+  gezeigt"): Die Ansicht bestellt ihr Bild für Qts Malrunde statt `repaint()`
+  (das malte das ganze Fenster samt halb gelegtem Auswahlfenster, sechsmal je
+  Klick), die Maßkarte wartet verborgen auf ihre Trägerfläche statt oben
+  rechts, das Merkmalfenster stellt vor dem Start der Maßgruppe um und legt
+  seine Layouts sofort, und die Operationsliste meldet ihre echte Höhe (der
+  Rollbalken sprang an). Gemessen an den Malereignissen: vorher zwei bis sechs
+  gequetschte Bilder je Klick, nachher keines, an Platte und Wabenhalter.
+  **Offen:** Am echten Fenster bleibt Bohrung zu Bohrung bei rund 350 ms an
+  beiden Körpern (Abnahme: Wabenhalter unter 100, Platte unter 300). 140 der
+  854 Widgets sind native Fenster — ohne `AA_DontCreateNativeWidgetSiblings`
+  macht Qt alle Geschwister der wgpu-Fläche nativ, damit die Karten darüber
+  liegen —, und jedes Ein- und Ausblenden kostet dort 1,3 ms und malt sofort;
+  dazu baut die Maßgruppe je Klick neu (`end_quiet_placement` → `dispose`,
+  fünf `redraw`), und `seat_of` rechnet seine Öffnungen und Kanten je Klick
+  neu (39 ms im Arbeiter).
 
 <a id="rm-233"></a>
 

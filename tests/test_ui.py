@@ -103,6 +103,144 @@ def test_the_repair_buttons_ask_for_exactly_what_they_say() -> None:
     assert len(applied) == 2, "kein zweiter Reparaturschritt"
 
 
+def _answers_stand_in(monkeypatch: pytest.MonkeyPatch, *, known: bool) -> Any:
+    """Ein Hauptfenster aus Stellvertretern für den Merkmalsweg mit großem Körper (RM-232)."""
+    from types import SimpleNamespace
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import placement as placement_module
+
+    monkeypatch.setattr(main_window_module, "ANSWERS_IN_WORKER_FROM", 12)
+    monkeypatch.setattr(main_window_module, "texture_steps_of", lambda *_a, **_k: ((), False))
+    monkeypatch.setattr(placement_module, "bore_step_of", lambda *_a, **_k: None)
+    feature = Feature(id="hole_1", kind="hole", provenance="detected", params={"diameter": 5.0})
+    entry = SimpleNamespace(
+        id="obj_1",
+        features={"hole_1": feature},
+        mesh=MeshData.of(trimesh.creation.box((10.0, 10.0, 10.0))),
+    )
+    result = SimpleNamespace(
+        completed=(), scene=SimpleNamespace(objects={"obj_1": entry, "obj_2": object()})
+    )
+    calls: list[tuple[str, Any]] = []
+    view = SimpleNamespace(
+        calls=calls,
+        entry=entry,
+        result=result,
+        session=SimpleNamespace(
+            last_result=result,
+            project=SimpleNamespace(document=object()),
+            protected_features=lambda _object: (),
+        ),
+        feature_panel=SimpleNamespace(
+            known_answers=lambda *_a: "gemerkt" if known else None,
+            show_feature=lambda feature_id, *_a, **_k: calls.append(("show", feature_id)),
+            remember_answers=lambda feature_id, *_a: calls.append(("remember", feature_id)),
+            request_in_view=lambda: calls.append(("in_view", None)),
+            clear=lambda: calls.append(("clear", None)),
+        ),
+        feature_dock=SimpleNamespace(reveal=lambda: None),
+        object_tree=SimpleNamespace(selected=lambda: "obj_1", selected_feature=lambda: "hole_1"),
+        part_step_of=lambda _feature: None,
+        _answer_in_worker=lambda feature_id, *_a: calls.append(("worker", feature_id)),
+        _op_dialog=None,
+        _quiet_placement=None,
+        _start_feature_preview=lambda: None,
+        _parameter_values=dict,
+        _on_error=lambda error: calls.append(("error", error)),
+        _lay_out_now=lambda: calls.append(("layout", None)),
+    )
+    view._show_feature_fields = lambda feature_id, entry, result, **kwargs: calls.append(
+        ("fields", kwargs.get("allow_worker", True))
+    )
+    return view
+
+
+@pytest.mark.parametrize("known", [False, True])
+def test_a_large_body_asks_its_feature_answers_in_the_worker_unless_they_are_known(
+    known: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der erste Klick an einer Bohrung eines großen Körpers rechnet nicht im Hauptfaden (RM-232).
+
+    Hohlraumkette, Handlungen und gleichartige Geschwister kosteten an der
+    dichten Platte (204 000 Dreiecke) 130 ms im Hauptfaden. Kennt das
+    Merkmalfenster die Antwort, baut es sofort; sonst holt sie der Arbeiter,
+    und bis dahin wird nichts angeboten.
+    """
+    view = _answers_stand_in(monkeypatch, known=known)
+
+    MainWindow._show_feature_fields(view, "hole_1", view.entry, view.result)
+
+    if known:
+        assert view.calls == [("show", "hole_1"), ("in_view", None), ("layout", None)]
+    else:
+        assert view.calls == [("worker", "hole_1"), ("layout", None)], "kein Aufbau davor"
+
+
+def test_without_the_worker_the_feature_fields_build_directly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der zweite Aufbau nach der Antwort geht nicht noch einmal in den Arbeiter."""
+    view = _answers_stand_in(monkeypatch, known=False)
+
+    MainWindow._show_feature_fields(view, "hole_1", view.entry, view.result, allow_worker=False)
+
+    assert view.calls == [("show", "hole_1"), ("in_view", None), ("layout", None)]
+
+
+@pytest.mark.parametrize("case", ["current", "superseded", "elsewhere", "stale"])
+def test_the_arriving_answer_is_kept_and_built_only_where_it_still_belongs(
+    case: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Antwort des Arbeiters gilt ihrem Merkmal, gebaut wird nur, was noch gewählt ist.
+
+    Auch ein abgelöster Arbeiter liefert eine richtige Antwort, solange die
+    Auswertung dieselbe ist — der nächste Klick auf sein Merkmal braucht sie.
+    Eine neue Auswertung dagegen hat andere Merkmale, und dann gilt nichts.
+    """
+    from types import SimpleNamespace
+
+    view = _answers_stand_in(monkeypatch, known=False)
+    worker, other = object(), object()
+    view._answers_worker = other if case == "superseded" else worker
+    if case == "elsewhere":
+        view.object_tree = SimpleNamespace(
+            selected=lambda: "obj_1", selected_feature=lambda: "hole_2"
+        )
+    if case == "stale":
+        view.session.last_result = object()
+
+    MainWindow._answers_arrived(view, ("obj_1", "hole_1", view.result), worker, "antwort")
+
+    expected = {
+        "current": [("remember", "hole_1"), ("fields", False)],
+        "superseded": [("remember", "hole_1")],
+        "elsewhere": [("remember", "hole_1")],
+        "stale": [],
+    }
+    assert view.calls == expected[case]
+
+
+@pytest.mark.parametrize("current", [True, False])
+def test_a_crashed_answer_worker_reports_instead_of_waiting(
+    current: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Programmfehler im Arbeiter ist einer: Bericht, kein ewiger Wartezustand."""
+    view = _answers_stand_in(monkeypatch, known=False)
+    worker = object()
+    view._answers_worker = worker if current else object()
+
+    MainWindow._answers_failed(view, worker, "Traceback …")
+
+    if current:
+        assert [name for name, _value in view.calls] == ["clear", "error"]
+        assert isinstance(view.calls[1][1], errors.InternalError)
+    else:
+        assert view.calls == [], "ein abgelöster Arbeiter meldet nichts"
+
+
 def _accept_after_preview(window: MainWindow, dialog: OperationDialog) -> None:
     """Übernehmen, sobald die Vorschau dargestellt ist — so wie der Kunde.
 

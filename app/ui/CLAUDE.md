@@ -1295,7 +1295,11 @@ oder `original_surface_hit` im Nebenthread darauf rechnen — sie füllen sonst
 dieselben trägen trimesh-Caches, an denen der Hauptthread währenddessen
 Hüllquader, Dreiecke und Kanten liest. Die Kopie bleibt je Szenennetz über
 den Fluss hinaus, und wer an ihr rechnet, tut es unter ihrem Schloss
-(`on_the_copy`; Regel in `wartezeit.md`).
+(`on_the_copy`; Regel in `wartezeit.md`). Sie nimmt die trimesh-Merker des
+Originals flach mit (`copy(include_cache=True)`: dieselben schreibgeschützten
+Felder, eigene neue Einträge). Eine Kopie je Netz, nicht je Aufgabe — zwei
+Kopien nebeneinander verloren am Fenster gegen den GIL und die geteilten
+Merker (gemessen, Docstring von `for_a_worker`).
 Auch die Durchsicht der Druckplatte liest die zuletzt aufgebaute Szene und
 deren sichtbare Körpermenge. Ihre Entscheidung wird bis zu einem Wechsel
 dieser beiden Eingaben behalten; Kamerabewegungen lösen keine erneute exakte
@@ -1858,11 +1862,27 @@ Beschriftung, Namen, Erklärung und Merker `_fill_row`; was keiner nimmt, geht
 mit `_drop_spare_rows`. Die Fokuskette wird nach einer Wiederverwendung neu
 gezogen (`_settle_row_order`, Halte über `_focus_stops` ohne Innenleben).
 Die Kernauskunft (Hohlraumkette, Handlungen, Geschwister) merkt
-`_answers_for` je Merkmal für einen Körper und eine Merkmalsliste.
+`_answers_for` je Merkmal für einen Körper und eine Merkmalsliste; gerechnet
+wird sie in `feature_answers` (rein, ohne Qt). **An einem großen Körper rechnet
+sie der Arbeiter** (`MainWindow._answer_in_worker`, ab
+`ANSWERS_IN_WORKER_FROM` Dreiecken, an der Arbeiterkopie unter ihrem Schloss):
+Bis die Antwort da ist, zeigt `show_pending` Name, Maß und einen Satz, keine
+Zeile zum Klicken; `remember_answers` legt sie ab, und der Aufbau läuft mit
+`allow_worker=False` noch einmal. Die Antwort eines abgelösten Arbeiters wird
+gemerkt, solange die Auswertung dieselbe ist; gebaut wird nur, was noch gewählt
+ist. Jeder Aufbau endet mit `_lay_out_now` — die Höhe des Fensters pflanzt sich
+sonst über mehrere Ereignisrunden fort, und die Malrunde käme dazwischen
+(Regel in `ansicht.md`, „Die Ansicht bestellt ihr Bild").
 Sichtbarkeit wechselt nur über `_set_shown`; `clear(rebuilding=True)` lässt
 die Knopfzeile bis `_settle_apply` stehen. Ein Test vergleicht ein
 wiederverwendetes Fenster mit einem frisch gebauten Zustand für Zustand
 (`test_feature_panel.py`, `_panel_state`).
+
+Die Maßgruppe startet erst, wenn das Fenster auf „Messen" steht
+(`set_measuring` vor `PlacementFlow.start`): Der Start blendet Felder über der
+Grafikfläche ein, und das malt sofort. Ihre Karte bleibt verborgen, solange
+die Trägerfläche am Merkmal gerechnet wird (`PlacementFlow._seat_waits`), und
+erscheint an ihrem Platz, nicht erst am Rückfallplatz oben rechts.
 
 Die Klickkette davor meldet einmal: `ObjectTree.select_feature` leert die
 Auswahl geblockt, und `MainWindow._on_features_selected` baut an Bohrung und
