@@ -658,7 +658,7 @@ def command_recognize(args: argparse.Namespace) -> int:
             )
             if standing:
                 print(
-                    f"  - {tr('Neu entscheiden')}: solidon3d recognize {args.path} "
+                    f"  - {tr('Neu entscheiden')}: {DISTRIBUTION_NAME} recognize {args.path} "
                     f"--on {' '.join(standing)}",
                     file=sys.stderr,
                 )
