@@ -56,6 +56,7 @@
 - [Knopf und Handlung](knopf-und-handlung-fragen-verschieden.md) · [Reparatur vor den Fehler](reparatur-muss-vor-den-fehler.md) · [Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) · [Architektur-Sonde](architektur-sonde-type-checking.md)
 - [Fenstermaske über Vulkan verliert das Gerät](fenstermaske-ueber-vulkan-verliert-das-geraet.md)
 - [Fremdes Fenster in der Aufnahme](fremdes-fenster-in-der-aufnahme.md) — mehrere Sitzungen, ein Schirm; `foreign_window_over`.
+- [Native Fläche steckt Geschwister an](native-flaeche-steckt-geschwister-an.md) — 140 von 854 Widgets nativ; AA_DontCreateNativeWidgetSiblings, Widget im endgültigen Elternteil bauen.
 
 ## Messen und Prüfen
 
@@ -76,6 +77,7 @@
 - [Verrauschte Tafel ≠ Haut](verrauschte-tafel-trennt-nicht-von-sanfter-kruemmung.md) — erst gemischte, starke Knicke trennen Rauschen von Krümmung; eigener Auslöser, nie zur Summe.
 - [Rückfallregel an ihren Treffern messen](rueckfallregel-an-ihren-treffern-messen.md) — zählen, was sie verwirft; ein Fortschritt über der Schweißtoleranz ist Rauschen.
 - [Kurzes Splinestück besteht jede Kreisprüfung](kurzes-splinestueck-besteht-jede-kreispruefung.md) — erst gleicher Radius über das ganze Stück plus genaue Ecken belegen einen Bogen.
+- [Sonde ohne exec löscht nichts](sonde-ohne-exec-loescht-nichts.md) · [rendercanvas-Takt bremst nicht](rendercanvas-takt-bremst-nicht.md) — DeferredDelete selbst zustellen; max_fps=30 gemessen folgenlos.
 
 ## Shell und Git
 

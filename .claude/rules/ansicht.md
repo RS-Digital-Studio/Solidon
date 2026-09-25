@@ -1208,6 +1208,55 @@ seinem Minimum und die Knopfzeile zu ihrer Wunschhöhe passt; der Stapel zeigt,
 wer gemalt hat (`.claude/.state/rm-232-erster-klick-2026-09-25/scenario_malen.py`).
 Vorher: je Bohrungsklick zwei bis sechs gequetschte Bilder; nachher keines.
 
+### Nur was über der Grafikfläche liegt, hat ein eigenes Fenster (RM-232, 25.09.2026)
+
+Die Grafikfläche ist ein natives Fenster (`present_method="screen"`). Ohne
+`AA_DontCreateNativeWidgetSiblings` macht Qt daraufhin jede Ebene darüber
+nativ **samt allen ihren Geschwistern**, und ein Elternteil, in das ein
+natives Widget umzieht, zwingt jedes spätere Kind dazu. Gemessen am
+Wabenhalter: 140 von 854 Widgets waren eigene Windows-Fenster, darunter die
+ganze Andockleiste — das Merkmalfenster entstand als Kind des Hauptfensters,
+wurde dort nativ und nahm das beim Umzug mit. Ein Bohrungsklick legte 30
+Fenster an; jedes `setVisible` kostete 1,3 ms und malte sofort, neun Fenster
+anlegen und zeigen 19 ms, löschen 13, verbergen 9, jedes `move` 1 ms
+(Sonden unter `.claude/.state/rm-232-erster-klick-2026-09-25/`:
+`scenario_nativ*.py`, `scenario_fensterkosten.py`).
+
+* **Die Regel setzt die Ansicht vor ihrer Fläche** (`overlay.keep_widgets_alien`
+  in `Viewport.__init__`), und nativ wird nur, was über der Fläche liegen muss:
+  die direkten Kinder von `Viewport` und `OverlayHost`, beim Polieren
+  (`overlay.hold_above_the_view`, in beider `childEvent`). Ihr Inhalt malt in
+  ihr Fenster. Danach: 20 native Widgets im Stand, 29 mit gewählter Bohrung.
+* **Ein Widget entsteht in seinem endgültigen Elternteil.** Wer es als Kind der
+  Ansicht baut und dann in eine Karte hängt, gibt ihm beim Polieren ein
+  eigenes Fenster, das es behält — und ein natives Kind macht seine Vorfahren
+  nativ. So kamen Kantenmaße und das Feldkästchen der Maßgruppe zu je einem
+  zweiten Fenster im ersten (`PlacementFlow._build_floating` baut die Halter
+  vor den Feldern, `FeaturePanel.measure_fields(op, None)`).
+* **Was über der Fläche schwebt, bleibt über den Fluss hinaus.** Jeder
+  Merkmalklick baut einen neuen `PlacementFlow`; der Vorgänger legt seine
+  schwebenden Widgets und die Maßtinte verborgen und ungebunden ab
+  (`_park_floating`, Verbindungen in `_links`), der Nachfolger übernimmt sie
+  (`_take_parked_floating`, `_wire_floating`). Höchstens ein Satz je Ansicht,
+  unter ihrer Kennung und nicht in einem schwachen Wörterbuch: Der Satz hält
+  die Ansicht selbst fest, ein Schlüssel, den sein Wert hält, fiele nie weg.
+  `destroyed` der Ansicht räumt den Eintrag.
+* **Wer prüft, ob etwas verdeckt ist**, fährt `scenario_verdeckt.py`: jedes
+  sichtbare Widget, das die Fläche schneidet und in eine Fläche darunter malt.
+  Nach dem Umbau über acht Fensterzustände, Werkzeuge und Skizzenmodus: keines.
+
+Gemessen am echten Fenster, abwechselnd mit derselben Fremdlast (`ab.sh`),
+Bohrung zu Bohrung bis zur Fläche: Wabenhalter 200–208 → 127–128 ms, dichte
+Platte 310 → 163 ms; unter schwerer Fremdlast bleibt das Verhältnis (452 →
+261 ms). Ohne jedes native Überlagerungsfenster — unsichtbar, nur als
+Untergrenze — wären es 100–103 ms.
+
+**Nicht der Bildtakt.** rendercanvas nimmt ohne Angabe `max_fps=30`; am
+Qt-Bildschirmweg wartet eine Bestellung trotzdem nur 2,5 ms im Median bis zum
+Zeichnen (`scenario_bestellung.py`), und eine Kamerageste zeichnet mit 30 und
+mit dem Takt des Bildschirms gleich oft (`scenario_zug.py`). Wer dort ansetzt,
+misst vorher.
+
 ### Jeder Ansichts-Setter prüft auf Änderung
 
 Sieben von acht Szenenaufbauten waren unnötig — ein Klick auf einen Körper,

@@ -90,7 +90,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Roberts Geste nachgestellt und verlegt (`7ff34c67`: je Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s → 1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-215 — 276 Befundstellen enden ohne Handlung](#rm-215) | Bedienung und Darstellung | Sollliste C1: 97 Warnungen und sieben Fehler ohne Weg, darunter fit.violated, gcode.spool_left_out, join.blocked, orient.support_likely — Test für alle, dann gebietsweise nachziehen |
-| [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Erster Klick: Kernauskünfte im Arbeiter, Hauptfaden 172 → 36 ms, längste Lücke 171 → 52 ms; keine Zwischenbilder mehr (Ansicht bestellt ihr Bild, Maßkarte wartet auf ihren Platz). Am echten Fenster bleibt Bohrung zu Bohrung bei 350 ms: 140 native Widgets über der Grafikfläche, die Maßgruppe baut je Klick neu |
+| [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Erster Klick: Kernauskünfte im Arbeiter, Hauptfaden 172 → 36 ms; keine Zwischenbilder mehr. Am echten Fenster Bohrung zu Bohrung Wabenhalter 208 → 128 ms, Platte 310 → 163 ms (native Widgets 140 → 20, die Maßgruppe übergibt ihre Widgets). Offen: Wabenhalter unter 100 ms — Rest im Hauptfaden (Umschalten des Merkmalfensters, Werkzeug neu im Renderer, zwei Bilder) |
 | [RM-233 — Fünf Kleinigkeiten aus den Durchsichten, am Code bestätigt](#rm-233) | Bedienung und Darstellung | autosave wirft im Zeitgeber, Skizzen-Kontextmenü wird nie freigegeben, Objektnamen in der Sprache des Augenblicks, „Schwerpunkt" statt Hüllquadermitte, Rückfragekarte fest 520 Punkte |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -2493,6 +2493,30 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   dazu baut die Maßgruppe je Klick neu (`end_quiet_placement` → `dispose`,
   fünf `redraw`), und `seat_of` rechnet seine Öffnungen und Kanten je Klick
   neu (39 ms im Arbeiter).
+
+  **Weitergebaut am Abend** (Regel in `ansicht.md`, „Nur was über der
+  Grafikfläche liegt, hat ein eigenes Fenster"). Die Ansicht setzt
+  `AA_DontCreateNativeWidgetSiblings`, bevor ihre Fläche entsteht, und macht
+  nur die direkten Kinder von Ansicht und Überlagerung nativ — 140 → 20 native
+  Widgets, das Merkmalfenster ohne ein einziges. Schwebende Widgets und
+  Maßtinte gehen von Fluss zu Fluss, statt je Klick neu zu entstehen; `start`
+  baut einmal auf; `end_quiet_placement` räumt den Rücklauf aus dem eigenen
+  Abbau nicht doppelt; die Platzsuche der Felder fragt der Nähe nach (952
+  Proben je Klick → wenige, an drei Körpern dieselben Plätze). Gemessen
+  abwechselnd bei gleicher Last, Bohrung zu Bohrung bis zur Fläche: Wabenhalter
+  200–208 → 127–128 ms, dichte Platte 310 → 163 ms — die Platte unter ihrer
+  Schwelle. `seat_of` war kein Posten: allein 18 ms am ersten Loch einer
+  Fläche, 1,4 danach (der Merker an `prepare_surface`); die 39 ms im Profil
+  waren Warten auf den GIL. Der Bildtakt von rendercanvas (`max_fps=30`) bremst
+  nichts (`render/CLAUDE.md`). **Offen:** der Wabenhalter unter 100 ms. Ohne
+  jedes native Überlagerungsfenster wären es 100–103 ms; was bleibt, liegt im
+  Hauptfaden: Das Merkmalfenster schaltet beim Wechsel der Bohrung zweimal um
+  (`set_measuring` aus und an, 87 Sichtbarkeitswechsel, rund 10 ms), das
+  Werkzeug der neuen Bohrung kommt neu in den Renderer (rund 10 ms),
+  `_redraw_features` 14 ms, zwei Bilder je Klick, Zeigen und Bewegen der neun
+  nativen Felder (rund 20 ms). Gemessen wird mit `ab.sh` und
+  `scenario_zeitleiste.py`, und nur bei ruhiger Maschine — unter Fremdlast
+  schwankt schon der synchrone Teil zwischen 58 und 97 ms.
 
 <a id="rm-233"></a>
 

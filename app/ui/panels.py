@@ -7987,9 +7987,14 @@ class FeaturePanel(QWidget):
         self._in_view.setAccessibleDescription(promise)
 
     def measure_fields(
-        self, op: str, parent: QWidget, *, feature: Feature | None = None
+        self, op: str, parent: QWidget | None, *, feature: Feature | None = None
     ) -> tuple[Any, QWidget, dict[str, QWidget]] | None:
-        """Die aktive Maßgruppe aus derselben fachlichen Feldbeschreibung aufbauen."""
+        """Die aktive Maßgruppe aus derselben fachlichen Feldbeschreibung aufbauen.
+
+        ``parent`` ist ``None``, wenn der Empfänger das Kästchen gleich in sein
+        eigenes Layout nimmt: Ein Umweg über die Ansicht machte es nativ
+        (``overlay.hold_above_the_view``).
+        """
         from app.ui.op_dialog import ValueField
 
         entry = next((entry for entry in self._runs.values() if entry.op == op), None)
@@ -8049,6 +8054,11 @@ class FeaturePanel(QWidget):
     def measure_group(self, op: str) -> Any:
         """Das belegte Gruppenangebot zum Binden an den angezeigten Entwurf."""
         return self._groups.get(op)
+
+    @property
+    def measuring(self) -> bool:
+        """Ob gerade Maße im Bild stehen (:meth:`set_measuring`)."""
+        return self._measuring
 
     def set_measuring(self, active: bool, *, op: str | None = None, begun: bool = False) -> None:
         """Während der Maßgruppe gibt es deren Felder und Abschluss genau einmal.

@@ -870,7 +870,10 @@ die ihr überwachtes Objekt überleben: `stop_watching_the_dying`)
 hinter der Ansicht, eigene `CLAUDE.md`: der Vertrag `api.py`, pygfx über wgpu
 in `gfx_renderer.py`, gebaut über `factory.py`, Kameraführung, Formen,
 Bewegungsgriff) · `overlay.py` (Zonen über der
-Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py` ·
+Ansicht statt neben ihr; dazu die Regel, dass nur ihre direkten Kinder und die
+der Ansicht ein eigenes natives Fenster bekommen — `keep_widgets_alien`,
+`hold_above_the_view`, Regel in `ansicht.md`) · `loading.py` (Ladeanzeige,
+§2.8) · `cursors.py` ·
 `placement_flow.py` (Oberflächenplatzierung aus dem Operationsdialog, §18.5) ·
 `spacemouse.py` (die 3D-Maus als zweite Hand an derselben Kamera: HID-Leser
 über hidapi, auf dem Mac der Treiberweg über das 3Dconnexion-Framework des
@@ -1883,6 +1886,12 @@ Die Maßgruppe startet erst, wenn das Fenster auf „Messen" steht
 Grafikfläche ein, und das malt sofort. Ihre Karte bleibt verborgen, solange
 die Trägerfläche am Merkmal gerechnet wird (`PlacementFlow._seat_waits`), und
 erscheint an ihrem Platz, nicht erst am Rückfallplatz oben rechts.
+Leiste, Maßkarte, Kanten-, Mitten- und Tiefenmaß und die Maßtinte gehen von
+Fluss zu Fluss (`_build_floating` einmal, `_wire_floating` je Fluss,
+`_park_floating` beim Abbau, `_take_parked_floating` beim nächsten Aufbau);
+`start` baut dabei einmal auf (`_redraw_held`), und `end_quiet_placement`
+räumt den Rücklauf aus dem eigenen `dispose` nicht ein zweites Mal
+(`_ending_quiet_placement`).
 
 Die Klickkette davor meldet einmal: `ObjectTree.select_feature` leert die
 Auswahl geblockt, und `MainWindow._on_features_selected` baut an Bohrung und

@@ -47,8 +47,24 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from app.core.bootstrap import load_operations  # noqa: E402
 
+if os.environ.get("PROBE_NO_SIBLINGS"):
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontCreateNativeWidgetSiblings)
 application = QApplication([])
 load_operations()
+# Vergleich unter gleicher Last: „alt" nimmt die Regel gegen native Geschwister
+# zurück, „alien" lässt auch die Überlagerungen ohne eigenes Fenster (unsichtbar
+# über der Fläche, nur für die Zeit).
+VARIANT = os.environ.get("PROBE_VARIANT", "")
+if VARIANT == "alt":
+    import app.ui.viewport as _viewport_module  # noqa: E402
+
+    _viewport_module.keep_widgets_alien = lambda: None
+elif VARIANT == "alien":
+    import app.ui.overlay as _overlay_module  # noqa: E402
+    import app.ui.viewport as _viewport_module  # noqa: E402
+
+    _viewport_module.hold_above_the_view = lambda event: None
+    _overlay_module.hold_above_the_view = lambda event: None
 from app.ui.app import build_application  # noqa: E402
 
 application, window = build_application([])
@@ -78,6 +94,9 @@ window.setGeometry(screen.availableGeometry())
 window.showMaximized()
 for _ in range(30):
     application.processEvents()
+if os.environ.get("PROBE_FPS"):
+    _fps = application.primaryScreen().refreshRate() if os.environ["PROBE_FPS"] == "screen" else float(os.environ["PROBE_FPS"])
+    window.viewport.renderer._canvas.set_update_mode("ondemand", max_fps=_fps)
 
 
 def pump(seconds: float) -> None:
@@ -93,6 +112,9 @@ def idle(settle: float = 0.6, timeout: float = 180.0) -> None:
     quiet = time.monotonic()
     while time.monotonic() < deadline:
         application.processEvents()
+        # Wie die Ereignisschleife: ohne exec() löscht processEvents nichts, was
+        # deleteLater bestellt hat, und die Sonde sammelte je Klick 30 Widgets an.
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         time.sleep(0.005)
         flow = window._quiet_placement
         approval = window._preview_approval

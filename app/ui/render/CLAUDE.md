@@ -249,6 +249,16 @@ im Stand 7,2 gegen 3,8 ms, Speicher gleich —, stehen im Gedächtnis
 Kundendateien, eine Leistungsreihe bis 3,15 Millionen Dreiecke und ein
 Aufbauprofil.
 
+**Der Bildtakt von rendercanvas bremst hier nichts.** `QRenderWidget` nimmt
+ohne Angabe `max_fps=30`, und der Scheduler liest sich, als warte jede
+Bestellung auf den nächsten Takt von 33 ms. Gemessen am echten Fenster
+(25.09.2026, 144-Hz-Bildschirm): Eine Bestellung wartet im Median 2,5 ms bis
+zum Zeichnen, höchstens 7,4 ms, und eine Kamerageste zeichnet mit 30 wie mit
+dem Takt des Bildschirms 41 bis 48 Bilder je Sekunde bei gleicher
+Hauptfadenlast (`scenario_bestellung.py`, `scenario_zug.py` unter
+`.claude/.state/rm-232-erster-klick-2026-09-25/`). Ein Takt nach dem
+Bildschirm war gebaut und ist wieder draußen.
+
 Drei Dinge daran haben je einen Lauf gekostet, bevor die Zahlen stimmten, und
 gelten weiter: rendercanvas zeigt ein Qt-Widget von sich aus über eine
 **Bitmap** an (zurücklesen, `QPainter`; 20 ms je Bild — deshalb

@@ -11933,6 +11933,8 @@ class MainWindow(QMainWindow):
         self._quiet_host: Any = None
         """Ihr Träger. Getrennt geführt, damit ein Test ihn fragen kann, ohne
         durch den Fluss zu greifen."""
+        self._ending_quiet_placement = False
+        """Ob :meth:`end_quiet_placement` gerade einen Fluss abbaut."""
         self._quiet_target: tuple[str, str | None] | None = None
         """Körper und Merkmal, deren Stelle die laufende Platzierung bearbeitet."""
         self._quiet_order: Callable[[str, Mapping[str, Any]], _PreviewOrder | None] | None = None
@@ -16077,8 +16079,13 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         body = result.scene.objects.get(object_id) if result is not None else None
         feature_id = str(params.get("at_feature") or self.object_tree.selected_feature() or "")
+        # **Ohne Elternteil, bis die Maßgruppe es aufnimmt.** Als Kind der
+        # Ansicht bekam das Kästchen beim Polieren ein natives Fenster
+        # (``overlay.hold_above_the_view``) und zog damit den Rollbereich der
+        # Maßgruppe samt Innenfläche nach: drei Fenster je Bohrungsklick,
+        # die über der Grafikfläche niemand braucht (RM-232, 25.09.2026).
         built = self.feature_panel.measure_fields(
-            op, self.viewport, feature=body.features.get(feature_id) if body is not None else None
+            op, None, feature=body.features.get(feature_id) if body is not None else None
         )
         if built is None:
             return
@@ -16418,6 +16425,12 @@ class MainWindow(QMainWindow):
         Übernehmen. Wer die Auswahl wechselt, ein Projekt öffnet oder dieselbe
         Handlung noch einmal anstößt, räumt sie deshalb hier ab.
         """
+        if self._ending_quiet_placement:
+            # Der Träger meldet sein Ende aus dem Abbau heraus (``dispose`` →
+            # ``reject`` → ``finished``); was danach zu räumen ist, räumt der
+            # äußere Aufruf. Doppelt kostete es je Bohrungsklick zwei
+            # Umschaltungen des Merkmalfensters (RM-232).
+            return
         if self._preview_approval is not None and self._preview_approval.owner is self._quiet_host:
             self._forget_preview_approval()
         flow, self._quiet_placement = self._quiet_placement, None
@@ -16425,8 +16438,13 @@ class MainWindow(QMainWindow):
         self._quiet_target = None
         self._quiet_order = None
         if flow is not None:
-            flow.dispose()
-        self.feature_panel.set_measuring(False)
+            self._ending_quiet_placement = True
+            try:
+                flow.dispose()
+            finally:
+                self._ending_quiet_placement = False
+        if self.feature_panel.measuring:
+            self.feature_panel.set_measuring(False)
         self.viewport.set_feature_gizmo_blocked(False)
         self._drop_feature_preview()
 

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6cc3ee18-dc46-4c89-b9d6-d1e1862ffcc1
-  modified: 2026-09-17T21:12:21.832Z
+  modified: 2026-09-25T11:49:41.999Z
 ---
 
 Am 14.09.2026, Übernahme von RM-080 aus einem Worktree in `F:\3D Druck`
@@ -49,6 +49,12 @@ wertlos: Sie galt für den Augenblick, in dem sie lief.
 - **Index-Aufbau als Ganzes gegen einen HEAD:** `git rev-parse HEAD` vor dem
   ersten und nach dem letzten `update-index`; ungleich heißt: alles verwerfen
   und gegen den neuen HEAD neu bauen — ein halber Index ist keiner.
+- **Und noch einmal unmittelbar vor `git commit`.** Am 25.09.2026 lag
+  zwischen Aufbau und Commit ein Probelauf im Worktree (zehn Minuten); eine
+  andere Sitzung mischte in der Zeit origin ein, und mein Commit über den
+  privaten Index nahm deren ganzen Commit zurück (e8013c5c nahm 95a7770c
+  zurück, ebf084d9 stellte ihn her). Die Prüfung, die es gefangen hätte:
+  `git diff --cached --name-only HEAD` enthält nur eigene Pfade.
 - **Gegenprobe, dass der Index genau die eigenen Zeilen trägt:**
   `git diff --cached --numstat | sort` gegen
   `git -C <worktree> diff <basis> --numstat | sort` — gleiche Zahlen je Datei,

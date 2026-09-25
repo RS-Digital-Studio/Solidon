@@ -18,6 +18,7 @@ from typing import Any, Final, Protocol, cast, runtime_checkable
 import numpy as np
 from PySide6.QtCore import (
     QEvent,
+    QMetaObject,
     QObject,
     QPoint,
     QPointF,
@@ -341,6 +342,91 @@ class QuietHost(QObject):
 #: selbst eine sucht (:meth:`PlacementFlow._face_to_seat_on`) — die Normale
 #: gegen z; 0,7 ist rund 45 Grad.
 UPWARD_FACE: Final = 0.7
+
+
+#: Die schwebenden Widgets eines Flusses, wie :meth:`PlacementFlow._park_floating`
+#: sie ablegt und :meth:`PlacementFlow._take_parked_floating` sie übernimmt.
+_FLOATING: Final = (
+    "_canvas",
+    "_bar",
+    "_title",
+    "_note",
+    "_tool_legend",
+    "_back",
+    "_accept",
+    "_measure_box",
+    "_measure_scroll",
+    "_measure_note",
+    "_measure_accept",
+    "_measure_cancel",
+    "_measure_scope_box",
+    "_measure_scope_layout",
+    "_measures",
+    "_depth_measure",
+    "_rest",
+    "_centre",
+    "_centre_measures",
+    "_reference_boxes",
+)
+
+#: Höchstens ein abgelegter Satz je Ansicht, unter ihrer Kennung (RM-232).
+#:
+#: **Kein schwaches Wörterbuch mit der Ansicht als Schlüssel**: Der Satz hält
+#: sie selbst fest (die Maßtinte kennt ihre Ansicht), und ein Schlüssel, den
+#: sein eigener Wert hält, fällt nie weg. Der Eintrag geht mit dem
+#: ``destroyed`` der Ansicht (:func:`_park`).
+_PARKED: dict[int, dict[str, Any]] = {}
+#: Die Ansichten, deren ``destroyed`` den Eintrag schon räumt — eine
+#: Verbindung je Ansicht, nicht eine je Ablage.
+_PARKED_WATCHED: set[int] = set()
+
+
+def _park(viewport: QWidget, floating: dict[str, Any]) -> None:
+    """Einen Satz für die Ansicht ablegen; ein älterer, den niemand nahm, wird gelöscht."""
+    key = id(viewport)
+    previous = _PARKED.pop(key, None)
+    if previous is not None:
+        _discard_floating(previous)
+    if key not in _PARKED_WATCHED:
+        _PARKED_WATCHED.add(key)
+        viewport.destroyed.connect(lambda *_args, key=key: _forget_parked(key))
+    _PARKED[key] = floating
+
+
+def _forget_parked(key: int) -> None:
+    """Die Ansicht ist weg — und mit ihr jedes ihrer Widgets."""
+    _PARKED.pop(key, None)
+    _PARKED_WATCHED.discard(key)
+
+
+def _floating_widgets(floating: Mapping[str, Any]) -> list[QObject]:
+    """Jedes Qt-Objekt eines abgelegten Satzes, die Listen aufgelöst — ohne die Tinte."""
+    found: list[QObject] = []
+    for value in floating.values():
+        found.extend(value if isinstance(value, list) else [value])
+    return [item for item in found if isinstance(item, QObject)]
+
+
+def _discard_floating(floating: Mapping[str, Any]) -> None:
+    """Einen abgelegten Satz löschen, den niemand mehr übernimmt.
+
+    Gelöscht werden die Widgets, deren Elternteil nicht selbst zum Satz
+    gehört — die an der Ansicht hängen; alles darin geht mit ihnen. Die
+    Maßtinte räumt ihre Elemente aus dem Renderer.
+    """
+    canvas = floating.get("_canvas")
+    if isinstance(canvas, _Dimensions):
+        canvas.dispose()
+    widgets = [
+        widget
+        for widget in _floating_widgets(floating)
+        if isinstance(widget, QWidget) and isValid(widget)
+    ]
+    inside = {id(widget) for widget in widgets}
+    for widget in widgets:
+        if id(widget.parentWidget()) not in inside:
+            widget.hide()
+            widget.deleteLater()
 
 
 #: Wie viele Szenennetze ihre Arbeiterkopie über einen Fluss hinaus behalten.
@@ -1198,6 +1284,8 @@ class PlacementFlow(QObject):
         self._commit_pending = False
         self._accept_pending = False
         self._updating = False
+        self._redraw_held = False
+        """Ob :meth:`start` den Aufbau für sein eigenes ``redraw`` zurückhält."""
         #: Ob die Tiefenstufe läuft — Stufe 2 der Platzierung. Der Klick legt
         #: die Stelle fest, danach zieht die Maus die Tiefe (Robert,
         #: 09.09.2026: „wenn wir klicken wollen wir die bohrung von der
@@ -1257,118 +1345,11 @@ class PlacementFlow(QObject):
         #: Und die Kamerastellung davor, aus demselben Grund: Der Schwenk quer
         #: zur Werkzeugachse gehört der Stufe, nicht dem Kunden.
         self._camera_before: tuple[Any, Any, Any, float | None] | None = None
-        self._canvas = _Dimensions(self.viewport)
-        self._bar = QFrame(self.viewport)
-        self._bar.setObjectName("surface_placement_bar")
-        self._bar.setAutoFillBackground(True)
-        layout = QHBoxLayout(self._bar)
-        layout.setContentsMargins(ROOMY, NORMAL, ROOMY, NORMAL)
-        self._title = QLabel(str(self.spec_of().title), self._bar)
-        layout.addWidget(self._title)
-        self._note = QLabel(tr("Auf eine Oberfläche zeigen."), self._bar)
-        self._note.setWordWrap(True)
-        layout.addWidget(self._note, 1)
-        self._tool_legend = QLabel(self._bar)
-        self._tool_legend.hide()
-        layout.addWidget(self._tool_legend)
-        self._back = QPushButton(tr("Werte bearbeiten"), self._bar)
-        self._back.clicked.connect(self.back)
-        layout.addWidget(self._back)
-        self._accept = QPushButton(tr("Position übernehmen"), self._bar)
-        self._accept.clicked.connect(self.accept)
-        layout.addWidget(self._accept)
-        self._bar.hide()
         self._measure_group: QWidget | None = None
         self._measure_scope: QWidget | None = None
         self._measure_interpret: Callable[[], bool] | None = None
         self._measure_refresh: Callable[[Mapping[str, Any]], None] | None = None
         self._interpreting_fields = False
-        self._measure_box = QFrame(self.viewport)
-        self._measure_box.setObjectName("placement_measure_fields")
-        self._measure_box.setAutoFillBackground(True)
-        measure_layout = QVBoxLayout(self._measure_box)
-        measure_layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
-        measure_layout.setSpacing(NORMAL)
-        self._measure_scroll = QScrollArea(self._measure_box)
-        self._measure_scroll.setWidgetResizable(True)
-        self._measure_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._measure_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        measure_layout.addWidget(self._measure_scroll)
-        self._measure_note = QLabel(self._measure_box)
-        self._measure_note.setWordWrap(True)
-        self._measure_note.hide()
-        measure_layout.addWidget(self._measure_note)
-        measure_actions = QHBoxLayout()
-        measure_actions.addStretch()
-        self._measure_accept = QPushButton(tr("Übernehmen"), self._measure_box)
-        self._measure_accept.setObjectName("placement_measure_accept")
-        self._measure_accept.setIcon(icon("done", self._measure_accept))
-        self._measure_accept.clicked.connect(self.accept)
-        measure_actions.addWidget(self._measure_accept)
-        self._measure_cancel = QPushButton(tr("Abbrechen"), self._measure_box)
-        self._measure_cancel.setObjectName("placement_measure_cancel")
-        self._measure_cancel.setIcon(icon("cancel", self._measure_cancel))
-        self._measure_cancel.clicked.connect(self._cancel_measures)
-        measure_actions.addWidget(self._measure_cancel)
-        measure_layout.addLayout(measure_actions)
-        self._measure_scope_box = QWidget(self._measure_box)
-        self._measure_scope_layout = QVBoxLayout(self._measure_scope_box)
-        self._measure_scope_layout.setContentsMargins(0, 0, 0, 0)
-        self._measure_scope_box.hide()
-        measure_layout.addWidget(self._measure_scope_box)
-        self._measure_box.hide()
-        self._measures = [LengthSpin(self.viewport), LengthSpin(self.viewport)]
-        for index, field in enumerate(self._measures):
-            field.setObjectName(f"placement_distance_{index + 1}")
-            field.setAccessibleName(
-                tr("Abstand zu Kante {number}").replace("{number}", str(index + 1))
-            )
-            field.setToolTip(tr("Abstand ändern; die Position bleibt dabei auf dieser Fläche."))
-            self._watch_field(field)
-            # **Das Rad dreht ein Feld erst mit Fokus** — nach dem eigenen
-            # Filter angemeldet, damit es vor ihm gefragt wird: Die Felder
-            # schweben über dem Bild, und eine Radraste darüber meinte bis zum
-            # 21.09.2026 den Zoom, verstellte aber das Maß und band den
-            # Entwurf (Sonde ``probe_wheel_over_field.py``).
-            wheel_needs_focus(field)
-            field.valueChangedMm.connect(self._distance_changed)
-            field.hide()
-        #: Die Tiefe als Zahl — dasselbe Feld wie die Kantenabstände, damit
-        #: Ausdruck und Einheitenumschaltung mitkommen. Sie steht in Stufe 3 an
-        #: der Stelle der Kantenmaße: Die zeigen die Fläche, auf der gesetzt
-        #: wurde, und die ist dort entschieden (Robert, 09.09.2026: „die maße
-        #: fehlen auch bzw zeigen noch die von der Fläche wo wir die Bohrung
-        #: gesetzt haben").
-        self._depth_measure = LengthSpin(self.viewport)
-        self._depth_measure.setObjectName("placement_depth")
-        self._depth_measure.setAccessibleName(tr("Tiefe der Bohrung"))
-        self._depth_measure.setToolTip(tr("Tiefe eintippen oder mit der Maus ziehen."))
-        self._watch_field(self._depth_measure)
-        wheel_needs_focus(self._depth_measure)
-        self._depth_measure.valueChangedMm.connect(self._depth_typed)
-        self._depth_measure.hide()
-        #: Was an Wand stehen bleibt — das Gegenstück zur Tiefe. Eine Zahl und
-        #: kein Feld: Sie folgt aus Tiefe und Materialstärke und ist nichts,
-        #: was man eintippt.
-        self._rest = QLabel(self.viewport)
-        self._rest.setObjectName("placement_rest")
-        self._rest.setAutoFillBackground(True)
-        self._rest.hide()
-        self._centre = QLabel(self.viewport)
-        self._centre.setAutoFillBackground(True)
-        self._centre.hide()
-        self._centre_measures = [LengthSpin(self.viewport), LengthSpin(self.viewport)]
-        for index, field in enumerate(self._centre_measures):
-            field.setObjectName(f"placement_centre_distance_{index + 1}")
-            field.setAccessibleName(
-                tr("Abstand zum Mittelpunkt – Richtung {number}").format(number=index + 1)
-            )
-            field.setPrefix(tr("Mitte {number}: ").format(number=index + 1))
-            field.setToolTip(tr("Der Maßpfeil zeigt die Richtung auf dieser Fläche."))
-            self._watch_field(field)
-            wheel_needs_focus(field)
-            field.valueChangedMm.connect(self._centre_changed)
-            field.hide()
         self._reference_pick: int | None = None
         self._held_references: tuple[placement.EdgeReference, ...] | None = None
         self._held_centre = ""
@@ -1380,32 +1361,12 @@ class PlacementFlow(QObject):
         Abstand wieder gültig macht (Griff, neue Stelle, Neuaufbau), setzt
         ``_distance_valid``; der Hinweis daneben blieb sonst mit „außerhalb"
         stehen, während Übernehmen längst frei war (Review 24.09.2026)."""
-        self._reference_boxes: list[QWidget] = []
-        # **Der Bezugswechsel steht nicht im Bild** (Robert, 21.09.2026,
-        # RM-197: „das mit bezug ändern hintendran brauche ich garnicht").
-        # Bis dahin trug jedes Kantenmaß ein Auswahlfeld *Bezug ändern* hinter
-        # sich — die doppelte Breite je Beschriftung, mitten über der Platte.
-        # Die Wahl bleibt erreichbar, wo sie niemanden stört: als Kontextmenü
-        # des Maßes (Rechtsklick oder Menütaste, `_reference_menu`), gebaut je
-        # Aufruf und danach weggeräumt. Der Rahmen um das Feld bleibt: Er ist,
-        # was `redraw` an die Maßlinie legt und die Verteilung freihält.
-        for index, reference_field in enumerate((*self._measures, self._centre)):
-            box = QWidget(self.viewport)
-            layout = QHBoxLayout(box)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(SPACE)
-            layout.addWidget(reference_field)
-            reference_field.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            reference_field.customContextMenuRequested.connect(
-                lambda at, slot=index: self._reference_menu(slot, at)
-            )
-            self._reference_boxes.append(box)
-            box.hide()
-        # **Die Tabulatortaste geht denselben Weg wie das Auge** (`oberflaeche.md`):
-        # erst die zwei Kantenmaße, dann die Mitten.
-        ordered = [*self._measures, *self._centre_measures]
-        for earlier, later in pairwise(ordered):
-            QWidget.setTabOrder(earlier, later)
+        self._links: list[QMetaObject.Connection] = []
+        """Was die schwebenden Widgets mit diesem Fluss verbindet — getrennt,
+        sobald er sie abgibt (:meth:`_park_floating`)."""
+        if not self._take_parked_floating():
+            self._build_floating()
+        self._wire_floating()
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(16)
@@ -1860,8 +1821,16 @@ class PlacementFlow(QObject):
             # und ein Widget über der Grafikfläche einzublenden malt das
             # ganze Fenster sofort, samt halb umgebautem Auswahlfenster.
             self._seat_waits = self._serial if self._source_feature()[1] is not None else None
-            self._request_tool()
-            self._begin_at_feature()
+            # **Ein Aufbau für den ganzen Start** (RM-232). Der Werkzeugauftrag
+            # baute die Maßgruppe schon einmal auf, und das ``redraw`` am Ende
+            # des Starts gleich noch einmal — rund 6 ms je Bohrungsklick für
+            # einen Zustand, den niemand zu sehen bekam.
+            self._redraw_held = True
+            try:
+                self._request_tool()
+                self._begin_at_feature()
+            finally:
+                self._redraw_held = False
         else:
             epoch = self._epoch
             self._note.setText(tr("Die Oberfläche vor diesem Schritt wird vorbereitet …"))
@@ -2146,9 +2115,7 @@ class PlacementFlow(QObject):
         self.session.projectChanged.disconnect(self._document_changed)
         if isinstance(self.dialog, QuietHost):
             self.dialog.reject()
-        for widget in self._widgets():
-            widget.deleteLater()
-        self._canvas.dispose()
+        self._park_floating()
 
     def _after_slot_proposal(self, *_args: object) -> None:
         """Ein gezogenes Langloch wartet — die Maße bleiben und zeichnen neu."""
@@ -2172,6 +2139,235 @@ class PlacementFlow(QObject):
             *self._reference_boxes,
             *self._centre_measures,
         )
+
+    def _build_floating(self) -> None:
+        """Die schwebenden Widgets bauen: Leiste, Maßkarte, Kanten-, Mitten- und Tiefenmaß.
+
+        Nur was für jeden Fluss gleich ist — Aufbau, Namen, Symbole und die
+        Tabulatorreihenfolge. Was einen Fluss an sie bindet, steht in
+        :meth:`_wire_floating`, damit der nächste sie übernehmen kann
+        (:meth:`_take_parked_floating`). Die Maßtinte gehört dazu: Ihre acht
+        Elemente legt der Renderer je neuem Fluss sonst noch einmal an, rund
+        9 ms je Bohrungsklick (RM-232).
+        """
+        self._canvas = _Dimensions(self.viewport)
+        self._bar = QFrame(self.viewport)
+        self._bar.setObjectName("surface_placement_bar")
+        self._bar.setAutoFillBackground(True)
+        layout = QHBoxLayout(self._bar)
+        layout.setContentsMargins(ROOMY, NORMAL, ROOMY, NORMAL)
+        self._title = QLabel(self._bar)
+        layout.addWidget(self._title)
+        self._note = QLabel(self._bar)
+        self._note.setWordWrap(True)
+        layout.addWidget(self._note, 1)
+        self._tool_legend = QLabel(self._bar)
+        layout.addWidget(self._tool_legend)
+        self._back = QPushButton(tr("Werte bearbeiten"), self._bar)
+        layout.addWidget(self._back)
+        self._accept = QPushButton(self._bar)
+        layout.addWidget(self._accept)
+        self._bar.hide()
+        self._measure_box = QFrame(self.viewport)
+        self._measure_box.setObjectName("placement_measure_fields")
+        self._measure_box.setAutoFillBackground(True)
+        measure_layout = QVBoxLayout(self._measure_box)
+        measure_layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        measure_layout.setSpacing(NORMAL)
+        self._measure_scroll = QScrollArea(self._measure_box)
+        self._measure_scroll.setWidgetResizable(True)
+        self._measure_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._measure_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        measure_layout.addWidget(self._measure_scroll)
+        self._measure_note = QLabel(self._measure_box)
+        self._measure_note.setWordWrap(True)
+        measure_layout.addWidget(self._measure_note)
+        measure_actions = QHBoxLayout()
+        measure_actions.addStretch()
+        self._measure_accept = QPushButton(tr("Übernehmen"), self._measure_box)
+        self._measure_accept.setObjectName("placement_measure_accept")
+        self._measure_accept.setIcon(icon("done", self._measure_accept))
+        measure_actions.addWidget(self._measure_accept)
+        self._measure_cancel = QPushButton(tr("Abbrechen"), self._measure_box)
+        self._measure_cancel.setObjectName("placement_measure_cancel")
+        self._measure_cancel.setIcon(icon("cancel", self._measure_cancel))
+        measure_actions.addWidget(self._measure_cancel)
+        measure_layout.addLayout(measure_actions)
+        self._measure_scope_box = QWidget(self._measure_box)
+        self._measure_scope_layout = QVBoxLayout(self._measure_scope_box)
+        self._measure_scope_layout.setContentsMargins(0, 0, 0, 0)
+        self._measure_scope_box.hide()
+        measure_layout.addWidget(self._measure_scope_box)
+        self._measure_box.hide()
+        # **Erst die Halter, dann die Felder darin.** Was als Kind der Ansicht
+        # entsteht und dort poliert wird, bekommt ein eigenes natives Fenster
+        # (``overlay.hold_above_the_view``) und behält es beim Umzug in den
+        # Halter; ein Kantenmaß kostete so bei jedem Bohrungsklick ein
+        # zweites Fenster im ersten (RM-232, 25.09.2026).
+        self._reference_boxes: list[QWidget] = [QWidget(self.viewport) for _slot in range(3)]
+        self._measures = [
+            LengthSpin(self._reference_boxes[0]),
+            LengthSpin(self._reference_boxes[1]),
+        ]
+        for index, field in enumerate(self._measures):
+            field.setObjectName(f"placement_distance_{index + 1}")
+            field.hide()
+        #: Die Tiefe als Zahl — dasselbe Feld wie die Kantenabstände, damit
+        #: Ausdruck und Einheitenumschaltung mitkommen. Sie steht in Stufe 3 an
+        #: der Stelle der Kantenmaße: Die zeigen die Fläche, auf der gesetzt
+        #: wurde, und die ist dort entschieden (Robert, 09.09.2026: „die maße
+        #: fehlen auch bzw zeigen noch die von der Fläche wo wir die Bohrung
+        #: gesetzt haben").
+        self._depth_measure = LengthSpin(self.viewport)
+        self._depth_measure.setObjectName("placement_depth")
+        self._depth_measure.setAccessibleName(tr("Tiefe der Bohrung"))
+        self._depth_measure.setToolTip(tr("Tiefe eintippen oder mit der Maus ziehen."))
+        self._depth_measure.hide()
+        #: Was an Wand stehen bleibt — das Gegenstück zur Tiefe. Eine Zahl und
+        #: kein Feld: Sie folgt aus Tiefe und Materialstärke und ist nichts,
+        #: was man eintippt.
+        self._rest = QLabel(self.viewport)
+        self._rest.setObjectName("placement_rest")
+        self._rest.setAutoFillBackground(True)
+        self._rest.hide()
+        self._centre = QLabel(self._reference_boxes[2])
+        self._centre.setAutoFillBackground(True)
+        self._centre.hide()
+        self._centre_measures = [LengthSpin(self.viewport), LengthSpin(self.viewport)]
+        for index, field in enumerate(self._centre_measures):
+            field.setObjectName(f"placement_centre_distance_{index + 1}")
+            field.setAccessibleName(
+                tr("Abstand zum Mittelpunkt – Richtung {number}").format(number=index + 1)
+            )
+            field.setPrefix(tr("Mitte {number}: ").format(number=index + 1))
+            field.setToolTip(tr("Der Maßpfeil zeigt die Richtung auf dieser Fläche."))
+            field.hide()
+        # **Der Bezugswechsel steht nicht im Bild** (Robert, 21.09.2026,
+        # RM-197: „das mit bezug ändern hintendran brauche ich garnicht").
+        # Bis dahin trug jedes Kantenmaß ein Auswahlfeld *Bezug ändern* hinter
+        # sich — die doppelte Breite je Beschriftung, mitten über der Platte.
+        # Die Wahl bleibt erreichbar, wo sie niemanden stört: als Kontextmenü
+        # des Maßes (Rechtsklick oder Menütaste, `_reference_menu`), gebaut je
+        # Aufruf und danach weggeräumt. Der Rahmen um das Feld bleibt: Er ist,
+        # was `redraw` an die Maßlinie legt und die Verteilung freihält.
+        for box, reference_field in zip(
+            self._reference_boxes, (*self._measures, self._centre), strict=True
+        ):
+            box_layout = QHBoxLayout(box)
+            box_layout.setContentsMargins(0, 0, 0, 0)
+            box_layout.setSpacing(SPACE)
+            box_layout.addWidget(reference_field)
+            reference_field.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            box.hide()
+        # **Die Tabulatortaste geht denselben Weg wie das Auge** (`oberflaeche.md`):
+        # erst die zwei Kantenmaße, dann die Mitten.
+        ordered = [*self._measures, *self._centre_measures]
+        for earlier, later in pairwise(ordered):
+            QWidget.setTabOrder(earlier, later)
+
+    def _wire_floating(self) -> None:
+        """Die schwebenden Widgets an diesen Fluss binden — frisch gebaut oder übernommen.
+
+        Was ein Fluss an ihnen verstellt und der nächste nicht vor dem Zeigen
+        selbst setzt, beginnt hier von vorn: Titel, Hinweis, Knopftexte, die
+        Nebenzeilen, Namen und Tipps der Kantenmaße und begonnene Eingaben.
+        Jede Verbindung zu diesem Fluss steht in :attr:`_links`.
+        """
+        link = self._links.append
+        self._title.setText(str(self.spec_of().title))
+        self._note.setText(tr("Auf eine Oberfläche zeigen."))
+        self._tool_legend.clear()
+        self._tool_legend.hide()
+        self._accept.setText(tr("Position übernehmen"))
+        self._accept.setEnabled(True)
+        self._measure_note.clear()
+        self._measure_note.hide()
+        self._measure_accept.setEnabled(True)
+        for setter in (
+            self._measure_accept.setToolTip,
+            self._measure_accept.setStatusTip,
+            self._measure_accept.setAccessibleDescription,
+        ):
+            setter("")
+        link(self._back.clicked.connect(self.back))
+        link(self._accept.clicked.connect(self.accept))
+        link(self._measure_accept.clicked.connect(self.accept))
+        link(self._measure_cancel.clicked.connect(self._cancel_measures))
+        for index, field in enumerate(self._measures):
+            field.setPrefix("")
+            field.setAccessibleName(
+                tr("Abstand zu Kante {number}").replace("{number}", str(index + 1))
+            )
+            field.setToolTip(tr("Abstand ändern; die Position bleibt dabei auf dieser Fläche."))
+            link(field.valueChangedMm.connect(self._distance_changed))
+        link(self._depth_measure.valueChangedMm.connect(self._depth_typed))
+        for field in self._centre_measures:
+            link(field.valueChangedMm.connect(self._centre_changed))
+        for field in (*self._measures, self._depth_measure, *self._centre_measures):
+            field.lineEdit().setModified(False)
+            self._watch_field(field)
+            # **Das Rad dreht ein Feld erst mit Fokus** — nach dem eigenen
+            # Filter angemeldet, damit es vor ihm gefragt wird: Die Felder
+            # schweben über dem Bild, und eine Radraste darüber meinte bis zum
+            # 21.09.2026 den Zoom, verstellte aber das Maß und band den
+            # Entwurf (Sonde ``probe_wheel_over_field.py``). An einem
+            # übernommenen Feld rückt derselbe Filter wieder nach vorn.
+            wheel_needs_focus(field)
+        for index, reference_field in enumerate((*self._measures, self._centre)):
+            link(
+                reference_field.customContextMenuRequested.connect(
+                    lambda at, slot=index: self._reference_menu(slot, at)
+                )
+            )
+
+    def _take_parked_floating(self) -> bool:
+        """Die schwebenden Widgets des vorigen Flusses an derselben Ansicht übernehmen.
+
+        **Ein Merkmalklick baut einen neuen Fluss**, und jeder baute bis zum
+        25.09.2026 seine neun Widgets über der Grafikfläche neu — neun
+        native Fenster anlegen, zeigen, verbergen und löschen, am echten
+        Fenster rund 40 ms je Bohrungsklick (RM-232, ``scenario_fensterkosten``).
+        Der Vorgänger legt sie beim Abbau verborgen und ohne Verbindungen ab
+        (:meth:`_park_floating`); fehlt eines, baut dieser Fluss neu.
+        """
+        parked = _PARKED.pop(id(self.viewport), None)
+        if parked is None:
+            return False
+        if not all(isValid(widget) for widget in _floating_widgets(parked)):
+            _discard_floating(parked)
+            return False
+        for name, value in parked.items():
+            setattr(self, name, value)
+        return True
+
+    def _park_floating(self) -> None:
+        """Die schwebenden Widgets verborgen und ungebunden für den nächsten Fluss ablegen.
+
+        Die Fachfelder und der Umfangshaken gehören dem Träger dieses Flusses
+        und gehen mit ihm; ein zuvor abgelegter Satz, den niemand übernommen
+        hat, wird gelöscht — abgelegt ist höchstens einer je Ansicht.
+        """
+        for connection in self._links:
+            QObject.disconnect(connection)
+        self._links.clear()
+        floating = {name: getattr(self, name) for name in _FLOATING}
+        group = self._measure_scroll.takeWidget()
+        if group is not None:
+            group.hide()
+            group.deleteLater()
+        scope = self._measure_scope
+        if scope is not None and isValid(scope):
+            self._measure_scope_layout.removeWidget(scope)
+            scope.hide()
+            scope.deleteLater()
+        self._measure_scope_box.hide()
+        for widget in (*self._widgets(), *self._measures, self._centre):
+            widget.hide()
+        self._canvas.hide()
+        if not isValid(self.viewport):
+            _discard_floating(floating)
+            return
+        _park(self.viewport, floating)
 
     def pointer(self, event: PointerEvent) -> bool:
         """Linksklick gehört der Platzierung, alle Kameragesten bleiben frei."""
@@ -4136,7 +4332,7 @@ class PlacementFlow(QObject):
         self.redraw(draw=False)
 
     def redraw(self, *, draw: bool = True) -> None:
-        if not self.active or self._disposed:
+        if not self.active or self._disposed or self._redraw_held:
             return
         # Ohne gemeinsame Fachgruppe hat die Langlochvorschau ihren eigenen
         # Übernehmen-Weg. Die gebundene Gruppe behält dagegen ihren Abschluss.
@@ -4636,7 +4832,8 @@ class PlacementFlow(QObject):
                 # von seiner Linie weg, nur um einen Strich nicht zu decken
                 # (Review 22.09.2026). Ein Feld über einem Strich ist besser als
                 # eines, das nirgends steht.
-                nearest = min(admissible, key=rank)
+                ordered = sorted(admissible, key=rank)
+                nearest = ordered[0]
                 chosen = nearest
                 # Die eigene Maßlinie zählt nicht: Auf einer Zeichnung sitzt die
                 # Zahl auf ihrer Linie; gemieden wird, was ein anderes Maß
@@ -4646,11 +4843,18 @@ class PlacementFlow(QObject):
                     for line in drawn
                     if ((line[0] + line[1]) / 2 - anchor).manhattanLength() > 1.0
                 ]
-                clear = [rect for rect in admissible if _clear_of_lines(rect, foreign)]
-                if clear:
-                    best = min(clear, key=rank)
-                    if rank(best)[0] <= rank(nearest)[0] + STICKY_FIELDS * height:
-                        chosen = best
+                # **Der Nähe nach gefragt, und nur bis zur Grenze** (RM-232).
+                # Der erste freie Platz ist der nächste freie, und hinter der
+                # Grenze gewönne keiner mehr. Bis zum 25.09.2026 wurde jeder
+                # zulässige Platz gegen jede fremde Linie geprüft — 952 Proben
+                # je Bohrungsklick am Wabenhalter für einen einzigen Platz.
+                reach = rank(nearest)[0] + STICKY_FIELDS * height
+                for rect in ordered:
+                    if rank(rect)[0] > reach:
+                        break
+                    if _clear_of_lines(rect, foreign):
+                        chosen = rect
+                        break
                 found[widget] = chosen
                 taken.append(chosen)
                 drawn.append((QPointF(chosen.center()), anchor))

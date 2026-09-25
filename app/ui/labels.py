@@ -345,9 +345,15 @@ def wheel_needs_focus(widget: QWidget) -> None:
     nimmt dem Rad den Fokuswechsel, der Filter reicht die Raste ohne Fokus an
     den Rollbereich weiter. Wer ins Feld klickt, dreht danach wie gewohnt.
     Gilt für Dreh- und Auswahlfelder; ein Haken kennt kein Rad.
+
+    **Ein zweiter Aufruf legt keinen zweiten Filter an**, sondern setzt den
+    vorhandenen wieder nach vorn — Qt fragt den zuletzt angemeldeten Filter
+    zuerst. So bleibt die Reihenfolge, wenn ein Feld seinen Besitzer wechselt
+    und dessen Filter nach diesem kommt (``PlacementFlow._wire_floating``).
     """
     widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-    widget.installEventFilter(_WheelNeedsFocus(widget))
+    helper = widget.findChild(_WheelNeedsFocus, options=Qt.FindChildOption.FindDirectChildrenOnly)
+    widget.installEventFilter(helper if helper is not None else _WheelNeedsFocus(widget))
 
 
 class NumberSpin(QDoubleSpinBox):
