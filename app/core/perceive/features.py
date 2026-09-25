@@ -5697,29 +5697,8 @@ def _coincident_vertices(body: trimesh.Trimesh) -> bool:
     Ein geschweißtes Netz hat keine, und die Frage kostet einmal so viel wie
     eine Lesung des ganzen Körpers, nicht einmal je Fleck.
     """
-    canonical = _canonical_vertices(body)
+    canonical = vertex_rank(body)
     return bool(int(canonical.max()) + 1 < len(canonical)) if len(canonical) else False
-
-
-def _canonical_vertices(body: trimesh.Trimesh) -> np.ndarray:
-    """Je Ecke die Nummer ihres Punkts — deckungsgleiche Ecken teilen sie.
-
-    Die Nummern folgen der lexikographischen Ordnung der Koordinaten, also
-    genau der Reihenfolge, die ``np.unique(vertices, axis=0)`` je Fleck
-    lieferte. Einmal je Körper gerechnet statt einmal je Fleck: An der
-    Schüssel mit 215 000 Dreiecken und deckungsgleichen Ecken sortierte jede
-    der 443 Lesungen ihre Punkte als Zeilen (gemessen am 22.09.2026).
-    """
-    result: np.ndarray = remembered(
-        "canonical_vertices",
-        body,
-        (),
-        lambda: np.asarray(
-            np.unique(np.asarray(body.vertices, dtype=float), axis=0, return_inverse=True)[1],
-            dtype=np.int64,
-        ).reshape(-1),
-    )
-    return result
 
 
 def _fans_connected(
@@ -5814,10 +5793,10 @@ def _read_surface_support(
     if _coincident_vertices(body):
         # Über die Punktnummern des Körpers, nicht über die Koordinaten des
         # Flecks: dieselben Punkte in derselben Reihenfolge, ohne je Fleck
-        # Zeilen zu sortieren (:func:`_canonical_vertices`). Vertreten wird
+        # Zeilen zu sortieren (:func:`vertex_rank`). Vertreten wird
         # jeder Punkt von seiner kleinsten benutzten Ecke — ``used`` steigt,
         # also ist das ihr erstes Vorkommen.
-        canonical = _canonical_vertices(body)
+        canonical = vertex_rank(body)
         _distinct, first_seen, vertex_of = np.unique(
             canonical[used], return_index=True, return_inverse=True
         )
@@ -7458,7 +7437,7 @@ def in_body_order(body: trimesh.Trimesh, groups: Sequence[Sequence[int]]) -> lis
       Zusammenlegung benachbarter Bögen.
 
     Geordnet wird deshalb nach den Ecken: jede Ecke bekommt ihren Rang nach
-    ihren Koordinaten (:func:`_vertex_rank`, einmal je Körper), jedes Dreieck
+    ihren Koordinaten (:func:`vertex_rank`, einmal je Körper), jedes Dreieck
     die drei Ränge seiner Ecken aufsteigend, und die Dreiecke folgen diesen
     drei Zahlen; die Flecken folgen ihrem ersten Dreieck. Gleich sind nur
     deckungsgleiche Dreiecke, und die tragen zur Summe dasselbe bei.
@@ -7474,7 +7453,7 @@ def in_body_order(body: trimesh.Trimesh, groups: Sequence[Sequence[int]]) -> lis
     # 120 000 davon mit, und je Fleck ``np.asarray`` und ``np.split`` kosteten
     # dort zusammen 0,4 s (23.09.2026).
     faces = np.fromiter(itertools.chain.from_iterable(kept), dtype=np.int64, count=int(sizes.sum()))
-    corners = np.sort(_vertex_rank(body)[np.asarray(body.faces, dtype=np.int64)[faces]], axis=1)
+    corners = np.sort(vertex_rank(body)[np.asarray(body.faces, dtype=np.int64)[faces]], axis=1)
     count = int(corners.max()) + 1
     if count <= _RANK_PACKING:
         key = (corners[:, 0] * count + corners[:, 1]) * count + corners[:, 2]
@@ -7530,11 +7509,24 @@ def _in_size_order(body: trimesh.Trimesh, patches: list[list[int]]) -> list[list
 _VERTEX_RANK_KEY: Final = "solidon_vertex_rank"
 
 
-def _vertex_rank(body: trimesh.Trimesh) -> np.ndarray:
+def vertex_rank(body: trimesh.Trimesh) -> np.ndarray:
     """Der Rang jeder Ecke nach ihren Koordinaten (x, dann y, dann z), einmal je Körper.
 
-    Deckungsgleiche Ecken teilen einen Rang. Unabhängig von der Reihenfolge
-    der Ecken und Dreiecke im Netz.
+    Deckungsgleiche Ecken teilen einen Rang: Er ist die Nummer ihres Punkts,
+    genau die, die ``np.unique(vertices, axis=0, return_inverse=True)``
+    liefert — in derselben lexikographischen Ordnung, fünfmal so schnell
+    (an der dichten Platte mit 101 882 Ecken 9 gegen 46 ms). Unabhängig von
+    der Reihenfolge der Ecken und Dreiecke im Netz.
+
+    **Die eine Stelle für „welche Ecken sind derselbe Ort".** Die Lesung der
+    Stützpunkte fragte sie über ``np.unique`` je Körper, die Ordnung der
+    Flecken über diesen Rang, die Nachbarschaft der Platzierung
+    (``scene.placement._welded_adjacency``) noch einmal über ``np.unique`` —
+    dreimal dieselbe Auskunft (RM-232, 25.09.2026). Einmal je Körper und
+    nicht je Fleck: An der Schüssel mit 215 000 Dreiecken und
+    deckungsgleichen Ecken sortierte jede der 443 Lesungen ihre Punkte als
+    Zeilen (22.09.2026). Der Rang liegt im Cache des Netzes, verfällt mit
+    seiner Geometrie und reist mit einer Kopie, die ihren Cache mitnimmt.
     """
     if _VERTEX_RANK_KEY in body._cache:
         cached: np.ndarray = body._cache[_VERTEX_RANK_KEY]
