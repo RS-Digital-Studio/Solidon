@@ -3258,6 +3258,13 @@ def move_feature(ctx: OpContext) -> OpResult:
         findings += _mouth_covered(
             "move_feature", body, placed.mesh, through_feature, source.features, travel, findings
         )
+        # **Und die Nachbarwand, wie beim Kippen und beim Neuschnitt an neuer
+        # Stelle** (25.09.2026): Eine Bohrung Ø 6, um 4,5 mm auf die Bohrung
+        # 10 mm daneben zu versetzt, riss die Trennwand auf, und an keinem Kern
+        # sagte der Schritt etwas.
+        findings += _without_opened_twice(
+            _neighbour_bore_findings(source, feature, cutting, ctx, moved=True), findings
+        )
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -3509,6 +3516,10 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         findings += _mouth_covered(
             "duplicate_feature", body, placed.mesh, feature, source.features, travel, findings
         )
+        findings += _without_opened_twice(
+            _neighbour_bore_findings(source, feature, cutting, ctx, moved=True, copy=True),
+            findings,
+        )
     if lost:
         # Wie beim Versetzen: Der Satz sagt „geht nicht mehr durch", und die
         # Kopie sagt es auch — hier blieb sie ``through=True`` (RM-220).
@@ -3615,6 +3626,9 @@ def _duplicate_cavity_chain(
         )
     findings += _mouth_covered(
         "duplicate_feature", body, placed.mesh, chain[0], source.features, travel, findings
+    )
+    findings += _without_opened_twice(
+        _neighbour_bore_findings(source, feature, cutting, ctx, moved=True, copy=True), findings
     )
     return OpResult(
         outputs=[
@@ -4780,7 +4794,9 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     # daneben, und der Bericht schwieg (RM-133, 23.09.2026) — eine Folge, die der
     # Kunde ändern kann, anders als die bloße Volumenänderung.
     if cavity and feature.kind in {"hole", "cone"}:
-        findings += _neighbour_bore_findings(source, feature, tool, ctx, turned=True)
+        findings += _without_opened_twice(
+            _neighbour_bore_findings(source, feature, tool, ctx, turned=True), findings
+        )
     carried = {**_without_old_triangles(source.features), feature.id: moved}
     if cavity:
         carried.update(
@@ -4935,7 +4951,9 @@ def _rotate_cavity_chain(
         features[bore.id] = dataclasses.replace(
             measured_bore, params={**measured_bore.params, "through": False}
         )
-    findings += _neighbour_bore_findings(source, feature, turned_tool, ctx, turned=True)
+    findings += _without_opened_twice(
+        _neighbour_bore_findings(source, feature, turned_tool, ctx, turned=True), findings
+    )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=placed.mesh, features=features)],
         findings=findings,
@@ -6098,9 +6116,17 @@ def _without_opened_twice(neighbours: list[Finding], already: Sequence[Finding])
     ``bore.breaks_out`` sieht nur, dass der Strahl das Material verlässt; ob
     dahinter ein Nachbar liegt, weiß der Nachbarbefund. Steht er da, fällt
     der allgemeinere Satz — die Liste des Aufrufers wird dafür geändert.
+    **Ebenso ``bore.over_the_edge``** (25.09.2026): Eine um 30° zur Nachbarin
+    gekippte Senkung mündete in deren Mündung, die Kantenprüfung sah dort Luft
+    und meldete „ragt seitlich über den Körper hinaus", an beiden Kernen neben
+    dem Nachbarbefund.
     """
     if any(entry.code == "bore.neighbour_opened" for entry in neighbours):
-        kept = [entry for entry in already if entry.code != "bore.breaks_out"]
+        kept = [
+            entry
+            for entry in already
+            if entry.code not in ("bore.breaks_out", "bore.over_the_edge")
+        ]
         if isinstance(already, list) and len(kept) != len(already):
             already[:] = kept
     return neighbours
@@ -7251,6 +7277,7 @@ def _neighbour_bore_findings(
     moved: bool = False,
     deeper: bool = False,
     turned: bool = False,
+    copy: bool = False,
 ) -> list[Finding]:
     """Nur eine durch diese Vergrößerung — oder diese Stelle — geschwächte
     Nachbarwand melden.
@@ -7258,7 +7285,10 @@ def _neighbour_bore_findings(
     ``moved`` sagt, dass das Werkzeug an einer neuen Stelle steht; der Satz
     nennt dann die Stelle als Ausweg, nicht den Durchmesser. ``deeper`` sagt
     dasselbe für eine neue Tiefe, ``turned``, dass es gekippt steht (*Merkmal
-    drehen*); dann ist der Ausweg ein anderer Winkel.
+    drehen*); dann ist der Ausweg ein anderer Winkel. ``copy`` sagt, dass das
+    Werkzeug eine Kopie setzt (*Merkmal verdoppeln*): Dann ist die Vorlage
+    selbst eine Nachbarin, und vorher gab es keine Wand, die dünner werden
+    konnte — jede zu dünne zählt.
 
     Der Hüllquader sortiert entfernte Kandidaten aus. Den Abstand bestimmen
     die echten, an ihren Endringen geschlossenen Hohlräume und das tatsächlich
@@ -7272,10 +7302,10 @@ def _neighbour_bore_findings(
     chains = cavity_chains(source.features, mesh)
     grouped = {section.id: chain for chain in chains for section in chain}
     own = grouped.get(feature.id, (feature,))
-    old = _paired_cavity_body(mesh, *own)
-    if old is None:
+    old = None if copy else _paired_cavity_body(mesh, *own)
+    if old is None and not copy:
         return []
-    seen = {section.id for section in own}
+    seen = set() if copy else {section.id for section in own}
     threshold = ctx.profile.minimum_wall_thickness
     tool_bounds = np.asarray(tool.raw.bounds)
     findings = []
@@ -7305,8 +7335,8 @@ def _neighbour_bore_findings(
         after_gap = surface_gap(tool, other, threshold)
         if after_gap is None or after_gap >= threshold - EPS_GEOM:
             continue
-        before_gap = surface_gap(old, other, threshold)
-        if before_gap is None or before_gap <= after_gap + EPS_GEOM:
+        before_gap = None if old is None else surface_gap(old, other, threshold)
+        if old is not None and (before_gap is None or before_gap <= after_gap + EPS_GEOM):
             continue
         opened = after_gap <= EPS_GEOM
         neighbour = neighbours[0]
@@ -7318,7 +7348,11 @@ def _neighbour_bore_findings(
                     opened, moved, after_gap, threshold, deeper=deeper, turned=turned
                 ),
                 feature_ids=(feature.id, neighbour.id),
-                values={"thickness": after_gap, "minimum": threshold, "previous": before_gap},
+                values={
+                    "thickness": after_gap,
+                    "minimum": threshold,
+                    **({} if before_gap is None else {"previous": before_gap}),
+                },
                 suggestions=(CORRECT_INPUT,),
             )
         )
@@ -9364,11 +9398,14 @@ def _exact_move_cavity(
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     filled = _exact_cavity_filled(solid, feature)
     ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
-    placed = _exact_rigid_cut(source, filled, feature, target, axis, travel)
+    placed, tool = _exact_rigid_cut(source, filled, feature, target, axis, travel)
     expected = dataclasses.replace(
         feature, params={**feature.params, "centre": target}, provenance="generated"
     )
     findings = _edge_findings(as_mesh_data(filled), [expected])
+    findings += _without_opened_twice(
+        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True), findings
+    )
     result = _exact_cavity_result(
         ctx, source, placed, op="move_feature", expected=expected, findings=findings
     )
@@ -9388,7 +9425,7 @@ def _exact_duplicate_cavity(
     axis = _bore_vector(feature, "axis")
     travel = np.asarray(target, dtype=float) - np.asarray(feature.params["centre"], dtype=float)
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
-    placed = _exact_rigid_cut(source, solid, feature, target, axis, travel)
+    placed, tool = _exact_rigid_cut(source, solid, feature, target, axis, travel)
     copy = dataclasses.replace(
         feature,
         id=_free_feature_id(source, feature.kind),
@@ -9396,6 +9433,10 @@ def _exact_duplicate_cavity(
         provenance="generated",
     )
     findings = _edge_findings(as_mesh_data(solid), [copy])
+    findings += _without_opened_twice(
+        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True, copy=True),
+        findings,
+    )
     nothing = without_effect(solid, placed, "difference", ctx.profile)
     if nothing is not None:
         findings.append(nothing)
@@ -9505,7 +9546,10 @@ def _exact_rotate_cavity(
             if caps:
                 tool = edit.clipped_bore_tool(tool, caps)
         placed = edit.boolean("difference", [filled, tool])
-        findings += _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True)
+        findings += _without_opened_twice(
+            _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True),
+            findings,
+        )
     else:
         placed = _exact_cavity_cut(filled, spun, centre, turned_axis)
     expected = dataclasses.replace(
@@ -9785,6 +9829,9 @@ def _exact_move_chain(
         for related in chain
     ]
     findings = _edge_findings(as_mesh_data(filled), expected)
+    findings += _without_opened_twice(
+        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True), findings
+    )
     floor = _floor_carried(
         source.mesh, chain[0], source.features, translation((travel[0], travel[1], travel[2]))
     )
@@ -9828,6 +9875,10 @@ def _exact_duplicate_chain(
             )
         )
     findings = _edge_findings(as_mesh_data(solid), copies)
+    findings += _without_opened_twice(
+        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True, copy=True),
+        findings,
+    )
     nothing = without_effect(solid, placed, "difference", ctx.profile)
     if nothing is not None:
         findings.append(nothing)
@@ -9879,7 +9930,9 @@ def _exact_rotate_chain(
     # Dieselbe Nachbarwandprüfung wie am Netz (``_rotate_cavity_chain``) —
     # am exakten Körper fehlte sie (RM-220), und der Bericht schwieg, wo die
     # gekippte Senkung in die Bohrung daneben lief.
-    findings += _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True)
+    findings += _without_opened_twice(
+        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True), findings
+    )
     floor = _floor_carried(source.mesh, chain[0], source.features, matrix)
     if floor is not None:
         expected.append(floor)
@@ -9977,9 +10030,9 @@ def _exact_rigid_cut(
     target: Vec3,
     axis: Vec3,
     travel: NDArray[np.float64],
-) -> Any:
+) -> tuple[Any, Any]:
     """Bohrung oder Langloch am exakten Körper an ``target`` schneiden — starr
-    mitbewegt, wie am Netz.
+    mitbewegt, wie am Netz. Zurück kommen Ergebnis und Werkzeug.
 
     Eine Durchgangsbohrung bekommt dafür die ganze Zielhülle als Tiefe
     (``_exact_cavity_tool``) und endet an ihren alten Randebenen, um ``travel``
@@ -9991,14 +10044,15 @@ def _exact_rigid_cut(
     """
     from app.core.brep import edit
 
-    if not feature.params.get("through"):
-        return _exact_cavity_cut(solid, feature, target, axis)
-    rims = _moved_rims(as_mesh_data(source.mesh), feature, source.features, travel)
-    if len(rims) != 2:
-        return _exact_cavity_cut(solid, feature, target, axis)
-    tool = edit.clipped_bore_tool(_exact_cavity_tool(solid, feature, target, axis), rims)
+    tool = _exact_cavity_tool(solid, feature, target, axis)
+    if feature.params.get("through"):
+        rims = _moved_rims(as_mesh_data(source.mesh), feature, source.features, travel)
+        if len(rims) == 2:
+            tool = edit.clipped_bore_tool(tool, rims)
     cut = edit.boolean("difference", [solid, tool])
-    return edit.unified(cut) if feature.kind == "slot" else cut
+    # Beim Langloch liegen die Flanken des Werkzeugs in der Ebene alter Flanken
+    # (``_exact_cavity_cut``).
+    return (edit.unified(cut) if feature.kind == "slot" else cut), tool
 
 
 def _exact_remove_chain(
@@ -11947,7 +12001,10 @@ def _exact_rotate_cone(
         caps = _old_rim_caps(as_mesh_data(source.mesh), feature, source.features)
         if caps:
             tool = edit.clipped_bore_tool(tool, caps)
-        findings += _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True)
+        findings += _without_opened_twice(
+            _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True),
+            findings,
+        )
     placed = edit.unified(edit.boolean("difference" if cavity else "union", [cleared, tool]))
     expected = dataclasses.replace(
         feature,

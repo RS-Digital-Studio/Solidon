@@ -580,6 +580,19 @@ bleibt derselbe** (`_free_along_the_axis`): Er kommt als Sackloch zurück, und
 der exakte Kern hielt ihn für verloren, solange die Mitte entlang der Achse
 nicht frei war.
 
+**Versetzen und Verdoppeln fragen die Nachbarwand, an beiden Kernen**
+(`_neighbour_bore_findings`, 25.09.2026) — Kippen und der Neuschnitt an neuer
+Stelle taten es schon, *Merkmal versetzen* und *Merkmal verdoppeln* nicht:
+Eine Bohrung Ø 6, 4,5 mm auf die Bohrung daneben zu versetzt, riss die
+Trennwand auf, und kein Kern sagte etwas. Beim Verdoppeln ist die Vorlage
+selbst eine Nachbarin, und jede zu dünne Wand zählt (`copy=True`), denn
+vorher gab es keine. **Reißt die Wand auf, ist das der Nachbarbefund und nicht
+dazu „über die Kante"** (`_without_opened_twice`, wie schon für
+`bore.breaks_out`): Die Mündung der Nachbarin ist Luft, und die Kantenprüfung
+hielt sie für die Außenkante. Abnahme:
+`test_a_bore_moved_towards_its_neighbour_says_what_is_left_of_the_wall`,
+`test_a_copy_set_beside_its_original_says_what_is_left_of_the_wall`.
+
 **Und was das Schließen an der alten Stelle zurücklässt, wird zusammengelegt**
 (`_without_scars`): Der Stopfen endet an der Hülle in den Deckelflächen, und
 die Vereinigung ließ seine Kappen dort als Dreiecke in der Ebene stehen — je

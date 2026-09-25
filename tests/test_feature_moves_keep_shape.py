@@ -488,7 +488,8 @@ def test_a_tilted_bore_reports_its_neighbour_on_both_kernels(
     ``_exact_rotate_chain`` fragten nicht, und derselbe Schritt schwieg am
     exakten Körper (RM-220). Gemessen am 25.09.2026: um 30° zur Nachbarin hin
     reißt die gesenkte Bohrung die Wand auf, davon weg bleiben 0,64 mm, die
-    schlichte Bohrung lässt 0,06 mm.
+    schlichte Bohrung lässt 0,06 mm. Und die Senkung, die in die Mündung der
+    Nachbarin läuft, hieß daneben „über die Kante" — an beiden Kernen.
     """
     from tests.test_bore_depth import _evaluated
 
@@ -504,6 +505,9 @@ def test_a_tilted_bore_reports_its_neighbour_on_both_kernels(
         )
         walls = [finding for finding in findings if finding.code.startswith("bore.neighbour_")]
         assert walls, (kernel, [finding.code for finding in findings])
+        assert "bore.over_the_edge" not in _warnings(findings), (
+            "die Mündung der Nachbarin ist keine Kante"
+        )
         seen[kernel] = (walls[0].code, float(walls[0].values["thickness"]))
     assert seen["mesh"][0] == seen["brep"][0]
     assert seen["mesh"][1] == pytest.approx(seen["brep"][1], abs=0.05)
@@ -623,3 +627,76 @@ def test_a_countersink_tilted_past_its_flank_is_refused_with_the_largest_angle(
         source, profile, "rotate_feature", at_feature=feature.id, axis="x", angle=40.0
     )
     assert float(as_mesh_data(changed.mesh).volume) < float(as_mesh_data(source.mesh).volume)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("case", ["gesenkt", "durchgehend"])
+def test_a_bore_moved_towards_its_neighbour_says_what_is_left_of_the_wall(
+    profile: Profile, kernel: str, case: str
+) -> None:
+    """*Merkmal versetzen* fragt die Nachbarwand — wie Kippen und Neuschnitt.
+
+    Gemessen am 25.09.2026: Eine Bohrung Ø 6, um 4,5 mm auf die Bohrung 10 mm
+    daneben zu versetzt, riss die Trennwand auf, und an keinem Kern sagte der
+    Schritt etwas; um 3,5 mm blieben 0,5 mm Wand, und auch das blieb still.
+    Von der Nachbarin weg bleibt es still.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    source = _with_neighbour(kernel, RIBBED[case])
+    hole = min(
+        (feature for feature in source.features.values() if feature.kind == "hole"),
+        key=lambda feature: abs(float(feature.params["centre"][0])),
+    )
+    x, y, z = (float(value) for value in hole.params["centre"])
+    # Die Senkung Ø 10 kommt der Nachbarin 2 mm früher nahe als der Schaft Ø 6.
+    reach = 2.0 if case == "gesenkt" else 0.0
+    for step, expected in (
+        (3.5 - reach, "bore.neighbour_wall_thin"),
+        (4.5 - reach, "bore.neighbour_opened"),
+    ):
+        _moved, findings = _evaluated(
+            source, profile, "move_feature", at_feature=hole.id, x=x + step, y=y, z=z
+        )
+        codes = _warnings(findings)
+        assert expected in codes, (step, codes)
+        assert "bore.over_the_edge" not in codes, (step, codes)
+    _moved, findings = _evaluated(
+        source, profile, "move_feature", at_feature=hole.id, x=x - 3.5, y=y, z=z
+    )
+    assert not [code for code in _warnings(findings) if code.startswith("bore.neighbour_")]
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("case", ["gesenkt", "durchgehend"])
+def test_a_copy_set_beside_its_original_says_what_is_left_of_the_wall(
+    profile: Profile, kernel: str, case: str
+) -> None:
+    """*Merkmal verdoppeln* fragt die Wand zur Vorlage — die ist hier die Nachbarin.
+
+    Vorher gab es keine Wand, die dünner werden konnte; jede zu dünne zählt.
+    Ø 6 neben Ø 6, von der Nachbarin weg: 6,5 mm daneben bleiben 0,5 mm Wand,
+    5 mm daneben überschneiden sich beide; 8 mm daneben ist alles gut. Bei der
+    gesenkten Bohrung trifft die Senkung Ø 10 früher.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    source = _with_neighbour(kernel, RIBBED[case])
+    hole = min(
+        (feature for feature in source.features.values() if feature.kind == "hole"),
+        key=lambda feature: abs(float(feature.params["centre"][0])),
+    )
+    x, y, z = (float(value) for value in hole.params["centre"])
+    wide = 10.0 if case == "gesenkt" else 6.0
+    for step, expected in (
+        (wide + 0.5, "bore.neighbour_wall_thin"),
+        (wide - 1.0, "bore.neighbour_opened"),
+    ):
+        _copied, findings = _evaluated(
+            source, profile, "duplicate_feature", at_feature=hole.id, x=x - step, y=y, z=z
+        )
+        assert expected in _warnings(findings), (step, _warnings(findings))
+    _copied, findings = _evaluated(
+        source, profile, "duplicate_feature", at_feature=hole.id, x=x - wide - 2.0, y=y, z=z
+    )
+    assert not [code for code in _warnings(findings) if code.startswith("bore.neighbour_")]
