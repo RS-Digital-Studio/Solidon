@@ -1453,6 +1453,7 @@
   "Die 3D-Modell-Erzeugung hat kein Modell geliefert.": "La génération du modèle 3D n’a livré aucun modèle.",
   "Die 3D-Modell-Erzeugung konnte nicht starten.": "La génération du modèle 3D n’a pas pu démarrer.",
   "Die 3D-Modell-Erzeugung wurde unterbrochen.": "La génération du modèle 3D a été interrompue.",
+  "Die Abschnitte dieses Hohlraums lassen sich am exakten Körper nicht gemeinsam lesen: Ein Rand liegt nicht in einer Ebene, oder eine Stufe wird nach außen enger. Ändern Sie den Schritt, aus dem der Hohlraum stammt.": "Les tronçons de cette cavité ne peuvent pas être lus ensemble sur le corps exact : un bord ne se trouve pas dans un plan, ou un épaulement se rétrécit vers l’extérieur. Modifiez l’étape dont provient la cavité.",
   "Die Achse von Hand angeben": "Saisir l'axe à la main",
   "Die Achse, an der gespiegelt wird — die andere Hand desselben Teils.": "L'axe du miroir — l'autre main de la même pièce.",
   "Die Achse, entlang der das erste Teil in das zweite geschoben wird.": "L'axe le long duquel la première pièce est poussée dans la seconde.",

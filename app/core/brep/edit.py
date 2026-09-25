@@ -63,7 +63,7 @@ from app.core.geom.edges import wanted as edges_wanted
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.types import BoundingBox, CancelToken, PlaneFrame, Point2, Transform, Vec3
-from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close
+from app.core.units import EPS_DISPLAY, EPS_GEOM, exact_centre, is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -2004,6 +2004,7 @@ def solid_from_faces(
     face_indices: Sequence[int],
     *,
     allowed_rings: tuple[int, ...] = (1, 2),
+    fan_caps: bool = False,
     cancelled: CancelToken | None = None,
 ) -> Solid | None:
     """Der Körper, den diese nativen Flächen einnehmen — an ebenen Randringen geschlossen.
@@ -2021,6 +2022,14 @@ def solid_from_faces(
 
     Die Originalflächen werden nicht angefasst: genäht werden private
     Kopien (``BRepBuilderAPI_Copy``), wie es der Eigentumsvertrag verlangt.
+
+    ``fan_caps`` schließt einen Ring, der **nicht** in einer Ebene liegt, mit
+    einem Fächer: der Regelfläche von seinem Mittelpunkt an jede seiner Kanten
+    (:func:`_fan_cap`). Dasselbe tut der Netzkern an einer Mündung in einer
+    gekrümmten Fläche (``prepare_ops._body_from_faces``, ``curved_rims``) —
+    dort mit Dreiecken, hier mit den echten Randkurven. Das braucht nur ein
+    Stopfen, der einen Hohlraum füllt; ob der Ring dafür eben genug ist,
+    entscheidet der Aufrufer.
     """
     require()
     from OCP.BRepBuilderAPI import (
@@ -2081,9 +2090,14 @@ def solid_from_faces(
         if not wire.Closed():
             return None
         cap = BRepBuilderAPI_MakeFace(wire, True)
-        if not cap.IsDone():
+        if cap.IsDone():
+            sewing.Add(cap.Face())
+            continue
+        fan = _fan_cap(wire) if fan_caps else None
+        if fan is None:
             return None
-        sewing.Add(cap.Face())
+        for piece in fan:
+            sewing.Add(piece)
     sewing.Perform()
     if sewing.NbFreeEdges() != 0:
         return None
@@ -2108,6 +2122,55 @@ def solid_from_faces(
     if built.volume <= EPS_GEOM:
         return None
     return built
+
+
+def _fan_cap(wire: Any) -> list[Any] | None:
+    """Die Flächen eines Fächers über einem nicht ebenen Ring — oder ``None``.
+
+    Der Mittelpunkt ist der der abgetasteten Randpunkte, in Grundrechenarten
+    (``units.exact_centre``, RM-187), wie am Netz. Je Randkante entsteht die
+    Regelfläche von diesem Punkt an die Kante (``BRepOffsetAPI_ThruSections``
+    zwischen einem Punkt und dem Ring): Ihr Rand ist die Kante selbst, und das
+    Nähen schließt sie an die Fläche, zu der die Kante gehört.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    points: list[Vec3] = []
+    walk = TopExp_Explorer(wire, TopAbs_EDGE)
+    while walk.More():
+        curve = BRepAdaptor_Curve(TopoDS.Edge(walk.Current()))
+        walk.Next()
+        first, last = curve.FirstParameter(), curve.LastParameter()
+        for step in range(_FAN_SAMPLES):
+            point = curve.Value(first + (last - first) * step / _FAN_SAMPLES)
+            points.append((point.X(), point.Y(), point.Z()))
+    if len(points) < 3:
+        return None
+    hub = exact_centre(points)
+    builder = BRepOffsetAPI_ThruSections(False, True)
+    builder.AddVertex(BRepBuilderAPI_MakeVertex(gp_Pnt(*hub)).Vertex())
+    builder.AddWire(wire)
+    builder.Build()
+    if not builder.IsDone():
+        return None
+    pieces = []
+    faces = TopExp_Explorer(builder.Shape(), TopAbs_FACE)
+    while faces.More():
+        pieces.append(faces.Current())
+        faces.Next()
+    return pieces or None
+
+
+#: Wie viele Punkte je Randkante den Mittelpunkt eines Fächers bestimmen
+#: (:func:`_fan_cap`). Gleichmäßig im Parameter, damit er nicht von der
+#: Tessellierung abhängt.
+_FAN_SAMPLES = 16
 
 
 def transformed(solid: Solid, matrix: Transform, *, cancelled: CancelToken | None = None) -> Solid:

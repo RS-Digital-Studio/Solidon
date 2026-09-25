@@ -1441,7 +1441,25 @@ def _ordered_cavity(
     graph: Mapping[FeatureId, set[FeatureId]],
     invalid: set[FeatureId],
 ) -> tuple[Feature, ...] | None:
-    """Den einfachen Pfad von der eindeutigen engen Bohrung aus lesen."""
+    """Den einfachen Pfad von der eindeutigen engen Bohrung aus lesen.
+
+    **Die Bohrung steht vorn, dahinter je Seite ihre Erweiterungen nach
+    außen** (RM-245, 25.09.2026). Bis dahin musste die engste Bohrung ein Ende
+    des Pfads sein. An allen vier Lochplatten aus ``F:\\3D Dateien`` weitet
+    sich aber jede Schraubbohrung an beiden Enden — hinten eine
+    Zylindersenkung Ø 10, vorn eine Fase Ø 7 —, der Graph war sauber, und
+    trotzdem sagten Kippen, Versetzen und Verdoppeln an allen neun ab: „geht
+    in einen anderen Hohlraum über". Dasselbe an jeder beidseitig gefasten
+    Durchgangsbohrung.
+
+    Liegt die Bohrung in der Mitte, folgen auf sie erst die Abschnitte der
+    einen, dann die der anderen Seite, jede Folge von der Bohrung weg
+    geordnet; welche Seite zuerst kommt, entscheidet ihre Bauart
+    (:func:`_side_order`), damit zwei gleiche Bohrungen dieselbe Kette
+    ergeben. Wo die Stücke eines Pfads nicht eindeutig auf einer Seite der
+    Bohrungsmitte liegen, gibt es keine Kette — :func:`cavity_sides` liest
+    die Seiten an genau dieser Lage wieder heraus.
+    """
     connected: set[FeatureId] = set()
     waiting = [selected]
     while waiting:
@@ -1462,20 +1480,104 @@ def _ordered_cavity(
         ),
         key=lambda candidate: float(candidate.params.get("diameter") or 0.0),
     )
-    if not bores or bores[0].id not in ends:
+    if not bores:
         return None
     if (
         len(bores) > 1
         and abs(float(bores[1].params["diameter"]) - float(bores[0].params["diameter"])) <= EPS_GEOM
     ):
         return None
-    ordered = [bores[0].id]
-    while len(ordered) < len(connected):
-        following = graph[ordered[-1]] - set(ordered)
-        if len(following) != 1:
+    bore = bores[0].id
+    sides: list[list[FeatureId]] = []
+    for first in sorted(graph[bore]):
+        side = [first]
+        while len(following := graph[side[-1]] - {bore, *side}) == 1:
+            side.append(next(iter(following)))
+        if following:
             return None
-        ordered.append(next(iter(following)))
-    return tuple(candidates[identifier] for identifier in ordered)
+        sides.append(side)
+    if sum(len(side) for side in sides) + 1 != len(connected):
+        return None
+    arranged = _side_order(candidates, sides)
+    ordered = (
+        candidates[bore],
+        *(candidates[identifier] for side in arranged for identifier in side),
+    )
+    split = _sides_of(ordered)
+    if split is None or [[part.id for part in side[1:]] for side in split] != [
+        list(side) for side in arranged
+    ]:
+        return None
+    return ordered
+
+
+def _side_order(
+    candidates: Mapping[FeatureId, Feature], sides: Sequence[Sequence[FeatureId]]
+) -> list[Sequence[FeatureId]]:
+    """Die zwei Seiten einer Bohrung in einer Reihenfolge, die ihre Bauart
+    festlegt und nicht die gemessene Achsrichtung.
+
+    Die Achse einer erkannten Bohrung trägt ein beliebiges Vorzeichen; zwei
+    gleiche Schraubbohrungen derselben Platte ergäben sonst Ketten mit
+    vertauschten Seiten, und die Gruppenauskunft vergleicht Ketten Glied für
+    Glied (:func:`_group_comparison`). Zuerst die längere Folge, dann nach den
+    Arten ihrer Abschnitte, dann die weitere Mündung.
+    """
+    return sorted(
+        sides,
+        key=lambda side: (
+            -len(side),
+            tuple(candidates[identifier].kind for identifier in side),
+            -float(candidates[side[-1]].params.get("diameter") or 0.0),
+        ),
+    )
+
+
+def cavity_sides(chain: Sequence[Feature]) -> tuple[tuple[Feature, ...], ...]:
+    """Die Erweiterungsfolgen einer Kette, jede mit der Bohrung vorn und nach
+    außen geordnet — eine, oder zwei, wo sich die Bohrung an beiden Enden
+    weitet (RM-245).
+
+    Eine Kette aus :func:`_ordered_cavity` beginnt mit ihrer engsten Bohrung.
+    Welche der folgenden Abschnitte auf welcher Seite liegen, sagt ihre Lage
+    entlang der Bohrungsachse; :func:`_ordered_cavity` lässt nur Ketten zu, an
+    denen diese Lage eindeutig ist. Eine Kette von einem Glied hat eine Seite:
+    sich selbst.
+    """
+    return _sides_of(chain) or (tuple(chain),)
+
+
+def _sides_of(chain: Sequence[Feature]) -> tuple[tuple[Feature, ...], ...] | None:
+    """:func:`cavity_sides`, oder ``None``, wo die Lage die Seiten nicht trennt.
+
+    Getrennt wird an der Stelle, an der die Abschnitte von einer Seite der
+    Bohrungsmitte auf die andere wechseln. Ein Abschnitt, dessen Mitte
+    innerhalb von :data:`~app.core.units.EPS_GEOM` auf der Bohrungsmitte liegt,
+    gehört keiner Seite, und eine zweite Rückkehr hieße, die Seiten liegen
+    durcheinander.
+    """
+    if len(chain) < 2:
+        return (tuple(chain),)
+    bore = chain[0]
+    axis, centre = axis_of(bore), centre_of(bore)
+    if axis is None or centre is None:
+        return None
+    signs = []
+    for section in chain[1:]:
+        where = centre_of(section)
+        if where is None:
+            return None
+        along = units.dot3(where - centre, axis)
+        if abs(along) <= EPS_GEOM:
+            return None
+        signs.append(along > 0.0)
+    changes = [index for index in range(1, len(signs)) if signs[index] != signs[index - 1]]
+    if not changes:
+        return (tuple(chain),)
+    if len(changes) > 1:
+        return None
+    split = changes[0] + 1
+    return ((bore, *chain[1:split]), (bore, *chain[split:]))
 
 
 _Comparison = Literal["same", "different", "unavailable"]

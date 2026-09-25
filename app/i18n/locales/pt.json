@@ -1453,6 +1453,7 @@
   "Die 3D-Modell-Erzeugung hat kein Modell geliefert.": "A geração do modelo 3D não entregou nenhum modelo.",
   "Die 3D-Modell-Erzeugung konnte nicht starten.": "A geração do modelo 3D não conseguiu arrancar.",
   "Die 3D-Modell-Erzeugung wurde unterbrochen.": "A geração do modelo 3D foi interrompida.",
+  "Die Abschnitte dieses Hohlraums lassen sich am exakten Körper nicht gemeinsam lesen: Ein Rand liegt nicht in einer Ebene, oder eine Stufe wird nach außen enger. Ändern Sie den Schritt, aus dem der Hohlraum stammt.": "As secções desta cavidade não podem ser lidas em conjunto no corpo exato: uma borda não está num plano ou um degrau estreita-se para fora. Altere o passo de onde vem a cavidade.",
   "Die Achse von Hand angeben": "Indicar o eixo à mão",
   "Die Achse, an der gespiegelt wird — die andere Hand desselben Teils.": "O eixo em que se espelha — a outra mão da mesma peça.",
   "Die Achse, entlang der das erste Teil in das zweite geschoben wird.": "O eixo ao longo do qual a primeira peça é empurrada para dentro da segunda.",

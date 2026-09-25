@@ -429,7 +429,10 @@ Fürs Versetzen bleibt es beim exakten Flächenkörper, den `_past_the_mouths`
 an seinen Mündungen um die Zugabe aus §39 verlängert — das Werkzeug aus
 Kennzahlen kostete dort Volumen, der bündige Körper ließ eine Haut von 5 µm
 stehen. Gedreht wird um die Mitte des gewählten Abschnitts. Nur `slot_hole`
-sagt an einer Kette weiter ab.
+sagt an einer Kette weiter ab. Weitet sich die Bohrung an beiden Enden, hat
+die Kette zwei Seiten (`relations.cavity_sides`, RM-245): `_chain_tool` baut
+je Seite ihre Erweiterungen mit Überstand und die Bohrung dazwischen einmal,
+der exakte Einlauf liest die zweite Seite als `_BoreEntrance.back`.
 
 Die Regeln stehen in `.claude/rules/operationen.md`.
 

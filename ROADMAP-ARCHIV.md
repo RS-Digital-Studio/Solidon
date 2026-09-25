@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-25 | [Bohrungen mit Erweiterung an beiden Enden (25.09.2026)](#bohrungen-mit-erweiterung-an-beiden-enden-25092026) |
 | 2026-09-25 | [Das lokale Modell bekommt ein Angebot statt des ganzen Registers (25.09.2026)](#das-lokale-modell-bekommt-ein-angebot-statt-des-ganzen-registers-25092026) |
 | 2026-09-25 | [Die Schnittsuche an Nadeldreiecken: die Trennprüfung (25.09.2026)](#die-schnittsuche-an-nadeldreiecken-die-trennprüfung-25092026) |
 | 2026-09-25 | [Nadeldreiecke: die Gewinderegel und die Bögen eines Prismas (25.09.2026)](#nadeldreiecke-die-gewinderegel-und-die-bögen-eines-prismas-25092026) |
@@ -31684,3 +31685,74 @@ Dazu aus dem Bericht, je mit Test:
   Kurzform, deren Aufruf nur die Felder holt. Die Zahlen der KI-Seite sind
   nachgezogen (`ki-modelle.html` und die fünf Übersetzungen). Nachweis:
   `tests/test_tool_offer.py`, `test_the_measured_prompt_matches_the_current_tool_count`.
+
+## Bohrungen mit Erweiterung an beiden Enden (25.09.2026)
+
+<a id="rm-245"></a>
+
+- [x] **RM-245 — Eine Bohrung mit Erweiterung an beiden Enden lässt sich nicht bearbeiten.**
+  Gefunden am 25.09.2026 beim Nachprüfen von RM-220 an den neuen Modellen aus
+  `F:\3D Dateien`: An allen vier Lochplatten (`pegboard-gs-100-v2.step`,
+  `pegboard-10inch-crimper-v5.step`, `pegboard-pb3041-v4.step`,
+  `pegboard-goot-ceramic-screwdrivers-v3.step`, exakter Kern) sagen *Merkmal
+  drehen*, *Merkmal versetzen* und *Merkmal verdoppeln* an allen neun
+  Schraubbohrungen ab — „Dieses Merkmal geht in einen anderen Hohlraum über".
+  Jede dieser Bohrungen weitet sich an beiden Enden: hinten eine
+  Zylindersenkung Ø 10, 8,5 mm tief, dann Ø 6 auf 1 mm, vorn eine Fase Ø 7
+  (an `pegboard-gs-100-v2.step`: `hole_1`, `hole_3`, `cone_2`).
+  `relations.cavity_chain_state_at` kennt nur Ketten, die sich von der
+  Bohrung aus nach **einer** Seite weiten, und meldet `ambiguous_cavity_chain`;
+  `cavity_refusal` sagt dann `NO_OWN_BODY`. Das ganze Kettenmodell setzt diese
+  eine Richtung voraus: `_BoreEntrance` und `bore_entrance`, `_chain_tool`,
+  `_cavity_plug`/`_chain_plug`, `_old_rim_caps`, die exakten Wege
+  `_exact_chain_*`. **Entscheidung Robert, 25.09.2026:** als eigener Punkt
+  ausbauen. Weg: eine Kette mit der engsten Bohrung in der Mitte und je einer
+  Erweiterungsfolge zu beiden Mündungen — Erkennung, Einlauf, Werkzeug,
+  Stopfen und Kappen je Seite, die Bohrung dazwischen einmal. Abnahme: An den
+  vier Lochplatten, als STEP und als 3MF, gehen Kippen, Versetzen und
+  Verdoppeln jeder Schraubbohrung an beiden Kernen mit denselben Befunden;
+  je Fall ein Test an Netz und exaktem Körper, eine Platte mit Zylindersenkung
+  hinten und Fase vorn.
+
+  **Abgeschlossen am 25.09.2026 — die Kette hat zwei Seiten.**
+  `relations._ordered_cavity` stellt die engste Bohrung vorn hin und dahinter
+  je Seite ihre Erweiterungen nach außen, in einer Reihenfolge, die ihre
+  Bauart festlegt (`_side_order`, damit zwei gleiche Bohrungen dieselbe Kette
+  ergeben); `relations.cavity_sides` liest die Seiten an ihrer Lage entlang
+  der Bohrungsachse wieder heraus. Jeder Kettenweg fragt je Seite:
+  `_inner_sections`, `_chain_tool` (die Bohrung dazwischen einmal und ohne
+  eigene Mündung), `_sinks_must_close`, `_old_rim_caps` (beide Ränder),
+  `_bore_end_rims`, der Befund beim Ändern. Am exakten Kern liest
+  `bore_entrance` die zweite Seite als `back`, `_entrance_tools` baut den
+  Schaft einmal von Mündung zu Mündung und spiegelt die Umrisse der zweiten
+  Seite in die Halbebene der ersten; Kippen, Abschnitt entfernen und Einlauf
+  ändern kennen beide Mündungen. Dazu fünf Dinge, die die Lochplatten zeigten:
+  (1) Die äußere Zylindersenkung darf in eine gekrümmte Fläche münden
+  (`_curved_mouth_planes`): geschnitten bis zur Ebene durch den weitesten
+  Randpunkt, wie am Netz, gefüllt aus den nativen Flächen mit einem
+  Regelflächenfächer (`edit.solid_from_faces`, `fan_caps`) — die untere
+  Schraubbohrung von gs-100 sagte am exakten Kern jede Handlung ab. Was der
+  Fächer dort stehen lässt, steht als RM-248 im Register. (2) Eine
+  Kettenhandlung sagt am exakten Kern mit ihrem eigenen Satz ab
+  (`CHAIN_NOT_READABLE`) statt mit dem Rat zu „Nur Bohrungsdurchmesser“.
+  (3) Der äußere Zylinder einer Kette ist beim Wiederfinden entlang der Achse
+  frei (`_chain_mouths`, `_free_along_the_axis`): Gekippt kam eine
+  Zylindersenkung am exakten Kern sonst als verloren zurück, auch an einer
+  Kette mit einer Seite. (4) `_exact_copy_result` ordnet erst nach Lage und
+  Maß zu und benennt danach — die Erkennung hatte der neuen Senkung den Namen
+  der Bohrungskopie gegeben, und die Kopie hieß „geht nicht mehr durch“, bei
+  genau dem Volumen der Kette. (5) Wer nur die Bohrung entfernt, bekommt am
+  exakten Kern kein „geht nicht mehr durch“ mehr für die übrigen Abschnitte.
+  Gemessen an den vier Lochplatten, je als STEP und als 3MF, neun
+  Schraubbohrungen: Versetzen um 1,5 mm quer ändert das Volumen nicht (exakt
+  −0,033 mm³ an der Crimper-Platte), Kippen um 10° trägt je Kette 5,2 bis
+  7,9 mm³ ab, Verdoppeln an beiden Kernen dasselbe Volumen auf 2 %, jeweils
+  ohne Befund und mit der ganzen Kette danach. Die untere Bohrung von gs-100
+  mündet hinten in eine Rundung: Versetzen −5,0 mm³ am Netz, −5,4 mm³ am
+  exakten Kern (RM-248). Wo eine Kopie auf andere Geometrie fällt, meldet der
+  exakte Kern sie teils als verloren, das Netz nicht: RM-249. Die
+  Booleschen am BSpline-Körper von gs-100 brauchen je Vereinigung 23 bis
+  49 s, vor RM-245 genauso. Nachweis: `test_feature_moves_keep_shape.py`
+  (eine Kette mit zwei Seiten; Versetzen, Kippen, Verdoppeln und Entfernen an
+  drei Profilen und beiden Kernen; jeder Abschnitt einzeln; die Mündung in
+  einer gekrümmten Fläche).

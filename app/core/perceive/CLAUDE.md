@@ -530,8 +530,13 @@ Die räumliche Prüfung beider Achslinien bleibt bestehen. Eine Ringschulter
 muss eben sein und zwei vollständig belegte Ringe tragen; ihre Ebene darf
 schräg zur Achse liegen. Glatte kleine Übergangsflächen gehören nur dazu,
 wenn danach weiterhin genau zwei geschlossene äußere Ringe übrig bleiben. Eine
-eindeutige Kette beginnt am engsten Bohrungszylinder; doppelte Randbelegung,
-Verzweigung, Zyklus oder ein uneindeutiger Anfang liefern keine Auskunft.
+eindeutige Kette beginnt am engsten Bohrungszylinder. Liegt er in der Mitte
+des Pfads (RM-245), folgen ihm die Erweiterungen der einen, dann die der
+anderen Seite, je nach außen geordnet und die Seiten nach ihrer Bauart
+(`_side_order`); `cavity_sides` liest sie an ihrer Lage entlang der
+Bohrungsachse zurück. Doppelte Randbelegung, Verzweigung, Zyklus, ein
+uneindeutiger Anfang oder Abschnitte, die nicht eindeutig auf einer Seite
+liegen, liefern keine Auskunft.
 `cavity_chains` bildet die Ringe einmal für den ganzen Objektbaum. Die alten
 Paarfunktionen bleiben ohne Netz kompatibel; mit `mesh=` liefern sie nur
 echte Zweierketten und kürzen längere Hohlräume nicht ab.

@@ -70,8 +70,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe](#rm-239) | Geometrie, Erkennung und Druckvorbereitung | Siebhalter-Ring mit Riss: die Heilung überwiegt, 12 Eckpaare zu 0,015 µm werden zusammengelegt, 24 Dreiecke fallen — Gruppen nach Flächenblatt trennen, ohne Dreieckssuppen aufzureißen; Import- und Reparaturregel zusammenlegen |
 | [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
 | [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
-| [RM-245 — Eine Bohrung mit Erweiterung an beiden Enden lässt sich nicht bearbeiten](#rm-245) | Geometrie, Erkennung und Druckvorbereitung | Vier STEP-Lochplatten: 9 von 9 Schraubbohrungen (Zylindersenkung hinten, Fase vorn) sagen Kippen, Versetzen und Verdoppeln ab — Kettenmodell auf Erweiterungen an beiden Enden ausbauen |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter und Leerfahrt vom Drucker gebaut und im ElegooSlicer belegt; offen: Tempo je Drucker, Orcas Bäume nur vom Bett, Rand bei Füßen |
+| [RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht](#rm-248) | Geometrie, Erkennung und Druckvorbereitung | Fächer vom Randmittelpunkt lässt beim Versetzen 3,6 bis 5,4 mm³ Mulde — den Deckel als Fortsetzung der umgebenden Fläche bauen, an beiden Kernen |
+| [RM-249 — Eine verdoppelte Kette: exakt „verloren“, am Netz ungeprüft](#rm-249) | Geometrie, Erkennung und Druckvorbereitung | An vier Lochplatten, 12 mm quer verdoppelt, findet der exakte Kern Bohrungskopien nicht wieder, das Netz prüft nicht — messen, was die Kopie dort trifft, dann eine Nachkontrolle für beide |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
@@ -1838,32 +1839,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   ohne Verrundungen an den Buchstaben, Flaschenhalter, Besenhalter und die
   übrigen Korpuskörper Merkmal für Merkmal gleich.
 
-<a id="rm-245"></a>
-
-- [ ] **RM-245 — Eine Bohrung mit Erweiterung an beiden Enden lässt sich nicht bearbeiten.**
-  Gefunden am 25.09.2026 beim Nachprüfen von RM-220 an den neuen Modellen aus
-  `F:\3D Dateien`: An allen vier Lochplatten (`pegboard-gs-100-v2.step`,
-  `pegboard-10inch-crimper-v5.step`, `pegboard-pb3041-v4.step`,
-  `pegboard-goot-ceramic-screwdrivers-v3.step`, exakter Kern) sagen *Merkmal
-  drehen*, *Merkmal versetzen* und *Merkmal verdoppeln* an allen neun
-  Schraubbohrungen ab — „Dieses Merkmal geht in einen anderen Hohlraum über".
-  Jede dieser Bohrungen weitet sich an beiden Enden: hinten eine
-  Zylindersenkung Ø 10, 8,5 mm tief, dann Ø 6 auf 1 mm, vorn eine Fase Ø 7
-  (an `pegboard-gs-100-v2.step`: `hole_1`, `hole_3`, `cone_2`).
-  `relations.cavity_chain_state_at` kennt nur Ketten, die sich von der
-  Bohrung aus nach **einer** Seite weiten, und meldet `ambiguous_cavity_chain`;
-  `cavity_refusal` sagt dann `NO_OWN_BODY`. Das ganze Kettenmodell setzt diese
-  eine Richtung voraus: `_BoreEntrance` und `bore_entrance`, `_chain_tool`,
-  `_cavity_plug`/`_chain_plug`, `_old_rim_caps`, die exakten Wege
-  `_exact_chain_*`. **Entscheidung Robert, 25.09.2026:** als eigener Punkt
-  ausbauen. Weg: eine Kette mit der engsten Bohrung in der Mitte und je einer
-  Erweiterungsfolge zu beiden Mündungen — Erkennung, Einlauf, Werkzeug,
-  Stopfen und Kappen je Seite, die Bohrung dazwischen einmal. Abnahme: An den
-  vier Lochplatten, als STEP und als 3MF, gehen Kippen, Versetzen und
-  Verdoppeln jeder Schraubbohrung an beiden Kernen mit denselben Befunden;
-  je Fall ein Test an Netz und exaktem Körper, eine Platte mit Zylindersenkung
-  hinten und Fase vorn.
-
 <a id="rm-247"></a>
 
 - [~] **RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken.**
@@ -1913,6 +1888,50 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   - **Haftung auf zwölf kleinen Füßen.** Nutzer des Designerprofils auf
     MakerWorld melden „hintere Ecke hebt sich und Stringing"; ein Rand-Vorschlag
     für viele kleine Aufstandsinseln ist nicht bewertet.
+
+<a id="rm-248"></a>
+
+- [ ] **RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht.**
+  Gefunden am 25.09.2026 bei RM-245. Mündet ein Hohlraum in eine gekrümmte
+  Fläche, schließen ihn beide Kerne beim Versetzen, Kippen und Entfernen mit
+  einem Fächer vom Mittelpunkt des Rands (`prepare_ops._body_from_faces` mit
+  `curved_rims`, `brep.edit.solid_from_faces` mit `fan_caps`). Der Mittelpunkt
+  liegt auf der mittleren Höhe des Rands und nicht auf der Fläche: An einer
+  Platte, deren Unterseite ein Zylinder R 40 ist, bleibt unter einer
+  Zylindersenkung Ø 10 beim Versetzen eine Mulde von 4,9 mm³ am Netz und
+  3,6 mm³ am exakten Körper; an der unteren Schraubbohrung von
+  `pegboard-gs-100-v2.step` 5,0 und 5,4 mm³, am Gartenschlauchhalter (RM-220)
+  1 bis 4 mm³. Gerechnet hätte ein Fächer über einer Fläche z = y²/80 rund
+  6 mm³. Die BSpline-Flächen an der Lochplatte sind genau auf ihren Rand
+  beschnitten und laufen unter dem Loch nicht weiter;
+  `BRepAlgoAPI_Defeaturing` meldet dort fertig und lässt die Kette stehen,
+  eine N-seitige Füllung nur am Rand liegt 8 mm³ (C0) bis 127 mm³ (G1)
+  daneben. Weg: die Fläche um den Rand herum messen — die Nachbardreiecke
+  beziehungsweise Nachbarflächen bis etwa zum halben Durchmesser außerhalb —
+  und den Deckel als ihre glatte Fortsetzung bauen: am Netz als Gitter auf der
+  angepassten Fläche, am exakten Kern als Füllung mit Stützpunkten auf ihr.
+  Die Anpassung ohne LAPACK, in Grundrechenarten wie `units.plane_fit`
+  (RM-187). Abnahme: Versetzen entlang der Zylinderachse an der Platte R 40
+  ändert das Volumen an beiden Kernen um weniger als 0,5 mm³, an gs-100 um
+  weniger als 1 mm³ (`test_a_widened_bore_whose_mouth_lies_in_a_curved_face_
+  is_moved_on_both_kernels` mit der engeren Schranke).
+
+<a id="rm-249"></a>
+
+- [ ] **RM-249 — Eine verdoppelte Kette: am exakten Kern „verloren“, am Netz ungeprüft.**
+  Gefunden am 25.09.2026 bei RM-245. An den vier Lochplatten, jede
+  Schraubbohrung um 12 mm quer verdoppelt, tragen beide Kerne dasselbe
+  Volumen ab (auf 2 %: −218,847 zu −218,473 mm³ an der Crimper-Platte), aber
+  der exakte Kern findet danach Kopien einzelner Bohrungen nicht wieder und
+  meldet `duplicate_feature.feature_lost` — an `pegboard-gs-100-v2.step`
+  oben beide Bohrungskopien, erkannt wird an der Stelle nur ein Kegelstück;
+  ebenso an der Goot-Platte zweimal, an pb3041 und an der Crimper-Platte je
+  einmal. Das Netz (`_duplicate_cavity_chain`) prüft seine Kopien nicht nach
+  und trägt sie mit ihren Maßen weiter. Weg: an der Kopierstelle messen, was
+  die Kopie dort schneidet und warum die Erkennung die Bohrung nicht findet;
+  dann eine Nachkontrolle für beide Kerne, und eine Kopie, die es nicht gibt,
+  wird an beiden gemeldet. Abnahme: dieselben Befunde an beiden Kernen an
+  den vier Lochplatten, als STEP und als 3MF.
 
 ## Bedienung und Darstellung
 

@@ -17,6 +17,7 @@ wirklich ist — und beide Kerne antworten dasselbe.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -1013,3 +1014,224 @@ def test_a_needle_in_the_tool_is_no_wall_of_the_through_column() -> None:
     for tool in (column, needle):
         radius = prepare_ops._inscribed_radius(MeshData.of(tool), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
         assert radius == pytest.approx(inscribed, abs=1e-9), len(tool.faces)
+
+
+# --- Bohrungen mit Erweiterung an beiden Enden (RM-245) -----------------------------
+
+#: Profile als (Radius, Höhe) um die Z-Achse in einer Platte 44 x 24 x 12: Die
+#: Bohrung Ø 6 weitet sich unten und oben — wie an den Lochplatten aus
+#: ``F:\\3D Dateien`` (Zylindersenkung hinten, Fase vorn).
+BOTH_ENDS: dict[str, list[tuple[float, float]]] = {
+    "Zylindersenkung und Fase": [(0, 0), (5, 0), (5, 6), (3, 6), (3, 11), (4, 12), (0, 12), (0, 0)],
+    "Fase beidseitig": [(0, 0), (4, 0), (3, 1), (3, 11), (4, 12), (0, 12), (0, 0)],
+    "Stufen beidseitig": [
+        (0, 0),
+        (5, 0),
+        (5, 3),
+        (3, 3),
+        (3, 9),
+        (4.5, 9),
+        (4.5, 12),
+        (0, 12),
+        (0, 0),
+    ],
+}
+
+
+def _widened(kernel: str, outline: Sequence[tuple[float, float]], *, curved: bool = False) -> Any:
+    """Die Platte 44 × 24 × 12 mit einer Bohrung aus ``outline`` bei x = −8.
+
+    ``curved`` legt die Unterseite in einen Zylinder R 40 entlang X: Die
+    untere Mündung liegt dann in einer gekrümmten Fläche und streut 0,31 mm
+    entlang der Achse — der Fall der unteren Schraubbohrung an
+    ``pegboard-gs-100-v2.step``, dort in einer BSpline-Rundung.
+    """
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    plate = edit.box(44.0, 24.0, 12.0)
+    if curved:
+        roll = edit.revolved_bore_tool(
+            [(0.0, -30.0), (40.0, -30.0), (40.0, 30.0), (0.0, 30.0), (0.0, -30.0)],
+            frame_of((1.0, 0.0, 0.0), (0.0, 0.0, 40.0)),
+        )
+        plate = edit.unified(edit.boolean("intersection", [plate, roll]))
+    solid = edit.bore_profile(plate, list(outline), frame_of((0, 0, 1), (-8.0, 0, 0)))
+    return _body(kernel, solid)
+
+
+def _profile_volume(outline: Sequence[tuple[float, float]]) -> float:
+    """Das Volumen des Hohlraums aus seinem Profil: je Abschnitt ein Kegelstumpf."""
+    return sum(
+        np.pi * (z1 - z0) * (r0 * r0 + r0 * r1 + r1 * r1) / 3.0
+        for (r0, z0), (r1, z1) in pairwise(outline[1:-1])
+    )
+
+
+def _cavity_members(source: SceneObject) -> list[Feature]:
+    return sorted(
+        (feature for feature in source.features.values() if feature.kind in ("hole", "cone")),
+        key=lambda feature: feature.id,
+    )
+
+
+def _chain_ids(source: SceneObject) -> set[str]:
+    """Die Namen aller Abschnitte, die in einer Kette mit zwei Seiten stehen."""
+    from app.core.perceive.relations import cavity_chain_state_at, cavity_sides
+
+    mesh = as_mesh_data(source.mesh)
+    found: set[str] = set()
+    for feature in _cavity_members(source):
+        chain = cavity_chain_state_at(feature, source.features, mesh).chain
+        if chain is not None and len(cavity_sides(chain)) == 2:
+            found.update(part.id for part in chain)
+    return found
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("case", list(BOTH_ENDS))
+def test_a_bore_widened_at_both_ends_is_one_chain_with_two_sides(kernel: str, case: str) -> None:
+    """Bis RM-245 musste die engste Bohrung ein Ende der Kette sein; eine, die
+    sich an beiden Enden weitet, hieß „geht in einen anderen Hohlraum über".
+
+    Jetzt steht sie vorn, dahinter je Seite ihre Erweiterungen nach außen, und
+    ``cavity_sides`` gibt beide Seiten zurück — von jedem Abschnitt aus
+    dieselbe Kette. Eine Kette mit einer Seite bleibt eine.
+    """
+    from app.core.perceive.relations import cavity_chain_state_at, cavity_sides
+
+    source = _widened(kernel, BOTH_ENDS[case])
+    mesh = as_mesh_data(source.mesh)
+    bore = _narrowest_hole(source)
+    states = [
+        cavity_chain_state_at(part, source.features, mesh) for part in _cavity_members(source)
+    ]
+    assert {tuple(part.id for part in state.chain or ()) for state in states} == {
+        tuple(part.id for part in states[0].chain or ())
+    }
+    chain = cavity_chain_state_at(bore, source.features, mesh).chain
+    assert chain is not None and len(chain) == 3 and chain[0].id == bore.id
+    sides = cavity_sides(chain)
+    assert len(sides) == 2
+    below = [float(side[1].params["centre"][2]) < float(bore.params["centre"][2]) for side in sides]
+    assert sorted(below) == [False, True], below
+
+    one_sided = _bored(kernel, SUNK, ribbed=False)
+    single = cavity_chain_state_at(
+        _narrowest_hole(one_sided), one_sided.features, as_mesh_data(one_sided.mesh)
+    ).chain
+    assert single is not None and cavity_sides(single) == (single,)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("case", list(BOTH_ENDS))
+def test_a_bore_widened_at_both_ends_moves_tilts_and_copies_on_both_kernels(
+    profile: Profile, kernel: str, case: str
+) -> None:
+    """Die Abnahme von RM-245 an der Platte: Versetzen, Kippen und Verdoppeln
+    gehen an beiden Kernen mit denselben Befunden — keinen —, und die Kette
+    steht danach wieder da.
+
+    Sollwerte: Versetzen ändert das Volumen nicht, Verdoppeln nimmt den
+    Hohlraum ein zweites Mal ab, Entfernen gibt ihn zurück — sein Volumen aus
+    dem Profil, je Abschnitt ein Zylinder oder Kegelstumpf. Am exakten Kern
+    kam die gekippte Zylindersenkung vorher als verloren zurück, und die Kopie
+    einer Bohrung hieß „geht nicht mehr durch", weil die Erkennung der neuen
+    Senkung den Namen der Kopie gegeben hatte.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    outline = BOTH_ENDS[case]
+    source = _widened(kernel, outline)
+    before = abs(float(as_mesh_data(source.mesh).volume))
+    cavity = _profile_volume(outline)
+    bore = _narrowest_hole(source)
+    x, y, z = (float(value) for value in bore.params["centre"])
+    members = {feature.id for feature in _cavity_members(source)}
+
+    moved, findings = _evaluated(
+        source, profile, "move_feature", at_feature=bore.id, x=x + 5.0, y=y, z=z
+    )
+    assert _warnings(findings) == [], findings
+    assert abs(float(as_mesh_data(moved.mesh).volume)) == pytest.approx(before, abs=0.05)
+    assert _chain_ids(moved) == members
+
+    turned, findings = _evaluated(
+        source, profile, "rotate_feature", at_feature=bore.id, axis="x", angle=15.0
+    )
+    assert _warnings(findings) == [], findings
+    assert _chain_ids(turned) == members
+
+    copied, findings = _evaluated(
+        source, profile, "duplicate_feature", at_feature=bore.id, x=x + 16.0, y=y, z=z
+    )
+    assert _warnings(findings) == [], findings
+    taken = before - abs(float(as_mesh_data(copied.mesh).volume))
+    assert taken == pytest.approx(cavity, rel=0.01), (taken, cavity)
+    assert len(_chain_ids(copied)) == 6
+
+    closed, findings = _evaluated(
+        source, profile, "remove_feature", at_feature=bore.id, sections="chain"
+    )
+    assert _warnings(findings) == [], findings
+    given = abs(float(as_mesh_data(closed.mesh).volume)) - before
+    assert given == pytest.approx(cavity, rel=0.01), (given, cavity)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("case", list(BOTH_ENDS))
+def test_each_section_of_a_bore_widened_at_both_ends_is_removed_alone(
+    profile: Profile, kernel: str, case: str
+) -> None:
+    """Nur einen Abschnitt entfernen: Die Seite, auf der er lag, geht bis zu
+    ihrer Mündung weiter durch, die andere bleibt, wie sie war. Ohne die
+    Bohrung geht keiner der übrigen mehr durch — das ist der Sinn des
+    Schritts und kein Befund; am exakten Kern stand dort „geht nicht mehr
+    durch" (RM-245).
+    """
+    from tests.test_bore_depth import _evaluated
+
+    source = _widened(kernel, BOTH_ENDS[case])
+    bore = _narrowest_hole(source)
+    for section in _cavity_members(source):
+        changed, findings = _evaluated(
+            source, profile, "remove_feature", at_feature=section.id, sections="single"
+        )
+        assert _warnings(findings) == [], (section.id, findings)
+        rest = {feature.id for feature in _cavity_members(changed)}
+        assert section.id not in rest, section.id
+        if section.id != bore.id:
+            assert bore.id in rest, section.id
+            assert changed.features[bore.id].params.get("through"), section.id
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_widened_bore_whose_mouth_lies_in_a_curved_face_is_moved_on_both_kernels(
+    profile: Profile, kernel: str
+) -> None:
+    """Die untere Zylindersenkung mündet in eine gekrümmte Fläche.
+
+    Am exakten Kern sagte jede Kettenhandlung dort ab — mit dem Satz des
+    Einlaufs, der zu „Nur Bohrungsdurchmesser" riet, einem Feld, das
+    Versetzen nicht hat (RM-245). Jetzt reicht das Werkzeug bis zur Ebene
+    durch den weitesten Punkt des Rands, wie am Netz, und gefüllt wird aus den
+    Flächen mit einem Fächer am Rand. Beide Kerne lassen dabei denselben
+    kleinen Rest des Fächers stehen, und die Kette steht an der neuen Stelle
+    wieder da.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    source = _widened(kernel, BOTH_ENDS["Zylindersenkung und Fase"], curved=True)
+    before = abs(float(as_mesh_data(source.mesh).volume))
+    bore = _narrowest_hole(source)
+    x, y, z = (float(value) for value in bore.params["centre"])
+    members = {feature.id for feature in _cavity_members(source)}
+    moved, findings = _evaluated(
+        source, profile, "move_feature", at_feature=bore.id, x=x + 5.0, y=y, z=z
+    )
+    assert _warnings(findings) == [], findings
+    change = abs(float(as_mesh_data(moved.mesh).volume)) - before
+    # Der Fächer vom Mittelpunkt des Rands liegt über der Mitte der Fläche: Am
+    # Zylinder R 40 bleiben rund 4 bis 5 mm³ von 651, an beiden Kernen.
+    assert abs(change) <= 0.01 * _profile_volume(BOTH_ENDS["Zylindersenkung und Fase"]), change
+    assert _chain_ids(moved) == members

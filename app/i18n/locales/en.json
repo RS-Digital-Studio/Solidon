@@ -1453,6 +1453,7 @@
   "Die 3D-Modell-Erzeugung hat kein Modell geliefert.": "The 3D model generation delivered no model.",
   "Die 3D-Modell-Erzeugung konnte nicht starten.": "The 3D model generation could not start.",
   "Die 3D-Modell-Erzeugung wurde unterbrochen.": "The 3D model generation was interrupted.",
+  "Die Abschnitte dieses Hohlraums lassen sich am exakten Körper nicht gemeinsam lesen: Ein Rand liegt nicht in einer Ebene, oder eine Stufe wird nach außen enger. Ändern Sie den Schritt, aus dem der Hohlraum stammt.": "The sections of this cavity cannot be read together on the exact body: an edge does not lie in a plane, or a step gets narrower towards the outside. Change the step the cavity comes from.",
   "Die Achse von Hand angeben": "Enter the axis by hand",
   "Die Achse, an der gespiegelt wird — die andere Hand desselben Teils.": "The axis to mirror about — the other hand of the same part.",
   "Die Achse, entlang der das erste Teil in das zweite geschoben wird.": "The axis along which the first part is pushed into the second.",

@@ -605,6 +605,25 @@ Ausgleichsrechnung über LAPACK und schriebe je Maschine andere Ecken (RM-187).
 Nur der Stopfen nimmt diese Deckel; ein Werkzeug, das bündig schneiden muss,
 nie.
 
+**Eine Bohrung, die sich an beiden Enden weitet, ist eine Kette mit zwei
+Seiten** (RM-245). Die Kette beginnt mit der engsten Bohrung, dahinter stehen
+je Seite ihre Erweiterungen nach außen; welche zu welcher Seite gehört, sagt
+`relations.cavity_sides`. Kein Kettenweg nimmt an, dass `chain[-1]` die
+einzige Mündung ist: Werkzeug, Kappen, Senkungsprüfung, Randebenen und der
+exakte Einlauf (`_BoreEntrance.back`) fragen je Seite, und die Bohrung
+dazwischen hat keine eigene Mündung. **Die äußere Zylindersenkung darf am
+exakten Kern in eine gekrümmte Fläche münden** (`_curved_mouth_planes`,
+offen und bis `CURVED_RIM` neben der Ebene): Das Werkzeug reicht bis zur
+Ebene durch den weitesten Randpunkt, gefüllt wird aus den nativen Flächen mit
+einem Fächer (`edit.solid_from_faces`, `fan_caps`) — derselbe Deckel wie am
+Netz. **Und der äußere Zylinder einer Kette ist beim Wiederfinden entlang der
+Achse frei** (`_chain_mouths`): Wie weit er reicht, sagt die Fläche, in die er
+mündet. Die exakten Kopien werden erst nach Lage und Maß zugeordnet und dann
+benannt (`_exact_copy_result`); ein Fund, der zufällig den Namen einer Kopie
+trägt, ist deshalb noch nicht diese Kopie. Kann der exakte Kern die Kette
+nicht lesen, sagt die Kettenhandlung mit `CHAIN_NOT_READABLE` ab, nicht mit dem
+Satz des Einlaufs.
+
 **Versetzt und verdoppelt wird starr, an beiden Kernen** (RM-220). Eine
 Bohrung ist danach so lang wie vorher; entlang ihrer Achse oder in dickeres
 Material gesetzt, bleibt Material stehen, und `no_longer_through` sagt es
