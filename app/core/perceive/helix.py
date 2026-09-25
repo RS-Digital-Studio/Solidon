@@ -452,9 +452,9 @@ def _candidate_axes(
     facets = body.facets
     facet_touches = np.zeros(len(facets), dtype=bool)
     if len(facets):
-        members = np.concatenate(facets)
-        owners = np.repeat(np.arange(len(facets)), [len(facet) for facet in facets])
-        facet_touches[owners[touching[np.asarray(body.faces)[members]].any(axis=1)]] = True
+        owner = _facet_of_face(body)
+        near = touching[np.asarray(body.faces)].any(axis=1) & (owner >= 0)
+        facet_touches[owner[near]] = True
     added = 0
     order = np.argsort(body.facets_area)[::-1]
     for index in order[facet_touches[order]]:
@@ -469,6 +469,29 @@ def _candidate_axes(
         if added >= 3:
             break
     return origin, local, candidates
+
+
+def _facet_of_face(body: trimesh.Trimesh) -> NDArray[np.int64]:
+    """Je Dreieck die Nummer seiner Facette, ``-1`` außerhalb jeder Facette.
+
+    Einmal je Körper: :func:`_candidate_axes` fragt je Kantenzug, und am
+    erzeugten Puppenhausbett baute jede Frage dieselbe Zuordnung über 963 549
+    Facettendreiecke neu — 130 Fragen, 8,7 Sekunden (25.09.2026).
+    """
+    from app.core.perceive.features import remembered
+
+    def compute() -> NDArray[np.int64]:
+        owner = np.full(len(body.faces), -1, dtype=np.int64)
+        facets = body.facets
+        if len(facets):
+            lengths = np.fromiter(
+                (len(facet) for facet in facets), dtype=np.int64, count=len(facets)
+            )
+            owner[np.concatenate(facets)] = np.repeat(np.arange(len(facets)), lengths)
+        return owner
+
+    result: NDArray[np.int64] = remembered("facet_of_face", body, (), compute)
+    return result
 
 
 def _resolved_helix(
@@ -530,7 +553,14 @@ def _resolved_crest(
     check_cancelled: Callable[[], None] | None = None,
 ) -> Helix | None:
     """Prüft zusammenhängende scharfe Kanten auf konstanten Radius und Steigung."""
-    relative = np.asarray(body.vertices, dtype=float) - centre
+    # **Gerechnet an den Ecken der Kanten, nicht an allen Ecken des Netzes.**
+    # Je Achse und Quantil stand hier ein Abstandsfeld über den ganzen Körper:
+    # am erzeugten Puppenhausbett 615 000 Ecken, 472 Aufrufe und 21 Sekunden
+    # für Züge aus einigen hundert Kanten (25.09.2026). Die Umnummerierung ist
+    # aufsteigend, Gruppen und Punkte kommen also in derselben Folge.
+    corners, local_edges = np.unique(edges, return_inverse=True)
+    edges = local_edges.reshape(edges.shape)
+    relative = np.asarray(body.vertices[corners], dtype=float) - centre
     along = relative @ axis
     across = relative - np.outer(along, axis)
     radii = np.linalg.norm(across, axis=1)

@@ -373,6 +373,38 @@ def test_disconnected_facet_fans_at_one_point_do_not_share_their_support() -> No
     assert not support.ridges[shared]
 
 
+@pytest.mark.parametrize("welded", (True, False))
+def test_the_support_reads_the_same_counted_sorted_or_marked(
+    monkeypatch: pytest.MonkeyPatch, welded: bool
+) -> None:
+    """Ein Fleck liest dieselbe Stützung, ob seine Ecken sortiert oder markiert gezählt werden.
+
+    Unter ``SORTED_CORNERS_SHARE`` sortiert die Lesung die Ecken des Flecks,
+    darüber markiert sie ein Feld über alle Ecken des Netzes — am erzeugten
+    Puppenhausbett kostete das Markieren je Splitter mehr als die Lesung
+    selbst (25.09.2026). Beide Wege liefern Punkt für Punkt dasselbe, auch an
+    einem ungeschweißten Netz mit deckungsgleichen Ecken.
+    """
+    from app.core.perceive import features
+
+    body = _round_surface("torus")
+    if not welded:
+        body = trimesh.Trimesh(
+            vertices=body.triangles.reshape(-1, 3),
+            faces=np.arange(len(body.faces) * 3).reshape(-1, 3),
+            process=False,
+        )
+    patch = [int(index) for index in np.flatnonzero(body.triangles_center[:, 0] > 0.0)]
+    readings = []
+    for share in (0.0, math.inf):
+        monkeypatch.setattr(features, "SORTED_CORNERS_SHARE", share)
+        readings.append(features._read_surface_support(body, patch, None))
+    marked, sorted_ = readings
+    assert marked is not None and sorted_ is not None
+    for name, left, right in zip(marked._fields, marked, sorted_, strict=True):
+        assert np.array_equal(left, right), name
+
+
 @pytest.mark.parametrize("kind", ("sphere", "cone", "torus"))
 @pytest.mark.parametrize("sections", (24, 48, 72))
 def test_new_surface_points_recover_the_same_independent_measures(kind: str, sections: int) -> None:

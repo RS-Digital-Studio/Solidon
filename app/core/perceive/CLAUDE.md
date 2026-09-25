@@ -976,7 +976,13 @@ Verweis bleibt je Merkmal eine Warnung
   Ecken) —, und nur wer dort auseinanderfällt, geht den Einzelweg mit dem
   Strahlenvergleich (`_one_vertex_fan`, an der Schüssel mit 215 000
   Dreiecken 368 217 Aufrufe und 5,8 Sekunden, bevor es so war). Die Punkte
-  kommen aus den Ecken des Netzes ohne Sortierung; wo das Netz
+  kommen aus den Ecken des Netzes, für einen großen Fleck markiert, für einen
+  kleinen sortiert (`SORTED_CORNERS_SHARE`, dieselbe Schwelle zählt die Bögen
+  in `_counted_at`): Ein Feld über alle Ecken des Netzes je Splitter kostete
+  am erzeugten Puppenhausbett über 30 Sekunden, und kein Aufruf hält ein
+  Feld in Netzgröße, das nur den Fleck betrifft — auch nicht die
+  Wendelsuche (`helix._resolved_crest` rechnet an den Kantenecken,
+  `_facet_of_face` einmal je Körper). Wo das Netz
   deckungsgleiche Ecken hat, legt `_canonical_vertices` sie **einmal je
   Körper** zusammen, und die Lesung liest je Fleck nur Nummern
   (`_coincident_vertices` fragt dieselbe Tabelle) — sonst ist jede Ecke ihr

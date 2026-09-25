@@ -255,6 +255,19 @@ ROUND_FIT_PRECISION: Final = float(np.finfo(float).eps ** 0.75)
 #: Eine Rechengrenze, keine Geometrietoleranz.
 FIT_SOLVER_POINTS: Final = 4096
 
+#: Bis zu welchem Anteil an den Ecken des Netzes die Ecken eines Flecks
+#: sortiert statt markiert gezählt werden.
+#:
+#: Markieren kostet ein Feld über **alle** Ecken des Netzes, Sortieren nur
+#: die des Flecks. An der Ikosphäre, deren Fleck das ganze Netz ist, war
+#: Markieren fünfmal schneller; am erzeugten Puppenhausbett mit 615 000
+#: Ecken und 96 893 Splittern aus meist unter hundert Ecken kostete es
+#: dagegen je Fleck ein bis zwei Millisekunden für nichts, über 30 der 190
+#: Sekunden der Erkennung (25.09.2026). Gleich schnell sind beide Wege bei
+#: fünf bis zehn Prozent der Netzecken, gemessen an 50 000 bis 1,2 Millionen
+#: Ecken. Beide geben dieselbe Antwort; eine Rechengrenze, keine Toleranz.
+SORTED_CORNERS_SHARE: Final = 0.05
+
 #: Bis zu wie vielen Punkten ein Fleck seine Deckungsgleichheit ausweist.
 #:
 #: Die Kennzahl in :func:`_rigid_key` steht auf **allen** paarweisen
@@ -5441,9 +5454,21 @@ def _fan_arcs(body: trimesh.Trimesh, patch: Sequence[int], used: np.ndarray) -> 
     rows = pair_rows[indices][inner]
     edges = np.asarray(body.face_adjacency_edges, dtype=np.int64)[rows]
     corners = np.asarray(body.faces[indices], dtype=np.int64).ravel()
-    triangles = np.bincount(corners, minlength=len(body.vertices))
-    inner_edges = np.bincount(edges.ravel(), minlength=len(body.vertices)) // 2
-    return np.asarray(triangles[used] - inner_edges[used], dtype=np.int64)
+    triangles = _counted_at(corners, used, len(body.vertices))
+    inner_edges = _counted_at(edges.ravel(), used, len(body.vertices)) // 2
+    return np.asarray(triangles - inner_edges, dtype=np.int64)
+
+
+def _counted_at(values: np.ndarray, used: np.ndarray, vertex_count: int) -> np.ndarray:
+    """Wie oft jede Ecke aus ``used`` (aufsteigend) in ``values`` vorkommt.
+
+    ``values`` sind Ecken des Flecks, liegen also alle in ``used``. Gezählt
+    wird über ``used`` statt über alle Ecken des Netzes, solange der Fleck
+    klein ist (:data:`SORTED_CORNERS_SHARE`) — dieselbe Zahl je Ecke.
+    """
+    if len(values) < vertex_count * SORTED_CORNERS_SHARE:
+        return np.bincount(np.searchsorted(used, values), minlength=len(used))
+    return np.asarray(np.bincount(values, minlength=vertex_count)[used], dtype=np.int64)
 
 
 #: Die zuletzt gelesenen Stützpunkte je Netz und Fleck (:func:`_surface_support`).
@@ -5484,10 +5509,12 @@ CACHE_LIMIT_PER_QUESTION = 4096
 #: an denen die Mündungsprobe einer Bohrung jede Frage stellt
 #: (``prepare_ops.bore_entrance``), wiegen am Gartenschlauchhalter mit 392 532
 #: Dreiecken je rund 15 und 75 Megabyte; viertausend davon hielte kein Rechner.
-#: Die vorbereitete Trägerfläche der Platzierung (``placement.prepare_surface``)
-#: trägt die ganze Kontur einer Fläche und gehört mit derselben Grenze dazu.
+#: Die Facette je Dreieck der Wendelsuche (``helix._facet_of_face``) trägt
+#: eine Zahl je Dreieck. Die vorbereitete Trägerfläche der Platzierung
+#: (``placement.prepare_surface``) trägt die ganze Kontur einer Fläche und
+#: gehört mit derselben Grenze dazu.
 WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
-    {"support", "merged_copy", "surface_index", "prepared_surface"}
+    {"support", "merged_copy", "surface_index", "facet_of_face", "prepared_surface"}
 )
 
 
@@ -5768,25 +5795,33 @@ def _read_surface_support(
     # Netz selbst kennt, sind ein Sechstel davon, und deckungsgleiche
     # STL-Punkte fallen unter ihnen genauso zusammen. Das Ergebnis ist
     # dasselbe sortierte Punktfeld mit derselben Zuordnung.
-    # Die benutzten Ecken ohne Sortierung: Markieren, zählen, umnummerieren —
-    # an der Ikosphäre zehn statt fünfzig Millisekunden für 983 040 Ecken.
+    # Die benutzten Ecken eines großen Flecks ohne Sortierung: Markieren,
+    # zählen, umnummerieren — an der Ikosphäre zehn statt fünfzig
+    # Millisekunden für 983 040 Ecken. Ein kleiner Fleck wird sortiert
+    # (:data:`SORTED_CORNERS_SHARE`); beide Wege geben dieselben Ecken in
+    # derselben aufsteigenden Folge.
     flat_corners = np.asarray(body.faces[patch], dtype=np.int64).ravel()
-    present = np.zeros(len(body.vertices), dtype=bool)
-    present[flat_corners] = True
-    used = np.flatnonzero(present)
-    renumbered = np.full(len(body.vertices), -1, dtype=np.int64)
-    renumbered[used] = np.arange(len(used))
-    corner_of = renumbered[flat_corners]
+    if len(flat_corners) < len(body.vertices) * SORTED_CORNERS_SHARE:
+        used, corner_of = np.unique(flat_corners, return_inverse=True)
+    else:
+        present = np.zeros(len(body.vertices), dtype=bool)
+        present[flat_corners] = True
+        used = np.flatnonzero(present)
+        renumbered = np.full(len(body.vertices), -1, dtype=np.int64)
+        renumbered[used] = np.arange(len(used))
+        corner_of = renumbered[flat_corners]
     all_vertices = np.asarray(body.vertices, dtype=float)
     if _coincident_vertices(body):
         # Über die Punktnummern des Körpers, nicht über die Koordinaten des
         # Flecks: dieselben Punkte in derselben Reihenfolge, ohne je Fleck
-        # Zeilen zu sortieren (:func:`_canonical_vertices`).
+        # Zeilen zu sortieren (:func:`_canonical_vertices`). Vertreten wird
+        # jeder Punkt von seiner kleinsten benutzten Ecke — ``used`` steigt,
+        # also ist das ihr erstes Vorkommen.
         canonical = _canonical_vertices(body)
-        distinct, vertex_of = np.unique(canonical[used], return_inverse=True)
-        representative = np.full(int(canonical.max()) + 1, -1, dtype=np.int64)
-        representative[canonical[used][::-1]] = used[::-1]
-        points = all_vertices[representative[distinct]]
+        _distinct, first_seen, vertex_of = np.unique(
+            canonical[used], return_index=True, return_inverse=True
+        )
+        points = all_vertices[used[first_seen]]
     else:
         # **Ohne deckungsgleiche Ecken ist jede Ecke ihr eigener Punkt** — die
         # Sortierung der Koordinaten je Fleck entfällt; sie kostete an 2 843

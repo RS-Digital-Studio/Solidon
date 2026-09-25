@@ -71,7 +71,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Lüfterkurve gebaut; offen PLA-Vorgabe je Drucker, Hilfs- und Kammerlüfter, unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
 | [RM-229 — Anordnen legt ein zu großes Teil über die Kante, und geteilte Stücke heißen nach einem Buchstabenpfad](#rm-229) | Geometrie, Erkennung und Druckvorbereitung | 108,5 bei freigegebenen 108 statt einer Mitte mit kleinerem Rand; „B A · Stifte" für ein Stück mit Stiften und Löchern — Rand zuerst verkleinern, Nummerierung entscheiden |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
-| [RM-235 — Die Erkennung läuft an sehr großen Netzen in den Speicher oder über ihre Grenze](#rm-235) | Geometrie, Erkennung und Druckvorbereitung | MemoryError in features._fitted am Puppenhausbett — Speicher begrenzen. Seit 24.09.2026 kostet ein Speicherfehler beim Laden nur die Erkennung, nicht den Import; seit 25.09.2026 behält Kumiko über der Grenze ihre 5 000 größten Merkmale; die Ursache in `_fitted` bleibt offen |
+| [RM-235 — Die Erkennung läuft an sehr großen Netzen in den Speicher oder über ihre Grenze](#rm-235) | Geometrie, Erkennung und Druckvorbereitung | Beide Abnahmen stehen (25.09.2026): Kumiko behält über der Grenze ihre 5 000 größten Merkmale, das Puppenhausbett läuft ohne Speicherfehler (Spitze 2,1 GB). Offen: 98 s Splittereinpassung an erzeugten Figuren mit verrauschten Tafeln (Rauschen gegen sanfte Krümmung unterscheiden), dazu die Reste der Erkennung an einer Stelle — Wabenmuster, Magnettaschen, Senkungen |
 | [RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe](#rm-239) | Geometrie, Erkennung und Druckvorbereitung | Siebhalter-Ring mit Riss: die Heilung überwiegt, 12 Eckpaare zu 0,015 µm werden zusammengelegt, 24 Dreiecke fallen — Gruppen nach Flächenblatt trennen, ohne Dreieckssuppen aufzureißen; Import- und Reparaturregel zusammenlegen |
 | [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
@@ -1843,7 +1843,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
 <a id="rm-235"></a>
 
-- [ ] **RM-235 — Die Erkennung läuft an sehr großen Netzen in den Speicher oder über ihre Grenze.**
+- [~] **RM-235 — Die Erkennung läuft an sehr großen Netzen in den Speicher oder über ihre Grenze.**
   Aus der Durchsicht 0.5.0 (szene 27, beziehungen): Am Puppenhausbett (1,2 Mio.
   Dreiecke) warf die Erkennung einen `MemoryError` in `features._fitted` — der
   Halt ist seither sauber (ein Programmfehler der Erkennung reißt die Auswertung
@@ -1865,7 +1865,25 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   großen Deckflächen da. Nach Verschieben, Skalieren um 1,1 und Strecken in y
   um 1,2 wechseln 0, 0 und 11 Namen — so viele wie ganz ohne Grenze; nach der
   Größe allein waren es 136 und 1 814, und aus 5 000 Merkmalen wurden 5 898.
-  Offen bleibt der Speicherbedarf in `_fitted`.
+
+  **Das Puppenhausbett ist seit dem 25.09.2026 abgenommen**
+  (`F:\3D Dateien\3D Drucker\Puppenhaus\moebel\bett.glb`, 1 229 570
+  Dreiecke, als Zoll gelesen): Die Vollerkennung läuft ohne Speicherfehler
+  durch, Spitze 2,1 GB, davon 1,2 GB schon das eingelesene Netz. Sie dauerte
+  aber 174 s für null Merkmale, und über 30 s davon waren Felder in
+  Netzgröße je Fleck — in der Stützpunktlesung, der Bogenzählung und der
+  Wendelsuche. Jetzt 98 s, an 15 Modellen Merkmal für Merkmal gleich
+  (Gartenschlauchhalter 55 → 29 s, Kumiko 18 → 12 s, Drache 46 → 39 s).
+  **Offen:** Der Rest ist die Einpassung von 96 893 Splittern. Das Bett gilt
+  nicht als Haut, weil 63 Prozent seiner Oberfläche in großen Facetten liegen
+  — verrauschte Tafeln mit bis zu 4,3° Streuung, weder Fläche noch Fleck —,
+  und erst die Zählung am Ende verwirft seine 5 508 Kugeln. Die Tafeln zur
+  Haut zu zählen scheidet aus: Konstruierte Teile tragen ebenso viel solcher
+  Facettenfläche (Wedge-Lock 40, Siebhalter 35, Kugelbahnteile bis
+  41 Prozent), sanft gekrümmte Flächen, die an derselben Ebenheitsprüfung
+  scheitern. Rauschen von sanfter Krümmung zu trennen wäre eine eigene
+  Messung; bis dahin kostet eine solche Figur Zeit, wie in RM-193
+  entschieden.
 
   **Seit dem 24.09.2026 kostet der Speicherfehler beim Laden nur die
   Erkennung** (`scene.evaluate._with_features`): Das Modell lädt ohne sie,
