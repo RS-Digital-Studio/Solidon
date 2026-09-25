@@ -3,3 +3,4 @@ probe-profile/
 *.prof
 *.stl
 __pycache__/
+*.stdout

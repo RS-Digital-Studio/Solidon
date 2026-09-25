@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: c8bf1d70-6f46-4992-9b9e-5becddfdbd88
-  modified: 2026-09-22T20:24:11.836Z
+  modified: 2026-09-25T15:59:35.147Z
 ---
 
 Am 06.09.2026 schrieb ein Unteragent Docstrings und Kommentare in 35
@@ -48,3 +48,11 @@ Pfade mit `i/lf` und `w/crlf|w/mixed` byteweise auf LF. Danach zeigt
 und `git diff` leer — weder `update-index --refresh` noch `--really-refresh`
 helfen; `git add --pathspec-from-file=<liste>` erneuert nur die Stat-Einträge
 (gleiche Blobs, nichts gestaged), und der Baum ist sauber.
+
+**Dritter Nachtrag 25.09.2026 — trotz dieser Notiz noch einmal.** Ein
+Ersetzungsskript mit `path.write_text(text, encoding="utf-8")` stellte
+`placement_flow.py` (4 900 Zeilen) auf CRLF; aufgefallen nur an der Warnung
+von `git diff --stat`. Die Gewohnheit, die es nicht vergessen kann: **Bytes
+lesen, Bytes schreiben** — `text = p.read_bytes().decode("utf-8")`, am Ende
+`p.write_bytes(text.encode("utf-8"))` und einmal `text.count("\r")`
+ausgeben. Dann trägt die Datei genau die Zeilenenden, die sie hatte.

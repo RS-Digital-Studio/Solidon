@@ -1,0 +1,20 @@
+geladen in 2.45 s
+Druckbefunde laufen noch: True
+obj_1 203776 10
+hole_1         hole       synchron    14.0 ms  bis Ruhe   333.3 ms  längste Lücke   43 ms  Befunde läuft
+hole_2         hole       synchron    36.3 ms  bis Ruhe   218.2 ms  längste Lücke   43 ms  Befunde läuft
+hole: bis Ruhe Median 218.2 ms (ohne ersten), erster 333.3 ms; Lücke Median 43 ms, max 43 ms
+  feature_answers [Arbeiter]             2 Aufrufe  zusammen    189.8 ms  größter   140.0 ms
+  seat_of [Arbeiter]                     2 Aufrufe  zusammen    182.4 ms  größter   130.4 ms
+  prepare_surface [Arbeiter]             2 Aufrufe  zusammen    115.5 ms  größter   115.5 ms
+  at_point [Arbeiter]                    2 Aufrufe  zusammen     22.3 ms  größter    17.4 ms
+  prepare_tool [Arbeiter]                2 Aufrufe  zusammen      3.8 ms  größter     2.8 ms
+  bore_entrance [Arbeiter]               2 Aufrufe  zusammen      0.1 ms  größter     0.0 ms
+Windows fatal exception: access violation
+
+Current thread 0x0000a1cc (most recent call first):
+  File "F:\3D Druck\.claude\.state\rm-232-erster-klick-2026-09-25\rm232_probe.py", line 287 in main
+  File "F:\3D Druck\.claude\.state\rm-232-erster-klick-2026-09-25\rm232_probe.py", line 290 in <module>
+
+Current thread's C stack trace (most recent call first):
+  <cannot get C stack on this system>

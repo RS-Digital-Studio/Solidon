@@ -26,12 +26,38 @@ Zahlen (offscreen, `rm232_probe.py`, dichte Platte): erster Bohrungsklick synchr
 längste Lücke 171 → 52 ms, bis Ruhe 850 → 334 ms; Bohrung zu Bohrung 72–89 ms.
 Echtes Fenster (`slot_probe.py clicktime`): Bohrung zu Bohrung 351 ms Platte, 348 ms Wabenhalter.
 
-## Offen in RM-232
+## Abends: native Fenster und Übergabe (gebaut, gemessen)
 
-- Echtes Fenster: 140 von 854 Widgets nativ (AA_DontCreateNativeWidgetSiblings aus, die
-  Karten liegen als native Geschwister über der wgpu-Fläche); `setVisible` 1,3 ms und malt
-  sofort (`scenario_nativ.py`). Die Maßgruppe baut je Klick neu (`end_quiet_placement` →
-  `dispose`, fünf `redraw`); `seat_of` rechnet Öffnungen und Kanten je Klick (39 ms).
+- `overlay.keep_widgets_alien` (AA_DontCreateNativeWidgetSiblings, in `Viewport.__init__`
+  vor der Fläche) und `overlay.hold_above_the_view` (`childEvent` von `Viewport` und
+  `OverlayHost`): nativ 106 → 20 im Stand, 29 mit Bohrung. `scenario_verdeckt.py`: acht
+  Zustände, Werkzeuge, Skizze — nichts verdeckt.
+- Widgets im endgültigen Elternteil: Halter vor Feldern, `measure_fields(op, None)`.
+- Übergabe von Fluss zu Fluss: `_build_floating`, `_wire_floating` (`_links`),
+  `_park_floating`, `_take_parked_floating`, Vorrat `_PARKED` je Kennung mit `destroyed`
+  (`scenario_abbau.py`: nach dem Schließen leer, Ansicht und Tinte eingesammelt).
+  Die Maßtinte geht mit (8 Renderer-Elemente). `wheel_needs_focus` idempotent.
+- `start` baut einmal auf (`_redraw_held`), `end_quiet_placement` ohne Rücklauf
+  (`_ending_quiet_placement`), `FeaturePanel.measuring`.
+- Platzsuche der Nähe nach bis zur Grenze: an drei Körpern dieselben Plätze
+  (`scenario_plaetze.py`, vorher/nachher).
+- Nachweise am Fenster statt Fenstertests (die laufen erst beim Release):
+  `scenario_uebergabe.py` an Wabenhalter, Schraubendreherhalter, Pegboard-Teil.
+- Bildtakt (`max_fps`): gemessen folgenlos (`scenario_bestellung.py`, `scenario_zug.py`),
+  gebaut und wieder entfernt.
+
+Zahlen, abwechselnd bei gleicher Last (`ab.sh`), Bohrung zu Bohrung bis zur Fläche:
+Wabenhalter 200–208 → 127–128 ms, Platte 310 → 163 ms; „alles alien" 100–103 ms.
+Unter schwerer Fremdlast (16–25 Kerne anderer Torläufe) schwankt schon der synchrone
+Teil zwischen 58 und 97 ms — dann nur Verhältnisse lesen.
+
+## Offen in RM-232 (im Register)
+
+Wabenhalter unter 100 ms. Rest im Hauptfaden (`scenario_zeitleiste.py`,
+`scenario_teilprofil.py`): `set_measuring` aus/an beim Bohrungswechsel (87
+Sichtbarkeitswechsel, ~10 ms), Werkzeug neu in den Renderer (~10 ms),
+`_redraw_features` 14 ms, zwei Bilder je Klick, Zeigen/Bewegen der neun nativen
+Felder (~20 ms).
 
 ## Danach (Vorgabe Robert: nichts liegen lassen)
 
