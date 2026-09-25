@@ -551,6 +551,22 @@ einem Deckel aus Material, und ein Werkzeug, das dort um die Zugabe über die
 Ebene hinausreicht, trug bei jedem Versetzen ein Scheibchen ab — 1,33 mm³ an
 Ø 9,2 (Review, 21.09.2026).
 
+**Gibt der Flächenkörper nichts her, füllt der Stopfen und schneidet das
+Werkzeug der Kopie** (`_cavity_plug`, `_chain_copy_tool`) — wie beim Kippen
+und Verdoppeln derselben Kette; bis zum 25.09.2026 sagte allein das Versetzen
+ab. **Und ein Rand in einer schrägen, leicht gekrümmten Fläche wird aus den
+Flächen gefüllt, mit einem Fächerdeckel am Ring** (`_body_from_faces`,
+`curved_rims`, bis `CURVED_RIM` des Durchmessers neben der Ebene): Der
+Zylinderstopfen reichte bis an den äußersten Punkt des Rands, an der konvexen
+Hülle gekappt, und füllte die Luft vor dem Rest der Mündung — am
+Gartenschlauchhalter 58 und 148 mm³ beim Kippen um 5° und 15°, in einer Rinne
+11 und 43 mm³. Was bleibt, ist der Durchhang des Deckels über der gekrümmten
+Fläche (in der Rinne 1 bis 4 mm³). Der Fächer geht vom Mittelpunkt aus
+(`units.exact_centre`), nicht von einer geschätzten Flächenhöhe: Die wäre eine
+Ausgleichsrechnung über LAPACK und schriebe je Maschine andere Ecken (RM-187).
+Nur der Stopfen nimmt diese Deckel; ein Werkzeug, das bündig schneiden muss,
+nie.
+
 **Versetzt und verdoppelt wird starr, an beiden Kernen** (RM-220). Eine
 Bohrung ist danach so lang wie vorher; entlang ihrer Achse oder in dickeres
 Material gesetzt, bleibt Material stehen, und `no_longer_through` sagt es

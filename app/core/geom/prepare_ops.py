@@ -664,6 +664,14 @@ PARAMETRIC_KINDS: Final = ("hole", "pin", "slot")
 #: Boolesche zuverlässig bricht (§39).
 FEATURE_SECTIONS: Final = BORE_SECTIONS
 
+#: Wie weit der Rand eines Hohlraums im Mittel neben seiner Ausgleichsebene
+#: liegen darf, damit der Stopfen ihn noch mit einem Fächer schließt — als
+#: Anteil seines Durchmessers (:func:`_body_from_faces`, ``curved_rims``). Eine
+#: Zylindersenkung Ø 11 in einer schrägen Fläche des Gartenschlauchhalters
+#: schwankt um ±0,4 mm; ein Zwanzigstel des Durchmessers lässt sie zu und
+#: hält den Deckel nah genug an der Fläche, dass kein Stopfen über sie steht.
+CURVED_RIM: Final = 0.05
+
 #: Wie weit der Öffnungswinkel eines am Netz gemessenen Kegels vom gesetzten
 #: abweichen darf, damit er noch derselbe ist — in Grad, über den ganzen Winkel.
 #: Die Erkennung passt einen glatten Kegel in Facetten, und die liegen innerhalb
@@ -896,7 +904,11 @@ def _stands_alone(mesh: MeshData, feature: Feature, features: Mapping[str, Featu
 
 
 def _body_from_faces(
-    mesh: MeshData, face_indices: Sequence[int], *, allowed_rings: tuple[int, ...]
+    mesh: MeshData,
+    face_indices: Sequence[int],
+    *,
+    allowed_rings: tuple[int, ...],
+    curved_rims: bool = False,
 ) -> MeshData | None:
     """Einen Flächenausschnitt an seinen ebenen Randringen schließen.
 
@@ -905,6 +917,12 @@ def _body_from_faces(
     andere Mündung beziehungsweise den Boden der Bohrung. Die Zahl kommt vom
     Aufrufer, damit ein zweiter Ring nie wieder still dieselbe Bedeutung für
     zwei verschiedene Geometrien bekommt.
+
+    ``curved_rims`` nimmt auch einen Ring, der nur fast eben ist — bis
+    :data:`CURVED_RIM` seines Durchmessers neben seiner Ausgleichsebene, im
+    Mittel. Der Deckel ist dann ein Fächer vom Mittelpunkt an den Ring und
+    folgt ihm; das braucht nur der Stopfen (:func:`_cavity_plug`), nie ein
+    Werkzeug, das bündig schneiden muss.
     """
     if not face_indices:
         return None
@@ -960,7 +978,11 @@ def _body_from_faces(
             # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an
             # einer Seitenwand hat ihren Ring in der YZ-Ebene.
             spread = ring - hub
-            if float(np.linalg.svd(spread, compute_uv=False)[-1]) > FLAT_RIM * len(ring) ** 0.5:
+            limit = FLAT_RIM
+            if curved_rims:
+                reach = float(np.max(np.linalg.norm(spread, axis=1)))
+                limit = max(limit, CURVED_RIM * 2.0 * reach)
+            if float(np.linalg.svd(spread, compute_uv=False)[-1]) > limit * len(ring) ** 0.5:
                 return None
             # Der Deckel läuft gegen die Randkanten des Ausschnitts: Jede
             # Kante wird von der anderen Seite geschlossen, und der Körper ist
@@ -1215,7 +1237,18 @@ def _cavity_plug(
     """
     from app.core.perceive.relations import cavity_surface_indices
 
-    built = _body_from_faces(mesh, cavity_surface_indices(mesh, sections), allowed_rings=(1, 2))
+    indices = cavity_surface_indices(mesh, sections)
+    built = _body_from_faces(mesh, indices, allowed_rings=(1, 2))
+    if built is not None:
+        return built
+    # **Ein Rand in einer schrägen, leicht gekrümmten Fläche** (25.09.2026): Am
+    # Gartenschlauchhalter mündet eine Zylindersenkung Ø 11 in eine Fläche, die
+    # 30° gegen ihre Achse steht und 0,4 mm um ihre Ebene schwankt. Der
+    # Zylinderstopfen reicht bis an den äußersten Punkt des Rands und füllte die
+    # Luft vor dem Rest der Mündung — eine Beule: um 5° gekippt 58 mm³ Material
+    # mehr als vorher, um 15° 148. Ein Fächerdeckel am Ring füllt den Hohlraum
+    # bis auf dessen Abweichung von der Ebene.
+    built = _body_from_faces(mesh, indices, allowed_rings=(1, 2), curved_rims=True)
     if built is not None:
         return built
     return _chain_plug(mesh, sections, quality=quality, seed=seed, cancelled=cancelled)
@@ -3126,7 +3159,16 @@ def move_feature(ctx: OpContext) -> OpResult:
     travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
     if chain is not None:
         bore, widening = chain[0], chain[-1]
-        cavity_body = _paired_cavity_body(body, *chain)
+        # **Wo die Flächen keinen Körper hergeben, gelten die Kennzahlen** — wie
+        # beim Verdoppeln und beim Kippen derselben Kette (25.09.2026). Am
+        # Gartenschlauchhalter kippten zwei Senkbohrungen, und dieselben zwei
+        # ließen sich nicht versetzen: „geht in einen anderen Hohlraum über".
+        # Gefüllt wird mit dem Stopfen (:func:`_cavity_plug`), geschnitten mit
+        # dem Werkzeug der Kopie (:func:`_chain_copy_tool`); wo die Flächen
+        # tragen, sind beide der Flächenkörper wie bisher.
+        cavity_body = _cavity_plug(
+            body, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+        )
         if cavity_body is None:
             raise ValidationError(
                 field="at_feature",
@@ -3157,7 +3199,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         # Kubikmillimeter mehr ab, als der Pfropfen zurückgab (sieben Tests
         # der Senkungsübergänge rot). Verlängert wird deshalb der exakte
         # Körper selbst — nur an den Mündungen, nie am Boden.
-        shifted_cavity = _past_the_mouths(body, cavity_body).raw.copy()
+        shifted_cavity = _chain_copy_tool(ctx, body, feature, chain).raw.copy()
         shifted_cavity.apply_translation(travel)
         cutting = MeshData.of(shifted_cavity)
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))

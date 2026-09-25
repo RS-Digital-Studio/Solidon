@@ -2934,6 +2934,47 @@ def _top_face_area(mesh: MeshData) -> float:
     )
 
 
+def test_a_chain_without_a_body_is_moved_from_its_dimensions(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wo das Netz keinen Hohlraumkörper hergibt, versetzt die Kette aus ihren Kennzahlen.
+
+    Verdoppeln und Kippen hatten diesen Rückfall, Versetzen nicht: Am
+    Gartenschlauchhalter kippten zwei Senkbohrungen, und dieselben zwei sagten
+    beim Versetzen ab — „geht in einen anderen Hohlraum über" (gemessen am
+    25.09.2026). Die Lage wird wie im Test darunter an ``_body_from_faces``
+    gestellt.
+    """
+    from app.core.geom import prepare_ops
+
+    entry, _bored, cone, hole = _countersunk_plate(profile)
+    volume = float(as_mesh_data(entry.mesh).volume)
+    centre = [float(value) for value in entry.features[hole].params["centre"]]
+
+    monkeypatch.setattr(prepare_ops, "_body_from_faces", lambda *_a, **_k: None)
+    moved = _run_op(
+        "move_feature",
+        entry,
+        profile,
+        at_feature=hole,
+        x=centre[0] + 8.0,
+        y=centre[1],
+        z=centre[2],
+    ).outputs[0]
+
+    assert moved.mesh.raw.is_watertight and moved.mesh.raw.body_count == 1
+    # Stopfen und Werkzeug aus Kennzahlen treffen die Facetten nicht genau;
+    # ein Prozent des Hohlraums deckt es.
+    assert float(moved.mesh.volume) == pytest.approx(volume, abs=0.01 * (60 * 40 * 10 - volume))
+    found = detect(moved.mesh)
+    for kind in ("hole", "cone"):
+        places = [
+            float(feature.params["centre"][0]) for feature in found.values() if feature.kind == kind
+        ]
+        assert places == pytest.approx([centre[0] + 8.0], abs=0.05), (kind, places)
+    assert moved.features[cone].params["centre"][0] == pytest.approx(centre[0] + 8.0, abs=0.05)
+
+
 @pytest.mark.parametrize("sections", ["single", "chain"])
 def test_a_cavity_without_a_body_is_closed_from_its_dimensions(
     profile: Profile, monkeypatch: pytest.MonkeyPatch, sections: str
@@ -3444,6 +3485,76 @@ def test_no_plug_stands_proud_into_a_hollow(
     assert _material_in_the_channel(result.outputs[0].mesh) == pytest.approx(0.0, abs=1e-3), (
         f"{op} lässt einen Pfropfen in der Nut stehen"
     )
+
+
+def _grooved_block_with_a_counterbore() -> tuple[SceneObject, MeshData]:
+    """Quader 40 × 30 × 20 mit einer Rinne oben (r 12 entlang x, Achse bei z = 26)
+    und bei y = 5 einer Bohrung Ø 4 mit Zylindersenkung Ø 8, die in die gekrümmte
+    Rinnenfläche mündet — zurück kommen der Körper und der Rinnenraum."""
+    pytest.importorskip("OCP", reason="OpenCASCADE baut die Rinne")
+    from app.core.brep import edit
+    from app.core.geom import lathe
+    from app.core.geom import transform as moving
+    from app.core.sketch.planes import frame_of
+
+    groove = edit.revolved_bore_tool(
+        [(0.0, -30.0), (12.0, -30.0), (12.0, 30.0), (0.0, 30.0), (0.0, -30.0)],
+        frame_of((1.0, 0.0, 0.0), (0.0, 0.0, 26.0)),
+    )
+    grooved = edit.unified(edit.boolean("difference", [edit.box(40.0, 30.0, 20.0), groove]))
+    solid = edit.bore_profile(
+        grooved,
+        [(0, 0), (2, 0), (2, 10), (4, 10), (4, 25), (0, 25), (0, 0)],
+        frame_of((0, 0, 1), (0, 5.0, 0)),
+    )
+    mesh = as_mesh_data(solid)
+    space = lathe.cylinder(radius=11.98, height=40.0, sections=96)
+    moving.moved(space, moving.rotation_between([0.0, 0.0, 1.0], [1.0, 0.0, 0.0]))
+    space.apply_translation((0.0, 0.0, 26.0))
+    return SceneObject("plate", "Platte", mesh, features=detect(mesh)), MeshData.of(space)
+
+
+@pytest.mark.parametrize(
+    ("op", "params"),
+    [
+        ("rotate_feature", {"axis": "x", "angle": 5.0}),
+        ("rotate_feature", {"axis": "y", "angle": 10.0}),
+        ("move_feature", {}),
+    ],
+)
+def test_no_plug_stands_proud_where_the_mouth_is_curved(
+    profile: Profile, op: str, params: dict[str, object]
+) -> None:
+    """Eine Kette, die in eine gekrümmte Fläche mündet, wird aus ihren Flächen gefüllt.
+
+    Ihr Randring ist nicht eben, der Flächenkörper sagte ab, und es kam der
+    Zylinderstopfen: bis an den äußersten Punkt des Rands, an der konvexen
+    Hülle gekappt — in einer Rinne liegt die Hülle über der Fläche. Gemessen
+    am 25.09.2026 an diesem Quader: um 5° gekippt 11,2 mm³ Material in der
+    Rinne, um 10° 42,8, und *Versetzen* sagte ab. Am Gartenschlauchhalter trug
+    derselbe Weg 58 und 148 mm³ auf. Jetzt schließt ein Fächerdeckel am Ring
+    (``_body_from_faces``, ``curved_rims``); was bleibt, ist dessen Durchhang
+    über der hohlen Fläche, gemessen 0,9, 1,7 und 4,3 mm³.
+    """
+    entry, space = _grooved_block_with_a_counterbore()
+    hole = min(
+        (feature for feature in entry.features.values() if feature.kind == "hole"),
+        key=lambda feature: float(feature.params["diameter"]),
+    )
+    before = boolean("intersection", [space, as_mesh_data(entry.mesh)], allow_empty=True).mesh
+    baseline = abs(float(before.volume)) if len(before.raw.faces) else 0.0
+    if op == "move_feature":
+        # 3 mm entlang der Rinne: dieselbe Fläche an der neuen Stelle.
+        centre = [float(value) for value in hole.params["centre"]]
+        params = {"x": centre[0] + 3.0, "y": centre[1], "z": centre[2]}
+
+    result = _run_op(op, entry, profile, at_feature=hole.id, **params)
+
+    left = boolean("intersection", [space, result.outputs[0].mesh], allow_empty=True).mesh
+    grown = (abs(float(left.volume)) if len(left.raw.faces) else 0.0) - baseline
+    limit = 5.0 if op == "move_feature" else 2.0
+    assert grown <= limit, f"{op} lässt {grown:.2f} mm³ in der Rinne stehen"
+    assert "bore.over_the_edge" not in [finding.code for finding in result.findings]
 
 
 def test_removing_a_bore_restores_the_body_exactly(profile: Profile) -> None:
