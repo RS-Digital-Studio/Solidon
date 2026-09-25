@@ -2192,11 +2192,19 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Entwurf im Merkmalfenster scharf —, und beim Übernehmen liest die
   Maßgruppe nur die getippten Felder neu: Das Zurücklesen einer feineren
   Zahl, als das Feld zeigt, baute das Werkzeug neu, und der Klick verfiel
-  still. Offen daraus: die Mündungskorrektur in
-  `surface_values` erkennt die eigene Fläche nicht von einer fremden
-  parallelen im Abstand bis zu einem Radius — eine Korrektur nur an der
-  Fläche aus `seat_of` bräche die gerundete Mündung am Schaber, die gar keine
-  hat. Am echten Fenster gefahren an `plate_coarse_slots`,
+  still. Die Mündungskorrektur in `surface_values` gilt seit dem
+  25.09.2026 nur der eigenen Fläche (G5): Der Fluss reicht die eigene
+  Mündung mit — vom Sitz, oder nach einem Zielen von `placement.mouth_on` an
+  der frisch vorbereiteten Fläche —, und eine fremde parallele Fläche im
+  Radius setzt die Mündung auf sich, statt die Mitte in der Höhe zu halten.
+  Im Fenster tritt der Fall nur auf, wo gezielt wird (im Dialog an einem
+  Loch ohne Sitz); am gewählten Merkmal gehört ein Klick der Auswahl.
+  Dabei gefunden: Wer in der Maßgruppe eine Koordinate tippte, verlor die
+  Gruppe nach der zweiten Ziffer — die Mitte wanderte an der um Rauschen
+  schiefen Achse mit dem Versatz in der Höhe (Schaber: 2,9 µm auf 43 mm),
+  und `move_to` las das als getippte Tiefe. Gemessen wird seither an der
+  Mündung; am Schaber hält die Gruppe über „-47,00“, und Enter übernimmt
+  mit unveränderter Höhe. Am echten Fenster gefahren an `plate_coarse_slots`,
   `plate_holes` und aus `F:\3D Dateien` an Scraper und Wedge-Lock:
   Einrasten, Übernehmen, Rücknahme des Schritts, Zwillingsfelder in beiden
   Richtungen. Die neuen Tests ohne Fenster waren am Stand davor rot; die

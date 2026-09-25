@@ -112,11 +112,14 @@ def test_a_moved_draft_seats_its_mouth_on_the_face_and_not_beside_it():
     )
 
     PlacementFlow._begin_at_feature(flow)
-    prepared, surface = work[0]()
+    prepared, surface, mouth = work[0]()
 
     assert surface.point == pytest.approx((x + 2.0, y + 1.0, 4.0), abs=1e-9)
     assert sorted(edge.distance for edge in surface.edges) == pytest.approx([11.0, 17.0])
     assert prepared.frame.normal == pytest.approx((0.0, 0.0, 1.0))
+    assert mouth == pytest.approx((x, y, 4.0), abs=1e-9), (
+        "die eigene Mündung bleibt der Durchstoßpunkt der Achse, nicht die versetzte Stelle"
+    )
 
 
 @pytest.mark.parametrize("centre", [False, True])

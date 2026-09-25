@@ -53,7 +53,7 @@ from app.core.types import (
     measure_status,
     vec3_or_none,
 )
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, format_length, round_display
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, dot3, format_length, round_display
 from app.i18n import TranslatableText, _, tr
 
 if TYPE_CHECKING:
@@ -1487,19 +1487,7 @@ def seat_of(
     Verrundung an einer Kante hat keine, und ein Merkmal ohne Achse oder Tiefe
     ebenso wenig. Der Aufrufer zeigt dann keine Maße statt falscher.
     """
-    axis = feature.params.get("axis")
-    depth = feature.params.get("depth")
-    centre = feature.params.get("centre")
-    if axis is None or centre is None or not isinstance(depth, int | float):
-        return None
-    direction = np.asarray(axis, dtype=float)
-    length = float(np.linalg.norm(direction))
-    if length <= EPS_GEOM:
-        return None
-    direction = direction / length
-    middle = np.asarray(centre, dtype=float)
-    half = direction * (float(depth) / 2.0)
-    mouths = ((_vec(middle + half), direction), (_vec(middle - half), -direction))
+    mouths = _ends(feature)
     for mouth, outward in mouths:
         seated = _seat_at(mesh, feature, features, mouth, outward)
         if seated is not None:
@@ -1512,6 +1500,162 @@ def seat_of(
         if seated is not None:
             return seated
     return None
+
+
+def mouth_on(
+    prepared: PreparedSurface, feature: Feature, features: Mapping[str, Feature]
+) -> Vec3 | None:
+    """Die eigene Mündung eines Lochs auf dieser Fläche — ``None`` für eine fremde.
+
+    Die Frage vor der Fasenkorrektur in :func:`surface_values`: Ist die
+    Fläche, auf die gerade gezielt wird, die Mündungsfläche des Lochs, oder
+    eine fremde, die nur parallel daneben liegt? Beantwortet wie
+    :func:`seat_of` je Ende — die Ebene der gemessenen Mündung selbst, sonst
+    eine bis :func:`mouth_reach` dahinter, deren Öffnung die Achse
+    umschließt; liegt an diesem Ende eine Fläche genau in der Mündung, ist
+    nur sie die eigene. Gefragt wird an einer **frisch vorbereiteten** Fläche
+    mit ihren Öffnungen. Die Fläche aus :func:`seat_of` hat die eigene
+    Öffnung gefüllt und bestünde die Prüfung nicht; wer von dort kommt, nimmt
+    deren Mündung.
+
+    Bis zum 25.09.2026 galt jede parallele Fläche im Fenster als die eigene
+    (G5): Ein Sackloch von unten, mit einem Klick auf die 2 mm darüber
+    liegende Oberseite versetzt, behielt die Höhe seiner Mitte und wurde ein
+    Hohlraum im Material statt einer Bohrung.
+    """
+    if not prepared.planar:
+        return None
+    normal = prepared.frame.normal
+    origin = prepared.frame.origin
+    reach = mouth_reach(feature)
+    for mouth, outward in _ends(feature):
+        aligned = dot3(normal, outward)
+        if not _faces_outward(aligned, feature):
+            continue
+        offset = dot3(tuple(o - m for o, m in zip(origin, mouth, strict=True)), normal)
+        point = _vec(np.asarray(mouth) + np.asarray(outward) * (offset / aligned))
+        exact = abs(offset) <= EPS_GEOM
+        if not exact and not (
+            -MAX_FACET_SAG <= offset <= reach
+            and not _seat_candidates(feature, features, mouth, outward)
+        ):
+            continue
+        if not _openings(prepared):
+            if exact:
+                return point
+            continue
+        if _opening_around(prepared, point) is not None:
+            return point
+    return None
+
+
+def _ends(feature: Feature) -> tuple[tuple[Vec3, Vec3], ...]:
+    """Die beiden Mündungen eines Merkmals, je mit der Richtung nach außen.
+
+    Die gemessene Achse trägt kein Vorzeichen (:func:`seat_of`), also sind
+    es immer beide Enden: zuerst das, auf das die Achse zeigt. Leer, wenn
+    Achse, Mitte oder Tiefe fehlen.
+    """
+    axis = feature.params.get("axis")
+    depth = feature.params.get("depth")
+    centre = feature.params.get("centre")
+    if axis is None or centre is None or not isinstance(depth, int | float):
+        return ()
+    direction = np.asarray(axis, dtype=float)
+    length = math.sqrt(dot3(direction, direction))
+    if length <= EPS_GEOM:
+        return ()
+    direction = direction / length
+    middle = np.asarray(centre, dtype=float)
+    half = direction * (float(depth) / 2.0)
+    return (
+        (_vec(middle + half), _vec(direction)),
+        (_vec(middle - half), _vec(-direction)),
+    )
+
+
+def _faces_outward(aligned: float, feature: Feature) -> bool:
+    """Ob eine Fläche mit dieser Ausrichtung zur Achse eine Mündung tragen kann.
+
+    Der Sacklochboden liegt ebenfalls auf einer Endebene, zeigt aber zum
+    Hohlraum zurück. Nur die äußere Mündung zeigt von der Mitte weg.
+    """
+    return (aligned if feature.kind in ("hole", "slot") else abs(aligned)) >= _SEAT_PARALLEL
+
+
+def _seat_candidates(
+    feature: Feature,
+    features: Mapping[str, Feature],
+    mouth: Vec3,
+    direction: Vec3,
+    *,
+    reach: float = 0.0,
+) -> list[tuple[float, Feature, Vec3]]:
+    """Die ebenen Flächen, die an diesem Ende die Mündung tragen könnten, die nächste zuerst.
+
+    Ohne ``reach`` nur Flächen, deren Ebene die Mündung enthält; mit ``reach``
+    die bis dahin nach außen dahinter, jede mit dem Durchstoßpunkt der Achse.
+    Gefragt wird an den Merkmalen, ohne eine Fläche vorzubereiten.
+    """
+    beyond = reach > EPS_GEOM
+    candidates: list[tuple[float, Feature, Vec3]] = []
+    for entry in features.values():
+        if entry.kind != "face" or not entry.face_indices:
+            continue
+        normal = entry.params.get("normal")
+        seat = entry.params.get("centre")
+        if normal is None or seat is None:
+            continue
+        aligned = dot3(normal, direction)
+        if not _faces_outward(aligned, feature):
+            continue
+        offset = dot3(tuple(float(s) - m for s, m in zip(seat, mouth, strict=True)), normal)
+        if not beyond:
+            if abs(offset) > EPS_GEOM:
+                continue
+            candidates.append((0.0, entry, mouth))
+        elif -MAX_FACET_SAG <= offset <= reach:
+            # **Auch knapp davor.** Die Wand ist eingepasst, nicht abgelesen:
+            # Am gekürzten Langloch des Wedge-Lock lag die gemessene Mündung
+            # 3,5 µm über ihrer Fläche — für ``EPS_GEOM`` eine andere Ebene.
+            # Entlang der Achse bis in die Ebene, nicht entlang der Normalen:
+            # Die Mitte bleibt auf der Achse, auch wo die Fläche um die
+            # Messgenauigkeit schief steht.
+            candidates.append(
+                (
+                    abs(offset),
+                    entry,
+                    _vec(np.asarray(mouth) + np.asarray(direction) * (offset / aligned)),
+                )
+            )
+    # Die nächste Ebene zuerst; in der Mündung selbst gilt die Reihenfolge
+    # der Merkmale wie bisher (stabil sortiert, alle Abstände null).
+    return sorted(candidates, key=lambda candidate: candidate[0])
+
+
+def _openings(prepared: PreparedSurface) -> tuple[Any, ...]:
+    """Die inneren Ringe einer vorbereiteten Fläche — leer ohne Aussparung."""
+    from shapely.geometry import Polygon
+
+    area = prepared.area
+    if not isinstance(area, Polygon):
+        return ()
+    return tuple(area.interiors)
+
+
+def _opening_around(prepared: PreparedSurface, point: Vec3) -> Any:
+    """Die eine Öffnung der Fläche, die den Durchstoßpunkt der Achse umschließt.
+
+    ``None``, wenn es keine oder mehr als eine ist — dann ist die Fläche an
+    dieser Stelle Material oder die Frage nicht eindeutig.
+    """
+    from shapely.geometry import Point, Polygon
+
+    from app.core.sketch.planes import to_plane
+
+    pierced = Point(to_plane(prepared.frame, point))
+    own = [ring for ring in _openings(prepared) if Polygon(ring).covers(pierced)]
+    return own[0] if len(own) == 1 else None
 
 
 def mouth_reach(feature: Feature) -> float:
@@ -1535,7 +1679,7 @@ def _seat_at(
     feature: Feature,
     features: Mapping[str, Feature],
     mouth: Vec3,
-    direction: Any,
+    direction: Vec3,
     *,
     reach: float = 0.0,
 ) -> tuple[PreparedSurface, Vec3] | None:
@@ -1552,44 +1696,14 @@ def _seat_at(
     from app.core.sketch.planes import to_plane
 
     beyond = reach > EPS_GEOM
-    candidates: list[tuple[float, Feature, Vec3]] = []
-    for entry in features.values():
-        if entry.kind != "face" or not entry.face_indices:
-            continue
-        normal = entry.params.get("normal")
-        seat = entry.params.get("centre")
-        if normal is None or seat is None:
-            continue
-        flat = np.asarray(normal, dtype=float)
-        aligned = float(flat @ direction)
-        # Der Sacklochboden liegt ebenfalls auf einer Endebene, zeigt aber
-        # zum Hohlraum zurück. Nur die äußere Mündung zeigt von der Mitte weg.
-        if (aligned if feature.kind in ("hole", "slot") else abs(aligned)) < _SEAT_PARALLEL:
-            continue
-        offset = float((np.asarray(seat, dtype=float) - np.asarray(mouth)) @ flat)
-        if not beyond:
-            if abs(offset) > EPS_GEOM:
-                continue
-            candidates.append((0.0, entry, mouth))
-        elif -MAX_FACET_SAG <= offset <= reach:
-            # **Auch knapp davor.** Die Wand ist eingepasst, nicht abgelesen:
-            # Am gekürzten Langloch des Wedge-Lock lag die gemessene Mündung
-            # 3,5 µm über ihrer Fläche — für ``EPS_GEOM`` eine andere Ebene.
-            # Entlang der Achse bis in die Ebene, nicht entlang der Normalen:
-            # Die Mitte bleibt auf der Achse, auch wo die Fläche um die
-            # Messgenauigkeit schief steht.
-            candidates.append(
-                (abs(offset), entry, _vec(np.asarray(mouth) + direction * (offset / aligned)))
-            )
-    # Die nächste Ebene zuerst; in der Mündung selbst gilt die Reihenfolge
-    # der Merkmale wie bisher (stabil sortiert, alle Abstände null).
-    for _distance, entry, point in sorted(candidates, key=lambda candidate: candidate[0]):
+    for _distance, entry, point in _seat_candidates(
+        feature, features, mouth, direction, reach=reach
+    ):
         try:
             prepared = prepare_surface(mesh, entry.face_indices[0], features)
         except ValidationError:
             continue
-        area = prepared.area
-        if not isinstance(area, Polygon) or not area.interiors:
+        if not _openings(prepared):
             if beyond:
                 # Ohne Öffnung um die Achse ist die Fläche dahinter Material —
                 # der Deckel über einem flachen Sackloch, kein Sitz.
@@ -1601,11 +1715,10 @@ def _seat_at(
         # Langloch Ø 6 auf 20 kamen minus 3,00 und minus 3,30 zurück, also seine eigene
         # halbe Breite. Gefragt ist der Abstand zum **Rand des Teils**; was in
         # einer Aussparung liegt, ist keine Antwort darauf.
-        pierced = Point(to_plane(prepared.frame, point))
-        own = [ring for ring in area.interiors if Polygon(ring).covers(pierced)]
-        if len(own) != 1:
+        border = _opening_around(prepared, point)
+        if border is None:
             continue
-        border = own[0]
+        area = prepared.area
         available = Polygon(area.exterior, [ring for ring in area.interiors if ring != border])
         edges = tuple(
             edge
@@ -1974,8 +2087,17 @@ def surface_values(
     feature: Feature | None = None,
     source: SceneObject | None = None,
     prepared_tool: PlacementTool | None = None,
+    mouth: Vec3 | None = None,
 ) -> dict[str, Any]:
-    """Reproduzierbare Op-Werte für einen echten Flächentreffer, ohne Feature zu erfinden."""
+    """Reproduzierbare Op-Werte für einen echten Flächentreffer, ohne Feature zu erfinden.
+
+    ``mouth`` ist bei *Zum Langloch ziehen* und *Bohrung ändern* die eigene
+    Mündung des Lochs auf der Fläche des Treffers, der Durchstoßpunkt seiner
+    Achse — aus :func:`seat_of`, wo die Platzierung am Merkmal begann, sonst
+    aus :func:`mouth_on`. Nur auf ihrer Ebene rückt die Mitte nicht um eine
+    Fase in die Achse; ``None`` heißt: Die Fläche ist nicht die eigene, und
+    die Mündung liegt auf ihr.
+    """
     from app.core.knowledge.parts.ops import normal_fields, placement_fields
 
     if not supports_surface_placement(spec):
@@ -2021,18 +2143,32 @@ def surface_values(
         towards = 1.0 if facing >= 0.0 else -1.0
         half = float(depth) / 2.0
         centre = feature.params.get("centre")
-        if centre is not None:
+        if centre is not None and mouth is not None:
             # **Hinter einer Fase liegt die Fläche weiter draußen als die
-            # Mündung** (:func:`seat_of`). Eine Ebene innerhalb von
-            # :func:`mouth_reach` hinter der gemessenen Mündung ist die eigene;
-            # ihr Abstand zur Mitte ersetzt die halbe Tiefe, sonst rückte die
+            # Mündung** (:func:`seat_of`). Auf der eigenen Mündungsfläche
+            # ersetzt ihr Abstand zur Mitte die halbe Tiefe, sonst rückte die
             # Mitte um die Fase in die Achse — an einem Sackloch hieße das ein
-            # anderes Loch. Dieselbe Spanne wie dort, auch knapp davor.
-            beyond = towards * sum(
-                (float(target[index]) - float(centre[index])) * float(along[index]) / span
+            # anderes Loch. **Nur dort** (G5, 25.09.2026): Eine fremde Fläche
+            # parallel im selben Fenster ist keine Fase, und wer auf sie
+            # versetzt, meint die Mündung auf ihr.
+            #
+            # **Gemessen wird an der Mündung, nicht am Ziel.** Die gemessene
+            # Achse steht um Rechenrauschen schief (am Schaber 1,5 µrad), und
+            # der Abstand des *versetzten* Punkts zur alten Mitte entlang
+            # dieser Achse wuchs mit dem Versatz: 43 mm weiter lag die Mitte
+            # 2,9 µm höher, und ``move_to`` las das beim nächsten Tastendruck
+            # als getippte Tiefe — die Maßgruppe ging ans Merkmalfenster.
+            lifted = sum(
+                (float(target[index]) - float(mouth[index])) * float(placement.frame.normal[index])
                 for index in range(3)
             )
-            if half - MAX_FACET_SAG <= beyond <= half + mouth_reach(feature):
+            beyond = towards * sum(
+                (float(mouth[index]) - float(centre[index])) * float(along[index]) / span
+                for index in range(3)
+            )
+            if abs(lifted) <= MAX_FACET_SAG and (
+                half - MAX_FACET_SAG <= beyond <= half + mouth_reach(feature)
+            ):
                 half = beyond
         target = _vec(np.asarray(target) - along / span * towards * half)
     elif spec.name in {"move_feature", "duplicate_feature"}:

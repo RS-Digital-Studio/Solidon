@@ -1201,6 +1201,21 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   bleibt die gemessene: `surface_values` rechnet von der gefundenen Mündung
   zurück und nimmt die halbe Tiefe nur, wo sie zwischen Mündung und Fläche
   passt. Korpus: `plate_chamfered_mouths.stl`.
+- **Die Fasenkorrektur gilt nur der eigenen Mündungsfläche** (G5,
+  25.09.2026). `surface_values(..., mouth=...)` bekommt den Durchstoßpunkt
+  der Achse durch die eigene Fläche — aus `seat_of`, wo am Merkmal begonnen
+  wurde, sonst aus `mouth_on` an der frisch vorbereiteten Fläche (dieselbe
+  Frage wie `seat_of` je Ende: Ebene der Mündung, sonst bis `mouth_reach`
+  dahinter mit einer Öffnung um die Achse). Ohne `mouth` oder auf einer
+  anderen Ebene liegt die Mündung auf der getroffenen Fläche. Vorher galt
+  jede parallele Fläche im Fenster als die eigene, und ein Sackloch, auf die
+  2 mm darüber liegende Oberseite versetzt, wurde ein Hohlraum im Material.
+  **Und der Abstand zur Mitte wird an der Mündung gemessen, nicht am
+  Ziel:** Eine gemessene Achse steht um Rechenrauschen schief, und am
+  verschobenen Punkt gemessen wanderte die Mitte mit dem Versatz in der Höhe
+  — am Schaber 2,9 µm auf 43 mm, genug, dass `move_to` beim nächsten
+  Tastendruck eine getippte Tiefe las und die Maßgruppe ans Merkmalfenster
+  ging.
 - **Ein Sichtstrahl wird am Originalnetz geprüft.** `original_surface_hit()`
   ersetzt unbekannte LOD-Zellen durch Originaldreiecke und berücksichtigt alle
   Schnittebenen. Ihre positive Seite entfällt; künstliche Kappen sind kein
