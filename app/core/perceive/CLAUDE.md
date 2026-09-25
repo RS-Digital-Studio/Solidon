@@ -983,8 +983,10 @@ Verweis bleibt je Merkmal eine Warnung
   Feld in Netzgröße, das nur den Fleck betrifft — auch nicht die
   Wendelsuche (`helix._resolved_crest` rechnet an den Kantenecken,
   `_facet_of_face` einmal je Körper). Wo das Netz
-  deckungsgleiche Ecken hat, legt `_canonical_vertices` sie **einmal je
-  Körper** zusammen, und die Lesung liest je Fleck nur Nummern
+  deckungsgleiche Ecken hat, legt `vertex_rank` sie **einmal je
+  Körper** zusammen (im Cache des Netzes — dieselbe Nummer liest die
+  Ordnung der Flecken und die Nachbarschaft der Platzierung), und die
+  Lesung liest je Fleck nur Nummern
   (`_coincident_vertices` fragt dieselbe Tabelle) — sonst ist jede Ecke ihr
   eigener Punkt. Gemessen am 21.09.2026, allein auf Roberts Maschine:
   Ikosphäre 22,8 → 1,4 s, Lochplatte mit 204 000 Dreiecken 1,4 → 1,0 s,

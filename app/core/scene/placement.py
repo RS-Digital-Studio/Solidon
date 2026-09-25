@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 import numpy as np
 
 from app.core.errors import CORRECT_INPUT, ValidationError
-from app.core.geom.mesh import MeshData, as_mesh_data, unique_edges
+from app.core.geom.mesh import MeshData, as_mesh_data, edge_table, unique_edges
 from app.core.log import get_logger
 from app.core.registry import OperationSpec
 from app.core.types import (
@@ -986,8 +986,10 @@ def _welded_adjacency(raw: Any, vertices: Any) -> np.ndarray:
     """Welche Dreiecke sich eine Kante teilen — über **exakte** Ortsgleichheit.
 
     Zurück kommt je geteilter Kante ein Paar Dreiecksnummern, das kleinere
-    zuerst, als Feld mit zwei Spalten. Eine Kante mit mehr als zwei Besitzern
-    verbindet nichts; sie ist keine Fläche, sondern eine Verzweigung.
+    zuerst, als Feld mit zwei Spalten; die Reihenfolge der Paare sagt nichts.
+    Eine Kante mit mehr als zwei Besitzern verbindet nichts; sie ist keine
+    Fläche, sondern eine Verzweigung. Ebenso wenig ein Dreieck, das mit sich
+    selbst eine Kante teilt.
 
     Exakte Gleichheit verbindet auch unverschweißte STL-Dreiecke, und kein
     Abstandsschwellwert darf dabei einen tatsächlichen schmalen Spalt
@@ -1007,6 +1009,14 @@ def _welded_adjacency(raw: Any, vertices: Any) -> np.ndarray:
     unterteilt (815 104 Dreiecke), dauerte der erste Klick auf eine Bohrung
     darin 8,2 s, bevor Griff und Maße kamen (RM-200). Nach Kante sortiert
     stehen die zwei Besitzer einer geteilten Kante nebeneinander.
+
+    **Und über die Punktnummer des Körpers** (``features.vertex_rank``,
+    RM-232): Sie liegt nach der Erkennung schon im Cache des Netzes, wo diese
+    Nachbarschaft ihre Ecken noch einmal als Zeilen sortierte. Trägt kein
+    Ort zwei Ecken, sind die gespeicherten Nummern die Orte, und die
+    Kantenzählung des Einlesens beantwortet die Frage schon
+    (``mesh.edge_table``). An der dichten Platte kostete die erste
+    Platzierung darauf 114 ms allein hierfür, jetzt rund 30.
     """
     try:
         cache = raw._cache
@@ -1016,15 +1026,28 @@ def _welded_adjacency(raw: Any, vertices: Any) -> np.ndarray:
     else:
         if isinstance(cached, np.ndarray):
             return cached
-    _, inverse = np.unique(vertices, axis=0, return_inverse=True)
-    faces = inverse.reshape(-1)[np.asarray(raw.faces, dtype=np.int64)]
-    _, edge_ids = unique_edges(
-        faces[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), return_inverse=True
-    )
-    edge_ids = np.asarray(edge_ids, dtype=np.int64).reshape(-1)
-    order = np.argsort(edge_ids, kind="stable")
-    shared = np.bincount(edge_ids)[edge_ids[order]] == 2
-    adjacency: np.ndarray = (order[shared] // 3).reshape(-1, 2)
+    from app.core.perceive.features import vertex_rank
+
+    adjacency: np.ndarray | None = None
+    try:
+        rank = vertex_rank(raw)
+    except AttributeError, TypeError, KeyError:
+        # Die Punktnummer liegt im Cache des Netzes; ohne ihn zählt der Ort selbst.
+        rank = np.unique(vertices, axis=0, return_inverse=True)[1].reshape(-1)
+    else:
+        if len(rank) and int(rank.max()) + 1 == len(rank):
+            with suppress(AttributeError, TypeError, KeyError):
+                adjacency = edge_table(raw).face_pairs()
+    if adjacency is None:
+        faces = rank[np.asarray(raw.faces, dtype=np.int64)]
+        _, edge_ids = unique_edges(
+            faces[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), return_inverse=True
+        )
+        edge_ids = np.asarray(edge_ids, dtype=np.int64).reshape(-1)
+        order = np.argsort(edge_ids, kind="stable")
+        shared = np.bincount(edge_ids)[edge_ids[order]] == 2
+        pairs = (order[shared] // 3).reshape(-1, 2)
+        adjacency = pairs[pairs[:, 0] != pairs[:, 1]]
     if cache is not None:
         # Die private Cacheform darf die berechnete Auskunft nicht verhindern.
         with suppress(AttributeError, TypeError, KeyError):

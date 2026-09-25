@@ -41,6 +41,7 @@ from app.core.perceive.features import (
     SINK_AXIS_LIMIT,
     SINK_FIT_LIMIT,
     _large_facet_faces,
+    _neighbour_index,
     _one_body,
     axis_of,
     centre_of,
@@ -1379,31 +1380,53 @@ def _blended_cavity_faces(
     Fläche gehört trotzdem zur Bohrung: Sie ist glatt verbunden, zeigt zur
     selben Achse und endet gemeinsam mit der Wand in zwei vollständigen Ringen.
     Ebene Böden und Außenseiten bleiben außerhalb dieses Flächenausschnitts.
+
+    **Gesucht wird ab der Wand, nicht im ganzen Netz** (RM-232): Glatt über
+    eine Naht verbunden und keine große ebene Fläche, außer sie gehört selbst
+    zur Wand — dieselben Stücke, die die Zusammenhangskomponenten des ganzen
+    Netzes lieferten, über den Nachbarindex des Körpers
+    (``features._neighbour_index``). Diese legten je Bohrung Felder und
+    Komponenten über alle Dreiecke an, und die Markierung zahlte das beim
+    ersten Klick im Hauptfaden: an der dichten Platte 15 von 25 ms je Bohrung.
     """
     bore = next((feature for feature in candidates.values() if feature.kind == "hole"), None)
     if bore is None or (axis := axis_of(bore)) is None or (centre := centre_of(bore)) is None:
         return indices
-    allowed = np.ones(len(body.faces), dtype=bool)
-    allowed[list(_large_facet_faces(body))] = False
-    allowed[list(indices)] = True
-    pairs = np.asarray(body.face_adjacency, dtype=np.int64)
-    if not len(pairs):
+    neighbours, seams = _neighbour_index(body)
+    if not neighbours.shape[1]:
         return indices
-    smooth = np.degrees(np.asarray(body.face_adjacency_angles)) < CURVATURE_LIMIT
-    pairs = pairs[smooth & allowed[pairs[:, 0]] & allowed[pairs[:, 1]]]
-    if not len(pairs):
-        return indices
-    labels = trimesh.graph.connected_component_labels(  # type: ignore[no-untyped-call]
-        pairs, node_count=len(body.faces)
-    )
-    expanded = np.flatnonzero(np.isin(labels, labels[list(indices)]))
+    large = _large_facet_faces(body)
+    angles = np.asarray(body.face_adjacency_angles)
+    reached = set(indices)
+    frontier = np.fromiter(sorted(indices), dtype=np.int64, count=len(indices))
+    while len(frontier):
+        near, seam = neighbours[frontier].reshape(-1), seams[frontier].reshape(-1)
+        near = near[(near >= 0) & (np.degrees(angles[np.maximum(seam, 0)]) < CURVATURE_LIMIT)]
+        fresh = [
+            index
+            for index in np.unique(near).tolist()
+            if index not in reached and (index in indices or index not in large)
+        ]
+        reached.update(fresh)
+        frontier = np.asarray(fresh, dtype=np.int64)
+    expanded = np.asarray(sorted(reached), dtype=np.int64)
     extra = np.asarray([index for index in expanded if index not in indices], dtype=np.int64)
     if not len(extra):
         return indices
-    towards = np.asarray(centre) - np.asarray(body.triangles_center)[extra]
-    direction = np.asarray(axis)
-    towards -= np.outer(towards @ direction, direction)
-    inward = np.einsum("ij,ij->i", towards, np.asarray(body.face_normals)[extra])
+    # Elementweise statt über ``@`` und ``einsum`` (RM-187): Am Vorzeichen
+    # hängt, ob der Übergang zur Wand gehört.
+    towards = np.asarray(centre, dtype=np.float64) - np.asarray(body.triangles_center)[extra]
+    direction = np.asarray(axis, dtype=np.float64)
+    along = (
+        towards[:, 0] * direction[0] + towards[:, 1] * direction[1] + towards[:, 2] * direction[2]
+    )
+    towards = towards - along[:, None] * direction
+    normals = np.asarray(body.face_normals)[extra]
+    inward = (
+        towards[:, 0] * normals[:, 0]
+        + towards[:, 1] * normals[:, 1]
+        + towards[:, 2] * normals[:, 2]
+    )
     if bool(np.any(inward < -EPS_GEOM)):
         return indices
     rings = _face_boundary_rings(body, expanded)

@@ -48,6 +48,47 @@ def test_original_face_adjacency_cache_follows_mesh_changes():
     assert placement._welded_adjacency(raw, raw.vertices).tolist() == []
 
 
+@pytest.mark.parametrize("welded", [True, False])
+def test_the_welded_adjacency_reads_the_body_numbering_and_answers_as_before(welded, monkeypatch):
+    """Über die Punktnummer des Körpers dieselben Paare wie über die Koordinaten (RM-232).
+
+    Bis zum 25.09.2026 sortierte die Nachbarschaft die Ecken als Zeilen
+    (``np.unique(…, axis=0)``) — dieselbe Auskunft, die ``vertex_rank`` im
+    Cache des Netzes schon hält. Geschweißt beantwortet die Kantenzählung
+    die Frage ohne eigene Kantensuche; ungeschweißt (jedes STL-Dreieck mit
+    eigenen Ecken) trägt die Punktnummer die Orte. Verglichen wird gegen die
+    alte Rechnung, als Menge — die Reihenfolge der Paare sagt nichts.
+    """
+    from pathlib import Path
+
+    from app.core.geom.mesh import unique_edges
+    from app.core.perceive.features import vertex_rank
+
+    raw = trimesh.load_mesh(
+        Path(__file__).parent / "data" / "meshes" / "plate_countersunk.stl", process=welded
+    )
+    vertices = np.asarray(raw.vertices, dtype=np.float64)
+    _, inverse = np.unique(vertices, axis=0, return_inverse=True)
+    assert np.array_equal(vertex_rank(raw), inverse.reshape(-1)), "dieselbe Nummerierung"
+    faces = inverse.reshape(-1)[np.asarray(raw.faces, dtype=np.int64)]
+    _, edge_ids = unique_edges(
+        faces[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), return_inverse=True
+    )
+    edge_ids = np.asarray(edge_ids, dtype=np.int64).reshape(-1)
+    order = np.argsort(edge_ids, kind="stable")
+    before = (order[np.bincount(edge_ids)[edge_ids[order]] == 2] // 3).reshape(-1, 2)
+    if welded:
+        monkeypatch.setattr(
+            placement, "unique_edges", lambda *_a, **_k: pytest.fail("eigene Kantensuche")
+        )
+
+    pairs = placement._welded_adjacency(raw, vertices)
+
+    assert len(before) and len(pairs) == len(before)
+    assert set(map(tuple, pairs.tolist())) == set(map(tuple, before.tolist()))
+    assert (pairs[:, 0] < pairs[:, 1]).all(), "das kleinere Dreieck zuerst"
+
+
 @pytest.mark.parametrize("slotted", [False, True])
 def test_blind_feature_from_below_finds_its_actual_mouth(slotted):
     """Die kanonisch positive Achse verlegt die Mündung nicht auf den Sacklochboden."""

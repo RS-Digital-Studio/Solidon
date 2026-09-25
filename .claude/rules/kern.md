@@ -150,10 +150,14 @@ allein damit; die Fleckenlesung sortierte je Fleck ihre Ecken als Zeilen.
 
 Für Kanten nimmt der Kern `geom.mesh.unique_edges` (Kantennummer `a·n + b`,
 gleiche Reihenfolge, Zähler und Rückabbildung auf Wunsch); für Ecken eine
-einmal je Körper gebildete Punktnummer (`perceive.features._canonical_vertices`)
-und danach nur noch `np.unique` über Nummern. Wer eine Zellnummer aus
-Koordinaten bildet (`mesh_ops._clustered_once`), macht dasselbe. Einmal je
-Körper — `geom/repair.py`, `geom/orient.py` — bleibt `axis=0` in Ordnung.
+einmal je Körper gebildete Punktnummer (`perceive.features.vertex_rank`,
+im Cache des Netzes) und danach nur noch `np.unique` über Nummern. Wer eine
+Zellnummer aus Koordinaten bildet (`mesh_ops._clustered_once`), macht
+dasselbe. Einmal je Körper — `geom/repair.py`, `geom/orient.py` — bleibt
+`axis=0` in Ordnung; **wer exakt deckungsgleiche Ecken sucht, fragt trotzdem
+`vertex_rank`** — dieselbe Nummerierung, fünfmal so schnell, und nach dem
+ersten Leser umsonst (die Platzierungsnachbarschaft sortierte sie ein
+drittes Mal, RM-232).
 
 **Und die Regel gilt eine Ebene höher genauso** (16.09.2026). Die
 Schattenprojektion der Ansicht rechnete ihre ebene Hülle selbst über
