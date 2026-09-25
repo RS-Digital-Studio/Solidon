@@ -458,7 +458,9 @@ Merkmal hängt (`_connected_to`). Hat nur die Facette gesucht und liefert sie
 das Merkmal nicht, heißt der Grund `budget` — nie ein stilles Fehlen.
 ``standing`` nennt Merkmale, deren Belege am neuen Netz unverändert gelten
 (nach einer belegten starren Bewegung die exakt mitbewegten,
-`features.moved_twin`); sie werden übernommen, nicht gesucht (Review R6).
+`features.moved_twin`, nach einer belegten Teilung die in ihre Nachfahren
+übertragenen, `features.refined_twin`); sie werden übernommen, nicht
+gesucht (Review R6).
 Dieselbe Nachmessung wird einmal gerechnet: Das Ergebnis ist eine reine
 Funktion von Netz, Merkmalen, Anspruch und Budgets (`_known_key`, bis
 `KNOWN_MEMORY_LIMIT` Einträge); ein Halt wird nicht gemerkt.
@@ -781,7 +783,7 @@ Cache des Netzes und wird je Netz einmal gerechnet). Vier Nebentabellen gehen
 mit — Flächenindizes als Gewicht der Verdrängung, weggelassene Rundformen
 (`freeform_dropped`), das Freiformurteil (`recognised_as_freeform`), unlesbare
 Schalen (`unreadable_void_shells`) —, und `_remember` führt alle fünf
-zusammen. Zwei Leser kommen ohne Rechnung aus:
+zusammen. Drei Leser kommen ohne Rechnung aus:
 
 - **`carry_detection`** überträgt die Erkennung eines Netzes auf seine starr
   bewegte Kopie, wenn drei Belege stehen — starre Matrix, dieselben Dreiecke
@@ -792,6 +794,14 @@ zusammen. Zwei Leser kommen ohne Rechnung aus:
   bewegten Körpers (`scene.evaluate._with_features`, `source_mesh`): Ein
   Verschieben oder Drehen an 204 000 Dreiecken kostete davor 1,3 s
   Neuerkennung für eine Antwort, die bis auf die Lage schon dastand.
+- **`carry_refined_detection`** tut dasselbe für eine feiner geteilte Kopie
+  (*Kanten verfeinern*). Die Operation vermerkt die Herkunft jedes Dreiecks
+  am Ergebnis (`note_refinement`, im Cache des Netzes), `refined_twin`
+  glaubt sie erst nach dem Beleg — derselbe Eingang nach `_mesh_key`, jede
+  Ecke in der Ebene ihres Ursprungs, je Ursprung dieselbe Fläche, beides
+  unter `MOVED_TWIN_TOLERANCE` —, und `refined_features` ersetzt die
+  Dreiecksnummern jedes Merkmals und seiner Teilträger durch die ihrer
+  Nachfahren. Maße und Namen bleiben, denn die Oberfläche ist dieselbe.
 - **`known_detection`** gibt die gemerkte Antwort oder `None` — für die
   Live-Vorschau, die Geometrie zeigt und keine Merkmale braucht
   (`evaluate(..., detect_features=False)`).

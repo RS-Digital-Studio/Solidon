@@ -28,5 +28,6 @@ Zwei weitere Eigenschaften, die man sonst nachmessen muss:
 **How to apply:** Wer „jede Kante höchstens e" braucht, nimmt
 `mesh_ops.remesh`, nicht `refined` (ein Durchgang, fürs Biegen genug). Wer
 Attribute durch den Kern tragen will, gibt `face_id` mit, statt hinterher
-über `attributes.transfer` die nächste Oberfläche zu suchen. Verwandt:
+über `attributes.transfer` die nächste Oberfläche zu suchen — und dieselbe
+Herkunft trägt über `perceive.features.note_refinement` die Merkmale. Verwandt:
 [[index-messen-und-pruefen]].

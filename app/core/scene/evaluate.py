@@ -56,12 +56,15 @@ from app.core.perceive.features import (
     DETECTABLE_KINDS,
     _mesh_key,
     carry_detection,
+    carry_refined_detection,
     centre_of,
     detect,
     freeform_dropped,
     known_detection,
     moved_twin,
     recognised_as_freeform,
+    refined_features,
+    refined_twin,
     unreadable_void_shells,
 )
 from app.core.perceive.local import (
@@ -3095,6 +3098,21 @@ def _with_features(
         and moved_twin(source_mesh, mesh, transform)
         else frozenset()
     )
+    # **Ein feiner geteiltes Netz ist dieselbe Oberfläche** (RM-223). Belegt
+    # ``refined_twin`` die Teilung, leben die Merkmale in den Dreiecken
+    # weiter, die aus ihren hervorgingen — ohne Neuerkennung und über der
+    # Grenze ohne örtliche Nachmessung. Am Bohrmaschinenhalter bei 0,5 mm maß
+    # sie 317 Merkmale in 644 s nach und verlor sie danach trotzdem.
+    refinement = (
+        refined_twin(source_mesh, mesh)
+        if feature_movement is None and not unchanged and isinstance(source_mesh, MeshData)
+        else None
+    )
+    if refinement is not None and local_only and isinstance(source_mesh, MeshData):
+        carried = refined_features(known, refinement, source_mesh.triangle_count)
+        if carried is not None:
+            known = carried
+            standing = frozenset(carried)
     if local_only:
         detected = _measured_locally(entry, known, required, unchanged, watch, standing)
     else:
@@ -3109,6 +3127,10 @@ def _with_features(
         # Merker — rechnet die Erkennung wie zuvor.
         if transform is not None and isinstance(source_mesh, MeshData):
             carry_detection(source_mesh, mesh, transform, check_cancelled=watch.raise_if_cancelled)
+        if refinement is not None and isinstance(source_mesh, MeshData):
+            carry_refined_detection(
+                source_mesh, mesh, refinement, check_cancelled=watch.raise_if_cancelled
+            )
         if not detect_features and not referenced and not needed:
             # **Die Vorschau rechnet keine Erkennung, die niemand liest.**
             # Der Dialog zeigt Geometrie und Differenz; die Erkennung am

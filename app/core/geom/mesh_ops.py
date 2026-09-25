@@ -663,14 +663,15 @@ def _subdivided_on_demand(mesh: MeshData, edge: float) -> MeshData:
     bleibt konform. Ob das Ergebnis geschlossen ist, entscheidet trotzdem der
     Aufrufer — das ist eine Eigenschaft der Bibliothek, keine Zusage an uns.
     """
-    vertices, faces = trimesh.remesh.subdivide_to_size(
+    vertices, faces, origin = trimesh.remesh.subdivide_to_size(
         np.asarray(mesh.raw.vertices, dtype=float),
         np.asarray(mesh.raw.faces, dtype=np.int64),
         max_edge=edge,
+        return_index=True,
     )
     body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     body.merge_vertices()
-    return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
+    return _inherited(mesh, body, np.asarray(origin, dtype=np.int64))
 
 
 def _subdivided_evenly(
@@ -684,6 +685,7 @@ def _subdivided_evenly(
     """
     vertices = np.asarray(mesh.raw.vertices, dtype=float)
     faces = np.asarray(mesh.raw.faces, dtype=np.int64)
+    origin = np.arange(len(faces), dtype=np.int64)
     for _step in range(MAX_SUBDIVISIONS):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -693,10 +695,16 @@ def _subdivided_evenly(
             break
         if len(faces) * 4 > MAX_REMESH_TRIANGLES:
             raise _too_fine(mesh, edge, len(faces) * 4, _even_count(mesh), reserve=1.0)
-        vertices, faces = trimesh.remesh.subdivide(vertices, faces)
+        vertices, faces, children = trimesh.remesh.subdivide(vertices, faces, return_index=True)
+        # Je Durchgang sagt ``subdivide``, welche vier neuen Dreiecke aus
+        # welchem alten wurden; über alle Durchgänge ergibt das die Herkunft.
+        parent = np.empty(len(faces), dtype=np.int64)
+        for old, new in children.items():
+            parent[np.asarray(new, dtype=np.int64)] = int(old)
+        origin = origin[parent]
     body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     body.merge_vertices()
-    return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
+    return _inherited(mesh, body, origin)
 
 
 def estimated_triangles(mesh: MeshData, edge: float, *, until_short: bool = False) -> int:
@@ -1047,22 +1055,34 @@ def _longest_side(points: np.ndarray, corners: np.ndarray) -> float:
 
 
 def _inherited(mesh: MeshData, body: Any, origin: np.ndarray) -> MeshData:
-    """Slots und Flächenfarben je Dreieck vom alten Dreieck, aus dem es entstand.
+    """Slots, Flächenfarben und Merkmale je Dreieck vom alten, aus dem es entstand.
 
     **Ein Netz, das seine Farben verliert, verliert seine Filamente** (§20):
     Ein erzeugter Körper kommt farbig aus dem Generator, *Farben zu
     Filamenten* liest genau diese Werte, und vor der Neuvernetzung für ein
     Relief steht oft das Verfeinern. Bis zum 25.09.2026 kam das Netz daraus
     grau zurück.
+
+    **Und die Herkunft wird am Netz vermerkt** (``perceive.features.
+    note_refinement``): Die Oberfläche ist dieselbe, also gilt jedes erkannte
+    Merkmal mit den Dreiecken seiner Ursprünge weiter. Geglaubt wird der
+    Vermerk erst nach der Prüfung (``refined_twin``); ohne ihn maß die
+    Auswertung am Bohrmaschinenhalter nach 0,5 mm 317 Merkmale in 644 s
+    örtlich nach und verlor sie danach trotzdem.
     """
+    from app.core.perceive.features import note_refinement
+
     colours = face_colours(mesh.raw)
     if colours is not None:
         taken = np.rint(colours[origin] * 255.0).astype(np.uint8)
         body.visual.face_colors = np.column_stack((taken, np.full(len(taken), 255, dtype=np.uint8)))
     if len(mesh.slots) != mesh.triangle_count:
-        return MeshData.of(body)
-    slots = np.asarray(mesh.slots, dtype=np.int32)[origin]
-    return MeshData.of(body, tuple(slots.tolist()))
+        refined = MeshData.of(body)
+    else:
+        slots = np.asarray(mesh.slots, dtype=np.int32)[origin]
+        refined = MeshData.of(body, tuple(slots.tolist()))
+    note_refinement(mesh, refined, origin)
+    return refined
 
 
 # --- gleichmäßig vernetzen und unterteilen ----------------------------------------

@@ -31128,6 +31128,26 @@ Dazu aus dem Bericht, je mit Test:
   `test_subdivision.py` mit den neuen Zahlen, `remesh_mesh` in
   `test_platform_identity.py`.
 
+  **Und die Merkmale reisen mit** (zweiter Commit desselben Tages). Das
+  Profil der Auswertung nach 0,5 mm (`profil-drill-05.txt`) zeigte 644 der
+  658 s in `detect_known`: Das Netz lag über der Grenze der Vollerkennung,
+  317 bekannte Merkmale wurden örtlich nachgemessen, und am Ende stand
+  trotzdem `perceive.orphaned`. Die Oberfläche ist beim Verfeinern aber
+  bitgleich, und jedes neue Dreieck kennt sein Herkunftsdreieck. Alle drei
+  Wege vermerken die Herkunft jetzt am Ergebnis
+  (`perceive.features.note_refinement`; die beiden über `trimesh` mit
+  `return_index`), `refined_twin` glaubt den Vermerk nur nach dem Beleg am
+  Netz, und die Auswertung trägt die Merkmale darüber weiter — unter der
+  Grenze über den Merker (`carry_refined_detection`), darüber als stehend.
+  Gemessen am Kundenweg (`uebertrag-kundenweg.txt`, neben einem fremden
+  Torlauf): Bohrmaschinenhalter bei 1 mm 4,6 statt 21 s, bei 0,5 mm 19,1
+  statt 658 s, alle 367 Merkmale behalten statt verloren; Besenhalter bei
+  1 mm 10,2 statt 23 s, bei 0,5 mm 27,3 statt 257 s, 152 von 152.
+  Nachweis in `tests/test_matching.py`: Merker-Übertrag, Beleg statt Vermerk
+  (fremdes Netz, verschobene Herkunft, verändertes Netz), die Auswertung
+  unter und über der Grenze mit gezählter Erkennung und gesperrter
+  örtlicher Suche; ohne den Anschluss in der Auswertung sind beide Fälle rot.
+
 ## Große Netze: Speicher, Merkmalsgrenze und die Erkennung an einer Stelle (25.09.2026)
 
 <a id="rm-235"></a>

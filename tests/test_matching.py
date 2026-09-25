@@ -881,6 +881,150 @@ def test_the_evaluation_carries_features_across_a_translation(profile) -> None:
             assert np.allclose(after[name].params["centre"], expected, atol=1e-6)
 
 
+def _same_surface(before: MeshData, after: MeshData, old: Feature, new: Feature) -> None:
+    """Das übertragene Merkmal deckt dieselbe Fläche wie das alte — nur feiner geteilt."""
+    assert new.kind == old.kind
+    assert dict(new.params) == dict(old.params), "die Oberfläche ist dieselbe, also die Maße"
+    old_area = float(np.asarray(before.raw.area_faces)[list(old.face_indices)].sum())
+    new_area = float(np.asarray(after.raw.area_faces)[list(new.face_indices)].sum())
+    assert new_area == pytest.approx(old_area, rel=1e-9)
+    assert len(new.face_indices) >= len(old.face_indices)
+
+
+def test_a_refined_twin_takes_its_features_from_the_memory(monkeypatch) -> None:
+    """*Kanten verfeinern* rechnet die Erkennung nicht neu (§21.2, §31).
+
+    Das Verfeinern verschiebt keinen Punkt, es teilt nur; jedes neue Dreieck
+    liegt in seinem alten. Bis zum 25.09.2026 lief die Erkennung am feineren
+    Netz trotzdem vollständig — und über der Grenze der Vollerkennung wurde
+    jedes bekannte Merkmal örtlich nachgemessen: am Bohrmaschinenhalter bei
+    0,5 mm 317 Merkmale in 644 s, und am Ende hieß es „nicht mehr
+    wiederzuerkennen". Jetzt trägt der Merker jedes Merkmal über die Herkunft
+    seiner Dreiecke weiter.
+    """
+    import importlib
+
+    from app.core.geom.mesh_ops import remesh
+    from app.core.perceive.features import (
+        carry_refined_detection,
+        detect,
+        forget_cache,
+        refined_twin,
+    )
+
+    features = importlib.import_module("app.core.perceive.features")
+    forget_cache()
+    mesh = body("plate_holes.stl")
+    known = detect(mesh)
+    assert len(known) == 10
+
+    refined = remesh(mesh, 2.0)
+    origin = refined_twin(mesh, refined)
+    assert origin is not None, "das verfeinerte Netz trägt seine Herkunft"
+    assert carry_refined_detection(mesh, refined, origin)
+
+    def never(*_args, **_kwargs):
+        raise AssertionError("die Erkennung darf am verfeinerten Zwilling nicht rechnen")
+
+    monkeypatch.setattr(features, "_large_facet_faces", never)
+    found = detect(refined)
+
+    assert set(found) == set(known)
+    for name, feature in known.items():
+        _same_surface(mesh, refined, feature, found[name])
+
+
+def test_a_refinement_needs_the_proof_not_the_note() -> None:
+    """Der Vermerk der Operation allein trägt nichts: anderes Netz, fremde Herkunft, geändert."""
+    from app.core.geom.mesh_ops import remesh
+    from app.core.perceive.features import note_refinement, refined_twin
+
+    mesh = body("plate_holes.stl")
+    refined = remesh(mesh, 2.0)
+    origin = refined_twin(mesh, refined)
+    assert origin is not None
+
+    # Ein anderes Netz als Quelle.
+    assert refined_twin(body("cube_clean.stl"), refined) is None
+    # Eine Herkunft, die nicht stimmt: jedes Dreieck dem Nachbarn zugeschrieben.
+    forged = remesh(mesh, 2.0)
+    note_refinement(mesh, forged, np.roll(origin, 1))
+    assert refined_twin(mesh, forged) is None
+    # Ein Netz ohne Vermerk.
+    plain = MeshData.of(refined.raw.copy())
+    assert refined_twin(mesh, plain) is None
+    # Und ein Netz, das nach dem Vermerk verändert wurde, verliert ihn.
+    moved = refined.raw.copy(include_cache=True)
+    moved.vertices = np.asarray(moved.vertices) + np.array([0.0, 0.0, 1.0])
+    assert refined_twin(mesh, MeshData.of(moved)) is None
+
+
+@pytest.mark.parametrize("above_the_limit", [False, True])
+def test_the_evaluation_carries_features_across_a_refinement(
+    profile, monkeypatch, above_the_limit: bool
+) -> None:
+    """Der Weg durch die Auswertung, unter und über der Grenze der Vollerkennung.
+
+    Darunter trifft ``detect`` den Merker, darüber gelten die übertragenen
+    Merkmale als stehend und werden nicht örtlich nachgemessen. In beiden
+    Fällen bleiben Namen und Maße.
+    """
+    import importlib
+
+    from app.core.perceive import local
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    features = importlib.import_module("app.core.perceive.features")
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    forget_cache()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    first = evaluate(project.document, profile, sources=sources)
+    body_id = project.document.ops[-1].outputs[0]
+    source_mesh = first.scene.objects[body_id].mesh
+    before = first.scene.objects[body_id].features
+    assert len(before) == 10
+
+    history.apply(
+        "Verfeinern",
+        [OperationDraft(op="remesh_mesh", inputs=(body_id,), params={"edge": 2.0})],
+    )
+    if above_the_limit:
+        # Der Eingang liegt darunter, das feinere Netz darüber.
+        monkeypatch.setattr(evaluation, "FEATURE_LIMIT_TRIANGLES", source_mesh.triangle_count)
+        monkeypatch.setattr(
+            local, "_recognise_region", lambda *_a, **_k: pytest.fail("örtlich nachgemessen")
+        )
+    runs: list[int] = []
+    original = features._large_facet_faces
+
+    def counted(*args, **kwargs):
+        runs.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(features, "_large_facet_faces", counted)
+    second = evaluate(project.document, profile, sources=sources)
+
+    assert second.stopped_at is None
+    output = second.scene.objects[project.document.ops[-1].outputs[0]]
+    assert output.mesh.triangle_count > source_mesh.triangle_count
+    assert set(output.features) == set(before), "dieselben Namen nach dem Verfeinern"
+    assert runs == [], "die Erkennung lief am verfeinerten Netz nicht noch einmal"
+    for name, feature in before.items():
+        _same_surface(source_mesh, output.mesh, feature, output.features[name])
+    codes = {finding.code for finding in second.scene.report.findings}
+    assert "perceive.orphaned" not in codes
+
+
 def test_a_transform_operation_reports_what_it_did() -> None:
     """Die Matrix kommt aus der Operation, nicht aus einem Vergleich danach."""
     from app.core.registry import REGISTRY

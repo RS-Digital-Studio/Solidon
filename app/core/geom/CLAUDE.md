@@ -1578,7 +1578,10 @@ durch den exakten Kern (`_split_conforming`): `refine_to_length` so oft, bis
 keine Kante mehr über der verlangten Länge liegt — ein Durchgang lässt die
 Diagonalen im Inneren eines geteilten Dreiecks bis zum Vierfachen stehen,
 drei reichten an elf Kundenmodellen. Slots und Farben kommen über `face_id`
-vom Herkunftsdreieck (`_inherited`), nicht über `attributes.transfer`. Nur
+vom Herkunftsdreieck (`_inherited`), nicht über `attributes.transfer`, und
+auf allen drei Wegen wird die Herkunft am Ergebnis vermerkt
+(`perceive.features.note_refinement`): Die Auswertung trägt die Merkmale
+darüber weiter, statt sie neu zu erkennen (`.claude/rules/operationen.md`). Nur
 ein offenes Netz und ein dichtes, das der Kern ablehnt, gehen die zwei Wege
 über `trimesh` (`subdivide_to_size` halbiert seit trimesh 5.1 selbst
 konform, braucht aber zwei- bis viermal so viele Dreiecke; gleichmäßig nur,

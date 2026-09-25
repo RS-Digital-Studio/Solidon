@@ -1440,6 +1440,17 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   weiter. Eine Operation, die einen Körper nur bewegt, geht deshalb durch
   `moved_object`/`apply` und meldet ihre Matrix; wer eine Bewegung anders
   baut, verliert beides.
+- **Eine feiner geteilte Kopie auch nicht.** *Kanten verfeinern* vermerkt am
+  Ergebnis, aus welchem Dreieck jedes neue stammt
+  (`perceive.features.note_refinement`), und die Auswertung glaubt den
+  Vermerk erst nach dem Beleg am Netz (`refined_twin`: derselbe Eingang,
+  jede Ecke in der Ebene ihres Ursprungs, je Ursprung dieselbe Fläche). Dann
+  leben die Merkmale in den Dreiecken weiter, die aus ihren hervorgingen —
+  unter der Grenze über den Merker (`carry_refined_detection`), darüber als
+  stehend ohne örtliche Nachmessung. Wer eine weitere Operation baut, die nur
+  teilt, gibt die Herkunft ebenso mit; ohne sie maß die Auswertung am
+  Bohrmaschinenhalter nach 0,5 mm 317 Merkmale in 644 s nach und verlor sie
+  danach.
 - **Die Live-Vorschau erkennt nur, was jemand braucht.** `evaluate(...,
   detect_features=False)` ist der Weg des Dialogs; er lässt die Erkennung
   aus, wo kein späterer Schritt und keine Passung ein Merkmal des Körpers

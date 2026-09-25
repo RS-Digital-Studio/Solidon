@@ -313,7 +313,10 @@ steht die Antwort im Dokument, nicht die Frage.
 Bewegung, bekommt `_with_features` den Eingang derselben Stelle
 (`source_mesh`) und ruft `perceive.features.carry_detection`: Ist die Ausgabe
 belegbar der starr bewegte Zwilling, trifft `detect` danach den Merker statt
-zu rechnen (§21.2 ohne die 1,3 s Neuerkennung je Verschieben). Und
+zu rechnen (§21.2 ohne die 1,3 s Neuerkennung je Verschieben). Dasselbe für
+eine feiner geteilte Ausgabe (*Kanten verfeinern*): Belegt
+`perceive.features.refined_twin` die Teilung, überträgt
+`carry_refined_detection` den Merker in die Nachfahren jedes Dreiecks. Und
 `evaluate(..., detect_features=False)` — der Weg der Live-Vorschau — lässt
 die Erkennung aus, wo kein späterer Schritt und keine Passung ein Merkmal
 des Körpers braucht: Der Körper behält, was die Operation ausgab, ohne
@@ -658,7 +661,9 @@ misst `_measured_locally` bekannte Merkmale örtlich nach (`detect_known`,
 mit `required` aus `_needed_after`), bei unveränderten Dreiecken
 (`_same_triangles`) gar nicht und nach einer belegten starren Bewegung nur,
 was die Bewegung nicht exakt trägt (`standing`, derselbe Beleg
-`perceive.features.moved_twin` wie für `carry_detection`);
+`perceive.features.moved_twin` wie für `carry_detection`), nach einer
+belegten Teilung gar nicht — die übertragenen Merkmale stehen
+(`refined_twin`, `refined_features`);
 `recognition_of` trägt die Ladewahl je Körper durch den Lauf. Was dabei
 gilt, steht in `kern.md`.
 

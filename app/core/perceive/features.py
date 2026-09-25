@@ -1563,6 +1563,162 @@ def carry_detection(
     return True
 
 
+#: Unter diesem Schlüssel legt *Kanten verfeinern* am feineren Netz ab, aus
+#: welchem Dreieck welches Netzes jedes neue stammt (:func:`note_refinement`).
+REFINED_FROM_KEY: Final = "solidon_refined_from"
+
+
+def note_refinement(source: MeshData, refined: MeshData, origin: np.ndarray) -> None:
+    """Vermerkt am feineren Netz, aus welchem Dreieck von ``source`` jedes stammt.
+
+    Abgelegt im Cache des Netzes selbst, der mit dessen Geometrie verfällt —
+    dieselbe Ablage wie der Abdruck in :func:`_mesh_key`. Ein Vermerk ist eine
+    Zusage der Operation; geglaubt wird er erst von :func:`refined_twin`.
+    """
+    cache = getattr(refined.raw, "_cache", None)
+    if cache is None:
+        return
+    cache.verify()
+    cache[REFINED_FROM_KEY] = (_mesh_key(source), np.asarray(origin, dtype=np.int64))
+
+
+def refined_twin(source: MeshData, refined: MeshData) -> np.ndarray | None:
+    """Die Herkunft jedes Dreiecks von ``refined`` — wenn es belegbar ``source`` ist, feiner.
+
+    Das Gegenstück zu :func:`moved_twin` für eine Teilung: Der Vermerk aus
+    :func:`note_refinement` muss zu genau diesem Eingang gehören (derselbe
+    Abdruck), jede Ecke eines neuen Dreiecks liegt in der Ebene seines
+    Ursprungs, und die neuen Dreiecke eines Ursprungs decken zusammen genau
+    seine Fläche. Dann ist die Oberfläche dieselbe, und jede Dreiecksnummer
+    eines Merkmals lebt in den Dreiecken weiter, die aus ihr hervorgingen.
+    Die Grenze ist :data:`MOVED_TWIN_TOLERANCE`, je Ecke für die Ebene und je
+    Umfang für die Fläche — eine Rechengrenze, keine Geometrietoleranz.
+
+    Gerechnet über Kreuzprodukte und Normen über eine Achse, die auf jeder
+    Maschine dieselben Bits geben: An der Antwort hängt, ob die Erkennung
+    läuft oder übertragen wird.
+    """
+    cache = getattr(refined.raw, "_cache", None)
+    if cache is None:
+        return None
+    cache.verify()
+    noted = cache.cache.get(REFINED_FROM_KEY)
+    if noted is None:
+        return None
+    key, origin = noted
+    if key != _mesh_key(source):
+        return None
+    origin = np.asarray(origin, dtype=np.int64)
+    corners = np.asarray(refined.raw.faces, dtype=np.int64)
+    count = len(source.raw.faces)
+    if origin.shape != (len(corners),) or not len(origin):
+        return None
+    if int(origin.min()) < 0 or int(origin.max()) >= count:
+        return None
+    old = np.asarray(source.raw.triangles, dtype=np.float64)
+    first, second, third = old[:, 0], old[:, 1], old[:, 2]
+    cross = np.cross(second - first, third - first)
+    doubled = np.linalg.norm(cross, axis=1)
+    perimeter = (
+        np.linalg.norm(second - first, axis=1)
+        + np.linalg.norm(third - second, axis=1)
+        + np.linalg.norm(first - third, axis=1)
+    )
+    points = np.asarray(refined.raw.vertices, dtype=np.float64)
+    flat = doubled[origin] > MOVED_TWIN_TOLERANCE * perimeter[origin]
+    unit = cross[origin][flat] / doubled[origin][flat][:, None]
+    anchor = first[origin][flat]
+    for column in range(3):
+        offset = points[corners[flat, column]] - anchor
+        if np.abs((offset * unit).sum(axis=1)).max(initial=0.0) > MOVED_TWIN_TOLERANCE:
+            return None
+    new = points[corners]
+    pieces = np.linalg.norm(np.cross(new[:, 1] - new[:, 0], new[:, 2] - new[:, 0]), axis=1)
+    covered = np.bincount(origin, weights=pieces, minlength=count)
+    if (np.abs(covered - doubled) > MOVED_TWIN_TOLERANCE * perimeter).any():
+        return None
+    return origin
+
+
+def refined_features(
+    features: Mapping[FeatureId, Feature], origin: np.ndarray, count: int
+) -> dict[FeatureId, Feature] | None:
+    """Die Merkmale eines Netzes auf seine feiner geteilte Kopie — Dreieck für Dreieck.
+
+    Jede Dreiecksnummer eines Merkmals und seiner Teilträger wird durch die
+    Nummern der Dreiecke ersetzt, die aus ihr hervorgingen; Maße und Namen
+    bleiben, denn die Oberfläche ist dieselbe (:func:`refined_twin`). Eine
+    Nummer außerhalb der ``count`` Dreiecke des Eingangs gehört zu keinem
+    Merkmal dieses Netzes — dann wird nichts übertragen.
+    """
+    order = np.argsort(origin, kind="stable")
+    starts = np.searchsorted(origin[order], np.arange(count + 1, dtype=np.int64))
+
+    def children(indices: Sequence[int]) -> tuple[int, ...] | None:
+        rows = np.asarray(indices, dtype=np.int64)
+        if not len(rows):
+            return ()
+        if int(rows.min()) < 0 or int(rows.max()) >= count:
+            return None
+        lengths = starts[rows + 1] - starts[rows]
+        before = np.cumsum(lengths) - lengths
+        places = np.repeat(starts[rows] - before, lengths) + np.arange(int(lengths.sum()))
+        return tuple(np.sort(order[places]).tolist())
+
+    carried: dict[FeatureId, Feature] = {}
+    for name, feature in features.items():
+        faces = children(feature.face_indices)
+        patches: list[SurfacePatch] = []
+        for patch in feature.surface_patches:
+            rows = children(patch.face_indices)
+            if rows is None:
+                return None
+            patches.append(replace(patch, face_indices=rows))
+        if faces is None:
+            return None
+        carried[name] = replace(feature, face_indices=faces, surface_patches=tuple(patches))
+    return carried
+
+
+def carry_refined_detection(
+    source: MeshData,
+    refined: MeshData,
+    origin: np.ndarray,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Die gemerkte Erkennung eines Netzes auf seine feiner geteilte Kopie übertragen.
+
+    Wie :func:`carry_detection` für eine Bewegung: ``detect`` beantwortet das
+    feinere Netz danach aus dem Merker. ``origin`` kommt aus
+    :func:`refined_twin` — ohne den Beleg wird nicht gerufen.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    source_key = _mesh_key(source)
+    with _CACHE_LOCK:
+        known = _FEATURE_CACHE.get(source_key)
+    if known is None:
+        return False
+    refined_key = _mesh_key(refined)
+    if _cached_detection(refined_key) is not None:
+        return True
+    carried = refined_features(known, origin, len(source.raw.faces))
+    if carried is None:
+        return False
+    with _CACHE_LOCK:
+        if source_key in _FEATURE_CACHE:
+            _FEATURE_CACHE.move_to_end(source_key)
+        side = (
+            _FREEFORM_DROPPED.get(source_key, 0),
+            _UNREADABLE_VOIDS.get(source_key, 0),
+            _FREEFORM.get(source_key, False),
+        )
+    _remember(refined_key, carried, *side)
+    _log.info("carried %d features onto a refined twin", len(known))
+    return True
+
+
 # --- Gewinde ---------------------------------------------------------------------
 
 

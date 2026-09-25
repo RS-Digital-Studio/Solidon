@@ -71,3 +71,11 @@ wertlos: Sie galt für den Augenblick, in dem sie lief.
   Sortierung wie `catalog.write_catalog` (HEAD-Katalog für den Index, die
   Arbeitskopie für den Arbeitsbaum). Ein `git add` einer geteilten Datei nimmt
   fremde Hunks mit — d1s 280dbe51 trug so meinen `app/ui/CLAUDE.md`-Absatz.
+- **Den Hauptbaum nachziehen: erst prüfen, dann umsetzen, dann ohne Bedingung
+  zurücksetzen.** Nach einem Push aus dem Worktree geht es mit
+  `git update-ref refs/heads/main <neu> <alt>` und `git reset -q`. Am
+  25.09.2026 stand dazwischen `git diff --cached --quiet &&` — nach dem
+  Zeigerwechsel unterscheidet sich der Index aber zwangsläufig vom neuen
+  HEAD, die Bedingung war also immer falsch, und der Baum zeigte meinen
+  eigenen Commit als gestagete Rücknahme. Der leere Index wird **vor**
+  `update-ref` geprüft; danach folgt `git reset -q` sofort.
