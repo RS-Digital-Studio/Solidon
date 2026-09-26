@@ -2066,9 +2066,9 @@ def test_update_version_chart_keeps_even_small_counts_visible(tmp_path: Path) ->
     with _php_server(tmp_path, environment) as base:
         status, _headers, page = _request(f"{base}/stats.php", headers=headers)
     assert status == 200 and "</html>" in page
-    # Seit dem Umbau in vier Blöcke (15.09.2026) steht die Versionstabelle im
-    # Block „Nutzung" hinter den Downloads; der Anker ist ihre Überschrift.
-    updates = page.split('<h3 id="versionen">Versionen</h3>')[1].split("</table>")[0]
+    # Seit dem Umbau vom 24.09.2026 ist die Versionstabelle „Je Version" im
+    # Block „Versionen"; der Anker ist weiterhin ihre Überschrift.
+    updates = page.split('<h3 id="versionen">Je Version</h3>')[1].split("</table>")[0]
     bars = re.findall(r'<span class="balken" style="width:\s*(\d+)%">', updates)
     assert bars == ["100", "1"], "Beide positiven Werte brauchen einen sichtbaren Balken"
 
@@ -2124,7 +2124,13 @@ def test_update_counting_keeps_no_visitor_identifier_or_referrer(tmp_path: Path)
         assert '<th class="n">Prüfungen</th>' in updates
         assert "Installationen" not in updates
         assert "Installationen (Tag mal Kennzeichen)" not in page
-        assert re.search(r"0\.4\.0</td>\s*<td class=\"n\">2</td>", updates)
+        # Die Zeile der Version: Name, zuerst und zuletzt gesehen, Tage, dann
+        # die Prüfungen — zwei Abrufe bleiben zwei, keine Rechnerzahl.
+        assert re.search(
+            r"0\.4\.0<span class=\"marke\">aktuell</span></td>(?:\s*<td[^>]*>.*?</td>){3}"
+            r"\s*<td class=\"n\">2</td>",
+            updates,
+        )
 
 
 def _display_today() -> datetime:
@@ -2332,12 +2338,17 @@ def test_stats_derives_conversion_sources_and_pages_from_the_five_fields(
         66.7,
     )
     assert usage["version_columns"] == ["0.4.1", "0.4.0"]
-    assert usage["versions_per_day"][-1] == {
+    # Die Tage stehen lückenlos bis heute; der 13. ist der Tag, an dem sich
+    # 0.4.0 zum ersten Mal meldete — der 12. ist der erste gespeicherte Tag.
+    per_day = {line["day"]: line for line in usage["versions_per_day"]}
+    assert per_day[f"{month}-13"] == {
         "day": f"{month}-13",
         "cells": {"0.4.1": 1, "0.4.0": 1},
-        "other": 0,
         "total": 2,
+        "new": ["0.4.0"],
+        "release_share_percent": 50.0,
     }
+    assert per_day[f"{month}-12"]["new"] == [], "am ersten Tag der Daten ist nichts neu"
 
     # Dieselben Zahlen im HTML: Matrix, Seite vor dem Download, ungelesene Seiten.
     cells = "".join(f'<td class="n">{count}</td>' for count in (1, 1, 1, 0))
@@ -2346,6 +2357,137 @@ def test_stats_derives_conversion_sources_and_pages_from_the_five_fields(
     assert "ohne Seitenaufruf" in before and "/handbuch.html" in before
     assert "<li>/fr/</li>" in page and "<li>/pt/</li>" in page and "<li>/es/</li>" not in page
     assert "Installation" not in page.split('id="nutzung"')[1], "kein Rückschluss auf Rechner"
+
+
+def test_stats_gives_every_version_its_column_and_counts_from_its_first_day(
+    tmp_path: Path,
+) -> None:
+    """Versionen Tag für Tag, über die Monatsgrenze und ohne „andere".
+
+    Bis zum 24.09.2026 standen die fünf meistgesehenen Versionen einzeln und
+    der Rest als „andere" — eine frisch veröffentlichte Version mit wenigen
+    Prüfungen verschwand darin, und der Monatsschnitt zerteilte ihre erste
+    Woche. Sieben Versionen über vierzig Tage prüfen beides, dazu die
+    Kennzahlen, die vom ersten Auftauchen aus zählen.
+    """
+    today = _display_today()
+    day = timedelta(days=1)
+    minute = timedelta(minutes=1)
+    # Die ältesten beiden laufen ab dem ersten gespeicherten Tag mit; ihr
+    # Veröffentlichungstag liegt vor den Daten.
+    releases = [("0.3.9", 40), ("0.4.0", 40), ("0.4.1", 30), ("0.4.2", 22), ("0.4.3", 15)]
+    releases += [("0.4.4", 10), ("0.5.0", 3)]
+    rows = []
+    for days_ago in range(40, -1, -1):
+        when = today - days_ago * day
+        # Je Tag: die neueste bis dahin erschienene Version dreimal, die
+        # davor einmal, 0.3.9 einmal als Nachzügler.
+        out = [name for name, age in releases if age >= days_ago]
+        rows += [_stats_row(when + index * minute, "u", out[-1]) for index in range(3)]
+        if len(out) >= 2:
+            rows.append(_stats_row(when + 10 * minute, "u", out[-2]))
+        rows.append(_stats_row(when + 20 * minute, "u", "0.3.9"))
+    # Am Veröffentlichungstag von 0.5.0 meldet sie sich nur einmal, 0.4.4
+    # dreimal: Die Mehrheit kommt erst am Tag danach.
+    release_day = today - 3 * day
+    rows = [row for row in rows if not (row["t"].startswith(release_day.strftime("%Y-%m-%d")))]
+    rows += [
+        _stats_row(release_day, "u", "0.5.0"),
+        *(_stats_row(release_day + index * minute, "u", "0.4.4") for index in range(1, 4)),
+    ]
+    stats = tmp_path / "stats"
+    stats.mkdir(mode=0o700)
+    _write_stats_rows(stats, rows)
+    docroot = _temporary_docroot(tmp_path)
+    (docroot / "version.json").write_text('{"version": "0.5.0"}', encoding="ascii")
+    environment, headers = _stats_test_access(tmp_path)
+    with _php_server(tmp_path, environment, docroot=docroot) as base:
+        status, _headers, page = _request(f"{base}/stats.php", headers=headers)
+        json_status, _json_headers, body = _request(
+            f"{base}/stats.php?format=json", headers=headers
+        )
+    assert status == 200 and "</html>" in page and json_status == 200
+    usage = json.loads(body)["usage"]
+
+    versions = ["0.5.0", "0.4.4", "0.4.3", "0.4.2", "0.4.1", "0.4.0", "0.3.9"]
+    assert usage["version_columns"] == versions, "jede Version einzeln, die neueste zuerst"
+    assert (usage["from"], usage["to"]) == (
+        (today - 40 * day).strftime("%Y-%m-%d"),
+        today.strftime("%Y-%m-%d"),
+    ), "alle gespeicherten Tage, nicht der gewählte Monat"
+    assert len(usage["versions_per_day"]) == 41, "jeder Kalendertag eine Zeile"
+    assert all(set(line["cells"]) == set(versions) for line in usage["versions_per_day"])
+    assert usage["updates"] == sum(line["total"] for line in usage["versions_per_day"])
+    per_day = {line["day"]: line for line in usage["versions_per_day"]}
+    assert per_day[release_day.strftime("%Y-%m-%d")]["new"] == ["0.5.0"]
+
+    life = {entry["version"]: entry for entry in usage["lifecycle"]}
+    newest = life["0.5.0"]
+    assert newest["current"] and not newest["since_data_start"]
+    assert newest["first_seen"] == release_day.strftime("%Y-%m-%d")
+    # Am ersten Tag 1 von 4, am Tag danach 3 von 5.
+    assert newest["majority_from"] == (release_day + day).strftime("%Y-%m-%d")
+    assert newest["days_to_majority"] == 1
+    assert newest["first_week_share_percent"] is None, "die erste Woche ist noch nicht vorbei"
+    # 0.4.4 ist seit zehn Tagen da: 7 Tage ab dem ersten, davon an den ersten
+    # sechs je 3 von 5 und am siebten 3 von 5 — also 21 von 35.
+    assert life["0.4.4"]["first_week_share_percent"] == 60.0
+    assert life["0.4.4"]["days_to_majority"] == 0
+    for old in ("0.4.0", "0.3.9"):
+        assert life[old]["since_data_start"], old
+        assert life[old]["majority_from"] is None, "vor den Daten gibt es keinen ersten Tag"
+        assert life[old]["first_week_share_percent"] is None
+
+    # Im HTML: jede Version als Spalte, keine Spalte „andere", die Marke „neu".
+    table = page.split("<h3>Versionen Tag für Tag</h3>")[1].split("</table>")[0]
+    for version in versions:
+        assert re.search(r"</span>" + re.escape(version) + r"</th>", table), version
+    assert ">andere<" not in table
+    assert '<span class="marke">neu: 0.5.0</span>' in table
+
+
+def test_stats_findings_warn_about_a_silent_counter_and_a_missing_package(
+    tmp_path: Path,
+) -> None:
+    """Die Befunde oben sagen zuerst, was nicht stimmt.
+
+    Zweimal hat der Zähler schon stumm aufgehört zu schreiben (Rechte am
+    03.09.2026, open_basedir am 02.09.2026), und von außen sah das aus wie
+    eine Seite ohne Besucher. Und eine Version, deren Pakete nicht im Ordner
+    liegen, lässt den Download-Kasten ins Leere zeigen.
+    """
+    three_days_ago = _display_today() - timedelta(days=3)
+    rows = [
+        _stats_row(three_days_ago, "p", "/", "", "aaaa0001"),
+        _stats_row(three_days_ago, "u", "0.4.4"),
+    ]
+    stats = tmp_path / "stats"
+    stats.mkdir(mode=0o700)
+    _write_stats_rows(stats, rows)
+    docroot = _temporary_docroot(tmp_path)
+    (docroot / "version.json").write_text('{"version": "0.5.0"}', encoding="ascii")
+    (docroot / "dl" / "Solidon3D-Setup-0.5.0.exe").write_bytes(b"kein echtes Paket")
+    (docroot / "dl" / "Solidon3D-0.4.4-x86_64.AppImage").write_bytes(b"kein echtes Paket")
+    environment, headers = _stats_test_access(tmp_path)
+    with _php_server(tmp_path, environment, docroot=docroot) as base:
+        status, _headers, page = _request(f"{base}/stats.php", headers=headers)
+        _json_status, _json_headers, body = _request(
+            f"{base}/stats.php?format=json", headers=headers
+        )
+    assert status == 200 and "</html>" in page
+    findings = json.loads(body)["findings"]
+    warnings = [finding["text"] for finding in findings if finding["tone"] == "warnung"]
+    assert findings[: len(warnings)] == [{"tone": "warnung", "text": text} for text in warnings], (
+        "Warnungen stehen vorn"
+    )
+    assert any("keine gezählte Zeile mehr" in text for text in warnings), warnings
+    assert (
+        "Für 0.5.0 fehlt im Download-Ordner ein Paket für Linux, macOS (Apple Silicon), "
+        "macOS (Intel)." in warnings
+    ), "das Linux-Paket der alten Version zählt nicht für die neue"
+    assert any("noch keine Update-Prüfung" in finding["text"] for finding in findings)
+    block = page.split('<h2 id="befunde">')[1].split('<h2 id="jetzt">')[0]
+    assert block.count('<span class="ton">Achtung</span>') == len(warnings)
 
 
 def test_a_head_request_is_served_and_never_counted(tmp_path: Path) -> None:

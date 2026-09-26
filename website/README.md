@@ -261,20 +261,32 @@ Abnahme gehört eine vom echten Zähler geschriebene Zeile jeder Art und ein
 anschließender erfolgreicher Wartungslauf. Ein lokaler Test belegt dabei
 weder das produktive Deployment noch die Ausführung des Plesk-Tasks.
 
-`api/stats.php` wertet diese Zeilen in vier Blöcken aus, die dem Weg eines
-Kunden folgen: **Jetzt** (rollend bis heute, 7 und 30 Tage, mit der
-Veränderung zum gleich langen Zeitraum davor — über die Monatsgrenze hinweg,
-und ohne Vergleich, wo die Löschfrist die Daten nicht so weit zurückreichen
-lässt), **Reichweite** (Aufrufe, Besuche, Herkunft und Sprache je Besuch mit
-Download-Spalte, Seiten mit Anteil, ungelesene Seiten aus `sitemap.xml`,
-Einstieg und Ausstieg, Tiefe und Dauer, Uhrzeit und Wochentag),
-**Konversion** (Besuche mit Download, Direktdownloads ohne Seitenaufruf,
-Version mal Zielsystem, die Seite vor dem Download, die Dateien im Ordner) und
-**Nutzung** (Update-Prüfungen je Version und je Tag, Anteil der aktuellen
-Version aus `version.json`). Alles davon entsteht aus den fünf Feldern einer
+`api/stats.php` wertet diese Zeilen aus. Vorneweg steht **Auf einen Blick**:
+Befunde als Sätze, jeder eine feste Regel über Zahlen, die weiter unten
+ohnehin stehen, und stumm, wo die Masse für eine Aussage fehlt. Warnungen
+stehen vorn — ein Zähler, der seit 48 Stunden keine Zeile geschrieben hat,
+und eine Version aus `version.json`, der im Download-Ordner ein Paket je
+Zielsystem fehlt. Danach vier Blöcke, die dem Weg eines Kunden folgen:
+**Jetzt** (rollend bis heute, 7 und 30 Tage, mit der Veränderung zum gleich
+langen Zeitraum davor — über die Monatsgrenze hinweg, und ohne Vergleich, wo
+die Löschfrist die Daten nicht so weit zurückreichen lässt), **Reichweite**
+(Tag für Tag als Säulen mit aufklappbarer Tabelle, Monate im Vergleich,
+Herkunft und Sprache je Besuch mit Anteil und Konversion, Seiten mit Einstieg,
+Ausstieg und Ausstiegsquote, ungelesene Seiten aus `sitemap.xml`, Tiefe und
+Dauer, Uhrzeit und Wochentag), **Konversion** (Besuche mit Download,
+Direktdownloads ohne Seitenaufruf, Version mal Zielsystem mit Anteil, die
+Seite vor dem Download, die Dateien im Ordner) und **Versionen**
+(Update-Prüfungen aller gespeicherten Tage, unabhängig vom gewählten Monat:
+je Version zuerst und zuletzt gesehen, Anteil gesamt und der letzten 7 Tage,
+Anteil in der ersten Woche und der erste Tag mit Mehrheit; die Anteile Tag für
+Tag als gestapelte Säulen; und Versionen Tag für Tag mit einer Spalte je
+Version und der Marke „neu" am ersten Tag). Was vom ersten Auftauchen aus
+zählt, bleibt leer, wenn eine Version schon am ersten gespeicherten Tag da
+war. Die Diagramme sind HTML und CSS ohne Skript — die Inhaltsrichtlinie der
+Seite lässt keines zu. Alles davon entsteht aus den fünf Feldern einer
 Zählzeile; ein Besuch ist ein Tageskennzeichen an einem Tag und endet um
-Mitternacht. `?format=json` liefert dieselbe Auswertung hinter derselben
-Anmeldung als JSON.
+Mitternacht. `?format=json` liefert dieselbe Auswertung samt Befunden hinter
+derselben Anmeldung als JSON.
 
 Erreicht die Statistik ihre Monats- oder Gesamtquote, schreibt der Zähler
 keine weitere Zeile und nennt die betroffene Grenze im privaten PHP-Log.
