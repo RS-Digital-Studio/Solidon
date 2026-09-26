@@ -5509,6 +5509,7 @@
   "Teile": "pezzi",
   "Teile danach": "Parti dopo",
   "Teile das Teil, damit es auf das Bett passt": "Dividi il pezzo perché stia sul piano",
+  "Teile des Modells stecken ineinander und ließen sich nicht vereinigen, weil sich eine Oberfläche selbst kreuzt. Wo der Schritt durch beide Teile geht, kann Material stehen bleiben.": "Alcune parti del modello si compenetrano e non è stato possibile unirle, perché una superficie interseca se stessa. Dove il passaggio attraversa entrambe le parti, può restare del materiale.",
   "Teile des Modells überschneiden sich.": "Parti del modello si sovrappongono.",
   "Teile vorher": "Parti prima",
   "Teilen": "Dividere",

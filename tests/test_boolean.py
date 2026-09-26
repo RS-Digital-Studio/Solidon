@@ -349,6 +349,93 @@ def test_parts_that_stick_into_each_other_are_united_first_and_it_says_so(
     assert -10.0 <= united[0].location[0] <= 20.0, "der Ort liegt am Körper"
 
 
+def _cube_in_a_cube() -> MeshData:
+    """Würfel 20 mit einem Würfel 10 ganz in seinem Material, beide nach außen gewickelt."""
+    outer = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    inner = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    return MeshData.of(trimesh.util.concatenate([outer, inner]))
+
+
+@pytest.mark.parametrize(
+    ("kind", "tool", "volume"),
+    [
+        # Ein Würfel 4 mm mitten durch beide: 8 000 - 4·4·20.
+        ("difference", ((0.0, 0.0, 0.0), (4.0, 4.0, 30.0)), 8000.0 - 320.0),
+        # Ein Würfel 4 mm auf der Oberseite, 1 mm eingesenkt: 8 000 + 4·4·3.
+        ("union", ((0.0, 0.0, 11.0), (4.0, 4.0, 4.0)), 8000.0 + 48.0),
+    ],
+    ids=["difference", "union"],
+)
+def test_a_part_inside_the_material_of_another_is_united_first_and_it_says_so(
+    kind: BooleanKind,
+    tool: tuple[tuple[float, float, float], tuple[float, float, float]],
+    volume: float,
+) -> None:
+    """Ein Teil ganz im Material eines anderen steckt auch darin (Durchsicht
+    0.5.1, BOHRUNG-02).
+
+    Es schneidet keine Wand, und die Vorfrage nach durchdringenden Teilen sah
+    es nicht: Eine Bohrung Ø 6 durch einen Würfel 20 mit einem Würfel 10 ganz
+    innen ließ 8 154 statt 7 434 mm³ — das innere Teil zählte weiter doppelt,
+    und der Bericht schwieg. Sollwert ist das Volumen wie gedruckt, mit dem
+    inneren Teil als Material des äußeren.
+    """
+    body = _cube_in_a_cube()
+    assert body.volume == pytest.approx(9000.0), "vorher zählt das innere Teil doppelt"
+    place, extents = tool
+    cutter = trimesh.creation.box(extents=extents)
+    cutter.apply_translation(place)
+
+    result = boolean(kind, [body, MeshData.of(cutter)])
+
+    assert result.mesh.component_count == 1
+    assert result.mesh.volume == pytest.approx(volume, rel=1e-9)
+    codes = [finding.code for finding in result.findings]
+    assert codes.count("boolean.parts_united") == 1, codes
+
+
+def test_a_part_in_a_hollow_stays_a_part() -> None:
+    """Ein Teil frei in einem Hohlraum liegt in Luft (die Rassel): Es bleibt, und
+    niemand vereinigt etwas. Sollwert: der hohle Würfel (Wand 2 mm), der Würfel
+    darin und ein Würfel 2 mm, der ganz in der Wand abgetragen wird."""
+    outer = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    hollow = trimesh.creation.box(extents=(16.0, 16.0, 16.0))
+    hollow.invert()
+    rattle = trimesh.creation.box(extents=(4.0, 4.0, 4.0))
+    body = MeshData.of(trimesh.util.concatenate([outer, hollow, rattle]))
+    cutter = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    cutter.apply_translation((9.0, 9.0, 9.0))
+
+    result = boolean("difference", [body, MeshData.of(cutter)])
+
+    assert result.mesh.volume == pytest.approx(8000.0 - 4096.0 + 64.0 - 8.0, rel=1e-9)
+    assert "boolean.parts_united" not in [finding.code for finding in result.findings]
+
+
+def test_parts_that_cannot_be_united_say_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stecken Teile ineinander, lässt sich das aber nicht auflösen — weil eine
+    Schale sich selbst kreuzt, wie am Laptop-Ständer (RM-253) —, rechnet die
+    Kette am Eingang, wie er ist, und sagt es mit Ort und *Stelle zeigen*.
+    Vorher blieb in einer versetzten Bohrung Material stehen, und der Bericht
+    sagte nur „geht nicht mehr durch"."""
+    from app.core.errors import SHOW_LOCATION
+    from app.core.geom import boolean as boolean_module
+
+    monkeypatch.setattr(
+        boolean_module, "resolve_self_intersections", lambda mesh, _cancelled: (mesh, False)
+    )
+    body = _two_cubes_in_one(10.0)
+
+    result = boolean("difference", [body, box(2.0, (-8.0, 0.0, 10.0))])
+
+    stuck = [finding for finding in result.findings if finding.code == "boolean.parts_not_united"]
+    assert len(stuck) == 1, [finding.code for finding in result.findings]
+    assert stuck[0].severity == "warning"
+    assert stuck[0].location is not None
+    assert stuck[0].suggestions == (SHOW_LOCATION,)
+    assert "boolean.parts_united" not in [finding.code for finding in result.findings]
+
+
 def test_a_tool_made_of_crossing_pieces_is_left_to_the_kernel() -> None:
     """Bei Differenz und Schnittmenge gilt die Vorvereinigung dem bearbeiteten Körper.
 

@@ -1243,6 +1243,51 @@ def parts_inside_parts(body: trimesh.Trimesh) -> list[tuple[float, float, float]
     return places
 
 
+def nested_part_families(body: trimesh.Trimesh) -> list[np.ndarray]:
+    """Die Dreiecke jedes Teils, das ganz im Material eines anderen liegt — samt
+    allem, was in ihm liegt; je Familie ein Feld von Dreiecksnummern.
+
+    Dieselbe Frage wie :func:`parts_inside_parts` (Summe der Vorzeichen der
+    umschließenden Schalen ab eins), hier für die Boolesche Kette
+    (``boolean._united_parts``, Durchsicht 0.5.1, BOHRUNG-02): Ein solches Teil
+    schneidet keine Wand und kam unvereinigt in die Kette — eine Bohrung zählte
+    es danach weiter doppelt. Genommen wird nur die äußerste solche Schale je
+    Familie; was darin liegt, auch ein Hohlraum, liegt ebenso im Material.
+    Sagt ein Strahl nicht, ob eine Schale drinnen liegt, bleibt ihre Familie
+    draußen.
+    """
+    if not len(body.faces):
+        return []
+    shells = _Shells(body)
+    count = len(shells.components)
+    if count < 2 or int(np.count_nonzero(shells.volumes > 0.0)) < 2:
+        return []
+    found = dict(shells.containers_of(range(count)))
+    undecided = {index for index, entries in found.items() if any(a is None for _o, a in entries)}
+    depth = {
+        index: sum(1 if shells.volumes[other] > 0.0 else -1 for other, answer in entries if answer)
+        for index, entries in found.items()
+    }
+    buried = {
+        index
+        for index in range(count)
+        if shells.volumes[index] > 0.0 and depth[index] >= 1 and index not in undecided
+    }
+    families = []
+    for index in sorted(buried):
+        if any(answer and other in buried for other, answer in found[index]):
+            continue
+        members = [index] + [
+            other
+            for other in range(count)
+            if any(answer and outer == index for outer, answer in found[other])
+        ]
+        if any(member in undecided for member in members):
+            continue
+        families.append(np.concatenate([shells.components[member] for member in members]))
+    return families
+
+
 #: Wie viele Dreieckspaare das Einlesen höchstens prüft, ob die Teile eines
 #: Körpers ineinanderstecken (:func:`parts_that_cross`). Die Frage wählt nur
 #: den Satz und die Knöpfe am Befund; wo das Budget nicht reicht, bleibt der

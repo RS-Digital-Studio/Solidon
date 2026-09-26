@@ -5509,6 +5509,7 @@
   "Teile": "peças",
   "Teile danach": "Partes depois",
   "Teile das Teil, damit es auf das Bett passt": "Divide a peça para caber na mesa",
+  "Teile des Modells stecken ineinander und ließen sich nicht vereinigen, weil sich eine Oberfläche selbst kreuzt. Wo der Schritt durch beide Teile geht, kann Material stehen bleiben.": "Partes do modelo encaixam-se umas nas outras e não puderam ser unidas, porque uma superfície se cruza a si própria. Onde o passo atravessa as duas partes, pode ficar material.",
   "Teile des Modells überschneiden sich.": "Partes do modelo sobrepõem-se.",
   "Teile vorher": "Partes antes",
   "Teilen": "Separar",

@@ -36,9 +36,11 @@ from app.core.errors import (
     BooleanFailedError,
 )
 from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
-from app.core.geom.mesh import MeshData, enclosed_volume, signed_volume
+from app.core.geom.mesh import MeshData, enclosed_volume, signed_volume, without_faces
 from app.core.geom.repair import (
+    CROSSING_PARTS_MAX,
     merge_vertices,
+    nested_part_families,
     parts_that_cross,
     remove_degenerate_faces,
     resolve_self_intersections,
@@ -307,8 +309,21 @@ def _parts_united_first(
     gemeinsame Raum zählt einmal.
 
     Gilt nur, wo die Vorfrage es belegt (:func:`~app.core.geom.repair.parts_that_cross`);
-    sagt sie nichts oder scheitert das Vereinigen, bleibt der Eingang, wie er
-    war. Ein Befund je Operation, auch wenn mehrere Eingänge es brauchten.
+    sagt sie nichts, bleibt der Eingang, wie er war. Ein Befund je Operation,
+    auch wenn mehrere Eingänge es brauchten.
+
+    **Ein Teil ganz im Material eines anderen steckt ebenso darin** (Durchsicht
+    0.5.1, BOHRUNG-02): Es schneidet keine Wand, und die Vorfrage sah es nicht.
+    Eine Bohrung durch einen Würfel mit einem zweiten ganz innen ließ
+    8 154 statt 7 434 mm³ stehen — das innere Teil zählte weiter doppelt.
+    Vereinigt wird es wie gedruckt (:func:`_nested_united`).
+
+    **Und was sich nicht vereinigen lässt, sagt es** (``boolean.parts_not_united``).
+    Kreuzt sich eine Schale selbst, lehnt das Auflösen ab, und die Kette
+    rechnet an Teilen, die einander durchdringen: Am Laptop-Ständer
+    (21 Teile, eines kreuzt sich 1 121-mal selbst) blieb in einer um 1,5 mm
+    versetzten Bohrung Material stehen, und der Bericht sagte nur „geht nicht
+    mehr durch" (RM-253).
 
     **Gefragt wird der Körper, an dem gearbeitet wird** — bei Differenz und
     Schnittmenge der erste Eingang, bei der Vereinigung jeder. Was danach
@@ -319,6 +334,7 @@ def _parts_united_first(
     """
     prepared: list[MeshData] = []
     place: Vec3 | None = None
+    stuck: Vec3 | None = None
     for index, mesh in enumerate(meshes):
         if index and kind != "union":
             prepared.append(mesh)
@@ -328,46 +344,125 @@ def _parts_united_first(
             prepared.append(mesh)
             continue
         body, where = united
+        if body is None:
+            prepared.append(mesh)
+            stuck = where if stuck is None else stuck
+            continue
         prepared.append(body)
         place = where if place is None else place
-    if place is None:
-        return meshes, []
-    return prepared, [
-        Finding(
-            code="boolean.parts_united",
-            severity="info",
-            message=_(
-                "Ineinandersteckende Teile wurden dabei vereinigt. "
-                "Ihr gemeinsamer Raum zählt jetzt einmal, wie im Druck."
-            ),
-            location=place,
-            # Der Ort, an dem die Teile ineinanderstecken, reist mit (Regel 17).
-            suggestions=(SHOW_LOCATION,),
+    findings: list[Finding] = []
+    if place is not None:
+        findings.append(
+            Finding(
+                code="boolean.parts_united",
+                severity="info",
+                message=_(
+                    "Ineinandersteckende Teile wurden dabei vereinigt. "
+                    "Ihr gemeinsamer Raum zählt jetzt einmal, wie im Druck."
+                ),
+                location=place,
+                # Der Ort, an dem die Teile ineinanderstecken, reist mit (Regel 17).
+                suggestions=(SHOW_LOCATION,),
+            )
         )
-    ]
+    if stuck is not None:
+        findings.append(
+            Finding(
+                code="boolean.parts_not_united",
+                severity="warning",
+                message=_(
+                    "Teile des Modells stecken ineinander und ließen sich nicht vereinigen, "
+                    "weil sich eine Oberfläche selbst kreuzt. Wo der Schritt durch beide "
+                    "Teile geht, kann Material stehen bleiben."
+                ),
+                location=stuck,
+                suggestions=(SHOW_LOCATION,),
+            )
+        )
+    return (prepared if place is not None else meshes), findings
 
 
-def _united_parts(mesh: MeshData, cancelled: CancelToken | None) -> tuple[MeshData, Vec3] | None:
+def _united_parts(
+    mesh: MeshData, cancelled: CancelToken | None
+) -> tuple[MeshData | None, Vec3] | None:
     """Der Eingang mit vereinigten Teilen und ein Ort der Durchdringung — oder ``None``.
 
-    Einmal je Netz: Die Antwort liegt im Cache des Netzes und verfällt mit
-    seiner Geometrie. Die Vorschau fragt denselben Körper bei jeder getippten
-    Zahl, und ein Körper aus einem Stück kostet nur die gemerkte Teilezahl.
+    Stecken Teile ineinander, lassen sich aber nicht vereinigen, kommt statt
+    des Körpers ``None`` mit dem Ort zurück (:func:`_parts_united_first` sagt
+    es dann). Einmal je Netz: Die Antwort liegt im Cache des Netzes und
+    verfällt mit seiner Geometrie. Die Vorschau fragt denselben Körper bei
+    jeder getippten Zahl, und ein Körper aus einem Stück kostet nur die
+    gemerkte Teilezahl.
     """
     if mesh.triangle_count == 0 or mesh.component_count < 2:
         return None
     cache = getattr(mesh.raw, "_cache", None)
     if cache is not None and _UNITED_KEY in cache:
-        return cast("tuple[MeshData, Vec3] | None", cache[_UNITED_KEY])
-    answer: tuple[MeshData, Vec3] | None = None
+        return cast("tuple[MeshData | None, Vec3] | None", cache[_UNITED_KEY])
+    answer: tuple[MeshData | None, Vec3] | None = None
     place = parts_that_cross(mesh.raw, cancelled=cancelled)
     if place is not None:
         resolved, done = resolve_self_intersections(mesh, cancelled)
-        if done:
-            answer = (resolved, place)
+        answer = (resolved if done else None, place)
+    elif mesh.component_count <= CROSSING_PARTS_MAX:
+        answer = _nested_united(mesh, cancelled)
     if cache is not None:
         cache[_UNITED_KEY] = answer
     return answer
+
+
+def _nested_united(mesh: MeshData, cancelled: CancelToken | None) -> tuple[MeshData, Vec3] | None:
+    """Der Eingang ohne die Teile, die ganz im Material eines anderen liegen —
+    wie gedruckt, wo sie ohnehin voll sind — und ihr Ort; ``None`` ohne solche.
+
+    Ob sie wirklich ganz drin liegen, sagt nicht der eine Strahl der Vorfrage
+    (:func:`~app.core.geom.repair.nested_part_families`), sondern die
+    Vereinigung selbst: Bleibt ihr Volumen das des Rests, ist die Familie im
+    Material, und der Rest ist das Ergebnis — mit seinen eigenen Dreiecken,
+    Slots und Farben. Ragt eine hinaus, gilt die Vereinigung; scheitert sie,
+    bleibt der Eingang.
+    """
+    families = nested_part_families(mesh.raw)
+    if not families:
+        return None
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    inner = np.zeros(len(mesh.raw.faces), dtype=bool)
+    for family in families:
+        inner[family] = True
+    slots = np.asarray(mesh.slots, dtype=np.int64) if len(mesh.slots) == len(inner) else None
+
+    def part(keep: np.ndarray) -> MeshData:
+        body = without_faces(mesh.raw, keep)
+        return MeshData.of(body, tuple(slots[keep].tolist()) if slots is not None else ())
+
+    rest = part(~inner)
+    pieces = []
+    for family in families:
+        keep = np.zeros(len(inner), dtype=bool)
+        keep[family] = True
+        pieces.append(part(keep))
+    corners = np.asarray(mesh.raw.triangles, dtype=np.float64)[families[0]].reshape(-1, 3)
+    centre = (corners.min(axis=0) + corners.max(axis=0)) / 2.0
+    place: Vec3 = (float(centre[0]), float(centre[1]), float(centre[2]))
+    try:
+        united = boolean("union", [rest, *pieces], stages=("direct",), cancelled=cancelled).mesh
+    except PROGRAMMING_ERRORS:
+        raise
+    except BooleanFailedError:
+        return None
+    before = signed_volume(rest.raw)
+    after = signed_volume(united.raw)
+    if abs(after - before) <= _NESTED_SAME * max(abs(before), 1.0):
+        return rest, place
+    return united, place
+
+
+#: Wie genau das Volumen der Vereinigung das des Rests treffen muss, damit die
+#: eingeschlossenen Teile als ganz im Material gelten (:func:`_nested_united`) —
+#: ein Anteil, weit über der Rechengenauigkeit des Kerns und weit unter dem
+#: kleinsten Teil, das hinausragen könnte.
+_NESTED_SAME: Final = 1e-7
 
 
 def _keep_slots(

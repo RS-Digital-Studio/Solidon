@@ -5509,6 +5509,7 @@
   "Teile": "parts",
   "Teile danach": "Parts after",
   "Teile das Teil, damit es auf das Bett passt": "Split the part so it fits on the bed",
+  "Teile des Modells stecken ineinander und ließen sich nicht vereinigen, weil sich eine Oberfläche selbst kreuzt. Wo der Schritt durch beide Teile geht, kann Material stehen bleiben.": "Parts of the model stick into each other and could not be merged because a surface crosses itself. Where the step passes through both parts, material may be left standing.",
   "Teile des Modells überschneiden sich.": "Parts of the model overlap.",
   "Teile vorher": "Parts before",
   "Teilen": "Split",
