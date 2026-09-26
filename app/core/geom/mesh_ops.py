@@ -362,6 +362,9 @@ def _display_manifold_decimation(mesh: MeshData, target: int, sag: float | None)
     bei 0,67 mm, 78 740 bei 3,3 mm). Ein Schritt, der nichts einbringt, beendet
     die Suche deshalb sofort: Sechs vergebliche Läufe kosteten dort 600 ms,
     bevor der zweite Weg drankam.
+
+    Was der Kern dabei an Splittern stehen lässt, geht nicht mit
+    (:func:`_without_slivers`).
     """
     from app.core.units import MAX_FACET_SAG
 
@@ -371,19 +374,55 @@ def _display_manifold_decimation(mesh: MeshData, target: int, sag: float | None)
         return None
     tolerance = sag if sag is not None and sag > 0.0 else MAX_FACET_SAG
     best = None
+    best_tolerance = tolerance
     for _step in range(DISPLAY_SEARCH_STEPS):
         candidate = solid.simplify(tolerance)
         if candidate.is_empty():
             break
         if best is not None and candidate.num_tri() >= best.num_tri():
             break
-        best = candidate
+        best, best_tolerance = candidate, tolerance
         if candidate.num_tri() <= target:
             break
         tolerance *= DISPLAY_TOLERANCE_GROWTH
     if best is None or best.num_tri() > target or best.num_tri() >= mesh.triangle_count:
         return None
+    best = _without_slivers(best, best_tolerance)
+    if best is None:
+        return None
     return _as_mesh(mesh, best)
+
+
+def _without_slivers(solid: Any, tolerance: float) -> Any | None:
+    """Der vereinfachte Körper ohne die Schalen, die dünner sind als ``tolerance``.
+
+    ``manifold3d.simplify`` lässt dort, wo es dünne Stellen zusammenzieht,
+    kleine geschlossene Schalen stehen: an der Piratenschiff-Baugruppe
+    (1 223 836 Dreiecke, ein Teil) bei 0,2 mm zwölf Stück aus vier bis
+    vierzehn Dreiecken, im Mittel 0,003 bis 0,03 mm dick, manche verkehrt
+    herum und alle an Kanten des Rumpfs anliegend (26.09.2026, RM-212).
+    :func:`_as_mesh` verschweißt ihre Ecken mit denen des Rumpfs, vier
+    Kanten trugen danach vier Flächen, und die Boolesche Kette lehnte das
+    grobe Netz der Vorschau ab — jede Zahl im Bohrdialog rechnete genau.
+
+    Gemessen wird die mittlere Dicke einer Schale, doppeltes Volumen durch
+    Oberfläche. Was dünner ist als die Toleranz, mit der der Kern gerade
+    vereinfacht hat, hat unter dessen eigener Zusage keine Form mehr; das
+    dünnste echte Teil an vier Kundenmodellen (Waschschüssel, Eiffelturm,
+    Spiderman, Piratenschiff, je bei 0,05 und 0,2 mm) war über 1 mm dick.
+    ``None``, wenn nichts übrig bliebe.
+    """
+    import manifold3d
+
+    parts = solid.decompose()
+    if len(parts) < 2:
+        return solid
+    kept = [part for part in parts if 2.0 * abs(part.volume()) > tolerance * part.surface_area()]
+    if len(kept) == len(parts):
+        return solid
+    if not kept:
+        return None
+    return manifold3d.Manifold.compose(kept)
 
 
 def _clustered_for_display(mesh: MeshData, target: int, sag: float | None) -> MeshData:
@@ -1134,21 +1173,36 @@ def _as_solid(mesh: MeshData) -> Any:
 
 
 def _as_mesh(mesh: MeshData, solid: Any) -> MeshData:
-    """Zurück ins Netz — und die doppelten Eckpunkte wieder zusammen.
+    """Zurück ins Netz — verschweißt nur, wo das Netz dabei dicht bleibt.
 
-    Der Kern gibt an jeder scharfen Kante mehrere Eckpunkte an derselben
-    Stelle heraus, einen je Normalenrichtung. Für einen Renderer ist das
-    richtig; hier heißt es, dass ein tadelloser Würfel als sechs Komponenten
-    mit offenen Kanten ankommt. Ohne das Verschweißen fällt jede Prüfung
-    danach auf ein Netz herein, das nur so aussieht.
+    Der Kern gibt ein Netz heraus, das per Index dicht ist. Eckpunkte an
+    derselben Stelle trägt es, wo eine Eigenschaft die Ecke teilt oder zwei
+    Schalen einander berühren; :func:`_as_solid` gibt ihm keine
+    Eigenschaften, ein Würfel kommt mit acht Ecken zurück (gemessen
+    26.09.2026). Verschweißt wird trotzdem — teilt der Kern doch einmal eine
+    Ecke, wäre das Netz ohne das nur scheinbar geschlossen —, übernommen aber
+    nur, wenn es nicht aufreißt: Zwei Schalen, die sich an einer Kante
+    berühren, legen verschweißt vier Flächen an diese Kante. Am Eiffelturm
+    (zwei Teile) und an den Splittern des Piratenschiffs riss genau das das
+    grobe Netz der Vorschau auf, und die Boolesche Kette lehnte es ab
+    (RM-212). Dieselbe Entscheidung trifft ``boolean._tidied`` für die
+    Ausgabe der Booleschen Operationen.
     """
     built = solid.to_mesh64()
     body = trimesh.Trimesh(
-        vertices=np.asarray(built.vert_properties[:, :3], dtype=float),
-        faces=np.asarray(built.tri_verts, dtype=np.int64),
+        # Eigene Puffer, wie in ``boolean._kernel``: Ohne das Verschweißen
+        # hingen die Felder sonst am Speicher des Kerns, und
+        # ``fast_simplification`` nimmt nur eigene C-Puffer an.
+        vertices=np.array(built.vert_properties[:, :3], dtype=np.float64, order="C", copy=True),
+        faces=np.array(built.tri_verts, dtype=np.int64, order="C", copy=True),
         process=False,
     )
-    body.merge_vertices()
+    welded = body.copy()
+    welded.merge_vertices()
+    if len(welded.vertices) < len(body.vertices) and (
+        welded.is_watertight or not body.is_watertight
+    ):
+        body = welded
     return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
 
 

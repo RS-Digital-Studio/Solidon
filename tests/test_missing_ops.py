@@ -233,6 +233,98 @@ def test_a_thumbnail_never_holds_the_window_on_the_exact_kernel(
     assert np.allclose(small.bounds.maximum, plate.bounds.maximum, atol=plate.bounds.diagonal / 40)
 
 
+def _box_with_a_shell_on_its_edge(
+    shell_thickness: float,
+) -> tuple[trimesh.Trimesh, trimesh.Trimesh]:
+    """Ein Würfel und daneben eine eigene Schale, die an einer seiner Kanten anliegt.
+
+    Die Schale hat eigene Ecken an denselben Orten wie die Würfelkante — so,
+    wie ``manifold3d.simplify`` an der Piratenschiff-Baugruppe zwölf Splitter
+    neben dem Rumpf stehen ließ (26.09.2026, RM-212). ``shell_thickness`` ist
+    ihre mittlere Dicke, doppeltes Volumen durch Oberfläche.
+    """
+    box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    bottom, top = np.array([10.0, 10.0, -10.0]), np.array([10.0, 10.0, 10.0])
+    out = np.array([13.0, 13.0, 0.0])
+    # Die vierte Ecke hebt die Schale um ``lift`` aus der Ebene der drei
+    # anderen; das Volumen wächst linear damit, die Oberfläche kaum.
+    lift = 1.0
+    for _attempt in range(60):
+        side = np.array([13.0, 13.0 + lift, 4.0])
+        shell = trimesh.Trimesh(
+            [bottom, top, out, side], [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]], process=False
+        )
+        if shell.volume < 0.0:
+            shell.invert()
+        thickness = 2.0 * shell.volume / shell.area
+        if abs(thickness - shell_thickness) <= 0.05 * shell_thickness:
+            return box, shell
+        lift *= shell_thickness / thickness
+    raise AssertionError("keine Schale der verlangten Dicke")
+
+
+def test_a_display_body_drops_the_shells_the_kernel_left_without_thickness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Was der Kern beim Vereinfachen an Splittern stehen lässt, kommt nicht mit.
+
+    An der Piratenschiff-Baugruppe (1 223 836 Dreiecke, ein Teil) lieferte
+    ``simplify(0,2)`` den Rumpf und zwölf Schalen aus vier bis vierzehn
+    Dreiecken, im Mittel 0,003 bis 0,03 mm dick, anliegend an Kanten des
+    Rumpfs. Das Verschweißen in ``_as_mesh`` legte ihre Ecken auf die des
+    Rumpfs, vier Kanten trugen danach vier Flächen, und die Boolesche Kette
+    lehnte das grobe Netz ab: Jede Zahl im Bohrdialog rechnete genau, 16 bis
+    19 s (RM-212). Das dünnste echte Teil an vier Kundenmodellen war über
+    1 mm dick. Eine Schale, die dünner ist als die Toleranz, mit der der Kern
+    gerade vereinfacht hat, ist ein Rest davon — eine echte bleibt.
+    """
+    import manifold3d
+
+    from app.core.units import MAX_FACET_SAG
+
+    def solid(*bodies: trimesh.Trimesh) -> manifold3d.Manifold:
+        return manifold3d.Manifold.compose(
+            [
+                manifold3d.Manifold(
+                    manifold3d.Mesh64(
+                        np.asarray(body.vertices, dtype=np.float64),
+                        np.asarray(body.faces, dtype=np.uint64),
+                    )
+                )
+                for body in bodies
+            ]
+        )
+
+    class _Kernel:
+        """Steht für den Kern, der beim Vereinfachen den Splitter zurückgibt."""
+
+        def __init__(self, simplified: manifold3d.Manifold) -> None:
+            self.simplified = simplified
+
+        def simplify(self, _tolerance: float) -> manifold3d.Manifold:
+            return self.simplified
+
+    dense = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
+    body = MeshData.of(dense)
+    assert body.triangle_count > 1_000
+
+    box, sliver = _box_with_a_shell_on_its_edge(MAX_FACET_SAG / 10.0)
+    monkeypatch.setattr(mesh_ops, "_as_solid", lambda _mesh: _Kernel(solid(box, sliver)))
+    shown = mesh_ops.decimate_for_display(body, 1_000)
+    assert shown.is_watertight, "das Verschweißen riss die Kante auf"
+    assert shown.triangle_count == len(box.faces), "der Splitter bleibt draußen"
+
+    _box, real = _box_with_a_shell_on_its_edge(MAX_FACET_SAG * 4.0)
+    monkeypatch.setattr(mesh_ops, "_as_solid", lambda _mesh: _Kernel(solid(box, real)))
+    kept = mesh_ops.decimate_for_display(body, 1_000)
+    assert kept.triangle_count == len(box.faces) + len(real.faces), "eine echte Schale bleibt"
+    # Und sie bleibt dicht: Der Kern gibt zwei Schalen, die sich an einer
+    # Kante berühren, mit getrennten Ecken heraus; wer sie verschweißt, legt
+    # vier Flächen an eine Kante. Am Eiffelturm (62 940 Dreiecke, zwei Teile)
+    # riss genau das das grobe Netz auf.
+    assert kept.is_watertight, "zwei Schalen an einer Kante wurden verschweißt"
+
+
 def test_a_small_body_is_not_decimated_for_display() -> None:
     body = MeshData.of(trimesh.creation.icosphere(subdivisions=2, radius=20.0))
     assert mesh_ops.decimate_for_display(body, 600) is body

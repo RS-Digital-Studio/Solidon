@@ -1617,6 +1617,47 @@ def test_coarse_steps_before_a_changed_step_rebuild_the_stack_without_gaps(monke
     assert result.scene.objects[body].mesh.triangle_count <= original_triangles
 
 
+def test_the_coarse_preview_keeps_the_closed_kernel_body_of_a_figure() -> None:
+    """Eine Figur, die der Kern nicht unter 50 000 bringt, bleibt grob geschlossen.
+
+    Der Anzeigeweg nimmt den exakten Kern, solange er das Ziel erreicht, und
+    sonst das Raster — und das Raster ist oft offen, eine Bohrung darauf
+    scheitert, die Vorschau rechnet dann genau. Am Spiderman lag das Minimum
+    der Kernkurve bei 122 952 Dreiecken, am Piratenschiff bei 64 468, am
+    Eiffelturm bei 57 680; mit 50 000 als Ziel ging jede Zahl im Bohrdialog
+    grob ins Leere und danach genau, 4 bis 54 s (gemessen am 26.09.2026,
+    RM-212). Der Körper hier hat dieselbe Kurve: gewellt, 327 680 Dreiecke,
+    beim Sehnenfehler rund 145 000, danach um 70 000 und wieder steigend.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.mesh_ops import decimate_for_display
+    from app.ui import session as session_module
+
+    ball = trimesh.creation.icosphere(subdivisions=7, radius=20.0)
+    points = np.array(ball.vertices, dtype=float)
+    radius = np.linalg.norm(points, axis=1)
+    around = np.arctan2(points[:, 1], points[:, 0])
+    up = np.arcsin(points[:, 2] / radius)
+    points *= ((radius + 0.3 * np.sin(50.0 * around) * np.cos(50.0 * up)) / radius)[:, None]
+    figure = MeshData.of(trimesh.Trimesh(points, ball.faces, process=False))
+    assert figure.is_watertight
+    assert figure.triangle_count > session_module.COARSE_PREVIEW_ABOVE, "sonst keine grobe Stufe"
+
+    before = decimate_for_display(figure, 50_000)
+    assert not before.is_watertight, "mit dem alten Ziel ging die Figur ins Raster"
+
+    params = session_module._coarse_params()
+    assert params["method"] == "fast"
+    coarse = decimate_for_display(figure, params["triangles"])
+
+    assert coarse.is_watertight, "das Kernergebnis, nicht das Raster"
+    assert coarse.triangle_count <= session_module.COARSE_PREVIEW_ABOVE
+    assert coarse.triangle_count < figure.triangle_count / 2
+
+
 def test_no_coarse_step_for_a_small_body_or_a_whole_face_texture(monkeypatch) -> None:
     import copy
 
