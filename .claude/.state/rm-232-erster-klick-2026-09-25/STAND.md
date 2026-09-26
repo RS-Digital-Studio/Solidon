@@ -73,9 +73,13 @@ Die dichte Platte ist `tests/data/meshes/plate_holes.stl` viermal unterteilt
 
 ## Angehalten am 25.09.2026 abends (Robert: „mach dir notizen, wir machen später weiter")
 
-Committet sind RM-232 bis 9d8d33395 (Code) und ad0404e37 (Sonden, Erinnerungen).
-**Nicht committet und nicht durch das Tor** — der Rest von RM-232 (Wabenhalter
-unter 100 ms), alles im Hauptbaum:
+Committet sind RM-232 bis 9d8d33395 (Code) und ad0404e37 (Sonden, Erinnerungen),
+am 26.09.2026 dazu a255b14f8 — der angefangene Rest von RM-232 (Wabenhalter unter
+100 ms). Gefahren sind dafür nur die betroffenen Tests ohne Fenster (grün bis auf die
+erzeugten Handbuchseiten, die erst der Paketbau neu schreibt) und mypy; die Fenstertests
+laufen beim Release. In `tests/test_ui.py` stehen drei Zeilen dazu in einem Test einer
+anderen Sitzung, der noch nicht committet ist (Attrappe von
+`test_first_measure_edit_releases_split_…`). Was der Commit enthält:
 
 | Datei | Was |
 |---|---|
