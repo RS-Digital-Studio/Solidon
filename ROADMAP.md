@@ -123,6 +123,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-095 — Automatischen Löschlauf auf dem Server belegen](#rm-095) | Veröffentlichung, Betrieb und Vertrieb | Server-Löschlauf, Sicherungen und Ausfallalarm tatsächlich nachweisen |
 | [RM-116 — Historische Statistikreste auf dem Server behandeln](#rm-116) | Veröffentlichung, Betrieb und Vertrieb | Öffentlichen Altbestand prüfen und Umgang mit alten Statistikzeilen entscheiden |
 | [RM-145 — CRA-Konformitätsakte zum gesetzlichen Anwendungszeitpunkt vorbereiten](#rm-145) | Veröffentlichung, Betrieb und Vertrieb | Produktklassifizierung, technische Akte und Konformitätsverfahren für 2027 vorbereiten |
+| [RM-242 — Testphase der Vollversion nachreichen](#rm-242) | Veröffentlichung, Betrieb und Vertrieb | Robert 25.09.2026: 1.0 startet ohne Testphase, sie kommt später — Januar (Unentschlossene noch zu 69 €) oder Februar 2027 mit dem Preissprung. Offen: Termin, ob frühere Demo-Geräte sie bekommen (heute T15: nein), Release mit gesetztem `TRIAL_FROM` |
 | [RM-038 — Mailrückfall ohne prozentkodierten Berichtstext prüfen](#rm-038) | Kundenrückmeldungen | mailto-Weg gebaut, Rückfall ohne Mailprogramm sagt, was jetzt geht, lange Berichte werden gekürzt (`29dcefa4`, `736d4a46`); offen der Portalweg im ausgelieferten Flatpak |
 | [RM-040 — Kundenfehler mit Traceback und betroffener Datei zuordnen](#rm-040) | Kundenrückmeldungen | Aktuellen Kundenbericht mit Traceback und betroffener Datei reproduzieren |
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Start, Fokus und IME am aktuellen Flatpak bestätigen |
@@ -3270,6 +3271,22 @@ RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
   [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
 
+<a id="rm-242"></a>
+
+- [ ] **RM-242 — Testphase der Vollversion nachreichen.** Entscheidung Robert vom 25.09.2026:
+  Die Verkaufsversion startet am 01.11.2026 wie geplant ohne Testphase
+  ([Übergangskonzept](konzepte/konzept-demo-zu-1.0-2026-09.md) H, I09); eine Testphase wird
+  später integriert. Im Gespräch sind **Januar 2027**, damit Unentschlossene noch zum
+  Einstiegspreis von 69 € ausprobieren und kaufen, oder **Februar 2027** zusammen mit dem
+  Preissprung auf 99 €/249 €. Der Unterbau steht: `TRIAL_DAYS = 14` und `TRIAL_FROM` in
+  `app/core/activation/store.py`; ein Angebot braucht einen bewusst gebauten Release mit
+  gesetztem `TRIAL_FROM`. Die EULA lässt eine spätere Testphase ausdrücklich zu (§4a).
+  Zu entscheiden: der Termin; ob Geräte mit altem Demo-Marker die Testphase ebenfalls bekommen
+  (heute schließt T15 im Übergangskonzept das aus — damit erreichte ein Januar-Termin die
+  Unentschlossenen aus der Demo gerade nicht); welcher Release sie trägt und wann er vor dem
+  Termin draußen sein muss. Abnahme: 1.x-Build mit gesetztem `TRIAL_FROM`, Frist je Gerät von
+  14 Tagen, danach derselbe lesende Zustand wie ohne Testphase (I09), Tests analog
+  `test_a_sale_version_carries_no_deadline`, Website, Kauftexte und Changelog nennen sie.
 <a id="rm-162"></a>
 
 RM-162 ist mit der Auslieferung von 0.5.0 abgeschlossen.
