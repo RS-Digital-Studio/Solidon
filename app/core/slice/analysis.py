@@ -3029,7 +3029,15 @@ def channel_space(
         kept = [part for part in _areas_of(free) if part.intersects(seeds)]
         if not kept:
             return None
-        return (z_low - step / 2.0, z_high + step / 2.0, unary_union(kept))
+        # **Eine Scheibe höher, in die Decke hinein.** Der Slicer fragt die
+        # Sperre an der Überhangfläche, in deren eigener Schicht — und dort ist
+        # die Decke Material, also kein freier Raum. Endete die Sperre unter
+        # ihr, hielt sie im ElegooSlicer an der Waschschüssel fast nichts fern
+        # (Gitter „überall" 86,8 → 86,3 m im freien Kanalraum, Baum 21,0 →
+        # 18,4 m); eine Scheibe höher 87,8 → 0,0 und 22,5 → 1,7 m im
+        # Sperrkörper. Eine Sperre druckt nicht; dass sie in die Decke ragt,
+        # kostet nichts.
+        return (z_low - step / 2.0, z_high + step / 2.0 + slab, unary_union(kept))
 
     # Jede Scheibe fragt nur ihre eigenen Schichten; nebeneinander gerechnet,
     # in der Folge der Höhe zurückgegeben.

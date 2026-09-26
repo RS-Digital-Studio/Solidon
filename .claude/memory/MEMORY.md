@@ -81,6 +81,7 @@
 - [Kurzes Splinestück besteht jede Kreisprüfung](kurzes-splinestueck-besteht-jede-kreispruefung.md) — erst gleicher Radius über das ganze Stück plus genaue Ecken belegen einen Bogen.
 - [Sonde ohne exec löscht nichts](sonde-ohne-exec-loescht-nichts.md) · [rendercanvas-Takt bremst nicht](rendercanvas-takt-bremst-nicht.md) — DeferredDelete selbst zustellen; max_fps=30 gemessen folgenlos.
 - [Analyse je Stück am Gitterwerk messen](neue-analyse-je-stueck-am-gitterwerk-messen.md) · [buffer: Methode 16, Funktion 8 Segmente](shapely-buffer-methode-16-funktion-8-segmente.md) — Kanalfrage am Eiffelturm 30 min; Aufrufe zählen, je Schicht bündeln.
+- [Sperre an der Modellbahn messen](sperre-an-der-modellbahn-messen-nicht-an-der-stuetze.md) — als Kunststoff gedruckte Kanalsperre sah aus wie eine wirksame (RM-247); mit/ohne, Modellbahn und Filament zuerst.
 
 ## Shell und Git
 

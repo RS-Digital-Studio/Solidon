@@ -368,7 +368,8 @@ def _with_blocker(volume_type: str = "SupportBlocker") -> bytes:
     body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
     rod = trimesh.creation.box(extents=(10.0, 10.0, 30.0))
     payload = writer.write_assembly(
-        [writer.AssemblyPart(MeshData.of(body), name="Schüssel", support_blocker=MeshData.of(rod))]
+        [writer.AssemblyPart(MeshData.of(body), name="Schüssel", support_blocker=MeshData.of(rod))],
+        blocker_as_part=False,
     )
     if volume_type == "SupportBlocker":
         return payload

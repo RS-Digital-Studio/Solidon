@@ -283,6 +283,7 @@ def write_assembly(
     layout: tuple[float, float] | None = None,
     prusa_config: Mapping[str, str] | None = None,
     across: Sequence[AssemblyPart] | None = None,
+    blocker_as_part: bool = True,
 ) -> bytes:
     """Mehrere Körper als eine 3MF-Baugruppe (§20, §29).
 
@@ -327,15 +328,17 @@ def write_assembly(
         raise ValueError("an assembly needs at least one part")
 
     materials = merge_slots(parts, across=across)
-    model = _assembly_xml(parts, materials, name, bed, layout)
+    model = _assembly_xml(parts, materials, name, bed, layout, blocker_as_part)
 
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
         container.writestr("[Content_Types].xml", _content_types())
         container.writestr("_rels/.rels", _relationships())
         container.writestr(MODEL_PATH, model)
-        container.writestr(SETTINGS_PATH, _settings_xml(parts, materials))
-        container.writestr(PRUSA_MODEL_CONFIG_PATH, _prusa_settings_xml(parts, materials))
+        container.writestr(SETTINGS_PATH, _settings_xml(parts, materials, blocker_as_part))
+        container.writestr(
+            PRUSA_MODEL_CONFIG_PATH, _prusa_settings_xml(parts, materials, blocker_as_part)
+        )
         if project_settings:
             container.writestr(
                 PROJECT_SETTINGS_PATH,
@@ -360,8 +363,15 @@ def write_assembly(
     return buffer.getvalue()
 
 
-def _prusa_settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[MaterialSlot]) -> bytes:
-    """Objektwerte mit Prusas Typkennung und Zuordnung der Dreiecke (§29)."""
+def _prusa_settings_xml(
+    parts: Sequence[AssemblyPart], materials: Sequence[MaterialSlot], blocker_as_part: bool = True
+) -> bytes:
+    """Objektwerte mit Prusas Typkennung und Zuordnung der Dreiecke (§29).
+
+    Die Stützsperre steht hier nur, wenn sie als Bereich im Netz hängt
+    (``blocker_as_part`` falsch, die Schreibweise von PrusaSlicer); als
+    eigenes Teil nennt sie die Orca-Beilage (:func:`_settings_xml`).
+    """
     config = ET.Element("config")
     for number, part in enumerate(parts, start=2):
         node = ET.SubElement(config, "object", {"id": str(number), "instances_count": "1"})
@@ -377,7 +387,11 @@ def _prusa_settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[Mater
             ET.SubElement(
                 volume, "metadata", {"type": "volume", "key": "volume_type", "value": "ModelPart"}
             )
-        if part.support_blocker is not None and part.support_blocker.triangle_count:
+        if (
+            not blocker_as_part
+            and part.support_blocker is not None
+            and part.support_blocker.triangle_count
+        ):
             first = part.mesh.triangle_count
             blocker = ET.SubElement(
                 node,
@@ -402,7 +416,9 @@ def _prusa_settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[Mater
     )
 
 
-def _settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[MaterialSlot]) -> bytes:
+def _settings_xml(
+    parts: Sequence[AssemblyPart], materials: Sequence[MaterialSlot], blocker_as_part: bool = True
+) -> bytes:
     """Die Beilage, in der die Orca-Familie Namen und Objektwerte führt.
 
     Zwei Dinge stehen hier, die sonst verloren gingen. Zum einen die **Namen**:
@@ -419,6 +435,7 @@ def _settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[MaterialSlo
     dort auch nicht, denn was ein Programm nicht kennt, liest es nicht.
     """
     config = ET.Element("config")
+    helpers = _helper_ids(parts) if blocker_as_part else {}
     for number, part in enumerate(parts, start=2):
         node = ET.SubElement(config, "object", {"id": str(number)})
         if part.name:
@@ -434,6 +451,17 @@ def _settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[MaterialSlo
             )
         for key, value in part.settings.items():
             ET.SubElement(node, "metadata", {"key": key, "value": value})
+        if number in helpers:
+            # Die Teile des Objekts, wie ``_assembly_xml`` sie als Komponenten
+            # anlegt; die Matrix ist die Einheit, gelegt wird über den Build.
+            for child, kind, title in (
+                (helpers[number][0], "normal_part", part.name),
+                (helpers[number][1], "support_blocker", str(_("Stützsperre"))),
+            ):
+                piece = ET.SubElement(node, "part", {"id": str(child), "subtype": kind})
+                if title:
+                    ET.SubElement(piece, "metadata", {"key": "name", "value": title})
+                ET.SubElement(piece, "metadata", {"key": "matrix", "value": _IDENTITY_MATRIX})
 
     # Und die Platten. Ohne sie ist eine Datei mit mehreren Platten für den
     # Slicer eine einzige, auf der alles nebeneinander steht — die Teile
@@ -464,6 +492,10 @@ def _settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[MaterialSlo
     return b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(
         ET.tostring(config, encoding="utf-8")
     )
+
+
+#: Die Einheitsmatrix in der Schreibweise der Orca-Beilage, sechzehn Werte zeilenweise.
+_IDENTITY_MATRIX: Final = "1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"
 
 
 def _part_extruder(part: AssemblyPart, materials: Sequence[MaterialSlot]) -> int:
@@ -578,8 +610,8 @@ def _write_geometry(
     lines: list[str] = ["<vertices>"]
     for point in mesh.raw.vertices:
         lines.append(f'<vertex x="{point[0]:.6f}" y="{point[1]:.6f}" z="{point[2]:.6f}" />')
-    # Die Stützsperre hängt hinter dem Körper: Ihre Dreiecke kommen nach allen
-    # des Körpers, und die Prusa-Beilage nennt den Bereich (``_prusa_settings_xml``).
+    # Die Stützsperre als Bereich (PrusaSlicer): Ihre Dreiecke kommen nach
+    # allen des Körpers, und die Prusa-Beilage nennt den Bereich.
     if blocker is not None:
         for point in blocker.raw.vertices:
             lines.append(f'<vertex x="{point[0]:.6f}" y="{point[1]:.6f}" z="{point[2]:.6f}" />')
@@ -642,9 +674,12 @@ def _assembly_xml(
     name: str,
     bed: tuple[float, float] | None = None,
     layout: tuple[float, float] | None = None,
+    blocker_as_part: bool = True,
 ) -> bytes:
     """Das Modell-XML einer Baugruppe: ein ``object`` je Teil, ein ``item`` je
-    Teil im Build.
+    Teil im Build. Eine Stützsperre wird ein eigenes Teil desselben Objekts
+    oder ein Bereich hinter den Dreiecken des Körpers — je nachdem, welche
+    Schreibweise der Slicer liest (``slicer_keys.helpers_as_parts``).
     """
     plates = sorted({part.plate for part in parts})
     root = ET.Element(
@@ -658,6 +693,13 @@ def _assembly_xml(
     )
     ET.SubElement(root, "metadata", {"name": "Application"}).text = f"{APP_NAME} {APP_VERSION}"
     ET.SubElement(root, "metadata", {"name": "slic3rpe:MmPaintingVersion"}).text = "1"
+    if not blocker_as_part:
+        # **PrusaSlicer liest seine Beilage erst mit dieser Angabe.** Ohne sie
+        # übersprang er die Bereichsarten: An der Waschschüssel stand die
+        # Stütze im Sperrkörper mit und ohne Sperre bei 91,0 m, mit ihr bei
+        # 6,5 m (26.09.2026). Nur hier, in der Prusa-Schreibweise — der
+        # Orca-Familie bleibt ihre eigene Beilage.
+        ET.SubElement(root, "metadata", {"name": "slic3rpe:Version3mf"}).text = "1"
     if name:
         ET.SubElement(root, "metadata", {"name": "Title"}).text = name
 
@@ -694,17 +736,20 @@ def _assembly_xml(
 
     build = ET.SubElement(root, "build")
     blocks: list[tuple[str, bytes]] = []
+    helpers = _helper_ids(parts) if blocker_as_part else {}
     for number, part in enumerate(parts, start=2):
         order = {slot.index: positions.get(slot_identity(slot), 0) for slot in assembly_slots(part)}
+        named = {"name": part.name} if part.name else {}
+        own = helpers.get(number)
         body = ET.SubElement(
             resources,
             "object",
             {
-                "id": str(number),
+                "id": str(number if own is None else own[0]),
                 "type": "model",
                 "pid": group_id,
                 "pindex": "0",
-                **({"name": part.name} if part.name else {}),
+                **named,
             },
         )
         blocks.append(
@@ -714,10 +759,40 @@ def _assembly_xml(
                 group_id,
                 order,
                 bool(part.slots or part.mesh.slots),
-                number=number,
-                blocker=part.support_blocker,
+                number=number if own is None else own[0],
+                blocker=None if blocker_as_part else part.support_blocker,
             )
         )
+        if own is not None and part.support_blocker is not None:
+            # **Die Stützsperre ist ein eigenes Teil desselben Objekts**, so
+            # wie die Orca-Familie selbst sie schreibt: ein Objekt mit zwei
+            # Komponenten, und ``model_settings.config`` nennt die zweite
+            # ``support_blocker`` (:func:`_settings_xml`). Bis zum 26.09.2026
+            # hingen ihre Dreiecke hinter denen des Körpers, und nur die
+            # Prusa-Beilage nannte den Bereich — der ElegooSlicer liest dann
+            # die Orca-Beilage, übergeht die Bereichsart und druckte die Sperre
+            # als Kunststoff in den Wasserkanal der Waschschüssel (161,8 statt
+            # 49,5 m Modellbahn im Kanal, 22,8 g mehr).
+            shield = ET.SubElement(
+                resources,
+                "object",
+                {
+                    "id": str(own[1]),
+                    "type": "model",
+                    "pid": group_id,
+                    "pindex": "0",
+                    "name": str(_("Stützsperre")),
+                },
+            )
+            blocks.append(
+                _write_geometry(shield, part.support_blocker, group_id, {}, number=own[1])
+            )
+            holder = ET.SubElement(
+                resources, "object", {"id": str(number), "type": "model", **named}
+            )
+            components = ET.SubElement(holder, "components")
+            for child in own:
+                ET.SubElement(components, "component", {"objectid": str(child)})
         item = {"objectid": str(number)}
         placement = _placement(
             bed,
@@ -733,6 +808,23 @@ def _assembly_xml(
         ET.tostring(root, encoding="utf-8")
     )
     return _fill_in(document, blocks)
+
+
+def _helper_ids(parts: Sequence[AssemblyPart]) -> dict[int, tuple[int, int]]:
+    """Je Teil mit Stützsperre die Objektnummern von Körper und Sperre.
+
+    Das Teil selbst behält seine Nummer im Build — ab zwei, in der Folge der
+    Teile —, denn unter ihr führen beide Beilagen und die Platten es. Körper
+    und Sperre bekommen Nummern hinter allen Teilen. Eine Stelle für Modell
+    und Beilage, damit die zwei nicht auseinanderzählen.
+    """
+    ids: dict[int, tuple[int, int]] = {}
+    free = len(parts) + 2
+    for number, part in enumerate(parts, start=2):
+        if part.support_blocker is not None and part.support_blocker.triangle_count:
+            ids[number] = (free, free + 1)
+            free += 2
+    return ids
 
 
 def _placement(bed: tuple[float, float] | None, origin: tuple[float, float]) -> str | None:

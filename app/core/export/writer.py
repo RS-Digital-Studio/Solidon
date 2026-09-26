@@ -36,6 +36,7 @@ from app.core.errors import (
 from app.core.export import threemf
 from app.core.export.slicer_keys import (
     SlicerFlavour,
+    helpers_as_parts,
     needs_bed_translation,
     reads_assembly_file,
 )
@@ -1370,6 +1371,7 @@ def write_assembly(
             # Verschiebung ohne Grund, und die Datei trüge eine Matrix, die
             # nichts sagt.
             layout=(width, depth) if len({p.plate for p in parts}) > 1 else None,
+            blocker_as_part=helpers_as_parts(flavour),
         ),
     )
     _log.info("exported %d object(s) as one assembly to %s", len(parts), target.name)

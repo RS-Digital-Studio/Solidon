@@ -9,7 +9,7 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 | Datei | Rolle |
 |---|---|
 | `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3); `default_scheme` nennt das Namensmuster, nach dem ohne eigene Angabe benannt wird — das Fenster zeigt es im Dateidialog (RM-141). `mesh_for_export` vernetzt einen exakten Körper so fein, wie das Verfahren des Druckers es verlangt (`Profile.export_deflection`: ein Achtel des kleinsten Details, gedeckelt von der Zahl des Kerns — FDM bleibt bei 0,05 mm, ein Resin-Drucker mit 50-µm-Pixeln bekommt 0,006), an allen drei Stellen des Schreibers; `export.tessellated` nennt das Maß. Bei einem Resin-Drucker lässt `write_assembly` den FDM-Satz fallen: keine Haftungs- und Filamentbefunde, keine Beilage |
-| `threemf.py` | 3MF **schreiben** — ein Körper oder eine Baugruppe, mit Farbgruppen und Slicer-Beilagen (§20, §29); `AssemblyPart.support_blocker` hängt eine Stützsperre als zweiten Bereich an (`SupportBlocker` in der Prusa-Beilage). Gelesen wird in `ingest/threemf.py` |
+| `threemf.py` | 3MF **schreiben** — ein Körper oder eine Baugruppe, mit Farbgruppen und Slicer-Beilagen (§20, §29); `AssemblyPart.support_blocker` legt eine Stützsperre an — für die Orca-Familie als eigenes Teil (`support_blocker` in `model_settings.config`), für PrusaSlicer als Bereich im Netz (`SupportBlocker` in der Prusa-Beilage, dazu `slic3rpe:Version3mf`), je nach `blocker_as_part`. Gelesen wird in `ingest/threemf.py` |
 | `handover.py` | Übergabe an den Slicer (§29, §28.1) |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt |
 | `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt |
@@ -22,10 +22,11 @@ STEP geht über `brep/step.py`, nicht von hier.
 `writer._support_blocker` schneidet das Teil dafür einmal mit
 `detail="support"`, fragt `analysis.model_support` und `channel_space` und
 extrudiert die Kanalscheiben mit `manifold3d`; der Befund
-`export.support_blocker` sagt, wo. Eine gespeicherte 3MF trägt sie nicht,
-denn Solidons eigener Leser nähme den Bereich als Material
-(`ingest.foreign_volume`); ein STL für Cura kennt sie nicht
-(`slicer_keys.NOT_TAKEN_BY`, `AS_GEOMETRY`).
+`export.support_blocker` sagt, wo. Eine gespeicherte 3MF trägt sie nicht:
+Sie ist das Projekt des Kunden und keine Übergabe. Ein STL für Cura kennt sie
+nicht (`slicer_keys.NOT_TAKEN_BY`, `AS_GEOMETRY`). Welche Schreibweise welche
+Familie liest, entscheidet `slicer_keys.helpers_as_parts`; die Regel und die
+Messung dazu stehen in `.claude/rules/dateiformat.md`.
 
 Die Erhebung eingelegter Slicerfilamente nimmt einen `CancelToken` an.
 Orca-Dateisuche, Namensindex und Vererbung sowie Prusa-Dateien und Abschnitte

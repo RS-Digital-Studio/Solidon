@@ -1120,6 +1120,21 @@ def reads_assembly_file(flavour: SlicerFlavour) -> bool:
     return flavour not in {"cura", "other"}
 
 
+def helpers_as_parts(flavour: SlicerFlavour) -> bool:
+    """Liest dieser Slicer ein Hilfsteil wie die Stützsperre als eigenes Teil?
+
+    Zwei Schreibweisen für dieselbe Sache, und jede Familie liest nur ihre:
+    Die Orca-Familie führt es als Komponente, die ``model_settings.config``
+    als ``support_blocker`` nennt; PrusaSlicer als Dreiecksbereich im Netz des
+    Objekts, den ``Slic3r_PE_model.config`` benennt. Gemessen an der
+    Waschschüssel (26.09.2026): Mit dem Bereich druckte der ElegooSlicer die
+    Sperre als Kunststoff (+22,8 g), mit der Komponente PrusaSlicer (+38,8 g);
+    in der eigenen Schreibweise blieb die Modellbahn gleich (ElegooSlicer
+    bitgleich, PrusaSlicer auf 0,1 %).
+    """
+    return flavour == "orca"
+
+
 def knows_plates(flavour: SlicerFlavour) -> bool:
     """Trägt eine Projektdatei dieser Familie mehrere Druckplatten?
 

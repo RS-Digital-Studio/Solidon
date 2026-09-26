@@ -199,11 +199,16 @@ Wand. Deshalb der Vorschlag `support.block_channels`: Die Übergabe legt dann
 eine Stützsperre in die 3MF, gebaut aus dem freien Kanalraum
 (`analysis.channel_space` — je Millimeterscheibe die freie Fläche im Umkreis
 der Kanalsäulen innerhalb der konvexen Hülle der Schicht, verbunden mit einer
-Säule). Die Hülle ist die richtige Grenze, „schmal" wäre es nicht: Die Säulen
-unter der Kanaldecke stehen im breiten Rohrbogen, und eine Sperre nur im
-schmalen Teil ließ 32 m Stütze darin; ohne Grenze reichte sie an einem Tunnel
-15 mm aus der Mündung. Gemessen im ElegooSlicer an der Schüssel: „Gitter
-überall" 22,9 → 0,5 m im Kanal, „Baum nur vom Bett" 6,2 → 0,7 m.
+Säule). Die Hülle ist die richtige Grenze: Ohne sie reichte die Sperre an
+einem Tunnel 15 mm aus der Mündung. **Und jede Scheibe reicht eine
+Scheibenhöhe in die Decke**: Der Slicer fragt die Sperre an der
+Überhangfläche, in deren eigener Schicht, und dort ist die Decke Material.
+Gemessen im ElegooSlicer an der Schüssel, Stütze im Sperrkörper: „Gitter
+überall" 87,8 → 0,0 m, „Baum nur vom Bett" 22,5 → 1,7 m, in PrusaSlicer
+„Gitter überall" 91,0 → 6,5 m; die Modellbahn bleibt gleich. **Die Zahlen vom
+Vortag (22,9 → 0,5 m, 6,2 → 0,7 m) waren falsch**: Die Sperre wurde damals als
+Kunststoff gedruckt und füllte den Kanal (`dateiformat.md`, „Was welcher
+Slicer bekommt").
 **Vorschlag, nicht Automatik:** Was ohne „Vorschläge übernehmen" zum Slicer
 geht, sind die Standardeinstellungen (Entscheidung Robert, 26.09.2026).
 

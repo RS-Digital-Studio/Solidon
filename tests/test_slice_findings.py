@@ -587,7 +587,8 @@ def test_a_part_with_a_channel_is_offered_the_blocker() -> None:
 def test_the_channel_space_stays_inside_the_tunnel() -> None:
     """Gesperrt wird der freie Raum des Kanals, nicht mehr: Die Kragplatte
     daneben braucht ihre Stützen vom Bett, und jenseits der Tunnelwand liegt
-    freie Luft, die mit dem Kanal nicht zusammenhängt."""
+    freie Luft, die mit dem Kanal nicht zusammenhängt. Nach oben reicht die
+    Sperre eine Scheibe in die Decke — dort fragt der Slicer, ob er stützt."""
     result = slice_body(tunnel_block(20.0), 0.5)
     slabs = channel_space(result, model_support(result))
 
@@ -597,4 +598,8 @@ def test_the_channel_space_stays_inside_the_tunnel() -> None:
     # Der Tunnel ist 20 mm breit und sitzt mittig im 60 mm breiten Block.
     assert low_x >= -10.0 - 1e-6 and high_x <= 10.0 + 1e-6
     assert min(low for low, _high, _region in slabs) >= 8.0 - 1.0
-    assert max(high for _low, high, _region in slabs) <= 28.0 + 1.0
+    # Die Decke liegt bei 28 mm. Die oberste freie Scheibe endet je nach
+    # Raster unter ihr, und von dort reicht die Sperre eine Scheibe höher —
+    # zugesagt ist, dass sie in die Decke ragt, und nicht weiter als das.
+    top = max(high for _low, high, _region in slabs)
+    assert 28.0 < top <= 28.0 + 0.5 + 1.0

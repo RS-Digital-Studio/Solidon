@@ -1581,6 +1581,10 @@ def test_every_flavour_answers_every_property() -> None:
         # Mehrere Platten in einer Projektdatei — die Orca-Familie speichert
         # ihre Projekte so; PrusaSlicer und Cura kennen eine Platte je Datei.
         "knows_plates": {"prusa": False, "orca": True, "cura": False, "other": False},
+        # Die Stützsperre als eigenes Teil (Orca-Beilage) statt als Bereich im
+        # Netz (Prusa-Beilage) — jede Familie liest nur ihre Schreibweise und
+        # druckte die andere als Kunststoff (26.09.2026). Cura bekommt ein STL.
+        "helpers_as_parts": {"prusa": False, "orca": True, "cura": False, "other": False},
     }
     flavours = set(get_args(SlicerFlavour))
     assert len(flavours) >= 4, f"zu wenige Familien gefunden: {flavours}"
@@ -2754,35 +2758,87 @@ def _blocker_ranges(written: Path) -> list[tuple[str, int, int]]:
     ]
 
 
+def _orca_parts(written: Path) -> list[tuple[str, str]]:
+    """Die Teile, die ``model_settings.config`` je Objekt nennt: (Objekt, Art)."""
+    config = ET.fromstring(zipfile.ZipFile(written).read("Metadata/model_settings.config"))
+    return [
+        (node.get("id", ""), part.get("subtype", ""))
+        for node in config.iter("object")
+        for part in node.iter("part")
+    ]
+
+
 def test_the_support_blocker_travels_only_after_the_advice(
     tmp_path: Path, profile: Profile
 ) -> None:
     """Ohne „Vorschläge übernehmen" gehen die Standardeinstellungen hinaus,
     und in denen ist nichts auf dieses Modell zugeschnitten (Robert,
-    26.09.2026). Mit übernommenem Vorschlag liegt die Sperre als zweiter
-    Bereich desselben Objekts hinter dessen Dreiecken."""
+    26.09.2026). Mit übernommenem Vorschlag bekommt die Orca-Familie die
+    Sperre als eigenes Teil desselben Objekts — so, wie sie es selbst
+    schreibt. Als Bereich hinter den Dreiecken des Körpers liest der
+    ElegooSlicer die Orca-Beilage, übergeht die Bereichsart und druckte die
+    Sperre als Kunststoff in den Kanal (22,8 g mehr an der Waschschüssel)."""
     entry = scene_object(mesh=tunnel_block())
     settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
 
     plain, _plain_findings = write_assembly(
         [entry], tmp_path / "ohne", project_name="t", profile=profile, settings=settings
     )
+    assert _orca_parts(plain) == []
     assert [kind for kind, _first, _last in _blocker_ranges(plain)] == ["ModelPart"]
 
     taken = print_settings.with_path(settings, "support.block_channels", True)
     written, findings = write_assembly(
         [entry], tmp_path / "mit", project_name="t", profile=profile, settings=taken
     )
+    kinds = _orca_parts(written)
+    assert [kind for _object, kind in kinds] == ["normal_part", "support_blocker"]
+    assert {owner for owner, _kind in kinds} == {"2"}, "beide Teile gehören zum einen Objekt"
+    assert [kind for kind, _first, _last in _blocker_ranges(written)] == ["ModelPart"]
+    assert "export.support_blocker" in {finding.code for finding in findings}
+    model = zipfile.ZipFile(written).read("3D/3dmodel.model").decode("utf-8")
+    assert "slic3rpe:Version3mf" not in model, "die Orca-Familie bleibt bei ihrer Beilage"
+
+    # Und Solidon liest seine eigene Übergabe als den einen Körper zurück.
+    read_back = threemf_reader.read_objects(written.read_bytes(), [])
+    assert len(read_back) == 1
+    assert read_back[0].mesh.triangle_count == as_mesh_data(entry.mesh).triangle_count
+
+
+def test_prusaslicer_gets_the_blocker_as_a_range_of_the_mesh(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """PrusaSlicer liest die andere Schreibweise: einen Bereich hinter den
+    Dreiecken des Körpers, den ``Slic3r_PE_model.config`` benennt. Als eigene
+    Komponente druckte er die Sperre als Kunststoff (38,8 g mehr an der
+    Waschschüssel) — jede Familie bekommt ihre (``helpers_as_parts``)."""
+    entry = scene_object(mesh=tunnel_block())
+    taken = print_settings.with_path(
+        print_settings.with_path(print_settings.resolve(profile), "support.style", "grid"),
+        "support.block_channels",
+        True,
+    )
+    written, _findings = write_assembly(
+        [entry], tmp_path, project_name="t", profile=profile, settings=taken, flavour="prusa"
+    )
+
     body, blocker = _blocker_ranges(written)
     triangles = as_mesh_data(entry.mesh).triangle_count
     assert body == ("ModelPart", 0, triangles - 1)
     assert blocker[0] == "SupportBlocker" and blocker[1] == triangles and blocker[2] > triangles
-    assert "export.support_blocker" in {finding.code for finding in findings}
+    assert _orca_parts(written) == []
+    # Ohne diese Angabe übersprang PrusaSlicer die Bereichsarten ganz: 91,0 m
+    # Stütze im Sperrkörper mit und ohne Sperre, mit ihr 6,5 m.
+    model = zipfile.ZipFile(written).read("3D/3dmodel.model").decode("utf-8")
+    assert '<metadata name="slic3rpe:Version3mf">1</metadata>' in model
+    read_back = threemf_reader.read_objects(written.read_bytes(), [])
+    assert [part.mesh.triangle_count for part in read_back] == [triangles]
 
 
 def test_a_saved_file_and_cura_carry_no_blocker(tmp_path: Path, profile: Profile) -> None:
-    """Eine gespeicherte 3MF liest auch Solidon wieder ein, und sein Leser
-    nähme den Bereich als Material; ein STL für CuraEngine kennt ihn nicht."""
+    """Eine gespeicherte 3MF ist das Projekt des Kunden und keine Übergabe:
+    Sie trägt keine Sperre, die ein anderes Programm als Material lesen
+    könnte. Ein STL für CuraEngine kennt sie ohnehin nicht."""
     entry = scene_object(mesh=tunnel_block())
     taken = print_settings.with_path(
         print_settings.with_path(print_settings.resolve(profile), "support.style", "grid"),
