@@ -335,6 +335,33 @@ def mismatches(pinned_set: dict[str, tuple[str, str]], present: dict[str, str]) 
     ]
 
 
+#: Was in jeder Umgebung liegt, ohne im festgeschriebenen Satz zu stehen.
+_ALWAYS_PRESENT: Final = frozenset({"pip"})
+
+
+def project_name() -> str:
+    """Der Name dieses Projekts aus ``pyproject.toml``, normalisiert."""
+    with PYPROJECT.open("rb") as handle:
+        return normal(str(tomllib.load(handle)["project"]["name"]))
+
+
+def leftovers(pinned_set: dict[str, tuple[str, str]], present: dict[str, str]) -> list[str]:
+    """Pakete, die in der Umgebung liegen, aber in `constraints.txt` nicht mehr stehen.
+
+    **Der Gegenfall zu :func:`mismatches`, und der gefährlichere** (RM-214).
+    `constraints.txt` ist ein vollständiger Abzug der Umgebung; ein Paket, das
+    daraus verschwindet, wurde ausgebaut — `pip install -c` entfernt es aber
+    nicht. So lag `vtk` nach dem Ausbau des VTK-Renderers weiter in der
+    `.venv`: Ein neuer Import davon liefe hier grün und fiele erst im frischen
+    Klon, in der CI oder im gebauten Paket auf, und :func:`freeze` nähme es
+    wieder in den Satz. Dasselbe Bild hat ein neu installiertes Paket vor
+    seinem ersten Freeze; welches von beiden es ist, weiß nur, wer es
+    installiert hat — der Bericht nennt deshalb beide Wege.
+    """
+    known = {*pinned_set, *_ALWAYS_PRESENT, project_name()}
+    return sorted(f"{name} {version}" for name, version in present.items() if name not in known)
+
+
 HOOKS_DIR: Final = ROOT / ".githooks"
 
 #: Wo die Projekterfahrungen liegen — im Arbeitsbaum, nicht im Nutzerprofil.
@@ -464,6 +491,20 @@ def check() -> tuple[list[str], list[str]]:
             + (" …" if len(mismatched) > 6 else "")
         )
         suggestions.append(setup_command(with_venv=True))
+
+    stale = leftovers(pinned_set, present)
+    if stale:
+        findings.append(
+            f"{len(stale)} Paket(e) liegen in der Umgebung, stehen aber nicht in "
+            "`constraints.txt`: "
+            + ", ".join(stale[:6])
+            + (" …" if len(stale) > 6 else "")
+            + ". Ein Import davon liefe hier und fiele erst im frischen Klon auf — "
+            "und `--freeze` schriebe sie wieder fest."
+        )
+        names = " ".join(entry.split(" ", 1)[0] for entry in stale)
+        suggestions.append(f'Ausgebaut? Entfernen: "{python}" -m pip uninstall -y {names}')
+        suggestions.append("Neu und gewollt? Festschreiben: python tools/check_env.py --freeze")
 
     days = age_in_days()
     if days is not None and days >= DAYS_UNTIL_MAINTENANCE:

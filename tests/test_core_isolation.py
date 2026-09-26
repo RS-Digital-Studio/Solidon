@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import os
 import pkgutil
 import subprocess
 import sys
@@ -714,3 +715,93 @@ def test_activation_keeps_its_public_names_without_eager_submodules() -> None:
     )
 
     assert finished.returncode == 0, finished.stderr or finished.stdout
+
+
+#: Was mit dem VTK-Renderer gegangen ist (RM-050) und nicht zurückkommt.
+RETIRED_ROOTS = ("vtk", "vtkmodules", "pyvista", "pyvistaqt")
+
+#: Aufrufe, die ein Modul über seinen Namen als Zeichenkette laden.
+_LOADERS_BY_NAME = frozenset({"import_module", "find_spec", "__import__", "importorskip"})
+
+
+def _retired_references(path: Path) -> list[str]:
+    """Jeder Import und jedes Laden über den Namen, das auf den alten Stapel zeigt."""
+    found: list[str] = []
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in ast.walk(tree):
+        modules: list[str] = []
+        if isinstance(node, ast.Import):
+            modules = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0:
+            modules = [node.module or ""]
+        elif isinstance(node, ast.Call) and node.args:
+            called = node.func
+            name = called.attr if isinstance(called, ast.Attribute) else getattr(called, "id", "")
+            first = node.args[0]
+            if (
+                name in _LOADERS_BY_NAME
+                and isinstance(first, ast.Constant)
+                and isinstance(first.value, str)
+            ):
+                modules = [first.value]
+        for module in modules:
+            if module.split(".")[0] in RETIRED_ROOTS:
+                found.append(f"{path.as_posix()}:{node.lineno} {module}")
+    return found
+
+
+def test_nothing_that_ships_or_builds_reaches_for_vtk_again() -> None:
+    """RM-214: VTK ist ausgebaut, und ein Import davon wäre heute unsichtbar.
+
+    Das Paket liegt in älteren Entwicklungsumgebungen weiter in der ``.venv``
+    (``tools/check_env.py`` meldet es): Ein neuer ``import vtk`` liefe dort
+    grün, und erst ein frischer Klon oder das gebaute Paket fiele um — oder
+    schlimmer, PyInstaller nähme das Paket still wieder mit. Zwei Wege, weil
+    jeder allein zu schwach ist: Die Quellen fangen Importe in Funktionen, die
+    kein Start berührt; der frische Prozess fängt, was über eine Abhängigkeit
+    hereinkommt. Er lädt jedes Modul unter ``app`` und misst danach einmal
+    die Wandstärke der Bereichsprüfung — der letzte Weg, der VTK brauchte.
+    """
+    root = Path(app.core.__file__).parents[2]
+    offenders = [
+        line
+        for folder in ("app", "tools")
+        for path in sorted((root / folder).rglob("*.py"))
+        for line in _retired_references(path)
+    ]
+    assert not offenders, "wieder ein Weg zu VTK:\n" + "\n".join(offenders)
+
+    script = textwrap.dedent(
+        f"""
+        import importlib, pkgutil, sys
+        import app
+
+        names = ['app'] + [
+            info.name for info in pkgutil.walk_packages(app.__path__, prefix='app.')
+        ]
+        for name in names:
+            importlib.import_module(name)
+
+        import trimesh
+        from app.core.geom.mesh import MeshData
+        from app.core.knowledge.parts.range_check import local_wall_thickness
+
+        wall = local_wall_thickness(MeshData(trimesh.creation.box(extents=(4.0, 2.0, 1.0))))
+        assert wall is not None and abs(wall - 1.0) < 1e-9, wall
+        print(len(names))
+        retired = {RETIRED_ROOTS!r}
+        print(','.join(sorted(m for m in sys.modules if m.split('.')[0] in retired)))
+        """
+    )
+    finished = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=root,
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
+        check=False,
+    )
+    assert finished.returncode == 0, finished.stderr or finished.stdout
+    counted, _, loaded = finished.stdout.partition("\n")
+    assert int(counted) > 250, f"nur {counted} Module geladen — der Lauf hat nichts geprüft"
+    assert not loaded.strip(), f"ein voller Import lud VTK: {loaded.strip()}"

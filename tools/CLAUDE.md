@@ -360,7 +360,11 @@ Schichtanalyse)
 die in `PLATFORM_PINS` belegten Abhängigkeiten anderer Zielplattformen.
 Ändert sich eine bedingte Kante im Laufzeit-/Bauwerkzeugbaum, werden diese Liste
 und die vollständige Windows-/Linux-/macOS-Auflösung zusammen geprüft;
-entfernte allgemeine Pakete werden nicht durch einen Freeze wieder aufgenommen.
+entfernte allgemeine Pakete werden nicht durch einen Freeze wieder aufgenommen —
+solange sie nicht mehr installiert sind: `pip install -c` entfernt nichts, und
+`pip freeze` schreibt fest, was in der `.venv` liegt. `check_env` meldet deshalb
+Pakete, die installiert sind, aber nicht im Satz stehen (`leftovers`); vor einem
+Freeze wird jedes davon entfernt oder bewusst aufgenommen.
 
 - **`stamp_assets.py` läuft als Letztes** vor dem Upload. Wer die Reihenfolge
   ändert, macht `test_every_reference_carries_the_stamp_of_the_file_it_points_at`

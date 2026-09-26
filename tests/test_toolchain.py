@@ -594,6 +594,36 @@ def test_a_package_that_is_absent_is_not_a_deviation() -> None:
     assert mismatches(satz, {}) == []
 
 
+def test_a_package_that_left_the_pinned_set_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RM-214: `vtk` lag nach seinem Ausbau weiter in der `.venv`, und niemand sagte es.
+
+    `pip install -c` entfernt nichts. Ein Paket, das aus `constraints.txt`
+    verschwunden ist, bleibt liegen — und ein neuer Import davon läuft hier
+    grün. `pip` selbst und das eigene Projekt stehen nie im Satz und sind
+    kein Rest. Der Bericht nennt den Befehl, der es entfernt (Regel 17).
+    """
+    from tools.check_env import leftovers, project_name
+
+    satz = {"numpy": ("numpy", "2.4.0")}
+    vorhanden = {"numpy": "2.4.0", "vtk": "9.7.0", "pip": "26.0", project_name(): "0.5.0"}
+    assert leftovers(satz, vorhanden) == ["vtk 9.7.0"]
+    assert leftovers(satz, {"numpy": "2.4.0"}) == []
+
+    monkeypatch.setattr(check_env, "venv_python", lambda: Path(sys.executable))
+    monkeypatch.setattr(
+        check_env, "interpreter_version", lambda _python: check_env.required_version()
+    )
+    monkeypatch.setattr(check_env, "installed", lambda _python: vorhanden)
+    monkeypatch.setattr(check_env, "pinned", lambda: satz)
+    monkeypatch.setattr(check_env, "age_in_days", lambda: None)
+    monkeypatch.setattr(check_env, "hooks_are_wired", lambda: True)
+    monkeypatch.setattr(check_env, "memory_is_wired", lambda: True)
+    findings, suggestions = check_env.check()
+    assert any("vtk 9.7.0" in zeile for zeile in findings), findings
+    assert any("pip uninstall -y vtk" in zeile for zeile in suggestions), suggestions
+    assert any("check_env.py --freeze" in zeile for zeile in suggestions), suggestions
+
+
 def test_the_rebuild_command_pins_the_versions() -> None:
     """Ohne das `-c` ist der Vorschlag genau der Fehler, den er beheben soll."""
     for with_venv in (True, False):
