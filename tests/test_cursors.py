@@ -15,7 +15,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog, QMenuBar, QWidget
 
-from app.ui import cursors
+from app.ui import app_events, cursors
 from app.ui.theme import THEMES
 from tests.render_fakes import RecordingRenderer
 
@@ -442,7 +442,7 @@ def test_finishing_window_work_restores_the_solidon_pointer_in_panels(qt_app: QA
     finally:
         window.release()
         window.deleteLater()
-        qt_app.removeEventFilter(watcher)
+        app_events.forget(watcher)
         watcher.setParent(None)
         watcher.deleteLater()
 
@@ -470,7 +470,7 @@ def test_panel_arrows_use_solidon_while_text_and_resize_pointers_keep_their_mean
         assert panel.cursor().shape() == Qt.CursorShape.PointingHandCursor
     finally:
         window.close()
-        qt_app.removeEventFilter(watcher)
+        app_events.forget(watcher)
         watcher.setParent(None)
         watcher.deleteLater()
 
@@ -497,7 +497,7 @@ def test_cursor_fallback_does_not_restart_itself(
         assert 0 < len(calls) < 10
     finally:
         window.close()
-        qt_app.removeEventFilter(watcher)
+        app_events.forget(watcher)
         watcher.setParent(None)
         watcher.deleteLater()
 
@@ -544,7 +544,7 @@ def test_a_window_built_after_the_theme_still_gets_the_pointer(qt_app: QApplicat
         dialog.close()
         window.close()
     finally:
-        qt_app.removeEventFilter(watcher)
+        app_events.forget(watcher)
         watcher.setParent(None)
         watcher.deleteLater()
 
@@ -562,7 +562,7 @@ def test_the_watcher_is_installed_only_once(qt_app: QApplication) -> None:
         assert cursors.install(qt_app) is first
         assert len(qt_app.findChildren(cursors.CursorWatcher)) == 1
     finally:
-        qt_app.removeEventFilter(first)
+        app_events.forget(first)
         first.setParent(None)
         first.deleteLater()
 

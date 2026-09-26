@@ -110,7 +110,7 @@ from app.core.units import (
     to_mm,
 )
 from app.i18n import tr
-from app.ui import cursors
+from app.ui import app_events, cursors
 from app.ui.icons import icon
 from app.ui.labels import (
     display_unit,
@@ -12644,14 +12644,16 @@ class Viewport(QWidget):
             self._refresh_preview_banner()
         else:
             self.banner.hide()
+        # Beim einen Filter der Anwendung, nur für die zwei Tasten
+        # (:mod:`app.ui.app_events`).
         if note and changes:
             if application is not None and not self._comparing:
-                application.installEventFilter(self._compare)
+                app_events.listen(self._compare, (QEvent.Type.KeyPress, QEvent.Type.KeyRelease))
                 self._comparing = True
         else:
             self.hold_before(False)
             if application is not None and self._comparing:
-                application.removeEventFilter(self._compare)
+                app_events.forget(self._compare)
                 self._comparing = False
 
     def _refresh_preview_banner(self) -> None:

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QWidget
 
-from app.ui import window_chrome
+from app.ui import app_events, window_chrome
 from app.ui.theme import apply_theme
 
 
@@ -56,7 +56,7 @@ def test_reinstalling_chrome_does_not_duplicate_painting(qt_app: QApplication, m
         assert first is second
     finally:
         for watcher in {first, second}:
-            qt_app.removeEventFilter(watcher)
+            app_events.forget(watcher)
             watcher.setParent(None)
             watcher.deleteLater()
         dialog.deleteLater()

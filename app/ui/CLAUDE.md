@@ -909,7 +909,10 @@ Bewegungsgriff) · `overlay.py` (Zonen über der
 Ansicht statt neben ihr; dazu die Regel, dass nur ihre direkten Kinder und die
 der Ansicht ein eigenes natives Fenster bekommen — `keep_widgets_alien`,
 `hold_above_the_view`, Regel in `ansicht.md`) · `loading.py` (Ladeanzeige,
-§2.8) · `cursors.py` ·
+§2.8) · `cursors.py` · `app_events.py` (der eine Filter an der Anwendung:
+Mauszeiger, Fensterchrom, Navigationstasten, Nutzungsuhr, Dateiempfang und
+der Vorher-Vergleich melden dort ihre Ereignisarten an, statt je einen
+eigenen Filter zu hängen — Regel in `wartezeit.md`) ·
 `placement_flow.py` (Oberflächenplatzierung aus dem Operationsdialog, §18.5) ·
 `spacemouse.py` (die 3D-Maus als zweite Hand an derselben Kamera: HID-Leser
 über hidapi, auf dem Mac der Treiberweg über das 3Dconnexion-Framework des

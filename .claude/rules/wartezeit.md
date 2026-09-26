@@ -12,6 +12,7 @@ paths:
   - "app/ui/local_recognition.py"
   - "app/ui/local_recognition_flow.py"
   - "app/ui/print_findings_flow.py"
+  - "app/ui/app_events.py"
 ---
 
 # Regeln für Wartezeit und Nebenläufigkeit
@@ -1180,6 +1181,13 @@ Zwei Sätze, die dazugehören:
   Netze, Suchbäume und vorbereitete Flächen (`BODY_BOUND_ANSWERS`) baut jede
   Kopie für sich, sie gehen nie über Fäden. Eine Kopie, die umgebaut wird
   (`repair`), nimmt `copy()` und erbt nichts.
+* **An der Anwendung hängt ein Filter, nicht einer je Anliegen**
+  (`app_events`, Durchsicht 0.5.1). Ein Bohrungsklick schickt rund 2 400
+  Ereignisse durch die Anwendung, und jeder eigene Python-Filter an ihr kostet
+  je Ereignis einen Aufruf: drei davon 17 ms je Klick. Wer an der Anwendung
+  zuhören muss, meldet sich mit seinen Ereignisarten bei
+  `app_events.listen` an und mit `app_events.forget` ab;
+  `test_app_events` hält das am Quelltext fest.
 * **Was das Merkmalfenster den Kern fragt, fragt an einem großen Körper der
   Arbeiter** (RM-232). Ab `ANSWERS_IN_WORKER_FROM` Dreiecken laufen
   Hohlraumkette, Handlungen und Gleichartige in `_FeatureAnswersWorker` an

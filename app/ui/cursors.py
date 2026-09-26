@@ -51,6 +51,7 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.process import run_limited, trusted_cwd
+from app.ui import app_events
 from app.ui.theme import THEMES
 
 #: Wie viel größer als die Zeilenhöhe ein Zeiger gezeichnet wird. Deutlich
@@ -211,6 +212,10 @@ def apply_default_cursor(window: QWidget) -> None:
     window.setCursor(cursor("select", window))
 
 
+#: Worauf :class:`CursorWatcher` hört — alles andere bekommt er nicht zu sehen.
+WATCHED_EVENTS: Final = (QEvent.Type.Show, QEvent.Type.CursorChange)
+
+
 class CursorWatcher(QObject):
     """Gibt jedem Fenster den Zeiger, sobald es zum ersten Mal erscheint.
 
@@ -268,11 +273,14 @@ def install(application: QApplication) -> CursorWatcher:
     zweiter Wächter läge dann im Strom jedes Ereignisses und täte dasselbe;
     gefunden wird der vorhandene über seine Klasse unter den Kindern der
     Anwendung.
+
+    Angemeldet wird er beim einen Filter der Anwendung
+    (:mod:`app.ui.app_events`), nur für ``Show`` und ``CursorChange``.
     """
     for existing in application.findChildren(CursorWatcher):
         return existing
     watcher = CursorWatcher(application)
-    application.installEventFilter(watcher)
+    app_events.listen(watcher, WATCHED_EVENTS)
     return watcher
 
 

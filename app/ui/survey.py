@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
-    QApplication,
     QButtonGroup,
     QFrame,
     QHBoxLayout,
@@ -38,6 +37,7 @@ from PySide6.QtWidgets import (
 
 from app.core import feedback
 from app.core.log import get_logger
+from app.ui import app_events
 from app.ui.icons import icon
 from app.ui.leash import stop_watching_the_dying
 from app.ui.style import NORMAL, ROOMY, SPACE, TIGHT, make_primary
@@ -200,9 +200,7 @@ class UsageClock(QObject):
         """Beginnt zu zählen — wenn es überhaupt noch etwas zu fragen gibt."""
         if not feedback.enabled():
             return
-        application = QApplication.instance()
-        if application is not None and not self._watching:
-            application.installEventFilter(self)
+        if not self._watching and app_events.listen(self, WORK_EVENTS):
             self._watching = True
         self._timer.start()
 
@@ -214,9 +212,8 @@ class UsageClock(QObject):
     def stop(self) -> None:
         """Hält an und hängt sich wieder aus."""
         self._timer.stop()
-        application = QApplication.instance()
-        if application is not None and self._watching:
-            application.removeEventFilter(self)
+        if self._watching:
+            app_events.forget(self)
         self._watching = False
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen

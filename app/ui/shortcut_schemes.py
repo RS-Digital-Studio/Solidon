@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.i18n import TranslatableText, _
+from app.ui import app_events
 
 #: Der Fusion-nahe Satz: einzelne Buchstaben für das, was man dauernd tut.
 #: Nur Operationen stehen darin — die Fensterbefehle (Speichern, Öffnen,
@@ -167,5 +168,7 @@ def install_navigation_keys() -> NavigationKeys | None:
         return None
     if _INSTALLED is None:
         _INSTALLED = NavigationKeys(application)
-        application.installEventFilter(_INSTALLED)
+        # Beim einen Filter der Anwendung, nur für ``ShortcutOverride``
+        # (:mod:`app.ui.app_events`).
+        app_events.listen(_INSTALLED, (QEvent.Type.ShortcutOverride,))
     return _INSTALLED

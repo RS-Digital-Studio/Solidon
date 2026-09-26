@@ -53,6 +53,7 @@ from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.log import get_logger
+from app.ui import app_events
 
 _log = get_logger(__name__)
 
@@ -187,5 +188,7 @@ def install(application: QObject) -> ChromeWatcher | None:
         return existing
     watcher = ChromeWatcher()
     watcher.setParent(application)
-    application.installEventFilter(watcher)
+    # Beim einen Filter der Anwendung, nur für die zwei Arten, die ihn tragen
+    # (:mod:`app.ui.app_events`).
+    app_events.listen(watcher, (QEvent.Type.Show, QEvent.Type.ApplicationPaletteChange))
     return watcher

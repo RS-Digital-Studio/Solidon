@@ -45,7 +45,7 @@ from app.core.bootstrap import load_operations, load_user_parts
 from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
-from app.ui import cursors, window_chrome
+from app.ui import app_events, cursors, window_chrome
 from app.ui.icons import application_icon
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.qt_platform import prefer_x11_for_the_viewport
@@ -604,7 +604,7 @@ def main(argv: list[str] | None = None) -> int:
     # den Tisch — die Zuordnung im Bundle wäre dort ein Versprechen ohne
     # Wirkung.
     listener = FileOpenListener(window, application)
-    application.installEventFilter(listener)
+    app_events.listen(listener, (QEvent.Type.FileOpen,))
     holder.follow(listener)
 
     # **Und die Gegenzeile dazu.** Bis zum 23.08.2026 vermerkte das Protokoll
