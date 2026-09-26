@@ -1073,7 +1073,12 @@ def _split_conforming(
         corners = np.asarray(built.tri_verts, dtype=np.int64)
         if len(corners) > MAX_REMESH_TRIANGLES:
             raise _too_fine(mesh, edge, len(corners), _conforming_count(mesh, until_short=True))
-        points = np.asarray(built.vert_properties[:, :3], dtype=float)
+        # **Eigene Puffer, nicht der Speicher des Kerns** (Durchsicht 0.5.1): Die
+        # Ecken aus ``vert_properties`` sind nur lesbar, und die Schichtanalyse
+        # des Prüfberichts (``slice._chain.plane_segments``) nimmt keinen
+        # solchen Puffer — nach *Kanten verfeinern* brach sie ab, und dem
+        # Bericht fehlten Inseln, Überhänge und Brücken.
+        points = np.array(built.vert_properties[:, :3], dtype=np.float64, order="C", copy=True)
         passes += 1
         if passes >= MAX_SUBDIVISIONS or _longest_side(points, corners) <= edge + EPS_GEOM:
             break
@@ -1227,8 +1232,10 @@ def refined(mesh: MeshData, edge: float) -> MeshData:
     """
     built = _as_solid(mesh).refine_to_length(edge).to_mesh64()
     body = trimesh.Trimesh(
-        vertices=np.asarray(built.vert_properties[:, :3], dtype=float),
-        faces=np.asarray(built.tri_verts, dtype=np.int64),
+        # Eigene Puffer wie in :func:`_split_conforming`: nur lesbare Ecken nimmt
+        # die Schichtanalyse nicht an.
+        vertices=np.array(built.vert_properties[:, :3], dtype=np.float64, order="C", copy=True),
+        faces=np.array(built.tri_verts, dtype=np.int64, order="C", copy=True),
         process=False,
     )
     return mesh.replacing(body)

@@ -216,6 +216,34 @@ def test_an_edge_length_that_cannot_be_reached_says_which_one_can(profile: Profi
     assert float(raised.value.values["reachable"]) > 0.05
 
 
+@pytest.mark.parametrize("way", ["remesh_mesh", "refined"])
+def test_a_refined_body_goes_through_the_layer_analysis(way: str, profile: Profile) -> None:
+    """Nach *Kanten verfeinern* rechnet die Schichtanalyse des Prüfberichts weiter.
+
+    Der exakte Kern gibt seine Ecken als nur lesbaren Puffer heraus, und der
+    geschlossene Weg (``mesh_ops._split_conforming``) legte ihn unverändert
+    ins Netz. Die übersetzte Schichtanalyse (``slice._chain.plane_segments``)
+    nimmt keinen solchen Puffer: Nach dem Verfeinern brach die Druckprüfung
+    des Berichts ab („_PrintFindingsWorker did not come back“), und Inseln,
+    Überhänge und Brücken fehlten — gesehen am Schraubendreherhalter aus
+    ``F:\\3D Dateien`` (Durchsicht 0.5.1). ``refined`` ist der zweite Weg durch
+    denselben Kern (das Biegen einer Textur).
+    """
+    from app.core.slice import analysis
+
+    plate = corpus("plate_holes.stl")
+    assert plate.is_watertight, "nur ein geschlossener Körper geht durch den exakten Kern"
+    if way == "remesh_mesh":
+        refined = run(way, object_of(plate), profile, edge=2.0).outputs[0].mesh
+    else:
+        refined = mesh_ops.refined(plate, 2.0)
+
+    assert refined.triangle_count > plate.triangle_count
+    assert refined.raw.vertices.flags.writeable, "eigene Puffer, nicht der Speicher des Kerns"
+    points, _layers, _nodes = analysis._plane_segments(refined, np.array([1.0, 2.0]))
+    assert len(points), "die Schichten schneiden den Körper"
+
+
 def test_a_body_without_volume_is_turned_away_with_a_way_out(profile: Profile) -> None:
     """Der Befund aus P16.2, jetzt als Verhalten.
 

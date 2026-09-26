@@ -20074,6 +20074,9 @@ class MainWindow(QMainWindow):
             "split_model": self._split_after_error,
             "split_and_retry": self._split_and_retry_after_error,
             "recount_and_retry": self._recount_after_error,
+            # *Kanten verfeinern* und *Verschmelzen* nennen die feinste Zahl, die
+            # noch geht (``mesh_ops._too_fine``, ``blend``) — ein Klick nimmt sie.
+            "use_reachable": self._use_reachable_after_error,
             "split_along_line": lambda _error: self.tools.activate("split"),
             "scale_to_fit": self._scale_after_error,
             "export_as_mesh": self._export_as_mesh_after_error,
@@ -20611,6 +20614,31 @@ class MainWindow(QMainWindow):
         if found < 2:
             return
         self.session.recount_and_retry(error.op_id, found)
+
+    def _use_reachable_after_error(self, error: AppError) -> None:
+        """Die Zahl nehmen, die der Kern als machbar nennt — derselbe Schritt, ein Klick.
+
+        **Der Rat stand da und hatte keinen Draht** (Durchsicht 0.5.1). *Kanten
+        verfeinern* mit einer zu kleinen Kantenlänge hält die Kette an und nennt
+        die kleinste, die unter der Decke bleibt (``values["reachable"]``, an
+        derselben Zählung gesucht, die abgelehnt hat). Der Prüfbericht zeigte
+        die Zeile ohne einen einzigen Knopf — er bietet nur an, was hier einen
+        Handler hat —, und die machbare Zahl stand allein im Tooltip. Der
+        Schritt wird **ersetzt**, nicht verdoppelt (§15.4); Strg+Z nimmt ihn
+        zurück. Fehlt die Zahl, öffnet sich der Schritt wie bei *Eingabe
+        korrigieren*.
+        """
+        if error.op_id is None:
+            return
+        name = str(error.values.get("field", ""))
+        try:
+            reachable = float(str(error.values.get("reachable", "")))
+        except ValueError:
+            reachable = math.nan
+        if not name or not math.isfinite(reachable) or reachable <= 0.0:
+            self._correct_after_error(error)
+            return
+        self.session.change_params(error.op_id, {name: reachable})
 
     def _change_selection_after_error(self, error: AppError) -> None:
         """Einem Schritt andere Objekte geben — im Objektbaum, nicht im Dialog.
