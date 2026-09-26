@@ -172,10 +172,10 @@ def test_the_scan_streams_the_count_without_the_full_parse(
     Abbrechen (§2.8). Der Scan streamt jetzt und rührt ``ET.fromstring`` für die
     Modelldateien nicht mehr an.
 
-    Bewiesen, indem ``ET.fromstring`` gesperrt wird: Der Vollparse
-    (``read_objects``) — genau er hob das XML am Stück herein — gibt danach
-    nichts mehr zurück, der streamende Scan aber die volle Wahrheit. Dieselbe
-    Datei, dieselbe Sperre.
+    Bewiesen, indem der Vollparse gesperrt wird (``_parse_model``, seit der
+    Durchsicht 0.5.1 stückweise statt ``ET.fromstring``): ``read_objects`` —
+    genau er hebt das ganze XML herein — gibt danach nichts mehr zurück, der
+    streamende Scan aber die volle Wahrheit. Dieselbe Datei, dieselbe Sperre.
     """
     payload = production_container({"1": cube(10.0), "2": cube(20.0), "3": cube(30.0)})
 
@@ -183,6 +183,7 @@ def test_the_scan_streams_the_count_without_the_full_parse(
         raise threemf.ET.ParseError("der Zählweg liest das XML nicht am Stück")
 
     monkeypatch.setattr(threemf.ET, "fromstring", kein_vollparse)
+    monkeypatch.setattr(threemf_reader, "_parse_model", kein_vollparse)
 
     assert threemf_reader.read_objects(payload) == []
     # Ein Würfel aus trimesh hat zwölf Dreiecke; drei also sechsunddreißig.
@@ -754,6 +755,61 @@ def test_numbers_damaged_twice_are_not_silently_dropped(
     assert any(
         "unreadable" in entry.message or "damaged" in entry.message for entry in caplog.records
     ), "und er sagt es"
+
+
+def test_numbers_in_blocks_give_the_same_arrays(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Umwandlung in Blöcken liefert dieselben Zahlen wie am Stück.
+
+    Blöcke, damit der Hauptfaden während eines großen Imports nicht bis 1,7 s
+    steht (Durchsicht 0.5.1); ein Block von zwei macht aus acht Ecken und
+    zwölf Dreiecken vier und sechs Blöcke — die Nähte liegen also mitten im
+    Körper.
+    """
+    payload = threemf.write_assembly([_part((10, 20, 30), "A")], bed=(256.0, 256.0))
+    whole = threemf_reader.read_objects(payload)[0].mesh
+    monkeypatch.setattr(threemf_reader, "NUMBER_BLOCK", 2)
+    blocked = threemf_reader.read_objects(payload)[0].mesh
+    assert blocked.triangle_count == whole.triangle_count == 12
+    assert (blocked.raw.vertices == whole.raw.vertices).all()
+    assert (blocked.raw.faces == whole.raw.faces).all()
+    empty = ET.fromstring("<vertices/>")
+    assert threemf_reader._numbers_in_blocks(empty, ("x", "y", "z"), float).shape == (0,)
+    broken = ET.fromstring('<vertices><vertex x="1" y="2" z="a"/></vertices>')
+    with pytest.raises((TypeError, ValueError)):
+        threemf_reader._numbers_in_blocks(broken, ("x", "y", "z"), float)
+
+
+def test_the_model_xml_is_read_in_pieces_and_nothing_stays_frozen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Das Modell-XML in Stücken gelesen ist dasselbe wie am Stück (FENSTER-03).
+
+    Am Stück hielt ``ET.fromstring`` den GIL 4 bis 5 s (Mausoleum-Drache, 195 MB
+    XML), und der Speicherbereiniger lief über Millionen gebauter Elemente.
+    Gelesen wird deshalb stückweise mit eingefrorenem Bereiniger — danach darf
+    nichts eingefroren bleiben, sonst sammelte der Prozess nie wieder Zyklen
+    ein. Ein Stück von sieben Bytes zerschneidet Tags und das „ü“ im Namen.
+    """
+    import gc
+
+    payload = threemf.write_assembly([_part((10, 20, 30), "Würfel")], bed=(256.0, 256.0))
+    whole = threemf_reader.read_objects(payload)
+    assert gc.get_freeze_count() == 0
+    monkeypatch.setattr(threemf_reader, "XML_CHUNK", 7)
+    pieces = threemf_reader.read_objects(payload)
+    assert gc.get_freeze_count() == 0, "nach dem Lesen ist nichts mehr eingefroren"
+    assert [part.name for part in pieces] == [part.name for part in whole] == ["Würfel"]
+    assert (pieces[0].mesh.raw.vertices == whole[0].mesh.raw.vertices).all()
+    assert (pieces[0].mesh.raw.faces == whole[0].mesh.raw.faces).all()
+    with pytest.raises(ET.ParseError):
+        threemf_reader._parse_model(b"<model><object></model>")
+    tree = threemf_reader._parse_model(
+        b'<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
+        b"<mesh><vertices>" + b'<vertex x="0" y="0" z="0"/>' * 5 + b"</vertices></mesh></model>"
+    )
+    monkeypatch.setattr(threemf_reader, "NUMBER_BLOCK", 2)
+    threemf_reader._release(tree)
+    assert len(tree) == 0, "freigegeben"
 
 
 # --- die Verdopplung ------------------------------------------------------------

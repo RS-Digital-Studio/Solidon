@@ -310,6 +310,15 @@ dort). Fünf Sätze dazu:
 Dreieckszahl und Dateigröße sind beim Import gedeckelt — mit klarer Meldung
 statt Speicherüberlauf.
 
+**Ein 3MF-Modell wird nie am Stück geparst.** `ET.fromstring` über 195 MB
+Modell-XML hielt den GIL 4 bis 5 s, und der Speicherbereiniger lief danach über
+3,5 Millionen `Element`-Objekte — das Fenster stand, obwohl der Import im
+Arbeiter lief (Durchsicht 0.5.1, FENSTER-03). Wer den Baum braucht, liest ihn
+über `threemf._parse_model` innerhalb von `_reading_trees`: stückweise, nach
+jedem Stück eingefroren (`gc.freeze`), am Ende in Scheiben freigegeben und
+aufgetaut. Nichts bleibt eingefroren (`gc.get_freeze_count() == 0`, Test). Wer
+nur zählt, baut die Geometrie gar nicht (`_StructureOnly`).
+
 ## Was welcher Slicer bekommt
 
 **Eine Stützsperre gehört zu ihrem Objekt, und jede Familie schreibt sie

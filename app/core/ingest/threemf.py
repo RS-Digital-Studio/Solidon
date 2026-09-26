@@ -23,10 +23,15 @@ das tut.
 from __future__ import annotations
 
 import dataclasses
+import gc
 import json
 import zipfile
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from io import BytesIO
+from itertools import islice
 from typing import Final
 from xml.etree import ElementTree as ET
 from xml.parsers import expat
@@ -602,6 +607,12 @@ def read(payload: bytes, faces: int) -> Groups | None:
     Gruppe, nicht unsere Nummerierung — ein Körper, dessen einzige Farbe Slot 3
     war, kommt also als Slot 0 zurück, mit Namen und Farbe unversehrt.
     """
+    with _reading_trees():
+        return _read_groups(payload, faces)
+
+
+def _read_groups(payload: bytes, faces: int) -> Groups | None:
+    """Der Rumpf von :func:`read`, innerhalb von :func:`_reading_trees`."""
     leaves = _leaves(payload, [])
     if len(leaves) == 1:
         try:
@@ -620,7 +631,7 @@ def read(payload: bytes, faces: int) -> Groups | None:
             return None
     try:
         with zipfile.ZipFile(BytesIO(payload)) as container:
-            model = ET.fromstring(container.read(MODEL_PATH))
+            model = _parse_model(container.read(MODEL_PATH))
     except KeyError, zipfile.BadZipFile, ET.ParseError:
         return None
     except (NotImplementedError, RuntimeError) as problem:
@@ -693,6 +704,12 @@ def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[
     braucht, für sein eigenes Material je Körper (§12) und seine eigene
     Platte (§25).
     """
+    with _reading_trees():
+        return _read_objects(payload, findings)
+
+
+def _read_objects(payload: bytes, findings: list[Finding] | None) -> list[Part]:
+    """Der Rumpf von :func:`read_objects`, innerhalb von :func:`_reading_trees`."""
     # Träge, aus demselben Grund wie in ``_carved``: Ohne Aussparung braucht
     # der Leser den Rechenkern nicht.
     from app.core.geom.boolean import deepest
@@ -1649,10 +1666,10 @@ def _leaves(payload: bytes, noted: list[Finding]) -> list[_Leaf]:
             names = set(container.namelist())
             if MODEL_PATH not in names:
                 return []
-            models = {MODEL_PATH: ET.fromstring(container.read(MODEL_PATH))}
+            models = {MODEL_PATH: _parse_model(container.read(MODEL_PATH))}
             for entry in sorted(names):
                 if entry.startswith("3D/Objects/") and entry.endswith(".model"):
-                    models[entry] = ET.fromstring(container.read(entry))
+                    models[entry] = _parse_model(container.read(entry))
             settings = (
                 _settings(container.read(SETTINGS_PATH)) if SETTINGS_PATH in names else _Settings()
             )
@@ -1976,16 +1993,132 @@ def _numbers_from(vertices: ET.Element, triangles: ET.Element) -> tuple[np.ndarr
         return _read_numbers(vertices, triangles)
 
 
+#: Wie viel Modell-XML der Leser am Stück parst.
+#:
+#: **Am Stück hielt das Parsen den GIL 4 bis 5 Sekunden** (Durchsicht 0.5.1,
+#: FENSTER-03): Mausoleum Dragon.3mf, 195 MB Modell-XML, ``ET.fromstring`` —
+#: das Fenster stand, obwohl der Import im Arbeiter lief, und Windows schrieb
+#: „Keine Rückmeldung“. In Stücken dieser Größe gibt der Leser den GIL
+#: zwischen zwei Stücken ab; die längste Lücke im Nebenfaden war 31 ms.
+XML_CHUNK: Final = 256 * 1024
+
+_TREES: ContextVar[list[ET.Element] | None] = ContextVar("threemf_trees", default=None)
+"""Die Bäume, die der laufende Lesevorgang gebaut hat (:func:`_reading_trees`)."""
+_POINT_LISTS: Final = frozenset({f"{{{CORE_NAMESPACE}}}vertices", f"{{{CORE_NAMESPACE}}}triangles"})
+
+
+@contextmanager
+def _reading_trees() -> Iterator[None]:
+    """Ein Lesevorgang über gebaute Bäume, ohne dass der Speicherbereiniger sie abläuft.
+
+    **Stückweise allein half nicht.** Die 3,5 Millionen ``Element``-Objekte des
+    Drachen sind für den Speicherbereiniger Kandidaten; jeder seiner Läufe ging
+    über alle bis dahin gebauten, hielt den GIL dafür am Stück (gemessen: 0,8
+    bis 1,5 s je Lauf) und machte das stückweise Parsen langsamer als das am
+    Stück. :func:`_parse_model` friert deshalb nach jedem Stück ein, was steht
+    (``gc.freeze``): Die gebauten Elemente zählen für spätere Läufe nicht mehr
+    mit. Hier werden sie am Ende **in Scheiben** freigegeben — ein Baum dieser
+    Größe am Stück losgelassen hielt den GIL noch einmal 0,5 bis 0,6 s — und
+    danach wieder aufgetaut.
+
+    Gemessen (``sonden/fenster/p31_xml_freeze.py``, ``p31b_phasen.py``, ohne
+    Qt, Nebenfaden im 5-ms-Takt, je drei Läufe): am Stück 9,4 s, längste Lücke
+    4,6 s; stückweise mit Einfrieren 6,9 s, längste Lücke 0,7 s; dazu in
+    Scheiben freigegeben längste Lücke 0,13 s.
+
+    ``gc.freeze`` gilt dem ganzen Prozess. Was ein anderer Faden in dieser Zeit
+    anlegt, bleibt ebenfalls bis zum Auftauen liegen — nur Zyklen, die
+    solange niemand einsammelt; freigegeben über den Referenzzähler wird
+    weiter alles sofort.
+    """
+    roots: list[ET.Element] = []
+    token = _TREES.set(roots)
+    try:
+        yield
+    finally:
+        _TREES.reset(token)
+        for root in roots:
+            _release(root)
+        roots.clear()
+        gc.unfreeze()
+
+
+def _parse_model(data: bytes) -> ET.Element:
+    """Modell-XML in :data:`XML_CHUNK`-Stücken parsen — Fehler wie ``ET.fromstring``.
+
+    Innerhalb von :func:`_reading_trees` wird nach jedem Stück eingefroren und
+    der Baum zum Freigeben vorgemerkt; außerhalb ist es ein stückweises
+    ``fromstring``.
+    """
+    roots = _TREES.get()
+    parser = ET.XMLParser()
+    for start in range(0, len(data), XML_CHUNK):
+        parser.feed(data[start : start + XML_CHUNK])
+        if roots is not None:
+            gc.freeze()
+    root = parser.close()
+    if roots is not None:
+        roots.append(root)
+    return root
+
+
+def _release(root: ET.Element) -> None:
+    """Einen Baum freigeben, Ecken und Dreiecke in Scheiben zu :data:`NUMBER_BLOCK`.
+
+    Abgestiegen wird nur bis zu den Listen der Ecken und Dreiecke — deren
+    Kinder haben keine eigenen, und sie einzeln zu besuchen kostete bei vielen
+    mittleren Körpern mehr als das Freigeben selbst.
+    """
+    pending = [root]
+    while pending:
+        node = pending.pop()
+        if node.tag in _POINT_LISTS:
+            while len(node):
+                del node[:NUMBER_BLOCK]
+        else:
+            pending.extend(node)
+    root.clear()
+
+
+#: Wie viele Ecken oder Dreiecke eine Umwandlung in Zahlen am Stück nimmt.
+#:
+#: **Blöcke, damit der Hauptfaden atmet.** Die Umwandlung von Zeichenketten in
+#: Zahlen hält den GIL für die ganze Liste; am Mausoleum-Drachen (1,2 Mio.
+#: Ecken, 2,3 Mio. Dreiecke) stand das Fenster dabei bis 1,7 s still, obwohl
+#: der Import im Arbeiter lief. In Blöcken dieser Größe ist die längste Lücke
+#: im Nebenfaden 40 bis 60 ms, bei gleicher Gesamtzeit (Durchsicht 0.5.1,
+#: ``sonden/fenster/p06_xml_gil.py``).
+NUMBER_BLOCK: Final = 65_536
+
+
 def _read_numbers(vertices: ET.Element, triangles: ET.Element) -> tuple[np.ndarray, np.ndarray]:
-    points = np.array(
-        [(entry.get("x"), entry.get("y"), entry.get("z")) for entry in vertices],
-        dtype=np.float64,
-    )
-    faces = np.array(
-        [(entry.get("v1"), entry.get("v2"), entry.get("v3")) for entry in triangles],
-        dtype=np.int64,
-    )
+    points = _numbers_in_blocks(vertices, ("x", "y", "z"), np.float64)
+    faces = _numbers_in_blocks(triangles, ("v1", "v2", "v3"), np.int64)
     return points, faces
+
+
+def _numbers_in_blocks(
+    parent: ET.Element, names: tuple[str, str, str], dtype: type[np.generic]
+) -> np.ndarray:
+    """Drei Attribute je Kindknoten als ``(n, 3)``-Feld, in :data:`NUMBER_BLOCK`-Blöcken.
+
+    Ein leerer Knoten gibt ein leeres Feld wie der Weg am Stück zuvor; ein
+    fehlendes oder unlesbares Attribut wirft wie dort ``TypeError`` oder
+    ``ValueError``.
+    """
+    first, second, third = names
+    children = iter(parent)
+    blocks = []
+    while block := list(islice(children, NUMBER_BLOCK)):
+        blocks.append(
+            np.array(
+                [(entry.get(first), entry.get(second), entry.get(third)) for entry in block],
+                dtype=dtype,
+            )
+        )
+    if not blocks:
+        return np.array([], dtype=dtype)
+    return blocks[0] if len(blocks) == 1 else np.concatenate(blocks)
 
 
 #: Ein Dreieck zeigt mit ``pid`` auf eine Materialgruppe und mit ``p1`` auf
