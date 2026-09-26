@@ -1589,26 +1589,26 @@ Möller-Trumbore-Rechnung wie `ray_hits`, aber über zwei Achsen zugleich (viele
 Strahlen, dieselben Dreiecke) und blockweise über die Dreiecksachse, damit der
 Speicher begrenzt bleibt. Das Paket `vtk` ist damit keine Abhängigkeit mehr.
 **Ab `RAY_CULL_PAIRS` Paaren wählt `ray_hits_batch` die Dreiecke je
-Strahlgruppe räumlich vor** (`_culled_ray_hits`): Strahlen nach
-Reichweitenstufe und Ursprungszelle gruppiert, je Gruppe nur die Dreiecke,
-deren Hüllquader den Quader der Strahlstücke bis zur Reichweite berührt;
-ein Treffer gilt bis `RAY_CULL_TAKEN` der Reichweite, sonst fragt die
-nächste Runde bis zu ihm. Die Auswahl entscheidet nur, welche Paare
-gerechnet werden — jedes gerechnete Paar trägt dieselben Bits wie im
+Strahl über einen räumlichen Index vor** (`_indexed_ray_hits`, RM-214): ein
+Baum aus Hüllquadern über Blättern von `RAY_INDEX_LEAF` Dreiecken in
+Morton-Reihenfolge; jeder Strahl steigt ihn mit einem Scheibentest hinab
+(`_crossing`) und rechnet nur gegen die Dreiecke der Blätter, deren Quader er
+durchquert. Die Quader sind um das baryzentrische `edge_margin` und ein
+Milliardstel der Szenendiagonale gewachsen. Der Index entscheidet nur, welche
+Paare gerechnet werden — jedes gerechnete Paar trägt dieselben Bits wie im
 Vollvergleich, Gleichstände behält die kleinste Nummer, und der Beweis steht
 an der Funktion; ausgenommen sind nur fast streifende Treffer an der Grenze
-von `RAY_PARALLEL_EPS`, deren Abstand auch der Vollvergleich nur gerundet
-kennt. Ein negatives `minimum_travel` rechnet voll, und erreicht die Auswahl
-einer Gruppe die Hälfte aller Dreiecke, rechnen deren Strahlen gemeinsam
-voll. Ohne sie war die Wandstärke quadratisch: Die runde Dichtschnur mit
-45 368 Dreiecken rechnete zwei Milliarden Paare in 378 s, mit ihr 171
-Millionen in 24 s (24.09.2026). **Sie lohnt an dünnen Wänden, nicht an
-Vollkörpern**: Liegt der Treffer jenseits der halben Szene, kostet sie bis
-etwa die Hälfte mehr als der Vollvergleich (Kugel mit 5120 Dreiecken 4,2
-gegen 2,6 s); die 35 Bausteine zusammen bleiben gleich schnell. Ein echter
-räumlicher Index für solche Körper steht im Register (`ROADMAP.md`,
-CI-Testlaufzeiten). `tests/test_geometry_review.py` vergleicht bitgleich
-gegen den Einzelstrahl und trägt je Sicherung einen konstruierten Fall.
+von `RAY_PARALLEL_EPS`, deren Lage auch der Vollvergleich nur gerundet kennt.
+Ein negatives `minimum_travel` und nicht endliche Strahlen rechnen voll; hält
+eine Strahlgruppe mehr als `RAY_INDEX_PAIRS` Paare, teilt sie sich. Ohne Index
+war die Wandstärke quadratisch (Dichtschnur mit 45 368 Dreiecken: 378 s); die
+Vorauswahl nach Reichweite davor half an dünnen Wänden, kostete an
+Vollkörpern aber mehr als der Vollvergleich. Mit dem Index (26.09.2026, unter
+Last, bitgleich zum Vorgänger): Vollkugel 12 800 Dreiecke 31 → 0,5 s, Vollkugel
+51 200 Dreiecke 2,0 s bei 47 MB Spitze, Hohlkugel 7,6 → 0,6 s, Platte mit 96 Bohrungen
+(37 260 Dreiecke) 16,9 → 4,6 s. `tests/test_geometry_review.py` vergleicht
+bitgleich gegen den Einzelstrahl und trägt je Sicherung einen konstruierten
+Fall; jede Sicherung einzeln herausgenommen macht ihn rot.
 
 **Netz, Farbe, Text**
 

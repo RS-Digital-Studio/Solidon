@@ -1083,72 +1083,118 @@ def _inward_rays(subdivisions: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]
     )
 
 
-def test_the_ray_preselection_hands_a_solid_body_to_one_full_comparison(
+def test_the_ray_index_answers_a_solid_body_with_few_pairs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Erreicht die Auswahl einer Gruppe die Hälfte aller Dreiecke, rechnet sie voll.
+    """Ein Vollkörper, von jedem Dreieck einwärts: dieselben Bits, ein Bruchteil der Paare.
 
-    An einem Vollkörper spart die Vorauswahl nichts: Der Treffer liegt auf
-    der anderen Seite. Diese Strahlen gehen gemeinsam in einen Vollvergleich —
-    und ihr Ergebnis bleibt dasselbe. Gezählt wird, dass es diesen Weg gibt.
+    Hier war die frühere Vorauswahl nach Reichweite am schwächsten — der
+    Treffer liegt auf der anderen Seite, jede Strahlgruppe berührte die halbe
+    Kugel, und sie rechnete teurer als der Vollvergleich (RM-214: eine Kugel
+    mit 12 800 Dreiecken 34 s). Der Index lässt jeden Strahl nur die Blätter
+    rechnen, deren Quader er durchquert: an der Wand, von der er ausgeht, und
+    an der, die er trifft.
+    """
+    from app.core.geom import mesh as mesh_module
+
+    triangles, origins, directions = _inward_rays(4)
+    assert len(triangles) * len(origins) > mesh_module.RAY_CULL_PAIRS
+    evaluated = []
+    parameters = mesh_module._ray_triangle_parameters
+
+    def counted(*arguments: Any) -> tuple[np.ndarray, np.ndarray]:
+        t, inside = parameters(*arguments)
+        evaluated.append(t.size)
+        return t, inside
+
+    monkeypatch.setattr(mesh_module, "_ray_triangle_parameters", counted)
+    travel, hit_face = ray_hits_batch(
+        triangles, origins, directions, edge_margin=EPS_GEOM, minimum_travel=EPS_GEOM * 100.0
+    )
+    monkeypatch.setattr(mesh_module, "_ray_triangle_parameters", parameters)
+
+    assert sum(evaluated) < len(triangles) * len(origins) / 20
+    expected_travel, expected_face = _nearest_by_single_rays(triangles, origins, directions)
+    assert np.isfinite(expected_travel).all()
+    assert np.array_equal(travel, expected_travel) and np.array_equal(hit_face, expected_face)
+
+
+def test_the_ray_index_splits_a_group_that_would_hold_too_many_pairs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Über ``RAY_INDEX_PAIRS`` teilt sich die Gruppe, bis sie passt — dieselbe Antwort."""
+    from app.core.geom import mesh as mesh_module
+
+    triangles, origins, directions = _inward_rays(3)
+    monkeypatch.setattr(mesh_module, "RAY_INDEX_PAIRS", 40)
+    split = []
+    candidates = mesh_module._index_candidates
+
+    def counted(*arguments: Any) -> tuple[np.ndarray, np.ndarray] | None:
+        found = candidates(*arguments)
+        split.append(found is None)
+        return found
+
+    monkeypatch.setattr(mesh_module, "_index_candidates", counted)
+    travel, hit_face = ray_hits_batch(
+        triangles, origins, directions, edge_margin=EPS_GEOM, minimum_travel=EPS_GEOM * 100.0
+    )
+    assert any(split), "die Gruppe wurde nie geteilt — dann prüft dieser Test nichts"
+    expected_travel, expected_face = _nearest_by_single_rays(triangles, origins, directions)
+    assert np.array_equal(travel, expected_travel) and np.array_equal(hit_face, expected_face)
+
+
+def test_a_cancelled_ray_index_stops_inside_its_descent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Abbruch endet in der laufenden Strahlgruppe, mit dem Teilstand und ohne Fehler.
+
+    Gefragt wird je Gruppe und je Ebene des Baums: Die Bereichsprüfung muss
+    mitten in ihrer ersten Ecke anhalten können
+    (``test_range_check_cancels_inside_local_geometry_and_keeps_progress_monotonic``).
     """
     from app.core.geom import mesh as mesh_module
 
     triangles, origins, directions = _inward_rays(3)
-    assert len(triangles) * len(origins) > mesh_module.RAY_CULL_PAIRS
-    whole = []
-    nearest = mesh_module._nearest_ray_hits
-
-    def counted(chosen: np.ndarray, *arguments: Any) -> tuple[np.ndarray, np.ndarray]:
-        if len(chosen) == len(triangles):
-            whole.append(len(arguments[0]))
-        return nearest(chosen, *arguments)
-
-    monkeypatch.setattr(mesh_module, "_nearest_ray_hits", counted)
-    travel, hit_face = ray_hits_batch(
-        triangles, origins, directions, edge_margin=EPS_GEOM, minimum_travel=EPS_GEOM * 100.0
-    )
-    monkeypatch.setattr(mesh_module, "_nearest_ray_hits", nearest)
-    assert whole and max(whole) > len(origins) / 2
-    expected_travel, expected_face = _nearest_by_single_rays(triangles, origins, directions)
-    assert np.array_equal(travel, expected_travel) and np.array_equal(hit_face, expected_face)
-
-
-def test_the_ray_preselection_answers_the_same_after_its_last_round(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Nach ``RAY_CULL_ROUNDS`` rechnet der Rest voll — dieselbe Antwort, nur später."""
-    from app.core.geom import mesh as mesh_module
-
-    triangles, origins, directions = _inward_rays(3)
-    monkeypatch.setattr(mesh_module, "RAY_CULL_ROUNDS", 1)
-    travel, hit_face = ray_hits_batch(
-        triangles, origins, directions, edge_margin=EPS_GEOM, minimum_travel=EPS_GEOM * 100.0
-    )
-    expected_travel, expected_face = _nearest_by_single_rays(triangles, origins, directions)
-    assert np.array_equal(travel, expected_travel) and np.array_equal(hit_face, expected_face)
-
-
-def test_a_cancelled_ray_preselection_stops_inside_its_rounds() -> None:
-    """Ein Abbruch mitten in der Vorauswahl endet dort, mit dem Teilstand und ohne Fehler."""
-    triangles, origins, directions = _inward_rays(3)
+    monkeypatch.setattr(mesh_module, "RAY_INDEX_RAYS", 64)
     asked = []
 
     class Token:
         @property
         def is_cancelled(self) -> bool:
             asked.append(True)
-            return len(asked) > 5
+            return len(asked) > 25
 
         def raise_if_cancelled(self) -> None:
-            raise AssertionError("die Vorauswahl fragt, sie wirft nicht")
+            raise AssertionError("der Index fragt, er wirft nicht")
 
     travel, hit_face = ray_hits_batch(
         triangles, origins, directions, edge_margin=EPS_GEOM, cancelled=Token()
     )
     assert travel.shape == hit_face.shape == (len(origins),)
-    assert len(asked) == 6, "der Abbruch wurde nach der ersten Frage nicht mehr gestellt"
-    assert (hit_face < 0).any()
+    assert len(asked) == 26, "nach dem ersten Ja wurde weiter gefragt oder gerechnet"
+    assert (hit_face < 0).any() and (hit_face >= 0).any()
+
+
+def test_a_ray_along_a_box_wall_touches_the_box() -> None:
+    """Liegt der Ursprung auf einer Quaderwand und läuft der Strahl in ihr, zählt er.
+
+    Der Scheibentest rechnet dort ``0 · ∞`` — ``NaN``, und ein ``NaN`` im
+    Maximum hätte den Quader still verworfen. Die Auswahl muss im Zweifel
+    rechnen lassen, nie weglassen.
+    """
+    from app.core.geom import mesh as mesh_module
+
+    low = np.zeros((4, 3))
+    high = np.ones((4, 3))
+    origins = np.array(
+        [[0.5, 1.0, 0.5], [0.0, 0.5, 0.5], [0.5, 0.5, 1.0], [0.5, 2.0, 0.5]], dtype=float
+    )
+    directions = np.array(
+        [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]], dtype=float
+    )
+    with np.errstate(divide="ignore"):
+        inverse = 1.0 / directions
+    touched = mesh_module._crossing(origins, inverse, low, high)
+    assert touched.tolist() == [True, True, True, False]
 
 
 def test_hits_behind_the_origin_are_never_preselected_away() -> None:
@@ -1179,29 +1225,27 @@ def _triangle(*corners: tuple[float, float, float]) -> np.ndarray:
 
 
 def test_each_safeguard_of_the_ray_preselection_decides_a_constructed_case() -> None:
-    """Drei Fälle, an denen je eine Sicherung der Vorauswahl das Ergebnis trägt.
+    """Drei Fälle, deren Sollwert aus der Konstruktion kommt, nicht aus dem Prüfling.
 
-    Der Zufallsvergleich darüber blieb grün, als die Gegenprobe jede davon
-    einzeln herausnahm — eine Kugelschale ist dafür zu gutmütig. Hier steht
-    je Sicherung ein Strahl, dessen Sollwert aus der Konstruktion kommt:
+    Der Zufallsvergleich darüber ist für eine Auswahl zu gutmütig; hier steht
+    je Frage ein Strahl, an dem eine falsche Auswahl sichtbar würde:
 
-    * **Übernahmegrenze.** Eine große schräge Wand ``B`` ragt in jeden
-      Suchquader und wird erst in ``2R`` getroffen; das kleine Dreieck ``A``
-      in ``1,5R`` liegt außerhalb der ersten Reichweite. Wer den ersten
-      Treffer der Auswahl nähme, meldete ``B``.
-    * **Stücklänge.** Derselbe Aufbau näher: ``A3`` in ``0,6R``, ``B`` in
-      ``0,7R``. Wer nur bis ``R/2`` sucht, findet ``B`` unter der Grenze.
+    * **Das nächste, nicht das erste.** Eine große schräge Wand ``B`` ragt in
+      jeden Quader längs des Strahls und wird erst in ``2R`` getroffen; das
+      kleine Dreieck ``A`` liegt in ``1,5R`` davor. Wer den ersten gefundenen
+      Treffer nähme, meldete ``B``.
+    * **Derselbe Aufbau näher:** ``A3`` in ``0,6R``, ``B`` in ``0,7R``.
     * **Randzugabe.** Der Strahl geht ein halbes Millionstel neben der Kante
       von ``C`` vorbei — innerhalb von ``edge_margin``, also ein Treffer, aber
-      außerhalb des Hüllquaders von ``C``.
+      außerhalb des ungewachsenen Hüllquaders von ``C``.
 
-    ``R`` ist die erste Reichweite: zwei Ankerdreiecke legen die
-    Szenendiagonale fest. Eine Kugel daneben mit Strahlen von ihrer Wand
-    bringt die Paare über ``RAY_CULL_PAIRS``.
+    ``R`` ist eine feste Länge, ein Zweiunddreißigstel der Szenendiagonale,
+    die zwei Ankerdreiecke festlegen. Eine Kugel daneben mit Strahlen von
+    ihrer Wand bringt die Paare über ``RAY_CULL_PAIRS``.
     """
     from app.core.geom import mesh as mesh_module
 
-    reach = 100.0 * math.sqrt(3.0) * mesh_module.RAY_CULL_FIRST_REACH
+    reach = 100.0 * math.sqrt(3.0) / 32.0
     wall_x = 2.0 * reach
     filler = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
     filler.apply_translation((-35.0, -35.0, -35.0))
