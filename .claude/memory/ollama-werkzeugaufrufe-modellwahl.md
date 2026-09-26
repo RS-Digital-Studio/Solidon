@@ -40,6 +40,20 @@ Kriterium (Robert: „alle Modelle mit denen es klappt wollen wir empfehlen"):
 mindestens 7/8 **und** bei der mehrdeutigen Anfrage nicht geraten. Die
 Listen stehen in `llm.OLLAMA_SUGGESTIONS` und `llm.OLLAMA_UNSUITABLE`.
 
+**Die Probe sagt nicht, wie gut ein Modell mehrteilige Aufträge schafft** —
+die Suite (39 Fälle) am 26.09.2026, freie Karte, `num_ctx` 32 768:
+
+| Modell, Stand | gut | gefragt | schemagültig | Baustein | Zeit |
+|---|---|---|---|---|---|
+| qwen3:14b mit Angebot | 18 | 2/3 | 82 % | 5/13 | 44 min |
+| qwen3:14b ohne Angebot, derselbe Code | 14 | 1/3 | 76 % | 3/13 | 46 min, 9 Fensterabbrüche |
+| qwen3.5:9b mit Angebot | 18 | 1/3 | 89 % | 2/13 | 16 min |
+| gpt-oss:20b mit Angebot | 10 | 2/3 | 88 % | 0/13 | 22 min, fordert nie eine Kurzform an |
+
+gpt-oss:20b bestand die Probe mit 7/8 und ist in der Suite das schwächste;
+es bleibt empfohlen, der Satz in der Auswahl sagt „für einzelne Anweisungen".
+Rohdaten: `.claude/.state/lokale-ki-2026-09-25/messung/`.
+
 ## Ergebnis vom 31.08.2026 — damals die Kundenlage, heute Vorgeschichte
 
 Auf der RTX 4080 mit 16 GB, Ollama 0.33.2 und `qwen3:14b` wurde der

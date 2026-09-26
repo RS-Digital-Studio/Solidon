@@ -148,16 +148,16 @@
       <p class="sub">O chat funciona de graça com o Ollama no seu próprio computador. O modelo tem de caber inteiro na memória gráfica — caso contrário, o processador entra em ação e cada resposta demora muitas vezes mais. Estes quatro chamam as ferramentas do Solidon de forma fiável e perguntam quando um pedido não está claro:</p>
       <table class="compare">
         <thead>
-          <tr><th>Modelo</th><th>Memória gráfica</th><th>Prova das ferramentas</th></tr>
+          <tr><th>Modelo</th><th>Memória gráfica</th><th>Prova e suite</th></tr>
         </thead>
         <tbody>
-          <tr><td><b>qwen3.5:9b</b></td><td>7,4&nbsp;GB — a partir de uma placa de 8&nbsp;GB</td><td>7 de 8, cerca de 6&nbsp;s por pedido</td></tr>
-          <tr><td><b>gpt-oss:20b</b></td><td>12,9&nbsp;GB — placa de 16&nbsp;GB</td><td>7 de 8, cerca de 7&nbsp;s</td></tr>
-          <tr><td><b>qwen3:14b</b></td><td>13,6&nbsp;GB — placa de 16&nbsp;GB</td><td>8 de 8, cerca de 18&nbsp;s — pensa antes de cada resposta</td></tr>
-          <tr><td><b>qwen3:30b-a3b</b></td><td>mais de 16&nbsp;GB — com 16&nbsp;GB o processador calcula um terço</td><td>8 de 8, cerca de 17&nbsp;s</td></tr>
+          <tr><td><b>qwen3.5:9b</b></td><td>7,4&nbsp;GB — a partir de uma placa de 8&nbsp;GB</td><td>Prova 7 de 8, suite 18 de 39, cerca de 6&nbsp;s por pedido</td></tr>
+          <tr><td><b>gpt-oss:20b</b></td><td>12,9&nbsp;GB — placa de 16&nbsp;GB</td><td>Prova 7 de 8, suite só 10 de 39 — para instruções isoladas, cerca de 7&nbsp;s</td></tr>
+          <tr><td><b>qwen3:14b</b></td><td>13,6&nbsp;GB — placa de 16&nbsp;GB</td><td>Prova 8 de 8, suite 18 de 39 com o maior número de blocos, cerca de 18&nbsp;s — pensa antes de cada resposta</td></tr>
+          <tr><td><b>qwen3:30b-a3b</b></td><td>mais de 16&nbsp;GB — com 16&nbsp;GB o processador calcula um terço</td><td>Prova 8 de 8, cerca de 17&nbsp;s; suite não medida</td></tr>
         </tbody>
       </table>
-      <p class="footnote">Medido em 25.09.2026 numa NVIDIA RTX 4080 com 16&nbsp;GB no Ollama 0.34.3. A prova são oito pedidos que exigem cada um uma ferramenta; num deliberadamente ambíguo, perguntar de volta é a resposta certa. A um modelo local, o Solidon3D envia em cada pedido as ferramentas pretendidas com todos os campos e todas as outras em forma abreviada — assim a tarefa tem um quarto do tamanho de antes. Depois de uma resposta, o modelo fica carregado três minutos, para que a pergunta seguinte não espere pelo seu arranque. <b>Não recomendados</b>, embora medidos: gemma4:12b (respostas sem fim), granite4.1:8b e llama3.1:8b (adivinham perante um pedido ambíguo em vez de perguntar), mistral-nemo e qwen2.5-coder:14b (escrevem as chamadas como texto). Na configuração, o Solidon3D mostra se o Ollama está mesmo a usar a placa gráfica.</p>
+      <p class="footnote">Medido em 25.09.2026 numa NVIDIA RTX 4080 com 16&nbsp;GB no Ollama 0.34.3. A prova são oito pedidos que exigem cada um uma ferramenta; num deliberadamente ambíguo, perguntar de volta é a resposta certa. A suite são 39 tarefas do dia a dia, desde mover uma peça até um suporte com blocos; com o conjunto completo de ferramentas na mesma janela em vez da oferta, o qwen3:14b acertou 14. A um modelo local, o Solidon3D envia em cada pedido as ferramentas pretendidas com todos os campos e todas as outras em forma abreviada — assim a tarefa tem um quarto do tamanho de antes. Depois de uma resposta, o modelo fica carregado três minutos, para que a pergunta seguinte não espere pelo seu arranque. <b>Não recomendados</b>, embora medidos: gemma4:12b (respostas sem fim), granite4.1:8b e llama3.1:8b (adivinham perante um pedido ambíguo em vez de perguntar), mistral-nemo e qwen2.5-coder:14b (escrevem as chamadas como texto). Na configuração, o Solidon3D mostra se o Ollama está mesmo a usar a placa gráfica.</p>
     </div>
   </section>
 

@@ -274,12 +274,16 @@ Empfohlen sind die Modelle, die in der Werkzeugprobe mindestens sieben von
 acht Aufrufen treffen und bei einer unklaren Anfrage nachfragen, statt zu
 raten (`OLLAMA_SUGGESTIONS` in `app/core/backends/llm.py`):
 
-| Modell | Grafikspeicher | Anmerkung |
-|---|---|---|
-| `qwen3.5:9b` | 7,4 GB | läuft ab einer Karte mit 8 GB |
-| `gpt-oss:20b` | 12,9 GB | Karte mit 16 GB |
-| `qwen3:14b` | 13,6 GB | Vorgabe; denkt vor jeder Antwort, Karte mit 16 GB |
-| `qwen3:30b-a3b` | mehr als 16 GB | auf 16 GB rechnet ein Drittel der Prozessor |
+| Modell | Grafikspeicher | Suite | Anmerkung |
+|---|---|---|---|
+| `qwen3.5:9b` | 7,4 GB | 18/39 | läuft ab einer Karte mit 8 GB |
+| `gpt-oss:20b` | 12,9 GB | 10/39 | Karte mit 16 GB; für einzelne Anweisungen |
+| `qwen3:14b` | 13,6 GB | 18/39 | Vorgabe; denkt vor jeder Antwort, Karte mit 16 GB |
+| `qwen3:30b-a3b` | mehr als 16 GB | — | auf 16 GB rechnet ein Drittel der Prozessor |
+
+Die Suite am 26.09.2026 auf freier Karte (RTX 4080). Derselbe Stand mit dem
+ganzen Werkzeugsatz statt des Angebots traf mit `qwen3:14b` im selben
+Fenster 14 von 39, neunmal riss dabei das Fenster.
 
 Gemessen und nicht empfohlen (`OLLAMA_UNSUITABLE`): `gemma4:12b`,
 `granite4.1:8b`, `llama3.1:8b`, `mistral-nemo`, `qwen2.5-coder:14b`, `llama3`.

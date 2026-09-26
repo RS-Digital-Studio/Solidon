@@ -1701,30 +1701,35 @@ def parse_parameter_count(text: str) -> float | None:
 #: Prozessor mit, und jede Antwort dauert ein Vielfaches.
 #:
 #: Gemessen am 25.09.2026 auf einer RTX 4080 (16 GB), Ollama 0.34.3, mit dem
-#: Werkzeugangebot aus ``agent/offer.py`` und dem kompakten Prompt.
+#: Werkzeugangebot aus ``agent/offer.py`` und dem kompakten Prompt. Die Suite
+#: (39 Aufträge, ``tools/run_agent_suite.py``) am 26.09.2026 auf freier Karte
+#: zeigt, was die Probe nicht zeigt: gpt-oss:20b trifft in ihr 10, qwen3:14b
+#: und qwen3.5:9b je 18; qwen3:30b-a3b ist dort nicht gemessen.
 OLLAMA_SUGGESTIONS: Final = (
     (
         "qwen3.5:9b",
         6.6,
         _(
-            "Belegt 7,4 GB Grafikspeicher. Zweimal geprüft: jeweils sieben von acht "
-            "Aufrufen richtig, rund 6 Sekunden je Anfrage."
+            "Belegt 7,4 GB Grafikspeicher. In der Probe sieben von acht Aufrufen "
+            "richtig, in der Suite 18 von 39 Aufträgen; rund 6 Sekunden je Anfrage."
         ),
     ),
     (
         "qwen3:14b",
         9.3,
         _(
-            "Belegt 13,6 GB Grafikspeicher. Acht von acht Aufrufen richtig; denkt vor "
-            "jeder Antwort nach, rund 18 Sekunden je Anfrage."
+            "Belegt 13,6 GB Grafikspeicher. In der Probe acht von acht, in der Suite 18 "
+            "von 39 Aufträgen und die meisten Bausteine; denkt vor jeder Antwort, rund 18 "
+            "Sekunden je Anfrage."
         ),
     ),
     (
         "gpt-oss:20b",
         13.8,
         _(
-            "Belegt 12,9 GB Grafikspeicher. Sieben von acht Aufrufen richtig, rund "
-            "7 Sekunden je Anfrage."
+            "Belegt 12,9 GB Grafikspeicher. In der Probe sieben von acht, in der Suite "
+            "nur 10 von 39 — gut für einzelne Anweisungen, schwach bei mehrteiligen; "
+            "rund 7 Sekunden je Anfrage."
         ),
     ),
     (
