@@ -89,6 +89,9 @@ class _NativeMaterials:
     objects: dict[str, int] = field(default_factory=dict)
     parts: dict[tuple[str, str], int] = field(default_factory=dict)
     volumes: dict[str, list[tuple[int, int, int]]] = field(default_factory=dict)
+    helpers: dict[str, list[tuple[int, int, str, str]]] = field(default_factory=dict)
+    """Prusa-Bereiche, die kein Modellteil sind: erste und letzte Dreiecksnummer,
+    Teilart (:data:`PRUSA_VOLUME_KINDS`) und Name."""
     troubles: dict[str, _MaterialError] = field(default_factory=dict)
 
 
@@ -111,12 +114,12 @@ class _MaterialError(Exception):
 
 
 class _ForeignVolumeError(_MaterialError):
-    """Ein Dreiecksbereich von PrusaSlicer, der kein Modellteil ist.
+    """Ein Dreiecksbereich von PrusaSlicer einer Art, die Solidon nicht kennt.
 
-    Ein anderer Satz als „Farben nicht gelesen": Der Bereich — ein
-    Modifikator, eine Aussparung — liegt im selben Netz wie der Körper und
-    kommt als dessen Material an. Das soll der Kunde erfahren, nicht nur,
-    dass die Farben fehlen (Regel 21).
+    Die bekannten — Modifikator, Stützsperre, Stützverstärker, Aussparung —
+    nimmt :func:`_helpers_left_out` aus dem Netz. Eine unbekannte liegt im
+    selben Netz wie der Körper und kommt als dessen Material an; das soll der
+    Kunde erfahren, nicht nur, dass die Farben fehlen (Regel 21).
     """
 
     def __init__(self, kind: str) -> None:
@@ -146,6 +149,17 @@ HELPER_TITLES: Final = {
 #: einen Liste steht und in der anderen fehlt — das wäre ein ``KeyError`` an
 #: einer Kundendatei.
 HELPER_KINDS: Final[frozenset[str]] = frozenset(HELPER_TITLES)
+#: Dieselben Arten, wie PrusaSlicer sie führt: nicht als eigenes Teil, sondern
+#: als Dreiecksbereich im Netz des Objekts (``volume_type`` in
+#: ``Slic3r_PE_model.config``). Solidons Übergabe schreibt ihre Stützsperre
+#: genauso (``export/threemf.py``), und ein im Slicer gespeichertes Projekt
+#: bringt sie zurück.
+PRUSA_VOLUME_KINDS: Final = {
+    "ParameterModifier": "modifier_part",
+    "SupportBlocker": "support_blocker",
+    "SupportEnforcer": "support_enforcer",
+    "NegativeVolume": NEGATIVE_KIND,
+}
 
 
 def _is_body(kind: str) -> bool:
@@ -260,11 +274,40 @@ def _native_materials(container: zipfile.ZipFile, model: ET.Element) -> _NativeM
             ) from problem
         for obj in config.findall("object"):
             identifier = obj.get("id", "")
+            # Außerhalb der Farbfrage: Ein Hilfsbereich fällt auch dann aus
+            # dem Körper, wenn sich die Werkzeuge daneben nicht lesen lassen.
+            _object_helpers(obj, identifier, result)
             try:
                 _object_tools(obj, identifier, result)
             except _MaterialError as problem:
                 result.troubles[identifier] = problem
     return result
+
+
+def _object_helpers(obj: ET.Element, identifier: str, result: _NativeMaterials) -> None:
+    """Die Prusa-Bereiche eines Objekts, die kein Modellteil sind und deren
+    Art Solidon kennt — was :func:`read_objects` aus dem Netz nimmt.
+
+    Ein Bereich mit unlesbaren Nummern bleibt hier weg; :func:`_object_tools`
+    meldet ihn als unbekannten Bereich, und er kommt als Material an wie
+    bisher.
+    """
+    for volume in obj.findall("volume"):
+        kind = volume.find("metadata[@key='volume_type']")
+        stated = "ModelPart" if kind is None else (kind.get("value") or "")
+        if stated not in PRUSA_VOLUME_KINDS:
+            continue
+        try:
+            first = int(volume.get("firstid", ""))
+            last = int(volume.get("lastid", ""))
+        except ValueError:
+            _log.warning("3MF object %r has a %s volume without triangle ids", identifier, stated)
+            continue
+        named = volume.find("metadata[@key='name']")
+        name = "" if named is None else named.get("value", "")
+        result.helpers.setdefault(identifier, []).append(
+            (first, last, PRUSA_VOLUME_KINDS[stated], name)
+        )
 
 
 def _object_tools(obj: ET.Element, identifier: str, result: _NativeMaterials) -> None:
@@ -273,9 +316,10 @@ def _object_tools(obj: ET.Element, identifier: str, result: _NativeMaterials) ->
 
     Ein Teil, das kein druckbares Modellteil ist, hat hier kein Werkzeug —
     was es ist, liest :func:`_settings`, und :func:`read_objects` entscheidet,
-    ob es übersprungen oder abgezogen wird. Ein Dreiecksbereich, der keines
-    ist, bleibt dagegen ein Problem dieses Objekts: Seine Dreiecke liegen im
-    selben Netz, und ohne sie herauszunehmen wäre jede Farbe daran geraten.
+    ob es übersprungen oder abgezogen wird. Ein Dreiecksbereich bekannter Art
+    ebenso (:func:`_object_helpers`). Einer unbekannter Art bleibt dagegen ein
+    Problem dieses Objekts: Seine Dreiecke liegen im selben Netz, und ohne sie
+    herauszunehmen wäre jede Farbe daran geraten.
     """
     tool = _native_tool(obj)
     if tool is not None:
@@ -292,8 +336,11 @@ def _object_tools(obj: ET.Element, identifier: str, result: _NativeMaterials) ->
             result.parts[identifier, part.get("id", "")] = part_tool
     for volume in obj.findall("volume"):
         kind = volume.find("metadata[@key='volume_type']")
-        if kind is not None and kind.get("value") != "ModelPart":
-            raise _ForeignVolumeError(kind.get("value") or "")
+        stated = "ModelPart" if kind is None else (kind.get("value") or "")
+        if stated in PRUSA_VOLUME_KINDS and _helper_ids_readable(volume):
+            continue
+        if stated != "ModelPart":
+            raise _ForeignVolumeError(stated)
         volume_tool = _native_tool(volume)
         if volume_tool is not None:
             try:
@@ -302,6 +349,16 @@ def _object_tools(obj: ET.Element, identifier: str, result: _NativeMaterials) ->
             except ValueError as problem:
                 raise _unsupported_materials(_("Ungültiger Dreiecksbereich")) from problem
             result.volumes.setdefault(identifier, []).append((first, last, volume_tool))
+
+
+def _helper_ids_readable(volume: ET.Element) -> bool:
+    """Ob :func:`_object_helpers` diesen Bereich aufnehmen konnte."""
+    try:
+        int(volume.get("firstid", ""))
+        int(volume.get("lastid", ""))
+    except ValueError:
+        return False
+    return True
 
 
 def _native_tool(node: ET.Element) -> int | None:
@@ -701,21 +758,25 @@ def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[
         body = _mesh_from(leaf.node)
         if body is None:
             continue
-        raw = body.raw
+        kept, own_cutters = _helpers_left_out(leaf, body.raw, noted)
+        base = body.raw if kept is None else _faces_only(body.raw, kept)
+        raw = base
         groups: Groups | None = None
         try:
             native = _native_tools_of(leaf)
             if native is not None:
-                tools = native.tools
-                if native.splits:
+                tools, splits = native.tools, native.splits
+                if kept is not None:
+                    tools, splits = _kept_tools(tools, splits, kept)
+                if splits:
                     # Erst teilen, dann bewegen: Die Mittelpunkte sind in
                     # jeder Lage dieselben, und die Kopie unten nimmt das
                     # Netz, das die Bemalung tragen kann.
-                    raw, tools = _refine(raw, tools, native.splits, leaf.name)
+                    raw, tools = _refine(raw, tools, splits, leaf.name)
                 groups = _groups_from(tools, native.palette)
         except _ForeignVolumeError as problem:
             _log.warning("3MF body %r carries a %s volume: %s", leaf.name, problem.kind, problem)
-            raw = body.raw
+            raw = base
             noted.append(
                 Finding(
                     code="ingest.foreign_volume",
@@ -732,10 +793,15 @@ def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[
             )
         except _MaterialError as problem:
             _log.warning("3MF body %r keeps one colour: %s", leaf.name, problem)
-            raw = body.raw
+            raw = base
             noted.append(_colours_dropped(leaf.name, problem.reason))
         if groups is None:
             groups = _groups_of(leaf.node, leaf.palette, leaf.pid, leaf.pindex)
+            if groups is not None and kept is not None:
+                slots = zip(groups.slots, kept, strict=True)
+                groups = Groups(
+                    slots=tuple(slot for slot, keep in slots if keep), materials=groups.materials
+                )
         moved = raw.copy()
         transform.moved(moved, leaf.transform)
         mesh = (
@@ -747,6 +813,14 @@ def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[
             carved.add(leaf.owner)
             if touched:
                 effective.add((leaf.owner, cutter_name))
+            if cut is not None:
+                solver = deepest((solver, cut))
+        # Die Aussparungen aus dem eigenen Netz (PrusaSlicer) gehören nur
+        # diesem Körper; eine wirkungslose sagt ``_carved`` nicht, also hier.
+        for cutter_name, cutter in own_cutters:
+            mesh, cut, touched = _carved(mesh, leaf.name, cutter_name, cutter, noted)
+            if not touched:
+                noted.append(_negative_without_effect(cutter_name))
             if cut is not None:
                 solver = deepest((solver, cut))
         parts.append(
@@ -766,18 +840,7 @@ def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[
                 # keines: Im Slicer schneidet sie dort ebenso wenig. Gesagt
                 # wird es trotzdem — es ist die eine Stelle, an der der
                 # Leser sonst schweigend entschiede (Regel 21).
-                noted.append(
-                    Finding(
-                        code="ingest.negative_without_effect",
-                        severity="info",
-                        message=_(
-                            "Die Aussparung „{cutter}“ trifft keinen Körper — sie hat keine "
-                            "Wirkung.",
-                            cutter=cutter_name,
-                        ),
-                        values={"cutter": cutter_name},
-                    )
-                )
+                noted.append(_negative_without_effect(cutter_name))
             if owner in carved:
                 continue
             noted.append(
@@ -834,6 +897,96 @@ def _colours_dropped(name: str, reason: TranslatableText | str) -> Finding:
             reason=reason,
         ),
         values={"name": name, "reason": reason},
+    )
+
+
+def _negative_without_effect(cutter_name: str) -> Finding:
+    """Eine Aussparung, die keinen Körper trifft — im Slicer schneidet sie ebenso wenig."""
+    return Finding(
+        code="ingest.negative_without_effect",
+        severity="info",
+        message=_(
+            "Die Aussparung „{cutter}“ trifft keinen Körper — sie hat keine Wirkung.",
+            cutter=cutter_name,
+        ),
+        values={"cutter": cutter_name},
+    )
+
+
+def _helpers_left_out(
+    leaf: _Leaf, raw: trimesh.Trimesh, noted: list[Finding]
+) -> tuple[np.ndarray | None, list[tuple[str, trimesh.Trimesh]]]:
+    """Welche Dreiecke dieses Netzes der Körper sind — ohne die Prusa-Bereiche,
+    die kein Modellteil sind — und die Aussparungen darunter, bewegt wie der
+    Körper.
+
+    Dieselbe Entscheidung wie für die Teilarten der Orca-Familie: Ein
+    Modifikator, eine Stützsperre oder ein Stützverstärker ist keine Geometrie
+    des Drucks (``ingest.helper_skipped``), eine Aussparung wird abgezogen.
+    Bis zum 26.09.2026 kamen diese Bereiche als Material des Körpers an —
+    und seit Solidons Übergabe selbst eine Stützsperre schreibt, saß sie nach
+    dem Speichern im Slicer und erneutem Öffnen als Klotz im Wasserkanal der
+    Waschschüssel.
+
+    ``None`` heißt: Das Netz trägt keine solchen Bereiche, oder sie lassen
+    sich nicht sauber trennen — dann bleibt alles wie bisher.
+    """
+    if not leaf.helpers:
+        return None, []
+    count = len(raw.faces)
+    kept = np.ones(count, dtype=bool)
+    for first, last, kind, _name in leaf.helpers:
+        if first < 0 or last < first or last >= count or not kept[first : last + 1].all():
+            _log.warning("3MF body %r has a %s range outside its triangles", leaf.name, kind)
+            return None, []
+        kept[first : last + 1] = False
+    if not kept.any():
+        # Ein Netz, das nur aus Hilfsbereichen besteht, bleibt ein Körper:
+        # Der Zählweg (``_scan``) hat es schon gezählt, und die Körperzahl
+        # steht fest, bevor gerechnet wird (§11).
+        _log.warning("3MF body %r consists of slicer helper volumes only", leaf.name)
+        return None, []
+    cutters: list[tuple[str, trimesh.Trimesh]] = []
+    for first, last, kind, name in leaf.helpers:
+        if kind == NEGATIVE_KIND:
+            own = np.zeros(count, dtype=bool)
+            own[first : last + 1] = True
+            cutter = _faces_only(raw, own)
+            transform.moved(cutter, leaf.transform)
+            cutters.append((name or leaf.name, cutter))
+            continue
+        _log.info("3MF body %r carries a slicer %s — left out", leaf.name, kind)
+        noted.append(
+            Finding(
+                code="ingest.helper_skipped",
+                severity="info",
+                message=_(
+                    "„{name}“ ist ein Hilfsteil des Slicers ({kind}) und keine Geometrie "
+                    "des Drucks — es wurde nicht geladen.",
+                    name=name or leaf.name,
+                    kind=HELPER_TITLES[kind],
+                ),
+                values={"name": name or leaf.name, "kind": HELPER_TITLES[kind]},
+            )
+        )
+    return kept, cutters
+
+
+def _faces_only(raw: trimesh.Trimesh, chosen: np.ndarray) -> trimesh.Trimesh:
+    """Die gewählten Dreiecke als eigenes Netz, ohne die Ecken der übrigen."""
+    faces = raw.faces[chosen]
+    used, inverse = np.unique(faces.ravel(), return_inverse=True)
+    return trimesh.Trimesh(vertices=raw.vertices[used], faces=inverse.reshape(-1, 3), process=False)
+
+
+def _kept_tools(
+    tools: list[int], splits: dict[int, _PaintSplit], kept: np.ndarray
+) -> tuple[list[int], dict[int, _PaintSplit]]:
+    """Werkzeuge und Bemalungsteilungen der verbleibenden Dreiecke, neu nummeriert."""
+    renumbered = np.cumsum(kept) - 1
+    return (
+        [tool for tool, keep in zip(tools, kept, strict=True) if keep],
+        {int(renumbered[index]): split for index, split in splits.items() if kept[index]},
     )
 
 
@@ -1238,6 +1391,9 @@ class _Leaf:
     native: _NativeMaterials | None = None
     tool: int | None = None
     volumes: tuple[tuple[int, int, int], ...] = ()
+    helpers: tuple[tuple[int, int, str, str], ...] = ()
+    """Prusa-Bereiche dieses Netzes, die kein Modellteil sind
+    (:attr:`_NativeMaterials.helpers`)."""
     owner: str = ""
     """Das Objekt des Builds, zu dem dieses Blatt gehört — die Klammer, in
     der eine Aussparung ihre Körper findet."""
@@ -1698,6 +1854,7 @@ def _parts_of(
                 native=native,
                 tool=tool,
                 volumes=tuple(native.volumes.get(identifier, ())) if native else (),
+                helpers=tuple(native.helpers.get(identifier, ())) if native else (),
                 owner=owner,
                 identifier=identifier,
                 kind=settings.kinds.get((owner, identifier), "normal_part"),

@@ -360,31 +360,95 @@ def test_the_scan_counts_exactly_what_the_reader_returns(kind: str) -> None:
         assert findings[0].values == {"name": "Teil 3", "kind": "seam_painting"}
 
 
-def test_a_prusa_volume_that_is_no_model_part_gets_its_own_sentence() -> None:
-    """PrusaSlicer führt Modifikator und Aussparung als Dreiecksbereich im
-    selben Netz. Der Körper kommt einfarbig — aber der Satz sagt, was
-    wirklich passiert ist: Der Bereich ist als Material geladen. „Farben
-    nicht gelesen" wäre die halbe Wahrheit (Regel 21). Und gefunden wird das
-    Problem unter der Objekt-ID, unter der PrusaSlicer es notiert — dem
-    Mesh-Objekt, nicht dem Build-Objekt darüber.
-    """
-    config = (
-        b'<config><object id="2"><volume firstid="0" lastid="5">'
-        b'<metadata key="volume_type" value="ModelPart"/><metadata key="extruder" value="2"/>'
-        b'</volume><volume firstid="6" lastid="11">'
-        b'<metadata key="volume_type" value="NegativeVolume"/>'
-        b'<metadata key="extruder" value="3"/></volume></object></config>'
+def _with_blocker(volume_type: str = "SupportBlocker") -> bytes:
+    """Ein Würfel 20 mm mit einem zweiten Bereich im selben Netz, so wie
+    Solidons Übergabe für PrusaSlicer die Stützsperre schreibt: ein Stab 10
+    auf 10 auf 30 mm quer durch die Mitte, als ``SupportBlocker`` — oder, für
+    die anderen Arten, dieselbe Beilage mit ausgetauschter Bereichsart."""
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    rod = trimesh.creation.box(extents=(10.0, 10.0, 30.0))
+    payload = writer.write_assembly(
+        [writer.AssemblyPart(MeshData.of(body), name="Schüssel", support_blocker=MeshData.of(rod))]
     )
-    payload = _changed(
-        _native(prusa=True, part_override=False), {writer.PRUSA_MODEL_CONFIG_PATH: config}
+    if volume_type == "SupportBlocker":
+        return payload
+    with zipfile.ZipFile(BytesIO(payload)) as source:
+        config = source.read(writer.PRUSA_MODEL_CONFIG_PATH)
+    assert config.count(b'value="SupportBlocker"') == 1
+    return _changed(
+        payload,
+        {
+            writer.PRUSA_MODEL_CONFIG_PATH: config.replace(
+                b'value="SupportBlocker"', f'value="{volume_type}"'.encode()
+            )
+        },
     )
+
+
+def test_the_handovers_own_support_blocker_is_no_material() -> None:
+    """Solidons Übergabe an PrusaSlicer legt die Kanalsperre als zweiten
+    Bereich in das Netz des Teils (RM-247), und ein in PrusaSlicer
+    gespeichertes Projekt bringt sie so zurück. Bis zum 26.09.2026 kam sie
+    beim Öffnen als Material an — ein Klotz im Wasserkanal der Waschschüssel.
+    Sie ist ein Hilfsteil wie die Stützsperre der Orca-Familie und wird nicht
+    geladen."""
+    payload = _with_blocker()
     findings: list[Finding] = []
     parts = reader.read_objects(payload, findings)
+
+    assert len(parts) == reader.count_objects(payload) == 1
+    assert parts[0].mesh.triangle_count == 12, "nur der Würfel"
+    assert parts[0].mesh.raw.volume == pytest.approx(8000.0)
+    assert [entry.code for entry in findings] == ["ingest.helper_skipped"]
+    assert findings[0].values == {
+        "name": "Stützsperre",
+        "kind": reader.HELPER_TITLES["support_blocker"],
+    }
+
+
+@pytest.mark.parametrize("volume_type", ["ParameterModifier", "SupportEnforcer"])
+def test_a_prusa_helper_volume_is_left_out_like_its_orca_part(volume_type: str) -> None:
+    """Dieselbe Entscheidung wie für die Teilarten von Bambu, Orca und
+    Elegoo (``HELPER_KINDS``): Ein Modifikator oder Stützverstärker ist keine
+    Geometrie des Drucks — auch dann nicht, wenn PrusaSlicer ihn als Bereich
+    im selben Netz führt."""
+    findings: list[Finding] = []
+    parts = reader.read_objects(_with_blocker(volume_type), findings)
+
     assert len(parts) == 1
+    assert parts[0].mesh.raw.volume == pytest.approx(8000.0)
+    assert [entry.code for entry in findings] == ["ingest.helper_skipped"]
+    assert (
+        findings[0].values["kind"] == reader.HELPER_TITLES[reader.PRUSA_VOLUME_KINDS[volume_type]]
+    )
+
+
+def test_a_prusa_negative_volume_is_cut_from_its_body() -> None:
+    """Eine Aussparung im selben Netz wird abgezogen, wie der Slicer es beim
+    Slicen täte — der Stab bohrt ein Loch 10 auf 10 durch den Würfel."""
+    findings: list[Finding] = []
+    parts = reader.read_objects(_with_blocker("NegativeVolume"), findings)
+
+    assert len(parts) == 1
+    assert parts[0].mesh.raw.volume == pytest.approx(8000.0 - 10.0 * 10.0 * 20.0)
+    assert parts[0].solver is not None, "die Stufe der Rückfallkette steht am Körper"
+    assert "ingest.negative_carved" in {entry.code for entry in findings}
+
+
+def test_a_prusa_volume_of_an_unknown_kind_is_still_loaded_as_material() -> None:
+    """Die Gegenseite: Eine Bereichsart, die Solidon nicht kennt, bleibt
+    Material des Körpers, und der Satz sagt es (Regel 21) — geraten wird
+    nicht, was sie ist. Gefunden wird sie unter der Objekt-ID, unter der
+    PrusaSlicer sie notiert."""
+    findings: list[Finding] = []
+    parts = reader.read_objects(_with_blocker("TextVolume"), findings)
+
+    assert len(parts) == 1
+    assert parts[0].mesh.triangle_count == 24, "Würfel und Stab"
     assert parts[0].slots == (), "kein halb gelesener Bereich bleibt als Farbe stehen"
     assert [entry.code for entry in findings] == ["ingest.foreign_volume"]
-    assert findings[0].values == {"name": parts[0].name, "kind": "NegativeVolume"}
-    assert "NegativeVolume" in findings[0].message.translate("de")
+    assert findings[0].values == {"name": parts[0].name, "kind": "TextVolume"}
+    assert "TextVolume" in findings[0].message.translate("de")
 
 
 def test_a_paint_code_nested_too_deep_is_a_finding_not_a_crash() -> None:

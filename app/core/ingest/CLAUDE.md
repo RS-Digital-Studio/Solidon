@@ -131,9 +131,13 @@ Nullwirkung ersetzt sie nicht.
   Der Zählweg (`_scan`) und der Leser fragen dasselbe Prädikat `_is_body` —
   die Körperzahl steht fest, bevor gerechnet wird (§11). **Das gilt für
   Bambu, Orca und Elegoo** (`subtype` in `model_settings.config`);
-  PrusaSlicer führt Modifikator und Aussparung als `volume` im selben Netz,
-  und dort wird nichts abgezogen: Der Körper kommt einfarbig, und
-  `ingest.foreign_volume` sagt, dass der Bereich als Material geladen ist.
+  PrusaSlicer führt dieselben Arten als `volume` im selben Netz
+  (`PRUSA_VOLUME_KINDS`), und Solidons Übergabe an PrusaSlicer schreibt ihre
+  Stützsperre genauso: `_helpers_left_out` nimmt diese Dreiecke aus dem
+  Körper, eine Aussparung darunter wird abgezogen, Werkzeuge und Bemalung
+  der übrigen Dreiecke werden neu nummeriert. Nur eine Bereichsart, die
+  Solidon nicht kennt, kommt als Material an, einfarbig, und
+  `ingest.foreign_volume` sagt es.
   Bleibt danach kein druckbarer
   Körper, ist das eine Absage (`no_printable_part`) und keine leere Liste:
   Leer hieße für `load` „keine lesbare 3MF", und der allgemeine Leser lüde
