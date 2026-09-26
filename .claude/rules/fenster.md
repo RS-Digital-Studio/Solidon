@@ -537,7 +537,8 @@ operation ausführe"). Zwei Stellen halten das, und beide sind nötig:
   kann (Regel 17). Eine Änderung **ohne** Schritt (Parameter, Passung,
   Drucker) geht weiter, denn die kann den Halt lösen; ebenso Rückgängig,
   *Schritt löschen* und die Wege des Verlaufs (`change_params`,
-  `repair_and_retry`, `split_and_retry`, `recount_and_retry`).
+  `repair_and_retry`, `split_and_retry`, `recount_and_retry`,
+  `decimate_and_retry`).
 * **Die Oberfläche sagt es vorher** (`_halt_reason`, die erste Frage in
   `_reason_locked`): Aktion, Palette, Karte und Zwillingshaken tragen den
   Grund mit Schrittnummer und Titel, dazu Automatisch teilen, Einfügen,

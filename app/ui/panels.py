@@ -90,6 +90,7 @@ from app.core.errors import (
     CHOOSE_PRINTER,
     CONVERT_TO_EXACT,
     CORRECT_INPUT,
+    DECIMATE_AND_RETRY,
     DECIMATE_MESH,
     EXPORT_AS_MESH,
     PLACE_ON_BED,
@@ -777,6 +778,17 @@ def actions_for_document(
         # Vor den Schritt gehört die Reparatur nur, wo er vorhandene Netze
         # liest — dieselbe Schranke wie beim angehaltenen Schritt.
         offered = [action for action in offered if action.id != REPAIR_BEFORE_AND_RETRY.id]
+    if "decimate_to" not in finding.values or not repair_is_available(
+        document,
+        stopped_at=stopped_at,
+        op_id=finding.op_id,
+        object_id=None,
+    ):
+        # *Dreiecke verringern und erneut versuchen* ersetzt den angehaltenen
+        # Suffix wie die Reparatur — dieselbe Schranke (lebende Netze, kein
+        # Schritt des exakten Kerns), und nur mit der Zahl, an der der Kern
+        # nachgezählt hat.
+        offered = [action for action in offered if action.id != DECIMATE_AND_RETRY.id]
     target = _object_for_finding(finding, document)
     if target is None or (live_objects is not None and target not in live_objects):
         offered = [

@@ -680,7 +680,8 @@ geteilte Werkzeuggeometrie), `evaluate.py` (reservierte Merkmalskennungen,
 Objektzahländerung, `OpContext.scene` nur lesend), `cache.py` (versionierte
 geometrische Auskünfte), `history.py` (`repair_and_retry` — Reparieren und
 erneut versuchen — und `split_and_retry` daneben, dasselbe Muster mit *In
-Einzelteile zerlegen* statt der Reparatur, beide über `_retried_after`),
+Einzelteile zerlegen* statt der Reparatur, `decimate_and_retry` mit *Dreiecke
+verringern*, alle über `_retried_after`),
 `project.py` und `migrations.py` (keine absoluten Pfade, kein Code, die
 fünf Schritte eines Formatwechsels). Die Dreiecksgrenze der
 Merkmalerkennung, `FEATURE_LIMIT_TRIANGLES`, liegt in `perceive/local.py`;

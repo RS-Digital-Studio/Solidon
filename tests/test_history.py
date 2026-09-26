@@ -807,6 +807,50 @@ def test_repair_and_retry_never_turns_an_exact_shell_into_triangles() -> None:
     assert document_to_data(project.document) == before
 
 
+def test_decimate_and_retry_never_guesses_a_target(history: History) -> None:
+    """Das Verringern vor dem Schritt nimmt dieselben Ziele wie die Reparatur — oder keine.
+
+    Ein Schritt ohne Eingang hat kein Netz, das sich verringern ließe; die
+    aktuelle Auswahl ist kein Ersatz (Regel 21), und geschrieben wird nichts.
+    """
+    create(history)
+    failed_id = history.operations[-1].id
+    before = document_to_data(history.document)
+
+    with pytest.raises(ValidationError) as caught:
+        history.decimate_and_retry(failed_id, 20_000)
+
+    assert caught.value.constraint == "no_decimate_target"
+    assert caught.value.suggestions
+    assert document_to_data(history.document) == before
+
+
+def test_decimate_and_retry_never_turns_an_exact_body_into_triangles() -> None:
+    """Vor einen Schritt des exakten Kerns kommt kein Verringern — es machte Dreiecke daraus."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project()
+    exact_history = History(project.document)
+    exact_history.apply(
+        _("Exakter Quader"),
+        [OperationDraft(op="create_brep_box", params={"width": 40.0, "depth": 30.0})],
+    )
+    object_id = exact_history.operations[-1].outputs[0]
+    exact_history.apply(
+        _("Aushöhlen"),
+        [OperationDraft(op="shell_exact", inputs=(object_id,), params={"wall": 2.0})],
+    )
+    before = document_to_data(project.document)
+
+    with pytest.raises(ValidationError) as caught:
+        exact_history.decimate_and_retry(exact_history.operations[-1].id, 20_000)
+
+    assert caught.value.constraint == "no_decimate_target"
+    assert document_to_data(project.document) == before
+
+
 def test_same_count_in_and_out_keeps_the_object(history: History) -> None:
     object_id = create(history)
     history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=(object_id,))])

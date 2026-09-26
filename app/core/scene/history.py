@@ -29,6 +29,7 @@ from app.core import activation, expressions
 from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
+    DECIMATE_AND_RETRY,
     RECOUNT_AND_RETRY,
     REPAIR_AND_RETRY,
     SHOW_STEP_VALUES,
@@ -886,6 +887,66 @@ class History:
 
         return self._retried_after([], suffix, living, RECOUNT_AND_RETRY.label, redraft=redraft)
 
+    def decimate_and_retry(self, stopped_at: OpId, triangles: int) -> Transaction:
+        """Verringert die Eingänge vor einem angehaltenen Schritt und plant neu.
+
+        Das vierte Geschwister von :meth:`repair_and_retry`, für ein Netz, das
+        zum Teilen schon zu dicht ist (``mesh_ops._too_fine``): Der vollständige
+        Suffix ab ``stopped_at`` wird ersetzt, davor kommt je lebendem Eingang
+        *Dreiecke verringern* auf ``triangles`` — auf dem schnellen Weg, denn an
+        genau dem hat der Kern nachgezählt, dass das Teilen danach geht
+        (``mesh_ops._thinning``). Alte und neue Fassung reisen in **einer**
+        Transaktion; ein Undo nimmt den ganzen Zug zurück (§15.5, Regel 16).
+
+        Die Zahl stammt aus dem Befund (``values["decimate_to"]``), die Ziele
+        aus der Operation — dieselbe Schranke wie bei der Reparatur
+        (:func:`repair_targets`): lebende Eingänge, kein Schritt des exakten
+        Kerns, dessen einzeln bearbeitbare Flächen das Verringern in Dreiecke
+        verwandeln würde.
+        """
+        activation.require(activation.CHANGE)
+        operations = self.operations
+        failed = self.operation(stopped_at)
+        failed_index = next(
+            index for index, entry in enumerate(operations) if entry.id == failed.id
+        )
+        prefix = operations[:failed_index]
+        suffix = operations[failed_index:]
+
+        living = _living_objects(prefix)
+        targets = repair_targets(self.document, stopped_at, self._registry)
+        if not targets:
+            raise ValidationError(
+                field="in",
+                detail=_(
+                    "Dieser Schritt verwendet kein vorhandenes Modell, dessen Dreiecke "
+                    "Solidon verringern kann."
+                ),
+                constraint="no_decimate_target",
+                values={"op": stopped_at},
+                suggestions=(SHOW_STEP_VALUES, CANCEL),
+                op_id=stopped_at,
+            )
+
+        # Erst vollständig planen, dann schreiben — ein ungültiger Wert hält
+        # hier an (``_plan`` prüft die Grenzen der Operation), und geschrieben
+        # ist dann nichts.
+        self._reseed()
+        planned: list[Operation] = []
+        for target in targets:
+            thinned = self._plan(
+                OperationDraft(
+                    op="decimate_mesh",
+                    inputs=(target,),
+                    params={"triangles": int(triangles), "method": "fast"},
+                ),
+                living,
+            )
+            planned.append(thinned)
+            living.difference_update(set(thinned.inputs) - set(thinned.outputs))
+            living.update(thinned.outputs)
+        return self._retried_after(planned, suffix, living, DECIMATE_AND_RETRY.label)
+
     def _with_replaced(
         self, step: Operation, gone: set[ObjectId], pieces: tuple[ObjectId, ...]
     ) -> OperationDraft | None:
@@ -921,7 +982,8 @@ class History:
         """Den Suffix hinter ``planned`` neu fassen und alles als einen Zug schreiben.
 
         Der gemeinsame Schluss von :meth:`repair_and_retry`,
-        :meth:`split_and_retry` und :meth:`recount_and_retry`: Jeder Schritt
+        :meth:`split_and_retry`, :meth:`recount_and_retry` und
+        :meth:`decimate_and_retry`: Jeder Schritt
         des alten Suffixes bekommt eine neue Fassung mit denselben Werten,
         demselben Startwert und denselben Ein- und Ausgängen — oder die, die
         ``redraft`` für ihn nennt; Passungen, die an einem ersetzten Schritt

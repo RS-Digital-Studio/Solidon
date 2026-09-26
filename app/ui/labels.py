@@ -1420,6 +1420,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # ``ingest.threemf``: der Negativkörper aus dem Slicer, der keinen Körper trifft.
     "cutter": _("Aussparung"),
     "cycle": _("Zyklus"),
+    # ``mesh_ops._too_fine``: die Dreieckszahl, auf die *Dreiecke verringern*
+    # vor dem erneuten Versuch geht — am verringerten Netz nachgezählt.
+    "decimate_to": _("Verringern auf"),
     "dependencies": _("Begleitdateien"),
     "dependency": _("Begleitdatei"),
     "depth": _("Tiefe"),

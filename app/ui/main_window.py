@@ -20283,6 +20283,9 @@ class MainWindow(QMainWindow):
             # *Kanten verfeinern* und *Verschmelzen* nennen die feinste Zahl, die
             # noch geht (``mesh_ops._too_fine``, ``blend``) — ein Klick nimmt sie.
             "use_reachable": self._use_reachable_after_error,
+            # Und wo das Netz selbst zu dicht ist: *Dreiecke verringern* vor den
+            # angehaltenen Schritt, mit der Zahl, an der der Kern nachgezählt hat.
+            "decimate_and_retry": self._decimate_after_error,
             "split_along_line": lambda _error: self.tools.activate("split"),
             "scale_to_fit": self._scale_after_error,
             "export_as_mesh": self._export_as_mesh_after_error,
@@ -20847,6 +20850,40 @@ class MainWindow(QMainWindow):
             self._correct_after_error(error)
             return
         self.session.change_params(error.op_id, {name: reachable})
+
+    def _decimate_after_error(self, error: AppError) -> None:
+        """*Dreiecke verringern* vor den angehaltenen Schritt, dann derselbe Schritt noch einmal.
+
+        **Der Rat stand seit 0.5.0 da und hatte keinen Draht** (Durchsicht
+        0.5.1, REPARATUR-09): „Vorher mit „Dreiecke verringern“ ausdünnen."
+        stand im Fehlerdialog als Satz, im Prüfbericht gar nicht, und ohne Zahl
+        hätte auch ein Knopf nur raten können. Jetzt nennt der Kern sie
+        (``values["decimate_to"]``, am verringerten Netz nachgezählt), und der
+        Verlauf setzt den Schritt davor und plant den Rest neu
+        (``History.decimate_and_retry``) — ein Zug, Strg+Z nimmt ihn zurück.
+
+        Hält die Kette nicht mehr an diesem Schritt, gibt es keinen Suffix zu
+        ersetzen: Dann geht *Dreiecke verringern* für den Körper des Befunds
+        mit dieser Zahl und dem schnellen Weg auf, als gewöhnlicher nächster
+        Schritt.
+        """
+        try:
+            triangles = int(str(error.values.get("decimate_to", "")))
+        except ValueError:
+            return
+        result = self.session.last_result
+        if error.op_id is not None and result is not None and result.stopped_at == error.op_id:
+            self.session.decimate_and_retry(error.op_id, triangles)
+            return
+        # Der Körper des Befunds, nie die Auswahl — wie bei der Reparatur.
+        object_id = error.object_id
+        if object_id is None:
+            return
+        self.run_operation(
+            REGISTRY.get("decimate_mesh"),
+            {"triangles": triangles, "method": "fast"},
+            on_bodies=(object_id,),
+        )
 
     def _change_selection_after_error(self, error: AppError) -> None:
         """Einem Schritt andere Objekte geben — im Objektbaum, nicht im Dialog.

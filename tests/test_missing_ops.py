@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.errors import ValidationError
+from app.core.errors import DECIMATE_AND_RETRY, ValidationError
 from app.core.geom import mesh_ops
 from app.core.geom.hollow import hollow
 from app.core.geom.label_ops import outlines
@@ -25,8 +25,10 @@ from app.core.ingest.loader import normalise
 from app.core.ingest.outline import extrude, is_outline
 from app.core.knowledge import profiles
 from app.core.registry import REGISTRY
+from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import NeverCancelled
-from app.core.types import OpContext, Profile, Scene, SceneObject
+from app.core.scene.project import ProjectSources, new_project
+from app.core.types import Document, OpContext, Profile, Scene, SceneObject, Source
 from app.core.units import EPS_GEOM
 
 SVG = (
@@ -779,7 +781,164 @@ def test_the_suggested_edge_length_is_one_that_goes(
     assert reachable > 0.5
     assert mesh_ops.remesh(plate, reachable).triangle_count <= 20_000
     offered = {action.id for action in raised.value.suggestions}
-    assert ("repair_mesh" in offered) == opened
+    # Die Reparatur **vor** den Schritt, mit Knopf im Prüfbericht — bis zur
+    # Durchsicht 0.5.1 stand hier ``repair_mesh``, und das löst nur der Dialog
+    # der lokalen Erkennung ein.
+    assert ("repair_before_and_retry" in offered) == opened
+    assert "repair_mesh" not in offered
+    # Die Fläche allein braucht bei 0,5 mm fast das Doppelte der Decke — kein
+    # Verringern hilft, also bietet es auch keiner an (Regel 17).
+    assert "decimate_and_retry" not in offered
+    assert "decimate_to" not in raised.value.values
+
+
+def _dense_plate() -> MeshData:
+    """Die Lochplatte, dreimal gleichmäßig geviertelt: 50 944 Dreiecke, dieselbe Form.
+
+    Ein Netz, das dichter ist, als seine Form verlangt — wie ein CAD-Export
+    mit Fächern oder ein gescanntes Teil. Der exakte Kern bringt es innerhalb
+    seines Sehnenfehlers auf wenige hundert Dreiecke zurück.
+    """
+    plate = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    vertices, faces = plate.raw.vertices, plate.raw.faces
+    for _pass in range(3):
+        vertices, faces = trimesh.remesh.subdivide(vertices, faces)
+    return MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+
+
+def test_a_mesh_denser_than_its_shape_is_offered_thinning_that_goes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """*Dreiecke verringern und erneut versuchen* nennt eine Zahl, und die trägt.
+
+    **Der Rat hieß „Vorher mit „Dreiecke verringern“ ausdünnen." und hatte
+    weder Zahl noch Knopf** (Durchsicht 0.5.1, REPARATUR-09). Jetzt zählt der
+    Kern am verringerten Netz nach, ob das Teilen danach geht, und nennt die
+    Zahl in ``values["decimate_to"]``. Geprüft wird die Zusage selbst: dasselbe
+    Verringern (schneller Weg) und dasselbe Teilen danach bleiben unter der
+    Decke, der Körper bleibt geschlossen und behält sein Volumen bis auf den
+    Sehnenfehler des Kerns (gemessen 0,04 Prozent).
+    """
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 200_000)
+    dense = _dense_plate()
+    assert dense.is_watertight
+
+    with pytest.raises(ValidationError) as raised:
+        mesh_ops.remesh(dense, 1.0)
+
+    offered = [action.id for action in raised.value.suggestions]
+    assert offered == ["use_reachable", "decimate_and_retry"], offered
+    target = raised.value.values["decimate_to"]
+    assert mesh_ops.DECIMATE_FLOOR <= target < dense.triangle_count
+
+    thinned = mesh_ops.decimate_for_display(dense, target)
+    assert thinned.is_watertight
+    assert thinned.volume == pytest.approx(dense.volume, rel=1e-3)
+    refined = mesh_ops.remesh(thinned, 1.0)
+    assert refined.triangle_count <= 200_000
+    assert refined.is_watertight
+    assert refined.volume == pytest.approx(thinned.volume, rel=1e-9), "Teilen ändert die Form nicht"
+
+
+def test_a_mesh_too_dense_for_any_edge_is_offered_thinning_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hat das Netz selbst mehr Dreiecke als die Decke verträgt, hilft keine Länge.
+
+    Dann bleibt nur das Verringern, und es wird nicht ohne Zahl angeboten:
+    Sie muss das Teilen überhaupt erst möglich machen — die Länge nennt der
+    nächste Halt am verringerten Netz.
+    """
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 40_000)
+    dense = _dense_plate()
+
+    with pytest.raises(ValidationError) as raised:
+        mesh_ops.remesh(dense, 5.0)
+
+    assert [action.id for action in raised.value.suggestions] == ["decimate_and_retry"]
+    assert "reachable" not in raised.value.values
+    thinned = mesh_ops.decimate_for_display(dense, raised.value.values["decimate_to"])
+    assert thinned.triangle_count * mesh_ops.ESTIMATE_RESERVE <= 40_000
+    assert mesh_ops.remesh(thinned, 5.0).triangle_count <= 40_000
+
+
+def test_decimate_and_retry_puts_the_thinning_before_the_halted_step(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile, document: Document
+) -> None:
+    """Der Kundenweg im Kern: Halt, Knopf, Kette läuft durch, Strg+Z (Regel 16).
+
+    *Kanten verfeinern* hält an einem Netz an, das dichter ist als seine Form;
+    der Befund nennt *Dreiecke verringern und erneut versuchen* mit Zahl. Der
+    Verlauf setzt das Verringern **vor** den angehaltenen Schritt, plant ihn
+    neu, und beides ist eine Transaktion: Ein Rückgängig stellt den
+    angehaltenen Stand wieder her, mit derselben Schrittkennung.
+    """
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 200_000)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/platte.stl", sha256=""
+    )
+    project.sources["src_1"] = _dense_plate().raw.export(file_type="stl")
+    history = History(document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Kanten verfeinern",
+        [OperationDraft(op="remesh_mesh", inputs=("obj_1",), params={"edge": 1.0})],
+    )
+    sources = ProjectSources(project)
+
+    halted = evaluate(document, profile, sources=sources, detect_features=False)
+
+    stopped = halted.stopped_at
+    assert stopped == history.operations[-1].id
+    refusal = next(f for f in halted.scene.report.findings if f.severity == "error")
+    assert DECIMATE_AND_RETRY in refusal.suggestions
+    target = int(refusal.values["decimate_to"])
+    before_ops = list(document.ops)
+    transactions = len(document.transactions)
+
+    history.decimate_and_retry(stopped, target)
+    result = evaluate(document, profile, sources=sources, detect_features=False)
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    assert [entry.op for entry in history.operations] == ["load", "decimate_mesh", "remesh_mesh"]
+    assert history.operations[1].params == {"triangles": target, "method": "fast"}
+    assert len(document.transactions) == transactions + 1, "ein Zug, eine Transaktion"
+    body = result.scene.objects["obj_1"].mesh
+    assert body.is_watertight
+    assert body.triangle_count <= 200_000
+
+    history.undo()
+    assert list(document.ops) == before_ops, "Strg+Z holt den angehaltenen Stand zurück"
+    again = evaluate(document, profile, sources=sources, detect_features=False)
+    assert again.stopped_at == stopped
+
+
+def test_thinning_is_not_offered_where_it_would_open_the_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Verringern, das den Körper aufreißt, ist kein Weg — es wird nicht angeboten.
+
+    Gemessen an der Kumiko-Schale aus ``F:\\3D Dateien``: Der schnelle Weg
+    riss sie bei der Hälfte auf, und das Teilen danach hätte das Sechzehnfache
+    gebraucht. Nachgestellt, indem das Verringern hier ein offenes Netz liefert.
+    """
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 200_000)
+    dense = _dense_plate()
+
+    def torn(mesh: MeshData, target: int, **_: object) -> MeshData:
+        raw = mesh.raw.copy()
+        raw.update_faces(np.arange(len(raw.faces)) > 1)
+        return MeshData.of(raw)
+
+    monkeypatch.setattr(mesh_ops, "decimate_for_display", torn)
+
+    with pytest.raises(ValidationError) as raised:
+        mesh_ops.remesh(dense, 1.0)
+
+    assert [action.id for action in raised.value.suggestions] == ["use_reachable"]
+    assert "decimate_to" not in raised.value.values
 
 
 @pytest.mark.parametrize(
@@ -812,7 +971,8 @@ def test_running_out_of_memory_is_a_sentence_with_a_way_out(
     assert raised.value.constraint == "memory"
     assert "Arbeitsspeicher" in str(raised.value.detail)
     assert raised.value.values["reachable"] == pytest.approx(2.0)
-    assert {action.id for action in raised.value.suggestions} == {"use_reachable", "decimate_first"}
+    # Zwölf Dreiecke verringert nichts — ein Knopf dazu wäre einer ohne Wirkung.
+    assert [action.id for action in raised.value.suggestions] == ["use_reachable"]
 
 
 def test_remeshing_keeps_the_colour_of_every_face(profile: Profile) -> None:

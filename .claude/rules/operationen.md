@@ -1615,6 +1615,19 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   Suffixes stehen die Teile dort, wo der Körper stand, in jedem Schritt,
   der die ganze Szene nimmt; jeder andere behält seine Kennung, denn die
   erste Kennung der Zerlegung ist die des Ausgangskörpers.
+- **Verringern und erneut versuchen nennt eine nachgezählte Zahl.** Ein Netz,
+  das zum Teilen zu dicht ist (*Kanten verfeinern*, *Dreiecke angleichen*,
+  *Fläche unterteilen*), bekommt `DECIMATE_AND_RETRY` nur, wo das Verringern
+  wirklich trägt: `mesh_ops._thinning` verringert auf dem schnellen Weg
+  (`decimate_for_display`, derselbe wie *Methode: Schnell*) und zählt am
+  Ergebnis mit derselben Vorabzählung wie das Teilen danach; die Zahl steht in
+  `values["decimate_to"]`, und `History.decimate_and_retry` setzt genau diesen
+  Schritt vor den angehaltenen (Muster wie die Reparatur, dieselbe
+  Zielschranke `repair_targets`). Keine Schätzung aus dem Netz davor — sie lag
+  an echten Modellen bis zum 3,6-Fachen daneben, und das Verringern riss zwei
+  Körper auf. Wo die Fläche allein schon zu viele Dreiecke braucht, wird nicht
+  gesucht und nichts angeboten; ein offenes Netz bekommt zuerst *Erst
+  reparieren, dann neu rechnen*.
 - **Einfügen und Verschieben planen den Suffix genauso neu** (RM-188 P7):
   ab der ersten geänderten Stelle neue Kennungen, dieselben Werte, Körper
   und Startwerte, eine Transaktion (`_clone` teilt sich das mit

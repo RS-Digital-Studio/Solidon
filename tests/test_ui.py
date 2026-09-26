@@ -5294,6 +5294,126 @@ def test_the_split_and_retry_button_lays_the_pieces_on_the_plates(
     assert back.stopped_at == halted.stopped_at, "nach dem Undo steht die Absage wieder da"
 
 
+def _dense_plate_file(folder: Path) -> Path:
+    """Die Lochplatte, dreimal gleichmäßig geviertelt — dichter, als ihre Form verlangt."""
+    import trimesh
+
+    plate = trimesh.load(MESHES / "plate_holes.stl", force="mesh")
+    vertices, faces = plate.vertices, plate.faces
+    for _pass in range(3):
+        vertices, faces = trimesh.remesh.subdivide(vertices, faces)
+    path = folder / "platte_dicht.stl"
+    path.write_bytes(trimesh.Trimesh(vertices, faces, process=False).export(file_type="stl"))
+    return path
+
+
+def test_the_decimate_and_retry_button_thins_before_the_step_and_runs_through(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Klick im Prüfbericht: verringern, verfeinern, fertig — und Strg+Z nimmt alles zurück.
+
+    **Der Rat stand seit 0.5.0 da und hatte keinen Draht** (Durchsicht 0.5.1,
+    REPARATUR-09): *Kanten verfeinern* an einem Netz, das dichter ist als seine
+    Form, hielt an, und „Vorher mit „Dreiecke verringern“ ausdünnen." kam im
+    Prüfbericht gar nicht an. Dass ``History.decimate_and_retry`` den Schritt
+    davor setzt, prüft ``test_missing_ops.py``; dass der Kunde den Knopf
+    bekommt und er bis ans Ende läuft, nur diese Zeile. Die Decke ist klein
+    gesetzt, damit der Weg in Sekunden läuft — der Draht ist derselbe.
+    """
+    from app.core.errors import DECIMATE_AND_RETRY
+    from app.core.geom import mesh_ops
+    from app.ui.panels import actions_for_document, as_error
+
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 200_000)
+    window.open_path(_dense_plate_file(tmp_path))
+    window.session.wait_for_idle()
+    window.session.evaluate_now()
+    spec = REGISTRY.get("remesh_mesh")
+    window.session.apply(
+        spec.title, [OperationDraft(op=spec.name, inputs=("obj_1",), params={"edge": 1.0})]
+    )
+    window.session.wait_for_idle()
+    halted = window.session.evaluate_now()
+    window._on_scene(halted)
+    assert halted.stopped_at is not None, "das Teilen ging — dann prüft der Test nichts"
+
+    refusal = next(f for f in halted.scene.report.findings if f.severity == "error")
+    handlers = window.error_handlers()
+    offered = [
+        action.id
+        for action in actions_for_document(
+            refusal,
+            window.session.project.document,
+            stopped_at=halted.stopped_at,
+            live_objects=halted.scene.objects,
+        )
+        if action.id in handlers
+    ]
+    assert offered == ["use_reachable", DECIMATE_AND_RETRY.id], offered
+    ops_before = list(window.session.project.document.ops)
+    steps_before = len(window.session.history.transactions)
+
+    handlers[DECIMATE_AND_RETRY.id](as_error(refusal, window.session.project.document))
+    window.session.wait_for_idle()
+
+    after = window.session.last_result
+    assert after is not None and after.stopped_at is None, (
+        f"die Kette hält weiter an: {[str(f.message) for f in after.scene.report.findings]}"
+    )
+    assert [entry.op for entry in window.session.project.document.ops] == [
+        "load",
+        "decimate_mesh",
+        "remesh_mesh",
+    ]
+    assert len(window.session.history.transactions) == steps_before + 1, "ein Zug, ein Undo"
+    assert after.scene.objects["obj_1"].mesh.is_watertight
+
+    window.session.undo()
+    window.session.wait_for_idle()
+    back = window.session.last_result
+    assert list(window.session.project.document.ops) == ops_before
+    assert back is not None and back.stopped_at == halted.stopped_at, (
+        "nach dem Undo steht die Absage wieder da"
+    )
+
+
+def test_the_decimate_button_retries_only_the_halted_step_with_the_named_count() -> None:
+    """*Dreiecke verringern und erneut versuchen* nimmt Schritt und Zahl aus dem Befund.
+
+    Am angehaltenen Schritt setzt der Verlauf das Verringern davor; ohne Zahl
+    tut der Knopf nichts — geraten wird sie nicht (Regel 21) —, und hält die
+    Kette woanders, geht der Dialog der Operation für den Körper des Befunds
+    auf, vorbelegt mit derselben Zahl und dem schnellen Weg.
+    """
+    from types import SimpleNamespace
+
+    retried: list[tuple[int, int]] = []
+    opened: list[tuple[str, dict[str, object], tuple[str, ...]]] = []
+    view = SimpleNamespace(
+        session=SimpleNamespace(
+            last_result=SimpleNamespace(stopped_at=7),
+            decimate_and_retry=lambda step, count: retried.append((step, count)),
+        ),
+        run_operation=lambda spec, given, on_bodies: opened.append(
+            (spec.name, dict(given), tuple(on_bodies))
+        ),
+    )
+
+    MainWindow._decimate_after_error(
+        view, errors.AppError(title="zu fein", op_id=7, values={"decimate_to": 25_000})
+    )
+    MainWindow._decimate_after_error(view, errors.AppError(title="zu fein", op_id=7))
+    MainWindow._decimate_after_error(
+        view,
+        errors.AppError(
+            title="zu fein", op_id=3, object_id="obj_2", values={"decimate_to": "12000"}
+        ),
+    )
+
+    assert retried == [(7, 25_000)]
+    assert opened == [("decimate_mesh", {"triangles": 12_000, "method": "fast"}, ("obj_2",))]
+
+
 def test_a_halted_step_whose_advice_nobody_carries_out_still_opens_the_step() -> None:
     """Regel 17 im Prüfbericht: Eine Absage ohne einlösbaren Rat bekommt *Eingabe korrigieren*.
 
@@ -7898,7 +8018,6 @@ ACTIONS_WITHOUT_A_CONSTANT = {
     # Räte, die der Nutzer selbst ausführt — als Satz gezeigt, nicht als Knopf.
     "check_input",
     "coarser_pitch",
-    "decimate_first",
     "fewer_iterations",
     "fix_parent",
     "open_sketch",
@@ -7924,9 +8043,12 @@ ACTIONS_WITHOUT_A_CONSTANT = {
     "texture.wrap_flat",
     "use_parts",
     "use_planar",
-    "use_reachable",
     "use_texture",
     "write_target",
+    # Inline gebaut, weil der Satz die Zahl des Aufrufers meint („die feinste
+    # Rasterweite", „die doppelte Kantenlänge") — aber verdrahtet: Der Handler
+    # setzt ``values["reachable"]`` in den Schritt (Durchsicht 0.5.1).
+    "use_reachable",
 }
 
 

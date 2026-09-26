@@ -186,7 +186,9 @@ def test_an_expired_trial_blocks_removing_a_step(monkeypatch: pytest.MonkeyPatch
     assert list(project.document.transactions) == before_transactions
 
 
-@pytest.mark.parametrize("method", ["repair_and_retry", "split_and_retry", "recount_and_retry"])
+@pytest.mark.parametrize(
+    "method", ["repair_and_retry", "split_and_retry", "recount_and_retry", "decimate_and_retry"]
+)
 @pytest.mark.parametrize("licensed", [False, True])
 def test_retry_boundaries_keep_reading_free_and_guard_changes(
     monkeypatch: pytest.MonkeyPatch, method: str, licensed: bool
@@ -203,6 +205,7 @@ def test_retry_boundaries_keep_reading_free_and_guard_changes(
         "repair_and_retry": (step.id,),
         "split_and_retry": (step.id, "obj_1", 2),
         "recount_and_retry": (step.id, 3),
+        "decimate_and_retry": (step.id, 20_000),
     }
     before = deepcopy(project.document)
     if licensed:

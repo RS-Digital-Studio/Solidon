@@ -188,6 +188,15 @@ SPLIT_AND_RETRY = Action(
 RECOUNT_AND_RETRY = Action(
     "recount_and_retry", _("Stückzahl anpassen und erneut versuchen"), primary=True
 )
+#: Für ein Netz, das zum Teilen schon zu dicht ist: *Dreiecke verringern* vor
+#: den angehaltenen Schritt, dann derselbe Schritt noch einmal — das vierte
+#: Geschwister von ``REPAIR_AND_RETRY`` (``History.decimate_and_retry``). Die
+#: Dreieckszahl reist in ``values["decimate_to"]`` mit; angeboten wird es nur,
+#: wo das Netz nach dem Verringern am verringerten Netz nachgezählt unter der
+#: Grenze liegt (``mesh_ops._thinning``). Bis zur Durchsicht 0.5.1 stand es als
+#: ``decimate_first`` ohne Zahl und ohne Draht da: im Fehlerdialog ein Satz,
+#: im Prüfbericht nichts.
+DECIMATE_AND_RETRY = Action("decimate_and_retry", _("Dreiecke verringern und erneut versuchen"))
 SPLIT_ALONG_LINE = Action("split_along_line", _("An gezeichneter Linie trennen"), primary=True)
 #: Wenn *Automatisch teilen* neben den gesperrten Sichtflächen keine Naht
 #: mehr findet (§22.3, RM-080): Die Sperren dieses Körpers aufheben — der

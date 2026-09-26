@@ -2729,6 +2729,12 @@ NEEDS_OP: Final = frozenset(
         # 24.09.2026): ohne Schrittkennung gäbe es nichts zu ändern.
         "resolve_intersections",
         "leave_open",
+        # Die drei Wege eines zu feinen Teilens (Durchsicht 0.5.1): die
+        # erreichbare Zahl in **diesen** Schritt, die Reparatur oder das
+        # Verringern **vor** ihn — ohne seine Kennung gäbe es keinen.
+        "use_reachable",
+        "repair_before_and_retry",
+        "decimate_and_retry",
     }
 )
 

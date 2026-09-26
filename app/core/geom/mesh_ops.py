@@ -15,6 +15,9 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import threading
+import weakref
+from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any, Final, Literal, cast
 
@@ -25,9 +28,9 @@ from app.core.deferred import trimesh
 from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
+    DECIMATE_AND_RETRY,
     REPAIR_AND_RETRY,
     REPAIR_BEFORE_AND_RETRY,
-    REPAIR_MESH,
     SHOW_LOCATIONS,
     Action,
     NotManifoldError,
@@ -65,6 +68,11 @@ _log = get_logger(__name__)
 #: Unter so vielen Dreiecken wird nichts dezimiert. Bei einem so kleinen
 #: Körper geht die Zeit nicht verloren, und jede Entfernung kostet Form.
 DECIMATE_FLOOR = 500
+
+#: Und darüber verringert die Operation nicht auf Wunsch: die Obergrenze ihres
+#: Parameters ``triangles``. Ein Vorschlag, der mehr nennt, wäre ein Wert, den
+#: der Dialog ablehnt (:func:`_thinning`).
+DECIMATE_CEILING = 5_000_000
 
 #: Wie weit eine Dezimierung die Oberfläche verschieben darf, bevor es eine
 #: Warnung wert ist — als Anteil der Modelldiagonale. Ein halbes Prozent auf
@@ -909,6 +917,7 @@ def _too_fine(
     count: Callable[[float], int],
     *,
     reserve: float = ESTIMATE_RESERVE,
+    until_short: bool = True,
 ) -> ValidationError:
     """Sagt, welche Kantenlänge noch ginge — die Zahl kennt nur die Operation.
 
@@ -916,40 +925,75 @@ def _too_fine(
     Nutzer ins Raten: er hat eine Zahl eingetippt, sie war zu klein, und die
     nächste ist auch nur geraten. ``count`` ist die Zählung des Wegs, der
     abgelehnt hat (:func:`_reachable_edge`), ``reserve`` die Luft, die sie
-    braucht — eine Obergrenze gibt ``1.0``. Ein
-    offenes Netz bekommt dazu *Netz reparieren* — geschlossen teilt es der
-    exakte Kern, und der viertelt keine Nadeln.
+    braucht — eine Obergrenze gibt ``1.0``.
+
+    Ein offenes Netz bekommt dazu *Erst reparieren, dann neu rechnen* —
+    geschlossen teilt es der exakte Kern, und der viertelt keine Nadeln. Bis
+    zur Durchsicht 0.5.1 stand hier *Netz reparieren* (``repair_mesh``), und
+    diese Handlung löst nur der Dialog der lokalen Erkennung ein: Im
+    Prüfbericht kam kein Knopf an, im Fehlerdialog ein Satz.
+
+    *Dreiecke verringern und erneut versuchen* steht nur da, wo es trägt
+    (:func:`_thinning`): nachgezählt am verringerten Netz, mit der Zahl in
+    ``values["decimate_to"]``. ``until_short`` sagt, wie der Schritt danach
+    zählt — *Kanten verfeinern* teilt, bis keine Kante mehr zu lang ist,
+    *Dreiecke angleichen* und *Fläche unterteilen* teilen einmal
+    (:func:`estimated_triangles`).
     """
     reachable = _reachable_edge(count, edge, would_be, reserve)
     values: dict[str, Any] = {"triangles": would_be, "limit": MAX_REMESH_TRIANGLES}
-    suggestions = [
-        Action(id="decimate_first", label=_("Vorher mit „Dreiecke verringern“ ausdünnen."))
-    ]
+    suggestions: list[Action] = []
+    if not mesh.is_watertight:
+        suggestions.append(REPAIR_BEFORE_AND_RETRY)
     if reachable is not None:
         values["reachable"] = reachable
-        suggestions.insert(
-            0,
-            Action(id="use_reachable", label=_("Die kleinste Kantenlänge nehmen, die noch geht.")),
+        suggestions.append(
+            Action(id="use_reachable", label=_("Die kleinste Kantenlänge nehmen, die noch geht."))
         )
-    if not mesh.is_watertight:
-        suggestions.insert(0, REPAIR_MESH)
+    # Ohne erreichbare Länge ist das Netz selbst zu dicht für jede Kante: Dann
+    # genügt es, dass das Teilen danach überhaupt geht — die Länge nennt der
+    # nächste Halt, am verringerten Netz.
+    thinned = _thinning(
+        mesh,
+        edge if reachable is not None else None,
+        MAX_REMESH_TRIANGLES,
+        until_short=until_short,
+    )
+    if thinned is not None:
+        values["decimate_to"] = thinned
+        suggestions.append(DECIMATE_AND_RETRY)
     return ValidationError(
         field="edge",
         detail=_("Diese Kantenlänge ergäbe mehr Dreiecke, als sich noch rechnen lassen."),
         constraint="maximum",
         values=values,
-        suggestions=tuple(suggestions),
+        # Regel 17: Ein geschlossenes Netz, dem weder eine Länge noch das
+        # Verringern hilft, endet trotzdem nicht mit nichts — der Schritt geht
+        # mit dem Cursor in der Kantenlänge auf.
+        suggestions=tuple(suggestions) or (CORRECT_INPUT,),
     )
 
 
-def _out_of_memory(edge: float) -> ValidationError:
+def _out_of_memory(mesh: MeshData, edge: float, *, until_short: bool = True) -> ValidationError:
     """Der Speicher ging aus, bevor die Decke erreicht war — mit dem Weg daran vorbei.
 
     Die Decke ist eine Zahl, der Arbeitsspeicher eines Rechners eine andere;
     auf einem mit wenig davon endet das Teilen früher. Bis zum 25.09.2026 kam
     das beim Kunden als „Im Programm ist ein unerwarteter Fehler" an (RM-223,
-    Regel 17). Eine doppelt so lange Kante braucht ein Viertel der Dreiecke.
+    Regel 17). Eine doppelt so lange Kante braucht ein Viertel der Dreiecke —
+    und das Verringern wird an derselben Zahl gemessen: angeboten nur, wenn
+    das Teilen danach bei dieser Kantenlänge höchstens ein Viertel dessen
+    braucht, was vorab für das Netz geschätzt war.
     """
+    values: dict[str, Any] = {"reachable": math.ceil(edge * 2.0 * 100.0) / 100.0}
+    suggestions = [Action(id="use_reachable", label=_("Die doppelte Kantenlänge nehmen."))]
+    quarter = estimated_triangles(mesh, edge, until_short=until_short) / 4.0
+    thinned = _thinning(
+        mesh, edge, min(float(MAX_REMESH_TRIANGLES), quarter), until_short=until_short
+    )
+    if thinned is not None:
+        values["decimate_to"] = thinned
+        suggestions.append(DECIMATE_AND_RETRY)
     return ValidationError(
         field="edge",
         detail=_(
@@ -957,12 +1001,120 @@ def _out_of_memory(edge: float) -> ValidationError:
             "lange Kante braucht ein Viertel davon."
         ),
         constraint="memory",
-        values={"reachable": math.ceil(edge * 2.0 * 100.0) / 100.0},
-        suggestions=(
-            Action(id="use_reachable", label=_("Die doppelte Kantenlänge nehmen.")),
-            Action(id="decimate_first", label=_("Vorher mit „Dreiecke verringern“ ausdünnen.")),
-        ),
+        values=values,
+        suggestions=tuple(suggestions),
     )
+
+
+#: Die Verringerungsziele, die :func:`_thinning` der Reihe nach nachzählt — als
+#: Anteil der Dreiecke des Netzes, das größte zuerst: Wer verringert, soll so
+#: wenig Form verlieren wie möglich. Vier Stufen, je ein Viertel der vorigen.
+THINNING_SHARES: Final = (0.5, 0.125, 0.03125, 0.0078125)
+
+#: Die zuletzt gesuchten Verringerungsziele, je Netz, Kantenlänge und Grenze.
+#:
+#: Ein angehaltener Schritt wird bei jeder Auswertung wieder gerechnet — beim
+#: Tippen in der Vorschau, beim Übernehmen, nach jedem Rückgängig —, und jede
+#: Suche verringert bis zu viermal. Gemerkt wird unter der Adresse des Netzes
+#: mit einem schwachen Verweis daneben, derselbe Weg wie ``autosplit._MIRRORS``
+#: (``hash`` eines trimesh-Netzes rechnet je Aufruf).
+_THINNED: OrderedDict[
+    tuple[int, float | None, float, bool], tuple[weakref.ref[Any], int | None]
+] = OrderedDict()
+_THINNED_LIMIT: Final = 16
+_THINNED_LOCK = threading.Lock()
+
+
+def _thinning(mesh: MeshData, edge: float | None, limit: float, *, until_short: bool) -> int | None:
+    """Auf wie viele Dreiecke *Dreiecke verringern* das Netz bringen muss, damit das Teilen geht.
+
+    **Nachgezählt, nicht geschätzt.** Ob Verringern vor dem Teilen hilft, sagt
+    keine Formel über das Netz davor. Gemessen am 26.09.2026 an sechs Modellen
+    aus ``F:\\3D Dateien``: Die Zählung nach dem Verringern lag beim 0,96- bis
+    3,6-Fachen jeder Vorhersage aus Fläche und Dreieckszahl — ein verringertes
+    Netz trägt lange Kanten, wo vorher Fächer lagen —, und an zwei Modellen ging
+    das Netz dabei auf (Kumiko-Schale, Baum mit Schale), womit das Teilen
+    danach das Fünf- bis Sechzehnfache brauchte statt weniger. Also wird
+    verringert und gezählt: mit genau dem Weg, den der eingefügte Schritt
+    nimmt (:func:`decimate_for_display`, *Methode: Schnell*), und genau der
+    Zählung, mit der das Teilen danach vorab prüft (:func:`estimated_triangles`,
+    mit :data:`ESTIMATE_RESERVE` Luft).
+
+    Der schnelle Weg ist dabei auch der formtreuere: Der exakte Kern
+    vereinfacht nach einer zugesagten Toleranz, beginnend beim Sehnenfehler
+    der eigenen Tessellierung — der Spielwürfel aus dem Korpus fällt so von
+    250 488 auf 3 858 Dreiecke, und das Teilen auf 0,1 mm braucht danach ein
+    Drittel. Er kostet 0,04 bis 2,8 s je Versuch (bis zwei Millionen Dreiecke,
+    unter Last), der gemessene Weg der Operation 4 bis 24 s.
+
+    Angeboten wird nur, was trägt: Das Netz ist geschlossen und bleibt es, und
+    die Zählung danach liegt unter ``limit``. Von :data:`THINNING_SHARES` gilt
+    der größte Anteil, der das schafft. Vorab entfällt die Suche, wo keine
+    Verringerung helfen kann: Die Fläche allein braucht bei dieser Kante so
+    viele Dreiecke (``until_short`` zählt sie doppelt, wie
+    :func:`estimated_triangles`), und kein Netz derselben Fläche kommt mit
+    weniger aus. Das ist der Regelfall — eine zu kleine Kante an einem
+    gewöhnlichen Modell —, und dort hilft die erreichbare Länge.
+
+    ``edge`` ist ``None``, wenn keine Kantenlänge mehr reicht, weil das Netz
+    selbst zu dicht ist: Dann zählt, dass das Teilen überhaupt geht. Ein
+    geschlossenes Netz, dessen Kanten alle kurz genug sind, bleibt beim Teilen,
+    wie es ist, und die Kantenlänge nennt danach der nächste Halt.
+    """
+    if not mesh.is_watertight or mesh.triangle_count <= DECIMATE_FLOOR:
+        return None
+    if edge is not None:
+        cell = math.sqrt(3.0) / 4.0 * edge * edge
+        needed = float(mesh.raw.area) * (2.0 if until_short else 1.0) / cell
+        if needed * ESTIMATE_RESERVE > limit:
+            return None
+    raw = mesh.raw
+    key = (id(raw), edge, limit, until_short)
+    with _THINNED_LOCK:
+        known = _THINNED.get(key)
+        if known is not None and known[0]() is raw:
+            return known[1]
+    found: int | None = None
+    below = mesh.triangle_count
+    for share in THINNING_SHARES:
+        target = min(_two_figures(mesh.triangle_count * share), DECIMATE_CEILING)
+        if target < DECIMATE_FLOOR:
+            break
+        if target >= below:
+            # Der schnelle Weg hält an der ersten Toleranz, die unter das Ziel
+            # führt; ein Ziel über dem letzten Ergebnis gäbe dasselbe noch einmal.
+            continue
+        thinned = decimate_for_display(mesh, target)
+        below = thinned.triangle_count
+        if not thinned.is_watertight or below >= mesh.triangle_count:
+            continue
+        after = (
+            estimated_triangles(thinned, edge, until_short=until_short)
+            if edge is not None
+            else below
+        )
+        if after * ESTIMATE_RESERVE <= limit:
+            found = target
+            break
+    with _THINNED_LOCK:
+        _THINNED[key] = (weakref.ref(raw), found)
+        while len(_THINNED) > _THINNED_LIMIT:
+            _THINNED.popitem(last=False)
+    return found
+
+
+def _two_figures(count: float) -> int:
+    """Auf zwei geltende Ziffern abgerundet — 125 244 wird 120 000.
+
+    Die Zahl steht im Verlauf als Wert des Schritts. Eine krumme sähe aus wie
+    gemessen, und genau ist sie nicht gemeint: Der schnelle Weg hält an einer
+    Toleranz, nicht an der Zahl.
+    """
+    whole = int(count)
+    if whole < 100:
+        return whole
+    step = int(10 ** (len(str(whole)) - 2))
+    return whole // step * step
 
 
 def remesh(mesh: MeshData, edge: float, *, cancelled: CancelToken | None = None) -> MeshData:
@@ -1030,7 +1182,7 @@ def remesh(mesh: MeshData, edge: float, *, cancelled: CancelToken | None = None)
             return on_demand
         even = _subdivided_evenly(mesh, edge, cancelled)
     except MemoryError as error:
-        raise _out_of_memory(edge) from error
+        raise _out_of_memory(mesh, edge) from error
     _log.info(
         "remeshed %d to %d triangles (evenly, on demand tore the mesh)",
         mesh.triangle_count,
@@ -1264,12 +1416,14 @@ def uniform(mesh: MeshData, edge: float, deviation: float) -> MeshData:
     """
     wanted = estimated_triangles(mesh, edge)
     if wanted > MAX_REMESH_TRIANGLES:
-        raise _too_fine(mesh, edge, wanted, _conforming_count(mesh, until_short=False))
+        raise _too_fine(
+            mesh, edge, wanted, _conforming_count(mesh, until_short=False), until_short=False
+        )
     solid = _as_solid(mesh)
     try:
         evened = _as_mesh(mesh, solid.simplify(deviation).refine_to_length(edge))
     except MemoryError as error:
-        raise _out_of_memory(edge) from error
+        raise _out_of_memory(mesh, edge, until_short=False) from error
     _log.info("evened %d to %d triangles", mesh.triangle_count, evened.triangle_count)
     return evened
 
@@ -1296,13 +1450,15 @@ def subdivided(mesh: MeshData, edge: float, angle: float) -> MeshData:
     """
     wanted = estimated_triangles(mesh, edge)
     if wanted > MAX_REMESH_TRIANGLES:
-        raise _too_fine(mesh, edge, wanted, _conforming_count(mesh, until_short=False))
+        raise _too_fine(
+            mesh, edge, wanted, _conforming_count(mesh, until_short=False), until_short=False
+        )
     solid = _as_solid(mesh)
     smoothed = solid.calculate_normals(0, angle).smooth_by_normals(0)
     try:
         return _as_mesh(mesh, smoothed.refine_to_length(edge))
     except MemoryError as error:
-        raise _out_of_memory(edge) from error
+        raise _out_of_memory(mesh, edge, until_short=False) from error
 
 
 # --- operations -------------------------------------------------------------------
@@ -1324,7 +1480,7 @@ class DecimateParams(BaseParams):
         title=_("Dreiecke"),
         default=50_000,
         minimum=DECIMATE_FLOOR,
-        maximum=5_000_000,
+        maximum=DECIMATE_CEILING,
         doc=_("Zielzahl. Weniger heißt schneller und ungenauer — wie viel, sagt der Bericht."),
     )
     method: str = param(

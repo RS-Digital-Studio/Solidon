@@ -2240,6 +2240,21 @@ class Session(QObject):
         self._changed()
         return True
 
+    def decimate_and_retry(self, stopped_at: int, triangles: int) -> bool:
+        """Setzt *Dreiecke verringern* und den erneuten Versuch als einen Zug vor den Fehler.
+
+        Das vierte Geschwister von :meth:`repair_and_retry`, für ein Netz, das
+        zum Teilen schon zu dicht ist; die Zahl nennt der Befund, Reihenfolge
+        und Undo gehören dem Verlauf.
+        """
+        try:
+            self.history.decimate_and_retry(stopped_at, triangles)
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        self._changed()
+        return True
+
     def change_parameter(self, name: str, value: float, origin: Origin | None = None) -> bool:
         """Eine gedrehte Zahl der Parameterleiste (§13, §15.5).
 
