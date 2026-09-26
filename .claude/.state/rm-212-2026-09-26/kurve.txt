@@ -1,0 +1,45 @@
+obj_1_spiderman.stl: 885570 Dreiecke, dicht True
+  Kern nimmt es: True (0.47 s)
+  simplify(  0.050) →   338998 in 0.46 s
+  simplify(  0.200) →   125796 in 0.55 s
+  simplify(  0.800) →   287704 in 1.28 s
+  simplify(  3.200) →   385662 in 2.61 s
+  simplify( 12.800) →   367232 in 2.42 s
+  simplify( 51.200) →   349552 in 2.04 s
+  Raster → 57722 in 0.86 s, dicht False
+obj_15_Assembly.stl: 1223836 Dreiecke, dicht False
+  Kern nimmt es: True (0.69 s)
+  simplify(  0.050) →   173904 in 0.66 s
+  simplify(  0.200) →    64592 in 0.83 s
+  simplify(  0.800) →   165528 in 1.37 s
+  simplify(  3.200) →   283508 in 3.27 s
+  simplify( 12.800) →   283676 in 2.87 s
+  simplify( 51.200) →   324690 in 3.93 s
+  Raster → 38979 in 1.18 s, dicht False
+埃菲尔铁塔18cm.stl: 312970 Dreiecke, dicht False
+  Kern nimmt es: True (0.12 s)
+  simplify(  0.050) →    62938 in 0.19 s
+  simplify(  0.200) →    57680 in 0.22 s
+  simplify(  0.800) →    69996 in 1.12 s
+  simplify(  3.200) →    97256 in 2.40 s
+  simplify( 12.800) →   100600 in 3.94 s
+  simplify( 51.200) →   124264 in 3.40 s
+  Raster → 68985 in 0.16 s, dicht False
+washing bowl v1.stl: 215074 Dreiecke, dicht False
+  Kern nimmt es: True (0.09 s)
+  simplify(  0.050) →    69674 in 0.09 s
+  simplify(  0.200) →    25542 in 0.09 s
+  simplify(  0.800) →    12714 in 0.12 s
+  simplify(  3.200) →    76730 in 0.37 s
+  simplify( 12.800) →    90272 in 0.80 s
+  simplify( 51.200) →    87924 in 0.70 s
+  Raster → 84351 in 0.16 s, dicht False
+plate_holes_x5.stl: 815104 Dreiecke, dicht True
+  Kern nimmt es: True (0.22 s)
+  simplify(  0.050) →      292 in 0.43 s
+  simplify(  0.200) →      218 in 0.47 s
+  simplify(  0.800) →      120 in 0.49 s
+  simplify(  3.200) →     7990 in 0.51 s
+  simplify( 12.800) →   167662 in 4.84 s
+  simplify( 51.200) →   167664 in 3.98 s
+  Raster → 78649 in 0.15 s, dicht False

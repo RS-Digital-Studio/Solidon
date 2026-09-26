@@ -276,14 +276,16 @@ raten (`OLLAMA_SUGGESTIONS` in `app/core/backends/llm.py`):
 
 | Modell | Grafikspeicher | Suite | Anmerkung |
 |---|---|---|---|
-| `qwen3.5:9b` | 7,4 GB | 18/39 | läuft ab einer Karte mit 8 GB |
+| `qwen3.5:9b` | 7,4 GB | 21/39 | läuft ab einer Karte mit 8 GB; fragt seltener nach |
 | `gpt-oss:20b` | 12,9 GB | 10/39 | Karte mit 16 GB; für einzelne Anweisungen |
-| `qwen3:14b` | 13,6 GB | 18/39 | Vorgabe; denkt vor jeder Antwort, Karte mit 16 GB |
+| `qwen3:14b` | 13,6 GB | 22/39 | Vorgabe; denkt vor jeder Antwort, Karte mit 16 GB |
 | `qwen3:30b-a3b` | mehr als 16 GB | — | auf 16 GB rechnet ein Drittel der Prozessor |
 
 Die Suite am 26.09.2026 auf freier Karte (RTX 4080). Derselbe Stand mit dem
 ganzen Werkzeugsatz statt des Angebots traf mit `qwen3:14b` im selben
-Fenster 14 von 39, neunmal riss dabei das Fenster.
+Fenster 14 von 39, neunmal riss dabei das Fenster; mit einem Fenster von
+40 960 Token 24 von 39, aber in 149 statt 47 Minuten und zu einem Zehntel
+auf dem Prozessor.
 
 Gemessen und nicht empfohlen (`OLLAMA_UNSUITABLE`): `gemma4:12b`,
 `granite4.1:8b`, `llama3.1:8b`, `mistral-nemo`, `qwen2.5-coder:14b`, `llama3`.

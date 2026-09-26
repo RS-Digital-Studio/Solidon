@@ -1,0 +1,21 @@
+app aus F:\/3D Druck\app\__init__.py Ziel 150000
+plate_holes_x5.stl: 815104 → 292 in 0.40 s, geschlossen=True, längster Stillstand 250 ms
+    _as_solid                        0.14 s
+    _as_mesh                         0.00 s
+    _display_manifold_decimation     0.40 s
+obj_1_spiderman.stl: 885570 → 125796 in 0.91 s, geschlossen=True, längster Stillstand 324 ms
+    _as_solid                        0.28 s
+    _as_mesh                         0.03 s
+    _display_manifold_decimation     0.91 s
+obj_15_Assembly.stl: 1223836 → 64524 in 1.42 s, geschlossen=False, längster Stillstand 492 ms
+    _as_solid                        0.50 s
+    _as_mesh                         0.02 s
+    _display_manifold_decimation     1.42 s
+埃菲尔铁塔18cm.stl: 312970 → 62938 in 0.24 s, geschlossen=False, längster Stillstand 120 ms
+    _as_solid                        0.07 s
+    _as_mesh                         0.01 s
+    _display_manifold_decimation     0.23 s
+washing bowl v1.stl: 215074 → 69674 in 0.17 s, geschlossen=False, längster Stillstand 89 ms
+    _as_solid                        0.05 s
+    _as_mesh                         0.02 s
+    _display_manifold_decimation     0.17 s

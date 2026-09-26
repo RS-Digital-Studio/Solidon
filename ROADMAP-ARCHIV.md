@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-26 | [Die Kante innerhalb der Hülle und die Nachkontrolle der Kopien (26.09.2026)](#die-kante-innerhalb-der-hülle-und-die-nachkontrolle-der-kopien-26092026) |
 | 2026-09-25 | [Bohrungen mit Erweiterung an beiden Enden (25.09.2026)](#bohrungen-mit-erweiterung-an-beiden-enden-25092026) |
 | 2026-09-25 | [Das lokale Modell bekommt ein Angebot statt des ganzen Registers (25.09.2026)](#das-lokale-modell-bekommt-ein-angebot-statt-des-ganzen-registers-25092026) |
 | 2026-09-25 | [Die Schnittsuche an Nadeldreiecken: die Trennprüfung (25.09.2026)](#die-schnittsuche-an-nadeldreiecken-die-trennprüfung-25092026) |
@@ -31686,6 +31687,80 @@ Dazu aus dem Bericht, je mit Test:
   nachgezogen (`ki-modelle.html` und die fünf Übersetzungen). Nachweis:
   `tests/test_tool_offer.py`, `test_the_measured_prompt_matches_the_current_tool_count`.
 
+<a id="rm-081"></a>
+
+- [x] **RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen.** Die lokale Modellserie
+  auf die noch offenen Messungen begrenzen: Warm-/Kaltstart und Antwortqualität mit aktuellem
+  Werkzeugschema erfassen, weitere Schemakürzungen gegen dieselben Referenzanfragen prüfen und die
+  gestufte Werkzeugauswahl als Bedienentscheidung vorbereiten. Abnahme: Quote und Latenz aus
+  demselben ruhigen Lauf samt GPU-Zustand; keine Qualitätsverschlechterung durch Kürzungen.
+
+  **Stand 15.09.2026, aus RM-173:** Die Quote ist zweimal gemessen (20/39 → 24/39 mit der
+  Kürzung), und die Kürzung hat nicht geschadet — aber unter Fremdlast, mit Modellstarts
+  zwischen 56 und 314 s, also ohne brauchbare Latenz. Ruhig gemessen (14.09., RM-054/RM-173):
+  22,9 s kalt und 2,3 s warm für den vollen Prompt, 18,7 s kalt für den gekürzten. Was
+  bleibt: ein ruhiger Lauf für Latenz und GPU-Zustand, das Ergebnis des Laufs ohne Denkblock
+  (484 und 847 Token Ausgabe je Schritt sind zum größten Teil Denkblock, bei 33 Token/s eine
+  halbe Minute), und die gestufte Werkzeugauswahl — die bleibt, was `AGENTS.md` sagt: eine
+  Auswahl, die Operationen aussortiert, wäre eine Betriebsart mit anderem Namen, und ob es
+  eine geben soll, entscheidet Robert.
+
+  **Warum der Modellstart Minuten kostet — beobachtet am 15.09.2026, 00:53 bis 01:00, alle
+  vier Sekunden `nvidia-smi` und der Arbeitssatz von `llama-server`:** Nach dem Entladen
+  belegt der Desktop 1,6 GB der 16 GB (dwm 945 MB, Claude 200, Explorer 185, Chrome). Die
+  Gewichte (8,6 GB) sind in acht Sekunden auf der Karte; dann kriecht die Belegung von 10,4 auf
+  15,7 GB mit etwa 60 MB/s — zweieinhalb Minuten, ein Kern beschäftigt, Platte und Grafikkarte
+  im Leerlauf. Das ist der KV-Cache (5 120 MiB bei 32 768 Token in f16) und die Rechenpuffer,
+  angelegt am Rand des Speichers: `ollama ps` meldet 14,4 GB für das Modell, frei waren 14,7.
+  **Die Kante ist es aber nicht** — das sagte um 03:07 dieselbe Messung mit leerem Desktop
+  (1,4 GB belegt): 188 s Kaltstart, und `llama3.1:8b` mit 7 GB Luft brauchte für 4 GB KV-Cache
+  23 s gegen 4,4 s bei 4 096 Token; `qwen3:14b` mit 4 096 Token 26 s, mit 32 768 Token 188 s.
+  Die Zeit hängt an der **Größe des KV-Caches**, nicht am freien Speicher, und sie hat einen
+  Anfang: Bis 17:55 lud dasselbe Modell mit demselben Fenster in **3 bis 4,5 s** (elf Starts
+  im Serverlog), um 17:58 waren es 83 s, seither nie unter 40 — die Zeit, zu der die
+  Torläufe der anderen Sitzungen mit ihren Fenster- und Renderer-Tests begannen. Der
+  Grafiktreiber lagert seither bei jeder großen Zuweisung um, und zwar Stunden nach dem
+  letzten Test noch. Was das zurücksetzt, ist nicht gemessen — ein Neustart ist die Probe,
+  und die gehört Robert. Bis dahin gilt: Latenz nur nach frischem Start und **vor** einem
+  Torlauf messen; die 22,9 s vom Nachmittag sind der Bezugswert, und jede Sitzung mit
+  `keep_alive: 0` zahlt den Start je Zug neu.
+
+  Zwei Hebel, beide eine Entscheidung: **Warmhalten zwischen den Zügen** (siehe RM-173) — und
+  der **KV-Cache in `q8_0`**: Ollama nimmt das nur als Umgebungsvariable des Dienstes
+  (`OLLAMA_KV_CACHE_TYPE=q8_0` mit `OLLAMA_FLASH_ATTENTION=1`), halbiert damit die 5 GB, und
+  mit 3,2 GB bei 40 960 Token passte sogar das volle Trainingsfenster von qwen3 auf die Karte
+  (8,6 + 3,2 + Puffer ≈ 12,5 GB) — ein Viertel mehr Platz für RM-173. Solidon kann die
+  Variable nicht setzen, aber messen, ob sie gesetzt ist: Die vorhandene Probe
+  (`model_state`, Karte gegen Prozessor) sagt nach einem Ladeversuch mit 40 960, ob das Modell
+  ganz im VRAM liegt. Ein Fenster, das sich nach dieser Probe richtet, statt fest 32 768 zu
+  nehmen, ist der Vorschlag; gebaut wird er auf Roberts Wort.
+
+  **Stand 25.09.2026 (Auftrag Robert: „lokale KI optimieren für weniger
+  Kontext, sinnvoll einfache Bedienung, neues oder besseres Modell"):** Beide
+  Hebel sind entschieden und gebaut. **Warmhalten:** Nach dem Zug bleibt das
+  Modell drei Minuten auf der Karte (`OLLAMA_KEEP_ALIVE`), `local_ai_slot`
+  gibt beim Betreten jedes fremde warm gehaltene Modell frei, ComfyUI räumt
+  die Karte ganz — zwei Modelle zugleich bleiben ausgeschlossen. **Gestufte
+  Werkzeugauswahl** als Angebot (`agent/offer.py`): jede Operation bleibt
+  aufrufbar, nur die gemeinten stehen mit Feldern da; Grundlast 30 461 → 7 276
+  Token (RM-185 im Archiv). Dazu eine Antwortobergrenze (`num_predict` 8 192)
+  gegen Endlosantworten und der Kürzungsschutz nach Anfragelänge. `q8_0` ist
+  damit ohne Bedarf: qwen3:14b liegt mit 32 768 ganz auf der Karte, und das
+  Fenster hat 25 000 Token Luft. **Offen ist die Qualitätsabnahme:** Suite
+  desselben Stands ohne Angebot gegen mit, qwen3:14b, ruhige Karte (Werkzeuge
+  in `.claude/.state/lokale-ki-2026-09-25/`).
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#ollama-bis-zum-anschlag-31082026).
+
+  **Abgeschlossen am 26.09.2026.** Die Qualitätsabnahme ist gefahren:
+  derselbe Code mit und ohne Angebot, qwen3:14b, freie Karte — mit Angebot 24
+  von 39 (mit dem Zwilling als Kurzform 22), ohne 14 im selben Fenster, davon
+  neun Fensterabbrüche, und mit einem Fenster von 40 960 ohne Angebot ebenfalls 24, aber in 149 statt 44 Minuten und zu einem Zehntel auf dem Prozessor — das Angebot hält die Quote bei einem Drittel der Zeit. Warmhalten, Angebot,
+  Antwortobergrenze und Kürzungsschutz nach Länge sind gebaut; `q8_0` bleibt
+  ungebaut, weil qwen3:14b mit 32 768 ganz auf der Karte liegt und das Fenster
+  25 000 Token Luft hat. Nachweis: die Tabelle bei RM-016,
+  `tests/test_tool_offer.py`, `tests/test_backends.py`.
+
 ## Bohrungen mit Erweiterung an beiden Enden (25.09.2026)
 
 <a id="rm-245"></a>
@@ -31756,3 +31831,72 @@ Dazu aus dem Bericht, je mit Test:
   (eine Kette mit zwei Seiten; Versetzen, Kippen, Verdoppeln und Entfernen an
   drei Profilen und beiden Kernen; jeder Abschnitt einzeln; die Mündung in
   einer gekrümmten Fläche).
+
+## Die Kante innerhalb der Hülle und die Nachkontrolle der Kopien (26.09.2026)
+
+<a id="rm-249"></a>
+
+- [x] **RM-249 — Eine Bohrung über einer Seite innerhalb der Hülle meldet keine Kante.**
+  Gefunden am 25.09.2026 bei RM-245. An den vier Lochplatten, jede
+  Schraubbohrung um 12 mm quer verdoppelt, tragen beide Kerne dasselbe
+  Volumen ab (auf 2 %: −218,847 zu −218,473 mm³ an der Crimper-Platte), aber
+  der exakte Kern findet danach Kopien einzelner Bohrungen nicht wieder und
+  meldet `duplicate_feature.feature_lost` — an `pegboard-gs-100-v2.step`
+  oben beide Bohrungskopien, erkannt wird an der Stelle nur ein Kegelstück;
+  ebenso an der Goot-Platte zweimal, an pb3041 und an der Crimper-Platte je
+  einmal. Das Netz (`_duplicate_cavity_chain`) prüft seine Kopien nicht nach
+  und trägt sie mit ihren Maßen weiter.
+  **Nachgemessen am 26.09.2026:** Frisch erkannt findet auch das Netz an der
+  Kopierstelle nur das Kegelstück — der exakte Kern hat recht. Die Platte
+  reicht auf der Höhe der oberen Bohrung (z = 46,25) nur bis x ≈ 13,6, ihr
+  Hüllquader bis x = 20; die Kopie bei x = 12 läuft mit der Zylindersenkung
+  Ø 10 bis x = 17 über die Seite, und **keiner** der beiden Kerne sagt „über
+  die Kante“. Ursache: `prepare.over_the_edge_along` und
+  `prepare.mouth_over_the_edge` fragen zuerst `_axes_over`, den Hüllquader,
+  und kehren zurück, wenn die Scheibe darin bleibt — das Urteil am Netz
+  (`_flank_is_open`, der Kranz an der Mündung) kommt gar nicht erst dran.
+  Den Hüllquader einfach zu streichen trägt nicht: `_flank_is_open` tastet in
+  Schritten eines Sechzehntels der Hüllendiagonale entlang der Achse und fände
+  an einer 3 mm starken Platte keine Tiefe mit dem Kranz ganz im Material —
+  jede Bohrung hieße „über die Kante“. Weg: für ein Merkmal mit Mitte und
+  Tiefe den Kranz über **seine eigene** Tiefe abtasten (ein Viertel, die
+  Hälfte, drei Viertel), am Körper vor dem Schnitt; wo keine dieser Tiefen
+  ihn ganz im Material hat, reißt die Flanke auf. Das gilt für Versetzen,
+  Verdoppeln, Kippen und Muster (`_edge_findings`); *Bohren* fragt mit der
+  gewählten Tiefe genauso. Danach die Nachkontrolle der Kopien am Netz wie am
+  exakten Kern (`_duplicate_cavity_chain` fragt heute nicht), damit eine
+  Kopie, die es nicht gibt, an beiden gemeldet wird. Abnahme: an gs-100 oben
+  um 12 mm quer verdoppelt „über die Kante“ an beiden Kernen, an den übrigen
+  drei Platten dieselben Befunde an beiden Kernen, als STEP und als 3MF; eine
+  Bohrung in einer 1-mm-Platte ohne Kantenbefund.
+
+  **Abgeschlossen am 26.09.2026 — der Hüllquader ist nur noch die Vorauswahl.**
+  `over_the_edge_along` nimmt ``reach``, die Länge der Bohrung von ihrer
+  Stelle aus; bleibt die Scheibe im Hüllquader, fragt `_flank_opens_within`
+  am Netz nach: der Kranz über die eigene Länge der Bohrung, an der Stelle und
+  je einem Viertel, der Hälfte und drei Vierteln in beide Richtungen, nur an
+  Tiefen, an denen die Bohrung schneidet. Liegt er an einer davon ganz im
+  Material, ist die Flanke zu. Von den Punkten in Luft zählt nur, was nach
+  außen frei liegt — ein Strahl quer zur Achse, der den Körper nicht mehr
+  trifft (`_open_to_the_outside`); ein Punkt in einer Nachbarbohrung trifft
+  deren Wand. Jeder Weg, der eine Bohrung setzt, gibt ``reach`` mit: Bohren,
+  Ändern, Langloch, Versetzen, Verdoppeln, Kippen und Muster, an beiden
+  Kernen. Der Oberflächenindex je Körper zog dafür als `surface_index_of`
+  nach `geom.prepare`. **Und das Netz misst seine Kopien nach**
+  (`_copies_found`, beim Verdoppeln einzeln und als Kette und im Muster):
+  Was sich nicht wiederfindet oder seitlich weiter als die Facettengrenze
+  neben seiner Achse liegt, meldet es als verloren und lässt es weg, wie der
+  exakte Kern. Die Messung nahm sonst einen angeschnittenen Zylinder über der
+  Seite als Bohrung, mit seiner Mitte 0,75 bis 1,25 mm daneben, und die
+  Auswertung verwarf ihn danach still.
+  Gemessen an den vier Lochplatten, je als STEP und als 3MF, jede
+  Schraubbohrung um 12 mm quer verdoppelt: Wo die Kopie über die Seite läuft
+  — gs-100 oben, Goot beide, pb3041 und Crimper je eine —, sagen beide Kerne
+  „über die Kante“ und nennen dieselben Kopien verloren; wo sie passt, sagen
+  beide nichts; an gs-100 unten beide „geht nicht mehr durch“. An einer
+  Platte, die schmaler ist als ihre Hülle: Verdoppeln über die Seite, Versetzen
+  und Bohren dort an beiden Kernen „über die Kante“, eine Bohrung in die
+  vorhandene hinein und eine mitten im Material nichts, eine Platte von 1 mm
+  Stärke ohne Kantenbefund. Nachweis: `test_feature_moves_keep_shape.py`
+  (Kopie und Versetzen über der Seite, Bohren daneben und in die Nachbarin,
+  die dünne Platte), dazu das Tor mit allen bisherigen Kantentests.

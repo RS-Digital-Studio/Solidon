@@ -705,7 +705,7 @@ ungeschweißte STL je Körper einmal statt bei jeder Frage.
 `geom.edges._around`), `nearly_flat_mask` (je Abdruck der gerundeten
 Seiten), `prepare_ops.has_own_body` (je Flächen und `alone`), die
 verschweißte Kopie (`prepare_ops._welded`) und der Oberflächenindex
-(`_surface_index`, von `mesh.on_surface(..., index=)` nur für genau diesen
+(`geom.prepare.surface_index_of`, von `mesh.on_surface(..., index=)` nur für genau diesen
 Körper angenommen). Ganze Körperantworten zählen gegen `SUPPORT_CACHE_LIMIT`
 (`features.WHOLE_BODY_ANSWERS`), nicht gegen die 4096 je Frage. Die
 Randringe sucht `relations._face_boundary_rings` in der Nummerierung des

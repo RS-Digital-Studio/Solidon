@@ -91,6 +91,7 @@ from app.core.geom.prepare import (
     slot_travel,
     split_at_plane,
     split_findings,
+    surface_index_of,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, cut
 from app.core.geom.transform import Axis, composed, moved_object, place_on_bed, translation
@@ -1637,6 +1638,12 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
             if float(np.linalg.norm(direction)) > EPS_GEOM and stretch > EPS_GEOM:
                 direction /= float(np.linalg.norm(direction))
                 positions = [centre - direction * stretch, centre + direction * stretch]
+        # **Mit ihrer Länge** (RM-249): Bleibt die Scheibe im Hüllquader, fragt
+        # die Prüfung am Netz über die eigene Tiefe des Merkmals nach — eine
+        # Kopie über einer Seite, die schmaler ist als die Hülle, sagte sonst
+        # nichts.
+        depth = _depth_of(feature)
+        reach = depth / 2.0 if depth > EPS_GEOM else diameter / 2.0
         for position in positions:
             found = over_the_edge_along(
                 body,
@@ -1644,6 +1651,7 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
                 _feature_direction(feature),
                 diameter,
                 body=body,
+                reach=reach,
             )
             if found:
                 return found
@@ -3649,11 +3657,13 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         surface_patches=(),
     )
     findings += _edge_findings(body, [copy])
+    kept: dict[FeatureId, Feature] = {copy.id: copy}
     if cavity:
         travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
-        copy = _measured_on(
-            placed.mesh, [copy], check_cancelled=ctx.cancelled.raise_if_cancelled
-        ).get(copy.id, copy)
+        kept, missing = _copies_found(
+            "duplicate_feature", placed.mesh, kept, check_cancelled=ctx.cancelled.raise_if_cancelled
+        )
+        findings += missing
         findings += _mouth_covered(
             "duplicate_feature", body, placed.mesh, feature, source.features, travel, findings
         )
@@ -3661,16 +3671,17 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
             _neighbour_bore_findings(source, feature, cutting, ctx, moved=True, copy=True),
             findings,
         )
-    if lost:
+    if lost and copy.id in kept:
         # Wie beim Versetzen: Der Satz sagt „geht nicht mehr durch", und die
         # Kopie sagt es auch — hier blieb sie ``through=True`` (RM-220).
-        copy = dataclasses.replace(copy, params={**copy.params, "through": False})
+        found = kept[copy.id]
+        kept[copy.id] = dataclasses.replace(found, params={**found.params, "through": False})
     return OpResult(
         outputs=[
             dataclasses.replace(
                 source,
                 mesh=placed.mesh,
-                features={**_without_old_triangles(source.features), copy.id: copy},
+                features={**_without_old_triangles(source.features), **kept},
                 reserved_feature_ids=tuple(
                     sorted({*source.reserved_feature_ids, *source.features, copy.id})
                 ),
@@ -3755,12 +3766,11 @@ def _duplicate_cavity_chain(
         tool=cutting,
     )
     findings += lost
-    copies.update(
-        _measured_on(
-            placed.mesh, list(copies.values()), check_cancelled=ctx.cancelled.raise_if_cancelled
-        )
+    copies, missing = _copies_found(
+        "duplicate_feature", placed.mesh, copies, check_cancelled=ctx.cancelled.raise_if_cancelled
     )
-    if lost:
+    findings += missing
+    if lost and bore.id in copies:
         measured_bore = copies[bore.id]
         copies[bore.id] = dataclasses.replace(
             measured_bore, params={**measured_bore.params, "through": False}
@@ -4383,6 +4393,10 @@ def _mesh_pattern_result(
                 if lost:
                     copy = dataclasses.replace(copy, params={**copy.params, "through": False})
             copies[copy.id] = copy
+    copies, missing = _copies_found(
+        "pattern_feature", placed, copies, check_cancelled=ctx.cancelled.raise_if_cancelled
+    )
+    findings.extend(missing)
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -4420,16 +4434,25 @@ def _exact_pattern_result(
     solid = _exact_body(source)
     faces_bodies: dict[str, Any] = {}
     material: list[Any] = []
-    hollow_tools: list[Any] = []
     for place in kept:
         ctx.cancelled.raise_if_cancelled()
-        tool = _exact_place_tool(source, solid, place, faces_bodies)
-        (hollow_tools if is_a_cavity(place.unit.feature) else material).append(tool)
+        if not is_a_cavity(place.unit.feature):
+            material.append(_exact_place_tool(source, solid, place, faces_bodies))
     placed = solid
     if material:
         placed = edit.unified(edit.boolean("union", [placed, *material]))
-    if hollow_tools:
-        placed = edit.unified(edit.boolean("difference", [placed, *hollow_tools]))
+    hollow = [place for place in kept if is_a_cavity(place.unit.feature)]
+    if hollow:
+        # Alle Hohlräume in einer Differenz, wie bisher — und wie beim
+        # Verdoppeln wiederholt, wenn sie still scheitert
+        # (:func:`_exact_chain_cut_holding`).
+        base = placed
+        placed, _tools = _exact_chain_cut_holding(
+            base,
+            lambda overlap: _pattern_hollow_tool(
+                source, solid, hollow, faces_bodies, overlap=overlap
+            ),
+        )
     copies = [copy for place in kept for copy in place.copies]
     findings.extend(_edge_findings(as_mesh_data(solid), copies))
     # Die Kopien stehen in der Reihenfolge der Glieder (:func:`_name_copies`);
@@ -4448,8 +4471,30 @@ def _exact_pattern_result(
     return result
 
 
+def _pattern_hollow_tool(
+    source: SceneObject,
+    solid: Any,
+    places: Sequence[_PatternPlace],
+    faces_bodies: dict[str, Any],
+    *,
+    overlap: float,
+) -> Any:
+    """Die Werkzeuge aller Hohlraumplätze eines Musters als ein Körper."""
+    from app.core.brep import edit
+
+    tools = [
+        _exact_place_tool(source, solid, place, faces_bodies, overlap=overlap) for place in places
+    ]
+    return edit.boolean("union", tools) if len(tools) > 1 else tools[0]
+
+
 def _exact_place_tool(
-    source: SceneObject, solid: Any, place: _PatternPlace, faces_bodies: dict[str, Any]
+    source: SceneObject,
+    solid: Any,
+    place: _PatternPlace,
+    faces_bodies: dict[str, Any],
+    *,
+    overlap: float = FEATURE_OVERLAP,
 ) -> Any:
     """Das exakte Werkzeug eines Platzes — je Art dasselbe wie bei der Verdoppelung."""
     from app.core.brep import edit
@@ -4457,7 +4502,7 @@ def _exact_place_tool(
     feature = place.unit.feature
     if place.unit.chain is not None:
         entrance = _exact_chain_entrance(source, place.unit.chain)
-        return _exact_chain_tool_placed(solid, entrance, place.matrix)
+        return _exact_chain_tool_placed(solid, entrance, place.matrix, overlap=overlap)
     copy = place.copies[0]
     centre = cast(Vec3, tuple(float(value) for value in copy.params["centre"]))
     if feature.kind == "torus":
@@ -5447,21 +5492,6 @@ def _welded(mesh: MeshData) -> Any:
     return remembered("merged_copy", mesh.raw, (), weld)
 
 
-def _surface_index(mesh: MeshData) -> Any:
-    """Der Suchbaum für :func:`app.core.geom.mesh.on_surface` — einmal je Körper.
-
-    Die Mündungsprobe fragt eine Handvoll Punkte, der Baum darunter kennt alle
-    Dreiecke: am Gartenschlauchhalter 0,2 s für den Aufbau, je Bohrung neu
-    (RM-181). Gemerkt wird er in den Merkern der Erkennung, nicht im Cache des
-    Netzes (``features.WHOLE_BODY_ANSWERS``, acht über alle Körper), und er
-    geht mit seinem Körper.
-    """
-    from app.core.geom.mesh import surface_index
-    from app.core.perceive.features import remembered
-
-    return remembered("surface_index", mesh.raw, (), lambda: surface_index(mesh.raw))
-
-
 def _mouth_is_open(mesh: MeshData, edge: NDArray[np.float64], normal: NDArray[np.float64]) -> bool:
     """Vor dem gesamten Rand liegt Luft; ein Sacklochboden bleibt geschlossen."""
     # Ein Anteil aus Zählungen, nie negativ — gefragt wird „keine Probe im
@@ -5479,7 +5509,7 @@ def _share_in_material(
     inward = edge.mean(axis=0) - edge
     inward /= np.maximum(np.linalg.norm(inward, axis=1), EPS_GEOM)[:, None]
     probes = edge + inward * FEATURE_OVERLAP + normal * FEATURE_OVERLAP
-    closest, _, at = on_surface(mesh.raw, probes, index=_surface_index(mesh))
+    closest, _, at = on_surface(mesh.raw, probes, index=surface_index_of(mesh))
     body_normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
     signed = np.einsum("ij,ij->i", probes - closest, body_normals[at])
     return float(np.count_nonzero(signed <= EPS_GEOM)) / float(max(len(signed), 1))
@@ -6659,6 +6689,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 travel=slot_travel_now,
                 angle_deg=slot_angle_of(feature, axis) if feature.kind == "slot" else 0.0,
                 body=as_mesh_data(source.mesh),
+                reach=depth / 2.0,
             )
         )
         findings.extend(compensation_findings(params.diameter, cut, params.compensate))
@@ -7338,6 +7369,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 travel=0.0 if rounded else slot_travel(diameter=diameter, length=cut_length),
                 angle_deg=angle,
                 body=as_mesh_data(source.mesh),
+                reach=_depth_of(feature) / 2.0,
             )
         )
         findings.extend(split_findings(source.mesh, solid))
@@ -8282,7 +8314,12 @@ def _entrance_is_open(
 
 
 def _entrance_tools(
-    entrance: _BoreEntrance, diameter: float, reach: float, *, filling: bool = False
+    entrance: _BoreEntrance,
+    diameter: float,
+    reach: float,
+    *,
+    filling: bool = False,
+    overlap: float = FEATURE_OVERLAP,
 ) -> list[tuple[list[tuple[float, float]], tuple[SectionPlane, ...]]]:
     """Beide Kerne erhalten dieselben Radien, Profile und Randebenen.
 
@@ -8291,7 +8328,8 @@ def _entrance_tools(
     Erweiterungen der ersten Seite, dann die der zweiten (RM-245). Deren
     Umrisse entstehen entlang ihrer eigenen Richtung und werden in die
     Halbebene der ersten gespiegelt — ein Drehkörper um dieselbe Achse; die
-    Randebenen stehen ohnehin im Raum.
+    Randebenen stehen ohnehin im Raum. ``overlap`` ist die Zugabe über offene
+    Mündungen (§39, :func:`_exact_chain_cut_holding`).
     """
     delta = diameter / 2.0 - entrance.sections[0].inner_radius
     tools = _side_tools(
@@ -8302,10 +8340,11 @@ def _entrance_tools(
         filling=filling,
         back=entrance.back,
         back_open=entrance.back_open,
+        overlap=overlap,
     )
     if entrance.back:
         for outline, planes in _side_tools(
-            entrance.back, entrance.back_open, delta, reach, filling=filling
+            entrance.back, entrance.back_open, delta, reach, filling=filling, overlap=overlap
         )[1:]:
             tools.append(([(radius, -along) for radius, along in reversed(outline)], planes))
     return tools
@@ -8320,6 +8359,7 @@ def _side_tools(
     filling: bool,
     back: Sequence[_EntranceSection] = (),
     back_open: bool = True,
+    overlap: float = FEATURE_OVERLAP,
 ) -> list[tuple[list[tuple[float, float]], tuple[SectionPlane, ...]]]:
     """Die Werkzeuge einer Seite in ihrer eigenen Halbebene: der Schaft zuerst,
     dann jede Erweiterung. Mit ``back`` reicht der Schaft bis an deren Mündung."""
@@ -8337,9 +8377,9 @@ def _side_tools(
         lower = section.lower
         upper = section.upper
         if not filling and open_end and (index == 0 or index == len(members) - 1):
-            upper = dataclasses.replace(upper, position=upper.position + FEATURE_OVERLAP)
+            upper = dataclasses.replace(upper, position=upper.position + overlap)
         if not filling and back and back_open and index == 0:
-            lower = dataclasses.replace(lower, position=lower.position + FEATURE_OVERLAP)
+            lower = dataclasses.replace(lower, position=lower.position + overlap)
         if section.feature.kind == "cone":
             slope = (section.outer_radius - section.inner_radius) / (section.end - section.start)
             start = section.start - radius / slope
@@ -9363,6 +9403,61 @@ def _measured_on(
     return measured
 
 
+def _copies_found(
+    op: str,
+    mesh: MeshData,
+    copies: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> tuple[dict[FeatureId, Feature], list[Finding]]:
+    """Die Kopien am Ergebnis nachgemessen — und was sich nicht wiederfindet,
+    gemeldet und weggelassen, wie am exakten Kern (``_exact_copy_result``).
+
+    **Eine Kopie, die es nicht gibt, sagt es an beiden Kernen** (RM-249,
+    26.09.2026). An der Lochplatte ``pegboard-gs-100-v2`` lief eine um 12 mm
+    quer verdoppelte Schraubbohrung über die Seite; frisch erkannt fand sich an
+    der Stelle an keinem Kern mehr als ein Kegelstück. Der exakte Kern meldete
+    die Bohrungskopien als verloren, das Netz trug sie ungeprüft mit ihren
+    Maßen weiter — und das Merkmalfenster zeigte zwei Bohrungen, die nicht
+    da sind. Nachgemessen wird mit :func:`_measured_on`; Kopien anderer Art
+    reichen durch, wie sie sind.
+
+    **Wiedergefunden heißt: auf ihrer Achse.** Die Messung am Netz nimmt auch
+    einen angeschnittenen Zylinder als Bohrung; an der Kopie über der Seite lag
+    seine Mitte 0,75 bis 1,25 mm zur Materialseite hin, und die Auswertung
+    verwarf ihn danach still als verwaist. Eine starr gesetzte Kopie steht
+    seitlich genau dort, wo sie hin sollte — mehr als die Facettengrenze
+    daneben (:data:`~app.core.units.MAX_FACET_SAG`) ist sie nicht mehr diese
+    Kopie.
+    """
+    cavities = [
+        copy for copy in copies.values() if copy.kind in ("hole", "cone") and is_a_cavity(copy)
+    ]
+    measured = _measured_on(mesh, cavities, check_cancelled=check_cancelled)
+    kept: dict[FeatureId, Feature] = {}
+    findings: list[Finding] = []
+    wanted = {copy.id for copy in cavities}
+    for name, copy in copies.items():
+        found = measured.get(name)
+        if name in wanted and (found is None or _beside_its_axis(found, copy)):
+            findings.append(_cavity_lost_finding(op, copy))
+            continue
+        kept[name] = found or copy
+    return kept, findings
+
+
+def _beside_its_axis(found: Feature, expected: Feature) -> bool:
+    """Ob ein nachgemessenes Merkmal seitlich neben der Achse liegt, auf die es
+    gesetzt wurde — weiter als die Facettengrenze (:func:`_copies_found`)."""
+    axis = np.asarray(_feature_direction(expected), dtype=np.float64)
+    axis /= math.hypot(float(axis[0]), float(axis[1]), float(axis[2]))
+    offset = np.asarray(found.params["centre"], dtype=np.float64) - np.asarray(
+        expected.params["centre"], dtype=np.float64
+    )
+    across = offset - axis * units.dot3(offset, axis)
+    return math.hypot(float(across[0]), float(across[1]), float(across[2])) > MAX_FACET_SAG
+
+
 def _recognised_resized_feature(
     mesh: MeshData,
     feature: Feature,
@@ -9765,7 +9860,9 @@ def _through_lost_finding(op: str, feature: Feature, centre: Vec3) -> Finding:
 
 
 def _cavity_lost_finding(op: str, feature: Feature) -> Finding:
-    """Das Merkmal ist gesetzt, aber am exakten Körper nicht mehr als Merkmal auffindbar."""
+    """Das Merkmal ist gesetzt, aber am Ergebnis nicht mehr als Merkmal auffindbar —
+    am exakten Körper nach seiner Erkennung, am Netz nach dem Nachmessen
+    (:func:`_copies_found`)."""
     return Finding(
         code=f"{op}.feature_lost",
         severity="warning",
@@ -10164,6 +10261,7 @@ def _exact_chain_solid(
     filling: bool,
     frame: PlaneFrame,
     planes_of: Callable[[int, SectionPlane, SectionPlane], tuple[SectionPlane, ...]],
+    overlap: float = FEATURE_OVERLAP,
 ) -> Any:
     """Der Hohlraum einer Kette als exakter Körper — Stopfen oder Werkzeug.
 
@@ -10177,7 +10275,7 @@ def _exact_chain_solid(
     diameter = entrance.sections[0].inner_radius * 2.0
     parts = []
     for index, (outline, (lower, upper)) in enumerate(
-        _entrance_tools(entrance, diameter, reach, filling=filling)
+        _entrance_tools(entrance, diameter, reach, filling=filling, overlap=overlap)
     ):
         tool = edit.revolved_bore_tool(outline, frame)
         parts.append(edit.clipped_bore_tool(tool, planes_of(index, lower, upper)))
@@ -10247,15 +10345,63 @@ def _exact_chain_cut_moved(
 ) -> tuple[Any, Any]:
     """Die Kette an der um ``travel`` verschobenen Stelle exakt ausschneiden —
     das Ergebnis und das Werkzeug, an dem der Durchgang danach gemessen wird."""
+    matrix = np.asarray(translation(cast(Vec3, tuple(float(v) for v in travel))), dtype=float)
+    return _exact_chain_cut_holding(
+        solid, lambda overlap: _exact_chain_tool_placed(solid, entrance, matrix, overlap=overlap)
+    )
+
+
+def _exact_chain_cut_holding(solid: Any, tool_with: Callable[[float], Any]) -> tuple[Any, Any]:
+    """``solid`` minus dem Werkzeug aus ``tool_with`` — und eine Differenz, die
+    still gescheitert ist, wird mit weiterem Mündungsüberstand wiederholt.
+
+    **OpenCASCADE sagt nicht immer, wenn es nicht schneiden konnte**
+    (26.09.2026). An der Lochplatte ``pegboard-gs-100-v2.step`` kam die untere
+    Schraubbohrung, um 1,5 mm nach oben versetzt, mit genau dem Volumen des
+    gefüllten Körpers zurück: 57 statt 50 Flächen, der Netz-Zwilling undicht
+    mit 5 176 mm³ zu viel, und ``BRepCheck`` nannte alles gültig. Körper minus
+    Werkzeug ergab dort „leer", die Schnittmenge null — die Lage und nicht das
+    Werkzeug war der Grund: Mit 0,02 mm Überstand über die offenen Mündungen
+    scheiterten +1,5 und +2,0 mm, mit 0,04 und 0,06 mm hielt jede Lage, mit
+    0,1 mm scheiterte es wieder. Ein Ergebnis gilt deshalb nur mit dichtem
+    Zwilling, und sonst schneidet dasselbe Werkzeug mit dem doppelten und dann
+    dem dreifachen Überstand (:data:`CUT_OVERLAPS`). Der Überstand liegt vor
+    offenen Mündungen, in der Luft; er ändert den Abtrag nur, wo die Fläche an
+    der neuen Stelle weiter hinausreicht — an der Lochplatte um 0,4 mm³. Hält
+    keiner, sagt die Handlung ab, statt einen kaputten Körper zu liefern.
+    """
     from app.core.brep import edit
 
-    matrix = np.asarray(translation(cast(Vec3, tuple(float(v) for v in travel))), dtype=float)
-    tool = _exact_chain_tool_placed(solid, entrance, matrix)
-    return edit.unified(edit.boolean("difference", [solid, tool])), tool
+    for factor in CUT_OVERLAPS:
+        tool = tool_with(FEATURE_OVERLAP * factor)
+        placed = edit.unified(edit.boolean("difference", [solid, tool]))
+        if as_mesh_data(placed).is_watertight:
+            return placed, tool
+    raise GeometryError(
+        title=_("Der exakte Kern bringt den Hohlraum an dieser Stelle nicht sauber heraus."),
+        detail=CUT_DID_NOT_HOLD,
+        suggestions=(CORRECT_INPUT, CANCEL),
+    )
+
+
+#: Die Vielfachen von :data:`FEATURE_OVERLAP`, mit denen
+#: :func:`_exact_chain_cut_holding` eine gescheiterte Differenz wiederholt.
+CUT_OVERLAPS: Final = (1.0, 2.0, 3.0)
+
+#: Der Satz, wenn keine Wiederholung einen dichten Körper ergibt.
+CUT_DID_NOT_HOLD: Final = _(
+    "Die Differenz gab dort einen undichten Körper zurück, auch mit mehr Überstand. "
+    "Setzen Sie die Stelle um einen Bruchteil eines Millimeters anders und versuchen "
+    "Sie es erneut."
+)
 
 
 def _exact_chain_tool_placed(
-    solid: Any, entrance: _BoreEntrance, matrix: NDArray[np.float64]
+    solid: Any,
+    entrance: _BoreEntrance,
+    matrix: NDArray[np.float64],
+    *,
+    overlap: float = FEATURE_OVERLAP,
 ) -> Any:
     """Das Werkzeug der Kette, mit einer starren Bewegung an einen neuen Platz gebracht.
 
@@ -10281,6 +10427,7 @@ def _exact_chain_tool_placed(
             _plane_placed(lower, matrix),
             _plane_placed(upper, matrix),
         ),
+        overlap=overlap,
     )
 
 
@@ -10322,6 +10469,8 @@ def _exact_chain_tool_turned(
     pivot: NDArray[np.float64],
     tilt: float,
     caps: Sequence[SectionPlane],
+    *,
+    overlap: float = FEATURE_OVERLAP,
 ) -> Any:
     """Das Werkzeug der gekippten Kette — mit dem Überstand, den die Neigung verlangt.
 
@@ -10392,6 +10541,7 @@ def _exact_chain_tool_turned(
             (float(turned_origin[0]), float(turned_origin[1]), float(turned_origin[2])),
         ),
         planes_of=planes_of,
+        overlap=overlap,
     )
     return edit.clipped_bore_tool(tool, caps) if caps else tool
 
@@ -10496,7 +10646,6 @@ def _exact_rotate_chain(
 ) -> OpResult:
     """Bohrung samt Senkung am exakten Körper kippen — um die Mitte des gewählten
     Abschnitts (P2.4)."""
-    from app.core.brep import edit
 
     entrance = _exact_chain_entrance(source, chain)
     pivot = np.asarray(feature.params["centre"], dtype=float)
@@ -10512,8 +10661,12 @@ def _exact_rotate_chain(
     filled = _exact_chain_filled(source, entrance)
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     caps = _old_rim_caps(as_mesh_data(source.mesh), chain[0], source.features, chain)
-    tool = _exact_chain_tool_turned(filled, entrance, matrix, pivot, tilt, caps)
-    placed = edit.unified(edit.boolean("difference", [filled, tool]))
+    placed, tool = _exact_chain_cut_holding(
+        filled,
+        lambda overlap: _exact_chain_tool_turned(
+            filled, entrance, matrix, pivot, tilt, caps, overlap=overlap
+        ),
+    )
     expected = []
     for related in chain:
         centre = np.asarray(related.params["centre"], dtype=float)

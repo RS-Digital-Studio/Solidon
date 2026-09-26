@@ -167,6 +167,7 @@ def over_the_edge(
     diameter: float,
     *,
     body: MeshData | None = None,
+    reach: float | None = None,
 ) -> list[Finding]:
     """Ragt die Bohrung seitlich über den Körper hinaus?
 
@@ -178,15 +179,16 @@ def over_the_edge(
     um ihn herum. Abgetragen wurde ein Viertel, und die Antwort lautete
     trotzdem „durchgehend und mittig".
 
-    Gemessen am Hüllquader und nicht an der wirklichen Form: eine Bohrung, die
-    innerhalb der Hülle liegt und trotzdem ins Leere geht, trifft entweder
-    einen Hohlraum — den kann sie treffen sollen — oder gar nichts, und dann
-    greift ``without_effect``.
+    Gemessen wird zuerst am Hüllquader. Innerhalb der Hülle trifft eine
+    Bohrung, die ins Leere geht, einen Hohlraum — den kann sie treffen sollen
+    —, gar nichts, dann greift ``without_effect`` — **oder eine Seite, die
+    schmaler ist als die Hülle** (RM-249): Dafür fragt ``reach`` mit ``body``
+    am Netz nach (:func:`over_the_edge_along`).
     """
     direction = [0.0, 0.0, 0.0]
     direction[AXIS_INDEX[axis]] = 1.0
     vector: Vec3 = (direction[0], direction[1], direction[2])
-    return over_the_edge_along(mesh, position, vector, diameter, body=body)
+    return over_the_edge_along(mesh, position, vector, diameter, body=body, reach=reach)
 
 
 #: Wie fein die Mündung abgetastet wird, wenn der Hüllquader Verdacht meldet.
@@ -241,6 +243,102 @@ def _flank_is_open(body: MeshData, position: Vec3, unit: Any, radius: float) -> 
     return not bool(inside.all(axis=1).any())
 
 
+def surface_index_of(mesh: MeshData) -> Any:
+    """Der Suchbaum für :func:`app.core.geom.mesh.on_surface` — einmal je Körper.
+
+    Die Mündungs- und Kantenproben fragen eine Handvoll Punkte, der Baum
+    darunter kennt alle Dreiecke: am Gartenschlauchhalter 0,2 s für den Aufbau,
+    je Bohrung neu (RM-181). Gemerkt wird er in den Merkern der Erkennung,
+    nicht im Cache des Netzes (``features.WHOLE_BODY_ANSWERS``, acht über alle
+    Körper), und er geht mit seinem Körper.
+    """
+    from app.core.geom.mesh import surface_index
+    from app.core.perceive.features import remembered
+
+    return remembered("surface_index", mesh.raw, (), lambda: surface_index(mesh.raw))
+
+
+def _inside_material(body: MeshData, points: np.ndarray) -> np.ndarray:
+    """Welche Punkte im Material liegen oder auf seiner Oberfläche — dieselbe
+    Probe wie in :func:`_flank_is_open`, mit dem gemerkten Suchbaum."""
+    from app.core.geom.mesh import on_surface
+
+    closest, _distance, triangle = on_surface(body.raw, points, index=surface_index_of(body))
+    normals = np.asarray(body.raw.face_normals)[triangle]
+    offset = points - closest
+    outward = (
+        offset[:, 0] * normals[:, 0] + offset[:, 1] * normals[:, 1] + offset[:, 2] * normals[:, 2]
+    )
+    return np.asarray(outward <= EPS_GEOM)
+
+
+def _open_to_the_outside(body: MeshData, points: np.ndarray, across: np.ndarray) -> list[str]:
+    """Die Achsen, zu denen Punkte außerhalb des Materials **frei** liegen: Ein
+    Strahl von ihnen quer zur Bohrung nach außen trifft den Körper nicht mehr.
+
+    Ein Punkt in einer Nachbarbohrung oder einem eingeschlossenen Hohlraum
+    trifft die Wand dahinter und zählt nicht — dort ist die Flanke in den
+    Nachbarn offen, und das sagt der Nachbarbefund (RM-249).
+    """
+    from app.core.geom.mesh import ray_hits_batch
+
+    if not len(points):
+        return []
+    lengths = np.sqrt(across[:, 0] ** 2 + across[:, 1] ** 2 + across[:, 2] ** 2)
+    directions = across / np.maximum(lengths, EPS_GEOM)[:, None]
+    distances, _hit = ray_hits_batch(
+        np.asarray(body.raw.triangles, dtype=float), points, directions
+    )
+    free = directions[~np.isfinite(distances)]
+    return [name for index, name in enumerate("xyz") if bool(np.any(np.abs(free[:, index]) > 0.5))]
+
+
+def _flank_opens_within(
+    body: MeshData, position: Vec3, unit: Any, radius: float, reach: float
+) -> list[str]:
+    """Die Achsen, zu denen eine Bohrung **innerhalb der Hülle** seitlich aus dem
+    Körper tritt — leer, wo sie das nicht tut.
+
+    **Der Hüllquader urteilt nur über das, was über ihn hinausragt** (RM-249,
+    26.09.2026). An der Lochplatte ``pegboard-gs-100-v2`` reicht die Platte auf
+    Höhe der oberen Schraubbohrung nur bis x ≈ 13,6, ihre Hülle bis x = 20: Eine
+    Kopie der Bohrung bei x = 12 lief mit der Zylindersenkung Ø 10 bis x = 17
+    über die Seite, und keiner der beiden Kerne sagte etwas. Gefragt wird
+    deshalb am Netz, über die eigene Länge der Bohrung — ``reach`` in beide
+    Richtungen entlang der Achse, an der Stelle selbst und an einem Viertel,
+    der Hälfte und drei Vierteln davon. Es zählen nur Tiefen, an denen die
+    Bohrung schneidet — die Achse oder ein Punkt ihres Kranzes im Material; die
+    übrigen sind Luft vor oder hinter dem Körper. Bei x = 14 liegt die Achse
+    schon neben der Platte, und die Bohrung trägt trotzdem ein Stück ihrer
+    Seite ab. Liegt der Kranz an einer der Tiefen ganz im Material, ist die Flanke geschlossen
+    — wie in :func:`_flank_is_open`, nur über die Länge der Bohrung statt über
+    die ganze Hülle: In Sechzehnteln der Hüllendiagonale fände sich an einer
+    3 mm starken Platte keine Tiefe, und jede Bohrung dort hieße „über die
+    Kante". Von den Punkten in Luft zählt nur, was nach außen frei liegt
+    (:func:`_open_to_the_outside`).
+    """
+    if reach <= EPS_GEOM or radius <= EPS_GEOM:
+        return []
+    axis = np.asarray(unit, dtype=float)
+    rim = _rim_around(axis, radius)
+    depths = reach * np.asarray(_WITHIN_DEPTHS, dtype=float)
+    centres = np.asarray(position, dtype=float) + depths[:, None] * axis
+    samples = centres[:, None, :] + rim[None, :, :]
+    inside = _inside_material(body, np.vstack([centres, samples.reshape(-1, 3)]))
+    ring = inside[len(depths) :].reshape(len(depths), _RIM_POINTS)
+    cutting = inside[: len(depths)] | ring.any(axis=1)
+    if not bool(cutting.any()) or bool(ring[cutting].all(axis=1).any()):
+        return []
+    rows, columns = np.nonzero(cutting[:, None] & ~ring)
+    return _open_to_the_outside(body, samples[rows, columns], rim[columns])
+
+
+#: Wo :func:`_flank_opens_within` entlang der Achse fragt, in Anteilen von
+#: ``reach``: an der Stelle selbst und je ein Viertel, die Hälfte und drei
+#: Viertel in beide Richtungen.
+_WITHIN_DEPTHS: Final = (0.0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75)
+
+
 def over_the_edge_along(
     mesh: HasBounds,
     position: Vec3,
@@ -248,6 +346,7 @@ def over_the_edge_along(
     diameter: float,
     *,
     body: MeshData | None = None,
+    reach: float | None = None,
 ) -> list[Finding]:
     """Die Kantenprüfung für eine freie Bohrungsrichtung.
 
@@ -272,6 +371,11 @@ def over_the_edge_along(
     deshalb :func:`_flank_is_open`; ohne eines — der exakte Kern reicht einen
     ``Solid`` herein — bleibt es beim Hüllquader, und der ist dort zu streng
     und nie zu milde.
+
+    **Und wo die Scheibe im Hüllquader bleibt, entscheidet mit ``reach`` das
+    Netz** (RM-249): ``reach`` ist die Länge der Bohrung von ``position`` aus —
+    an ihrer Mündung ihre Tiefe, an ihrer Mitte die halbe
+    (:func:`_flank_opens_within`). Ohne ``reach`` bleibt es beim Hüllquader.
     """
     vector = np.asarray(direction, dtype=float)
     # ``math.hypot`` statt ``np.linalg.norm``: Letzteres geht durch BLAS, und
@@ -284,7 +388,10 @@ def over_the_edge_along(
     radius = diameter / 2.0
     over = _axes_over(mesh, position, unit, radius)
     if not over:
-        return []
+        if body is None or reach is None:
+            return []
+        within = _flank_opens_within(body, position, unit, radius, reach)
+        return [_edge_finding(diameter, within)] if within else []
     if body is not None and not _flank_is_open(body, position, unit, radius):
         return []
     return [_edge_finding(diameter, over)]
@@ -658,7 +765,9 @@ def resize_bore(
     if nothing is not None:
         findings.append(nothing)
     unit_vector: Vec3 = (float(unit[0]), float(unit[1]), float(unit[2]))
-    findings.extend(over_the_edge_along(mesh, position, unit_vector, cut_diameter, body=mesh))
+    findings.extend(
+        over_the_edge_along(mesh, position, unit_vector, cut_diameter, body=mesh, reach=depth / 2.0)
+    )
     findings.extend(split_findings(mesh, resized))
     findings.extend(compensation_findings(diameter, cut_diameter, compensate))
     world_tool = tool.copy()
@@ -827,6 +936,7 @@ def slot_bore(
             diameter=diameter,
             travel=travel,
             angle_deg=angle_deg,
+            reach=depth / 2.0,
         )
     )
     findings.extend(split_findings(mesh, slotted))
@@ -1125,8 +1235,12 @@ def edge_findings(
     travel: float,
     angle_deg: float,
     body: MeshData | None = None,
+    reach: float | None = None,
 ) -> list[Finding]:
     """Die Kantenwarnung für eine runde Bohrung — und für beide Enden eines Langlochs.
+
+    ``reach`` ist die Länge der Bohrung von ``position`` aus, in beide
+    Richtungen (:func:`over_the_edge_along`, RM-249).
 
     Ein Langloch steckt in der Mitte tief im Material und reißt trotzdem an
     einem Ende auf; wer nur die Mitte fragt, hört davon nichts. Gemeldet wird
@@ -1136,9 +1250,9 @@ def edge_findings(
     if body is None and isinstance(mesh, MeshData):
         body = mesh
     if travel <= EPS_GEOM:
-        return over_the_edge_along(mesh, position, frame.normal, diameter, body=body)
+        return over_the_edge_along(mesh, position, frame.normal, diameter, body=body, reach=reach)
     for end in slot_ends(position, frame, travel, angle_deg):
-        found = over_the_edge_along(mesh, end, frame.normal, diameter, body=body)
+        found = over_the_edge_along(mesh, end, frame.normal, diameter, body=body, reach=reach)
         if found:
             return found
     return []
@@ -1372,6 +1486,7 @@ def drill(
                 diameter=cut_diameter,
                 travel=travel,
                 angle_deg=slot_angle,
+                reach=max(abs(mouth), abs(mouth - height)),
             )
         )
         findings.extend(split_findings(mesh, result))
@@ -1433,7 +1548,8 @@ def drill(
     nothing = without_effect(mesh, outcome.mesh, "difference", profile)
     if nothing is not None:
         findings.append(nothing)
-    findings.extend(over_the_edge(mesh, position, axis, cut_diameter, body=mesh))
+    reach = height / 2.0 if through else depth if anchor == "mouth" else depth / 2.0
+    findings.extend(over_the_edge(mesh, position, axis, cut_diameter, body=mesh, reach=reach))
     findings.extend(split_findings(mesh, outcome.mesh))
     findings.extend(compensation_findings(diameter, cut_diameter, compensate))
     return BoreResult(

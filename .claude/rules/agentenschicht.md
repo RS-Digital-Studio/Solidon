@@ -163,9 +163,12 @@ mehrdeutig — und am Ende die Suite gegen denselben Stand ohne die Änderung.
 Gemessen am 25.09.2026 mit qwen3:14b: 30 461 Token für die Kurzfassung aller
 153 Werkzeuge gegen **7 258** für die Grundlast des Angebots. **Und die Quote
 hält:** Am 26.09.2026 auf freier Karte, derselbe Code mit und ohne Angebot,
-qwen3:14b bei 32 768 — 18 gegen 14 von 39, gefragt 2/3 gegen 1/3, Baustein 5
-gegen 3 von 13, schemagültig 82 gegen 76 Prozent; ohne Angebot riss neunmal
-das Fenster.
+qwen3:14b — mit Angebot bei 32 768 24 von 39, ohne 14 (neunmal riss das
+Fenster) und mit einem Fenster von 40 960 ebenfalls 24, aber in 149 statt 44
+Minuten und zu einem Zehntel auf dem Prozessor. Mit dem Zwilling als Kurzform
+22 — im Rauschen: Zwei Läufe desselben Stands kippten bis zu sieben Fälle in
+jede Richtung. Gezählt ist mit der Bewertung, die einen Zwilling als dieselbe
+Handlung nimmt (`run_agent_suite._acts`).
 
 ### Nach dem Zug bleibt das Modell warm — bis ein anderer die Karte braucht
 

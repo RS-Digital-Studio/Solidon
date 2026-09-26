@@ -292,8 +292,10 @@ warmer Cache, eine Kugel als Körper:
 Die Reihe ist linear, rund 6,6 µs je Dreieck, und die Sekunde aus der Tabelle
 oben fällt bei etwa **150 000**. Dort steht `session.COARSE_PREVIEW_ABOVE`.
 Darüber legt `_preview_outcome` vor die vorgeschauten Schritte eine
-`decimate_mesh`-Operation auf `COARSE_PREVIEW_TARGET` = 50 000 Dreiecke —
-in der **Dokumentkopie**, die die Vorschau ohnehin rechnet, und nur dort. Was
+`decimate_mesh`-Operation auf `COARSE_PREVIEW_TARGET` Dreiecke — dieselbe
+Zahl, die Schranke selbst (bis zum 26.09.2026 stand dort 50 000; warum nicht
+mehr, steht unten unter „Und das Ziel ist die Schranke selbst") —, in der
+**Dokumentkopie**, die die Vorschau ohnehin rechnet, und nur dort. Was
 übernommen wird, rechnet weiterhin genau.
 
 **Sie nimmt den Anzeigeweg** (Entscheidung Robert, 23.09.2026, RM-208):
@@ -344,7 +346,7 @@ Vier Bedingungen, und jede einzelne trägt:
   Solange der Sehnenfehler allein unter das Ziel führt, bleibt er die
   Abweichung, egal wie hoch das Ziel ist. Erst ein Ziel darunter vervierfacht
   die Toleranz, und dann reißt beides — Abweichung und Geschlecht. Ein
-  Körper, dessen Form bei 0,05 mm mehr als 50 000 Dreiecke braucht (eine
+  Körper, dessen Form bei 0,05 mm mehr als 150 000 Dreiecke braucht (eine
   Figur, ein Scan), wird gröber als die Grenze; das Band sagt „grob" auch
   dann.
 * **Die Verkleinerung des unveränderten Eingangs wird gemerkt.**
@@ -386,6 +388,36 @@ der Absage von vorher. Die Maschine war bei beiden Läufen unterschiedlich
 belastet (Öffnen desselben Eiffelturms 55 bis 102 s); die Spannen sind
 Streuung, die Größenordnungen nicht.
 
+**Und das Ziel ist die Schranke selbst** (26.09.2026, RM-212). Mit 50 000 als
+Ziel kamen die letzten drei Zeilen nie grob durch: Der Kern bringt den
+Spiderman nicht unter 122 952 Dreiecke, das Piratenschiff nicht unter 64 468,
+den Eiffelturm nicht unter 57 680 — jenseits dieses Minimums steigt die Zahl
+mit der Toleranz wieder. Der Anzeigeweg nahm dann das Raster, dessen Netz
+offen ist, und jede Zahl rechnete erst grob vergeblich und dann genau. Mit der
+Schranke als Ziel nimmt er das geschlossene Kernergebnis. Zwei Fallen lagen
+dahinter, beide im Rückweg ins Netz: `simplify` ließ am Piratenschiff zwölf
+Splitter neben dem Rumpf stehen, im Mittel dünner als seine Toleranz
+(`mesh_ops._without_slivers` lässt sie weg), und `_as_mesh` verschweißte
+Schalen, die sich an einer Kante berühren, bis vier Flächen an ihr hingen —
+am Eiffelturm zwei echte Teile (seither verschweißt es nur, wo das Netz dicht
+bleibt, wie `boolean._tidied`). Gemessen mit derselben Sonde, vorher und
+nachher unmittelbar hintereinander, ruhige Maschine:
+
+| Modell | grob erstmals | grob danach | genau |
+|---|---:|---:|---:|
+| Lochplatte, fünfmal unterteilt | 0,69 → 0,71 s | 0,12 → 0,13–0,17 s | 2,9–4,0 s |
+| Waschschüssel (offen) | 0,45 → 0,69 s | 0,22 → 0,49–0,53 s | 1,2–1,4 s |
+| Eiffelturm | Absage → genau, 4,3 s → **grob, 2,3 s** | 2,8–2,9 → 1,7 s | 2,4–4,5 s |
+| Voronoi-Spiderman | Absage → genau, 48,2 s → **grob, 1,7 s** | 17,8–18,9 → **0,59–0,66 s** | 17–46 s |
+| Piratenschiff-Baugruppe | Absage → genau, 16,0 s → **grob, 2,0 s** | 11,1–13,4 → **0,66–0,68 s** | 9,5–13,2 s |
+
+Den Preis zahlt die Schüssel: Ihr grobes Netz bleibt beim Sehnenfehler
+(69 674 statt 25 542 Dreiecke bei 0,2 mm), jede Zahl kostet eine halbe
+Sekunde statt einer Viertelsekunde — und ihr Abtrag weicht um 0,1 statt 1,8 %
+vom genauen ab. Am Eiffelturm, am Spiderman und am Piratenschiff liegt die
+Abweichung bei 0,4, 3 und 0,04 %. Die Platte bekommt dasselbe grobe Netz wie
+vorher (292 Dreiecke); ihre Zeilen sind die Streuung des Laufs.
+
 **Ein Weg bleibt genau, mit Absicht.** Der Agentenvorschlag geht über
 `preview_scene` ohne den Rückruf — er antwortet ohnehin nicht in
 Millisekunden, und sein Bild steht, bis jemand es annimmt.
@@ -409,8 +441,12 @@ mit einem 5-ms-Takt neben dem Arbeiter, längste Lücke: Lochplatte 815 104
 Dreiecke 568 ms, Waschschüssel 149 ms, Eiffelturm 1,3 s, Spiderman 2,0 s —
 der gemessene Weg davor 378 ms, 7,9 s und 2,2 s, und zwar **bei jeder**
 Vorschau, die nicht vollständig durchlief. Jetzt einmal je Körper und
-Dialog. Ganz weg ist es erst mit einem Kern, der den GIL hergibt, oder dem
-Raster allein — das ist eine Frage der Ansicht (offener Punkt dort).
+Dialog. Seit das Ziel die Schranke ist (RM-212), sucht der Kern nicht mehr
+bis zum Raster weiter; dieselbe Sonde, vorher und nachher hintereinander:
+Lochplatte 252 → 250 ms, Waschschüssel 60 → 89 ms, Eiffelturm 664 → 120 ms,
+Spiderman 799 → 324 ms, Piratenschiff 819 → 492 ms. Ganz weg ist es erst
+mit einem Kern, der den GIL hergibt — `manifold3d` gibt ihn bei keinem
+Aufruf her, auch nicht beim Bauen des Körpers (RM-212).
 
 **Und die Vorschau des Dialogs erkennt keine Merkmale** (22.09.2026).
 `preview_async` reicht `detect_features=False` bis in `evaluate`: Die

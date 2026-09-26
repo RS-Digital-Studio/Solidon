@@ -162,8 +162,22 @@ def compare(
     entry = Difference(object_id="", noise_volume=_noise(profile))
     before, after = _clipped_to_the_change(before, after, quality)
     first, second, common = _comparison_parts(before, after)
-    added = _cut_parts(second, first, common, quality)
-    removed = _cut_parts(first, second, common, quality)
+    balance = _volume_balance(first, second, common)
+    noise = entry.noise_volume
+    # Zuerst die Seite, auf der die Bilanz Material erwartet; die andere steht
+    # danach oft ohne Schnitt fest (:func:`_empty_by_balance`).
+    if balance is not None and balance > 0.0:
+        added = _cut_parts(second, first, common, quality)
+        removed = _empty_by_balance(added, balance, noise, added=False)
+        if removed is None:
+            removed = _cut_parts(first, second, common, quality)
+    else:
+        removed = _cut_parts(first, second, common, quality)
+        added = _empty_by_balance(removed, balance, noise, added=True)
+        if added is None:
+            added = _cut_parts(second, first, common, quality)
+            if removed is None:
+                removed = _empty_by_balance(added, balance, noise, added=False)
 
     if added is not None:
         entry.added, entry.added_volume = added[0], max(added[0].volume, 0.0)
@@ -443,6 +457,60 @@ def _cut_parts(
     except Exception as problem:
         _log.warning("component difference could not be computed: %s", problem)
         return None
+
+
+def _volume_balance(
+    first: list[MeshData], second: list[MeshData], common: list[MeshData]
+) -> float | None:
+    """|danach| - |davor| — oder ``None``, wo die Volumina der Netze keine
+    Volumina der Körper sind.
+
+    Für zwei Körper A und B gilt |A - B| - |B - A| = |A| - |B|: Hat einer der
+    zwei Schnitte gerechnet, steht der andere als Zahl fest. Das Volumen eines
+    Netzes ist aber nur dann das seines Körpers, wenn sich keine Schalen
+    überdecken — eine zweite, ineinandersteckende zählte doppelt. Gerechnet
+    wird deshalb nur an je einem zusammenhängenden Stück ohne gemeinsamen
+    Anteil; alles andere schneidet beide Seiten wie bisher.
+    """
+    if common or len(first) != 1 or len(second) != 1:
+        return None
+    before, after = first[0], second[0]
+    if len(face_components(before.raw)) != 1 or len(face_components(after.raw)) != 1:
+        return None
+    return float(signed_volume(after.raw)) - float(signed_volume(before.raw))
+
+
+def _empty_by_balance(
+    known: tuple[MeshData, tuple[SolverInfo, ...]] | None,
+    balance: float | None,
+    noise: float,
+    *,
+    added: bool,
+) -> tuple[MeshData, tuple[SolverInfo, ...]] | None:
+    """Die andere Seite des Vergleichs als leer, wenn die Bilanz es belegt.
+
+    ``known`` ist der gerechnete Schnitt der Gegenseite, ``added`` sagt,
+    welche Seite hier gefragt ist. Aus der Bilanz folgt ihr Volumen; liegt es
+    nicht über ``noise`` — der Grenze, ab der der Vergleich überhaupt eine
+    Änderung meldet —, ist sie leer, ein leeres Netz ohne Löser. Sonst
+    ``None``, und es wird geschnitten.
+
+    **Der Schnitt, den das spart, ist der schwierigste von beiden.** Liegt ein
+    Körper ganz im anderen und decken sich ihre ebenen Flächen mit
+    verschiedenen Dreiecken, liefert der Kern für den inneren minus den
+    äußeren Splitter: an der Senkplatte (311 296 Dreiecke, Bohrung Ø 5,2 auf
+    Ø 6 und 6,5) solche mit negativem Volumen, die beide Stufen der
+    Entwurfskette ablehnten — die Vorschau hieß unvollständig —, bei Ø 7 ein
+    Kontaktrest aus 1 980 Dreiecken, gezeigt als hinzugekommenes Material
+    (26.09.2026, RM-212).
+    """
+    if known is None or balance is None:
+        return None
+    other = max(float(known[0].volume), 0.0)
+    derived = other + balance if added else other - balance
+    if derived > noise:
+        return None
+    return MeshData.of(trimesh.Trimesh()), ()
 
 
 def _noise(profile: Profile | None) -> float:

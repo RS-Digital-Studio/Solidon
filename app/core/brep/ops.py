@@ -680,6 +680,15 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     # Ergebnis — nicht weil der Kern ihn nicht könnte, sondern weil die
     # Signatur ein ``MeshData`` verlangte. Sie fragt jetzt nach dem, was sie
     # wirklich braucht, und ``Solid`` trägt seinen Hüllquader.
+    # Die Länge der Bohrung von der Stelle aus (RM-249): ab der Mündung ihre
+    # Tiefe, um die Mitte die halbe; durchgehend der ganze Körper.
+    reach = (
+        float(body.bounds.diagonal)
+        if params.depth <= EPS_GEOM
+        else params.depth
+        if params.anchor == "mouth"
+        else params.depth / 2.0
+    )
     if shape.slot_length > EPS_GEOM:
         # Ein Langloch steckt in der Mitte tief im Material und reißt trotzdem
         # an einem Ende auf — gefragt wird deshalb an beiden Bogenmittelpunkten
@@ -693,14 +702,21 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
             travel,
             shape.slot_angle,
         ):
-            found = over_the_edge_along(body, end, normal, cut, body=as_mesh_data(body))
+            found = over_the_edge_along(
+                body, end, normal, cut, body=as_mesh_data(body), reach=reach
+            )
             if found:
                 findings.extend(found)
                 break
     elif math.hypot(*normal) > EPS_GEOM:
         findings.extend(
             over_the_edge_along(
-                body, (params.x, params.y, params.z), normal, cut, body=as_mesh_data(body)
+                body,
+                (params.x, params.y, params.z),
+                normal,
+                cut,
+                body=as_mesh_data(body),
+                reach=reach,
             )
         )
     else:
@@ -711,6 +727,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
                 cast(Axis, params.axis),
                 cut,
                 body=as_mesh_data(body),
+                reach=reach,
             )
         )
     findings.extend(split_findings(body, solid))

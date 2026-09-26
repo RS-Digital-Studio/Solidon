@@ -814,7 +814,7 @@ bevor es jemand wusste:
   `test_ui.py` hingen daran (03.09.2026).
 
 **Und oberhalb von 150 000 Dreiecken rechnet sie grob.** `Session._preview_outcome`
-legt dann eine `decimate_mesh`-Operation auf 50 000 Dreiecke vor die
+legt dann eine `decimate_mesh`-Operation auf dieselbe Zahl vor die
 Entwurfsschritte — auf dem Anzeigeweg (`method="fast"`, `_coarse_params`), in
 der Dokumentkopie, die die Vorschau ohnehin anlegt, und für beide Seiten der
 Differenz dieselbe (`_coarse_before`). `_coarse_before` rechnet **zuerst** und

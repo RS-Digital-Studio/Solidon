@@ -56,7 +56,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Auf Windows mit 1 728 Reihenfolgen, Rauschen je Funktion und 24 Hash-Startwerten nicht nachzustellen; Vermutung: gemischte Ubuntu-Runner (AVX-512/AVX2). Nächster Schritt: die Eckkette in `edges.py` auf die plattformgleichen Werkzeuge umstellen und die Ecke in `test_platform_identity._WAYS` aufnehmen; das Beispielarchiv der Werkstattfilme bleibt offen |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Vierte Fassung nach einem Korpusfund: Das Urteil zählt nur Flecken **ohne** Grundform — drei Bowlingkugeln verloren sonst ihre Kugel (Rückstand 0,0 über 65 024 Dreiecke), und schon im alten Stand hing es an der Fleckreihenfolge. Zwei Runden statt einer, Drache 4,02 → 3,83 s. Offen: §31 verlangt 1 s je 200 000, gemessen sind 3,83 — es bleibt `_large_facet_faces` (1,2 s am Drachen) und der Löser selbst (RM-209). Zwei Abkürzungen sind gemessen und verworfen: nur den Zylinder fragen (kostet die Bowlingkugel) und die Stichprobe an Riesenflecken (ändert die Erkennung). Durchsicht 0.5.0: an der Freiform aus den Leistungstests 6 % langsamer als vorher (unter Fremdlast), am Drachen gleich; der Aufschlag ist der Kantenleser der Gewinde (je Achse 0,12 s an 233 330 Kanten). Die Schiffskörper aus RM-181 liegen bei 7,9–18,3 s je 200 000 Dreiecke. Stapelumbau oder neu gefasstes Ziel entscheidet Robert (wie RM-132) |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | `slice_body` an der Hohlkugel 40 % schneller (`546eff16`: Stapelung, Inselzertifikat, Säulen auf Arbeitern, direkte Ringe), hochgerechnet rund 0,65 s auf der Referenzmaschine — 300 ms nicht erreicht; der Rest ist die Breitensuche mit sieben Öffnungen je Schicht. Robert gibt C++ frei (23.09.): native Breitensuche als eigener Bauauftrag; womit (eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython), entscheidet Robert |
-| [RM-212 — Die Vorschau großer Teile hält den Hauptthread und rechnet vergeblich](#rm-212) | Geometrie, Erkennung und Druckvorbereitung | GIL beim ersten Verkleinern (0,57–2,0 s), sechs vergebliche Kernschritte vor dem Raster (bis 4,8 s), genaue Vorschau großer Teile 8–37 s — Raster vorziehen, simplify aus dem Hauptthread, lokaler Tausch des Hohlraums |
+| [RM-212 — Die Vorschau großer Teile hält den Hauptthread und rechnet vergeblich](#rm-212) | Geometrie, Erkennung und Druckvorbereitung | Grob gelingt jetzt an allen fünf Modellen (0,5–1,7 s je Zahl); offen: der GIL beim ersten Verkleinern (0,1–0,5 s, `manifold3d` gibt ihn nie her — Entscheidung Hilfsprozess) und die genaue Vorschau der Senkplatte (4,3–5,7 s statt unter 3) |
 | [RM-216 — Ein erzeugtes Flächenmerkmal behält nach einer Änderung seine alte Fläche](#rm-216) | Geometrie, Erkennung und Druckvorbereitung | Nach einer Bohrung trägt face_top weiter 2 400 statt 2 349,878 mm² — Kennzahlen gebauter Merkmale aus den nachgeführten Dreiecken neu messen (Sonde s35_stale_area) |
 | [RM-217 — Die Zuordnung meldet doppelt und fragt ohne Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Formen-Beispiel auf acht Hinweise gebündelt, alle Kennungen und Zahlen bleiben erhalten. Offen: remove_feature.gone und perceive.orphaned doppelt, orphaned nach Teilen, Frage unter der Deckfläche, altes Merkmal ohne Markierung — _with_features filtert, question_context trägt das alte Merkmal |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | drill_brep_hole nummeriert nach Lage; Verschieben und Einfügen sagen an build_tray_v3.step ab — eindeutige geometrische Zuordnung behält den Namen wie am Netz |
@@ -73,8 +73,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-246 — Am offenen Netz fährt jede Merkmalshandlung auf das Raster und bläht das Modell auf](#rm-246) | Geometrie, Erkennung und Druckvorbereitung | Laptop-Ständer: nach dem Import `repair.still_open`, 21 Teile, jede Merkmalshandlung auf `voxel` mit +31 % Volumen und nur „gerundet“ im Bericht — warum bleibt es offen, und darf die Rasterstufe so still durchreichen |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht](#rm-248) | Geometrie, Erkennung und Druckvorbereitung | Fächer vom Randmittelpunkt lässt beim Versetzen 3,6 bis 5,4 mm³ Mulde — den Deckel als Fortsetzung der umgebenden Fläche bauen, an beiden Kernen |
-| [RM-249 — Eine Bohrung über einer Seite innerhalb der Hülle meldet keine Kante](#rm-249) | Geometrie, Erkennung und Druckvorbereitung | Kantenprüfung fragt zuerst den Hüllquader; an gs-100 läuft eine Kopie 3,4 mm über die Seite, ohne Befund — Prüfung über die eigene Tiefe des Merkmals am Netz, dann Nachkontrolle der Kopien an beiden Kernen |
 | [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | `for_part` setzt ihn ohne Klick bei kleiner Standfläche oder schlankem Teil; Robert 26.09.2026: ohne „Vorschläge übernehmen" gehen die Standardeinstellungen hinaus — bleibt die Automatik, oder wird sie ein Vorschlag je Teil? |
+| [RM-252 — Der Korpuslauf der Übergabe steht nach vier Modellen](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Werkzeug in `.claude/.state/uebergabe-korpus-2026-09-26/`; offen: CuraEngine bricht am Eiffelturm ab („mehr Ausgabe, als gesammelt wird"), pista+biglie liegt bei allen vier Slicern neben dem Bett, dann die übrigen 24 Modelle |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
@@ -99,8 +99,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
-| [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Mit dem Werkzeugangebot (Prompt-Version 8) am 25.09.2026 lokal gemessen: qwen3.5:9b 18/39 (gefragt 1/3, Baustein 2/13, 15,6 min), qwen3:14b 16/22 in einer Teilmessung ohne die Bausteinfälle (gefragt 2/3); offen: der volle Lauf mit qwen3:14b, derselbe Stand ohne Angebot als Basis und der gehostete Vorgabeweg (Geld) |
-| [RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen](#rm-081) | KI und Generatoren | Warmhalten gebaut (`resources.keep_warm`), gestufte Werkzeugauswahl als Angebot gebaut (keine Operation fällt weg); offen: Suite alt gegen neu mit qwen3:14b auf ruhiger Karte als Qualitätsabnahme, `q8_0` nur noch als Dienstvariable ohne Bedarf |
+| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Mit Werkzeugangebot enden bei qwen3:14b zehn von 39 Fällen bei acht Schritten, mit vollem Werkzeugsatz keiner; Entscheidung Robert: eigenes Schrittlimit für den lokalen Weg oder ein Prompt-Satz für gebündelte Aufrufe, je mit Suite vorher/nachher |
+| [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal abgeschlossen am 26.09.2026 (qwen3:14b 22/39 mit Angebot, ohne 14, mit großem Fenster ohne Angebot 24 in dreifacher Zeit; Modellvergleich am Punkt); offen ist nur der gehostete Vorgabeweg — ein kostenpflichtiger Lauf, der Roberts Freigabe braucht |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -1584,6 +1584,29 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   zum Raster, Senkplatte genau unter 3 s — gemessen mit
   `sonden/vorschau/probe_preview.py` auf ruhiger Maschine.
 
+  **Stand 26.09.2026.** Der zweite Posten ist erledigt, anders als gedacht:
+  Das Raster vorzuziehen hätte nichts gebracht, denn sein Netz ist offen, und
+  jede Bohrung darauf scheitert. Die grobe Vorschau verkleinert jetzt auf die
+  Schranke selbst (`COARSE_PREVIEW_TARGET` = 150 000) und nimmt das
+  geschlossene Kernergebnis; der Anzeigeweg lässt dabei Splitter dünner als
+  die Toleranz weg (`_without_slivers`), und `_as_mesh` verschweißt nur, wo
+  das Netz dicht bleibt. Vorher und nachher hintereinander gemessen: Spiderman
+  grob danach 17,8–18,9 → 0,6 s, Piratenschiff 11,1–13,4 → 0,7 s, Eiffelturm
+  2,8 → 1,7 s, alle drei vorher Absage und genau; die Schüssel zahlt
+  0,22 → 0,5 s für 0,1 statt 1,8 % Abweichung. Längster GIL-Stillstand:
+  Spiderman 799 → 324 ms, Piratenschiff 819 → 492, Eiffelturm 664 → 120,
+  Platte 250, Schüssel 89. Die genaue Vorschau der Senkplatte liegt bei
+  4,3–5,7 s (Review: 8–15), und sie war bei Ø 6 und 6,5 unvollständig: Der
+  Schnitt „danach minus davor" lief in Splitter; `difference.compare` nimmt
+  seither die Volumenbilanz statt des Schnitts, der leer sein muss
+  (`_empty_by_balance`). Übrig: `resize_hole` 2,9 s (vier Boolesche 1,9 s,
+  volle Nacherkennung unter 1,5 Mio. Dreiecken 1,1 s), Vergleich 1,8 s
+  (Beschnitt 0,6, Schnitt am dichten Ausschnitt mit 150 000 Dreiecken 1,0).
+  Für den ersten Posten gibt es nur zwei Wege — einen Hilfsprozess für die
+  Kernaufrufe oder einen Kern, der den GIL hergibt (eigenes Rad oder
+  Beitrag an `manifold3d`) —, und beide sind eine Entscheidung Roberts.
+  Sonden und Messungen: `.claude/.state/rm-212-2026-09-26/`.
+
 <a id="rm-216"></a>
 
 - [ ] **RM-216 — Ein erzeugtes Flächenmerkmal behält nach einer Änderung seine alte Fläche.**
@@ -1968,42 +1991,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   weniger als 1 mm³ (`test_a_widened_bore_whose_mouth_lies_in_a_curved_face_
   is_moved_on_both_kernels` mit der engeren Schranke).
 
-<a id="rm-249"></a>
-
-- [ ] **RM-249 — Eine Bohrung über einer Seite innerhalb der Hülle meldet keine Kante.**
-  Gefunden am 25.09.2026 bei RM-245. An den vier Lochplatten, jede
-  Schraubbohrung um 12 mm quer verdoppelt, tragen beide Kerne dasselbe
-  Volumen ab (auf 2 %: −218,847 zu −218,473 mm³ an der Crimper-Platte), aber
-  der exakte Kern findet danach Kopien einzelner Bohrungen nicht wieder und
-  meldet `duplicate_feature.feature_lost` — an `pegboard-gs-100-v2.step`
-  oben beide Bohrungskopien, erkannt wird an der Stelle nur ein Kegelstück;
-  ebenso an der Goot-Platte zweimal, an pb3041 und an der Crimper-Platte je
-  einmal. Das Netz (`_duplicate_cavity_chain`) prüft seine Kopien nicht nach
-  und trägt sie mit ihren Maßen weiter.
-  **Nachgemessen am 26.09.2026:** Frisch erkannt findet auch das Netz an der
-  Kopierstelle nur das Kegelstück — der exakte Kern hat recht. Die Platte
-  reicht auf der Höhe der oberen Bohrung (z = 46,25) nur bis x ≈ 13,6, ihr
-  Hüllquader bis x = 20; die Kopie bei x = 12 läuft mit der Zylindersenkung
-  Ø 10 bis x = 17 über die Seite, und **keiner** der beiden Kerne sagt „über
-  die Kante“. Ursache: `prepare.over_the_edge_along` und
-  `prepare.mouth_over_the_edge` fragen zuerst `_axes_over`, den Hüllquader,
-  und kehren zurück, wenn die Scheibe darin bleibt — das Urteil am Netz
-  (`_flank_is_open`, der Kranz an der Mündung) kommt gar nicht erst dran.
-  Den Hüllquader einfach zu streichen trägt nicht: `_flank_is_open` tastet in
-  Schritten eines Sechzehntels der Hüllendiagonale entlang der Achse und fände
-  an einer 3 mm starken Platte keine Tiefe mit dem Kranz ganz im Material —
-  jede Bohrung hieße „über die Kante“. Weg: für ein Merkmal mit Mitte und
-  Tiefe den Kranz über **seine eigene** Tiefe abtasten (ein Viertel, die
-  Hälfte, drei Viertel), am Körper vor dem Schnitt; wo keine dieser Tiefen
-  ihn ganz im Material hat, reißt die Flanke auf. Das gilt für Versetzen,
-  Verdoppeln, Kippen und Muster (`_edge_findings`); *Bohren* fragt mit der
-  gewählten Tiefe genauso. Danach die Nachkontrolle der Kopien am Netz wie am
-  exakten Kern (`_duplicate_cavity_chain` fragt heute nicht), damit eine
-  Kopie, die es nicht gibt, an beiden gemeldet wird. Abnahme: an gs-100 oben
-  um 12 mm quer verdoppelt „über die Kante“ an beiden Kernen, an den übrigen
-  drei Platten dieselben Befunde an beiden Kernen, als STEP und als 3MF; eine
-  Bohrung in einer 1-mm-Platte ohne Kantenbefund.
-
 <a id="rm-250"></a>
 
 - [ ] **RM-250 — Der Brim je Teil beim Export ist eine Automatik.**
@@ -2017,6 +2004,35 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   die Automatik je Teil (sie verhindert, dass kleine Teile abreißen, und ist
   im Prüfbericht benannt), oder wird sie ein Vorschlag je Teil im Druckdialog?
   Die neue Regel für viele kleine Füße ist bewusst nur ein Vorschlag.
+
+<a id="rm-252"></a>
+
+- [ ] **RM-252 — Der Korpuslauf der Übergabe steht nach vier Modellen.**
+  Begonnen am 26.09.2026 auf Roberts Frage, ob Vorschläge und Übergabe an
+  alle unterstützten Slicer bei jedem Modell klappen. Das Werkzeug liegt in
+  `.claude/.state/uebergabe-korpus-2026-09-26/`: `alle.py` fährt 28 Modelle,
+  je Modell ein Prozess; `lauf.py` geht den Weg von Import, Druckdialog und
+  Übergabe an ElegooSlicer (Centauri Carbon 2), OrcaSlicer (Bambu A1),
+  PrusaSlicer (MK4S) und CuraEngine (Ender 3 V3), je mit Standard,
+  übernommenen Vorschlägen und ohne Kanalsperre; `auswertung.py` fasst
+  zusammen. Auf Roberts Wort nach vier Modellen und 44 Läufen angehalten.
+  - **CuraEngine am Eiffelturm:** „Der Slicer hat mehr Ausgabe erzeugt, als
+    gesammelt wird" — mit Standard und mit Vorschlägen keine Druckdatei.
+  - **pista+biglie.3mf:** Alle vier Slicer sehen Teile neben dem Bett;
+    ElegooSlicer und OrcaSlicer ordnen selbst an, PrusaSlicer lehnt ab
+    („außerhalb seines Bauraums"). Zu klären, ob der Lauf oder die Übergabe
+    die Belegung verliert.
+  - Die Orca-Zeilen der Schüssel liefen noch mit einem Leser ohne Bambus
+    `; FEATURE:` — neu fahren, bevor die −15,7 % Modellbahn mit Sperre
+    etwas heißen.
+  - Sonst ließ die Kanalsperre die Modellbahn an Schüssel, Murmelbahn,
+    Okarina und Eiffelturm in ElegooSlicer, OrcaSlicer und PrusaSlicer
+    unverändert (±0,00 %) und nahm die Stütze im Kanal weg.
+  - Die Cura-Lüfterwarnung stand an jedem Lauf; seit dem 26.09.2026 misst
+    die Übergabe den Lüfterstart in der Druckdatei und meldet nur, was dort
+    steht.
+
+  Nächster Schritt: die zwei Befunde beheben, dann alle 28 Modelle.
 
 ## Bedienung und Darstellung
 
@@ -2751,6 +2767,27 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#p16--organische-modellierung).
 
+<a id="rm-251"></a>
+
+- [ ] **RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit.** Gefunden am
+  26.09.2026 beim Suitevergleich (RM-016): Mit Werkzeugangebot endet qwen3:14b in
+  zehn von 39 Fällen bei `MAX_STEPS` = 8 (which_hole, join_what, magnet_lid,
+  wall_holder, cable_exit, spacer, snap_box, dowels, inserts, free_shape), mit
+  vollem Werkzeugsatz und Fenster 40 960 in keinem — dort höchstens vier
+  Schritte. Der Unterschied liegt nicht an den Nachforderungen (0 bis 1 je
+  Fall), sondern an der Bündelung: Mit vollem Satz ruft das Modell mehrere
+  Werkzeuge in einem Schritt (magnet_lid neun Aufrufe in vier Schritten), mit
+  Angebot meist eines je Schritt. Das erklärt die zwei Fälle, die das Angebot
+  gegen den vollen Satz verliert (22 gegen 24). Zwei Hebel, beide zu messen:
+  **(a)** ein eigenes Schrittlimit für den lokalen Weg — §26.5 nennt das
+  Iterationslimit hart, lokal kostet ein Schritt kein Geld, aber 15 bis 20
+  Sekunden; eine Entscheidung Roberts. **(b)** ein Satz im Prompt, der
+  gebündelte Aufrufe nahelegt; `_OFFER_HINT` sagt heute „im nächsten Schritt …
+  danach rufst du es mit Werten auf" und legt damit das Nacheinander nahe.
+  Abnahme: Suite mit qwen3:14b vorher und nachher auf freier Karte, keine
+  Verschlechterung der Quote, weniger Fälle am Limit. Rohdaten:
+  `.claude/.state/lokale-ki-2026-09-25/messung/`.
+
 <a id="rm-016"></a>
 
 - [ ] **RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen.** Die Agenten-Suite gegen
@@ -2759,91 +2796,31 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   und Quote sind belegt; mehrschrittige Werkzeugaufrufe berücksichtigen den Umgang mit
   Thinking-Blöcken. Die Behandlung von Modellablehnungen ist bereits gebaut.
 
-  **Stand 25.09.2026, lokal, Prompt-Version 8 (Werkzeugangebot), RTX 4080:**
-  qwen3.5:9b ohne Ortsfelder der Bausteine 18/39 (19 mit der korrigierten
-  Erwartung der Wo-Fälle), gefragt 1/3, schemagültig 89/97, Baustein 0/13 —
-  zwölf Bausteine ohne Stelle, die die Auswertung verwarf —, 18,9 min; mit
-  Ortsfeldern (`part_placement`, so eingecheckt) 18/39, gefragt 1/3,
-  schemagültig 57/64, Baustein 2/13, 15,6 min. Die übrigen Wechsel zwischen
-  beiden Läufen gehen in beide Richtungen und betreffen Fälle ohne Baustein.
-  Zweimal lief eine Antwort von qwen3.5:9b an die Obergrenze von 8 192 Token.
-  qwen3:14b ohne Ortsfelder in einer Teilmessung über die ersten 22 Fälle:
-  16 gut (17 korrigiert), gefragt 2/3, schemagültig 67/111, 23,2 min; auf
-  denselben 22 Fällen traf qwen3.5:9b ebenfalls 16. Zum Vergleich der Lauf vom
-  23.09.2026 ohne Angebot: 21/39, gefragt 3/3, Baustein 4/13. Die Wo-Fälle
-  verlangten das Wort „Menü"; Aushöhlen und Bohrung ändern stehen seit dem
-  11.09.2026 in den Handlungen rechts, die richtige Antwort fiel also durch
-  (`tests/agent_cases.py` verlangt jetzt „Handlungen", 7064a646). Offen: der
-  volle Lauf mit qwen3:14b auf dem eingecheckten Stand, derselbe Stand ohne
-  Angebot als Basis, gpt-oss:20b. Werkzeuge und Rohdaten:
+  **Lokal abgeschlossen am 26.09.2026** — Prompt-Version 8, Regelsammlung
+  unverändert, RTX 4080 mit freier Karte (Belegung je Fall im Rohdatensatz),
+  Ollama 0.34.3, `num_ctx` 32 768 außer wo genannt:
+
+  | Stand | Modell | gut | gefragt | schemagültig | Baustein | Zeit |
+  |---|---|---|---|---|---|---|
+  | ohne Angebot (`75aaf46e`) | qwen3:14b | 14 | 1/3 | 76 % | 3/13 | 46 min, 9 Fensterabbrüche |
+  | ohne Angebot, Fenster 40 960 | qwen3:14b | 24 | 2/3 | 83 % | 5/13 | 149 min, 10 % auf dem Prozessor |
+  | mit Angebot (`a00f5053`) | qwen3:14b | 24 | 2/3 | 82 % | 5/13 | 44 min |
+  | dazu Zwilling als Kurzform (`2c34c2a7`) | qwen3:14b | 22 | 2/3 | 81 % | 3/13 | 47 min |
+  | dazu Zwilling als Kurzform | qwen3.5:9b | 21 | 1/3 | 88 % | 4/13 | 15 min |
+  | dazu Zwilling als Kurzform | gpt-oss:20b | 10 | 2/3 | 88 % | 0/13 | 21 min, zweimal an der Antwortgrenze, keine Kurzform angefordert |
+
+  Das Vorgabemodell bleibt qwen3:14b. Die Wo-Fälle verlangten bis 7064a646 das
+  Wort „Menü“, das es für Aushöhlen und Bohrung ändern seit dem 11.09. nicht
+  mehr gibt, und neun Bausteinfälle den Netz-Quader, den das Menü seit P2.8
+  nicht mehr anbietet; alle Zahlen oben sind mit der Bewertung aus a989a099
+  gezählt (ein Zwilling ist dieselbe Handlung, Wo-Fälle mit „Handlungen“).
+  Zwei Läufe desselben Stands kippten bis zu sieben Fälle in jede Richtung. Zehn Fälle
+  enden mit Angebot am Schrittlimit, ohne keiner — das ist der nächste Hebel
+  (RM-251), kein Messfehler. **Offen bleibt der gehostete Vorgabeweg:**
+  ein kostenpflichtiger Lauf, nur mit Roberts Freigabe. Werkzeuge und Rohdaten:
   `.claude/.state/lokale-ki-2026-09-25/`.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-konzepte-nachrecherchiert-19082026).
-
-<a id="rm-081"></a>
-
-- [ ] **RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen.** Die lokale Modellserie
-  auf die noch offenen Messungen begrenzen: Warm-/Kaltstart und Antwortqualität mit aktuellem
-  Werkzeugschema erfassen, weitere Schemakürzungen gegen dieselben Referenzanfragen prüfen und die
-  gestufte Werkzeugauswahl als Bedienentscheidung vorbereiten. Abnahme: Quote und Latenz aus
-  demselben ruhigen Lauf samt GPU-Zustand; keine Qualitätsverschlechterung durch Kürzungen.
-
-  **Stand 15.09.2026, aus RM-173:** Die Quote ist zweimal gemessen (20/39 → 24/39 mit der
-  Kürzung), und die Kürzung hat nicht geschadet — aber unter Fremdlast, mit Modellstarts
-  zwischen 56 und 314 s, also ohne brauchbare Latenz. Ruhig gemessen (14.09., RM-054/RM-173):
-  22,9 s kalt und 2,3 s warm für den vollen Prompt, 18,7 s kalt für den gekürzten. Was
-  bleibt: ein ruhiger Lauf für Latenz und GPU-Zustand, das Ergebnis des Laufs ohne Denkblock
-  (484 und 847 Token Ausgabe je Schritt sind zum größten Teil Denkblock, bei 33 Token/s eine
-  halbe Minute), und die gestufte Werkzeugauswahl — die bleibt, was `AGENTS.md` sagt: eine
-  Auswahl, die Operationen aussortiert, wäre eine Betriebsart mit anderem Namen, und ob es
-  eine geben soll, entscheidet Robert.
-
-  **Warum der Modellstart Minuten kostet — beobachtet am 15.09.2026, 00:53 bis 01:00, alle
-  vier Sekunden `nvidia-smi` und der Arbeitssatz von `llama-server`:** Nach dem Entladen
-  belegt der Desktop 1,6 GB der 16 GB (dwm 945 MB, Claude 200, Explorer 185, Chrome). Die
-  Gewichte (8,6 GB) sind in acht Sekunden auf der Karte; dann kriecht die Belegung von 10,4 auf
-  15,7 GB mit etwa 60 MB/s — zweieinhalb Minuten, ein Kern beschäftigt, Platte und Grafikkarte
-  im Leerlauf. Das ist der KV-Cache (5 120 MiB bei 32 768 Token in f16) und die Rechenpuffer,
-  angelegt am Rand des Speichers: `ollama ps` meldet 14,4 GB für das Modell, frei waren 14,7.
-  **Die Kante ist es aber nicht** — das sagte um 03:07 dieselbe Messung mit leerem Desktop
-  (1,4 GB belegt): 188 s Kaltstart, und `llama3.1:8b` mit 7 GB Luft brauchte für 4 GB KV-Cache
-  23 s gegen 4,4 s bei 4 096 Token; `qwen3:14b` mit 4 096 Token 26 s, mit 32 768 Token 188 s.
-  Die Zeit hängt an der **Größe des KV-Caches**, nicht am freien Speicher, und sie hat einen
-  Anfang: Bis 17:55 lud dasselbe Modell mit demselben Fenster in **3 bis 4,5 s** (elf Starts
-  im Serverlog), um 17:58 waren es 83 s, seither nie unter 40 — die Zeit, zu der die
-  Torläufe der anderen Sitzungen mit ihren Fenster- und Renderer-Tests begannen. Der
-  Grafiktreiber lagert seither bei jeder großen Zuweisung um, und zwar Stunden nach dem
-  letzten Test noch. Was das zurücksetzt, ist nicht gemessen — ein Neustart ist die Probe,
-  und die gehört Robert. Bis dahin gilt: Latenz nur nach frischem Start und **vor** einem
-  Torlauf messen; die 22,9 s vom Nachmittag sind der Bezugswert, und jede Sitzung mit
-  `keep_alive: 0` zahlt den Start je Zug neu.
-
-  Zwei Hebel, beide eine Entscheidung: **Warmhalten zwischen den Zügen** (siehe RM-173) — und
-  der **KV-Cache in `q8_0`**: Ollama nimmt das nur als Umgebungsvariable des Dienstes
-  (`OLLAMA_KV_CACHE_TYPE=q8_0` mit `OLLAMA_FLASH_ATTENTION=1`), halbiert damit die 5 GB, und
-  mit 3,2 GB bei 40 960 Token passte sogar das volle Trainingsfenster von qwen3 auf die Karte
-  (8,6 + 3,2 + Puffer ≈ 12,5 GB) — ein Viertel mehr Platz für RM-173. Solidon kann die
-  Variable nicht setzen, aber messen, ob sie gesetzt ist: Die vorhandene Probe
-  (`model_state`, Karte gegen Prozessor) sagt nach einem Ladeversuch mit 40 960, ob das Modell
-  ganz im VRAM liegt. Ein Fenster, das sich nach dieser Probe richtet, statt fest 32 768 zu
-  nehmen, ist der Vorschlag; gebaut wird er auf Roberts Wort.
-
-  **Stand 25.09.2026 (Auftrag Robert: „lokale KI optimieren für weniger
-  Kontext, sinnvoll einfache Bedienung, neues oder besseres Modell"):** Beide
-  Hebel sind entschieden und gebaut. **Warmhalten:** Nach dem Zug bleibt das
-  Modell drei Minuten auf der Karte (`OLLAMA_KEEP_ALIVE`), `local_ai_slot`
-  gibt beim Betreten jedes fremde warm gehaltene Modell frei, ComfyUI räumt
-  die Karte ganz — zwei Modelle zugleich bleiben ausgeschlossen. **Gestufte
-  Werkzeugauswahl** als Angebot (`agent/offer.py`): jede Operation bleibt
-  aufrufbar, nur die gemeinten stehen mit Feldern da; Grundlast 30 461 → 7 276
-  Token (RM-185 im Archiv). Dazu eine Antwortobergrenze (`num_predict` 8 192)
-  gegen Endlosantworten und der Kürzungsschutz nach Anfragelänge. `q8_0` ist
-  damit ohne Bedarf: qwen3:14b liegt mit 32 768 ganz auf der Karte, und das
-  Fenster hat 25 000 Token Luft. **Offen ist die Qualitätsabnahme:** Suite
-  desselben Stands ohne Angebot gegen mit, qwen3:14b, ruhige Karte (Werkzeuge
-  in `.claude/.state/lokale-ki-2026-09-25/`).
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#ollama-bis-zum-anschlag-31082026).
 
 ## Tests und Entwicklungswerkzeuge
 

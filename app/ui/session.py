@@ -713,17 +713,24 @@ def _warning_of(result: EvaluationResult, previewed: tuple[OpId, ...]) -> str:
 #: Bild" ohne Hilfe nicht mehr zu halten ist.
 COARSE_PREVIEW_ABOVE: Final = 150_000
 
-#: Worauf verkleinert wird.
+#: Worauf verkleinert wird: auf die Schranke selbst.
 #:
-#: Dieselbe Messung von der anderen Seite: Aus 327 680 Dreiecken auf 50 000
-#: kostet ``decimate`` 0,20 s (einmal je Auswertung, danach aus dem Cache),
-#: und die Oberfläche wandert dabei um 0,0078 mm — ein Sechstel von
-#: :data:`app.core.units.MAX_FACET_SAG`, mit der beide Kerne ohnehin
-#: tessellieren. Die Bohrung bleibt eine Bohrung: gemessen an derselben Kugel
-#: trägt das grobe Bild dasselbe Geschlecht, ein Loch von 4,98 mm und
-#: 1 168,5 mm³ Abtrag wie das genaue — bis hinunter zu 5 000 Dreiecken
-#: (0,0266 mm). Erst bei 2 000 reißt die Facettentoleranz (0,0804 mm).
-COARSE_PREVIEW_TARGET: Final = 50_000
+#: Der Anzeigeweg nimmt zuerst den exakten Kern, beginnend beim Sehnenfehler,
+#: mit dem beide Kerne tessellieren (0,05 mm), und hält an, sobald das Ziel
+#: erreicht ist; nur wo das nicht gelingt, legt er im Raster zusammen. Das
+#: Kernergebnis ist geschlossen, das Raster oft nicht — und auf einem offenen
+#: groben Netz scheitert jede Bohrung, die Vorschau rechnet dann genau.
+#:
+#: Bis zum 26.09.2026 stand hier 50 000. Figuren bringt der Kern nicht so
+#: weit: den Spiderman nicht unter 122 952 Dreiecke, das Piratenschiff nicht
+#: unter 64 468, den Eiffelturm nicht unter 57 680 — jenseits dieses
+#: Minimums steigt die Zahl mit der Toleranz wieder. Alle drei gingen ins
+#: Raster, und jede Zahl im Bohrdialog rechnete genau, 13 bis 37 s (RM-212).
+#: Mit der Schranke als Ziel nimmt die grobe Vorschau das geschlossene
+#: Kernergebnis, und das bleibt unter der Größe, ab der eine Vorschau die
+#: Sekunde nicht mehr hält. Genauer wird sie dabei auch: Ein höheres Ziel
+#: hält den Kern öfter beim ersten, feinsten Schritt.
+COARSE_PREVIEW_TARGET: Final = COARSE_PREVIEW_ABOVE
 
 
 def _quiet_progress(_fraction: float, _text: str) -> None:
