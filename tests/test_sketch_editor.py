@@ -9200,3 +9200,35 @@ def test_fitting_reaches_the_vertices_of_a_turned_ellipse(qt_app: QApplication) 
     # x-Scheitel einer gedrehten Ellipse: sqrt(a² cos² θ + b² sin² θ).
     expected = math.hypot(20.0 * math.cos(math.radians(40.0)), 6.0 * math.sin(math.radians(40.0)))
     assert reach == pytest.approx(expected, abs=1e-9)
+
+
+@pytest.mark.parametrize("keep", [True, False])
+def test_leaving_the_sketch_brings_back_the_tab_from_before(
+    qt_app: QApplication, keep: bool
+) -> None:
+    """Nach der Skizze steht rechts wieder der Prüfbericht, nicht der Chat (KUNDE-07).
+
+    Beim Betreten kommt der Reiter *Bedingungen* nach vorn; beim Verlassen wurde
+    er nur ausgeblendet, und ``QTabWidget`` wählte seinen Nachbarn — den Chat.
+    *An den Slicer übergeben …* im Prüfbericht lag danach verdeckt.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.show()
+        window._show_start_screen(False)
+        window.right.setCurrentWidget(window.report)
+        window.start_sketch("sketch_extrude")
+        qt_app.processEvents()
+        assert window.right.currentWidget() is window._constraints_room, (
+            "ohne Reiterwechsel prüft dieser Test nichts"
+        )
+        window.finish_sketch(keep=keep)
+        qt_app.processEvents()
+        assert window.right.currentWidget() is window.report
+    finally:
+        window.close()
+        window.deleteLater()

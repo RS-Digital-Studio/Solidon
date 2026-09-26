@@ -118,6 +118,7 @@ from app.ui.labels import (
     explain_choices,
     localised,
 )
+from app.ui.labels import slicer_title as _slicer_title
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.palette import ROLES
 from app.ui.panels import align_forms, collapsible
@@ -2390,18 +2391,6 @@ class _SlicerWorker(Worker):
             # darunter nennt den Weg zu den zusätzlichen Programmen.
             _log.warning("could not search for slicers: %s", problem)
             self.done.emit(())
-
-
-def _slicer_title(path: Path) -> str:
-    """Ein Name, den ein Mensch wiedererkennt — der Installationsordner.
-
-    „elegoo-slicer.exe" und „prusa-slicer-console.exe" sind Dateinamen; was
-    auf der Packung steht, ist „ElegooSlicer" und „PrusaSlicer". Der Ordner
-    trägt genau das, und bei Cura sogar die Version („UltiMaker Cura 5.13.0"),
-    was bei zwei installierten Fassungen der Unterschied ist.
-    """
-    folder = path.parent.name
-    return folder or path.stem
 
 
 class PrintSettingsDialog(QDialog):

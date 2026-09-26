@@ -133,11 +133,14 @@ class AskDialog(QDialog):
         parent: QWidget | None = None,
         *,
         labels: Mapping[str, str] | None = None,
+        as_buttons: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Rückfrage"))
         self.setMinimumWidth(360)
         self._ready = True
+        self._answers: list[QPushButton] = []
+        """Je Antwort ein Knopf, wenn die Frage zwei oder drei Handlungen anbietet."""
 
         prompt = QLabel(question, self)
         prompt.setWordWrap(True)
@@ -184,6 +187,26 @@ class AskDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
+        if as_buttons:
+            # **Zwei Handlungen sind zwei Knöpfe, keine Liste mit einem dritten.**
+            # Vor der Vollerkennung stand „Sofort laden“ und „Mit
+            # Merkmalserkennung laden“ als Liste, darunter ein Knopf, dessen
+            # Beschriftung mit der Zeile wechselte: erst die Zeile wählen, dann
+            # den Knopf — zwei Klicks für eine Antwort, und die zweite Antwort
+            # lag hinter einer Auswahl, die niemand als solche erkennt
+            # (Durchsicht 0.5.1). Liste und Antwortknopf bleiben als Ablage der
+            # Wahl; zu sehen sind die Knöpfe, der erste ist der Hauptknopf.
+            self.list.hide()
+            self._accept.hide()
+            for index in range(self.list.count()):
+                item = self.list.item(index)
+                answer = buttons.addButton(item.text(), QDialogButtonBox.ButtonRole.ActionRole)
+                answer.clicked.connect(weak_slot(self, AskDialog._answer, index))
+                if index == 0:
+                    make_primary(answer)
+                self._answers.append(answer)
+            self._name_the_choice()
+
         layout = QVBoxLayout(self)
         layout.addWidget(prompt)
         layout.addWidget(self._preparing)
@@ -202,6 +225,8 @@ class AskDialog(QDialog):
         item = self.list.currentItem()
         self._accept.setText(item.text() if item is not None else tr("OK"))
         self._accept.setEnabled(self._ready and item is not None)
+        for answer in self._answers:
+            answer.setEnabled(self._ready)
 
     def set_ready(self, ready: bool) -> None:
         """Wählt erst an der aufgebauten Szene; Abbrechen bleibt immer erreichbar."""
@@ -217,7 +242,15 @@ class AskDialog(QDialog):
             # ist der, den Enter auslöst: Die Eingabetaste verwarf die Frage
             # (gemessen am 21.09.2026, ``test_ui``). Ab jetzt steht der Fokus
             # in der Liste, und Enter ist die Antwort.
-            self.list.setFocus(Qt.FocusReason.OtherFocusReason)
+            if self._answers:
+                self._answers[0].setFocus(Qt.FocusReason.OtherFocusReason)
+            else:
+                self.list.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _answer(self, index: int) -> None:
+        """Ein Antwortknopf: die Zeile wählen und antworten, in einem Klick."""
+        self.list.setCurrentRow(index)
+        self.accept()
 
     def accept(self) -> None:
         """Auch Eingabetaste und Doppelklick beachten die Bereitschaft der Ansicht."""

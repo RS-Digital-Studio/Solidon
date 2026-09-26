@@ -514,3 +514,31 @@ def test_a_local_way_to_decimate_closes_the_search_and_opens_the_operation(
     assert opened == ["decimate_mesh"]
     assert tuple(window.object_tree.selected_objects()) == (body,)
     assert window.session.project.document == document
+
+
+def test_the_search_reuses_what_the_session_already_computed(local_window, qt_app, monkeypatch):
+    """Die Suche an einer Stelle rechnet in der Qualität der Sitzung, nicht „fein“.
+
+    Die Sitzung rechnet im Entwurf; mit „fein“ traf die Suche keinen Schritt im
+    Cache und las am Mausoleum-Drachen zuerst das ganze Modell neu ein — 40 s
+    vor jeder Suche, solange keine gelang (Durchsicht 0.5.1). Gezählt wird, ob
+    der Ladeschritt in der Suche noch einmal gerechnet wird.
+    """
+    from app.ui import local_recognition as recognition_module
+
+    session = local_window.session
+    assert session.quality == "draft", "die Sitzung rechnet im Entwurf"
+    qualities: list[str] = []
+    real = recognition_module.evaluate
+
+    def watched(document, profile, **kwargs):
+        qualities.append(kwargs.get("quality"))
+        return real(document, profile, **kwargs)
+
+    monkeypatch.setattr(recognition_module, "evaluate", watched)
+    before = session.cache.statistics.misses
+    _flow, dialog = start(local_window, qt_app)
+    assert qualities and set(qualities) == {session.quality}, qualities
+    # Nur der neue Suchschritt fehlt im Cache, nicht der Ladeschritt davor.
+    assert session.cache.statistics.misses - before <= 1
+    dialog.reject()

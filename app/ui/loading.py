@@ -111,7 +111,9 @@ BLOCK_HEIGHT = (
 )
 
 
-def remaining_time(started: float | None, fraction: float, *, now: float | None = None) -> str:
+def remaining_time(
+    started: float | None, fraction: float, *, now: float | None = None, since: float = 0.0
+) -> str:
     """Was von einer Wartezeit noch aussteht — leer, solange es geraten wäre.
 
     §2.8 verlangt die Schätzung erst über zehn Sekunden, und das ist keine
@@ -127,13 +129,16 @@ def remaining_time(started: float | None, fraction: float, *, now: float | None 
     und die zeigte Prozent ohne jede Zeitangabe. Die Zeile aus §2.8, die es
     über zehn Sekunden verlangt, galt damit für genau den Fall nicht, für den
     sie geschrieben ist.
+
+    ``since`` ist der Anteil, bei dem ``started`` gemessen wurde: Hochgerechnet
+    wird, was seitdem dazukam (``ProgressTiming``).
     """
-    if started is None or fraction < ESTIMATE_FROM:
+    if started is None or fraction < ESTIMATE_FROM or fraction - since <= 0.0:
         return ""
     passed = (time.monotonic() if now is None else now) - started
     if passed < ESTIMATE_AFTER_S:
         return ""
-    left = passed * (1.0 - fraction) / fraction
+    left = passed * (1.0 - fraction) / (fraction - since)
     if left < 5.0:
         return tr("gleich fertig")
     if left < 90.0:
@@ -164,6 +169,17 @@ class ProgressTiming(QObject):
     Anteil je von vorn zählen — Einleseplan, Auswertung, darin das
     Normalisieren und die Erkennung. Beginnt der Anteil wieder kleiner, beginnt
     eine neue, und hochgerechnet wird nur ihre eigene Zeit.
+
+    **Und eine Rechnung, die bei null stand, gibt ihre Zeit nicht weiter.**
+    Meldet eine Zeile ihren Anfang bei 0 % und nie mehr, und die nächste Zeile
+    kommt gleich mit 20 %, sinkt der Anteil nicht — die Zeit der ersten Zeile
+    ging trotzdem in die Hochrechnung der zweiten ein. Gemessen am
+    Mausoleum-Drachen: 16 s „Modell einfügen · 0 %“, dann „Punkte
+    verschweißen · 20 %“ mit „noch etwa 70 s“ und zwei Sekunden später
+    „noch etwa 15 s“ (Durchsicht 0.5.1). Wechselt die Zeile, während der
+    Anteil noch bei null stand, zählt die Schätzung deshalb ab dem ersten
+    gemessenen Anteil der neuen Zeile, und hochgerechnet wird nur, was seitdem
+    dazukam.
     """
 
     changed = Signal()
@@ -186,6 +202,8 @@ class ProgressTiming(QObject):
         hochgerechnet, ergäben eine Minute Einleseplan und danach zehn Prozent
         Auswertung „noch etwa 9 min" (60 s · 0,9 / 0,1), gleich wie kurz die
         Auswertung wirklich ist."""
+        self._counted_fraction = 0.0
+        """Der Anteil, bei dem die Zählung der laufenden Teilrechnung begann."""
         self._tick = QTimer(self)
         self._tick.setInterval(1000)
         self._tick.timeout.connect(self.refresh)
@@ -201,6 +219,7 @@ class ProgressTiming(QObject):
         self._waited = 0.0
         self._moved_at = self.started
         self._counted_from = self.started
+        self._counted_fraction = 0.0
         self._tick.start()
         self.refresh()
 
@@ -209,12 +228,17 @@ class ProgressTiming(QObject):
         self.begin()
         fraction = max(0.0, min(1.0, fraction))
         now = time.monotonic()
+        # Die vorige Zeile stand bei null und ist vorbei: Ihre Zeit war keine
+        # Rechnung an diesem Anteil (siehe Klassenbeschreibung). Gezählt wird
+        # ab dem ersten gemessenen Anteil der neuen Zeile.
+        after_zero = self.fraction <= 0.0 < fraction and bool(self.detail) and detail != self.detail
         if fraction > self.fraction:
             self._moved_at = now
-        elif fraction < self.fraction:
+        if fraction < self.fraction or after_zero:
             # Ein kleinerer Anteil beginnt eine neue Teilrechnung: Ihre
             # Schätzung zählt ab hier, die verstrichene Zeit läuft weiter.
             self._counted_from = now
+            self._counted_fraction = fraction if after_zero else 0.0
             self._waited = 0.0
             if self._waiting_since is not None:
                 self._waiting_since = now
@@ -247,7 +271,9 @@ class ProgressTiming(QObject):
         if self._moved_at is not None and moment - self._moved_at > ESTIMATE_AFTER_S:
             return ""
         counted_from = self.started if self._counted_from is None else self._counted_from
-        return remaining_time(counted_from + self._waited, self.fraction, now=now)
+        return remaining_time(
+            counted_from + self._waited, self.fraction, now=now, since=self._counted_fraction
+        )
 
     def refresh(self) -> None:
         """Meldet dieselbe Zeitangabe auch ohne neue Fortschrittsmessung."""
@@ -267,6 +293,7 @@ class ProgressTiming(QObject):
         self._waiting_since = None
         self._waited = 0.0
         self._counted_from = None
+        self._counted_fraction = 0.0
 
 
 class LoadingVeil(QWidget):

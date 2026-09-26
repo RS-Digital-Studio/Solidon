@@ -508,3 +508,57 @@ def test_an_answer_before_a_new_part_does_not_shorten_its_estimate(
     finally:
         timing.end()
         timing.deleteLater()
+
+
+def test_a_line_that_stood_at_zero_gives_its_time_to_nobody(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine Zeile, die nur ihren Anfang bei 0 % meldete, rechnet der nächsten nichts zu.
+
+    Gemessen am Mausoleum-Drachen (Durchsicht 0.5.1): 16 s „Modell einfügen ·
+    0 %“, dann „Punkte verschweißen · 20 %“ mit „noch etwa 70 s“ und zwei
+    Sekunden später „noch etwa 15 s“. Der Anteil sank nicht, also galt die
+    Zeit der ersten Zeile als Rechenzeit der zweiten.
+    """
+    import app.ui.loading as loading_module
+
+    now = [100.0]
+    monkeypatch.setattr(loading_module.time, "monotonic", lambda: now[0])
+    timing = ProgressTiming()
+    try:
+        timing.begin()
+        timing.step(0.0, "Modell einfügen")
+        now[0] = 116.0
+        timing.step(0.2, "Punkte verschweißen")
+        assert timing.remaining() == "", "16 s bei null sind keine Rechnung an 20 %"
+        now[0] = 118.0
+        timing.step(0.6, "Außenseiten angleichen")
+        assert timing.remaining() == "", "zwei Sekunden der neuen Zeile sagen nichts"
+        now[0] = 128.0
+        timing.step(0.8, "Außenseiten angleichen")
+        # 12 s für 60 Prozentpunkte: 20 Punkte bleiben, also 4 s — „gleich fertig“.
+        assert timing.remaining() == tr("gleich fertig")
+        assert timing.time_text.startswith("Verstrichen: 28 s"), "die Uhr zählt weiter"
+    finally:
+        timing.end()
+        timing.deleteLater()
+
+
+def test_one_line_that_reports_from_zero_keeps_its_own_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dieselbe Zeile von 0 % an: Ihre Zeit bei null ist ihre eigene Rechnung."""
+    import app.ui.loading as loading_module
+
+    now = [100.0]
+    monkeypatch.setattr(loading_module.time, "monotonic", lambda: now[0])
+    timing = ProgressTiming()
+    try:
+        timing.begin()
+        timing.step(0.0, "Bohrung")
+        now[0] = 130.0
+        timing.step(0.5, "Bohrung")
+        assert timing.remaining() == tr("noch etwa {seconds} s").format(seconds=30)
+    finally:
+        timing.end()
+        timing.deleteLater()

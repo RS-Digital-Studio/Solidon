@@ -12,6 +12,7 @@ import re
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any, Final, Literal
 
 from PySide6.QtCore import QDate, QDateTime, QEvent, QLocale, QObject, QSize, Qt, Signal
@@ -2742,6 +2743,33 @@ class DateField(QWidget):
 
     def _show_clear_state(self) -> None:
         self.clear_button.setEnabled(bool(self.text()))
+
+
+#: Ordnernamen, die nichts über das Programm sagen — dort gilt der Dateiname.
+_GENERIC_FOLDERS: Final = frozenset({"", "bin", "sbin", "usr", "local", "macos", "contents"})
+
+
+def slicer_title(path: Path) -> str:
+    """Ein Name, den ein Mensch wiedererkennt — nicht der Dateiname.
+
+    „elegoo-slicer.exe" und „prusa-slicer-console.exe" sind Dateinamen; was
+    auf der Packung steht, ist „ElegooSlicer" und „PrusaSlicer". Der
+    Installationsordner trägt genau das, bei Cura sogar die Version
+    („UltiMaker Cura 5.13.0"), was bei zwei installierten Fassungen der
+    Unterschied ist. Auf dem Mac ist es das Programmpaket (``PrusaSlicer.app``);
+    liegt ein Programm in einem allgemeinen Ordner (``/usr/bin``), bleibt der
+    Dateiname.
+
+    **Eine Stelle für den Druckdialog und die Erstinbetriebnahme** — die
+    nannte dieselben Programme mit Dateinamen (Durchsicht 0.5.1, KUNDE-02).
+    """
+    for parent in path.parents:
+        if parent.suffix.lower() == ".app":
+            return parent.stem
+    folder = path.parent.name
+    if folder.lower() in _GENERIC_FOLDERS:
+        return path.stem
+    return folder
 
 
 def deadline_date(state: Activation) -> str:

@@ -177,6 +177,7 @@ class LocalRecognitionFlow(QObject):
             sources=ProjectSources(project, base_dir=session.base_dir),
             cache=session.cache,
             parent=self.view,
+            quality=session.quality,
         )
         self.dialog = dialog
         dialog.recognitionReady.connect(self._recognized)

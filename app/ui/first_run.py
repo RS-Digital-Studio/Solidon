@@ -62,7 +62,7 @@ from app.core.types import PrinterProfile, PrintTechnology
 from app.i18n import format_decimal, language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
 from app.ui.icons import icon
-from app.ui.labels import NumberSpin, by_title, deadline_date
+from app.ui.labels import NumberSpin, by_title, deadline_date, slicer_title
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.settings import UiSettings
 from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
@@ -322,7 +322,8 @@ class FirstRunDialog(QDialog):
         self.slicer.addItem(tr("Später auswählen"), "")
         remembered = discover.remembered_path("slicer")
         if remembered:
-            self.slicer.addItem(Path(remembered).stem, remembered)
+            self.slicer.addItem(slicer_title(Path(remembered)), remembered)
+            self.slicer.setItemData(1, remembered, Qt.ItemDataRole.ToolTipRole)
             self.slicer.setCurrentIndex(1)
         self.slicer.setAccessibleName(tr("Slicer"))
         self.slicer.currentIndexChanged.connect(self._slicer_changed)
@@ -994,7 +995,7 @@ class FirstRunDialog(QDialog):
             self.slicer.clear()
             self.slicer.addItem(tr("Später auswählen"), "")
             for path in paths:
-                self.slicer.addItem(path.stem, str(path))
+                self.slicer.addItem(slicer_title(path), str(path))
                 self.slicer.setItemData(
                     self.slicer.count() - 1, str(path), Qt.ItemDataRole.ToolTipRole
                 )
@@ -1008,7 +1009,8 @@ class FirstRunDialog(QDialog):
         if not filename:
             return
         if self.slicer.findData(filename) < 0:
-            self.slicer.addItem(Path(filename).stem, filename)
+            self.slicer.addItem(slicer_title(Path(filename)), filename)
+            self.slicer.setItemData(self.slicer.count() - 1, filename, Qt.ItemDataRole.ToolTipRole)
         _select(self.slicer, filename)
 
     def _slicer_changed(self) -> None:

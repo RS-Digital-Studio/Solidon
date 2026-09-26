@@ -1962,6 +1962,47 @@ def _edge_labels(candidates: Sequence[tuple[str, str] | EdgeTarget]) -> dict[str
     return {entry.token: edge_label(entry) for entry in candidates if isinstance(entry, EdgeTarget)}
 
 
+def _undone_text(transaction: Any) -> str:
+    """Was die Statuszeile nach Strg+Z sagt — bei einer Änderung am Schritt die Änderung.
+
+    Eine geänderte Fassung trägt als Titel den Titel des Schritts
+    (``History._swap_operation``). Nach *Offen lassen* hieß es deshalb
+    „Modell einfügen zurückgenommen.“, und das Modell stand weiter da
+    (Durchsicht 0.5.1). Nimmt Strg+Z nur geänderte Fassungen zurück — kein
+    eigener Schritt, kein Umbau, nichts gelöscht —, sagt der Satz das.
+    """
+    changes = transaction.changes
+    edited = changes.after.edited_ops if changes is not None else None
+    if (
+        not transaction.ops
+        and transaction.revision is None
+        and edited
+        and all(entry is not None for entry in edited.values())
+    ):
+        return tr("Änderung an „{name}“ zurückgenommen.").format(name=str(transaction.title))
+    return tr("{name} zurückgenommen.").format(name=str(transaction.title))
+
+
+#: Wie lang eine Antwort als Knopf höchstens sein darf — länger ist sie ein
+#: Name (eine Datei im Archiv) und gehört in eine Liste.
+ANSWER_BUTTON_CHARS = 40
+
+
+def _answers_as_buttons(request: AskRequest) -> bool:
+    """Ob eine Frage ihre Antworten als Knöpfe zeigt (``AskDialog(as_buttons=…)``).
+
+    Nur wo nichts im Bild zu zeigen ist und die Antworten Handlungen sind: zwei
+    oder drei, jede kurz. Kandidaten (Merkmale, Kanten) brauchen die Liste, weil
+    die markierte Zeile in der Ansicht leuchtet.
+    """
+    return (
+        not request.candidates
+        and request.preview is None
+        and 2 <= len(request.choices) <= 3
+        and all(len(str(choice)) <= ANSWER_BUTTON_CHARS for choice in request.choices)
+    )
+
+
 def _candidate_labels(request: AskRequest) -> dict[str, str]:
     """Die Zeile je Antwort, die der Kunde im Dialog liest — Kanten und Merkmale.
 
@@ -3022,6 +3063,8 @@ class MainWindow(QMainWindow):
         # Zeile, lange nach der Tour.
         self.right.addTab(self.tour, tr("Tour"))
         self.right.setTabVisible(self.right.indexOf(self.tour), False)
+        self._tab_before_sketch: QWidget | None = None
+        """Der Reiter rechts, der vor dem Skizzenmodus vorn stand (KUNDE-07)."""
         self._constraints_room = QWidget(self)
         """Der Reiter, in dem die Bedingungen der offenen Skizze stehen (§30.1).
 
@@ -6579,7 +6622,7 @@ class MainWindow(QMainWindow):
             return
         transaction = self.session.undo()
         if transaction is not None:
-            self.announce(tr("{name} zurückgenommen.").format(name=str(transaction.title)))
+            self.announce(_undone_text(transaction))
 
     def action_redo(self) -> None:
         if not self._quiet_command_allowed():
@@ -9836,6 +9879,12 @@ class MainWindow(QMainWindow):
         # Die Bedingungen sind dieselbe Sorte Auskunft — eine, die zu einem
         # Zustand gehört und mit ihm kommt und geht.
         self._constraints_box.addWidget(panel.take_constraint_list())
+        # Der Reiter davor kommt beim Verlassen zurück (KUNDE-07): Ohne das
+        # wählte ``QTabWidget`` den Nachbarn des ausgeblendeten Reiters — den
+        # Chat —, und *An den Slicer übergeben …* im Prüfbericht lag verdeckt.
+        before = self.right.currentWidget()
+        if before is not self._constraints_room:
+            self._tab_before_sketch = before
         self.right.setTabVisible(self.right.indexOf(self._constraints_room), True)
         self.right.setCurrentWidget(self._constraints_room)
         self._bottom_layout.insertWidget(0, panel)
@@ -10976,7 +11025,17 @@ class MainWindow(QMainWindow):
         # mit Signalen, die ins Leere zeigen, und beim nächsten Skizzenmodus
         # käme eine zweite dazu. Gemessen war das ein Segmentierungsfehler in
         # der Fensterdatei, kein sichtbarer Rest.
+        showing = self.right.currentWidget() is self._constraints_room
         self.right.setTabVisible(self.right.indexOf(self._constraints_room), False)
+        if showing:
+            # Wer während der Skizze selbst einen anderen Reiter gewählt hat,
+            # behält ihn; sonst kommt der von vorher, ohne ihn der Prüfbericht.
+            before = self._tab_before_sketch
+            back = before if before is not None and self.right.indexOf(before) >= 0 else None
+            if back is None or not self.right.isTabVisible(self.right.indexOf(back)):
+                back = self.report
+            self.right.setCurrentWidget(back)
+        self._tab_before_sketch = None
         box = panel.take_constraint_list()
         self._constraints_box.removeWidget(box)
         box.setParent(panel)
@@ -19416,6 +19475,12 @@ class MainWindow(QMainWindow):
             self.session.last_result,
             display_unit(),
         )
+        # **Derselbe Name in der Titelleiste.** ``session.title`` leitet ihn
+        # aus dem Ergebnis ab, und gesetzt wurde die Titelleiste nur beim
+        # Dokumentwechsel — also bevor das eingelesene Modell ausgewertet war:
+        # Nach dem Einlesen stand oben „Unbenannt“, in der Kopfzeile und im
+        # Baum der Name des Modells (Durchsicht 0.5.1).
+        self.setWindowTitle(f"{self.session.title} — {APP_NAME}")
         self.header.show_profile(self.session.profile, self.session.last_result)
         # Die Projektangaben wachsen erst mit dem ersten Ergebnis. Dann muss
         # die Werkzeugleiste ihren Text/Icon-Umschalter erneut bewerten;
@@ -19815,10 +19880,15 @@ class MainWindow(QMainWindow):
         # Vorgang. Der Wortlaut ist der, den das Handbuch nennt
         # (``manual.py``: „eine Ladeanzeige mit „Modell wird gelesen““), und
         # den der Fortschritt einer 3MF-Baugruppe ohnehin schon führt.
-        if result is not None:
-            headline = tr("Wird berechnet …")
-        elif self._loading_model:
+        # **Das Modell zuerst.** Vom Startbildschirm aus legt ``start_new``
+        # ein leeres Projekt an, und dessen Ergebnis steht, bevor das Modell
+        # gelesen ist — mit dem Ergebnis zuerst gefragt, stand „Wird berechnet
+        # …“ über einem Import, während die Statuszeile „Modell einfügen“
+        # sagte (Durchsicht 0.5.1, gemessen am Mausoleum-Drachen).
+        if self._loading_model:
             headline = tr("Modell wird gelesen")
+        elif result is not None:
+            headline = tr("Wird berechnet …")
         else:
             headline = tr("Projekt wird geladen …")
         self.veil.begin(
@@ -19918,6 +19988,10 @@ class MainWindow(QMainWindow):
                 request.choices,
                 self,
                 labels=_candidate_labels(request),
+                # Zwei oder drei Handlungen ohne Kandidaten im Bild — die Frage
+                # vor der Vollerkennung — stehen als Knöpfe da; eine Wahl
+                # zwischen Merkmalen, Kanten oder Dateien bleibt eine Liste.
+                as_buttons=_answers_as_buttons(request),
             )
             self._ask_dialog = dialog
             self._ask_request = request

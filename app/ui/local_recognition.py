@@ -48,7 +48,16 @@ from app.core.scene import EvaluationResult, History, OperationDraft, evaluate
 from app.core.scene.cache import ResultCache
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.placement import original_surface_hit
-from app.core.types import Document, Feature, Finding, Profile, Scene, SourceAccess, Vec3
+from app.core.types import (
+    Document,
+    Feature,
+    Finding,
+    Profile,
+    Quality,
+    Scene,
+    SourceAccess,
+    Vec3,
+)
 from app.core.units import is_close
 from app.i18n import tr
 from app.ui.dialogs import AskDialog, ErrorNotice
@@ -115,11 +124,13 @@ class _RecognitionWorker(Worker):
         mesh: MeshData | None = None,
         original_ray: tuple[Vec3, Vec3] | None = None,
         clip_planes: tuple[SectionPlane, ...] = (),
+        quality: Quality = "fine",
     ) -> None:
         super().__init__()
         self.document, self.draft, self.profile = document, draft, profile
         self.revision, self.sources, self.cache = revision, sources, cache
         self.mesh, self.original_ray, self.clip_planes = mesh, original_ray, clip_planes
+        self.quality: Quality = quality
         self.cancelled = CancelSignal()
 
     def _ask(self, question: str, choices: list[str]) -> str:
@@ -168,7 +179,14 @@ class _RecognitionWorker(Worker):
             result = evaluate(
                 document,
                 self.profile,
-                quality="fine",
+                # **Die Qualität der Sitzung, nicht „fein“.** Die Sitzung
+                # rechnet im Entwurf (§31), und der Cache kennt jeden Schritt
+                # vor der Suche nur in dieser Qualität. Mit „fein“ rechnete
+                # jede Suche am Mausoleum-Drachen zuerst das ganze Einlesen neu
+                # — 40 s vor der eigentlichen Suche, bei jedem neuen Suchradius
+                # wieder, solange keine Suche gelang (Durchsicht 0.5.1).
+                # Übernommen wird ohnehin in der Qualität der Sitzung.
+                quality=self.quality,
                 sources=self.sources,
                 cache=self.cache,
                 cancelled=self.cancelled,
@@ -187,7 +205,13 @@ class _RecognitionWorker(Worker):
                     raise UserError(
                         finding.message,
                         suggestions=finding.suggestions or (CORRECT_INPUT,),
-                        values=dict(finding.values),
+                        # Ohne ``kind``: Der Bericht legt dort den Titel der
+                        # Klasse ab, und im Fenster stand darunter „Art: Die
+                        # Eingabe war so nicht verwendbar.“ (Durchsicht 0.5.1).
+                        # ``constraint`` bleibt — es wählt die Wege je Grund.
+                        values={
+                            key: value for key, value in finding.values.items() if key != "kind"
+                        },
                     )
                 raise UserError(
                     tr(
@@ -311,8 +335,11 @@ class LocalRecognitionDialog(QDialog):
         parent: QWidget | None = None,
         original_ray: tuple[Vec3, Vec3] | None = None,
         clip_planes: tuple[SectionPlane, ...] = (),
+        quality: Quality = "fine",
     ) -> None:
         super().__init__(parent)
+        self._quality: Quality = quality
+        """In welcher Qualität gesucht wird — die der Sitzung (``_RecognitionWorker``)."""
         self.setWindowTitle(tr("Merkmale an dieser Stelle"))
         self.resize(460, 650)
         self._document, self._profile = copy.deepcopy(document), copy.deepcopy(profile)
@@ -461,6 +488,7 @@ class LocalRecognitionDialog(QDialog):
             self._mesh,
             self._original_ray,
             self._clip_planes,
+            quality=self._quality,
         )
         worker.ready.connect(self._ready)
         worker.failed.connect(self._failed)

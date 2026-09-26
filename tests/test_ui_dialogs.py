@@ -347,3 +347,116 @@ def test_an_open_advanced_section_never_overlaps_the_action_buttons(
         assert max(editor.geometry().bottom() for editor in advanced) < box.geometry().top()
     finally:
         dialog.close()
+
+
+def test_two_ways_are_two_buttons_not_a_list(qt_app: QApplication) -> None:
+    """Die Frage vor der Vollerkennung antwortet mit einem Klick (Durchsicht 0.5.1).
+
+    Vorher stand eine Liste mit zwei Zeilen da und darunter ein Knopf, dessen
+    Beschriftung mit der Zeile wechselte: Wer mit Erkennung laden wollte, wählte
+    erst die Zeile und klickte dann den Knopf.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    from app.ui.dialogs import AskDialog
+
+    dialog = AskDialog(
+        "„Drache“ hat 2,3 Millionen Dreiecke …",
+        ["Sofort laden", "Mit Merkmalserkennung laden"],
+        as_buttons=True,
+    )
+    answers = [
+        button
+        for button in dialog.findChildren(QPushButton)
+        if button.text() in ("Sofort laden", "Mit Merkmalserkennung laden")
+        and not button.isHidden()
+    ]
+    assert len(answers) == 2, "je Antwort ein sichtbarer Knopf"
+    assert dialog.list.isHidden(), "keine Liste daneben"
+    assert answers[0].isDefault(), "Enter nimmt die erste Antwort"
+    answers[1].click()
+    assert dialog.result() == AskDialog.DialogCode.Accepted
+    assert dialog.chosen() == "Mit Merkmalserkennung laden"
+    dialog.deleteLater()
+
+
+def test_only_short_actions_without_candidates_become_buttons() -> None:
+    """Kandidaten im Bild, lange Namen oder viele Antworten bleiben eine Liste."""
+    from app.ui.main_window import _answers_as_buttons
+    from app.ui.session import AskRequest
+
+    assert _answers_as_buttons(AskRequest("?", ["Sofort laden", "Mit Merkmalserkennung laden"]))
+    assert not _answers_as_buttons(
+        AskRequest("?", ["hole_1", "hole_2"], candidates=(("obj_1", "hole_1"),))
+    )
+    assert not _answers_as_buttons(AskRequest("?", ["a", "b", "c", "d"]))
+    assert not _answers_as_buttons(
+        AskRequest("?", ["eine sehr lange Modelldatei im Archiv, Teil 1.stl", "b"])
+    )
+    assert not _answers_as_buttons(AskRequest("?", ["nur eine"]))
+
+
+def test_undoing_a_changed_step_says_the_change_not_the_step() -> None:
+    """Strg+Z nach *Offen lassen* sagte „Modell einfügen zurückgenommen.“ (Durchsicht 0.5.1).
+
+    Zurückgenommen war nur die Änderung am Ladeschritt; das Modell stand weiter
+    da. Ein eigener Schritt und ein gelöschter behalten den alten Satz.
+    """
+    from app.core.types import DocumentChange, DocumentState, Operation, Transaction
+    from app.ui.main_window import _undone_text
+
+    step = Operation(id=1, op="load", inputs=(), outputs=("obj_1",), params={})
+    edited = Transaction(
+        id="t2",
+        title="Modell einfügen",
+        ops=(),
+        changes=DocumentChange(
+            before=DocumentState(edited_ops={1: step}), after=DocumentState(edited_ops={1: step})
+        ),
+    )
+    assert _undone_text(edited) == "Änderung an „Modell einfügen“ zurückgenommen."
+    own = Transaction(id="t1", title="Bohrung", ops=(2,))
+    assert _undone_text(own) == "Bohrung zurückgenommen."
+    removed = Transaction(
+        id="t3",
+        title="Schritte löschen",
+        ops=(),
+        changes=DocumentChange(
+            before=DocumentState(edited_ops={1: step}), after=DocumentState(edited_ops={1: None})
+        ),
+    )
+    assert _undone_text(removed) == "Schritte löschen zurückgenommen."
+
+
+@pytest.mark.parametrize(
+    ("path", "name"),
+    [
+        (r"C:\Program Files\ElegooSlicer\elegoo-slicer.exe", "ElegooSlicer"),
+        (r"C:\Program Files\UltiMaker Cura 5.13.0\CuraEngine.exe", "UltiMaker Cura 5.13.0"),
+        ("/Applications/PrusaSlicer.app/Contents/MacOS/PrusaSlicer", "PrusaSlicer"),
+        ("/usr/bin/prusa-slicer", "prusa-slicer"),
+    ],
+)
+def test_a_slicer_is_named_as_on_its_box(path: str, name: str) -> None:
+    """Druckdialog und Erstinbetriebnahme nennen einen Slicer gleich (KUNDE-02).
+
+    Der Erststart zeigte `elegoo-slicer`, `CuraEngine` — Dateinamen, während der
+    Druckdialog „ElegooSlicer“ und „UltiMaker Cura 5.13.0“ schrieb.
+    """
+    from pathlib import PurePosixPath, PureWindowsPath
+
+    from app.ui.labels import slicer_title
+
+    pure = PureWindowsPath(path) if "\\" in path else PurePosixPath(path)
+    assert slicer_title(pure) == name  # type: ignore[arg-type]
+
+
+def test_the_first_run_names_slicers_like_the_print_dialog() -> None:
+    """Keine zweite Namensregel im Erststart: alle drei Stellen fragen ``slicer_title``."""
+    import inspect
+
+    from app.ui import first_run
+
+    source = inspect.getsource(first_run)
+    assert ".stem, " not in source, "ein Slicer wird wieder mit seinem Dateinamen eingetragen"
+    assert source.count("slicer_title(") >= 3
