@@ -1181,6 +1181,79 @@ def test_splitting_says_that_the_halves_still_lie_together(
     assert hinweis.severity == "info", "nichts ist schiefgegangen"
 
 
+def test_several_cuts_say_once_that_the_parts_lie_together(
+    document: Document, profile: Profile
+) -> None:
+    """Nach mehreren Schnitten ein Satz über die Stücke — nicht einer je Schnitt (KUNDE-11).
+
+    *Modell teilen* am vergrößerten Organizer schnitt fünfmal, und der Bericht
+    sagte fünfmal „Die zwei Hälften liegen noch aneinander …", dazu je Stück,
+    welche Formdetails nicht wiederzuerkennen seien — zehn Hinweise über
+    Merkmale, auf die nichts zeigte. Zwei Schnitte am Würfel: ein Satz, in der
+    Mehrzahl, und kein Verlust ohne Verweis (``evaluate.QUIET_LOSSES``).
+    """
+    project, history = loaded(document)
+    history.apply(
+        _("Teilen"),
+        [OperationDraft(op="split_pinned", inputs=("obj_1",), params={"axis": "z", "pins": 0})],
+    )
+    history.apply(
+        _("Teilen"),
+        [OperationDraft(op="split_pinned", inputs=("obj_2",), params={"axis": "x", "pins": 0})],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    assert len(result.scene.objects) == 3
+    findings = result.scene.report.findings
+    halves = [entry for entry in findings if entry.code == "prepare.halves_in_place"]
+    assert len(halves) == 1, [str(entry.message) for entry in findings]
+    assert str(halves[0].message).startswith("Die Teile liegen noch aneinander"), "Mehrzahl"
+    assert not [entry for entry in findings if entry.code == "perceive.orphaned"]
+
+
+def test_the_pieces_of_a_cut_are_not_called_off_the_plate_one_by_one() -> None:
+    """Die Stücke eines Schnitts stehen, wo das ganze Teil stand — das sagt ein Satz (KUNDE-11).
+
+    Am vergrößerten Organizer stand nach dem Teilen sechsmal „Ein Objekt
+    liegt außerhalb des Druckbetts." neben „Die zwei Hälften liegen noch
+    aneinander …" — derselbe Befund mit demselben Knopf, *Auf dem Bett
+    anordnen*. Fort ist der Hinweis für die Stücke eines Schnitts; eine
+    Warnung (beim Schreiben einer Datei) und ein anderer Körper behalten ihn.
+    """
+    from app.core.scene.evaluate import _without_split_echoes
+    from app.core.types import Finding
+
+    body = MeshData.of(trimesh.creation.box())
+    scene = Scene(
+        objects={
+            "obj_2": SceneObject(id="obj_2", name="A", mesh=body, created_by=2),
+            "obj_3": SceneObject(id="obj_3", name="B", mesh=body, created_by=2),
+            "obj_4": SceneObject(id="obj_4", name="C", mesh=body, created_by=1),
+        }
+    )
+    halves = Finding(
+        code="prepare.halves_in_place", severity="info", message="…", object_id="obj_1", op_id=2
+    )
+
+    def off(object_id: str, severity: str) -> Finding:
+        return Finding(
+            code="arrange.off_the_plate", severity=severity, message="…", object_id=object_id
+        )
+
+    kept = _without_split_echoes(
+        [halves, off("obj_2", "info"), off("obj_3", "warning"), off("obj_4", "info")], scene
+    )
+
+    assert [(entry.code, entry.object_id, entry.severity) for entry in kept] == [
+        ("prepare.halves_in_place", "obj_1", "info"),
+        ("arrange.off_the_plate", "obj_3", "warning"),
+        ("arrange.off_the_plate", "obj_4", "info"),
+    ]
+    assert kept[0].message == "…", "ein Schnitt behält seinen Satz über die zwei Hälften"
+
+
 @pytest.mark.parametrize(
     ("keep", "volume", "top"), [("below", 6000.0, 5.0), ("above", 2000.0, 10.0)]
 )

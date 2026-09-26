@@ -1091,7 +1091,7 @@ def _evaluate(
         if operation.op == "arrange_bed" and not any(
             entry.code == "arrange.already_arranged" for entry in current_findings
         ):
-            findings[:] = [entry for entry in findings if entry.code != "prepare.halves_in_place"]
+            findings[:] = [entry for entry in findings if entry.code != HALVES_IN_PLACE]
         if result.solver is not None:
             solvers[operation.id] = result.solver
         completed.append(operation.id)
@@ -1187,7 +1187,9 @@ def _evaluate(
     # Erst heilen, dann entdoppeln: Was ein späterer Schritt aufgehoben hat,
     # soll gar nicht erst in den Vergleich — sonst überlebte von zwei
     # geheilten Befunden der letzte die Streichung nicht und der erste doch.
-    settled = _without_repeats(_without_outdated(_without_settled(findings), scene))
+    settled = _without_split_echoes(
+        _without_repeats(_without_outdated(_without_settled(findings), scene)), scene
+    )
     if len(settled) != len(findings):
         scene = dataclasses.replace(scene, report=Report(tuple(settled)))
     token.raise_if_cancelled()
@@ -1309,9 +1311,33 @@ ONE_PIECE_CODES: Final = frozenset(
     }
 )
 
+#: Und welche davon ihre Teilezahl nennen, mit dem Wert, unter dem sie steht.
+#: Sie fallen auch an einem Körper, der am Endstand aus **anderen** vielen
+#: Teilen besteht: „69 Teile, von denen manche ineinanderstecken" stand über
+#: dem Bohrmaschinenhalter, den *Überschneidungen auflösen* zu vier Teilen
+#: vereinigt hatte, und darüber „4 Teile" im Kopf (KUNDE-13).
+COUNTED_PARTS: Final[dict[str, str]] = {
+    "ingest.multiple_components": "components",
+    "repair.part_inside": "components",
+    "mesh.components_split": "after_components",
+}
+
 #: Und „an N Kanten zeigen die Außenseiten gegeneinander" — gestrichen, wenn der
 #: Körper am Endstand einheitlich gewickelt ist (Review R19, 24.09.2026).
 WOUND_STATE_CODES: Final = frozenset({"repair.normals_inconsistent"})
+
+#: Nach welchen Schritten ein Verlust **ohne** Verweis nicht gemeldet wird
+#: („Formdetails sind nach diesem Schritt nicht mehr automatisch
+#: wiederzuerkennen"). Die Reparatur ändert das Netz mit Absicht (Bedienweg C5,
+#: 24.09.2026); das Teilen verbraucht mit Absicht, was an der Schnittfläche lag
+#: (RM-217, KUNDE-11): Am vergrößerten Organizer standen nach *Modell teilen*
+#: zehn solche Hinweise, und auf keines der Merkmale zeigte etwas. Ein Verlust
+#: **mit** Verweis bleibt an jedem Schritt eine Warnung.
+QUIET_LOSSES: Final = frozenset({"repair", "split_pinned", "split_line"})
+
+#: Der Satz, mit dem ein Schnitt sagt, dass seine Stücke noch dort stehen, wo
+#: sie im ganzen Teil standen (``prepare_ops._halves_still_together``).
+HALVES_IN_PLACE: Final = "prepare.halves_in_place"
 
 
 def _conversion_findings(
@@ -1484,10 +1510,12 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
     Endstand geschlossen, ist der Satz falsch, gleich welcher Schritt dazwischen
     geschlossen hat (:data:`CLOSED_STATE_CODES`). Ebenso „besteht aus
     mehreren Teilen" an einem Körper, der am Ende ein Stück ist
-    (:data:`ONE_PIECE_CODES`), und gegeneinander zeigende Außenseiten an einem
-    einheitlich gewickelten (:data:`WOUND_STATE_CODES`). Ein Befund ohne Körper
-    oder an einem Körper, den es am Ende nicht mehr gibt, bleibt — über ihn
-    weiß der Endstand nichts.
+    (:data:`ONE_PIECE_CODES`) — und ein Satz, der eine Teilezahl nennt, an
+    einem, der am Ende eine andere hat (:data:`COUNTED_PARTS`); die Zahl der
+    sehr kleinen Teile wird am Endstand neu gezählt (``repair.small_components``)
+    —, und gegeneinander zeigende Außenseiten an einem einheitlich gewickelten
+    (:data:`WOUND_STATE_CODES`). Ein Befund ohne Körper oder an einem Körper,
+    den es am Ende nicht mehr gibt, bleibt — über ihn weiß der Endstand nichts.
     """
     if not any(
         entry.code in CLOSED_STATE_CODES
@@ -1497,7 +1525,7 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
     ):
         return list(findings)
     closed: dict[ObjectId, bool] = {}
-    whole: dict[ObjectId, bool] = {}
+    parts: dict[ObjectId, int | None] = {}
     wound: dict[ObjectId, bool] = {}
 
     def body_of(entry: Finding) -> SceneObject | None:
@@ -1517,10 +1545,31 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
             if closed[body.id]:
                 continue
         if body is not None and entry.code in ONE_PIECE_CODES:
-            if body.id not in whole:
-                whole[body.id] = getattr(body.mesh, "component_count", 0) == 1
-            if whole[body.id]:
+            if body.id not in parts:
+                count = getattr(body.mesh, "component_count", None)
+                parts[body.id] = count if isinstance(count, int) else None
+            now = parts[body.id]
+            if now == 1:
                 continue
+            said = entry.values.get(COUNTED_PARTS.get(entry.code, ""))
+            if now is not None and isinstance(said, (int, float)) and said != now:
+                continue
+            if entry.code == "ingest.small_components":
+                # Wie viele kleine Teile der Körper **jetzt** hat, nach
+                # derselben Regel wie beim Einlesen (KUNDE-13): Nach
+                # *Überschneidungen auflösen* stand am Bohrmaschinenhalter
+                # „Anzahl 57" über vier Teilen.
+                raw = getattr(body.mesh, "raw", None)
+                if raw is not None:
+                    from app.core.geom.repair import small_components
+
+                    small = len(small_components(raw))
+                    if not small:
+                        continue
+                    if entry.values.get("count") != small:
+                        entry = dataclasses.replace(
+                            entry, values={**dict(entry.values), "count": small}
+                        )
         if body is not None and entry.code in WOUND_STATE_CODES:
             if body.id not in wound:
                 raw = getattr(body.mesh, "raw", None)
@@ -1570,6 +1619,49 @@ def _without_repeats(findings: Sequence[Finding]) -> list[Finding]:
         last[key] = index
     keep = set(last.values())
     return [entry for index, entry in enumerate(findings) if index in keep]
+
+
+def _without_split_echoes(findings: Sequence[Finding], scene: Scene) -> list[Finding]:
+    """Nach dem Teilen ein Satz über die Stücke, nicht elf (KUNDE-11).
+
+    *Modell teilen* am auf 276 mal 253 mal 269 mm vergrößerten Organizer
+    schneidet fünfmal. Im Bericht standen danach fünfmal „Die zwei Hälften liegen noch
+    aneinander …" und sechsmal „Ein Objekt liegt außerhalb des Druckbetts." —
+    für jedes Stück, das dort steht, wo es im ganzen Teil stand. Beides sagt
+    dasselbe und trägt denselben Knopf (*Auf dem Bett anordnen*), und darunter
+    ging unter, was der Kunde wissen muss. Stehen bleibt der letzte Satz über
+    die Hälften, nach mehreren Schnitten in der Mehrzahl; der Hinweis
+    „außerhalb des Druckbetts" fällt für die Stücke eines solchen Schnitts.
+    Eine Warnung darüber — beim Schreiben einer Datei — bleibt.
+    """
+    halves = [index for index, entry in enumerate(findings) if entry.code == HALVES_IN_PLACE]
+    if not halves:
+        return list(findings)
+    cutting = {findings[index].op_id for index in halves if findings[index].op_id is not None}
+    pieces = {
+        object_id for object_id, entry in scene.objects.items() if entry.created_by in cutting
+    }
+    kept: list[Finding] = []
+    for index, entry in enumerate(findings):
+        if entry.code == HALVES_IN_PLACE:
+            if index != halves[-1]:
+                continue
+            if len(halves) > 1:
+                entry = dataclasses.replace(
+                    entry,
+                    message=_(
+                        "Die Teile liegen noch aneinander — im Bild sieht das aus wie ein Teil. "
+                        "Zum Drucken nebeneinander legen."
+                    ),
+                )
+        elif (
+            entry.code == "arrange.off_the_plate"
+            and entry.severity == "info"
+            and entry.object_id in pieces
+        ):
+            continue
+        kept.append(entry)
+    return kept
 
 
 def _same_size(first: BoundingBox, second: BoundingBox) -> bool:
@@ -3743,8 +3835,9 @@ def _with_features(
         # niemand benannt: „Formdetails sind nicht mehr wiederzuerkennen"
         # klang dort, als sei etwas kaputtgegangen, und die geschlossenen
         # Stellen sagt ``repair.holes_filled`` schon. Ein Verlust **mit**
-        # Verweis ist oben gemeldet und bleibt es.
-        if not gone or operation.op == "repair":
+        # Verweis ist oben gemeldet und bleibt es. **Ebenso nach dem Teilen**
+        # (:data:`QUIET_LOSSES`).
+        if not gone or operation.op in QUIET_LOSSES:
             continue
         several = len(gone) > 1
         said: dict[str, Any] = {"feature": ", ".join(gone)}

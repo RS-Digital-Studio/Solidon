@@ -3689,30 +3689,46 @@ def remove_open_splinters(
     return MeshData.of(body, slots=slots), len(doomed)
 
 
+def small_components(
+    body: trimesh.Trimesh, share: float = SMALL_COMPONENT_SHARE
+) -> list[np.ndarray]:
+    """Die Teile, deren Fläche unter ``share`` der größten liegt — je Teil seine Dreiecke.
+
+    **Eine Regel für drei Fragen** (Durchsicht 0.5.1): Das Einlesen zählt sie
+    (``ingest.small_components``), *Kleine Teile entfernen* wirft sie fort
+    (:func:`remove_small_components`), und der Bericht fragt am Endstand, ob
+    die gezählte Zahl noch stimmt (``evaluate._without_outdated``). Die ersten
+    beiden rechneten sie je für sich; am Bohrmaschinenhalter stand nach
+    *Überschneidungen auflösen* „57 sehr kleine Einzelteile" über einem Körper
+    aus vier Teilen (KUNDE-13).
+    """
+    pieces = face_components(body)
+    if len(pieces) <= 1:
+        return []
+    areas = [float(body.area_faces[piece].sum()) for piece in pieces]
+    largest = max(areas)
+    return [piece for piece, area in zip(pieces, areas, strict=True) if area < largest * share]
+
+
 def remove_small_components(
     mesh: MeshData, share: float = SMALL_COMPONENT_SHARE
 ) -> tuple[MeshData, int]:
     """Wirft lose Fragmente — aber nur auf Nachfrage, nie beim
     Hereinkommen (§17.1)."""
-    pieces = face_components(mesh.raw)
-    if len(pieces) <= 1:
-        return mesh, 0
-    areas = [float(mesh.raw.area_faces[piece].sum()) for piece in pieces]
-    largest = max(areas)
-    keep = [piece for piece, area in zip(pieces, areas, strict=True) if area >= largest * share]
-    if len(keep) == len(pieces):
+    small = small_components(mesh.raw, share)
+    if not small:
         return mesh, 0
 
-    mask = np.zeros(len(mesh.raw.faces), dtype=bool)
-    for piece in keep:
-        mask[piece] = True
+    mask = np.ones(len(mesh.raw.faces), dtype=bool)
+    for piece in small:
+        mask[piece] = False
     body = without_faces(mesh.raw, mask)
     slots = (
         tuple(slot for slot, kept in zip(mesh.slots, mask, strict=True) if kept)
         if mesh.slots
         else ()
     )
-    return MeshData.of(body, slots=slots), len(pieces) - len(keep)
+    return MeshData.of(body, slots=slots), len(small)
 
 
 #: Wie viele genaue Paarprüfungen die Durchdringungssuche mindestens bezahlt

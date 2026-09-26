@@ -2332,6 +2332,86 @@ def test_a_body_made_one_piece_is_no_longer_called_several(
     assert "ingest.small_components" not in codes
 
 
+def test_a_part_count_a_later_step_changed_is_no_longer_said(
+    document: Document, profile: Profile
+) -> None:
+    """„Besteht aus 69 Teilen, von denen manche ineinanderstecken" über einem Körper mit vier.
+
+    Der Satz des Ladeschritts nennt die Teilezahl, die er gemessen hat. Nach
+    *Überschneidungen auflösen* am Bohrmaschinenhalter stand er weiter im
+    Bericht, über „Überschneidungen wurden aufgelöst." und unter „4 Teile" im
+    Kopf — der Kunde wusste nicht, ob das Auflösen gewirkt hatte (KUNDE-13).
+    Aus einem Stück ist der Körper danach nicht, der Filter für „aus
+    mehreren Teilen" griff also nicht. Gefragt wird dieselbe Sache: am
+    Endstand, ob die genannte Zahl noch stimmt. Und *In Einzelteile zerlegen*
+    am alten Satz plante 69 Ausgänge für einen Körper mit vier.
+    """
+    project, history = _loaded(document, "crossing_and_apart.stl")
+    first = evaluate(document, profile, sources=ProjectSources(project))
+    said = next(f for f in first.scene.report.findings if f.code == "ingest.multiple_components")
+    assert said.values["components"] == 3
+    assert "resolve_intersections" in {action.id for action in said.suggestions}
+
+    history.apply(
+        _("Überschneidungen auflösen"),
+        [OperationDraft(op="repair", inputs=("obj_1",), params={"self_intersections": True})],
+    )
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    body = result.scene.objects["obj_1"].mesh
+    assert body is not None and body.component_count == 2
+    assert body.volume == pytest.approx(2.0 * 8000.0 - 12.0**3 + 8000.0, rel=1e-9)
+    codes = [f.code for f in result.scene.report.findings]
+    assert "repair.self_intersections" in codes, "der Schritt sagt, was er getan hat"
+    assert "ingest.multiple_components" not in codes, "drei Teile gibt es nicht mehr"
+
+
+def test_the_count_of_tiny_parts_is_taken_at_the_end(document: Document, profile: Profile) -> None:
+    """„Es gibt sehr kleine Einzelteile" zählt am Endstand, nicht beim Einlesen (KUNDE-13).
+
+    Am Bohrmaschinenhalter stand nach *Überschneidungen auflösen* weiter
+    „Anzahl 57" unter „4 Teile" im Kopf: Die Buchstaben, die in der Wand
+    steckten, waren im Körper aufgegangen, und der Satz des Ladeschritts zählte
+    sie noch. Hier zwei Würfel ineinander, ein Krümel halb in der Wand des
+    ersten und einer daneben: vier Teile, zwei davon klein; nach dem Auflösen
+    zwei Teile, einer klein.
+    """
+    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second.apply_translation((8.0, 8.0, 8.0))
+    in_the_wall = trimesh.creation.box(extents=(0.5, 0.5, 0.5))
+    in_the_wall.apply_translation((-10.0, 0.0, 0.0))
+    beside = trimesh.creation.box(extents=(0.5, 0.5, 0.5))
+    beside.apply_translation((60.0, 0.0, 0.0))
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/crumbs.stl", sha256=""
+    )
+    project.sources["src_1"] = trimesh.util.concatenate(
+        [first, second, in_the_wall, beside]
+    ).export(file_type="stl")
+    history = History(document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    loaded = evaluate(document, profile, sources=ProjectSources(project))
+    tiny = next(f for f in loaded.scene.report.findings if f.code == "ingest.small_components")
+    assert tiny.values["count"] == 2, "die Voraussetzung: zwei Krümel"
+
+    history.apply(
+        _("Überschneidungen auflösen"),
+        [OperationDraft(op="repair", inputs=("obj_1",), params={"self_intersections": True})],
+    )
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.scene.objects["obj_1"].mesh.component_count == 2
+    counts = [
+        f.values["count"]
+        for f in result.scene.report.findings
+        if f.code == "ingest.small_components"
+    ]
+    assert counts == [1], "einer ist im Würfel aufgegangen, einer steht daneben"
+
+
 def test_a_later_repair_settles_the_earlier_crossing_finding(
     document: Document, profile: Profile
 ) -> None:

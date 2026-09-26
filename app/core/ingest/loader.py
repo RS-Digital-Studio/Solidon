@@ -51,11 +51,11 @@ from app.core.geom.mesh import (
     read_mesh,
 )
 from app.core.geom.repair import (
-    SMALL_COMPONENT_SHARE,
     is_closed,
     open_edge_count,
     parts_can_be_merged,
     parts_that_cross,
+    small_components,
 )
 from app.core.geom.repair import weld as weld_points
 from app.core.log import get_logger
@@ -1425,9 +1425,7 @@ def _count_components(
     pieces = face_components(body)
     if len(pieces) <= 1:
         return len(pieces)
-    sizes = [float(body.area_faces[piece].sum()) for piece in pieces]
-    largest = max(sizes)
-    small = [size for size in sizes if size < largest * SMALL_COMPONENT_SHARE]
+    small = small_components(body)
     crossing = parts_that_cross(body, pieces, cancelled) if closed else None
     if crossing is not None:
         findings.append(
