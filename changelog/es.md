@@ -68,7 +68,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un 3MF de PrusaSlicer ya no carga modificadores, bloqueadores ni reforzadores de soportes como material macizo. Un volumen negativo se resta de la pieza.
 - Con «Refinar las aristas» se conservan todas las características y salen hasta cuatro veces menos triángulos: un soporte de taladradora a 1 mm en cinco segundos en vez de catorce minutos.
 - Un modelo cerrado sigue estanco y conserva sus colores de filamento. Con demasiados triángulos, Solidon indica una longitud de arista que funciona de verdad.
-- Los conjuntos grandes se importan más rápido: la reparación al importar un barco pirata de 1,2 millones de triángulos tarda 3,6 segundos en lugar de 6.
+- Los conjuntos grandes se importan más rápido: la reparación al importar un barco pirata de 1,2 millones de triángulos tarda alrededor de un 30 % menos.
 
 ### Imprimir y entregar al slicer
 

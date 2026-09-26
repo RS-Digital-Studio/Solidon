@@ -182,26 +182,23 @@ def _read_soup(
     der sie gehört, und die Kantenzählung der gelesenen Dreiecke.
     """
     # Gruppiert wird auf der Schweißtoleranz — dort passt der Schlüssel in
-    # eine Zahl, und trimesh sortiert schnell —, und nur eine Gruppe, deren
+    # eine Zahl (:func:`_first_of_each_row`) —, und nur eine Gruppe, deren
     # Ecken weiter als ``EPS_GEOM`` von ihrer ersten liegen, wird auf dem
     # feineren Gitter geteilt. Sechs Stellen für alle kosteten an 815 104
     # Dreiecken eine Sekunde statt einer halben: Der Schlüssel passt dann
     # nicht mehr in eine Zahl.
     fine = max(digits, weld_digits(EPS_GEOM))
-    first, inverse = trimesh.grouping.unique_rows(_weld_keys(body, digits, used), keep_order=True)
-    inverse = np.asarray(inverse, dtype=np.int64).reshape(-1)
-    roots = used[np.asarray(first, dtype=np.int64)[inverse]]
+    first, inverse = _first_of_each_row(_weld_keys(body, digits, used))
+    roots = used[first[inverse]]
     apart = np.any(np.abs(positions[used] - positions[roots]) > EPS_GEOM, axis=1)
     if apart.any():
         wide = np.zeros(len(first), dtype=bool)
         wide[inverse[apart]] = True
         members = np.flatnonzero(wide[inverse])
-        finer, split = trimesh.grouping.unique_rows(
-            np.column_stack([inverse[members], _weld_keys(body, fine, used[members])]),
-            keep_order=True,
+        finer, split = _first_of_each_row(
+            np.column_stack([inverse[members], _weld_keys(body, fine, used[members])])
         )
-        split = np.asarray(split, dtype=np.int64).reshape(-1)
-        roots[members] = used[members][np.asarray(finer, dtype=np.int64)[split]]
+        roots[members] = used[members][finer[split]]
     group = np.arange(len(positions), dtype=np.int64)
     group[used] = roots
     vertex_of, edges = _sheets(faces, group, positions, 10.0**-fine, whole_fans=False)
@@ -248,10 +245,8 @@ def _joined_at_the_rims(
     candidates = np.flatnonzero(marked)
     if len(candidates) < 2:
         return None
-    first, inverse = trimesh.grouping.unique_rows(
-        _weld_keys(body, digits, candidates), keep_order=True
-    )
-    roots = candidates[np.asarray(first, dtype=np.int64)[np.asarray(inverse).reshape(-1)]]
+    first, inverse = _first_of_each_row(_weld_keys(body, digits, candidates))
+    roots = candidates[first[inverse]]
     if np.array_equal(roots, candidates):
         return None
     group = np.arange(len(positions), dtype=np.int64)
@@ -267,6 +262,45 @@ def _joined_at_the_rims(
         _log.info("weld skipped: merging at %d points would tear the mesh", len(candidates))
         return None
     return mended, after
+
+
+def _first_of_each_row(keys: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Je Gruppe gleicher Zeilen die erste, und je Zeile die Nummer ihrer Gruppe.
+
+    Dieselben Gruppen und je Gruppe dieselbe erste Zeile wie
+    ``trimesh.grouping.unique_rows`` — nur die Reihenfolge der Gruppen folgt
+    ihrem Schlüssel und nicht ihrem ersten Auftreten; wer ``first[inverse]``
+    liest, bekommt dieselben Zahlen.
+
+    **Über eine Zahl je Zeile, wo sie passt** (Durchsicht 0.5.1). trimesh
+    packt eine Zeile aus drei Spalten nur dann in eine Zahl, wenn jede Spalte
+    in 21 Bit passt — bei vier Nachkommastellen bis ±104 mm —, und sortiert
+    darüber Zeilen als Byteketten: Am Piratenschiff aus ``F:\\3D Dateien``
+    (3,67 Millionen Ecken, 175 mm) kostete das 1,2 von 2,3 s des Lesens.
+    Die Schlüssel sind ganze Zahlen; ihre Spannweiten ergeben zusammen eine
+    Stellenwertnummer, die fast immer in 63 Bit passt, und ``np.unique``
+    sortiert für ``return_index`` stabil — die erste Zeile je Gruppe bleibt
+    die erste. Gemessen dort 0,43 statt 1,16 s, dieselben Wurzeln. Nur
+    ganze Zahlen, keine Plattformfrage (RM-187).
+    """
+    rows = np.asarray(keys, dtype=np.int64)
+    if not len(rows):
+        return np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64)
+    low = rows.min(axis=0)
+    spans = (rows.max(axis=0) - low + 1).tolist()
+    total = 1
+    for span in spans:
+        total *= int(span)
+    if total >= 2**63:
+        first, inverse = trimesh.grouping.unique_rows(rows)
+        return np.asarray(first, dtype=np.int64), np.asarray(inverse, dtype=np.int64).reshape(-1)
+    # Jede Zwischenzahl bleibt unter dem Produkt der Spannweiten und damit
+    # unter 2**63.
+    code = rows[:, 0] - low[0]
+    for column in range(1, rows.shape[1]):
+        code = code * int(spans[column]) + (rows[:, column] - low[column])
+    _codes, first, inverse = np.unique(code, return_index=True, return_inverse=True)
+    return np.asarray(first, dtype=np.int64), np.asarray(inverse, dtype=np.int64).reshape(-1)
 
 
 def _table_of(faces: np.ndarray) -> EdgeTable:
@@ -949,6 +983,37 @@ def _shell_volumes(body: trimesh.Trimesh, labels: np.ndarray, count: int) -> np.
     return np.bincount(labels, weights=products, minlength=count) / 6.0
 
 
+#: Wo :func:`_labelled_shells` das Volumen je Schale im Cache des Netzes ablegt.
+_SHELL_VOLUMES_KEY: Final = "solidon_shell_volumes"
+
+
+def _labelled_shells(body: trimesh.Trimesh) -> tuple[list[np.ndarray], np.ndarray, np.ndarray]:
+    """Die Schalen eines Netzes, je Dreieck die Nummer seiner Schale, und je Schale ihr Volumen.
+
+    **Einmal je Netz** (Durchsicht 0.5.1): Das Füllen fragt nach, ob es eine
+    Fläche ohne Dicke geschlossen hat (:func:`_flat_fills`), und das Richten
+    der Außenseiten gleich danach fragt dasselbe Netz noch einmal
+    (:class:`_Shells`) — am Piratenschiff zweimal 0,22 s. Die Schalen merkt
+    sich :func:`~app.core.geom.mesh.face_components` im Cache des Netzes,
+    die Volumen liegen daneben; beides verfällt mit der Geometrie und reist
+    mit einer Kopie samt Cache.
+    """
+    components = face_components(body)
+    count = len(components)
+    labels = np.empty(len(body.faces), dtype=np.int64)
+    for index, members in enumerate(components):
+        labels[members] = index
+    cache = getattr(body, "_cache", None)
+    if cache is not None and _SHELL_VOLUMES_KEY in cache:
+        known = np.asarray(cache[_SHELL_VOLUMES_KEY])
+        if len(known) == count:
+            return components, labels, known
+    volumes = _shell_volumes(body, labels, count)
+    if cache is not None:
+        cache[_SHELL_VOLUMES_KEY] = volumes
+    return components, labels, volumes
+
+
 #: Wie viele Hüllquadervergleiche :meth:`_Shells.containers_of` auf einmal als
 #: Feld hält — ein Megabyte je Vergleich, gleich wie viele Teile der Körper hat.
 _SHELL_BLOCK: Final = 1 << 20
@@ -968,13 +1033,9 @@ class _Shells:
     """
 
     def __init__(self, body: trimesh.Trimesh) -> None:
-        self.components = face_components(body)
+        self.components, labels, self.volumes = _labelled_shells(body)
         count = len(self.components)
-        labels = np.empty(len(body.faces), dtype=np.int64)
-        for index, members in enumerate(self.components):
-            labels[members] = index
         self.triangles = np.asarray(body.triangles, dtype=np.float64)
-        self.volumes = _shell_volumes(body, labels, count)
         self.low = np.full((count, 3), np.inf)
         self.high = np.full((count, 3), -np.inf)
         if count > 1:
@@ -2894,11 +2955,7 @@ def _flat_fills(patched: MeshData, first_new: int, owners: np.ndarray) -> set[in
     :func:`_shell_volumes`, nahe am Teil und elementweise (RM-187).
     """
     body = patched.raw
-    components = face_components(body)
-    labels = np.empty(len(body.faces), dtype=np.int64)
-    for index, faces in enumerate(components):
-        labels[faces] = index
-    volume = _shell_volumes(body, labels, len(components))
+    components, labels, volume = _labelled_shells(body)
     area = np.bincount(labels, weights=np.asarray(body.area_faces), minlength=len(components))
     flat = np.flatnonzero(np.abs(volume) <= EPS_GEOM * area)
     if not len(flat):
@@ -2981,11 +3038,28 @@ def _fill_loops(
         tuple[frozenset[tuple[tuple[float, ...], tuple[float, ...]]], float, tuple[float, ...]]
     ] = []
     blocked = 0
-    triangles_now = np.asarray(body.triangles, dtype=np.float64)
-    centroids = (triangles_now[:, 0] + triangles_now[:, 1] + triangles_now[:, 2]) / 3.0
-    face_normals = _unit_normals(triangles_now)
     faces_now = np.asarray(body.faces, dtype=np.int64)
-    face_bounds = (triangles_now.min(axis=1), triangles_now.max(axis=1))
+    # **Mitten und Normalen nur der Nachbarn am Rand** (Durchsicht 0.5.1):
+    # Band, Wand zwischen zwei Mündungen und glatteste Füllung lesen sie nur
+    # an den Dreiecken, denen eine Randkante gehört. Über alle Dreiecke
+    # gerechnet, samt ihren Hüllquadern, kostete das am Piratenschiff
+    # (1,2 Millionen Dreiecke, zwei Löcher) 0,6 s je Runde. Jede Zeile
+    # entsteht elementweise — dieselben Bits wie über das ganze Feld.
+    owners = np.fromiter(neighbour_of.values(), dtype=np.int64, count=len(neighbour_of))
+    rim_triangles = points[faces_now[owners]]
+    centroids = np.zeros((len(faces_now), 3))
+    centroids[owners] = (rim_triangles[:, 0] + rim_triangles[:, 1] + rim_triangles[:, 2]) / 3.0
+    face_normals = np.zeros((len(faces_now), 3))
+    face_normals[owners] = _unit_normals(rim_triangles)
+    # Die Hüllquader aller Dreiecke braucht erst ein Mantel, der sich prüfen lässt.
+    bounds_once: list[tuple[np.ndarray, np.ndarray]] = []
+
+    def face_bounds() -> tuple[np.ndarray, np.ndarray]:
+        if not bounds_once:
+            triangles = points[faces_now]
+            bounds_once.append((triangles.min(axis=1), triangles.max(axis=1)))
+        return bounds_once[0]
+
     jobs = _fill_jobs(
         points,
         loops,
@@ -3092,7 +3166,7 @@ def _fill_loops(
             if len(job.rims) > 1 and len(attempt) and int(attempt.max()) >= len(points):
                 continue
             if job.band is not None:
-                if _band_crosses(points, faces_now, attempt, cancelled, face_bounds):
+                if _band_crosses(points, faces_now, attempt, cancelled, face_bounds()):
                     continue
             elif not len(attempt) or normal is None or _folds(reachable[attempt], normal):
                 continue
@@ -3477,10 +3551,7 @@ def remove_hollow_shells(mesh: MeshData) -> tuple[MeshData, int]:
     pieces = face_components(mesh.raw)
     if len(pieces) <= 1:
         return mesh, 0
-    labels = np.empty(len(mesh.raw.faces), dtype=np.int64)
-    for index, piece in enumerate(pieces):
-        labels[piece] = index
-    volumes = _shell_volumes(mesh.raw, labels, len(pieces))
+    _pieces, _labels, volumes = _labelled_shells(mesh.raw)
     keep = [
         piece
         for piece, volume in zip(pieces, volumes.tolist(), strict=True)
@@ -4255,18 +4326,28 @@ def crossed_edge_faces(mesh: MeshData) -> np.ndarray:
     Dort zeigen die Außenseiten gegeneinander. Je solcher Kante stehen beide
     Dreiecke in der Liste, in der Reihenfolge der Kanten; der Bericht zählt
     die Kanten, die Netzfehlerkarte färbt die Dreiecke.
+
+    **Mit trimeshs Begriff von „einheitlich"** (``is_winding_consistent``, aus
+    derselben Kantenzählung, :func:`app.core.geom.mesh.edge_table`): Eine
+    Kante von einer Ecke zu sich selbst — sie hängt nur an flach gedrückten
+    Dreiecken — hat keine Richtung und ist keine verkehrte Kante. Hier zählte
+    sie als verkehrt, während die Auswertung am Endstand denselben Körper
+    einheitlich nannte (``evaluate.WOUND_STATE_CODES``). Und ist der Körper
+    einheitlich, gibt es nichts zu suchen: Die Suche sortierte am
+    Piratenschiff 1,8 Millionen Kanten, 0,24 s für null (Durchsicht 0.5.1).
     """
     table = _edge_table(mesh)
     rows = table.rows(2)
-    if not len(rows):
+    if not len(rows) or mesh.raw.is_winding_consistent:
         return np.zeros(0, dtype=np.int64)
     directed = np.asarray(mesh.raw.edges, dtype=np.int64)[rows]
     forward = directed[:, 0] < directed[:, 1]
+    pointless = directed[:, 0] == directed[:, 1]
     edge = table.inverse[rows]
     order = np.argsort(edge, kind="stable")
-    rows, forward = rows[order], forward[order]
+    rows, forward, pointless = rows[order], forward[order], pointless[order]
     # Je Kante zwei Zeilen nebeneinander; gleiche Richtung heißt verkehrt.
-    wrong = forward[0::2] == forward[1::2]
+    wrong = (forward[0::2] == forward[1::2]) & ~pointless[0::2]
     pairs = np.column_stack((rows[0::2][wrong], rows[1::2][wrong])) // 3
     return np.asarray(pairs.ravel(), dtype=np.int64)
 

@@ -67,7 +67,7 @@ scrive in `website/version.json`.
 - Un 3MF di PrusaSlicer non carica più modificatori, blocchi e rinforzi dei supporti come materiale pieno. Un volume negativo viene sottratto dal pezzo.
 - Con «Affina gli spigoli» restano tutte le caratteristiche e i triangoli sono fino a quattro volte meno: un supporto per trapano a 1 mm in cinque secondi invece di quattordici minuti.
 - Un modello chiuso resta stagno e conserva i colori del filamento. Con troppi triangoli, Solidon indica una lunghezza di spigolo che funziona davvero.
-- I grandi assiemi si importano più in fretta: la riparazione all'importazione di una nave pirata da 1,2 milioni di triangoli richiede 3,6 secondi invece di 6.
+- I grandi assiemi si importano più in fretta: la riparazione all'importazione di una nave pirata da 1,2 milioni di triangoli richiede circa il 30 % di tempo in meno.
 
 ### Stampare e passare allo slicer
 

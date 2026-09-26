@@ -68,7 +68,7 @@ dans `website/version.json`.
 - Un 3MF de PrusaSlicer ne charge plus les modificateurs, bloqueurs et renforts de supports comme matière pleine. Un volume négatif est soustrait de la pièce.
 - Avec « Affiner les arêtes », les caractéristiques restent et les triangles sont jusqu'à quatre fois moins nombreux : un support de perceuse à 1 mm en cinq secondes au lieu de quatorze minutes.
 - Un modèle fermé reste étanche et garde ses couleurs de filament. S'il y a trop de triangles, Solidon indique une longueur d'arête qui marche vraiment.
-- Les grands assemblages s'importent plus vite : la réparation à l'import d'un bateau pirate de 1,2 million de triangles prend 3,6 secondes au lieu de 6.
+- Les grands assemblages s'importent plus vite : la réparation à l'import d'un bateau pirate de 1,2 million de triangles prend environ 30 % de temps en moins.
 
 ### Imprimer et transmettre au slicer
 

@@ -664,6 +664,7 @@ def without_faces(body: trimesh.Trimesh, keep: np.ndarray) -> trimesh.Trimesh:
     trimmed = body.copy()
     trimmed.update_faces(keep)
     trimmed.remove_unreferenced_vertices()
+    _carry_face_measures(body, trimmed, keep=keep)
     cache = getattr(body, "_cache", None)
     if cache is None or _EDGE_TABLE_KEY not in cache:
         return trimmed
@@ -696,7 +697,10 @@ def carry_appended_edges(body: trimesh.Trimesh, extended: trimesh.Trimesh) -> No
     nur die der neuen Dreiecke in die sortierte Liste eingefügt: Die alten
     Kanten behalten ihre Reihenfolge und rücken um die Zahl der neuen davor.
     Ohne Zählung an ``body`` geschieht nichts; ``extended`` zählt dann selbst.
+    Die Kreuzprodukte und Flächen je Dreieck reisen ebenso mit
+    (:func:`_carry_face_measures`).
     """
+    _carry_face_measures(body, extended)
     cache = getattr(body, "_cache", None)
     if cache is None or _EDGE_TABLE_KEY not in cache:
         return
@@ -730,6 +734,54 @@ def carry_appended_edges(body: trimesh.Trimesh, extended: trimesh.Trimesh) -> No
             counts=counts,
         ),
     )
+
+
+#: Was je Dreieck nur an seinen drei Ecken hängt und trimesh im Cache des Netzes
+#: ablegt — :func:`_carry_face_measures` trägt es in ein abgeleitetes Netz.
+_FACE_MEASURES: Final = ("triangles_cross", "area_faces")
+
+
+def _carry_face_measures(
+    source: trimesh.Trimesh, target: trimesh.Trimesh, *, keep: np.ndarray | None = None
+) -> None:
+    """Kreuzprodukt und Fläche je Dreieck in ein abgeleitetes Netz tragen, statt sie neu zu rechnen.
+
+    Beide hängen nur an den drei Ecken ihres Dreiecks, und trimesh rechnet sie
+    Zeile für Zeile: Ein Dreieck, das bleibt, hat danach dieselben Bits, ein
+    angehängtes wird allein gerechnet. **Am Piratenschiff rechnete das
+    Einlesen beide dreimal über 1,2 Millionen Dreiecke** — für die leeren
+    Dreiecke, für die Fläche vor der Lochfüllung und für die Füllungen ohne
+    Dicke, je 0,12 s —, obwohl sich dazwischen acht Dreiecke geändert hatten
+    (Durchsicht 0.5.1). ``keep`` ist die Maske eines Streichens
+    (:func:`without_faces`); ohne sie trägt ``target`` die Dreiecke von
+    ``source`` vorn und neue dahinter (:func:`carry_appended_edges`).
+    """
+    known = getattr(source, "_cache", None)
+    into = getattr(target, "_cache", None)
+    if known is None or into is None:
+        return
+    count = len(source.faces)
+    crosses: np.ndarray | None = None
+    for name in _FACE_MEASURES:
+        # ``in`` prüft, ob der Eintrag noch zur Geometrie von ``source`` gehört.
+        if name not in known:
+            continue
+        values = np.asarray(known[name])
+        if len(values) != count:
+            continue
+        if keep is not None:
+            into[name] = values[keep]
+            continue
+        added = np.asarray(target.faces, dtype=np.int64)[count:]
+        if len(added):
+            if crosses is None:
+                corners = np.asarray(target.vertices, dtype=np.float64)[added]
+                crosses = np.asarray(trimesh.triangles.cross(corners))
+            fresh = (
+                crosses if name == "triangles_cross" else trimesh.triangles.area(crosses=crosses)
+            )
+            values = np.concatenate([values, np.asarray(fresh, dtype=values.dtype)])
+        into[name] = values
 
 
 def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:

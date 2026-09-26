@@ -92,7 +92,7 @@ Nutzen da und sonst nichts.
 - Eine 3MF aus PrusaSlicer lädt Modifikatoren, Stützsperren und Stützverstärker nicht mehr als festes Material. Eine Aussparung wird vom Teil abgezogen.
 - Mit *Kanten verfeinern* bleiben alle Merkmale erhalten, und es entstehen bis zu viermal weniger Dreiecke: ein Bohrmaschinenhalter bei 1 mm in fünf Sekunden statt vierzehn Minuten.
 - Ein geschlossenes Modell bleibt dabei dicht und behält seine Filamentfarben. Bei zu vielen Dreiecken nennt Solidon eine Kantenlänge, die wirklich geht.
-- Große Baugruppen lesen schneller ein: Die Reparatur beim Einlesen eines Piratenschiffs mit 1,2 Millionen Dreiecken braucht 3,6 statt 6 Sekunden.
+- Große Baugruppen lesen schneller ein: Die Reparatur beim Einlesen eines Piratenschiffs mit 1,2 Millionen Dreiecken braucht rund 30 Prozent weniger Zeit.
 
 ### Drucken und Übergabe an den Slicer
 

@@ -67,7 +67,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um 3MF do PrusaSlicer já não carrega modificadores, bloqueadores e reforços de suportes como material maciço. Um volume negativo é subtraído da peça.
 - Com «Refinar as arestas» mantêm-se todas as características e surgem até quatro vezes menos triângulos: um suporte de berbequim a 1 mm em cinco segundos em vez de catorze minutos.
 - Um modelo fechado continua estanque e conserva as cores de filamento. Com triângulos a mais, o Solidon indica um comprimento de aresta que funciona de facto.
-- Os conjuntos grandes importam mais depressa: a reparação ao importar um navio pirata com 1,2 milhões de triângulos demora 3,6 segundos em vez de 6.
+- Os conjuntos grandes importam mais depressa: a reparação ao importar um navio pirata com 1,2 milhões de triângulos demora cerca de 30 % menos tempo.
 
 ### Imprimir e entregar ao slicer
 

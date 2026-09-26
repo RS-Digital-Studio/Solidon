@@ -67,7 +67,7 @@ it into `website/version.json`.
 - A 3MF from PrusaSlicer no longer loads modifiers, support blockers and support enforcers as solid material. A negative volume is subtracted from the part.
 - With *Refine edges*, all features stay and up to four times fewer triangles are created: a drill holder at 1 mm in five seconds instead of fourteen minutes.
 - A closed model stays watertight and keeps its filament colours. With too many triangles, Solidon names an edge length that really works.
-- Large assemblies import faster: the repair while importing a pirate ship with 1.2 million triangles takes 3.6 seconds instead of 6.
+- Large assemblies import faster: the repair while importing a pirate ship with 1.2 million triangles takes about 30 percent less time.
 
 ### Printing and slicer handover
 
