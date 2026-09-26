@@ -273,9 +273,17 @@ Unbrauchbare Bett- und Sperrkonturen der Druckdatei bleiben als Warnung im
 Prüfbericht. Ein gleichzeitig nachgewiesener Bauraumübertritt hat Vorrang und
 trägt den Profilrückfall oder die ausgelassene Sperre als Einzelheit mit.
 
-Curas Lüfterhochlauf bildet keine feste Zahl ausgeschalteter Schichten ab.
-Der gemeinsame Exaktwert bleibt deshalb gesperrt; `setting_limitations`
-benennt die abweichende Bedeutung bei der Übergabe.
+Cura kennt keine Lüfterpause, nur einen Hochlauf vom Anfangslüfter bis zu
+einer Höhe. `_cura_fan_start` schreibt beides (Anfangslüfter null, Höhe in
+der Mitte der ersten Schicht nach der Pause) auf die Einstellungsseite, damit
+auch das Cura-Fenster es bekommt; `_full_fan_layer` rechnet daraus für die
+Konsole Curas Formel für `cool_fan_full_layer`. Für null und eine Schicht ist
+das die Pause selbst, ab zwei laufen die Schichten dazwischen an — nur dann
+nennt `slicer_keys.limitation` vorher einen Satz (`LIMITED`). Kurze Schichten
+kühlt Cura auch in der Pause stärker; das hängt an der Schichtzeit und zeigt
+erst die Druckdatei. Nach dem Slicen misst deshalb `fan_in_off_layers` den
+Lüfterstart (`GcodeAnalysis.fan_start`) und meldet ihn mit Herkunft G-Code,
+statt vorher pauschal zu warnen.
 
 Sie läuft **vorher**, nicht nachher: Wasserdichtheit, Bauraum, Wandstärken.
 Was sie findet, ist ein Befund mit Handlungsvorschlag (Regel 17) — kein

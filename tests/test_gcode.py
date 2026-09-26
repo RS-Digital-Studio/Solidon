@@ -1219,3 +1219,42 @@ def test_a_malformed_time_stamp_does_not_abort_the_analysis(stamp: str) -> None:
     # fertige Druckdatei. Der unlesbare Stempel wird übergangen, der nächste zählt.
     text = f"M83\nG0 X0 Y0 Z0.2\nG1 X10 E1\n;TIME_ELAPSED:{stamp}\n;TIME_ELAPSED:12.5\n"
     assert gcode.analyze(text).metrics.print_seconds == 12.5
+
+
+def test_the_fan_start_counts_printed_layers_not_commands() -> None:
+    """Die erste Schicht, in der mit Bauteillüfter gedruckt wird.
+
+    Ein Lüfter aus dem Startcode, der vor der ersten Bahn wieder ausgeht,
+    zählt nicht; einer, der anbleibt, zählt ab Schicht 1. Die Orca-Familie
+    schreibt mit dem Centauri zwei Marken je Schicht und im Startcode schon
+    ``;LAYER:0`` — gezählt wird die erste Bahn nach einer Marke. Hilfs- und
+    Bauraumlüfter (``P2``, ``P3``) sind nicht der Bauteillüfter.
+    """
+    cura = gcode.analyze(
+        "M82\nM106 S255\nG1 E5\nM107\n;LAYER:0\nG0 X0 Y0 Z0.2\nG1 X10 E6\n"
+        ";LAYER:1\nG1 X20 E7\n;LAYER:2\nM106 S127.5\nG1 E6\nG1 E7\nG1 X30 E8\n"
+    )
+    left_on = gcode.analyze("M83\nM106\n;LAYER:0\nG0 X0 Y0 Z0.2\nG1 X10 E1\n")
+    orca = gcode.analyze(
+        "M83\nM106 S0\n;LAYER:0\nM106 P3 S200\nM106 P2 S255\n"
+        ";LAYER_CHANGE\n;Z:0.25\nG1 E-.8\n;LAYER:1\nG0 X0 Y0 Z0.25\nG1 E.8\nG1 X10 E1\n"
+        ";LAYER_CHANGE\n;LAYER:2\nM106 S255\nG1 X20 E1\n"
+    )
+    silent = gcode.analyze("M83\n;LAYER_CHANGE\nG0 X0 Y0 Z0.2\nG1 X10 E1\nM107\n")
+
+    assert cura.fan_start == (3, pytest.approx(0.5))
+    assert left_on.fan_start == (1, 1.0), "M106 ohne Wert heißt voll"
+    assert orca.fan_start == (2, 1.0)
+    assert silent.fan_start is None
+
+
+def test_bambus_part_fan_is_number_one() -> None:
+    """Bei Bambu ist ``P1`` der Bauteillüfter; ohne Bambu-Kopf ist es ein zweiter."""
+    bambu = gcode.analyze(
+        "; HEADER_BLOCK_START\n; BambuStudio 02.08.02.61\n; HEADER_BLOCK_END\n"
+        "M620 S0A\nM83\n; CHANGE_LAYER\nM106 P1 S255\nG0 X0 Y0 Z0.2\nG1 X10 E1\n"
+    )
+    other = gcode.analyze("M83\n;LAYER_CHANGE\nM106 P1 S255\nG0 X0 Y0 Z0.2\nG1 X10 E1\n")
+
+    assert bambu.fan_start == (1, 1.0)
+    assert other.fan_start is None

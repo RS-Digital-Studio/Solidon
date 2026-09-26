@@ -20,9 +20,12 @@ Ruhe (§29).
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Final, Literal, NamedTuple
+from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.types import PrintSettings
 
 SlicerFlavour = Literal["prusa", "orca", "cura", "other"]
 """Die Familie eines Slicers — und ``other`` für jedes Programm, dessen
@@ -740,7 +743,6 @@ CURA_UNTOUCHED: Final[dict[str, str]] = {
     "layer_start_x": "gilt nur mit ``layer_start_at_z_seam``, und das steht auf aus.",
     "layer_start_y": "wie oben",
     "build_fan_full_layer": "Gehäuselüfter — keine Einstellung in Solidon.",
-    "cool_fan_full_at_height": "nur Elternwert von ``cool_fan_full_layer``, das direkt kommt.",
     "skin_outline_count": "wird 1 für jedes Muster, das Solidon anbietet — also die Vorgabe.",
     "min_skin_width_for_expansion": "wird 0, solange der Öffnungswinkel bei 90° steht.",
     "adhesion_extruder_nr": "Extrudernummer — bei einem Extruder ist die Vorgabe richtig.",
@@ -903,7 +905,6 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
     "orca": frozenset(),
     "cura": frozenset(
         {
-            "cooling.disable_first_layers",
             "shell.wall_generator",
             "shell.precise_outer_wall",
             "retraction.wipe",
@@ -923,6 +924,17 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
 AS_GEOMETRY: Final[frozenset[str]] = frozenset({"support.block_channels"})
 
 
+#: Einstellungen, die ankommen, aber je nach Wert nur angenähert. Dazu
+#: nennt :func:`limitation` einen Satz, sobald der Wert wirklich abweicht —
+#: nicht bei jeder Übergabe.
+LIMITED: Final[dict[SlicerFlavour, frozenset[str]]] = {
+    "prusa": frozenset(),
+    "orca": frozenset(),
+    "cura": frozenset({"cooling.disable_first_layers"}),
+    "other": frozenset(),
+}
+
+
 def takes(flavour: SlicerFlavour, path: str) -> bool:
     """Nimmt dieser Slicer diese Einstellung überhaupt entgegen (§29)?
 
@@ -940,12 +952,26 @@ def takes(flavour: SlicerFlavour, path: str) -> bool:
     return path not in NOT_TAKEN_BY[flavour]
 
 
-def limitation(flavour: SlicerFlavour, path: str) -> TranslatableText | None:
-    """Eine abweichende Bedeutung, die ein gleich benannter Wert verdecken würde."""
+def limitation(
+    flavour: SlicerFlavour, path: str, settings: PrintSettings | None = None
+) -> TranslatableText | None:
+    """Eine abweichende Bedeutung, die ein gleich benannter Wert verdecken würde.
+
+    Cura hat für den Lüfter keine Abschaltphase, nur einen Hochlauf vom
+    Anfangslüfter null (``handover._cura_fan_start``). Für null und eine
+    Schicht ohne Lüfter ist das dieselbe Pause; ab zwei laufen die Schichten
+    dazwischen schon an — nur dann gibt es vorher einen Satz. Dass Cura kurze
+    Schichten auch in der Pause kühlt, zeigt erst die Druckdatei
+    (``handover.fan_in_off_layers``); darum behauptet der Satz nicht, der
+    Lüfter bleibe in Schicht 1 aus.
+    """
     if flavour == "cura" and path == "cooling.disable_first_layers":
+        if settings is None or settings.cooling.disable_first_layers < 2:
+            return None
         return _(
-            "Cura regelt den Lüfter über einen Hochlauf. Eine feste Anzahl Schichten "
-            "ohne Lüfter lässt sich hier nicht übertragen. Stellen Sie den Hochlauf in Cura ein."
+            "Cura kennt keine Lüfterpause und fährt den Lüfter bis Schicht {layer} "
+            "schrittweise hoch.",
+            layer=settings.cooling.disable_first_layers + 1,
         )
     return None
 

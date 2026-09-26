@@ -692,9 +692,6 @@ UNREACHABLE: dict[str, dict[str, str]] = {
     },
     "cura": {
         "support.block_channels": "ein STL trägt keine Stützsperre — ``NOT_TAKEN_BY``.",
-        "cooling.disable_first_layers": (
-            "Cura hat einen Lüfterhochlauf statt einer festen Abschaltphase."
-        ),
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
         "adhesion.kind": "in ``adhesion_type`` enthalten, das die Tabelle schreibt.",
@@ -5265,9 +5262,6 @@ def test_what_can_be_opened_can_also_be_found() -> None:
 #: nicht, und das ist in Ordnung.* Wer einen hinzufügt, schreibt den Grund
 #: dazu — eine Ausnahmeliste ohne Gründe wird zur Halde.
 UNREACHED: Final[dict[tuple[str, str], str]] = {
-    ("cooling.disable_first_layers", "cura"): (
-        "Curas Hochlauf ist keine feste Abschaltphase; der Verlust wird sichtbar erklärt."
-    ),
     ("shell.wall_generator", "cura"): (
         "CuraEngine wählt den Wandgenerator nicht über einen Schalter: Arachne "
         "ist seit 5.0 der einzige Weg, und die Klassik gibt es dort nicht mehr."
@@ -5906,12 +5900,83 @@ def test_orca_readback_keeps_every_tools_values_and_the_written_firmware(
 
 
 def test_cura_reports_its_fan_ramp_instead_of_claiming_an_off_phase() -> None:
-    """Kein Exaktwert darf als native Rampe verkauft werden."""
+    """Kein Exaktwert darf als native Rampe verkauft werden — und keine exakte
+    Übertragung als Verlust. Curas Hochlauf vom Anfangslüfter null bis
+    ``cool_fan_full_layer`` ist für null und eine Schicht ohne Lüfter genau die
+    Abschaltphase; erst ab zwei laufen die Schichten dazwischen an. Vorher
+    warnte jede Cura-Übergabe, auch mit der Vorgabe von einer Schicht."""
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
-    for count in (0, 1, 3):
+    for count, full in ((0, "1"), (1, "2"), (3, "4")):
         changed = print_settings.with_path(settings, "cooling.disable_first_layers", count)
         values = handover.values_for(changed, profile, "cura")
-        assert values["cool_fan_full_layer"] == "2"
-    assert not slicer_keys.takes("cura", "cooling.disable_first_layers")
-    assert handover.setting_limitations("cura")[0].suggestions
+        assert values["cool_fan_full_layer"] == full
+        assert values["cool_fan_speed_0"] == "0"
+        warned = handover.setting_limitations("cura", changed)
+        if count < 2:
+            assert warned == [], f"{count} Schichten kommen genau an"
+        else:
+            assert [entry.values["path"] for entry in warned] == ["cooling.disable_first_layers"]
+            assert warned[0].suggestions
+            assert "4" in warned[0].message.translate("de")
+        # Das Cura-Fenster bekommt nur diese Seite und rechnet die Schicht
+        # mit seiner eigenen Formel aus der Höhe.
+        page = handover.as_mapping(changed, "cura")
+        assert page["cool_fan_speed_0"] == "0"
+        assert "cool_fan_full_at_height" in page
+        assert "cool_fan_full_layer" not in page
+    assert slicer_keys.takes("cura", "cooling.disable_first_layers")
+    assert handover.setting_limitations("cura") == [], "ohne Einstellungen kein Urteil"
+
+
+@pytest.mark.parametrize("first", [0.1, 0.12, 0.2, 0.25, 0.28, 0.3, 0.32])
+@pytest.mark.parametrize("layer", [0.08, 0.1, 0.12, 0.16, 0.2, 0.24, 0.28, 0.3])
+def test_curas_fan_layer_formula_lands_on_the_layer_after_the_pause(
+    first: float, layer: float
+) -> None:
+    """Cura rundet die Höhe ab (``fdmprinter.def.json``). Auf der Oberkante der
+    Schicht entschiede der letzte Bitfehler — deshalb die Mitte, und hier jede
+    Kombination aus dem Bereich der Stufen, mit null bis sechs Schichten."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_path(settings, "layers.layer_height", layer)
+    settings = print_settings.with_path(settings, "layers.first_layer_height", first)
+    for count in range(7):
+        changed = print_settings.with_path(settings, "cooling.disable_first_layers", count)
+        values = handover.values_for(changed, profile, "cura")
+        assert float(values["cool_fan_full_at_height"]) >= 0.0, "Cura verlangt mindestens 0"
+        assert values["cool_fan_full_layer"] == str(count + 1), (first, layer, count)
+
+
+def test_cura_fan_in_the_off_layers_is_measured_in_the_print_file() -> None:
+    """Curas Hochlauf trifft die Pause, aber kurze Schichten kühlt es auch dort.
+
+    Gemessen am 26.09.2026 mit CuraEngine 5.13 und einer Schicht ohne Lüfter:
+    am 20-mm-Würfel ``M106 S53.5`` in der ersten Schicht, am 120-mm-Würfel
+    ``M107``. Vor dem Slicen kennt niemand die Schichtzeit; also spricht die
+    Druckdatei, und nur dann, wenn der Lüfter wirklich zu früh läuft.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    assert settings.cooling.disable_first_layers == 1
+    early = gcode.analyze(
+        "M82\nM107\n;LAYER:0\nM106 S53.5\nG0 X0 Y0 Z0.2\nG1 X10 E1\n"
+        ";LAYER:1\nM106 S255\nG1 X20 E2\n"
+    )
+    held = gcode.analyze(
+        "M82\nM107\n;LAYER:0\nM107\nG0 X0 Y0 Z0.2\nG1 X10 E1\n;LAYER:1\nM106 S127.5\nG1 X20 E2\n"
+    )
+
+    found = handover.fan_in_off_layers(early, settings, "cura")
+
+    assert found is not None
+    assert found.source == "gcode" and found.severity == "warning"
+    assert found.suggestions
+    assert "Schicht 1 mit 21 %" in found.message.translate("de")
+    assert handover.fan_in_off_layers(held, settings, "cura") is None
+    for flavour in ("orca", "prusa"):
+        assert handover.fan_in_off_layers(early, settings, flavour) is None, (
+            f"{flavour} hält die Pause selbst"
+        )
+    longer = print_settings.with_path(settings, "cooling.disable_first_layers", 2)
+    found = handover.fan_in_off_layers(held, longer, "cura")
+    assert found is not None and "Schicht 2 mit 50 %" in found.message.translate("de")

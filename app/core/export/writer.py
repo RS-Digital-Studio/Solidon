@@ -1244,7 +1244,7 @@ def write_assembly(
         meshes = [exported[entry.id] for entry in chosen]
         from app.core.export import handover
 
-        findings += handover.setting_limitations(flavour)
+        findings += handover.setting_limitations(flavour, settings)
         findings += check_adhesion_clearance(meshes, settings, [entry.plate for entry in chosen])
         findings += check_filament_changes(chosen, settings, plate)
     width, depth, _height = profile.printer.build_volume

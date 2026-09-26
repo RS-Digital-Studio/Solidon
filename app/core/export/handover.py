@@ -494,7 +494,7 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
             written[entry.key] = value
     chosen = _only_chosen_adhesion(written, settings, flavour)
     if flavour == "cura":
-        return _first_layer_width(chosen)
+        return _cura_fan_start(_first_layer_width(chosen), settings)
     return _support_spacing(chosen, settings, flavour)
 
 
@@ -682,9 +682,6 @@ def _cura_dependants(written: dict[str, str], settings: PrintSettings) -> dict[s
     """
     # Erst rechnen, dann spiegeln: ``support_line_distance`` und
     # ``skin_preshrink`` sind selbst Quellen für weitere Schlüssel.
-    # Curas native Vorgabe ist ein Hochlauf zur zweiten Schicht. Die
-    # gemeinsame Abschaltphase wird ausdrücklich als nicht übertragbar gemeldet.
-    written.setdefault("cool_fan_full_layer", "2")
     _cura_computed(written, settings)
     for source, targets in slicer_keys.CURA_MIRRORED.items():
         copied = written.get(source)
@@ -721,6 +718,34 @@ def _first_layer_width(written: dict[str, str]) -> dict[str, str]:
     return written
 
 
+def _cura_fan_start(written: dict[str, str], settings: PrintSettings) -> dict[str, str]:
+    """Die Schichten ohne Lüfter als Curas Hochlauf (26.09.2026).
+
+    Cura kennt keine Lüfterpause, nur einen Hochlauf vom Anfangslüfter bis zu
+    einer Höhe, aus der es die Schicht ``cool_fan_full_layer`` rechnet. Mit
+    Anfangslüfter null und der Höhe in der ersten Schicht nach der Pause ist
+    das für null und eine Schicht ohne Lüfter die Pause selbst — solange die
+    Schicht lange genug dauert: Kürzere kühlt Cura auch dort stärker, was
+    :func:`fan_in_off_layers` in der Druckdatei nachmisst. Ab zwei Schichten
+    laufen die dazwischen schon an (``slicer_keys.limitation``).
+
+    Die Mitte der Schicht und nicht ihre Oberkante, weil Cura abrundet: Auf
+    der Kante entschiede der letzte Bitfehler über eine ganze Schicht. Steht
+    hier und nicht in :func:`_cura_dependants`, weil das Cura-Fenster nur
+    diese Seite bekommt (:func:`cura_profile_beside`). Vorher bekam es nichts
+    davon, und die Konsole fest die zweite Schicht — jede Cura-Übergabe
+    meldete die Pause als verloren, auch die, bei der nichts abwich.
+    """
+    first = _as_float(written.get("layer_height_0"))
+    layer = _as_float(written.get("layer_height"))
+    if first is None or not layer:
+        return written
+    off = max(0, settings.cooling.disable_first_layers)
+    written["cool_fan_speed_0"] = "0"
+    written["cool_fan_full_at_height"] = f"{max(0.0, first + (off - 0.5) * layer):g}"
+    return written
+
+
 def _cura_computed(written: dict[str, str], settings: PrintSettings) -> None:
     """Die gerechneten Ableitungen — je Zeile die Formel aus der Definition.
 
@@ -730,6 +755,18 @@ def _cura_computed(written: dict[str, str], settings: PrintSettings) -> None:
     _from_line_width(written, settings)
     _for_supports(written, settings)
     _for_speeds(written, settings)
+    _full_fan_layer(written)
+
+
+def _full_fan_layer(written: dict[str, str]) -> None:
+    """Ab welcher Schicht der Lüfter voll läuft — aus der Höhe, die
+    :func:`_cura_fan_start` schreibt."""
+    height = _as_float(written.get("cool_fan_full_at_height"))
+    first = _as_float(written.get("layer_height_0"))
+    layer = _as_float(written.get("layer_height"))
+    if height is None or first is None or not layer:
+        return
+    written["cool_fan_full_layer"] = str(max(1, math.floor((height - first) / layer) + 2))
 
 
 def _from_line_width(written: dict[str, str], settings: PrintSettings) -> None:
@@ -2023,8 +2060,15 @@ def _as_slots(value: object) -> object:
     return value if isinstance(value, list) else [value]
 
 
-def setting_limitations(flavour: SlicerFlavour) -> list[Finding]:
-    """Benannte Übergabeverluste vor dem Öffnen und nach dem Slicen ausweisen."""
+def setting_limitations(
+    flavour: SlicerFlavour, settings: PrintSettings | None = None
+) -> list[Finding]:
+    """Benannte Übergabeverluste vor dem Öffnen und nach dem Slicen ausweisen.
+
+    Was nur je nach Wert angenähert ankommt (``slicer_keys.LIMITED``), wird
+    erst mit den Einstellungen beurteilt — ohne sie gibt es dazu keinen Satz.
+    """
+    paths = slicer_keys.NOT_TAKEN_BY[flavour] | slicer_keys.LIMITED[flavour]
     return [
         Finding(
             code="slicer.setting_not_transferred",
@@ -2033,8 +2077,8 @@ def setting_limitations(flavour: SlicerFlavour) -> list[Finding]:
             values={"path": path},
             suggestions=(CHECK_SLICER_PROFILE,),
         )
-        for path in sorted(slicer_keys.NOT_TAKEN_BY[flavour])
-        if (message := slicer_keys.limitation(flavour, path)) is not None
+        for path in sorted(paths)
+        if (message := slicer_keys.limitation(flavour, path, settings)) is not None
     ]
 
 
@@ -2673,6 +2717,40 @@ def too_short(
     )
 
 
+def fan_in_off_layers(
+    analysis: gcode.GcodeAnalysis, settings: PrintSettings, flavour: SlicerFlavour
+) -> Finding | None:
+    """Läuft der Lüfter in einer Schicht, die ohne ihn gedruckt werden sollte?
+
+    Nur bei Cura, der einzigen Familie ohne Lüfterpause
+    (``slicer_keys.LIMITED``). Sein Hochlauf trifft sie für null und eine
+    Schicht genau — aber kurze Schichten kühlt Cura danach stärker, auch in
+    der Pause, und dieser Zuschlag hängt an der Druckzeit der Schicht, die
+    vor dem Slicen niemand kennt. Gemessen am 26.09.2026 mit einer Schicht
+    ohne Lüfter: am 20-mm-Würfel in Schicht 1 21 %, am 120-mm-Würfel aus.
+    Also wird die Druckdatei gefragt, mit ihrer Herkunft (Regel 14).
+    """
+    if "cooling.disable_first_layers" not in slicer_keys.LIMITED[flavour]:
+        return None
+    start = analysis.fan_start
+    if start is None or start[0] > settings.cooling.disable_first_layers:
+        return None
+    layer, share = start
+    return Finding(
+        code="gcode.fan_in_first_layers",
+        severity="warning",
+        message=_(
+            "Cura kennt keine Lüfterpause: Der Lüfter läuft schon in Schicht {layer} "
+            "mit {percent} %.",
+            layer=layer,
+            percent=round(share * 100.0),
+        ),
+        values={"path": "cooling.disable_first_layers"},
+        suggestions=(CHOOSE_SLICER,),
+        source="gcode",
+    )
+
+
 def spools_left_out(
     analysis: gcode.GcodeAnalysis,
     expected: Sequence[int],
@@ -3214,6 +3292,7 @@ def slice_model(
         # „der Aufrufer kennt die Höhe nicht" — dann entfällt der Vergleich,
         # er wird nie geraten.
         short = too_short(analysis, model_height, settings) if model_height is not None else None
+        fan = fan_in_off_layers(analysis, settings, setup.flavour)
         # Die vierte: Sind alle übergebenen Spulen darin? Die drei darüber
         # sehen eine Datei, der ein ganzes Filament fehlt, nicht an — sie hat
         # die volle Höhe, liegt auf dem Bett und bestätigt jeden Wert.
@@ -3233,6 +3312,8 @@ def slice_model(
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    # Ohne Einstellungen: Was nur je nach Wert angenähert ankommt, beurteilt
+    # nach dem Slicen die Druckdatei selbst (``fan_in_off_layers``).
     findings = [
         *setting_limitations(setup.flavour),
         *profile_differences(settings, setup),
@@ -3247,6 +3328,7 @@ def slice_model(
         *ignored,
         *([beyond] if beyond is not None else []),
         *([short] if short is not None else []),
+        *([fan] if fan is not None else []),
         *([left_out] if left_out is not None else []),
         *gcode.findings_for(metrics),
     ]

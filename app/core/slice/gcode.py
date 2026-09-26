@@ -246,6 +246,11 @@ class GcodeAnalysis:
     excluded_areas: tuple[tuple[tuple[float, float], ...], ...] = ()
     paths_inside: bool | None = None
     firmware: str = ""
+    #: Die erste Schicht (ab 1 gezählt), in der mit laufendem Bauteillüfter
+    #: gedruckt wird, und dessen Stärke als Anteil — ``None``, wenn keine.
+    #: Gezählt wird, was gedruckt wird, nicht was befohlen: Ein Lüfter, den
+    #: der Startcode einschaltet und vor der ersten Bahn wieder aus, zählt nicht.
+    fan_start: tuple[int, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -521,6 +526,12 @@ _WARNING = re.compile(r";\s*(?:WARNING|Warnung)[:\s]\s*(?P<text>.+)", re.IGNOREC
 #: Die Marke, mit der PrusaSlicer jeden Schichtwechsel ankündigt. Gezählt ist
 #: sie die Schichtzahl, die er sonst nirgends nennt.
 _LAYER_CHANGE = re.compile(r"^;\s*(?:LAYER_CHANGE|CHANGE_LAYER)\s*$", re.IGNORECASE)
+#: Jede Schichtmarke der drei Familien. Die Orca-Familie schreibt mit manchen
+#: Druckern zwei je Schicht (``;LAYER_CHANGE`` und ``;LAYER:n`` aus dem
+#: Druckerprofil); gezählt wird deshalb erst die erste Bahn nach einer Marke.
+_LAYER_MARK = re.compile(
+    r"^;\s*(?:LAYER\s*:\s*-?[0-9]+|LAYER_CHANGE|CHANGE_LAYER)\s*$", re.IGNORECASE
+)
 _TIME_ELAPSED = re.compile(r";\s*TIME_ELAPSED:\s*([0-9.]+)", re.IGNORECASE)
 _SETTING_LINE = re.compile(r"^;\s*(?P<key>[a-z_0-9]+)\s*=\s*(?P<value>.*?)\s*$", re.IGNORECASE)
 _MATERIAL_LINE = re.compile(
@@ -664,6 +675,12 @@ def analyze_lines(
     seen_type = False
     has_first_layer = False
     after_first_layer = False
+    # Bauteillüfter als Anteil, die Schicht der letzten Bahn, und ob seitdem
+    # eine Schichtmarke kam.
+    part_fan = 0.0
+    printed_layer = 0
+    layer_pending = False
+    fan_start: tuple[int, float] | None = None
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -709,6 +726,8 @@ def analyze_lines(
                     last_elapsed = seconds
             if _LAYER_CHANGE.fullmatch(stripped):
                 layer_changes += 1
+            if _LAYER_MARK.match(stripped):
+                layer_pending = True
             setting = _SETTING_LINE.match(stripped)
             if setting is not None:
                 settings.setdefault(setting.group("key").casefold(), setting.group("value"))
@@ -753,6 +772,15 @@ def analyze_lines(
             found.group("name").upper(): float(found.group("value"))
             for found in _WORD.finditer(command_text)
         }
+        if family == "M" and code in (106, 107):
+            # Der Bauteillüfter: ohne Nummer oder Nummer 0, bei Bambu Nummer 1
+            # (2 und 3 sind dort Hilfs- und Bauraumlüfter). Marlins Skala geht
+            # bis 255, ein ``M106`` ohne Wert heißt voll.
+            fan = words.get("P", 0.0)
+            if fan == 0.0 or (bambu_commands and fan == 1.0):
+                speed = 0.0 if code == 107 else words.get("S", 255.0) / 255.0
+                part_fan = min(max(speed, 0.0), 1.0)
+            continue
         if family == "M" and code in (82, 83):
             for state in extrusion_states:
                 state.absolute = code == 82
@@ -887,6 +915,14 @@ def analyze_lines(
             if after_first_layer:
                 state.model_extent.add(*points)
                 state.model_paths_inside = state.model_paths_inside and inside
+        # Nur was beide Dialekte als Druckbahn lesen — ein Rückzug in dem
+        # einen ist keine Bahn im anderen.
+        if all(step > 0.0 for step in steps):
+            if layer_pending:
+                printed_layer += 1
+                layer_pending = False
+            if fan_start is None and part_fan > 0.0 and printed_layer >= 1:
+                fan_start = (printed_layer, part_fan)
 
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -1014,6 +1050,7 @@ def analyze_lines(
         if path_check is not None
         else None,
         dialect,
+        fan_start=fan_start,
     )
 
 
