@@ -3626,7 +3626,14 @@ def _area_and_reach(body: trimesh.Trimesh, patch: Sequence[int]) -> tuple[float,
     """
     faces = np.asarray(patch, dtype=int)
     area = float(body.area_faces[faces].sum())
-    corners = np.asarray(body.vertices[body.faces[faces].reshape(-1)], dtype=float)
+    # **Über ``np.asarray`` und nicht am Netz selbst indizieren.** Jede Auswahl
+    # aus ``body.faces`` oder ``body.vertices`` (trimesh ``TrackedArray``)
+    # erklärt deren Prüfsumme für ungültig, und der nächste gemerkte Wert des
+    # Netzes rechnet sie neu: an 4,5 Millionen Dreiecken 34 ms für die Flächen,
+    # 17 ms für die Ecken — je Fleck. Die Vorschau von *Kanten verfeinern* auf
+    # 0,04 mm am Spielwürfel stand damit über zehn Minuten in dieser Zeile
+    # (Durchsicht 0.5.1, Stapelabzug unter Last).
+    corners = np.asarray(body.vertices)[np.asarray(body.faces)[faces].reshape(-1)]
     reach = float(np.linalg.norm(corners.max(axis=0) - corners.min(axis=0)))
     return area, reach
 

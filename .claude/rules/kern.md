@@ -187,6 +187,20 @@ langsam an der Kopie; `test_every_remembered_question_is_either_shared_or_bound`
 verlangt den Eintrag. Eine Antwort, die selbst ein Körper ist, steht zusätzlich
 in `DERIVED_BODY_ANSWERS`.
 
+## Eine Auswahl aus `body.faces` oder `body.vertices` in einer Schleife geht über `np.asarray`
+
+trimesh hält Ecken und Dreiecke als `TrackedArray`, und **jede** Ansicht
+daraus — auch eine bloße Auswahl `body.faces[fleck]` — erklärt die Prüfsumme
+des Netzes für ungültig (`TrackedArray.__array_finalize__`). Der nächste
+gemerkte Wert (`body.area_faces`, `face_normals`, …) rechnet sie neu: an
+4,5 Millionen Dreiecken 34 ms für die Dreiecke, 17 ms für die Ecken — je
+Zugriff. In einer Schleife über Flecken wird daraus Minuten: Die Vorschau von
+*Kanten verfeinern* auf 0,04 mm am Spielwürfel stand über zehn Minuten in
+`perceive.features._area_and_reach` (Durchsicht 0.5.1, Stapelabzug). Wer in
+einer Schleife auswählt, nimmt `np.asarray(body.faces)[…]` — eine Ansicht der
+Grundklasse, die nichts verfolgt; die gemerkten Werte selbst
+(`body.area_faces[…]`) sind davon nicht betroffen.
+
 ## Fehler
 
 Jede Ausnahme erbt von `AppError` und trägt `suggestions: list[Action]` —
