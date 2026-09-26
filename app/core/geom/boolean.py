@@ -1076,8 +1076,12 @@ def without_effect(
     rechnen im exakten Kern (§30.1) und hatten deshalb keinen Zugang zu dieser
     Auskunft: eine Tasche neben dem Körper lief dort genauso stumm durch, wie
     es die Magnettasche einmal tat.
+
+    **Gefragt wird am Netz-Zwilling, nicht am exakten Integral** (Durchsicht
+    0.5.1, BOHRUNG-10; :func:`_measured_volume`).
     """
-    change = abs(after.volume - before.volume)
+    first, second = _measured_volume(before), _measured_volume(after)
+    change = abs(second - first)
     threshold = profile.smallest_printable_volume if profile is not None else EPS_GEOM
     if change > threshold:
         return None
@@ -1099,10 +1103,33 @@ def without_effect(
         # „daneben", ein Tausendstel heißt „gestreift", und das sind zwei
         # verschiedene Handgriffe am Ort.
         values={
-            "volume_mm3": round(before.volume, 3),
+            "volume_mm3": round(first, 3),
             "removed_mm3": round(change, 6),
         },
         # Regel 17: „Position prüfen“ heißt den Schritt öffnen; die Auswertung
         # trägt seine Kennung nach.
         suggestions=(CORRECT_INPUT,),
     )
+
+
+def _measured_volume(body: HasVolume) -> float:
+    """Das Volumen, an dem :func:`without_effect` misst — am exakten Körper das
+    seines Netz-Zwillings.
+
+    **Das exakte Integral kann eine Minute kosten** (Durchsicht 0.5.1,
+    BOHRUNG-10). An der Lochplatte ``pegboard-gs-100-v2.step`` hält die Naht
+    einer BSpline-Rundung ihre Toleranz nicht, der Kern fällt auf den UV-Weg,
+    und das Volumen braucht 33 s — vorher und nachher je einmal: *Bohrung
+    verschließen* stand 75 s, *Bohrung ändern* 124 s. Die Frage „hat sich
+    etwas geändert?" beantwortet der Zwilling genauso, den die Anzeige ohnehin
+    braucht: Unberührte Flächen vernetzen sich gleich, die Änderung trägt nur
+    den Sehnenfehler der geschnittenen. Das Integral rechnet der
+    Auswertungsarbeiter danach für die Zahlenzeile.
+    """
+    if not isinstance(body, MeshData):
+        converted = getattr(body, "to_mesh", None)
+        if callable(converted):
+            twin = converted()
+            if isinstance(twin, MeshData):
+                return float(twin.volume)
+    return float(body.volume)

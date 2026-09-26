@@ -657,7 +657,9 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     # geteilt und nicht ein zweites Mal geschrieben. ``without_effect``
     # darunter fängt den Fall nicht: Es prüft auf *nichts abgetragen*, hier
     # wurde *alles* abgetragen.
-    if solid.volume <= EPS_GEOM or solid.face_count == 0:
+    # Am Zwilling gefragt, nicht am exakten Integral (Durchsicht 0.5.1,
+    # BOHRUNG-10): An einer BSpline-Rundung kostet es eine halbe Minute.
+    if solid.face_count == 0 or as_mesh_data(solid).volume <= EPS_GEOM:
         raise GeometryError(
             title=NOTHING_LEFT_TITLE,
             detail=NOTHING_LEFT_DETAIL,

@@ -1238,3 +1238,48 @@ def test_a_nurbs_taper_is_handled_like_an_analytic_one(action: str, profile: Pro
         assert solid.volume == pytest.approx(expected[action], rel=1e-9)
     cones = [feature for feature in output.features.values() if feature.kind == "cone"]
     assert len(cones) == {"move": 1, "duplicate": 2, "rotate": 1, "remove": 0}[action]
+
+
+#: Die Bohrungsschritte am exakten Körper, je mit den Werten, die ihn an der
+#: Platte aus :func:`_bored_plate` etwas tun lassen.
+_BORE_STEPS: dict[str, dict[str, Any]] = {
+    "drill_brep_hole": {"x": 20.0, "y": 0.0, "z": 10.0, "axis": "z", "diameter": 5.0},
+    "resize_hole": {"diameter": 8.0},
+    "slot_hole": {"slot_length": 12.0, "slot_angle": 0.0},
+    "plug_hole": {},
+    "move_feature": {"x": 5.0, "y": 0.0, "z": 5.0},
+    "duplicate_feature": {"x": 15.0, "y": 0.0, "z": 5.0},
+    "rotate_feature": {"axis": "x", "angle": 10.0},
+    "remove_feature": {},
+}
+
+
+@pytest.mark.parametrize("op", sorted(_BORE_STEPS))
+def test_a_bore_step_on_an_exact_body_does_not_wait_for_its_integral(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, op: str
+) -> None:
+    """Kein Bohrungsschritt am exakten Körper fragt das exakte Volumen
+    (Durchsicht 0.5.1, BOHRUNG-10).
+
+    An der Lochplatte ``pegboard-gs-100-v2.step`` hält die Naht einer
+    BSpline-Rundung ihre Toleranz nicht, und das Volumen fällt auf den UV-Weg:
+    33 s je Körper. *Bohrung ändern* wartete darauf 124 s, *Bohrung
+    verschließen* 75 s, das Versetzen vor BOHRUNG-09 bis zu zwei Minuten —
+    für die Fragen „ist noch etwas übrig?" und „hat es etwas bewirkt?", die der
+    Netz-Zwilling ebenso beantwortet. Das Integral rechnet danach der
+    Auswertungsarbeiter für die Zahlenzeile (``session._warm_metrics``).
+    """
+    from app.core.brep.kernel import Solid
+
+    source = _bored_plate()
+    hole = _the_one(source, "hole")
+
+    def refused(_self: Any) -> float:
+        raise AssertionError("das exakte Volumen wurde gefragt")
+
+    monkeypatch.setattr(Solid, "volume", property(refused))
+    params = dict(_BORE_STEPS[op])
+    if op != "drill_brep_hole":
+        params["at_feature"] = hole.id
+    result = run(op, source, profile, **params)
+    assert result.outputs[0].kind == "brep"

@@ -6649,7 +6649,8 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 diameter=cut,
                 depth=depth,
             )
-        if solid.volume <= EPS_GEOM or solid.face_count == 0:
+        # Am Zwilling, nicht am exakten Integral (BOHRUNG-10).
+        if solid.face_count == 0 or as_mesh_data(solid).volume <= EPS_GEOM:
             raise GeometryError(
                 title=NOTHING_LEFT_TITLE,
                 detail=NOTHING_LEFT_DETAIL,
@@ -7339,7 +7340,8 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 angle_deg=angle,
                 overlap=overlap,
             )
-        if solid.volume <= EPS_GEOM or solid.face_count == 0:
+        # Am Zwilling, nicht am exakten Integral (BOHRUNG-10).
+        if solid.face_count == 0 or as_mesh_data(solid).volume <= EPS_GEOM:
             raise GeometryError(
                 title=NOTHING_LEFT_TITLE,
                 detail=NOTHING_LEFT_DETAIL,
@@ -9713,8 +9715,16 @@ def _exact_cavity_tool(solid: Any, feature: Feature, centre: Vec3, axis: Vec3) -
 
 def _exact_body_checked(solid: Any) -> Any:
     """Ob nach dem Schnitt noch ein geschlossener Körper da ist — dieselben zwei
-    Fragen wie in ``resize_hole``, mit denselben Sätzen."""
-    if solid.volume <= EPS_GEOM or solid.face_count == 0:
+    Fragen wie in ``resize_hole``, mit denselben Sätzen.
+
+    **„Nichts übrig" fragt den Zwilling, nicht das exakte Volumen** (Durchsicht
+    0.5.1, BOHRUNG-09). Das exakte Volumen integriert BSpline-Flächen
+    numerisch; an der Lochplatte gs-100 kostete diese Frage allein 64 bis
+    86 s je Versetzen, und das Ergebnis stand so lange nicht im Fenster. Den
+    Zwilling braucht die Anzeige ohnehin, und das exakte Volumen rechnet der
+    Auswertungsarbeiter danach für die Zahlenzeile (``session._warm_metrics``).
+    """
+    if solid.face_count == 0 or as_mesh_data(solid).volume <= EPS_GEOM:
         raise GeometryError(
             title=NOTHING_LEFT_TITLE,
             detail=NOTHING_LEFT_DETAIL,
@@ -10300,9 +10310,24 @@ def _exact_chain_filled(source: SceneObject, entrance: _BoreEntrance) -> Any:
     # Ein Stopfen aus den eigenen Flächen des Körpers teilt mit ihm jede
     # Kante; eine Vereinigung, die ihn still fallen ließe, bliebe sonst
     # unbemerkt — der Hohlraum stünde an der alten Stelle weiter offen.
-    if filled.volume < solid.volume + plug.volume * (1.0 - _SAME_LENGTH):
+    #
+    # **Gefragt an den Zwillingen, nicht am exakten Volumen** (Durchsicht
+    # 0.5.1, BOHRUNG-09): Das exakte Volumen integriert jede BSpline-Fläche
+    # numerisch, und an der Lochplatte gs-100 (Rundung aus vier BSplines)
+    # kostete diese eine Zeile 55 der 121 s eines Versetzens — für einen
+    # Zwischenkörper, den danach niemand mehr misst. Ein fallen gelassener
+    # Stopfen fehlt ganz; die Tessellierung verschiebt die Bilanz um wenige
+    # Prozent, :data:`_PLUG_KEPT` trennt beides.
+    gained = as_mesh_data(filled).volume - as_mesh_data(solid).volume
+    if gained < as_mesh_data(plug).volume * _PLUG_KEPT:
         raise _chain_not_readable(entrance.chain)
     return filled
+
+
+#: Welcher Anteil des Stopfens am gefüllten Körper ankommen muss, gemessen an
+#: den Zwillingen (:func:`_exact_chain_filled`): Ein fallen gelassener Stopfen
+#: bringt nichts, die Vernetzung weicht um wenige Prozent ab.
+_PLUG_KEPT: Final = 0.8
 
 
 def _exact_chain_plug(source: SceneObject, entrance: _BoreEntrance) -> Any:
