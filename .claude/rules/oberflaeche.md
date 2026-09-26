@@ -759,6 +759,13 @@ Absatz sagt, worauf.
   das der Kern genannt hat, und ersetzt ihn beim Übernehmen (§15.4). Eine
   Handlung, die eine Schrittkennung braucht, steht in `dialogs.NEEDS_OP` und
   wird ohne sie nicht angeboten.
+- **Und eine Befundzeile aus einer Operation steht nie ohne Knopf da.** Viele
+  Absagen tragen Räte, die nur der Kunde ausführen kann („Weniger Durchgänge
+  nehmen.“); der Fehlerdialog zeigt sie als Sätze (`dialogs.unhandled_advice`),
+  der Prüfbericht nur Knöpfe. Bleibt nach dem Abgleich mit `error_handlers`
+  nichts übrig, bietet `panels.handled_actions` *Eingabe korrigieren* an, und
+  der Rat steht in der Kurzhilfe dieses Knopfs. Knopfzeile, Kontextmenü und
+  Vorwahl fragen dieselbe Funktion.
 - **Lokale Formenerkennung aus einem Befund behält dessen Ziel.** Ein
   Sammelbefund bindet die nächste Oberflächenwahl an seine Körper; erst der
   Treffer bestimmt einen davon. Die aktuelle Baumauswahl ersetzt dieses Ziel

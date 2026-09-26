@@ -126,7 +126,7 @@ from app.core.scene.history import StepNeed, recognition_reopenable, repair_is_a
 from app.core.types import Document, Feature, Finding, MaterialSlot, ObjectId, OpId, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import TranslatableText, sort_key, tr
-from app.ui.dialogs import NEEDS_OP, handlers_of
+from app.ui.dialogs import NEEDS_OP, handlers_of, unhandled_advice
 from app.ui.icons import OVERSAMPLING, icon, icon_name_for
 from app.ui.labels import (
     LengthSpin,
@@ -820,6 +820,54 @@ def actions_for_document(
             for action in offered
         ]
     return tuple(offered)
+
+
+def handled_actions(
+    finding: Finding,
+    document: Document | None,
+    handlers: Mapping[str, Callable[[AppError], None]],
+    *,
+    stopped_at: OpId | None = None,
+    live_objects: Mapping[ObjectId, SceneObject] | None = None,
+    bodies: tuple[ObjectId, ...] = (),
+) -> list[Action]:
+    """Die Handlungen einer Befundzeile, die das Fenster wirklich ausführt (Regel 17).
+
+    **Ein angehaltener Schritt ohne einen einzigen Knopf war eine Sackgasse.**
+    Der Kern gibt vielen Absagen Räte mit, die nur der Kunde selbst ausführen
+    kann — „Weniger Durchgänge nehmen.", „Eine gröbere Steigung nehmen.",
+    „Ein Bild wählen." (``dialogs.unhandled_advice``). Der Fehlerdialog zeigt
+    sie als Sätze; der Prüfbericht zeigt nur Knöpfe, und so stand dort die
+    Zeile eines angehaltenen Schritts ohne Knopf und ohne Rat (Durchsicht
+    0.5.1, gezählt: 28 solche Kennungen an 48 Stellen des Kerns). Der Weg
+    zurück war, den Schritt im Verlauf selbst zu finden und doppelzuklicken.
+
+    Bleibt an einem Befund aus einer Operation nichts übrig, steht deshalb
+    *Eingabe korrigieren* da — derselbe Rückfall wie für einen solchen Befund
+    ganz ohne Vorschlag (:func:`actions_for`): Der Schritt geht auf, mit dem
+    Cursor im Feld, das die Absage nennt, und dort wird ausgeführt, was der
+    Rat sagt. Der Rat selbst steht in der Kurzhilfe des Knopfs
+    (``ReportPanel._show_offers``).
+    """
+    offered = [
+        action
+        for action in actions_for_document(
+            finding,
+            document,
+            stopped_at=stopped_at,
+            live_objects=live_objects,
+            bodies=bodies,
+        )
+        if action.id in handlers
+    ]
+    if (
+        not offered
+        and finding.op_id is not None
+        and finding.code.startswith(_FROM_AN_OPERATION)
+        and CORRECT_INPUT.id in handlers
+    ):
+        offered = [CORRECT_INPUT]
+    return offered
 
 
 def _import_group_for(
@@ -4585,23 +4633,26 @@ class ReportPanel(QWidget):
         )
         handlers = handlers_of(self)
         offered = (
-            [
-                action
-                for action in actions_for_document(
-                    finding,
-                    self._document,
-                    stopped_at=self._stopped_at,
-                    live_objects=self._live_objects,
-                    bodies=items[0].data(_BODIES_ROLE) or (),
-                )
-                if action.id in handlers
-            ]
+            handled_actions(
+                finding,
+                self._document,
+                handlers,
+                stopped_at=self._stopped_at,
+                live_objects=self._live_objects,
+                bodies=items[0].data(_BODIES_ROLE) or (),
+            )
             if finding is not None
             else []
         )
         for action in offered:
             button = QPushButton(str(action.label), self._offers)
             button.setToolTip(str(finding.message) if finding is not None else "")
+            if finding is not None and action.id == CORRECT_INPUT.id:
+                # Der Rat des Kerns, den kein Knopf einlöst, steht beim Knopf,
+                # der zu ihm führt — sonst ginge er im Bericht ganz verloren.
+                advice = unhandled_advice(as_error(finding, self._document), handlers)
+                if advice:
+                    button.setToolTip("\n".join([str(finding.message), *advice]))
             if action.primary:
                 make_primary(button)
             # ``weak_slot`` und nicht ein Lambda: ``handlers`` hält gebundene
@@ -4975,15 +5026,13 @@ class ReportPanel(QWidget):
                 # sauberen Modell — und las sich wie eine Warnung. Ein Hinweis
                 # am Körper (*Auf das Bett setzen*) bleibt vorwählbar.
                 continue
-            if any(
-                action.id in handlers
-                for action in actions_for_document(
-                    finding,
-                    self._document,
-                    stopped_at=self._stopped_at,
-                    live_objects=self._live_objects,
-                    bodies=item.data(_BODIES_ROLE) or (),
-                )
+            if handled_actions(
+                finding,
+                self._document,
+                handlers,
+                stopped_at=self._stopped_at,
+                live_objects=self._live_objects,
+                bodies=item.data(_BODIES_ROLE) or (),
             ):
                 self.list.setCurrentRow(row)
                 return
@@ -5350,15 +5399,15 @@ class ReportPanel(QWidget):
         if item is None:
             return
         finding: Finding = item.data(Qt.ItemDataRole.UserRole)
-        offers = actions_for_document(
+        handlers = handlers_of(self)
+        offered = handled_actions(
             finding,
             self._document,
+            handlers,
             stopped_at=self._stopped_at,
             live_objects=self._live_objects,
             bodies=item.data(_BODIES_ROLE) or (),
         )
-        handlers = handlers_of(self)
-        offered = [action for action in offers if action.id in handlers]
         if not offered:
             return
 

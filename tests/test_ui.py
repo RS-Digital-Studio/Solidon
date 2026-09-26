@@ -5294,6 +5294,46 @@ def test_the_split_and_retry_button_lays_the_pieces_on_the_plates(
     assert back.stopped_at == halted.stopped_at, "nach dem Undo steht die Absage wieder da"
 
 
+def test_a_halted_step_whose_advice_nobody_carries_out_still_opens_the_step() -> None:
+    """Regel 17 im Prüfbericht: Eine Absage ohne einlösbaren Rat bekommt *Eingabe korrigieren*.
+
+    *Glätten* mit zu vielen Durchgängen hält mit „Weniger Durchgänge nehmen."
+    und „Vorher neu vernetzen" an — zwei Räte, die nur der Kunde ausführen
+    kann. Der Fehlerdialog zeigt sie als Sätze, der Prüfbericht zeigte nur
+    Knöpfe und damit nichts (Durchsicht 0.5.1). Jetzt öffnet ein Knopf den
+    Schritt; wo es einen einlösbaren Weg gibt, bleibt es bei ihm, und ein
+    Befund, der nicht aus einer Operation stammt, bekommt keinen Schritt
+    angeboten, den es nicht gibt.
+    """
+    from app.core.errors import Action
+    from app.ui.panels import handled_actions
+
+    def nothing(_error: object) -> None:
+        return None
+
+    advice = (
+        Action("fewer_iterations", "Weniger Durchgänge nehmen."),
+        Action("remesh_first", "Vorher neu vernetzen — feiner glättet sanfter."),
+    )
+    halted = Finding(
+        code="op.smooth_mesh.ValidationError",
+        severity="error",
+        message="Der Körper hat sich beim Glätten umgestülpt.",
+        op_id=4,
+        values={"field": "iterations"},
+        suggestions=advice,
+    )
+    handlers = {"correct_input": nothing}
+
+    assert [action.id for action in handled_actions(halted, None, handlers)] == ["correct_input"]
+    assert [
+        action.id
+        for action in handled_actions(halted, None, {**handlers, "fewer_iterations": nothing})
+    ] == ["fewer_iterations"], "ein einlösbarer Weg geht vor"
+    loose = dataclasses.replace(halted, code="ingest.colours_dropped", op_id=None)
+    assert handled_actions(loose, None, handlers) == [], "ohne Schritt kein Schritt zum Öffnen"
+
+
 def test_a_halted_chain_takes_no_new_step_and_names_the_way_on(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
