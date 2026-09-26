@@ -763,7 +763,9 @@ Körper zuerst auf den Quader, in dem sich ihre Häute unterscheiden
 Nummer in kanonischer Drehung verglichen); die Differenz liegt in dessen
 Hülle, und zwei Schnitte an einer Platte mit 204 000 Dreiecken kosten so
 25 statt 366 ms — bleibt die Box über der Hälfte der gemeinsamen Hülle,
-rechnet sie am ganzen Körper) · `intersections.py` (Selbstdurchdringung als Feld, eine Rechnung für Karte und Bereichstest) · `repair.py` (Netze reparieren: verzweigte Kanten
+rechnet sie am ganzen Körper; von den zwei Schnitten rechnet sie nur, was die
+Volumenbilanz |A − B| − |B − A| = |A| − |B| nicht schon beantwortet —
+`_empty_by_balance`, RM-212) · `intersections.py` (Selbstdurchdringung als Feld, eine Rechnung für Karte und Bereichstest) · `repair.py` (Netze reparieren: verzweigte Kanten
 auflösen (`resolve_branching_edges` — dort liegen Flächen übereinander, die
 kleinste geht), Sanduhr-Ecken auftrennen (`split_pinched_vertices` — zwei
 Löcher, die sich eine Ecke teilen, sind zwei Ringe), Ränder vernähen und
@@ -1660,7 +1662,11 @@ Schwelle aus §31, Beispielbilder, Stellvertreter der Orientierungssuche:
 erst der exakte Kern nach Sehnenfehler (`units.MAX_FACET_SAG` als Start, je
 Schritt vervierfacht), dann das Zusammenlegen im Raster für Netze, die der
 Kern nicht nimmt (`_clustered_for_display`). Die angeforderte Dreieckszahl ist
-ein Richtwert; der Rasterweg darf bis zum Doppelten behalten. Für die große
+ein Richtwert; der Rasterweg darf bis zum Doppelten behalten. Was der Kern beim
+Vereinfachen an Schalen stehen lässt, die im Mittel dünner sind als seine
+Toleranz, geht nicht mit (`_without_slivers`), und `_as_mesh` verschweißt nur,
+wo das Netz dabei dicht bleibt — beides riss an Kundenmodellen das grobe Netz
+der Vorschau auf, und die Bohrung darauf scheiterte (RM-212). Für die große
 Anzeige sind damit höchstens 400.000 Dreiecke bei einem Richtwert von 200.000
 zulässig (§31). Eine geometrische Abweichung wird hier nicht gemessen.
 **Die Operation hat eine Tür zum Anzeigeweg:** `decimate_mesh(method="fast")`

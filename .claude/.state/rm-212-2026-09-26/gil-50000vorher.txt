@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "F:\3D Druck\.claude\.state\rm-212-2026-09-26\probe_display_gil.py", line 11, in <module>
+    TARGET = int(os.environ.get("ZIEL", "50000"))
+ValueError: invalid literal for int() with base 10: 'C:/Program Files/Git/Users/rober/AppData/Local/Temp/claude/F--3D-Druck/eda33e4f-279c-48e3-bf58-acf625bcf116/scratchpad/rm212-alt'

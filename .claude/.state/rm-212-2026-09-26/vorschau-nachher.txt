@@ -1,0 +1,31 @@
+app aus F:\3D Druck\app\__init__.py
+plate_holes_x5.stl: 1 Körper, 815104 Dreiecke (größter 815104), geöffnet in 19.7 s
+  grob Ø5                     1.32 s  grob=True  abgetragen=166.2  Verkleinerung=[decimate_for_display 0.84 s]  
+  grob Ø6                     0.22 s  grob=True  abgetragen=237.0  Verkleinerung=[]  
+  grob Ø7                     0.24 s  grob=True  abgetragen=320.3  Verkleinerung=[]  
+  genau Ø5                    6.77 s  grob=False  abgetragen=166.2  Verkleinerung=[]  
+  genau Ø6                    7.38 s  grob=False  abgetragen=237.0  Verkleinerung=[]  
+Traceback (most recent call last):
+  File "F:\3D Druck\app\core\ingest\loader.py", line 200, in read_bounded_payload
+    check_limits(path.stat().st_size, 0)
+                 ~~~~~~~~~^^
+  File "C:\Users\rober\AppData\Local\Programs\Python\Python314\Lib\pathlib\__init__.py", line 654, in stat
+    return os.stat(self, follow_symlinks=follow_symlinks)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [WinError 3] Das System kann den angegebenen Pfad nicht finden: 'F:\\3D Dateien\\HydroBowl+-+Smart+Fruit+&+Veggie+Washer (1)\\washing bowl v1.stl'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "F:\3D Druck\.claude\.state\rm-212-2026-09-26\probe_preview.py", line 115, in <module>
+    session.import_model(path, unit="mm")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "F:\3D Druck\app\ui\session.py", line 2418, in import_model
+    read_local_payload(path),
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "F:\3D Druck\app\core\ingest\loader.py", line 240, in read_local_payload
+    payload = read_bounded_payload(path)
+  File "F:\3D Druck\app\core\ingest\loader.py", line 204, in read_bounded_payload
+    raise unreadable_file(path, problem) from problem
+app.core.errors.UserError: Diese Datei ließ sich nicht lesen.: Sie ist vielleicht verschoben worden, oder das Laufwerk ist gerade nicht erreichbar. Wählen Sie die Datei noch einmal aus.
+Exit: 1

@@ -297,6 +297,67 @@ def test_new_triangles_at_the_same_volume_are_a_preview() -> None:
     assert not difference.recoloured
 
 
+def test_a_widened_bore_takes_material_and_adds_none_even_where_the_cut_cannot(
+    profile: Profile,
+) -> None:
+    """Was eine Bohrung aufweitet, fällt weg — und dazu kommt nichts, auch wenn
+    der Schnitt „danach minus davor" am Kern scheitert.
+
+    Die Senkplatte, einmal unterteilt, Bohrung Ø 5,2 auf Ø 6: Der Körper danach
+    liegt ganz im Körper davor, und ihre ebenen Flächen decken sich mit
+    verschiedenen Dreiecken. Genau dort liefert der Kern für „danach minus
+    davor" Splitter: hier zehn Dreiecke mit 3·10⁻¹² mm³, die die Vorschau als
+    hinzugekommenes Material zeigte; auf dem Weg der Sitzung Splitter mit
+    negativem Volumen, die beide Stufen der Entwurfskette ablehnten — die
+    Vorschau hieß unvollständig, an der Senkplatte mit 311 296 Dreiecken bei
+    Ø 6 und Ø 6,5 (26.09.2026, RM-212). Die Antwort steht aber fest, sobald
+    der andere Schnitt gerechnet hat: |A − B| − |B − A| ist |A| − |B|.
+
+    Erwartet (``data/README.md``): Zylinder Ø 5,2 auf 5,6 mm Tiefe, darüber
+    die 90°-Senkung. Aufgeweitet wird der Zylinder zum Ring
+    π/4 · (6² − 5,2²) · 5,6 und der Kegel zwischen Ø 5,2 und Ø 6 auf 0,4 mm
+    Höhe zum Ring π · (3² · 0,4 − 0,4/3 · (2,6² + 2,6 · 3 + 3²)).
+    """
+    import math
+
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.features import detect
+    from tests.helpers import feature_operation
+
+    load_operations()
+    # Wie die Sonde: erst unterteilen, dann einlesen, wie ein Kunde die Datei öffnet.
+    raw = read_mesh((MESHES / "plate_countersunk.stl").read_bytes(), ".stl").raw
+    vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+    finer = MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+    before = normalise(finer, "mm").mesh
+    features = detect(before)
+    hole = next(feature for feature in features.values() if feature.kind == "hole")
+    after = (
+        feature_operation(
+            "resize_hole",
+            before,
+            features,
+            hole,
+            profile,
+            diameter=6.0,
+            compensate=False,
+            quality="draft",
+        )
+        .outputs[0]
+        .mesh
+    )
+
+    difference = compare(before, after, profile=profile)
+
+    ring = math.pi / 4.0 * (6.0**2 - 5.2**2) * 5.6
+    cone = math.pi * (3.0**2 * 0.4 - 0.4 / 3.0 * (2.6**2 + 2.6 * 3.0 + 3.0**2))
+    assert not difference.findings, [finding.code for finding in difference.findings]
+    assert difference.removed_volume == pytest.approx(ring + cone, rel=0.02)
+    assert difference.removed_volume == pytest.approx(before.volume - after.volume, rel=1e-6)
+    assert difference.added_volume == 0.0
+    assert difference.added is not None and difference.added.triangle_count == 0
+
+
 def test_an_incomplete_difference_is_not_a_reshaped_preview(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

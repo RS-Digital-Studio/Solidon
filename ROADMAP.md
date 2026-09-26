@@ -56,7 +56,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Auf Windows mit 1 728 Reihenfolgen, Rauschen je Funktion und 24 Hash-Startwerten nicht nachzustellen; Vermutung: gemischte Ubuntu-Runner (AVX-512/AVX2). Nächster Schritt: die Eckkette in `edges.py` auf die plattformgleichen Werkzeuge umstellen und die Ecke in `test_platform_identity._WAYS` aufnehmen; das Beispielarchiv der Werkstattfilme bleibt offen |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Vierte Fassung nach einem Korpusfund: Das Urteil zählt nur Flecken **ohne** Grundform — drei Bowlingkugeln verloren sonst ihre Kugel (Rückstand 0,0 über 65 024 Dreiecke), und schon im alten Stand hing es an der Fleckreihenfolge. Zwei Runden statt einer, Drache 4,02 → 3,83 s. Offen: §31 verlangt 1 s je 200 000, gemessen sind 3,83 — es bleibt `_large_facet_faces` (1,2 s am Drachen) und der Löser selbst (RM-209). Zwei Abkürzungen sind gemessen und verworfen: nur den Zylinder fragen (kostet die Bowlingkugel) und die Stichprobe an Riesenflecken (ändert die Erkennung). Durchsicht 0.5.0: an der Freiform aus den Leistungstests 6 % langsamer als vorher (unter Fremdlast), am Drachen gleich; der Aufschlag ist der Kantenleser der Gewinde (je Achse 0,12 s an 233 330 Kanten). Die Schiffskörper aus RM-181 liegen bei 7,9–18,3 s je 200 000 Dreiecke. Stapelumbau oder neu gefasstes Ziel entscheidet Robert (wie RM-132) |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | `slice_body` an der Hohlkugel 40 % schneller (`546eff16`: Stapelung, Inselzertifikat, Säulen auf Arbeitern, direkte Ringe), hochgerechnet rund 0,65 s auf der Referenzmaschine — 300 ms nicht erreicht; der Rest ist die Breitensuche mit sieben Öffnungen je Schicht. Robert gibt C++ frei (23.09.): native Breitensuche als eigener Bauauftrag; womit (eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython), entscheidet Robert |
-| [RM-212 — Die Vorschau großer Teile hält den Hauptthread und rechnet vergeblich](#rm-212) | Geometrie, Erkennung und Druckvorbereitung | GIL beim ersten Verkleinern (0,57–2,0 s), sechs vergebliche Kernschritte vor dem Raster (bis 4,8 s), genaue Vorschau großer Teile 8–37 s — Raster vorziehen, simplify aus dem Hauptthread, lokaler Tausch des Hohlraums |
+| [RM-212 — Die Vorschau großer Teile hält den Hauptthread und rechnet vergeblich](#rm-212) | Geometrie, Erkennung und Druckvorbereitung | Grob gelingt jetzt an allen fünf Modellen (0,5–1,7 s je Zahl); offen: der GIL beim ersten Verkleinern (0,1–0,5 s, `manifold3d` gibt ihn nie her — Entscheidung Hilfsprozess) und die genaue Vorschau der Senkplatte (4,3–5,7 s statt unter 3) |
 | [RM-216 — Ein erzeugtes Flächenmerkmal behält nach einer Änderung seine alte Fläche](#rm-216) | Geometrie, Erkennung und Druckvorbereitung | Nach einer Bohrung trägt face_top weiter 2 400 statt 2 349,878 mm² — Kennzahlen gebauter Merkmale aus den nachgeführten Dreiecken neu messen (Sonde s35_stale_area) |
 | [RM-217 — Die Zuordnung meldet doppelt und fragt ohne Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Formen-Beispiel auf acht Hinweise gebündelt, alle Kennungen und Zahlen bleiben erhalten. Offen: remove_feature.gone und perceive.orphaned doppelt, orphaned nach Teilen, Frage unter der Deckfläche, altes Merkmal ohne Markierung — _with_features filtert, question_context trägt das alte Merkmal |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | drill_brep_hole nummeriert nach Lage; Verschieben und Einfügen sagen an build_tray_v3.step ab — eindeutige geometrische Zuordnung behält den Namen wie am Netz |
@@ -1582,6 +1582,29 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Vorschau über 0,2 s im Hauptthread, Spiderman und Piratenschiff unter 1 s bis
   zum Raster, Senkplatte genau unter 3 s — gemessen mit
   `sonden/vorschau/probe_preview.py` auf ruhiger Maschine.
+
+  **Stand 26.09.2026.** Der zweite Posten ist erledigt, anders als gedacht:
+  Das Raster vorzuziehen hätte nichts gebracht, denn sein Netz ist offen, und
+  jede Bohrung darauf scheitert. Die grobe Vorschau verkleinert jetzt auf die
+  Schranke selbst (`COARSE_PREVIEW_TARGET` = 150 000) und nimmt das
+  geschlossene Kernergebnis; der Anzeigeweg lässt dabei Splitter dünner als
+  die Toleranz weg (`_without_slivers`), und `_as_mesh` verschweißt nur, wo
+  das Netz dicht bleibt. Vorher und nachher hintereinander gemessen: Spiderman
+  grob danach 17,8–18,9 → 0,6 s, Piratenschiff 11,1–13,4 → 0,7 s, Eiffelturm
+  2,8 → 1,7 s, alle drei vorher Absage und genau; die Schüssel zahlt
+  0,22 → 0,5 s für 0,1 statt 1,8 % Abweichung. Längster GIL-Stillstand:
+  Spiderman 799 → 324 ms, Piratenschiff 819 → 492, Eiffelturm 664 → 120,
+  Platte 250, Schüssel 89. Die genaue Vorschau der Senkplatte liegt bei
+  4,3–5,7 s (Review: 8–15), und sie war bei Ø 6 und 6,5 unvollständig: Der
+  Schnitt „danach minus davor" lief in Splitter; `difference.compare` nimmt
+  seither die Volumenbilanz statt des Schnitts, der leer sein muss
+  (`_empty_by_balance`). Übrig: `resize_hole` 2,9 s (vier Boolesche 1,9 s,
+  volle Nacherkennung unter 1,5 Mio. Dreiecken 1,1 s), Vergleich 1,8 s
+  (Beschnitt 0,6, Schnitt am dichten Ausschnitt mit 150 000 Dreiecken 1,0).
+  Für den ersten Posten gibt es nur zwei Wege — einen Hilfsprozess für die
+  Kernaufrufe oder einen Kern, der den GIL hergibt (eigenes Rad oder
+  Beitrag an `manifold3d`) —, und beide sind eine Entscheidung Roberts.
+  Sonden und Messungen: `.claude/.state/rm-212-2026-09-26/`.
 
 <a id="rm-216"></a>
 

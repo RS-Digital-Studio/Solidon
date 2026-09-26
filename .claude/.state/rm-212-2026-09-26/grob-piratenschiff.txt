@@ -1,0 +1,16 @@
+obj_15_Assembly.stl: geöffnet in 108.2 s
+  eingelesen: 1223836 Dreiecke, dicht=True, gleichsinnig=True, Volumen=284141.0
+    1 Teile
+    davon offen oder nicht positiv: 0
+  verkleinert in 2.08 s
+  grob: 64614 Dreiecke, dicht=False, gleichsinnig=True, Volumen=284085.9
+    13 Teile
+    Teil 1: 6 Dreiecke, dicht=True, gleichsinnig=True, Volumen=-0.00
+    Teil 5: 4 Dreiecke, dicht=True, gleichsinnig=True, Volumen=-0.00
+    Teil 7: 4 Dreiecke, dicht=True, gleichsinnig=True, Volumen=-0.00
+    Teil 8: 6 Dreiecke, dicht=True, gleichsinnig=True, Volumen=-0.00
+    Teil 9: 4 Dreiecke, dicht=True, gleichsinnig=True, Volumen=-0.00
+    Teil 11: 14 Dreiecke, dicht=True, gleichsinnig=True, Volumen=-0.00
+    Teil 12: 6 Dreiecke, dicht=True, gleichsinnig=True, Volumen=-0.00
+    davon offen oder nicht positiv: 7
+Exit: 0
