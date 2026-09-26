@@ -561,3 +561,66 @@ def test_the_scene_hands_its_printer_to_the_difference(profile: Profile) -> None
     assert compare_scenes(
         scene_with(10.0, with_printer=False), scene_with(10.0002, with_printer=False)
     ).changed
+
+
+def _cube_with_a_void(bore: float) -> MeshData:
+    """Würfel 10 mit einer Bohrung ``bore`` durch die Mitte und einem
+    eingeschlossenen Hohlraum 1 × 1 × 1 in einer Ecke — eine zweite Schale mit
+    negativem Volumen, wie die acht Kanäle im Gartenschlauchhalter."""
+    from app.core.geom.boolean import boolean
+
+    block = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    tool = MeshData.of(trimesh.creation.cylinder(radius=bore / 2.0, height=14.0, sections=48))
+    bored = boolean("difference", [block, tool]).mesh.raw
+    void = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+    void.apply_translation((4.0, 4.0, 0.0))
+    void.invert()
+    return MeshData.of(trimesh.util.concatenate([bored, void]))
+
+
+def test_a_widened_bore_beside_an_enclosed_void_is_measured_by_the_balance(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Bilanz |A − B| − |B − A| = |A| − |B| gilt auch mit Hohlräumen, und
+    die genaue Vorschau nennt sich nicht mehr unvollständig (Durchsicht 0.5.1,
+    BOHRUNG-11).
+
+    Am Gartenschlauchhalter (392 532 Dreiecke) trägt der Körper acht
+    eingeschlossene Kanäle; Bohrung Ø 6 auf 7 aufgeweitet, schnitt der Kern
+    „danach minus davor" nicht, und weil der Körper mehr als eine Schale hatte,
+    galt die Bilanz nicht: `difference.incomplete`, obwohl |davor| − |danach|
+    genau das Abgetragene war (60,715 mm³). Eine Schale mit negativem Volumen
+    liegt im Material und zählt richtig ab; nur Schalen mit Material, die sich
+    überdecken, zählten doppelt. Hier: ein Schnitt, und nichts hinzu.
+    """
+    from app.core.geom import difference as module
+
+    before, after = _cube_with_a_void(7.0), _cube_with_a_void(8.0)
+    calls = []
+    real = module._cut
+
+    def counted(first: MeshData, second: MeshData, quality: object) -> object:
+        calls.append(1)
+        return real(first, second, quality)
+
+    monkeypatch.setattr(module, "_cut", counted)
+    difference = compare(before, after, profile=profile)
+
+    assert not difference.findings, [finding.code for finding in difference.findings]
+    assert difference.removed_volume == pytest.approx(before.volume - after.volume, rel=1e-6)
+    assert difference.added_volume == 0.0
+    assert len(calls) == 1, "die Gegenseite steht aus der Bilanz fest"
+
+
+def test_shells_with_material_that_overlap_keep_the_two_cuts() -> None:
+    """Zwei Schalen mit Material, die sich überdecken, zählen im Netz doppelt —
+    dort gilt die Bilanz nicht, und beide Seiten werden geschnitten."""
+    from app.core.geom import difference as module
+
+    first = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    second = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    second.apply_translation((5.0, 0.0, 0.0))
+    overlapping = MeshData.of(trimesh.util.concatenate([first, second]))
+
+    assert not module._shells_apart(overlapping)
+    assert module._shells_apart(_cube_with_a_void(7.0))

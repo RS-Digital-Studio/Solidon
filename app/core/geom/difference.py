@@ -33,6 +33,7 @@ from app.core.types import (
     SceneObject,
     SolverInfo,
 )
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -469,15 +470,47 @@ def _volume_balance(
     zwei Schnitte gerechnet, steht der andere als Zahl fest. Das Volumen eines
     Netzes ist aber nur dann das seines Körpers, wenn sich keine Schalen
     überdecken — eine zweite, ineinandersteckende zählte doppelt. Gerechnet
-    wird deshalb nur an je einem zusammenhängenden Stück ohne gemeinsamen
-    Anteil; alles andere schneidet beide Seiten wie bisher.
+    wird deshalb nur an je einem Stück ohne gemeinsamen Anteil, dessen
+    Schalen sich nicht überdecken (:func:`_shells_apart`); alles andere
+    schneidet beide Seiten wie bisher.
     """
     if common or len(first) != 1 or len(second) != 1:
         return None
     before, after = first[0], second[0]
-    if len(face_components(before.raw)) != 1 or len(face_components(after.raw)) != 1:
+    if not _shells_apart(before) or not _shells_apart(after):
         return None
     return float(signed_volume(after.raw)) - float(signed_volume(before.raw))
+
+
+def _shells_apart(mesh: MeshData) -> bool:
+    """Ob das Volumen des Netzes das seines Körpers ist: Keine zwei Schalen mit
+    Material überdecken sich.
+
+    **Ein Hohlraum zählt richtig ab** (Durchsicht 0.5.1, BOHRUNG-11). Hier
+    stand „ein zusammenhängendes Stück", und das schloss jeden Körper mit
+    eingeschlossener Luft aus: Der Gartenschlauchhalter trägt acht Kanäle als
+    Schalen mit negativem Volumen, und die genaue Vorschau einer aufgeweiteten
+    Bohrung nannte sich unvollständig, weil der Kern „danach minus davor"
+    nicht schnitt — die Bilanz hätte die Antwort gegeben. Doppelt zählen nur
+    Schalen mit Material, die ineinanderstecken; die trennt hier ihr
+    Hüllquader, und wo zwei sich darin überschneiden, gilt die Bilanz nicht.
+    """
+    groups = face_components(mesh.raw)
+    if len(groups) <= 1:
+        return True
+    boxes: list[tuple[np.ndarray, np.ndarray]] = []
+    for group in groups:
+        shell = cast(trimesh.Trimesh, mesh.raw.submesh([group], append=True, repair=False))
+        if float(signed_volume(shell)) <= 0.0:
+            continue
+        corners = np.asarray(shell.vertices, dtype=np.float64)
+        boxes.append((corners.min(axis=0), corners.max(axis=0)))
+    for index, (low, high) in enumerate(boxes):
+        for other_low, other_high in boxes[index + 1 :]:
+            shared = np.minimum(high, other_high) - np.maximum(low, other_low)
+            if bool(np.all(shared > EPS_GEOM)):
+                return False
+    return True
 
 
 def _empty_by_balance(

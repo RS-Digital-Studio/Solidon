@@ -1596,7 +1596,9 @@ Entscheidungen fern ihrer Schwelle: die Grenzprüfungen `_reaches` und
 `Profile.smallest_printable_volume`, dieselbe Grenze und dieselbe Begründung
 wie bei `boolean.without_effect`. Die Szene bringt das Profil mit; ohne eines
 bleibt es beim Vernetzungsrauschen, denn wer keinen Drucker kennt, soll keinen
-erfinden — Regel 7, RM-097)
+erfinden — Regel 7, RM-097; eine Seite, die der Kern nicht schneidet, folgt aus
+der Volumenbilanz, auch an Körpern mit eingeschlossenen Hohlräumen,
+`_shells_apart`)
 
 `section.clip_triangles` begrenzt lose Markierungsdreiecke an denselben
 Halbräumen wie Körper. Es bleibt eine offene Anzeigefläche ohne zusätzliche
