@@ -49,6 +49,7 @@ from app.core.errors import (
     SCALE_TO_FIT,
     SHOW_LOCATIONS,
     SHOW_SLICER_OUTPUT,
+    SPLIT_MODEL,
     ExternalToolError,
     FileWriteError,
     OperationCancelled,
@@ -2281,7 +2282,12 @@ def _command(
             arguments += ["--arrange", "0"]
         return [*arguments, "--slice", "0", "--outputdir", str(output), *files]
 
-    arguments = [binary, "slice", "-v"]
+    # **Ohne ``-v``.** Das ausführliche Protokoll nennt jede Schicht und
+    # jeden Arbeitsschritt; am Eiffelturm aus dem Korpus (313 000 Dreiecke)
+    # waren das 12,3 MB, über der Sammelgrenze :data:`SLICER_OUTPUT_LIMIT`,
+    # und der Lauf endete ohne Druckdatei (RM-252). Ohne den Schalter bleiben
+    # Warnungen und Fehler, 50 kB — mehr liest die Übergabe nicht daraus.
+    arguments = [binary, "slice"]
     basis = setup.machine_profile or _cura_base(setup.executable)
     if basis:
         arguments += ["-j", basis]
@@ -3199,10 +3205,17 @@ def slice_model(
             # im Lauf um, und was dasteht, ist die letzte Zeile davor. Der
             # Kunde bekäme sonst nur „Der Slicer hat keine Druckdatei geschrieben“.
             # Der Prozessstatus belegt den Absturz, aber nicht dessen Ursache.
+            # Der Rückgabewert gehört ins Protokoll, nicht in den Satz: Unter
+            # Windows kam -50 als 4294967246 beim Kunden an (KUNDE-09).
+            _log.info(
+                "%s ended without a print file, exit code %d",
+                setup.name,
+                signed_exit_code(completed.returncode),
+            )
             if crashed(completed.returncode):
                 raise ExternalToolError(
                     tool=setup.name,
-                    exit_code=completed.returncode,
+                    title=SLICER_FAILED,
                     detail=_(
                         "Der Slicer ist beim Verarbeiten der Übergabe abgestürzt. "
                         "Öffnen Sie die Datei im Slicer und prüfen Sie Drucker- und "
@@ -3218,10 +3231,53 @@ def slice_model(
                     # keiner Vermutung (§2.1).
                     suggestions=(CHOOSE_SLICER, RETRY, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
                 )
+            if (
+                setup.flavour == "orca"
+                and signed_exit_code(completed.returncode) == ORCA_OFF_THE_PLATE
+            ):
+                # **Die Orca-Familie sagt es nur mit einer Zahl** (-50,
+                # „found error, exit"): Nicht jedes Teil liegt ganz auf ihrer
+                # Platte. Gemessen am ElegooSlicer (26.09.2026): halb neben der
+                # Platte, ganz daneben und 270 mm lang auf 256 mm, jeweils mit
+                # ``--arrange 0``; ohne die Vorgabe ordnet er selbst an und legt
+                # den langen Quader schräg. Der Laptop-Ständer (205 auf 272 mm)
+                # passt auch schräg nicht — dort half nur Teilen oder
+                # Verkleinern, und der Kunde las „hat nicht geantwortet".
+                raise ExternalToolError(
+                    tool=setup.name,
+                    title=SLICER_FAILED,
+                    detail=_(
+                        "Nicht jedes Teil liegt ganz auf der Druckplatte des Slicers: "
+                        "Eines ist größer als der Bauraum oder liegt daneben."
+                    ),
+                    values={"output": output},
+                    suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
+                )
+            if (
+                _is_creality_print(setup)
+                and any(entry.suffix.casefold() == ".3mf" for entry in models)
+                and _says_print_is_empty(output)
+            ):
+                # **Creality Print 7.2 rechnet über die Kommandozeile keine
+                # 3MF**, gleich woher: Solidons Übergabe, eine nackte 3MF aus
+                # trimesh, eine aus PrusaSlicer — jede endet mit -100 und „The
+                # print is empty", dasselbe Teil als STL schneidet es
+                # (26.09.2026, RM-164). Im eigenen Fenster lädt es die Datei;
+                # dorthin führt der Satz, statt den Kunden raten zu lassen.
+                raise ExternalToolError(
+                    tool=setup.name,
+                    title=SLICER_FAILED,
+                    detail=_(
+                        "Creality Print rechnet eine 3MF-Datei nur in seinem Fenster. "
+                        "Öffnen Sie sie dort mit „Im Slicer öffnen“."
+                    ),
+                    values={"output": output},
+                    suggestions=(CHOOSE_SLICER, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
+                )
             if _says_outside_the_volume(output):
                 raise ExternalToolError(
                     tool=setup.name,
-                    exit_code=completed.returncode,
+                    title=SLICER_FAILED,
                     detail=_("Der Slicer sagt, die Teile liegen außerhalb seines Bauraums."),
                     values={"output": output},
                     suggestions=(ARRANGE_ON_BED, SCALE_TO_FIT, SHOW_SLICER_OUTPUT),
@@ -3229,7 +3285,7 @@ def slice_model(
             if _says_no_layers(output):
                 raise ExternalToolError(
                     tool=setup.name,
-                    exit_code=completed.returncode,
+                    title=SLICER_FAILED,
                     detail=_(
                         "Der Slicer hat keine druckbaren Schichten gefunden. Prüfen Sie "
                         "offene Stellen, Einheit und Wandstärke."
@@ -3243,7 +3299,7 @@ def slice_model(
             # der nicht wollte (§2.1, gemessen am 30.08.2026).
             raise ExternalToolError(
                 tool=setup.name,
-                exit_code=completed.returncode,
+                title=SLICER_FAILED,
                 detail=_("Der Slicer hat keine Druckdatei geschrieben."),
                 values={"output": output},
                 suggestions=(CHOOSE_SLICER, SHOW_SLICER_OUTPUT, CHECK_SLICER_PROFILE, EXPORT_ONLY),
@@ -3267,7 +3323,7 @@ def slice_model(
             # Nutzer schickte eine leere Datei an den Drucker.
             raise ExternalToolError(
                 tool=setup.name,
-                exit_code=completed.returncode,
+                title=SLICER_FAILED,
                 detail=_(
                     "Die Druckdatei enthält keine einzige Materialbahn — "
                     "der Slicer hat das Modell nicht verarbeitet."
@@ -3704,6 +3760,18 @@ OUTSIDE_THE_VOLUME: Final[tuple[str, ...]] = ("outside of the print volume",)
 #: derselben leeren Schichtmenge —, deshalb zählt der Nutzersatz die drei
 #: Prüfungen auf, statt eine davon zu behaupten (Regel 21).
 NO_LAYERS: Final[tuple[str, ...]] = ("no layers were detected",)
+#: Der Rückgabewert, mit dem die Orca-Familie einen Auftrag ablehnt, dessen
+#: Teile nicht ganz auf der Platte liegen (Bambus ``CLI_NO_SUITABLE_OBJECTS``),
+#: gemessen am ElegooSlicer 1.5 mit halb, ganz daneben und zu groß.
+ORCA_OFF_THE_PLATE: Final = -50
+#: Der Titel, wenn der Slicer gelaufen ist und keine brauchbare Druckdatei
+#: hinterließ. ``ExternalToolError`` sagt sonst „hat nicht geantwortet" — der
+#: Slicer hat aber geantwortet, nur mit einem Fehler.
+SLICER_FAILED: Final = _("Der Slicer hat den Auftrag nicht gerechnet.")
+#: Gemessen an Creality Print 7.2 mit jeder 3MF über die Kommandozeile
+#: (RM-164). Andere Programme der Familie sagen es, wenn alle Teile neben der
+#: Platte liegen; gelesen wird es deshalb nur für Creality Print.
+PRINT_IS_EMPTY: Final[tuple[str, ...]] = ("the print is empty",)
 
 
 def _refuses_arrange_flag(output: str) -> bool:
@@ -3730,10 +3798,21 @@ def _says_outside_the_volume(output: str) -> bool:
     return any(phrase in lowered for phrase in OUTSIDE_THE_VOLUME)
 
 
+def _says_print_is_empty(output: str) -> bool:
+    """Sagt die Ausgabe des Slicers, dass auf der Platte nichts zu drucken ist?"""
+    lowered = output.lower()
+    return any(phrase in lowered for phrase in PRINT_IS_EMPTY)
+
+
 def _says_no_layers(output: str) -> bool:
     """Sagt die Ausgabe des Slicers, dass keine druckbare Schicht entstand?"""
     lowered = output.lower()
     return any(phrase in lowered for phrase in NO_LAYERS)
+
+
+def signed_exit_code(exit_code: int) -> int:
+    """Ein Rückgabewert mit Vorzeichen — Windows liefert ``-50`` als DWORD 4294967246."""
+    return exit_code - (1 << 32) if exit_code >= (1 << 31) else exit_code
 
 
 def crashed(exit_code: int) -> bool:

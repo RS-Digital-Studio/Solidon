@@ -2374,6 +2374,69 @@ def test_a_plate_outside_the_volume_offers_arranging(
     assert raised.value.values["output"], "die Ausgabe des Slicers bleibt lesbar"
 
 
+@pytest.mark.parametrize(
+    ("program", "points_to_the_window"),
+    [("CrealityPrint.exe", True), ("orca-slicer.exe", False)],
+)
+def test_creality_prints_empty_3mf_files_on_its_console(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str, points_to_the_window: bool
+) -> None:
+    """Creality Print 7.2 rechnet über die Kommandozeile keine 3MF — nicht
+    Solidons Übergabe, nicht eine nackte aus trimesh, nicht eine aus
+    PrusaSlicer: jede endet mit -100 und „The print is empty", dasselbe Teil
+    als STL schneidet es (26.09.2026, RM-164). Der Kunde las „Der Slicer hat
+    keine Druckdatei geschrieben" und riet. Andere Programme der Familie sagen
+    den Satz, wenn alles neben der Platte liegt; für sie bleibt es beim alten."""
+    profile = profiles.make_profile()
+    model = tmp_path / "platte.3mf"
+    model.write_bytes(b"keine echte 3MF")
+    executable = tmp_path / program
+    executable.write_bytes(b"")
+    finished = _Finished(
+        b"The print is empty. The model is not printable with current print settings.\n"
+    )
+    finished.returncode = 0xFFFFFF9C
+    monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: finished)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    assert ("Im Slicer öffnen" in str(raised.value)) is points_to_the_window, str(raised.value)
+    assert raised.value.suggestions, "Regel 17"
+
+
+def test_an_orca_refusal_for_parts_off_the_plate_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """KUNDE-09: Der Laptop-Ständer (205 × 272 mm) passt nicht auf den Centauri
+    Carbon 2. Der ElegooSlicer lehnt mit -50 und „found error, exit" ab —
+    gemessen auch halb und ganz neben der Platte und an einem zu langen
+    Quader, jeweils mit ``--arrange 0``. Der Kunde las „Ein externes Programm
+    hat nicht geantwortet" mit „Rückgabewert 4294967246". Jetzt: was los ist,
+    und Teilen, Verkleinern, Anordnen als Knöpfe; die Zahl steht im
+    Protokoll, nicht im Satz."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    finished = _Finished(b"Slic3r::CLI::run found error, exit\n")
+    finished.returncode = 4294967246
+    monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: finished)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    problem = raised.value
+    assert "Druckplatte" in str(problem.detail)
+    assert "nicht geantwortet" not in str(problem.title)
+    assert {action.id for action in problem.suggestions} >= {"split_model", "scale_to_fit"}
+    assert problem.values.get("exit_code") is None, "die Zahl gehört ins Protokoll"
+    assert handover.signed_exit_code(4294967246) == -50
+
+
 def test_bambus_refusal_in_its_result_file_reaches_the_slicer_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3871,6 +3934,22 @@ def test_cura_gets_its_values_on_the_extruder_too(tmp_path) -> None:
     wall = [index for index, entry in enumerate(command) if entry.startswith("wall_line_count=")]
     assert len(wall) == 2, "einmal global, einmal auf dem Zug"
     assert wall[0] < command.index("-e0") < wall[1], "und in dieser Reihenfolge"
+
+
+def test_cura_runs_without_its_verbose_log(tmp_path) -> None:
+    """Mit ``-v`` schrieb CuraEngine am Eiffelturm aus dem Korpus 12,3 MB
+    Protokoll, über Solidons Sammelgrenze von 8 MiB — der Lauf endete mit
+    „mehr Ausgabe, als gesammelt wird" und ohne Druckdatei (RM-252). Ohne den
+    Schalter waren es 50 kB."""
+    from pathlib import Path
+
+    setup = handover.SlicerSetup(executable=Path("CuraEngine.exe"), flavour="cura")
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    config = handover.write_config(print_settings.resolve(profile), profile, setup, tmp_path)
+
+    command = handover._command(setup, [tmp_path / "cube.stl"], config, tmp_path)
+    assert command[1] == "slice"
+    assert "-v" not in command
 
 
 def test_curas_first_line_width_is_a_share_not_a_size() -> None:
