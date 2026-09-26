@@ -123,6 +123,23 @@ def test_the_repair_buttons_ask_for_exactly_what_they_say() -> None:
     assert len(applied) == 2, "kein zweiter Reparaturschritt"
 
 
+def test_repairing_before_a_step_retries_that_step() -> None:
+    """RM-246: *Erst reparieren, dann neu rechnen* setzt die Reparatur vor den Schritt.
+
+    Derselbe Zug wie am angehaltenen Schritt (``History.repair_and_retry``);
+    ein Befund ohne Schritt hat nichts, wovor repariert werden könnte.
+    """
+    from types import SimpleNamespace
+
+    retried: list[int] = []
+    view = SimpleNamespace(session=SimpleNamespace(repair_and_retry=retried.append))
+
+    MainWindow._repair_before_step(view, errors.AppError(title="gerundet", op_id=7))
+    MainWindow._repair_before_step(view, errors.AppError(title="gerundet"))
+
+    assert retried == [7]
+
+
 @pytest.mark.parametrize("command", ["action_undo", "action_redo"])
 @pytest.mark.parametrize("begun", [False, True])
 def test_document_history_waits_only_for_a_begun_measure_draft(command: str, begun: bool) -> None:
@@ -8434,6 +8451,56 @@ def test_repair_is_not_offered_for_a_stopped_step_without_an_input() -> None:
     offered = actions_for_document(finding, document, stopped_at=3)
 
     assert offered == ()
+
+
+def test_the_grid_finding_repairs_before_its_step_and_only_once() -> None:
+    """RM-246: Am gelungenen Rasterschritt gehört die Reparatur vor den Schritt.
+
+    Die Ausgabe ist dicht, nur gerundet — *Reparieren und erneut versuchen*
+    reparierte sie und ließ die Rundung stehen. Angeboten wird der Weg, der
+    die Eingänge vor dem Schritt repariert, und nur, solange derselbe Zug das
+    nicht schon getan hat.
+    """
+    from app.core.types import Document, Finding, Operation, Transaction
+    from app.ui.panels import actions_for_document
+
+    document = Document(format_version=18, app_version="test")
+    document.ops.extend(
+        [
+            Operation(id=1, op="load", outputs=("obj_1",)),
+            Operation(id=2, op="create_box", outputs=("obj_2",)),
+            Operation(id=3, op="subtract_objects", inputs=("obj_1", "obj_2"), outputs=("obj_3",)),
+        ]
+    )
+    document.transactions.extend(
+        [
+            Transaction(id="t1", title="Laden", ops=(1,)),
+            Transaction(id="t2", title="Quader", ops=(2,)),
+            Transaction(id="t3", title="Abziehen", ops=(3,)),
+        ]
+    )
+    finding = Finding(
+        code="boolean.voxel",
+        severity="warning",
+        message="gerundet",
+        op_id=3,
+        object_id="obj_3",
+    )
+    living = frozenset({"obj_3"})
+
+    assert [
+        action.id for action in actions_for_document(finding, document, live_objects=living)
+    ] == ["repair_before_and_retry"]
+
+    document.ops[2:] = [
+        Operation(id=4, op="repair", inputs=("obj_1",), outputs=("obj_1",)),
+        Operation(id=5, op="repair", inputs=("obj_2",), outputs=("obj_2",)),
+        Operation(id=6, op="subtract_objects", inputs=("obj_1", "obj_2"), outputs=("obj_3",)),
+    ]
+    document.transactions[2] = Transaction(id="t3", title="Reparieren", ops=(4, 5, 6))
+    repaired = dataclasses.replace(finding, op_id=6)
+
+    assert actions_for_document(repaired, document, live_objects=living) == ()
 
 
 def test_a_planned_but_not_evaluated_object_is_not_an_executable_target() -> None:

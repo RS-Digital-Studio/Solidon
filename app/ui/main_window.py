@@ -20019,6 +20019,7 @@ class MainWindow(QMainWindow):
             # eben nur die Notlösung für Kennungen, die niemand einlösen kann.
             "cancel_split": lambda _error: self.session.cancel_split(),
             "repair_and_retry": self._repair_after_error,
+            "repair_before_and_retry": self._repair_before_step,
             "release_protection": self._release_protection_after_error,
             "remove_small_parts": self._remove_small_parts,
             # Die drei Rückwege der Reparatur (Durchsicht 24.09.2026): den Schritt
@@ -20383,6 +20384,16 @@ class MainWindow(QMainWindow):
             REGISTRY.get("repair").title,
             [OperationDraft(op="repair", inputs=(object_id,))],
         )
+
+    def _repair_before_step(self, error: AppError) -> None:
+        """Repariert die Eingänge vor dem Schritt des Befunds und rechnet ihn neu (RM-246).
+
+        Derselbe Zug wie nach einem angehaltenen Schritt — nur dass dieser
+        Schritt ein Ergebnis hatte, ein gerundetes. Ohne Schritt gibt es
+        nichts, wovor repariert werden könnte.
+        """
+        if error.op_id is not None:
+            self.session.repair_and_retry(error.op_id)
 
     def _remove_small_parts(self, error: AppError) -> None:
         """Dieselbe Operation wie die Reparatur — aber mit dem Schalter, der wirkt.

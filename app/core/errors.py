@@ -70,6 +70,16 @@ CHANGE_SELECTION = Action("change_selection", _("Andere Objekte wählen"), prima
 #: den Rat als Satz ohne Knopf.
 PICK_PLANE = Action("sketch.pick_plane", _("Eine andere Ebene wählen"), primary=True)
 REPAIR_AND_RETRY = Action("repair_and_retry", _("Reparieren und erneut versuchen"), primary=True)
+#: **Die Reparatur gehört vor den Schritt, nicht dahinter** (RM-246). Ein
+#: Schritt, der auf das Raster auswich, hat ein Ergebnis — geschlossen, aber
+#: gerundet —, und *Reparieren und erneut versuchen* reparierte an einem
+#: gelungenen Schritt dessen Ausgabe: Die ist schon dicht, und die Rundung
+#: bliebe. Gemeint ist der Eingang: ihn vor dem Schritt reparieren und den
+#: Schritt auf dem geschlossenen Netz genau neu rechnen, als ein Zug im
+#: Verlauf (``History.repair_and_retry``).
+REPAIR_BEFORE_AND_RETRY = Action(
+    "repair_before_and_retry", _("Erst reparieren, dann neu rechnen"), primary=True
+)
 SHOW_LOCATIONS = Action("show_locations", _("Stellen zeigen"))
 #: Zum Ort eines Befunds fliegen und ihn markieren — für eine Stelle, die
 #: keine Karte färbt: Eine eben geschlossene Öffnung ist kein Netzfehler mehr,

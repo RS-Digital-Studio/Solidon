@@ -98,6 +98,7 @@ from app.core.errors import (
     RELEASE_PROTECTION,
     REMOVE_SMALL_PARTS,
     REPAIR_AND_RETRY,
+    REPAIR_BEFORE_AND_RETRY,
     SCALE_TO_FIT,
     SHOW_DETAILS,
     SHOW_HISTORY,
@@ -431,6 +432,12 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     "split.uncapped": (REPAIR_AND_RETRY,),
     # Dieselbe Ursache beim halben Teilen: das Modell war schon offen.
     "cut_away.uncapped": (REPAIR_AND_RETRY,),
+    # **Der Satz nennt den genauen Weg, und hier steht er als Knopf**
+    # (RM-246): Das Raster sprang ein, weil der Eingang nicht geschlossen war,
+    # und *Erst reparieren, dann neu rechnen* setzt die Reparatur vor den
+    # Schritt. Die Ausgabe zu reparieren hülfe nicht — sie ist dicht, nur
+    # gerundet.
+    "boolean.voxel": (REPAIR_BEFORE_AND_RETRY,),
     "split.too_many_parts": (SPLIT_ALONG_LINE, CHOOSE_PRINTER, SHOW_DETAILS),
     # Die zwei Sätze einer gelungenen Teilung (RM-080, T6/T7): warum die Naht
     # in der Mitte liegt, und dass es nicht mit weniger Stücken geht. Beide
@@ -747,6 +754,18 @@ def actions_for_document(
         live_objects=live_objects,
     ):
         offered = [action for action in offered if action.id != REPAIR_AND_RETRY.id]
+    if _repair_was_attempted(finding, document) or not (
+        finding.op_id is not None
+        and repair_is_available(
+            document,
+            stopped_at=finding.op_id,
+            op_id=finding.op_id,
+            object_id=None,
+        )
+    ):
+        # Vor den Schritt gehört die Reparatur nur, wo er vorhandene Netze
+        # liest — dieselbe Schranke wie beim angehaltenen Schritt.
+        offered = [action for action in offered if action.id != REPAIR_BEFORE_AND_RETRY.id]
     target = _object_for_finding(finding, document)
     if target is None or (live_objects is not None and target not in live_objects):
         offered = [

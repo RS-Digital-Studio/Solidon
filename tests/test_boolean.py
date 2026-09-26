@@ -478,6 +478,38 @@ def test_the_voxel_stage_says_that_it_rounded() -> None:
     assert any(finding.severity == "warning" for finding in result.findings)
 
 
+def test_the_voxel_stage_says_how_far_its_volume_is_off() -> None:
+    """RM-246: Legt das Raster mehr zu, als die Operation erklärt, steht die Zahl im Befund.
+
+    Eine Differenz nimmt vom ersten Körper höchstens das Werkzeug weg und fügt
+    nichts hinzu. Am Laptop-Ständer wuchs das Volumen auf dem Raster um
+    31 Prozent, und der Bericht sagte nur „gerundet". Eine Kugel zeigt dasselbe
+    im Kleinen: Jede Zelle, die ihre Oberfläche berührt, zählt als Material.
+    """
+    sphere = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=20.0))
+    tool = MeshData.of(trimesh.creation.cylinder(radius=2.0, height=60.0))
+
+    result = boolean("difference", [sphere, tool], stages=("voxel",))
+
+    [finding] = [entry for entry in result.findings if entry.code == "boolean.voxel"]
+    assert finding.severity == "warning"
+    values = dict(finding.values or {})
+    grown = float(result.mesh.raw.volume) - float(sphere.raw.volume)
+    assert grown > 0.0
+    assert values["deviation_mm3"] == pytest.approx(grown, rel=1e-9)
+    assert values["share_percent"] == pytest.approx(100.0 * grown / float(sphere.raw.volume))
+    # Die Zahl steht in den Werten, nicht im Satz (fehlertexte-ohne-platzhalter).
+    assert "{" not in finding.message.msgid
+
+
+def test_the_voxel_stage_stays_short_when_its_volume_is_plausible() -> None:
+    """RM-246: Innerhalb dessen, was die Operation bewirken kann, bleibt es bei „gerundet"."""
+    result = boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))], stages=("voxel",))
+
+    [finding] = [entry for entry in result.findings if entry.code == "boolean.voxel"]
+    assert not finding.values
+
+
 def test_the_jitter_stage_carries_its_seed() -> None:
     """§11.3: ohne gespeicherten Startwert wäre das Ergebnis nicht
     reproduzierbar.

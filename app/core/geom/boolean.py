@@ -219,7 +219,7 @@ def boolean(
                 attempted=tuple(attempted),
                 seed=seed if stage == "jittered" else None,
             ),
-            findings=[*united, *_findings_for(stage)],
+            findings=[*united, *_findings_for(stage, kind, meshes, result)],
         )
 
     if emptied and "voxel" not in attempted:
@@ -733,7 +733,35 @@ def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
     return bool(mesh.raw.is_watertight) and signed_volume(mesh.raw) > 0.0
 
 
-def _findings_for(stage: SolverStage) -> list[Finding]:
+#: Ab welchem Anteil am größten Eingang die Rasterstufe ihre Abweichung beziffert.
+VOXEL_DEVIATION_SHARE: Final = 0.005
+
+
+def _voxel_deviation(kind: BooleanKind, meshes: list[MeshData], result: MeshData) -> float:
+    """Wie weit das Volumen neben dem liegt, was die Operation bewirken kann.
+
+    Eine Differenz nimmt vom ersten Körper höchstens die übrigen weg und fügt
+    nichts hinzu, eine Vereinigung liegt zwischen dem größten und der Summe,
+    ein Schnitt zwischen null und dem kleinsten. Was das Ergebnis darüber oder
+    darunter hat, erklärt keine Operation — nur das Raster (RM-246).
+    """
+    volumes = [signed_volume(mesh.raw) for mesh in meshes]
+    if kind == "difference":
+        lower, upper = volumes[0] - math.fsum(volumes[1:]), volumes[0]
+    elif kind == "union":
+        lower, upper = max(volumes), math.fsum(volumes)
+    else:
+        lower, upper = 0.0, min(volumes)
+    reached = signed_volume(result.raw)
+    return max(0.0, reached - upper, lower - reached)
+
+
+def _findings_for(
+    stage: SolverStage,
+    kind: BooleanKind | None = None,
+    meshes: list[MeshData] | None = None,
+    result: MeshData | None = None,
+) -> list[Finding]:
     if stage == "direct":
         return []
     if stage == "welded":
@@ -754,6 +782,33 @@ def _findings_for(stage: SolverStage) -> list[Finding]:
                 ),
             )
         ]
+    # **Und das Raster sagt, wie weit es danebenliegt** (RM-246). Am offenen
+    # Laptop-Ständer (``parametric-laptop-riser.stl``) versetzte *Merkmal
+    # versetzen* eine Bohrung um 1,5 mm, und das Volumen wuchs um 31 Prozent,
+    # von 348 274 auf 457 343 mm³ — der Bericht sagte nur „gerundet". Schon an
+    # einem heilen Körper legt das Raster zu (die Lochplatte um elf Prozent),
+    # denn jede Zelle, die die Oberfläche berührt, zählt als Material. Eine
+    # Absage nähme dem Kunden die Stufe, die ihm überhaupt eine Antwort gibt;
+    # er bekommt sie mit der Zahl und dem Weg zum genauen Ergebnis.
+    if kind is not None and meshes is not None and result is not None:
+        deviation = _voxel_deviation(kind, meshes, result)
+        largest = max(abs(signed_volume(mesh.raw)) for mesh in meshes)
+        if largest > 0.0 and deviation > VOXEL_DEVIATION_SHARE * largest:
+            return [
+                Finding(
+                    code="boolean.voxel",
+                    severity="warning",
+                    message=_(
+                        "Auf einem Raster gelöst — die Maße sind gerundet, und das Volumen "
+                        "liegt neben dem, was diese Operation bewirken kann. Ein geschlossenes "
+                        "Netz rechnet genau."
+                    ),
+                    values={
+                        "deviation_mm3": deviation,
+                        "share_percent": 100.0 * deviation / largest,
+                    },
+                )
+            ]
     return [
         Finding(
             code="boolean.voxel",
