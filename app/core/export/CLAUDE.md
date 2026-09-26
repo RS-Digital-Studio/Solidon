@@ -21,8 +21,11 @@ STEP geht über `brep/step.py`, nicht von hier.
 3MF-Slicer (`write_assembly(for_slicer=True)`, Orca-Familie und PrusaSlicer).
 `writer._support_blocker` schneidet das Teil dafür einmal mit
 `detail="support"`, fragt `analysis.model_support` und `channel_space` und
-extrudiert die Kanalscheiben mit `manifold3d`; der Befund
-`export.support_blocker` sagt, wo. Eine gespeicherte 3MF trägt sie nicht:
+extrudiert die Kanalscheiben mit `manifold3d` — vorher um `BLOCKER_SIMPLIFY`
+vereinfacht, danach um `BLOCKER_MARGIN` aufgeweitet; der Befund
+`export.support_blocker` sagt, wo. Der Schritt ist abbrechbar:
+`write_assembly(cancelled=)` reicht den Abbruch bis in den Schnitt, und der
+Druckdialog gibt ihn über `_PlateJob.cancelled` mit. Eine gespeicherte 3MF trägt sie nicht:
 Sie ist das Projekt des Kunden und keine Übergabe. Ein STL für Cura kennt sie
 nicht (`slicer_keys.NOT_TAKEN_BY`, `AS_GEOMETRY`). Welche Schreibweise welche
 Familie liest, entscheidet `slicer_keys.helpers_as_parts`; die Regel und die

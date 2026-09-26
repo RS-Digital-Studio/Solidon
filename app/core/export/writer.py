@@ -1093,9 +1093,22 @@ def _part_setting_findings(
 #: Nach außen schadet der Zuschlag nicht — dort ist Wand.
 BLOCKER_MARGIN: Final = 0.5
 
+#: Um so viel darf der Umriss einer Kanalscheibe vereinfacht werden, bevor sie
+#: zum Sperrkörper wird, in mm — ein Fünfundzwanzigstel von
+#: :data:`BLOCKER_MARGIN`, der den Umriss danach ohnehin nach außen schiebt.
+#: Die Scheiben sind Vereinigungen von Kreisen zu je 64 Ecken und von
+#: Schnittkonturen; unvereinfacht hatte die Sperre am Eiffelturm aus dem
+#: Korpus 404 464 Dreiecke und kostete 12,6 s, vereinfacht 177 454 und 1,4 s,
+#: bei 27 von 129 985 mm³ weniger vor dem Zuschlag (26.09.2026, unter Last).
+BLOCKER_SIMPLIFY: Final = 0.02
+
 
 def _support_blocker(
-    entry: SceneObject, mesh: MeshData, settings: PrintSettings, profile: Profile
+    entry: SceneObject,
+    mesh: MeshData,
+    settings: PrintSettings,
+    profile: Profile,
+    cancelled: CancelToken | None = None,
 ) -> tuple[MeshData | None, list[Finding]]:
     """Die Stützsperre für die Kanäle dieses Teils (§22.2, §29).
 
@@ -1106,28 +1119,48 @@ def _support_blocker(
     Bett", mit Stämmen durch die Wand (Waschschüssel, 25.09.2026). Die Sperre
     füllt den freien Kanalraum in Scheiben von einem Millimeter
     (:func:`analysis.channel_space`).
+
+    Abbrechbar zwischen den Schritten und im Schnitt selbst: Am Eiffelturm aus
+    dem Korpus dauert das alles zusammen eine Viertelminute (26.09.2026).
     """
     import manifold3d
+    import shapely
 
     from app.core.knowledge import profiles as profile_table
     from app.core.slice.analysis import channel_space, model_support, slice_body
+    from app.core.slice.findings import remembered_analysis
 
     wall, angle = profile_table.analysis_limits(profile, entry)
-    result = slice_body(
-        mesh,
-        settings.layers.layer_height,
-        first_layer_height=settings.layers.first_layer_height,
-        overhang_angle=angle,
-        bridge_from=wall,
-        detail="support",
-        support_volume=False,
-    )
+    # **Erst die Schichten des Prüfberichts** (DRUCK-14, Durchsicht 0.5.1): Er
+    # hat dasselbe Netz mit demselben Raster, Winkel und derselben
+    # Brückenbreite schon geschnitten, und seine Überhänge und Inseln sind
+    # dieselben wie hier (``detail="support"`` spart nur Breiten und Brücken).
+    # Dann trifft auch die gemerkte Kanalfrage des Druckdialogs.
+    result = remembered_analysis(mesh, settings, angle, wall)
+    if result is None:
+        result = slice_body(
+            mesh,
+            settings.layers.layer_height,
+            first_layer_height=settings.layers.first_layer_height,
+            overhang_angle=angle,
+            bridge_from=wall,
+            detail="support",
+            support_volume=False,
+            cancelled=cancelled,
+        )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     model = model_support(result)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     slabs = channel_space(result, model)
     if not slabs:
         return None, []
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     prisms = []
-    for bottom, top, region in slabs:
+    for bottom, top, flat in slabs:
+        region = shapely.simplify(flat, BLOCKER_SIMPLIFY, preserve_topology=True)
         rings: list[np.ndarray] = []
         for part in getattr(region, "geoms", [region]):
             rings.append(np.asarray(part.exterior.coords)[:-1])
@@ -1179,8 +1212,13 @@ def write_assembly(
     scene: Scene | None = None,
     document: Document | None = None,
     checked: Sequence[Finding] | None = None,
+    cancelled: CancelToken | None = None,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
+
+    ``cancelled`` erreicht die teure Stufe, die Stützsperre für Kanäle
+    (:func:`_support_blocker`); ein Abbruch wirft ``OperationCancelled``, bevor
+    eine Datei entsteht.
 
     Ein ausdrücklicher Dateiexport (`for_slicer=False`) bleibt 3MF.
     Bei direkter Übergabe erhält CuraEngine sein unterstütztes STL-Format.
@@ -1298,7 +1336,7 @@ def write_assembly(
     ):
         for entry in chosen:
             blockers[entry.id], noted = _support_blocker(
-                entry, exported[entry.id], settings, profile
+                entry, exported[entry.id], settings, profile, cancelled
             )
             findings += noted
     parts = [

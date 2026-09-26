@@ -2835,6 +2835,137 @@ def test_prusaslicer_gets_the_blocker_as_a_range_of_the_mesh(
     assert [part.mesh.triangle_count for part in read_back] == [triangles]
 
 
+def test_the_simplified_blocker_still_covers_the_whole_channel(profile: Profile) -> None:
+    """Die Kanalscheiben werden vor dem Sperrkörper um
+    ``writer.BLOCKER_SIMPLIFY`` vereinfacht — am Eiffelturm aus dem Korpus
+    404 464 statt 177 454 Dreiecke, 12,6 statt 1,4 s. Der Zuschlag
+    ``BLOCKER_MARGIN`` schiebt den Umriss danach nach außen; vom freien
+    Kanalraum darf deshalb nichts außerhalb der Sperre liegen."""
+    import manifold3d
+    import numpy as np
+
+    from app.core.export import writer
+    from app.core.knowledge import profiles as profile_table
+    from app.core.slice.analysis import channel_space, model_support, slice_body
+
+    # Eine geschlossene runde Kammer Ø 20: Am Kreis ändert Vereinfachen den
+    # Umriss, an einem quer liegenden Tunnel nicht — dessen Scheiben sind
+    # Rechtecke, und dort wäre jede Toleranz grün (gegengeprüft mit 3 mm).
+    block = trimesh.creation.box(extents=(40.0, 40.0, 40.0))
+    block.apply_translation((0.0, 0.0, 20.0))
+    chamber = trimesh.creation.cylinder(radius=10.0, height=20.0, sections=96)
+    chamber.apply_translation((0.0, 0.0, 18.0))
+    entry = scene_object(mesh=MeshData.of(trimesh.boolean.difference([block, chamber])))
+    mesh = as_mesh_data(entry.mesh)
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+    blocker, _found = writer._support_blocker(entry, mesh, settings, profile)
+    assert blocker is not None
+
+    wall, angle = profile_table.analysis_limits(profile, entry)
+    result = slice_body(
+        mesh,
+        settings.layers.layer_height,
+        first_layer_height=settings.layers.first_layer_height,
+        overhang_angle=angle,
+        bridge_from=wall,
+        detail="support",
+        support_volume=False,
+    )
+    exact = []
+    for bottom, top, region in channel_space(result, model_support(result)):
+        rings = [
+            ring
+            for part in getattr(region, "geoms", [region])
+            for ring in (
+                np.asarray(part.exterior.coords)[:-1],
+                *(np.asarray(hole.coords)[:-1] for hole in part.interiors),
+            )
+        ]
+        section = manifold3d.CrossSection(rings, manifold3d.FillRule.EvenOdd)
+        exact.append(manifold3d.Manifold.extrude(section, top - bottom).translate((0, 0, bottom)))
+    free = manifold3d.Manifold.batch_boolean(exact, manifold3d.OpType.Add)
+    raw = blocker.raw
+    shield = manifold3d.Manifold(
+        manifold3d.Mesh(
+            vert_properties=np.asarray(raw.vertices, dtype=np.float32),
+            tri_verts=np.asarray(raw.faces, dtype=np.uint32),
+        )
+    )
+
+    assert free.volume() > 0.0
+    assert (free - shield).volume() < 1e-6 * free.volume(), "nichts vom Kanal liegt außerhalb"
+
+
+def test_the_blocker_takes_the_reports_layers(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DRUCK-14: Hat der Prüfbericht das Netz geschnitten, schneidet die Sperre nicht.
+
+    Seine Überhänge und Inseln sind dieselben wie bei ``detail="support"``;
+    also ist auch die Sperre dieselbe. Am Eiffelturm aus dem Korpus kostete
+    der zweite Schnitt vor dem Start des Slicers den größten Teil von 17 s.
+    """
+    from app.core.export import writer
+    from app.core.knowledge import profiles as profile_table
+    from app.core.slice import analysis
+    from app.core.slice.findings import analysed
+
+    block = trimesh.creation.box(extents=(40.0, 40.0, 40.0))
+    block.apply_translation((0.0, 0.0, 20.0))
+    tunnel = trimesh.creation.box(extents=(12.0, 50.0, 14.0))
+    tunnel.apply_translation((0.0, 0.0, 16.0))
+    entry = scene_object(mesh=MeshData.of(trimesh.boolean.difference([block, tunnel])))
+    mesh = as_mesh_data(entry.mesh)
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+    fresh, _found = writer._support_blocker(entry, MeshData.of(mesh.raw.copy()), settings, profile)
+    assert fresh is not None
+
+    wall, angle = profile_table.analysis_limits(profile, entry)
+    analysed(mesh, settings, angle, wall)
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("die Schichten des Prüfberichts genügen")
+
+    monkeypatch.setattr(analysis, "slice_body", refuse)
+    reused, _found = writer._support_blocker(entry, mesh, settings, profile)
+
+    assert reused is not None
+    assert reused.raw.volume == pytest.approx(fresh.raw.volume, rel=1e-9)
+    assert reused.triangle_count == fresh.triangle_count
+
+
+def test_the_blocker_stops_when_the_customer_cancels(tmp_path: Path, profile: Profile) -> None:
+    """Die Sperre rechnet am Eiffelturm aus dem Korpus eine Viertelminute —
+    Schnitt, Kanalfrage, Kanalraum — vor dem Start des Slicers. *Abbrechen*
+    griff erst danach: ``write_assembly`` kannte keinen Abbruch. Jetzt erreicht
+    er den Schnitt, und es entsteht keine Datei."""
+    from app.core.errors import OperationCancelled
+
+    class Stopped:
+        is_cancelled = True
+
+        def raise_if_cancelled(self) -> None:
+            raise OperationCancelled
+
+    entry = scene_object(mesh=tunnel_block())
+    taken = print_settings.with_path(
+        print_settings.with_path(print_settings.resolve(profile), "support.style", "grid"),
+        "support.block_channels",
+        True,
+    )
+
+    with pytest.raises(OperationCancelled):
+        write_assembly(
+            [entry],
+            tmp_path,
+            project_name="t",
+            profile=profile,
+            settings=taken,
+            cancelled=Stopped(),
+        )
+    assert not list(tmp_path.glob("*.3mf")), "keine halbe Übergabe"
+
+
 def test_a_saved_file_and_cura_carry_no_blocker(tmp_path: Path, profile: Profile) -> None:
     """Eine gespeicherte 3MF ist das Projekt des Kunden und keine Übergabe:
     Sie trägt keine Sperre, die ein anderes Programm als Material lesen

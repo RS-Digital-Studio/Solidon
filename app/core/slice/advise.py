@@ -29,6 +29,7 @@ from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.slice.analysis import (
     OVERHANG_MARGIN,
+    ModelSupport,
     _layer_shape,
     island_layers,
     largest_overhang_patch,
@@ -643,7 +644,19 @@ def _from_geometry(
     # 25.09.2026). Ohne diese Ausnahme schaltete ein Wasserkanal die Stützen
     # ein und verlangte zugleich, dass sie auf dem Modell ansetzen — genau dort,
     # wo sie ihn füllen.
-    model = model_support(result)
+    #
+    # **Gefragt wird die Kanalfrage nur, wenn es ohne sie Stützen bräuchte.**
+    # Sie nimmt Stücke heraus, nie hinzu; ein Körper, der schon mit allen
+    # Stücken ohne Stütze auskommt, braucht sie nicht. Am Bohrmaschinenhalter
+    # aus dem Korpus kostete sie 0,8 s von 2,5 s Vorschlagsrechnung, ohne dass
+    # eine Antwort davon abhing (Weg a der Durchsicht 0.5.1).
+    model = (
+        model_support(result)
+        if _may_need_support(
+            result, islands, total_overhang(result), largest_overhang_patch(result)
+        )
+        else ModelSupport()
+    )
     overhang = total_overhang(result, without=model.channels)
     patch = largest_overhang_patch(result, without=model.channels)
     # Die Summe allein reicht nicht, und der Unterschied entscheidet: ein
@@ -669,16 +682,7 @@ def _from_geometry(
     # darin dieselbe Decke wie beim Deckel. Gefragt wird deshalb das größte
     # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
     # Stege fängt die Brückenregel darunter weiter ab.
-    needs_support = (
-        bool(islands)
-        or patch > OVERHANG_LAYER_WORTH_SUPPORT
-        or (overhang > OVERHANG_WORTH_SUPPORT and patch > OVERHANG_LAYER_MINIMUM)
-        or any(
-            layer.bridge_width > SPAN_INTERESTING
-            for index, layer in enumerate(result.layers)
-            if index not in model.channel_layers
-        )
-    )
+    needs_support = _may_need_support(result, islands, overhang, patch, model.channel_layers)
 
     if needs_support and settings.support.style == "none":
         style = "tree" if len(islands) >= TREE_FROM_ISLANDS else "grid"
@@ -1183,6 +1187,27 @@ def for_part(settings: PrintSettings, bounds: BoundingBox, footprint: float) -> 
             severity="warning",
         )
     ]
+
+
+def _may_need_support(
+    result: SliceResult,
+    islands: tuple[float, ...],
+    overhang: float,
+    patch: float,
+    channel_layers: frozenset[int] = frozenset(),
+) -> bool:
+    """Die zwei Wege aus :func:`_from_geometry` zum Stützbedarf, dazu Inseln
+    und lange Brücken außerhalb der Kanalschichten."""
+    return (
+        bool(islands)
+        or patch > OVERHANG_LAYER_WORTH_SUPPORT
+        or (overhang > OVERHANG_WORTH_SUPPORT and patch > OVERHANG_LAYER_MINIMUM)
+        or any(
+            layer.bridge_width > SPAN_INTERESTING
+            for index, layer in enumerate(result.layers)
+            if index not in channel_layers
+        )
+    )
 
 
 def _on_small_feet(result: SliceResult) -> bool:

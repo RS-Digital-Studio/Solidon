@@ -384,6 +384,96 @@ def test_a_channel_ceiling_leaves_the_supports_on_the_plate() -> None:
     assert placement_advice(tunnel_block(65.0)) is None, "der weite Tunnel braucht sie"
 
 
+def bare_tunnel(width: float) -> MeshData:
+    """Ein Block mit einem Tunnel von ``width`` mal 20 mm, ohne Kragplatte —
+    die Tunneldecke ist der einzige Überhang."""
+    block = brick(width + 40.0, 40.0, 40.0, (0.0, 0.0, 20.0))
+    tunnel = brick(width, 50.0, 20.0, (0.0, 0.0, 18.0))
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([block, tunnel])))
+
+
+def test_asking_single_pieces_gives_the_same_channel_answer() -> None:
+    """Der Prüfbericht fragt nur seine wenigen großen Stücke; jedes muss dieselbe
+    Antwort bekommen wie im ganzen Durchgang, denn keine Säule beschneidet eine
+    andere."""
+    result = slice_body(tunnel_block(20.0), 0.5)
+    everything = model_support(result)
+    names = frozenset(
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number, _contour in enumerate(layer.overhangs)
+    )
+    assert everything.channels and names - everything.channels, "Kanal und Kragplatte"
+
+    for name in sorted(names):
+        asked = model_support(result, only=frozenset({name}))
+        assert asked.channels == everything.channels & {name}, name
+
+
+def test_the_channel_question_is_answered_once_per_measurement() -> None:
+    """DRUCK-14: Die Kanalfrage hängt nur an den Schichten.
+
+    Der Druckdialog stellte sie nach jedem geänderten Feld neu, an der
+    Waschschüssel je 3,9 s. Dieselbe Messung bekommt dieselbe Antwort,
+    ohne zu rechnen; eine neue Messung derselben Form wird neu gefragt, und
+    die Frage nach einzelnen Stücken läuft immer.
+    """
+    import app.core.slice.analysis as analysis
+
+    result = slice_body(bare_tunnel(20.0), 0.5)
+    first = model_support(result)
+    assert first.channels
+
+    assert model_support(result) is first, "dieselbe Messung, dieselbe Antwort"
+    again = slice_body(bare_tunnel(20.0), 0.5)
+    assert model_support(again) is not first, "eine neue Messung wird neu gefragt"
+    assert model_support(again) == first
+    single = frozenset({min(first.channels)})
+    assert model_support(result, only=single) is not model_support(result, only=single)
+    assert len(analysis._ANSWERS) <= analysis._ANSWERS_KEPT
+
+
+def test_the_dialog_can_take_the_reports_layers() -> None:
+    """DRUCK-14: Was der Prüfbericht geschnitten hat, findet der Druckdialog.
+
+    Gleiches Raster, gleicher Winkel, gleiche Brückenbreite: dieselbe Messung,
+    ohne zu schneiden. Ein anderer Winkel ist eine andere Frage.
+    """
+    from app.core.slice.findings import analysed, remembered_analysis
+
+    mesh = bare_tunnel(20.0)
+    settings = print_settings.resolve(petg())
+    assert remembered_analysis(mesh, settings, 45.0, 0.8) is None, "nichts geschnitten"
+
+    result = analysed(mesh, settings, 45.0, 0.8)
+
+    assert remembered_analysis(mesh, settings, 45.0, 0.8) is result
+    assert remembered_analysis(mesh, settings, 50.0, 0.8) is None
+    assert analysed(mesh, settings, 45.0, 0.8) is result
+
+
+def test_the_report_does_not_ask_for_supports_in_a_channel() -> None:
+    """Prüfbericht und Vorschläge sagen über dieselbe Decke dasselbe.
+
+    Die Vorschläge nehmen eine Kanaldecke aus dem Stützbedarf — sie schließt
+    sich selbst, und eine Stütze darin käme nicht mehr heraus
+    (:func:`model_support`). Der Prüfbericht fragte nur die Größe und sagte über
+    dieselbe Tunneldecke von 1000 mm² „braucht Stützen"; wer ihm folgte und sie
+    einschaltete, füllte den Tunnel. Der weite Tunnel bleibt ein Befund."""
+    from app.core.slice.findings import overhang_findings
+
+    narrow = slice_body(bare_tunnel(20.0), 0.5)
+    wide = slice_body(bare_tunnel(65.0), 0.5)
+
+    assert model_support(narrow).channels, "die Voraussetzung: eine Kanaldecke"
+    assert not any(
+        entry.path == "support.style"
+        for entry in advise.advise(print_settings.resolve(petg()), petg(), narrow)
+    ), "die Vorschläge verlangen keine Stütze"
+    assert overhang_findings("teil", narrow) == []
+    assert [finding.code for finding in overhang_findings("teil", wide)] == ["slice.large_overhang"]
+
+
 # --- Die Aufstandsfläche gehört dem Drucker, nicht der Suche --------------------
 
 

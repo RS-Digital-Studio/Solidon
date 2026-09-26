@@ -32,7 +32,7 @@ from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
 from app.core.log import get_logger
 from app.core.types import CancelToken, LayerInfo, Polygon, SliceResult
-from app.core.units import EPS_GEOM, exact_cos, ring_area
+from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -57,6 +57,15 @@ else:
 
 #: Der kleinste Überhang, der nicht bloß Vernetzungsrauschen ist.
 OVERHANG_MARGIN = 0.05
+
+#: Bis zu welchem Spalt zwei Konturen derselben Schicht für den Slicer eine
+#: sind, in mm: das Doppelte von ``slice_closing_radius``, mit dem PrusaSlicer
+#: und die Orca-Familie jede Schicht schließen (Vorgabe 0,049 mm). Keine
+#: Toleranz, die Solidon wählt, sondern was der Slicer tut — am
+#: Bohrmaschinenhalter aus dem Korpus stehen die Buchstaben acht Millionstel
+#: Millimeter neben der Wand, und im ElegooSlicer verschmelzen sie mit ihr
+#: (KUNDE-01).
+SLICER_CLOSING_GAP: Final = 2.0 * 0.049
 
 #: Ab welchem Abstand zweier aufeinanderfolgender Schnitte sie nicht mehr
 #: dieselbe Schicht sind. Ein Millionstel Millimeter: Senkrechte Wände treffen
@@ -2490,6 +2499,26 @@ def _islands_many(shapes: np.ndarray, previous: np.ndarray) -> list[ShapelyPolyg
             shapely.area(shapely.intersection(parts[unclear], below[unclear]))
             <= EPS_GEOM * EPS_GEOM
         )
+    # **Und was seitlich an Getragenem anliegt, ist keine Insel** (KUNDE-01).
+    # Der Slicer schließt jede Schicht und macht aus zwei Konturen mit einem
+    # Spalt unter :data:`SLICER_CLOSING_GAP` eine: Die Schrift, die als eigene
+    # Schale an einer Wand steht, beginnt dann nicht in der Luft, sondern hängt
+    # als kleiner Überhang an der Wand. Weitergereicht wird über Ketten —
+    # ein Buchstabe am Buchstaben an der Wand.
+    for number in np.unique(owner[floating]).tolist():
+        mine = owner == number
+        held = mine & ~floating
+        if not held.any():
+            continue
+        loose = np.flatnonzero(mine & floating)
+        anchor = shapely.union_all(parts[held])
+        while len(loose):
+            near = shapely.dwithin(parts[loose], anchor, SLICER_CLOSING_GAP)
+            if not near.any():
+                break
+            floating[loose[near]] = False
+            anchor = shapely.union_all(np.asarray([anchor, *parts[loose[near]]], dtype=object))
+            loose = loose[~near]
     for number in np.unique(owner[floating]).tolist():
         pieces = parts[(owner == number) & floating].tolist()
         result[number] = unary_union(pieces)
@@ -2738,8 +2767,19 @@ def support_on_model(result: SliceResult) -> bool:
     return model_support(result).open_patch > EPS_GEOM
 
 
-def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> ModelSupport:
+def model_support(
+    result: SliceResult,
+    channel_width: float = CHANNEL_WIDTH,
+    *,
+    only: frozenset[tuple[int, int]] | None = None,
+) -> ModelSupport:
     """Welche Stützsäulen auf dem Modell enden, und ob in einem Kanal (§22.2).
+
+    ``only`` fragt nur diese Stücke (Schicht, Stück). Keine Säule beschneidet
+    eine andere, also bekommt jedes Stück dieselbe Antwort wie im ganzen
+    Durchgang — nur ohne die übrigen sechzehntausend eines Gitterwerks, wenn
+    jemand bloß wissen will, ob ein einzelnes Stück eine Kanaldecke ist
+    (``findings.overhang_findings``).
 
     Die Frage, an der „Stützen nur von der Platte" hängt. Geschlossen wurde
     sie aus „keine Insel", und das ist etwas anderes: Ein Tisch — Bodenplatte
@@ -2761,7 +2801,42 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
     Säule an Material verliert, setzt es dort auf, und dieser Ort wird
     einmal befragt. Der übliche Fall — alles erreicht die Platte — geht durch
     alle Schichten und stellt keine Kanalfrage.
+
+    **Die ganze Frage wird je Messung gemerkt** (DRUCK-14, Durchsicht 0.5.1).
+    Sie hängt nur an den Schichten, nicht an den Einstellungen — der
+    Druckdialog stellte sie trotzdem bei jedem geänderten Feld und nach jeder
+    nachgereichten Profilliste neu, an der Waschschüssel je 3,9 s. Gemerkt
+    wird am Schichttupel selbst (Identität, nicht Gleichheit), für die letzten
+    :data:`_ANSWERS_KEPT` Messungen; eine Frage nach einzelnen Stücken
+    (``only``) läuft immer.
     """
+    if only is not None:
+        return _model_support(result, channel_width, only)
+    with _ANSWERS_LOCK:
+        for layers, width, answer in _ANSWERS:
+            if layers is result.layers and is_close(width, channel_width):
+                return answer
+    answer = _model_support(result, channel_width, None)
+    with _ANSWERS_LOCK:
+        _ANSWERS.append((result.layers, channel_width, answer))
+        del _ANSWERS[:-_ANSWERS_KEPT]
+    return answer
+
+
+#: Wie viele beantwortete Kanalfragen :func:`model_support` behält — die
+#: jüngsten, meist die Körper des offenen Druckdialogs. Ihre Schichttupel
+#: bleiben dafür am Leben, und damit bleibt ihre Identität eindeutig.
+_ANSWERS_KEPT: Final = 4
+_ANSWERS: list[tuple[tuple[LayerInfo, ...], float, ModelSupport]] = []
+_ANSWERS_LOCK = threading.Lock()
+
+
+def _model_support(
+    result: SliceResult,
+    channel_width: float,
+    only: frozenset[tuple[int, int]] | None,
+) -> ModelSupport:
+    """Die Kanalfrage selbst, ungemerkt (:func:`model_support`)."""
     layers = result.layers
     areas: list[float] = []
     names: list[tuple[int, int]] = []
@@ -2769,6 +2844,8 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
     starts: dict[int, list[int]] = {}
     for index in range(len(layers) - 1, 0, -1):
         for number, contour in enumerate(layers[index].overhangs):
+            if only is not None and (index, number) not in only:
+                continue
             starts.setdefault(index, []).append(len(areas))
             names.append((index, number))
             areas.append(piece_area(contour))

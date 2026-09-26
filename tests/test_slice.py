@@ -464,6 +464,36 @@ def test_a_solid_body_has_no_islands_above_the_plate() -> None:
     assert not above, "nothing starts in mid-air in a cube"
 
 
+def _wall_with_letter(gap: float) -> MeshData:
+    """Eine Wand 20 × 2 × 20 mm und daneben ein „Buchstabe" 3 × 0,5 × 2 mm, der
+    auf halber Höhe beginnt — als eigene Schale, ``gap`` von der Wand entfernt.
+    So stehen Ziffern und Buchstaben am Bohrmaschinenhalter aus dem Korpus
+    (KUNDE-01): 69 Schalen, die Schrift 0,5 mm dick seitlich an der Wand, mit
+    acht Millionstel Millimetern Luft dazwischen."""
+    wall = trimesh.creation.box(extents=(20.0, 2.0, 20.0))
+    wall.apply_translation((0.0, 0.0, 10.0))
+    letter = trimesh.creation.box(extents=(3.0, 0.5, 2.0))
+    letter.apply_translation((0.0, 1.0 + gap + 0.25, 11.0))
+    return MeshData.of(trimesh.util.concatenate([wall, letter]))
+
+
+def test_a_letter_on_the_side_of_a_wall_does_not_start_in_mid_air() -> None:
+    """Der Slicer schließt beim Schneiden Spalte bis zum doppelten
+    ``slice_closing_radius`` (PrusaSlicer und Orca: 0,049 mm) — die Schrift
+    verschmilzt je Schicht mit der Wand, und ihre Unterseite ist ein Überhang
+    von einem halben Millimeter, keine Insel. Solidon meldete an jedem
+    Buchstaben „beginnt in der Luft und braucht eine Stütze", und der
+    Druckdialog schlug Gitterstützen vor, wo keine nötig sind. Ein Millimeter
+    Luft bleibt eine Insel."""
+    touching = slice_body(_wall_with_letter(8e-6), 0.2)
+    apart = slice_body(_wall_with_letter(1.0), 0.2)
+
+    assert len(touching.layers) > 50
+    assert not island_layers(touching), "die Schrift hängt an der Wand"
+    assert island_layers(apart), "ein Millimeter Luft trägt nichts"
+    assert min(island_layers(apart)) == pytest.approx(10.1, abs=0.2)
+
+
 def test_a_contour_touching_only_at_a_corner_is_an_island() -> None:
     """Eine Ecke traegt nichts, und eine Kante auch nicht (§22.2).
 

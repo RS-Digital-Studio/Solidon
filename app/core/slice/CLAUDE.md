@@ -30,11 +30,11 @@ In der Oberfläche heißt es „Schichtanalyse", nicht „Vorschau".
 
 | Datei | Rolle |
 |---|---|
-| `analysis.py` | Der Analyse-Schneider: Konturen, Überhänge, Inseln, Brücken (§22) |
+| `analysis.py` | Der Analyse-Schneider: Konturen, Überhänge, Inseln, Brücken (§22); `model_support` merkt seine Antwort je Messung (Identität des Schichttupels) |
 | `advise.py` | Einstellungen aus Geometrie, Material und Maschine (§22.2, §29); `combine` vereint die Anforderungen des Ausgabeumfangs ohne benötigte Stützen zu verlieren; Stützort über `analysis.model_support` (außen, Kanal oder Insel), Kanalsperre als Vorschlag, Leerfahrt aus dem Drucker, Brim auch für viele kleine Füße; der Volumenstrom rechnet über `knowledge.print_settings.flow_speed_limit` |
 | `gcode.py` | G-Code zurücklesen (§28.1, §28.2), in einem Durchlauf — auch die erste Schicht, in der mit Bauteillüfter gedruckt wird (`fan_start`) |
 | `estimate.py` | Was ein Teil kostet, ohne es zu schneiden |
-| `findings.py` | Die Schichtanalyse im Prüfbericht (§17.3, §22.2, §22.3): Inseln mit Ort und Stützbedarf, größter frei hängender Überhang, lange Brücke und schmalste Stelle mit Ort (`advise.located_warnings`), gesparte Stütze einer anderen Lage mit Drehwinkel; gemerkt im Cache des Netzes, gerufen von `ui/print_findings_flow.py` nach jeder Auswertung |
+| `findings.py` | Die Schichtanalyse im Prüfbericht (§17.3, §22.2, §22.3): Inseln mit Ort und Stützbedarf, größter frei hängender Überhang außerhalb der Kanäle (dieselbe Ausnahme wie in `advise`, gefragt über `model_support(..., only=)` nur für die Stücke über der Meldeschwelle), lange Brücke und schmalste Stelle mit Ort (`advise.located_warnings`), gesparte Stütze einer anderen Lage mit Drehwinkel; gemerkt im Cache des Netzes, gerufen von `ui/print_findings_flow.py` nach jeder Auswertung. `remembered_analysis` gibt diese Messung heraus, ohne zu rechnen — Druckdialog (`_AdviceWorker`) und Stützsperre (`export.writer._support_blocker`) fragen dort, bevor sie selbst schneiden |
 | `orientation.py` | Die Suche nach einer Druckorientierung; eine kleine Grundflächen-Vorauswahl für Auto Split wird mit demselben echten Stützvolumen und derselben Fünf-Prozent-Grenze entschieden (§22.3) |
 
 Die Orientierungskandidaten kommen deterministisch aus den flächengeordneten

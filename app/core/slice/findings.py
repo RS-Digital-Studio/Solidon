@@ -38,6 +38,7 @@ from app.core.slice.analysis import (
     _layer_shape,
     _total_area,
     largest_overhang_patch,
+    model_support,
     slice_body,
 )
 from app.core.types import (
@@ -151,21 +152,11 @@ def analysed(
     sobald sich die Ecken ändern, und stirbt mit dem Netz. Im Schlüssel steht,
     was das Ergebnis bestimmt — Raster, Winkel, Brückenbreite.
     """
-    key = (
-        _CACHE_KEY,
-        round(settings.layers.layer_height, 6),
-        round(settings.layers.first_layer_height, 6),
-        round(angle, 6),
-        round(wall, 6),
-    )
+    stored = remembered_analysis(mesh, settings, angle, wall)
+    if stored is not None:
+        return stored
     cache = getattr(mesh.raw, "_cache", None)
-    name = "|".join(str(part) for part in key)
-    if cache is not None:
-        cache.verify()
-        if name in cache:
-            stored = cache[name]
-            if isinstance(stored, SliceResult):
-                return stored
+    name = _cache_name(settings, angle, wall)
     result = slice_body(
         mesh,
         settings.layers.layer_height,
@@ -177,6 +168,38 @@ def analysed(
     if cache is not None:
         cache[name] = result
     return result
+
+
+def remembered_analysis(
+    mesh: MeshData, settings: PrintSettings, angle: float, wall: float
+) -> SliceResult | None:
+    """Die Schichtanalyse, die der Prüfbericht für genau dieses Raster schon hat.
+
+    Der Druckdialog fragt hier, bevor er selbst schneidet (DRUCK-14,
+    Durchsicht 0.5.1): Der Prüfbericht rechnet nach jedem Laden dieselben
+    Schichten mit demselben Winkel und derselben Brückenbreite, und seine
+    Messung ist eine Obermenge — sie trägt zusätzlich das Stützvolumen, das die
+    Vorschläge nicht lesen. Ohne Treffer ``None``; gerechnet wird hier nie.
+    """
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is None:
+        return None
+    # ``trimesh``s Cache prüft selbst, ob sich die Ecken geändert haben, und
+    # gibt für einen fehlenden Eintrag ``None``.
+    stored = cache[_cache_name(settings, angle, wall)]
+    return stored if isinstance(stored, SliceResult) else None
+
+
+def _cache_name(settings: PrintSettings, angle: float, wall: float) -> str:
+    """Der Eintrag im Cache des Netzes: Raster, Winkel, Brückenbreite."""
+    key = (
+        _CACHE_KEY,
+        round(settings.layers.layer_height, 6),
+        round(settings.layers.first_layer_height, 6),
+        round(angle, 6),
+        round(wall, 6),
+    )
+    return "|".join(str(part) for part in key)
 
 
 def island_findings(object_id: ObjectId, result: SliceResult, bottom: float) -> list[Finding]:
@@ -246,23 +269,34 @@ def overhang_findings(object_id: ObjectId, result: SliceResult) -> list[Finding]
     """
     if largest_overhang_patch(result) <= OVERHANG_REPORTED_FROM:
         return []
-    best: tuple[float, float, ShapelyPolygon] | None = None
-    for layer in result.layers:
+    candidates: list[tuple[float, tuple[int, int], float, ShapelyPolygon]] = []
+    for index, layer in enumerate(result.layers):
         # Eine Insel ist auch ein Überhang — der ganze Querschnitt hängt in der
         # Luft. Sie hat ihre eigene Zeile (:func:`island_findings`); hier
         # stünde dieselbe Stelle ein zweites Mal.
         floating = [ShapelyPolygon(entry.outline, entry.holes) for entry in layer.islands]
-        for contour in layer.overhangs:
+        for number, contour in enumerate(layer.overhangs):
             piece = ShapelyPolygon(contour.outline, contour.holes)
             if piece.area <= OVERHANG_REPORTED_FROM:
                 continue
             if any(piece.intersection(island).area > 0.5 * piece.area for island in floating):
                 continue
-            if best is None or piece.area > best[0]:
-                best = (float(piece.area), layer.z, piece)
-    if best is None:
+            candidates.append((float(piece.area), (index, number), layer.z, piece))
+    if not candidates:
         return []
-    area, z, piece = best
+    # **Und keine Kanaldecke**, aus demselben Grund wie in den Vorschlägen
+    # (``advise._from_geometry``): Sie schließt sich selbst, und eine Stütze
+    # darin käme nicht mehr heraus. An einem Block mit einem 20-mm-Tunnel
+    # verlangten die Vorschläge keine Stütze, und der Bericht sagte über
+    # dieselbe Decke „braucht Stützen" — wer ihm folgte, füllte den Tunnel.
+    # Gefragt wird erst hier, wo ein Befund ansteht, und nur nach diesen
+    # Stücken: Über alle sechzehntausend Stücke des Eiffelturms kostet die
+    # Kanalfrage fünf Sekunden, über die wenigen großen ein Bruchteil davon.
+    channels = model_support(result, only=frozenset(entry[1] for entry in candidates)).channels
+    kept = [entry for entry in candidates if entry[1] not in channels]
+    if not kept:
+        return []
+    area, _name, z, piece = max(kept, key=lambda entry: entry[0])
     spot = piece.representative_point()
     return [
         Finding(
