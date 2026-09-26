@@ -2113,6 +2113,8 @@ class _FillJob:
     rims: tuple[list[int], ...]
     band: np.ndarray | None = None
     """Die fertigen Dreiecke eines Mantels zwischen zwei Ringen (:func:`_band_between`)."""
+    side: frozenset[int] | None = None
+    """Bei einem Mantel in einem Ring (:func:`_wall_between_rims`) die Ecken der einen Mündung."""
 
 
 #: Wie weit zwei Richtungen voneinander abweichen dürfen und noch als parallel
@@ -2277,22 +2279,27 @@ def _nearest_directions(first: np.ndarray, second: np.ndarray) -> np.ndarray:
 
 
 def _band_crosses(
-    points: np.ndarray, faces: np.ndarray, band: np.ndarray, cancelled: CancelToken | None
+    points: np.ndarray,
+    faces: np.ndarray,
+    band: np.ndarray,
+    cancelled: CancelToken | None,
+    face_bounds: tuple[np.ndarray, np.ndarray],
 ) -> bool:
     """Ob ein Mantel etwas durchdringt, das schon da ist — geprüft in seiner Umgebung.
 
     Eine unvollständige Suche zählt als „durchdringt": Gebaut wird nur, was
-    belegt ist.
+    belegt ist. ``face_bounds`` sind je Dreieck von ``faces`` die kleinsten
+    und größten Koordinaten, einmal je Füllung gerechnet: Je Mantel neu
+    gesammelt kosteten sie am Laptop-Ständer (172 336 Dreiecke, 103 Mäntel)
+    6,3 von 8,4 s des Einlesens.
     """
     from app.core.geom.intersections import crossing_face_pairs
 
     corners = points[band]
     low = corners.reshape(-1, 3).min(axis=0) - EPS_GEOM
     high = corners.reshape(-1, 3).max(axis=0) + EPS_GEOM
-    triangles = points[faces]
-    near = np.flatnonzero(
-        np.all(triangles.max(axis=1) >= low, axis=1) & np.all(triangles.min(axis=1) <= high, axis=1)
-    )
+    lows, highs = face_bounds
+    near = np.flatnonzero(np.all(highs >= low, axis=1) & np.all(lows <= high, axis=1))
     combined = np.vstack([faces[near], band])
     found = crossing_face_pairs(
         points, combined, cancelled, max_pairs=intersection_budget(len(combined))
@@ -2309,6 +2316,7 @@ def _fill_jobs(
     owner_of: dict[tuple[int, int], int] | None = None,
     centroids: np.ndarray | None = None,
     cancelled: CancelToken | None = None,
+    face_normals: np.ndarray | None = None,
 ) -> list[_FillJob]:
     """Die Ringe, die zusammen eine Fläche mit Löchern begrenzen, als eine Füllung.
 
@@ -2476,6 +2484,18 @@ def _fill_jobs(
                 )
                 merged.update([first, second])
                 break
+    # Ein Ring, der eine fehlende Wand zwischen zwei Mündungen umläuft, wird
+    # ihr Mantel (:func:`_wall_between_rims`, RM-240).
+    if owner_of is not None and centroids is not None and face_normals is not None:
+        for index, loop in enumerate(loops):
+            if index in merged:
+                continue
+            check()
+            wall = _wall_between_rims(points, loop, tolerance, owner_of, centroids, face_normals)
+            if wall is not None:
+                band, side = wall
+                jobs.append((index, _FillJob(loop=loop, rims=(loop,), band=band, side=side)))
+                merged.add(index)
     jobs.extend(
         (index, _FillJob(loop=loop, rims=(loop,)))
         for index, loop in enumerate(loops)
@@ -2484,13 +2504,157 @@ def _fill_jobs(
     return [job for _index, job in sorted(jobs, key=lambda item: item[0])]
 
 
+def _wall_between_rims(
+    points: np.ndarray,
+    loop: list[int],
+    tolerance: float,
+    owner_of: dict[tuple[int, int], int],
+    centroids: np.ndarray,
+    normals: np.ndarray,
+) -> tuple[np.ndarray, frozenset[int]] | None:
+    """Die Wand, die einem Ring fehlt, wenn er zwischen zwei Mündungen umläuft (RM-240).
+
+    **Fehlt ein Stück einer Bohrungswand, ist ihr Rand ein Ring aus zwei
+    Bögen und zwei Mantellinien** — und die flachste, kleinste Schließung
+    sind zwei Deckel über den Bögen: An ``plate_holes.stl`` wurde aus einer
+    halben Wand eine gerundete Seite, die Platte hatte drei Bohrungen und
+    25,9 mm³ zu viel, eine Dreiviertelwand blieb ganz offen (Befund B4 der
+    Durchsicht 24.09.2026). Welche Schließung gemeint war, sagt die Form der
+    Restwand: Ihre Mündungen liegen in zwei parallelen Ebenen.
+
+    Gefragt wird an einer Richtung aus den Normalen der Nachbarflächen: Die
+    Ecken des Rings liegen in genau zwei Höhen, jede Höhe ein zusammenhängendes
+    Stück mit mindestens zwei Ecken, und keine Nachbarfläche eines Stücks liegt
+    zum anderen hin — sonst verbindet eine vorhandene Wand die Mündungen schon
+    (dieselbe Probe wie in :func:`_band_between`). Dann wird der Mantel zwischen
+    den zwei Stücken gezogen (:func:`_zipped`): an einer Bohrung und einem
+    Senkungskegel mit ihren eigenen Teilungen, an einer geraden Wand eben.
+    Zurück kommt der Mantel und die Ecken der ersten Mündung.
+    """
+    count = len(loop)
+    if count < 4:
+        return None
+    ring = points[loop]
+    owners: list[int] = []
+    for index in range(count):
+        first, second = loop[index], loop[(index + 1) % count]
+        owner = owner_of.get((min(first, second), max(first, second)))
+        if owner is None:
+            return None
+        owners.append(owner)
+    owned = np.asarray(owners, dtype=np.int64)
+    for direction in _common_directions(normals[owned]):
+        heights = along(ring, direction)
+        jumps = np.flatnonzero(np.abs(heights - np.roll(heights, -1)) > tolerance)
+        if len(jumps) != 2:
+            continue
+        one, two = int(jumps[0]), int(jumps[1])
+        lower = [(one + 1 + step) % count for step in range((two - one) % count)]
+        upper = [(two + 1 + step) % count for step in range((one - two) % count)]
+        if len(lower) < 2 or len(upper) < 2:
+            continue
+        level_a, level_b = float(heights[lower[0]]), float(heights[upper[0]])
+        if float(np.abs(heights[lower] - level_a).max()) > tolerance:
+            continue
+        if float(np.abs(heights[upper] - level_b).max()) > tolerance:
+            continue
+        if abs(level_b - level_a) <= tolerance:
+            continue
+        toward = 1.0 if level_b > level_a else -1.0
+        # Die Kanten eines Stücks: je Ecke die Kante zur nächsten im Stück.
+        edges_a = np.asarray(lower[:-1], dtype=np.int64)
+        edges_b = np.asarray(upper[:-1], dtype=np.int64)
+        side_a = (along(centroids[owned[edges_a]], direction) - level_a) * toward
+        side_b = (along(centroids[owned[edges_b]], direction) - level_b) * -toward
+        if float(side_a.max()) > tolerance or float(side_b.max()) > tolerance:
+            continue
+        mouth = [loop[i] for i in lower]
+        return _zipped(points, mouth, [loop[i] for i in upper]), frozenset(mouth)
+    return None
+
+
+#: Wie viele Richtungen :func:`_wall_between_rims` an einem Ring fragt.
+WALL_DIRECTIONS: Final = 3
+
+
+def _common_directions(normals: np.ndarray) -> list[np.ndarray]:
+    """Die häufigsten Richtungen unter den Normalen der Nachbarflächen, höchstens drei.
+
+    Die Mündungen einer fehlenden Wand liegen in Flächen, deren Normale ihre
+    Richtung ist, und jede ihrer Randkanten trägt eine davon. Gegenläufige
+    Normalen sind eine Richtung. Jede Normale einzeln zu fragen kostete an
+    einem offenen Rohr mit 4 096 Teilungen die dritte Potenz — 218 s für zwei
+    Ringe, die einen Deckel bekommen.
+    """
+    size = np.sqrt(np.sum(normals * normals, axis=1))
+    usable = size > EPS_GEOM
+    units_ = normals[usable] / size[usable][:, None]
+    if not len(units_):
+        return []
+    leading = np.argmax(np.abs(units_), axis=1)
+    flip = np.where(units_[np.arange(len(units_)), leading] < 0.0, -1.0, 1.0)
+    canonical = units_ * flip[:, None]
+    keys = np.round(canonical / BAND_PARALLEL).astype(np.int64)
+    _keys, first, counts = np.unique(keys, axis=0, return_index=True, return_counts=True)
+    ranked = np.lexsort((first, -counts))[:WALL_DIRECTIONS]
+    return [canonical[int(first[index])] for index in ranked]
+
+
+def _spans_both_rims(triangles: np.ndarray, side: frozenset[int]) -> bool:
+    """Ob jedes Dreieck eine Ecke auf der Mündung ``side`` hat und eine daneben."""
+    on_side = np.isin(triangles, np.fromiter(side, dtype=np.int64))
+    return bool(np.all(on_side.any(axis=1) & ~on_side.all(axis=1)))
+
+
+def _zipped(points: np.ndarray, first: list[int], second: list[int]) -> np.ndarray:
+    """Der Mantel zwischen zwei Stücken eines Rings, in dessen Umlaufrichtung.
+
+    Der Ring läuft ``first`` entlang, springt ans erste Ecke von ``second``,
+    läuft es entlang und springt zurück. Gezogen wird von der Sprungkante am
+    Anfang von ``first`` zur anderen: je Schritt ein Dreieck auf dem Stück,
+    dessen nächste Ecke den kleineren Anteil seiner Länge erreicht — gleich
+    geteilte Bögen ergeben so Vierecke, wie sie die Restwand trägt. Jedes
+    Dreieck nimmt die Randkanten in Richtung des Rings, damit der Mantel wie
+    seine Nachbarn umläuft.
+    """
+    back = second[::-1]
+
+    def shares(chain: list[int]) -> list[float]:
+        corners = points[chain]
+        steps = corners[1:] - corners[:-1]
+        lengths = np.sqrt(
+            steps[:, 0] * steps[:, 0] + steps[:, 1] * steps[:, 1] + steps[:, 2] * steps[:, 2]
+        )
+        total = math.fsum(lengths.tolist())
+        run = [0.0]
+        for length in lengths.tolist():
+            run.append(run[-1] + length)
+        return [value / total if total > 0.0 else 0.0 for value in run]
+
+    along_first, along_back = shares(first), shares(back)
+    triangles: list[list[int]] = []
+    here = there = 0
+    while here < len(first) - 1 or there < len(back) - 1:
+        forward = there == len(back) - 1 or (
+            here < len(first) - 1 and along_first[here + 1] <= along_back[there + 1]
+        )
+        if forward:
+            triangles.append([first[here], first[here + 1], back[there]])
+            here += 1
+        else:
+            triangles.append([first[here], back[there + 1], back[there]])
+            there += 1
+    return np.asarray(triangles, dtype=np.int64)
+
+
 #: Bis zu wie vielen Ecken ein Ring über alle Triangulierungen gefüllt wird.
 #: Die Suche kostet die dritte Potenz der Eckenzahl; bei 32 sind es rund
 #: 5 500 Schritte, gemessen 10 ms je Ring. Ein Viertel der Wand einer Bohrung
 #: Ø 5,2 mit 48 Teilungen hat 26 Ecken und kommt damit als Wand zurück, bei
 #: sechzehn als flacher Deckel quer durch die Bohrung (24.09.2026). Eine
-#: halbe Wand bleibt flach: Dort ist die flache Schließung kleiner als der
-#: halbe Mantel, und welche gemeint war, sagt nur die Form der Restwand.
+#: halbe Wand schlösse sie flach — dort ist die flache Schließung kleiner als
+#: der halbe Mantel; sie bekommt ihre Wand vorher aus der Form der Restwand
+#: (:func:`_wall_between_rims`, RM-240).
 SMOOTH_FILL_CORNERS: Final = 32
 
 
@@ -2821,6 +2985,7 @@ def _fill_loops(
     centroids = (triangles_now[:, 0] + triangles_now[:, 1] + triangles_now[:, 2]) / 3.0
     face_normals = _unit_normals(triangles_now)
     faces_now = np.asarray(body.faces, dtype=np.int64)
+    face_bounds = (triangles_now.min(axis=1), triangles_now.max(axis=1))
     jobs = _fill_jobs(
         points,
         loops,
@@ -2828,6 +2993,7 @@ def _fill_loops(
         neighbour_of,
         centroids,
         cancelled,
+        face_normals,
     )
     position = 0
     while position < len(jobs):
@@ -2871,10 +3037,11 @@ def _fill_loops(
                 )
                 / 2.0
             )
-            centre = (
-                centre
-                + np.asarray(units.exact_centre(points[job.rims[1]].tolist()), dtype=np.float64)
-            ) / 2.0
+            if len(job.rims) > 1:
+                centre = (
+                    centre
+                    + np.asarray(units.exact_centre(points[job.rims[1]].tolist()), dtype=np.float64)
+                ) / 2.0
         wide_here = spanned > limit
         rim_keys = frozenset(
             _edge_key(points[rim[position]], points[rim[(position + 1) % len(rim)]])
@@ -2898,6 +3065,18 @@ def _fill_loops(
         # Ein Mantel ist fertig und wird nur geprüft.
         if job.band is not None:
             attempts = [job.band]
+            if job.side is not None and len(loop) == 4:
+                # **Ein einziges Viereck bekommt die Diagonale der glattesten
+                # Füllung**, wenn die ein Mantel ist — beide Dreiecke reichen von
+                # einer Mündung zur anderen. Dort wählt sie nach dem Knick gegen
+                # die Nachbarn, und zwei fehlende Dreiecke einer Verrundung
+                # kommen als dieselben zwei zurück. Bei mehr Ecken nicht: Am
+                # Viertel eines Senkungskegels zog sie schiefe Sprossen über
+                # mehrere Teilungen und ließ 0,105 mm³ stehen, wo der Mantel
+                # Teilung für Teilung exakt ist.
+                smooth = _smoothest_fill(points, loop, neighbour_of, face_normals, taken)
+                if smooth is not None and _spans_both_rims(smooth, job.side):
+                    attempts.insert(0, smooth)
         else:
             attempts = []
             if len(job.rims) == 1:
@@ -2913,7 +3092,7 @@ def _fill_loops(
             if len(job.rims) > 1 and len(attempt) and int(attempt.max()) >= len(points):
                 continue
             if job.band is not None:
-                if _band_crosses(points, faces_now, attempt, cancelled):
+                if _band_crosses(points, faces_now, attempt, cancelled, face_bounds):
                     continue
             elif not len(attempt) or normal is None or _folds(reachable[attempt], normal):
                 continue

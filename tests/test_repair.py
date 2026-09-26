@@ -2431,6 +2431,93 @@ def test_a_quarter_of_a_bore_wall_comes_back_as_wall() -> None:
     assert sum(1 for feature in detect(result.mesh).values() if feature.kind == "hole") == 4
 
 
+def _part_of_the_wall(mesh: MeshData, feature, part: str) -> np.ndarray:
+    """Die Dreiecke eines Stücks der Wand um die Achse, ohne Winkelfunktion abgegrenzt."""
+    wall = np.asarray(feature.face_indices)
+    offset = np.asarray(mesh.raw.triangles_center)[wall] - np.asarray(feature.params["centre"])
+    if part == "quarter":
+        return wall[(offset[:, 0] < 0.0) & (offset[:, 1] < 0.0)]
+    if part == "half":
+        return wall[offset[:, 0] < 0.0]
+    return wall[~((offset[:, 0] >= 0.0) & (offset[:, 1] >= 0.0))]
+
+
+@pytest.mark.parametrize("part", ["half", "three_quarters"])
+def test_a_half_or_three_quarter_bore_wall_comes_back_as_wall(part: str) -> None:
+    """Fehlt die halbe Wand oder drei Viertel, kommt sie als Wand zurück (RM-240).
+
+    Der Rand ist ein Ring aus zwei Bögen und zwei Mantellinien. Die flachste,
+    kleinste Schließung sind zwei Deckel über den Bögen — aus der halben Wand
+    wurde so eine gerundete Seite, die Platte hatte drei Bohrungen und 25,9 mm³
+    zu viel, die Dreiviertelwand blieb ganz offen. Die Mündungen der Restwand
+    liegen in zwei parallelen Ebenen, und dazwischen fehlt ein Mantel.
+    """
+    from app.core.perceive.features import detect
+
+    whole, _welded = merge_vertices(raw("plate_holes.stl"))
+    bore = min(
+        (feature for feature in detect(whole).values() if feature.kind == "hole"),
+        key=lambda feature: tuple(feature.params["centre"]),
+    )
+
+    result = repair(_without_faces(whole, _part_of_the_wall(whole, bore, part)))
+
+    assert result.mesh.is_watertight
+    assert result.mesh.volume == pytest.approx(whole.volume, rel=1e-9)
+    assert self_intersecting_faces(result.mesh) == ()
+    bores = [feature for feature in detect(result.mesh).values() if feature.kind == "hole"]
+    assert len(bores) == 4 and all(bore.params.get("through") for bore in bores)
+
+
+@pytest.mark.parametrize("part", ["quarter", "half", "three_quarters"])
+def test_a_part_of_a_countersink_comes_back_as_a_cone(part: str) -> None:
+    """Dasselbe am Kegel einer Senkung: Er kommt als Kegel zurück, nicht als Stufe (RM-240).
+
+    Und Teilung für Teilung: Am Viertel zog die glatteste Füllung schiefe
+    Sprossen über mehrere Teilungen und ließ 0,105 mm³ stehen.
+    """
+    from app.core.ingest.loader import normalise
+    from app.core.perceive.features import detect
+
+    whole = normalise(raw("plate_countersunk.stl"), "mm").mesh
+    cone = next(feature for feature in detect(whole).values() if feature.kind == "cone")
+
+    result = repair(_without_faces(whole, _part_of_the_wall(whole, cone, part)))
+
+    assert result.mesh.is_watertight
+    assert result.mesh.volume == pytest.approx(whole.volume, rel=1e-9)
+    kinds = sorted(
+        (feature.kind, feature.params.get("through"))
+        for feature in detect(result.mesh).values()
+        if feature.kind in ("hole", "cone")
+    )
+    assert kinds == [("cone", None), ("hole", True)]
+
+
+def test_a_straight_wall_with_a_missing_strip_stays_flat() -> None:
+    """Die Gegenprobe: Zwischen zwei geraden Mündungen ist der Mantel eben.
+
+    Einem viermal unterteilten Würfel fehlt ein senkrechter Streifen seiner
+    Vorderseite; der Rand liegt oben und unten auf den Kanten des Würfels. Was
+    zurückkommt, liegt ganz in der Ebene der Vorderseite.
+    """
+    box = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    for _round in range(2):
+        box = box.subdivide()
+    body = MeshData.of(box)
+    centres = np.asarray(box.triangles_center)
+    front = np.asarray(box.face_normals)[:, 1] < -0.9
+    strip = np.flatnonzero(front & (np.abs(centres[:, 0]) < 1.5))
+    assert len(strip), "die Voraussetzung: ein Streifen der Vorderseite"
+
+    result = repair(_without_faces(body, strip))
+
+    assert result.mesh.is_watertight
+    assert result.mesh.volume == pytest.approx(1000.0, rel=1e-9)
+    added = np.asarray(result.mesh.raw.triangles_center)[len(box.faces) - len(strip) :]
+    assert np.allclose(added[:, 1], -5.0), "jedes neue Dreieck liegt in der Vorderseite"
+
+
 def test_splinters_that_go_leave_no_sheet_and_no_hidden_hole() -> None:
     """Was als Splitter geht, zählt nicht mehr als Fläche ohne Dicke (Review R5).
 

@@ -549,7 +549,13 @@ verbiegt** (`_fill_loops`, eine Warteschlange aus `_FillJob`):
    Bohrungswand und Senkungskegel kommen zurück statt zweier Deckel.
    Kreuzt das Band vorhandene Flächen (`_band_crosses`) oder verbinden die
    Wände die Ringe schon — Rohr ohne Deckel, Kugel ohne Pole —, wird jeder
-   Ring für sich gefüllt.
+   Ring für sich gefüllt. **Und ein Ring, der ein Stück einer solchen Wand
+   umläuft, ist dieselbe fehlende Wand** (`_wall_between_rims`, RM-240): Liegen
+   seine Ecken in zwei parallelen Ebenen, je ein zusammenhängendes Stück, und
+   liegt keine Nachbarfläche eines Stücks zum anderen hin, wird zwischen den
+   Stücken ein Mantel gezogen (`_zipped`) — die halbe und die Dreiviertelwand
+   einer Bohrung und eines Senkungskegels kommen mit ihren Teilungen zurück,
+   eine gerade Wand eben.
 2. **Ringe in einer Ebene, einer im anderen, sind eine Fläche mit Löchern**
    (`_bridged_holes`): eine Triangulierung mit Brückenkanten statt fünf
    übereinanderliegender Scheiben — die fehlende Oberseite einer Lochplatte
