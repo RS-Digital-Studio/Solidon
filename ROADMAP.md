@@ -67,7 +67,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Lüfterkurve gebaut; offen PLA-Vorgabe je Drucker, Hilfs- und Kammerlüfter, unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
 | [RM-229 — Anordnen legt ein zu großes Teil über die Kante, und geteilte Stücke heißen nach einem Buchstabenpfad](#rm-229) | Geometrie, Erkennung und Druckvorbereitung | 108,5 bei freigegebenen 108 statt einer Mitte mit kleinerem Rand; „B A · Stifte" für ein Stück mit Stiften und Löchern — Rand zuerst verkleinern, Nummerierung entscheiden |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
-| [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
+| [RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen](#rm-254) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-243: am `Screen-Cover_RS.stl` noch R 11,2 (zwei Stücke) und das Wandband R 13,73 an den Buchstaben, an verrauschten Ellipsen ein bis vier von acht bis fünfzehn Stücken — eine Bestätigung, die kurze Stücke nicht gegenseitig trägt, ohne dem Korbbogen echte Bögen zu nehmen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Nach RM-246 geschlossen und genau gerechnet; offen: `hole_11`+`cone_51` um 15° gekippt trägt 1 444 mm³ vor den Mündungen ab, jedes Verdoppeln daneben bleibt `boolean.without_effect`, Versetzen um 1,5 mm meldet `no_longer_through` |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht](#rm-248) | Geometrie, Erkennung und Druckvorbereitung | Fächer vom Randmittelpunkt lässt beim Versetzen 3,6 bis 5,4 mm³ Mulde — den Deckel als Fortsetzung der umgebenden Fläche bauen, an beiden Kernen |
@@ -1796,26 +1796,27 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   wählbare Anfang gehört zu P5.1. Abnahme: je Grenze entweder gebaut oder mit
   Satz und Weg in der Oberfläche und im Handbuch benannt.
 
-<a id="rm-243"></a>
+<a id="rm-254"></a>
 
-- [ ] **RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst.**
-  Gefunden beim Abschluss von RM-219 (25.09.2026). Die Nachtrennung
-  (`CURVATURE_JUMP`) zerlegt einen Umriss mit verrauschtem Radius je Dreieck
-  in kurze Stücke, und ein Stück von vier bis acht Streifen trifft einen
-  Kreis auf Mikrometer — `fit_cylinder` nimmt es an. Am Screen-Cover
-  (`Screen-Cover_RS.stl`, `…_Basis.stl`, `…_RS.3mf`) werden so die Buchstaben
-  „RS" zu 23 bis 25 Verrundungen mit wandernden Radien (11,05 · 11,21 ·
-  11,34 · 11,46 … mm, 2 bis 10 µm neben dem Kreis); bis RM-219 verwarf sie die
-  fehlerhafte Gewinderegel, und die Seiten trugen gar kein Merkmal. Dieselbe
-  Klasse am Eiffelturm (sechs neue Strebenstücke für zwei alte). Die am
-  Prisma bewährten Größen trennen in der normalen Runde nicht: Die echten,
-  aber µm-rauen Flaschentaschen R 49 des Flaschenhalters haben dieselbe
-  Kreisabweichung und ein ebenso lautes Radiusfeld. Weg: an den Stücken eines Flecks prüfen, ob
-  sie zusammen einen Umriss mit stetig wanderndem Radius bilden (benachbart,
-  tangential, Radius und Mitte wandern ohne Sprung) — dann ist der Fleck eine
-  gerundete Seite; die Flaschentaschen als Gegenfall. Abnahme: Screen-Cover
-  ohne Verrundungen an den Buchstaben, Flaschenhalter, Besenhalter und die
-  übrigen Korpuskörper Merkmal für Merkmal gleich.
+- [ ] **RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen.**
+  Gefunden beim Abschluss von RM-243 (26.09.2026). `_wandering_outline`
+  schont im wandernden Umriss jeden Kreis, den ein zweites Stück bestätigt —
+  eines liegt auf dem Kreis des anderen, mit den zehn Mikrometern von
+  `_lies_on_the_cylinder`. Ein kurzes Stück liegt so auch auf einem Kreis mit
+  vier Prozent anderem Radius: Am `Screen-Cover_RS.stl` bleiben zwei
+  Buchstabenstücke als R 11,2 stehen, an verrauschten Ellipsen ein bis vier
+  von vorher acht bis fünfzehn Stücken (Scheitel, wo die Krümmung ruht).
+  Beidseitige Bestätigung räumt beides ab, nimmt aber 20 von 72 verrauschten
+  Korbbögen R 10 · R 16 · R 10 echte Bögen. Daneben ein Fall, den die Regel
+  gar nicht sieht: das Wandband R 13,73 am selben Screen-Cover, 0,4 mm hoch
+  zwischen zwei Buchstabenecken, ein **ganzer** Fleck, der auf 52 Grad einen
+  Kreis trifft und in der ersten Runde eingepasst wird (vor RM-219 schon da).
+  Weg: eine Bestätigung, die an der gemeinsamen Länge beider Stücke misst,
+  wie gut ein Kreis sie trägt, statt an der Toleranz eines einzelnen; für das
+  Wandband klären, ob ein Bogen zwischen zwei Ecken eines wandernden Umrisses
+  zu diesem gehört. Abnahme: `Screen-Cover_RS.stl` ohne Verrundungen an den
+  Buchstaben, die 72 Korbbögen aus der Reihe von RM-243 und das
+  Schmierwerkzeug (R 4,2 · R 6,75) unverändert.
 
 <a id="rm-253"></a>
 

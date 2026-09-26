@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-26 | [Schriftzüge und Streben sind gerundete Seiten (26.09.2026)](#schriftzüge-und-streben-sind-gerundete-seiten-26092026) |
 | 2026-09-26 | [Verschweißen je Blatt, die fehlende Bohrungswand und das Raster mit Zahl (26.09.2026)](#verschweißen-je-blatt-die-fehlende-bohrungswand-und-das-raster-mit-zahl-26092026) |
 | 2026-09-26 | [Die Kante innerhalb der Hülle und die Nachkontrolle der Kopien (26.09.2026)](#die-kante-innerhalb-der-hülle-und-die-nachkontrolle-der-kopien-26092026) |
 | 2026-09-25 | [Bohrungen mit Erweiterung an beiden Enden (25.09.2026)](#bohrungen-mit-erweiterung-an-beiden-enden-25092026) |
@@ -32052,3 +32053,74 @@ Dazu aus dem Bericht, je mit Test:
   `test_the_grid_finding_repairs_before_its_step_and_only_once`,
   `test_repairing_before_a_step_retries_that_step`. Was die Sonde am Ständer
   sonst zeigt, gehört den Merkmalshandlungen und steht als RM-253 im Register.
+
+## Schriftzüge und Streben sind gerundete Seiten (26.09.2026)
+
+<a id="rm-243"></a>
+
+- [x] **RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst.**
+  Gefunden beim Abschluss von RM-219 (25.09.2026). Die Nachtrennung
+  (`CURVATURE_JUMP`) zerlegt einen Umriss mit verrauschtem Radius je Dreieck
+  in kurze Stücke, und ein Stück von vier bis acht Streifen trifft einen
+  Kreis auf Mikrometer — `fit_cylinder` nimmt es an. Am Screen-Cover
+  (`Screen-Cover_RS.stl`, `…_Basis.stl`, `…_RS.3mf`) werden so die Buchstaben
+  „RS" zu 23 bis 25 Verrundungen mit wandernden Radien (11,05 · 11,21 ·
+  11,34 · 11,46 … mm, 2 bis 10 µm neben dem Kreis); bis RM-219 verwarf sie die
+  fehlerhafte Gewinderegel, und die Seiten trugen gar kein Merkmal. Dieselbe
+  Klasse am Eiffelturm (sechs neue Strebenstücke für zwei alte). Die am
+  Prisma bewährten Größen trennen in der normalen Runde nicht: Die echten,
+  aber µm-rauen Flaschentaschen R 49 des Flaschenhalters haben dieselbe
+  Kreisabweichung und ein ebenso lautes Radiusfeld. Weg: an den Stücken eines Flecks prüfen, ob
+  sie zusammen einen Umriss mit stetig wanderndem Radius bilden (benachbart,
+  tangential, Radius und Mitte wandern ohne Sprung) — dann ist der Fleck eine
+  gerundete Seite; die Flaschentaschen als Gegenfall. Abnahme: Screen-Cover
+  ohne Verrundungen an den Buchstaben, Flaschenhalter, Besenhalter und die
+  übrigen Korpuskörper Merkmal für Merkmal gleich.
+
+  **Abgeschlossen am 26.09.2026 — der Fleck entscheidet, nicht das Stück.**
+  Was ein Stück selbst hergibt, trennt nicht: Buchstabenstücke liegen 0,8 bis
+  9,8 µm neben ihrem Kreis, die echten Flaschentaschen 5,4 bis 7,3 µm; der
+  Flaschenhalter springt an so vielen Nähten wie die Buchstaben; ein
+  Buchstabenstück überstreicht bis 43,5 Grad, eine echte R 2 am Pegboard
+  34,2. `features._wandering_outline` fragt deshalb die Nachbarschaft. Ein
+  Kreis, den ein zweites Stück desselben Flecks bestätigt oder der
+  gezeichnet ist, ist ein Bogen und hält die Folge an; unter den übrigen
+  wandert der Umriss, wenn ein Kreis tangential einen engeren und einen
+  weiteren Nachbarn hat — zwei Wechsel in dieselbe Richtung. Dann fallen die
+  unbestätigten Stücke des Flecks, erst nach der Zusammenlegung und nur, wenn
+  sie ganz auf dem Umriss liegen (`_off_the_outline`). Unterwegs gemessen und
+  verworfen: alles eines wandernden Flecks zurückziehen (nahm am
+  Schmierwerkzeug R 4,2 über 179 Grad und zweimal R 6,75 über 81 Grad mit),
+  vor der Zusammenlegung zurückziehen (zwei Eiffelbögen R 24 verloren je ein
+  Bruchstück), beidseitige Bestätigung (20 von 72 Korbbögen verloren echte
+  Bögen), eine Mindestgröße für einen Wechsel (13 Buchstabenstücke kamen
+  zurück).
+
+  Screen-Cover: `…_RS.3mf` und `…_Basis.stl` tragen an den Buchstaben keine
+  Verrundung mehr; übrig sind die sechs Ecken R 2, der exakte Bogen R 22,975
+  aus dem Schriftzug des Originals und am 3MF zwei Rundungen des Griffs.
+  `…_RS.stl` behält zwei Buchstabenstücke R 11,2, die einander bestätigen,
+  und das Wandband R 13,73 — beides steht als RM-254 im Register. Vor RM-219
+  trugen die drei Dateien 20 bis 23 solcher Stücke, danach 44 bis 45.
+  Über 187 Dateien aus `F:D Dateien`, Basis und Stand auf demselben
+  `main`: 176 Merkmal für Merkmal gleich, darunter Flaschenhalter,
+  Besenhalter, Toilettenpapierhalter, Rack, Pegboards, Bohrerhalter und
+  Blessed. Verändert elf, alle in dieser Klasse: die drei Screen-Cover, der
+  Eiffelturm und seine reparierte Fassung (je 47 Strebenstücke), der
+  Gartenschlauchhalter (30 Verrundungen, 15 Kegel), die Pool-Düse (fünf
+  Stücke von R 0,78 bis R 12,1), das Schmierwerkzeug in drei Dateien (je ein
+  Stück R 3,09) und der Rucksackhalter (sechs Verrundungen und ein Ring einer
+  Freiformfläche aus 2611 Stücken, darunter viermal R 7,93 über 65 Grad, die
+  kein zweites Stück bestätigt). Erkennungszeit über den Korpus 393 → 416 s,
+  der neue Lauf zum Teil neben dem Tor.
+
+  Nachweis: `test_features.py` (verrauschte Ellipse wird gerundete Seite,
+  gezeichneter Bogen daneben bleibt, Korbbogen auf Flanken behält R 10 ·
+  R 10 · R 16, zwei Korbbögen mit einem Wechsel bleiben unberührt, Rückzug
+  nur ganz). Von zehn Mutationen werden sieben rot — ohne Bestätigung, mit
+  beidseitiger, ohne gezeichnete Bögen als bestätigt, ohne das Schonen
+  bestätigter Kreise, mit einem Wechsel statt zweien, mit teilweisem Rückzug
+  und ohne die Regel. Die Tangentenprüfung hält der Toilettenpapierhalter
+  (ohne sie fallen dort sechs Verrundungen R 20,8 bis R 29,9); die Grenze
+  `CURVATURE_JUMP` für einen Schritt und das Durchlaufen formloser Stücke
+  hält kein eigener Fall.

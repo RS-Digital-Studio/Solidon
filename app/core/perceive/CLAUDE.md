@@ -1195,6 +1195,23 @@ Verweis bleibt je Merkmal eine Warnung
   93 statt 12 Verrundungen), und *In Flächen und Kanten umwandeln* fiel von
   64 auf 14 s; die Bögen der Buchstaben und ein Ellipsenbogen bleiben in
   dieser Runde gerundete Seiten.
+- **Ein Umriss mit wanderndem Radius ist eine gerundete Seite**
+  (`_wandering_outline`, zweite Runde in `_fitted`, RM-243). Die
+  Nachtrennung zerlegt einen verrauschten Schriftzug, eine geschwungene
+  Strebe oder einen frei geformten Griff in kurze Stücke, und jedes passt
+  für sich auf einen Kreis. Gezählt werden die Kreise von Stücken mit
+  Gewicht, die weder gezeichnet sind (`_exactly_an_arc`) noch von einem
+  zweiten Stück desselben Flecks bestätigt werden (eines liegt auf dem Kreis
+  des anderen); ein bestätigter Kreis hält die Folge an. Hat einer davon
+  tangential einen engeren und einen weiteren Nachbarn — der Radius wechselt
+  zweimal in dieselbe Richtung —, ist der Fleck ein Umriss, und die Funktion
+  gibt seine bestätigten und gezeichneten Stücke zurück. Alle anderen
+  eingepassten Stücke werden vorgemerkt (`outline` in `_fitted`) und fallen
+  erst nach der Zusammenlegung, wenn sie ganz auf vorgemerkten Dreiecken
+  liegen (`_off_the_outline`); was dort mit einem Stück von woanders zu einer
+  Fläche verschmolz, bleibt. Der Rest wird zur gerundeten Seite
+  (`detect_curved_faces`). Warum es so und nicht einfacher geht, steht in
+  `.claude/rules/schichtanalyse.md`.
 - **Der Merkmals-Cache hat zwei Schranken.** `CACHE_LIMIT` zählt
   Einträge, `CACHE_INDEX_LIMIT` ihr Gewicht in Flächenindizes —
   ein Eintrag für ein 400 000-Dreieck-Modell wiegt 3,9 MiB, und

@@ -4364,6 +4364,161 @@ def test_an_elliptic_extrusion_stays_one_curved_face() -> None:
     assert [f.kind for f in found.values() if f.kind != "face"] == ["curved_face"]
 
 
+def _restless_ellipse(amount: float) -> MeshData:
+    """Die halbe Ellipse von oben, jede Ecke um bis zu ``amount`` radial verrückt."""
+    rng = np.random.default_rng(8)
+    bow = []
+    for turn in range(-90, 91):
+        x = 20.0 + 10.0 * math.cos(math.radians(turn))
+        y = 8.0 + 8.0 * math.sin(math.radians(turn))
+        push = amount * (2.0 * rng.random() - 1.0) / math.hypot(x - 20.0, y - 8.0)
+        bow.append((x + (x - 20.0) * push, y + (y - 8.0) * push))
+    return _extruded([(0.0, 0.0), *bow, (0.0, 16.0)])
+
+
+def test_a_restless_spline_is_a_curved_side_and_no_row_of_fillets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Umriss mit wanderndem Radius ist eine gerundete Seite (RM-243).
+
+    Dieselbe Ellipse, die Ecken um ±1 µm radial verrauscht — so liegen die
+    Buchstaben „RS" am Screen-Cover. Die Nachtrennung zerlegt den Umriss an
+    den Sprüngen des Radius je Dreieck, und jedes Stück passt für sich auf
+    einen Kreis: Bis zum 26.09.2026 standen hier zwölf Verrundungen von
+    R 6,35 bis R 12,51. Die Stücke schließen tangential aneinander an, und
+    der Radius wächst über drei Kreise hinweg — ein Verlauf, kein Übergang.
+    """
+    forget_cache()
+    found = detect(_restless_ellipse(0.001))
+    assert [f.kind for f in found.values() if f.kind != "face"] == ["curved_face"]
+
+    # Ohne die Frage nach dem Verlauf stünden die Stücke als Verrundungen da;
+    # sonst prüfte der Test nichts.
+    monkeypatch.setattr(features_module, "_wandering_outline", lambda *_args: None)
+    forget_cache()
+    rows = [f for f in detect(_restless_ellipse(0.001)).values() if f.kind == "fillet"]
+    assert len(rows) >= 3
+
+
+def test_a_drawn_arc_beside_a_restless_spline_stays_a_fillet() -> None:
+    """Ein CAD-Umriss setzt Bögen und Splines nebeneinander (RM-243).
+
+    Die verrauschte Ellipse von oben läuft an ihrem Scheitel tangential in
+    einen gezeichneten Bogen R 5 über, beides ein Fleck. Die Stücke der
+    Ellipse fallen, der Bogen bleibt — wie am Screen-Cover der exakte Bogen
+    R 22,975 im Schriftzug des Originals.
+    """
+    rng = np.random.default_rng(8)
+    bow = []
+    for turn in range(-90, 90):
+        x = 20.0 + 10.0 * math.cos(math.radians(turn))
+        y = 8.0 + 8.0 * math.sin(math.radians(turn))
+        push = 0.001 * (2.0 * rng.random() - 1.0) / math.hypot(x - 20.0, y - 8.0)
+        bow.append((x + (x - 20.0) * push, y + (y - 8.0) * push))
+    drawn = [
+        (20.0 + 5.0 * math.cos(math.radians(turn)), 11.0 + 5.0 * math.sin(math.radians(turn)))
+        for turn in range(90, 181)
+    ]
+    forget_cache()
+    found = detect(_extruded([(0.0, 0.0), *bow, *drawn, (0.0, 11.0)]))
+
+    rounds = [float(f.params["radius"]) for f in found.values() if f.kind == "fillet"]
+    assert rounds == pytest.approx([5.0], rel=1e-6)
+    assert "curved_face" in {f.kind for f in found.values()}
+
+
+def _basket_arch(flank: float, seed: int) -> MeshData:
+    """Ein Korbbogen R 10 · R 16 · R 10 auf zwei Flanken, jede Ecke um bis zu
+    0,6 µm radial verrückt."""
+    rng = np.random.default_rng(seed)
+    points = [(0.0, -flank), (0.0, 0.0)] if flank > 0.0 else [(0.0, 0.0)]
+    x = y = 0.0
+    heading = 90.0
+    for radius, sweep in ((10.0, 50.0), (16.0, 80.0), (10.0, 50.0)):
+        cx = x - radius * math.sin(math.radians(heading))
+        cy = y + radius * math.cos(math.radians(heading))
+        for step in range(1, round(sweep) + 1):
+            angle = math.radians(heading - 90.0 + step)
+            push = 0.0006 * (2.0 * rng.random() - 1.0)
+            points.append(
+                (
+                    cx + (radius + push) * math.cos(angle),
+                    cy + (radius + push) * math.sin(angle),
+                )
+            )
+        heading += sweep
+        x = cx + radius * math.cos(math.radians(heading - 90.0))
+        y = cy + radius * math.sin(math.radians(heading - 90.0))
+    if flank > 0.0:
+        points.append((x, -flank))
+    return _extruded(points)
+
+
+@pytest.mark.parametrize("seed", [4, 7])
+def test_a_basket_arch_keeps_its_arcs_although_the_radius_changes_twice(seed: int) -> None:
+    """Zwei Wechsel gegeneinander sind kein Verlauf (RM-243).
+
+    Auf 5 mm hohen Flanken zerlegt die Nachtrennung den verrauschten Korbbogen
+    in Stücke, und jeder der drei Bögen kommt als Verrundung heraus. Der Radius
+    steigt und fällt wieder — eine Konstruktion aus zwei Radien, wie die
+    Flaschentasche, die in ihre engere Einlaufrundung übergeht. Die Stücke
+    eines Bogens bestätigen einander, und ein Stück über der Naht zweier
+    Bögen passt auf einen Zwischenkreis, ohne einen dritten Radius zu machen.
+    Verlangte die Bestätigung beide Richtungen, verlöre die Saat 7 ihren
+    Bogen R 16.
+    """
+    forget_cache()
+    found = detect(_basket_arch(5.0, seed))
+
+    rounds = sorted(float(f.params["radius"]) for f in found.values() if f.kind == "fillet")
+    assert rounds == pytest.approx([10.0, 10.0, 16.0], rel=0.002)
+
+
+@pytest.mark.parametrize("seed", [2, 10])
+def test_a_single_change_of_radius_leaves_a_construction_alone(
+    seed: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Wechsel ist ein Übergang (RM-243).
+
+    Derselbe Korbbogen direkt auf der Grundlinie: Neben den Stücken der Bögen
+    liegen dort Rauschstücke an den Ecken (R 8,3 bis R 9,0), die einen
+    einzelnen tangentialen Wechsel zum Nachbarn bilden. Ein Wechsel allein
+    macht keinen Umriss — die Erkennung gibt dasselbe wie ohne die Regel.
+    """
+    forget_cache()
+    ruled = sorted(
+        round(float(f.params["radius"]), 6)
+        for f in detect(_basket_arch(0.0, seed)).values()
+        if f.kind == "fillet"
+    )
+    monkeypatch.setattr(features_module, "_wandering_outline", lambda *_args: None)
+    forget_cache()
+    unruled = sorted(
+        round(float(f.params["radius"]), 6)
+        for f in detect(_basket_arch(0.0, seed)).values()
+        if f.kind == "fillet"
+    )
+    assert len(unruled) >= 3, "ohne Rundungen prüft der Test nichts"
+    assert ruled == unruled
+
+
+def test_a_piece_of_an_outline_stays_when_the_merge_joined_it_to_a_face_elsewhere() -> None:
+    """Zurückgezogen wird nur, was ganz auf dem Umriss liegt (RM-243).
+
+    Am Eiffelturm lag ein Bruchstück der Bögen R 24 über 172 Grad in einem
+    wandernden Nachbarfleck; die Zusammenlegung hatte es mit dem Hauptbogen
+    vereint. Fiel alles, was den Umriss berührt, verloren zwei der vier
+    Bögen 31 und 47 Dreiecke.
+    """
+    outline = np.zeros(8, dtype=bool)
+    outline[[0, 1, 2]] = True
+    entries = [("Umrissstück", [0, 1]), ("Bogen mit Bruchstück", [2, 3, 4]), ("anderswo", [5])]
+
+    kept = features_module._off_the_outline(entries, outline)
+
+    assert [name for name, _faces in kept] == ["Bogen mit Bruchstück", "anderswo"]
+
+
 @pytest.mark.parametrize(
     "name",
     [

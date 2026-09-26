@@ -2229,6 +2229,9 @@ def _fitted(
         areas = np.asarray(body.area_faces, dtype=float)
         total_area = float(areas.sum())
         freeform_skin = False
+        #: Die Dreiecke, die als Stücke eines wandernden Umrisses eingepasst
+        #: wurden (RM-243) — sie fallen nach der Zusammenlegung.
+        outline = np.zeros(len(body.faces), dtype=bool)
         #: Kennzahlen von Flecken, an denen der Kegel nichts hergab. Wer
         #: deckungsgleich zu einem davon ist, bekommt dieselbe leere Antwort,
         #: ohne dass der Löser noch einmal hundert Auswertungen dafür braucht
@@ -2432,6 +2435,22 @@ def _fitted(
             # Jedes Stück wird gefragt, nicht nur bis zum ersten Treffer — die
             # Liste ist Absicht, kein ``any`` mit Kurzschluss.
             classified = [classify(piece) for piece in pieces] if split_apart else []
+            # **Und ein Umriss ist kein Stapel von Kreisen** (RM-243): Reihen
+            # sich die Stücke als tangential wandernde Kreise aneinander, ist
+            # der Fleck die gerundete Seite eines Schriftzugs, einer Strebe,
+            # eines geschwungenen Griffs, und seine Stücke sind keine Merkmale.
+            # Stehen bleibt, was ein gezeichneter oder bestätigter Bogen ist —
+            # ein CAD-Umriss setzt Bögen und Splines nebeneinander.
+            # Zurückgezogen wird erst nach der Zusammenlegung
+            # (:func:`_off_the_outline`): Ein Stück, das dort mit einem anderen
+            # Fleck zu einer Fläche verschmilzt, ist bestätigt.
+            standing = (
+                _wandering_outline(body, pieces, check_cancelled) if any(classified) else None
+            )
+            if standing is not None:
+                for number, (piece, known) in enumerate(zip(pieces, classified, strict=True)):
+                    if known and number not in standing:
+                        outline[np.asarray(piece, dtype=np.intp)] = True
             leftovers: list[list[int]] = [] if split_apart else [patch]
             for piece, known in zip(pieces, classified, strict=False):
                 if not known:
@@ -2482,6 +2501,11 @@ def _fitted(
         if check_cancelled is not None:
             check_cancelled()
         rings = _merged_tori(body, tori.entries, check_cancelled=check_cancelled)
+        if outline.any():
+            found = _off_the_outline(found, outline)
+            cones = _off_the_outline(cones, outline)
+            rings = _off_the_outline(rings, outline)
+            spheres = _off_the_outline(spheres, outline)
         if check_cancelled is not None:
             check_cancelled()
         helices = find_helices(mesh, check_cancelled=check_cancelled)
@@ -7642,6 +7666,173 @@ def _exactly_an_arc(
         float(extents[0] * extents[0] + extents[1] * extents[1] + extents[2] * extents[2])
     )
     return fit.fit_error <= weld_tolerance(diagonal)
+
+
+def _wandering_outline(
+    body: trimesh.Trimesh,
+    pieces: Sequence[list[int]],
+    check_cancelled: Callable[[], None] | None = None,
+) -> set[int] | None:
+    """Die Bögen unter den Stücken eines wandernden Umrisses — oder ``None``,
+    wenn die Stücke keinen solchen Umriss bilden (RM-243).
+
+    Ein Stück allein verrät nichts: Es liegt 1 bis 10 µm neben seinem Kreis,
+    ob es ein Stück Schriftzug ist oder ein Stück einer rauen Flaschentasche.
+    Die Antwort steht in der Nachbarschaft, und sie hat zwei Teile.
+
+    **Ein Kreis, den ein zweites Stück bestätigt, ist ein Bogen.** Das
+    Rauschen des Radius je Dreieck zerteilt einen echten Bogen in mehrere
+    Stücke, und die liegen alle auf seinem Kreis: gleiche Seite, Radius und
+    Achse wie in :func:`_same_cylinder`, und eines liegt auf dem Kreis des
+    anderen (:func:`_lies_on_the_cylinder`). Beide Richtungen zu verlangen
+    ist zu streng — am verrauschten Korbbogen verlören dann echte Bögen ihre
+    Bestätigung. Ein gezeichneter Bogen (:func:`_exactly_an_arc`) ist ohnehin
+    einer. Ein
+    Umriss mit wanderndem Radius trägt dagegen auf jedem Stück einen eigenen
+    Kreis. Gezählt werden nur diese unbestätigten Kreise von Stücken mit
+    Gewicht (:data:`MIN_PATCH_FACES`).
+
+    **Ein Wechsel ist ein Übergang, zwei in dieselbe Richtung sind ein
+    Verlauf.** Zwei unbestätigte Kreise, die über Splitter und formlose
+    Stücke hinweg aufeinanderfolgen, gehen tangential ineinander über, wenn
+    sie auf derselben Seite liegen, ihre Achsen parallel stehen und der
+    Querversatz der Achsen so groß ist wie der Unterschied der Radien
+    (innerhalb :data:`SINK_FIT_LIMIT`); der Radius ändert sich dabei um
+    weniger als :data:`CURVATURE_JUMP` — die Kreise sagen, dass die Krümmung
+    nicht sprang, und die Trennung kam aus dem Rauschen. Eine Untergrenze für
+    den Schritt gibt es nicht: Buchstaben wandern oft in Schritten von einem
+    bis drei Prozent. Der Umriss wandert, wenn ein Kreis so einen engeren und
+    einen weiteren Nachbarn hat: Dort
+    wächst der Radius über drei Kreise hinweg. Eine Flaschentasche, die in
+    eine engere Einlaufrundung übergeht, hat einen Wechsel; ein Korbbogen
+    R 10 · R 16 · R 10 zwei gegeneinander. Ein bestätigter Kreis hält die
+    Folge an wie ein gezeichneter: Hinter einem Bogen beginnt der Umriss neu.
+
+    Zurück kommen die Nummern der bestätigten und gezeichneten Stücke: Sie
+    bleiben Merkmale, auch wenn der Fleck ein Umriss ist. Am Schmierwerkzeug
+    von Elegoo liegen im selben Fleck wie die wandernden Splinestücke ein
+    Halbrund R 4,2 aus dreizehn Stücken und zwei Bögen R 6,75 über 81 Grad.
+
+    Gelesen wird am Nachbarindex, ohne Feld über das ganze Netz (wie
+    :func:`_arcs_of_a_prism`); entschieden wird mit Grundrechenarten (RM-187).
+    """
+    fits: dict[int, CylinderFit] = {}
+    confirmed: set[int] = set()
+    for number, piece in enumerate(pieces):
+        if len(piece) < MIN_PATCH_FACES:
+            continue
+        if check_cancelled is not None:
+            check_cancelled()
+        if _exactly_an_arc(body, piece, check_cancelled):
+            confirmed.add(number)
+        fit = fit_cylinder(body, piece, check_cancelled=check_cancelled)
+        if fit is not None and fit.good:
+            fits[number] = fit
+    # Zwei Wechsel in dieselbe Richtung brauchen drei Kreise.
+    if sum(1 for number in fits if number not in confirmed) < 3:
+        return None
+
+    axis_cosine = units.exact_cos_degrees(SINK_AXIS_LIMIT)
+
+    def placed(one: int, other: int) -> tuple[float, float, float] | None:
+        """Radiusunterschied, Querversatz und Maßstab zweier Kreise gleicher Seite
+        und paralleler Achse — sonst nichts."""
+        first, second = fits[one], fits[other]
+        if first.inward is not second.inward:
+            return None
+        axis = np.asarray(first.axis, dtype=float)
+        if abs(float((axis * np.asarray(second.axis, dtype=float)).sum())) < axis_cosine:
+            return None
+        offset = np.asarray(second.centre, dtype=float) - np.asarray(first.centre, dtype=float)
+        across = offset - axis * float((offset * axis).sum())
+        return (
+            abs(first.radius - second.radius),
+            math.sqrt(float((across * across).sum())),
+            max(first.radius, second.radius),
+        )
+
+    numbers = sorted(fits)
+    for position, one in enumerate(numbers):
+        for other in numbers[position + 1 :]:
+            if one in confirmed and other in confirmed:
+                continue
+            place = placed(one, other)
+            if place is None:
+                continue
+            step, across, scale = place
+            if step > scale * CYLINDER_TOLERANCE or across > scale * SINK_FIT_LIMIT:
+                continue
+            if check_cancelled is not None:
+                check_cancelled()
+            if _lies_on_the_cylinder(
+                body, fits[one], pieces[other], check_cancelled=check_cancelled
+            ) or _lies_on_the_cylinder(
+                body, fits[other], pieces[one], check_cancelled=check_cancelled
+            ):
+                confirmed.update((one, other))
+    circles = [number for number in numbers if number not in confirmed]
+    if len(circles) < 3:
+        return None
+
+    sizes = np.fromiter((len(piece) for piece in pieces), dtype=np.intp, count=len(pieces))
+    faces = np.concatenate([np.asarray(piece, dtype=np.intp) for piece in pieces])
+    owners = np.repeat(np.arange(len(pieces), dtype=np.intp), sizes)
+    order = np.argsort(faces, kind="stable")
+    faces, owners = faces[order], owners[order]
+    neighbours, _rows = _neighbour_index(body)
+    beside = neighbours[faces]
+    spot = np.minimum(np.searchsorted(faces, np.maximum(beside, 0)), len(faces) - 1)
+    member = (beside >= 0) & (faces[spot] == beside)
+    near = np.broadcast_to(owners[:, None], beside.shape)[member]
+    far = owners[spot[member]]
+    touching = near != far
+    adjacent: dict[int, set[int]] = {}
+    for one, other in zip(near[touching].tolist(), far[touching].tolist(), strict=True):
+        adjacent.setdefault(one, set()).add(other)
+
+    # Je Kreis bis zum nächsten Kreis auf jeder Seite, je Paar einmal gefragt.
+    smaller: set[int] = set()
+    larger: set[int] = set()
+    for number in circles:
+        if check_cancelled is not None:
+            check_cancelled()
+        seen = {number}
+        frontier = [number]
+        while frontier:
+            current = frontier.pop()
+            for other in sorted(adjacent.get(current, ())):
+                if other in seen or other in confirmed:
+                    continue
+                seen.add(other)
+                if other not in fits:
+                    frontier.append(other)
+                    continue
+                place = placed(number, other) if other > number else None
+                if place is None:
+                    continue
+                step, across, scale = place
+                if step <= scale * CURVATURE_JUMP and abs(across - step) <= scale * SINK_FIT_LIMIT:
+                    low, high = sorted((number, other), key=lambda key: fits[key].radius)
+                    larger.add(low)
+                    smaller.add(high)
+    # Ein Kreis mit einem engeren Nachbarn und einem weiteren: zwei Wechsel in
+    # dieselbe Richtung.
+    return confirmed if smaller & larger else None
+
+
+def _off_the_outline[Fit](
+    entries: list[tuple[Fit, list[int]]], outline: np.ndarray
+) -> list[tuple[Fit, list[int]]]:
+    """Die Einpassungen ohne die, die ganz auf einem wandernden Umriss liegen (RM-243).
+
+    ``outline`` markiert je Dreieck die Stücke, die :func:`_wandering_outline`
+    zur gerundeten Seite erklärt hat. Gefragt wird nach der Zusammenlegung,
+    und darum ganz und nicht teilweise: Was dort mit einem Stück von
+    woanders zu einer Fläche verschmolz, bleibt mit allen Dreiecken — am
+    Eiffelturm die Bögen R 24 über 172 Grad, von denen ein Bruchstück im
+    wandernden Nachbarfleck lag.
+    """
+    return [entry for entry in entries if not bool(outline[entry[1]].all())]
 
 
 def _face_radii(body: trimesh.Trimesh, pairs: np.ndarray, radii: np.ndarray) -> np.ndarray:

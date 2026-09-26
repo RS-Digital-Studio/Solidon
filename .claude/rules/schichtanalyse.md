@@ -784,6 +784,78 @@ Besenhalters und der anderen Konstruktionen (Radien mit wenigen
 Nachkommastellen, genau rund) gegen Schriftzüge, Logos, Griffe und den
 Eiffelturm, je Datei die neuen Verrundungen mit Kreisfehler und Radius.
 
+## Ein Umriss mit wanderndem Radius ist eine gerundete Seite (26.09.2026, RM-243)
+
+`features._wandering_outline` entscheidet über die Stücke eines Flecks
+**zusammen**, nie über eines allein. Was das Stück selbst hergibt, trennt
+nicht — gemessen an Screen-Cover, Flaschenhalter, Toilettenpapierhalter,
+Eiffelturm, Bohrerhalter, Rack, Pegboards und Besenhalter, damit es niemand
+ein zweites Mal misst:
+
+* **Kreisfehler:** Buchstabenstücke liegen 0,8 bis 9,8 µm neben ihrem
+  Kreis, die echten Flaschentaschen R 49 5,4 bis 7,3 µm, eine echte R 2 am
+  Pegboard 1,7 µm. Beides ist die Float32-Rundung der STL.
+* **Anteil springender Nähte** (`PRISM_QUIET_SHARE`): Der Flaschenhalter
+  springt an 25 bis 65 Prozent seiner Nähte, so viel wie die Buchstaben.
+* **Überstrichener Winkel:** Buchstabenstücke bis 43,5 Grad, eine echte R 2
+  am Pegboard 34,2 Grad.
+* **Ähnliche Kreise im selben Fleck:** fängt nur die Hälfte der Buchstaben
+  (deren Stücke liegen zwischen Splittern), und derselbe Radius auf zwei
+  Ecken ist keine Wanderung.
+* **Ein anderes Stück liegt auf dem Kreis** (`_lies_on_the_cylinder`, über
+  alle Stücke): Splitter aus zwei Dreiecken liegen auf jedem nahen Kreis.
+
+Was trennt, sind zwei Sätze über die Nachbarschaft:
+
+* **Ein bestätigter Kreis ist ein Bogen.** Das Rauschen zerteilt einen
+  echten Bogen in Stücke, die alle auf seinem Kreis liegen; ein Spline trägt
+  auf jedem Stück einen eigenen. Bestätigt heißt: ein zweites Stück von
+  Gewicht mit derselben Seite, Radius und Achse wie in `_same_cylinder`,
+  und eines liegt auf dem Kreis des anderen (`_lies_on_the_cylinder`) —
+  oder ein gezeichneter Bogen (`_exactly_an_arc`). Ein bestätigter Kreis
+  hält die Folge an. Ohne diesen Satz ist ein Korbbogen R 10 · R 16 · R 10
+  verloren: Ein Stück über der Naht zweier Bögen passt auf einen
+  Zwischenkreis (R 15,1) und täuscht eine steigende Folge vor. **Beide
+  Richtungen zu verlangen ist zu streng:** Dann verlieren 20 von 72
+  verrauschten Korbbögen echte Bögen. Der Preis der einen Richtung ist
+  bekannt: Mit den zehn Mikrometern von `_lies_on_the_cylinder` liegt ein
+  kurzes Stück auch auf einem Kreis mit vier Prozent anderem Radius, und so
+  bestätigen sich am Scheitel einer verrauschten Ellipse und an zwei
+  Buchstabenstücken R 11,2 Splinestücke gegenseitig — sie bleiben stehen.
+* **Zwei Wechsel in dieselbe Richtung sind ein Verlauf.** Unbestätigte
+  Kreise, die über Splitter und formlose Stücke aufeinanderfolgen und
+  tangential ineinander übergehen, mit einem Radiusschritt unter
+  `CURVATURE_JUMP`: Hat einer einen engeren und einen weiteren Nachbarn,
+  wandert der Umriss. Eine Flaschentasche mit ihrer engeren Einlaufrundung
+  hat einen Wechsel, ein Korbbogen zwei gegeneinander. **Eine Untergrenze für
+  den Schritt trennt nicht:** Mit `PRISM_ARC_JUMP` (5 %) blieb der
+  Rucksackhalter gleich, aber am Screen-Cover kamen 13 Buchstabenstücke
+  zurück — Buchstaben wandern oft in Schritten von einem bis drei Prozent.
+
+**Im wandernden Fleck bleiben die bestätigten und gezeichneten Kreise
+stehen, der Rest fällt.** Am Schmierwerkzeug von Elegoo liegen im selben
+Fleck wie die Splinestücke ein Halbrund R 4,2 aus dreizehn Stücken und zwei
+Bögen R 6,75 über 81 Grad; mit allem, was nicht gezeichnet war, fielen sie
+mit. Am Screen-Cover bleibt so der exakte R 22,975 aus dem Schriftzug des
+Originals. **Und zurückgezogen wird nach der Zusammenlegung, nur was ganz
+auf vorgemerkten Dreiecken liegt** (`_off_the_outline`): Vorher verlor der
+Eiffelturm an zwei seiner vier Bögen R 24 über 172 Grad ein Bruchstück, das
+im wandernden Nachbarfleck lag.
+
+Welche Bedingung ein konstruierter Fall hält und welche der Korpus: In
+`test_features.py` wird die Regel rot ohne Bestätigung, mit beidseitiger,
+ohne gezeichnete Bögen als bestätigt, ohne das Schonen bestätigter Kreise,
+mit einem Wechsel statt zweien und mit teilweisem Rückzug. Die
+Tangentenprüfung hält der Toilettenpapierhalter (ohne sie fallen dort sechs
+Verrundungen R 20,8 bis R 29,9). Die Grenze `CURVATURE_JUMP` für einen
+Schritt und das Durchlaufen formloser Stücke hält kein eigener Fall; sie
+stehen aus der Sache — ein Sprung über die Hälfte ist eine Kante der
+Krümmung und keine Wanderung, und formlose Stücke liegen zwischen den
+Kreisen einer verrauschten Ellipse. Wer eine der Bedingungen anfasst, fährt beide Seiten: die
+Schriftzüge und Streben gegen Flaschentaschen, Besenhalter, Rack,
+Pegboards, Bohrerhalter, Schmierwerkzeug, Toilettenpapierhalter und die
+Korbbögen aus `test_features.py`.
+
 ## Ein Hohlraum ohne Weg nach außen ist keine Bohrung (10.09.2026)
 
 Dasselbe Modell trug acht eigene geschlossene Schalen mit **negativem**
