@@ -74,6 +74,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht](#rm-248) | Geometrie, Erkennung und Druckvorbereitung | Fächer vom Randmittelpunkt lässt beim Versetzen 3,6 bis 5,4 mm³ Mulde — den Deckel als Fortsetzung der umgebenden Fläche bauen, an beiden Kernen |
 | [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | `for_part` setzt ihn ohne Klick bei kleiner Standfläche oder schlankem Teil; Robert 26.09.2026: ohne „Vorschläge übernehmen" gehen die Standardeinstellungen hinaus — bleibt die Automatik, oder wird sie ein Vorschlag je Teil? |
+| [RM-252 — Der Korpuslauf der Übergabe steht nach vier Modellen](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Werkzeug in `.claude/.state/uebergabe-korpus-2026-09-26/`; offen: CuraEngine bricht am Eiffelturm ab („mehr Ausgabe, als gesammelt wird"), pista+biglie liegt bei allen vier Slicern neben dem Bett, dann die übrigen 24 Modelle |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
@@ -2003,6 +2004,35 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   die Automatik je Teil (sie verhindert, dass kleine Teile abreißen, und ist
   im Prüfbericht benannt), oder wird sie ein Vorschlag je Teil im Druckdialog?
   Die neue Regel für viele kleine Füße ist bewusst nur ein Vorschlag.
+
+<a id="rm-252"></a>
+
+- [ ] **RM-252 — Der Korpuslauf der Übergabe steht nach vier Modellen.**
+  Begonnen am 26.09.2026 auf Roberts Frage, ob Vorschläge und Übergabe an
+  alle unterstützten Slicer bei jedem Modell klappen. Das Werkzeug liegt in
+  `.claude/.state/uebergabe-korpus-2026-09-26/`: `alle.py` fährt 28 Modelle,
+  je Modell ein Prozess; `lauf.py` geht den Weg von Import, Druckdialog und
+  Übergabe an ElegooSlicer (Centauri Carbon 2), OrcaSlicer (Bambu A1),
+  PrusaSlicer (MK4S) und CuraEngine (Ender 3 V3), je mit Standard,
+  übernommenen Vorschlägen und ohne Kanalsperre; `auswertung.py` fasst
+  zusammen. Auf Roberts Wort nach vier Modellen und 44 Läufen angehalten.
+  - **CuraEngine am Eiffelturm:** „Der Slicer hat mehr Ausgabe erzeugt, als
+    gesammelt wird" — mit Standard und mit Vorschlägen keine Druckdatei.
+  - **pista+biglie.3mf:** Alle vier Slicer sehen Teile neben dem Bett;
+    ElegooSlicer und OrcaSlicer ordnen selbst an, PrusaSlicer lehnt ab
+    („außerhalb seines Bauraums"). Zu klären, ob der Lauf oder die Übergabe
+    die Belegung verliert.
+  - Die Orca-Zeilen der Schüssel liefen noch mit einem Leser ohne Bambus
+    `; FEATURE:` — neu fahren, bevor die −15,7 % Modellbahn mit Sperre
+    etwas heißen.
+  - Sonst ließ die Kanalsperre die Modellbahn an Schüssel, Murmelbahn,
+    Okarina und Eiffelturm in ElegooSlicer, OrcaSlicer und PrusaSlicer
+    unverändert (±0,00 %) und nahm die Stütze im Kanal weg.
+  - Die Cura-Lüfterwarnung stand an jedem Lauf; seit dem 26.09.2026 misst
+    die Übergabe den Lüfterstart in der Druckdatei und meldet nur, was dort
+    steht.
+
+  Nächster Schritt: die zwei Befunde beheben, dann alle 28 Modelle.
 
 ## Bedienung und Darstellung
 
