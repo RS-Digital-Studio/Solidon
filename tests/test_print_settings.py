@@ -328,6 +328,70 @@ def test_a_small_footprint_asks_for_a_brim() -> None:
     assert brim and brim[0].value == "brim"
 
 
+def _standing_on(*feet: float) -> SliceResult:
+    """Ein Körper, dessen erste Schicht aus getrennten Quadraten der
+    genannten Flächen besteht — darüber eine geschlossene Schicht."""
+    contours = tuple(
+        Polygon(
+            outline=(
+                (100.0 * index, 0.0),
+                (100.0 * index + area**0.5, 0.0),
+                (100.0 * index + area**0.5, area**0.5),
+                (100.0 * index, area**0.5),
+            )
+        )
+        for index, area in enumerate(feet)
+    )
+    first = LayerInfo(
+        z=0.1,
+        contours=contours,
+        area=sum(feet),
+        overhang_area=0.0,
+        islands=(),
+        min_width=5.0,
+    )
+    above = replace(
+        first,
+        z=0.3,
+        contours=(Polygon(outline=((0.0, 0.0), (900.0, 0.0), (900.0, 50.0), (0.0, 50.0))),),
+    )
+    return SliceResult(
+        layers=(first, above), support_volume=0.0, first_layer_area=sum(feet), source="internal"
+    )
+
+
+def test_a_part_on_many_small_feet_asks_for_a_brim() -> None:
+    """Die Waschschüssel steht in Drucklage auf zwölf Füßen, zehn davon zu je
+    108 mm², zusammen 1417 mm² (gemessen am Schnitt 0,1 mm über dem Bett).
+    Die Summe liegt über :data:`advise.SMALL_FOOTPRINT`, und doch hält keiner
+    der Füße für sich — Nutzer des Designerprofils melden, dass sich die
+    hintere Ecke hebt."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    bowl = _standing_on(242.8, 198.6, 2.8, *[108.1] * 9)
+    assert bowl.first_layer_area > advise.SMALL_FOOTPRINT
+
+    entries = advise.advise(settings, profile, bowl)
+
+    brim = [entry for entry in entries if entry.path == "adhesion.kind"]
+    assert [entry.value for entry in brim] == ["brim"]
+    assert "Füßen" in str(brim[0].reason)
+
+
+def test_one_foot_that_holds_on_its_own_needs_no_brim() -> None:
+    """Steht einer der Füße auf genug Fläche für ein Teil, trägt er den Rest
+    — und ein einzelner großer Fuß ist schlicht eine Standfläche."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+
+    for result in (
+        _standing_on(advise.SMALL_FOOTPRINT + 1.0, 108.1, 108.1),
+        _standing_on(1417.3),
+    ):
+        entries = advise.advise(settings, profile, result)
+        assert "adhesion.kind" not in _paths(entries)
+
+
 def test_a_tall_slim_part_asks_for_a_brim() -> None:
     settings = print_settings.resolve(profiles.make_profile())
     result = _layers(*[600.0] * 6)

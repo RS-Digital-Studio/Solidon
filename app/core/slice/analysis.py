@@ -2612,7 +2612,7 @@ def total_overhang(
     """
     total = float(sum(layer.overhang_area for layer in result.layers))
     for index, number in without:
-        total -= _piece_area(result.layers[index].overhangs[number])
+        total -= piece_area(result.layers[index].overhangs[number])
     return max(total, 0.0)
 
 
@@ -2666,7 +2666,7 @@ def largest_overhang_patch(
         for number, piece in enumerate(layer.overhangs):
             if (index, number) in without:
                 continue
-            largest = max(largest, _piece_area(piece))
+            largest = max(largest, piece_area(piece))
     return largest
 
 
@@ -2771,7 +2771,7 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
         for number, contour in enumerate(layers[index].overhangs):
             starts.setdefault(index, []).append(len(areas))
             names.append((index, number))
-            areas.append(_piece_area(contour))
+            areas.append(piece_area(contour))
             pieces.append(ShapelyPolygon(contour.outline, contour.holes))
     if not starts:
         return ModelSupport()
@@ -3098,8 +3098,9 @@ def _total_area(parts: list[ShapelyPolygon]) -> float:
     return float(shapely.area(np.asarray(parts, dtype=object)).sum())
 
 
-def _piece_area(piece: Polygon) -> float:
-    """Die Fläche eines Überhangstücks, ohne GEOS (:func:`largest_overhang_patch`)."""
+def piece_area(piece: Polygon) -> float:
+    """Die Fläche einer Kontur samt Löchern, ohne GEOS — für viele kleine
+    Stücke schneller als der Umweg über ein Polygon (:func:`units.ring_area`)."""
     return ring_area(piece.outline) - sum(ring_area(hole) for hole in piece.holes)
 
 

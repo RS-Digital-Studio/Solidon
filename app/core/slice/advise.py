@@ -34,6 +34,7 @@ from app.core.slice.analysis import (
     largest_overhang_patch,
     model_support,
     narrowest_measured,
+    piece_area,
     tapered_layers,
     thinnest_spot,
     total_overhang,
@@ -790,6 +791,32 @@ def _from_geometry(
             )
         )
 
+    # **Und auf vielen kleinen Füßen.** Die Frage oben liest die Summe: Die
+    # Waschschüssel steht auf zwölf Füßen zu je 108 mm², zusammen 1417 mm²,
+    # und bekam keinen Brim — Nutzer des Designerprofils melden, dass sich die
+    # hintere Ecke hebt. Jeder Fuß trägt seinen Teil des Hebels allein, und
+    # keiner hat die Fläche, die ein Teil für sich braucht. Im Korpus
+    # (447 Körper, 26.09.2026) trifft das außer der Schüssel sechs: den
+    # Eiffelturm auf vier Beinen, eine Katze auf drei Pfoten, einen Schaber
+    # auf zwei Auflagen.
+    if (
+        settings.adhesion.kind == "skirt"
+        and result.first_layer_area >= SMALL_FOOTPRINT
+        and _on_small_feet(result)
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="adhesion.kind",
+                value="brim",
+                reason=_(
+                    "Das Teil steht auf kleinen Füßen, und keiner hält allein. "
+                    "Ein Brim gibt jedem Fuß Halt."
+                ),
+                severity="warning",
+            )
+        )
+
     if bounds is not None and _slender(bounds) and settings.adhesion.kind == "skirt":
         advice.append(
             _advice(
@@ -1156,6 +1183,15 @@ def for_part(settings: PrintSettings, bounds: BoundingBox, footprint: float) -> 
             severity="warning",
         )
     ]
+
+
+def _on_small_feet(result: SliceResult) -> bool:
+    """Steht der Körper auf mehreren Inseln, von denen keine für sich die
+    Standfläche eines Teils hat (:data:`SMALL_FOOTPRINT`)?"""
+    if not result.layers:
+        return False
+    feet = [piece_area(contour) for contour in result.layers[0].contours]
+    return len(feet) >= 2 and max(feet) < SMALL_FOOTPRINT
 
 
 def _slender(bounds: BoundingBox) -> bool:

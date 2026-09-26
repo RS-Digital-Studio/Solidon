@@ -207,6 +207,21 @@ schmalen Teil ließ 32 m Stütze darin; ohne Grenze reichte sie an einem Tunnel
 **Vorschlag, nicht Automatik:** Was ohne „Vorschläge übernehmen" zum Slicer
 geht, sind die Standardeinstellungen (Entscheidung Robert, 26.09.2026).
 
+**Die kleine Standfläche wird auch je Fuß gefragt** (26.09.2026). Die
+Brim-Regel las die Summe, und die Waschschüssel steht in Drucklage auf zwölf
+Füßen zu je rund 108 mm², zusammen 1417 mm² — kein Vorschlag, und Nutzer des
+Designerprofils melden eine hebende Ecke. Steht ein Körper auf mehreren
+Inseln und hat keine davon `SMALL_FOOTPRINT`, heißt es jetzt Brim
+(`advise._on_small_feet`). Dieselbe Zahl, keine neue: Keiner der Füße hält,
+was ein Teil für sich braucht. Im Korpus (447 Körper) trifft sie außer der
+Schüssel sechs — Eiffelturm auf vier Beinen, Katze auf drei Pfoten, Schaber
+auf zwei Auflagen; die Summenregel trifft 202. Orcas `auto_brim` fragt den
+Hüllquader und legte an der Schüssel um einen Fuß einen Rand. **Nur als
+Vorschlag:** `for_part` setzt beim Export weiterhin nur die Summenregel und
+den schlanken Körper je Teil. Und wo die Stütze auf dem Bett bis an die Füße
+reicht, legt der Slicer den Rand nur, wo Platz ist — an der Schüssel mit
+Gitter vom Bett 236 mm.
+
 **Mehrere Körper werden gemeinsam beurteilt.** `advise.combine` berücksichtigt
 auch Körper, deren Einstellungen bereits passen. Ein einzelner Würfel darf
 deshalb die Stützen eines anderen Körpers nicht abschalten. Filamentwerte
