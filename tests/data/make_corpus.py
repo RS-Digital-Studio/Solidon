@@ -490,6 +490,22 @@ def broken_selfint() -> None:
     write(trimesh.util.concatenate([first, second]), "broken_selfint.stl")
 
 
+def crossing_and_apart() -> None:
+    """Zwei Blöcke, die sich durchdringen, und ein dritter daneben (KUNDE-13).
+
+    Drei Teile beim Einlesen, zwei nach *Überschneidungen auflösen*. Der Satz
+    des Ladeschritts nennt die Zahl, die er gemessen hat — am Endstand mit
+    zwei Teilen ist er falsch, und der Körper ist trotzdem nicht aus einem
+    Stück. Vereinigt: 2 · 8000 − 12³ = 14 272 mm³, dazu 8000 für den dritten.
+    """
+    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second.apply_translation((8.0, 8.0, 8.0))
+    apart = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    apart.apply_translation((60.0, 0.0, 0.0))
+    write(trimesh.util.concatenate([first, second, apart]), "crossing_and_apart.stl")
+
+
 def colored_3mf() -> None:
     """Zwei Farben in einer 3MF, je Dreieck (§34, §20)."""
     import sys
@@ -770,6 +786,7 @@ if __name__ == "__main__":
     generated_figure()
     clean_figure()
     broken_selfint()
+    crossing_and_apart()
     colored_3mf()
     island_tower()
     oversized()

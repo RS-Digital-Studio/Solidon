@@ -1813,6 +1813,59 @@ def test_a_cavity_or_a_part_beside_is_no_part_inside(case: str) -> None:
     assert "repair.part_inside" not in {entry.code for entry in result.findings}
 
 
+def _block_across_a_bore(*, inverted: bool) -> tuple[MeshData, int]:
+    """Die Lochplatte mit einem Klotz quer durch die Wand ihrer ersten Bohrung.
+
+    Der Klotz 8 × 8 × 4 steht mittig auf der Bohrung Ø 5,2: Seine Ecken liegen
+    5,66 mm von der Achse im Material, seine Mitte in der Bohrung, und seine
+    Hülle liegt ganz in der Hülle der Platte. Zurück kommen das Netz und die
+    Zahl der Plattendreiecke — dahinter beginnt der Klotz.
+    """
+    from app.core.perceive.features import detect
+
+    plate, _welded = merge_vertices(raw("plate_holes.stl"))
+    bore = min(
+        (feature for feature in detect(plate).values() if feature.kind == "hole"),
+        key=lambda feature: tuple(feature.params["centre"]),
+    )
+    block = trimesh.creation.box(extents=(8.0, 8.0, 4.0))
+    block.apply_translation(bore.params["centre"])
+    if inverted:
+        block.invert()
+    joined = trimesh.util.concatenate([plate.raw, block])
+    return MeshData.of(joined), plate.triangle_count
+
+
+@pytest.mark.parametrize("inverted", [False, True], ids=["right", "inverted"])
+def test_a_part_through_the_wall_of_another_is_not_inside_it(inverted: bool) -> None:
+    """Ein Teil, das durch die Wand eines anderen läuft, liegt nicht „ganz darin".
+
+    Gefragt wurde an einer einzigen Ecke: Lag sie im anderen Teil und die
+    Hülle in dessen Hülle, hieß das Teil „ganz in einem anderen", und der
+    Bericht sagte, Slicer druckten es hohl oder voll. Am Bohrmaschinenhalter
+    aus ``F:\\3D Dateien`` waren das fünf Teile, am Laptopständer zwei, an der
+    Bildschirmabdeckung eines — alle acht schnitten die Wand ihres
+    „Behälters" (Durchsicht 0.5.1). Solche Teile stecken ineinander; das sagt
+    der andere Satz, mit *Überschneidungen auflösen*. Die Hohlraumerkennung
+    fragt dafür seit je zuerst, ob sich die Schalen schneiden
+    (``perceive.features._shells_do_not_cross``).
+
+    Und ein verkehrt gewickeltes Teil in dieser Lage ist frei, nicht
+    umschlossen: Es wird nach außen gedreht wie jedes freie.
+    """
+    from app.core.geom.mesh import signed_volume
+
+    body, plate_faces = _block_across_a_bore(inverted=inverted)
+
+    result = repair(body, self_intersections=False, inspect_intersections=True)
+
+    codes = {entry.code for entry in result.findings}
+    assert "repair.part_inside" not in codes
+    assert "repair.self_intersections_detected" in codes, "gesagt wird die Überschneidung"
+    block = result.mesh.raw.submesh([np.arange(plate_faces, result.mesh.triangle_count)])[0]
+    assert signed_volume(block) == pytest.approx(8.0 * 8.0 * 4.0, rel=1e-9), "nach außen"
+
+
 @pytest.mark.parametrize("far", [0.0, 1e4, 1e5])
 def test_a_skin_without_thickness_goes_far_from_the_origin_too(far: float) -> None:
     """Eine Haut ohne Dicke fällt auch zehn Meter vom Ursprung entfernt.

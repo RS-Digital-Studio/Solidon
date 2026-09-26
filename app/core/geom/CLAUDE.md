@@ -589,7 +589,13 @@ den Abbruch je Ring, und der Import reicht ihn durch (`normalise(cancelled=)`).
 ausschneidet): Eine freie Schale muss positiv sein; ist sie negativ, dreht sie
 sich samt allem, was belegt in ihr liegt, und ein richtiger Hohlkörper
 daneben bleibt, wie er ist. Ein einzelner Körper braucht dafür nur sein
-Vorzeichen. Eine positive Schale **im Material** einer anderen — die Summe der
+Vorzeichen. **Umschlossen heißt ganz darin** (`_Shells.inside`): Die Schalen
+schneiden sich nicht (Zertifikat `perceive.features._shells_do_not_cross`,
+sonst ein Paar quer durch die Wand über `_first_crossing_between`), und eine
+Ecke liegt innen — dieselbe Frage wie die Hohlraumerkennung. Ein Teil quer
+durch die Wand eines anderen ist frei: Verkehrt wird es gedreht, und
+gemeldet wird es als ineinandersteckend, nicht als Teil im Teil. Eine
+positive Schale **im Material** einer anderen — die Summe der
 Vorzeichen aller umschließenden Schalen ist mindestens eins — wird nicht
 geraten, sondern gemeldet (`parts_inside_parts`, `repair.part_inside` mit Ort
 und *In Einzelteile zerlegen*, aus Import und Reparatur derselbe Befund); eine

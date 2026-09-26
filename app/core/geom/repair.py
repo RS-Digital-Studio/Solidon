@@ -1026,15 +1026,15 @@ class _Shells:
     behält danach Dreiecke und Hüllquader (Befund B19 der Durchsicht
     24.09.2026): Vorher kopierte jede Innenschale die ganze Außenschale neu,
     und 300 Hohlräume in 331 280 Dreiecken kosteten 7,2 s. Ob eine Schale in
-    einer anderen liegt, fragt derselbe Strahl wie die Hohlraumerkennung
-    (``perceive.features._point_inside_shell``). Die Hüllquader entstehen je
-    Dreieck und werden je Schale zusammengefasst, ohne Kopie der Ecken
-    (Review R20).
+    einer anderen liegt, fragt dasselbe wie die Hohlraumerkennung
+    (:meth:`inside`). Die Hüllquader entstehen je Dreieck und werden je Schale
+    zusammengefasst, ohne Kopie der Ecken (Review R20).
     """
 
     def __init__(self, body: trimesh.Trimesh) -> None:
         self.components, labels, self.volumes = _labelled_shells(body)
         count = len(self.components)
+        self.faces = np.asarray(body.faces, dtype=np.int64)
         self.triangles = np.asarray(body.triangles, dtype=np.float64)
         self.low = np.full((count, 3), np.inf)
         self.high = np.full((count, 3), -np.inf)
@@ -1042,6 +1042,8 @@ class _Shells:
             np.minimum.at(self.low, labels, self.triangles.min(axis=1))
             np.maximum.at(self.high, labels, self.triangles.max(axis=1))
         self._outer: dict[int, tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]] = {}
+        self._inner: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        self._per_triangle: tuple[np.ndarray, np.ndarray] | None = None
 
     def containers_of(
         self, inners: Sequence[int]
@@ -1075,15 +1077,74 @@ class _Shells:
                 yield inner, found
 
     def inside(self, inner: int, outer: int) -> bool | None:
-        """Liegt ``inner`` in ``outer``? ``None``, wenn der Strahl es nicht entscheidet."""
-        from app.core.perceive.features import _point_inside_shell, _triangle_bounds
+        """Liegt ``inner`` ganz in ``outer``? ``False`` heißt außen oder quer durch
+        dessen Wand, ``None``, wenn es sich nicht entscheiden lässt.
+
+        **Ganz darin heißt: Die Schalen schneiden sich nicht, und eine Ecke
+        liegt innen** — dieselbe Frage wie die Hohlraumerkennung
+        (``perceive.features._shells_inside_the_material``). Hier stand allein
+        der Strahl an der ersten Ecke (Durchsicht 0.5.1): Ein Teil, das durch
+        die Wand eines anderen läuft und dessen erste Ecke im Material liegt,
+        hieß „ganz in einem anderen" — am Bohrmaschinenhalter, am
+        Laptopständer und an der Bildschirmabdeckung aus ``F:\\3D Dateien``
+        acht Teile, alle quer durch die Wand ihres „Behälters". Und ein
+        verkehrt gewickeltes Teil in dieser Lage galt als umschlossen und blieb
+        verkehrt. Gefragt wird zuerst der Strahl — sagt er außen, ist nichts
+        weiter zu prüfen —, danach die Wand: Das Zertifikat
+        (``_shells_do_not_cross``) spart die genaue Suche, wo sich die Schalen
+        nicht nahekommen; sonst sucht :func:`_first_crossing_between` ein Paar
+        quer durch die Wand, unter den Dreiecken um das innere Teil.
+        """
+        from app.core.perceive.features import (
+            _point_inside_shell,
+            _shells_do_not_cross,
+            _triangle_bounds,
+        )
 
         if outer not in self._outer:
             shell = self.triangles[self.components[outer]]
             self._outer[outer] = (shell, _triangle_bounds(shell))
         shell, bounds = self._outer[outer]
         point = self.triangles[self.components[inner][0], 0]
-        return _point_inside_shell(point, shell, bounds)
+        answer = _point_inside_shell(point, shell, bounds)
+        if answer is False:
+            # Außen oder quer durch die Wand — ganz darin liegt es jedenfalls nicht.
+            return False
+        if inner not in self._inner:
+            self._inner[inner] = _triangle_bounds(self.triangles[self.components[inner]])
+        if not _shells_do_not_cross(self._inner[inner], bounds):
+            crossing = self._crosses(inner, outer)
+            if crossing is None:
+                return None
+            if crossing:
+                return False
+        return answer
+
+    def _crosses(self, inner: int, outer: int) -> bool | None:
+        """Ob ``inner`` quer durch die Wand von ``outer`` läuft — ``None`` über dem Budget.
+
+        Gefragt werden nur die Dreiecke von ``outer`` im Hüllquader von
+        ``inner``; das Budget ist das der Frage beim Einlesen
+        (:data:`CROSSING_PARTS_PAIRS`).
+        """
+        if self._per_triangle is None:
+            self._per_triangle = (self.triangles.min(axis=1), self.triangles.max(axis=1))
+        low, high = self._per_triangle
+        one = np.asarray(self.components[inner], dtype=np.int64)
+        piece = np.asarray(self.components[outer], dtype=np.int64)
+        box_low = self.low[inner] - EPS_GEOM
+        box_high = self.high[inner] + EPS_GEOM
+        near = piece[
+            np.all(low[piece] <= box_high, axis=1) & np.all(high[piece] >= box_low, axis=1)
+        ]
+        if not len(near):
+            return False
+        found, spent = _first_crossing_between(
+            self.triangles, self.faces, low, high, one, near, CROSSING_PARTS_PAIRS
+        )
+        if found is not None:
+            return True
+        return None if spent >= CROSSING_PARTS_PAIRS else False
 
 
 def turn_shells_outward(body: trimesh.Trimesh) -> bool:
