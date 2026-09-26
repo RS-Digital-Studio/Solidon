@@ -14787,7 +14787,18 @@ class MainWindow(QMainWindow):
             if feature_id != self._feature_shown:
                 self.feature_dock.forget_dismissal()
             self._feature_shown = feature_id
-        self.viewport.select_feature(feature_id)
+        # **Was die Zeile bündelt, zeigt die Ansicht gleich ganz** (RM-232).
+        # Eine Bohrung mit ihrer Senkung meldet der Baum als ein Merkmal und in
+        # derselben Runde als zwei (``featuresSelected``); die Ansicht baute
+        # ihre Markierung erst für die Bohrung und gleich danach für beide —
+        # am Wabenhalter je Klick ein Aufbau zu viel. Der Vorschlag am vorigen
+        # Merkmal fällt dabei wie in ``select_feature``.
+        bundle = self.object_tree.selected_features() if feature_id is not None else ()
+        if len(bundle) > 1 and feature_id in {member for _owner, member in bundle}:
+            self.viewport.drop_move_proposal()
+            self.viewport.select_feature_refs(bundle)
+        else:
+            self.viewport.select_feature(feature_id)
         # Eine Vorschau, die zum vorigen Merkmal gehört, hat hier nichts mehr
         # zu suchen — sie zeigte eine Änderung an etwas, das nicht mehr gewählt
         # ist.

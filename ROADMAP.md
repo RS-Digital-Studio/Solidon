@@ -2659,6 +2659,17 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `scenario_zeitleiste.py`, und nur bei ruhiger Maschine — unter Fremdlast
   schwankt schon der synchrone Teil zwischen 58 und 97 ms.
 
+  **Weitergebaut am 26.09.2026.** Eine Zeile, die Bohrung und Senkung
+  bündelt, meldet der Baum in derselben Runde als ein Merkmal und als zwei;
+  die Ansicht baute ihre Markierung erst für die Bohrung und gleich danach für
+  beide. `_on_feature_selected` zeigt das Bündel jetzt gleich ganz
+  (`select_feature_refs`), ein Aufbau je Klick weniger. Für Messungen unter
+  Fremdlast liest `ab_cpu.sh` mit `scenario_cpuzeit.py` die Takte des
+  Hauptfadens (`QueryThreadCycleTime`) statt der Wandzeit. **Offen bleibt die
+  Abnahme am Wabenhalter unter 100 ms**, am echten Fenster mit `ab.sh` zu
+  belegen, sobald die Maschine ruhig ist; am 26.09.2026 teilten sie sich sechs
+  Sitzungen.
+
 <a id="rm-233"></a>
 
 - [ ] **RM-233 — Fünf Kleinigkeiten aus den Durchsichten, am Code bestätigt.**
