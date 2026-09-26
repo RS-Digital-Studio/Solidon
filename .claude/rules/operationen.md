@@ -1024,7 +1024,8 @@ Am exakten Kern gilt dieselbe Suche gegen `features_of`; ein `any(kind ==
 "slot")` schwieg, sobald ein zweites Langloch im Körper stand.
 
 **Und dieselbe Frage stellt die Auswertung jedem erklärten Merkmal**
-(`scene.evaluate._near_its_declaration`): Was eine Operation als `generated`
+(`perceive.matching.near_its_declaration`, über `declared_partners` — am Netz
+in der Auswertung, am exakten Körper im Baustein): Was eine Operation als `generated`
 ausgibt, bekommt einen erkannten Partner nur, wenn der quer zur Achse
 innerhalb der Breite des erklärten liegt und entlang der Achse innerhalb
 seiner erklärten Tiefe. `_sits_at` bleibt die strengere Prüfung der

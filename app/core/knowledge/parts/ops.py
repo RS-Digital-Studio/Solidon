@@ -716,12 +716,19 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     Ohne ``at_features`` bleibt alles, wie es war: :func:`_insert_at` ist der
     Weg, den es seit je gibt, und die Schleife darüber ist bei einem Ziel eine
     Wiederholung mit einem Durchgang.
+
+    Ein exaktes Ergebnis liest seine Merkmale danach **einmal** aus der
+    Topologie (:func:`_read_exactly`) — nach dem letzten Ziel und nicht je
+    Durchgang, denn jedes Ziel wird am Merkmal des Eingangs aufgelöst.
     """
     targets = _chosen_features(ctx.params)
     if not targets:
-        return _insert_at(ctx, spec)
+        return _read_exactly(ctx, _insert_at(ctx, spec))
     if len(targets) == 1:
-        return _insert_at(dataclasses.replace(ctx, params=_aimed_at(ctx.params, targets[0])), spec)
+        return _read_exactly(
+            ctx,
+            _insert_at(dataclasses.replace(ctx, params=_aimed_at(ctx.params, targets[0])), spec),
+        )
 
     source = ctx.inputs[0]
     findings: list[Finding] = []
@@ -742,7 +749,69 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
             if finding not in findings:
                 findings.append(finding)
         solver = deepest((solver, outcome.solver))
-    return OpResult(outputs=[source], solver=solver, findings=findings)
+    return _read_exactly(ctx, OpResult(outputs=[source], solver=solver, findings=findings))
+
+
+def _read_exactly(ctx: OpContext, outcome: OpResult) -> OpResult:
+    """Die Merkmale eines exakten Ergebnisses, aus seiner Topologie gelesen.
+
+    **Am Netz liest die Auswertung neu, am exakten Körper niemand sonst.** Ein
+    Solid hat keine Dreiecke, an denen die Erkennung messen könnte; seine
+    Merkmale liest ``brep.features.features_of`` in der Operation, die ihn
+    baut (``scene.evaluate._with_features``). Der Baustein gab stattdessen die
+    Merkmale seines Trägers durch — ohne Dreiecke, denn deren Nummern gehören
+    dem Netz vor dem Schnitt (:func:`_merged_features`), und mit ihren alten
+    Maßen. Nach einer Magnettasche im Quader des Kundenwegs stand die
+    Oberseite mit 1 179 statt 1 129 mm² „aus der Konstruktion“ da, kein
+    Merkmal des Körpers ließ sich im Bild treffen, und Boden und Haltelippe
+    der Tasche fehlten (Durchsicht 0.5.1, ERKENNUNG-10). Der Nachweis zu P2.7
+    hatte das Lesen einmal verworfen, weil es die Namen neu vergab und das
+    zweite Ziel einer Mehrfachwahl dann die erste Bohrung traf (B3); gelesen
+    wird deshalb erst nach dem letzten Ziel.
+
+    Wie in jeder exakten Merkmalshandlung (``geom.prepare_ops._exact_features_after``)
+    geht der Name über die eindeutige Zuordnung weiter: Die erklärten Merkmale
+    — die des Bausteins und die früher eingesetzter — suchen ihren Partner an
+    ihrer Stelle und nehmen dessen Oberfläche auf
+    (``matching.declared_partners``, ``on_their_partners``, derselbe Weg wie
+    am Netz), die übrigen Merkmale des Trägers bekommen ihre Nachfolger über
+    ``match`` und ``apply_mapping``. Was neu dazukommt — der Boden einer
+    Tasche —, bekommt einen freien Namen und in der Auswertung den Schritt als
+    Erzeuger.
+    """
+    if not outcome.outputs or outcome.outputs[0].kind != "brep":
+        return outcome
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+    from app.core.perceive.matching import (
+        apply_mapping,
+        declared_partners,
+        match,
+        on_their_partners,
+    )
+
+    body = outcome.outputs[0]
+    solid = body.mesh
+    if not isinstance(solid, Solid):
+        return outcome
+    watch = ctx.cancelled.raise_if_cancelled
+    detected = features_of(solid, cancelled=ctx.cancelled)
+    bounds = solid.bounds
+    declared = {
+        name: entry for name, entry in body.features.items() if entry.provenance == "generated"
+    }
+    carried = {name: entry for name, entry in body.features.items() if name not in declared}
+    seen = declared_partners(
+        declared, detected, bounds.centre, bounds.diagonal, check_cancelled=watch
+    )
+    partners = set(seen.mapping.values())
+    remaining = {name: entry for name, entry in detected.items() if name not in partners}
+    matched = match(carried, remaining, bounds.centre, bounds.diagonal, check_cancelled=watch)
+    features = {
+        **apply_mapping(remaining, matched, previous=carried, reserved=set(declared)),
+        **on_their_partners(declared, detected, seen),
+    }
+    return dataclasses.replace(outcome, outputs=[dataclasses.replace(body, features=features)])
 
 
 def _chosen_features(params: Any) -> tuple[str, ...]:
@@ -1160,8 +1229,9 @@ def _insert_at_exact(
     statt einer Verkettung, Befund B9 des Berichts). Das Einsenken um
     ``BOOLEAN_OVERLAP`` bleibt: Es schadet exakt nicht und hält beide Wege
     auf demselben Maß (B4). Die Merkmale sind Provenienz und reisen wie am
-    Netz mit der Matrix; die Merkmale des Trägers führt die Auswertung nach
-    ihrem Zuordnungsvertrag fort (B3). Trägeraufbau und Sitzvorbereitung
+    Netz mit der Matrix; die Merkmale des Trägers liest :func:`insert` nach
+    dem letzten Ziel aus der Topologie des Ergebnisses (:func:`_read_exactly`,
+    B3). Trägeraufbau und Sitzvorbereitung
     entstehen im selben Kern; was ihre Formen melden, wird Befund.
     """
     from app.core.brep import edit

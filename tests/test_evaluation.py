@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import math
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -2859,6 +2860,209 @@ def _many_features(count: int) -> dict[str, object]:
     }
 
 
+def test_a_built_face_measures_what_is_left_of_it_after_a_bore(profile: Profile) -> None:
+    """Eine gebaute Fläche nennt nach einer Bohrung ihre heutige Größe (RM-216).
+
+    ``create_box`` benennt seine Deckfläche selbst (``face_top``), und die
+    Bohrung danach gibt sie weiter aus. Die Zuordnung gab ihr die Dreiecke
+    des erkannten Partners, aber nicht dessen Maße: Steckbrief, Agent und
+    Merkmalfenster nannten 2 400 mm² für eine Fläche, der das Loch fehlt —
+    die frische Erkennung misst 2 349,878. Was die Erzeugung selbst als
+    Messung ausweist (Quelle ``facets``/``fit``), folgt dem Partner; was aus
+    einem Parameter kommt, bleibt.
+    """
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect, forget_cache
+    from app.core.scene.project import new_project
+
+    forget_cache()
+    document = new_project("centauri-carbon-2", "petg").document
+    History(document).apply(
+        "Schritte",
+        [
+            OperationDraft(op="create_box", params={"width": 60.0, "depth": 40.0, "height": 10.0}),
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 8.0, "x": -10.0, "y": 5.0, "z": 10.0, "compensate": False},
+            ),
+        ],
+    )
+    result = evaluate(document, profile, cache=ResultCache())
+    body = result.scene.objects["obj_1"]
+    top = body.features["face_top"]
+    assert top.provenance == "generated", "der Name der Erzeugung bleibt"
+    assert isinstance(body.mesh, MeshData)
+    fresh = next(
+        feature
+        for feature in detect(body.mesh).values()
+        if feature.kind == "face" and feature.params["normal"][2] > 0.99
+    )
+    assert top.params["area"] == pytest.approx(fresh.params["area"], rel=1e-9)
+    assert top.params["area"] == pytest.approx(60.0 * 40.0 - math.pi * 4.0 * 4.0, rel=0.01)
+    assert top.params["centre"] == pytest.approx(fresh.params["centre"], abs=1e-9)
+    assert tuple(top.params["normal"]) == (0.0, 0.0, 1.0), "die Normale kommt aus dem Parameter"
+    assert top.measure_sources["area"] == "facets"
+
+
+def test_a_face_that_a_bore_divides_is_not_reported_lost(profile: Profile) -> None:
+    """Eine Bohrung über die Kante teilt die Seite, die sie anschneidet — ein Verlust ist das nicht.
+
+    Quader 20 × 20 × 10, Bohrung Ø 6 genau auf der rechten Kante: Die rechte
+    Seite steht danach als zwei Flächen in derselben Ebene da. Der Bericht
+    sagte dazu „Ein Formdetail ist nach diesem Schritt nicht mehr automatisch
+    wiederzuerkennen“ (`perceive.orphaned` für `face_6`, Befund texte der
+    Durchsicht 0.5.1, RM-217) — über einem Schritt, der genau das tun sollte.
+    """
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.project import new_project
+
+    forget_cache()
+    document = new_project("centauri-carbon-2", "petg").document
+    History(document).apply(
+        "Schritte",
+        [
+            OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 10.0}),
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "axis": "z", "x": 10.0, "y": 0.0, "z": 10.0},
+            ),
+        ],
+    )
+    result = evaluate(document, profile, cache=ResultCache())
+
+    assert result.complete
+    step = document.ops[-1].id
+    codes = [finding.code for finding in result.scene.report.findings if finding.op_id == step]
+    assert "perceive.orphaned" not in codes, codes
+    right = [
+        feature
+        for feature in result.scene.objects["obj_1"].features.values()
+        if feature.kind == "face" and feature.params["normal"][0] > 0.99
+    ]
+    assert len(right) == 2, "die rechte Seite steht in zwei Stücken da"
+
+
+def test_a_face_that_a_split_divides_is_not_reported_lost_in_either_half(
+    profile: Profile,
+) -> None:
+    """*Teilen* schneidet jede Fläche, durch die die Ebene geht — auch für die zweite Hälfte.
+
+    Eine Fläche, die die Ebene quert, reist mit der Hälfte, auf der ihre Mitte
+    liegt (``prepare_ops._features_after_split``). Ob sie dort nur geteilt
+    ist, misst die Auswertung an ihren Dreiecken im Eingangsnetz — und das
+    bekam nur die **erste** Ausgabe: Die zweite hatte keinen Eingang „an
+    derselben Stelle“, und Deck-, Boden- und Seitenflächen standen dort als
+    „Ein Formdetail ist nach diesem Schritt nicht mehr automatisch
+    wiederzuerkennen“ (RM-217, zweiter Punkt; am Besenhalter drei Flächen,
+    Durchsicht 0.5.1, Sonde p64).
+    """
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.project import new_project
+
+    forget_cache()
+    document = new_project("centauri-carbon-2", "petg").document
+    History(document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 10.0})],
+    )
+    box = evaluate(document, profile, cache=ResultCache()).scene.objects["obj_1"]
+    # Die Ebene drei Millimeter vor der Mitte: Jede querende Fläche reist mit
+    # der zweiten Hälfte.
+    position = float(box.mesh.bounds.centre[0]) - 3.0
+    History(document).apply(
+        "Teilen",
+        [
+            OperationDraft(
+                op="split_pinned",
+                inputs=("obj_1",),
+                params={"axis": "x", "position": position, "pins": 0},
+            )
+        ],
+    )
+    result = evaluate(document, profile, cache=ResultCache())
+
+    assert result.complete
+    step = document.ops[-1].id
+    lost = [
+        finding.values.get("feature")
+        for finding in result.scene.report.findings
+        if finding.op_id == step and finding.code == "perceive.orphaned"
+    ]
+    assert not lost, lost
+    halves = [result.scene.objects[name] for name in document.ops[-1].outputs]
+    # Jede Hälfte ist ein Quader mit sechs erkannten Flächen; die Stücke der
+    # geteilten Flächen stehen darunter, in beiden Hälften.
+    faces = [
+        sorted(
+            name
+            for name, feature in half.features.items()
+            if feature.kind == "face" and feature.provenance == "detected"
+        )
+        for half in halves
+    ]
+    assert all(len(names) == 6 for names in faces), faces
+
+
+@pytest.mark.parametrize(
+    ("answer", "gone"),
+    [
+        ("Nur das gewählte Merkmal", {"cone_1"}),
+        ("Den ganzen Hohlraum entfernen", {"cone_1", "hole_1"}),
+    ],
+)
+def test_a_removed_feature_is_told_once(profile: Profile, answer: str, gone: set[str]) -> None:
+    """*Merkmal entfernen* sagt einmal, dass das Merkmal fort ist (RM-217).
+
+    Die Operation meldet ``remove_feature.gone`` — „Das Merkmal ist
+    entfernt" — und die Zuordnung danach noch einmal ``perceive.orphaned``:
+    „Ein Formdetail ist nach diesem Schritt nicht mehr automatisch
+    wiederzuerkennen". Zwei Sätze über dasselbe, und der zweite klingt, als sei
+    etwas schiefgegangen, wo der Kunde genau das wollte.
+    """
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    meshes = Path(__file__).parent / "data" / "meshes"
+    forget_cache()
+    project = new_project("centauri-carbon-2", "petg")
+    project.sources["src_1"] = (meshes / "plate_countersunk.stl").read_bytes()
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_countersunk.stl", sha256=""
+    )
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Entfernen",
+        [OperationDraft(op="remove_feature", inputs=("obj_1",), params={"at_feature": "cone_1"})],
+    )
+    result = evaluate(
+        project.document,
+        profile,
+        sources=ProjectSources(project),
+        cache=ResultCache(),
+        ask=lambda question, choices: answer if answer in choices else choices[0],
+    )
+
+    assert result.complete
+    step = project.document.ops[-1].id
+    removed = [
+        finding
+        for finding in result.scene.report.findings
+        if finding.op_id == step and finding.code == "remove_feature.gone"
+    ]
+    assert removed and set(removed[0].feature_ids) == gone
+    lost = {
+        name.strip()
+        for finding in result.scene.report.findings
+        if finding.op_id == step and finding.code == "perceive.orphaned"
+        for name in str(finding.values.get("feature", "")).split(",")
+    }
+    assert not lost & gone, "das entfernte Merkmal steht zweimal im Bericht"
+
+
 def test_too_many_features_keep_the_largest_and_say_so(monkeypatch: pytest.MonkeyPatch) -> None:
     """Über der Grenze bleiben die größten Merkmale, zugeordnet wie sonst (RM-235).
 
@@ -3353,7 +3557,10 @@ def test_large_import_asks_before_recognition_and_keeps_original(monkeypatch, tr
         assert f"{millions} Millionen Dreiecke" in question
         assert f"geschätzt {minimum} bis {maximum} Minuten" in question
         assert f"etwa {recognition_gigabytes(triangles)} GB Arbeitsspeicher" in question
-        assert "langsamen Rechnern länger" in question
+        # Die Spanne gilt diesem Rechner (``recognition_time``); ein Zusatz über
+        # „langsame Rechner" ließ raten, ob sie das tut (erkennung-01).
+        assert "auf diesem Rechner geschätzt" in question
+        assert "langsamen Rechnern" not in question
         assert choices[0] == "Sofort laden", "die sichere Wahl steht vorn"
         asked.append(question)
         if choice == "closed":
@@ -3385,9 +3592,11 @@ def test_large_import_asks_before_recognition_and_keeps_original(monkeypatch, tr
     assert bool(calls) is (choice == 1)
     assert next(iter(recorded.values()))["allowed"] is (choice == 1)
     assert any(f.code == "perceive.too_large" for f in findings) is (choice != 1)
-    # Während der langen Erkennung nennt die Zeile dieselbe Spanne wie die Frage.
-    estimate = f"Merkmale erkennen, geschätzt {minimum} bis {maximum} min"
-    assert (progress[-1] == estimate) is (choice == 1)
+    # Während der langen Erkennung sagt die Zeile, was läuft; die Dauer rechnet
+    # die Statuszeile aus dem wachsenden Anteil hoch (KUNDE-14) — eine feste
+    # Spanne daneben wäre eine zweite Auskunft über dieselbe Zeit.
+    assert progress[-1] == "Merkmale erkennen"
+    assert not [text for text in progress if "geschätzt" in text]
 
 
 @pytest.mark.parametrize(
@@ -3418,6 +3627,114 @@ def test_large_recognition_never_asks_above_cap_after_import_or_for_preview(
         detect_features=detect_features,
     )
     assert result.mesh is mesh and not result.features and not records
+
+
+def _loaded_plate(name: str = "plate_holes.stl") -> Any:
+    """Ein Projekt mit einem Ladeschritt, wie das Fenster es anlegt."""
+    from app.core.scene.project import new_project
+    from app.core.types import Source
+
+    meshes = Path(__file__).parent / "data" / "meshes"
+    project = new_project("centauri-carbon-2", "petg")
+    project.sources["src_1"] = (meshes / name).read_bytes()
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path=f"sources/{name}", sha256=""
+    )
+    History(project.document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    return project
+
+
+def test_first_the_model_then_its_features_in_a_second_run(profile: Profile) -> None:
+    """Erst das Modell, dann die Merkmale — zwei Läufe mit einem Cache (KUNDE-14).
+
+    Das Piratenschiff erschien nach 57 statt 12 Sekunden, weil es seit 0.5.1
+    unter der Grenze der Vollerkennung liegt und vor dem ersten Bild erkannt
+    wurde; 48 Sekunden davon stand der Balken auf „Merkmale erkennen · 0 %“.
+    Der erste Lauf ohne Erkennung zeigt Geometrie und Bericht und nennt, was er
+    ausließ. Der zweite trifft den Ladeschritt im Cache, erkennt, und sein
+    Anteil wandert dabei über den Bereich des Schritts bis eins. Danach kennt
+    der Merker alles, und ein Lauf ohne Erkennung lässt nichts mehr aus.
+    """
+    from itertools import pairwise
+
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.project import ProjectSources
+
+    forget_cache()
+    project = _loaded_plate()
+    sources = ProjectSources(project)
+    cache = ResultCache()
+    body_id = project.document.ops[-1].outputs[0]
+
+    first = evaluate(project.document, profile, sources=sources, cache=cache, detect_features=False)
+    assert first.complete
+    assert first.recognition_left_out == {body_id}
+    assert not first.scene.objects[body_id].features
+
+    told: list[tuple[float, str]] = []
+    second = evaluate(
+        project.document,
+        profile,
+        sources=sources,
+        cache=cache,
+        progress=lambda fraction, text: told.append((fraction, text)),
+    )
+    assert second.complete
+    assert cache.statistics.hits >= 1, "der Ladeschritt kommt aus dem Cache"
+    assert second.recognition_left_out == frozenset()
+    kinds = sorted(feature.kind for feature in second.scene.objects[body_id].features.values())
+    assert kinds.count("hole") == 4
+    during = [fraction for fraction, text in told if text == "Merkmale erkennen"]
+    assert during[0] == 0.0 and during[-1] == 1.0, during
+    assert all(later > earlier for earlier, later in pairwise(during[1:])), during
+    assert len(during) > 5, "der Balken wandert während der Erkennung"
+
+    third = evaluate(project.document, profile, sources=sources, cache=cache, detect_features=False)
+    assert third.recognition_left_out == frozenset(), "der Merker kennt die Merkmale jetzt"
+    assert third.scene.objects[body_id].features == second.scene.objects[body_id].features
+
+
+@pytest.mark.parametrize("detect_features", [False, True])
+def test_a_large_import_without_recognition_is_not_declined(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile, detect_features: bool
+) -> None:
+    """Der Lauf ohne Erkennung fragt nicht vor der Vollerkennung — und sagt nicht ab (KUNDE-14).
+
+    Über der automatischen Grenze stellt erst der Lauf mit Erkennung die Frage.
+    Der erste Lauf des Wegs „erst das Modell“ darf deshalb weder fragen noch
+    „ausgelassen“ in den Bericht schreiben: Nichts ist entschieden, und der
+    Satz stünde über einer Frage, die gleich kommt. Er nennt den Körper als
+    ausgelassen; der zweite Lauf fragt und schreibt die Absage wie bisher.
+    """
+    from importlib import import_module
+
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.project import ProjectSources
+
+    module = import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(module, "FEATURE_LIMIT_TRIANGLES", 1)
+    forget_cache()
+    project = _loaded_plate()
+    body_id = project.document.ops[-1].outputs[0]
+    asked: list[str] = []
+
+    def ask(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return choices[0]
+
+    result = evaluate(
+        project.document,
+        profile,
+        sources=ProjectSources(project),
+        ask=ask,
+        detect_features=detect_features,
+    )
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert bool(asked) is detect_features
+    assert ("perceive.too_large" in codes) is detect_features
+    assert result.recognition_left_out == (frozenset() if detect_features else {body_id})
 
 
 @pytest.mark.parametrize("allowed", [False, True])
@@ -3591,7 +3908,8 @@ def test_recognition_estimate_contains_the_reference_and_preserves_generation_bu
         recognition_time, "_probe_seconds", recognition_time.PROBE_REFERENCE_SECONDS
     )
     lower, upper = recognition_minutes(RECOGNITION_REFERENCE_TRIANGLES)
-    assert lower * 60 <= RECOGNITION_REFERENCE_SECONDS <= upper * 60
+    # Minuten sind die Einheit der Frage: Unter einer Minute steht „1“.
+    assert lower * 60 <= max(60, RECOGNITION_REFERENCE_SECONDS) <= upper * 60
     assert 1 <= lower < upper
 
 

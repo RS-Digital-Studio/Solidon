@@ -316,13 +316,30 @@ belegbar der starr bewegte Zwilling, trifft `detect` danach den Merker statt
 zu rechnen (§21.2 ohne die 1,3 s Neuerkennung je Verschieben). Dasselbe für
 eine feiner geteilte Ausgabe (*Kanten verfeinern*): Belegt
 `perceive.features.refined_twin` die Teilung, überträgt
-`carry_refined_detection` den Merker in die Nachfahren jedes Dreiecks. Und
+`carry_refined_detection` den Merker in die Nachfahren jedes Dreiecks — auch
+nach dem Wiederöffnen, denn der Plattencache legt den Herkunftsvermerk neben
+das Netz (`cache._refinement_to_disk`, `_refinement_from_disk`). Und
 `evaluate(..., detect_features=False)` — der Weg der Live-Vorschau — lässt
 die Erkennung aus, wo kein späterer Schritt und keine Passung ein Merkmal
 des Körpers braucht: Der Körper behält, was die Operation ausgab, ohne
 Zuordnung und ohne Waisenbefund, wie bei `perceive.too_many`; was der Merker
 kennt, kommt trotzdem. Die Szene einer solchen Auswertung ist ein Bild, kein
-Dokumentstand.
+Dokumentstand. **Derselbe Weg zeigt ein Modell vor seinen Merkmalen**
+(KUNDE-14): `EvaluationResult.recognition_left_out` nennt die Körper, deren
+Erkennung ausgelassen wurde — oder deren Frage vor der Vollerkennung noch
+aussteht, denn ein Lauf ohne Erkennung fragt nicht und schreibt kein
+„ausgelassen“. Ein zweiter Lauf mit Erkennung und demselben Cache trifft die
+Schritte im Cache und rechnet nur die Erkennung; ihr Anteil wächst über den
+Bereich des Schritts (`_StepProgress`, `features.detect(progress=...)`).
+
+**Eine geteilte Fläche ist nicht verloren** (`_divided_in_place`, RM-217):
+Steht nach dem Schritt eine Fläche in derselben Ebene und gleich gerichtet
+innerhalb der alten, fällt die alte aus dem Hinweis `perceive.orphaned` — eine
+Bohrung über die Kante teilt die angeschnittene Seite, ohne dass etwas fort
+ist. Gemessen wird an den Dreiecken der alten Fläche im Netz, auf das sie
+zeigen: `source_mesh`, und wo es fehlt, weil ein Eingang mehrere Ausgaben hat
+(*Teilen*), `origin_mesh` — sonst verlor die zweite Hälfte jede geteilte
+Fläche.
 
 **Die Zuordnungsfrage fragt, was etwas trägt, zuerst — und nur, was eine
 Antwort hat** (`_answer_matches`). Verwiesene alte Merkmale kommen vor
@@ -341,12 +358,23 @@ wieder) und *Verlauf zeigen*. Der Stand davor bleibt sichtbar; der Befund
 steht am Schritt.
 
 **Ein erklärtes Merkmal sucht seinen erkannten Partner an seiner Stelle**
-(`_near_its_declaration`): quer zur Achse innerhalb seiner Breite
-(Durchmesser, beim Langloch die Länge), entlang der Achse innerhalb seiner
-Tiefe, wo eine erklärt ist. Die Zuordnung toleriert zwischen zwei Schritten
-8 % der Diagonale; was die Operation selbst gesetzt hat, steht dort, wo sie es
-sagt — sonst nahm eine verschobene Senkung die der Nachbarbohrung, und deren
-Name verwaiste.
+(`matching.declared_partners`, `matching.near_its_declaration`): quer zur
+Achse innerhalb seiner Breite (Durchmesser, beim Langloch die Länge), entlang
+der Achse innerhalb seiner Tiefe, wo eine erklärt ist. Die Zuordnung
+toleriert zwischen zwei Schritten 8 % der Diagonale; was die Operation selbst
+gesetzt hat, steht dort, wo sie es sagt — sonst nahm eine verschobene Senkung
+die der Nachbarbohrung, und deren Name verwaiste. Dieselbe Stelle entscheidet
+unter Konkurrenten: Wer seinen umkämpften Kandidaten allein an seiner Stelle
+hat, bekommt ihn, wer dort keinen hat, ist verwaist — sonst blieb ein
+erkannter Verbinderstift ohne Namen, und die Nummern der Verbinder rückten.
+
+**Und ein neues Merkmal bekommt keinen Namen, den ein Mitreisender trägt**
+(`matching.apply_mapping(..., reserved=...)`, RM-222). Was die Operation
+selbst ausgibt (`declared`), was ungeprüft mitreist (`unchecked`) und was
+starr mitbewegt bleibt (`rigid_orphans`), wird nach der Zuordnung
+eingehängt; bekam eine neu erkannte Bohrung als ersten freien Namen den
+einer vorher geänderten, überschrieb die geänderte sie, und die neue fehlte
+im Baum ohne Befund.
 
 **Ein verwiesenes erkanntes Merkmal, das ein Schritt unkenntlich macht,
 meldet sich am Schritt** (`perceive.referenced_lost`, Warnung mit

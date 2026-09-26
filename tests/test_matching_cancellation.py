@@ -74,6 +74,12 @@ def _cancel_at_match(
         return original(*args, check_cancelled=check_cancelled, **kwargs)
 
     monkeypatch.setattr(module, "match", stopped)
+    # Die erklärten Merkmale suchen ihren Partner über ``matching.declared_partners``
+    # (Durchsicht 0.5.1, derselbe Weg für Netz und exakten Baustein) — die
+    # Zuordnung beginnt dort, im Modul der Zuordnung.
+    matching = import_module("app.core.perceive.matching")
+    if module is not matching:
+        monkeypatch.setattr(matching, "match", stopped)
     return calls
 
 

@@ -55,6 +55,7 @@ from app.core.knowledge.profiles import analysis_limits, for_process
 from app.core.log import get_logger
 from app.core.perceive.features import (
     DETECTABLE_KINDS,
+    PARALLEL_FACE_COSINE,
     _mesh_key,
     carry_detection,
     carry_refined_detection,
@@ -96,9 +97,11 @@ from app.core.perceive.matching import (
     FeatureTransform,
     MatchResult,
     apply_mapping,
+    declared_partners,
     inherit_originators,
     match,
     moved_features,
+    on_their_partners,
     question_for,
     resolve,
     transformed_features,
@@ -145,7 +148,7 @@ from app.core.types import (
     Transform,
     kind_of,
 )
-from app.core.units import EPS_DISPLAY, EPS_GEOM, MAX_FACET_SAG, is_close
+from app.core.units import EPS_DISPLAY, EPS_GEOM, MAX_FACET_SAG, is_close, match_tolerance
 from app.i18n import TranslatableText, _, format_decimal, source_text, tr
 
 _log = get_logger(__name__)
@@ -250,6 +253,17 @@ class EvaluationResult:
     Loch."""
     fit_sights: tuple[ReferenceSight, ...] = ()
     """Dasselbe für die aktiven Passungen, am Endstand (§14)."""
+    recognition_left_out: frozenset[ObjectId] = frozenset()
+    """Körper des Endstands, deren Merkmalserkennung dieser Lauf ausgelassen hat.
+
+    Nur bei ``evaluate(..., detect_features=False)``: Gerechnet hätte sie, oder
+    vor der Vollerkennung eines großen Imports gefragt. **Der Weg „erst das
+    Modell, dann die Merkmale"** (KUNDE-14) fährt deshalb zwei Läufe: Der
+    erste ohne Erkennung zeigt Geometrie und Prüfbericht; ist diese Menge
+    nicht leer, holt ein zweiter Lauf mit Erkennung, demselben Cache,
+    ``progress`` und ``cancelled`` sie im Hintergrund nach — die Schritte
+    selbst treffen dort den Cache, es rechnet nur die Erkennung. Leer heißt:
+    Der Merker kannte alles, oder es gab nichts zu erkennen."""
 
     @property
     def complete(self) -> bool:
@@ -270,6 +284,40 @@ type RecognitionAnswered = Callable[[OpId, str, Mapping[str, Any]], None]
 
 def _silent_progress(fraction: float, text: str) -> None:
     return None
+
+
+class _StepProgress:
+    """Text und Anteil der Merkmalsarbeit eines Körpers, im Anteil seines Schritts (§2.8).
+
+    **Die Erkennung gehört zu ihrem Schritt** und bekommt dessen Bereich des
+    Balkens — bei einer Ausgabe den ganzen, bei mehreren je Körper ein
+    gleiches Stück. Bis zur Durchsicht 0.5.1 bekam sie nur den Anfang: Der
+    Balken stand beim Laden des Piratenschiffs 48 Sekunden auf „Merkmale
+    erkennen · 0 %“ (KUNDE-14). :meth:`say` wechselt den Text und behält den
+    Anteil, :meth:`advance` rückt ihn vor, nie zurück.
+    """
+
+    __slots__ = ("_end", "_fraction", "_progress", "_start", "_text")
+
+    def __init__(self, progress: ProgressFn, start: float, end: float) -> None:
+        self._progress = progress
+        self._start = start
+        self._end = end
+        self._fraction = start
+        self._text = ""
+
+    def say(self, text: str) -> None:
+        """Der Text der laufenden Arbeit, beim erreichten Anteil."""
+        self._text = text
+        self._progress(self._fraction, text)
+
+    def advance(self, share: float) -> None:
+        """Die laufende Arbeit ist zu ``share`` erledigt (null bis eins)."""
+        fraction = self._start + (self._end - self._start) * min(1.0, max(0.0, share))
+        if fraction <= self._fraction:
+            return
+        self._fraction = fraction
+        self._progress(fraction, self._text)
 
 
 def _refuse_to_guess(question: str, choices: list[str]) -> str:
@@ -404,6 +452,8 @@ def _evaluate(
         )
     completed: list[OpId] = []
     pending: list[tuple[str, CachedResult, bool]] = []
+    #: Körper, deren Erkennung ``detect_features=False`` ausgelassen hat.
+    recognition_left_out: set[ObjectId] = set()
     solvers: dict[OpId, SolverInfo] = {}
     answers: dict[OpId, Mapping[str, Any]] = {}
     matches: dict[OpId, dict[str, Any]] = {}
@@ -913,6 +963,13 @@ def _evaluate(
                 object_id if produced_name not in produced_by_name else None
             )
             recorded: dict[str, dict[str, Any]] = {}
+            # Der Bruchteil ist der dieser Operation — die Erkennung gehört zu
+            # ihr, je Ausgabe ein gleiches Stück davon (:class:`_StepProgress`).
+            step_progress = _StepProgress(
+                progress,
+                (position + index / len(result.objects)) / total,
+                (position + (index + 1) / len(result.objects)) / total,
+            )
             try:
                 prepared_objects[object_id] = _with_features(
                     placed,
@@ -929,10 +986,8 @@ def _evaluate(
                     referenced_features.get(object_id, set()) | referenced_anywhere,
                     spec.touches_features,
                     token,
-                    # Der Bruchteil ist der dieser Operation — die Erkennung
-                    # gehört zu ihr, und ein Balken, der dafür zurückspränge,
-                    # sagte etwas Falsches. Was sich ändert, ist der Text.
-                    partial(progress, position / total),
+                    step_progress.say,
+                    advance=step_progress.advance,
                     question_context=announce_candidates,
                     legacy_eligible=legacy_eligible,
                     needed=_needed_after(
@@ -948,10 +1003,22 @@ def _evaluate(
                     # Ausgabe sein bewegter Zwilling ist. Ob er es ist,
                     # prüft ``carry_detection`` am Netz, nicht am Index.
                     source_mesh=inputs[index].mesh if index < len(inputs) else None,
+                    # Die alten Merkmale jeder Ausgabe stammen bei einem
+                    # einzigen Eingang aus ihm — auch die der zweiten Hälfte
+                    # nach *Teilen* (RM-217).
+                    origin_mesh=inputs[0].mesh if len(inputs) == 1 else None,
                     detect_features=detect_features,
                     recognition_of=recognition_of,
                     on_recognition_answer=on_recognition_answer,
                     decided=decided,
+                    announced_gone=frozenset(
+                        name
+                        for entry in result.findings
+                        if entry.code in REMOVAL_CODES
+                        and entry.object_id in (None, operation.outputs[index])
+                        for name in entry.feature_ids
+                    ),
+                    unrecognised=recognition_left_out,
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -1211,6 +1278,7 @@ def _evaluate(
         blocked_references=tuple(blocked),
         sights=sights,
         fit_sights=fit_sights,
+        recognition_left_out=frozenset(recognition_left_out & scene.objects.keys()),
     )
 
 
@@ -1338,6 +1406,11 @@ QUIET_LOSSES: Final = frozenset({"repair", "split_pinned", "split_line"})
 #: Der Satz, mit dem ein Schnitt sagt, dass seine Stücke noch dort stehen, wo
 #: sie im ganzen Teil standen (``prepare_ops._halves_still_together``).
 HALVES_IN_PLACE: Final = "prepare.halves_in_place"
+
+#: Befunde, mit denen eine Operation selbst sagt, welche Merkmale sie entfernt
+#: hat (``Finding.feature_ids``). Deren Verlust ohne Verweis meldet die
+#: Zuordnung danach nicht ein zweites Mal als ``perceive.orphaned`` (RM-217).
+REMOVAL_CODES: Final = frozenset({"remove_feature.gone"})
 
 
 def _conversion_findings(
@@ -1781,6 +1854,56 @@ def _outside(feature: Feature | None, bounds: BoundingBox, moved: bool) -> bool:
         value < low - EPS_DISPLAY or value > high + EPS_DISPLAY
         for value, low, high in zip(position, bounds.minimum, bounds.maximum, strict=True)
     )
+
+
+def _divided_in_place(
+    feature: Feature | None, detected: Mapping[FeatureId, Feature], source: Mesh | None
+) -> bool:
+    """Ob eine alte ebene Fläche nach dem Schritt geteilt oder beschnitten weiterbesteht.
+
+    Weiterbestehend heißt: Eine erkannte Fläche liegt in ihrer Ebene, gleich
+    gerichtet, und ihre Mitte im Hüllquader der alten Fläche — gemessen an
+    deren Dreiecken im Eingangsnetz. Eine Fläche, die eine formende Operation
+    wirklich nimmt (ein Pinselzug, der ihr die Ebene nimmt), hat keine solche
+    Nachfolgerin und bleibt ein Verlust.
+    """
+    import numpy as np
+
+    if feature is None or feature.kind != "face" or not feature.face_indices:
+        return False
+    if not isinstance(source, MeshData):
+        return False
+    normal = feature.params.get("normal")
+    centre = feature.params.get("centre")
+    if not isinstance(normal, tuple | list) or not isinstance(centre, tuple | list):
+        return False
+    faces = np.asarray(feature.face_indices, dtype=np.int64)
+    if int(faces.max()) >= source.triangle_count:
+        return False
+    corners = np.asarray(source.raw.vertices, dtype=float)[
+        np.asarray(source.raw.faces, dtype=np.int64)[faces].ravel()
+    ]
+    tolerance = match_tolerance(source.bounds.diagonal)
+    low = corners.min(axis=0) - tolerance
+    high = corners.max(axis=0) + tolerance
+    for candidate in detected.values():
+        if candidate.kind != "face":
+            continue
+        there = candidate.params.get("centre")
+        direction = candidate.params.get("normal")
+        if not isinstance(there, tuple | list) or not isinstance(direction, tuple | list):
+            continue
+        facing = sum(float(a) * float(b) for a, b in zip(normal, direction, strict=True))
+        if facing < PARALLEL_FACE_COSINE:
+            continue
+        apart = sum(
+            (float(b) - float(a)) * float(n) for a, b, n in zip(centre, there, normal, strict=True)
+        )
+        if abs(apart) > tolerance:
+            continue
+        if all(low[axis] <= float(there[axis]) <= high[axis] for axis in range(3)):
+            return True
+    return False
 
 
 def _shift_between(before: BoundingBox, now: BoundingBox) -> Transform | None:
@@ -2533,9 +2656,9 @@ def _full_recognition_allowed(
     minimum, maximum = recognition_minutes(triangles, check_cancelled=watch.raise_if_cancelled)
     question = tr(
         "„{name}“ hat {triangles} Millionen Dreiecke. Die vollständige Merkmalserkennung "
-        "dauert geschätzt {minimum} bis {maximum} Minuten, auf langsamen Rechnern länger, "
-        "und braucht etwa {memory} GB Arbeitsspeicher. Ohne sie erscheint das Modell "
-        "sofort, und „Alle Merkmale erkennen“ im Prüfbericht holt sie später nach.",
+        "dauert auf diesem Rechner geschätzt {minimum} bis {maximum} Minuten und braucht "
+        "etwa {memory} GB Arbeitsspeicher. Ohne sie können Sie sofort weiterarbeiten, und "
+        "„Alle Merkmale erkennen“ im Prüfbericht holt sie später nach.",
         name=str(entry.name),
         triangles=format_decimal(triangles / 1_000_000, 1),
         minimum=format_decimal(minimum, 0),
@@ -2790,9 +2913,9 @@ def _ask_once_for_large_bodies(
     minimum, maximum = recognition_minutes(triangles, check_cancelled=watch.raise_if_cancelled)
     question = tr(
         "{count} Modelle haben zusammen {triangles} Millionen Dreiecke. Die vollständige "
-        "Merkmalserkennung dauert geschätzt {minimum} bis {maximum} Minuten, auf langsamen "
-        "Rechnern länger, und braucht etwa {memory} GB Arbeitsspeicher. Ohne sie erscheinen "
-        "die Modelle sofort, und „Alle Merkmale erkennen“ im Prüfbericht holt sie später nach.",
+        "Merkmalserkennung dauert auf diesem Rechner geschätzt {minimum} bis {maximum} "
+        "Minuten und braucht etwa {memory} GB Arbeitsspeicher. Ohne sie können Sie sofort "
+        "weiterarbeiten, und „Alle Merkmale erkennen“ im Prüfbericht holt sie später nach.",
         count=format_decimal(len(waiting), 0),
         triangles=format_decimal(triangles / 1_000_000, 1),
         minimum=format_decimal(minimum, 0),
@@ -2834,10 +2957,14 @@ def _with_features(
     continuations: Sequence[FeatureContinuation] = (),
     scope: str | None = None,
     source_mesh: Mesh | None = None,
+    origin_mesh: Mesh | None = None,
     detect_features: bool = True,
     recognition_of: dict[ObjectId, _BodyRecognition] | None = None,
     on_recognition_answer: RecognitionAnswered | None = None,
     decided: Mapping[ObjectId, bool | None] | None = None,
+    announced_gone: Collection[FeatureId] = frozenset(),
+    advance: Callable[[float], None] | None = None,
+    unrecognised: set[ObjectId] | None = None,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -2850,9 +2977,17 @@ def _with_features(
     einem Verschieben um 5 mm. Und nach einem Speicherfehler beim Laden lief
     jeder Folgeschritt in denselben Fehler, als Programmfehler am Schritt.
 
+    ``announced_gone`` nennt die Merkmale, deren Entfernen die Operation selbst
+    meldet (:data:`REMOVAL_CODES`): Ihr Verlust ohne Verweis steht nicht noch
+    einmal als ``perceive.orphaned`` im Bericht (RM-217).
+
     ``source_mesh`` ist das Netz des Eingangs, aus dem diese Ausgabe entstand —
     bei einer gemeldeten Bewegung der Beleg dafür, dass nicht neu erkannt
-    werden muss (:func:`carry_detection`). ``detect_features=False`` lässt
+    werden muss (:func:`carry_detection`). ``origin_mesh`` ist das Netz, auf
+    das die Dreiecke der alten Merkmale zeigen, und fehlt ``source_mesh`` nur
+    deshalb, weil ein einziger Eingang mehrere Ausgaben hat (*Teilen*), steht es
+    trotzdem da: Ob eine alte Fläche nur geteilt ist, misst
+    :func:`_divided_in_place` an ihr. ``detect_features=False`` lässt
     die Erkennung aus, wo kein späterer Schritt und keine Passung ein Merkmal
     dieses Körpers braucht (siehe :func:`evaluate`).
 
@@ -2894,9 +3029,19 @@ def _with_features(
     dieser ganzen Zeit nicht, denn das Token wurde nur am Kopf der
     Operationsschleife abgefragt, und die Leiste nannte weiter eine Operation,
     die längst fertig war. ``say`` bekommt nur den Text: Welcher Bruchteil des
-    Ganzen gerade läuft, weiß der Aufrufer, nicht diese Funktion.
+    Ganzen gerade läuft, weiß der Aufrufer, nicht diese Funktion. **Wie weit
+    die Vollerkennung ist, weiß sie dagegen** — ``advance`` erfährt deren
+    erledigten Anteil, null bis eins, und der Aufrufer rechnet ihn in seinen
+    Bereich um (:class:`_StepProgress`, KUNDE-14).
+
+    ``unrecognised`` nimmt den Körper auf, dessen Erkennung ``detect_features=False``
+    ausgelassen hat — wo sie gerechnet oder gefragt hätte. Ein zweiter Lauf mit
+    Erkennung holt sie nach (:attr:`EvaluationResult.recognition_left_out`).
     """
     watch = cancelled or NeverCancelled()
+    if unrecognised is not None:
+        # Es gilt der letzte Schritt, der diesen Körper ausgibt.
+        unrecognised.discard(entry.id)
     mesh = entry.mesh
     if not isinstance(mesh, MeshData):
         # Ein exakter Körper hat keine Dreiecke, an denen die Erkennung messen
@@ -3041,6 +3186,7 @@ def _with_features(
     # derselbe Minutenlauf bis zum selben Fehler noch einmal (Review R3).
     fresh = False
     out_of_memory = False
+    pending = False
     state = recognition_of.get(entry.id) if recognition_of is not None else None
     within = mesh.triangle_count <= CONFIRMED_FEATURE_LIMIT_TRIANGLES
     if operation.op == "load" and within:
@@ -3066,6 +3212,13 @@ def _with_features(
             )
             local_only = allowed is not True
             fresh = allowed is not None
+            if not detect_features:
+                # **Ungefragt ist nicht abgesagt.** Der Lauf ohne Erkennung
+                # stellt die Frage nicht; der Lauf danach stellt sie. Bis
+                # dahin steht kein Satz „ausgelassen" im Bericht.
+                pending = True
+                if unrecognised is not None:
+                    unrecognised.add(entry.id)
             if allowed is not None and on_recognition_answer is not None:
                 on_recognition_answer(
                     operation.id,
@@ -3095,7 +3248,7 @@ def _with_features(
     elif not within:
         state = None
     reopenable = state is not None and state.answer is not None
-    if local_only:
+    if local_only and not pending:
         findings.append(
             _skipped_recognition(
                 entry, operation, reopenable=reopenable, out_of_memory=out_of_memory
@@ -3172,21 +3325,13 @@ def _with_features(
     }
     watch.raise_if_cancelled()
     if say is not None:
-        if not local_only and mesh.triangle_count > FEATURE_LIMIT_TRIANGLES:
-            # Minuten ohne gemessenen Anteil: Die Zeile nennt dieselbe Spanne
-            # wie die Frage, die Uhr daneben die verstrichene Zeit (§2.8).
-            minimum, maximum = recognition_minutes(
-                mesh.triangle_count, check_cancelled=watch.raise_if_cancelled
-            )
-            say(
-                tr(
-                    "Merkmale erkennen, geschätzt {minimum} bis {maximum} min",
-                    minimum=format_decimal(minimum, 0),
-                    maximum=format_decimal(maximum, 0),
-                )
-            )
-        else:
-            say(str(_("Merkmale erkennen")))
+        # **Eine Auskunft über die Dauer, nicht zwei** (KUNDE-14). Solange die
+        # Erkennung keinen Anteil kannte, nannte die Zeile während der langen
+        # Vollerkennung dieselbe Spanne wie die Frage davor. Jetzt wächst ihr
+        # Anteil (``advance``), und die Statuszeile rechnet die Restzeit selbst
+        # hoch; eine feste Spanne daneben widerspräche ihr, sobald beide
+        # auseinanderlaufen.
+        say(str(_("Merkmale erkennen")))
     # **Anhalten darf die örtliche Nachmessung nur für ein Merkmal, das noch
     # jemand braucht** (RM-235). Jedes andere verliert seine Belegung wie am
     # Netz üblich und steht als Hinweis im Bericht; ein starr mitbewegtes
@@ -3251,6 +3396,8 @@ def _with_features(
             # Zuordnung und ohne Waisenbefund, wie bei ``perceive.too_many``.
             remembered_features = known_detection(mesh)
             if remembered_features is None:
+                if unrecognised is not None:
+                    unrecognised.add(entry.id)
                 return (
                     dataclasses.replace(entry, features=output_features)
                     if feature_movement is not None
@@ -3296,7 +3443,7 @@ def _with_features(
                         {"object_id": entry.id, "scope": answer_scope, "allowed": True},
                     )
                 try:
-                    full = detect(mesh, check_cancelled=watch.raise_if_cancelled)
+                    full = detect(mesh, check_cancelled=watch.raise_if_cancelled, progress=advance)
                 except MemoryError:
                     if not fallback:
                         raise
@@ -3475,31 +3622,18 @@ def _with_features(
         watch.raise_if_cancelled()
         if say is not None:
             say(str(_("Merkmale zuordnen")))
-        seen = match(
+        # **Ein erklärtes Merkmal sucht seinen Partner an seiner Stelle**
+        # (``matching.declared_partners``). Am Schraubenhalter nahm eine
+        # verschobene Senkung die der Nachbarbohrung 18 mm daneben, und
+        # ``cone_2`` war verwaist, ohne dass jemand es angefasst hatte
+        # (23.09.2026).
+        seen = declared_partners(
             declared,
             detected,
             mesh.bounds.centre,
             mesh.bounds.diagonal,
             check_cancelled=watch.raise_if_cancelled,
         )
-        # **Ein erklärtes Merkmal sucht seinen Partner an seiner Stelle.** Die
-        # Zuordnung toleriert 8 % der Diagonale, weil zwischen zwei Schritten
-        # ungeklärt gewandert werden darf; was die Operation selbst gesetzt hat,
-        # steht aber dort, wo sie es sagt. Am Schraubenhalter nahm eine
-        # verschobene Senkung die der Nachbarbohrung 18 mm daneben, und
-        # ``cone_2`` war verwaist, ohne dass jemand es angefasst hatte
-        # (23.09.2026). Weiter weg als seine eigene Größe ist es nicht es selbst.
-        far = {
-            name
-            for name, found in seen.mapping.items()
-            if not _near_its_declaration(declared[name], detected[found])
-        }
-        if far:
-            seen = dataclasses.replace(
-                seen,
-                mapping={name: found for name, found in seen.mapping.items() if name not in far},
-                orphaned=(*seen.orphaned, *sorted(far)),
-            )
         blind = set(seen.orphaned)
         # Randöffnungen sind geometrisch erkennbare Langlöcher. Fehlt ihre
         # Wand, darf ein mitgetragener Eintrag nicht zur ungeprüften Zusage
@@ -3521,23 +3655,13 @@ def _with_features(
                 )
             )
         }
-        # **Der Name bleibt, die aktuelle Oberfläche geht mit.** Ein Baustein
-        # kennt Ort und Maß seiner Bohrung, aber nicht die Dreiecksnummern des
-        # Netzes, das erst aus seiner Geometrie entsteht. Die Erkennung kennt
-        # genau diese Nummern. Bei einer eindeutigen Zuordnung gehören sie
-        # deshalb an das benannte Merkmal, bevor dessen technischer Doppelname
-        # unten entfernt wird. Ohne die Übergabe war die Auswahl im Baum
-        # richtig, im Viewport erschien aber nur der Beschriftungspunkt.
-        visible_faces = {
-            old_name: detected[new_name].face_indices
-            for old_name, new_name in seen.mapping.items()
-            if new_name in detected
-        }
-        visible_patches = {
-            old_name: detected[new_name].surface_patches
-            for old_name, new_name in seen.mapping.items()
-            if new_name in detected
-        }
+        # **Der Name bleibt, die aktuelle Oberfläche geht mit**
+        # (``matching.on_their_partners``): Dreiecke, Teilträger und die
+        # Messwerte des Partners (RM-216: nach einer Bohrung trug ``face_top``
+        # eines Quaders die Dreiecke seines Partners, aber weiter 2 400 statt
+        # 2 349,878 mm²). Ohne die Übergabe war die Auswahl im Baum richtig, im
+        # Viewport erschien aber nur der Beschriftungspunkt. Den Suchumfang
+        # einer örtlichen Erkennung nimmt nur dieser Weg mit.
         visible_scopes = {
             old_name: {"local_search_radius": detected[new_name].params["local_search_radius"]}
             for old_name, new_name in seen.mapping.items()
@@ -3547,24 +3671,11 @@ def _with_features(
         }
         declared = {
             name: (
-                dataclasses.replace(
-                    feature,
-                    face_indices=visible_faces[name],
-                    surface_patches=visible_patches[name],
-                    params={**feature.params, **visible_scopes.get(name, {})},
-                )
-                if name in visible_faces
+                dataclasses.replace(feature, params={**feature.params, **visible_scopes[name]})
+                if name in visible_scopes
                 else feature
             )
-            for name, feature in declared.items()
-        }
-        declared = {
-            name: (
-                feature
-                if name not in blind
-                else dataclasses.replace(feature, recognised=False, surface_patches=())
-            )
-            for name, feature in declared.items()
+            for name, feature in on_their_partners(declared, detected, seen).items()
         }
         # **Und was einen benannten Partner hat, kommt nicht zusätzlich in die
         # Szene.** Der Kommentar weiter oben sagt es seit je voraus — „eine
@@ -3817,6 +3928,22 @@ def _with_features(
             )
             continue
 
+        # **Was die Operation selbst als entfernt meldet, steht nicht noch
+        # einmal da** (RM-217). *Merkmal entfernen* sagt „Das Merkmal ist
+        # entfernt", und darunter stand „Ein Formdetail ist nach diesem Schritt
+        # nicht mehr automatisch wiederzuerkennen" — zwei Sätze über dasselbe,
+        # und der zweite klang nach einem Fehler, wo der Kunde genau das
+        # wollte. Ein Verlust **mit** Verweis ist oben gemeldet und bleibt es.
+        if old_id in announced_gone:
+            continue
+        # **Eine geteilte Fläche ist nicht fort** (RM-217, Befund texte). Eine
+        # Bohrung über die Kante teilt die Seite, die sie anschneidet, in zwei;
+        # *Teilen* schneidet jede Fläche, durch die die Ebene geht. Die Stücke
+        # stehen in derselben Ebene im Baum, und „Ein Formdetail ist nach
+        # diesem Schritt nicht mehr automatisch wiederzuerkennen“ klang nach
+        # einem Schaden an einem Schritt, der genau das tun sollte.
+        if _divided_in_place(old_feature, detected, source_mesh or origin_mesh):
+            continue
         quiet[defect].append(old_id)
 
     # **Einmal je Körper und Schritt, nicht je Merkmal** (23.09.2026). Der
@@ -3902,7 +4029,13 @@ def _with_features(
     # sie alle in ``fresh``.
     detected = _feature_originators(detected, matched, operation, touches_features, knew_features)
 
-    mapped = apply_mapping(detected, matched, previous=previous)
+    # Die Namen, die gleich neben der Zuordnung eingehängt werden, vergibt sie
+    # nicht an ein neues Merkmal (RM-222): Eine geänderte Bohrung reist unter
+    # ihrem Namen in ``declared`` weiter, und eine neu gebohrte bekam diesen
+    # Namen als ersten freien — und wurde beim Zusammenführen überschrieben.
+    mapped = apply_mapping(
+        detected, matched, previous=previous, reserved={*rigid_orphans, *unchecked, *declared}
+    )
     # Ein Bezeichner, der von einem erzeugten Merkmal kommt, bleibt erzeugt.
     # ``apply_mapping`` trägt den *Namen* weiter, die Provenienz steckt aber im
     # Merkmal, das gerade erkannt wurde — und das ist per Definition
@@ -3917,47 +4050,6 @@ def _with_features(
         entry,
         features={**mapped, **rigid_orphans, **unchecked, **declared},
     )
-
-
-def _near_its_declaration(declared: Feature, found: Feature) -> bool:
-    """Ob ein erkanntes Merkmal dort liegt, wo die Operation ihr erklärtes gesetzt hat.
-
-    Quer zur Achse darf der Mittelpunkt höchstens um die Breite des erklärten
-    Merkmals abweichen — Durchmesser, bei einem Langloch seine Länge —, entlang
-    der Achse höchstens um seine Tiefe, wo eine erklärt ist: Wo auf der Achse
-    eine Mitte liegt, ist eine Frage der Messung (Mündung oder Mitte, je nach
-    Erzeuger), wie weit daneben eine Bohrung liegt, nicht. Ohne Achse gilt die
-    Breite als Abstand. Ein erklärtes Merkmal ohne Größe oder ohne Ort wird
-    nicht beschränkt; dort entscheidet die Zuordnung allein.
-    """
-
-    def number(key: str) -> float:
-        value = declared.params.get(key)
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            return abs(float(value))
-        return 0.0
-
-    width = max(number("diameter"), number("length"))
-    where = declared.params.get("centre")
-    there = found.params.get("centre")
-    if not isinstance(where, tuple | list) or not isinstance(there, tuple | list):
-        return True
-    if width <= EPS_GEOM:
-        return True
-    try:
-        offset = [float(b) - float(a) for a, b in zip(where, there, strict=True)]
-        axis = declared.params.get("axis")
-        direction = [float(value) for value in axis] if isinstance(axis, tuple | list) else []
-    except TypeError, ValueError:
-        return True
-    length = math.hypot(*direction) if len(direction) == 3 else 0.0
-    if length <= EPS_GEOM:
-        return math.hypot(*offset) <= width
-    unit = [value / length for value in direction]
-    along = sum(a * b for a, b in zip(offset, unit, strict=True))
-    across = math.hypot(*(value - along * part for value, part in zip(offset, unit, strict=True)))
-    depth = number("depth")
-    return across <= width and (depth <= EPS_GEOM or abs(along) <= depth)
 
 
 #: Welcher Sammelparameter seine Ausdrücke in einem eigenen Text versteckt.

@@ -429,3 +429,69 @@ def test_a_field_drawn_on_a_derived_plane_follows_its_parameters(profile):
         cold = evaluate(document, profile=profile)
         assert warm.complete and cold.complete
         assert figures(warm) == figures(cold), (name, value)
+
+
+@pytest.mark.parametrize(("offset", "cut_area"), [(0.0, True), (-2.0, False)])
+def test_a_field_keeps_the_name_of_the_face_it_was_drawn_on(profile, offset, cut_area):
+    """Die Deckfläche heißt nach dem Feldschnitt weiter ``face_top`` — ohne Frage (RM-217).
+
+    Der Schnitt am Netz gab die ganze Neuerkennung seines Ergebnisses als
+    eigene Merkmale aus, nicht nur die benannten Feldbohrungen. Die Auswertung
+    las sie als mitgebrachte Merkmale: Auf der Deckfläche gewann deren
+    ``face_2`` gegen ``face_top``, und der Bericht warnte, ein Merkmal aus der
+    Konstruktion sei verloren; zwei Millimeter darunter stritten beide um
+    dieselbe unberührte Fläche, und die Auswertung hielt mit „Welches Merkmal
+    entspricht face_top?“ an (Durchsicht 0.5.1, Sonden p61 und p62).
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene import evaluate
+    from app.core.scene.migrations import FORMAT_VERSION
+    from app.core.sketch.planes import feature_plane, offset_plane
+    from app.core.types import Document, Operation
+
+    load_operations()
+    plane = offset_plane(feature_plane("body", "face_top"), "@d")
+    document = Document(
+        format_version=FORMAT_VERSION,
+        app_version="0.0.0",
+        parameters={"d": Parameter("d", offset)},
+        ops=[
+            Operation(
+                id=1,
+                op="create_box",
+                outputs=("body",),
+                params={"width": 40.0, "depth": 40.0, "height": 20.0, "anchor": "corner"},
+            ),
+            Operation(
+                id=2,
+                op="field_cut",
+                inputs=("body",),
+                outputs=("body",),
+                params={
+                    "region_sketch": sketch_to_text(replace(shapes.rectangle(30, 30), plane=plane)),
+                    "diameter": 3.0,
+                    "spacing": 8.0,
+                    "depth": 4.0,
+                    "margin": 1.0,
+                    "web": 1.0,
+                },
+            ),
+        ],
+    )
+    questions: list[str] = []
+
+    def ask(question: str, choices: list[str]) -> str:
+        questions.append(question)
+        return choices[0]
+
+    result = evaluate(document, profile=profile, ask=ask)
+    assert result.complete
+    assert not questions
+    codes = {entry.code for entry in result.scene.report.findings}
+    assert not codes & {"perceive.generated_lost", "perceive.discarded", "perceive.orphaned"}
+    top = result.scene.objects["body"].features["face_top"]
+    # Auf der Deckfläche nimmt sie die gelochte Fläche auf, darunter bleibt sie ganz.
+    assert (top.params["area"] < 1600.0 - 1.0) is cut_area
+    assert sum(name.startswith("field_") for name in result.scene.objects["body"].features) == (
+        9 if cut_area else 0
+    )

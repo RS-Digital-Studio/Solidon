@@ -893,6 +893,61 @@ def test_a_magnet_pocket_cuts_and_a_wall_mount_grows_on_an_exact_host(profile: P
     )
 
 
+def test_an_exact_host_reads_its_features_anew_after_a_part(profile: Profile) -> None:
+    """Nach einem Baustein trägt der exakte Körper die Merkmale seiner Topologie.
+
+    Bis zur Durchsicht 0.5.1 reichte der Baustein die Merkmale des Trägers
+    durch — ohne Dreiecke, weil deren Nummern dem Körper vor dem Schnitt
+    gehören, und mit den Maßen von vorher (ERKENNUNG-10). Nach einer
+    Magnettasche mitten in der Oberseite hieß die Deckfläche weiter
+    10 000 mm² „aus der Konstruktion“, keine Fläche des Trägers ließ sich im
+    Bild treffen, und der Boden der Tasche fehlte.
+
+    Der Name des Trägers bleibt, die aktuelle Oberfläche geht mit: dieselben
+    Namen, jede mit Dreiecken, die Deckfläche um die Mündung kleiner. Die
+    Tasche trägt ihre Dreiecke unter ihrem eigenen Namen und steht nicht ein
+    zweites Mal als erkannte Bohrung daneben.
+    """
+    _kernel()
+    host = _host()
+    outcome = run(
+        "insert_magnet_pocket", host, profile, size="8x3", cover=0.0, press_lip=False, **ON_TOP
+    )
+    (result,) = outcome.outputs
+    features = result.features
+    assert set(host.features) <= set(features), "die Namen des Trägers bleiben"
+    blind = [name for name in host.features if not features[name].face_indices]
+    assert not blind, f"ohne Dreiecke, im Bild nicht zu treffen: {blind}"
+
+    top = next(
+        name
+        for name, feature in host.features.items()
+        if feature.kind == "face" and feature.params["normal"][2] > 0.5
+    )
+    pocket = features["magnet_pocket_pocket_1"]
+    assert pocket.face_indices, "die Tasche ist im Bild zu treffen"
+    # Ohne Haltelippe ist die Mündung so weit wie die Tasche selbst.
+    mouth = math.pi * (float(pocket.params["diameter"]) / 2.0) ** 2
+    assert features[top].params["area"] == pytest.approx(HOST[0] * HOST[1] - mouth, rel=1e-9)
+
+    twins = [
+        name
+        for name, feature in features.items()
+        if feature.kind == "hole"
+        and name != pocket.id
+        and math.dist(feature.params["centre"][:2], pocket.params["centre"][:2]) < 1.0
+    ]
+    assert not twins, f"die Tasche steht zweimal im Baum: {twins}"
+    floor = [
+        name
+        for name, feature in features.items()
+        if name not in host.features
+        and feature.kind == "face"
+        and feature.params["centre"][2] == pytest.approx(HOST[2] - 3.0, abs=1e-6)
+    ]
+    assert floor, "der Boden der Tasche ist eine Fläche"
+
+
 # --- die Profilklemmen: Querschnitte mit zwei Auswertern -----------------------------------------
 
 

@@ -307,6 +307,11 @@ am wirklichen Schnitt. Ihre Tiefe und ihr Durchgang bleiben gemessen;
 `_with_nominal_bore(..., sections=ARC_STEPS)` belegt das bekannte Durchmessermaß
 an sämtlichen Wandpunkten. Der Weg umgeht weder die gemeinsame Grenze der
 Gesamterkennung noch behauptet er Nominalmaße nach Jitter- oder Voxelrückfall.
+Am Netz gibt `_named_bores` nur diese benannten Bohrungen aus; alle übrigen
+Merkmale erkennt die Auswertung aus dem Merker nach und ordnet sie denen des
+Eingangs zu — eine ausgegebene Neuerkennung stünde dort als mitgebracht neben
+den alten Namen (`face_2` neben `face_top`). Am exakten Körper bleibt die
+Ausgabe seine vollständige Lesung.
 
 `move_feature` versetzt eine eindeutig topologisch verbundene Senkbohrung
 als ganzen Hohlraum: alle Abschnitte aus `perceive.relations.cavity_chain_at`

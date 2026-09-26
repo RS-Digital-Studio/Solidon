@@ -53,6 +53,7 @@ from app.core.geom.orient import NoFittingOrientationError, orient_for_print, ra
 from app.core.geom.pins import (
     PIN_COUNT,
     PIN_MAX,
+    FeatureSide,
     PinnedPair,
     add_pins,
     connector_glue_finding,
@@ -14777,7 +14778,7 @@ def _cut_and_pin(
     if glue_hint and plan is not None and plan.count and plan.shape == "round":
         pair.findings.append(connector_glue_finding())
 
-    first_features, second_features = _features_after_split(source.features, plane)
+    first_features, second_features = _features_after_split(source.features, plane, source.mesh)
     first_name, second_name = half_names(
         source.name, pinned=bool(pair.pin_features), pins_on_b=pins_on_b
     )
@@ -14813,7 +14814,7 @@ def _reversed(normal: Vec3) -> Vec3:
 
 
 def _features_after_split(
-    features: dict[str, Feature], plane: SectionPlane
+    features: dict[str, Feature], plane: SectionPlane, mesh: Mesh | None = None
 ) -> tuple[dict[str, Feature], dict[str, Feature]]:
     """Nimmt bestehende Merkmale auf die geometrisch richtige Hälfte mit.
 
@@ -14821,20 +14822,53 @@ def _features_after_split(
     deshalb nicht unverändert weitergelten. Ohne Mittelpunkt bleibt das alte
     Verhalten erhalten: Es reist mit der ersten Hälfte, statt geraten zu
     werden.
+
+    **Liegt die ganze Fläche eines Merkmals auf einer Seite, entscheidet sie**
+    (:func:`_surface_side`), nicht sein Mittelpunkt: Der einer Verrundung ist
+    ein Punkt ihrer Achse, und die liegt bei einer Kehle außerhalb des
+    Materials — am Besenhalter jenseits der Ebene, während die ganze gerundete
+    Fläche diesseits lag (RM-217, Durchsicht 0.5.1). Verbinder behalten ihre
+    eigene Regel; was die Ebene quert, entscheidet weiter der Mittelpunkt.
     """
     first: dict[str, Feature] = {}
     second: dict[str, Feature] = {}
     for feature_id, feature in features.items():
-        side = feature_side(
-            feature,
-            plane,
-            connector=feature_id.startswith(("pin_", "bore_")),
-        )
+        connector = feature_id.startswith(("pin_", "bore_"))
+        side = None if connector else _surface_side(feature, plane, mesh)
+        if side is None:
+            side = feature_side(feature, plane, connector=connector)
         if side in (-1, None):
             first[feature_id] = feature
         elif side == 1:
             second[feature_id] = feature
     return first, second
+
+
+def _surface_side(feature: Feature, plane: SectionPlane, mesh: Mesh | None) -> FeatureSide | None:
+    """Auf welcher Seite der Ebene jedes Dreieck eines Merkmals liegt — oder ``None``.
+
+    ``None`` heißt: kein Netz, keine gültigen Dreiecke, oder die Fläche quert
+    die Ebene beziehungsweise berührt sie. Gerechnet wird mit
+    Grundrechenarten (RM-187), verglichen mit ``EPS_GEOM``.
+    """
+    if not isinstance(mesh, MeshData) or not feature.face_indices:
+        return None
+    faces = np.asarray(feature.face_indices, dtype=np.int64)
+    if int(faces.min()) < 0 or int(faces.max()) >= mesh.triangle_count:
+        return None
+    normal = np.asarray(plane.normal, dtype=float)
+    length = math.sqrt(float((normal * normal).sum()))
+    if length <= EPS_GEOM:
+        return None
+    corners = np.asarray(mesh.raw.vertices, dtype=float)[
+        np.asarray(mesh.raw.faces, dtype=np.int64)[faces].ravel()
+    ]
+    distances = (corners * (normal / length)).sum(axis=1) - plane.position
+    if bool((distances < -EPS_GEOM).all()):
+        return -1
+    if bool((distances > EPS_GEOM).all()):
+        return 1
+    return None
 
 
 @op_params
@@ -14909,7 +14943,7 @@ def cut_away(ctx: OpContext) -> OpResult:
             value=params.position,
             constraint="no_split",
         )
-    features, _dropped = _features_after_split(source.features, plane)
+    features, _dropped = _features_after_split(source.features, plane, source.mesh)
     # **Eine offene Schnittfläche wird gesagt, nicht verschwiegen.** *Teilen*
     # meldet sie seit je (``split.uncapped``); *Abschneiden* ging denselben
     # Schnitt bis zum 22.09.2026 ohne ein Wort, und der Körper kam mit offener

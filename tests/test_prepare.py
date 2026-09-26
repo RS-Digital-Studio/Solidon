@@ -1149,6 +1149,40 @@ def test_splitting_runs_as_an_operation(document: Document, profile: Profile) ->
         assert entry.mesh.volume == pytest.approx(4000.0, rel=1e-6)
 
 
+def test_a_rounding_goes_with_the_half_its_surface_lies_in(profile: Profile) -> None:
+    """Eine Verrundung reist mit der Hälfte, in der ihre Fläche liegt, nicht ihre Achse.
+
+    Der Mittelpunkt einer Verrundung ist ein Punkt ihrer Achse, und die kann
+    auf der anderen Seite der Ebene liegen als die ganze gerundete Fläche. Am
+    Besenhalter gingen so zwei unberührte Verrundungen (R 2,25 und R 3,95) an
+    die falsche Hälfte, standen dort als „nicht mehr wiederzuerkennen“, und
+    in der richtigen Hälfte erkannte die Erkennung sie neu unter fremdem
+    Namen (RM-217, Durchsicht 0.5.1, Sonde p65). Hier: ein liegendes
+    Rautenprisma mit gerundeter Spitze, die Ebene zwischen Achse und Fläche.
+    """
+    from shapely.geometry import Polygon
+
+    middle = 10.0 - 3.0 * math.sqrt(2.0)
+    tip = [
+        (middle + 3.0 * math.cos(angle), 3.0 * math.sin(angle))
+        for angle in np.radians(np.linspace(-45.0, 45.0, 13))
+    ]
+    outline = Polygon([(0.0, -10.0), *tip, (0.0, 10.0), (-10.0, 0.0)])
+    mesh = MeshData.of(trimesh.creation.extrude_polygon(outline, 20.0))
+    features = detect(mesh)
+    rounding = [name for name, feature in features.items() if feature.kind == "fillet"]
+    assert len(rounding) == 1
+    (name,) = rounding
+    assert features[name].params["centre"][0] == pytest.approx(middle)
+    entry = SceneObject(id="obj_1", name="Raute", mesh=mesh, features=features)
+
+    result = _run_op("split_pinned", entry, profile, axis="x", position=middle + 1.0, pins=0)
+
+    first, second = result.outputs
+    assert name not in first.features
+    assert name in second.features
+
+
 def test_splitting_says_that_the_halves_still_lie_together(
     document: Document, profile: Profile
 ) -> None:

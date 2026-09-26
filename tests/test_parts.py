@@ -3051,6 +3051,49 @@ def test_the_features_of_a_part_reach_the_scene(profile: Profile) -> None:
     assert pocket.params["centre"][0] == pytest.approx(10.0, abs=0.01)
 
 
+def test_a_magnet_pocket_in_a_mesh_is_a_bore_with_its_lip(profile: Profile) -> None:
+    """Am Netz ist die Magnettasche Bohrung und Haltelippe wie am exakten Körper (ERKENNUNG-11).
+
+    Wand und Lippe knicken um 20,5 Grad gegeneinander, unter der Knickgrenze
+    von 30 Grad, und lagen in einem Fleck, auf den weder Zylinder noch Kegel
+    passte. Im Baum stand unter „Magnettasche“ eine „Gerundete Seite innen“,
+    und die Tasche selbst trug keine Dreiecke — im Bild nicht zu treffen, von
+    *Bohrung ändern* nicht zu finden. Die fünfte Runde teilt an der Naht: Die
+    Tasche trägt die Wand, die Lippe ist ein Kegel an ihrer Mündung, und keine
+    gerundete Seite bleibt übrig.
+    """
+    import math
+
+    project = project_with_plate()
+    History(project.document).apply(
+        "Magnet",
+        [
+            OperationDraft(
+                op="insert_magnet_pocket",
+                inputs=("obj_1",),
+                # Die Lochplatte liegt mittig: Oberseite bei z = 4.
+                params={"size": "8x3", "x": 0.0, "y": 0.0, "z": 4.0},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    features = result.scene.objects["obj_1"].features
+    pocket = features["magnet_pocket_pocket_1"]
+    assert pocket.recognised and pocket.face_indices, "die Tasche ist im Bild zu treffen"
+    at_the_pocket = {
+        name: feature
+        for name, feature in features.items()
+        if "centre" in feature.params
+        and math.dist(feature.params["centre"][:2], pocket.params["centre"][:2]) < 1.0
+    }
+    assert not [name for name, f in at_the_pocket.items() if f.kind == "curved_face"]
+    lips = [feature for feature in at_the_pocket.values() if feature.kind == "cone"]
+    assert len(lips) == 1, at_the_pocket
+    assert set(lips[0].face_indices).isdisjoint(pocket.face_indices)
+
+
 def test_the_play_comes_from_the_material_profile(profile: Profile) -> None:
     """AGENTS.md Regel 7: nie eine feste Zahl in der Datei."""
     project = project_with_plate()

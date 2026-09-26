@@ -29,7 +29,7 @@ def clocked_probe(monkeypatch: pytest.MonkeyPatch, durations: tuple[float, ...])
 def test_the_estimate_follows_the_speed_of_this_computer(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ein halb so schneller Rechner verdoppelt die Spanne, ein doppelt so schneller halbiert sie.
 
-    Auf dem Referenzrechner dauert die Probe 18 ms und der Drache 72 s; die
+    Auf dem Referenzrechner dauert die Probe 18 ms und der Drache 44 s; die
     feste Spanne sagte jedem Rechner „1 bis 6 Minuten“.
     """
     clocked_probe(monkeypatch, (0.018,) * 3)
@@ -37,7 +37,7 @@ def test_the_estimate_follows_the_speed_of_this_computer(monkeypatch: pytest.Mon
     clocked_probe(monkeypatch, (0.009,) * 3)
     assert local.recognition_minutes(TRIANGLES) == (1, 3)
     clocked_probe(monkeypatch, (0.072,) * 3)
-    assert local.recognition_minutes(TRIANGLES) == (4, 24)
+    assert local.recognition_minutes(TRIANGLES) == (2, 21)
 
 
 def test_probe_warms_up_uses_the_median_and_runs_once_per_process(

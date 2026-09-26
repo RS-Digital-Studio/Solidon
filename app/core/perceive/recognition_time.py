@@ -28,15 +28,22 @@ from typing import Final
 
 import numpy as np
 
-#: Belegte Referenzprobe, allein die Erkennung ohne Einlesen: Der Drache mit
-#: 2 330 374 Dreiecken brauchte 59 bis 72 Sekunden, je Dreieck 25 bis 31 µs.
-#: Gerechnet wird mit dem langsameren Lauf.
+#: Belegte Referenz, allein die Erkennung ohne Einlesen, auf den Referenzrechner
+#: umgerechnet (Messzeit mal Referenzprobe durch Probe des Laufs): Der Drache
+#: mit 2 330 374 Dreiecken braucht 44 Sekunden, je Dreieck 18,8 µs (Durchsicht
+#: 0.5.1, 26.09.2026). Die 72 Sekunden davor stammten aus dem Stand vor den
+#: Beschleunigungen vom 25.09.2026, und die Frage nannte dem Drachen „1 bis 7
+#: Minuten“ für 36 Sekunden.
 RECOGNITION_REFERENCE_TRIANGLES: Final = 2_330_374
-RECOGNITION_REFERENCE_SECONDS: Final = 72
-#: Die Topologie streut stärker als der Rechner: je Dreieck 31 µs am Drachen,
-#: 32 µs am Piratenschiff, 118 µs am Gartenschlauchhalter (24.09.2026). Die
-#: obere Schätzung trägt deshalb den fünffachen Zeitansatz.
-RECOGNITION_TIME_FACTOR: Final = 5
+RECOGNITION_REFERENCE_SECONDS: Final = 44
+#: Die Topologie streut stärker als der Rechner. Je Dreieck, am selben Tag und
+#: gleich umgerechnet: 16,4 µs am Voronoi-Spiderman, 18,8 am Drachen, 19,5 an
+#: der Katze, 22,0 am Puppenhausbett, 23,2 am Piratenschiff — und 128,4 µs am
+#: erzeugten Murmelbrett, einer zur Hälfte ebenen Platte mit verrauschter Haut,
+#: deren 167 000 Splitter einzeln eingepasst werden (ERKENNUNG-05). Die obere
+#: Schätzung trägt deshalb den siebenfachen Zeitansatz; vorher trug sie den
+#: fünffachen, und das Brett brauchte mehr als die angezeigte Obergrenze.
+RECOGNITION_TIME_FACTOR: Final = 7
 #: Dieselbe Probe auf dem Referenzrechner: Median 17,572 ms, gerundet 18 ms.
 PROBE_REFERENCE_SECONDS: Final = 0.018
 #: Umfang der Probe: vier Blöcke aus NumPy-Sortierung und Python-Kantenzählung

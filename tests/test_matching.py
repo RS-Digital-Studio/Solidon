@@ -1025,6 +1025,167 @@ def test_the_evaluation_carries_features_across_a_refinement(
     assert "perceive.orphaned" not in codes
 
 
+@pytest.mark.parametrize("above_the_limit", [False, True])
+def test_a_refinement_keeps_its_features_when_the_project_is_opened_again(
+    profile, monkeypatch, tmp_path, above_the_limit: bool
+) -> None:
+    """Nach dem Wiederöffnen trägt der geteilte Körper dieselben Merkmale wie in der Sitzung.
+
+    Der Vermerk, aus welchem Dreieck jedes neue stammt, lag nur im Speicher
+    des Netzes. Kam das feinere Netz beim Öffnen von der Platte, fehlte er:
+    Die Erkennung lief am feineren Netz neu und las dort etwas anderes — am
+    Screen-Cover nach 1 mm statt einer gerundeten Seite 45 Verrundungen,
+    72 Namen zeigten auf andere Merkmale (Durchsicht 0.5.1, erkennung-02).
+    Dasselbe Dokument ergab je nach Cache zwei Merkmalsstände (§15.1).
+    """
+    import importlib
+
+    from app.core.geom.mesh import MeshCodec
+    from app.core.perceive import local
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    features = importlib.import_module("app.core.perceive.features")
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    forget_cache()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    body_id = project.document.ops[-1].outputs[0]
+    history.apply(
+        "Verfeinern",
+        [OperationDraft(op="remesh_mesh", inputs=(body_id,), params={"edge": 2.0})],
+    )
+    if above_the_limit:
+        # Der Eingang liegt darunter, das feinere Netz darüber.
+        monkeypatch.setattr(
+            evaluation, "FEATURE_LIMIT_TRIANGLES", body("plate_holes.stl").triangle_count
+        )
+        monkeypatch.setattr(
+            local, "_recognise_region", lambda *_a, **_k: pytest.fail("örtlich nachgemessen")
+        )
+    folder = tmp_path / "ergebnisse"
+    first = evaluate(
+        project.document,
+        profile,
+        sources=sources,
+        cache=ResultCache(disk=DiskCache(codec=MeshCodec(), directory=folder)),
+    )
+    assert first.stopped_at is None
+    output_id = project.document.ops[-1].outputs[0]
+    in_session = first.scene.objects[output_id]
+    assert len(in_session.features) == 10
+
+    # Wiederöffnen: Merker leer, der Speicher des Caches leer, die Platte voll.
+    forget_cache()
+    examined: list[int] = []
+    original = features._large_facet_faces
+
+    def counted(body, *args, **kwargs):
+        examined.append(len(body.faces))
+        return original(body, *args, **kwargs)
+
+    monkeypatch.setattr(features, "_large_facet_faces", counted)
+    reopened_cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=folder))
+    second = evaluate(project.document, profile, sources=sources, cache=reopened_cache)
+
+    assert reopened_cache.statistics.disk_hits == 2, "beide Schritte kommen von der Platte"
+    reopened = second.scene.objects[output_id]
+    assert reopened.mesh.triangle_count == in_session.mesh.triangle_count
+    assert in_session.mesh.triangle_count not in examined, (
+        "am feineren Netz lief die Erkennung nach dem Öffnen noch einmal"
+    )
+    assert set(reopened.features) == set(in_session.features)
+    for name, feature in in_session.features.items():
+        assert reopened.features[name].kind == feature.kind
+        assert reopened.features[name].face_indices == feature.face_indices
+
+
+def test_a_new_bore_keeps_its_place_after_a_changed_bore_took_the_last_name(profile) -> None:
+    """Eine neue Bohrung verschwindet nicht, weil eine geänderte den nächsten Namen trägt (RM-222).
+
+    *Bohrung ändern* gibt die geänderte Bohrung unter ihrem alten Namen selbst
+    aus, und jeder Folgeschritt führt sie so weiter — neben der Zuordnung, an
+    der Neuerkennung vorbei. Die Zuordnung kannte diesen Namen deshalb nicht
+    als vergeben: Eine im nächsten Schritt neu gebohrte Bohrung bekam ihn als
+    ersten freien, und beim Zusammenführen überschrieb die geänderte sie. Am
+    Besenhalter fehlte so die Durchbohrung der Wand bei y = 0, sobald vorher
+    eine andere Bohrung vergrößert worden war — dieselbe Geometrie in anderer
+    Reihenfolge gebaut trug sie (Durchsicht 0.5.1, erkennung-06).
+    """
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    forget_cache()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    body_id = project.document.ops[-1].outputs[0]
+    loaded = evaluate(project.document, profile, sources=sources)
+    holes = sorted(
+        name
+        for name, feature in loaded.scene.objects[body_id].features.items()
+        if feature.kind == "hole"
+    )
+    assert holes == ["hole_1", "hole_2", "hole_3", "hole_4"]
+    history.apply(
+        "Vergrößern",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=(body_id,),
+                params={"at_feature": "hole_4", "diameter": 6.5, "compensate": False},
+            )
+        ],
+    )
+    history.apply(
+        "Bohren",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(project.document.ops[-1].outputs[0],),
+                params={
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 4.0,
+                    "axis": "z",
+                    "diameter": 4.0,
+                    "depth": 0.0,
+                    "compensate": False,
+                },
+                seed=11,
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=sources)
+
+    assert result.stopped_at is None
+    body = result.scene.objects[project.document.ops[-1].outputs[0]]
+    places = sorted(
+        (round(float(feature.params["centre"][0]), 1), round(float(feature.params["centre"][1]), 1))
+        for feature in body.features.values()
+        if feature.kind == "hole"
+    )
+    assert (0.0, 0.0) in places, "die neu gebohrte Bohrung fehlt"
+    assert len(places) == 5
+    assert float(body.features["hole_4"].params["diameter"]) == pytest.approx(6.5, abs=0.05)
+
+
 def test_a_transform_operation_reports_what_it_did() -> None:
     """Die Matrix kommt aus der Operation, nicht aus einem Vergleich danach."""
     from app.core.registry import REGISTRY
@@ -1910,3 +2071,44 @@ def test_a_coarse_clearance_hole_gets_the_head_of_its_screw() -> None:
     values = values_for(REGISTRY.get("countersink_hole"), clicked_bore(5.7))
 
     assert values["diameter"] == standards.screw("M5").countersink
+
+
+def test_a_declared_pin_takes_the_twin_at_its_own_place() -> None:
+    """Zwei erklärte Stifte, ein erkannter — er gehört dem, an dessen Stelle er steht.
+
+    Gemessen am Auto-Split der Gabel (Durchsicht 0.5.1): Zwei Verbinderstifte
+    16,6 mm auseinander an einem Körper mit 635 mm Diagonale lagen beide in der
+    Toleranz der Zuordnung (8 % der Diagonale). Der eine erkannte Stift war
+    damit umkämpft, keiner bekam ihn, er stand unter einem frischen Namen
+    daneben, und die Nummer fehlte dem nächsten Verbinder: Zwei Passungen
+    zeigten ins Leere. Der Stift steht 2,4 mm entlang der Achse versetzt — die
+    Erkennung misst die Mitte des Mantels, der Verbinder seinen Fuß.
+    """
+    from app.core.perceive.matching import declared_partners
+
+    def made(name: str, kind: str, centre: tuple[float, float, float], provenance: str) -> Feature:
+        return Feature(
+            id=name,
+            kind=kind,
+            provenance=provenance,
+            params={"diameter": 3.6, "centre": centre, "axis": (1.0, 0.0, 0.0), "depth": 5.4},
+        )
+
+    declared = {
+        "pin_1": made("pin_1", "pin", (0.0, 0.0, 28.3), "generated"),
+        "pin_2": made("pin_2", "pin", (0.0, 0.0, 11.7), "generated"),
+    }
+    # Die Fasen der Stiftspitzen gehören dazu: Erst mit ihnen blieb der Stift
+    # in der Zuordnung umkämpft (``match`` allein, Sonde p70).
+    detected = {
+        "cone_1": made("cone_1", "cone", (4.8, 0.0, 11.7), "detected"),
+        "cone_2": made("cone_2", "cone", (4.8, 0.0, 28.3), "detected"),
+        "pin_1": made("pin_1", "pin", (2.4, 0.0, 28.3), "detected"),
+    }
+
+    seen = declared_partners(declared, detected, (-97.3, 0.0, 300.0), 635.0)
+
+    assert seen.mapping == {"pin_1": "pin_1"}
+    assert not seen.ambiguous
+    assert "pin_2" in seen.orphaned, "an seiner Stelle steht nichts"
+    assert "pin_1" not in seen.fresh

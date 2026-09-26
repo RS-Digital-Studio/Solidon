@@ -22,10 +22,10 @@ Drei Ausgänge, und nur einer davon ist still:
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
 
@@ -756,6 +756,7 @@ def apply_mapping(
     result: MatchResult,
     *,
     previous: Mapping[FeatureId, Feature] | None = None,
+    reserved: Collection[FeatureId] = (),
 ) -> dict[FeatureId, Feature]:
     """Benennt die neuen Merkmale auf die alten Bezeichner um, die überlebt
     haben.
@@ -774,6 +775,13 @@ def apply_mapping(
     Messachse vor; die gemessene Achslage bleibt erhalten. Kegel und
     Flächennormalen sind geometrisch gerichtet. Der Torus trägt die Normale
     seiner Symmetrieebene, keine Längsrichtung, und behält sie ebenfalls.
+
+    ``reserved`` sind Namen, die neben der Zuordnung weiterleben — was die
+    Operation selbst ausgibt, was ungeprüft mitreist, was starr mitbewegt
+    bleibt. Ein neues Merkmal bekommt keinen davon (RM-222): Beim
+    Zusammenführen überschrieb der Mitreisende das neue, und eine eben
+    gebohrte Bohrung fehlte wortlos, sobald eine vorher geänderte den nächsten
+    freien Namen trug.
     """
     require_injective(result.mapping)
     renamed: dict[FeatureId, Feature] = {}
@@ -783,7 +791,9 @@ def apply_mapping(
     # ihn sofort neu zu vergeben ließe eine Passung auf das falsche Merkmal
     # zeigen. Aufgelöste stehen ohnehin schon im mapping, der Zusatz ist
     # dann folgenlos.
-    taken: set[FeatureId] = set(result.mapping) | set(result.orphaned) | set(result.ambiguous)
+    taken: set[FeatureId] = (
+        set(result.mapping) | set(result.orphaned) | set(result.ambiguous) | set(reserved)
+    )
     inherited = inherit_originators(new, result, previous) if previous is not None else new
     for identifier, feature in inherited.items():
         target = reverse.get(identifier)
@@ -830,6 +840,178 @@ def _fresh_id(identifier: FeatureId, taken: set[FeatureId]) -> FeatureId:
     while f"{stem}{number}" in taken:
         number += 1
     return f"{stem}{number}"
+
+
+#: Die Quellen, deren Wert eine Messung an den Dreiecken ist und keine Vorgabe
+#: (RM-216): Nur sie liest ein erklärtes Merkmal an seinem heutigen Partner neu.
+_MEASURED_SOURCES: Final = frozenset({"facets", "fit"})
+
+
+def near_its_declaration(declared: Feature, found: Feature) -> bool:
+    """Ob ein erkanntes Merkmal dort liegt, wo die Operation ihr erklärtes gesetzt hat.
+
+    Quer zur Achse darf der Mittelpunkt höchstens um die Breite des erklärten
+    Merkmals abweichen — Durchmesser, bei einem Langloch seine Länge —, entlang
+    der Achse höchstens um seine Tiefe, wo eine erklärt ist: Wo auf der Achse
+    eine Mitte liegt, ist eine Frage der Messung (Mündung oder Mitte, je nach
+    Erzeuger), wie weit daneben eine Bohrung liegt, nicht. Ohne Achse gilt die
+    Breite als Abstand. Ein erklärtes Merkmal ohne Größe oder ohne Ort wird
+    nicht beschränkt; dort entscheidet die Zuordnung allein.
+    """
+
+    def number(key: str) -> float:
+        value = declared.params.get(key)
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            return abs(float(value))
+        return 0.0
+
+    width = max(number("diameter"), number("length"))
+    where = declared.params.get("centre")
+    there = found.params.get("centre")
+    if not isinstance(where, tuple | list) or not isinstance(there, tuple | list):
+        return True
+    if width <= EPS_GEOM:
+        return True
+    try:
+        offset = [float(b) - float(a) for a, b in zip(where, there, strict=True)]
+        axis = declared.params.get("axis")
+        direction = [float(value) for value in axis] if isinstance(axis, tuple | list) else []
+    except TypeError, ValueError:
+        return True
+    length = math.hypot(*direction) if len(direction) == 3 else 0.0
+    if length <= EPS_GEOM:
+        return math.hypot(*offset) <= width
+    unit = [value / length for value in direction]
+    along = sum(a * b for a, b in zip(offset, unit, strict=True))
+    across = math.hypot(*(value - along * part for value, part in zip(offset, unit, strict=True)))
+    depth = number("depth")
+    return across <= width and (depth <= EPS_GEOM or abs(along) <= depth)
+
+
+def measured_again(declared: Feature, found: Feature) -> dict[str, Any]:
+    """Die gemessenen Werte eines erklärten Merkmals, am heutigen Partner abgelesen.
+
+    Nur, was die Erzeugung selbst als Messung ausweist
+    (:data:`_MEASURED_SOURCES`), was beide tragen und nur bei derselben Art.
+    Eine Vorgabe aus dem Schritt (``parameter``) oder aus der Konstruktion
+    (``native``) bleibt, wie sie ist: Die Normale von ``face_top`` ist die
+    Richtung, die der Quader seiner Deckfläche gibt, ihre Fläche eine Messung,
+    die nach einer Bohrung nicht mehr stimmte (RM-216).
+    """
+    if found.kind != declared.kind:
+        return {}
+    return {
+        key: found.params[key]
+        for key, source in declared.measure_sources.items()
+        if source in _MEASURED_SOURCES and key in declared.params and key in found.params
+    }
+
+
+def declared_partners(
+    declared: Mapping[FeatureId, Feature],
+    detected: Mapping[FeatureId, Feature],
+    centre: Vec3,
+    diagonal: float,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> MatchResult:
+    """Welches erkannte Merkmal ein erklärtes ist — gesucht an seiner Stelle.
+
+    Die Zuordnung toleriert 8 % der Diagonale, weil zwischen zwei Schritten
+    ungeklärt gewandert werden darf; was eine Operation selbst gesetzt hat,
+    steht aber dort, wo sie es sagt (:func:`near_its_declaration`). Weiter weg
+    als seine eigene Größe ist es nicht es selbst und zählt als verwaist.
+    Beide Kerne fragen so: die Auswertung am Netz und der Baustein an seinem
+    exakten Ergebnis (``knowledge.parts.ops``).
+    """
+    seen = match(dict(declared), dict(detected), centre, diagonal, check_cancelled=check_cancelled)
+    far = {
+        name
+        for name, found in seen.mapping.items()
+        if not near_its_declaration(declared[name], detected[found])
+    }
+    # **Dieselbe Stelle entscheidet auch unter Konkurrenten** (Durchsicht
+    # 0.5.1). Zwei erklärte Stifte 16,6 mm auseinander an einem Körper mit
+    # 635 mm Diagonale liegen beide in der Toleranz der Zuordnung, und der
+    # eine erkannte Stift war umkämpft: Keiner bekam ihn, er stand unter einem
+    # frischen Namen ``pin_3`` daneben, und die Nummer fehlte dem nächsten
+    # Verbinder — zwei Passungen des Auto-Split zeigten ins Leere. Wer seinen
+    # Kandidaten an seiner Stelle hat und ihn mit niemandem teilt, bekommt ihn;
+    # wer an seiner Stelle keinen hat, ist verwaist wie ein zu ferner Partner.
+    placed: dict[FeatureId, FeatureId] = {}
+    lonely: set[FeatureId] = set()
+    if seen.ambiguous:
+        near = {
+            name: tuple(
+                candidate
+                for candidate in candidates
+                if near_its_declaration(declared[name], detected[candidate])
+            )
+            for name, candidates in seen.ambiguous.items()
+        }
+        claimed: dict[FeatureId, list[FeatureId]] = {}
+        for name, candidates in near.items():
+            for candidate in candidates:
+                claimed.setdefault(candidate, []).append(name)
+        taken = set(seen.mapping.values())
+        for name, candidates in near.items():
+            if not candidates:
+                lonely.add(name)
+            elif (
+                len(candidates) == 1
+                and claimed[candidates[0]] == [name]
+                and candidates[0] not in taken
+            ):
+                placed[name] = candidates[0]
+    if not far and not placed and not lonely:
+        return seen
+    settled = set(placed) | lonely
+    return replace(
+        seen,
+        mapping={
+            **{name: found for name, found in seen.mapping.items() if name not in far},
+            **placed,
+        },
+        ambiguous={
+            name: candidates for name, candidates in seen.ambiguous.items() if name not in settled
+        },
+        orphaned=(*seen.orphaned, *sorted(far | lonely)),
+        fresh=tuple(name for name in seen.fresh if name not in set(placed.values())),
+    )
+
+
+def on_their_partners(
+    declared: Mapping[FeatureId, Feature],
+    detected: Mapping[FeatureId, Feature],
+    seen: MatchResult,
+) -> dict[FeatureId, Feature]:
+    """Die erklärten Merkmale mit der heutigen Oberfläche ihres Partners.
+
+    **Der Name bleibt, die aktuelle Oberfläche geht mit.** Ein Baustein kennt
+    Ort und Maß seiner Bohrung, aber nicht die Dreiecksnummern des Körpers,
+    der erst aus seiner Geometrie entsteht; die Erkennung kennt genau diese.
+    Mit eindeutigem Partner (``seen.mapping``) bekommt das erklärte Merkmal
+    dessen Dreiecke und Teilträger und liest seine Messwerte neu
+    (:func:`measured_again`); Werte aus dem Schritt bleiben. Wer verwaist ist,
+    trägt ``recognised=False`` und keinen Teilträger; ein umkämpftes bleibt,
+    wie es war.
+    """
+    placed: dict[FeatureId, Feature] = {}
+    orphaned = set(seen.orphaned)
+    for name, feature in declared.items():
+        partner = seen.mapping.get(name)
+        if partner is not None and partner in detected:
+            found = detected[partner]
+            feature = replace(
+                feature,
+                face_indices=found.face_indices,
+                surface_patches=found.surface_patches,
+                params={**feature.params, **measured_again(feature, found)},
+            )
+        elif name in orphaned:
+            feature = replace(feature, recognised=False, surface_patches=())
+        placed[name] = feature
+    return placed
 
 
 def question_for(old_id: FeatureId, candidates: tuple[FeatureId, ...]) -> tuple[str, list[str]]:

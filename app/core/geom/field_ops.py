@@ -474,6 +474,17 @@ def _named_bores(
     points = cKDTree(tools.centres)
     tolerance = match_tolerance(mesh.bounds.diagonal)
     named: dict[str, Feature] = {}
+    # **Am Netz gibt der Schnitt nur aus, was er selbst benennt** (RM-217,
+    # Durchsicht 0.5.1). Alles Übrige erkennt die Auswertung am selben Netz
+    # nach — aus dem Merker, ohne zweite Rechnung — und ordnet es den Merkmalen
+    # des Eingangs zu. Gab der Schnitt seine ganze Neuerkennung aus, las die
+    # Auswertung sie als mitgebrachte Merkmale mit frischen Namen: Auf der
+    # Deckfläche eines Quaders gewann deren ``face_2`` gegen ``face_top``, und
+    # der Bericht meldete ein verlorenes Merkmal aus der Konstruktion; zwei
+    # Millimeter darunter stritten beide um dieselbe unberührte Fläche, und die
+    # Auswertung hielt mit einer Zuordnungsfrage an. Am exakten Körper ist die
+    # Ausgabe dagegen seine vollständige Lesung und bleibt es.
+    passed_on = named if output.kind == "brep" else {}
     counts: dict[tuple[int, int], int] = {}
     ordinal = 1
     taken = (*ctx.inputs[0].features, *ctx.inputs[0].reserved_feature_ids)
@@ -482,12 +493,12 @@ def _named_bores(
     for key, feature in found.items():
         ctx.cancelled.raise_if_cancelled()
         if feature.kind != "hole":
-            named[key] = feature
+            passed_on[key] = feature
             continue
         centre = feature.params["centre"]
         distance, index = points.query(to_plane(frame, centre))
         if distance > tolerance:
-            named[key] = feature
+            passed_on[key] = feature
             continue
         point = tools.centres[int(index)]
         expected = replace(
@@ -503,13 +514,13 @@ def _named_bores(
             # muss auch ihre Richtung belegen, nicht nur die Projektion.
             aligned = abs(float(np.dot(feature.params["axis"], frame.normal)))
             if aligned < 1 - EPS_GEOM or abs(feature.params["diameter"] - diameter) > EPS_GEOM:
-                named[key] = feature
+                passed_on[key] = feature
                 continue
             checked = feature
         else:
             checked = _with_nominal_bore(mesh, feature, expected, diameter, sections=ARC_STEPS)
             if checked is feature:
-                named[key] = feature
+                passed_on[key] = feature
                 continue
         row = round(
             (point[1] - params.origin_y)
