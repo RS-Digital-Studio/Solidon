@@ -70,6 +70,10 @@ Drehringe an. Die übrigen Gizmos behalten ihre Drehfunktion.
   `frame_was_reduced()` sagt, ob das stehende Bild eines aus der Bewegung ist.
   Wann gezogen wird, entscheidet der Viewport (`note_camera_motion`, Regel in
   `ansicht.md`); am Vertrag sind beide Vorgaben, die nichts tun.
+* **Schriftzeichen lassen sich vorbauen.** `warm_glyphs(text)` legt die
+  Zeichen in pygfx' gemeinsamen Atlas, ohne etwas ins Bild zu stellen; die
+  Ansicht ruft es im Leerlauf (`_warm_the_glyphs`). Am Vertrag eine Vorgabe,
+  die nichts tut.
 * **Punktnormalen kann ein Arbeiter mitbringen.** `surface_normals(vertices,
   faces)` ist eine reine Rechnung (pygfx' eigene), die der Szenenarbeiter
   nebenläufig stellt; `add_surface(normals=…)` übernimmt sie, wenn die Form

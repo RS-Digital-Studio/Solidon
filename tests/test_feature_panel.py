@@ -1399,6 +1399,40 @@ def test_a_handling_that_does_not_apply_is_hidden(qt_app: QApplication) -> None:
         assert str(action.reason) not in texte
 
 
+def test_an_opening_where_nothing_applies_says_why_once(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Bohrung, an der der Kern jede Handlung ablehnt, nennt den Grund (Durchsicht 0.5.1).
+
+    Am Laptop-Ständer lehnte der Kern an 13 von 28 Bohrungen alles mit „In
+    dieser Bohrung steht Material …“ ab; das Fenster zeigte nur Name, Maß und
+    den Katalog, und der Kunde wartete auf Maße im Bild. Der Satz steht jetzt
+    einmal da, nicht je Handlung; eine anklickbare Handlung gibt es weiter
+    nicht.
+    """
+    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY
+    from app.core.perceive.actions import FeatureAction
+
+    identifier, feature = a_hole()
+    refused = tuple(
+        FeatureAction(title=action.title, op=None, reason=HOLE_IS_NOT_EMPTY)
+        for action in actions_for(feature)
+    )
+    assert len(refused) > 1, "ohne mehrere Absagen prüft der Test das Zusammenlegen nicht"
+    monkeypatch.setattr(actions, "actions_for", lambda *args, **kwargs: refused)
+
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+
+    assert not buttons(panel), "keine Handlung ist anklickbar"
+    said = [
+        label.text()
+        for label in panel.findChildren(QLabel)
+        if str(HOLE_IS_NOT_EMPTY) in label.text()
+    ]
+    assert said == [str(HOLE_IS_NOT_EMPTY)], said
+
+
 def test_a_changed_number_is_reported_before_it_is_done(qt_app: QApplication) -> None:
     """Robert am 03.09.2026: „eine live vorschau wäre noch gut."
 
@@ -3401,3 +3435,37 @@ def test_the_waiting_panel_already_shows_its_feature(qt_app: QApplication) -> No
 
     assert panel.feature_id == hole_id
     assert panel._empty.isHidden(), "der Leersatz stand unter dem gewählten Merkmal"
+
+
+def test_a_fresh_row_that_is_hidden_stays_hidden_after_qt_lays_it_out(
+    qt_app: QApplication,
+) -> None:
+    """Verborgen heißt ausdrücklich verborgen — auch an einer frisch eingesetzten Zeile.
+
+    Ein Widget, das eben erst in ein sichtbares Layout kam, meldet
+    ``isHidden()``, bis Qt es mit einem eingereihten Aufruf zeigt. Verbarg
+    ``_set_shown`` es nur, wenn es nicht schon „verborgen“ war, zeigte Qt es
+    danach trotzdem: Der Block von *Bohrung ändern* stand rechts neben der
+    Maßgruppe im Bild, mit denselben Feldern (Durchsicht 0.5.1, RM-199).
+    """
+    from PySide6.QtWidgets import QVBoxLayout
+
+    from app.ui.panels import _set_shown
+
+    host = QWidget()
+    layout = QVBoxLayout(host)
+    host.show()
+    qt_app.processEvents()
+    row = QWidget()
+    layout.addWidget(row)
+    assert row.isHidden(), "Voraussetzung: frisch im Layout, noch nicht gezeigt"
+
+    _set_shown(row, False)
+    for _round in range(5):
+        qt_app.processEvents()
+
+    assert row.isHidden(), "Qt zeigte die verborgene Zeile nachträglich"
+    _set_shown(row, True)
+    assert not row.isHidden()
+    host.close()
+    host.deleteLater()

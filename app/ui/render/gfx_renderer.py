@@ -1735,6 +1735,20 @@ class GfxRenderer(Renderer):
         finally:
             self._restore(restore)
 
+    def warm_glyphs(self, text: str) -> None:
+        """Die Zeichen in den Atlas von pygfx legen — ein Textobjekt, das nie ins Bild kommt.
+
+        pygfx rendert jedes Zeichen beim ersten Gebrauch als Abstandsfeld in
+        einen **gemeinsamen** Atlas, unabhängig von Größe, Farbe und Stärke.
+        Am Laptop-Ständer kostete das beim ersten Klick auf eine Bohrung rund
+        90 ms im Hauptfaden, weil die ersten Merkmalsnamen erschienen
+        (Durchsicht 0.5.1). Das Textobjekt hier hängt an keinem Baum und geht
+        danach.
+        """
+        import pygfx as gfx
+
+        gfx.Text(text=text, font_size=12.0, screen_space=True)
+
     def pick_item(self, x: float, y: float) -> Item | None:
         restore = self._pick_pass(None)
         try:

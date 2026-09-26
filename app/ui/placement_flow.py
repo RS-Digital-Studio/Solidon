@@ -667,6 +667,21 @@ def _places_that_still_serve(
     return kept
 
 
+def _screen_side(foot: QPointF, spot: QPointF) -> str | None:
+    """Zu welcher Seite des Bildes eine Maßlinie von der Stelle aus läuft.
+
+    ``links``, ``rechts``, ``oben`` oder ``unten`` nach der längeren Richtung im
+    Bild; ``None`` für eine Linie, die im Bild kaum eine Richtung hat (von vorn
+    auf die Kante gesehen) — dann bleibt die Nummer.
+    """
+    across, down = foot.x() - spot.x(), foot.y() - spot.y()
+    if max(abs(across), abs(down)) < 2 * SPACE:
+        return None
+    if abs(across) >= abs(down):
+        return "left" if across < 0 else "right"
+    return "up" if down < 0 else "down"
+
+
 def _clear_of_lines(rect: QRect, lines: Sequence[tuple[QPointF, QPointF]]) -> bool:
     """Ob kein Strich der Tinte durch das um ``SPACE`` gewachsene Feld läuft.
 
@@ -1384,6 +1399,8 @@ class PlacementFlow(QObject):
         self._held_references: tuple[placement.EdgeReference, ...] | None = None
         self._held_centre = ""
         self._reference_message = ""
+        self._typed_off_surface = False
+        """Ob eine getippte Koordinate neben der Fläche liegt (:meth:`refuse_typed_position`)."""
         self._distance_message = ""
         """Warum der Abstand gerade nicht gilt — gezeigt nur, solange er nicht gilt.
 
@@ -1574,14 +1591,21 @@ class PlacementFlow(QObject):
         if pulled:
             reason = None
             begun = True
+        # **Ein Werkzeug, das gerade neu gebaut wird, sperrt nicht** (Durchsicht
+        # 0.5.1, Kunde Weg b): Nach jeder getippten Zahl baut der Fluss das
+        # Werkzeug neu, der Knopf war so lange grau, und ein Klick gleich nach
+        # dem Tippen fiel still auf einen grauen Knopf — gemessen am
+        # Schraubendreherhalter: kein Schritt nach 30 s; wer es merkte, klickte
+        # nach Sekunden noch einmal (6,6 s bis zum Schritt). Warten ist keine
+        # Sperre: Der Klick wartet auf das Werkzeug und danach auf die
+        # Vorschau (:meth:`_accept_values`).
         allowed = (
             self.active
             and (
                 self._measure_without_surface
                 or (
                     self._surface is not None
-                    and self._tool_context is not None
-                    and not self._tool_busy
+                    and (self._tool_context is not None or self._tool_busy)
                 )
             )
             and self._distance_valid
@@ -1663,7 +1687,15 @@ class PlacementFlow(QObject):
         self._measure_scroll.setFixedHeight(max(1, min(height, room.height() - chrome - distances)))
         self._measure_box.setMaximumSize(max(width, 1), max(room.height(), 1))
         self._measure_box.adjustSize()
-        self._measure_box.setVisible(not self._seat_is_coming())
+        # **Gezeigt wird erst an ihrem Platz** (Durchsicht 0.5.1). Die Karte
+        # ist ein eigenes Fenster über der Grafikfläche; hier eingeblendet,
+        # stand sie von Bohrung zu Bohrung zuerst dort, wo die vorige Bohrung
+        # sie verlassen hatte, und rückte erst am Ende von :meth:`redraw` an
+        # ihren Platz — am Wabenhalter 15 ms lang an der falschen Stelle. Den
+        # Platz vergeben und die Karte zeigen tun beide Wege von
+        # :meth:`redraw` selbst.
+        if self._seat_is_coming():
+            self._measure_box.hide()
 
     def _hold_frames(self) -> None:
         """Das Bild anhalten, bis die Fläche am Merkmal da ist (RM-232).
@@ -3363,8 +3395,7 @@ class PlacementFlow(QObject):
                 self._request_tool()
             elif self._accept_pending and self.active:
                 self._accept_pending = False
-                if not self.dialog.preview_required and not self.dialog.requires_displayed_preview:
-                    self.accept()
+                self.accept()
 
         self.session.placement_async(compute, done, lambda _detail: done(None))
 
@@ -3417,7 +3448,26 @@ class PlacementFlow(QObject):
         return menu
 
     @staticmethod
-    def _reference_name(kind: str, number: int) -> str:
+    def _reference_name(kind: str, number: int, side: str | None = None) -> str:
+        """Der Name eines Bezugs — mit seiner Seite im Bild, sonst mit Nummer.
+
+        Die Nummer bleibt im Kontextmenü (dort stehen alle Bezüge der Fläche);
+        am Maß selbst sagt die Seite mehr (:func:`_screen_side`).
+        """
+        if side is not None:
+            bare = {
+                "outer": tr("Außenkante"),
+                "inner": tr("Innenkante"),
+                "axis": tr("Achse"),
+                "centre": tr("Mitte"),
+            }
+            sided = {
+                "left": tr("{reference} links"),
+                "right": tr("{reference} rechts"),
+                "up": tr("{reference} oben"),
+                "down": tr("{reference} unten"),
+            }
+            return sided[side].format(reference=bare[kind])
         names = {
             "outer": tr("Außenkante {number}"),
             "inner": tr("Innenkante {number}"),
@@ -3565,6 +3615,40 @@ class PlacementFlow(QObject):
             )
             self.redraw()
 
+    @property
+    def on_a_surface(self) -> bool:
+        """Ob die Stelle auf einer vorbereiteten Fläche sitzt — nur dann gibt es Flächenmaße."""
+        return (
+            self._surface is not None
+            and self._prepared is not None
+            and not self._measure_without_surface
+        )
+
+    def refuse_typed_position(self, message: str) -> None:
+        """Eine getippte Koordinate liegt nicht auf der Fläche — die Maße bleiben stehen.
+
+        **Mitten im Tippen entscheidet eine Zahl noch nichts** (Durchsicht
+        0.5.1). Wer an einer Bohrung bei x = -98 „-99“ tippt, kommt über „-9“,
+        und das lag neben dem Wabenhalter: Die Maßgruppe ging, das Feld mit
+        ihr, und die übrigen Tasten landeten auf einem Knopf des Fensters. Die
+        Stelle bleibt jetzt, wo sie war, Übernehmen wartet, und der Satz sagt
+        warum; die nächste Ziffer auf der Fläche setzt sie (:meth:`move_to`),
+        dieselbe Zahl wie vorher nimmt die Sperre zurück
+        (:meth:`typed_position_back`).
+        """
+        self._typed_off_surface = True
+        self._invalid_distance(message)
+        self.redraw()
+
+    def typed_position_back(self) -> None:
+        """Die getippte Koordinate steht wieder auf der Stelle, die gilt."""
+        if not self._typed_off_surface:
+            return
+        self._typed_off_surface = False
+        self._distance_valid = True
+        self._distance_message = ""
+        self.redraw()
+
     def _invalid_distance(self, message: str) -> None:
         """Ungültige Abstände erklären und beide Abschlüsse unmittelbar sperren."""
         self._distance_valid = False
@@ -3592,6 +3676,7 @@ class PlacementFlow(QObject):
             return
         self._frozen = True
         self._distance_valid = True
+        self._typed_off_surface = False
         self._pending = None
         self._serial += 1
         self._surface = changed
@@ -3621,6 +3706,7 @@ class PlacementFlow(QObject):
             return
         self._frozen = True
         self._distance_valid = True
+        self._typed_off_surface = False
         self._pending = None
         self._serial += 1
         self._surface = changed
@@ -3670,6 +3756,7 @@ class PlacementFlow(QObject):
             return False
         self._frozen = True
         self._distance_valid = True
+        self._typed_off_surface = False
         self._pending = None
         self._serial += 1
         self._surface = changed
@@ -3739,7 +3826,7 @@ class PlacementFlow(QObject):
         self._accept_values(allow_pending=True)
 
     def _accept_values(self, *, allow_pending: bool) -> None:
-        """Ein früher Tastendruck wird unter keinen Umständen nachgeholt."""
+        """Ein früher Tastendruck wird nicht nachgeholt — außer im Maßfeld (``allow_pending``)."""
         self._accept_pending = False
         if (
             self._disposed
@@ -3759,13 +3846,16 @@ class PlacementFlow(QObject):
             # Der Knopf im Merkmalfenster bleibt erreichbar, während eine
             # neue Maßangabe ihr Werkzeug vorbereitet. Sein Klick gehört dem
             # fertigen Werkzeug; Abbruch und neuere Eingaben löschen ihn.
+            # Auch dort, wo eine gezeigte Vorschau Pflicht ist: Der gemerkte
+            # Klick läuft nach dem Werkzeug durch :meth:`accept` und hängt sich
+            # dort an die Vorschau (``preview_defer``), statt zu verfallen.
             self._accept_pending = (
-                allow_pending
-                and self.dialog.values_stand_elsewhere
-                and self._distance_valid
-                and not self.dialog.preview_required
-                and not self.dialog.requires_displayed_preview
+                allow_pending and self.dialog.values_stand_elsewhere and self._distance_valid
             )
+            if self._accept_pending:
+                announce = getattr(self.window, "announce", None)
+                if announce is not None:
+                    announce(tr("Wird übernommen, sobald die Vorschau steht."), receipt=False)
             return
         if not self._measure_without_surface and (
             self._tool is None or self._tool_context is None or not self._accept.isEnabled()
@@ -4293,9 +4383,15 @@ class PlacementFlow(QObject):
                         # Pickmodus, geht Escape wie bisher zurück.
                         self.step_back()
                     else:
-                        if watched in self._field_targets:
+                        typed = watched in self._field_targets
+                        if typed:
                             self._begin_edit()
-                        self._accept_values(allow_pending=False)
+                        # **Die Eingabetaste im Maßfeld wartet wie der Knopf**
+                        # (Durchsicht 0.5.1, Kunde Weg b): Gleich nach der
+                        # letzten Ziffer baut der Fluss noch das Werkzeug, und
+                        # die Taste verfiel still. Eine Taste außerhalb der
+                        # Felder wird weiter nicht nachgeholt.
+                        self._accept_values(allow_pending=typed and self._measure_group is not None)
                     return True
             # **Eine Radraste beginnt den Entwurf nur an einem Feld mit
             # Fokus.** Die Editoren aus ``set_measure_fields`` tragen ihren
@@ -4566,6 +4662,7 @@ class PlacementFlow(QObject):
                     max(measure_room.left(), measure_room.right() - self._measure_box.width() + 1),
                     measure_room.top(),
                 )
+                self._measure_box.show()
                 self._measure_box.raise_()
             self.viewport.grip_placement(None)
             if draw:
@@ -4706,6 +4803,20 @@ class PlacementFlow(QObject):
         else:
             self._rest.hide()
 
+        # **Die Maße sagen, wohin sie gehen** (Durchsicht 0.5.1, Weg c):
+        # „Außenkante 4“ verlangte, die Nummer im Kopf auf eine Kante im Bild
+        # zu legen. Genannt wird die Seite, zu der die Maßlinie im Bild läuft
+        # — dieselbe, die das Auge sieht, auch nach dem Drehen. Zeigen beide
+        # Maße zur selben Seite, bleibt die Nummer, sonst wären sie gleich.
+        sides = [
+            _screen_side(
+                screen(tuple(point - np.asarray(edge.inward, dtype=np.float64) * edge.distance)),
+                screen(surface.point),
+            )
+            for edge in surface.edges[:2]
+        ]
+        if len(set(sides)) < len(sides):
+            sides = [None] * len(sides)
         for index, edge in enumerate(surface.edges[:2]):
             reference = (screen(edge.start), screen(edge.end))
             self._canvas.references.append(reference)
@@ -4723,7 +4834,7 @@ class PlacementFlow(QObject):
                 for number, reference in enumerate(self._prepared.edges, 1)
                 if reference.id == edge.id
             )
-            reference_name = self._reference_name(edge.kind, number)
+            reference_name = self._reference_name(edge.kind, number, sides[index])
             field.setPrefix(reference_name + ": ")
             # **Der Name für den Bildschirmleser zieht mit.** Er stand einmalig
             # als „Abstand zu Kante 1/2" im Aufbau der Felder; das Präfix nennt

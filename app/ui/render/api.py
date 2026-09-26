@@ -443,6 +443,16 @@ class Renderer(ABC):
         """
         return None
 
+    def warm_glyphs(self, text: str) -> None:
+        """Die Schriftzeichen von ``text`` vorab aufbauen, ohne etwas ins Bild zu stellen.
+
+        Für den Leerlauf nach dem Start (``Viewport._warm_the_glyphs``): Ein
+        Renderer, der Beschriftungen aus einem Zeichenatlas baut, bezahlt jedes
+        Zeichen beim ersten Gebrauch — und der kam mit dem ersten Klick auf
+        ein Merkmal. Ohne Umsetzung tut der Aufruf nichts.
+        """
+        return None
+
     def frame_was_reduced(self) -> bool:
         """Ob das zuletzt gezeichnete Bild in der leichten Stufe entstand.
 

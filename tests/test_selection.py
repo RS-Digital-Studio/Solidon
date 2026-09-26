@@ -790,6 +790,50 @@ def test_bore_target_slack_cannot_cross_a_blind_hole_back_wall(
     assert view._bore_aim(tuple(origin), tuple(direction), float("inf")) is not None
 
 
+def test_a_click_into_a_countersunk_mouth_means_the_bore_and_not_its_rim(
+    qt_app: QApplication,
+) -> None:
+    """Mitten in eine gesenkte Bohrung geklickt ist die Bohrung gemeint (KUNDE-05).
+
+    Durchsicht 0.5.1 am Schraubendreherhalter: In der Übersicht hat eine
+    Bohrung Ø 4,4 zehn Bildpunkte Durchmesser, jede Stelle darin lag in der
+    Reichweite ihres Rands, und die Kante gewann — auch mitten in der Öffnung.
+    Näher herangezoomt traf der Klick die Senkung, weil der Strahl zuerst durch
+    ihren Kegel geht. Jetzt gewinnt die engste Öffnung derselben Achse, und
+    innerhalb einer Mündung gibt es keine Randkante; die Senkung trifft ein
+    Klick auf ihre Kegelwand.
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+
+    mesh = normalise(read_mesh((MESHES / "plate_countersunk.stl").read_bytes(), ".stl"), "mm").mesh
+    entry = SceneObject(id="body", name="Senkplatte", mesh=mesh, features=detect(mesh))
+    view = Viewport()
+    view.show_scene(EvaluationResult(scene=Scene(objects={"body": entry})))
+    bores = {target.feature_id: target for target in view._prepared_bores("body")}
+    hole = next(name for name in bores if entry.features[name].kind == "hole")
+    cone = next(name for name in bores if entry.features[name].kind == "cone")
+    line = np.asarray(bores[cone].axis, dtype=float)
+    # Die Senkung liegt an dem Ende, an dem ihr Kegel weiter hinausreicht.
+    outward = line if bores[cone].bounds[1] > bores[hole].bounds[1] else -line
+    centre = np.asarray(bores[hole].centre, dtype=float)
+    sideways = np.cross(line, [1.0, 0.0, 0.0] if abs(line[0]) < 0.9 else [0.0, 1.0, 0.0])
+    sideways /= np.linalg.norm(sideways)
+
+    origin = centre + outward * 100.0
+    aimed = view._bore_aim(tuple(origin), tuple(-outward), math.inf, view_space=True)
+    assert aimed is not None
+    assert view._feature_at(aimed) == hole, "mitten in der Mündung: die Bohrung, nicht der Kegel"
+    assert view._aim_in_opening == hole, "und innerhalb ihres Rands gibt es keine Randkante"
+
+    on_the_cone = (bores[hole].radius + bores[cone].radius) / 2.0
+    origin = centre + outward * 100.0 + sideways * on_the_cone
+    aimed = view._bore_aim(tuple(origin), tuple(-outward), math.inf, view_space=True)
+    assert aimed is not None and view._feature_at(aimed) == cone, "auf der Kegelwand: die Senkung"
+
+
 def test_bore_target_slack_cannot_cross_a_closed_side_wall(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1259,8 +1303,12 @@ def test_the_body_is_announced_before_its_feature(window: MainWindow) -> None:
     und ausgewählt war noch keines. Im Fenster sah es aus, als käme der Klick
     nicht an — in Wahrheit war er angekommen und hatte niemanden.
 
-    Zwei Klicks statt einem, seit die Tiefe gestuft ist; die Reihenfolge im
-    zweiten ist dieselbe geblieben.
+    Zwei Klicks statt einem, seit die Tiefe gestuft ist. **Der zweite meldet
+    den Körper nicht noch einmal** (Durchsicht 0.5.1): Er steht dann schon
+    allein in der Auswahl, und die Meldung wählte im Baum den Körper ohne
+    Merkmal — Maßgruppe ab, Merkmalfenster leer, alles neu, und gleich danach
+    noch einmal für das Merkmal. Wo der Körper noch nicht gewählt ist — der
+    Rechtsklick geht ohne Stufe ans Merkmal —, kommt er weiter zuerst.
     """
     order: list[str] = []
     window.viewport.objectPicked.connect(lambda name, add: order.append(f"object:{name}"))
@@ -1270,7 +1318,15 @@ def test_the_body_is_announced_before_its_feature(window: MainWindow) -> None:
     window.viewport._select_at(point)
     window.viewport._select_at(point)
 
-    assert order == ["object:obj_1", "object:obj_1", "feature:hole_1"]
+    assert order == ["object:obj_1", "feature:hole_1"]
+    assert window.object_tree.selected() == "obj_1"
+    assert window.object_tree.selected_feature() == "hole_1"
+
+    window.object_tree.select_object(None)
+    order.clear()
+    window.viewport._select_at(point, direct=True)
+    assert order == ["object:obj_1", "feature:hole_1"], "ohne gewählten Körper kommt er zuerst"
+    assert window.object_tree.selected_feature() == "hole_1"
 
 
 # --- der Weg zurück -------------------------------------------------------------

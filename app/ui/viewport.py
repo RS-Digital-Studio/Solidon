@@ -1999,6 +1999,18 @@ FEATURE_REACH_SHARE = 0.01
 FEATURE_REACH_MINIMUM = 0.5
 
 
+#: Wie weit zwei Öffnungen einer Kette (Senkung und Bohrung) in der Richtung
+#: auseinanderliegen dürfen — ``1 - cos`` des Winkels zwischen den Achsen. Die
+#: erkannten Achsen tragen Rauschen um 1e-6; eine gekippte Bohrung unter einer
+#: Senkung liegt Grad daneben und bleibt ein eigenes Ziel.
+CHAIN_AXIS_SLACK: Final = 1e-3
+
+#: Wie weit die Achse der engeren Öffnung von der der weiteren abstehen darf,
+#: als Anteil ihres Radius — mehr ist eine zweite Bohrung daneben, nicht die
+#: Fortsetzung derselben.
+CHAIN_CENTRE_SHARE: Final = 0.1
+
+
 def _is_opening_feature(feature: Feature) -> bool:
     """Bohrung, Langloch, Senkung oder Innengewinde bezeichnen eine axiale Öffnung.
 
@@ -3999,6 +4011,25 @@ class _MeshMemo:
         self._entries.clear()
 
 
+def _footprint_fan(corners: Any) -> Any:
+    """Die konvexe Hülle von Punkten der Ebene als Fächer aus Dreiecken ``(n, 3, 2)``.
+
+    Leer, wo die Punkte keine Fläche aufspannen. Für die Grundfläche eines
+    gezogenen Bausteins (:meth:`Viewport._landing_of`).
+    """
+    import numpy as np
+    from scipy.spatial import ConvexHull, QhullError
+
+    points = np.unique(np.asarray(corners, dtype=float).reshape(-1, 2), axis=0)
+    if len(points) < 3:
+        return np.zeros((0, 3, 2))
+    try:
+        ring = points[ConvexHull(points).vertices]
+    except QhullError:
+        return np.zeros((0, 3, 2))
+    return np.stack((np.repeat(ring[:1], len(ring) - 2, axis=0), ring[1:-1], ring[2:]), axis=1)
+
+
 def _inside_any(triangles: Any, point: Any) -> bool:
     """Ob ein Punkt der Ebene in einem der Dreiecke liegt — Rand eingeschlossen.
 
@@ -4177,6 +4208,167 @@ class _SceneMeshWorker(Worker):
             self._result,
             _PreparedScene(meshes, cached, uncapped, edges, hulls, normals),
         )
+
+
+#: Die Zeichen, die Merkmalsnamen und Maße im Bild tragen — in allen Sprachen
+#: der Kataloge (:meth:`Viewport._warm_the_glyphs`).
+LABEL_GLYPHS: Final = (
+    "0123456789 ,.:;-–+±×·°Ø%/()'"
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "äöüßÄÖÜáàâãçéèêëíìîïñóòôõúùûœÁÀÂÃÇÉÈÊÍÓÔÕÚ"
+)
+
+#: Wie viele Zeichen je Leerlaufrunde vorgebaut werden, und mit welchem
+#: Abstand in Millisekunden — je Runde rund 10 bis 30 ms unter Last.
+GLYPHS_PER_TICK: Final = 12
+GLYPH_TICK_MS: Final = 40
+
+
+#: Ab wie vielen Dreiecken die Markierung eines Merkmals im Arbeiter entsteht
+#: (Durchsicht 0.5.1). Dieselbe Grenze wie die Kernauskünfte des
+#: Merkmalfensters (``ANSWERS_IN_WORKER_FROM``): An der Senkplatte mit 311 296
+#: Dreiecken kostete der erste Klick auf die Senkbohrung 290 ms für die
+#: Hohlraumfläche und danach noch einmal 140 ms für Ecken, Normalen und Kontur
+#: der Markierung im Hauptfaden; an kleinen Körpern bleibt beides unter 20 ms.
+MARKING_IN_WORKER_FROM: Final = 20_000
+
+#: Ab wie vielen Dreiecken einer Bohrungskette auch ihre Hohlraumfläche im
+#: Arbeiter entsteht, an einer eigenen Kopie des Netzes (Durchsicht 0.5.1).
+#: Darunter kostet sie am Original wenig (Laptop-Ständer, 504 Dreiecke in der
+#: Kette: 74 ms), darüber wächst sie mit der Kette (Senkplatte, 196 608: 207 ms).
+CAVITY_IN_WORKER_FROM: Final = 20_000
+
+#: Wie viele fertige Markierungen großer Körper gemerkt werden — genug für
+#: das Hin und Her zwischen den Bohrungen eines Teils, ohne dass jede je
+#: gewählte Fläche ihr Netz im Speicher hält.
+MARKING_MEMORY: Final = 12
+
+
+class _MarkingGeometry(NamedTuple):
+    """Was die Markierung einer Dreiecksauswahl braucht, bis auf Anhebung und Versatz.
+
+    Alles in Szenenkoordinaten. Anhebung (hängt am Zoom der Szene), Schnitt der
+    Ansicht und Versatz einer Explosion kommen erst beim Zeichnen dazu
+    (:meth:`Viewport._lifted_and_rim`); darum kann das hier im Arbeiter
+    entstehen und über viele Klicks stehen bleiben.
+    """
+
+    corners: Any
+    """Die Ecken der Auswahl, ``(k, 3)``."""
+    inverse: Any
+    """Je Dreiecksecke ihr Platz in ``corners``, ``(3n,)``."""
+    normals: Any
+    """Je Ecke die flächengewichtet gemittelte Einheitsnormale, ``(k, 3)``."""
+    outline: Any
+    """Der Rand der Auswahl als Strichpaare, ``(2m, 3)`` (:func:`outline_edges`)."""
+
+
+def _selected_corners(vertices: Any, faces: Any, chosen: Any) -> tuple[Any, Any]:
+    """Die Ecken einer Dreiecksauswahl und je Dreiecksecke ihr Platz darin.
+
+    **Über eine Markierung je Ecke, nicht über ``np.unique``** (Durchsicht
+    0.5.1): Das Sortieren aller Eckennummern war der teuerste Schritt der
+    Markierung, an der Senkbohrung der Senkplatte 35 ms. Die Antwort ist
+    dieselbe — Ecken aufsteigend nach ihrer Nummer, ``inverse`` ihr Platz.
+    """
+    import numpy as np
+
+    triangles = np.asarray(faces, dtype=np.int64)[chosen].reshape(-1)
+    points = np.asarray(vertices, dtype=float)
+    used = np.zeros(len(points), dtype=bool)
+    used[triangles] = True
+    place = np.cumsum(used) - 1
+    return points[used], place[triangles]
+
+
+def _corner_normals(corners: Any, inverse: Any) -> Any:
+    """Je Ecke die gemittelte Normale ihrer Dreiecke, nach deren Fläche gewichtet."""
+    import numpy as np
+
+    count = len(corners)
+    selected = corners[inverse].reshape(-1, 3, 3)
+    # Das Kreuzprodukt trägt bereits die doppelte Dreiecksfläche. So braucht
+    # ein kleiner Patch keine Flächentabelle des gesamten Netzes.
+    products = np.cross(selected[:, 1] - selected[:, 0], selected[:, 2] - selected[:, 0])
+    areas = np.linalg.norm(products, axis=1)
+    weighted = np.repeat(products, 3, axis=0)
+    summed = np.column_stack(
+        [np.bincount(inverse, weights=weighted[:, axis], minlength=count) for axis in range(3)]
+    )
+    weights = np.bincount(inverse, weights=np.repeat(areas, 3), minlength=count)
+    np.divide(summed, weights[:, None], out=summed, where=weights[:, None] > 0.0)
+    lengths = np.linalg.norm(summed, axis=1, keepdims=True)
+    return np.divide(summed, lengths, out=np.zeros_like(summed), where=lengths > EPS_GEOM)
+
+
+def marking_geometry(vertices: Any, faces: Any, chosen: Any) -> _MarkingGeometry:
+    """Ecken, Normalen und Kontur einer Dreiecksauswahl — rein, ohne Qt, im Arbeiter rechenbar."""
+    corners, inverse = _selected_corners(vertices, faces, chosen)
+    return _MarkingGeometry(
+        corners,
+        inverse,
+        _corner_normals(corners, inverse),
+        outline_edges(corners, inverse.reshape(-1, 3)),
+    )
+
+
+def _marking_of(
+    vertices: Any,
+    faces: Any,
+    lists: Sequence[Sequence[int]],
+    cavity: Callable[[], Any] | None = None,
+) -> _MarkingGeometry | None:
+    """Die Markierung der Dreiecke in ``lists`` — ``None``, wo nichts zu markieren ist.
+
+    **Als Feld und nicht als Folge von Zahlen.** Hier stand ein
+    ``dict.fromkeys`` über jede Dreiecksnummer, und je Nummer fragte die
+    Bedingung ``len(raw.faces)`` — eine Eigenschaft von trimesh, an der
+    Senkbohrung einer 311k-Platte 500 000-mal je Auswahl (0,13 s, RM-203). Die
+    Reihenfolge der Dreiecke sagt der Markierung nichts; sie braucht die Menge.
+    """
+    import numpy as np
+
+    if cavity is not None:
+        blended = cavity()
+        if blended:
+            lists = [blended]
+    count = len(faces)
+    listed = [
+        np.asarray(face_indices, dtype=np.int64) for face_indices in lists if len(face_indices)
+    ]
+    chosen = np.unique(np.concatenate(listed)) if listed else np.zeros(0, dtype=np.int64)
+    chosen = chosen[(chosen >= 0) & (chosen < count)]
+    if not len(chosen):
+        return None
+    return marking_geometry(vertices, faces, chosen)
+
+
+class _MarkingWorker(Worker):
+    """Die Markierung eines Merkmals an einem großen Körper, abseits des Hauptfadens.
+
+    Er rechnet :func:`_marking_of` — Ecken, Normalen und Kontur — aus Feldern,
+    die er nur liest, und braucht deshalb weder eine Arbeiterkopie noch ihr
+    Schloss (:meth:`Viewport._marking`).
+    """
+
+    done = Signal(object, object)
+
+    def __init__(self, key: Any, compute: Callable[[], Any]) -> None:
+        super().__init__()
+        self._key = key
+        self._compute = compute
+        self.cancelled = CancelSignal()
+
+    def cancel(self) -> None:
+        """Die Ansicht geht — die Antwort braucht niemand mehr."""
+        self.cancelled.cancel()
+
+    def work(self) -> None:
+        if self.cancelled.is_cancelled:
+            return
+        answer = self._compute()
+        if not self.cancelled.is_cancelled:
+            self.done.emit(self._key, answer)
 
 
 class _ShadowWorker(Worker):
@@ -4886,6 +5078,9 @@ class Viewport(QWidget):
         #: :meth:`_warm_the_picker` zieht ihn deshalb in den Leerlauf des
         #: Programmstarts vor — der leere Szenenaufbau genügt dafür.
         self._picker_warm = False
+        #: Welche Zeichen von :data:`LABEL_GLYPHS` noch vorzuwärmen sind
+        #: (:meth:`_warm_the_glyphs`); ``None``, solange niemand begonnen hat.
+        self._glyphs_to_warm: str | None = None
         self._occlusion_applied = False
         self._depth_order_for: tuple[tuple[float, ...], tuple[str, ...], int] | None = None
         """Für welche Kameralage und welche Körper zuletzt nach Tiefe geordnet
@@ -4997,6 +5192,12 @@ class Viewport(QWidget):
         Auswertung, nicht dem Viewport.
         """
         self._selection_hit: _SelectionHit | None = None
+        self._aim_in_opening: FeatureId | None = None
+        """Die Öffnung, durch deren Mündung der letzte Zielstrahl ging (:meth:`_aim_at`).
+
+        Gesetzt nur, wenn der Strahl **innerhalb** ihres Rands lag, nicht in der
+        Zielhilfe daneben. Dann meint der Klick die Bohrung und nicht die
+        Kante ihres Rands (:meth:`_edge_click`, :meth:`_edge_under`)."""
         self._original_pick_cells: set[ObjectId] = set()
         self._feature_cells: dict[ObjectId, tuple[tuple[FeatureId, ...], Any]] = {}
         self._feature_bores: dict[ObjectId, list[_BoreTarget]] = {}
@@ -5009,6 +5210,10 @@ class Viewport(QWidget):
         # oben: Ein Körper aus einer STEP-Datei hat tausende Kanten, sie
         # abzutasten kostet, und die Frage stellt jeder Klick neu.
         self._edge_geometry: dict[ObjectId, tuple[tuple[str, Any], ...]] = {}
+        #: Die Hüllquader dieser Kanten, einmal je Kantensatz gebildet
+        #: (:meth:`_edges_near`) — die Kanten selbst als Schlüssel, damit ein
+        #: neuer Satz nie die Quader eines alten liest.
+        self._edge_boxes: dict[int, tuple[Any, Any, Any]] = {}
         self._edges_checked: EvaluationResult | None = None
         """Für welche Auswertung zuletzt geprüft wurde, ob die gewählte Kante
         sie überlebt hat. Ohne dieses Feld lief die Prüfung bei jedem
@@ -5055,6 +5260,14 @@ class Viewport(QWidget):
         #: Wofür die stehende Merkmalsmarkierung gebaut wurde — siehe
         #: :meth:`_feature_patch_state`.
         self._feature_patch_drawn: tuple[Any, ...] | None = None
+        #: Die Markierungen großer Körper, wie der Arbeiter sie fand
+        #: (:meth:`_marking`) — je Netz (schwach) und Merkmalen, die jüngste
+        #: zuletzt, höchstens :data:`MARKING_MEMORY`.
+        self._markings: dict[
+            tuple[int, tuple[str, ...]], tuple[Any, tuple[Any, ...], _MarkingGeometry | None]
+        ] = {}
+        #: Welche davon gerade gerechnet werden.
+        self._marking_asked: set[tuple[int, tuple[str, ...]]] = set()
         self._feature_outlines: dict[ObjectId, Item] = {}
         self._protected_patch: Any | None = None
         self._protected_hatch: Any | None = None
@@ -6638,6 +6851,10 @@ class Viewport(QWidget):
         # wenn ihre Kante den Schritt nicht überlebt hat — sonst zeigte die
         # Hervorhebung auf einen Schlüssel, den es nicht mehr gibt.
         self._edge_geometry.clear()
+        self._edge_boxes.clear()
+        self._markings = {
+            key: known for key, known in self._markings.items() if known[0]() is not None
+        }
         self._edge_info.clear()
         self._edge_sides.clear()
         # **Nachgesehen wird nur bei einer neuen Auswertung.** ``show_scene``
@@ -6684,6 +6901,7 @@ class Viewport(QWidget):
         # Wartezeit in den Moment, in dem der Kunde die Startfläche ansieht
         # oder eine Datei aussucht, statt in seine erste Geste am Modell.
         self._warm_the_picker()
+        self._warm_the_glyphs()
         # **Und neue Geometrie bringt neue Pipelines mit** — gemessen am
         # 13.09.2026 am echten Fenster: Der leere Aufbau hatte aufgewärmt, und
         # der erste Pick nach dem Öffnen von ``drilled_v6.p3d`` kostete
@@ -6991,6 +7209,42 @@ class Viewport(QWidget):
             # Die Zeichenfläche ist unter dem Timer weggestorben. Nichts zu
             # retten und nichts zu melden: Die Ansicht existiert nicht mehr.
             self._picker_warm = False
+
+    def _warm_the_glyphs(self) -> None:
+        """Die Schriftzeichen der Beschriftungen im Leerlauf vorbauen, in Stücken.
+
+        **Der erste Klick auf ein Merkmal bezahlte sie** (Durchsicht 0.5.1):
+        Mit ihm erscheinen die ersten Merkmalsnamen im Bild, und der Renderer
+        baut jedes Zeichen beim ersten Gebrauch — am Laptop-Ständer rund 90 ms,
+        an der Senkplatte 60 ms der längsten Lücke im Hauptfaden. Einmal je
+        Ansicht, in Stücken zu :data:`GLYPHS_PER_TICK` Zeichen mit
+        :data:`GLYPH_TICK_MS` Abstand, damit keine einzelne Runde den Start
+        oder die erste Geste merklich anhält.
+        """
+        if self._glyphs_to_warm is not None or self.renderer is None:
+            return
+        self._glyphs_to_warm = LABEL_GLYPHS
+        QTimer.singleShot(GLYPH_TICK_MS, self, weak_slot(self, Viewport._warm_some_glyphs))
+
+    def _warm_some_glyphs(self) -> None:
+        """Ein Stück der Zeichen vorbauen und das nächste bestellen.
+
+        Wie beim Picker darf ein Fehlschlag nichts kosten: Er verschiebt die
+        Wartezeit nur zurück in den ersten Klick.
+        """
+        renderer = self.renderer
+        pending = self._glyphs_to_warm or ""
+        if renderer is None or not pending:
+            return
+        chunk, self._glyphs_to_warm = pending[:GLYPHS_PER_TICK], pending[GLYPHS_PER_TICK:]
+        try:
+            renderer.warm_glyphs(chunk)
+        except RuntimeError, OSError, ValueError:
+            self._glyphs_to_warm = ""
+            _log.debug("glyph warm-up stopped", exc_info=True)
+            return
+        if self._glyphs_to_warm:
+            QTimer.singleShot(GLYPH_TICK_MS, self, weak_slot(self, Viewport._warm_some_glyphs))
 
     def _aim_rotation(self) -> None:
         """Der Drehpunkt bekommt beim Drehbeginn die Tiefe dessen, was man ansieht (§2.9).
@@ -8798,7 +9052,7 @@ class Viewport(QWidget):
         Fassungen dieser Frage liefen auseinander, und dann zeigte der Zeiger
         eine Kante an, die der Klick nicht nimmt.
         """
-        if not self._means_a_feature():
+        if not self._means_a_feature() or self._aim_in_opening is not None:
             return False
         object_id = self._object_at_view(self._from_view(point))
         if object_id is None or not self._goes_deeper(object_id, direct=False, add=False):
@@ -9833,6 +10087,22 @@ class Viewport(QWidget):
             # Fenster #12). Ein Kantenwahl oder ein Bausteingriff dazwischen
             # hätte den Zustand verändert — dann läuft der Aufbau wie immer.
             return
+        if (
+            len(chosen) == 1
+            and not self._selected_feature_refs
+            and not self._selected_more
+            and chosen == self.highlighted_feature_refs()
+            and self._selected_edge is None
+            and self._part_grip is None
+        ):
+            # **Und ein einzelnes Merkmal, das schon so steht, auch nicht**
+            # (Durchsicht 0.5.1). Nach einem Klick auf eine Bohrung meldet der
+            # Baum sie als Merkmal (:meth:`select_feature`) und in derselben
+            # Runde als Paar; beides zeigt dieselbe Markierung, und der zweite
+            # Aufbau kostete am Wabenhalter 8 ms je Klick. Gemerkt wird das
+            # Paar trotzdem — es ist die genauere Auskunft.
+            self._remember_feature_refs(chosen)
+            return
         self._remember_feature_refs(chosen)
         self._refresh_feature_selection()
 
@@ -10584,18 +10854,19 @@ class Viewport(QWidget):
         return lifted + np.asarray(offset, dtype=float), inverse.reshape(-1, 3)
 
     def _lifted_and_rim(
-        self, raw: Any, chosen: Any, lift: float, offset: Any
-    ) -> tuple[tuple[Any, Any], tuple[Any, Any]]:
-        """Die angehobene Markierung und ihre Kontur auf den Ecken — ein Durchgang.
+        self, marking: _MarkingGeometry, lift: float, offset: Any
+    ) -> tuple[tuple[Any, Any], Any]:
+        """Die angehobene Markierung und ihre Kontur — aus einer fertigen Auswahl.
 
-        Beide lesen dieselbe Auswahl, und das Zusammensuchen ihrer Ecken
-        (``np.unique`` über alle Dreiecksnummern) war der teuerste Schritt
-        daran; es läuft hier einmal statt zweimal.
+        Ecken, Normalen und Kontur stehen in ``marking`` (:func:`marking_geometry`,
+        an großen Körpern aus dem Arbeiter); hier kommen nur Anhebung, Schnitt
+        und Versatz dazu. Mit Schnitt entsteht die Kontur neu, am
+        beschnittenen Rand.
         """
         import numpy as np
 
-        corners, inverse = self._selected_vertices(raw, chosen)
-        lifted = self._lifted_from(corners, inverse, lift)
+        corners, inverse = marking.corners, marking.inverse
+        lifted = self._lifted_from(corners, inverse, lift, marking.normals)
         shift = np.asarray(offset, dtype=float)
         plane, _second = self._section_planes()
         if plane is not None:
@@ -10603,46 +10874,32 @@ class Viewport(QWidget):
             rim = self._clip_feature_corners(corners[inverse]) + shift
             return (
                 (patch, _triangle_faces(len(patch) // 3)),
-                (rim, _triangle_faces(len(rim) // 3)),
+                outline_edges(rim, _triangle_faces(len(rim) // 3)),
             )
-        faces = inverse.reshape(-1, 3)
-        return (lifted + shift, faces), (corners + shift, faces)
+        return (lifted + shift, inverse.reshape(-1, 3)), marking.outline + shift
 
     def _selected_vertices(self, raw: Any, chosen: Any) -> tuple[Any, Any]:
         """Die Ecken einer Dreiecksauswahl und je Dreiecksecke ihr Platz darin."""
-        import numpy as np
-
-        triangles = np.asarray(raw.faces, dtype=np.int64)[chosen]
-        vertices, inverse = np.unique(triangles, return_inverse=True)
-        return np.asarray(raw.vertices, dtype=float)[vertices], inverse.reshape(-1)
+        return _selected_corners(raw.vertices, raw.faces, chosen)
 
     def _lifted_vertices(self, raw: Any, chosen: Any, lift: float) -> tuple[Any, Any]:
         """Die angehobenen Ecken einer Auswahl und je Dreiecksecke ihr Platz darin."""
         corners, inverse = self._selected_vertices(raw, chosen)
         return self._lifted_from(corners, inverse, lift), inverse
 
-    def _lifted_from(self, corners: Any, inverse: Any, lift: float) -> Any:
-        """Die Ecken um ``lift`` entlang ihrer gemittelten Normalen angehoben."""
-        import numpy as np
+    def _lifted_from(
+        self, corners: Any, inverse: Any, lift: float, normals: Any | None = None
+    ) -> Any:
+        """Die Ecken um ``lift`` entlang ihrer gemittelten Normalen angehoben.
 
+        ``normals`` sind die schon gemittelten (:func:`_corner_normals`), wo
+        die Auswahl sie mitbringt.
+        """
         if lift == 0.0:
             # Ohne Anhebung gibt es nichts zu mitteln: Die Kontur liegt auf
             # den Ecken selbst.
             return corners
-        count = len(corners)
-        selected = corners[inverse].reshape(-1, 3, 3)
-        # Das Kreuzprodukt trägt bereits die doppelte Dreiecksfläche. So
-        # braucht ein kleiner Patch keine Flächentabelle des gesamten Netzes.
-        products = np.cross(selected[:, 1] - selected[:, 0], selected[:, 2] - selected[:, 0])
-        areas = np.linalg.norm(products, axis=1)
-        weighted = np.repeat(products, 3, axis=0)
-        summed = np.column_stack(
-            [np.bincount(inverse, weights=weighted[:, axis], minlength=count) for axis in range(3)]
-        )
-        weights = np.bincount(inverse, weights=np.repeat(areas, 3), minlength=count)
-        np.divide(summed, weights[:, None], out=summed, where=weights[:, None] > 0.0)
-        lengths = np.linalg.norm(summed, axis=1, keepdims=True)
-        averaged = np.divide(summed, lengths, out=np.zeros_like(summed), where=lengths > EPS_GEOM)
+        averaged = _corner_normals(corners, inverse) if normals is None else normals
         return self._lift_within_section(corners, averaged * lift)
 
     def _lift_within_section(self, corners: Any, displacement: Any) -> Any:
@@ -10899,6 +11156,100 @@ class Viewport(QWidget):
             tuple(objects),
         )
 
+    def _marking(
+        self, entry: SceneObject, raw: Any, mesh: MeshData, members: tuple[str, ...]
+    ) -> _MarkingGeometry | None:
+        """Die Markierung dieser Merkmale — an großen Körpern aus dem Arbeiter.
+
+        ``None``, wo es nichts zu markieren gibt oder die Markierung noch im
+        Arbeiter entsteht (dann steht ihr Schlüssel in ``_marking_asked``).
+
+        **Ecken, Normalen und Kontur entstehen im Arbeiter** (Durchsicht
+        0.5.1): An der Senkbohrung der Senkplatte (311 296 Dreiecke, davon
+        196 608 in der Markierung) kosteten sie beim ersten Klick 140 ms im
+        Hauptfaden. Der Arbeiter liest nur die Felder des Netzes und braucht
+        kein Schloss. Bis seine Antwort da ist, wartet die Markierung dieses
+        Körpers und wird danach einmal gezeichnet; gemerkt werden die letzten
+        :data:`MARKING_MEMORY`, von Bohrung zu Bohrung und zurück kommt nur
+        noch die Anhebung dazu.
+
+        **Die Hohlraumfläche einer Bohrungskette entsteht meist hier, am
+        Original** (:func:`cavity_surface_indices`). An einer Kopie fehlen die
+        gemerkten Flächenfits des Originals — sie gelten je Körperobjekt: am
+        Laptop-Ständer 1784 statt 74 ms, an der Senkplatte 858 statt 207 ms
+        (gemessen unter Last). An der **geteilten** Arbeiterkopie warteten
+        unter ihrem Schloss die Kernauskünfte des Merkmalfensters so lange, und
+        die Maße im Bild standen 1 bis 4 s später. Nur eine Kette ab
+        :data:`CAVITY_IN_WORKER_FROM` Dreiecken — dort wächst die Rechnung mit
+        der Kette und nicht mit den Fits — rechnet im Arbeiter, an einer
+        **eigenen** Kopie ohne Schloss: an der Senkplatte längste Pause im
+        Hauptfaden 228 → 107 ms, die Maße nach 1,1 s wie vorher, die Markierung
+        150 ms danach.
+        """
+        import numpy as np
+
+        features = tuple(entry.features[key] for key in members)
+        # Schlichte Sichten auf die Felder des Netzes, hier geholt: Der
+        # Arbeiter liest nur sie und nie die trägen Merker von trimesh.
+        vertices, faces = np.asarray(raw.vertices), np.asarray(raw.faces)
+        key = (id(raw), tuple(sorted(members)))
+        large = len(faces) >= MARKING_IN_WORKER_FROM
+        known = self._markings.get(key) if large else None
+        if (
+            known is not None
+            and known[0]() is raw
+            and len(known[1]) == len(features)
+            and all(a is b for a, b in zip(known[1], features, strict=True))
+        ):
+            self._markings[key] = self._markings.pop(key)
+            return known[2]
+        if key in self._marking_asked:
+            return None
+        lists: list[Sequence[int]] = [feature.face_indices for feature in features]
+        cavity: Callable[[], Any] | None = None
+        if features and all(feature.kind in ("hole", "cone") for feature in features):
+            if large and sum(len(f.face_indices) for f in features) >= CAVITY_IN_WORKER_FROM:
+                private = mesh.replacing(raw.copy(include_cache=True))
+                cavity = lambda: cavity_surface_indices(private, features)  # noqa: E731
+            else:
+                blended = cavity_surface_indices(mesh, features)
+                if blended:
+                    lists = [blended]
+        if not large:
+            return _marking_of(vertices, faces, lists)
+        self._marking_asked.add(key)
+        asked = (key, weakref.ref(raw), features)
+        worker = _MarkingWorker(asked, lambda: _marking_of(vertices, faces, lists, cavity))
+        worker.done.connect(weak_slot(self, Viewport._marking_found, forward=True))
+        worker.crashed.connect(
+            weak_slot(self, lambda view, _detail: view._marking_found(asked, None), forward=True)
+        )
+        worker.finished.connect(
+            weak_slot(self, lambda view, done: view._scene_leash.hold_until_done(done), worker)
+        )
+        self._scene_leash.start(worker)
+        return None
+
+    def _marking_found(self, asked: Any, answer: _MarkingGeometry | None) -> None:
+        """Die Markierung ist da — sie wird einmal gezeichnet.
+
+        Auch ein abgestürzter Arbeiter kommt hier an (``answer`` ``None``, die
+        Zeile steht im Protokoll): Dann bleibt die Stelle ohne Markierung, statt
+        bei jedem Zeichnen neu zu fragen.
+        """
+        key, body, features = asked
+        self._marking_asked.discard(key)
+        if body() is None:
+            return
+        self._markings.pop(key, None)
+        self._markings[key] = (body, features, answer)
+        while len(self._markings) > MARKING_MEMORY:
+            self._markings.pop(next(iter(self._markings)))
+        self._feature_patch_drawn = None
+        self._redraw_features()
+        if self.renderer is not None:
+            self._draw()
+
     def _redraw_feature_patch(self) -> None:
         """Die Dreiecke des gewählten Merkmals in der Auswahlfarbe über dem Körper.
 
@@ -10932,8 +11283,6 @@ class Viewport(QWidget):
         if self._result is None:
             return
 
-        import numpy as np
-
         selected: dict[ObjectId, list[FeatureId]] = {}
         for object_id, feature_id in self.highlighted_feature_refs():
             selected.setdefault(object_id, []).append(feature_id)
@@ -10954,42 +11303,22 @@ class Viewport(QWidget):
                     chain = cavity_chain_at(feature, entry.features, mesh)
                     if chain is not None:
                         members.update(dict.fromkeys(part.id for part in chain))
-            # **Als Feld und nicht als Folge von Zahlen.** Hier stand ein
-            # ``dict.fromkeys`` über jede Dreiecksnummer, und je Nummer fragte
-            # die Bedingung ``len(raw.faces)`` — eine Eigenschaft von trimesh,
-            # an der Senkbohrung einer 311k-Platte 500 000-mal je Auswahl
-            # (0,13 s, RM-203). Die Reihenfolge der Dreiecke sagt der
-            # Markierung nichts; sie braucht die Menge.
-            count = len(raw.faces)
-            listed = [
-                np.asarray(feature.face_indices, dtype=np.int64)
-                for feature_id in members
-                if (feature := entry.features.get(feature_id)) is not None
-                and len(feature.face_indices)
-            ]
-            chosen = np.unique(np.concatenate(listed)) if listed else np.zeros(0, dtype=np.int64)
-            chosen = chosen[(chosen >= 0) & (chosen < count)]
-            if members and all(
-                key in entry.features and entry.features[key].kind in ("hole", "cone")
-                for key in members
-            ):
-                blended = cavity_surface_indices(mesh, (entry.features[key] for key in members))
-                if blended:
-                    chosen = np.asarray(blended, dtype=np.int64)
-            if not len(chosen):
+            marking = self._marking(
+                entry, raw, mesh, tuple(key for key in members if key in entry.features)
+            )
+            if marking is None:
+                # Nichts zu markieren — oder die Markierung kommt gleich aus
+                # dem Arbeiter; eine vorläufige kostete dasselbe Aufbauen ein
+                # zweites Mal.
                 continue
             offset = self._shown_offset(entry, self._result)
             # Linien tragen ihren Tiefenversatz in Bildpunkten im Renderer.
             # Ihre Weltkontur bleibt deshalb am tatsächlichen Merkmalrand —
             # gezählt nach dem Ort, nicht nach Eckennummern
-            # (:func:`app.ui.render.edges.outline_edges`). Beide aus einem
-            # Durchgang über die Auswahl (:meth:`_lifted_and_rim`).
-            (corners, faces), (rim, rim_faces) = self._lifted_and_rim(
-                raw, chosen, self._patch_lift(), offset
-            )
+            # (:func:`app.ui.render.edges.outline_edges`).
+            (corners, faces), boundary = self._lifted_and_rim(marking, self._patch_lift(), offset)
             if not len(corners):
                 continue
-            boundary = outline_edges(rim, rim_faces)
             if len(boundary):
                 self._feature_outlines[object_id] = self.renderer.add_lines(
                     boundary,
@@ -11433,6 +11762,11 @@ class Viewport(QWidget):
         best_radius = math.inf
         found: Vec3 | None = None
         picked: _SelectionHit | None = None
+        best_inside = False
+        best_axis: Any = None
+        #: Jede Öffnung, durch deren Mündung der Strahl innerhalb des Rands
+        #: geht: Radius, Achse, Mitte, Treffer im Bild und in der Szene.
+        inside: list[tuple[float, Any, Any, Vec3, _SelectionHit]] = []
         for object_id, entry in self._result.scene.objects.items():
             visible = (
                 self._in_pick_view(object_id, entry)
@@ -11501,10 +11835,6 @@ class Viewport(QWidget):
                 leave = min(span[1], until)
                 if leave < enter - EPS_GEOM:
                     continue
-                nearer = enter < best_enter - EPS_GEOM
-                tied = abs(enter - best_enter) <= EPS_GEOM and radius < best_radius
-                if not (nearer or tied):
-                    continue
                 # Der Punkt auf der Achse, auf der Höhe, in der der Strahl die
                 # Bohrung durchläuft — geklemmt auf ihre eigene Länge, damit er
                 # nicht über der Öffnung im Leeren steht, wo die Deckfläche
@@ -11514,14 +11844,45 @@ class Viewport(QWidget):
                 )
                 point = np.asarray(centre, dtype=float)
                 point = point + line * (middle - float(point @ line))
-                best_enter = enter
-                best_radius = radius
                 scene_point = (float(point[0]), float(point[1]), float(point[2]))
                 shown = point + shift
-                found = (float(shown[0]), float(shown[1]), float(shown[2]))
-                picked = _SelectionHit(object_id, scene_point, found, feature_id=feature_id)
-        if view_space and picked is not None:
-            self._selection_hit = picked
+                shown_point = (float(shown[0]), float(shown[1]), float(shown[2]))
+                hit = _SelectionHit(object_id, scene_point, shown_point, feature_id=feature_id)
+                within = visible_span is not None and visible_span[0] <= until + EPS_GEOM
+                if within:
+                    inside.append((radius, line, np.asarray(centre, dtype=float), shown_point, hit))
+                nearer = enter < best_enter - EPS_GEOM
+                tied = abs(enter - best_enter) <= EPS_GEOM and radius < best_radius
+                if not (nearer or tied):
+                    continue
+                best_enter = enter
+                best_radius = radius
+                best_inside = within
+                best_axis = (line, np.asarray(centre, dtype=float))
+                found = shown_point
+                picked = hit
+        # **Die engste Öffnung einer Kette gewinnt** (Durchsicht 0.5.1,
+        # KUNDE-05). Wer mitten in eine gesenkte Bohrung klickt, trifft zuerst
+        # den Kegel der Senkung und meint doch die Bohrung — wie im Objektbaum,
+        # wo die Senkung unter ihrer Bohrung hängt. Gewählt wird die engere
+        # Öffnung auf derselben Achse, durch deren Mündung der Strahl ebenfalls
+        # geht; die Senkung selbst trifft ein Klick auf ihre Kegelwand.
+        if picked is not None and best_inside and best_axis is not None:
+            line, centre = best_axis
+            for radius, other, other_centre, shown_point, hit in inside:
+                offset = other_centre - centre
+                sideways = offset - float(offset @ line) * line
+                if (
+                    radius < best_radius - EPS_GEOM
+                    and abs(float(other @ line)) >= 1.0 - CHAIN_AXIS_SLACK
+                    and float(np.linalg.norm(sideways))
+                    <= max(radius, EPS_GEOM) * CHAIN_CENTRE_SHARE
+                ):
+                    best_radius, found, picked = radius, shown_point, hit
+        if view_space:
+            self._aim_in_opening = picked.feature_id if picked is not None and best_inside else None
+            if picked is not None:
+                self._selection_hit = picked
         return found
 
     def _prepared_bores(self, object_id: ObjectId) -> list[_BoreTarget]:
@@ -11703,6 +12064,7 @@ class Viewport(QWidget):
         dort ist eine Stelle auf der Oberfläche gemeint und keine Bohrung, und
         ein Punkt in der Luft wäre dort falsch.
         """
+        self._aim_in_opening = None
         if self.renderer is None:
             return None
         point = self._world_at(x, y)
@@ -11947,17 +12309,27 @@ class Viewport(QWidget):
 
         reach = float(entry.mesh.bounds.diagonal) * EDGE_REACH_WORLD_SHARE
         target = np.asarray(behind, dtype=float)
-        near: list[int] = []
-        for index, (_key, points) in enumerate(prepared):
-            shown = np.asarray(points, dtype=float) + offset
-            low = shown.min(axis=0)
-            high = shown.max(axis=0)
-            # Abstand des Punktes zum achsparallelen Quader: je Achse, was
-            # links beziehungsweise rechts übersteht, und davon die Länge.
-            outside = np.maximum(np.maximum(low - target, target - high), 0.0)
-            if float(np.linalg.norm(outside)) <= reach:
-                near.append(index)
-        return near
+        # **Die Quader einmal je Kantensatz, geprüft in einem Zug** (Durchsicht
+        # 0.5.1). Je Kante eine eigene NumPy-Runde kostete am Wabenhalter
+        # 20 ms je Klick auf eine Bohrung, zweimal je Klick — ein Netz hat
+        # seit dem 10.09.2026 anklickbare Kanten, und der Wabenhalter trägt
+        # hunderte. Der Versatz der Ansicht verschiebt den Quader wie seine
+        # Punkte, deshalb wird er erst hier addiert.
+        boxes = self._edge_boxes.get(id(prepared))
+        if boxes is None or boxes[0] is not prepared:
+            lows = np.asarray(
+                [np.asarray(points, dtype=float).min(axis=0) for _k, points in prepared]
+            )
+            highs = np.asarray(
+                [np.asarray(points, dtype=float).max(axis=0) for _k, points in prepared]
+            )
+            boxes = (prepared, lows, highs)
+            self._edge_boxes[id(prepared)] = boxes
+        _prepared, lows, highs = boxes
+        # Abstand des Punktes zum achsparallelen Quader: je Achse, was links
+        # beziehungsweise rechts übersteht, und davon die Länge.
+        outside = np.maximum(np.maximum(lows + offset - target, target - highs - offset), 0.0)
+        return [int(index) for index in np.flatnonzero(np.linalg.norm(outside, axis=1) <= reach)]
 
     def set_direct_picking(self, active: bool) -> None:
         """Schaltet die Auswahltiefe ab, solange ein Dialog nach einem Merkmal
@@ -12066,6 +12438,13 @@ class Viewport(QWidget):
         if not self.user_selection_allowed():
             return True
         if add or self._direct_picking:
+            return False
+        # **In einer Mündung meint der Klick die Bohrung** (Durchsicht 0.5.1,
+        # KUNDE-05). Eine Bohrung Ø 4,4 hat in der Übersicht zehn Bildpunkte
+        # Durchmesser; jede Stelle darin lag in der Reichweite ihres Rands, und
+        # die Kante gewann immer — auch mitten in der Öffnung. Die Kante
+        # trifft jetzt ein Klick außerhalb des Rands (:attr:`_aim_in_opening`).
+        if self._aim_in_opening is not None:
             return False
         # **``_object_at_view`` und nicht ``_object_at``**: ``point`` kommt aus
         # dem Bild und trägt den Versatz der Ansicht (§18.8, §25). Gegen die
@@ -14419,9 +14798,19 @@ class Viewport(QWidget):
 
         Die Dreiecke des Körpers, die in der Ebene des Sitzes liegen und in
         ihre Richtung zeigen, dazu die Grundfläche des Bausteins selbst —
-        sein alter Platz ist nach dem Zug wieder Fläche. Liegt der Sitz schon
-        vor dem Zug auf keinem davon, sitzt der Baustein nicht auf einer
-        ebenen Fläche, und es gibt nichts zu sagen (``None``).
+        sein alter Platz ist nach dem Zug wieder Fläche. Gibt es an seiner
+        Höhe keine solche Fläche, sitzt der Baustein nicht auf einer ebenen
+        Fläche, und es gibt nichts zu sagen (``None``).
+
+        **Die Grundfläche ist der Umriss des Bausteins, nicht seine Böden**
+        (Durchsicht 0.5.1). Gezählt waren nur seine eigenen Dreiecke, und der
+        Sitz eines Schlüssellochs liegt über dessen durchgehender Bohrung —
+        dort ist kein Dreieck. Am Wabenhalter hieß das ``None``: Der Zug neben
+        die Deckfläche blieb in der Auswahlfarbe, das Zugfeld schwieg, und
+        erst nach dem Loslassen hieß es „Der Schnitt hat nichts abgetragen“.
+        Die konvexe Hülle seiner Ecken in der Ebene und der Öffnung am Sitz
+        deckt beides mit — auch wenn die Erkennung die Bohrungswand einem
+        eigenen Merkmal ohne Baustein zugeschlagen hat.
         """
         import numpy as np
 
@@ -14443,10 +14832,31 @@ class Viewport(QWidget):
             math.radians(EPS_ANGLE)
         )
         level = np.abs((triangles - centre) @ normal).max(axis=1) <= EPS_GEOM
+        own = np.zeros(len(triangles), dtype=bool)
+        own[cells] = True
         chosen = facing & level
-        chosen[cells] = True
+        if not np.any(chosen & ~own):
+            return None
+        chosen |= own
         flat = triangles[chosen] - centre
         planar = np.stack((flat @ across, flat @ along), axis=-1)
+        # Der Umriss: die eigenen Dreiecke in der Ebene und die Öffnung am
+        # Sitz selbst — eine Bohrung des Bausteins, deren Wände die Erkennung
+        # einem anderen Merkmal zugeschlagen hat, gehört trotzdem dazu.
+        turn = np.linspace(0.0, 2.0 * math.pi, 16, endpoint=False)
+        opening = float(seat[2]) * np.stack((np.cos(turn), np.sin(turn)), axis=-1)
+        footprint = _footprint_fan(
+            np.concatenate(
+                (
+                    np.stack(
+                        ((triangles[own] - centre) @ across, (triangles[own] - centre) @ along), -1
+                    ).reshape(-1, 2),
+                    opening,
+                )
+            )
+        )
+        if len(footprint):
+            planar = np.concatenate((planar, footprint))
         if not _inside_any(planar, np.zeros(2)):
             return None
         return centre, across, along, planar
@@ -16239,7 +16649,22 @@ class Viewport(QWidget):
             self._refuse_selection()
             return True
         object_id, feature_id = self._click_target(point, direct=direct, add=add)
-        self.objectPicked.emit(object_id or "", add)
+        # **Steht der Körper schon allein in der Auswahl, meldet ihn ein
+        # Merkmalsklick nicht noch einmal** (Durchsicht 0.5.1). Die Meldung
+        # wählte im Baum den Körper ohne Merkmal: Maßgruppe abgebaut,
+        # Merkmalfenster geleert, Handlungen, Karten und Menüs neu — und gleich
+        # danach alles noch einmal für das neue Merkmal. Von Bohrung zu Bohrung
+        # am Wabenhalter waren das 27 ms im Hauptfaden je Klick; der Weg über
+        # den Baum (``ObjectTree.select_feature``) spart dieselbe Runde seit
+        # dem 22.09.2026. Der Baum kennt den Körper bereits, und
+        # ``_on_feature_picked`` fragt ihn danach.
+        if not (
+            feature_id is not None
+            and not add
+            and object_id == self._selected
+            and not self._selected_more
+        ):
+            self.objectPicked.emit(object_id or "", add)
         if feature_id is None:
             # **Zurück auf den Körper, und zwar hier.** Bis zum 23.08.2026
             # stand hier nur ein ``return``, und der Docstring verließ sich
@@ -16261,8 +16686,21 @@ class Viewport(QWidget):
             if self._selected_feature is not None and not add:
                 self.select_feature(None)
             return False
-        self.select_feature(feature_id)
+        if add:
+            self.select_feature(feature_id)
+            self.featurePicked.emit(feature_id, add)
+            return True
+        # **Erst melden, dann nur nachziehen, was nicht ankam** (Durchsicht
+        # 0.5.1). Der Baum wählt das Merkmal auf die Meldung hin und gibt die
+        # Auswahl samt Bündel (Bohrung mit Senkung) an die Ansicht zurück; die
+        # eigene Wahl davor baute Markierung, Farbe und Griff einmal mehr auf —
+        # 13 ms je Bohrungsklick am Wabenhalter. Ohne Baum (eine Ansicht für
+        # sich) wählt sie weiter selbst. Mit Taste bleibt die alte Folge: Dort
+        # nimmt der Baum auch heraus, und die eigene Wahl darf ihm nicht
+        # nachträglich widersprechen.
         self.featurePicked.emit(feature_id, add)
+        if feature_id not in self.highlighted_features():
+            self.select_feature(feature_id)
         return True
 
     def _world_at(self, x: int, y: int) -> Vec3 | None:

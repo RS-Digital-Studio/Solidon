@@ -8832,3 +8832,223 @@ def test_the_first_frame_of_a_preview_is_drawn_before_it_is_reported() -> None:
     assert drawn == ["sofort", "bestellt"]
     assert reported == [difference, difference]
     assert view._displayed_difference is difference
+
+
+def test_the_edges_near_a_click_are_found_in_one_pass_with_the_offset() -> None:
+    """Die Kantenvorauswahl eines Klicks prüft alle Hüllquader in einem Zug.
+
+    Je Kante eine eigene NumPy-Runde kostete am Wabenhalter 20 ms je Klick auf
+    eine Bohrung, zweimal je Klick (Durchsicht 0.5.1). Die Antwort muss die
+    alte bleiben: dieselben Kanten wie die Einzelprüfung, der Versatz der
+    Ansicht verschiebt die Quader, und ein neuer Kantensatz liest nicht die
+    Quader des alten.
+    """
+    from app.ui.viewport import EDGE_REACH_WORLD_SHARE, Viewport
+
+    generator = np.random.default_rng(7)
+    prepared = tuple(
+        (f"edge_{index}", generator.uniform(-40.0, 40.0, size=(int(generator.integers(2, 9)), 3)))
+        for index in range(300)
+    )
+    entry = SimpleNamespace(mesh=SimpleNamespace(bounds=SimpleNamespace(diagonal=120.0)))
+    view = SimpleNamespace(_edge_boxes={})
+    reach = 120.0 * EDGE_REACH_WORLD_SHARE
+
+    def one_by_one(edges: Any, offset: Any, behind: Any) -> list[int]:
+        found = []
+        for index, (_key, points) in enumerate(edges):
+            shown = np.asarray(points, dtype=float) + offset
+            outside = np.maximum(
+                np.maximum(shown.min(axis=0) - behind, behind - shown.max(axis=0)), 0.0
+            )
+            if float(np.linalg.norm(outside)) <= reach:
+                found.append(index)
+        return found
+
+    for offset, behind in (
+        (np.zeros(3), np.array([1.0, 2.0, 3.0])),
+        (np.array([250.0, 0.0, 0.0]), np.array([251.0, 2.0, 3.0])),
+        (np.array([250.0, 0.0, 0.0]), np.array([1.0, 2.0, 3.0])),
+    ):
+        near = Viewport._edges_near(view, prepared, offset, tuple(behind), entry)  # type: ignore[arg-type]
+        assert near == one_by_one(prepared, offset, behind)
+    assert near == [], "eine Bettbreite daneben liegt keine Kante am Treffer"
+    assert len(view._edge_boxes) == 1, "die Quader entstehen einmal je Kantensatz"
+
+    moved = tuple((key, points + 100.0) for key, points in prepared)
+    behind = np.array([101.0, 102.0, 103.0])
+    assert Viewport._edges_near(view, moved, np.zeros(3), tuple(behind), entry) == one_by_one(  # type: ignore[arg-type]
+        moved, np.zeros(3), behind
+    )
+    assert Viewport._edges_near(view, prepared, np.zeros(3), None, entry) == list(range(300))  # type: ignore[arg-type]
+
+
+def test_the_marking_of_a_large_body_waits_for_its_worker_and_draws_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ecken, Normalen und Kontur großer Körper kommen aus dem Arbeiter (Durchsicht 0.5.1).
+
+    An der Senkplatte (311 296 Dreiecke) kosteten sie beim ersten Klick auf die
+    Senkbohrung 140 ms im Hauptfaden. Jetzt fragt die Markierung einmal den
+    Arbeiter, zeichnet bis dahin nichts Vorläufiges (``None``) und danach
+    genau einmal neu; derselbe Klick später liest die gemerkte Markierung,
+    und kleine Körper rechnen wie bisher sofort. Die Hohlraumfläche einer
+    Bohrungskette fragt die Ansicht selbst, am Original — nicht an einer
+    Arbeiterkopie, der die gemerkten Fits fehlen. Ein abgestürzter Arbeiter
+    lässt die Stelle ohne Markierung, statt bei jedem Zeichnen neu zu fragen.
+    """
+    import app.ui.viewport as module
+    from app.ui.viewport import MARKING_IN_WORKER_FROM, MARKING_MEMORY, Viewport
+
+    asked: list[Any] = []
+    cavities: list[Any] = []
+
+    def cavity(mesh: Any, chain: Any) -> tuple[int, ...]:
+        cavities.append(mesh)
+        return (0, 1)
+
+    monkeypatch.setattr(module, "cavity_surface_indices", cavity)
+
+    class View:
+        def __init__(self) -> None:
+            self._markings: dict[Any, Any] = {}
+            self._marking_asked: set[Any] = set()
+            self._scene_leash = SimpleNamespace(start=asked.append, hold_until_done=lambda w: None)
+            self._feature_patch_drawn: Any = ("gezeichnet",)
+            self.renderer = None
+            self.redrawn = 0
+
+        def _redraw_features(self) -> None:
+            self.redrawn += 1
+
+        def _marking_found(self, key: Any, answer: Any) -> None:
+            Viewport._marking_found(self, key, answer)  # type: ignore[arg-type]
+
+    class Raw:
+        def __init__(self, count: int) -> None:
+            self.vertices = np.arange(12.0).reshape(4, 3) ** 1.5
+            self.faces = np.tile(np.array([[0, 1, 2], [0, 2, 3]]), (count // 2 + 1, 1))[:count]
+
+        def copy(self, include_cache: bool = False) -> Raw:
+            return self
+
+    bore = SimpleNamespace(id="hole_1", kind="hole", face_indices=(1,))
+    entry = SimpleNamespace(features={"hole_1": bore}, mesh="netz")
+    view = View()
+
+    small = Raw(MARKING_IN_WORKER_FROM - 1)
+    marking = Viewport._marking(view, entry, small, None, ("hole_1",))  # type: ignore[arg-type]
+    assert marking is not None and len(marking.inverse) == 6, "Hohlraumfläche: Dreiecke 0 und 1"
+    assert asked == [], "ein kleiner Körper rechnet sofort"
+
+    large = Raw(MARKING_IN_WORKER_FROM)
+    assert Viewport._marking(view, entry, large, "original", ("hole_1",)) is None  # type: ignore[arg-type]
+    assert Viewport._marking(view, entry, large, "original", ("hole_1",)) is None  # type: ignore[arg-type]
+    assert len(asked) == 1, "einmal gefragt, nicht je Zeichnen"
+    assert cavities[-1] == "original", "die Hohlraumfläche kommt vom Original"
+
+    asked[0].work()
+    assert view.redrawn == 1 and view._feature_patch_drawn is None, "danach einmal neu gezeichnet"
+    again = Viewport._marking(view, entry, large, None, ("hole_1",))  # type: ignore[arg-type]
+    assert again is not None and len(asked) == 1, "derselbe Klick liest die gemerkte Markierung"
+    np.testing.assert_array_equal(again.corners, marking.corners)
+
+    redetected = SimpleNamespace(features={"hole_1": SimpleNamespace(**vars(bore))}, mesh="netz")
+    assert Viewport._marking(view, redetected, large, None, ("hole_1",)) is None  # type: ignore[arg-type]
+    assert len(asked) == 2, "ein neu erkanntes Merkmal am selben Netz wird neu gefragt"
+
+    from app.ui.viewport import CAVITY_IN_WORKER_FROM
+
+    long_chain = SimpleNamespace(
+        id="hole_2", kind="hole", face_indices=tuple(range(CAVITY_IN_WORKER_FROM))
+    )
+    chained = SimpleNamespace(features={"hole_2": long_chain}, mesh="netz")
+    copies: list[Any] = []
+    original = SimpleNamespace(replacing=lambda raw: copies.append(raw) or "eigene Kopie")
+    before = len(cavities)
+    assert Viewport._marking(view, chained, large, original, ("hole_2",)) is None  # type: ignore[arg-type]
+    assert len(cavities) == before, "eine lange Kette rechnet nicht im Hauptfaden"
+    asked[-1].work()
+    assert cavities[-1] == "eigene Kopie" and copies == [large], "sondern an einer eigenen Kopie"
+
+    face = SimpleNamespace(id="face_1", kind="plane", face_indices=(1,))
+    surface = SimpleNamespace(features={"face_1": face}, mesh="netz")
+    assert Viewport._marking(view, surface, large, None, ("face_1",)) is None  # type: ignore[arg-type]
+    asked[-1].crashed.emit("RuntimeError: kaputt")
+    assert Viewport._marking(view, surface, large, None, ("face_1",)) is None  # type: ignore[arg-type]
+    assert len(asked) == 4, "nach einem Absturz nicht bei jedem Zeichnen neu gefragt"
+
+    for number in range(MARKING_MEMORY + 2):
+        view._marking_found(((number, ("x",)), weakref.ref(large), ()), None)
+    assert len(view._markings) == MARKING_MEMORY, "gemerkt werden nur die jüngsten"
+
+
+def test_the_marking_geometry_is_the_old_one_with_the_offset_added_last() -> None:
+    """Die Markierung aus dem Arbeiter zeichnet dasselbe wie die alte Rechnung.
+
+    Ecken und ihr Platz wie ``np.unique`` über die Dreiecksnummern, Normalen
+    wie die alte Mittelung, und die Kontur in Szenenkoordinaten, um den
+    Versatz der Ansicht verschoben, wie die Kontur der verschobenen Ecken.
+    """
+    from app.ui.render.edges import outline_edges
+    from app.ui.viewport import marking_geometry
+
+    body = trimesh.creation.annulus(r_min=2.0, r_max=5.0, height=4.0, sections=48)
+    chosen = np.flatnonzero(np.abs(body.face_normals[:, 2]) < 0.5)[::2]
+    marking = marking_geometry(body.vertices, body.faces, chosen)
+
+    used, inverse = np.unique(np.asarray(body.faces)[chosen], return_inverse=True)
+    np.testing.assert_array_equal(marking.corners, np.asarray(body.vertices)[used])
+    np.testing.assert_array_equal(marking.inverse, inverse.reshape(-1))
+
+    triangles = marking.corners[marking.inverse].reshape(-1, 3, 3)
+    products = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
+    summed = np.zeros_like(marking.corners)
+    np.add.at(summed, marking.inverse, np.repeat(products, 3, axis=0))
+    expected = summed / np.linalg.norm(summed, axis=1, keepdims=True)
+    np.testing.assert_allclose(marking.normals, expected, atol=1e-12)
+
+    offset = np.array([250.0, -30.0, 0.5])
+    np.testing.assert_array_equal(
+        marking.outline + offset,
+        outline_edges(marking.corners + offset, marking.inverse.reshape(-1, 3)),
+    )
+    assert len(marking.outline), "eine halbe Wand hat einen Rand"
+
+
+def test_a_part_over_its_own_through_bore_still_knows_where_it_lands() -> None:
+    """Der Sitz über der durchgehenden Bohrung eines Bausteins hat Grund (Durchsicht 0.5.1).
+
+    Ein Schlüsselloch sitzt mit der Mitte seiner Bohrung auf der Fläche; unter
+    dieser Mitte liegt kein Dreieck. Gezählt wurden nur die eigenen Dreiecke
+    des Bausteins, die Landefläche hieß ``None``, und am Wabenhalter blieb der
+    Zug neben die Deckfläche in der Auswahlfarbe (RM-174). Jetzt deckt der
+    Umriss des Bausteins seine Öffnung: Ein kleiner Zug landet, ein Zug über
+    den Rand nicht.
+    """
+    from app.ui.viewport import Viewport, _inside_any
+
+    ring = trimesh.creation.annulus(r_min=3.0, r_max=20.0, height=10.0, sections=48)
+    normals = np.asarray(ring.face_normals)
+    radii = np.linalg.norm(np.asarray(ring.triangles_center)[:, :2], axis=1)
+    bore = np.flatnonzero((np.abs(normals[:, 2]) < 0.1) & (radii < 5.0))
+    assert len(bore), "ohne Bohrungswand prüft der Test nichts"
+    top = float(ring.bounds[1][2])
+    view = SimpleNamespace(_face_seat=((0.0, 0.0, top), (0.0, 0.0, 1.0), 3.0))
+
+    landing = Viewport._landing_of(view, ring, np.zeros(3), bore)  # type: ignore[arg-type]
+    assert landing is not None, "der Baustein sitzt auf einer ebenen Fläche"
+    _centre, across, along, planar = landing
+
+    def lands(shift: tuple[float, float, float]) -> bool:
+        moved = np.asarray(shift, dtype=float)
+        return _inside_any(planar, np.array((moved @ across, moved @ along)))
+
+    assert lands((1.0, 0.0, 0.0)), "über der alten Öffnung — sie ist nach dem Zug wieder Fläche"
+    assert lands((12.0, 0.0, 0.0)), "auf dem Ring"
+    assert not lands((30.0, 0.0, 0.0)), "über den Rand hinaus"
+
+    lying = SimpleNamespace(_face_seat=((0.0, 0.0, top + 4.0), (0.0, 0.0, 1.0), 3.0))
+    assert Viewport._landing_of(lying, ring, np.zeros(3), bore) is None, (  # type: ignore[arg-type]
+        "ohne ebene Fläche in der Höhe des Sitzes gibt es nichts zu sagen"
+    )

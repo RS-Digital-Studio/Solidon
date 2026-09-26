@@ -503,6 +503,15 @@ Zugfeld sagt „neben der Fläche" — nie die Farbe allein (Regel 18). Sitzt de
 Baustein auf keiner ebenen Fläche, gibt es keine Aussage statt einer
 falschen. Der Aktor gehört dem Zug und geht mit dem Geist (`_drop_ghost`).
 
+**Die eigene Grundfläche ist der Umriss, nicht die Böden** (Durchsicht
+0.5.1): die konvexe Hülle der eigenen Dreiecke in der Ebene samt der Öffnung
+am Sitz (`_footprint_fan`). Der Sitz eines Schlüssellochs liegt über seiner
+durchgehenden Bohrung, deren Wände die Erkennung einem Merkmal ohne Baustein
+zuschlägt; nur mit den eigenen Dreiecken gab es dort keinen Grund, die
+Landefläche hieß `None`, und am Wabenhalter blieb der Zug neben die Deckfläche
+stumm, bis nach dem Loslassen „Der Schnitt hat nichts abgetragen“ kam. „Auf
+keiner ebenen Fläche“ heißt jetzt: kein fremdes Dreieck in der Höhe des Sitzes.
+
 ### Frei drehen, aber 45 Grad treffen
 
 Der Winkelfang stand auf null, weil ein hartes Raster jeden kleinen Zug

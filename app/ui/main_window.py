@@ -16406,10 +16406,28 @@ class MainWindow(QMainWindow):
                     not is_close(float(values[axis]), float(previous_values[axis])) for axis in axes
                 )
                 if moved and flow is not None and flow.active:
-                    if flow.move_to(
+                    if not flow.on_a_surface:
+                        # Ohne Fläche sind die Felder die Bedienung, und die
+                        # Werte stehen im Träger (``_no_seat_at_feature``).
+                        host.take_placement(values)
+                    elif flow.move_to(
                         tuple(float(values[axis]) for axis in axes), on_plane_only=True
                     ):
                         host.take_placement({k: v for k, v in values.items() if k not in axes})
+                    elif not interpret:
+                        # **Eine Taste ist noch keine Absicht** (Durchsicht
+                        # 0.5.1): Wer „-99“ tippt, kommt über „-9“, und das
+                        # lag am Wabenhalter neben der Fläche. Die Übergabe
+                        # nach rechts nahm dort die Maßgruppe samt Feld mit,
+                        # und die nächsten Tasten gingen auf einen Knopf.
+                        # Die Stelle bleibt, bis die Eingabe fertig ist.
+                        host.take_placement({k: v for k, v in values.items() if k not in axes})
+                        flow.refuse_typed_position(
+                            tr(
+                                "Diese Stelle liegt nicht auf der Fläche. Anderen Wert "
+                                "eingeben oder mit der Eingabetaste rechts weiterarbeiten."
+                            )
+                        )
                     else:
                         # Freie Koordinaten dürfen die Trägerfläche verlassen —
                         # dann gilt die normale Feldvorschau mit den Werten,
@@ -16431,6 +16449,8 @@ class MainWindow(QMainWindow):
 
                         QTimer.singleShot(0, hand_over)
                 else:
+                    if flow is not None and flow.active:
+                        flow.typed_position_back()
                     host.take_placement(values)
             finally:
                 reading["fields"] = False
@@ -16520,9 +16540,20 @@ class MainWindow(QMainWindow):
         Maßgruppe kommt sie erst hierher, und die Feldvorschau rechts nimmt sie
         an, als wäre sie dort getippt worden.
         """
+        from app.ui.panels import FIELD_PROPERTY
+
+        focused = QApplication.focusWidget()
+        name = None
+        while focused is not None and name is None:
+            name = focused.property(FIELD_PROPERTY)
+            focused = focused.parentWidget()
         self.end_quiet_placement()
         self.feature_panel.take_values(op, values)
         self._on_feature_values_changed(op, values)
+        # Die Tastatur folgt der Zahl: Das Feld im Bild ist mit der Maßgruppe
+        # gegangen, dasselbe steht jetzt rechts.
+        if isinstance(name, str):
+            self.feature_panel.focus_field(op, name)
 
     def end_quiet_placement(self, *, measuring_follows: bool = False) -> None:
         """Eine laufende Platzierung ohne Dialog beenden und abräumen.

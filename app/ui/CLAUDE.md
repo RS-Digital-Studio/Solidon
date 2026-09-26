@@ -1825,8 +1825,8 @@ dahin wurde daraus ein `move_feature` auf die Tasche des Schlüssellochs,
 und der Schlitz blieb stehen. Damit der Griff auch an einer Verrundung oder
 einem Gewinde hängt, die für sich keine Operation tragen, fragt
 `Viewport.gizmo_feature` das Fenster über `moves_as_a_part` — eine
-schwache Frage, keine gebundene Methode (`wartezeit.md`). Was während des
-Zugs im Bild wandert, ist weiter die Marke des einen Merkmals (RM-174).
+schwache Frage, keine gebundene Methode (`wartezeit.md`). Während des Zugs
+wandert der ganze Baustein und wird neben der Fläche rot (RM-174, `griffe.md`).
 Seit dem 16.09.2026 gilt das auch an einer **Fläche** des Bausteins
 (`gizmo_target` kennt dort kein Press/Pull), bei gewähltem **Dach** im Baum
 (`_move_the_part` fragt `_common_part_step`, wenn `selected_feature`
@@ -1893,7 +1893,10 @@ ist. Jeder Aufbau endet mit `_lay_out_now` — die Höhe des Fensters pflanzt si
 sonst über mehrere Ereignisrunden fort, und die Malrunde käme dazwischen
 (Regel in `ansicht.md`, „Die Ansicht bestellt ihr Bild").
 Sichtbarkeit wechselt nur über `_set_shown`; `clear(rebuilding=True)` lässt
-die Knopfzeile bis `_settle_apply` stehen. Ein Test vergleicht ein
+die Knopfzeile bis `_settle_apply` stehen. Verborgen wird **ausdrücklich**:
+Eine eben ins sichtbare Layout gesetzte Zeile meldet `isHidden()`, und Qt
+zeigt sie danach mit `_q_showIfNotHidden`, wenn niemand sie ausdrücklich
+verborgen hat (`WA_WState_ExplicitShowHide`). Ein Test vergleicht ein
 wiederverwendetes Fenster mit einem frisch gebauten Zustand für Zustand
 (`test_feature_panel.py`, `_panel_state`).
 

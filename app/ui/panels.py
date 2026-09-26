@@ -2031,7 +2031,13 @@ class ObjectTree(QWidget):
             self.tree.addTopLevelItem(item)
             item.setExpanded(object_id in selected)
         self.tree.resizeColumnToContents(0)
-        if len(selected_features) > 1:
+        # **Eine gewählte Zeile bleibt eine Zeile** (Durchsicht 0.5.1). Eine
+        # Bohrung mit ihrer Senkung meldet :meth:`selected_features` als zwei
+        # Merkmale; nach jeder Auswertung wurden daraus zwei markierte Zeilen,
+        # ``selected_feature`` hieß danach „keines“, und die Maßgruppe nach
+        # *Übernehmen* hing an keinem Merkmal. Aufgelöst wird nur, was keine
+        # einzelne Merkmalszeile war — ein Dach oder eine Mehrfachwahl.
+        if selected_feature is None and len(selected_features) > 1:
             self.select_features(selected_features)
         else:
             self._restore(selected, selected_feature)
@@ -5951,9 +5957,21 @@ def _set_shown(widget: QWidget, visible: bool) -> None:
     Ereignissen an jeden Anwendungsfilter. Im Merkmalfenster geschah das je
     Klick gut hundertmal — Zwillingszeilen, Info-Zeichen, die Knopfzeile —,
     im gebauten Fenster eine halbe Millisekunde je Aufruf (22.09.2026).
+
+    **Verborgen heißt ausdrücklich verborgen** (Durchsicht 0.5.1). Ein Widget,
+    das gerade erst in ein sichtbares Layout kam, meldet ``isHidden()``, bis
+    Qt es mit einem eingereihten ``_q_showIfNotHidden`` zeigt — und zeigt es
+    dann auch, wenn es inzwischen verborgen sein sollte, weil niemand das
+    ausdrücklich gesagt hat. So stand der Block von *Bohrung ändern* rechts,
+    während dieselben Felder als Maßgruppe im Bild standen (RM-199).
     """
-    if widget.isHidden() == visible:
-        widget.setVisible(visible)
+    if visible:
+        if widget.isHidden():
+            widget.setVisible(True)
+    elif not widget.isHidden() or not widget.testAttribute(
+        Qt.WidgetAttribute.WA_WState_ExplicitShowHide
+    ):
+        widget.setVisible(False)
 
 
 def _focus_stops(row: QWidget) -> list[QWidget]:
@@ -6636,6 +6654,19 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
             self._blocks[next(reversed(self._runs))] = (line, row)
+
+        # **Eine Öffnung, an der nichts geht, sagt warum** (Durchsicht 0.5.1).
+        # Am Laptop-Ständer lehnt der Kern an 13 von 28 Bohrungen jede
+        # Handlung mit demselben Satz ab („In dieser Bohrung steht Material
+        # …“); das Fenster zeigte Name, Maß und *Baustein einsetzen …*, und
+        # der Kunde wartete auf Maße im Bild, die nie kamen. An einer Bohrung
+        # ist der Grund eine Auskunft; an Kante und Fläche bleibt es bei der
+        # Regel oben, dort sagt der Katalog darunter, was geht.
+        if feature.kind in ("hole", "slot", "cone") and not any(
+            action.op is not None or getattr(action, "step", None) is not None for action in actions
+        ):
+            for reason in dict.fromkeys(str(action.reason) for action in actions if action.reason):
+                self.show_note(reason)
 
         if feature.kind == "face":
             self._build_sketch_entries(feature_id)
@@ -7626,6 +7657,26 @@ class FeaturePanel(QWidget):
         if not isinstance(editor, QCheckBox) or editor.isHidden() or not editor.isEnabled():
             return False
         editor.toggle()
+        return True
+
+    def focus_field(self, op: str, name: str) -> bool:
+        """Das Feld ``name`` der Handlung ``op`` bekommt den Fokus — wenn es steht.
+
+        Für die Übergabe aus der Maßgruppe im Bild
+        (``MainWindow._hand_quiet_placement_to_panel``): Dort verschwindet das
+        Feld, in dem getippt wurde, und ohne diesen Weg landete die Tastatur
+        auf dem nächsten Knopf der Kette statt auf derselben Zahl hier.
+        """
+        row = next(
+            (row for row in self._shown_rows.values() if row.op == op and name in row.widgets),
+            None,
+        )
+        if row is None:
+            return False
+        editor = row.widgets[name]
+        if not editor.isVisibleTo(self) or not editor.isEnabled():
+            return False
+        getattr(editor, "spin", editor).setFocus(Qt.FocusReason.OtherFocusReason)
         return True
 
     def _row_values(self, row: _ActionRow) -> dict[str, Any]:

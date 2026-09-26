@@ -3000,7 +3000,10 @@ def test_the_flow_runs_on_a_host_without_a_window(
         host.take_placement({"diameter": 6.0})
         assert controller._tool_busy, "die neue Größe wird noch vorbereitet"
         controller.accept()
-        assert controller._accept_pending is not preview_required
+        # Der frühe Klick wartet auf das Werkzeug — auch dort, wo eine gezeigte
+        # Vorschau Pflicht ist; die Pflicht prüft danach :meth:`accept` selbst
+        # (Durchsicht 0.5.1, Kunde Weg b).
+        assert controller._accept_pending
         assert session.wait_for_idle(30_000)
         if preview_required:
             assert not übernommen and controller.active

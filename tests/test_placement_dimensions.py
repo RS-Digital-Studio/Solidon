@@ -1734,3 +1734,117 @@ def test_the_line_check_skips_far_strokes_and_answers_as_before():
                 (QPointF(rect.left() - 40.0, edge_y), QPointF(rect.right() + 40.0, edge_y))
             )
         assert _clear_of_lines(rect, lines) == without_filter(rect, lines)
+
+
+def test_a_typed_position_beside_the_surface_holds_the_measures_until_it_comes_back():
+    """Eine Taste neben der Fläche beendet die Maßgruppe nicht (Durchsicht 0.5.1).
+
+    Wer an einer Bohrung bei x = -98 „-99“ tippt, kommt über „-9“, und das lag
+    am Wabenhalter neben der Fläche: Die Maßgruppe ging samt Feld nach rechts,
+    und die nächsten Tasten landeten auf einem Knopf. Jetzt sperrt der Fluss
+    nur *Übernehmen* und sagt warum; dieselbe Stelle wie vorher gibt frei.
+    """
+    said: list[str] = []
+    enabled: list[bool] = []
+    calls: list[str] = []
+    flow = SimpleNamespace(
+        _typed_off_surface=False,
+        _distance_valid=True,
+        _distance_message="",
+        _note=SimpleNamespace(setText=said.append),
+        _accept=SimpleNamespace(setEnabled=enabled.append),
+        _refresh_measure_actions=lambda: calls.append("Knöpfe"),
+        redraw=lambda: calls.append("Bild"),
+    )
+    flow._invalid_distance = lambda message: PlacementFlow._invalid_distance(flow, message)  # type: ignore[arg-type]
+
+    PlacementFlow.refuse_typed_position(flow, "neben der Fläche")  # type: ignore[arg-type]
+    assert flow._typed_off_surface and not flow._distance_valid
+    assert flow._distance_message == "neben der Fläche"
+    assert said == ["neben der Fläche"] and enabled == [False]
+    assert calls == ["Knöpfe", "Bild"]
+
+    PlacementFlow.typed_position_back(flow)  # type: ignore[arg-type]
+    assert flow._distance_valid and not flow._typed_off_surface
+    assert flow._distance_message == ""
+    calls.clear()
+    PlacementFlow.typed_position_back(flow)  # type: ignore[arg-type]
+    assert calls == [], "ohne Sperre gibt es nichts zurückzunehmen"
+
+
+@pytest.mark.parametrize(
+    ("surface", "prepared", "without", "expected"),
+    [
+        (object(), object(), False, True),
+        (None, object(), False, False),
+        (object(), object(), True, False),
+    ],
+)
+def test_only_a_prepared_face_carries_typed_coordinates(surface, prepared, without, expected):
+    """Ohne Fläche sind die Felder die Bedienung — dann gibt es nichts zu loten."""
+    flow = SimpleNamespace(_surface=surface, _prepared=prepared, _measure_without_surface=without)
+    assert PlacementFlow.on_a_surface.fget(flow) is expected  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    ("foot", "expected"),
+    [
+        ((-40.0, 5.0), "left"),
+        ((40.0, -5.0), "right"),
+        ((3.0, -40.0), "up"),
+        ((-3.0, 40.0), "down"),
+        ((1.0, 1.0), None),
+    ],
+)
+def test_a_dimension_is_named_by_the_side_it_runs_to_in_the_picture(foot, expected):
+    """„Außenkante links“ statt „Außenkante 4“ — die Seite, zu der die Maßlinie läuft.
+
+    Durchsicht 0.5.1, Weg c: Eine Nummer verlangte, sie im Kopf einer Kante im
+    Bild zuzuordnen. Eine Linie ohne Richtung im Bild (von vorn auf die Kante
+    gesehen) behält die Nummer.
+    """
+    from app.ui.placement_flow import _screen_side
+
+    spot = QPointF(100.0, 100.0)
+    assert _screen_side(QPointF(spot.x() + foot[0], spot.y() + foot[1]), spot) == expected
+
+
+@pytest.mark.parametrize("preview_required", [False, True])
+def test_an_early_click_waits_for_the_tool_even_where_a_preview_is_required(preview_required):
+    """Ein Klick gleich nach dem Tippen verfällt nicht (Durchsicht 0.5.1, Kunde Weg b).
+
+    Nach jeder getippten Zahl baut der Fluss das Werkzeug neu. Der Knopf war so
+    lange grau, und wo eine gezeigte Vorschau Pflicht ist, fiel auch ein
+    gemerkter Klick weg: Am Schraubendreherhalter stand nach Ø tippen und
+    sofortigem *Übernehmen* nach 30 s kein Schritt. Jetzt wartet der Klick auf
+    das Werkzeug, sagt es, und läuft danach durch ``accept`` — wo die
+    Vorschau-Pflicht ihn an die Vorschau hängt.
+    """
+    from app.ui.placement_flow import QuietHost
+
+    said: list[str] = []
+    host = QuietHost({"at_feature": "hole_1", "diameter": 7.0}, lambda values: True)
+    host.preview_required = preview_required
+    flow = SimpleNamespace(
+        dialog=host,
+        window=SimpleNamespace(announce=lambda text, **_kw: said.append(text)),
+        session=SimpleNamespace(result_current=True),
+        active=True,
+        _disposed=False,
+        _accept_pending=False,
+        _reference_pick=None,
+        _interpret_active_fields=lambda: True,
+        _display_ready=lambda: True,
+        _surface=object(),
+        _measure_without_surface=False,
+        _tool_busy=True,
+        _distance_valid=True,
+    )
+
+    PlacementFlow._accept_values(flow, allow_pending=True)  # type: ignore[arg-type]
+    assert flow._accept_pending, "der Klick wartet auf das Werkzeug"
+    assert said == ["Wird übernommen, sobald die Vorschau steht."]
+
+    flow._accept_pending = False
+    PlacementFlow._accept_values(flow, allow_pending=False)  # type: ignore[arg-type]
+    assert not flow._accept_pending, "eine Taste außerhalb der Felder wird nicht nachgeholt"

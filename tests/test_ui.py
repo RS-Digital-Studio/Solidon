@@ -18244,6 +18244,33 @@ def test_a_countersunk_bore_builds_the_selection_window_once(
     assert window.feature_panel.feature_id == hole
 
 
+def test_a_countersunk_bore_stays_one_chosen_feature_after_a_new_evaluation(
+    window: MainWindow,
+) -> None:
+    """Nach einer Auswertung bleibt eine gewählte Bohrung mit Senkung eine Zeile.
+
+    ``selected_features`` meldet sie als zwei Merkmale, und die Wiederherstellung
+    im Baum markierte daraus zwei Zeilen — ``selected_feature`` hieß danach
+    „keines“, und die Maßgruppe nach *Übernehmen* hing an keinem Merkmal
+    (Durchsicht 0.5.1, Wabenhalter).
+    """
+    window.open_path(MESHES / "plate_countersunk.stl")
+    assert window.session.wait_for_idle()
+    entry = window.session.last_result.scene.objects["obj_1"]
+    hole = next(identifier for identifier, f in entry.features.items() if f.kind == "hole")
+    window.object_tree.select_object("obj_1")
+    window.object_tree.select_feature("obj_1", hole)
+    QApplication.processEvents()
+    assert len(window.object_tree.selected_features()) == 2, "sonst gibt es den Fall nicht"
+
+    window.object_tree.show_scene(window.session.last_result, window.session.project.document)
+    QApplication.processEvents()
+
+    assert window.object_tree.selected_feature() == hole
+    assert len(window.object_tree.tree.selectedItems()) == 1, "eine Zeile, nicht zwei"
+    assert len(window.object_tree.selected_features()) == 2, "und sie bündelt weiter beide"
+
+
 def test_a_click_in_the_tree_settles_the_menu_entries_once_per_signal_pair(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:

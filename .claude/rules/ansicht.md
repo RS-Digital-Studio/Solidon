@@ -393,6 +393,15 @@ und der weiß von keinem Feld im Viewport. Dazu kommt: `objectPicked` läuft
 synchron durch den Baum zurück und setzt `_selected`, also muss die Stufe
 **vor** dem Senden gelesen werden.
 
+**Ein Merkmalsklick am schon allein gewählten Körper meldet ihn nicht noch
+einmal** (Durchsicht 0.5.1). `objectPicked` wählte im Baum den Körper ohne
+Merkmal — Maßgruppe ab, Merkmalfenster leer, Körperfarbe hin und zurück — und
+gleich danach alles für das Merkmal; von Bohrung zu Bohrung eine ganze
+Auswahlrunde je Klick. Und die Ansicht wählt das Merkmal erst **nach**
+`featurePicked` selbst, und nur, wenn die Auswahl aus dem Baum nicht ankam
+(eine Ansicht ohne Baum); mit Umschalt oder Strg bleibt die alte Folge, weil
+der Baum dort auch herausnimmt.
+
 **Der Zeiger stellt dieselbe Frage mit derselben Rechnung**
 (`_look_under_pointer` → `_click_target`; dieselbe Frage als eigene Auskunft
 steht in `_would_pick_feature`, gerufen wird sie heute nur aus einem Test).
@@ -1130,6 +1139,17 @@ rechnet keine Normalen. Gemessen an der Senkplatte (311 000 Dreiecke): Fläche
 300 → 63 ms, Kette einer Senkbohrung 1 100 → 175 ms, Hover bei gewähltem
 Merkmal 250–380 → 17–80 ms.
 
+**An großen Körpern rechnet ein Arbeiter ohne Schloss, die Hohlraumfläche
+bleibt am Original** (Durchsicht 0.5.1). Ab `MARKING_IN_WORKER_FROM` Dreiecken
+entstehen Ecken, Normalen und Kontur in `_MarkingWorker` aus den schlichten
+Feldern des Netzes; gemerkt werden die letzten `MARKING_MEMORY`. Die
+Hohlraumfläche (`cavity_surface_indices`) dagegen **nicht** an der geteilten
+Arbeiterkopie: `features.remembered` merkt je Körperobjekt, einer Kopie fehlen
+alle Flächenfits des Originals (Laptop-Ständer 1 784 statt 74 ms), und unter
+dem Schloss der Kopie warteten die Kernauskünfte des Merkmalfensters — die
+Maße standen Sekunden später. Nur eine Kette ab `CAVITY_IN_WORKER_FROM`
+Dreiecken rechnet im Arbeiter, an einer **eigenen** Kopie.
+
 ### Der Schattenwurf hält seinen Aktor und fällt im Arbeiter (22.09.2026)
 
 Die Umrisse aller Stücke gehen in **einem** vektorisierten Aufruf
@@ -1557,6 +1577,13 @@ echten Renderer, und ein Doppel ist immer schnell
 (`tests/test_viewport_decisions.py::test_the_picker_is_warmed_up_before_the_first_gesture`
 und `::test_new_geometry_warms_the_picker_again`).
 Die Zahlen stehen im Prüfstand, nicht in der Suite.
+
+**Die Schriftzeichen der Beschriftungen gehen denselben Weg**
+(`_warm_the_glyphs`, Durchsicht 0.5.1): pygfx rendert jedes Zeichen beim
+ersten Gebrauch, und der kam mit dem ersten Merkmalsklick (am Laptop-Ständer
+rund 90 ms). `LABEL_GLYPHS` wird nach dem ersten Szenenaufbau im Leerlauf in
+Stücken vorgebaut (`Renderer.warm_glyphs`); wer neue Zeichen in Beschriftungen
+bringt, trägt sie dort ein.
 
 ## Der Adapter wird einmal gefragt, und nicht im Hauptthread (14.09.2026)
 

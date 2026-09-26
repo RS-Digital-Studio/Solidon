@@ -3946,8 +3946,13 @@ def test_a_click_on_a_feature_selects_its_body_too(window: MainWindow) -> None:
 
     window.viewport._select_at(wall)  # zweite Stufe: das Merkmal darin
 
-    assert picked == ["obj_1"], "der Körper zuerst — er trägt die Zeile im Baum"
-    assert features == [hole], "und danach das Merkmal, das darunter erscheint"
+    # Der Körper steht nach dem ersten Klick schon allein in der Auswahl; der
+    # zweite meldet ihn nicht noch einmal (Durchsicht 0.5.1), und der Baum
+    # zeigt das Merkmal trotzdem unter seiner Zeile.
+    assert picked == [], "der schon gewählte Körper wird nicht noch einmal gewählt"
+    assert features == [hole], "das Merkmal, das darunter erscheint"
+    assert window.object_tree.selected() == "obj_1"
+    assert window.object_tree.selected_feature() == hole
 
 
 def test_the_report_says_where_you_stand_not_only_what_to_do(qt_app: QApplication) -> None:
