@@ -349,9 +349,7 @@ def flow_of(settings: PrintSettings, speed: float, *, first_layer: bool = False)
     ein Drittel mehr Material je Millimeter Bahn. Mit den Maßen der übrigen
     gerechnet fällt genau der Wert durch, der als erster reißt.
     """
-    height = settings.layers.first_layer_height if first_layer else settings.layers.layer_height
-    width = settings.layers.first_layer_line_width if first_layer else settings.layers.line_width
-    return height * width * speed
+    return settings_table.bead_area(settings, first_layer=first_layer) * speed
 
 
 def _from_flow(settings: PrintSettings) -> list[SettingAdvice]:
@@ -365,32 +363,21 @@ def _from_flow(settings: PrintSettings) -> list[SettingAdvice]:
     """
     advice: list[SettingAdvice] = []
     limit = settings.filament.max_flow
-    per_millimetre = settings.layers.layer_height * settings.layers.line_width
-    first_per_millimetre = (
-        settings.layers.first_layer_height * settings.layers.first_layer_line_width
-    )
-    if limit <= 0.0 or per_millimetre <= 0.0 or first_per_millimetre <= 0.0:
+    if limit <= 0.0 or any(
+        settings_table.bead_area(settings, first_layer=first) <= 0.0 for first in (False, True)
+    ):
         return advice
 
-    breaking = [
-        (path, speed, first)
-        for path, speed, first in (
-            ("speed.infill", settings.speed.infill, False),
-            ("speed.inner_wall", settings.speed.inner_wall, False),
-            ("speed.outer_wall", settings.speed.outer_wall, False),
-            ("speed.top_surface", settings.speed.top_surface, False),
-            ("speed.first_layer", settings.speed.first_layer, True),
-        )
-        if flow_of(settings, speed, first_layer=first) > limit
-    ]
+    breaking: list[tuple[str, float, bool]] = []
+    for name, first in settings_table.FLOW_BOUND_SPEEDS:
+        speed = float(getattr(settings.speed, name))
+        if flow_of(settings, speed, first_layer=first) > limit:
+            breaking.append((f"speed.{name}", speed, first))
     if not breaking:
         return advice
 
-    # Abgerundet und nicht gerundet: Ein aufgerundeter Wert liegt wieder über
-    # der Grenze, um die es geht — knapp, aber der Vorschlag hätte sie dann
-    # nicht eingehalten.
     for path, speed, first in breaking:
-        allowed = float(math.floor(limit / (first_per_millimetre if first else per_millimetre)))
+        allowed = settings_table.flow_speed_limit(settings, first_layer=first)
         if allowed <= 0.0:
             # Die Geschwindigkeitsfelder beginnen bei 1 mm/s. Eine leere
             # Liste wäre hier eine Entwarnung trotz überschrittener Grenze.

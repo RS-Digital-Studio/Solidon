@@ -65,7 +65,18 @@ Drei Sachen, die dabei nicht verhandelbar sind:
   dem Standardprozess des Herstellerprofils). Ein Projekt von vorher bekommt
   sie als Vorschlag. Anlass: Die Waschschüssel ging mit den allgemeinen
   150 mm/s an einen Centauri Carbon 2, dessen Hersteller 500 fährt, bei 530
-  Leerfahrten je Schicht — und zog ab Schicht 1 Fäden.
+  Leerfahrten je Schicht — und zog ab Schicht 1 Fäden. **Dasselbe gilt dem
+  Drucktempo** (`speed_*`, `acceleration`, `outer_wall_acceleration`): Es
+  gilt für „Standard", jede andere Stufe behält ihr Verhältnis dazu
+  (`print_settings._paced`), und `flow_factor` hebt den Volumenstrom des
+  Materials auf das Hotend des Druckers (Centauri 21 statt 12 mm³/s).
+  **Danach fördert kein Tempo mehr, als das Filament fließt**
+  (`print_settings.flow_speed_limit`, dieselbe Rechnung wie die
+  Volumenstromregel): Die Herstellertempi gelten seinem schnellsten
+  Filament, und der Slicer bremst selbst — stünde das schnellere Tempo in
+  der Datei, meldete die Beratung an jedem Teil vier Warnungen, ohne dass
+  jemand etwas eingestellt hat. Ein älteres Projekt behält seine Tempi;
+  schneller wird nichts vorgeschlagen, denn langsamer behebt keinen Fehler.
 - **Was Solidon meint, wird geschrieben, auch das Muster.** „Gitter" ging bis
   zum 25.09.2026 als An/Aus und Art hinaus, das Muster blieb beim Hersteller —
   bei Elegoo `rectilinear`, Linien in einer Richtung, die als freistehende

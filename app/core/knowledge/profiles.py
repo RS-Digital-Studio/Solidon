@@ -149,10 +149,29 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
         # eine — das ist der Bestand der Tabelle und der übliche Drucker.
         nozzles=max(1, int(table.get("nozzles", 1))),
         travel_speed=_positive_or_none(table.get("travel_speed"), f"{identifier}.travel_speed"),
+        **{
+            name: _positive_or_none(table.get(name), f"{identifier}.{name}")
+            for name in PRINTER_PACE_FIELDS
+        },
+        flow_factor=_positive_or_none(table.get("flow_factor"), f"{identifier}.flow_factor") or 1.0,
     )
     printable_area(result)
     printable_height(result)
     return result
+
+
+#: Die Tempofelder eines Druckers (``PrinterProfile.speed_*`` und die
+#: Beschleunigungen) — freiwillig, jedes für sich.
+PRINTER_PACE_FIELDS: Final = (
+    "speed_outer_wall",
+    "speed_inner_wall",
+    "speed_infill",
+    "speed_top_surface",
+    "speed_first_layer",
+    "speed_bridge",
+    "acceleration",
+    "outer_wall_acceleration",
+)
 
 
 def _positive_or_none(value: object, field: str) -> float | None:
@@ -170,7 +189,7 @@ def _positive_or_none(value: object, field: str) -> float | None:
     if not math.isfinite(number) or number <= 0.0:
         raise ValidationError(
             field=field,
-            detail=_("Die Leerfahrt muss eine Geschwindigkeit über null in mm/s sein."),
+            detail=_("Tempo, Beschleunigung und Förderfaktor müssen größer als null sein."),
             values={"value": str(value)},
         )
     return number

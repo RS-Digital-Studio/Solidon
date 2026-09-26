@@ -391,6 +391,15 @@ _PRINTER_FIELDS_NO_OPERATION_READS: dict[str, str] = {
     "bed_temperature_max": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
     "nozzle_temperature_max": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
     "travel_speed": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "speed_outer_wall": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "speed_inner_wall": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "speed_infill": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "speed_top_surface": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "speed_first_layer": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "speed_bridge": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "acceleration": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "outer_wall_acceleration": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
+    "flow_factor": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
 }
 _MATERIAL_FIELDS_NO_OPERATION_READS: dict[str, str] = {
     "title": "nur Anzeige; die Kennung steht im Schlüssel",

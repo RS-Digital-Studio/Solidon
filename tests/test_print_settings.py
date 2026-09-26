@@ -111,6 +111,104 @@ def test_an_open_printer_gets_no_chamber_temperature() -> None:
     assert closed.temperature.chamber > 0
 
 
+# --- Das Tempo gehört dem Drucker ------------------------------------------------
+
+
+def test_the_printers_own_pace_is_the_standard_stage() -> None:
+    """Der Centauri Carbon 2 fährt im Standardprozess seines Herstellers die
+    Außenwand mit 160, Innenwand, Füllung und Deckel mit 200 mm/s und
+    beschleunigt mit 10 000 mm/s² (Elegoo-Profil in OrcaSlicer, eingetragen in
+    ``printers.toml``). Die allgemeine Stufe fährt 40 — die Waschschüssel ging
+    so mit einem Viertel des Tempos hinaus, das der Drucker kann."""
+    speed = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla")).speed
+
+    assert (speed.outer_wall, speed.inner_wall, speed.infill, speed.top_surface) == (
+        160.0,
+        200.0,
+        200.0,
+        200.0,
+    )
+    assert (speed.first_layer, speed.bridge) == (50.0, 50.0)
+    assert (speed.acceleration, speed.outer_wall_acceleration) == (10000.0, 5000.0)
+
+
+def test_the_other_stages_keep_their_ratio_to_the_printers_pace() -> None:
+    """„Fein" fährt bei Solidon die Außenwand ein Viertel langsamer als
+    „Standard" — am Centauri dann 120 statt 160. Ein Drucker ohne eigenes
+    Tempo behält die Zahlen der Stufe."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    fine = print_settings._quality_table("fine")
+    standard = print_settings._quality_table("standard")
+
+    speed = print_settings.resolve(profile, "fine").speed
+
+    assert speed.outer_wall == pytest.approx(
+        160.0 * fine["speed_outer_wall"] / standard["speed_outer_wall"]
+    )
+    assert speed.acceleration == pytest.approx(
+        10000.0 * fine["acceleration"] / standard["acceleration"]
+    )
+    plain = print_settings.resolve(profiles.make_profile("generic-220", "pla"), "fine").speed
+    assert plain.outer_wall == fine["speed_outer_wall"]
+    assert plain.acceleration == fine["acceleration"]
+
+
+def test_the_printers_hotend_raises_the_flow_of_the_material() -> None:
+    """Der Materialwert gilt einem üblichen Hotend. Elegoos allgemeines PLA
+    fördert am Centauri 21 mm³/s, Solidons PLA 12 — ``flow_factor`` 1,75."""
+    pla = print_settings._material_table("pla")["max_flow"]
+
+    fast = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    plain = print_settings.resolve(profiles.make_profile("generic-220", "pla"))
+
+    assert fast.filament.max_flow == pytest.approx(pla * 1.75)
+    assert plain.filament.max_flow == pytest.approx(pla)
+
+
+@pytest.mark.parametrize("printer_id", sorted(profiles.printer_profiles()))
+def test_no_stage_asks_for_more_than_the_filament_flows(printer_id: str) -> None:
+    """Die Herstellertempi gelten dem schnellsten Filament des Herstellers.
+    Der Bambu A1 fährt Innenwände mit 300 mm/s, das sind 25 mm³/s gegen 12 für
+    allgemeines PLA; der Slicer bremst dann selbst. Die Auflösung bremst
+    genauso — sonst stünden an jedem Teil vier Warnungen, ohne dass jemand
+    etwas eingestellt hätte."""
+    printer = profiles.printer(printer_id)
+    if printer.is_resin:
+        pytest.skip("ein Resin-Drucker fördert nicht")
+    materials = [
+        identifier
+        for identifier, material in profiles.material_profiles().items()
+        if material.technology == printer.technology
+    ]
+    assert materials
+    for material_id in materials:
+        profile = profiles.make_profile(printer_id, material_id)
+        for quality in print_settings.quality_presets():
+            settings = print_settings.resolve(profile, quality)  # type: ignore[arg-type]
+            for name, first in print_settings.FLOW_BOUND_SPEEDS:
+                flow = advise.flow_of(settings, getattr(settings.speed, name), first_layer=first)
+                assert flow <= settings.filament.max_flow + 1e-9, (material_id, quality, name)
+            assert advise._from_flow(settings) == [], (material_id, quality)
+
+
+def test_the_flow_cap_is_the_highest_whole_speed_below_the_limit() -> None:
+    """A1 mit PLA: 12 mm³/s durch 0,2 auf 0,42 mm sind 142,9 mm/s —
+    abgerundet 142, damit der Wert die Grenze einhält, um die es geht."""
+    settings = print_settings.resolve(profiles.make_profile("bambu-a1", "pla"))
+    area = settings.layers.layer_height * settings.layers.line_width
+
+    assert settings.speed.inner_wall == float(int(settings.filament.max_flow / area))
+    assert settings.speed.first_layer == 50.0, "die erste Schicht liegt darunter"
+
+
+@pytest.mark.parametrize("field", ["speed_outer_wall", "acceleration", "flow_factor"])
+def test_a_pace_that_does_not_move_is_refused(field: str) -> None:
+    table = {"title": "Probe", "build_volume": [200.0, 200.0, 200.0], field: 0}
+
+    with pytest.raises(ValidationError):
+        profiles._printer_from_table("probe", table, Path("printers.toml"))
+
+
 def test_an_unknown_material_still_yields_settings() -> None:
     """Ein eigenes Filament soll sich benutzen lassen, bevor jemand eine
     Tabelle dafür pflegt."""
@@ -349,9 +447,12 @@ def test_flexible_material_caps_the_speed() -> None:
 def test_too_much_flow_limits_speed_within_the_measured_profile() -> None:
     """Die Grenze, die kein Feld zeigt: Schichthöhe mal Bahnbreite mal Tempo
     ist der Volumenstrom, und darüber wird die Bahn dünner als gerechnet —
-    ohne dass an den Einstellungen etwas falsch aussähe."""
+    ohne dass an den Einstellungen etwas falsch aussähe. Die Auflösung hält
+    die Grenze selbst ein; das zu hohe Tempo setzt hier der Kunde von Hand."""
     profile = profiles.make_profile("prusa-mk4s", "pla")
-    settings = print_settings.resolve(profile, "draft")
+    settings = print_settings.with_path(
+        print_settings.resolve(profile, "draft"), "speed.infill", 300.0
+    )
     assert advise.flow_of(settings, settings.speed.infill) > settings.filament.max_flow
 
     entries = advise.advise(settings, profile)
@@ -375,7 +476,7 @@ def test_a_nozzle_at_its_limit_slows_down_instead() -> None:
     Vorschlag über die Maschinengrenze hinaus wäre keiner."""
     profile = profiles.make_profile("anycubic-kobra-2", "pla")
     settings = print_settings.with_path(
-        print_settings.resolve(profile, "draft"),
+        print_settings.with_path(print_settings.resolve(profile, "draft"), "speed.infill", 150.0),
         "temperature.nozzle",
         profile.printer.nozzle_temperature_max,
     )
@@ -395,9 +496,12 @@ def test_a_nozzle_at_its_limit_slows_down_instead() -> None:
 def test_the_flow_rule_sees_what_the_others_changed() -> None:
     """Bei weichem Filament senkt die Materialregel das Tempo. Rechnete der
     Volumenstrom gegen das alte, empfähle er eine heißere Düse für ein Tempo,
-    das nebenan schon gesenkt wurde."""
+    das nebenan schon gesenkt wurde. Die Auflösung bleibt schon unter der
+    Grenze; das schnelle Tempo stammt hier aus einem Projekt von vorher."""
     profile = profiles.make_profile("prusa-mk4s", "tpu-95a")
-    settings = print_settings.resolve(profile, "draft")
+    settings = print_settings.with_path(
+        print_settings.resolve(profile, "draft"), "speed.infill", 120.0
+    )
 
     entries = advise.advise(settings, profile)
     after = advise.apply(settings, entries)

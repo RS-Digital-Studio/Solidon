@@ -794,6 +794,26 @@ class PrinterProfile:
     Schicht — und schon in den ersten Schichten zog der Druck Fäden. Ohne
     Angabe gilt die Vorgabe von :class:`SpeedSettings`.
     """
+    # **Das Standardtempo des Druckers** (26.09.2026), aus dem Standardprozess
+    # seines Herstellerprofils. Solidons Qualitätsstufen sind für einen
+    # allgemeinen Drucker geschrieben — 40/60/80 mm/s —, und der Centauri
+    # Carbon 2 fährt 160/200/200: dieselbe Schüssel 30 h 41 min gegen
+    # 18 h 29 min im ElegooSlicer. Steht ein Wert hier, gilt er für die Stufe „Standard", und
+    # die übrigen Stufen skalieren ihn mit ihrem Verhältnis zu ihr
+    # (``print_settings.resolve``). Ohne Angabe bleibt der Wert der Stufe.
+    speed_outer_wall: float | None = None
+    speed_inner_wall: float | None = None
+    speed_infill: float | None = None
+    speed_top_surface: float | None = None
+    speed_first_layer: float | None = None
+    speed_bridge: float | None = None
+    acceleration: float | None = None
+    outer_wall_acceleration: float | None = None
+    flow_factor: float = 1.0
+    """Wie viel mehr das Hotend fördert als das Standard-Hotend, für das die
+    Materialwerte ``max_flow`` gelten — aus dem generischen PLA-Profil des
+    Herstellers gegen Solidons 12 mm³/s (CC2 21 → 1,75). Ohne ihn drückte die
+    Volumenstromregel die Tempi des Druckers gleich wieder herunter."""
 
     @property
     def is_resin(self) -> bool:

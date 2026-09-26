@@ -11,7 +11,9 @@ verbreiteten Slicer als Prozess-, Filament- und Druckerprofil führen:
    Überschreibt die Stufe, wo beide etwas sagen.
 3. **Drucker** aus ``printers.toml`` — Düsendurchmesser skaliert Schichthöhe
    und Linienbreite, die Temperaturgrenzen deckeln, und ohne geschlossenen
-   Bauraum gibt es keine Kammertemperatur.
+   Bauraum gibt es keine Kammertemperatur. Kennt das Profil das Standardtempo
+   seines Herstellers, gilt es für „Standard"; kein Tempo liegt danach über
+   dem Volumenstrom des Filaments (:func:`flow_speed_limit`).
 
 Was die Geometrie darüber hinaus verlangt, kommt nicht von hier, sondern aus
 :mod:`app.core.slice.advise` — dort mit Begründung je Wert.
@@ -19,6 +21,7 @@ Was die Geometrie darüber hinaus verlangt, kommt nicht von hier, sondern aus
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -58,6 +61,17 @@ REFERENCE_NOZZLE: Final = 0.4
 #: Mehr als drei Viertel des Düsendurchmessers trägt keine Schicht mehr sicher
 #: auf der darunterliegenden auf.
 MAX_LAYER_RATIO: Final = 0.75
+
+#: Die Tempi, bei denen die Düse fördert, und ob sie mit den Maßen der ersten
+#: Schicht rechnen. Fahrt und Brücke stehen nicht darin: Die eine fördert
+#: nicht, die andere mit eigenem Fluss.
+FLOW_BOUND_SPEEDS: Final = (
+    ("infill", False),
+    ("inner_wall", False),
+    ("outer_wall", False),
+    ("top_surface", False),
+    ("first_layer", True),
+)
 
 _DATA_DIR: Final = Path(__file__).parent / "data"
 
@@ -191,7 +205,7 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
         line_width = printer.extrusion_width
         first_layer_line_width = round(printer.extrusion_width * 1.07, 3)
 
-    return PrintSettings(
+    settings = PrintSettings(
         id=f"{quality}-{profile.material.id}",
         title=f"{stage.get('title', quality)} · {profile.material.title}",
         quality=quality,
@@ -219,14 +233,16 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
             minimum_layer_time=float(stage["minimum_layer_time"]),
         ),
         speed=SpeedSettings(
-            outer_wall=float(stage["speed_outer_wall"]),
-            inner_wall=float(stage["speed_inner_wall"]),
-            infill=float(stage["speed_infill"]),
-            top_surface=float(stage["speed_top_surface"]),
-            first_layer=float(stage["speed_first_layer"]),
-            bridge=float(stage["speed_bridge"]),
-            acceleration=float(stage["acceleration"]),
-            outer_wall_acceleration=float(stage["outer_wall_acceleration"]),
+            outer_wall=_paced(stage, "speed_outer_wall", printer.speed_outer_wall),
+            inner_wall=_paced(stage, "speed_inner_wall", printer.speed_inner_wall),
+            infill=_paced(stage, "speed_infill", printer.speed_infill),
+            top_surface=_paced(stage, "speed_top_surface", printer.speed_top_surface),
+            first_layer=_paced(stage, "speed_first_layer", printer.speed_first_layer),
+            bridge=_paced(stage, "speed_bridge", printer.speed_bridge),
+            acceleration=_paced(stage, "acceleration", printer.acceleration),
+            outer_wall_acceleration=_paced(
+                stage, "outer_wall_acceleration", printer.outer_wall_acceleration
+            ),
             # Die Leerfahrt gehört dem Drucker, nicht der Stufe
             # (``PrinterProfile.travel_speed``); ohne Angabe gilt die Vorgabe.
             **({} if printer.travel_speed is None else {"travel": printer.travel_speed}),
@@ -242,9 +258,75 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
             density=float(stuff.get("density", 1.24)),
             flow_ratio=float(stuff.get("flow_ratio", 1.0)),
             colour=str(stuff.get("colour", "#4A90D9")),
-            max_flow=float(stuff.get("max_flow", 12.0)),
+            # Der Materialwert gilt für ein Standard-Hotend; der Drucker sagt,
+            # wie viel mehr seines fördert (``PrinterProfile.flow_factor``).
+            max_flow=float(stuff.get("max_flow", 12.0)) * printer.flow_factor,
         ),
     )
+    return _within_flow(settings)
+
+
+def bead_area(settings: PrintSettings, *, first_layer: bool = False) -> float:
+    """Der Querschnitt einer Bahn in mm²: Schichthöhe mal Bahnbreite.
+
+    ``first_layer=True`` nimmt die Maße der ersten Schicht — sie ist höher und
+    breiter als alle darüber und fördert je Millimeter ein Drittel mehr.
+    """
+    layers = settings.layers
+    if first_layer:
+        return layers.first_layer_height * layers.first_layer_line_width
+    return layers.layer_height * layers.line_width
+
+
+def flow_speed_limit(settings: PrintSettings, *, first_layer: bool = False) -> float:
+    """Das schnellste ganze Tempo in mm/s, bei dem die Düse den Volumenstrom
+    des Filaments hält — ``math.inf``, wo keiner gilt.
+
+    Abgerundet und nicht gerundet: Ein aufgerundeter Wert läge wieder über
+    der Grenze, um die es geht.
+    """
+    limit = settings.filament.max_flow
+    area = bead_area(settings, first_layer=first_layer)
+    if limit <= 0.0 or area <= 0.0:
+        return math.inf
+    return float(math.floor(limit / area))
+
+
+def _within_flow(settings: PrintSettings) -> PrintSettings:
+    """Kein Tempo der Auflösung fördert mehr, als das Filament fließt.
+
+    Die Herstellertempi sind für das schnellste Filament des Herstellers
+    geschrieben; der Bambu A1 fährt Innenwände mit 300 mm/s, und mit 0,2 auf
+    0,42 mm sind das 25 mm³/s gegen 12 für allgemeines PLA. Der Slicer bremst
+    dann selbst auf den Volumenstrom — steht das schnellere Tempo in der Datei,
+    meldet die Beratung (``advise._from_flow``) an jedem Teil dieselben vier
+    Warnungen, obwohl niemand etwas eingestellt hat. Unter dem kleinsten
+    einstellbaren Tempo wird nichts gesetzt; das meldet die Beratung.
+    """
+    limits = {first: flow_speed_limit(settings, first_layer=first) for first in (False, True)}
+    if min(limits.values()) < 1.0:
+        return settings
+    speed = settings.speed
+    capped = {
+        name: min(float(getattr(speed, name)), limits[first]) for name, first in FLOW_BOUND_SPEEDS
+    }
+    return replace(settings, speed=replace(speed, **capped))
+
+
+def _paced(stage: Mapping[str, Any], key: str, printer_value: float | None) -> float:
+    """Ein Tempo der Stufe — oder das des Druckers, im Verhältnis der Stufe.
+
+    Die Stufen sind für einen allgemeinen Drucker geschrieben. Kennt das
+    Druckerprofil sein Standardtempo (``PrinterProfile.speed_*``), gilt es für
+    „Standard", und jede andere Stufe behält ihr Verhältnis dazu: „Fein" fährt
+    die Außenwand bei Solidon mit 30 statt 40, also ein Viertel langsamer —
+    am Centauri Carbon 2 dann 120 statt 160.
+    """
+    value = float(stage[key])
+    if printer_value is None:
+        return value
+    standard = float(_quality_table("standard")[key])
+    return round(printer_value * value / standard, 1)
 
 
 class FanCurve(TypedDict):
