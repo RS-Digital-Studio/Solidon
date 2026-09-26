@@ -152,6 +152,8 @@ class ToolStrip(QWidget):
         self._tools: dict[str, Tool] = {}
         self._buttons: dict[str, QToolButton] = {}
         self._active: str | None = None
+        self.activation_allowed: Callable[[str | None], bool] | None = None
+        """Prüft den Werkzeugwechsel, bevor Leisten oder Eingabebesitzer wechseln."""
 
         self._row = QHBoxLayout()
         self._row.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
@@ -311,6 +313,12 @@ class ToolStrip(QWidget):
         if key is not None and key not in self._tools:
             return
         if self._active == key:
+            return
+        if self.activation_allowed is not None and not self.activation_allowed(key):
+            # Ein geklickter Umschalter hat seinen Haken bereits geändert.
+            # Bei einer Absage bleibt auch die Anzeige beim aktiven Werkzeug.
+            for name, button in self._buttons.items():
+                button.setChecked(name == self._active)
             return
 
         previous = self._active

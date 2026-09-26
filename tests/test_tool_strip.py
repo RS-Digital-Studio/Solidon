@@ -65,6 +65,35 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 TOOLS = ("section", "measure", "transform", "analysis", "layers", "explode", "split")
 
 
+@pytest.mark.parametrize("active", [None, "measure"])
+@pytest.mark.parametrize("clicked", [False, True])
+def test_refused_tool_activation_keeps_owner_and_button_state(active, clicked) -> None:
+    """Klick und Kürzel dürfen weder die alte Leiste noch ihren Besitzer ändern."""
+    from types import SimpleNamespace
+
+    from app.ui.tool_strip import ToolStrip
+
+    checked = {"measure": active == "measure", "split": clicked}
+    requests = []
+    strip = SimpleNamespace(
+        _active=active,
+        _tools={"measure": object(), "split": object()},
+        _buttons={
+            name: SimpleNamespace(
+                setChecked=lambda value, name=name: checked.__setitem__(name, value)
+            )
+            for name in checked
+        },
+        activation_allowed=lambda key: requests.append(key) or False,
+    )
+
+    ToolStrip.activate(strip, "split")
+
+    assert requests == ["split"]
+    assert strip._active == active
+    assert checked == {"measure": active == "measure", "split": False}
+
+
 @pytest.fixture
 def window(qt_app: QApplication) -> Iterator[MainWindow]:
     """Ein Fenster mit einem geladenen Teil — die Lage, in der ein Kunde ein

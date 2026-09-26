@@ -2587,6 +2587,11 @@ class MainWindow(QMainWindow):
         # Werkzeug beim Schließen zurückgenommen wird, steht hier und nicht in
         # den Leisten — verdrahtet wird sowieso an dieser Stelle.
         self.tools = ToolStrip(self)
+        tools_window_ref = weakref.ref(self)
+        self.tools.activation_allowed = lambda key: (
+            (window := tools_window_ref()) is not None
+            and (key != "split" or window._quiet_command_allowed())
+        )
         self.tools.add(
             "section",
             tr("Schnitt"),
@@ -6570,11 +6575,15 @@ class MainWindow(QMainWindow):
         # bekommt die Sitzung als eine Transaktion (Regel 16).
         if self.restore_discarded_sketch() or self.undo_sculpt_stroke() or self.undo_bone():
             return
+        if not self._quiet_command_allowed():
+            return
         transaction = self.session.undo()
         if transaction is not None:
             self.announce(tr("{name} zurückgenommen.").format(name=str(transaction.title)))
 
     def action_redo(self) -> None:
+        if not self._quiet_command_allowed():
+            return
         self.session.redo()
 
     def action_toggle_bed(self) -> None:
@@ -9740,8 +9749,12 @@ class MainWindow(QMainWindow):
         für einen neuen Körper, und bei mehreren fragt die Leiste
         (:meth:`_resolve_sketch_body`).
         """
+        if not self._quiet_command_allowed():
+            return
         if self._sketch_panel is not None or not self._begin_from_the_start_screen():
             return
+        if self._quiet_host is not None:
+            self.end_quiet_placement()
         # **Die Ebenen, die das Feld annimmt** (``ParamSpec.sketch_planes``,
         # RM-183): Die Bahn eines Sweeps liegt auf der Vorder- oder
         # Seitenansicht. Mit dieser Angabe beginnt eine leere Bahn dort, das
@@ -11027,7 +11040,7 @@ class MainWindow(QMainWindow):
         Ansicht bleibt, was sie ist — geformt wird am Körper, nicht auf einer
         Zeichenfläche.
         """
-        if self._sculpt_target is not None:
+        if not self._quiet_command_allowed() or self._sculpt_target is not None:
             return
         target = object_id or self.object_tree.selected()
         if not target:
@@ -11038,6 +11051,8 @@ class MainWindow(QMainWindow):
             self.announce(tr("Dieses Objekt hat kein Netz zum Formen."))
             return
 
+        if self._quiet_host is not None:
+            self.end_quiet_placement()
         self._sculpt_target = target
         # **Auch der erste Zug ist einer.** Der Schalter wird nach jedem Zug
         # zurückgenommen (der Grund steht dort), beim Betreten aber nicht: Wer
@@ -11374,6 +11389,10 @@ class MainWindow(QMainWindow):
         discarded = self._discarded_sketch
         if discarded is None:
             return False
+        if not self._quiet_command_allowed():
+            # Der Tastendruck ist beantwortet, die Zeichnung bleibt aufgehoben.
+            # start_sketch würde sonst erst nach ihrem Vergessen absagen.
+            return True
         self._discarded_sketch = None
         if len(self.session.history.operations) != discarded.steps:
             # Der Verlauf ist weitergegangen — das Angebot ist verfallen, und
@@ -11462,6 +11481,8 @@ class MainWindow(QMainWindow):
         ist meistens eine Kette, und wer für jeden Knochen sein Elternteil
         wählen muss, klickt dreimal so oft wie nötig.
         """
+        if not self._quiet_command_allowed():
+            return
         if self._armature_target is not None or self._sculpt_target is not None:
             return
         target = object_id or self.object_tree.selected()
@@ -11469,6 +11490,8 @@ class MainWindow(QMainWindow):
             self.announce(str(_NEEDS_SELECTION))
             return
 
+        if self._quiet_host is not None:
+            self.end_quiet_placement()
         self._armature_target = target
         # **Ein vorhandenes Skelett kommt mit.** Wer den Editor auf einem
         # Körper öffnet, der schon eines trägt, erwartet seine Knochen zu
@@ -13698,6 +13721,8 @@ class MainWindow(QMainWindow):
         wie bei jeder anderen Zeile auch. Einen Ort gibt es nicht: Neun
         Buchstaben haben neun.
         """
+        if not self._quiet_command_allowed():
+            return
         if finding.op_id is not None and self.history_panel.point_at(int(finding.op_id)):
             open_section(self.history_panel)
         if not isinstance(bodies, (tuple, list)):
@@ -13710,6 +13735,8 @@ class MainWindow(QMainWindow):
 
     def _on_finding_activated(self, finding: Finding) -> None:
         """Ein Berichtsklick bindet zuerst den Körper, dann Karte und tatsächlichen Ort."""
+        if not self._quiet_command_allowed():
+            return
         self._finding_awaiting_map = None
         self.viewport.clear_finding_mark()
         if finding.op_id is not None and self.history_panel.point_at(int(finding.op_id)):
@@ -14287,6 +14314,8 @@ class MainWindow(QMainWindow):
         bleibt genau die Ebene, die im Bild stand, auch nach einer Kamerafahrt
         die Eingabe der Operation (§11.2).
         """
+        if not self._quiet_command_allowed():
+            return
         if (
             len(self._split_points) < POINTS_NEEDED
             or self._split_target is None
@@ -15718,6 +15747,8 @@ class MainWindow(QMainWindow):
         self._end_changed_quiet_placement()
         previous = self._preview_approval
         order = self._prepare_feature_order(op, params)
+        if self.tools.active() == "split":
+            self.tools.close_tool()
         if order is not None:
             approval = self._set_preview_order(self._quiet_host or self.feature_panel, order)
         else:
@@ -16409,6 +16440,8 @@ class MainWindow(QMainWindow):
         def begun() -> None:
             window, host = window_ref(), host_ref()
             if window is not None and host is not None and window._quiet_host is host:
+                if window.tools.active() == "split":
+                    window.tools.close_tool()
                 window.feature_panel.set_measuring(True, op=op, begun=True)
 
         def scope_changed(_checked: bool) -> None:
@@ -20241,6 +20274,8 @@ class MainWindow(QMainWindow):
         drei offenen Kanten wären es drei. Die Defektkarte färbt sie alle, und
         das ist die Antwort auf die Frage, die der Knopf stellt.
         """
+        if not self._quiet_command_allowed():
+            return
         object_id = self._object_of(error)
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result and object_id else None
@@ -20605,6 +20640,8 @@ class MainWindow(QMainWindow):
 
     def _show_support_need(self, error: AppError) -> None:
         """Die Stützkarte des Körpers, dessen Insel oder Überhang gemeldet ist."""
+        if not self._quiet_command_allowed():
+            return
         object_id = self._object_of(error)
         if object_id is None:
             return

@@ -222,6 +222,22 @@ vom abgeleiteten `preview_required`. Beide Zwillinge brauchen vor Übernehmen
 das dargestellte aktuelle Ergebnis. `accepted(values)` liefert bool;
 `finished` folgt erst auf Erfolg. Frühes Enter wird nie nachgeholt.
 
+Ein begonnener Maßentwurf hält seine Auswahl auch gegenüber Berichtsklicks,
+direkten Gesteneditoren und lokaler Erkennung. Diese Nutzereinstiege prüfen
+`_quiet_command_allowed` vor dem ersten Zustandswechsel. Passive Maße geben
+ihren Eingabeweg beim Werkzeugwechsel frei. Dokument-Undo/Redo wartet auf
+den Abschluss des Entwurfs; das eigene Undo von Skizze, Formen und Skelett
+behält Vorrang. Ein fremder Drehring prüft die Sperre vor `take_values`,
+damit eine abgelehnte Handlung nicht schon im Panel aktiv wird.
+Die Wiederherstellung einer verworfenen Zeichnung prüft denselben Einstieg,
+bevor sie das aufgehobene Exemplar verbraucht.
+`ToolStrip.activation_allowed` prüft vor Leistenwechsel und Werkzeugstart;
+eine Absage stellt auch die Umschalter auf den bisherigen Zustand zurück.
+Trennen nutzt diese Prüfung und prüft beim Übernehmen der Schnittebene
+erneut. Beginnt umgekehrt eine Maßbearbeitung, schließt sie ein aktives
+Trennwerkzeug; passive Maße lösen diesen Wechsel nicht aus. Rein
+betrachtende Werkzeuge bleiben während des Entwurfs verfügbar.
+
 Ungültige Außen- und Mittenabstände erklären sich über denselben sichtbaren
 Maßhinweis und sperren beide Abschlüsse sofort (`_invalid_distance`). Die
 eingegebene Zahl bleibt korrigierbar; eine gültige Korrektur entfernt den

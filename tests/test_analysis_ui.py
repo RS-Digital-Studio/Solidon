@@ -34,6 +34,111 @@ from tests.render_fakes import RecordingItem, RecordingRenderer
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+def _activate_report_navigation(state: Any, route: str, object_id: str) -> None:
+    """Die vier Auswahlwege aus Befundzeile und angebotener Handlung."""
+    from app.core.errors import AppError
+
+    finding = Finding("perceive.deviation", "info", "Formabweichung", object_id=object_id, op_id=1)
+    if route == "finding":
+        MainWindow._on_finding_activated(state, finding)
+    elif route == "bundle":
+        MainWindow._on_bundle_activated(state, finding, (object_id,))
+    elif route == "locations":
+        MainWindow._show_error_location(state, AppError(object_id=object_id))
+    else:
+        assert route == "support"
+        MainWindow._show_support_need(state, AppError(object_id=object_id))
+
+
+@pytest.mark.parametrize("route", ["finding", "bundle", "locations", "support"])
+@pytest.mark.parametrize("phase", ["absent", "passive", "editing", "committing"])
+def test_report_navigation_preserves_a_started_draft_before_any_side_effect(
+    route: str,
+    phase: str,
+) -> None:
+    """Alle Berichtsauswahlen beachten denselben Besitz wie Baum und Viewport."""
+    from app.ui.placement_flow import QuietHost
+
+    host = None if phase == "absent" else QuietHost({"diameter": 7.0}, lambda values: False)
+    if host is not None and phase in {"editing", "committing"}:
+        host.begin_edit()
+        host.committing = phase == "committing"
+    events: list[Any] = []
+    selection = ["obj_1"]
+    awaiting = object()
+
+    def select(objects: list[str]) -> None:
+        selection[:] = objects
+        events.append(("selection", tuple(objects)))
+
+    state = SimpleNamespace(
+        _quiet_host=host,
+        _finding_awaiting_map=awaiting,
+        _quiet_selection_allowed=lambda: MainWindow._quiet_selection_allowed(state),
+        _quiet_command_allowed=lambda: MainWindow._quiet_command_allowed(state),
+        _say_the_change_comes_first=lambda: events.append("refused"),
+        _object_of=lambda error: MainWindow._object_of(state, error),
+        viewport=SimpleNamespace(clear_finding_mark=lambda: events.append("clear_mark")),
+        history_panel=SimpleNamespace(
+            point_at=lambda op_id: events.append(("history", op_id)) or False
+        ),
+        session=SimpleNamespace(
+            last_result=SimpleNamespace(
+                scene=SimpleNamespace(objects={"obj_2": SimpleNamespace(id="obj_2")})
+            )
+        ),
+        object_tree=SimpleNamespace(
+            selected=lambda: selection[0],
+            select_object=lambda body: select([body]),
+            select_objects=select,
+        ),
+        tools=SimpleNamespace(activate=lambda tool: events.append(("tool", tool))),
+        analysis_bar=SimpleNamespace(show_map=lambda kind: events.append(("map", kind))),
+        _analysis_map=lambda kind, body, **kwargs: events.append(("analysis", kind, body)),
+    )
+
+    _activate_report_navigation(state, route, "obj_2")
+
+    if phase == "editing":
+        assert selection == ["obj_1"]
+        assert state._finding_awaiting_map is awaiting
+        assert events == ["refused"], "auch Karte, Ortsmarke und Verlauf bleiben unverändert"
+    else:
+        assert selection == ["obj_2"]
+        assert "refused" not in events
+        if route != "bundle":
+            assert ("tool", "analysis") in events
+    assert state._quiet_host is host
+    if host is not None:
+        assert host.values() == {"diameter": 7.0}
+
+
+@pytest.mark.parametrize("route", ["finding", "bundle", "locations", "support"])
+def test_report_navigation_keeps_the_selected_feature_and_its_measure_group(
+    window: MainWindow,
+    route: str,
+) -> None:
+    """Ein Berichtsklick beendet auch am echten Fenster keinen begonnenen Bohrungsentwurf."""
+    window.object_tree.select_feature("obj_1", "hole_1")
+    host, flow = window._quiet_host, window._quiet_placement
+    assert host is not None and flow is not None
+    host.begin_edit()
+    host.take_placement({"diameter": float(host.values()["diameter"]) + 0.5})
+    values = host.values()
+    panel = window.feature_panel.preview_values()
+    approval = window._preview_approval
+    shown_map = window.analysis_bar.chosen()
+
+    _activate_report_navigation(window, route, "obj_1")
+
+    assert window._quiet_host is host and window._quiet_placement is flow
+    assert host.begun and flow.active and host.values() == values
+    assert window.object_tree.selected_feature() == "hole_1"
+    assert window.feature_panel.preview_values() == panel
+    assert window._preview_approval is approval
+    assert window.analysis_bar.chosen() == shown_map
+
+
 @pytest.fixture
 def deviation_host(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch

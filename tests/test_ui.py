@@ -62,6 +62,26 @@ from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
 
 
+@pytest.mark.parametrize("command", ["start_sketch", "start_sculpt", "start_armature"])
+def test_gesture_editor_entry_keeps_an_unaccepted_measure_draft(command: str) -> None:
+    """Auch die direkten Toolbar-Einstiege erhalten den begonnenen Maßentwurf."""
+    from types import SimpleNamespace
+
+    notices: list[str] = []
+    host = SimpleNamespace(begun=True, committing=False, values={"diameter": 7.0})
+    view = SimpleNamespace(_quiet_host=host, announce=notices.append)
+    view._quiet_selection_allowed = lambda: MainWindow._quiet_selection_allowed(view)
+    view._say_the_change_comes_first = lambda: MainWindow._say_the_change_comes_first(view)
+    view._quiet_command_allowed = lambda: MainWindow._quiet_command_allowed(view)
+
+    arguments = ("",) if command == "start_sketch" else ()
+    getattr(MainWindow, command)(view, *arguments)
+
+    assert view._quiet_host is host
+    assert host.values == {"diameter": 7.0}
+    assert notices == [tr("Die aktuelle Änderung zuerst übernehmen oder abbrechen.")]
+
+
 def test_the_repair_buttons_ask_for_exactly_what_they_say() -> None:
     """Die Knöpfe der Reparaturbefunde, ohne Fenster: je Knopf genau sein Schalter.
 
@@ -101,6 +121,76 @@ def test_the_repair_buttons_ask_for_exactly_what_they_say() -> None:
     MainWindow._resolve_intersections_after_error(view, object())
     assert changed == [(2, {"fill_holes": True, "self_intersections": True})]
     assert len(applied) == 2, "kein zweiter Reparaturschritt"
+
+
+@pytest.mark.parametrize("command", ["action_undo", "action_redo"])
+@pytest.mark.parametrize("begun", [False, True])
+def test_document_history_waits_only_for_a_begun_measure_draft(command: str, begun: bool) -> None:
+    """Passive Maße erlauben Undo; ein offener Entwurf behält seine Bezugsgeometrie."""
+    from types import SimpleNamespace
+
+    calls: list[str] = []
+    view = SimpleNamespace(
+        _quiet_host=SimpleNamespace(begun=begun, committing=False),
+        restore_discarded_sketch=lambda: False,
+        undo_sculpt_stroke=lambda: False,
+        undo_bone=lambda: False,
+        session=SimpleNamespace(
+            undo=lambda: calls.append("undo"), redo=lambda: calls.append("redo")
+        ),
+    )
+    view._quiet_selection_allowed = lambda: MainWindow._quiet_selection_allowed(view)
+    view._say_the_change_comes_first = lambda: calls.append("finish-draft")
+    view._quiet_command_allowed = lambda: MainWindow._quiet_command_allowed(view)
+
+    getattr(MainWindow, command)(view)
+
+    assert calls == (["finish-draft"] if begun else [command.removeprefix("action_")])
+
+
+def test_split_apply_cannot_replace_an_unaccepted_measure_draft() -> None:
+    """Auch eine vorher gezeichnete Trennlinie bleibt hinter der Entwurfssperre."""
+    from types import SimpleNamespace
+
+    calls: list[str] = []
+    view = SimpleNamespace(
+        _quiet_host=SimpleNamespace(begun=True, committing=False),
+        _split_points=[(0.0, 0.0, 0.0), (10.0, 10.0, 0.0)],
+        _split_target="obj_1",
+        _split_plane=object(),
+    )
+    view._quiet_selection_allowed = lambda: MainWindow._quiet_selection_allowed(view)
+    view._say_the_change_comes_first = lambda: calls.append("finish-draft")
+    view._quiet_command_allowed = lambda: MainWindow._quiet_command_allowed(view)
+
+    MainWindow._apply_split_line(view)
+
+    assert calls == ["finish-draft"]
+    assert view._split_points == [(0.0, 0.0, 0.0), (10.0, 10.0, 0.0)]
+    assert view._split_target == "obj_1"
+
+
+@pytest.mark.parametrize("active", [None, "split", "measure", "transform"])
+def test_editing_feature_fields_releases_only_the_split_pointer(active: str | None) -> None:
+    """Eine Feldänderung übernimmt den Zeiger; andere Ansichtswerkzeuge bleiben offen."""
+    from types import SimpleNamespace
+
+    closed: list[str] = []
+    view = SimpleNamespace(
+        _quiet_placement=None,
+        _quiet_host=None,
+        _preview_approval=None,
+        _end_changed_quiet_placement=lambda: None,
+        _prepare_feature_order=lambda op, params: None,
+        _follow_chamfer_sides=lambda op, params: None,
+        _offer_feature_cancel=lambda: None,
+        tools=SimpleNamespace(active=lambda: active, close_tool=lambda: closed.append("split")),
+    )
+
+    MainWindow._on_feature_values_changed(view, "resize_hole", {"diameter": 7.0})
+
+    assert closed == (["split"] if active == "split" else [])
+    assert view._feature_pending == ("resize_hole", {"diameter": 7.0})
 
 
 def _answers_stand_in(monkeypatch: pytest.MonkeyPatch, *, known: bool) -> Any:
@@ -239,6 +329,109 @@ def test_a_crashed_answer_worker_reports_instead_of_waiting(
         assert isinstance(view.calls[1][1], errors.InternalError)
     else:
         assert view.calls == [], "ein abgelöster Arbeiter meldet nichts"
+
+
+@pytest.mark.parametrize("active", [None, "split", "measure", "transform"])
+def test_first_measure_edit_releases_split_but_passive_measures_do_not(
+    active: str | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die echte Host-Verdrahtung gibt den Zeiger erst bei der ersten Eingabe weiter."""
+    from types import SimpleNamespace
+
+    from app.core.bootstrap import load_operations
+    from app.ui import placement_flow
+
+    load_operations()
+    closed: list[str] = []
+    measuring: list[dict[str, Any]] = []
+    order: list[str] = []
+
+    class View:
+        """Schwache Referenz ohne ein Fenster für die tatsächliche Anschlussmethode."""
+
+    view: Any = View()
+    view.tools = SimpleNamespace(active=lambda: active, close_tool=lambda: closed.append("split"))
+    view._quiet_command_allowed = lambda: True
+    view._quiet_placement = None
+    view._drop_feature_preview = lambda: None
+    view.end_quiet_placement = lambda **_kwargs: None
+    view._measuring_to_release = False
+    view._release_measuring = lambda: MainWindow._release_measuring(view)
+    view._place_measures = lambda *args, **kwargs: MainWindow._place_measures(view, *args, **kwargs)
+    view.object_tree = SimpleNamespace(selected=lambda: "obj_1", selected_feature=lambda: "hole")
+    action = SimpleNamespace(fixed={}, fields=[])
+    view.feature_panel = SimpleNamespace(
+        measure_fields=lambda *args, **kwargs: (action, object(), {}),
+        measure_group=lambda op: None,
+        set_measuring=lambda enabled, **kwargs: (measuring.append(kwargs), order.append("messen")),
+    )
+    view._lay_out_now = lambda: order.append("legen")
+    view.session = SimpleNamespace(
+        last_result=None, project=SimpleNamespace(document=object()), result_current=False
+    )
+    view.viewport = SimpleNamespace(set_feature_gizmo_blocked=lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        placement_flow,
+        "PlacementFlow",
+        lambda *args, **kwargs: SimpleNamespace(
+            active=True,
+            set_measure_fields=lambda *args, **kwargs: None,
+            start=lambda: order.append("start"),
+        ),
+    )
+
+    MainWindow._place_from_feature_panel(view, "resize_hole", {"at_feature": "hole"})
+    assert closed == []
+    assert measuring[-1]["begun"] is False
+    # **Erst umstellen, dann starten** (RM-232): Der Start blendet Felder über
+    # der Grafikfläche ein, und das malt sofort — samt Merkmalfenster.
+    assert order == ["messen", "legen", "start"]
+
+    view._quiet_host.begin_edit()
+
+    assert closed == (["split"] if active == "split" else [])
+    assert measuring[-1]["begun"] is True
+
+
+@pytest.mark.parametrize("handled_by", ["sketch", "sculpt", "bone"])
+def test_editor_undo_keeps_priority_over_document_history(handled_by: str) -> None:
+    """Das eigene Gesten-Undo bleibt vor der Sperre für fremde Dokumentbefehle."""
+    from types import SimpleNamespace
+
+    calls: list[str] = []
+
+    def undo(kind: str) -> bool:
+        calls.append(kind)
+        return handled_by == kind
+
+    view = SimpleNamespace(
+        restore_discarded_sketch=lambda: undo("sketch"),
+        undo_sculpt_stroke=lambda: undo("sculpt"),
+        undo_bone=lambda: undo("bone"),
+    )
+    MainWindow.action_undo(view)
+    assert (
+        calls == ["sketch", "sculpt", "bone"][: ["sketch", "sculpt", "bone"].index(handled_by) + 1]
+    )
+
+
+def test_a_blocked_sketch_restore_keeps_the_discarded_drawing() -> None:
+    """Undo verliert keine aufgehobene Zeichnung, wenn ein Maßentwurf den Einstieg hält."""
+    from types import SimpleNamespace
+
+    calls: list[str] = []
+    drawing = object()
+    view = SimpleNamespace(
+        _quiet_host=SimpleNamespace(begun=True, committing=False),
+        _discarded_sketch=drawing,
+    )
+    view._quiet_selection_allowed = lambda: MainWindow._quiet_selection_allowed(view)
+    view._say_the_change_comes_first = lambda: calls.append("finish-draft")
+    view._quiet_command_allowed = lambda: MainWindow._quiet_command_allowed(view)
+
+    assert MainWindow.restore_discarded_sketch(view)
+    assert view._discarded_sketch is drawing
+    assert calls == ["finish-draft"]
 
 
 def _accept_after_preview(window: MainWindow, dialog: OperationDialog) -> None:

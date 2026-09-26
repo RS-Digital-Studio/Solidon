@@ -2214,6 +2214,17 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Signalanschlüsse sind ohne Fenster geprüft; die ergänzten Fensterfälle
   für Auswahl, Übernahme und Undo gehören zur nächsten Release-Abnahme.
 
+  **Gemeinsame Bedienwege im Code geprüft:** Berichtsklicks, direkte Einstiege
+  in Skizze, Formen und Skelett, Trennen sowie lokale Erkennung respektieren denselben
+  begonnenen Maßentwurf wie Menüoperationen. Dokument-Undo/Redo greift erst
+  nach dessen Übernahme oder Abbruch; lokales Gesten-Undo behält Vorrang.
+  Ein abgelehnter Drehring aktiviert keine fremde Panelhandlung mehr.
+  Ungültige Außen- oder Mittenabstände zeigen den Grund an der sichtbaren
+  Maßgruppe und sperren Übernehmen sofort; die Korrektur macht den Weg frei.
+  Nach Roberts Vorgabe erfolgt dieser Nachweis über Code und fensterlose
+  Zustandsregressionen; eine durchgängige native Bedienabnahme ist damit
+  nicht behauptet.
+
   **Review des Langlochzugs, 24.09.2026** (Robert: „noch ein bisschen buggy
   vor allem mit dem merkmalpanel nebenan und dass man es nicht kleiner
   schieben kann, die maße fehlen auch beim langloch"). Ein Druck in das Ende
