@@ -1,0 +1,3 @@
+schlechter degenerate.stl                           #0       15 Dr.  heute offen/verzw/Teile/flach (1, 4, 5, 2)  neu (10, 1, 5, 2)
+36 Körper, 1 verschieden: 0 besser, 1 schlechter
+Zeit heute 1.26 s, neu 3.83 s

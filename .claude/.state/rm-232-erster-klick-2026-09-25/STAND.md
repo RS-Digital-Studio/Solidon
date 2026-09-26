@@ -70,3 +70,55 @@ Felder (~20 ms).
 
 Die dichte Platte ist `tests/data/meshes/plate_holes.stl` viermal unterteilt
 (796 · 4⁴ = 203 776 Dreiecke): `python erzeuge_platte.py`.
+
+## Angehalten am 25.09.2026 abends (Robert: „mach dir notizen, wir machen später weiter")
+
+Committet sind RM-232 bis 9d8d33395 (Code) und ad0404e37 (Sonden, Erinnerungen).
+**Nicht committet und nicht durch das Tor** — der Rest von RM-232 (Wabenhalter
+unter 100 ms), alles im Hauptbaum:
+
+| Datei | Was |
+|---|---|
+| `app/ui/render/api.py` | `hold_frames(ms)`, `release_frames()` am Vertrag, Vorgabe tut nichts |
+| `app/ui/render/gfx_renderer.py` | Anhalten mit eigener Frist (`_hold_timer`), `request_draw(self._frame)` statt `_draw` (dreimal), `_frame` hält fest, `render()` merkt vor, `render_now()` beendet das Anhalten |
+| `app/ui/placement_flow.py` | `FRAME_HOLD_MS = 50`; `_hold_frames`/`_release_frames`; angehalten bei beiden Sitzsuchen (`_begin_at_feature`, `_begin_on_a_face`), frei nach `_settle` (done/failed in `try/finally`), in `_stop` und `_camera_moved`; `_seated_on_a_face` herausgezogen; `redraw` kehrt bei `_seat_is_coming()` früh zurück (nur Werkzeug verbergen) |
+| `app/ui/main_window.py` | `_measuring_to_release` + `_release_measuring`; `end_quiet_placement(measuring_follows=)` und `_end_changed_quiet_placement(measuring_follows=)`; `_on_selection` gibt `not settle_actions` mit; `_on_features_selected` → Hülle um `_show_chosen_features`; `_place_from_feature_panel` → Hülle um `_place_measures`, dort `end_quiet_placement(measuring_follows=True)` |
+| `tests/render_fakes.py` | `holds`, `releases` (hält nichts an — Bildzählungen bleiben) |
+| `tests/test_surface_placement_ui.py` | `_another_hole`, zwei neue Fenstertests (Anhalten/Freigeben, Messen bleibt von Bohrung zu Bohrung) — **nie gelaufen** (erst beim Release) |
+| `tests/test_render_gfx_regressions.py` | `test_held_frames_arrive_as_one_after_the_release` — Fenstertest, **nie gelaufen** |
+| `tests/test_ui.py` | Attrappe von `test_first_measure_edit_releases_split_…` nachgezogen — gelaufen, grün |
+
+Neue Sonden hier: `scenario_rundgang.py` (Ereignisse je Klick), `scenario_hauptprofil.py`
+(Profil Klick bis Fläche), `scenario_messen.py` (wer ruft `set_measuring`), `ab_head.sh`
+(HEAD-Arbeitsbaum gegen Hauptbaum, Zeitleiste). Der HEAD-Arbeitsbaum lag im Scratchpad
+und ist entfernt: `git worktree add --detach <ordner> HEAD`, dann `bash ab_head.sh <ordner> 3`.
+
+**Gemessen** (ruhige Maschine, Wabenhalter, Median Klick 3–10):
+
+- `set_measuring` je Klick 1 statt 2 Aufrufe (5–6 statt 18 + 1,5 ms). Die Ursache des
+  zweiten war `_place_from_feature_panel` → `end_quiet_placement()` **nach** dem schon
+  vorgemerkten Ausschalten.
+- Das Bild vor `_settle` ist weg; danach kommen noch **ein bis zwei** Bilder (vermutlich
+  Expose der gezeigten nativen Felder — prüfen).
+- `scenario_zeiten`: 121 ms bis zur Fläche. `ab_head.sh` drei Runden, RUHE:
+  HEAD 120 / 141 / 143, neu 133 / 127 / 124 — Rauschen ±15 ms, **kein belegter Gewinn**.
+- Zeitleiste neu: synchron fertig ~60, Arbeiter fertig ~70, `_settle` 82 → 101, Bild 107 → 120.
+
+**Offen, in dieser Reihenfolge:**
+
+1. Nachweise am Fenster erneut fahren (`scenario_uebergabe`, `scenario_verdeckt`,
+   `scenario_abbau`, `scenario_plaetze`) — nach diesen Änderungen noch nicht.
+2. Lücke Arbeiterende → `_settle` (~13 ms, Qt malt Merkmalfenster/Baum dazwischen),
+   `_settle` 18–24 ms (`set_gizmo` 9× je Klick, native `raise_`/`move`/`show`,
+   `_size_measure_fields`), das zweite Bild danach, `_layout_feature_labels` 10× je Klick.
+   Kandidaten: Werkzeug über Flüsse behalten (Schlüssel ist ortsfrei, gleiche Bohrung →
+   kein `prepare_tool`, kein `add_surface`), Griff umhängen statt neu bauen (Regel in
+   `ansicht.md`/`griffe.md` beachten), Maßgruppen-Kästchen wiederverwenden.
+3. Mehr Runden A/B nur bei ruhiger Maschine (Last vorher prüfen); Ziel Klick bis Ruhe < 100 ms.
+4. Doku: `ansicht.md` (Bild anhalten, Messen über die Auswahlrunde), `app/ui/CLAUDE.md`,
+   `render/CLAUDE.md` („Zeichnen an einer Stelle" um das Anhalten ergänzen).
+5. Tor (`suite-getrennt.sh`, ruff, format, mypy), dann Commit nur der eigenen Hunks.
+
+Danach: RM-239 (oben), RM-240, **RM-246** (Laptop-Ständer offen nach Reparatur, Rasterstufe
++31 % Volumen — heute ins Register eingetragen; Sonde und Übergabenotiz der
+Langloch-Sitzung in `.claude/.state/rm-246-laptop-staender-2026-09-25/`).

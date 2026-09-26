@@ -70,6 +70,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe](#rm-239) | Geometrie, Erkennung und Druckvorbereitung | Siebhalter-Ring mit Riss: die Heilung überwiegt, 12 Eckpaare zu 0,015 µm werden zusammengelegt, 24 Dreiecke fallen — Gruppen nach Flächenblatt trennen, ohne Dreieckssuppen aufzureißen; Import- und Reparaturregel zusammenlegen |
 | [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
 | [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
+| [RM-246 — Am offenen Netz fährt jede Merkmalshandlung auf das Raster und bläht das Modell auf](#rm-246) | Geometrie, Erkennung und Druckvorbereitung | Laptop-Ständer: nach dem Import `repair.still_open`, 21 Teile, jede Merkmalshandlung auf `voxel` mit +31 % Volumen und nur „gerundet“ im Bericht — warum bleibt es offen, und darf die Rasterstufe so still durchreichen |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht](#rm-248) | Geometrie, Erkennung und Druckvorbereitung | Fächer vom Randmittelpunkt lässt beim Versetzen 3,6 bis 5,4 mm³ Mulde — den Deckel als Fortsetzung der umgebenden Fläche bauen, an beiden Kernen |
 | [RM-249 — Eine Bohrung über einer Seite innerhalb der Hülle meldet keine Kante](#rm-249) | Geometrie, Erkennung und Druckvorbereitung | Kantenprüfung fragt zuerst den Hüllquader; an gs-100 läuft eine Kopie 3,4 mm über die Seite, ohne Befund — Prüfung über die eigene Tiefe des Merkmals am Netz, dann Nachkontrolle der Kopien an beiden Kernen |
@@ -1839,6 +1840,30 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   gerundete Seite; die Flaschentaschen als Gegenfall. Abnahme: Screen-Cover
   ohne Verrundungen an den Buchstaben, Flaschenhalter, Besenhalter und die
   übrigen Korpuskörper Merkmal für Merkmal gleich.
+
+<a id="rm-246"></a>
+
+- [ ] **RM-246 — Am offenen Netz fährt jede Merkmalshandlung auf das Raster und bläht das Modell auf.**
+  Gemeldet von der Sitzung „Langloch-Ziehen" (25.09.2026) an
+  `F:\3D Dateien\parametric-laptop-riser.stl` (neu seit diesem Tag). Beim
+  Einlesen bleibt `repair.still_open` (Warnung); danach 172 336 Dreiecke,
+  `is_watertight` falsch, 21 Teile, manifold3d `Error.NotManifold`. Jede
+  Merkmalshandlung fällt deshalb auf `boolean.voxel`: *Merkmal versetzen* einer
+  Bohrung um 1,5 mm 348 273,61 → 457 343,01 mm³ (+31 %), *Merkmal verdoppeln*
+  457 561 mm³, *Merkmal drehen* um 15° ebenso und dazu rund 800 mm³ Abtrag vor
+  den Mündungen. Der Bericht sagt nur „Auf einem Raster gelöst — die Maße sind
+  gerundet." Sonde und Übergabenotiz der meldenden Sitzung:
+  `.claude/.state/rm-246-laptop-staender-2026-09-25/probe_real.py` (Aufruf
+  `PROBE_TREE=<baum> python probe_real.py "<datei>" 15`). Zwei Fragen:
+  **Warum bleibt das Netz nach der Reparatur offen**, und **darf die
+  Rasterstufe ein Ergebnis mit einem Drittel mehr Volumen still als
+  „gerundet" durchreichen** — oder sagt sie ab beziehungsweise nennt die
+  Abweichung mit Weg (Regel 17, §17.2 „nie stillschweigend"). Zuständig:
+  Reparatur und Rückfallkette (`geom/repair.py`, `geom/boolean.py`), nicht die
+  Merkmalshandlung. Abnahme: Der Laptop-Ständer kommt geschlossen aus dem
+  Import oder sagt am Befund, was offen bleibt und warum; eine Merkmalshandlung
+  an ihm ändert das Volumen nur um das, was das Werkzeug bewegt, oder die
+  Rasterstufe sagt mit Zahl und Weg, dass sie es nicht kann.
 
 <a id="rm-247"></a>
 
