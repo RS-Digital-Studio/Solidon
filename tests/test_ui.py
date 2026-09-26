@@ -9041,6 +9041,29 @@ def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWin
     ), "ein Undo nimmt die Handlung nicht zurück"
 
 
+def test_scaling_to_the_build_volume_keeps_the_part_on_the_bed(window: MainWindow) -> None:
+    """*Auf den Bauraum verkleinern* lässt das Teil auf dem Bett stehen (KUNDE-09).
+
+    Verkleinert wurde um die Mitte; die Unterseite hob sich, und der Bericht
+    meldete danach „Ein Objekt schwebt über dem Druckbett“ (Durchsicht 0.5.1,
+    am Laptopständer aus dem Druckdialog).
+    """
+    from app.ui.panels import as_error
+
+    window.open_path(MESHES / "oversized.stl")
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    over = [f for f in result.scene.report.findings if f.code == "arrange.out_of_build_volume"]
+    assert over, "das Testmodell steht über den Bauraum hinaus"
+    window.error_handlers()["scale_to_fit"](as_error(over[0]))
+    assert window.session.wait_for_idle()
+    after = window.session.last_result
+    body = next(iter(after.scene.objects.values()))
+    assert body.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6)
+    codes = {f.code for f in after.scene.report.findings}
+    assert "arrange.above_bed" not in codes and "arrange.out_of_build_volume" not in codes
+
+
 def test_only_actions_with_a_handler_are_offered(window: MainWindow) -> None:
     """Lieber ein Knopf weniger als einer, der nichts tut."""
     from app.ui.dialogs import offered_actions

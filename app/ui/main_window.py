@@ -13096,6 +13096,16 @@ class MainWindow(QMainWindow):
         Ansicht.
         """
         object_id = self.object_tree.selected()
+        if kind is not None and object_id is None:
+            lone = self._lone_visible_body()
+            if lone is not None:
+                # **Mit einem Körper gibt es nichts zu wählen** (KUNDE-15).
+                # „Wählen Sie zuerst ein Objekt im Objektbaum“ stand am
+                # Laptopständer über einer Szene mit genau einem Teil. Die
+                # Auswahl stößt die Karte selbst an (``_on_selection``).
+                self.object_tree.select_object(lone)
+                if self.object_tree.selected() == lone:
+                    return
         request = self._map_request
         if request is not None and (kind != request.key[1] or object_id != request.key[0]):
             self.viewport.clear_finding_mark()
@@ -13115,6 +13125,14 @@ class MainWindow(QMainWindow):
             return
         self._map_cancelled_for = None
         self._analysis_map(kind, object_id)
+
+    def _lone_visible_body(self) -> ObjectId | None:
+        """Der einzige sichtbare Körper der Szene — ``None`` bei mehreren oder keinem."""
+        result = self.session.last_result
+        if result is None:
+            return None
+        visible = [name for name in result.scene.objects if name not in self._hidden]
+        return visible[0] if len(visible) == 1 else None
 
     def _analysis_map(
         self, kind: maps.MapKind, object_id: ObjectId, *, finding: Finding | None = None
@@ -19667,6 +19685,25 @@ class MainWindow(QMainWindow):
         self._update_veil(busy)
         if not busy:
             self._resume_preview_after_idle()
+            self._resume_map_after_idle()
+
+    def _resume_map_after_idle(self) -> None:
+        """Die gewählte Analysekarte kommt nach der Rechnung wieder.
+
+        Jede neue Geometrie räumt die Karte ab (``_show_scene``, ``_on_busy``),
+        und die Auswahl, die sie neu anstoßen würde, kommt noch während der
+        Rechnung — dort lehnt ``_analysis_map`` ab. Danach fragte niemand mehr:
+        Nach *Reparieren* aus der Legende der Netzfehlerkarte stand der Wähler
+        weiter auf „Netzfehler“, im Bild und in der Legende war nichts
+        (Durchsicht 0.5.1, am Bohrmaschinenhalter). Ein Abbruch des Kunden
+        gilt weiter (``_on_map_changed`` prüft ``_map_cancelled_for``).
+        """
+        kind = self.analysis_bar.chosen()
+        if kind is None or self.viewport.analysis_map is not None or self._map_worker is not None:
+            return
+        if self.object_tree.selected() is None:
+            return
+        self._on_map_changed(kind)
 
     def _resume_preview_after_idle(self) -> None:
         """Eine Vorschau, deren Antwort während der Auswertung verfiel, wird neu angefordert.
@@ -20819,6 +20856,13 @@ class MainWindow(QMainWindow):
         Fehlerdialog kommt oder aus dem Kontextmenü des Prüfberichts.
 
         Ein Prozent Luft, damit das Teil nicht exakt an der Wand klebt.
+
+        **Und das Teil bleibt auf dem Bett.** Verkleinert wurde um die Mitte
+        des Objekts; die Unterseite hob sich dabei um die halbe Höhenabnahme,
+        und danach meldete der Bericht „Ein Objekt schwebt über dem Druckbett“
+        — am Laptopständer nach *Auf den Bauraum verkleinern* aus dem
+        Druckdialog (Durchsicht 0.5.1, KUNDE-09). Der Bezugspunkt ist deshalb
+        das Druckbett: Mitte in X und Y, Unterseite in Z.
         """
         object_id = self._object_of(error)
         result = self.session.last_result
@@ -20839,7 +20883,9 @@ class MainWindow(QMainWindow):
             REGISTRY.get("scale_object").title,
             [
                 OperationDraft(
-                    op="scale_object", inputs=(object_id,), params={"factor": factor * 0.99}
+                    op="scale_object",
+                    inputs=(object_id,),
+                    params={"factor": factor * 0.99, "about": "bed"},
                 )
             ],
         )

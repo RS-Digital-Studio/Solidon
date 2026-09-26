@@ -952,6 +952,40 @@ def test_a_warning_that_a_later_step_fixed_is_dropped() -> None:
     assert [entry.code for entry in kept] == ["repair.holes_filled"]
 
 
+def test_resolved_intersections_settle_the_load_note_that_offered_it() -> None:
+    """„… von denen manche ineinanderstecken“ geht, sobald ein späterer Schritt aufgelöst hat.
+
+    Am Bohrmaschinenhalter (69 Teile) blieb die Zeile nach *Überschneidungen
+    auflösen* stehen, samt Knopf, über „Überschneidungen wurden aufgelöst.“ —
+    der Körper hat danach weiter viele Teile, also griff die Einteiligkeit nicht
+    (Durchsicht 0.5.1). Die Fassung ohne Überschneidung sagt etwas anderes und
+    bleibt; sie bietet die Auflösung nicht an.
+    """
+    import dataclasses
+
+    from app.core.errors import RESOLVE_INTERSECTIONS, SPLIT_BODIES
+    from app.core.scene.evaluate import _without_settled
+
+    crossing = dataclasses.replace(
+        _finding("ingest.multiple_components", "info", 1),
+        suggestions=(RESOLVE_INTERSECTIONS, SPLIT_BODIES),
+    )
+    plain = dataclasses.replace(
+        _finding("ingest.multiple_components", "info", 1), suggestions=(SPLIT_BODIES,)
+    )
+    resolved = _finding("repair.self_intersections", "info", 2)
+
+    assert [e.code for e in _without_settled([crossing, resolved])] == ["repair.self_intersections"]
+    assert [e.code for e in _without_settled([plain, resolved])] == [
+        "ingest.multiple_components",
+        "repair.self_intersections",
+    ], "die Fassung ohne Überschneidung bleibt"
+    earlier = _finding("repair.self_intersections", "info", 0)
+    assert crossing in _without_settled([earlier, crossing]), "nur ein späterer Schritt hebt auf"
+    other = dataclasses.replace(resolved, object_id="obj_9")
+    assert crossing in _without_settled([crossing, other]), "nur am selben Körper"
+
+
 def test_a_decimation_that_stays_too_large_does_not_settle_the_warning() -> None:
     """Der Grenzfall des jüngsten Eintrags in ``SETTLED_BY``.
 

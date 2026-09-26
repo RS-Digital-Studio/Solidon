@@ -35,6 +35,7 @@ from app.core.errors import (
     CORRECT_INPUT,
     DECIMATE_MESH,
     REACTIVATE_STEP,
+    RESOLVE_INTERSECTIONS,
     SHOW_DETAILS,
     SHOW_HISTORY,
     SHOW_LAYERS,
@@ -1347,6 +1348,31 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
     "repair.self_intersections_incomplete": frozenset({"repair.self_intersections"}),
 }
 
+#: Wie :data:`SETTLED_BY`, aber nur für die Fassung eines Befunds, die diese
+#: Handlung anbietet.
+#:
+#: „Das Modell besteht aus 69 Teilen, von denen manche ineinanderstecken“
+#: steht beim Einlesen mit *Überschneidungen auflösen* — und blieb nach dem
+#: Klick stehen, samt Knopf, über „Überschneidungen wurden aufgelöst.“: Der
+#: Körper hat danach weiter viele Teile, also griff :data:`ONE_PIECE_CODES`
+#: nicht (Durchsicht 0.5.1, am Bohrmaschinenhalter). Die Fassung **ohne**
+#: Überschneidung („besteht aus drei Teilen“) sagt etwas anderes und bleibt;
+#: sie trägt denselben Code, deshalb unterscheidet hier die angebotene Handlung.
+#: Aufgehoben wird sie von jedem späteren Satz über die Überschneidungen
+#: desselben Körpers — gelöst, nicht lösbar, nur gemeldet —, denn der beschreibt
+#: den Zustand danach.
+SETTLED_BY_OFFER: Final[dict[tuple[str, str], frozenset[str]]] = {
+    ("ingest.multiple_components", RESOLVE_INTERSECTIONS.id): frozenset(
+        {
+            "repair.self_intersections",
+            "repair.self_intersections_unresolved",
+            "repair.self_intersections_skipped",
+            "repair.self_intersections_detected",
+            "repair.self_crossing",
+        }
+    ),
+}
+
 #: Befunde, die einen **Zustand** des Körpers aussagen — offen, verzweigt,
 #: ohne Dicke — und am Endstand nicht mehr stimmen, wenn der Körper dort
 #: geschlossen ist. Sie werden am fertigen Körper gefragt, nicht über einen
@@ -1556,15 +1582,24 @@ def _without_settled(findings: Sequence[Finding]) -> list[Finding]:
     ``op_id``, und ein Befund ohne sie zählt als am Anfang stehend — die
     Prüfungen am Ende der Auswertung (Passungen, Bauraum) tragen keine.
     """
-    if not any(entry.code in SETTLED_BY for entry in findings):
+    offered_codes = {code for code, _action in SETTLED_BY_OFFER}
+    if not any(entry.code in SETTLED_BY or entry.code in offered_codes for entry in findings):
         return list(findings)
 
     def step(entry: Finding) -> int:
         return entry.op_id if entry.op_id is not None else -1
 
+    def healers_of(entry: Finding) -> frozenset[str] | None:
+        found = SETTLED_BY.get(entry.code)
+        for action in entry.suggestions:
+            more = SETTLED_BY_OFFER.get((entry.code, action.id))
+            if more is not None:
+                found = more if found is None else found | more
+        return found
+
     kept: list[Finding] = []
     for entry in findings:
-        healers = SETTLED_BY.get(entry.code)
+        healers = healers_of(entry)
         if healers is not None and any(
             other.code in healers
             and step(other) > step(entry)

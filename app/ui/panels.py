@@ -4946,6 +4946,13 @@ class ReportPanel(QWidget):
             if item.isHidden():
                 continue
             finding = item.data(Qt.ItemDataRole.UserRole)
+            if finding.severity == "info" and finding.object_id is None:
+                # **Ein Hinweis zur Einrichtung ist nicht der erste Schritt am
+                # Teil** (KUNDE-06). „Material kalibrieren“ stand vorgewählt,
+                # in der Auswahlfarbe, mit orangem Hauptknopf, über jedem
+                # sauberen Modell — und las sich wie eine Warnung. Ein Hinweis
+                # am Körper (*Auf das Bett setzen*) bleibt vorwählbar.
+                continue
             if any(
                 action.id in handlers
                 for action in actions_for_document(
@@ -5186,6 +5193,17 @@ class ReportPanel(QWidget):
                 if self._live_objects
                 else tr("Keine Befunde.")
             )
+            return
+        if self._live_objects and not alerts:
+            # **Das Urteil zuerst, auch neben Hinweisen** (KUNDE-06). Ein
+            # Hinweis ist eine Auskunft und keine Aufforderung (``alerts``) —
+            # und „Die Toleranzen dieses Materials sind Startwerte“ steht bei
+            # jeder frischen Installation an jedem Teil. Der Satz „druckbereit“
+            # stand deshalb praktisch nie da; der Kunde las nur die Zählung
+            # (null Fehler, null Warnungen, ein Hinweis) und musste selbst
+            # schließen. Die Zahl bleibt in der Schreibweise der Zählung
+            # darunter, weil der Katalog keine Mehrzahl kennt.
+            self.summary.setText(f"{tr('Druckbereit')} · {counts['info']} × {tr('Hinweis')}")
             return
         self.summary.setText(
             f"{counts['error']} × {tr('Fehler')} · "

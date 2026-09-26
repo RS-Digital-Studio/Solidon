@@ -7188,6 +7188,52 @@ def test_the_viewport_paints_the_defect_levels_from_the_legend_table(qt_app: QAp
     assert tuple(colours.colormap) == category_colours(len(levels), viewport.body_colour())
 
 
+def test_an_incomplete_defect_search_says_so_once(window: MainWindow) -> None:
+    """Die unvollständige Suche steht einmal da, nicht noch als Rohzahl (KUNDE-15).
+
+    Am Laptopständer stand hinter „Die Suche nach Überschneidungen ist
+    unvollständig …“ noch „33140 × nicht bestimmbar (Überschneidungen nicht
+    vollständig geprüft)“ — dieselbe Aussage als Zahl ohne Handlung. Die Zahl
+    steht jetzt im Tooltip.
+    """
+    import math
+
+    result = window.session.last_result
+    assert result is not None
+    object_id = next(iter(result.scene.objects))
+    body = result.scene.objects[object_id].mesh
+    open_search = maps.AnalysisMap(
+        kind="defects",
+        title="Netzfehler",
+        values=(math.nan,) * (body.triangle_count - 1) + (3.0,),
+        unit="",
+        low=0.0,
+        high=4.0,
+        categories=tuple(str(level) for level in maps.DEFECT_LEVELS),
+        note="Die Suche nach Überschneidungen ist unvollständig.",
+        unknown_note="Überschneidungen nicht vollständig geprüft",
+    )
+    window._show_map(open_search, object_id)
+    note = window.analysis_bar.legend.note
+    assert tr("nicht bestimmbar") not in note.text()
+    assert tr("nicht bestimmbar") in note.toolTip()
+
+
+def test_the_defect_map_needs_no_choice_with_one_body(window: MainWindow) -> None:
+    """Mit einem Körper wählt die Karte ihn selbst (KUNDE-15).
+
+    „Wählen Sie zuerst ein Objekt im Objektbaum“ stand am Laptopständer über
+    einer Szene mit genau einem Teil.
+    """
+    result = window.session.last_result
+    assert result is not None and len(result.scene.objects) == 1
+    window.object_tree.select_object(None)
+    window._on_map_changed("defects")
+    assert window.object_tree.selected() == next(iter(result.scene.objects))
+    asked = tr("Wählen Sie zuerst ein Objekt im Objektbaum.")
+    assert asked not in window.analysis_bar.legend.note.text()
+
+
 def test_the_defect_map_offers_the_repair_and_says_when_there_is_nothing(
     window: MainWindow,
 ) -> None:
@@ -7286,3 +7332,106 @@ def test_the_repair_offer_outlives_a_change_of_the_display_unit() -> None:
     MainWindow._refresh_map_units(view)  # type: ignore[arg-type]
     assert len(legends) == 2, "die Legende wurde nicht neu gebaut"
     assert offered == [(defects, "obj_1"), (defects, "obj_1")], "der Knopf ging mit der Einheit"
+
+
+def test_the_chosen_map_comes_back_after_a_change(window: MainWindow) -> None:
+    """Nach einer Änderung steht die gewählte Karte wieder da (Durchsicht 0.5.1).
+
+    Jede neue Geometrie räumt die Karte ab, und die Auswahl, die sie neu
+    anstoßen würde, kam noch während der Rechnung. Danach stand der Wähler auf
+    „Netzfehler“, und Bild und Legende blieben leer — auch nach *Reparieren* aus
+    der Legende selbst.
+    """
+    from app.core.scene import OperationDraft
+
+    select_plate(window)
+    QApplication.processEvents()
+    selector = window.analysis_bar.selector
+    selector.setCurrentIndex(selector.findData("defects"))
+    selector.activated.emit(selector.currentIndex())
+    wait_for_map(window)
+    assert window.viewport.analysis_map is not None, "ohne Karte prüft dieser Test nichts"
+    object_id = window.object_tree.selected()
+    window.session.apply("Reparieren", [OperationDraft(op="repair", inputs=(object_id,))])
+    assert window.session.wait_for_idle()
+    QApplication.processEvents()
+    wait_for_map(window)
+    assert window.analysis_bar.chosen() == "defects"
+    assert window.viewport.analysis_map is not None, "die gewählte Karte kam nicht wieder"
+
+
+def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -> None:
+    """„Druckbereit · 1 × Hinweis“ statt einer Zählung neben Hinweisen (KUNDE-06).
+
+    Der Hinweis zu den Startwerten des Materials steht bei jeder frischen
+    Installation an jedem Teil; mit ihm stand der Satz praktisch nie da, und die
+    Zeile des Hinweises war vorgewählt — in der Auswahlfarbe, mit orangem Knopf,
+    wie eine Warnung. Ein Hinweis am Körper bleibt vorwählbar; eine Warnung
+    nimmt das Urteil weg.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene, SceneObject
+    from app.ui.panels import ReportPanel
+
+    body = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 10.0)))
+    objects = {"obj_1": SceneObject(id="obj_1", name="Kasten", mesh=body)}
+    material = Finding(
+        code="settings.uncalibrated_material",
+        severity="info",
+        message="Die Toleranzen dieses Materials sind Startwerte.",
+        suggestions=(Action("calibrate_material", "Material kalibrieren"),),
+    )
+    from PySide6.QtWidgets import QWidget
+
+    class Host(QWidget):
+        """Ein Fenster mit dem Handler, den die Vorwahl sucht."""
+
+        def error_handlers(self) -> dict[str, Any]:
+            return {"calibrate_material": lambda _error: None, "place_on_bed": lambda _e: None}
+
+    host = Host()
+    panel = ReportPanel(host)
+    try:
+        panel.show_result(
+            EvaluationResult(scene=Scene(objects=objects, report=Report(findings=(material,))))
+        )
+        assert panel.summary.text().startswith(tr("Druckbereit"))
+        assert f"1 × {tr('Hinweis')}" in panel.summary.text()
+        assert not panel.list.selectedItems(), "ein Hinweis zur Einrichtung ist nicht vorgewählt"
+
+        warning = Finding(
+            code="arrange.out_of_build_volume",
+            severity="warning",
+            message="Ein Objekt steht über den Bauraum hinaus.",
+            object_id="obj_1",
+        )
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(objects=objects, report=Report(findings=(warning, material)))
+            )
+        )
+        assert not panel.summary.text().startswith(tr("Druckbereit"))
+        assert f"1 × {tr('Warnung')}" in panel.summary.text()
+
+        # Gegenprobe: Ein Hinweis **am Körper** mit Handlung wird vorgewählt.
+        below = Finding(
+            code="arrange.below_bed",
+            severity="info",
+            message="Ein Objekt steckt unter dem Druckbett.",
+            object_id="obj_1",
+            suggestions=(Action("place_on_bed", "Auf das Bett setzen"),),
+        )
+        panel.list.clearSelection()
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(objects=objects, report=Report(findings=(material, below)))
+            )
+        )
+        chosen = panel.list.selectedItems()
+        assert chosen and chosen[0].data(Qt.ItemDataRole.UserRole).code == "arrange.below_bed"
+    finally:
+        panel.deleteLater()
+        host.deleteLater()

@@ -231,7 +231,15 @@ class MapLegend(QWidget):
             unknown = f"{analysis.unknown_count} × {tr('nicht bestimmbar')}"
             if analysis.unknown_note:
                 unknown = f"{unknown} ({analysis.unknown_note})"
-            parts.append(unknown)
+            if analysis.kind == "defects" and analysis.note is not None:
+                # Die Netzfehlerkarte sagt die unvollständige Suche schon im
+                # Satz davor; die Zahl der unbestimmten Flächen dahinter
+                # (am Laptopständer 33140) war eine Rohzahl ohne Handlung
+                # (KUNDE-15). Die Zahl
+                # bleibt im Tooltip für den, der sie sucht.
+                fine.append(unknown)
+            else:
+                parts.append(unknown)
         self.note.setText(" · ".join(parts))
         explanation = "\n".join((*parts, *fine))
         if analysis.kind == "deviation" and analysis.numerical_error is not None:
