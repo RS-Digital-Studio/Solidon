@@ -3287,6 +3287,7 @@ RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Termin draußen sein muss. Abnahme: 1.x-Build mit gesetztem `TRIAL_FROM`, Frist je Gerät von
   14 Tagen, danach derselbe lesende Zustand wie ohne Testphase (I09), Tests analog
   `test_a_sale_version_carries_no_deadline`, Website, Kauftexte und Changelog nennen sie.
+
 <a id="rm-162"></a>
 
 RM-162 ist mit der Auslieferung von 0.5.0 abgeschlossen.
