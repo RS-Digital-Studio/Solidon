@@ -25,6 +25,7 @@ from collections import Counter
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache, partial
+from pathlib import PurePath
 from typing import Any, Final, cast
 
 from app.core import expressions
@@ -4108,6 +4109,13 @@ def _with_nested_context(
             source_id = resolved.get(spec.name)
             if isinstance(source_id, str) and source_id:
                 context[f"#{spec.name}"] = sources.identity(source_id)
+                # Und ihr Name: ``load`` nennt den Körper nach der Datei und
+                # wählt den Leser nach der Endung. Mit dem Inhalt allein kamen
+                # dieselben Bytes unter einem zweiten Namen mit dem ersten aus
+                # dem Plattencache zurück, über Projekte und Sitzungen hinweg.
+                # Der Ordner bleibt draußen — ein umgezogenes Projekt behält
+                # seine gerechneten Schritte.
+                context[f"#{spec.name}.name"] = PurePath(sources.describe(source_id).path).name
             continue
         if spec.kind == "features":
             named_features = resolved.get(spec.name)

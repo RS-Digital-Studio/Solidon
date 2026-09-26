@@ -364,6 +364,33 @@ def test_info_describes_the_evaluated_scene(
     assert "12" in printed
 
 
+def test_the_same_bytes_under_another_name_keep_their_own_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Durchsicht v0.5.1: Der Test darüber sah „deckel" statt „cube_clean",
+    je nachdem, welcher Test vorher lief — ein anderer hatte dieselben Bytes
+    als ``deckel.stl`` eingelesen, und der Plattencache kannte nur den Inhalt
+    einer Quelle, nicht ihren Namen. Beim Kunden hieß eine umbenannte Kopie
+    wie die Datei, die er Tage vorher geöffnet hatte."""
+    lid = tmp_path / "deckel.stl"
+    lid.write_bytes((MESHES / "cube_clean.stl").read_bytes())
+    first = tmp_path / "erstes.p3d"
+    main(["new", str(first)])
+    main(["import", str(first), str(lid)])
+    assert main(["info", str(first)]) == 0
+    assert "deckel" in capsys.readouterr().out, "die erste Datei heißt wie sie selbst"
+
+    second = tmp_path / "zweites.p3d"
+    main(["new", str(second)])
+    main(["import", str(second), str(MESHES / "cube_clean.stl")])
+    capsys.readouterr()
+
+    assert main(["info", str(second)]) == 0
+    printed = capsys.readouterr().out
+    assert "cube_clean" in printed
+    assert "deckel" not in printed
+
+
 def test_an_operation_runs_from_the_registry(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

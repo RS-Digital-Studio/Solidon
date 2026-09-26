@@ -8,7 +8,10 @@ import logging
 import os
 import shutil
 import time
+from collections.abc import Mapping
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -2084,6 +2087,9 @@ def test_the_key_reads_the_content_of_every_source_bearing_parameter() -> None:
         def identity(self, source_id: str) -> str:
             return f"{self.content}:{source_id}"
 
+        def describe(self, source_id: str) -> SimpleNamespace:
+            return SimpleNamespace(path="teil.stl")
+
     covered: list[tuple[str, str, str]] = []
     for spec in REGISTRY.all():
         for entry in spec.params.spec():
@@ -2100,6 +2106,55 @@ def test_the_key_reads_the_content_of_every_source_bearing_parameter() -> None:
     assert ("displace_image", "source", "image") in covered, "das Relief liest ein Bild"
     assert ("load", "source", "source") in covered
     assert len(covered) >= 4, covered
+
+
+def test_the_key_reads_the_file_name_of_every_source_bearing_parameter() -> None:
+    """Durchsicht v0.5.1: Der Schlüssel las von einer Quelle nur den Inhalt.
+    ``load`` liest aber auch ihren Namen — der Körper heißt wie die Datei, und
+    die Endung wählt den Leser. Dieselben Bytes unter einem zweiten Namen kamen
+    aus dem Plattencache mit dem Namen des ersten zurück, über Projekte und
+    Sitzungen hinweg: ``cube_clean.stl`` hieß im Baum „deckel", weil ein
+    anderer Prozess dieselben Bytes als ``deckel.stl`` eingelesen hatte.
+
+    Der Pfad selbst gehört nicht hinein, nur der Name: Ein Projektordner, der
+    umzieht, soll seine gerechneten Schritte behalten."""
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import SOURCE_KINDS, _with_nested_context
+
+    class Sources:
+        def __init__(self, path: str) -> None:
+            self.path = path
+
+        def identity(self, source_id: str) -> str:
+            return "dieselben Bytes"
+
+        def describe(self, source_id: str) -> SimpleNamespace:
+            return SimpleNamespace(path=self.path)
+
+    def key(params_class: Any, name: str, path: str) -> Mapping[str, Any]:
+        return _with_nested_context(params_class, {name: "src_1"}, {}, Sources(path), None, None)  # type: ignore[arg-type]
+
+    covered: list[str] = []
+    for spec in REGISTRY.all():
+        for entry in spec.params.spec():
+            if entry.kind not in SOURCE_KINDS:
+                continue
+            lid = key(spec.params, entry.name, "modelle/deckel.stl")
+            assert lid != key(spec.params, entry.name, "modelle/cube_clean.stl"), (
+                f"{spec.name}.{entry.name}: ein anderer Name, derselbe Schlüssel"
+            )
+            assert lid != key(spec.params, entry.name, "modelle/deckel.obj"), (
+                f"{spec.name}.{entry.name}: eine andere Endung wählt einen anderen Leser"
+            )
+            assert lid == key(spec.params, entry.name, "umgezogen/deckel.stl"), (
+                f"{spec.name}.{entry.name}: ein umgezogener Ordner verliert seinen Cache"
+            )
+            covered.append(spec.name)
+
+    assert "load" in covered, covered
 
 
 def test_a_failing_cache_folder_does_not_take_the_result_with_it(
