@@ -3563,15 +3563,20 @@ def test_declined_recognition_does_not_poison_a_later_acceptance(monkeypatch, pr
     assert declined.mesh is accepted.mesh is mesh
 
 
-def test_recognition_estimate_contains_the_reference_and_preserves_generation_budget():
+def test_recognition_estimate_contains_the_reference_and_preserves_generation_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Die Warnung behauptet keine Sekundenpräzision und erhöht nicht das KI-Ausgabebudget."""
     from app.core.generate import GENERATED_TRIANGLE_LIMIT, GENERATED_TRIANGLE_TARGET
+    from app.core.perceive import recognition_time
     from app.core.perceive.local import (
         CONFIRMED_FEATURE_LIMIT_TRIANGLES,
         FEATURE_LIMIT_TRIANGLES,
+        recognition_minutes,
+    )
+    from app.core.perceive.recognition_time import (
         RECOGNITION_REFERENCE_SECONDS,
         RECOGNITION_REFERENCE_TRIANGLES,
-        recognition_minutes,
     )
 
     assert FEATURE_LIMIT_TRIANGLES == 1_500_000
@@ -3579,6 +3584,11 @@ def test_recognition_estimate_contains_the_reference_and_preserves_generation_bu
     assert (GENERATED_TRIANGLE_LIMIT, GENERATED_TRIANGLE_TARGET) == (1_000_000, 750_000)
     assert GENERATED_TRIANGLE_LIMIT <= FEATURE_LIMIT_TRIANGLES, (
         "ein erzeugtes Netz über der Erkennungsgrenze verlöre seine Merkmale"
+    )
+    # Auf dem Referenzrechner; ein anderer Rechner verschiebt die Spanne mit
+    # seiner Rechenprobe (``test_recognition_time.py``).
+    monkeypatch.setattr(
+        recognition_time, "_probe_seconds", recognition_time.PROBE_REFERENCE_SECONDS
     )
     lower, upper = recognition_minutes(RECOGNITION_REFERENCE_TRIANGLES)
     assert lower * 60 <= RECOGNITION_REFERENCE_SECONDS <= upper * 60

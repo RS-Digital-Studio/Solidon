@@ -122,6 +122,7 @@ Was nur diese Datei weiß:
 | Deutsche Stämme in Bezeichnern? | `test_language_rules.py` |
 | Ist jede Op vollständig registriert? | `test_registry_consistency.py` |
 | Zweimal ausgewertet = identisch? | `test_evaluation.py` |
+| Schätzt die Frage vor einer großen Vollerkennung die Dauer auf diesem Rechner, lässt ein Abbruch keinen halben Messwert zurück, und startet die Erkennung selbst die Probe nie? | `test_recognition_time.py` — die echte Rechenprobe mit gesteuerter Uhr |
 | Lässt sich der Verlauf umbauen — einfügen, verschieben, aus- und einschalten —, folgt jeder Verweis seinem Merkmal, fragt oder sagt ab statt umzubiegen, und stellt Strg+Z die alte Folge her? | `test_history.py` (Planen, Stellen, Absagen), `test_revision.py` (an beiden Kernen, an der Platte mit Sollwerten aus den Schritten und an den Beispielprojekten), `test_cli.py` (dieselben Wege auf der Kommandozeile); das Verlaufsfeld in `test_history_revision_ui.py` — die Helfer ohne Fenster, Feld und Sitzung beim Release |
 | Jede Rückfallstufe einmal erzwungen? | `test_boolean.py` |
 | Sammelparameter-Ops über das Register | `test_gesture_ops.py` |

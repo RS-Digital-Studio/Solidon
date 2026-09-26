@@ -2436,7 +2436,8 @@ def _full_recognition_allowed(
     """
     assert isinstance(entry.mesh, MeshData)
     triangles = entry.mesh.triangle_count
-    minimum, maximum = recognition_minutes(triangles)
+    # Dieselbe Spanne wie später die Statuszeile, auf diesem Rechner gemessen.
+    minimum, maximum = recognition_minutes(triangles, check_cancelled=watch.raise_if_cancelled)
     question = tr(
         "„{name}“ hat {triangles} Millionen Dreiecke. Die vollständige Merkmalserkennung "
         "dauert geschätzt {minimum} bis {maximum} Minuten, auf langsamen Rechnern länger, "
@@ -2693,7 +2694,7 @@ def _ask_once_for_large_bodies(
             triangles += count
     if len(waiting) < 2:
         return {}
-    minimum, maximum = recognition_minutes(triangles)
+    minimum, maximum = recognition_minutes(triangles, check_cancelled=watch.raise_if_cancelled)
     question = tr(
         "{count} Modelle haben zusammen {triangles} Millionen Dreiecke. Die vollständige "
         "Merkmalserkennung dauert geschätzt {minimum} bis {maximum} Minuten, auf langsamen "
@@ -3081,7 +3082,9 @@ def _with_features(
         if not local_only and mesh.triangle_count > FEATURE_LIMIT_TRIANGLES:
             # Minuten ohne gemessenen Anteil: Die Zeile nennt dieselbe Spanne
             # wie die Frage, die Uhr daneben die verstrichene Zeit (§2.8).
-            minimum, maximum = recognition_minutes(mesh.triangle_count)
+            minimum, maximum = recognition_minutes(
+                mesh.triangle_count, check_cancelled=watch.raise_if_cancelled
+            )
             say(
                 tr(
                     "Merkmale erkennen, geschätzt {minimum} bis {maximum} min",

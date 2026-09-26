@@ -18,6 +18,7 @@ from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.perceive import features as detection
+from app.core.perceive import recognition_time
 from app.core.perceive.helix import _facet_of_face
 from app.core.perceive.matching import DIAMETER_TOLERANCE, match, transformed_features
 from app.core.perceive.relations import cavity_chains
@@ -30,33 +31,22 @@ from app.i18n import _
 FEATURE_LIMIT_TRIANGLES = 1_500_000
 #: Vollerkennung größerer Importe nur nach ausdrücklicher gespeicherter Wahl.
 CONFIRMED_FEATURE_LIMIT_TRIANGLES: Final = 5_000_000
-#: Belegte Referenzprobe, allein die Erkennung ohne Einlesen: Der Drache mit
-#: 2 330 374 Dreiecken brauchte 59 bis 72 Sekunden, je Dreieck 25 bis 31 µs.
-#: Gerechnet wird mit dem langsameren Lauf; Zeit und Aufschlag dienen
-#: ausschließlich der Anzeige.
-RECOGNITION_REFERENCE_TRIANGLES: Final = 2_330_374
-RECOGNITION_REFERENCE_SECONDS: Final = 72
-#: Die Topologie streut stärker als der Rechner: je Dreieck 31 µs am Drachen,
-#: 32 µs am Piratenschiff, 118 µs am Gartenschlauchhalter (24.09.2026).
-RECOGNITION_TIME_FACTOR: Final = 5
 #: Spitzenbedarf des ganzen Imports je Dreieck, Einlesen eingeschlossen:
 #: 1 600 Byte am Gartenschlauchhalter, 1 660 am Drachen, 1 770 am Schiff.
 RECOGNITION_BYTES_PER_TRIANGLE: Final = 1_800
 
 
-def recognition_minutes(triangles: int) -> tuple[int, int]:
-    """Grobe Zeitspanne, keine Zusage: 2 330 374 Dreiecke dauerten 72 Sekunden.
+def recognition_minutes(
+    triangles: int, *, check_cancelled: Callable[[], None] | None = None
+) -> tuple[int, int]:
+    """Grobe Zeitspanne auf diesem Rechner, keine Zusage.
 
-    Topologie und Rechner bestimmen die wirkliche Dauer. Die obere Schätzung
-    erhält den fünffachen Zeitansatz; die Minuten werden unten ab- und oben
-    aufgerundet. Die Warnung nennt ausdrücklich mögliche längere Laufzeiten.
+    Die Referenz wird mit einer kurzen Rechenprobe dieses Rechners skaliert
+    (:mod:`app.core.perceive.recognition_time`); die Topologie bestimmt die
+    wirkliche Dauer mit, deshalb die weite Spanne. Die Warnung nennt
+    ausdrücklich mögliche längere Laufzeiten.
     """
-    minute_basis = RECOGNITION_REFERENCE_TRIANGLES * 60
-    measured = triangles * RECOGNITION_REFERENCE_SECONDS
-    return (
-        max(1, measured // minute_basis),
-        max(2, (measured * RECOGNITION_TIME_FACTOR + minute_basis - 1) // minute_basis),
-    )
+    return recognition_time.estimate_minutes(triangles, check_cancelled=check_cancelled)
 
 
 #: Netze, deren Vollerkennung in diesem Prozess am Arbeitsspeicher scheiterte

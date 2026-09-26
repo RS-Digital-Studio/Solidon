@@ -43,7 +43,11 @@ Uhr des Gesamtvorgangs und die laufende Statusanzeige bestehen.
 **Eine bestätigte Vollerkennung meldet keinen Anteil, aber ihre Spanne**
 (§21.1): Die Zeile heißt dann „Merkmale erkennen, geschätzt 1 bis 6 min" —
 dieselbe Zahl wie die Frage davor, aus `perceive.local.recognition_minutes`
-—, und die Uhr daneben zählt. Eine Restschätzung aus dem Anteil gibt es in
+—, und die Uhr daneben zählt. **Die Spanne gilt diesem Rechner**
+(`perceive.recognition_time`): Eine kurze Rechenprobe je Prozess, rund
+70 ms, skaliert die Referenz. Sie gehört zur Wartezeit der Frage und prüft
+`check_cancelled`; in der Erkennung läuft sie nie (§15.1).
+Eine Restschätzung aus dem Anteil gibt es in
 dieser Phase nicht; `detect` meldet zwischen seinen Phasen keinen Fortschritt.
 **Steht der Anteil länger still als die Schwelle der Schätzung, rechnet die
 Uhr nichts hoch** (`ProgressTiming.remaining`); die Antwortzeit einer Frage

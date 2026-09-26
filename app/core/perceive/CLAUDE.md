@@ -65,10 +65,15 @@ Körper oder Netzinhalt gibt nichts frei. Die Importstaffel und grobe
 Schätzung stehen zusammen in `local`: automatische Erkennung bis
 `FEATURE_LIMIT_TRIANGLES`, bestätigte Importe bis
 `CONFIRMED_FEATURE_LIMIT_TRIANGLES`, darüber weiterhin lokale Auswahl;
-`recognition_minutes` gibt die Zeitspanne (Referenz Drache, Aufschlag
-`RECOGNITION_TIME_FACTOR` für die Topologie), `recognition_gigabytes` den
-Spitzenbedarf des ganzen Imports (`RECOGNITION_BYTES_PER_TRIANGLE`). Beide
-sind Anzeige, keine Grenze; die Messungen stehen an den Konstanten.
+`recognition_minutes` gibt die Zeitspanne auf diesem Rechner,
+`recognition_gigabytes` den Spitzenbedarf des ganzen Imports
+(`RECOGNITION_BYTES_PER_TRIANGLE`). Beide sind Anzeige, keine Grenze; die
+Messungen stehen an den Konstanten. Die Spanne rechnet `recognition_time`:
+Die Referenz (Drache, Aufschlag `RECOGNITION_TIME_FACTOR` für die Topologie)
+wird mit einer kurzen deterministischen Python-/NumPy-Probe dieses Rechners
+skaliert, einmal je Prozess und nur, wo eine Spanne angezeigt wird. Die
+Erkennung selbst misst nichts: Aus vergangenen Läufen zu lernen hieße, in
+`detect` die Uhr zu lesen und in den Nutzerordner zu schreiben (§15.1).
 `match_decisions` bildet Gruppen, erkennt deren vollständiges
 Kandidatenmuster geometrisch wieder und prüft die gesamte Wahl atomar;
 `resolve_group(scope=...)` gibt eine native Wahl nur für denselben Scope frei
@@ -777,6 +782,7 @@ nicht zur ersten Wand. Rasterrundung und Abbruchpunkte bleiben gleich.
 | `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Die Randringe der Hohlraumketten (`_cavity_links`) liegen im Cache des Netzes unter einem Schlüssel aus Name, Art und Flächen — **ohne Lage**, damit `geom.transform.apply` den Eintrag an die bewegte Kopie weiterreichen kann; `session._warm_metrics` fragt sie im Arbeiter, bevor der Objektbaum sie im Hauptfaden liest. Der vollständige Flächenvergleich zweier Ausschnitte (`_same_surface_patch`) fragt erst die Ecken über den Suchbaum und misst nur an Dreiecken, was weiter als die Sehnenhöhe von jeder Ecke liegt — vier gleich vernetzte Bohrungen kosteten je Klick 1,6 s im Hauptfaden, jetzt eine Baumabfrage. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen. Am Langloch ist das die **dünnste** Wand: Der Weg der Mittellinie geht zur Hälfte ab, denn dort sitzen die Enden. Eine Regel (`_sleeve_between`), drei Auskünfte: `sleeve_at` fragt für **ein** Merkmal; `sleeves_of` liefert die dünnste Wand an **jeder** Merkmalszeile des Steckbriefs; `thinnest_sleeve` liefert das Minimum für die Wandprüfung. Beide Körperabfragen lesen die Maße je Merkmal einmal und teilen dieselbe Paarprüfung (RM-127). Und wem ein Dreieck gehört, das zwei Merkmale beanspruchen, sagt `cell_owner_table` (innerstes bei Verschachtelung, `CONTESTED` bei Widerspruch) — der Viewport liest es für den Klick im Bild |
 | `maps.py` | Analysekarten (§18.4). Die Netzfehlerkarte hat **vier** Stufen, und die dritte ist die einzige räumliche: offene und verzweigte Kanten stehen in der Kantentabelle, eine **Durchdringung** nicht — zwei Wände, die einander schneiden, haben lauter saubere Kanten mit je zwei Flächen (`repair.self_intersecting_faces`, RM-143). Wand- und Krümmungskarte nehmen `cancelled` bis in die Schrittschleife mit (ein Kartenwechsel hält die alte an); die Wand rechnet je Schritt nur die noch aktiven Dreiecke, die Krümmung ist vektorisiert. Die Überhanglegende nennt den Grenzwinkel der Karte, nicht fest 45 Grad |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23). Unter der Auswahlzeile steht seit P1.5, was das Merkmalfenster zur gewählten Stelle weiß (`_selection_lines`): die Hohlraumkette oder der Grund „nicht sicher einzeln“, und je Mitgliedschaft eine Zeile der Handlungsgruppen — gleiche Merkmale mit Umfang, unsichere mit Grund; Handlungen mit derselben Mitgliedschaft teilen eine Zeile (§26.1) |
+| `recognition_time.py` | Zeitspanne der Vollerkennung auf diesem Rechner aus einer kurzen Rechenprobe je Prozess (§21.1) — nur Anzeige, nie in der Erkennung |
 | `matching.py` | Merkmalsbezeichner über Operationen hinweg stabil halten (§21.2, §21.3) |
 | `actions.py` | Was der Kunde mit einem erkannten Merkmal tun kann — und was nicht, mit Grund. Die Liste fürs Merkmalspanel, **aus dem Register abgeleitet** (§10, §21); `reason_against` beantwortet dieselbe Frage für den Kern |
 
