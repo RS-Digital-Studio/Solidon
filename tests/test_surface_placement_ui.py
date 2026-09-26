@@ -1489,6 +1489,11 @@ def test_feature_hover_reuses_the_body_prepared_outside_qt(
 
 def test_late_tool_from_a_closed_run_is_discarded(flow: Any, monkeypatch: Any) -> None:
     controller, session, _viewport, _dialog = flow
+    from app.ui import placement_flow
+
+    # Der Weg über den Arbeiter: Am kleinen Körper entstünde das Werkzeug beim
+    # Start gleich im Hauptfaden (``AT_ONCE_BELOW``), und nichts käme zu spät.
+    monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 0)
     requests = []
     monkeypatch.setattr(
         session, "placement_async", lambda compute, then, failed: requests.append((compute, then))

@@ -535,6 +535,28 @@ def for_a_worker(mesh: Any) -> Any:
     return copy
 
 
+def _answers_at_once(mesh: Any) -> bool:
+    """Ob eine Platzierungsfrage an diesem Körper im Hauptfaden läuft (:data:`AT_ONCE_BELOW`)."""
+    return bool(as_mesh_data(mesh).triangle_count < AT_ONCE_BELOW)
+
+
+def _answer_now(
+    compute: Callable[[], Any], done: Callable[[Any], None], failed: Callable[[str], None]
+) -> None:
+    """Eine Platzierungsfrage gleich beantworten — mit denselben zwei Ausgängen wie im Arbeiter.
+
+    Scheitert die Rechnung, bekommt ``failed`` denselben Satz, den der Arbeiter
+    geschickt hätte (``leash.Worker``), und das Protokoll dieselbe Zeile.
+    """
+    try:
+        value = compute()
+    except Exception as problem:  # derselbe Fang wie im Arbeiter
+        _log.exception("placement answer did not come back")
+        failed(f"{type(problem).__name__}: {problem}")
+        return
+    done(value)
+
+
 def on_the_copy(copy: Any, compute: Callable[[], Any]) -> Callable[[], Any]:
     """Eine Rechnung, die unter dem Schloss der geteilten Kopie läuft.
 
@@ -1237,6 +1259,16 @@ STICKY_FIELDS: Final = 2.0
 #: Fläche folgt mit einem zweiten, wie bisher.
 FRAME_HOLD_MS: Final = 50
 
+#: Bis zu wie vielen Dreiecken beim Start eines Flusses die Fläche am
+#: gewählten Merkmal und das Werkzeug gleich im Hauptfaden entstehen, statt im
+#: Arbeiter (RM-232, Durchsicht 0.5.1). Am Wabenhalter (7 956 Dreiecke)
+#: rechnete der Arbeiter beides in 5 ms, und die Antwort wartete danach 16 ms
+#: hinter dem Malen des halb umgebauten Fensters, bevor sie ankam — und das
+#: Fenster malte danach ein zweites Mal. Dieselbe Grenze wie die Kernauskünfte
+#: des Merkmalfensters (``main_window.ANSWERS_IN_WORKER_FROM``); darüber, und
+#: für jeden getippten Wert, bleibt es beim Arbeiter und seiner Kopie.
+AT_ONCE_BELOW: Final = 20_000
+
 
 class PlacementFlow(QObject):
     """Eine laufende Platzierung gehört genau einem vorhandenen Träger.
@@ -1922,7 +1954,7 @@ class PlacementFlow(QObject):
             # einen Zustand, den niemand zu sehen bekam.
             self._redraw_held = True
             try:
-                self._request_tool()
+                self._request_tool(at_once=True)
                 self._begin_at_feature()
             finally:
                 self._redraw_held = False
@@ -2859,7 +2891,8 @@ class PlacementFlow(QObject):
         self._seated_at_feature = True
         self._seat_waits = stamp
         self._hold_frames()
-        mesh = for_a_worker(entry.mesh)
+        at_once = _answers_at_once(entry.mesh)
+        mesh = as_mesh_data(entry.mesh) if at_once else for_a_worker(entry.mesh)
         values = self.dialog.values()
         target = None
         if self.spec_of().name in {"slot_hole", "resize_hole"} and all(
@@ -2924,6 +2957,9 @@ class PlacementFlow(QObject):
             finally:
                 self._release_frames()
 
+        if at_once:
+            _answer_now(compute, done, failed)
+            return
         self.session.placement_async(on_the_copy(mesh, compute), done, failed)
 
     def _no_seat_at_feature(self) -> None:
@@ -3290,7 +3326,15 @@ class PlacementFlow(QObject):
                 if historical_measures:
                     self._begin_at_bore_step()
 
-    def _request_tool(self) -> None:
+    def _request_tool(self, *, at_once: bool = False) -> None:
+        """Das Werkzeug zu den Werten des Trägers vorbereiten lassen.
+
+        ``at_once`` nur beim Start eines Flusses: An einem kleinen Körper
+        entsteht es dann gleich im Hauptfaden, zusammen mit der Fläche am
+        Merkmal (:data:`AT_ONCE_BELOW`), und das erste Bild trägt beides.
+        Getippte Werte fragen weiter den Arbeiter — dort wartet ein früher
+        Klick auf *Übernehmen* auf das Werkzeug (``_accept_pending``).
+        """
         if self._tool_busy:
             self._tool_again = True
             self._tool_context = None
@@ -3405,6 +3449,9 @@ class PlacementFlow(QObject):
                 self._accept_pending = False
                 self.accept()
 
+        if at_once and source is not None and _answers_at_once(source.mesh):
+            _answer_now(compute, done, lambda _detail: done(None))
+            return
         self.session.placement_async(compute, done, lambda _detail: done(None))
 
     def _reference_entries(self, index: int) -> list[tuple[str, tuple[str, str]]]:

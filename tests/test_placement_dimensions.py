@@ -117,7 +117,9 @@ def test_the_measures_without_a_carrier_face_can_be_accepted():
     assert taken == [{"at_feature": "hole_1", "diameter": 7.0}], "der Klick kam an"
 
 
-def test_a_moved_draft_seats_its_mouth_on_the_face_and_not_beside_it():
+def test_a_moved_draft_seats_its_mouth_on_the_face_and_not_beside_it(
+    monkeypatch: pytest.MonkeyPatch,
+):
     """Ein Entwurf mit versetzter Mitte beginnt in der Ebene seiner Fläche.
 
     Die Maßgruppe von *Zum Langloch ziehen* übernimmt die Mitte eines schon
@@ -132,6 +134,7 @@ def test_a_moved_draft_seats_its_mouth_on_the_face_and_not_beside_it():
 
     from app.core.bootstrap import load_operations
     from app.core.perceive.features import detect
+    from app.ui import placement_flow
     from app.ui.placement_flow import QuietHost
 
     load_operations()
@@ -158,6 +161,9 @@ def test_a_moved_draft_seats_its_mouth_on_the_face_and_not_beside_it():
         _hold_frames=lambda: None,
     )
 
+    # Der Weg über den Arbeiter — die Platte ist klein genug für die Antwort
+    # im Hauptfaden, und die prüft der Test darunter.
+    monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 0)
     PlacementFlow._begin_at_feature(flow)
     prepared, surface, mouth = work[0]()
 
@@ -167,6 +173,61 @@ def test_a_moved_draft_seats_its_mouth_on_the_face_and_not_beside_it():
     assert mouth == pytest.approx((x, y, 4.0), abs=1e-9), (
         "die eigene Mündung bleibt der Durchstoßpunkt der Achse, nicht die versetzte Stelle"
     )
+
+
+def test_a_small_body_seats_the_feature_at_once_and_without_a_worker() -> None:
+    """Am kleinen Körper steht die Fläche am Merkmal noch im Klick (RM-232).
+
+    Am Wabenhalter (7 956 Dreiecke) rechnete der Arbeiter die Fläche in 5 ms,
+    und seine Antwort wartete danach 16 ms hinter dem Malen des halb
+    umgebauten Fensters. Unter :data:`placement_flow.AT_ONCE_BELOW` Dreiecken
+    antwortet der Start gleich, am Original und ohne Kopie — dieselbe Fläche,
+    dieselbe Stelle, und der Arbeiter wird nicht gefragt.
+    """
+    from pathlib import Path
+
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.features import detect
+    from app.ui import placement_flow
+    from app.ui.placement_flow import QuietHost
+
+    load_operations()
+    mesh = MeshData.of(
+        trimesh.load_mesh(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
+    )
+    assert mesh.triangle_count < placement_flow.AT_ONCE_BELOW, "die Vorbedingung: klein"
+    features = detect(mesh)
+    hole = min((f for f in features.values() if f.kind == "hole"), key=lambda f: f.id)
+    x, y, _z = hole.params["centre"]
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=features)
+    host = QuietHost({"at_feature": hole.id}, lambda values: False)
+    asked: list[object] = []
+    steps: list[str] = []
+    flow = SimpleNamespace(
+        dialog=host,
+        active=True,
+        _disposed=False,
+        _serial=0,
+        _surface=None,
+        _seated_at_feature=False,
+        _source_feature=lambda: (entry, hole),
+        spec_of=lambda: REGISTRY.get("resize_hole"),
+        session=SimpleNamespace(placement_async=lambda *args: asked.append(args)),
+        _hold_frames=lambda: steps.append("hold"),
+        _release_frames=lambda: steps.append("release"),
+        _set_values=lambda: steps.append("values"),
+        _settle=lambda: steps.append("settle"),
+        _no_seat_at_feature=lambda: steps.append("no seat"),
+    )
+
+    PlacementFlow._begin_at_feature(flow)
+
+    assert not asked, "kein Arbeiter"
+    assert steps == ["hold", "values", "settle", "release"], "die Fläche steht noch im Klick"
+    assert flow._seat_waits is None
+    assert flow._prepared_mesh is entry.mesh and flow._object_id == "obj_1"
+    assert flow._surface.point[:2] == pytest.approx((x, y), abs=1e-6)
+    assert flow._own_mouth[:2] == pytest.approx((x, y), abs=1e-6)
 
 
 @pytest.mark.parametrize("centre", [False, True])
