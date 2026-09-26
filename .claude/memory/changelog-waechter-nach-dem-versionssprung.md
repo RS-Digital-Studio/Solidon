@@ -30,3 +30,11 @@ Anführungszeichen am Anfang (Operationen ohne Zeichen nennen, wie der
 Abschnitt es sonst hält), keine Bausteine mit „test" im Namen. Oder
 `APP_VERSION` in einer Sonde auf die kommende Fassung setzen und den Test
 darüber fahren. Siehe [[texte-altern-mit-ihrer-grenze]].
+
+**Auch der Stern fällt durch** (26.09.2026, 0.5.1): `*Reparieren* löst …`
+beginnt mit `*`, und `isupper()` ist falsch — je Sprache vier Punkte, im
+Deutschen wie im Englischen mit Stern, in den romanischen mit «. Den
+Knopfnamen in den Satz stellen („Überschneidungen löst *Reparieren* …“).
+Die Sonde, die gemessen trägt: ein Skript setzt `app.branding.APP_VERSION`
+**vor** `pytest.main([...])`; das Testmodul importiert danach und sieht die
+neue Nummer (Gegenprobe: `tests.test_changelog.APP_VERSION` ausgeben).

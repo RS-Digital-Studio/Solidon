@@ -22,6 +22,7 @@
 - [Serverstand sofort prüfen](serverstand-sofort-selbst-pruefen.md) · [Freies Gebiet](freies-gebiet-einfach-machen.md) · [Weitergabe: die Handlung](weitergabe-die-handlung-entscheidet.md)
 - [Repo nur beim Release öffentlich](repository-ist-nur-beim-release-oeffentlich.md) — rote CI-Kurzläufe sind normal.
 - [Übersetzung neu](uebersetzung-neu-statt-flicken.md) · [Weg nie bis zum Ende](weg-nie-bis-zum-ende-gemessen.md) · [Mehrsitzungs-Setup ausgebaut](mehrsitzungs-setup-ist-ausgebaut.md) · [Rechtemodus bleibt bypass](rechtemodus-bleibt-bypass.md)
+- [Druckzeit als Anteil](druckzeit-im-changelog-als-anteil.md) — Robert 26.09.2026: „rund 40 Prozent kürzer“ statt Stunden eines Beispielmodells.
 - [Changelog ist das Vorbild](changelog-seite-ist-das-gestaltungsvorbild.md) — Robert 24.09.2026: gleich hohe Karten, ein Gedanke je Karte; die Seite bleibt, wie sie ist.
 - [Wahl selbst treffen](wahl-nach-kunde-druck-modell-selbst-treffen.md) — Varianten nicht vorlegen: das Beste für Kunde, Druck und Modell, begründet umsetzen.
 - [Übergabe je Modell, Slicer, Drucker](uebergabe-je-modell-slicer-drucker.md) — Robert 25.09.2026 (Waschschüssel): im echten Slicer belegen, Herstellerprofil als Maßstab; RM-247.
