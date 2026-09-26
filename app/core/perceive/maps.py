@@ -876,13 +876,6 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
 
 # --- Netzdefekte ----------------------------------------------------------------
 
-#: Wie viele genaue Paarprüfungen die Netzfehlerkarte höchstens bezahlt — rund
-#: vier Sekunden bei zwei Mikrosekunden je Prüfung, die Trennprüfung davor
-#: anteilig mitgezählt (``geom.intersections.SEPARATION_COST``); §31 gibt einer
-#: Karte drei im Hintergrund. Fest und nicht auf die Uhr, damit dieselbe Datei auf jedem
-#: Rechner dieselbe Karte zeigt.
-DEFECT_MAP_PAIRS: Final = 2_000_000
-
 
 def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> AnalysisMap:
     """Offene Kanten, verzweigte Kanten und Durchdringungen, je Dreieck (§18.4).
@@ -894,13 +887,17 @@ def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> Analysis
     genau deshalb sah die Karte an `broken_selfint.stl` nichts.
 
     Sie ist die teuerste der drei und steht deshalb zuletzt: Ihre Suche ist
-    räumlich (`repair.crossings_of`), nicht tabellarisch, und deckelt sich an
-    :data:`DEFECT_MAP_PAIRS` geprüften Paaren — die Reparatur prüft mit ihrem
-    größeren Budget, und hat sie das Netz schon ganz geprüft, liest die Karte
-    ihre Antwort. **Was die Suche nicht erreicht hat, ist unbekannt, nicht
-    alles** (Befund B3 der Durchsicht 24.09.2026): Bis dahin färbte eine
-    vorzeitig beendete Suche jede fehlerfreie Fläche grau, auch die schon
-    geprüften.
+    räumlich (`repair.crossings_of`), nicht tabellarisch. **Sie bezahlt
+    dasselbe Budget wie die Reparatur** (`repair.intersection_budget`,
+    Durchsicht 0.5.1, KUNDE-15): Bis dahin deckelte sie sich fest bei zwei
+    Millionen Paaren, und an den 358 Körpern aus ``F:\\3D Dateien`` bis zur
+    Kartengrenze blieb sie an jedem ab 349 000 Dreiecken unvollständig — zwölf
+    Karten, deren Reparatur dasselbe Netz vollständig sah, für 8 bis 103
+    Prozent mehr Zeit. Jetzt sehen Karte und Reparatur dasselbe, und die Suche
+    läuft je Netz einmal (``crossings_of`` merkt sie sich). **Was die Suche
+    nicht erreicht hat, ist unbekannt, nicht alles** (Befund B3 der Durchsicht
+    24.09.2026): Bis dahin färbte eine vorzeitig beendete Suche jede
+    fehlerfreie Fläche grau, auch die schon geprüften.
     """
     from app.core.geom.repair import crossed_edge_faces, crossings_of
 
@@ -927,7 +924,7 @@ def defect_map(mesh: MeshData, cancelled: CancelToken | None = None) -> Analysis
         # offene Ränder; eine Durchdringung darüber wiegt schwerer und färbt.
         for face in crossed_edge_faces(mesh).tolist():
             values[face] = max(values[face], 4.0)
-        crossings = crossings_of(mesh, cancelled, budget=DEFECT_MAP_PAIRS)
+        crossings = crossings_of(mesh, cancelled)
         complete = crossings.complete
         for face in crossings.faces:
             values[face] = 3.0

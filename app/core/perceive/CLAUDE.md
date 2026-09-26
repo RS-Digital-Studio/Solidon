@@ -736,8 +736,9 @@ Null bleibt endlich, große nahezu ebene Radien verdrängen kleine Verrundungen
 nicht aus der Farbrampe, und kein Wert wird gekappt oder verschwiegen.
 
 Die Netzfehlerkarte fragt dieselbe Schnittsuche wie die Reparatur
-(`repair.crossings_of`, ein Ergebnis im Cache des Netzes) mit eigenem Budget
-(`DEFECT_MAP_PAIRS`). Greift es, bleiben belegte Fehler markiert, und
+(`repair.crossings_of`, ein Ergebnis im Cache des Netzes) mit demselben Budget
+(`repair.intersection_budget`): Beide sehen dasselbe, und die Suche läuft je
+Netz einmal. Greift das Budget, bleiben belegte Fehler markiert, und
 unbekannt (`nan`) sind nur die Dreiecke, die die Suche noch nicht geprüft hat
 (`Crossings.checked`) — nicht der ganze Körper. Die Legende nennt die
 unvollständige Prüfung ausdrücklich; eine leere Trefferliste aus einer

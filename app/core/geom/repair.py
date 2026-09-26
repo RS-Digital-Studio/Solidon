@@ -3755,7 +3755,17 @@ MAX_INTERSECTION_PAIRS: Final = 2_000_000
 #: fünf Sekunden ans Ende. Das
 #: Fünfhundertfache, das hier einen Nachmittag stand, ließ die Netzfehlerkarte
 #: am Besenhalter 8 und am Spiderman 12 Sekunden rechnen.
-INTERSECTION_PAIRS_PER_TRIANGLE: Final = 12
+#:
+#: **Sechzehn, seit der Durchsicht 0.5.1** (KUNDE-15). Ein Modell aus Teilen,
+#: die einander durchdringen, ohne vereinigt zu sein — so exportieren
+#: parametrische Werkzeuge —, braucht mehr als ein organisches: Der
+#: Laptopständer aus ``F:\\3D Dateien`` (173 592 Dreiecke, 21 Teile, 43 369
+#: schneidende Paare) kommt zwischen 2,3 und 2,6 Millionen Paaren ans Ende,
+#: also bei 13 bis 15 je Dreieck. Mit zwölf blieben Netzfehlerkarte und
+#: Reparatur dort unvollständig („33 140-mal nicht bestimmbar"); die volle Suche
+#: kostete unter Last 10,5 statt 9,7 s. Alle 358 Körper des Korpus bis zur
+#: Kartengrenze kamen schon mit zwölf ans Ende.
+INTERSECTION_PAIRS_PER_TRIANGLE: Final = 16
 
 
 def intersection_budget(triangles: int) -> int:
@@ -3783,9 +3793,10 @@ def crossings_of(
     B11 der Durchsicht 24.09.2026): Die Suche kostet am Drachen 27 Sekunden,
     und jede Stelle rechnete sie für sich. Der Merker verfällt mit der
     Geometrie wie die Kantentabelle; ein Ergebnis mit kleinerem Budget gilt nur,
-    wenn es vollständig war. ``budget`` weicht nur für die Netzfehlerkarte von
-    :func:`intersection_budget` ab: Sie ist eine Anzeige mit drei Sekunden aus
-    §31 und zeigt Ungeprüftes als unbekannt.
+    wenn es vollständig war. ``budget`` weicht nur über der Kartengrenze vom
+    Budget je Dreieck ab (:func:`_intersection_findings`); die Netzfehlerkarte
+    bezahlt seit der Durchsicht 0.5.1 dasselbe wie die Reparatur, damit beide
+    dasselbe sehen und die Suche einmal läuft.
     """
     from app.core.geom.intersections import crossing_face_pairs
 

@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.geom import repair as repair_module
 from app.core.geom.measure import wall_thickness
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.transform import apply, place_on_bed, rotation
@@ -444,7 +445,7 @@ def test_a_clean_body_has_a_clean_map() -> None:
 
 def test_an_incomplete_defect_search_does_not_clear_unchecked_faces(monkeypatch) -> None:
     """Eine begrenzte Suche ist keine Entwarnung für die restliche Oberfläche."""
-    monkeypatch.setattr(maps, "DEFECT_MAP_PAIRS", 0)
+    monkeypatch.setattr(repair_module, "intersection_budget", lambda _triangles: 0)
     analysis = maps.defect_map(cube())
 
     assert analysis.unknown_count == len(analysis.values)
@@ -454,7 +455,7 @@ def test_an_incomplete_defect_search_does_not_clear_unchecked_faces(monkeypatch)
 
 def test_an_incomplete_defect_search_keeps_proven_boundary_errors(monkeypatch) -> None:
     """Ungeprüfte Durchdringungen verdecken keine belegten offenen Kanten."""
-    monkeypatch.setattr(maps, "DEFECT_MAP_PAIRS", 0)
+    monkeypatch.setattr(repair_module, "intersection_budget", lambda _triangles: 0)
     body = trimesh.creation.box()
     body.update_faces(np.arange(len(body.faces)) != 0)
     analysis = maps.defect_map(MeshData.of(body))
@@ -476,7 +477,7 @@ def test_a_partly_searched_defect_map_knows_what_it_checked(monkeypatch) -> None
     import math
 
     sphere = trimesh.creation.icosphere(subdivisions=3, radius=10.0)
-    monkeypatch.setattr(maps, "DEFECT_MAP_PAIRS", 2000)
+    monkeypatch.setattr(repair_module, "intersection_budget", lambda _triangles: 2000)
 
     analysis = maps.defect_map(MeshData.of(sphere))
 
@@ -508,6 +509,45 @@ def test_the_defect_map_marks_where_the_body_runs_through_itself() -> None:
     assert set(durchdrungen) <= set(analysis.highlighted), "die Stellen sind nicht auffindbar"
     # Regel 18: Die Bedeutung steht als Wort daneben, nicht nur als Farbe.
     assert analysis.categories[3] == "Überschneidung"
+
+
+def test_the_defect_map_pays_the_same_budget_as_the_repair(monkeypatch) -> None:
+    """Karte und Reparatur sehen dasselbe, und die Suche läuft einmal (KUNDE-15).
+
+    Die Karte deckelte ihre Überschneidungssuche fest bei zwei Millionen
+    Paaren, die Reparatur bei einer Zahl je Dreieck. An den 358 Körpern aus
+    ``F:\\3D Dateien`` bis zur Kartengrenze blieb die Karte deshalb an jedem ab
+    349 000 Dreiecken unvollständig, während *Reparieren* dasselbe Netz ganz
+    sah — und am Laptopständer stand in der Legende „33 140 × nicht
+    bestimmbar". Jetzt fragt die Karte dasselbe Budget, und die Antwort liegt
+    für die Reparatur danach im Cache des Netzes (``repair.crossings_of``).
+    """
+    from app.core.geom import intersections
+
+    asked: list[int] = []
+    budget = repair_module.intersection_budget
+
+    def counted_budget(triangles: int) -> int:
+        asked.append(triangles)
+        return budget(triangles)
+
+    searched: list[int | None] = []
+    search = intersections.crossing_face_pairs
+
+    def counted_search(*args, **kwargs):  # type: ignore[no-untyped-def]
+        searched.append(kwargs.get("max_pairs"))
+        return search(*args, **kwargs)
+
+    monkeypatch.setattr(repair_module, "intersection_budget", counted_budget)
+    monkeypatch.setattr(intersections, "crossing_face_pairs", counted_search)
+    broken = normalise(read_mesh((MESHES / "broken_selfint.stl").read_bytes(), ".stl"), "mm").mesh
+
+    analysis = maps.defect_map(broken)
+    crossings = repair_module.crossings_of(broken)
+
+    assert asked == [broken.triangle_count, broken.triangle_count], "dasselbe Budget"
+    assert searched == [budget(broken.triangle_count)], "eine Suche für beide"
+    assert crossings.complete and analysis.unknown_count == 0
 
 
 def test_a_clean_body_is_not_called_self_intersecting() -> None:
