@@ -201,7 +201,9 @@ MIN_SURFACE_WIDTH = 0.2
 #: … außer sie bestehen aus mindestens so vielen koplanaren Dreiecken. Ein
 #: Zylinderdeckel kommt aus dem Kern als ein Dreieck je Segment — sie zu zählen
 #: ist also das, was eine kleine ebene Fläche von einer Scheibe einer gekrümmten
-#: unterscheidet.
+#: unterscheidet. **Gezählt wird höchstens je Umrissecke** (:func:`_flat_counts`):
+#: Ein Teiler vermehrt die Dreiecke einer Facette, nicht die Ecken ihres
+#: Umrisses, und ein fein geteilter Mantelstreifen ist kein Deckel.
 MIN_FLAT_FACES = 8
 
 #: Ab welchem Knick zwischen zwei Dreiecken eine Kante eine Kante ist und keine
@@ -849,6 +851,26 @@ PRISM_ARC_JUMP: Final = 0.05
 #: sie vorher waren — R 2 an der Schwammablage bei 13 Prozent.
 PRISM_QUIET_SHARE: Final = 0.1
 
+#: Ab welchem Knick eine Naht **innerhalb** eines Flecks zwei Flächen trennt,
+#: in Grad (ERKENNUNG-11). Unter :data:`CURVATURE_LIMIT` gilt ein Knick als
+#: Stufe einer Rundung, und der Fleck bleibt beisammen. Die Haltelippe einer
+#: Magnettasche steht aber um 20,5 Grad gegen die Wand, und eine flache
+#: Senkung, ein Absatz an einer Drehform ebenso: Wand und Lippe lagen in einem
+#: Fleck, auf den weder Zylinder noch Kegel passte, und am Netz stand die
+#: Tasche als „Gerundete Seite innen“ da, am exakten Körper als Bohrung mit
+#: Senkung. Zehn Grad liegen über der Teilung jedes fein vernetzten Mantels
+#: (48 Segmente: 7,5 Grad) und unter der Lippe.
+SEAM_ANGLE: Final = 10.0
+#: … und wie viel schärfer die Naht sein muss als jeder andere weiche Knick
+#: ihrer beiden Dreiecke. Eine grob geteilte Verrundung knickt an jeder
+#: Reihe gleich stark und ist keine Naht; die Lippe knickt 2,7-mal so stark wie
+#: die Teilung des Mantels daneben.
+SEAM_RATIO: Final = 2.0
+#: … und wie gleich die Naht ringsum knickt: der größte Knick höchstens so
+#: viel über dem kleinsten. Eine gedrehte oder gezogene Kante knickt überall
+#: gleich; Rauschen nicht.
+SEAM_SPREAD: Final = 0.1
+
 #: Ab welchem Anteil Kugeln und Ringe an **allen** Merkmalen das Modell eine
 #: Freiform ist — ein Scan, eine Figur, ein Segel.
 #:
@@ -1208,8 +1230,93 @@ def _welded(mesh: MeshData) -> MeshData | None:
     return welded if gone else None
 
 
+#: In welchen Schritten die Vollerkennung ihren erledigten Anteil meldet: ein
+#: Tausendstel. Feiner sieht niemand einen Balken wandern, und eine Meldung je
+#: Einpassung wären am Meshy-Murmelbrett 168 000 Signale an das Fenster.
+SHARE_STEP: Final = 0.001
+
+
+class _Told:
+    """Was ein Balken zuletzt erfahren hat — geteilt von allen Abschnitten einer Erkennung."""
+
+    __slots__ = ("value",)
+
+    def __init__(self) -> None:
+        self.value = -1.0
+
+
+class _Share:
+    """Der erledigte Anteil einer Vollerkennung, für Balken und Restzeit (§2.8).
+
+    **Die Erkennung meldete nur ihren Text.** Den Anteil kannte der Aufrufer
+    allein als den seines Schritts, und am Piratenschiff mit 1,2 Millionen
+    Dreiecken stand der Balken 48 Sekunden auf „Merkmale erkennen · 0 %“,
+    während nur die Uhr lief (Durchsicht 0.5.1, KUNDE-14). Ein Abschnitt ist
+    ein Bereich des Ganzen; :meth:`part` teilt ihn weiter, :meth:`reach` sagt,
+    wie weit er ist. Die Gewichte in :func:`detect` und :func:`_fitted` sind
+    die gemessenen Anteile der Etappen an fünf großen Netzen (Median; Drache,
+    Piratenschiff, Puppenhausbett, Voronoi-Spiderman, Gartenschlauchhalter).
+
+    Gemeldet wird nur, was wächst, und in Schritten von :data:`SHARE_STEP`.
+    **Eine Uhr liest der Anteil nicht** — die Erkennung ist Teil einer reinen
+    Funktion (§15.1); er zählt erledigte Etappen, Flecken und Stücke. Wo
+    niemand zuhört (``report`` ist ``None``), kostet er einen Vergleich.
+    """
+
+    __slots__ = ("_end", "_report", "_start", "_told")
+
+    def __init__(
+        self,
+        report: Callable[[float], None] | None,
+        start: float = 0.0,
+        end: float = 1.0,
+        told: _Told | None = None,
+    ) -> None:
+        self._report = report
+        self._start = start
+        self._end = end
+        self._told = told if told is not None else _Told()
+
+    def part(self, begin: float, finish: float) -> _Share:
+        """Der Abschnitt von ``begin`` bis ``finish`` dieses Abschnitts."""
+        width = self._end - self._start
+        return _Share(
+            self._report, self._start + begin * width, self._start + finish * width, self._told
+        )
+
+    def reach(self, fraction: float) -> None:
+        """Dieser Abschnitt ist zu ``fraction`` erledigt (null bis eins)."""
+        if self._report is None:
+            return
+        value = self._start + (self._end - self._start) * min(1.0, max(0.0, fraction))
+        told = self._told.value
+        if value < told + SHARE_STEP and not value >= 1.0 > told:
+            return
+        self._told.value = value
+        self._report(value)
+
+
+#: Der Abschnitt, dem niemand zuhört — für Aufrufer ohne Balken.
+_UNHEARD: Final = _Share(None)
+
+#: Wie viele Dreiecke eines Flecks so viel Einpassung kosten wie der Fleck
+#: selbst. Gemessen an Piratenschiff, Puppenhausbett und Gartenschlauchhalter
+#: (Sonde p33, Durchsicht 0.5.1): ein Fleck unter hundert Dreiecken 5 bis 20 ms,
+#: bis zehntausend 12 bis 36 ms, darüber 0,3 bis 1,5 s. Die Zahl dient nur dem
+#: Balken — sie verteilt seinen Weg so, wie die Zeit vergeht.
+SHARE_FACES_PER_FIT: Final = 2_000
+
+
+def _fit_weight(patch: Sequence[int]) -> float:
+    """Was die Einpassung eines Flecks im Balken wiegt (:data:`SHARE_FACES_PER_FIT`)."""
+    return 1.0 + len(patch) / SHARE_FACES_PER_FIT
+
+
 def detect(
-    mesh: MeshData, *, check_cancelled: Callable[[], None] | None = None
+    mesh: MeshData,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+    progress: Callable[[float], None] | None = None,
 ) -> dict[FeatureId, Feature]:
     """Alles, was dieses Modul erkennen kann, mit stabilen Namen.
 
@@ -1219,6 +1326,9 @@ def detect(
     ``check_cancelled`` darf ``OperationCancelled`` werfen (§2.8). Geprüft
     wird zwischen Phasen und Fitflecken; ein laufender nativer Aufruf endet
     vorher. Nur ein vollständiger Durchgang wird im Merkmalscache abgelegt.
+
+    ``progress`` erfährt den erledigten Anteil, von null bis eins und nur
+    wachsend (:class:`_Share`); eine Antwort aus dem Merker meldet nichts.
     """
     # **Einmal suchen, zweimal lesen** — hier, und nicht in den beiden
     # Aufrufern. Der Docstring von :func:`_cylinders` beschreibt genau das seit
@@ -1251,9 +1361,14 @@ def detect(
         # dürfen geteilt werden; die Zuordnung darüber hinein nicht.
         return dict(known)
 
+    share = _Share(progress)
     mesh = _one_body(mesh)
     if check_cancelled is not None:
         check_cancelled()
+    # Die Etappen und ihr gemessener Anteil (Median über fünf große Netze):
+    # Verschweißen zwei Prozent, Ebenen ein Viertel, Einpassung zwei Drittel,
+    # der Rest — Kugeln bis gerundete Seiten — sieben Prozent.
+    share.reach(0.02)
     # **Die Sperre gehört um den ganzen Durchgang, nicht nur um die
     # Einpassung.** Die Begründung steht bei ihrer Schwester in
     # :func:`_fitted`; hier zählt die Reichweite. Gemessen am selben Segel mit
@@ -1265,14 +1380,20 @@ def detect(
     # gibt bei mehreren Komponenten ein neues zurück, und eine Sperre auf dem
     # alten hielte ein Netz still, das niemand mehr liest.
     with mesh.raw._cache:
-        planar = _large_facet_faces(mesh.raw, check_cancelled=check_cancelled)
+        planar = _large_facet_faces(
+            mesh.raw, check_cancelled=check_cancelled, share=share.part(0.02, 0.28)
+        )
         if check_cancelled is not None:
             check_cancelled()
-        fitted = _fitted(mesh, planar=planar, check_cancelled=check_cancelled)
+        fitted = _fitted(
+            mesh, planar=planar, check_cancelled=check_cancelled, share=share.part(0.28, 0.93)
+        )
+        rest = share.part(0.93, 1.0)
         sphere_candidates = _sphere_candidates(mesh, fitted.spheres)
         sphere_features = detect_spheres(mesh, sphere_candidates, check_cancelled=check_cancelled)
         torus_candidates = _torus_candidates(mesh, fitted.tori)
         torus_features = detect_tori(mesh, torus_candidates, check_cancelled=check_cancelled)
+        rest.reach(0.1)
         recognised_round_faces = {
             frozenset(feature.face_indices) for feature in (*sphere_features, *torus_features)
         }
@@ -1304,6 +1425,7 @@ def detect(
         # verschluckt, braucht beides nie (:func:`_face_candidates`).
         face_entries = _planar_face_entries(mesh, planar=planar, check_cancelled=check_cancelled)
         face_entries = _largest_first(mesh.raw, face_entries)
+        rest.reach(0.2)
         found: dict[FeatureId, Feature] = {}
         for phase in (
             lambda: detect_holes(mesh, fitted.cylinders, fitted.cones),
@@ -1319,6 +1441,7 @@ def detect(
                 check_cancelled()
             for feature in phase():
                 found[feature.id] = feature
+        rest.reach(0.45)
         if check_cancelled is not None:
             check_cancelled()
         found = _threads_instead_of_phantoms(mesh, found, helices=fitted.helices)
@@ -1342,6 +1465,7 @@ def detect(
             ],
             check_cancelled=check_cancelled,
         )
+        rest.reach(0.6)
         if check_cancelled is not None:
             check_cancelled()
         # **Nach dem Langloch und vor dem Einschluss.** Nach dem Langloch,
@@ -1351,12 +1475,14 @@ def detect(
         # welche bleiben (:func:`_faces_finished_in`): Ein dichtes Rändel hat
         # 32 000 Flächen, nach dem Falten sieben (§21.1, RM-207).
         found = patterns_instead_of_cells(mesh, found, check_cancelled=check_cancelled)
+        rest.reach(0.7)
         if check_cancelled is not None:
             check_cancelled()
         found = _faces_finished_in(mesh, found, face_entries, check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         found = _faces_on_a_round_wall(mesh, found, check_cancelled=check_cancelled)
+        rest.reach(0.75)
         if check_cancelled is not None:
             check_cancelled()
         # **Vor dem Freiformfilter, und das ist keine Reihenfolge nach Gefühl.**
@@ -1366,6 +1492,7 @@ def detect(
         # Einschluss gehören — nicht, weil das Modell eine Figur wäre.
         voids, unreadable = _detect_voids(mesh, check_cancelled=check_cancelled)
         found = voids_instead_of_phantom_bores(found, voids, check_cancelled=check_cancelled)
+        rest.reach(0.85)
         if check_cancelled is not None:
             check_cancelled()
         found = _partial_cones_folded(mesh, found, check_cancelled=check_cancelled)
@@ -1380,6 +1507,7 @@ def detect(
         found, left_out = _shapes_on_a_freeform(
             found, unpublished_round_shapes=unpublished_round_shapes, skin=fitted.freeform_skin
         )
+        rest.reach(0.9)
         if check_cancelled is not None:
             check_cancelled()
         # **Zuletzt, denn sie nehmen den Rest.** Eine gerundete Seite ist,
@@ -1399,6 +1527,7 @@ def detect(
         " (skin)" if fitted.freeform_skin else "",
     )
     _remember(key, found, left_out, unreadable, freeform)
+    share.reach(1.0)
     return dict(found)
 
 
@@ -1575,11 +1704,40 @@ def note_refinement(source: MeshData, refined: MeshData, origin: np.ndarray) -> 
     dieselbe Ablage wie der Abdruck in :func:`_mesh_key`. Ein Vermerk ist eine
     Zusage der Operation; geglaubt wird er erst von :func:`refined_twin`.
     """
-    cache = getattr(refined.raw, "_cache", None)
+    restore_refinement_note(refined, _mesh_key(source), origin)
+
+
+def refinement_note(mesh: MeshData) -> tuple[bytes, np.ndarray] | None:
+    """Der Vermerk aus :func:`note_refinement` — Abdruck des Eingangs und Herkunft je Dreieck.
+
+    Für den Plattencache: Der Vermerk lebt im Speicher des Netzes, und ein
+    von der Platte gelesenes Netz hatte ihn nicht mehr. Nach dem Wiederöffnen
+    lief die Erkennung dann am feineren Netz neu und las dort etwas anderes
+    als in der Sitzung (Durchsicht 0.5.1, erkennung-02).
+    """
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is None:
+        return None
+    cache.verify()
+    noted = cache.cache.get(REFINED_FROM_KEY)
+    if noted is None:
+        return None
+    key, origin = noted
+    return bytes(key), np.asarray(origin, dtype=np.int64)
+
+
+def restore_refinement_note(mesh: MeshData, key: bytes, origin: np.ndarray) -> None:
+    """Legt einen Vermerk an ``mesh`` — aus der Operation oder von der Platte.
+
+    Auch von der Platte bleibt er eine Zusage und kein Beleg: Geglaubt wird er
+    erst, wenn :func:`refined_twin` ihn am Eingang und an der Geometrie
+    nachgeprüft hat.
+    """
+    cache = getattr(mesh.raw, "_cache", None)
     if cache is None:
         return
     cache.verify()
-    cache[REFINED_FROM_KEY] = (_mesh_key(source), np.asarray(origin, dtype=np.int64))
+    cache[REFINED_FROM_KEY] = (bytes(key), np.asarray(origin, dtype=np.int64))
 
 
 def refined_twin(source: MeshData, refined: MeshData) -> np.ndarray | None:
@@ -1599,17 +1757,12 @@ def refined_twin(source: MeshData, refined: MeshData) -> np.ndarray | None:
     Maschine dieselben Bits geben: An der Antwort hängt, ob die Erkennung
     läuft oder übertragen wird.
     """
-    cache = getattr(refined.raw, "_cache", None)
-    if cache is None:
-        return None
-    cache.verify()
-    noted = cache.cache.get(REFINED_FROM_KEY)
+    noted = refinement_note(refined)
     if noted is None:
         return None
     key, origin = noted
     if key != _mesh_key(source):
         return None
-    origin = np.asarray(origin, dtype=np.int64)
     corners = np.asarray(refined.raw.faces, dtype=np.int64)
     count = len(source.raw.faces)
     if origin.shape != (len(corners),) or not len(origin):
@@ -2166,6 +2319,7 @@ def _fitted(
     *,
     planar: set[int] | None = None,
     check_cancelled: Callable[[], None] | None = None,
+    share: _Share = _UNHEARD,
 ) -> Fitted:
     """Jeder gekrümmte Fleck des Körpers, einmal eingepasst.
 
@@ -2174,6 +2328,11 @@ def _fitted(
     die Facetten und die zusammenhängenden Flecken Sekunden. Sie zweimal zu
     machen verdoppelte die Erkennungszeit für nichts — also passiert sie hier,
     und beide Aufrufer filtern das Ergebnis.
+
+    ``share`` erfährt, wie weit die Einpassung ist (:class:`_Share`): gezählt
+    werden Flecken und Stücke, gewichtet nach den gemessenen Anteilen der
+    Runden — Flecken sechs Prozent, ganze Flecken 44, Nachtrennung zehn,
+    Stücke 32, Zusammenlegung acht (Median über fünf große Netze).
     """
     if check_cancelled is not None:
         check_cancelled()
@@ -2335,6 +2494,8 @@ def _fitted(
         patches = _in_size_order(
             body, _connected_patches(body, curved, check_cancelled=check_cancelled)
         )
+        share.reach(0.06)
+        whole = share.part(0.06, 0.5)
 
         def splinters_in(pieces: list[list[int]]) -> int:
             """Wie viele Stücke unter :data:`FREEFORM_PIECE_SHARE` der Oberfläche liegen."""
@@ -2347,6 +2508,8 @@ def _fitted(
         # **Erst jeder Fleck als Ganzes.** Was hier eine Form ergibt, ist
         # fertig und zählt für das Urteil unten nicht mehr mit.
         unresolved: list[int] = []
+        whole_weight = sum(_fit_weight(patch) for patch in patches if len(patch) >= MIN_PATCH_FACES)
+        weighed = 0.0
         for patch_index, patch in enumerate(patches):
             if check_cancelled is not None:
                 check_cancelled()
@@ -2354,6 +2517,9 @@ def _fitted(
                 continue
             if not classify(patch):
                 unresolved.append(patch_index)
+            weighed += _fit_weight(patch)
+            whole.reach(weighed / whole_weight)
+        share.reach(0.5)
 
         # **Dann die Nachtrennung — und mit ihr das Urteil über die Haut**
         # (RM-193, Entscheidung Robert 22.09.2026). Eine Verrundung schließt
@@ -2407,6 +2573,31 @@ def _fitted(
                 or _rough_facet_area(body, planar) >= total_area * FREEFORM_ROUGH_SHARE
             )
 
+        share.reach(0.6)
+
+        def heavy(piece: list[int]) -> bool:
+            """Ob ein Stück einer Haut Gewicht hat (:data:`FREEFORM_PIECE_SHARE`)."""
+            return float(areas[piece].sum()) >= total_area * FREEFORM_PIECE_SHARE
+
+        # Gewogen wird je eingepasstem Stück, ein ungeteilter Fleck als eines.
+        planned = max(
+            1.0,
+            sum(
+                (
+                    sum(
+                        _fit_weight(piece)
+                        for piece in curvature_splits[index]
+                        if heavy(piece) or not freeform_skin
+                    )
+                    if len(curvature_splits[index]) > 1
+                    else _fit_weight(patches[index])
+                )
+                for index in unresolved
+            ),
+        )
+        weighed = 0.0
+        by_piece = share.part(0.6, 0.92)
+
         # **Zuletzt die Stücke.** Sie kommen nach allen ganzen Flecken und
         # nicht mehr unmittelbar nach ihrem eigenen: Das Urteil über die Haut
         # muss vorher stehen, sonst hinge es daran, welcher Fleck zuerst
@@ -2427,14 +2618,18 @@ def _fitted(
                 # Drachen 23 Stücke). Was die Haut an Bohrungen und Flächen
                 # trägt, liegt an ihren Rändern und ist längst ein eigener
                 # Fleck.
-                pieces = [
-                    piece
-                    for piece in pieces
-                    if float(areas[piece].sum()) >= total_area * FREEFORM_PIECE_SHARE
-                ]
+                pieces = [piece for piece in pieces if heavy(piece)]
             # Jedes Stück wird gefragt, nicht nur bis zum ersten Treffer — die
             # Liste ist Absicht, kein ``any`` mit Kurzschluss.
-            classified = [classify(piece) for piece in pieces] if split_apart else []
+            classified: list[bool] = []
+            if split_apart:
+                for piece in pieces:
+                    classified.append(classify(piece))
+                    weighed += _fit_weight(piece)
+                    by_piece.reach(weighed / planned)
+            else:
+                weighed += _fit_weight(patch)
+                by_piece.reach(weighed / planned)
             # **Und ein Umriss ist kein Stapel von Kreisen** (RM-243): Reihen
             # sich die Stücke als tangential wandernde Kreise aneinander, ist
             # der Fleck die gerundete Seite eines Schriftzugs, einer Strebe,
@@ -2487,11 +2682,23 @@ def _fitted(
                 for arc in _arcs_of_a_prism(body, leftover, check_cancelled)
                 if _exactly_an_arc(body, arc, check_cancelled)
             ]
-            if any(classified) or any(arcs):
+            # **Fünfte Runde, für eine Wand mit Absatz** (ERKENNUNG-11): Ein
+            # ganzer Fleck, den weder Krümmung noch Prisma geteilt haben, kann
+            # zwei Formen an einer weichen Naht sein — Wand und Haltelippe
+            # einer Magnettasche, Bohrung und flache Senkung. Geteilt wird nur
+            # dort (:func:`_pieces_at_a_seam`), und jedes Stück wird gefragt
+            # wie jedes andere.
+            seams = (
+                [classify(piece) for piece in _pieces_at_a_seam(body, patch, check_cancelled)]
+                if not split_apart and not any(arcs)
+                else []
+            )
+            if any(classified) or any(arcs) or any(seams):
                 # Belegte Teilflächen ersetzen die unsichere Gesamtdeutung;
                 # dieselben Dreiecke zählen nicht zusätzlich als verworfener Ring.
                 tori.drop_patch(patch)
 
+        share.reach(0.92)
         if check_cancelled is not None:
             check_cancelled()
         found = _merged_cylinders(body, mesh, found, check_cancelled=check_cancelled)
@@ -3403,13 +3610,24 @@ def _a_sliver_read(body: trimesh.Trimesh, patch: list[int]) -> bool:
     """Der Rumpf von :func:`_a_sliver` — die Antwort merkt sich die Hülle."""
     if not patch:
         return True
+    area, reach = _area_and_reach(body, patch)
+    if reach <= EPS_GEOM:
+        return True
+    return area / reach < MIN_SURFACE_WIDTH
+
+
+def _area_and_reach(body: trimesh.Trimesh, patch: Sequence[int]) -> tuple[float, float]:
+    """Fläche und Raumdiagonale eines Flecks; ihr Quotient ist seine Breite.
+
+    Die Messung hinter :func:`_a_sliver` — und hinter der Zählregel in
+    :func:`_flat_counts`, die aus derselben Breite den Radius liest, auf dem
+    ein schmaler Streifen läge. Eine Rechnung für beide Fragen.
+    """
     faces = np.asarray(patch, dtype=int)
     area = float(body.area_faces[faces].sum())
     corners = np.asarray(body.vertices[body.faces[faces].reshape(-1)], dtype=float)
     reach = float(np.linalg.norm(corners.max(axis=0) - corners.min(axis=0)))
-    if reach <= EPS_GEOM:
-        return True
-    return area / reach < MIN_SURFACE_WIDTH
+    return area, reach
 
 
 def _too_small_to_make(size: float) -> bool:
@@ -4644,6 +4862,188 @@ def _facet_table(
     return members, owner, sizes, touches_curved
 
 
+def _outline_corners(
+    body: trimesh.Trimesh, members: np.ndarray, owner: np.ndarray, sizes: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Je Facette die Ecken ihres Umrisses und die Punkte in ihrem Inneren.
+
+    Gezählt werden die Randecken, an denen der Umriss abknickt — mehr als
+    :data:`EPS_ANGLE`, gerechnet mit Grundrechenarten (RM-187). Ein Punkt,
+    den eine Teilung auf eine gerade Kante setzt, knickt nicht; eine Ecke, an
+    der mehr oder weniger als zwei Randkanten enden, zählt als Ecke. Hat eine
+    Facette ein Dreieck ohne genau drei Nachbarn — offener Rand, verzweigte
+    Kante —, bleibt es bei ihrer Dreieckszahl: Dort kennt die Nachbarschaft
+    den Umriss nicht vollständig. Innere Punkte sind Ecken ihrer Dreiecke,
+    die auf keiner Randkante liegen.
+    """
+    facet_count = len(sizes)
+    if not facet_count:
+        empty = np.asarray(sizes, dtype=np.int64)
+        return empty, empty
+    count = len(body.faces)
+    label = np.full(count, -1, dtype=np.int64)
+    label[members] = owner
+    neighbours, _rows = _neighbour_index(body)
+    known = (
+        (neighbours >= 0).sum(axis=1) if neighbours.shape[1] else np.zeros(count, dtype=np.int64)
+    )
+    irregular = np.zeros(facet_count, dtype=bool)
+    irregular[label[members[known[members] != 3]]] = True
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    seams = np.asarray(body.face_adjacency_edges, dtype=np.int64).reshape(-1, 2)
+    first, second = label[pairs[:, 0]], label[pairs[:, 1]]
+    on_first = (first >= 0) & (first != second)
+    on_second = (second >= 0) & (second != first)
+    rim_facet = np.concatenate((first[on_first], second[on_second]))
+    rim = np.concatenate((seams[on_first], seams[on_second]))
+    # Jede Randkante zweimal, von jeder ihrer Ecken aus gesehen.
+    at_facet = np.concatenate((rim_facet, rim_facet))
+    at_vertex = np.concatenate((rim[:, 0], rim[:, 1]))
+    toward = np.concatenate((rim[:, 1], rim[:, 0]))
+    # Alle Ecken je Facette, einmal gezählt; innere sind die ohne Randkante.
+    corner_of = np.asarray(body.faces, dtype=np.int64)[members]
+    keys = np.unique(np.repeat(owner, 3) * len(body.vertices) + corner_of.ravel())
+    every = np.bincount(keys // len(body.vertices), minlength=facet_count)
+    if not len(at_facet):
+        return np.where(irregular, sizes, 0).astype(np.int64), every.astype(np.int64)
+    order = np.lexsort((toward, at_vertex, at_facet))
+    at_facet, at_vertex, toward = at_facet[order], at_vertex[order], toward[order]
+    fresh = np.r_[True, (at_facet[1:] != at_facet[:-1]) | (at_vertex[1:] != at_vertex[:-1])]
+    starts = np.flatnonzero(fresh)
+    lengths = np.diff(np.r_[starts, len(at_facet)])
+    corner = np.ones(len(starts), dtype=bool)
+    through = lengths == 2
+    base = starts[through]
+    points = np.asarray(body.vertices, dtype=np.float64)
+    here = points[at_vertex[base]]
+    one = points[toward[base]] - here
+    two = points[toward[base + 1]] - here
+    crossed = np.cross(one, two)
+    span = np.sqrt((one * one).sum(axis=1)) * np.sqrt((two * two).sum(axis=1))
+    bent = np.sqrt((crossed * crossed).sum(axis=1)) > units.exact_sin_degrees(EPS_ANGLE) * span
+    # Zwei Kanten in dieselbe Richtung sind eine Spitze, keine Gerade.
+    folded = (one * two).sum(axis=1) > 0.0
+    corner[through] = bent | folded
+    corners = np.bincount(at_facet[starts[corner]], minlength=facet_count).astype(np.int64)
+    inner = (every - np.bincount(at_facet[starts], minlength=facet_count)).astype(np.int64)
+    return np.where(irregular, np.asarray(sizes, dtype=np.int64), corners), inner
+
+
+#: Wie viele Ecken ein Teilstück der Vernetzung einer Rundung höchstens hat:
+#: Mäntel und Kehlen kommen als Streifen (vier), Kugeln und Ringe als Dreiecke
+#: und Vierecke. Eine kleine Ebene mit mehr Ecken — ein Deckel, eine Kerbe, die
+#: Kante einer Senkung — ist keines, auch wenn der Exporter innere Punkte in sie
+#: gesetzt hat. Gemessen am Korpus (Durchsicht 0.5.1): An einem Lochbrett
+#: (``pegboard_pb3041``) fielen Fächer aus neun Dreiecken und sechs Ecken am
+#: Rand der Senkungen, nach Ecken gezählt, in deren Fleck und nahmen drei von
+#: vier Senkungen; am Siebhalter wurden zwei fast ebene Facetten von 80 mm² zu
+#: Rundungsstücken.
+_TESSELLATION_CORNERS: Final = 4
+
+
+def _flat_counts(
+    body: trimesh.Trimesh,
+    facets: Sequence[np.ndarray],
+    members: np.ndarray,
+    owner: np.ndarray,
+    sizes: np.ndarray,
+) -> np.ndarray:
+    """Was :data:`MIN_FLAT_FACES` je Facette zählt: Dreiecke, höchstens so viele wie Umrissecken.
+
+    **Die Regel meint den Umriss, gezählt hat sie die Dreiecke** (ERKENNUNG-04).
+    Ein Zylinderdeckel kommt als Fächer mit einem Dreieck je Segment, und acht
+    Dreiecke waren acht Ecken. *Kanten verfeinern* setzt aber Punkte auf die
+    geraden Ränder und ins Innere einer Facette, ohne die Form zu ändern — und
+    jeder Mantelstreifen einer Verrundung trug danach acht und mehr koplanare
+    Dreiecke mit vier Ecken. Nach der Dreieckszahl galt jeder Streifen als
+    Ebene: am Besenhalter nach 2 mm aus 36 Flächen 552 und aus 93
+    Verrundungen 11, an der Säule mit Kehle aus sieben Flächen 102, am
+    Screen-Cover nach 1 mm statt einer gerundeten Seite 45 Verrundungen
+    (Durchsicht 0.5.1). Dieselbe Stelle stand seit dem 04.09.2026 als offene im
+    Kommentar bei :func:`_facet_verdicts_read`.
+
+    **Höchstens, nicht stattdessen, und nur an einem Teilstück.** Die
+    Umrissecken allein machten jeden Streifen aus sechs Dreiecken auf einer
+    verrauschten Haut zur Ebene — acht Randpunkte, jeder ein Knick: am Korpus
+    56 000 Facetten, die Ebene geworden wären. Gedeckelt wird deshalb nur, was
+    ein Teiler aufgebläht hat: eine Facette mit inneren Punkten und höchstens
+    :data:`_TESSELLATION_CORNERS` Ecken — ein Streifen, ein Dreieck. Kippen
+    kann eine Facette damit nur zur Rundung hin, und nur, wo sie ein Stück
+    einer Rundung ist.
+
+    **Ein Splitter unter der Erkennungsauflösung behält seine Dreiecke.** Die
+    hundertstelbreiten Streifen an den Kanten eines Boolesch gebauten Körpers
+    — am Screen-Cover 67 Stück, 131,5 mm lang, 0,02 mm breit, je 520
+    Dreiecke mit vier Ecken — knicken gegen ihre Nachbarn wie ein Mantelstreifen
+    und hielten sich nur über ihre Dreieckszahl aus der Rundformsuche heraus;
+    darin zerfiel die gerundete Seite der Buchstaben in sechzehn Verrundungen.
+    Ein solcher Streifen ist keine Rundung: Breite durch Knick ergibt den
+    Radius, auf dem er läge — am Screen-Cover 0,1 mm, unter
+    :data:`MIN_CYLINDER_DIAMETER`. Der Streifen einer Verrundung R 3 ist nur
+    0,2 mm breit, knickt aber um 3,75 Grad und liegt auf 3 mm; er zählt nach
+    Ecken. Ein Splitter ohne weichen Rand gehört zu keiner Rundung und bleibt
+    ebenfalls bei seinen Dreiecken.
+    """
+    sizes = np.asarray(sizes, dtype=np.int64)
+    counted: np.ndarray = sizes.copy()
+    # Gefragt werden nur Facetten, die nach Dreiecken als Ebene zählen — die
+    # übrigen ändert die Deckelung nicht, und am Drachen sind das 300 000 von
+    # 320 000 Facetten: zwei Sekunden Umrissrechnung für nichts.
+    wanted = np.flatnonzero(sizes >= MIN_FLAT_FACES)
+    if not len(wanted):
+        return counted
+    keep = np.zeros(len(sizes), dtype=bool)
+    keep[wanted] = True
+    chosen = keep[owner]
+    renumbered = np.full(len(sizes), -1, dtype=np.int64)
+    renumbered[wanted] = np.arange(len(wanted))
+    corners, inner = _outline_corners(
+        body, members[chosen], renumbered[owner[chosen]], sizes[wanted]
+    )
+    # Gedeckelt wird nur ein Teilstück einer Rundung, das ein Teiler zerlegt hat:
+    # innere Punkte und höchstens vier Ecken — ein Streifen, ein Dreieck.
+    split_up = (inner > 0) & (corners <= _TESSELLATION_CORNERS)
+    counted[wanted[split_up]] = np.minimum(sizes[wanted[split_up]], corners[split_up])
+    doubtful = np.flatnonzero((sizes >= MIN_FLAT_FACES) & (counted < MIN_FLAT_FACES))
+    if not len(doubtful):
+        return counted
+    # Die weichen Randknicke aller fraglichen Facetten in einem Durchgang:
+    # je Randkante ihr Knick, der Facette zugeschrieben, auf deren Seite sie
+    # liegt — eine Maske über alle Nähte je Facette kostete an einem Netz mit
+    # Millionen Dreiecken Minuten.
+    asked = np.zeros(len(sizes), dtype=bool)
+    asked[doubtful] = True
+    label = np.full(len(body.faces), -1, dtype=np.int64)
+    label[members] = owner
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    angles = np.asarray(body.face_adjacency_angles, dtype=float)
+    first, second = label[pairs[:, 0]], label[pairs[:, 1]]
+    rim = (first != second) & (angles < math.radians(CURVATURE_LIMIT))
+    rim &= angles > math.radians(EPS_ANGLE)
+    on_first = rim & (first >= 0) & asked[np.maximum(first, 0)]
+    on_second = rim & (second >= 0) & asked[np.maximum(second, 0)]
+    whose = np.concatenate((first[on_first], second[on_second]))
+    bends = np.concatenate((angles[on_first], angles[on_second]))
+    order = np.lexsort((bends, whose))
+    whose, bends = whose[order], bends[order]
+    begins = np.searchsorted(whose, doubtful, side="left")
+    ends = np.searchsorted(whose, doubtful, side="right")
+    for number, begin, end in zip(doubtful.tolist(), begins.tolist(), ends.tolist(), strict=True):
+        facet = np.asarray(facets[number], dtype=np.int64).tolist()
+        # Breit genug für eine Fläche: ein Stück einer Rundung, es zählt nach
+        # Ecken. Schmaler: Breite durch Knick ist der Radius, auf dem er läge.
+        if not _a_sliver(body, facet):
+            continue
+        area, reach = _area_and_reach(body, facet)
+        if (
+            reach <= EPS_GEOM
+            or end == begin
+            or _too_small_to_make(2.0 * area / reach / float(np.median(bends[begin:end])))
+        ):
+            counted[number] = sizes[number]
+    return counted
+
+
 def _facet_areas(body: trimesh.Trimesh, facets: Sequence[np.ndarray]) -> list[float]:
     """Die Fläche je Facette — eine Summe über alle Dreiecke statt einer je Facette.
 
@@ -4733,6 +5133,7 @@ def _large_facet_faces(
     body: trimesh.Trimesh,
     *,
     check_cancelled: Callable[[], None] | None = None,
+    share: _Share = _UNHEARD,
 ) -> set[int]:
     """Ebene Flecken von den Streifen einer gekrümmten Haut unterscheiden.
 
@@ -4747,6 +5148,8 @@ def _large_facet_faces(
     Lochplatte mit 360 000 Dreiecken (gemessen am 22.09.2026). Wer nur einzelne
     Facetten fragt — die Erkennung an einer Stelle —, fragt
     :func:`planar_facet`: dieselbe Regel, begrenzt auf ihren Fleck.
+
+    ``share`` erfährt, wie weit die Frage ist (:class:`_Share`).
     """
     if check_cancelled is not None:
         check_cancelled()
@@ -4754,7 +5157,7 @@ def _large_facet_faces(
         "large_facet_faces",
         body,
         (),
-        lambda: _large_facet_faces_read(body, check_cancelled=check_cancelled),
+        lambda: _large_facet_faces_read(body, check_cancelled=check_cancelled, share=share),
         check_cancelled=check_cancelled,
     )
     return set(planar)
@@ -4839,13 +5242,15 @@ def _facet_verdicts_read(
     # ist selbst einer, und jede liegt damit bei fast hundert Prozent. Gegen
     # die größte gemessen zerfiel ``torus_ring.stl`` in 288 ebene Flächen.
     broad = float(body.area) * BROAD_FACE_SHARE
-    # **Der erste Zweig prüft die Rundung nicht, und das ist eine offene
-    # Stelle.** Ein Mantelstreifen, den eine Boolesche neu vernetzt hat, besteht
-    # aus mehr als acht koplanaren Dreiecken und kommt hier unbesehen durch.
-    # Gemessen an einem Mast Ø 5, dessen Zapfen einmal versetzt wurde:
-    # fünfzig Facetten qualifizieren sich allein über die Dreieckszahl, alle
-    # fünfzig sitzen auf der Rundung, und der Zapfen trägt danach 720 statt
-    # 1630 Dreiecke — 43 ebene Flächen stehen daneben, die alle zu ihm gehören.
+    # **Der erste Zweig prüft die Rundung nicht.** Ein Mantelstreifen, den eine
+    # Boolesche neu vernetzt hat, bestand aus mehr als acht koplanaren
+    # Dreiecken und kam hier unbesehen durch. Gemessen an einem Mast Ø 5,
+    # dessen Zapfen einmal versetzt wurde: fünfzig Facetten qualifizierten sich
+    # allein über die Dreieckszahl, alle fünfzig saßen auf der Rundung, und der
+    # Zapfen trug danach 720 statt 1630 Dreiecke. Seit der Durchsicht 0.5.1
+    # zählt die Regel höchstens je Umrissecke (:func:`_flat_counts`) — ein
+    # Streifen hat vier, und dieselbe Stelle hatte nach *Kanten verfeinern*
+    # jeden Streifen einer Verrundung zur Fläche gemacht.
     #
     # **Die naheliegende Ergänzung ``and not any(... in curved ...)`` ist
     # gemessen und wieder ausgebaut** (04.09.2026): Sie bringt den Mast von 47
@@ -4864,12 +5269,16 @@ def _facet_verdicts_read(
     # Erkennung); ``_facet_table`` beantwortet „berührt die Facette eine
     # Rundung" für alle Facetten mit einem ``bincount``.
     members, owner, sizes, touches_curved = _facet_table(facets, count, curved)
+    # Gezählt werden die Ecken des Umrisses, nicht die Dreiecke (:func:`_flat_counts`).
+    counted = _flat_counts(body, facets, members, owner, sizes)
+    if check_cancelled is not None:
+        check_cancelled()
     area_of = np.asarray(areas, dtype=float)
     stands_apart = np.zeros(len(facets), dtype=bool)
     if apart:
         stands_apart[np.fromiter(apart, dtype=np.int64, count=len(apart))] = True
     planar_facets = (
-        (sizes >= MIN_FLAT_FACES)
+        (counted >= MIN_FLAT_FACES)
         | (area_of >= broad)
         | ((area_of >= MIN_FACE_AREA) & ~touches_curved)
         | stands_apart
@@ -4887,7 +5296,7 @@ def _facet_verdicts_read(
     # Auch eine breite Facette muss den vollständigen Rundträgernachweis
     # erfüllen. Ein kleines Teilstück darf ihren Rest nicht verschlucken.
     recoverable_facets = np.zeros(len(facets), dtype=bool)
-    for number in np.flatnonzero(sizes >= MIN_FLAT_FACES).tolist():
+    for number in np.flatnonzero(counted >= MIN_FLAT_FACES).tolist():
         recoverable_facets[number] = bool(touches_curved[number]) or _a_sliver(
             body, [int(index) for index in facets[number]]
         )
@@ -4945,9 +5354,13 @@ def _large_facet_faces_read(
     body: trimesh.Trimesh,
     *,
     check_cancelled: Callable[[], None] | None = None,
+    share: _Share = _UNHEARD,
 ) -> set[int]:
     """Der Rumpf von :func:`_large_facet_faces` — die Antwort merkt sich die Hülle."""
     verdicts = _facet_verdicts(body, check_cancelled=check_cancelled)
+    # Gemessen: das Urteil je Facette gut ein Drittel, die Flecken ein Fünftel,
+    # der Mantelnachweis den Rest (Sonde p30, Durchsicht 0.5.1).
+    share.reach(0.35)
     if not len(verdicts.planar):
         return set()
     members, owner = verdicts.members, verdicts.owner
@@ -4958,7 +5371,13 @@ def _large_facet_faces_read(
     protected = planar - recoverable
     candidates = _all_but(len(body.faces), protected)
     mesh = MeshData.of(body)
-    for patch in _connected_patches(body, candidates, check_cancelled=check_cancelled):
+    patches = _connected_patches(body, candidates, check_cancelled=check_cancelled)
+    proofs = share.part(0.55, 1.0)
+    planned = sum(_fit_weight(patch) for patch in patches)
+    weighed = 0.0
+    for patch in patches:
+        weighed += _fit_weight(patch)
+        proofs.reach(weighed / planned)
         if check_cancelled is not None:
             check_cancelled()
         if len(patch) < MIN_PATCH_FACES or recoverable.isdisjoint(patch):
@@ -6135,10 +6554,24 @@ def _coincident_vertices(body: trimesh.Trimesh) -> bool:
     Eine ungeschweißte STL schreibt jedes Dreieck mit eigenen Ecken; dann
     fallen deckungsgleiche Punkte in der Lesung zusammen (:func:`_read_surface_support`).
     Ein geschweißtes Netz hat keine, und die Frage kostet einmal so viel wie
-    eine Lesung des ganzen Körpers, nicht einmal je Fleck.
+    eine Lesung des ganzen Körpers, nicht einmal je Fleck — **deshalb liegt
+    die Antwort neben dem Rang im Cache des Netzes**. Bis zur Durchsicht 0.5.1
+    stand der Satz hier, und die Rechnung lief trotzdem je Fleck: ein Maximum
+    über alle Ecken, am Meshy-Murmelbrett 63 509-mal und 68 s von 866 unter
+    dem Profiler (erkennung-05).
     """
+    if _COINCIDENT_KEY in body._cache:
+        known: bool = body._cache[_COINCIDENT_KEY]
+        return known
     canonical = vertex_rank(body)
-    return bool(int(canonical.max()) + 1 < len(canonical)) if len(canonical) else False
+    answer = bool(int(canonical.max()) + 1 < len(canonical)) if len(canonical) else False
+    body._cache[_COINCIDENT_KEY] = answer
+    return answer
+
+
+#: Unter diesem Schlüssel hält der Cache von ``trimesh`` die Antwort von
+#: :func:`_coincident_vertices` — sie verfällt mit der Geometrie wie der Rang.
+_COINCIDENT_KEY: Final = "solidon_coincident_vertices"
 
 
 def _fans_connected(
@@ -7578,6 +8011,69 @@ def face_radii(
     return result
 
 
+def _pieces_at_a_seam(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[list[int]]:
+    """Die Stücke eines Flecks beiderseits einer weichen Naht (ERKENNUNG-11).
+
+    Eine Naht ist ein Knick ab :data:`SEAM_ANGLE`, der von **beiden** Seiten
+    aus mindestens :data:`SEAM_RATIO`-mal so scharf ist wie jeder andere
+    weiche Knick seines Dreiecks, und der ringsum gleich knickt
+    (:data:`SEAM_SPREAD`). Zurück kommen die Stücke ab :data:`MIN_PATCH_FACES`
+    Dreiecken, in der Ordnung des Körpers — wenn die Nähte den Fleck in
+    mindestens zwei teilen; sonst nichts.
+
+    Gefragt wird nur für einen ganzen Fleck, auf den keine Form passt und den
+    weder die Krümmung noch ein Prisma geteilt hat (:func:`_fitted`, fünfte
+    Runde). Was heute erkannt wird, bleibt deshalb, wie es ist.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    neighbours, pair_rows = _neighbour_index(body)
+    if not neighbours.shape[1] or len(patch) < 2 * MIN_PATCH_FACES:
+        return []
+    local = np.unique(np.asarray(patch, dtype=np.intp))
+    chosen = neighbours[local]
+    rows = pair_rows[local]
+    spot = np.minimum(np.searchsorted(local, np.maximum(chosen, 0)), len(local) - 1)
+    inside = (chosen >= 0) & (local[spot] == chosen)
+    adjacency_angles = np.asarray(body.face_adjacency_angles, dtype=float)
+    angles = np.where(inside, np.degrees(adjacency_angles[np.maximum(rows, 0)]), 0.0)
+    soft = inside & (angles < CURVATURE_LIMIT)
+    angles = np.where(soft, angles, 0.0)
+    # Je Kante eines Dreiecks der schärfste der anderen weichen Knicke — über
+    # alle Plätze, denn an einer verzweigten Kante hat ein Dreieck mehr als drei.
+    ranked = np.sort(angles, axis=1)
+    top = ranked[:, -1:]
+    runner_up = ranked[:, -2:-1] if angles.shape[1] > 1 else np.zeros_like(top)
+    others = np.where(angles >= top, runner_up, top)
+    sharp = soft & (angles >= SEAM_ANGLE) & (angles >= SEAM_RATIO * others)
+    # Naht ist, was von beiden Seiten so aussieht: ihre Zeile zweimal.
+    seam_rows, seen = np.unique(rows[sharp], return_counts=True)
+    seam_rows = seam_rows[seen == 2]
+    if not len(seam_rows):
+        return []
+    seam_angles = np.degrees(adjacency_angles[seam_rows])
+    if float(seam_angles.max()) > float(seam_angles.min()) * (1.0 + SEAM_SPREAD):
+        return []
+    pairs = np.asarray(body.face_adjacency, dtype=np.intp)
+    kept_rows = np.unique(rows[soft])
+    kept_rows = kept_rows[~np.isin(kept_rows, seam_rows)]
+    if check_cancelled is not None:
+        check_cancelled()
+    groups = trimesh.graph.connected_components(
+        np.searchsorted(local, pairs[kept_rows]),
+        nodes=np.arange(len(local)),
+        engine="scipy",
+    )
+    pieces = [local[group].tolist() for group in groups if len(group) >= MIN_PATCH_FACES]
+    if len(pieces) < 2:
+        return []
+    return in_body_order(body, pieces)
+
+
 def _arcs_of_a_prism(
     body: trimesh.Trimesh,
     piece: Sequence[int],
@@ -7684,6 +8180,62 @@ def _exactly_an_arc(
     return fit.fit_error <= weld_tolerance(diagonal)
 
 
+def _circle_pairs(
+    fits: Mapping[int, CylinderFit],
+    numbers: Sequence[int],
+    axis_cosine: float,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[tuple[int, int]]:
+    """Die Kreispaare, die :func:`_wandering_outline` einzeln prüfen muss — in fester Folge.
+
+    Die Bestätigung fragt jedes Paar zweier Kreise nach Seite, Achse, Radius
+    und Querversatz, bevor sie misst. Paar für Paar in Python war das
+    quadratisch: Am Meshy-Murmelbrett trug ein Fleck 12 961 Stücke mit
+    Gewicht, und diese eine Frage kostete 32 s (Durchsicht 0.5.1,
+    erkennung-05). Hier fallen die Paare vorher heraus, die keine der vier
+    Bedingungen erfüllen können: nach Radius sortiert nur das Fenster, in dem
+    zwei Radien um höchstens :data:`CYLINDER_TOLERANCE` des größeren
+    auseinanderliegen, und darin feldweise Seite, Achse und Versatz — mit
+    einem Spielraum von einem Milliardstel, damit die Rundung keine Antwort
+    ändert. Entschieden wird danach je Paar wie bisher; die Folge ist
+    dieselbe wie in der Doppelschleife: aufsteigend nach dem ersten, dann nach
+    dem zweiten Kreis.
+    """
+    count = len(numbers)
+    if count < 2:
+        return []
+    radius = np.fromiter((float(fits[n].radius) for n in numbers), dtype=np.float64, count=count)
+    inward = np.fromiter((bool(fits[n].inward) for n in numbers), dtype=bool, count=count)
+    axes = np.asarray([fits[n].axis for n in numbers], dtype=np.float64).reshape(count, 3)
+    centres = np.asarray([fits[n].centre for n in numbers], dtype=np.float64).reshape(count, 3)
+    by_radius = np.argsort(radius, kind="stable")
+    ordered = radius[by_radius]
+    slack = 1.0 + 1e-9
+    lowest = np.searchsorted(ordered, radius * (1.0 - CYLINDER_TOLERANCE) / slack, side="left")
+    highest = np.searchsorted(ordered, radius / (1.0 - CYLINDER_TOLERANCE) * slack, side="right")
+    pairs: list[tuple[int, int]] = []
+    for index in range(count):
+        if check_cancelled is not None and index % FIT_SCAN_BLOCK == 0:
+            check_cancelled()
+        near = by_radius[lowest[index] : highest[index]]
+        near = near[(near > index) & (inward[near] == inward[index])]
+        if not len(near):
+            continue
+        axis = axes[index]
+        dots = axes[near, 0] * axis[0] + axes[near, 1] * axis[1] + axes[near, 2] * axis[2]
+        near = near[np.abs(dots) >= axis_cosine - 1e-12]
+        if not len(near):
+            continue
+        offset = centres[near] - centres[index]
+        along = offset[:, 0] * axis[0] + offset[:, 1] * axis[1] + offset[:, 2] * axis[2]
+        across = offset - along[:, None] * axis
+        distance = np.sqrt((across * across).sum(axis=1))
+        scale = np.maximum(radius[near], radius[index])
+        near = near[distance <= scale * SINK_FIT_LIMIT * slack + 1e-12]
+        pairs.extend((numbers[index], numbers[int(other)]) for other in np.sort(near))
+    return pairs
+
+
 def _wandering_outline(
     body: trimesh.Trimesh,
     pieces: Sequence[list[int]],
@@ -7768,24 +8320,21 @@ def _wandering_outline(
         )
 
     numbers = sorted(fits)
-    for position, one in enumerate(numbers):
-        for other in numbers[position + 1 :]:
-            if one in confirmed and other in confirmed:
-                continue
-            place = placed(one, other)
-            if place is None:
-                continue
-            step, across, scale = place
-            if step > scale * CYLINDER_TOLERANCE or across > scale * SINK_FIT_LIMIT:
-                continue
-            if check_cancelled is not None:
-                check_cancelled()
-            if _lies_on_the_cylinder(
-                body, fits[one], pieces[other], check_cancelled=check_cancelled
-            ) or _lies_on_the_cylinder(
-                body, fits[other], pieces[one], check_cancelled=check_cancelled
-            ):
-                confirmed.update((one, other))
+    for one, other in _circle_pairs(fits, numbers, axis_cosine, check_cancelled):
+        if one in confirmed and other in confirmed:
+            continue
+        place = placed(one, other)
+        if place is None:
+            continue
+        step, across, scale = place
+        if step > scale * CYLINDER_TOLERANCE or across > scale * SINK_FIT_LIMIT:
+            continue
+        if check_cancelled is not None:
+            check_cancelled()
+        if _lies_on_the_cylinder(
+            body, fits[one], pieces[other], check_cancelled=check_cancelled
+        ) or _lies_on_the_cylinder(body, fits[other], pieces[one], check_cancelled=check_cancelled):
+            confirmed.update((one, other))
     circles = [number for number in numbers if number not in confirmed]
     if len(circles) < 3:
         return None
@@ -8163,6 +8712,7 @@ def _connected_patches_read(
     """
     pairs = np.asarray(body.face_adjacency)
     adjacency = pairs[:0]
+    local: np.ndarray | None = None
     if len(pairs):
         # **Nur die Nähte dieses Flecks, nicht alle des Netzes** (20.09.2026).
         # Die Auswahl lief als Winkelfilter über alle Paare und eine Maske
@@ -8180,26 +8730,50 @@ def _connected_patches_read(
         # Test dafür gibt es aus demselben Grund nicht: Weggelassen ändert
         # sich keine Antwort.
         indices = np.asarray(faces, dtype=np.intp)
-        wanted = np.zeros(len(body.faces), dtype=bool)
-        wanted[indices] = True
         neighbours, pair_rows = _neighbour_index(body)
         if check_cancelled is not None:
             check_cancelled()
         chosen = neighbours[indices]
-        present = chosen >= 0
-        present[present] = wanted[chosen[present]]
-        # Dieselben Zeilen in derselben aufsteigenden Ordnung wie ``np.unique``,
-        # nur ohne Sortierung: eine Maske über die Nähte.
-        seen = np.zeros(len(pairs), dtype=bool)
-        seen[pair_rows[indices][present]] = True
-        rows = np.flatnonzero(seen)
+        if len(indices) < len(body.faces) * SORTED_CORNERS_SHARE:
+            # **Ein kleiner Fleck fragt sortiert, nicht über Felder in
+            # Netzgröße** (Durchsicht 0.5.1, erkennung-05): Zwei Masken über
+            # alle Dreiecke und Nähte je Aufruf, und :func:`_cylinder_beside_a_torus`
+            # ruft je Stück — am Meshy-Murmelbrett 3 656 Aufrufe und 71 s von
+            # 866 unter dem Profiler. Dieselben Zeilen, aufsteigend wie dort.
+            local = np.unique(indices)
+            spot = np.minimum(np.searchsorted(local, np.maximum(chosen, 0)), len(local) - 1)
+            present = (chosen >= 0) & (local[spot] == chosen)
+            rows = np.unique(pair_rows[indices][present])
+        else:
+            wanted = np.zeros(len(body.faces), dtype=bool)
+            wanted[indices] = True
+            present = chosen >= 0
+            present[present] = wanted[chosen[present]]
+            # Dieselben Zeilen in derselben aufsteigenden Ordnung wie
+            # ``np.unique``, nur ohne Sortierung: eine Maske über die Nähte.
+            seen = np.zeros(len(pairs), dtype=bool)
+            seen[pair_rows[indices][present]] = True
+            rows = np.flatnonzero(seen)
         angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[rows])
         adjacency = pairs[rows[angles < CURVATURE_LIMIT]]
     if check_cancelled is not None:
         check_cancelled()
     if not len(adjacency):
         return in_body_order(body, [[index] for index in faces])
-    groups = trimesh.graph.connected_components(adjacency, nodes=np.asarray(faces), engine="scipy")
+    if local is not None:
+        # Der Zusammenhang in eigener, aufsteigender Nummerierung: Die Suche
+        # legt sonst einen Graphen über alle Dreiecke des Netzes an. Die
+        # Umnummerierung erhält die Ordnung, also Gruppen und ihre Folge.
+        within = trimesh.graph.connected_components(
+            np.searchsorted(local, adjacency),
+            nodes=np.searchsorted(local, np.asarray(faces)),
+            engine="scipy",
+        )
+        groups = [local[group] for group in within]
+    else:
+        groups = trimesh.graph.connected_components(
+            adjacency, nodes=np.asarray(faces), engine="scipy"
+        )
     if check_cancelled is not None:
         check_cancelled()
     closed = _without_notches(body, [group.tolist() for group in groups])

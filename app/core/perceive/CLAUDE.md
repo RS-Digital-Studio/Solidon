@@ -814,6 +814,12 @@ zusammen. Drei Leser kommen ohne Rechnung aus:
   unter `MOVED_TWIN_TOLERANCE` —, und `refined_features` ersetzt die
   Dreiecksnummern jedes Merkmals und seiner Teilträger durch die ihrer
   Nachfahren. Maße und Namen bleiben, denn die Oberfläche ist dieselbe.
+  **Der Vermerk reist über die Platte mit** (`refinement_note`,
+  `restore_refinement_note`, im Plattencache als `<n>.origin.npy` neben
+  dem Netz, `scene.cache`): Ohne ihn lief die Erkennung nach dem
+  Wiederöffnen am feineren Netz neu, und dasselbe Dokument trug je nach
+  Cache zwei Merkmalsstände. Geglaubt wird er auch von der Platte erst nach
+  dem Beleg in `refined_twin`.
 - **`known_detection`** gibt die gemerkte Antwort oder `None` — für die
   Live-Vorschau, die Geometrie zeigt und keine Merkmale braucht
   (`evaluate(..., detect_features=False)`).
@@ -896,6 +902,22 @@ Verweis bleibt je Merkmal eine Warnung
   Einpassen sind, und für die übrigen kommt der Fleck ungeteilt zurück. Ein
   Stück ist nie größer als sein Fleck, die Antwort ändert sich also nicht — an
   einer verrauschten Freiform sind es 1 650 von 120 610 Flecken.
+- **Die Vollerkennung meldet ihren Anteil** (`detect(..., progress=...)`,
+  `_Share`, Durchsicht 0.5.1): nur wachsend, in Tausendstelschritten, ohne
+  Uhr. Die Etappen tragen ihre gemessenen Anteile (Ebenen ein Viertel,
+  Einpassung zwei Drittel), die Einpassung zählt Flecken und Stücke nach
+  `_fit_weight` (`SHARE_FACES_PER_FIT`). Den Bereich des Schritts rechnet die
+  Auswertung um (`scene.evaluate._StepProgress`).
+- **Die Ebenenregel zählt ein geteiltes Teilstück höchstens je Umrissecke**
+  (`_flat_counts`, `_outline_corners`): `MIN_FLAT_FACES` meint die Ecken eines
+  Deckels, und ein Mantelstreifen, in den *Kanten verfeinern* innere Punkte
+  gesetzt hat, hat vier. Gedeckelt wird nur eine Facette mit inneren Punkten
+  und höchstens `_TESSELLATION_CORNERS` Ecken; jede andere zählt ihre
+  Dreiecke. Splitter unter der Erkennungsauflösung — Breite
+  (`_area_and_reach`) durch Randknick unter dem Radius von
+  `MIN_CYLINDER_DIAMETER`, gefragt über `_a_sliver` und `_too_small_to_make`
+  — behalten ihre Dreiecke und bleiben aus der Rundformsuche heraus. Ein
+  geteilter Streifen zählt damit wie der ungeteilte.
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.
 - **Ein Fleck mit einer Kerbe von einem Dreieck bekommt es zurück**
   (`_notch_faces`, `_without_notches`, 17.09.2026). `relations.boundary_rings`
@@ -926,6 +948,10 @@ Verweis bleibt je Merkmal eine Warnung
   Netzes — am Drachen aus TripoSG (325 244 Dreiecke, ein Fleck mit 307 063
   und 65 Kandidaten) waren das 264 von 482 Sekunden. Denselben Index liest
   `_connected_patches`, das je Splitstück gerufen wird: 320 statt 11 Sekunden.
+  Ein kleiner Fleck (unter `SORTED_CORNERS_SHARE` der Dreiecke) fragt dabei
+  sortiert und rechnet seinen Zusammenhang in eigener, aufsteigender
+  Nummerierung — keine Maske und kein Graph über das ganze Netz je Aufruf;
+  Gruppen und Folge sind dieselben.
 - **Bohrungen teilen ihre Durchgangsvorarbeit.** `detect_holes` hält
   `_ThroughBounds` nur für seinen aktuellen, unveränderlichen Körper. Die
   Dreiecksgrenzen entstehen erst bei der ersten exakt achsenparallelen Bohrung.
@@ -1034,8 +1060,8 @@ Verweis bleibt je Merkmal eine Warnung
   Körper** zusammen (im Cache des Netzes — dieselbe Nummer liest die
   Ordnung der Flecken und die Nachbarschaft der Platzierung), und die
   Lesung liest je Fleck nur Nummern
-  (`_coincident_vertices` fragt dieselbe Tabelle) — sonst ist jede Ecke ihr
-  eigener Punkt. Gemessen am 21.09.2026, allein auf Roberts Maschine:
+  (`_coincident_vertices` fragt dieselbe Tabelle und merkt sich die Antwort
+  daneben im Cache des Netzes) — sonst ist jede Ecke ihr eigener Punkt. Gemessen am 21.09.2026, allein auf Roberts Maschine:
   Ikosphäre 22,8 → 1,4 s, Lochplatte mit 204 000 Dreiecken 1,4 → 1,0 s,
   Taschenplatte 1,3 → 0,95 s, verrauschte Freiform 5,9 → 4,3 s (Ziel §31:
   eine Sekunde). Was an der Freiform bleibt, ist die Verfeinerung selbst: je
@@ -1202,6 +1228,14 @@ Verweis bleibt je Merkmal eine Warnung
   93 statt 12 Verrundungen), und *In Flächen und Kanten umwandeln* fiel von
   64 auf 14 s; die Bögen der Buchstaben und ein Ellipsenbogen bleiben in
   dieser Runde gerundete Seiten.
+- **Eine Wand mit Absatz sind zwei Formen** (`_pieces_at_a_seam`, fünfte
+  Runde in `_fitted`, Durchsicht 0.5.1). Ein ganzer Fleck, auf den nichts
+  passt und den weder Krümmung noch Prisma geteilt haben, wird an einer
+  weichen Naht geteilt: Knick ab `SEAM_ANGLE`, von beiden Seiten mindestens
+  `SEAM_RATIO`-mal so scharf wie jeder andere weiche Knick seines Dreiecks,
+  ringsum gleich (`SEAM_SPREAD`). So wird die Haltelippe einer Magnettasche
+  am Netz ein Kegel an der Bohrung, wie am exakten Körper; eine grob geteilte
+  Rundung knickt an jeder Reihe gleich und bleibt ungeteilt.
 - **Ein Umriss mit wanderndem Radius ist eine gerundete Seite**
   (`_wandering_outline`, zweite Runde in `_fitted`, RM-243). Die
   Nachtrennung zerlegt einen verrauschten Schriftzug, eine geschwungene
@@ -1218,7 +1252,10 @@ Verweis bleibt je Merkmal eine Warnung
   liegen (`_off_the_outline`); was dort mit einem Stück von woanders zu einer
   Fläche verschmolz, bleibt. Der Rest wird zur gerundeten Seite
   (`detect_curved_faces`). Warum es so und nicht einfacher geht, steht in
-  `.claude/rules/schichtanalyse.md`.
+  `.claude/rules/schichtanalyse.md`. Die Paare, die eine Bestätigung prüfen
+  muss, wählt `_circle_pairs` vor — nach Radius sortiert, feldweise nach
+  Seite, Achse und Versatz, mit einem Spielraum von einem Milliardstel —, in
+  derselben Folge wie die Doppelschleife davor.
 - **Der Merkmals-Cache hat zwei Schranken.** `CACHE_LIMIT` zählt
   Einträge, `CACHE_INDEX_LIMIT` ihr Gewicht in Flächenindizes —
   ein Eintrag für ein 400 000-Dreieck-Modell wiegt 3,9 MiB, und

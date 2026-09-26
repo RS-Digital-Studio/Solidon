@@ -1011,6 +1011,15 @@ def test_a_shaping_step_names_its_unreferenced_losses_once(profile: Profile) -> 
     Verweis. Der Hinweis steht deshalb einmal je Körper und Schritt, Zahl und
     Kennungen in den Werten. Ein Verlust mit Verweis bleibt ein eigener
     Befund (``perceive.referenced_lost``) und ist hier nicht betroffen.
+
+    **Seit der Zählregel der Durchsicht 0.5.1 fehlt die Flut an ihrer
+    Wurzel.** Ein vernetztes Rohlingsdreieck hat innere Punkte und drei Ecken;
+    es zählt nach Ecken und bleibt ein Stück der Rundung. Der Rohling ist nach
+    *Gleichmäßig vernetzen* dieselbe gekrümmte Fläche wie davor, und die
+    Pinselzüge nehmen nur, was sie treffen: im ersten Zug nichts, im zweiten
+    drei Restfacetten und die gekrümmte Fläche, weil der Körper danach als
+    Freiform gilt. Mit dem Skalieren sind es fünf Kennungen statt 51 — und die
+    vier des zweiten Zugs stehen weiterhin in einem Befund.
     """
     from collections import Counter
 
@@ -1040,10 +1049,10 @@ def test_a_shaping_step_names_its_unreferenced_losses_once(profile: Profile) -> 
         assert int(entry.values.get("count", 1)) == len(named), dict(entry.values)
         counted += len(named)
     # Die Merkmale gehen nicht verloren, nur ihre Wiederholung: Jede der
-    # 51 Kennungen steht weiterhin in genau einem Befund.
-    assert counted == 51, counted
-    assert max(int(entry.values.get("count", 1)) for entry in lost) == 28
+    # fünf Kennungen steht weiterhin in genau einem Befund.
+    assert counted == 5, counted
+    assert max(int(entry.values.get("count", 1)) for entry in lost) == 4
 
-    # Vier Schritte mit Verlust, zweimal *Pinselzüge angewendet*, dazu
-    # Angleichen und Abweichung des Vernetzens: acht Hinweise statt 55.
+    # Zwei Schritte mit Verlust, zweimal *Pinselzüge angewendet*, Angleichen
+    # und Abweichung des Vernetzens, dazu die Freiform: sieben Hinweise statt 55.
     assert len(findings) <= 8, Counter(entry.code for entry in findings)

@@ -666,11 +666,19 @@ def test_original_plane_witness_fits_only_its_relevant_complete_patch(
     Der Mantel ist bewusst größer als die Grenze, ab der zuerst Teile geprüft
     werden: Sein Teil passt auf einen Zylinder, also entscheidet der ganze
     Fleck — wie in der Vollerkennung, ohne Abbruch am Budget.
+
+    **Die Streifen tragen ihre Punkte nur auf den Rändern**, wie ein Mantel mit
+    Höhenringen. Bis zur Durchsicht 0.5.1 stand hier ein zweimal unterteilter
+    Zylinder; dessen Streifen haben innere Punkte und vier Ecken, und seit der
+    Zählregel (``_flat_counts``) zählen sie als Stück einer Rundung, nicht
+    mehr als Ebene. Die Antwort ist dieselbe, nur ohne Mantelfit — das hält
+    das Ende des Tests fest.
     """
     from app.core.perceive import features
 
-    raw = trimesh.creation.cylinder(radius=10, height=20, sections=64)
-    raw = raw.subdivide().subdivide()
+    rows = 16
+    outline = [(0.0, -10.0), *((10.0, -10.0 + 20.0 * i / rows) for i in range(rows + 1))]
+    raw = trimesh.creation.revolve(np.asarray([*outline, (0.0, 10.0)]), sections=64)
     triangles = np.asarray(raw.triangles)
     cap = np.flatnonzero(np.all(np.isclose(triangles[:, :, 2], 10), axis=1))
     wall = np.flatnonzero(np.ptp(triangles[:, :, 2], axis=1) > 0)
@@ -687,6 +695,14 @@ def test_original_plane_witness_fits_only_its_relevant_complete_patch(
     assert not proofs
     assert not features.planar_facet(raw, wall.tolist(), limit=2000)
     assert proofs == [2048]
+
+    divided = trimesh.creation.cylinder(radius=10, height=20, sections=64).subdivide().subdivide()
+    triangles = np.asarray(divided.triangles)
+    wall = np.flatnonzero(np.ptp(triangles[:, :, 2], axis=1) > 0)
+    assert len(wall) == 2048
+    proofs.clear()
+    assert not features.planar_facet(divided, wall.tolist(), limit=2000)
+    assert not proofs, "ein unterteilter Streifen ist schon nach der Zählregel keine Ebene"
 
 
 def test_long_thin_plane_keeps_its_measured_scope_after_rotation(monkeypatch) -> None:

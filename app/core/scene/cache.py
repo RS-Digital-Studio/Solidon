@@ -106,7 +106,15 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Senkungen verwenden ihren echten Boden statt eines neu gefächerten Deckels.
 #: - 28 (24.09.2026): eine gerundete Seite nimmt jede koplanare Facette ganz,
 #:   die an ihre Rundungsnaht grenzt — gespeicherte Merkmale sind zu klein.
-CACHE_FORMAT_VERSION: Final = 28
+#: - 29 (26.09.2026): das Ergebnis von *Kanten verfeinern* trägt seinen
+#:   Herkunftsvermerk auf der Platte (``refined_from``). Ein älterer Eintrag hat
+#:   ihn nicht, und am feineren Netz liefe die Erkennung nach dem Öffnen neu —
+#:   mit anderen Merkmalen als in der Sitzung. Dazu lesen sich gespeicherte
+#:   Merkmale neu: Die Ebenenregel zählt eine geteilte Facette höchstens je
+#:   Umrissecke, eine Naht teilt einen Mantel in Bohrung und Kegel, ein
+#:   exakter Baustein liest sein Ergebnis aus der Topologie, und ein Lochfeld
+#:   am Netz gibt nur noch seine benannten Bohrungen aus.
+CACHE_FORMAT_VERSION: Final = 29
 
 
 @dataclass(frozen=True, slots=True)
@@ -463,6 +471,67 @@ def _warm_figures(mesh: Mesh) -> None:
             getattr(mesh, figure)
 
 
+#: Die Endung der Herkunftsdatei eines verfeinerten Netzes neben seinem Netz.
+_ORIGIN_SUFFIX: Final = ".origin.npy"
+
+
+def _refinement_to_disk(folder: Path, position: int, mesh: Mesh) -> dict[str, str] | None:
+    """Legt den Herkunftsvermerk von *Kanten verfeinern* neben das Netz — falls es einen trägt.
+
+    Der Vermerk (``perceive.features.refinement_note``) lebt im Speicher des
+    Netzes. Ohne ihn auf der Platte lief die Erkennung nach dem Wiederöffnen am
+    feineren Netz neu und las dort etwas anderes als in der Sitzung: am
+    Screen-Cover nach 1 mm 45 Verrundungen statt einer gerundeten Seite, und
+    72 Namen zeigten auf andere Merkmale (Durchsicht 0.5.1, erkennung-02).
+    Dasselbe Dokument hatte damit je nach Cache zwei Merkmalsstände (§15.1).
+    """
+    import io
+
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import refinement_note
+
+    if not isinstance(mesh, MeshData):
+        return None
+    noted = refinement_note(mesh)
+    if noted is None:
+        return None
+    key, origin = noted
+    name = f"{position}{_ORIGIN_SUFFIX}"
+    buffer = io.BytesIO()
+    np.save(buffer, np.asarray(origin, dtype=np.int64), allow_pickle=False)
+    (folder / name).write_bytes(buffer.getvalue())
+    return {"source": key.hex(), "origin": name}
+
+
+def _refinement_from_disk(folder: Path, record: Any, mesh: Mesh) -> None:
+    """Legt einen gelesenen Herkunftsvermerk wieder an das Netz.
+
+    Geprüft wird hier nur die Form — ein beschädigter Eintrag wirft einen der
+    Fehler aus :data:`_DAMAGED_ENTRY` und wird neu gerechnet. Ob der Vermerk
+    stimmt, prüft ``perceive.features.refined_twin`` am Eingang und an der
+    Geometrie, bevor er etwas überträgt.
+    """
+    import io
+
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import restore_refinement_note
+
+    if not isinstance(mesh, MeshData):
+        raise TypeError("refined_from")
+    source = bytes.fromhex(str(record["source"]))
+    name = str(record["origin"])
+    if len(source) != 16 or Path(name).name != name or not name.endswith(_ORIGIN_SUFFIX):
+        raise ValueError("refined_from")
+    origin = np.load(io.BytesIO((folder / name).read_bytes()), allow_pickle=False)
+    if origin.dtype.kind not in "iu" or origin.shape != (mesh.triangle_count,):
+        raise ValueError("refined_from")
+    restore_refinement_note(mesh, source, origin)
+
+
 def _feature_from_data(data: dict[str, Any], *, face_count: int | None = None) -> Feature:
     indices = tuple(data["face_indices"])
     return Feature(
@@ -678,6 +747,8 @@ class DiskCache:
             objects_list = []
             for entry in data["objects"]:
                 mesh = self.codec.loads((folder / entry["mesh"]).read_bytes())
+                if "refined_from" in entry:
+                    _refinement_from_disk(folder, entry["refined_from"], mesh)
                 _warm_figures(mesh)
                 objects_list.append(
                     SceneObject(
@@ -773,23 +844,25 @@ class DiskCache:
             for position, entry in enumerate(result.objects):
                 name = f"{position}{self.codec.suffix}"
                 (folder / name).write_bytes(self.codec.dumps(entry.mesh))
-                entries.append(
-                    {
-                        "id": entry.id,
-                        "name": _name_to_data(entry.name),
-                        "mesh": name,
-                        "kind": entry.kind,
-                        "features": {
-                            key_: feature_to_data(value) for key_, value in entry.features.items()
-                        },
-                        "material_slots": [_slot_to_data(slot) for slot in entry.material_slots],
-                        "material": entry.material,
-                        "created_by": entry.created_by,
-                        "visible": entry.visible,
-                        "plate": entry.plate,
-                        "reserved_feature_ids": list(entry.reserved_feature_ids),
-                    }
-                )
+                record: dict[str, Any] = {
+                    "id": entry.id,
+                    "name": _name_to_data(entry.name),
+                    "mesh": name,
+                    "kind": entry.kind,
+                    "features": {
+                        key_: feature_to_data(value) for key_, value in entry.features.items()
+                    },
+                    "material_slots": [_slot_to_data(slot) for slot in entry.material_slots],
+                    "material": entry.material,
+                    "created_by": entry.created_by,
+                    "visible": entry.visible,
+                    "plate": entry.plate,
+                    "reserved_feature_ids": list(entry.reserved_feature_ids),
+                }
+                refined = _refinement_to_disk(folder, position, entry.mesh)
+                if refined is not None:
+                    record["refined_from"] = refined
+                entries.append(record)
             payload: dict[str, Any] = {"format_version": CACHE_FORMAT_VERSION, "objects": entries}
             if result.findings:
                 payload["findings"] = [finding_to_data(entry) for entry in result.findings]

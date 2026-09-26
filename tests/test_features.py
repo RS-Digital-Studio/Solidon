@@ -4549,6 +4549,82 @@ def test_a_single_change_of_radius_leaves_a_construction_alone(
     assert ruled == unruled
 
 
+def test_the_circle_pairs_of_an_outline_are_those_of_the_double_loop() -> None:
+    """Die Vorauswahl der Kreispaare lässt kein Paar aus und ändert keine Folge.
+
+    Die Bestätigung im wandernden Umriss fragte jedes Paar Kreise einzeln —
+    am Meshy-Murmelbrett 12 961 Stücke in einem Fleck, 32 s für eine Frage
+    (Durchsicht 0.5.1, erkennung-05). ``_circle_pairs`` nimmt vorher heraus,
+    was keine der Bedingungen erfüllen kann. Geprüft wird gegen die
+    Doppelschleife mit denselben Rechnungen, auch an den Grenzen selbst:
+    Radien genau um :data:`CYLINDER_TOLERANCE` auseinander, Achsen genau auf
+    dem Grenzwinkel, Versatz genau an :data:`SINK_FIT_LIMIT`.
+    """
+    from app.core import units
+    from app.core.perceive.features import (
+        CYLINDER_TOLERANCE,
+        SINK_AXIS_LIMIT,
+        SINK_FIT_LIMIT,
+        CylinderFit,
+        _circle_pairs,
+    )
+
+    generator = np.random.default_rng(243)
+    limit = units.exact_cos_degrees(SINK_AXIS_LIMIT)
+    fits: dict[int, CylinderFit] = {}
+    for number in range(400):
+        radius = float(generator.choice([2.0, 5.0, 11.0]) * (1.0 + 0.2 * generator.random()))
+        axis = np.array([0.0, 0.0, 1.0]) + 0.05 * (generator.random(3) - 0.5)
+        axis /= math.sqrt(float((axis * axis).sum()))
+        centre = generator.random(3) * 2.0
+        fits[3 * number] = CylinderFit(
+            axis=tuple(float(value) for value in axis),
+            centre=tuple(float(value) for value in centre),
+            radius=radius,
+            residual=0.0,
+            inward=bool(generator.random() < 0.5),
+        )
+    # Genau an den Grenzen: Radius, Achswinkel, Querversatz.
+    base = CylinderFit(
+        axis=(0.0, 0.0, 1.0), centre=(0.0, 0.0, 0.0), radius=4.0, residual=0.0, inward=True
+    )
+    fits[5000] = base
+    fits[5001] = dataclasses.replace(base, radius=4.0 / (1.0 - CYLINDER_TOLERANCE))
+    tilt = math.sqrt(1.0 - limit * limit)
+    fits[5002] = dataclasses.replace(base, axis=(tilt, 0.0, limit))
+    fits[5003] = dataclasses.replace(base, centre=(4.0 * SINK_FIT_LIMIT, 0.0, 3.0))
+    fits[5004] = dataclasses.replace(base, radius=4.0 * (1.0 - CYLINDER_TOLERANCE))
+    numbers = sorted(fits)
+
+    def accepted(one: int, other: int) -> bool:
+        first, second = fits[one], fits[other]
+        if first.inward is not second.inward:
+            return False
+        axis = np.asarray(first.axis, dtype=float)
+        if abs(float((axis * np.asarray(second.axis, dtype=float)).sum())) < limit:
+            return False
+        offset = np.asarray(second.centre, dtype=float) - np.asarray(first.centre, dtype=float)
+        across = offset - axis * float((offset * axis).sum())
+        step = abs(first.radius - second.radius)
+        scale = max(first.radius, second.radius)
+        return (
+            step <= scale * CYLINDER_TOLERANCE
+            and math.sqrt(float((across * across).sum())) <= scale * SINK_FIT_LIMIT
+        )
+
+    expected = [
+        (one, other)
+        for position, one in enumerate(numbers)
+        for other in numbers[position + 1 :]
+        if accepted(one, other)
+    ]
+    assert len(expected) > 50, "ohne angenommene Paare prüft der Test nichts"
+    pairs = _circle_pairs(fits, numbers, limit)
+    assert [pair for pair in pairs if accepted(*pair)] == expected
+    assert pairs == sorted(pairs), "dieselbe Folge wie die Doppelschleife"
+    assert len(pairs) < len(numbers) * (len(numbers) - 1) // 20, "die Vorauswahl wählt aus"
+
+
 def test_a_piece_of_an_outline_stays_when_the_merge_joined_it_to_a_face_elsewhere() -> None:
     """Zurückgezogen wird nur, was ganz auf dem Umriss liegt (RM-243).
 
@@ -6191,6 +6267,222 @@ def test_the_facet_verdict_and_the_patches_stop_between_their_steps() -> None:
 
         with pytest.raises(OperationCancelled):
             run(cancel_on_the_second)
+
+
+def _refined(mesh: MeshData, edge: float) -> MeshData:
+    """*Kanten verfeinern* ohne Herkunftsvermerk — so, wie ein Folgeschritt das Netz sieht."""
+    from app.core.geom.mesh_ops import remesh
+
+    refined = remesh(mesh, edge)
+    return MeshData.of(
+        trimesh.Trimesh(
+            np.asarray(refined.raw.vertices), np.asarray(refined.raw.faces), process=False
+        )
+    )
+
+
+@pytest.mark.parametrize("name", ["block_with_rounded_edge.stl", "post_with_fillet.stl"])
+def test_a_refined_mesh_is_recognised_like_its_original(name: str) -> None:
+    """Fein geteilt erkennt die Erkennung dasselbe wie am Original (ERKENNUNG-04).
+
+    *Kanten verfeinern* ändert die Form nicht, nur die Zahl der Dreiecke — und
+    die Ebenenregel zählte Dreiecke: Jeder Streifen einer Verrundung trug
+    danach acht und mehr koplanare Dreiecke und galt als Ebene. Aus dem Quader
+    mit gerundeter Kante wurden 30 Flächen ohne Verrundung, aus der Säule mit
+    Kehle 102 Flächen ohne Zapfen (Durchsicht 0.5.1). Gezählt wird jetzt
+    höchstens je Umrissecke; ein Streifen hat vier.
+    """
+    mesh = plate(name)
+    forget_cache()
+    before = detect(mesh)
+    forget_cache()
+    after = detect(_refined(mesh, 1.0))
+    forget_cache()
+
+    def summary(found: dict[FeatureId, Feature]) -> list[tuple[str, float]]:
+        return sorted(
+            (feature.kind, round(float(feature.params.get("radius") or 0.0), 2))
+            for feature in found.values()
+        )
+
+    assert summary(after) == summary(before)
+
+
+def test_a_strip_below_the_resolution_keeps_its_triangle_count() -> None:
+    """Ein Splitter unter der Erkennungsauflösung bleibt nach Dreiecken gezählt (ERKENNUNG-04).
+
+    Ein gezogener Umriss mit einer Rundung R 3 und einer R 0,1, fein geteilt:
+    Die Streifen der R 3 sind 0,2 mm breit, knicken um 3,75 Grad und liegen auf
+    3 mm — sie zählen nach ihren vier Ecken und gehören zur Rundung. Die der
+    R 0,1 sind 0,026 mm breit und liegen auf 0,1 mm, unter
+    :data:`MIN_CYLINDER_DIAMETER`: Wie die Kantenstreifen eines Boolesch
+    gebauten Körpers bleiben sie bei ihren Dreiecken und aus der Rundformsuche
+    heraus.
+    """
+    from shapely.geometry import Polygon
+
+    from app.core.perceive.features import (
+        MIN_FLAT_FACES,
+        _curved_faces,
+        _facet_areas,
+        _facet_table,
+        _flat_counts,
+        _one_body,
+    )
+
+    def arc(x: float, y: float, radius: float, start: float, count: int) -> list[tuple]:
+        return [
+            (
+                x + radius * math.cos(start + math.pi / 2 * step / count),
+                y + radius * math.sin(start + math.pi / 2 * step / count),
+            )
+            for step in range(count + 1)
+        ]
+
+    outline = [(0.0, 0.0), (30.0, 0.0), *arc(27.0, 17.0, 3.0, 0.0, 24)]
+    outline += arc(0.1, 19.9, 0.1, math.pi / 2, 6)
+    body = _one_body(
+        _refined(MeshData.of(trimesh.creation.extrude_polygon(Polygon(outline), 10.0)), 1.0)
+    ).raw
+    facets = list(body.facets)
+    members, owner, sizes, _touches = _facet_table(facets, len(body.faces), _curved_faces(body))
+    counted = _flat_counts(body, facets, members, owner, sizes)
+    areas = np.asarray(_facet_areas(body, facets))
+    widths = []
+    for number, facet in enumerate(facets):
+        corners = np.asarray(body.vertices)[np.asarray(body.faces)[facet].ravel()]
+        widths.append(
+            areas[number] / float(np.linalg.norm(corners.max(axis=0) - corners.min(axis=0)))
+        )
+    rounding = [number for number, width in enumerate(widths) if 0.15 < width < 0.25]
+    splinters = [number for number, width in enumerate(widths) if width < 0.05]
+    assert len(rounding) == 24 and len(splinters) == 6
+    assert all(sizes[number] >= MIN_FLAT_FACES for number in (*rounding, *splinters))
+    assert all(counted[number] == 4 for number in rounding)
+    assert all(counted[number] == sizes[number] for number in splinters)
+
+
+def _turned_bore(entry: list[list[float]]) -> MeshData:
+    """Ein gedrehter Ring Ø 24 × 10 mit Bohrung Ø 6; ``entry`` ist der Weg der Mündung.
+
+    Die Punkte laufen von der Bohrungswand (Radius 3) zur Deckfläche (z = 10);
+    48 Segmente, wie ein fein vernetzter Mantel (7,5 Grad je Teilung).
+    """
+    profile = [[12.0, 0.0], [12.0, 10.0], *reversed(entry), [3.0, 0.0], [12.0, 0.0]]
+    return MeshData.of(trimesh.creation.revolve(profile, sections=48))
+
+
+def test_a_bore_with_a_steep_lead_in_is_a_bore_and_a_cone() -> None:
+    """Eine Mündung, die unter der Knickgrenze abknickt, ist Bohrung und Kegel (ERKENNUNG-11).
+
+    Ein Einführkegel mit 20 Grad Halbwinkel steht um 20 Grad gegen die
+    Bohrungswand — unter :data:`CURVATURE_LIMIT`, also lagen Wand und Kegel in
+    einem Fleck, auf den keine Form passte, und die Bohrung fehlte. Dieselbe
+    Lage wie die Haltelippe einer Magnettasche. Die fünfte Runde teilt an der
+    Naht, die ringsum gleich und doppelt so scharf knickt wie die Teilung des
+    Mantels.
+    """
+    lead = 1.5
+    entry = [[3.0, 10.0 - lead], [3.0 + lead * math.tan(math.radians(20.0)), 10.0]]
+    forget_cache()
+    found = detect(_turned_bore(entry))
+
+    holes = [feature for feature in found.values() if feature.kind == "hole"]
+    cones = [feature for feature in found.values() if feature.kind == "cone"]
+    assert len(holes) == 1 and holes[0].params["diameter"] == pytest.approx(6.0, abs=0.01)
+    assert len(cones) == 1 and cones[0].params["angle"] == pytest.approx(40.0, abs=1.0)
+    assert not [feature for feature in found.values() if feature.kind == "curved_face"]
+
+
+def test_a_rounded_mouth_is_no_seam() -> None:
+    """Eine grob geteilte Rundung knickt an jeder Reihe gleich — das ist keine Naht (ERKENNUNG-11).
+
+    Vier Reihen über neunzig Grad knicken je 22,5 Grad, so scharf wie die Naht
+    einer Lippe. Getrennt wird trotzdem nicht: Jede Reihe knickt auch gegen
+    ihre Nachbarreihe so, und eine Naht muss doppelt so scharf sein wie jeder
+    andere weiche Knick ihrer Dreiecke. Die Erkennung ist mit und ohne die
+    fünfte Runde dieselbe.
+    """
+    radius = 1.5
+    turns = [math.radians(22.5 * step) for step in range(5)]
+    entry = [
+        [3.0 + radius - radius * math.cos(angle), 10.0 - radius + radius * math.sin(angle)]
+        for angle in turns
+    ]
+    mesh = _turned_bore(entry)
+    forget_cache()
+    with_seams = detect(mesh)
+    forget_cache()
+    original = features_module._pieces_at_a_seam
+    try:
+        features_module._pieces_at_a_seam = lambda *_args, **_kwargs: []
+        without_seams = detect(mesh)
+    finally:
+        features_module._pieces_at_a_seam = original
+    forget_cache()
+    assert with_seams == without_seams
+
+
+def test_the_recognition_tells_how_far_it_is() -> None:
+    """Die Vollerkennung meldet ihren erledigten Anteil, nur wachsend, bis eins (KUNDE-14).
+
+    Sie meldete nur ihren Text, und beim Laden des Piratenschiffs stand der
+    Balken 48 Sekunden auf „Merkmale erkennen · 0 %“, während allein die Uhr
+    lief (Durchsicht 0.5.1). Jetzt zählt sie erledigte Etappen, Flecken und
+    Stücke — hier an der Säule mit Kehle, deren Mantel die Nachtrennung in
+    rund hundert Stücke zerlegt. Der Anteil ändert die Erkennung nicht, und
+    eine Antwort aus dem Merker meldet nichts.
+    """
+    from itertools import pairwise
+
+    from app.core.perceive.features import SHARE_STEP
+
+    forget_cache()
+    body = normalise(read_mesh((MESHES / "post_with_fillet.stl").read_bytes(), ".stl"), "mm").mesh
+    told: list[float] = []
+    found = detect(body, progress=told.append)
+
+    assert told[0] < 0.05, told[:3]
+    assert told[-1] == 1.0
+    assert all(later > earlier for earlier, later in pairwise(told)), "nur wachsend"
+    assert all(later - earlier >= SHARE_STEP * 0.999 for earlier, later in pairwise(told[:-1]))
+    # Nicht nur die Etappen, auch die Einpassung dazwischen: Der Balken wandert
+    # mit jedem Stück und steht nicht, bis die Runde fertig ist.
+    assert len(told) > 50, len(told)
+
+    forget_cache()
+    assert detect(body) == found, "der Anteil ändert die Erkennung nicht"
+    again: list[float] = []
+    detect(body, progress=again.append)
+    assert again == [], "eine Antwort aus dem Merker meldet nichts"
+
+
+def test_a_small_patch_is_grouped_like_a_large_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein kleiner Fleck wird sortiert gruppiert, und es kommen dieselben Flecken heraus.
+
+    ``_connected_patches_read`` legte je Aufruf zwei Masken über alle
+    Dreiecke und Nähte und einen Graphen über alle Dreiecke an —
+    :func:`_cylinder_beside_a_torus` ruft sie je Stück, am Meshy-Murmelbrett
+    3 656-mal für 71 s (Durchsicht 0.5.1, erkennung-05). Der kleine Weg
+    nummeriert den Fleck aufsteigend um; Gruppen, ihre Folge und ihre
+    Dreiecke müssen dieselben sein wie auf dem großen Weg — hier an zufälligen
+    Auswahlen einer fein geteilten Kugel mit Kerben und Inseln erzwungen.
+    """
+    body = trimesh.creation.icosphere(subdivisions=4, radius=10.0)
+    generator = np.random.default_rng(5)
+    count = len(body.faces)
+    samples = [
+        sorted(generator.choice(count, size=size, replace=False).tolist())
+        for size in (7, 40, 300, 1500)
+    ]
+    samples.append(list(range(0, count, 3)))
+    for faces in samples:
+        monkeypatch.setattr(features_module, "SORTED_CORNERS_SHARE", 0.0)
+        large = features_module._connected_patches_read(body, faces)
+        monkeypatch.setattr(features_module, "SORTED_CORNERS_SHARE", 1.0)
+        small = features_module._connected_patches_read(body, faces)
+        assert small == large, len(faces)
+    assert any(len(features_module._connected_patches_read(body, faces)) > 1 for faces in samples)
 
 
 def test_a_refinement_that_turns_a_triangle_is_not_the_same_surface() -> None:
