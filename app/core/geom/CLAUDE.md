@@ -1208,6 +1208,10 @@ jede Platte als Ganzes in die Mitte der freigegebenen Fläche, wie es jeder
 Slicer daneben tut (`best_object_pos` steht dort auf `0.5x0.5`). Verschoben
 wird je Achse nur, was hineinpasst, und nur wenn die Zielfläche wirklich frei
 ist — die Prüfung gegen Sperrzonen läge sonst hinter der Verschiebung.
+Was in einer Achse nur ohne den Rand passt, liegt in dieser Achse auf der
+Bettmitte, geprüft gegen das Bett samt Sperrzonen, und `check_build_volume`
+nennt es `arrange.narrow_margin` (Hinweis mit dem verbleibenden Abstand)
+statt „über den Bauraum hinaus" (RM-229).
 `occupied` nennt Körper, die liegen bleiben und ihren Platz belegen; eine
 Platte mit solchen wird nicht zentriert.
 

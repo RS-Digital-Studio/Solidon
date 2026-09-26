@@ -2197,7 +2197,11 @@ def _fits_after_shift(mesh: MeshData, shift: tuple[float, float], allowed: Any) 
 
 
 def _into_the_middle(
-    arranged: list[MeshData], assigned: list[int], area: Any, allowed: Any
+    arranged: list[MeshData],
+    assigned: list[int],
+    area: Any,
+    allowed: Any,
+    bed: Any | None = None,
 ) -> list[MeshData]:
     """Schiebt jede Platte als Ganzes in die Mitte der freigegebenen Fläche.
 
@@ -2226,27 +2230,50 @@ def _into_the_middle(
       Verschiebung geht an dieser Prüfung vorbei. Ein Drucker mit einer
       Sperrzone in der Mitte bekäme sonst Teile hineingeschoben — dort bleibt
       die Platte, wo sie gepackt wurde.
+
+    **Was nur ohne den Rand passt, liegt mittig auf dem Bett** (RM-229,
+    Durchsicht 0.5.1). ``bed`` ist die Druckfläche ohne Rand. Eine Platte, die
+    in einer Achse breiter ist als die Fläche mit Rand, aber nicht breiter als
+    das Bett, wird in dieser Achse auf die Mitte des Betts gelegt: Der Rand
+    wird auf beiden Seiten gleich schmal, statt auf der einen Seite zu bleiben
+    und auf der anderen über die Kante zu ragen. Gemessen am K1 (Bett 220,
+    Abstand 5): ein Quader von 216 mm lag bei x -105…111, 1 mm über der Kante,
+    und mittig passt er mit 2 mm je Seite. Geprüft wird diese Lage dann gegen
+    das Bett; was dort nicht frei ist (eine Sperrzone), bleibt, wo es liegt.
+    :func:`check_build_volume` sagt den schmaleren Rand als Hinweis.
     """
     left_edge, front_edge, right_edge, back_edge = area.bounds
     middle = ((left_edge + right_edge) / 2.0, (front_edge + back_edge) / 2.0)
     span = (right_edge - left_edge, back_edge - front_edge)
+    if bed is not None and not bed.is_empty:
+        bed_left, bed_front, bed_right, bed_back = bed.bounds
+        bed_middle = ((bed_left + bed_right) / 2.0, (bed_front + bed_back) / 2.0)
+        bed_span = (bed_right - bed_left, bed_back - bed_front)
+        bed_allowed = bed.buffer(EPS_GEOM, join_style="mitre")
+    else:
+        bed_middle, bed_span, bed_allowed = middle, span, allowed
     moved = list(arranged)
     for plate in sorted(set(assigned)):
         members = [index for index, at in enumerate(assigned) if at == plate]
         low = np.min([arranged[index].bounds.minimum[:2] for index in members], axis=0)
         high = np.max([arranged[index].bounds.maximum[:2] for index in members], axis=0)
-        along = [
-            middle[axis] - (float(low[axis]) + float(high[axis])) / 2.0
-            if float(high[axis]) - float(low[axis]) <= span[axis] + _TOUCH
-            else 0.0
-            for axis in (0, 1)
-        ]
+        along = [0.0, 0.0]
+        narrower = False
+        for axis in (0, 1):
+            extent = float(high[axis]) - float(low[axis])
+            centre = (float(low[axis]) + float(high[axis])) / 2.0
+            if extent <= span[axis] + _TOUCH:
+                along[axis] = middle[axis] - centre
+            elif extent <= bed_span[axis] + _TOUCH:
+                along[axis] = bed_middle[axis] - centre
+                narrower = True
+        limit = bed_allowed if narrower else allowed
         shift = (along[0], along[1])
         if abs(shift[0]) < _TOUCH and abs(shift[1]) < _TOUCH:
             continue
         whole = box(low[0] + shift[0], low[1] + shift[1], high[0] + shift[0], high[1] + shift[1])
-        if not allowed.covers(whole) and not all(
-            _fits_after_shift(arranged[index], shift, allowed) for index in members
+        if not limit.covers(whole) and not all(
+            _fits_after_shift(arranged[index], shift, limit) for index in members
         ):
             continue
         for index in members:
@@ -2409,7 +2436,9 @@ def arrange_on_bed(
     # fremde Körper liegen bleiben, gehört die Mitte ihnen mit; dort wird die
     # gepackte Lage nicht mehr verschoben.
     if not occupied:
-        arranged = _into_the_middle(arranged, assigned, area, allowed)
+        arranged = _into_the_middle(
+            arranged, assigned, area, allowed, printable_area(profile.printer)
+        )
 
     findings.extend(check_build_volume(arranged, profile, assigned, object_ids, margin=edge_margin))
     if plate + 1 >= plates and _overfull(arranged, assigned, profile, edge_margin):
@@ -2457,7 +2486,11 @@ def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile, spaci
     on_last = [mesh for mesh, plate in zip(meshes, plates, strict=True) if plate == last]
     if sum(_fits_alone(mesh, profile, spacing) for mesh in on_last) < 2:
         return False
-    return bool(check_build_volume(on_last, profile, margin=spacing))
+    # Ein schmalerer Rand ist kein Gedränge: Das Teil liegt ganz auf dem Bett.
+    return any(
+        finding.code != "arrange.narrow_margin"
+        for finding in check_build_volume(on_last, profile, margin=spacing)
+    )
 
 
 def _fits_alone(mesh: MeshData, profile: Profile, spacing: float) -> bool:
@@ -2632,6 +2665,7 @@ def check_build_volume(
         area.bounds if not area.is_empty else printable_area(profile.printer).bounds
     )
     allowed = BoundingBox((left, front, 0.0), (right, back, printable_height(profile.printer)))
+    bed = printable_area(profile.printer) if margin > 0.0 else area
     findings: list[Finding] = []
 
     for index, mesh in enumerate(meshes):
@@ -2652,6 +2686,45 @@ def check_build_volume(
         object_id = (
             object_ids[index] if object_ids is not None and index < len(object_ids) else None
         )
+        if (
+            margin > 0.0
+            and outside
+            and 2 not in outside
+            and not _fits_at_all(bounds, allowed, 0.0)
+            and fits_xy(mesh, bed)
+        ):
+            # **Auf dem Bett, nur der Rand ist schmaler** (RM-229): Das Teil
+            # passt mit dem gewählten Rand nirgends hin, liegt aber ganz auf
+            # der Druckfläche — :func:`_into_the_middle` hat es dorthin gelegt.
+            # „Steht über den Bauraum hinaus" wäre falsch und schickte den
+            # Kunden zum Verkleinern; was fehlt, ist der Rand, und wie viel
+            # davon bleibt, steht dabei.
+            bed_left, bed_front, bed_right, bed_back = bed.bounds
+            narrow: dict[str, Any] = {
+                "margin": max(
+                    0.0,
+                    min(
+                        float(bounds.minimum[0]) - bed_left,
+                        bed_right - float(bounds.maximum[0]),
+                        float(bounds.minimum[1]) - bed_front,
+                        bed_back - float(bounds.maximum[1]),
+                    ),
+                )
+            }
+            if object_id is None:
+                narrow["object"] = index
+            if plates is not None and index < len(plates):
+                narrow["plate"] = plates[index] + 1
+            findings.append(
+                Finding(
+                    code="arrange.narrow_margin",
+                    severity="info",
+                    message=_("Ein Objekt passt nur mit schmalerem Rand auf die Druckfläche."),
+                    object_id=object_id,
+                    values=narrow,
+                )
+            )
+            continue
         if outside:
             values: dict[str, Any] = {
                 "axes": ", ".join("xyz"[axis] for axis in outside),

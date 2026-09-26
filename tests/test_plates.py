@@ -159,10 +159,18 @@ def test_more_plates_are_only_offered_when_they_would_help(profile: Profile) -> 
 def test_a_part_in_exactly_bed_size_does_not_ask_for_a_plate_either(profile: Profile) -> None:
     """„Passt allein" heißt „würde allein passend gelegt".
 
-    Ein Teil in genau Bettgröße passt roh und ragt nach dem Anordnen dennoch
-    über den Rand — der Abstand steht auf beiden Seiten. Ohne ihn in der
-    Rechnung wäre der Rat wieder einer, der nichts löst.
+    Ein Teil in genau Bettgröße passt roh, aber nicht mit dem Abstand zum
+    Rand — der steht auf beiden Seiten. Ohne ihn in der Rechnung wäre der Rat
+    „eine Platte mehr" wieder einer, der nichts löst.
+
+    **Und es liegt auf dem Bett, nicht darüber hinaus** (RM-229, Durchsicht
+    0.5.1). Bis dahin blieb es in der Packecke stehen und ragte um den Rand
+    über die Kante; gemeldet wurde „steht über den Bauraum hinaus". Jetzt
+    liegt es in der Mitte, und der Bericht sagt, was wirklich fehlt: der Rand.
     """
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, bed_exclusions=())
+    )
     width, depth, _height = profile.printer.build_volume
     exact = trimesh.creation.box(extents=(width, depth, 10.0))
     exact.apply_translation((0.0, 0.0, 5.0))
@@ -172,7 +180,53 @@ def test_a_part_in_exactly_bed_size_does_not_ask_for_a_plate_either(profile: Pro
 
     codes = {finding.code for finding in result.findings}
     assert "arrange.needs_more_plates" not in codes
-    assert "arrange.out_of_build_volume" in codes, "der Abstand ragt hinaus, und das steht da"
+    assert result.plates == [0, 1]
+    assert "arrange.out_of_build_volume" not in codes, "es liegt ganz auf dem Bett"
+    assert "arrange.narrow_margin" in codes, "der Abstand fehlt, und das steht da"
+
+
+def test_a_part_that_fits_only_without_the_margin_lies_in_the_middle(profile: Profile) -> None:
+    """RM-229: Passt ein Teil nur mit schmalerem Rand, liegt es mittig auf dem Bett.
+
+    Gemessen in der Durchsicht 0.5.0 und wieder in 0.5.1: ein Quader, 4 mm
+    schmaler als das Bett, bei 5 mm Abstand — gelegt an die Packecke, also
+    auf der einen Seite 5 mm drin und auf der anderen 1 mm über der Kante.
+    Mittig hat er auf jeder Seite 2 mm, und jeder Slicer nimmt ihn so an.
+    """
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, bed_exclusions=())
+    )
+    width, depth, _height = profile.printer.build_volume
+    body = trimesh.creation.box(extents=(width - 4.0, depth - 4.0, 10.0))
+    body.apply_translation((30.0, -20.0, 5.0))
+
+    result = arrange_on_bed([MeshData.of(body)], profile, spacing=5.0, plates=1)
+
+    placed = result.meshes[0].bounds
+    assert placed.minimum[0] == pytest.approx(-width / 2.0 + 2.0)
+    assert placed.maximum[0] == pytest.approx(width / 2.0 - 2.0)
+    assert placed.minimum[1] == pytest.approx(-depth / 2.0 + 2.0)
+    assert placed.maximum[1] == pytest.approx(depth / 2.0 - 2.0)
+    said = [finding for finding in result.findings if finding.code == "arrange.narrow_margin"]
+    assert [finding.severity for finding in said] == ["info"]
+    assert said[0].values["margin"] == pytest.approx(2.0)
+    assert "arrange.out_of_build_volume" not in {finding.code for finding in result.findings}
+
+
+def test_a_part_wider_than_the_bed_still_says_so(profile: Profile) -> None:
+    """Der Gegenfall: Was auch ohne Rand nicht passt, bleibt ein Bauraumbefund."""
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, bed_exclusions=())
+    )
+    width, depth, _height = profile.printer.build_volume
+    body = trimesh.creation.box(extents=(width + 4.0, depth - 40.0, 10.0))
+    body.apply_translation((0.0, 0.0, 5.0))
+
+    result = arrange_on_bed([MeshData.of(body)], profile, spacing=5.0, plates=1)
+
+    codes = {finding.code for finding in result.findings}
+    assert "arrange.out_of_build_volume" in codes
+    assert "arrange.narrow_margin" not in codes
 
 
 def test_crowding_still_asks_for_another_plate(profile: Profile) -> None:
