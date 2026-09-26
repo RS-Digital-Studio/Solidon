@@ -6136,6 +6136,96 @@ def test_a_complete_cavity_chain_is_nested_with_one_topology_pass(
         tree.deleteLater()
 
 
+def test_a_part_with_one_row_carries_its_own_name(qt_app: QApplication) -> None:
+    """Ein Baustein mit einer einzigen Zeile heißt im Baum wie im Verlauf.
+
+    Das Dach über einer einzigen Zeile entfällt (Befund Robert, 09.09.2026) —
+    und mit ihm verschwand der Name des Bausteins: Eine eingesetzte
+    Magnettasche stand im Baum als „Sackbohrung 1", im Verlauf und rechts im
+    Fenster als „Magnettasche" (Kundenprüfung 0.5.1, Weg c, am exakten
+    Quader). Die Zeile trägt seitdem den Namen des Dachs; was sie geometrisch
+    ist, sagt ihre Kurzhilfe, und die Kennung des Merkmals bleibt.
+
+    Die Gegenprobe steht am selben Körper: Ein Baustein mit zwei Zeilen
+    behält sein Dach, und seine Zeilen behalten die Namen ihrer Merkmale.
+    Gebaut wird die Szene von Hand, damit die Zahl der Zeilen an keiner
+    Erkennung hängt.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.registry import REGISTRY
+    from app.core.scene import EvaluationResult, History, OperationDraft
+    from app.core.scene.project import new_project
+    from app.core.types import Feature, Scene, SceneObject
+    from app.ui.labels import feature_name
+    from app.ui.panels import ObjectTree
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_box", params={"height": 10.0})])
+    history.apply(
+        "Magnettasche",
+        [OperationDraft(op="insert_magnet_pocket", inputs=("obj_1",), params={"z": 10.0})],
+    )
+    history.apply(
+        "Wandhalter",
+        [OperationDraft(op="insert_wall_mount", inputs=("obj_1",), params={"z": 10.0})],
+    )
+    pocket_step, mount_step = (entry.id for entry in project.document.ops[1:])
+
+    def made(name: str, kind: str, step: int, **params: Any) -> Feature:
+        return Feature(id=name, kind=kind, provenance="generated", params=params, created_by=step)
+
+    pocket = made(
+        "magnet_pocket_pocket_1",
+        "hole",
+        pocket_step,
+        diameter=8.25,
+        through=False,
+        centre=(0.0, 0.0, 8.5),
+        axis=(0.0, 0.0, 1.0),
+    )
+    plate = made("wall_mount_plate_1", "face", mount_step, normal=(0.0, 1.0, 0.0), area=750.0)
+    bore = made(
+        "wall_mount_bore_1",
+        "hole",
+        mount_step,
+        diameter=4.5,
+        through=True,
+        centre=(10.0, 5.0, 20.0),
+        axis=(0.0, 1.0, 0.0),
+    )
+    features = {feature.id: feature for feature in (pocket, plate, bore)}
+    box = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 10.0)))
+    entry = SceneObject(id="obj_1", name="Quader", mesh=box, features=features)
+    tree = ObjectTree()
+    try:
+        tree.show_scene(EvaluationResult(scene=Scene(objects={"obj_1": entry})), project.document)
+
+        root = tree.tree.topLevelItem(0)
+        row = _feature_row(root, pocket.id)
+        assert row is not None, "die Magnettasche steht gar nicht im Baum"
+        assert row.parent() is root, "ein Dach über einer einzigen Zeile ist keins"
+        title = str(REGISTRY.get("insert_magnet_pocket").title)
+        assert row.text(0) == title, f"im Baum „{row.text(0)}“, im Verlauf „{title}“"
+        assert row.data(1, Qt.ItemDataRole.UserRole) == pocket.id, "die Kennung bleibt"
+        assert feature_name(pocket.id, pocket) in row.toolTip(0), (
+            "was die Zeile geometrisch ist, sagt ihre Kurzhilfe"
+        )
+
+        mount_row = _feature_row(root, bore.id)
+        assert mount_row is not None
+        roof = mount_row.parent()
+        assert roof is not root, "zwei Zeilen behalten ihr Dach"
+        assert roof.text(0) == str(REGISTRY.get("insert_wall_mount").title)
+        assert mount_row.text(0) == feature_name(bore.id, bore), (
+            "unter dem Dach heißt jede Zeile wie ihr Merkmal"
+        )
+    finally:
+        tree.deleteLater()
+
+
 def _feature_row(item: Any, feature_id: str) -> Any:
     """Die Zeile eines Merkmals, gleich wie tief sie hängt."""
     for index in range(item.childCount()):

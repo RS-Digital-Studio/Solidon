@@ -2148,7 +2148,12 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
   angeklickt meinte sie den ganzen Körper, und im Auswahlfenster standen alle
   Körperoperationen. Der Weg zum Schritt geht dabei nicht verloren: Er steht in
   `Feature.created_by`, und Doppelklick wie „Diesen Schritt ändern" lesen ihn
-  von dort, wenn `_STEP_ROLE` fehlt.
+  von dort, wenn `_STEP_ROLE` fehlt. **Und die Zeile übernimmt den Namen des
+  Dachs**: Sie steht dann für den Baustein, ein Klick öffnet ihn rechts, und
+  der Verlauf nennt ihn beim selben Titel — als „Sackbohrung 1" hieß eine
+  Magnettasche im Baum anders als überall sonst. Die Art steht in der
+  Kurzhilfe, die Kennung bleibt
+  (`test_a_part_with_one_row_carries_its_own_name`).
 - **Ein zusammenhängender Bohrungshohlraum ist ein vollständiger Ast.**
   Bohrung, kegelige Übergänge und zylindrische Senkungen werden in der
   Reihenfolge von `perceive.relations.cavity_chains` ineinander gehängt; eine

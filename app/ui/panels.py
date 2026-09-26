@@ -2018,12 +2018,22 @@ class ObjectTree(QWidget):
                 # Verloren geht dabei nichts: Der Schritt steht in
                 # ``feature.created_by``, und beide Wege zu ihm — Doppelklick und
                 # „Diesen Schritt ändern" — lesen ihn von dort, wenn die Rolle
-                # fehlt. Auch der Bausteinname bleibt: ``_feature_tip`` nennt die
-                # Herkunft jeder Zeile.
+                # fehlt.
+                #
+                # **Und der Name des Dachs geht auf die Zeile über.** Sie steht
+                # jetzt für den ganzen Baustein: Ein Klick darauf öffnet rechts
+                # den Baustein, und der Verlauf nennt ihn beim selben Titel. Mit
+                # dem Namen des Merkmals hieß eine eingesetzte Magnettasche im
+                # Baum „Sackbohrung 1" und im Verlauf „Magnettasche" — für den
+                # Kunden eine Sache mit zwei Namen (Kundenprüfung 0.5.1, Weg c).
+                # Was die Zeile geometrisch ist, sagt weiter ihre Kurzhilfe
+                # (``_feature_tip``: „Sackbohrung 1 · Ø8,25 mm"), und die Kennung
+                # des Merkmals bleibt, wie sie ist.
                 only = group.takeChild(0) if group.childCount() == 1 else None
                 if only is not None:
                     where = item.indexOfChild(group)
                     item.removeChild(group)
+                    only.setText(0, group.text(0))
                     item.insertChild(where, only)
                     only.setExpanded(True)
                     continue
