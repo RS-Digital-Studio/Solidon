@@ -9894,6 +9894,33 @@ def _cavity_lost_finding(op: str, feature: Feature) -> Finding:
     )
 
 
+def _copy_lost_finding(op: str, copy: Feature) -> Finding:
+    """Eine Kopie, die sich am Ergebnis nicht wiederfindet — beim Verdoppeln und
+    im Muster, an beiden Kernen.
+
+    **Nicht der Satz eines versetzten Merkmals** (Durchsicht 0.5.1, BOHRUNG-04).
+    Hier stand „Die Geometrie stimmt; spätere Schritte … verlieren ihren
+    Bezug" — an einer Kopie, die über die Seite der Lochplatte lief oder
+    ganz in der Luft stand und nichts abtrug. Der Kunde las, alles sei gut,
+    und hatte keine Bohrung. Der häufigste Grund ist die Stelle; die zeigt
+    der Knopf.
+    """
+    centre = copy.params.get("centre")
+    location = vec3_or_none(centre)
+    return Finding(
+        code=f"{op}.feature_lost",
+        severity="warning",
+        message=_(
+            "Die Kopie ist am Ergebnis nicht als eigenes Merkmal zu erkennen — meist liegt sie "
+            "nicht ganz im Teil. Setzen Sie sie an eine andere Stelle."
+        ),
+        feature_ids=(copy.id,),
+        values={"feature": copy.id, "kind": copy.kind},
+        location=location,
+        suggestions=(SHOW_LOCATION, CORRECT_INPUT) if location is not None else (CORRECT_INPUT,),
+    )
+
+
 def _exact_cavity_result(
     ctx: OpContext,
     source: SceneObject,
@@ -10075,7 +10102,7 @@ def _exact_copy_result(
         if len(found) == 1:
             claimed[found[0]] = copy.id
         elif not found:
-            findings.append(_cavity_lost_finding(op, copy))
+            findings.append(_copy_lost_finding(op, copy))
     taken: set[str] = {*source.reserved_feature_ids, *source.features, *copy_ids, *features}
     named: dict[str, Feature] = {}
     for name, entry in features.items():

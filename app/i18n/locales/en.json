@@ -1727,6 +1727,7 @@
   "Die Kontur hat in Montagerichtung einen Hinterschnitt. Drehen Sie die Trennebene oder ändern Sie die Kontur.": "The outline has an undercut in the assembly direction. Rotate the split plane or change the outline.",
   "Die Kontur ist nicht eindeutig geschlossen oder enthält überlappende Ränder. Korrigieren Sie die Zeichnung.": "The outline is not clearly closed or contains overlapping boundaries. Correct the drawing.",
   "Die Kopftiefe muss kleiner als die Gesamttiefe sein, damit eine Rückhaltekante bleibt.": "The head depth must be smaller than the total depth to leave a retaining lip.",
+  "Die Kopie ist am Ergebnis nicht als eigenes Merkmal zu erkennen — meist liegt sie nicht ganz im Teil. Setzen Sie sie an eine andere Stelle.": "The copy cannot be recognised as a feature of its own on the result — usually it does not lie fully inside the part. Place it somewhere else.",
   "Die Kurve läuft danach durch die übrigen Punkte.": "The curve then runs through the remaining points.",
   "Die Körper als STL, 3MF, OBJ, PLY, GLB oder STEP schreiben — mit der Prüfung aus dem Bericht davor.": "Write the bodies as STL, 3MF, OBJ, PLY, GLB or STEP — checked by the report beforehand.",
   "Die Körper berühren sich nicht und liegen weiter auseinander als der Übergang breit ist — sie sind nebeneinander geblieben, nicht verbunden.": "The bodies do not touch and lie further apart than the transition is wide — they stayed side by side rather than joining.",

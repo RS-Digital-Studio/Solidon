@@ -1727,6 +1727,7 @@
   "Die Kontur hat in Montagerichtung einen Hinterschnitt. Drehen Sie die Trennebene oder ändern Sie die Kontur.": "Il contorno presenta un sottosquadro nella direzione di montaggio. Ruotate il piano di separazione o modificate il contorno.",
   "Die Kontur ist nicht eindeutig geschlossen oder enthält überlappende Ränder. Korrigieren Sie die Zeichnung.": "Il contorno non è chiaramente chiuso o contiene bordi sovrapposti. Correggere il disegno.",
   "Die Kopftiefe muss kleiner als die Gesamttiefe sein, damit eine Rückhaltekante bleibt.": "La profondità della testa deve essere inferiore alla profondità totale per lasciare un bordo di ritenuta.",
+  "Die Kopie ist am Ergebnis nicht als eigenes Merkmal zu erkennen — meist liegt sie nicht ganz im Teil. Setzen Sie sie an eine andere Stelle.": "La copia non è riconoscibile come caratteristica a sé nel risultato: di solito non si trova interamente nel pezzo. La collochi in un altro punto.",
   "Die Kurve läuft danach durch die übrigen Punkte.": "Poi la curva passa per i punti rimanenti.",
   "Die Körper als STL, 3MF, OBJ, PLY, GLB oder STEP schreiben — mit der Prüfung aus dem Bericht davor.": "Scrivi i corpi come STL, 3MF, OBJ, PLY, GLB o STEP — con prima la verifica del rapporto.",
   "Die Körper berühren sich nicht und liegen weiter auseinander als der Übergang breit ist — sie sind nebeneinander geblieben, nicht verbunden.": "I corpi non si toccano e distano più di quanto il passaggio sia largo: sono rimasti affiancati, non uniti.",

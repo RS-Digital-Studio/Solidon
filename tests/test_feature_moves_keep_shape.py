@@ -1280,6 +1280,14 @@ def test_a_copy_over_a_side_inside_the_hull_says_so_on_both_kernels(
         source, profile, "duplicate_feature", at_feature=bore.id, x=x, y=y + 9.5, z=z
     )
     assert _warnings(findings) == ["bore.over_the_edge", "duplicate_feature.feature_lost"]
+    # Die Kopie, die es nicht gibt, sagt nicht „Die Geometrie stimmt", sondern
+    # zeigt ihre Stelle (Durchsicht 0.5.1, BOHRUNG-04).
+    from app.core.errors import SHOW_LOCATION
+
+    lost = next(f for f in findings if f.code == "duplicate_feature.feature_lost")
+    assert "Geometrie stimmt" not in str(lost.message)
+    assert lost.location == pytest.approx((x, y + 9.5, z), abs=1e-6)
+    assert SHOW_LOCATION in lost.suggestions
     _moved, findings = _evaluated(
         source, profile, "move_feature", at_feature=bore.id, x=x, y=y + 6.0, z=z
     )
