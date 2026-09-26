@@ -1144,11 +1144,12 @@ bleibt am Original** (Durchsicht 0.5.1). Ab `MARKING_IN_WORKER_FROM` Dreiecken
 entstehen Ecken, Normalen und Kontur in `_MarkingWorker` aus den schlichten
 Feldern des Netzes; gemerkt werden die letzten `MARKING_MEMORY`. Die
 Hohlraumfläche (`cavity_surface_indices`) dagegen **nicht** an der geteilten
-Arbeiterkopie: `features.remembered` merkt je Körperobjekt, einer Kopie fehlen
-alle Flächenfits des Originals (Laptop-Ständer 1 784 statt 74 ms), und unter
-dem Schloss der Kopie warteten die Kernauskünfte des Merkmalfensters — die
-Maße standen Sekunden später. Nur eine Kette ab `CAVITY_IN_WORKER_FROM`
-Dreiecken rechnet im Arbeiter, an einer **eigenen** Kopie.
+Arbeiterkopie: Unter dem Schloss der Kopie warteten die Kernauskünfte des
+Merkmalfensters — die Maße standen Sekunden später. Nur eine Kette ab
+`CAVITY_IN_WORKER_FROM` Dreiecken rechnet im Arbeiter, an einer **eigenen**
+Kopie aus `features.copy_with_answers`: Sie liest die Flächenfits des
+Originals, statt sie neu einzupassen (ohne das: Laptop-Ständer 1 784 statt
+74 ms, Senkplatte 858 statt 207 ms).
 
 ### Der Schattenwurf hält seinen Aktor und fällt im Arbeiter (22.09.2026)
 

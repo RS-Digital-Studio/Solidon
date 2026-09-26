@@ -2621,22 +2621,186 @@ def test_the_support_cache_lets_go_of_a_dead_body() -> None:
     body = mesh.raw
     key = id(body)
     detect(mesh)
+    memory = module._MEMORIES[key]
+    tokens = {memory.token, memory.lineage.token}
     remembered = {
-        name: sum(1 for entry in answers if entry[0] == key)
+        name: sum(1 for entry in answers if entry[0] in tokens)
         for name, answers in module._SUPPORT_CACHE.items()
     }
     assert sum(remembered.values()) > 0, "die Vorbedingung: der Körper hat Antworten hinterlassen"
-    assert key in module._MEMORIES and module._MEMORIES[key].answers
+    assert memory.answers or memory.lineage.answers
     assert module._DIGESTS, "und Abdrücke seiner Fleckenlisten"
 
-    del mesh, body
+    del mesh, body, memory
     gc.collect()
 
     assert key not in module._MEMORIES, "der Merker des toten Körpers ist weg"
     assert not [
-        entry for answers in module._SUPPORT_CACHE.values() for entry in answers if entry[0] == key
+        entry
+        for answers in module._SUPPORT_CACHE.values()
+        for entry in answers
+        if entry[0] in tokens
     ], "und keine seiner Antworten steht mehr im Stützcache"
     assert not module._DIGESTS, "auch die Abdrücke seiner Listen sind fort"
+
+
+def test_a_worker_copy_answers_from_the_memory_of_its_original(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Arbeiterkopie passt nichts neu ein, was ihr Original schon kennt.
+
+    **Gemessen in der Durchsicht 0.5.1:** Die Hohlraumfläche einer Bohrung am
+    Laptop-Ständer (173 592 Dreiecke) kostete an der Arbeiterkopie 1,1 s, am
+    Original 0,07 s — die Merker galten je Körperobjekt, und die Kopie
+    passte Kegel, Kugeln und Ringe neu ein — für die Frage nach den großen
+    Facetten des ganzen Körpers. ``copy_with_answers`` stellt die
+    Kopie in die Abstammung des Originals. Der Kontrollfall ist die Kopie,
+    wie ``for_a_worker`` sie vorher machte: Sie muss neu einpassen, sonst
+    prüfte der Test nichts. Netze und Suchbäume rechnet jede Kopie selbst.
+    """
+    from app.core.geom.prepare import surface_index_of
+    from app.core.perceive import features as module
+    from app.core.perceive import relations
+    from app.core.types import is_a_cavity
+
+    forget_cache()
+    mesh = plate("plate_countersunk.stl")
+    found = detect(mesh)
+    chain = [f for f in found.values() if f.kind in {"hole", "cone"} and is_a_cavity(f)]
+    assert len(chain) >= 2, "ohne Kette prüft der Test nichts"
+    fits = 0
+    for name in (
+        "_large_facet_faces_read",
+        "_facet_verdicts_read",
+        "_fit_cone_read",
+        "_fit_sphere_read",
+        "_fit_torus_read",
+        "_fit_cylinder_read",
+    ):
+        real = getattr(module, name)
+
+        def counted(*args: Any, _real: Any = real, **rest: Any) -> Any:
+            nonlocal fits
+            fits += 1
+            return _real(*args, **rest)
+
+        monkeypatch.setattr(module, name, counted)
+
+    plain = mesh.replacing(mesh.raw.copy(include_cache=True))
+    expected = relations.cavity_surface_indices(plain, chain)
+    assert expected and fits > 0, "die Vorbedingung: eine Kopie ohne Abstammung liest neu"
+
+    fits = 0
+    copy = mesh.replacing(module.copy_with_answers(mesh.raw))
+    assert copy.raw is not mesh.raw
+    assert relations.cavity_surface_indices(copy, chain) == expected
+    assert fits == 0, "die Kopie liest die Antworten ihres Originals"
+
+    reads = 0
+    real_read = relations._cavity_surface_indices_read
+
+    def counted_read(*args: Any, **rest: Any) -> Any:
+        nonlocal reads
+        reads += 1
+        return real_read(*args, **rest)
+
+    monkeypatch.setattr(relations, "_cavity_surface_indices_read", counted_read)
+    assert relations.cavity_surface_indices(mesh, chain) == expected
+    assert reads == 0, "und das Original liest, was die Kopie gerechnet hat"
+
+    own = surface_index_of(copy)
+    assert own is not surface_index_of(mesh), "ein Suchbaum bleibt am eigenen Körper"
+    assert own.body is copy.raw
+
+
+def test_the_shared_answers_live_as_long_as_one_of_the_family() -> None:
+    """Geteilte Antworten gehen mit dem letzten Körper ihrer Abstammung — nicht früher.
+
+    Die Arbeiterkopie überlebt ihr Original, solange ein Arbeiter an ihr
+    rechnet; bis dahin antwortet sie weiter aus dem gemeinsamen Merker. Stirbt
+    auch sie, ist nichts mehr davon übrig — auch nicht die Abstammung einer
+    verschweißten Lesung.
+    """
+    import gc
+
+    from app.core.perceive import features as module
+
+    forget_cache()
+    loose = trimesh.creation.box(extents=(20.0, 30.0, 40.0))
+    loose = trimesh.Trimesh(
+        vertices=loose.vertices[loose.faces].reshape(-1, 3),
+        faces=np.arange(len(loose.faces) * 3).reshape(-1, 3),
+        process=False,
+    )
+    original = MeshData.of(loose)
+    copy = MeshData.of(module.copy_with_answers(original.raw))
+    patch = [0, 1, 2]
+    assert module.remembered("fit_cone", original.raw, patch, lambda: "Original") == "Original"
+    assert module.remembered("fit_cone", copy.raw, list(patch), lambda: "neu") == "Original"
+    assert module.remembered("one_body", copy.raw, (), lambda: "eigene") == "eigene", (
+        "eine gebundene Antwort gilt nur für ihren Körper"
+    )
+
+    # Die verschweißte Lesung der Kopie ist ein neuer Körper — und teilt die
+    # Antworten der verschweißten Lesung des Originals.
+    forget_cache()
+    welded = module._one_body(original)
+    twin = module._one_body(copy)
+    assert welded is not original and twin is not copy and twin is not welded
+    assert module.remembered("fit_sphere", welded.raw, patch, lambda: "geschweißt") == "geschweißt"
+    assert module.remembered("fit_sphere", twin.raw, patch, lambda: "neu") == "geschweißt"
+    assert module._DERIVED_LINEAGES, "die Abstammung der Lesungen steht"
+
+    del original, loose, welded
+    gc.collect()
+    gc.collect()
+    assert module.remembered("fit_sphere", twin.raw, patch, lambda: "neu") == "geschweißt", (
+        "die Kopie überlebt ihr Original und antwortet weiter"
+    )
+    with module._MEMORY_LOCK:
+        tokens = {
+            module._memory_of(copy.raw).lineage.token,
+            module._memory_of(twin.raw).lineage.token,
+        }
+
+    # Die verschweißte Lesung hängt als gebundene Antwort an ihrer Kopie und
+    # in trimesh-Zyklen: Erst der Abschied der Kopie gibt sie frei, erst die
+    # nächste Bereinigung räumt sie ab.
+    del copy, twin
+    gc.collect()
+    gc.collect()
+    assert not [
+        entry
+        for answers in module._SUPPORT_CACHE.values()
+        for entry in answers
+        if entry[0] in tokens
+    ], "mit dem letzten Körper gehen die geteilten Antworten"
+    assert not module._DERIVED_LINEAGES, "und die Abstammung der verschweißten Lesungen"
+
+
+def test_every_remembered_question_is_either_shared_or_bound() -> None:
+    """Jede gemerkte Frage steht in genau einer der beiden Mengen.
+
+    Eine Frage ohne Eintrag gilt als gebunden (``BODY_BOUND_ANSWERS``) — das
+    ist sicher, aber die Arbeiterkopie rechnet sie dann neu. Wer eine Frage
+    teilt, prüft, dass ihre Antwort nichts trägt, was sich beim Lesen füllt:
+    kein Netz, keinen Suchbaum, keine vorbereitete Fläche.
+    """
+    from app.core.perceive import features as module
+
+    root = Path(__file__).resolve().parents[1] / "app"
+    asked = {
+        name
+        for path in root.rglob("*.py")
+        for name in re.findall(r"\bremembered\(\s*\"(\w+)\"", path.read_text(encoding="utf-8"))
+    }
+    assert len(asked) >= 25, "die Suche findet die gemerkten Fragen"
+    assert not module.SHARED_ANSWERS & module.BODY_BOUND_ANSWERS
+    assert module.DERIVED_BODY_ANSWERS <= module.BODY_BOUND_ANSWERS
+    assert asked <= module.SHARED_ANSWERS | module.BODY_BOUND_ANSWERS, sorted(
+        asked - module.SHARED_ANSWERS - module.BODY_BOUND_ANSWERS
+    )
+    assert asked >= module.SHARED_ANSWERS | module.BODY_BOUND_ANSWERS, "keine Leichen"
 
 
 def test_a_reader_in_one_thread_keeps_its_key_while_a_writer_evicts_in_another(

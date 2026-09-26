@@ -81,7 +81,7 @@ from app.core.geom.transform import (
     snap_to_step,
 )
 from app.core.log import get_logger
-from app.core.perceive.features import CURVATURE_LIMIT, EPS_ANGLE
+from app.core.perceive.features import CURVATURE_LIMIT, EPS_ANGLE, copy_with_answers
 from app.core.perceive.maps import AnalysisMap
 from app.core.perceive.relations import cavity_chain_at, cavity_surface_indices
 from app.core.scene import EdgeTarget, EvaluationResult
@@ -11230,17 +11230,16 @@ class Viewport(QWidget):
         noch die Anhebung dazu.
 
         **Die Hohlraumfläche einer Bohrungskette entsteht meist hier, am
-        Original** (:func:`cavity_surface_indices`). An einer Kopie fehlen die
-        gemerkten Flächenfits des Originals — sie gelten je Körperobjekt: am
-        Laptop-Ständer 1784 statt 74 ms, an der Senkplatte 858 statt 207 ms
-        (gemessen unter Last). An der **geteilten** Arbeiterkopie warteten
-        unter ihrem Schloss die Kernauskünfte des Merkmalfensters so lange, und
-        die Maße im Bild standen 1 bis 4 s später. Nur eine Kette ab
-        :data:`CAVITY_IN_WORKER_FROM` Dreiecken — dort wächst die Rechnung mit
-        der Kette und nicht mit den Fits — rechnet im Arbeiter, an einer
-        **eigenen** Kopie ohne Schloss: an der Senkplatte längste Pause im
-        Hauptfaden 228 → 107 ms, die Maße nach 1,1 s wie vorher, die Markierung
-        150 ms danach.
+        Original** (:func:`cavity_surface_indices`). An der **geteilten**
+        Arbeiterkopie warteten unter ihrem Schloss die Kernauskünfte des
+        Merkmalfensters, und die Maße im Bild standen 1 bis 4 s später. Nur
+        eine Kette ab :data:`CAVITY_IN_WORKER_FROM` Dreiecken — dort wächst die
+        Rechnung mit der Kette — rechnet im Arbeiter, an einer **eigenen**
+        Kopie ohne Schloss: an der Senkplatte längste Pause im Hauptfaden
+        228 → 107 ms, die Maße nach 1,1 s wie vorher, die Markierung 150 ms
+        danach. Die Kopie antwortet aus dem Merker des Originals
+        (``features.copy_with_answers``): Ohne ihn passte sie jeden Flächenfit
+        neu ein, an der Senkplatte 858 statt 207 ms.
         """
         import numpy as np
 
@@ -11265,7 +11264,7 @@ class Viewport(QWidget):
         cavity: Callable[[], Any] | None = None
         if features and all(feature.kind in ("hole", "cone") for feature in features):
             if large and sum(len(f.face_indices) for f in features) >= CAVITY_IN_WORKER_FROM:
-                private = mesh.replacing(raw.copy(include_cache=True))
+                private = mesh.replacing(copy_with_answers(raw))
                 cavity = lambda: cavity_surface_indices(private, features)  # noqa: E731
             else:
                 blended = cavity_surface_indices(mesh, features)

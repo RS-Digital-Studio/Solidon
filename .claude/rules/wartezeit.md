@@ -1171,6 +1171,15 @@ Zwei Sätze, die dazugehören:
   Felder darin sind schreibgeschützt. Die Kernauskünfte einer Bohrung an der
   dichten Platte kosteten an der leeren Kopie 529 ms, an der mitgenommenen
   264 — die Kopie selbst beide Male 3 ms.
+* **Und mit den Antworten der Erkennung** (Durchsicht 0.5.1). Eine Kopie für
+  einen Nebenfaden entsteht mit `features.copy_with_answers`, nie mit
+  `raw.copy(include_cache=True)` allein: Die Merker der Erkennung galten je
+  Körperobjekt, und die frische Kopie passte jeden Flächenfit neu ein — die
+  Hohlraumfläche einer Bohrung am Laptop-Ständer 1,1 s statt 0,07 s. Geteilt
+  werden nur Antworten aus `SHARED_ANSWERS` (Zahlen, Felder, Mengen);
+  Netze, Suchbäume und vorbereitete Flächen (`BODY_BOUND_ANSWERS`) baut jede
+  Kopie für sich, sie gehen nie über Fäden. Eine Kopie, die umgebaut wird
+  (`repair`), nimmt `copy()` und erbt nichts.
 * **Was das Merkmalfenster den Kern fragt, fragt an einem großen Körper der
   Arbeiter** (RM-232). Ab `ANSWERS_IN_WORKER_FROM` Dreiecken laufen
   Hohlraumkette, Handlungen und Gleichartige in `_FeatureAnswersWorker` an

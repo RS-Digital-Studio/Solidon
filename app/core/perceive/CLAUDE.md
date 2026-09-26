@@ -1039,6 +1039,20 @@ Verweis bleibt je Merkmal eine Warnung
   das Merkmalfenster im Hauptfaden dieselben Fragen stellt wie der Arbeiter
   — `get` und `move_to_end` sind zwei Schritte, und dazwischen verdrängte
   der andere Faden den Schlüssel (21.09.2026).
+  **Eine Kopie antwortet aus dem Merker ihres Originals**
+  (`copy_with_answers`, `_Lineage`, Durchsicht 0.5.1): Schlüssel sind Marken
+  statt Adressen, und eine Kopie samt trimesh-Cache gehört zur Abstammung
+  ihres Originals. Antworten aus `SHARED_ANSWERS` (Fits, Nachweise, Mengen,
+  Felder, Hohlraumflächen) gelten für die ganze Abstammung und gehen mit
+  ihrem letzten Körper; `BODY_BOUND_ANSWERS` (verschweißte Lesungen,
+  Oberflächenindex, Flächenausschnitt, Trägerfläche — Netze, Suchbäume,
+  vorbereitete Flächen) bleiben am eigenen Körper, denn die Kopie gibt es
+  gerade, damit ein Nebenfaden nichts davon mit dem Hauptfaden teilt. Eine
+  verschweißte Lesung der Kopie teilt die Antworten der Lesung des Originals
+  (`DERIVED_BODY_ANSWERS`). Geteilt wird über die Abstammung und nicht über
+  einen Inhaltsabdruck: der kostete 6,7 ms je Körper mit 173 592 Dreiecken und
+  hielte gleiche Netze verschiedener Herkunft für eines. Gemessen am
+  Laptop-Ständer: Hohlraumfläche an der frischen Kopie 1,1 s → 65 ms.
   Der Fächer einer Ecke wird über die Bogenzahl aus dem Nachbarindex gezählt
   (`_fan_arcs`: Dreiecke minus innere Nähte, ein offener Bogen zählt eins,
   ein geschlossener Ring an einem wasserdichten Netz null); die zerrissenen

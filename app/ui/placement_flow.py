@@ -52,6 +52,7 @@ from app.core.geom.transform import snap_to_marks
 from app.core.knowledge.parts.ops import depth_field, normal_fields, placement_fields
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
+from app.core.perceive.features import copy_with_answers
 from app.core.registry import OperationSpec
 from app.core.scene import placement
 from app.core.sketch.profile import strictly_crossing
@@ -501,6 +502,13 @@ def for_a_worker(mesh: Any) -> Any:
     Kernauskünfte des Merkmalfensters an der leeren Kopie 529 ms, an der
     mitgenommenen 264, und die Kopie selbst beide Male 3 ms.
 
+    **Und die Antworten der Erkennung dazu** (``features.copy_with_answers``,
+    Durchsicht 0.5.1). Deren Merker galten je Körperobjekt, und die Kopie
+    passte jeden Kegel und jede Kugel neu ein, die das Original längst kannte:
+    die Hohlraumfläche einer Bohrung am Laptop-Ständer 1,1 s an der frischen
+    Kopie, 0,07 s am Original. Geteilt werden nur Zahlen und Felder; Netze und
+    Suchbäume baut die Kopie für sich.
+
     **Eine Kopie je Netz, nicht je Aufgabe** (gemessen am 25.09.2026). Die
     Kernauskünfte des Merkmalfensters an einer zweiten Kopie neben der
     Trägerfläche an dieser zu rechnen, gewann in der Kernsonde 160 ms und
@@ -519,7 +527,7 @@ def for_a_worker(mesh: Any) -> Any:
         if held is not None and held[0]() is raw:
             _worker_copies.move_to_end(key)
             return held[1]
-    copy = source.replacing(raw.copy(include_cache=True))
+    copy = source.replacing(copy_with_answers(raw))
     with _worker_copies_lock:
         _worker_copies[key] = (weakref.ref(raw, _forget_dead_copies), copy, threading.Lock())
         while len(_worker_copies) > WORKER_COPIES_KEPT:

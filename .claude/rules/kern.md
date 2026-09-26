@@ -173,6 +173,20 @@ Die allgemeine Form, weil dieselbe Falle zweimal an verschiedenen Orten stand:
 **Eine Regel über eine Bibliothek gilt der Bibliothek, nicht dem Verzeichnis,
 in dem sie zuerst auffiel.**
 
+## Eine neue gemerkte Frage wird geteilt oder gebunden — ausdrücklich
+
+`features.remembered` legt jede Antwort unter ihrer Frage ab. Eine Kopie für
+einen Nebenfaden (`copy_with_answers`) liest die Antworten ihres Originals —
+aber nur die aus `SHARED_ANSWERS`. Wer eine neue Frage merkt, trägt ihren
+Namen in genau eine der beiden Mengen ein: geteilt, wenn die Antwort eine Zahl,
+ein schreibgeschütztes Feld, eine Menge oder ein Fit ist; gebunden
+(`BODY_BOUND_ANSWERS`), wenn sie beim Lesen etwas nachbaut — ein Netz mit
+trägem Cache, einen Suchbaum, eine vorbereitete GEOS-Fläche, ein
+`cached_property`. Ohne Eintrag gilt sie als gebunden und ist sicher, nur
+langsam an der Kopie; `test_every_remembered_question_is_either_shared_or_bound`
+verlangt den Eintrag. Eine Antwort, die selbst ein Körper ist, steht zusätzlich
+in `DERIVED_BODY_ANSWERS`.
+
 ## Fehler
 
 Jede Ausnahme erbt von `AppError` und trägt `suggestions: list[Action]` —

@@ -1165,6 +1165,7 @@ def forget_cache() -> None:
         for memory in _MEMORIES.values():
             memory.answers.clear()
             memory.digests.clear()
+            memory.lineage.answers.clear()
 
 
 def _one_body(mesh: MeshData) -> MeshData:
@@ -6322,11 +6323,25 @@ def _counted_at(values: np.ndarray, used: np.ndarray, vertex_count: int) -> np.n
 #: Die zuletzt gelesenen Stützpunkte je Netz und Fleck (:func:`_surface_support`).
 #: Acht Fragen an denselben Fleck — Kugel, Kegel, Zylinder, große Facetten —
 #: lasen die Ikosphäre mit 327 680 Dreiecken achtmal, je über eine Sekunde
-#: (gemessen am 21.09.2026). Der Schlüssel ist die Identität des Netzes und
-#: der Abdruck der Flächenliste; die Geometrie dahinter ist unveränderlich
+#: (gemessen am 21.09.2026). Der Schlüssel ist die Marke des Netzes und der
+#: Abdruck der Flächenliste; die Geometrie dahinter ist unveränderlich
 #: (Regel 3). **Nicht der Datenhash des Netzes:** trimesh rechnet ihn bei
 #: jeder Frage neu, 0,4 ms an 200 000 Dreiecken — an der Freiform mit 9 589
 #: Fragen waren das vier Sekunden, mehr als die Lesungen selbst.
+#:
+#: **Und eine Kopie antwortet aus dem Merker ihres Originals**
+#: (:func:`copy_with_answers`, :class:`_Lineage`, Durchsicht 0.5.1). Die
+#: Arbeiterkopie der Platzierung und des Merkmalfensters hatte leere Merker:
+#: Die Hohlraumfläche einer Bohrung am Laptop-Ständer kostete an ihr 1,1 s,
+#: am Original 0,07 s — die Kopie passte Kegel, Kugeln, Zylinder und Ringe
+#: neu ein, die das Original längst kannte. Geteilt wird über die
+#: **Abstammung** und nicht über einen Inhaltsabdruck: Der kostete an
+#: denselben 173 592 Dreiecken 6,7 ms je Körper, auch an jeder verschweißten
+#: Lesung, und hielte zwei gleiche Netze verschiedener Herkunft für eines,
+#: obwohl trimesh die Flächennormalen aus der Datei behalten kann. Eine Kopie
+#: ist dagegen Bit für Bit ihr Original. Geteilt werden nur die Antworten aus
+#: :data:`SHARED_ANSWERS`; was ein Netz oder einen Suchbaum trägt, bleibt am
+#: eigenen Körper (:data:`BODY_BOUND_ANSWERS`).
 #:
 #: **Und die Antworten eines Körpers gehen mit ihm** (:class:`_BodyMemory`).
 #: Die erste Fassung hielt sie, bis die Grenze je Frage sie verdrängte — und
@@ -6376,6 +6391,62 @@ WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
     }
 )
 
+#: Fragen, deren Antwort an genau ihren Körper gebunden bleibt — auch gegen
+#: seine Kopie (:func:`copy_with_answers`). Sie tragen ein Netz, einen
+#: Suchbaum oder eine vorbereitete GEOS-Fläche, und deren träge Merker füllen
+#: sich beim Lesen, ohne Schloss: die verschweißte Lesung (``one_body``,
+#: ``merged_copy``), der Oberflächenindex mit seinem Körper, der
+#: Flächenausschnitt mit seinem ``cKDTree`` (``relations._SurfacePatch``) und
+#: die Trägerfläche der Platzierung. Die Arbeiterkopie gibt es gerade, damit
+#: der Nebenfaden nichts davon mit dem Hauptfaden teilt
+#: (``placement_flow.for_a_worker``). **Eine Frage, die in keiner der beiden
+#: Mengen steht, gilt als gebunden** — das Teilen ist die Ausnahme, die
+#: jemand geprüft hat; ``test_features`` hält beide Mengen vollständig.
+BODY_BOUND_ANSWERS: Final[frozenset[str]] = frozenset(
+    {"one_body", "merged_copy", "surface_index", "surface_patch", "prepared_surface"}
+)
+
+#: Die gebundenen Antworten, die selbst ein Körper sind. Derselbe Eingang
+#: ergibt denselben Körper: Die verschweißte Lesung der Kopie teilt deshalb
+#: die Antworten mit der verschweißten Lesung des Originals — sonst fingen
+#: an einer ungeschweißten STL alle Fits der Kopie wieder von vorn an.
+DERIVED_BODY_ANSWERS: Final[frozenset[str]] = frozenset({"one_body", "merged_copy"})
+
+#: Fragen, deren Antwort Original und Kopie teilen: Fits, Nachweise, Zahlen,
+#: Mengen und schreibgeschützte Felder — nichts, was beim Lesen etwas
+#: nachbaut. Dieselben Antworten lesen Hauptfaden und Auswertung schon heute
+#: am Original gemeinsam.
+SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
+    {
+        "a_sliver",
+        "_sphere_is_recognisable",
+        "_torus_is_recognisable",
+        "_cone_is_recognisable",
+        "curved_faces",
+        "facets_standing_apart",
+        "large_facet_faces",
+        "facet_verdicts",
+        "planar_facet",
+        "planar_mask",
+        "nearly_flat",
+        "fit_cylinder",
+        "fit_cone",
+        "fit_sphere",
+        "fit_torus",
+        "support",
+        "surface_owners",
+        "face_radii",
+        "curvature_jumps",
+        "connected_patches",
+        "facet_of_face",
+        "facets_by_area",
+        "cavity_surface",
+        "same_surface_patch",
+        "hole_is_clear",
+        "has_own_body",
+    }
+)
+
 
 #: Die zuletzt gebildeten Abdrücke je Listenobjekt — mit der Liste selbst als
 #: Anker, damit ihre Identität nicht an eine andere Liste fallen kann.
@@ -6383,20 +6454,57 @@ _DIGESTS: OrderedDict[int, tuple[Sequence[int], bytes]] = OrderedDict()
 DIGEST_LIMIT = 32
 
 
+#: Die Marken der Merker: je Körper und je Abstammung eine, nie zweimal
+#: vergeben. Eine Adresse geht nach dem Tod eines Körpers an den nächsten,
+#: eine Marke nicht.
+_TOKENS = itertools.count(1)
+
+
+class _Lineage:
+    """Ein Körper und seine Kopien — die Antworten, die sie teilen.
+
+    ``token`` steht im Schlüssel jeder geteilten Antwort
+    (:data:`SHARED_ANSWERS`), ``answers`` nennt sie wie
+    :attr:`_BodyMemory.answers`. ``members`` zählt die lebenden Körper
+    dieser Abstammung; stirbt der letzte, gehen die Antworten mit ihm.
+    ``origin`` ist der Schlüssel in :data:`_DERIVED_LINEAGES`, wenn die
+    Körper aus einer gebundenen Antwort stammen (:data:`DERIVED_BODY_ANSWERS`).
+    """
+
+    __slots__ = ("answers", "members", "origin", "token")
+
+    def __init__(self, origin: tuple[Any, ...] | None = None) -> None:
+        self.token = next(_TOKENS)
+        self.origin = origin
+        self.members = 0
+        self.answers: set[tuple[str, tuple[int, bytes, Any, int]]] = set()
+
+
+#: Je abgeleiteter Abstammung — Elternabstammung, Frage, Schlüssel — die
+#: gemeinsame Abstammung ihrer Körper: die verschweißte Lesung des Originals
+#: und die jeder Kopie. Der Eintrag geht, wenn der letzte dieser Körper stirbt.
+_DERIVED_LINEAGES: dict[tuple[Any, ...], _Lineage] = {}
+
+
 class _BodyMemory:
     """Was ein Körper in den Merkern hinterlassen hat — damit es mit ihm geht.
 
-    ``answers`` nennt je gemerkter Antwort die Frage und den Schlüssel in
+    ``answers`` nennt je gemerkter gebundener Antwort
+    (:data:`BODY_BOUND_ANSWERS`) die Frage und den Schlüssel in
     :data:`_SUPPORT_CACHE`, ``digests`` die Listenabdrücke in :data:`_DIGESTS`.
     Beides sind Mengen, denn eine verdrängte und neu gerechnete Antwort trägt
-    denselben Schlüssel. Der schwache Verweis sagt, ob hinter der Adresse noch
+    denselben Schlüssel. Die geteilten Antworten führt die Abstammung
+    (``lineage``). Der schwache Verweis sagt, ob hinter der Adresse noch
     derselbe Körper steht.
     """
 
-    __slots__ = ("answers", "digests", "ref")
+    __slots__ = ("answers", "digests", "lineage", "ref", "token")
 
-    def __init__(self, body: trimesh.Trimesh) -> None:
+    def __init__(self, body: trimesh.Trimesh, lineage: _Lineage) -> None:
         self.ref: weakref.ref[Any] = weakref.ref(body)
+        self.token = next(_TOKENS)
+        self.lineage = lineage
+        lineage.members += 1
         self.answers: set[tuple[str, tuple[int, bytes, Any, int]]] = set()
         self.digests: set[int] = set()
 
@@ -6415,16 +6523,18 @@ _MEMORIES: dict[int, _BodyMemory] = {}
 _MEMORY_LOCK = threading.RLock()
 
 
-def _memory_of(body: trimesh.Trimesh) -> _BodyMemory:
+def _memory_of(body: trimesh.Trimesh, lineage: _Lineage | None = None) -> _BodyMemory:
     """Der Merker eines Körpers, beim ersten Mal angelegt — mit dem Abschied im Gepäck.
 
-    Nur mit gehaltenem :data:`_MEMORY_LOCK` aufrufen.
+    Ein neuer Körper beginnt eine eigene Abstammung, außer ``lineage`` nennt
+    die, zu der er gehört (:func:`copy_with_answers`). Nur mit gehaltenem
+    :data:`_MEMORY_LOCK` aufrufen.
     """
     key = id(body)
     memory = _MEMORIES.get(key)
     if memory is not None and memory.ref() is body:
         return memory
-    memory = _BodyMemory(body)
+    memory = _BodyMemory(body, lineage if lineage is not None else _Lineage())
     _MEMORIES[key] = memory
     farewell = weakref.finalize(body, _forget_body, key, memory)
     # Beim Beenden des Prozesses gibt es nichts mehr aufzuräumen — und die
@@ -6436,18 +6546,76 @@ def _memory_of(body: trimesh.Trimesh) -> _BodyMemory:
 
 
 def _forget_body(key: int, memory: _BodyMemory) -> None:
-    """Der Abschied: Die Antworten eines gestorbenen Körpers gehen mit ihm."""
+    """Der Abschied: Die Antworten eines gestorbenen Körpers gehen mit ihm.
+
+    Seine gebundenen sofort, die geteilten mit dem letzten Körper seiner
+    Abstammung — solange eine Kopie lebt, antwortet sie weiter daraus.
+    """
     with _MEMORY_LOCK:
         if _MEMORIES.get(key) is memory:
             del _MEMORIES[key]
-        for name, answer_key in memory.answers:
-            answers = _SUPPORT_CACHE.get(name)
-            if answers is not None:
-                answers.pop(answer_key, None)
+        _drop_answers(memory.answers)
         for digest_key in memory.digests:
             _DIGESTS.pop(digest_key, None)
-        memory.answers.clear()
         memory.digests.clear()
+        lineage = memory.lineage
+        lineage.members -= 1
+        if lineage.members <= 0:
+            _drop_answers(lineage.answers)
+            if lineage.origin is not None and _DERIVED_LINEAGES.get(lineage.origin) is lineage:
+                del _DERIVED_LINEAGES[lineage.origin]
+
+
+def _drop_answers(held: set[tuple[str, tuple[int, bytes, Any, int]]]) -> None:
+    """Die genannten Antworten aus :data:`_SUPPORT_CACHE` nehmen — nur unter dem Schloss."""
+    for name, answer_key in held:
+        answers = _SUPPORT_CACHE.get(name)
+        if answers is not None:
+            answers.pop(answer_key, None)
+    held.clear()
+
+
+def copy_with_answers(body: trimesh.Trimesh) -> trimesh.Trimesh:
+    """Eine eigene Kopie eines Netzes, die aus dem Merker des Originals antwortet.
+
+    Für einen Nebenfaden, der an einem Szenennetz rechnen soll, ohne dessen
+    träge trimesh-Merker mit dem Hauptfaden zu teilen
+    (``placement_flow.for_a_worker``, die Markierung der Ansicht). Kopiert
+    wird samt trimesh-Cache — dieselben Felder, schreibgeschützt. Und die
+    Kopie gehört zur Abstammung des Originals: Fits, Nachweise und
+    Hohlraumflächen, die eines von beiden schon kennt, kennt das andere auch
+    (:data:`SHARED_ANSWERS`). Gemessen an Bohrungen des Laptop-Ständers
+    (173 592 Dreiecke): die Hohlraumfläche an der Kopie 1,1 s ohne, so schnell
+    wie am Original mit. Gebundene Antworten — Netze, Suchbäume — rechnet
+    die Kopie selbst.
+
+    Die Kopie darf danach nicht verändert werden, so wenig wie ihr Original
+    (Regel 3). Wer eine Kopie zum Umbauen braucht, nimmt ``body.copy()``.
+    """
+    copy = body.copy(include_cache=True)
+    with _MEMORY_LOCK:
+        _memory_of(copy, _memory_of(body).lineage)
+    return copy
+
+
+def _derived_from(value: Any, parent: _Lineage, name: str, question: tuple[Any, ...]) -> None:
+    """Einen abgeleiteten Körper in die Abstammung seiner Geschwister stellen.
+
+    Die verschweißte Lesung einer Kopie entsteht aus demselben Eingang wie
+    die des Originals und ist deshalb derselbe Körper. Ein Körper, der schon
+    einen Merker hat, bleibt, wo er ist. Nur unter dem Schloss aufrufen.
+    """
+    body = getattr(value, "raw", value)
+    if not isinstance(body, trimesh.Trimesh):
+        return
+    known = _MEMORIES.get(id(body))
+    if known is not None and known.ref() is body:
+        return
+    origin = (parent.token, name, *question)
+    lineage = _DERIVED_LINEAGES.get(origin)
+    if lineage is None:
+        lineage = _DERIVED_LINEAGES[origin] = _Lineage(origin)
+    _memory_of(body, lineage)
 
 
 def _patch_digest(memory: _BodyMemory, patch: Sequence[int]) -> bytes:
@@ -6495,6 +6663,10 @@ def remembered(
     ``extra`` trägt, was die Frage sonst noch bestimmt, etwa den Fit, den ein
     Nachweis prüft. Gerechnet wird außerhalb des Schlosses; fragen zwei Fäden
     zugleich dasselbe, rechnen beide und legen dieselbe Antwort ab.
+
+    Eine Antwort aus :data:`SHARED_ANSWERS` gilt für die ganze Abstammung
+    des Körpers — Original und Kopien (:func:`copy_with_answers`) —, jede
+    andere nur für ihn selbst.
     """
     # **Ein abgebrochener Auftrag bekommt auch keine gemerkte Antwort.** Der
     # Abbruch gilt dem Auftrag, nicht der Rechnung; wer schon abgebrochen hat,
@@ -6503,9 +6675,16 @@ def remembered(
         check_cancelled()
     with _MEMORY_LOCK:
         memory = _memory_of(body)
+    shared = name in SHARED_ANSWERS
+    owner = memory.lineage if shared else None
     # Das Löserbudget gehört zum Schlüssel: Ein Test setzt es auf eins und
     # fragt danach noch einmal mit dem vollen — zwei Fragen, zwei Antworten.
-    key = (id(body), _patch_digest(memory, patch), extra, ROUND_FIT_EVALUATIONS)
+    key = (
+        memory.token if owner is None else owner.token,
+        _patch_digest(memory, patch),
+        extra,
+        ROUND_FIT_EVALUATIONS,
+    )
     with _MEMORY_LOCK:
         answers = _SUPPORT_CACHE.setdefault(name, OrderedDict())
         if key in answers:
@@ -6515,7 +6694,9 @@ def remembered(
     with _MEMORY_LOCK:
         answers = _SUPPORT_CACHE.setdefault(name, OrderedDict())
         answers[key] = value
-        memory.answers.add((name, key))
+        (memory.answers if owner is None else owner.answers).add((name, key))
+        if name in DERIVED_BODY_ANSWERS:
+            _derived_from(value, memory.lineage, name, key[1:])
         limit = SUPPORT_CACHE_LIMIT if name in WHOLE_BODY_ANSWERS else CACHE_LIMIT_PER_QUESTION
         while len(answers) > limit:
             answers.popitem(last=False)

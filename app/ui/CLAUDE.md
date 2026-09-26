@@ -1335,8 +1335,8 @@ dieselben trägen trimesh-Caches, an denen der Hauptthread währenddessen
 Hüllquader, Dreiecke und Kanten liest. Die Kopie bleibt je Szenennetz über
 den Fluss hinaus, und wer an ihr rechnet, tut es unter ihrem Schloss
 (`on_the_copy`; Regel in `wartezeit.md`). Sie nimmt die trimesh-Merker des
-Originals flach mit (`copy(include_cache=True)`: dieselben schreibgeschützten
-Felder, eigene neue Einträge). Eine Kopie je Netz, nicht je Aufgabe — zwei
+Originals flach mit (`features.copy_with_answers`: dieselben schreibgeschützten
+Felder, eigene neue Einträge, und die geteilten Antworten der Erkennung). Eine Kopie je Netz, nicht je Aufgabe — zwei
 Kopien nebeneinander verloren am Fenster gegen den GIL und die geteilten
 Merker (gemessen, Docstring von `for_a_worker`).
 Auch die Durchsicht der Druckplatte liest die zuletzt aufgebaute Szene und
