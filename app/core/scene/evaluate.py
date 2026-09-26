@@ -3939,6 +3939,14 @@ def _with_features(
         # (23.09.2026).
         generated = getattr(old_feature, "provenance", "detected") == "generated"
         later = needed.get(old_id, ()) if needed is not None else ()
+        # **Wer ein Merkmal entfernt, verweist darauf — und verliert es nicht**
+        # (Durchsicht 0.5.1, BOHRUNG-13 Nachtrag). Die Magnettasche aus dem
+        # Baustein, am Netz entfernt, hieß danach „Ein benanntes Merkmal ist
+        # nach dieser Operation nicht mehr auffindbar": ``referenced`` zählt
+        # den Verweis des entfernenden Schritts selbst. Braucht es danach
+        # niemand mehr, ist das angesagte Entfernen das Ziel, kein Verlust.
+        if old_id in announced_gone and needed is not None and not later:
+            continue
         if (old_id in referenced) if generated or needed is None else (old_id in needed):
             values: dict[str, Any] = {"feature": old_id}
             if later:

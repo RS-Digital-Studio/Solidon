@@ -683,7 +683,11 @@ Kegel geht als B-Spline-Fläche durch STEP und hält dabei die siebte Stelle.
 Körper geschlossen — aus privaten Kopien der Flächen. Geschlossen ist, was
 keine freie Kante hat; das `Closed()`-Flag setzt Sewing nicht, und an einer
 Kuppe stand es auf falsch bei gültigem Körper (20.09.2026). Ein Ring, der in
-keiner Ebene liegt, gibt keinen Körper: dann wird nichts geraten. Was die
+keiner Ebene liegt, gibt keinen Körper: dann wird nichts geraten. Als
+Werkzeug bekommt ein solcher Hohlraumkörper an seinen offenen Mündungen einen
+Kragen (`collared`, das Prisma seines Deckels) — so schneidet
+`geom.prepare_ops._exact_own_cut` ein versetztes Langloch samt Fasen und eine
+Magnettasche samt Haltelippe. Was die
 Erkennung am Kegel nicht nennt — Höhe und schmalen Radius —, liest
 `cone_extent` aus dem Parameterbereich der nativen Fläche (ein Punkt liegt
 bei `Location + v·cos(w)·Achse` mit dem Radius `RefRadius + v·sin(w)`, `w` der

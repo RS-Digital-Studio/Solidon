@@ -327,6 +327,22 @@ def slots_instead_of_half_bores(
         lambda index: _corner_key(mesh.raw, np.asarray(slots[index].face_indices)),
     )
     slots = [slots[index] for index in order]
+    # **Was beide Wege finden, ist ein Langloch** (Durchsicht 0.5.1,
+    # BOHRUNG-05). Ein Mantel kann als Paar von Bögen und zugleich als Mantel
+    # aus einem Stück gelesen werden; an einem entlang seiner Richtung
+    # versetzten Langloch kamen so zwei mit denselben 138 Dreiecken heraus, und
+    # die Auswertung fand für das versetzte keinen eindeutigen Zwilling — im Baum
+    # stand es danach unter neuem Namen. Behalten wird das erste in der
+    # Nummernfolge.
+    distinct: set[frozenset[int]] = set()
+    unique = []
+    for slot in slots:
+        faces = frozenset(int(index) for index in slot.face_indices)
+        if faces in distinct:
+            continue
+        distinct.add(faces)
+        unique.append(slot)
+    slots = unique
 
     covered: set[int] = set()
     for slot in slots:

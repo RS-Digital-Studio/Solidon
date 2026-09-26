@@ -6691,3 +6691,42 @@ def test_a_clean_cavity_is_closed_without_the_slow_winding_repair(monkeypatch) -
     assert len(body.raw.faces) == len(reference.raw.faces)
     indices = cavity_surface_indices(mesh, (hole, *chain))
     assert len(indices) > 0
+
+
+def test_a_ray_along_a_large_mesh_hits_what_the_full_comparison_hits() -> None:
+    """Die Vorauswahl eines Strahls gibt dieselben Treffer mit denselben Bits
+    wie der Vollvergleich (Durchsicht 0.5.1).
+
+    ``prepare.ray_hits_along`` rechnet nur die Dreiecke, deren Schatten quer
+    zum Strahl seinen Weg umschließt — am Gartenschlauchhalter sparte das fast
+    eine Sekunde je Versetzen. Verglichen wird gegen ``mesh.ray_hits`` über
+    alle Dreiecke: eine fein geteilte Kugel und ein Würfel mit Bohrung, Strahlen
+    aus Zufallsrichtungen, durch Ecken und Kanten und mit Mindestweg.
+    """
+    from app.core.geom.mesh import ray_hits
+    from app.core.geom.prepare import _ALONG_ABOVE, ray_hits_along
+
+    sphere = trimesh.creation.icosphere(subdivisions=6, radius=10.0)
+    box_with_hole = boolean(
+        "difference",
+        [
+            MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide().subdivide()),
+            MeshData.of(trimesh.creation.cylinder(radius=3.0, height=30.0, sections=256)),
+        ],
+    ).mesh.raw
+    generator = np.random.default_rng(7)
+    for body in (sphere, box_with_hole.subdivide().subdivide().subdivide()):
+        triangles = np.asarray(body.triangles, dtype=np.float64)
+        assert len(triangles) >= _ALONG_ABOVE, len(triangles)
+        vertices = np.asarray(body.vertices, dtype=np.float64)
+        origins = np.vstack(
+            [generator.random((20, 3)) * 30.0 - 15.0, vertices[:10], [[0.0, 0.0, 0.0]]]
+        )
+        for origin in origins:
+            for _turn in range(4):
+                direction = generator.random(3) - 0.5
+                for travel in (0.0, 1e-6):
+                    full = ray_hits(triangles, origin, direction, minimum_travel=travel)
+                    chosen = ray_hits_along(triangles, origin, direction, minimum_travel=travel)
+                    assert np.array_equal(full[1], chosen[1])
+                    assert np.array_equal(full[0], chosen[0])

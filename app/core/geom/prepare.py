@@ -546,6 +546,65 @@ def mouth_over_the_edge(
     return [_edge_finding(diameter, over)]
 
 
+def ray_hits_along(
+    triangles: np.ndarray,
+    origin: Any,
+    direction: Any,
+    *,
+    minimum_travel: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """:func:`~app.core.geom.mesh.ray_hits` für einen einzelnen Strahl an einem
+    großen Netz — mit denselben Treffern, aber nur gegen die Dreiecke gerechnet,
+    deren Schatten quer zum Strahl seinen Weg umschließt.
+
+    **Ein Strahl gegen alle Dreiecke war die teuerste Zeile beim Versetzen**
+    (Durchsicht 0.5.1): Die Austritte der Achse (``prepare_ops._axis_exits``)
+    und der Mündungspunkt (:func:`_mouth_face`) schossen am
+    Gartenschlauchhalter (392 532 Dreiecke) je Strahl 0,15 s Möller-Trumbore
+    über das ganze Netz, fast eine Sekunde je Schritt. Ein Dreieck, das der
+    Strahl trifft, enthält den Treffer; in der Ebene quer zum Strahl liegt der
+    Treffer auf dem Fußpunkt des Ursprungs, und dieser Punkt liegt dann im
+    Rechteck, das das Dreieck dort wirft. Die Vorauswahl fragt genau das,
+    mit :data:`~app.core.units.EPS_GEOM` Spiel — weit über dem baryzentrischen
+    Rand von ``ray_hits``. Gerechnet wird jedes ausgewählte Dreieck mit
+    denselben Zahlen wie im Vollvergleich, und die Nummern kommen in derselben
+    Reihenfolge zurück: gleiche Bits, gleicher erster Treffer (RM-187). Die
+    Projektion ist elementweise, ohne BLAS.
+    """
+    from app.core.geom.mesh import ray_hits
+
+    triangles = np.asarray(triangles, dtype=np.float64)
+    if len(triangles) < _ALONG_ABOVE:
+        return ray_hits(triangles, origin, direction, minimum_travel=minimum_travel)
+    start = np.asarray(origin, dtype=np.float64).reshape(3)
+    way = np.asarray(direction, dtype=np.float64).reshape(3)
+    length = math.hypot(float(way[0]), float(way[1]), float(way[2]))
+    if length <= EPS_GEOM:
+        return ray_hits(triangles, origin, direction, minimum_travel=minimum_travel)
+    ring = _rim_around(way / length, 1.0)
+    first, second = ring[0], ring[len(ring) // 4]
+    keep = np.ones(len(triangles), dtype=bool)
+    for across in (first, second):
+        # Der Fußpunkt des Ursprungs als Zahl statt als Feld: Die Vorauswahl
+        # ist ein Sieb mit Spiel, kein Treffer, und ein Rundungsunterschied
+        # von 1e-14 gegen ``EPS_GEOM`` entscheidet nichts.
+        foot = units.dot3(start, across)
+        shade = (
+            triangles[:, :, 0] * across[0]
+            + triangles[:, :, 1] * across[1]
+            + triangles[:, :, 2] * across[2]
+        )
+        keep &= (shade.min(axis=1) <= foot + EPS_GEOM) & (shade.max(axis=1) >= foot - EPS_GEOM)
+    chosen = np.flatnonzero(keep)
+    distances, hit = ray_hits(triangles[chosen], start, way, minimum_travel=minimum_travel)
+    return distances, chosen[hit]
+
+
+#: Ab wie vielen Dreiecken :func:`ray_hits_along` vorauswählt; darunter kostet
+#: die Projektion mehr, als sie spart.
+_ALONG_ABOVE: Final = 20_000
+
+
 def _mouth_face(
     body: MeshData, position: np.ndarray, inward: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray] | None:
@@ -557,14 +616,12 @@ def _mouth_face(
     ``None``, wo der Strahl nichts trifft oder die Fläche fast längs der Achse
     liegt — dann bleibt es beim Kreis quer zur Achse.
     """
-    from app.core.geom.mesh import ray_hits
-
     triangles = np.asarray(body.raw.triangles, dtype=float)
     if not len(triangles):
         return None
     back = float(body.bounds.diagonal) * 1e-3 + EPS_DISPLAY
     start = position - inward * back
-    distances, hit = ray_hits(triangles, start, inward)
+    distances, hit = ray_hits_along(triangles, start, inward)
     if not len(distances):
         return None
     first = int(np.argmin(distances))

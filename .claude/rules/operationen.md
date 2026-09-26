@@ -644,17 +644,43 @@ Lochplatte gs-100 kam die Kette, 1,5 mm nach oben versetzt, mit dem Volumen des
 gefüllten Körpers zurück, gültig laut `BRepCheck`, der Zwilling undicht. Dann
 schneidet dasselbe Werkzeug mit doppeltem und dreifachem Mündungsüberstand
 (`CUT_OVERLAPS`); hält keiner, sagt die Handlung mit `CUT_DID_NOT_HOLD` ab.
-Versetzen, Verdoppeln, Kippen und das Muster einer Kette gehen diesen Weg.
+Versetzen, Verdoppeln, Kippen und das Muster einer Kette gehen diesen Weg —
+**und eine einzelne Bohrung oder ein Langloch beim Versetzen und Verdoppeln
+auch** (`_exact_rigid_cut`): Am Teppichclip kam das Langloch, entlang seiner
+Richtung versetzt, mit undichtem Zwilling und bis 16 mm³ zu viel zurück, ohne
+Befund. Ohne offene Mündung gibt es nichts zu verlängern, dann einmal.
 
 **Versetzt und verdoppelt wird starr, an beiden Kernen** (RM-220). Eine
 Bohrung ist danach so lang wie vorher; entlang ihrer Achse oder in dickeres
 Material gesetzt, bleibt Material stehen, und `no_longer_through` sagt es
 (entschieden am 03.09.2026). Der exakte Kern schnitt eine Durchgangsbohrung
 über die ganze Zielhülle und blieb dort durchgehend; jetzt endet sie an ihren
-alten Randebenen, um die Bewegung mitgenommen (`_exact_rigid_cut`,
-`_moved_rims`). **Ein Einrücken bis zur Facettengrenze ist Messrauschen**
+alten Randebenen, um die Bewegung mitgenommen (`_exact_rigid_cut`).
+**Ein Einrücken bis zur Facettengrenze ist Messrauschen**
 (`_seated`): Die Mitte einer gekippten Bohrung lag bei z = 4,9576, und wer sie
-auf 5 setzte, hätte eine Haut von 0,022 mm über der Mündung stehen lassen.
+auf 5 setzte, hätte eine Haut von 0,022 mm über der Mündung stehen lassen. Das
+Netz folgt derselben Regel über den Kragen (`_past_the_mouths(travel=)`).
+**Ein Langloch reist ganz, aus seinen Flächen** (Durchsicht 0.5.1): Fasen und
+schräge Mündungen gehören zu ihm. Am Netz füllt `_closed_at` es mit dem
+Körper aus seinen Flächen und `_tool_for` setzt ihn starr samt Kragen; am
+exakten Kern `_exact_own_cavity` mit `_exact_own_filled` und
+`_exact_own_cut` (Kragen `edit.collared`). Aus Kennzahlen schnitt es die
+gemessene Tiefe um die Mitte und ließ am Wedge-Lock unter der schrägen
+Unterseite Häute stehen. Gedreht und skaliert bleibt es bei den Kennzahlen;
+wo die Flächen keinen Körper mit zwei ebenen Rändern hergeben, ebenso.
+**Eine Tasche mit Haltelippe reist mit ihrer Luft** (BOHRUNG-13): Die Lippe
+galt als Material im Zylinder, und jede Handlung sagte „keine Bohrung“. Steht
+im Zylinder nur ein Rand an der Wand (`_only_a_rim_inside`, äußeres Viertel
+des Radius), ist das Werkzeug die Hülle der erklärten Maße minus Körper
+(`_air_of_the_bore`, exakt `_exact_air_of_the_bore`), samt Lippe; eine Nabe
+oder ein Zapfen reicht weiter zur Achse und bleibt `HOLE_IS_NOT_EMPTY`. Das
+Kriterium ist der Rand, nicht „Merkmal ohne Dreiecke“: Die Erkennung ordnet
+einem Baustein-Merkmal Flächen zu (`declared_partners`) und führt die Lippe
+dann als Kegel einer Kette. Eine Kette, die nach außen enger wird
+(`_narrows_outward`), reist am exakten Kern aus ihren Flächen
+(`_exact_chain_own_cavity`) — die Profile einer Kette weiten sich nach außen
+und schnitten die Lippe weg. Die Kopie eines Merkmals, das die Erkennung
+nicht sieht, wird nicht nachgemessen (`_copies_found`).
 **Und eine Mündung, die an der neuen Stelle unter Material liegt, wird
 gemeldet** (`_mouth_covered`, `{op}.mouth_covered`): Eine Sackbohrung hat keinen
 Durchgang, den sie verlieren könnte, und schwieg — an einer schrägen

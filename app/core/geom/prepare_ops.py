@@ -48,7 +48,7 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.hollow import VENT_DIAMETER, HollowResult, below_printable_wall, hollow
-from app.core.geom.mesh import MeshData, as_mesh_data, face_components, ray_hits
+from app.core.geom.mesh import MeshData, as_mesh_data, face_components
 from app.core.geom.ops import as_transform
 from app.core.geom.orient import NoFittingOrientationError, orient_for_print, ranked_orientations
 from app.core.geom.pins import (
@@ -85,6 +85,7 @@ from app.core.geom.prepare import (
     over_the_edge_along,
     plug,
     plug_placement,
+    ray_hits_along,
     resize_bore,
     shell,
     shortest_slot,
@@ -1739,7 +1740,7 @@ def _axis_exits(
         if len(triangles):
             # Ein Dreieck unter einer Mitte auf der Oberfläche ist kein Austritt
             # in diese Richtung; der Strahl zählt erst ab ``EPS_GEOM``.
-            distances, hit = ray_hits(triangles, centre, ray, minimum_travel=EPS_GEOM)
+            distances, hit = ray_hits_along(triangles, centre, ray, minimum_travel=EPS_GEOM)
             # Elementweise und nicht über ``@`` (RM-187): Der Austritt wird zum
             # Befund, und der soll auf jeder Maschine derselbe sein.
             facing = normals[hit]
@@ -1869,6 +1870,7 @@ def _closed_at(
     seed: int | None,
     cancelled: CancelToken | None,
     alone: bool = False,
+    whole: bool = False,
 ) -> BooleanOutcome:
     """Das Merkmal an dieser Stelle schließen: gefüllt, wenn es ein Hohlraum
     ist, abgetragen, wenn es Material ist.
@@ -1897,7 +1899,22 @@ def _closed_at(
     Abgetragen wird ohne Schnitt: Ein Zapfen, der über die Hülle hinausragt,
     **ist** das Teil an dieser Stelle, und ein zu großes Messer schneidet nur
     Luft.
+
+    **Geht ein Langloch ganz, füllt es, was seine Flächen umschließen**
+    (``whole``; Durchsicht 0.5.1, BOHRUNG-05) — wie eine Kette
+    (:func:`_cavity_plug`). Der Stopfen aus Kennzahlen hat den Umriss des
+    Schlitzes und nicht seine Fasen: Am Wedge-Lock blieben sie beim Versetzen
+    als Ring um die alte Stelle stehen. ``whole`` setzen Versetzen, Kippen,
+    Entfernen und Verschließen; wer das Langloch nur kürzer, breiter oder
+    anders gerichtet neu schneidet, behält die Fasen an den Seiten, die
+    bleiben. Wo die Flächen keinen Körper hergeben, gilt der Stopfen wie bisher.
     """
+    if whole and cavity and feature.kind == "slot":
+        own = _body_from_faces(mesh, feature.face_indices, allowed_rings=(2,))
+        if own is not None:
+            return _without_scars(
+                boolean("union", [mesh, own], quality=quality, seed=seed, cancelled=cancelled)
+            )
     tool = _tool_for(
         mesh, feature, centre, alone=alone, quality=quality, seed=seed, cancelled=cancelled
     )
@@ -2130,32 +2147,54 @@ def _tool_for(
     den **heutigen** Grund nennt und nicht den von gestern — siehe
     :data:`NO_OWN_BODY`.
     """
+    air: MeshData | None = None
     if feature.kind == "hole" and not hole_is_clear(mesh, feature):
         # Im Zylinder steht Material: eine Radinnenwand mit Speichen oder ein
         # Topf mit Zapfen, kein Bohrungsmantel. Ob die Flächen einen Körper
         # hergeben, ist dann gleich — der Pfropfen schlösse den Zapfen ein,
         # und der Zylinder an der neuen Stelle nähme die Speichen mit. Gefragt
         # wird vor dem Flächenkörper, der hier umsonst gebaut würde.
-        raise ValidationError(
-            field="at_feature",
-            detail=HOLE_IS_NOT_EMPTY,
-            values={"feature": feature.id, "kind": feature.kind},
-            constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
+        #
+        # **Außer, wo es nur ein Rand an der Wand ist** (Durchsicht 0.5.1,
+        # BOHRUNG-13): Die Haltelippe einer Magnettasche verengt die Mündung
+        # von Ø 8,25 auf 7,95 und zählte als Material im Zylinder. Dort ist das
+        # Werkzeug die Luft der Tasche selbst (:func:`_air_of_the_bore`), samt
+        # Lippe — gleich, ob die Erkennung dem Merkmal Flächen zuordnet.
+        air = _air_of_the_bore(mesh, feature, quality=quality, seed=seed, cancelled=cancelled)
+        if air is None:
+            raise ValidationError(
+                field="at_feature",
+                detail=HOLE_IS_NOT_EMPTY,
+                values={"feature": feature.id, "kind": feature.kind},
+                constraint="not_movable",
+                suggestions=(CHANGE_SELECTION, CANCEL),
+            )
     # Beim Versetzen zählt der vorhandene Sehnenzug, nicht der Radius durch
     # die Dreiecksmitten. Sonst schrumpft eine fremd tessellierte Bohrung.
     # Und der Körper aus den Flächen endet bündig in den Oberflächen — als
     # Messer bekommt er an seinen Mündungen den Kragen aus §39
     # (:func:`_past_the_mouths`), damit keine Haut stehen bleibt; als Pfropfen
     # ersetzt ihn :func:`_closed_at` ohnehin durch den Zylinder aus Kennzahlen.
-    built = (
+    #
+    # **Ein Langloch ebenso, wo es starr bewegt wird** (Durchsicht 0.5.1,
+    # BOHRUNG-05). Aus Kennzahlen hatte es die gemessene Tiefe um seine Mitte:
+    # Am Wedge-Lock läuft die Unterseite unter dem Schlitz um 3,6° schräg, und
+    # der Schlitz trägt an beiden Mündungen Fasen — 0,5 mm versetzt blieben
+    # +125 mm³ als Häute stehen, „geht nicht mehr durch". Aus seinen Flächen
+    # reist er ganz mit, Fasen und schräge Mündung eingeschlossen. Gedreht und
+    # skaliert bleibt es bei den Kennzahlen: Dort ändert sich seine Form.
+    built = air or (
         _body_from_faces(mesh, feature.face_indices, allowed_rings=(2,))
         if feature.kind == "hole"
+        or (feature.kind == "slot" and is_close(scale, 1.0) and axis is None)
         else None
     )
     if built is not None:
-        built = _past_the_mouths(mesh, built)
+        rigid = is_close(scale, 1.0) and axis is None
+        travel = np.asarray(centre, dtype=np.float64) - np.asarray(
+            feature.params["centre"], dtype=np.float64
+        )
+        built = _past_the_mouths(mesh, built, travel=travel if rigid else None)
     if feature.kind == "pin" and rooted:
         # **Ein gesetzter Zapfen ist so hoch wie der gemessene** (22.09.2026).
         # Unverändert kommt er aus seinen Flächen und bekommt unten einen
@@ -2206,6 +2245,114 @@ def _tool_for(
     transform.moved(body, matrix)
     body.apply_translation(np.asarray(centre, dtype=float))
     return MeshData.of(body)
+
+
+def _bore_air_frame(
+    mesh: MeshData, feature: Feature
+) -> tuple[NDArray[np.float64], NDArray[np.float64], float, float] | None:
+    """Mündung, Richtung zur Luft, Radius und Tiefe einer Tasche, in deren
+    Zylinder nur ein Rand steht (:func:`_only_a_rim_inside`) — ``None`` für
+    alles andere.
+
+    Die Maße sind die, die das Merkmal erklärt; wo die Luft liegt, sagt der
+    Körper (:func:`_toward_the_air`). Eine Durchgangsbohrung hat zwei
+    Mündungen und keine eine Seite, an der die Hülle enden könnte.
+    """
+    if feature.kind != "hole" or not _only_a_rim_inside(mesh, feature):
+        return None
+    radius = float(feature.params.get("diameter", 0.0)) / 2.0
+    depth = float(feature.params.get("depth", 0.0))
+    if radius <= EPS_GEOM or depth <= EPS_GEOM:
+        return None
+    up = _toward_the_air(mesh, feature)
+    if up is None:
+        return None
+    mouth = np.asarray(_bore_vector(feature, "centre"), dtype=np.float64) + up * (depth / 2.0)
+    return mouth, up, radius, depth
+
+
+def _air_of_the_bore(
+    mesh: MeshData,
+    feature: Feature,
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> MeshData | None:
+    """Die Luft einer Tasche aus einem Baustein, wie sie ist — samt Haltelippe.
+
+    **Die Hülle der erklärten Maße minus Körper** (Durchsicht 0.5.1,
+    BOHRUNG-13): ein Zylinder um die Zugabe weiter als die Tasche, vom Boden
+    bis genau in die Ebene der Mündung. Was darin Material ist — die Wand
+    ringsum, der Boden, die Lippe —, geht ab, und übrig bleibt die Luft der
+    Tasche. Aus Kennzahlen wäre sie ein glatter Zylinder, und jede Kopie einer
+    Magnettasche verlöre ihre Lippe; aus Flächen gibt es sie nicht, denn das
+    Merkmal des Bausteins trägt keine. ``None``, wo die Tasche keine
+    eindeutige Mündung hat oder die Rechnung keinen Körper hergibt.
+    """
+    frame = _bore_air_frame(mesh, feature)
+    if frame is None:
+        return None
+    mouth, up, radius, depth = frame
+    height = depth + 2.0 * FEATURE_OVERLAP
+    wide = (radius + 2.0 * FEATURE_OVERLAP) / units.inscribed_ratio(FEATURE_SECTIONS)
+    envelope = lathe.cylinder(radius=wide, height=height, sections=FEATURE_SECTIONS)
+    transform.moved(envelope, transform.rotation_between([0.0, 0.0, 1.0], up))
+    envelope.apply_translation(mouth - up * (height / 2.0))
+    try:
+        air = boolean(
+            "difference",
+            [MeshData.of(envelope), mesh],
+            quality=quality,
+            seed=seed,
+            cancelled=cancelled,
+            allow_empty=True,
+        ).mesh
+    except BooleanFailedError:
+        return None
+    if not len(air.raw.faces) or not air.is_watertight or air.volume <= EPS_GEOM:
+        return None
+    return air
+
+
+def _exact_air_of_the_bore(source: SceneObject, feature: Feature) -> _OwnCavity | None:
+    """:func:`_air_of_the_bore` am exakten Körper, samt der Mündungsebene für den
+    Kragen — nur, wo das Netz Material im Zylinder sieht (die Lippe).
+    """
+    from app.core.brep import edit
+
+    twin = as_mesh_data(source.mesh)
+    frame = _bore_air_frame(twin, feature)
+    if frame is None or hole_is_clear(twin, feature):
+        return None
+    mouth, up, radius, depth = frame
+    height = depth + 2.0 * FEATURE_OVERLAP
+    matrix = np.asarray(
+        composed(
+            translation(cast(Vec3, tuple(float(v) for v in mouth - up * height))),
+            transform.rotation_between([0.0, 0.0, 1.0], up),
+        ),
+        dtype=np.float64,
+    )
+    envelope = edit.transformed(
+        edit.cylinder(2.0 * (radius + 2.0 * FEATURE_OVERLAP), height), as_transform(matrix)
+    )
+    air = edit.boolean("difference", [envelope, _exact_body(source)])
+    if air.face_count == 0 or as_mesh_data(air).volume <= EPS_GEOM:
+        return None
+    plane = SectionPlane(
+        normal=(float(up[0]), float(up[1]), float(up[2])), position=units.dot3(mouth, up)
+    )
+    return _OwnCavity(air, ((plane, True),))
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _OwnCavity:
+    """Ein Hohlraum am exakten Körper, wie er ist, und seine Mündungen — je die
+    Ebene bündig in der Oberfläche und ob davor Luft liegt."""
+
+    body: Any
+    mouths: tuple[tuple[SectionPlane, bool], ...]
 
 
 def _pin_body(mesh: MeshData, feature: Feature) -> MeshData | None:
@@ -2721,6 +2868,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
                 seed=ctx.seed,
                 cancelled=ctx.cancelled,
                 alone=True,
+                whole=True,
             )
         body, closed_solver = closed.mesh, closed.solver
         findings.extend(closed.findings)
@@ -3092,6 +3240,14 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
 
 def _hole_is_clear_read(mesh: MeshData, feature: Feature, radius: float, depth: float) -> bool:
     """Der Rumpf von :func:`hole_is_clear` — die Rechnung über die Dreiecksmitten."""
+    return not len(_inside_the_bore(mesh, feature, radius, depth))
+
+
+def _inside_the_bore(
+    mesh: MeshData, feature: Feature, radius: float, depth: float
+) -> NDArray[np.float64]:
+    """Der Abstand von der Achse je Dreieck, das im Zylinder der Bohrung liegt
+    und nicht zu ihr gehört — leer, wo sie leer ist (:func:`hole_is_clear`)."""
     centre = np.asarray(feature.params["centre"], dtype=np.float64)
     axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=np.float64)
     axis /= max(float(np.linalg.norm(axis)), EPS_GEOM)
@@ -3124,7 +3280,34 @@ def _hole_is_clear_read(mesh: MeshData, feature: Feature, radius: float, depth: 
     if feature.face_indices:
         own = np.asarray(feature.face_indices, dtype=np.int64)
         inside[own[own < len(inside)]] = False
-    return not bool(inside.any())
+    return np.asarray(radial[inside], dtype=np.float64)
+
+
+def _only_a_rim_inside(mesh: MeshData, feature: Feature) -> bool:
+    """Ob das Material im Zylinder einer Bohrung nur ein Rand an ihrer Wand ist —
+    eine Haltelippe, eine Verengung an der Mündung — und kein Inhalt.
+
+    **Das Kriterium für den Weg über die Luft** (:func:`_air_of_the_bore`,
+    Durchsicht 0.5.1, BOHRUNG-13 Nachtrag). Bis zur Zusammenführung hieß es
+    „das Merkmal trägt keine Dreiecke", und das hielt nur, solange die
+    Erkennung einem Merkmal aus einem Baustein keine Flächen zuordnete. Steht
+    im Zylinder ein Steg, eine Nabe oder ein Zapfen, reicht er weit zur Achse
+    hin, und die Bohrung bleibt eine Wand (``HOLE_IS_NOT_EMPTY``); eine Lippe
+    liegt im äußeren Viertel des Radius (:data:`_RIM_ONLY`).
+    """
+    radius = float(feature.params.get("diameter", 0.0)) / 2.0
+    depth = float(feature.params.get("depth", 0.0))
+    if radius <= EPS_GEOM or depth <= EPS_GEOM:
+        return False
+    radial = _inside_the_bore(mesh, feature, radius, depth)
+    return bool(len(radial)) and float(radial.min()) >= radius * (1.0 - _RIM_ONLY)
+
+
+#: Wie weit ein Rand im Zylinder einer Bohrung zur Achse hin reichen darf, damit
+#: er Rand bleibt (:func:`_only_a_rim_inside`) — als Anteil des Radius. Die
+#: Lippe einer Magnettasche 8x3 liegt bei 0,973 r, die Nabe eines Rades und der
+#: Zapfen eines Topfes weit darunter.
+_RIM_ONLY: Final = 0.25
 
 
 def has_own_body(mesh: MeshData, feature: Feature, *, alone: bool) -> bool:
@@ -3181,7 +3364,10 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 2: eine schräge Bohrung schließt an ihren Randebenen (22.09.2026).
     # 3: die Kette schließt ohne Narben, der Sackboden reist mit, und eine
     # gekippte Sackbohrung bleibt über ihrem Boden (23.09.2026).
-    cache_version="3",
+    # 4: ein Langloch reist aus seinen Flächen, samt Fasen und schräger
+    # Mündung, und der Kragen am Netz nimmt das Messrauschen der Mitte wie
+    # der exakte Kern (Durchsicht 0.5.1).
+    cache_version="4",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -3337,7 +3523,10 @@ def move_feature(ctx: OpContext) -> OpResult:
         set_features = [features[related.id] for related in chain]
         features.update(
             _measured_on(
-                placed.mesh, set_features, check_cancelled=ctx.cancelled.raise_if_cancelled
+                placed.mesh,
+                set_features,
+                check_cancelled=ctx.cancelled.raise_if_cancelled,
+                shifted=True,
             )
         )
         bore_target = np.asarray(bore.params["centre"], dtype=float) + travel
@@ -3357,6 +3546,7 @@ def move_feature(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
             cancelled=ctx.cancelled,
             alone=True,
+            whole=True,
         )
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         cutting = _placing_tool(ctx, body, source, feature, target, cavity)
@@ -3376,7 +3566,12 @@ def move_feature(ctx: OpContext) -> OpResult:
         features[feature.id] = moved
         if cavity:
             features.update(
-                _measured_on(placed.mesh, [moved], check_cancelled=ctx.cancelled.raise_if_cancelled)
+                _measured_on(
+                    placed.mesh,
+                    [moved],
+                    check_cancelled=ctx.cancelled.raise_if_cancelled,
+                    shifted=True,
+                )
             )
         floor = _floor_carried(body, feature, source.features, translation(travel))
         if floor is not None:
@@ -3525,7 +3720,9 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     name="duplicate_feature",
     # 2: der Rückfall aus Kennzahlen schneidet ein Sackloch nicht mehr um die
     # Zugabe unter seinen Boden (23.09.2026).
-    cache_version="2",
+    # 3: ein Langloch wird aus seinen Flächen kopiert, samt Fasen (Durchsicht
+    # 0.5.1).
+    cache_version="3",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -3949,6 +4146,9 @@ class _PatternPlace:
 
 @register_op(
     name="pattern_feature",
+    # 2: ein Langloch wird aus seinen Flächen gesetzt, samt Fasen (Durchsicht
+    # 0.5.1).
+    cache_version="2",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -4503,6 +4703,9 @@ def _exact_place_tool(
 
     feature = place.unit.feature
     if place.unit.chain is not None:
+        own_chain = _exact_chain_own_cavity(source, place.unit.chain)
+        if own_chain is not None:
+            return _own_placed(own_chain, place.matrix, overlap)
         entrance = _exact_chain_entrance(source, place.unit.chain)
         return _exact_chain_tool_placed(solid, entrance, place.matrix, overlap=overlap)
     copy = place.copies[0]
@@ -4511,11 +4714,26 @@ def _exact_place_tool(
         axis = cast(Vec3, tuple(float(value) for value in copy.params["axis"]))
         return _exact_torus_tool(feature, centre, axis)
     if feature.kind in EXACT_CAVITY_KINDS:
+        # Wie beim Verdoppeln: ein Langloch samt Fasen, eine Tasche aus einem
+        # Baustein samt Lippe (:func:`_exact_own_cavity`, BOHRUNG-05/13).
+        own = _exact_own_cavity(source, feature)
+        if own is not None:
+            return _own_placed(own, place.matrix, overlap)
         axis = cast(Vec3, tuple(float(value) for value in copy.params["axis"]))
         return _exact_cavity_tool(solid, copy, centre, axis)
     if feature.id not in faces_bodies:
         faces_bodies[feature.id] = _exact_body_from_faces(source, feature)
     return edit.transformed(faces_bodies[feature.id], as_transform(place.matrix))
+
+
+def _own_placed(own: _OwnCavity, matrix: NDArray[np.float64], overlap: float) -> Any:
+    """Ein eigener Hohlraum (:func:`_exact_own_cavity`) an einem Platz des
+    Musters, mit Kragen an seinen offenen Mündungen."""
+    from app.core.brep import edit
+
+    placed = edit.transformed(own.body, as_transform(matrix))
+    collars = [(_plane_placed(plane, matrix), overlap) for plane, opened in own.mouths if opened]
+    return edit.collared(placed, collars) if collars else placed
 
 
 def _chain_copy_tool(
@@ -4632,7 +4850,9 @@ class RemoveFeatureParams(BaseParams):
     # parallelen Wänden bis zum Boden (``patterns.plug_for``, 23.09.2026).
     # 8: derselbe Stopfen wird an den Facettengrenzen konform geteilt und
     # endet an den Stirnflächen des Stifts (23.09.2026).
-    cache_version="8",
+    # 9: ein Langloch schließt mit dem Körper aus seinen Flächen, samt Fasen
+    # (Durchsicht 0.5.1).
+    cache_version="9",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -4766,6 +4986,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
             cancelled=ctx.cancelled,
             alone=stands_alone,
+            whole=True,
         )
         gone = (feature.id,)
 
@@ -4840,7 +5061,9 @@ class RotateFeatureParams(BaseParams):
     # 2: eine schräge Bohrung schließt an ihren Randebenen (22.09.2026).
     # 3: die Kette schließt ohne Narben, der Sackboden reist mit, und eine
     # gekippte Sackbohrung bleibt über ihrem Boden (23.09.2026).
-    cache_version="3",
+    # 4: ein Langloch schließt samt Fasen, und ein gekipptes durchgehendes
+    # endet an seinen alten Randebenen (Durchsicht 0.5.1).
+    cache_version="4",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -4938,6 +5161,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         seed=ctx.seed,
         cancelled=ctx.cancelled,
         alone=True,
+        whole=True,
     )
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     tool = _turned_through_bore(body, feature, spun, centre, turned_axis)
@@ -5365,8 +5589,14 @@ def _turned_through_bore(
     Werkzeug Luft oder eine Wand, die niemand gemeint hat. Bleibt trotzdem
     Material im Schlauch — an einer schrägen Wand etwa —, sagt es
     ``_throughness_lost`` wie bisher.
+
+    **Ein durchgehendes Langloch ebenso** (Durchsicht 0.5.1, BOHRUNG-08): Am
+    ``build_tray_v3.step`` blieben um 10° gekippt +104,9 mm³ im Schlitz, und
+    er hieß danach nicht mehr durchgehend. Seine weiteste Ausdehnung quer zur
+    Achse ist die halbe Länge, nicht der Radius; was darüber hinaus reicht,
+    kappt der Aufrufer an den alten Randebenen (:func:`_within_the_old_rims`).
     """
-    if feature.kind != "hole" or not feature.params.get("through"):
+    if feature.kind not in ("hole", "slot") or not feature.params.get("through"):
         return None
     old_axis = np.asarray(_feature_direction(feature), dtype=np.float64)
     new_axis = np.asarray(turned_axis, dtype=np.float64)
@@ -5377,8 +5607,11 @@ def _turned_through_bore(
     depth = float(feature.params.get("depth", 0.0))
     if diameter <= EPS_GEOM or depth <= EPS_GEOM:
         return None
+    across = diameter / 2.0
+    if feature.kind == "slot":
+        across = max(across, float(feature.params.get("length", 0.0)) / 2.0)
     reach = _reach_past_a_tilted_face(
-        depth / 2.0, diameter / 2.0, tilt, at_most=float(body.bounds.diagonal)
+        depth / 2.0, across, tilt, at_most=float(body.bounds.diagonal)
     )
     stretched = dataclasses.replace(spun, params={**spun.params, "depth": 2.0 * reach})
     return _feature_solid(stretched, centre, axis=turned_axis, oversize=0.0)
@@ -5517,9 +5750,19 @@ def _share_in_material(
     return float(np.count_nonzero(signed <= EPS_GEOM)) / float(max(len(signed), 1))
 
 
-def _past_the_mouths(mesh: MeshData, cavity: MeshData) -> MeshData:
+def _past_the_mouths(
+    mesh: MeshData, cavity: MeshData, *, travel: NDArray[np.float64] | None = None
+) -> MeshData:
     """Der exakte Hohlraumkörper, an seinen Mündungen um ``FEATURE_OVERLAP``
     über die Oberfläche hinaus verlängert — das Werkzeug für die Differenz (§39).
+
+    ``travel`` ist die starre Bewegung, mit der das Werkzeug danach gesetzt
+    wird. **Rückt sie eine Mündung um weniger als die Facettengrenze ins
+    Material, ist das Messrauschen** (:func:`_seated`, wie am exakten Kern), und
+    der Kragen reicht um so viel weiter. Am Wedge-Lock blieb ein Langloch,
+    0,5 mm gegen seine schräge Unterseite versetzt, sonst unter einer Haut von
+    0,03 mm stehen und hieß „geht nicht mehr durch" — der exakte Kern sagte am
+    Teppichclip mit derselben Zunge nichts (Durchsicht 0.5.1, BOHRUNG-05).
 
     Ein Hohlraum aus seinen Flächen (:func:`_body_from_faces`) endet bündig
     in der Oberfläche, und eine bündige Differenz lässt eine Haut stehen. Das
@@ -5569,7 +5812,12 @@ def _past_the_mouths(mesh: MeshData, cavity: MeshData) -> MeshData:
             continue
         lifted = np.full(int(members.max()) + 1, -1, dtype=np.int64)
         lifted[members] = np.arange(next_index, next_index + len(members))
-        added.append(points[members] + normal * FEATURE_OVERLAP)
+        reach = FEATURE_OVERLAP
+        if travel is not None:
+            along = units.dot3(normal, travel)
+            if -MAX_FACET_SAG <= along < 0.0:
+                reach -= along
+        added.append(points[members] + normal * reach)
         next_index += len(members)
         faces[facet] = lifted[cap]
         first, second = rim[:, 0], rim[:, 1]
@@ -6273,7 +6521,6 @@ def _exits_below(
     der Strahl dann sieht, ist das Material, in das die neue schneidet. Ein
     Austritt ist ein Treffer, dessen Flächennormale mit dem Strahl läuft.
     """
-    from app.core.geom.mesh import ray_hits
     from app.core.sketch.planes import frame_of
 
     triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
@@ -6284,7 +6531,7 @@ def _exits_below(
     rays = []
     for u, v in _DEPTH_RAYS:
         start = mouth - inward * back + (across[0] * u + across[1] * v) * radius
-        distances, hit = ray_hits(triangles, start, inward)
+        distances, hit = ray_hits_along(triangles, start, inward)
         leaving = normals[hit] @ inward > 0.0
         exits = np.sort(distances[leaving]) - back
         exits = exits[exits > EPS_GEOM]
@@ -6888,19 +7135,66 @@ def resize_hole(ctx: OpContext) -> OpResult:
         compensation_findings(params.diameter, cut, params.compensate) if redrilled else []
     )
     expected_diameter = cut if redrilled else result.diameter
-    detected = _detect_resized_bores(
-        result.mesh,
-        {looked_for.id: _expected_bore(looked_for, expected_diameter)},
-        check_cancelled=ctx.cancelled.raise_if_cancelled,
-    )
-    resized_feature = _recognised_resized_feature(
-        result.mesh,
-        looked_for,
-        expected_diameter,
-        original=original_body if not redrilled and feature.kind == "hole" else None,
-        known=detected,
-        check_cancelled=ctx.cancelled.raise_if_cancelled,
-    )
+    wanted = {looked_for.id: _expected_bore(looked_for, expected_diameter)}
+    # **Örtlich zuerst, wo es keinen Boden gibt** (Durchsicht 0.5.1,
+    # BOHRUNG-12). Die volle Erkennung am ganzen Ergebnis kostete am
+    # Gartenschlauchhalter (392 532 Dreiecke) 74 der 76 s eines Aufweitens um
+    # einen Millimeter. Eine Durchgangsbohrung findet die Suche an ihrer Stelle
+    # (``perceive.local.detect_known``); ein Sackloch braucht dazu seinen
+    # Boden (:func:`_resized_bore_floor`), und den liefert nur die volle.
+    # Findet sich die Bohrung örtlich nicht, entscheidet ebenfalls die volle.
+    detected: Mapping[FeatureId, Feature] = {}
+    resized_feature = None
+    if looked_for.params.get("through") and feature.kind == "hole":
+        from app.core.perceive.local import detect_known
+        from app.core.perceive.relations import cavity_chain_at, cavity_surface_indices
+
+        # Gesucht wird über den ganzen Hohlraum und sein Umfeld: Steht die
+        # Bohrung in einer Kette, hängt ihre Wand an der Senkung, und die
+        # Erkennung liest am Rand der Suche angeschnittene Nachbarn — am
+        # Gartenschlauchhalter fand sie Ø 7 erst im Umkreis 20 mm um eine
+        # Kette von 13 mm, bei 14 mm nicht. Der doppelte Umfang der Kette,
+        # und reicht auch der nicht, entscheidet die volle Erkennung.
+        scope = cavity_chain_at(feature, source.features, original_body) or (feature,)
+        faces = cavity_surface_indices(original_body, scope)
+        corners = np.asarray(original_body.raw.vertices, dtype=np.float64)[
+            np.unique(np.asarray(original_body.raw.faces)[list(faces)])
+        ]
+        middle = np.asarray(looked_for.params["centre"], dtype=np.float64)
+        reach = float(np.sqrt(((corners - middle) ** 2).sum(axis=1)).max()) if len(corners) else 0.0
+        grown = max(0.0, expected_diameter - float(looked_for.params["diameter"])) / 2.0
+        wanted = {
+            looked_for.id: dataclasses.replace(
+                wanted[looked_for.id],
+                params={
+                    **wanted[looked_for.id].params,
+                    "local_search_radius": 2.0 * (reach + grown) + FEATURE_OVERLAP,
+                },
+            )
+        }
+        detected = detect_known(
+            result.mesh, wanted, required=(), check_cancelled=ctx.cancelled.raise_if_cancelled
+        )
+        resized_feature = _recognised_resized_feature(
+            result.mesh,
+            looked_for,
+            expected_diameter,
+            original=original_body if not redrilled else None,
+            known=detected,
+            check_cancelled=ctx.cancelled.raise_if_cancelled,
+        )
+    if resized_feature is None:
+        detected = _detect_resized_bores(
+            result.mesh, wanted, check_cancelled=ctx.cancelled.raise_if_cancelled
+        )
+        resized_feature = _recognised_resized_feature(
+            result.mesh,
+            looked_for,
+            expected_diameter,
+            original=original_body if not redrilled and feature.kind == "hole" else None,
+            known=detected,
+            check_cancelled=ctx.cancelled.raise_if_cancelled,
+        )
     if resized_feature is not None and result.solver.strategy in ("direct", "welded"):
         resized_feature = _with_nominal_bore(
             result.mesh, resized_feature, looked_for, cut if redrilled else result.diameter
@@ -9185,24 +9479,6 @@ def _mouth_covered(
     return []
 
 
-def _moved_rims(
-    mesh: MeshData,
-    feature: Feature,
-    features: Mapping[FeatureId, Feature],
-    travel: NDArray[np.float64],
-) -> tuple[SectionPlane, ...]:
-    """Die Randebenen eines Hohlraums, starr um ``travel`` mitbewegt — mit der
-    Zugabe aus §39 an offenen Mündungen, leer, wo die Ränder nicht flach sind."""
-    moved = []
-    for plane in _bore_end_planes(mesh, feature, features, grows=True):
-        normal = np.asarray(plane.normal, dtype=np.float64)
-        shift = _seated(travel, normal)
-        moved.append(
-            dataclasses.replace(plane, position=plane.position + units.dot3(normal, shift))
-        )
-    return tuple(moved)
-
-
 def _seated(travel: NDArray[np.float64], normal: NDArray[np.float64]) -> NDArray[np.float64]:
     """Die Bewegung einer Mündung mit Normale ``normal`` — ohne ein Einrücken ins
     Material, das kleiner ist als die Messgenauigkeit ihrer Mitte.
@@ -9362,6 +9638,7 @@ def _measured_on(
     expected: Sequence[Feature],
     *,
     check_cancelled: Callable[[], None] | None = None,
+    shifted: bool = False,
 ) -> dict[FeatureId, Feature]:
     """Eben versetzte oder gekippte Bohrungen und Senkungen, am Ergebnis
     gemessen — unter ihren Namen.
@@ -9380,13 +9657,60 @@ def _measured_on(
     Messung ersetzt es nicht. Was sich nicht wiederfindet, fehlt in der
     Antwort und bleibt beim Aufrufer, wie es war — die Auswertung meldet es
     dann als nicht wiedererkannt.
+
+    **Nach dem Versetzen wird dort gemessen, wo das Merkmal steht, nicht am
+    ganzen Körper** (``shifted``, ``perceive.local.detect_known``; Durchsicht
+    0.5.1, BOHRUNG-07). Mit der vollen Erkennung kostete jedes Versetzen am
+    Netz eine ganze Merkmalssuche — auch in der
+    Vorschau, die bei einem Merkmalsbezug genau rechnet: am Bohrmaschinenhalter
+    3,5 statt 0,9 s, am Gartenschlauchhalter kalt 74 statt 9 s je Zug. Die
+    örtliche Suche gibt an Wabenhalter, Lochplatte und Bohrmaschinenhalter
+    dieselben Maße, Flächen und Durchgänge zurück. **Nach dem Kippen nicht**:
+    Dort misst sie die gekippte Senkung mit ihrem alten Durchmesser (Ø 10
+    statt der 20,2 der Ellipse an der Oberseite) — gekippt, verdoppelt und im
+    Muster bleibt es bei der vollen Erkennung; eine Kopie hat an der neuen
+    Stelle nichts, wovon die örtliche Suche ausgehen könnte.
     """
-    wanted = [feature for feature in expected if feature.kind in ("hole", "cone")]
+    from app.core.perceive.local import detect_known
+
+    # **Ein Langloch ebenso** (Durchsicht 0.5.1, BOHRUNG-05): Entlang einer
+    # schrägen Unterseite versetzt, liegt seine gemessene Mitte danach um
+    # einige Hundertstel anders und seine Wand ist kürzer. Mit den alten Maßen
+    # fand die Auswertung ihren Zwilling nicht mehr — im Baum stand die Kopie
+    # unter neuem Namen, und das versetzte Langloch hatte keine Flächen mehr.
+    wanted = [feature for feature in expected if feature.kind in ("hole", "cone", "slot")]
     if not wanted:
         return {}
-    detected = _detect_resized_bores(
-        mesh, {feature.id: feature for feature in wanted}, check_cancelled=check_cancelled
+    known = {feature.id: feature for feature in wanted}
+    if shifted:
+        # Findet die örtliche Suche nicht jedes Merkmal — die Stufen einer
+        # beidseitig geweiteten Kopie etwa —, entscheidet die volle Erkennung;
+        # eine Kopie hieße sonst verloren, die es gibt.
+        near = _measured_among(
+            mesh,
+            wanted,
+            detect_known(mesh, known, required=(), check_cancelled=check_cancelled),
+            check_cancelled=check_cancelled,
+        )
+        if len(near) == len(wanted):
+            return near
+    return _measured_among(
+        mesh,
+        wanted,
+        _detect_resized_bores(mesh, known, check_cancelled=check_cancelled),
+        check_cancelled=check_cancelled,
     )
+
+
+def _measured_among(
+    mesh: MeshData,
+    wanted: Sequence[Feature],
+    detected: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> dict[FeatureId, Feature]:
+    """Der Rumpf von :func:`_measured_on`: jedes gewollte Merkmal unter den Funden
+    gesucht, jeder Fund höchstens einmal vergeben."""
     measured: dict[FeatureId, Feature] = {}
     taken: set[str] = set()
     for want in wanted:
@@ -9438,8 +9762,15 @@ def _copies_found(
     daneben (:data:`~app.core.units.MAX_FACET_SAG`) ist sie nicht mehr diese
     Kopie.
     """
+    # **Nur was die Erkennung überhaupt sieht** (Durchsicht 0.5.1, BOHRUNG-13):
+    # Die Tasche eines Bausteins erkennt sie nicht (``recognised`` falsch,
+    # §24.1), also auch nicht ihre Kopie — die Magnettasche, vervielfacht,
+    # hieß sonst „nicht als eigenes Merkmal zu erkennen, liegt meist nicht
+    # ganz im Teil", obwohl sie genau dort stand. Sie reist wie ihre Vorlage.
     cavities = [
-        copy for copy in copies.values() if copy.kind in ("hole", "cone") and is_a_cavity(copy)
+        copy
+        for copy in copies.values()
+        if copy.kind in ("hole", "cone") and is_a_cavity(copy) and copy.recognised
     ]
     measured = _measured_on(mesh, cavities, check_cancelled=check_cancelled)
     kept: dict[FeatureId, Feature] = {}
@@ -9448,7 +9779,7 @@ def _copies_found(
     for name, copy in copies.items():
         found = measured.get(name)
         if name in wanted and (found is None or _beside_its_axis(found, copy)):
-            findings.append(_cavity_lost_finding(op, copy))
+            findings.append(_copy_lost_finding(op, copy))
             continue
         kept[name] = found or copy
     return kept, findings
@@ -9687,16 +10018,23 @@ def _exact_cavity_cut(solid: Any, feature: Feature, centre: Vec3, axis: Vec3) ->
     return edit.unified(cut) if feature.kind == "slot" else cut
 
 
-def _exact_cavity_tool(solid: Any, feature: Feature, centre: Vec3, axis: Vec3) -> Any:
+def _exact_cavity_tool(
+    solid: Any, feature: Feature, centre: Vec3, axis: Vec3, *, reach: float = 0.0
+) -> Any:
     """Das Werkzeug von :func:`_exact_cavity_cut` — für das Muster, das viele
     davon zugleich schneidet. Dieselben Maße: durchgehend über die ganze
     Zielhülle, blind in der gemessenen Tiefe, das Langloch in seiner Richtung.
+
+    ``reach`` verlängert eine Durchgangsbohrung an beiden Enden — für die
+    Wiederholung mit mehr Überstand (:func:`_exact_rigid_cut`); ohne sie endete
+    das Werkzeug 0,01 mm hinter der Hülle, und die weiter gerückten Randebenen
+    schnitten nichts ab.
     """
     from app.core.brep import edit
 
     diameter = _bore_number(feature, "diameter")
     depth = (
-        _through_bore_depth(solid, centre, axis)
+        _through_bore_depth(solid, centre, axis) + 2.0 * reach
         if feature.params.get("through")
         else _bore_number(feature, "depth")
     )
@@ -9991,7 +10329,7 @@ def _exact_move_cavity(
     axis = _bore_vector(feature, "axis")
     travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
-    filled = _exact_cavity_filled(solid, feature)
+    filled = _exact_own_filled(source, solid, feature)
     ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
     placed, tool = _exact_rigid_cut(source, filled, feature, target, axis, travel)
     expected = dataclasses.replace(
@@ -10166,7 +10504,7 @@ def _exact_rotate_cavity(
 
     solid = _exact_body(source)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
-    filled = _exact_cavity_filled(solid, feature)
+    filled = _exact_own_filled(source, solid, feature)
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     expected = dataclasses.replace(
         spun, params={**spun.params, "axis": turned_axis}, provenance="generated"
@@ -10177,19 +10515,25 @@ def _exact_rotate_cavity(
     # erst danach darin, meldete der exakte Körper eine in die Nachbarin
     # gekippte Bohrung zweimal (Durchsicht seit 0.5.0, 25.09.2026).
     findings = _edge_findings(as_mesh_data(filled), [expected])
-    if feature.kind == "hole":
-        tool = _exact_cavity_tool(filled, spun, centre, turned_axis)
-        if feature.params.get("through"):
-            caps = _old_rim_caps(as_mesh_data(source.mesh), feature, source.features)
-            if caps:
-                tool = edit.clipped_bore_tool(tool, caps)
-        placed = edit.boolean("difference", [filled, tool])
-        findings += _without_opened_twice(
-            _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True),
-            findings,
-        )
-    else:
-        placed = _exact_cavity_cut(filled, spun, centre, turned_axis)
+    # **Bohrung und Langloch gleich** (Durchsicht 0.5.1, BOHRUNG-08): Das
+    # Langloch schnitt gekippt über die ganze Zielhülle ohne Kappe — am
+    # ``build_tray_v3.step`` fehlten danach 8 012 mm³ vor seiner Mündung, quer
+    # durch die Schale. Jetzt endet es an den alten Randebenen wie die Bohrung.
+    tool = _exact_cavity_tool(filled, spun, centre, turned_axis)
+    if feature.params.get("through"):
+        caps = _old_rim_caps(as_mesh_data(source.mesh), feature, source.features)
+        if caps:
+            tool = edit.clipped_bore_tool(tool, caps)
+    # Dieselbe Haltefrage wie beim Versetzen (BOHRUNG-06): ein Versuch, denn
+    # die Kappen stehen schon mit der Zugabe an den offenen Mündungen. Beim
+    # Langloch liegen Flanken in der Ebene alter Flanken — vereinheitlicht.
+    placed, _held = _exact_chain_cut_holding(
+        filled, lambda _overlap: tool, overlaps=(1.0,), unify=feature.kind == "slot"
+    )
+    findings += _without_opened_twice(
+        _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True),
+        findings,
+    )
     return _exact_cavity_result(
         ctx, source, placed, op="rotate_feature", expected=expected, findings=findings
     )
@@ -10199,7 +10543,7 @@ def _exact_remove_cavity(ctx: OpContext, source: SceneObject, feature: Feature) 
     """Bohrung oder Langloch am exakten Körper schließen — und die Kennung geht mit (P2.4)."""
     solid = _exact_body(source)
     ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
-    filled = _exact_cavity_filled(solid, feature)
+    filled = _exact_own_filled(source, solid, feature)
     findings = [
         Finding(
             code="remove_feature.gone",
@@ -10411,7 +10755,13 @@ def _exact_chain_cut_moved(
     )
 
 
-def _exact_chain_cut_holding(solid: Any, tool_with: Callable[[float], Any]) -> tuple[Any, Any]:
+def _exact_chain_cut_holding(
+    solid: Any,
+    tool_with: Callable[[float], Any],
+    *,
+    overlaps: Sequence[float] = (),
+    unify: bool = True,
+) -> tuple[Any, Any]:
     """``solid`` minus dem Werkzeug aus ``tool_with`` — und eine Differenz, die
     still gescheitert ist, wird mit weiterem Mündungsüberstand wiederholt.
 
@@ -10429,12 +10779,23 @@ def _exact_chain_cut_holding(solid: Any, tool_with: Callable[[float], Any]) -> t
     offenen Mündungen, in der Luft; er ändert den Abtrag nur, wo die Fläche an
     der neuen Stelle weiter hinausreicht — an der Lochplatte um 0,4 mm³. Hält
     keiner, sagt die Handlung ab, statt einen kaputten Körper zu liefern.
+
+    **Und dieselbe Frage an jedem Bohrungsschnitt, nicht nur an Ketten**
+    (Durchsicht 0.5.1, BOHRUNG-06). Am Teppichclip (``carpet-corner-clip.step``)
+    kam das Langloch, 0,5 bis 2 mm entlang seiner Richtung versetzt, als
+    geschlossener Körper mit undichtem Zwilling und 6 bis 16 mm³ zu viel
+    zurück — ohne einen Befund; um -0,5 mm schnitt die Differenz gar nicht, und
+    danach scheiterte erst die Flächenmessung mit einem Satz über Integrale.
+    ``overlaps`` sind die Vielfachen des Überstands (leer: :data:`CUT_OVERLAPS`),
+    ein Werkzeug ohne offene Mündung versucht es einmal; ``unify`` legt die
+    Teilungsnähte zusammen wie bisher an Ketten und Langlöchern.
     """
     from app.core.brep import edit
 
-    for factor in CUT_OVERLAPS:
+    for factor in overlaps or CUT_OVERLAPS:
         tool = tool_with(FEATURE_OVERLAP * factor)
-        placed = edit.unified(edit.boolean("difference", [solid, tool]))
+        cut = edit.boolean("difference", [solid, tool])
+        placed = edit.unified(cut) if unify else cut
         if as_mesh_data(placed).is_watertight:
             return placed, tool
     raise GeometryError(
@@ -10614,7 +10975,12 @@ def _exact_move_chain(
     ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
     filled = _exact_chain_filled(source, entrance)
     ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
-    placed, tool = _exact_chain_cut_moved(filled, entrance, travel)
+    own = _exact_chain_own_cavity(source, chain)
+    placed, tool = (
+        _exact_own_cut(filled, own, travel)
+        if own is not None
+        else _exact_chain_cut_moved(filled, entrance, travel)
+    )
     expected = [
         dataclasses.replace(
             related,
@@ -10656,7 +11022,12 @@ def _exact_duplicate_chain(
     solid = _exact_body(source)
     travel = np.asarray(target, dtype=float) - np.asarray(feature.params["centre"], dtype=float)
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
-    placed, tool = _exact_chain_cut_moved(solid, entrance, travel)
+    own = _exact_chain_own_cavity(source, chain)
+    placed, tool = (
+        _exact_own_cut(solid, own, travel)
+        if own is not None
+        else _exact_chain_cut_moved(solid, entrance, travel)
+    )
     taken: set[str] = {*source.reserved_feature_ids, *source.features}
     copies = []
     for related in chain:
@@ -10852,7 +11223,7 @@ def _exact_rigid_cut(
 
     Eine Durchgangsbohrung bekommt dafür die ganze Zielhülle als Tiefe
     (``_exact_cavity_tool``) und endet an ihren alten Randebenen, um ``travel``
-    mitbewegt (:func:`_moved_rims`). Ohne das bohrte sie an der neuen Stelle
+    mitbewegt (:func:`_seated`). Ohne das bohrte sie an der neuen Stelle
     durch jede Wand auf ihrer Linie und blieb auch dort durchgehend, wo das Netz
     „geht nicht mehr durch" sagt — entlang ihrer Achse versetzt oder in
     dickeres Material (RM-220, 25.09.2026). Ohne flache Ränder bleibt es beim
@@ -10860,15 +11231,203 @@ def _exact_rigid_cut(
     """
     from app.core.brep import edit
 
-    tool = _exact_cavity_tool(solid, feature, target, axis)
-    if feature.params.get("through"):
-        rims = _moved_rims(as_mesh_data(source.mesh), feature, source.features, travel)
-        if len(rims) == 2:
-            tool = edit.clipped_bore_tool(tool, rims)
-    cut = edit.boolean("difference", [solid, tool])
+    own = _exact_own_cavity(source, feature)
+    if own is not None:
+        return _exact_own_cut(solid, own, travel)
+    rims = (
+        _bore_end_rims(as_mesh_data(source.mesh), feature, source.features, grows=True)
+        if feature.params.get("through")
+        else ()
+    )
+    if len(rims) != 2:
+        rims = ()
+
+    def tool_with(overlap: float) -> Any:
+        tool = _exact_cavity_tool(solid, feature, target, axis, reach=overlap)
+        if not rims:
+            return tool
+        planes = []
+        for rim in rims:
+            normal = np.asarray(rim.plane.normal, dtype=np.float64)
+            shift = units.dot3(normal, _seated(travel, normal))
+            # Die offene Mündung trägt schon :data:`FEATURE_OVERLAP`; eine
+            # Wiederholung rückt nur sie weiter hinaus, nie einen Boden.
+            extra = overlap - FEATURE_OVERLAP if rim.open else 0.0
+            planes.append(
+                dataclasses.replace(rim.plane, position=rim.plane.position + shift + extra)
+            )
+        return edit.clipped_bore_tool(tool, tuple(planes))
+
     # Beim Langloch liegen die Flanken des Werkzeugs in der Ebene alter Flanken
-    # (``_exact_cavity_cut``).
-    return (edit.unified(cut) if feature.kind == "slot" else cut), tool
+    # (``_exact_cavity_cut``) — deshalb vereinheitlicht, die Bohrung wie bisher
+    # nicht. Ohne offene Mündung ändert ein Überstand nichts: ein Versuch.
+    return _exact_chain_cut_holding(
+        solid,
+        tool_with,
+        overlaps=CUT_OVERLAPS if rims else (1.0,),
+        unify=feature.kind == "slot",
+    )
+
+
+def _exact_slot_body(source: SceneObject, feature: Feature) -> Any | None:
+    """Der Hohlraum eines Langlochs am exakten Körper, aus seinen nativen Flächen
+    geschlossen — mit Fasen und schrägen Mündungen, wie er ist; sonst ``None``.
+
+    **Das Gegenstück zum Netz** (``_tool_for``, :func:`_closed_at`; Durchsicht
+    0.5.1, BOHRUNG-05). Aus Kennzahlen hatte das Langloch am Teppichclip nur
+    seinen geraden Schlitz: Versetzt blieben die Fasen an der alten Stelle
+    stehen, und der Schnitt durch sie kam undicht zurück. Nur für ein
+    Langloch — eine Bohrung mit Fase ist eine Kette und hat ihren eigenen Weg.
+    """
+    from app.core.brep import edit
+
+    if feature.kind != "slot" or not is_a_cavity(feature) or not feature.face_indices:
+        return None
+    solid = _exact_body(source)
+    native = solid.faces_of_triangles(feature.face_indices)
+    if not native:
+        return None
+    return edit.solid_from_faces(solid, native, allowed_rings=(2,))
+
+
+def _exact_own_filled(source: SceneObject, solid: Any, feature: Feature) -> Any:
+    """Ein Hohlraum am exakten Körper geschlossen — ein Langloch aus seinen
+    Flächen (:func:`_exact_slot_body`), eine Tasche aus einem Baustein mit
+    ihrer Luft (:func:`_exact_air_of_the_bore`), alles andere wie bisher
+    (:func:`_exact_cavity_filled`).
+
+    Ob der Körper angekommen ist, sagen die Zwillinge wie in
+    :func:`_exact_chain_filled`: Eine Vereinigung, die ihn still fallen ließe,
+    ließe den Schlitz offen stehen.
+    """
+    from app.core.brep import edit
+
+    body = _exact_slot_body(source, feature)
+    if body is None:
+        air = _exact_air_of_the_bore(source, feature)
+        body = air.body if air is not None else None
+    if body is None:
+        return _exact_cavity_filled(solid, feature)
+    filled = edit.unified(edit.boolean("union", [solid, body]))
+    gained = as_mesh_data(filled).volume - as_mesh_data(solid).volume
+    if gained < as_mesh_data(body).volume * _PLUG_KEPT:
+        return _exact_cavity_filled(solid, feature)
+    return filled
+
+
+def _exact_own_cavity(source: SceneObject, feature: Feature) -> _OwnCavity | None:
+    """Der Hohlraum am exakten Körper, wie er ist, mit seinen Mündungen — oder
+    ``None``, wo er aus Kennzahlen geschnitten wird.
+
+    Ein Langloch aus seinen Flächen (:func:`_exact_slot_body`, BOHRUNG-05),
+    Mündungen aus seinen zwei Randringen; eine Tasche aus einem Baustein mit
+    ihrer Luft (:func:`_exact_air_of_the_bore`, BOHRUNG-13).
+    """
+    body = _exact_slot_body(source, feature)
+    if body is not None:
+        mouths = _own_mouths(source, feature)
+        return _OwnCavity(body, mouths) if mouths else None
+    return _exact_air_of_the_bore(source, feature)
+
+
+def _own_mouths(source: SceneObject, feature: Feature) -> tuple[tuple[SectionPlane, bool], ...]:
+    """Die zwei Endringe eines Hohlraums (samt Kette) als Ebenen bündig in der
+    Oberfläche, je mit der Luftprobe — leer, wo es keine zwei flachen gibt."""
+    rims = _bore_end_rims(as_mesh_data(source.mesh), feature, source.features, grows=True)
+    if len(rims) != 2:
+        return ()
+    return tuple(
+        (
+            dataclasses.replace(
+                rim.plane, position=rim.plane.position - (FEATURE_OVERLAP if rim.open else 0.0)
+            ),
+            rim.open,
+        )
+        for rim in rims
+    )
+
+
+def _narrows_outward(chain: Sequence[Feature]) -> bool:
+    """Ob eine Kette nach außen enger wird — eine Haltelippe statt einer Senkung.
+
+    Eine Senkung ist an ihrem weiten Ende weiter als die Bohrung darunter; ein
+    Kegel, dessen weites Ende nicht weiter ist, verengt die Mündung. So führt
+    die Erkennung seit der Zuordnung zu Baustein-Merkmalen die Lippe einer
+    Magnettasche (``cone_1`` Ø 8,25 über der Bohrung Ø 8,25).
+    """
+    from app.core.perceive.relations import cavity_sides
+
+    for side in cavity_sides(chain):
+        inner = _bore_number(side[0], "diameter")
+        for section in side[1:]:
+            if section.kind == "cone" and _bore_number(section, "diameter") <= inner + EPS_DISPLAY:
+                return True
+    return False
+
+
+def _exact_chain_own_cavity(source: SceneObject, chain: Sequence[Feature]) -> _OwnCavity | None:
+    """Eine Kette, die nach außen enger wird (:func:`_narrows_outward`), als
+    Hohlraum aus ihren nativen Flächen — ``None`` für jede andere.
+
+    **Die Profile einer Kette weiten sich nach außen** (``_entrance_tools``):
+    Der Schaft reicht mit dem Radius der Bohrung bis zur Mündung. An der
+    Magnettasche aus dem Baustein, die die Erkennung seit der Zusammenführung
+    als Bohrung mit Lippenkegel führt, schnitt er die Lippe weg — jede Kopie
+    und jede versetzte Tasche 1,55 mm³ zu weit, und kein Magnet hielt darin
+    (Durchsicht 0.5.1, BOHRUNG-13 Nachtrag). Aus den Flächen reist die Tasche,
+    wie sie ist; das Netz tut es ohnehin (``_paired_cavity_body``).
+    """
+    from app.core.brep import edit
+    from app.core.perceive.relations import cavity_surface_indices
+
+    if not _narrows_outward(chain):
+        return None
+    solid = _exact_body(source)
+    native = solid.faces_of_triangles(
+        cavity_surface_indices(as_mesh_data(source.mesh), tuple(chain))
+    )
+    body = edit.solid_from_faces(solid, native, allowed_rings=(2,)) if native else None
+    if body is None:
+        return None
+    mouths = _own_mouths(source, chain[0])
+    return _OwnCavity(body, mouths) if mouths else None
+
+
+def _exact_own_cut(solid: Any, own: _OwnCavity, travel: NDArray[np.float64]) -> tuple[Any, Any]:
+    """Der eigene Hohlraum (:func:`_exact_own_cavity`) um ``travel`` versetzt
+    ausgeschnitten — mit Kragen an den offenen Mündungen (``edit.collared``)
+    und derselben Haltefrage wie jeder Bohrungsschnitt
+    (:func:`_exact_chain_cut_holding`).
+
+    Der Kragen sitzt auf dem Deckel in der Ebene der Mündung, starr
+    mitbewegt. Rückt die Bewegung die Mündung um weniger als die
+    Facettengrenze ins Material, ist das Messrauschen (:func:`_seated`), und
+    der Kragen reicht um so viel weiter.
+    """
+    from app.core.brep import edit
+
+    moved = edit.moved(own.body, (float(travel[0]), float(travel[1]), float(travel[2])))
+    openings: list[tuple[SectionPlane, float]] = []
+    for plane, opened in own.mouths:
+        if not opened:
+            continue
+        normal = np.asarray(plane.normal, dtype=np.float64)
+        along = units.dot3(normal, travel)
+        openings.append(
+            (
+                dataclasses.replace(plane, position=plane.position + along),
+                -along if -MAX_FACET_SAG <= along < 0.0 else 0.0,
+            )
+        )
+
+    def tool_with(overlap: float) -> Any:
+        if not openings:
+            return moved
+        return edit.collared(moved, [(plane, overlap + extra) for plane, extra in openings])
+
+    return _exact_chain_cut_holding(
+        solid, tool_with, overlaps=CUT_OVERLAPS if openings else (1.0,), unify=True
+    )
 
 
 def _exact_remove_chain(
@@ -12874,7 +13433,12 @@ def _exact_rotate_cone(
             _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, turned=True),
             findings,
         )
-    placed = edit.unified(edit.boolean("difference" if cavity else "union", [cleared, tool]))
+    if cavity:
+        # Die Haltefrage auch hier (BOHRUNG-06): Die Senkung gilt erst mit
+        # dichtem Zwilling, sonst sagt die Handlung ab.
+        placed, _held = _exact_chain_cut_holding(cleared, lambda _overlap: tool, overlaps=(1.0,))
+    else:
+        placed = edit.unified(edit.boolean("union", [cleared, tool]))
     expected = dataclasses.replace(
         feature,
         params={
@@ -13438,7 +14002,9 @@ class PlugParams(BaseParams):
 @register_op(
     name="plug_hole",
     # 2: eine schräge Bohrung schließt an ihren Randebenen (22.09.2026).
-    cache_version="2",
+    # 3: ein Langloch schließt mit dem Körper aus seinen Flächen (Durchsicht
+    # 0.5.1).
+    cache_version="3",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,
@@ -13496,6 +14062,7 @@ def plug_hole(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            whole=True,
         )
         remaining = _without_old_triangles(source.features, without=(feature.id,))
         return OpResult(
@@ -13594,7 +14161,8 @@ def _exact_plug(ctx: OpContext, source: SceneObject, params: PlugParams) -> OpRe
     if params.at_feature:
         feature = _movable_feature(source, params.at_feature, "plug_hole")
         ctx.progress(0.3, str(_("Das Merkmal wird geschlossen …")))
-        filled = edit.unified(_exact_cavity_filled(solid, feature))
+        # Ein Langloch ganz, samt Fasen, wie am Netz (``whole``, BOHRUNG-05).
+        filled = edit.unified(_exact_own_filled(source, solid, feature))
         findings: list[Finding] = []
         nothing = without_effect(solid, filled, "union", ctx.profile)
         if nothing is not None:

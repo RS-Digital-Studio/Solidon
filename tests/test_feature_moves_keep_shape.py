@@ -16,10 +16,11 @@ wirklich ist — und beide Kerne antworten dasselbe.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from itertools import pairwise
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -501,6 +502,60 @@ def test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths(
     assert mesh[1] == brep[1], "beide Kerne sagen dasselbe"
     assert mesh[2] == brep[2], "beide Kerne halten dieselbe Bohrung für durchgehend"
     assert mesh[3] == pytest.approx(brep[3], abs=0.1), "die Senkung ist am Ergebnis gemessen"
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_tilted_through_slot_takes_only_its_own_slant(profile: Profile, kernel: str) -> None:
+    """Ein durchgehendes Langloch, gekippt, geht durch und trägt vor seinen
+    Mündungen nichts ab — an beiden Kernen (Durchsicht 0.5.1, BOHRUNG-08).
+
+    Am ``build_tray_v3.step`` schnitt der exakte Kern ein um 10° gekipptes
+    Langloch über die ganze Hülle: 8 012 mm³ fehlten vor der Mündung, quer
+    durch die Schale. Das Netz verlängerte es gar nicht und ließ +104,9 mm³
+    als Häute stehen, „geht nicht mehr durch". Hier: Platte 60 × 40 × 4, darüber
+    auf zwei Stützen eine zweite Platte (z 10 … 14) auf der Linie des
+    Schlitzes, Langloch Ø 6 × 20 entlang x, um 10° um x gekippt. Sollwert:
+    Querschnitt mal Wand durch cos 10° minus vorher, A · t · (1/cos θ − 1) mit
+    A = π · 3² + 6 · 14, und über der unteren Platte fehlt nichts.
+    """
+    from app.core.brep import edit
+    from app.core.geom.prepare import FEATURE_OVERLAP
+    from tests.test_bore_depth import _evaluated
+
+    plate = edit.unified(
+        edit.boolean(
+            "union",
+            [
+                edit.box(60.0, 40.0, 4.0),
+                edit.moved(edit.box(6.0, 40.0, 6.0), (-27.0, 0.0, 4.0)),
+                edit.moved(edit.box(6.0, 40.0, 6.0), (27.0, 0.0, 4.0)),
+                edit.moved(edit.box(60.0, 40.0, 4.0), (0.0, 0.0, 10.0)),
+            ],
+        )
+    )
+    solid = edit.slot_bore(
+        plate,
+        position=(0.0, 0.0, 2.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=6.0,
+        length=20.0,
+        angle_deg=0.0,
+        overlap=0.0,
+    )
+    source = _body(kernel, solid)
+    slot = next(feature for feature in source.features.values() if feature.kind == "slot")
+    changed, findings = _evaluated(
+        source, profile, "rotate_feature", at_feature=slot.id, axis="x", angle=10.0
+    )
+    lost = _removed(source, changed)
+    assert _beyond(lost, 4.0 + FEATURE_OVERLAP, above=True) == pytest.approx(0.0, abs=0.01)
+    assert _beyond(lost, -FEATURE_OVERLAP, above=False) == pytest.approx(0.0, abs=0.01)
+    assert "rotate_feature.no_longer_through" not in _warnings(findings), findings
+    section = math.pi * 9.0 + 6.0 * 14.0
+    slant = section * 4.0 * (1.0 / math.cos(math.radians(10.0)) - 1.0)
+    change = float(source.mesh.volume) - float(changed.mesh.volume)
+    assert change == pytest.approx(slant, rel=0.1), kernel
 
 
 def test_a_tilted_bore_is_capped_where_the_flat_cut_fails(
@@ -1464,3 +1519,335 @@ def test_a_cut_that_failed_silently_is_retried_with_more_overlap(
     with pytest.raises(GeometryError) as refused:
         _cut_with_twins(monkeypatch, [False, False, False])
     assert refused.value.detail == prepare_ops.CUT_DID_NOT_HOLD
+
+
+@pytest.mark.parametrize("case", ["gesenkt", "durchgehend"])
+def test_a_moved_bore_is_measured_where_it_stands(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Nach dem Versetzen misst das Netz örtlich nach, nicht mit der ganzen
+    Merkmalssuche (Durchsicht 0.5.1, BOHRUNG-07).
+
+    Die volle Erkennung am Ergebnis kostete jedes Versetzen am
+    Gartenschlauchhalter kalt 88 statt 12 s, auch in der Vorschau. Die
+    gesenkte und die schlichte Bohrung, je 4 mm quer versetzt, müssen ohne sie
+    auskommen und tragen danach die Maße der Konstruktion: Ø 6 durchgehend an
+    der neuen Stelle.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    source = _bored("mesh", RIBBED[case], ribbed=False)
+    hole = _narrowest_hole(source)
+
+    def refused(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("die volle Erkennung lief")
+
+    monkeypatch.setattr(prepare_ops, "_detect_resized_bores", refused)
+    x, y, z = (float(value) for value in hole.params["centre"])
+    changed, findings = _evaluated(
+        source, profile, "move_feature", at_feature=hole.id, x=x + 4.0, y=y, z=z
+    )
+    assert _warnings(findings) == []
+    measured = changed.features[hole.id]
+    assert float(measured.params["diameter"]) == pytest.approx(6.0, abs=0.01)
+    assert measured.params["through"] is True
+    assert float(measured.params["centre"][0]) == pytest.approx(x + 4.0, abs=1e-6)
+
+
+@pytest.mark.parametrize("op", ["move_feature", "duplicate_feature"])
+def test_a_single_exact_bore_cut_is_held_like_a_chain(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, op: str
+) -> None:
+    """Auch eine einzelne Bohrung geht am exakten Körper über die Haltefrage
+    (Durchsicht 0.5.1, BOHRUNG-06).
+
+    Am Teppichclip (``carpet-corner-clip.step``) kam ein Langloch, 0,5 mm
+    entlang seiner Richtung versetzt, als geschlossener Körper mit undichtem
+    Zwilling und 6 mm³ zu viel zurück — kein Befund, denn nur Ketten wurden
+    nachgeprüft. Hier wird gezählt, womit ``_exact_rigid_cut`` schneidet: drei
+    Überstände für eine Durchgangsbohrung, und das Werkzeug reicht mit jedem
+    Überstand weiter über die offenen Mündungen — um genau die Differenz, je
+    Mündung, also die doppelte Differenz in der Länge.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    source = _bored("brep", RIBBED["durchgehend"], ribbed=False)
+    hole = _narrowest_hole(source)
+    seen: list[tuple[float, float]] = []
+    real = prepare_ops._exact_chain_cut_holding
+
+    def counted(solid: Any, tool_with: Any, **kwargs: Any) -> Any:
+        def measured(overlap: float) -> Any:
+            tool = tool_with(overlap)
+            seen.append((overlap, float(tool.bounds.maximum[2] - tool.bounds.minimum[2])))
+            return tool
+
+        for factor in kwargs.get("overlaps") or prepare_ops.CUT_OVERLAPS:
+            measured(prepare_ops.FEATURE_OVERLAP * factor)
+        return real(solid, tool_with, **kwargs)
+
+    monkeypatch.setattr(prepare_ops, "_exact_chain_cut_holding", counted)
+    x, y, z = (float(value) for value in hole.params["centre"])
+    _evaluated(source, profile, op, at_feature=hole.id, x=x + 4.0, y=y, z=z)
+    overlaps = [overlap for overlap, _length in seen]
+    assert overlaps == pytest.approx(
+        [prepare_ops.FEATURE_OVERLAP * factor for factor in prepare_ops.CUT_OVERLAPS]
+    )
+    lengths = [length for _overlap, length in seen]
+    assert lengths[1] - lengths[0] == pytest.approx(2.0 * prepare_ops.FEATURE_OVERLAP, abs=1e-6)
+
+
+#: Die Neigung der Unterseite in :func:`_sloped_slot_plate`, in Grad.
+_SLOPE = 4.0
+
+
+def _sloped_slot_plate(*, chamfer: bool, slotted: bool = True) -> Any:
+    """Platte 40 × 40, oben z = 6, Unterseite um :data:`_SLOPE` geneigt
+    (z = 2 + tan · y), darin ein durchgehendes Langloch Ø 6 × 20 entlang y —
+    auf Wunsch mit einer Fase von 0,75 mm an beiden Mündungen.
+
+    Nachgebaut nach der Zunge des Wedge-Lock (``Wedge-Lock (Base).stl``) und des
+    Teppichclips: Langloch Ø 9 × 15,5 mit Fasen, die Unterseite um 3,6° geneigt.
+    """
+    from app.core.brep import edit
+    from app.core.geom.transform import composed, rotation, translation
+
+    plate = edit.box(40.0, 40.0, 6.0)
+    below = edit.moved(edit.box(120.0, 120.0, 30.0), (0.0, 0.0, -30.0))
+    matrix = np.asarray(composed(translation((0.0, 0.0, 2.0)), rotation("x", _SLOPE)))
+    below = edit.transformed(
+        below, cast(Any, tuple(tuple(float(value) for value in row) for row in matrix))
+    )
+    plate = edit.boolean("difference", [plate, below])
+    if not slotted:
+        return plate
+    plate = edit.slot_bore(
+        plate,
+        position=(0.0, 0.0, 3.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+        length=20.0,
+        angle_deg=90.0,
+        overlap=0.0,
+    )
+    if not chamfer:
+        return plate
+    rims = [
+        entry
+        for entry in edit.edges_of(plate)
+        if not entry.upright
+        and all(
+            abs(point[0]) <= 3.01 and abs(point[1]) <= 13.01 for point in edit.edge_points(entry)
+        )
+    ]
+    return edit.chamfer(plate, 0.75, selected_edges=edit.native_edge_indices(plate, rims))
+
+
+@pytest.mark.parametrize(
+    ("kernel", "chamfer"),
+    [("mesh", False), ("mesh", True), ("brep", False)],
+    ids=["Netz", "Netz gefast", "exakt"],
+)
+@pytest.mark.parametrize("way", ["entlang", "gegen", "quer", "Kopie"])
+def test_a_slot_through_a_sloped_wall_moves_as_a_whole(
+    profile: Profile, kernel: str, chamfer: bool, way: str
+) -> None:
+    """Ein Langloch durch eine Wand mit schräger Unterseite geht beim Versetzen
+    und Verdoppeln ganz mit — mit seinen Fasen, bis zu beiden Mündungen, an
+    beiden Kernen (Durchsicht 0.5.1, BOHRUNG-05).
+
+    Am Wedge-Lock (STL) füllte der Stopfen das Langloch über die ganze Wand,
+    das Werkzeug schnitt aber nur die gemessene Tiefe: 0,5 mm versetzt blieben
+    +125 mm³ als Häute stehen, „geht nicht mehr durch". Am Teppichclip (STEP)
+    blieben die Fasen an der alten Stelle zurück, und der Schnitt kam undicht.
+
+    Gegen die Neigung versetzt, rückt die untere Mündung um 0,03 mm ins
+    Material — Messrauschen unter der Facettengrenze, wie am exakten Kern
+    (``_seated``); das Netz ließ dort eine Haut stehen und sagte „geht nicht
+    mehr durch".
+
+    Am exakten Körper nur ohne Fase: Eine Fase von OpenCASCADE auf der
+    schrägen Unterseite endet an den Bögen in BSpline-Flächen, die die
+    Erkennung nicht zum Langloch zählt, und ihr Rand ist keine ebene Kurve.
+    Am Teppichclip sind die Fasen eigene Merkmale und bleiben beim Versetzen
+    stehen (Bericht bohrung, „Für Nachbarn").
+
+    Sollwerte: Quer versetzt ist die Wand an der neuen Stelle so dick wie an der
+    alten, das Volumen bleibt. Entlang der Neigung um 0,5 mm ist sie um
+    0,5 · tan 4° dünner, und das Volumen wächst um die Fläche der unteren
+    Mündung mal diese Differenz — mit der Fase ist das der Umriss um 0,75 mm
+    weiter, denn sie geht starr mit und liegt danach ein Stück vor der
+    Fläche. Die Kopie 12 mm daneben trägt so viel ab, wie der Hohlraum misst.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    solid = _sloped_slot_plate(chamfer=chamfer)
+    source = _body(kernel, solid)
+    slot = next(feature for feature in source.features.values() if feature.kind == "slot")
+    x, y, z = (float(value) for value in slot.params["centre"])
+    if way == "entlang":
+        op, target = "move_feature", (x, y + 0.5, z)
+    elif way == "gegen":
+        op, target = "move_feature", (x, y - 0.5, z)
+    elif way == "quer":
+        op, target = "move_feature", (x + 0.5, y, z)
+    else:
+        op, target = "duplicate_feature", (x + 12.0, y, z)
+    changed, findings = _evaluated(
+        source, profile, op, at_feature=slot.id, x=target[0], y=target[1], z=target[2]
+    )
+    assert _warnings(findings) == [], findings
+    assert as_mesh_data(changed.mesh).is_watertight
+    change = float(changed.mesh.volume) - float(source.mesh.volume)
+    if way in ("entlang", "gegen"):
+        # Die Unterseite steigt an der neuen Stelle um 0,5 · tan 4° oder fällt
+        # darum; die Mündung liegt starr mitbewegt um so viel davor oder, ins
+        # Material gerückt, bündig — samt dem Ring ihrer Fase.
+        rim = 0.75 if chamfer else 0.0
+        mouth = math.pi * (3.0 + rim) ** 2 + (6.0 + 2.0 * rim) * 14.0
+        expected = mouth * 0.5 * math.tan(math.radians(_SLOPE))
+        if way == "gegen":
+            expected = -expected
+    elif way == "quer":
+        expected = 0.0
+    else:
+        cavity = float(_body(kernel, _sloped_slot_plate(chamfer=False, slotted=False)).mesh.volume)
+        expected = -(cavity - float(source.mesh.volume))
+    assert change == pytest.approx(expected, abs=0.15), (kernel, change, expected)
+    slots = [feature for feature in changed.features.values() if feature.kind == "slot"]
+    assert len(slots) == (2 if op == "duplicate_feature" else 1), slots
+    assert all(feature.params.get("through") for feature in slots), slots
+
+
+@pytest.mark.parametrize("case", ["durchgehend", "Sackloch"])
+def test_a_widened_through_bore_is_measured_where_it_stands(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Nach dem Aufweiten misst das Netz eine Durchgangsbohrung örtlich nach,
+    nicht mit der ganzen Merkmalssuche (Durchsicht 0.5.1, BOHRUNG-12).
+
+    Am Gartenschlauchhalter kostete die volle Erkennung 74 der 76 s eines
+    Aufweitens von Ø 6 auf 7. Die Durchgangsbohrung muss ohne sie auskommen
+    und trägt danach Ø 8; ein Sackloch braucht seinen Boden und darf sie
+    nehmen — dort muss der Boden danach unter seinem Namen stehen.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    outline = (
+        RIBBED["durchgehend"]
+        if case == "durchgehend"
+        else [(0, 4), (3, 4), (3, 12), (0, 12), (0, 4)]
+    )
+    source = _bored("mesh", outline, ribbed=False)
+    hole = _narrowest_hole(source)
+    ran: list[int] = []
+    real = prepare_ops._detect_resized_bores
+
+    def watched(*args: Any, **kwargs: Any) -> Any:
+        ran.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(prepare_ops, "_detect_resized_bores", watched)
+    changed, findings = _evaluated(
+        source, profile, "resize_hole", at_feature=hole.id, diameter=8.0, compensate=False
+    )
+    assert _warnings(findings) == []
+    measured = changed.features[hole.id]
+    assert float(measured.params["diameter"]) == pytest.approx(8.0, abs=0.01)
+    assert bool(measured.params["through"]) is (case == "durchgehend")
+    assert bool(ran) is (case != "durchgehend")
+
+
+def _lid_with_a_magnet_pocket(box: str) -> tuple[Any, History, float]:
+    """Deckel 80 × 60 × 5 mit einer Magnettasche 8x3 von oben bei (−30, −20) —
+    der Aufbau aus ``magnet_lid`` der Agenten-Suite. Zurück: Projekt, Verlauf
+    und Volumen des Deckels ohne Tasche."""
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Deckel",
+        [OperationDraft(op=box, params={"width": 80.0, "depth": 60.0, "height": 5.0})],
+    )
+    history.apply(
+        "Magnet",
+        [
+            OperationDraft(
+                op="insert_magnet_pocket",
+                inputs=("obj_1",),
+                params={"size": "8x3", "x": -30.0, "y": -20.0, "z": 5.0},
+            )
+        ],
+    )
+    return project, history, 80.0 * 60.0 * 5.0
+
+
+@pytest.mark.parametrize("box", ["create_brep_box", "create_box"], ids=["exakt", "Netz"])
+@pytest.mark.parametrize(
+    "op", ["pattern_feature", "duplicate_feature", "move_feature", "remove_feature"]
+)
+def test_a_magnet_pocket_from_a_part_is_copied_moved_and_removed_with_its_lip(
+    profile: Profile, box: str, op: str
+) -> None:
+    """Eine Magnettasche aus dem Baustein lässt sich vervielfachen, verdoppeln,
+    versetzen und entfernen — mit ihrer Haltelippe, an beiden Kernen
+    (Durchsicht 0.5.1, BOHRUNG-13, Befund des Prüfers ki).
+
+    Das Merkmal des Bausteins trägt keine Dreiecke, und die Lippe verengt die
+    Mündung von Ø 8,25 auf 7,95: Die Prüfung „steht Material in der Bohrung?"
+    zählte die eigene Lippe als fremdes Material, und jede dieser Handlungen
+    sagte „In dieser Bohrung steht Material; sie ist eine Wand, keine
+    Bohrung." Im Assistenten wiederholte das Modell den Aufruf bis zur
+    Schrittgrenze (``magnet_lid``). Sollwerte: Jede Kopie trägt so viel ab wie
+    die Tasche selbst — samt Lippe —, das Versetzen lässt das Volumen, und
+    entfernt steht der volle Deckel da.
+
+    **Seit die Erkennung dem Merkmal des Bausteins Flächen zuordnet**
+    (Nachtrag nach der Zusammenführung), ist die Tasche eine Kette aus Bohrung
+    und Lippenkegel. Entfernt wird deshalb der ganze Hohlraum
+    (``sections="chain"``, *Den ganzen Hohlraum entfernen*); „nur das gewählte
+    Merkmal" ließe die Lippe als Ring stehen, und das ist dort die Absicht.
+    """
+    from app.core.geom.mesh import as_mesh_data as twin_of
+    from app.core.scene.project import ProjectSources
+
+    project, history, lid = _lid_with_a_magnet_pocket(box)
+    sources = ProjectSources(project)
+    before = evaluate(project.document, profile, sources=sources)
+    assert before.complete
+    body = before.scene.objects["obj_1"]
+    pocket = next(name for name in body.features if "magnet" in name)
+    volume = float(twin_of(body.mesh).volume)
+    cavity = lid - volume
+    params: dict[str, Any] = {"at_feature": pocket}
+    if op == "pattern_feature":
+        params = {
+            "at_features": [pocket],
+            "kind": "linear",
+            "count": 2,
+            "spacing": 60.0,
+            "dx": 1.0,
+            "dy": 0.0,
+            "dz": 0.0,
+        }
+        expected = volume - cavity
+    elif op == "duplicate_feature":
+        params.update(x=30.0, y=-20.0, z=3.5)
+        expected = volume - cavity
+    elif op == "move_feature":
+        params.update(x=-20.0, y=-20.0, z=3.5)
+        expected = volume
+    else:
+        params["sections"] = "chain"
+        expected = lid
+    history.apply(op, [OperationDraft(op=op, inputs=("obj_1",), params=params)])
+    after = evaluate(project.document, profile, sources=sources)
+    assert after.complete, [str(finding.message) for finding in after.scene.report.findings]
+    # Keine Warnung: weder „nicht als eigenes Merkmal zu erkennen" an einer
+    # Kopie, die dasteht, noch ein Verlust dessen, was entfernt werden sollte.
+    assert _warnings(after.scene.report.findings) == [], op
+    changed = float(twin_of(after.scene.objects["obj_1"].mesh).volume)
+    # Die Lippe selbst misst rund 0,8 mm³ (Kegelring Ø 8,25 → 7,95 über 0,4 mm):
+    # Eine Kopie als glatter Zylinder läge darüber.
+    assert changed == pytest.approx(expected, abs=0.25), (op, changed, expected)

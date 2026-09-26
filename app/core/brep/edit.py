@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 from app.core.brep.canonical import CylinderSurface
 from app.core.brep.kernel import (
@@ -1525,6 +1525,60 @@ def clipped_bore_tool(solid: Solid, planes: Sequence[SectionPlane]) -> Solid:
             )
         solid = solid.replacing(builder.Shape(), history=builder)
     return solid
+
+
+def collared(solid: Solid, mouths: Sequence[tuple[SectionPlane, float]]) -> Solid:
+    """``solid`` mit einem Kragen über jeder ebenen Fläche, die in einer der
+    Ebenen aus ``mouths`` liegt — deren Prisma um die Weite daneben entlang
+    der Ebenennormale.
+
+    Das exakte Gegenstück zu ``prepare_ops._past_the_mouths`` am Netz: Ein
+    Hohlraum aus seinen Flächen (:func:`solid_from_faces`) endet bündig in der
+    Oberfläche, und eine bündige Differenz lässt eine Haut stehen (§39). Die
+    Ebenen sind die offenen Mündungen, ihre Normalen zeigen nach außen; was
+    der Kragen dort einnimmt, liegt in der Luft und trägt nichts ab. Liegt
+    keine Fläche in einer der Ebenen, bleibt ``solid``, wie es ist.
+    """
+    require()
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.GeomAbs import GeomAbs_Plane
+    from OCP.gp import gp_Vec
+
+    pieces = [solid]
+    for face in solid.faces():
+        adaptor = BRepAdaptor_Surface(face)
+        if adaptor.GetType() != GeomAbs_Plane:
+            continue
+        surface = adaptor.Plane()
+        where = surface.Location()
+        facing = surface.Axis().Direction()
+        normal = (facing.X(), facing.Y(), facing.Z())
+        point = (where.X(), where.Y(), where.Z())
+        for plane, distance in mouths:
+            parallel = abs(sum(a * b for a, b in zip(normal, plane.normal, strict=True)))
+            offset = sum(a * b for a, b in zip(point, plane.normal, strict=True)) - plane.position
+            if parallel < _COLLAR_PARALLEL or abs(offset) > _COLLAR_OFF:
+                continue
+            shift = gp_Vec(*(value * distance for value in plane.normal))
+            # Mit Kopie der Grundfläche: Die Fläche gehört ``solid`` (Eigentumsvertrag).
+            prism = BRepPrimAPI_MakePrism(face, shift, True).Shape()
+            pieces.append(Solid(prism, deflection=solid.deflection))
+            break
+    if len(pieces) == 1:
+        return solid
+    return unified(boolean("union", pieces))
+
+
+#: Wie parallel eine Fläche zu einer Mündungsebene stehen muss, damit
+#: :func:`collared` sie als deren Deckel nimmt — als Betrag des Kosinus der
+#: Normalen. Ein Deckel aus :func:`solid_from_faces` liegt in der Ebene seines
+#: Rings; die Ebene der Mündung ist am Netz-Zwilling gemessen.
+_COLLAR_PARALLEL: Final = 0.999
+
+#: Wie weit ein Deckel neben der Mündungsebene liegen darf (mm) — weit unter
+#: dem Überstand, um den der Kragen reicht, weit über der Messung am Zwilling.
+_COLLAR_OFF: Final = 0.005
 
 
 def slot_bore(
