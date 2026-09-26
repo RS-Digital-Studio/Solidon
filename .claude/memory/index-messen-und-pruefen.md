@@ -48,3 +48,4 @@ Wortgleich aus `MEMORY.md` verlegt am 23.09.2026 (Hauptindex über 17 KB). Jede 
 - [Geteiltes Budget bedient die Reihenfolge](geteiltes-budget-bedient-die-reihenfolge.md) — Budget je Einheit, nicht je Träger.
 - [Mehr Kandidaten prüfen das Urteil](mehr-kandidaten-pruefen-das-urteil.md) — die bessere Vorauswahl stellte den Poolhalter auf eine Kante; Vollfeld fahren, neue Sieger ansehen.
 - [Rauschen auf einer Maschine ersetzt drei Runner](rauschen-auf-einer-maschine-ersetzt-drei-runner.md) — ein ULP auf jede plattformabhängige Rechnung plus BLAS-Kerntausch; `_WAYS` in test_platform_identity.
+- [Zwischenkreis an der Naht](zwischenkreis-an-der-naht-zweier-boegen.md) · [Gegenfall erst am Basisstand](gegenfall-erst-am-basisstand-pruefen.md) — ein Nahtstück täuscht einen dritten Radius vor; Sollbild vor dem Test am Basisstand bestätigen.
