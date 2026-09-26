@@ -449,6 +449,20 @@ Kunden an einen Rand, an dem nichts ist. Wo die grobe Frage anschlägt, wird
 deshalb an der Sache nachgemessen; wo kein Netz vorliegt, bleibt es bei der
 Näherung, und die ist dort zu streng und nie zu milde.
 
+**Und wo sie nicht anschlägt, ist das noch kein Freispruch** (RM-249). Eine
+Seite, die schmaler ist als die Hülle, liegt innerhalb des Hüllquaders: An der
+Lochplatte gs-100 lief eine Kopie 3,4 mm über die Seite, und keiner der beiden
+Kerne sagte etwas. Mit ``reach`` — der Länge der Bohrung von ihrer Stelle aus —
+fragt `over_the_edge_along` dann am Netz nach (`_flank_opens_within`): der
+Kranz über die eigene Länge der Bohrung, nur an Tiefen, an denen sie
+schneidet, und von den Punkten in Luft nur die, von denen ein Strahl quer zur
+Achse frei nach außen geht. Ein Punkt in einer Nachbarbohrung trifft deren
+Wand und ist kein Rand; dafür gibt es den Nachbarbefund. Über die ganze Hülle
+getastet, wie `_flank_is_open`, hieße jede Bohrung in einer dünnen Platte
+„über die Kante". Jeder Weg, der eine Bohrung setzt, gibt ``reach`` mit —
+Bohren, Ändern, Langloch, Versetzen, Verdoppeln, Kippen, Muster, an beiden
+Kernen.
+
 Die Frage davor, für jede Näherung im Haus: **Wie oft schlägt sie im Normalfall
 an?** Eine Näherung, die nur Fehlalarme in einem seltenen Fall erzeugt, ist
 richtig; eine, die den häufigsten Fall trifft, ist ein Fehler mit Docstring.
@@ -858,6 +872,15 @@ tief im Material und reißt 2,3 mm hinter ihrem unteren Austritt trotzdem auf
 geschlossen (`test_moving_or_duplicating_a_bore_over_the_edge_says_so`,
 `test_every_way_that_sets_a_bore_anew_asks_about_the_edge`,
 `test_a_widened_countersink_over_the_edge_says_so`).
+
+**Eine Kopie, die es nicht gibt, sagen beide Kerne** (RM-249). Der exakte
+erkennt nach dem Schnitt neu und meldet, was er nicht wiederfindet
+(`_exact_copy_result`); das Netz misst seine Kopien nach (`_copies_found`)
+und tut dasselbe — beim Verdoppeln einzeln und als Kette und im Muster.
+Wiedergefunden heißt: seitlich auf der Achse, auf die sie gesetzt wurde, bis
+zur Facettengrenze. Die Messung am Netz nimmt sonst auch einen
+angeschnittenen Zylinder über einer Seite als Bohrung, mit seiner Mitte bis
+1,25 mm daneben, und die Auswertung verwarf ihn danach still.
 
 **Der Winkel zählt gegen den Rahmen, den er bekommt — und die zwei Wege
 bekommen verschiedene.** `drill_hole` baut ihn aus der Normalen der

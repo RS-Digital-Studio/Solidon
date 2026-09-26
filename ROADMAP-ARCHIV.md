@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-26 | [Die Kante innerhalb der Hülle und die Nachkontrolle der Kopien (26.09.2026)](#die-kante-innerhalb-der-hülle-und-die-nachkontrolle-der-kopien-26092026) |
 | 2026-09-25 | [Bohrungen mit Erweiterung an beiden Enden (25.09.2026)](#bohrungen-mit-erweiterung-an-beiden-enden-25092026) |
 | 2026-09-25 | [Das lokale Modell bekommt ein Angebot statt des ganzen Registers (25.09.2026)](#das-lokale-modell-bekommt-ein-angebot-statt-des-ganzen-registers-25092026) |
 | 2026-09-25 | [Die Schnittsuche an Nadeldreiecken: die Trennprüfung (25.09.2026)](#die-schnittsuche-an-nadeldreiecken-die-trennprüfung-25092026) |
@@ -31756,3 +31757,72 @@ Dazu aus dem Bericht, je mit Test:
   (eine Kette mit zwei Seiten; Versetzen, Kippen, Verdoppeln und Entfernen an
   drei Profilen und beiden Kernen; jeder Abschnitt einzeln; die Mündung in
   einer gekrümmten Fläche).
+
+## Die Kante innerhalb der Hülle und die Nachkontrolle der Kopien (26.09.2026)
+
+<a id="rm-249"></a>
+
+- [x] **RM-249 — Eine Bohrung über einer Seite innerhalb der Hülle meldet keine Kante.**
+  Gefunden am 25.09.2026 bei RM-245. An den vier Lochplatten, jede
+  Schraubbohrung um 12 mm quer verdoppelt, tragen beide Kerne dasselbe
+  Volumen ab (auf 2 %: −218,847 zu −218,473 mm³ an der Crimper-Platte), aber
+  der exakte Kern findet danach Kopien einzelner Bohrungen nicht wieder und
+  meldet `duplicate_feature.feature_lost` — an `pegboard-gs-100-v2.step`
+  oben beide Bohrungskopien, erkannt wird an der Stelle nur ein Kegelstück;
+  ebenso an der Goot-Platte zweimal, an pb3041 und an der Crimper-Platte je
+  einmal. Das Netz (`_duplicate_cavity_chain`) prüft seine Kopien nicht nach
+  und trägt sie mit ihren Maßen weiter.
+  **Nachgemessen am 26.09.2026:** Frisch erkannt findet auch das Netz an der
+  Kopierstelle nur das Kegelstück — der exakte Kern hat recht. Die Platte
+  reicht auf der Höhe der oberen Bohrung (z = 46,25) nur bis x ≈ 13,6, ihr
+  Hüllquader bis x = 20; die Kopie bei x = 12 läuft mit der Zylindersenkung
+  Ø 10 bis x = 17 über die Seite, und **keiner** der beiden Kerne sagt „über
+  die Kante“. Ursache: `prepare.over_the_edge_along` und
+  `prepare.mouth_over_the_edge` fragen zuerst `_axes_over`, den Hüllquader,
+  und kehren zurück, wenn die Scheibe darin bleibt — das Urteil am Netz
+  (`_flank_is_open`, der Kranz an der Mündung) kommt gar nicht erst dran.
+  Den Hüllquader einfach zu streichen trägt nicht: `_flank_is_open` tastet in
+  Schritten eines Sechzehntels der Hüllendiagonale entlang der Achse und fände
+  an einer 3 mm starken Platte keine Tiefe mit dem Kranz ganz im Material —
+  jede Bohrung hieße „über die Kante“. Weg: für ein Merkmal mit Mitte und
+  Tiefe den Kranz über **seine eigene** Tiefe abtasten (ein Viertel, die
+  Hälfte, drei Viertel), am Körper vor dem Schnitt; wo keine dieser Tiefen
+  ihn ganz im Material hat, reißt die Flanke auf. Das gilt für Versetzen,
+  Verdoppeln, Kippen und Muster (`_edge_findings`); *Bohren* fragt mit der
+  gewählten Tiefe genauso. Danach die Nachkontrolle der Kopien am Netz wie am
+  exakten Kern (`_duplicate_cavity_chain` fragt heute nicht), damit eine
+  Kopie, die es nicht gibt, an beiden gemeldet wird. Abnahme: an gs-100 oben
+  um 12 mm quer verdoppelt „über die Kante“ an beiden Kernen, an den übrigen
+  drei Platten dieselben Befunde an beiden Kernen, als STEP und als 3MF; eine
+  Bohrung in einer 1-mm-Platte ohne Kantenbefund.
+
+  **Abgeschlossen am 26.09.2026 — der Hüllquader ist nur noch die Vorauswahl.**
+  `over_the_edge_along` nimmt ``reach``, die Länge der Bohrung von ihrer
+  Stelle aus; bleibt die Scheibe im Hüllquader, fragt `_flank_opens_within`
+  am Netz nach: der Kranz über die eigene Länge der Bohrung, an der Stelle und
+  je einem Viertel, der Hälfte und drei Vierteln in beide Richtungen, nur an
+  Tiefen, an denen die Bohrung schneidet. Liegt er an einer davon ganz im
+  Material, ist die Flanke zu. Von den Punkten in Luft zählt nur, was nach
+  außen frei liegt — ein Strahl quer zur Achse, der den Körper nicht mehr
+  trifft (`_open_to_the_outside`); ein Punkt in einer Nachbarbohrung trifft
+  deren Wand. Jeder Weg, der eine Bohrung setzt, gibt ``reach`` mit: Bohren,
+  Ändern, Langloch, Versetzen, Verdoppeln, Kippen und Muster, an beiden
+  Kernen. Der Oberflächenindex je Körper zog dafür als `surface_index_of`
+  nach `geom.prepare`. **Und das Netz misst seine Kopien nach**
+  (`_copies_found`, beim Verdoppeln einzeln und als Kette und im Muster):
+  Was sich nicht wiederfindet oder seitlich weiter als die Facettengrenze
+  neben seiner Achse liegt, meldet es als verloren und lässt es weg, wie der
+  exakte Kern. Die Messung nahm sonst einen angeschnittenen Zylinder über der
+  Seite als Bohrung, mit seiner Mitte 0,75 bis 1,25 mm daneben, und die
+  Auswertung verwarf ihn danach still.
+  Gemessen an den vier Lochplatten, je als STEP und als 3MF, jede
+  Schraubbohrung um 12 mm quer verdoppelt: Wo die Kopie über die Seite läuft
+  — gs-100 oben, Goot beide, pb3041 und Crimper je eine —, sagen beide Kerne
+  „über die Kante“ und nennen dieselben Kopien verloren; wo sie passt, sagen
+  beide nichts; an gs-100 unten beide „geht nicht mehr durch“. An einer
+  Platte, die schmaler ist als ihre Hülle: Verdoppeln über die Seite, Versetzen
+  und Bohren dort an beiden Kernen „über die Kante“, eine Bohrung in die
+  vorhandene hinein und eine mitten im Material nichts, eine Platte von 1 mm
+  Stärke ohne Kantenbefund. Nachweis: `test_feature_moves_keep_shape.py`
+  (Kopie und Versetzen über der Seite, Bohren daneben und in die Nachbarin,
+  die dünne Platte), dazu das Tor mit allen bisherigen Kantentests.

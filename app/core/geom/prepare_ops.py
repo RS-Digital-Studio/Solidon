@@ -91,6 +91,7 @@ from app.core.geom.prepare import (
     slot_travel,
     split_at_plane,
     split_findings,
+    surface_index_of,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, cut
 from app.core.geom.transform import Axis, composed, moved_object, place_on_bed, translation
@@ -1637,6 +1638,12 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
             if float(np.linalg.norm(direction)) > EPS_GEOM and stretch > EPS_GEOM:
                 direction /= float(np.linalg.norm(direction))
                 positions = [centre - direction * stretch, centre + direction * stretch]
+        # **Mit ihrer Länge** (RM-249): Bleibt die Scheibe im Hüllquader, fragt
+        # die Prüfung am Netz über die eigene Tiefe des Merkmals nach — eine
+        # Kopie über einer Seite, die schmaler ist als die Hülle, sagte sonst
+        # nichts.
+        depth = _depth_of(feature)
+        reach = depth / 2.0 if depth > EPS_GEOM else diameter / 2.0
         for position in positions:
             found = over_the_edge_along(
                 body,
@@ -1644,6 +1651,7 @@ def _edge_findings(body: MeshData, placed: Iterable[Feature]) -> list[Finding]:
                 _feature_direction(feature),
                 diameter,
                 body=body,
+                reach=reach,
             )
             if found:
                 return found
@@ -3649,11 +3657,13 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         surface_patches=(),
     )
     findings += _edge_findings(body, [copy])
+    kept: dict[FeatureId, Feature] = {copy.id: copy}
     if cavity:
         travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
-        copy = _measured_on(
-            placed.mesh, [copy], check_cancelled=ctx.cancelled.raise_if_cancelled
-        ).get(copy.id, copy)
+        kept, missing = _copies_found(
+            "duplicate_feature", placed.mesh, kept, check_cancelled=ctx.cancelled.raise_if_cancelled
+        )
+        findings += missing
         findings += _mouth_covered(
             "duplicate_feature", body, placed.mesh, feature, source.features, travel, findings
         )
@@ -3661,16 +3671,17 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
             _neighbour_bore_findings(source, feature, cutting, ctx, moved=True, copy=True),
             findings,
         )
-    if lost:
+    if lost and copy.id in kept:
         # Wie beim Versetzen: Der Satz sagt „geht nicht mehr durch", und die
         # Kopie sagt es auch — hier blieb sie ``through=True`` (RM-220).
-        copy = dataclasses.replace(copy, params={**copy.params, "through": False})
+        found = kept[copy.id]
+        kept[copy.id] = dataclasses.replace(found, params={**found.params, "through": False})
     return OpResult(
         outputs=[
             dataclasses.replace(
                 source,
                 mesh=placed.mesh,
-                features={**_without_old_triangles(source.features), copy.id: copy},
+                features={**_without_old_triangles(source.features), **kept},
                 reserved_feature_ids=tuple(
                     sorted({*source.reserved_feature_ids, *source.features, copy.id})
                 ),
@@ -3755,12 +3766,11 @@ def _duplicate_cavity_chain(
         tool=cutting,
     )
     findings += lost
-    copies.update(
-        _measured_on(
-            placed.mesh, list(copies.values()), check_cancelled=ctx.cancelled.raise_if_cancelled
-        )
+    copies, missing = _copies_found(
+        "duplicate_feature", placed.mesh, copies, check_cancelled=ctx.cancelled.raise_if_cancelled
     )
-    if lost:
+    findings += missing
+    if lost and bore.id in copies:
         measured_bore = copies[bore.id]
         copies[bore.id] = dataclasses.replace(
             measured_bore, params={**measured_bore.params, "through": False}
@@ -4383,6 +4393,10 @@ def _mesh_pattern_result(
                 if lost:
                     copy = dataclasses.replace(copy, params={**copy.params, "through": False})
             copies[copy.id] = copy
+    copies, missing = _copies_found(
+        "pattern_feature", placed, copies, check_cancelled=ctx.cancelled.raise_if_cancelled
+    )
+    findings.extend(missing)
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -5447,21 +5461,6 @@ def _welded(mesh: MeshData) -> Any:
     return remembered("merged_copy", mesh.raw, (), weld)
 
 
-def _surface_index(mesh: MeshData) -> Any:
-    """Der Suchbaum für :func:`app.core.geom.mesh.on_surface` — einmal je Körper.
-
-    Die Mündungsprobe fragt eine Handvoll Punkte, der Baum darunter kennt alle
-    Dreiecke: am Gartenschlauchhalter 0,2 s für den Aufbau, je Bohrung neu
-    (RM-181). Gemerkt wird er in den Merkern der Erkennung, nicht im Cache des
-    Netzes (``features.WHOLE_BODY_ANSWERS``, acht über alle Körper), und er
-    geht mit seinem Körper.
-    """
-    from app.core.geom.mesh import surface_index
-    from app.core.perceive.features import remembered
-
-    return remembered("surface_index", mesh.raw, (), lambda: surface_index(mesh.raw))
-
-
 def _mouth_is_open(mesh: MeshData, edge: NDArray[np.float64], normal: NDArray[np.float64]) -> bool:
     """Vor dem gesamten Rand liegt Luft; ein Sacklochboden bleibt geschlossen."""
     # Ein Anteil aus Zählungen, nie negativ — gefragt wird „keine Probe im
@@ -5479,7 +5478,7 @@ def _share_in_material(
     inward = edge.mean(axis=0) - edge
     inward /= np.maximum(np.linalg.norm(inward, axis=1), EPS_GEOM)[:, None]
     probes = edge + inward * FEATURE_OVERLAP + normal * FEATURE_OVERLAP
-    closest, _, at = on_surface(mesh.raw, probes, index=_surface_index(mesh))
+    closest, _, at = on_surface(mesh.raw, probes, index=surface_index_of(mesh))
     body_normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
     signed = np.einsum("ij,ij->i", probes - closest, body_normals[at])
     return float(np.count_nonzero(signed <= EPS_GEOM)) / float(max(len(signed), 1))
@@ -6659,6 +6658,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 travel=slot_travel_now,
                 angle_deg=slot_angle_of(feature, axis) if feature.kind == "slot" else 0.0,
                 body=as_mesh_data(source.mesh),
+                reach=depth / 2.0,
             )
         )
         findings.extend(compensation_findings(params.diameter, cut, params.compensate))
@@ -7338,6 +7338,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 travel=0.0 if rounded else slot_travel(diameter=diameter, length=cut_length),
                 angle_deg=angle,
                 body=as_mesh_data(source.mesh),
+                reach=_depth_of(feature) / 2.0,
             )
         )
         findings.extend(split_findings(source.mesh, solid))
@@ -9363,6 +9364,61 @@ def _measured_on(
     return measured
 
 
+def _copies_found(
+    op: str,
+    mesh: MeshData,
+    copies: Mapping[FeatureId, Feature],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> tuple[dict[FeatureId, Feature], list[Finding]]:
+    """Die Kopien am Ergebnis nachgemessen — und was sich nicht wiederfindet,
+    gemeldet und weggelassen, wie am exakten Kern (``_exact_copy_result``).
+
+    **Eine Kopie, die es nicht gibt, sagt es an beiden Kernen** (RM-249,
+    26.09.2026). An der Lochplatte ``pegboard-gs-100-v2`` lief eine um 12 mm
+    quer verdoppelte Schraubbohrung über die Seite; frisch erkannt fand sich an
+    der Stelle an keinem Kern mehr als ein Kegelstück. Der exakte Kern meldete
+    die Bohrungskopien als verloren, das Netz trug sie ungeprüft mit ihren
+    Maßen weiter — und das Merkmalfenster zeigte zwei Bohrungen, die nicht
+    da sind. Nachgemessen wird mit :func:`_measured_on`; Kopien anderer Art
+    reichen durch, wie sie sind.
+
+    **Wiedergefunden heißt: auf ihrer Achse.** Die Messung am Netz nimmt auch
+    einen angeschnittenen Zylinder als Bohrung; an der Kopie über der Seite lag
+    seine Mitte 0,75 bis 1,25 mm zur Materialseite hin, und die Auswertung
+    verwarf ihn danach still als verwaist. Eine starr gesetzte Kopie steht
+    seitlich genau dort, wo sie hin sollte — mehr als die Facettengrenze
+    daneben (:data:`~app.core.units.MAX_FACET_SAG`) ist sie nicht mehr diese
+    Kopie.
+    """
+    cavities = [
+        copy for copy in copies.values() if copy.kind in ("hole", "cone") and is_a_cavity(copy)
+    ]
+    measured = _measured_on(mesh, cavities, check_cancelled=check_cancelled)
+    kept: dict[FeatureId, Feature] = {}
+    findings: list[Finding] = []
+    wanted = {copy.id for copy in cavities}
+    for name, copy in copies.items():
+        found = measured.get(name)
+        if name in wanted and (found is None or _beside_its_axis(found, copy)):
+            findings.append(_cavity_lost_finding(op, copy))
+            continue
+        kept[name] = found or copy
+    return kept, findings
+
+
+def _beside_its_axis(found: Feature, expected: Feature) -> bool:
+    """Ob ein nachgemessenes Merkmal seitlich neben der Achse liegt, auf die es
+    gesetzt wurde — weiter als die Facettengrenze (:func:`_copies_found`)."""
+    axis = np.asarray(_feature_direction(expected), dtype=np.float64)
+    axis /= math.hypot(float(axis[0]), float(axis[1]), float(axis[2]))
+    offset = np.asarray(found.params["centre"], dtype=np.float64) - np.asarray(
+        expected.params["centre"], dtype=np.float64
+    )
+    across = offset - axis * units.dot3(offset, axis)
+    return math.hypot(float(across[0]), float(across[1]), float(across[2])) > MAX_FACET_SAG
+
+
 def _recognised_resized_feature(
     mesh: MeshData,
     feature: Feature,
@@ -9765,7 +9821,9 @@ def _through_lost_finding(op: str, feature: Feature, centre: Vec3) -> Finding:
 
 
 def _cavity_lost_finding(op: str, feature: Feature) -> Finding:
-    """Das Merkmal ist gesetzt, aber am exakten Körper nicht mehr als Merkmal auffindbar."""
+    """Das Merkmal ist gesetzt, aber am Ergebnis nicht mehr als Merkmal auffindbar —
+    am exakten Körper nach seiner Erkennung, am Netz nach dem Nachmessen
+    (:func:`_copies_found`)."""
     return Finding(
         code=f"{op}.feature_lost",
         severity="warning",

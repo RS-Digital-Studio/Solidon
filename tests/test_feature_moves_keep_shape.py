@@ -1235,3 +1235,103 @@ def test_a_widened_bore_whose_mouth_lies_in_a_curved_face_is_moved_on_both_kerne
     # Zylinder R 40 bleiben rund 4 bis 5 mm³ von 651, an beiden Kernen.
     assert abs(change) <= 0.01 * _profile_volume(BOTH_ENDS["Zylindersenkung und Fase"]), change
     assert _chain_ids(moved) == members
+
+
+# --- Eine Seite, die schmaler ist als die Hülle (RM-249) ------------------------------
+
+
+def _narrow_plate(kernel: str, *, thickness: float = 6.0) -> SceneObject:
+    """Grundplatte 40 x 16 (y ±8) mit einer Bohrung Ø 6 bei x = 8, dazu eine
+    Säule 10 x 24 x 30 am linken Ende (y ±12): Die Hülle reicht in y bis ±12,
+    die Platte nur bis ±8 — wie an der Lochplatte ``pegboard-gs-100-v2``, die
+    auf Höhe der oberen Schraubbohrung schmaler ist als ihre Hülle.
+    """
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    plate = edit.box(40.0, 16.0, thickness)
+    column = edit.moved(edit.box(10.0, 24.0, 30.0), (-15.0, 0.0, 0.0))
+    body = edit.unified(edit.boolean("union", [plate, column]))
+    outline = [(0, 0), (3, 0), (3, thickness), (0, thickness), (0, 0)]
+    solid = edit.bore_profile(body, outline, frame_of((0, 0, 1), (8.0, 0.0, 0.0)))
+    return _body(kernel, solid)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_copy_over_a_side_inside_the_hull_says_so_on_both_kernels(
+    profile: Profile, kernel: str
+) -> None:
+    """Die Kantenprüfung fragte zuerst den Hüllquader und schwieg, solange die
+    Scheibe darin blieb — auch über einer Seite, die schmaler ist als die
+    Hülle (RM-249). An der Lochplatte gs-100 lief eine Kopie 3,4 mm über die
+    Seite, und keiner der beiden Kerne sagte etwas; der exakte meldete die
+    Kopie als verloren, das Netz trug sie ungeprüft weiter.
+
+    Jetzt sagen beide „über die Kante" und beide „nicht wiederzufinden", beim
+    Versetzen „über die Kante". Eine Kopie, die ganz im Material steht, sagt
+    nichts.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    source = _narrow_plate(kernel)
+    bore = _narrowest_hole(source)
+    x, y, z = (float(value) for value in bore.params["centre"])
+    _copied, findings = _evaluated(
+        source, profile, "duplicate_feature", at_feature=bore.id, x=x, y=y + 9.5, z=z
+    )
+    assert _warnings(findings) == ["bore.over_the_edge", "duplicate_feature.feature_lost"]
+    _moved, findings = _evaluated(
+        source, profile, "move_feature", at_feature=bore.id, x=x, y=y + 6.0, z=z
+    )
+    assert _warnings(findings) == ["bore.over_the_edge"]
+    copied, findings = _evaluated(
+        source, profile, "duplicate_feature", at_feature=bore.id, x=x + 8.0, y=y, z=z
+    )
+    assert _warnings(findings) == []
+    assert len([feature for feature in copied.features.values() if feature.kind == "hole"]) == 2
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_drilling_over_a_side_inside_the_hull_says_so(profile: Profile, kernel: str) -> None:
+    """Bohren fragt die Kante mit seiner Tiefe genauso (RM-249).
+
+    Über der schmalen Seite heißt es „über die Kante"; eine Bohrung, die in
+    die vorhandene schneidet, ist keine Kante — dort ist die Flanke in den
+    Nachbarn offen, und ein Strahl vom Kranz nach außen trifft dessen Wand.
+    Und eine Bohrung ganz im Material sagt nichts.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    source = _narrow_plate(kernel)
+    for x, y, expected in (
+        (-2.0, 6.0, ["bore.over_the_edge"]),
+        (-2.0, 3.0, []),
+        (8.0, 3.0, []),
+    ):
+        _drilled, findings = _evaluated(
+            source, profile, "drill_hole", x=x, y=y, z=6.0, diameter=6.0, depth=0.0, axis="z"
+        )
+        edge = [code for code in _warnings(findings) if code == "bore.over_the_edge"]
+        assert edge == expected, (x, y, findings)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_bore_in_a_thin_plate_is_no_edge(profile: Profile, kernel: str) -> None:
+    """Die Probe tastet über die eigene Länge der Bohrung, nicht in
+    Sechzehnteln der Hüllendiagonale: Dort fände sich an einer dünnen Platte
+    keine Tiefe mit dem Kranz ganz im Material, und jede Bohrung hieße „über
+    die Kante". Eine Platte 1 mm stark, gebohrt, versetzt und verdoppelt mitten
+    im Material — kein Kantenbefund.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    source = _narrow_plate(kernel, thickness=1.0)
+    bore = _narrowest_hole(source)
+    x, y, z = (float(value) for value in bore.params["centre"])
+    for op, params in (
+        ("drill_hole", {"x": -2.0, "y": 0.0, "z": 1.0, "diameter": 6.0, "depth": 0.0, "axis": "z"}),
+        ("move_feature", {"at_feature": bore.id, "x": x + 2.0, "y": y, "z": z}),
+        ("duplicate_feature", {"at_feature": bore.id, "x": x + 8.0, "y": y, "z": z}),
+    ):
+        _changed, findings = _evaluated(source, profile, op, **params)
+        assert "bore.over_the_edge" not in _warnings(findings), (op, findings)
