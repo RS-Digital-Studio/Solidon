@@ -96,6 +96,37 @@ def release_warm(*, keep: str = "") -> None:
             _log.warning("warm gehaltenes Modell %s nicht freigegeben: %s", holder, problem)
 
 
+#: Wie lange das Beenden der Anwendung höchstens auf die Freigabe wartet.
+#: Ollama antwortet erst, wenn das Modell entladen ist: gemessen 0,3 bis 0,6 s
+#: für qwen3:14b auf freier Karte, unmittelbar nach einem Zug an einer vollen
+#: Karte über zwei Sekunden (Durchsicht 0.5.1). Endet die Anwendung vorher,
+#: stirbt der Faden mit ihr, und das Modell hielte seine drei Minuten doch.
+#: Antwortet der Dienst gar nicht, geht das Fenster nach dieser Frist trotzdem
+#: zu, und das Modell fällt nach seinem ``keep_alive`` von selbst.
+RELEASE_AT_EXIT_SECONDS = 5.0
+
+
+def release_warm_before_exit(seconds: float = RELEASE_AT_EXIT_SECONDS) -> bool:
+    """Jedes warm gehaltene Modell freigeben, weil die Anwendung endet.
+
+    **Seit dem Warmhalten (25.09.2026) blieb das Modell nach dem Beenden
+    liegen**: Freigegeben wurde es nur, wenn ein anderer Lauf die Spur betrat,
+    und nach dem Beenden betritt sie keiner mehr. Wer Solidon schloss und ein
+    Spiel oder den Slicer startete, hatte drei Minuten lang bis zu 13,6 GB
+    Grafikspeicher weniger (Durchsicht 0.5.1). Bis 0.5.0 wurde nach jedem Zug
+    entladen, und das Problem gab es nicht.
+
+    In einem eigenen Faden mit Frist: Ein hängender Dienst darf das Beenden
+    nicht aufhalten. ``True``, wenn die Freigabe in der Frist fertig wurde.
+    """
+    if not warm_holders():
+        return True
+    worker = threading.Thread(target=release_warm, name="release-warm-models", daemon=True)
+    worker.start()
+    worker.join(seconds)
+    return not worker.is_alive()
+
+
 def warm_holders() -> tuple[str, ...]:
     """Wer gerade warm gehalten wird — für Tests und die Diagnose."""
     with _WARM_LOCK:

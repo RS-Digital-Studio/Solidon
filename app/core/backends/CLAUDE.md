@@ -97,6 +97,10 @@ ein zweiter Chat-Zug desselben Modells lädt nicht neu. Die Werkzeugprobe und
 die Geschwindigkeitsmessung tragen ihr Modell ebenso ein (`_stays_warm`),
 sonst hielte es seine drei Minuten `OLLAMA_KEEP_ALIVE` gegen einen Lauf, der
 davon nichts weiß. Die Suite leert die Liste je Test (`tests/conftest.py`).
+**Und das Beenden der Anwendung gibt frei** (`release_warm_before_exit`, an
+`aboutToQuit` in `app/ui/app.py`): Danach betritt niemand mehr die Spur, und
+das Modell blieb sonst drei Minuten auf der Karte. In einem Faden mit fünf
+Sekunden Frist — ein hängender Dienst hält das Schließen nicht auf.
 ComfyUI erhält beim Abbruch ausschließlich Solidons eigene
 Auftrags-ID über `POST /api/jobs/{job_id}/cancel`. Der Endpunkt prüft und
 unterbricht atomar; `cancelled: false` bestätigt einen bereits beendeten oder

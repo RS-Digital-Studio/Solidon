@@ -40,6 +40,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.branding import APP_ID, APP_NAME, APP_VERSION
 from app.core import activation, network
+from app.core.backends.resources import release_warm_before_exit
 from app.core.bootstrap import load_operations, load_user_parts
 from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
@@ -622,6 +623,10 @@ def main(argv: list[str] | None = None) -> int:
     application.aboutToQuit.connect(
         lambda: _log.info("%s %s ended normally", APP_NAME, APP_VERSION)
     )
+    # Ein warm gehaltenes Sprachmodell gehört nicht über das Ende hinaus auf
+    # die Grafikkarte (``resources.release_warm_before_exit``): Nach dem
+    # Beenden betritt niemand mehr die Spur, die es sonst freigäbe.
+    application.aboutToQuit.connect(release_warm_before_exit)
 
     _log.info("%s %s started", APP_NAME, APP_VERSION)
     return int(application.exec())

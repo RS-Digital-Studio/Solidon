@@ -458,6 +458,44 @@ def test_a_local_ollama_session_keeps_its_model_warm_until_the_card_is_needed() 
     assert resources.warm_holders() == (backend.holder,)
 
 
+def test_quitting_the_application_frees_the_card_of_the_warm_model() -> None:
+    """Nach dem Beenden betritt niemand mehr die Spur — also gibt das Beenden frei.
+
+    Durchsicht 0.5.1: Seit dem Warmhalten blieb qwen3:14b nach dem Schließen
+    von Solidon drei Minuten mit 13,6 GB auf der Karte. Ein hängender Dienst
+    hält das Beenden dabei nicht auf, und die Anwendung ruft die Freigabe am
+    Ende ihrer Ereignisschleife.
+    """
+    from pathlib import Path
+
+    from app.core.backends import resources
+
+    transport = Recorder(ollama_answer())
+    backend = OllamaBackend(transport=transport)
+    with backend.resource_session(None):
+        backend.complete([Message(role="user", content="Halter")])
+    assert resources.warm_holders() == (backend.holder,)
+
+    assert resources.release_warm_before_exit() is True
+    assert transport.calls[-1][2] == {"model": backend.model, **_UNLOAD}
+    assert resources.warm_holders() == ()
+    assert resources.release_warm_before_exit() is True, "ohne warmes Modell nichts zu tun"
+
+    hangs = threading.Event()
+    resources.keep_warm("haengt", lambda: hangs.wait(5.0))
+    try:
+        assert resources.release_warm_before_exit(0.05) is False, "die Frist gilt"
+    finally:
+        hangs.set()
+
+    app_source = (Path(__file__).parent.parent / "app" / "ui" / "app.py").read_text(
+        encoding="utf-8"
+    )
+    assert "aboutToQuit.connect(release_warm_before_exit)" in app_source, (
+        "die Anwendung gibt beim Beenden frei"
+    )
+
+
 def test_a_model_on_the_processor_is_unloaded_after_the_turn() -> None:
     """Auf dem Prozessor belegt das Modell den Arbeitsspeicher der Anwendung."""
     from app.core.backends import resources
