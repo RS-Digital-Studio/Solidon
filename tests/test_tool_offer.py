@@ -74,6 +74,52 @@ def test_a_hidden_twin_is_announced_as_the_second_choice() -> None:
     assert str(REGISTRY.get(hidden).title) in stubs[hidden]
 
 
+def test_a_hidden_twin_names_its_first_choice_hosted_and_local() -> None:
+    """Der versteckte Zwilling nennt das Werkzeug der ersten Wahl — an beiden Wegen.
+
+    Beide Zwillinge heißen im Menü gleich; „im Menü steht Bohrung setzen" ließ
+    offen, welches Werkzeug gemeint war, und qwen3:14b bohrte über den exakten
+    Kern. Gehostet stand der Satz bis zum 26.09.2026 im Zweig für fremde
+    Rezepte und kam nie an.
+    """
+    from app.core.agent.tools import second_choice_note
+
+    hidden, shown = next(iter(menu_twins().items()))
+    note = second_choice_note(hidden, REGISTRY)
+    assert shown in note and str(REGISTRY.get(shown).title) in note
+    assert second_choice_note(shown, REGISTRY) == "", "die erste Wahl trägt keinen Satz"
+
+    hosted = {str(entry["name"]): str(entry["description"]) for entry in operation_tools()}
+    assert hosted[hidden].endswith(note), "gehostet steht der Satz am versteckten Zwilling"
+    assert note not in hosted[shown]
+
+    offer = ToolOffer.for_turn(REGISTRY, ["Hallo."])
+    offer.promote([hidden])
+    local = {str(entry["name"]): str(entry["description"]) for entry in offer.schemas()}
+    assert local[hidden].endswith(note), "lokal ausführlich derselbe Satz"
+
+
+def test_a_hidden_twin_stays_a_stub_while_its_visible_one_is_meant() -> None:
+    """Wer bohren will, bekommt *Bohrung setzen* ausführlich — nicht den Zwilling.
+
+    Standen beide ausführlich da, bohrte qwen3:14b über den exakten Kern, auch
+    mit dem Satz, der die erste Wahl nennt. Aufrufbar bleibt der Zwilling: Wer
+    ihn anfordert, bekommt ihn.
+    """
+    hidden = menu_twins()
+    offer = ToolOffer.for_turn(
+        REGISTRY,
+        ["Bohr ein Loch mit 5 mm Durchmesser in die Oberseite, mittig."],
+        selected_kind="face",
+    )
+    assert "drill_hole" in offer.detailed
+    assert not offer.detailed & set(hidden), "kein versteckter Zwilling von sich aus ausführlich"
+    twin = next(name for name, shown in hidden.items() if shown == "drill_hole")
+    assert offer.is_stub(twin)
+    offer.introduce(twin)
+    assert not offer.is_stub(twin), "angefordert steht er mit Feldern da"
+
+
 def test_a_detailed_tool_is_the_compact_schema_with_its_place() -> None:
     """Ausführlich heißt: dieselben Felder wie die Kurzfassung für lokale
     Modelle, dazu der Ort im Fenster (§2.6)."""

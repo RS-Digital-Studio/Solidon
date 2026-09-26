@@ -150,13 +150,22 @@ mehr sieht, wäre eine Betriebsart mit anderem Namen (§2.6). Die Regeln dazu:
 - **Ein gehostetes Modell sieht jedes Werkzeug ausführlich** (`offer is
   None`). Es hat Platz, und das Angebot ist eine Antwort auf das Fenster, nicht
   auf die Werkzeugwahl.
+- **Ein versteckter Zwilling (`menu_twins`) steht nie von sich aus
+  ausführlich** — gemeint ist sein sichtbarer, der die Körperart selbst fragt.
+  Angefordert bekommt das Modell ihn trotzdem. Und an beiden Wegen nennt
+  `tools.second_choice_note` das Werkzeug der ersten Wahl, nicht nur ihren
+  Titel: Beide Zwillinge heißen im Menü gleich.
 
 Wer an Rangfolge, Grenze oder Kurzform dreht, fährt `tests/test_tool_offer.py`
 und danach `tools/check_local_model.py` — acht Fälle, drei davon
 Operationen, die ausführlich angeboten werden müssen, einer absichtlich
-mehrdeutig. Gemessen am 25.09.2026 mit qwen3:14b: 30 461 Token für die
-Kurzfassung aller 153 Werkzeuge gegen **7 258** für die Grundlast des
-Angebots.
+mehrdeutig — und am Ende die Suite gegen denselben Stand ohne die Änderung.
+Gemessen am 25.09.2026 mit qwen3:14b: 30 461 Token für die Kurzfassung aller
+153 Werkzeuge gegen **7 258** für die Grundlast des Angebots. **Und die Quote
+hält:** Am 26.09.2026 auf freier Karte, derselbe Code mit und ohne Angebot,
+qwen3:14b bei 32 768 — 18 gegen 14 von 39, gefragt 2/3 gegen 1/3, Baustein 5
+gegen 3 von 13, schemagültig 82 gegen 76 Prozent; ohne Angebot riss neunmal
+das Fenster.
 
 ### Nach dem Zug bleibt das Modell warm — bis ein anderer die Karte braucht
 

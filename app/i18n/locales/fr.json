@@ -6388,7 +6388,7 @@
   "Zweite Bedingung entfernen": "Retirer la deuxième contrainte",
   "Zweite Komponente der Oberflächenrichtung — siehe Richtung X.": "Deuxième composante de la direction de la surface — voir Direction X.",
   "Zweite Koordinate des Punkts — siehe Punkt X.": "Deuxième coordonnée du point — voir Point X.",
-  "Zweite Wahl — im Menü steht „{title}“.": "Second choix — le menu propose « {title} ».",
+  "Zweite Wahl — die erste ist {name}, im Menü „{title}“.": "Second choix — le premier est {name}, dans le menu « {title} ».",
   "Zweiten Punkt anklicken. Zwischen beiden wird getrennt.": "Cliquez le deuxième point. La séparation passe entre les deux.",
   "Zweiter Abstand": "Seconde distance",
   "Zweites": "Deuxième",

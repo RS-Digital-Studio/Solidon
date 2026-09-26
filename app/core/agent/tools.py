@@ -106,6 +106,26 @@ def untrusted_recipe_text(source: str, text: object) -> str:
     )
 
 
+def second_choice_note(name: str, registry: Registry) -> str:
+    """Der Satz an einem versteckten Zwilling: welches Werkzeug die erste Wahl ist.
+
+    **Der versteckte Zwilling ist zweite Wahl** (P2.8): Seit ein Quader im
+    Menü exakt entsteht und *Bohrung setzen* die Körperart selbst fragt, soll
+    der Agent dasselbe greifen wie der Kunde. Der Satz nennt deshalb das
+    Werkzeug und nicht nur seinen Titel — beide Zwillinge heißen im Menü
+    gleich, und „im Menü steht Bohrung setzen" ließ offen, welches gemeint
+    war: qwen3:14b bohrte am 26.09.2026 über ``mesh_to_exact`` und
+    ``drill_brep_hole``. Und er stand bis dahin im Zweig für fremde Rezepte,
+    wo er nie griff — ein Rezept ist kein Menüzwilling.
+    """
+    shown = menu_twins().get(name)
+    if shown is None:
+        return ""
+    return str(tr("Zweite Wahl — die erste ist {name}, im Menü „{title}“.")).format(
+        name=shown, title=registry.get(shown).title
+    )
+
+
 def framed_if_foreign(name: str, text: object) -> str:
     """Ein Text zu einer Operation — gerahmt, wenn sie ein fremdes Rezept ist (§32).
 
@@ -384,15 +404,6 @@ def operation_tools(
                 # ungerahmt zurück.
                 menu = untrusted_recipe_text(foreign_source, menu_path(spec, source))
                 description = f"{description} {tr('Ort')}: {menu}."
-                # **Der versteckte Zwilling ist zweite Wahl** (P2.8): Seit ein
-                # Quader im Menü exakt entsteht, soll der Agent für „mach mir
-                # einen Quader" dasselbe greifen wie der Kunde — nicht den
-                # Netz-Zwilling, der nur in der Palette steht.
-                twins = menu_twins()
-                if spec.name in twins:
-                    description = f"{description} " + str(
-                        tr("Zweite Wahl — im Menü steht „{title}“.")
-                    ).format(title=source.get(twins[spec.name]).title)
             schemas.append(
                 {
                     "name": schema["name"],
@@ -502,6 +513,9 @@ def operation_tools(
             description = _shortened(description, _caveat_tail(spec))
         else:
             description = f"{description} {tr('Ort')}: {menu_path(spec, source)}."
+            note = second_choice_note(spec.name, source)
+            if note:
+                description = f"{description} {note}"
         schemas.append(
             {
                 "name": schema["name"],

@@ -124,7 +124,9 @@ die Befehlspalette), dazu an einem gewählten Merkmal die Handlungen aus
 Grundkörper — höchstens `DETAILED_LIMIT` von sich aus. Titel und Menüweg,
 die das Angebot selbst in eine Beschreibung setzt, gehen durch
 `tools.framed_if_foreign`: Bei einem mitgereisten Rezept enden beide mit
-dessen fremdem Titel (§32).
+dessen fremdem Titel (§32). Ein versteckter Zwilling bleibt Kurzform, solange
+das Modell ihn nicht anfordert; ausführlich trägt er an beiden Wegen den Satz
+aus `tools.second_choice_note`, der das Werkzeug der ersten Wahl nennt.
 
 Ruft das Modell eine Kurzform auf, **wird nichts ausgeführt**: Die Sitzung
 antwortet mit `ToolOffer.introduce`, zählt den Aufruf unter

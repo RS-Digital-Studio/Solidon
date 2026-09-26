@@ -6388,7 +6388,7 @@
   "Zweite Bedingung entfernen": "Remove the second constraint",
   "Zweite Komponente der Oberflächenrichtung — siehe Richtung X.": "Second component of the surface direction — see Direction X.",
   "Zweite Koordinate des Punkts — siehe Punkt X.": "Second coordinate of the point — see Point X.",
-  "Zweite Wahl — im Menü steht „{title}“.": "Second choice — the menu offers “{title}”.",
+  "Zweite Wahl — die erste ist {name}, im Menü „{title}“.": "Second choice — the first is {name}, in the menu “{title}”.",
   "Zweiten Punkt anklicken. Zwischen beiden wird getrennt.": "Click the second point. The split runs between the two.",
   "Zweiter Abstand": "Second distance",
   "Zweites": "Second",

@@ -6388,7 +6388,7 @@
   "Zweite Bedingung entfernen": "Rimuovi il secondo vincolo",
   "Zweite Komponente der Oberflächenrichtung — siehe Richtung X.": "Seconda componente della direzione della superficie — vedi Direzione X.",
   "Zweite Koordinate des Punkts — siehe Punkt X.": "Seconda coordinata del punto — vedi Punto X.",
-  "Zweite Wahl — im Menü steht „{title}“.": "Seconda scelta: nel menu c'è «{title}».",
+  "Zweite Wahl — die erste ist {name}, im Menü „{title}“.": "Seconda scelta: la prima è {name}, nel menu «{title}».",
   "Zweiten Punkt anklicken. Zwischen beiden wird getrennt.": "Fare clic sul secondo punto. La divisione passa tra i due.",
   "Zweiter Abstand": "Seconda distanza",
   "Zweites": "Secondo",

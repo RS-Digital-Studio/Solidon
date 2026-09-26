@@ -32,7 +32,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, Final
 
-from app.core.agent.tools import extra_tools, framed_if_foreign, operation_tools
+from app.core.agent.tools import (
+    extra_tools,
+    framed_if_foreign,
+    operation_tools,
+    second_choice_note,
+)
 from app.core.registry import Registry, menu_path, menu_twins
 from app.core.registry.search import rank_operations
 from app.i18n import tr
@@ -119,21 +124,28 @@ class ToolOffer:
                 f"{schema['description']} {tr('Ort')}: "
                 f"{framed_if_foreign(name, menu_path(spec, registry))}."
             )
-            if name in twins:
-                # Der versteckte Zwilling ist zweite Wahl — in beiden Fassungen,
-                # sonst verlöre er den Satz, sobald er ausführlich wird.
-                description += " " + str(tr("Zweite Wahl — im Menü steht „{title}“.")).format(
-                    title=registry.get(twins[name]).title
-                )
+            # Der versteckte Zwilling ist zweite Wahl — in beiden Fassungen,
+            # sonst verlöre er den Satz, sobald er ausführlich wird.
+            note = second_choice_note(name, registry)
+            if note:
+                description += f" {note}"
             full[name] = {**schema, "description": description}
             stubs[name] = _stub(
                 name, framed_if_foreign(name, spec.title), second_choice=name in twins
             )
         wanted = set(favoured)
-        detailed = {name for name in pinned if name in full}
+        # **Ein versteckter Zwilling ist nicht gemeint, wenn es sein sichtbarer
+        # ist** (P2.8): *Bohrung setzen* fragt die Körperart selbst, der exakte
+        # Zwilling bleibt für alte Projekte registriert. Standen beide
+        # ausführlich da, bohrte qwen3:14b am 26.09.2026 über ``mesh_to_exact``
+        # und ``drill_brep_hole`` — auch mit dem Satz, der die erste Wahl
+        # nennt. Er bleibt deshalb Kurzform; wer ihn aufruft, bekommt ihn.
+        detailed = {name for name in pinned if name in full and name not in twins}
         for name, score in rank_operations(texts, registry, favoured=wanted):
             if len(detailed) >= DETAILED_LIMIT:
                 break
+            if name in twins:
+                continue
             if score >= MIN_SCORE or name in wanted:
                 detailed.add(name)
         return cls(
