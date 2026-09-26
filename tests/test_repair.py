@@ -415,6 +415,36 @@ def test_every_filled_triangle_inherits_material_and_colour_from_its_hole(
     assert np.all(closed.raw.visual.face_colors[source.triangle_count :] == (210, 40, 25, 255))
 
 
+@pytest.mark.parametrize("way", ["import", "repair", "stitch"])
+def test_a_body_without_colours_gets_none_from_its_repair(way: str) -> None:
+    """Ein farbloses Netz bleibt farblos, auch wenn die Reparatur es neu baut.
+
+    ``_carried_colours`` las ``visual.face_colors`` — und trimesh erfindet dort
+    für ein Netz ohne Farben ein Grau je Dreieck (102, 102, 102). Das wurde
+    auf das reparierte Netz geschrieben, als wäre es eine Farbe der Datei:
+    Der Laptopständer und ``broken_open.stl`` kamen nach dem Einlesen grau
+    statt in der Körperfarbe ins Bild (``viewport.source_colours``), und
+    *Farben zu Filamenten* machte daraus ein graues Filament, wo ein graues
+    STL ein graues STL bleiben soll (``texture.to_slots``). Durchsicht 0.5.1.
+    """
+    from app.core.geom import texture
+    from app.core.ingest.loader import normalise
+
+    if way == "stitch":
+        body = t_junction()
+        assert getattr(body.raw.visual, "kind", None) is None, "die Voraussetzung: farblos"
+        result, seams = stitch_t_junctions(body)
+        assert seams, "sonst prüft der Test nichts"
+    else:
+        opened, _welded = merge_vertices(raw("broken_open.stl"))
+        assert getattr(opened.raw.visual, "kind", None) is None, "die Voraussetzung: farblos"
+        result = normalise(opened, "mm").mesh if way == "import" else repair(opened).mesh
+        assert result.is_watertight, "sonst prüft der Test nichts"
+
+    assert getattr(result.raw.visual, "kind", None) is None
+    assert texture.face_colours(result.raw) is None
+
+
 def _cube_with_a_hole(missing: int) -> MeshData:
     """Ein zweimal unterteilter Würfel, dem oben ``missing`` Dreiecke fehlen."""
     body = trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide().subdivide()

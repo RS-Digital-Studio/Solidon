@@ -1903,8 +1903,19 @@ def _carried_colours(source: trimesh.Trimesh, target: trimesh.Trimesh, origin: n
     ``trimesh.Trimesh`` hat sie nicht, und aus zwei Filamenten wurde eines.
     ``origin`` sagt je neuer Fläche, von welcher alten sie erbt —
     ``len(source.faces)`` für eine, die es vorher nicht gab.
+
+    **Ein Netz ohne Farben bekommt keine** (Durchsicht 0.5.1). trimesh
+    beantwortet ``face_colors`` auch ohne Farben — mit einem erfundenen Grau
+    je Dreieck —, und das stand danach als Farbe der Datei am reparierten
+    Netz: Ein STL mit Loch kam grau statt in der Körperfarbe ins Bild
+    (``viewport.source_colours``), *Farben zu Filamenten* machte daraus ein
+    graues Filament, und jede Kopie des Netzes rechnete Eckenfarben nach.
+    Farben hat, wessen ``visual.kind`` sie nennt — dieselbe Frage wie
+    ``texture.face_colours``.
     """
     visual = getattr(source, "visual", None)
+    if getattr(visual, "kind", None) is None:
+        return
     colours = getattr(visual, "face_colors", None) if visual is not None else None
     if colours is None:
         return
