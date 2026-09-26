@@ -71,9 +71,9 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
-- The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2 the print time drops by about 40 percent.
+- The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.
 - Travel comes from the printer too: the Centauri Carbon 2 moves at 500 instead of 150 mm/s between islands, so the nozzle does not ooze along the way.
-- A ceiling over a water channel or tunnel no longer draws supports onto the model. Solidon then suggests supports from the bed only, and the channel stays clear.
+- A ceiling over a water channel or tunnel no longer draws supports onto the model. If nothing else needs supports on the model, Solidon suggests them from the bed only.
 - New suggestion *Keep channels clear*: once applied, the handover to PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print puts a support blocker in the channels.
 - Grid supports arrive at the slicer as a real grid, with the direction changing each layer, instead of loose lines that shift during printing.
 - When a part stands on many small feet, Solidon suggests a brim, even if the feet together would have enough area.

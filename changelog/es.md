@@ -72,9 +72,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Imprimir y entregar al slicer
 
-- El nivel «Standard» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar cada impresora a 40 mm/s. En una Centauri Carbon 2 se imprime un 40 % más rápido.
+- El nivel «Standard» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.
 - El desplazamiento también viene de la impresora: la Centauri Carbon 2 se mueve a 500 en lugar de 150 mm/s entre islas, para que la boquilla no gotee por el camino.
-- Un techo sobre un canal de agua o un túnel ya no atrae soportes sobre el modelo. Solidon propone entonces soportes solo desde la cama, y el canal queda libre.
+- Un techo sobre un canal de agua o un túnel ya no atrae soportes sobre el modelo. Si nada más los necesita sobre el modelo, Solidon los propone solo desde la cama.
 - Nueva sugerencia «Mantener libres los canales»: aplicada, coloca un bloqueador de soportes en los canales para PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer y Creality Print.
 - Los soportes de rejilla llegan al slicer como rejilla de verdad, con la dirección cambiando en cada capa, en lugar de líneas sueltas que se desplazan al imprimir.
 - Si una pieza se apoya en muchos pies pequeños, Solidon propone un brim, aunque los pies juntos tengan superficie suficiente.

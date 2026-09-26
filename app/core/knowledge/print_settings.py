@@ -73,6 +73,16 @@ FLOW_BOUND_SPEEDS: Final = (
     ("first_layer", True),
 )
 
+#: Das Material, an dem ``PrinterProfile.flow_factor`` gemessen ist — das
+#: allgemeine PLA des Herstellers — und das einzige, dessen Volumenstrom er
+#: hebt. Die übrigen begrenzt das Filament, nicht das Hotend: Die allgemeinen
+#: Profile der Hersteller liegen dort bei Solidons Werten (Orca-Bestand,
+#: 26.09.2026: Centauri ABS 12 und PETG-CF 12, K1 PETG 9 und TPU 3 bis 3,5,
+#: MK4S TPU 3, gegen Solidons 11, 9, 10 und 3,5). Mit dem Faktor des PLA
+#: bekam TPU am Centauri 6,1 mm³/s und 72 mm/s statt 41 — das Doppelte dessen,
+#: was Elastikfilament durch die Düse bringt.
+HOTEND_FLOW_MATERIAL: Final = "pla"
+
 _DATA_DIR: Final = Path(__file__).parent / "data"
 
 _tables: dict[str, dict[str, dict[str, Any]]] | None = None
@@ -259,8 +269,10 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
             flow_ratio=float(stuff.get("flow_ratio", 1.0)),
             colour=str(stuff.get("colour", "#4A90D9")),
             # Der Materialwert gilt für ein Standard-Hotend; der Drucker sagt,
-            # wie viel mehr seines fördert (``PrinterProfile.flow_factor``).
-            max_flow=float(stuff.get("max_flow", 12.0)) * printer.flow_factor,
+            # wie viel mehr seines mit PLA fördert (``PrinterProfile.flow_factor``)
+            # — und nur mit PLA, siehe :data:`HOTEND_FLOW_MATERIAL`.
+            max_flow=float(stuff.get("max_flow", 12.0))
+            * (printer.flow_factor if profile.material.id == HOTEND_FLOW_MATERIAL else 1.0),
         ),
     )
     return _within_flow(settings)

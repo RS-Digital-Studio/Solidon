@@ -813,7 +813,9 @@ class PrinterProfile:
     """Wie viel mehr das Hotend fördert als das Standard-Hotend, für das die
     Materialwerte ``max_flow`` gelten — aus dem generischen PLA-Profil des
     Herstellers gegen Solidons 12 mm³/s (CC2 21 → 1,75). Ohne ihn drückte die
-    Volumenstromregel die Tempi des Druckers gleich wieder herunter."""
+    Volumenstromregel die Tempi des Druckers gleich wieder herunter. Er gilt
+    nur für PLA (``print_settings.HOTEND_FLOW_MATERIAL``); die übrigen
+    Materialien begrenzt das Filament."""
 
     @property
     def is_resin(self) -> bool:

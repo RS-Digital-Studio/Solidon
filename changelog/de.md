@@ -96,9 +96,9 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Übergabe an den Slicer
 
-- Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 wird die Druckzeit damit rund 40 Prozent kürzer.
+- Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 sind große Teile so 40 bis 50 Prozent früher fertig.
 - Auch die Leerfahrt kommt vom Drucker: Der Centauri Carbon 2 fährt zwischen den Inseln 500 statt 150 mm/s, damit die Düse unterwegs nicht ausläuft.
-- Eine Decke über einem Wasserkanal oder Tunnel holt keine Stützen mehr aufs Modell. Solidon schlägt dann Stützen nur vom Bett vor, und der Kanal bleibt frei.
+- Eine Decke über einem Wasserkanal oder Tunnel holt keine Stützen mehr aufs Modell. Braucht sonst keine Stelle Stützen auf dem Modell, schlägt Solidon sie nur vom Bett vor.
 - Neu ist der Vorschlag *Kanäle frei halten*: Übernommen legt die Übergabe an PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print eine Stützsperre in die Kanäle.
 - Gitterstützen kommen als echtes Gitter beim Slicer an, mit wechselnder Richtung je Schicht, statt als lose Linien, die sich im Druck verschieben.
 - Steht ein Teil auf vielen kleinen Füßen, schlägt Solidon einen Brim vor, auch wenn die Füße zusammen genug Fläche hätten.

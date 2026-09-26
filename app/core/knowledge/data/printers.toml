@@ -25,7 +25,8 @@
 # Stufen skalieren sie. Fehlt ein Wert oder steht er dort nur relativ (in
 # Prozent) oder als null, bleibt der Wert der Stufe. flow_factor ist der
 # Volumenstrom des generischen PLA-Profils des Herstellers gegen Solidons
-# 12 mm³/s (Centauri Carbon 2: 21 → 1,75); ohne Angabe eins.
+# 12 mm³/s (Centauri Carbon 2: 21 → 1,75); ohne Angabe eins. Er hebt nur PLA —
+# die übrigen Materialien begrenzt das Filament, nicht das Hotend.
 # Konturen: XY relativ zur nominellen Bettmitte; Z ab Bett. Ohne Kontur gilt
 # das nominale Rechteck. Brim-/Skirt-Ränder gehören zum Auftrag, nicht hierher.
 
@@ -209,6 +210,7 @@ speed_first_layer = 40.0
 speed_bridge = 50.0
 acceleration = 4000.0
 outer_wall_acceleration = 4000.0
+flow_factor = 1.25
 
 [prusa-mini]
 title = "Prusa MINI+"
@@ -227,7 +229,8 @@ speed_infill = 140.0
 speed_top_surface = 40.0
 speed_first_layer = 20.0
 speed_bridge = 25.0
-acceleration = 10000.0
+acceleration = 1000.0
+outer_wall_acceleration = 700.0
 
 [prusa-xl]
 title = "Prusa XL"
@@ -248,6 +251,7 @@ speed_first_layer = 25.0
 speed_bridge = 50.0
 acceleration = 2500.0
 outer_wall_acceleration = 2500.0
+flow_factor = 1.25
 
 [creality-k1]
 title = "Creality K1"
@@ -301,6 +305,16 @@ extrusion_width = 0.42
 enclosed = false
 bed_temperature_max = 110
 nozzle_temperature_max = 300
+travel_speed = 500.0
+speed_outer_wall = 200.0
+speed_inner_wall = 300.0
+speed_infill = 500.0
+speed_top_surface = 200.0
+speed_first_layer = 60.0
+speed_bridge = 50.0
+acceleration = 12000.0
+outer_wall_acceleration = 5000.0
+flow_factor = 1.5
 
 [anycubic-kobra-2]
 title = "Anycubic Kobra 2"
@@ -319,6 +333,7 @@ speed_infill = 70.0
 speed_top_surface = 120.0
 speed_bridge = 40.0
 acceleration = 2500.0
+outer_wall_acceleration = 700.0
 
 [sovol-sv06]
 title = "Sovol SV06"

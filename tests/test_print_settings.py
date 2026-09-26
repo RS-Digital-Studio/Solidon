@@ -165,6 +165,21 @@ def test_the_printers_hotend_raises_the_flow_of_the_material() -> None:
     assert plain.filament.max_flow == pytest.approx(pla)
 
 
+@pytest.mark.parametrize("material_id", ["tpu-95a", "abs", "petg", "pa-cf-eigenbau"])
+def test_the_hotend_factor_leaves_other_materials_alone(material_id: str) -> None:
+    """Der Faktor ist am PLA des Herstellers gemessen. TPU bekam mit ihm am
+    Centauri 6,1 mm³/s und fuhr 72 statt 41 mm/s; Elegoos allgemeines ABS und
+    PETG-CF fördern dort 12, nicht 19,25 und 15,75. Ein eigenes Material ohne
+    Tabelle bekommt ihn ebenso wenig — es könnte ein Elastikfilament sein."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    plain = print_settings.resolve(
+        replace(profile, material=replace(profile.material, id=material_id))
+    )
+
+    expected = print_settings._material_table(material_id).get("max_flow", 12.0)
+    assert plain.filament.max_flow == pytest.approx(expected)
+
+
 @pytest.mark.parametrize("printer_id", sorted(profiles.printer_profiles()))
 def test_no_stage_asks_for_more_than_the_filament_flows(printer_id: str) -> None:
     """Die Herstellertempi gelten dem schnellsten Filament des Herstellers.
@@ -199,6 +214,47 @@ def test_the_flow_cap_is_the_highest_whole_speed_below_the_limit() -> None:
 
     assert settings.speed.inner_wall == float(int(settings.filament.max_flow / area))
     assert settings.speed.first_layer == 50.0, "die erste Schicht liegt darunter"
+
+
+@pytest.mark.parametrize(
+    "printer_id",
+    sorted(
+        identifier
+        for identifier, printer in profiles.printer_profiles().items()
+        if not printer.is_resin and not identifier.startswith("generic-")
+    ),
+)
+def test_every_named_printer_carries_its_makers_pace(printer_id: str) -> None:
+    """Jeder benannte Drucker hat einen Standardprozess beim Hersteller, und
+    „Standard" soll ihn fahren. Dem Ender-3 V3 fehlte er (Orca: „0.20mm Standard
+    @Creality Ender-3 V3", 200/300/500 mm/s, Leerfahrt 500): Er druckte mit
+    Solidons allgemeinen 40 mm/s, obwohl der Changelog das Gegenteil sagt."""
+    printer = profiles.printer(printer_id)
+
+    assert printer.travel_speed is not None
+    assert printer.speed_outer_wall is not None
+
+
+@pytest.mark.parametrize("printer_id", sorted(profiles.printer_profiles()))
+def test_the_outer_wall_never_accelerates_harder_than_the_rest(printer_id: str) -> None:
+    """Die Außenwand fährt sanfter als der Rest, bei jedem Hersteller. Stand nur
+    die allgemeine Beschleunigung in der Tabelle, kam die der Außenwand aus der
+    Stufe — am Kobra 2 5000 gegen 2500 mm/s² (Orca: 700), am MINI stand dazu
+    10 000 statt der 1000 aus Prusas Profil."""
+    printer = profiles.printer(printer_id)
+    if printer.is_resin:
+        pytest.skip("ein Resin-Drucker fährt keine Bahnen")
+    speed = print_settings.resolve(profiles.make_profile(printer_id, "pla")).speed
+
+    assert speed.outer_wall_acceleration <= speed.acceleration
+
+
+def test_the_mini_accelerates_like_prusas_profile() -> None:
+    """Prusas Standardprozess für den MINI (PrusaSlicer ``[print:*MINI*]``,
+    Orca „0.20mm Standard @MINI"): 1000 mm/s², die Außenwand 700."""
+    speed = print_settings.resolve(profiles.make_profile("prusa-mini", "pla")).speed
+
+    assert (speed.acceleration, speed.outer_wall_acceleration) == (1000.0, 700.0)
 
 
 @pytest.mark.parametrize("field", ["speed_outer_wall", "acceleration", "flow_factor"])

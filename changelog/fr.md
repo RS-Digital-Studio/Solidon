@@ -72,9 +72,9 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
-- Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de brider chaque imprimante à 40 mm/s. Sur une Centauri Carbon 2, l'impression dure environ 40 % de moins.
+- Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de tout brider à 40 mm/s. Sur une Centauri Carbon 2, les grandes pièces prennent 40 à 50 % de temps en moins.
 - Le déplacement à vide vient aussi de l'imprimante : la Centauri Carbon 2 va à 500 au lieu de 150 mm/s entre les îlots, pour que la buse ne suinte pas en route.
-- Un plafond au-dessus d'un canal d'eau ou d'un tunnel n'attire plus de supports sur le modèle. Solidon propose alors des supports depuis le plateau uniquement.
+- Un plafond au-dessus d'un canal d'eau ou d'un tunnel n'attire plus de supports sur le modèle. Si rien d'autre n'en a besoin sur le modèle, Solidon les propose depuis le plateau uniquement.
 - Nouvelle suggestion « Garder les canaux libres » : appliquée, elle pose un bloqueur de supports dans les canaux pour PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print.
 - Les supports en grille arrivent au slicer comme une vraie grille, dont la direction change à chaque couche, au lieu de lignes libres qui se décalent à l'impression.
 - Quand une pièce repose sur beaucoup de petits pieds, Solidon propose un brim, même si les pieds réunis auraient assez de surface.
