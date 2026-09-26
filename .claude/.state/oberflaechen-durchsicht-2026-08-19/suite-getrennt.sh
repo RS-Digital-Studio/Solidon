@@ -306,7 +306,13 @@ else
   auswahl="not performance and not windowed"
 fi
 echo "=== alle Tests ohne Fenster in einem Zug (-n $KERNE) ==="
-PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "$auswahl" -n "$KERNE" \
+# ``--dist worksteal`` wie in der CI: Ein Arbeiter, der fertig ist, nimmt
+# Fälle aus fremden Schlangen, statt am Ende auf den langsamsten zu warten.
+# Gemessen am 26.09.2026 an diesem Tor (-n 4, unter Last durch parallele
+# Sitzungen, abwechselnd): 860, 850 und 811 s mit der Vorgabe ``load``, 580
+# und 593 s mit ``worksteal`` — dieselben 17 166 Fälle. Die Verteilart
+# ändert nur die Reihenfolge.
+PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "$auswahl" -n "$KERNE" --dist worksteal \
   > "$protokoll" 2>&1
 status=$?
 cat "$protokoll"
