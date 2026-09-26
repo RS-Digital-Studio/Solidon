@@ -602,3 +602,26 @@ def test_a_real_drag_stays_a_drag_at_any_scaling(
     assert "pick" not in log.kinds(), f"dreißig Logikpunkte sind ein Zug: {log.calls}"
     phases = [call[1] for call in log.calls if call[0] == "body"]
     assert "start" in phases, f"und der Zug beginnt: {log.calls}"
+
+
+def test_a_click_without_camera_motion_does_not_end_a_gesture(
+    scene: tuple[_FlatRenderer, _Log],
+) -> None:
+    """Ein Klick, der die Kamera nicht bewegt, meldet kein Gestenende (Durchsicht 0.5.1).
+
+    Das Ende zieht Schatten, Maßtinte und ein Bild nach. Ein Klick ins Bild
+    beginnt in manchem Schema eine Drehung, und ihr Ende kostete am Wabenhalter
+    12 ms je Klick von Bohrung zu Bohrung — für eine Kamera, die stand.
+    """
+    renderer, log = scene
+    navigator = Navigator(renderer, "solidon", log.callbacks())
+    before = renderer.pose
+    navigator.handle(press(200, 150, "right"))
+    navigator.handle(release(200, 150, "right"))
+    assert renderer.pose == before
+    assert "end" not in log.kinds(), "ein Klick ist keine Kamerafahrt"
+
+    navigator.handle(press(200, 150, "right"))
+    navigator.handle(move(230, 150, "right"))
+    navigator.handle(release(230, 150, "right"))
+    assert log.kinds().count("end") == 1, "eine Drehung endet weiter mit ihrer Meldung"

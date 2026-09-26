@@ -353,6 +353,8 @@ class Navigator:
         self._pan_at: tuple[int, int] | None = None
         self._dolly_at: tuple[int, int] | None = None
         self._gesture: CameraAction | None = None
+        self._camera_went = False
+        """Ob die laufende Geste die Kamera bewegt hat — ein Klick tut es nicht."""
 
     @property
     def scheme(self) -> NavigationScheme:
@@ -502,6 +504,7 @@ class Navigator:
         action = navigation_action(self._scheme, button, shift)
         if action == "select":
             return
+        self._camera_went = False
         if action == "pan":
             self._pan_at = position
             self._gesture = "pan"
@@ -530,14 +533,21 @@ class Navigator:
     def _end(self) -> None:
         """Jede Bewegung beenden — welche lief, sagt ``_gesture``."""
         gesture, self._gesture = self._gesture, None
+        went, self._camera_went = self._camera_went, False
         self._tilt_at = None
         self._turn_at = None
         self._pan_at = None
         self._dolly_at = None
-        if gesture in ("pan", "zoom", "rotate"):
+        if gesture in ("pan", "zoom", "rotate") and went:
             # Bisher das ``EndInteractionEvent`` von VTK, das nur Zustände mit
             # ``StartRotate``/``StartPan``/``StartDolly`` auslösten — das
             # Kippen meldet sich je Schritt selbst.
+            #
+            # **Nur, wenn sich die Kamera bewegt hat** (Durchsicht 0.5.1). Im
+            # Schema „solidon“ beginnt jeder Linksklick ins Bild eine Drehung;
+            # ihr Ende zog Schatten, Maßtinte und ein Bild nach, obwohl nichts
+            # gedreht war — am Wabenhalter 12 ms im Hauptfaden je Klick von
+            # Bohrung zu Bohrung, für die Maßgruppe, die gleich darauf ging.
             self._calls.on_end()
         self._calls.on_cursor(None)
 
@@ -548,6 +558,7 @@ class Navigator:
             pose.position, pose.focal_point, pose.view_up, dx, dy, self._renderer.view_size()
         )
         self._renderer.set_camera_pose(CameraPose(position, pose.focal_point, up))
+        self._camera_went = True
         self._renderer.render()
 
     def _pan(self, start: tuple[int, int], now: tuple[int, int]) -> None:
@@ -560,6 +571,7 @@ class Navigator:
             return
         shift = tuple(before[axis] - after[axis] for axis in range(3))
         self._shift_camera(shift)
+        self._camera_went = True
         self._renderer.render()
 
     def _dolly(self, dy: int) -> None:
@@ -567,6 +579,7 @@ class Navigator:
         height = max(self._renderer.view_size()[1], 1)
         factor = DOLLY_BASE ** (DOLLY_MOTION_FACTOR * float(dy) / (height / 2.0))
         self._renderer.dolly(factor)
+        self._camera_went = True
         self._renderer.render()
 
     def _zoom_at(self, x: int, y: int, factor: float) -> None:
