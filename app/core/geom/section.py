@@ -182,6 +182,12 @@ def cut(mesh: MeshData, plane: SectionPlane, second: SectionPlane | None = None)
     """
     body: trimesh.Trimesh = mesh.raw
     capped = True
+    if not len(body.faces):
+        # **Ein leerer Körper hat nichts zu schneiden.** Sein Hüllquader ist
+        # ``None``, und die Vorschau einer Aufweitung trägt einen solchen
+        # Körper als Zugabe mit: Ein Ansichtsschnitt riss dort die ganze
+        # Vorschau ab (Durchsicht 0.5.1).
+        return SectionResult(mesh=mesh, capped=capped)
 
     for entry in (plane, second) if second is not None else (plane,):
         body, closed = _apply(body, entry)

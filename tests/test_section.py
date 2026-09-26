@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import trimesh
 
 from app.core.geom.mesh import read_mesh
 from app.core.geom.section import SectionPlane, cut, section_volume
@@ -55,6 +56,24 @@ def test_a_plane_outside_the_body_changes_nothing() -> None:
 def test_a_plane_beyond_the_body_leaves_nothing() -> None:
     result = cut(solid(), SectionPlane.along("z", -50.0))
     assert result.mesh.triangle_count == 0
+
+
+@pytest.mark.parametrize("second", [False, True])
+def test_an_empty_body_is_cut_to_nothing_instead_of_failing(second: bool) -> None:
+    """Ein leerer Körper hat nichts zu schneiden — und bricht die Vorschau nicht ab.
+
+    Die Vorschau einer aufgeweiteten Bohrung trägt einen leeren Körper „dazu“
+    (``added``); sobald ein Ansichtsschnitt stand, riss ``cut`` an seinem
+    Hüllquader, und die ganze Vorschau hieß „nicht verfügbar“ — mit gesperrtem
+    Übernehmen, bis ein Wert geändert wurde (Durchsicht 0.5.1, Wabenhalter).
+    """
+    empty = solid().replacing(trimesh.Trimesh())
+    plane = SectionPlane.along("z", 0.0)
+
+    result = cut(empty, plane, plane.flipped() if second else None)
+
+    assert result.mesh.triangle_count == 0
+    assert result.capped, "ohne Körper bleibt keine Schnittfläche offen"
 
 
 def test_two_planes_leave_a_slice() -> None:
