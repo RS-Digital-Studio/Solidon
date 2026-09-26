@@ -31687,6 +31687,80 @@ Dazu aus dem Bericht, je mit Test:
   nachgezogen (`ki-modelle.html` und die fünf Übersetzungen). Nachweis:
   `tests/test_tool_offer.py`, `test_the_measured_prompt_matches_the_current_tool_count`.
 
+<a id="rm-081"></a>
+
+- [x] **RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen.** Die lokale Modellserie
+  auf die noch offenen Messungen begrenzen: Warm-/Kaltstart und Antwortqualität mit aktuellem
+  Werkzeugschema erfassen, weitere Schemakürzungen gegen dieselben Referenzanfragen prüfen und die
+  gestufte Werkzeugauswahl als Bedienentscheidung vorbereiten. Abnahme: Quote und Latenz aus
+  demselben ruhigen Lauf samt GPU-Zustand; keine Qualitätsverschlechterung durch Kürzungen.
+
+  **Stand 15.09.2026, aus RM-173:** Die Quote ist zweimal gemessen (20/39 → 24/39 mit der
+  Kürzung), und die Kürzung hat nicht geschadet — aber unter Fremdlast, mit Modellstarts
+  zwischen 56 und 314 s, also ohne brauchbare Latenz. Ruhig gemessen (14.09., RM-054/RM-173):
+  22,9 s kalt und 2,3 s warm für den vollen Prompt, 18,7 s kalt für den gekürzten. Was
+  bleibt: ein ruhiger Lauf für Latenz und GPU-Zustand, das Ergebnis des Laufs ohne Denkblock
+  (484 und 847 Token Ausgabe je Schritt sind zum größten Teil Denkblock, bei 33 Token/s eine
+  halbe Minute), und die gestufte Werkzeugauswahl — die bleibt, was `AGENTS.md` sagt: eine
+  Auswahl, die Operationen aussortiert, wäre eine Betriebsart mit anderem Namen, und ob es
+  eine geben soll, entscheidet Robert.
+
+  **Warum der Modellstart Minuten kostet — beobachtet am 15.09.2026, 00:53 bis 01:00, alle
+  vier Sekunden `nvidia-smi` und der Arbeitssatz von `llama-server`:** Nach dem Entladen
+  belegt der Desktop 1,6 GB der 16 GB (dwm 945 MB, Claude 200, Explorer 185, Chrome). Die
+  Gewichte (8,6 GB) sind in acht Sekunden auf der Karte; dann kriecht die Belegung von 10,4 auf
+  15,7 GB mit etwa 60 MB/s — zweieinhalb Minuten, ein Kern beschäftigt, Platte und Grafikkarte
+  im Leerlauf. Das ist der KV-Cache (5 120 MiB bei 32 768 Token in f16) und die Rechenpuffer,
+  angelegt am Rand des Speichers: `ollama ps` meldet 14,4 GB für das Modell, frei waren 14,7.
+  **Die Kante ist es aber nicht** — das sagte um 03:07 dieselbe Messung mit leerem Desktop
+  (1,4 GB belegt): 188 s Kaltstart, und `llama3.1:8b` mit 7 GB Luft brauchte für 4 GB KV-Cache
+  23 s gegen 4,4 s bei 4 096 Token; `qwen3:14b` mit 4 096 Token 26 s, mit 32 768 Token 188 s.
+  Die Zeit hängt an der **Größe des KV-Caches**, nicht am freien Speicher, und sie hat einen
+  Anfang: Bis 17:55 lud dasselbe Modell mit demselben Fenster in **3 bis 4,5 s** (elf Starts
+  im Serverlog), um 17:58 waren es 83 s, seither nie unter 40 — die Zeit, zu der die
+  Torläufe der anderen Sitzungen mit ihren Fenster- und Renderer-Tests begannen. Der
+  Grafiktreiber lagert seither bei jeder großen Zuweisung um, und zwar Stunden nach dem
+  letzten Test noch. Was das zurücksetzt, ist nicht gemessen — ein Neustart ist die Probe,
+  und die gehört Robert. Bis dahin gilt: Latenz nur nach frischem Start und **vor** einem
+  Torlauf messen; die 22,9 s vom Nachmittag sind der Bezugswert, und jede Sitzung mit
+  `keep_alive: 0` zahlt den Start je Zug neu.
+
+  Zwei Hebel, beide eine Entscheidung: **Warmhalten zwischen den Zügen** (siehe RM-173) — und
+  der **KV-Cache in `q8_0`**: Ollama nimmt das nur als Umgebungsvariable des Dienstes
+  (`OLLAMA_KV_CACHE_TYPE=q8_0` mit `OLLAMA_FLASH_ATTENTION=1`), halbiert damit die 5 GB, und
+  mit 3,2 GB bei 40 960 Token passte sogar das volle Trainingsfenster von qwen3 auf die Karte
+  (8,6 + 3,2 + Puffer ≈ 12,5 GB) — ein Viertel mehr Platz für RM-173. Solidon kann die
+  Variable nicht setzen, aber messen, ob sie gesetzt ist: Die vorhandene Probe
+  (`model_state`, Karte gegen Prozessor) sagt nach einem Ladeversuch mit 40 960, ob das Modell
+  ganz im VRAM liegt. Ein Fenster, das sich nach dieser Probe richtet, statt fest 32 768 zu
+  nehmen, ist der Vorschlag; gebaut wird er auf Roberts Wort.
+
+  **Stand 25.09.2026 (Auftrag Robert: „lokale KI optimieren für weniger
+  Kontext, sinnvoll einfache Bedienung, neues oder besseres Modell"):** Beide
+  Hebel sind entschieden und gebaut. **Warmhalten:** Nach dem Zug bleibt das
+  Modell drei Minuten auf der Karte (`OLLAMA_KEEP_ALIVE`), `local_ai_slot`
+  gibt beim Betreten jedes fremde warm gehaltene Modell frei, ComfyUI räumt
+  die Karte ganz — zwei Modelle zugleich bleiben ausgeschlossen. **Gestufte
+  Werkzeugauswahl** als Angebot (`agent/offer.py`): jede Operation bleibt
+  aufrufbar, nur die gemeinten stehen mit Feldern da; Grundlast 30 461 → 7 276
+  Token (RM-185 im Archiv). Dazu eine Antwortobergrenze (`num_predict` 8 192)
+  gegen Endlosantworten und der Kürzungsschutz nach Anfragelänge. `q8_0` ist
+  damit ohne Bedarf: qwen3:14b liegt mit 32 768 ganz auf der Karte, und das
+  Fenster hat 25 000 Token Luft. **Offen ist die Qualitätsabnahme:** Suite
+  desselben Stands ohne Angebot gegen mit, qwen3:14b, ruhige Karte (Werkzeuge
+  in `.claude/.state/lokale-ki-2026-09-25/`).
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#ollama-bis-zum-anschlag-31082026).
+
+  **Abgeschlossen am 26.09.2026.** Die Qualitätsabnahme ist gefahren:
+  derselbe Code mit und ohne Angebot, qwen3:14b, freie Karte — mit Angebot 24
+  von 39 (mit dem Zwilling als Kurzform 22), ohne 14 im selben Fenster, davon
+  neun Fensterabbrüche, und mit einem Fenster von 40 960 ohne Angebot ebenfalls 24, aber in 149 statt 44 Minuten und zu einem Zehntel auf dem Prozessor — das Angebot hält die Quote bei einem Drittel der Zeit. Warmhalten, Angebot,
+  Antwortobergrenze und Kürzungsschutz nach Länge sind gebaut; `q8_0` bleibt
+  ungebaut, weil qwen3:14b mit 32 768 ganz auf der Karte liegt und das Fenster
+  25 000 Token Luft hat. Nachweis: die Tabelle bei RM-016,
+  `tests/test_tool_offer.py`, `tests/test_backends.py`.
+
 ## Bohrungen mit Erweiterung an beiden Enden (25.09.2026)
 
 <a id="rm-245"></a>

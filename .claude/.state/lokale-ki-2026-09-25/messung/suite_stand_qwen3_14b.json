@@ -1,0 +1,2272 @@
+{
+ "model": "qwen3:14b",
+ "root": "C:/Users/rober/AppData/Local/Temp/claude/F--3D-Druck/c532d8f7-8f49-4adc-93d0-1ed2d7f07f4e/scratchpad/ki/stand",
+ "window": 32768,
+ "results": [
+  {
+   "id": "move",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "translate_object",
+    "translate_object"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 3,
+   "error": "",
+   "answer": "Der Vorschlag verschiebt das Objekt um 10 mm entlang der X-Achse, was die Anfrage korrekt umsetzt. Die Prüfung ergab keinen Befund, sodass die Positionierung nun korrekt ist.",
+   "seconds": 46.1,
+   "requests": [
+    {
+     "seconds": 14.98,
+     "in": 9165,
+     "out": 319,
+     "load_s": 3.68,
+     "prompt_s": 2.99,
+     "tools": 153
+    },
+    {
+     "seconds": 6.3,
+     "in": 9253,
+     "out": 211,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 24.22,
+     "in": 9341,
+     "out": 1094,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "1110, 42",
+   "stopped": ""
+  },
+  {
+   "id": "rotate",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "rotate_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Objekt wurde um 90 Grad um die Z-Achse gedreht und hat nun die Abmessungen 50,0 × 80,0 × 8,0 mm. Die Rotation wurde erfolgreich durchgeführt.",
+   "seconds": 24.6,
+   "requests": [
+    {
+     "seconds": 17.19,
+     "in": 9346,
+     "out": 665,
+     "load_s": 0.01,
+     "prompt_s": 2.6,
+     "tools": 153
+    },
+    {
+     "seconds": 7.36,
+     "in": 9434,
+     "out": 281,
+     "load_s": 0.0,
+     "prompt_s": 0.1,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15406, 98",
+   "stopped": ""
+  },
+  {
+   "id": "on_bed",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "place_on_bed"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Teil wurde erfolgreich auf das Druckbett gesetzt. Die Positionierung ist jetzt korrekt, und es gibt keine Überhänge mehr.",
+   "seconds": 21.0,
+   "requests": [
+    {
+     "seconds": 10.99,
+     "in": 9320,
+     "out": 351,
+     "load_s": 0.0,
+     "prompt_s": 2.26,
+     "tools": 153
+    },
+    {
+     "seconds": 9.9,
+     "in": 9397,
+     "out": 397,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15463, 98",
+   "stopped": ""
+  },
+  {
+   "id": "scale",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "scale_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Objekt wurde um 20 % skaliert, jetzt 96 × 60 × 9,6 mm.",
+   "seconds": 17.7,
+   "requests": [
+    {
+     "seconds": 11.94,
+     "in": 8450,
+     "out": 393,
+     "load_s": 0.0,
+     "prompt_s": 1.67,
+     "tools": 153
+    },
+    {
+     "seconds": 5.66,
+     "in": 8535,
+     "out": 180,
+     "load_s": 0.01,
+     "prompt_s": 0.05,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15176, 98",
+   "stopped": ""
+  },
+  {
+   "id": "repair",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "repair"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Modell wurde erfolgreich repariert, und der Prüfbericht zeigt keine offenen Stellen oder Selbstüberschneidungen mehr an. Die Bohrungen sind als Durchgangslöcher konzipiert und stellen keine offenen Flächen dar. Das Objekt ist nun korrekt auf dem Druckbett positioniert und masshaltig.",
+   "seconds": 27.9,
+   "requests": [
+    {
+     "seconds": 13.88,
+     "in": 8892,
+     "out": 487,
+     "load_s": 0.01,
+     "prompt_s": 2.06,
+     "tools": 153
+    },
+    {
+     "seconds": 13.97,
+     "in": 9074,
+     "out": 544,
+     "load_s": 0.01,
+     "prompt_s": 1.35,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15147, 98",
+   "stopped": ""
+  },
+  {
+   "id": "orient",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "orient_for_print"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Teil ist nun optimal ausgerichtet und benötigt kaum Stützen.",
+   "seconds": 19.9,
+   "requests": [
+    {
+     "seconds": 10.11,
+     "in": 8528,
+     "out": 312,
+     "load_s": 0.01,
+     "prompt_s": 1.36,
+     "tools": 153
+    },
+    {
+     "seconds": 9.67,
+     "in": 8603,
+     "out": 386,
+     "load_s": 0.0,
+     "prompt_s": 0.11,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15145, 98",
+   "stopped": ""
+  },
+  {
+   "id": "split",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "split_pinned"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Objekt wurde entlang der Mittelachse (z=0) in zwei Hälften geteilt. Die neue untere Hälfte (obj_2) erstreckt sich von z=-4 bis z=0, die obere Hälfte (obj_3) von z=0 bis z=+4. Die Bohrungen und Flächen wurden entsprechend auf die neuen Objekte übertragen.",
+   "seconds": 55.1,
+   "requests": [
+    {
+     "seconds": 40.54,
+     "in": 8235,
+     "out": 1877,
+     "load_s": 0.0,
+     "prompt_s": 1.73,
+     "tools": 153
+    },
+    {
+     "seconds": 14.46,
+     "in": 9410,
+     "out": 627,
+     "load_s": 0.0,
+     "prompt_s": 0.59,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15149, 98",
+   "stopped": ""
+  },
+  {
+   "id": "drill",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "mesh_to_exact",
+    "drill_brep_hole"
+   ],
+   "parameters": 0,
+   "calls": 3,
+   "invalid": 0,
+   "steps": 5,
+   "error": "",
+   "answer": "Das Loch (hole_5) wurde in die Oberseite (face_2) der Platte mittig gebohrt. Der Durchmesser beträgt 5,20 mm, und es handelt sich um ein Durchgangsloch. Die Geometrie wurde aktualisiert, und der neue Bohrungsmerkmal ist im Steckbrief enthalten.",
+   "seconds": 55.0,
+   "requests": [
+    {
+     "seconds": 15.99,
+     "in": 10894,
+     "out": 582,
+     "load_s": 0.0,
+     "prompt_s": 3.07,
+     "tools": 153
+    },
+    {
+     "seconds": 10.59,
+     "in": 11067,
+     "out": 438,
+     "load_s": 0.0,
+     "prompt_s": 0.27,
+     "tools": 153
+    },
+    {
+     "seconds": 12.49,
+     "in": 11266,
+     "out": 492,
+     "load_s": 0.01,
+     "prompt_s": 1.56,
+     "tools": 153
+    },
+    {
+     "seconds": 8.63,
+     "in": 11350,
+     "out": 356,
+     "load_s": 0.01,
+     "prompt_s": 0.2,
+     "tools": 153
+    },
+    {
+     "seconds": 6.5,
+     "in": 11514,
+     "out": 233,
+     "load_s": 0.0,
+     "prompt_s": 0.24,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15503, 98",
+   "stopped": ""
+  },
+  {
+   "id": "drill_on_feature",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "duplicate_feature"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 1,
+   "steps": 3,
+   "error": "",
+   "answer": "Die Bohrung hole_1 wurde erfolgreich an der Position (-25, -15, 0) dupliziert. Das neue Merkmal ist nun als hole_5 im Objekt obj_1 vorhanden. \n\nIst es noch etwas anderes, das Sie an der Bohrung oder dem Objekt ändern möchten?",
+   "seconds": 111.5,
+   "requests": [
+    {
+     "seconds": 74.51,
+     "in": 10396,
+     "out": 3487,
+     "load_s": 0.0,
+     "prompt_s": 2.8,
+     "tools": 153
+    },
+    {
+     "seconds": 27.02,
+     "in": 10487,
+     "out": 1250,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 9.95,
+     "in": 10582,
+     "out": 382,
+     "load_s": 0.04,
+     "prompt_s": 0.12,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15355, 98",
+   "stopped": ""
+  },
+  {
+   "id": "duplicate",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "duplicate_object",
+    "translate_object"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 4,
+   "error": "",
+   "answer": "Die Kopie des Teils wurde erfolgreich 80 mm neben dem Original platziert. Beide Objekte sind jetzt korrekt positioniert, und es wurden keine weiteren Probleme erkannt.",
+   "seconds": 67.0,
+   "requests": [
+    {
+     "seconds": 32.21,
+     "in": 8356,
+     "out": 1441,
+     "load_s": 0.0,
+     "prompt_s": 1.79,
+     "tools": 153
+    },
+    {
+     "seconds": 10.64,
+     "in": 8995,
+     "out": 429,
+     "load_s": 0.0,
+     "prompt_s": 0.38,
+     "tools": 153
+    },
+    {
+     "seconds": 12.28,
+     "in": 9162,
+     "out": 477,
+     "load_s": 0.01,
+     "prompt_s": 1.05,
+     "tools": 153
+    },
+    {
+     "seconds": 11.82,
+     "in": 9275,
+     "out": 496,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15227, 98",
+   "stopped": ""
+  },
+  {
+   "id": "parameter",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": true,
+   "ops": [],
+   "parameters": 1,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Die Plattenbreite ist jetzt als Projektparameter `plate_width` mit dem Wert 80 mm definiert. Dies ermöglicht eine spätere Änderung der Breite über das Parameter-Panel, ohne die Geometrie direkt anzupassen.",
+   "seconds": 19.7,
+   "requests": [
+    {
+     "seconds": 10.67,
+     "in": 8011,
+     "out": 382,
+     "load_s": 0.01,
+     "prompt_s": 0.78,
+     "tools": 153
+    },
+    {
+     "seconds": 8.94,
+     "in": 8083,
+     "out": 354,
+     "load_s": 0.01,
+     "prompt_s": 0.09,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15225, 98",
+   "stopped": ""
+  },
+  {
+   "id": "question",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Die Platte ist 8,0 mm dick. Dies ergibt sich aus den angegebenen Abmessungen von obj_1 (80,0 × 50,0 × 8,0 mm), wobei die Höhe (z-Achse) die Dicke der Platte darstellt.",
+   "seconds": 9.1,
+   "requests": [
+    {
+     "seconds": 9.07,
+     "in": 8253,
+     "out": 293,
+     "load_s": 0.0,
+     "prompt_s": 1.47,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15238, 98",
+   "stopped": ""
+  },
+  {
+   "id": "printable",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "translate_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 4,
+   "error": "",
+   "answer": "Das Teil ist jetzt korrekt auf dem Druckbett positioniert und sollte gut druckbar sein. Die erste Schicht ist durch die Verschiebung um 4 mm nach oben korrigiert, und der Prüfbericht zeigt keine weiteren Probleme an.",
+   "seconds": 58.8,
+   "requests": [
+    {
+     "seconds": 15.09,
+     "in": 8450,
+     "out": 569,
+     "load_s": 0.0,
+     "prompt_s": 1.83,
+     "tools": 153
+    },
+    {
+     "seconds": 22.8,
+     "in": 8595,
+     "out": 945,
+     "load_s": 0.0,
+     "prompt_s": 2.21,
+     "tools": 153
+    },
+    {
+     "seconds": 11.41,
+     "in": 8760,
+     "out": 447,
+     "load_s": 0.01,
+     "prompt_s": 0.81,
+     "tools": 153
+    },
+    {
+     "seconds": 9.47,
+     "in": 8845,
+     "out": 379,
+     "load_s": 0.0,
+     "prompt_s": 0.11,
+     "tools": 153
+    }
+   ],
+   "lookups": 2,
+   "gpu": "15226, 98",
+   "stopped": ""
+  },
+  {
+   "id": "how_long",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Der Druck dauert ungefähr 70 Minuten und benötigt etwa 18 g Material (14,4 cm³). Dieser Schätzung liegen das Volumen und die Oberfläche des Modells zugrunde, ohne Berücksichtigung von Stützen oder Haftungshilfen.",
+   "seconds": 13.7,
+   "requests": [
+    {
+     "seconds": 6.52,
+     "in": 8158,
+     "out": 132,
+     "load_s": 0.01,
+     "prompt_s": 1.4,
+     "tools": 153
+    },
+    {
+     "seconds": 7.15,
+     "in": 8255,
+     "out": 257,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15225, 97",
+   "stopped": ""
+  },
+  {
+   "id": "core_hole",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Kernloch für ein M4-Gewinde benötigt einen Bohrungsdurchmesser von 3,3 mm (Tap-Durchmesser). Für ein Durchgangsloch (ohne Gewinde) wären 4,3 mm (Fein) oder 4,8 mm (Grob) erforderlich. \n\nDer Wert 3,3 mm stammt aus dem Materialprofil des PETG und berücksichtigt die notwendige Passung für ein Gewin",
+   "seconds": 37.6,
+   "requests": [
+    {
+     "seconds": 23.46,
+     "in": 8368,
+     "out": 1013,
+     "load_s": 0.0,
+     "prompt_s": 1.54,
+     "tools": 153
+    },
+    {
+     "seconds": 14.07,
+     "in": 8476,
+     "out": 616,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15256, 97",
+   "stopped": ""
+  },
+  {
+   "id": "switch_material",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 3,
+   "error": "",
+   "answer": "Das Projekt verwendet bereits den Drucker „centauri-carbon-2“ und das Material „pla“. Keine Änderung notwendig.",
+   "seconds": 18.7,
+   "requests": [
+    {
+     "seconds": 7.18,
+     "in": 8330,
+     "out": 151,
+     "load_s": 0.0,
+     "prompt_s": 1.83,
+     "tools": 153
+    },
+    {
+     "seconds": 5.22,
+     "in": 8399,
+     "out": 157,
+     "load_s": 0.0,
+     "prompt_s": 0.1,
+     "tools": 153
+    },
+    {
+     "seconds": 6.25,
+     "in": 8452,
+     "out": 212,
+     "load_s": 0.01,
+     "prompt_s": 0.09,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15226, 97",
+   "stopped": ""
+  },
+  {
+   "id": "where_menu",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "resize_hole"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 1,
+   "steps": 3,
+   "error": "",
+   "answer": "Die Bohrung hole_1 wurde auf 6,00 mm Durchmesser vergrößert — der Wert aus dem Materialprofil für FDM-Löcher wurde berücksichtigt.",
+   "seconds": 31.7,
+   "requests": [
+    {
+     "seconds": 15.82,
+     "in": 9907,
+     "out": 548,
+     "load_s": 0.0,
+     "prompt_s": 2.42,
+     "tools": 153
+    },
+    {
+     "seconds": 9.06,
+     "in": 9996,
+     "out": 347,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 6.68,
+     "in": 10091,
+     "out": 220,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15227, 97",
+   "stopped": ""
+  },
+  {
+   "id": "where_hollow",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Das Aushöhlen (Hollowing) finden Sie im rechten Bereich der Oberfläche, wenn Sie einen Körper ausgewählt haben: Klicken Sie auf **„Aushöhlen“** (Hollow). Alternativ steht es als zweite Wahl im Menü unter **„Aushöhlen“** (Shell). \n\nDieses Werkzeug erzeugt eine Hülle mit bearbeitbaren Flächen und läss",
+   "seconds": 10.7,
+   "requests": [
+    {
+     "seconds": 10.6,
+     "in": 8451,
+     "out": 319,
+     "load_s": 0.01,
+     "prompt_s": 1.69,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15266, 97",
+   "stopped": ""
+  },
+  {
+   "id": "which_hole",
+   "good": true,
+   "asked": true,
+   "ambiguous": true,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "drill_hole"
+   ],
+   "parameters": 0,
+   "calls": 3,
+   "invalid": 1,
+   "steps": 4,
+   "error": "",
+   "answer": "Der Vorschlag vergrößert das Loch hole_1 auf 6,2 mm Durchmesser und fügt ein neues Merkmal hole_5 hinzu. Die Koordinaten (-25, -15, 0) sind korrekt für die Positionierung des Lochs. Die Schichtdicke wurde berücksichtigt, da der Wert \"compensate\": true aktiviert ist.",
+   "seconds": 56.3,
+   "requests": [
+    {
+     "seconds": 20.36,
+     "in": 9073,
+     "out": 794,
+     "load_s": 0.01,
+     "prompt_s": 2.12,
+     "tools": 153
+    },
+    {
+     "seconds": 15.32,
+     "in": 9157,
+     "out": 656,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 11.53,
+     "in": 9315,
+     "out": 464,
+     "load_s": 0.0,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 8.88,
+     "in": 9529,
+     "out": 327,
+     "load_s": 0.01,
+     "prompt_s": 0.26,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15470, 97",
+   "stopped": ""
+  },
+  {
+   "id": "how_much_thinner",
+   "good": false,
+   "asked": false,
+   "ambiguous": true,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "scale_object"
+   ],
+   "parameters": 1,
+   "calls": 3,
+   "invalid": 1,
+   "steps": 5,
+   "error": "",
+   "answer": "Die Platte ist jetzt 4 mm dick. Die Skalierung erfolgte um den Mittelpunkt mit 50% in Z-Richtung, wobei das Objekt auf dem Druckbett bleibt.",
+   "seconds": 93.6,
+   "requests": [
+    {
+     "seconds": 24.7,
+     "in": 8379,
+     "out": 1011,
+     "load_s": 0.01,
+     "prompt_s": 1.79,
+     "tools": 153
+    },
+    {
+     "seconds": 35.88,
+     "in": 8448,
+     "out": 1685,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 13.32,
+     "in": 8646,
+     "out": 497,
+     "load_s": 0.01,
+     "prompt_s": 1.28,
+     "tools": 153
+    },
+    {
+     "seconds": 10.68,
+     "in": 8769,
+     "out": 427,
+     "load_s": 0.01,
+     "prompt_s": 0.16,
+     "tools": 153
+    },
+    {
+     "seconds": 8.94,
+     "in": 8861,
+     "out": 338,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15542, 96",
+   "stopped": ""
+  },
+  {
+   "id": "join_what",
+   "good": true,
+   "asked": true,
+   "ambiguous": true,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 8,
+   "invalid": 0,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 100.3,
+   "requests": [
+    {
+     "seconds": 13.2,
+     "in": 8041,
+     "out": 516,
+     "load_s": 0.01,
+     "prompt_s": 1.0,
+     "tools": 153
+    },
+    {
+     "seconds": 18.11,
+     "in": 8105,
+     "out": 542,
+     "load_s": 0.01,
+     "prompt_s": 0.1,
+     "tools": 153
+    },
+    {
+     "seconds": 13.6,
+     "in": 8187,
+     "out": 562,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 7.67,
+     "in": 8303,
+     "out": 267,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 14.97,
+     "in": 8407,
+     "out": 633,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 10.71,
+     "in": 8546,
+     "out": 420,
+     "load_s": 0.01,
+     "prompt_s": 0.19,
+     "tools": 153
+    },
+    {
+     "seconds": 10.28,
+     "in": 8686,
+     "out": 397,
+     "load_s": 0.01,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 11.74,
+     "in": 8800,
+     "out": 472,
+     "load_s": 0.01,
+     "prompt_s": 0.15,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15674, 97",
+   "stopped": "steps"
+  },
+  {
+   "id": "bracket",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": true,
+   "ops": [
+    "create_brep_box",
+    "drill_hole",
+    "drill_hole"
+   ],
+   "parameters": 3,
+   "calls": 7,
+   "invalid": 1,
+   "steps": 3,
+   "error": "",
+   "answer": "Der Halter mit den angegebenen Maßen und zwei M4-Bohrungen ist fertiggestellt. Bitte bestätigen Sie, ob weitere Anpassungen oder Schritte erforderlich sind.",
+   "seconds": 93.3,
+   "requests": [
+    {
+     "seconds": 56.36,
+     "in": 9875,
+     "out": 2504,
+     "load_s": 0.01,
+     "prompt_s": 2.79,
+     "tools": 153
+    },
+    {
+     "seconds": 28.64,
+     "in": 11061,
+     "out": 1167,
+     "load_s": 0.01,
+     "prompt_s": 2.42,
+     "tools": 153
+    },
+    {
+     "seconds": 8.15,
+     "in": 11467,
+     "out": 281,
+     "load_s": 0.0,
+     "prompt_s": 0.33,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15754, 97",
+   "stopped": ""
+  },
+  {
+   "id": "magnet_lid",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 8,
+   "invalid": 0,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 100.0,
+   "requests": [
+    {
+     "seconds": 24.74,
+     "in": 9218,
+     "out": 1019,
+     "load_s": 0.01,
+     "prompt_s": 2.43,
+     "tools": 153
+    },
+    {
+     "seconds": 11.31,
+     "in": 9269,
+     "out": 475,
+     "load_s": 0.0,
+     "prompt_s": 0.08,
+     "tools": 153
+    },
+    {
+     "seconds": 13.06,
+     "in": 9320,
+     "out": 562,
+     "load_s": 0.01,
+     "prompt_s": 0.09,
+     "tools": 153
+    },
+    {
+     "seconds": 11.63,
+     "in": 9371,
+     "out": 484,
+     "load_s": 0.01,
+     "prompt_s": 0.08,
+     "tools": 153
+    },
+    {
+     "seconds": 10.63,
+     "in": 9437,
+     "out": 434,
+     "load_s": 0.0,
+     "prompt_s": 0.1,
+     "tools": 153
+    },
+    {
+     "seconds": 10.9,
+     "in": 9511,
+     "out": 443,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 9.13,
+     "in": 9607,
+     "out": 355,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 8.52,
+     "in": 9685,
+     "out": 325,
+     "load_s": 0.01,
+     "prompt_s": 0.1,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15107, 98",
+   "stopped": "steps"
+  },
+  {
+   "id": "wall_holder",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 8,
+   "invalid": 0,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 94.8,
+   "requests": [
+    {
+     "seconds": 19.45,
+     "in": 9087,
+     "out": 770,
+     "load_s": 0.0,
+     "prompt_s": 2.05,
+     "tools": 153
+    },
+    {
+     "seconds": 7.28,
+     "in": 9141,
+     "out": 265,
+     "load_s": 0.0,
+     "prompt_s": 0.08,
+     "tools": 153
+    },
+    {
+     "seconds": 7.19,
+     "in": 9195,
+     "out": 259,
+     "load_s": 0.0,
+     "prompt_s": 0.09,
+     "tools": 153
+    },
+    {
+     "seconds": 11.88,
+     "in": 9249,
+     "out": 499,
+     "load_s": 0.01,
+     "prompt_s": 0.09,
+     "tools": 153
+    },
+    {
+     "seconds": 12.39,
+     "in": 9339,
+     "out": 521,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 11.88,
+     "in": 9429,
+     "out": 500,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 12.85,
+     "in": 9519,
+     "out": 549,
+     "load_s": 0.0,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 11.85,
+     "in": 9633,
+     "out": 494,
+     "load_s": 0.01,
+     "prompt_s": 0.16,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15110, 98",
+   "stopped": "steps"
+  },
+  {
+   "id": "cable_exit",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "insert_cable_gland"
+   ],
+   "parameters": 0,
+   "calls": 4,
+   "invalid": 2,
+   "steps": 5,
+   "error": "",
+   "answer": "Der Vorschlag fügt eine Kabeldurchführung mit Zugentlastung in die 3 mm dicke Wand ein und passt die Geometrie an. Die Wanddicke bleibt erhalten, und die Zugentlastung ist positioniert.",
+   "seconds": 57.2,
+   "requests": [
+    {
+     "seconds": 8.95,
+     "in": 9278,
+     "out": 229,
+     "load_s": 0.01,
+     "prompt_s": 2.04,
+     "tools": 153
+    },
+    {
+     "seconds": 17.53,
+     "in": 9368,
+     "out": 785,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 13.44,
+     "in": 9781,
+     "out": 565,
+     "load_s": 0.01,
+     "prompt_s": 0.32,
+     "tools": 153
+    },
+    {
+     "seconds": 9.22,
+     "in": 9878,
+     "out": 364,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 7.94,
+     "in": 10099,
+     "out": 291,
+     "load_s": 0.01,
+     "prompt_s": 0.25,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15106, 98",
+   "stopped": ""
+  },
+  {
+   "id": "threaded_stud",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "thread_exact"
+   ],
+   "parameters": 2,
+   "calls": 5,
+   "invalid": 2,
+   "steps": 4,
+   "error": "",
+   "answer": "Der M6-Gewindezapfen mit 12 mm Länge wurde erfolgreich erstellt. Das Objekt `obj_1` enthält das Gewinde `thread_1` mit den festgelegten Abmessungen. Die Parameter `@diameter` (6 mm) und `@length` (12 mm) sind im Steckbrief hinterlegt und können später zur Anpassung verwendet werden. \n\n**Änderung:** ",
+   "seconds": 70.9,
+   "requests": [
+    {
+     "seconds": 24.48,
+     "in": 9052,
+     "out": 1067,
+     "load_s": 0.01,
+     "prompt_s": 1.25,
+     "tools": 153
+    },
+    {
+     "seconds": 11.72,
+     "in": 9290,
+     "out": 490,
+     "load_s": 0.01,
+     "prompt_s": 0.21,
+     "tools": 153
+    },
+    {
+     "seconds": 22.49,
+     "in": 9397,
+     "out": 1047,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 11.89,
+     "in": 9720,
+     "out": 491,
+     "load_s": 0.01,
+     "prompt_s": 0.27,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15106, 98",
+   "stopped": ""
+  },
+  {
+   "id": "nut_plate",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "insert_nut_trap"
+   ],
+   "parameters": 0,
+   "calls": 8,
+   "invalid": 3,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 151.7,
+   "requests": [
+    {
+     "seconds": 6.86,
+     "in": 9227,
+     "out": 167,
+     "load_s": 0.01,
+     "prompt_s": 1.57,
+     "tools": 153
+    },
+    {
+     "seconds": 41.84,
+     "in": 9313,
+     "out": 2026,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 8.11,
+     "in": 9409,
+     "out": 301,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 14.79,
+     "in": 9838,
+     "out": 632,
+     "load_s": 0.0,
+     "prompt_s": 0.31,
+     "tools": 153
+    },
+    {
+     "seconds": 38.95,
+     "in": 9934,
+     "out": 1858,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 17.75,
+     "in": 10048,
+     "out": 787,
+     "load_s": 0.01,
+     "prompt_s": 0.15,
+     "tools": 153
+    },
+    {
+     "seconds": 11.17,
+     "in": 10144,
+     "out": 456,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 12.06,
+     "in": 10258,
+     "out": 499,
+     "load_s": 0.01,
+     "prompt_s": 0.15,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15115, 98",
+   "stopped": "steps"
+  },
+  {
+   "id": "spacer",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_cylinder"
+   ],
+   "parameters": 1,
+   "calls": 7,
+   "invalid": 0,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 176.4,
+   "requests": [
+    {
+     "seconds": 16.7,
+     "in": 9454,
+     "out": 617,
+     "load_s": 0.01,
+     "prompt_s": 2.11,
+     "tools": 153
+    },
+    {
+     "seconds": 47.13,
+     "in": 9566,
+     "out": 2273,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 16.45,
+     "in": 9645,
+     "out": 728,
+     "load_s": 0.0,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 43.17,
+     "in": 10870,
+     "out": 1915,
+     "load_s": 0.0,
+     "prompt_s": 2.32,
+     "tools": 153
+    },
+    {
+     "seconds": 14.02,
+     "in": 10927,
+     "out": 596,
+     "load_s": 0.0,
+     "prompt_s": 0.1,
+     "tools": 153
+    },
+    {
+     "seconds": 9.97,
+     "in": 10985,
+     "out": 391,
+     "load_s": 0.01,
+     "prompt_s": 0.1,
+     "tools": 153
+    },
+    {
+     "seconds": 9.7,
+     "in": 11045,
+     "out": 370,
+     "load_s": 0.01,
+     "prompt_s": 0.04,
+     "tools": 153
+    },
+    {
+     "seconds": 19.2,
+     "in": 11325,
+     "out": 839,
+     "load_s": 0.0,
+     "prompt_s": 0.29,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15110, 98",
+   "stopped": "steps"
+  },
+  {
+   "id": "hinge",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box"
+   ],
+   "parameters": 0,
+   "calls": 7,
+   "invalid": 1,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 102.5,
+   "requests": [
+    {
+     "seconds": 31.03,
+     "in": 9278,
+     "out": 1337,
+     "load_s": 0.0,
+     "prompt_s": 2.18,
+     "tools": 153
+    },
+    {
+     "seconds": 7.44,
+     "in": 9350,
+     "out": 267,
+     "load_s": 0.01,
+     "prompt_s": 0.1,
+     "tools": 153
+    },
+    {
+     "seconds": 9.28,
+     "in": 9435,
+     "out": 360,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 11.45,
+     "in": 9527,
+     "out": 473,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 9.73,
+     "in": 9636,
+     "out": 384,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 9.34,
+     "in": 9740,
+     "out": 366,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 9.27,
+     "in": 9855,
+     "out": 360,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 14.93,
+     "in": 10278,
+     "out": 625,
+     "load_s": 0.0,
+     "prompt_s": 0.3,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15117, 98",
+   "stopped": "steps"
+  },
+  {
+   "id": "snap_box",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 8,
+   "invalid": 0,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 112.1,
+   "requests": [
+    {
+     "seconds": 21.07,
+     "in": 8952,
+     "out": 819,
+     "load_s": 0.01,
+     "prompt_s": 2.23,
+     "tools": 153
+    },
+    {
+     "seconds": 18.34,
+     "in": 9015,
+     "out": 805,
+     "load_s": 0.01,
+     "prompt_s": 0.09,
+     "tools": 153
+    },
+    {
+     "seconds": 13.27,
+     "in": 9094,
+     "out": 555,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 9.91,
+     "in": 9184,
+     "out": 387,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 9.79,
+     "in": 9294,
+     "out": 376,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 9.99,
+     "in": 9412,
+     "out": 389,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 13.56,
+     "in": 9523,
+     "out": 557,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 16.14,
+     "in": 9648,
+     "out": 687,
+     "load_s": 0.01,
+     "prompt_s": 0.15,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15162, 97",
+   "stopped": "steps"
+  },
+  {
+   "id": "keyhole_back",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "insert_keyhole"
+   ],
+   "parameters": 0,
+   "calls": 6,
+   "invalid": 2,
+   "steps": 8,
+   "error": "",
+   "answer": "Der Schlüsselloch-Aufhängung wurde an der Fläche face_3 des Trägerobjekts (obj_1) erfolgreich eingefügt. Die Parameter wurden angepasst, um den Mindestwert für \"drop\" (2.0 mm) zu erfüllen, und das Merkmal ist jetzt korrekt am Objekt positioniert. \n\n**Änderung:** Die Schlüsselloch-Aufhängung (keyhole",
+   "seconds": 99.9,
+   "requests": [
+    {
+     "seconds": 9.42,
+     "in": 9052,
+     "out": 228,
+     "load_s": 0.01,
+     "prompt_s": 2.06,
+     "tools": 153
+    },
+    {
+     "seconds": 9.28,
+     "in": 9138,
+     "out": 354,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 24.46,
+     "in": 9558,
+     "out": 1100,
+     "load_s": 0.01,
+     "prompt_s": 0.29,
+     "tools": 153
+    },
+    {
+     "seconds": 10.24,
+     "in": 9984,
+     "out": 275,
+     "load_s": 0.01,
+     "prompt_s": 2.08,
+     "tools": 153
+    },
+    {
+     "seconds": 10.88,
+     "in": 10096,
+     "out": 396,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 11.31,
+     "in": 10204,
+     "out": 431,
+     "load_s": 0.01,
+     "prompt_s": 0.07,
+     "tools": 153
+    },
+    {
+     "seconds": 13.03,
+     "in": 10329,
+     "out": 528,
+     "load_s": 0.01,
+     "prompt_s": 0.16,
+     "tools": 153
+    },
+    {
+     "seconds": 11.15,
+     "in": 10555,
+     "out": 435,
+     "load_s": 0.01,
+     "prompt_s": 0.2,
+     "tools": 153
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15355, 96",
+   "stopped": ""
+  },
+  {
+   "id": "stiffen",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "insert_rib"
+   ],
+   "parameters": 0,
+   "calls": 6,
+   "invalid": 4,
+   "steps": 7,
+   "error": "",
+   "answer": "Die Rippe wurde erfolgreich an die Wand angebracht. Die Wand ist nun verstärkt und die Geometrie aktualisiert. Gibt es noch weitere Anpassungen oder Schritte, die durchgeführt werden sollen?",
+   "seconds": 108.9,
+   "requests": [
+    {
+     "seconds": 10.33,
+     "in": 9606,
+     "out": 250,
+     "load_s": 0.01,
+     "prompt_s": 2.59,
+     "tools": 153
+    },
+    {
+     "seconds": 19.33,
+     "in": 9691,
+     "out": 854,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 9.78,
+     "in": 9786,
+     "out": 376,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 10.96,
+     "in": 10230,
+     "out": 427,
+     "load_s": 0.01,
+     "prompt_s": 0.32,
+     "tools": 153
+    },
+    {
+     "seconds": 24.11,
+     "in": 10315,
+     "out": 1091,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 26.98,
+     "in": 10410,
+     "out": 1240,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 7.32,
+     "in": 10570,
+     "out": 250,
+     "load_s": 0.01,
+     "prompt_s": 0.19,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15763, 96",
+   "stopped": ""
+  },
+  {
+   "id": "dowels",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 8,
+   "invalid": 0,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 97.3,
+   "requests": [
+    {
+     "seconds": 14.99,
+     "in": 9168,
+     "out": 524,
+     "load_s": 0.01,
+     "prompt_s": 2.06,
+     "tools": 153
+    },
+    {
+     "seconds": 7.21,
+     "in": 9238,
+     "out": 257,
+     "load_s": 0.0,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 17.49,
+     "in": 9319,
+     "out": 784,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 10.63,
+     "in": 9399,
+     "out": 432,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 153
+    },
+    {
+     "seconds": 10.65,
+     "in": 9481,
+     "out": 425,
+     "load_s": 0.01,
+     "prompt_s": 0.13,
+     "tools": 153
+    },
+    {
+     "seconds": 12.57,
+     "in": 9563,
+     "out": 530,
+     "load_s": 0.0,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 13.51,
+     "in": 9671,
+     "out": 579,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 10.19,
+     "in": 9771,
+     "out": 409,
+     "load_s": 0.0,
+     "prompt_s": 0.13,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15762, 98",
+   "stopped": "steps"
+  },
+  {
+   "id": "inserts",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4"
+   ],
+   "parameters": 0,
+   "calls": 18,
+   "invalid": 5,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 208.0,
+   "requests": [
+    {
+     "seconds": 42.87,
+     "in": 9107,
+     "out": 1963,
+     "load_s": 0.0,
+     "prompt_s": 1.7,
+     "tools": 153
+    },
+    {
+     "seconds": 11.26,
+     "in": 9611,
+     "out": 453,
+     "load_s": 0.01,
+     "prompt_s": 0.34,
+     "tools": 153
+    },
+    {
+     "seconds": 26.42,
+     "in": 9745,
+     "out": 1235,
+     "load_s": 0.0,
+     "prompt_s": 0.19,
+     "tools": 153
+    },
+    {
+     "seconds": 34.73,
+     "in": 10789,
+     "out": 1611,
+     "load_s": 0.0,
+     "prompt_s": 0.59,
+     "tools": 153
+    },
+    {
+     "seconds": 21.13,
+     "in": 10919,
+     "out": 950,
+     "load_s": 0.0,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 40.06,
+     "in": 11983,
+     "out": 1838,
+     "load_s": 0.01,
+     "prompt_s": 0.62,
+     "tools": 153
+    },
+    {
+     "seconds": 15.99,
+     "in": 12110,
+     "out": 675,
+     "load_s": 0.0,
+     "prompt_s": 0.16,
+     "tools": 153
+    },
+    {
+     "seconds": 14.62,
+     "in": 13164,
+     "out": 577,
+     "load_s": 0.0,
+     "prompt_s": 0.64,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15115, 98",
+   "stopped": "steps"
+  },
+  {
+   "id": "parameterise",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": true,
+   "ops": [
+    "create_brep_box"
+   ],
+   "parameters": 4,
+   "calls": 9,
+   "invalid": 2,
+   "steps": 6,
+   "error": "",
+   "answer": "Der Quader mit den Parametern Breite und Höhe ist erfolgreich erstellt worden. Die aktuellen Werte betragen jeweils 10 mm. \n\nWas möchten Sie als nächstes tun?",
+   "seconds": 63.5,
+   "requests": [
+    {
+     "seconds": 9.24,
+     "in": 9027,
+     "out": 252,
+     "load_s": 0.0,
+     "prompt_s": 1.75,
+     "tools": 153
+    },
+    {
+     "seconds": 9.52,
+     "in": 9160,
+     "out": 375,
+     "load_s": 0.01,
+     "prompt_s": 0.17,
+     "tools": 153
+    },
+    {
+     "seconds": 16.99,
+     "in": 9268,
+     "out": 755,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 8.0,
+     "in": 9397,
+     "out": 294,
+     "load_s": 0.0,
+     "prompt_s": 0.2,
+     "tools": 153
+    },
+    {
+     "seconds": 10.54,
+     "in": 9508,
+     "out": 427,
+     "load_s": 0.0,
+     "prompt_s": 0.14,
+     "tools": 153
+    },
+    {
+     "seconds": 9.16,
+     "in": 10023,
+     "out": 284,
+     "load_s": 0.0,
+     "prompt_s": 1.53,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15100, 98",
+   "stopped": ""
+  },
+  {
+   "id": "free_shape",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_cone"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 3,
+   "error": "",
+   "answer": "",
+   "seconds": 33.0,
+   "requests": [
+    {
+     "seconds": 9.29,
+     "in": 9525,
+     "out": 251,
+     "load_s": 0.0,
+     "prompt_s": 1.92,
+     "tools": 153
+    },
+    {
+     "seconds": 10.22,
+     "in": 9572,
+     "out": 409,
+     "load_s": 0.01,
+     "prompt_s": 0.08,
+     "tools": 153
+    },
+    {
+     "seconds": 13.43,
+     "in": 9855,
+     "out": 565,
+     "load_s": 0.0,
+     "prompt_s": 0.29,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15100, 98",
+   "stopped": ""
+  },
+  {
+   "id": "hex_base",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "sketch_extrude"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Der sechseckige Sockel ist erstellt und entspricht den Maßen 30 mm über die Ecken und 8 mm Höhe. Keine weitere Anpassung erforderlich.",
+   "seconds": 68.4,
+   "requests": [
+    {
+     "seconds": 49.79,
+     "in": 9107,
+     "out": 2295,
+     "load_s": 0.0,
+     "prompt_s": 2.38,
+     "tools": 153
+    },
+    {
+     "seconds": 18.6,
+     "in": 9631,
+     "out": 750,
+     "load_s": 0.0,
+     "prompt_s": 1.87,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15100, 98",
+   "stopped": ""
+  },
+  {
+   "id": "pocket_plate",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "sketch_pocket"
+   ],
+   "parameters": 0,
+   "calls": 4,
+   "invalid": 2,
+   "steps": 4,
+   "error": "",
+   "answer": "Der Deckel mit der Tasche ist vollständig erstellt. Das Objekt `obj_1` hat die gewünschten Abmessungen (60×60×4 mm), und die Tasche (40×40 mm, 2 mm tief) ist korrekt positioniert. Keine weiteren Schritte erforderlich.",
+   "seconds": 51.3,
+   "requests": [
+    {
+     "seconds": 15.45,
+     "in": 9518,
+     "out": 540,
+     "load_s": 0.0,
+     "prompt_s": 2.13,
+     "tools": 153
+    },
+    {
+     "seconds": 11.48,
+     "in": 10069,
+     "out": 465,
+     "load_s": 0.0,
+     "prompt_s": 0.35,
+     "tools": 153
+    },
+    {
+     "seconds": 13.21,
+     "in": 10177,
+     "out": 560,
+     "load_s": 0.01,
+     "prompt_s": 0.12,
+     "tools": 153
+    },
+    {
+     "seconds": 11.09,
+     "in": 10539,
+     "out": 442,
+     "load_s": 0.01,
+     "prompt_s": 0.31,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15100, 97",
+   "stopped": ""
+  },
+  {
+   "id": "handrail_bend",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "sketch_sweep"
+   ],
+   "parameters": 1,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 3,
+   "error": "",
+   "answer": "Der Handlauf-Bogen ist als Objekt `obj_1` erstellt worden. Die Maße (12 mm Dicke, 60 mm Radius, 90° Bogen) sind erfüllt. Die Querschnittsfläche (`face_1` und `face_2`) ist planar, und der Wulst (`torus_1`) hat die korrekten Durchmesser. \n\n**Vorschlag:**  \nFüge einen Projektparameter für die Dicke hi",
+   "seconds": 72.7,
+   "requests": [
+    {
+     "seconds": 45.6,
+     "in": 9537,
+     "out": 2073,
+     "load_s": 0.01,
+     "prompt_s": 2.08,
+     "tools": 153
+    },
+    {
+     "seconds": 15.52,
+     "in": 9804,
+     "out": 674,
+     "load_s": 0.0,
+     "prompt_s": 0.25,
+     "tools": 153
+    },
+    {
+     "seconds": 11.47,
+     "in": 9968,
+     "out": 467,
+     "load_s": 0.01,
+     "prompt_s": 0.19,
+     "tools": 153
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15101, 98",
+   "stopped": ""
+  }
+ ]
+}
