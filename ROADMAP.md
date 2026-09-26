@@ -70,9 +70,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe](#rm-239) | Geometrie, Erkennung und Druckvorbereitung | Siebhalter-Ring mit Riss: die Heilung überwiegt, 12 Eckpaare zu 0,015 µm werden zusammengelegt, 24 Dreiecke fallen — Gruppen nach Flächenblatt trennen, ohne Dreieckssuppen aufzureißen; Import- und Reparaturregel zusammenlegen |
 | [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
 | [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
-| [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter und Leerfahrt vom Drucker gebaut und im ElegooSlicer belegt; offen: Tempo je Drucker, Rand bei Füßen |
+| [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht](#rm-248) | Geometrie, Erkennung und Druckvorbereitung | Fächer vom Randmittelpunkt lässt beim Versetzen 3,6 bis 5,4 mm³ Mulde — den Deckel als Fortsetzung der umgebenden Fläche bauen, an beiden Kernen |
 | [RM-249 — Eine Bohrung über einer Seite innerhalb der Hülle meldet keine Kante](#rm-249) | Geometrie, Erkennung und Druckvorbereitung | Kantenprüfung fragt zuerst den Hüllquader; an gs-100 läuft eine Kopie 3,4 mm über die Seite, ohne Befund — Prüfung über die eigene Tiefe des Merkmals am Netz, dann Nachkontrolle der Kopien an beiden Kernen |
+| [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | `for_part` setzt ihn ohne Klick bei kleiner Standfläche oder schlankem Teil; Robert 26.09.2026: ohne „Vorschläge übernehmen" gehen die Standardeinstellungen hinaus — bleibt die Automatik, oder wird sie ein Vorschlag je Teil? |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
@@ -1875,24 +1876,44 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     7,5 mm über dem Bett auf zwölf Füßen.
   - Eine Stützsperre für Kanäle (26.09.2026), als Vorschlag
     `support.block_channels` — ohne „Vorschläge übernehmen" gehen die
-    Standardeinstellungen hinaus (Robert). Die Übergabe legt dann einen
-    `SupportBlocker`-Bereich in die 3MF, gebaut aus dem freien Kanalraum
-    innerhalb der Hülle des Teils (`analysis.channel_space`). Im ElegooSlicer:
-    „Gitter überall" 22,9 → 0,5 m im Kanal, Orcas organische Bäume „nur vom
-    Bett" 6,2 → 0,7 m. Cura bekommt ein STL und keine Sperre.
+    Standardeinstellungen hinaus (Robert). Gebaut aus dem freien Kanalraum
+    innerhalb der Hülle des Teils, eine Scheibe in die Decke hinein
+    (`analysis.channel_space`). **Die erste Fassung druckte der ElegooSlicer
+    als Kunststoff**: Sie hing als Prusa-Bereich im Netz, und die Orca-Familie
+    liest ihre eigene Beilage — im Kanal 161,8 statt 49,5 m Modellbahn, 22,8 g
+    mehr; die damals gemessenen „22,9 → 0,5 m" waren der Pfropfen. Jetzt je
+    Familie die eigene Schreibweise (`slicer_keys.helpers_as_parts`): für die
+    Orca-Familie ein eigenes Teil `support_blocker`, für PrusaSlicer der
+    Bereich samt `slic3rpe:Version3mf`. Stütze im Sperrkörper, Modellbahn
+    unverändert: ElegooSlicer „Gitter überall" 87,8 → 0,0 m, „Baum nur vom
+    Bett" 22,5 → 1,7 m; PrusaSlicer „Gitter überall" 91,0 → 6,5 m. Cura
+    bekommt ein STL und keine Sperre. Keine Ausgabe trug die fehlerhafte
+    Fassung (v0.5.0 liegt davor).
   - Inseln: Eine Insel auf dem Modell verlangt „überall", eine über dem Bett
     nicht mehr — vorher bekam jedes Teil mit einer Insel „überall", und der
     Kanal füllte sich wieder.
 
-  **Offen, gemessen:**
-  - **Tempo je Drucker.** Solidons Stufe „Standard" fährt 40/60/80 mm/s, Elegoos
-    CC2-Profil 160/200/200 — dieselbe Schüssel 25 h 46 min gegen 13 h 22 min.
-    Wie die Leerfahrt gehört die Tempogrenze der Maschine (samt Volumenstrom
-    des Hotends, `max_flow` ist heute ein Materialwert „für ein
-    Standard-Hotend").
-  - **Haftung auf zwölf kleinen Füßen.** Nutzer des Designerprofils auf
-    MakerWorld melden „hintere Ecke hebt sich und Stringing"; ein Rand-Vorschlag
-    für viele kleine Aufstandsinseln ist nicht bewertet.
+  - **Tempo je Drucker** (26.09.2026): `PrinterProfile.speed_*`, die
+    Beschleunigungen und `flow_factor` aus dem Standardprozess und dem
+    allgemeinen PLA des Herstellers, für „Standard"; die übrigen Stufen im
+    Verhältnis. Danach deckelt die Auflösung jedes Tempo auf den Volumenstrom
+    (`print_settings.flow_speed_limit`) — sonst meldete die Beratung an Bambu,
+    Prusa, K1 und Kobra an jedem Teil vier Warnungen. Schüssel am Centauri im
+    ElegooSlicer: 30 h 41 min → 18 h 29 min.
+  - **Brim auf vielen kleinen Füßen** (26.09.2026), als Vorschlag: mehrere
+    Aufstandsinseln, keine mit `SMALL_FOOTPRINT`. Die Schüssel steht auf zwölf
+    zu je rund 108 mm²; im Korpus trifft die Regel sonst 6 von 447 Körpern.
+    Am Eiffelturm legt der Brim 1001 mm um jedes Bein.
+  - **Die Kanalfrage selbst war zu langsam** (26.09.2026): je Säule gefragt am
+    Eiffelturm hochgerechnet 30 Minuten für die Druckvorschläge; jetzt je
+    Schicht und auf Arbeitern 2,8 s, an der Schüssel dieselben Antworten.
+  - **Eine Stützsperre kam beim Einlesen als Material an** (26.09.2026):
+    Prusa-Bereiche, die kein Modellteil sind, fallen jetzt aus dem Körper,
+    eine Aussparung wird abgezogen — wie die Teilarten der Orca-Familie.
+
+  **Offen:** der Probedruck der Schüssel am Centauri Carbon 2 mit
+  übernommenen Vorschlägen. Die Frage zum Brim je Teil beim Export steht als
+  RM-250.
 
 <a id="rm-248"></a>
 
@@ -1956,6 +1977,20 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   um 12 mm quer verdoppelt „über die Kante“ an beiden Kernen, an den übrigen
   drei Platten dieselben Befunde an beiden Kernen, als STEP und als 3MF; eine
   Bohrung in einer 1-mm-Platte ohne Kantenbefund.
+
+<a id="rm-250"></a>
+
+- [ ] **RM-250 — Der Brim je Teil beim Export ist eine Automatik.**
+  Gefunden am 26.09.2026 bei RM-247. `advise.for_part` setzt beim Export
+  einem einzelnen Teil einen Brim, wenn es auf weniger als `SMALL_FOOTPRINT`
+  steht oder schlank ist, auch wenn die Platte auf Schürze steht und niemand
+  „Vorschläge übernehmen" geklickt hat (seit 03.09.2026, mit Befund
+  `export.part_setting`). Roberts Vorgabe vom 26.09.2026 lautet: nur mit
+  „Vorschläge übernehmen" werden Einstellungen auf das Modell zugeschnitten,
+  sonst gehen die Standardeinstellungen zum Slicer. Zu entscheiden: Bleibt
+  die Automatik je Teil (sie verhindert, dass kleine Teile abreißen, und ist
+  im Prüfbericht benannt), oder wird sie ein Vorschlag je Teil im Druckdialog?
+  Die neue Regel für viele kleine Füße ist bewusst nur ein Vorschlag.
 
 ## Bedienung und Darstellung
 
