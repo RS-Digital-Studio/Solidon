@@ -21291,6 +21291,13 @@ class MainWindow(QMainWindow):
         """
         if self.session.busy or self._survey_notice.isVisibleTo(self.viewport):
             return
+        if not self._survey_notice.has_room():
+            # **Und nicht unter die Karten** (RM-233): In einem schmalen
+            # Fenster (1024 Punkte) gibt es zwischen Objektbaum und
+            # Prüfbericht keinen Streifen für die Karte; sie stand dann oben in
+            # der Mitte, verdeckt, und wartete auf eine Antwort, die niemand
+            # geben konnte. Dasselbe „später“ wie bei einer Rechnung.
+            return
         self._usage.stop()
         self._survey_notice.ask()
 
@@ -21993,7 +22000,15 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt name
         super().resizeEvent(event)
-        self._fit_toolbar()
+        # **Die Größe kann sich ändern, bevor es eine Werkzeugleiste gibt.**
+        # Der Renderer fragt beim Bau der Ansicht nach seinem nativen Fenster
+        # (``winId``), und damit entsteht das des Hauptfensters — bei
+        # doppelter Skalierung (``QT_SCALE_FACTOR=2`` auf einem 1440er Schirm)
+        # mitsamt einer Größenänderung, mitten in ``__init__``. Ohne diese
+        # Zeile endete der Start dort mit ``AttributeError`` (Durchsicht
+        # 0.5.1, RM-238). Gekürzt wird beim ersten Zeigen ohnehin.
+        if hasattr(self, "toolbar"):
+            self._fit_toolbar()
 
     def _fit_toolbar(self) -> None:
         """Kürzt die Werkzeugleiste, statt sie überlaufen zu lassen (D6).

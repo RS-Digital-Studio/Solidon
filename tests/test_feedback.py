@@ -742,3 +742,52 @@ def test_a_notice_finds_the_free_spot_between_the_cards(qt_app: object) -> None:
         "der umgebrochene Satz passt in die Zeile"
     )
     view.close()
+
+
+def test_the_survey_card_narrows_before_it_hides_under_the_cards(qt_app: object) -> None:
+    """Die Rückfragekarte nimmt einen schmaleren freien Streifen, statt unter Karten zu liegen.
+
+    Mit fester Breite von 520 Punkten fand sie in einem schmalen Fenster
+    keinen Streifen und stand oben in der Mitte — dort, wo Objektbaum und
+    Prüfbericht liegen (RM-233). Nie schmaler als ihre zwei Knöpfe.
+    """
+    from app.ui.style import ROOMY
+    from app.ui.survey import NOTICE_MIN_WIDTH, NOTICE_WIDTH, SurveyNotice
+
+    notice = SurveyNotice()
+    least = max(NOTICE_MIN_WIDTH, notice._buttons_width())
+    assert notice.width_for(NOTICE_WIDTH + 2 * ROOMY + 200) == NOTICE_WIDTH, "breit bleibt sie"
+    assert notice.width_for(least + 2 * ROOMY - 1) is None, "schmaler als die Knöpfe nie"
+    if least < NOTICE_WIDTH:
+        assert notice.width_for(least + 2 * ROOMY) == least, "dazwischen nimmt sie den Streifen"
+    notice.deleteLater()
+
+
+def test_the_survey_card_only_speaks_where_it_can_be_seen(qt_app: object) -> None:
+    """Keine freie Stelle, keine Einladung — später, nicht unter den Karten (RM-233).
+
+    Bei 1024 × 760 Punkten blieben zwischen Objektbaum und Prüfbericht 125 Punkte,
+    darunter kein Band hoch genug: Die Karte stand oben in der Mitte, verdeckt.
+    """
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    from app.ui.survey import SurveyNotice
+
+    view = QWidget()
+    view.resize(1400, 800)
+    left = QWidget(view)
+    left.setGeometry(12, 12, 300, 776)
+    right = QWidget(view)
+    right.setGeometry(1400 - 12 - 340, 12, 340, 776)
+    notice = SurveyNotice(view)
+    for card in (left, right):
+        notice.keep_clear_of(card)
+    view.show()
+    QApplication.processEvents()
+    assert notice.has_room(), "breit genug: zwischen den Karten"
+
+    view.resize(800, 800)
+    right.setGeometry(800 - 12 - 340, 12, 340, 776)
+    QApplication.processEvents()
+    assert not notice.has_room(), "125 Punkte und keine Höhe frei: keine Stelle"
+    view.close()

@@ -4447,9 +4447,13 @@ class SketchCanvas(QWidget):
         ausdrücklich. Und, wo einer liegt, der Punkt selbst."""
         position = QPointF(event.position())
         menu = self.context_menu_at(self._hit_point(position), self._to_world(position))
-        if menu.isEmpty():
-            return
-        menu.exec(event.globalPosition().toPoint())
+        if not menu.isEmpty():
+            menu.exec(event.globalPosition().toPoint())
+        # **Ein Menü je Rechtsklick, und keines bleibt liegen** (RM-233) —
+        # dieselbe Lage wie im Objektbaum (``ObjectTree._on_context_menu``):
+        # Es entsteht als Kind der Zeichenfläche und lebte sonst bis zu ihr,
+        # samt Aktionen und Rückrufen. ``deleteLater``, nicht ``setParent(None)``.
+        menu.deleteLater()
 
     def context_menu_at(self, hit: int | None, spot: tuple[float, float] | None = None) -> QMenu:
         """Was das Kontextmenü anbietet — gebaut, nicht gezeigt.
@@ -7951,9 +7955,10 @@ class SketchPanel(QWidget):
         """Rechtsklick in der Bedingungsliste — der sichtbare Weg hinaus."""
         row = self.constraint_list.indexAt(position).row()
         menu = self.constraint_menu_at(row)
-        if menu.isEmpty():
-            return
-        menu.exec(self.constraint_list.viewport().mapToGlobal(position))
+        if not menu.isEmpty():
+            menu.exec(self.constraint_list.viewport().mapToGlobal(position))
+        # Wie an der Zeichenfläche: kein Menü bleibt liegen (RM-233).
+        menu.deleteLater()
 
     def leaveEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         """Der Zeiger ist weg — dann leuchtet auch nichts mehr."""

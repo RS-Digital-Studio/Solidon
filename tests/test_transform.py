@@ -895,3 +895,40 @@ def test_four_quarter_turns_bring_every_point_back_bit_for_bit() -> None:
         np.array([[0.0, 6.0, 1.0]]), rotation_about((0.0, 0.0, 1.0), (0.0, 0.0, 0.0), 90.0)
     )
     assert np.array_equal(on_axis, [[-6.0, 0.0, 1.0]])
+
+
+def test_the_centre_anchor_is_called_what_it_computes() -> None:
+    """„Mitte“ ist die Mitte der Hülle, und die Kurzhilfe nennt sie so (RM-233).
+
+    *Drehen*, *Skalieren* und *Spiegeln* nannten ihren Anker „Schwerpunkt“,
+    gerechnet wurde mit der Mitte des Hüllquaders — an einem L-Winkel liegen
+    beide Zentimeter auseinander. Die Auswahl darüber sagt „Mitte“, und der
+    Satz dazu sagt jetzt dasselbe.
+    """
+    import trimesh
+
+    from app.core.geom import transform
+    from app.core.geom.mesh import MeshData
+
+    angle = trimesh.util.concatenate(
+        [
+            trimesh.creation.box(
+                extents=(40.0, 4.0, 4.0),
+                transform=trimesh.transformations.translation_matrix((20.0, 2.0, 2.0)),
+            ),
+            trimesh.creation.box(
+                extents=(4.0, 40.0, 4.0),
+                transform=trimesh.transformations.translation_matrix((2.0, 20.0, 2.0)),
+            ),
+        ]
+    )
+    mesh = MeshData.of(angle)
+    centre = transform.anchor_point(mesh, "centre")
+    assert centre == pytest.approx(tuple(mesh.bounds.centre)), "gerechnet wird die Hüllmitte"
+    assert centre != pytest.approx(tuple(angle.center_mass)), "der Fall unterscheidet beide"
+    for name in ("rotate_object", "scale_object", "mirror_object"):
+        about = next(entry for entry in REGISTRY.get(name).params.spec() if entry.name == "about")
+        assert "Schwerpunkt" not in str(about.doc), (
+            f"{name}: die Kurzhilfe verspricht den Schwerpunkt"
+        )
+        assert "Mitte" in str(about.doc), f"{name}: die Kurzhilfe nennt die Mitte nicht"

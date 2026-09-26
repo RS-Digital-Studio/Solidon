@@ -252,6 +252,11 @@ class UsageClock(QObject):
 #: nicht mehr als das hier.
 NOTICE_WIDTH = 520
 
+#: Wie schmal die Rückfragekarte höchstens werden darf, bevor sie lieber oben
+#: in der Mitte steht. Schmaler als ihre zwei Knöpfe nebeneinander wird sie
+#: ohnehin nie (:meth:`SurveyNotice.width_for`).
+NOTICE_MIN_WIDTH = 240
+
 #: Wie weit von oben. Dieselbe Zahl wie beim Vorschaubanner
 #: (``viewport.BANNER_TOP``) — zwei Karten an derselben Stelle sollen an
 #: derselben Stelle stehen, und wo sie zusammentreffen, weicht diese nach
@@ -412,10 +417,28 @@ class ViewNotice(QFrame):
         höher, und dann wird mit dem höheren Band noch einmal gefragt.
         Gerechnet wird nur mit Rechtecken, die schon stehen, nie mit der
         eigenen alten Lage.
+
+        Gibt es keine freie Stelle, steht die Karte oben in der Mitte — dann
+        liegt sie unter den Karten (:meth:`has_room` sagt es vorher).
         """
         parent = self.parentWidget()
         if parent is None:
             return self.geometry()
+        free = self._free_spot()
+        if free is not None:
+            return free
+        width = parent.width()
+        chosen = self.width_for(width) or self.width()
+        return QRect(max((width - chosen) // 2, 0), NOTICE_TOP, chosen, self.height_for(chosen))
+
+    def has_room(self) -> bool:
+        """Ob es über der Ansicht eine Stelle gibt, an der die Karte zu sehen ist."""
+        return self.parentWidget() is not None and self._free_spot() is not None
+
+    def _free_spot(self) -> QRect | None:
+        """Die oberste freie Stelle — ``None``, wenn keine Höhe einen Streifen hat."""
+        parent = self.parentWidget()
+        assert parent is not None
         width, height = parent.width(), parent.height()
         bottom = height - BOTTOM_ROOM
         obstacles = self._obstacles()
@@ -454,8 +477,7 @@ class ViewNotice(QFrame):
                 reach = taller
             if best is not None:
                 return best
-        chosen = self.width_for(width) or self.width()
-        return QRect(max((width - chosen) // 2, 0), NOTICE_TOP, chosen, self.height_for(chosen))
+        return None
 
     @staticmethod
     def _free_spans(
@@ -576,6 +598,33 @@ class SurveyNotice(ViewNotice):
             + f"#surveyNotice #surveyGive {{ background: {colours['highlight']};"
             f" color: {colours['highlight_text']}; border: 1px solid {colours['highlight']}; }}"
         )
+
+    def width_for(self, room: int) -> int | None:
+        """So breit wie :data:`NOTICE_WIDTH`, schmaler nur, wenn der Streifen es verlangt.
+
+        **Die feste Breite hielt die Karte in einem schmalen Fenster unter den
+        Karten** (RM-233): Zwischen Objektbaum und Prüfbericht war kein
+        Streifen 520 Punkte breit, also stand sie oben in der Mitte — dort,
+        wo die Karten liegen, und darunter nicht zu sehen. Jetzt nimmt sie den
+        freien Streifen bis hinunter zu :data:`NOTICE_MIN_WIDTH`; der Text
+        bricht um, und die Höhe folgt (:meth:`ViewNotice.height_for`). Nie
+        schmaler als die zwei Knöpfe nebeneinander — der Grund, aus dem sie
+        überhaupt eine feste Breite bekam: Ein Knopf ohne Wort ist ein Rätsel.
+        """
+        usable = room - 2 * ROOMY
+        least = max(NOTICE_MIN_WIDTH, self._buttons_width())
+        if usable < least:
+            return None
+        return min(NOTICE_WIDTH, usable)
+
+    def _buttons_width(self) -> int:
+        """Die Breite, in der beide Knöpfe mit ganzer Beschriftung nebeneinander passen."""
+        self.ensurePolished()
+        layout = self.layout()
+        margins = layout.contentsMargins() if layout is not None else None
+        sides = margins.left() + margins.right() if margins is not None else 2 * ROOMY
+        frame = self.width() - self.contentsRect().width()
+        return self.no.sizeHint().width() + SPACE + self.give.sizeHint().width() + sides + frame
 
     def _accept(self) -> None:
         self.hide()

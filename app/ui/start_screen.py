@@ -1254,6 +1254,9 @@ class StartScreen(QWidget):
             lambda _checked=False, path=str(stored): self.forgetRequested.emit(Path(path))
         )
         menu.exec(self.recent_list.viewport().mapToGlobal(position))
+        # Kein Menü bleibt als Kind der Startfläche liegen (RM-233, wie im
+        # Objektbaum): ``deleteLater`` lässt dem Signal des Eintrags seine Runde.
+        menu.deleteLater()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
         if accepted_path(event) is not None or accepted_url(event) is not None:

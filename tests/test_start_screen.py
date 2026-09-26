@@ -413,6 +413,37 @@ def test_an_empty_recent_list_is_a_line_not_a_box(screen: StartScreen) -> None:
     assert screen.recent_list.count() == 2
 
 
+def test_the_recent_menu_does_not_stay_behind(screen: StartScreen) -> None:
+    """Ein Menü je Rechtsklick auf „Zuletzt geöffnet“, und keines bleibt liegen (RM-233).
+
+    Es entstand als Kind der Startfläche und lebte bis zu ihr — samt Aktion und
+    Rückruf, je Rechtsklick eines.
+    """
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QMenu
+
+    screen.show_recent([Path("a.p3d")])
+    screen.resize(800, 600)
+    screen.show()
+    QApplication.processEvents()
+    spot = screen.recent_list.visualItemRect(screen.recent_list.item(0)).center()
+
+    def close_popup() -> None:
+        popup = QApplication.activePopupWidget()
+        if popup is not None:
+            popup.close()
+
+    before = len(screen.findChildren(QMenu))
+    for _ in range(10):
+        QTimer.singleShot(0, close_popup)
+        screen._on_recent_menu(spot)
+        QApplication.processEvents()
+    QApplication.processEvents()
+    after = len(screen.findChildren(QMenu))
+    assert after <= before + 1, f"{after - before} Menüs blieben nach zehn Rechtsklicks liegen"
+    screen.hide()
+
+
 def test_recent_projects_come_before_the_guided_tours(screen: StartScreen) -> None:
     """Weiterarbeiten steht vor Entdecken, sobald es etwas fortzusetzen gibt."""
     screen.show_recent([Path("mein-projekt.p3d")])

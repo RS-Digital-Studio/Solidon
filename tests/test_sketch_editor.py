@@ -3341,6 +3341,52 @@ def test_the_viewport_routes_digits_to_the_lent_measure_field(qt_app: QApplicati
         viewport.deleteLater()
 
 
+def test_the_sketch_menus_do_not_stay_behind(qt_app: QApplication) -> None:
+    """Zeichenfläche und Bedingungsliste räumen ihr Kontextmenü weg (RM-233).
+
+    ``context_menu_at`` baut je Rechtsklick ein ``QMenu`` als Kind der Fläche;
+    ohne ``deleteLater`` lebte jedes bis zur Fläche — auch das leere, das gar
+    nicht aufging.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QMenu
+
+    dialog = SketchEditorDialog(sketch_to_text(shapes.rectangle(40.0, 20.0)))
+    canvas = dialog.canvas
+    canvas.resize(400, 300)
+    canvas.selection = [("line", (0, 1))]
+
+    def close_popup() -> None:
+        popup = QApplication.activePopupWidget()
+        if popup is not None:
+            popup.close()
+
+    event = SimpleNamespace(
+        position=lambda: QPointF(200.0, 150.0), globalPosition=lambda: QPointF(200.0, 150.0)
+    )
+    before = len(canvas.findChildren(QMenu))
+    for _ in range(10):
+        QTimer.singleShot(0, close_popup)
+        canvas._context_menu(event)
+        qt_app.processEvents()
+    qt_app.processEvents()
+    after = len(canvas.findChildren(QMenu))
+    assert after <= before + 1, f"{after - before} Menüs der Fläche blieben liegen"
+
+    panel = dialog.panel
+    before = len(panel.findChildren(QMenu))
+    for _ in range(10):
+        QTimer.singleShot(0, close_popup)
+        panel._constraint_menu(QPoint(5, 5))
+        qt_app.processEvents()
+    qt_app.processEvents()
+    after = len(panel.findChildren(QMenu))
+    assert after <= before + 1, f"{after - before} Menüs der Bedingungsliste blieben liegen"
+    dialog.deleteLater()
+
+
 def test_the_sketch_menu_is_reachable_from_a_plane_point(qt_app: QApplication) -> None:
     """Das Kontextmenü der Zeichnung braucht einen Weg über Millimeter.
 

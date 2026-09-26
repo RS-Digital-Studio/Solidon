@@ -349,29 +349,43 @@ def test_surface_picker_keys_use_device_pixels_and_keep_unrelated_keys(ratio):
 
 
 def test_surface_picker_position_is_clamped_and_drawn_in_logical_pixels():
-    """Eine kleine Ansicht hält den Treffer im Bild und das Kreuz darüber."""
+    """Eine kleine Ansicht hält den Treffer im Bild und das Kreuz darüber.
+
+    Das Kreuz sind vier Arme um eine freie Mitte (RM-238): Die Mitte liegt in
+    Qt-Punkten beim gehaltenen Gerätepixel geteilt durch den Faktor.
+    """
     from types import SimpleNamespace
 
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import RETICLE_ARM, RETICLE_GAP, RETICLE_THICKNESS, Viewport
 
-    positions = []
-    mark = SimpleNamespace(
-        width=lambda: 24,
-        height=lambda: 24,
-        move=lambda x, y: positions.append((x, y)),
-        show=lambda: None,
-        raise_=lambda: None,
-    )
+    placed: list[tuple[int, int, int, int]] = []
+
+    def arm() -> SimpleNamespace:
+        return SimpleNamespace(
+            setGeometry=lambda *geometry: placed.append(geometry),
+            show=lambda: None,
+            raise_=lambda: None,
+        )
+
+    arms = tuple(arm() for _side in range(4))
     view = SimpleNamespace(
         _surface_picker=lambda x, y: None,
         _surface_picker_point=(500.0, -10.0),
-        _surface_picker_mark=mark,
+        _surface_picker_mark=arms[0],
+        _surface_picker_arms=arms,
         renderer=SimpleNamespace(view_size=lambda: (201, 101), widget=None),
         _device_ratio=lambda: 2.0,
     )
     Viewport._place_surface_picker(view)
     assert view._surface_picker_point == (200.0, 0.0)
-    assert positions == [(88, -12)]
+    half = RETICLE_THICKNESS // 2
+    reach = RETICLE_GAP + RETICLE_ARM
+    assert placed == [
+        (100 - half, 0 - reach, RETICLE_THICKNESS, RETICLE_ARM),
+        (100 - half, 0 + RETICLE_GAP, RETICLE_THICKNESS, RETICLE_ARM),
+        (100 - reach, 0 - half, RETICLE_ARM, RETICLE_THICKNESS),
+        (100 + RETICLE_GAP, 0 - half, RETICLE_ARM, RETICLE_THICKNESS),
+    ], "die Mitte bleibt frei, die Arme liegen um den Treffer"
 
 
 def test_ending_the_surface_picker_gives_the_keyboard_back_to_the_view():
@@ -397,6 +411,7 @@ def test_ending_the_surface_picker_gives_the_keyboard_back_to_the_view():
     view = SimpleNamespace(
         _surface_picker=lambda x, y: None,
         _surface_picker_mark=mark,
+        _surface_picker_arms=(),
         setFocus=lambda _reason: happened.append("Ansicht fokussiert"),
     )
     holder["focus"] = mark

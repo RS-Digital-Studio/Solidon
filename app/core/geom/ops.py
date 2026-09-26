@@ -336,8 +336,8 @@ class RotateParams(BaseParams):
         choices=_ANCHORS_WITH_POINT,
         placement="advanced",
         doc=_(
-            "Schwerpunkt des Objekts, Weltnullpunkt, Aufstandsfläche — oder "
-            "ein genannter Punkt, um den mehrere Körper gemeinsam drehen."
+            "Mitte des Objekts, Ursprung oder Druckbett — oder ein genannter Punkt, "
+            "um den mehrere Körper gemeinsam drehen."
         ),
     )
     pivot_x: float = param(
@@ -444,7 +444,7 @@ class ScaleParams(BaseParams):
         choices=_ANCHORS_WITH_POINT,
         placement="advanced",
         doc=_(
-            "Der Punkt, der stehen bleibt: Schwerpunkt, Nullpunkt, Aufstandsfläche "
+            "Der Punkt, der stehen bleibt: Mitte des Objekts, Ursprung oder Druckbett "
             "— oder ein genannter Punkt, damit mehrere Körper zusammen wachsen."
         ),
     )
@@ -593,7 +593,9 @@ class MirrorParams(BaseParams):
         default="centre",
         choices=_ANCHORS,
         placement="advanced",
-        doc=_("Wo die Spiegelebene liegt: Schwerpunkt, Nullpunkt oder Aufstandsfläche."),
+        doc=_(
+            "Wo die Spiegelebene liegt: in der Mitte des Objekts, im Ursprung oder am Druckbett."
+        ),
     )
 
 

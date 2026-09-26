@@ -31,7 +31,15 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QFont, QFontMetricsF, QGuiApplication, QKeySequence, QMouseEvent
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetricsF,
+    QGuiApplication,
+    QKeySequence,
+    QMouseEvent,
+    QPainter,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -122,6 +130,8 @@ from app.ui.palette import (
     DIFF_PALETTES,
     LAYER_WIDTHS,
     NEUTRAL_FIRST_MAPS,
+    ON_DARK_FIELD,
+    ON_LIGHT_FIELD,
     ROLES,
     VIRIDIS,
     DiffPalette,
@@ -4120,6 +4130,39 @@ class _PreparedScene(NamedTuple):
     normals: dict[ObjectId, Any] | None = None
 
 
+#: Das Fadenkreuz der Stellenwahl, in Qt-Punkten: vier Arme um eine freie
+#: Mitte. Die Mitte bleibt frei, weil dort liegt, was gewählt wird.
+RETICLE_GAP: Final = 4
+RETICLE_ARM: Final = 10
+RETICLE_THICKNESS: Final = 4
+
+
+class _ReticleArm(QWidget):
+    """Ein Arm des Fadenkreuzes — ein eigenes, **deckendes** Fenster über der Grafikfläche.
+
+    **Durchsichtig kann über der Grafikfläche nichts liegen** (RM-238, native
+    Abnahme 0.5.1). Das Kreuz war ein ``QLabel`` mit dem durchsichtigen
+    Messzeiger; als natives Kind der Ansicht (``hold_above_the_view``) stand es
+    in einem Quadrat von 32 mal 32 Punkten in der Fensterfarbe — genau über der
+    Stelle, die gewählt werden soll (Bildschirmaufnahme: alle 1024 Bildpunkte
+    des Quadrats verdeckt). Eine Fenstermaske ist keine Lösung
+    (``fenstermaske-ueber-vulkan-verliert-das-geraet``). Vier schmale Arme sind
+    je ein volles Rechteck: dunkler Rand, heller Kern, auf jeder Oberfläche zu
+    sehen, und die Mitte bleibt frei.
+    """
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+
+    def paintEvent(self, _event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(ON_LIGHT_FIELD))
+        painter.fillRect(self.rect().adjusted(1, 1, -1, -1), QColor(ON_DARK_FIELD))
+        painter.end()
+
+
 class _SceneMeshWorker(Worker):
     """Dezimierung, Ansichtsbeschnitt, Kanten, Schattenhüllen und Normalen
     abseits des Qt-Hauptthreads."""
@@ -4650,7 +4693,9 @@ class Viewport(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._surface_picker: Callable[[float, float], None] | None = None
         self._surface_picker_point = (0.0, 0.0)
-        self._surface_picker_mark: QLabel | None = None
+        self._surface_picker_mark: QWidget | None = None
+        """Der Arm des Fadenkreuzes, der den Tastaturfokus hält (der obere)."""
+        self._surface_picker_arms: tuple[QWidget, ...] = ()
         #: Welche Flugtasten gerade liegen, und der Takt, der sie fährt.
         self._flying: set[str] = set()
         self._flight_timer: QTimer | None = None
@@ -7337,15 +7382,16 @@ class Viewport(QWidget):
                 if mark.window().focusWidget() is mark:
                     self.setFocus(Qt.FocusReason.OtherFocusReason)
                 mark.hide()
+                for arm in self._surface_picker_arms:
+                    arm.hide()
             return
         if self.renderer is None:
             return
         if self._surface_picker_mark is None:
-            mark = QLabel(self)
-            mark.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            # Oben, unten, links, rechts — der obere hält den Fokus und den Namen.
+            arms = tuple(_ReticleArm(self) for _side in range(4))
+            mark = arms[0]
             mark.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-            mark.setPixmap(cursors.cursor("measure", self).pixmap())
-            mark.adjustSize()
             mark.setAccessibleName(tr("Stelle auswählen"))
             mark.setAccessibleDescription(
                 tr(
@@ -7354,6 +7400,7 @@ class Viewport(QWidget):
                 )
             )
             self._surface_picker_mark = mark
+            self._surface_picker_arms = arms
         width, height = self.renderer.view_size()
         self._surface_picker_point = (width / 2.0, height / 2.0)
         self._place_surface_picker()
@@ -7372,12 +7419,21 @@ class Viewport(QWidget):
         widget = renderer.widget
         origin = widget.mapTo(self, QPoint()) if widget is not None else QPoint()
         ratio = self._device_ratio()
-        mark.move(
-            origin.x() + round(x / ratio - mark.width() / 2),
-            origin.y() + round(y / ratio - mark.height() / 2),
+        centre_x, centre_y = origin.x() + x / ratio, origin.y() + y / ratio
+        half = RETICLE_THICKNESS / 2
+        reach = RETICLE_GAP + RETICLE_ARM
+        places = (
+            (centre_x - half, centre_y - reach, RETICLE_THICKNESS, RETICLE_ARM),
+            (centre_x - half, centre_y + RETICLE_GAP, RETICLE_THICKNESS, RETICLE_ARM),
+            (centre_x - reach, centre_y - half, RETICLE_ARM, RETICLE_THICKNESS),
+            (centre_x + RETICLE_GAP, centre_y - half, RETICLE_ARM, RETICLE_THICKNESS),
         )
-        mark.show()
-        mark.raise_()
+        for arm, (left, top, arm_width, arm_height) in zip(
+            self._surface_picker_arms, places, strict=True
+        ):
+            arm.setGeometry(round(left), round(top), arm_width, arm_height)
+            arm.show()
+            arm.raise_()
 
     def _surface_picker_key(self, event: Any) -> bool:
         """Nur die Tasten der ausstehenden Auswahl verbrauchen."""
