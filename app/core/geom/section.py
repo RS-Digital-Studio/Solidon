@@ -305,6 +305,18 @@ def _capped(sliced: trimesh.Trimesh, position: float) -> trimesh.Trimesh:
     ebenen Koordinaten hier exakt in X und Y, statt über eine SVD dorthin
     gedreht zu werden. Der Deckel zeigt nach oben, aus dem Körper hinaus, wie
     der, den ``trimesh`` setzt.
+
+    **Zusammengelegt wird nur die Schnittkante, und nur innerhalb einer
+    Schale** (KUNDE-10). ``slice_mesh_plane`` legt jeden Schnittpunkt je
+    Dreieck neu an; diese Ecken in der Ebene müssen zu einem Rand werden.
+    ``trimesh`` legte dafür *alle* gleichen Ecken des Körpers zusammen — auch
+    die zweier Teile, die sich nur berühren, und die einer Engstelle, die das
+    Einlesen eigens getrennt hat (``repair.weld``). Die Berührflächen teilten
+    danach ihre Kanten: Am Laptopständer (21 Teile) trug jede Hälfte 89 bis
+    500 verzweigte Kanten, war kein Körper mehr, und die Stifte von *Modell
+    teilen* scheiterten daran. Welche Ecken zu einer Schale gehören, sagt die
+    Nachbarschaft der Dreiecke über ihre Eckennummern, wie sie aus dem Schnitt
+    kommen; jede Schale deckelt ihre eigenen Umrisse (:func:`_cap_batches`).
     """
     from scipy.spatial import cKDTree
     from trimesh import geometry, grouping
@@ -312,10 +324,23 @@ def _capped(sliced: trimesh.Trimesh, position: float) -> trimesh.Trimesh:
     from trimesh.path import polygons
 
     vertices = np.asarray(sliced.vertices, dtype=np.float64)
-    unique, inverse = grouping.unique_rows(vertices)  # type: ignore[no-untyped-call]
-    vertices = vertices[unique]
-    faces = np.asarray(inverse)[np.asarray(sliced.faces, dtype=np.int64)]
-    faces = faces[(faces[:, :1] != faces[:, 1:]).all(axis=1)]
+    faces = np.asarray(sliced.faces, dtype=np.int64)
+    shells = _vertex_shells(faces, len(vertices))
+    on_plane = np.abs(vertices[:, 2] - position) < _ON_PLANE
+    inverse = np.arange(len(vertices), dtype=np.int64)
+    rim = np.flatnonzero(on_plane)
+    if len(rim):
+        keys = np.column_stack((shells[rim].astype(np.float64), vertices[rim]))
+        first, groups = grouping.unique_rows(keys)  # type: ignore[no-untyped-call]
+        inverse[rim] = rim[np.asarray(first, dtype=np.int64)[np.asarray(groups, dtype=np.int64)]]
+    faces = inverse[faces]
+    faces = faces[(faces[:, :1] != faces[:, 1:]).all(axis=1) & (faces[:, 1] != faces[:, 2])]
+    used = np.zeros(len(vertices), dtype=bool)
+    used[faces.ravel()] = True
+    renumbered = np.cumsum(used, dtype=np.int64) - 1
+    vertices = vertices[used]
+    shells = shells[used]
+    faces = renumbered[faces]
     edges = geometry.faces_to_edges(faces)  # type: ignore[no-untyped-call]
     edges.sort(axis=1)
     on_plane = np.abs(vertices[:, 2] - position) < _ON_PLANE
@@ -324,19 +349,71 @@ def _capped(sliced: trimesh.Trimesh, position: float) -> trimesh.Trimesh:
     single = grouping.group_rows(edges, require_count=1)  # type: ignore[no-untyped-call]
     collected = [faces]
     if len(vertices) >= 3 and len(single):
-        tree = cKDTree(vertices)
-        for outline in polygons.edges_to_polygons(edges[single], vertices[:, :2]):
-            points, triangles = triangulate_polygon(outline, force_vertices=True)
-            if not len(triangles):
-                continue
-            spatial = np.column_stack(
-                (np.asarray(points, dtype=np.float64), np.full(len(points), position))
-            )
-            _distance, nearest = tree.query(spatial)
-            mapped = np.asarray(nearest, dtype=np.int64)[np.asarray(triangles, dtype=np.int64)]
-            usable = (mapped[:, 1:] != mapped[:, :1]).all(axis=1) & (mapped[:, 1] != mapped[:, 2])
-            collected.append(mapped[usable])
+        for batch in _cap_batches(edges[single], vertices, shells):
+            corners = np.unique(batch)
+            tree = cKDTree(vertices[corners])
+            for outline in polygons.edges_to_polygons(batch, vertices[:, :2]):
+                points, triangles = triangulate_polygon(outline, force_vertices=True)
+                if not len(triangles):
+                    continue
+                spatial = np.column_stack(
+                    (np.asarray(points, dtype=np.float64), np.full(len(points), position))
+                )
+                _distance, nearest = tree.query(spatial)
+                mapped = corners[np.asarray(nearest, dtype=np.int64)][
+                    np.asarray(triangles, dtype=np.int64)
+                ]
+                usable = (mapped[:, 1:] != mapped[:, :1]).all(axis=1) & (
+                    mapped[:, 1] != mapped[:, 2]
+                )
+                collected.append(mapped[usable])
     return trimesh.Trimesh(vertices=vertices, faces=np.vstack(collected), process=False)
+
+
+def _vertex_shells(faces: np.ndarray, count: int) -> np.ndarray:
+    """Zu welcher Schale jede Ecke gehört — über die Eckennummern der Dreiecke.
+
+    Eine Ecke, die kein Dreieck benutzt, bildet ihre eigene Schale. Die
+    Antwort von ``connected_components`` kommt in ``int32`` und geht sofort
+    nach ``int64`` (siehe ``csgraph antwortet in int32``).
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    if not len(faces):
+        return np.arange(count, dtype=np.int64)
+    rows = np.concatenate((faces[:, 0], faces[:, 1]))
+    cols = np.concatenate((faces[:, 1], faces[:, 2]))
+    graph = coo_matrix((np.ones(len(rows), dtype=np.int8), (rows, cols)), shape=(count, count))
+    _found, labels = connected_components(graph, directed=False)
+    return np.asarray(labels, dtype=np.int64)
+
+
+def _cap_batches(edges: np.ndarray, vertices: np.ndarray, shells: np.ndarray) -> list[np.ndarray]:
+    """Die Randkanten in Gruppen, deren Umrisse sich keine Stelle teilen.
+
+    Umrisse zweier Schalen, die sich an einer Stelle berühren, dürfen weder
+    zu einem Umriss verschmelzen noch ihre Deckelecken bei der anderen Schale
+    holen. Solche Schalen deckeln einzeln; alle übrigen zusammen, wie bisher —
+    ein Schnitt durch ein Teil mit vielen losen Stücken wird damit nicht zu
+    einer Schleife über jedes einzelne.
+    """
+    from trimesh import grouping
+
+    corners = np.unique(edges)
+    owner = shells[corners]
+    _first, groups = grouping.unique_rows(vertices[corners])  # type: ignore[no-untyped-call]
+    groups = np.asarray(groups, dtype=np.int64)
+    order = np.lexsort((owner, groups))
+    same_place = groups[order][1:] == groups[order][:-1]
+    other_shell = owner[order][1:] != owner[order][:-1]
+    shared = same_place & other_shell
+    touching = np.unique(np.concatenate((owner[order][1:][shared], owner[order][:-1][shared])))
+    edge_shells = shells[edges[:, 0]]
+    alone = np.isin(edge_shells, touching)
+    batches = [edges[~alone]] if bool((~alone).any()) else []
+    batches.extend(edges[edge_shells == shell] for shell in touching)
+    return batches
 
 
 def _corner_distances(body: trimesh.Trimesh, normal: np.ndarray, origin: np.ndarray) -> np.ndarray:

@@ -617,7 +617,15 @@ def add_pins(
         # Nahtfläche, an der er angeschweißt wird. Beide Körper stehen deshalb
         # auf der Naht und reichen gleich weit hinein.
         reach = plan.length / 2.0
-        pin_body = _part("snap_connector", diameter=plan.diameter, length=reach, kind="pin")
+        # **Arm und Tasche mit demselben Spiel.** Beim Schnapper ist es kein
+        # Aufmaß der Tasche allein: Stärke und Lage des Arms rechnen mit ihm,
+        # damit Arm, Haken und Rückweg zusammen mittig in der Tasche stehen.
+        # Ohne es stand der Arm bei jeder Naht in der Rastkante — 2,1 bis
+        # 3,3 mm³ Überdeckung in Einbaulage, und der Prüfbericht meldete die
+        # Passung als Kollision.
+        pin_body = _part(
+            "snap_connector", diameter=plan.diameter, length=reach, kind="pin", play=clearance
+        )
         bore_body = _part(
             "snap_connector",
             diameter=plan.diameter,
@@ -664,15 +672,27 @@ def add_pins(
     # Bausteinversion 4), und der Versatz nahm sie mit ans tiefe Ende, wo der
     # Arm nichts fand, hinter das er springen konnte.
     #
-    # Gewendet wird über die Gegenrichtung der Naht, und zwar ohne Versatz: Die
-    # Mündung liegt im Baustein auf z = 0, also genau auf der Naht. Es ist
-    # dieselbe halbe Drehung um die eigene Y-Achse, mit der man die Hälften
-    # zusammensteckt (``tests/test_split_line.py`` misst den Baustein in dieser
-    # Lage) — und für jeden Verbinderquerschnitt eine Deckbewegung: Rund ist
-    # drehsymmetrisch, Sechskant und Schwalbenschwanz sind zu ihr
-    # spiegelsymmetrisch, und die Tasche des Schnappers behält ihre Rastkante
-    # auf ihrer Seite.
-    into_material = (-plan.normal[0], -plan.normal[1], -plan.normal[2])
+    # Gewendet wird ohne Versatz: Die Mündung liegt im Baustein auf z = 0,
+    # also genau auf der Naht. Es ist die halbe Drehung um die eigene Y-Achse,
+    # mit der man die Hälften zusammensteckt (``tests/test_split_line.py``
+    # misst den Baustein in dieser Lage) — und für jeden Verbinderquerschnitt
+    # eine Deckbewegung: Rund ist drehsymmetrisch, Sechskant und
+    # Schwalbenschwanz sind zu ihr spiegelsymmetrisch, und die Tasche des
+    # Schnappers behält ihre Rastkante auf ihrer Seite.
+    #
+    # **Um die eigene Y-Achse, und zwar im Rahmen des Stifts.** Bis zum
+    # 26.09.2026 lag die Bohrung im Rahmen der Gegenrichtung
+    # (``_along_normal`` mit ``-normal``). Der geht aus dem des Stifts nur an
+    # einer Naht quer zu X oder Z durch die halbe Drehung um Y hervor: quer
+    # zu Y durch die um X, an einer schiefen Naht durch eine beliebige — die
+    # kürzeste Drehung auf +Z ist für beide Richtungen eine andere. Dort stand
+    # der Schwalbenschwanz in einer auf den Kopf gestellten Bohrung, der runde
+    # Rücken des Stifts 0,09 mm in ihrem flachen Boden, und am Laptopständer
+    # meldete der Prüfbericht nach *Modell teilen* zwei Kollisionen (KUNDE-10;
+    # schief 22 mm³). Die Drehung ist exakt, nur Vorzeichen.
+    turned_over = transform.apply(
+        bore_body, transform.rotation_about((0.0, 1.0, 0.0), (0.0, 0.0, 0.0), 180.0)
+    )
 
     placed_pins: list[MeshData] = []
     placed_bores: list[MeshData] = []
@@ -680,7 +700,7 @@ def add_pins(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         placed_pins.append(_along_normal(pin_body, plan.normal, position, pin_offset))
-        placed_bores.append(_along_normal(bore_body, into_material, position, 0.0))
+        placed_bores.append(_along_normal(turned_over, plan.normal, position, 0.0))
 
     _add_connector_geometry(
         pair,

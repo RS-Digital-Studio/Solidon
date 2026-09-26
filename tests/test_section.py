@@ -104,6 +104,51 @@ def test_a_plate_with_holes_is_capped_around_the_holes() -> None:
     assert result.mesh.volume == pytest.approx(plate.volume / 2.0, rel=1e-3)
 
 
+def touching_blocks():
+    """Zwei Würfel zu 20 mm, die sich an einer Fläche berühren — zwei Schalen.
+
+    So hinterlässt das Einlesen Teile, die sich nur berühren (``repair.weld``:
+    „Zwei Körper, die sich berühren, bleiben zwei"): Jede Schale hat ihre
+    eigenen Ecken, auch dort, wo sie an derselben Stelle liegen wie die der
+    anderen.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second.apply_translation((20.0, 0.0, 0.0))
+    return MeshData(trimesh.util.concatenate([first, second]))
+
+
+@pytest.mark.parametrize(("axis", "position", "volume"), [("z", 0.0, 8000.0), ("y", 3.0, 10400.0)])
+def test_two_bodies_that_touch_stay_two_closed_bodies_after_a_cut(
+    axis: str, position: float, volume: float
+) -> None:
+    """Ein Schnitt quer zur Berührfläche verbindet die zwei Schalen nicht.
+
+    Der Deckel legte dafür **alle** gleichen Ecken zusammen, nicht nur die der
+    Schnittkante — und damit auch die Ecken, an denen sich die zwei Teile
+    berühren. Die Berührflächen teilten danach ihre Kanten, vier Flächen an
+    einer Kante, und die Hälfte war kein Körper mehr: Am Laptopständer
+    (``parametric-laptop-riser.stl``, 21 Teile) trug jede Hälfte 89 bis 500
+    verzweigte Kanten, und *Modell teilen* scheiterte an den Stiften
+    (KUNDE-10). Die Sollwerte sind die zweier Würfel: je 20 × 20 × 10 unter
+    z = 0, je 20 × 13 × 20 unter y = 3.
+    """
+    from app.core.geom.repair import branching_edge_count, open_edge_count
+
+    result = cut(touching_blocks(), SectionPlane.along(axis, position))  # type: ignore[arg-type]
+
+    assert result.capped
+    assert result.mesh.is_watertight, "each half is still two closed blocks"
+    assert branching_edge_count(result.mesh) == 0
+    assert open_edge_count(result.mesh) == 0
+    assert result.mesh.component_count == 2, "touching is not joining"
+    assert result.mesh.volume == pytest.approx(volume, rel=1e-9)
+
+
 def test_an_open_model_is_cut_but_reported_as_uncapped() -> None:
     """Ein offener Körper lässt sich nicht ehrlich deckeln — also wird es
     nicht vorgetäuscht (§18.2).

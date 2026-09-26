@@ -12,7 +12,9 @@ ihren Befunden.
 
 from __future__ import annotations
 
+import hashlib
 import math
+import threading
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, cast
@@ -3835,13 +3837,88 @@ def _crossing_shape(mesh: MeshData, crossings: Crossings) -> str:
     auflösen" kam. Gefragt wird deshalb vorher: Liegt ein schräges Paar in
     derselben Schale, ist es eine Eigenkreuzung.
     """
+    components = face_components(mesh.raw)
     labels = np.empty(len(mesh.raw.faces), dtype=np.int64)
-    for index, faces in enumerate(face_components(mesh.raw)):
+    for index, faces in enumerate(components):
         labels[faces] = index
     same_shell = labels[crossings.first] == labels[crossings.second]
-    if bool(np.any(same_shell & ~crossings.coplanar)):
+    slanted = same_shell & ~crossings.coplanar
+    if bool(np.any(slanted)):
+        crossed = np.unique(labels[crossings.first[slanted]])
+        _remember_self_crossing(mesh, [components[int(index)] for index in crossed])
         return "self"
     return "overlay" if bool(np.all(same_shell)) else "shells"
+
+
+#: Abdrücke der Schalen, die sich nachweislich selbst kreuzen
+#: (:func:`_remember_self_crossing`) — die ältesten fallen heraus, damit ein
+#: langer Lauf nicht wächst.
+_SELF_CROSSING: Final[dict[bytes, None]] = {}
+_SELF_CROSSING_KEPT: Final = 256
+_SELF_CROSSING_LOCK: Final = threading.Lock()
+
+
+def _shell_print(triangles: np.ndarray) -> bytes:
+    """Ein Abdruck einer Schale, der nur an ihren Dreiecken hängt.
+
+    Dieselben Dreiecke in anderer Reihenfolge, mit anderen Eckennummern oder an
+    einer anderen Ecke begonnen ergeben denselben Abdruck; der Umlauf zählt.
+    Gerechnet wird über die Bits der Koordinaten — ein Abdruck ist eine
+    Gleichheit, keine Nähe.
+    """
+    rows = np.ascontiguousarray(triangles, dtype=np.float64).reshape(-1, 3, 3)
+    # Je Dreieck an der kleinsten Ecke beginnen (nach x, dann y, dann z).
+    corner = np.zeros(len(rows), dtype=np.int64)
+    for candidate in (1, 2):
+        best = rows[np.arange(len(rows)), corner]
+        other = rows[:, candidate]
+        smaller = (other[:, 0] < best[:, 0]) | (
+            (other[:, 0] == best[:, 0])
+            & (
+                (other[:, 1] < best[:, 1])
+                | ((other[:, 1] == best[:, 1]) & (other[:, 2] < best[:, 2]))
+            )
+        )
+        corner[smaller] = candidate
+    turned = rows[np.arange(len(rows))[:, None], (corner[:, None] + np.arange(3)) % 3]
+    flat = turned.reshape(len(rows), 9)
+    ordered = flat[np.lexsort(flat.T[::-1])]
+    return hashlib.blake2b(ordered.tobytes(), digest_size=16).digest()
+
+
+def _remember_self_crossing(mesh: MeshData, shells: Sequence[np.ndarray]) -> None:
+    """Sich merken, dass diese Schalen sich selbst kreuzen — gleich in welchem Netz.
+
+    **Eine Eigenkreuzung gehört der Schale, nicht dem Netz** (Durchsicht
+    0.5.1, KUNDE-10). *Modell teilen* schneidet einen Körper an mehreren
+    Nähten probeweise, setzt Stifte und prüft die Einbaulage; jede Boolesche
+    Rechnung darin versucht zuerst, ineinandersteckende Teile zu vereinigen
+    (``boolean._united_parts``), und jede Hälfte ist ein neues Netz. Am
+    Laptopständer aus ``F:\\3D Dateien`` kreuzt sich eine von 21 Schalen
+    1 121-mal selbst: Siebenmal lief deshalb die volle Suche über
+    172 000 Dreiecke, je 9 bis 12 s unter Last, bis dasselbe „geht nicht"
+    herauskam. Die Schalen, die der Schnitt nicht trifft, sind in jeder
+    Hälfte dieselben Dreiecke — ihr Abdruck (:func:`_shell_print`) sagt es.
+    Gemerkt wird nur, was belegt ist: ein schräges Paar in einer Schale.
+    """
+    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
+    prints = [_shell_print(triangles[faces]) for faces in shells]
+    with _SELF_CROSSING_LOCK:
+        for entry in prints:
+            _SELF_CROSSING.pop(entry, None)
+            _SELF_CROSSING[entry] = None
+        while len(_SELF_CROSSING) > _SELF_CROSSING_KEPT:
+            del _SELF_CROSSING[next(iter(_SELF_CROSSING))]
+
+
+def _known_to_cross_itself(mesh: MeshData) -> bool:
+    """Ob eine Schale dieses Netzes schon einmal belegt sich selbst gekreuzt hat."""
+    with _SELF_CROSSING_LOCK:
+        if not _SELF_CROSSING:
+            return False
+        known = set(_SELF_CROSSING)
+    triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
+    return any(_shell_print(triangles[faces]) in known for faces in face_components(mesh.raw))
 
 
 def _intersections_resolvable(mesh: MeshData, crossings: Crossings | None = None) -> str | None:
@@ -3923,6 +4000,10 @@ def resolve_self_intersections(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     if not _has_volume(mesh):
+        return mesh, False
+    if _known_to_cross_itself(mesh):
+        # Dieselbe Schale, dieselbe Eigenkreuzung: Die volle Suche käme zum
+        # selben „geht nicht" (:func:`_remember_self_crossing`).
         return mesh, False
     crossings = crossings_of(mesh, cancelled, budget=budget)
     if not len(crossings.first) or _crossing_shape(mesh, crossings) == "self":

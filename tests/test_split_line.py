@@ -424,6 +424,73 @@ def test_every_connector_shape_gives_two_closed_halves(profile: Profile, shape: 
     assert "bore_1" in result.outputs[1].features
 
 
+#: Trennrichtungen, an denen die Rahmen der zwei Nahtseiten verschieden
+#: auseinander hervorgehen: jede Achse in beiden Richtungen und eine schiefe.
+SEAM_NORMALS = {
+    "+x": (1.0, 0.0, 0.0),
+    "-x": (-1.0, 0.0, 0.0),
+    "+y": (0.0, 1.0, 0.0),
+    "-y": (0.0, -1.0, 0.0),
+    "+z": (0.0, 0.0, 1.0),
+    "-z": (0.0, 0.0, -1.0),
+    "schief": (0.3, 0.5, 0.81),
+}
+
+
+@pytest.mark.parametrize("shape", ["dovetail", "snap"])
+@pytest.mark.parametrize("seam", sorted(SEAM_NORMALS))
+def test_every_connector_sits_in_its_bore_across_every_seam(
+    profile: Profile, shape: str, seam: str
+) -> None:
+    """Die zwei Hälften teilen in Einbaulage kein Material — an jeder Naht.
+
+    Eine Naht quer zu Y ist die häufigste Teilung eines langen Teils, und an
+    ihr saß der Schwalbenschwanz in einer **auf den Kopf gestellten** Bohrung:
+    die flache Seite des Stifts oben, die der Bohrung unten. Der runde Rücken
+    des Stifts stand 0,09 mm in ihrem Boden, und der Prüfbericht meldete nach
+    *Modell teilen* am Laptopständer zweimal „Die Körper überschneiden sich in
+    dieser Einbaulage" (KUNDE-10). An einer schiefen Naht waren es 22 mm³.
+    Der Grund: Die Bohrung wurde mit dem Rahmen der **Gegenrichtung** gelegt,
+    und der geht nur an einer Naht quer zu X oder Z durch die halbe Drehung um
+    Y aus dem des Stifts hervor — quer zu Y durch die um X, schief durch eine
+    beliebige. Rund und Sechskant merken das nicht, sie sind unter beiden
+    halben Drehungen dieselben.
+
+    Der Schnapper überschnitt sich an **jeder** Naht (2,1 bis 3,3 mm³, schief
+    109): Sein Arm entstand ohne das Spiel, mit dem die Tasche gebaut wird, und
+    Lage und Stärke des Arms rechnen mit ihm. Im Baustein allein, mit gleichem
+    Spiel, liegt der Arm ganz in der Tasche
+    (``test_the_snap_connector_catches_and_still_goes_in``).
+
+    Die Schwelle ist die kleinste druckbare Menge und nicht null — dieselbe
+    Grenze wie beim Schnapper oben: Die Mündungen der Werkzeuge liegen in der
+    Nahtebene.
+    """
+    from app.core.geom.measure import body_overlap
+
+    normal_x, normal_y, normal_z = SEAM_NORMALS[seam]
+    entry = SceneObject(id="obj_1", name="Klotz", mesh=block())
+
+    result = run(
+        "split_line",
+        entry,
+        profile,
+        normal_x=normal_x,
+        normal_y=normal_y,
+        normal_z=normal_z,
+        position=0.0,
+        pins=2,
+        shape=shape,
+    )
+
+    first, second = (output.mesh for output in result.outputs)
+    assert "pin_1" in result.outputs[0].features, "ohne Verbinder prüft der Test nichts"
+    shared = body_overlap(first, second, cancelled=NeverCancelled())
+    assert shared < profile.smallest_printable_volume, (
+        f"{shape} an der Naht {seam}: {shared:.4f} mm³ Stift in der Wand der Gegenseite"
+    )
+
+
 def test_a_dovetail_holds_where_a_round_pin_only_guides(profile: Profile) -> None:
     """Der Unterschied ist messbar, nicht bloß behauptet.
 

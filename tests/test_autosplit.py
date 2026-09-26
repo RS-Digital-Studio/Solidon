@@ -1627,6 +1627,33 @@ def loaded(profile: Profile) -> tuple[Project, MeshData]:
     return project, result.scene.objects["obj_1"].mesh
 
 
+def test_a_seam_whose_connectors_fail_does_not_end_the_search(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile
+) -> None:
+    """Scheitert an einer Naht der Bau der Stifte, ist sie nicht zu beurteilen — mehr nicht.
+
+    Die Suche baut an jeder Naht der engeren Wahl die Stifte probeweise, um
+    ihr Stützvolumen zu messen. Warf die Boolesche Kette dabei, brach die ganze
+    Teilung ab: Am Laptopständer (``parametric-laptop-riser.stl``) stand nach
+    6,7 s ein Fehlerdialog über „die schnelle Vorschau", dessen Knöpfe an der
+    Teilung nichts ändern konnten (KUNDE-10). Eine Naht ohne messbare Stifte
+    kostet unbekannt viel — wie eine Hälfte ohne Lage —, und die übrigen Nähte
+    werden weiter beurteilt. Hält der Schritt danach selbst an, sagt es der
+    Bericht an ihm, mit *Reparieren und erneut versuchen* davor.
+    """
+    from app.core.geom import pins as connectors
+
+    def failing(*_args: object, **_kwargs: object) -> None:
+        raise BooleanFailedError(detail="Stifte", attempted=("direct", "welded"))
+
+    monkeypatch.setattr(connectors, "add_pins", failing)
+
+    plan = plan_split(bar(), "obj_1", profile)
+
+    assert plan.drafts, "the search ends with a seam, not with the kernel's exception"
+    assert all(draft.op == "split_pinned" for draft in plan.drafts)
+
+
 def test_the_plan_is_one_operation_per_cut(loaded, profile: Profile) -> None:
     _project, mesh = loaded
 

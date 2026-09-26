@@ -36,7 +36,7 @@ import numpy as np
 from app.core import units
 from app.core.build_area import placement_offset, printable_area, printable_height
 from app.core.deferred import trimesh
-from app.core.errors import PROGRAMMING_ERRORS
+from app.core.errors import PROGRAMMING_ERRORS, BooleanFailedError
 from app.core.geom import transform
 from app.core.geom.mesh import MeshData
 from app.core.geom.orient import NoFittingOrientationError
@@ -1867,15 +1867,26 @@ def _support_after_cut(
         if pins_on_b:
             first, second = second, first
             plan = replace(plan, normal=(-plan.normal[0], -plan.normal[1], -plan.normal[2]))
-        pair = add_pins(
-            first,
-            second,
-            plan,
-            profile,
-            quality="draft",
-            cancelled=cancelled,
-            batch=True,
-        )
+        try:
+            pair = add_pins(
+                first,
+                second,
+                plan,
+                profile,
+                quality="draft",
+                cancelled=cancelled,
+                batch=True,
+            )
+        except BooleanFailedError:
+            # **Eine Naht, an der die Stifte nicht zu bauen sind, kostet
+            # unbekannt viel** — wie eine Hälfte ohne Lage darunter. Die
+            # Ausnahme brach sonst die ganze Suche ab, und der Kunde las über
+            # seiner Teilung einen Satz über „die schnelle Vorschau", dessen
+            # Knöpfe an ihr nichts ändern konnten (KUNDE-10, Laptopständer).
+            # Die übrigen Nähte werden weiter beurteilt; scheitert der
+            # Schritt danach selbst, hält er im Verlauf an und bietet
+            # *Reparieren und erneut versuchen* an.
+            return float("inf")
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         parts = (pair.first, pair.second)

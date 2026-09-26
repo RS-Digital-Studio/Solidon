@@ -2144,6 +2144,72 @@ def test_a_shell_crossing_itself_is_named_and_not_united(
     } & {finding.code for finding in result.findings}
 
 
+def test_a_shell_known_to_cross_itself_is_not_searched_again_in_another_mesh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dieselbe Schale in einem neuen Netz: dasselbe „geht nicht", ohne zweite Suche.
+
+    *Modell teilen* schneidet probeweise an mehreren Nähten, setzt Stifte und
+    prüft die Einbaulage, und jede Boolesche Rechnung darin versucht zuerst,
+    ineinandersteckende Teile zu vereinigen — an jeder Hälfte, und jede Hälfte
+    ist ein neues Netz. Am Laptopständer aus ``F:\\3D Dateien`` kreuzt sich
+    eine Schale selbst, und siebenmal lief die volle Suche über 172 000
+    Dreiecke bis zum selben Nein (KUNDE-10, Durchsicht 0.5.1). Die Schalen,
+    die der Schnitt nicht trifft, sind in jeder Hälfte dieselben Dreiecke — in
+    anderer Reihenfolge und mit anderen Eckennummern.
+    """
+    import app.core.geom.repair as module
+    from app.core.geom import intersections
+
+    monkeypatch.setattr(module, "_SELF_CROSSING", {})
+    searched: list[int] = []
+    original = intersections.crossing_face_pairs
+
+    def counted(vertices, faces, *args, **kwargs):  # type: ignore[no-untyped-def]
+        searched.append(len(faces))
+        return original(vertices, faces, *args, **kwargs)
+
+    monkeypatch.setattr(intersections, "crossing_face_pairs", counted)
+    itself = _crossing_itself().raw
+    first = MeshData.of(
+        trimesh.util.concatenate(
+            [itself, _box(20.0, (100.0, 0.0, 0.0)), _box(20.0, (108.0, 5.0, 3.0))]
+        )
+    )
+    # Dieselbe Schale rückwärts und mit vertauschten Ecken, daneben ein anderes Paar.
+    turned = np.arange(len(itself.vertices))[::-1]
+    renumbered = np.empty_like(turned)
+    renumbered[turned] = np.arange(len(turned))
+    again = trimesh.Trimesh(
+        vertices=np.asarray(itself.vertices)[turned],
+        faces=renumbered[np.asarray(itself.faces)[::-1]],
+        process=False,
+    )
+    second = MeshData.of(
+        trimesh.util.concatenate(
+            [again, _box(20.0, (100.0, 0.0, 0.0)), _box(20.0, (106.0, 4.0, 2.0))]
+        )
+    )
+    moved = itself.copy()
+    moved.apply_translation((0.5, 0.0, 0.0))
+    third = MeshData.of(
+        trimesh.util.concatenate(
+            [moved, _box(20.0, (100.0, 0.0, 0.0)), _box(20.0, (106.0, 4.0, 2.0))]
+        )
+    )
+
+    one, worked_once = module.resolve_self_intersections(first)
+    assert (one, worked_once) == (first, False), "eine Eigenkreuzung wird nicht vereinigt"
+    assert searched == [first.triangle_count], "das erste Mal wird gesucht"
+
+    two, worked_twice = module.resolve_self_intersections(second)
+    assert (two, worked_twice) == (second, False)
+    assert searched == [first.triangle_count], "dieselbe Schale wird nicht noch einmal gesucht"
+
+    module.resolve_self_intersections(third)
+    assert searched[-1] == third.triangle_count, "eine andere Schale wird gesucht"
+
+
 def test_the_crossing_search_runs_once_per_mesh(monkeypatch: pytest.MonkeyPatch) -> None:
     """Reparatur, Vorschau und Netzfehlerkarte fragen dasselbe Netz einmal.
 
