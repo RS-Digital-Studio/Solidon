@@ -16,10 +16,11 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Iterable
+from functools import lru_cache
 from typing import Final
 
 from app.core.registry.registry import Registry
-from app.i18n import TranslatableText
+from app.i18n import TranslatableText, _
 
 #: Wie ein Umlaut auf einer Tastatur ohne Umlaute geschrieben wird.
 #:
@@ -153,7 +154,9 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     "create_brep_torus": ("exakt", "brep", "echte kanten"),
     "drill_hole": ("exakt", "brep", "echte kanten"),
     "drill_brep_hole": ("exakt", "brep", "echte kanten"),
-    "repair_mesh": ("loecher schliessen", "reparieren", "flicken"),
+    # Stand bis zum 26.09.2026 unter ``repair_mesh`` — eine Operation dieses
+    # Namens gab es nicht, und „flicken" fand die Reparatur nie.
+    "repair": ("loecher schliessen", "reparieren", "flicken"),
     # **Die gewöhnlichsten Wörter fehlten**, und das fiel niemandem auf, weil
     # niemand sie sucht, der das Register kennt: „kopieren" und „loeschen"
     # führten ins Leere, obwohl es beides gibt. Gemessen an vierzig Wörtern,
@@ -185,14 +188,153 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
 }
 
 
+#: Was mehrere Operationen gemeinsam meinen: eine Rippe und ein Eckwinkel
+#: machen beide ein Teil steifer. Ein Text, ein Katalogeintrag.
+_STRONGER: Final = _("stabiler; stabiler machen; verstärken; Versteifung", context="Suchwörter")
+_HANG_UP: Final = _("an die Wand hängen; aufhängen; Wandhalterung", context="Suchwörter")
+
+#: Die Kundenwörter **je Sprache** — was jemand tippt, der das Register nie
+#: gelesen hat, in der Sprache, in der er tippt.
+#:
+#: **Gemessen am 26.09.2026, sechs Sprachen, 55 Kundenwörter je Sprache**
+#: (Durchsicht 0.5.1, Sonde ``palette_measure.py``): Das Ziel stand bei 183
+#: von 330 unter den ersten drei Zeilen. Deutsch 34 von 55, Spanisch 26; auf
+#: Italienisch fanden „girare", „cancellare" und „calamita" gar nichts, auf
+#: Portugiesisch „salvar" und „apagar", auf Englisch „copy", „flip" und „feet".
+#: :data:`SYNONYMS` gab es nur auf Deutsch, und die Titel der anderen Sprachen
+#: tragen dieselbe Lücke über die Wortgrenze, die die Tabelle dort schließt.
+#:
+#: Jeder Eintrag ist ein Katalogtext (Kontext „Suchwörter"): Wendungen, durch
+#: Semikolon getrennt, echte Umlaute und Akzente — gefaltet wird beim Suchen.
+#: Gesucht wird in der deutschen Quelle **und** in der Übersetzung der
+#: eingestellten Sprache, wie bei den Titeln (:func:`_texts_of`). Die Schlüssel
+#: sind Operationen und die Fensterbefehle der Palette (``file.save`` …), deren
+#: Kennung das Hauptfenster festlegt; ``tests/test_theme_and_palette.py`` prüft,
+#: dass jeder Schlüssel etwas trifft.
+#:
+#: **Dieselben Vorsichten wie oben:** kein Wort, das der Stamm schon findet und
+#: dessen genauer Treffer einer anderen Zusicherung den Fall nimmt („bohren"),
+#: und kein Wort, das ein anderes gemeintes Wort enthält, ohne es zu meinen.
+CUSTOMER_WORDS: Final[dict[str, TranslatableText]] = {
+    "resize_hole": _(
+        "Loch größer; Loch größer machen; Loch kleiner; Loch weiten; "
+        "Bohrung weiter machen; Durchmesser ändern",
+        context="Suchwörter",
+    ),
+    "scale_object": _(
+        "kleiner machen; größer machen; verkleinern; vergrößern; Größe ändern; Prozent",
+        context="Suchwörter",
+    ),
+    "fit_to_size": _(
+        "auf Maß; genaue Größe; Größe einstellen; Länge festlegen", context="Suchwörter"
+    ),
+    "orient_for_print": _(
+        "Stützen; weniger Stützen; beste Lage; flach hinlegen; hinlegen; Überhang",
+        context="Suchwörter",
+    ),
+    "file.print_settings": _(
+        "Stützen; Schichthöhe; Temperatur; Füllung; Infill; slicen", context="Suchwörter"
+    ),
+    "smooth_mesh": _("glatt; Oberfläche glatt; Rillen weg; rau", context="Suchwörter"),
+    "split_pinned": _("in zwei Teile; auseinander; trennen; zersägen", context="Suchwörter"),
+    "edit.auto_split": _(
+        "zu groß für den Drucker; zu groß; passt nicht aufs Bett; in Stücke",
+        context="Suchwörter",
+    ),
+    "label_text": _(
+        "Text drauf; Schrift; Name drauf; Buchstaben; beschriften", context="Suchwörter"
+    ),
+    "drill_hole": _("Loch machen; Loch rein; lochen", context="Suchwörter"),
+    "fillet_edges": _(
+        "Kanten abrunden; Ecken rund; rund machen; runde Kanten", context="Suchwörter"
+    ),
+    "chamfer_edges": _("schräge Kante; anfasen", context="Suchwörter"),
+    "rotate_object": _("wenden; kippen", context="Suchwörter"),
+    "translate_object": _("bewegen; schieben", context="Suchwörter"),
+    "mirror_object": _("spiegelverkehrt; seitenverkehrt; Spiegelbild", context="Suchwörter"),
+    "duplicate_object": _("Kopie; Duplikat", context="Suchwörter"),
+    "delete_object": _("Teil löschen; wegwerfen", context="Suchwörter"),
+    "hollow_object": _("hohl; hohl machen; innen leer; Material sparen", context="Suchwörter"),
+    "repair": _(
+        "kaputt; defekt; Fehler beheben; Löcher im Modell; reparieren", context="Suchwörter"
+    ),
+    "union_objects": _("zusammensetzen", context="Suchwörter"),
+    "place_on_bed": _("hinlegen; flach hinlegen", context="Suchwörter"),
+    "file.open": _("Datei öffnen; Projekt öffnen; laden", context="Suchwörter"),
+    "file.save": _("speichern; sichern", context="Suchwörter"),
+    "file.export": _(
+        "als STL speichern; STL; 3MF; exportieren; für den Slicer", context="Suchwörter"
+    ),
+    "assign_slot": _("Farbe; Farbe ändern; andere Farbe; mehrfarbig", context="Suchwörter"),
+    "displace_image": _("Logo drauf; Bild drauf; Foto drauf; Bild", context="Suchwörter"),
+    "insert_magnet_pocket": _("Magnet; Magnete; Magnet einbauen", context="Suchwörter"),
+    "insert_screw_hole": _(
+        "Loch für Schraube; Schraube; verschrauben; anschrauben", context="Suchwörter"
+    ),
+    "decimate_mesh": _(
+        "Datei zu groß; zu viele Dreiecke; kleinere Datei; weniger Polygone",
+        context="Suchwörter",
+    ),
+    "insert_wall_mount": _HANG_UP,
+    "insert_keyhole": _("aufhängen; Nagel; an die Wand hängen", context="Suchwörter"),
+    "plug_hole": _(
+        "Loch zumachen; Loch schließen; Loch füllen; Loch entfernen", context="Suchwörter"
+    ),
+    "move_feature": _(
+        "Loch verschieben; Loch versetzen; Bohrung verschieben", context="Suchwörter"
+    ),
+    "cut_away": _("Stück abschneiden; abschneiden; wegschneiden; kürzen", context="Suchwörter"),
+    "create_brep_box": _("Würfel; Block", context="Suchwörter"),
+    "create_brep_cylinder": _("Stange; Rundstab; Scheibe", context="Suchwörter"),
+    "create_brep_sphere": _("Ball", context="Suchwörter"),
+    "apply_texture": _("rutschfest; griffig; Rändel; Riffel; Muster", context="Suchwörter"),
+    "insert_rib": _STRONGER,
+    "insert_gusset": _STRONGER,
+    "insert_foot": _("Füße; Fuß; Standfüße; Gummifuß", context="Suchwörter"),
+    # Die übrigen vier mit deutschen Wörtern in :data:`SYNONYMS` — sonst
+    # hätten nur sie in fünf Sprachen keine.
+    "subtract_objects": _("herausschneiden; Form ausschneiden", context="Suchwörter"),
+    "pattern": _("Reihe; mehrere Kopien; vervielfältigen", context="Suchwörter"),
+    "paint_slot": _("bemalen; Fläche anmalen", context="Suchwörter"),
+    "load": _("Modell laden; STL öffnen; importieren", context="Suchwörter"),
+}
+
+
+def customer_phrases(name: str) -> tuple[str, ...]:
+    """Die Kundenwörter dieser Operation oder dieses Fensterbefehls, gefaltet.
+
+    :data:`SYNONYMS` (deutsch, schon gefaltet), dazu :data:`CUSTOMER_WORDS` in
+    der deutschen Quelle und in der eingestellten Sprache — jede Wendung
+    einmal, in dieser Reihenfolge.
+    """
+    words = CUSTOMER_WORDS.get(name)
+    return _phrases(name, words.msgid if words else "", str(words) if words else "")
+
+
+@lru_cache(maxsize=1024)
+def _phrases(name: str, source: str, shown: str) -> tuple[str, ...]:
+    """Die Faltung je Eintrag und Übersetzung einmal — die Palette fragt je
+    Tastendruck jede ihrer gut zweihundert Zeilen. Geschlüsselt über den
+    übersetzten Text selbst: Ein anderer Katalog ist ein anderer Schlüssel."""
+    phrases: dict[str, None] = dict.fromkeys(SYNONYMS.get(name, ()))
+    for text in (source, shown):
+        for phrase in text.split(";"):
+            folded = fold(phrase.strip())
+            if folded:
+                phrases.setdefault(folded, None)
+    return tuple(phrases)
+
+
 def synonyms_for(name: str) -> str:
     """Die Kundenwörter dieser Operation, als ein Stück Suchtext.
 
     Gefaltet gespeichert und gefaltet gesucht — die Tabelle oben schreibt
     „aushoehlen" und nicht „aushöhlen", damit beide Schreibweisen denselben
-    Weg nehmen.
+    Weg nehmen. Die Wendungen trennt ein Semikolon: Ein Wort sucht darin als
+    Teilzeichenkette, und über die Grenze zweier Wendungen hinweg soll es
+    nichts finden.
     """
-    return " ".join(SYNONYMS.get(name, ()))
+    return "; ".join(customer_phrases(name))
 
 
 # --- Rangfolge für eine Anfrage in Sätzen ------------------------------------------
@@ -242,22 +384,36 @@ def _texts_of(value: object) -> str:
     return shown
 
 
-def _fields_of(registry: Registry) -> dict[str, dict[str, str]]:
-    """Je Operation die gefalteten Suchtexte, nach Feld getrennt."""
+def search_fields(entries: Iterable[tuple[str, object, object]]) -> dict[str, dict[str, str]]:
+    """Je Eintrag die gefalteten Suchtexte, nach Feld getrennt.
+
+    Ein Eintrag ist ``(name, titel, doc)`` — eine Operation des Registers oder
+    eine Zeile der Befehlspalette, die kein Register kennt (Speichern, das
+    Handbuch). Titel und ``doc`` dürfen übersetzbare Texte sein; dann zählt
+    die deutsche Quelle neben der Übersetzung (:func:`_texts_of`).
+
+    Einmal gebaut, für viele Anfragen: Die Palette fragt je Tastendruck, und
+    das Falten von zweihundert Beschreibungen wäre sonst jedes Mal dabei.
+    """
     return {
-        spec.name: {
-            "title": fold(_texts_of(spec.title)),
-            "name": fold(spec.name.replace("_", " ")),
+        name: {
+            "title": fold(_texts_of(title)),
+            "name": fold(name.replace("_", " ").replace(".", " ")),
             # Der erste Satz sagt, was die Operation tut; der Rest erklärt
             # Randfälle und nennt dabei fast jedes Wort des Fachs.
-            "doc": fold(str(spec.doc).split(". ")[0]),
+            "doc": fold(str(doc).split(". ")[0]),
             # Gezählt wird die Seltenheit am ganzen Text: In einem ersten Satz
             # ist „das" selten, im ganzen ``doc`` steht es fast überall — und
             # genau daran erkennt die Rechnung ein Füllwort.
-            "all": fold(f"{_texts_of(spec.title)} {spec.name.replace('_', ' ')} {spec.doc}"),
+            "all": fold(f"{_texts_of(title)} {name.replace('_', ' ')} {doc}"),
         }
-        for spec in registry.all()
+        for name, title, doc in entries
     }
+
+
+def registry_fields(registry: Registry) -> dict[str, dict[str, str]]:
+    """:func:`search_fields` über jede Operation des Registers."""
+    return search_fields((spec.name, spec.title, spec.doc) for spec in registry.all())
 
 
 #: Ab welcher Länge ein Wort auch **mitten** in einem Wort des Registers
@@ -270,7 +426,7 @@ _INNER_LENGTH: Final = 5
 _INNER_SHARE: Final = 0.3
 
 
-def _starts_a_word(part: str, text: str) -> bool:
+def starts_a_word(part: str, text: str) -> bool:
     """Ob ``part`` in ``text`` am Anfang eines Worts steht."""
     start = text.find(part)
     while start != -1:
@@ -292,20 +448,43 @@ def _strength(term: str, text: str) -> float:
         # nicht „place", und „box" nicht „boxed".
         return 1.0 if term in text.split() else 0.0
     stem = stem_of(term)
-    if _starts_a_word(term, text):
+    if starts_a_word(term, text):
         return 1.0
-    if stem != term and _starts_a_word(stem, text):
+    if stem != term and starts_a_word(stem, text):
         return _STEM_SHARE
     if len(term) >= _INNER_LENGTH and stem in text:
         return _INNER_SHARE
     return 0.0
 
 
+def _same_word(term: str, word: str) -> bool:
+    """Ob ein Wort der Anfrage ein Wort einer Kundenwendung meint.
+
+    **Der Stamm in beide Richtungen**, nicht nur der der Anfrage: „verschieb"
+    und „verschrauben" teilen „versch", und bis zur Durchsicht 0.5.1 genügte
+    das — *Verschieb die Platte* brachte das Schraubenloch mit. „Magnete" und
+    „Magnet", „mach" und „machen" tragen einander dagegen je ganz im Stamm.
+    Unter :data:`STEM_LENGTH` gilt nur das Wort selbst.
+    """
+    if len(term) < STEM_LENGTH or len(word) < STEM_LENGTH:
+        return term == word
+    return word.startswith(stem_of(term)) and term.startswith(stem_of(word))
+
+
 def _says(phrase: str, terms: list[str]) -> bool:
-    """Ob die Anfrage jedes Wort dieser Wendung enthält, ganz oder am Stamm."""
-    return all(
-        any(_strength(term, word) >= _STEM_SHARE for term in terms) for word in phrase.split()
-    )
+    """Ob die Anfrage jedes Wort dieser Wendung enthält (:func:`_same_word`).
+
+    Ein kurzes Wort aus Buchstaben („an", „zu", „la") zählt nicht mit: Die
+    Anfrage führt es nie (:data:`_SHORTEST_TERM`), und „an die Wand hängen"
+    fände sonst nie jemanden. Eine Zahl dagegen muss dastehen und steht nie da
+    — „45 grad" meint die Fase und nicht jede Drehung um Grad.
+    """
+    words: list[str] = []
+    for token in phrase.split():
+        if any(letter.isdigit() for letter in token):
+            return False
+        words.extend(word for word in _WORDS.findall(token) if len(word) >= _SHORTEST_TERM)
+    return bool(words) and all(any(_same_word(term, word) for term in terms) for word in words)
 
 
 def rank_operations(
@@ -325,13 +504,40 @@ def rank_operations(
     einen festen Betrag: Wer eine Bohrung gewählt hat und „größer" schreibt,
     meint die Handlungen an der Bohrung. Zurück kommt jede Operation mit
     Wertung über null, bei Gleichstand in der Reihenfolge des Registers.
+
+    **Ohne die Kundenwörter der Palette** (``customer_words=False``), nur mit
+    :data:`SYNONYMS`. Gemessen in der Durchsicht 0.5.1 (qwen3:14b, je zweimal
+    HEAD gegen den Stand mit Kundenwörtern, die fünf Fälle, deren Angebot sich
+    änderte): 7 gegen 5 von 10. „Versteife die Wand mit einer Rippe" traf 3 von
+    3 und dann 0 von 2 — die Wendung „Versteifung" holte den Eckwinkel neben die
+    Rippe ins ausführliche Angebot, und das Modell fragte, statt zu bauen. Eine
+    Verhaltensänderung des Agenten, deren Quote sinkt, wird zurückgenommen
+    (``.claude/rules/agentenschicht.md``); die Palette behält die Kundenwörter.
+    """
+    return rank_entries(texts, registry_fields(registry), favoured=favoured, customer_words=False)
+
+
+def rank_entries(
+    texts: Iterable[str],
+    fields: dict[str, dict[str, str]],
+    *,
+    favoured: Iterable[str] = (),
+    customer_words: bool = True,
+) -> tuple[tuple[str, float], ...]:
+    """:func:`rank_operations` über beliebige Einträge (:func:`search_fields`).
+
+    Dieselbe Rechnung für den Agenten und die Befehlspalette: Die Palette
+    führt neben den Operationen die Fensterbefehle, und eine mehrwortige Frage
+    („Loch größer machen") ordnet sie nach genau dieser Wertung.
+    ``customer_words`` zählt die Wendungen aus :data:`CUSTOMER_WORDS` mit (die
+    Palette); ohne sie gilt nur :data:`SYNONYMS` (der Agent,
+    :func:`rank_operations`).
     """
     terms: list[str] = []
     for text in texts:
         for term in request_terms(text):
             if term not in terms:
                 terms.append(term)
-    fields = _fields_of(registry)
     total = len(fields)
     wanted = set(favoured)
     if not total:
@@ -356,9 +562,11 @@ def rank_operations(
         rarity = math.log((total + 1) / (spread + 0.5))
         for name, weight in hits.items():
             scores[name] += rarity * weight
-    for name in scores:
-        if any(_says(phrase, terms) for phrase in SYNONYMS.get(name, ())):
-            scores[name] += _SYNONYM_SCORE
+    if terms:
+        for name in scores:
+            phrases = customer_phrases(name) if customer_words else SYNONYMS.get(name, ())
+            if any(_says(phrase, terms) for phrase in phrases):
+                scores[name] += _SYNONYM_SCORE
     for name in wanted:
         if name in scores:
             scores[name] += FAVOURED_BONUS

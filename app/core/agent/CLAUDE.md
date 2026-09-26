@@ -118,8 +118,9 @@ Operation in Registerreihenfolge, **ausführlich** — Kurzfassung der Felder au
 Bausteine also mit ihren zehn Ortsfeldern ohne Satz — nur die gemeinten, alle
 übrigen als **Kurzform** (Titel, `STUB_MARK` am Ende, keine Felder). Gemeint
 heißt: `registry.search.rank_operations` über die Anfrage und die letzten
-Nutzerbeiträge (dieselbe Faltung, dieselben Stämme, dieselben Kundenwörter wie
-die Befehlspalette), dazu an einem gewählten Merkmal die Handlungen aus
+Nutzerbeiträge (dieselbe Faltung, dieselben Stämme wie die Befehlspalette,
+von den Kundenwörtern nur `SYNONYMS` — die Wendungen je Sprache aus
+`CUSTOMER_WORDS` bleiben der Palette, siehe `.claude/rules/agentenschicht.md`), dazu an einem gewählten Merkmal die Handlungen aus
 `perceive.actions.ACTION_ORDER` und in einer leeren Szene die sichtbaren
 Grundkörper — höchstens `DETAILED_LIMIT` von sich aus. Titel und Menüweg,
 die das Angebot selbst in eine Beschreibung setzt, gehen durch

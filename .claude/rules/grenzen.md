@@ -412,7 +412,7 @@ eine Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen.
 Menüleiste (`by_category`), in der Palette und im Kontextmenü, nicht in der
 Ordnung von `Registry.all()`, die der internen englischen Bezeichner. Nicht
 `str` und nicht `casefold`: „Überhangfächer" landet nach Codepunkt hinter allem
-anderen. Nicht zu verwechseln mit `command_palette.fold`, der **Suchfaltung** —
+anderen. Nicht zu verwechseln mit `registry.search.fold`, der **Suchfaltung** —
 dort wird „ä" zu „ae", weil jemand „aushoehlen" tippt; beim Sortieren zählt „ä"
 wie „a" (DIN 5007-1), damit „Ändern" zwischen „Analyse" und „Anordnen" steht.
 Zwei Aufgaben, zwei Tabellen, und der Kommentar an jeder sagt, welche.
@@ -426,3 +426,26 @@ Wörter — das Folgende passt auf einzelne."). „ecke abrunden" gab eine leere
 Liste, während „abrunden" das *Verrunden* fand (Bedienweg-Durchsicht
 14.09.2026, sieben von 71 Kundenwörtern leer). Eine Liste, die
 stillschweigend weniger prüft, sähe aus wie eine genaue — deshalb die Zeile.
+
+**Und gesucht wird in der Sprache des Kunden, am Wortanfang** (Durchsicht
+0.5.1, 26.09.2026). Die Kundenwörter stehen je Sprache im Katalog
+(`registry.search.CUSTOMER_WORDS`, Kontext „Suchwörter"); vorher gab es sie
+nur auf Deutsch, und von 330 Kundenwörtern in sechs Sprachen führten 183 ans
+Ziel, danach 328 (Gegenprobe mit anderen Wörtern: 63 → 144 von 168). Ein
+Titeltreffer mitten im Wort („stützen" in „unterstützen") zählt nach den
+Kundenwörtern, die Wörter einer Anfrage müssen in **einer** Wendung stehen,
+und in den ungenauen Stufen (`LOOSE_RANK`) entscheidet dieselbe Wertung,
+mit der der Agent seine Werkzeuge wählt (`rank_entries`).
+
+**Die Kundenwörter gehören der Palette, nicht dem Agenten.** Der Agent wertet
+nur `SYNONYMS` (`rank_operations`, `customer_words=False`). Mit den
+Kundenwörtern holte „Versteifung" den Eckwinkel neben die Rippe ins
+ausführliche Angebot, und qwen3:14b traf „Versteife die Wand mit einer Rippe"
+0 von 2 statt 3 von 3 (Durchsicht 0.5.1). Wer ein Kundenwort auch dem Agenten
+geben will, ändert sein Angebot — das ist eine Verhaltensänderung mit Suite
+vorher/nachher (`.claude/rules/agentenschicht.md`). Wer ein Kundenwort
+einträgt, trägt es in allen Sprachen ein und prüft zwei Dinge: dass es kein
+Füllwort ist (eine Wendung „zu einem Teil" traf jede Anfrage mit „eine" und
+„Teils"), und dass es nicht über einen kurzen Stamm ein anderes Wort meint —
+`test_every_customer_word_belongs_to_a_row_of_the_palette` hält die Schlüssel
+am Register und an den Fensterbefehlen fest.

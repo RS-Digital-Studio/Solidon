@@ -16025,6 +16025,10 @@ def test_a_question_of_several_words_still_finds_something(window: MainWindow) -
     Weg (Bedienweg-Durchsicht 14.09.2026: sieben von 71 Kundenwörtern leer).
     Erst wenn nichts auf alle passt, genügt eines; die Zeile darüber sagt es,
     und wer ein Wort tippt, das ganz passt, sieht sie nicht.
+
+    „ecke abrunden" selbst passt seit den Kundenwörtern je Sprache ganz
+    (Durchsicht 0.5.1: „Ecken rund" am *Verrunden*); die dritte Runde prüft
+    deshalb ein Wort, das nirgends steht, neben einem, das trifft.
     """
     from app.ui.command_palette import CommandPalette
 
@@ -16032,6 +16036,9 @@ def test_a_question_of_several_words_still_finds_something(window: MainWindow) -
     palette = CommandPalette(parent=window)
 
     palette._refilter("ecke abrunden")
+    assert palette.list.item(0).data(Qt.ItemDataRole.UserRole) == "fillet_edges"
+
+    palette._refilter("zacken abrunden")
     rows = [palette.list.item(row) for row in range(palette.list.count())]
     assert rows and rows[0].text() == heading, [row.text() for row in rows[:3]]
     assert not rows[0].flags() & Qt.ItemFlag.ItemIsSelectable, "die Überschrift ist kein Befehl"

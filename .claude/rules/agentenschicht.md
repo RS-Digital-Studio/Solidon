@@ -136,7 +136,10 @@ mehr sieht, wäre eine Betriebsart mit anderem Namen (§2.6). Die Regeln dazu:
 
 - **Ausführlich** stehen die Treffer von `registry.search.rank_operations`
   über Anfrage und letzte Nutzerbeiträge — **dieselbe** Wortsuche wie die
-  Befehlspalette, kein zweites Ranking daneben (`zwillinge.md`) —, am gewählten
+  Befehlspalette, kein zweites Ranking daneben (`zwillinge.md`), aber **ohne
+  die Kundenwörter der Palette** (`CUSTOMER_WORDS`, `customer_words=False`):
+  Mit ihnen fiel „Versteife die Wand mit einer Rippe" von 3 von 3 auf 0 von 2
+  (qwen3:14b, Durchsicht 0.5.1, `grenzen.md`) —, am gewählten
   Merkmal seine Handlungen aus `ACTION_ORDER`, in leerer Szene die sichtbaren
   Grundkörper, und was das Modell im Zug angefordert oder über `find_part`
   gefunden hat. Von sich aus höchstens `DETAILED_LIMIT`, und nur über

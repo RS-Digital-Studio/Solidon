@@ -218,6 +218,28 @@ def test_filler_words_decide_nothing() -> None:
     assert alone == padded
 
 
+def test_the_agent_weighs_its_curated_words_and_not_the_palette_phrases() -> None:
+    """Die Kundenwörter der Palette stehen nicht im Angebot des Agenten.
+
+    Gemessen in der Durchsicht 0.5.1 (qwen3:14b, je zweimal): Mit ihnen holte
+    „Versteifung" den Eckwinkel neben die Rippe ins ausführliche Angebot, und
+    „Versteife die Wand mit einer Rippe" traf 0 von 2 statt 3 von 3 — das
+    Modell fragte, statt zu bauen. Die Palette behält sie
+    (``rank_entries(customer_words=True)``).
+    """
+    from app.core.registry.search import rank_entries, registry_fields
+
+    request = "Versteife die Wand mit einer Rippe."
+    palette = dict(rank_entries([request], registry_fields(REGISTRY)))
+    agent = dict(rank_operations([request], REGISTRY))
+    assert palette.get("insert_gusset", 0.0) > agent.get("insert_gusset", 0.0), (
+        "die Palette findet den Eckwinkel über „verstärken“, der Agent nicht"
+    )
+    offer = ToolOffer.for_turn(REGISTRY, [request], empty_scene=True)
+    assert "insert_rib" in offer.detailed
+    assert "insert_gusset" not in offer.detailed
+
+
 def test_a_three_letter_word_counts_only_as_a_whole_word() -> None:
     """„pla" meint das Material und nicht „place"."""
     assert "place_on_bed" not in dict(rank_operations(["pla"], REGISTRY))

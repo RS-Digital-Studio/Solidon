@@ -7,6 +7,7 @@ eine Tabelle davon liest.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Final, cast
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QRect, Qt
@@ -24,7 +25,15 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.registry import PaletteEntry, menu_twins, palette_entries, variant_members
-from app.core.registry.search import STEM_LENGTH, stem_of, synonyms_for
+from app.core.registry.search import (
+    STEM_LENGTH,
+    customer_phrases,
+    rank_entries,
+    search_fields,
+    starts_a_word,
+    stem_of,
+    synonyms_for,
+)
 
 # Ausdrücklich weitergereicht: Die Faltung lebt seit dem 25.09.2026 in
 # ``registry.search``, und das Hauptfenster liest sie noch von hier.
@@ -81,7 +90,25 @@ def rank(entry: PaletteEntry, query: str) -> int:
     title = fold(str(entry.title))
     name = fold(str(entry.name))
     in_title = all(part in title for part in parts)
-    in_synonyms = all(part in synonyms_for(str(entry.name)) for part in parts)
+    # **Am Wortanfang, nicht mitten im Wort.** „Stützen" stellte *Hilfe:
+    # Solidon3D unterstützen …* vor alles andere, weil das Wort in
+    # „unterstützen" steckt; ein Titeltreffer mitten im Wort zählt deshalb erst
+    # nach den Kundenwörtern (Durchsicht 0.5.1, 26.09.2026). Eine
+    # Zusammensetzung bleibt findbar — nur nicht vor dem, was gemeint ist.
+    at_title_start = in_title and all(starts_a_word(part, title) for part in parts)
+    # **Eine Wendung, am Wortanfang.** Die Wörter der Anfrage müssen in
+    # *einer* Kundenwendung stehen, nicht verstreut über alle: „Loch machen"
+    # fand sonst *Bohrung ändern* vor *Bohrung setzen*, weil dessen Wendungen
+    # „Loch größer" und „größer machen" beide Wörter enthielten; und „move
+    # hole" fand *Bohrung verschließen*, weil „move" in „remove hole" steckt.
+    # Wer die Wendung ganz tippt, hat genau sie gemeint — das wiegt mehr als
+    # eine, die sie nur enthält.
+    phrases = customer_phrases(str(entry.name))
+    typed = " ".join(parts)
+    said_exactly = typed in phrases
+    in_phrase = said_exactly or any(
+        all(starts_a_word(part, phrase) for part in parts) for phrase in phrases
+    )
     # **Titel *und* Synonym schlägt Titel allein.** Solange nur eine Operation
     # „Bemalen" hieß, war „färben" eindeutig. Seit beide das Wort im Titel
     # tragen („Filament zuweisen", „Filament auf eine Fläche"), bekamen beide denselben Rang,
@@ -89,17 +116,28 @@ def rank(entry: PaletteEntry, query: str) -> int:
     # bekam die Fläche, wo er das Teil meinte. Das Synonym ist die bewusste
     # Zuordnung und bricht den Gleichstand; ohne diese Stufe bliebe es
     # wirkungslos, sobald das Wort auch im Titel steht.
-    if in_title and in_synonyms:
+    if at_title_start and in_phrase:
         return 0
-    if in_title:
+    if at_title_start:
         return 1
     if all(part in name for part in parts):
         return 2
-    if in_synonyms:
+    if said_exactly:
         return 3
-    if all(stem_of(part) in title for part in parts if len(part) >= STEM_LENGTH):
+    if in_phrase:
         return 4
-    return 5
+    if in_title:
+        return 5
+    if all(stem_of(part) in title for part in parts if len(part) >= STEM_LENGTH):
+        return 6
+    return 7
+
+
+#: Ab welcher Güte aus :func:`rank` ein Treffer ungenau ist — eine Wendung,
+#: die die Wörter nur enthält, ein Titel mitten im Wort, ein Stamm, die
+#: Beschreibung. Darunter ordnet die Palette stabil, darüber nach der Wertung
+#: der Wortsuche (``registry.search.rank_entries``).
+LOOSE_RANK: Final = 4
 
 
 def hidden_from_the_menu() -> frozenset[str]:
@@ -121,6 +159,25 @@ def hidden_from_the_menu() -> frozenset[str]:
     vergessen werden kann.
     """
     return frozenset(menu_twins()) | variant_members()
+
+
+def _haystack(entry: PaletteEntry) -> str:
+    """Titel, Name, Beschreibung und Kundenwörter eines Eintrags, gefaltet."""
+    return _folded_haystack(
+        str(entry.title), str(entry.name), str(entry.doc), synonyms_for(str(entry.name))
+    )
+
+
+@lru_cache(maxsize=2048)
+def _folded_haystack(title: str, name: str, doc: str, synonyms: str) -> str:
+    """Die Faltung je Zeile einmal statt je Tastendruck.
+
+    Sie lief für jede der gut zweihundert Zeilen bei jedem Zeichen zweimal —
+    im Filter und in der Sortierung —, über Beschreibungen von mehreren hundert
+    Zeichen. Geschlüsselt über die Texte selbst, die übersetzten
+    eingeschlossen: Ein Sprachwechsel ist ein anderer Schlüssel.
+    """
+    return fold(f"{title} {name} {doc} {synonyms}")
 
 
 def matches(entry: PaletteEntry, query: str, *, stem: bool = False, any_word: bool = False) -> bool:
@@ -164,7 +221,7 @@ def matches(entry: PaletteEntry, query: str, *, stem: bool = False, any_word: bo
         return entry.name not in hidden_from_the_menu()
     if any_word:
         return word_hits(entry, query) > 0
-    haystack = fold(f"{entry.title} {entry.name} {entry.doc} {synonyms_for(entry.name)}")
+    haystack = _haystack(entry)
     parts = fold(query).split()
     if not stem:
         return all(part in haystack for part in parts)
@@ -181,7 +238,7 @@ def word_hits(entry: PaletteEntry, query: str) -> int:
     leer, darunter „zu viele dreiecke" und „gerade stellen"). Gezählt und
     nicht nur gefragt, damit die Liste nach Trefferzahl sortiert werden kann.
     """
-    haystack = fold(f"{entry.title} {entry.name} {entry.doc} {synonyms_for(entry.name)}")
+    haystack = _haystack(entry)
     return sum(
         part in haystack or (len(part) >= STEM_LENGTH and stem_of(part) in haystack)
         for part in fold(query).split()
@@ -268,6 +325,11 @@ class CommandPalette(QDialog):
         # Grund für das Ausgrauen), 480 zeigen also zwölf bis sechzehn.
         self.setMinimumSize(520, 480)
         self._entries = entries if entries is not None else list(palette_entries())
+        # Die Suchtexte der Wortsuche im Kern, einmal je Palette — sie ordnet
+        # die dritte Runde (:meth:`_refilter`).
+        self._fields = search_fields(
+            (str(entry.name), entry.title, entry.doc) for entry in self._entries
+        )
 
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("Befehl suchen …"))
@@ -324,13 +386,33 @@ class CommandPalette(QDialog):
         # ``doc``-Satz als zweite Zeile, so wie der gesperrte Fall seinen Grund
         # (Review 02.09.2026).
         twins = menu_twins().keys() | menu_twins().values()
-        found.sort(
-            key=lambda entry: (
+        # **Die dritte Runde ordnet die Wortsuche des Kerns** — dieselbe, mit
+        # der der Agent seine Werkzeuge wählt (``registry.search``). Nach der
+        # bloßen Trefferzahl stand bei „Teil kleiner machen" *Fläche
+        # unterteilen* vorn, weil „teil" und „machen" in ihrer Beschreibung
+        # stehen; die Wertung wiegt Kundenwörter als Wendung und seltene Wörter
+        # schwerer als häufige.
+        #
+        # **Und in den ersten beiden Runden bricht sie den Gleichstand** einer
+        # ungenauen Güte (ab :data:`LOOSE_RANK`): Bei „Teil kleiner machen"
+        # standen *Teilen* und *Skalieren* in derselben Stufe, und die
+        # Reihenfolge der Liste entschied. Bei einem Titel- oder Wendungstreffer
+        # bleibt es bei der stabilen Reihenfolge — dort steht vorn, was zur
+        # Auswahl passt (``palette_entries(for_feature=…)``).
+        scores = dict(rank_entries([query], self._fields)) if query.strip() else {}
+
+        def order(entry: PaletteEntry) -> tuple[float, int, int, bool, float]:
+            good = rank(entry, query)
+            score = scores.get(str(entry.name), 0.0)
+            return (
+                -score if loosened else 0.0,
                 -word_hits(entry, query) if loosened else 0,
-                rank(entry, query),
+                good,
                 entry.name in hidden_names,
+                -score if good >= LOOSE_RANK else 0.0,
             )
-        )
+
+        found.sort(key=order)
         offset = 0
         if loosened:
             # Nicht wählbar und ohne Daten, wie die leere Antwort unten:

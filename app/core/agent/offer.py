@@ -12,7 +12,8 @@ rund 2 300.
 
 * **Mit allen Feldern** stehen die Operationen, die die Anfrage meint
   (``registry.search.rank_operations``, dieselbe Wortsuche wie die
-  Befehlspalette), die zur gewählten Stelle passen, und alles, was das Modell
+  Befehlspalette, ohne deren Kundenwörter je Sprache), die zur gewählten
+  Stelle passen, und alles, was das Modell
   in diesem Zug schon angefordert oder über ``find_part`` gefunden hat.
 * **In Kurzform** — Name und Titel, keine Felder — stehen alle übrigen. Ruft
   das Modell eine davon auf, wird nichts ausgeführt: Die Antwort sagt, dass

@@ -875,6 +875,94 @@ def test_the_word_a_customer_types_lands_on_top() -> None:
     assert not daneben, "diese Wörter zeigen zuerst auf das Falsche: " + "; ".join(daneben)
 
 
+#: Kundenwörter in jeder Sprache, und was sie meinen (Durchsicht 0.5.1). Vorher
+#: fanden „copy", „calamita", „apagar", „Füße" nichts oder das Falsche, und
+#: „Loch größer" fand *Bohrung setzen* statt *Bohrung ändern*: Die Kundenwörter
+#: gab es nur auf Deutsch, und die Titel tragen dieselbe Lücke über die
+#: Wortgrenze wie im Deutschen.
+WORDS_BY_LANGUAGE: tuple[tuple[str, str, str], ...] = (
+    ("de", "Loch größer", "resize_hole"),
+    ("de", "Füße", "insert_foot"),
+    ("de", "Würfel", "create_brep_box"),
+    ("de", "Loch machen", "drill_hole"),
+    ("de", "flicken", "repair"),
+    ("en", "copy", "duplicate_object"),
+    ("en", "make hole bigger", "resize_hole"),
+    ("en", "move hole", "move_feature"),
+    ("en", "feet", "insert_foot"),
+    ("es", "agujero más grande", "resize_hole"),
+    ("es", "borrar", "delete_object"),
+    ("fr", "trou plus grand", "resize_hole"),
+    ("fr", "copier", "duplicate_object"),
+    ("it", "calamita", "insert_magnet_pocket"),
+    ("it", "girare", "rotate_object"),
+    ("pt", "apagar", "delete_object"),
+    ("pt", "ímã", "insert_magnet_pocket"),
+)
+
+
+@pytest.mark.parametrize(("language", "word", "meant"), WORDS_BY_LANGUAGE)
+def test_a_customer_finds_his_operation_in_his_language(
+    language: str, word: str, meant: str
+) -> None:
+    """Dieselbe Frage wie ``test_the_word_a_customer_types_lands_on_top`` — in
+    der Sprache, in der der Kunde tippt, mit den Kundenwörtern seiner Sprache
+    (``registry.search.CUSTOMER_WORDS``)."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry.surfaces import palette_entries
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.command_palette import rank
+
+    load_operations()
+    install_language(language)
+    set_language(language)
+    eintraege = palette_entries(REGISTRY)
+    treffer = [e for e in eintraege if matches(e, word)] or [
+        e for e in eintraege if matches(e, word, stem=True)
+    ]
+    assert treffer, f"„{word}“ findet auf {language} nichts"
+    erste = min(treffer, key=lambda e: rank(e, word))
+    assert erste.name == meant, f"„{word}“ ({language}) zeigt zuerst {erste.name}"
+
+
+def test_a_word_inside_a_title_does_not_beat_the_word_that_means_it() -> None:
+    """„Stützen" stellte *Hilfe: Solidon3D unterstützen …* vor alles, weil das
+    Wort mitten in „unterstützen" steckt. Ein Titel zählt am Wortanfang; mitten
+    im Wort erst nach den Kundenwörtern."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry.surfaces import PaletteEntry, palette_entries
+    from app.ui.command_palette import rank
+
+    load_operations()
+    spende = PaletteEntry(
+        name="menu.41", title="Hilfe: Solidon3D unterstützen …", doc="", category="menu"
+    )
+    ausrichten = next(e for e in palette_entries(REGISTRY) if e.name == "orient_for_print")
+    assert rank(ausrichten, "Stützen") < rank(spende, "Stützen")
+
+
+def test_every_customer_word_belongs_to_a_row_of_the_palette() -> None:
+    """Ein Kundenwort, dessen Ziel es nicht gibt, zeigt stumm ins Leere.
+
+    So stand es bis zur Durchsicht 0.5.1 um „flicken" und „löcher schließen":
+    eingetragen unter ``repair_mesh``, die Operation heißt ``repair``. Ein
+    Schlüssel ist eine Operation oder ein Fensterbefehl, den das Hauptfenster
+    unter genau dieser Kennung in die Palette legt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry.search import CUSTOMER_WORDS, SYNONYMS
+
+    load_operations()
+    fenster = (Path(app.__file__).parent / "ui" / "main_window.py").read_text(encoding="utf-8")
+    fehlend = [
+        name
+        for name in (*SYNONYMS, *CUSTOMER_WORDS)
+        if not REGISTRY.has(name) and f'"{name}": (' not in fenster
+    ]
+    assert not fehlend, "diese Kundenwörter zeigen auf nichts: " + ", ".join(fehlend)
+
+
 # --- Der Körper steht auf der Platte, nicht in ihr (B35) ---------------------
 
 
