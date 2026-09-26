@@ -328,6 +328,53 @@ def test_a_contour_point_carried_by_two_corners_counts_once() -> None:
     assert len(_distinct_points(doubled)) == 3
 
 
+def test_coinciding_mantle_points_are_merged_before_the_neighbour_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Alle Ecken einer Mantellinie fallen auf einen Punkt — gesucht wird zwischen verschiedenen.
+
+    An der großen Bohrung aus ``test_bore_floor_resize`` kamen 525 312 Punkte
+    herein, 1 024 davon verschieden. Die Nachbarsuche über alle zählte jedes
+    Paar deckungsgleicher Punkte: 134 Millionen Paare, 7 bis 21 s je Aufruf und
+    viermal je Größenänderung einer Bohrung (26.09.2026). Das Ergebnis bleibt
+    dasselbe: je Gruppe der lexikographisch kleinste Punkt, bei Gleichstand
+    der mit der kleineren Nummer, in der Reihenfolge der Nummern.
+    """
+    from scipy.spatial import cKDTree
+
+    from app.core.perceive.features import _distinct_points
+
+    ring = np.array(
+        [[5.0 * math.cos(a), 5.0 * math.sin(a)] for a in np.linspace(0.0, 2.0 * math.pi, 64)[:-1]]
+    )
+    rng = np.random.default_rng(26092026)
+    points = ring[rng.integers(0, len(ring), size=20_000)]
+    # Eine Kette unter EPS_GEOM hängt an einem Punkt und wird mit ihm eins.
+    chain = ring[:1] + np.array([[0.4 * EPS_GEOM, 0.0], [0.8 * EPS_GEOM, 0.0]])
+    points = np.concatenate((points, chain, ring))
+    searched = []
+    original = cKDTree
+
+    def counted(data: np.ndarray) -> Any:
+        searched.append(len(data))
+        return original(data)
+
+    monkeypatch.setattr("scipy.spatial.cKDTree", counted)
+    merged = _distinct_points(points)
+    assert searched and max(searched) <= len(ring) + len(chain)
+
+    order = np.lexsort(points.T[::-1])
+    first_of_value: dict[tuple[float, float], int] = {}
+    for index in order.tolist():
+        first_of_value.setdefault(tuple(points[index]), index)
+    expected = sorted(
+        index
+        for value, index in first_of_value.items()
+        if not (value[1] == 0.0 and 5.0 < value[0] <= 5.0 + EPS_GEOM)
+    )
+    assert np.array_equal(merged, points[expected])
+
+
 def test_a_face_keeps_its_area_unrounded() -> None:
     """Regel 6: Der Kern rundet nicht — die Fläche steht, wie sie gemessen ist.
 

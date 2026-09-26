@@ -5374,6 +5374,17 @@ def _distinct_points(points: np.ndarray) -> np.ndarray:
     ihren lexikographisch kleinsten Punkt. ``EPS_GEOM`` ist die Grenze, unter
     der zwei Längen im Kern gleich sind — hier die zwei Enden einer
     Mantelkante, die in der Projektion auf denselben Punkt fallen.
+
+    **Deckungsgleiche Punkte zuerst, dann die Nachbarschaft.** In der
+    Projektion eines Zylindermantels fallen alle Ecken einer Mantellinie auf
+    denselben Punkt; die Nachbarsuche über alle Punkte zählte jedes Paar
+    davon. Gemessen an der großen Bohrung aus ``test_bore_floor_resize``:
+    525 312 Punkte, 1 024 verschiedene, 134 Millionen Paare — 7 bis 21 s je
+    Aufruf, viermal je Größenänderung (26.09.2026). Gleiche Punkte liegen
+    ohnehin in einer Gruppe; gesucht wird deshalb nur zwischen verschiedenen.
+    Welcher Punkt eine Gruppe vertritt, entscheidet weiter die
+    lexikographische Reihenfolge über **alle** Punkte, bei Gleichstand die
+    kleinere Nummer — dasselbe Ergebnis wie vorher.
     """
     if len(points) < 2:
         return points
@@ -5381,19 +5392,24 @@ def _distinct_points(points: np.ndarray) -> np.ndarray:
     from scipy.sparse.csgraph import connected_components
     from scipy.spatial import cKDTree
 
-    pairs = cKDTree(points).query_pairs(EPS_GEOM, output_type="ndarray")
-    if not len(pairs):
+    # Lexikographisch sortiert liegen gleiche Punkte nebeneinander; ``lexsort``
+    # ist stabil, der erste eines Laufs trägt also die kleinste Nummer.
+    order = np.lexsort(points.T[::-1])
+    ordered = points[order]
+    starts = np.ones(len(points), dtype=bool)
+    starts[1:] = np.any(ordered[1:] != ordered[:-1], axis=1)
+    distinct = ordered[starts]
+    pairs = cKDTree(distinct).query_pairs(EPS_GEOM, output_type="ndarray")
+    if not len(pairs) and len(distinct) == len(points):
         return points
-    count = len(points)
+    count = len(distinct)
     links = coo_matrix(
         (np.ones(len(pairs), dtype=np.int8), (pairs[:, 0], pairs[:, 1])), shape=(count, count)
     )
-    _groups, labels = connected_components(links, directed=False)
-    order = np.lexsort(points.T[::-1])
-    chosen: dict[int, int] = {}
-    for index in order.tolist():
-        chosen.setdefault(int(labels[index]), index)
-    return np.asarray(points[sorted(chosen.values())], dtype=float)
+    _groups, grouped = connected_components(links, directed=False)
+    # Je Gruppe der erste Punkt in lexikographischer Reihenfolge.
+    _labels, first = np.unique(grouped[np.cumsum(starts) - 1], return_index=True)
+    return np.asarray(points[np.sort(order[first])], dtype=float)
 
 
 def _cylinder_band(
