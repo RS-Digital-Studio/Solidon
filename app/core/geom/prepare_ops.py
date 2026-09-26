@@ -4434,16 +4434,25 @@ def _exact_pattern_result(
     solid = _exact_body(source)
     faces_bodies: dict[str, Any] = {}
     material: list[Any] = []
-    hollow_tools: list[Any] = []
     for place in kept:
         ctx.cancelled.raise_if_cancelled()
-        tool = _exact_place_tool(source, solid, place, faces_bodies)
-        (hollow_tools if is_a_cavity(place.unit.feature) else material).append(tool)
+        if not is_a_cavity(place.unit.feature):
+            material.append(_exact_place_tool(source, solid, place, faces_bodies))
     placed = solid
     if material:
         placed = edit.unified(edit.boolean("union", [placed, *material]))
-    if hollow_tools:
-        placed = edit.unified(edit.boolean("difference", [placed, *hollow_tools]))
+    hollow = [place for place in kept if is_a_cavity(place.unit.feature)]
+    if hollow:
+        # Alle Hohlräume in einer Differenz, wie bisher — und wie beim
+        # Verdoppeln wiederholt, wenn sie still scheitert
+        # (:func:`_exact_chain_cut_holding`).
+        base = placed
+        placed, _tools = _exact_chain_cut_holding(
+            base,
+            lambda overlap: _pattern_hollow_tool(
+                source, solid, hollow, faces_bodies, overlap=overlap
+            ),
+        )
     copies = [copy for place in kept for copy in place.copies]
     findings.extend(_edge_findings(as_mesh_data(solid), copies))
     # Die Kopien stehen in der Reihenfolge der Glieder (:func:`_name_copies`);
@@ -4462,8 +4471,30 @@ def _exact_pattern_result(
     return result
 
 
+def _pattern_hollow_tool(
+    source: SceneObject,
+    solid: Any,
+    places: Sequence[_PatternPlace],
+    faces_bodies: dict[str, Any],
+    *,
+    overlap: float,
+) -> Any:
+    """Die Werkzeuge aller Hohlraumplätze eines Musters als ein Körper."""
+    from app.core.brep import edit
+
+    tools = [
+        _exact_place_tool(source, solid, place, faces_bodies, overlap=overlap) for place in places
+    ]
+    return edit.boolean("union", tools) if len(tools) > 1 else tools[0]
+
+
 def _exact_place_tool(
-    source: SceneObject, solid: Any, place: _PatternPlace, faces_bodies: dict[str, Any]
+    source: SceneObject,
+    solid: Any,
+    place: _PatternPlace,
+    faces_bodies: dict[str, Any],
+    *,
+    overlap: float = FEATURE_OVERLAP,
 ) -> Any:
     """Das exakte Werkzeug eines Platzes — je Art dasselbe wie bei der Verdoppelung."""
     from app.core.brep import edit
@@ -4471,7 +4502,7 @@ def _exact_place_tool(
     feature = place.unit.feature
     if place.unit.chain is not None:
         entrance = _exact_chain_entrance(source, place.unit.chain)
-        return _exact_chain_tool_placed(solid, entrance, place.matrix)
+        return _exact_chain_tool_placed(solid, entrance, place.matrix, overlap=overlap)
     copy = place.copies[0]
     centre = cast(Vec3, tuple(float(value) for value in copy.params["centre"]))
     if feature.kind == "torus":
@@ -8283,7 +8314,12 @@ def _entrance_is_open(
 
 
 def _entrance_tools(
-    entrance: _BoreEntrance, diameter: float, reach: float, *, filling: bool = False
+    entrance: _BoreEntrance,
+    diameter: float,
+    reach: float,
+    *,
+    filling: bool = False,
+    overlap: float = FEATURE_OVERLAP,
 ) -> list[tuple[list[tuple[float, float]], tuple[SectionPlane, ...]]]:
     """Beide Kerne erhalten dieselben Radien, Profile und Randebenen.
 
@@ -8292,7 +8328,8 @@ def _entrance_tools(
     Erweiterungen der ersten Seite, dann die der zweiten (RM-245). Deren
     Umrisse entstehen entlang ihrer eigenen Richtung und werden in die
     Halbebene der ersten gespiegelt — ein Drehkörper um dieselbe Achse; die
-    Randebenen stehen ohnehin im Raum.
+    Randebenen stehen ohnehin im Raum. ``overlap`` ist die Zugabe über offene
+    Mündungen (§39, :func:`_exact_chain_cut_holding`).
     """
     delta = diameter / 2.0 - entrance.sections[0].inner_radius
     tools = _side_tools(
@@ -8303,10 +8340,11 @@ def _entrance_tools(
         filling=filling,
         back=entrance.back,
         back_open=entrance.back_open,
+        overlap=overlap,
     )
     if entrance.back:
         for outline, planes in _side_tools(
-            entrance.back, entrance.back_open, delta, reach, filling=filling
+            entrance.back, entrance.back_open, delta, reach, filling=filling, overlap=overlap
         )[1:]:
             tools.append(([(radius, -along) for radius, along in reversed(outline)], planes))
     return tools
@@ -8321,6 +8359,7 @@ def _side_tools(
     filling: bool,
     back: Sequence[_EntranceSection] = (),
     back_open: bool = True,
+    overlap: float = FEATURE_OVERLAP,
 ) -> list[tuple[list[tuple[float, float]], tuple[SectionPlane, ...]]]:
     """Die Werkzeuge einer Seite in ihrer eigenen Halbebene: der Schaft zuerst,
     dann jede Erweiterung. Mit ``back`` reicht der Schaft bis an deren Mündung."""
@@ -8338,9 +8377,9 @@ def _side_tools(
         lower = section.lower
         upper = section.upper
         if not filling and open_end and (index == 0 or index == len(members) - 1):
-            upper = dataclasses.replace(upper, position=upper.position + FEATURE_OVERLAP)
+            upper = dataclasses.replace(upper, position=upper.position + overlap)
         if not filling and back and back_open and index == 0:
-            lower = dataclasses.replace(lower, position=lower.position + FEATURE_OVERLAP)
+            lower = dataclasses.replace(lower, position=lower.position + overlap)
         if section.feature.kind == "cone":
             slope = (section.outer_radius - section.inner_radius) / (section.end - section.start)
             start = section.start - radius / slope
@@ -10222,6 +10261,7 @@ def _exact_chain_solid(
     filling: bool,
     frame: PlaneFrame,
     planes_of: Callable[[int, SectionPlane, SectionPlane], tuple[SectionPlane, ...]],
+    overlap: float = FEATURE_OVERLAP,
 ) -> Any:
     """Der Hohlraum einer Kette als exakter Körper — Stopfen oder Werkzeug.
 
@@ -10235,7 +10275,7 @@ def _exact_chain_solid(
     diameter = entrance.sections[0].inner_radius * 2.0
     parts = []
     for index, (outline, (lower, upper)) in enumerate(
-        _entrance_tools(entrance, diameter, reach, filling=filling)
+        _entrance_tools(entrance, diameter, reach, filling=filling, overlap=overlap)
     ):
         tool = edit.revolved_bore_tool(outline, frame)
         parts.append(edit.clipped_bore_tool(tool, planes_of(index, lower, upper)))
@@ -10305,15 +10345,63 @@ def _exact_chain_cut_moved(
 ) -> tuple[Any, Any]:
     """Die Kette an der um ``travel`` verschobenen Stelle exakt ausschneiden —
     das Ergebnis und das Werkzeug, an dem der Durchgang danach gemessen wird."""
+    matrix = np.asarray(translation(cast(Vec3, tuple(float(v) for v in travel))), dtype=float)
+    return _exact_chain_cut_holding(
+        solid, lambda overlap: _exact_chain_tool_placed(solid, entrance, matrix, overlap=overlap)
+    )
+
+
+def _exact_chain_cut_holding(solid: Any, tool_with: Callable[[float], Any]) -> tuple[Any, Any]:
+    """``solid`` minus dem Werkzeug aus ``tool_with`` — und eine Differenz, die
+    still gescheitert ist, wird mit weiterem Mündungsüberstand wiederholt.
+
+    **OpenCASCADE sagt nicht immer, wenn es nicht schneiden konnte**
+    (26.09.2026). An der Lochplatte ``pegboard-gs-100-v2.step`` kam die untere
+    Schraubbohrung, um 1,5 mm nach oben versetzt, mit genau dem Volumen des
+    gefüllten Körpers zurück: 57 statt 50 Flächen, der Netz-Zwilling undicht
+    mit 5 176 mm³ zu viel, und ``BRepCheck`` nannte alles gültig. Körper minus
+    Werkzeug ergab dort „leer", die Schnittmenge null — die Lage und nicht das
+    Werkzeug war der Grund: Mit 0,02 mm Überstand über die offenen Mündungen
+    scheiterten +1,5 und +2,0 mm, mit 0,04 und 0,06 mm hielt jede Lage, mit
+    0,1 mm scheiterte es wieder. Ein Ergebnis gilt deshalb nur mit dichtem
+    Zwilling, und sonst schneidet dasselbe Werkzeug mit dem doppelten und dann
+    dem dreifachen Überstand (:data:`CUT_OVERLAPS`). Der Überstand liegt vor
+    offenen Mündungen, in der Luft; er ändert den Abtrag nur, wo die Fläche an
+    der neuen Stelle weiter hinausreicht — an der Lochplatte um 0,4 mm³. Hält
+    keiner, sagt die Handlung ab, statt einen kaputten Körper zu liefern.
+    """
     from app.core.brep import edit
 
-    matrix = np.asarray(translation(cast(Vec3, tuple(float(v) for v in travel))), dtype=float)
-    tool = _exact_chain_tool_placed(solid, entrance, matrix)
-    return edit.unified(edit.boolean("difference", [solid, tool])), tool
+    for factor in CUT_OVERLAPS:
+        tool = tool_with(FEATURE_OVERLAP * factor)
+        placed = edit.unified(edit.boolean("difference", [solid, tool]))
+        if as_mesh_data(placed).is_watertight:
+            return placed, tool
+    raise GeometryError(
+        title=_("Der exakte Kern bringt den Hohlraum an dieser Stelle nicht sauber heraus."),
+        detail=CUT_DID_NOT_HOLD,
+        suggestions=(CORRECT_INPUT, CANCEL),
+    )
+
+
+#: Die Vielfachen von :data:`FEATURE_OVERLAP`, mit denen
+#: :func:`_exact_chain_cut_holding` eine gescheiterte Differenz wiederholt.
+CUT_OVERLAPS: Final = (1.0, 2.0, 3.0)
+
+#: Der Satz, wenn keine Wiederholung einen dichten Körper ergibt.
+CUT_DID_NOT_HOLD: Final = _(
+    "Die Differenz gab dort einen undichten Körper zurück, auch mit mehr Überstand. "
+    "Setzen Sie die Stelle um einen Bruchteil eines Millimeters anders und versuchen "
+    "Sie es erneut."
+)
 
 
 def _exact_chain_tool_placed(
-    solid: Any, entrance: _BoreEntrance, matrix: NDArray[np.float64]
+    solid: Any,
+    entrance: _BoreEntrance,
+    matrix: NDArray[np.float64],
+    *,
+    overlap: float = FEATURE_OVERLAP,
 ) -> Any:
     """Das Werkzeug der Kette, mit einer starren Bewegung an einen neuen Platz gebracht.
 
@@ -10339,6 +10427,7 @@ def _exact_chain_tool_placed(
             _plane_placed(lower, matrix),
             _plane_placed(upper, matrix),
         ),
+        overlap=overlap,
     )
 
 
@@ -10380,6 +10469,8 @@ def _exact_chain_tool_turned(
     pivot: NDArray[np.float64],
     tilt: float,
     caps: Sequence[SectionPlane],
+    *,
+    overlap: float = FEATURE_OVERLAP,
 ) -> Any:
     """Das Werkzeug der gekippten Kette — mit dem Überstand, den die Neigung verlangt.
 
@@ -10450,6 +10541,7 @@ def _exact_chain_tool_turned(
             (float(turned_origin[0]), float(turned_origin[1]), float(turned_origin[2])),
         ),
         planes_of=planes_of,
+        overlap=overlap,
     )
     return edit.clipped_bore_tool(tool, caps) if caps else tool
 
@@ -10554,7 +10646,6 @@ def _exact_rotate_chain(
 ) -> OpResult:
     """Bohrung samt Senkung am exakten Körper kippen — um die Mitte des gewählten
     Abschnitts (P2.4)."""
-    from app.core.brep import edit
 
     entrance = _exact_chain_entrance(source, chain)
     pivot = np.asarray(feature.params["centre"], dtype=float)
@@ -10570,8 +10661,12 @@ def _exact_rotate_chain(
     filled = _exact_chain_filled(source, entrance)
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     caps = _old_rim_caps(as_mesh_data(source.mesh), chain[0], source.features, chain)
-    tool = _exact_chain_tool_turned(filled, entrance, matrix, pivot, tilt, caps)
-    placed = edit.unified(edit.boolean("difference", [filled, tool]))
+    placed, tool = _exact_chain_cut_holding(
+        filled,
+        lambda overlap: _exact_chain_tool_turned(
+            filled, entrance, matrix, pivot, tilt, caps, overlap=overlap
+        ),
+    )
     expected = []
     for related in chain:
         centre = np.asarray(related.params["centre"], dtype=float)

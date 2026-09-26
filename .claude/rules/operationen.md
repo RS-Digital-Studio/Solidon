@@ -638,6 +638,14 @@ trägt, ist deshalb noch nicht diese Kopie. Kann der exakte Kern die Kette
 nicht lesen, sagt die Kettenhandlung mit `CHAIN_NOT_READABLE` ab, nicht mit dem
 Satz des Einlaufs.
 
+**Und eine exakte Differenz gilt erst mit dichtem Zwilling**
+(`_exact_chain_cut_holding`). OpenCASCADE scheitert lagenabhängig still: An der
+Lochplatte gs-100 kam die Kette, 1,5 mm nach oben versetzt, mit dem Volumen des
+gefüllten Körpers zurück, gültig laut `BRepCheck`, der Zwilling undicht. Dann
+schneidet dasselbe Werkzeug mit doppeltem und dreifachem Mündungsüberstand
+(`CUT_OVERLAPS`); hält keiner, sagt die Handlung mit `CUT_DID_NOT_HOLD` ab.
+Versetzen, Verdoppeln, Kippen und das Muster einer Kette gehen diesen Weg.
+
 **Versetzt und verdoppelt wird starr, an beiden Kernen** (RM-220). Eine
 Bohrung ist danach so lang wie vorher; entlang ihrer Achse oder in dickeres
 Material gesetzt, bleibt Material stehen, und `no_longer_through` sagt es

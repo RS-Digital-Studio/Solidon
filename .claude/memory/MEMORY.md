@@ -80,6 +80,7 @@
 - [Verrauschte Tafel ≠ Haut](verrauschte-tafel-trennt-nicht-von-sanfter-kruemmung.md) — erst gemischte, starke Knicke trennen Rauschen von Krümmung; eigener Auslöser, nie zur Summe.
 - [Prüfsonde liegt im Vieleck](pruefsonde-liegt-im-vieleck.md) — Säule gegen den Innenkreis der Werkzeugwand, „zugedeckt“ zählen statt allen Proben glauben.
 - [Rückfallregel an ihren Treffern messen](rueckfallregel-an-ihren-treffern-messen.md) — zählen, was sie verwirft; ein Fortschritt über der Schweißtoleranz ist Rauschen.
+- [Exakte Differenz scheitert still](exakte-differenz-scheitert-still.md) — gültig laut BRepCheck, aber undichter Zwilling; am Zwilling prüfen, Überstand wechseln.
 - [Kurzes Splinestück besteht jede Kreisprüfung](kurzes-splinestueck-besteht-jede-kreispruefung.md) — erst gleicher Radius über das ganze Stück plus genaue Ecken belegen einen Bogen.
 - [Sonde ohne exec löscht nichts](sonde-ohne-exec-loescht-nichts.md) · [rendercanvas-Takt bremst nicht](rendercanvas-takt-bremst-nicht.md) — DeferredDelete selbst zustellen; max_fps=30 gemessen folgenlos.
 - [Analyse je Stück am Gitterwerk messen](neue-analyse-je-stueck-am-gitterwerk-messen.md) · [buffer: Methode 16, Funktion 8 Segmente](shapely-buffer-methode-16-funktion-8-segmente.md) — Kanalfrage am Eiffelturm 30 min; Aufrufe zählen, je Schicht bündeln.

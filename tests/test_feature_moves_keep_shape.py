@@ -1335,3 +1335,49 @@ def test_a_bore_in_a_thin_plate_is_no_edge(profile: Profile, kernel: str) -> Non
     ):
         _changed, findings = _evaluated(source, profile, op, **params)
         assert "bore.over_the_edge" not in _warnings(findings), (op, findings)
+
+
+# --- Eine still gescheiterte exakte Differenz --------------------------------------------
+
+
+def _cut_with_twins(monkeypatch: pytest.MonkeyPatch, closed: list[bool]) -> list[float]:
+    """Eine exakte Differenz, deren Zwilling der Reihe nach ``closed`` antwortet —
+    zurück kommen die Überstände, mit denen geschnitten wurde."""
+    from types import SimpleNamespace
+
+    from app.core.brep import edit
+
+    answers = iter(closed)
+    monkeypatch.setattr(
+        prepare_ops, "as_mesh_data", lambda _body: SimpleNamespace(is_watertight=next(answers))
+    )
+    plate = edit.box(20.0, 20.0, 5.0)
+    overlaps: list[float] = []
+
+    def tool_with(overlap: float) -> Any:
+        overlaps.append(overlap)
+        return edit.moved(edit.cylinder(4.0, 7.0), (0.0, 0.0, -1.0))
+
+    prepare_ops._exact_chain_cut_holding(plate, tool_with)
+    return overlaps
+
+
+def test_a_cut_that_failed_silently_is_retried_with_more_overlap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OpenCASCADE sagt nicht immer, wenn es nicht schneiden konnte: An der
+    Lochplatte gs-100 kam die untere Schraubbohrung, 1,5 mm nach oben
+    versetzt, mit dem Volumen des gefüllten Körpers und einem undichten
+    Zwilling zurück, und ``BRepCheck`` nannte alles gültig. Mit doppeltem
+    Überstand über die offenen Mündungen hielt die Differenz. Ein Ergebnis
+    gilt deshalb nur mit dichtem Zwilling, und sonst wird wiederholt; hält
+    keiner der drei Überstände, sagt die Handlung ab.
+    """
+    from app.core.errors import GeometryError
+
+    overlap = prepare_ops.FEATURE_OVERLAP
+    assert _cut_with_twins(monkeypatch, [True]) == [overlap]
+    assert _cut_with_twins(monkeypatch, [False, True]) == [overlap, 2.0 * overlap]
+    with pytest.raises(GeometryError) as refused:
+        _cut_with_twins(monkeypatch, [False, False, False])
+    assert refused.value.detail == prepare_ops.CUT_DID_NOT_HOLD
