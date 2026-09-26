@@ -797,6 +797,11 @@ class GfxRenderer(Renderer):
         self._interacting = False
         #: Ob das zuletzt gezeichnete Bild die leichte Stufe trug.
         self._reduced_frame = False
+        #: Angehaltene Bilder (:meth:`hold_frames`): ob angehalten ist, ob in
+        #: der Zeit eines bestellt wurde, und die Frist, die es beendet.
+        self._frames_held = False
+        self._frame_wanted = False
+        self._hold_timer: Any = None
         self._occlusion: Any = None
         self._occlusion_radius = 0.0
         self._occlusion_bias = 0.0
@@ -827,7 +832,7 @@ class GfxRenderer(Renderer):
             self._kit.append((light, math.radians(elevation), math.radians(azimuth)))
         self.set_camera_pose(CameraPose((0.0, 0.0, 10.0), (0.0, 0.0, 0.0), (0.0, 1.0, 0.0)))
         if self.widget is not None:
-            self._canvas.request_draw(self._draw)
+            self._canvas.request_draw(self._frame)
 
     # --- Qt -------------------------------------------------------------------------
 
@@ -1839,6 +1844,9 @@ class GfxRenderer(Renderer):
         self._renderer.flush()
 
     def render(self) -> None:
+        if self._frames_held:
+            self._frame_wanted = True
+            return
         if self.widget is not None:
             # **Bestellt, nicht erzwungen** (RM-232, 25.09.2026). Bis dahin
             # zeichnete ``render()`` synchron wie VTKs ``Render()`` — damit
@@ -1857,15 +1865,60 @@ class GfxRenderer(Renderer):
             # (``request_draw``), deshalb steht es hier nicht. Wer das Bild
             # sofort braucht, ruft :meth:`render_now`. Vor dem ersten Anzeigen
             # bleibt der Wunsch stehen, und der erste Aufbau zeichnet ihn.
-            self._canvas.request_draw(self._draw)
+            self._canvas.request_draw(self._frame)
             return
         self._draw()
 
     def render_now(self) -> None:
+        # Wer das Bild jetzt verlangt, bekommt es — auch aus einem Anhalten.
+        self._frames_held = False
+        self._frame_wanted = False
         if self.widget is not None:
-            self._canvas.request_draw(self._draw)
+            self._canvas.request_draw(self._frame)
             if self.widget.isVisible():
                 self._canvas.force_draw()
+            return
+        self._draw()
+
+    def hold_frames(self, milliseconds: int) -> None:
+        """Bestellte Bilder zurückhalten, bis :meth:`release_frames` kommt (RM-232).
+
+        **Ein Klick an einer Bohrung malte zwei Bilder**: eines nach dem
+        synchronen Teil — neue Auswahl, noch ohne Maße — und eines, sobald der
+        Arbeiter die Fläche gebracht hatte. Das erste kostete den Hauptfaden
+        12 bis 14 ms, und die Fläche wartete dahinter. Angehalten wird auch,
+        was schon bestellt war: rendercanvas ruft dann :meth:`_frame`, und ein
+        Aufruf ohne erworbene Textur präsentiert nichts — das letzte Bild
+        bleibt stehen.
+
+        Die Frist läuft hier und nicht beim Aufrufer: Ein Anhalten, das
+        niemand freigibt, endet trotzdem. Ohne Fenster geschieht nichts.
+        """
+        if self.widget is None:
+            return
+        from PySide6.QtCore import QTimer
+
+        self._frames_held = True
+        if self._hold_timer is None:
+            self._hold_timer = QTimer(self.widget)
+            self._hold_timer.setSingleShot(True)
+            self._hold_timer.timeout.connect(self.release_frames)
+        self._hold_timer.start(max(0, int(milliseconds)))
+
+    def release_frames(self) -> None:
+        if self._hold_timer is not None:
+            self._hold_timer.stop()
+        if not self._frames_held:
+            return
+        self._frames_held = False
+        if self._frame_wanted:
+            self._frame_wanted = False
+            self.render()
+
+    def _frame(self) -> None:
+        """Was rendercanvas zur Malrunde ruft — ein angehaltenes Bild bleibt bestellt."""
+        if self._frames_held:
+            self._frame_wanted = True
             return
         self._draw()
 

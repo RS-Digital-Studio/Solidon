@@ -145,7 +145,9 @@ class RecordingRenderer(Renderer):
     ``labels``), den Namen und die Argumente — Stil, Farbe, Breite, Zellfarben —
     und das entstandene Element. ``names()``, ``colour_of()`` und ``style_of()``
     lesen darin; ``labelled`` sammelt die Beschriftungen, ``removed`` die
-    entfernten Elemente, ``renders`` zählt die Bilder.
+    entfernten Elemente, ``renders`` zählt die Bilder, ``holds`` und
+    ``releases`` das Anhalten der Bilder (angehalten wird hier nichts — die
+    Zählung der Bilder bleibt, wie die Tests sie kennen).
 
     Die Kamera ist eine Stellung ohne Optik: ``world_to_display`` skaliert x
     und y mit ``scale`` und zählt y von oben; ``display_to_world`` rechnet
@@ -161,6 +163,8 @@ class RecordingRenderer(Renderer):
         self.labelled: list[list[str]] = []
         self.removed: list[Item] = []
         self.renders = 0
+        self.holds: list[int] = []
+        self.releases = 0
         self.interacting = False
         self.reduced_renders = 0
         self._reduced = False
@@ -431,6 +435,12 @@ class RecordingRenderer(Renderer):
         # Wie der pygfx-Renderer: leicht nur mit eingeschalteter Verdeckung.
         self._reduced = self.interacting and bool(self.occlusion) and self.occlusion[-1][0]
         self.reduced_renders += int(self._reduced)
+
+    def hold_frames(self, milliseconds: int) -> None:
+        self.holds.append(int(milliseconds))
+
+    def release_frames(self) -> None:
+        self.releases += 1
 
     def set_interacting(self, active: bool) -> None:
         self.interacting = bool(active)

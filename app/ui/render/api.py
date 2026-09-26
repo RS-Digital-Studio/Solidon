@@ -539,6 +539,21 @@ class Renderer(ABC):
         """
         self.render()
 
+    def hold_frames(self, milliseconds: int) -> None:
+        """Bestellte Bilder zurückhalten — bis :meth:`release_frames`, höchstens so lange.
+
+        Für einen Zustandswechsel, dessen Rest gleich aus einem Arbeiter kommt:
+        Ein Bild dazwischen zeigte eine halbe Auswahl und kostete den
+        Hauptfaden ein ganzes Bild (``GfxRenderer``). Die Frist gehört dem
+        Renderer, nicht dem Aufrufer — ein Anhalten, das niemand freigibt,
+        endet trotzdem. Ohne Fenster geschieht nichts.
+        """
+        return None
+
+    def release_frames(self) -> None:
+        """Angehaltene Bilder freigeben: Was bestellt war, kommt jetzt als ein Bild."""
+        return None
+
     @abstractmethod
     def screenshot(self) -> np.ndarray:
         """Das Bild als ``(h, w, 3)`` uint8."""

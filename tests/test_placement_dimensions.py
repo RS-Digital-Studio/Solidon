@@ -155,6 +155,7 @@ def test_a_moved_draft_seats_its_mouth_on_the_face_and_not_beside_it():
         _source_feature=lambda: (entry, hole),
         spec_of=lambda: REGISTRY.get("slot_hole"),
         session=SimpleNamespace(placement_async=lambda compute, done, failed: work.append(compute)),
+        _hold_frames=lambda: None,
     )
 
     PlacementFlow._begin_at_feature(flow)

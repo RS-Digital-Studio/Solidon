@@ -1207,6 +1207,13 @@ class _Dimensions:
 #: seinen alten verlässt — in Vielfachen der Feldhöhe (``PlacementFlow``).
 STICKY_FIELDS: Final = 2.0
 
+#: Wie lange ein Klick an einem Merkmal sein Bild zurückhält, bis die Fläche da
+#: ist (:meth:`PlacementFlow._hold_frames`). So lange, wie die Sitzsuche an einem
+#: gewöhnlichen Körper braucht; länger, und ein großer Körper zeigte seine neue
+#: Auswahl später als ohne Anhalten — dort kommt das Bild nach der Frist, und die
+#: Fläche folgt mit einem zweiten, wie bisher.
+FRAME_HOLD_MS: Final = 50
+
 
 class PlacementFlow(QObject):
     """Eine laufende Platzierung gehört genau einem vorhandenen Träger.
@@ -1336,6 +1343,8 @@ class PlacementFlow(QObject):
         hinzusetzen. Beim Setzen einer neuen Bohrung wird er nie gesetzt, dort
         ändert sich nichts."""
         self._seat_waits: int | None = None
+        #: Ob dieser Fluss das Bild der Ansicht gerade anhält (:meth:`_hold_frames`).
+        self._frames_held = False
         """Für welche Anfrage (:attr:`_serial`) die Trägerfläche von selbst kommt.
 
         **Bis dahin steht die Maßkarte nicht im Bild** (RM-232, 25.09.2026).
@@ -1655,6 +1664,31 @@ class PlacementFlow(QObject):
         self._measure_box.setMaximumSize(max(width, 1), max(room.height(), 1))
         self._measure_box.adjustSize()
         self._measure_box.setVisible(not self._seat_is_coming())
+
+    def _hold_frames(self) -> None:
+        """Das Bild anhalten, bis die Fläche am Merkmal da ist (RM-232).
+
+        **Ein Bild je Klick statt zweier.** Nach dem synchronen Teil eines
+        Bohrungsklicks malte die Ansicht die neue Auswahl ohne Maße, und die
+        Fläche aus dem Arbeiter wartete hinter diesem Bild auf den Hauptfaden
+        (12 bis 14 ms am Wabenhalter); das zweite Bild brachte dann die Maße.
+        Angehalten wird im Renderer mit Frist (``FRAME_HOLD_MS``), freigegeben
+        nach :meth:`_settle`, beim Abbau und bei jeder Kamerabewegung — was
+        bis dahin bestellt war, kommt als ein Bild.
+        """
+        renderer = self.viewport.renderer
+        if renderer is not None:
+            renderer.hold_frames(FRAME_HOLD_MS)
+            self._frames_held = True
+
+    def _release_frames(self) -> None:
+        """Das angehaltene Bild freigeben (:meth:`_hold_frames`)."""
+        if not self._frames_held:
+            return
+        self._frames_held = False
+        renderer = self.viewport.renderer if isValid(self.viewport) else None
+        if renderer is not None:
+            renderer.release_frames()
 
     def _seat_is_coming(self) -> bool:
         """Ob die Trägerfläche am Merkmal gerade gerechnet wird (:attr:`_seat_waits`)."""
@@ -2038,6 +2072,7 @@ class PlacementFlow(QObject):
 
     def _stop(self) -> None:
         self.active = False
+        self._release_frames()
         self.viewport.clear_placement_resume(self._resume)
         self._resume_press = None
         self._reference_pick = None
@@ -2783,6 +2818,7 @@ class PlacementFlow(QObject):
         # :attr:`_seated_at_feature`.
         self._seated_at_feature = True
         self._seat_waits = stamp
+        self._hold_frames()
         mesh = for_a_worker(entry.mesh)
         values = self.dialog.values()
         target = None
@@ -2818,27 +2854,35 @@ class PlacementFlow(QObject):
                 return
             if self._seat_waits == stamp:
                 self._seat_waits = None
-            if not self.active or stamp != self._serial:
-                return
-            if value is None:
-                self._no_seat_at_feature()
-                return
-            self._prepared, self._surface, self._own_mouth = value
-            self._centre_id = self._surface.centres[0].feature_id if self._surface.centres else ""
-            self._prepared_mesh = entry.mesh
-            self._patch_faces = frozenset(self._surface.face_indices)
-            self._object_id = object_id
-            self._distance_valid = True
-            self._set_values()
-            self._settle()
+            try:
+                if not self.active or stamp != self._serial:
+                    return
+                if value is None:
+                    self._no_seat_at_feature()
+                    return
+                self._prepared, self._surface, self._own_mouth = value
+                self._centre_id = (
+                    self._surface.centres[0].feature_id if self._surface.centres else ""
+                )
+                self._prepared_mesh = entry.mesh
+                self._patch_faces = frozenset(self._surface.face_indices)
+                self._object_id = object_id
+                self._distance_valid = True
+                self._set_values()
+                self._settle()
+            finally:
+                self._release_frames()
 
         def failed(_detail: str) -> None:
             if not isValid(self) or self._disposed:
                 return
             if self._seat_waits == stamp:
                 self._seat_waits = None
-            if self.active and stamp == self._serial:
-                self._no_seat_at_feature()
+            try:
+                if self.active and stamp == self._serial:
+                    self._no_seat_at_feature()
+            finally:
+                self._release_frames()
 
         self.session.placement_async(on_the_copy(mesh, compute), done, failed)
 
@@ -2913,6 +2957,7 @@ class PlacementFlow(QObject):
             return
         stamp = self._serial
         self._seat_waits = stamp
+        self._hold_frames()
         object_id = entry.id
         first = int(face.face_indices[0]) if face is not None and face.face_indices else -1
         features = entry.features
@@ -2949,45 +2994,55 @@ class PlacementFlow(QObject):
                 return
             if self._seat_waits == stamp:
                 self._seat_waits = None
-            if not self.active or stamp != self._serial:
-                return
-            if value is None or self._surface is not None:
-                # Ohne Sitz zielt der Zeiger; die Maßkarte gehört dann an
-                # ihren Rückfallplatz.
-                self.redraw()
-                return
-            self._prepared, self._surface, in_the_hole = value
-            self._own_mouth = None
-            self._centre_id = ""
-            self._prepared_mesh = entry.mesh
-            self._patch_faces = frozenset(self._surface.face_indices)
-            self._object_id = object_id
-            self._distance_valid = True
-            self._seated_by_default = True
-            self._set_values()
-            self._settle()
-            # Der Satz sagt, was hier anders ist als nach einem Klick: Der
-            # Griff verschiebt, der Klick setzt um — und übernimmt nicht.
-            self._note.setText(
-                tr(
-                    "Sitzt in der Bohrung · Griff: verschieben · Klick: umsetzen · "
-                    "Übernehmen: ausführen · Esc: zurück"
-                )
-                if in_the_hole
-                else tr(
-                    "Sitzt auf der Fläche · Griff: verschieben · Klick: umsetzen · "
-                    "Übernehmen: ausführen · Esc: zurück"
-                )
-            )
+            try:
+                self._seated_on_a_face(value, stamp, object_id, entry)
+            finally:
+                self._release_frames()
 
         def failed(_detail: str) -> None:
             # Eine Fläche, auf der nichts sitzen kann, ist kein Fehler: Dann
             # zielt der Zeiger, wie vor diesem Weg auch.
             if isValid(self) and not self._disposed and self._seat_waits == stamp:
                 self._seat_waits = None
-                self.redraw()
+                try:
+                    self.redraw()
+                finally:
+                    self._release_frames()
 
         self.session.placement_async(on_the_copy(mesh, compute), done, failed)
+
+    def _seated_on_a_face(self, value: Any, stamp: int, object_id: str, entry: SceneObject) -> None:
+        """Die Antwort der Sitzsuche aus :meth:`_begin_on_a_face` übernehmen."""
+        if not self.active or stamp != self._serial:
+            return
+        if value is None or self._surface is not None:
+            # Ohne Sitz zielt der Zeiger; die Maßkarte gehört dann an
+            # ihren Rückfallplatz.
+            self.redraw()
+            return
+        self._prepared, self._surface, in_the_hole = value
+        self._own_mouth = None
+        self._centre_id = ""
+        self._prepared_mesh = entry.mesh
+        self._patch_faces = frozenset(self._surface.face_indices)
+        self._object_id = object_id
+        self._distance_valid = True
+        self._seated_by_default = True
+        self._set_values()
+        self._settle()
+        # Der Satz sagt, was hier anders ist als nach einem Klick: Der
+        # Griff verschiebt, der Klick setzt um — und übernimmt nicht.
+        self._note.setText(
+            tr(
+                "Sitzt in der Bohrung · Griff: verschieben · Klick: umsetzen · "
+                "Übernehmen: ausführen · Esc: zurück"
+            )
+            if in_the_hole
+            else tr(
+                "Sitzt auf der Fläche · Griff: verschieben · Klick: umsetzen · "
+                "Übernehmen: ausführen · Esc: zurück"
+            )
+        )
 
     def _hole_to_seat_in(self, entry: SceneObject) -> Feature | None:
         """Die Bohrung, in die ein Baustein von selbst gesetzt wird — sonst ``None``.
@@ -4353,7 +4408,11 @@ class PlacementFlow(QObject):
         Wer ``cameraMoved`` sendet, zeichnet danach genau einmal
         (``kamera.md``). Bis zum 21.09.2026 zeichnete der Fluss hier selbst,
         und je Radraste kamen zwei Bilder und je Zugende drei.
+
+        Wer die Kamera bewegt, während die Fläche noch gerechnet wird, bekommt
+        sein Bild sofort (:meth:`_hold_frames`).
         """
+        self._release_frames()
         self.redraw(draw=False)
 
     def redraw(self, *, draw: bool = True) -> None:
@@ -4369,6 +4428,21 @@ class PlacementFlow(QObject):
                 if item is not None:
                     item.set_visible(False)
             self.viewport.grip_placement(None)
+            if draw:
+                self._draw_soon()
+            return
+        if self._seat_is_coming():
+            # **Solange die Fläche am Merkmal rechnet, steht nichts** (RM-232).
+            # Sie wird nur aus :meth:`start` gerechnet, und dort liegt alles
+            # Schwebende verborgen; eine Neuzeichnung davor legte Leiste und
+            # Felder, baute den Griff ab, den :meth:`_settle` gleich wieder
+            # aufbaut, und das zwei- bis dreimal je Bohrungsklick für ein Bild,
+            # das angehalten ist (:meth:`_hold_frames`). Nur das Werkzeug, das
+            # der Arbeiter inzwischen gebracht hat, bleibt verborgen, bis die
+            # Fläche es trägt.
+            for item in (self._tool, self._addition):
+                if item is not None:
+                    item.set_visible(False)
             if draw:
                 self._draw_soon()
             return

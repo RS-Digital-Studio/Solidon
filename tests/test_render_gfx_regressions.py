@@ -1180,3 +1180,51 @@ def test_display_to_world_is_affine_in_a_fixed_depth(renderer: GfxRenderer, para
         assert np.allclose(direct, derived, atol=1e-6 * max(1.0, float(np.abs(direct).max()))), (
             f"{(x, y)}: {direct} gegen {derived}"
         )
+
+
+def test_held_frames_arrive_as_one_after_the_release(qt_app: object, renderer: GfxRenderer) -> None:
+    """Angehaltene Bilder kommen als eines, und die Frist endet das Anhalten (RM-232).
+
+    Angehalten wird auch, was vor dem Anhalten bestellt war: rendercanvas ruft
+    dann ``_frame``, und dort bleibt es bestellt. Wer das Bild jetzt verlangt
+    (``render_now``), bekommt es auch aus einem Anhalten heraus.
+    """
+    import time
+
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtWidgets import QWidget
+
+    stand_in = QWidget()
+    ordered: list[object] = []
+    drawn: list[int] = []
+    renderer.widget = stand_in
+    renderer._canvas.request_draw = lambda function=None: ordered.append(function)  # type: ignore[method-assign]
+    renderer._draw = lambda: drawn.append(1)  # type: ignore[method-assign]
+    try:
+        renderer.hold_frames(60_000)
+        renderer.render()
+        renderer.render()
+        renderer._frame()
+        assert ordered == [] and drawn == [], "angehalten, auch was schon bestellt war"
+        renderer.release_frames()
+        assert len(ordered) == 1, "drei Bestellungen, ein Bild"
+        renderer._frame()
+        assert drawn == [1]
+        renderer.release_frames()
+        assert len(ordered) == 1, "ein zweites Freigeben bestellt nichts"
+
+        renderer.hold_frames(1)
+        renderer.render()
+        deadline = time.monotonic() + 5.0
+        while renderer._frames_held and time.monotonic() < deadline:
+            QCoreApplication.processEvents()
+            time.sleep(0.005)
+        assert not renderer._frames_held and len(ordered) == 2, "die Frist endet das Anhalten"
+
+        renderer.hold_frames(60_000)
+        renderer.render_now()
+        assert not renderer._frames_held and len(ordered) == 3, "jetzt heißt jetzt"
+    finally:
+        renderer.release_frames()
+        renderer.widget = None
+        stand_in.deleteLater()

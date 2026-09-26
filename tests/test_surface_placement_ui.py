@@ -2132,6 +2132,88 @@ def test_the_next_hole_takes_over_the_floating_widgets_of_the_last(qt_app: QAppl
         window.release()
 
 
+def _another_hole(window, object_id: str, hole: str) -> str:
+    """Eine zweite Bohrung desselben Körpers."""
+    entry = window.session.last_result.scene.objects[object_id]
+    return next(
+        identifier
+        for identifier, feature in entry.features.items()
+        if feature.kind == "hole" and identifier != hole
+    )
+
+
+def test_a_click_at_a_hole_holds_the_picture_until_its_surface_is_there(
+    qt_app: QApplication,
+) -> None:
+    """Ein Bild je Bohrungsklick statt zweier (RM-232).
+
+    Nach dem synchronen Teil malte die Ansicht die neue Auswahl ohne Maße,
+    und die Fläche aus dem Arbeiter wartete hinter diesem Bild; das zweite
+    brachte die Maße. Der Fluss hält das Bild an, solange er die Fläche am
+    Merkmal rechnet, und gibt es frei, sobald sie steht — ein Anhalten, eine
+    Freigabe, mit der Frist aus ``FRAME_HOLD_MS``.
+    """
+    from app.ui.placement_flow import FRAME_HOLD_MS
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, first_hole = _a_selected_hole(window)
+        renderer = window.viewport.renderer
+        first = _measures_in_the_view(window)
+        assert first is not None and first._surface is not None
+        assert renderer.holds and set(renderer.holds) == {FRAME_HOLD_MS}
+        assert renderer.releases == len(renderer.holds), "freigegeben, sobald die Fläche steht"
+        window.object_tree.select_feature(object_id, _another_hole(window, object_id, first_hole))
+        assert renderer.releases == len(renderer.holds) - 1, "angehalten, solange sie rechnet"
+        second = _measures_in_the_view(window)
+        assert second is not None and second is not first and second._surface is not None
+        assert renderer.releases == len(renderer.holds) and not second._frames_held
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_the_feature_panel_keeps_measuring_from_hole_to_hole(qt_app: QApplication) -> None:
+    """Zwischen zwei Bohrungen schaltet das Merkmalfenster nicht aus und wieder an (RM-232).
+
+    Der Baum meldet die Auswahl in drei Signalen derselben Runde; das erste
+    räumte die alte Maßgruppe ab und nahm das Fenster aus dem Messen, das
+    zweite schaltete es für die neue wieder hinein — 87 Sichtbarkeitswechsel
+    je Klick am Wabenhalter. Entschieden wird jetzt nach dem letzten Signal
+    (``MainWindow._release_measuring``). Gegenprobe: Wer den Körper wählt,
+    hat danach kein Messen mehr.
+    """
+    window = _window_with_a_renderer()
+    try:
+        object_id, first_hole = _a_selected_hole(window)
+        assert _measures_in_the_view(window) is not None
+        panel = window.feature_panel
+        assert panel.measuring
+        switched: list[bool] = []
+        original = panel.set_measuring
+
+        def recording(active: bool, **kwargs: Any) -> None:
+            switched.append(bool(active))
+            original(active, **kwargs)
+
+        panel.set_measuring = recording  # type: ignore[method-assign]
+        window.object_tree.select_feature(object_id, _another_hole(window, object_id, first_hole))
+        assert False not in switched and panel.measuring, (
+            "die Maßgruppe wechselt, das Messen bleibt"
+        )
+        assert _measures_in_the_view(window) is not None and panel.measuring
+        window.object_tree.select_object(object_id)
+        window.session.wait_for_idle()
+        for _ in range(20):
+            QApplication.processEvents()
+        assert window._quiet_placement is None and not panel.measuring, "ohne Bohrung kein Messen"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_passive_measures_can_be_replaced_but_a_begun_draft_cannot(
     qt_app: QApplication,
 ) -> None:

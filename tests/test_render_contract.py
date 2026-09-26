@@ -795,7 +795,14 @@ def test_render_orders_a_frame_and_render_now_draws_it_at_once() -> None:
         force_draw=lambda: calls.append("sofort"),
     )
     widget = SimpleNamespace(isVisible=lambda: True, update=lambda: calls.append("noch einmal"))
-    stand_in = SimpleNamespace(widget=widget, _canvas=canvas, _draw=lambda: calls.append("direkt"))
+    stand_in = SimpleNamespace(
+        widget=widget,
+        _canvas=canvas,
+        _draw=lambda: calls.append("direkt"),
+        _frame=lambda: None,
+        _frames_held=False,
+        _frame_wanted=False,
+    )
 
     GfxRenderer.render(stand_in)  # type: ignore[arg-type]
     assert calls == ["bestellt"], "am sichtbaren Fenster wird bestellt, nicht gezeichnet"
@@ -803,7 +810,9 @@ def test_render_orders_a_frame_and_render_now_draws_it_at_once() -> None:
     GfxRenderer.render_now(stand_in)  # type: ignore[arg-type]
     assert calls == ["bestellt", "sofort"]
     calls.clear()
-    windowless = SimpleNamespace(widget=None, _draw=lambda: calls.append("direkt"))
+    windowless = SimpleNamespace(
+        widget=None, _draw=lambda: calls.append("direkt"), _frames_held=False
+    )
     GfxRenderer.render(windowless)  # type: ignore[arg-type]
     GfxRenderer.render_now(windowless)  # type: ignore[arg-type]
     assert calls == ["direkt", "direkt"], "ohne Fenster zeichnen beide sofort"

@@ -11939,6 +11939,9 @@ class MainWindow(QMainWindow):
         durch den Fluss zu greifen."""
         self._ending_quiet_placement = False
         """Ob :meth:`end_quiet_placement` gerade einen Fluss abbaut."""
+        self._measuring_to_release = False
+        """Ob das Merkmalfenster nach dieser Auswahlrunde aus dem Messen geht
+        (:meth:`_release_measuring`)."""
         self._quiet_target: tuple[str, str | None] | None = None
         """Körper und Merkmal, deren Stelle die laufende Platzierung bearbeitet."""
         self._quiet_order: Callable[[str, Mapping[str, Any]], _PreviewOrder | None] | None = None
@@ -15145,6 +15148,33 @@ class MainWindow(QMainWindow):
         return False
 
     def _on_features_selected(self, chosen: list[Any]) -> None:
+        """Der letzte Empfänger einer Auswahlrunde — danach steht fest, ob gemessen wird."""
+        try:
+            self._show_chosen_features(chosen)
+        finally:
+            self._release_measuring()
+
+    def _release_measuring(self) -> None:
+        """Das Merkmalfenster aus dem Messen nehmen, wenn keine Maßgruppe nachkam.
+
+        **Beim Wechsel von Bohrung zu Bohrung bleibt es im Messen** (RM-232).
+        Der Baum meldet eine Auswahl in drei Signalen derselben Runde
+        (``ObjectTree._on_selection``); das erste räumte die Maßgruppe der
+        alten Bohrung ab und schaltete das Fenster aus dem Messen, das zweite
+        baute die neue auf und schaltete es wieder hinein — 87 Sichtbarkeits-
+        wechsel je Klick über dieselben Zeilen. Der Abbau merkt sich das
+        Ausschalten nur vor (``measuring_follows``), und entschieden wird hier,
+        nach dem letzten Signal: Steht eine neue Maßgruppe, bleibt es, sonst
+        geht das Fenster aus dem Messen. Gemalt wird dazwischen nichts — die
+        Runde ist synchron.
+        """
+        if not self._measuring_to_release:
+            return
+        self._measuring_to_release = False
+        if self._quiet_placement is None and self.feature_panel.measuring:
+            self.feature_panel.set_measuring(False)
+
+    def _show_chosen_features(self, chosen: list[Any]) -> None:
         """Abstand im selben Körper, manuelle Prüfbeziehung zwischen zwei Körpern."""
         shown_this_round, self._fields_this_round = self._fields_this_round, None
         if chosen:
@@ -16070,7 +16100,19 @@ class MainWindow(QMainWindow):
     def _place_from_feature_panel(
         self, op: str, params: dict[str, Any], *, editing: bool = False
     ) -> None:
-        """Eine passive Maßgruppe bindet beim ersten Eingriff ihren vollständigen Auftrag."""
+        """Eine passive Maßgruppe bindet beim ersten Eingriff ihren vollständigen Auftrag.
+
+        Die vorige Maßgruppe geht dabei ab, ohne das Merkmalfenster aus dem
+        Messen zu nehmen; ob es danach misst, entscheidet
+        :meth:`_release_measuring` hier am Ende (RM-232).
+        """
+        try:
+            self._place_measures(op, params, editing=editing)
+        finally:
+            self._release_measuring()
+
+    def _place_measures(self, op: str, params: dict[str, Any], *, editing: bool) -> None:
+        """Der Aufbau hinter :meth:`_place_from_feature_panel`."""
         from app.ui.panels import feature_field_values, refresh_feature_fields
         from app.ui.placement_flow import PlacementFlow, QuietHost
 
@@ -16093,7 +16135,7 @@ class MainWindow(QMainWindow):
         ):
             return
         self._drop_feature_preview()
-        self.end_quiet_placement()
+        self.end_quiet_placement(measuring_follows=True)
         result = self.session.last_result
         body = result.scene.objects.get(object_id) if result is not None else None
         feature_id = str(params.get("at_feature") or self.object_tree.selected_feature() or "")
@@ -16416,11 +16458,15 @@ class MainWindow(QMainWindow):
             host.begin_edit()
         show_values()
 
-    def _end_changed_quiet_placement(self) -> None:
-        """Eine Platzierung räumen, sobald die Auswahl eine andere Stelle meint."""
+    def _end_changed_quiet_placement(self, *, measuring_follows: bool = False) -> None:
+        """Eine Platzierung räumen, sobald die Auswahl eine andere Stelle meint.
+
+        ``measuring_follows``: Die Runde meldet noch das Merkmal, und ob danach
+        gemessen wird, entscheidet :meth:`_release_measuring`.
+        """
         selected = (self.object_tree.selected(), self.object_tree.selected_feature())
         if self._quiet_target is not None and self._quiet_target != selected:
-            self.end_quiet_placement()
+            self.end_quiet_placement(measuring_follows=measuring_follows)
 
     def _hand_quiet_placement_to_panel(self, op: str, values: dict[str, Any]) -> None:
         """Eine Koordinate senkrecht zur Fläche beendet die Platzierung — die Zahlen bleiben.
@@ -16434,7 +16480,7 @@ class MainWindow(QMainWindow):
         self.feature_panel.take_values(op, values)
         self._on_feature_values_changed(op, values)
 
-    def end_quiet_placement(self) -> None:
+    def end_quiet_placement(self, *, measuring_follows: bool = False) -> None:
         """Eine laufende Platzierung ohne Dialog beenden und abräumen.
 
         **Sie hat kein Fenster, das sie schließen könnte**, und damit auch
@@ -16461,7 +16507,9 @@ class MainWindow(QMainWindow):
                 flow.dispose()
             finally:
                 self._ending_quiet_placement = False
-        if self.feature_panel.measuring:
+        if measuring_follows:
+            self._measuring_to_release = True
+        elif self.feature_panel.measuring:
             self.feature_panel.set_measuring(False)
         self.viewport.set_feature_gizmo_blocked(False)
         self._drop_feature_preview()
@@ -20704,7 +20752,9 @@ class MainWindow(QMainWindow):
                 # nach dieser Runde steht fest, ob sie wirklich leer bleibt.
                 QTimer.singleShot(0, self, self._end_changed_quiet_placement)
             else:
-                self._end_changed_quiet_placement()
+                # Kommt der Merkmalsempfänger noch (``settle_actions=False``,
+                # der Weg aus dem Baum), entscheidet er übers Messen.
+                self._end_changed_quiet_placement(measuring_follows=not settle_actions)
         # **Alle gewählten Körper, nicht nur der erste.** Hier stand
         # ``select(object_id)`` — die Kennung des ersten Eintrags —, während
         # die Statuszeile drei Zeilen weiter unten mit ``selected_objects()``
