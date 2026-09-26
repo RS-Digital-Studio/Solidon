@@ -25,9 +25,11 @@ venv/
 /.venv-video/
 /.voices/
 
-# Die erzeugten Videos. Sie entstehen aus tools/make_video.py neu, und ein
-# Repository ist kein Ablageort für Megabytes, die ein Aufruf wiederherstellt.
-/marketing/video/
+# Der ganze Marketing-Ordner liegt nur lokal (Entscheidung Robert,
+# 26.09.2026): Pressemails, Kampagnentexte, Kanzleianfragen und die Bilder
+# dazu gehören nicht ins Repository. Die erzeugten Videos darunter entstehen
+# ohnehin aus tools/make_video.py neu.
+/marketing/
 
 # --- Übersetzte Erweiterungen -------------------------------------------------
 # Die Konturverkettung der Schichtanalyse (app/core/slice/_chain.pyx) wird mit
