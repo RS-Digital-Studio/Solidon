@@ -145,13 +145,13 @@
           <tr><th>Model</th><th>Graphics memory</th><th>Check and suite</th></tr>
         </thead>
         <tbody>
-          <tr><td><b>qwen3.5:9b</b></td><td>7.4&nbsp;GB — from an 8&nbsp;GB card</td><td>Check 7 of 8, suite 18 of 39, about 6&nbsp;s per request</td></tr>
+          <tr><td><b>qwen3.5:9b</b></td><td>7.4&nbsp;GB — from an 8&nbsp;GB card</td><td>Check 7 of 8, suite 21 of 39, about 6&nbsp;s per request — asks back less often</td></tr>
           <tr><td><b>gpt-oss:20b</b></td><td>12.9&nbsp;GB — 16&nbsp;GB card</td><td>Check 7 of 8, suite only 10 of 39 — for single instructions, about 7&nbsp;s</td></tr>
-          <tr><td><b>qwen3:14b</b></td><td>13.6&nbsp;GB — 16&nbsp;GB card</td><td>Check 8 of 8, suite 18 of 39 with the most parts, about 18&nbsp;s — thinks before every answer</td></tr>
+          <tr><td><b>qwen3:14b</b></td><td>13.6&nbsp;GB — 16&nbsp;GB card</td><td>Check 8 of 8, suite 22 of 39, about 18&nbsp;s — thinks before every answer</td></tr>
           <tr><td><b>qwen3:30b-a3b</b></td><td>more than 16&nbsp;GB — on 16&nbsp;GB the processor takes a third</td><td>Check 8 of 8, about 17&nbsp;s; suite not measured</td></tr>
         </tbody>
       </table>
-      <p class="footnote">Measured on 25 September 2026 on an NVIDIA RTX 4080 with 16&nbsp;GB under Ollama 0.34.3. The check is eight requests that each call for one tool; for one that is deliberately unclear, asking back is the right answer. The suite is 39 everyday tasks, from moving a part to a bracket with parts; with the whole tool set in the same window instead of the offer, qwen3:14b scored 14 there. For a local model, Solidon3D sends the intended tools with all their fields and all others in short form with each request — which makes the task a quarter as long as before. After an answer the model stays loaded for three minutes, so the next question does not wait for it to start. <b>Not recommended</b>, although measured: gemma4:12b (answers without end), granite4.1:8b and llama3.1:8b (guess on an unclear request instead of asking), mistral-nemo and qwen2.5-coder:14b (write the calls out as text). During setup, Solidon3D shows whether Ollama is really using the graphics card.</p>
+      <p class="footnote">Measured on 25 September 2026 on an NVIDIA RTX 4080 with 16&nbsp;GB under Ollama 0.34.3. The check is eight requests that each call for one tool; for one that is deliberately unclear, asking back is the right answer. The suite is 39 everyday tasks, from moving a part to a bracket with parts; with the whole tool set in the same window instead of the offer, qwen3:14b scored 14 there; with a window of 40&nbsp;960 tokens 24, but in three times the time and no longer entirely on the card. For a local model, Solidon3D sends the intended tools with all their fields and all others in short form with each request — which makes the task a quarter as long as before. After an answer the model stays loaded for three minutes, so the next question does not wait for it to start. <b>Not recommended</b>, although measured: gemma4:12b (answers without end), granite4.1:8b and llama3.1:8b (guess on an unclear request instead of asking), mistral-nemo and qwen2.5-coder:14b (write the calls out as text). During setup, Solidon3D shows whether Ollama is really using the graphics card.</p>
     </div>
   </section>
 

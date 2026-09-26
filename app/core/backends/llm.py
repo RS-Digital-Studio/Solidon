@@ -1703,24 +1703,26 @@ def parse_parameter_count(text: str) -> float | None:
 #: Gemessen am 25.09.2026 auf einer RTX 4080 (16 GB), Ollama 0.34.3, mit dem
 #: Werkzeugangebot aus ``agent/offer.py`` und dem kompakten Prompt. Die Suite
 #: (39 Aufträge, ``tools/run_agent_suite.py``) am 26.09.2026 auf freier Karte
-#: zeigt, was die Probe nicht zeigt: gpt-oss:20b trifft in ihr 10, qwen3:14b
-#: und qwen3.5:9b je 18; qwen3:30b-a3b ist dort nicht gemessen.
+#: zeigt, was die Probe nicht zeigt: qwen3:14b trifft in ihr 22, qwen3.5:9b
+#: 21, gpt-oss:20b nur 10 — es fordert nie eine Kurzform an und setzt keinen
+#: Baustein. qwen3:30b-a3b ist dort nicht gemessen. Gezählt mit der Bewertung
+#: vom 26.09.2026 (ein Zwilling ist dieselbe Handlung, ``run_agent_suite``).
 OLLAMA_SUGGESTIONS: Final = (
     (
         "qwen3.5:9b",
         6.6,
         _(
             "Belegt 7,4 GB Grafikspeicher. In der Probe sieben von acht Aufrufen "
-            "richtig, in der Suite 18 von 39 Aufträgen; rund 6 Sekunden je Anfrage."
+            "richtig, in der Suite 21 von 39 Aufträgen; fragt bei Unklarem seltener "
+            "nach. Rund 6 Sekunden je Anfrage."
         ),
     ),
     (
         "qwen3:14b",
         9.3,
         _(
-            "Belegt 13,6 GB Grafikspeicher. In der Probe acht von acht, in der Suite 18 "
-            "von 39 Aufträgen und die meisten Bausteine; denkt vor jeder Antwort, rund 18 "
-            "Sekunden je Anfrage."
+            "Belegt 13,6 GB Grafikspeicher. In der Probe acht von acht, in der Suite 22 "
+            "von 39 Aufträgen; denkt vor jeder Antwort, rund 18 Sekunden je Anfrage."
         ),
     ),
     (

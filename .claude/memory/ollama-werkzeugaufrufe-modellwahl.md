@@ -43,12 +43,20 @@ Listen stehen in `llm.OLLAMA_SUGGESTIONS` und `llm.OLLAMA_UNSUITABLE`.
 **Die Probe sagt nicht, wie gut ein Modell mehrteilige Aufträge schafft** —
 die Suite (39 Fälle) am 26.09.2026, freie Karte, `num_ctx` 32 768:
 
-| Modell, Stand | gut | gefragt | schemagültig | Baustein | Zeit |
-|---|---|---|---|---|---|
-| qwen3:14b mit Angebot | 18 | 2/3 | 82 % | 5/13 | 44 min |
-| qwen3:14b ohne Angebot, derselbe Code | 14 | 1/3 | 76 % | 3/13 | 46 min, 9 Fensterabbrüche |
-| qwen3.5:9b mit Angebot | 18 | 1/3 | 89 % | 2/13 | 16 min |
-| gpt-oss:20b mit Angebot | 10 | 2/3 | 88 % | 0/13 | 22 min, fordert nie eine Kurzform an |
+| Modell, Stand | gut | gefragt | Baustein | Zeit |
+|---|---|---|---|---|
+| qwen3:14b, Endstand (`2c34c2a7`) | 22 | 2/3 | 3/13 | 47 min |
+| qwen3:14b mit Angebot, Zwilling ausführlich | 24 | 2/3 | 5/13 | 44 min |
+| qwen3:14b ohne Angebot, derselbe Code | 14 | 1/3 | 3/13 | 46 min, 9 Fensterabbrüche |
+| qwen3:14b ohne Angebot, `num_ctx` 40 960 | 24 | 2/3 | 5/13 | 149 min, 10 % Prozessor |
+| qwen3.5:9b, Endstand | 21 | 1/3 | 4/13 | 15 min |
+| gpt-oss:20b, Endstand | 10 | 2/3 | 0/13 | 21 min, fordert nie eine Kurzform an |
+
+Gezählt mit der Bewertung vom 26.09.2026: Ein Zwilling ist dieselbe Handlung
+(neun Fälle erwarteten den Netz-Quader, den das Menü seit P2.8 nicht mehr
+anbietet), die Wo-Fälle zählen „Handlungen". Zwei Läufe desselben Stands
+kippten bis zu sieben Fälle in jede Richtung — Unterschiede um zwei sind
+Rauschen.
 
 gpt-oss:20b bestand die Probe mit 7/8 und ist in der Suite das schwächste;
 es bleibt empfohlen, der Satz in der Auswahl sagt „für einzelne Anweisungen".
