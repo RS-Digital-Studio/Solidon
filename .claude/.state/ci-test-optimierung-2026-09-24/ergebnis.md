@@ -69,7 +69,9 @@ Claude; Ergebnis, Befunde an diesem Stand und Messbelege stehen in
 `claude-durchsicht/README.md`. Die drei großen Sammlungsabzüge
 (`ui-collection-*.json`), die Vorher-Kopien der beiden UI-Testdateien, die
 JUnit-Dateien der statischen Läufe und das Windows-Protokoll des Ausgangslaufs
-sind nicht eingecheckt: Sie tragen je mehrere hundert Kilobyte bis Megabyte,
+sind nicht eingecheckt und seit dem 26.09.2026 auch lokal entfernt: Sie trugen
+je mehrere hundert Kilobyte bis Megabyte, die Ergebnisse stehen in den
+`pytest.txt` der Laufordner,
 das Protokoll ist über den Lauf in `tests/data/ci_window_durations.json`
 abrufbar, und der Umzug ist gegen HEAD nachgeprüft (`claude-durchsicht/ui_split_vs_head.py`).
 
