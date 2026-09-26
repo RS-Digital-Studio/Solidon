@@ -26,7 +26,7 @@ it into `website/version.json`.
 - If a bore runs out of the side of the part after moving, duplicating or tilting, Solidon now says so at stepped places too. A copy that was not created is noticed.
 - On ribs and in honeycombs, a tilted bore no longer wrongly reports that it runs over the edge.
 - After moving, tilting or duplicating, the feature panel shows the dimensions the result really has.
-- If a bore cut on an exact body fails without showing it, Solidon notices and computes it again. Before, a broken body could be left behind.
+- If a bore cut fails unnoticed on a body made of faces and edges, such as one from a STEP file, Solidon notices and computes it again. Before, a broken body could be left behind.
 - A slot can be pulled shorter. Pulled to its own width, it becomes a round bore again.
 - The handle at the end of a slot can be grabbed anywhere in the opening, and it no longer jumps to the pointer on the first drag.
 - When parts of a model are stuck into each other, Solidon unites them before computing, as they will be printed. Volume and bores are then right, and the report says so.
@@ -39,7 +39,7 @@ it into `website/version.json`.
 - From bore to bore, the dimensions in the view appear in a third of the time. The first click on a feature no longer freezes the window, even on large models.
 - Clicking a bore shows no intermediate pictures any more: the selection panel and the dimension card appear in place straight away, without jumping.
 - Escape at the dimensions in the view discards the draft and clears the selection, like *Cancel*.
-- A click on *Apply* is no longer silently lost. Only the fields you typed in are read again.
+- A click on *Apply* is no longer silently lost, and dimensions you did not type stay exactly as they were measured.
 - A bore draft you have started is no longer lost along the way: a click in the report, a tool change or Ctrl+Z first asks you to apply or cancel it.
 - Typing a coordinate no longer makes the dimension fields vanish after the second digit.
 
@@ -49,8 +49,8 @@ it into `website/version.json`.
 - If you decline full recognition, *Recognise all features* in the report catches up later. If it takes too long, *Load without feature recognition* loads the model without it.
 - On large models, *Detect features at a spot* finds faces, pockets and flattened areas where it used to report too many triangles. The spot can also be chosen with the keyboard.
 - Large models are recognised much faster: a generated doll's house bed with 1.2 million triangles in 27 seconds instead of 174. Cancel takes effect within a few seconds.
-- Lettering and struts appear in the tree as rounded sides instead of dozens of fillets with changing radii, even after the edges have been split.
-- Outlines made of arcs and lines are recognised arc by arc with their radius. Converting to an exact body is many times faster as a result.
+- Lettering and struts appear in the tree as rounded sides instead of dozens of fillets with changing radii.
+- Outlines made of arcs and lines are recognised arc by arc with their radius. *Convert to faces and edges* is many times faster as a result.
 - A stepped pin no longer counts as a thread. Cylinders and bores that this mix-up had swallowed are back.
 - If a model has more than 5,000 features, Solidon keeps the largest instead of showing none at all. Scaling does not shuffle their names.
 
@@ -65,14 +65,14 @@ it into `website/version.json`.
 - The mesh defects map shows intact areas in the body's colour so that single defects stand out, and carries *Repair* right in the legend.
 - The search for overlaps now reaches the end on models with fans of narrow triangles too. The mesh defects map and repair then see the whole model.
 - A 3MF from PrusaSlicer no longer loads modifiers, support blockers and support enforcers as solid material. A negative volume is subtracted from the part.
-- With *Refine edges*, all features stay and up to four times fewer triangles are created: a drill holder at 1 mm in five seconds instead of fourteen minutes.
-- A closed model stays watertight and keeps its filament colours. With too many triangles, Solidon names an edge length that really works.
+- With *Refine edges*, all features stay and up to four times fewer triangles are created: a drill holder at 1 mm edge length in five seconds instead of fourteen minutes.
+- A closed model stays free of holes and keeps its filament colours. With too many triangles, Solidon names an edge length that really works.
 - Large assemblies import faster: the repair while importing a pirate ship with 1.2 million triangles takes about 30 percent less time.
 
 ### Printing and slicer handover
 
 - The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.
-- Travel comes from the printer too: the Centauri Carbon 2 moves at 500 instead of 150 mm/s between islands, so the nozzle does not ooze along the way.
+- Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, so the nozzle oozes less along the way.
 - A ceiling over a water channel or tunnel no longer draws supports onto the model. If nothing else needs supports on the model, Solidon suggests them from the bed only.
 - New suggestion *Keep channels clear*: once applied, the handover to PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print puts a support blocker in the channels.
 - Grid supports arrive at the slicer as a real grid, with the direction changing each layer, instead of loose lines that shift during printing.

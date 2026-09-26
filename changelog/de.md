@@ -51,7 +51,7 @@ Nutzen da und sonst nichts.
 - Läuft eine Bohrung nach dem Versetzen, Verdoppeln oder Kippen seitlich aus dem Teil, sagt Solidon es auch an abgesetzten Stellen. Eine Kopie, die nicht entstanden ist, fällt auf.
 - Auf Rippen und in Waben meldet eine gekippte Bohrung nicht mehr fälschlich, sie rage über die Kante.
 - Nach dem Versetzen, Kippen oder Verdoppeln zeigt das Merkmalfenster die Maße, die das Ergebnis wirklich hat.
-- Misslingt am exakten Körper ein Bohrungsschnitt, ohne dass es auffällt, erkennt Solidon das und rechnet neu. Vorher konnte ein kaputter Körper zurückbleiben.
+- Misslingt an einem Körper aus Flächen und Kanten, etwa aus einer STEP-Datei, ein Bohrungsschnitt unbemerkt, erkennt Solidon das und rechnet neu. Vorher konnte ein kaputter Körper zurückbleiben.
 - Ein Langloch lässt sich kürzer ziehen. Auf seine eigene Breite gezogen, wird es wieder eine runde Bohrung.
 - Den Griff am Ende eines Langlochs fassen Sie überall in der Öffnung, und er springt beim ersten Zug nicht mehr zur Hand.
 - Stecken Teile eines Modells ineinander, vereinigt Solidon sie vor dem Rechnen, so wie sie gedruckt werden. Volumen und Bohrungen stimmen dann, und der Bericht sagt es.
@@ -64,7 +64,7 @@ Nutzen da und sonst nichts.
 - Von Bohrung zu Bohrung stehen die Maße im Bild in einem Drittel der Zeit. Der erste Klick auf ein Merkmal hält das Fenster auch an großen Modellen nicht mehr an.
 - Ein Klick auf eine Bohrung zeigt keine Zwischenbilder mehr: Auswahlfenster und Maßkarte erscheinen gleich an ihrem Platz, ohne zu springen.
 - Escape an den Maßen im Bild verwirft den Entwurf und hebt die Auswahl auf, wie *Abbrechen*.
-- Ein Klick auf *Übernehmen* verfällt nicht mehr still. Neu gelesen werden nur die Felder, in die Sie getippt haben.
+- Ein Klick auf *Übernehmen* verfällt nicht mehr still, und Maße, die Sie nicht getippt haben, bleiben genau so, wie sie gemessen wurden.
 - Ein begonnener Bohrungsentwurf geht nicht mehr nebenbei verloren: Ein Klick in den Prüfbericht, ein Werkzeugwechsel oder Strg+Z bittet erst, ihn zu übernehmen oder abzubrechen.
 - Beim Tippen einer Koordinate verschwinden die Maßfelder nicht mehr nach der zweiten Ziffer.
 
@@ -74,8 +74,8 @@ Nutzen da und sonst nichts.
 - Wer die volle Erkennung ablehnt, holt sie später mit *Alle Merkmale erkennen* im Prüfbericht nach. Dauert sie zu lange, lädt *Ohne Merkmalserkennung laden* das Modell ohne.
 - An großen Modellen findet *Merkmale an einer Stelle erkennen* Flächen, Taschen und Abflachungen, wo es vorher zu viele Dreiecke meldete. Die Stelle lässt sich auch per Tastatur wählen.
 - Große Modelle werden deutlich schneller erkannt: ein erzeugtes Puppenhausbett mit 1,2 Millionen Dreiecken in 27 statt 174 Sekunden. Abbrechen wirkt dabei nach wenigen Sekunden.
-- Schriftzüge und Streben stehen im Baum als gerundete Seiten statt als Dutzende Verrundungen mit wechselnden Radien, auch nach einer Kantenteilung.
-- Umrisse aus Bögen und Geraden werden Bogen für Bogen mit ihrem Radius erkannt. Das Umwandeln in einen exakten Körper geht dadurch um ein Vielfaches schneller.
+- Schriftzüge und Streben stehen im Baum als gerundete Seiten statt als Dutzende Verrundungen mit wechselnden Radien.
+- Umrisse aus Bögen und Geraden werden Bogen für Bogen mit ihrem Radius erkannt. *In Flächen und Kanten umwandeln* geht dadurch um ein Vielfaches schneller.
 - Ein abgesetzter Zapfen gilt nicht mehr als Gewinde. Zylinder und Bohrungen, die diese Verwechslung verschluckt hatte, sind wieder da.
 - Hat ein Modell mehr als 5 000 Merkmale, behält Solidon die größten, statt ohne jedes Merkmal dazustehen. Skalieren bringt ihre Namen nicht durcheinander.
 
@@ -90,14 +90,14 @@ Nutzen da und sonst nichts.
 - Die Netzfehlerkarte zeigt heile Stellen in der Farbe des Körpers, damit einzelne Fehler auffallen, und trägt *Reparieren* direkt in der Legende.
 - Die Suche nach Überschneidungen kommt auch an Modellen mit Fächern aus schmalen Dreiecken bis zum Ende. Netzfehlerkarte und Reparatur sehen dann das ganze Modell.
 - Eine 3MF aus PrusaSlicer lädt Modifikatoren, Stützsperren und Stützverstärker nicht mehr als festes Material. Eine Aussparung wird vom Teil abgezogen.
-- Mit *Kanten verfeinern* bleiben alle Merkmale erhalten, und es entstehen bis zu viermal weniger Dreiecke: ein Bohrmaschinenhalter bei 1 mm in fünf Sekunden statt vierzehn Minuten.
+- Mit *Kanten verfeinern* bleiben alle Merkmale erhalten, und es entstehen bis zu viermal weniger Dreiecke: ein Bohrmaschinenhalter bei 1 mm Kantenlänge in fünf Sekunden statt vierzehn Minuten.
 - Ein geschlossenes Modell bleibt dabei dicht und behält seine Filamentfarben. Bei zu vielen Dreiecken nennt Solidon eine Kantenlänge, die wirklich geht.
 - Große Baugruppen lesen schneller ein: Die Reparatur beim Einlesen eines Piratenschiffs mit 1,2 Millionen Dreiecken braucht rund 30 Prozent weniger Zeit.
 
 ### Drucken und Übergabe an den Slicer
 
 - Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 sind große Teile so 40 bis 50 Prozent früher fertig.
-- Auch die Leerfahrt kommt vom Drucker: Der Centauri Carbon 2 fährt zwischen den Inseln 500 statt 150 mm/s, damit die Düse unterwegs nicht ausläuft.
+- Auch das Tempo der Leerfahrten kommt vom Drucker: Der Centauri Carbon 2 fährt sie mit 500 statt 150 mm/s, damit die Düse unterwegs weniger ausläuft.
 - Eine Decke über einem Wasserkanal oder Tunnel holt keine Stützen mehr aufs Modell. Braucht sonst keine Stelle Stützen auf dem Modell, schlägt Solidon sie nur vom Bett vor.
 - Neu ist der Vorschlag *Kanäle frei halten*: Übernommen legt die Übergabe an PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print eine Stützsperre in die Kanäle.
 - Gitterstützen kommen als echtes Gitter beim Slicer an, mit wechselnder Richtung je Schicht, statt als lose Linien, die sich im Druck verschieben.

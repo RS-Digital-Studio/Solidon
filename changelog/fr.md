@@ -27,7 +27,7 @@ dans `website/version.json`.
 - Si un perçage sort sur le côté de la pièce après déplacement, duplication ou inclinaison, Solidon le dit aussi aux endroits en retrait. Une copie non créée est signalée.
 - Sur les nervures et dans les nids d'abeille, un perçage incliné ne signale plus à tort qu'il dépasse le bord.
 - Après un déplacement, une inclinaison ou une duplication, le panneau des caractéristiques montre les cotes réelles du résultat.
-- Si une découpe de perçage échoue sans que cela se voie sur un corps exact, Solidon le remarque et recalcule. Avant, un corps cassé pouvait rester.
+- Si une découpe de perçage échoue en silence sur un corps fait de faces et d'arêtes, issu par exemple d'un STEP, Solidon le remarque et recalcule. Avant, un corps cassé pouvait rester.
 - Un trou oblong se laisse raccourcir. Étiré à sa propre largeur, il redevient un perçage rond.
 - La poignée au bout d'un trou oblong se saisit n'importe où dans l'ouverture, et elle ne saute plus vers le pointeur au premier mouvement.
 - Quand des pièces d'un modèle s'emboîtent, Solidon les unit avant le calcul, comme elles seront imprimées. Volume et perçages sont alors justes, et le rapport le dit.
@@ -40,18 +40,18 @@ dans `website/version.json`.
 - D'un perçage à l'autre, les cotes dans la vue apparaissent en un tiers du temps. Le premier clic sur une caractéristique ne fige plus la fenêtre, même sur un grand modèle.
 - Un clic sur un perçage ne montre plus d'images intermédiaires : le panneau de sélection et la carte des cotes apparaissent directement à leur place, sans sauter.
 - Échap sur les cotes dans la vue abandonne le brouillon et désélectionne, comme « Annuler ».
-- Un clic sur « Appliquer » ne se perd plus en silence. Seuls les champs que vous avez saisis sont relus.
+- Un clic sur « Appliquer » ne se perd plus en silence, et les cotes que vous n'avez pas saisies restent exactement telles qu'elles ont été mesurées.
 - Un perçage commencé ne se perd plus en chemin : un clic dans le rapport, un changement d'outil ou Ctrl+Z demande d'abord de l'appliquer ou de l'annuler.
 - Saisir une coordonnée ne fait plus disparaître les champs de cote après le deuxième chiffre.
 
 ### Reconnaissance
 
 - Les caractéristiques sont reconnues d'elles-mêmes jusqu'à 1,5 million de triangles. Jusqu'à cinq millions, Solidon demande d'abord et indique la mémoire nécessaire et la durée sur votre ordinateur.
-- Si vous refusez la reconnaissance complète, « Reconnaître toutes les caractéristiques » la rattrape plus tard depuis le rapport. Trop longue, elle s'évite au chargement.
+- Refusée, la reconnaissance complète se rattrape avec « Reconnaître toutes les caractéristiques » dans le rapport. Trop longue, « Charger sans reconnaissance des caractéristiques » l'omet.
 - Sur les grands modèles, « Détecter les éléments à un endroit » trouve des faces, des logements et des méplats là où il signalait trop de triangles. L'endroit se choisit aussi au clavier.
 - Les grands modèles sont reconnus bien plus vite : un lit de maison de poupée généré, 1,2 million de triangles, en 27 secondes au lieu de 174. Annuler agit en quelques secondes.
-- Lettrages et entretoises apparaissent dans l'arbre comme des côtés arrondis au lieu de dizaines de congés aux rayons changeants, même après une subdivision des arêtes.
-- Les contours faits d'arcs et de droites sont reconnus arc par arc avec leur rayon. La conversion en corps exact est ainsi bien plus rapide.
+- Lettrages et entretoises apparaissent dans l'arbre comme des côtés arrondis au lieu de dizaines de congés aux rayons changeants.
+- Les contours faits d'arcs et de droites sont reconnus arc par arc avec leur rayon. « Convertir en faces et arêtes » est ainsi bien plus rapide.
 - Un tenon épaulé ne passe plus pour un filetage. Les cylindres et les perçages que cette confusion avait avalés sont de retour.
 - Si un modèle a plus de 5 000 caractéristiques, Solidon garde les plus grandes au lieu de n'en afficher aucune. Une mise à l'échelle ne mélange pas leurs noms.
 
@@ -66,14 +66,14 @@ dans `website/version.json`.
 - La carte des défauts de maillage montre les zones saines dans la couleur du corps, pour que chaque défaut ressorte, et porte « Réparer » directement dans la légende.
 - La recherche de recouvrements va jusqu'au bout aussi sur les modèles aux éventails de triangles étroits. Carte des défauts et réparation voient alors tout le modèle.
 - Un 3MF de PrusaSlicer ne charge plus les modificateurs, bloqueurs et renforts de supports comme matière pleine. Un volume négatif est soustrait de la pièce.
-- Avec « Affiner les arêtes », les caractéristiques restent et les triangles sont jusqu'à quatre fois moins nombreux : un support de perceuse à 1 mm en cinq secondes au lieu de quatorze minutes.
+- « Affiner les arêtes » garde toutes les caractéristiques et crée jusqu'à quatre fois moins de triangles : un support de perceuse aux arêtes de 1 mm en cinq secondes au lieu de quatorze minutes.
 - Un modèle fermé reste étanche et garde ses couleurs de filament. S'il y a trop de triangles, Solidon indique une longueur d'arête qui marche vraiment.
 - Les grands assemblages s'importent plus vite : la réparation à l'import d'un bateau pirate de 1,2 million de triangles prend environ 30 % de temps en moins.
 
 ### Imprimer et transmettre au slicer
 
 - Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de tout brider à 40 mm/s. Sur une Centauri Carbon 2, les grandes pièces prennent 40 à 50 % de temps en moins.
-- Le déplacement à vide vient aussi de l'imprimante : la Centauri Carbon 2 va à 500 au lieu de 150 mm/s entre les îlots, pour que la buse ne suinte pas en route.
+- La vitesse des déplacements à vide vient aussi de l'imprimante : la Centauri Carbon 2 se déplace à 500 au lieu de 150 mm/s, pour que la buse suinte moins en route.
 - Un plafond au-dessus d'un canal d'eau ou d'un tunnel n'attire plus de supports sur le modèle. Si rien d'autre n'en a besoin sur le modèle, Solidon les propose depuis le plateau uniquement.
 - Nouvelle suggestion « Garder les canaux libres » : appliquée, elle pose un bloqueur de supports dans les canaux pour PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print.
 - Les supports en grille arrivent au slicer comme une vraie grille, dont la direction change à chaque couche, au lieu de lignes libres qui se décalent à l'impression.

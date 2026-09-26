@@ -26,7 +26,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo sai pela lateral da peça depois de deslocado, duplicado ou inclinado, o Solidon indica-o também em zonas com degraus. Uma cópia que não foi criada é detetada.
 - Em nervuras e favos, um furo inclinado já não indica por engano que passa do bordo.
 - Depois de deslocar, inclinar ou duplicar, o painel de características mostra as cotas que o resultado tem de facto.
-- Se num corpo exato um corte de furo falha sem se notar, o Solidon deteta-o e volta a calcular. Antes podia ficar um corpo danificado.
+- Se num corpo feito de faces e arestas, por exemplo de um ficheiro STEP, um corte de furo falha sem se notar, o Solidon deteta-o e volta a calcular. Antes podia ficar um corpo danificado.
 - Um furo oblongo pode ser encurtado. Puxado até à sua própria largura, volta a ser um furo redondo.
 - A pega na ponta de um furo oblongo agarra-se em qualquer ponto da abertura, e já não salta para o ponteiro no primeiro arrasto.
 - Quando peças de um modelo estão metidas umas nas outras, o Solidon une-as antes de calcular, tal como serão impressas. Volume e furos batem certo, e o relatório di-lo.
@@ -39,18 +39,18 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - De furo em furo, as cotas na vista aparecem num terço do tempo. O primeiro clique numa característica já não congela a janela, mesmo em modelos grandes.
 - Um clique num furo já não mostra imagens intermédias: o painel de seleção e o cartão de cotas aparecem logo no seu lugar, sem saltar.
 - Escape nas cotas da vista descarta o rascunho e retira a seleção, como «Cancelar».
-- Um clique em «Aplicar» já não se perde em silêncio. Só são relidos os campos em que escreveu.
+- Um clique em «Aplicar» já não se perde em silêncio, e as cotas que não escreveu ficam exatamente como foram medidas.
 - Um furo começado já não se perde pelo caminho: um clique no relatório, uma troca de ferramenta ou Ctrl+Z pedem primeiro para o aplicar ou cancelar.
 - Ao escrever uma coordenada, os campos de cota já não desaparecem depois do segundo algarismo.
 
 ### Reconhecimento
 
 - As características são reconhecidas sozinhas até 1,5 milhões de triângulos. Até cinco milhões, o Solidon pergunta antes e indica a memória necessária e a duração no seu computador.
-- Se recusar o reconhecimento completo, «Reconhecer todas as características» recupera-o mais tarde a partir do relatório. Se demorar demasiado, pode carregar sem ele.
+- Recusado o reconhecimento completo, «Reconhecer todas as características» recupera-o no relatório. Se demorar, «Carregar sem reconhecimento de características» salta-o.
 - Em modelos grandes, «Detetar elementos num local» encontra faces, alojamentos e achatamentos onde antes indicava triângulos a mais. O local também se escolhe com o teclado.
 - Os modelos grandes são reconhecidos muito mais depressa: uma cama de casa de bonecas gerada, com 1,2 milhões de triângulos, em 27 segundos em vez de 174. Cancelar atua em segundos.
-- Letreiros e escoras aparecem na árvore como lados arredondados em vez de dezenas de arredondamentos com raios variáveis, também depois de subdividir as arestas.
-- Os contornos feitos de arcos e retas são reconhecidos arco a arco com o seu raio. A conversão em corpo exato fica assim muito mais rápida.
+- Letreiros e escoras aparecem na árvore como lados arredondados em vez de dezenas de arredondamentos com raios variáveis.
+- Os contornos feitos de arcos e retas são reconhecidos arco a arco com o seu raio. «Converter em faces e arestas» fica assim muito mais rápido.
 - Um pino escalonado já não conta como rosca. Voltam os cilindros e furos que essa confusão tinha engolido.
 - Se um modelo tem mais de 5 000 características, o Solidon mantém as maiores em vez de ficar sem nenhuma. Escalar não baralha os seus nomes.
 
@@ -65,14 +65,14 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O mapa de defeitos de malha mostra as zonas sãs na cor do corpo, para que cada defeito sobressaia, e traz «Reparar» diretamente na legenda.
 - A procura de sobreposições chega agora ao fim também em modelos com leques de triângulos estreitos. Mapa de defeitos e reparação veem então o modelo inteiro.
 - Um 3MF do PrusaSlicer já não carrega modificadores, bloqueadores e reforços de suportes como material maciço. Um volume negativo é subtraído da peça.
-- Com «Refinar as arestas» mantêm-se todas as características e surgem até quatro vezes menos triângulos: um suporte de berbequim a 1 mm em cinco segundos em vez de catorze minutos.
+- Com «Refinar as arestas» mantêm-se todas as características e surgem até quatro vezes menos triângulos: um suporte de berbequim com arestas de 1 mm em cinco segundos em vez de catorze minutos.
 - Um modelo fechado continua estanque e conserva as cores de filamento. Com triângulos a mais, o Solidon indica um comprimento de aresta que funciona de facto.
 - Os conjuntos grandes importam mais depressa: a reparação ao importar um navio pirata com 1,2 milhões de triângulos demora cerca de 30 % menos tempo.
 
 ### Imprimir e entregar ao slicer
 
 - O nível «Standard» imprime com as velocidades e acelerações do perfil do fabricante em vez de travar cada impressora a 40 mm/s. Numa Centauri Carbon 2, as peças grandes levam 40 a 50 % menos tempo.
-- O percurso em vazio também vem da impressora: a Centauri Carbon 2 desloca-se a 500 em vez de 150 mm/s entre ilhas, para que o bico não escorra pelo caminho.
+- A velocidade dos percursos em vazio também vem da impressora: a Centauri Carbon 2 desloca-se a 500 em vez de 150 mm/s, para que o bico escorra menos pelo caminho.
 - Um teto sobre um canal de água ou um túnel já não atrai suportes para o modelo. Se mais nada precisar deles sobre o modelo, o Solidon propõe-nos só a partir da mesa.
 - Nova sugestão «Manter os canais livres»: aplicada, coloca um bloqueador de suportes nos canais para PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
 - Os suportes em grelha chegam ao slicer como grelha verdadeira, com a direção a mudar em cada camada, em vez de linhas soltas que se deslocam na impressão.

@@ -26,7 +26,7 @@ scrive in `website/version.json`.
 - Se un foro esce dal fianco del pezzo dopo uno spostamento, una duplicazione o un'inclinazione, Solidon lo dice anche nei punti a gradino. Una copia non creata viene notata.
 - Su nervature e nidi d'ape, un foro inclinato non segnala più per errore di sporgere oltre il bordo.
 - Dopo spostamento, inclinazione o duplicazione, il pannello delle caratteristiche mostra le quote che il risultato ha davvero.
-- Se su un corpo esatto un taglio di foro fallisce senza che si noti, Solidon se ne accorge e ricalcola. Prima poteva restare un corpo rotto.
+- Se su un corpo fatto di facce e spigoli, per esempio da un file STEP, un taglio di foro fallisce senza che si noti, Solidon se ne accorge e ricalcola. Prima poteva restare un corpo rotto.
 - Un'asola si può accorciare. Tirata alla sua stessa larghezza, torna a essere un foro rotondo.
 - La maniglia all'estremità di un'asola si afferra in qualsiasi punto dell'apertura, e al primo trascinamento non salta più verso il puntatore.
 - Se parti di un modello sono infilate l'una nell'altra, Solidon le unisce prima del calcolo, come verranno stampate. Volume e fori tornano, e il rapporto lo dice.
@@ -39,18 +39,18 @@ scrive in `website/version.json`.
 - Da un foro all'altro le quote nella vista compaiono in un terzo del tempo. Il primo clic su una caratteristica non blocca più la finestra, nemmeno sui modelli grandi.
 - Un clic su un foro non mostra più immagini intermedie: pannello di selezione e scheda delle quote compaiono subito al loro posto, senza saltare.
 - Esc sulle quote nella vista scarta la bozza e toglie la selezione, come «Annulla».
-- Un clic su «Applica» non va più perso in silenzio. Vengono riletti solo i campi in cui avete digitato.
+- Un clic su «Applica» non va più perso in silenzio, e le quote che non avete digitato restano esattamente come sono state misurate.
 - Un foro iniziato non va più perso per strada: un clic nel rapporto, un cambio di strumento o Ctrl+Z chiedono prima di applicarlo o annullarlo.
 - Digitando una coordinata, i campi quota non spariscono più dopo la seconda cifra.
 
 ### Riconoscimento
 
 - Le caratteristiche vengono riconosciute da sole fino a 1,5 milioni di triangoli. Fino a cinque milioni Solidon chiede prima e indica la memoria necessaria e la durata sul vostro computer.
-- Se rifiutate il riconoscimento completo, «Riconosci tutte le caratteristiche» lo recupera più tardi dal rapporto. Se dura troppo, si può caricare senza.
+- Rifiutato il riconoscimento completo, «Riconosci tutte le caratteristiche» lo recupera nel rapporto. Se dura troppo, «Carica senza riconoscimento delle caratteristiche» lo salta.
 - Sui modelli grandi «Riconosci elementi in un punto» trova facce, sedi e appiattimenti dove prima segnalava troppi triangoli. Il punto si sceglie anche da tastiera.
 - I modelli grandi vengono riconosciuti molto più in fretta: un letto da casa delle bambole generato, 1,2 milioni di triangoli, in 27 secondi invece di 174. Annulla agisce in pochi secondi.
-- Scritte e montanti compaiono nell'albero come lati arrotondati invece che come decine di raccordi dai raggi variabili, anche dopo una suddivisione degli spigoli.
-- I contorni fatti di archi e rette vengono riconosciuti arco per arco con il loro raggio. La conversione in corpo esatto diventa così molto più rapida.
+- Scritte e montanti compaiono nell'albero come lati arrotondati invece che come decine di raccordi dai raggi variabili.
+- I contorni fatti di archi e rette vengono riconosciuti arco per arco con il loro raggio. «Converti in facce e spigoli» diventa così molto più rapido.
 - Un perno a gradino non conta più come filettatura. Tornano i cilindri e i fori che questo scambio aveva inghiottito.
 - Se un modello ha più di 5 000 caratteristiche, Solidon tiene le più grandi invece di restare senza nessuna. Scalare non rimescola i loro nomi.
 
@@ -65,14 +65,14 @@ scrive in `website/version.json`.
 - La mappa dei difetti della mesh mostra le zone sane nel colore del corpo, così ogni difetto risalta, e porta «Ripara» direttamente nella legenda.
 - La ricerca delle sovrapposizioni arriva ora fino in fondo anche sui modelli con ventagli di triangoli stretti. Mappa dei difetti e riparazione vedono tutto il modello.
 - Un 3MF di PrusaSlicer non carica più modificatori, blocchi e rinforzi dei supporti come materiale pieno. Un volume negativo viene sottratto dal pezzo.
-- Con «Affina gli spigoli» restano tutte le caratteristiche e i triangoli sono fino a quattro volte meno: un supporto per trapano a 1 mm in cinque secondi invece di quattordici minuti.
+- Con «Affina gli spigoli» restano tutte le caratteristiche e i triangoli sono fino a quattro volte meno: un supporto per trapano con spigoli di 1 mm in cinque secondi invece di quattordici minuti.
 - Un modello chiuso resta stagno e conserva i colori del filamento. Con troppi triangoli, Solidon indica una lunghezza di spigolo che funziona davvero.
 - I grandi assiemi si importano più in fretta: la riparazione all'importazione di una nave pirata da 1,2 milioni di triangoli richiede circa il 30 % di tempo in meno.
 
 ### Stampare e passare allo slicer
 
 - Il livello «Standard» stampa con velocità e accelerazioni del profilo del produttore invece di frenare tutto a 40 mm/s. Su una Centauri Carbon 2 i pezzi grandi richiedono il 40-50 % di tempo in meno.
-- Anche lo spostamento a vuoto viene dalla stampante: la Centauri Carbon 2 si muove a 500 invece di 150 mm/s tra le isole, perché l'ugello non coli lungo il tragitto.
+- Anche la velocità degli spostamenti a vuoto viene dalla stampante: la Centauri Carbon 2 si sposta a 500 invece di 150 mm/s, perché l'ugello coli meno lungo il tragitto.
 - Un soffitto sopra un canale d'acqua o un tunnel non richiama più supporti sul modello. Se nient'altro li richiede sul modello, Solidon li propone solo dal piano.
 - Nuovo suggerimento «Tenere liberi i canali»: applicato, mette un blocco dei supporti nei canali per PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
 - I supporti a griglia arrivano allo slicer come vera griglia, con la direzione che cambia a ogni strato, invece che come linee sciolte che si spostano in stampa.

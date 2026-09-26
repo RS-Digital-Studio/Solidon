@@ -27,7 +27,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro sale por el lateral de la pieza tras desplazarlo, duplicarlo o inclinarlo, Solidon lo indica también en zonas escalonadas. Una copia que no se creó se detecta.
 - En nervaduras y panales, un taladro inclinado ya no indica por error que sobresale del borde.
 - Tras desplazar, inclinar o duplicar, el panel de características muestra las cotas que el resultado tiene de verdad.
-- Si en un cuerpo exacto un corte de taladro falla sin que se note, Solidon lo detecta y vuelve a calcular. Antes podía quedar un cuerpo roto.
+- Si en un cuerpo de caras y aristas, por ejemplo de un archivo STEP, un corte de taladro falla sin que se note, Solidon lo detecta y vuelve a calcular. Antes podía quedar un cuerpo roto.
 - Una ranura se puede acortar. Estirada hasta su propio ancho, vuelve a ser un taladro redondo.
 - El tirador del extremo de una ranura se agarra en cualquier punto de la abertura, y ya no salta hacia el puntero en el primer arrastre.
 - Si piezas de un modelo están metidas unas en otras, Solidon las une antes de calcular, tal como se imprimirán. Volumen y taladros cuadran entonces, y el informe lo dice.
@@ -40,18 +40,18 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - De taladro en taladro, las cotas en la vista aparecen en un tercio del tiempo. El primer clic en una característica ya no congela la ventana, ni siquiera en modelos grandes.
 - Un clic en un taladro ya no muestra imágenes intermedias: el panel de selección y la tarjeta de cotas aparecen directamente en su sitio, sin saltar.
 - Escape en las cotas de la vista descarta el borrador y quita la selección, como «Cancelar».
-- Un clic en «Aplicar» ya no se pierde en silencio. Solo se vuelven a leer los campos en los que ha escrito.
+- Un clic en «Aplicar» ya no se pierde en silencio, y las cotas que no ha escrito se quedan exactamente como se midieron.
 - Un taladro empezado ya no se pierde por el camino: un clic en el informe, un cambio de herramienta o Ctrl+Z piden primero aplicarlo o cancelarlo.
 - Al escribir una coordenada, los campos de cota ya no desaparecen tras la segunda cifra.
 
 ### Reconocimiento
 
 - Las características se reconocen solas hasta 1,5 millones de triángulos. Hasta cinco millones, Solidon pregunta antes e indica la memoria necesaria y la duración en su ordenador.
-- Si rechaza el reconocimiento completo, «Reconocer todas las características» lo recupera más tarde desde el informe. Si tarda demasiado, se puede cargar sin él.
+- Rechazado el reconocimiento completo, «Reconocer todas las características» lo recupera en el informe. Si tarda demasiado, «Cargar sin reconocimiento de características» lo omite.
 - En modelos grandes, «Detectar detalles en un punto» encuentra caras, alojamientos y aplanamientos donde antes indicaba demasiados triángulos. El punto también se elige con el teclado.
 - Los modelos grandes se reconocen mucho más rápido: una cama de casa de muñecas generada, de 1,2 millones de triángulos, en 27 segundos en vez de 174. Cancelar actúa en pocos segundos.
-- Rótulos y tirantes aparecen en el árbol como lados redondeados en lugar de decenas de redondeos con radios cambiantes, también tras subdividir las aristas.
-- Los contornos de arcos y rectas se reconocen arco a arco con su radio. Convertir en cuerpo exacto es así mucho más rápido.
+- Rótulos y tirantes aparecen en el árbol como lados redondeados en lugar de decenas de redondeos con radios cambiantes.
+- Los contornos de arcos y rectas se reconocen arco a arco con su radio. «Convertir en caras y aristas» es así mucho más rápido.
 - Un tetón escalonado ya no cuenta como rosca. Vuelven los cilindros y taladros que esa confusión se había tragado.
 - Si un modelo tiene más de 5 000 características, Solidon conserva las más grandes en lugar de quedarse sin ninguna. Escalar no revuelve sus nombres.
 
@@ -66,14 +66,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El mapa de defectos de malla muestra las zonas sanas en el color del cuerpo, para que cada defecto destaque, y lleva «Reparar» directamente en la leyenda.
 - La búsqueda de solapamientos llega ahora al final también en modelos con abanicos de triángulos estrechos. Mapa de defectos y reparación ven entonces todo el modelo.
 - Un 3MF de PrusaSlicer ya no carga modificadores, bloqueadores ni reforzadores de soportes como material macizo. Un volumen negativo se resta de la pieza.
-- Con «Refinar las aristas» se conservan todas las características y salen hasta cuatro veces menos triángulos: un soporte de taladradora a 1 mm en cinco segundos en vez de catorce minutos.
+- Con «Refinar las aristas» se conservan todas las características y salen hasta cuatro veces menos triángulos: un soporte de taladradora con aristas de 1 mm en cinco segundos en vez de catorce minutos.
 - Un modelo cerrado sigue estanco y conserva sus colores de filamento. Con demasiados triángulos, Solidon indica una longitud de arista que funciona de verdad.
 - Los conjuntos grandes se importan más rápido: la reparación al importar un barco pirata de 1,2 millones de triángulos tarda alrededor de un 30 % menos.
 
 ### Imprimir y entregar al slicer
 
 - El nivel «Standard» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.
-- El desplazamiento también viene de la impresora: la Centauri Carbon 2 se mueve a 500 en lugar de 150 mm/s entre islas, para que la boquilla no gotee por el camino.
+- La velocidad de desplazamiento también viene de la impresora: la Centauri Carbon 2 se desplaza a 500 en lugar de 150 mm/s, para que la boquilla gotee menos por el camino.
 - Un techo sobre un canal de agua o un túnel ya no atrae soportes sobre el modelo. Si nada más los necesita sobre el modelo, Solidon los propone solo desde la cama.
 - Nueva sugerencia «Mantener libres los canales»: aplicada, coloca un bloqueador de soportes en los canales para PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer y Creality Print.
 - Los soportes de rejilla llegan al slicer como rejilla de verdad, con la dirección cambiando en cada capa, en lugar de líneas sueltas que se desplazan al imprimir.
