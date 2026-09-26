@@ -492,6 +492,34 @@ def test_an_unsound_exact_cut_is_not_delivered_but_cut_on_the_mesh(
     assert not inside(body.mesh, (9.0, 0.0, 19.5))
 
 
+def test_an_unsound_exact_pocket_is_not_delivered_but_cut_on_the_mesh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auch *Tasche schneiden* liefert keinen ungültigen exakten Körper aus (RM-227).
+
+    Am Teppichclip gab die Tasche einen ungültigen exakten Körper still zurück,
+    wo die Schnitte mit Werkzeug schon am Netz weiterrechneten und es sagten.
+    Erzwungen wie oben: Die Tasche Ø 10, 5 mm tief in eine Welle Ø 20 × 40,
+    kommt als Netz mit ``sketch.exact_cut_unsound`` und dem Volumen der Tasche
+    zurück — π · 5² · 5, bis auf die Sehnen der Vernetzung.
+    """
+    from app.core.brep import profiles
+
+    monkeypatch.setattr(profiles, "is_sound", lambda solid: False)
+    entry = shaft()
+    result = run(
+        "sketch_pocket", entry, shape="circle", length=10.0, width=10.0, depth=5.0, x=0.0, y=0.0
+    )
+    body = result.outputs[0]
+    assert body.kind == "mesh" and body.mesh.is_watertight
+    assert "sketch.exact_cut_unsound" in {finding.code for finding in result.findings}
+    before = as_mesh_data(entry.mesh).volume
+    touched = math.pi * 10.0 * 5.0 + 2.0 * math.pi * 5.0**2
+    assert before - body.mesh.volume == pytest.approx(
+        math.pi * 25.0 * 5.0, abs=MAX_FACET_SAG * touched
+    )
+
+
 def test_the_revolve_maker_is_unchanged_by_the_shared_profile() -> None:
     """Der Erzeuger nimmt denselben Querschnitt wie der Schnitt — und rechnet wie vorher."""
     body = (

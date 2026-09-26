@@ -1122,6 +1122,13 @@ def cut_regions(
         )
     tool = tools[0] if len(tools) == 1 else edit.boolean("union", tools)
     solid = edit.boolean("difference", [body, tool])
+    if solid.solid_count >= 1 and solid.volume > EPS_GEOM and not profiles.is_sound(solid):
+        # **Und die Tasche liefert keinen ungültigen Körper aus** (RM-227): Die
+        # Schnitte mit Werkzeug rechnen dann am Netz weiter und sagen es
+        # (``sketch.exact_cut_unsound``); *Tasche schneiden* gab denselben
+        # ungültigen Körper am Teppichclip still zurück. Derselbe Weg hier —
+        # der exakte Versuch dort wiederholt sich, das kostet nur im Fehlerfall.
+        return _cut_with_tool(ctx, tool, findings, seed=ctx.seed)
     # Eine Tasche, die den Körper verfehlt, lief stumm durch: im Verlauf ein
     # Schritt, im Bild dasselbe Teil, und keine Zeile, die das erklärt.
     # Gemessen an vier Fällen — Oberkante unter dem Körper, Ort daneben —, und
