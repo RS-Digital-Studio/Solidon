@@ -129,6 +129,45 @@ den geraden Weg nicht mehr; eingebettet wird dazwischen im Hauptthread. Ein
 Absturzbericht. Dasselbe gilt für den Inhalt eines Archivs, das ohnehin im
 Arbeiter entpackt wurde.
 
+**Und *Abbrechen* gilt, während das Laufwerk noch liest.** Ein `stat` oder
+`read` lässt sich nicht unterbrechen; `_ReadWorker` liest deshalb in einem
+Daemon-Faden (derselbe Grund wie bei „Zuletzt geöffnet“) und sieht alle 50 ms
+nach seinem eigenen `CancelSignal`, das `cancel_evaluation` setzt. Abgebrochen
+endet der Arbeiter sofort (`stopped` → `importFinished(False)`), die späte
+Antwort des Laufwerks holt niemand ab — gemessen: frei nach 0,06 s statt nach
+dem Laufwerk, Schließen des Fensters 0,07 statt 19 s (Durchsicht 0.5.1).
+
+**Die automatische Sicherung schreibt im Arbeiter** (`Session.autosave_async`,
+`_AutosaveWorker`). Im Zeitgeber des Hauptfadens stand das Fenster am
+Drachen alle zwei Minuten 0,8 bis 1 s. Die Kopie des Dokuments entsteht im
+Hauptfaden, geschrieben wird sie daneben; Speichern, Verwerfen und
+Dokumentwechsel zählen `_autosave_epoch` hoch, und eine Sicherung, die danach
+fertig wird, wird wieder geräumt. Ein Schreibfehler kommt über
+`autosaveFailed` und steht einmal je Sitzung in der Statuszeile.
+`Session.autosave` bleibt der gerade Weg für Tests und Werkzeuge.
+
+**Das Modell zuerst, die Erkennung danach** (KUNDE-14, Durchsicht 0.5.1).
+Ein Ladeschritt, dessen Körper noch nie im Bild standen, rechnet im selben
+Arbeiter zweimal: erst ohne Erkennung (`run_evaluation(detect_features=False)`),
+dann den ganzen Lauf, der die Geometrie aus dem Cache nimmt. Steht nach dem
+ersten Durchgang ein Netzkörper ab `PICTURE_FIRST_TRIANGLES` da, dessen
+Erkennung der Durchgang ausgelassen hat (`EvaluationResult.recognition_left_out`),
+geht dieses **Bild** über `pictureChanged` ins Fenster: Es wird `last_result`,
+`result_current` bleibt falsch, und alles, was ein fertiges Ergebnis verlangt,
+wartet weiter. Der Schleier weicht, Uhr und *Abbrechen* bleiben. Rückfragen
+des ersten Durchgangs beantwortet der zweite aus dem Gedächtnis
+(`_pending.asked`/`replay`), nie ein zweites Mal am Bildschirm. Gemessen am
+Piratenschiff: Modell im Bild 33 → 7,5 s, Merkmale unverändert nach rund 32 s.
+Eine Änderung, die nicht lädt, rechnet wie bisher — dort bleibt das Modell ohnehin
+stehen (§15.3).
+
+**Ein Import ohne Modell wird kein Schritt** (KUNDE-12). Hält das erste Bild
+oder Ergebnis nach einem Import an genau seinem Ladeschritt mit einem
+`ValidationError`, nimmt `Session._settle_import` ihn zurück — ohne Redo
+(`History.withdraw`), mit der Quelle — und `importRejected` sagt den Grund mit
+*Andere Datei wählen*. In „Zuletzt geöffnet“ kommt eine Datei erst mit
+`importConfirmed`.
+
 **Eine STEP-Datei hat ihre eigene Grenze** (`STEP_PLAN_IN_WORKER_ABOVE`, zwei
 MB, P7.4): Ihr Plan liest die ganze Baugruppe über XCAF, gemessen rund 0,6 s
 je MB (0,28 s an 0,45 MB, 1,1 s an 1000 Instanzen in 2 MB). Welche Grenze

@@ -12,9 +12,11 @@ Anfrage ersetzt eine wartende, statt sich dahinter anzustellen.
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import threading
 import time
+import traceback
 import weakref
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -42,10 +44,12 @@ from app.core.counterpart import (
 from app.core.errors import (
     CANCEL,
     CANCEL_SPLIT,
+    CHOOSE_ANOTHER_FILE,
     RETRY,
     SHOW_HISTORY,
     STOP_INSERTING,
     AppError,
+    FileWriteError,
     GeometryError,
     InternalError,
     OperationCancelled,
@@ -56,7 +60,7 @@ from app.core.errors import (
 from app.core.generate import into_project as generate_into
 from app.core.geom.autosplit import MARGIN
 from app.core.geom.difference import SceneDifference, compare_scenes
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.section import SectionPlane
 from app.core.ingest.archive import is_archive, model_from_archive
 from app.core.ingest.loader import read_bounded_payload, read_local_payload, unreadable_file
@@ -72,7 +76,7 @@ from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.recipe import Recipe
 from app.core.lid_flow import LidApplied, apply_lid
 from app.core.log import get_logger
-from app.core.perceive.local import forget_out_of_memory
+from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES, forget_out_of_memory
 from app.core.registry import REGISTRY
 from app.core.scene import (
     CancelSignal,
@@ -91,6 +95,7 @@ from app.core.scene.history import Dependencies, MoveTarget, RevisionPlan, StepN
 from app.core.scene.project import (
     Project,
     ProjectSources,
+    autosave_path,
     checksum,
     claim_recovery,
     clear_autosave,
@@ -238,17 +243,116 @@ def _warm_metrics(result: EvaluationResult, cancelled: CancelSignal) -> None:
                 _log.info("cavity chains of %s not available: %s", entry.id, problem)
 
 
+#: Ab so vielen Dreiecken zeigt der Ladeweg einen Körper vor seiner
+#: Merkmalserkennung (KUNDE-14). Die Erkennung braucht je Dreieck 31 µs am
+#: Referenzrechner und bis zu 118 µs je nach Topologie
+#: (``perceive.recognition_time``) — hier also mindestens 1,5 s, auf acht
+#: Jahre alter Hardware ein Mehrfaches. Darunter wäre ein zweiter Aufbau von
+#: Baum, Bericht und Ansicht Unruhe ohne Gewinn.
+PICTURE_FIRST_TRIANGLES: Final = 50_000
+
+
+def _recognition_follows(picture: EvaluationResult) -> bool:
+    """Ob nach diesem Bild eine Erkennung von Sekunden läuft.
+
+    Welche Körper noch nicht erkannt sind, sagt der Lauf ohne Erkennung selbst
+    (``EvaluationResult.recognition_left_out``): Was der Merker schon kennt,
+    bringt auch das Bild mit, und ein Körper kann Merkmale seiner Operation
+    tragen und trotzdem unerkannt sein. Über der bestätigbaren Grenze erkennt
+    niemand vollständig, und ein angehaltener Stapel wird nicht erkannt.
+    """
+    if picture.stopped_at is not None:
+        return False
+    return any(
+        entry.kind == "mesh"
+        and isinstance(entry.mesh, MeshData)
+        and entry.id in picture.recognition_left_out
+        and PICTURE_FIRST_TRIANGLES
+        <= entry.mesh.triangle_count
+        <= CONFIRMED_FEATURE_LIMIT_TRIANGLES
+        for entry in picture.scene.objects.values()
+    )
+
+
+def _as_picture(picture: EvaluationResult) -> EvaluationResult:
+    """Das Bild, wie der Prüfbericht es zeigt, solange die Erkennung läuft.
+
+    Der Satz über die ausgelassene Vollerkennung (``perceive.too_large``) gilt
+    noch nicht: Ob erkannt wird, fragt der Lauf danach. An seiner Stelle sagt
+    eine Zeile, dass die Merkmale noch kommen — der Kunde klickt sonst auf
+    eine Bohrung, und nichts wird gewählt.
+    """
+    findings = [
+        entry for entry in picture.scene.report.findings if entry.code != "perceive.too_large"
+    ]
+    findings.append(
+        Finding(
+            code="perceive.pending",
+            severity="info",
+            # Wahr, solange die Erkennung läuft, und auch nach einem Abbruch:
+            # Die Statuszeile sagt, welches von beiden.
+            message=_(
+                "Die Merkmale sind noch nicht erkannt — Bohrungen und Flächen lassen "
+                "sich danach einzeln wählen."
+            ),
+        )
+    )
+    scene = dataclasses.replace(picture.scene, report=Report(tuple(findings)))
+    return dataclasses.replace(picture, scene=scene)
+
+
 class _EvaluationWorker(Worker):
-    """Ein Auswertungslauf. Besitzt nichts, meldet alles."""
+    """Ein Auswertungslauf. Besitzt nichts, meldet alles.
+
+    **Ein großer Import zeigt sein Modell vor der Erkennung** (KUNDE-14,
+    :meth:`Session.picture_first`). Das Piratenschiff mit 1,2 Mio. Dreiecken
+    stand in 0.5.1 erst nach 60 s im Bild — 8 s Einlesen, danach 51 s
+    Merkmalserkennung unter dem Ladeschleier. Der Arbeiter rechnet dann
+    zweimal: erst ohne Erkennung (``detect_features=False``, derselbe Weg wie
+    die Live-Vorschau) und meldet das über ``pictureWith``; dann den ganzen
+    Lauf, der die Geometrie aus dem Cache nimmt — dort liegt die rohe Ausgabe,
+    nicht die erkannte. Eine Rückfrage des ersten Laufs beantwortet der zweite
+    aus dem Gedächtnis (``_pending.replay``), nicht noch einmal am Bildschirm.
+    """
 
     finishedWith = Signal(object)
     failedWith = Signal(object)
     cancelled = Signal()
+    pictureWith = Signal(object)
 
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, *, picture_first: bool = False) -> None:
         super().__init__()
         self._session = session
         self._project_generation = session._project_generation
+        self._picture_first = picture_first
+
+    def _evaluate(self, session: Session) -> EvaluationResult:
+        """Der ganze Lauf — beim Ladeweg mit dem Bild davor."""
+        if not self._picture_first:
+            return session.run_evaluation()
+        asked: dict[tuple[str, tuple[str, ...]], str | None] = {}
+        session._pending.asked = asked
+        try:
+            picture = session.run_evaluation(detect_features=False)
+        finally:
+            session._pending.asked = None
+        if picture.stopped_at is not None and not picture.scene.objects:
+            # Schon der erste Schritt hielt an: Es gibt nichts zu erkennen, und
+            # ein zweiter Lauf käme nur ein zweites Mal an derselben Stelle an.
+            return picture
+        if _recognition_follows(picture):
+            _warm_metrics(picture, session.cancel_signal)
+            self.pictureWith.emit(_as_picture(picture))
+        session._pending.replay = asked
+        try:
+            result = session.run_evaluation()
+        finally:
+            session._pending.replay = None
+        if picture.answers:
+            # Eine Antwort des ersten Laufs (die Einheit beim Laden) steht nur
+            # in seinem Ergebnis: Der zweite fand den Schritt im Cache.
+            result = dataclasses.replace(result, answers={**picture.answers, **result.answers})
+        return result
 
     def work(self) -> None:
         session = self._session
@@ -275,7 +379,7 @@ class _EvaluationWorker(Worker):
                 session.pending_part_check = False
                 outside.extend(part_check.check(session.project.document))
 
-            result = session.run_evaluation()
+            result = self._evaluate(session)
             if session.pending_orphan_check:
                 # **Einmal** geprüft, auch wenn der Nutzer die Frage abbricht:
                 # Der Merker fällt vor der Schleife, nicht danach — sonst
@@ -370,6 +474,53 @@ class _ArchiveWorker(Worker):
         super().release_finished_references()
 
 
+#: Wie lange das Öffnen eines Projekts ohne Ereignisrunde auf das Lesen
+#: wartet — eine lokale Platte antwortet darunter, und dann gibt es kein
+#: Zwischenbild (dieselbe Zahl wie ``MainWindow.RECENT_WAIT_S``).
+PROJECT_READ_WAIT_S: Final = 0.05
+
+
+def _load_beside_the_window(path: Path) -> Project:
+    """Eine Projektdatei lesen, ohne dass das Fenster dabei stillsteht.
+
+    **Ein Dateizugriff ist eine Netzfrage** (RM-224) — auch für ein Projekt aus
+    „Zuletzt geöffnet“ auf einem Netzlaufwerk. ``load`` lief im Hauptfaden: Um
+    5 s verzögertes Lesen hielt das Fenster 5,1 s an, ein totes Laufwerk bis
+    zu seinem Zeitlimit (Durchsicht 0.5.1, ``sonden/fenster/p22``). Gelesen
+    wird deshalb in einem Daemon-Faden; solange er liest, stellt der
+    Hauptfaden Ereignisse zu — Malen, Größe, Zeitgeber —, aber **keine
+    Eingaben**: Das Öffnen bleibt ein Schritt, mitten in dem niemand das alte
+    Projekt weiterbearbeitet. Ein ``stat``, das hängt, lässt sich ohnehin nicht
+    abbrechen; der Faden hält das Beenden nicht auf.
+
+    Ohne laufende Anwendung (Kommandozeile) und bei einer lokalen Platte, die
+    unter :data:`PROJECT_READ_WAIT_S` antwortet, ist es derselbe gerade Aufruf
+    wie vorher. Was ``load`` wirft, wirft auch dies.
+    """
+    application = QCoreApplication.instance()
+    if application is None:
+        return load(path)
+    box: list[tuple[bool, object]] = []
+
+    def read() -> None:
+        try:
+            box.append((True, load(path)))
+        except BaseException as problem:  # im Hauptfaden neu geworfen
+            box.append((False, problem))
+
+    reader = threading.Thread(target=read, name="project-read", daemon=True)
+    reader.start()
+    reader.join(PROJECT_READ_WAIT_S)
+    while reader.is_alive():
+        with undisturbed():
+            application.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+        reader.join(0.02)
+    succeeded, value = box[0]
+    if not succeeded:
+        raise cast(BaseException, value)
+    return cast(Project, value)
+
+
 class _ReadWorker(Worker):
     """Liest eine Modelldatei von der Platte, bevor irgendetwas eingebettet wird.
 
@@ -383,26 +534,110 @@ class _ReadWorker(Worker):
     Erwartete Fehler (verschoben, gesperrt, zu groß) kommen aus
     :func:`read_local_payload` schon als Hinweis mit Weg und gehen über
     ``failedWith`` hinaus; eingebettet wird im Hauptthread.
+
+    **Und *Abbrechen* wirkt, auch wenn das Laufwerk nicht antwortet.** Ein
+    ``stat`` oder ``read`` lässt sich nicht unterbrechen; stand es direkt in
+    ``work``, galt der Klick erst, wenn das System aufgab — gemessen an einem
+    um 8 s verzögerten Lesen: frei nach 6,1 s statt sofort, bei einem toten
+    Netzlaufwerk nach dessen Zeitlimit. Gelesen wird deshalb in einem
+    **Daemon-Thread** (dieselbe Begründung wie bei „Zuletzt geöffnet“,
+    ``MainWindow._show_recent``), und der Arbeiter sieht alle 50 ms nach
+    :attr:`cancel`. Abgebrochen meldet er ``stopped`` und endet; der
+    Daemon-Thread läuft aus, und seine Antwort holt niemand ab. So hält auch
+    das Schließen des Fensters keinen ``QThread`` fest, der in einem ``stat``
+    hängt.
     """
 
     readyWith = Signal(object)
     failedWith = Signal(object)
+    stopped = Signal()
+
+    #: Wie oft der Arbeiter nach *Abbrechen* sieht, während der Lesefaden wartet.
+    POLL_S: Final = 0.05
 
     def __init__(self, path: Path) -> None:
         super().__init__()
         self._path = path
+        self.cancel = CancelSignal()
 
     def work(self) -> None:
+        box: list[tuple[str, object]] = []
+        reader = threading.Thread(
+            target=self._read_into, args=(box,), name="model-read", daemon=True
+        )
+        reader.start()
+        while reader.is_alive():
+            if self.cancel.is_cancelled:
+                self.stopped.emit()
+                return
+            reader.join(self.POLL_S)
+        if self.cancel.is_cancelled or not box:
+            self.stopped.emit()
+            return
+        kind, value = box[0]
+        if kind == "ready":
+            self.readyWith.emit(value)
+        elif kind == "failed":
+            self.failedWith.emit(value)
+        else:
+            # Was niemand erwartet hat, geht den Weg jedes Arbeiters
+            # (``crashed``) — nur aus dem Lesefaden hierher getragen.
+            raise RuntimeError(str(value))
+
+    def _read_into(self, box: list[tuple[str, object]]) -> None:
+        """Im Lesefaden: das Ergebnis oder den Hinweis in ``box`` legen."""
         try:
             payload = read_local_payload(self._path)
         except AppError as error:
-            self.failedWith.emit(error)
+            box.append(("failed", error))
         except OSError as problem:
             # Wie in der Quellenwahl: Das Lesen selbst meldet sich schon als
             # Hinweis, was hier ankommt, stammt aus dem Weg um die Datei.
-            self.failedWith.emit(unreadable_file(self._path, problem))
+            box.append(("failed", unreadable_file(self._path, problem)))
+        except Exception:  # wird im Arbeiter zu ``crashed``
+            box.append(("crashed", traceback.format_exc()))
         else:
-            self.readyWith.emit(payload)
+            box.append(("ready", payload))
+
+
+class _AutosaveWorker(Worker):
+    """Schreibt die automatische Sicherung, ohne das Fenster anzuhalten (§38).
+
+    **Die Sicherung lief im Zeitgeber des Hauptfadens** und schrieb das ganze
+    Projekt samt eingebetteter Modelle neu. Gemessen am Mausoleum-Drachen
+    (33 MB Sicherung): 0,8 bis 1,0 s stand das Fenster, alle zwei Minuten,
+    solange das Projekt ungespeichert war — und nach einem Import ist es das
+    (Durchsicht 0.5.1, ``sonden/fenster/p08_sicherung.py``). Geschrieben wird
+    eine Kopie des Dokuments von jetzt; die Quelldaten sind unveränderliche
+    Bytes und werden geteilt.
+
+    Ein Schreibfehler (volles Laufwerk, gesperrte Datei) ist ein Ergebnis und
+    kein Absturz: Er kommt über ``done`` zurück, und das Fenster sagt es.
+    """
+
+    done = Signal(object)
+    """``None`` oder der ``AppError`` des Schreibens."""
+
+    def __init__(self, project: Project, path: Path | None, token: str) -> None:
+        super().__init__()
+        self._project = project
+        self._path = path
+        self._token = token
+
+    def work(self) -> None:
+        try:
+            write_autosave(self._project, self._path, self._token)
+        except AppError as error:
+            self.done.emit(error)
+        except (OSError, ValueError) as problem:
+            self.done.emit(
+                FileWriteError(
+                    target=autosave_path(self._path, self._token).name,
+                    detail=getattr(problem, "strerror", None) or str(problem),
+                )
+            )
+        else:
+            self.done.emit(None)
 
 
 class _PlanWorker(Worker):
@@ -1178,6 +1413,17 @@ class Session(QObject):
 
     Das Gegenstück zum ``raise`` des synchronen Wegs: Wer im Arbeiter plant,
     kann nicht in den Aufrufer werfen, der längst weitergelaufen ist."""
+    autosaveFailed = Signal(object)
+    """Die automatische Sicherung ließ sich nicht schreiben — trägt den ``AppError``."""
+    pictureChanged = Signal(object)
+    """Das Bild vor der Erkennung (:meth:`picture_first`): Geometrie und Befunde
+    eines großen Imports, noch ohne Merkmale — kein Dokumentstand."""
+    importRejected = Signal(object)
+    """Ein angenommener Import hielt schon beim Laden an und ist zurückgenommen
+    (KUNDE-12) — trägt den ``UserError`` mit *Andere Datei wählen*."""
+    importConfirmed = Signal()
+    """Der zuletzt angenommene Import hat sein Modell geliefert — jetzt gehört
+    er nach „Zuletzt geöffnet“ (KUNDE-12)."""
     importFinished = Signal(bool)
     """Der asynchrone Einleseweg ist durch — ``True``, wenn etwas ankam.
 
@@ -1254,6 +1500,14 @@ class Session(QObject):
         self.last_result: EvaluationResult | None = None
         self.result_current = False
         """Ob die Szene bereits zum aktuellen Auswertungsauftrag gehört."""
+        self._unconfirmed_import: tuple[str, frozenset[int], str] | None = None
+        """Transaktion, Ladeschritte und Quelle des letzten Imports, bis seine
+        Auswertung zeigt, ob die Datei ein Modell enthält (KUNDE-12)."""
+        self.picture: EvaluationResult | None = None
+        """Das gezeigte Bild vor der Erkennung, solange sie läuft — sonst ``None``.
+
+        Ist es gesetzt, ist es auch ``last_result``; ``result_current`` ist dann
+        falsch, weil die Merkmale noch fehlen (siehe :meth:`picture_first`)."""
         self.pending_orphan_check = False
         """Gesetzt, wenn eine Datei geöffnet wurde: §21.3 prüft ihre Verweise
         einmal, nicht immer."""
@@ -1292,6 +1546,11 @@ class Session(QObject):
         self._superseded: _EvaluationWorker | None = None
         self._plan: _PlanWorker | _ArchiveWorker | _ReadWorker | None = None
         """Der laufende Einleseplan (§2.8) — siehe ``import_payload_async``."""
+        self._autosaving: _AutosaveWorker | None = None
+        """Die laufende automatische Sicherung — siehe :meth:`autosave_async`."""
+        self._autosave_epoch = 0
+        """Zählt jedes Speichern und Verwerfen: Eine Sicherung, die danach
+        fertig wird, gilt einem Stand, den niemand mehr braucht."""
         self._agent: _AgentWorker | None = None
         self._split: _SplitWorker | None = None
         self._revision: _RevisionWorker | None = None
@@ -1537,7 +1796,7 @@ class Session(QObject):
         self._reset_for(None)
 
     def open_project(self, path: Path) -> None:
-        self.project = load(path)
+        self.project = _load_beside_the_window(path)
         self.pending_orphan_check = True
         self.pending_part_check = True
         self.pending_foreign_check = True
@@ -1587,7 +1846,7 @@ class Session(QObject):
         Geändert ist der Stand in beiden Fällen: er weicht von dem ab, was auf
         der Platte liegt. Genau das war der Grund, ihn wiederherzustellen.
         """
-        self.project = load(path)
+        self.project = _load_beside_the_window(path)
         self.pending_orphan_check = True
         self.pending_part_check = True
         self.pending_foreign_check = True
@@ -1631,7 +1890,7 @@ class Session(QObject):
         # Schreiben, und ein volles oder gesperrtes Laufwerk ließ die neuen
         # Änderungen nur noch im Speicher zurück — die Projektdatei trug den
         # alten Stand, die Sicherung war weg (Gesamtreview, UI-06).
-        clear_autosave(self.path, self.recovery_token)
+        self.forget_autosave()
         self.path = target
         self._dirty = False
         self.projectChanged.emit()
@@ -1644,16 +1903,67 @@ class Session(QObject):
         Wiederherstellung verschwindet ebenfalls. Dies speichert keine
         Änderungen und ersetzt keine Verwerfentscheidung des Nutzers.
         """
-        clear_autosave(self.path, self.recovery_token)
+        self.forget_autosave()
         self.release_recovery()
         self._dirty = False
         self.projectChanged.emit()
 
     def autosave(self) -> None:
-        """Container zur Absturz-Wiederherstellung neben dem Projekt (§38)."""
+        """Container zur Absturz-Wiederherstellung neben dem Projekt (§38).
+
+        Der gerade Weg, der wirft — für Tests und Werkzeuge. Das Fenster
+        nimmt :meth:`autosave_async`.
+        """
         if self._dirty:
             self._claim_recovery()
             write_autosave(self.project, self.path, self.recovery_token)
+
+    def autosave_async(self) -> None:
+        """Die automatische Sicherung im Arbeiter — der Zeitgeber des Fensters.
+
+        Die Kopie des Dokuments entsteht hier, im Hauptfaden, wo es sich ändert;
+        geschrieben wird sie im Arbeiter (:class:`_AutosaveWorker`). Läuft noch
+        eine, wartet diese Runde auf die nächste. Ein Fehler kommt über
+        :attr:`autosaveFailed` — bis zur Durchsicht 0.5.1 warf er im Slot des
+        Zeitgebers, wo ihn kein Kunde sah (RM-233).
+        """
+        if not self._dirty or self._autosaving is not None:
+            return
+        try:
+            self._claim_recovery()
+        except AppError as error:
+            self.autosaveFailed.emit(error)
+            return
+        snapshot = Project(
+            document=copy.deepcopy(self.project.document),
+            sources=dict(self.project.sources),
+            report=self.project.report,
+            thumbnail=self.project.thumbnail,
+        )
+        worker = _AutosaveWorker(snapshot, self.path, self.recovery_token)
+        epoch, path, token = self._autosave_epoch, self.path, self.recovery_token
+        self._autosaving = worker
+
+        def done(error: object) -> None:
+            if self._autosaving is worker:
+                self._autosaving = None
+            if epoch != self._autosave_epoch:
+                # Gespeichert oder verworfen, während geschrieben wurde: Die
+                # Sicherung gilt einem Stand, den es so nicht mehr zu retten
+                # gibt, und böte sich beim nächsten Start sonst an.
+                clear_autosave(path, token)
+                return
+            if isinstance(error, AppError):
+                self.autosaveFailed.emit(error)
+
+        worker.done.connect(done)
+        worker.crashed.connect(lambda detail: done(InternalError(detail=detail)))
+        self._leash.start(worker)
+
+    def forget_autosave(self) -> None:
+        """Die Sicherung des offenen Dokuments räumen — auch eine, die noch entsteht."""
+        self._autosave_epoch += 1
+        clear_autosave(self.path, self.recovery_token)
 
     def _claim_recovery(self) -> None:
         """Belegt die namenlose Sicherung vor dem ersten Schreibversuch."""
@@ -1671,6 +1981,8 @@ class Session(QObject):
             self._recovery_finalizer = None
 
     def _reset_for(self, path: Path | None) -> None:
+        # Eine Sicherung, die noch für das vorige Dokument schreibt, gilt nichts mehr.
+        self._autosave_epoch += 1
         # Was dieses Projekt an eigenen Druckern und Materialien mitbringt,
         # ist ab jetzt bekannt — und das des vorigen nicht mehr.
         profiles.carry(self.project.document.carried_profiles)
@@ -1692,6 +2004,8 @@ class Session(QObject):
         forget_out_of_memory()
         self._dirty = False
         self.last_result = None
+        self.picture = None
+        self._unconfirmed_import = None
         self._coarse_scene = None
         self._stop_coarse_preparation()
         if self._insert_before is not None:
@@ -1856,6 +2170,15 @@ class Session(QObject):
         object_id = halt.object_id if halt is not None else None
         if object_id is None and step is not None and len(step.inputs) == 1:
             object_id = step.inputs[0]
+        # Die Werte des Halts, ohne die zwei, die der Satz schon sagt: „Art“
+        # ist bei einem Fehler des Schritts dessen Titel (``_finding_from``),
+        # die Nummer steht als „Schritt 1“ im Satz — der Dialog zeigte beide
+        # noch einmal als „Art: Die Eingabe war so nicht verwendbar.“ und
+        # „Operation: 1“ (KUNDE-12). Die Handler lesen ``op_id``.
+        values = dict(halt.values) if halt is not None else {}
+        if halt is not None and halt.code.startswith("op."):
+            values.pop("kind", None)
+        values.pop("op", None)
         return UserError(
             _("Die Kette hält an — ein neuer Schritt dahinter würde nicht gerechnet."),
             _(
@@ -1868,7 +2191,7 @@ class Session(QObject):
             else _("Angehalten ist Schritt {number} ({step}).", number=op_id, step=title),
             suggestions=(halt.suggestions if halt is not None else (SHOW_HISTORY, CANCEL))
             or (CANCEL,),
-            values={**(dict(halt.values) if halt is not None else {}), "op": op_id},
+            values=values,
             object_id=object_id,
             op_id=op_id,
         )
@@ -2304,6 +2627,7 @@ class Session(QObject):
             or settings.slot_profile_bindings is not None
             or not settings.slot_profiles
             or result is None
+            or result is self.picture
             or result.stopped_at is not None
             or not result.scene.objects
         ):
@@ -2493,6 +2817,7 @@ class Session(QObject):
         # Die Sitzung kann eine Abweisung entweder melden oder nach außen
         # reichen. In beiden Fällen wird die Quelle zurückgenommen; nur so
         # bleiben lokaler Import und Download derselbe, vollständige Vorgang.
+        before = {entry.id for entry in self.project.document.ops}
         try:
             accepted = self.apply(
                 plan.title,
@@ -2504,6 +2829,8 @@ class Session(QObject):
             raise
         if not accepted:
             self._drop_source(source_id)
+        else:
+            self._track_import(before, source_id)
         return accepted
 
     def import_model_async(self, path: Path, unit: str = "auto") -> None:
@@ -2556,8 +2883,20 @@ class Session(QObject):
             if stamp == self._project_generation:
                 self.importFailed.emit(error)
 
+        def stopped(stamp: int = stamp) -> None:
+            # Abgebrochen, während das Laufwerk noch las: Eingebettet ist
+            # nichts, und das Signal gehört niemandem mehr — es sei denn, eine
+            # Auswertung läuft daneben und verbraucht es selbst (``_on_cancelled``).
+            if stamp != self._project_generation:
+                return
+            if self._worker is None:
+                self._cancel_by_user = False
+                self.cancel_signal.reset()
+            self.importFinished.emit(False)
+
         worker.readyWith.connect(ready)
         worker.failedWith.connect(failed)
+        worker.stopped.connect(stopped)
         worker.crashed.connect(lambda detail: failed(InternalError(detail=detail)))
         self._leash.start(worker)
 
@@ -2784,7 +3123,12 @@ class Session(QObject):
         self._apply_import_plan(with_selection(plan, keys), source_id)
 
     def _apply_import_plan(self, plan: ImportPlan, source_id: str) -> None:
-        """Den fertig gewählten Import anwenden; abgewiesene Quellen reisen nicht mit."""
+        """Den fertig gewählten Import anwenden; abgewiesene Quellen reisen nicht mit.
+
+        Angenommen ist er damit noch nicht endgültig: Ob die Datei ein Modell
+        enthält, sagt erst die Auswertung (:meth:`_settle_import`).
+        """
+        before = {entry.id for entry in self.project.document.ops}
         try:
             accepted = self.apply(plan.title, [plan.draft], raise_on_error=True)
         except AppError as error:
@@ -2793,7 +3137,85 @@ class Session(QObject):
             return
         if not accepted:
             self._drop_source(source_id)
+        else:
+            self._track_import(before, source_id)
         self.importFinished.emit(accepted)
+
+    def _track_import(self, before: set[int], source_id: str) -> None:
+        """Den eben angenommenen Import bis zu seinem ersten Ergebnis vormerken."""
+        added = frozenset(entry.id for entry in self.project.document.ops) - before
+        last = self.history.transactions[-1] if self.history.transactions else None
+        # Nur ein Import, der eine eigene Transaktion ist: Ein gebündelter
+        # nähme mit der Rücknahme fremde Schritte mit.
+        self._unconfirmed_import = (
+            (last.id, added, source_id)
+            if last is not None and added and frozenset(last.ops) == added
+            else None
+        )
+
+    @property
+    def import_unconfirmed(self) -> bool:
+        """Ob der zuletzt angenommene Import noch auf sein erstes Ergebnis wartet."""
+        return self._unconfirmed_import is not None
+
+    def _settle_import(self, result: EvaluationResult) -> bool:
+        """Nach dem ersten Stand, der den Import enthält: behalten oder zurücknehmen.
+
+        **Eine Datei ohne Modell wird kein Schritt** (KUNDE-12). Eine STL, die
+        nur Text ohne gültige Ecken enthält — ein abgebrochener Download —,
+        passiert den Einleseplan und scheitert erst am Ladeschritt. Bis zur
+        Durchsicht 0.5.1 blieb sie dann als Schritt 1 stehen: leerer
+        Arbeitsbereich, „Die Kette hält an“, jede weitere abgelegte Datei
+        abgewiesen, und sie stand in „Zuletzt geöffnet“. Jetzt geht sie den
+        Weg jedes anderen Lesefehlers: Der Import wird zurückgenommen (ohne
+        Redo, die Quelle geht mit), und das Fenster zeigt den Grund mit
+        *Andere Datei wählen*.
+
+        Zurückgenommen wird nur, was eindeutig an der Datei liegt — ein
+        ``ValidationError`` des Ladeschritts — und nur, solange der Import die
+        letzte Transaktion ist. Gibt ``True`` zurück, wenn er zurückgenommen
+        wurde; das Ergebnis gilt dann nichts mehr.
+        """
+        pending = self._unconfirmed_import
+        if pending is None:
+            return False
+        self._unconfirmed_import = None
+        transaction_id, op_ids, source_id = pending
+        if result.stopped_at not in op_ids:
+            self.importConfirmed.emit()
+            return False
+        halt = next(
+            (
+                entry
+                for entry in result.scene.report.findings
+                if entry.severity == "error"
+                and entry.op_id == result.stopped_at
+                and entry.code.endswith(".ValidationError")
+            ),
+            None,
+        )
+        if halt is None:
+            return False
+        source = self.project.document.sources.get(source_id)
+        name = Path(source.path).name if source is not None else ""
+        if self.history.withdraw(transaction_id) is None:
+            return False
+        self._drop_source(source_id)
+        fresh = self.path is None and not self.history.can_undo
+        self._changed()
+        if fresh:
+            # Ein neues Projekt, in dem nie etwas ankam, ist nicht geändert.
+            self._dirty = False
+            self.projectChanged.emit()
+        self.importRejected.emit(
+            UserError(
+                title=_("Diese Datei ließ sich nicht lesen."),
+                detail=halt.message,
+                values={"path": name} if name else {},
+                suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+            )
+        )
+        return True
 
     def _on_plan_failed(self, error: Any, source_id: str, generation: int | None = None) -> None:
         """Die Quelle wird zurückgenommen, wie im synchronen Weg auch.
@@ -3759,7 +4181,7 @@ class Session(QObject):
             return
         self.cancel_signal.reset()
         self._cancel_by_user = False
-        worker = _EvaluationWorker(self)
+        worker = _EvaluationWorker(self, picture_first=self.picture_first())
         # **Jeder Slot erfährt, von welchem Lauf er kommt.** Ein Arbeiter ist
         # fertig, bevor Qt seine Signale zugestellt hat — und in dieser Lücke
         # startet der nächste. Ohne den Absender hielt der Nachzügler seine
@@ -3780,19 +4202,59 @@ class Session(QObject):
             lambda detail, done=worker: self._on_failed(InternalError(detail=detail), finished=done)
         )
         worker.cancelled.connect(partial(self._on_cancelled, finished=worker))
+        worker.pictureWith.connect(partial(self._on_picture, finished=worker))
         worker.finished.connect(partial(self._on_thread_done, worker))
         self._worker = worker
         self.busyChanged.emit(True)
         self._leash.start(worker)
 
-    def run_evaluation(self, quality: Quality | None = None) -> EvaluationResult:
+    def picture_first(self) -> bool:
+        """Ob der nächste Lauf das Modell vor seiner Erkennung zeigt (KUNDE-14).
+
+        **Das gilt dem Ladeweg**: einem Ladeschritt, dessen Körper noch nicht
+        im Bild standen — ein Import auf die Startfläche oder in ein Projekt,
+        ein geöffnetes Projekt, eine Sicherung. Gefragt wird an
+        ``object_names`` und nicht an der Szene: Dort stehen auch Körper, die
+        ein späterer Schritt verbraucht hat. Und solange ein Bild steht, zeigt
+        auch der nächste Lauf erst eins — sonst ließe eine Verschiebung während
+        der Erkennung das Modell bis zu deren Ende an der alten Stelle.
+
+        Jede andere Änderung rechnet wie bisher: Dort steht ein Modell im Bild,
+        und das bleibt stehen, bis das Ergebnis kommt (§15.3). Ob wirklich eine
+        lange Erkennung folgt, entscheidet erst das Bild
+        (:func:`_recognition_follows`).
+        """
+        if self.picture is not None:
+            return True
+        last = self.last_result
+        shown = last.object_names if last is not None else {}
+        # Ein Ladeschritt, an dem der letzte Lauf anhielt, lädt nicht schneller,
+        # wenn man ihn zweimal rechnet.
+        halted = last.stopped_at if last is not None else None
+        return any(
+            operation.op == "load"
+            and operation.suppressed is None
+            and operation.id != halted
+            and not all(output in shown for output in operation.outputs)
+            for operation in self.displayed_document().ops
+        )
+
+    def run_evaluation(
+        self, quality: Quality | None = None, *, detect_features: bool = True
+    ) -> EvaluationResult:
         """Ein Durchlauf mit allem, was der Kern braucht. Keine Signale, kein
         Zustand.
+
+        ``detect_features=False`` rechnet das Bild vor der Erkennung
+        (:meth:`picture_first`); der Lauf danach ist derselbe Auftrag.
         """
         # Ein einmalig angeforderter Lauf gilt für diesen und keinen weiteren:
         # Wer die volle Kette braucht, braucht sie an einer Stelle, und alles
-        # danach soll wieder so schnell sein wie vorher (§31).
-        once, self._quality_once = self._quality_once, None
+        # danach soll wieder so schnell sein wie vorher (§31). Das Bild davor
+        # verbraucht ihn nicht — es gehört zum selben Lauf.
+        once = self._quality_once
+        if detect_features:
+            self._quality_once = None
         # Bei einer Einfügemarke der Stand davor (P7.1) — die ganze Oberfläche
         # zeigt und löst gegen ihn auf, bis das Einfügen endet.
         document = self.displayed_document()
@@ -3806,6 +4268,7 @@ class Session(QObject):
             cancelled=self.cancel_signal,
             cache=self.cache,
             sources=ProjectSources(self.project, base_dir=self.base_dir),
+            detect_features=detect_features,
             on_recognition_answer=self._recognition_answered_in_worker,
         )
         # Bei jedem Lauf und nicht nur beim Öffnen: Solange mit einem
@@ -3857,6 +4320,7 @@ class Session(QObject):
         self.cancel_signal.reset()
         self._superseded = self._worker
         result = self.run_evaluation("fine")
+        self.picture = None
         self.last_result = result
         # Wie in ``_on_finished``: Mit dem Ergebnis wartet keine Zustimmung mehr.
         self._recognition_answers.clear()
@@ -3914,6 +4378,10 @@ class Session(QObject):
         self._cancel_by_user = True
         self._rerun_pending = False
         self.cancel_signal.cancel()
+        if isinstance(self._plan, _ReadWorker):
+            # Das Lesen einer Datei hat seinen eigenen Schalter: Es wartet
+            # womöglich auf ein Laufwerk, und der Klick soll sofort gelten.
+            self._plan.cancel.cancel()
         self.questionInvalidated.emit()
 
     def cancel_agent(self) -> None:
@@ -4562,6 +5030,17 @@ class Session(QObject):
         """Reicht die Frage ans Fenster und wartet auf die Antwort."""
         candidates = getattr(self._pending, "candidates", ())
         self._pending.candidates = ()
+        asked_as = (question, tuple(choices))
+        replay: dict[tuple[str, tuple[str, ...]], str | None] | None = getattr(
+            self._pending, "replay", None
+        )
+        if replay is not None and asked_as in replay:
+            # Das Bild vor der Erkennung hat genau das schon gefragt, am
+            # selben Stand (``_EvaluationWorker._evaluate``).
+            answer = replay[asked_as]
+            if answer is None:
+                raise QuestionDeclined
+            return answer
         request = AskRequest(
             question=question,
             choices=list(choices),
@@ -4579,6 +5058,9 @@ class Session(QObject):
         request.answered.wait()
         if not self.question_is_current(request):
             raise OperationCancelled
+        asked = getattr(self._pending, "asked", None)
+        if asked is not None:
+            asked[asked_as] = request.answer
         if request.answer is None:
             # Ohne Wahl geschlossen, und die Frage gilt noch: ein Abbruch der
             # **Frage**, nicht der Rechnung. Die Auswertung macht daraus einen
@@ -4608,6 +5090,24 @@ class Session(QObject):
         """
         return self._outdated(finished) or (finished is not None and finished is self._superseded)
 
+    def _on_picture(self, picture: Any, finished: _EvaluationWorker | None = None) -> None:
+        """Das Modell steht im Bild, die Erkennung läuft weiter (KUNDE-14).
+
+        Das Bild wird ``last_result``, damit Ansicht, Baum, Auswahl und Bericht
+        dasselbe zeigen; ``result_current`` bleibt falsch — was ein fertiges
+        Ergebnis verlangt (Karten, Passungen, Abschlüsse, Antworten im
+        Stapel), wartet weiter auf ``_on_finished``.
+        """
+        if self._stale(finished) or self.cancel_signal.is_cancelled:
+            return
+        self.last_result = picture
+        self.picture = picture
+        self.result_generation += 1
+        self.result_current = False
+        self.pictureChanged.emit(picture)
+        # Ein Bild gibt es nur von einem Stand, der nicht anhielt.
+        self._settle_import(picture)
+
     def _on_finished(self, result: Any, finished: _EvaluationWorker | None = None) -> None:
         if self._stale(finished):
             # §15.3: stehen bleibt der letzte **gültige** Stand. Das Ergebnis
@@ -4615,6 +5115,11 @@ class Session(QObject):
             # mehr gibt — es einzublenden hieß, die leere Szene des neuen
             # Projekts über das Modell zu legen, das gerade geladen wird.
             return
+        if not self._rerun_pending and self._settle_import(result):
+            # Die Datei enthielt kein Modell; der Stand ohne sie wird gerade
+            # gerechnet und kommt als nächstes Ergebnis.
+            return
+        self.picture = None
         self.last_result = result
         # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
         # Wegräumen hielte sie die **vorige** Szene am Leben — bei einem Netz
@@ -4855,6 +5360,7 @@ class Session(QObject):
                 or self._revision
                 or next(iter(self._previews), None)
                 or next(iter(self._placements), None)
+                or self._autosaving
             )
             if worker is None:
                 return True

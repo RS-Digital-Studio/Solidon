@@ -2375,7 +2375,11 @@ class MainWindow(QMainWindow):
         self._recent_poll.timeout.connect(self._collect_recent)
         self._autosave = QTimer(self)
         self._autosave.setInterval(AUTOSAVE_INTERVAL_MS)
-        self._autosave.timeout.connect(self.session.autosave)
+        # Im Arbeiter (``Session.autosave_async``): Am Drachen stand das
+        # Fenster sonst alle zwei Minuten eine Sekunde (Durchsicht 0.5.1).
+        self._autosave.timeout.connect(self.session.autosave_async)
+        self.session.autosaveFailed.connect(self._autosave_failed)
+        self._autosave_warned = False
         self._autosave.start()
 
         self._show_recent()
@@ -5532,6 +5536,22 @@ class MainWindow(QMainWindow):
             action.setToolTip(str(stored))
             action.setProperty("tip_before_pick", None)
 
+    def _choose_another_file(self, error: AppError) -> None:
+        """*Andere Datei wählen*: derselbe Dateidialog wie der Weg, der scheiterte.
+
+        Eine Projektdatei, die sich nicht öffnen ließ, sucht man unter
+        *Öffnen*, ein Modell unter *Einfügen* — Einfügen ersetzt kein offenes
+        Projekt, und Öffnen nimmt kein Modell an. Bis zur Durchsicht 0.5.1 bot
+        jede Absage *Einfügen* an, auch die eines verschobenen Projekts aus
+        „Zuletzt geöffnet“. Welcher Weg es war, sagt der Name der Datei im
+        Fehler.
+        """
+        name = str(error.values.get("path", "")) if error.values else ""
+        if Path(name).suffix.lower() == PROJECT_SUFFIX:
+            self.action_open()
+        else:
+            self.action_import()
+
     def _open_error_url(self, error: AppError) -> None:
         """Öffnet die Adresse, die im Fehler mitreist — nicht die Produktseite.
 
@@ -5702,6 +5722,7 @@ class MainWindow(QMainWindow):
 
     def _connect_session(self) -> None:
         self.session.sceneChanged.connect(self._on_scene)
+        self.session.pictureChanged.connect(self._on_picture)
         self.session.projectChanged.connect(self._on_project)
         self.session.progressChanged.connect(self._on_progress)
         self.session.busyChanged.connect(self._on_busy)
@@ -5732,6 +5753,11 @@ class MainWindow(QMainWindow):
         self._loading_model = False
         self.session.importFailed.connect(self._on_import_failed)
         self.session.importFinished.connect(self._on_import_finished)
+        self.session.importRejected.connect(self._on_import_rejected)
+        self.session.importConfirmed.connect(self._on_import_confirmed)
+        #: Die eingelesene Datei, bis ihre Auswertung zeigt, dass sie ein
+        #: Modell enthält — erst dann kommt sie nach „Zuletzt geöffnet“ (KUNDE-12).
+        self._recent_candidate: Path | None = None
         self.session.choose_outline = True
         self.session.outlineImportRequested.connect(self._choose_outline_import)
         self.session.choose_step_bodies = True
@@ -5892,7 +5918,7 @@ class MainWindow(QMainWindow):
         if not self.session.modified:
             return True
         if self.session.only_imported:
-            clear_autosave(self.session.path, self.session.recovery_token)
+            self.session.forget_autosave()
             return True
         answer = confirm_unsaved(self.session.title, self)
         if answer == "cancel":
@@ -5906,7 +5932,7 @@ class MainWindow(QMainWindow):
         # Absturz da (§38) — nicht dafür, eine Entscheidung des Nutzers zu
         # überstimmen. Bleibt sie liegen, bietet das nächste Öffnen genau den
         # Stand wieder an, den er hier gerade weggeworfen hat.
-        clear_autosave(self.session.path, self.session.recovery_token)
+        self.session.forget_autosave()
         return True
 
     def open_path(self, path: Path) -> None:
@@ -5983,6 +6009,7 @@ class MainWindow(QMainWindow):
                 return
         except AppError as error:
             self.status_message.setText(self._announcement)
+            self._show_recent()
             show_error(error, self)
             return
         self._show_start_screen(False)
@@ -19201,6 +19228,17 @@ class MainWindow(QMainWindow):
             self._showing_scene = False
             self._pending_scene = None
 
+    def _on_picture(self, picture: EvaluationResult) -> None:
+        """Das Modell vor seiner Erkennung ins Bild bringen (KUNDE-14).
+
+        Derselbe Aufbau wie für ein Ergebnis — Ansicht, Baum, Bericht —, und
+        danach weicht die Ladeanzeige: Sie gilt dem leeren Bild, und das ist
+        jetzt keines mehr. Balken, Uhr und *Abbrechen* bleiben, denn die
+        Erkennung rechnet weiter.
+        """
+        self._on_scene(picture)
+        self._update_veil(self.session.busy)
+
     def _show_scene(self, result: EvaluationResult) -> None:
         # Ein fertiger Lauf hat nichts mehr abzubrechen: *Ohne
         # Merkmalserkennung laden* gehört zur Ansage eines Abbruchs (Review N4).
@@ -19272,7 +19310,15 @@ class MainWindow(QMainWindow):
         # ``_update_actions`` — mit dem Grund am Knopf statt ohne Knopf.
         self.explode_bar.show_for(len(result.scene.objects))
         self.report.show_result(result, self.session.project.document)
-        self._print_findings.start(result, self.session.profile, self.effective_print_settings())
+        if result is self.session.picture:
+            # Die Schichtanalyse wartet auf das Ergebnis: Neben der Erkennung
+            # nähme sie ihr den Rechner, und das Ergebnis danach rechnete sie
+            # ohnehin neu.
+            self._print_findings.cancel()
+        else:
+            self._print_findings.start(
+                result, self.session.profile, self.effective_print_settings()
+            )
         steps, planned = self._split_findings
         if planned and steps == len(self.session.project.document.ops):
             # Die Befunde der Suche stehen in keinem Schritt; jede Auswertung
@@ -19343,6 +19389,9 @@ class MainWindow(QMainWindow):
         self._pending_import = None
         self._pending_download = ""
         self.status_message.setText(self._announcement)
+        # „Zuletzt geöffnet“ prüft die Einträge nur beim Aufbau; eine Datei,
+        # die seither verschwand, stünde sonst weiter da (Durchsicht 0.5.1).
+        self._show_recent()
         show_error(error, self)
 
     def _on_import_finished(self, accepted: bool) -> None:
@@ -19363,13 +19412,44 @@ class MainWindow(QMainWindow):
         if accepted:
             self._show_start_screen(False)
             if eingelesen is not None:
-                self.settings.remember(eingelesen)
-                self._store_settings()
-                self._show_recent()
+                # **Erst wenn das Modell steht** (KUNDE-12): Eine Datei, die
+                # den Plan passiert und am Ladeschritt scheitert, stand sonst
+                # in der Liste. ``importConfirmed`` trägt sie nach. Eine Datei
+                # davor, deren Ergebnis noch aussteht, wartet nicht länger —
+                # die Sitzung merkt sich nur den letzten Import.
+                if self._recent_candidate is not None:
+                    self._on_import_confirmed()
+                self._recent_candidate = eingelesen
+                if not self.session.import_unconfirmed:
+                    self._on_import_confirmed()
             if geladen:
                 self.announce(f"{tr('Geladen')}: {geladen}")
         else:
             self.status_message.setText(self._announcement)
+
+    def _on_import_confirmed(self) -> None:
+        """Das eingelesene Modell steht — die Datei kommt nach „Zuletzt geöffnet“."""
+        eingelesen, self._recent_candidate = self._recent_candidate, None
+        if eingelesen is None:
+            return
+        self.settings.remember(eingelesen)
+        self._store_settings()
+        self._show_recent()
+
+    def _on_import_rejected(self, error: AppError) -> None:
+        """Die Datei enthielt kein Modell; der Import ist zurückgenommen (KUNDE-12).
+
+        Derselbe Ausgang wie ein Lesefehler vor dem Plan: keine Zeile in
+        „Zuletzt geöffnet“, der Startbildschirm, wenn das Projekt dadurch leer
+        ist, und der Grund mit *Andere Datei wählen*. Vorher blieb die Datei
+        als Schritt 1 stehen, und jede weitere abgelegte Datei wurde mit „Die
+        Kette hält an“ abgewiesen.
+        """
+        self._recent_candidate = None
+        if not self.session.project.document.ops and self.session.path is None:
+            self._show_start_screen(True)
+        self.status_message.setText(self._announcement)
+        show_error(error, self)
 
     def _on_project(self) -> None:
         request = self._map_request
@@ -19835,18 +19915,33 @@ class MainWindow(QMainWindow):
         nächsten Ereignis verschwindet, war für den, der gerade woanders
         hinsah, nie da.
         """
-        self.announce(
-            tr(
-                "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
-                "eine Änderung am Stapel rechnet weiter."
+        if self.session.picture is not None:
+            # Das Bild vor der Erkennung ist kein vollständig gerechneter
+            # Stand: Die Geometrie stimmt, die Merkmale fehlen (KUNDE-14).
+            self.announce(
+                tr(
+                    "Abgebrochen. Das Modell steht da, seine Merkmale sind nicht erkannt — "
+                    "die nächste Änderung erkennt sie."
+                )
             )
-        )
+        else:
+            self.announce(
+                tr(
+                    "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
+                    "eine Änderung am Stapel rechnet weiter."
+                )
+            )
         if self.session.recognition_interrupted():
             self.skip_recognition.setVisible(True)
 
     def _load_without_recognition(self) -> None:
-        """*Ohne Merkmalserkennung laden* nach einem Abbruch der langen Erkennung."""
-        self.skip_recognition.setVisible(False)
+        """*Ohne Merkmalserkennung laden* nach einem Abbruch der langen Erkennung.
+
+        Die Ansage des Abbruchs geht mit: „Zu sehen ist der letzte vollständig
+        gerechnete Stand“ stand sonst über dem Modell, das gerade vollständig
+        geladen war (Durchsicht 0.5.1). ``announce`` nimmt den Knopf mit.
+        """
+        self.announce("")
         self.session.load_without_recognition()
 
     def _update_veil(self, busy: bool) -> None:
@@ -20210,7 +20305,7 @@ class MainWindow(QMainWindow):
             # den ``correct_input`` öffnen würde, entsteht gar nicht erst.
             # Was bleibt, ist eine andere Datei — ``action_import``, nicht
             # ``action_open``: Einfügen ersetzt kein offenes Projekt.
-            "choose_another_file": lambda _error: self.action_import(),
+            "choose_another_file": self._choose_another_file,
             # Die andere Hälfte davon: Wo nicht ein Wert, sondern die
             # Auswahl nicht geht, hilft kein Dialog (§15.4).
             "change_selection": self._change_selection_after_error,
@@ -22217,6 +22312,25 @@ class MainWindow(QMainWindow):
         self.viewport.release_renderer()
         self.session.release_recovery()
         event.accept()
+
+    def _autosave_failed(self, error: AppError) -> None:
+        """Die automatische Sicherung ließ sich nicht schreiben (§38, RM-233).
+
+        Bis zur Durchsicht 0.5.1 warf sie im Zeitgeber, und das erreichte
+        keinen Kunden — der verließ sich auf eine Sicherung, die es nicht
+        gab. Gesagt wird es einmal je Sitzung, nicht alle zwei Minuten; eine
+        gelungene Sicherung danach ändert daran nichts, der Satz nennt den Weg.
+        """
+        _log.warning("autosave failed: %s", error)
+        if self._autosave_warned:
+            return
+        self._autosave_warned = True
+        self.announce(
+            tr(
+                "Die automatische Sicherung ließ sich nicht schreiben — prüfen Sie den "
+                "freien Speicherplatz und speichern Sie das Projekt selbst."
+            )
+        )
 
     def _store_settings(self) -> bool:
         """Oberflächeneinstellungen schreiben und einen Fehler sichtbar machen."""

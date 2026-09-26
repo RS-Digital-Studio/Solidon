@@ -32,6 +32,7 @@ from app.i18n import _
 from tests.conftest import FakeMesh
 
 RUNS: dict[str, int] = {}
+MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def test_secondary_material_profile_recalibrates_a_cached_operation(
@@ -4789,3 +4790,237 @@ def test_an_unrecorded_memory_decline_does_not_repeat_the_long_run(monkeypatch, 
     assert len(calls) == 1, "der zweite Lauf hat den Speicherfehler nicht wiederholt"
     assert told[0][0] == 1
     assert (told[0][1]["allowed"], told[0][1]["out_of_memory"]) == (False, True)
+
+
+def _session_with_unshown_import(path: Path) -> Any:
+    """Eine Sitzung mit einem Ladeschritt, dessen Körper noch nie im Bild stand."""
+    from app.ui.session import Session
+
+    session = Session()
+    assert session.import_model(path, unit="mm")
+    # Der Arbeiter, den das Einfügen anstößt, meldet ohne Ereignisschleife
+    # nichts zurück; angehalten und abgewartet, rechnet hier nur der Test.
+    running = session._worker
+    session.cancel_evaluation()
+    if running is not None:
+        assert running.wait(60_000)
+    session.cancel_signal.reset()
+    return session
+
+
+def test_a_large_import_is_shown_before_its_recognition(monkeypatch) -> None:
+    """Das Modell steht im Bild, bevor seine Merkmale erkannt sind (KUNDE-14).
+
+    Das Piratenschiff (1,2 Mio. Dreiecke) erschien in 0.5.1 erst nach 60 s:
+    8 s Einlesen, dann 51 s Erkennung unter dem Ladeschleier. Der Ladeweg
+    rechnet jetzt erst das Bild ohne Erkennung, dann denselben Lauf mit ihr —
+    und der liest die Geometrie aus dem Cache, statt noch einmal einzulesen.
+    """
+    from app.core.registry import REGISTRY
+    from app.ui import session as session_module
+    from app.ui.session import _EvaluationWorker
+
+    monkeypatch.setattr(session_module, "PICTURE_FIRST_TRIANGLES", 1)
+    session = _session_with_unshown_import(MESHES / "plate_holes.stl")
+    assert session.picture_first(), "ein Ladeschritt ohne Bild zeigt erst das Modell"
+
+    spec = REGISTRY.get("load")
+    real = spec.fn
+    loads: list[int] = []
+
+    def counted(ctx: OpContext) -> Any:
+        loads.append(1)
+        return real(ctx)
+
+    worker = _EvaluationWorker(session, picture_first=True)
+    pictures: list[Any] = []
+    worker.pictureWith.connect(pictures.append)
+    object.__setattr__(spec, "fn", counted)
+    try:
+        result = worker._evaluate(session)
+    finally:
+        object.__setattr__(spec, "fn", real)
+
+    assert len(pictures) == 1, "genau ein Bild vor der Erkennung"
+    picture = pictures[0]
+    body = next(iter(picture.scene.objects.values()))
+    assert not body.features, "das Bild trägt noch keine Merkmale"
+    codes = [entry.code for entry in picture.scene.report.findings]
+    assert "perceive.pending" in codes and "perceive.too_large" not in codes
+    assert any(entry.features for entry in result.scene.objects.values()), "danach erkannt"
+    assert "perceive.pending" not in {entry.code for entry in result.scene.report.findings}
+    assert len(loads) == 1, "der zweite Lauf nimmt die Geometrie aus dem Cache"
+
+    session._on_picture(picture)
+    assert session.last_result is picture and session.picture is picture
+    assert not session.result_current, "ein Bild ist kein fertiges Ergebnis"
+    assert session.picture_first(), "solange ein Bild steht, zeigt auch der nächste Lauf eins"
+    session._on_finished(result)
+    assert session.picture is None and session.last_result is result
+    assert not session.picture_first(), "danach rechnet eine Änderung wie bisher"
+
+
+def test_a_small_import_is_not_shown_twice(monkeypatch) -> None:
+    """Unter der Schwelle kommt kein Bild: Die Erkennung ist schneller als ein
+    zweiter Aufbau von Baum, Bericht und Ansicht (KUNDE-14)."""
+    from app.ui.session import PICTURE_FIRST_TRIANGLES, _EvaluationWorker
+
+    session = _session_with_unshown_import(MESHES / "plate_holes.stl")
+    worker = _EvaluationWorker(session, picture_first=True)
+    pictures: list[Any] = []
+    worker.pictureWith.connect(pictures.append)
+    result = worker._evaluate(session)
+    body = next(iter(result.scene.objects.values()))
+    assert body.mesh.triangle_count < PICTURE_FIRST_TRIANGLES
+    assert not pictures
+
+
+def test_the_run_after_the_picture_does_not_ask_again(monkeypatch) -> None:
+    """Was das Bild schon gefragt hat, beantwortet der Lauf danach selbst (KUNDE-14).
+
+    Beide Läufe rechnen denselben Stand; eine zweite, gleiche Frage am
+    Bildschirm wäre ein Fenster für nichts.
+    """
+    from app.core.errors import QuestionDeclined
+    from app.ui.session import Session
+
+    session = Session()
+    asked: list[Any] = []
+    session.askRequested.connect(asked.append)
+    session._pending.replay = {
+        ("Welche Einheit?", ("mm", "Zoll")): "Zoll",
+        ("Welche Seite?", ("oben", "unten")): None,
+    }
+    try:
+        assert session.ask_from_worker("Welche Einheit?", ["mm", "Zoll"]) == "Zoll"
+        with pytest.raises(QuestionDeclined):
+            session.ask_from_worker("Welche Seite?", ["oben", "unten"])
+    finally:
+        session._pending.replay = None
+    assert not asked, "keine Frage am Bildschirm"
+
+
+def test_a_halted_load_is_not_computed_twice(tmp_path: Path) -> None:
+    """Hält schon der Ladeschritt an, gibt es nichts zu zeigen und nichts zu
+    erkennen — der Lauf endet mit dem ersten Durchgang, und der nächste Lauf
+    rechnet ihn nicht zweimal (KUNDE-12, KUNDE-14)."""
+    from app.core.registry import REGISTRY
+    from app.ui.session import _EvaluationWorker
+
+    broken = tmp_path / "kaputt.stl"
+    # Wie ein abgebrochener Download: Facetten angekündigt, keine gültige Ecke.
+    broken.write_bytes(b"solid x\n facet normal 0 0 1\n  outer loop\n   vertex 0 0 nope\n" * 3)
+    session = _session_with_unshown_import(broken)
+    spec = REGISTRY.get("load")
+    real = spec.fn
+    loads: list[int] = []
+
+    def counted(ctx: OpContext) -> Any:
+        loads.append(1)
+        return real(ctx)
+
+    worker = _EvaluationWorker(session, picture_first=True)
+    object.__setattr__(spec, "fn", counted)
+    try:
+        result = worker._evaluate(session)
+    finally:
+        object.__setattr__(spec, "fn", real)
+    assert result.stopped_at is not None and not result.scene.objects
+    assert len(loads) == 1, "ein Durchgang"
+    session._on_finished(result)
+    assert not session.picture_first(), "der angehaltene Ladeschritt rechnet nicht doppelt"
+
+
+def _broken_stl(folder: Path) -> Path:
+    """Wie ein abgebrochener Download: Facetten angekündigt, keine gültige Ecke."""
+    broken = folder / "kaputt.stl"
+    broken.write_bytes(b"solid x\n facet normal 0 0 1\n  outer loop\n   vertex 0 0 nope\n" * 3)
+    return broken
+
+
+def _settled(session: Any) -> None:
+    """Den Lauf, den eine Rücknahme anstößt, anhalten und abwarten."""
+    running = session._worker
+    session.cancel_evaluation()
+    if running is not None:
+        assert running.wait(60_000)
+    session.cancel_signal.reset()
+
+
+def test_a_file_without_a_model_does_not_become_a_step(tmp_path: Path) -> None:
+    """Eine Datei, die erst am Ladeschritt scheitert, wird zurückgenommen (KUNDE-12).
+
+    Bis zur Durchsicht 0.5.1 blieb sie als Schritt 1 stehen: leerer
+    Arbeitsbereich, jede weitere abgelegte Datei mit „Die Kette hält an“
+    abgewiesen. Jetzt geht sie den Weg jedes Lesefehlers — ohne Redo, ohne
+    Quelle, und ein neues Projekt gilt danach nicht als geändert.
+    """
+    from app.core.errors import CHOOSE_ANOTHER_FILE
+
+    session = _session_with_unshown_import(_broken_stl(tmp_path))
+    assert session.import_unconfirmed
+    rejected: list[Any] = []
+    confirmed: list[bool] = []
+    session.importRejected.connect(rejected.append)
+    session.importConfirmed.connect(lambda: confirmed.append(True))
+    result = session.run_evaluation()
+    assert result.stopped_at is not None
+
+    session._on_finished(result)
+    _settled(session)
+
+    assert len(rejected) == 1 and not confirmed
+    error = rejected[0]
+    assert str(error.title) == str(_("Diese Datei ließ sich nicht lesen."))
+    assert CHOOSE_ANOTHER_FILE in error.suggestions
+    assert error.values == {"path": "kaputt.stl"}, "nur der Name, keine Art und keine Nummer"
+    assert not session.project.document.ops, "kein Schritt bleibt stehen"
+    assert not session.project.document.sources and not session.project.sources
+    assert not session.history.can_redo, "Strg+Y bringt die Datei nicht zurück"
+    assert not session.modified, "ein neues Projekt, in dem nie etwas ankam"
+    assert not session.import_unconfirmed
+
+
+def test_a_file_with_a_model_is_confirmed(tmp_path: Path) -> None:
+    """Das Gegenstück: Ein Modell, das steht, bleibt und wird bestätigt (KUNDE-12)."""
+    session = _session_with_unshown_import(MESHES / "cube_clean.stl")
+    rejected: list[Any] = []
+    confirmed: list[bool] = []
+    session.importRejected.connect(rejected.append)
+    session.importConfirmed.connect(lambda: confirmed.append(True))
+    session._on_finished(session.run_evaluation())
+    assert confirmed == [True] and not rejected
+    assert len(session.project.document.ops) == 1
+    assert not session.import_unconfirmed
+
+
+def test_a_broken_file_after_other_work_is_not_withdrawn_blindly(tmp_path: Path) -> None:
+    """Zurückgenommen wird nur die letzte Transaktion und nur der Import selbst (KUNDE-12)."""
+    session = _session_with_unshown_import(_broken_stl(tmp_path))
+    result = session.run_evaluation()
+    # Danach kam noch etwas — der Import ist nicht mehr die letzte Transaktion.
+    session.history.apply(
+        _("Quader"),
+        [OperationDraft(op="create_box", params={})],
+    )
+    rejected: list[Any] = []
+    session.importRejected.connect(rejected.append)
+    session._on_finished(result)
+    _settled(session)
+    assert not rejected
+    assert len(session.project.document.ops) == 2
+
+
+def test_the_halt_refusal_does_not_repeat_its_sentence(tmp_path: Path) -> None:
+    """Die Absage hinter einem Halt nennt nicht noch einmal Art und Nummer (KUNDE-12).
+
+    Unter „Angehalten ist Schritt 1 (Modell einfügen): …“ standen „Art: Die
+    Eingabe war so nicht verwendbar.“ und „Operation: 1“ — der Titel des
+    Fehlers und die Nummer, die der Satz schon sagt. Die Handler lesen
+    ``op_id``.
+    """
+    session = _session_with_unshown_import(_broken_stl(tmp_path))
+    session.last_result = session.run_evaluation()
+    refusal = session.halt_in_the_way()
+    assert refusal is not None and refusal.op_id == 1
+    assert "kind" not in refusal.values and "op" not in refusal.values, refusal.values

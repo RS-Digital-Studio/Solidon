@@ -1428,12 +1428,15 @@ def test_a_cancelled_recognition_offers_to_load_without_it():
     from types import SimpleNamespace
     from unittest.mock import Mock
 
+    from app.i18n import tr
     from app.ui.main_window import MainWindow
 
     for interrupted in (True, False):
         window = SimpleNamespace(
             announce=Mock(),
-            session=SimpleNamespace(recognition_interrupted=lambda value=interrupted: value),
+            session=SimpleNamespace(
+                recognition_interrupted=lambda value=interrupted: value, picture=None
+            ),
             skip_recognition=Mock(),
         )
         MainWindow._on_evaluation_cancelled(window)
@@ -1441,3 +1444,18 @@ def test_a_cancelled_recognition_offers_to_load_without_it():
             window.skip_recognition.setVisible.assert_called_once_with(True)
         else:
             window.skip_recognition.setVisible.assert_not_called()
+
+    # Mit dem Bild vor der Erkennung (KUNDE-14) steht das Modell schon da; der
+    # Satz sagt das und nicht „der letzte vollständig gerechnete Stand“.
+    window = SimpleNamespace(
+        announce=Mock(),
+        session=SimpleNamespace(recognition_interrupted=lambda: False, picture=object()),
+        skip_recognition=Mock(),
+    )
+    MainWindow._on_evaluation_cancelled(window)
+    window.announce.assert_called_once_with(
+        tr(
+            "Abgebrochen. Das Modell steht da, seine Merkmale sind nicht erkannt — "
+            "die nächste Änderung erkennt sie."
+        )
+    )

@@ -40,7 +40,14 @@ from typing import Any, BinaryIO, Final, get_args
 
 from app.branding import APP_VERSION, PROJECT_SUFFIX
 from app.core import examples
-from app.core.errors import PROGRAMMING_ERRORS, SHOW_DETAILS, FileWriteError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CHOOSE_ANOTHER_FILE,
+    PROGRAMMING_ERRORS,
+    SHOW_DETAILS,
+    FileWriteError,
+    ValidationError,
+)
 from app.core.ingest.loader import (
     MAX_ARCHIVE_ENTRIES,
     MAX_COMPRESSION_RATIO,
@@ -1587,12 +1594,20 @@ def _not_written(path: Path, problem: OSError) -> FileWriteError:
 
 def load(path: Path) -> Project:
     """Liest einen Container — migriert und verifiziert unterwegs (§16.2)."""
+    # **Eine Datei, die nicht (mehr) da ist, ist keine falsche Eingabe.** Bis
+    # zur Durchsicht 0.5.1 stand darüber „Die Eingabe war so nicht
+    # verwendbar.“, und der Dialog bot *Details anzeigen* und *Fehlerbericht
+    # erstellen* an — für ein Projekt aus „Zuletzt geöffnet“, das jemand
+    # verschoben hatte. Titel und Weg sind dieselben wie beim Modell
+    # (``loader.unreadable_file``): *Andere Datei wählen*.
     if not path.is_file():
         raise ValidationError(
             field="path",
             detail=_("Diese Projektdatei gibt es nicht."),
             constraint="missing_file",
             values={"path": path.name},
+            title=_("Diese Datei ließ sich nicht lesen."),
+            suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
         )
     try:
         _check_outer_size(path)
@@ -1766,6 +1781,8 @@ def load(path: Path) -> Project:
             ),
             constraint="unreadable",
             values={"path": path.name, "reason": problem.strerror or str(problem)},
+            title=_("Diese Datei ließ sich nicht lesen."),
+            suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
         ) from problem
     except PROGRAMMING_ERRORS:
         # **Ein falscher Aufruf ist keine kaputte Datei.** ``TypeError`` und

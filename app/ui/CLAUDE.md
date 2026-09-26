@@ -7,7 +7,27 @@ Oberfläche rechnet keine Geometrie und ändert keine — **sie ruft Ops auf.**
 Zeittext. Statuszeile und Ladeschleier lesen denselben Sekundentakt, auch ohne
 neue Fortschrittsmeldung oder Animation. Der Schleier kann verschwinden,
 während die Uhr für die Statuszeile weiterläuft. Antwortzeit einer Kernfrage
-zählt als verstrichen, aber nicht als Rechenzeit der Restschätzung.
+zählt als verstrichen, aber nicht als Rechenzeit der Restschätzung. Stand
+die vorige Zeile bei 0 % und kommt eine neue mit einem Anteil, zählt die
+Schätzung ab dort (`_counted_fraction`).
+
+Die Frage vor der Vollerkennung und jede andere Rückfrage ohne Kandidaten im
+Bild mit zwei oder drei kurzen Antworten zeigt die Antworten als Knöpfe
+(`AskDialog(as_buttons=…)`, entschieden von `main_window._answers_as_buttons`);
+Liste und Antwortknopf bleiben als Ablage der Wahl. Die Suche an einer Stelle
+rechnet in der Qualität der Sitzung (`LocalRecognitionDialog(quality=…)`), sonst
+trifft sie keinen Schritt im Cache. Nach jeder Rechnung fordert `_on_busy` die
+gewählte Analysekarte neu an (`_resume_map_after_idle`). Slicer heißen überall
+wie auf der Packung (`labels.slicer_title`).
+
+Beim Laden zeigt die Sitzung das Modell vor seiner Erkennung
+(`Session.picture_first`, `pictureChanged` → `MainWindow._on_picture`,
+`Session.picture`); ein Import, dessen Datei am Ladeschritt scheitert, wird
+zurückgenommen (`importRejected`/`importConfirmed`, `_recent_candidate`). Das
+Fadenkreuz der Stellenwahl sind vier deckende Arme um eine freie Mitte
+(`viewport._ReticleArm`). Die Netzfehlerkarte wählt einen einzigen Körper selbst
+(`_lone_visible_body`), die Rückfragekarte lädt nur ein, wo sie Platz hat
+(`SurveyNotice.has_room`).
 
 Nachlaufende Befunde erhalten die gewählte Zeile des Prüfberichts über die
 gemeinsame Befundidentität, auch wenn neue Fehler die Reihenfolge ändern.

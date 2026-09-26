@@ -2565,6 +2565,22 @@ class History:
         self._undone_anchor = self._document_mark()
         return transaction
 
+    def withdraw(self, transaction_id: TransactionId) -> Transaction | None:
+        """Nimmt die letzte Transaktion zurück, **ohne** sie für Strg+Y aufzuheben.
+
+        Für eine Rücknahme, die kein Undo des Nutzers ist: Ein Import, dessen
+        Datei sich als unlesbar erweist, war nie ein Schritt des Projekts
+        (KUNDE-12). Sein Redo brächte einen Ladeschritt zurück, dessen Quelle
+        schon wieder ausgetragen ist. Nur genau diese Transaktion, und nur,
+        wenn sie noch die letzte ist — sonst ``None`` und nichts geändert.
+        """
+        transactions = self.document.transactions
+        if not transactions or transactions[-1].id != transaction_id:
+            return None
+        transaction = self.undo()
+        self._forget_undone()
+        return transaction
+
     def _document_mark(self) -> tuple[int, TransactionId | None]:
         """Woran sich eine fremde Handlung erkennen lässt: Zahl und Kennung der
         letzten Transaktion im Dokument."""

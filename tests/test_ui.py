@@ -13,6 +13,7 @@ import dataclasses
 import logging
 import re
 import threading
+import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -13211,6 +13212,273 @@ def test_reading_a_file_says_so_while_the_window_stays_free(
     assert [entry.op for entry in window.session.project.document.ops] == ["load"]
 
 
+def test_cancelling_frees_the_window_while_the_drive_still_reads(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Abbrechen* gilt sofort, auch wenn das Laufwerk nicht antwortet.
+
+    Ein ``stat`` oder ``read`` lässt sich nicht unterbrechen; bis zur
+    Durchsicht 0.5.1 galt der Klick erst, wenn das System aufgab — gemessen
+    mit einem um 8 s verzögerten Lesen: frei nach 6,1 s. Gelesen wird seither
+    in einem Daemon-Faden, und der Arbeiter endet auf den Klick.
+    """
+    from app.ui import session as session_module
+
+    release = threading.Event()
+    real = session_module.read_local_payload
+
+    def hanging(path: Path) -> bytes:
+        release.wait(30)
+        return real(path)
+
+    monkeypatch.setattr(session_module, "read_local_payload", hanging)
+    finished: list[bool] = []
+    window.session.importFinished.connect(finished.append)
+    try:
+        window.open_path(MESHES / "cube_clean.stl")
+        assert window.session.busy, "gelesen wird im Arbeiter"
+        window.session.cancel_evaluation()
+        started = time.monotonic()
+        while window.session.busy and time.monotonic() - started < 5:
+            qt_app.processEvents()
+            time.sleep(0.01)
+        freed = time.monotonic() - started
+        assert not window.session.busy, "der Klick wartete auf das Laufwerk"
+        assert freed < 2.0, f"frei erst nach {freed:.1f} s"
+        assert finished == [False], "der abgebrochene Import meldet sich als nicht angenommen"
+        assert not window.session.project.document.ops, "eingebettet wurde nichts"
+    finally:
+        release.set()
+    # Die späte Antwort des Laufwerks verfällt, und ein neuer Import geht durch.
+    qt_app.processEvents()
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle()
+    assert [entry.op for entry in window.session.project.document.ops] == ["load"]
+
+
+def test_a_project_on_a_slow_drive_does_not_stop_the_window(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Das Fenster malt weiter, während eine Projektdatei von einem langsamen Laufwerk kommt.
+
+    ``load`` lief im Hauptfaden: Um 5 s verzögertes Lesen hielt das Fenster
+    5,1 s an (Durchsicht 0.5.1). Gelesen wird daneben; Zeitgeber laufen
+    weiter, Eingaben nicht — das Öffnen bleibt ein Schritt.
+    """
+    from PySide6.QtCore import QTimer
+
+    from app.core.scene.project import save
+    from app.ui import session as session_module
+
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle()
+    target = save(window.session.project, tmp_path / "langsam.p3d")
+    real = session_module.load
+
+    def slow(path: Path) -> Any:
+        time.sleep(0.4)
+        return real(path)
+
+    monkeypatch.setattr(session_module, "load", slow)
+    ticks: list[int] = []
+    QTimer.singleShot(100, lambda: ticks.append(1))
+    window.session.open_project(target)
+    assert ticks, "während des Lesens lief kein Zeitgeber — der Hauptfaden stand"
+    assert window.session.path == target
+
+
+def test_a_moved_project_leads_to_open_and_a_moved_model_to_insert(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Andere Datei wählen* nimmt den Weg, der scheiterte (Durchsicht 0.5.1).
+
+    Ein Projekt sucht man unter *Öffnen*, ein Modell unter *Einfügen*; bis
+    dahin führte jede Absage zu *Einfügen*.
+    """
+    from app.core.errors import UserError
+
+    called: list[str] = []
+    monkeypatch.setattr(window, "action_open", lambda: called.append("open"))
+    monkeypatch.setattr(window, "action_import", lambda: called.append("import"))
+    handler = window.error_handlers()["choose_another_file"]
+    handler(UserError("x", values={"path": "werkstatt.p3d"}))
+    handler(UserError("x", values={"path": "halter.stl"}))
+    handler(UserError("x"))
+    assert called == ["open", "import", "import"]
+
+
+def test_the_autosave_writes_beside_the_window_and_says_when_it_cannot(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die automatische Sicherung hält das Fenster nicht an und schweigt nicht (RM-233).
+
+    Sie schrieb im Zeitgeber des Hauptfadens — am Mausoleum-Drachen 0,8 bis
+    1,0 s Stillstand alle zwei Minuten —, und ein Schreibfehler warf in diesem
+    Slot, wo ihn niemand sah (Durchsicht 0.5.1).
+    """
+    from app.core.errors import FileWriteError
+    from app.ui import session as session_module
+
+    threads: list[bool] = []
+    real = session_module.write_autosave
+
+    def watched(project: Any, path: Any, token: Any = None) -> Any:
+        threads.append(threading.current_thread() is threading.main_thread())
+        return real(project, path, token)
+
+    monkeypatch.setattr(session_module, "write_autosave", watched)
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle()
+    assert window.session.modified
+    window._autosave.timeout.emit()
+    assert window.session.wait_for_idle()
+    qt_app.processEvents()
+    assert threads == [False], "geschrieben wird im Arbeiter"
+
+    def refusing(project: Any, path: Any, token: Any = None) -> Any:
+        raise FileWriteError(target="x.autosave", detail="Kein Platz")
+
+    monkeypatch.setattr(session_module, "write_autosave", refusing)
+    for _round in range(2):
+        window._autosave.timeout.emit()
+        assert window.session.wait_for_idle()
+        qt_app.processEvents()
+    said = tr(
+        "Die automatische Sicherung ließ sich nicht schreiben — prüfen Sie den "
+        "freien Speicherplatz und speichern Sie das Projekt selbst."
+    )
+    assert window._announcement == said, "der Fehler kam nicht beim Kunden an"
+    window.announce("")
+    window._autosave.timeout.emit()
+    assert window.session.wait_for_idle()
+    qt_app.processEvents()
+    assert window._announcement == "", "einmal je Sitzung, nicht alle zwei Minuten"
+
+
+def test_a_backup_that_finishes_after_saving_is_cleared(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Eine Sicherung, die nach dem Speichern fertig wird, böte sich sonst beim Start an."""
+    from app.core.scene.project import autosave_path
+    from app.ui import session as session_module
+
+    release = threading.Event()
+    real = session_module.write_autosave
+
+    def slow(project: Any, path: Any, token: Any = None) -> Any:
+        release.wait(10)
+        return real(project, path, token)
+
+    monkeypatch.setattr(session_module, "write_autosave", slow)
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle()
+    target = tmp_path / "gespeichert.p3d"
+    token = window.session.recovery_token
+    window.session.autosave_async()
+    window.session.save_project(target)
+    release.set()
+    assert window.session.wait_for_idle()
+    qt_app.processEvents()
+    assert not autosave_path(None, token).exists(), "die späte Sicherung blieb liegen"
+    assert not autosave_path(target).exists()
+
+
+def test_a_recent_file_that_vanished_leaves_the_list_after_the_attempt(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein Eintrag, dessen Datei seit dem Start verschwand, bleibt nicht stehen.
+
+    „Zuletzt geöffnet“ prüft beim Aufbau; wer danach verschob und klickte, bekam
+    den Hinweis — und denselben toten Eintrag wieder angeboten (Durchsicht 0.5.1).
+    """
+    monkeypatch.setattr(main_window_module, "show_error", lambda *args, **kwargs: None)
+    moved = tmp_path / "verschoben.stl"
+    moved.write_bytes((MESHES / "cube_clean.stl").read_bytes())
+    window.settings.recent = [str(moved)]
+    window._show_recent()
+    qt_app.processEvents()
+    assert window.start_screen.recent_list.count() == 1
+    moved.unlink()
+    window.open_path(moved)
+    assert window.session.wait_for_idle()
+    for _round in range(20):
+        qt_app.processEvents()
+        if window.start_screen.recent_list.count() == 0:
+            break
+        time.sleep(0.02)
+    assert window.start_screen.recent_list.count() == 0, "der tote Eintrag steht weiter da"
+
+
+def test_a_file_without_a_model_leaves_no_step_and_no_recent_entry(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Eine Datei, die am Ladeschritt scheitert, wird kein Schritt 1 (KUNDE-12).
+
+    Vorher: leerer Arbeitsbereich, „Die Kette hält an“, jede weitere Datei mit
+    einem Dialog abgewiesen, und die kaputte stand in „Zuletzt geöffnet“.
+    """
+    shown: list[Any] = []
+    monkeypatch.setattr(
+        main_window_module, "show_error", lambda error, *a, **k: shown.append(error)
+    )
+    broken = tmp_path / "kaputt.stl"
+    broken.write_bytes(b"solid x\n facet normal 0 0 1\n  outer loop\n   vertex 0 0 nope\n" * 3)
+    window.open_path(broken)
+    for _round in range(200):
+        assert window.session.wait_for_idle()
+        qt_app.processEvents()
+        if shown and not window.session.busy:
+            break
+    assert [str(error.title) for error in shown] == [tr("Diese Datei ließ sich nicht lesen.")]
+    assert "choose_another_file" in [action.id for action in shown[0].suggestions]
+    assert not window.session.project.document.ops
+    assert window.stack.currentWidget() is window.start_screen
+    assert str(broken) not in window.settings.recent
+
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle()
+    qt_app.processEvents()
+    assert len(shown) == 1, "die nächste Datei wird angenommen"
+    assert len(window.session.last_result.scene.objects) == 1
+    assert str(MESHES / "cube_clean.stl") in window.settings.recent
+
+
+def test_a_resize_before_the_toolbar_exists_does_not_end_the_start(qt_app: QApplication) -> None:
+    """Eine Größenänderung mitten im Aufbau beendet den Start nicht (RM-238).
+
+    Der Renderer fragt beim Bau der Ansicht nach seinem nativen Fenster, und
+    bei doppelter Skalierung auf einem 1440er Schirm kam dabei ein
+    ``resizeEvent`` ans Hauptfenster, bevor es eine Werkzeugleiste hatte —
+    ``AttributeError``, kein Fenster (Durchsicht 0.5.1, ``QT_SCALE_FACTOR=2``).
+    """
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QResizeEvent
+
+    class HalfBuilt(MainWindow):
+        def __init__(self) -> None:
+            # Nur der Qt-Teil, wie mitten im Aufbau.
+            QtWidgets.QMainWindow.__init__(self)
+
+    early = HalfBuilt()
+    try:
+        early.resizeEvent(QResizeEvent(QSize(800, 600), QSize(640, 480)))
+    finally:
+        early.deleteLater()
+
+
+def test_the_window_title_names_the_model_once_it_is_read(window: MainWindow) -> None:
+    """Die Titelleiste sagt denselben Namen wie Kopfzeile und Baum.
+
+    ``session.title`` leitet ihn aus dem Ergebnis ab; gesetzt wurde die
+    Titelleiste nur beim Dokumentwechsel, also vor der Auswertung — nach dem
+    Einlesen stand oben „Unbenannt“ (Durchsicht 0.5.1).
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert window.windowTitle().startswith("cube_clean"), window.windowTitle()
+
+
 @pytest.mark.parametrize("starting_fresh", [False, True])
 def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, starting_fresh: bool
@@ -13378,6 +13646,16 @@ def test_the_veil_says_whether_a_model_or_a_project_is_coming(window: MainWindow
 
     window._on_busy(False)
     assert not window._loading_model, "das Ende der Anzeige räumt den Merker"
+
+    # Vom Startbildschirm aus steht schon das leere Ergebnis des neuen
+    # Projekts da; das Modell gewinnt trotzdem (Durchsicht 0.5.1 — sonst stand
+    # „Wird berechnet …“ über dem Import, „Modell einfügen“ in der Zeile).
+    window.session.evaluate_now()
+    assert window.session.last_result is not None
+    window._loading_model = True
+    window._on_busy(True)
+    assert window.veil._headline == str(tr("Modell wird gelesen"))
+    window._on_busy(False)
 
 
 def test_the_veil_can_be_cancelled(window: MainWindow) -> None:

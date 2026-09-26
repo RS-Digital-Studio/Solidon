@@ -857,11 +857,20 @@ def test_an_unreadable_project_file_is_a_file_error_not_a_crash(
     def refuse(*_args: object, **_kwargs: object) -> None:
         raise PermissionError(13, "Der Prozess kann nicht auf die Datei zugreifen")
 
-    monkeypatch.setattr(zipfile.ZipFile, "__init__", refuse)
-    with pytest.raises(ValidationError) as caught:
-        load(path)
+    # Nur um ``load`` herum: Allein gefahren importierte der Abbau der
+    # Fixtures danach PySide6, dessen Start ``zipfile`` braucht — der
+    # verweigerte Zugriff riss den Prozess mit 0xC0000409 (Durchsicht 0.5.1).
+    with monkeypatch.context() as patch:
+        patch.setattr(zipfile.ZipFile, "__init__", refuse)
+        with pytest.raises(ValidationError) as caught:
+            load(path)
     assert caught.value.constraint == "unreadable"
     assert "zugreifen" in str(caught.value.values["reason"])
+    # Dieselbe Absage wie beim verschobenen Projekt, mit demselben Weg.
+    from app.core.errors import CHOOSE_ANOTHER_FILE
+
+    assert str(caught.value.title) == "Diese Datei ließ sich nicht lesen."
+    assert CHOOSE_ANOTHER_FILE in caught.value.suggestions
 
 
 @pytest.mark.parametrize("stage", ["folder", "replace"])
@@ -2017,6 +2026,23 @@ def test_a_missing_file_is_a_user_error(tmp_path: Path) -> None:
     with pytest.raises(ValidationError) as caught:
         load(tmp_path / "gibtsnicht.p3d")
     assert caught.value.constraint == "missing_file"
+
+
+def test_a_moved_project_offers_another_file_not_a_bug_report(tmp_path: Path) -> None:
+    """Ein verschobenes Projekt aus „Zuletzt geöffnet“ ist keine falsche Eingabe.
+
+    Bis zur Durchsicht 0.5.1 stand darüber „Die Eingabe war so nicht
+    verwendbar.“, und der Dialog bot nur *Details anzeigen* und
+    *Fehlerbericht erstellen* an — beim Modell stand längst *Andere Datei
+    wählen* da.
+    """
+    from app.core.errors import CHOOSE_ANOTHER_FILE
+
+    with pytest.raises(ValidationError) as caught:
+        load(tmp_path / "verschoben.p3d")
+    assert str(caught.value.title) == "Diese Datei ließ sich nicht lesen."
+    assert caught.value.suggestions[0] == CHOOSE_ANOTHER_FILE
+    assert caught.value.values["path"] == "verschoben.p3d", "der Weg zurück kennt die Art"
 
 
 def test_saving_leaves_no_partial_file_behind(filled: Project, tmp_path: Path) -> None:
