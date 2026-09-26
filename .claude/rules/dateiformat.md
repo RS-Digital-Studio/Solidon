@@ -295,6 +295,13 @@ statt Speicherüberlauf.
 
 ## Was welcher Slicer bekommt
 
+**Eine Stützsperre ist ein Bereich desselben Objekts**, kein eigenes Objekt:
+Ihre Dreiecke hängen hinter denen des Körpers, und die Prusa-Beilage
+(`Slic3r_PE_model.config`) nennt sie als zweites `volume` mit `volume_type`
+`SupportBlocker` — so schreiben PrusaSlicer und die Orca-Familie es selbst,
+und der ElegooSlicer liest es daraus (gemessen 26.09.2026). Geschrieben wird
+sie nur in die direkte Übergabe, nicht in eine gespeicherte 3MF.
+
 `write_assembly` schreibt eine 3MF-Baugruppe — außer für `cura`. `CuraEngine`
 liest kein 3MF (die 3MF-Seite sitzt in Curas Fenster, nicht in der
 Rechenmaschine dahinter), und ein 3MF endete dort in „Der Slicer hat keine

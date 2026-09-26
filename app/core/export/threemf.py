@@ -114,6 +114,16 @@ class AssemblyPart:
     """
     plate: int = 0
     """Auf welche Druckplatte dieses Teil gehört, von null an gezählt."""
+    support_blocker: MeshData | None = None
+    """Wo der Slicer an diesem Teil keine Stützen anlegen darf, in seinen
+    Koordinaten — die Kanäle, deren Decken sich selbst schließen (§22.2).
+
+    Er reist als zweiter Volumenbereich desselben Objekts, ``SupportBlocker``
+    in der Prusa-Beilage — so schreiben PrusaSlicer und die Orca-Familie ihn
+    selbst. Gemessen am ElegooSlicer mit der Waschschüssel (26.09.2026):
+    „Stützen überall" legte ohne ihn 22,9 m Stütze in den Wasserkanal, mit
+    ihm 0,3 m.
+    """
 
 
 SlotKey = tuple[TranslatableText | str, tuple[float, float, float] | None, str | None, str | None]
@@ -367,6 +377,26 @@ def _prusa_settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[Mater
             ET.SubElement(
                 volume, "metadata", {"type": "volume", "key": "volume_type", "value": "ModelPart"}
             )
+        if part.support_blocker is not None and part.support_blocker.triangle_count:
+            first = part.mesh.triangle_count
+            blocker = ET.SubElement(
+                node,
+                "volume",
+                {
+                    "firstid": str(first),
+                    "lastid": str(first + part.support_blocker.triangle_count - 1),
+                },
+            )
+            ET.SubElement(
+                blocker,
+                "metadata",
+                {"type": "volume", "key": "volume_type", "value": "SupportBlocker"},
+            )
+            ET.SubElement(
+                blocker,
+                "metadata",
+                {"type": "volume", "key": "name", "value": str(_("Stützsperre"))},
+            )
     return b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(
         ET.tostring(config, encoding="utf-8")
     )
@@ -501,6 +531,7 @@ def _write_geometry(
     native: bool = False,
     *,
     number: int = 0,
+    blocker: MeshData | None = None,
 ) -> tuple[str, bytes]:
     """Ecken und Dreiecke eines Körpers, mit ihrer Materialzuordnung.
 
@@ -547,6 +578,11 @@ def _write_geometry(
     lines: list[str] = ["<vertices>"]
     for point in mesh.raw.vertices:
         lines.append(f'<vertex x="{point[0]:.6f}" y="{point[1]:.6f}" z="{point[2]:.6f}" />')
+    # Die Stützsperre hängt hinter dem Körper: Ihre Dreiecke kommen nach allen
+    # des Körpers, und die Prusa-Beilage nennt den Bereich (``_prusa_settings_xml``).
+    if blocker is not None:
+        for point in blocker.raw.vertices:
+            lines.append(f'<vertex x="{point[0]:.6f}" y="{point[1]:.6f}" z="{point[2]:.6f}" />')
     lines.append("</vertices><triangles>")
 
     assignment = mesh.slots or ((0,) * len(mesh.raw.faces))
@@ -562,6 +598,13 @@ def _write_geometry(
             f'<triangle v1="{int(face[0])}" v2="{int(face[1])}" v3="{int(face[2])}"'
             f' pid="{group_id}" p1="{position}"{painted} />'
         )
+    if blocker is not None:
+        start = len(mesh.raw.vertices)
+        for face in blocker.raw.faces:
+            lines.append(
+                f'<triangle v1="{int(face[0]) + start}" v2="{int(face[1]) + start}"'
+                f' v3="{int(face[2]) + start}" pid="{group_id}" p1="0" />'
+            )
     lines.append("</triangles>")
     return mark, "".join(lines).encode("utf-8")
 
@@ -672,6 +715,7 @@ def _assembly_xml(
                 order,
                 bool(part.slots or part.mesh.slots),
                 number=number,
+                blocker=part.support_blocker,
             )
         )
         item = {"objectid": str(number)}

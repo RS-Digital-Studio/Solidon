@@ -30,7 +30,7 @@ from app.core.export.writer import (
     write_assembly,
     write_plan,
 )
-from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
 from app.core.geom.prepare import check_build_volume
 from app.core.geom.transform import apply, place_on_bed, translation
 from app.core.ingest import threemf as threemf_reader
@@ -2724,3 +2724,88 @@ def test_the_orca_family_gets_solidons_speed_and_width_for_every_role(profile: P
         "top_surface_line_width",
     ):
         assert process[key] == width, key
+
+
+# --- Die Stützsperre reist nur mit, wenn der Vorschlag übernommen ist ------------
+
+
+def tunnel_block() -> MeshData:
+    """Ein Block 60 × 40 × 40 mit einem Tunnel 20 × 20 quer hindurch.
+
+    Die Tunneldecke hängt über dem Tunnelboden, 20 mm weit — ein Kanal
+    (``analysis.CHANNEL_WIDTH``).
+    """
+    block = trimesh.creation.box(extents=(60.0, 40.0, 40.0))
+    block.apply_translation((0.0, 0.0, 20.0))
+    tunnel = trimesh.creation.box(extents=(20.0, 50.0, 20.0))
+    tunnel.apply_translation((0.0, 0.0, 18.0))
+    return MeshData.of(trimesh.boolean.difference([block, tunnel]))
+
+
+def _blocker_ranges(written: Path) -> list[tuple[str, int, int]]:
+    config = ET.fromstring(zipfile.ZipFile(written).read("Metadata/Slic3r_PE_model.config"))
+    return [
+        (
+            volume.find("metadata[@key='volume_type']").get("value", ""),  # type: ignore[union-attr]
+            int(volume.get("firstid", "-1")),
+            int(volume.get("lastid", "-1")),
+        )
+        for volume in config.iter("volume")
+    ]
+
+
+def test_the_support_blocker_travels_only_after_the_advice(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Ohne „Vorschläge übernehmen" gehen die Standardeinstellungen hinaus,
+    und in denen ist nichts auf dieses Modell zugeschnitten (Robert,
+    26.09.2026). Mit übernommenem Vorschlag liegt die Sperre als zweiter
+    Bereich desselben Objekts hinter dessen Dreiecken."""
+    entry = scene_object(mesh=tunnel_block())
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+
+    plain, _plain_findings = write_assembly(
+        [entry], tmp_path / "ohne", project_name="t", profile=profile, settings=settings
+    )
+    assert [kind for kind, _first, _last in _blocker_ranges(plain)] == ["ModelPart"]
+
+    taken = print_settings.with_path(settings, "support.block_channels", True)
+    written, findings = write_assembly(
+        [entry], tmp_path / "mit", project_name="t", profile=profile, settings=taken
+    )
+    body, blocker = _blocker_ranges(written)
+    triangles = as_mesh_data(entry.mesh).triangle_count
+    assert body == ("ModelPart", 0, triangles - 1)
+    assert blocker[0] == "SupportBlocker" and blocker[1] == triangles and blocker[2] > triangles
+    assert "export.support_blocker" in {finding.code for finding in findings}
+
+
+def test_a_saved_file_and_cura_carry_no_blocker(tmp_path: Path, profile: Profile) -> None:
+    """Eine gespeicherte 3MF liest auch Solidon wieder ein, und sein Leser
+    nähme den Bereich als Material; ein STL für CuraEngine kennt ihn nicht."""
+    entry = scene_object(mesh=tunnel_block())
+    taken = print_settings.with_path(
+        print_settings.with_path(print_settings.resolve(profile), "support.style", "grid"),
+        "support.block_channels",
+        True,
+    )
+
+    saved, _saved_findings = write_assembly(
+        [entry],
+        tmp_path / "datei",
+        project_name="t",
+        profile=profile,
+        settings=taken,
+        for_slicer=False,
+    )
+    assert [kind for kind, _first, _last in _blocker_ranges(saved)] == ["ModelPart"]
+    stl, findings = write_assembly(
+        [entry],
+        tmp_path / "cura",
+        project_name="t",
+        profile=profile,
+        settings=taken,
+        flavour="cura",
+    )
+    assert stl.suffix == ".stl"
+    assert "export.support_blocker" not in {finding.code for finding in findings}

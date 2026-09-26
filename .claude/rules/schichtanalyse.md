@@ -176,6 +176,26 @@ Konstante: Tisch, Kasten mit Innenregal (74 mm), verschlossener Hohlkörper
 (54 mm) und weiter Tunnel (65 mm) behalten „überall". Wer die Grenze
 anfasst, misst beide Reihen nach und fährt die Schüssel im Slicer.
 
+**Eine Insel ist nie eine Kanaldecke** (26.09.2026). Sie hat nichts unter
+sich, an dem eine Brücke ansetzen könnte; setzt sie auf dem Modell auf, heißt
+es „überall", gleich wie klein (`ModelSupport.island_on_model`). Die frühere
+Bedingung „keine Inseln" vor „nur vom Bett" ist dafür entfallen — eine Insel
+über dem Bett erreicht das Bett.
+
+**Und „nur vom Bett" hält einen Kanal nicht in jedem Slicer frei.** Orcas
+organische Bäume wuchsen trotzdem hinein und führten die Stämme durch die
+Wand. Deshalb der Vorschlag `support.block_channels`: Die Übergabe legt dann
+eine Stützsperre in die 3MF, gebaut aus dem freien Kanalraum
+(`analysis.channel_space` — je Millimeterscheibe die freie Fläche im Umkreis
+der Kanalsäulen innerhalb der konvexen Hülle der Schicht, verbunden mit einer
+Säule). Die Hülle ist die richtige Grenze, „schmal" wäre es nicht: Die Säulen
+unter der Kanaldecke stehen im breiten Rohrbogen, und eine Sperre nur im
+schmalen Teil ließ 32 m Stütze darin; ohne Grenze reichte sie an einem Tunnel
+15 mm aus der Mündung. Gemessen im ElegooSlicer an der Schüssel: „Gitter
+überall" 22,9 → 0,5 m im Kanal, „Baum nur vom Bett" 6,2 → 0,7 m.
+**Vorschlag, nicht Automatik:** Was ohne „Vorschläge übernehmen" zum Slicer
+geht, sind die Standardeinstellungen (Entscheidung Robert, 26.09.2026).
+
 **Mehrere Körper werden gemeinsam beurteilt.** `advise.combine` berücksichtigt
 auch Körper, deren Einstellungen bereits passen. Ein einzelner Würfel darf
 deshalb die Stützen eines anderen Körpers nicht abschalten. Filamentwerte

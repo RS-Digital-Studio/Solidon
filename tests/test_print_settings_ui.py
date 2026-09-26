@@ -5053,6 +5053,10 @@ def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
             if not works:
                 measured.add(field.path)
         assert checked > 50, f"{flavour}: nur {checked} Felder geprüft — der Lauf sagt nichts"
+        # Was als Geometrie in der Baugruppe reist, sieht diese Messung nicht;
+        # wo es trotzdem nicht ankommt (Cura, ein STL), steht es in der Liste.
+        if slicer_keys.reads_assembly_file(flavour):
+            measured -= slicer_keys.AS_GEOMETRY
         assert measured == slicer_keys.NOT_TAKEN_BY[flavour], (
             f"{flavour}: gemessen {sorted(measured)}, "
             f"eingetragen {sorted(slicer_keys.NOT_TAKEN_BY[flavour])}"

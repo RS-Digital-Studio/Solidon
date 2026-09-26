@@ -731,8 +731,16 @@ def _from_geometry(
     # Stützbedarf selbst: An der Waschschüssel blieb neben der Kanaldecke ein
     # Rest von 11 mm² an der Düsenmündung, und der allein verlangte, dass die
     # Stützen des ganzen Teils überall ansetzen — wieder im Kanal.
+    #
+    # **Eine Insel auf dem Modell verlangt es immer**, gleich wie klein: Sie
+    # hat nichts unter sich. Eine Insel über dem Bett dagegen erreicht es —
+    # deshalb steht hier nicht mehr pauschal „keine Inseln": Bis zum
+    # 26.09.2026 bekam jedes Teil mit einer Insel „überall", auch wenn alle
+    # Säulen das Bett erreichten oder im Kanal endeten, und der Kanal füllte
+    # sich wieder.
     on_model = needs_support and (
-        model.open_patch > OVERHANG_LAYER_WORTH_SUPPORT
+        model.island_on_model
+        or model.open_patch > OVERHANG_LAYER_WORTH_SUPPORT
         or (model.open_area > OVERHANG_WORTH_SUPPORT and model.open_patch > OVERHANG_LAYER_MINIMUM)
     )
     if needs_support and on_model and settings.support.placement == "build_plate":
@@ -748,12 +756,7 @@ def _from_geometry(
                 severity="warning",
             )
         )
-    elif (
-        needs_support
-        and not islands
-        and settings.support.placement == "everywhere"
-        and not on_model
-    ):
+    elif needs_support and settings.support.placement == "everywhere" and not on_model:
         advice.append(
             _advice(
                 settings,
@@ -767,6 +770,24 @@ def _from_geometry(
                 else _(
                     "Alle Überhänge erreichen das Bett. Stützen auf dem Modell "
                     "hinterlassen Narben, die keine sein müssen."
+                ),
+            )
+        )
+
+    # **Und die Kanäle frei halten** (26.09.2026). „Nur vom Bett" reicht dafür
+    # nicht in jedem Slicer: Orcas organische Bäume wuchsen trotzdem in den
+    # Wasserkanal der Waschschüssel und führten ihre Stämme durch die Wand, und
+    # wo „überall" nötig bleibt — eine Insel auf dem Modell —, füllt jeder
+    # Slicer den Kanal. Die Sperre in der Übergabe hält beides heraus.
+    if needs_support and model.channels and not settings.support.block_channels:
+        advice.append(
+            _advice(
+                settings,
+                path="support.block_channels",
+                value=True,
+                reason=_(
+                    "Dieses Teil hat schmale Kanäle. Eine Sperre hält die Stützen dort "
+                    "fern — sie kämen nicht mehr heraus, und die Decken tragen sich selbst."
                 ),
             )
         )

@@ -909,10 +909,18 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
             "retraction.wipe",
             "filament.density",
             "filament.cost_per_kg",
+            # CuraEngine bekommt ein STL, und darin reist keine Stützsperre.
+            "support.block_channels",
         }
     ),
     "other": frozenset(),
 }
+
+#: Einstellungen, die nicht als Wert reisen, sondern als **Geometrie** in der
+#: 3MF-Baugruppe (``writer.write_assembly``) — die Messung über ``values_for``
+#: sieht sie deshalb nicht. ``support.block_channels`` wird die Stützsperre,
+#: ein ``SupportBlocker``-Bereich, den PrusaSlicer und die Orca-Familie lesen.
+AS_GEOMETRY: Final[frozenset[str]] = frozenset({"support.block_channels"})
 
 
 def takes(flavour: SlicerFlavour, path: str) -> bool:

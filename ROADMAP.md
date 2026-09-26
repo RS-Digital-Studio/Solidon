@@ -70,7 +70,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe](#rm-239) | Geometrie, Erkennung und Druckvorbereitung | Siebhalter-Ring mit Riss: die Heilung überwiegt, 12 Eckpaare zu 0,015 µm werden zusammengelegt, 24 Dreiecke fallen — Gruppen nach Flächenblatt trennen, ohne Dreieckssuppen aufzureißen; Import- und Reparaturregel zusammenlegen |
 | [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
 | [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
-| [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter und Leerfahrt vom Drucker gebaut und im ElegooSlicer belegt; offen: Tempo je Drucker, Orcas Bäume nur vom Bett, Rand bei Füßen |
+| [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter und Leerfahrt vom Drucker gebaut und im ElegooSlicer belegt; offen: Tempo je Drucker, Rand bei Füßen |
 | [RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht](#rm-248) | Geometrie, Erkennung und Druckvorbereitung | Fächer vom Randmittelpunkt lässt beim Versetzen 3,6 bis 5,4 mm³ Mulde — den Deckel als Fortsetzung der umgebenden Fläche bauen, an beiden Kernen |
 | [RM-249 — Eine Bohrung über einer Seite innerhalb der Hülle meldet keine Kante](#rm-249) | Geometrie, Erkennung und Druckvorbereitung | Kantenprüfung fragt zuerst den Hüllquader; an gs-100 läuft eine Kopie 3,4 mm über die Seite, ohne Befund — Prüfung über die eigene Tiefe des Merkmals am Netz, dann Nachkontrolle der Kopien an beiden Kernen |
 | [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
@@ -1873,6 +1873,16 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     nur, was breiter als zwei Bahnen ist. Die größte Brücke der Schüssel ist
     danach 176,6 mm bei z = 7,55, und die ist echt: Der Boden liegt dort
     7,5 mm über dem Bett auf zwölf Füßen.
+  - Eine Stützsperre für Kanäle (26.09.2026), als Vorschlag
+    `support.block_channels` — ohne „Vorschläge übernehmen" gehen die
+    Standardeinstellungen hinaus (Robert). Die Übergabe legt dann einen
+    `SupportBlocker`-Bereich in die 3MF, gebaut aus dem freien Kanalraum
+    innerhalb der Hülle des Teils (`analysis.channel_space`). Im ElegooSlicer:
+    „Gitter überall" 22,9 → 0,5 m im Kanal, Orcas organische Bäume „nur vom
+    Bett" 6,2 → 0,7 m. Cura bekommt ein STL und keine Sperre.
+  - Inseln: Eine Insel auf dem Modell verlangt „überall", eine über dem Bett
+    nicht mehr — vorher bekam jedes Teil mit einer Insel „überall", und der
+    Kanal füllte sich wieder.
 
   **Offen, gemessen:**
   - **Tempo je Drucker.** Solidons Stufe „Standard" fährt 40/60/80 mm/s, Elegoos
@@ -1880,11 +1890,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     Wie die Leerfahrt gehört die Tempogrenze der Maschine (samt Volumenstrom
     des Hotends, `max_flow` ist heute ein Materialwert „für ein
     Standard-Hotend").
-  - **Orcas organische Bäume „nur vom Bett"** wachsen trotzdem in den Kanal
-    und führen ihre Stämme durch die Wand zum Bett (6,2 m). Klassische Bäume
-    (`tree_strong`) halten ihn frei, erzeugen aber 6 670 Leerfahrten in
-    Schicht 2. Übergibt Solidon Bäume mit Kanälen, braucht es eine Stützsperre
-    in der 3MF oder eine andere Baumart — noch nicht gebaut.
   - **Haftung auf zwölf kleinen Füßen.** Nutzer des Designerprofils auf
     MakerWorld melden „hintere Ecke hebt sich und Stringing"; ein Rand-Vorschlag
     für viele kleine Aufstandsinseln ist nicht bewertet.

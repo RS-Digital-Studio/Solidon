@@ -516,11 +516,14 @@ UNREACHABLE: dict[str, dict[str, str]] = {
     "prusa": {
         "shell.precise_outer_wall": "PrusaSlicer kompensiert die Bahnbreite immer, ohne Schalter.",
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
+        "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
     },
     "orca": {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
+        "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
     },
     "cura": {
+        "support.block_channels": "ein STL trägt keine Stützsperre — ``NOT_TAKEN_BY``.",
         "cooling.disable_first_layers": (
             "Cura hat einen Lüfterhochlauf statt einer festen Abschaltphase."
         ),
@@ -5119,6 +5122,12 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "entgegen; sie zum Slicer zu tragen brächte niemandem etwas."
     ),
     ("filament.cost_per_kg", "cura"): "Wie die Dichte darüber — Solidon rechnet, nicht der Slicer.",
+    ("support.block_channels", "prusa"): (
+        "Reist als Stützsperre in der 3MF, nicht als Wert (``slicer_keys.AS_GEOMETRY``); "
+        "``test_threemf_assembly`` prüft den Bereich."
+    ),
+    ("support.block_channels", "orca"): "Wie bei PrusaSlicer — dieselbe Beilage.",
+    ("support.block_channels", "cura"): "CuraEngine bekommt ein STL; darin reist keine Sperre.",
 }
 
 

@@ -1160,6 +1160,14 @@ class SupportSettings:
     xy_gap: float = 0.5
     density: float = 0.15
     interface_layers: int = 2
+    block_channels: bool = False
+    """Stützen aus schmalen Kanälen heraushalten (§22.2).
+
+    Die Übergabe legt dafür eine Stützsperre in die 3MF
+    (``export.writer._support_blocker``). Aus steht es, bis ein Vorschlag es
+    einschaltet: Was ohne „Vorschläge übernehmen" zum Slicer geht, sind die
+    Standardeinstellungen, nichts auf dieses Modell Zugeschnittenes
+    (Entscheidung Robert, 26.09.2026)."""
 
 
 @dataclass(frozen=True, slots=True)

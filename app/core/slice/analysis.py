@@ -2713,6 +2713,12 @@ class ModelSupport:
     channel_area: float = 0.0
     channel_at: tuple[float, float, float] | None = None
     """Wo das größte Kanalstück hängt — für den Ort eines Befunds."""
+    channel_columns: tuple[tuple[Polygon, float, float], ...] = ()
+    """Je Kanalstück sein Grundriss mit der Höhe, auf der seine Säule aufsetzt,
+    und der, auf der es hängt — daraus baut die Übergabe die Stützsperre."""
+    island_on_model: bool = False
+    """Setzt eine **Insel** auf dem Modell auf? Sie druckt ohne Stütze in die
+    Luft, gleich wie klein sie ist, und ist deshalb nie eine Kanaldecke."""
 
 
 def support_on_model(result: SliceResult) -> bool:
@@ -2798,11 +2804,26 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
     if not landed:
         return ModelSupport()
     shapes: dict[int, ShapelyPolygon] = {}
+    floating: dict[int, ShapelyPolygon] = {}
     open_patch = 0.0
     open_area = 0.0
+    island_on_model = False
     channels: set[int] = set()
     places: dict[int, Any] = {}
     for owner, (low, area) in landed.items():
+        index = names[owner][0]
+        if layers[index].islands:
+            if index not in floating:
+                floating[index] = unary_union(
+                    [ShapelyPolygon(item.outline, item.holes) for item in layers[index].islands]
+                )
+            if pieces[owner].intersection(floating[index]).area > EPS_GEOM:
+                # Eine Insel ist nie eine Decke, die sich selbst schließt: Sie
+                # hat nichts unter sich, an dem eine Brücke ansetzen könnte.
+                island_on_model = True
+                open_patch = max(open_patch, area)
+                open_area += area
+                continue
         # **Gemessen wird unmittelbar unter der Decke**, nicht auf halber
         # Höhe der Säule. Die Frage ist, ob sich die Decke selbst schließt,
         # und das entscheidet die Weite, die sie überspannen muss: Der
@@ -2822,6 +2843,14 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
             open_area += area
 
     chosen = frozenset(names[owner] for owner in channels)
+    columns = tuple(
+        (
+            layers[names[owner][0]].overhangs[names[owner][1]],
+            float(layers[landed[owner][0]].z),
+            float(layers[names[owner][0]].z),
+        )
+        for owner in sorted(channels, key=lambda owner: names[owner])
+    )
     counted: dict[int, int] = {}
     for index, _number in chosen:
         counted[index] = counted.get(index, 0) + 1
@@ -2839,6 +2868,8 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
         ),
         channel_area=float(sum(areas[owner] for owner in channels)),
         channel_at=at,
+        channel_columns=columns,
+        island_on_model=island_on_model,
     )
 
 
@@ -2854,6 +2885,67 @@ def _material(layer: LayerInfo) -> ShapelyPolygon:
     if not parts:
         return ShapelyPolygon()
     return parts[0] if len(parts) == 1 else MultiPolygon(parts)
+
+
+def channel_space(
+    result: SliceResult,
+    model: ModelSupport,
+    *,
+    slab: float = 1.0,
+    channel_width: float = CHANNEL_WIDTH,
+) -> list[tuple[float, float, ShapelyPolygon]]:
+    """Der freie Raum der Kanäle, in Höhenscheiben: (unten, oben, Fläche) (§22.2).
+
+    Die Stützsperre der Übergabe baut daraus ihren Körper. Die Grundrisse der
+    Deckenstücke allein reichen dafür nicht: Der Slicer liest Überhänge mit
+    seiner eigenen Regel und fand im Wasserkanal der Waschschüssel mehr als
+    Solidon — mit einer Sperre nur aus den Deckenstücken blieben 13,5 von
+    22,9 m Stütze darin (26.09.2026). Gesperrt wird deshalb der Raum selbst:
+    je Scheibe die freie Fläche im Umkreis ``channel_width / 2`` der
+    Kanalsäulen innerhalb der Hülle des Teils, und davon nur, was mit einer
+    Säule zusammenhängt — ein freier Raum jenseits der Wand bleibt frei, und
+    ebenso die Luft vor einer Mündung.
+    """
+    columns = model.channel_columns
+    if not columns:
+        return []
+    layers = result.layers
+    heights = [layer.z for layer in layers]
+    # Der Schritt einer gewöhnlichen Schicht; die erste ist dicker.
+    step = heights[-1] - heights[-2] if len(heights) > 1 else slab
+    stride = max(1, round(slab / max(step, EPS_GEOM)))
+    footprints = [ShapelyPolygon(item.outline, item.holes) for item, _low, _high in columns]
+    reaches = [shape.buffer(channel_width / 2.0) for shape in footprints]
+    bottom = min(low for _outline, low, _high in columns)
+    top = max(high for _outline, _low, high in columns)
+    slabs: list[tuple[float, float, ShapelyPolygon]] = []
+    indices = [index for index, z in enumerate(heights) if bottom <= z <= top]
+    for start in range(0, len(indices), stride):
+        chunk = indices[start : start + stride]
+        z_low, z_high = heights[chunk[0]], heights[chunk[-1]]
+        active = [
+            number
+            for number, (_outline, low, high) in enumerate(columns)
+            if low <= z_high and high >= z_low
+        ]
+        if not active:
+            continue
+        reach = unary_union([reaches[number] for number in active])
+        # Die engste Stelle der Scheibe zählt: frei ist, was auf jeder ihrer
+        # Schichten frei ist.
+        material = unary_union([_material(layers[index]) for index in chunk])
+        # **Und nur innerhalb des Teils**, in seiner konvexen Hülle: An einer
+        # Mündung hängt der Kanal mit der Luft davor zusammen, und ohne diese
+        # Grenze reichte die Sperre an einem Tunnel 15 mm aus ihr heraus.
+        # „Schmal" wäre die falsche Grenze gewesen: Die Säulen unter der
+        # Kanaldecke der Waschschüssel stehen im breiten Rohrbogen, und eine
+        # Sperre nur im schmalen Teil ließ 32 m Stütze darin (26.09.2026).
+        free = reach.intersection(material.convex_hull).difference(material)
+        seeds = unary_union([footprints[number] for number in active])
+        kept = [part for part in _areas_of(free) if part.intersects(seeds)]
+        if kept:
+            slabs.append((z_low - step / 2.0, z_high + step / 2.0, unary_union(kept)))
+    return slabs
 
 
 def _in_a_channel(shape: ShapelyPolygon, point: Any, width: float) -> bool:

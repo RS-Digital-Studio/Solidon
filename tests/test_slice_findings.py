@@ -23,6 +23,7 @@ from app.core.knowledge import print_settings, profiles
 from app.core.slice import advise
 from app.core.slice.analysis import (
     WIDTH_INTERESTING,
+    channel_space,
     minimum_width,
     model_support,
     narrowest,
@@ -454,3 +455,54 @@ def test_suggested_connector_infill_meets_the_announced_material_share() -> None
     core = diameter - 2.0 * changed.shell.wall_count * changed.layers.line_width
     solid_area = (diameter**2 - core**2) + changed.infill.density * core**2
     assert solid_area / diameter**2 >= 0.75
+
+
+def test_an_island_above_the_bed_may_be_supported_from_the_plate() -> None:
+    """Eine Insel, unter der nur das Bett liegt, erreicht das Bett. Bis zum
+    26.09.2026 bekam jedes Teil mit einer Insel „überall" — auch dann."""
+    body = on_bed(
+        brick(20.0, 20.0, 5.0, (0.0, 0.0, 2.5)),
+        brick(10.0, 10.0, 4.0, (30.0, 0.0, 12.0)),
+    )
+
+    assert placement_advice(body) == "build_plate"
+
+
+def test_an_island_above_the_model_keeps_supports_everywhere() -> None:
+    """Dieselbe Insel über der Grundplatte: Ihre Stütze muss auf dem Modell
+    stehen, gleich wie klein sie ist."""
+    body = on_bed(
+        brick(40.0, 40.0, 5.0, (0.0, 0.0, 2.5)),
+        brick(6.0, 6.0, 4.0, (0.0, 0.0, 14.0)),
+    )
+
+    assert model_support(slice_body(body, 0.5)).island_on_model
+    assert placement_advice(body) is None, "everywhere bleibt stehen"
+
+
+def test_a_part_with_a_channel_is_offered_the_blocker() -> None:
+    """„Nur vom Bett" hält einen Kanal nicht in jedem Slicer frei — Orcas
+    organische Bäume wuchsen trotzdem hinein. Die Sperre ist ein Vorschlag wie
+    jeder andere: Ohne „Vorschläge übernehmen" geht sie nicht hinaus."""
+    settings = print_settings.resolve(petg())
+    entries = advise.advise(settings, petg(), slice_body(tunnel_block(20.0), 0.5))
+
+    assert [entry.value for entry in entries if entry.path == "support.block_channels"] == [True]
+    wide = advise.advise(settings, petg(), slice_body(tunnel_block(65.0), 0.5))
+    assert "support.block_channels" not in {entry.path for entry in wide}
+
+
+def test_the_channel_space_stays_inside_the_tunnel() -> None:
+    """Gesperrt wird der freie Raum des Kanals, nicht mehr: Die Kragplatte
+    daneben braucht ihre Stützen vom Bett, und jenseits der Tunnelwand liegt
+    freie Luft, die mit dem Kanal nicht zusammenhängt."""
+    result = slice_body(tunnel_block(20.0), 0.5)
+    slabs = channel_space(result, model_support(result))
+
+    assert slabs, "der Tunnel hat eine Decke über dem Tunnelboden"
+    low_x = min(region.bounds[0] for _low, _high, region in slabs)
+    high_x = max(region.bounds[2] for _low, _high, region in slabs)
+    # Der Tunnel ist 20 mm breit und sitzt mittig im 60 mm breiten Block.
+    assert low_x >= -10.0 - 1e-6 and high_x <= 10.0 + 1e-6
+    assert min(low for low, _high, _region in slabs) >= 8.0 - 1.0
+    assert max(high for _low, high, _region in slabs) <= 28.0 + 1.0

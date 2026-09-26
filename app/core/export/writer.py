@@ -1086,6 +1086,82 @@ def _part_setting_findings(
     ]
 
 
+#: Um so viel greift die Stützsperre über den Grundriss einer Kanaldecke
+#: hinaus, in mm: eine Bahnbreite der 0,4er Düse, damit auch der Rand, den der
+#: Slicer mit seinem eigenen Winkel noch als Überhang liest, darunter liegt.
+#: Nach außen schadet der Zuschlag nicht — dort ist Wand.
+BLOCKER_MARGIN: Final = 0.5
+
+
+def _support_blocker(
+    entry: SceneObject, mesh: MeshData, settings: PrintSettings, profile: Profile
+) -> tuple[MeshData | None, list[Finding]]:
+    """Die Stützsperre für die Kanäle dieses Teils (§22.2, §29).
+
+    Solidon weiß aus der Schichtanalyse, wo eine Decke in einem schmalen
+    Kanal liegt und sich selbst schließt (:func:`analysis.model_support`);
+    der Slicer weiß es nicht. Ohne Sperre füllt er den Kanal, sobald er auf
+    dem Modell stützen darf — und Orcas organische Bäume tun es auch „nur vom
+    Bett", mit Stämmen durch die Wand (Waschschüssel, 25.09.2026). Die Sperre
+    füllt den freien Kanalraum in Scheiben von einem Millimeter
+    (:func:`analysis.channel_space`).
+    """
+    import manifold3d
+
+    from app.core.knowledge import profiles as profile_table
+    from app.core.slice.analysis import channel_space, model_support, slice_body
+
+    wall, angle = profile_table.analysis_limits(profile, entry)
+    result = slice_body(
+        mesh,
+        settings.layers.layer_height,
+        first_layer_height=settings.layers.first_layer_height,
+        overhang_angle=angle,
+        bridge_from=wall,
+        detail="support",
+        support_volume=False,
+    )
+    model = model_support(result)
+    slabs = channel_space(result, model)
+    if not slabs:
+        return None, []
+    prisms = []
+    for bottom, top, region in slabs:
+        rings: list[np.ndarray] = []
+        for part in getattr(region, "geoms", [region]):
+            rings.append(np.asarray(part.exterior.coords)[:-1])
+            rings += [np.asarray(hole.coords)[:-1] for hole in part.interiors]
+        section = manifold3d.CrossSection(rings, manifold3d.FillRule.EvenOdd).offset(
+            BLOCKER_MARGIN, manifold3d.JoinType.Miter
+        )
+        prisms.append(
+            manifold3d.Manifold.extrude(section, top - bottom).translate((0.0, 0.0, bottom))
+        )
+    solid = manifold3d.Manifold.batch_boolean(prisms, manifold3d.OpType.Add).to_mesh()
+    blocker = MeshData(
+        trimesh.Trimesh(
+            np.asarray(solid.vert_properties)[:, :3], np.asarray(solid.tri_verts), process=False
+        )
+    )
+    finding = Finding(
+        code="export.support_blocker",
+        severity="info",
+        message=_(
+            "In „{name}“ liegen Decken in schmalen Kanälen. Dort sperrt Solidon die "
+            "Stützen im Slicer — sie kämen nicht mehr heraus, und die Decken tragen "
+            "sich selbst.",
+            name=source_text(entry.name),
+        ),
+        values={
+            "name": source_text(entry.name),
+            "area_mm2": round(model.channel_area, 1),
+        },
+        location=model.channel_at,
+        object_id=entry.id,
+    )
+    return blocker, [finding]
+
+
 def write_assembly(
     objects: list[SceneObject],
     directory: Path,
@@ -1206,12 +1282,31 @@ def write_assembly(
         _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
         return target, findings
 
+    # **Die Stützsperre nur für die direkte Übergabe.** Eine gespeicherte 3MF
+    # liest auch Solidon selbst wieder, und sein Leser nähme den Bereich als
+    # Material des Körpers (``ingest.foreign_volume``). Nur, wenn gestützt
+    # wird — ohne Stützen gibt es nichts zu sperren —, und nur, wenn der
+    # Vorschlag übernommen ist (``support.block_channels``): Ohne ihn gehen die
+    # Standardeinstellungen hinaus (Entscheidung Robert, 26.09.2026).
+    blockers: dict[str, MeshData | None] = {}
+    if (
+        for_slicer
+        and settings is not None
+        and settings.support.style != "none"
+        and settings.support.block_channels
+    ):
+        for entry in chosen:
+            blockers[entry.id], noted = _support_blocker(
+                entry, exported[entry.id], settings, profile
+            )
+            findings += noted
     parts = [
         threemf.AssemblyPart(
             mesh=exported[entry.id],
             name=source_text(entry.name),
             slots=threemf.slots_for_object(entry),
             settings=part_advice[entry.id][0],
+            support_blocker=blockers.get(entry.id),
             # Die Platte reist mit. Ohne Einschränkung auf eine gehen alle in
             # dieselbe Datei — und dann muss dort stehen, welches Teil auf
             # welche gehört, sonst legt der Slicer sie übereinander.

@@ -813,6 +813,16 @@ FIELDS: tuple[Field, ...] = (
             "Dichte Schichten zwischen Stütze und Teil. Sie machen die gestützte Fläche glatter."
         ),
     ),
+    Field(
+        "support.block_channels",
+        _("Kanäle frei halten"),
+        "support",
+        kind="bool",
+        note=_(
+            "Sperrt Stützen in schmalen Kanälen und Rohren. Dort kämen sie nicht mehr heraus, "
+            "und die Decken tragen sich selbst."
+        ),
+    ),
     # --- Haftung ---
     Field(
         "adhesion.kind",
