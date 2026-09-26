@@ -11,7 +11,13 @@ import numpy as np
 from app.core import units
 from app.core.build_area import placement_offset
 from app.core.deferred import trimesh
-from app.core.errors import CANCEL, CHOOSE_PRINTER, SPLIT_MODEL, GeometryError
+from app.core.errors import (
+    CANCEL,
+    CHOOSE_PRINTER,
+    SHOW_SUPPORT_NEED,
+    SPLIT_MODEL,
+    GeometryError,
+)
 from app.core.geom.mesh import IntegerGrid, MeshData, stable_normals
 from app.core.geom.transform import (
     apply,
@@ -673,7 +679,7 @@ def orient_for_print(
             code="orient.heuristic",
             severity="info",
             message=_(
-                "Ausrichtung über eine Normalen-Heuristik gewählt — die Schichtanalyse "
+                "Ausrichtung aus den Flächenrichtungen geschätzt — die Schichtanalyse "
                 "urteilt später genauer."
             ),
             values={
@@ -694,6 +700,8 @@ def orient_for_print(
                 code="orient.support_likely",
                 severity="warning",
                 message=_("Auch in der besten Lage bleibt viel Überhang — Stützen sind nötig."),
+                # Regel 17: Die Stützkarte zeigt, wo der Überhang bleibt.
+                suggestions=(SHOW_SUPPORT_NEED,),
             )
         )
     return OrientResult(mesh=turned, chosen=best, findings=findings, transform=matrix)

@@ -1320,7 +1320,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "area": _("Flächeninhalt"),
     "at": _("Position auf dem Fügeweg"),
     "at_feature": _("Bezugsmerkmal"),
-    "attempted": _("Versuchte Stufen"),
+    "attempted": _("Versuchte Rechenwege"),
     "before_components": _("Teile vorher"),
     "bodies": _("Körper"),
     "bores": _("Geschlossene Bohrungen"),
@@ -1348,7 +1348,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "last_angle": _("Letzter Winkel"),
     "length": _("Länge"),
     "nominal_side_clearance": _("Seitliches Nennspiel"),
-    "normal": _("Flächennormale"),
+    "normal": _("Richtung der Fläche"),
     "outer": _("Senkung"),
     "overlap": _("Überdeckung"),
     "overshoot": _("Überstand je Achse"),
@@ -1490,7 +1490,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "footprint": _("Standfläche"),
     "formats": _("Formate"),
     "free_depth": _("Freie Tiefe"),
-    "free_dof": _("Freie Freiheitsgrade"),
+    "free_dof": _("Offene Maße"),
     "from": _("Von"),
     "gap": _("Spalt"),
     # ``scene.fits``: woraus die Passung gerechnet wurde — exakt, Netz, gemischt.
@@ -1751,8 +1751,33 @@ def value_label(key: str) -> str:
     return str(name) if name is not None else key
 
 
+#: Die Rechenwege, die ein Befund unter „Rechenstufe“ und „Versuchte Stufen“
+#: nennt — als Satzstück statt als Bezeichner aus dem Kern (RM-088): In den
+#: Einzelheiten stand „Rechenstufe: voxel“ und „Versuchte Stufen:
+#: fast_simplification“. Die Kennungen stammen aus ``types.SolverStage`` und
+#: ``mesh_ops.SimplificationSolver``; eine unbekannte bleibt stehen, wie sie ist.
+_METHOD_NAMES: Final[dict[str, TranslatableText]] = {
+    "direct": _("direkt gerechnet"),
+    "welded": _("mit zusammengeführten Punkten gerechnet"),
+    "jittered": _("minimal verschoben gerechnet"),
+    "voxel": _("auf einem Raster gerechnet"),
+    "none": _("nicht vereinfacht"),
+    "exact": _("verlustfrei vereinfacht"),
+    "fast_simplification": _("schnell vereinfacht"),
+    "manifold": _("formtreu vereinfacht"),
+}
+
+
 def value_text(key: str, value: object) -> str:
     """Der Wert mit seiner Einheit, in der Einheit der Anzeige (§19.3)."""
+    if key in ("solver", "attempted") and isinstance(value, str) and value in _METHOD_NAMES:
+        return str(_METHOD_NAMES[value])
+    if key in ("solver", "attempted") and isinstance(value, (list, tuple)):
+        # Die Liste der versuchten Wege kam als Python-Liste an: „['direct',
+        # 'welded']" (Kundenprüfer, KUNDE-10). Jetzt als Wörter, durch Kommas.
+        return ", ".join(
+            str(_METHOD_NAMES[entry]) if entry in _METHOD_NAMES else str(entry) for entry in value
+        )
     # Diese bestehenden Befundschlüssel tragen keine Einheiten-Endung.
     # Längen folgen trotzdem der Anzeigeeinheit; Materialkennwerte behalten
     # die Einheit des Filamentprofils und der Festigkeitsrechnung.

@@ -26,6 +26,7 @@ from app.core.errors import (
     RECOUNT_AND_RETRY,
     REPAIR_AND_RETRY,
     RESIZE_THE_WIDENING,
+    SHOW_LOCATION,
     SPLIT_AND_RETRY,
     SPLIT_MODEL,
     BooleanFailedError,
@@ -9173,6 +9174,10 @@ def _mouth_covered(
                     "sie ausgeht."
                 ),
                 feature_ids=(feature.id,),
+                # Der Satz nennt die Handlung, und sie steht als Knopf daneben
+                # (Regel 17): Der Schritt geht wieder auf, und die Stelle wird
+                # neu gewählt.
+                suggestions=(CORRECT_INPUT,),
             )
         ]
     return []
@@ -9857,6 +9862,8 @@ def _through_lost_finding(op: str, feature: Feature, centre: Vec3) -> Finding:
         ),
         feature_ids=(feature.id,),
         location=centre,
+        # Regel 17: Stelle und Tiefe stehen im Schritt, der Ort fliegt mit.
+        suggestions=(CORRECT_INPUT, SHOW_LOCATION),
     )
 
 
@@ -10222,9 +10229,9 @@ def _exact_chain_entrance(source: SceneObject, chain: Sequence[Feature]) -> _Bor
 #: Der Satz, mit dem eine Kettenhandlung am exakten Körper absagt, wenn sich die
 #: Abschnitte nicht zu einem Einlauf lesen lassen (:func:`_exact_chain_entrance`).
 CHAIN_NOT_READABLE: Final = _(
-    "Die Abschnitte dieses Hohlraums lassen sich am exakten Körper nicht gemeinsam "
-    "lesen: Ein Rand liegt nicht in einer Ebene, oder eine Stufe wird nach außen enger. "
-    "Ändern Sie den Schritt, aus dem der Hohlraum stammt."
+    "Dieser Hohlraum lässt sich an diesem Körper nicht als eine Bohrung lesen: Ein Rand "
+    "ist nicht eben, oder eine Stufe wird nach außen enger. Ändern Sie den Schritt, aus "
+    "dem er stammt."
 )
 
 
@@ -10379,7 +10386,7 @@ def _exact_chain_cut_holding(solid: Any, tool_with: Callable[[float], Any]) -> t
         if as_mesh_data(placed).is_watertight:
             return placed, tool
     raise GeometryError(
-        title=_("Der exakte Kern bringt den Hohlraum an dieser Stelle nicht sauber heraus."),
+        title=_("Der Hohlraum lässt sich an dieser Stelle nicht sauber ausschneiden."),
         detail=CUT_DID_NOT_HOLD,
         suggestions=(CORRECT_INPUT, CANCEL),
     )
@@ -10391,9 +10398,8 @@ CUT_OVERLAPS: Final = (1.0, 2.0, 3.0)
 
 #: Der Satz, wenn keine Wiederholung einen dichten Körper ergibt.
 CUT_DID_NOT_HOLD: Final = _(
-    "Die Differenz gab dort einen undichten Körper zurück, auch mit mehr Überstand. "
-    "Setzen Sie die Stelle um einen Bruchteil eines Millimeters anders und versuchen "
-    "Sie es erneut."
+    "Das Ergebnis bliebe dort offen, auch nach zwei weiteren Versuchen. Setzen Sie die "
+    "Stelle um einen Bruchteil eines Millimeters anders und versuchen Sie es erneut."
 )
 
 
@@ -13086,7 +13092,10 @@ def _already_round(feature: Feature) -> Finding:
             "Die Bohrung ist schon rund. Ziehen Sie sie länger, um ein Langloch daraus zu machen."
         ),
         feature_ids=(feature.id,),
-        values={"feature": feature.id},
+        # Der Weg, den der Satz nennt, steht als Knopf daneben: Der Schritt geht
+        # mit dem Cursor in der Länge auf (Regel 17).
+        values={"feature": feature.id, "field": "slot_length"},
+        suggestions=(CORRECT_INPUT,),
     )
 
 

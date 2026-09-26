@@ -101,10 +101,12 @@ from app.core.errors import (
     REPAIR_BEFORE_AND_RETRY,
     SCALE_TO_FIT,
     SHOW_DETAILS,
+    SHOW_FEATURE,
     SHOW_HISTORY,
     SHOW_LOCATION,
     SHOW_LOCATIONS,
     SHOW_STEP_VALUES,
+    SHOW_SUPPORT_NEED,
     SPLIT_ALONG_LINE,
     SPLIT_BODIES,
     SPLIT_MODEL,
@@ -124,7 +126,7 @@ from app.core.scene.history import StepNeed, recognition_reopenable, repair_is_a
 from app.core.types import Document, Feature, Finding, MaterialSlot, ObjectId, OpId, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import TranslatableText, sort_key, tr
-from app.ui.dialogs import handlers_of
+from app.ui.dialogs import NEEDS_OP, handlers_of
 from app.ui.icons import OVERSAMPLING, icon, icon_name_for
 from app.ui.labels import (
     LengthSpin,
@@ -560,6 +562,9 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Vereinfachen einer Ente — geschlossen hinein, offen heraus, und im
     # Bericht stand nur, dass sich die Fläche kaum verschoben hat.
     "mesh.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    # Dieselbe Sache aus dem Formen (RM-215): Das Netz ist beim Formen
+    # aufgegangen, und der Satz sagt „Reparieren, bevor es weitergeht".
+    "sculpt.torn": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
     # Der Zwilling daneben: dieselbe Netzoperation, andere Frage — nicht „offen",
     # sondern „in wie viele Teile". Dieselben zwei Handlungen, weil dieselbe
     # Reparatur hilft und die Defektkarte zeigt, wo es auseinanderging.
@@ -746,6 +751,12 @@ def actions_for_document(
     Kennungsmenge hätte sie still aus jeder Zeile genommen.
     """
     offered = list(actions_for(finding))
+    if finding.op_id is None:
+        # Dieselbe Schranke wie im Fehlerdialog (``dialogs.offered_actions``):
+        # *Eingabe korrigieren* öffnet den Schritt des Befunds, und ohne seine
+        # Kennung wäre der Knopf einer, der nichts tut (Regel 17). Befunde aus
+        # einer Operation tragen sie immer — die Auswertung trägt sie nach.
+        offered = [action for action in offered if action.id not in NEEDS_OP]
     if _repair_was_attempted(finding, document) or not repair_is_available(
         document,
         stopped_at=stopped_at,
@@ -771,6 +782,14 @@ def actions_for_document(
         offered = [
             action for action in offered if action.id not in {SHOW_LOCATIONS.id, SHOW_LOCATION.id}
         ]
+    if target is None or not finding.feature_ids:
+        # *Merkmal zeigen* braucht Körper und Merkmal des Befunds.
+        offered = [action for action in offered if action.id != SHOW_FEATURE.id]
+    if target is None:
+        # *Stützbedarf zeigen* fiele sonst auf die gerade gewählte Auswahl
+        # zurück (``MainWindow._object_of``) — die Karte eines fremden Körpers
+        # unter dem Satz über diesen wäre geraten (Regel 21).
+        offered = [action for action in offered if action.id != SHOW_SUPPORT_NEED.id]
     if finding.location is None:
         # Eine Sammelzeile über verschiedene Orte trägt keinen (siehe unten),
         # und ohne Ort hätte der Knopf kein Ziel.
@@ -842,6 +861,9 @@ def as_error(
         # Ausschließlich der beim Angebotsaufbau aus der tatsächlichen Szene
         # gebundene Umfang. Historische Ausgaben sind keine lebenden Körper.
         values["import_group"] = import_group
+    if finding.feature_ids:
+        # *Merkmal zeigen* wählt es; der Fehler kennt sonst kein Merkmal.
+        values.setdefault("feature_ids", tuple(finding.feature_ids))
     if finding.location is not None:
         # *Stelle zeigen* fliegt dorthin; der Fehler kennt sonst keinen Ort.
         values.setdefault("location", tuple(float(value) for value in finding.location))

@@ -738,7 +738,7 @@ def gizmo_sentence(feature: Feature | None, *, part: bool = False) -> str:
         # ihr stand der Satz über Press/Pull — ein Zug, den es dort nicht gibt.
         return tr("Der Griff bewegt den ganzen Baustein, nicht nur dieses Merkmal.")
     if feature.kind == "face":
-        return tr("Der Griff versetzt die gewählte Fläche entlang ihrer Normalen.")
+        return tr("Der Griff schiebt die gewählte Fläche senkrecht zu sich selbst.")
     if feature.kind in slot_feature_kinds():
         if feature.kind not in movable_feature_kinds():
             return tr("An den Knöpfen ändern Sie Länge und Richtung des Langlochs.")
@@ -7395,8 +7395,8 @@ class Viewport(QWidget):
             mark.setAccessibleName(tr("Stelle auswählen"))
             mark.setAccessibleDescription(
                 tr(
-                    "Pfeiltasten bewegen das Fadenkreuz, Umschalt bewegt es fein. "
-                    "Eingabe wählt die Stelle, Escape beendet die Auswahl."
+                    "Pfeiltasten bewegen das Fadenkreuz, mit Umschalt fein. Die "
+                    "Eingabetaste wählt die Stelle, Esc beendet die Auswahl."
                 )
             )
             self._surface_picker_mark = mark

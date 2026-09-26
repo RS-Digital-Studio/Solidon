@@ -24,7 +24,13 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import Final
 
-from app.core.errors import CALIBRATE_MATERIAL, ValidationError
+from app.core.errors import (
+    CALIBRATE_MATERIAL,
+    CHOOSE_PRINTER,
+    OPEN_PRINT_SETTINGS,
+    SHOW_SUPPORT_NEED,
+    ValidationError,
+)
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.slice.analysis import (
@@ -1275,6 +1281,9 @@ def warnings_for(
                     "material": profile.material.title,
                     "printer": profile.printer.title,
                 },
+                # Regel 17: Ein geschlossener Drucker oder ein anderes Material —
+                # beides in den Druckeinstellungen.
+                suggestions=(CHOOSE_PRINTER,),
             )
         )
 
@@ -1341,6 +1350,8 @@ def warnings_for(
                     "wanted": float(wanted_nozzle),
                     "possible": float(profile.printer.nozzle_temperature_max),
                 },
+                # Regel 17: Drucker und Material wählt man in den Druckeinstellungen.
+                suggestions=(CHOOSE_PRINTER,),
             )
         )
 
@@ -1362,6 +1373,8 @@ def warnings_for(
                     "wanted": float(wanted_bed),
                     "possible": float(profile.printer.bed_temperature_max),
                 },
+                # Regel 17: Brim und Raft stehen in den Druckeinstellungen.
+                suggestions=(OPEN_PRINT_SETTINGS,),
             )
         )
 
@@ -1386,6 +1399,8 @@ def warnings_for(
                     "printer": profile.printer.title,
                     "wanted": float(wanted_chamber),
                 },
+                # Regel 17: Der Drucker mit geschlossenem Bauraum ist der Weg, den der Satz nennt.
+                suggestions=(CHOOSE_PRINTER,),
             )
         )
 
@@ -1402,6 +1417,8 @@ def warnings_for(
                     "gap": settings.support.z_gap,
                     "layer_height": settings.layers.layer_height,
                 },
+                # Regel 17: Der Stützabstand steht in den Druckeinstellungen.
+                suggestions=(OPEN_PRINT_SETTINGS,),
             )
         )
 
@@ -1448,6 +1465,8 @@ def located_warnings(result: SliceResult, profile: Profile) -> list[Finding]:
                     "z_mm": round(layer.z, 2),
                 },
                 location=None if spot is None else (spot[0], spot[1], layer.z),
+                # Regel 17: Düse und Bahnbreite stehen in den Druckeinstellungen.
+                suggestions=(OPEN_PRINT_SETTINGS,),
             )
         )
     findings += _from_spans(result)
@@ -1513,6 +1532,8 @@ def _from_spans(result: SliceResult) -> list[Finding]:
                 "layers": len(spanning),
             },
             location=location,
+            # Regel 17: Die Stützkarte zeigt die Decke, um die es geht.
+            suggestions=(SHOW_SUPPORT_NEED,),
         )
     ]
 

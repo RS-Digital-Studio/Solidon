@@ -186,9 +186,8 @@ def _solved_drawing(ctx: OpContext, sketch_text: str, findings: list[Finding]) -
                 code="sketch.underconstrained",
                 severity="info",
                 message=_(
-                    "Die Skizze hat noch freie Maße oder Bewegungen. "
-                    "Legen Sie im Skizzeneditor weitere Maße oder Beziehungen fest, "
-                    "wenn ihre Form vollständig bestimmt sein soll."
+                    "Nicht jedes Maß der Zeichnung ist festgelegt. Gedruckt wird sie, "
+                    "wie sie gezeichnet ist; feste Maße legen Sie im Skizzeneditor an."
                 ),
                 values={"free_dof": solved.free_dof},
             )

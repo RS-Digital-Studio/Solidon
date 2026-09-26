@@ -709,7 +709,7 @@ class TextureParams(BaseParams):
         title=_("Richtung X"),
         default=0.0,
         placement="advanced",
-        doc=_("Normale der Fläche. Aus einer angeklickten Fläche kommt sie mit."),
+        doc=_("Richtung der Fläche. Aus einer angeklickten Fläche kommt sie mit."),
         depends_on=("coverage", ("rectangle",)),
     )
     ny: float = param(
@@ -808,6 +808,8 @@ def _wrap_beyond_body(body: Any, wrap_diameter: float) -> Finding | None:
             "wrap_diameter_mm": round(wrap_diameter, 3),
             "body_diameter_mm": round(widest, 3),
         },
+        # Regel 17: Die Zylinderfläche klickt man im Schritt neu an.
+        suggestions=(CORRECT_INPUT,),
     )
 
 

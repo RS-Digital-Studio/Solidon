@@ -4185,7 +4185,7 @@ def repair(
                 Finding(
                     code="repair.welded",
                     severity="info",
-                    message=_("Doppelte Punkte wurden verschweißt."),
+                    message=_("Doppelte Punkte wurden zusammengeführt."),
                     values={"removed": removed},
                 )
             )

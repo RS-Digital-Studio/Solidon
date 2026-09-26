@@ -21,7 +21,10 @@ from typing import cast
 
 import numpy as np
 
-from app.core.errors import ValidationError
+from app.core.errors import (
+    CORRECT_INPUT,
+    ValidationError,
+)
 from app.core.geom.colour_ops import colour_from, colours_from, merged_slots
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.filaments import profile_name
@@ -269,6 +272,8 @@ def paint_slot(ctx: OpContext) -> OpResult:
                     message=_("Dieses Merkmal hat keine eigene Fläche zu färben."),
                     object_id=source.id,
                     values={"feature": params.at_feature},
+                    # Regel 17: Ein anderes Merkmal wählt man im Schritt.
+                    suggestions=(CORRECT_INPUT,),
                 )
             ],
         )

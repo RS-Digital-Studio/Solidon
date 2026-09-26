@@ -2931,7 +2931,7 @@ def spoken_values(error: AppError) -> list[str]:
 
 
 #: Werte einer ``ValidationError``, die dem Code gelten und nicht dem Kunden.
-_ADDRESSES = frozenset({"field", "constraint"})
+_ADDRESSES = frozenset({"field", "constraint", "feature_ids"})
 
 
 def problem_text(

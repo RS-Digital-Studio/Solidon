@@ -35,7 +35,12 @@ from app.core.build_area import (
     printable_height,
 )
 from app.core.deferred import trimesh
-from app.core.errors import CORRECT_INPUT, PROGRAMMING_ERRORS, ValidationError
+from app.core.errors import (
+    CORRECT_INPUT,
+    PROGRAMMING_ERRORS,
+    SHOW_HISTORY,
+    ValidationError,
+)
 from app.core.geom import lathe, transform
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
@@ -607,6 +612,8 @@ def _edge_finding(diameter: float, over: list[str]) -> Finding:
             "teilweise ab und lässt eine offene Flanke zurück."
         ),
         values={"axes": ", ".join(over), "diameter": format_length(diameter)},
+        # Regel 17: Der Knopf öffnet den Schritt, dessen Stelle über den Rand führt.
+        suggestions=(CORRECT_INPUT,),
     )
 
 
@@ -631,6 +638,8 @@ def split_findings(before: HasComponents, after: HasComponents) -> list[Finding]
                 "Teile. Verkürzen Sie die Länge oder versetzen Sie die Bohrung."
             ),
             values={"count": now},
+            # Regel 17: Länge oder Stelle, die der Satz nennt, stehen im Schritt.
+            suggestions=(CORRECT_INPUT,),
         )
     ]
 
@@ -1686,6 +1695,8 @@ def sink_placement(
                     "in eine Bohrung legen."
                 ),
                 values={"diameter": format_length(diameter)},
+                # Regel 17: Die Stelle, die der Satz nennt, steht im Schritt.
+                suggestions=(CORRECT_INPUT,),
             )
         )
     return SinkPlacement((float(at[0]), float(at[1]), float(at[2])), outward, tuple(findings))
@@ -2058,6 +2069,8 @@ def compensate_elephant_foot(
                     severity="warning",
                     message=_("Die Aufstandsfläche ist zu klein, um sie noch einzuziehen."),
                     values={"amount_mm": round(value, 3)},
+                    # Regel 17: Der Einzug steht im Schritt und lässt sich dort kleiner wählen.
+                    suggestions=(CORRECT_INPUT,),
                 )
             ],
             None,
@@ -3085,8 +3098,14 @@ def check_join_path(
             Finding(
                 code="join.blocked",
                 severity="error",
-                message=_("Die Teile überschneiden sich in ihrer Endlage."),
+                message=_(
+                    "Die Teile überschneiden sich schon in ihrer Endlage. Geben Sie "
+                    "einem der beiden Spiel, dann prüft Solidon den Weg dorthin."
+                ),
                 values={"shared": format_volume(end)},
+                # Regel 17: Das Maß, das Spiel gibt, steht in einem früheren
+                # Schritt — der Verlauf zeigt ihn.
+                suggestions=(SHOW_HISTORY,),
             )
         ]
 

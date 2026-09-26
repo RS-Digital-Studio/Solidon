@@ -1091,6 +1091,10 @@ def test_a_round_bore_pulled_to_its_own_width_stays_as_it_is(profile: Profile) -
     assert result.mesh is entry.mesh, "nichts geschnitten, nichts gefüllt"
     assert [finding.code for finding in findings] == ["slot_hole.already_round"]
     assert findings[0].severity == "info"
+    # Regel 17: Der Satz sagt „Ziehen Sie sie länger", und der Knopf öffnet den
+    # Schritt mit dem Cursor in der Länge.
+    assert [action.id for action in findings[0].suggestions] == ["correct_input"]
+    assert findings[0].values["field"] == "slot_length"
 
 
 @pytest.mark.parametrize("beyond", [-0.5, 0.2])

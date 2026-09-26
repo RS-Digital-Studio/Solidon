@@ -1133,6 +1133,8 @@ def unreachable_overrides(
                 "Mehrfilament-Übergabe etwa OrcaSlicer oder Bambu Studio."
             ),
             values={"slots": len(affected), "slicer": setup.name},
+            # Regel 17: Der Satz nennt einen anderen Slicer, und der Knopf wählt ihn.
+            suggestions=(CHOOSE_SLICER,),
         ),
     ]
 
@@ -2831,6 +2833,11 @@ def spools_left_out(
             "expected": len(wanted),
             "found": len(set(metrics.used_tools) & wanted),
         },
+        # Regel 17: Bambu Studio lässt die Spule still weg, OrcaSlicer und
+        # ElegooSlicer rechnen dieselbe Platte mit beiden — der andere Slicer
+        # ist der kürzeste Weg zur vollständigen Druckdatei, das Profil der
+        # zweite (gemessen, siehe oben).
+        suggestions=(CHOOSE_SLICER, CHECK_SLICER_PROFILE),
         source="gcode",
     )
 

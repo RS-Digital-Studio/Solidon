@@ -606,7 +606,7 @@ class BackendPromptTruncated(ExternalToolError):
     Fehlerbericht.
     """
 
-    default_title = _("Der Auftrag passte nicht in das Fenster des Sprachmodells.")
+    default_title = _("Der Auftrag war zu lang für das Sprachmodell.")
 
     def __init__(
         self, counted: int = 0, expected: int = 0, window: int = 0, provider: str = ""
@@ -626,11 +626,11 @@ class BackendPromptTruncated(ExternalToolError):
             values["provider"] = provider
         super().__init__(
             detail=_(
-                "Das lokale Modell hat den Auftrag nicht ganz bekommen: Ollama "
-                "kürzt still, was nicht in sein Fenster passt, und die Antwort "
-                "beruht dann auf einem halben Auftrag. Ein kürzerer Chatverlauf "
-                "hilft, sonst ein Modell mit größerem Fenster oder ein "
-                "gehostetes."
+                "Das lokale Modell hat den Auftrag nicht ganz bekommen: Was über "
+                "die Länge hinausgeht, die es fasst, schneidet Ollama still ab, und "
+                "die Antwort beruht dann auf einem halben Auftrag. Ein kürzerer "
+                "Chatverlauf hilft, sonst ein Modell, das längere Aufträge fasst, "
+                "oder ein gehostetes."
             ),
             values=values,
             suggestions=(OPEN_SETTINGS, CANCEL),
@@ -656,7 +656,7 @@ class BackendContextShifted(ExternalToolError):
     gehostetes Modell — kein Fehlerbericht.
     """
 
-    default_title = _("Die Antwort des Sprachmodells passte nicht mehr in sein Fenster.")
+    default_title = _("Auftrag und Antwort wurden zu lang für das Sprachmodell.")
 
     def __init__(self, counted: int = 0, window: int = 0, provider: str = "") -> None:
         self.provider = provider
@@ -669,11 +669,11 @@ class BackendContextShifted(ExternalToolError):
             values["provider"] = provider
         super().__init__(
             detail=_(
-                "Auftrag und Antwort zusammen waren länger als das Fenster des "
-                "lokalen Modells. Ollama verwirft dann während der Antwort die "
-                "Mitte des Auftrags und rechnet mit dem Rest weiter — die Antwort "
-                "beruht auf einem Auftrag, den es so nicht mehr gab. Wählen Sie in "
-                "den Einstellungen ein Modell mit größerem Fenster oder ein "
+                "Auftrag und Antwort zusammen waren länger, als das lokale Modell "
+                "fasst. Ollama verwirft dann während der Antwort die Mitte des "
+                "Auftrags und rechnet mit dem Rest weiter — die Antwort beruht auf "
+                "einem Auftrag, den es so nicht mehr gab. Wählen Sie in den "
+                "Einstellungen ein Modell, das längere Aufträge fasst, oder ein "
                 "gehostetes."
             ),
             values=values,

@@ -381,7 +381,7 @@ def test_every_menu_path_in_the_texts_exists_in_the_menu_bar(
 NAME_MUSTER = re.compile(r"(?<![*\w])\*([A-ZÄÖÜ][^*\n]{2,34})\*(?!\*)")
 
 #: Was hinter einem Namen stehen darf, wenn die Anwendung ihn als Anfang
-#: eines längeren Textes zeigt: „Bestimmt — alle Freiheitsgrade sind vergeben."
+#: eines längeren Textes zeigt: „Bestimmt — jedes Maß steht fest."
 TRENNER = (" — ", " – ", ": ", " …", "…", " (")
 
 
@@ -465,3 +465,169 @@ def test_no_customer_text_names_a_window_the_application_does_not_have() -> None
         assert any(richtig in key for key in quelle), (
             f"„{richtig}“ steht in keinem Kundentext — dann ist es kein Ort, sondern eine Idee"
         )
+
+
+# --- Konstrukteurswörter (RM-088) -------------------------------------------
+
+#: Wörter, die ein Konstrukteur kennt und ein Slicer-Nutzer nicht. Maßstab ist
+#: der Slicer (Cura, PrusaSlicer, Orca): „Brim“, „Stützen“, „Infill“, „Netz“
+#: stehen dort, „Normale“, „Facette“ oder „verschweißen“ nicht. Kuratiert wie
+#: ``ABGELEGT`` oben — „verschweißt“ bleibt erlaubt, denn eine Stütze, die am
+#: Teil verschweißt, beschreibt den Druck und nicht das Netz.
+KONSTRUKTEURSWORT = re.compile(
+    r"(?<![A-Za-zÄÖÜäöüß])(Flächennormalen?|Normalen\w*|Normale\b(?! Wandstärke)"
+    r"|[Mm]anifold|B-Rep|Tessell\w*|Facette\w*|Vertex|Vertices|Voxel\w*"
+    r"|[Ww]asserdicht\w*|[Bb]oolesch\w*|[Dd]eterministisch\w*|[Ee]ntartet\w*"
+    r"|[Dd]ezimier\w*|[Uu]ngeschweißt\w*|[Vv]erschweißen|Freiheitsgrad\w*)"
+)
+
+#: Dieselbe Frage an der englischen Übersetzung — dort stehen die Wörter auch
+#: dann, wenn die deutsche Quelle sie meidet („Eckpunkt“ wurde „vertex“).
+DESIGNER_WORD = re.compile(
+    r"\b(normals?|manifold|tessellat\w*|facets?|vertex|vertices|voxels?|watertight|welding|welded"
+    r"|decimat\w*|degrees? of freedom)\b",
+    re.IGNORECASE,
+)
+
+#: Schlüsselanfang → warum das Wort dort stehen darf.
+DARF_KONSTRUKTEURSWORT: dict[str, str] = {
+    "Die Wörter, die in Solidon, in Slicern und in Druckforen vorkommen": (
+        "Das Glossar des Handbuchs erklärt genau diese Wörter."
+    ),
+    "Normale": (
+        "Nur im Steckbrief für das Sprachmodell (perceive/digest.py) — der Kunde liest ihn nicht."
+    ),
+}
+DARF_DESIGNER_WORD: dict[str, str] = {
+    "Nicht für Teile, die dicht sein müssen": "„watertight“ meint dort wörtlich Wasser.",
+    "Einen Parameterwert setzen": "Kommandozeile: „Boolean“ ist dort der Datentyp.",
+    "Für Wahrheitswerte verwenden Sie": "Kommandozeile: „Boolean“ ist dort der Datentyp.",
+    "Wie breit eine Bahn gelegt wird.": "„is normal“ heißt dort „ist üblich“.",
+    "Die Fälle, die am Anfang am häufigsten sind": "„that is normal“ heißt dort „ist üblich“.",
+    "Normale": (
+        "Nur im Steckbrief für das Sprachmodell (perceive/digest.py) — der Kunde liest ihn nicht."
+    ),
+    "Die Wörter, die in Solidon, in Slicern und in Druckforen vorkommen": (
+        "Das Glossar des Handbuchs erklärt genau diese Wörter."
+    ),
+}
+
+
+def test_no_customer_text_uses_a_designer_word() -> None:
+    """Was ein Kunde ohne CAD-Kenntnisse liest, nennt er so, wie sein Slicer es nennt.
+
+    Gemessen in der Durchsicht 0.5.1: 32 deutsche Quelltexte mit einem
+    Konstrukteurswort („entlang ihrer Normalen“, „Facettenkorrektur“,
+    „Punkte verschweißen“, „nicht wasserdicht“, „Normale X“) und zwölf, in denen
+    erst die englische Übersetzung eines trug („snaps to a vertex“). Die Regel
+    steht in ``.claude/rules/oberflaeche.md``; dieser Test hält sie.
+
+    Geprüft werden die Katalogschlüssel, also jeder Text, den ``tr()`` je gesehen
+    hat — Meldungen, Befunde, Feldhilfen und das Handbuch. Kommentare und
+    Docstrings dürfen die Wörter behalten: Sie beschreiben den Code.
+    """
+    englisch = json.loads(Path("app/i18n/locales/en.json").read_text(encoding="utf-8"))
+    assert len(englisch) > 500, f"nur {len(englisch)} Katalogschlüssel — dann prüft das nichts"
+
+    def erlaubt(schluessel: str, ausnahmen: dict[str, str]) -> bool:
+        return any(schluessel.startswith(anfang) for anfang in ausnahmen)
+
+    deutsch = sorted(
+        f"{KONSTRUKTEURSWORT.findall(key)}: {key[:100]}"
+        for key in englisch
+        if KONSTRUKTEURSWORT.search(key) and not erlaubt(key, DARF_KONSTRUKTEURSWORT)
+    )
+    assert not deutsch, "Konstrukteurswort im deutschen Text:\n" + "\n".join(deutsch)
+
+    uebersetzt = sorted(
+        f"{DESIGNER_WORD.findall(text)}: {key[:60]} -> {text[:80]}"
+        for key, text in englisch.items()
+        if DESIGNER_WORD.search(text) and not erlaubt(key, DARF_DESIGNER_WORD)
+    )
+    assert not uebersetzt, "Konstrukteurswort in der englischen Übersetzung:\n" + "\n".join(
+        uebersetzt
+    )
+
+    # Und jede Ausnahme muss noch gebraucht werden — sonst hält sie still eine
+    # Tür offen, durch die das nächste Wort unbemerkt hereinkommt.
+    for ausnahmen in (DARF_KONSTRUKTEURSWORT, DARF_DESIGNER_WORD):
+        for anfang in ausnahmen:
+            assert any(key.startswith(anfang) for key in englisch), (
+                f"Ausnahme „{anfang}“ trifft keinen Text mehr — austragen"
+            )
+
+
+# --- Knopfnamen in Zitaten (RM-084) ------------------------------------------
+
+#: (Anfang des Schlüssels, Zitat) → warum die Übersetzung dort nicht wörtlich
+#: den Knopf nennt.
+ZITAT_DARF_ABWEICHEN: dict[tuple[str, str], str] = {
+    ("Alle Maße in Millimetern.", "Spiel"): "Begriff im Satz, nicht der Feldname; klein im Satz.",
+    (
+        "Alle Maße in Millimetern.",
+        "Presssitz",
+    ): "Begriff im Satz, nicht der Feldname; klein im Satz.",
+    ("Die Tasche ist derselbe Weg", "Tasche"): (
+        "Der Katalogschlüssel „Tasche“ trägt auch die Gummifuß-Tasche des Standfußes "
+        "(`labels.py`), die Übersetzungen folgen jener; der Verlaufsschritt des Beispiels "
+        "heißt nach `make_examples.py` ebenso. Aufgelöst wird das mit einem eigenen Schlüssel "
+        "beim nächsten Erzeugen der Beispiele (Registersatz der Durchsicht 0.5.1)."
+    ),
+}
+
+
+def test_a_quoted_control_is_named_as_the_control_says() -> None:
+    """Ein Satz, der „Werkzeuge prüfen“ zitiert, zitiert in jeder Sprache den Knopf.
+
+    Gemessen in der Durchsicht 0.5.1: 51 Zitate in 25 Sätzen nannten einen Knopf
+    anders, als er im Fenster heißt — „Plug hole“ neben dem Knopf „Fill a bore“,
+    «Comprobar herramientas» neben «Comprobar las herramientas». Der Kunde sucht
+    dann einen Knopf, den es nicht gibt.
+    """
+    languages = [language for language in available_languages() if language != "de"]
+    catalogs = {
+        language: json.loads(
+            (Path("app/i18n/locales") / f"{language}.json").read_text(encoding="utf-8")
+        )
+        for language in languages
+    }
+    source = catalogs[languages[0]]
+    assert len(source) > 500, "keine Katalogschlüssel gelesen — dann prüft das nichts"
+
+    def control(name: str) -> str | None:
+        if name in source:
+            return name
+        return next((key for key in source if key.rstrip(" …") == name), None)
+
+    checked = 0
+    wrong: list[str] = []
+    used: set[tuple[str, str]] = set()
+    for key in source:
+        for quote in re.findall(r"„([^“]+)“", key):
+            parts = [part.strip() for part in quote.split("→")]
+            keys = [control(part) for part in parts]
+            if any(entry is None for entry in keys):
+                continue  # kein Knopf, sondern ein Beispielsatz oder ein Begriff
+            exempt = next(
+                (
+                    entry
+                    for entry in ZITAT_DARF_ABWEICHEN
+                    if key.startswith(entry[0]) and quote == entry[1]
+                ),
+                None,
+            )
+            for language in languages:
+                checked += 1
+                for part, entry in zip(parts, keys, strict=True):
+                    wanted = catalogs[language][entry]
+                    wanted = wanted if part.endswith("…") else wanted.rstrip(" …")
+                    if wanted in catalogs[language][key]:
+                        continue
+                    if exempt is not None:
+                        used.add(exempt)
+                        continue
+                    wrong.append(f"[{language}] „{part}“ = {wanted!r} fehlt in {key[:60]!r}")
+    assert checked > 100, f"nur {checked} Zitate geprüft — dann prüft das nichts"
+    assert not wrong, "Knopf anders zitiert, als er heißt:\n" + "\n".join(wrong)
+    unused = sorted(set(ZITAT_DARF_ABWEICHEN) - used)
+    assert not unused, f"Ausnahmen ohne Treffer — austragen: {unused}"

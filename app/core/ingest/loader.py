@@ -1012,7 +1012,7 @@ def normalise(
     if weld and len(body.faces):
         from app.core.geom.repair import used_vertex_count
 
-        progress(0.2, str(_("Punkte verschweißen")))
+        progress(0.2, str(_("Doppelte Punkte zusammenführen")))
         digits = weld_digits(weld_tolerance(diagonal))
         # **Dieselbe Funktion wie die Reparatur** (RM-239): Sie legt nur
         # zusammen, was an offenen Rändern liegt, trennt jede Punktgruppe nach
@@ -1063,7 +1063,7 @@ def normalise(
                 Finding(
                     code="ingest.welded",
                     severity="info",
-                    message=_("Doppelte Punkte wurden verschweißt."),
+                    message=_("Doppelte Punkte wurden zusammengeführt."),
                     values={"removed": merged},
                 )
             )

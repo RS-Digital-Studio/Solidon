@@ -781,9 +781,7 @@ def _sketch_editor(theme: Theme) -> str:
 
     # Die Statuszeile — die eigentliche Auskunft des Editors.
     canvas.box(10, 300, 600, 30, fill=colours.fill)
-    canvas.label(
-        20, 320, str(_("Bestimmt — alle Freiheitsgrade sind vergeben.")), size=11, bold=True
-    )
+    canvas.label(20, 320, str(_("Bestimmt — jedes Maß steht fest.")), size=11, bold=True)
     return canvas.svg()
 
 
@@ -1202,7 +1200,7 @@ FIGURES: Final[tuple[Figure, ...]] = (
             "40 mm mit einem Kreis darin, der Rand des Bauraums gestrichelt, ein "
             "gefangener Punkt markiert. Rechts die Liste der Bedingungen — waagerecht, "
             "rechtwinklig, Abstand, Deckung, tangential — mit den Punkten, die jede "
-            "hält. Unten die Statuszeile: bestimmt, alle Freiheitsgrade sind vergeben."
+            "hält. Unten die Statuszeile: bestimmt, jedes Maß steht fest."
         ),
         caption=_(
             "Die Statuszeile ist die eigentliche Auskunft: was noch frei ist, wandert "
@@ -1484,7 +1482,7 @@ FIGURES: Final[tuple[Figure, ...]] = (
             "Der Skizzenmodus: gezeichnet wird in der Ansicht, auf der Fläche des "
             "Teils, die in der Leiste unten steht. Die Leiste trägt die "
             "Zeichenwerkzeuge, die Ebenenwahl mit dem Hinweis auf die Druckschichten, "
-            "die Reihe der Bedingungsknöpfe und die Zahl der freien Freiheitsgrade. "
+            "die Reihe der Bedingungsknöpfe und wie viele Maße noch offen sind. "
             "Rechts stehen die Bedingungen der Zeichnung als eigener Reiter, einzeln "
             "aufgelistet."
         ),

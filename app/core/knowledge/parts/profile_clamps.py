@@ -225,7 +225,7 @@ class ProfileClampShellParams(BaseParams):
         minimum=2.0,
         maximum=8.0,
         unit="mm",
-        doc=_("Normaler Abstand vom Sitz zur Außenkontur."),
+        doc=_("Abstand vom Sitz zur Außenkontur, senkrecht gemessen."),
     )
     half: str = param(
         title=_("Hälfte"),
@@ -441,7 +441,10 @@ class ProfileClampLinerParams(BaseParams):
         minimum=1.0,
         maximum=5.0,
         unit="mm",
-        doc=_("Normale Wandstärke einer neuen Einlage; beim Ersatz die erforderliche Mindestwand."),
+        doc=_(
+            "Wandstärke einer neuen Einlage, senkrecht gemessen; beim Ersatz die "
+            "erforderliche Mindestwand."
+        ),
     )
     half: str = param(
         title=_("Hälfte"),

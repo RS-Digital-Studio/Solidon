@@ -571,6 +571,8 @@ def draft_walls(
                     "der Unterkante, an der das Maß bleibt."
                 ),
                 values={"before": before, "after": after, "angle_deg": round(angle_deg, 2)},
+                # Regel 17: Winkel und neutrale Ebene stehen im Schritt.
+                suggestions=(CORRECT_INPUT,),
             )
         )
     return outcome

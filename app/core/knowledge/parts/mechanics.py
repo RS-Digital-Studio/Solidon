@@ -1029,8 +1029,9 @@ HINGE_EYE_FACET_WALL_FIXED = PartChange(
     date="2026-08-31",
     reason="Die polygonale Kreisannäherung unterschritt die zugesagte Augenwand.",
     effect=_(
-        "Der Außendurchmesser wächst um die analytische Facettenkorrektur. "
-        "Bohrung und Spiel bleiben unverändert; die kleinste Wand hält jetzt ihr Nennmaß."
+        "Der Außendurchmesser wächst um den Zuschlag für das Vieleck, als das ein Kreis "
+        "gedruckt wird. Bohrung und Spiel bleiben unverändert; die kleinste Wand hält "
+        "jetzt ihr Nennmaß."
     ),
 )
 

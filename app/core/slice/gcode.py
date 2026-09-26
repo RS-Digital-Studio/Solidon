@@ -28,7 +28,11 @@ from io import StringIO
 from itertools import pairwise
 from typing import TYPE_CHECKING, Final
 
-from app.core.errors import CHECK_SLICER_PROFILE, ValidationError
+from app.core.errors import (
+    CHECK_SLICER_PROFILE,
+    SHOW_SLICER_OUTPUT,
+    ValidationError,
+)
 from app.core.log import get_logger
 from app.core.types import BoundingBox, CancelToken, Finding, MetricSource
 from app.i18n import TranslatableText, _
@@ -1570,6 +1574,8 @@ def findings_for(metrics: GcodeMetrics) -> list[Finding]:
                 message=_("Der Slicer hat gewarnt."),
                 values={"text": warning},
                 source="gcode",
+                # Regel 17: Was der Slicer gesagt hat, steht in den Werten; der Knopf zeigt sie.
+                suggestions=(SHOW_SLICER_OUTPUT,),
             )
         )
     return findings

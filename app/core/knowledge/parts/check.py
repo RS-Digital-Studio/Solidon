@@ -17,7 +17,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from app.core.errors import KEEP_SAVED_PARTS, PROGRAMMING_ERRORS
+from app.core.errors import CHECK_UPDATES, KEEP_SAVED_PARTS, PROGRAMMING_ERRORS
 from app.core.knowledge.parts.registry import (
     LIBRARY_VERSION,
     PARTS,
@@ -167,8 +167,15 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
             Finding(
                 code="parts.missing",
                 severity="error",
-                message=_("Dieses Projekt benutzt Bausteine, die es hier nicht gibt."),
+                message=_(
+                    "Dieses Projekt benutzt Bausteine, die es hier nicht gibt. Ein "
+                    "eigener von einem anderen Rechner gehört in Ihren Bausteinordner, "
+                    "einen neuen aus der Bibliothek bringt eine neuere Version mit."
+                ),
                 values={"parts": ", ".join(missing)},
+                # Regel 17: Der zweite Weg des Satzes ist ein Knopf; den
+                # ersten kann nur der Kunde gehen (die Datei liegt bei ihm).
+                suggestions=(CHECK_UPDATES,),
             )
         )
 

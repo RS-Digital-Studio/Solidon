@@ -2930,6 +2930,8 @@ def _skipped_finding(skipped: int, worked: int) -> Finding:
             "stehen. Die übrigen Kanten sind bearbeitet."
         ),
         values={"skipped": skipped, "worked": worked},
+        # Regel 17: Die Kantenwahl steht im Schritt.
+        suggestions=(CORRECT_INPUT,),
     )
 
 

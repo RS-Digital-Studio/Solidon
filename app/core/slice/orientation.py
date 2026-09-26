@@ -12,6 +12,10 @@ from shapely.geometry import Point
 from shapely.geometry import Polygon as ShapelyPolygon
 
 from app.core.deferred import trimesh
+from app.core.errors import (
+    OPEN_PRINT_SETTINGS,
+    SHOW_SUPPORT_NEED,
+)
 from app.core.geom.mesh import MeshData
 from app.core.geom.mesh_ops import decimate_for_display
 from app.core.geom.orient import (
@@ -609,6 +613,8 @@ def search(
                     "needed_mm2": round(floor, 3),
                 },
                 source="internal",
+                # Regel 17: Den Brim, den der Satz nennt, setzen die Druckeinstellungen.
+                suggestions=(OPEN_PRINT_SETTINGS,),
             )
         )
     if not best.stable:
@@ -621,6 +627,8 @@ def search(
                     "Prüfen Sie Stützen oder eine größere Plattenhaftung."
                 ),
                 source="internal",
+                # Regel 17: Die Stützkarte zeigt, was über der Auflage hängt.
+                suggestions=(SHOW_SUPPORT_NEED,),
             )
         )
     if progress is not None:

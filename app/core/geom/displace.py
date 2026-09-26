@@ -27,7 +27,12 @@ from typing import Final, cast
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import PROGRAMMING_ERRORS, Action, ValidationError
+from app.core.errors import (
+    CORRECT_INPUT,
+    PROGRAMMING_ERRORS,
+    Action,
+    ValidationError,
+)
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -523,6 +528,8 @@ def _displacement_findings(
                 ),
                 object_id=object_id,
                 values={"height_mm": round(params.strength, 3), "layer_mm": round(layer, 3)},
+                # Regel 17: Die Höhe des Reliefs steht im Schritt.
+                suggestions=(CORRECT_INPUT,),
             )
         )
     return findings

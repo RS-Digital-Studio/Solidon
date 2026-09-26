@@ -36,7 +36,12 @@ from typing import Final, cast
 import numpy as np
 
 from app.core.deferred import cKDTree, trimesh
-from app.core.errors import Action, NotManifoldError, ValidationError
+from app.core.errors import (
+    CORRECT_INPUT,
+    Action,
+    NotManifoldError,
+    ValidationError,
+)
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -403,6 +408,8 @@ def blend_union(ctx: OpContext) -> OpResult:
                 ),
                 object_id=ctx.inputs[0].id,
                 values={"components": merged.component_count},
+                # Regel 17: Die Breite des Übergangs steht im Schritt.
+                suggestions=(CORRECT_INPUT,),
             )
         )
     from app.core.geom.ops import _material_slots_after_boolean

@@ -310,7 +310,7 @@ class FieldCutParams(BaseParams):
         unit="mm",
         placement="advanced",
         doc=_(
-            "Auf einer Grundebene: Höhe entlang ihrer Normalen; null nimmt die Körperoberkante. "
+            "Auf einer Grundebene: Höhe senkrecht zu ihr; null nimmt die Körperoberkante. "
             "Auf einer Körperfläche beginnt der Schnitt an dieser Fläche."
         ),
     )

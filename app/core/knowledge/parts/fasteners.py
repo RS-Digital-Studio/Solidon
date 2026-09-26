@@ -509,7 +509,7 @@ NUT_TRAP_SINKS_ON_A_FACE = PartChange(
         "richtig behandelt, an einer Fläche nicht."
     ),
     effect=_(
-        "Über eine Fläche gesetzt wird die Tasche jetzt entgegen der Normalen "
+        "Über eine Fläche gesetzt wird die Tasche jetzt von der Fläche aus "
         "ins Material gebaut, mit der Öffnung an der Fläche. Wer eine "
         "Mutternfalle an eine Deckfläche gesetzt hat, bekam vorher eine "
         "unveränderte Platte samt Hinweis „nichts abgetragen“; an einer Bohrung "

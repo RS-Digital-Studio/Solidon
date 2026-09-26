@@ -99,8 +99,8 @@ class LocalRecognitionFlow(QObject):
         self.view.viewport.set_surface_picker(self._pick_surface)
         self.view.announce(
             tr(
-                "Wählen Sie eine Oberfläche: klicken oder mit Pfeiltasten zielen und Enter "
-                "drücken. Escape beendet die Auswahl."
+                "Wählen Sie eine Oberfläche: klicken oder mit den Pfeiltasten zielen und die "
+                "Eingabetaste drücken. Esc beendet die Auswahl."
             )
         )
 

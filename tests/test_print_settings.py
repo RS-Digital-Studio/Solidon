@@ -3205,6 +3205,9 @@ def test_a_left_out_spool_reaches_the_report(
     )
     codes = [entry.code for entry in outcome.findings]
     assert "gcode.spool_left_out" in codes, codes
+    # Regel 17: Eine fehlende Spule nennt den Weg zur vollständigen Druckdatei.
+    left_out = next(entry for entry in outcome.findings if entry.code == "gcode.spool_left_out")
+    assert [action.id for action in left_out.suggestions] == ["choose_slicer", "check_profile"]
 
     ohne = handover.slice_model(
         model,

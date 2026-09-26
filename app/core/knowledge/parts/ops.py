@@ -650,6 +650,8 @@ def _standing_on_edge(spec: PartSpec, params: Any, direction: Vec3 | None) -> Fi
             "Stelle eintippen."
         ),
         values={"part": spec.name},
+        # Regel 17: Die Richtung des Bausteins steht im Schritt.
+        suggestions=(CORRECT_INPUT,),
     )
 
 
@@ -697,6 +699,8 @@ def _lying_flat(spec: PartSpec, params: Any, direction: Vec3 | None) -> Finding 
             "auf. Soll er ohne Fläche stehen, setzen Sie die Achse auf Y."
         ),
         values={"part": spec.name},
+        # Regel 17: Die Richtung des Bausteins steht im Schritt.
+        suggestions=(CORRECT_INPUT,),
     )
 
 
@@ -1064,6 +1068,8 @@ def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> F
             "safety": round(load.safety, 2),
             "material": profile.material.title,
         },
+        # Regel 17: Armlänge und Last, die der Satz nennt, stehen im Schritt.
+        suggestions=(CORRECT_INPUT,),
     )
 
 

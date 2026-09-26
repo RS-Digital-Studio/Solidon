@@ -689,6 +689,10 @@ def test_a_net_that_explodes_says_so(profile: Profile, monkeypatch) -> None:
     dense = [finding for finding in result.findings if finding.code == "mesh.remesh_dense"]
     assert dense, "der Sprung gehört gesagt, sonst sucht niemand die Ursache"
     assert "gleichmäßig" not in str(dense[0].message), "der Satz behauptete einen Weg"
+    # Regel 17: Der Satz nennt die größere Kantenlänge, und der Knopf öffnet den
+    # Schritt mit dem Cursor in genau diesem Feld.
+    assert [action.id for action in dense[0].suggestions] == ["correct_input"]
+    assert dense[0].values["field"] == "edge"
 
 
 def test_an_edge_length_beyond_reach_names_one_that_works(profile: Profile) -> None:

@@ -46,22 +46,22 @@ class DetectRegionParams(BaseParams):
         doc=_("Z-Koordinate der gewählten Stelle am Originalmodell."),
     )
     nx: float = param(
-        title=_("Normale X"),
+        title=_("Richtung X"),
         default=0.0,
         placement="advanced",
-        doc=_("X-Anteil der Flächennormale an der gewählten Stelle."),
+        doc=_("X-Anteil der Richtung der Fläche an der gewählten Stelle."),
     )
     ny: float = param(
-        title=_("Normale Y"),
+        title=_("Richtung Y"),
         default=0.0,
         placement="advanced",
-        doc=_("Y-Anteil der Flächennormale an der gewählten Stelle."),
+        doc=_("Y-Anteil der Richtung der Fläche an der gewählten Stelle."),
     )
     nz: float = param(
-        title=_("Normale Z"),
+        title=_("Richtung Z"),
         default=1.0,
         placement="advanced",
-        doc=_("Z-Anteil der Flächennormale an der gewählten Stelle."),
+        doc=_("Z-Anteil der Richtung der Fläche an der gewählten Stelle."),
     )
     seed_face: int = param(
         title=_("Originaldreieck"),

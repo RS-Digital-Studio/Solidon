@@ -386,7 +386,7 @@ def check(
 
             mesh = as_mesh_data(result.mesh)
             if not mesh.is_watertight:
-                add(entered, str(_("nicht wasserdicht")))
+                add(entered, str(_("nicht geschlossen")))
             if mesh.volume <= 0.0:
                 add(entered, str(_("kein Volumen")))
             if not joined_by_host and mesh.component_count != max(bodies, 1):

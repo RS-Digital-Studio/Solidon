@@ -24,6 +24,7 @@ import numpy as np
 from app.core import activation
 from app.core.deferred import trimesh
 from app.core.errors import (
+    ARRANGE_ON_BED,
     CANCEL,
     CHANGE_SELECTION,
     CONVERT_TO_EXACT,
@@ -480,6 +481,8 @@ def check_adhesion_clearance(
                         "gap": format_length(gap),
                         "needed": format_length(needed),
                     },
+                    # Regel 17: Anordnen legt die Teile mit dem Abstand der Plattenhaftung.
+                    suggestions=(ARRANGE_ON_BED,),
                 )
             )
     return findings

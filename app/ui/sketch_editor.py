@@ -512,8 +512,8 @@ def free_dof_phrase(free: int) -> str:
     gedruckt worden.
     """
     if free == 1:
-        return tr("ein Freiheitsgrad frei")
-    return tr("{count} Freiheitsgrade frei").format(count=free)
+        return tr("ein Maß offen")
+    return tr("{count} Maße offen").format(count=free)
 
 
 def readable_measure(expression: str) -> str:
@@ -2148,17 +2148,15 @@ class SketchCanvas(QWidget):
         # versteht jeder; der Könner findet seine Zahl weiter (Review 02.09.2026).
         if self.solved.free_dof == 0:
             return tr(
-                "{state} · Bestimmt — nichts wackelt mehr (alle Freiheitsgrade vergeben). {advice}"
+                "{state} · Bestimmt — jedes Maß steht fest, nichts wackelt mehr. {advice}"
             ).format(state=state, advice=advice), True
         if self.solved.free_dof == 1:
-            return tr(
-                "{state} · Noch ein Maß fehlt, dann wackelt nichts mehr "
-                "(ein Freiheitsgrad frei). {advice}"
-            ).format(state=state, advice=advice), True
-        return tr(
-            "{state} · Noch {count} Maße fehlen, dann wackelt nichts mehr "
-            "({count} Freiheitsgrade frei). {advice}"
-        ).format(state=state, count=self.solved.free_dof, advice=advice), True
+            return tr("{state} · Noch ein Maß fehlt, dann wackelt nichts mehr. {advice}").format(
+                state=state, advice=advice
+            ), True
+        return tr("{state} · Noch {count} Maße fehlen, dann wackelt nichts mehr. {advice}").format(
+            state=state, count=self.solved.free_dof, advice=advice
+        ), True
 
     def outline_advice(self) -> str:
         """Was der Zustand der Zeichnung für den nächsten Schritt bedeutet.

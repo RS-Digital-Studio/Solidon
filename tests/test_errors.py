@@ -299,7 +299,7 @@ def test_the_boolean_failure_says_which_stages_really_ran() -> None:
     Namen trägt — im Skizzenmodus zeichnet der Kunde einen Entwurf.
     """
     vorschau = BooleanFailedError(attempted=("direct", "welded"))
-    assert "Vorschau" in str(vorschau.title)
+    assert "schnellen Rechnung" in str(vorschau.title)
     assert errors.USE_VOXEL_STAGE in vorschau.suggestions, "hier ist die Stufe noch offen"
 
     voll = BooleanFailedError(attempted=("direct", "welded", "jittered", "voxel"))

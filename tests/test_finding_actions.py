@@ -1,0 +1,220 @@
+"""Ein Knopf am Befund tut, was er sagt — am Weg des Kunden geprüft.
+
+Die Durchsicht 0.5.1 gab rund dreißig Warnungen eine Handlung (Regel 17,
+RM-215), die meisten *Eingabe korrigieren*. Der Knopf öffnet den Schritt des
+Befunds (``MainWindow._correct_after_error`` über ``edit_operation``) — und tut
+nichts, wenn der Befund keine Schrittkennung trägt. Die Operationen setzen sie
+nicht selbst; die Auswertung trägt sie an jedem Befund eines Schritts nach
+(``evaluate``: „Ein Befund, der seine Kennung selbst mitbringt, behält sie").
+Dieser Test hält beides fest: dass Kennung und Körper ankommen, und dass der
+Bericht eine Handlung, die sie braucht, ohne sie gar nicht erst anbietet.
+"""
+
+from __future__ import annotations
+
+import ast
+import dataclasses
+from pathlib import Path
+
+import pytest
+
+from app.core.errors import CORRECT_INPUT, SHOW_SUPPORT_NEED
+from app.core.geom import mesh_ops
+from app.core.geom.mesh import read_mesh
+from app.core.ingest.loader import normalise
+from app.core.registry import REGISTRY, Registry
+from app.core.scene import ResultCache, evaluate
+from app.core.types import (
+    Document,
+    Finding,
+    OpContext,
+    Operation,
+    OpResult,
+    Profile,
+    SceneObject,
+)
+
+MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def _cube() -> object:
+    return normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
+
+
+def _plate() -> object:
+    return normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+
+
+def _evaluated(profile: Profile, mesh: object, op: str, params: dict[str, object]):
+    """Ein Körper aus einem Erzeuger, dann genau der Schritt, dessen Befund gefragt ist."""
+
+    def make(ctx: OpContext) -> OpResult:
+        return OpResult(outputs=[SceneObject(id="", name="Teil", mesh=mesh)])
+
+    registry = Registry()
+    registry.register(dataclasses.replace(REGISTRY.get("create_box"), fn=make, cache_version="t"))
+    registry.register(REGISTRY.get(op))
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(id=1, op="create_box", outputs=["obj_1"], params={}),
+            Operation(id=2, op=op, inputs=["obj_1"], outputs=["obj_1"], params=params),
+        ],
+    )
+    return evaluate(document, profile, registry=registry, cache=ResultCache())
+
+
+def _only(result, code: str) -> Finding:
+    found = [entry for entry in result.scene.report.findings if entry.code == code]
+    assert found, [entry.code for entry in result.scene.report.findings]
+    return found[0]
+
+
+def test_every_finding_of_a_step_carries_its_step_and_body(profile: Profile) -> None:
+    """Die Zusage, auf der jeder Knopf *Eingabe korrigieren* steht.
+
+    Eine Operation gibt Befunde ohne Kennung zurück — sie kennt ihren Schritt
+    nicht. Kommt der Befund ohne sie im Bericht an, öffnet der Knopf nichts.
+    """
+    mesh = _cube()
+
+    def warns(ctx: OpContext) -> OpResult:
+        return OpResult(
+            outputs=[dataclasses.replace(ctx.inputs[0], id="")],
+            findings=[
+                Finding(
+                    code="probe.warns",
+                    severity="warning",
+                    message="—",
+                    suggestions=(CORRECT_INPUT, SHOW_SUPPORT_NEED),
+                )
+            ],
+        )
+
+    registry = Registry()
+    registry.register(
+        dataclasses.replace(
+            REGISTRY.get("create_box"),
+            fn=lambda ctx: OpResult(outputs=[SceneObject(id="", name="Teil", mesh=mesh)]),
+            cache_version="t",
+        )
+    )
+    registry.register(
+        dataclasses.replace(REGISTRY.get("translate_object"), fn=warns, cache_version="t")
+    )
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(id=1, op="create_box", outputs=["obj_1"], params={}),
+            Operation(id=2, op="translate_object", inputs=["obj_1"], outputs=["obj_1"], params={}),
+        ],
+    )
+    result = evaluate(document, profile, registry=registry, cache=ResultCache())
+
+    probe = _only(result, "probe.warns")
+    assert probe.op_id == 2, "ohne Schrittkennung öffnet *Eingabe korrigieren* nichts"
+    assert probe.object_id == "obj_1", "ohne Körper fiele *Stützbedarf zeigen* auf die Auswahl"
+
+
+@pytest.mark.parametrize(
+    ("mesh", "op", "params", "code"),
+    [
+        # Die Bohrung über die Kante (Stellvertreter der Bohrungswarnungen).
+        (
+            _cube,
+            "drill_hole",
+            {"diameter": 6.0, "axis": "z", "x": 15.0, "y": 0.0, "z": 30.0},
+            "bore.over_the_edge",
+        ),
+        # Aushöhlen mit einer Wand, die keinen Hohlraum lässt.
+        (_cube, "hollow_object", {"wall": 14.0}, "hollow.too_thin"),
+    ],
+)
+def test_a_warning_with_correct_input_opens_its_own_step(
+    profile: Profile, mesh, op: str, params: dict[str, object], code: str
+) -> None:
+    """Am echten Schritt: Befund, Handlung und Kennung kommen zusammen an."""
+    result = _evaluated(profile, mesh(), op, params)
+
+    finding = _only(result, code)
+    assert CORRECT_INPUT in finding.suggestions, finding.suggestions
+    assert finding.op_id == 2
+
+
+def test_a_dense_remesh_opens_the_edge_length(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Satz nennt die Kantenlänge, und der Schritt geht mit dem Cursor dort auf."""
+    monkeypatch.setattr(mesh_ops, "DENSE_FACTOR", 2)
+    result = _evaluated(profile, _plate(), "remesh_mesh", {"edge": 5.0})
+
+    finding = _only(result, "mesh.remesh_dense")
+    assert finding.op_id == 2
+    assert finding.values["field"] == "edge"
+
+
+def test_the_report_offers_no_step_action_without_a_step() -> None:
+    """Dieselbe Schranke wie im Fehlerdialog (``dialogs.NEEDS_OP``).
+
+    Ein Befund ohne Schritt — aus der Übergabe an den Slicer, aus der
+    Druckanalyse — bekommt *Eingabe korrigieren* nicht angeboten, und ein
+    Befund ohne Körper nicht *Stützbedarf zeigen*: Beides wäre ein Knopf,
+    der nichts tut oder am falschen Körper.
+    """
+    from app.ui.panels import actions_for_document
+
+    loose = Finding(
+        code="probe.loose",
+        severity="warning",
+        message="—",
+        suggestions=(CORRECT_INPUT, SHOW_SUPPORT_NEED),
+    )
+    anchored = dataclasses.replace(loose, op_id=2, object_id="obj_1")
+
+    assert [action.id for action in actions_for_document(loose, None)] == []
+    assert [action.id for action in actions_for_document(anchored, None)] == [
+        CORRECT_INPUT.id,
+        SHOW_SUPPORT_NEED.id,
+    ]
+
+
+def test_every_finding_with_correct_input_comes_from_an_operation() -> None:
+    """*Eingabe korrigieren* nur an Befunden, die eine Operation zurückgibt.
+
+    Befunde aus der Slicer-Übergabe, der Druckanalyse oder dem Einlesen
+    entstehen außerhalb eines Schritts; die Auswertung kann ihnen keine
+    Kennung nachtragen. Dort wäre der Knopf wirkungslos — der Bericht blendet
+    ihn zwar aus (Test darüber), aber dann bliebe der Befund ohne Weg.
+    """
+    import app.core
+
+    outside = ("slice/", "export/", "agent/")
+    wrong: list[str] = []
+    root = Path(app.core.__file__).parent
+    for path in root.rglob("*.py"):
+        name = path.relative_to(root).as_posix()
+        if not name.startswith(outside):
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "Finding"
+            ):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg == "suggestions" and "CORRECT_INPUT" in ast.unparse(keyword.value):
+                    wrong.append(f"{name}:{node.lineno}")
+    assert not wrong, "Eingabe korrigieren ohne Schritt: " + ", ".join(wrong)
+
+
+def test_the_stages_tried_read_as_words() -> None:
+    """„Versuchte Rechenwege: ['direct', 'welded']" stand im Fehlerdialog (KUNDE-10)."""
+    from app.ui.labels import value_text
+
+    shown = value_text("attempted", ["direct", "welded"])
+    assert "[" not in shown and "direct" not in shown, shown
+    assert shown == "direkt gerechnet, mit zusammengeführten Punkten gerechnet"

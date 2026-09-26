@@ -3624,9 +3624,9 @@ def _with_features(
                 code="perceive.too_many",
                 severity="info",
                 message=_(
-                    "Dieses Modell hat mehr einzelne Merkmale, als Solidon über die "
-                    "Schritte hinweg zuordnet. Behalten sind die größten; ist es "
-                    "ungeschweißt, verschweißen Sie es beim Laden."
+                    "Das Modell hat mehr Merkmale, als Solidon über die Schritte verfolgt; "
+                    "behalten sind die größten. Wurde es ohne „Doppelte Punkte zusammenführen“ "
+                    "geladen, laden Sie es mit diesem Haken neu."
                 ),
                 object_id=entry.id,
                 op_id=operation.id,

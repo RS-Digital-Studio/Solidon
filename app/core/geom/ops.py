@@ -253,6 +253,8 @@ def _too_small_to_print(mesh: object, profile: object) -> list[Finding]:
                 "hinterlässt. Gedruckt entstünde daraus nichts."
             ),
             values={"volume_mm3": round(float(volume), 6)},
+            # Regel 17: Der Maßstab steht im Schritt.
+            suggestions=(CORRECT_INPUT,),
         )
     ]
 
@@ -662,7 +664,7 @@ class RepairParams(BaseParams):
         default=True,
         placement="advanced",
         depends_on=("fill_holes", (True,)),
-        doc=_("Aus lässt Öffnungen offen, die eine neue große Fläche bräuchten."),
+        doc=_("Schließt auch Öffnungen, die eine neue große Fläche brauchen. Aus lässt sie offen."),
     )
     #: **Vorgabe an** (Entscheidung Robert, 24.09.2026). Die Suche läuft beim
     #: Reparieren ohnehin; aufgelöst wird nur, was die Nachprüfung als
@@ -683,7 +685,7 @@ class RepairParams(BaseParams):
         doc=_("Entfernt auch geschlossene Teile, die viel kleiner sind als das Hauptteil."),
     )
     weld: bool = param(
-        title=_("Punkte verschweißen"),
+        title=_("Doppelte Punkte zusammenführen"),
         default=True,
         placement="advanced",
         doc=_(

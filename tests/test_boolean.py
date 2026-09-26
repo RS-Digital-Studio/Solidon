@@ -1002,7 +1002,7 @@ def test_an_empty_result_in_draft_quality_points_at_the_stages_left() -> None:
     # Und der Titel kommt aus derselben Entscheidung wie die Handlung: Die
     # Ausnahme wählt ihn danach, ob die Voxelstufe dran war. Zwei Stellen für
     # dieselbe Frage liefen auseinander, sobald jemand eine davon ändert.
-    assert "Vorschau" in str(caught.value.title), str(caught.value.title)
+    assert "schnellen Rechnung" in str(caught.value.title), str(caught.value.title)
 
 
 def test_the_voxel_stage_refuses_a_grid_it_cannot_afford(caplog: pytest.LogCaptureFixture) -> None:

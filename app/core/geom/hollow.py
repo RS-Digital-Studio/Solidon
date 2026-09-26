@@ -27,7 +27,12 @@ from typing import Final, NoReturn
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import PROGRAMMING_ERRORS, BooleanFailedError, NotManifoldError
+from app.core.errors import (
+    CORRECT_INPUT,
+    PROGRAMMING_ERRORS,
+    BooleanFailedError,
+    NotManifoldError,
+)
 from app.core.geom import lathe
 from app.core.geom.boolean import BooleanOutcome, boolean, deepest
 from app.core.geom.mesh import MeshData, concatenated
@@ -277,6 +282,8 @@ def _hollow_inward(
                         "Die Öffnung ließ sich nicht schneiden — der Hohlraum reicht "
                         "nicht bis unter die Wand, die geöffnet werden soll."
                     ),
+                    # Regel 17: Die Öffnung wählt man im Schritt neu.
+                    suggestions=(CORRECT_INPUT,),
                 )
             )
         else:
@@ -697,6 +704,8 @@ def _drill_vents(
                     "Es war keine Stelle für eine Entlüftung zu finden — "
                     "ein geschlossener Hohlraum drückt beim Drucken die Decke hoch."
                 ),
+                # Regel 17: Wandstärke und Entlüftung stehen im Schritt.
+                suggestions=(CORRECT_INPUT,),
             )
         )
     elif len(placed) < vents:
@@ -775,13 +784,13 @@ def _raster_findings(
                     # Die strukturelle Grenze als Zahl: ab hier trifft das Raster.
                     "fair_wall_mm": round(3.0 * MIN_PITCH, 2),
                 },
+                # Regel 17: Die Wandstärke, die der Satz nennt, steht im Schritt.
+                suggestions=(CORRECT_INPUT,),
             )
         )
     if opened is not None:
         closed = _closed_cavities(opened, pitch)
         if closed:
-            from app.core.errors import CORRECT_INPUT
-
             findings.append(
                 Finding(
                     code="hollow.closed_cavities",
@@ -858,12 +867,16 @@ def below_printable_wall(wall: float, profile: Profile | None) -> Finding | None
             severity="warning",
             message=_("Die Wand ist dünner, als dieser Drucker sie stehen lässt."),
             values={"wall_mm": round(wall, 2), "least_mm": round(least, 2)},
+            # Regel 17: Die Wandstärke steht im Schritt.
+            suggestions=(CORRECT_INPUT,),
         )
     return Finding(
         code="hollow.wall_below_nozzle",
         severity="warning",
         message=_("Die Wand ist dünner, als der Drucker sie legen kann."),
         values={"wall_mm": round(wall, 2), "least_mm": round(least, 2)},
+        # Regel 17: Die Wandstärke steht im Schritt.
+        suggestions=(CORRECT_INPUT,),
     )
 
 
@@ -955,6 +968,8 @@ def too_thin(wall: float) -> Finding:
         severity="warning",
         message=_("Für diese Wandstärke bleibt kein Hohlraum übrig."),
         values={"wall_mm": round(wall, 2)},
+        # Regel 17: Die Wandstärke steht im Schritt.
+        suggestions=(CORRECT_INPUT,),
     )
 
 

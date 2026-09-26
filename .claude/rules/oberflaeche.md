@@ -221,6 +221,18 @@ Abwesenheit versprechen. Der Suchbegriff ist die Verneinung dessen, was man
 baut („nichts", „nie", „kein", „ohne") — nicht der Name der neuen Sache, denn
 den kennen die alten Texte ja gerade nicht.
 
+**Drei Wächter halten das seit der Durchsicht 0.5.1**, alle ohne Fenster:
+`test_wording::test_no_customer_text_uses_a_designer_word` (kuratierte
+Wortliste für Quelle und englische Übersetzung, Ausnahmen mit Grund),
+`test_wording::test_a_quoted_control_is_named_as_the_control_says` (ein Satz,
+der „Werkzeuge prüfen“ zitiert, zitiert in jeder Sprache den Knopf) und
+`test_finding_ways.py` (jede Warnung und jeder Fehler des Kerns trägt einen Weg
+oder steht mit Grund in `OHNE_KNOPF`). Wer einen Befund baut, gibt ihm
+`suggestions=`; *Eingabe korrigieren* nur an Befunden einer Operation — die
+Auswertung trägt die Schrittkennung nach, und der Bericht blendet Handlungen
+aus, die ohne Schritt oder Körper nichts täten (`panels.actions_for_document`,
+`tests/test_finding_actions.py`).
+
 Und beim Tauschen eines Katalogtexts muss der **alte Schlüssel hinaus**:
 `test_every_text_is_translated` prüft beide Richtungen und meldet ihn sonst als
 „no longer used". Zwei gegenläufige Zusicherungen decken einander.

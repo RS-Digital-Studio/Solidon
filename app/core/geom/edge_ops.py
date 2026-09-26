@@ -860,4 +860,6 @@ def _too_small_to_see(
         # ``removed_mm3`` sagt, wie knapp es war: eine glatte Null heißt, dass
         # gar nichts geschnitten wurde, ein Tausendstel heißt „zu klein".
         values={"volume_mm3": round(before.volume, 3), "removed_mm3": round(change, 6)},
+        # Regel 17: Radius oder Breite, die der Satz nennt, stehen im Schritt.
+        suggestions=(CORRECT_INPUT,),
     )

@@ -418,7 +418,10 @@ def test_follow_at_a_new_place_keeps_the_axial_level_of_the_recut(profile: Profi
         assert after.params["centre"][0] == pytest.approx(
             before.params["centre"][0] + 3.0, abs=0.05
         )
-    assert "move_feature.mouth_covered" in [finding.code for finding in moved.findings]
+    covered = [f for f in moved.findings if f.code == "move_feature.mouth_covered"]
+    assert covered, [finding.code for finding in moved.findings]
+    # Regel 17: „Legen Sie die Stelle auf die Fläche" steht als Knopf daneben.
+    assert [action.id for action in covered[0].suggestions] == ["correct_input"]
     assert "move_feature.mouth_covered" not in [finding.code for finding in still.findings]
 
 

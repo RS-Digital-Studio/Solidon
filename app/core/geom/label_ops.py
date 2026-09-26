@@ -25,7 +25,10 @@ from typing import Any, Final, Literal, cast
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import ValidationError
+from app.core.errors import (
+    CORRECT_INPUT,
+    ValidationError,
+)
 from app.core.geom import transform
 from app.core.geom.attributes import with_slot
 from app.core.geom.boolean import (
@@ -717,6 +720,8 @@ def _buried(letters: Any, before: Any, after: Any, mode: str) -> Finding | None:
             "expected": format_volume(expected),
             "shown": format_volume(shown),
         },
+        # Regel 17: Fläche und Richtung wählt man im Schritt neu.
+        suggestions=(CORRECT_INPUT,),
     )
 
 
@@ -778,6 +783,8 @@ def _too_fine(
         severity="warning",
         message=message,
         values={"font": font, "needed": format_length(needed)},
+        # Regel 17: Größe und Schnitt der Schrift stehen im Schritt.
+        suggestions=(CORRECT_INPUT,),
     )
 
 

@@ -60,7 +60,7 @@ class PushFaceParams(BaseParams):
         doc=_(
             "Welche Fläche wandert. Beim Anklicken steht sie hier. Ohne Angabe "
             "gilt nur an einem exakten Körper der ältere Richtungsweg: Dann "
-            "wandert jede Fläche, deren Normale in die angegebene Richtung zeigt."
+            "wandert jede Fläche, die in die angegebene Richtung zeigt."
         ),
     )
     nx: float = param(
@@ -69,7 +69,7 @@ class PushFaceParams(BaseParams):
         placement="advanced",
         doc=_(
             "Der ältere Weg, und nur für gespeicherte Schritte: Ohne gewählte "
-            "Fläche wandert an einem exakten Körper jede, deren Normale hierhin "
+            "Fläche wandert an einem exakten Körper jede, die hierhin "
             "zeigt — an einer Treppe also jede Stufe."
         ),
     )
@@ -98,7 +98,7 @@ class PushFaceParams(BaseParams):
     produces=1,
     applies_to=("face",),
     doc=_(
-        "Greift eine Fläche und verschiebt sie entlang ihrer Normalen; die "
+        "Greift eine Fläche und verschiebt sie senkrecht zu sich selbst; die "
         "Nachbarwände wachsen mit. Der Weg, eine Wand zu ändern, ohne die "
         "Operation zu suchen, die sie erzeugt hat — bei einem importierten "
         "Modell gibt es keine."

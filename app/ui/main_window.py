@@ -12912,14 +12912,14 @@ class MainWindow(QMainWindow):
                         "Dieser Baustein sitzt an „{feature}“ und dreht sich nur um dessen "
                         "Achse. Frei drehen lässt er sich, wenn er über eine Fläche gesetzt "
                         "ist: aus dem Katalog neu auf die Fläche, oder im Schritt „An "
-                        "Merkmal“ leeren und die Normalenrichtung eintragen."
+                        "Merkmal“ leeren und die Richtung eintragen."
                     ).format(feature=at_feature)
                     if refused == "seat"
                     else tr(
                         "Dieser Baustein hat keine Richtung von einer Fläche und dreht sich "
                         "nur um seine Achse ({axis}). Klicken Sie die Fläche an, an die er "
                         "kommt: Sie gibt ihm die Richtung — oder tragen Sie sie im Schritt "
-                        "unter Normalenrichtung ein."
+                        "unter „Richtung X“ bis „Richtung Z“ ein."
                     ).format(axis=str(current.get("axis") or "z").upper())
                 )
                 return True
@@ -20361,6 +20361,8 @@ class MainWindow(QMainWindow):
             "calibrate_material": lambda _error: self.action_calibrate(),
             "show_output": lambda error: show_details(error, self),
             "check_profile": lambda _error: self.action_print_settings(),
+            "open_print_settings": lambda _error: self.action_print_settings(),
+            "show_feature": self._show_feature_after_error,
             # **Zwei verschenkte Klickwege, gefunden beim Release-Durchgang.**
             # Beide standen als Satz da — ehrlich, aber an diesen Stellen zu
             # wenig: Der naheliegendste Rat soll ein Knopf sein, wo die
@@ -20924,6 +20926,21 @@ class MainWindow(QMainWindow):
         # Der Kern nennt das Feld, das nicht ging (``ValidationError.field``),
         # und der Befund trägt es weiter. Damit steht der Cursor gleich dort.
         self.edit_operation(error.op_id, str(error.values.get("field", "")))
+
+    def _show_feature_after_error(self, error: AppError) -> None:
+        """*Merkmal zeigen*: das Merkmal des Befunds wählen, wie ein Klick im Baum.
+
+        Dann stehen seine Maße im Bild und seine Handlungen im Auswahlfenster —
+        bei einer Passung, die nicht passt, ist das der Weg: Das Maß der
+        Bohrung ändern, nicht die Passung. Körper und Merkmal kommen aus dem
+        Befund (``panels.as_error``), nie aus der Auswahl.
+        """
+        if not self._quiet_command_allowed():
+            return
+        features = tuple(error.values.get("feature_ids") or ())
+        if error.object_id is None or not features:
+            return
+        self.object_tree.select_feature(error.object_id, str(features[0]))
 
     def _show_support_need(self, error: AppError) -> None:
         """Die Stützkarte des Körpers, dessen Insel oder Überhang gemeldet ist."""

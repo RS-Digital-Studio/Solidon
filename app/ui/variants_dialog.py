@@ -342,7 +342,13 @@ class VariantsDialog(QDialog):
             text = tr("Nicht jede Variante ließ sich rechnen — nichts wurde geschrieben.")
             if values:
                 text = f"{text} {tr('Ohne Ergebnis')}: {values}"
+            # Regel 17: der Weg nach vorn, und der Cursor steht schon dort.
+            text = f"{text}\n" + tr(
+                "Wählen Sie einen anderen ersten Wert oder eine kleinere Schrittweite "
+                "und erzeugen Sie erneut."
+            )
             self.state.setText(text)
+            self.first.setFocus()
             return
 
         if not written:

@@ -346,7 +346,7 @@ def test_entering_clears_a_stale_grip_sentence(qt_app) -> None:
 
     window = MainWindow(Session(), UiSettings())
     try:
-        window.announce("Der Griff versetzt die gewählte Fläche entlang ihrer Normalen.")
+        window.announce("Der Griff schiebt die gewählte Fläche senkrecht zu sich selbst.")
         window.start_sketch("")
         assert window.status_message.text() == ""
     finally:

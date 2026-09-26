@@ -537,8 +537,9 @@ CABLE_CLIP_FACET_WALL_FIXED = PartChange(
     date="2026-09-01",
     reason="Die polygonale Kreisannäherung unterschritt die zugesagte Bügelwand.",
     effect=_(
-        "Der Außendurchmesser wächst um die analytische Facettenkorrektur. "
-        "Kabelsitz, Spiel und Öffnung bleiben unverändert; die kleinste Wand hält ihr Nennmaß."
+        "Der Außendurchmesser wächst um den Zuschlag für das Vieleck, als das ein Kreis "
+        "gedruckt wird. Kabelsitz, Spiel und Öffnung bleiben unverändert; die kleinste "
+        "Wand hält ihr Nennmaß."
     ),
 )
 

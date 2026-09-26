@@ -145,6 +145,13 @@ STOP_INSERTING = Action("stop_inserting", _("Einfügen beenden"), primary=True)
 ORIENT_FOR_PRINT = Action("orient_for_print", _("Druckoptimal ausrichten"), primary=True)
 SHOW_SUPPORT_NEED = Action("show_support_need", _("Stützbedarf zeigen"))
 CALIBRATE_MATERIAL = Action("calibrate_material", _("Material kalibrieren"), primary=True)
+#: Die Druckeinstellungen öffnen — Brim, Raft, Stützabstand und Düse stehen
+#: dort. Für Befunde, deren Rat eine Druckeinstellung ist (RM-215).
+OPEN_PRINT_SETTINGS = Action("open_print_settings", _("Druckeinstellungen öffnen"))
+#: Das Merkmal eines Befunds wählen, damit seine Maße im Bild und seine
+#: Handlungen erscheinen — für eine Passung, die nicht passt: Geändert wird
+#: nicht die Passung, sondern das Maß der Bohrung oder des Zapfens (RM-215).
+SHOW_FEATURE = Action("show_feature", _("Merkmal zeigen"), primary=True)
 #: Die laufende Teilungssuche anhalten und verwerfen.
 #:
 #: **Sie hieß ``cancel_evaluation`` und meinte die Teilung.** Ein zweiter
@@ -702,7 +709,8 @@ class BooleanFailedError(GeometryError):
         # vollen Kette rechnet.
         if attempted and "voxel" not in attempted:
             kwargs.setdefault(
-                "title", _("Die Körper ließen sich in der schnellen Vorschau nicht verknüpfen.")
+                "title",
+                _("Mit der schnellen Rechnung ließ sich hier kein sauberes Ergebnis bilden."),
             )
         elif "voxel" in attempted and kwargs.get("suggestions") is None:
             kwargs["suggestions"] = tuple(

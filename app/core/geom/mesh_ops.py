@@ -25,7 +25,10 @@ from app.core.deferred import trimesh
 from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
+    REPAIR_AND_RETRY,
+    REPAIR_BEFORE_AND_RETRY,
     REPAIR_MESH,
+    SHOW_LOCATIONS,
     Action,
     NotManifoldError,
     ValidationError,
@@ -919,7 +922,9 @@ def _too_fine(
     """
     reachable = _reachable_edge(count, edge, would_be, reserve)
     values: dict[str, Any] = {"triangles": would_be, "limit": MAX_REMESH_TRIANGLES}
-    suggestions = [Action(id="decimate_first", label=_("Vorher dezimieren."))]
+    suggestions = [
+        Action(id="decimate_first", label=_("Vorher mit „Dreiecke verringern“ ausdünnen."))
+    ]
     if reachable is not None:
         values["reachable"] = reachable
         suggestions.insert(
@@ -955,7 +960,7 @@ def _out_of_memory(edge: float) -> ValidationError:
         values={"reachable": math.ceil(edge * 2.0 * 100.0) / 100.0},
         suggestions=(
             Action(id="use_reachable", label=_("Die doppelte Kantenlänge nehmen.")),
-            Action(id="decimate_first", label=_("Vorher dezimieren.")),
+            Action(id="decimate_first", label=_("Vorher mit „Dreiecke verringern“ ausdünnen.")),
         ),
     )
 
@@ -1354,9 +1359,9 @@ class DecimateParams(BaseParams):
         "wird gemessen und gemeldet."
     ),
     caveat=_(
-        "Nicht auf einem Teil, das noch bemaßt wird: Dezimieren verschiebt Flächen, "
+        "Nicht auf einem Teil, das noch bemaßt wird: Das Verringern verschiebt Flächen, "
         "und eine Bohrung, die danach gesetzt wird, sitzt auf einer anderen Oberfläche "
-        "als geplant. Zuerst konstruieren, zuletzt dezimieren."
+        "als geplant. Zuerst konstruieren, zuletzt verringern."
     ),
     # „2" mit dem Parameter ``method``: Der gemessene Weg rechnet wie zuvor,
     # der Schlüssel alter Einträge passt aber nicht mehr zum neuen Schema.
@@ -1576,11 +1581,19 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
                 code="mesh.remesh_dense",
                 severity="info",
                 message=_(
-                    "Das Netz hat jetzt über hundertmal so viele Dreiecke. Alles, was "
-                    "danach kommt, rechnet entsprechend länger."
+                    "Das Netz hat jetzt über hundertmal so viele Dreiecke, und alles "
+                    "danach rechnet entsprechend länger. Eine größere Kantenlänge hält "
+                    "es kleiner."
                 ),
                 object_id=source.id,
-                values={"before": before.triangle_count, "after": after.triangle_count},
+                # Der Satz nennt den Weg, und der Knopf öffnet den Schritt mit dem
+                # Cursor in der Kantenlänge (Regel 17).
+                values={
+                    "before": before.triangle_count,
+                    "after": after.triangle_count,
+                    "field": "edge",
+                },
+                suggestions=(CORRECT_INPUT,),
             )
         )
     # Der Satz oben ist eine Zusicherung, und eine Zusicherung wird geprüft.
@@ -1599,6 +1612,12 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
                 ),
                 object_id=source.id,
                 values={"components": after.component_count},
+                # Regel 17: Dieselben zwei Wege wie bei ``mesh.not_watertight``; war
+                # der Eingang schon offen, gehört die Reparatur vor den Schritt.
+                suggestions=(
+                    REPAIR_AND_RETRY,
+                    SHOW_LOCATIONS,
+                ),
             )
         )
     elif not after.is_watertight:
@@ -1612,6 +1631,9 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
                 ),
                 object_id=source.id,
                 values={"components": after.component_count},
+                # Regel 17: Dieselben zwei Wege wie bei ``mesh.not_watertight``; war
+                # der Eingang schon offen, gehört die Reparatur vor den Schritt.
+                suggestions=(REPAIR_BEFORE_AND_RETRY,),
             )
         )
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
@@ -1737,12 +1759,12 @@ class SubdivideParams(BaseParams):
     produces=1,
     doc=_(
         "Macht aus einer kantigen Fläche eine gekrümmte: Die neuen Punkte werden nicht "
-        "in die Facette gesetzt, sondern auf die Rundung, die sie meint. Scharfe Kanten "
+        "in das ebene Dreieck gesetzt, sondern auf die Rundung, die sie meint. Scharfe Kanten "
         "bleiben scharf."
     ),
     caveat=_(
-        "Nicht als Ersatz für eine gröbere Vorlage: Was hier entsteht, ist eine "
-        "Interpolation der vorhandenen Facetten, keine wiedergewonnene Konstruktion. "
+        "Nicht als Ersatz für eine gröbere Vorlage: Was hier entsteht, ist aus den "
+        "vorhandenen Dreiecken gerechnet, keine wiedergewonnene Konstruktion. "
         "Wo es auf ein Maß ankommt, gehört die Rundung in die Skizze."
     ),
 )
@@ -1762,7 +1784,7 @@ def subdivide_surface(ctx: OpContext) -> OpResult:
         Finding(
             code="mesh.subdivided",
             severity="info",
-            message=_("Die Fläche wurde zwischen ihren Facetten interpoliert."),
+            message=_("Die Fläche wurde zwischen ihren Dreiecken gerundet."),
             object_id=source.id,
             values={"before": before.triangle_count, "after": after.triangle_count},
         )

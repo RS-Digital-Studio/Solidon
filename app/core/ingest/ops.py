@@ -112,7 +112,7 @@ class LoadParams(BaseParams):
         ),
     )
     weld: bool = param(
-        title=_("Punkte verschweißen"),
+        title=_("Doppelte Punkte zusammenführen"),
         default=True,
         placement="advanced",
         doc=_(
@@ -154,7 +154,7 @@ class LoadParams(BaseParams):
         default=True,
         placement="advanced",
         depends_on=("mend", (True,)),
-        doc=_("Aus lässt Öffnungen offen, die eine neue große Fläche bräuchten."),
+        doc=_("Schließt auch Öffnungen, die eine neue große Fläche brauchen. Aus lässt sie offen."),
     )
     #: Ein Schalter und keine neue Vorgabe (RM-252): Ein älteres Projekt mit
     #: einer Orca- oder Bambu-Datei behält die Lage, mit der es gespeichert

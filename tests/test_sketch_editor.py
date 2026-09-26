@@ -1920,7 +1920,8 @@ def test_without_a_selection_the_line_belongs_to_the_degrees_of_freedom(
     canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
 
     assert not canvas.selection_hint()
-    assert "Freiheitsgrade" in canvas.status_text()
+    # Die Zahl steht als offene Maße da, nicht als „Freiheitsgrade" (KUNDE-08).
+    assert "Maße fehlen" in canvas.status_text()
 
 
 # --- Punkte setzen und danach greifen (der Weg, an dem es scheiterte) ----------
@@ -2544,7 +2545,7 @@ def test_a_closed_outline_still_counts_its_degrees_of_freedom(qt_app: QApplicati
 
     line = canvas.status_text()
     assert line.startswith("Geschlossen"), line
-    assert "Freiheitsgrade" in line or "Freiheitsgrad" in line, line
+    assert "Maße fehlen" in line or "Maß fehlt" in line, line
 
 
 def test_a_selection_can_be_moved_in_one_go(qt_app: QApplication) -> None:
@@ -4293,7 +4294,8 @@ def test_the_line_translates_its_number_into_a_consequence(qt_app: QApplication)
     canvas.insert_shape(shapes.rectangle(40.0, 20.0))
 
     line = canvas.status_text()
-    assert "Freiheitsgrade" in line or "Freiheitsgrad" in line, "die Zahl bleibt: " + line
+    assert "Maße fehlen" in line or "Maß fehlt" in line, "die Zahl bleibt: " + line
+    assert "Freiheitsgrad" not in line, "Slicer-Kunden kennen das Wort nicht (KUNDE-08): " + line
     assert canvas.outline_advice() in line, "und der Satz steht dahinter: " + line
     assert "Körper" in canvas.outline_advice(), canvas.outline_advice()
 

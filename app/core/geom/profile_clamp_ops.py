@@ -117,7 +117,7 @@ class ProfileClampSetParams(CounterProfileParams):
         maximum=5.0,
         unit="mm",
         placement="advanced",
-        doc=_("Normale Wandstärke zwischen Gegenprofil und Außensitz."),
+        doc=_("Wandstärke zwischen Gegenprofil und Außensitz, senkrecht gemessen."),
     )
     wall: float = param(
         title=_("Schalenwand"),
@@ -126,7 +126,7 @@ class ProfileClampSetParams(CounterProfileParams):
         maximum=8.0,
         unit="mm",
         placement="advanced",
-        doc=_("Normaler Abstand vom Sitz zur Außenkontur."),
+        doc=_("Abstand vom Sitz zur Außenkontur, senkrecht gemessen."),
     )
     joint_gap: float = param(
         title=_("Teilungsspalt"),

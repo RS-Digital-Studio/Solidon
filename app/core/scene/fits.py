@@ -17,7 +17,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from app.core.errors import PROGRAMMING_ERRORS, AppError, InternalError, OperationCancelled
+from app.core.errors import (
+    PROGRAMMING_ERRORS,
+    SHOW_FEATURE,
+    SHOW_HISTORY,
+    AppError,
+    InternalError,
+    OperationCancelled,
+)
 from app.core.expressions import resolve as resolve_parameters
 from app.core.expressions import resolve_value
 from app.core.knowledge.profiles import for_object, resolve_tolerance
@@ -307,6 +314,10 @@ def check(
                     ),
                     object_id=fit.a.object_id,
                     values={"fit": fit.name, "reason": str(problem)},
+                    # Regel 17, derselbe Weg wie ``fit.missing_feature``: Eine
+                    # Passung gehört keinem Schritt, und im Verlauf steht der,
+                    # dessen Parameter der Satz meint.
+                    suggestions=(SHOW_HISTORY,),
                 )
             )
             continue
@@ -369,6 +380,9 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
                 values=values,
                 object_id=fit.a.object_id,
                 feature_ids=(fit.a.feature_id,),
+                # Regel 17: Die zwei Merkmale passen ihrer Art nach nicht
+                # zueinander; das Merkmal zeigt, woran es liegt.
+                suggestions=(SHOW_FEATURE,),
             )
         ]
         if fit.kind == "flush":
@@ -393,6 +407,8 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
                 values={"fit": fit.name},
                 object_id=fit.a.object_id,
                 feature_ids=(fit.a.feature_id,),
+                # Regel 17: Das Merkmal zeigt, welches Maß fehlt.
+                suggestions=(SHOW_FEATURE,),
             )
         ]
 
@@ -426,6 +442,8 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
             # den Punkt, zu dem die Kamera fliegt.
             object_id=hole_ref.object_id,
             feature_ids=(hole_ref.feature_id,),
+            # Regel 17: Geändert wird das Maß des Merkmals, nicht die Passung.
+            suggestions=(SHOW_FEATURE,),
         ),
         *geometry,
     ]
@@ -712,6 +730,8 @@ def _mesh_clearance(
                 values={"fit": fit.name},
                 object_id=hole_ref.object_id,
                 feature_ids=(hole_ref.feature_id,),
+                # Regel 17: Das Merkmal zeigt, welches Maß fehlt.
+                suggestions=(SHOW_FEATURE,),
             )
         bands.append((low, high))
     minimum = 2.0 * (bands[0][0] - bands[1][1])
@@ -736,6 +756,8 @@ def _mesh_clearance(
         },
         object_id=hole_ref.object_id,
         feature_ids=(hole_ref.feature_id,),
+        # Regel 17: Das Merkmal zeigt die Maße, an denen die Unsicherheit hängt.
+        suggestions=(SHOW_FEATURE,),
     )
 
 
@@ -798,6 +820,8 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
                 values={"fit": fit.name, "a": first.kind, "b": second.kind},
                 object_id=fit.a.object_id,
                 feature_ids=(fit.a.feature_id,),
+                # Regel 17: Das Merkmal zeigt, welches Maß fehlt.
+                suggestions=(SHOW_FEATURE,),
             )
         ]
 
@@ -814,6 +838,8 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
                 values={"fit": fit.name},
                 object_id=fit.a.object_id,
                 feature_ids=(fit.a.feature_id,),
+                # Regel 17: Das Merkmal zeigt, welches Maß fehlt.
+                suggestions=(SHOW_FEATURE,),
             )
         ]
 
@@ -839,6 +865,8 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
                 values={"fit": fit.name, "alignment": abs(signed)},
                 object_id=fit.a.object_id,
                 feature_ids=(fit.a.feature_id,),
+                # Regel 17: Geändert wird das Maß des Merkmals, nicht die Passung.
+                suggestions=(SHOW_FEATURE,),
             )
         ]
 
@@ -855,6 +883,8 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
             # wird — und damit die Stelle, an der man nachsieht.
             object_id=fit.a.object_id,
             feature_ids=(fit.a.feature_id,),
+            # Regel 17: Geändert wird das Maß des Merkmals, nicht die Passung.
+            suggestions=(SHOW_FEATURE,),
         )
     ]
 

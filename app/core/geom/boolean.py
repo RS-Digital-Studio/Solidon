@@ -28,7 +28,13 @@ from typing import Any, Final, Literal, Protocol, cast
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, BooleanFailedError
+from app.core.errors import (
+    CANCEL,
+    CORRECT_INPUT,
+    PROGRAMMING_ERRORS,
+    SHOW_LOCATION,
+    BooleanFailedError,
+)
 from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
 from app.core.geom.mesh import MeshData, enclosed_volume, signed_volume
 from app.core.geom.repair import (
@@ -270,7 +276,10 @@ def boolean(
             seed=seed,
         )
     raise BooleanFailedError(
-        detail=_("Auch die letzte Rückfallstufe hat kein brauchbares Ergebnis geliefert."),
+        detail=_(
+            "Häufig ist das Modell an einer Stelle offen — dann hilft Reparieren. Gröber "
+            "gerechnet gelingt es meist, mit gerundeten Maßen."
+        ),
         attempted=tuple(attempted),
         seed=seed,
     )
@@ -332,6 +341,8 @@ def _parts_united_first(
                 "Ihr gemeinsamer Raum zählt jetzt einmal, wie im Druck."
             ),
             location=place,
+            # Der Ort, an dem die Teile ineinanderstecken, reist mit (Regel 17).
+            suggestions=(SHOW_LOCATION,),
         )
     ]
 
@@ -769,7 +780,9 @@ def _findings_for(
             Finding(
                 code="boolean.welded",
                 severity="info",
-                message=_("Die Operation gelang erst nach dem Verschweißen."),
+                message=_(
+                    "Die Operation gelang erst, nachdem doppelte Punkte zusammengeführt waren."
+                ),
             )
         ]
     if stage == "jittered":
@@ -799,9 +812,9 @@ def _findings_for(
                     code="boolean.voxel",
                     severity="warning",
                     message=_(
-                        "Auf einem Raster gelöst — die Maße sind gerundet, und das Volumen "
-                        "liegt neben dem, was diese Operation bewirken kann. Ein geschlossenes "
-                        "Netz rechnet genau."
+                        "Auf einem Raster gerechnet: Die Maße sind gerundet, und das Volumen "
+                        "weicht deutlich vom genauen Ergebnis ab. An einem reparierten Modell "
+                        "rechnet der Schritt genau."
                     ),
                     values={
                         "deviation_mm3": deviation,
@@ -903,11 +916,12 @@ def fell_apart(
     return Finding(
         code=code,
         severity="error",
-        # **Der Vorschlag steht im Satz.** Ein ``Finding`` trägt keine
-        # ``Action``-Liste — das kann nur eine Ausnahme. Regel 17 verlangt
-        # trotzdem einen Weg nach vorn, und :func:`without_effect` macht es
-        # nebenan genauso: erst was ist, dann was hilft.
+        # **Der Vorschlag steht im Satz, und der Knopf daneben** (Regel 17):
+        # Jeder Aufrufer rät, eine Eingabe des Schritts zu ändern — Fläche,
+        # Ort, Rückplatte —, und *Eingabe korrigieren* öffnet genau diesen
+        # Schritt; die Auswertung trägt seine Kennung nach.
         message=message(loose),
+        suggestions=(CORRECT_INPUT,),
         values={
             **(dict(values) if values else {}),
             "loose": str(loose),
@@ -993,4 +1007,7 @@ def without_effect(
             "volume_mm3": round(before.volume, 3),
             "removed_mm3": round(change, 6),
         },
+        # Regel 17: „Position prüfen“ heißt den Schritt öffnen; die Auswertung
+        # trägt seine Kennung nach.
+        suggestions=(CORRECT_INPUT,),
     )

@@ -12,7 +12,10 @@ import dataclasses
 import re
 from typing import cast
 
-from app.core.errors import ValidationError
+from app.core.errors import (
+    CHANGE_SELECTION,
+    ValidationError,
+)
 from app.core.geom.attributes import counts, validate_full_faces, with_slots
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.texture import to_slots
@@ -345,6 +348,8 @@ def slots_from_texture(ctx: OpContext) -> OpResult:
                     severity="warning",
                     message=_("Dieses Objekt trägt keine Farbinformation."),
                     object_id=source.id,
+                    # Regel 17: Die Farbe trägt ein anderes Objekt.
+                    suggestions=(CHANGE_SELECTION,),
                 )
             ],
         )
