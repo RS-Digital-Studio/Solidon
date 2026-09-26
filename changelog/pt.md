@@ -82,10 +82,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Assistente com modelo local
 
-- A escolha do modelo recomenda também modelos mais pequenos a partir de 8 GB de memória gráfica e indica para cada um a memória que ocupa e como resolve pedidos com várias partes.
-- O assistente recebe em detalhe só as ações que servem o pedido. Fica assim espaço para o histórico e a resposta, e os pedidos com várias partes resultam muito mais vezes.
+- A escolha do modelo recomenda também um modelo mais pequeno para placas a partir de 10 GB de memória gráfica e indica para cada um a memória que ocupa e como resolve pedidos com várias partes.
+- O assistente recebe em detalhe só as ações que servem o pedido. Fica assim espaço para o histórico e a resposta, e os pedidos resultam muito mais vezes.
 - O modelo local fica carregado três minutos depois de uma resposta, e a pergunta seguinte já não espera pelo arranque.
-- Uma resposta que não encontra fim é interrompida após um comprimento fixo e indicada como cortada, em vez de ocupar a placa gráfica durante minutos.
+- Uma resposta que não encontra fim é interrompida após um comprimento fixo e indicada como cortada, em vez de ocupar a placa gráfica até ao limite de dez minutos.
 
 ### Utilização e sistema
 

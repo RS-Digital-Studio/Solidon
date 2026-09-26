@@ -1141,6 +1141,21 @@ def test_a_model_measured_unsuitable_is_named_but_not_offered() -> None:
         assert llm.known_model_note(name) == what, f"{name}: sein Satz steht beim Installierten"
 
 
+def test_the_small_model_says_what_happens_on_an_eight_gigabyte_card() -> None:
+    """„Belegt 7,4 GB" las sich wie „passt auf 8 GB" — und das tut es nicht.
+
+    llama-server verlangt für qwen3.5:9b rund 7 950 MiB frei; auf einer
+    8-GB-Karte mit Desktop gingen nachgestellt 26 bis 30 von 34 Schichten auf
+    die Karte, und jede Anfrage dauerte zwei- bis dreimal so lange (Durchsicht
+    0.5.1, Herleitung an ``OLLAMA_SUGGESTIONS``). Der Changelog empfiehlt das
+    Modell für kleinere Karten; der Satz in der Auswahl muss sagen, ab wann es
+    ganz passt und was darunter geschieht.
+    """
+    note = str(llm.known_model_note("qwen3.5:9b"))
+    assert "ab 10 GB ganz auf die Karte" in note, note
+    assert "8-GB-Karte" in note and "Prozessor" in note, note
+
+
 class _PullServer:
     """Ollamas Antwort auf ``/api/pull``: eine Zeile JSON je Zustand."""
 
@@ -1339,8 +1354,11 @@ def test_the_cpu_warning_names_the_limit_only_when_the_wait_reaches_it() -> None
     nicht unbrauchbar; ihm die Absage zu schreiben hieße, ihm etwas Falsches
     zu sagen. Beide Sätze nennen die Wartezeit und einen Weg zu Schnellerem.
     """
-    slow = llm.Speed(tokens_per_second=llm.PROMPT_TOKENS / (20 * 60))
-    fast = llm.Speed(tokens_per_second=llm.PROMPT_TOKENS / (5 * 60))
+    slow = llm.Speed(tokens_per_second=llm.TURN_TOKENS / (20 * 60))
+    fast = llm.Speed(tokens_per_second=llm.TURN_TOKENS / (5 * 60))
+    assert fast.prompt_minutes is not None and round(fast.prompt_minutes) == 5, (
+        "geschätzt wird der übliche erste Schritt, nicht die Grundlast"
+    )
     assert fast.on_gpu is False, "auch der schnellere Fall rechnet auf dem Prozessor"
 
     stops = str(llm.speed_warning(slow))

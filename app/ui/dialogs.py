@@ -1614,11 +1614,14 @@ class KeyDialog(QDialog):
         if warning is None or speed.prompt_minutes is None:
             return ""
         return str(warning).format(
-            rate=round(speed.tokens_per_second or 0.0, 1),
-            # Auf Tausender gerundet: „rund 20 000" ist die Aussage, die der
-            # Satz macht, und „19 641" wäre eine Genauigkeit, die er nicht
-            # hat — die Zahl gilt für ein Modell und einen Werkzeugsatz.
-            tokens=f"{round(llm.PROMPT_TOKENS, -3):n}",
+            # Mit dem Dezimalzeichen der Sprache: „7.8" stand im deutschen
+            # Satz, weil ``round`` eine Zahl einsetzt und kein Text.
+            rate=format_decimal(speed.tokens_per_second or 0.0, 1),
+            # Auf Tausender gerundet: „rund 9000" ist die Aussage, die der
+            # Satz macht, und „9061" wäre eine Genauigkeit, die er nicht
+            # hat — die Zahl gilt für ein Modell und einen Werkzeugsatz. Der
+            # übliche erste Schritt, nicht die Grundlast (``llm.TURN_TOKENS``).
+            tokens=str(round(llm.TURN_TOKENS, -3)),
             minutes=round(speed.prompt_minutes),
         )
 

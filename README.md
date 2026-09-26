@@ -276,7 +276,7 @@ raten (`OLLAMA_SUGGESTIONS` in `app/core/backends/llm.py`):
 
 | Modell | Grafikspeicher | Suite | Anmerkung |
 |---|---|---|---|
-| `qwen3.5:9b` | 7,4 GB | 21/39 | läuft ab einer Karte mit 8 GB; fragt seltener nach |
+| `qwen3.5:9b` | 7,4 GB | 21/39 | ganz auf der Karte ab 10 GB, mit 8 GB zwei- bis dreimal langsamer; fragt seltener nach |
 | `gpt-oss:20b` | 12,9 GB | 10/39 | Karte mit 16 GB; für einzelne Anweisungen |
 | `qwen3:14b` | 13,6 GB | 22/39 | Vorgabe; denkt vor jeder Antwort, Karte mit 16 GB |
 | `qwen3:30b-a3b` | mehr als 16 GB | — | auf 16 GB rechnet ein Drittel der Prozessor |

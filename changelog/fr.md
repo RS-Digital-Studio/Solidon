@@ -83,10 +83,10 @@ dans `website/version.json`.
 
 ### Assistant avec un modèle local
 
-- Le choix du modèle recommande aussi de plus petits modèles dès 8 Go de mémoire graphique et indique pour chacun la mémoire occupée et sa réussite sur les demandes à plusieurs étapes.
-- L'assistant ne reçoit en détail que les actions qui correspondent à la demande. Il reste de la place pour l'historique et la réponse, et les demandes complexes réussissent bien plus souvent.
+- Le choix du modèle recommande aussi un modèle plus petit pour les cartes dès 10 Go de mémoire graphique et indique pour chacun la mémoire occupée et sa réussite sur les demandes à plusieurs étapes.
+- L'assistant ne reçoit en détail que les actions qui correspondent à la demande. Il reste de la place pour l'historique et la réponse, et les demandes réussissent bien plus souvent.
 - Le modèle local reste chargé trois minutes après une réponse, et la question suivante n'attend plus son démarrage.
-- Une réponse qui ne trouve pas de fin s'arrête après une longueur fixe et est signalée comme coupée, au lieu d'occuper la carte graphique pendant des minutes.
+- Une réponse qui ne trouve pas de fin s'arrête après une longueur fixe et est signalée comme coupée, au lieu d'occuper la carte graphique jusqu'à la limite de dix minutes.
 
 ### Utilisation et système
 

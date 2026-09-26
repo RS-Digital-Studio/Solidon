@@ -1707,31 +1707,52 @@ def parse_parameter_count(text: str) -> float | None:
 #: 21, gpt-oss:20b nur 10 — es fordert nie eine Kurzform an und setzt keinen
 #: Baustein. qwen3:30b-a3b ist dort nicht gemessen. Gezählt mit der Bewertung
 #: vom 26.09.2026 (ein Zwilling ist dieselbe Handlung, ``run_agent_suite``).
+#:
+#: **Mehrteilig** heißt: ein Fall mit mindestens zwei erwarteten Operationen,
+#: zehn der 39 (Grundkörper plus Baustein). Davon trafen qwen3:14b und
+#: qwen3.5:9b je zwei, gpt-oss:20b keinen — nachgezählt an denselben Läufen in
+#: der Durchsicht 0.5.1; der Changelog verspricht genau diese Auskunft. Die
+#: Sätze sagen „Einzelne Anweisungen" und „Testaufträge" statt „Probe" und
+#: „Suite": Der Kunde kennt keines der beiden Werkzeuge.
+#:
+#: **7,4 GB heißt nicht „passt auf 8 GB".** Wie viel auf die Karte geht,
+#: entscheidet llama-server beim Laden selbst: qwen3.5:9b plant 6 031 MiB und
+#: verlangt dazu 1 919 MiB Rest, also rund 7 950 MiB frei. Auf einer 8-GB-Karte
+#: bliebe das nur mit weniger als 250 MiB für Desktop und Fenster; auf der
+#: Messmaschine belegten sie ohne Modell 1,3 GB. Nachgestellt in der
+#: Durchsicht 0.5.1 über ``LLAMA_ARG_FIT_TARGET`` an einem zweiten Ollama
+#: (eine fremde Belegung der Karte hilft unter WDDM nicht, llama-server sah
+#: weiter 15 022 MiB frei): mit 1,35 GB Desktop 26 von 34 Schichten auf der
+#: Karte und 21 bis 26 statt 80 Token je Sekunde, mit 0,7 GB 30 Schichten und
+#: 31 bis 34. Ab 10 GB passt es ganz.
 OLLAMA_SUGGESTIONS: Final = (
     (
         "qwen3.5:9b",
         6.6,
         _(
-            "Belegt 7,4 GB Grafikspeicher. In der Probe sieben von acht Aufrufen "
-            "richtig, in der Suite 21 von 39 Aufträgen; fragt bei Unklarem seltener "
-            "nach. Rund 6 Sekunden je Anfrage."
+            "Belegt 7,4 GB Grafikspeicher und passt ab 10 GB ganz auf die Karte; auf einer "
+            "8-GB-Karte rechnet ein Teil auf dem Prozessor, jede Anfrage dauert dann zwei- "
+            "bis dreimal so lange. Einzelne Anweisungen: sieben von acht richtig. "
+            "Von 39 Testaufträgen 21, von zehn mehrteiligen zwei; fragt bei Unklarem "
+            "seltener nach. Rund 6 Sekunden je Anfrage."
         ),
     ),
     (
         "qwen3:14b",
         9.3,
         _(
-            "Belegt 13,6 GB Grafikspeicher. In der Probe acht von acht, in der Suite 22 "
-            "von 39 Aufträgen; denkt vor jeder Antwort, rund 18 Sekunden je Anfrage."
+            "Belegt 13,6 GB Grafikspeicher. Einzelne Anweisungen: acht von acht richtig. "
+            "Von 39 Testaufträgen 22, von zehn mehrteiligen zwei; denkt vor jeder Antwort "
+            "nach, rund 18 Sekunden je Anfrage."
         ),
     ),
     (
         "gpt-oss:20b",
         13.8,
         _(
-            "Belegt 12,9 GB Grafikspeicher. In der Probe sieben von acht, in der Suite "
-            "nur 10 von 39 — gut für einzelne Anweisungen, schwach bei mehrteiligen; "
-            "rund 7 Sekunden je Anfrage."
+            "Belegt 12,9 GB Grafikspeicher. Einzelne Anweisungen: sieben von acht richtig. "
+            "Von 39 Testaufträgen nur 10, von zehn mehrteiligen keinen — gut für einzelne "
+            "Anweisungen; rund 7 Sekunden je Anfrage."
         ),
     ),
     (
@@ -1740,7 +1761,8 @@ OLLAMA_SUGGESTIONS: Final = (
         _(
             "Braucht mehr als 16 GB Grafikspeicher; auf einer 16-GB-Karte rechnet ein "
             "Drittel auf dem Prozessor, und es bleibt bei rund 17 Sekunden je Anfrage. "
-            "Acht von acht Aufrufen richtig."
+            "Einzelne Anweisungen: acht von acht richtig; mit den Testaufträgen nicht "
+            "gemessen."
         ),
     ),
 )
@@ -2282,6 +2304,18 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: ``a66f67dae56492664bc4b762938c2b534e5777c084bd0bdd840b962f37cbd9ce``.
 PROMPT_TOKENS: Final = 7276
 
+#: Wie viele Token der **erste Schritt eines üblichen Zugs** einliest — die
+#: Zahl, mit der die Wartezeit auf dem Prozessor geschätzt wird
+#: (:meth:`Speed.prompt_minutes`).
+#:
+#: Nicht :data:`PROMPT_TOKENS`: Das ist die Grundlast zu „Hallo.", ohne ein
+#: einziges ausführliches Werkzeug, ohne Steckbrief. Ein wirklicher Zug legt
+#: die gemeinten Werkzeuge und die Szene dazu. Gemessen am 26.09.2026 in der
+#: Suite (qwen3:14b, Endstand ``2c34c2a7``, 39 Fälle): Median des ersten
+#: Schritts 9 061, höchstens 10 886 (Durchsicht 0.5.1). Mit der Grundlast
+#: geschätzt, sagte der Prozessorhinweis rund ein Viertel zu wenig Minuten.
+TURN_TOKENS: Final = 9061
+
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
 #: lassen — am 08.09.2026 hat er genau das geleistet und dabei eine
@@ -2326,10 +2360,11 @@ class Speed:
 
     @property
     def prompt_minutes(self) -> float | None:
-        """Geschätzte Einlesedauer für den zuletzt gemessenen Auftragsumfang."""
+        """Geschätzte Einlesedauer für den ersten Schritt eines üblichen Zugs
+        (:data:`TURN_TOKENS`)."""
         if not self.tokens_per_second:
             return None
-        return PROMPT_TOKENS / self.tokens_per_second / 60.0
+        return TURN_TOKENS / self.tokens_per_second / 60.0
 
 
 def ollama_speed(model: str, url: str | None = None, transport: Transport = post_json) -> Speed:
@@ -2391,7 +2426,7 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
 
     Die drei Platzhalter ``rate``, ``tokens`` und ``minutes`` bleiben stehen;
     eingesetzt werden sie von der Oberfläche aus
-    :meth:`Speed.tokens_per_second`, :data:`PROMPT_TOKENS` und
+    :meth:`Speed.tokens_per_second`, :data:`TURN_TOKENS` und
     :meth:`Speed.prompt_minutes`. **``tokens`` ist ein Platzhalter und keine
     Zahl im Satz, weil er sonst altert:** Hier stand „rund 24 000", während
     die Konstante daneben schon gepflegt wurde. Dasselbe Muster wie bei ``AppError.values``

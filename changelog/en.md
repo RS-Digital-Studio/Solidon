@@ -82,10 +82,10 @@ it into `website/version.json`.
 
 ### Assistant with a local model
 
-- The model choice also recommends smaller models from 8 GB of graphics memory and names for each the memory it takes and how well it handles multi-part requests.
-- The assistant gets full detail only for the actions that fit the request. That leaves room for history and answer, and multi-part requests succeed much more often.
+- The model choice also recommends a smaller model for cards from 10 GB of graphics memory and names for each the memory it takes and how well it handles multi-part requests.
+- The assistant gets full detail only for the actions that fit the request. That leaves room for history and answer, and requests succeed much more often.
 - The local model stays loaded for three minutes after an answer, and the next question no longer waits for the model to start.
-- An answer that finds no end stops after a fixed length and is reported as cut off, instead of occupying the graphics card for minutes.
+- An answer that finds no end stops after a fixed length and is reported as cut off, instead of occupying the graphics card until the ten-minute time limit.
 
 ### Operation and system
 

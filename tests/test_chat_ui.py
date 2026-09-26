@@ -1561,10 +1561,15 @@ def test_a_suggested_entry_separates_the_name_from_its_explanation(
 
     assert dialog._chosen_model() == llm.DEFAULT_OLLAMA_MODEL
     assert dialog.model_field.currentText() == llm.DEFAULT_OLLAMA_MODEL
-    assert "Download: 9,3 GB" in dialog.model_note.text()
-    assert "fünf von fünf" in dialog.model_note.text()
-    assert "Median rund 17" in dialog.model_note.text()
-    assert "14 GB" not in dialog.model_note.text()
+    note = dialog.model_note.text()
+    assert "Download: 9,3 GB" in note
+    # Speicherbedarf und mehrteilige Aufträge, wie der Changelog 0.5.1 sie
+    # verspricht — und in Kundenwörtern: Bis zur Durchsicht 0.5.1 stand hier
+    # „fünf von fünf" und „Median rund 17", die der Satz seit a00f5053 nicht
+    # mehr trug; der Fenstertest war rot, ohne dass ein Tor ihn fuhr.
+    assert "13,6 GB Grafikspeicher" in note
+    assert "mehrteilig" in note
+    assert "Suite" not in note and "Probe" not in note, "Werkzeugnamen, die kein Kunde kennt"
 
 
 def test_an_installed_alias_keeps_its_known_explanation(
@@ -1581,7 +1586,7 @@ def test_an_installed_alias_keeps_its_known_explanation(
     dialog.model_field.setCurrentIndex(0)
 
     assert "keine Messung" not in dialog.model_note.text()
-    assert "keine Werkzeuge" in dialog.model_note.text()
+    assert "ungeeignet" in dialog.model_note.text(), "die Messung des Aliases steht da"
 
 
 def test_installed_model_aliases_appear_exactly_once(
@@ -1839,8 +1844,10 @@ def test_a_model_on_the_processor_says_so_before_it_is_blamed(
 
     gesagt = dialog.probe_result.text()
     assert "Prozessor" in gesagt
-    assert "7.8" in gesagt, "die gemessene Zahl steht dabei"
-    minutes = round(llm.PROMPT_TOKENS / 7.8 / 60)
+    # Mit dem Dezimalzeichen der Sprache: Hier stand „7.8", und der Test
+    # schrieb damit den Punkt in einem deutschen Satz fest (Durchsicht 0.5.1).
+    assert "7,8" in gesagt, "die gemessene Zahl steht dabei"
+    minutes = round(llm.TURN_TOKENS / 7.8 / 60)
     assert str(minutes) in gesagt, "und was sie für den Kunden bedeutet"
     assert "Zehn-Minuten-Grenze" in gesagt, "der CPU-Weg endet vor dem Ergebnis"
     assert "nicht abgeschlossen" in gesagt, "die Grenze wird nicht als langsamer Erfolg verkauft"

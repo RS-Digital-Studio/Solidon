@@ -107,10 +107,10 @@ Nutzen da und sonst nichts.
 
 ### Assistent mit lokalem Modell
 
-- Die Modellauswahl empfiehlt auch kleinere Modelle ab 8 GB Grafikspeicher und nennt je Modell den Speicherbedarf und wie gut es mehrteilige Aufträge schafft.
-- Der Assistent bekommt nur die Handlungen ausführlich, die zur Anfrage passen. So bleibt Platz für Verlauf und Antwort, und mehrteilige Aufträge gelingen deutlich öfter.
+- Die Modellauswahl empfiehlt auch ein kleineres Modell für Karten ab 10 GB Grafikspeicher und nennt je Modell den Speicherbedarf und wie gut es mehrteilige Aufträge schafft.
+- Der Assistent bekommt nur die Handlungen ausführlich, die zur Anfrage passen. So bleibt Platz für Verlauf und Antwort, und Aufträge gelingen deutlich öfter.
 - Das lokale Modell bleibt nach einer Antwort drei Minuten geladen, und die nächste Frage wartet nicht mehr auf den Modellstart.
-- Eine Antwort, die kein Ende findet, bricht nach einer festen Länge ab und wird als abgeschnitten gemeldet, statt die Grafikkarte minutenlang zu belegen.
+- Eine Antwort, die kein Ende findet, bricht nach einer festen Länge ab und wird als abgeschnitten gemeldet, statt die Grafikkarte bis zur Zeitgrenze von zehn Minuten zu belegen.
 
 ### Bedienung und System
 

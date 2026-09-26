@@ -82,10 +82,10 @@ scrive in `website/version.json`.
 
 ### Assistente con modello locale
 
-- La scelta del modello consiglia anche modelli più piccoli da 8 GB di memoria grafica e indica per ciascuno la memoria che occupa e quanto bene gestisce richieste in più parti.
-- L'assistente riceve in dettaglio solo le azioni adatte alla richiesta. Resta così spazio per cronologia e risposta, e le richieste in più parti riescono molto più spesso.
+- La scelta del modello consiglia anche un modello più piccolo per schede da 10 GB di memoria grafica e indica per ciascuno la memoria che occupa e quanto bene gestisce richieste in più parti.
+- L'assistente riceve in dettaglio solo le azioni adatte alla richiesta. Resta così spazio per cronologia e risposta, e le richieste riescono molto più spesso.
 - Il modello locale resta caricato tre minuti dopo una risposta, e la domanda successiva non aspetta più il suo avvio.
-- Una risposta che non trova una fine si interrompe dopo una lunghezza fissa e viene segnalata come troncata, invece di occupare la scheda grafica per minuti.
+- Una risposta che non trova una fine si interrompe dopo una lunghezza fissa e viene segnalata come troncata, invece di occupare la scheda grafica fino al limite di dieci minuti.
 
 ### Uso e sistema
 
