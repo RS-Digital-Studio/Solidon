@@ -546,6 +546,26 @@ def test_the_commit_guard_sees_a_text_that_runs_over_several_lines(
     ], "der zusammengesetzte Text zählt als einer, und der unveränderte gehört nicht dazu"
 
 
+def test_the_commit_guard_reads_a_text_with_context_under_its_catalog_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Text mit ``context=`` steht im Katalog als ``Kontext\\x04Text``.
+
+    Durchsicht 0.5.1: Die Kundenwörter der Befehlspalette tragen den Kontext
+    „Suchwörter“. Der Wächter suchte sie ohne ihn — „Ball“ statt
+    „Suchwörter\\x04Ball“ —, fand sie in keinem Katalog und hielt einen
+    vollständig übersetzten Commit an. Gefragt wird der Schlüssel, unter dem
+    ``TranslatableText`` nachschlägt; ohne Kontext bleibt es der Text selbst.
+    """
+    neu = _guard_with(
+        monkeypatch,
+        before="x = 1\n",
+        after='_("Ball", context="Suchwörter")\ntr("Nach oben", context="Verlauf")\n_("Gerade")\n',
+    )
+
+    assert neu == ["Gerade", "Suchwörter\x04Ball", "Verlauf\x04Nach oben"]
+
+
 # --- hold_back_version -------------------------------------------------------------
 
 

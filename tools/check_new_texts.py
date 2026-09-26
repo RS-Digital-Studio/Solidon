@@ -88,8 +88,28 @@ def _texts_in(revision: str, path: str) -> set[str]:
             continue
         first = node.args[0]
         if isinstance(first, ast.Constant) and isinstance(first.value, str):
-            found.add(first.value)
+            found.add(_catalog_key(node, first.value))
     return found
+
+
+def _catalog_key(call: ast.Call, text: str) -> str:
+    """Der Schlüssel, unter dem der Katalog diesen Text führt.
+
+    **Mit Kontext steht er als ``Kontext\\x04Text`` darin**, wie
+    ``TranslatableText`` nachschlägt. Ohne diese Zeile suchte der Wächter die
+    Kundenwörter der Befehlspalette (``context="Suchwörter"``, Durchsicht 0.5.1)
+    ohne ihren Kontext, fand keinen davon und hielt einen vollständig
+    übersetzten Commit an.
+    """
+    for keyword in call.keywords:
+        if (
+            keyword.arg == "context"
+            and isinstance(keyword.value, ast.Constant)
+            and isinstance(keyword.value.value, str)
+            and keyword.value.value
+        ):
+            return f"{keyword.value.value}\x04{text}"
+    return text
 
 
 def added_texts() -> list[str]:
