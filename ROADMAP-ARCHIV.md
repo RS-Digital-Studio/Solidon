@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-26 | [Durchsicht v0.5.1: neun Punkte geschlossen (26.09.2026)](#durchsicht-v051-neun-punkte-geschlossen-26092026) |
 | 2026-09-26 | [Schriftzüge und Streben sind gerundete Seiten (26.09.2026)](#schriftzüge-und-streben-sind-gerundete-seiten-26092026) |
 | 2026-09-26 | [Verschweißen je Blatt, die fehlende Bohrungswand und das Raster mit Zahl (26.09.2026)](#verschweißen-je-blatt-die-fehlende-bohrungswand-und-das-raster-mit-zahl-26092026) |
 | 2026-09-26 | [Die Kante innerhalb der Hülle und die Nachkontrolle der Kopien (26.09.2026)](#die-kante-innerhalb-der-hülle-und-die-nachkontrolle-der-kopien-26092026) |
@@ -32124,3 +32125,249 @@ Dazu aus dem Bericht, je mit Test:
   (ohne sie fallen dort sechs Verrundungen R 20,8 bis R 29,9); die Grenze
   `CURVATURE_JUMP` für einen Schritt und das Durchlaufen formloser Stücke
   hält kein eigener Fall.
+
+## Durchsicht v0.5.1: neun Punkte geschlossen (26.09.2026)
+
+Die Durchsicht seit 0.5.0 (Roberts Auftrag: Leistung, Funktion über die Oberfläche,
+einfache Oberfläche, Verständnis für Kunden ohne CAD-Kenntnisse) lief in zehn Paketen;
+Berichte, Sonden und Patches liegen unter `F:\3D Druck.review-051\`. Übernommen wurden
+werkzeuge, massbild, ki, reparatur, erkennung, fenster, druck und texte; jedes Paket gelesen,
+im Prüfbaum gegen den aktuellen Stand zusammengeführt, mit grünem Entwicklungstor
+committet. Diese Punkte sind damit geschlossen.
+
+<a id="rm-088"></a>
+
+- [x] **RM-088 — Verständlichkeit für Laien im Regelwerk verankern.** Die vorgeschlagene
+  Verständlichkeitsregel für Kundentexte entscheiden und ihren Geltungsbereich festlegen. Abnahme:
+  freigegebene Formulierung, begründete Ausnahmen für Slicer-Begriffe und gegebenenfalls eine
+  kuratierte, sprachübergreifende Prüfung.
+
+  **Stand 23.09.2026:** Die Slicer-Begriffsausnahme ist in der Praxis bereits gesetzt — „slicer" ist
+  jetzt in allen sechs Sprachen einheitlich der Fachbegriff (Paket „texte", RM-084). Was fehlt, ist
+  Roberts Freigabe der Verständlichkeitsregel selbst und ihres Geltungsbereichs darüber hinaus — das
+  ist eine Regelentscheidung und wird hier nicht unterstellt.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
+
+  **Abschluss 26.09.2026 (Durchsicht v0.5.1):** Übernommen mit der Durchsicht v0.5.1
+  (Entscheidung der Hauptsitzung auf Roberts Auftrag „alles einfach nachvollziehbar für
+  Kunden ohne CAD-Kenntnisse“; Robert informiert, kein Widerspruch). Die Regel steht in
+  `.claude/rules/oberflaeche.md`, 32 Kundentexte und 12 Übersetzungen tragen kein
+  Konstrukteurswort mehr, Rohwerte wie „voxel“ in Befunddetails sind ersetzt. Wächter:
+  `tests/test_wording.py::test_no_customer_text_uses_a_designer_word` mit begründeter
+  Ausnahmeliste, dazu `test_a_quoted_control_is_named_as_the_control_says` für
+  Knopfzitate (`e8f9f574d`).
+
+<a id="rm-214"></a>
+
+- [x] **RM-214 — Die Bereichsprüfung ohne VTK hat keinen Index und keinen Wächter.**
+  Folgen des VTK-Ausbaus (`5a57e261`, Bericht vtk): Die neue Wandmessung
+  (`range_check.local_wall_thickness` über `mesh.ray_hits_batch`) prüft Strahlen
+  gegen alle Dreiecke — O(n²) statt O(n log n). Die Stichprobe im Bericht vtk
+  maß nur die erste Bereichsecke je Baustein; ihre höchstens 4 316 Dreiecke
+  sind keine Grenze für alle Ecken. Auch die dort behauptete Sekundengrenze
+  gilt nicht allgemein. Der vollständige Hauptbaum-Lauf am 23.09.2026 bestand
+  für alle 35 Bausteine (Exit 0); `seal_gasket` brauchte für seinen gesamten
+  Bereich mit 16 Ecken 719,5 s. Das ist keine Einzelmessung der Wandprüfung
+  und kein Nachweis einer allgemeinen Laufzeitregression der Anwendung.
+  Fortschritt, ältere VTK-Läufe und die Messgrenzen stehen in
+  `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-bausteinlauf.md`. Größere eigene
+  `.py`-Bausteine bleiben wegen der quadratischen Wandmessung ebenfalls
+  betroffen. Ein Test, der VTK-Importe unter `app/` und
+  `tools/` verbietet, fehlt (der Nachweis war ein `grep`); `vtk` liegt weiter in
+  der `.venv`, und nur `check_env` könnte es melden. Weg: ein räumlicher Index
+  (Sweep-and-Prune wie in `geom/intersections.py`, oder `cKDTree` mit wachsendem
+  Radius); ein Wächter nach dem Muster von `test_core_isolation.py` über
+  `sys.modules` nach einem vollen Start; `check_env` meldet nicht mehr geführte
+  Pakete. Abnahme: ein eigener Baustein mit 50 000 Dreiecken prüft seine Wand
+  unter 5 s, der Wächter ist gegen einen eingefügten Import rot.
+
+  **Abschluss 26.09.2026 (Durchsicht v0.5.1):** Behoben in der Durchsicht v0.5.1 (Paket
+  werkzeuge): Baum aus Hüllquadern in `mesh.ray_hits_batch`, bitgleich zum Vollvergleich
+  — Vollkugel mit 12 800 Dreiecken 31 → 0,5 s, ein Baustein mit 51 200 Dreiecken in 2,0
+  s unter Last (gefordert unter 5 s; `7e3442623`); Wächter gegen VTK-Importe über
+  `sys.modules` und Quellen, gegen einen eingefügten Import rot, und `check_env` meldet
+  nicht mehr geführte Pakete (`a0db3edeb`). vtk 9.7.0 ist aus der `.venv` entfernt
+  (Robert, 26.09.2026). Der Bereichsnachweis aller 35 Bausteine ist danach neu gefahren
+  (`e8f9f574d`).
+
+<a id="rm-205"></a>
+
+- [x] **RM-205 — Escape in der dritten Stufe der Platzierung springt in den
+  Dialog.** Gefunden am 21.09.2026 im Review (Ansicht #11):
+  `placement_flow.py` sendet `surfaceRequested` ohne Sender; Escape in Stufe 3
+  überspringt Stufe 2 und landet im Dialog, und aus dem Dialog führt kein Weg
+  zurück in Stufe 1. Das ist eine Bedienfrage nach §2 und §19, keine
+  Codefrage: Welche Stufe ein Escape verlässt und wohin es führt, entscheidet
+  der Ablauf, nicht die Signalverdrahtung. Weg: `bedienlogik` entwirft den
+  Rückweg Klick für Klick, dann die Umsetzung mit einem Test je Stufe.
+  Abnahme: ein Escape je Stufe geht genau eine Stufe zurück, der Dialog hat
+  einen Rückweg in die erste, und kein Zustand bleibt ohne Sender.
+
+  **Abschluss 26.09.2026 (Durchsicht v0.5.1):** Am echten Fenster abgenommen in der
+  Durchsicht v0.5.1 (Paket massbild, `scenario_escape.py`, Wabenhalter, echte Klicks und
+  Escape an der Renderfläche): Maße → Tiefe → Escape → Maße (gezogene Tiefe bleibt) →
+  Escape → Zielen (Werte bleiben) → Escape → Dialog mit angemeldetem Rückweg → Klick ins
+  Modell → wieder Maße. Keine Abweichung.
+
+<a id="rm-174"></a>
+
+- [x] **RM-174 — Der Geist beim Zug an einem Bausteinmerkmal zeigt nur dieses Merkmal.** Seit dem
+  14.09.2026 versetzt der Griff an einem Merkmal, das aus einem Baustein kam, den ganzen Baustein
+  (`MainWindow._move_the_part`): Die Tasche eines Schlüssellochs nimmt Schlitz und zehn
+  Verrundungen mit, der Schritt behält seine Kennung. Während des Zugs zeigt die Ansicht aber
+  weiter, was sie für jedes Merkmal zeigt — die Marke des angefassten Merkmals wandert, der
+  blasse Geist steht an seiner Ausgangsstelle (`Viewport._show_ghost`, `_feature_shape`), und
+  die übrigen elf Merkmale rücken erst beim Loslassen nach. Für eine Bohrung ist das die ganze
+  Wahrheit, für einen Baustein die Hälfte. Abnahme: Während des Zugs wandert der Umriss des
+  ganzen Bausteins (die Dreiecke seiner Merkmale, oder der Werkzeugkörper aus
+  `placement_tools` an der neuen Stelle), und ein Zug neben die Fläche zeigt schon vor dem
+  Loslassen, dass er dort nicht landet.
+
+  [Befund](ROADMAP-ARCHIV.md#bausteine-vorschau-griff-und-werte--die-sonde-über-alle-27-14092026).
+
+  **Abschluss 26.09.2026 (Durchsicht v0.5.1):** Am echten Fenster abgenommen in der
+  Durchsicht v0.5.1 (Paket massbild, `scenario_bausteinzug.py`, Wabenhalter mit
+  Schlüsselloch): Der ganze Baustein zieht mit. Die Rotfärbung „neben der Fläche“ fehlte
+  über der eigenen Bohrung eines Bausteins, weil der Sitz dort keine Landefläche fand
+  (MASSBILD-16) — behoben (`5a90d4361`).
+
+<a id="rm-216"></a>
+
+- [x] **RM-216 — Ein erzeugtes Flächenmerkmal behält nach einer Änderung seine alte Fläche.**
+  Gefunden in der Durchsicht 0.5.0 (Paket exakt, Rest der Lücke 2 aus RM-188,
+  Sonde `sonden/exakt/s35_stale_area.py`): `face_top` aus `create_box` trägt
+  nach einer Durchgangsbohrung weiter 2 400 mm², die frische Erkennung misst
+  2 349,878 mm². Die Dreiecke des Merkmals sind nachgeführt, seine Maße nicht,
+  denn `evaluate._with_features` reicht Merkmale, die ein Baustein oder
+  Grundkörper mitgebracht hat, ohne Neuerkennung weiter. Am exakten Körper
+  stimmt es (native Neuerkennung). Wirkung beim Kunden: Steckbrief, Agent und
+  Merkmalfenster nennen eine Fläche, die es so nicht mehr gibt. Weg: Test zuerst
+  mit der Sonde als Fall; die Kennzahlen gebauter Merkmale nach einer formenden
+  Operation aus ihren nachgeführten Dreiecken neu messen, ohne die Kennung zu
+  verlieren. Abnahme: Fläche, Normale und Mitte gebauter Merkmale stimmen nach
+  jeder Operation mit der frischen Erkennung überein, am Netz wie am exakten
+  Körper.
+
+  **Abschluss 26.09.2026 (Durchsicht v0.5.1):** Behoben in der Durchsicht v0.5.1 (Paket
+  erkennung, ERKENNUNG-07): Ein erklärtes Merkmal liest, was seine Erzeugung als Messung
+  ausweist (`facets`, `fit`), an seinem heutigen Partner neu
+  (`matching.on_their_partners`, `measured_again`); Vorgaben aus dem Schritt bleiben.
+  `face_top` nach einer Bohrung: 2 349,878 mm² wie die frische Erkennung. Test
+  `tests/test_evaluation.py::test_a_built_face_measures_what_is_left_of_it_after_a_bore`
+  (`1afc1852d`). Am exakten Körper liest ein Baustein sein Ergebnis seither aus der
+  Topologie (ERKENNUNG-10).
+
+<a id="rm-222"></a>
+
+- [x] **RM-222 — Die Erkennung einer Durchbohrung am Netz hängt an der Vorgeschichte.**
+  Gemessen beim Bau von P7 (Bericht p7verlauf, Abschnitt 7) am Besenhalter
+  (`broomholdervcd_d35mm.stl`): Dieselbe Geometrie, einmal mit vorherigem
+  *Bohrung vergrößern* und einmal ohne gebaut, erkennt einmal eine Bohrung mehr
+  (die Wand bei y = 0). Die Gegenprobe ist sauber — dieselbe Folge von Hand
+  gebaut ergibt bitgleich dasselbe Netz und dieselben Merkmale wie der Umbau —;
+  die Erkennung hängt also nicht am Umbau, sondern an der Vorgeschichte. Das
+  macht „reproduzierbarer Endstand" an Merkmalsnamen fest, die von der
+  Reihenfolge abhängen, und ist dieselbe Familie wie RM-210. Weg: die zwei
+  Stände als Korpusfall einchecken, die Stelle eingrenzen (vermutlich das
+  Mitführen gebauter Merkmale gegen die frische Erkennung, `carry_detection`).
+  Abnahme: beide Wege liefern dieselben Merkmale.
+
+  **Abschluss 26.09.2026 (Durchsicht v0.5.1):** Behoben in der Durchsicht v0.5.1 (Paket
+  erkennung, ERKENNUNG-06): Eine geänderte Bohrung reiste unter ihrem Namen neben der
+  Zuordnung weiter, und eine neu gebohrte bekam diesen Namen als ersten freien und wurde
+  beim Zusammenführen überschrieben. `apply_mapping(..., reserved=...)` vergibt Namen,
+  die neben der Zuordnung weiterleben, nicht mehr neu. Test
+  `tests/test_matching.py::test_a_new_bore_keeps_its_place_after_a_changed_bore_took_the_last_name`
+  (`1afc1852d`).
+
+<a id="rm-233"></a>
+
+- [x] **RM-233 — Fünf Kleinigkeiten aus den Durchsichten, am Code bestätigt.**
+  Jede für sich klein, alle am Stand `5a57e261` nachgelesen: `Session.autosave`
+  hängt ungeschützt am Zeitgeber (`main_window.py:2274`, `write_autosave` ohne
+  `try`) — ein voller Datenträger wirft in einem Slot, und das erreicht keinen
+  Kunden (szene); das Kontextmenü des Skizzeneditors
+  (`sketch_editor._context_menu`) baut je Rechtsklick ein `QMenu(self)` und gibt
+  es nie frei (fenster); *Drehdeckel* und *Prüfstück* vergeben Objektnamen in
+  der Sprache des Augenblicks (`lid.py:1470`, `prepare_ops.py:12557`,
+  `unused_name(_(…))`) — derselbe Schritt heißt nach einem Sprachwechsel anders
+  (szene); *Drehen*, *Skalieren* und *Spiegeln* nennen ihren Anker
+  „Schwerpunkt", gerechnet wird mit der Hüllquadermitte
+  (`geom/ops.py:339/447/596`, `transform.anchor_point`, `pivot_for_transform`,
+  `_on_scale_dragged`; Text in allen Katalogen auf „Mitte des Objekts") (szene);
+  und die Rückfragekarte hat feste 520 Punkte und steht in einem sehr schmalen
+  Fenster oben mittig unter Karten (foerderung, bestehend). Weg: je Stelle der
+  kleinste Fix mit Test. Abnahme: fünf Tests, der Sprachwechseltest benennt den
+  Namen einmal.
+
+  **Abschluss 26.09.2026 (Durchsicht v0.5.1):** Alle fünf behoben. Automatische
+  Sicherung im Arbeiter, ein Schreibfehler steht einmal je Sitzung in der Statuszeile;
+  Kontextmenüs von Skizze und „Zuletzt geöffnet“ mit `deleteLater`; Rückfragekarte nimmt
+  den freien Streifen bis 240 Punkte oder fragt später; der Anker heißt „Mitte des
+  Objekts, Ursprung oder Druckbett“ (Durchsicht v0.5.1, Paket fenster: `336c7fdc8`,
+  `fa0320fe7`, Tests in `test_ui.py`, `test_sketch_editor.py`, `test_start_screen.py`,
+  `test_feedback.py`, `test_transform.py`). Die Objektnamen in der Sprache des
+  Augenblicks waren schon mit `54f922e0f` behoben: `Scene.unused_name` gibt einen
+  übersetzbaren Text zurück
+  (`test_missing_ops.py::test_the_screw_lid_name_follows_the_language`).
+
+<a id="rm-238"></a>
+
+- [x] **RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen.**
+  Die Großmodellbefunde bieten die lokale Erkennung direkt an. Der nächste
+  Oberflächentreffer bestimmt einen der vom Befund betroffenen Netz-Körper;
+  eine zufällige Baumauswahl ersetzt das Ziel nicht. Eine ungültige Stelle
+  kann erneut gewählt werden, ohne die Erkundung ins Dokument zu übernehmen.
+
+  Menü, Palette und Bericht verwenden `LocalRecognitionFlow.arm`. Während
+  dieser Auswahl bewegt die Tastatur ein sichtbares Fadenkreuz; Enter folgt
+  demselben Originaltreffer wie die Maus, Umschalt ermöglicht Feinschritte.
+  Abbruch, Projektwechsel und Beginn der Erkennung entfernen die Auswahlhilfe.
+  Fensterfälle sind ergänzt. **Offen bleibt ihre native Release-Abnahme**:
+  Bericht → Körper → Stelle → erkannte Form → Änderung und Undo, vollständig
+  mit Tastatur, einschließlich Fokus, Abbruch und Rückkehr bei mehreren DPI-Stufen.
+
+  Nachgezogen am 24.09.2026 aus der Bedienweg-Durchsicht (E1–E7): Der
+  Kartenbefund `ingest.very_large` trägt die lokale Erkennung nicht mehr, der
+  Befund `perceive.too_large` am Ladeschritt dafür *Alle Merkmale erkennen*;
+  jeder Fehlergrund der lokalen Suche bietet die Wege, die sein Satz nennt, als
+  Knöpfe (Suchradius vergrößern oder verkleinern mit sofortiger neuer Suche,
+  andere Stelle, Dreiecke verringern, Netz reparieren); eine Auswahl, die nicht
+  beginnen kann, sagt den Grund; „Suchradius" und „gefunden" statt „Radius" und
+  „vollständig". Die Fensterfälle dazu gehören zur Abnahme oben.
+
+  **Abschluss 26.09.2026 (Durchsicht v0.5.1):** Native Abnahme in der Durchsicht v0.5.1
+  (Paket fenster, `p07_stelle.py`, `p29_nativ.py`): Drache Bericht → Knopf → Pfeile →
+  Enter, `plate_holes.stl` in vier DPI-Stufen (QT_SCALE_FACTOR 1 bis 2): Treffer genau
+  unter dem Kreuz, Fokus beim Kreuz, Escape gibt ihn zurück, Abbruch und Rückkehr
+  belegt. Dabei behoben: Start mit QT_SCALE_FACTOR=2 endete mit AttributeError
+  (FENSTER-16), das Kreuz verdeckte die gewählte Stelle (FENSTER-17, vier deckende Arme
+  um eine freie Mitte), die Suche 58 → 21,6 s (FENSTER-10); `336c7fdc8`, `c2ebc0fe0`.
+
+<a id="rm-215"></a>
+
+- [x] **RM-215 — 276 Befundstellen enden ohne Handlung.**
+  Aus der Sollliste der Durchsicht 0.5.0 (C1): 276 Befundstellen im Kern tragen
+  weder `suggestions` noch einen Eintrag in `panels.FINDING_ACTIONS`, darunter
+  97 Warnungen und sieben Fehler. Stichprobe am Code (`main`): `fit.violated`
+  (`scene/fits.py:382`), `gcode.spool_left_out` (`export/handover.py:2720`),
+  `join.blocked` (`geom/prepare.py:2819`) und `orient.support_likely`
+  (`geom/orient.py:685`) bauen ihren `Finding` ohne `suggestions`, und keiner
+  steht in `FINDING_ACTIONS`. Regel 17 verlangt mindestens einen
+  Handlungsvorschlag je Ausnahme; für Befunde gilt dieselbe Haltung (§2.7). Der
+  geplante Querschnitt „befunde" (Welle 2/3) ist nicht begonnen worden. Weg: ein
+  Test, der für jede Warnung und jeden Fehler einen Weg verlangt (Ausnahmeliste
+  mit Begründung für reine Auskünfte), dann die Stellen gebietsweise nachziehen
+  — Fehler zuerst. Abnahme: der Test grün, jede Ausnahme begründet.
+
+  **Abschluss 26.09.2026 (Durchsicht v0.5.1):** Wächter eingecheckt in der Durchsicht
+  v0.5.1 (Paket texte): `tests/test_finding_ways.py` verlangt für jede Warnung und jeden
+  Fehler im Kern eine Handlung oder einen Eintrag in `OHNE_KNOPF` mit Grund und prüft,
+  dass jede Ausnahme noch trifft (Gegenprobe rot). Neue Handlungen *Merkmal zeigen* an
+  allen `fit.*`-Warnungen und *Druckeinstellungen öffnen* an Bett-, Stützabstands-,
+  Düsen- und Brim-Befunden, `join.blocked` mit Rat und *Verlauf zeigen*. Stand: 252
+  Stellen ohne Handlung statt 277, davon 2 Fehler und 50 Warnungen, jede begründet; der
+  Rest sind Hinweise. `tests/test_finding_actions.py` belegt, dass die angebotenen
+  Knöpfe etwas tun (`e8f9f574d`).
+

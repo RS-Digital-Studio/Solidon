@@ -49,55 +49,51 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | P4.0 steht (`596bcb64`, „In Flächen und Kanten umwandeln“); P4.1–P4.3 folgen in 0.5.x: Nachbaukandidaten aus Grundvolumen, Aufträgen und Abzügen, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | 0.5.0 trägt nach Roberts Entscheidung vom 23.09. P3.2–P3.5, P4.0, P6.1–P6.7, P7.1–P7.4 und Zeichnen Z0/Z1 — implementiert, die Fensterabnahme gehört zum Release (RM-213); Paketstände in der Tabelle am Punkt. In 0.5.x danach: P4.1–P4.3 (RM-022), P8.1–P8.5, P9.1–P9.4, P0.8, P5.1–P5.3, Zeichnen Z2–Z6 und die exakten Erzeuger ohne Eingang (P2.8, Mechanismus bei Robert). Abschluss erst nach P5.3 |
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände) — ob Solidon dort Vorgaben setzt, entscheidet Robert |
-| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Gebaut am 22.09.2026: drei Regeln gegen Läufe, die nur am Limit noch antworten. Die Zeitzahlen sind zurückgezogen (unter Fremdlast gemessen) und werden ruhig neu erhoben; die Merkmalsbilanz steht. Kumiko-Schale in der Durchsicht 0.5.0 unverändert (40,9 gegen 41,1 s unter Fremdlast); die Kosten liegen im Kegellöser |
+| [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Durchsicht 0.5.1: drei Wege, die je Fleck über das ganze Netz rechneten, beschleunigt (Kumiko-Schale 24,6 → 14,1 s, Meshy-Murmelbrett 349,5 → 342,8 s, unter Last); zwei Hautregeln gemessen und verworfen (sie änderten 17 bzw. 33 Korpuskörper). Was bleibt, sind 42 000 Löserläufe an 167 000 Stücken; für den Kunden trägt der Ladeweg „Modell zuerst, Erkennung mit Anteil und Abbrechen“ |
 | [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Mindestbogen nach Roberts Entscheidung gebaut (5 Grad, beide Kerne, `3fa7d719`), die Kippstellen der Verrundungen behoben — lageabhängig 17 statt 27 von 101 Körpern; offen sind Einpassungen an ihrer Kippe (deckungsgleiche Kegel am Budget, Flächen aus zwei Dreiecken, Langlöcher der CC2-Box, Freiformurteil, Torus gegen Langloch) oder die dokumentierte Grenze der Zusage ‚drehfest‘ — zwischen beidem entscheidet Robert |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | 1,400 auf 1,004 s gebracht; offen ist die Entscheidung zwischen Stapelumbau der Einpassungen und einem neu gefassten Ziel. Durchsicht 0.5.0: an der Freiform aus den Leistungstests 6 % langsamer als vorher (unter Fremdlast), am Drachen gleich; der Aufschlag ist der Kantenleser der Gewinde (je Achse 0,12 s an 233 330 Kanten). Die Schiffskörper aus RM-181 liegen bei 7,9–18,3 s je 200 000 Dreiecke |
-| [RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Solidons Anteil erledigt (`56f70000`: der Fensterweg bekommt die einplattige Mehrfarbdatei, Abstürze heißen Absturz); offen allein die Abnahme des Konsolenwegs — Creality Print einmal einrichten (Modus und Drucker, Robert), dann drei Platten mit mehreren Spulen über *Slicen* |
-| [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Auf Windows mit 1 728 Reihenfolgen, Rauschen je Funktion und 24 Hash-Startwerten nicht nachzustellen; Vermutung: gemischte Ubuntu-Runner (AVX-512/AVX2). Nächster Schritt: die Eckkette in `edges.py` auf die plattformgleichen Werkzeuge umstellen und die Ecke in `test_platform_identity._WAYS` aufnehmen; das Beispielarchiv der Werkstattfilme bleibt offen |
+| [RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Creality Print 7.2 rechnet über die Kommandozeile keine 3MF (jede endet mit „The print is empty“, STL schneidet); die Meldung führt seit `e401ce900` zu *Im Slicer öffnen*. Offen: einmal von Hand prüfen, ob das Fenster die Übergabe samt Sperre, Tempo und Brim lädt, dann entscheiden, ob *Slicen* für Creality Print gesperrt oder über STL geführt wird |
+| [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); offen allein die Marke `xfail(linux)`, die nach drei grünen Linux-Läufen in Folge fällt, und das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Entschieden und gebaut am 22.09.2026: Die Haut — der Fleck über der halben Oberfläche, der keine Grundform ist und in Splitter zerfällt — wird nicht mehr Splitter für Splitter eingepasst, ihre Stücke von Gewicht schon (Zapfen, Verrundung bleiben); das Freiformurteil kommt aus der Haut. Drache 482 → 37,7 → 4,2 s, Schüssel 7,3 → 3,0 s (unter Fremdlast, gleiche Merkmale). Vierte Fassung nach einem Korpusfund: Das Urteil zählt nur Flecken **ohne** Grundform — drei Bowlingkugeln verloren sonst ihre Kugel (Rückstand 0,0 über 65 024 Dreiecke), und schon im alten Stand hing es an der Fleckreihenfolge. Zwei Runden statt einer, Drache 4,02 → 3,83 s. Offen: §31 verlangt 1 s je 200 000, gemessen sind 3,83 — es bleibt `_large_facet_faces` (1,2 s am Drachen) und der Löser selbst (RM-209). Zwei Abkürzungen sind gemessen und verworfen: nur den Zylinder fragen (kostet die Bowlingkugel) und die Stichprobe an Riesenflecken (ändert die Erkennung). Durchsicht 0.5.0: an der Freiform aus den Leistungstests 6 % langsamer als vorher (unter Fremdlast), am Drachen gleich; der Aufschlag ist der Kantenleser der Gewinde (je Achse 0,12 s an 233 330 Kanten). Die Schiffskörper aus RM-181 liegen bei 7,9–18,3 s je 200 000 Dreiecke. Stapelumbau oder neu gefasstes Ziel entscheidet Robert (wie RM-132) |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | `slice_body` an der Hohlkugel 40 % schneller (`546eff16`: Stapelung, Inselzertifikat, Säulen auf Arbeitern, direkte Ringe), hochgerechnet rund 0,65 s auf der Referenzmaschine — 300 ms nicht erreicht; der Rest ist die Breitensuche mit sieben Öffnungen je Schicht. Robert gibt C++ frei (23.09.): native Breitensuche als eigener Bauauftrag; womit (eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython), entscheidet Robert |
 | [RM-212 — Die Vorschau großer Teile hält den Hauptthread und rechnet vergeblich](#rm-212) | Geometrie, Erkennung und Druckvorbereitung | Grob gelingt jetzt an allen fünf Modellen (0,5–1,7 s je Zahl); offen: der GIL beim ersten Verkleinern (0,1–0,5 s, `manifold3d` gibt ihn nie her — Entscheidung Hilfsprozess) und die genaue Vorschau der Senkplatte (4,3–5,7 s statt unter 3) |
-| [RM-216 — Ein erzeugtes Flächenmerkmal behält nach einer Änderung seine alte Fläche](#rm-216) | Geometrie, Erkennung und Druckvorbereitung | Nach einer Bohrung trägt face_top weiter 2 400 statt 2 349,878 mm² — Kennzahlen gebauter Merkmale aus den nachgeführten Dreiecken neu messen (Sonde s35_stale_area) |
-| [RM-217 — Die Zuordnung meldet doppelt und fragt ohne Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Formen-Beispiel auf acht Hinweise gebündelt, alle Kennungen und Zahlen bleiben erhalten. Offen: remove_feature.gone und perceive.orphaned doppelt, orphaned nach Teilen, Frage unter der Deckfläche, altes Merkmal ohne Markierung — _with_features filtert, question_context trägt das alte Merkmal |
+| [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Drei der vier Beobachtungen behoben (Durchsicht 0.5.1: `remove_feature.gone` einmal, nach *Teilen* kein Verlust für geteilte Flächen, Feldschnitt unter der Deckfläche ohne Frage — `1afc1852d`, `5948a79a5`); offen: die Zuordnungsfrage markiert das alte Merkmal nicht im Bild (`question_context` trägt es noch nicht zur Ansicht) |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | drill_brep_hole nummeriert nach Lage; Verschieben und Einfügen sagen an build_tray_v3.step ab — eindeutige geometrische Zuordnung behält den Namen wie am Netz |
-| [RM-222 — Die Erkennung einer Durchbohrung am Netz hängt an der Vorgeschichte](#rm-222) | Geometrie, Erkennung und Druckvorbereitung | Besenhalter: gleiche Geometrie, mit vorherigem Vergrößern eine Bohrung weniger — beide Stände als Korpusfall, Stelle eingrenzen |
 | [RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen](#rm-225) | Geometrie, Erkennung und Druckvorbereitung | Gewürzdeckel: nach Teilung ändern 124 Flächen und kein Muster, nach Entfernen 31 Zusatzflächen und 1,7 mm³ Überlappung — Feld begrenzen, Stirnkappen verschmelzen |
 | [RM-226 — Netz und exakter Kern nennen dieselbe Fläche verschieden](#rm-226) | Geometrie, Erkennung und Druckvorbereitung | Gewölbte Oberseite exakt Verrundung, am Netz gekrümmte Fläche; Fläche versetzen lässt exakt eine koplanare Scheibe stehen — replaces_an_edge an den exakten Kern, gleiche Domäne vereinigen |
 | [RM-227 — Eine Tasche am Teppichclip gibt einen ungültigen exakten Körper mit 0 mm³ Abtrag still zurück](#rm-227) | Geometrie, Erkennung und Druckvorbereitung | sketch_pocket Ø 11 an carpet-corner-clip.step: ungültig, 0 mm³, kein Befund — nach dem Schnitt mit profiles.is_sound prüfen und absagen, dann die Ursache |
 | [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Lüfterkurve gebaut; offen PLA-Vorgabe je Drucker, Hilfs- und Kammerlüfter, unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
-| [RM-229 — Anordnen legt ein zu großes Teil über die Kante, und geteilte Stücke heißen nach einem Buchstabenpfad](#rm-229) | Geometrie, Erkennung und Druckvorbereitung | 108,5 bei freigegebenen 108 statt einer Mitte mit kleinerem Rand; „B A · Stifte" für ein Stück mit Stiften und Löchern — Rand zuerst verkleinern, Nummerierung entscheiden |
+| [RM-229 — Geteilte Stücke heißen nach einem Buchstabenpfad](#rm-229) | Geometrie, Erkennung und Druckvorbereitung | Anordnen legt ein Teil, das nur ohne Rand passt, mittig und meldet den schmaleren Rand (`58e654ac5`); offen allein die Nummerierung geteilter Stücke — Entscheidung Robert |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
 | [RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen](#rm-254) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-243: am `Screen-Cover_RS.stl` noch R 11,2 (zwei Stücke) und das Wandband R 13,73 an den Buchstaben, an verrauschten Ellipsen ein bis vier von acht bis fünfzehn Stücken — eine Bestätigung, die kurze Stücke nicht gegenseitig trägt, ohne dem Korbbogen echte Bögen zu nehmen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Nach RM-246 geschlossen und genau gerechnet; offen: `hole_11`+`cone_51` um 15° gekippt trägt 1 444 mm³ vor den Mündungen ab, jedes Verdoppeln daneben bleibt `boolean.without_effect`, Versetzen um 1,5 mm meldet `no_longer_through` |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht](#rm-248) | Geometrie, Erkennung und Druckvorbereitung | Fächer vom Randmittelpunkt lässt beim Versetzen 3,6 bis 5,4 mm³ Mulde — den Deckel als Fortsetzung der umgebenden Fläche bauen, an beiden Kernen |
 | [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | `for_part` setzt ihn ohne Klick bei kleiner Standfläche oder schlankem Teil; Robert 26.09.2026: ohne „Vorschläge übernehmen" gehen die Standardeinstellungen hinaus — bleibt die Automatik, oder wird sie ein Vorschlag je Teil? |
-| [RM-252 — Der Korpuslauf der Übergabe steht nach vier Modellen](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Werkzeug in `.claude/.state/uebergabe-korpus-2026-09-26/`; offen: CuraEngine bricht am Eiffelturm ab („mehr Ausgabe, als gesammelt wird"), pista+biglie liegt bei allen vier Slicern neben dem Bett, dann die übrigen 24 Modelle |
-| [RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen](#rm-238) | Bedienung und Darstellung | Berichtseinstieg und Tastatur-Fadenkreuz umgesetzt; native Release-Abnahme von Fokus, Treffern, Abbruch und Undo noch offen |
+| [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt, 4 Abstürze am zweifarbigen Besteckeinsatz sind ein Fehler von ElegooSlicer/OrcaSlicer (Originalprojekt stürzt ohne Solidon ab). Offen für Robert: den Fehler dort melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für die Orca-Familie auf Baumstützen ausweicht |
+| [RM-255 — Ein Drucker ohne Tempodaten überschreibt den gewählten Herstellerprozess mit 40 mm/s](#rm-255) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: Tempo aus dem gewählten Prozessprofil lesen, die Tempo-Schlüssel für solche Drucker gar nicht schreiben (Empfehlung) oder wie heute |
+| [RM-256 — Ältere Projekte behalten 40 mm/s und bekommen nur die Leerfahrt angeboten](#rm-256) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: eine Vorschlagszeile „Tempo des Druckers“ (Empfehlung) oder die Stufe beim Öffnen neu auflösen |
+| [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert, ob die neue Fähigkeit gebaut wird (Weg und Abnahme stehen am Punkt) |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
-| [RM-205 — Escape in der dritten Stufe der Platzierung springt in den Dialog](#rm-205) | Bedienung und Darstellung | Gebaut (`7ff34c67`, `29dcefa4`): Escape geht je Stufe genau eine zurück (Tiefe → Maße → Zielen → Dialog), ein Klick ins Modell und der Knopf „Stelle im Bild wählen“ führen aus dem Dialog zurück, `surfaceRequested` hat seinen Sender; getestet je Stufe. Offen: Abnahme am Fenster beim Release (RM-213) |
 | [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Führen mit gezeichneter Bahn und Überblenden mit gezeichnetem Umriss am Fenster gefahren (`f19a7b4b`, sechs Fehler behoben), Tabulatorfolge, Bildschirmleser und Trennstriche im dunklen Thema (2,30:1) gemessen; offen allein die Rampe der 3D-Maus am echten Gerät — ob dieser Rest in RM-070 aufgeht (dasselbe Gerät) und der Punkt damit schließt, entscheidet Robert |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Welle 2 (`9145aedc`) und die Gebietsdurchsichten haben die in der Sollliste benannten Stellen, Preise, Generatoraussage, Sicherheit, Agentenquote und Sprachkonsistenz nachgezogen; offen ist der erschöpfende Durchgang durch jeden Anwendungs- und Websitetext, dazu Presse A16/A23 und die C12-Namen |
-| [RM-088 — Verständlichkeit für Laien im Regelwerk verankern](#rm-088) | Bedienung und Darstellung | Die Regel steht in `oberflaeche.md`, mit den Slicer-Ausnahmen; 23 Konstrukteurswörter außerhalb der Sitzung gefunden (`face_ops.py` 10× „Normale“, `mesh_ops.py`, `range_check.py`, `viewport.py:726`, englische Werte vertices/watertight/boolean/facets/voxel) — Robert gibt die Formulierung frei, dann tauschen und die Prüfung als Test mit Ausnahmeliste einchecken |
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; mehrere gezogene Dateien werden seit 0.5.0 angesagt statt still verworfen (`84185f4d`), geöffnet wird weiter nur die erste |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Windows-Stand nachgemessen am 23.09.2026 (Overlay- und Kartentests grün); offen nur der macOS-Prüflauf |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Quelle nachgezogen (`84185f4d`: Kopfzeile, Fenster „Auswahl“ mit Handlungen, Alt-Text in allen Sprachen); Erzeugung und Sichtprüfung je Sprache beim Release |
-| [RM-174 — Der Geist beim Zug an einem Bausteinmerkmal zeigt nur dieses Merkmal](#rm-174) | Bedienung und Darstellung | Gebaut (`7ff34c67`): Beim Zug an einem Bausteinmerkmal wandert der ganze Baustein, neben der Fläche wird er rot, und das Zugfeld sagt ‚neben der Fläche‘; offscreen getestet. Offen: Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Nachtragstext für §9 und §30.1 liegt im Bericht skizze der Durchsicht 0.5.0 bereit (neu geschrieben, der Wortlaut W2 lag nicht mehr vor), dazu die Vorschläge aus p66 (Ellipse, drei Bedingungsarten), p6c (drei Schnitte), zeichnenbau und p7verlauf. Robert sagt den Nachtrag an und entscheidet dabei, ob eine neue Bedingungsart die Formatversion hebt (p66 hat sie mit Format 31 gehoben, Satz 5 des Nachtrags sagt nein) |
 | [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Umgesetzt und im Review vom 21./22.09.2026 nachgezogen (Griff überlebt ein Bild mitten im Zug, Radraste über einem Maßfeld zoomt, erstes Escape nimmt nur die Bezugswahl zurück); die Fensterdateien der Ansicht liefen dabei grün (456 Fälle). Offen bleibt allein die Abnahme am echten Fenster beim Release 0.5.0 |
 | [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den echten Startweg beim Release 0.5.0 noch einmal fahren, und ob Windows D3D12 als Backend bekommt, bleibt eine eigene Entscheidung |
 | [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem 25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`) |
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Roberts Geste nachgestellt und verlegt (`7ff34c67`: je Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s → 1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
-| [RM-215 — 276 Befundstellen enden ohne Handlung](#rm-215) | Bedienung und Darstellung | Sollliste C1: 97 Warnungen und sieben Fehler ohne Weg, darunter fit.violated, gcode.spool_left_out, join.blocked, orient.support_likely — Test für alle, dann gebietsweise nachziehen |
-| [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Erster Klick: Kernauskünfte im Arbeiter, Hauptfaden 172 → 36 ms; keine Zwischenbilder mehr. Am echten Fenster Bohrung zu Bohrung Wabenhalter 208 → 128 ms, Platte 310 → 163 ms (native Widgets 140 → 20, die Maßgruppe übergibt ihre Widgets). Offen: Wabenhalter unter 100 ms — Rest im Hauptfaden (Umschalten des Merkmalfensters, Werkzeug neu im Renderer, zwei Bilder) |
-| [RM-233 — Fünf Kleinigkeiten aus den Durchsichten, am Code bestätigt](#rm-233) | Bedienung und Darstellung | autosave wirft im Zeitgeber, Skizzen-Kontextmenü wird nie freigegeben, Objektnamen in der Sprache des Augenblicks, „Schwerpunkt" statt Hüllquadermitte, Rückfragekarte fest 520 Punkte |
+| [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Wabenhalter Bohrung zu Bohrung 124–148 ms bis die Maße stehen (Durchsicht 0.5.1, massbild, unter Last; vorher 223–249 ms); offen unter 100 ms — Rest je Klick Merkmalfenster und Maßgruppe aufbauen, `PlacementFlow._settle`, zwei bis drei Bilder; in Arbeit in der zweiten Runde der Durchsicht, danach auf ruhiger Maschine nachmessen |
+| [RM-258 — Beim Parsen großer 3MF steht der Hauptfaden bis 2 s ohne GIL und ohne CPU](#rm-258) | Bedienung und Darstellung | Freigabe Robert für einen nativen Stapelabtaster (`py-spy`, MIT, nur Entwicklerwerkzeug), dann eine halbe Stunde messen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
-| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Mit Werkzeugangebot enden bei qwen3:14b zehn von 39 Fällen bei acht Schritten, mit vollem Werkzeugsatz keiner; Entscheidung Robert: eigenes Schrittlimit für den lokalen Weg oder ein Prompt-Satz für gebündelte Aufrufe, je mit Suite vorher/nachher |
+| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) gemessen in der Durchsicht 0.5.1: Schrittgrenze 12 lokal 23 von 39 gegen 22, mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 — keine Verschlechterung; Entscheidung Robert: Grenze 12 für den lokalen Weg ja/nein. (b) ungemessen (zwei volle Läufe je Stand) |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal abgeschlossen am 26.09.2026 (qwen3:14b 22/39 mit Angebot, ohne 14, mit großem Fenster ohne Angebot 24 in dreifacher Zeit; Modellvergleich am Punkt); offen ist nur der gehostete Vorgabeweg — ein kostenpflichtiger Lauf, der Roberts Freigabe braucht |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
@@ -105,7 +101,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen](#rm-113) | Tests und Entwicklungswerkzeuge | Diagnose gebaut (`736d4a46`: SIDs genannt, Prozessnutzer angenommen); offen der Beleg auf dem CI-Runner (das Repository ist nur beim Release öffentlich) |
 | [RM-134 — Zusammenführung duplizierter Testhilfen entscheiden](#rm-134) | Tests und Entwicklungswerkzeuge | 41 wortgleiche Gruppen gemessen, vier nach `tests/helpers.py` zusammengeführt (`920c609a`); offen die Fensterfixtures (`window`, `with_a_body`, `on_the_bore_wall`) — Robert entscheidet über die großen |
 | [RM-137 — Sitzungsende im tatsächlichen Editorbetrieb abnehmen](#rm-137) | Tests und Entwicklungswerkzeuge | Echtes SessionEnd und Freigabe des Sitzungsgebiets nach Neustart beobachten |
-| [RM-214 — Die Bereichsprüfung ohne VTK hat keinen Index und keinen Wächter](#rm-214) | Tests und Entwicklungswerkzeuge | Wandmessung O(n²) für große eigene Bausteine, kein Test gegen vtk-Importe, vtk noch in der .venv — Index wie intersections.py, Wächter über sys.modules |
 | [RM-234 — Linux-Fensterabnahme und macOS-Gegenprobe nachweisen](#rm-234) | Tests und Entwicklungswerkzeuge | Gepinnter Ubuntu-Releasejob 107485122706 erreicht die Fensterverträge und besteht; „Neueste Versionen" enthält heute nur Kerntests. Der vollständige macOS-Taglauf 35982366247 ist grün; offen bleibt die unabhängige Ergebnismeldung der Fensterverträge bei rotem Kernschritt |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Plan bis 01.11. mit Takt und Messpunkten liegt vor (`marketing/reichweite/analyse-und-plan.md`, `36487f9b`); drei Facebook-Beiträge für 24., 26. und 28.09. in der Meta Business Suite eingeplant; YouTube-Änderungen (14) freigegeben, in Studio nicht umgesetzt; Video V3 freigegeben, nicht gedreht. Offen: Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -688,6 +683,15 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Abnahme: das §31-Ziel für 200 000 Dreiecke belegt oder begründet angepasst. Gehört zum
   Leistungsstrang RM-208.
 
+  **Durchsicht v0.5.1 (26.09.2026, erkennung R2):** `_coincident_vertices` merkt sich
+  seine Antwort am Netz, `_connected_patches` fragt kleine Flecken sortiert,
+  `_circle_pairs` wählt die Kreispaare vor — Kumiko-Schale 24,6 → 14,1 s,
+  Meshy-Murmelbrett 349,5 → 342,8 s (unter Last, gleiche Ergebnisse; `6217c57f9`). Zwei
+  Hautregeln gemessen und verworfen: die Splitterfläche an der gekrümmten statt der
+  ganzen Oberfläche (17 Körper würden Haut, darunter konstruierte Teile mit 16
+  Senkungen) und nur Stücke von Gewicht einpassen (33 von 85 Körpern anders, 400 → 944
+  s). Was bleibt, sind 42 000 Löserläufe an 167 000 Stücken, 94 davon mit Gewicht.
+
 <a id="rm-210"></a>
 
 - [ ] **RM-210 — Dasselbe Modell, anders im Raum gelegt, ergibt andere Merkmale.** Gemessen am
@@ -870,7 +874,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
 <a id="rm-164"></a>
 
-- [~] **RM-164 — Creality Print: Erkennung steht, der Konsolenlauf ist ungeprüft.** Das
+- [~] **RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF.** Das
   Programm war installiert und wurde von Solidon gar nicht erkannt — `flavour_of` gab `None`,
   und damit war es im Druckdialog nicht wählbar. Es ist ab Version 6 ein Orca-Abkömmling:
   derselbe Profilbaum mit `machine_list`/`sub_path`, dieselben Schlüsselnamen; als `orca`
@@ -889,6 +893,15 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   mehreren Spulen übergeben — einmal über *Im Slicer öffnen*, einmal über *Slicen*. Läuft der
   Konsolenweg auch dann nicht, gehört die Einschränkung benannt, statt sie den Kunden am
   Absturz erfahren zu lassen.
+
+  **Durchsicht v0.5.1 (26.09.2026, druck, DRUCK-07):** Creality Print 7.2 rechnet über
+  die Kommandozeile keine 3MF — Solidons Übergabe, eine nackte aus trimesh, eine aus
+  PrusaSlicer, Bambu, Elegoo: jede endet mit −100 und „The print is empty“, dasselbe
+  Teil als STL schneidet. Die Meldung sagt das jetzt und führt zu *Im Slicer öffnen*
+  (`e401ce900`). Offen: einmal von Hand *Im Slicer öffnen* mit der Okarina und
+  *Vorschläge übernehmen*, im Fenster slicen und die Stütze in den Kanälen ansehen;
+  danach entscheiden, ob *Slicen* für Creality Print gesperrt oder über STL geführt
+  wird.
 
 <a id="rm-166"></a>
 
@@ -938,6 +951,14 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   STLs stammen aus den Aufnahmen vom 13.09. und tragen den alten Fehler; sie neu zu erzeugen
   heißt, die Aufnahmen mit dem gefixten Code zu fahren und das ZIP neu zu verpacken — ein
   Produktionsschritt, der zusammen mit der nächsten Filmrunde läuft.
+
+  **Durchsicht v0.5.1 (26.09.2026):** Werkzeuge und Eckanschluss rechnen plattformgleich
+  — Längen über `math.hypot`, Skalarprodukte über `units.dot3`, Winkel über
+  `mesh.stable_arccos`, kleine Gleichungssysteme nach Cramer statt LAPACK, die Kugel
+  über `_icosphere`; `test_platform_identity` fährt Verrunden und Fase an der schiefen
+  Tetraederecke mit ULP-Rauschen und getauschtem BLAS-Kern (`9bc3d354e`). Offen bleiben
+  die Marke `xfail(linux)` (fällt nach drei grünen Linux-Läufen in Folge) und das
+  Beispielarchiv.
 
 <a id="rm-184"></a>
 
@@ -1605,26 +1626,9 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Beitrag an `manifold3d`) —, und beide sind eine Entscheidung Roberts.
   Sonden und Messungen: `.claude/.state/rm-212-2026-09-26/`.
 
-<a id="rm-216"></a>
-
-- [ ] **RM-216 — Ein erzeugtes Flächenmerkmal behält nach einer Änderung seine alte Fläche.**
-  Gefunden in der Durchsicht 0.5.0 (Paket exakt, Rest der Lücke 2 aus RM-188,
-  Sonde `sonden/exakt/s35_stale_area.py`): `face_top` aus `create_box` trägt
-  nach einer Durchgangsbohrung weiter 2 400 mm², die frische Erkennung misst
-  2 349,878 mm². Die Dreiecke des Merkmals sind nachgeführt, seine Maße nicht,
-  denn `evaluate._with_features` reicht Merkmale, die ein Baustein oder
-  Grundkörper mitgebracht hat, ohne Neuerkennung weiter. Am exakten Körper
-  stimmt es (native Neuerkennung). Wirkung beim Kunden: Steckbrief, Agent und
-  Merkmalfenster nennen eine Fläche, die es so nicht mehr gibt. Weg: Test zuerst
-  mit der Sonde als Fall; die Kennzahlen gebauter Merkmale nach einer formenden
-  Operation aus ihren nachgeführten Dreiecken neu messen, ohne die Kennung zu
-  verlieren. Abnahme: Fläche, Normale und Mitte gebauter Merkmale stimmen nach
-  jeder Operation mit der frischen Erkennung überein, am Netz wie am exakten
-  Körper.
-
 <a id="rm-217"></a>
 
-- [ ] **RM-217 — Die Zuordnung meldet doppelt und fragt ohne Bild.**
+- [ ] **RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild.**
   Vier verbleibende Beobachtungen aus der Durchsicht 0.5.0, alle an `evaluate._with_features`
   und der Zuordnungsfrage: Nach *Merkmal entfernen* stehen `remove_feature.gone`
   **und** `perceive.orphaned` für dasselbe Merkmal (merkmalsops, Sonde
@@ -1659,6 +1663,13 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   die Bündelung bleibt der geltende Weg. Die größenabhängige Kugelauflösung
   folgt nach 0.5.0 unter RM-188.
 
+  **Durchsicht v0.5.1 (26.09.2026):** *Merkmal entfernen* meldet das Entfernte einmal
+  (`REMOVAL_CODES`), nach *Teilen* schweigt ein Verlust ohne Verweis (`QUIET_LOSSES`),
+  eine geteilte Fläche gilt nicht als verloren (`_divided_in_place`, auch für die zweite
+  Hälfte), und der Feldschnitt gibt am Netz nur seine benannten Bohrungen aus — unter
+  der Deckfläche keine Frage mehr, auf ihr behält sie `face_top` (`1afc1852d`,
+  `5948a79a5`). Offen allein: Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild.
+
 <a id="rm-218"></a>
 
 - [ ] **RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen.**
@@ -1675,21 +1686,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   für unveränderte Flächen eingeführt hat. Abnahme: an `build_tray_v3.step`
   Bohrung B vor A, Einfügen zwischen und rechts rechnen durch, Namen und
   Passungen folgen ihrem Merkmal, Strg+Z stellt den Stand bitgleich her.
-
-<a id="rm-222"></a>
-
-- [ ] **RM-222 — Die Erkennung einer Durchbohrung am Netz hängt an der Vorgeschichte.**
-  Gemessen beim Bau von P7 (Bericht p7verlauf, Abschnitt 7) am Besenhalter
-  (`broomholdervcd_d35mm.stl`): Dieselbe Geometrie, einmal mit vorherigem
-  *Bohrung vergrößern* und einmal ohne gebaut, erkennt einmal eine Bohrung mehr
-  (die Wand bei y = 0). Die Gegenprobe ist sauber — dieselbe Folge von Hand
-  gebaut ergibt bitgleich dasselbe Netz und dieselben Merkmale wie der Umbau —;
-  die Erkennung hängt also nicht am Umbau, sondern an der Vorgeschichte. Das
-  macht „reproduzierbarer Endstand" an Merkmalsnamen fest, die von der
-  Reihenfolge abhängen, und ist dieselbe Familie wie RM-210. Weg: die zwei
-  Stände als Korpusfall einchecken, die Stelle eingrenzen (vermutlich das
-  Mitführen gebauter Merkmale gegen die frische Erkennung, `carry_detection`).
-  Abnahme: beide Wege liefern dieselben Merkmale.
 
 <a id="rm-225"></a>
 
@@ -1762,9 +1758,16 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Prusa je ein Lauf, Lüfterwerte im G-Code wie im Dialog, keine unbemalte Spule
   in der Übergabe.
 
+  **Ergänzung Durchsicht v0.5.1 (26.09.2026, druck):** Curas
+  `cool_min_layer_time_fan_speed_max = 80` s aus der PLA-Kurve lässt Cura jede erste
+  Schicht unter 80 s hochkühlen (Okarina 75 %, Würfel 92 % am Ender-3 V3 mit
+  Herstellertempo); die Pause wird geschrieben und überstimmt, Curas Vorgabe ist 10 s.
+  Entscheidung: für Cura die Schwelle der Kurve anders abbilden, oder die Warnung als
+  erwartbar stehen lassen.
+
 <a id="rm-229"></a>
 
-- [ ] **RM-229 — Anordnen legt ein zu großes Teil über die Kante, und geteilte Stücke heißen nach einem Buchstabenpfad.**
+- [ ] **RM-229 — Geteilte Stücke heißen nach einem Buchstabenpfad.**
   Aus der Durchsicht 0.5.0 (trennen): Ein Körper, der mit dem Anordnungsrand
   nicht auf die Platte passt, wird trotzdem an die Kante gelegt und steht über
   (gemessen: x bis 108,5 bei freigegebenen 108); das Ergebnis meldet es richtig
@@ -1777,6 +1780,11 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Split mit drei und mehr Stücken eine Nummerierung („Wandleiste 1 von 3") —
   Entscheidung bei Robert. Abnahme: kein Überstand, wo die Mitte passt; Namen,
   die Stifte und Löcher richtig nennen.
+
+  **Durchsicht v0.5.1 (26.09.2026):** Was in einer Achse nur ohne den Rand passt, liegt
+  dort auf der Bettmitte, geprüft gegen Bett und Sperrzonen; `check_build_volume` meldet
+  `arrange.narrow_margin` als Hinweis mit dem verbleibenden Abstand statt „über den
+  Bauraum hinaus“ (`58e654ac5`). Offen: die Nummerierung geteilter Stücke (Robert).
 
 <a id="rm-230"></a>
 
@@ -1958,7 +1966,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
 <a id="rm-252"></a>
 
-- [ ] **RM-252 — Der Korpuslauf der Übergabe steht nach vier Modellen.**
+- [ ] **RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden.**
   Begonnen am 26.09.2026 auf Roberts Frage, ob Vorschläge und Übergabe an
   alle unterstützten Slicer bei jedem Modell klappen. Das Werkzeug liegt in
   `.claude/.state/uebergabe-korpus-2026-09-26/`: `alle.py` fährt 28 Modelle,
@@ -1985,32 +1993,64 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
   Nächster Schritt: die zwei Befunde beheben, dann alle 28 Modelle.
 
+  **Durchsicht v0.5.1 (26.09.2026, druck):** CuraEngine läuft ohne `-v` (am Eiffelturm
+  12,3 MB → 50 kB Ausgabe, Druckdatei entsteht; `e401ce900`), und eine 3MF mit mehreren
+  Platten kommt auf ihre Platten (`a32a54ba2`). Korpusrest nachgefahren: 225 Läufe, 204
+  mit Druckdatei, 17 zu Recht abgelehnt. Vier Abstürze von ElegooSlicer/OrcaSlicer am
+  zweifarbigen Besteckeinsatz sind ein Fehler des Slicers: Das Originalprojekt stürzt
+  auch ohne Solidon ab, sobald `enable_support = 1` und `support_type = normal(auto)`
+  gesetzt sind (Rückgabe `0xC0000409`, `F:\3D
+  Druck.review-051\sonden\druck\besteck_bisekt.out`). Offen für Robert: den Fehler bei
+  Elegoo und OrcaSlicer melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für
+  die Orca-Familie auf Baumstützen ausweicht (eine Regel gegen einen fremden Fehler).
+
+<a id="rm-255"></a>
+
+- [ ] **RM-255 — Ein Drucker ohne Tempodaten überschreibt den gewählten
+  Herstellerprozess mit 40 mm/s.** Aus der Durchsicht v0.5.1 (druck, DRUCK-10). Ein
+  Drucker, der nicht unter den 13 FDM-Einträgen von `printers.toml` steht (eigenes
+  Profil, allgemeiner Drucker — etwa Centauri Carbon der ersten Reihe, Neptune 4 Pro,
+  Bambu H2D, K2), bekommt Solidons Stufe (40/60/80 mm/s, Leerfahrt 150, 8000 mm/s²) und
+  überschreibt damit den im Druckdialog gewählten Herstellerprozess
+  (`print_settings._paced`, `handover.as_mapping`; gemessen an `generic-220`). Der
+  Changelog sagt „statt jeden Drucker auf 40 mm/s zu bremsen“. Warum Robert: Es
+  entscheidet, welche Quelle gewinnt — dieselbe Frage wie beim Filament (Übernahme nur
+  auf Klick, 08.09.2026). Optionen: (a) Tempo, Leerfahrt und Beschleunigung aus dem
+  gewählten Prozessprofil lesen (`slicer_profiles.resolve_profile`), wenn der Drucker
+  keine eigenen hat; (b) für solche Drucker die Tempo-Schlüssel nicht schreiben, der
+  Slicer behält sein Profil — Empfehlung für Orca und Prusa mit gewähltem Prozess: kein
+  geratener Wert, und die Beratung rechnet mit dem, was der Slicer ohnehin fährt; (c)
+  wie heute. Abnahme: Centauri Carbon (erste Reihe) mit Elegoos Prozess —
+  `outer_wall_speed` im G-Code wie im Herstellerprofil.
+
+<a id="rm-256"></a>
+
+- [ ] **RM-256 — Ältere Projekte behalten 40 mm/s und bekommen nur die Leerfahrt
+  angeboten.** Aus der Durchsicht v0.5.1 (druck, DRUCK-11). Ein Projekt trägt seine
+  Einstellungen selbst; eines von vor 0.5.1 (Roberts Schüssel vom 25.09. eingeschlossen)
+  behält Stufe „Standard“ mit 40/60/80 mm/s, und der Druckdialog bietet nur „Dieser
+  Drucker fährt leer schneller“ an. Die Tempi des Druckers erreicht es erst, wenn der
+  Kunde die Stufe neu wählt — die Schüssel bleibt damit bei 30 statt 18 Stunden. Warum
+  Robert: Beide Wege berühren gespeicherte Projekteinstellungen (Öffnen schreibt nichts
+  ins Projekt, 03.09.2026; ohne *Vorschläge übernehmen* gehen die Standardeinstellungen
+  hinaus, 26.09.2026). Optionen: ein Vorschlag „Tempo des Druckers“ als eine Zeile, die
+  alle acht Felder setzt (Empfehlung: sichtbar, abwählbar, keine stille Änderung); oder
+  beim Öffnen die Stufe neu auflösen, wenn die gespeicherten Tempi genau die allgemeinen
+  der Stufe sind. Abnahme: die Schüssel vom 25.09. öffnen, eine Zeile übernehmen,
+  Herstellertempo im G-Code.
+
+<a id="rm-257"></a>
+
+- [ ] **RM-257 — Kanäle frei halten auch für Cura.** Aus der Durchsicht v0.5.1 (druck).
+  Nicht gebaut, weil es eine neue Fähigkeit ist und nicht die Behebung einer Zusage: Der
+  Changelog verspricht Cura nichts, und seit `12b7e9174` sagt der Druckdialog, wo Cura
+  die Kanäle von Hand sperrt (Stützblocker im Cura-Fenster). CuraEngine nimmt nach `-l
+  <datei>` Einstellungen je Netz an; ein zweites Netz mit `anti_overhang_mesh = true`
+  ist Curas Stützsperre — damit bekäme die Konsole dieselbe Sperre, das Cura-Fenster
+  (STL) nicht. Abnahme: Okarina in CuraEngine mit und ohne, Modellbahn gleich, Stütze im
+  Kanal weg.
+
 ## Bedienung und Darstellung
-
-<a id="rm-238"></a>
-
-- [~] **RM-238 — Lokale Formenerkennung aus dem Bericht und mit der Tastatur bedienen.**
-  Die Großmodellbefunde bieten die lokale Erkennung direkt an. Der nächste
-  Oberflächentreffer bestimmt einen der vom Befund betroffenen Netz-Körper;
-  eine zufällige Baumauswahl ersetzt das Ziel nicht. Eine ungültige Stelle
-  kann erneut gewählt werden, ohne die Erkundung ins Dokument zu übernehmen.
-
-  Menü, Palette und Bericht verwenden `LocalRecognitionFlow.arm`. Während
-  dieser Auswahl bewegt die Tastatur ein sichtbares Fadenkreuz; Enter folgt
-  demselben Originaltreffer wie die Maus, Umschalt ermöglicht Feinschritte.
-  Abbruch, Projektwechsel und Beginn der Erkennung entfernen die Auswahlhilfe.
-  Fensterfälle sind ergänzt. **Offen bleibt ihre native Release-Abnahme**:
-  Bericht → Körper → Stelle → erkannte Form → Änderung und Undo, vollständig
-  mit Tastatur, einschließlich Fokus, Abbruch und Rückkehr bei mehreren DPI-Stufen.
-
-  Nachgezogen am 24.09.2026 aus der Bedienweg-Durchsicht (E1–E7): Der
-  Kartenbefund `ingest.very_large` trägt die lokale Erkennung nicht mehr, der
-  Befund `perceive.too_large` am Ladeschritt dafür *Alle Merkmale erkennen*;
-  jeder Fehlergrund der lokalen Suche bietet die Wege, die sein Satz nennt, als
-  Knöpfe (Suchradius vergrößern oder verkleinern mit sofortiger neuer Suche,
-  andere Stelle, Dreiecke verringern, Netz reparieren); eine Auswahl, die nicht
-  beginnen kann, sagt den Grund; „Suchradius" und „gefunden" statt „Radius" und
-  „vollständig". Die Fensterfälle dazu gehören zur Abnahme oben.
 
 <a id="rm-197"></a>
 
@@ -2358,19 +2398,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Abnahme: ein Merkmalklick unter 20 ms im Fenster, `test_feature_panel.py`
   und `test_ui.py` unverändert grün.
 
-<a id="rm-205"></a>
-
-- [ ] **RM-205 — Escape in der dritten Stufe der Platzierung springt in den
-  Dialog.** Gefunden am 21.09.2026 im Review (Ansicht #11):
-  `placement_flow.py` sendet `surfaceRequested` ohne Sender; Escape in Stufe 3
-  überspringt Stufe 2 und landet im Dialog, und aus dem Dialog führt kein Weg
-  zurück in Stufe 1. Das ist eine Bedienfrage nach §2 und §19, keine
-  Codefrage: Welche Stufe ein Escape verlässt und wohin es führt, entscheidet
-  der Ablauf, nicht die Signalverdrahtung. Weg: `bedienlogik` entwirft den
-  Rückweg Klick für Klick, dann die Umsetzung mit einem Test je Stufe.
-  Abnahme: ein Escape je Stufe geht genau eine Stufe zurück, der Dialog hat
-  einen Rückweg in die erste, und kein Zustand bleibt ohne Sender.
-
 <a id="rm-070"></a>
 
 - [~] **RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen.** HID-Anbindung und
@@ -2430,20 +2457,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#rückmeldung-und-freiwillige-unterstützung-gehören-in-die-app-startfläche-31082026).
 
-<a id="rm-088"></a>
-
-- [ ] **RM-088 — Verständlichkeit für Laien im Regelwerk verankern.** Die vorgeschlagene
-  Verständlichkeitsregel für Kundentexte entscheiden und ihren Geltungsbereich festlegen. Abnahme:
-  freigegebene Formulierung, begründete Ausnahmen für Slicer-Begriffe und gegebenenfalls eine
-  kuratierte, sprachübergreifende Prüfung.
-
-  **Stand 23.09.2026:** Die Slicer-Begriffsausnahme ist in der Praxis bereits gesetzt — „slicer" ist
-  jetzt in allen sechs Sprachen einheitlich der Fachbegriff (Paket „texte", RM-084). Was fehlt, ist
-  Roberts Freigabe der Verständlichkeitsregel selbst und ihres Geltungsbereichs darüber hinaus — das
-  ist eine Regelentscheidung und wird hier nicht unterstellt.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
-
 <a id="rm-090"></a>
 
 - [ ] **RM-090 — Serie zum Übergabestatus entscheiden.** Entscheiden, welche der fünf Erlebnisse des
@@ -2481,22 +2494,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   beim nächsten betroffenen Release nur erforderliche Abbildungen/Handbücher/PDFs neu erzeugen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-durchsicht-des-07092026).
-
-<a id="rm-174"></a>
-
-- [ ] **RM-174 — Der Geist beim Zug an einem Bausteinmerkmal zeigt nur dieses Merkmal.** Seit dem
-  14.09.2026 versetzt der Griff an einem Merkmal, das aus einem Baustein kam, den ganzen Baustein
-  (`MainWindow._move_the_part`): Die Tasche eines Schlüssellochs nimmt Schlitz und zehn
-  Verrundungen mit, der Schritt behält seine Kennung. Während des Zugs zeigt die Ansicht aber
-  weiter, was sie für jedes Merkmal zeigt — die Marke des angefassten Merkmals wandert, der
-  blasse Geist steht an seiner Ausgangsstelle (`Viewport._show_ghost`, `_feature_shape`), und
-  die übrigen elf Merkmale rücken erst beim Loslassen nach. Für eine Bohrung ist das die ganze
-  Wahrheit, für einen Baustein die Hälfte. Abnahme: Während des Zugs wandert der Umriss des
-  ganzen Bausteins (die Dreiecke seiner Merkmale, oder der Werkzeugkörper aus
-  `placement_tools` an der neuen Stelle), und ein Zug neben die Fläche zeigt schon vor dem
-  Loslassen, dass er dort nicht landet.
-
-  [Befund](ROADMAP-ARCHIV.md#bausteine-vorschau-griff-und-werte--die-sonde-über-alle-27-14092026).
 
 <a id="rm-175"></a>
 
@@ -2551,22 +2548,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   parallele Aufnahmen zerstörten Bilder anderer Sitzungen). Abnahme: ein
   Protokoll je Weg mit Klicks, Zeiten und Bildern nach dem Bildstandard vom
   23.09.2026, jeder Befund behoben oder als Punkt geführt.
-
-<a id="rm-215"></a>
-
-- [ ] **RM-215 — 276 Befundstellen enden ohne Handlung.**
-  Aus der Sollliste der Durchsicht 0.5.0 (C1): 276 Befundstellen im Kern tragen
-  weder `suggestions` noch einen Eintrag in `panels.FINDING_ACTIONS`, darunter
-  97 Warnungen und sieben Fehler. Stichprobe am Code (`main`): `fit.violated`
-  (`scene/fits.py:382`), `gcode.spool_left_out` (`export/handover.py:2720`),
-  `join.blocked` (`geom/prepare.py:2819`) und `orient.support_likely`
-  (`geom/orient.py:685`) bauen ihren `Finding` ohne `suggestions`, und keiner
-  steht in `FINDING_ACTIONS`. Regel 17 verlangt mindestens einen
-  Handlungsvorschlag je Ausnahme; für Befunde gilt dieselbe Haltung (§2.7). Der
-  geplante Querschnitt „befunde" (Welle 2/3) ist nicht begonnen worden. Weg: ein
-  Test, der für jede Warnung und jeden Fehler einen Weg verlangt (Ausnahmeliste
-  mit Begründung für reine Auskünfte), dann die Stellen gebietsweise nachziehen
-  — Fehler zuerst. Abnahme: der Test grün, jede Ausnahme begründet.
 
 <a id="rm-232"></a>
 
@@ -2671,25 +2652,25 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   belegen, sobald die Maschine ruhig ist; am 26.09.2026 teilten sie sich sechs
   Sitzungen.
 
-<a id="rm-233"></a>
+  **Durchsicht v0.5.1 (26.09.2026, massbild):** Wabenhalter Bohrung zu Bohrung 124–148
+  ms bis die Maße stehen, Ruhe 135–158 ms (vorher 223–249 / 304–337 ms, unter Last,
+  abwechselnd im selben Lauf). Rest je Klick: Merkmalfenster und Maßgruppe aufbauen,
+  `PlacementFlow._settle`, zwei bis drei Bilder. Die zweite Runde der Durchsicht
+  arbeitet an den letzten Millisekunden; die Abnahme misst auf ruhiger Maschine.
 
-- [ ] **RM-233 — Fünf Kleinigkeiten aus den Durchsichten, am Code bestätigt.**
-  Jede für sich klein, alle am Stand `5a57e261` nachgelesen: `Session.autosave`
-  hängt ungeschützt am Zeitgeber (`main_window.py:2274`, `write_autosave` ohne
-  `try`) — ein voller Datenträger wirft in einem Slot, und das erreicht keinen
-  Kunden (szene); das Kontextmenü des Skizzeneditors
-  (`sketch_editor._context_menu`) baut je Rechtsklick ein `QMenu(self)` und gibt
-  es nie frei (fenster); *Drehdeckel* und *Prüfstück* vergeben Objektnamen in
-  der Sprache des Augenblicks (`lid.py:1470`, `prepare_ops.py:12557`,
-  `unused_name(_(…))`) — derselbe Schritt heißt nach einem Sprachwechsel anders
-  (szene); *Drehen*, *Skalieren* und *Spiegeln* nennen ihren Anker
-  „Schwerpunkt", gerechnet wird mit der Hüllquadermitte
-  (`geom/ops.py:339/447/596`, `transform.anchor_point`, `pivot_for_transform`,
-  `_on_scale_dragged`; Text in allen Katalogen auf „Mitte des Objekts") (szene);
-  und die Rückfragekarte hat feste 520 Punkte und steht in einem sehr schmalen
-  Fenster oben mittig unter Karten (foerderung, bestehend). Weg: je Stelle der
-  kleinste Fix mit Test. Abnahme: fünf Tests, der Sprachwechseltest benennt den
-  Namen einmal.
+<a id="rm-258"></a>
+
+- [ ] **RM-258 — Beim Parsen großer 3MF steht der Hauptfaden bis 2 s ohne GIL und ohne
+  CPU.** Aus der Durchsicht v0.5.1 (fenster, Rest von FENSTER-03). Das stückweise Parsen
+  hat die GIL-Lücken beim Einlesen des Mausoleum-Drachen beseitigt (längste Lücke im
+  Nebenfaden 4,6 → 0,13 s, `d5889e1a1`). Der Qt-Takt steht trotzdem bis 2 s: ein
+  Python-Faden daneben ohne Lücke, der Hauptfaden 0,03 s CPU in 4,3 s Lücke, in `exec()`
+  ohne Python-Rahmen; bei HEAD in den GIL-Lücken verborgen. Ausgeschlossen:
+  Speicherbereiniger, Ladeanzeige, Picker-Aufwärmen, Zeitgebertyp, GIL-Abgabe zwischen
+  den Stücken. Nächster Schritt: ein nativer Stapelabtaster am Hauptfaden während des
+  Drachenimports (etwa `py-spy dump --native`) — nicht Teil des Pakets, braucht aber die
+  Freigabe, es in die Arbeitsumgebung zu holen. Abnahme: das Fenster bleibt während
+  großer Importe flüssig (längste Lücke im Qt-Takt unter 200 ms).
 
 ## KI und Generatoren
 
@@ -2749,6 +2730,14 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Abnahme: Suite mit qwen3:14b vorher und nachher auf freier Karte, keine
   Verschlechterung der Quote, weniger Fälle am Limit. Rohdaten:
   `.claude/.state/lokale-ki-2026-09-25/messung/`.
+
+  **Durchsicht v0.5.1 (26.09.2026, ki):** (a) gemessen mit qwen3:14b, Schnappschuss
+  `aeb562ede`, unter Last: Schrittgrenze 12 löst 23 von 39 gegen 22 im Endstand,
+  mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 Fälle, dafür hängen hinge und stiffen
+  an 12 — im Rauschen, keine Verschlechterung. (b) nicht gemessen. magnet_lid endet
+  nicht am Bündeln, sondern an `pattern_feature`, das die eigene Magnettasche am exakten
+  Körper ablehnt. Rohdaten: `F:\3D Druck.review-051\sonden\ki\rm251\`. Entscheidung
+  Robert: Grenze 12 für den lokalen Weg ja/nein.
 
 <a id="rm-016"></a>
 
@@ -2894,30 +2883,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   konfigurierte Terminal-Statuszeile nicht als Desktop-Darstellungsnachweis behandeln.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#zwei-werkzeuge-zwei-wahrheiten-08092026).
-
-<a id="rm-214"></a>
-
-- [ ] **RM-214 — Die Bereichsprüfung ohne VTK hat keinen Index und keinen Wächter.**
-  Folgen des VTK-Ausbaus (`5a57e261`, Bericht vtk): Die neue Wandmessung
-  (`range_check.local_wall_thickness` über `mesh.ray_hits_batch`) prüft Strahlen
-  gegen alle Dreiecke — O(n²) statt O(n log n). Die Stichprobe im Bericht vtk
-  maß nur die erste Bereichsecke je Baustein; ihre höchstens 4 316 Dreiecke
-  sind keine Grenze für alle Ecken. Auch die dort behauptete Sekundengrenze
-  gilt nicht allgemein. Der vollständige Hauptbaum-Lauf am 23.09.2026 bestand
-  für alle 35 Bausteine (Exit 0); `seal_gasket` brauchte für seinen gesamten
-  Bereich mit 16 Ecken 719,5 s. Das ist keine Einzelmessung der Wandprüfung
-  und kein Nachweis einer allgemeinen Laufzeitregression der Anwendung.
-  Fortschritt, ältere VTK-Läufe und die Messgrenzen stehen in
-  `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-bausteinlauf.md`. Größere eigene
-  `.py`-Bausteine bleiben wegen der quadratischen Wandmessung ebenfalls
-  betroffen. Ein Test, der VTK-Importe unter `app/` und
-  `tools/` verbietet, fehlt (der Nachweis war ein `grep`); `vtk` liegt weiter in
-  der `.venv`, und nur `check_env` könnte es melden. Weg: ein räumlicher Index
-  (Sweep-and-Prune wie in `geom/intersections.py`, oder `cKDTree` mit wachsendem
-  Radius); ein Wächter nach dem Muster von `test_core_isolation.py` über
-  `sys.modules` nach einem vollen Start; `check_env` meldet nicht mehr geführte
-  Pakete. Abnahme: ein eigener Baustein mit 50 000 Dreiecken prüft seine Wand
-  unter 5 s, der Wächter ist gegen einen eingefügten Import rot.
 
 <a id="rm-234"></a>
 
