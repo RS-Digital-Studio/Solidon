@@ -146,7 +146,24 @@ zwei deckungsgleiche Teile mit doppeltem Volumen an (gegenläufig geschrieben
 mit dem Volumen null). Seit der Durchsicht 0.5.0 räumt das Einlesen sie ab wie
 jedes andere doppelte Dreieck — unter `remove_degenerate`, mit Befund, und nur,
 wenn das Netz danach geschlossen ist; berühren sich zwei Körper an einer
-Fläche, bleibt es beim Zurücknehmen des Verschweißens.
+Fläche, bleiben sie zwei.
+
+**Verschweißen schließt Ränder, es verbindet keine Blätter** (RM-239). Import
+und Reparatur fragen dieselbe Funktion (`geom.repair.weld`): Eine Suppe wird
+auf `EPS_GEOM` gelesen, danach kommt nur zusammen, was an einem offenen oder
+verzweigten Rand liegt oder als Kante unter `EPS_GEOM` zusammenfällt, jede
+Punktgruppe wird nach dem Flächenblatt getrennt, zu dem ihre Kopien gehören,
+und übernommen wird nur, was das Netz nicht schlechter macht. Was darüber
+liegt und heil ist, ist Form: eine Fase von 0,016 µm zwischen zwei Flächen
+bleibt, auch wenn sie schmaler ist als die Schweißtoleranz. Wer ein
+eingelesenes oder beschädigtes Netz an einer weiteren Stelle verschweißt,
+nimmt dieselbe Funktion — zwei Regeln für dieselbe Frage entschieden über
+dasselbe Netz verschieden (der Import nahm zurück, was einen dichten Eingang
+aufriss, die Reparatur, was die Summe offener und verzweigter Kanten
+erhöhte). `Trimesh.merge_vertices` bleibt, wo ein Erzeuger seine eigenen
+Stücke zusammenfügt (Drehkörper, Werkzeuge), und in `boolean._tidied`, das
+die Ausgabe des Kerns über alles verschweißt, wie ein Slicer es täte, und das
+Ergebnis selbst prüft.
 
 **Und sie schließt, was offen ist** (Entscheidung Robert, 22.09.2026: „am
 besten beim Import", „alles bei der Reparatur beheben"). Bis dahin meldete der
@@ -205,9 +222,9 @@ Vorgabe vom 25.09.2026 („das Beste für den Kunden, den Druck und das Modell�
   Kettenglied zählen nicht. Am Korpus `F:\3D Dateien`: 16 von 56
   mehrteiligen Körpern, 3,9 s für alle 485 Körper.
 * **Was stehen bleibt, ist keine Zeile** (Bedienweg A4): Ein Verschweißen oder
-  Entfernen leerer Dreiecke, das zurückgenommen wurde, weil es das Netz
-  aufgerissen hätte, geht ins Protokoll, nicht in den Bericht — geschehen ist
-  nichts, und der Kunde kann nichts tun (am Korpus 41 und 23 von 485 Körpern).
+  Entfernen leerer Dreiecke, das ausblieb, weil es das Netz aufgerissen hätte,
+  geht ins Protokoll, nicht in den Bericht — geschehen ist nichts, und der
+  Kunde kann nichts tun (am Korpus vor RM-239 41 und 23 von 485 Körpern).
 * **Eine Fläche ohne Dicke bleibt offen.** Ihren Rand zu schließen legte eine
   zweite Fläche deckungsgleich auf die erste; der Bericht sagt
   `repair.no_thickness` mit *Dicke geben*.

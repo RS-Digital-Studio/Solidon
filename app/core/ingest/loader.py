@@ -46,6 +46,7 @@ from app.core.geom.mesh import (
     TRIMESH_SUFFIXES,
     MeshData,
     concatenated,
+    edge_table,
     face_components,
     read_mesh,
 )
@@ -56,6 +57,7 @@ from app.core.geom.repair import (
     parts_can_be_merged,
     parts_that_cross,
 )
+from app.core.geom.repair import weld as weld_points
 from app.core.log import get_logger
 from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
 from app.core.types import BoundingBox, CancelToken, Finding, IngestInfo, ProgressFn, Vec3
@@ -1011,76 +1013,58 @@ def normalise(
         from app.core.geom.repair import used_vertex_count
 
         progress(0.2, str(_("Punkte verschweißen")))
-        # Unbenutzte Ecken zählen nicht: Das Verschweißen räumt sie mit weg,
-        # und das ist kein Zusammenlegen (derselbe Zähler wie die Reparatur).
-        before = used_vertex_count(body)
-        tolerance = weld_tolerance(diagonal)
-        # **Gefragt wird am verschweißten Netz, nicht vorher** (Durchsicht
-        # 0.5.0, Zusatz aus dem Paket „netzkern"). Ob das Netz vorher dicht
-        # war, zählt nur, wenn das Verschweißen es aufreißt; die Frage stand
-        # aber immer davor — am 1,2-M-Netz eine halbe Sekunde, auch wenn das
-        # Verschweißen nichts zusammenlegte oder das Netz schloss. Die Kopie
-        # für den Rückweg kostet ein Zehntel davon. Eine Suppe braucht keine:
-        # Sie war nie dicht.
-        unwelded = body.copy() if closed is not False else None
-        body.merge_vertices(digits_vertex=weld_digits(tolerance))
-        welded = used_vertex_count(body) < before
+        digits = weld_digits(weld_tolerance(diagonal))
+        # **Dieselbe Funktion wie die Reparatur** (RM-239): Sie legt nur
+        # zusammen, was an offenen Rändern liegt, trennt jede Punktgruppe nach
+        # dem Flächenblatt, zu dem ihre Kopien gehören, und nimmt nichts, was
+        # das Netz schlechter macht. Ein dichter Eingang hat keinen offenen
+        # Rand; ihn reißt das Verschweißen nicht mehr auf, und die Kopie für
+        # den Rückweg, die hier jedes Mal entstand, ist entfallen. Gemessen an
+        # einer 3MF, die diese Anwendung selbst geschrieben hatte: 17186 Ecken,
+        # wasserdicht; trimeshs Verschweißen bei 0,28 µm ließ 17184 übrig, und
+        # der Prüfbericht sagte „Das Modell ist nicht geschlossen" über eine
+        # Datei, die es war.
+        merged = weld_points(body, digits)
+        welded = merged > 0
         if welded:
-            closed = is_closed(body) if unwelded is not None else None
-        opened = (
-            welded and closed is False and unwelded is not None and bool(unwelded.is_watertight)
-        )
-        # **Ein Verschweißen, das das Netz aufreißt, wird zurückgenommen.**
-        #
-        # Zwei Punkte, die dichter beieinanderliegen als die Toleranz, gehören
-        # meist zusammen — manchmal aber zu zwei Blättern derselben Fläche, und
-        # dann schnürt das Zusammenlegen sie zu einer Kante mit drei Nachbarn
-        # ab. Gemessen an einer 3MF, die diese Anwendung selbst geschrieben
-        # hatte: 17186 Ecken, wasserdicht; verschweißt bei 0,28 µm blieben
-        # 17184, und der Prüfbericht sagte „Das Modell ist nicht geschlossen"
-        # über eine Datei, die es war. Verschweißen ist eine Reparatur, und
-        # eine Reparatur, die etwas kaputt macht, wird nicht angewendet.
-        single = _without_doubled_shell(body) if opened and remove_degenerate else None
-        if single is not None:
-            # **Dieselbe Schale zweimal, jede mit eigenen Ecken** (Durchsicht
-            # 0.5.0, gefunden vom Paket „netzkern"): Das Verschweißen macht aus
-            # der Kopie lauter deckungsgleiche Dreiecke, und das Netz ist
-            # offen, weil jede Kante vier Flächen trägt. Zurückgenommen kam die
-            # Kugel als zwei Teile mit doppeltem Volumen an — gegenläufig
-            # geschrieben mit dem Volumen null. Bleibt von jeder Gruppe das
-            # erste Dreieck und ist das Netz danach geschlossen, war es eine
-            # Kopie und keine Berührung zweier Körper.
-            body, kept_faces = single
-            if slots is not None:
-                slots = slots[kept_faces]
-            closed = True
-            findings.append(
-                Finding(
-                    code="ingest.doubled_shell_removed",
-                    severity="info",
-                    message=_(
-                        "Die Datei trug den Körper zweimal deckungsgleich. Die Kopie wurde "
-                        "entfernt."
-                    ),
-                    values={"removed": int((~kept_faces).sum())},
+            closed = is_closed(body)
+        elif remove_degenerate and closed is not False:
+            # Die Antwort gilt auch für Schritt 3: Gefragt wird einmal.
+            closed = is_closed(body)
+            single = _without_doubled_shell(body, digits) if closed else None
+            if single is not None:
+                # **Dieselbe Schale zweimal, jede mit eigenen Ecken** (Durchsicht
+                # 0.5.0, gefunden vom Paket „netzkern"): Jede Schale ist für sich
+                # dicht, und keine Ecke liegt an einem offenen Rand — das
+                # Verschweißen lässt sie beide stehen. Die Kugel kam sonst als zwei
+                # Teile mit doppeltem Volumen an, gegenläufig geschrieben mit dem
+                # Volumen null.
+                body, kept_faces = single
+                if slots is not None:
+                    slots = slots[kept_faces]
+                closed = True
+                findings.append(
+                    Finding(
+                        code="ingest.doubled_shell_removed",
+                        severity="info",
+                        message=_(
+                            "Die Datei trug den Körper zweimal deckungsgleich. Die Kopie wurde "
+                            "entfernt."
+                        ),
+                        values={"removed": int((~kept_faces).sum())},
+                    )
                 )
-            )
-        elif opened and unwelded is not None:
-            body = unwelded
-            welded = False
-            closed = True
-            # **Was stehen bleibt, ist keine Zeile im Bericht** (Bedienweg A4,
-            # 25.09.2026): Geschehen ist nichts, und der Kunde kann nichts tun —
-            # am Korpus ``F:\3D Dateien`` stand der Satz an 41 beziehungsweise 23
-            # von 485 Körpern. Das Protokoll behält ihn für den Support.
-            _log.info("weld skipped on import: it would have torn the mesh")
-        elif welded and not weld_is_reading:
+        if not welded and used_vertex_count(body) < len(body.vertices):
+            # Unbenutzte Ecken räumte das Verschweißen bisher immer mit weg;
+            # was danach kommt, rechnet mit einem Netz ohne sie.
+            body.remove_unreferenced_vertices()
+        if welded and not weld_is_reading:
             findings.append(
                 Finding(
                     code="ingest.welded",
                     severity="info",
                     message=_("Doppelte Punkte wurden verschweißt."),
-                    values={"removed": before - used_vertex_count(body)},
+                    values={"removed": merged},
                 )
             )
 
@@ -1372,32 +1356,54 @@ def _too_fine(triangles: int) -> Finding | None:
 
 
 def _without_doubled_shell(
-    body: trimesh.Trimesh,
+    body: trimesh.Trimesh, digits: int
 ) -> tuple[trimesh.Trimesh, np.ndarray] | None:
-    """Das verschweißte Netz ohne deckungsgleiche Kopien — wenn es danach geschlossen ist.
+    """Das dichte Netz ohne eine deckungsgleiche Kopie seiner Schale — wenn es eine trägt.
 
-    Von jeder Gruppe deckungsgleicher Dreiecke (dieselben Ecken, gleich in
-    welchem Umlauf) bleibt das erste. Ist das Netz danach dicht, war die
-    Doppelung eine Kopie derselben Schale. Berühren sich dagegen zwei Körper
-    an einer Fläche, bleibt dort eine Kante mit drei Flächen zurück, und die
-    Antwort ist ``None``: Dann nimmt der Aufrufer das Verschweißen zurück wie
-    bisher. Zurück kommt das Netz und die Maske der behaltenen Dreiecke — die
-    Filamentzuweisung je Dreieck folgt ihr.
+    Gefragt wird nur, wo es mehr als ein Teil gibt. Eine Kopie des Netzes wird
+    über alles verschweißt, wie trimesh es tut, und von jeder Gruppe
+    deckungsgleicher Dreiecke (dieselben Ecken, gleich in welchem Umlauf)
+    bleibt das erste. Ist das Netz danach dicht, war die Doppelung eine Kopie
+    derselben Schale. Berühren sich dagegen zwei Körper an einer Fläche, bleibt
+    dort eine Kante mit drei Flächen zurück, und die Antwort ist ``None``: Dann
+    bleibt der Eingang, wie er ist. Zurück kommt das Netz und die Maske der
+    behaltenen Dreiecke — die Filamentzuweisung je Dreieck folgt ihr.
     """
-    faces = np.asarray(body.faces)
-    if not len(faces):
+    if not len(body.faces) or _index_parts(body) < 2:
         return None
+    joined = body.copy()
+    joined.merge_vertices(digits_vertex=digits)
+    faces = np.asarray(joined.faces)
     _groups, first = np.unique(np.sort(faces, axis=1), axis=0, return_index=True)
     if len(first) == len(faces):
         return None
     keep = np.zeros(len(faces), dtype=bool)
     keep[first] = True
-    single = body.copy()
+    single = joined
     single.update_faces(keep)
     single.remove_unreferenced_vertices()
     if not single.is_watertight:
         return None
     return single, keep
+
+
+def _index_parts(body: trimesh.Trimesh) -> int:
+    """Wie viele Teile das Netz nach seinen Eckennummern hat.
+
+    Nicht :func:`~app.core.geom.mesh.face_components`: Das verbindet auch, was
+    nur am selben Ort liegt, und zwei deckungsgleiche Schalen sind dort ein
+    Teil. Gelesen wird die Kantenzählung, die das Verschweißen schon angelegt hat.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    count = len(body.faces)
+    pairs = edge_table(body).face_pairs()
+    graph = coo_matrix(
+        (np.ones(len(pairs), dtype=np.int8), (pairs[:, 0], pairs[:, 1])), shape=(count, count)
+    )
+    parts, _labels = connected_components(graph, directed=False)
+    return int(parts)
 
 
 def _count_components(

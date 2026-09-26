@@ -458,16 +458,44 @@ jetzt Millisekunden). Und
 unverändert zurück: Ein exakter Körper bleibt exakt, statt als Netz mit
 „nichts zu reparieren" zurückzukommen.
 
-`repair()` übernimmt Verschweißen und Dreiecksbereinigung nur, wenn das Netz
-danach nicht schlechter ist — gewogen über die Summe offener und verzweigter
-Kanten (`_tears_it_further`). Andernfalls bleiben das Netz und seine
-Materialzuweisungen erhalten; ein Befund nennt den ausgelassenen Schritt.
-**Der Import fragt enger** (`ingest.loader.normalise`, Schritt 2): Er nimmt
-ein Verschweißen nur zurück, das einen dichten Eingang aufreißt. Die beiden
-Regeln sind nicht dieselbe, und eine Punktgruppe, die zwei Blätter einer
-Fläche zu einer verzweigten Kante schnürt, wird an keiner der beiden Stellen
-einzeln entschieden — siehe Register. Die einzelnen Reparaturhilfen bleiben
-für ausdrücklich gesteuerte Reparaturketten verfügbar.
+`repair()` übernimmt die Dreiecksbereinigung nur, wenn das Netz danach nicht
+schlechter ist — gewogen über die Summe offener und verzweigter Kanten
+(`_tears_it_further`). Andernfalls bleiben das Netz und seine
+Materialzuweisungen erhalten, und das Protokoll nennt den ausgelassenen
+Schritt. Die einzelnen Reparaturhilfen bleiben für ausdrücklich gesteuerte
+Reparaturketten verfügbar.
+
+**Verschweißt wird überall mit derselben Funktion** (`repair.weld`, RM-239):
+Import (`ingest.loader.normalise`, Schritt 2), Reparatur und Stufe 2 der
+Booleschen Kette fragen sie, die beiden letzten über `merge_vertices`.
+**Unter `EPS_GEOM` ist ein Ort ein Ort, darüber entscheidet die Datei:** Eine
+Dreieckssuppe wird zuerst gelesen — was auf `EPS_GEOM` zusammenfällt, ist eine
+Ecke (`_read_soup`; gruppiert auf der Schweißtoleranz, fein geteilt nur, wo
+eine Gruppe weiter streut) —, danach, und am Netz mit geteilten Ecken sofort,
+kommt nur zusammen, was an einer offenen oder verzweigten Kante liegt oder als
+Kante unter `EPS_GEOM` zusammenfällt (`_joined_at_the_rims`). Eine Ecke in
+heiler Fläche bleibt, auch wenn eine andere näher liegt als die
+Schweißtoleranz: am Ring aus `Siebhalter+X1C.3mf` zwölf Fasen von 0,016 µm
+zwischen zwei Flächen, die zusammengezogen aus 16 erkannten Flächen 28
+machten. Jede Punktgruppe wird nach Flächenblatt getrennt (`_sheets`):
+Zusammen bleibt, was in der Datei eine Ecke war, was nach dem Verschweißen
+eine Kante mit genau zwei Flächen teilt, eine gleich umlaufende Doppelung,
+und an einer Kante mit mehr Flächen die zwei, die denselben Körper begrenzen
+— um die Kante nach einem Pseudowinkel aus Grundrechenarten geordnet
+(`_around_the_edge`, `_pseudo_angle`; die Ordnung entscheidet über die
+Topologie, RM-187). Zwei Dreiecke am selben Winkel haben Luft zwischen sich:
+Zwei Körper, die sich berühren, bleiben zwei, auch als Dreieckssuppe; zwei,
+die sich an einem Rand nur an einer Ecke treffen, behalten zwei Ecken
+(`whole_fans`; beim Lesen einer Suppe ist die Ecke ein Punkt). Lässt sich eine
+Kante nicht ordnen, bleiben die Gruppen an ihren Enden ganz. Übernommen wird
+nur, was die Summe offener und verzweigter Kanten an den Dreiecken, die nicht
+flach gedrückt sind, nicht erhöht (`_damage`) — ein flach gedrücktes fällt im
+Schritt danach. Der Schlüssel ist trimeshs (Lage, Texturkoordinaten,
+Eckennormalen): Wo keine zwei Blätter aufeinanderliegen, kommt Ecke für Ecke
+dasselbe heraus wie aus `Trimesh.merge_vertices`, und die Kantenzählung des
+Ergebnisses liegt im Cache (`mesh.remember_edge_table`). Eine Kopie derselben
+Schale mit eigenen Ecken hat keinen offenen Rand; sie sucht der Import eigens
+(`loader._without_doubled_shell`).
 
 Normalenkorrekturen vergleichen die Reihenfolge der Dreiecksecken; eine
 geänderte Windung muss das Volumen nicht ändern. Beim Vernähen und Schließen

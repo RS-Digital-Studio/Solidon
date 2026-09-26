@@ -613,6 +613,17 @@ def _remember_edges(body: trimesh.Trimesh, table: EdgeTable) -> None:
         cache["is_winding_consistent"] = bool(np.array_equal(up[pairs], down[pairs]))
 
 
+def remember_edge_table(body: trimesh.Trimesh, table: EdgeTable) -> None:
+    """Eine schon gezählte Kantenzählung am Netz ablegen — sie muss zu seinen Dreiecken passen.
+
+    Für den, der die Zählung ohnehin braucht, bevor das Netz entsteht: Das
+    Verschweißen fragt an den verschweißten Dreiecken, ob es etwas aufreißt
+    (``repair.weld``), und dieselbe Zählung beantwortet danach Dichtheit,
+    Ränder und Teile, ohne alle Kanten ein zweites Mal zu sortieren.
+    """
+    _remember_edges(body, table)
+
+
 def without_faces(body: trimesh.Trimesh, keep: np.ndarray) -> trimesh.Trimesh:
     """Eine Kopie mit den Dreiecken aus ``keep`` und ohne unbenutzte Ecken.
 

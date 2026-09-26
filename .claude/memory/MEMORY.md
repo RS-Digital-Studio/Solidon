@@ -86,6 +86,7 @@
 - [Analyse je Stück am Gitterwerk messen](neue-analyse-je-stueck-am-gitterwerk-messen.md) · [buffer: Methode 16, Funktion 8 Segmente](shapely-buffer-methode-16-funktion-8-segmente.md) — Kanalfrage am Eiffelturm 30 min; Aufrufe zählen, je Schicht bündeln.
 - [Sperre an der Modellbahn messen](sperre-an-der-modellbahn-messen-nicht-an-der-stuetze.md) — als Kunststoff gedruckte Kanalsperre sah aus wie eine wirksame (RM-247); mit/ohne, Modellbahn und Filament zuerst.
 - [Kernausgabe ist per Index dicht](kernausgabe-ist-per-index-dicht.md) — merge_vertices reißt berührende Schalen auf; grobe Vorschau: grob= mitlesen, nicht nur die Zeit.
+- [Heiles Netz nicht verschweißen](heiles-netz-nicht-verschweissen.md) — jede Kante zweimal belegt: unberührt; Schweißregeln am Importkorpus gegen HEAD messen, dicht → offen zählen.
 
 ## Shell und Git
 

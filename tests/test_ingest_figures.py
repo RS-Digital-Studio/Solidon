@@ -120,12 +120,14 @@ def test_a_weld_that_closes_the_mesh_is_asked_about_once(monkeypatch) -> None:
     assert len(calls) == 1, f"{len(calls)} Fragen nach der Dichtheit"
 
 
-def test_a_weld_that_is_taken_back_keeps_its_answer(monkeypatch) -> None:
-    """Zurückgenommenes Verschweißen: Die Antwort des alten Netzes geht mit zurück.
+def test_two_touching_bodies_are_not_welded_and_asked_once(monkeypatch) -> None:
+    """Zwei dichte Körper, die sich berühren: kein Verschweißen, eine Frage.
 
-    Das zurückgelegte Netz ist eine Kopie ohne Cache; die Frage „dicht?", deren
-    Antwort gerade feststand, stellte ``fix_inversion`` am 1,2-M-Bett ein
-    drittes Mal (Durchsicht 0.5.0).
+    Bis RM-239 legte das Verschweißen die Berührfläche zusammen, riss das Netz
+    damit auf und wurde zurückgenommen — samt einer Kopie ohne Cache, an der
+    ``fix_inversion`` am 1,2-M-Bett ein drittes Mal fragte (Durchsicht 0.5.0).
+    Heute hat ein dichter Eingang keinen offenen Rand, und das Verschweißen
+    fasst ihn nicht an; die Antwort „dicht" gilt für alles danach.
     """
     from app.core.geom.mesh import MeshData
 
@@ -140,7 +142,8 @@ def test_a_weld_that_is_taken_back_keeps_its_answer(monkeypatch) -> None:
 
     assert not result.info.welded, "das Verschweißen blieb aus"
     assert result.mesh.is_watertight
-    assert len(calls) == 2, f"{len(calls)} Fragen nach der Dichtheit"
+    assert result.mesh.component_count == 2
+    assert len(calls) == 1, f"{len(calls)} Fragen nach der Dichtheit"
 
 
 def test_the_figures_the_window_reads_are_already_known_after_normalise() -> None:
