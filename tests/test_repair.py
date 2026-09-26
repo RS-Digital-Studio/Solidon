@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom.mesh import MeshData, edge_table, read_mesh
 from app.core.geom.repair import (
     branching_edge_count,
     fill_boundary_loops,
@@ -30,6 +30,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import CancelToken, Document, Profile, Source
+from app.core.units import weld_digits, weld_tolerance
 from app.i18n import _
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -131,6 +132,181 @@ def test_degenerate_triangles_go_away() -> None:
 
     assert removed > 0
     assert mesh.triangle_count == 12, "the cube stays, the junk goes"
+
+
+def _with_a_torn_triangle(box: trimesh.Trimesh, upwards: bool) -> trimesh.Trimesh:
+    """Der Würfel mit einem abgerissenen Dreieck seiner Ober- oder Unterseite.
+
+    Das Dreieck bekommt eigene Ecken an derselben Stelle — ein Riss, wie ihn
+    ein Export hinterlässt: drei offene Kanten auf jeder Seite.
+    """
+    vertices = np.asarray(box.vertices, dtype=float)
+    faces = np.asarray(box.faces, dtype=np.int64).copy()
+    side = 1.0 if upwards else -1.0
+    row = int(np.flatnonzero(np.asarray(box.face_normals)[:, 2] * side > 0.9)[0])
+    copies = vertices[faces[row]]
+    faces[row] = len(vertices) + np.arange(3)
+    return trimesh.Trimesh(vertices=np.vstack([vertices, copies]), faces=faces, process=False)
+
+
+def _soup(body: trimesh.Trimesh) -> trimesh.Trimesh:
+    """Dasselbe Netz, wie eine STL es speichert: jede Ecke je Dreieck einmal."""
+    corners = np.asarray(body.vertices)[np.asarray(body.faces)].reshape(-1, 3)
+    return trimesh.Trimesh(
+        vertices=corners, faces=np.arange(len(corners)).reshape(-1, 3), process=False
+    )
+
+
+def _torn_where_they_touch() -> trimesh.Trimesh:
+    """Zwei Würfel, die sich an einer Fläche berühren, beide an genau dieser Fläche gerissen.
+
+    Die Ecken der Berührfläche stehen damit an offenen Rändern beider
+    Würfel, und jede Punktgruppe dort trägt Kopien von beiden (RM-239).
+    """
+    lower = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    upper = lower.copy()
+    upper.apply_translation((0.0, 0.0, 10.0))
+    return trimesh.util.concatenate(
+        [_with_a_torn_triangle(lower, upwards=True), _with_a_torn_triangle(upper, upwards=False)]
+    )
+
+
+def _corner_to_corner() -> trimesh.Trimesh:
+    """Zwei Würfel, die sich an einer Ecke fast berühren (10⁻⁸ mm), der erste mit Riss."""
+    first = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    second = first.copy()
+    second.apply_translation((10.0 + 1e-8, 10.0, 10.0))
+    return trimesh.util.concatenate([_with_a_torn_triangle(first, upwards=True), second])
+
+
+@pytest.mark.parametrize("as_soup", [False, True], ids=["indexed", "soup"])
+def test_welding_closes_the_tears_and_leaves_two_touching_bodies_two(as_soup: bool) -> None:
+    """Zwei Würfel, die sich berühren, bleiben zwei — auch wo beide gerissen sind (RM-239).
+
+    Bis dahin legte das Verschweißen jede Punktgruppe als Ganzes zusammen: Die
+    Risse schlossen sich, und die Berührfläche wurde dabei zu Kanten mit vier
+    Flächen. In der Summe der offenen und verzweigten Kanten war das eine
+    Verbesserung, also wurde es übernommen.
+    """
+    body = _torn_where_they_touch()
+    if as_soup:
+        body = _soup(body)
+
+    welded, removed = merge_vertices(MeshData.of(body))
+
+    assert removed > 0
+    assert open_edge_count(welded) == 0
+    assert branching_edge_count(welded) == 0
+    assert welded.is_watertight
+    assert welded.component_count == 2, "zwei Körper, die sich berühren"
+    assert welded.triangle_count == 24, "kein Dreieck fällt"
+    assert len(welded.raw.vertices) == 16, "jeder Würfel mit seinen acht Ecken"
+    assert float(welded.volume) == pytest.approx(2000.0)
+
+
+def test_welding_keeps_two_corners_on_two_sheets_apart() -> None:
+    """Die Abnahme aus dem Register: Riss geschlossen, Ecken getrennt, Dreieckszahl gleich.
+
+    Die zwei Würfel berühren sich an einer Ecke, 10⁻⁸ mm auseinander, tief
+    unter der Schweißtoleranz. Zusammengelegt würde daraus eine Sanduhr-Ecke,
+    an der zwei Körper hängen — und die Datei sagt, dass es zwei Ecken sind.
+    """
+    welded, _removed = merge_vertices(MeshData.of(_corner_to_corner()))
+
+    assert welded.is_watertight
+    assert welded.component_count == 2
+    assert welded.triangle_count == 24
+    assert len(welded.raw.vertices) == 16, "die zwei Ecken bleiben zwei"
+
+
+def test_in_a_soup_two_corners_closer_than_eps_geom_are_one_point() -> None:
+    """Die Gegenprobe als Dreieckssuppe: Unter ``EPS_GEOM`` ist ein Ort ein Ort.
+
+    Eine Suppe hat keine Eckennummern, die zwei Ecken auseinanderhielten; was
+    auf ``EPS_GEOM`` zusammenfällt, liest der Import als eine Ecke. Die zwei
+    Würfel bleiben trotzdem zwei geschlossene Körper — sie teilen einen Punkt,
+    keine Kante.
+    """
+    welded, _removed = merge_vertices(MeshData.of(_soup(_corner_to_corner())))
+
+    assert welded.is_watertight
+    assert welded.component_count == 2
+    assert welded.triangle_count == 24
+    assert len(welded.raw.vertices) == 15, "die Ecke, die beide berühren, ist ein Punkt"
+
+
+@pytest.mark.parametrize("name", ["cube_clean.stl", "plate_holes.stl", "plate_countersunk.stl"])
+def test_welding_a_clean_soup_gives_what_trimesh_gives(name: str) -> None:
+    """Wo keine zwei Blätter aufeinanderliegen, verschweißt es wie bisher — Ecke für Ecke."""
+    body = raw(name).raw
+    reference = body.copy()
+    diagonal = float(np.linalg.norm(body.extents))
+    reference.merge_vertices(digits_vertex=weld_digits(weld_tolerance(diagonal)))
+
+    welded, _removed = merge_vertices(MeshData.of(body))
+
+    np.testing.assert_array_equal(welded.raw.vertices, reference.vertices)
+    np.testing.assert_array_equal(welded.raw.faces, reference.faces)
+
+
+def test_welding_keeps_a_texture_seam_open_like_trimesh() -> None:
+    """Zwei Ecken an derselben Stelle mit verschiedenen Texturkoordinaten bleiben zwei.
+
+    Dieselbe Regel wie in trimesh: Zusammengelegt verlöre eine Seite ihre
+    Textur. Die Texturkoordinaten reisen mit den Ecken, die bleiben.
+    """
+    soup = _soup(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    uv = np.zeros((len(soup.vertices), 2))
+    uv[: len(uv) // 2, 0] = 0.25  # die erste Hälfte der Dreiecke auf einer anderen Kachel
+    soup.visual = trimesh.visual.TextureVisuals(uv=uv)
+    reference = soup.copy()
+    reference.merge_vertices(digits_vertex=weld_digits(weld_tolerance(20.0)))
+
+    welded, _removed = merge_vertices(MeshData.of(soup), tolerance=weld_tolerance(20.0))
+
+    np.testing.assert_array_equal(welded.raw.vertices, reference.vertices)
+    np.testing.assert_array_equal(welded.raw.faces, reference.faces)
+    np.testing.assert_array_equal(welded.raw.visual.uv, reference.visual.uv)
+
+
+def test_welding_leaves_its_edge_count_in_the_cache_of_the_mesh() -> None:
+    """Die Zählung, die das Verschweißen ohnehin braucht, ist die des Ergebnisses."""
+    welded, _removed = merge_vertices(MeshData.of(_torn_where_they_touch()))
+    fresh = trimesh.Trimesh(
+        vertices=welded.raw.vertices.copy(), faces=welded.raw.faces.copy(), process=False
+    )
+
+    kept, counted = edge_table(welded.raw), edge_table(fresh)
+
+    np.testing.assert_array_equal(kept.unique, counted.unique)
+    np.testing.assert_array_equal(kept.inverse, counted.inverse)
+    np.testing.assert_array_equal(kept.counts, counted.counts)
+    assert welded.raw.is_watertight == fresh.is_watertight
+    assert welded.raw.is_winding_consistent == fresh.is_winding_consistent
+
+
+def test_repair_and_import_weld_the_same_way(document: Document, profile: Profile) -> None:
+    """Import und Reparatur fragen dieselbe Funktion (RM-239) — und kommen zum selben Netz."""
+    body = _soup(_torn_where_they_touch())
+    repaired = repair(MeshData.of(body), holes=False)
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/wuerfel.stl", sha256=""
+    )
+    project.sources["src_1"] = body.export(file_type="stl")
+    History(document).apply(
+        _("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    result = evaluate(document, profile, sources=ProjectSources(project))
+    (loaded,) = result.scene.objects.values()
+
+    for mesh in (repaired.mesh, loaded.mesh):
+        assert mesh.is_watertight
+        assert mesh.component_count == 2
+        assert branching_edge_count(mesh) == 0
+        assert mesh.triangle_count == 24
 
 
 @pytest.mark.parametrize("holes", [False, True])

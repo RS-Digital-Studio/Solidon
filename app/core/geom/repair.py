@@ -39,9 +39,11 @@ from app.core.geom.mesh import (
     carry_appended_edges,
     edge_table,
     face_components,
+    remember_edge_table,
     signed_volume,
     stable_areas,
     triple_products,
+    unique_edges,
     without_faces,
 )
 from app.core.geom.transform import along
@@ -79,19 +81,623 @@ def used_vertex_count(body: trimesh.Trimesh) -> int:
 
 
 def merge_vertices(mesh: MeshData, tolerance: float | None = None) -> tuple[MeshData, int]:
-    """Verschweißt zusammenfallende Punkte. Liefert den Körper und wie viele
-    Eckpunkte **zusammengelegt** wurden.
+    """Verschweißt zusammenfallende Punkte (:func:`weld`). Liefert den Körper
+    und wie viele Eckpunkte **zusammengelegt** wurden.
 
-    Unbenutzte Ecken zählen nicht mit: trimesh räumt sie beim Verschweißen
-    weg, und eine einzige davon meldete „Doppelte Punkte wurden verschweißt"
-    samt voller Neuerkennung über einem Netz, an dem sich nichts geändert
-    hatte (Durchsicht 24.09.2026).
+    Unbenutzte Ecken zählen nicht mit, und wo nichts zusammengelegt wird,
+    kommt der Körper selbst zurück: Eine einzige unbenutzte Ecke meldete
+    „Doppelte Punkte wurden verschweißt" samt voller Neuerkennung über einem
+    Netz, an dem sich nichts geändert hatte (Durchsicht 24.09.2026).
     """
-    body = mesh.raw.copy()
-    before = used_vertex_count(body)
+    body = mesh.raw.copy(include_cache=True)
     limit = tolerance if tolerance is not None else weld_tolerance(mesh.bounds.diagonal)
-    body.merge_vertices(digits_vertex=weld_digits(limit))
-    return mesh.replacing(body), before - used_vertex_count(body)
+    merged = weld(body, weld_digits(limit))
+    if not merged:
+        return mesh, 0
+    return mesh.replacing(body), merged
+
+
+def weld(body: trimesh.Trimesh, digits: int) -> int:
+    """Verschweißt, was an offenen Rändern zusammenfällt — am Netz selbst.
+
+    Zurück kommt, wie viele benutzte Ecken zusammengelegt wurden; bei null ist
+    das Netz unverändert, samt seinen unbenutzten Ecken und seinem Cache. Die
+    eine Funktion für Import (``ingest.loader.normalise``), Reparatur und
+    Stufe 2 der Booleschen Kette (RM-239).
+
+    **Unter ``EPS_GEOM`` ist ein Ort ein Ort, darüber entscheidet die Datei.**
+    Eine Dreieckssuppe — jede Ecke je Dreieck einmal, wie eine STL sie
+    speichert — wird zuerst gelesen: Ecken, die auf ``EPS_GEOM`` genau
+    zusammenfallen, sind eine (:func:`_read_soup`). Danach, und an einem Netz
+    mit geteilten Ecken sofort, wird nur zusammengelegt, was an einer offenen
+    oder verzweigten Kante liegt oder als Kante unter ``EPS_GEOM`` zusammenfällt
+    (:func:`_joined_at_the_rims`). Eine Ecke in heiler Fläche bleibt, was sie
+    ist, auch wenn eine andere näher liegt als die Schweißtoleranz: Am Ring aus
+    ``Siebhalter+X1C.3mf`` sind das zwölf Fasen von 0,016 µm zwischen zwei
+    Flächen, und trimeshs ``merge_vertices`` zog sie zusammen, sobald daneben
+    ein Riss zu schließen war — aus 16 Flächen wurden 28.
+
+    **Eine Punktgruppe wird nach Flächenblatt getrennt** (:func:`_sheets`):
+    Zusammen bleibt, was in der Datei eine Ecke war, was danach eine Kante mit
+    genau zwei Flächen teilt und was an einer Kante mit mehr Flächen denselben
+    Körper begrenzt. Zwei Körper, die sich an einer Fläche berühren, bleiben
+    so zwei, auch als Suppe; wo sich an einem Rand zwei Körper nur an einer
+    Ecke treffen, bleiben es zwei Ecken.
+
+    **Übernommen wird nur, was das Netz nicht schlechter macht**, gewogen über
+    die Summe offener und verzweigter Kanten wie bei jedem Reparaturschritt
+    (:func:`_tears_it_further`) — ohne die Dreiecke, die es flach drückt
+    (:func:`_damage`). Die Gruppen bildet derselbe Schlüssel wie in
+    trimesh — Lage, Texturkoordinaten, mitgebrachte Eckennormalen —, die
+    Dreiecke behalten ihre Reihenfolge (die Slots je Dreieck bleiben gültig),
+    und die Kantenzählung des Ergebnisses liegt danach im Cache des Netzes
+    (:func:`~app.core.geom.mesh.remember_edge_table`).
+    """
+    faces = np.asarray(body.faces, dtype=np.int64)
+    count = len(faces)
+    n = len(body.vertices)
+    if not count or not n:
+        return 0
+    uses = np.bincount(faces.reshape(-1), minlength=n)
+    used = np.flatnonzero(uses)
+    positions = np.asarray(body.vertices, dtype=np.float64)
+    if int(uses.max()) <= 1:
+        vertex_of, table = _read_soup(body, faces, used, positions, digits)
+    else:
+        vertex_of, table = np.arange(n, dtype=np.int64), edge_table(body)
+    joined = _joined_at_the_rims(body, vertex_of[faces], table, positions, digits)
+    if joined is not None:
+        mended, table = joined
+        vertex_of = mended[vertex_of]
+    kept = np.zeros(n, dtype=bool)
+    kept[vertex_of[used]] = True
+    merged = len(used) - int(np.count_nonzero(kept))
+    if merged <= 0:
+        return 0
+    renumbered = np.maximum(np.cumsum(kept) - 1, 0)[vertex_of]
+    body.update_vertices(np.flatnonzero(kept), renumbered)
+    # Die Nummern der Ecken, die bleiben, steigen mit ihrer alten: Die Kanten
+    # behalten ihre Ordnung, und die Zählung gilt dem neuen Netz unverändert.
+    remember_edge_table(
+        body,
+        EdgeTable(unique=renumbered[table.unique], inverse=table.inverse, counts=table.counts),
+    )
+    return merged
+
+
+def _read_soup(
+    body: trimesh.Trimesh,
+    faces: np.ndarray,
+    used: np.ndarray,
+    positions: np.ndarray,
+    digits: int,
+) -> tuple[np.ndarray, EdgeTable]:
+    """Eine Dreieckssuppe lesen: Ecken, die auf ``EPS_GEOM`` zusammenfallen, sind eine.
+
+    Das ist Lesen und keine Reparatur — eine STL schreibt jede geteilte Ecke
+    mit denselben Zahlen, und die Suppe hat keine Eckennummern, die etwas
+    anderes sagen könnten. Getrennt wird nur, was sonst eine Kante mit mehr
+    als zwei Flächen ergäbe (:func:`_sheets` ohne ``whole_fans``): zwei
+    Körper, die sich an einer Fläche berühren. Zurück kommt je Ecke die, zu
+    der sie gehört, und die Kantenzählung der gelesenen Dreiecke.
+    """
+    # Gruppiert wird auf der Schweißtoleranz — dort passt der Schlüssel in
+    # eine Zahl, und trimesh sortiert schnell —, und nur eine Gruppe, deren
+    # Ecken weiter als ``EPS_GEOM`` von ihrer ersten liegen, wird auf dem
+    # feineren Gitter geteilt. Sechs Stellen für alle kosteten an 815 104
+    # Dreiecken eine Sekunde statt einer halben: Der Schlüssel passt dann
+    # nicht mehr in eine Zahl.
+    fine = max(digits, weld_digits(EPS_GEOM))
+    first, inverse = trimesh.grouping.unique_rows(_weld_keys(body, digits, used), keep_order=True)
+    inverse = np.asarray(inverse, dtype=np.int64).reshape(-1)
+    roots = used[np.asarray(first, dtype=np.int64)[inverse]]
+    apart = np.any(np.abs(positions[used] - positions[roots]) > EPS_GEOM, axis=1)
+    if apart.any():
+        wide = np.zeros(len(first), dtype=bool)
+        wide[inverse[apart]] = True
+        members = np.flatnonzero(wide[inverse])
+        finer, split = trimesh.grouping.unique_rows(
+            np.column_stack([inverse[members], _weld_keys(body, fine, used[members])]),
+            keep_order=True,
+        )
+        split = np.asarray(split, dtype=np.int64).reshape(-1)
+        roots[members] = used[members][np.asarray(finer, dtype=np.int64)[split]]
+    group = np.arange(len(positions), dtype=np.int64)
+    group[used] = roots
+    vertex_of, edges = _sheets(faces, group, positions, 10.0**-fine, whole_fans=False)
+    read = vertex_of[faces]
+    if edges is not None and np.array_equal(vertex_of[used], group[used]):
+        return vertex_of, edges.table(read)
+    return vertex_of, _table_of(read)
+
+
+def _joined_at_the_rims(
+    body: trimesh.Trimesh,
+    faces: np.ndarray,
+    table: EdgeTable,
+    positions: np.ndarray,
+    digits: int,
+) -> tuple[np.ndarray, EdgeTable] | None:
+    """Was an einem offenen oder verzweigten Rand zusammenfällt, wird eine Ecke.
+
+    ``faces`` sind die Dreiecke in Eckennummern, ``table`` ihre Kantenzählung.
+    Zusammengelegt werden, auf ``digits`` Stellen gleich, die Ecken der Kanten,
+    die nicht genau zwei bleibende Flächen tragen, und die Enden einer Kante
+    unter ``EPS_GEOM`` — ihre Dreiecke haben keine Höhe, und die Bereinigung
+    danach nimmt sie mit derselben Grenze weg (``plate_countersunk.stl`` schließt
+    nur so). Jede Gruppe wird nach Blatt getrennt, auch wo zwei Fächer sich nur
+    an der Ecke berühren (``whole_fans``). ``None``, wenn nichts zusammenkommt
+    oder das Netz danach schlechter wäre.
+    """
+    if not np.any(table.counts != 2):
+        # **Ein heiles Netz hat nichts zu verschweißen**, auch keine Kante unter
+        # ``EPS_GEOM``: Zusammengezogen und danach bereinigt, rissen sie am
+        # Korpus sechs dichte Körper auf — zwei Deckel aus 3MF, zwei Möbel aus
+        # GLB mit danach 129 und 257 Teilen. Bis RM-239 nahm der Import dieses
+        # Verschweißen zurück. Gezählt wird dabei jedes Dreieck: Ein flach
+        # gedrücktes, das eine Datei schon mitbringt, ist ein Schaden
+        # (``plate_countersunk.stl``, von trimesh verschweißt geladen).
+        return None
+    live = _live_counts(table, faces)
+    damage = int(np.count_nonzero(live == 1)) + int(np.count_nonzero(live > 2))
+    ends = table.unique
+    span = positions[ends[:, 1]] - positions[ends[:, 0]]
+    tiny = np.sum(span * span, axis=1) <= EPS_GEOM * EPS_GEOM
+    marked = np.zeros(len(positions), dtype=bool)
+    marked[ends[((live != 2) & (live > 0)) | tiny].reshape(-1)] = True
+    candidates = np.flatnonzero(marked)
+    if len(candidates) < 2:
+        return None
+    first, inverse = trimesh.grouping.unique_rows(
+        _weld_keys(body, digits, candidates), keep_order=True
+    )
+    roots = candidates[np.asarray(first, dtype=np.int64)[np.asarray(inverse).reshape(-1)]]
+    if np.array_equal(roots, candidates):
+        return None
+    group = np.arange(len(positions), dtype=np.int64)
+    group[candidates] = roots
+    mended, _edges = _sheets(faces, group, positions, 10.0**-digits, whole_fans=True)
+    if np.array_equal(mended[candidates], candidates):
+        return None
+    joined = mended[faces]
+    after = _table_of(joined)
+    if _damage(after, joined) > damage:
+        # **Was stehen bleibt, ist keine Zeile im Bericht** (Bedienweg A4,
+        # 25.09.2026): Geschehen ist nichts, und der Kunde kann nichts tun.
+        _log.info("weld skipped: merging at %d points would tear the mesh", len(candidates))
+        return None
+    return mended, after
+
+
+def _table_of(faces: np.ndarray) -> EdgeTable:
+    """Die Kantenzählung eines Dreiecksfelds, in der Zeilenfolge von trimesh."""
+    unique, inverse, counts = unique_edges(
+        faces[:, [0, 1, 1, 2, 2, 0]], return_inverse=True, return_counts=True
+    )
+    return EdgeTable(unique=unique, inverse=inverse, counts=counts)
+
+
+def _live_counts(table: EdgeTable, faces: np.ndarray) -> np.ndarray:
+    """Je Kante, wie viele Dreiecke sie tragen, die nicht flach sind."""
+    flat = (
+        (faces[:, 0] == faces[:, 1]) | (faces[:, 1] == faces[:, 2]) | (faces[:, 2] == faces[:, 0])
+    )
+    if not flat.any():
+        return table.counts
+    return np.bincount(table.inverse[np.repeat(~flat, 3)], minlength=len(table.counts))
+
+
+def _damage(table: EdgeTable, faces: np.ndarray) -> int:
+    """Offene und verzweigte Kanten, gezählt an den Dreiecken, die nicht flach sind.
+
+    Ein Dreieck, dessen Ecken das Verschweißen auf zwei zusammenlegt, fällt im
+    Schritt danach — beim Import, in der Reparatur und in Stufe 2 der Kette.
+    Mitgezählt machte es jede Kante, an der es hängt, zu einer mit vier
+    Flächen: Eine Kante von 0,06 µm zusammenzuziehen sähe dann schlechter aus
+    als sie stehen zu lassen (``plate_countersunk.stl``, 16 solche Kanten).
+    """
+    counts = _live_counts(table, faces)
+    return int(np.count_nonzero(counts == 1)) + int(np.count_nonzero(counts > 2))
+
+
+def _weld_keys(body: trimesh.Trimesh, digits: int, rows: np.ndarray) -> np.ndarray:
+    """Je Ecke aus ``rows`` der Schlüssel, unter dem trimeshs ``merge_vertices`` sie gruppiert.
+
+    Die Lage auf ``digits`` Stellen gerundet, dazu Texturkoordinaten auf vier
+    und mitgebrachte Eckennormalen auf zwei Stellen: Zwei Ecken an derselben
+    Stelle mit verschiedenen Texturkoordinaten sind eine Naht der Textur, und
+    zusammengelegt verlöre eine Seite ihr Bild. Dieselben Zahlen wie in
+    ``trimesh.grouping.merge_vertices``, damit ein Netz ohne zwei aufeinander
+    liegende Blätter Ecke für Ecke so verschweißt wird wie bisher.
+    """
+    vertices = np.asarray(body.vertices, dtype=np.float64)
+    columns = [vertices[rows] * (10**digits)]
+    visual = body.visual
+    uv = getattr(visual, "uv", None)
+    if (
+        visual is not None
+        and visual.defined
+        and visual.kind == "texture"
+        and uv is not None
+        and len(uv) == len(vertices)
+    ):
+        columns.append(np.asarray(uv, dtype=np.float64)[rows] * (10**4))
+    cache = getattr(body, "_cache", None)
+    normals = cache["vertex_normals"] if cache is not None else None
+    if normals is not None and np.shape(normals) == vertices.shape:
+        columns.append(np.asarray(normals, dtype=np.float64)[rows] * (10**2))
+    return np.asarray(np.column_stack(columns).round().astype(np.int64))
+
+
+@dataclass(frozen=True)
+class _EdgeRows:
+    """Die Kantenzeilen verschweißter Dreiecke (drei je Dreieck), nach Kante geordnet.
+
+    ``order`` sind Zeilennummern (``3·Dreieck + Stelle``), gruppiert nach
+    Kante; ``starts`` und ``sizes`` beschreiben die Gruppen darin.
+    """
+
+    order: np.ndarray
+    starts: np.ndarray
+    sizes: np.ndarray
+
+    def table(self, welded: np.ndarray) -> EdgeTable:
+        """Dieselbe Ordnung als Kantenzählung — nur, wenn jede Zeile darin steht."""
+        rows = self.order[self.starts]
+        face, slot = rows // 3, rows % 3
+        start, end = welded[face, slot], welded[face, (slot + 1) % 3]
+        inverse = np.empty(len(self.order), dtype=np.int64)
+        inverse[self.order] = np.repeat(np.arange(len(self.starts), dtype=np.int64), self.sizes)
+        return EdgeTable(
+            unique=np.stack([np.minimum(start, end), np.maximum(start, end)], axis=1),
+            inverse=inverse,
+            counts=self.sizes,
+        )
+
+
+def _edge_rows(welded: np.ndarray, live: np.ndarray, width: int) -> _EdgeRows:
+    """Die Zeilen der Dreiecke aus ``live``, nach Kante geordnet — eine Sortierung."""
+    start = welded.reshape(-1)
+    end = welded[:, [1, 2, 0]].reshape(-1)
+    code = np.minimum(start, end) * width + np.maximum(start, end)
+    rows = np.flatnonzero(np.repeat(live, 3))
+    order = rows[np.argsort(code[rows], kind="stable")]
+    if not len(order):
+        empty = np.zeros(0, dtype=np.int64)
+        return _EdgeRows(order=order, starts=empty, sizes=empty)
+    ordered = code[order]
+    starts = np.r_[0, np.flatnonzero(ordered[1:] != ordered[:-1]) + 1].astype(np.int64)
+    sizes = np.diff(np.r_[starts, len(order)]).astype(np.int64)
+    return _EdgeRows(order=order, starts=starts, sizes=sizes)
+
+
+def _row_corners(rows: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Je Kantenzeile die Ecke (``3·Dreieck + Stelle``) am Anfang und am Ende."""
+    face = rows // 3
+    slot = rows % 3
+    return 3 * face + slot, 3 * face + (slot + 1) % 3
+
+
+def _rows_of(edges: _EdgeRows, chosen: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Die Zeilen der Kanten ``chosen`` (Nummern in ``edges``) und je Zeile ihre Kante."""
+    lengths = edges.sizes[chosen]
+    total = int(lengths.sum())
+    offsets = np.repeat(np.cumsum(lengths) - lengths, lengths)
+    within = np.arange(total, dtype=np.int64) - offsets
+    rows = edges.order[np.repeat(edges.starts[chosen], lengths) + within]
+    return rows, np.repeat(np.arange(len(chosen), dtype=np.int64), lengths)
+
+
+def _same_ends(
+    first: np.ndarray, second: np.ndarray, corners: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Die Eckenpaare zweier Zeilen derselben Kante, je Ende eines.
+
+    ``corners`` ordnet jeder Ecke ihre verschweißte Nummer zu; eine Kante kann
+    in zwei Dreiecken gleich oder gegenläufig stehen.
+    """
+    start_one, end_one = _row_corners(first)
+    start_two, end_two = _row_corners(second)
+    aligned = corners[start_one] == corners[start_two]
+    partner_start = np.where(aligned, start_two, end_two)
+    partner_end = np.where(aligned, end_two, start_two)
+    return np.r_[start_one, end_one], np.r_[partner_start, partner_end]
+
+
+def _sheets(
+    faces: np.ndarray,
+    group: np.ndarray,
+    positions: np.ndarray,
+    spacing: float,
+    *,
+    whole_fans: bool,
+) -> tuple[np.ndarray, _EdgeRows | None]:
+    """Je Ecke die Ecke, zu der sie verschweißt wird — die Gruppen nach Flächenblatt getrennt.
+
+    ``group`` nennt je Ecke die kleinste Nummer ihrer Punktgruppe. Betrachtet
+    werden die Ecken der Dreiecke (drei je Dreieck), deren Gruppe mehr als eine
+    Ecke der Datei hat, und zwei davon gehören zu einem Blatt, wenn
+
+    * sie in der Datei dieselbe Ecke sind;
+    * ihre Dreiecke nach dem Verschweißen eine Kante mit genau zwei Flächen
+      teilen und sie an deren gleichem Ende stehen;
+    * ihre Dreiecke deckungsgleich und gleich umlaufend sind (eine Doppelung,
+      die ein späterer Schritt entfernt) — die Kopie zählt dann nicht mit;
+    * ihre Dreiecke an einer Kante mit mehr als zwei Flächen denselben Körper
+      begrenzen (:func:`_around_the_edge`).
+
+    Lässt sich eine solche Kante nicht ordnen, bleiben die Gruppen an ihren
+    Enden ganz, wie trimesh sie zusammenlegt. Ecken, die nur an zerfallenen
+    Dreiecken hängen, folgen der ersten lebenden Ecke ihrer Gruppe. Jedes Blatt
+    wird zu seiner kleinsten Ecke der Datei.
+
+    Mit ``whole_fans`` wird jede Gruppe so getrennt, auch wo sich zwei Fächer
+    nur an der Ecke berühren; ohne es nur die Gruppen an Kanten mit mehr als
+    zwei Flächen — beim Lesen einer Suppe, wo zwei Fächer an einem Ort
+    derselbe Punkt sind und die Suche über alle Ecken nichts entschiede.
+
+    Dazu kommen die nach Kante geordneten Zeilen der verschweißten Dreiecke,
+    wenn keines zerfallen ist und keine Kopie ausgelassen wurde — dann sind sie
+    die ganze Kantenzählung.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    n = len(group)
+    count = len(faces)
+    flat = faces.reshape(-1)
+    welded = group[faces]
+    corners = welded.reshape(-1)
+    used = np.zeros(n, dtype=bool)
+    used[flat] = True
+    size = np.bincount(group[np.flatnonzero(used)], minlength=n)
+    merged = size > 1
+    flat_faces = (
+        (welded[:, 0] == welded[:, 1])
+        | (welded[:, 1] == welded[:, 2])
+        | (welded[:, 2] == welded[:, 0])
+    )
+    live = ~flat_faces
+    if whole_fans:
+        # Gezählt werden nur die Kanten um die Gruppen: Um jede ihrer Ecken
+        # stehen alle Dreiecke, die sie berühren.
+        live = live & merged[welded].any(axis=1)
+    links: list[tuple[np.ndarray, np.ndarray]] = []
+
+    # 1 — Doppelungen an Kanten mit mehr als zwei Flächen zählen als ein Dreieck.
+    edges = _edge_rows(welded, live, n)
+    complete = not whole_fans and bool(live.all())
+    crowded = np.flatnonzero(edges.sizes > 2)
+    if len(crowded):
+        rows, _edge = _rows_of(edges, crowded)
+        suspects = np.unique(rows // 3)
+        triples = welded[suspects]
+        turn = np.argmin(triples, axis=1)[:, None]
+        canonical = np.take_along_axis(triples, (turn + np.arange(3)) % 3, axis=1)
+        _keys, first_of, which = np.unique(
+            canonical, axis=0, return_index=True, return_inverse=True
+        )
+        original = suspects[first_of[np.asarray(which).reshape(-1)]]
+        copies = suspects[original != suspects]
+        if len(copies):
+            originals = original[original != suspects]
+            for slot in range(3):
+                place = np.argmax(welded[originals] == welded[copies, slot][:, None], axis=1)
+                links.append((3 * copies + slot, 3 * originals + place))
+            live = live.copy()
+            live[copies] = False
+            complete = False
+            edges = _edge_rows(welded, live, n)
+            crowded = np.flatnonzero(edges.sizes > 2)
+
+    if whole_fans:
+        chosen = merged
+    else:
+        chosen = np.zeros(n, dtype=bool)
+        if len(crowded):
+            rows, _edge = _rows_of(edges, crowded)
+            start, end = _row_corners(rows)
+            chosen[corners[start]] = True
+            chosen[corners[end]] = True
+        chosen &= merged
+    selected = np.flatnonzero(chosen[corners])
+    if not len(selected):
+        return group, edges if complete else None
+    local = np.full(3 * count, -1, dtype=np.int64)
+    local[selected] = np.arange(len(selected), dtype=np.int64)
+
+    # 2 — dieselbe Ecke der Datei: je Ecke an ihre erste Dreiecksecke gebunden.
+    # Eine Dreieckssuppe braucht das nicht, dort hat jede Ecke ein Dreieck.
+    if len(flat) > int(np.count_nonzero(used)):
+        first_corner = np.full(n, 3 * count, dtype=np.int64)
+        np.minimum.at(first_corner, flat[selected], selected)
+        links.append((selected, first_corner[flat[selected]]))
+
+    # 3 — Kanten mit genau zwei Flächen.
+    pairs = edges.starts[edges.sizes == 2]
+    links.append(_same_ends(edges.order[pairs], edges.order[pairs + 1], corners))
+
+    # 4 — Kanten mit mehr Flächen: gepaart, was denselben Körper begrenzt.
+    whole = np.zeros(n, dtype=bool)
+    if len(crowded):
+        rows, edge = _rows_of(edges, crowded)
+        partner, unresolved = _around_the_edge(rows, edge, welded, positions, spacing)
+        paired = partner >= 0
+        links.append(_same_ends(rows[paired], rows[partner[paired]], corners))
+        stuck = rows[unresolved[edge]]
+        start, end = _row_corners(stuck)
+        whole[corners[start]] = True
+        whole[corners[end]] = True
+    if whole.any():
+        # Eine Gruppe, deren Kante sich nicht ordnen ließ, bleibt ganz.
+        kept = selected[whole[corners[selected]]]
+        first_of_group = np.full(n, 3 * count, dtype=np.int64)
+        np.minimum.at(first_of_group, corners[kept], kept)
+        links.append((kept, first_of_group[corners[kept]]))
+
+    one = np.concatenate([pair[0] for pair in links])
+    other = np.concatenate([pair[1] for pair in links])
+    real = other < 3 * count
+    one, other = one[real], other[real]
+    inside = (local[one] >= 0) & (local[other] >= 0)
+    graph = coo_matrix(
+        (
+            np.ones(int(np.count_nonzero(inside)), dtype=np.int8),
+            (local[one[inside]], local[other[inside]]),
+        ),
+        shape=(len(selected), len(selected)),
+    )
+    _parts, label = connected_components(graph, directed=False)
+    label = np.asarray(label, dtype=np.int64)
+
+    # Blätter, die nur an zerfallenen Dreiecken hängen, folgen ihrer Gruppe.
+    alive = np.repeat(~flat_faces, 3)[selected]
+    lives = np.zeros(int(label.max()) + 1, dtype=bool)
+    lives[label[alive]] = True
+    dead = np.flatnonzero(~lives[label])
+    if len(dead):
+        roots = corners[selected]
+        living = np.flatnonzero(lives[label])
+        first_living = np.full(n, len(selected), dtype=np.int64)
+        np.minimum.at(first_living, roots[living], living)
+        chosen = first_living[roots[dead]]
+        found = chosen < len(selected)
+        label[dead[found]] = label[chosen[found]]
+        rest = dead[~found]
+        label[rest] = int(label.max()) + 1 + roots[rest]
+    present = np.zeros(int(label.max()) + 1, dtype=bool)
+    present[label] = True
+    sheet = (np.cumsum(present) - 1)[label]
+    lowest = np.full(int(sheet.max()) + 1, n, dtype=np.int64)
+    np.minimum.at(lowest, sheet, flat[selected])
+    vertex_of = group.copy()
+    vertex_of[flat[selected]] = lowest[sheet]
+    return vertex_of, edges if complete else None
+
+
+def _around_the_edge(
+    rows: np.ndarray,
+    edge: np.ndarray,
+    welded: np.ndarray,
+    positions: np.ndarray,
+    spacing: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Um jede Kante mit mehr als zwei Flächen: welche zwei denselben Körper begrenzen.
+
+    ``rows`` sind die Kantenzeilen, ``edge`` je Zeile die Nummer ihrer Kante.
+    Zurück kommt je Zeile die Nummer (in ``rows``) der Zeile, mit der sie ein
+    Blatt bildet, oder ``-1``, und je Kante, ob sie sich nicht ordnen ließ.
+
+    Die Dreiecke werden um die Kante nach ihrem Winkel geordnet. Ein Dreieck,
+    in dem die Kante von der kleineren zur größeren Ecke läuft, hat das
+    Material auf der Seite kleinerer Winkel, das gegenläufige auf der anderen.
+    Zwei Nachbarn begrenzen einen Körper, wenn zwischen ihnen Material liegt —
+    das gegenläufige mit seinem Nachfolger. Richtig gewickelte Schalen wechseln
+    sich um die Kante ab; wo nicht, lässt sich die Kante nicht ordnen.
+
+    **Zwei Dreiecke, deren dritte Ecke innerhalb ``spacing`` in derselben
+    Ebene durch die Kante liegt, stehen am selben Winkel**, und dort liegt Luft
+    zwischen ihnen: zwei Körper, die sich an einer Fläche berühren. Der Winkel
+    ist ein Pseudowinkel aus Grundrechenarten (:func:`_pseudo_angle`) — die
+    Ordnung entscheidet über die Topologie und muss auf jeder Maschine
+    dieselbe sein (RM-187).
+    """
+    face = rows // 3
+    slot = rows % 3
+    start = welded[face, slot]
+    end = welded[face, (slot + 1) % 3]
+    third = welded[face, (slot + 2) % 3]
+    low = np.minimum(start, end)
+    high = np.maximum(start, end)
+    forward = start == low
+    axis = positions[high] - positions[low]
+    offset = positions[third] - positions[low]
+    length_squared = np.sum(axis * axis, axis=1)
+    # Eine Kante ohne Länge (zwei Ecken an einem Ort, getrennt nur durch ihre
+    # Texturkoordinaten) hat keine Richtung, um die sich etwas ordnen ließe.
+    pointless = length_squared <= spacing * spacing
+    length_squared = np.where(pointless, 1.0, length_squared)
+    along_axis = np.sum(offset * axis, axis=1) / length_squared
+    across = offset - along_axis[:, None] * axis
+    reach = np.sqrt(np.sum(across * across, axis=1))
+    # Eine Bezugsrichtung je Kante: quer zur Kante, aus der Achse, die ihr am
+    # wenigsten folgt — für jede Zeile derselben Kante dieselbe.
+    reference = np.zeros_like(axis)
+    reference[np.arange(len(axis)), np.argmin(np.abs(axis), axis=1)] = 1.0
+    first = np.cross(axis, reference)
+    first_length = np.sqrt(np.sum(first * first, axis=1))
+    first /= np.where(first_length > 0.0, first_length, 1.0)[:, None]
+    second = np.cross(axis, first) / np.sqrt(length_squared)[:, None]
+    angle = _pseudo_angle(np.sum(across * first, axis=1), np.sum(across * second, axis=1))
+
+    edges = int(edge.max()) + 1
+    unresolved = np.zeros(edges, dtype=bool)
+    unresolved[edge[(reach <= spacing) | pointless]] = True
+    lengths = np.bincount(edge, minlength=edges)
+    offsets = np.cumsum(lengths) - lengths
+    # Nach Winkel geordnet, dann so gedreht, dass die Folge hinter der größten
+    # Lücke beginnt: So trennt der Schnitt bei null keine zwei Dreiecke, die am
+    # selben Winkel stehen.
+    order = np.lexsort((angle, edge))
+    sorted_angle = angle[order]
+    index = np.arange(len(order), dtype=np.int64)
+    local = index - offsets[edge[order]]
+    last = offsets + lengths - 1
+    following = index + 1
+    following[last] = offsets
+    gap = sorted_angle[following] - sorted_angle
+    gap[last] += 4.0
+    widest = np.maximum.reduceat(gap, offsets)
+    candidate = np.where(gap == widest[edge[order]], index, len(order))
+    cut = np.minimum.reduceat(candidate, offsets)
+    begin = following[cut] - offsets
+    rank = (local - begin[edge[order]]) % lengths[edge[order]]
+    rotation = np.lexsort((rank, edge[order]))
+    turned = order[rotation]
+    # Was hinter dem Schnitt lag, zählt eine Runde weiter — sonst sähe der
+    # Schritt über null wie ein gleicher Winkel aus.
+    lifted = sorted_angle + 4.0 * (local < begin[edge[order]])
+    # Gruppen gleichen Winkels, darin die gleichläufigen zuerst: zwischen ihnen Luft.
+    turned_angle = lifted[rotation]
+    near = np.minimum(reach[turned][1:], reach[turned][:-1])
+    same_edge = edge[turned][1:] == edge[turned][:-1]
+    step = turned_angle[1:] - turned_angle[:-1]
+    together = same_edge & (step * np.maximum(near, spacing) <= spacing)
+    cluster = np.r_[0, np.cumsum(~together)]
+    final = turned[np.lexsort((~forward[turned], cluster))]
+    # Abwechselnd gleich- und gegenläufig, sonst ist die Kante nicht zu ordnen.
+    direction = forward[final]
+    final_edge = edge[final]
+    breaks = (final_edge[1:] == final_edge[:-1]) & (direction[1:] == direction[:-1])
+    unresolved[final_edge[1:][breaks]] = True
+    unresolved[lengths % 2 == 1] = True
+    position = np.empty(len(final), dtype=np.int64)
+    position[final] = np.arange(len(final), dtype=np.int64)
+    after = position + 1
+    wraps = after == offsets[edge] + lengths[edge]
+    after[wraps] = offsets[edge[wraps]]
+    partner = np.full(len(rows), -1, dtype=np.int64)
+    backward = ~forward & ~unresolved[edge]
+    partner[backward] = final[after[backward]]
+    return partner, unresolved
+
+
+def _pseudo_angle(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Ein Winkel in ``[0, 4)``, der mit dem echten wächst — ohne Winkelfunktion.
+
+    Je Viertel ``|y| / (|x| + |y|)``, richtig gespiegelt und versetzt. Er
+    ordnet wie ``atan2``, rechnet aber nur mit Grundrechenarten, und die geben
+    auf jeder Maschine dieselben Bits (RM-187).
+    """
+    width = np.abs(x) + np.abs(y)
+    share = np.divide(np.abs(y), width, out=np.zeros_like(width), where=width > 0.0)
+    upper = y >= 0.0
+    right = x >= 0.0
+    return np.asarray(
+        np.where(
+            upper, np.where(right, share, 2.0 - share), np.where(right, 4.0 - share, 2.0 + share)
+        )
+    )
 
 
 def remove_degenerate_faces(mesh: MeshData) -> tuple[MeshData, int]:
@@ -3137,17 +3743,12 @@ def repair(
         cancelled.raise_if_cancelled()
 
     if weld:
+        # Dieselbe Zusicherung wie beim Import, in derselben Funktion
+        # (:func:`weld`): Nahe Punkte können zu zwei getrennten Schalen
+        # gehören, und ein Verschweißen, das das Netz schlechter macht, legt
+        # nichts zusammen.
         candidate, removed = merge_vertices(result.mesh)
-        # Dieselbe Zusicherung wie beim Import: nahe Punkte können zu zwei
-        # getrennten Schalen gehören. Das Zusammenlegen darf deren Kanten
-        # nicht zu nichtmannigfaltigen Verbindungen machen.
-        if removed and _tears_it_further(result.mesh, candidate):
-            # **Was stehen bleibt, ist keine Zeile im Bericht** (Bedienweg A4,
-            # 25.09.2026): Geschehen ist nichts, und der Kunde kann nichts tun —
-            # am Korpus ``F:\3D Dateien`` stand der Satz an 41 beziehungsweise 23
-            # von 485 Körpern. Das Protokoll behält ihn für den Support.
-            _log.info("weld skipped: merging %d points would tear the mesh", removed)
-        elif removed:
+        if removed:
             result.mesh = candidate
             result.changed = True
             result.findings.append(

@@ -71,19 +71,25 @@ Nullwirkung ersetzt sie nicht.
   folgt dem Schalter *Außenseiten angleichen* und dem Abbruch des
   Ladeschritts (`normalise(cancelled=)`); ein Befundort wandert beim
   Aufsetzen mit, auch bei einer Baugruppe (`moved_findings`).
-- **Dieselbe Schale zweimal** (`loader._without_doubled_shell`): Reißt das
-  Verschweißen ein geschlossenes Netz auf, weil eine Kopie derselben Schale
-  mit eigenen Ecken daneben liegt, bleibt von deckungsgleichen Dreiecken das
-  erste, wenn das Netz danach dicht ist (`ingest.doubled_shell_removed`,
-  unter `remove_degenerate`). Sonst wird das Verschweißen zurückgenommen wie
-  bisher (`ingest.weld_skipped`) — zwei Körper, die sich nur berühren, bleiben
-  zwei.
-- **Dichtheit wird gefragt, wenn die Antwort gebraucht wird**, und am Stand,
-  der gilt: erst am verschweißten Netz, am unverschweißten nur, wenn das
-  Verschweißen es aufgerissen hat; das zurückgelegte Netz behält seine
-  Antwort. Gefragt wird über `repair.is_closed`: Die Kantenzählung
-  (`mesh.edge_table`) beantwortet es und bleibt für Reparatur und Teilezahl
-  liegen. `tests/test_ingest_figures.py` zählt die Fragen.
+- **Verschweißt wird wie in der Reparatur** (`geom.repair.weld`, RM-239):
+  eine Suppe auf `EPS_GEOM` gelesen, danach nur an offenen oder verzweigten
+  Rändern, jede Punktgruppe nach Flächenblatt getrennt, und nur, was das Netz
+  nicht schlechter macht — ein heiler Eingang wird nicht angefasst. Die Karte in `app/core/geom/CLAUDE.md` nennt die Regeln.
+- **Dieselbe Schale zweimal** (`loader._without_doubled_shell`): Eine Kopie
+  derselben Schale mit eigenen Ecken hat keinen offenen Rand, und das
+  Verschweißen lässt sie stehen. An einem dichten Netz aus mehr als einem Teil
+  — gezählt nach Eckennummern (`_index_parts`), denn `face_components`
+  verbindet auch, was nur am selben Ort liegt — verschweißt der Import deshalb
+  eine Kopie über alles; bleibt von deckungsgleichen Dreiecken das erste und
+  ist das Netz danach dicht, war es eine Kopie (`ingest.doubled_shell_removed`,
+  unter `remove_degenerate`). Sonst bleibt der Eingang, wie er ist — zwei
+  Körper, die sich nur berühren, bleiben zwei.
+- **Dichtheit wird gefragt, wenn die Antwort gebraucht wird**, und einmal: am
+  verschweißten Netz, sonst am Eingang, und die Antwort gilt für Schritt 3.
+  Gefragt wird über `repair.is_closed`: Die Kantenzählung (`mesh.edge_table`,
+  nach dem Verschweißen schon hinterlegt) beantwortet es und bleibt für
+  Reparatur und Teilezahl liegen. `tests/test_ingest_figures.py` zählt die
+  Fragen.
 - **Dichtheit und Umlaufsinn reisen als Paar.** trimesh berechnet beide über
   dieselbe Topologieprüfung. `normalise` bewahrt vor Aufsetzen oder Zentrieren
   beide Antworten und legt sie danach gemeinsam zurück; ein halber Cache
