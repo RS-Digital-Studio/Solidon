@@ -1,6 +1,6 @@
 ---
 name: entwickler-sieht-den-cache-fehler-nie
-description: "Der Ergebniscache trägt einen Code-Hash im Pfad — jede Codeänderung verwirft ihn. Wer täglich baut, sieht Cache-Fehler nie; der Kunde fährt denselben Stand wochenlang."
+description: "Der Ergebniscache trägt einen Code-Hash im Pfad — jede Codeänderung verwirft ihn. Wer täglich baut, sieht Cache-Fehler nie; der Kunde fährt denselben Stand wochenlang. Zwei Fälle: Sprache, Dateiname — was die Op liest, gehört in den Schlüssel."
 metadata:
   type: feedback
 ---
@@ -49,6 +49,22 @@ Läufen nicht verworfen werden** — dieselbe Zahl an Einträgen vorher und
 nachher ist der Beleg, dass der Fix heilt und nicht bloß leert. Hier: 10 → 10,
 und der Name stimmte trotzdem, weil er jetzt ein `TranslatableText` ist statt
 eines `str`.
+
+**Zweiter Fall derselben Klasse, 26.09.2026 (Durchsicht 0.5.1):** Der
+Schlüssel einer Quelle trug nur ihre Inhaltsprüfsumme, `load` liest aber
+auch den **Dateinamen** (Körpername, Endung wählt den Leser). Eine
+umbenannte Kopie einer früher geöffneten Datei kam mit dem alten Namen aus
+dem Plattencache. Sichtbar wurde es nicht am Produkt, sondern als
+reihenfolgeabhängiger Testfehler: Die Suite teilt ein Cache-Verzeichnis
+über alle xdist-Arbeiter, und erst `--dist worksteal` stellte einen Test,
+der dieselben Bytes als `deckel.stl` las, vor
+`test_info_describes_the_evaluated_scene`.
+
+Die allgemeine Frage an jeden Schlüssel: **Was liest die Operation außer
+ihren Parametern?** Sprache, Dateiname, Endung, Profil — alles, was im
+Ergebnis landet, gehört hinein. Und ein Test, der plötzlich den Wert eines
+**anderen** Tests sieht, ist zuerst ein Verdacht auf den Plattencache, nicht
+auf die Testreihenfolge.
 
 Verwandt:
 [[pruefstand-geht-den-weg-der-oberflaeche]] — der Kundenweg ist auch ein
