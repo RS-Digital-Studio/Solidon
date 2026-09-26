@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-26 | [Verschweißen je Blatt, die fehlende Bohrungswand und das Raster mit Zahl (26.09.2026)](#verschweißen-je-blatt-die-fehlende-bohrungswand-und-das-raster-mit-zahl-26092026) |
 | 2026-09-26 | [Die Kante innerhalb der Hülle und die Nachkontrolle der Kopien (26.09.2026)](#die-kante-innerhalb-der-hülle-und-die-nachkontrolle-der-kopien-26092026) |
 | 2026-09-25 | [Bohrungen mit Erweiterung an beiden Enden (25.09.2026)](#bohrungen-mit-erweiterung-an-beiden-enden-25092026) |
 | 2026-09-25 | [Das lokale Modell bekommt ein Angebot statt des ganzen Registers (25.09.2026)](#das-lokale-modell-bekommt-ein-angebot-statt-des-ganzen-registers-25092026) |
@@ -31900,3 +31901,154 @@ Dazu aus dem Bericht, je mit Test:
   Stärke ohne Kantenbefund. Nachweis: `test_feature_moves_keep_shape.py`
   (Kopie und Versetzen über der Seite, Bohren daneben und in die Nachbarin,
   die dünne Platte), dazu das Tor mit allen bisherigen Kantentests.
+
+## Verschweißen je Blatt, die fehlende Bohrungswand und das Raster mit Zahl (26.09.2026)
+
+<a id="rm-239"></a>
+
+- [x] **RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe.**
+  Aus der Durchsicht der Dreieckserkennung und Reparatur (24.09.2026, Befund
+  B8 der Erkennung, B16 der Reparatur). Der Ring aus `Siebhalter+X1C.3mf`
+  (7 996 Dreiecke, Schweißtoleranz 0,092 µm) trägt 12 Eckpaare im Abstand
+  0,015 µm auf zwei Blättern derselben Fläche. Unbeschädigt bleibt er
+  unverschweißt (`repair.weld_skipped`, sonst 18 verzweigte Kanten); mit einem
+  Riss daneben (74 offene Kanten) überwiegt die Heilung in der Summe
+  (`repair._tears_it_further`), die Paare werden zusammengelegt, 24 Dreiecke
+  fallen, und aus 16 Flächen werden 28. Der Import fragt dieselbe Sache anders
+  — er nimmt nur ein Verschweißen zurück, das einen dichten Eingang aufreißt
+  (`ingest.loader.normalise`, Schritt 2) —, und die Karte behauptete bis heute,
+  beides sei dasselbe. **Warum es nicht in dieser Durchsicht behoben ist:** Eine
+  Gruppe, deren Zusammenlegen ein Dreieck plattdrückt oder eine Kante verzweigt,
+  einfach getrennt zu lassen, reißt jede Dreieckssuppe auf — dort ist jede
+  Gruppe ein Zusammenlegen aller Kopien einer Ecke, und eine gehaltene Gruppe
+  hinterließe um diese Ecke einen offenen Kranz. Die Gruppe muss nach dem
+  Flächenblatt getrennt werden, zu dem ihre Kopien gehören, und das ist eine
+  Frage an die Nachbarschaft, die erst das Verschweißen herstellt. Abnahme:
+  Würfel mit zwei 10⁻⁸ mm getrennten Ecken auf zwei Blättern plus Riss →
+  Riss geschlossen, Ecken getrennt, Dreieckszahl gleich; jede STL des Korpus
+  kommt so dicht heraus wie heute; Import und Reparatur fragen dieselbe
+  Funktion.
+
+  **Abgeschlossen am 26.09.2026 — Import und Reparatur verschweißen mit
+  derselben Funktion, und sie verbindet Ränder, keine Blätter.**
+  `repair.weld(body, digits)` ist der eine Weg; `ingest.loader.normalise`
+  ruft ihn in Schritt 2, `repair.merge_vertices` für die Reparatur. Zwei
+  Stufen: Unter `EPS_GEOM` (10⁻⁶ mm) ist eine Stelle eine Stelle — so wird
+  eine Dreieckssuppe gelesen, grob gruppiert und fein nachgeteilt. Darüber
+  werden nur Ecken beschädigter Ränder (offene oder verzweigte lebende Kanten)
+  und Kanten bis `EPS_GEOM` zusammengelegt. Jede Gruppe wird nach Blättern
+  getrennt (`_sheets`): verbunden ist, was dieselbe Dateiecke, eine
+  zweiseitige Kante oder eine gleich orientierte Doppelfläche teilt, und an
+  einer Kante mit mehr als zwei Flächen paart `_around_the_edge` die Flächen
+  radial um die Kante; was sich nicht eindeutig paaren lässt, bleibt als
+  Gruppe ganz. Ein heiles Netz — jede Kante mit genau zwei Flächen — bleibt
+  unberührt, und wächst der lebende Schaden (`_damage`), unterbleibt das
+  Verschweißen. Die Kantentabelle reist im Cache des Körpers weiter.
+
+  Nachweis: Der Würfel mit zwei 10⁻⁸ mm getrennten Ecken auf zwei Blättern und
+  einem Riss kommt geschlossen zurück, die Ecken getrennt, die Dreieckszahl
+  gleich (`test_welding_keeps_two_corners_on_two_sheets_apart`); zwei sich
+  berührende Körper bleiben zwei, indiziert wie als Suppe; saubere Suppen
+  (`cube_clean`, `plate_holes`, `plate_countersunk`) geben, was trimesh gibt;
+  eine Texturnaht bleibt offen wie bei trimesh; Import und Reparatur liefern an
+  denselben Dateien dasselbe (`test_repair_and_import_weld_the_same_way`). Der
+  Siebhalter-Ring mit Riss behält seine 16 Flächen. Über 463 Körper aus
+  `tests/data/` und `F:\3D Dateien` verschweißt: drei besser
+  (Laptop-Ständer 626 → 58 verzweigte Kanten, Eiffelturm 29 → 0,
+  Naht 4 → 0), keiner schlechter. Einlesen aller 521 Körper aus
+  `F:\3D Dateien` gegen `a989a099d`: geschlossen 519 → 521 (Gähnende Katze,
+  Laptop-Ständer), kein Körper von dicht nach offen; die Naht kommt als drei
+  geschlossene Körper ohne Reparatur statt zwei reparierter, der
+  Flaschenhalter ohne Verschweißen und Verzweigung. Zeit, abwechselnd
+  gemessen: gleich bis auf das Marmorbrett (1,95 Mio. Dreiecke als Suppe,
+  9,3–11,7 → 11,5–12,9 s, die Feinstufe der Suppe) und den Laptop-Ständer
+  (1,2 → 3,8 s — er wird jetzt repariert statt offen gelassen). Sonden:
+  `.claude/.state/rm-232-erster-klick-2026-09-25/rm239/`.
+
+<a id="rm-240"></a>
+
+- [x] **RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück.**
+  Aus derselben Durchsicht (Befund B4 der Erkennung). Fehlt ein Teil einer
+  Bohrungswand, ist der Rand ein einziger Ring aus zwei Bögen und zwei
+  Mantellinien. Seit dem 24.09.2026 füllt die Reparatur Ringe bis 32 Ecken
+  über alle Triangulierungen (`repair._smoothest_fill`): Ein Viertel der Wand
+  an `plate_holes.stl` (26 Ecken) kommt als Wand zurück, die Platte behält
+  vier Bohrungen und ihr Volumen. Die halbe Wand (50 Ecken) schließt weiter
+  flach — dort ist die flache Schließung aus zwei Halbkreisen und einem
+  Rechteck kleiner als der halbe Mantel (62,8 gegen 65,3 mm²), und der Knick
+  gegen die Nachbarn ist in beiden Fällen ein rechter Winkel; die Platte hat
+  danach drei Bohrungen, eine gerundete Seite und 25,9 mm³ mehr. Welche
+  Schließung gemeint war, sagt nur die Form der Restwand. Weg: Wo die
+  Erkennung am beschädigten Netz die Restwand als Zylinder (oder Kegel) belegt,
+  setzt die Füllung sie mit denselben Teilungen fort, statt nach Knick und
+  Fläche zu wählen. Abnahme: halbe und Dreiviertelwand an `plate_holes.stl`
+  und der Senkungskegel an `plate_countersunk.stl` kommen mit vier Bohrungen
+  und dem Volumen der unbeschädigten Platte zurück; eine gerade Wand mit
+  fehlendem Stück bleibt eben.
+
+  **Abgeschlossen am 26.09.2026 — ein Ring, der eine fehlende Wand zwischen
+  zwei Mündungen umläuft, bekommt die Wand.** `_wall_between_rims` fragt an
+  den häufigsten Richtungen der Nachbarnormalen (`_common_directions`), ob die
+  Ecken des Rings in genau zwei Höhen liegen, jede ein zusammenhängendes Stück
+  und keine Nachbarfläche zum anderen hin; dann zieht `_zipped` den Mantel
+  zwischen den Stücken mit ihren eigenen Teilungen. Ein Ring aus vier Ecken
+  nimmt die glatteste Füllung, wenn sie von einer Mündung zur anderen reicht;
+  mehr Ecken nicht (am Viertel eines Senkungskegels zog sie schiefe Sprossen,
+  0,105 mm³ daneben). Die Kreuzungsprüfung der Mäntel liest die Grenzen der
+  Dreiecke einmal je Füllung statt je Mantel — am Laptop-Ständer waren das
+  6,3 von 8,4 s des Einlesens. Nachweis: halbe und Dreiviertelwand an
+  `plate_holes.stl` kommen geschlossen, ohne Selbstdurchdringung, mit vier
+  durchgehenden Bohrungen und dem Volumen der unbeschädigten Platte auf
+  10⁻⁹ zurück; Viertel, Hälfte und drei Viertel des Senkungskegels an
+  `plate_countersunk.stl` als Kegel über der Bohrung; eine gerade Wand mit
+  fehlendem Streifen bleibt eben. Sonde:
+  `.claude/.state/rm-240-bohrungswand-2026-09-26/sonde.py`.
+
+<a id="rm-246"></a>
+
+- [x] **RM-246 — Am offenen Netz fährt jede Merkmalshandlung auf das Raster und bläht das Modell auf.**
+  Gemeldet von der Sitzung „Langloch-Ziehen" (25.09.2026) an
+  `F:\3D Dateien\parametric-laptop-riser.stl` (neu seit diesem Tag). Beim
+  Einlesen bleibt `repair.still_open` (Warnung); danach 172 336 Dreiecke,
+  `is_watertight` falsch, 21 Teile, manifold3d `Error.NotManifold`. Jede
+  Merkmalshandlung fällt deshalb auf `boolean.voxel`: *Merkmal versetzen* einer
+  Bohrung um 1,5 mm 348 273,61 → 457 343,01 mm³ (+31 %), *Merkmal verdoppeln*
+  457 561 mm³, *Merkmal drehen* um 15° ebenso und dazu rund 800 mm³ Abtrag vor
+  den Mündungen. Der Bericht sagt nur „Auf einem Raster gelöst — die Maße sind
+  gerundet." Sonde und Übergabenotiz der meldenden Sitzung:
+  `.claude/.state/rm-246-laptop-staender-2026-09-25/probe_real.py` (Aufruf
+  `PROBE_TREE=<baum> python probe_real.py "<datei>" 15`). Zwei Fragen:
+  **Warum bleibt das Netz nach der Reparatur offen**, und **darf die
+  Rasterstufe ein Ergebnis mit einem Drittel mehr Volumen still als
+  „gerundet" durchreichen** — oder sagt sie ab beziehungsweise nennt die
+  Abweichung mit Weg (Regel 17, §17.2 „nie stillschweigend"). Zuständig:
+  Reparatur und Rückfallkette (`geom/repair.py`, `geom/boolean.py`), nicht die
+  Merkmalshandlung. Abnahme: Der Laptop-Ständer kommt geschlossen aus dem
+  Import oder sagt am Befund, was offen bleibt und warum; eine Merkmalshandlung
+  an ihm ändert das Volumen nur um das, was das Werkzeug bewegt, oder die
+  Rasterstufe sagt mit Zahl und Weg, dass sie es nicht kann.
+
+  **Abgeschlossen am 26.09.2026 — der Ständer kommt geschlossen, und das
+  Raster sagt mit Zahl und Weg, wie weit es danebenliegt.** Offen blieb er,
+  weil das Verschweißen Blätter an überfüllten Kanten verband und die
+  Reparatur die Verzweigungen danach nicht mehr auflösen konnte; mit RM-239
+  kommt er geschlossen aus dem Import (21 Teile, `repair.holes_filled`,
+  `repair.part_inside`, kein `repair.still_open`). Die Merkmalshandlungen
+  rechnen dort wieder genau: *Merkmal versetzen* von `hole_1` um 1,5 mm
+  348 163,18 → 348 036,35 mm³ statt +31 % auf dem Raster, von `hole_2`
+  +1,81 mm³, kein `boolean.voxel`. Wo das Raster doch einspringt, prüft
+  `boolean._voxel_deviation` das Volumen gegen das, was die Operation bewirken
+  kann (Differenz: höchstens die Werkzeuge weniger, nie mehr; Vereinigung:
+  zwischen dem größten und der Summe; Schnitt: zwischen null und dem
+  kleinsten). Liegt es mehr als 0,5 % des größten Eingangs daneben, sagt der
+  Befund es mit `deviation_mm3` und `share_percent` und nennt das
+  geschlossene Netz als genauen Weg; der Knopf *Erst reparieren, dann neu
+  rechnen* (`REPAIR_BEFORE_AND_RETRY`) setzt die Reparatur vor den Schritt
+  (`History.repair_and_retry`) — die Ausgabe zu reparieren hülfe nicht, sie
+  ist dicht. Angeboten wird er nur, wo der Schritt vorhandene Netze liest und
+  derselbe Zug sie nicht schon repariert hat. Tests:
+  `test_the_voxel_stage_says_how_far_its_volume_is_off`,
+  `test_the_voxel_stage_stays_short_when_its_volume_is_plausible`,
+  `test_the_grid_finding_repairs_before_its_step_and_only_once`,
+  `test_repairing_before_a_step_retries_that_step`. Was die Sonde am Ständer
+  sonst zeigt, gehört den Merkmalshandlungen und steht als RM-253 im Register.

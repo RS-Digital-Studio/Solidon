@@ -67,10 +67,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Lüfterkurve gebaut; offen PLA-Vorgabe je Drucker, Hilfs- und Kammerlüfter, unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
 | [RM-229 — Anordnen legt ein zu großes Teil über die Kante, und geteilte Stücke heißen nach einem Buchstabenpfad](#rm-229) | Geometrie, Erkennung und Druckvorbereitung | 108,5 bei freigegebenen 108 statt einer Mitte mit kleinerem Rand; „B A · Stifte" für ein Stück mit Stiften und Löchern — Rand zuerst verkleinern, Nummerierung entscheiden |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
-| [RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe](#rm-239) | Geometrie, Erkennung und Druckvorbereitung | Siebhalter-Ring mit Riss: die Heilung überwiegt, 12 Eckpaare zu 0,015 µm werden zusammengelegt, 24 Dreiecke fallen — Gruppen nach Flächenblatt trennen, ohne Dreieckssuppen aufzureißen; Import- und Reparaturregel zusammenlegen |
-| [RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück](#rm-240) | Geometrie, Erkennung und Druckvorbereitung | Lochplatte: Viertelwand kommt zurück, die halbe Wand schließt flach (4 → 3 Bohrungen, +25,9 mm³) — die Restwand als Zylinder fortsetzen, wo die Erkennung sie belegt |
 | [RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst](#rm-243) | Geometrie, Erkennung und Druckvorbereitung | Screen-Cover: 23 bis 25 Verrundungen mit wandernden Radien an den Buchstaben — Stücke eines Flecks mit stetig wanderndem Radius als Umriss erkennen, die Flaschentaschen des Flaschenhalters als Gegenfall |
-| [RM-246 — Am offenen Netz fährt jede Merkmalshandlung auf das Raster und bläht das Modell auf](#rm-246) | Geometrie, Erkennung und Druckvorbereitung | Laptop-Ständer: nach dem Import `repair.still_open`, 21 Teile, jede Merkmalshandlung auf `voxel` mit +31 % Volumen und nur „gerundet“ im Bericht — warum bleibt es offen, und darf die Rasterstufe so still durchreichen |
+| [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Nach RM-246 geschlossen und genau gerechnet; offen: `hole_11`+`cone_51` um 15° gekippt trägt 1 444 mm³ vor den Mündungen ab, jedes Verdoppeln daneben bleibt `boolean.without_effect`, Versetzen um 1,5 mm meldet `no_longer_through` |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht](#rm-248) | Geometrie, Erkennung und Druckvorbereitung | Fächer vom Randmittelpunkt lässt beim Versetzen 3,6 bis 5,4 mm³ Mulde — den Deckel als Fortsetzung der umgebenden Fläche bauen, an beiden Kernen |
 | [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | `for_part` setzt ihn ohne Klick bei kleiner Standfläche oder schlankem Teil; Robert 26.09.2026: ohne „Vorschläge übernehmen" gehen die Standardeinstellungen hinaus — bleibt die Automatik, oder wird sie ein Vorschlag je Teil? |
@@ -1798,52 +1796,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   wählbare Anfang gehört zu P5.1. Abnahme: je Grenze entweder gebaut oder mit
   Satz und Weg in der Oberfläche und im Handbuch benannt.
 
-<a id="rm-239"></a>
-
-- [ ] **RM-239 — Verschweißen entscheidet für das ganze Netz, nicht je Punktgruppe.**
-  Aus der Durchsicht der Dreieckserkennung und Reparatur (24.09.2026, Befund
-  B8 der Erkennung, B16 der Reparatur). Der Ring aus `Siebhalter+X1C.3mf`
-  (7 996 Dreiecke, Schweißtoleranz 0,092 µm) trägt 12 Eckpaare im Abstand
-  0,015 µm auf zwei Blättern derselben Fläche. Unbeschädigt bleibt er
-  unverschweißt (`repair.weld_skipped`, sonst 18 verzweigte Kanten); mit einem
-  Riss daneben (74 offene Kanten) überwiegt die Heilung in der Summe
-  (`repair._tears_it_further`), die Paare werden zusammengelegt, 24 Dreiecke
-  fallen, und aus 16 Flächen werden 28. Der Import fragt dieselbe Sache anders
-  — er nimmt nur ein Verschweißen zurück, das einen dichten Eingang aufreißt
-  (`ingest.loader.normalise`, Schritt 2) —, und die Karte behauptete bis heute,
-  beides sei dasselbe. **Warum es nicht in dieser Durchsicht behoben ist:** Eine
-  Gruppe, deren Zusammenlegen ein Dreieck plattdrückt oder eine Kante verzweigt,
-  einfach getrennt zu lassen, reißt jede Dreieckssuppe auf — dort ist jede
-  Gruppe ein Zusammenlegen aller Kopien einer Ecke, und eine gehaltene Gruppe
-  hinterließe um diese Ecke einen offenen Kranz. Die Gruppe muss nach dem
-  Flächenblatt getrennt werden, zu dem ihre Kopien gehören, und das ist eine
-  Frage an die Nachbarschaft, die erst das Verschweißen herstellt. Abnahme:
-  Würfel mit zwei 10⁻⁸ mm getrennten Ecken auf zwei Blättern plus Riss →
-  Riss geschlossen, Ecken getrennt, Dreieckszahl gleich; jede STL des Korpus
-  kommt so dicht heraus wie heute; Import und Reparatur fragen dieselbe
-  Funktion.
-
-<a id="rm-240"></a>
-
-- [ ] **RM-240 — Eine halbe Bohrungswand kommt als flacher Deckel zurück.**
-  Aus derselben Durchsicht (Befund B4 der Erkennung). Fehlt ein Teil einer
-  Bohrungswand, ist der Rand ein einziger Ring aus zwei Bögen und zwei
-  Mantellinien. Seit dem 24.09.2026 füllt die Reparatur Ringe bis 32 Ecken
-  über alle Triangulierungen (`repair._smoothest_fill`): Ein Viertel der Wand
-  an `plate_holes.stl` (26 Ecken) kommt als Wand zurück, die Platte behält
-  vier Bohrungen und ihr Volumen. Die halbe Wand (50 Ecken) schließt weiter
-  flach — dort ist die flache Schließung aus zwei Halbkreisen und einem
-  Rechteck kleiner als der halbe Mantel (62,8 gegen 65,3 mm²), und der Knick
-  gegen die Nachbarn ist in beiden Fällen ein rechter Winkel; die Platte hat
-  danach drei Bohrungen, eine gerundete Seite und 25,9 mm³ mehr. Welche
-  Schließung gemeint war, sagt nur die Form der Restwand. Weg: Wo die
-  Erkennung am beschädigten Netz die Restwand als Zylinder (oder Kegel) belegt,
-  setzt die Füllung sie mit denselben Teilungen fort, statt nach Knick und
-  Fläche zu wählen. Abnahme: halbe und Dreiviertelwand an `plate_holes.stl`
-  und der Senkungskegel an `plate_countersunk.stl` kommen mit vier Bohrungen
-  und dem Volumen der unbeschädigten Platte zurück; eine gerade Wand mit
-  fehlendem Stück bleibt eben.
-
 <a id="rm-243"></a>
 
 - [ ] **RM-243 — Splinestücke von Schriftzügen und Streben werden als Verrundungen eingepasst.**
@@ -1865,29 +1817,27 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   ohne Verrundungen an den Buchstaben, Flaschenhalter, Besenhalter und die
   übrigen Korpuskörper Merkmal für Merkmal gleich.
 
-<a id="rm-246"></a>
+<a id="rm-253"></a>
 
-- [ ] **RM-246 — Am offenen Netz fährt jede Merkmalshandlung auf das Raster und bläht das Modell auf.**
-  Gemeldet von der Sitzung „Langloch-Ziehen" (25.09.2026) an
-  `F:\3D Dateien\parametric-laptop-riser.stl` (neu seit diesem Tag). Beim
-  Einlesen bleibt `repair.still_open` (Warnung); danach 172 336 Dreiecke,
-  `is_watertight` falsch, 21 Teile, manifold3d `Error.NotManifold`. Jede
-  Merkmalshandlung fällt deshalb auf `boolean.voxel`: *Merkmal versetzen* einer
-  Bohrung um 1,5 mm 348 273,61 → 457 343,01 mm³ (+31 %), *Merkmal verdoppeln*
-  457 561 mm³, *Merkmal drehen* um 15° ebenso und dazu rund 800 mm³ Abtrag vor
-  den Mündungen. Der Bericht sagt nur „Auf einem Raster gelöst — die Maße sind
-  gerundet." Sonde und Übergabenotiz der meldenden Sitzung:
-  `.claude/.state/rm-246-laptop-staender-2026-09-25/probe_real.py` (Aufruf
-  `PROBE_TREE=<baum> python probe_real.py "<datei>" 15`). Zwei Fragen:
-  **Warum bleibt das Netz nach der Reparatur offen**, und **darf die
-  Rasterstufe ein Ergebnis mit einem Drittel mehr Volumen still als
-  „gerundet" durchreichen** — oder sagt sie ab beziehungsweise nennt die
-  Abweichung mit Weg (Regel 17, §17.2 „nie stillschweigend"). Zuständig:
-  Reparatur und Rückfallkette (`geom/repair.py`, `geom/boolean.py`), nicht die
-  Merkmalshandlung. Abnahme: Der Laptop-Ständer kommt geschlossen aus dem
-  Import oder sagt am Befund, was offen bleibt und warum; eine Merkmalshandlung
-  an ihm ändert das Volumen nur um das, was das Werkzeug bewegt, oder die
-  Rasterstufe sagt mit Zahl und Weg, dass sie es nicht kann.
+- [ ] **RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab.**
+  Gefunden beim Abschluss von RM-246 (26.09.2026) an
+  `F:\3D Dateien\parametric-laptop-riser.stl`, das seitdem geschlossen aus
+  dem Import kommt (21 Teile, `repair.part_inside`) und genau rechnet. Die
+  Sonde der meldenden Sitzung (`.claude/.state/rm-246-laptop-staender-2026-09-25/probe_real.py`,
+  `PROBE_TREE=<baum> python probe_real.py "<datei>" 15`) zeigt an 18 Ketten
+  mit Senkung und sechs einzelnen Durchgängen drei Dinge, die nicht zum
+  Werkzeug passen: *Merkmal drehen* von `hole_11`+`cone_51` um 15° um x trägt
+  1 444,47 mm³ vor den alten Mündungen ab (`hole_1`+`cone_5`: 19,59 mm³, die
+  übrigen null); *Merkmal verdoppeln* 6,3 bis 11,1 mm daneben lässt an jeder
+  geprüften Bohrung das Volumen stehen (`boolean.without_effect`, an
+  `hole_11` dazu `duplicate_feature.no_longer_through`); *Merkmal versetzen*
+  um 1,5 mm meldet an `hole_1`, `hole_3` und `hole_11`
+  `move_feature.no_longer_through`. Zu klären, ob das an den 21
+  ineinandersteckenden Teilen liegt (eine Bohrung durch mehrere Teile, eine
+  Kopie im Hohlraum eines anderen) oder an den Handlungen. Abnahme: Kippen
+  trägt vor den Mündungen nur ab, was das gekippte Werkzeug überstreicht;
+  eine Kopie im Material trägt ab oder sagt, warum nicht; „nicht mehr
+  durchgehend" nur, wo die versetzte Bohrung wirklich endet.
 
 <a id="rm-247"></a>
 
