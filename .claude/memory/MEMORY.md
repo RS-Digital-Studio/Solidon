@@ -29,7 +29,8 @@
 ## Produkt und Entscheidungen
 
 - [Alexander Schneider](alexander-schneider-kunde-und-mac-tester.md) · [Ralph W. Dietrich](ralph-dietrich-mac-kunde-3d-maus.md) — Mac-Berichte stehen aus.
-- [Verkaufsphase und Demo-Zahlen](verkaufsphase-preise-und-demo-zahlen.md) — 69/199/249 €.
+- [Verkaufsphase, Preise, Spenden](verkaufsphase-preise-und-demo-zahlen.md) — privat 69→99 €, gewerblich 199→249 € ab Februar; GoFundMe-Stand; gezählte Zahlen und Prognose 25.09.
+- [Zähldaten roh per FTPS](zaehldaten-roh-per-ftps-lesen.md) — solidon-stats/*.jsonl lesen statt Statistikseite; Felder, Untergrenzen.
 - [Vorstufe vor dem Slicer](solidon-ist-die-vorstufe-vor-dem-slicer.md) · [Technische Produktreife](technische-produktreife-konzept.md) · [Firmennutzung](marktwert-zielgruppe-und-firmenvalidierung.md)
 - [Viewport: zwei Renderer](viewport-zwei-renderer-messen.md) — pygfx; VTK ausgebaut.
 - [Modellkette vor Freigabe](modellkette-vor-erzeugerfreigabe.md) · [KI-Hinweis sperrt](ki-hinweis-sperrt-den-ersten-modellaufruf.md) · [Kein Rechteübergang](neu-speichern-aendert-keine-urheberschaft.md)
@@ -44,6 +45,7 @@
 - [Rechnung warnt](rechnung-warnt-sie-erlaubt-nicht.md) · [Prüfjob nur beim Tag](pruefjob-nur-beim-tag-hat-nie-gemessen.md)
 - [mypy prüft die Plattform](mypy-prueft-die-laufende-plattform.md) · [Zusage über die Umgebung](zusage-ueber-die-umgebung.md) · [Windows-Bordmittel](pruefstand-nutzt-windows-bordmittel.md)
 - [Datei zuerst, Register danach](datei-zuerst-register-danach.md) · [Erzeugte Datei](erzeugte-datei-fuehrt-ins-fremde-werkzeug.md)
+- [Statistikseite lokal vorschauen](statistikseite-lokal-vorschauen.md) — php -S, eigenes Token, Chrome headless; Mindestbreite 500.
 
 ## Qt und Oberfläche
 
@@ -90,5 +92,5 @@
 - [Checkout-Reflex löscht eigene Arbeit](checkout-reflex-loescht-eigene-arbeit.md) · [Git-Identität](git-identitaet-mitgeben.md) · [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md)
 - [Patch auf modifizierte Datei](datei-die-vor-dem-patch-modifiziert-war-geht-nur-als-blob.md) · [Katalogschreiber überschreibt still](katalogschreiber-ueberschreibt-still.md) · [Geteilter Index veraltet](geteilter-index-nach-fremdem-commit-veraltet.md) · [Fremder Commit nimmt Hunks mit](fremder-commit-nimmt-unfertige-hunks-mit.md)
 - [Nullkontext-Hunk verschmilzt fremde Zeilen](nullkontext-hunk-verschmilzt-fremde-zeilen.md) — Hunk-Auswahl am Anker schneiden, Stufe gegen den Hauptbaum diffen.
-- [Schreiben vor dem Lesen leert die Datei](oeffnen-zum-schreiben-vor-dem-lesen-leert-die-datei.md) — open('w').write(f(open().read())) kürzt zuerst; ROADMAP samt fremder Arbeit am 25.09. geleert.
 - [Vorgebauter Stand veraltet mit dem HEAD](vorgebauter-stand-veraltet-mit-dem-head.md) — vor dem Commit `git log <bau-head>..HEAD -- datei`; sonst nimmt er fremde Commits zurück.
+- [Schreiben vor dem Lesen leert die Datei](oeffnen-zum-schreiben-vor-dem-lesen-leert-die-datei.md) — open('w').write(f(open().read())) kürzt zuerst; ROADMAP samt fremder Arbeit am 25.09. geleert.

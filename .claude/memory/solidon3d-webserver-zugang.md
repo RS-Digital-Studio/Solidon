@@ -128,3 +128,16 @@ um den Lesezugriff des Skripts.
 PHP-Einstellungen dazu: `activation-health.php` muss 200 geben, und die
 Zähldatei muss nach einem Abruf von `count.php?f=<paket>` wachsen. Steht sie
 still, ist es `open_basedir` — nicht der Code.
+
+## Mehrere Dateien am Werkzeug vorbei: eine Sitzung, nicht eine je Datei
+
+Gemessen am 24.09.2026 beim Hochladen der sechs Startseiten: Nach rund zehn
+FTPS-Anmeldungen in kurzer Folge (je Datei Sichern, Laden, Zurücklesen in
+eigener Sitzung) antwortete der Server auf die nächste nicht mehr, der
+Verbindungsaufbau lief in einen Timeout. Kein 530, also kein Passwortproblem
+und kein Grund für einen zweiten Versuch mit anderen Daten. Nach 90 Sekunden
+Pause ging es in **einer** Sitzung durch.
+
+Das geht, weil `upload_website.ensure_dir` vor jedem Upload mit `cwd("/")`
+neu ansetzt. Nur ein `RETR` mit vollem Pfad braucht in derselben Sitzung
+vorher selbst ein `cwd("/")`, sonst meldet der Server 550.

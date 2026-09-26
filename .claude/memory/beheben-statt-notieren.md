@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: c1806dc1-e846-4999-89d4-b8c3c4636d14
-  modified: 2026-09-02T16:41:42.077Z
+  modified: 2026-09-25T07:37:32.844Z
 ---
 
 Robert, 02.09.2026, während des Releases 0.3.0: „du solltest auch immer
@@ -28,6 +28,15 @@ abschließen wollte: „daran denken, dass alles abgearbeitet ist und du keine
 offenen Punkte hinterlässt, verschieben oder später sind keine Ausrede." Ein
 neuer Registerpunkt für eigene Restarbeit ist dasselbe Liegenlassen unter
 anderem Namen.
+
+Am selben Tag ein zweites Mal, vor einer Pause, als RM-224 nach einem
+Teilgewinn mit „der Punkt bleibt offen und sagt es" committet werden sollte.
+Ein Commit, der den eigenen Rest als offen ausweist, ist dasselbe Liegenlassen.
+Und ein drittes Mal an eine andere Sitzung (RM-232), mit demselben Satz: Auch
+was ich in einer früheren Durchsicht selbst ins Register gelegt habe (RM-239,
+RM-240, der Import-Hinweis auf ineinandersteckende Teile), gehört zur Arbeit,
+nicht zum Bericht. Ein technisches Risiko ist ein Grund, sorgfältig zu bauen und
+zu messen, kein Grund, es liegen zu lassen.
 
 **How to apply:**
 - Fund → Messung → Behebung → Test, in dieser Sitzung. Das Register ist für
