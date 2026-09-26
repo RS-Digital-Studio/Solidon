@@ -84,9 +84,12 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 17. **Jede Ausnahme trägt mindestens einen Handlungsvorschlag.** Ein Fehler
     endet nie mit „fehlgeschlagen".
 18. **Keine Bedeutung allein über Farbe.** Immer eine zweite Kodierung.
-19. **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen.** Einzige
-    ausdrücklich gewünschte Ausnahme: Vor dem Löschen von Verlaufsschritten
-    nennt eine Nachfrage auch abhängige Schritte und den Rückweg über Strg+Z.
+19. **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen.** Ausdrücklich
+    gewünschte Ausnahmen: Vor dem Löschen von Verlaufsschritten nennt eine
+    Nachfrage auch abhängige Schritte und den Rückweg über Strg+Z. Beim Import
+    oberhalb der automatischen Merkmalsgrenze wird die lange Vollerkennung mit
+    Zeitschätzung angeboten; ohne Zustimmung lädt das Modell mit begrenzter
+    Erkennung weiter (§21.1).
 20. **Keine fest eingebaute Zeichenkette** in der Oberfläche — alles über
     `tr()`.
 
