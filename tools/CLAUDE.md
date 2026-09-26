@@ -251,7 +251,11 @@ aus `sign_release.py`. Nur die EXE wird ersetzt und die Übergabe neu gebunden.
 Der feste Inno-7-Compiler baut daraus Setup, SHA-256 und `windows-installer-build.json`
 für die lokale abschließende Setupsignatur. Die Rückgabe nennt zusätzlich den
 tatsächlichen Installercommit und Installerlauf; der lokale Prüfer bindet beide
-an den vollständig erfolgreichen CI-Lauf. Der Installerjob benötigt
+an den vollständig erfolgreichen CI-Lauf. Weicht der Installercommit ab, fährt
+der Workflow vorher `tests/test_sign_release.py` und
+`tests/test_windows_signed_installer.py` gegen genau diesen Stand; ein roter
+Lauf endet vor Herkunftsprüfung und Bau (Wächter in `tests/test_packaging.py`).
+Der Installerjob benötigt
 `contents: write`, weil GitHub unveröffentlichte Entwürfe nur mit Push-Rechten
 zugänglich macht. Er veröffentlicht nichts und erhält keine Signiergeheimnisse.
 

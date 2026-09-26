@@ -55,6 +55,28 @@ jobs:
       - name: Abhängigkeit der vorhandenen Übergabeprüfer
         run: python -m pip install -c constraints.txt packaging
 
+      # Weicht dieser Lauf vom Produktcommit ab, hat sich nur die
+      # Orchestrierung geändert (`sign_release.INSTALLER_ORCHESTRATION_FILES`)
+      # — aber genau die baut gleich die Setup-Datei, und für ihren neuen
+      # Stand lief weder `build.yml` noch ein Test. Ihre eigenen Tests laufen
+      # deshalb hier, vor jeder Prüfung und jedem Bau; ein roter Lauf endet
+      # vor dem Installer und damit vor der lokalen Setupsignatur. Mit dem
+      # Extra `brep` wie in `build.yml`: `tests/conftest.py` bricht unter `CI`
+      # ohne den exakten Kern ab. Kein Token in diesem Schritt.
+      - name: Prüfumgebung der geänderten Orchestrierung
+        if: github.sha != inputs.source_commit
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
+
+      - name: Tests der geänderten Orchestrierung
+        if: github.sha != inputs.source_commit
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m pytest -q -p no:cacheprovider tests/test_sign_release.py tests/test_windows_signed_installer.py
+          if ($LASTEXITCODE -ne 0) { throw "Die Tests der geänderten Signierorchestrierung sind nicht grün; kein Installer." }
+
       - name: Herkunft, Archiv und lokale Anwendungssignatur prüfen
         shell: pwsh
         env:

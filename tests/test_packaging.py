@@ -539,6 +539,93 @@ def test_the_ci_contract_rejects_lost_coverage_or_hidden_failures(before: str, a
         _assert_ci_dependencies(workflow.replace(before, after, 1))
 
 
+INSTALLER_WORKFLOW = ROOT / ".github" / "workflows" / "windows-signed-installer.yml"
+
+#: Die Schrittnamen des Installerjobs in der verlangten Reihenfolge.
+_INSTALLER_ORDER = (
+    "Prüfumgebung der geänderten Orchestrierung",
+    "Tests der geänderten Orchestrierung",
+    "Herkunft, Archiv und lokale Anwendungssignatur prüfen",
+    "Installer bauen und Rückgabe binden",
+)
+
+
+def _assert_changed_orchestration_is_tested(workflow: str) -> None:
+    """Weicht der Installerlauf vom Produktcommit ab, laufen erst die Signiertests.
+
+    Seit ``0c58a7837`` darf der Installer auf einem späteren Commit bauen, der
+    nur die Signierorchestrierung ändert — also genau die Dateien, die die
+    Setup-Datei bauen. Für ihren neuen Stand lief kein ``build.yml``. Verlangt
+    wird: beide Testdateien, nur bei abweichendem Commit, mit vollem Extra samt
+    ``brep`` (``conftest`` bricht unter ``CI`` sonst ab), ein Nichtnull-Ausgang
+    beendet den Schritt, kein Token in der Nähe, und alles **vor** der
+    Herkunftsprüfung und dem Bau.
+    """
+    job = job_block(workflow, "installer")
+    install = step_block(job, _INSTALLER_ORDER[0])
+    tests = step_block(job, _INSTALLER_ORDER[1])
+    condition = "        if: github.sha != inputs.source_commit\n"
+    assert condition in install and condition in tests
+    assert '-c constraints.txt -e ".[dev,geom,ui,agent,brep]"' in install
+    assert "continue-on-error" not in tests and "shell: pwsh" in tests
+    script = step_script(tests)
+    assert (
+        "python -m pytest -q -p no:cacheprovider tests/test_sign_release.py "
+        "tests/test_windows_signed_installer.py"
+    ) in script
+    assert "if ($LASTEXITCODE -ne 0) { throw" in script
+    assert "secrets." not in tests and "token" not in tests.lower()
+    order = [job.index(f"      - name: {name}\n") for name in _INSTALLER_ORDER]
+    assert order == sorted(order), "die Tests laufen nach Prüfung oder Bau"
+
+
+def test_a_changed_signing_orchestration_is_tested_before_it_builds_the_installer() -> None:
+    """Der Installerworkflow fährt die Tests der Dateien, die er abweichend benutzt."""
+    _assert_changed_orchestration_is_tested(INSTALLER_WORKFLOW.read_text(encoding="utf-8"))
+
+
+_CONDITION = "        if: github.sha != inputs.source_commit\n"
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (" tests/test_windows_signed_installer.py\n", "\n"),
+        ("no:cacheprovider tests/test_sign_release.py", "no:cacheprovider"),
+        ("          if ($LASTEXITCODE -ne 0) { throw", "          # ($LASTEXITCODE"),
+        ("      - name: Tests der geänderten Orchestrierung\n", "      - name: Tests\n"),
+        (_CONDITION + "        shell: pwsh", "        shell: pwsh"),
+        (
+            _CONDITION + "        shell: pwsh",
+            _CONDITION + "        continue-on-error: true\n        shell: pwsh",
+        ),
+        (",agent,brep]", ",agent]"),
+        (
+            "          QT_QPA_PLATFORM: offscreen\n",
+            "          QT_QPA_PLATFORM: offscreen\n          GH_TOKEN: ${{ github.token }}\n",
+        ),
+    ],
+)
+def test_the_orchestration_guard_rejects_a_weakened_step(before: str, after: str) -> None:
+    """Gegenproben: fehlende Datei, verschluckter Ausgang, Umbenennung, Token, kein ``brep``."""
+    workflow = INSTALLER_WORKFLOW.read_text(encoding="utf-8")
+    assert before in workflow
+    with pytest.raises(AssertionError):
+        _assert_changed_orchestration_is_tested(workflow.replace(before, after, 1))
+
+
+def test_the_orchestration_guard_rejects_tests_after_the_build() -> None:
+    """Rückt der Testschritt hinter den Bau, ist er kein Tor mehr."""
+    workflow = INSTALLER_WORKFLOW.read_text(encoding="utf-8")
+    job = job_block(workflow, "installer")
+    tests = step_block(job, _INSTALLER_ORDER[1])
+    build = step_block(job, _INSTALLER_ORDER[3])
+    moved = workflow.replace(tests, "", 1).replace(build, build + tests, 1)
+    assert moved != workflow
+    with pytest.raises(AssertionError):
+        _assert_changed_orchestration_is_tested(moved)
+
+
 def test_only_the_requested_latest_dependencies_run_alongside_a_manual_build() -> None:
     """Der wöchentliche Versionswächter ist beim Handstart ausdrücklich zuschaltbar."""
     workflow = WORKFLOW.read_text(encoding="utf-8")

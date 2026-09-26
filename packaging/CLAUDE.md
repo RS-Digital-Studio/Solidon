@@ -89,6 +89,9 @@ Die verbindliche Reihenfolge lautet:
    beider Stände außerhalb der eng benannten Signierablauf-Dateien identisch
    findet. Derselbe Vergleich läuft nochmals vor der lokalen Setupsignatur.
    Produktquellen und ursprüngliche Installer-Eingänge bleiben unverändert.
+   Bei abweichendem Commit laufen vorher die Tests der Signierorchestrierung
+   (`test_sign_release.py`, `test_windows_signed_installer.py`); rot endet
+   der Lauf vor jedem Bau.
    Er prüft Herkunft,
    Hash, Zeitstempel und Herausgeber, ersetzt nur die EXE und bindet die
    Übergabe neu. Inno Setup 7
