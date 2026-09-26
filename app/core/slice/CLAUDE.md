@@ -171,6 +171,17 @@ Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
   als erstem Operand. Ein vorbereiteter GEOS-Index der gemeinsamen Schicht
   darf nicht parallel als Prädikatindex verwendet werden: GEOS baut darin
   weitere Suchstrukturen erst bei der Abfrage auf.
+- **Der Stützort ebenso** (`model_support`, 26.09.2026). Er führt denselben
+  Abstieg je Stück, auf denselben Arbeitern; jede Gruppe bereitet ihre eigene
+  Kopie der Schicht vor (aus WKB), die Differenzen einer Schicht gehen in
+  einem Aufruf, und die Baumtreffer werden sortiert — sonst hinge die letzte
+  Stelle der Flächen an der Arbeiterzahl. Die Kanalfrage wird **je Schicht**
+  gestellt (`_in_channels`: Material Teil für Teil aufgeweitet und vereinigt,
+  dann die umschriebene Scheibe je Punkt), der Kanalraum vereinigt die
+  Umkreise je Scheibe auf Arbeitern (`channel_space`). Am Eiffelturm aus dem
+  Korpus (16 323 Stücke, 14 755 davon auf dem Modell): die Beratung eine
+  halbe Stunde → 2,8 s, der Kanalraum 9 → 2,3 s; an der Waschschüssel 1,1 →
+  0,8 s und 1,1 → 0,3 s, mit denselben Antworten.
 
 Die Arbeiterzahl der vollständigen Messung steht bei sechs (`FULL_WORKERS`);
 die Messreihe dazu steht an der Konstante.

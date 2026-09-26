@@ -285,6 +285,98 @@ def test_a_wide_tunnel_is_no_channel() -> None:
     assert model.open_patch > 1000.0
 
 
+def tunnels_side_by_side(count: int) -> MeshData:
+    """Ein Block mit ``count`` Tunneln zu je 10 auf 20 mm nebeneinander —
+    ``count`` Kanaldecken auf derselben Schicht."""
+    block = brick(20.0 * count + 10.0, 40.0, 30.0, (0.0, 0.0, 15.0))
+    first = -10.0 * (count - 1)
+    tunnels = [brick(10.0, 50.0, 20.0, (first + 20.0 * index, 0.0, 12.0)) for index in range(count)]
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([block, *tunnels])))
+
+
+def test_the_channel_question_is_asked_once_per_layer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Je Säule gefragt, kostete die Kanalfrage am Eiffelturm aus dem Korpus
+    (14 755 Säulen) eine halbe Stunde; je Schicht gefragt 1,9 s. Fünf
+    Tunneldecken auf einer Schicht sind eine Frage mit fünf Punkten."""
+    from app.core.slice import analysis
+
+    asked: list[int] = []
+    real = analysis._in_channels
+
+    def counting(shape: BaseGeometry, points: list[Point], width: float) -> list[bool]:
+        asked.append(len(points))
+        return real(shape, points, width)
+
+    monkeypatch.setattr(analysis, "_in_channels", counting)
+    model = model_support(slice_body(tunnels_side_by_side(5), 0.5))
+
+    assert len(model.channels) == 5, "jede Tunneldecke ist ein Kanal"
+    assert asked == [5]
+
+
+def cellar() -> MeshData:
+    """Eine Decke 66 auf 66 mm, am Rand gehalten, 3 mm über einem Gitter aus
+    Wänden, die nach unten breiter werden. Ihre Säule zerfällt beim Absinken
+    in Zellen, und jede Zelle schrumpft über viele Schichten — ein Stück, das
+    in mehreren Teilen zugleich Fläche verliert."""
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    parts = [brick(66.0, 66.0, 2.0, (0.0, 0.0, 1.0)), brick(66.0, 66.0, 3.0, (0.0, 0.0, 21.5))]
+    for size, at in (
+        ((3.0, 66.0), (-31.5, 0.0)),
+        ((3.0, 66.0), (31.5, 0.0)),
+        ((66.0, 3.0), (0.0, -31.5)),
+        ((66.0, 3.0), (0.0, 31.5)),
+    ):
+        parts.append(brick(*size, 20.0, (*at, 11.0)))
+    for index in range(4):
+        x = -22.5 + 15.0 * index
+        profile = ShapelyPolygon(
+            [(x - 3.1, 2.0), (x + 2.9, 2.0), (x + 0.55, 17.0), (x - 0.65, 17.0)]
+        )
+        wall = trimesh.creation.extrude_polygon(profile, 60.0)
+        wall.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+        wall.apply_translation((0.0, 30.0, 0.0))
+        across = wall.copy()
+        across.apply_transform(
+            trimesh.transformations.rotation_matrix(math.pi / 2.0 + 0.013, (0, 0, 1))
+        )
+        parts += [wall, across]
+    return place_on_bed(MeshData.of(trimesh.boolean.union(parts)))
+
+
+def test_the_columns_come_out_the_same_on_any_number_of_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Säulen verteilen sich auf Arbeiter, und ihre Zahl hängt an der
+    Maschine. Das Ergebnis darf es nicht (RM-187). Der räumliche Baum liefert
+    seine Treffer in seiner eigenen Folge, die an den übrigen Stücken der
+    Gruppe hängt; ungeordnet summierten sich die Flächen eines zerfallenden
+    Stücks in anderer Folge — am Eiffelturm aus dem Korpus je nach Gruppe
+    um 3·10⁻¹⁴ mm² anders, hier mit umgekehrtem Baum um 3·10⁻¹² mm²."""
+    import shapely
+
+    from app.core.slice import analysis
+
+    result = slice_body(cellar(), 0.25)
+    assert len(result.layers) >= analysis.PARALLEL_FROM, "sonst liefe nur ein Arbeiter"
+    monkeypatch.setattr(analysis, "SUPPORT_TREE_FROM", 1)
+    answers = []
+    for workers in (1, 2, 6):
+        monkeypatch.setattr(analysis, "SUPPORT_WORKERS", workers)
+        answers.append(model_support(result))
+    tree_order = shapely.STRtree.query
+    monkeypatch.setattr(
+        shapely.STRtree,
+        "query",
+        lambda tree, *args, **kwargs: tree_order(tree, *args, **kwargs)[::-1],
+    )
+    answers.append(model_support(result))
+
+    assert answers[0].open_area > 1000.0, "die Säule setzt auf den Wänden auf"
+    assert answers[1:] == [answers[0]] * 3
+
+
 def test_a_channel_ceiling_leaves_the_supports_on_the_plate() -> None:
     """Vorher blieb „überall" stehen, weil eine Säule auf dem Modell endet —
     in der Tunneldecke, dort, wo sie den Tunnel füllt."""

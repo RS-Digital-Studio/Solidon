@@ -17,6 +17,7 @@ verschiedene Dinge, und der Bericht sagt, welches welches ist.
 from __future__ import annotations
 
 import math
+import threading
 from dataclasses import dataclass, replace
 from typing import Any, Final, Literal, cast
 
@@ -31,7 +32,7 @@ from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
 from app.core.log import get_logger
 from app.core.types import CancelToken, LayerInfo, Polygon, SliceResult
-from app.core.units import EPS_GEOM, ring_area
+from app.core.units import EPS_GEOM, exact_cos, ring_area
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -2690,6 +2691,13 @@ def island_layers(result: SliceResult) -> tuple[float, ...]:
 #: trägt die Decke nicht und die Stütze ist erreichbar.
 CHANNEL_WIDTH: Final = 30.0
 
+#: Die Bogenauflösung der Kanalfrage und des Kanalraums, in Segmenten je
+#: Viertelkreis — die von ``BaseGeometry.buffer``; ``shapely.buffer`` nimmt
+#: ohne Angabe acht, und derselbe Umkreis kam damit um 6 mm² anders heraus.
+#: Bei 15 mm Radius liegt das Vieleck um höchstens 0,02 mm innerhalb seines
+#: Kreises; :func:`_in_channels` rechnet die umschriebene Scheibe daraus.
+CHANNEL_QUAD_SEGMENTS: Final = 16
+
 
 @dataclass(frozen=True, slots=True)
 class ModelSupport:
@@ -2746,7 +2754,7 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
     auf 40 mm Höhe mit Stütze, die niemand mehr herausbekommt — Robert:
     „die Stützen sind sinnlos und gehen durch das Modell". Eine Säule steht
     in einem Kanal, wenn der freie Raum um sie herum auf halber Höhe keinen
-    Kreis von ``channel_width`` fasst, der sie enthält (:func:`_in_a_channel`).
+    Kreis von ``channel_width`` fasst, der sie enthält (:func:`_in_channels`).
 
     Gerechnet wird derselbe Durchgang von oben nach unten wie beim
     Stützvolumen (:func:`_support_volume`), nur je Stück: Wo ein Teil einer
@@ -2758,59 +2766,118 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
     areas: list[float] = []
     names: list[tuple[int, int]] = []
     pieces: list[ShapelyPolygon] = []
-    pending: list[ShapelyPolygon] = []
-    owners: list[int] = []
-    landed: dict[int, tuple[int, float]] = {}
+    starts: dict[int, list[int]] = {}
     for index in range(len(layers) - 1, 0, -1):
         for number, contour in enumerate(layers[index].overhangs):
-            owners.append(len(areas))
+            starts.setdefault(index, []).append(len(areas))
             names.append((index, number))
             areas.append(_piece_area(contour))
             pieces.append(ShapelyPolygon(contour.outline, contour.holes))
-            pending.append(pieces[-1])
-        if not pending:
-            continue
-        below = _material(layers[index - 1])
-        if below.is_empty:
-            continue
-        # Vorbereitet, weil hunderte Säulen dieselbe Schicht fragen; der
-        # Durchgang läuft in einem Faden, und die Schicht gehört nur ihm.
-        # **Die Schicht steht vorn**: GEOS nutzt die Vorbereitung nur am
-        # ersten Argument — umgekehrt kostete die Frage an der Waschschüssel
-        # 1,5 s.
-        shapely.prepare(below)
-        parts = np.asarray(pending, dtype=object)
-        if len(pending) >= SUPPORT_TREE_FROM:
-            candidates = shapely.STRtree(pending).query(below)
-            touching = candidates[shapely.intersects(below, parts[candidates])]
-        else:
-            touching = np.nonzero(shapely.intersects(below, parts))[0]
-        if not len(touching):
-            continue
-        hit = set(touching.tolist())
-        kept = [part for number, part in enumerate(pending) if number not in hit]
-        kept_owners = [owner for number, owner in enumerate(owners) if number not in hit]
-        for number in touching.tolist():
-            part, owner = pending[number], owners[number]
-            rest = _areas_of(part.difference(below))
-            lost = float(part.area) - sum(float(piece.area) for piece in rest)
-            if lost > EPS_GEOM:
-                low, before = landed.get(owner, (index - 1, 0.0))
-                landed[owner] = (low, before + lost)
-            kept += rest
-            kept_owners += [owner] * len(rest)
-        pending, owners = kept, kept_owners
+    if not starts:
+        return ModelSupport()
+    top = max(starts)
+
+    # **Die Säulen verteilen sich auf Arbeiter**, wie beim Stützvolumen: Keine
+    # beschneidet eine andere, also rechnet jede Gruppe denselben Durchgang
+    # für die Stücke ihrer Schichten. Am Eiffelturm aus dem Korpus (16 323
+    # Stücke) lief er einfädig 7,7 s.
+    starting = sorted(starts, reverse=True)
+    groups = min(_workers(SUPPORT_WORKERS), len(starting)) if len(layers) >= PARALLEL_FROM else 1
+    member = {index: number % groups for number, index in enumerate(starting)}
+    # Je Schicht einmal gebaut, für alle Gruppen und die Kanalfrage danach.
+    # **Vorbereitet wird je Gruppe eine eigene Kopie**: GEOS vervollständigt
+    # den Index einer vorbereiteten Fläche erst bei der Abfrage, und geteilt
+    # zwischen Fäden ist das ein Wettlauf. Die Kopie kommt aus WKB; das kostet
+    # je Schicht Mikrosekunden, die Vorbereitung spart an der Waschschüssel
+    # 1,5 s — GEOS nutzt sie nur am ersten Argument, deshalb steht die Schicht
+    # vorn.
+    materials: dict[int, ShapelyPolygon] = {}
+    frozen: dict[int, bytes] = {}
+    building = threading.Lock()
+
+    def material_at(index: int) -> tuple[ShapelyPolygon, bytes]:
+        with building:
+            if index not in materials:
+                materials[index] = _material(layers[index])
+                frozen[index] = shapely.to_wkb(materials[index])
+            return materials[index], frozen[index]
+
+    def descend(group: int) -> dict[int, tuple[int, float]]:
+        pending: list[ShapelyPolygon] = []
+        owners: list[int] = []
+        landed: dict[int, tuple[int, float]] = {}
+        for index in range(top, 0, -1):
+            if member.get(index) == group:
+                for owner in starts[index]:
+                    pending.append(pieces[owner])
+                    owners.append(owner)
+            if not pending:
+                continue
+            shared, blob = material_at(index - 1)
+            if shared.is_empty:
+                continue
+            below = shapely.from_wkb(blob)
+            shapely.prepare(below)
+            parts = np.asarray(pending, dtype=object)
+            if len(pending) >= SUPPORT_TREE_FROM:
+                # Sortiert: Der Baum liefert seine Treffer in seiner eigenen
+                # Folge, und die hängt an den übrigen Stücken der Gruppe. Die
+                # Flächen eines Stücks summieren sich so in derselben Folge,
+                # auf wie vielen Arbeitern auch immer (RM-187).
+                candidates = np.sort(shapely.STRtree(pending).query(below))
+                touching = candidates[shapely.intersects(below, parts[candidates])]
+            else:
+                touching = np.nonzero(shapely.intersects(below, parts))[0]
+            if not len(touching):
+                continue
+            hit = set(touching.tolist())
+            kept = [part for number, part in enumerate(pending) if number not in hit]
+            kept_owners = [owner for number, owner in enumerate(owners) if number not in hit]
+            # **In einem Aufruf je Schicht**, nicht je Stück: Ein vektorisierter
+            # GEOS-Aufruf gibt den Interpreter frei, und erst damit rechnen die
+            # Gruppen wirklich nebeneinander — Stück für Stück gerufen standen
+            # sie am Eiffelturm hintereinander an (7,8 s seriell, 6,0 s auf
+            # sechs Arbeitern).
+            chosen = parts[touching]
+            split, source = shapely.get_parts(shapely.difference(chosen, below), return_index=True)
+            flat = (shapely.get_type_id(split) == shapely.GeometryType.POLYGON) & ~shapely.is_empty(
+                split
+            )
+            split, source = split[flat], source[flat]
+            left = np.zeros(len(chosen))
+            np.add.at(left, source, shapely.area(split))
+            lost = shapely.area(chosen) - left
+            for position, number in enumerate(touching.tolist()):
+                if lost[position] > EPS_GEOM:
+                    owner = owners[number]
+                    low, before = landed.get(owner, (index - 1, 0.0))
+                    landed[owner] = (low, before + float(lost[position]))
+            kept += split.tolist()
+            kept_owners += [owners[int(touching[position])] for position in source.tolist()]
+            pending, owners = kept, kept_owners
+        return landed
+
+    if groups == 1:
+        shares = [descend(0)]
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=groups) as pool:
+            shares = list(pool.map(descend, range(groups)))
+    # In der Folge der Stücke, nicht der Arbeiter: Jedes Stück gehört genau
+    # einer Gruppe, und die Summen darunter hängen dann nicht daran, wer
+    # zuerst fertig war.
+    landed = {owner: share[owner] for share in shares for owner in share}
+    landed = {owner: landed[owner] for owner in sorted(landed)}
 
     if not landed:
         return ModelSupport()
-    shapes: dict[int, ShapelyPolygon] = {}
     floating: dict[int, ShapelyPolygon] = {}
-    open_patch = 0.0
-    open_area = 0.0
-    island_on_model = False
+    islands: set[int] = set()
     channels: set[int] = set()
     places: dict[int, Any] = {}
-    for owner, (low, area) in landed.items():
+    asked: dict[int, list[int]] = {}
+    for owner, (low, _area) in landed.items():
         index = names[owner][0]
         if layers[index].islands:
             if index not in floating:
@@ -2820,9 +2887,7 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
             if pieces[owner].intersection(floating[index]).area > EPS_GEOM:
                 # Eine Insel ist nie eine Decke, die sich selbst schließt: Sie
                 # hat nichts unter sich, an dem eine Brücke ansetzen könnte.
-                island_on_model = True
-                open_patch = max(open_patch, area)
-                open_area += area
+                islands.add(owner)
                 continue
         # **Gemessen wird unmittelbar unter der Decke**, nicht auf halber
         # Höhe der Säule. Die Frage ist, ob sich die Decke selbst schließt,
@@ -2833,14 +2898,29 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
         # Gefragt wird am Stück selbst: Wo seine Säule aufsetzt, kann der
         # Raum weiter sein als unter der Decke (der Boden des Kanals).
         under = max(names[owner][0] - 1, low + 1)
-        if under not in shapes:
-            shapes[under] = _material(layers[under])
         places[owner] = pieces[owner].representative_point()
-        if _in_a_channel(shapes[under], places[owner], channel_width):
-            channels.add(owner)
-        else:
-            open_patch = max(open_patch, area)
-            open_area += area
+        asked.setdefault(under, []).append(owner)
+
+    # Eine Frage je Schicht, nicht je Säule (:func:`_in_channels`), und die
+    # Schichten nebeneinander: Jede fragt nur ihre eigene Fläche.
+    def answer(under: int) -> list[bool]:
+        return _in_channels(
+            material_at(under)[0], [places[owner] for owner in asked[under]], channel_width
+        )
+
+    if groups == 1 or len(asked) < 2:
+        answers = [answer(under) for under in asked]
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=groups) as pool:
+            answers = list(pool.map(answer, asked))
+    for under, closed in zip(asked, answers, strict=True):
+        channels.update(owner for owner, shut in zip(asked[under], closed, strict=True) if shut)
+    outside = [area for owner, (_low, area) in landed.items() if owner not in channels]
+    open_patch = max(outside, default=0.0)
+    open_area = math.fsum(outside)
+    island_on_model = bool(islands)
 
     chosen = frozenset(names[owner] for owner in channels)
     columns = tuple(
@@ -2866,7 +2946,7 @@ def model_support(result: SliceResult, channel_width: float = CHANNEL_WIDTH) -> 
         channel_layers=frozenset(
             index for index, count in counted.items() if count == len(layers[index].overhangs)
         ),
-        channel_area=float(sum(areas[owner] for owner in channels)),
+        channel_area=math.fsum(areas[owner] for owner in sorted(channels)),
         channel_at=at,
         channel_columns=columns,
         island_on_model=island_on_model,
@@ -2914,23 +2994,28 @@ def channel_space(
     # Der Schritt einer gewöhnlichen Schicht; die erste ist dicker.
     step = heights[-1] - heights[-2] if len(heights) > 1 else slab
     stride = max(1, round(slab / max(step, EPS_GEOM)))
-    footprints = [ShapelyPolygon(item.outline, item.holes) for item, _low, _high in columns]
-    reaches = [shape.buffer(channel_width / 2.0) for shape in footprints]
-    bottom = min(low for _outline, low, _high in columns)
-    top = max(high for _outline, _low, high in columns)
-    slabs: list[tuple[float, float, ShapelyPolygon]] = []
+    footprints = np.asarray(
+        [ShapelyPolygon(item.outline, item.holes) for item, _low, _high in columns], dtype=object
+    )
+    reaches = shapely.buffer(footprints, channel_width / 2.0, quad_segs=CHANNEL_QUAD_SEGMENTS)
+    lows = np.array([low for _outline, low, _high in columns])
+    highs = np.array([high for _outline, _low, high in columns])
+    bottom = float(lows.min())
+    top = float(highs.max())
     indices = [index for index, z in enumerate(heights) if bottom <= z <= top]
-    for start in range(0, len(indices), stride):
-        chunk = indices[start : start + stride]
+    chunks = [indices[start : start + stride] for start in range(0, len(indices), stride)]
+
+    def slab_of(chunk: list[int]) -> tuple[float, float, ShapelyPolygon] | None:
         z_low, z_high = heights[chunk[0]], heights[chunk[-1]]
-        active = [
-            number
-            for number, (_outline, low, high) in enumerate(columns)
-            if low <= z_high and high >= z_low
-        ]
-        if not active:
-            continue
-        reach = unary_union([reaches[number] for number in active])
+        active = (lows <= z_high) & (highs >= z_low)
+        if not active.any():
+            return None
+        # Die Umkreise einzeln aufgeweitet und dann vereinigt — umgekehrt,
+        # erst die Grundrisse vereinigt und dann einmal aufgeweitet, kostete
+        # der Puffer über tausende Ecken am Eiffelturm aus dem Korpus 91 s
+        # statt 9.
+        seeds = shapely.union_all(footprints[active])
+        reach = shapely.union_all(reaches[active])
         # Die engste Stelle der Scheibe zählt: frei ist, was auf jeder ihrer
         # Schichten frei ist.
         material = unary_union([_material(layers[index]) for index in chunk])
@@ -2941,29 +3026,69 @@ def channel_space(
         # Kanaldecke der Waschschüssel stehen im breiten Rohrbogen, und eine
         # Sperre nur im schmalen Teil ließ 32 m Stütze darin (26.09.2026).
         free = reach.intersection(material.convex_hull).difference(material)
-        seeds = unary_union([footprints[number] for number in active])
         kept = [part for part in _areas_of(free) if part.intersects(seeds)]
-        if kept:
-            slabs.append((z_low - step / 2.0, z_high + step / 2.0, unary_union(kept)))
-    return slabs
+        if not kept:
+            return None
+        return (z_low - step / 2.0, z_high + step / 2.0, unary_union(kept))
+
+    # Jede Scheibe fragt nur ihre eigenen Schichten; nebeneinander gerechnet,
+    # in der Folge der Höhe zurückgegeben.
+    if len(chunks) < 2 or len(layers) < PARALLEL_FROM:
+        found = [slab_of(chunk) for chunk in chunks]
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=_workers(SUPPORT_WORKERS)) as pool:
+            found = list(pool.map(slab_of, chunks))
+    return [entry for entry in found if entry is not None]
 
 
-def _in_a_channel(shape: ShapelyPolygon, point: Any, width: float) -> bool:
-    """Fasst der freie Raum um ``point`` keinen Kreis der Weite ``width``, der ihn enthält?
+def _in_channels(shape: ShapelyPolygon, points: list[Any], width: float) -> list[bool]:
+    """Fasst der freie Raum um jeden dieser Punkte keinen Kreis der Weite
+    ``width``, der ihn enthält?
 
-    Ein Kreis vom Radius r, der den Punkt enthält, liegt ganz im Quadrat mit
-    der halben Kante 2r um ihn. Gefragt wird deshalb nur dieses Fenster: Das
-    Material wird darauf zugeschnitten, der freie Raum erodiert, und ein
-    Mittelpunkt im Abstand höchstens r vom Punkt heißt „weit". Der
-    Fensterrand begrenzt dabei keinen Kreis, der zählen könnte.
+    Ein solcher Kreis hat seinen Mittelpunkt höchstens r vom Punkt entfernt
+    und mindestens r vom Material. Liegt die Scheibe vom Radius r um den
+    Punkt ganz im Material, aufgeweitet um r, gibt es keinen solchen
+    Mittelpunkt: Der Punkt liegt in einem Kanal. Material weiter als 2r vom
+    Punkt entfernt trägt dazu nichts bei, also wird auf die Punkte samt
+    diesem Rand zugeschnitten.
+
+    **Aufgeweitet wird einmal je Schicht, und Teil für Teil.** Gemessen am
+    Eiffelturm aus dem Korpus (14 755 Fragen in 532 Schichten, 26.09.2026):
+    je Punkt ein erodiertes Fenster 1818 s, die freie Fläche der Schicht auf
+    einmal erodiert 12,4 s, jedes Teil gepuffert und danach vereinigt 1,9 s.
+    GEOS knotet beim Puffern einer Fläche mit vielen Löchern alle Ringe in
+    einem Zug; die Kaskade vereinigt stattdessen kleine Stücke.
+
+    **Im Zweifel offen.** Beide Puffer sind Vielecke, deren Ecken auf dem
+    Kreis liegen, also kleiner als ihr Kreis. Die Scheibe um den Punkt wird
+    deshalb umschrieben angelegt: Passt sie ins aufgeweitete Material, passt
+    der wahre Kreis erst recht. Eingeschrieben sagte sie an der Waschschüssel
+    an fünf Stellen „Kanal", deren größter freier Kreis Ø 30,07 bis 30,14 mm
+    misst. Umschrieben stimmen dort alle 89 Antworten mit der Erosion überein;
+    am Eiffelturm weichen 7 von 14 755 ab, alle zur offenen Seite und alle
+    dort, wo ein freier Kreis der Weite den Punkt um 0,014 bis 0,025 mm
+    verfehlt — innerhalb des doppelten Bogenfehlers.
     """
     radius = width / 2.0
     reach = 2.0 * radius + OVERHANG_MARGIN
-    x, y = float(point.x), float(point.y)
-    window = shapely.box(x - reach, y - reach, x + reach, y + reach)
-    material = shapely.clip_by_rect(shape, x - reach, y - reach, x + reach, y + reach)
-    core = window.difference(material).buffer(-radius)
-    return bool(core.is_empty or core.distance(point) > radius)
+    around = radius / exact_cos(math.pi / (4 * CHANNEL_QUAD_SEGMENTS))
+    xs = [float(point.x) for point in points]
+    ys = [float(point.y) for point in points]
+    material = shapely.clip_by_rect(
+        shape, min(xs) - reach, min(ys) - reach, max(xs) + reach, max(ys) + reach
+    )
+    parts = shapely.get_parts(material)
+    parts = parts[shapely.get_type_id(parts) == shapely.GeometryType.POLYGON]
+    if not len(parts):
+        return [False] * len(points)
+    grown = shapely.union_all(shapely.buffer(parts, radius, quad_segs=CHANNEL_QUAD_SEGMENTS))
+    shapely.prepare(grown)
+    discs = shapely.buffer(
+        np.asarray(points, dtype=object), around, quad_segs=CHANNEL_QUAD_SEGMENTS
+    )
+    return [bool(shut) for shut in shapely.contains(grown, discs)]
 
 
 def _total_area(parts: list[ShapelyPolygon]) -> float:
