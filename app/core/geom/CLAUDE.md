@@ -37,6 +37,7 @@ Achse, `math.hypot`/`math.fsum` und NumPys paarweise Summe. Was dafür da ist:
 | 4x4-Matrizen zusammensetzen (`a @ b`) | `transform.composed` |
 | kürzeste Drehung zwischen zwei Richtungen | `transform.rotation_between` |
 | Winkelfunktionen | `units.exact_cos`/`exact_sin`, `exact_cos_degrees`, `circle_point` |
+| Arkuskosinus (Knickwinkel, Bogenspanne) | `mesh.stable_arccos` |
 | Ausgleichsebene, symmetrische 3x3-Eigenwerte | `units.plane_fit`, `units.symmetric_eigen3` |
 | Mitte einer Punktwolke | `units.exact_centre` |
 | Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_areas` (einzelne Dreiecke), `mesh.stable_vertex_normals` |
@@ -1559,6 +1560,18 @@ Zylinder **und** Kugel hängen dabei am Radius: `_ring_steps` für den Umlauf,
 des Eckanschlusses zusätzlich die Winkelgrenze — dort ersetzt sie die Flächen
 der angrenzenden Zylinder, hier füllt sie nur deren Zwickel, und der
 Unterschied ist eine Unterteilung, also viermal so viele Dreiecke.
+
+**Werkzeuge und Eckanschluss rechnen plattformgleich** (RM-166): Längen über
+`_length` (`math.hypot`), Skalarprodukte über `units.dot3`/`transform.along`,
+Winkel über `mesh.stable_arccos` und `units.exact_sin`/`exact_cos`, die kleinen
+Gleichungssysteme über `_solved3`/`_least_squares3` (Cramer, Normalgleichungen)
+statt LAPACK, die Kugel über `_icosphere` (trimeshs Unterteilung, elementweise
+auf den Radius gelegt), und die Normalen der Züge aus `mesh.stable_normals`.
+`tests/test_platform_identity.py` fährt Verrunden und Fase an der schiefen
+Tetraederecke (`corner_fillet`, `corner_chamfer`). Plattformabhängig bleiben nur
+Entscheidungen fern ihrer Schwelle: die Grenzprüfungen `_reaches` und
+`contact_band_limit`, Konvexität und Windung aus trimesh, das Vorzeichen in
+`transform.moved`.
 
 **Messen und Schneiden**
 

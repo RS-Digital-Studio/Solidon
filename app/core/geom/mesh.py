@@ -445,6 +445,26 @@ def _stable_arctan(values: np.ndarray) -> np.ndarray:
     return np.asarray(np.where(inverse, _PI_2 - result, result))
 
 
+def stable_arccos(values: np.ndarray | float) -> np.ndarray:
+    """``arccos`` aus Grundrechenarten und :func:`_stable_arctan` — auf jeder
+    Maschine dieselben Bits (RM-166).
+
+    ``arccos(x) = arctan(√(1 - x²) / x)`` für ``x > 0`` und ``π`` minus
+    dasselbe für ``x < 0``; die Wurzel über ``(1 - x)(1 + x)``, damit sie an
+    den Rändern nicht auslöscht. Eingaben außerhalb von ``[-1, 1]`` werden auf
+    den Rand gelegt, wie ``np.clip`` vor ``np.arccos`` es tat. ``np.arccos``
+    und ``math.acos`` wählen ihre Umsetzung nach der CPU bzw. der
+    Mathematikbibliothek der Plattform.
+    """
+    x = np.clip(np.asarray(values, dtype=np.float64), -1.0, 1.0)
+    rest = np.sqrt((1.0 - x) * (1.0 + x))
+    size = np.abs(x)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.where(size > 0.0, rest / np.where(size > 0.0, size, 1.0), 0.0)
+    angle = _stable_arctan(ratio)
+    return np.asarray(np.where(x > 0.0, angle, np.where(x < 0.0, math.pi - angle, _PI_2)))
+
+
 def stable_vertex_normals(mesh: trimesh.Trimesh) -> np.ndarray:
     """Die Eckennormalen, gewichtet mit den Winkeln der Dreiecke an der Ecke —
     wie ``vertex_normals`` von ``trimesh``, aber auf jeder Maschine dieselben Bits.

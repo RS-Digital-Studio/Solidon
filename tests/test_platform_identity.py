@@ -576,8 +576,35 @@ def _step_assembly() -> str:
     )
 
 
+def _worked_corner(rounded: bool) -> str:
+    """*Verrunden* und *Fase* an der schiefen Dreiflächenecke eines Tetraeders (RM-166).
+
+    Die Ecke, an der der Linux-Runner einmal in vier Läufen einen Punkt im
+    Normalenkegel bei 6,5 statt 3,0 hatte
+    (``test_mesh_edges.test_a_nonorthogonal_trihedral_corner_has_the_tangent_sphere``):
+    Stützebenen, Halbraumecken, Kugelmitte und Kugel des Eckanschlusses.
+    """
+    from app.core.deferred import trimesh
+    from app.core.geom.edges import bevel_edges, edge_key, edges_of, round_edges
+    from app.core.geom.mesh import MeshData
+
+    body = MeshData(
+        trimesh.convex.convex_hull(np.asarray([(0, 0, 0), (40, 0, 0), (0, 40, 0), (0, 0, 40)]))
+    )
+    corner = (40.0, 0.0, 0.0)
+    touching = [
+        entry
+        for entry in edges_of(body)
+        if min(math.dist(corner, entry.points[0]), math.dist(corner, entry.points[-1])) < 1e-7
+    ]
+    edit = round_edges if rounded else bevel_edges
+    return _mesh_print(edit(body, 3.0, "named", [edge_key(entry) for entry in touching]).mesh)
+
+
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
+    "corner_chamfer": lambda: _worked_corner(False),
+    "corner_fillet": lambda: _worked_corner(True),
     "fill_band": _bore_wall_band,
     "fill_bridged": _top_with_holes,
     "import_repair": _mended_import,

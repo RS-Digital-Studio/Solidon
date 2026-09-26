@@ -47,7 +47,7 @@ from app.core.errors import (
 from app.core.geom import lathe, transform
 from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean, deepest
 from app.core.geom.measure import SHARP_EDGE_ANGLE
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, stable_arccos, stable_normals
 from app.core.geom.repair import remove_hollow_shells
 from app.core.log import get_logger
 from app.core.types import CancelToken, Feature, Finding, Mesh, Quality, Vec3, is_a_cavity
@@ -66,6 +66,79 @@ from app.i18n import TranslatableText, _
 EDGE_SELECTION_REJECTED = _("Wählen Sie die Kante am Körper neu und wiederholen Sie die Änderung.")
 
 _log = get_logger(__name__)
+
+
+# --- Plattformgleich gerechnet (RM-166) --------------------------------------
+#
+# Verrunden und Fase bauen ihre Werkzeuge aus Längen, Skalarprodukten, Winkeln
+# und kleinen Gleichungssystemen. ``np.linalg.norm`` ohne Achse, ``np.dot``
+# und ``@`` gehen durch BLAS, ``solve``/``det``/``lstsq`` durch LAPACK,
+# ``math.acos``/``math.tan`` durch die Mathematikbibliothek der Plattform —
+# und die Kugel des Eckanschlusses kam aus ``trimesh.creation.icosphere``, das
+# über ``np.dot`` normiert. Auf dem Linux-Runner stand deshalb einmal in vier
+# Läufen ein Punkt im Normalenkegel einer Ecke bei 6,5 statt 3,0. Die Helfer
+# hier rechnen dasselbe elementweise (``tests/test_platform_identity.py``,
+# Wege ``corner_fillet`` und ``corner_chamfer``).
+
+
+def _length(vector: Any) -> float:
+    """Die Länge eines Raumvektors — ``math.hypot`` statt ``np.linalg.norm``."""
+    return math.hypot(float(vector[0]), float(vector[1]), float(vector[2]))
+
+
+def _acos(value: float) -> float:
+    """``math.acos`` auf jeder Maschine gleich (:func:`~app.core.geom.mesh.stable_arccos`)."""
+    return float(stable_arccos(value))
+
+
+def _tan(angle: float) -> float:
+    """``math.tan`` aus den exakten Winkelfunktionen (``units.exact_sin``/``exact_cos``)."""
+    return units.exact_sin(angle) / units.exact_cos(angle)
+
+
+def _solved3(rows: Any, values: Sequence[float] | np.ndarray) -> np.ndarray | None:
+    """Die Lösung von ``rows · x = values`` für drei Gleichungen — Cramer statt LAPACK.
+
+    ``None``, wenn die drei Zeilen (fast) linear abhängig sind: dieselbe
+    Schranke wie vorher ``abs(np.linalg.det(rows)) <= EPS_GEOM``.
+    """
+    first, second, third = (np.asarray(row, dtype=np.float64) for row in rows)
+    across = np.cross(second, third)
+    determinant = units.dot3(first, across)
+    if abs(determinant) <= EPS_GEOM:
+        return None
+    total = (
+        float(values[0]) * across
+        + float(values[1]) * np.cross(third, first)
+        + float(values[2]) * np.cross(first, second)
+    )
+    return np.asarray(total / determinant)
+
+
+def _in_frame(values: np.ndarray, turn: np.ndarray) -> np.ndarray:
+    """``values @ turn`` elementweise — je Spalte von ``turn`` ein :func:`transform.along`."""
+    return np.stack([transform.along(values, turn[:, column]) for column in range(3)], axis=-1)
+
+
+def _least_squares3(rows: np.ndarray, values: np.ndarray) -> np.ndarray:
+    """Der Punkt, der ``rows · x = values`` am besten erfüllt — ohne ``np.linalg.lstsq``.
+
+    Drei Zeilen werden gelöst (:func:`_solved3`), mehr über die
+    Normalgleichungen, deren Summen elementweise in fester Reihenfolge
+    entstehen. Ohne Lösung kommt der Ursprung zurück; der Aufrufer prüft das
+    Ergebnis ohnehin gegen jede Zeile.
+    """
+    matrix = np.asarray(rows, dtype=np.float64)
+    wanted = np.asarray(values, dtype=np.float64)
+    if len(matrix) == 3:
+        solved = _solved3(matrix, wanted)
+        if solved is not None:
+            return solved
+    gram = [[float((matrix[:, i] * matrix[:, j]).sum()) for j in range(3)] for i in range(3)]
+    right = [float((matrix[:, i] * wanted).sum()) for i in range(3)]
+    solved = _solved3(gram, right)
+    return solved if solved is not None else np.zeros(3)
+
 
 #: Wie viele Kanten an einem Knoten zusammenlaufen dürfen, damit ein Zug
 #: durchläuft. An einer Ecke sind es drei, und dort endet er — sonst liefe er
@@ -318,17 +391,29 @@ def edges_of(mesh: MeshData, angle: float = SHARP_EDGE_ANGLE) -> list[MeshEdge]:
 
 
 def _edges_of(raw: Any, angle: float) -> list[MeshEdge]:
-    """Die Züge eines ``trimesh.Trimesh`` — die Rechnung hinter :func:`edges_of`."""
-    angles = np.asarray(raw.face_adjacency_angles, dtype=float)
-    if not len(angles):
+    """Die Züge eines ``trimesh.Trimesh`` — die Rechnung hinter :func:`edges_of`.
+
+    Normalen und Knickwinkel kommen elementweise (``mesh.stable_normals``,
+    ``stable_arccos``) und nicht aus ``face_normals`` und
+    ``face_adjacency_angles`` von trimesh, die über BLAS normieren: Die
+    Normalen je Kante tragen die Werkzeuge von Verrunden und Fase (RM-166).
+    """
+    adjacency = np.asarray(raw.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    if not len(adjacency):
         return []
+    face_normals = stable_normals(raw)[0]
+    first_side, second_side = face_normals[adjacency[:, 0]], face_normals[adjacency[:, 1]]
+    angles = stable_arccos(
+        first_side[:, 0] * second_side[:, 0]
+        + first_side[:, 1] * second_side[:, 1]
+        + first_side[:, 2] * second_side[:, 2]
+    )
     sharp = angles > float(angle)
     if not sharp.any():
         return []
     segments = np.asarray(raw.face_adjacency_edges, dtype=np.int64)[sharp]
     convex = np.asarray(raw.face_adjacency_convex, dtype=bool)[sharp]
-    pairs = np.asarray(raw.face_adjacency, dtype=np.int64)[sharp]
-    face_normals = np.asarray(raw.face_normals, dtype=float)
+    pairs = adjacency[sharp]
     vertices = np.asarray(raw.vertices, dtype=float)
     # Je Segment die zwei Flächennormalen, unter dem Schlüssel des
     # Knotenpaars — beim Verketten steht die Reihenfolge der Knoten noch
@@ -366,7 +451,7 @@ def _describe(
     # geschlossener Kreis, ihr Schwerpunkt liegt auf der Achse, und die
     # Richtung von Anfang zu Ende ist entartet.
     span = points[-1] - points[0]
-    reach = max(float(np.linalg.norm(span)), EPS_GEOM)
+    reach = max(_length(span), EPS_GEOM)
     direction = tuple(float(value) for value in span / reach)
     # **Längengewichtet und nicht als Mittel der Punkte.** Das ist die
     # diskrete Fassung von OpenCASCADEs ``CentreOfMass``: Ein fein
@@ -845,7 +930,7 @@ def starts_at_first(first: Sequence[float], last: Sequence[float]) -> bool:
     „Radius am Anfang" am Netz und am exakten Körper dieselbe Stelle meint.
     """
     span = np.asarray(last, dtype=float) - np.asarray(first, dtype=float)
-    reach = float(np.linalg.norm(span))
+    reach = _length(span)
     if reach <= EPS_GEOM:
         return True
     for value in span / reach:
@@ -870,7 +955,7 @@ LOOP_WAY: Final = (0.0, 1.0, 1e-3)
 
 def points_forward(direction: Sequence[float]) -> bool:
     """Ob ein Ring in dieser Tangentenrichtung von seinem Anfang weg läuft (:data:`LOOP_WAY`)."""
-    return float(np.dot(np.asarray(direction, dtype=float), LOOP_WAY)) > 0.0
+    return units.dot3(direction, LOOP_WAY) > 0.0
 
 
 def loop_start(points: np.ndarray) -> tuple[float, bool]:
@@ -883,14 +968,14 @@ def loop_start(points: np.ndarray) -> tuple[float, bool]:
     :func:`points_forward` für die Richtung wachsender Bogenlänge.
     """
     ring = np.asarray(points, dtype=float)
-    if float(np.linalg.norm(ring[0] - ring[-1])) <= EPS_GEOM:
+    if _length(ring[0] - ring[-1]) <= EPS_GEOM:
         ring = ring[:-1]
     count = len(ring)
     steps = np.linalg.norm(np.roll(ring, -1, axis=0) - ring, axis=1)
     cumulative = np.concatenate(([0.0], np.cumsum(steps)))
     total = float(cumulative[-1])
     weight = np.asarray(LOOP_START, dtype=float)
-    values = ring @ (weight / float(np.linalg.norm(weight)))
+    values = transform.along(ring, weight / _length(weight))
     corner = int(np.argmin(values))
     before, after = float(steps[corner - 1]), float(steps[corner])
     low, here, high = values[corner - 1], values[corner], values[(corner + 1) % count]
@@ -992,7 +1077,7 @@ def law_on_points(points: Sequence[Sequence[float]] | np.ndarray, law: RadiusLaw
     ring = np.asarray(points, dtype=float)
     steps = np.linalg.norm(np.diff(ring, axis=0), axis=1)
     total = float(steps.sum())
-    closed = len(ring) > 2 and float(np.linalg.norm(ring[0] - ring[-1])) <= EPS_GEOM
+    closed = len(ring) > 2 and _length(ring[0] - ring[-1]) <= EPS_GEOM
     if closed:
         start, forward = loop_start(ring)
         return LawOnChain(law.as_loop(), total, start, forward, True)
@@ -1105,8 +1190,8 @@ def chamfer_reaches(
         return distance, distance
     reference_is_one = reference_first(one, two) != shape.flipped
     if shape.angle is not None:
-        cosine = -float(np.clip(np.dot(np.asarray(one, float), np.asarray(two, float)), -1.0, 1.0))
-        between = math.degrees(math.acos(float(np.clip(cosine, -1.0, 1.0))))
+        cosine = -units.dot3(one, two)
+        between = math.degrees(_acos(cosine))
         if between + shape.angle >= 180.0 - 1e-6:
             raise ValidationError(
                 "angle",
@@ -1187,7 +1272,7 @@ def mesh_edge_sides(entry: MeshEdge) -> EdgeSides | None:
     one = np.asarray(entry.normals[index][0], dtype=float)
     two = np.asarray(entry.normals[index][1], dtype=float)
     into = -(one + two) if entry.convex else one + two
-    if float(np.linalg.norm(into)) <= EPS_GEOM:
+    if _length(into) <= EPS_GEOM:
         return None
     towards_one = _along_face(one, along, into)
     towards_two = _along_face(two, along, into)
@@ -1339,17 +1424,17 @@ def workable(entry: MeshEdge) -> bool:
     points = np.asarray(entry.points, dtype=float)
     for index, (first, second) in enumerate(entry.normals):
         along = points[index + 1] - points[index]
-        reach = float(np.linalg.norm(along))
+        reach = _length(along)
         if reach <= EPS_GEOM:
             continue
         along = along / reach
         one = np.asarray(first, dtype=float)
         two = np.asarray(second, dtype=float)
         into = (one + two) if not entry.convex else -(one + two)
-        weight = float(np.linalg.norm(into))
+        weight = _length(into)
         if weight <= EPS_GEOM:
             continue
-        half = (math.pi - math.acos(float(np.clip(np.dot(one, two), -1.0, 1.0)))) / 2.0
+        half = (math.pi - _acos(units.dot3(one, two))) / 2.0
         if half <= EPS_GEOM or half >= math.pi / 2.0 - EPS_GEOM:
             continue
         into = into / weight
@@ -1380,7 +1465,7 @@ def _wedge(
     zwei verschiedene Rücknahmen (:func:`chamfer_reaches`).
     """
     along = end - start
-    reach = float(np.linalg.norm(along))
+    reach = _length(along)
     if reach <= EPS_GEOM:
         return None
     along = along / reach
@@ -1405,7 +1490,7 @@ def _wedge(
     # stünde das Polygon schief, und der erste Anlauf tat genau das.
     across = np.cross(along, towards_one)
     flat = [
-        (float(np.dot(point - start, towards_one)), float(np.dot(point - start, across)))
+        (units.dot3(point - start, towards_one), units.dot3(point - start, across))
         for point in profile
     ]
     # **Den Überstand bekommt nur, was abgezogen wird.** Bei einer Differenz
@@ -1454,13 +1539,13 @@ def _wedge_section(
     # das Werkzeug unter dem Nutboden im vollen Material, und die Vereinigung
     # legte 0,02 mm³ dazu statt 30.
     into = (one + two) if not convex else -(one + two)
-    weight = float(np.linalg.norm(into))
+    weight = _length(into)
     if weight <= EPS_GEOM:
         # Zwei entgegengesetzte Normalen: keine Kante, sondern eine Wand von
         # null Dicke. Dort ist nichts zu runden.
         return None
     into = into / weight
-    theta = math.pi - math.acos(float(np.clip(np.dot(one, two), -1.0, 1.0)))
+    theta = math.pi - _acos(units.dot3(one, two))
     half = theta / 2.0
     if half <= EPS_GEOM or half >= math.pi / 2.0 - EPS_GEOM:
         return None
@@ -1469,7 +1554,7 @@ def _wedge_section(
     # sie aus dem Radius: Eine Fase von 1 mm nimmt jeder Fläche 1 mm weg,
     # gleich unter welchem Winkel sie stehen — so ist es auch im exakten Kern
     # beschrieben („auf jeder der beiden Flächen").
-    tangent = radius / math.tan(half) if rounded else radius
+    tangent = radius / _tan(half) if rounded else radius
     tangents = (tangent, tangent) if rounded else chamfer_reaches(radius, shape, first, second)
     # Die Richtungen entlang der beiden Flächen, weg von der Kante.
     towards_one = _along_face(one, along, into)
@@ -1491,7 +1576,7 @@ def _wedge_section(
         sign = 1.0 if convex else -1.0
         shifted = sign * flank_overlap
         profile = [
-            start + shifted * (one + two) / (1.0 + float(np.dot(one, two))),
+            start + shifted * (one + two) / (1.0 + units.dot3(one, two)),
             first_touch + shifted * one,
             first_touch,
             *bow,
@@ -1536,11 +1621,11 @@ def _prism(
 def _along_face(normal: np.ndarray, along: np.ndarray, inward: np.ndarray) -> np.ndarray | None:
     """Die Richtung in dieser Fläche, quer zur Kante und in den Zwickel."""
     direction = np.cross(normal, along)
-    reach = float(np.linalg.norm(direction))
+    reach = _length(direction)
     if reach <= EPS_GEOM:
         return None
     direction = direction / reach
-    return direction if float(np.dot(direction, inward)) > 0.0 else -direction
+    return direction if units.dot3(direction, inward) > 0.0 else -direction
 
 
 def _arc_steps(radius: float, span: float, sag: float = MAX_FACET_SAG) -> int:
@@ -1562,7 +1647,7 @@ def _arc_steps(radius: float, span: float, sag: float = MAX_FACET_SAG) -> int:
         # es bleibt bei der Winkelgrenze.
         turn = MAX_FACET_ANGLE
     else:
-        turn = min(2.0 * math.acos(1.0 - sag / radius), MAX_FACET_ANGLE)
+        turn = min(2.0 * _acos(1.0 - sag / radius), MAX_FACET_ANGLE)
     return max(MIN_ARC_STEPS, math.ceil(span / turn))
 
 
@@ -1615,7 +1700,7 @@ def _varying_tool(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         start, end = points[index], points[index + 1]
-        reach = float(np.linalg.norm(end - start))
+        reach = _length(end - start)
         if reach <= EPS_GEOM:
             continue
         along = (end - start) / reach
@@ -1623,7 +1708,7 @@ def _varying_tool(
         places = {low, high}
         places.update(value for value in stations if low < value < high)
         one, two = np.asarray(first, dtype=float), np.asarray(second, dtype=float)
-        half = (math.pi - math.acos(float(np.clip(np.dot(one, two), -1.0, 1.0)))) / 2.0
+        half = (math.pi - _acos(units.dot3(one, two))) / 2.0
         if curved and EPS_GEOM < half < math.pi / 2.0 - EPS_GEOM:
             # Wie weit ein Querschnittspunkt je Millimeter Radius wandert:
             # höchstens um den Mittelpunktsabstand und einen Radius dazu.
@@ -1722,9 +1807,9 @@ def _arc(
     """
     one = (first - centre) / radius
     two = (second - centre) / radius
-    span = math.acos(float(np.clip(np.dot(one, two), -1.0, 1.0)))
+    span = _acos(units.dot3(one, two))
     axis = np.cross(one, two)
-    length = float(np.linalg.norm(axis))
+    length = _length(axis)
     if length <= EPS_GEOM:
         return []
     axis = axis / length
@@ -1736,7 +1821,7 @@ def _arc(
         turned = (
             one * units.exact_cos(angle)
             + np.cross(axis, one) * units.exact_sin(angle)
-            + axis * float(np.dot(axis, one)) * (1.0 - units.exact_cos(angle))
+            + axis * units.dot3(axis, one) * (1.0 - units.exact_cos(angle))
         )
         points.append(centre + radius * turned)
     return points
@@ -1969,7 +2054,7 @@ def _distinct_vectors(vectors: Sequence[np.ndarray]) -> np.ndarray:
     """Gleichgerichtete Flächennormalen nur einmal, unabhängig von Dreiecken."""
     unique: list[np.ndarray] = []
     for vector in vectors:
-        if not any(float(np.linalg.norm(vector - other)) <= EPS_GEOM for other in unique):
+        if not any(_length(vector - other) <= EPS_GEOM for other in unique):
             unique.append(vector)
     return np.asarray(unique)
 
@@ -1979,11 +2064,11 @@ def _cone_planes(normals: np.ndarray) -> np.ndarray:
     planes: list[np.ndarray] = []
     for first, second in itertools.combinations(normals, 2):
         direction = np.cross(first, second)
-        length = float(np.linalg.norm(direction))
+        length = _length(direction)
         if length <= EPS_GEOM:
             continue
         direction /= length
-        products = normals @ direction
+        products = transform.along(normals, direction)
         if float(products.max()) <= EPS_GEOM:
             planes.append(direction)
         elif float(products.min()) >= -EPS_GEOM:
@@ -1995,11 +2080,11 @@ def _halfspace_vertices(normals: np.ndarray, offsets: np.ndarray) -> np.ndarray:
     """Die Ecken eines beschränkten Schnitts von Halbräumen n·x <= d."""
     points: list[np.ndarray] = []
     for indices in itertools.combinations(range(len(normals)), 3):
-        rows = normals[list(indices)]
-        if abs(float(np.linalg.det(rows))) <= EPS_GEOM:
+        chosen = list(indices)
+        point = _solved3(normals[chosen], offsets[chosen])
+        if point is None:
             continue
-        point = np.linalg.solve(rows, offsets[list(indices)])
-        if bool(np.all(normals @ point <= offsets + EPS_GEOM)):
+        if bool(np.all(transform.along(normals, point) <= offsets + EPS_GEOM)):
             points.append(point)
     return _distinct_vectors(points)
 
@@ -2058,12 +2143,16 @@ def _ball(radius: float, *, turn_limit: bool = True) -> Any:
     Dreiecke mit der Winkelgrenze, 0,56 s und 53 970 ohne — bei derselben
     Sehnenabweichung.
     """
-    import trimesh
-
     divisions = 0
     while True:
-        ball = trimesh.creation.icosphere(subdivisions=divisions, radius=radius)
-        supports = np.einsum("ij,ij->i", ball.triangles[:, 0], ball.face_normals)
+        ball = _icosphere(divisions, radius)
+        normals = stable_normals(ball)[0]
+        corners = np.asarray(ball.triangles, dtype=np.float64)[:, 0]
+        supports = (
+            corners[:, 0] * normals[:, 0]
+            + corners[:, 1] * normals[:, 1]
+            + corners[:, 2] * normals[:, 2]
+        )
         arcs = np.linalg.norm(np.diff(ball.vertices[ball.edges_unique], axis=1)[:, 0], axis=1)
         turns_enough = not turn_limit or float(arcs.max()) <= (
             2.0 * radius * units.exact_sin(MAX_FACET_ANGLE / 2.0)
@@ -2071,6 +2160,31 @@ def _ball(radius: float, *, turn_limit: bool = True) -> Any:
         if float(supports.min()) >= radius - MAX_FACET_SAG and turns_enough:
             return ball
         divisions += 1
+
+
+def _icosphere(subdivisions: int, radius: float) -> Any:
+    """``trimesh.creation.icosphere``, nur elementweise auf die Kugel gelegt (RM-166).
+
+    trimesh rückt jede Ecke nach jeder Unterteilung um ``R - |v|`` nach außen
+    und misst ``|v|`` über ``np.dot(v², [1, 1, 1])`` — durch BLAS. Hier ist es
+    dieselbe Rechnung mit einer Summe je Ecke; Ikosaeder und Unterteilung
+    (Mitte zweier Ecken) kommen unverändert aus trimesh.
+    """
+    import trimesh
+
+    ball = trimesh.creation.icosahedron()
+    for _round in range(max(subdivisions, 1)):
+        if subdivisions > 0:
+            ball = ball.subdivide()
+        vectors = np.asarray(ball.vertices, dtype=np.float64)
+        scalar = np.sqrt(
+            vectors[:, 0] * vectors[:, 0]
+            + vectors[:, 1] * vectors[:, 1]
+            + vectors[:, 2] * vectors[:, 2]
+        )
+        unit = vectors / scalar[:, None]
+        ball.vertices = vectors + unit * (radius - scalar)[:, None]
+    return ball
 
 
 def _corner_ball(radius: float) -> np.ndarray:
@@ -2097,9 +2211,9 @@ def _chamfer_contacts(
         original = np.asarray(entry.normals[end], dtype=float)
         pair = sign * original
         along = np.asarray(entry.points[1 if end == 0 else -2]) - entry.points[end]
-        along /= float(np.linalg.norm(along))
+        along /= _length(along)
         bisector = pair.sum(axis=0)
-        bisector /= float(np.linalg.norm(bisector))
+        bisector /= _length(bisector)
         first_in = _along_face(pair[0], along, -bisector)
         second_in = _along_face(pair[1], along, -bisector)
         assert first_in is not None and second_in is not None
@@ -2107,10 +2221,10 @@ def _chamfer_contacts(
         first_touch = first_in * reach_one
         second_touch = second_in * reach_two
         plane = np.cross(along, second_touch - first_touch)
-        plane /= float(np.linalg.norm(plane))
-        if float(plane @ bisector) < 0.0:
+        plane /= _length(plane)
+        if units.dot3(plane, bisector) < 0.0:
             plane = -plane
-        boundaries.append((plane, float(plane @ first_touch), pair))
+        boundaries.append((plane, units.dot3(plane, first_touch), pair))
     contacts: list[np.ndarray] = []
     for normal in normals:
         touching = [
@@ -2120,8 +2234,11 @@ def _chamfer_contacts(
         ]
         if len(touching) != THROUGH:
             continue
-        rows = np.vstack([normal, touching[0][0], touching[1][0]])
-        contacts.append(np.linalg.solve(rows, [0.0, touching[0][1], touching[1][1]]))
+        contact = _solved3(
+            (normal, touching[0][0], touching[1][0]), (0.0, touching[0][1], touching[1][1])
+        )
+        if contact is not None:
+            contacts.append(contact)
     return np.asarray(contacts)
 
 
@@ -2160,27 +2277,33 @@ def _corner_tools(
         if len(contacts) < 3:
             return None
         cap = _hull(np.vstack([np.zeros(3), contacts])).raw
-        offsets = np.einsum("ij,ij->i", cap.face_normals, cap.triangles[:, 0])
+        cap_normals = stable_normals(cap)[0]
+        first_corners = np.asarray(cap.triangles, dtype=np.float64)[:, 0]
+        offsets = (
+            cap_normals[:, 0] * first_corners[:, 0]
+            + cap_normals[:, 1] * first_corners[:, 1]
+            + cap_normals[:, 2] * first_corners[:, 2]
+        )
         beyond = offsets > EPS_GEOM
         # Nur die äußeren Hilfsflächen bekommen Überstand. Die eigentliche
         # Eckfläche bleibt exakt auf den berechneten Kontaktpunkten.
         overshoot = EDGE_OVERSHOOT if entry.convex else 0.0
         corners = _halfspace_vertices(
-            np.vstack([normals, cap.face_normals[beyond]]),
+            np.vstack([normals, cap_normals[beyond]]),
             np.concatenate([np.full(len(normals), overshoot), offsets[beyond]]),
         )
         capped = _corner_hull(corners, vertex)
         return (kind, capped, []) if capped is not None else None
-    centre = np.linalg.lstsq(normals, np.full(len(normals), -size), rcond=None)[0]
-    if float(np.max(np.abs(normals @ centre + size))) > EPS_GEOM:
+    centre = _least_squares3(normals, np.full(len(normals), -size))
+    if float(np.max(np.abs(transform.along(normals, centre) + size))) > EPS_GEOM:
         # Mehr als drei Flächen haben nicht notwendig ein gemeinsames
         # Offsetzentrum. Der wirkliche versetzte Polyeder besitzt dann
         # mehrere Ecken und verbindende Grate. Seine Minkowski-Summe mit
         # der Kugel verbindet sie, ohne ein beliebiges Ebenentripel zu wählen.
         eroded = _halfspace_vertices(normals, np.full(len(normals), -size))
         axis = normals.sum(axis=0)
-        axis /= float(np.linalg.norm(axis))
-        depth = float(np.min(eroded @ axis)) - size
+        axis /= _length(axis)
+        depth = float(np.min(transform.along(eroded, axis))) - size
         rows = np.vstack([normals, -axis])
         corners = _halfspace_vertices(
             rows, np.append(np.full(len(normals), EDGE_OVERSHOOT), -depth)
@@ -2193,7 +2316,7 @@ def _corner_tools(
         cone = _cone_planes(normals)
         corners = _halfspace_vertices(
             np.vstack([normals, cone]),
-            np.concatenate([np.full(len(normals), EDGE_OVERSHOOT), cone @ centre]),
+            np.concatenate([np.full(len(normals), EDGE_OVERSHOOT), transform.along(cone, centre)]),
         )
         ball_points = ball_vertices + centre
     local = _corner_hull(corners, vertex)
@@ -2226,7 +2349,10 @@ def _mixed_corner_frame(star: list[tuple[MeshEdge, int]]) -> tuple[np.ndarray, b
         if bool(np.all(np.linalg.norm(sides - normal, axis=1) > EPS_GEOM))
     )
     axes = np.column_stack([sides[0], sides[1], top])
-    if not bool(np.all(np.abs(axes.T @ axes - np.eye(3)) <= EPS_GEOM)):
+    gram = np.array(
+        [[units.dot3(axes[:, row], axes[:, column]) for column in range(3)] for row in range(3)]
+    )
+    if not bool(np.all(np.abs(gram - np.eye(3)) <= EPS_GEOM)):
         return None
     frame = np.eye(4)
     frame[:3, :3] = axes
@@ -2248,7 +2374,8 @@ def _check_corner_region(
     clipped = boolean(
         "intersection", [mesh, region], quality=quality, allow_empty=True, cancelled=cancelled
     )
-    local = (clipped.mesh.raw.triangles - frame[:3, 3]) @ frame[:3, :3]
+    shifted = np.asarray(clipped.mesh.raw.triangles, dtype=np.float64) - frame[:3, 3]
+    local = np.stack([transform.along(shifted, frame[:3, axis]) for axis in range(3)], axis=-1)
     allowed = np.zeros(len(local), dtype=bool)
     for axis, levels in ((0, (-size, 0.0, size)), (1, (-size, 0.0, size)), (2, (-size, 0.0))):
         for level in levels:
@@ -2888,15 +3015,18 @@ def _placed_edge_work(
         )
     raw = mesh.raw.copy()
     delta = np.asarray(raw.vertices) - frame[:3, 3]
-    local = delta @ frame[:3, :3]
+    local = _in_frame(delta, frame[:3, :3])
     # Subtraktion, Skalarprodukte und die vorher berechneten Einheitsnormalen
     # tragen Float64-Rauschen. Nur dessen Band an den drei belegten Ebenen
     # durch den Knoten wird bereinigt, kein geometrischer Abstand gerundet.
     roundoff = 32.0 * np.finfo(float).eps
-    error = roundoff * (np.abs(delta) @ np.abs(frame[:3, :3]) + np.abs(frame[:3, 3]).sum() + 1.0)
+    error = roundoff * (
+        _in_frame(np.abs(delta), np.abs(frame[:3, :3])) + np.abs(frame[:3, 3]).sum() + 1.0
+    )
     local[np.abs(local) <= error] = 0.0
     raw.vertices = local
-    if float(np.linalg.det(frame[:3, :3])) < 0.0:
+    turn = frame[:3, :3]
+    if units.dot3(turn[:, 0], np.cross(turn[:, 1], turn[:, 2])) < 0.0:
         raw.faces = raw.faces[:, ::-1]
     local_entries: list[MeshEdge] = []
     local_chosen: list[MeshEdge] = []
@@ -2906,12 +3036,12 @@ def _placed_edge_work(
         # Die gespeicherten Knotennummern verbinden weiterhin die gewählten
         # Züge, sind aber keine Indizes dieses Zwischenkörpers mehr.
         offset = np.asarray(entry.points) - frame[:3, 3]
-        points = offset @ frame[:3, :3]
+        points = _in_frame(offset, frame[:3, :3])
         noise = roundoff * (
-            np.abs(offset) @ np.abs(frame[:3, :3]) + np.abs(frame[:3, 3]).sum() + 1.0
+            _in_frame(np.abs(offset), np.abs(frame[:3, :3])) + np.abs(frame[:3, 3]).sum() + 1.0
         )
         points[np.abs(points) <= noise] = 0.0
-        normals = np.asarray(entry.normals) @ frame[:3, :3]
+        normals = _in_frame(np.asarray(entry.normals, dtype=float), frame[:3, :3])
         normals[np.abs(normals) <= roundoff] = 0.0
         normals /= np.linalg.norm(normals, axis=2, keepdims=True)
         placed = _describe(
@@ -3129,14 +3259,14 @@ def sharp_corner(
             ),
         )
     axis = np.asarray(feature.params["axis"], dtype=float)
-    axis = axis / float(np.linalg.norm(axis))
+    axis = axis / _length(axis)
     normals, neighbours = _around(mesh, triangles, axis, feature.params.get("centre"), features)
     if len(normals) != THROUGH:
         raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
     first, second = normals[0], normals[1]
     line, point = _plane_cut(first, neighbours[0], second, neighbours[1])
 
-    if float(np.dot(axis, line)) < 0.0:
+    if units.dot3(axis, line) < 0.0:
         line = -line
     centre = np.asarray(feature.params["centre"], dtype=float)
     # **Ohne Überstand.** Der Füllkörper wird vereinigt, und was über das Ende
@@ -3144,7 +3274,7 @@ def sharp_corner(
     # 24000,72 mm³ statt 24000,0 und ein Quader, der 20,04 mm hoch war. Derselbe
     # Fall wie bei der Kehle in :func:`_wedge`, nur eine Handlung weiter.
     half = float(feature.params.get("length", 0.0)) / 2.0
-    middle = point + line * float(np.dot(centre - point, line))
+    middle = point + line * units.dot3(centre - point, line)
 
     corners = np.asarray(mesh.raw.faces, dtype=np.int64)[triangles]
     points = np.asarray(mesh.raw.vertices, dtype=float)[np.unique(corners)]
@@ -3153,7 +3283,9 @@ def sharp_corner(
     # deckt den Bogen sicher ab und liegt mit seinen Flanken trotzdem in den
     # Nachbarebenen — dort ist ohnehin Material (§39, „überall breiter").
     across = points - middle
-    reach = float(np.max(np.linalg.norm(across - np.outer(across @ line, line), axis=1)))
+    reach = float(
+        np.max(np.linalg.norm(across - np.outer(transform.along(across, line), line), axis=1))
+    )
     return SharpCorner(
         start=middle - line * half,
         end=middle + line * half,
@@ -3216,7 +3348,7 @@ def _plane_cut(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Schnittgerade zweier Ebenen: Richtung und ein Punkt darauf."""
     line = np.cross(first, second)
-    length = float(np.linalg.norm(line))
+    length = _length(line)
     if length <= EPS_GEOM:
         raise GeometryError(
             detail=_(
@@ -3227,11 +3359,12 @@ def _plane_cut(
     line = line / length
     # Der Punkt auf beiden Ebenen, der der Bauart nach am stabilsten ist:
     # gelöst wird das 3x3-System aus den zwei Ebenen und der Schnittgeraden.
-    matrix = np.vstack([first, second, line])
-    right = np.array(
-        [float(np.dot(first, on_first)), float(np.dot(second, on_second)), 0.0], dtype=float
+    point = _solved3(
+        (first, second, line), (units.dot3(first, on_first), units.dot3(second, on_second), 0.0)
     )
-    return line, np.linalg.solve(matrix, right)
+    if point is None:
+        raise GeometryError(detail=NOT_BETWEEN_TWO_PLANES, suggestions=(CHANGE_SELECTION, CANCEL))
+    return line, point
 
 
 def unround(
@@ -3356,7 +3489,7 @@ def radial_rounding(
     axis = np.asarray(fitted.axis)
     centre = np.asarray(fitted.centre)
     relative = old - centre
-    axial = np.outer(relative @ axis, axis)
+    axial = np.outer(transform.along(relative, axis), axis)
     radial = relative - axial
     # Auch nachträglich eingefügte Punkte auf einer Sehne skalieren mit.
     # Sie auf den Kreis zu ziehen würde die vorhandene Facette ausbeulen.
@@ -3464,11 +3597,11 @@ def _placed(corner: SharpCorner) -> _Placed:
     """Die wiederhergestellte Kante, so beschrieben, wie ``edge_key`` sie liest."""
     middle = (corner.start + corner.end) / 2.0
     along = corner.end - corner.start
-    along = along / float(np.linalg.norm(along))
+    along = along / _length(along)
     return _Placed(
         middle=(float(middle[0]), float(middle[1]), float(middle[2])),
         direction=(float(along[0]), float(along[1]), float(along[2])),
-        extent=float(np.linalg.norm(corner.end - corner.start)) / 2.0,
+        extent=_length(corner.end - corner.start) / 2.0,
     )
 
 
@@ -3545,7 +3678,7 @@ def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
     parts: list[Any] = []
     for first, second in itertools.pairwise(points):
         along = second - first
-        reach = float(np.linalg.norm(along))
+        reach = _length(along)
         if reach <= EPS_GEOM:
             continue
         rod = lathe.cylinder(radius=radius, height=reach, sections=_ring_steps(radius))
@@ -3586,7 +3719,7 @@ def _towards(along: np.ndarray, middle: np.ndarray) -> np.ndarray:
     frame = np.eye(4)
     helper = np.array([0.0, 0.0, 1.0]) if abs(float(along[2])) < 0.9 else np.array([1.0, 0.0, 0.0])
     across = np.cross(helper, along)
-    across = across / float(np.linalg.norm(across))
+    across = across / _length(across)
     frame[:3, 0] = across
     frame[:3, 1] = np.cross(along, across)
     frame[:3, 2] = along
