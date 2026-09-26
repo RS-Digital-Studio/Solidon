@@ -34,6 +34,7 @@ from app.core.backends.llm import (
 )
 from app.core.bootstrap import load_operations
 from app.core.knowledge import profiles
+from app.core.registry import menu_twins
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import Source
@@ -129,7 +130,20 @@ class Outcome:
         # ist.** Als Menge verglichen galt der Halter mit zwei M4-Löchern schon
         # mit einem Schraubenloch als erfüllt (Gesamtreview 05.09.2026, R36).
         # Gefunden von 3d-druck-46 beim Gegenlesen, vor dem ersten Modelllauf.
-        return Counter(self.case.expects_ops) <= Counter(self.operations)
+        #
+        # **Und ein Zwilling ist dieselbe Handlung** (P2.8). Seit dem 21.09.2026
+        # steht im Menü der exakte Quader, der Netz-Quader ist sein versteckter
+        # Zwilling; neun Fälle erwarteten weiter ``create_box``. Ein Modell, das
+        # wie der Kunde zur ersten Wahl griff, fiel damit durch, und eines, das
+        # die zweite nahm, bestand — am 26.09.2026 verschob das den Vergleich
+        # zweier Stände um vier Fälle. Gezählt wird deshalb je Handlung.
+        return _acts(self.case.expects_ops) <= _acts(self.operations)
+
+
+def _acts(names: tuple[str, ...]) -> Counter[str]:
+    """Die Operationen als Handlungen: ein versteckter Zwilling zählt als der sichtbare."""
+    twins = menu_twins()
+    return Counter(twins.get(name, name) for name in names)
 
 
 def project_with_plate() -> Project:

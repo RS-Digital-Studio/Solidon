@@ -1096,3 +1096,35 @@ def test_the_score_counts_how_often_an_expected_operation_must_appear() -> None:
 
     assert not half.good, "ein Loch von zweien ist kein Treffer"
     assert whole.good
+
+
+def test_a_twin_counts_as_the_same_act_in_the_score() -> None:
+    """P2.8: Der exakte Quader ist die erste Wahl, der Netz-Quader sein Zwilling.
+
+    Neun Fälle erwarteten ``create_box``; ein Modell, das wie der Kunde zum
+    exakten Quader griff, fiel damit durch. Am 26.09.2026 verschob das den
+    Vergleich zweier Stände um vier Fälle. Beide zählen als dieselbe Handlung —
+    und eine fehlende bleibt ein Fehler.
+    """
+    from tests.agent_cases import by_id
+    from tools.run_agent_suite import Outcome
+
+    case = by_id("bracket")
+    assert "create_box" in case.expects_ops, "der Fall, um den es geht"
+    exact = Outcome(
+        case=case,
+        operations=("create_brep_box", "insert_screw_hole", "insert_screw_hole"),
+        parameters=1,
+    )
+    mesh = Outcome(
+        case=case,
+        operations=("create_box", "insert_screw_hole", "insert_screw_hole"),
+        parameters=1,
+    )
+    missing = Outcome(
+        case=case, operations=("insert_screw_hole", "insert_screw_hole"), parameters=1
+    )
+
+    assert exact.good, "die erste Wahl des Menüs erfüllt den Fall"
+    assert mesh.good, "der Zwilling ebenso"
+    assert not missing.good, "ohne Quader bleibt es ein Fehler"
