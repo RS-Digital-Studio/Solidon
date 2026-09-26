@@ -15,6 +15,85 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.5.1
+
+### Modificare i fori
+
+- Un foro con svasatura da un lato e smusso dall'altro si può inclinare, spostare e duplicare. Prima Solidon rifiutava.
+- Un foro o una svasatura inclinati non tagliano più ciò che sta davanti alla loro imboccatura, come una nervatura o il nido d'ape accanto.
+- Un foro svasato che sbocca su una faccia bombata si può spostare, e dopo averlo inclinato o rimosso non sporge più alcun tappo dalla faccia.
+- Spostare e duplicare avvisano quando la parete verso il foro vicino diventa troppo sottile o si rompe.
+- Se un foro esce dal fianco del pezzo dopo uno spostamento, una duplicazione o un'inclinazione, Solidon lo dice anche nei punti a gradino. Una copia non creata viene notata.
+- Su nervature e nidi d'ape, un foro inclinato non segnala più per errore di sporgere oltre il bordo.
+- Dopo spostamento, inclinazione o duplicazione, il pannello delle caratteristiche mostra le quote che il risultato ha davvero.
+- Se su un corpo esatto un taglio di foro fallisce senza che si noti, Solidon se ne accorge e ricalcola. Prima poteva restare un corpo rotto.
+- Un'asola si può accorciare. Tirata alla sua stessa larghezza, torna a essere un foro rotondo.
+- La maniglia all'estremità di un'asola si afferra in qualsiasi punto dell'apertura, e al primo trascinamento non salta più verso il puntatore.
+- Se parti di un modello sono infilate l'una nell'altra, Solidon le unisce prima del calcolo, come verranno stampate. Volume e fori tornano, e il rapporto lo dice.
+- Se allargate un foro su un modello grande, l'anteprima precisa mostra di nuovo tutto il materiale asportato invece di dirsi incompleta.
+- Mentre digitate una quota su una figura grande, l'anteprima grossolana compare in meno di un secondo invece che fino a diciannove, e l'anteprima di un foro riesce.
+- Se un passaggio su un modello aperto calcola solo in modo approssimato e il volume cresce, il rapporto indica lo scostamento e propone «Prima ripara, poi ricalcola».
+
+### Quote nella vista
+
+- Da un foro all'altro le quote nella vista compaiono in un terzo del tempo. Il primo clic su una caratteristica non blocca più la finestra, nemmeno sui modelli grandi.
+- Un clic su un foro non mostra più immagini intermedie: pannello di selezione e scheda delle quote compaiono subito al loro posto, senza saltare.
+- Esc sulle quote nella vista scarta la bozza e toglie la selezione, come «Annulla».
+- Un clic su «Applica» non va più perso in silenzio. Vengono riletti solo i campi in cui avete digitato.
+- Un foro iniziato non va più perso per strada: un clic nel rapporto, un cambio di strumento o Ctrl+Z chiedono prima di applicarlo o annullarlo.
+- Digitando una coordinata, i campi quota non spariscono più dopo la seconda cifra.
+
+### Riconoscimento
+
+- Le caratteristiche vengono riconosciute da sole fino a 1,5 milioni di triangoli. Fino a cinque milioni Solidon chiede prima e indica la memoria necessaria e la durata sul vostro computer.
+- Se rifiutate il riconoscimento completo, «Riconosci tutte le caratteristiche» lo recupera più tardi dal rapporto. Se dura troppo, si può caricare senza.
+- Sui modelli grandi «Riconosci elementi in un punto» trova facce, sedi e appiattimenti dove prima segnalava troppi triangoli. Il punto si sceglie anche da tastiera.
+- I modelli grandi vengono riconosciuti molto più in fretta: un letto da casa delle bambole generato, 1,2 milioni di triangoli, in 27 secondi invece di 174. Annulla agisce in pochi secondi.
+- Scritte e montanti compaiono nell'albero come lati arrotondati invece che come decine di raccordi dai raggi variabili, anche dopo una suddivisione degli spigoli.
+- I contorni fatti di archi e rette vengono riconosciuti arco per arco con il loro raggio. La conversione in corpo esatto diventa così molto più rapida.
+- Un perno a gradino non conta più come filettatura. Tornano i cilindri e i fori che questo scambio aveva inghiottito.
+- Se un modello ha più di 5 000 caratteristiche, Solidon tiene le più grandi invece di restare senza nessuna. Scalare non rimescola i loro nomi.
+
+### Importare e riparare
+
+- Se a un modello manca un pezzo di parete di un foro o parte di un cono di svasatura, Solidon chiude il vuoto come parete, non come coperchio di traverso al foro.
+- Le cuciture aperte si chiudono all'importazione e alla riparazione senza unire parti che si toccano soltanto. Un modello integro resta invariato.
+- Le sovrapposizioni le risolve ora «Ripara» da solo. Se le parti di un modello importato sono infilate l'una nell'altra, il rapporto propone «Risolvi le sovrapposizioni».
+- Una superficie senza spessore resta aperta e propone «Dai spessore». Un'apertura grande indica il suo punto con «Mostra il punto», e «Lascia aperto» lascia aperta solo lei.
+- Una parte rovesciata accanto a un corpo cavo viene raddrizzata senza perdere la cavità. Una parte dentro il materiale di un'altra viene segnalata invece che indovinata.
+- Il rapporto dopo l'importazione è più corto: i rilievi smentiti dal risultato spariscono, e dove si può fare qualcosa c'è un pulsante invece di un consiglio.
+- La mappa dei difetti della mesh mostra le zone sane nel colore del corpo, così ogni difetto risalta, e porta «Ripara» direttamente nella legenda.
+- La ricerca delle sovrapposizioni arriva ora fino in fondo anche sui modelli con ventagli di triangoli stretti. Mappa dei difetti e riparazione vedono tutto il modello.
+- Un 3MF di PrusaSlicer non carica più modificatori, blocchi e rinforzi dei supporti come materiale pieno. Un volume negativo viene sottratto dal pezzo.
+- Con «Affina gli spigoli» restano tutte le caratteristiche e i triangoli sono fino a quattro volte meno: un supporto per trapano a 1 mm in cinque secondi invece di quattordici minuti.
+- Un modello chiuso resta stagno e conserva i colori del filamento. Con troppi triangoli, Solidon indica una lunghezza di spigolo che funziona davvero.
+- I grandi assiemi si importano più in fretta: la riparazione all'importazione di una nave pirata da 1,2 milioni di triangoli richiede 3,6 secondi invece di 6.
+
+### Stampare e passare allo slicer
+
+- Il livello «Standard» stampa con velocità e accelerazioni del profilo del produttore invece di frenare ogni stampante a 40 mm/s. Su una Centauri Carbon 2 la stampa dura circa il 40 % in meno.
+- Anche lo spostamento a vuoto viene dalla stampante: la Centauri Carbon 2 si muove a 500 invece di 150 mm/s tra le isole, perché l'ugello non coli lungo il tragitto.
+- Un soffitto sopra un canale d'acqua o un tunnel non richiama più supporti sul modello. Solidon propone allora supporti solo dal piano, e il canale resta libero.
+- Nuovo suggerimento «Tenere liberi i canali»: applicato, mette un blocco dei supporti nei canali per PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
+- I supporti a griglia arrivano allo slicer come vera griglia, con la direzione che cambia a ogni strato, invece che come linee sciolte che si spostano in stampa.
+- Se un pezzo poggia su molti piedini, Solidon propone un brim, anche se i piedini insieme avrebbero superficie sufficiente.
+- Una striscia stretta e inclinata lungo la parete esterna non conta più nel rapporto come un lungo ponte.
+- Il passaggio a Cura trasmette i primi strati senza ventola come avvio graduale. L'avviso arriva solo se il file di stampa finito si discosta davvero.
+
+### Assistente con modello locale
+
+- La scelta del modello consiglia anche modelli più piccoli da 8 GB di memoria grafica e indica per ciascuno la memoria che occupa e quanto bene gestisce richieste in più parti.
+- L'assistente riceve in dettaglio solo le azioni adatte alla richiesta. Resta così spazio per cronologia e risposta, e le richieste in più parti riescono molto più spesso.
+- Il modello locale resta caricato tre minuti dopo una risposta, e la domanda successiva non aspetta più il suo avvio.
+- Una risposta che non trova una fine si interrompe dopo una lunghezza fissa e viene segnalata come troncata, invece di occupare la scheda grafica per minuti.
+
+### Uso e sistema
+
+- Durante il caricamento e i calcoli lunghi un orologio conta il tempo trascorso, anche quando l'avanzamento resta fermo per un po'.
+- Un modello su un'unità lenta o che non risponde non blocca più la finestra all'apertura.
+- Se un file in «Aperti di recente» è stato spostato, Solidon lo dice e propone «Scegli un altro file».
+- Un file che non si è potuto leggere non finisce più in «Aperti di recente», e il file successivo non ne annuncia più il nome durante il caricamento.
+
 ## 0.5.0
 
 ### Riconoscimento

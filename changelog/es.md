@@ -16,6 +16,85 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.5.1
+
+### Editar taladros
+
+- Un taladro con avellanado en un lado y chaflán en el otro se puede inclinar, desplazar y duplicar. Antes, Solidon lo rechazaba.
+- Un taladro o avellanado inclinado ya no corta lo que está delante de su boca, como una nervadura o el panal de al lado.
+- Un taladro avellanado que desemboca en una cara curva se puede desplazar, y tras inclinarlo o quitarlo ya no sobresale ningún tapón de la cara.
+- Desplazar y duplicar avisan cuando la pared hacia el taladro vecino se vuelve demasiado fina o se rompe.
+- Si un taladro sale por el lateral de la pieza tras desplazarlo, duplicarlo o inclinarlo, Solidon lo indica también en zonas escalonadas. Una copia que no se creó se detecta.
+- En nervaduras y panales, un taladro inclinado ya no indica por error que sobresale del borde.
+- Tras desplazar, inclinar o duplicar, el panel de características muestra las cotas que el resultado tiene de verdad.
+- Si en un cuerpo exacto un corte de taladro falla sin que se note, Solidon lo detecta y vuelve a calcular. Antes podía quedar un cuerpo roto.
+- Una ranura se puede acortar. Estirada hasta su propio ancho, vuelve a ser un taladro redondo.
+- El tirador del extremo de una ranura se agarra en cualquier punto de la abertura, y ya no salta hacia el puntero en el primer arrastre.
+- Si piezas de un modelo están metidas unas en otras, Solidon las une antes de calcular, tal como se imprimirán. Volumen y taladros cuadran entonces, y el informe lo dice.
+- Si agranda un taladro en un modelo grande, la vista previa precisa vuelve a mostrar todo el material retirado en lugar de declararse incompleta.
+- Al escribir una cota en una figura grande, la vista previa aproximada aparece en menos de un segundo en lugar de hasta diecinueve, y la de un taladro en ella funciona.
+- Si un paso en un modelo abierto solo calcula de forma aproximada y el volumen crece, el informe indica la desviación y ofrece «Reparar primero y volver a calcular».
+
+### Cotas en la vista
+
+- De taladro en taladro, las cotas en la vista aparecen en un tercio del tiempo. El primer clic en una característica ya no congela la ventana, ni siquiera en modelos grandes.
+- Un clic en un taladro ya no muestra imágenes intermedias: el panel de selección y la tarjeta de cotas aparecen directamente en su sitio, sin saltar.
+- Escape en las cotas de la vista descarta el borrador y quita la selección, como «Cancelar».
+- Un clic en «Aplicar» ya no se pierde en silencio. Solo se vuelven a leer los campos en los que ha escrito.
+- Un taladro empezado ya no se pierde por el camino: un clic en el informe, un cambio de herramienta o Ctrl+Z piden primero aplicarlo o cancelarlo.
+- Al escribir una coordenada, los campos de cota ya no desaparecen tras la segunda cifra.
+
+### Reconocimiento
+
+- Las características se reconocen solas hasta 1,5 millones de triángulos. Hasta cinco millones, Solidon pregunta antes e indica la memoria necesaria y la duración en su ordenador.
+- Si rechaza el reconocimiento completo, «Reconocer todas las características» lo recupera más tarde desde el informe. Si tarda demasiado, se puede cargar sin él.
+- En modelos grandes, «Detectar detalles en un punto» encuentra caras, alojamientos y aplanamientos donde antes indicaba demasiados triángulos. El punto también se elige con el teclado.
+- Los modelos grandes se reconocen mucho más rápido: una cama de casa de muñecas generada, de 1,2 millones de triángulos, en 27 segundos en vez de 174. Cancelar actúa en pocos segundos.
+- Rótulos y tirantes aparecen en el árbol como lados redondeados en lugar de decenas de redondeos con radios cambiantes, también tras subdividir las aristas.
+- Los contornos de arcos y rectas se reconocen arco a arco con su radio. Convertir en cuerpo exacto es así mucho más rápido.
+- Un tetón escalonado ya no cuenta como rosca. Vuelven los cilindros y taladros que esa confusión se había tragado.
+- Si un modelo tiene más de 5 000 características, Solidon conserva las más grandes en lugar de quedarse sin ninguna. Escalar no revuelve sus nombres.
+
+### Importar y reparar
+
+- Si a un modelo le falta un trozo de pared de taladro o parte de un cono de avellanado, Solidon cierra el hueco como pared, no como tapa a través del taladro.
+- Las costuras abiertas se cierran al importar y reparar sin unir piezas que solo se tocan. Un modelo intacto queda sin cambios.
+- Los solapamientos los resuelve ahora «Reparar» por sí solo. Si las piezas de un modelo importado están metidas unas en otras, el informe ofrece «Resolver solapamientos».
+- Una superficie sin grosor queda abierta y ofrece «Dar grosor». Una abertura grande indica su sitio con «Mostrar el punto», y «Dejar abierto» deja abierta solo esa.
+- Una pieza vuelta del revés junto a un cuerpo hueco se endereza sin perder la cavidad. Una pieza dentro del material de otra se indica en lugar de adivinarse.
+- El informe tras importar es más corto: los hallazgos que el resultado desmiente desaparecen, y donde se puede hacer algo hay un botón en lugar de un consejo.
+- El mapa de defectos de malla muestra las zonas sanas en el color del cuerpo, para que cada defecto destaque, y lleva «Reparar» directamente en la leyenda.
+- La búsqueda de solapamientos llega ahora al final también en modelos con abanicos de triángulos estrechos. Mapa de defectos y reparación ven entonces todo el modelo.
+- Un 3MF de PrusaSlicer ya no carga modificadores, bloqueadores ni reforzadores de soportes como material macizo. Un volumen negativo se resta de la pieza.
+- Con «Refinar las aristas» se conservan todas las características y salen hasta cuatro veces menos triángulos: un soporte de taladradora a 1 mm en cinco segundos en vez de catorce minutos.
+- Un modelo cerrado sigue estanco y conserva sus colores de filamento. Con demasiados triángulos, Solidon indica una longitud de arista que funciona de verdad.
+- Los conjuntos grandes se importan más rápido: la reparación al importar un barco pirata de 1,2 millones de triángulos tarda 3,6 segundos en lugar de 6.
+
+### Imprimir y entregar al slicer
+
+- El nivel «Standard» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar cada impresora a 40 mm/s. En una Centauri Carbon 2 se imprime un 40 % más rápido.
+- El desplazamiento también viene de la impresora: la Centauri Carbon 2 se mueve a 500 en lugar de 150 mm/s entre islas, para que la boquilla no gotee por el camino.
+- Un techo sobre un canal de agua o un túnel ya no atrae soportes sobre el modelo. Solidon propone entonces soportes solo desde la cama, y el canal queda libre.
+- Nueva sugerencia «Mantener libres los canales»: aplicada, coloca un bloqueador de soportes en los canales para PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer y Creality Print.
+- Los soportes de rejilla llegan al slicer como rejilla de verdad, con la dirección cambiando en cada capa, en lugar de líneas sueltas que se desplazan al imprimir.
+- Si una pieza se apoya en muchos pies pequeños, Solidon propone un brim, aunque los pies juntos tengan superficie suficiente.
+- Una franja estrecha e inclinada junto a la pared exterior ya no cuenta en el informe como un puente largo.
+- La entrega a Cura transmite las primeras capas sin ventilador como arranque progresivo. Solo avisa si el archivo de impresión final difiere de verdad.
+
+### Asistente con modelo local
+
+- La elección de modelo recomienda también modelos más pequeños desde 8 GB de memoria gráfica e indica para cada uno la memoria que ocupa y cómo resuelve encargos de varias partes.
+- El asistente recibe en detalle solo las acciones que encajan con la petición. Así queda sitio para el historial y la respuesta, y los encargos complejos salen bien mucho más a menudo.
+- El modelo local se queda cargado tres minutos tras una respuesta, y la siguiente pregunta ya no espera a que arranque.
+- Una respuesta que no encuentra fin se corta tras una longitud fija y se indica como cortada, en lugar de ocupar la tarjeta gráfica durante minutos.
+
+### Manejo y sistema
+
+- Al cargar y en cálculos largos, un reloj cuenta el tiempo transcurrido, aunque el progreso se quede quieto un rato.
+- Un modelo en una unidad lenta o que no responde ya no congela la ventana al abrirlo.
+- Si un archivo de «Abiertos recientemente» se ha movido, Solidon lo dice y ofrece «Elegir otro archivo».
+- Un archivo que no se pudo leer ya no acaba en «Abiertos recientemente», y el siguiente archivo ya no anuncia su nombre al cargar.
+
 ## 0.5.0
 
 ### Reconocimiento

@@ -16,6 +16,85 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.5.1
+
+### Modifier les perçages
+
+- Un perçage avec une fraisure d'un côté et un chanfrein de l'autre se laisse incliner, déplacer et dupliquer. Avant, Solidon refusait.
+- Un perçage ou une fraisure inclinés n'enlèvent plus ce qui se trouve devant leur entrée, comme une nervure ou le nid d'abeille voisin.
+- Un perçage fraisé qui débouche sur une face bombée se laisse déplacer, et après inclinaison ou suppression plus aucun bouchon ne dépasse de la face.
+- Déplacer et dupliquer avertissent quand la paroi vers le perçage voisin devient trop mince ou se rompt.
+- Si un perçage sort sur le côté de la pièce après déplacement, duplication ou inclinaison, Solidon le dit aussi aux endroits en retrait. Une copie non créée est signalée.
+- Sur les nervures et dans les nids d'abeille, un perçage incliné ne signale plus à tort qu'il dépasse le bord.
+- Après un déplacement, une inclinaison ou une duplication, le panneau des caractéristiques montre les cotes réelles du résultat.
+- Si une découpe de perçage échoue sans que cela se voie sur un corps exact, Solidon le remarque et recalcule. Avant, un corps cassé pouvait rester.
+- Un trou oblong se laisse raccourcir. Étiré à sa propre largeur, il redevient un perçage rond.
+- La poignée au bout d'un trou oblong se saisit n'importe où dans l'ouverture, et elle ne saute plus vers le pointeur au premier mouvement.
+- Quand des pièces d'un modèle s'emboîtent, Solidon les unit avant le calcul, comme elles seront imprimées. Volume et perçages sont alors justes, et le rapport le dit.
+- Si vous agrandissez un perçage sur un grand modèle, l'aperçu précis montre à nouveau toute la matière enlevée au lieu de se dire incomplet.
+- Pendant la saisie d'une cote sur une grande figure, l'aperçu grossier apparaît en moins d'une seconde au lieu de dix-neuf au plus, et l'aperçu d'un perçage y réussit.
+- Si une étape sur un modèle ouvert ne calcule qu'approximativement et que le volume augmente, le rapport indique l'écart et propose « Réparer d'abord, puis recalculer ».
+
+### Cotes dans la vue
+
+- D'un perçage à l'autre, les cotes dans la vue apparaissent en un tiers du temps. Le premier clic sur une caractéristique ne fige plus la fenêtre, même sur un grand modèle.
+- Un clic sur un perçage ne montre plus d'images intermédiaires : le panneau de sélection et la carte des cotes apparaissent directement à leur place, sans sauter.
+- Échap sur les cotes dans la vue abandonne le brouillon et désélectionne, comme « Annuler ».
+- Un clic sur « Appliquer » ne se perd plus en silence. Seuls les champs que vous avez saisis sont relus.
+- Un perçage commencé ne se perd plus en chemin : un clic dans le rapport, un changement d'outil ou Ctrl+Z demande d'abord de l'appliquer ou de l'annuler.
+- Saisir une coordonnée ne fait plus disparaître les champs de cote après le deuxième chiffre.
+
+### Reconnaissance
+
+- Les caractéristiques sont reconnues d'elles-mêmes jusqu'à 1,5 million de triangles. Jusqu'à cinq millions, Solidon demande d'abord et indique la mémoire nécessaire et la durée sur votre ordinateur.
+- Si vous refusez la reconnaissance complète, « Reconnaître toutes les caractéristiques » la rattrape plus tard depuis le rapport. Trop longue, elle s'évite au chargement.
+- Sur les grands modèles, « Détecter les éléments à un endroit » trouve des faces, des logements et des méplats là où il signalait trop de triangles. L'endroit se choisit aussi au clavier.
+- Les grands modèles sont reconnus bien plus vite : un lit de maison de poupée généré, 1,2 million de triangles, en 27 secondes au lieu de 174. Annuler agit en quelques secondes.
+- Lettrages et entretoises apparaissent dans l'arbre comme des côtés arrondis au lieu de dizaines de congés aux rayons changeants, même après une subdivision des arêtes.
+- Les contours faits d'arcs et de droites sont reconnus arc par arc avec leur rayon. La conversion en corps exact est ainsi bien plus rapide.
+- Un tenon épaulé ne passe plus pour un filetage. Les cylindres et les perçages que cette confusion avait avalés sont de retour.
+- Si un modèle a plus de 5 000 caractéristiques, Solidon garde les plus grandes au lieu de n'en afficher aucune. Une mise à l'échelle ne mélange pas leurs noms.
+
+### Importer et réparer
+
+- S'il manque à un modèle un morceau de paroi de perçage ou une partie de cône de fraisure, Solidon comble le trou par une paroi, pas par un couvercle en travers.
+- Les coutures ouvertes se ferment à l'import et à la réparation sans relier des pièces qui ne font que se toucher. Un modèle intact reste inchangé.
+- Les recouvrements sont désormais résolus par « Réparer » lui-même. Quand les pièces d'un modèle importé s'emboîtent, le rapport propose « Résoudre les recouvrements ».
+- Une surface sans épaisseur reste ouverte et propose « Donner une épaisseur ». Une grande ouverture se montre avec « Montrer l’endroit », et « Laisser ouvert » ne laisse qu'elle ouverte.
+- Une pièce retournée à côté d'un corps creux est remise à l'endroit sans perdre la cavité. Une pièce dans la matière d'une autre est signalée au lieu d'être devinée.
+- Le rapport après l'import est plus court : les constats que le résultat dément disparaissent, et là où l'on peut agir, un bouton remplace le conseil.
+- La carte des défauts de maillage montre les zones saines dans la couleur du corps, pour que chaque défaut ressorte, et porte « Réparer » directement dans la légende.
+- La recherche de recouvrements va jusqu'au bout aussi sur les modèles aux éventails de triangles étroits. Carte des défauts et réparation voient alors tout le modèle.
+- Un 3MF de PrusaSlicer ne charge plus les modificateurs, bloqueurs et renforts de supports comme matière pleine. Un volume négatif est soustrait de la pièce.
+- Avec « Affiner les arêtes », les caractéristiques restent et les triangles sont jusqu'à quatre fois moins nombreux : un support de perceuse à 1 mm en cinq secondes au lieu de quatorze minutes.
+- Un modèle fermé reste étanche et garde ses couleurs de filament. S'il y a trop de triangles, Solidon indique une longueur d'arête qui marche vraiment.
+- Les grands assemblages s'importent plus vite : la réparation à l'import d'un bateau pirate de 1,2 million de triangles prend 3,6 secondes au lieu de 6.
+
+### Imprimer et transmettre au slicer
+
+- Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de brider chaque imprimante à 40 mm/s. Sur une Centauri Carbon 2, l'impression dure environ 40 % de moins.
+- Le déplacement à vide vient aussi de l'imprimante : la Centauri Carbon 2 va à 500 au lieu de 150 mm/s entre les îlots, pour que la buse ne suinte pas en route.
+- Un plafond au-dessus d'un canal d'eau ou d'un tunnel n'attire plus de supports sur le modèle. Solidon propose alors des supports depuis le plateau uniquement.
+- Nouvelle suggestion « Garder les canaux libres » : appliquée, elle pose un bloqueur de supports dans les canaux pour PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print.
+- Les supports en grille arrivent au slicer comme une vraie grille, dont la direction change à chaque couche, au lieu de lignes libres qui se décalent à l'impression.
+- Quand une pièce repose sur beaucoup de petits pieds, Solidon propose un brim, même si les pieds réunis auraient assez de surface.
+- Une bande étroite et oblique le long de la paroi extérieure ne compte plus dans le rapport comme un long pont.
+- La transmission à Cura passe les premières couches sans ventilateur sous forme de montée progressive. L'avertissement ne vient que si le fichier d'impression diffère vraiment.
+
+### Assistant avec un modèle local
+
+- Le choix du modèle recommande aussi de plus petits modèles dès 8 Go de mémoire graphique et indique pour chacun la mémoire occupée et sa réussite sur les demandes à plusieurs étapes.
+- L'assistant ne reçoit en détail que les actions qui correspondent à la demande. Il reste de la place pour l'historique et la réponse, et les demandes complexes réussissent bien plus souvent.
+- Le modèle local reste chargé trois minutes après une réponse, et la question suivante n'attend plus son démarrage.
+- Une réponse qui ne trouve pas de fin s'arrête après une longueur fixe et est signalée comme coupée, au lieu d'occuper la carte graphique pendant des minutes.
+
+### Utilisation et système
+
+- Pendant le chargement et les longs calculs, une horloge compte le temps écoulé, même quand la progression reste immobile un moment.
+- Un modèle sur un disque lent ou qui ne répond pas ne fige plus la fenêtre à l'ouverture.
+- Si un fichier de « Ouverts récemment » a été déplacé, Solidon le dit et propose « Choisir un autre fichier ».
+- Un fichier illisible n'atterrit plus dans « Ouverts récemment », et le fichier suivant n'annonce plus son nom au chargement.
+
 ## 0.5.0
 
 ### Reconnaissance

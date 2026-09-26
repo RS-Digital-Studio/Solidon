@@ -15,6 +15,85 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.5.1
+
+### Editar furos
+
+- Um furo com escareamento de um lado e chanfro do outro pode ser inclinado, deslocado e duplicado. Antes, o Solidon recusava.
+- Um furo ou escareamento inclinado já não corta o que está à frente da sua boca, como uma nervura ou o favo ao lado.
+- Um furo escareado que desemboca numa face curva pode ser deslocado, e depois de o inclinar ou remover já não fica nenhum tampão saliente sobre a face.
+- Deslocar e duplicar avisam quando a parede até ao furo vizinho fica demasiado fina ou se rompe.
+- Se um furo sai pela lateral da peça depois de deslocado, duplicado ou inclinado, o Solidon indica-o também em zonas com degraus. Uma cópia que não foi criada é detetada.
+- Em nervuras e favos, um furo inclinado já não indica por engano que passa do bordo.
+- Depois de deslocar, inclinar ou duplicar, o painel de características mostra as cotas que o resultado tem de facto.
+- Se num corpo exato um corte de furo falha sem se notar, o Solidon deteta-o e volta a calcular. Antes podia ficar um corpo danificado.
+- Um furo oblongo pode ser encurtado. Puxado até à sua própria largura, volta a ser um furo redondo.
+- A pega na ponta de um furo oblongo agarra-se em qualquer ponto da abertura, e já não salta para o ponteiro no primeiro arrasto.
+- Quando peças de um modelo estão metidas umas nas outras, o Solidon une-as antes de calcular, tal como serão impressas. Volume e furos batem certo, e o relatório di-lo.
+- Se alargar um furo num modelo grande, a pré-visualização precisa volta a mostrar todo o material removido em vez de se dizer incompleta.
+- Ao escrever uma cota numa figura grande, a pré-visualização grosseira aparece em menos de um segundo em vez de até dezanove, e a de um furo nela resulta.
+- Se um passo num modelo aberto só calcula de forma aproximada e o volume cresce, o relatório indica o desvio e oferece «Reparar primeiro e voltar a calcular».
+
+### Cotas na vista
+
+- De furo em furo, as cotas na vista aparecem num terço do tempo. O primeiro clique numa característica já não congela a janela, mesmo em modelos grandes.
+- Um clique num furo já não mostra imagens intermédias: o painel de seleção e o cartão de cotas aparecem logo no seu lugar, sem saltar.
+- Escape nas cotas da vista descarta o rascunho e retira a seleção, como «Cancelar».
+- Um clique em «Aplicar» já não se perde em silêncio. Só são relidos os campos em que escreveu.
+- Um furo começado já não se perde pelo caminho: um clique no relatório, uma troca de ferramenta ou Ctrl+Z pedem primeiro para o aplicar ou cancelar.
+- Ao escrever uma coordenada, os campos de cota já não desaparecem depois do segundo algarismo.
+
+### Reconhecimento
+
+- As características são reconhecidas sozinhas até 1,5 milhões de triângulos. Até cinco milhões, o Solidon pergunta antes e indica a memória necessária e a duração no seu computador.
+- Se recusar o reconhecimento completo, «Reconhecer todas as características» recupera-o mais tarde a partir do relatório. Se demorar demasiado, pode carregar sem ele.
+- Em modelos grandes, «Detetar elementos num local» encontra faces, alojamentos e achatamentos onde antes indicava triângulos a mais. O local também se escolhe com o teclado.
+- Os modelos grandes são reconhecidos muito mais depressa: uma cama de casa de bonecas gerada, com 1,2 milhões de triângulos, em 27 segundos em vez de 174. Cancelar atua em segundos.
+- Letreiros e escoras aparecem na árvore como lados arredondados em vez de dezenas de arredondamentos com raios variáveis, também depois de subdividir as arestas.
+- Os contornos feitos de arcos e retas são reconhecidos arco a arco com o seu raio. A conversão em corpo exato fica assim muito mais rápida.
+- Um pino escalonado já não conta como rosca. Voltam os cilindros e furos que essa confusão tinha engolido.
+- Se um modelo tem mais de 5 000 características, o Solidon mantém as maiores em vez de ficar sem nenhuma. Escalar não baralha os seus nomes.
+
+### Importar e reparar
+
+- Se faltar a um modelo um pedaço de parede de furo ou parte de um cone de escareamento, o Solidon fecha a lacuna como parede, não como tampa atravessada no furo.
+- As costuras abertas fecham-se ao importar e reparar sem unir peças que apenas se tocam. Um modelo intacto fica inalterado.
+- As sobreposições são agora resolvidas pelo próprio «Reparar». Quando as peças de um modelo importado estão metidas umas nas outras, o relatório oferece «Resolver as sobreposições».
+- Uma superfície sem espessura fica aberta e oferece «Dar espessura». Uma abertura grande indica o seu local com «Mostrar o ponto», e «Deixar aberto» deixa aberta só essa.
+- Uma peça virada do avesso ao lado de um corpo oco é endireitada sem perder a cavidade. Uma peça dentro do material de outra é indicada em vez de adivinhada.
+- O relatório depois de importar é mais curto: as constatações que o resultado desmente desaparecem, e onde se pode agir há um botão em vez de um conselho.
+- O mapa de defeitos de malha mostra as zonas sãs na cor do corpo, para que cada defeito sobressaia, e traz «Reparar» diretamente na legenda.
+- A procura de sobreposições chega agora ao fim também em modelos com leques de triângulos estreitos. Mapa de defeitos e reparação veem então o modelo inteiro.
+- Um 3MF do PrusaSlicer já não carrega modificadores, bloqueadores e reforços de suportes como material maciço. Um volume negativo é subtraído da peça.
+- Com «Refinar as arestas» mantêm-se todas as características e surgem até quatro vezes menos triângulos: um suporte de berbequim a 1 mm em cinco segundos em vez de catorze minutos.
+- Um modelo fechado continua estanque e conserva as cores de filamento. Com triângulos a mais, o Solidon indica um comprimento de aresta que funciona de facto.
+- Os conjuntos grandes importam mais depressa: a reparação ao importar um navio pirata com 1,2 milhões de triângulos demora 3,6 segundos em vez de 6.
+
+### Imprimir e entregar ao slicer
+
+- O nível «Standard» imprime com as velocidades e acelerações do perfil do fabricante em vez de travar cada impressora a 40 mm/s. Numa Centauri Carbon 2, a impressão fica cerca de 40 % mais curta.
+- O percurso em vazio também vem da impressora: a Centauri Carbon 2 desloca-se a 500 em vez de 150 mm/s entre ilhas, para que o bico não escorra pelo caminho.
+- Um teto sobre um canal de água ou um túnel já não atrai suportes para o modelo. O Solidon propõe então suportes só da mesa, e o canal fica livre.
+- Nova sugestão «Manter os canais livres»: aplicada, coloca um bloqueador de suportes nos canais para PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
+- Os suportes em grelha chegam ao slicer como grelha verdadeira, com a direção a mudar em cada camada, em vez de linhas soltas que se deslocam na impressão.
+- Quando uma peça assenta em muitos pés pequenos, o Solidon propõe um brim, mesmo que os pés juntos tenham área suficiente.
+- Uma faixa estreita e inclinada junto à parede exterior já não conta no relatório como uma ponte longa.
+- A entrega ao Cura transfere as primeiras camadas sem ventoinha como arranque gradual. Só avisa quando o ficheiro de impressão final difere de facto.
+
+### Assistente com modelo local
+
+- A escolha do modelo recomenda também modelos mais pequenos a partir de 8 GB de memória gráfica e indica para cada um a memória que ocupa e como resolve pedidos com várias partes.
+- O assistente recebe em detalhe só as ações que servem o pedido. Fica assim espaço para o histórico e a resposta, e os pedidos com várias partes resultam muito mais vezes.
+- O modelo local fica carregado três minutos depois de uma resposta, e a pergunta seguinte já não espera pelo arranque.
+- Uma resposta que não encontra fim é interrompida após um comprimento fixo e indicada como cortada, em vez de ocupar a placa gráfica durante minutos.
+
+### Utilização e sistema
+
+- Ao carregar e em cálculos longos, um relógio conta o tempo decorrido, mesmo quando o progresso fica parado por algum tempo.
+- Um modelo numa unidade lenta ou que não responde já não congela a janela ao abrir.
+- Se um ficheiro de «Abertos recentemente» tiver sido movido, o Solidon di-lo e oferece «Escolher outro ficheiro».
+- Um ficheiro que não foi possível ler já não vai parar a «Abertos recentemente», e o ficheiro seguinte já não anuncia o nome dele ao carregar.
+
 ## 0.5.0
 
 ### Reconhecimento

@@ -40,6 +40,85 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.5.1
+
+### Bohrungen bearbeiten
+
+- Eine Bohrung mit Senkung auf der einen und Fase auf der anderen Seite lässt sich kippen, versetzen und verdoppeln. Vorher sagte Solidon dort ab.
+- Eine gekippte Bohrung oder Senkung schneidet nichts mehr weg, was vor ihrer Mündung steht, etwa eine Rippe oder die Waben daneben.
+- Mündet eine Senkbohrung in eine gewölbte Fläche, lässt sie sich versetzen, und nach dem Kippen oder Entfernen steht kein Pfropfen mehr über der Fläche.
+- Versetzen und Verdoppeln warnen, wenn die Wand zur Nachbarbohrung zu dünn wird oder aufreißt.
+- Läuft eine Bohrung nach dem Versetzen, Verdoppeln oder Kippen seitlich aus dem Teil, sagt Solidon es auch an abgesetzten Stellen. Eine Kopie, die nicht entstanden ist, fällt auf.
+- Auf Rippen und in Waben meldet eine gekippte Bohrung nicht mehr fälschlich, sie rage über die Kante.
+- Nach dem Versetzen, Kippen oder Verdoppeln zeigt das Merkmalfenster die Maße, die das Ergebnis wirklich hat.
+- Misslingt am exakten Körper ein Bohrungsschnitt, ohne dass es auffällt, erkennt Solidon das und rechnet neu. Vorher konnte ein kaputter Körper zurückbleiben.
+- Ein Langloch lässt sich kürzer ziehen. Auf seine eigene Breite gezogen, wird es wieder eine runde Bohrung.
+- Den Griff am Ende eines Langlochs fassen Sie überall in der Öffnung, und er springt beim ersten Zug nicht mehr zur Hand.
+- Stecken Teile eines Modells ineinander, vereinigt Solidon sie vor dem Rechnen, so wie sie gedruckt werden. Volumen und Bohrungen stimmen dann, und der Bericht sagt es.
+- Weiten Sie an einem großen Modell eine Bohrung auf, zeigt die genaue Vorschau wieder das ganze abgetragene Material, statt sich unvollständig zu nennen.
+- Beim Tippen eines Maßes an einer großen Figur steht die grobe Vorschau in unter einer Sekunde statt nach bis zu neunzehn, und die Vorschau einer Bohrung darauf gelingt.
+- Rechnet ein Schritt an einem offenen Modell nur angenähert und wächst dabei das Volumen, nennt der Bericht die Abweichung und bietet *Erst reparieren, dann neu rechnen* an.
+
+### Maße im Bild
+
+- Von Bohrung zu Bohrung stehen die Maße im Bild in einem Drittel der Zeit. Der erste Klick auf ein Merkmal hält das Fenster auch an großen Modellen nicht mehr an.
+- Ein Klick auf eine Bohrung zeigt keine Zwischenbilder mehr: Auswahlfenster und Maßkarte erscheinen gleich an ihrem Platz, ohne zu springen.
+- Escape an den Maßen im Bild verwirft den Entwurf und hebt die Auswahl auf, wie *Abbrechen*.
+- Ein Klick auf *Übernehmen* verfällt nicht mehr still. Neu gelesen werden nur die Felder, in die Sie getippt haben.
+- Ein begonnener Bohrungsentwurf geht nicht mehr nebenbei verloren: Ein Klick in den Prüfbericht, ein Werkzeugwechsel oder Strg+Z bittet erst, ihn zu übernehmen oder abzubrechen.
+- Beim Tippen einer Koordinate verschwinden die Maßfelder nicht mehr nach der zweiten Ziffer.
+
+### Erkennen
+
+- Merkmale werden bis 1,5 Millionen Dreiecke von selbst erkannt. Bis fünf Millionen fragt Solidon vorher und nennt den Speicherbedarf und die Dauer auf Ihrem Rechner.
+- Wer die volle Erkennung ablehnt, holt sie später mit *Alle Merkmale erkennen* im Prüfbericht nach. Dauert sie zu lange, lädt *Ohne Merkmalserkennung laden* das Modell ohne.
+- An großen Modellen findet *Merkmale an einer Stelle erkennen* Flächen, Taschen und Abflachungen, wo es vorher zu viele Dreiecke meldete. Die Stelle lässt sich auch per Tastatur wählen.
+- Große Modelle werden deutlich schneller erkannt: ein erzeugtes Puppenhausbett mit 1,2 Millionen Dreiecken in 27 statt 174 Sekunden. Abbrechen wirkt dabei nach wenigen Sekunden.
+- Schriftzüge und Streben stehen im Baum als gerundete Seiten statt als Dutzende Verrundungen mit wechselnden Radien, auch nach einer Kantenteilung.
+- Umrisse aus Bögen und Geraden werden Bogen für Bogen mit ihrem Radius erkannt. Das Umwandeln in einen exakten Körper geht dadurch um ein Vielfaches schneller.
+- Ein abgesetzter Zapfen gilt nicht mehr als Gewinde. Zylinder und Bohrungen, die diese Verwechslung verschluckt hatte, sind wieder da.
+- Hat ein Modell mehr als 5 000 Merkmale, behält Solidon die größten, statt ohne jedes Merkmal dazustehen. Skalieren bringt ihre Namen nicht durcheinander.
+
+### Einlesen und Reparieren
+
+- Fehlt einem Modell ein Stück Bohrungswand oder ein Teil eines Senkungskegels, schließt Solidon die Lücke als Wand, nicht als Deckel quer durch die Bohrung.
+- Offene Nähte werden beim Einlesen und Reparieren geschlossen, ohne Teile zu verbinden, die sich nur berühren. Ein heiles Modell bleibt unverändert.
+- Überschneidungen löst *Reparieren* jetzt von selbst auf. Stecken die Teile eines eingelesenen Modells ineinander, bietet der Prüfbericht *Überschneidungen auflösen* an.
+- Eine Fläche ohne Dicke bleibt offen und bietet *Dicke geben* an. Eine große Öffnung nennt ihren Ort mit *Stelle zeigen*, und *Offen lassen* lässt nur sie offen.
+- Ein umgestülptes Teil neben einem Hohlkörper wird gerichtet, ohne dass der Hohlraum verloren geht. Ein Teil im Material eines anderen wird gemeldet statt geraten.
+- Der Prüfbericht nach dem Einlesen ist kürzer: Befunde, die das Ergebnis widerlegt, fallen weg, und wo sich etwas tun lässt, steht ein Knopf statt eines Ratschlags.
+- Die Netzfehlerkarte zeigt heile Stellen in der Farbe des Körpers, damit einzelne Fehler auffallen, und trägt *Reparieren* direkt in der Legende.
+- Die Suche nach Überschneidungen kommt auch an Modellen mit Fächern aus schmalen Dreiecken bis zum Ende. Netzfehlerkarte und Reparatur sehen dann das ganze Modell.
+- Eine 3MF aus PrusaSlicer lädt Modifikatoren, Stützsperren und Stützverstärker nicht mehr als festes Material. Eine Aussparung wird vom Teil abgezogen.
+- Mit *Kanten verfeinern* bleiben alle Merkmale erhalten, und es entstehen bis zu viermal weniger Dreiecke: ein Bohrmaschinenhalter bei 1 mm in fünf Sekunden statt vierzehn Minuten.
+- Ein geschlossenes Modell bleibt dabei dicht und behält seine Filamentfarben. Bei zu vielen Dreiecken nennt Solidon eine Kantenlänge, die wirklich geht.
+- Große Baugruppen lesen schneller ein: Die Reparatur beim Einlesen eines Piratenschiffs mit 1,2 Millionen Dreiecken braucht 3,6 statt 6 Sekunden.
+
+### Drucken und Übergabe an den Slicer
+
+- Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 wird die Druckzeit damit rund 40 Prozent kürzer.
+- Auch die Leerfahrt kommt vom Drucker: Der Centauri Carbon 2 fährt zwischen den Inseln 500 statt 150 mm/s, damit die Düse unterwegs nicht ausläuft.
+- Eine Decke über einem Wasserkanal oder Tunnel holt keine Stützen mehr aufs Modell. Solidon schlägt dann Stützen nur vom Bett vor, und der Kanal bleibt frei.
+- Neu ist der Vorschlag *Kanäle frei halten*: Übernommen legt die Übergabe an PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print eine Stützsperre in die Kanäle.
+- Gitterstützen kommen als echtes Gitter beim Slicer an, mit wechselnder Richtung je Schicht, statt als lose Linien, die sich im Druck verschieben.
+- Steht ein Teil auf vielen kleinen Füßen, schlägt Solidon einen Brim vor, auch wenn die Füße zusammen genug Fläche hätten.
+- Ein schmaler schräger Streifen an der Außenwand gilt im Prüfbericht nicht mehr als weit gespannte Brücke.
+- Die Übergabe an Cura überträgt die ersten Schichten ohne Lüfter als Hochlauf. Gewarnt wird nur noch, wenn die fertige Druckdatei wirklich abweicht.
+
+### Assistent mit lokalem Modell
+
+- Die Modellauswahl empfiehlt auch kleinere Modelle ab 8 GB Grafikspeicher und nennt je Modell den Speicherbedarf und wie gut es mehrteilige Aufträge schafft.
+- Der Assistent bekommt nur die Handlungen ausführlich, die zur Anfrage passen. So bleibt Platz für Verlauf und Antwort, und mehrteilige Aufträge gelingen deutlich öfter.
+- Das lokale Modell bleibt nach einer Antwort drei Minuten geladen, und die nächste Frage wartet nicht mehr auf den Modellstart.
+- Eine Antwort, die kein Ende findet, bricht nach einer festen Länge ab und wird als abgeschnitten gemeldet, statt die Grafikkarte minutenlang zu belegen.
+
+### Bedienung und System
+
+- Beim Laden und bei langen Rechnungen zählt eine Uhr die verstrichene Zeit mit, auch wenn der Fortschritt eine Weile stillsteht.
+- Ein Modell auf einem langsamen oder nicht antwortenden Laufwerk friert das Fenster beim Öffnen nicht mehr ein.
+- Ist eine Datei aus *Zuletzt geöffnet* verschoben worden, sagt Solidon das und bietet *Andere Datei wählen* an.
+- Eine Datei, die sich nicht lesen ließ, landet nicht mehr in *Zuletzt geöffnet*, und die nächste Datei meldet beim Laden nicht deren Namen.
+
 ## 0.5.0
 
 ### Erkennen
