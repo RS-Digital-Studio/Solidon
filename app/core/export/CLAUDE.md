@@ -12,7 +12,7 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 | `threemf.py` | 3MF **schreiben** — ein Körper oder eine Baugruppe, mit Farbgruppen und Slicer-Beilagen (§20, §29); `AssemblyPart.support_blocker` legt eine Stützsperre an — für die Orca-Familie als eigenes Teil (`support_blocker` in `model_settings.config`), für PrusaSlicer als Bereich im Netz (`SupportBlocker` in der Prusa-Beilage, dazu `slic3rpe:Version3mf`), je nach `blocker_as_part`. Gelesen wird in `ingest/threemf.py` |
 | `handover.py` | Übergabe an den Slicer (§29, §28.1) |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt |
-| `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt |
+| `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt; ein Durchgang liest jede Datei einmal (`ProfileDocuments`, geteilt von Auswahl, Namensindex und Erbkette) |
 
 STEP geht über `brep/step.py`, nicht von hier.
 

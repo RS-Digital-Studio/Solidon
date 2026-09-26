@@ -377,3 +377,49 @@ def placement_offset(
         if allowed.covers(translate(rectangle, xoff=x, yoff=y)) or projection.covered(x, y):
             return (x, y, z)
     return None
+
+
+def size_excess(mesh: Mesh, printer: PrinterProfile) -> float:
+    """Um wie viel ein Körper über den Bauraum hinausgeht, gleich wo er liegt
+    und wie er um die Hochachse gedreht ist, in mm — null, wenn er passt.
+
+    Die Frage vor dem Slicen (KUNDE-09): Ein Körper **neben** dem Bett ist mit
+    *Auf dem Bett anordnen* erledigt, und ein langer Stab, der nur schräg auf
+    das Bett passt, legt der Slicer selbst so (gemessen am ElegooSlicer: 270
+    auf 40 mm auf 256 mm, ohne ``--arrange 0`` geschnitten). Ein Körper, der
+    in **keiner** Drehung passt, scheitert dagegen in jedem Slicer — der
+    Laptop-Ständer mit 205 auf 272 mm am Centauri Carbon 2 mit -50 und
+    „found error". Gezählt wird der kleinste Überstand über alle Drehungen
+    in Schritten von einem Grad, am Hüllrechteck der konvexen Hülle gegen das
+    Rechteck der Druckfläche; die Höhe zählt ohne Drehung.
+
+    Eine Messung für den Bericht, keine Geometrie: Die Drehung darf mit den
+    Winkelfunktionen der Plattform rechnen (``.claude/rules/kern.md``, RM-187).
+    Passt das Hüllrechteck, der Körper aber wegen einer Sperrzone nirgends,
+    kommt der kleinste positive Wert zurück (:data:`EPS_GEOM`) — dort gibt es
+    kein Maß, nur ein „passt nicht".
+    """
+    from shapely.affinity import rotate
+
+    from app.core.geom.mesh import as_mesh_data
+
+    if placement_offset(mesh, printer) is not None:
+        return 0.0
+    bounds = mesh.bounds
+    height = float(bounds.size[2]) - printable_height(printer)
+    left, front, right, back = printable_area(printer).bounds
+    width, depth = right - left, back - front
+    points = np.asarray(as_mesh_data(mesh).raw.vertices, dtype=float)[:, :2]
+    hull = MultiPoint(points).convex_hull
+    flat = float("inf")
+    for degrees in range(90):
+        low_x, low_y, high_x, high_y = rotate(hull, degrees, origin="centroid").bounds
+        over = max(high_x - low_x - width, high_y - low_y - depth)
+        flat = min(flat, over, max(high_x - low_x - depth, high_y - low_y - width))
+    if max(flat, height) > EPS_GEOM:
+        return max(flat, height)
+    # Er passt in einer Drehung. Liegt er achsparallel schon im Rechteck und
+    # findet trotzdem keinen Platz, steht eine Sperrzone im Weg; sonst dreht
+    # ihn der Slicer beim Anordnen selbst.
+    square = bounds.size[0] <= width + EPS_GEOM and bounds.size[1] <= depth + EPS_GEOM
+    return EPS_GEOM if square else 0.0

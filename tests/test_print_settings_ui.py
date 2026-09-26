@@ -1340,6 +1340,72 @@ def test_slicer_hints_preserve_the_colour_last_chosen_in_the_dialog(
         assert editor.accessibleDescription() == own_description
 
 
+def test_a_part_that_fits_no_bed_is_named_before_slicing(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """KUNDE-09: Der Laptop-Ständer (205 × 272 mm) passt in keiner Drehung auf
+    das Bett. *Slicen* rechnete trotzdem Minuten und endete mit „hat nicht
+    geantwortet" und einer Zahl. Jetzt steht oben, um wie viel es zu groß ist,
+    daneben *Modell teilen* und *Auf den Bauraum verkleinern*, und *Slicen*
+    nennt denselben Grund. Ein passender Würfel bekommt nichts davon."""
+    import types as types_module
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.ui import print_settings_dialog as module
+
+    width = dialog.session.profile.printer.build_volume[0]
+    slab = trimesh.creation.box(extents=(width + 30.0, width + 30.0, 10.0))
+    slab.apply_translation((0.0, 0.0, 5.0))
+    big = SceneObject(id="obj_1", name="Ständer", mesh=MeshData.of(slab))
+    called: list[tuple[str, object]] = []
+    window_handlers = {
+        "split_model": lambda error: called.append(("split_model", error.object_id)),
+        "scale_to_fit": lambda error: called.append(("scale_to_fit", error.object_id)),
+    }
+    monkeypatch.setattr(module, "handlers_of", lambda _widget: window_handlers)
+
+    scene = types_module.SimpleNamespace(objects={"obj_1": big})
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    dialog._show_slicer_state()
+
+    assert "Ständer" in dialog.oversize_note.text()
+    assert "zu groß" in dialog.oversize_note.text()
+    assert not dialog.oversize_note.isHidden()
+    assert not dialog.slice_button.isEnabled()
+    assert dialog.slice_button.toolTip() == dialog.oversize_note.text()
+    buttons = {
+        button.text(): button for button in dialog._oversize_actions.findChildren(QPushButton)
+    }
+    assert set(buttons) == {"Modell teilen", "Auf den Bauraum verkleinern"}
+    buttons["Modell teilen"].click()
+    assert called == [("split_model", "obj_1")]
+
+    small = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=small))
+    dialog._show_slicer_state()
+    assert dialog.oversize_note.isHidden()
+
+
+def test_the_cura_fan_hint_follows_the_number_of_layers(dialog: PrintSettingsDialog) -> None:
+    """Curas Hochlauf trifft null und eine Schicht ohne Lüfter genau; ab zwei
+    laufen die Schichten dazwischen an, und nur dann nennt das Feld es.
+
+    Der Dialog fragte ``slicer_keys.limitation`` ohne die Einstellungen — und
+    die antwortet dann immer mit nichts: Seit der Hinweis am Wert hängt, stand
+    er im Dialog nie, auch nicht bei drei Schichten ohne Lüfter."""
+    dialog._slicer_path = Path("CuraEngine.exe")
+    editor = dialog._editors["cooling.disable_first_layers"]
+
+    editor.setValue(3)
+    assert "Lüfterpause" in editor.toolTip()
+    assert "4" in editor.toolTip(), "hoch bis zur ersten Schicht danach"
+
+    editor.setValue(1)
+    assert "Lüfterpause" not in editor.toolTip()
+
+
 # --- ohne Slicer --------------------------------------------------------------------
 
 
@@ -5476,6 +5542,36 @@ def test_print_advice_uses_the_actual_body_material(qt_app, from_spool):
     )
 
 
+def test_cura_keeps_the_channel_advice_as_a_hand_step(qt_app, monkeypatch):
+    """*Kanäle frei halten* verschwindet mit Cura nicht still aus der Liste.
+
+    Cura nimmt die Stützsperre nicht an (``slicer_keys.NOT_TAKEN_BY``), und an
+    der Okarina füllten danach 53 m Stütze die Kanäle. Die Zeile bleibt,
+    nicht anhakbar, mit dem Handgriff im Cura-Fenster; die Orca-Familie
+    bekommt sie wie bisher zum Übernehmen.
+    """
+    from app.core.types import SettingAdvice
+
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
+    _wait_for_print_advice(dialog, qt_app)
+    advice = SettingAdvice(
+        path="support.block_channels", value=True, was=False, reason="Kanäle im Teil"
+    )
+    dialog._advice_entries = [advice]
+
+    monkeypatch.setattr(dialog, "_current_flavour", lambda: "cura")
+    [shown] = dialog._current_advice()
+    assert shown.unavailable and "Stützblocker" in str(shown.unavailable)
+    dialog._show_advice()
+    item = dialog.advice_view.topLevelItem(0)
+    assert not item.flags() & Qt.ItemFlag.ItemIsUserCheckable
+    assert "Stützblocker" in item.toolTip(0)
+    assert not dialog.apply_button.isEnabled()
+
+    monkeypatch.setattr(dialog, "_current_flavour", lambda: "orca")
+    assert dialog._current_advice() == [advice]
+
+
 def test_print_advice_cannot_disable_support_needed_by_another_body(qt_app):
     """Der Würfel braucht keine Stützen; der Kegel auf derselben Platte behält sie."""
     import math
@@ -5523,6 +5619,74 @@ def test_print_advice_ignores_other_plates_and_keeps_a_rejected_choice(qt_app):
     _wait_for_print_advice(dialog, qt_app)
     dialog._apply_advice()
     assert dialog.settings.speed.outer_wall == before
+
+
+def test_print_advice_keeps_its_layers_when_only_the_advice_changes(qt_app, monkeypatch):
+    """DRUCK-14: Ein geänderter Rat bricht den Schnitt nicht ab.
+
+    Gleich nach dem Öffnen kommen Maschine, Prozess und Filament aus der
+    Profilsuche nach; jedes ändert den Auftrag. Bis zur Durchsicht 0.5.1 brach
+    das den laufenden Schnitt ab, und der nächste Arbeiter schnitt denselben
+    Körper noch einmal. Hier ändert ein Feld den Rat, während geschnitten wird:
+    geschnitten wird einmal, und der Rat gilt dem neuen Stand.
+    """
+    from app.core.types import SliceResult
+    from app.ui import print_settings_dialog as module
+
+    entered = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    def measure(mesh, height, **_rest):
+        calls.append(height)
+        entered.set()
+        assert release.wait(5)
+        return SliceResult(layers=(), support_volume=0, first_layer_area=100)
+
+    monkeypatch.setattr(module, "slice_body", measure)
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
+    dialog._start_advice()
+    assert entered.wait(3)
+    running = dialog._advice_worker
+    dialog._editors["infill.density"].setValue(31)
+    assert running is not None and not running.cancelled.is_cancelled
+    assert not running.rules_wanted, "er misst weiter, sein Rat ist überholt"
+    release.set()
+    _wait_for_print_advice(dialog, qt_app)
+
+    assert len(calls) == 1, "dieselbe Geometrie wird nur einmal geschnitten"
+    assert dialog._advice_request == dialog._advice_context()
+    assert dialog.settings.infill.density == pytest.approx(31)
+
+
+def test_print_advice_takes_the_layers_the_report_already_has(qt_app, monkeypatch):
+    """DRUCK-14: Hat der Prüfbericht dieselben Schichten, schneidet der Dialog nicht.
+
+    Nach dem Laden rechnet der Prüfbericht die Schichtanalyse jedes Körpers mit
+    demselben Raster, Winkel und derselben Brückenbreite (``findings.analysed``).
+    Am Bohrmaschinenhalter schnitt der Dialog sie danach noch einmal, 2,3 s.
+    """
+    from app.core.types import SliceResult
+    from app.ui import print_settings_dialog as module
+
+    known = SliceResult(layers=(), support_volume=12.0, first_layer_area=100)
+    asked = []
+
+    def remembered(mesh, settings, angle, wall):
+        asked.append((angle, wall))
+        return known
+
+    def measure(*_args, **_kwargs):
+        raise AssertionError("die Schichten des Prüfberichts genügen")
+
+    monkeypatch.setattr(module, "remembered_analysis", remembered)
+    monkeypatch.setattr(module, "slice_body", measure)
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
+    dialog._start_advice()
+    _wait_for_print_advice(dialog, qt_app)
+
+    assert asked and all(angle > 0.0 and wall > 0.0 for angle, wall in asked)
+    assert dialog.slice_result is known
 
 
 def test_print_advice_restarts_for_actual_layers_and_rejects_cancelled_results(qt_app, monkeypatch):

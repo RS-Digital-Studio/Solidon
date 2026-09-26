@@ -63,7 +63,16 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import activation, discover, tools
-from app.core.errors import AppError, FileWriteError, InternalError, OperationCancelled
+from app.core.build_area import size_excess
+from app.core.errors import (
+    SCALE_TO_FIT,
+    SPLIT_MODEL,
+    AppError,
+    FileWriteError,
+    InternalError,
+    OperationCancelled,
+    OutOfBuildVolume,
+)
 from app.core.export import handover, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour, knows_plates, takes_a_machine_profile
 from app.core.export.writer import arrangement_holds, write_assembly
@@ -78,8 +87,10 @@ from app.core.scene.fits import active_fits
 from app.core.slice import advise, gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import estimate
+from app.core.slice.findings import remembered_analysis
 from app.core.types import (
     BoundingBox,
+    CancelToken,
     Document,
     Finding,
     HandoverKind,
@@ -94,8 +105,8 @@ from app.core.types import (
     SlotOverride,
     SlotProfileBinding,
 )
-from app.core.units import DEGREE_UNIT, is_close
-from app.i18n import TranslatableText, _, format_decimal, tr
+from app.core.units import DEGREE_UNIT, EPS_DISPLAY, is_close
+from app.i18n import TranslatableText, _, format_decimal, source_text, tr
 from app.ui.dialogs import (
     confirm_handover,
     handlers_of,
@@ -116,6 +127,7 @@ from app.ui.labels import (
     choice_label,
     colour_name,
     explain_choices,
+    length,
     localised,
 )
 from app.ui.labels import slicer_title as _slicer_title
@@ -1588,6 +1600,11 @@ class _PlateJob:
     #: Export, und ihr Bericht war bis dahin um diese zwei Zeilen ärmer.
     scene: Scene | None = None
     document: Document | None = None
+    #: Der Abbruch des Arbeiters, der diesen Auftrag schreibt. Die Stützsperre
+    #: für Kanäle rechnet an einem Gitterwerk eine Viertelminute
+    #: (``writer._support_blocker``); ohne ihn griff *Abbrechen* erst danach.
+    #: Der Arbeiter setzt ihn selbst (``replace``), der Dialog kennt ihn nicht.
+    cancelled: CancelToken | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1718,6 +1735,7 @@ def _prepare_plates(job: _PlateJob) -> ProjectRun:
         setup=job.setup,
         scene=job.scene,
         document=job.document,
+        cancelled=job.cancelled,
     )
     by_plate: dict[int, tuple[MaterialSlot, ...]] = {}
     for plate in job.plates:
@@ -1749,6 +1767,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         setup=job.setup,
         scene=job.scene,
         document=job.document,
+        cancelled=job.cancelled,
     )
     return PlateRun(
         plate=plate,
@@ -1768,6 +1787,18 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
             ]
         ),
     )
+
+
+#: Vorschläge, die ein Slicer nicht als Wert annimmt, die sich in seinem
+#: Fenster aber von Hand umsetzen lassen — je Familie und Feld der Handgriff
+#: (:meth:`PrintSettingsDialog._current_advice`). Cura liest ein STL und keine
+#: Stützsperre; sein Fenster hat dafür den Stützblocker.
+_BY_HAND_IN_THE_SLICER: Final[dict[tuple[str, str], TranslatableText]] = {
+    ("cura", "support.block_channels"): _(
+        "Cura übernimmt keine Stützsperre. Sperren Sie die Kanäle nach „Im Slicer öffnen“ "
+        "im Cura-Fenster mit dem Stützblocker."
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -1814,10 +1845,27 @@ class _AdviceWorker(Worker):
         self.connectors = connectors
         self.previous = previous
         self.cancelled = CancelSignal()
+        self.analysis_context: tuple[Any, ...] | None = None
+        """Für welchen Geometriestand dieser Arbeiter misst (``_analysis_context``)."""
+        self.rules_wanted = True
+        """Ob nach dem Messen noch die Regeln laufen sollen (:meth:`measure_only`)."""
 
     def cancel(self) -> None:
         """Auch innerhalb eines großen Körpers kann die Schichtanalyse aufhören."""
         self.cancelled.cancel()
+
+    def measure_only(self) -> None:
+        """Weiter schneiden, aber keine Regeln mehr — ihr Auftrag ist überholt.
+
+        **Die Schichten bleiben gültig, wenn sich nur der Rat ändert**
+        (DRUCK-14, Durchsicht 0.5.1). Der Dialog fragt gleich nach dem Öffnen,
+        und kurz darauf kommen Maschine, Prozess und Filament aus der
+        Profilsuche — jedes ändert den Auftrag. Bis dahin wurde der laufende
+        Arbeiter abgebrochen, mitten im Schnitt, und der nächste schnitt
+        denselben Körper noch einmal. Die Messung hängt an Geometrie und
+        Raster, nicht an diesen Feldern; nur die Regeln müssen neu.
+        """
+        self.rules_wanted = False
 
     def work(self) -> None:
         """Ein ausdrücklicher Abbruch ist kein unerwarteter Arbeiterfehler."""
@@ -1887,6 +1935,10 @@ class _AdviceWorker(Worker):
                 else None
             )
             if result is None:
+                # Der Prüfbericht hat dieselben Schichten meist schon — mit
+                # Stützvolumen, das hier niemand liest (DRUCK-14).
+                result = remembered_analysis(mesh, self.settings, angle, wall)
+            if result is None:
                 result = slice_body(
                     mesh,
                     self.settings.layers.layer_height,
@@ -1899,6 +1951,8 @@ class _AdviceWorker(Worker):
                     support_volume=False,
                 )
             results[body.id] = (angle, wall, result)
+            if not self.rules_wanted:
+                continue
             for slot, material_profile, effective in processes:
                 entries = advise.advise(
                     effective,
@@ -2144,7 +2198,7 @@ class _PrepareAndSliceWorker(_SliceWorker):
 
     def __init__(self, job: _PlateJob) -> None:
         super().__init__((), job.settings, job.profile, job.setup)
-        self._job = job
+        self._job = replace(job, cancelled=self.cancelled)
         self.comparison: SliceComparison | None = None
 
     def work(self) -> None:
@@ -2154,6 +2208,10 @@ class _PrepareAndSliceWorker(_SliceWorker):
                 return
             try:
                 runs.append(_prepare_plate(self._job, plate))
+            except OperationCancelled:
+                # Die Stützsperre rechnet an einem Gitterwerk eine
+                # Viertelminute; der Abbruch greift mitten darin (§15.6).
+                return
             except AppError as problem:
                 self.failed.emit(problem, [])
                 return
@@ -2190,8 +2248,8 @@ class _OpenInSlicerWorker(Worker):
 
     def __init__(self, job: _PlateJob) -> None:
         super().__init__()
-        self._job = job
         self.cancelled = CancelSignal()
+        self._job = replace(job, cancelled=self.cancelled)
 
     def cancel(self) -> None:
         """Weitere Platten und das Öffnen nach dem aktuellen Schreiben verwerfen."""
@@ -2232,6 +2290,8 @@ class _OpenInSlicerWorker(Worker):
                     else None
                 )
                 handover.open_in_slicer(run.model, self._job.setup)
+            except OperationCancelled:
+                return
             except AppError as problem:
                 self.failed.emit(problem)
                 return
@@ -2264,6 +2324,8 @@ class _OpenInSlicerWorker(Worker):
             if self._was_cancelled():
                 return
             handover.open_in_slicer(run.model, self._job.setup)
+        except OperationCancelled:
+            return
         except AppError as problem:
             self.failed.emit(problem)
             return
@@ -2430,6 +2492,16 @@ class PrintSettingsDialog(QDialog):
     Ein Label, das auf den Filamentwähler verweist und den Kunden dann suchen
     lässt, ist die halbe Antwort — das Fenster klappt den Abschnitt auf und
     lässt ihn aufleuchten."""
+
+    # Die Merker der Übergrößenzeile (DRUCK-12). Hier deklariert und nicht erst
+    # in ``_build_state``: Die Methoden, die sie lesen, stehen im Klassenkörper
+    # davor, und die Typprüfung liest ihn von oben nach unten.
+    _oversize_key: tuple[Any, ...] | None
+    """Wofür :meth:`_oversize_problem` zuletzt gefragt hat."""
+    _oversize: OutOfBuildVolume | None
+    """Die Antwort darauf."""
+    _oversize_shown: OutOfBuildVolume | bool | None
+    """Was die Zeile zeigt — ``False``, solange sie nie gebaut wurde."""
 
     def __init__(
         self,
@@ -2910,6 +2982,95 @@ class PrintSettingsDialog(QDialog):
             return []
         return list(filament_names(project, list(bodies)))
 
+    def _oversize_problem(self) -> OutOfBuildVolume | None:
+        """Das erste Teil der gewählten Platten, das in keiner Lage und Drehung
+        auf das Bett passt — als Fehler mit den Handlungen des Prüfberichts.
+
+        Gemerkt je Körper, Netz und Drucker: Die Zustandszeile fragt oft, und
+        die Drehprobe (``build_area.size_excess``) kostet an einem großen Netz
+        einige Hundertstel.
+        """
+        bodies = self._plate_bodies()
+        printer = self.session.profile.printer
+        key = (printer, tuple((entry.id, id(entry.mesh)) for entry in bodies))
+        if key == self._oversize_key:
+            return self._oversize
+        found: OutOfBuildVolume | None = None
+        if not printer.is_resin:
+            for entry in bodies:
+                excess = size_excess(as_mesh_data(entry.mesh), printer)
+                if excess <= 0.0:
+                    continue
+                name = source_text(entry.name) or entry.id
+                detail = (
+                    _(
+                        "„{name}“ ist {amount} zu groß für diesen Drucker ({printer}). Teilen "
+                        "oder verkleinern Sie es — sonst lehnt der Slicer es ab.",
+                        name=name,
+                        amount=length(excess),
+                        printer=source_text(printer.title),
+                    )
+                    if excess > EPS_DISPLAY
+                    else _(
+                        "„{name}“ passt nicht auf die Druckfläche dieses Druckers ({printer}). "
+                        "Teilen oder verkleinern Sie es — sonst lehnt der Slicer es ab.",
+                        name=name,
+                        printer=source_text(printer.title),
+                    )
+                )
+                found = OutOfBuildVolume(detail, object_id=entry.id, printer=printer.id)
+                break
+        self._oversize_key, self._oversize = key, found
+        return found
+
+    def _show_oversize(self) -> OutOfBuildVolume | None:
+        """Die Zeile über ein zu großes Teil samt Teilen und Verkleinern.
+
+        Gebaut wird nur, wenn sich der Befund geändert hat: Die Zustandszeile
+        fragt bei jedem Schritt des Dialogs, und neue Knöpfe je Frage stapelten
+        sich bis zum nächsten Durchlauf der Ereignisschleife.
+        """
+        problem = self._oversize_problem()
+        if self._oversize_shown is problem and self._oversize_key is not None:
+            return problem
+        self._oversize_shown = problem
+        while self._oversize_row.count():
+            item = self._oversize_row.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.hide()
+                widget.deleteLater()
+        handlers = handlers_of(self)
+        offered = [
+            action
+            for action in (SPLIT_MODEL, SCALE_TO_FIT)
+            if problem is not None and action.id in handlers
+        ]
+        for action in offered:
+            button = QPushButton(str(action.label), self._oversize_actions)
+            if action.primary:
+                make_primary(button)
+            button.clicked.connect(
+                weak_slot(self, PrintSettingsDialog._run_oversize_action, action.id)
+            )
+            self._oversize_row.addWidget(button)
+        self._oversize_row.addStretch(1)
+        text = "" if problem is None else str(problem.detail)
+        self.oversize_note.setText(text)
+        self.oversize_note.setAccessibleDescription(text)
+        self.oversize_note.setVisible(problem is not None)
+        self._oversize_actions.setVisible(bool(offered))
+        return problem
+
+    def _run_oversize_action(self, action_id: str) -> None:
+        """Teilen oder Verkleinern geschieht im Fenster; der Dialog macht Platz."""
+        problem = self._oversize
+        handler = handlers_of(self).get(action_id)
+        if problem is None or handler is None or self._worker is not None:
+            return
+        self.close()
+        handler(problem)
+
     def _plate_bodies(self) -> list[SceneObject]:
         """Die Körper der gewählten Platten — dieselbe Auswahl wie
         :meth:`_plate_slots`, nur eine Ebene davor."""
@@ -3060,6 +3221,8 @@ class PrintSettingsDialog(QDialog):
         self._load_into_editors()
         self._refresh_advice()
         self._refill_slicer_profiles()
+        # Ein anderer Drucker hat einen anderen Bauraum.
+        self._show_slicer_state()
 
     def _refill_slicer_profiles(self) -> None:
         """Die Profilfelder folgen dem Drucker des Projekts (§29).
@@ -4655,6 +4818,22 @@ class PrintSettingsDialog(QDialog):
         # ist, was gleich hinausgeht. Erzeugt wurde sie früher
         # (``_make_plate_row``), eingehängt wird sie hier.
         row.addWidget(self.plate_row)
+        # **Ein Teil, das in keiner Lage auf das Bett passt, steht oben** — mit
+        # den Knöpfen des Prüfberichts, bevor jemand *Slicen* drückt (KUNDE-09:
+        # der Laptop-Ständer rechnete Minuten und endete mit einer Zahl).
+        self.oversize_note = QLabel("", holder)
+        self.oversize_note.setWordWrap(True)
+        self.oversize_note.setTextFormat(Qt.TextFormat.PlainText)
+        self.oversize_note.hide()
+        row.addWidget(self.oversize_note)
+        self._oversize_actions = QWidget(holder)
+        self._oversize_row = QHBoxLayout(self._oversize_actions)
+        self._oversize_row.setContentsMargins(0, 0, 0, 0)
+        self._oversize_actions.hide()
+        row.addWidget(self._oversize_actions)
+        self._oversize_key = None
+        self._oversize = None
+        self._oversize_shown = False
         self.state = QLabel("", holder)
         self.state.setWordWrap(True)
         # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
@@ -4783,7 +4962,13 @@ class PrintSettingsDialog(QDialog):
                 if ignored
                 else ""
             )
-            specific = slicer_keys.limitation(flavour, path) if flavour is not None else None
+            # Mit den Einstellungen: Curas Lüfterhochlauf weicht erst ab zwei
+            # Schichten ohne Lüfter ab, und nur dann steht ein Satz da.
+            specific = (
+                slicer_keys.limitation(flavour, path, self.settings)
+                if flavour is not None
+                else None
+            )
             if specific is not None:
                 reason = str(specific)
             editor.setEnabled(not ignored)
@@ -4845,6 +5030,7 @@ class PrintSettingsDialog(QDialog):
         # gerade erst geklickt. Dieselbe Bauart wie ``_profiles_pending`` in
         # :meth:`_profile_gap` eine Ebene tiefer.
         searching = str(tr("Die Slicer werden gesucht …")) if self._slicers_pending else ""
+        oversize = self._show_oversize()
         reason = ""
         if not state.unlocked:
             reason = licence_lock_line(state)
@@ -4862,6 +5048,12 @@ class PrintSettingsDialog(QDialog):
                     "die Datei in seinem Fenster."
                 )
             )
+        elif oversize is not None:
+            # Ein Teil, das in keiner Lage passt, lehnt jeder Slicer ab — der
+            # ElegooSlicer mit -50 nach Minuten Vorbereitung (KUNDE-09). Im
+            # Fenster des Slicers lässt es sich noch verkleinern; der Knopf
+            # dorthin bleibt.
+            reason = str(oversize.detail)
         elif found is not None:
             # Die dritte Hürde derselben Bauart: Ein Slicer der Orca-Familie
             # ohne gewähltes Profil lehnt jeden Auftrag ab — das stand bisher
@@ -5229,6 +5421,8 @@ class PrintSettingsDialog(QDialog):
         if self._loading:
             return
         self.settings = self._collect()
+        # Ein Hinweis, der am Wert hängt, folgt dem Wert (``slicer_keys.LIMITED``).
+        self._mark_fields_this_slicer_ignores()
         self._refresh_advice()
 
     def _quality_changed(self) -> None:
@@ -5249,6 +5443,7 @@ class PrintSettingsDialog(QDialog):
             return
         self.settings = self._resolved(chosen)
         self._load_into_editors()
+        self._mark_fields_this_slicer_ignores()
         self._refresh_advice()
 
     # --- Vorschläge -----------------------------------------------------------
@@ -5271,7 +5466,28 @@ class PrintSettingsDialog(QDialog):
         flavour = self._current_flavour()
         if flavour is None:
             return entries
-        return [entry for entry in entries if slicer_keys.takes(flavour, entry.path)]
+        shown: list[SettingAdvice] = []
+        for entry in entries:
+            if slicer_keys.takes(flavour, entry.path):
+                shown.append(entry)
+            elif (flavour, entry.path) in _BY_HAND_IN_THE_SLICER:
+                # **Was sich im Slicer von Hand machen lässt, verschwindet
+                # nicht still.** Mit Cura fiel *Kanäle frei halten* aus der
+                # Liste, und an der Okarina füllten danach 53 m Stütze die
+                # Kanäle, ohne dass der Dialog es erwähnt hätte (Durchsicht
+                # 0.5.1, Bericht druck). Die Zeile bleibt, nicht anhakbar, mit
+                # dem Handgriff im Slicer.
+                shown.append(
+                    _TargetedAdvice(
+                        path=entry.path,
+                        value=entry.value,
+                        was=entry.was,
+                        reason=entry.reason,
+                        severity=entry.severity,
+                        unavailable=_BY_HAND_IN_THE_SLICER[flavour, entry.path],
+                    )
+                )
+        return shown
 
     def _profile_roots(self) -> tuple[Path, ...]:
         """Nutzer- und Herstellerprofile gehören zu demselben gewählten Slicer."""
@@ -5432,7 +5648,12 @@ class PrintSettingsDialog(QDialog):
                 self._advice_error = None
                 self._advice_pending = True
                 if self._advice_worker is not None:
-                    self._advice_worker.cancel()
+                    # Gleiche Geometrie, gleiches Raster: Was er schneidet,
+                    # gilt weiter — nur sein Rat nicht (DRUCK-14).
+                    if self._advice_worker.analysis_context == context[0]:
+                        self._advice_worker.measure_only()
+                    else:
+                        self._advice_worker.cancel()
                 self._advice_timer.start()
         else:
             if self._advice_request is not None:
@@ -5574,6 +5795,7 @@ class PrintSettingsDialog(QDialog):
             self._connector_diameters(),
             previous,
         )
+        worker.analysis_context = analysis_context
         context = self._advice_request
         worker.done.connect(
             lambda entries, results, worker=worker: self._advice_ready(
@@ -5603,21 +5825,34 @@ class PrintSettingsDialog(QDialog):
         entries: list[SettingAdvice],
         results: dict[str, tuple[float, float, SliceResult]],
     ) -> None:
-        """Ein verspätetes Ergebnis kann weder eine Wahl noch eine neue Analyse ersetzen."""
+        """Ein verspätetes Ergebnis kann weder eine Wahl noch eine neue Analyse ersetzen.
+
+        **Seine Messung aber schon** (DRUCK-14): Hat sich seit dem Auftrag nur
+        der Rat geändert — Maschine, Prozess, Filament, ein Feld —, gelten die
+        Schichten weiter, und der nächste Arbeiter übernimmt sie, statt noch
+        einmal zu schneiden.
+        """
         if (
             self._settling
             or worker is not self._advice_worker
             or worker.cancelled.is_cancelled
+            or analysis_context != self._analysis_context()
+        ):
+            return
+        self._body_analyses = results
+        self._analysed_context = analysis_context
+        self.session.remember_analyses(
+            self._memory_key(), [body.mesh for body in self._plate_bodies()], results
+        )
+        # Wer nur noch gemessen hat, hat keinen Rat — auch dann nicht, wenn der
+        # Auftrag inzwischen wieder derselbe ist wie bei seinem Start.
+        if (
+            not worker.rules_wanted
             or context != self._advice_request
             or context != self._advice_context()
         ):
             return
-        self._body_analyses = results
-        self.session.remember_analyses(
-            self._memory_key(), [body.mesh for body in self._plate_bodies()], results
-        )
         self.slice_result = next(iter(results.values()))[2] if len(results) == 1 else None
-        self._analysed_context = analysis_context
         self._advice_entries = entries
         self._advice_pending = False
         self._advice_problem = ""

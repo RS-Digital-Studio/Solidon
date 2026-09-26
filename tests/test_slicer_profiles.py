@@ -339,6 +339,44 @@ def test_inherited_compatibility_counts(slicer: Path) -> None:
     assert "0.20mm Standard @Fremd" not in fitting
 
 
+def test_the_search_opens_every_profile_file_once(
+    slicer: Path, bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DRUCK-14: Auswahl, Namensindex und Erbkette lesen dieselben Dateien.
+
+    Am ElegooSlicer waren es 25 941 Öffnungen für 11 951 Dateien, und das
+    Öffnen ist unter Windows der teure Teil der Suche (3,9 → 2,2 s). Das
+    Ergebnis bleibt dasselbe; gezählt wird hier, wie oft jede Datei gelesen
+    wird.
+    """
+    expected = sp.find_profiles(slicer, "orca")
+    reads: dict[Path, int] = {}
+    original = Path.read_text
+
+    def counted(self: Path, *args: object, **kwargs: object) -> str:
+        reads[self] = reads.get(self, 0) + 1
+        return original(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "read_text", counted)
+    found = sp.find_profiles(slicer, "orca")
+
+    assert found == expected
+    assert reads, "the search must read the store at all"
+    assert max(reads.values()) == 1, {path.name: count for path, count in reads.items()}
+
+
+def test_the_kind_is_read_from_the_folder_with_either_separator(tmp_path: Path) -> None:
+    """Der schnelle Schnitt in ``_kind_of`` und ``relative_to`` sagen dasselbe."""
+    root = tmp_path / "profiles"
+    inside = root / "Elegoo" / "machine" / "ECC2" / "a.json"
+    assert sp._kind_of(inside, root) == "machine"
+    assert sp._kind_of(Path(str(inside).replace("\\", "/")), root) == "machine"
+    assert sp._kind_of(root / "Elegoo" / "a.json", root) is None
+    assert sp._kind_of(tmp_path / "elsewhere" / "machine" / "a.json", root) is None
+    # Ein Nachbarordner mit gleichem Anfang ist nicht die Wurzel.
+    assert sp._kind_of(tmp_path / "profiles2" / "machine" / "a.json", root) is None
+
+
 def test_an_inheritance_loop_does_not_hang(slicer: Path, bestand: Path) -> None:
     _write(
         bestand / "Elegoo" / "process" / "ECC2" / "kreis_a.json",
@@ -1406,9 +1444,11 @@ def test_one_name_index_serves_a_whole_kind_instead_of_one_per_profile(
     laeufe: list[tuple[Path, object]] = []
     echtes = sp._names_in
 
-    def gezaehlt(wurzel: Path, art: object = None, *, cancelled=None) -> dict[str, Path]:
+    def gezaehlt(
+        wurzel: Path, art: object = None, *, cancelled=None, documents=None
+    ) -> dict[str, Path]:
         laeufe.append((wurzel, art))
-        return echtes(wurzel, art, cancelled=cancelled)
+        return echtes(wurzel, art, cancelled=cancelled, documents=documents)
 
     monkeypatch.setattr(sp, "_names_in", gezaehlt)
     passende = sp.processes([maschine, *erben], maschine)

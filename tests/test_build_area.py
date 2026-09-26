@@ -466,3 +466,29 @@ def test_the_orientation_search_beside_the_bed_needs_no_triangle_union(monkeypat
     result = search(_beside_the_bed(), profile=profile, count=16)
 
     assert not check_build_volume([result.mesh], profile)
+
+
+def _box(x: float, y: float, z: float) -> MeshData:
+    body = trimesh.creation.box(extents=(x, y, z))
+    body.apply_translation((0.0, 0.0, z / 2.0))
+    return MeshData.of(body)
+
+
+def test_the_size_excess_is_what_no_placement_or_turn_can_fix() -> None:
+    """KUNDE-09: Der Laptop-Ständer (205 × 272 mm) passt in keiner Drehung auf
+    den Centauri Carbon 2 und scheiterte im Slicer. Ein Stab von 270 × 40 mm
+    passt schräg, und der Slicer legt ihn selbst so; ein Teil neben dem Bett
+    ist mit Anordnen erledigt. Nur das erste ist „zu groß"."""
+    from app.core.build_area import printable_height, size_excess
+
+    printer = make_profile("centauri-carbon-2", "pla").printer
+    riser = size_excess(_box(205.0, 272.0, 90.0), printer)
+    stick = size_excess(_box(270.0, 40.0, 10.0), printer)
+    beside = _box(40.0, 40.0, 10.0)
+    beside.raw.apply_translation((400.0, 0.0, 0.0))
+    tower = size_excess(_box(20.0, 20.0, 300.0), printer)
+
+    assert riser == pytest.approx(272.0 - 256.0, abs=0.5)
+    assert stick == 0.0
+    assert size_excess(beside, printer) == 0.0
+    assert tower == pytest.approx(300.0 - printable_height(printer), abs=1e-6)

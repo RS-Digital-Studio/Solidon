@@ -76,6 +76,12 @@ def _checked_paths(paths: Iterable[Path], cancelled: CancelToken | None) -> Iter
 #: auf. Wer ihn übergibt, hält ihn so kurz wie den Aufruf, in dem er entsteht.
 ProfileIndexes = dict[tuple[Path, ProfileKind | None], dict[str, Path]]
 
+#: Die gelesenen Profildateien eines Durchgangs, Datei → Inhalt (``None`` für
+#: Unlesbares). :func:`find_profiles` liest den Bestand einmal für die Auswahl
+#: und ein zweites Mal für die Namensindizes und Erbketten; mit diesem Speicher
+#: öffnet es jede Datei nur einmal (DRUCK-14, Durchsicht 0.5.1).
+ProfileDocuments = dict[Path, dict[str, Any] | None]
+
 #: Wie viele Dateien höchstens gelesen werden. Der ausgelieferte Bestand eines
 #: Slicers umfasst einige tausend Profile über alle Hersteller; eine Zahl weit
 #: darüber heißt, dass hier der falsche Ordner durchsucht wird.
@@ -916,7 +922,28 @@ def machine_with_nozzle(
     return min(same_printer, key=lambda entry: (not entry.from_user, entry.name)).name
 
 
-def _read(path: Path, kind: ProfileKind, from_user: bool) -> SlicerProfile | None:
+def _load(path: Path, documents: ProfileDocuments | None = None) -> dict[str, Any] | None:
+    """Der Inhalt einer Profildatei — ``None``, wenn sie sich nicht lesen lässt
+    oder kein JSON-Objekt ist. Mit ``documents`` einmal je Durchgang."""
+    if documents is not None and path in documents:
+        return documents[path]
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as problem:
+        _log.debug("unreadable profile %s: %s", path.name, problem)
+        loaded = None
+    document = loaded if isinstance(loaded, dict) else None
+    if documents is not None:
+        documents[path] = document
+    return document
+
+
+def _read(
+    path: Path,
+    kind: ProfileKind,
+    from_user: bool,
+    documents: ProfileDocuments | None = None,
+) -> SlicerProfile | None:
     """Ein Profil aus seiner Datei. Was sich nicht lesen lässt, fehlt einfach.
 
     Ein kaputtes oder unbekanntes JSON im Bestand eines fremden Programms ist
@@ -926,12 +953,8 @@ def _read(path: Path, kind: ProfileKind, from_user: bool) -> SlicerProfile | Non
     angelegte Profile tragen es gar nicht, sie erben bloß von einem
     Systemprofil. Genau die will man in der Liste haben.
     """
-    try:
-        loaded = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as problem:
-        _log.debug("skipping profile %s: %s", path.name, problem)
-        return None
-    if not isinstance(loaded, dict):
+    loaded = _load(path, documents)
+    if loaded is None:
         return None
 
     # Zwischenstücke der Erbkette (`fdm_process_common` und Verwandte) sind im
@@ -1310,16 +1333,29 @@ def _cura_material_values(path: Path) -> dict[str, Any]:
     return values
 
 
+#: Beide Trenner, die ein Pfad unter Windows tragen kann (:func:`_kind_of`).
+_SEPARATORS: Final = re.compile(r"[\\/]")
+
+
 def _kind_of(path: Path, root: Path) -> ProfileKind | None:
     """Maschine oder Prozess — abgelesen am Ordner, in dem die Datei liegt.
 
     Die Ablage ist zwischen den Herstellern nicht einheitlich, deshalb wird
     der ganze Pfad unterhalb der Wurzel abgesucht statt einer festen Tiefe.
+
+    Was unter der Wurzel gefunden wurde, beginnt mit ihr als Zeichenkette;
+    dann genügt ein Schnitt. ``relative_to`` kostete an ElegooSlicers
+    24 000 Aufrufen je Profilsuche eine Sekunde (DRUCK-14).
     """
-    try:
-        parts = path.relative_to(root).parts[:-1]
-    except ValueError:
-        return None
+    text, base = str(path), str(root)
+    parts: tuple[str, ...]
+    if text.startswith(base) and text[len(base) : len(base) + 1] in (os.sep, "/"):
+        parts = tuple(_SEPARATORS.split(text[len(base) + 1 :]))[:-1]
+    else:
+        try:
+            parts = path.relative_to(root).parts[:-1]
+        except ValueError:
+            return None
     for part in parts:
         found = PROFILE_DIRS.get(part.casefold())
         if found is not None:
@@ -1364,6 +1400,7 @@ def find_profiles(
     roots.extend((folder, True) for folder in user_roots(flavour, executable))
 
     count = 0
+    documents: ProfileDocuments = {}
     for root, from_user in roots:
         for path in sorted(root.rglob("*.json")):
             # Die Ordnertiefe ist nicht einheitlich: Bambu legt seine Profile
@@ -1377,7 +1414,7 @@ def find_profiles(
             if count > MAX_FILES:
                 _log.warning("stopped after %d profile files below %s", MAX_FILES, root)
                 break
-            profile = _read(path, kind, from_user)
+            profile = _read(path, kind, from_user, documents)
             if profile is None:
                 continue
             # Eigene schlagen mitgelieferte gleichen Namens — sie sind die
@@ -1414,7 +1451,7 @@ def find_profiles(
         if profile.compatible_printers or not profile.inherits:
             continue
         try:
-            chain = _chain(profile.path, all_roots, indexes=indexes)
+            chain = _chain(profile.path, all_roots, indexes=indexes, documents=documents)
         except ExternalToolError as problem:
             _log.warning("skipping incomplete profile %s: %s", profile.name, problem)
             incomplete.add(index)
@@ -1425,6 +1462,11 @@ def find_profiles(
                 found[index] = replace(profile, compatible_printers=compatibility)
                 break
     found = [profile for index, profile in enumerate(found) if index not in incomplete]
+    # Die gelesenen Dateien gehen hier, nicht erst mit dem nächsten Aufräumen:
+    # Die Erbkette hält sie über ihre rekursiven Hilfsfunktionen im Ring, und
+    # am ElegooSlicer sind das 70 MiB, die sonst bis zum nächsten GC-Lauf
+    # blieben.
+    documents.clear()
     _log.info("found %d slicer profiles", len(found))
     return found
 
@@ -1759,7 +1801,11 @@ def _store_roots(path: Path, roots: Sequence[Path]) -> list[Path]:
 
 
 def _names_in(
-    root: Path, kind: ProfileKind | None, *, cancelled: CancelToken | None = None
+    root: Path,
+    kind: ProfileKind | None,
+    *,
+    cancelled: CancelToken | None = None,
+    documents: ProfileDocuments | None = None,
 ) -> dict[str, Path]:
     """Profilname → Datei für alles unter ``root`` — bei ``kind`` nur die
     Profile dieser Art, gemessen am Ordner unterhalb der Wurzel.
@@ -1777,11 +1823,8 @@ def _names_in(
             break
         if kind is not None and _kind_of(entry, root) != kind:
             continue
-        try:
-            loaded = json.loads(entry.read_text(encoding="utf-8"))
-        except OSError, ValueError:
-            continue
-        if isinstance(loaded, dict):
+        loaded = _load(entry, documents)
+        if loaded is not None:
             index.setdefault(str(loaded.get("name", entry.stem)), entry)
     return index
 
@@ -1877,6 +1920,7 @@ def _chain(
     *,
     indexes: ProfileIndexes | None = None,
     cancelled: CancelToken | None = None,
+    documents: ProfileDocuments | None = None,
 ) -> list[dict[str, Any]]:
     """Die Profile der Erbkette, spezifisches zuerst.
 
@@ -1899,14 +1943,14 @@ def _chain(
         family = _family(current)
         family_key = (family, None)
         if family_key not in indexes:
-            indexes[family_key] = _names_in(family, None, cancelled=cancelled)
+            indexes[family_key] = _names_in(family, None, cancelled=cancelled, documents=documents)
         local = indexes[family_key].get(name)
         if local is not None and local != current:
             return local
         for root in _store_roots(current, roots):
             key = (root, _kind_by_folder(current))
             if key not in indexes:
-                indexes[key] = _names_in(root, key[1], cancelled=cancelled)
+                indexes[key] = _names_in(root, key[1], cancelled=cancelled, documents=documents)
             found = indexes[key].get(name)
             if found is not None:
                 return found
@@ -1918,14 +1962,9 @@ def _chain(
             if template:
                 raise _incomplete_profile(path)
             return []
-        try:
-            loaded = json.loads(current.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as problem:
-            _log.debug("stopping at %s: %s", current.name, problem)
-            if template:
-                raise _incomplete_profile(path) from problem
-            return []
-        if not isinstance(loaded, dict):
+        loaded = _load(current, documents)
+        if loaded is None:
+            _log.debug("stopping at %s", current.name)
             if template:
                 raise _incomplete_profile(path)
             return []
