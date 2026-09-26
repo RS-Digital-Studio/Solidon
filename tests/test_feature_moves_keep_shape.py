@@ -1337,6 +1337,81 @@ def test_a_bore_in_a_thin_plate_is_no_edge(profile: Profile, kernel: str) -> Non
         assert "bore.over_the_edge" not in _warnings(findings), (op, findings)
 
 
+def _stepped(kernel: str, *, bored: bool) -> SceneObject:
+    """Grundplatte 40 x 40 x 5 (z 0 … 5), darauf ein Block 20 x 40 x 10 (x −20 … 0,
+    z 5 … 15); ``bored`` bohrt bei x = −10 durch beide Ø 6."""
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    solid = edit.unified(
+        edit.boolean(
+            "union",
+            [edit.box(40.0, 40.0, 5.0), edit.moved(edit.box(20.0, 40.0, 10.0), (-10.0, 0.0, 5.0))],
+        )
+    )
+    if bored:
+        outline = [(0, 0), (3, 0), (3, 15), (0, 15), (0, 0)]
+        solid = edit.bore_profile(solid, outline, frame_of((0, 0, 1), (-10.0, 0.0, 0.0)))
+    return _body(kernel, solid)
+
+
+def _step_side_lost(before: SceneObject, after: SceneObject) -> float:
+    """Wie viel Fläche die Seite x = 0 des Blocks (z über 5) verloren hat, in mm²."""
+
+    def side(entry: SceneObject) -> float:
+        raw = as_mesh_data(entry.mesh).raw
+        corners = np.asarray(raw.triangles, dtype=np.float64)
+        normals = np.asarray(raw.face_normals, dtype=np.float64)
+        on = (
+            (np.abs(corners[:, :, 0]).max(axis=1) < 1e-6)
+            & (normals[:, 0] > 0.99)
+            & (corners[:, :, 2].min(axis=1) > 5.0 - 1e-6)
+        )
+        return float(np.asarray(raw.area_faces, dtype=np.float64)[on].sum())
+
+    return side(before) - side(after)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_bore_that_runs_out_of_a_step_says_so_on_both_kernels(
+    profile: Profile, kernel: str
+) -> None:
+    """„Über die Kante" gilt auch an einer abgesetzten Stelle, an der die Bohrung
+    darunter ringsum Material hat (Durchsicht 0.5.1, BOHRUNG-01).
+
+    Die Kantenprüfung nannte eine Flanke geschlossen, sobald der Kranz an einer
+    einzigen Tiefe ganz im Material lag. Eine Bohrung Ø 6 bei x = −1 läuft im
+    Block 2 mm aus dessen Seite x = 0 — die Seite verliert rund 57 mm² — und
+    hat in der Grundplatte darunter ringsum Material: Bohren, Versetzen und
+    Verdoppeln schwiegen an beiden Kernen. Sollwert ist die verlorene Fläche
+    der Seite. Bei x = −3,5 bleibt die Seite ganz, und keiner sagt etwas (die
+    Kopie lässt dort 0,5 mm zur Vorlage bei x = −10 stehen; bei −4 berührten
+    sich beide Bohrungen in einer Linie, ein Körper ohne Wanddicke).
+    """
+    from tests.test_bore_depth import _evaluated
+
+    plain = _stepped(kernel, bored=False)
+    bored = _stepped(kernel, bored=True)
+    bore = _narrowest_hole(bored)
+    _x, y, z = (float(value) for value in bore.params["centre"])
+    for x in (-1.0, -3.5):
+        cases = (
+            (plain, "drill_hole", {"x": x, "y": 0.0, "z": 15.0, "diameter": 6.0, "depth": 0.0}),
+            (bored, "move_feature", {"at_feature": bore.id, "x": x, "y": y, "z": z}),
+            (bored, "duplicate_feature", {"at_feature": bore.id, "x": x, "y": y, "z": z}),
+        )
+        for source, op, params in cases:
+            changed, findings = _evaluated(source, profile, op, **params)
+            opened = _step_side_lost(source, changed) > 1.0
+            assert opened is (x > -3.0), (kernel, op, x)
+            assert ("bore.over_the_edge" in _warnings(findings)) is opened, (
+                kernel,
+                op,
+                x,
+                findings,
+            )
+
+
 # --- Eine still gescheiterte exakte Differenz --------------------------------------------
 
 

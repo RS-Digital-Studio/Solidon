@@ -682,15 +682,37 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     # Ergebnis — nicht weil der Kern ihn nicht könnte, sondern weil die
     # Signatur ein ``MeshData`` verlangte. Sie fragt jetzt nach dem, was sie
     # wirklich braucht, und ``Solid`` trägt seinen Hüllquader.
-    # Die Länge der Bohrung von der Stelle aus (RM-249): ab der Mündung ihre
-    # Tiefe, um die Mitte die halbe; durchgehend der ganze Körper.
-    reach = (
-        float(body.bounds.diagonal)
-        if params.depth <= EPS_GEOM
-        else params.depth
-        if params.anchor == "mouth"
-        else params.depth / 2.0
-    )
+    # Die halbe Länge der Bohrung um ihre Mitte (RM-249); durchgehend der
+    # ganze Körper. Am Mündungsanker liegt die Mitte eine halbe Tiefe im
+    # Material — gegen die Normale der Fläche, an einer Hauptachse in die
+    # Hälfte des Hüllquaders, in die ``edit.bore`` bohrt (Durchsicht 0.5.1,
+    # BOHRUNG-01: vor der Mündung gefragt, stand dort Material einer Wand
+    # daneben, das die Bohrung nie berührt).
+    position = (params.x, params.y, params.z)
+    way = [0.0, 0.0, 0.0]
+    if math.hypot(*normal) > EPS_GEOM:
+        size = math.hypot(*normal)
+        way = [value / size for value in normal]
+    else:
+        way["xyz".index(params.axis)] = 1.0
+    reach = params.depth / 2.0
+    along = 0.0
+    if params.depth <= EPS_GEOM:
+        # Durchgehend: die Ausdehnung des Körpers entlang der Achse, um ihre
+        # Mitte — wie am Netz (``prepare.drill``). Mit der Hüllendiagonale lagen
+        # die Tiefen elf Millimeter auseinander und übersprangen einen Absatz.
+        low, high = body.bounds.minimum, body.bounds.maximum
+        reach = sum(abs(w) * (b - a) for w, a, b in zip(way, low, high, strict=True)) / 2.0
+        along = sum(
+            w * ((a + b) / 2.0 - p) for w, a, b, p in zip(way, low, high, position, strict=True)
+        )
+    elif params.anchor == "mouth":
+        if math.hypot(*normal) > EPS_GEOM:
+            along = -params.depth / 2.0
+        else:
+            index = "xyz".index(params.axis)
+            into = -1.0 if position[index] >= body.bounds.centre[index] else 1.0
+            along = into * params.depth / 2.0
     if shape.slot_length > EPS_GEOM:
         # Ein Langloch steckt in der Mitte tief im Material und reißt trotzdem
         # an einem Ende auf — gefragt wird deshalb an beiden Bogenmittelpunkten
@@ -705,7 +727,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
             shape.slot_angle,
         ):
             found = over_the_edge_along(
-                body, end, normal, cut, body=as_mesh_data(body), reach=reach
+                body, end, normal, cut, body=as_mesh_data(body), reach=reach, along=along
             )
             if found:
                 findings.extend(found)
@@ -719,6 +741,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
                 cut,
                 body=as_mesh_data(body),
                 reach=reach,
+                along=along,
             )
         )
     else:
@@ -730,6 +753,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
                 cut,
                 body=as_mesh_data(body),
                 reach=reach,
+                along=along,
             )
         )
     findings.extend(split_findings(body, solid))

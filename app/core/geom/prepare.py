@@ -173,6 +173,7 @@ def over_the_edge(
     *,
     body: MeshData | None = None,
     reach: float | None = None,
+    along: float = 0.0,
 ) -> list[Finding]:
     """Ragt die Bohrung seitlich über den Körper hinaus?
 
@@ -193,7 +194,9 @@ def over_the_edge(
     direction = [0.0, 0.0, 0.0]
     direction[AXIS_INDEX[axis]] = 1.0
     vector: Vec3 = (direction[0], direction[1], direction[2])
-    return over_the_edge_along(mesh, position, vector, diameter, body=body, reach=reach)
+    return over_the_edge_along(
+        mesh, position, vector, diameter, body=body, reach=reach, along=along
+    )
 
 
 #: Wie fein die Mündung abgetastet wird, wenn der Hüllquader Verdacht meldet.
@@ -263,18 +266,19 @@ def surface_index_of(mesh: MeshData) -> Any:
     return remembered("surface_index", mesh.raw, (), lambda: surface_index(mesh.raw))
 
 
-def _inside_material(body: MeshData, points: np.ndarray) -> np.ndarray:
+def _inside_material(body: MeshData, points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Welche Punkte im Material liegen oder auf seiner Oberfläche — dieselbe
-    Probe wie in :func:`_flank_is_open`, mit dem gemerkten Suchbaum."""
+    Probe wie in :func:`_flank_is_open`, mit dem gemerkten Suchbaum. Dazu je
+    Punkt die Normale der nächsten Fläche."""
     from app.core.geom.mesh import on_surface
 
     closest, _distance, triangle = on_surface(body.raw, points, index=surface_index_of(body))
-    normals = np.asarray(body.raw.face_normals)[triangle]
+    normals = np.asarray(body.raw.face_normals, dtype=float)[triangle]
     offset = points - closest
     outward = (
         offset[:, 0] * normals[:, 0] + offset[:, 1] * normals[:, 1] + offset[:, 2] * normals[:, 2]
     )
-    return np.asarray(outward <= EPS_GEOM)
+    return np.asarray(outward <= EPS_GEOM), normals
 
 
 def _open_to_the_outside(body: MeshData, points: np.ndarray, across: np.ndarray) -> list[str]:
@@ -315,27 +319,70 @@ def _flank_opens_within(
     Bohrung schneidet — die Achse oder ein Punkt ihres Kranzes im Material; die
     übrigen sind Luft vor oder hinter dem Körper. Bei x = 14 liegt die Achse
     schon neben der Platte, und die Bohrung trägt trotzdem ein Stück ihrer
-    Seite ab. Liegt der Kranz an einer der Tiefen ganz im Material, ist die Flanke geschlossen
-    — wie in :func:`_flank_is_open`, nur über die Länge der Bohrung statt über
-    die ganze Hülle: In Sechzehnteln der Hüllendiagonale fände sich an einer
-    3 mm starken Platte keine Tiefe, und jede Bohrung dort hieße „über die
-    Kante". Von den Punkten in Luft zählt nur, was nach außen frei liegt
+    Seite ab. Von den Punkten in Luft zählt nur, was nach außen frei liegt
     (:func:`_open_to_the_outside`).
+
+    **Ringsum Material an einer Tiefe schließt keine andere** (Durchsicht
+    0.5.1, BOHRUNG-01). Hier stand die Regel aus :func:`_flank_is_open`: Liegt
+    der Kranz an einer Tiefe ganz im Material, ist die Flanke geschlossen. An
+    einer abgesetzten Stelle stimmt das nicht — eine Bohrung Ø 6 lief im
+    oberen Absatz eines Blocks 2 mm aus dessen Seite (57 mm² Seitenfläche
+    fort) und hatte darunter in der Grundplatte ringsum Material; Bohren,
+    Versetzen und Verdoppeln schwiegen an beiden Kernen. Gefragt wird deshalb
+    je Punkt, **und nur ein Punkt vor einer Seitenfläche zählt**: Die nächste
+    Fläche muss entlang der Bohrung stehen (:data:`_SIDE_FACE`). Ein Punkt vor
+    einer Mündungsfläche — der Kranz einer gekippten Bohrung, der über die
+    schräge Fläche ragt — liegt vor der Öffnung und nicht neben der Wand; und
+    die Seitenfläche umläuft die Achse nicht (:data:`_AROUND_THE_AXIS`), sonst
+    liegt der Punkt in einer weiteren Aussparung um die Bohrung. Die
+    Aufrufer geben ``position`` als Mitte der Bohrung und ``reach`` als halbe
+    Länge, damit keine Tiefe vor der Mündung liegt.
     """
     if reach <= EPS_GEOM or radius <= EPS_GEOM:
         return []
     axis = np.asarray(unit, dtype=float)
+    axis = axis / math.hypot(float(axis[0]), float(axis[1]), float(axis[2]))
     rim = _rim_around(axis, radius)
     depths = reach * np.asarray(_WITHIN_DEPTHS, dtype=float)
     centres = np.asarray(position, dtype=float) + depths[:, None] * axis
     samples = centres[:, None, :] + rim[None, :, :]
-    inside = _inside_material(body, np.vstack([centres, samples.reshape(-1, 3)]))
+    inside, normals = _inside_material(body, np.vstack([centres, samples.reshape(-1, 3)]))
     ring = inside[len(depths) :].reshape(len(depths), _RIM_POINTS)
+    facing = normals[len(depths) :].reshape(len(depths), _RIM_POINTS, 3)
     cutting = inside[: len(depths)] | ring.any(axis=1)
-    if not bool(cutting.any()) or bool(ring[cutting].all(axis=1).any()):
+    if not bool(cutting.any()):
         return []
-    rows, columns = np.nonzero(cutting[:, None] & ~ring)
+    along = np.abs(
+        facing[:, :, 0] * axis[0] + facing[:, :, 1] * axis[1] + facing[:, :, 2] * axis[2]
+    )
+    # Und sie ist keine Wand um die Bohrung herum, die zur Achse zeigt — die
+    # einer weiteren Aussparung, in der der Kranz liegt. Am
+    # Gartenschlauchhalter lagen Punkte des Kranzes einer Zylindersenkung vor
+    # ihrer schrägen Mündung in einer solchen Aussparung (Normale zur Achse
+    # hin, Kosinus -0,96 bis -1) und hießen „über die Kante"; die Enden einer
+    # Klammer (Besenhalter, -0,52) sind dagegen eine offene Seite.
+    outward = (
+        facing[:, :, 0] * rim[None, :, 0]
+        + facing[:, :, 1] * rim[None, :, 1]
+        + facing[:, :, 2] * rim[None, :, 2]
+    ) / radius
+    side = (along < _SIDE_FACE) & (outward > -_AROUND_THE_AXIS)
+    rows, columns = np.nonzero(cutting[:, None] & ~ring & side)
     return _open_to_the_outside(body, samples[rows, columns], rim[columns])
+
+
+#: Ab wann die nächste Fläche eines Punkts im Kranz eine Seitenfläche ist und
+#: keine Mündungsfläche (:func:`_flank_opens_within`) — als Betrag des Kosinus
+#: zwischen ihrer Normale und der Bohrungsachse. Eine Seitenwand steht entlang
+#: der Bohrung (0), die Mündung einer um 30° gekippten quer zu ihr (0,87);
+#: die Hälfte trennt Flächen bis 60° Neigung gegen die Achse als Mündung.
+_SIDE_FACE: Final = 0.5
+
+#: Ab wann eine Seitenfläche eine Wand um die Bohrung herum ist, die zur Achse
+#: zeigt (:func:`_flank_opens_within`) — als Kosinus zwischen ihrer Normale
+#: und der Richtung von der Achse zum Punkt, negativ genommen: Eine
+#: umlaufende Wand steht bei -1, das Ende einer Klammer quer dazu bei 0.
+_AROUND_THE_AXIS: Final = 0.7
 
 
 #: Wo :func:`_flank_opens_within` entlang der Achse fragt, in Anteilen von
@@ -352,6 +399,7 @@ def over_the_edge_along(
     *,
     body: MeshData | None = None,
     reach: float | None = None,
+    along: float = 0.0,
 ) -> list[Finding]:
     """Die Kantenprüfung für eine freie Bohrungsrichtung.
 
@@ -381,6 +429,11 @@ def over_the_edge_along(
     Netz** (RM-249): ``reach`` ist die Länge der Bohrung von ``position`` aus —
     an ihrer Mündung ihre Tiefe, an ihrer Mitte die halbe
     (:func:`_flank_opens_within`). Ohne ``reach`` bleibt es beim Hüllquader.
+    ``along`` ist der Weg von ``position`` zur Mitte der Bohrung entlang
+    ``direction``: Wer an der Mündung fragt, gibt die halbe Tiefe ins Material
+    mit, und ``reach`` ist dann die halbe Länge. Sonst lägen die Tiefen vor der
+    Mündung in der Luft davor, wo neben einer Wand Material steht, das die
+    Bohrung nie berührt (Durchsicht 0.5.1, BOHRUNG-01).
     """
     vector = np.asarray(direction, dtype=float)
     # ``math.hypot`` statt ``np.linalg.norm``: Letzteres geht durch BLAS, und
@@ -395,7 +448,14 @@ def over_the_edge_along(
     if not over:
         if body is None or reach is None:
             return []
-        within = _flank_opens_within(body, position, unit, radius, reach)
+        middle = np.asarray(position, dtype=float) + unit * along
+        within = _flank_opens_within(
+            body,
+            (float(middle[0]), float(middle[1]), float(middle[2])),
+            unit,
+            radius,
+            reach,
+        )
         return [_edge_finding(diameter, within)] if within else []
     if body is not None and not _flank_is_open(body, position, unit, radius):
         return []
@@ -1245,11 +1305,13 @@ def edge_findings(
     angle_deg: float,
     body: MeshData | None = None,
     reach: float | None = None,
+    along: float = 0.0,
 ) -> list[Finding]:
     """Die Kantenwarnung für eine runde Bohrung — und für beide Enden eines Langlochs.
 
     ``reach`` ist die Länge der Bohrung von ``position`` aus, in beide
-    Richtungen (:func:`over_the_edge_along`, RM-249).
+    Richtungen (:func:`over_the_edge_along`, RM-249); ``along`` der Weg von
+    ``position`` zu ihrer Mitte entlang der Normalen des Rahmens.
 
     Ein Langloch steckt in der Mitte tief im Material und reißt trotzdem an
     einem Ende auf; wer nur die Mitte fragt, hört davon nichts. Gemeldet wird
@@ -1259,9 +1321,13 @@ def edge_findings(
     if body is None and isinstance(mesh, MeshData):
         body = mesh
     if travel <= EPS_GEOM:
-        return over_the_edge_along(mesh, position, frame.normal, diameter, body=body, reach=reach)
+        return over_the_edge_along(
+            mesh, position, frame.normal, diameter, body=body, reach=reach, along=along
+        )
     for end in slot_ends(position, frame, travel, angle_deg):
-        found = over_the_edge_along(mesh, end, frame.normal, diameter, body=body, reach=reach)
+        found = over_the_edge_along(
+            mesh, end, frame.normal, diameter, body=body, reach=reach, along=along
+        )
         if found:
             return found
     return []
@@ -1495,7 +1561,10 @@ def drill(
                 diameter=cut_diameter,
                 travel=travel,
                 angle_deg=slot_angle,
-                reach=max(abs(mouth), abs(mouth - height)),
+                # Die Bohrung liegt im Rahmen zwischen ``mouth - height`` und
+                # ``mouth``; gefragt wird um ihre Mitte, über die halbe Länge.
+                reach=height / 2.0,
+                along=mouth - height / 2.0,
             )
         )
         findings.extend(split_findings(mesh, result))
@@ -1526,6 +1595,9 @@ def drill(
         mouth_overlap=BOOLEAN_OVERLAP if not through and anchor == "mouth" else 0.0,
     ).raw.copy()
     alignment = _axis_alignment(axis)
+    # Wo die Mitte der Bohrung liegt, von der Stelle aus entlang der Achse —
+    # für die Kantenfrage unten.
+    to_the_middle = 0.0
     if through:
         # Symmetrisch über beide Seiten hinaus: Mitte auf die Position.
         cylinder.apply_translation((0.0, 0.0, height / 2.0))
@@ -1549,6 +1621,8 @@ def drill(
         if anchor == "centre":
             # Historischer Anker: die Position ist die Mitte der Bohrlänge.
             offset = offset - along * (height / 2.0)
+        else:
+            to_the_middle = into * height / 2.0
         cylinder.apply_translation(offset)
 
     outcome = boolean("difference", [mesh, MeshData.of(cylinder)], quality=quality, seed=seed)
@@ -1557,8 +1631,19 @@ def drill(
     nothing = without_effect(mesh, outcome.mesh, "difference", profile)
     if nothing is not None:
         findings.append(nothing)
-    reach = height / 2.0 if through else depth if anchor == "mouth" else depth / 2.0
-    findings.extend(over_the_edge(mesh, position, axis, cut_diameter, body=mesh, reach=reach))
+    # Um die Mitte der Bohrung, über ihre halbe Länge: am Mündungsanker liegt
+    # sie eine halbe Tiefe im Material, sonst an der Stelle selbst.
+    findings.extend(
+        over_the_edge(
+            mesh,
+            position,
+            axis,
+            cut_diameter,
+            body=mesh,
+            reach=height / 2.0,
+            along=to_the_middle,
+        )
+    )
     findings.extend(split_findings(mesh, outcome.mesh))
     findings.extend(compensation_findings(diameter, cut_diameter, compensate))
     return BoreResult(
