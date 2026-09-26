@@ -32,6 +32,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from io import BytesIO
 from itertools import islice
+from math import ceil, sqrt
 from typing import Final
 from xml.etree import ElementTree as ET
 from xml.parsers import expat
@@ -71,6 +72,60 @@ MODEL_PATH = "3D/3dmodel.model"
 #: und eine Szene aus Körpern namens „object 7" ist eine Szene, in der niemand
 #: arbeiten kann. Gelesen, wenn da; achselzuckend übergangen, wenn nicht.
 SETTINGS_PATH = "Metadata/model_settings.config"
+
+#: Wo die Orca-Familie die Einstellungen einer *Projektdatei* führt — was in
+#: der Oberfläche Prozess, Filament und Drucker sind, in einer JSON-Abbildung.
+#:
+#: Der Schreiber legt Solidons Einstellungen dort ab (``export/threemf.py``):
+#: Ohne sie ist eine 3MF nur Geometrie, der Slicer öffnet sie mit dem Profil,
+#: das gerade eingestellt ist, und alles, was Solidon über Temperatur, Tempo
+#: und Kühlung dieses Teils weiß, ist beim Öffnen weg. Der Leser liest daraus
+#: allein die Druckfläche (``printable_area``), auf der die Platten der Datei
+#: liegen (:func:`_plate_layout`).
+PROJECT_SETTINGS_PATH = "Metadata/project_settings.config"
+
+
+#: Wie viel Luft die Orca-Familie zwischen zwei Platten lässt, als Anteil von
+#: Breite und Tiefe des Betts (der Viewport hat sein eigenes ``PLATE_GAP`` in
+#: Millimetern; zwei Namen, weil es zwei Werte sind) —
+#: ``LOGICAL_PART_PLATE_GAP = 1. / 5.`` in
+#: ``PartPlate.cpp``, gleichlautend in OrcaSlicer (seit 1.9), Bambu Studio
+#: und ElegooSlicer (1.5.3.4, die installierte Fassung).
+#:
+#: **Hier stand ein Achtel, und es war eine Fehllesung.** In
+#: ``BowlingGame.3mf`` lag das Objekt der ersten Platte bei x = 127,82 und
+#: das der zweiten bei 416,14; die Differenz von 288,3 mm las sich als 256
+#: plus ein Achtel — unter der Annahme, beide stünden plattenlokal an
+#: derselben Stelle. Sie standen es nicht. Mit vier Platten fiel es auf: Die
+#: Buchstaben der dritten und vierten lagen im ElegooSlicer rechts neben
+#: allem, denn der legt Platten nicht in eine Reihe (Robert, 11.09.2026: „so
+#: ganz passt die ausrichtung an den platten … nicht"). Gemessen am
+#: installierten Slicer per ``--arrange 1 --export-3mf`` mit fünf
+#: bettfüllenden Klötzen und Solidons Maschinenprofil (256 mm): Plattenmitten
+#: bei x = 128, 435,2 und 742,4, in der zweiten Zeile bei y = -179,2 — ein
+#: Schritt von 307,2, also ein Fünftel, und drei Spalten für fünf Platten.
+SLICER_PLATE_GAP = 1.0 / 5.0
+
+
+def plate_origin(rank: int, count: int, bed: tuple[float, float]) -> tuple[float, float]:
+    """Wo die Orca-Familie Platte ``rank`` von ``count`` hinlegt (§20).
+
+    Ihr ``PartPlateList`` rechnet ``cols = ceil(sqrt(count))`` Spalten
+    (``compute_colum_count``) und legt Platte *i* in Spalte ``i % cols`` und
+    Zeile ``i // cols``; Spalten gehen nach rechts, Zeilen nach **unten** —
+    ``compute_shape_position``: ``pos.y = -row * plate_stride_y()``. Vier
+    Platten sind ein Zweierquadrat, fünf brauchen drei Spalten. ``count`` ist
+    die Zahl der Platten **in der Datei**, denn daraus rechnet der Slicer
+    seine Spalten.
+
+    Er steht beim Leser, weil beide ihn brauchen: Die Übergabe legt ihre
+    Platten so hin, und der Leser nimmt eine Orca- oder Bambu-Datei mit
+    mehreren Platten so wieder auseinander (:func:`_plate_layout`).
+    """
+    columns = max(1, ceil(sqrt(count)))
+    row, column = divmod(rank, columns)
+    return column * bed[0] * (1.0 + SLICER_PLATE_GAP), -row * bed[1] * (1.0 + SLICER_PLATE_GAP)
+
 
 #: Endungen, die ein Slicer in einem Teilnamen stehen lässt, weil das Teil aus
 #: einer Datei kam.
@@ -680,9 +735,14 @@ class Part:
     """Ob die Datei den Körper benennt. ``False`` heißt: Der Name ist der
     Ersatz „Körper <Nummer>" — die ``load``-Operation nimmt bei einem
     einzelnen Körper dann den Dateinamen, wie bei einer STL."""
+    plate: int = 0
+    """Die Platte, auf die die Datei den Körper legt, ab null — bei einer
+    Datei mit mehreren Platten (:func:`_plate_layout`), sonst null."""
 
 
-def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[Part]:
+def read_objects(
+    payload: bytes, findings: list[Finding] | None = None, *, plates: bool = False
+) -> list[Part]:
     """Jeder Körper, den der Build platziert, jeder dort, wohin die Datei ihn
     setzt.
 
@@ -691,6 +751,10 @@ def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[
     Hilfsteil des Slicers, das keine Geometrie ist, eine Aussparung, die
     abgezogen wurde. Wer die Liste nicht mitgibt, bekommt die Körper trotzdem
     — die Auskunft steht dann nur im Protokoll.
+
+    ``plates`` legt die Teile einer Datei mit mehreren Platten auf ihre
+    Platten (:func:`_plate_layout`); ohne den Schalter bleiben sie, wo die
+    Datei sie im Plattenraster hat — so, wie ältere Ladeschritte sie kennen.
 
     Eine leere Liste heißt: das ist keine 3MF, die sich hier lesen lässt — der
     Aufrufer fällt auf den allgemeinen Loader zurück, statt für eine Datei eine
@@ -705,17 +769,19 @@ def read_objects(payload: bytes, findings: list[Finding] | None = None) -> list[
     Platte (§25).
     """
     with _reading_trees():
-        return _read_objects(payload, findings)
+        return _read_objects(payload, findings, plates=plates)
 
 
-def _read_objects(payload: bytes, findings: list[Finding] | None) -> list[Part]:
+def _read_objects(
+    payload: bytes, findings: list[Finding] | None, *, plates: bool = False
+) -> list[Part]:
     """Der Rumpf von :func:`read_objects`, innerhalb von :func:`_reading_trees`."""
     # Träge, aus demselben Grund wie in ``_carved``: Ohne Aussparung braucht
     # der Leser den Rechenkern nicht.
     from app.core.geom.boolean import deepest
 
     noted = findings if findings is not None else []
-    leaves = _leaves(payload, noted)
+    leaves = _leaves(payload, noted, plates=plates)
 
     # Aussparungen zuerst, je Objekt gesammelt: Sie gehören zu jedem
     # druckbaren Teil desselben Objekts, und die Reihenfolge der Blätter
@@ -847,6 +913,7 @@ def _read_objects(payload: bytes, findings: list[Finding] | None) -> list[Part]:
                 slots=tuple(groups.materials) if groups else (),
                 solver=solver,
                 named=leaf.named,
+                plate=leaf.plate,
             )
         )
 
@@ -1423,6 +1490,8 @@ class _Leaf:
     (:data:`HELPER_KINDS`)."""
     named: bool = True
     """Ob der Name aus der Datei stammt und nicht der Ersatz ist."""
+    plate: int = 0
+    """Die Platte des Build-Elements (:func:`_plate_layout`)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1654,7 +1723,7 @@ def _refine(
     ), final_tools
 
 
-def _leaves(payload: bytes, noted: list[Finding]) -> list[_Leaf]:
+def _leaves(payload: bytes, noted: list[Finding], *, plates: bool = False) -> list[_Leaf]:
     """Läuft den Build ab und sammelt jedes Mesh, das er erreicht, der Reihe
     nach.
 
@@ -1674,6 +1743,11 @@ def _leaves(payload: bytes, noted: list[Finding]) -> list[_Leaf]:
                 _settings(container.read(SETTINGS_PATH)) if SETTINGS_PATH in names else _Settings()
             )
             native: _NativeMaterials | None
+            bed = (
+                _printable_area(container.read(PROJECT_SETTINGS_PATH))
+                if plates and PROJECT_SETTINGS_PATH in names and settings.plates
+                else None
+            )
             try:
                 native = _native_materials(container, models[MODEL_PATH])
             except _MaterialError as problem:
@@ -1708,26 +1782,111 @@ def _leaves(payload: bytes, noted: list[Finding]) -> list[_Leaf]:
 
     found: list[_Leaf] = []
     budget = _Budget()
-    for item in models[MODEL_PATH].findall(f"{{{CORE_NAMESPACE}}}build/{{{CORE_NAMESPACE}}}item"):
+    items = models[MODEL_PATH].findall(f"{{{CORE_NAMESPACE}}}build/{{{CORE_NAMESPACE}}}item")
+    layout = _plate_layout(items, settings, bed)
+    for item in items:
         identifier = item.get("objectid")
         if identifier is None:
             continue
-        found.extend(
-            _parts_of(
-                identifier,
-                _inside(item.get(f"{{{PRODUCTION_NAMESPACE}}}path")),
-                _matrix(item.get("transform")),
-                catalog,
-                materials,
-                settings,
-                item.get("name") or settings.titles.get(identifier, ""),
-                0,
-                budget,
-                native=native,
-                inherited_named=bool(item.get("name") or settings.titles.get(identifier, "")),
-            )
+        rank, shift = layout.get(identifier, (0, None))
+        placement = _matrix(item.get("transform"))
+        if shift is not None:
+            placement = shift @ placement
+        leaves = _parts_of(
+            identifier,
+            _inside(item.get(f"{{{PRODUCTION_NAMESPACE}}}path")),
+            placement,
+            catalog,
+            materials,
+            settings,
+            item.get("name") or settings.titles.get(identifier, ""),
+            0,
+            budget,
+            native=native,
+            inherited_named=bool(item.get("name") or settings.titles.get(identifier, "")),
         )
+        found.extend(dataclasses.replace(leaf, plate=rank) for leaf in leaves)
     return found
+
+
+def _printable_area(payload: bytes) -> tuple[float, float, float, float] | None:
+    """Die Druckfläche des Projekts als ``(links, vorn, Breite, Tiefe)`` — aus
+    ``printable_area`` (``["0x0", "256x0", "256x256", "0x256"]``), oder
+    ``None``, wenn sie fehlt oder sich nicht lesen lässt."""
+    try:
+        document = json.loads(payload.decode("utf-8"))
+        corners = [
+            tuple(float(value) for value in str(corner).lower().split("x"))
+            for corner in document["printable_area"]
+        ]
+    except KeyError, TypeError, ValueError, UnicodeDecodeError:
+        return None
+    if len(corners) < 3 or any(len(corner) != 2 for corner in corners):
+        return None
+    xs = [corner[0] for corner in corners]
+    ys = [corner[1] for corner in corners]
+    width, depth = max(xs) - min(xs), max(ys) - min(ys)
+    if width <= 0.0 or depth <= 0.0:
+        return None
+    return min(xs), min(ys), width, depth
+
+
+def _plate_layout(
+    items: list[ET.Element],
+    settings: _Settings,
+    bed: tuple[float, float, float, float] | None,
+) -> dict[str, tuple[int, np.ndarray]]:
+    """Je Build-Objekt seine Platte und die Verschiebung auf sie — oder nichts.
+
+    **Eine Orca- oder Bambu-Datei mit mehreren Platten legt ihre Teile im
+    Plattenraster ab** (RM-252, Durchsicht 0.5.1). ``pista+biglie.3mf`` aus
+    Bambu Studio trägt zehn Platten; ihre Teile stehen bei x bis 1043, und bis
+    hierher kamen alle fünfzehn auf eine Platte, dreizehn davon neben dem
+    Bett, gemeldet nur als Hinweis. Die Übergabe gab weiter, was die Szene
+    sagte: ElegooSlicer und OrcaSlicer ordneten selbst neu an, PrusaSlicer
+    lehnte ab. Welche Platte ein Objekt hat, steht in ``model_settings.config``
+    (``<plate>`` mit ``plater_id`` und ``model_instance/object_id``); wo sie
+    liegt, sagt :func:`plate_origin` mit der Druckfläche des Projekts. Das
+    Teil kommt dann auf seine Platte, an seine Stelle darauf, gemessen von
+    der Bettmitte — dort, wo Solidons Koordinaten ihre Null haben.
+
+    **Nur wenn die Rechnung aufgeht.** Jedes Build-Element muss nach der
+    Verschiebung auf seiner Platte stehen, bis in die halbe Lücke zur
+    nächsten; sonst hat die Datei einen anderen Raster als den bekannten, und
+    es bleibt bei ihren Koordinaten (eine Platte, wie bisher). Eine Datei mit
+    einer einzigen Platte ändert sich nicht.
+    """
+    if bed is None or not settings.plates:
+        return {}
+    # Auch leere Platten zählen: Der Slicer rechnet seine Spalten aus allen
+    # Platten der Datei, und eine leere zweite schiebt die dritte weiter.
+    numbers = sorted(settings.plate_numbers | set(settings.plates.values()))
+    if len(numbers) < 2:
+        return {}
+    left, front, width, depth = bed
+    reach = (width * (1.0 + SLICER_PLATE_GAP) / 2.0, depth * (1.0 + SLICER_PLATE_GAP) / 2.0)
+    layout: dict[str, tuple[int, np.ndarray]] = {}
+    for item in items:
+        identifier = item.get("objectid")
+        if identifier is None or identifier not in settings.plates:
+            return {}
+        rank = numbers.index(settings.plates[identifier])
+        across, along = plate_origin(rank, len(numbers), (width, depth))
+        shift = np.eye(4)
+        shift[0, 3] = -(across + left + width / 2.0)
+        shift[1, 3] = -(along + front + depth / 2.0)
+        where = (shift @ _matrix(item.get("transform")))[:2, 3]
+        if abs(float(where[0])) > reach[0] or abs(float(where[1])) > reach[1]:
+            _log.info(
+                "3MF plate %d of %d does not hold object %s at the known raster — "
+                "keeping the file's coordinates",
+                rank + 1,
+                len(numbers),
+                identifier,
+            )
+            return {}
+        layout[identifier] = (rank, shift)
+    return layout
 
 
 def _numbered(parts: list[Part]) -> list[Part]:
@@ -1761,6 +1920,11 @@ class _Settings:
     """Nach Objekt- und nach Part-ID."""
     kinds: dict[tuple[str, str], str] = field(default_factory=dict)
     """``(Objekt, Part) → subtype`` — nur, wo der Slicer einen nennt."""
+    plates: dict[str, int] = field(default_factory=dict)
+    """Objekt-ID → ``plater_id``, wie ``<plate>`` sie nennt (ab eins)."""
+    plate_numbers: set[int] = field(default_factory=set)
+    """Jede ``plater_id`` der Datei, auch die einer leeren Platte — der Raster
+    zählt sie mit (:func:`_plate_layout`)."""
 
 
 def _settings(payload: bytes) -> _Settings:
@@ -1791,7 +1955,24 @@ def _settings(payload: bytes) -> _Settings:
             kind = part.get("subtype")
             if kind and kind != "normal_part":
                 found.kinds[obj.get("id", ""), part.get("id", "")] = kind
+    for plate in config.findall("plate"):
+        number = _metadata(plate, "plater_id")
+        if not number.isdigit():
+            continue
+        found.plate_numbers.add(int(number))
+        for instance in plate.findall("model_instance"):
+            owner = _metadata(instance, "object_id")
+            if owner:
+                found.plates.setdefault(owner, int(number))
     return found
+
+
+def _metadata(node: ET.Element, key: str) -> str:
+    """Der Wert von ``<metadata key=… value=…/>`` unter ``node`` — oder leer."""
+    for entry in node.findall("metadata"):
+        if entry.get("key") == key:
+            return str(entry.get("value", "")).strip()
+    return ""
 
 
 def _without_suffix(name: str) -> str:

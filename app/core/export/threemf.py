@@ -29,7 +29,6 @@ import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
-from math import ceil, sqrt
 from typing import Final
 from xml.etree import ElementTree as ET
 
@@ -44,6 +43,18 @@ from app.core.ingest.threemf import (
     NATIVE_TOOL_LIMIT,
     PRUSA_NAMESPACE,
     SETTINGS_PATH,
+    plate_origin,
+)
+
+# Der Plattenraster wohnt beim Leser, der ihn seit RM-252 auch braucht, und
+# ebenso der Ort der Projekteinstellungen, aus dem er die Druckfläche liest;
+# beide bleiben unter diesem Modul erreichbar, wo Übergabe, Tests und Karte
+# sie nennen.
+from app.core.ingest.threemf import (
+    PROJECT_SETTINGS_PATH as PROJECT_SETTINGS_PATH,
+)
+from app.core.ingest.threemf import (
+    SLICER_PLATE_GAP as SLICER_PLATE_GAP,
 )
 from app.core.knowledge import profiles
 from app.core.log import get_logger
@@ -56,16 +67,9 @@ _log = get_logger(__name__)
 RELATIONSHIP_NAMESPACE = "http://schemas.openxmlformats.org/package/2006/relationships"
 MODEL_RELATIONSHIP = "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"
 
-#: Wo die Orca-Familie die Einstellungen einer *Projektdatei* führt — was in
-#: der Oberfläche Prozess, Filament und Drucker sind, in einer JSON-Abbildung.
-#:
-#: Ohne sie ist eine 3MF nur Geometrie: der Slicer öffnet sie mit dem Profil,
-#: das gerade eingestellt ist, und alles, was Solidon über Temperatur, Tempo
-#: und Kühlung dieses Teils weiß, ist beim Öffnen weg. Genau das trennt eine
-#: Datei, die man druckt, von einer, die man erst noch einrichtet.
-PROJECT_SETTINGS_PATH = "Metadata/project_settings.config"
-
-#: Wo PrusaSlicer dasselbe führt — dieselbe Sache, ein anderes Format: eine
+#: Wo PrusaSlicer führt, was die Orca-Familie in ``PROJECT_SETTINGS_PATH``
+#: ablegt (die Konstanten des Containers stehen beim Leser,
+#: ``ingest/threemf.py``) — dieselbe Sache, ein anderes Format: eine
 #: Zeile ``; schlüssel = wert`` je Einstellung statt einer JSON-Abbildung.
 #:
 #: Er schreibt sie beim Konsolenexport selbst nicht mit, **liest** sie aber:
@@ -852,44 +856,6 @@ def _placement(bed: tuple[float, float] | None, origin: tuple[float, float]) -> 
     if is_zero(across) and is_zero(along):
         return None
     return f"1 0 0 0 1 0 0 0 1 {across:g} {along:g} 0"
-
-
-#: Wie viel Luft die Orca-Familie zwischen zwei Platten lässt, als Anteil von
-#: Breite und Tiefe des Betts (der Viewport hat sein eigenes ``PLATE_GAP`` in
-#: Millimetern; zwei Namen, weil es zwei Werte sind) —
-#: ``LOGICAL_PART_PLATE_GAP = 1. / 5.`` in
-#: ``PartPlate.cpp``, gleichlautend in OrcaSlicer (seit 1.9), Bambu Studio
-#: und ElegooSlicer (1.5.3.4, die installierte Fassung).
-#:
-#: **Hier stand ein Achtel, und es war eine Fehllesung.** In
-#: ``BowlingGame.3mf`` lag das Objekt der ersten Platte bei x = 127,82 und
-#: das der zweiten bei 416,14; die Differenz von 288,3 mm las sich als 256
-#: plus ein Achtel — unter der Annahme, beide stünden plattenlokal an
-#: derselben Stelle. Sie standen es nicht. Mit vier Platten fiel es auf: Die
-#: Buchstaben der dritten und vierten lagen im ElegooSlicer rechts neben
-#: allem, denn der legt Platten nicht in eine Reihe (Robert, 11.09.2026: „so
-#: ganz passt die ausrichtung an den platten … nicht"). Gemessen am
-#: installierten Slicer per ``--arrange 1 --export-3mf`` mit fünf
-#: bettfüllenden Klötzen und Solidons Maschinenprofil (256 mm): Plattenmitten
-#: bei x = 128, 435,2 und 742,4, in der zweiten Zeile bei y = -179,2 — ein
-#: Schritt von 307,2, also ein Fünftel, und drei Spalten für fünf Platten.
-SLICER_PLATE_GAP = 1.0 / 5.0
-
-
-def plate_origin(rank: int, count: int, bed: tuple[float, float]) -> tuple[float, float]:
-    """Wo die Orca-Familie Platte ``rank`` von ``count`` hinlegt (§20).
-
-    Ihr ``PartPlateList`` rechnet ``cols = ceil(sqrt(count))`` Spalten
-    (``compute_colum_count``) und legt Platte *i* in Spalte ``i % cols`` und
-    Zeile ``i // cols``; Spalten gehen nach rechts, Zeilen nach **unten** —
-    ``compute_shape_position``: ``pos.y = -row * plate_stride_y()``. Vier
-    Platten sind ein Zweierquadrat, fünf brauchen drei Spalten. ``count`` ist
-    die Zahl der Platten **in der Datei**, denn daraus rechnet der Slicer
-    seine Spalten.
-    """
-    columns = max(1, ceil(sqrt(count)))
-    row, column = divmod(rank, columns)
-    return column * bed[0] * (1.0 + SLICER_PLATE_GAP), -row * bed[1] * (1.0 + SLICER_PLATE_GAP)
 
 
 def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:

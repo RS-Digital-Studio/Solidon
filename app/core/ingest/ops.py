@@ -156,6 +156,18 @@ class LoadParams(BaseParams):
         depends_on=("mend", (True,)),
         doc=_("Aus lässt Öffnungen offen, die eine neue große Fläche bräuchten."),
     )
+    #: Ein Schalter und keine neue Vorgabe (RM-252): Ein älteres Projekt mit
+    #: einer Orca- oder Bambu-Datei behält die Lage, mit der es gespeichert
+    #: wurde; der Einlesplan setzt ihn für jede neue 3MF.
+    plates: bool = param(
+        title=_("Platten der Datei übernehmen"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Eine 3MF aus Bambu Studio, OrcaSlicer oder ElegooSlicer mit mehreren Platten: "
+            "Jedes Teil kommt auf seine Platte, an seine Stelle darauf."
+        ),
+    )
     copy: int = param(
         title=_("Kopie"),
         default=0,
@@ -217,7 +229,11 @@ def load(ctx: OpContext) -> OpResult:
     # Protokoll: Der Kunde soll sehen, warum sein Modell anders aussieht als
     # im Slicer, und was er dagegen tun kann.
     findings: list[Finding] = []
-    parts = threemf.read_objects(payload, findings) if suffix.lower() == ".3mf" else []
+    parts = (
+        threemf.read_objects(payload, findings, plates=params.plates)
+        if suffix.lower() == ".3mf"
+        else []
+    )
     if not parts:
         mesh = read_model(payload, suffix)
         mesh, slots = _colour_groups(payload, suffix, mesh)
@@ -355,15 +371,29 @@ def load(ctx: OpContext) -> OpResult:
             cancelled=ctx.cancelled,
         )
         outputs.append(
-            SceneObject(id="", name=part.name, mesh=result.mesh, material_slots=list(part.slots))
+            SceneObject(
+                id="",
+                name=part.name,
+                mesh=result.mesh,
+                material_slots=list(part.slots),
+                plate=part.plate,
+            )
         )
         findings.extend(
             _named(result.findings, part.name) if len(parts) > 1 else list(result.findings)
         )
 
     if (params.place_on_bed or params.centre) and len(outputs) > 1:
+        # **Mehrere Platten stehen schon an ihrer Stelle** (RM-252): Der Leser
+        # hat jedes Teil auf seine Platte gelegt, gemessen von der Bettmitte
+        # (``threemf._plate_layout``). Die Mitte des gemeinsamen Hüllquaders
+        # aller Platten wäre keine Mitte irgendeiner Platte.
+        several_plates = len({part.plate for part in parts}) > 1
         outputs = _group_on_bed(
-            outputs, findings, place_on_bed=params.place_on_bed, centre=params.centre
+            outputs,
+            findings,
+            place_on_bed=params.place_on_bed,
+            centre=params.centre and not several_plates,
         )
 
     if len(parts) > 1:

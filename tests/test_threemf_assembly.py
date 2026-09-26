@@ -238,6 +238,146 @@ def test_a_body_arrives_where_the_build_put_it() -> None:
     assert centre[2] == pytest.approx(25.0)
 
 
+def plated_container(
+    at: dict[str, tuple[int, float, float]],
+    bed: str = '["0x0","256x0","256x256","0x256"]',
+    empty: tuple[int, ...] = (),
+) -> bytes:
+    """Eine Bambu-/Orca-Datei mit mehreren Platten: je Körper ``(plater_id, x, y)``
+    im Plattenraster, dazu ``<plate>``-Blöcke und die Druckfläche des Projekts."""
+    payload = production_container(
+        {identifier: cube(10.0) for identifier in at},
+        transforms={
+            identifier: f"1 0 0 0 1 0 0 0 1 {x:g} {y:g} 5"
+            for identifier, (_plate, x, y) in at.items()
+        },
+    )
+    plates: dict[int, list[str]] = {}
+    for identifier, (plate, _x, _y) in at.items():
+        plates.setdefault(plate, []).append(identifier)
+    for plate in empty:
+        plates.setdefault(plate, [])
+    blocks = "".join(
+        f'<plate><metadata key="plater_id" value="{plate}"/>'
+        + "".join(
+            f'<model_instance><metadata key="object_id" value="1{identifier}"/>'
+            f'<metadata key="instance_id" value="0"/></model_instance>'
+            for identifier in members
+        )
+        + "</plate>"
+        for plate, members in sorted(plates.items())
+    )
+    buffer = BytesIO()
+    with (
+        zipfile.ZipFile(BytesIO(payload)) as source,
+        zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as target,
+    ):
+        for entry in source.namelist():
+            target.writestr(entry, source.read(entry))
+        target.writestr(threemf.SETTINGS_PATH, f'<?xml version="1.0"?><config>{blocks}</config>')
+        target.writestr(threemf_reader.PROJECT_SETTINGS_PATH, f'{{"printable_area": {bed}}}')
+    return buffer.getvalue()
+
+
+def test_a_file_with_several_plates_puts_every_part_on_its_plate() -> None:
+    """RM-252: ``pista+biglie.3mf`` aus Bambu Studio hat zehn Platten, und ihre
+    Teile kamen alle auf eine, dreizehn von fünfzehn neben dem Bett.
+
+    Vier Platten auf einem 256er Bett liegen im Raster der Orca-Familie in zwei
+    Spalten (``plate_origin``, Schritt 307,2 mm); ein Teil bei (128, 128) seiner
+    Platte steht dort in der Bettmitte, eins bei (60, 200) links hinten.
+    """
+    stride = 256.0 * (1.0 + threemf.SLICER_PLATE_GAP)
+    payload = plated_container(
+        {
+            "1": (1, 128.0, 128.0),
+            "2": (2, stride + 60.0, 200.0),
+            "3": (3, 128.0, -stride + 128.0),
+            "4": (4, stride + 128.0, -stride + 30.0),
+        }
+    )
+
+    parts = threemf_reader.read_objects(payload, plates=True)
+
+    assert [part.plate for part in parts] == [0, 1, 2, 3]
+    centres = [tuple(round(float(v), 6) for v in part.mesh.bounds.centre[:2]) for part in parts]
+    assert centres == [(0.0, 0.0), (-68.0, 72.0), (0.0, 0.0), (0.0, -98.0)]
+
+
+def test_an_empty_plate_still_counts_in_the_raster() -> None:
+    """Drei Platten, die mittlere leer: Der Slicer rechnet zwei Spalten aus
+    allen dreien, und die dritte liegt in der zweiten Zeile, nicht daneben."""
+    stride = 256.0 * (1.0 + threemf.SLICER_PLATE_GAP)
+    payload = plated_container(
+        {"1": (1, 128.0, 128.0), "3": (3, 100.0, -stride + 150.0)}, empty=(2,)
+    )
+
+    parts = threemf_reader.read_objects(payload, plates=True)
+
+    assert [part.plate for part in parts] == [0, 2]
+    assert parts[1].mesh.bounds.centre[0] == pytest.approx(-28.0)
+    assert parts[1].mesh.bounds.centre[1] == pytest.approx(22.0)
+
+
+def test_older_load_steps_keep_the_files_coordinates() -> None:
+    """Ohne den Schalter bleibt alles, wie ein älteres Projekt es gespeichert hat."""
+    stride = 256.0 * (1.0 + threemf.SLICER_PLATE_GAP)
+    payload = plated_container({"1": (1, 128.0, 128.0), "2": (2, stride + 60.0, 200.0)})
+
+    parts = threemf_reader.read_objects(payload)
+
+    assert [part.plate for part in parts] == [0, 0]
+    assert parts[1].mesh.bounds.centre[0] == pytest.approx(stride + 60.0)
+
+
+def test_a_raster_that_does_not_fit_keeps_the_files_coordinates() -> None:
+    """Steht ein Teil nach der Rechnung nicht auf seiner Platte, ist es ein
+    anderer Raster — dann gilt, was die Datei sagt, und nichts wird geraten."""
+    payload = plated_container({"1": (1, 128.0, 128.0), "2": (2, 900.0, 128.0)})
+
+    parts = threemf_reader.read_objects(payload, plates=True)
+
+    assert [part.plate for part in parts] == [0, 0]
+    assert parts[1].mesh.bounds.centre[0] == pytest.approx(900.0)
+
+
+def test_a_new_import_loads_the_plates_into_the_scene(profile) -> None:
+    """Der Weg des Kunden: Datei ablegen, Einlesplan, Auswertung — jedes Teil
+    auf seiner Platte, und kein Hinweis „liegt außerhalb der Druckfläche"."""
+    from app.core.ingest.plan import import_plan
+    from app.core.scene import History, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    stride = 256.0 * (1.0 + threemf.SLICER_PLATE_GAP)
+    payload = plated_container({"1": (1, 128.0, 128.0), "2": (2, stride + 60.0, 200.0)})
+    project = new_project("centauri-carbon-2", "pla")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/platten.3mf", sha256=""
+    )
+    project.sources["src_1"] = payload
+    plan = import_plan("src_1", "platten.3mf", payload, "auto", first_model=True)
+    assert plan.draft.params.get("plates") is True
+
+    History(project.document).apply(plan.title, [plan.draft])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    objects = sorted(result.scene.objects.values(), key=lambda entry: entry.plate)
+    assert [entry.plate for entry in objects] == [0, 1]
+    assert objects[1].mesh.bounds.centre[0] == pytest.approx(-68.0)
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "arrange.off_the_plate" not in codes, codes
+
+
+def test_one_plate_changes_nothing() -> None:
+    payload = plated_container({"1": (1, 100.0, 50.0), "2": (1, 30.0, 40.0)})
+
+    parts = threemf_reader.read_objects(payload, plates=True)
+
+    assert [part.plate for part in parts] == [0, 0]
+    assert parts[0].mesh.bounds.centre[0] == pytest.approx(100.0)
+
+
 def test_a_rotation_in_the_transform_is_applied() -> None:
     """Eine 3MF-Matrix ist spaltenweise; zeilenweise gelesen kommt eine
     Drehung gespiegelt heraus.

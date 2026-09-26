@@ -310,6 +310,8 @@ def import_plan(
                 "source": source_id,
                 "unit": unit,
                 **({"coordinates": "gltf"} if gltf else {}),
+                # Eine Datei mit mehreren Platten kommt auf ihre Platten (RM-252).
+                **({"plates": True} if suffix.lower() == ".3mf" else {}),
                 # Eine Nummer statt eines Namens (``_own_name``): Sie gilt
                 # jedem Körper, den die Datei bringt, auch einer Baugruppe.
                 **_own_name(name, taken, loads=True),
