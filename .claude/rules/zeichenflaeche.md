@@ -1,1054 +1,453 @@
 ---
-description: "Der Skizzeneditor — gezogene Punkte, Zwangsbedingungen, die Maßkarte, Lochkreis und Lochraster, die Karte unten, neue Ebenen, die Flächenkontur, Ellipse und Kurvenbedingungen"
+description: "Der Skizzeneditor — Vorschau und Fang am Zeiger, Raster und Maßstab, gezogene Punkte und Zwangsbedingungen, Maßkarten, der Ziehgriff der Querschau, Form- und Lochwerkzeuge, die Karte unten, Ebenen und Flächenkontur, Ellipse und Kurvenbedingungen, der Zielkörper"
 paths:
   - "app/ui/sketch_editor.py"
 ---
 
 # Regeln für die Zeichenfläche
 
-Der Skizzenmodus. Die übrigen Oberflächenregeln — Texte, Wartezeit,
-Barrierefreiheit, der Mauszeiger, die Ansicht — stehen in `oberflaeche.md`
-und gelten hier unverändert mit.
+Der Skizzenmodus (`app/ui/sketch_editor.py`, gezeigt im Viewport). Texte,
+Barrierefreiheit und Zeiger regelt `oberflaeche.md`, die Ansicht `ansicht.md`,
+das Warten `wartezeit.md`; sie gelten mit. Anlässe, Messwerte und die Mechanik
+im Einzelnen stehen unter denselben Überschriften in
+`konzepte/begruendungen/regel-zeichenflaeche.md`.
 
-Der Skizzeneditor (`app/ui/sketch_editor.py`) ist die zweite Ansicht, in der
-gezeigt werden muss, was gleich passiert. Vier Zusagen, alle vier hatten
-gefehlt:
+## Was entsteht, steht am Zeiger
 
-**Was entsteht, hängt am Zeiger.** Linie, Kreis und Bogen zeigen ihre Vorschau,
-bis der Klick sie festmacht. Ohne sie setzt ein Klick einen gestrichelten
-Kreis, dann geschieht nichts, und beim zweiten steht plötzlich eine Linie da.
+* **Linie, Kreis und Bogen zeigen ihre Vorschau am Zeiger**, bis der Klick sie
+  festmacht.
+* **Gefangen wird auf das Raster, ein vorhandener Punkt schlägt es** — sonst
+  risse der Fang die Deckung auf. Der Haken „Am Raster fangen" steht an der
+  Ebenenzeile, an ist die Vorgabe; derselbe Fang gilt beim Ziehen eines
+  Punktes.
+* **Was ein Klick tut, entscheidet die Methode, die auch ein Test ruft**
+  (`place`, `grab_point`); die Ereignisse übersetzen nur.
+* **Ein Klick auf einen Punkt greift ihn** (`grab_point`, beim Auswählen und
+  beim Punktwerkzeug), statt einen zweiten deckungsgleich daraufzusetzen. Bei
+  Linie, Kreis und Bogen bleibt der Fang: Dort ist der Punkt der Anfang.
+* **Was ein Klick greifen würde, leuchtet auf** (`_note_hover`, Fangradius
+  acht Bildpunkte); die Auswahl unterscheidet sich nicht allein über die Farbe
+  (Regel 18).
+* **Der Zeiger sagt, was ein Klick tut**, auch auf der Zeichenfläche
+  (`SketchCanvas.set_tool` über `cursors.cursor`; die Rolle `draw` ist die
+  Systemform `CrossCursor`).
+* **Jedes Zeichenwerkzeug nennt in jedem Schritt, was der nächste Klick tut**
+  (`drawing_hint`), auch dass Esc den Linienzug beendet. Sobald etwas
+  gezeichnet ist, hängt `status_text` „Esc wechselt zum Auswählen und Ziehen."
+  an.
+* **Wo der Zeiger steht, steht in der Zeile** (`pointer_target`,
+  `SketchPanel._show_pointer`) — der Ort, an dem ein Klick landet, nicht die
+  rohe Lage. Genaue Zahlen gibt das Kontextmenü am Punkt (`edit_point`, mit
+  eigenem `_remember()`).
+* **Was im Konstruktor gesetzt wird, kommt vor den Verbindungen:**
+  `SketchPanel` setzt die Skizze vor `sketchChanged` und frischt am Ende des
+  Konstruktors beide Anzeigen von Hand auf — ein Signal ersetzt nicht den
+  ersten Aufruf.
 
-**Gefangen wird auf das Raster, ein vorhandener Punkt schlägt es.** Sonst risse
-der Fang die Deckung auf, für die er da ist. Der Haken steht an der
-Ebenenzeile, an ist die Vorgabe; ein Kreuz am Zeiger zeigt, wohin ein Klick
-fiele. Derselbe Fang gilt beim Ziehen eines Punktes, sonst wäre er eine Zusage
-bis zum ersten Nachbessern.
+## Raster und Maßstab
 
-**Und es ist dasselbe Raster, das im Bild steht — eine Zahl für beides.** Hier
-stand bis zum 24.08.2026 das Gegenteil („gefangen wird feiner, als das Raster
-gezeichnet ist"), und das war nicht bloß eine Beschreibung, sondern der
-Zustand: gezeichnet wurden 5 mm, gefangen wurde auf 1 mm, und gemessen landeten
-vier von vier Klicks zwischen zwei sichtbaren Linien — (7,3 | −4,8) fiel auf
-(7,0 | −5,0). Das Kästchen heißt „Am Raster fangen" und hat damit etwas
-versprochen, das nicht eintrat.
+* **Eine Zahl für Raster im Bild und Fang:** `SketchPanel.follow_grid` gibt die
+  Weite, die `_redraw_sketch` gezeichnet hat, an Canvas **und** Feld; was der
+  Viewport zuletzt gezeichnet hat, steht in `_sketch_step`.
+* **Eine eingetippte Weite bleibt** (`_pinned_step`), das Raster folgt ihr; die
+  Null gibt sie zurück („Automatisch", `setSpecialValueText`) — eine
+  Einstellung ohne Rückweg wäre eine Sackgasse (§2.1). Kein eigener Haken
+  „Auto".
+* **Gesetzt wird unter `QSignalBlocker`**, sonst nagelte der erste Zoomschritt
+  die Weite fest. **Die Eingabe muss ins Bild:** `_snapping_changed` sendet
+  `sketchChanged`.
+* **`LEAST_SNAP_MM` hebt eine zu kleine Eingabe an, statt sie zu verschlucken**
+  — der Sonderwert zwingt das Minimum des Feldes auf null.
+* **Gemessen wird erst, wenn es ein Bild gibt** (`LEAST_VIEW_PIXELS`): Ein
+  Widget ohne Layout meldet 100 × 30 Bildpunkte; `start_sketch` zieht die Weite
+  über `QTimer.singleShot(0, …)` nach.
+* **Raster und Beschriftung folgen dem Maßstab** (`grid_step`, Folge 1, 2, 5).
+  Er kommt aus der Kamera, nicht vom unsichtbaren Canvas (§30.1):
+  `Viewport.pixels_per_mm(frame)` misst über zwei projizierte Weltpunkte, in
+  beiden Projektionen richtig, und beide Seiten rechnen `grid_step_for(scale)`.
 
-`SketchPanel.follow_grid` nimmt deshalb die Weite, die `_redraw_sketch` gerade
-gezeichnet hat, und gibt sie an Canvas **und** Feld. Zwei Dinge hängen daran:
+## Wohin ein Klick fällt, und die Fangmarke
 
-* **Eine eingetippte Weite bleibt stehen** (`_pinned_step`). Danach folgt
-  umgekehrt das Raster ihr — eine Zahl bleibt es in beiden Richtungen. Ohne
-  die Unterscheidung überschriebe der nächste Zoomschritt jede Eingabe.
-* **Das Setzen läuft unter `QSignalBlocker`.** `setValue` feuert
-  `valueChanged`, und das hieße hier „der Nutzer hat etwas eingetippt": Der
-  **erste** Zoomschritt hätte die Weite für immer festgenagelt.
-* **Und die Null gibt sie wieder her.** `_pinned_step` wurde gesetzt und nie
-  gelöst: Wer einmal eine Weite eintippte, sah bis zum Verlassen des Modus
-  kein mitwachsendes Raster mehr — herausgezoomt eine Fläche aus Linien,
-  hineingezoomt vier Linien im Bild. Das Feld beginnt deshalb bei null und
-  zeigt dort „Automatisch" (`setSpecialValueText`). Eine Einstellung ohne Weg
-  zurück ist eine Sackgasse, und §2.1 kennt keine.
-* **Die Eingabe muss ins Bild.** `_snapping_changed` sendet `sketchChanged` —
-  ohne das endete die Kette am Canvas, und der ist im Viewport-Modus
-  unsichtbar. Gemeldet als „wenn ich das Raster anpasse ändert es sich im
-  Viewport nicht": Feld und Fang trugen die neue Weite, das Bild die alte.
-  Drei Zahlen für dieselbe Sache. Was der Viewport zuletzt **gezeichnet** hat,
-  steht in `_sketch_step` — sonst wäre von außen nur zu zählen, nicht zu
-  fragen.
-
-**Wohin ein Klick fällt, muss im Bild stehen** (`Viewport.show_sketch_cursor`,
-`sketch_cursor`). Gefangen wird auf das Raster, also landet ein Klick bis zu
-einen halben Schritt neben dem Zeiger — bei 2 mm Raster elf Bildpunkte, bei
-10 mm sechzig. Der Canvas zeigte dafür seit je ein Kreuz; seit die Zeichnung
-im Viewport liegt (§30.1, P4), sieht das niemand mehr. Gemeldet als „die
-Klicks sind wo anders als ich klick", und es war ausdrücklich **kein**
-Koordinatenfehler: `devicePixelRatio` war 1.0, Qt- und Renderergröße des
-Fensters (damals VTKs Interactor) stimmten überein, der Ereignisfilter saß auf
-demselben Widget.
-
-Drei Dinge daran, alle drei gemessen:
-
-* **Der Ort kommt aus `pointer_target()`**, weitergereicht über
-  `SketchPanel.pointerMoved`. Ihn im Viewport nachzurechnen wäre die zweite
-  Zahl für dieselbe Sache — derselbe Fehler, an dem das Raster schon einmal
-  auseinanderlief. Beim Auswahlwerkzeug gibt `pointer_target()` absichtlich
-  die **rohe** Lage: Dort entsteht nichts, also ist die Mausstelle die
-  richtige Antwort.
+* **Wohin ein Klick fällt, steht im Bild** (`Viewport.show_sketch_cursor`,
+  `sketch_cursor`) — der Fang versetzt ihn bis zu einem halben Schritt. Der Ort
+  kommt aus `pointer_target()` über `SketchPanel.pointerMoved`, nie
+  nachgerechnet; beim Auswahlwerkzeug ist er absichtlich die rohe Lage.
 * **Die Größe steht in Bildpunkten** (`CURSOR_PIXELS`), nicht in Millimetern
-  und nicht als Anteil der Rasterweite. Der erste Anlauf koppelte sie an das
-  Raster; bei 10 mm sah das gut aus und bei 2 mm war das Kreuz zwei
-  Bildpunkte breit — unsichtbar genau dort, wo man es am nötigsten hat.
-  Gesehen hat das die Aufnahme, keine Rechnung.
-* **Ein gesetzter Punkt bleibt kräftiger als die Marke**
-  (`SKETCH_POINT_PIXELS >= CURSOR_PIXELS`, festgehalten in
-  `tests/test_sketch_editor.py`). Er stand auf sechs Bildpunkten gegen zwanzig
-  Spanne: Was schon existiert, sah leiser aus als das, was erst entstünde.
-  Verwechseln kann man beide nicht — Kugel gegen Kreuz, zwei Formen und nicht
-  zwei Farben.
+  oder als Rasteranteil. Ein gesetzter Punkt bleibt kräftiger als die Marke
+  (`SKETCH_POINT_PIXELS >= CURSOR_PIXELS`, geprüft in
+  `tests/test_sketch_editor.py`): Kugel gegen Kreuz, zwei Formen.
+* **Die Marke hat eigene Aktoren** (`_cursor_actors`) und verschwindet in
+  `set_sketching` (nicht in `finish_sketch`) bei **jedem** Aufruf, auch beim
+  Ebenenwechsel.
+* **Ein Zeigerschritt, der nichts ändert, zeichnet nicht:** `render()` kostet
+  6,9 ms, bei sechzig Ereignissen je Sekunde 41 % eines Kerns. Verglichen
+  werden gefangener Ort **und** Maßstab.
+* Fangmarke, `pending_elements()` und der feste Klick lesen dasselbe Ziel aus
+  `_placement_target`; ein Mausereignis rendert höchstens einmal.
 
-Die Marke lebt in einer **eigenen** Actorliste (`_cursor_actors`): Sie hängt an
-der Maus, die Zeichnung ändert sich beim Zeichnen. Zusammen geräumt flackerte
-sie bei jedem Strich. Weg ist sie in `set_sketching` und nicht in
-`finish_sketch`, sonst stünde dieselbe Zusage an zwei Stellen — **und zwar bei
-jedem Aufruf, nicht nur bei `None`**: Ein Ebenenwechsel geht durch dieselbe
-Methode mit einem neuen Rahmen, und die alte Marke blieb sonst auf der vorigen
-Ebene im Raum stehen, bis die Maus sich das nächste Mal bewegte.
+## Zoom und Schwenk auf einer Ebene
 
-**Und ein Zeigerschritt, der nichts ändert, zeichnet nicht.** Das ist die
-Hälfte, an der die Sache steht, und sie ist am gebauten Fenster gemessen:
+* **Die Zeichenebene wird orthografisch gesehen** (§18.1) — perspektivisch
+  wären gleich lange Strecken verschieden lang. Beim Verlassen kommt der Wert
+  des Nutzers zurück; `view_on_plane` rechnet `parallel_scale` aus der
+  Kameradistanz (`_fit_parallel_scale`).
+* **Wer an der Kamera zoomt, geht durch `apply_wheel_zoom`**, das beide
+  Projektionen unterscheidet (ein Dolly ändert orthografisch nichts); das Rad
+  zoomt auf den Zeiger. `tests/test_viewport_decisions.py` prüft beide.
+* **Die Kamera meldet jede Bewegung zurück** (`Viewport.cameraMoved`, verbunden
+  in `start_sketch`, gelöst in `finish_sketch`), am **Ende** einer Bewegung:
+  Zugende des Navigators (`on_end` in `_weak_callbacks`); Radzoom,
+  Kameravorgaben, 3D-Maus (`settle_camera`) und `show_span_on_plane` melden
+  selbst. Je Mausbewegung wäre das Neuzeichnen zu teuer. `_pinned_step`
+  gewinnt auch hier.
+* **Die Kamera hat eine Untergrenze** (`LEAST_PLANE_DISTANCE`): In der leeren
+  Szene von Weg 2 gab es sonst ein Raster von 0,1 mm.
+* **Gedreht wird um die Mitte der Körper**, nicht des Sichtbaren samt Platte
+  und Bauraum: `rotation_centre()` aus `_object_bounds()`, wie `reset_camera`;
+  ohne Körper wird nichts verschoben.
 
-| | Kosten je Aufruf |
-|---|---|
-| `show_sketch_cursor`, Marke wandert | 6,9 ms |
-| davon `pixels_per_mm` | 0,004 ms |
-| `_sketch_hit` zum Vergleich | 0,006 ms |
-| Marke bleibt, wo sie ist | **0,004 ms** |
+## Die Ebene steht im Bild
 
-Bei sechzig Mausereignissen in der Sekunde sind 6,9 ms **41 % eines Kerns** im
-Qt-Hauptthread. Teuer ist weder die Rechnung noch der Actor, sondern
-`render()` — das Netz einmal anzulegen und nur seine Punkte zu tauschen brachte
-gemessen nichts (6,95 gegen 6,92). Was hilft, ist die Eigenschaft der Marke
-selbst: Sie sitzt am **gefangenen** Ort und ändert sich zwischen zwei
-Rasterpunkten nicht. Verglichen wird Ort **und** Maßstab — beim Zoomen bleibt
-der Ort gleich, und die Größe müsste sich ändern.
+* **Benannt nach dem, was man sieht** (Draufsicht, Vorderansicht,
+  Seitenansicht), die Ebene in Klammern; Achsenbuchstaben aus `PLANE_AXES`,
+  auf einer angeklickten Fläche keine. Die Ziffern 1, 2, 3 gehen über
+  `choose_plane`, also über das Auswahlfeld.
+* **Das Ebenenfeld zeigt den Blick:** `offer_faces` nimmt zuerst
+  `canvas.view_plane`; fällt dessen Fläche weg, wechseln Feld und Kamera auf
+  die vorhandene Zeichenebene, sonst XY — die Zeichnung bleibt, wo sie ist.
+* **„Neue Ebene …" im Ebenenfeld und als vierte Karte, nicht im Menü**
+  (`NewPlaneDialog`, nicht modal über `open`): Vorschau beim Einstellen
+  (`SketchCanvas.preview_plane`, kein Schritt), *Abbrechen* stellt her,
+  *Übernehmen* ist **ein** Schritt. Eine vorhandene Zeichnung zieht
+  ausdrücklich mit (`change_drawing_plane`), und der Dialog sagt das.
+* **Welche Ebenen ein Skizzenfeld annimmt, sagt der Parameter**
+  (`ParamSpec.sketch_planes`): Eine leere Zeichnung beginnt auf der ersten, das
+  Feld bietet nur diese (und die eigene einer älteren Datei), keine Flächen,
+  keine neue Ebene, keine Ebenenkarten.
+* **Der obere Umriss beginnt auf der Ebene des unteren** (`follow_plane_of`,
+  schwach gehalten); **Rückgängig bringt Ebenenfeld und Klickebene mit**
+  (`planeRestored`).
 
-**Die Null im Rasterfeld kostet die Untergrenze**, wenn man sie nicht
-festhält. Qt setzt den Sonderwert immer auf das Minimum, das Minimum musste
-also auf null — und bei zwei Nachkommastellen nahm das Feld danach 0,01 mm an.
-`LEAST_SNAP_MM` hebt beim Eintippen an, statt abzulehnen: Ein Feld, das eine
-Eingabe verschluckt, ohne es zu zeigen, ist schlimmer als eines, das sie
-berichtigt.
+## Der Umriss sagt, wie weit er ist
 
-**Gemessen wird erst, wenn es ein Bild gibt** (`LEAST_VIEW_PIXELS` in
-`viewport.py`). Beim Aufbau meldet Qt für ein Widget ohne fertiges Layout
-100 mal 30 Bildpunkte; daran rechnete `pixels_per_mm` 0,28 aus, was ein Raster
-von 100 mm ergab — und da der Fang jetzt dieselbe Zahl nimmt, landeten drei
-Klicks dreimal auf (0 | 0). Deshalb zieht `start_sketch` die Weite über einen
-`QTimer.singleShot(0, …)` nach, sobald das Layout steht.
+* **Die Zeile beantwortet zuerst „ist es zu?"** (`_outline_state()` über
+  `regions_of`, denselben Kern, der später rechnet) — übernommen wird nur Ja
+  oder Nein: „Noch offen" oder „Geschlossen", dahinter die Freiheitsgrade.
+* **Die Kennzahl bekommt einen Satz** (`outline_advice`): Die Zahl bleibt für
+  den Könner, dahinter steht ihre Folge; der Umriss geht vor den
+  Freiheitsgraden.
+* **Der Zustand steht neben dem Werkzeughinweis** (`state_brief`,
+  `status_shows_state`): „Noch offen · noch 3 Maße fehlen".
+* **Ein Knopf, der nicht kann, sagt, was ihm fehlt:** Die zehn
+  Bedingungsknöpfe folgen der Auswahl (`constraint_offers`), Hinweis und
+  Meldung nach einem Kürzel kommen aus einer Quelle (`_needs_phrase`). Was eine
+  Bedingung **tut**, sagt `_does_phrase` — am Knopf, im Kontextmenü, in der
+  Meldung und an jedem Listeneintrag. Dass **Strg** dazunimmt, steht in der
+  Zeile (`selection_hint`).
+* **Die Bedingungsliste trägt die Punktnummern auch im Konflikt**; nach ihnen
+  sucht, wer eine Meldung des Lösers wiederfinden will.
+* **Die festen Punkte der Hilfsgeometrie sind eine Zeile der Liste**
+  (`held_guides`); wer eine Zeile übersetzt, fragt `constraint_indices(row)`.
+  Entf und Kontextmenü lösen die Gruppe in einem Schritt (`remove_constraints`).
 
-**Raster und Beschriftung folgen dem Maßstab** (`grid_step`, Folge 1, 2, 5),
-und das Rad zoomt auf den Zeiger. Eine feste Weite ist herausgezoomt eine
-Fläche aus Linien und hineingezoomt ein Blatt mit vier Linien darauf.
+## Das Maß am Zeiger
 
-**Seit dem Schnitt (§30.1, P4) kommt dieser Maßstab aus der Kamera, nicht aus
-der Zeichenfläche.** Sie ist im Viewport-Modus unsichtbar, rechnet aber
-weiter — und ihr eigener Maßstab steht damit auf dem Startwert 1,2, weil dort
-niemand mehr zoomt. Gezeichnet wurden so 20 mm, während auf 1 mm gefangen
-wurde: zwei Zahlen für dieselbe Sache, und die sichtbare war die falsche.
-`Viewport.pixels_per_mm(frame)` misst über zwei projizierte Weltpunkte statt
-`parallel_scale` umzukehren — damit stimmt die Zahl bei beiden Projektionen —,
-und `grid_step_for(scale)` ist aus der Methode heraus, damit beide Seiten
-dieselbe Folge rechnen.
+* **Das Maß beim Zeichnen steht am Zeiger** (`measure_field`, `MEASURE_GAP`
+  Bildpunkte neben der Spitze): nicht darunter (es fänge die Maus), an Rand
+  und Ecke auf der anderen Seite, und die erste Ziffer beginnt die Eingabe ohne
+  Klick — gesendet an `lineEdit()`, nicht an das Drehfeld.
+* **Gezeichnet heißt frei, getippt heißt bemaßt:** `_finish_rectangle` streift
+  den Festpunkt und lässt nur das Maß einer Seite stehen, deren Zahl im Feld
+  stand; `shapes.rectangle` bleibt für Dialog und Agent bestimmt (§30.1).
+* **Genau waagerecht oder senkrecht bleibt es** (`_axis_constraint`); ein
+  getipptes Maß zieht `_snapped_direction` innerhalb `AXIS_SNAP_DEGREES` auf
+  die Achse, und der getippte Linienzug geht danach weiter.
+* **Das Winkelmaß steht mit Gradzeichen** (`readable_angle`, `DEGREE_UNIT`) an
+  der gemeinten Ecke; ein Winkel hat keine Anzeigeeinheit.
 
-**Und die Kamera meldet jede Bewegung zurück** (`Viewport.cameraMoved`,
-verbunden in `start_sketch`, gelöst in `finish_sketch`). Das ist die dritte
-Kante, und sie fehlte: Feld → Bild läuft über `sketchChanged`, Bild → Feld
-über `follow_grid` — aber Rad, Drehzug und *Einpassen* änderten den Maßstab,
-ohne dass irgendwer neu zeichnete. Das Raster zeigte die Weite vom Betreten,
-und erst der nächste Strich ließ es springen (gemeldet von Robert am
-26.08.2026: „die Gitterlinien sollten genau das Raster sein"). Gesendet wird
-am **Ende** einer Bewegung — vom Zugende des Navigators (`on_end` in
-`_weak_callbacks`) für Dreh-, Kipp- und Schiebezug; der Radzoom, die
-Kameravorgaben, die 3D-Maus (`settle_camera`) und `show_span_on_plane` melden
-selbst, weil sie keinen Zug haben. Ein
-Neuzeichnen kostet gemessen 7,8 ms; wer
-hier ein Ereignis je Mausbewegung sendet statt je Zug, bezahlt es im
-Qt-Hauptthread. `_pinned_step` gilt dabei unverändert: Die Kamera-Kante ruft
-`_redraw_sketch`, und dort gewinnt eine eingetippte Weite wie überall.
+## Ein gezogener Punkt steht am Zeiger
 
-**Das Rad war orthografisch tot, und im Skizzenmodus ist orthografisch
-immer** (`apply_wheel_zoom` in `viewport.py`). Ein Dolly teilt nur die
-Distanz — in der Parallelprojektion bestimmt `parallel_scale` die Bildgröße,
-und die Position ist ihr gleichgültig: acht Radschritte, Bild byteweise
-unverändert (gemessen 26.08.2026 unter VTK, am echten Fenster, wo der
-direkte `Dolly`-Aufruf die Fallunterscheidung nicht trug, die der Trackball
-intern hatte). Wer an der Kamera zoomt, geht durch `apply_wheel_zoom`, und
-das unterscheidet die beiden Projektionen; `tests/test_viewport_decisions.py`
-prüft beide.
+Der Löser hat einen Zugmodus (`solve_sketch(..., dragged=, start=)`, Regel in
+`app/core/sketch/CLAUDE.md`): Gezogene Punkte sind fest, alles andere folgt mit
+der kleinsten Bewegung; was die Bedingungen nicht erlauben, rutscht so weit wie
+möglich.
 
-**Und die Kamera braucht dafür eine Untergrenze.** In einer leeren Szene hat
-`reset_camera` nie stattgefunden; die Startkamera stand 1,62 Einheiten vor dem
-Ursprung (gemessen unter PyVista), und `_plane_distance` übernahm sie treu — 918
-Bildpunkte je Millimeter, ein Raster von 0,1 mm. Getroffen hätte es
-ausgerechnet **Weg 2**, neu konstruieren: nur dort ist die Szene beim Betreten
-leer, mit geladenem Teil ist die Kamera längst eingepasst und
-`LEAST_PLANE_DISTANCE` wirkungslos.
+* **`_drag_solve` schreibt die ganze Lösung zurück** — die gespeicherte
+  Zeichnung ist stets die gelöste, ein `fixed`-Anker wandert nie; `-0.0` wird
+  null.
+* **Fest heißt fest, auch gegen die Hand**; getippte Koordinaten (`edit_point`)
+  setzen erst den Anker (`_anchor`).
+* **Die Mitte eines Kreises oder Bogens nimmt den Rand mit** (`move_point`),
+  der Rand zieht nur den Radius.
+* **Was hält, wird gesagt** (`_holding`): Kommt ein Punkt nicht an, nennt die
+  Zeile die Bedingungen an ihm und den Rechtsklick als Weg (Regel 17).
+* **Verschieben zieht die ganze Auswahl** (`move_selected`, verschoben, nicht
+  kopiert), erst ab `startDragDistance` (`_shift_selection`); der Undo-Punkt
+  entsteht beim ersten wirklichen Zug, einmal.
 
-**Die Zeichenebene wird orthografisch gesehen.** Der Grund steht seit je am
-Umschalter selbst (§18.1) — Parallelprojektion ist das, was gemessene Längen
-vertrauenswürdig macht —, und hier wiegt er schwerer als sonst irgendwo:
-Perspektivisch erscheinen zwei gleich lange Strecken auf derselben Ebene
-verschieden lang, je weiter sie von der Bildmitte weg liegen, und genau darauf
-setzt man beim Zeichnen Punkte. Gesehen hat das kein Test, sondern das Bild:
-Die Korpusplatte stand trapezförmig da, mit sichtbaren Seitenwänden, während
-die Zeile darunter „Draufsicht (XY)" meldete.
+## Der Ziehgriff der Querschau
 
-Zwei Dinge hängen daran. Beim Verlassen wird auf den Wert des Nutzers
-zurückgestellt und nicht auf „perspektivisch" — wer orthografisch arbeitet,
-hat das gewählt. Und `view_on_plane` rechnet `parallel_scale` aus der
-Kameradistanz (`_fit_parallel_scale`): Der Vertrag führt für beide
-Projektionen getrennte Größen (`parallel_scale` neben dem Abstand), und wer
-umschaltet, ohne die eine aus der anderen zu rechnen, landet auf einem
-Startwert — unter VTK war es 1,0, ein sichtbarer Ausschnitt von zwei
-Millimetern.
+In der Querschau zieht man am Umriss, und der Körper wächst mit
+(`Viewport.set_sketch_pull`, `axis_hit`, `pull_cage`).
 
-**Die Ebene ist eine Ansicht, und sie steht im Bild.** Benannt wird sie danach,
-was man sieht (Draufsicht, Vorderansicht, Seitenansicht), die Ebene steht in
-Klammern daneben — sie ist die Angabe, die in der Projektdatei landet. Die
-Achsenbuchstaben kommen aus `PLANE_AXES` und folgen ihr; auf einer angeklickten
-Fläche des Körpers bleiben sie weg, denn die kann beliebig geneigt sein. Die
-Ziffern 1, 2 und 3 wechseln direkt und gehen dabei über `choose_plane`, also
-über das Auswahlfeld — an ihm vorbei behaupteten zwei Stellen zweierlei.
+* **Angeboten nur in der Querschau:** `SketchCanvas.planes_are_parallel`
+  vergleicht die Richtungen von Blick und Zeichenebene (gegenläufige Normalen
+  sind parallel; dieselbe Prüfung gilt einer gewählten Fläche beim Einrasten
+  der Kamera); in der Draufsicht führt der Hinweis zur Vorder- oder
+  Seitenansicht, die freie Ansicht zählt als Querschau. Wer sich ohne
+  Ebenenwahl in die Kantensicht dreht, bekommt ihn nicht — dort ist Zeichnen
+  die Absicht.
+* **Die Frage stellt das Fenster** (`MainWindow._sketch_pull_offer`: `"ready"`,
+  ein Grund oder leer); ein Grund nur, wo die Geste gemeint war, über
+  `sketchPullBlocked` an `announce` (Regel 17) — und dieselbe Quelle schreibt
+  den Satz in die Leiste.
+* **Angeboten wird nur, was geht** (`pull_height_at` in `sketch_pull_ready`,
+  dieselbe `axis_hit`-Prüfung wie der Zug, am selben Ort `pull_base_at`).
+* **Der Griff ist der Umriss selbst**, gemessen gegen die Strecken der
+  projizierten Kurven (`polyline_distance`) bis `CURSOR_PIXELS`;
+  Konstruktionsgeometrie zählt nicht.
+* **Dieselbe Zustandsmaschine wie der Körperzug** (`on_body_drag`,
+  `ready`/`start`/`move`/`end`); `_end_drag` beendet den Ziehgriff über
+  `_end_pull`, **nicht** über `set_navigation`.
+* **Was wächst, ist eine Drahtform** (`pull_cage`, höchstens `MOST_PULL_RIBS`
+  Sprossen), keine Vorschau über `session.preview_async`.
+* **Die Höhe ist gefangen und geklemmt** (`pulled_height`): auf das sichtbare
+  Raster, in die Grenzen **aus dem Schema** (`main_window.pull_limits`), nie
+  abgeschrieben.
+* **Ein Zug in die falsche Richtung sagt es, statt einen Splitter zu bauen:**
+  Geklemmt wird mit Vorzeichen, null bleibt null; die Richtung entscheiden
+  `continue_sketch_pull` und `_pull_takes` an derselben geklemmten Höhe,
+  geprüft nur gegen die Untergrenze — ein Zug bis zum Anschlag ist gemeint, und
+  eine getippte Zahl ersetzt Zeiger samt Richtung.
+* **Die Grenze steht an einer Stelle** (`_pull_takes`, für Loslassen und
+  Eingabetaste): Beim Tippen wird abgelehnt, beim Ziehen geklemmt; die
+  abgelehnte Zahl bleibt markiert im Feld (wie bei `_apply_typed`).
+* **Ohne Attrappe nicht prüfbar:** Offscreen ist `sketch_pull_ready` immer
+  falsch; `gripping` in `tests/test_viewport_decisions.py` ersetzt genau die
+  drei Methoden, die einen Renderer brauchen (Muster aus `ansicht.md`,
+  `test_cursors.py`).
+* **Die freie Skizze bietet *Hochziehen* und *Abtragen* als Wörter**, sobald
+  der Umriss geschlossen ist, und führt damit in den Operationsdialog — die
+  Leiste erzeugt keine Geometrie (Regel 2). Offen nennen beide ihre Bedingung;
+  *Abtragen* steht nur mit Zielkörper da. Wurde der Modus für eine andere
+  Operation geöffnet, bleiben beide verborgen.
 
-Und jedes Zeichenwerkzeug sagt in der Statuszeile, was der nächste Klick tut
-(`drawing_hint`). Der Linienzug ist der Fall, an dem es fehlte: er läuft
-weiter, bis Esc ihn beendet, und das stand nirgends.
+### Die Zahl am Zeiger
 
-**Wo der Zeiger steht, steht in der Zeile** (`pointer_target`,
-`SketchPanel._show_pointer`). Genannt wird nicht die rohe Lage, sondern der
-Ort, an dem ein Klick landet — bei aktivem Fang also die Rasterweite. Eine
-Anzeige, die 29,75 zeigt, wo 30 entsteht, wäre schlechter als keine. Ohne sie
-ist ein gezogener Punkt eine ungefähre Lage, und „genau" geht nur über den
-Umweg Nachmessen; wo es auf den Zehntel ankommt, führt das Kontextmenü am
-Punkt zu Zahlen (`edit_point`) — mit eigenem `_remember()`, denn den
-Undo-Punkt setzt beim Ziehen der Mausdruck.
+* **Die Wertleiste steht am Zeiger** (`DragValueBar.anchor`, derselbe
+  `MEASURE_GAP` aus `viewport.py`); an den Griffen von §18.11 bleibt sie oben
+  mittig.
+* **Sie ist während des Zugs sichtbar und tippbar** — ein unsichtbares Feld
+  nimmt keinen Fokus, und was über den Ausschnitt hinausgeht, ist nur tippbar.
+* **Mit Vorzeichen, nicht als Betrag** (`_apply_typed` nimmt den Feldwert als
+  Höhe); die Richtung steht zusätzlich im Namen (*Höhe*, *Tiefe*).
+* **Maßfeld und Wertleiste heben sich beim Erscheinen an**, nicht je
+  Zeigerbewegung (`_place_measure_field` läuft an jedem `measuringChanged`):
+  Alle Kinder der Ansicht sind native Fenster, und die Leiste entsteht vor der
+  Grafikfläche. Die Schlösser nach ihren Feldern.
 
-**Der Zeiger sagt, was ein Klick tut — auch auf der Zeichenfläche.** Sie
-setzte ihn nie: der Pfeil stand da, gleich ob ein Zeichenwerkzeug lief oder
-nicht. Wer drei Punkte gesetzt hatte und den mittleren anklickte, um ihn zu
-ziehen, setzte einen vierten genau darauf — deckungsgleich, unsichtbar, mit
-Bedingung. Gesetzt wird in `SketchCanvas.set_tool`, aus derselben Quelle wie
-überall (`cursors.cursor`); die Rolle `draw` ist eine **Systemform**
-(`CrossCursor`), weil das Fadenkreuz die bekannteste Form für „hier entsteht
-etwas" ist und der Zeigergröße des Systems folgt. Dass der Viewport seinen
-Zeiger an genau einer Stelle setzt, gilt dort und aus seinem eigenen Grund —
-die Zeichenfläche hat nur einen Auslöser, das Werkzeug.
+## Keine Karte über einer anderen
 
-**Ein Klick auf einen Punkt greift ihn** (`grab_point`) — beim Auswählen und
-beim Punktwerkzeug, und er hängt sofort am Zeiger. Vorher entstand dort ein
-zweiter genau auf dem ersten, deckungsgleich und unsichtbar, und um den
-ersten zu bewegen, musste man erst das Werkzeug wechseln. Die Regel steht in
-`place` und nicht bloß im Mausereignis: **was ein Klick tut, entscheidet die
-Methode, die auch ein Test ruft** — die Ereignisse übersetzen nur. Bei Linie,
-Kreis und Bogen bleibt der Fang, wie er war: dort ist der vorhandene Punkt der
-Anfang des neuen Elements, und die Deckung ist die Verbindung, für die der
-Fang da ist.
-
-**Was ein Klick greifen würde, leuchtet auf** (`_note_hover`). Der Fangradius
-ist acht Bildpunkte; wo er greift, gehört ein Zeichen hin — sonst klickt man,
-sieht keinen Unterschied und klickt wieder. Und die Auswahl selbst muss man
-sehen: 5,0 gegen 3,5 Bildpunkte Radius waren drei Bildpunkte Unterschied im
-Durchmesser, die Aussage hing damit praktisch allein an der Farbe (Regel 18).
-
-**Ein Knopf, der nicht kann, sagt was ihm fehlt.** Die zehn Bedingungsknöpfe
-folgen der Auswahl (`constraint_offers`); wer sie nur sperrt, lässt raten. Der
-Hinweis am Knopf und die Meldung nach einem Kürzel nennen dieselbe Auskunft
-aus derselben Quelle (`_needs_phrase`) — stumm zurückzukehren ist die
-schlechtere Hälfte von „fehlgeschlagen": es sagt nicht einmal, dass etwas
-nicht ging. Dass **Strg** das Zweite dazunimmt, steht in der Zeile, sobald
-eines ausgewählt ist (`selection_hint`) — ohne das kommt niemand auf ein Maß
-zwischen zwei Punkten.
-
-**Das Maß beim Zeichnen steht am Zeiger, nicht in der Werkzeugzeile.** Wer
-eine Linie zieht, sieht auf ihre Spitze; eine Zahl am Fensterrand liest dort
-niemand. Fusion legt sie an den Zeiger, und darum ist das Eintippen dort der
-Normalweg — hier war es eine Funktion, die man kennen musste. Die
-Zeichenfläche besitzt `measure_field` und legt es mit `MEASURE_GAP`
-Bildpunkten Abstand neben die Spitze:
-
-* **Nicht darunter** — es finge die Mausbewegungen ab, und die Linie bliebe
-  beim Ziehen stehen.
-* **An Rand und Ecke kippt es** auf die andere Seite des Zeigers. Die untere
-  rechte Ecke ist kein Sonderfall: dorthin zieht man die letzte Linie eines
-  Umrisses.
-* **Die erste Ziffer beginnt die Eingabe**, ohne Klick und ohne Tabulator.
-  Ein Feld, das man erst anklicken muss, verlangt genau die Handbewegung, die
-  das Zeichnen unterbricht — und der Zeiger steht danach woanders, also auch
-  das Maß, das er gerade zeigte. Gesendet wird an `lineEdit()`; ein `event()`
-  auf dem Drehfeld landet in der Pfeiltastenbehandlung.
-
-Nebenbei löst das den breitesten Posten der Werkzeugzeile auf. Ein erster
-Schritt hatte ihn nur ausgeblendet, solange nichts gezeichnet wird — gemessen
-gegen den Stand davor sprang die Zeile beim ersten Klick von 881 auf 1007
-Bildpunkte zurück, also genau dann, wenn man sie am wenigsten braucht.
-
-**Was im Konstruktor gesetzt wird, kommt vor den Verbindungen.** `SketchPanel`
-setzt die Skizze, bevor `sketchChanged` verbunden ist: die Bedingungsliste
-blieb bei einer geöffneten Skizze leer, bis irgendetwas geändert wurde, und
-die Knöpfe standen alle bedienbar da. Ein Signal ersetzt nicht den ersten
-Aufruf — beide Auffrischungen laufen am Ende des Konstruktors von Hand.
-
-**Der Drehpunkt ist die Mitte der Körper, nicht die des Sichtbaren.**
-`ComputeVisiblePropBounds` nimmt Druckplatte und Bauraumrahmen mit; bei 250 mm
-Rahmen und 40 mm Teil liegt die Mitte hundert Millimeter über dem Modell, und
-die Kamera rückt bei jedem Szenenaufbau dorthin. `rotation_centre()` rechnet
-deshalb aus `_object_bounds()` — derselben Quelle wie `reset_camera`. Ohne
-Körper wird gar nichts verschoben.
-
-**Die Zeile beantwortet zwei Fragen, und die erste ist „ist es zu?".** Ob eine
-Kontur geschlossen ist, war bis zum Bestätigen der Operation nicht zu
-erfahren: Wer vier Linien zog und den letzten Klick knapp neben den ersten
-Punkt setzte, sah dasselbe Bild wie einer, der getroffen hatte — die Auskunft
-kam danach, als Absage. `_outline_state()` fragt `regions_of`, also denselben
-Kern, der später rechnet; die Antwort ist damit dieselbe und nicht bloß eine
-ähnliche. Übernommen wird aber nur das **Ja oder Nein**, nicht sein Satz: „Der
-Umriss ist nicht geschlossen" ist die Absage auf eine Handlung und stünde hier
-vom ersten Strich an als Warnung vor einem Zustand, den man gerade
-beabsichtigt. In der Zeile steht „Noch offen" oder „Geschlossen", und dahinter
-die Freiheitsgrade — keine der beiden Fragen beantwortet die andere: ein
-bestimmtes Rechteck kann offen sein, ein geschlossenes darf wackeln.
-
-**In der Querschau zieht man am Umriss, und der Körper wächst mit**
-(`Viewport.set_sketch_pull`, `axis_hit`, `pull_cage`). Robert am 27.08.2026:
-„schön wäre auch dass wenn ich in der skizze was in der draufsicht zeichne und
-dann in die Seitenansicht oder vorderansicht gehe sie nach oben ziehen kann."
-Vorher tippte man eine Höhe und sah das Ergebnis; der Unterschied ist die
-Geste.
-
-**Angeboten wird sie genau dort, wo nicht gezeichnet wird** — in der Querschau.
-`SketchCanvas.planes_are_parallel` vergleicht die Richtungen von Blick und
-Zeichenebene, unabhängig von Namen und Versatz. Dieselbe Prüfung erhält eine
-gewählte Fläche beim Einrasten der Kamera; gegenläufige Normalen gelten ebenso
-als parallel. In einer solchen Draufsicht bleibt der Griff aus und der Hinweis
-führt zur Vorder- oder Seitenansicht. Die freie Ansicht bleibt eine Querschau;
-ob dort wirklich gezogen werden kann, prüft weiterhin `axis_hit` selbst.
-
-**Das Ebenenfeld zeigt den Blick.** `offer_faces` erhält beim Neuaufbau zuerst
-`canvas.view_plane`. Fällt dessen Fläche weg, wechseln Feld und Kamera auf die
-noch vorhandene Zeichenebene, ersatzweise auf XY. Eine vorhandene Zeichnung
-wird dabei nicht verschoben.
-
-Sechs Dinge hängen daran:
-
-* **Die Frage stellt das Fenster, die Geste kennt die Ansicht**
-  (`MainWindow._sketch_pull_offer`). Drei Antworten: `"ready"`, ein Grund, oder
-  leer. Ein **Grund** kommt nur, wo die Geste gemeint war und nicht ging —
-  sonst stünde bei jedem Druck irgendwo im Bild ein Satz über eine Handlung,
-  die niemand versucht hat. Er geht über `sketchPullBlocked` an `announce`
-  (Regel 17: ein Griff, der stumm nichts tut, sagt nicht einmal, dass etwas
-  nicht ging).
-* **Und dieselbe Quelle schreibt den Satz in die Leiste.** Ohne ihn findet die
-  Geste niemand: Der Umriss sieht von der Kante aus wie ein Strich. Zwei Texte
-  aus zwei Quellen wären zwei Gelegenheiten, einander zu widersprechen.
-* **Der Griff ist der Umriss selbst**, nicht ein eigener Anfasser. Gemessen
-  wird in Bildpunkten gegen die **Strecken** der projizierten Kurven
-  (`polyline_distance`) und nicht gegen ihre Ecken — dieselbe Unterscheidung wie
-  bei der Merkmalssuche, die gegen die Dreiecke misst. Er reicht so weit, wie
-  die Fangmarke groß ist (`CURSOR_PIXELS`): Was man sieht, kann man greifen,
-  und eine zweite Zahl daneben wäre ein Bereich, in dem die Marke steht und der
-  Griff nicht hält. Konstruktionsgeometrie zählt nicht mit — an ihr entsteht
-  kein Körper.
-* **Dieselbe Zustandsmaschine wie der Körperzug** (`on_body_drag` mit
-  `ready`/`start`/`move`/`end`, Weiche in `_weak_callbacks`). Eine zweite wäre
-  eine zweite Klickschwelle, und das Loch zwischen zwei Schwellen hatte der
-  Körperzug schon einmal. Nur der Rückweg ist ein anderer: `_end_drag` schickt
-  den Ziehgriff durch `_end_pull` und **nicht** durch `set_navigation` — das
-  baute den Interaktionsstil mitten in der Geste neu auf, und das Loslassen
-  käme bei einem Stil an, der von seinem Drücken nichts weiß.
-* **Was wächst, ist eine Drahtform und keine Fläche** (`pull_cage`). Eine echte
-  Vorschau ginge über `session.preview_async`, also über einen Arbeiter-Thread
-  und einen Neuaufbau der Aktoren; allein das Neuzeichnen der Skizze kostet
-  gemessen 7,8 ms, und bei sechzig Mausereignissen in der Sekunde ist das der
-  Qt-Hauptthread. Die Sprossen sind gedeckelt (`MOST_PULL_RIBS`): Bei einem
-  Kreis mit vierundsechzig Punkten wären es vierundsechzig Striche, und das ist
-  eine Wand und keine Drahtform.
-* **Angeboten wird nur, was auch geht** (`pull_height_at` in
-  `sketch_pull_ready`). Der Zustand oben sagt, ob Ziehen *gemeint* ist; diese
-  Frage sagt, ob es *möglich* ist — von dieser Blickrichtung aus überhaupt eine
-  Höhe ablesbar. Das sind zwei Fragen und nicht zwei Schwellen für eine:
-  gefragt wird `axis_hit` selbst, also dieselbe Prüfung, die der Zug danach
-  benutzt. Sie fehlte, und der Fall, der sie erzwang, ist eine Skizze auf einer
-  **angeklickten Fläche**: Dort hat der Blick nie denselben Namen wie die
-  Zeichenebene, das Angebot stand also immer — und bei frontaler Ansicht gab
-  `axis_hit` nichts zurück. Der Griff nahm die linke Taste und tat stumm
-  nichts.
-
-  **Und derselbe Ort wird zweimal gefragt** (`pull_base_at`): Eine
-  Bereitschaft, die eine andere Stelle prüft als der Zug danach nimmt, ist
-  keine.
-
-  **Was das ausdrücklich nicht abdeckt:** Wer sich mit der Maus in die
-  Kantensicht *dreht*, ohne die Ebenenwahl anzufassen, bekommt den Griff
-  weiterhin nicht — `view_plane` folgt dem Auswahlfeld und den Ziffern 1 bis 3,
-  nicht dem Drehzug. Das ist die Grenze und kein Rest: Dort ist Zeichnen die
-  erklärte Absicht, ein Klick setzt weiter Punkte, und ein Griff daneben wäre
-  genau die Überlappung, die der Zustand vermeidet. Versprochen wird die Geste
-  nur in der Querschau, und dort gilt sie.
-* **Die Grenze steht an einer Stelle, und die heißt `_pull_takes`.**
-  Gefragt vom Loslassen und von der Eingabetaste, über die Höhe, die auch
-  angewandt würde. Vorher stand die Untergrenze an zwei Stellen und die
-  Obergrenze an keiner:
-  Eine getippte Höhe von 4000 mm ging bei einem Höchstwert von 1000 durch, und
-  der Dialog klemmte sie danach kommentarlos.
-
-  **Beim Tippen wird abgelehnt, beim Ziehen geklemmt**, und das ist kein
-  Widerspruch: Wer zieht, meint eine Bewegung, und die darf am Anschlag stehen
-  bleiben; wer tippt, meint genau diese Zahl, und sie stillschweigend zu ändern
-  wäre die Antwort auf eine andere Frage. Die abgelehnte bleibt im Feld
-  markiert stehen — dieselbe Zusage, die `_apply_typed` für alle Zugarten gibt.
-* **Ein Zug in die falsche Richtung sagt es, statt einen Splitter zu bauen.**
-  `pulled_height` klemmt ein Maß **mit erhaltenem Vorzeichen**, und ein auf
-  null gefangenes Maß bleibt null — bis zum 02.09.2026 hob die Klemmung es auf
-  die Untergrenze, und weil `round(-0.3)` gleich `-0.0` ist und `-0.0 < 0.0`
-  nicht gilt, wurde aus einem kurzen Zug nach unten ein Aufbau von 0,1 mm nach
-  oben. Die Richtung entscheidet `continue_sketch_pull` und `_pull_takes` an
-  derselben geklemmten Höhe; ein Zustand daneben (`_pull_raw`) stand hier
-  einmal als „einzige Auskunft über die Richtung" und hatte keine Lesestelle
-  mehr — er ist weg, und die Regeldatei beschreibt den Code, der da ist.
-
-  **Und zwar nur gegen die Untergrenze.** Die vollständige Prüfung stand hier
-  einen Anlauf lang und lehnte damit zwei richtige Fälle ab: Ein Zug bis zum
-  **Anschlag** hat ein rohes Maß über der Obergrenze und ist trotzdem gemeint —
-  die Leiste zeigt den geklemmten Wert, und der ist die Zusage. Und wer nach
-  einem Fehlzug eine Zahl **tippt**, hat die Frage nach der Richtung
-  beantwortet — die getippte Höhe ersetzt den Zeiger samt Richtung.
-* **Die Höhe ist gefangen und geklemmt** (`pulled_height`). Gefangen auf das
-  Raster, das im Bild steht — eine aufgezogene Höhe soll eine runde Zahl sein,
-  und ein Zug, der zwischen zwei Rasterpunkten nichts ändert, zeichnet nicht.
-  Geklemmt auf die Grenzen **aus dem Schema** (`main_window.pull_limits`), denn
-  eine Zahl, die der Griff zeigt und der Dialog danach ablehnt, ist eine
-  gebrochene Zusage. Wer sie hier abschreibt, hat die zweite Wahrheit gebaut.
-
-**Und der Griff ist ohne Attrappe nicht prüfbar** (`gripping` in
-`tests/test_viewport_decisions.py`). Offscreen gibt es keinen Renderer, also
-gibt `_display_of` nichts, `grip_reach` unendlich und `sketch_pull_ready`
-**immer** `False` — auch mit gesetztem Angebot. Der erste Test darüber
-behauptete „ohne Frage kein Griff" und wäre auch bei einem Griff grün geblieben,
-der jede Frage übergeht; `sketchPullBlocked` kam in der ganzen Suite nicht ein
-einziges Mal vor. Ersetzt werden genau die drei Methoden, die einen Renderer
-brauchen — Reichweite im Bild, Ort auf der Ebene, Maß entlang der Achse —, alles
-davor und danach ist echt. Das ist das Muster aus `ansicht.md`, und
-`test_cursors.py` macht es vor.
-
-**Und die Zahl steht am Zeiger, nicht am Fensterrand** (`DragValueBar.anchor`).
-Dieselbe Entscheidung wie beim Maßfeld der Zeichenfläche, mit demselben
-`MEASURE_GAP` — es wohnt seit dem Ziehgriff in `viewport.py`, weil zwei Felder
-daran hängen und eine Zahl an zwei Stellen driftet. Bei den Griffen von §18.11
-bleibt das Feld oben mittig: Dort zieht man an einem Gizmo, den man ansieht,
-und ein Feld unter dem Zeiger verdeckte gerade ihn.
-
-**Und sie ist tippbar, nicht bloß lesbar.** Das stand hier als Zusage und
-`continue_sketch_pull` hat die Leiste trotzdem nie gezeigt: `eventFilter`
-schrieb die Ziffer in `drag_bar.value` und holte den Fokus dorthin, aber ein
-unsichtbares Feld nimmt keinen Fokus, und die Eingabetaste lief ins Leere.
-Gemeldet von Robert am 07.09.2026 („beim hochziehen … ich kann auch keinen wert
-eingeben"); am gebauten Fenster war `drag_bar.isVisible()` während des ganzen
-Zugs falsch.
-
-Der Grund, warum das Feld hier schwerer wiegt als beim Zeichnen, ist der
-**Bildraum**: Gemessen am 07.09.2026 lag der Griff 237 Bildpunkte unter dem
-oberen Rand, bei 6,87 Bildpunkten je Millimeter — durch Ziehen sind das 40 mm,
-und das Schema erlaubt 1000. Eine Höhe von 200 mm bräuchte rund 1370
-Bildpunkte, das Bild ist 736 hoch. **Was über den sichtbaren Ausschnitt
-hinausgeht, ist nur tippbar**, und ohne Feld gar nicht erreichbar.
-
-**Gezeigt wird die Zahl mit Vorzeichen**, nicht ihr Betrag. `_apply_typed` nimmt
-den Feldwert unverändert als Höhe; ein Betrag machte aus einer Tasche
-kommentarlos einen Aufbau, sobald jemand die Eingabetaste drückt, ohne etwas zu
-tippen. Die Richtung steht zusätzlich im Namen (*Höhe* gegen *Tiefe*), weil eine
-Zahl mit Minus sie schlecht allein erklärt.
-
-**Beide Felder müssen sich beim Erscheinen anheben.** Alle Kinder der Ansicht
-sind native Fenster, und Windows stapelt sie in der Kindfolge; die Karten heben
-sich in ihrem `place()` selbst an (`SketchPlanePicker` steht beim freien
-Einstieg mitten im Bild), das verliehene Maßfeld und die Wertleiste nie. Die
-Leiste entsteht sogar im Konstruktor der Ansicht und lag damit **vor** der
-Grafikfläche des Renderers, also dahinter. Gemessen am 07.09.2026: `isVisible()`
-des Maßfeldes war wahr, `childAt` an seiner Mitte gab die Karte zurück, und auf
-der Bildschirmaufnahme war vom Feld nichts zu sehen — Roberts „wir sehen zwar
-die Werte, können aber nichts eingeben" war genau das.
-
-Angehoben wird **beim Erscheinen und nicht bei jeder Zeigerbewegung**:
-`_place_measure_field` läuft an jedem `measuringChanged`, und ein `raise_()` je
-Mausereignis wäre eine Fensterumsortierung sechzigmal in der Sekunde. Die
-Schlösser werden nach ihren Feldern angehoben, weil sie an deren rechtem Rand
-sitzen und sie überlappen.
-
-**Der Umriss trägt seine Nummern auch im Konflikt.** Der Hinweis an einem
-Eintrag der Bedingungsliste nennt Art, Maß, Ort, Wirkung — und darunter die
-rohen Punktnummern, weil danach sucht, wer eine Bedingung aus einer Meldung des
-Lösers wiederfinden will. Der Konfliktzweig überschrieb den Hinweis vollständig
-und nahm sie mit; ein Konflikt **ist** diese Meldung, also ist es der Fall, für
-den die Nummern da sind.
-
-**Der Zug kostet dabei keinen Klick weniger.** Gemessen am gebauten Fenster,
-27.08.2026: Rechteck zeichnen und extrudieren sind über *Fertig* sechs Klicks
-und über den Ziehgriff auch sechs. Was er einbringt, ist nicht die Zahl der
-Klicks, sondern dass die Höhe **gesehen** statt geraten wird — wer 15 mm zieht,
-hat keine Zahl getippt und trotzdem eine.
-
-**Die zwei häufigsten Folgen stehen trotzdem als Wörter an der freien
-Skizze.** Der Ziehgriff ist der anschauliche Direktweg, aber nur in der
-Querschau sichtbar; wer „Extrusion“ nicht kennt, soll nicht erst *Fertig*
-drücken und unter fünf Fachbegriffen suchen. Sobald der Umriss geschlossen
-ist, führen deshalb *Hochziehen* und *Abtragen* direkt in den jeweiligen
-Operationsdialog. Dort wird die genaue Höhe oder Tiefe angegeben — die
-Zeichenleiste erzeugt selbst keine Geometrie (Regel 2). Solange der Umriss
-offen ist, nennen beide Knöpfe im Hinweis ihre Bedingung. *Abtragen* steht
-nur da, wenn gezeichnet wird, um an einem Zielkörper zu arbeiten, und
-*Hochziehen* heißt dort „anfügen" (Abschnitt „Ein Körper, ein Ziel" unten).
-Wurde der Skizzenmodus bereits für eine andere Operation geöffnet, bleiben die
-beiden kurzen Wege verborgen und *Fertig* hält die ursprüngliche Absicht.
-
-**Keine Karte über einer anderen.** Maßkarten und die Karten des Ziehgriffs
-stehen mittig auf ihrem Anker. Mehrere Maße können auf denselben Bildpunkt
-fallen; `show_sketch` sammelt deshalb erst alle Karten und verteilt sie
-gemeinsam im Bild (`place_sketch_cards`, die Rechnung in
+`show_sketch` sammelt erst alle Maßkarten und Karten des Ziehgriffs und
+verteilt sie gemeinsam (`place_sketch_cards`, Rechnung in
 `spread_sketch_cards`): Die erste behält ihren Platz, jede weitere rückt zum
-nächsten freien um ihren Anker, senkrecht vor waagerecht. Wer frei steht,
-bleibt genau auf dem Anker. **Weggelassen wird keine** — anders als ein
-Merkmalsname (`layout_feature_labels`) ist eine Maßkarte die Aussage der
-Zeichnung. Die Größe misst Qt mit derselben Schrift, die pygfx zeichnet
-(`SKETCH_CARD_FONT_PIXELS`), mit einem Fünftel Zuschlag für die zweite
-Textformung. Geprüft ohne Fenster in `tests/test_sketch_card_layout.py`.
-
-**Und der Umriss beantwortet auch, was seine Kennzahl bedeutet**
-(`outline_advice`). „Geschlossen · 12 Freiheitsgrade sind noch frei" sagt einem
-Anfänger nichts — weder ob das gut oder schlecht ist, noch was zu tun wäre. Die
-Zahl bleibt stehen, denn für den Könner ist sie richtig und die einzige
-Auskunft darüber, wie weit eine Skizze bestimmt ist; dahinter steht ein Satz,
-der sie in eine **Folge** übersetzt. Drei Lagen, drei Sätze, und der Umriss
-gewinnt vor den Freiheitsgraden: Ohne ihn scheitert jede der fünf
-Erzeugungsarten, mit ihm ist ein freier Freiheitsgrad höchstens eine
-Ungenauigkeit.
-
-**Dasselbe gilt für die zehn Bedingungsknöpfe** (`_does_phrase`). `_needs_phrase`
-sagt, was ausgewählt sein muss; das ist die Bedienung und nicht die Sache.
-„Tangential" ist ein Wort, das jeder aus einem CAD kennt und niemand sonst, und
-wer es nicht kennt, wusste danach, was er anklicken muss, und immer noch nicht,
-wozu. Der Satz steht am Knopf, im Kontextmenü, in der Meldung nach einem Kürzel
-**und** an jedem Eintrag der Bedingungsliste — vier Stellen, eine Quelle.
-
-**Verschieben ist ein eigener Griff, kein Punkt-für-Punkt.** `move_selected`
-zieht alle Punkte der Auswahl gemeinsam — verschoben, nicht kopiert wie
-`offset` und `mirror` daneben, also behalten die Elemente ihren Platz in der
-Liste und jede Bedingung zeigt weiter auf dieselbe Stelle. Vorher gab es nur
-`move_point`: bei einem Rechteck vier Züge, von denen die ersten drei die Form
-verziehen. In der Zeichenfläche hängt die Auswahl nach dem Klick an der Hand,
-aber erst **ab Qts `startDragDistance`** (`_shift_selection`) — ohne die
-Schwelle säße die Form nach jedem Auswahlklick ein Zehntelmillimeter daneben.
-Der Undo-Punkt entsteht beim ersten wirklichen Zug und nur einmal; `move_selected`
-merkt nicht, sonst stünden im Rückgängig so viele Schritte, wie die Maus
-Meldungen geschickt hat.
-
-## Ein gezogener Punkt steht am Zeiger (13.09.2026)
-
-Robert: „rechteck bzw grundformen maße anpassen geht nicht, linie schieben
-geht nicht, punkt verschieben geht nicht". Gemessen waren es drei Fehler in
-einem, und keiner war ein Fehler des Mausweges:
-
-| | vorher |
-|---|---|
-| Rechteck mit zwei Klicks | trug `fixed` und beide Maße — null Freiheitsgrade, starr |
-| Ecke eines freien Rechtecks von (40 \| 20) nach (60 \| 30) | landete bei (45 \| 22,5): ein Viertel des Wegs |
-| Linie eines Rechtecks ziehen | das **ganze** Rechteck wanderte, samt Festpunkt |
-
-Der zweite ist der Kern. `move_point` tauschte nur die gespeicherte Koordinate
-und ließ den Löser neu rechnen — und der fand von dort aus die **nächste**
-Lösung: Die Deckung mit dem Nachbarn wurde hälftig ausgeglichen statt den
-Nachbarn nachzuziehen. Der dritte ist dieselbe Schwäche andersherum: `fixed`
-heftet an die gespeicherte Koordinate, und die wanderte unter der Hand mit.
-
-**Der Löser hat seitdem einen Zugmodus** (`solve_sketch(..., dragged=, start=)`,
-Regel und Messung in `app/core/sketch/CLAUDE.md`): Gezogene Punkte werden
-festgesetzt, alles andere folgt mit der kleinsten Bewegung ab dem zuletzt
-gelösten Stand; lassen die Bedingungen den Ort nicht zu, rutscht der Punkt so
-weit, wie sie erlauben. Vier Dinge hängen in der Zeichenfläche daran:
-
-* **`_drag_solve` schreibt das Ergebnis vollständig zurück** — jeden Punkt,
-  nicht nur den gezogenen. Die gespeicherte Zeichnung ist damit stets die
-  gelöste, der nächste Mausschritt beginnt dort, wo dieser aufgehört hat, und
-  ein `fixed`-Anker wandert nie mehr unter einem Zug. Ein `-0.0` des Lösers
-  wird dabei zur Null; sonst stünde „-0,00" in der Zeile.
-* **Fest heißt fest, auch gegen die Hand.** Ein Zug am festen Punkt lässt ihn
-  stehen — wie in Fusion. Der Testfall, der das Gegenteil festhielt
-  („ein festgenagelter Punkt lässt sich sehr wohl ziehen — gemessen"), war
-  eine Beobachtung, keine Entscheidung; er beschrieb die Anker-Schwäche.
-  Getippte Koordinaten (`edit_point`) gewinnen weiter: Sie setzen erst den
-  Anker (`_anchor`), dann rechnet der Zug.
-* **Die Mitte eines Kreises oder Bogens nimmt ihren Rand mit** (`move_point`).
-  Der Randpunkt trägt den Radius; die Mitte allein zu ziehen machte aus einem
-  Verschieben ein Aufziehen. Der Rand selbst zieht nur den Radius.
-* **Was hält, wird gesagt** (`_holding`). Kommt ein Punkt nicht dort an, wo
-  der Zeiger war, nennt die Zeile die Bedingungen an ihm und den Weg, sie zu
-  lösen — Rechtsklick auf den Punkt. Ein Punkt, der nur halb folgt, sieht
-  sonst aus wie ein verschluckter Klick (Regel 17).
-
-**Gezeichnet heißt frei, getippt heißt bemaßt.** `_finish_rectangle` streift
-den Festpunkt immer und lässt ein Maß nur für die Seite stehen, deren Zahl im
-Feld stand; `_insert_made` streift ihn auch an den Formen des Menüs, deren
-Maße bleiben (sie stehen im Menüeintrag). `shapes.rectangle` selbst bleibt
-bestimmt — Dialog und Agent brauchen das (§30.1). Die Zeile sagt seither
-ehrlich „Noch 4 Maße fehlen" über ein Rechteck, das niemand bemaßt hat.
-
-**Eine Linie, die genau waagerecht oder senkrecht liegt, bleibt es**
-(`_axis_constraint`, im Klick- und im Tippweg). Genau, nicht ungefähr: Der
-Rasterfang legt beide Enden auf eine Zeile oder nicht, und wer ohne Fang einen
-Millimeter Steigung zeichnet, meint ihn. Beim **getippten** Maß kommt die
-Richtung dagegen aus der Hand, und die hält keine 0,0 Grad —
-`_snapped_direction` zieht sie innerhalb von `AXIS_SNAP_DEGREES` auf die
-Achse. Und der getippte Linienzug geht danach weiter, wie nach einem Klick;
-vorher fing er nach jeder Zahl neu an.
-
-**Und die Zeile nennt den Weg zum Auswahlwerkzeug.** Das Rechteck bleibt nach
-dem zweiten Klick in der Hand, wie in jedem CAD — und wer dann eine Ecke
-greifen will, setzt ein zweites. Sobald etwas gezeichnet ist, hängt
-`status_text` an jeden Werkzeughinweis „Esc wechselt zum Auswählen und
-Ziehen." Ziehen geht nur mit dem Auswahlwerkzeug, und der Weg dorthin war eine
-Taste, die nirgends stand.
-
-## Verrunden und Fase an einer Ecke (13.09.2026)
-
-Robert: „schräge kanten kann man auch nicht machen." Zwei Werkzeuge
-(`CORNER_TOOLS`, F und K), beide gerechnet im Kern (`edit.fillet`,
-`edit.chamfer`, `edit.corner_at`) und beide mit derselben Geste: **Zeiger auf
-eine Ecke, Klick.** Eine Ecke sind zwei Linienenden am selben Ort — gesucht
-über die gelösten Punkte, nicht über die Deckung.
-
-* **Die Vorschau hängt an der Ecke unter dem Zeiger, nicht an einem ersten
-  Klick** (`_corner_hover`, gesetzt in `note_pointer` **vor** `pointerChanged`,
-  weil `pointer_target` sie kennen muss). `pending_elements` gibt den Bogen
-  oder die Schräge zurück, die der Klick setzen würde — aus den neu
-  hinzugefügten Elementen ohne Konstruktionshilfen. Der virtuelle Eckpunkt
-  steht hinter der Kante und ist deshalb nicht die Vorschau. `pending_measure` liefert das
-  gemerkte Maß (`corner_values`, Vorgabe `DEFAULT_FILLET_MM` und
-  `DEFAULT_CHAMFER_MM`). Damit erscheint das Maßfeld an der Ecke, die erste
-  Ziffer beginnt die Eingabe, und die Eingabetaste bricht die Ecke mit der
-  getippten Zahl — die danach die Vorgabe für die nächste ist, wie in Fusion.
-* **Passt das Maß nicht, sagt die Zeile, welches passt.** Der Kern rechnet
-  den größten Radius beziehungsweise das größte Fasenmaß der Ecke aus und
-  nennt es in der Absage; `_corner_hint` gibt den Satz weiter, und die
-  Vorschau bleibt weg (Regel 17).
-* **Die Fangmarke weicht, das Aufleuchten bleibt.** Ein Rasterpunkt neben
-  der Ecke wäre ein Ziel, das der Klick nicht nimmt (`_note_snap_mark`,
-  `pointer_target`); die Ecke selbst leuchtet wie beim Auswählen.
-* **Die Tangente ist eine Senkrechte.** Warum die Rundung `perpendicular`
-  zwischen Linie und Radiusstrahl trägt und nicht `tangent`, steht am Kern
-  (`edit.fillet`): Am Bogenende, das per Deckung auf der Linie liegt, ist die
-  Tangentenbedingung ein doppelter Nullpunkt, und der Löser meldete
-  „legt fest, was schon festliegt" über eine Skizze, die bestimmt war.
-* **Die alte Ecke bleibt als Hilfspunkt stehen** (`edit._held_by_the_virtual_corner`,
-  Bedienabnahme Zeichnen F3, 23.09.2026). Beide Werkzeuge kürzen die
-  Schenkel; das Maß der gekürzten Seite zeigte danach auf das Reststück, und
-  ein getipptes Rechteck 80 mal 50 kam nach R 5 als 80 mal 55 aus dem Dialog.
-  Der Hilfspunkt liegt auf beiden verlängerten Schenkeln — über dieselbe Achse,
-  wo ein Schenkel waagerecht oder senkrecht gehalten wird, sonst über
-  `parallel` vom fernen Ende —, und was am Eckende hing (Seitenmaß, Deckung mit
-  einem Dritten, Festpunkt), hängt jetzt an ihm. Wie in Fusion steht er im
-  Bild und lässt sich ziehen.
-* **Die Fase misst von der alten Ecke aus**, wie getippt: ein Maß auf dem
-  einen Schenkel, *gleich lang* auf dem anderen. Damit ist auch ihr Winkel
-  bestimmt; vorher stand die Länge der Schräge als Maß, und die Zeile sagte
-  „Noch ein Maß fehlt" über eine vollständig eingegebene Fase.
-
-## Vieleck, Langloch und vier Bedingungen (14.09.2026)
-
-Zwei Werkzeuge nach dem Muster des Rechtecks und vier Griffe an der
-Bedingungszeile. Was daran entschieden wurde:
-
-**Zwei Knöpfe mehr in der Werkzeugzeile, und das ist gemessen.** Die Zeile
-verlangte 639 Bildpunkte, erlaubt sind 900 (`tests/test_sketch_editor.py`,
-`test_the_sketch_area_fits_a_laptop_screen`); mit *Vieleck* und *Langloch*
-sind es 725, die Mindestbreite des ganzen Bereichs bleibt bei 800. Ein
-Ausklappmenü wie beim Rechteck wäre der Ausweg, wenn es eng würde — es ist
-nicht eng, und ein Werkzeug hinter einem Pfeil findet niemand, der es nicht
-sucht. Die Kürzel sind **V** wie Vieleck und **G** wie Lan**g**loch: Fusion
-belegt für beide nichts, L gehört der Linie, und das deutsche Wort entscheidet
-— dieselbe Begründung wie beim K der Fase.
-
-**Was entsteht, hängt auch hier am Zeiger — aus derselben Rechnung.**
-`_drawn_shape` liefert die Form, die der Klick setzen würde, und
-`pending_elements` gibt genau ihre Elemente als Vorschau heraus. Eine Vorschau,
-die sich ihre Kanten selbst zusammensetzt, wäre die zweite Wahrheit über das,
-was entsteht — derselbe Fehler, an dem das Raster schon einmal auseinanderlief.
-Der Hilfskreis des Vielecks reist in der Vorschau mit: Beim Aufziehen ist er
-das, woran man die Größe sieht.
-
-**Zwei Klicks am selben Fleck geben keine Form**, und die Zeile sagt das. Der
-erste Klick bleibt stehen, damit nur der eine zu wiederholen ist — dieselbe
-Zusage wie beim flachen Bogen.
-
-**Gezeichnet heißt frei, getippt heißt bemaßt — mit einer benannten
-Ausnahme.** Vieleck und Langloch kommen ohne Festpunkt und ohne Maß; eine
-getippte Zahl bleibt stehen (beim Vieleck der Umkreis, Ø oder R nach dem
-Umschalter, beim Langloch der Mittenabstand). Die **Breite des Langlochs**
-steht dagegen immer als Maß, und das ist kein Bruch der Regel: Sie kommt nicht
-vom Zeiger, sondern aus einem Feld der Leiste — wie der Versatzabstand eine
-Einstellung und keine Geste. Eine Zahl, die jemand eingestellt hat, ist eine
-Aussage; ohne sie wäre die Breite ein freier Grad, und ein Zug an einer Flanke
-machte aus dem Langloch ein Trapez.
-
-**Die Eckenzahl und die Breite stehen nur da, wenn sie gelten.** Beide Felder
-erscheinen mit ihrem Werkzeug und verschwinden mit ihm. Das ist dieselbe
-Ausnahme von „grau und begründet, nicht unsichtbar" wie bei den
-Bedingungsknöpfen: Ein Feld ohne Gegenstand ist kein Angebot, und im
-Normalzustand kostet es die Zeile Breite, die sie nicht hat.
-
-**Konzentrisch ist ein Wort und keine Bedingungsart.** Zwei Kreise mit
-gemeinsamer Mitte sind die Deckung ihrer Mittelpunkte; der Knopf heißt
-trotzdem so, weil ein CAD-Kunde danach sucht. Die Umsetzung steht in
-`ConstraintAction` und `core_kind`: Ein Griff der Oberfläche darf einen eigenen
-Namen haben, das Datenmodell bleibt eines. Aus demselben Grund nimmt *Gleich
-groß* Linien **und** Rundungen — eine Gleichung, zwei Fälle.
-
-**Welche Punkte eine Bedingung aus der Auswahl nimmt, entscheidet eine
-Stelle** (`SketchCanvas.constraint_targets`). Vier Arten nehmen weniger als
-alle: *Fest* einen Punkt, *Konzentrisch* je Element die Mitte, *Gleich groß* je
-Element zwei Punkte (Linie Anfang → Ende, Kreis Mitte → Rand, Bogen Mitte →
-Anfang), *Mittelpunkt* Punkt, Anfang und Ende. Wer diese Auswahl im Knopf
-trifft, trifft sie ein zweites Mal in der Frage „steht sie schon?" — und zwei
-Antworten auf dieselbe Frage sind ein Umschalter, der beim Zurücknehmen
-danebengreift.
-
-**Das Winkelmaß steht mit Gradzeichen in der Karte**, nicht in Millimetern
-(`readable_angle`, `DEGREE_UNIT` aus dem Kern). Die Karte sitzt an der Ecke,
-die der Winkel meint — zwei Linien, die sich einen Punkt teilen, sind der
-Regelfall —, und der Doppelklick trifft sie wie jedes andere Maß. Eine
-Anzeigeeinheit gibt es dabei nicht: Ein Winkel ist in jeder Einheitenwahl ein
-Winkel.
-
-## Ein Doppelklick auf die Maßkarte öffnet das Maß (13.09.2026)
-
-Der Griff, den jeder Fusion-Kunde sucht, lag bis dahin allein in der
-Bedingungsliste am rechten Rand. `_measure_cards` ist die **eine** Quelle für
-Anzeige und Treffer — dieselbe Rechnung, die die Karte legt, sagt auch, ob
-der Doppelklick sie trifft (`measure_at`, `MEASURE_PICK_PX` gegen die
-Kartenmitte). Die Zeichenfläche meldet `measureEditRequested`, das Panel
-öffnet denselben Dialog wie bei der Zeile in der Liste.
-
-**Und im Viewport bringt der Doppelklick seine Stelle mit.** Der Rückruf an
-`set_sketch_stroke` bekommt den Schnitt des Sichtstrahls mit der
-Zeichenebene (`None` bei der Eingabetaste); `MainWindow._finish_sketch_stroke`
-fragt `double_click_on_plane` — erst der Spline, dann die Karte, dieselbe
-Reihenfolge wie auf der Zeichenfläche selbst.
-
-**Die untere Karte misst ihre Höhe für die Breite, die sie bekommt**
-(`OverlayHost._bottom_size`). Ein umbrechender Satz — die Statuszeile mit dem
-Esc-Hinweis — meldet in `sizeHint()` die Höhe seiner Wunschbreite; zugeteilt
-bekommt die Karte höchstens die Fensterbreite. `heightForWidth` fragt die
-richtige Höhe; eine Karte ohne umbrechenden Inhalt antwortet mit minus eins
-und behält ihren Wunsch.
-
-**Was auf einer Taste liegt, steht auch im Kontextmenü.** Löschen lag allein
-auf Entf, und in der Werkzeugleiste steht es nicht — wer die Taste nicht rät,
-wird ein Element nicht los. Der Eintrag nennt das Kürzel daneben, so lernt man
-es nebenbei. `_context_menu` ist dafür in **Bauen** (`context_menu_at`) und
-Zeigen getrennt: ein Menü, das sich selbst öffnet, hält eine Suite an —
-`QMenu.exec` blockiert wie ein modaler Dialog, und `QMenu.exec` zu patchen ist
-kein Ersatz, sondern der nächste Hänger.
-
-## Sichtbarer Skizzenmodus im Viewport (29.08.2026)
-
-Der Canvas rechnet im Viewport-Modus weiter, aber **jede Auskunft, die der
-Kunde sehen muss, reist mit ins sichtbare Bild**. `pending_elements()` gibt die
-unfertige Linie, den Kreis, Bogen, Spline oder die vier Rechteckkanten als
-gewöhnliche `SketchElement`-Vorschau heraus; `curves_of` wandelt sie auf
-demselben Weg wie die feste Zeichnung um. `measure_annotations()` liefert
-Maßtext und versetzte Position. Beides ändert weder Skizze noch Undo-Stand
-(Regel 2). Ein Mausereignis aktualisiert Fangkreuz und Vorschau gemeinsam und
-rendert höchstens einmal.
-Fangmarke, `pending_elements()` und der feste Klick lesen dasselbe Ziel aus
-`_placement_target`: Ein vorhandener Punkt schlägt das Raster. Damit zeigt die
-Vorschau auch bei einem Punkt auf 10,25 mm genau den Ort, an dem anschließend
-die Deckungsbedingung entsteht.
-
-Ein Raster ist kein gleichförmiger Teppich. Im Viewport gelten drei Ebenen:
-leise Zwischenlinien, jede fünfte als Landmarke, Nullachsen mit X/Y/Z-Buchstaben
-nahe am Ursprung. Die Buchstaben stehen absichtlich nicht am Ende des
-Rasters — dessen Reichweite liegt meistens außerhalb des Ausschnitts.
-Skizzenkanten sind Hinweisblau und breiter als das Raster, Auswahl und
-unfertige Geometrie bernsteinfarben und zusätzlich dicker beziehungsweise als
-Vorschau kodiert. Maße stehen in ruhigen Karten statt direkt auf der Kante.
-
-Der Fusion-nahe Weg wird progressiv erklärt. Sobald ein Umriss schließt, steht
-im Bild: Vorder- oder Seitenansicht wählen. In der Querschau nennt die Karte
-den Pfeil und — nur bei ausgewähltem bearbeitbarem Körper — auch das Kreuz;
-direkt am Griff stehen entsprechend **Hochziehen** und **Abtragen**. Das Profil
-wird automatisch in der freien Fläche oberhalb der Werkzeugkarte zentriert.
-Ein Griff hinter der Leiste oder ohne gültige Operation ist kein vorhandener
-Griff.
-
-Die untere Karte bleibt eine Leiste. Im Viewport-Modus gehen der unsichtbare
-Canvas, sein leeres Strecklayout und der umbrechende Schichthinweis aus ihrer
-Höhenrechnung. Die Schichtauskunft bleibt als Tooltip am Ebenenfeld, die
-Bedingungsliste im rechten Reiter. Gemessen am gebauten Panel fiel die
-Vorgabehöhe von 292 auf 142 Bildpunkte; die Bedienung verlor dabei keine
-Handlung.
-
-## Lochkreis und Lochraster mit zwei Klicks — das Formenmenü fällt (16.09.2026)
-
-Robert: „das lochraster genauso bauen" wie Vieleck und Langloch, und „die
-rechtecke und kreise usw mit den festen maßen brauchen wir nicht". Beides in
-einem Schnitt:
-
-* **Zwei Werkzeuge nach dem Muster der Zwei-Klick-Formen.** Lochraster: erster
-  Klick das erste Loch, zweiter das gegenüberliegende, Spalten und Zeilen aus
-  der Leiste, die Abstände aus dem Zug — in x und y getrennt, so wie gezogen.
-  Lochkreis: Mitte, dann das erste Loch, die Anzahl aus der Leiste. Beide
-  rechnen Vorschau und Klick aus derselben Funktion (`_drawn_shape`,
-  `DRAWN_SHAPE_TOOLS`), wie Vieleck und Langloch.
-* **Gezeichnet heißt frei, getippt heißt bemaßt — und der Durchmesser ist die
-  Ausnahme wie die Breite des Langlochs.** Er kommt aus der Leiste und steht
-  als Maß am ersten Loch; alle anderen hängen im Kern `equal` daran. Getippt
-  ist beim Raster der Abstand (in beiden Richtungen derselbe), beim Lochkreis
-  der Teilkreis (Ø oder R nach dem Umschalter).
-* **Was das Raster hält, sind Bedingungen zwischen Mitten, keine Festpunkte**
-  (`edit.hole_grid_between`): Zeilen `horizontal`, Spalten `vertical`, die
-  Abstände der ersten Zeile und Spalte `equal`. Gemessen `free_dof` 5 frei, 4
-  mit Durchmesser aus der Leiste, 2 mit getipptem Abstand. Der Lochkreis hält
-  über den Teilkreis als Hilfskreis wie das Vieleck (`edit.bolt_circle_at`):
-  4, 3, 2. Bei zwei Löchern ist die Mitte ihr `midpoint` — ein `equal` zum
-  Teilkreis dazu legte fest, was schon festliegt, und der Löser sagte es.
-* **Ein zu großes Loch heißt nicht „die Klicks liegen aufeinander".** Der Kern
-  weist es ab (`hole_fits`), der Canvas merkt sich die Absage
-  (`_shape_error`), und die Zeile nennt sie samt Ausweg
-  (`_shape_refusal`) — Regel 17.
-* **Das Menü mit den festen Formen ist weg.** „Rechteck 40 × 20", „Kreis Ø 20",
-  „Lochraster 4 × 3, Abstand 10" und die drei anderen: Was man zeichnen kann,
-  zeichnet man, mit Vorschau am Zeiger. Das Rechteck ist ein Knopf wie Linie
-  und Kreis, `_insert_made` und der Menüknopf sind gefallen, der Verweis in
-  der Einladung der leeren Skizze wählt das Rechteckwerkzeug
-  (`_take_rectangle`). Die Formfunktionen in `shapes.py` bleiben — Dialog,
-  Kommandozeile und Agent brauchen sie (§30.1).
-* **Keine Kürzel für die beiden neuen Werkzeuge.** Fusion belegt nichts, und
-  L, K und R sind vergeben; ein Kürzel ohne Anlass ist eines, das man
-  vergisst. Die Knöpfe stehen rechts in der Zeile, die Zeile bleibt unter 900
-  Bildpunkten (`test_the_sketch_area_fits_a_laptop_screen`).
-
-## Die Karte unten: vier Gruppen, ein Hinweis, kein doppelter Satz (16.09.2026)
-
-Robert: „das zeichen panel ein bisschen übersichtlicher gestalten". Drei
-Dinge, alle drei aus der Durchsicht `konzepte/durchsicht-zeichenmodus-2026-09.md`:
-
-* **Die Werkzeuge stehen in vier Gruppen mit drei Strichen** (`style.divider`):
-  Auswählen — Punkt, Linie, Rechteck, Kreis, Bogen, Kurve, Vieleck, Langloch —
-  Lochkreis, Lochraster — Trimmen, Verlängern, Verrunden, Fase. Die Reihenfolge
-  ist die des Zeichnens: Formen, Lochbilder, dann was Gezeichnetes ändert.
-  Fünfzehn Symbole in historischer Reihenfolge las niemand als Reihe
-  (`test_the_tools_stand_in_four_groups_with_dividers`).
-* **Der Satz „Bedingungen erscheinen, sobald …" geht, sobald die Knöpfe einmal
-  da waren** (`_constraints_seen`). Er sagt, dass es Bedingungen gibt; wer sie
-  gesehen hat, weiß es — danach stand er bei jeder abgewählten Auswahl wieder
-  da. Auf dem leeren Blatt bleibt er weiter weg, dort sagt die Einladung alles.
-* **Der Gestensatz steht einmal, als Karte im Bild.** „Pfeil: Körper
-  hochziehen · Kreuz: Tasche schneiden" stand wörtlich zweimal — im Banner
-  über der Zeichnung und in der Zeile der Skizzenkarte. Die Zeile nennt
-  weiter Ebene und Zustand; die Geste nennt das Bild, wo sie stattfindet.
-
-**Die fünf Entscheidungen dazu hat Robert am selben Tag delegiert** („mach das
-beste für kunden daraus, denk auch dran weniger ist manchmal mehr"), und so
-sind sie gefallen:
-
-* **Die Arten stehen in einer Liste, und die hängt an *Mehr*, nicht an
-  *Fertig*** (`_fill_finish_menu`; bis zum 23.09.2026 am Knopf *Fertig*):
-  die Skizzen-Operationen des Registers, Hochziehen, Anfügen und Tasche vorn,
-  jede mit ihrem `doc`-Satz als Tooltip; was nicht geht, ist gesperrt und
-  sagt warum, und was als Knopf daneben steht, blendet die Liste aus
-  (`_update_sketch_actions`). Der Dialog „Was soll daraus werden?" mit
-  *Weiter* und *Zurück zum Zeichnen* ist gefallen — zwei Fenster für eine
-  Wahl. Mit festgelegter Operation gibt es kein *Mehr*. *Fertig* nimmt ohne
-  Wahl den wahrscheinlicheren Fall: über dem Zielkörper eine Tasche, sonst ein
-  neuer Körper (Robert, 03.09.2026; „über einem Körper" heißt seit dem
-  23.09.2026 über dem Zielkörper).
-* **Die Zeile der Skizzenkarte sagt nur, was sonst nirgends steht.** Ebene
-  führt das Auswahlfeld, Zustand die Zeile des Panels, Geste die Karte im
-  Bild — dann ist sie leer. Sie spricht bei abweichendem Blick („Blick aus der
-  Vorderansicht · Zeichenebene: Draufsicht") und auf einer Fläche eines
-  Körpers, deren Name im Auswahlfeld abgeschnitten steht. Die Entscheidung
-  vom 24.08.2026 (Robert zeichnete auf z gleich null) bleibt eingelöst: Die
-  Ebene steht sichtbar, nur einmal. Der Grund, aus dem der Griff nicht geht,
-  steht in der Karte im Bild, wo der Griff wäre.
-* **Kein Haken „Auto" am Raster.** Der Sonderwert „Automatisch" im Feld sagte
-  dasselbe; ganz herunterdrehen heißt Auto, so steht es im Handbuch.
-* **Ein Zeichnen-Knopf je Skizzenfeld.** An einem vorhandenen Schritt führt
-  er in das Bild (`offer_space` versteckt den Fensterweg), sonst in das
-  Fenster — nie beide nebeneinander. Bahn und oberer Umriss von Führen und
-  Überblenden bekommen so denselben Weg wie die Hauptskizze.
-* **Keine Kürzel für Lochkreis und Lochraster.** Fusion belegt nichts, freie
-  Buchstaben ohne Eselsbrücke vergisst man.
-
-## Ebenen, Zustand und Flächenkontur (Durchsicht 0.5.0)
-
-**„Neue Ebene …" steht im Ebenenfeld und als vierte Karte, nicht im Menü**
-(RM-188 P3.3). `NewPlaneDialog` fragt Art, Basis und Maß; die Ansicht zeigt
-die Ebene schon beim Einstellen (`SketchCanvas.preview_plane`, kein Schritt),
-*Abbrechen* stellt her, *Übernehmen* ist **ein** Schritt. Der Dialog ist nicht
-modal (`open`). Steht schon eine Zeichnung, zieht sie ausdrücklich mit
-(`change_drawing_plane`) — die Maße bleiben, der Ort wandert, und der Satz im
-Dialog sagt das.
-
-**Welche Ebenen ein Skizzenfeld annimmt, sagt der Parameter**
-(`ParamSpec.sketch_planes`). Eine leere Zeichnung beginnt auf der ersten, das
-Feld bietet nur diese an (und die eigene, falls eine ältere Datei woanders
-liegt), keine Flächen, keine neue Ebene, und im Zeichenmodus bleiben die
-Karten mit allen Ebenen weg. Die Bahn eines Sweeps, auf der Draufsicht
-gezeichnet, endete sonst mit einer Absage, nachdem alles fertig war.
-
-**Der obere Umriss beginnt auf der Ebene des unteren** (`follow_plane_of`,
-schwach gehaltener Verweis zwischen den Feldern desselben Dialogs).
-
-**Eine frische Zeichnung wird nicht auf die Vorgabe gestreckt**
-(`op_dialog.follow_sketch`, `drawing_changed`). Gestreckt wird nur, wenn sich
-die Zeichnung seit dem letzten Durchlauf nicht geändert hat — sonst galt die
-Schemavorgabe des Längenfelds als getippte Zahl.
-
-**Der Zustand steht neben dem Werkzeughinweis** (`state_brief`,
-`status_shows_state`): „Noch offen · noch 3 Maße fehlen" rechts, solange die
-Zeile sagt, was der nächste Klick tut. Jedes Zeichenwerkzeug hat in jedem
-Schritt einen Hinweis — auch Vieleck und Langloch.
-
-**Rückgängig bringt Ebenenfeld und Klickebene mit** (`planeRestored`). Sonst
-lag die Zeichnung auf der alten Ebene, das Feld und die Klicks auf der neuen.
-
-**Flächenkontur ist ein eigener Knopf neben Projizieren** (RM-188 P3.4,
-`take_face_outline`). Projizieren schneidet, die Kontur nimmt den Rand der
-Fläche, auf der gezeichnet wird. Die Zeile nennt nach dem Übernehmen, dass es
-eine feste **Kopie** ist, und am Netz, wie viele Kreise aus der Erkennung
-kamen und wie weit sie höchstens neben dem Netz liegen (`outline_phrase`).
-Die Objekte kommen mit ihren Merkmalen über `Surroundings.objects`.
-
-**Die festen Punkte der Hilfsgeometrie sind eine Zeile der Liste**
-(`held_guides`). Wer eine Zeile der Bedingungsliste in Bedingungen übersetzt,
-fragt `constraint_indices(row)` — Zeile und Index sind nicht mehr dasselbe.
-Entf und Kontextmenü lösen die Gruppe in einem Schritt (`remove_constraints`).
-
-**Wie weit ein Bogen läuft, sagt `profile.arc_sweep`.** Zeichnen, Treffertest
-und Hülle rechnen nicht selbst in Grad: Ein Bogen, dessen Enden der Löser
-zusammengeführt hat, ist ein Vollkreis — im Profil wie auf dem Blatt.
-
-**Jeder Knopf ohne Text trägt einen Namen** (`setAccessibleName`). Qt liest den
-Tooltip als Beschreibung, nicht als Namen; ohne Namen sagt ein Bildschirmleser
-„Schaltfläche". Der Test fragt `QAccessible`, nicht das Attribut.
-
-**Der Tabulator läuft durch die Karte** (`MainWindow._chain_sketch_card`):
-Werkzeuge, Ebene, Raster, Statuszeile, Hochziehen, Abtragen, Fertig,
-Verwerfen, danach die Bedingungsliste in der rechten Spalte. Qt reiht ein
-umgehängtes Panel am Ende der Fensterfolge ein; ohne die Kette lagen achtzehn
-fremde Halte zwischen den Werkzeugen und *Fertig*. **Angeknüpft wird an die
-Statuszeile, und die Fensterfolge wird nie mit `nextInFocusChain` abgegangen:**
-Der erste Bau tat das durch alle 634 Halte, und sobald das Panel gelöscht war,
-waren die Menüs der Leiste tot (`test_the_menus_outlive_the_sketch_mode`).
-
-## Ellipse und Kurvenbedingungen (RM-188 P6.6, Durchsicht 0.5.0)
-
-Eingehängt in die vorhandene Werkzeugzeile, die Bedingungsknöpfe und das
-Kontextmenü — kein neuer Griff, keine neue Leiste (Abstimmung der
-Koordination vom 23.09.2026: der Editor wird danach insgesamt umgebaut).
-
-**Ein Knopf *Ellipse*, keiner für den Ellipsenbogen.** Die Werkzeugzeile
-stand bei 875 von 900 Bildpunkten; zwei Knöpfe hätten 961 verlangt, schon
-einer 918. Der Bogen entsteht wie in Fusion durch **Trimmen** der Ellipse
-(`edit.trim` → `_trimmed_ellipse`), und die Zeile hat den **engen Abstand
-des Rasters** (`style.TIGHT`, vier statt sechs Bildpunkte, gemessen 872) —
-zwei Bildpunkte weniger zwischen den Knöpfen statt eines versteckten
-Werkzeugs; Abstände liegen auf dem Raster von vier (`tests/test_style.py`).
-Kein Kürzel: Fusion belegt keines.
-
-**Drei Klicks: Mitte, Achsende, Breite.** Vom dritten Klick zählt nur seine
-Höhe über der ersten Achse (`edit.ellipse_from_clicks`); der Punkt liegt
-senkrecht über der Mitte, und deshalb gibt es für ihn **keine Deckung** — sie
-zöge die Ellipse schief. Mitte und Achsende fangen wie jeder Klick. Getippt
-wird wie am Kreis: die Achse als Durchmesser oder Radius nach dem Umschalter,
-gespeichert als `diameter` auf (Mitte, Achsende). Ein Klick auf die Mitte
-oder die erste Achse zählt nicht, und die Zeile sagt warum.
-
-**Die Griffe einer Ellipse tun, was ein CAD tut** (`_ellipse_drag`): Das
-Achsende dreht und streckt die erste Achse, die zweite dreht mit und behält
-ihre Länge; das Ende der zweiten ändert nur deren Länge; die Enden eines
-Bogens gleiten auf der Ellipse. Die Mitte bleibt dabei stehen, und die
-Bogenenden wandern an derselben Stelle ihres Parameters mit
-(`edit.carried_onto`). Der Löser allein fände die *nächste* Lage — und
-verkürzte beim Drehen die zweite Achse.
-
-**Bedingungen zwischen Kurven plant der Kern** (`_PLANNED`, `constraint_plan`,
-`edit.tangent_plan` und Nachbarn). *Tangential* gilt für jedes Kurvenpaar
-außer zwei Linien, in jeder Reihenfolge der Auswahl — mit dem Bogen zuerst
-gewählt bot sich der Knopf früher nicht an, und mit der Linie zuerst entstand
-eine Bedingung mit fünf Zielen (Befund B2). Was der Klick anlegt, hängt an der
-Lage: am Stoß *glatt*, zwischen Linie und Kreis oder Bogen die
-Abstandstangente, sonst ein Hilfspunkt als Berührpunkt; an einem Spline ohne
-Stoß an einem seiner Punkte bleibt der Knopf weg. *Auf Kurve* nimmt einen
-Punkt und eine Kurve, *Krümmungsstetig* einen Spline und die Kurve an seinem
-Ende und bringt *glatt* mit, *Gleich groß* macht zwei Ellipsen in beiden
-Achsen gleich, die längere zur längeren. Ein zweiter Klick nimmt zurück, eine
-Tangente mit Hilfspunkt samt Punkt. Alle übrigen Griffe laufen unverändert
-über `constraint_targets`; *Waagerecht* und *Senkrecht* nehmen an einer
-Ellipse die erste Achse.
-
-**Die Liste nennt Kurven, nicht ihre ersten Punkte** (`targets_phrase` mit
-der Art): „Auf Kurve — Punkt 1, Ellipse 1", nicht „Ellipse 1 Mitte".
-
-**Splinepunkte kommen und gehen über das Kontextmenü**
-(`_offer_spline_point_insertion`, `_offer_spline_point_removal`): Rechtsklick
-auf die Kurve fügt dort einen Punkt ein — auf der Kurve, nicht am Klick —,
-Rechtsklick auf einen ihrer Punkte nimmt ihn heraus, unter drei Punkten
-gesperrt und begründet. Entf löscht weiterhin das ganze Element.
-## Ein Körper, ein Ziel (23.09.2026)
-
-Robert: „Beim Zeichnen wäre es auch gut, wenn man nur einen Körper hat und
-nicht alle, also am besten den ausgewählten; oder wenn keiner ausgewählt ist,
-ist man beim neu Zeichnen." Umgesetzt als Paket Z1 der Bedienabnahme
-(`reports/zeichnen-bedienung.md`, Abschnitt 7). Die Stellen liegen im
-Hauptfenster (`start_sketch`, `_resolve_sketch_body`, `_apply_sketch_body`),
-in der Ansicht (`Viewport.set_sketch_focus`) und im Register
-(`sketch_join`).
-
-* **Das Ziel folgt der Ausdrücklichkeit** (`_resolve_sketch_body`): ein
-  genannter Körper (Auswahlfenster, „Zeichnung weiterverwenden", zurückgeholte
-  Zeichnung), dann der Körper des geänderten Schritts (Eingang von Tasche und
-  Anfügen, sonst der Körper der Fläche, sonst der erzeugte Körper selbst),
-  dann der Körper der Fläche, auf der gezeichnet wird — auch über
-  Versatzebenen —, dann der **eine** gewählte Körper. Ohne Auswahl ist es eine
-  neue Zeichnung. **Mehrere gewählte Körper sind eine Frage** (Regel 21): Die
-  Leiste nennt sie mit Namen und *Neuer Körper*; bis zur Antwort stehen alle
-  Körper leise im Bild. Eine Baugruppe ist dabei nichts anderes als mehrere
-  gewählte Körper.
-* **Die übrigen Körper sind ausgeblendet** (Entscheidung Robert, 23.09.2026,
-  gegen die Empfehlung „durchscheinend"): `_in_view` lässt im Zeichenmodus
-  nur den Zielkörper durch — Bild, Klick, Fang, Kanten. *Nachbarn zeigen*
-  (Knopf, Taste N) holt sie mit `SKETCH_NEIGHBOUR_OPACITY` ohne Kanten und
-  nicht anklickbar zurück (`_draw_sketch_neighbours`, eigene Aktoren). Eine
-  eigene Regel neben `_hidden`, weil die Ausblendung des Nutzers im Objektbaum
-  steht und den Modus überlebt; diese endet mit ihm.
-* **Ebenenfeld, Projizieren und Flächenkontur sehen nur den Zielkörper**
-  (`_sketch_scope` → `_sketch_surroundings(only=…)`), auch wenn Nachbarn
-  eingeblendet sind — an ihnen richtet man aus, auf ihnen zeichnet man nicht.
-  Bei einer neuen Zeichnung sind es die Grundebenen, und die Nachbarn erst,
-  wenn sie ausdrücklich eingeblendet sind. Das Ebenenfeld nennt höchstens
-  `MOST_PLANE_FACES` Flächen, die größten zuerst; die gewählte steht immer
-  dabei. Die fünfte Ebenenkarte bietet die Oberseite des Zielkörpers an
-  (`SketchPlanePicker.offer_face`, `placement.top_face`). Aufgelöst werden
-  Ebenen weiter gegen die ganze Szene — eine Zeichnung aus dem Verlauf kann
-  auf einer Fläche eines anderen Körpers liegen.
-* **Das Ziel bestimmt das Ergebnis.** *Hochziehen* heißt am Zielkörper
-  *An Körper anfügen* (`sketch_join`, Befund E4), wenn der Umriss auf oder
-  über ihm liegt (`_outline_meets_the_body`, grob über Hüllquader wie vorher
-  die Suche nach dem Körper darunter), sonst neuer Körper. *Abtragen* steht
-  nur mit Ziel da und schneidet nur das Ziel — die Hüllquadersuche nach dem
-  Körper unter der Zeichnung (Robert, 30.08.2026) ist damit abgelöst. Ein Ziel
-  wählt man auch nachträglich im Feld *Ziel* der Leiste.
-* **Beim Verlassen kommt die vorige Sicht zurück**: Nachbarregel aus,
-  Darstellung, Projektion, Platte, das offene Werkzeug samt Explosion
-  (`_view_before_sketch`, `_restore_the_view_before_sketch`). Beim Betreten
-  wechselt die Ansicht auf die Platte des Ziels, und eine offene Explosion
-  wird aufgehoben — auf verschobenen Körpern landete die Zeichnung woanders
-  als gesehen.
-* **Verschwindet das Ziel im Modus** (Agent, Fernsteuerung), bleibt die
-  Zeichnung, die Leiste sagt es, und *Fertig* legt einen neuen Körper an
+nächsten freien um ihren Anker, senkrecht vor waagerecht; weggelassen wird
+keine. Gemessen mit derselben Schrift, die pygfx zeichnet
+(`SKETCH_CARD_FONT_PIXELS`), plus ein Fünftel; geprüft in
+`tests/test_sketch_card_layout.py`.
+
+## Ein Doppelklick auf die Maßkarte öffnet das Maß
+
+* `_measure_cards` ist die **eine** Quelle für Anzeige und Treffer
+  (`measure_at`, `MEASURE_PICK_PX`); die Zeichenfläche meldet
+  `measureEditRequested`, das Panel öffnet denselben Dialog wie die Liste.
+* Im Viewport bringt der Doppelklick seine Stelle mit (Rückruf an
+  `set_sketch_stroke`, `None` bei der Eingabetaste);
+  `MainWindow._finish_sketch_stroke` fragt `double_click_on_plane` — erst den
+  Spline, dann die Karte.
+* **Was auf einer Taste liegt, steht auch im Kontextmenü**, mit dem Kürzel.
+  `_context_menu` trennt **Bauen** (`context_menu_at`) und Zeigen — ein Menü,
+  das sich selbst öffnet, hält eine Suite an, und `QMenu.exec` zu patchen ist
+  kein Ersatz.
+
+## Sichtbarer Skizzenmodus im Viewport
+
+* **Jede Auskunft des Canvas reist ins sichtbare Bild:** `pending_elements()`
+  gibt die unfertige Geometrie als `SketchElement`-Vorschau (über `curves_of`
+  wie die feste Zeichnung), `measure_annotations()` Maßtext und Lage — beides
+  ändert weder Skizze noch Undo (Regel 2).
+* **Das Raster hat drei Ebenen:** leise Zwischenlinien, jede fünfte als
+  Landmarke, Nullachsen mit X/Y/Z nahe am Ursprung. Skizzenkanten hinweisblau
+  und breiter, Auswahl und Unfertiges bernsteinfarben und zusätzlich dicker
+  oder als Vorschau kodiert; Maße in ruhigen Karten.
+* **Der Weg wird progressiv erklärt:** Schließt ein Umriss, nennt das Bild die
+  Vorder- oder Seitenansicht; in der Querschau Pfeil und — nur mit gewähltem
+  bearbeitbarem Körper — Kreuz. Das Profil wird über der Werkzeugkarte
+  zentriert; ein Griff hinter der Leiste oder ohne gültige Operation ist keiner.
+* **Die untere Karte bleibt eine Leiste:** Im Viewport-Modus zählen
+  unsichtbarer Canvas, Strecklayout und Schichthinweis nicht zur Höhe (die
+  Schichtauskunft ist ein Tooltip am Ebenenfeld); `OverlayHost._bottom_size`
+  fragt `heightForWidth`.
+
+## Formwerkzeuge und Lochbilder
+
+* **Vorschau und Klick rechnen aus derselben Funktion** (`_drawn_shape`,
+  `DRAWN_SHAPE_TOOLS`, `pending_elements`): Vieleck samt Hilfskreis, Langloch,
+  Lochraster (erstes und gegenüberliegendes Loch, Abstände je Richtung aus dem
+  Zug) und Lochkreis (Mitte, erstes Loch). Zwei Klicks am selben Fleck geben
+  keine Form, die Zeile sagt es, und der erste Klick bleibt.
+* **Getippt heißt bemaßt, und Einstellungen der Leiste sind Maße:** Getippt
+  werden Umkreis (Ø oder R), Mittenabstand, Lochabstand und Teilkreis; die
+  **Breite des Langlochs** und der **Lochdurchmesser** kommen aus der Leiste
+  und stehen immer als Maß.
+* **Das Lochraster hält über Bedingungen zwischen Mitten**, nicht über
+  Festpunkte (`edit.hole_grid_between`: `horizontal`, `vertical`, `equal`), der
+  Lochkreis über den Teilkreis als Hilfskreis (`edit.bolt_circle_at`), bei zwei
+  Löchern über `midpoint` statt `equal`.
+* **Ein zu großes Loch sagt es** (`hole_fits` im Kern, `_shape_error`,
+  `_shape_refusal` mit Ausweg — Regel 17).
+* **Kein Menü mit festen Formen** (Entscheidung Robert): Was man zeichnen kann,
+  zeichnet man; die Einladung der leeren Skizze wählt das Rechteckwerkzeug
+  (`_take_rectangle`). `shapes.py` bleibt für Dialog, Kommandozeile und Agent
+  (§30.1).
+* **Konzentrisch ist ein Wort, keine Bedingungsart** (`ConstraintAction`,
+  `core_kind`); *Gleich groß* nimmt Linien und Rundungen.
+* **Welche Punkte eine Bedingung nimmt, entscheidet eine Stelle**
+  (`SketchCanvas.constraint_targets`): *Fest* einen Punkt, *Konzentrisch* je
+  Element die Mitte, *Gleich groß* je Element zwei Punkte, *Mittelpunkt* Punkt,
+  Anfang und Ende.
+
+## Verrunden und Fase an einer Ecke
+
+Zwei Werkzeuge (`CORNER_TOOLS`, F und K), gerechnet im Kern (`edit.fillet`,
+`edit.chamfer`, `edit.corner_at`): Zeiger auf eine Ecke — zwei Linienenden am
+selben Ort, gesucht über die gelösten Punkte —, dann Klick.
+
+* **Die Vorschau hängt an der Ecke unter dem Zeiger** (`_corner_hover`, gesetzt
+  in `note_pointer` **vor** `pointerChanged`); `pending_measure` liefert das
+  gemerkte Maß (`corner_values`, `DEFAULT_FILLET_MM`, `DEFAULT_CHAMFER_MM`),
+  eine getippte Zahl ist danach die Vorgabe.
+* **Passt das Maß nicht, nennt die Zeile das größte, das passt**
+  (`_corner_hint`), ohne Vorschau.
+* **Die Fangmarke weicht, das Aufleuchten bleibt** (`_note_snap_mark`).
+* **Die Rundung trägt `perpendicular`, nicht `tangent`** (`edit.fillet`) — die
+  Tangente wäre dort ein doppelter Nullpunkt.
+* **Die alte Ecke bleibt als Hilfspunkt** (`edit._held_by_the_virtual_corner`)
+  auf beiden verlängerten Schenkeln, und was am Eckende hing, hängt an ihm.
+* **Die Fase misst von der alten Ecke:** ein Maß und *gleich lang*.
+
+## Die Karte unten: vier Gruppen, ein Hinweis, kein doppelter Satz
+
+* **Werkzeuge in vier Gruppen** (`style.divider`): Auswählen — Punkt, Linie,
+  Rechteck, Kreis, Bogen, Ellipse, Kurve, Vieleck, Langloch — Lochkreis,
+  Lochraster — Trimmen, Verlängern, Verrunden, Fase
+  (`test_the_tools_stand_in_four_groups_with_dividers`). Die Zeile bleibt unter
+  900 Bildpunkten (`test_the_sketch_area_fits_a_laptop_screen`), mit dem engen
+  Abstand `style.TIGHT` (Abstände auf dem Raster von vier,
+  `tests/test_style.py`); Eckenzahl und Breite erscheinen nur mit ihrem
+  Werkzeug.
+* **Ein Kürzel braucht einen Anlass:** V (Vieleck) und G (Lan**g**loch) nach
+  dem deutschen Wort, F und K an den Ecken; Lochkreis, Lochraster und Ellipse
+  haben keines.
+* **„Bedingungen erscheinen, sobald …" geht, sobald die Knöpfe einmal da
+  waren** (`_constraints_seen`).
+* **Der Gestensatz steht einmal, als Karte im Bild**; die Zeile der
+  Skizzenkarte sagt nur, was sonst nirgends steht (abweichender Blick, Fläche
+  eines Körpers).
+* **Die Arten hängen an *Mehr*** (`_fill_finish_menu`): die
+  Skizzen-Operationen des Registers mit ihrem `doc`-Satz als Tooltip,
+  Hochziehen, Anfügen und Tasche vorn, Unmögliches gesperrt mit Grund, was
+  als Knopf daneben steht, ausgeblendet (`_update_sketch_actions`); kein
+  Dialog „Was soll daraus werden?", und mit festgelegter Operation kein
+  *Mehr*. *Fertig* hat kein Menü und nimmt den
+  wahrscheinlicheren Fall: über dem Zielkörper eine Tasche, sonst ein neuer
+  Körper (Entscheidung Robert). **Ein Knopf, eine Bedeutung** — mit Menü und
+  `clicked` am selben Knopf entschiede die Zustellung des Loslassens.
+* **Ein Zeichnen-Knopf je Skizzenfeld:** am vorhandenen Schritt ins Bild
+  (`offer_space`), sonst ins Fenster, nie beides.
+* **Jeder Knopf ohne Text trägt einen Namen** (`setAccessibleName`, geprüft über
+  `QAccessible`).
+* **Der Tabulator läuft durch die Karte** (`MainWindow._chain_sketch_card`:
+  Werkzeuge, Ebene, Raster, Statuszeile, Hochziehen, Abtragen, Fertig,
+  Verwerfen, dann die Bedingungsliste), angeknüpft an die Statuszeile, nie über
+  `nextInFocusChain` (`test_the_menus_outlive_the_sketch_mode`).
+
+## Ebenen, Zustand und Flächenkontur
+
+* **Eine frische Zeichnung wird nicht auf die Vorgabe gestreckt**
+  (`op_dialog.follow_sketch`, `drawing_changed`).
+* **Flächenkontur ist ein eigener Knopf neben Projizieren**
+  (`take_face_outline`): eine feste **Kopie** des Randes; am Netz nennt die
+  Zeile die erkannten Kreise und ihre größte Abweichung (`outline_phrase`),
+  Merkmale über `Surroundings.objects`.
+* **Wie weit ein Bogen läuft, sagt `profile.arc_sweep`** — Zeichnen,
+  Treffertest und Hülle rechnen nicht selbst in Grad; ein Bogen mit
+  zusammengeführten Enden ist ein Vollkreis.
+
+## Ellipse und Kurvenbedingungen
+
+* **Ein Knopf *Ellipse*, keiner für den Bogen** — der entsteht durch Trimmen
+  (`edit.trim` → `_trimmed_ellipse`).
+* **Drei Klicks: Mitte, Achsende, Breite**; vom dritten zählt nur die Höhe über
+  der ersten Achse (`edit.ellipse_from_clicks`), ohne Deckung. Getippt wie am
+  Kreis, gespeichert als `diameter` auf (Mitte, Achsende); ein Klick auf Mitte
+  oder erste Achse zählt nicht, und die Zeile sagt warum.
+* **Die Griffe tun, was ein CAD tut** (`_ellipse_drag`, `edit.carried_onto`):
+  Das Achsende dreht und streckt, die zweite Achse behält ihre Länge,
+  Bogenenden gleiten auf der Ellipse.
+* **Bedingungen zwischen Kurven plant der Kern** (`_PLANNED`,
+  `constraint_plan`, `edit.tangent_plan`): *Tangential* für jedes Kurvenpaar
+  außer zwei Linien, in jeder Auswahlreihenfolge — am Stoß *glatt*, zwischen
+  Linie und Kreis oder Bogen die Abstandstangente, sonst ein Hilfspunkt; an
+  einem Spline ohne Stoß an einem seiner Punkte bleibt der Knopf weg.
+  *Auf Kurve*, *Krümmungsstetig* (bringt *glatt* mit), *Gleich groß* für
+  Ellipsen (längere zur längeren); ein zweiter Klick nimmt zurück, eine
+  Tangente samt Hilfspunkt. *Waagerecht* und *Senkrecht* nehmen an der
+  Ellipse die erste Achse.
+* **Die Liste nennt Kurven** (`targets_phrase`): „Auf Kurve — Punkt 1,
+  Ellipse 1".
+* **Splinepunkte über das Kontextmenü** (`_offer_spline_point_insertion`,
+  `_offer_spline_point_removal`): einfügen auf der Kurve, entfernen unter drei
+  Punkten gesperrt und begründet; Entf löscht das ganze Element.
+
+## Ein Körper, ein Ziel
+
+* **Das Ziel folgt der Ausdrücklichkeit** (`_resolve_sketch_body`): genannter
+  Körper, dann der Körper des geänderten Schritts, dann der Körper der Fläche
+  (auch über Versatzebenen), dann der **eine** gewählte Körper; ohne Auswahl
+  eine neue Zeichnung. **Mehrere gewählte Körper — auch eine Baugruppe — sind
+  eine Frage** (Regel 21): Die Leiste nennt sie und *Neuer Körper*, bis dahin
+  stehen alle leise im Bild.
+* **Die übrigen Körper sind ausgeblendet** (Entscheidung Robert, gegen
+  „durchscheinend"): `_in_view` lässt nur das Ziel durch — Bild, Klick, Fang,
+  Kanten. *Nachbarn zeigen* (Taste N) holt sie mit `SKETCH_NEIGHBOUR_OPACITY`
+  ohne Kanten und nicht anklickbar zurück (`_draw_sketch_neighbours`). Eine
+  eigene Regel neben `_hidden`, die mit dem Modus endet.
+* **Ebenenfeld, Projizieren und Flächenkontur sehen nur das Ziel**
+  (`_sketch_scope` → `_sketch_surroundings(only=…)`), auch bei eingeblendeten
+  Nachbarn; bei einer neuen Zeichnung die Grundebenen, Nachbarn erst, wenn sie
+  eingeblendet sind. Das Feld nennt höchstens `MOST_PLANE_FACES` Flächen, die
+  gewählte immer; die fünfte Karte bietet die Oberseite
+  (`SketchPlanePicker.offer_face`, `placement.top_face`). Aufgelöst wird gegen
+  die ganze Szene.
+* **Das Ziel bestimmt das Ergebnis:** *Hochziehen* heißt am Ziel *An Körper
+  anfügen* (`sketch_join`), wenn der Umriss auf oder über ihm liegt
+  (`_outline_meets_the_body`); *Abtragen* nur mit Ziel und nur am Ziel. Das
+  Ziel ist auch nachträglich im Feld *Ziel* wählbar.
+* **Beim Verlassen kommt die vorige Sicht zurück** (`_view_before_sketch`,
+  `_restore_the_view_before_sketch`); beim Betreten gilt die Platte des Ziels,
+  und eine Explosion wird aufgehoben.
+* **Verschwindet das Ziel** (Agent, Fernsteuerung), bleibt die Zeichnung, die
+  Leiste sagt es, und *Fertig* legt einen neuen Körper an
   (`_sketch_body_missing`).
-* **Eine Zeichnung trägt ihren Ort** (F1, F2): Kommt eine Zeichnung in den
-  Dialog, übernimmt er aus der Auswahl weder „Bis zur Fläche" noch X/Y/
-  Oberkante (`_carries_a_drawing` in `run_operation`), und der Dialog leert
-  ein Ziel, das auf der Zeichenfläche selbst liegt
+* **Eine Zeichnung trägt ihren Ort:** `run_operation` übernimmt aus der Auswahl
+  kein „Bis zur Fläche" und keine Lage (`_carries_a_drawing`), und der Dialog
+  leert ein Ziel auf der Zeichenfläche
   (`OperationDialog._release_the_drawing_face`).
-* **Ein Knopf, eine Bedeutung** (E2): *Fertig* hat kein Menü mehr. Mit
-  Menü **und** `clicked` am selben Knopf entschied die Zustellung des
-  Loslassens, welche Bedeutung galt — die echte Maus (über `SendInput`
-  gemessen) öffnete das Menü, Eingabetaste, `QTest` und `click()` den Dialog.
-* **Escape verwirft nicht** (Entscheidung Robert zu R5): Kette, Werkzeug,
-  Auswahl — danach sagt die Zeile „Zum Verlassen: Fertig oder Verwerfen."
-  *Verwerfen* bleibt der eine Weg samt Rückweg über Strg+Z.
-* **Das Auswahlfenster einer ebenen Fläche** bietet *Hier zeichnen* und
-  *Loch oder Aussparung zeichnen …* (B2, `FeaturePanel.sketchRequested`), der
-  Verlauf an Schritten mit Zeichnung *Zeichnung weiterverwenden* (E6,
-  Entscheidung Robert: kopiert den Text in eine neue, freie Zeichnung — §30.1
-  bleibt unverändert).
+* **Escape verwirft nicht** (Entscheidung Robert): Kette, Werkzeug, Auswahl —
+  danach „Zum Verlassen: Fertig oder Verwerfen."; *Verwerfen* ist der eine Weg,
+  mit Strg+Z zurück.
+* **Eine ebene Fläche bietet *Hier zeichnen* und *Loch oder Aussparung
+  zeichnen …*** (`FeaturePanel.sketchRequested`), ein Schritt mit Zeichnung
+  *Zeichnung weiterverwenden* (Entscheidung Robert: eine neue, freie Kopie;
+  §30.1 bleibt).
