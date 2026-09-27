@@ -90,7 +90,7 @@ from app.core.types import (
     SlotOverride,
     SlotProfileBinding,
 )
-from app.core.units import is_close, is_zero
+from app.core.units import EPS_GEOM, is_close, is_zero
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -4214,13 +4214,7 @@ def slice_model(
                     suggestions=(CHOOSE_SLICER, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
                 )
             if _says_outside_the_volume(output):
-                raise ExternalToolError(
-                    tool=setup.name,
-                    title=SLICER_FAILED,
-                    detail=_("Der Slicer sagt, die Teile liegen außerhalb seines Bauraums."),
-                    values={"output": output},
-                    suggestions=(ARRANGE_ON_BED, SCALE_TO_FIT, SHOW_SLICER_OUTPUT),
-                )
+                raise _outside_the_volume(setup, profile, output, model_height)
             if _says_no_layers(output):
                 raise ExternalToolError(
                     tool=setup.name,
@@ -4759,6 +4753,35 @@ def _refuses_arrange_flag(output: str) -> bool:
             )
         )
         for line in output.casefold().splitlines()
+    )
+
+
+def _outside_the_volume(
+    setup: SlicerSetup, profile: Profile, output: str, model_height: float | None
+) -> ExternalToolError:
+    """Die Absage „außerhalb des Bauraums", mit dem Grund, den Solidon kennt.
+
+    PrusaSlicer sagt denselben Satz, gleich ob ein Teil neben dem Bett liegt
+    oder zu hoch ist. Am Minigolf-Auftrag auf dem MINI war es ein Teil von
+    200 mm bei 180 mm Bauhöhe (27.09.2026), und der Rat „Anordnen" half dort
+    nicht. Ist das höchste Teil höher als der Bauraum, sagt die Meldung das
+    und bietet Teilen, Verkleinern und einen anderen Drucker an.
+    """
+    limit = profile.printer.build_volume[2]
+    if model_height is not None and model_height > limit + EPS_GEOM:
+        return ExternalToolError(
+            tool=setup.name,
+            title=SLICER_FAILED,
+            detail=_("Ein Teil ist höher, als dieser Drucker drucken kann."),
+            values={"output": output, "height_mm": model_height, "limit_mm": limit},
+            suggestions=(SPLIT_MODEL, SCALE_TO_FIT, CHOOSE_PRINTER, SHOW_SLICER_OUTPUT),
+        )
+    return ExternalToolError(
+        tool=setup.name,
+        title=SLICER_FAILED,
+        detail=_("Der Slicer sagt, die Teile liegen außerhalb seines Bauraums."),
+        values={"output": output},
+        suggestions=(ARRANGE_ON_BED, SCALE_TO_FIT, SHOW_SLICER_OUTPUT),
     )
 
 

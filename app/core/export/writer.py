@@ -492,6 +492,71 @@ def check_adhesion_clearance(
     return findings
 
 
+def rim_reach(settings: PrintSettings) -> float:
+    """Wie weit Brim, Skirt oder Raft über den Rand des äußersten Teils reichen.
+
+    Anders als :func:`adhesion_margin` zählt beim Skirt auch seine Breite:
+    Zwischen zwei Teilen läuft er nicht, am Bettrand liegt er ganz außen —
+    ``skirt_distance`` weit weg und so viele Bahnen breit, wie er Runden hat.
+    """
+    adhesion = settings.adhesion
+    if adhesion.kind == "skirt":
+        return (
+            adhesion.skirt_distance + adhesion.skirt_loops * settings.layers.first_layer_line_width
+        )
+    return adhesion_margin(settings)
+
+
+def check_adhesion_on_bed(
+    meshes: Sequence[MeshData],
+    settings: PrintSettings,
+    profile: Profile,
+    object_ids: Sequence[str] = (),
+) -> list[Finding]:
+    """Liegt der Rand um jedes Teil noch auf dem Bett?
+
+    Zwischen zwei Teilen fragt :func:`check_adhesion_clearance`, nach den
+    Körpern selbst die Prüfung des Bauraums. Der Rand zum Bettrand blieb
+    ungefragt: Am Minigolf-Auftrag für den Centauri Carbon 2 fuhr der Auto-Brim
+    des ElegooSlicers am Neptune 4 210 Züge neben das Bett, PrusaSlicers Skirt
+    am SV06 24 (27.09.2026). Kein Slicer widersprach, die Druckdatei verließ
+    den Bauraum. Ein Teil, das selbst neben dem Bett liegt, meldet die Prüfung
+    des Bauraums; hier geht es nur um den Rand.
+    """
+    reach = rim_reach(settings)
+    if reach <= 0.0:
+        return []
+    width, depth, _height = profile.printer.build_volume
+    half = (width / 2.0, depth / 2.0)
+    findings: list[Finding] = []
+    for index, mesh in enumerate(meshes):
+        box = mesh.bounds
+        if any(
+            box.minimum[axis] < -half[axis] - EPS_GEOM or box.maximum[axis] > half[axis] + EPS_GEOM
+            for axis in (0, 1)
+        ):
+            continue
+        over = max(
+            max(-half[axis] - (box.minimum[axis] - reach), box.maximum[axis] + reach - half[axis])
+            for axis in (0, 1)
+        )
+        if over <= EPS_GEOM:
+            continue
+        findings.append(
+            Finding(
+                code="arrange.adhesion_off_bed",
+                severity="warning",
+                message=_("Der Rand um ein Teil reicht über das Bett hinaus."),
+                object_id=object_ids[index] if index < len(object_ids) else None,
+                values={"distance": format_length(over)},
+                # Regel 17: Anordnen hält zum Bettrand den Abstand der Haftung
+                # (``split.bed_margin``).
+                suggestions=(ARRANGE_ON_BED,),
+            )
+        )
+    return findings
+
+
 def arrangement_holds(meshes: Sequence[MeshData], profile: Profile) -> bool:
     """Ist die Anordnung dieser Teile eine, die der Slicer übernehmen darf?
 
@@ -1305,6 +1370,7 @@ def write_assembly(
 
         findings += handover.setting_limitations(flavour, settings)
         findings += check_adhesion_clearance(meshes, settings, [entry.plate for entry in chosen])
+        findings += check_adhesion_on_bed(meshes, settings, profile, [entry.id for entry in chosen])
         findings += check_filament_changes(chosen, settings, plate)
     width, depth, _height = profile.printer.build_volume
     bed = (width, depth) if place_on_bed and needs_bed_translation(flavour) else None
