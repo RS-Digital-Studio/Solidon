@@ -17,7 +17,7 @@ import pytest
 from app.branding import APP_VERSION
 from app.core import figures, guides, manual, tour
 from app.core.bootstrap import load_operations
-from app.i18n import tr
+from app.i18n import SOURCE_LANGUAGE, source_text, tr
 from app.i18n.catalog import available_languages
 
 load_operations()
@@ -124,6 +124,39 @@ def test_a_menu_path_in_a_step_is_the_one_the_menu_shows(language: str) -> None:
             for name in named:
                 path = menu_path(REGISTRY.get(name))
                 assert path in text, f"{language}, {guide.key} Schritt {number}: {path!r}"
+
+
+@pytest.mark.parametrize(
+    "language", [language for language in available_languages() if language != SOURCE_LANGUAGE]
+)
+def test_a_name_in_a_step_is_the_one_the_interface_shows(language: str) -> None:
+    """Ein hervorgehobener Name heißt in jeder Sprache wie der Text, den er meint.
+
+    Knopf, Feld, Baustein, Anleitungstitel: *Oben öffnen* muss im Satz so
+    übersetzt sein wie am Kästchen im Dialog, sonst sucht der Kunde einen
+    Knopf, den es nicht gibt. Ein Name ohne Katalogeintrag ist kein Text der
+    Oberfläche. Ob ein Menüweg dort steht, wo er hinzeigt, prüft der Test
+    davor.
+    """
+    import re
+
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language, read_catalog
+
+    catalog = read_catalog(language)
+    emphasis = re.compile(r"\*([^*]+)\*")
+    install_language(language)
+    set_language(language)
+    for guide in guides.GUIDES:
+        for number, one in enumerate(guide.steps, 1):
+            where = f"{language}, {guide.key} Schritt {number}"
+            said = emphasis.findall(str(one.text))
+            for name in emphasis.findall(source_text(one.text)):
+                parts = [part.strip() for part in name.split("→")]
+                unknown = [part for part in parts if part not in catalog]
+                assert not unknown, f"{where}: {unknown} ist kein Text der Oberfläche"
+                meant = " → ".join(catalog[part] for part in parts)
+                assert meant in said, f"{where}: *{meant}* fehlt, es steht {said}"
 
 
 def test_the_tour_points_at_targets_of_the_same_vocabulary() -> None:
