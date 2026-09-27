@@ -15,6 +15,7 @@ from __future__ import annotations
 import functools
 import os
 import shutil
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -83,3 +84,39 @@ def _php_command(extensions: tuple[str, ...]) -> tuple[str, ...]:
     )
     assert probe.returncode == 0, f"PHP kann benötigte Erweiterungen nicht laden: {extensions}"
     return command
+
+
+#: Wie viele Ports jeder Testprozess für seine PHP-Server bekommt, und wo die
+#: Bereiche beginnen — unterhalb der dynamischen Ports (Windows ab 49152), die
+#: das Betriebssystem nebenbei vergibt.
+_PORTS_PER_WORKER = 400
+_FIRST_PORT = 20000
+_next_port: int | None = None
+
+
+def free_port() -> int:
+    """Ein freier Port für einen PHP-Prüfserver, nur für diesen Testprozess.
+
+    ``bind(0)`` mit sofortigem Schließen gab zwei parallelen Arbeitern von
+    pytest-xdist denselben Port: Der zweite Server bekam ihn nicht oder teilte
+    ihn, und sein Test sprach mit dem Server des anderen, bis der ihn beendete
+    — ``ConnectionResetError`` in ``test_corrupt_rate_limit_states_fail_closed``,
+    zweimal im Tor, einzeln dreißigmal grün (27.09.2026). Jeder Arbeiter sucht
+    deshalb in seinem eigenen Bereich, und fortlaufend: Auch ein eben
+    beendeter Server reicht seinen Port nicht an den nächsten Test weiter.
+    """
+    global _next_port
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+    index = int(worker[2:]) if worker.startswith("gw") and worker[2:].isdigit() else 0
+    first = _FIRST_PORT + index * _PORTS_PER_WORKER
+    start = _next_port if _next_port is not None else first
+    for offset in range(_PORTS_PER_WORKER):
+        port = first + (start - first + offset) % _PORTS_PER_WORKER
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+        _next_port = first + (port - first + 1) % _PORTS_PER_WORKER
+        return port
+    pytest.fail(f"kein freier Port im Bereich von {worker or 'diesem Prozess'}")
