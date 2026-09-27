@@ -4124,6 +4124,7 @@ class HistoryPanel(QWidget):
         """Einfügen, Verschieben, Aus- und Einschalten im Kontextmenü (P7)."""
         if len(op_ids) == 1:
             insert = menu.addAction(tr("Davor einfügen"))
+            insert.setObjectName("history.insert")
             insert.setShortcut(self.insert_action.shortcut())
             insert.triggered.connect(
                 lambda _checked=False, chosen=op_ids[0]: self.insertRequested.emit(chosen)
@@ -4171,6 +4172,7 @@ class HistoryPanel(QWidget):
                 lambda _checked=False, chosen=fresh: self.suppressRequested.emit(chosen)
             )
         switch.setShortcut(self.toggle_action.shortcut())
+        switch.setObjectName("history.switch")
         if self._inserting is not None:
             stop = menu.addAction(tr("Einfügen beenden"))
             stop.setShortcut(self.stop_insert_action.shortcut())
@@ -4349,9 +4351,13 @@ class HistoryPanel(QWidget):
             return
 
         menu = QMenu(self)
+        # Die Objektnamen ``history.*`` sind die Adresse, unter der eine
+        # Bildanleitung einen Eintrag markiert (``guide_targets``); der Text
+        # steht damit nur hier.
         single_op = int(op_id) if op_id is not None and len(op_ids) == 1 else None
         if single_op is not None:
             action = menu.addAction(tr("Parameter ändern …"))
+            action.setObjectName("history.edit")
             action.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.operationActivated.emit(chosen)
             )
@@ -4373,6 +4379,7 @@ class HistoryPanel(QWidget):
         self._add_revision_entries(menu, op_ids)
         menu.setToolTipsVisible(True)
         remove = menu.addAction(tr("Schritt löschen …"))
+        remove.setObjectName("history.delete")
         remove.triggered.connect(
             lambda _checked=False, chosen=op_ids: self.removalRequested.emit(chosen)
         )

@@ -115,7 +115,8 @@ Hersteller-/Produktkennung) · `manual_search.py` (die Suche im Handbuch:
 Rangfolge nach Titel, Kurzfassung, Stichwort und Text, Fundstelle je Seite;
 Faltung, Trefferstärke und Kundenwörter aus `registry/search.py`) ·
 `guides.py` (Bildanleitungen: Schritte, Sätze und die Namen der Ziele, auf
-die ein Bild zeigt, dazu die Operationen, die eine Anleitung lehrt;
+die ein Bild zeigt, dazu die Operationen, die eine Anleitung lehrt, und die
+Erklärseiten, an deren Ende `manual.pages` auf sie verweist;
 aufgenommen beim Release in der echten Oberfläche,
 Konzept `konzepte/konzept-handbuch-2026-09.md`) · `figures.py`
 (Abbildungskatalog, dazu je Anleitungsschritt ein Bildschirmfoto) ·

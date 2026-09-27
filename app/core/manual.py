@@ -2893,10 +2893,24 @@ OUTLINE: Final[tuple[tuple[Part, tuple[str, ...]], ...]] = (
             "drill-a-hole",
             "first-part",
             "housing-with-lid",
+            "split-a-large-part",
             "ways",
         ),
     ),
-    ("tasks", ()),
+    (
+        "tasks",
+        (
+            "move-and-turn",
+            "change-a-dimension",
+            "undo-a-step",
+            "thread-a-hole",
+            "round-edges",
+            "label-a-part",
+            "draw-and-pull",
+            "two-colours",
+            "repair-a-model",
+        ),
+    ),
     (
         "topics",
         (
@@ -2978,13 +2992,29 @@ def pages(registry: Registry | None = None) -> tuple[Page, ...]:
         page.key: page
         for page in (
             _where_to_start_page(),
-            *INTRODUCTION,
+            *(_with_its_guides(page) for page in INTRODUCTION),
             _spacemouse_page(),
             *(guide_page(guide) for guide in guides.GUIDES),
         )
     }
     arranged = tuple(replace(written[key], part=part) for part, keys in OUTLINE for key in keys)
     return (*arranged, *knowledge_pages(), *generated)
+
+
+def _with_its_guides(page: Page) -> Page:
+    """Eine Erklärseite mit dem Verweis auf die Anleitungen, die ihr Thema in Bildern zeigen.
+
+    Erzeugt aus :attr:`guides.Guide.topics` und nicht in den Seitentext
+    geschrieben: Der Text jeder Seite ist ein Katalogschlüssel, und ein
+    Verweis darin verlangte die ganze Seite in fünf Sprachen neu. So kommt eine
+    neue Anleitung mit einer Zeile an ihrer Seite an, unter dem Titel, unter
+    dem sie auch in der Seitenliste steht.
+    """
+    shown = [guide for guide in guides.GUIDES if page.key in guide.topics]
+    if not shown:
+        return page
+    links = " · ".join(f"[{guide.title}](manual:{guide.key})" for guide in shown)
+    return replace(page, body=f"{page.body}\n\n**{_('Schritt für Schritt:')}** {links}")
 
 
 def find(key: str, registry: Registry | None = None) -> Page | None:

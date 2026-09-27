@@ -79,6 +79,19 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # Bausteinen „Einsetzen"; der Satz des Schritts nennt ihn so.
         "dialog",
         "dialog.accept",
+        # Der Haken „Maße als Parameter anlegen" in einem Dialog, der ihn anbietet
+        "dialog.naming",
+        # Die Zahlenfelder der Bewegen-Leiste, gleich welche Rolle gewählt ist
+        "transform.values",
+        # Das Wertfeld der ersten Zeile unter „Parameter" — über die Reihenfolge,
+        # weil ein benanntes Maß in jeder Sprache anders heißt
+        "parameters.first",
+        # „Zeichnen" in der Werkzeugleiste, die Ebenenwahl im Zeichenmodus,
+        # „Hochziehen" an der fertigen Kontur und „Fertig"
+        "toolbar.draw",
+        "sketch.plane",
+        "sketch.pull",
+        "sketch.done",
     }
 )
 
@@ -91,8 +104,27 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``field:diameter`` — ein Feld im offenen Operationsdialog über den Namen
 #:   seines Parameters;
 #: * ``part:screw_hole`` — ein Baustein über seinen Registernamen, im Bild
-#:   seine Kachel im offenen Bausteinkatalog.
-TARGET_KINDS: Final[tuple[str, ...]] = ("command", "operation", "field", "part")
+#:   seine Kachel im offenen Bausteinkatalog;
+#: * ``tool:transform`` — ein Werkzeug unter der Ansicht über seinen Schlüssel
+#:   in der Werkzeugzeile (``section``, ``measure``, ``transform`` …);
+#: * ``transform:rotate`` — eine Rolle der Bewegen-Leiste (``move``,
+#:   ``rotate``, ``scale``);
+#: * ``section:shaping`` — ein Abschnitt im Auswahlfenster über eine Kategorie
+#:   des Registers; im Bild seine Überschrift, die ihn auf- und zuklappt;
+#: * ``sketch:rectangle`` — ein Werkzeug des Zeichenmodus;
+#: * ``history:edit`` — ein Eintrag im Kontextmenü des Verlaufs (``edit``,
+#:   ``insert``, ``switch``, ``delete``), solange das Menü offen ist.
+TARGET_KINDS: Final[tuple[str, ...]] = (
+    "command",
+    "operation",
+    "field",
+    "part",
+    "tool",
+    "transform",
+    "section",
+    "sketch",
+    "history",
+)
 
 _NAME: Final = re.compile(r"[a-z0-9_.]+")
 
@@ -159,6 +191,14 @@ class Guide:
     anderen Rechenkern (``drill_brep_hole`` neben ``drill_hole``) öffnet
     denselben Dialog, ohne dass ein Bild ihn markiert. Jede markierte Operation
     steht hier auch, das prüft ``tests/test_guides.py``."""
+    topics: tuple[str, ...] = ()
+    """Die Erklärseiten, an deren Ende ein Verweis auf diese Anleitung steht.
+
+    Wer auf *Der Verlauf* liest, wie man einen Schritt ändert, findet dort den
+    Weg in Bildern (``manual.pages``). Der Verweis wird erzeugt und steht nicht
+    im Seitentext: Jede Seite ist ein Katalogschlüssel, und ein Verweis darin
+    verlangte sie in fünf Sprachen neu. Dass jede Seite hier eine Erklärseite
+    ist und jede Anleitung eine hat, prüft ``tests/test_guides.py``."""
 
     def figure_key(self, number: int) -> str:
         """Der Schlüssel der Abbildung zu Schritt ``number`` (gezählt ab 1)."""
@@ -209,6 +249,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 ("statusbar", _("Statusleiste: Maße, Fortschritt und offene Warnungen.")),
             ),
         ),
+        topics=("window",),
     ),
     Guide(
         key="print-a-model",
@@ -242,6 +283,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 "print.save",
             ),
         ),
+        topics=("print",),
     ),
     Guide(
         key="drill-a-hole",
@@ -282,6 +324,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
             ),
         ),
         teaches=("drill_hole", "drill_brep_hole"),
+        topics=("features",),
     ),
     Guide(
         key="first-part",
@@ -333,6 +376,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
             ),
         ),
         teaches=("create_brep_box", "create_box", "insert_screw_hole"),
+        topics=("parts",),
     ),
     Guide(
         key="housing-with-lid",
@@ -397,6 +441,332 @@ GUIDES: Final[tuple[Guide, ...]] = (
             ),
         ),
         teaches=("hollow_object", "create_lid", "orient_for_print"),
+        topics=("parts",),
+    ),
+    Guide(
+        key="split-a-large-part",
+        title=_("Ein zu großes Teil teilen"),
+        summary=_(
+            "Ein Teil, das nicht auf das Bett passt, in Stücke mit Stiften teilen "
+            "und druckfertig hinlegen."
+        ),
+        part="start",
+        steps=(
+            step(
+                _(
+                    "Rechts im *Prüfbericht* steht, dass das Teil über den Bauraum hinausragt. "
+                    "Klicken Sie darauf."
+                ),
+                "report",
+            ),
+            step(_("Klicken Sie auf *Modell teilen*."), "report.action"),
+            step(
+                _("Solidon teilt das Teil und setzt Stifte, damit die Stücke zusammenpassen."),
+                "viewport",
+            ),
+            step(_("Klicken Sie im *Prüfbericht* auf *Auf dem Bett anordnen*."), "report.action"),
+            step(
+                _(
+                    "Die Stücke liegen druckfertig nebeneinander. Gedruckt wird wie in "
+                    "[Ein Modell prüfen und drucken](manual:print-a-model)."
+                ),
+                "viewport",
+                "report.slicer",
+            ),
+        ),
+        teaches=("split_pinned", "arrange_bed"),
+        topics=("splitting",),
+    ),
+    Guide(
+        key="move-and-turn",
+        title=_("Ein Teil verschieben und drehen"),
+        summary=_("Am Griff im Bild ziehen oder genaue Werte eintippen."),
+        part="tasks",
+        steps=(
+            step(_("Klicken Sie auf das Teil. Es ist jetzt gewählt."), "viewport"),
+            step(_("Unten unter der Ansicht: Klicken Sie auf *Bewegen*."), "tool:transform"),
+            step(
+                _("Ziehen Sie an einem der Pfeile im Bild, um das Teil zu verschieben."), "viewport"
+            ),
+            step(
+                _(
+                    "Genau geht es mit Zahlen: Tippen Sie unten die Werte ein "
+                    "und drücken Sie Enter."
+                ),
+                "transform.values",
+            ),
+            step(
+                _(
+                    "Zum Drehen: Klicken Sie auf *Drehen*, wählen Sie die *Achse* "
+                    "und tragen Sie den *Winkel* ein."
+                ),
+                "transform:rotate",
+                "transform.values",
+            ),
+            step(
+                _("Jede Bewegung ist ein Schritt im *Verlauf* und lässt sich zurücknehmen."),
+                "history.last",
+            ),
+        ),
+        teaches=("translate_object", "rotate_object"),
+        topics=("moving",),
+    ),
+    Guide(
+        key="change-a-dimension",
+        title=_("Ein Maß nachträglich ändern"),
+        summary=_("Maße als Parameter anlegen und später an einer Stelle ändern."),
+        part="tasks",
+        steps=(
+            step(
+                _(
+                    "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an "
+                    "und haken Sie *Maße als Parameter anlegen* an."
+                ),
+                "dialog.naming",
+            ),
+            step(
+                _(
+                    "Klicken Sie auf *Quader anlegen*. Die Maße stehen jetzt links "
+                    "unter *Parameter*."
+                ),
+                "parameters",
+            ),
+            step(
+                _(
+                    "Tragen Sie bei *Breite* einen neuen Wert ein, zum Beispiel 80 mm, "
+                    "und drücken Sie Enter."
+                ),
+                "parameters.first",
+            ),
+            step(
+                _("Das Teil ändert sich mit, ebenso jeder Schritt, der das Maß benutzt."),
+                "viewport",
+            ),
+        ),
+        topics=("parameters",),
+    ),
+    Guide(
+        key="undo-a-step",
+        title=_("Einen Schritt zurücknehmen oder ändern"),
+        summary=_("Rückgängig machen, einen Schritt im Verlauf ändern, ausschalten oder löschen."),
+        part="tasks",
+        steps=(
+            step(
+                _(
+                    "Oben im Menü *Bearbeiten*: *Rückgängig* nimmt den letzten Schritt zurück, "
+                    "ebenso Strg+Z."
+                ),
+                "command:edit.undo",
+            ),
+            legend(
+                _(
+                    "Ein Rechtsklick auf einen Schritt im *Verlauf* zeigt, "
+                    "was Sie mit ihm tun können."
+                ),
+                ("history:edit", _("Parameter ändern: den Schritt öffnen und Werte ändern.")),
+                ("history:switch", _("Ausschalten: den Schritt weglassen, ohne ihn zu löschen.")),
+                ("history:delete", _("Schritt löschen: fragt nach; abhängige Schritte gehen mit.")),
+                whole_window=False,
+            ),
+            step(
+                _(
+                    "*Schritt löschen …* fragt vorher nach; abhängige Schritte gehen mit. "
+                    "Strg+Z holt alles zurück."
+                ),
+                "dialog",
+            ),
+        ),
+        topics=("history",),
+    ),
+    Guide(
+        key="thread-a-hole",
+        title=_("Ein Gewinde in eine Bohrung"),
+        summary=_("Ein druckbares Innengewinde in eine vorhandene Bohrung setzen."),
+        part="tasks",
+        steps=(
+            step(
+                _(
+                    "Klicken Sie zweimal auf die Bohrung: erst ist das Teil gewählt, "
+                    "dann die Bohrung."
+                ),
+                "viewport",
+            ),
+            step(
+                _("Öffnen Sie oben im Menü *Datei* den *Bausteinkatalog …*."),
+                "command:file.catalog",
+            ),
+            step(_("Doppelklicken Sie auf *Druckbares Gewinde*."), "part:printed_thread"),
+            step(
+                _("Wählen Sie die *Größe* und klicken Sie auf *Einsetzen*."),
+                "field:size",
+                "dialog.accept",
+            ),
+            step(_("Das Gewinde sitzt in der Bohrung."), "viewport"),
+        ),
+        teaches=("insert_printed_thread",),
+        topics=("parts",),
+    ),
+    Guide(
+        key="round-edges",
+        title=_("Kanten abrunden oder anfasen"),
+        summary=_(
+            "Die Kanten eines Teils rund oder schräg machen, mit Vorschau vor dem Übernehmen."
+        ),
+        part="tasks",
+        steps=(
+            step(_("Klicken Sie auf das Teil. Es ist jetzt gewählt."), "viewport"),
+            step(_("Rechts unter *Auswahl*: Klappen Sie *Ändern* auf."), "section:shaping"),
+            step(_("Klicken Sie auf *Verrunden*."), "operation:fillet_edges"),
+            step(
+                _("Tragen Sie den *Radius* ein und wählen Sie unter *Kanten*, welche rund werden."),
+                "field:radius",
+                "field:edges",
+            ),
+            step(
+                _("Die Vorschau zeigt die Rundung. Klicken Sie auf *Verrunden*."), "dialog.accept"
+            ),
+            step(
+                _("Die Kanten sind rund. Schräg statt rund geht genauso mit *Fase anbringen*."),
+                "viewport",
+                "operation:chamfer_edges",
+                whole_window=True,
+            ),
+        ),
+        teaches=("fillet_edges", "chamfer_edges"),
+        topics=("features",),
+    ),
+    Guide(
+        key="label-a-part",
+        title=_("Ein Teil beschriften"),
+        summary=_("Text erhaben oder vertieft auf eine Fläche setzen."),
+        part="tasks",
+        steps=(
+            step(
+                _(
+                    "Klicken Sie zweimal auf die Fläche für den Text: erst ist das Teil gewählt, "
+                    "dann die Fläche."
+                ),
+                "viewport",
+            ),
+            step(
+                _("Rechts unter *Auswahl*: Klicken Sie auf *Text aufbringen*."),
+                "operation:label_text",
+            ),
+            step(
+                _("Tippen Sie den *Text* ein und wählen Sie die *Schriftgröße*."),
+                "field:text",
+                "field:size",
+            ),
+            step(
+                _(
+                    "Unter *Art* wählen Sie erhaben oder vertieft. "
+                    "Klicken Sie auf *Text aufbringen*."
+                ),
+                "field:mode",
+                "dialog.accept",
+            ),
+            step(_("Der Text steht auf der Fläche."), "viewport"),
+        ),
+        teaches=("label_text", "create_label"),
+        topics=("labels",),
+    ),
+    Guide(
+        key="draw-and-pull",
+        title=_("Eine Form zeichnen und hochziehen"),
+        summary=_("Einen Umriss zeichnen und daraus ein eigenes Teil machen."),
+        part="tasks",
+        steps=(
+            step(_("Oben in der Werkzeugleiste: Klicken Sie auf *Zeichnen*."), "toolbar.draw"),
+            step(
+                _(
+                    "Wählen Sie die Zeichenebene. Die Draufsicht (XY) liegt flach "
+                    "wie die Druckplatte."
+                ),
+                "sketch.plane",
+            ),
+            step(
+                _("Klicken Sie auf das *Rechteck* und ziehen Sie es in der Ansicht auf."),
+                "sketch:rectangle",
+            ),
+            step(
+                _("Tippen Sie beim Ziehen die Maße ein, zum Beispiel 50 und 30 mm."),
+                "viewport",
+            ),
+            step(_("Klicken Sie auf *Hochziehen*."), "sketch.pull"),
+            step(
+                _("Tragen Sie die *Höhe* ein und klicken Sie auf *Grundform hochziehen*."),
+                "field:height",
+                "dialog.accept",
+            ),
+            step(
+                _(
+                    "Das Teil steht. Gedruckt wird wie in "
+                    "[Ein Modell prüfen und drucken](manual:print-a-model)."
+                ),
+                "viewport",
+                "report.slicer",
+            ),
+        ),
+        teaches=("sketch_extrude", "sketch_join"),
+        topics=("sketch",),
+    ),
+    Guide(
+        key="two-colours",
+        title=_("Zweifarbig drucken"),
+        summary=_("Einer Fläche ein zweites Filament geben; der Slicer bekommt den Wechsel mit."),
+        part="tasks",
+        steps=(
+            step(
+                _(
+                    "Klicken Sie zweimal auf die Fläche: erst ist das Teil gewählt, "
+                    "dann die Fläche."
+                ),
+                "viewport",
+            ),
+            step(
+                _("Rechts unter *Auswahl*: Klicken Sie auf *Filament auf eine Fläche*."),
+                "operation:paint_slot",
+            ),
+            step(_("Wählen Sie das *Filament* für diese Fläche."), "field:slot"),
+            step(_("Klicken Sie auf *Filament auf eine Fläche*."), "dialog.accept"),
+            step(
+                _(
+                    "Die Fläche hat ihre Farbe. Gedruckt wird wie in "
+                    "[Ein Modell prüfen und drucken](manual:print-a-model)."
+                ),
+                "viewport",
+                "report.slicer",
+            ),
+        ),
+        teaches=("paint_slot", "assign_slot", "clear_filament"),
+        topics=("moving",),
+    ),
+    Guide(
+        key="repair-a-model",
+        title=_("Ein Modell reparieren"),
+        summary=_("Was Solidon beim Einlesen selbst repariert, und wie Sie den Rest beheben."),
+        part="tasks",
+        steps=(
+            step(
+                _(
+                    "Beim Einlesen repariert Solidon, was sicher geht. "
+                    "Der *Prüfbericht* sagt, was es war."
+                ),
+                "report",
+            ),
+            step(_("Klicken Sie auf den Befund und dann auf *Stelle zeigen*."), "report.action"),
+            step(_("Die Ansicht zeigt die reparierte Stelle."), "viewport"),
+            step(
+                _(
+                    "Andere Befunde tragen ihre Reparatur als Knopf, "
+                    "etwa *Überschneidungen auflösen*."
+                ),
+                "report.action",
+            ),
+            step(_("Das Modell ist heil. Der Schritt steht im *Verlauf*."), "history.last"),
+        ),
+        teaches=("repair",),
+        topics=("trouble",),
     ),
 )
 

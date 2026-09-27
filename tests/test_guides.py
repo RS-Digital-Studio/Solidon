@@ -385,6 +385,19 @@ def test_the_guide_pictures_belong_to_this_version(language: str) -> None:
             assert figure is not None and figure.available(language), f"{language}: {key}"
 
 
+def test_every_guide_is_named_at_the_end_of_a_page_that_explains_its_topic() -> None:
+    """Wer eine Erklärseite liest, findet dort den Weg in Bildern (``Guide.topics``)."""
+    written = {page.key for page in manual.INTRODUCTION}
+    for guide in guides.GUIDES:
+        assert guide.topics, f"{guide.key}: keine Erklärseite verweist auf die Anleitung"
+        unknown = sorted(set(guide.topics) - written)
+        assert not unknown, f"{guide.key}: {unknown} ist keine Erklärseite"
+        for key in guide.topics:
+            page = manual.find(key)
+            assert page is not None, key
+            assert f"](manual:{guide.key})" in str(page.body), f"{key} nennt {guide.key} nicht"
+
+
 def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
     """Jeder feste Name findet sein Widget am Fenster, wie die Anwendung es baut.
 
@@ -397,13 +410,24 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
-    stateful = {"dialog", "dialog.accept", "report.action", "history.last"}
+    stateful = {
+        "dialog",
+        "dialog.accept",
+        "dialog.naming",
+        "parameters.first",
+        "sketch.plane",
+        "report.action",
+        "history.last",
+    }
     window = MainWindow(Session(), UiSettings())
     try:
         for name in sorted(guide_targets.RESOLVED - stateful):
             assert guide_targets.widget_for(window, name) is not None, name
-        with pytest.raises(guide_targets.MissingTargetError):
-            guide_targets.widget_for(window, "dialog")
+        for name in ("tool:transform", "transform:rotate"):
+            assert guide_targets.widget_for(window, name) is not None, name
+        for name in ("dialog", "dialog.naming", "parameters.first", "sketch.plane"):
+            with pytest.raises(guide_targets.MissingTargetError):
+                guide_targets.widget_for(window, name)
         with pytest.raises(guide_targets.MissingTargetError):
             guide_targets.area_for(window, "history.last")
     finally:

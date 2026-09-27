@@ -23,7 +23,7 @@ haben kein eigenes Widget — sie haben nur einen Ort.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import QAction
@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QMenu,
     QPushButton,
+    QScrollArea,
     QWidget,
 )
 
@@ -115,6 +116,96 @@ def _selection_parts(window: MainWindow) -> QWidget:
     return button
 
 
+def _transform_values(window: MainWindow) -> QWidget:
+    """Die Zahlenfelder der Bewegen-Leiste, gleich welche Rolle gerade gewählt ist."""
+    fields: QWidget = window.transform_bar.fields
+    return fields
+
+
+def _first_parameter(window: MainWindow) -> QWidget:
+    """Das Wertfeld der ersten Zeile unter *Parameter*.
+
+    Über die Reihenfolge und nicht über den Namen: Ein benanntes Maß heißt nach
+    seinem Titel in der Sprache, in der es angelegt wurde (``breite``,
+    ``width``), und eine Anleitung soll in jeder Sprache dieselbe Zeile meinen.
+    """
+    editors = window.parameters._editors
+    if not editors:
+        raise MissingTargetError("parameters.first: das Projekt hat noch keinen Parameter")
+    return next(iter(editors.values()))
+
+
+def _naming_box(window: MainWindow) -> QWidget:
+    """Der Haken *Maße als Parameter anlegen* im offenen Operationsdialog."""
+    dialog = window._op_dialog
+    naming = dialog._naming if dialog is not None and dialog.isVisible() else None
+    if naming is None:
+        raise MissingTargetError("dialog.naming: kein offener Dialog mit benannten Maßen")
+    return naming
+
+
+def _draw_button(window: MainWindow) -> QWidget:
+    """*Zeichnen* in der Werkzeugleiste — ein Knopf ohne Menüeintrag gleichen Namens."""
+    button = window.toolbar.widgetForAction(window._toolbar_sketch)
+    if button is None:
+        raise MissingTargetError("toolbar.draw: die Werkzeugleiste trägt kein Zeichnen")
+    return button
+
+
+def _sketch_panel(window: MainWindow, name: str) -> Any:
+    panel = window._sketch_panel
+    if panel is None:
+        raise MissingTargetError(f"{name}: der Zeichenmodus ist nicht offen")
+    return panel
+
+
+def _sketch_plane(window: MainWindow) -> QWidget:
+    """Die Wahl der Zeichenebene im offenen Zeichenmodus."""
+    choice: QWidget = _sketch_panel(window, "sketch.plane").plane_choice
+    return choice
+
+
+def _sketch_pull(window: MainWindow) -> QWidget:
+    """*Hochziehen* an der fertigen Kontur."""
+    button: QWidget = window.sketch_pull_button
+    return button
+
+
+def _sketch_done(window: MainWindow) -> QWidget:
+    """*Fertig* im Zeichenmodus."""
+    button: QWidget = window.sketch_finish_button
+    return button
+
+
+def _named(window: MainWindow, kind: str, rest: str) -> QWidget:
+    """Ein Ziel mit Namen dahinter, dessen Widget die Oberfläche unter diesem Namen führt."""
+    name = f"{kind}:{rest}"
+    if kind == "tool":
+        tool = window.tools._buttons.get(rest)
+        if tool is None:
+            raise MissingTargetError(f"{name}: kein Werkzeug dieses Namens unter der Ansicht")
+        return tool
+    if kind == "transform":
+        role = window.transform_bar.role_buttons.get(rest)
+        if role is None:
+            raise MissingTargetError(f"{name}: die Bewegen-Leiste kennt diese Rolle nicht")
+        return role
+    if kind == "section":
+        from app.core.registry.registry import group_title
+
+        group = window.selection_operations._groups.get(group_title(rest))
+        if group is None:
+            raise MissingTargetError(f"{name}: das Auswahlfenster zeigt diesen Abschnitt nicht")
+        heading: QWidget = group[1]
+        return heading
+    if kind == "sketch":
+        button = _sketch_panel(window, name)._tool_buttons.get(rest)
+        if button is None:
+            raise MissingTargetError(f"{name}: der Zeichenmodus kennt dieses Werkzeug nicht")
+        return button  # type: ignore[no-any-return]
+    raise MissingTargetError(f"{name}: hat kein eigenes Widget, nur einen Ort (area_for)")
+
+
 def _print_dialog(window: MainWindow) -> QWidget:
     """Der Druckdialog. Er läuft modal über ``exec()`` und hängt an keinem Attribut."""
     from app.ui.print_settings_dialog import PrintSettingsDialog
@@ -167,6 +258,13 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "start.drop": _drop_area,
     "dialog": _open_dialog,
     "dialog.accept": _accept_button,
+    "dialog.naming": _naming_box,
+    "transform.values": _transform_values,
+    "parameters.first": _first_parameter,
+    "toolbar.draw": _draw_button,
+    "sketch.plane": _sketch_plane,
+    "sketch.pull": _sketch_pull,
+    "sketch.done": _sketch_done,
 }
 
 #: Die Namen, die keinen eigenen Widget haben, nur einen Ort.
@@ -204,29 +302,33 @@ def widget_for(window: MainWindow, name: str) -> QWidget:
         button = window.selection_operations._buttons.get(rest)
         if button is not None and button.isVisible():
             return button
-    raise MissingTargetError(f"{name}: hat kein eigenes Widget, nur einen Ort (area_for)")
+    return _named(window, kind, rest)
 
 
 def area_for(window: MainWindow, name: str) -> QRect:
     """Wo das Ziel gerade auf dem Bildschirm steht, in globalen Koordinaten.
 
     Nur Sichtbares hat einen Ort. Ein Menüeintrag hat ihn nur, solange sein
-    Menü offen ist — das öffnet der Aufrufer, diese Funktion ändert nichts am
-    Fenster.
+    Menü offen ist — das öffnet der Aufrufer. Ein Widget in einem Rollbereich
+    wird vorher in den Blick gerollt, wie der Kunde es mit dem Mausrad täte:
+    Im aufgeklappten Abschnitt *Ändern* stand *Verrunden* unterhalb des
+    sichtbaren Teils, und ein Rahmen darum hätte ins Leere gezeigt.
     """
     if name == "history.last":
         return _last_row(window.history_panel.list, name)
     if name == "viewport":
         return _open_view(window)
-    kind, _separator, rest = name.partition(":")
+    kind, separator, rest = name.partition(":")
     if kind == "part":
         return _catalog_tile(rest, name)
+    if separator and kind == "history":
+        return _open_menu_entry_named(f"history.{rest}", name)
     if kind in ("command", "operation"):
         action = _action_for(window, kind, rest)
         if kind == "operation":
             button = window.selection_operations._buttons.get(rest)
             if button is not None and button.isVisible():
-                return _global(button)
+                return _global(_in_view(button))
         shown = _shown_in_toolbar(window, action)
         if shown is not None:
             return _global(shown)
@@ -234,7 +336,17 @@ def area_for(window: MainWindow, name: str) -> QRect:
     widget = widget_for(window, name)
     if not widget.isVisible():
         raise MissingTargetError(f"{name}: {type(widget).__name__} ist gerade nicht zu sehen")
-    return _global(widget)
+    return _global(_in_view(widget))
+
+
+def _in_view(widget: QWidget) -> QWidget:
+    """Das Widget in seinem Rollbereich in den sichtbaren Teil rollen, falls es einen hat."""
+    parent = widget.parentWidget()
+    while parent is not None and not isinstance(parent, QScrollArea):
+        parent = parent.parentWidget()
+    if parent is not None:
+        parent.ensureWidgetVisible(widget, 0, 24)
+    return widget
 
 
 def _global(widget: QWidget) -> QRect:
@@ -291,12 +403,21 @@ def _catalog_tile(part: str, name: str) -> QRect:
 
 
 def _last_row(view: QListWidget, name: str) -> QRect:
-    if view.count() == 0:
-        raise MissingTargetError(f"{name}: die Liste ist leer")
-    item = view.item(view.count() - 1)
-    view.scrollToItem(item)
-    rect = view.visualItemRect(item)
-    return QRect(view.viewport().mapToGlobal(rect.topLeft()), rect.size())
+    """Die letzte Zeile, die man sieht.
+
+    Nicht die letzte der Liste: Ein Schritt aus mehreren Operationen steht als
+    Gruppe mit eingeklappten Unterzeilen da („Drehen und aufs Bett setzen"),
+    und ein Rahmen um die verborgene letzte Unterzeile schrumpfte auf einen
+    Punkt am Rand.
+    """
+    for row in range(view.count() - 1, -1, -1):
+        item = view.item(row)
+        if item is None or item.isHidden():
+            continue
+        view.scrollToItem(item)
+        rect = view.visualItemRect(item)
+        return QRect(view.viewport().mapToGlobal(rect.topLeft()), rect.size())
+    raise MissingTargetError(f"{name}: die Liste ist leer")
 
 
 def action_for(window: MainWindow, name: str) -> QAction:
@@ -357,3 +478,14 @@ def _open_menu_entry(action: QAction, name: str) -> QRect:
             rect = widget.actionGeometry(action)
             return QRect(widget.mapToGlobal(rect.topLeft()), rect.size())
     raise MissingTargetError(f"{name}: steht weder sichtbar im Fenster noch in einem offenen Menü")
+
+
+def _open_menu_entry_named(object_name: str, name: str) -> QRect:
+    """Der Ort eines Eintrags mit diesem Objektnamen in einem gerade offenen Kontextmenü."""
+    for widget in QApplication.topLevelWidgets():
+        if not isinstance(widget, QMenu) or not widget.isVisible():
+            continue
+        for action in widget.actions():
+            if action.objectName() == object_name:
+                return _open_menu_entry(action, name)
+    raise MissingTargetError(f"{name}: kein offenes Kontextmenü trägt diesen Eintrag")

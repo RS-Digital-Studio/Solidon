@@ -73,7 +73,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QApplication, QMenu
 
-from app.branding import APP_VERSION
+from app.branding import APP_NAME, APP_VERSION
 from app.core import figures, guides
 from app.core.bootstrap import load_operations
 from app.i18n import install_catalog, set_language
@@ -104,6 +104,29 @@ BROKEN_MODEL: Final = MESHES / "broken_open.stl"
 #: Eine Platte mit ebener Oberseite und schon vorhandenen Löchern — dorthin
 #: kommt in *Ein Loch bohren* eine weitere Bohrung.
 PLATE_MODEL: Final = MESHES / "plate_holes.stl"
+
+#: Ein Balken von 400 mm, länger als jedes Bett der Vorgabe — für
+#: *Ein zu großes Teil teilen*.
+OVERSIZED_MODEL: Final = MESHES / "oversized.stl"
+
+#: Ein Würfel mit einer großen Öffnung, die Solidon beim Einlesen schließt,
+#: und einer, deren Stelle der Bericht zeigt — für *Ein Modell reparieren*.
+OPEN_MODEL: Final = MESHES / "partially_open.stl"
+
+#: Zwei Teile, die ineinanderstecken: Der Bericht bietet an, sie aufzulösen.
+CROSSING_MODEL: Final = MESHES / "broken_selfint.stl"
+
+#: Die zwei Spulen von *Zweifarbig drucken*, je Sprache benannt: Einen Namen,
+#: den die Aufnahme selbst anlegt, übersetzt die Anwendung nicht.
+SPOOLS: Final[dict[str, tuple[str, str]]] = {
+    "de": ("PLA weiß", "PLA rot"),
+    "en": ("PLA white", "PLA red"),
+    "es": ("PLA blanco", "PLA rojo"),
+    "fr": ("PLA blanc", "PLA rouge"),
+    "it": ("PLA bianco", "PLA rosso"),
+    "pt": ("PLA branco", "PLA vermelho"),
+}
+SPOOL_COLOURS: Final = ("#f2f2ee", "#c8372d")
 
 #: Wie breit ein Schrittbild höchstens gespeichert wird. Die Bilder reisen mit
 #: der Anwendung, sechs Sprachen lang; das Handbuchfenster zeigt sie ohnehin
@@ -244,6 +267,36 @@ def annotate(piece: QImage, spots: list[Spot], *, legend: bool, number: int) -> 
         if spot.pointer:
             _pointer(canvas, spot.rect.center() + QPoint(BORDER, BORDER))
     return canvas
+
+
+def _shows_the_window(image: QImage, window: Any) -> bool:
+    """Ob die Menüzeile im Bild die ist, die Qt für dieses Fenster zeichnet.
+
+    Verglichen wird an einem Raster von 20 mal 20 Punkten. Kantenglättung und ein Farbstich
+    zählen nicht; liegt aber ein anderes Fenster darüber, weicht mehr als ein
+    Fünftel der Punkte deutlich ab.
+    """
+    bar = window.menuBar()
+    if bar is None or not bar.isVisible():
+        return True
+    drawn = bar.grab().toImage().convertToFormat(QImage.Format.Format_RGB32)
+    corner = bar.mapTo(window, QPoint(0, 0))
+    shown = image.copy(QRect(corner, drawn.size())).convertToFormat(QImage.Format.Format_RGB32)
+    if shown.size() != drawn.size() or drawn.width() < 20 or drawn.height() < 4:
+        return True
+    wrong = 0
+    for column in range(20):
+        for row in range(20):
+            x = (drawn.width() - 1) * column // 19
+            y = (drawn.height() - 1) * row // 19
+            expected, found = QColor(drawn.pixel(x, y)), QColor(shown.pixel(x, y))
+            apart = (
+                abs(expected.red() - found.red())
+                + abs(expected.green() - found.green())
+                + abs(expected.blue() - found.blue())
+            )
+            wrong += apart > 90
+    return wrong <= 80
 
 
 def _small(spot: Spot) -> bool:
@@ -411,23 +464,34 @@ class GuideRun:
         step = self.guide.steps[number - 1]
         self.settle()
         origin = self.window.mapToGlobal(QPoint(0, 0))
-        spots: list[Spot] = []
-        for mark in step.marks:
-            if points and mark.target in points:
-                where = points[mark.target] - origin
-                spots.append(Spot(QRect(where, QSize(1, 1)), point=True, pointer=True))
-                continue
-            if rings and mark.target in rings:
-                ring = rings[mark.target]
-                box = ring if isinstance(ring, QRect) else QRect(ring, QSize(1, 1))
-                spots.append(Spot(box.translated(-origin), point=True))
-                continue
-            try:
-                area = guide_targets.area_for(self.window, mark.target)
-            except guide_targets.MissingTargetError as missing:
-                raise SystemExit(f"{self.guide.key}, Schritt {number}: {missing}") from missing
-            spots.append(Spot(area.translated(-origin)))
-        image = grab(self.window)
+
+        def located() -> list[Spot]:
+            spots: list[Spot] = []
+            for mark in step.marks:
+                if points and mark.target in points:
+                    where = points[mark.target] - origin
+                    spots.append(Spot(QRect(where, QSize(1, 1)), point=True, pointer=True))
+                    continue
+                if rings and mark.target in rings:
+                    ring = rings[mark.target]
+                    box = ring if isinstance(ring, QRect) else QRect(ring, QSize(1, 1))
+                    spots.append(Spot(box.translated(-origin), point=True))
+                    continue
+                try:
+                    area = guide_targets.area_for(self.window, mark.target)
+                except guide_targets.MissingTargetError as missing:
+                    raise SystemExit(f"{self.guide.key}, Schritt {number}: {missing}") from missing
+                spots.append(Spot(area.translated(-origin)))
+            return spots
+
+        # Zweimal gefragt: Die erste Frage rollt ein Ziel in den Blick, und erst
+        # nach dem nächsten Bildaufbau zeigt der Schirm, wo der Rahmen sitzt.
+        # Im Probelauf stand der Rahmen um *Verrunden*, das Bild noch auf dem
+        # alten Rollstand, und gerahmt war der Knopf darüber.
+        located()
+        self.settle(8)
+        spots = located()
+        image = self._grab(number)
         if step.whole_window:
             crop = image.rect()
         else:
@@ -454,6 +518,34 @@ class GuideRun:
         size = target.stat().st_size // 1024
         print(f"  {target.name:<36} {picture.width()}x{picture.height()}  {size} KB")
         self.taken = number
+
+    def _grab(self, number: int) -> QImage:
+        """Das Fenster vom Schirm, und nur, wenn darauf wirklich das Fenster steht.
+
+        Am 27.09.2026 zeigte ein Ergebnisbild statt Solidon das Fenster der
+        Claude-Sitzung: Es war in dem Augenblick nach vorn gekommen, und die
+        Prüfung auf fremde Fenster kurz davor hatte nichts gesehen. Deshalb
+        dreierlei: das eigene Fenster vor jedem Bild wieder obenauf, dieselbe
+        Prüfung auch nach dem Abgreifen, und die Menüzeile im Bild gegen die,
+        die Qt selbst zeichnet — fremder Inhalt darüber fällt dort auf.
+        """
+        for _attempt in range(10):
+            _stay_on_top(self.window)
+            self.settle(2)
+            image = grab(self.window)
+            other = shots.foreign_window_over(self.window)
+            if not other and _shows_the_window(image, self.window):
+                return image
+            print(
+                f"  … über Schritt {number} lag beim Abgreifen etwas anderes "
+                f"({other or 'fremder Inhalt'}), noch einmal",
+                flush=True,
+            )
+            self.settle(40)
+        raise SystemExit(
+            f"{self.guide.key}, Schritt {number}: Das Bild zeigte zehnmal nicht das "
+            "Aufnahmefenster. Fremde Fenster vom Aufnahmeschirm nehmen (--schirm N)."
+        )
 
     def finish(self) -> None:
         if self.taken != len(self.guide.steps):
@@ -895,6 +987,486 @@ def story_housing_with_lid(run: GuideRun) -> None:
     run.capture(10)
 
 
+def _open_dialog(run: GuideRun, what: str) -> Any:
+    """Der Operationsdialog, den der letzte Klick geöffnet haben muss."""
+    dialog = run.window._op_dialog
+    if dialog is None or not dialog.isVisible():
+        raise SystemExit(f"Der Dialog „{what}“ ging nicht auf")
+    return dialog
+
+
+def _finding_row(report: Any, code: str) -> int:
+    """Die Zeile des Prüfberichts mit diesem Befund — über den Code, nicht über den Satz."""
+    for row in range(report.list.count()):
+        finding = report.list.item(row).data(Qt.ItemDataRole.UserRole)
+        if getattr(finding, "code", None) == code:
+            return row
+    raise SystemExit(f"Der Prüfbericht meldet keinen Befund {code}")
+
+
+def _new_box(run: GuideRun, sizes: tuple[float, float, float], *, named: bool = False) -> Any:
+    """Ein neues Projekt mit einem Quader, ohne Bilder — den Weg zeigt „Das erste eigene Teil".
+
+    ``named`` hält den Dialog mit dem Haken *Maße als Parameter anlegen* offen
+    und gibt ihn zurück; sonst wird angelegt und der Körper gewählt.
+    """
+    from app.ui import guide_targets
+
+    _fresh(run)
+    guide_targets.widget_for(run.window, "start.new").click()
+    run.settle(30)
+    guide_targets.action_for(run.window, "operation:create_brep_box").trigger()
+    run.settle(40)
+    dialog = _open_dialog(run, "Quader anlegen")
+    for name, value in zip(("width", "depth", "height"), sizes, strict=True):
+        dialog._editors[name].set_value(value)
+    if named:
+        return dialog
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Quader")
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(20)
+    return web.select_body(run.window, 0)
+
+
+def _click_spot(run: GuideRun, body: str) -> QPoint:
+    """Wo der Klick auf ein Teil hinzeigt: neben die Mitte seiner Oberseite.
+
+    Neben die Mitte, weil dort nach dem Klick das Werkzeugkreuz steht; ein
+    Klickpunkt darauf sähe aus wie ein Griff am Kreuz.
+    """
+    result = run.session.last_result
+    if result is None:
+        raise SystemExit("nichts gerechnet — kein Teil zum Anklicken")
+    _face_id, face = _top_face(result.scene.objects[body])
+    centre = tuple(float(value) for value in face.params["centre"])
+    return _visible(run, (centre[0] + 12.0, centre[1] + 6.0, centre[2]))
+
+
+def _face_spot(run: GuideRun, body: str) -> QPoint:
+    """Die Oberseite wählen, wie mit dem zweiten Klick, und sagen, wo er hinzeigt."""
+    result = run.session.last_result
+    if result is None:
+        raise SystemExit("nichts gerechnet — keine Fläche zum Anklicken")
+    face_id, face = _top_face(result.scene.objects[body])
+    run.window.object_tree.select_feature(body, face_id)
+    run.settle(30)
+    centre = tuple(float(value) for value in face.params["centre"])
+    return _visible(run, (centre[0] + 18.0, centre[1] + 8.0, centre[2]))
+
+
+def story_split_a_large_part(run: GuideRun) -> None:
+    """Ein zu langer Balken: Befund, *Modell teilen*, Stücke anordnen."""
+    from app.ui import guide_targets
+
+    _import(run, OVERSIZED_MODEL)
+    report = run.window.report
+    run.window.right.setCurrentWidget(report)
+    report.list.setCurrentRow(_finding_row(report, "arrange.out_of_build_volume"))
+    run.settle(10)
+    run.capture(1)
+    run.capture(2)
+    guide_targets.widget_for(run.window, "report.action").click()
+    # Die Teilung sucht im Hintergrund; das Bild entsteht, wenn sie steht.
+    for _round in range(1200):
+        run.settle(2)
+        if not run.session.split_running:
+            break
+    web.until_quiet(run.app, run.session, "Teilen")
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(30)
+    run.capture(3)
+    run.window.right.setCurrentWidget(report)
+    report.list.setCurrentRow(_finding_row(report, "prepare.halves_in_place"))
+    run.settle(10)
+    run.capture(4)
+    guide_targets.widget_for(run.window, "report.action").click()
+    web.until_quiet(run.app, run.session, "Anordnen")
+    # Die Explosionsansicht, die das Teilen geöffnet hat, zöge die Stücke im
+    # Bild auseinander; gezeigt wird die Lage, die gedruckt wird.
+    run.window.tools.close_tool()
+    run.window.object_tree.select_object(None)
+    run.window.right.setCurrentWidget(report)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(30)
+    run.capture(5)
+
+
+def story_move_and_turn(run: GuideRun) -> None:
+    """Teil wählen, *Bewegen*, am Griff oder mit Zahlen verschieben, dann drehen."""
+    from app.ui import guide_targets
+
+    _import(run, PLATE_MODEL)
+    body = web.select_body(run.window, 0)
+    run.capture(1, points={"viewport": _click_spot(run, body)})
+    run.capture(2)
+    guide_targets.widget_for(run.window, "tool:transform").click()
+    run.settle(30)
+    run.capture(3)
+    bar = run.window.transform_bar
+    bar.dx.set_value_mm(20.0)
+    run.settle(20)
+    run.capture(4)
+    bar._apply()
+    web.until_quiet(run.app, run.session, "Verschieben")
+    guide_targets.widget_for(run.window, "transform:rotate").click()
+    run.settle(20)
+    run.capture(5)
+    bar._apply()
+    web.until_quiet(run.app, run.session, "Drehen")
+    run.settle(20)
+    run.capture(6)
+
+
+def story_change_a_dimension(run: GuideRun) -> None:
+    """Quader mit benannten Maßen, dann die Breite unter *Parameter* ändern."""
+    from app.ui import guide_targets
+
+    _new_box(run, (60.0, 40.0, 10.0), named=True)
+    naming = guide_targets.widget_for(run.window, "dialog.naming")
+    naming.setChecked(True)  # type: ignore[attr-defined]
+    run.settle(30)
+    run.capture(1)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Quader")
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(20)
+    run.capture(2)
+    width = guide_targets.widget_for(run.window, "parameters.first")
+    width.setValue(80.0)  # type: ignore[attr-defined]
+    web.until_quiet(run.app, run.session, "Parameter")
+    run.settle(20)
+    run.capture(3)
+    run.window.object_tree.select_object(None)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(30)
+    run.capture(4)
+
+
+def story_undo_a_step(run: GuideRun) -> None:
+    """*Rückgängig* im Menü, das Kontextmenü eines Schritts, die Nachfrage beim Löschen."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QMessageBox
+
+    from app.ui import guide_targets
+
+    # Zwei Schritte, der zweite hängt am ersten: Beim Löschen des Quaders
+    # nennt die Nachfrage die Bohrung, die mit ihm verschwände.
+    body = _new_box(run, (60.0, 40.0, 10.0))
+    _face_spot(run, body)
+    guide_targets.widget_for(run.window, "operation:drill_hole").click()
+    run.settle(40)
+    _open_dialog(run, "Bohrung setzen")
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Bohrung")
+    run.window.object_tree.select_object(None)
+    run.settle(20)
+    undo = guide_targets.action_for(run.window, "command:edit.undo")
+    _open_menu(run, undo)
+    run.capture(1)
+    _close_menus(run)
+
+    history = run.window.history_panel
+    item = history.list.item(0)
+    if item is None:
+        raise SystemExit("Der Verlauf ist leer — es gibt keinen Schritt für das Kontextmenü")
+    history.list.setCurrentItem(item)
+    run.settle(10)
+    state: dict[str, Any] = {"error": None}
+
+    def with_menu(rounds: int = 0) -> None:
+        # Das Kontextmenü läuft über ``exec``; aufgenommen wird aus seiner
+        # Schleife heraus, sobald es steht.
+        popup = QApplication.activePopupWidget()
+        if not isinstance(popup, QMenu) or not popup.isVisible():
+            if rounds < 200:
+                QTimer.singleShot(20, lambda: with_menu(rounds + 1))
+            else:
+                state["error"] = "Das Kontextmenü des Verlaufs ging nicht auf"
+            return
+        try:
+            run.capture(2)
+        except BaseException as error:  # nach dem Schließen weiterreichen
+            state["error"] = error
+        popup.close()
+
+    QTimer.singleShot(0, with_menu)
+    history.list.customContextMenuRequested.emit(history.list.visualItemRect(item).center())
+    run.settle(20)
+    if state["error"] is not None:
+        error = state["error"]
+        raise error if isinstance(error, BaseException) else SystemExit(str(error))
+
+    step = item.data(Qt.ItemDataRole.UserRole)
+    web.while_open(
+        QMessageBox,
+        lambda: history.removalRequested.emit((int(step),)),
+        lambda _box: run.capture(3),
+    )
+    run.settle(20)
+
+
+def story_thread_a_hole(run: GuideRun) -> None:
+    """Bohrung wählen, Katalog über das Menü, *Druckbares Gewinde* einsetzen."""
+    from app.core.knowledge.parts import PARTS
+    from app.ui import guide_targets
+    from app.ui.catalog import PartCatalog
+
+    _import(run, PLATE_MODEL)
+    body = web.select_body(run.window, 0)
+    result = run.session.last_result
+    if result is None:
+        raise SystemExit(f"{PLATE_MODEL.name}: keine Auswertung")
+    entry = result.scene.objects[body]
+    hole_id, hole = next(
+        (found, feature) for found, feature in entry.features.items() if feature.kind == "hole"
+    )
+    run.window.object_tree.select_feature(body, hole_id)
+    run.settle(30)
+    # Der Klick trifft die Öffnung oben, nicht die Mitte der Bohrung im Material.
+    centre = tuple(float(value) for value in hole.params["centre"])
+    top = float(entry.mesh.bounds.maximum[2])
+    run.capture(1, points={"viewport": _visible(run, (centre[0], centre[1], top))})
+    catalog = guide_targets.action_for(run.window, "command:file.catalog")
+    _open_menu(run, catalog)
+    run.capture(2)
+    _close_menus(run)
+
+    def in_catalog(opened: Any) -> None:
+        for _round in range(300):
+            if all(spec.name in opened._previews for spec in PARTS.all()):
+                break
+            run.settle(2)
+        else:
+            raise SystemExit("Die Vorschaubilder des Katalogs wurden nicht fertig")
+        tile = next(
+            (
+                item
+                for row in range(opened.list.count())
+                if (item := opened.list.item(row)) is not None
+                and item.data(Qt.ItemDataRole.UserRole) == "printed_thread"
+            ),
+            None,
+        )
+        if tile is None:
+            raise SystemExit("Der Katalog zeigt kein „Druckbares Gewinde“")
+        opened.list.setCurrentItem(tile)
+        run.settle(10)
+        run.capture(3)
+        opened.list.itemDoubleClicked.emit(tile)
+
+    web.while_open(PartCatalog, catalog.trigger, in_catalog)
+    run.settle(40)
+    _open_dialog(run, "Druckbares Gewinde")
+    run.settle(40)
+    run.capture(4)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Gewinde")
+    # Die Bohrung liegt in einer Ecke der Platte; die Kamera geht zu ihr, statt
+    # auf die Mitte zu zoomen, und ein Ring umschließt die Öffnung.
+    run.window.object_tree.select_object(None)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.window.viewport.fly_to((centre[0], centre[1], top), reach=45.0)
+    run.settle(30)
+    radius = float(hole.params["diameter"]) / 2.0 + 1.5
+    rim = [
+        _visible(run, (centre[0] + dx, centre[1] + dy, top))
+        for dx, dy in ((radius, 0.0), (-radius, 0.0), (0.0, radius), (0.0, -radius))
+    ]
+    xs, ys = [point.x() for point in rim], [point.y() for point in rim]
+    run.capture(5, rings={"viewport": QRect(QPoint(min(xs), min(ys)), QPoint(max(xs), max(ys)))})
+
+
+def story_round_edges(run: GuideRun) -> None:
+    """Quader wählen, *Ändern* aufklappen, *Verrunden*, Ergebnis mit *Fase anbringen*."""
+    from app.ui import guide_targets
+
+    body = _new_box(run, (60.0, 40.0, 20.0))
+    run.capture(1, points={"viewport": _click_spot(run, body)})
+    heading = guide_targets.widget_for(run.window, "section:shaping")
+    # Wie beim Kunden, der den Abschnitt noch nie geöffnet hat: zu.
+    if heading.isChecked():  # type: ignore[attr-defined]
+        heading.click()  # type: ignore[attr-defined]
+        run.settle(10)
+    run.capture(2)
+    heading.click()  # type: ignore[attr-defined]
+    run.settle(20)
+    run.capture(3)
+    guide_targets.widget_for(run.window, "operation:fillet_edges").click()
+    run.settle(40)
+    dialog = _open_dialog(run, "Verrunden")
+    dialog._editors["radius"].set_value(5.0)
+    run.settle(60)
+    run.capture(4)
+    run.capture(5)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Verrunden")
+    web.select_body(run.window, 0)
+    run.settle(20)
+    heading = guide_targets.widget_for(run.window, "section:shaping")
+    if not heading.isChecked():  # type: ignore[attr-defined]
+        heading.click()  # type: ignore[attr-defined]
+        run.settle(20)
+    run.capture(6)
+
+
+def story_label_a_part(run: GuideRun) -> None:
+    """Oberseite wählen, *Text aufbringen*, Text und Größe, erhaben aufbringen."""
+    from app.ui import guide_targets
+
+    _import(run, PLATE_MODEL)
+    body = web.select_body(run.window, 0)
+    run.capture(1, points={"viewport": _face_spot(run, body)})
+    run.capture(2)
+    guide_targets.widget_for(run.window, "operation:label_text").click()
+    run.settle(40)
+    dialog = _open_dialog(run, "Text aufbringen")
+    dialog._editors["text"].setText(APP_NAME)
+    dialog._editors["size"].set_value(10.0)
+    run.settle(60)
+    run.capture(3)
+    run.capture(4)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Text")
+    run.window.object_tree.select_object(None)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.window.viewport.zoom(1.6)
+    run.settle(30)
+    run.capture(5)
+
+
+def story_draw_and_pull(run: GuideRun) -> None:
+    """*Zeichnen*, Ebene, Rechteck, *Hochziehen*, Höhe, fertiges Teil."""
+    from app.core.sketch import shapes
+    from app.ui import guide_targets
+
+    _fresh(run)
+    guide_targets.widget_for(run.window, "start.new").click()
+    run.settle(30)
+    run.capture(1)
+    guide_targets.widget_for(run.window, "toolbar.draw").click()
+    run.settle(60)
+    panel = run.window._sketch_panel
+    if panel is None:
+        raise SystemExit("Der Zeichenmodus ging nicht auf")
+    run.capture(2)
+    guide_targets.widget_for(run.window, "sketch:rectangle").click()
+    run.settle(20)
+    run.capture(3)
+    # Gezeichnet wird wie in ``make_figures.frame_sketch``: Das Rechteck mit
+    # seinen Maßen ist dasselbe, das der Kunde mit zwei Zahlen aufzieht.
+    panel.canvas.insert_shape(shapes.rectangle(50.0, 30.0))
+    # Näher heran wie mit dem Mausrad: Auf der ganzen Platte stünde das
+    # Rechteck briefmarkengroß im Bild, und seine Maße wären nicht zu lesen.
+    # Nicht ``fit_view``: Die Ansicht reicht unter den Seitenkarten durch, und
+    # auf das Rechteck selbst eingepasst lief es hinter ihnen aus dem Bild.
+    # Die Kamera hört auf dasselbe Signal wie beim Einpassen.
+    panel.canvas.viewFitted.emit(0.0, 0.0, 175.0, 105.0)
+    run.settle(40)
+    run.capture(4)
+    run.capture(5)
+    guide_targets.widget_for(run.window, "sketch.pull").click()
+    run.settle(60)
+    dialog = _open_dialog(run, "Grundform hochziehen")
+    dialog._editors["height"].set_value(10.0)
+    run.settle(60)
+    run.capture(6)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Hochziehen")
+    run.window.object_tree.select_object(None)
+    run.window.right.setCurrentWidget(run.window.report)
+    run.window.viewport.view_from("iso")
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(40)
+    run.capture(7)
+
+
+def story_two_colours(run: GuideRun) -> None:
+    """Körper weiß, Oberseite rot: *Filament auf eine Fläche* mit einer zweiten Spule."""
+    from app.core.knowledge import filaments
+    from app.core.scene import OperationDraft
+    from app.i18n import get_language
+    from app.ui import guide_targets
+
+    names = SPOOLS.get(get_language(), SPOOLS["en"])
+    for name, colour in zip(names, SPOOL_COLOURS, strict=True):
+        filaments.save(filaments.CatalogueFilament(name=name, colour=colour, material_type="PLA"))
+    _import(run, PLATE_MODEL)
+    body = web.select_body(run.window, 0)
+    # Der Körper hat schon sein Filament, wie beim Kunden, der gedruckt hat;
+    # die Fläche bekommt das zweite.
+    run.session.apply(
+        names[0],
+        [
+            OperationDraft(
+                op="assign_slot",
+                inputs=(body,),
+                params={
+                    "slot": 1,
+                    "name": names[0],
+                    "colour": SPOOL_COLOURS[0],
+                    "material_type": "PLA",
+                },
+            )
+        ],
+        raise_on_error=True,
+    )
+    web.until_quiet(run.app, run.session, "Filament")
+    body = web.select_body(run.window, 0)
+    run.capture(1, points={"viewport": _face_spot(run, body)})
+    run.capture(2)
+    guide_targets.widget_for(run.window, "operation:paint_slot").click()
+    run.settle(40)
+    dialog = _open_dialog(run, "Filament auf eine Fläche")
+    slot = dialog._editors["slot"]
+    index = next((row for row in range(slot.count()) if names[1] in str(slot.itemText(row))), -1)
+    if index < 0:
+        raise SystemExit(f"Das Filamentfeld bietet „{names[1]}“ nicht an")
+    slot.setCurrentIndex(index)
+    # Wie der Klick in die Liste: Erst ``activated`` übernimmt Name und Farbe
+    # der Spule (``FilamentField._chosen``). Ohne das Signal bekam die Fläche
+    # einen Slot ohne Farbe, und das Ergebnisbild zeigte eine graue Platte.
+    slot.activated.emit(index)
+    run.settle(60)
+    run.capture(3)
+    run.capture(4)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Filament")
+    run.window.object_tree.select_object(None)
+    run.window.right.setCurrentWidget(run.window.report)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(30)
+    run.capture(5)
+
+
+def story_repair_a_model(run: GuideRun) -> None:
+    """Was beim Einlesen repariert wurde, *Stelle zeigen*, dann *Überschneidungen auflösen*."""
+    from app.ui import guide_targets
+
+    _import(run, OPEN_MODEL)
+    report = run.window.report
+    run.window.right.setCurrentWidget(report)
+    run.settle(10)
+    run.capture(1)
+    report.list.setCurrentRow(0)
+    run.settle(10)
+    run.capture(2)
+    guide_targets.widget_for(run.window, "report.action").click()
+    run.settle(60)
+    run.capture(3)
+    _import(run, CROSSING_MODEL)
+    run.window.right.setCurrentWidget(report)
+    report.list.setCurrentRow(_finding_row(report, "ingest.multiple_components"))
+    run.settle(10)
+    run.capture(4)
+    guide_targets.widget_for(run.window, "report.action").click()
+    web.until_quiet(run.app, run.session, "Reparieren")
+    run.window.right.setCurrentWidget(report)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(30)
+    run.capture(5)
+
+
 #: Je Anleitung ihre Geschichte. ``tests/test_guides.py`` verlangt für jede
 #: Anleitung im Kern genau eine.
 STORIES: Final[dict[str, Callable[[GuideRun], None]]] = {
@@ -903,6 +1475,16 @@ STORIES: Final[dict[str, Callable[[GuideRun], None]]] = {
     "drill-a-hole": story_drill_a_hole,
     "first-part": story_first_part,
     "housing-with-lid": story_housing_with_lid,
+    "split-a-large-part": story_split_a_large_part,
+    "move-and-turn": story_move_and_turn,
+    "change-a-dimension": story_change_a_dimension,
+    "undo-a-step": story_undo_a_step,
+    "thread-a-hole": story_thread_a_hole,
+    "round-edges": story_round_edges,
+    "label-a-part": story_label_a_part,
+    "draw-and-pull": story_draw_and_pull,
+    "two-colours": story_two_colours,
+    "repair-a-model": story_repair_a_model,
 }
 
 
@@ -934,11 +1516,18 @@ def _stay_on_top(window: Any) -> None:
     maximierte Claude-Fenster. Windows holt ein Programm aus dem Hintergrund
     nicht nach vorn: ``raise_`` und ``activateWindow`` blieben wirkungslos, und
     ``wait_until_uncovered`` brach nach 300 s ab. Die oberste Ebene
-    (``HWND_TOPMOST``) gilt ohne Fokuswechsel; Dialoge und Menüs gehören dem
-    Fenster und stehen deshalb darüber. Über Win32 und nicht über
+    (``HWND_TOPMOST``) gilt ohne Fokuswechsel. Über Win32 und nicht über
     ``WindowStaysOnTopHint``: Der Schalter baut das native Fenster neu und mit
     ihm die Fläche, in die der Renderer zeichnet. Ein fremdes Fenster, das
     selbst oben liegt, meldet ``foreign_window_over`` weiterhin.
+
+    **Die eigenen Menüs kommen danach wieder darüber.** Ein Dialog gehört dem
+    Fenster und bleibt über ihm; ein aufgeklapptes Menü oder eine Liste ist
+    ein eigenes Fenster ohne Besitzer. Seit das Fenster vor jedem Bild neu
+    angehoben wird, lag jedes offene Menü darunter, und die Bilder zeigten den
+    Rahmen um einen Eintrag, den man nicht sah (27.09.2026, *Erzeugen →
+    Grundformen*, *Datei → Bausteinkatalog …*, das Kontextmenü im Verlauf).
+    Untermenüs kommen nach ihrem Menü, damit sie oben liegen.
     """
     if sys.platform != "win32":
         return
@@ -960,6 +1549,25 @@ def _stay_on_top(window: Any) -> None:
     keep = 0x0001 | 0x0002 | 0x0010  # SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE
     if not user32.SetWindowPos(int(window.winId()), topmost, 0, 0, 0, 0, keep):
         print("  … das Aufnahmefenster ließ sich nicht nach oben legen", flush=True)
+    popups = [
+        widget
+        for widget in QApplication.topLevelWidgets()
+        if widget is not window
+        and widget.isVisible()
+        and widget.windowType() == Qt.WindowType.Popup
+    ]
+    for popup in sorted(popups, key=_depth):
+        user32.SetWindowPos(int(popup.winId()), topmost, 0, 0, 0, 0, keep)
+
+
+def _depth(widget: Any) -> int:
+    """Wie tief ein Fenster unter anderen hängt — ein Untermenü tiefer als sein Menü."""
+    depth = 0
+    parent = widget.parentWidget()
+    while parent is not None:
+        depth += 1
+        parent = parent.parentWidget()
+    return depth
 
 
 def _child(language: str, keys: list[str], target: Path) -> int:
