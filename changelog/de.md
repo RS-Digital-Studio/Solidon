@@ -126,8 +126,17 @@ Nutzen da und sonst nichts.
 - Ohne *Vorschläge übernehmen* bekommt kein Teil mehr ungefragt einen Brim, weder beim Export noch bei der Übergabe an den Slicer.
 - Projekte aus 0.5.0 drucken mit dem Tempo Ihres Druckers. Was Sie darin selbst eingestellt hatten, bleibt erhalten.
 - Das Tempo der ersten Schicht gilt jetzt auch für ihre Füllung. Vorher legte der Slicer den Boden mit dem Tempo des Herstellers, am Centauri Carbon 2 mit 105 mm/s.
+- Die erste Schicht druckt jetzt so breite Bahnen wie das Profil Ihres Druckers, an der 0,4er Düse meist 0,5 mm. Mit Cura fährt der Kopf dazwischen nicht mehr im Schritttempo.
+- Mit Cura beginnt der Druck jetzt mit dem Startcode Ihres Druckers, wie beim Hersteller. Kennt Cura den Drucker nicht, sagt Solidon es Ihnen.
+- Mit Cura fährt die erste Schicht jetzt mit der Beschleunigung aus dem Profil des Herstellers statt mit der vollen Druckbeschleunigung.
+- Stützen aus Cura entstehen jetzt nach dem Muster der Werksprofile: zusammenhängend, mit lockerer Decke und gemäßigtem Tempo.
+- Mit Cura fahren überhängende Wände jetzt langsamer, wie beim Hersteller. Drucke mit vielen Überhängen dauern dadurch bis zu rund 20 Prozent länger.
+- Mit Cura druckt die Füllung jetzt nach den Wänden, und Leerfahrten meiden Stützen und ziehen auf langen Wegen das Filament zurück.
+- Das Profil für das Cura-Fenster passt jetzt zu dem Drucker, der in Cura eingerichtet ist. Bisher lehnte Cura es bei manchen Druckern ab oder zeigte es nicht an.
+- Den Volumenstrom bietet der Druckdialog für Cura nicht mehr als Einstellung an, denn Cura liest ihn nicht.
+- Neu sind der Creality Ender-3 V3 SE und der V3 KE. Bisher bekam ein SE die Werte des viel schnelleren Ender-3 V3.
 - Eine Decke über einem Wasserkanal oder Tunnel holt keine Stützen mehr aufs Modell. Braucht sonst keine Stelle Stützen auf dem Modell, schlägt Solidon sie nur vom Bett vor.
-- Neu ist der Vorschlag *Kanäle frei halten*: Übernommen legt die Übergabe an PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print eine Stützsperre in die Kanäle.
+- Neu ist der Vorschlag *Kanäle frei halten*: Übernommen sperrt die Übergabe die Stützen in den Kanälen, in jedem unterstützten Slicer, bei Cura beim Slicen aus Solidon.
 - Gitterstützen kommen als echtes Gitter beim Slicer an, mit wechselnder Richtung je Schicht, statt als lose Linien, die sich im Druck verschieben.
 - Steht ein Teil auf vielen kleinen Füßen, schlägt Solidon einen Brim vor, auch wenn die Füße zusammen genug Fläche hätten.
 - Ein schmaler schräger Streifen an der Außenwand gilt im Prüfbericht nicht mehr als weit gespannte Brücke.

@@ -102,8 +102,17 @@ dans `website/version.json`.
 - Sans « Appliquer les suggestions », aucune pièce ne reçoit plus de brim sans le demander, ni à l'export ni lors de la transmission au slicer.
 - Les projets de 0.5.0 impriment à la vitesse de votre imprimante. Ce que vous y aviez réglé vous-même est conservé.
 - La vitesse de la première couche vaut désormais aussi pour son remplissage. Avant, le slicer posait le fond à la vitesse du fabricant, 105 mm/s sur la Centauri Carbon 2.
+- La première couche imprime désormais des lignes aussi larges que le profil de votre imprimante, souvent 0,5 mm avec une buse de 0,4. Avec Cura, la tête ne se traîne plus entre elles.
+- Avec Cura, l'impression commence désormais par le code de démarrage de votre imprimante, comme chez le fabricant. Si Cura ne connaît pas l'imprimante, Solidon vous le dit.
+- Avec Cura, la première couche utilise désormais l'accélération du profil du fabricant au lieu de l'accélération d'impression complète.
+- Les supports de Cura suivent désormais le modèle des profils d'usine : reliés, avec un toit léger et une vitesse modérée.
+- Avec Cura, les parois en surplomb s'impriment désormais plus lentement, comme chez le fabricant. Les impressions avec beaucoup de surplombs durent jusqu'à 20 % de plus.
+- Avec Cura, le remplissage s'imprime désormais après les parois, et les déplacements évitent les supports et rétractent le filament sur les longs trajets.
+- Le profil pour la fenêtre de Cura correspond désormais à l'imprimante configurée dans Cura. Avant, Cura le refusait pour certaines imprimantes ou ne l'affichait pas.
+- Les réglages d'impression ne proposent plus le débit volumique pour Cura, car Cura ne le lit pas.
+- Nouvelles : les Creality Ender-3 V3 SE et V3 KE. Jusqu'ici, une SE recevait les valeurs de l'Ender-3 V3, bien plus rapide.
 - Un plafond au-dessus d'un canal d'eau ou d'un tunnel n'attire plus de supports sur le modèle. Si rien d'autre n'en a besoin sur le modèle, Solidon les propose depuis le plateau uniquement.
-- Nouvelle suggestion « Garder les canaux libres » : appliquée, elle pose un bloqueur de supports dans les canaux pour PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print.
+- Nouvelle suggestion « Garder les canaux libres » : appliquée, la transmission bloque les supports dans les canaux de chaque slicer pris en charge, pour Cura en tranchant depuis Solidon.
 - Les supports en grille arrivent au slicer comme une vraie grille, dont la direction change à chaque couche, au lieu de lignes libres qui se décalent à l'impression.
 - Quand une pièce repose sur beaucoup de petits pieds, Solidon propose un brim, même si les pieds réunis auraient assez de surface.
 - Une bande étroite et oblique le long de la paroi extérieure ne compte plus dans le rapport comme un long pont.

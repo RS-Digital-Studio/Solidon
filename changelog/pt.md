@@ -101,8 +101,17 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Sem «Aplicar as sugestões», nenhuma peça recebe mais um brim sem pedir, nem na exportação nem na entrega ao slicer.
 - Os projetos da 0.5.0 imprimem com a velocidade da sua impressora. O que tinha definido neles mantém-se.
 - A velocidade da primeira camada vale agora também para o seu enchimento. Antes, o slicer fazia o fundo à velocidade do fabricante, 105 mm/s na Centauri Carbon 2.
+- A primeira camada imprime agora linhas tão largas como o perfil da sua impressora, normalmente 0,5 mm com bico de 0,4. Com o Cura, a cabeça já não anda a passo de caracol entre elas.
+- Com o Cura, a impressão começa agora com o código de início da sua impressora, como no fabricante. Se o Cura não conhece a impressora, o Solidon avisa.
+- Com o Cura, a primeira camada usa agora a aceleração do perfil do fabricante em vez da aceleração de impressão total.
+- Os suportes do Cura seguem agora o padrão dos perfis de fábrica: ligados, com um teto leve e velocidade moderada.
+- Com o Cura, as paredes em saliência imprimem agora mais devagar, como no fabricante. Impressões com muitas saliências demoram até cerca de 20 % mais.
+- Com o Cura, o enchimento imprime agora depois das paredes, e as deslocações evitam os suportes e recolhem o filamento em percursos longos.
+- O perfil para a janela do Cura corresponde agora à impressora configurada no Cura. Antes, o Cura rejeitava-o em algumas impressoras ou não o mostrava.
+- As definições de impressão já não oferecem o caudal volumétrico para o Cura, porque o Cura não o lê.
+- Novas: as Creality Ender-3 V3 SE e V3 KE. Até agora, uma SE recebia os valores da muito mais rápida Ender-3 V3.
 - Um teto sobre um canal de água ou um túnel já não atrai suportes para o modelo. Se mais nada precisar deles sobre o modelo, o Solidon propõe-nos só a partir da mesa.
-- Nova sugestão «Manter os canais livres»: aplicada, coloca um bloqueador de suportes nos canais para PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
+- Nova sugestão «Manter os canais livres»: aplicada, a entrega bloqueia os suportes nos canais em cada slicer suportado, no Cura ao fatiar a partir do Solidon.
 - Os suportes em grelha chegam ao slicer como grelha verdadeira, com a direção a mudar em cada camada, em vez de linhas soltas que se deslocam na impressão.
 - Quando uma peça assenta em muitos pés pequenos, o Solidon propõe um brim, mesmo que os pés juntos tenham área suficiente.
 - Uma faixa estreita e inclinada junto à parede exterior já não conta no relatório como uma ponte longa.

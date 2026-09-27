@@ -102,8 +102,17 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Sin «Aplicar las sugerencias», ninguna pieza recibe ya un brim sin preguntar, ni al exportar ni al entregarla al slicer.
 - Los proyectos de 0.5.0 imprimen con la velocidad de su impresora. Lo que usted había ajustado en ellos se conserva.
 - La velocidad de la primera capa vale ahora también para su relleno. Antes el slicer hacía el fondo a la velocidad del fabricante, 105 mm/s en la Centauri Carbon 2.
+- La primera capa imprime ahora líneas tan anchas como el perfil de su impresora, normalmente 0,5 mm con boquilla de 0,4. Con Cura, el cabezal ya no va a paso de tortuga entre ellas.
+- Con Cura, la impresión empieza ahora con el código de inicio de su impresora, como en el fabricante. Si Cura no conoce la impresora, Solidon se lo indica.
+- Con Cura, la primera capa usa ahora la aceleración del perfil del fabricante en lugar de la aceleración de impresión completa.
+- Los soportes de Cura siguen ahora el patrón de los perfiles de fábrica: unidos, con un techo ligero y velocidad moderada.
+- Con Cura, las paredes en voladizo se imprimen ahora más despacio, como en el fabricante. Las impresiones con muchos voladizos tardan hasta un 20 % más.
+- Con Cura, el relleno se imprime ahora después de las paredes, y los desplazamientos evitan los soportes y retraen el filamento en trayectos largos.
+- El perfil para la ventana de Cura corresponde ahora a la impresora configurada en Cura. Antes Cura lo rechazaba con algunas impresoras o no lo mostraba.
+- Los ajustes de impresión ya no ofrecen el caudal volumétrico para Cura, porque Cura no lo lee.
+- Nuevas: las Creality Ender-3 V3 SE y V3 KE. Hasta ahora una SE recibía los valores de la mucho más rápida Ender-3 V3.
 - Un techo sobre un canal de agua o un túnel ya no atrae soportes sobre el modelo. Si nada más los necesita sobre el modelo, Solidon los propone solo desde la cama.
-- Nueva sugerencia «Mantener libres los canales»: aplicada, coloca un bloqueador de soportes en los canales para PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer y Creality Print.
+- Nueva sugerencia «Mantener libres los canales»: aplicada, la entrega bloquea los soportes en los canales en cada slicer compatible, en Cura al laminar desde Solidon.
 - Los soportes de rejilla llegan al slicer como rejilla de verdad, con la dirección cambiando en cada capa, en lugar de líneas sueltas que se desplazan al imprimir.
 - Si una pieza se apoya en muchos pies pequeños, Solidon propone un brim, aunque los pies juntos tengan superficie suficiente.
 - Una franja estrecha e inclinada junto a la pared exterior ya no cuenta en el informe como un puente largo.
