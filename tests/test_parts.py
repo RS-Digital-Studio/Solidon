@@ -5816,7 +5816,7 @@ def test_the_three_geometry_fixes_are_reported_to_older_projects() -> None:
 
 #: Was ein Messschieber an einer echten SKÅDIS-Platte hergibt.
 #:
-#: Erste Messung am 27.08.2026 (Alexander Schneider): Schlitzbreite 4,9 bis
+#: Erste Messung am 27.08.2026 (ein Kunde): Schlitzbreite 4,9 bis
 #: 5,1 mm, Schlitzhöhe 14,9 bis 15,1 mm. Die **Nennmaße** der Tabelle sind
 #: damit bestätigt — neu ist die Toleranz, die keine Zeichnung hergibt.
 #:
