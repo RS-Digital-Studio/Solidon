@@ -621,14 +621,53 @@ def test_inner_floor_sketch_grows_into_the_cavity(review_run) -> None:
 
 
 def test_drawn_free_dof_reaches_the_operation_report(review_run) -> None:
-    """Freie Maße bleiben nach dem Schließen des Editors als Befund sichtbar."""
+    """Freie Maße bleiben nach dem Schließen des Editors als Befund sichtbar —
+    an einer Zeichnung, die **bemaßt** ist und trotzdem noch wandern kann."""
     run = review_run
 
     load_operations()
-    sketch = Sketch(plane="plane:xy", elements=(SketchElement("circle", ((0.0, 0.0), (2.0, 0.0))),))
+    circle = SketchElement("circle", ((0.0, 0.0), (2.0, 0.0)))
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(circle,),
+        constraints=(SketchConstraint("diameter", (0, 1), "4"),),
+    )
     result = run("sketch_extrude", sketch=sketch_to_text(sketch), height=3.0)
     finding = next(f for f in result.findings if f.code == "sketch.underconstrained")
-    assert finding.values["free_dof"] == solver.solve_sketch(sketch).free_dof
+    assert finding.values["free_dof"] == solver.solve_sketch(sketch).free_dof > 0
+
+
+def test_a_freehand_drawing_without_any_measure_is_no_finding(review_run) -> None:
+    """KUNDE-08, entschieden in der Durchsicht v0.5.1 (rest-kunde): Ein frei
+    gezogenes Rechteck ohne ein einziges Maß bekommt keinen Hinweis.
+
+    Wer kein Maß anlegt, zeichnet frei und druckt, was er sieht — genau das,
+    was der Satz verspricht. Als Zeile im Prüfbericht las er sich nach jeder
+    freien Zeichnung wie ein Mangel, ohne Handlung. Wer bemaßt hat, will eine
+    bestimmte Form; ihm sagt der Hinweis, dass noch etwas wandern kann (Test
+    darüber). Der Skizzeneditor zeigt die offenen Maße weiter beim Zeichnen.
+    """
+    run = review_run
+
+    load_operations()
+    drawn = rectangle(6.0, 4.0)
+    # Wie mit dem Rechteckwerkzeug gezogen: Ecken und Richtungen hängen
+    # zusammen, eine Zahl steht nirgends.
+    unmeasured = replace(
+        drawn,
+        constraints=tuple(
+            entry
+            for entry in drawn.constraints
+            if entry.kind not in {"distance", "radius", "diameter", "angle"}
+        ),
+    )
+    for sketch in (
+        Sketch(plane="plane:xy", elements=(SketchElement("circle", ((0.0, 0.0), (2.0, 0.0))),)),
+        unmeasured,
+    ):
+        assert solver.solve_sketch(sketch).free_dof > 0, "sonst prüft der Test nichts"
+        result = run("sketch_extrude", sketch=sketch_to_text(sketch), height=3.0)
+        assert "sketch.underconstrained" not in {f.code for f in result.findings}
 
 
 def test_g05_mesh_pocket_on_an_offset_face() -> None:

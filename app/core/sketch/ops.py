@@ -176,11 +176,28 @@ def _parameter_values(ctx: OpContext) -> dict[str, float]:
     return {name: entry.value for name, entry in ctx.scene.parameters.items()}
 
 
+#: Bedingungen, die ein **Maß** tragen — Länge, Radius, Durchmesser, Winkel.
+#: Deckung, Richtung und Gleichheit sind Beziehungen und keine Maße.
+_MEASURE_KINDS = frozenset({"distance", "radius", "diameter", "angle"})
+
+
 def _solved_drawing(ctx: OpContext, sketch_text: str, findings: list[Finding]) -> SolvedSketch:
-    """Löst eine Zeichnung einmal und nimmt ihre freien Maße in den Bericht mit."""
+    """Löst eine Zeichnung einmal und nimmt ihre freien Maße in den Bericht mit.
+
+    **Nur an einer bemaßten Zeichnung** (KUNDE-08, entschieden in der
+    Durchsicht v0.5.1): Wer kein einziges Maß angelegt hat, zeichnet frei und
+    druckt, was er sieht — genau das, was der Satz verspricht. Nach jeder
+    freien Zeichnung stand er sonst im Prüfbericht und las sich wie ein
+    Mangel. Wer bemaßt hat, will eine bestimmte Form; ihm sagt er, dass noch
+    etwas wandern kann. Der Skizzeneditor zeigt die offenen Maße ohnehin.
+    """
     values = _parameter_values(ctx)
-    solved = solve_sketch(sketch_from_text(sketch_text), values)
-    if solved.free_dof > 0:
+    sketch = sketch_from_text(sketch_text)
+    solved = solve_sketch(sketch, values)
+    measured = any(
+        entry.kind in _MEASURE_KINDS and str(entry.value).strip() for entry in sketch.constraints
+    )
+    if solved.free_dof > 0 and measured:
         findings.append(
             Finding(
                 code="sketch.underconstrained",
