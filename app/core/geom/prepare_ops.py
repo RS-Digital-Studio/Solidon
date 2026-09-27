@@ -5743,15 +5743,41 @@ def _share_in_material(
 ) -> float:
     """Welcher Anteil der Proben knapp vor dem Rand im Material liegt — die Probe
     von :func:`_mouth_is_open`, gezählt statt nur gefragt."""
+    return _shares_in_material(mesh, [(edge, normal)])[0]
+
+
+def _shares_in_material(
+    mesh: MeshData, rims: Sequence[tuple[NDArray[np.float64], NDArray[np.float64]]]
+) -> list[float]:
+    """:func:`_share_in_material` für viele Ränder in **einer** Abfrage.
+
+    Jede Frage an ``on_surface`` baut die Suchbäume seiner Größenbänder neu;
+    am Gartenschlauchhalter (392 532 Dreiecke) kostete das 68 ms je Rand, und
+    :func:`_past_the_mouths` fragte an einem Hohlraum aus seinen Flächen
+    614 ebene Stücke einzeln — 41 s für ein Werkzeug (Durchsicht 0.5.1).
+    Zusammen gefragt ist es eine Abfrage; jeder Punkt findet dieselbe nächste
+    Stelle wie allein.
+    """
     from app.core.geom.mesh import on_surface
 
-    inward = edge.mean(axis=0) - edge
-    inward /= np.maximum(np.linalg.norm(inward, axis=1), EPS_GEOM)[:, None]
-    probes = edge + inward * FEATURE_OVERLAP + normal * FEATURE_OVERLAP
-    closest, _, at = on_surface(mesh.raw, probes, index=surface_index_of(mesh))
+    if not rims:
+        return []
+    probes: list[NDArray[np.float64]] = []
+    for edge, normal in rims:
+        inward = edge.mean(axis=0) - edge
+        inward /= np.maximum(np.linalg.norm(inward, axis=1), EPS_GEOM)[:, None]
+        probes.append(edge + inward * FEATURE_OVERLAP + normal * FEATURE_OVERLAP)
+    every = np.vstack(probes)
+    closest, _, at = on_surface(mesh.raw, every, index=surface_index_of(mesh))
     body_normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
-    signed = np.einsum("ij,ij->i", probes - closest, body_normals[at])
-    return float(np.count_nonzero(signed <= EPS_GEOM)) / float(max(len(signed), 1))
+    signed = np.einsum("ij,ij->i", every - closest, body_normals[at])
+    shares: list[float] = []
+    start = 0
+    for part in probes:
+        own = signed[start : start + len(part)]
+        start += len(part)
+        shares.append(float(np.count_nonzero(own <= EPS_GEOM)) / float(max(len(own), 1)))
+    return shares
 
 
 def _past_the_mouths(
@@ -5796,6 +5822,7 @@ def _past_the_mouths(
     added: list[NDArray[np.float64]] = [points]
     collars: list[NDArray[np.int64]] = []
     next_index = len(points)
+    candidates = []
     for facet in raw.facets:
         # Wandstreifen sind Paare von Dreiecken; ein Deckel ist ein Fächer.
         if len(facet) < 3:
@@ -5810,9 +5837,15 @@ def _past_the_mouths(
         rim = directed[counts[inverse.ravel()] == 1]
         if len(rim) < 3:
             continue
-        # Die Probe: je Randpunkt ein wenig zur Mitte und um die Zugabe vor den
-        # Deckel — erst wenn dort überall Luft ist, ist der Deckel eine Mündung.
-        if not _mouth_is_open(mesh, points[rim[:, 0]], normal):
+        candidates.append((facet, cap, normal, members, rim))
+    # Die Probe: je Randpunkt ein wenig zur Mitte und um die Zugabe vor den
+    # Deckel — erst wenn dort überall Luft ist, ist der Deckel eine Mündung.
+    # Alle Deckel in einer Abfrage (:func:`_shares_in_material`).
+    shares = _shares_in_material(
+        mesh, [(points[rim[:, 0]], normal) for _facet, _cap, normal, _members, rim in candidates]
+    )
+    for (facet, cap, normal, members, rim), share in zip(candidates, shares, strict=True):
+        if share > 0.0:
             continue
         lifted = np.full(int(members.max()) + 1, -1, dtype=np.int64)
         lifted[members] = np.arange(next_index, next_index + len(members))
