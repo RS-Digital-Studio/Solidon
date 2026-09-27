@@ -2254,6 +2254,34 @@ def _orca_machine(setup: SlicerSetup) -> dict[str, object]:
     return document
 
 
+#: Schlüssel, die ein Solidon-Feld nur mitbedient, weil Solidon sie nicht eigens
+#: führt: die Lückenfüllung mit der Innenwand, die innere Vollfüllung mit der
+#: Füllung (``slicer_keys``). Solidons eigener Satz braucht für sie einen Wert;
+#: über einem Herstellerprozess hat der Hersteller sie eigens abgestimmt.
+_ORCA_FOLLOWERS: Final = frozenset({"gap_infill_speed", "internal_solid_infill_speed"})
+
+
+def _followers_not_faster(
+    base: Mapping[str, object], deviating: Mapping[str, str]
+) -> dict[str, str]:
+    """Eine Abweichung macht einen mitbedienten Schlüssel nie schneller als beim Hersteller.
+
+    Gemessen am 27.09.2026 an Anycubics Kobra 2 in OrcaSlicer: Der Vorschlag
+    „Innenwand 142 mm/s“ hob die Lückenfüllung des Herstellers von 100 auf
+    142 mm/s, weil ``speed.inner_wall`` beide Schlüssel schreibt. Langsamer
+    darf sie werden, denn wer die Innenwand bremst, meint die Lückenfüllung
+    mit. Schneller nicht: Das wäre eine Abweichung, die niemand gewählt hat.
+    Ein Herstellerwert, der keine Zahl ist, bleibt, wie er ist.
+    """
+    kept = dict(deviating)
+    for key in _ORCA_FOLLOWERS & kept.keys():
+        vendor = _as_float(_printed(base.get(key, "")))
+        own = _as_float(kept[key])
+        if vendor is None or own is None or own > vendor:
+            del kept[key]
+    return kept
+
+
 def _orca_process(
     values: dict[str, str],
     settings: PrintSettings,
@@ -2300,7 +2328,9 @@ def _orca_process(
         # Solidon damit hing.
         document.update(slicer_profiles.resolve_values(base, roots=_profile_roots(setup)))
     # Auf dem Herstellerprozess nur die Abweichung, ohne ihn alles (Entscheidung D).
-    document.update(values if base is None or deviating is None else deviating)
+    document.update(
+        values if base is None or deviating is None else _followers_not_faster(document, deviating)
+    )
     # **Die Druckplatte, ausdrücklich** (Entscheidung F). Ohne sie nimmt die
     # Konsole „Cool Plate" — gemessen am ElegooSlicer mit 35 °C Bett für PLA,
     # während das Fenster am Centauri Carbon 2 die texturierte PEI-Platte wählt.

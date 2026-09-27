@@ -472,6 +472,37 @@ def test_the_handover_writes_the_choice_and_the_accepted_suggestion(
     assert filament["hot_plate_temp"] == ["55"], "die übrigen Platten bleiben beim Hersteller"
 
 
+def test_a_field_that_serves_two_keys_never_speeds_up_the_second(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gemessen am 27.09.2026 an Anycubics Kobra 2 in OrcaSlicer: Der Vorschlag
+    „Innenwand 142 mm/s“ hob die Lückenfüllung des Herstellers von 100 auf
+    142 mm/s, weil Solidons Feld beide Schlüssel schreibt. Langsamer darf der
+    mitbediente Schlüssel werden, schneller als beim Hersteller nicht."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    vendor = bestand.parent / "resources" / "profiles" / "Elegoo" / "process" / "ECC2"
+    document = json.loads((vendor / "standard.json").read_text(encoding="utf-8"))
+    document.update(
+        {
+            "inner_wall_speed": "150",
+            "gap_infill_speed": "100",
+            "sparse_infill_speed": "270",
+            "internal_solid_infill_speed": ["250", "300"],
+        }
+    )
+    _write(vendor / "standard.json", document)
+    settings = print_settings.resolve(_cc2())
+    settings = print_settings.with_accepted(settings, "speed.inner_wall", 142.0)
+    settings = print_settings.with_choice(settings, "speed.infill", 200.0)
+
+    process, _filament = _written(tmp_path, settings, _setup(bestand))
+
+    assert process["inner_wall_speed"] == "142"
+    assert process["gap_infill_speed"] == "100", "nicht schneller als beim Hersteller"
+    assert process["sparse_infill_speed"] == "200"
+    assert process["internal_solid_infill_speed"] == "200", "langsamer darf er werden"
+
+
 def test_the_check_holds_what_the_slicer_prints(
     bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
