@@ -916,17 +916,17 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
             # Den Volumenstrom liest CuraEngine nicht; er wirkt nur über die
             # Tempi, die Solidon danach deckelt.
             "filament.max_flow",
-            # CuraEngine bekommt ein STL, und darin reist keine Stützsperre.
-            "support.block_channels",
         }
     ),
     "other": frozenset(),
 }
 
-#: Einstellungen, die nicht als Wert reisen, sondern als **Geometrie** in der
-#: 3MF-Baugruppe (``writer.write_assembly``) — die Messung über ``values_for``
-#: sieht sie deshalb nicht. ``support.block_channels`` wird die Stützsperre,
-#: ein ``SupportBlocker``-Bereich, den PrusaSlicer und die Orca-Familie lesen.
+#: Einstellungen, die nicht als Wert reisen, sondern als **Geometrie**
+#: (``writer.write_assembly``) — die Messung über ``values_for`` sieht sie
+#: deshalb nicht. ``support.block_channels`` wird die Stützsperre: in der
+#: 3MF-Baugruppe für PrusaSlicer und die Orca-Familie (:func:`helpers_as_parts`),
+#: für CuraEngine als eigenes Netz mit ``anti_overhang_mesh``
+#: (:func:`takes_mesh_settings`).
 AS_GEOMETRY: Final[frozenset[str]] = frozenset({"support.block_channels"})
 
 
@@ -1182,6 +1182,19 @@ def helpers_as_parts(flavour: SlicerFlavour) -> bool:
     bitgleich, PrusaSlicer auf 0,1 %).
     """
     return flavour == "orca"
+
+
+def takes_mesh_settings(flavour: SlicerFlavour) -> bool:
+    """Bekommt dieser Slicer jedes Teil als eigenes Netz, mit Werten nur für dieses Netz?
+
+    Nur CuraEngine: Ein ``-s`` nach ``-l`` gilt dem zuletzt geladenen Netz
+    (``CommandLine.cpp``). So reist die Stützsperre als eigenes Netz mit
+    ``anti_overhang_mesh`` — gemessen im Prüfbericht Cura (Abschnitt 1.5): 18 476
+    Stützbewegungen wurden 0, die Modellbahn blieb gleich —, und Stufe E des
+    Konzepts setzt dort ``support_enable`` je Teil. Die Orca-Familie und
+    PrusaSlicer tragen dasselbe in ihrer 3MF-Beilage (:func:`helpers_as_parts`).
+    """
+    return flavour == "cura"
 
 
 def knows_plates(flavour: SlicerFlavour) -> bool:

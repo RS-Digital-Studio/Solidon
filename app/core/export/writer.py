@@ -40,6 +40,7 @@ from app.core.export.slicer_keys import (
     helpers_as_parts,
     needs_bed_translation,
     reads_assembly_file,
+    takes_mesh_settings,
 )
 from app.core.geom import transform
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
@@ -1321,6 +1322,8 @@ def write_assembly(
             directory / (given_name(project_name, "projekt") + ".stl"),
             _cura_assembly([exported[entry.id] for entry in chosen], bed),
         )
+        if takes_mesh_settings(flavour):
+            findings += _cura_meshes(chosen, exported, target, settings, profile, bed, cancelled)
         _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
         return target, findings
 
@@ -1469,6 +1472,71 @@ def _plate_config(
 
     effective = handover.settings_for_handover(settings, profile, flavour, slots, setup)
     return handover.values_for(effective, profile, flavour)
+
+
+def _cura_meshes(
+    chosen: Sequence[SceneObject],
+    exported: dict[str, MeshData],
+    target: Path,
+    settings: PrintSettings | None,
+    profile: Profile,
+    bed: tuple[float, float] | None,
+    cancelled: CancelToken | None,
+) -> list[Finding]:
+    """Für CuraEngine je Teil ein Netz und jede Stützsperre als eigenes (§29).
+
+    Bis zum 27.09.2026 bekam Cura alle Teile als ein STL, und die Sperre fiel
+    dabei weg (``NOT_TAKEN_BY``). Als eigenes Netz mit ``anti_overhang_mesh``
+    wirkt sie — gemessen im Prüfbericht Cura (Abschnitt 1.5): 18 476 Stützbewegungen
+    wurden 0, die Modellbahn blieb gleich. Das zusammengelegte STL bleibt die
+    Datei, die Curas Fenster öffnet; die Netze und ihre Liste
+    (``handover.write_cura_meshes``) liest nur die Kommandozeile.
+
+    Die Sperre gilt nur dem Slicen: Im Fenster setzt der Kunde sie selbst,
+    und der Befund sagt es ihm.
+    """
+    from app.core.export import handover
+
+    findings: list[Finding] = []
+    blockers: dict[str, MeshData | None] = {}
+    if (
+        settings is not None
+        and settings.support.style != "none"
+        and settings.support.block_channels
+    ):
+        for entry in chosen:
+            blockers[entry.id], noted = _support_blocker(
+                entry, exported[entry.id], settings, profile, cancelled
+            )
+            findings += [
+                replace(
+                    finding,
+                    message=_(
+                        "In „{name}“ liegen Decken in schmalen Kanälen. Beim Slicen sperrt "
+                        "Solidon dort die Stützen; im Cura-Fenster setzen Sie dafür selbst "
+                        "einen Stützblocker.",
+                        name=source_text(entry.name),
+                    ),
+                )
+                for finding in noted
+            ]
+    meshes: list[handover.CuraMesh] = []
+    for number, entry in enumerate(chosen, start=1):
+        part = _written(
+            target.with_name(f"{target.stem}-part-{number}.stl"),
+            _cura_assembly([exported[entry.id]], bed),
+        )
+        # Hier setzt Stufe E, was nur diesem Teil gilt (``support_enable``).
+        meshes.append(handover.CuraMesh(part))
+        blocker = blockers.get(entry.id)
+        if blocker is not None:
+            barrier = _written(
+                target.with_name(f"{target.stem}-blocker-{number}.stl"),
+                _cura_assembly([blocker], bed),
+            )
+            meshes.append(handover.CuraMesh(barrier, {"anti_overhang_mesh": "true"}))
+    handover.write_cura_meshes(target, meshes)
+    return findings
 
 
 def _cura_assembly(meshes: Sequence[MeshData], bed: tuple[float, float] | None) -> bytes:

@@ -17,8 +17,9 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 STEP geht über `brep/step.py`, nicht von hier.
 
 **Die Stützsperre reist nur mit, wenn sie übernommen ist**
-(`support.block_channels`) — und nur in der direkten Übergabe an einen
-3MF-Slicer (`write_assembly(for_slicer=True)`, Orca-Familie und PrusaSlicer).
+(`support.block_channels`) — und nur in der direkten Übergabe
+(`write_assembly(for_slicer=True)`): bei der Orca-Familie und PrusaSlicer in
+der 3MF, bei Cura als eigenes Netz (`_cura_meshes`, siehe unten).
 `writer._support_blocker` schneidet das Teil dafür einmal mit
 `detail="support"`, fragt `analysis.model_support` und `channel_space` und
 extrudiert die Kanalscheiben mit `manifold3d` — vorher um `BLOCKER_SIMPLIFY`
@@ -26,10 +27,19 @@ vereinfacht, danach um `BLOCKER_MARGIN` aufgeweitet; der Befund
 `export.support_blocker` sagt, wo. Der Schritt ist abbrechbar:
 `write_assembly(cancelled=)` reicht den Abbruch bis in den Schnitt, und der
 Druckdialog gibt ihn über `_PlateJob.cancelled` mit. Eine gespeicherte 3MF trägt sie nicht:
-Sie ist das Projekt des Kunden und keine Übergabe. Ein STL für Cura kennt sie
-nicht (`slicer_keys.NOT_TAKEN_BY`, `AS_GEOMETRY`). Welche Schreibweise welche
-Familie liest, entscheidet `slicer_keys.helpers_as_parts`; die Regel und die
-Messung dazu stehen in `.claude/rules/dateiformat.md`.
+Sie ist das Projekt des Kunden und keine Übergabe. Welche Schreibweise welche
+Familie liest, entscheidet `slicer_keys.helpers_as_parts` bzw.
+`takes_mesh_settings`; die Regel und die Messung dazu stehen in
+`.claude/rules/dateiformat.md`.
+
+**Cura bekommt je Teil ein Netz.** Für CuraEngine schreibt `write_assembly`
+neben das zusammengelegte STL (die Datei, die Curas Fenster öffnet) je Teil
+ein STL und jede Sperre als eigenes, dazu die Netzliste
+`<name>.meshes.json` (`handover.write_cura_meshes`). `_command` liest sie
+(`handover.cura_meshes`, geprüft: nackte Dateinamen daneben, einzeilige Werte)
+und setzt je Netz `-l` und seine Werte gleich dahinter — die Sperre mit
+`anti_overhang_mesh=true`. An den Teilen setzt Stufe E des Konzepts
+`support_enable` je Teil; die Stelle steht in `writer._cura_meshes`.
 
 Die Erhebung eingelegter Slicerfilamente nimmt einen `CancelToken` an.
 Orca-Dateisuche, Namensindex und Vererbung sowie Prusa-Dateien und Abschnitte

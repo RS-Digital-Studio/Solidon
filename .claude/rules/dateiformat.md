@@ -334,14 +334,21 @@ Komponente PrusaSlicer (+38,8 g), gemessen am 26.09.2026. Geprüft wird eine
 Sperre deshalb an der **Modellbahn** mit und ohne sie — nicht an der Stütze:
 Eine als Kunststoff gedruckte Sperre verdrängt die Stütze auch.
 Geschrieben wird sie nur in die direkte Übergabe, nicht in eine gespeicherte
-3MF.
+3MF. **CuraEngine bekommt sie als eigenes Netz** mit `anti_overhang_mesh=true`
+(`slicer_keys.takes_mesh_settings`) — gemessen im Prüfbericht Cura (Abschnitt 1.5):
+18 476 Stützbewegungen wurden 0, die Modellbahn blieb bis auf zwei Bewegungen
+gleich. Im Cura-Fenster gilt sie nicht; der Befund sagt dort den Handgriff.
 
 `write_assembly` schreibt eine 3MF-Baugruppe — außer für `cura`. `CuraEngine`
 liest kein 3MF (die 3MF-Seite sitzt in Curas Fenster, nicht in der
 Rechenmaschine dahinter), und ein 3MF endete dort in „Der Slicer hat keine
 Druckdatei geschrieben", ohne dass irgendwo stand, warum. Cura bekommt ein STL
-mit allen Teilen der Platte; Namen und Materialslots liest es ohnehin nicht,
-und die Einstellungen kommen bei ihm über die Kommandozeile.
+mit allen Teilen der Platte — für das Fenster — und daneben je Teil ein Netz
+und eine Netzliste für die Kommandozeile, denn ein `-s` nach `-l` gilt nur
+diesem Netz. Namen und Materialslots liest es ohnehin nicht, und die
+Einstellungen kommen bei ihm über die Kommandozeile. **Eine Netzliste, die
+nicht hält** (fremder Pfad, fehlende Datei, Wert mit Umbruch), hält die
+Übergabe an, statt still ohne Sperre zu rechnen.
 
 **Mehrere Platten: eine Datei, wo der Slicer Platten kennt**
 (`knows_plates`). Die Orca-Familie speichert ihre Projekte mit je einem

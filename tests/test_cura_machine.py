@@ -574,3 +574,75 @@ def test_the_first_layer_does_not_travel_at_walking_pace() -> None:
     )
     # Sechs geltende Ziffern, wie jede geschriebene Zahl (``:g``).
     assert float(fast["speed_travel_layer_0"]) == pytest.approx(max(formula, 100.0), rel=1e-5)
+
+
+# --- B10: je Teil ein Netz, die Stützsperre als eigenes --------------------------
+
+
+def test_every_mesh_goes_in_with_its_own_values(tmp_path: Path) -> None:
+    """Ein ``-s`` nach ``-l`` gilt nur diesem Netz (``CommandLine.cpp``).
+
+    Die Sperre reist mit ``anti_overhang_mesh=true`` direkt hinter ihrem
+    ``-l``; die Teile vor ihr bekommen keinen Wert, und die globalen Werte
+    stehen vor dem ersten Netz.
+    """
+    engine = _cura(tmp_path)
+    config = _written(engine, "creality-k1-max", tmp_path)
+    model = tmp_path / "teil.stl"
+    part = tmp_path / "teil-part-1.stl"
+    blocker = tmp_path / "teil-blocker-1.stl"
+    for path in (model, part, blocker):
+        path.write_bytes(b"solid x\nendsolid x\n")
+    handover.write_cura_meshes(
+        model,
+        [handover.CuraMesh(part), handover.CuraMesh(blocker, {"anti_overhang_mesh": "true"})],
+    )
+
+    command = handover._command(handover.SlicerSetup(engine, "cura"), [model], config, tmp_path)
+
+    loads = [command[index + 1] for index, entry in enumerate(command) if entry == "-l"]
+    assert loads == [str(part), str(blocker)], "das Sammel-STL bleibt für das Fenster"
+    after = command[command.index(str(blocker)) + 1 : command.index("-o")]
+    assert after == ["-s", "anti_overhang_mesh=true"]
+    assert command.index("-e0") < command.index("-l"), "Maschine und Zug vor dem ersten Netz"
+
+
+def test_a_model_without_a_mesh_list_goes_in_as_it_is(tmp_path: Path) -> None:
+    """Ein Modell, das nicht aus ``write_assembly`` kommt, geht unverändert hinein."""
+    engine = _cura(tmp_path)
+    config = _written(engine, "creality-k1-max", tmp_path)
+    model = tmp_path / "fremd.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+
+    command = handover._command(handover.SlicerSetup(engine, "cura"), [model], config, tmp_path)
+
+    assert [command[index + 1] for index, entry in enumerate(command) if entry == "-l"] == [
+        str(model)
+    ]
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"file": "../anderswo.stl"},
+        {"file": "fehlt.stl"},
+        {"file": "teil-part-1.stl", "settings": {"support_enable": "a\nb"}},
+        {"file": "teil-part-1.stl", "settings": {"Mesh Type": "x"}},
+    ],
+)
+def test_a_mesh_list_that_does_not_hold_stops_the_handover(tmp_path: Path, entry: dict) -> None:
+    """Die Liste liegt in einem Ordner; was nicht passt, wird kein Argument.
+
+    Lieber anhalten als still das Modell ohne Sperre rechnen (Regel 21).
+    """
+    model = tmp_path / "teil.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    (tmp_path / "teil-part-1.stl").write_bytes(b"solid x\nendsolid x\n")
+    model.with_suffix(handover.CURA_MESHES_SUFFIX).write_text(
+        json.dumps({"meshes": [entry]}), encoding="utf-8"
+    )
+
+    with pytest.raises(ExternalToolError) as caught:
+        handover.cura_meshes(model)
+
+    assert [action.id for action in caught.value.suggestions] == ["retry", "export_only"]

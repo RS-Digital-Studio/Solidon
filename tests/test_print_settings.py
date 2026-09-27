@@ -747,7 +747,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
     },
     "cura": {
-        "support.block_channels": "ein STL trägt keine Stützsperre — ``NOT_TAKEN_BY``.",
+        "support.block_channels": "reist als eigenes Netz (``AS_GEOMETRY``).",
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
         "adhesion.kind": "in ``adhesion_type`` enthalten, das die Tabelle schreibt.",
@@ -5439,7 +5439,10 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "``test_threemf_assembly`` prüft den Bereich."
     ),
     ("support.block_channels", "orca"): "Wie bei PrusaSlicer — dieselbe Beilage.",
-    ("support.block_channels", "cura"): "CuraEngine bekommt ein STL; darin reist keine Sperre.",
+    ("support.block_channels", "cura"): (
+        "Reist als eigenes Netz mit ``anti_overhang_mesh`` neben den Teilen "
+        "(``slicer_keys.takes_mesh_settings``); ``test_export`` prüft die Netzliste."
+    ),
 }
 
 

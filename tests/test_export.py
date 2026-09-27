@@ -1582,6 +1582,9 @@ def test_every_flavour_answers_every_property() -> None:
         # 27.09.2026): Nur CuraEngine bekommt sie so; die Orca-Familie lädt
         # ein Profil, PrusaSlicer bekommt sie in Solidons ``.ini``.
         "machine_from_definition": {"prusa": False, "orca": False, "cura": True, "other": False},
+        # Je Teil ein Netz mit eigenen Werten auf der Kommandozeile (Stufe D):
+        # So reist die Stützsperre zu CuraEngine als ``anti_overhang_mesh``.
+        "takes_mesh_settings": {"prusa": False, "orca": False, "cura": True, "other": False},
         # Mehrere Platten in einer Projektdatei — die Orca-Familie speichert
         # ihre Projekte so; PrusaSlicer und Cura kennen eine Platte je Datei.
         "knows_plates": {"prusa": False, "orca": True, "cura": False, "other": False},
@@ -2970,10 +2973,10 @@ def test_the_blocker_stops_when_the_customer_cancels(tmp_path: Path, profile: Pr
     assert not list(tmp_path.glob("*.3mf")), "keine halbe Übergabe"
 
 
-def test_a_saved_file_and_cura_carry_no_blocker(tmp_path: Path, profile: Profile) -> None:
+def test_a_saved_file_carries_no_blocker(tmp_path: Path, profile: Profile) -> None:
     """Eine gespeicherte 3MF ist das Projekt des Kunden und keine Übergabe:
     Sie trägt keine Sperre, die ein anderes Programm als Material lesen
-    könnte. Ein STL für CuraEngine kennt sie ohnehin nicht."""
+    könnte."""
     entry = scene_object(mesh=tunnel_block())
     taken = print_settings.with_path(
         print_settings.with_path(print_settings.resolve(profile), "support.style", "grid"),
@@ -2990,13 +2993,62 @@ def test_a_saved_file_and_cura_carry_no_blocker(tmp_path: Path, profile: Profile
         for_slicer=False,
     )
     assert [kind for kind, _first, _last in _blocker_ranges(saved)] == ["ModelPart"]
+
+
+def test_cura_gets_every_part_and_the_blocker_as_meshes_of_their_own(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Die Stützsperre reist zu CuraEngine als eigenes Netz (Prüfbericht Cura, B10).
+
+    Bis zum 27.09.2026 bekam Cura alle Teile als ein STL, und die Sperre fiel
+    weg — am Minigolf-Körper im Prüfbericht gemessen: mit der Sperre als
+    eigenem Netz und ``anti_overhang_mesh`` 18 476 Stützbewegungen weniger,
+    die Modellbahn gleich. Das zusammengelegte STL bleibt für Curas Fenster,
+    und dort setzt der Kunde die Sperre selbst — der Befund sagt es.
+    """
+    entry = scene_object(mesh=tunnel_block())
+    second = scene_object("obj_2", "Zweites")
+    second = replace(second, mesh=apply(second.mesh, translation((60.0, 0.0, 0.0))))
+    taken = print_settings.with_path(
+        print_settings.with_path(print_settings.resolve(profile), "support.style", "grid"),
+        "support.block_channels",
+        True,
+    )
+
     stl, findings = write_assembly(
-        [entry],
-        tmp_path / "cura",
+        [entry, second], tmp_path, project_name="t", profile=profile, settings=taken, flavour="cura"
+    )
+
+    assert stl.suffix == ".stl", "das Fenster bekommt weiter ein STL mit allen Teilen"
+    meshes = handover.cura_meshes(stl)
+    assert [mesh.path.name for mesh in meshes] == [
+        "t-part-1.stl",
+        "t-blocker-1.stl",
+        "t-part-2.stl",
+    ]
+    assert [dict(mesh.settings) for mesh in meshes] == [{}, {"anti_overhang_mesh": "true"}, {}]
+    part = read_mesh(meshes[0].path.read_bytes(), ".stl")
+    assert part.volume == pytest.approx(as_mesh_data(entry.mesh).raw.volume, rel=1e-6)
+    blocker = read_mesh(meshes[1].path.read_bytes(), ".stl")
+    assert blocker.volume > 0.0
+    [said] = [finding for finding in findings if finding.code == "export.support_blocker"]
+    assert "Cura-Fenster" in str(said.message), "der Befund nennt den Handgriff im Fenster"
+
+
+def test_cura_gets_parts_without_a_blocker_when_none_is_taken(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Ohne übernommene Sperre: je Teil ein Netz, keines mit Werten."""
+    stl, findings = write_assembly(
+        [scene_object(mesh=tunnel_block())],
+        tmp_path,
         project_name="t",
         profile=profile,
-        settings=taken,
+        settings=print_settings.resolve(profile),
         flavour="cura",
     )
-    assert stl.suffix == ".stl"
+
+    assert [(mesh.path.name, dict(mesh.settings)) for mesh in handover.cura_meshes(stl)] == [
+        ("t-part-1.stl", {})
+    ]
     assert "export.support_blocker" not in {finding.code for finding in findings}

@@ -1156,6 +1156,94 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
 
 
 @dataclass(frozen=True, slots=True)
+class CuraMesh:
+    """Ein Netz für CuraEngine und die Werte, die nur ihm gelten (``-s`` nach ``-l``).
+
+    Heute trägt nur die Stützsperre Werte (``anti_overhang_mesh``); Stufe E des
+    Konzepts setzt an den Teilen ``support_enable`` je Teil.
+    """
+
+    path: Path
+    settings: Mapping[str, str] = field(default_factory=dict)
+
+
+#: Wie die Netzliste neben dem Modell heißt (:func:`write_cura_meshes`).
+CURA_MESHES_SUFFIX: Final = ".meshes.json"
+
+#: Wie ein Einstellungsname aussieht, der je Netz mitreisen darf.
+_SETTING_NAME: Final = re.compile(r"[a-z0-9_]+")
+
+
+def write_cura_meshes(model: Path, meshes: Sequence[CuraMesh]) -> Path:
+    """Legt neben das Modell die Liste seiner Netze für CuraEngine.
+
+    Das Modell selbst bleibt das zusammengelegte STL — die Datei, die Curas
+    Fenster öffnet. Die Kommandozeile liest stattdessen diese Liste
+    (:func:`cura_meshes`): je Teil ein Netz und jede Sperre als eigenes, mit
+    ihren Werten. So geht der Weg über den Druckdialog unverändert: Er reicht
+    ein Modell weiter, und die Übergabe findet daneben, was dazugehört.
+    """
+    target = model.with_suffix(CURA_MESHES_SUFFIX)
+    document = {
+        "meshes": [{"file": mesh.path.name, "settings": dict(mesh.settings)} for mesh in meshes]
+    }
+    try:
+        target.write_text(json.dumps(document, indent=1, ensure_ascii=False), encoding="utf-8")
+    except OSError as problem:
+        raise FileWriteError(
+            target=target.name, detail=problem.strerror or str(problem)
+        ) from problem
+    return target
+
+
+def cura_meshes(model: Path) -> tuple[CuraMesh, ...]:
+    """Die Netze, die CuraEngine für dieses Modell lädt — ohne Liste das Modell selbst.
+
+    Die Liste schreibt Solidon selbst (:func:`write_cura_meshes`), aber sie
+    liegt in einem Ordner, und was dort steht, wird geprüft, bevor es zu
+    Argumenten wird: Dateinamen ohne Pfad, die daneben liegen, Werte ohne
+    Umbruch unter einfachen Namen. Eine Liste, die das nicht erfüllt, hält
+    an, statt still das Modell ohne Sperre zu rechnen.
+    """
+    listing = model.with_suffix(CURA_MESHES_SUFFIX)
+    if not listing.is_file():
+        return (CuraMesh(model),)
+    try:
+        document = json.loads(listing.read_text(encoding="utf-8"))
+        meshes: list[CuraMesh] = []
+        for entry in document["meshes"]:
+            name, values = entry["file"], entry.get("settings", {})
+            if not isinstance(name, str) or Path(name).name != name or not name.endswith(".stl"):
+                raise ValueError(name)
+            path = model.parent / name
+            if not path.is_file() or not isinstance(values, dict):
+                raise ValueError(name)
+            for key, value in values.items():
+                if not (
+                    isinstance(key, str)
+                    and _SETTING_NAME.fullmatch(key)
+                    and isinstance(value, str)
+                    and _single_line(value)
+                ):
+                    raise ValueError(key)
+            meshes.append(CuraMesh(path, dict(values)))
+        if not meshes:
+            raise ValueError(listing.name)
+    except (OSError, ValueError, KeyError, TypeError) as problem:
+        raise ExternalToolError(
+            tool=model.name,
+            title=SLICER_FAILED,
+            detail=_(
+                "Die Teile für Cura sind unvollständig geschrieben. Slicen Sie noch "
+                "einmal, dann entstehen sie neu."
+            ),
+            values={"file": listing.name},
+            suggestions=(RETRY, EXPORT_ONLY),
+        ) from problem
+    return tuple(meshes)
+
+
+@dataclass(frozen=True, slots=True)
 class CuraMachine:
     """Was CuraEngine über die Maschine bekommt, neben Solidons Werten.
 
@@ -2531,8 +2619,15 @@ def _command(
     if extruder:
         arguments += ["-j", extruder]
     arguments += values
-    for entry in files:
-        arguments += ["-l", entry]
+    # **Je Netz ein ``-l``, und seine Werte gleich dahinter** — ein ``-s`` nach
+    # ``-l`` gilt nur diesem Netz (``CommandLine.cpp``). Die Stützsperre reist
+    # so als eigenes Netz mit ``anti_overhang_mesh``; ohne Netzliste bleibt es
+    # beim Modell selbst.
+    for model in models:
+        for mesh in cura_meshes(Path(model)):
+            arguments += ["-l", str(mesh.path)]
+            for key, value in mesh.settings.items():
+                arguments += ["-s", f"{key}={value}"]
     arguments += ["-o", str(output / OUTPUT_NAME)]
     return arguments
 
