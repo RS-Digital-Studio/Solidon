@@ -17,7 +17,8 @@ Was entsteht:
   die Schrittbilder der Anleitungen als WebP, weil sie nun einmal Pixel sind.
 * ``Releases/Solidon3D-Handbuch-<sprache>.pdf`` — über Qt gesetzt, damit dafür
   keine Abhängigkeit dazukommt, deren Lizenz erst geprüft werden müsste (§36).
-  Mit Lesezeichen nach Teilen und Kapiteln.
+  Mit Lesezeichen nach Teilen und Kapiteln; die Bildschirmfotos gehen als
+  JPEG in den Druck, wo das leichter ist.
 
 Das PDF braucht Qt und damit die echte Plattform; zu den Schriften unter
 ``offscreen`` steht alles in ``tools/make_figures.py``.
@@ -29,15 +30,19 @@ import os
 import re
 import struct
 import sys
+import tempfile
+import zlib
 from collections.abc import Iterable
 from html import escape
 from itertools import groupby
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import unquote
 
 if TYPE_CHECKING:
     from pypdf import PdfReader, PdfWriter
     from pypdf.generic import Fit
+    from PySide6.QtGui import QImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -871,6 +876,179 @@ def _suffix(key: str) -> str:
     return figure.suffix if figure is not None and figure.kind == "shot" else "svg"
 
 
+#: Die JPEG-Qualität, mit der ein Bildschirmfoto in den Druck geht.
+#:
+#: **92, weil Qt erst über 90 die Farbe in voller Auflösung speichert**
+#: (4:4:4 statt 4:2:0). Bis 90 verschwimmen die orangen Rahmen, Pfeile und
+#: Nummern der Anleitungen an ihren Kanten, bei 85 kommt Rauschen um die
+#: Schrift dazu. Ab 91 ist auch siebenfach vergrößert kein Unterschied zum
+#: verlustfreien Bild mehr zu sehen; 92 lässt Abstand zu dieser Schwelle, und
+#: 95 wiegt ein Fünftel mehr ohne sichtbaren Gewinn.
+PDF_JPEG_QUALITY = 92
+
+#: Eine Adresse in einem Attribut der Seite.
+_REFERENCE = re.compile(r'\b(src|srcset|href)="([^"]*)"')
+
+#: Der Anfang einer Adresse mit Schema (``https:``, ``mailto:``, ``file:``).
+_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
+
+#: Der Verweis, den `_staged` um ein Bildschirmfoto legt.
+_STAGED_LINK = re.compile(r'(<div class="stage">)<a href="[^"]*">(<img [^>]*>)</a>')
+
+
+def _print_copy(page_file: Path, folder: Path) -> tuple[Path, int]:
+    """Die Seite, wie sie in den Druck geht, und wie viele Bildschirmfotos sie zeigt.
+
+    Dieselbe Datei wie auf der Website, mit drei Unterschieden:
+
+    * **Die Verweise um die Bildschirmfotos fallen weg.** Auf der Website
+      öffnet ein Tippen das Bild in voller Größe (`_staged`); im Druck wurde
+      daraus ein Verweis auf den Pfad des Bau-Rechners,
+      ``file:///F:/3D%20Druck/website/handbuch/…``. Beim Kunden führt er ins
+      Leere und zeigt einen fremden Pfad. Das Bild bleibt, nur der Verweis geht.
+    * **Ein Bildschirmfoto kommt als JPEG, wo das leichter ist** (`_printable`).
+      Die Website behält ihre Dateien.
+    * **Jede relative Adresse wird absolut**, weil die Kopie in ``folder``
+      liegt und nicht neben ihren Bildern. Sprungmarken bleiben, wie sie sind:
+      Sie führen innerhalb des Dokuments, und genau daraus werden die Sprünge
+      im PDF.
+
+    Die Zahl zählt die Bildschirmfotos, deren Datei es gibt. So viele
+    Rasterbilder muss das PDF danach tragen (`_raster_images`).
+    """
+    base = page_file.parent
+    shown: set[Path] = set()
+
+    def absolute(address: str, *, picture: bool = False) -> str:
+        if not address or address.startswith(("#", "/")) or _SCHEME.match(address):
+            return address
+        source = (base / unquote(address.split("?", 1)[0])).resolve()
+        if picture and source.suffix in (".png", ".webp"):
+            if source.is_file():
+                shown.add(source)
+            return _printable(source, folder)
+        return source.as_uri()
+
+    def rewrite(match: re.Match[str]) -> str:
+        name, value = match.group(1), match.group(2)
+        if name == "srcset":
+            candidates = (candidate.strip().partition(" ") for candidate in value.split(","))
+            value = ", ".join(
+                f"{absolute(address)}{space}{descriptor}"
+                for address, space, descriptor in candidates
+            )
+        else:
+            value = absolute(value, picture=name == "src")
+        return f'{name}="{value}"'
+
+    html = _STAGED_LINK.sub(r"\1\2", page_file.read_text(encoding="utf-8"))
+    copy = folder / page_file.name
+    copy.write_text(_REFERENCE.sub(rewrite, html), encoding="utf-8")
+    return copy, len(shown)
+
+
+def _printable(source: Path, folder: Path) -> str:
+    """Die Adresse, unter der der Druck ein Bildschirmfoto liest.
+
+    **Chromium reicht ein JPEG unverändert ins PDF durch**: Der Bildstrom im
+    PDF ist Byte für Byte die Datei. Jedes andere Rasterbild entpackt es und
+    legt die Pixel verlustfrei gepackt ab. Für die Schrittbilder der
+    Anleitungen ist das teuer — sie sind WebP, also schon verlustbehaftet, und
+    ihre Pixel packen sich schlecht. Ein Bildschirmfoto als PNG mit ruhigen
+    Flächen packt sich dagegen verlustfrei kleiner als jedes JPEG.
+
+    Deshalb entscheidet die Größe: JPEG, wo es leichter ist als das, was
+    Chromium verlustfrei ablegte (`_flate_size`), sonst die Datei selbst. Ein
+    Bild mit Durchsicht bleibt, wie es ist; JPEG kennt keine. Das JPEG kommt
+    nach ``folder``, nicht neben die Bilder der Website.
+    """
+    from PySide6.QtGui import QImage
+
+    image = QImage(str(source))
+    if image.isNull() or not _opaque(image):
+        return source.as_uri()
+    jpeg = folder / f"{source.stem}.jpg"
+    saved = image.convertToFormat(QImage.Format.Format_RGB32).save(
+        str(jpeg), "JPG", PDF_JPEG_QUALITY
+    )
+    if not saved or jpeg.stat().st_size >= _flate_size(image):
+        jpeg.unlink(missing_ok=True)
+        return source.as_uri()
+    return jpeg.as_uri()
+
+
+def _flate_size(image: QImage) -> int:
+    """So viele Bytes legte Chromium für ein Bild ab, das kein JPEG ist.
+
+    Skia, das PDF-Werk von Chromium, packt die RGB-Zeilen eines Rasterbilds
+    mit zlib auf der üblichen Stufe 6. Das wird hier nachgerechnet, und es
+    trifft den Bildstrom im gedruckten PDF auf wenige Prozent, eher knapp
+    darunter: Ein Grenzfall bleibt dadurch verlustfrei, nicht umgekehrt.
+    """
+    from PySide6.QtGui import QImage
+
+    rgb = image.convertToFormat(QImage.Format.Format_RGB888)
+    row, stride = rgb.width() * 3, rgb.bytesPerLine()
+    data = bytes(rgb.constBits())
+    pixels = b"".join(data[line * stride : line * stride + row] for line in range(rgb.height()))
+    return len(zlib.compress(pixels, 6))
+
+
+def _opaque(image: QImage) -> bool:
+    """Ob ein Bild überall deckt — nur dann wird aus ihm ohne Verlust ein JPEG."""
+    from PySide6.QtGui import QImage
+
+    if not image.hasAlphaChannel():
+        return True
+    alpha = image.convertToFormat(QImage.Format.Format_Alpha8)
+    width, stride = alpha.width(), alpha.bytesPerLine()
+    data = bytes(alpha.constBits())
+    full = b"\xff" * width
+    return all(
+        data[line * stride : line * stride + width] == full for line in range(alpha.height())
+    )
+
+
+def _raster_images(pdf: Path) -> int:
+    """Wie viele Rasterbilder ein PDF trägt, jedes einmal gezählt.
+
+    Gezählt an den Bildobjekten, die die Seiten benutzen, auch in
+    Formularobjekten. Ein Suchen nach ``/Subtype /Image`` im Dateitext taugt
+    dafür nicht: Chromium legt seine Objekte gepackt ab, und die Suche fände
+    auch in einem guten PDF nichts.
+    """
+    from io import BytesIO
+
+    from pypdf import PdfReader
+    from pypdf.generic import DictionaryObject, IndirectObject
+
+    reader = PdfReader(BytesIO(pdf.read_bytes()))
+    images: set[int] = set()
+    forms: set[int] = set()
+
+    def visit(resources: object) -> None:
+        if isinstance(resources, IndirectObject):
+            resources = resources.get_object()
+        if not isinstance(resources, DictionaryObject) or "/XObject" not in resources:
+            return
+        xobjects = resources["/XObject"]
+        if not isinstance(xobjects, DictionaryObject):
+            return
+        for name in xobjects:
+            reference = xobjects.raw_get(name)
+            item = reference.get_object()
+            number = reference.idnum if isinstance(reference, IndirectObject) else id(item)
+            if item.get("/Subtype") == "/Image":
+                images.add(number)
+            elif item.get("/Subtype") == "/Form" and number not in forms:
+                forms.add(number)
+                visit(item.get("/Resources"))
+
+    for page in reader.pages:
+        visit(page.get_inherited("/Resources"))
+    return len(images)
+
+
 def write_pdf(language: str, page_file: Path) -> Path:
     """Das Handbuch als PDF — gedruckt aus derselben Seite, die im Web steht.
 
@@ -891,6 +1069,10 @@ def write_pdf(language: str, page_file: Path) -> Path:
     Media, und das setzt Chromium nicht um. Dafür trägt jede Seite ihre
     Ordnung im Inhaltsverzeichnis und in den Kapitelüberschriften — und der
     Leser sieht die Zahl in seinem Betrachter.
+
+    Gedruckt wird eine Kopie der Seite (`_print_copy`): ohne die Verweise um
+    die Bildschirmfotos und mit den Bildschirmfotos als JPEG, wo das leichter
+    ist. Danach legt `_stamp` Kopf- und Fußzeilen und die Lesezeichen an.
     """
     from PySide6.QtCore import QEventLoop, QMarginsF, QTimer, QUrl
     from PySide6.QtGui import QPageLayout, QPageSize
@@ -911,12 +1093,11 @@ def write_pdf(language: str, page_file: Path) -> Path:
         QPageLayout.Unit.Millimeter,
     )
 
-    def attempt(settle: int) -> bool:
-        """Ein Druckversuch. ``settle`` ist die Ruhezeit nach dem Dekodieren."""
+    def attempt(printable: Path, settle: int) -> bool:
+        """Ein Druckversuch. ``settle`` ist die Ruhezeit nach dem Laden."""
         page = QWebEnginePage()
         loop = QEventLoop()
         done: list[bool] = []
-        seen_images: list[int] = []
 
         def printed(data: bytes) -> None:
             if data:
@@ -924,66 +1105,50 @@ def write_pdf(language: str, page_file: Path) -> Path:
             done.append(bool(data))
             loop.quit()
 
-        def count_then_print(found: object) -> None:
-            """Die Bildzahl der Seite festhalten, dann drucken."""
-            seen_images.append(int(found) if isinstance(found, int | float) else -1)
-            QTimer.singleShot(settle, lambda: page.printToPdf(printed, layout))
-
         def loaded(ok: bool) -> None:
             if not ok:
                 done.append(False)
                 loop.quit()
                 return
-            # Ein Lidschlag, damit die Bilder wirklich im Layout stehen.
-            #
-            # **Er reicht nicht, und das ist ein offener Punkt** (ROADMAP,
-            # 26.08.2026): Die erzeugten PDFs tragen null eingebettete Bilder,
-            # an jeder Abbildung steht eine Lücke in exakt ihrer Größe. Zwei
-            # Wege sind gemessen und untauglich — ``decode()`` abzuwarten löst
-            # sein Promise nie auf (und ``runJavaScript`` wartet ohnehin nicht
-            # auf Promises, es gibt den synchronen Wert zurück), und eine
-            # ``QWebEngineView`` mit echtem Viewport druckt genauso ohne Bilder.
-            # Die Zahl daneben ist deshalb keine Zierde: Sie sagt, wie viele
-            # Bilder die Seite kennt, und trennt „Seite ohne Abbildungen" von
-            # „Abbildungen, die nicht mitgedruckt werden".
-            #
-            # **Vorher fallen die Verweise um die Bildschirmfotos weg.** Auf der
-            # Website öffnet ein Tippen das Bild in voller Größe (``_staged``);
-            # im Druck wurde daraus ein Verweis auf den Pfad des Bau-Rechners,
-            # ``file:///F:/3D%20Druck/website/handbuch/…`` — neun je Sprache,
-            # gemessen an den PDFs von 0.5.0. Beim Kunden führt er ins Leere
-            # und zeigt einen fremden Pfad. Das Bild bleibt, nur der Verweis geht.
-            page.runJavaScript(
-                "document.querySelectorAll('figure.screenshot .stage > a')"
-                ".forEach(link => link.replaceWith(...link.childNodes));"
-                "document.images.length",
-                count_then_print,
-            )
+            # Ein Lidschlag, damit die Bilder wirklich im Layout stehen. Ob
+            # alle Bildschirmfotos im PDF angekommen sind, zählt danach
+            # ``_raster_images`` im fertigen PDF.
+            QTimer.singleShot(settle, lambda: page.printToPdf(printed, layout))
 
         page.loadFinished.connect(loaded)
-        page.load(QUrl.fromLocalFile(str(page_file.resolve())))
+        page.load(QUrl.fromLocalFile(str(printable)))
         QTimer.singleShot(PDF_PRINT_LIMIT_MS, loop.quit)
         loop.exec()
         page.deleteLater()
-        if seen_images and seen_images[0] == 0:
-            # Ein Handbuch ohne ein einziges Bild ist kein Erfolg, sondern eine
-            # Seite, die ihre Abbildungen nicht gefunden hat.
-            print(f"  {language}: die Seite trug kein einziges Bild", file=sys.stderr)
         return bool(done) and done[0]
 
     # Zwei Anläufe, der zweite mit mehr Ruhe. Chromium bringt seinen eigenen
     # Prozess mit, und der ist unter Last gelegentlich noch nicht bereit, wenn
     # ``loadFinished`` schon kam — ein Handbuch deswegen gar nicht zu drucken
-    # wäre die schlechtere Antwort.
-    #
-    # **Der zweite Anlauf läuft nie**, und das gehört zum offenen Punkt oben:
-    # ``attempt`` gilt als gelungen, sobald ``printToPdf`` Bytes liefert, und
-    # ein PDF ohne Bilder ist auch Bytes. Eine Erfolgsbedingung, die die Bilder
-    # prüft, braucht eine verlässliche Zählung im fertigen PDF — ein Grep auf
-    # ``/Subtype /Image`` taugt dafür nicht, weil Chromium Objektströme
-    # komprimiert und der Grep dann auch über einem guten PDF null liefert.
-    if not attempt(400) and not attempt(2500):
-        raise RuntimeError(f"das Handbuch {language} ließ sich nicht drucken")
+    # wäre die schlechtere Antwort. Gelungen ist ein Anlauf erst, wenn das PDF
+    # jedes Bildschirmfoto der Seite trägt: Auch ein PDF ohne Bilder ist Bytes.
+    # Die Kopie und ihre JPEG-Dateien liegen in einem Ordner auf Zeit; hält
+    # Chromium eine davon noch offen, bleibt er liegen, statt den Lauf zu beenden.
+    with tempfile.TemporaryDirectory(prefix="solidon-druck-", ignore_cleanup_errors=True) as folder:
+        printable, pictures = _print_copy(page_file.resolve(), Path(folder))
+        found = -1
+        for settle in (400, 2500):
+            if not attempt(printable, settle):
+                continue
+            found = _raster_images(target)
+            if found >= pictures:
+                break
+        else:
+            problem = (
+                "nicht drucken"
+                if found < 0
+                else "nicht vollständig drucken, das PDF trägt "
+                f"{found} von {pictures} Bildschirmfotos"
+            )
+            raise RuntimeError(
+                f"Das Handbuch {language} ließ sich {problem}. Prüfen Sie die Bilder unter "
+                f"website/handbuch/{language} und erzeugen Sie das Handbuch erneut."
+            )
 
     _stamp(target, language)
     return target

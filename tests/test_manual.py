@@ -2201,3 +2201,147 @@ def test_the_pdf_bookmarks_hold_the_parts_and_under_them_their_chapters(
     assert (first_part.typ, float(first_part.top)) == ("/XYZ", 842.0), "Teil: Kopf der Seite"
     assert [one.typ for one in first_chapters] == ["/Fit", "/Fit"], "Kapitel: sein Ziel"
     assert reader.page_mode == "/UseOutlines"
+
+
+def test_the_raster_count_sees_every_picture_once_also_inside_a_form(tmp_path: Path) -> None:
+    """Die Zählung hinter der Bedingung, dass das PDF jedes Bildschirmfoto trägt.
+
+    Ein Bild, das zwei Seiten zeigen, zählt einmal; eines in einem
+    Formularobjekt zählt mit; ein Formular ohne Bild zählt nicht.
+    """
+    from pypdf import PdfWriter
+    from pypdf.generic import (
+        ArrayObject,
+        DecodedStreamObject,
+        DictionaryObject,
+        NameObject,
+        NumberObject,
+    )
+
+    from tools.make_manual import _raster_images
+
+    writer = PdfWriter()
+
+    def xobject(subtype: str, data: bytes, **entries: object) -> object:
+        item = DecodedStreamObject()
+        item.set_data(data)
+        item[NameObject("/Type")] = NameObject("/XObject")
+        item[NameObject("/Subtype")] = NameObject(subtype)
+        for key, value in entries.items():
+            item[NameObject(f"/{key}")] = value
+        return writer._add_object(item)
+
+    def image() -> object:
+        return xobject(
+            "/Image",
+            b"\x00\x00\x00",
+            Width=NumberObject(1),
+            Height=NumberObject(1),
+            ColorSpace=NameObject("/DeviceRGB"),
+            BitsPerComponent=NumberObject(8),
+        )
+
+    def form(inner: dict[str, object]) -> object:
+        return xobject(
+            "/Form",
+            b"",
+            BBox=ArrayObject([NumberObject(0), NumberObject(0), NumberObject(9), NumberObject(9)]),
+            Resources=DictionaryObject(
+                {
+                    NameObject("/XObject"): DictionaryObject(
+                        {NameObject(name): value for name, value in inner.items()}
+                    )
+                }
+            ),
+        )
+
+    shared = image()
+    for used in (
+        {"/Im0": shared},
+        {"/Im0": shared, "/Fm0": form({"/Im1": image()})},
+        {"/Fm1": form({})},
+    ):
+        page = writer.add_blank_page(width=100, height=100)
+        page[NameObject("/Resources")] = DictionaryObject(
+            {
+                NameObject("/XObject"): DictionaryObject(
+                    {NameObject(name): value for name, value in used.items()}
+                )
+            }
+        )
+    pdf = tmp_path / "bilder.pdf"
+    with pdf.open("wb") as stream:
+        writer.write(stream)
+
+    assert _raster_images(pdf) == 2
+
+
+def test_the_print_takes_a_screenshot_as_jpeg_only_where_that_is_lighter(tmp_path: Path) -> None:
+    """Der Druck liest eine Kopie der Seite; die Website behält ihre Dateien.
+
+    Chromium reicht ein JPEG unverändert ins PDF durch und legt jedes andere
+    Rasterbild verlustfrei gepackt ab. Ein Bild mit Verlauf und Rauschen — wie
+    ein Schrittbild über dem abgedunkelten Modell — packt sich verlustfrei
+    schlecht und geht als JPEG in den Druck. Eine ruhige Fläche packt sich
+    verlustfrei kleiner und bleibt, ebenso ein Bild mit Durchsicht, denn JPEG
+    kennt keine. Die Verweise um die Bildschirmfotos fallen weg, relative
+    Adressen werden absolut; Sprünge im Dokument und Adressen im Netz bleiben.
+    """
+    import random
+    import re
+
+    from PySide6.QtGui import QColor, QImage
+
+    from tools.make_manual import _print_copy
+
+    site = tmp_path / "website"
+    images = site / "handbuch" / "de"
+    images.mkdir(parents=True)
+    flat = QImage(320, 200, QImage.Format.Format_RGB32)
+    flat.fill(QColor(30, 32, 36))
+    busy = QImage(320, 200, QImage.Format.Format_RGB32)
+    clear = QImage(320, 200, QImage.Format.Format_ARGB32)
+    noise = random.Random(5)
+    for y in range(200):
+        for x in range(320):
+            shade = 40 + x // 4 + y // 4 + noise.randrange(-6, 7)
+            busy.setPixelColor(x, y, QColor(shade, shade + 10, shade + 25))
+            clear.setPixelColor(x, y, QColor(shade, shade + 10, shade + 25, 120 if x < 40 else 255))
+    for name, picture in (("flat", flat), ("busy", busy), ("clear", clear)):
+        assert picture.save(str(images / f"{name}.png"))
+    page = site / "handbuch.html"
+    page.write_text(
+        '<link rel="stylesheet" href="style.css">'
+        '<p><a href="#what">Sprung</a> <a href="https://solidon3d.de/">Netz</a></p>'
+        + "".join(
+            f'<figure class="screenshot"><div class="stage"><a href="handbuch/de/{name}.png">'
+            f'<img src="handbuch/de/{name}.png" alt="{name}" loading="lazy"></a></div></figure>'
+            for name in ("flat", "busy", "clear")
+        )
+        + '<figure><picture><source srcset="handbuch/de/drawing-dark.svg" '
+        'media="(prefers-color-scheme: dark)"><img src="handbuch/de/drawing.svg" '
+        'alt="drawing"></picture></figure>',
+        encoding="utf-8",
+    )
+    before = page.read_bytes()
+    folder = tmp_path / "druck"
+    folder.mkdir()
+
+    copy, shown = _print_copy(page, folder)
+    html = copy.read_text(encoding="utf-8")
+    sources = {alt: source for source, alt in re.findall(r'<img src="([^"]+)" alt="(\w+)"', html)}
+
+    assert copy.parent == folder
+    assert page.read_bytes() == before, "die Seite der Website bleibt, wie sie ist"
+    assert sorted(path.name for path in images.iterdir()) == ["busy.png", "clear.png", "flat.png"]
+    assert shown == 3
+    assert sources["busy"] == (folder / "busy.jpg").as_uri()
+    assert (folder / "busy.jpg").read_bytes()[:2] == b"\xff\xd8"
+    assert QImage(str(folder / "busy.jpg")).size() == busy.size()
+    assert sources["flat"] == (images / "flat.png").resolve().as_uri()
+    assert sources["clear"] == (images / "clear.png").resolve().as_uri()
+    assert sources["drawing"] == (images / "drawing.svg").resolve().as_uri()
+    assert f'srcset="{(images / "drawing-dark.svg").resolve().as_uri()}"' in html
+    assert f'href="{(site / "style.css").resolve().as_uri()}"' in html
+    assert 'href="#what"' in html and 'href="https://solidon3d.de/"' in html
+    assert html.count('<div class="stage"><img src=') == 3, "kein Verweis um ein Bildschirmfoto"
