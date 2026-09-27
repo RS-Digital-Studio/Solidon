@@ -173,6 +173,10 @@ Dialoge.
   grün sind — nicht wenn sie sich vollständig anfühlt.
 - **Konsistenz vor Vollständigkeit.** Acht Ops, die überall identisch
   auftauchen, schlagen zwanzig, die auseinanderdriften.
+- **Kein Revert.** Nie `checkout`/`restore`/`reset --hard`/`clean` über Arbeit
+  — vorwärts fixen; an diesem Baum arbeiten oft mehrere Sitzungen zugleich.
+  Rebase, Force-Push und History-Rewrite nur nach Rückfrage. Der Hook fragt
+  (Claude) bzw. sperrt (Codex) vor jedem verwerfenden Git-Befehl.
 - **Neue Fehlerbilder werden Testdateien**, keine Sonderfälle im Code.
 - **Bestehende Struktur nutzen.** Vor einer neuen Datei prüfen, ob die Sache in
   ein vorhandenes Modul gehört.
