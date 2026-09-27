@@ -1077,3 +1077,28 @@ def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> Non
             if a == b or (one_word and _stem(a) == _stem(b)):
                 clashes.append(f"Werkzeug {tool!r} ({a!r}) und Operation {title!r} ({b!r})")
     assert not clashes, f"{language}: gleiche Namen\n" + "\n".join(clashes)
+
+
+#: Handbuchseiten, die fr noch „Esc“ schreiben. Die Seiten gehören der
+#: Handbuch-Sitzung; ist eine nachgezogen, fliegt sie hier heraus.
+FRENCH_ESC_ON_MANUAL_PAGES = (
+    "Für den Umriss, den kein Grundkörper hergibt.",
+    "Wer noch nie mit einem Konstruktionsprogramm gearbeitet hat, fängt hier an.",
+)
+
+
+def test_french_names_the_escape_key_as_its_keyboard_does() -> None:
+    """Französische Tastaturen beschriften die Taste „Échap“.
+
+    Durchsicht 0.5.1: 15-mal „Échap“ gegen 7-mal „Esc“, zum Teil im selben
+    Fenster. Entscheidung der Release-Sitzung: „Échap“ überall
+    (``.claude/rules/uebersetzung.md``, Tastennamen).
+    """
+    catalog = read_catalog("fr")
+    found = sorted(key for key, value in catalog.items() if re.search(r"\bEsc\b", value))
+    unexpected = [key for key in found if not key.startswith(FRENCH_ESC_ON_MANUAL_PAGES)]
+    assert not unexpected, "fr sagt „Esc“ statt „Échap“:\n" + "\n".join(unexpected)
+    stale = [
+        start for start in FRENCH_ESC_ON_MANUAL_PAGES if not any(k.startswith(start) for k in found)
+    ]
+    assert not stale, f"nachgezogen — aus FRENCH_ESC_ON_MANUAL_PAGES austragen: {stale}"

@@ -34,8 +34,10 @@ Wie ein Text für den Kunden klingt (kurz, nicht nach einem Sprachmodell,
 - **Formatnamen:** STL, 3MF, STEP, GLB, OBJ, PLY, OFF, SVG, DXF, G-Code.
 - **Normbezeichnungen** (M4, DIN 912) und selbstbenennende Werte (mm, 6x3,
   DejaVu Sans, gyroid).
-- **Tastennamen:** aus „Strg" wird „Ctrl" wie im Englischen; F1, Esc, Tab,
-  Enter bleiben.
+- **Tastennamen:** aus „Strg" wird „Ctrl" wie im Englischen; F1, Esc und Tab
+  bleiben. Französisch schreibt „Échap“, weil französische Tastaturen die
+  Taste so beschriften. Die Eingabetaste heißt, wie der Bestand sie nennt:
+  en/pt Enter, es Intro, fr Entrée, it Invio.
 
 ## Glossare je Sprache — verbindlich
 
