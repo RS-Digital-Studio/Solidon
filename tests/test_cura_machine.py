@@ -646,3 +646,99 @@ def test_a_mesh_list_that_does_not_hold_stops_the_handover(tmp_path: Path, entry
         handover.cura_meshes(model)
 
     assert [action.id for action in caught.value.suggestions] == ["retry", "export_only"]
+
+
+# --- B8: Ender-3 V3 SE und KE sind eigene Drucker -------------------------------
+
+
+@pytest.mark.parametrize(
+    ("printer", "expected"),
+    [
+        # Orca, „0.20mm Standard @Creality Ender3V3SE 0.4": ein Bettschubser mit
+        # 2500 mm/s² und 180 mm/s Füllung, erste Schicht 500 mm/s².
+        (
+            "creality-ender3-v3-se",
+            {
+                "build_volume": (220.0, 220.0, 250.0),
+                "acceleration": 2500.0,
+                "outer_wall_acceleration": 1000.0,
+                "first_layer_acceleration": 500.0,
+                "speed_outer_wall": 60.0,
+                "speed_infill": 180.0,
+                "travel_speed": 150.0,
+                "overhang_limit": 60.0,
+                "first_layer_line_factor": 1.15,
+                "overhang_speed_factors": (33.0, 25.0, 17.0),
+                "cura_definition": "creality_ender3v3se",
+            },
+        ),
+        # Orca, „0.20mm Standard @Creality Ender3V3KE": 5000 mm/s², Außenwand 200.
+        # Die Bauhöhe 240 wie in Creality Print und Cura; Orca nennt 245.
+        (
+            "creality-ender3-v3-ke",
+            {
+                "build_volume": (220.0, 220.0, 240.0),
+                "acceleration": 5000.0,
+                "outer_wall_acceleration": 4000.0,
+                "first_layer_acceleration": 1000.0,
+                "speed_outer_wall": 200.0,
+                "speed_infill": 300.0,
+                "travel_speed": 400.0,
+                "overhang_limit": 60.0,
+                "first_layer_line_factor": 1.25,
+                "overhang_speed_factors": (25.0, 18.0, 5.0),
+                "cura_definition": "creality_ender3v3ke",
+            },
+        ),
+    ],
+)
+def test_the_ender3_v3_se_and_ke_are_printers_of_their_own(
+    printer: str, expected: dict[str, object]
+) -> None:
+    """Wer einen Ender-3 V3 SE besaß, wählte „Ender-3 V3" und bekam einen CoreXZ-Drucker.
+
+    Der V3 beschleunigt mit 12 000 mm/s² und füllt mit 500 mm/s, der SE schafft
+    2500 und 180 (Prüfbericht Cura, B8). Beide tragen jetzt den
+    Standardprozess ihres Herstellerprofils und ihre Definition in Cura.
+    """
+    entry = profiles.printer(printer)
+
+    for name, value in expected.items():
+        assert getattr(entry, name) == value, name
+    assert entry.vendor == "Creality"
+
+
+@pytest.mark.parametrize(
+    ("printer", "lines", "bed_prepend"),
+    [
+        # Der SE setzt Bett und Düse selbst und lädt sein Bettnetz.
+        ("creality-ender3-v3-se", ("M420 S1", "M190 S60", "M109 S215"), "false"),
+        # Der KE wartet im Startcode nur auf die Düse; das Bett setzt Cura davor.
+        ("creality-ender3-v3-ke", ("M109 S215", "Draw the first line"), "true"),
+    ],
+)
+def test_the_se_and_ke_start_with_the_code_of_their_definition(
+    printer: str, lines: tuple[str, ...], bed_prepend: str
+) -> None:
+    """Gegen die echte Installation: Startcode gefüllt, Endcode ohne offene Klammer."""
+    engine = _installed_cura()
+    if engine is None:
+        pytest.skip("keine Cura-Installation auf diesem Rechner")
+    machine = handover._cura_machine(
+        handover.SlicerSetup(engine, "cura"),
+        profiles.make_profile(printer, "pla"),
+        {
+            "material_print_temperature_layer_0": "215",
+            "material_bed_temperature_layer_0": "60",
+            "machine_depth": "220",
+        },
+    )
+
+    assert machine.from_printer
+    for line in lines:
+        assert line in machine.codes["machine_start_gcode"], line
+    assert "{" not in "".join(machine.codes.values())
+    assert machine.switches == {
+        "material_bed_temp_prepend": bed_prepend,
+        "material_print_temp_prepend": "false",
+    }

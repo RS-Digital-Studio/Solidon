@@ -544,6 +544,24 @@ def test_the_machine_name_leads_to_the_printer_profile() -> None:
     assert sp.printer_for("Ratterkiste 3000", known) == "", "was nicht trifft, wird nicht geraten"
 
 
+@pytest.mark.parametrize(
+    ("machine", "printer"),
+    [
+        ("Creality Ender-3 V3 SE 0.4 nozzle", "creality-ender3-v3-se"),
+        ("Creality Ender-3 V3 KE 0.4 nozzle", "creality-ender3-v3-ke"),
+        ("Creality Ender-3 V3 0.4 nozzle", "creality-ender3-v3"),
+    ],
+)
+def test_a_v3_se_or_ke_in_the_slicer_is_not_the_corexz_v3(machine: str, printer: str) -> None:
+    """„Creality Ender-3 V3" beginnt auch die Namen von SE und KE.
+
+    Solange Solidon nur den V3 kannte, wurde jeder von ihnen ein V3 — ein
+    Drucker mit 12 000 statt 2500 mm/s² (Prüfbericht Cura, B8). Der längste
+    Titel gewinnt, also genügt der eigene Eintrag.
+    """
+    assert sp.printer_for(machine, profiles.printer_profiles()) == printer
+
+
 def test_a_missing_configuration_is_no_suggestion(tmp_path: Path) -> None:
     """Kein Slicer, keine Vorgabe — und kein Fehler."""
     assert sp.chosen_machine("orca", tmp_path / "nirgends.exe") == ""

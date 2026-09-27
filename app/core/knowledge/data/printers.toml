@@ -397,6 +397,64 @@ first_layer_line_factor = 1.25
 overhang_speed_factors = [25, 15, 5]
 first_layer_acceleration = 500.0
 
+# Der SE ist kein langsamer V3, sondern ein anderes Gerät: ein Drucker mit
+# fahrendem Bett und 2500 mm/s² statt 12 000. Tempi und Beschleunigungen aus
+# Orcas „0.20mm Standard @Creality Ender3V3SE 0.4", die Temperaturgrenzen aus
+# Crealitys Datenblatt.
+[creality-ender3-v3-se]
+title = "Creality Ender-3 V3 SE"
+vendor = "Creality"
+build_volume = [220.0, 220.0, 250.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 100
+nozzle_temperature_max = 260
+travel_speed = 150.0
+speed_outer_wall = 60.0
+speed_inner_wall = 90.0
+speed_infill = 180.0
+speed_top_surface = 50.0
+speed_first_layer = 30.0
+speed_bridge = 100.0
+acceleration = 2500.0
+outer_wall_acceleration = 1000.0
+flow_factor = 1.5
+overhang_limit = 60.0
+first_layer_line_factor = 1.15
+overhang_speed_factors = [33, 25, 17]
+first_layer_acceleration = 500.0
+cura_definition = "creality_ender3v3se"
+
+# Der KE aus Orcas „0.20mm Standard @Creality Ender3V3KE". Die Bauhöhe 240
+# nennen Creality, Creality Print und Cura; Orca führt 245.
+[creality-ender3-v3-ke]
+title = "Creality Ender-3 V3 KE"
+vendor = "Creality"
+build_volume = [220.0, 220.0, 240.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 100
+nozzle_temperature_max = 300
+travel_speed = 400.0
+speed_outer_wall = 200.0
+speed_inner_wall = 300.0
+speed_infill = 300.0
+speed_top_surface = 250.0
+speed_first_layer = 50.0
+speed_bridge = 65.0
+acceleration = 5000.0
+outer_wall_acceleration = 4000.0
+flow_factor = 1.5
+overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [25, 18, 5]
+first_layer_acceleration = 1000.0
+cura_definition = "creality_ender3v3ke"
+
 [anycubic-kobra-2]
 title = "Anycubic Kobra 2"
 vendor = "Anycubic"
