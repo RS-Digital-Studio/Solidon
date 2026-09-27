@@ -92,6 +92,14 @@ htmlcov/
 /.claude/.state/sitzungsstart-*
 /.claude/settings.local.json
 
+# Die Erinnerungen bleiben auf der Maschine. Das Repository wird zu jedem
+# Release öffentlich, und sie nennen Zugangswege, Schlüsselablagen,
+# Kundennamen und Verkaufszahlen (Entscheidung Robert). Die Verknüpfung aus dem
+# Nutzerprofil legt tools/link_memory.py an; wo der Pull sie gelöscht hat, holt
+# `--wiederherstellen` den letzten versionierten Stand zurück, und der
+# Sitzungsstart ruft das selbst auf.
+/.claude/memory/
+
 # Die Installationspakete für die Website. Sie entstehen im Bau, werden von
 # tools/make_download.py hierher kopiert und von dort hochgeladen — im
 # Repository haben ein paar hundert Megabyte je Version nichts verloren. Die
@@ -144,11 +152,6 @@ tools/.window-bench-profile/
 # `.git` — Git zeigt den Ordner sonst dauerhaft als unversioniert an, und in
 # dieses hier gehört er nicht. Wer dort committet, tut es in seinem eigenen.
 /3D Drucker/
-
-# Der Erinnerungs-Index wird über tools/memory_index.py geschrieben; seine
-# Sperr- und Zwischendateien gehören niemandem sonst.
-/.claude/memory/.*.lock
-/.claude/memory/.memory-index-*
 
 # Was ein Release-Lauf an Protokollen hinterlässt. Die Sondenordner daneben
 # sind eingecheckt und bleiben es — sie tragen ein README und ein Skript, das

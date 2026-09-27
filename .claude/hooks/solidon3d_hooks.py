@@ -191,6 +191,35 @@ def umgebungshinweis() -> str:
     )
 
 
+def erinnerungshinweis() -> str:
+    """Holt die Erinnerungen zurück, wenn ein Pull sie aus dem Arbeitsbaum nahm.
+
+    `.claude/memory/` steht in `.gitignore`; der Commit, der die Dateien aus
+    dem Index nahm, löscht sie beim Pull auf jeder anderen Maschine.
+    `tools/link_memory.py --wiederherstellen` holt den letzten versionierten
+    Stand zurück, ohne eine vorhandene Datei zu überschreiben.
+    """
+    if (WURZEL / ".claude" / "memory" / "MEMORY.md").exists():
+        return ""
+    try:
+        lauf = subprocess.run(
+            [sys.executable, str(WURZEL / "tools" / "link_memory.py"), "--wiederherstellen"],
+            cwd=WURZEL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=15,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return (
+            " Die Erinnerungen fehlen. `python tools/link_memory.py --wiederherstellen` "
+            "holt den letzten versionierten Stand zurück."
+        )
+    zeilen = lauf.stdout.strip().splitlines()
+    return " " + zeilen[-1] if zeilen else ""
+
+
 def sitzungsstart() -> None:
     data = eingabe()
     start = _session_path(SESSION_START, data)
@@ -220,7 +249,8 @@ def sitzungsstart() -> None:
         "Der Kern (app/core) bleibt ohne Qt. "
         + workflow_note
         + "Die 22 harten Regeln stehen in AGENTS.md, das Sollverhalten im Bauplan."
-        + umgebungshinweis(),
+        + umgebungshinweis()
+        + erinnerungshinweis(),
     )
 
 
