@@ -582,6 +582,24 @@ def test_dash_bullets_become_a_list_too() -> None:
     assert "<p>- <code>" not in manual.as_html()
 
 
+def test_numbered_lines_become_a_numbered_list() -> None:
+    """Die drei Schritte der Seite über zusätzliche Programme klebten auf der
+    Website zu einem Absatz zusammen; das Handbuchfenster, das Qts Markdown
+    liest, zeigte sie als Liste. Die Legenden der Bildanleitungen brauchen sie
+    auch: Ihre Nummern sind die Nummern im Bild.
+    """
+    from app.core import markup
+
+    html = markup.to_html("1. **Läuft es?** Ja.\n2. Ein Modell holen.\n\nDanach.")
+    assert html.startswith("<ol><li><strong>Läuft es?</strong> Ja.</li><li>")
+    assert html.count("<li>") == 2
+    assert "<p>Danach.</p>" in html
+    assert '<ol start="3">' in markup.to_html("3. Weiter.")
+    mixed = markup.to_html("- Punkt\n1. Schritt")
+    assert mixed == "<ul><li>Punkt</li></ul>\n<ol><li>Schritt</li></ol>"
+    assert "<p>1. " not in manual.as_html()
+
+
 def test_a_drawn_figure_offers_its_dark_version() -> None:
     """Wo eine dunkle Version existiert, steht sie als zweite Quelle daneben.
 

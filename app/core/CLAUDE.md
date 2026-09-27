@@ -159,10 +159,15 @@ geänderter Verlauf bleibt unangetastet und bekommt einen erklärenden Befund.
 
 **Dokumentation, ohne Qt gezeichnet:**
 
-`manual.py` (Handbuch: geschriebene Seiten plus Referenz aus dem Register;
+`manual.py` (Handbuch: geschriebene Seiten, Bildanleitungen und Referenz aus
+dem Register, gegliedert in fünf Teile über `OUTLINE`;
 `spacemouse_access_help` liefert außerdem die kopierbare Betriebssystemhilfe,
 mit gerätebezogener USB-Regel nur bei bekannter Hersteller-/Produktkennung) ·
-`figures.py` (Abbildungskatalog) · `drawing.py` (SVG: Maßlinien, Schemata,
+`guides.py` (Bildanleitungen: Schritte, Sätze und die Namen der Ziele, auf die
+ein Bild zeigt; aufgenommen werden sie beim Release in der echten Oberfläche,
+Konzept `konzepte/konzept-handbuch-2026-09.md`) ·
+`figures.py` (Abbildungskatalog, dazu je Anleitungsschritt ein
+Bildschirmfoto) · `drawing.py` (SVG: Maßlinien, Schemata,
 Netzprojektion) · `markup.py` (Markdown → HTML, nur die selbst erzeugte
 Teilmenge) · `examples.py` · `tour.py`
 
