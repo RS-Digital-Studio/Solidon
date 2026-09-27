@@ -12090,7 +12090,7 @@ class MainWindow(QMainWindow):
         # *Übernehmen* bei y = 1062, also unter dem Rand. Wer eine Zahl tippte,
         # musste erst rollen, um seinen Schritt abzuschließen. Sie steht
         # deshalb **unter** dem Rollbereich, nicht darin; dieselbe Regel, die
-        # `oberflaeche.md` für die Karten schon kennt („Was unter der Liste
+        # `fenster.md` für die Karten schon kennt („Was unter der Liste
         # steht, gehört in beide Rechnungen … sonst schiebt man den einzigen
         # Weg hinaus, den die Karte anbietet").
         column = QWidget(self)
@@ -17227,8 +17227,8 @@ class MainWindow(QMainWindow):
                     # diese Sperre steht sie wählbar in der Liste, der Dialog
                     # geht durch, und die Auswertung hält danach an — dieselbe
                     # Lage, die bei den Zwillingen schon einmal gemessen wurde
-                    # (`oberflaeche.md`, „Ein Umschalter, dessen Zwilling eine
-                    # Bedingung hat, fragt sie — vorher").
+                    # (`grenzen.md`, „Ein Zwilling, der eine Bedingung hat,
+                    # fragt sie — vorher").
                     #
                     # Gefragt wird über `_reason_locked`, also dieselbe Kette
                     # wie Menüleiste und Kontextmenü: eine dritte Formulierung

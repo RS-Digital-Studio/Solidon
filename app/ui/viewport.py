@@ -4840,7 +4840,7 @@ class Viewport(QWidget):
         self._sketch_measure_pending: Callable[[], float] | None = None
         """Ob gerade ein Maß aussteht — vom Fenster je Skizzenmodus gesetzt
         und beim Verlassen gelöst, sonst hielte die Ansicht den Canvas fest
-        (ein aufbewahrter Rückruf ist eine Referenz, siehe oberflaeche.md)."""
+        (ein aufbewahrter Rückruf ist eine Referenz, siehe wartezeit.md)."""
         self._sketch_measure_begin: Callable[[Any], bool] | None = None
         #: Was einen begonnenen Zug abschließt — Doppelklick oder Eingabetaste.
         #:
@@ -6644,7 +6644,7 @@ class Viewport(QWidget):
 
         Eine eigene Methode und kein Lambda am Zeitgeber: Qt hält eine
         gebundene Methode schwach, ein Lambda hielte die Ansicht am eigenen
-        Kind fest (siehe ``__init__`` und `.claude/rules/oberflaeche.md`).
+        Kind fest (siehe ``__init__`` und `.claude/rules/wartezeit.md`).
         """
         self.show_scene(self._scene_for_rebuild())
 

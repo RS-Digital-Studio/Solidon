@@ -294,8 +294,8 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 - **Das Fenster importiert über `import_model_async`**, Fehler kommen über
   `importFailed`: Ein Test wartet mit `wait_for_idle`, und wer
   `session.import_model` patcht, patcht einen Weg, den das Fenster nicht geht.
-- **Hinter einem Halt nimmt `apply` keinen Schritt an** (`fenster.md`), und
-  **mit Einfügemarke ist `last_result` der Stand davor** (`oberflaeche.md`):
+- **Hinter einem Halt nimmt `apply` keinen Schritt an**, und **mit
+  Einfügemarke ist `last_result` der Stand davor** (beides `fenster.md`):
   Ein Test löst den Halt erst (Undo, `change_params`, `recount_and_retry`)
   oder beendet das Einfügen (`stop_inserting`, dann `wait_for_idle`).
 - **Der Hauptthread liest Kennzahlen und Hohlraumketten nur**; der

@@ -17,7 +17,7 @@ Die Regeln, die hier gelten:
 * **Nie die einzige Aussage.** Was eine Bewegung zeigt, steht auch ohne sie da
   — Regel 18 gilt für Zeit wie für Farbe.
 
-Und die Falle aus ``.claude/rules/oberflaeche.md`` gilt hier genauso: Eine
+Und die Falle aus ``.claude/rules/wartezeit.md`` gilt hier genauso: Eine
 ``QPropertyAnimation`` ohne Elternteil hält niemand fest. Jede bekommt hier
 das Widget, auf dem sie läuft — fällt das weg, fällt sie mit.
 """
@@ -230,7 +230,7 @@ def tween(
     kein Test misst je eine halb gemischte Farbe.
 
     ``owner`` hält die Animation am Leben; fällt er weg, fällt sie mit (die
-    Falle aus ``.claude/rules/oberflaeche.md``).
+    Falle aus ``.claude/rules/wartezeit.md``).
     """
     if not animations_enabled():
         on_step(1.0)

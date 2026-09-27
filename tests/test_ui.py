@@ -7385,8 +7385,8 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     assert not panel.isHidden()
     # ``isHidden`` und nicht ``isVisible``: Die Fixture zeigt das Fenster nie,
     # und offscreen meldet ``isVisible`` dann für **jedes** Widget False — die
-    # zwei Zeilen waren bis zum 18.09.2026 trivial wahr (Regel in
-    # ``oberflaeche.md``, gemessen in der zweiten Durchsicht).
+    # zwei Zeilen waren bis zum 18.09.2026 trivial wahr (Regel, gemessen in
+    # der zweiten Durchsicht).
     assert panel.search.isHidden(), "ohne Auswahl gibt es nichts zu durchsuchen"
     # ``isVisibleTo(panel)`` und nicht ``isHidden()``: Die Knöpfe stecken in
     # ihren Abschnitten, und versteckt ist der **Abschnitt** — das Widget
@@ -7770,7 +7770,7 @@ def test_a_chosen_edge_reaches_the_panel_as_its_own_level(window: MainWindow) ->
     QApplication.processEvents()
     assert window.selected_feature_kind() is None, "am Körper gibt es keine Art"
     # ``isHidden`` und nicht ``isVisible``: Qt lügt vor dem Anzeigen, und
-    # offscreen wird nie etwas angezeigt (Regel in ``oberflaeche.md``).
+    # offscreen wird nie etwas angezeigt (Regel).
     assert any(not button.isHidden() for button in panel._buttons.values()), (
         "die Voraussetzung: am Körper steht etwas"
     )
