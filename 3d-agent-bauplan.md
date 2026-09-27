@@ -1196,7 +1196,7 @@ Bemaßungen bleiben stehen, bis sie gelöscht werden; Anzeige gerundet auf
 | Karte | Zeigt | Nutzen |
 |---|---|---|
 | Wandstärke | Verlauf, dünn hervorgehoben | zu dünne Stellen finden |
-| Überhang | Winkel gegen Z, > 45° hervorgehoben | Stützbedarf, Orientierung |
+| Überhang | Winkel gegen Z, über der Überhanggrenze des Druckers hervorgehoben (§28.3; Startregel 45°) | Stützbedarf, Orientierung |
 | Netzfehler | offene Kanten, Non-Manifold, Durchdringung | Reparaturbedarf |
 | Krümmung | Krümmungsradius in Millimetern, scharfe Kanten gesondert markiert; gemessene Merkmalswerte und Schätzung unterschieden | Feature-Erkennung und Rundungsmaße prüfen |
 | Formabweichung | größter Abstand der ausgefüllten Originalfacette zu ihrem vorhandenen analytischen Träger; obere Schranken, numerische Breite und unbekannte Bereiche ausgewiesen | grobe Rundungen und Näherungen prüfen, ohne die Fläche neu einzupassen |
@@ -2159,8 +2159,11 @@ Wandstärke und Überhangwinkel sind Prozessmessungen: Sie gelten für das
 gemessene Material am gewählten Drucker mit derselben Düse, Schichthöhe und
 Linienbreite. Der Überhangwinkel wird von der Senkrechten aus gemessen.
 Abweichende Druckbedingungen verwenden die Startregeln, bis eine passende
-Probe vorliegt. Die wirksamen Grenzen gehen in Geometrieprüfung, Analysekarten,
-Schichtanalyse und Orientierungssuche ein. Beim Speichern einer neuen Probe
+Probe vorliegt. Für den Überhangwinkel ist die Startregel die Stützgrenze aus
+dem Standardprozess des Druckerherstellers, soweit das Druckerprofil sie führt
+(am Centauri Carbon 2 60°), sonst 45°. Die wirksamen Grenzen gehen in
+Geometrieprüfung, Analysekarten, Schichtanalyse, Orientierungssuche und den
+Stützwinkel der Slicer-Übergabe ein. Beim Speichern einer neuen Probe
 werden keine Messungen von anderen Druckbedingungen übernommen.
 
 Dazu der **Varianten-Generator**: dieselbe Op-Kette mit gestaffeltem Parameter

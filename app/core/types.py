@@ -816,6 +816,19 @@ class PrinterProfile:
     Volumenstromregel die Tempi des Druckers gleich wieder herunter. Er gilt
     nur für PLA (``print_settings.HOTEND_FLOW_MATERIAL``); die übrigen
     Materialien begrenzt das Filament."""
+    overhang_limit: float | None = None
+    """Bis zu welchem Winkel gegen die Senkrechte dieser Drucker ohne Stütze
+    druckt — die Stützgrenze aus dem Standardprozess seines Herstellers
+    (27.09.2026), umgerechnet aus deren Zählung gegen die Waagerechte.
+
+    Solidon rechnete bis dahin für jeden Drucker mit der Startregel von 45
+    Grad und schrieb sie in jede Übergabe. Der Centauri Carbon 2 stützt laut
+    Elegoo erst ab 60 Grad; am Minigolf-Satz verlangte die Startregel für die
+    Fase einer Bodenplatte und 45 bis 55 Grad geneigte Wände Stützen, der
+    ElegooSlicer legte 46 m davon an, und Roberts erste Schicht war ein
+    treppenförmiger Stützfuß mit einem Brim aus tausenden Stückchen. Ohne
+    Angabe gilt die Startregel (:data:`app.core.knowledge.rules.OVERHANG_LIMIT_DEGREES`);
+    eine Kalibrierung geht beidem vor (§28.3)."""
 
     @property
     def is_resin(self) -> bool:
@@ -943,10 +956,13 @@ class Profile:
 
     @property
     def overhang_limit_degrees(self) -> float:
-        """Die Überhanggrenze gegen die Senkrechte, gemessen oder als Startregel."""
+        """Die Überhanggrenze gegen die Senkrechte: gemessen, sonst die des
+        Druckers laut Hersteller, sonst die Startregel (§28.3)."""
         measured = self.material.overhang_angle
         if self.has_process_calibration and measured is not None and 0.0 < measured < 90.0:
             return measured
+        if self.printer.overhang_limit is not None:
+            return self.printer.overhang_limit
         return OVERHANG_LIMIT_DEGREES
 
     @property

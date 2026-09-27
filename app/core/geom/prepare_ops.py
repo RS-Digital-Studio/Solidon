@@ -17160,7 +17160,10 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
                 findings.extend(found.findings)
             else:
                 result = orient_for_print(
-                    mesh, printer=ctx.profile.printer, cancelled=ctx.cancelled
+                    mesh,
+                    printer=ctx.profile.printer,
+                    cancelled=ctx.cancelled,
+                    overhang_limit=analysis_limits(ctx.profile, entry)[1],
                 )
                 matrix = result.transform
                 findings.extend(result.findings)

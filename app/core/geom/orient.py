@@ -250,18 +250,31 @@ def candidates(mesh: MeshData, *, hull_limit: int = 200) -> list[Vec3]:
     return found
 
 
-def evaluate_direction(mesh: MeshData, direction: Vec3) -> Orientation:
+def evaluate_direction(
+    mesh: MeshData, direction: Vec3, *, overhang_limit: float = OVERHANG_LIMIT_DEGREES
+) -> Orientation:
     """Wie der Körper aussähe, stünde er auf dieser Fläche."""
-    return evaluate_directions(mesh, [direction])[0]
+    return evaluate_directions(mesh, [direction], overhang_limit=overhang_limit)[0]
 
 
 def evaluate_directions(
-    mesh: MeshData, directions: list[Vec3], cancelled: CancelToken | None = None
+    mesh: MeshData,
+    directions: list[Vec3],
+    cancelled: CancelToken | None = None,
+    *,
+    overhang_limit: float = OVERHANG_LIMIT_DEGREES,
 ) -> list[Orientation]:
     """Bewertet dieselben Lagen in speicherbegrenzten gemeinsamen Projektionen.
 
     Öffentlich, weil die Suche (``slice.orientation.search``) ihre Lagen
     ebenfalls stapelt: je Netz ein Aufruf statt einer je Richtung.
+
+    ``overhang_limit`` ist die Überhanggrenze gegen die Senkrechte, mit der
+    auch die Schichtanalyse danach urteilt (``Profile.overhang_limit_degrees``
+    über ``profiles.analysis_limits``). Ohne Angabe gilt die Startregel. Bis zum
+    27.09.2026 stand sie hier fest: Die Vorauswahl zählte am Centauri Carbon 2
+    Schrägen zwischen 45 und 60 Grad als Überhang, die der Slicer dort nicht
+    stützt, und ordnete Lagen danach, die das Endurteil anders sah.
     """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -286,13 +299,19 @@ def evaluate_directions(
     batch_size = max(
         1, min(len(directions), MAX_PROJECTION_VALUES // max(len(vertices), len(normals), 1))
     )
-    # **Genau 45 Grad sind druckbar, nicht überhängend.** Eine Fase unter dem
-    # Grenzwinkel liegt mit ihrer Normalen auf der Schwelle, und ob sie als
+    # **Genau auf der Grenze ist druckbar, nicht überhängend.** Eine Fase unter
+    # dem Grenzwinkel liegt mit ihrer Normalen auf der Schwelle, und ob sie als
     # Überhang zählte, entschied die letzte Stelle einer Projektion — an
     # einem CAD-Teil mit 45-Grad-Fasen der häufigste Fall, nicht der seltene.
     # Die Rechengrenze ``OVERHANG_EDGE`` schiebt die Schwelle um das Rauschen
     # eines Einheitsvektors auf die Seite, die die Regel meint.
-    threshold = -units.exact_cos_degrees(OVERHANG_LIMIT_DEGREES) - OVERHANG_EDGE
+    #
+    # **Der Sinus, nicht der Kosinus.** Eine Fläche, die um den Winkel a gegen
+    # die Senkrechte überhängt, trägt eine Normale mit z = -sin(a); über der
+    # Grenze heißt also z < -sin(Grenze). Hier stand der Kosinus, und bei
+    # 45 Grad sind beide dieselbe Zahl, bitgenau — mit 60 Grad aber hätte die
+    # Vorauswahl schon ab 30 Grad Überhang gezählt statt ab 60 (27.09.2026).
+    threshold = -units.exact_sin_degrees(overhang_limit) - OVERHANG_EDGE
 
     def score(batch: list[Vec3]) -> list[Orientation]:
         if cancelled is not None:
@@ -376,6 +395,7 @@ def ranked_orientations(
     cancelled: CancelToken | None = None,
     printer: PrinterProfile | None = None,
     margin: float = 0.0,
+    overhang_limit: float = OVERHANG_LIMIT_DEGREES,
 ) -> list[Orientation]:
     """Grundflächen nach der billigen Heuristik, beste zuerst.
 
@@ -396,7 +416,7 @@ def ranked_orientations(
             continue
         directions.append(direction)
 
-    scored = evaluate_directions(mesh, directions, cancelled)
+    scored = evaluate_directions(mesh, directions, cancelled, overhang_limit=overhang_limit)
 
     ranked = sorted(
         scored,
@@ -695,9 +715,16 @@ def orient_for_print(
     cancelled: CancelToken | None = None,
     printer: PrinterProfile | None = None,
     margin: float = 0.0,
+    overhang_limit: float = OVERHANG_LIMIT_DEGREES,
 ) -> OrientResult:
-    """Dreht den Körper in die Lage, die der Heuristik am besten gefällt."""
-    scored = ranked_orientations(mesh, cancelled=cancelled, printer=printer, margin=margin)
+    """Dreht den Körper in die Lage, die der Heuristik am besten gefällt.
+
+    ``overhang_limit`` wie bei :func:`evaluate_directions`: die Grenze, mit der
+    die Schichtanalyse danach urteilt.
+    """
+    scored = ranked_orientations(
+        mesh, cancelled=cancelled, printer=printer, margin=margin, overhang_limit=overhang_limit
+    )
     if not scored:
         raise NoFittingOrientationError()
     best = scored[0]
@@ -724,7 +751,7 @@ def orient_for_print(
             },
         )
     ]
-    # Die 45-Grad-Regel gilt der Düse: Was sie nicht mehr trägt, braucht
+    # Die Überhanggrenze gilt der Düse: Was sie nicht mehr trägt, braucht
     # Stützen. Ein Resinteil hängt ohnehin an Stützen, und ob es welche
     # braucht, entscheidet dort die Saugglocke, nicht der Überhang
     # (Resin-Konzept §5.3, Stufe 2) — bis dahin sagt die Heuristik zu

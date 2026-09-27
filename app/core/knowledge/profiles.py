@@ -154,6 +154,7 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
             for name in PRINTER_PACE_FIELDS
         },
         flow_factor=_positive_or_none(table.get("flow_factor"), f"{identifier}.flow_factor") or 1.0,
+        overhang_limit=_angle_or_none(table.get("overhang_limit"), f"{identifier}.overhang_limit"),
     )
     printable_area(result)
     printable_height(result)
@@ -190,6 +191,27 @@ def _positive_or_none(value: object, field: str) -> float | None:
         raise ValidationError(
             field=field,
             detail=_("Tempo, Beschleunigung und Förderfaktor müssen größer als null sein."),
+            values={"value": str(value)},
+        )
+    return number
+
+
+def _angle_or_none(value: object, field: str) -> float | None:
+    """Eine freiwillige Überhanggrenze gegen die Senkrechte, echt zwischen 0 und 90 Grad.
+
+    Null hieße „jede Wand braucht Stütze", neunzig „keine Decke braucht
+    eine" — beides ist kein Drucker, sondern ein Tippfehler (Regel 17).
+    """
+    if value is None:
+        return None
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except TypeError, ValueError:
+        number = math.nan
+    if not math.isfinite(number) or not 0.0 < number < 90.0:
+        raise ValidationError(
+            field=field,
+            detail=_("Die Überhanggrenze muss zwischen 0 und 90 Grad liegen."),
             values={"value": str(value)},
         )
     return number

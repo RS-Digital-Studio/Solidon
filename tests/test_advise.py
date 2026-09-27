@@ -7,14 +7,19 @@ geurteilt haben — jeder mit dem Körper, der sie widerlegt hat.
 
 from __future__ import annotations
 
+import math
+from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
+import trimesh
 
 from app.core.errors import ValidationError
-from app.core.knowledge import print_settings, profiles
+from app.core.geom.mesh import MeshData
+from app.core.knowledge import print_settings, profiles, rules
 from app.core.slice import advise
-from app.core.slice.analysis import WIDTH_INTERESTING
+from app.core.slice.analysis import WIDTH_INTERESTING, slice_body
 from app.core.types import (
     LayerInfo,
     Polygon,
@@ -617,3 +622,118 @@ def test_a_travel_speed_that_does_not_move_is_refused() -> None:
 
     with pytest.raises(ValidationError):
         profiles._printer_from_table("probe", table, Path("printers.toml"))
+
+
+# --- Ab welchem Winkel gestützt wird, sagt der Drucker ----------------------------
+
+
+def test_the_overhang_limit_comes_from_the_manufacturer() -> None:
+    """Die Stützgrenze des Standardprozesses im Slicer des Herstellers
+    (27.09.2026): ElegooSlicer ``support_threshold_angle`` 30 gegen die
+    Waagerechte, PrusaSlicer für den MINI ``support_material_threshold`` 50.
+    Ohne Herstellerwert bleibt die Startregel."""
+    centauri = profiles.make_profile("centauri-carbon-2", "pla")
+    mini = profiles.make_profile("prusa-mini", "pla")
+    plain = profiles.make_profile("generic-220", "pla")
+
+    assert centauri.overhang_limit_degrees == pytest.approx(60.0)
+    assert mini.overhang_limit_degrees == pytest.approx(40.0), "strenger als die Startregel"
+    assert plain.printer.overhang_limit is None
+    assert plain.overhang_limit_degrees == pytest.approx(rules.OVERHANG_LIMIT_DEGREES)
+
+
+def test_a_measured_overhang_angle_goes_before_the_manufacturer() -> None:
+    """§28.3: Die Probe am eigenen Drucker schlägt jede Angabe über ihn."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    measured = Profile(
+        profile.printer,
+        replace(
+            profile.material,
+            overhang_angle=52.0,
+            calibration_printer=profile.printer.id,
+            calibration_nozzle_diameter=profile.printer.nozzle_diameter,
+            calibration_layer_height=profile.printer.layer_height,
+            calibration_extrusion_width=profile.printer.extrusion_width,
+        ),
+    )
+
+    assert measured.has_process_calibration
+    assert measured.overhang_limit_degrees == pytest.approx(52.0)
+    assert print_settings.resolve(measured).support.threshold_angle == pytest.approx(52.0)
+
+
+def test_the_slicer_supports_from_the_angle_the_analysis_uses() -> None:
+    """Bis zum 27.09.2026 schrieb jede Übergabe 45 Grad über Elegoos 60 — der
+    ElegooSlicer stützte am Minigolf-Satz Fasen, die die Analyse für druckbar
+    hielt, und legte 46 m Stütze in die untersten 5 mm."""
+    for printer in ("centauri-carbon-2", "prusa-mk4s", "generic-220"):
+        profile = profiles.make_profile(printer, "pla")
+        settings = print_settings.resolve(profile)
+        assert settings.support.threshold_angle == pytest.approx(profile.overhang_limit_degrees)
+
+
+def test_an_older_project_is_offered_the_printers_overhang_limit() -> None:
+    """Ein gespeichertes Projekt trägt noch die 45 Grad — der Vorschlag holt es
+    auf den Drucker, in beide Richtungen, und bleibt still, wo es passt."""
+    centauri = profiles.make_profile("centauri-carbon-2", "pla")
+    current = print_settings.resolve(centauri)
+    older = print_settings.with_path(current, "support.threshold_angle", 45.0)
+
+    offered = [e for e in advise.advise(older, centauri) if e.path == "support.threshold_angle"]
+    assert [number(entry) for entry in offered] == [60.0]
+    assert "support.threshold_angle" not in paths(advise.advise(current, centauri))
+
+    mini = profiles.make_profile("prusa-mini", "pla")
+    looser = print_settings.with_path(print_settings.resolve(mini), "support.threshold_angle", 45.0)
+    stricter = [e for e in advise.advise(looser, mini) if e.path == "support.threshold_angle"]
+    assert [number(entry) for entry in stricter] == [40.0]
+    assert stricter[0].reason != offered[0].reason, "die andere Richtung hat ihren eigenen Grund"
+
+
+@pytest.mark.parametrize("angle", [0.0, 90.0, -5.0, "steil"])
+def test_an_overhang_limit_outside_the_quadrant_is_refused(angle: object) -> None:
+    table = {"title": "Probe", "build_volume": [200.0, 200.0, 200.0], "overhang_limit": angle}
+
+    with pytest.raises(ValidationError) as raised:
+        profiles._printer_from_table("probe", table, Path("printers.toml"))
+    assert raised.value.suggestions, "Regel 17"
+
+
+def _plate_on_a_sloped_foot(angle: float) -> MeshData:
+    """Eine Platte 60 mm im Quadrat, deren untere 4 mm ringsum unter ``angle``
+    gegen die Senkrechte nach außen laufen — die Bodenkante des Bahnteils
+    ``Gövde59`` aus dem Minigolf-Satz (``F:\\3D Dateien``, 27.09.2026):
+    2 mm Bodenplatte mit gut 50 Grad Fase, darüber 45 bis 50 Grad nach außen
+    geneigte Wände, zusammen 320 mm² Überhang über 45 Grad in Stücken bis
+    25 mm², darüber nichts."""
+    reach = 4.0 * math.tan(math.radians(angle))
+    foot = [(x, y, 0.0) for x in (-30.0, 30.0) for y in (-30.0, 30.0)]
+    wide = 30.0 + reach
+    top = [(x, y, z) for x in (-wide, wide) for y in (-wide, wide) for z in (4.0, 10.0)]
+    return MeshData.of(trimesh.convex.convex_hull(np.array(foot + top)))
+
+
+def test_a_sloped_foot_the_printer_carries_gets_no_supports() -> None:
+    """Der Minigolf-Satz am Centauri Carbon 2 (Robert, 27.09.2026): Die
+    Startregel verlangte für 52 Grad Stützen, der Slicer baute einen
+    treppenförmigen Stützfuß, der Brim zerfiel. Elegoo stützt ab 60 Grad —
+    mit derselben Grenze bleibt der Vorschlag weg. Die Gegenprobe ist der
+    allgemeine Drucker: Dort gilt 45, und dort bleibt er."""
+    body = _plate_on_a_sloped_foot(52.0)
+
+    def support_advised(printer: str) -> bool:
+        profile = profiles.make_profile(printer, "pla")
+        settings = print_settings.resolve(profile)
+        result = slice_body(
+            body,
+            settings.layers.layer_height,
+            first_layer_height=settings.layers.first_layer_height,
+            overhang_angle=profile.overhang_limit_degrees,
+            bridge_from=profile.minimum_wall_thickness,
+            support_volume=False,
+        )
+        entries = advise.advise(settings, profile, result, bounds=body.bounds)
+        return "support.style" in paths(entries)
+
+    assert support_advised("generic-220"), "unter der Startregel ist es ein Überhang"
+    assert not support_advised("centauri-carbon-2")

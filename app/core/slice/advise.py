@@ -441,6 +441,30 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
             )
         )
 
+    # **Und ab welchem Winkel er stützt.** Der Slicer bekommt die Grenze, mit
+    # der die Schichtanalyse rechnet (``Profile.overhang_limit_degrees``); ein
+    # Projekt von vor dem 27.09.2026 trägt noch die Startregel von 45 Grad und
+    # schickte sie über den Wert des Herstellers — am Centauri 60 Grad. Dann
+    # stützt der Slicer, was die Analyse als druckbar gemeldet hat.
+    limit = profile.overhang_limit_degrees
+    if not is_close(settings.support.threshold_angle, limit):
+        advice.append(
+            _advice(
+                settings,
+                path="support.threshold_angle",
+                value=limit,
+                reason=_(
+                    "Bis zu diesem Winkel druckt dieser Drucker Überhänge ohne Stütze. "
+                    "Ein kleinerer Winkel stützt auch Schrägen, die sich selbst tragen."
+                )
+                if settings.support.threshold_angle < limit
+                else _(
+                    "Ab diesem Winkel braucht dieser Drucker Stützen. Ein größerer Winkel "
+                    "lässt Überhänge frei hängen, die absacken."
+                ),
+            )
+        )
+
     wanted = settings_table.MAX_LAYER_RATIO * printer.nozzle_diameter
     if settings.layers.layer_height > wanted:
         advice.append(

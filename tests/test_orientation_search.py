@@ -22,6 +22,7 @@ from app.core.slice.orientation import (
     search,
 )
 from app.core.types import Profile
+from tests.helpers import at_the_start_rule
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -180,7 +181,12 @@ def test_a_pose_that_cannot_stand_never_wins(profile: Profile) -> None:
     diagonale Lage mit 0,6 mm³ Stütze und **0,1 mm²** erster Schicht gegen die
     liegende mit 11,1 mm³ und 1424 mm². Der Vergleich war richtig, die Zahl
     auch — nur ist ein Hundertstel Quadratmillimeter kein Stand.
+
+    Gemessen an der Startregel; mit den 60 Grad des Centauri wählen beide
+    Suchen dieselbe liegende Lage (22 mm hoch, 84 statt 215 mm³ Stütze), und
+    der Vergleich prüfte zwei Winkel statt eine Standfläche.
     """
+    profile = at_the_start_rule(profile)
     body = bar()
 
     ohne = search(body, count=60, seed=0)

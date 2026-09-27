@@ -39,7 +39,7 @@ Die Module hier **laden und lösen auf**; die Werte selbst liegen daneben:
 
 | Datei | Inhalt |
 |---|---|
-| `printers.toml` | Druckerprofile — sechzehn FDM-Geräte und zwei Resin-Geräte nach Bauraum (`technology = "resin"`, Pixelgröße und Mindestwand statt Düse und Bahn); `travel_speed`, `speed_*`, die Beschleunigungen und `flow_factor` aus dem Standardprozess und dem allgemeinen PLA des Herstellers |
+| `printers.toml` | Druckerprofile — sechzehn FDM-Geräte und zwei Resin-Geräte nach Bauraum (`technology = "resin"`, Pixelgröße und Mindestwand statt Düse und Bahn); `travel_speed`, `speed_*`, die Beschleunigungen und `flow_factor` aus dem Standardprozess und dem allgemeinen PLA des Herstellers; `overhang_limit` aus dem Standardprozess im Slicer des Herstellers (Stützgrenze gegen die Senkrechte) |
 | `materials.toml` | Materialprofile — hier stehen die Toleranzen; `resin` ist das Harz, mit `technology = "resin"` |
 | `print_settings.toml` | Druckeinstellungen je Stufe |
 | `standards.toml` | Normteilmaße |
@@ -84,7 +84,10 @@ beim Aktualisieren eines anderen Profils unverändert lesbar.
 Überhanggrenze zusammen mit Druckerkennung, Düse, Schichthöhe und Linienbreite.
 `profiles.for_process` übernimmt dafür das tatsächliche Druckraster aus den
 Projekteinstellungen. `Profile` verwendet die Messwerte nur bei passendem
-Prozess; andernfalls gelten zwei Linienbreiten und die Überhang-Startregel.
+Prozess; andernfalls gelten zwei Linienbreiten und die Überhanggrenze des
+Druckers (`PrinterProfile.overhang_limit`, aus dem Herstellerprofil), ohne
+sie die Startregel. Derselbe Winkel geht als Stützgrenze in die Übergabe
+(`print_settings.resolve`).
 Ein Wechsel des Messprozesses nimmt keine Messung des anderen Felds mit.
 Nicht ausgewählte Messfelder bleiben beim Speichern unverändert.
 

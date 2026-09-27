@@ -981,3 +981,34 @@ def test_a_face_at_exactly_the_limit_angle_is_printable(turn: float) -> None:
     scored = evaluate_directions(body, [(0.0, 0.0, -1.0)])[0]
 
     assert scored.overhang == 0.0, f"{scored.overhang:.3f} mm² Überhang bei {turn}°"
+
+
+def test_the_preselection_counts_overhangs_against_the_printers_limit() -> None:
+    """Die Vorauswahl urteilt mit derselben Grenze wie die Schichtanalyse danach.
+
+    Bis zum 27.09.2026 stand sie hier fest auf 45 Grad, auch wenn das Profil
+    des Centauri Carbon 2 erst ab 60 stützt: Ein Keil mit 52 Grad Unterseite
+    galt als Überhang, den das Endurteil nicht mehr sah, und die Lagen kamen
+    in einer Reihenfolge, die zu keinem Drucker passte.
+    """
+    from shapely.geometry import Polygon
+
+    from app.core.geom.orient import evaluate_directions, ranked_orientations
+
+    # Die Unterseite steht 52 Grad gegen die Senkrechte: über der Startregel,
+    # unter Elegoos Grenze. Er liegt auf seiner schmalen Kante.
+    run = 10.0 * np.tan(np.radians(52.0))
+    section = [(0.0, 0.0), (run, 10.0), (0.0, 10.0)]
+    wedge = trimesh.creation.extrude_polygon(Polygon(section), height=20.0)
+    wedge.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2.0, (1.0, 0.0, 0.0)))
+    body = MeshData.of(wedge)
+    down = (0.0, 0.0, -1.0)
+
+    start_rule = evaluate_directions(body, [down])[0]
+    printer = evaluate_directions(body, [down], overhang_limit=60.0)[0]
+
+    assert start_rule.overhang > 0.0, "unter der Startregel hängt die Unterseite über"
+    assert printer.overhang == 0.0, f"{printer.overhang:.3f} mm² trotz 60 Grad"
+    assert {entry.direction for entry in ranked_orientations(body, overhang_limit=60.0)} == {
+        entry.direction for entry in ranked_orientations(body)
+    }, "dieselben Lagen, nur anders beurteilt"
