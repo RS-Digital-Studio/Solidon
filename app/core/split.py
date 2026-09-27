@@ -389,18 +389,26 @@ def apply_planned(
         ),
     )
     prepared: list[OperationDraft] = []
-    for step, draft in zip(plan.outcome.cuts, plan.drafts, strict=True):
+    # **Jeder Schritt bekommt die Nummer seiner Stifte vom Plan** (RM-267).
+    # Die Passungen unten nennen die Stifte, bevor ein Schritt gerechnet hat;
+    # zählte der Schritt selbst nach den Namen am Stück, rückte ein erkannter
+    # Stift ohne Zwilling seine Nummern weiter (ERKENNUNG-16), und die
+    # Passungen zeigten ins Leere. Beide Hälften zählen von der nächsten weiter.
+    connector_starts: dict[ObjectId, int] = {object_id: plan.connector_start}
+    for index, (step, draft) in enumerate(zip(plan.outcome.cuts, plan.drafts, strict=True)):
         target = pieces[step.part_index]
         first = f"obj_{highest_object + 1}"
         second = f"obj_{highest_object + 2}"
         highest_object += 2
         outputs = (first, second)
+        start = connector_starts.pop(target, 1)
+        connector_starts[first] = connector_starts[second] = start + plan.pins_at(index, pins)
         prepared.append(
             OperationDraft(
                 op=draft.op,
                 inputs=(target,),
                 outputs=outputs,
-                params=dict(draft.params),
+                params={**draft.params, "first_pin": start},
             )
         )
         pieces[step.part_index : step.part_index + 1] = list(outputs)
@@ -408,7 +416,6 @@ def apply_planned(
     def change(planned: Sequence[Any]) -> Any:
         """Alle Nahtpassungen aus den gemeinsam geplanten Ausgaben bilden."""
         existing = list(document.fits)  # Passungen aus früheren Transaktionen
-        connector_starts: dict[ObjectId, int] = {object_id: plan.connector_start}
         known: dict[ObjectId, dict[FeatureId, Feature]] = {object_id: dict(plan.features)}
         created.clear()
         dropped.clear()
@@ -443,11 +450,9 @@ def apply_planned(
             dropped.extend(gone_old)
             dropped.extend(gone_new)
             first_features, second_features = _features_after(carried, step_plane)
-            feature_start = connector_starts.pop(target, 1)
+            # Dieselbe Nummer, mit der der Schritt seine Stifte benennt.
+            feature_start = int(operation.params["first_pin"])
             seated = plan.pins_at(index, pins)
-            next_start = feature_start + seated
-            connector_starts[made[0]] = next_start
-            connector_starts[made[1]] = next_start
             # So viele Paare, wie Stifte sitzen — nicht so viele, wie
             # gewünscht waren. Eine zu schmale Schnittfläche bekommt keinen
             # Stift und deshalb auch keine Passung, die auf ihn zeigt.

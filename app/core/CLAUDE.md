@@ -122,7 +122,9 @@ Versionen im selben Ordner.
 Punktwolken, gegen die die Suche ihre Ebenen prüft, §22.3; `bed_margin` ist der
 Rand zum Bettrand, mit dem danach angeordnet wird; `apply_planned` hängt die
 Passungen eines im selben Lauf noch einmal geteilten Stücks um, über die
-Verbinderplanung je Schnitt in `SplitPlan.connectors`)
+Verbinderplanung je Schnitt in `SplitPlan.connectors`, und schreibt jedem
+Schritt die erste Nummer seiner Stifte in `first_pin` — dieselbe, mit der die
+Passungen ihn nennen)
 · `generate.py` (Weg 3: Text oder Bild zu einem Körper) · `counterpart.py`
 (beide Hälften einer Verbindung auf zwei Körpern)
 

@@ -2823,6 +2823,62 @@ def test_loose_arms_are_parted_at_the_gap(profile: Profile) -> None:
     assert "fit.missing_feature" not in [f.code for f in result.scene.report.findings]
 
 
+def test_a_recognised_pin_without_a_twin_does_not_shift_a_later_seam(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-267: Ein erkannter Stift ohne Zwilling verschiebt die Stifte späterer Nähte nicht.
+
+    Auto Split plant die Passungen jeder Naht mit den Namen ihrer Stifte, bevor
+    die Schritte rechnen. Der Schritt zählte seine Nummern nach jedem Namen
+    ``pin_…`` und ``bore_…`` am Stück — auch nach einem erkannten Stift, den
+    die Zuordnung keinem erklärten zuwies (ERKENNUNG-16, die Gabel): Er hieß
+    ``pin_3``, die Verbinder der nächsten Naht rückten eine Nummer weiter, zwei
+    Passungen zeigten ins Leere und eine auf den fremden Stift. Nachgestellt
+    wird die Empfindlichkeit selbst: Die Zuordnung lässt jeden erkannten
+    Stift umkämpft, wie vor ERKENNUNG-16. Jetzt trägt jeder Schritt die
+    Nummer, die der Plan ihm gab, und der fremde Stift weicht aus.
+    """
+    import dataclasses
+    import importlib
+
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    original = evaluation.declared_partners
+
+    def contested(declared: Any, detected: Any, centre: Any, diagonal: Any, **kwargs: Any) -> Any:
+        seen = original(declared, detected, centre, diagonal, **kwargs)
+        pinned = sorted(name for name in seen.mapping if declared[name].kind == "pin")
+        return dataclasses.replace(
+            seen,
+            mapping={name: found for name, found in seen.mapping.items() if name not in pinned},
+            ambiguous={**seen.ambiguous, **{name: (seen.mapping[name],) for name in pinned}},
+            fresh=(*seen.fresh, *(seen.mapping[name] for name in pinned)),
+        )
+
+    monkeypatch.setattr(evaluation, "declared_partners", contested)
+    _plan, applied, result = built_split(fork(), profile)
+
+    stray = [
+        (object_id, name)
+        for object_id in applied.object_ids
+        for name, feature in result.scene.objects[object_id].features.items()
+        if feature.kind == "pin" and feature.provenance == "detected"
+    ]
+    assert stray, "the recognition must have left a pin without its twin"
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert "fit.missing_feature" not in codes
+    assert len(applied.fits) == 10
+    for fit in applied.fits:
+        pin = result.scene.objects[fit.a.object_id].features[fit.a.feature_id]
+        bore = result.scene.objects[fit.b.object_id].features[fit.b.feature_id]
+        assert (pin.kind, pin.provenance, bore.kind, bore.provenance) == (
+            "pin",
+            "generated",
+            "hole",
+            "generated",
+        ), fit.name
+        assert pin.params["centre"] == pytest.approx(bore.params["centre"]), fit.name
+
+
 def test_a_gap_is_found_where_no_edge_crosses() -> None:
     """Eine Lücke ist, wo keine Kante die Ebene kreuzt und beiderseits Material liegt."""
     two = manifold_body(

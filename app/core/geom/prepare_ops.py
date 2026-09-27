@@ -181,6 +181,28 @@ _CONNECTOR_DOC = _(
 )
 
 
+def _first_pin_param() -> Any:
+    """Die erste Nummer der Stifte einer Naht — von *Automatisch teilen* eingetragen (RM-267).
+
+    Der Plan nennt die Passungen jeder Naht mit den Namen ihrer Stifte, bevor
+    ein Schritt rechnet (``split.apply_planned``). Zählte der Schritt selbst
+    nach den Namen am Stück, rückte ein erkannter Stift ohne erklärten
+    Zwilling jede spätere Nummer weiter, und die Passungen zeigten ins Leere
+    oder auf den fremden Stift (ERKENNUNG-16). Null zählt nach dem Stück wie
+    bisher; so rechnet jeder gespeicherte Schritt ohne das Feld wie vorher.
+    """
+    return param(
+        title=_("Erste Stiftnummer"),
+        default=0,
+        minimum=0,
+        placement="advanced",
+        doc=_(
+            "Automatisch teilen trägt sie ein, damit jede Passung ihren Stift findet. "
+            "Null zählt nach den Stiften, die das Teil schon trägt."
+        ),
+    )
+
+
 #: Was eine Hälfte von der anderen unterscheidet, sobald verstiftet wurde,
 #: und das Zeichen davor.
 _HALF_MARK = " · "
@@ -16043,6 +16065,7 @@ class SplitPinnedParams(BaseParams):
             "zusammen weniger Stützen brauchen."
         ),
     )
+    first_pin: int = _first_pin_param()
 
 
 @op_params
@@ -16368,6 +16391,7 @@ def split_pinned(ctx: OpContext) -> OpResult:
         diameter=params.diameter,
         play=params.play,
         pins_on_b=params.pins_on_b,
+        first_pin=params.first_pin,
     )
 
 
@@ -16381,6 +16405,7 @@ def _cut_and_pin(
     diameter: float,
     play: float,
     pins_on_b: bool = False,
+    first_pin: int = 0,
 ) -> OpResult:
     """Der gemeinsame Teil von *Teilen* und *An Linie trennen*.
 
@@ -16391,7 +16416,10 @@ def _cut_and_pin(
     """
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
-    connector_start = next_connector_index(source.features)
+    # **Die erste Nummer nennt der Plan, wo es einen gibt** (RM-267): Auto
+    # Split hat die Passungen dieser Naht schon mit ihr benannt. Nach den
+    # Namen am Stück gezählt, zählte ein erkannter Stift ohne Zwilling mit.
+    connector_start = first_pin if first_pin > 0 else next_connector_index(source.features)
 
     first, second, findings = split_at_plane(mesh, plane)
     # **Verorten kann nur die Operation** (RM-039). `split_at_plane` rechnet auf
@@ -16464,6 +16492,15 @@ def _cut_and_pin(
         if pins_on_b
         else (pair.pin_features, pair.bore_features)
     )
+    taken = {
+        *first_features,
+        *second_features,
+        *first_added,
+        *second_added,
+        *source.reserved_feature_ids,
+    }
+    first_features = _clear_of(first_features, first_added, taken)
+    second_features = _clear_of(second_features, second_added, taken)
     return OpResult(
         solver=pair.solver,
         outputs=[
@@ -16482,6 +16519,29 @@ def _cut_and_pin(
         ],
         findings=[*findings, *pair.findings, _halves_still_together(source)],
     )
+
+
+def _clear_of(
+    carried: dict[str, Feature], added: Mapping[str, Feature], taken: set[str]
+) -> dict[str, Feature]:
+    """Die Merkmale einer Hälfte, ohne einen Namen ihrer neuen Verbinder.
+
+    Nur wo der Plan die Nummern vorgibt (``first_pin``, RM-267), kann ein
+    solcher Name schon vergeben sein — an einen Stift, den die Erkennung am
+    Stück fand und keinem Verbinder zuwies. Er weicht auf den nächsten freien
+    Namen seiner Art aus, statt vom Verbinder still überschrieben zu werden;
+    einen Bezug auf ihn gibt es nicht, er entstand im selben Lauf. ``taken``
+    nimmt jeden neuen Namen auf.
+    """
+    kept: dict[str, Feature] = {}
+    for name, feature in carried.items():
+        if name not in added:
+            kept[name] = feature
+            continue
+        fresh = _free_id_among(taken, name.rpartition("_")[0] or name)
+        taken.add(fresh)
+        kept[fresh] = dataclasses.replace(feature, id=fresh)
+    return kept
 
 
 def _reversed(normal: Vec3) -> Vec3:
@@ -16802,6 +16862,7 @@ class SplitLineParams(BaseParams):
             "Schnapper zur Naht passen."
         ),
     )
+    first_pin: int = _first_pin_param()
 
 
 @register_op(
@@ -16850,6 +16911,7 @@ def split_line(ctx: OpContext) -> OpResult:
         diameter=params.diameter,
         play=params.play,
         pins_on_b=params.pins_on_b,
+        first_pin=params.first_pin,
     )
 
 

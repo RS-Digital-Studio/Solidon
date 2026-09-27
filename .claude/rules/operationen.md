@@ -1489,6 +1489,15 @@ waren es fünf, vier davon in `tests/test_agent_suite.py`.
 - **Der Rand ist der des Anordnens** (`split.bed_margin`). Wer Auto Split mit
   kleinerem Rand fährt als *Auf dem Bett anordnen*, bekommt Stücke, die nach
   dem Anordnen über dem Bettrand liegen.
+- **Die Nummern der Stifte vergibt der Plan, nicht das Stück** (RM-267). Die
+  Passungen einer Teilung nennen ihre Stifte, bevor ein Schritt rechnet;
+  `apply_planned` schreibt jedem Schritt die erste Nummer in `first_pin`, und
+  `_cut_and_pin` nimmt sie. Nach den Namen am Stück gezählt
+  (`pins.next_connector_index`, der Weg jedes Schritts ohne das Feld), zählte
+  ein erkannter Stift ohne Zwilling mit, und die Passungen zeigten ins Leere
+  oder auf ihn (ERKENNUNG-16). Trägt ein erkanntes Merkmal schon den Namen
+  eines neuen Verbinders, weicht es aus (`_clear_of`) — überschrieben wird
+  nichts.
 - **Befunde der Suche stehen in keinem Schritt** und überleben die folgende
   Auswertung nur, weil das Fenster sie wieder anhängt, solange der Verlauf da
   steht, wo die Teilung ihn ließ (`MainWindow._split_findings`).
