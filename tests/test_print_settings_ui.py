@@ -710,13 +710,20 @@ def test_a_speed_survives_being_shown(dialog: PrintSettingsDialog) -> None:
     allein durch das Öffnen des Fensters mehr in der Datei, als das Material
     verträgt.
     """
+    from app.ui.print_settings_dialog import _setting_editor_value
+
     genau = 59.52380952380952
     dialog.settings = replace(
         dialog.settings, speed=replace(dialog.settings.speed, outer_wall=genau)
     )
     dialog._load_into_editors()
 
-    zurueck = dialog._collect().speed.outer_wall
+    # Seit Stufe A liest der Dialog nur das Feld zurück, das sich geändert hat
+    # (``_editor_changed``); bloßes Anzeigen ändert das Modell gar nicht.
+    assert dialog.settings.speed.outer_wall == genau
+    zurueck = _setting_editor_value(
+        dialog._editors["speed.outer_wall"], dialog._fields["speed.outer_wall"]
+    )
 
     fluss = dialog.settings.layers.layer_height * dialog.settings.layers.line_width
     assert zurueck * fluss <= dialog.settings.filament.max_flow + 1e-9, (
@@ -887,6 +894,10 @@ def test_every_choice_entry_says_what_it_does(dialog: PrintSettingsDialog) -> No
     Liste und als ``AccessibleDescriptionRole`` für den Bildschirmleser.
     Geprüft über **alle** Enum-Felder, nicht an einem Beispiel: fünfzehn
     erklärte Einträge von siebenundsechzig wären schlimmer als keine.
+
+    Wo ein Feld für einen Wert einen eigenen Satz führt (``choice_notes``),
+    gilt dieser: „Automatisch“ heißt bei Stützen und Haftung etwas anderes als
+    der allgemeine Satz (Review Stufe A+B, H8).
     """
     from app.ui.labels import choice_note
 
@@ -896,9 +907,10 @@ def test_every_choice_entry_says_what_it_does(dialog: PrintSettingsDialog) -> No
             continue
         editor = dialog._editors[field.path]
         assert isinstance(editor, QComboBox)
+        own = {value: str(text) for value, text in field.choice_notes}
         for index in range(editor.count()):
             value = editor.itemData(index)
-            note = choice_note(value)
+            note = own.get(value) or choice_note(value)
             if note is None:
                 continue
             if editor.itemData(index, Qt.ItemDataRole.ToolTipRole) != note:
@@ -1405,6 +1417,9 @@ def test_a_part_that_fits_no_bed_is_named_before_slicing(
 
     scene = types_module.SimpleNamespace(objects={"obj_1": big})
     monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    # Ein Slicer ist da — ohne ihn nennt *Slicen* zu Recht zuerst den fehlenden
+    # Slicer, und die Suite fragt die Maschine nicht (``_machine_stays_out_of_it``).
+    dialog._slicer_path = Path("prusa-slicer-console")
     dialog._show_slicer_state()
 
     assert "Ständer" in dialog.oversize_note.text()
@@ -2290,9 +2305,13 @@ def test_remembering_profiles_also_notes_their_slicer(
 
 def test_the_project_settings_win_over_the_preset(qt_app: QApplication) -> None:
     """§29: was eingestellt wurde, gilt beim nächsten Öffnen weiter — sonst
-    wäre der Dialog eine Sitzung lang gültig und danach vergessen."""
+    wäre der Dialog eine Sitzung lang gültig und danach vergessen.
+
+    Eingestellt heißt seit Stufe A des Konzepts Herstellerprofil: mit Herkunft
+    (``with_choice``, wie der Dialog es schreibt). Ein Wert ohne Herkunft ist
+    Grundlage und folgt dem Profil (``print_settings.on_base``)."""
     session = Session()
-    stored = print_settings.with_path(
+    stored = print_settings.with_choice(
         print_settings.resolve(session.profile), "shell.wall_count", 9
     )
     session.project.document.print_settings = stored
@@ -3086,6 +3105,110 @@ def test_a_remembered_choice_wins_over_the_match(qt_app: QApplication) -> None:
     assert dialog.machine_choice.currentData() == str(other.path)
 
 
+@pytest.mark.parametrize(
+    ("printer", "slicer", "wins"),
+    [
+        ("centauri-carbon-2", "", "gemerkt"),
+        ("", "", "gemerkt"),
+        ("generic-220", "", "passend"),
+        ("centauri-carbon-2", "C:/Anderswo/OrcaSlicer.exe", "passend"),
+    ],
+)
+def test_a_remembered_machine_belongs_to_its_printer_and_slicer(
+    qt_app: QApplication, printer: str, slicer: str, wins: str
+) -> None:
+    """Die gemerkte Maschine gilt nur für Drucker und Slicer, für die sie
+    gewählt wurde — dieselbe Regel wie beim Export (``remembered_setup``).
+    Ohne sie trug ein Projekt auf dem allgemeinen Drucker das Maschinenprofil
+    des Centauri Carbon 2: Der Slicer rechnete mit 256 mm Bett, Solidon mit 220."""
+    session = Session()
+    session.project.document.printer = "centauri-carbon-2"
+    machine = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+    )
+    other = _profile("Etwas anderes", "machine", printer_model="Etwas anderes", nozzle=0.4)
+    settings = UiSettings()
+    settings.slicer_machine_profile = str(other.path)
+    settings.slicer_profile_printer = printer
+    settings.slicer_profile_slicer = slicer
+    dialog = PrintSettingsDialog(session, settings)
+    try:
+        dialog._profiles_found([machine, other])
+
+        expected = other if wins == "gemerkt" else machine
+        assert dialog.machine_choice.currentData() == str(expected.path)
+    finally:
+        dialog.deleteLater()
+
+
+def test_the_printer_the_slicer_is_set_to_can_be_adopted(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Passt zum Drucker des Projekts kein Profil, der Slicer steht aber auf
+    einem Drucker, den Solidon kennt, bietet der Dialog genau diesen an —
+    und merkt ihn für das nächste Projekt (Robert, 27.09.2026: allgemeiner
+    Drucker im Projekt, der ElegooSlicer auf dem Centauri Carbon 2)."""
+    monkeypatch.setattr(
+        "app.core.export.slicer_profiles.chosen_machine",
+        lambda _flavour, _executable: "Elegoo Centauri Carbon 2 0.4 nozzle",
+    )
+    session = Session()
+    session.project.document.printer = "generic-220"
+    settings = UiSettings()
+    machine = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+    )
+    dialog = PrintSettingsDialog(session, settings)
+    try:
+        dialog._slicer_path = Path("ElegooSlicer.exe")
+        dialog._profiles_found([machine])
+
+        assert dialog.machine_choice.currentIndex() == 0, "der einzige Eintrag ist die Wahl"
+        # Der Knopf selbst; der Abschnitt darum zeigt sich erst mit einem
+        # gefundenen Slicer, und den gibt es hier nicht.
+        assert not dialog.adopt_printer.isHidden()
+        title = str(profiles.printer("centauri-carbon-2").title)
+        assert dialog.adopt_printer.text() == f"{title} übernehmen"
+        assert "ElegooSlicer" in dialog.adopt_printer.toolTip()
+        assert dialog.adopt_printer.accessibleDescription() == dialog.adopt_printer.toolTip()
+
+        dialog.adopt_printer.click()
+
+        assert dialog.printer_choice.currentData() == "centauri-carbon-2"
+        assert session.profile.printer.id == "centauri-carbon-2"
+        assert settings.printer == "centauri-carbon-2", "das nächste Projekt beginnt damit"
+        assert dialog.adopt_printer.isHidden(), "jetzt passt das Profil"
+    finally:
+        dialog.deleteLater()
+
+
+def test_only_a_picked_printer_becomes_the_next_projects_printer(
+    qt_app: QApplication,
+) -> None:
+    """Die Wahl im Feld zählt, das Befüllen beim Öffnen nicht: Ein Projekt,
+    das einen anderen Drucker mitbringt, ändert die Vorgabe nicht."""
+    session = Session()
+    session.project.document.printer = "centauri-carbon-2"
+    settings = UiSettings()
+    settings.printer = "generic-220"
+    dialog = PrintSettingsDialog(session, settings)
+    try:
+        assert settings.printer == "generic-220", "geöffnet ist nicht gewählt"
+        index = dialog.printer_choice.findData("prusa-mk4s")
+        assert index >= 0
+        dialog.printer_choice.setCurrentIndex(index)
+        dialog.printer_choice.activated.emit(index)
+        assert settings.printer == "prusa-mk4s"
+    finally:
+        dialog.deleteLater()
+
+
 def test_a_built_fit_counts_like_an_entered_one(session: Session, qt_app) -> None:
     """§29: die Regeln für Passungen greifen auch ohne Eintrag im Dokument.
 
@@ -3740,7 +3863,9 @@ def test_switching_the_slicer_drops_the_result_of_the_old_one(
 
     assert dialog._gcode == [], "die Druckdatei des alten Slicers wurde weiter angeboten"
     assert not dialog.save_button.isEnabled()
-    assert not dialog.state.text(), "die Kennzahlen des alten Laufs standen noch da"
+    # Seit Stufe C sieht der Dialog auch PrusaSlicers Profile durch und sagt das
+    # in der Statuszeile — die Kennzahlen des alten Laufs dürfen nur nicht bleiben.
+    assert "Druckzeit" not in dialog.state.text(), "die Kennzahlen des alten Laufs standen noch da"
 
 
 # --- Die Slicersuche haelt den Dialog nicht auf (§2.8) ----------------------------
@@ -3795,6 +3920,11 @@ def test_the_print_dialog_stands_before_the_slicer_search_comes_back(
         gebraucht = time.perf_counter() - begonnen
 
         assert gebraucht < 2.0, f"der Dialog wartete {gebraucht:.1f} s auf die Suche"
+        # Der Arbeiter ist gestartet, erreicht die Suche aber erst, wenn sein
+        # Thread läuft — unter Last (Tor mit acht Arbeitern) nach dem Blick hier.
+        frist = time.monotonic() + 10.0
+        while not lief_in and time.monotonic() < frist:
+            time.sleep(0.01)
         assert lief_in, "die Suche lief gar nicht — dann prüft dieser Test nichts"
         assert lief_in[0] != threading.main_thread().name, (
             f"die Suche lief im Qt-Hauptthread ({lief_in[0]}) — genau das war der Fehler"
@@ -5795,7 +5925,9 @@ def test_print_advice_cannot_disable_support_needed_by_another_body(qt_app):
     mesh = trimesh.creation.cone(radius=20, height=10, sections=32)
     mesh.apply_transform(trimesh.transformations.rotation_matrix(math.pi, [1, 0, 0]))
     cone = SceneObject(id="Kegel", name="Kegel", mesh=place_on_bed(MeshData.of(mesh)))
-    settings = print_settings.with_path(
+    # Eine eigene Wahl: ohne Herkunft wäre „grid" seit Stufe A Grundlage und
+    # käme beim Öffnen aus dem Profil.
+    settings = print_settings.with_choice(
         print_settings.resolve(profiles.make_profile()), "support.style", "grid"
     )
     dialog = _print_advice_dialog(qt_app, [cube, cone], settings=settings)
@@ -5866,7 +5998,8 @@ def test_print_advice_keeps_its_layers_when_only_the_advice_changes(qt_app, monk
 
     assert len(calls) == 1, "dieselbe Geometrie wird nur einmal geschnitten"
     assert dialog._advice_request == dialog._advice_context()
-    assert dialog.settings.infill.density == pytest.approx(31)
+    # Das Feld spricht Prozent, der Kern rechnet Anteile (``Field.factor``).
+    assert dialog.settings.infill.density == pytest.approx(0.31)
 
 
 def test_print_advice_takes_the_layers_the_report_already_has(qt_app, monkeypatch):
@@ -6021,7 +6154,14 @@ def test_print_advice_uses_manufacturer_flow_and_keeps_other_manufacturer_values
     monkeypatch,
     tmp_path,
 ):
-    """Herstellerwerte begrenzen den Rat; eine angenommene Kühlzeit erhält deren Nachbarwerte."""
+    """Herstellerwerte begrenzen den Rat; eine angenommene Kühlzeit erhält deren Nachbarwerte.
+
+    Den Tempodeckel nach dem Volumenstrom bietet der Dialog für die
+    Orca-Familie nicht an (``slicer_keys.caps_volumetric_speed``): Der Slicer
+    deckelt selbst nach dem Volumenstrom, den er bekommt, und der Deckel hob an
+    der Kobra 2 die Lückenfüllung des Herstellers an (27.09.2026). Die
+    Außenwand bleibt deshalb, und der Volumenstrom des Herstellers geht mit.
+    """
     profile = tmp_path / "maker.json"
     profile.write_text(
         json.dumps(
@@ -6049,10 +6189,11 @@ def test_print_advice_uses_manufacturer_flow_and_keeps_other_manufacturer_values
     dialog._slicer_path = Path("orca-slicer.exe")
     dialog._refresh_advice()
     _wait_for_print_advice(dialog, qt_app)
+    before = dialog.settings.speed.outer_wall
     dialog._apply_advice()
     setup = handover.SlicerSetup(Path("orca-slicer.exe"), "orca")
     effective = handover.settings_for_slot(dialog.settings, dialog.session.profile, slot, setup)
-    assert dialog.settings.speed.outer_wall <= 7
+    assert dialog.settings.speed.outer_wall == pytest.approx(before), "Orca deckelt selbst"
     assert effective.filament.max_flow == pytest.approx(0.6)
     assert effective.temperature.nozzle == 215
     assert effective.cooling.fan_speed == pytest.approx(0.43)
@@ -6062,14 +6203,20 @@ def test_print_advice_uses_manufacturer_flow_and_keeps_other_manufacturer_values
 
 @pytest.mark.parametrize("when", ["before_open", "field_change"])
 def test_empty_print_dialog_explains_an_impossible_flow_and_recovers(qt_app, when):
-    """Auch ohne Modell bleiben ungültige Empfehlungen sichtbar korrigierbar."""
+    """Auch ohne Modell bleiben ungültige Empfehlungen sichtbar korrigierbar.
+
+    Vor dem Öffnen gesetzt heißt: früher selbst gewählt. Ohne Herkunft wären
+    die Werte seit Stufe A Grundlage und kämen beim Öffnen aus dem Profil.
+    """
     session = Session()
     settings = print_settings.resolve(session.profile)
-    invalid = replace(
-        settings,
-        layers=replace(settings.layers, layer_height=0.8, line_width=2.0),
-        filament=replace(settings.filament, max_flow=0.5),
-    )
+    invalid = settings
+    for path, value in (
+        ("layers.layer_height", 0.8),
+        ("layers.line_width", 2.0),
+        ("filament.max_flow", 0.5),
+    ):
+        invalid = print_settings.with_choice(invalid, path, value)
     if when == "before_open":
         session.set_print_settings(invalid)
     dialog = PrintSettingsDialog(session, UiSettings())
@@ -6285,7 +6432,9 @@ def test_secondary_filament_advice_is_visible_but_not_applicable_in_prusa(qt_app
     large = _print_advice_cube("Groß", slots=(red,))
     large.mesh = MeshData.of(trimesh.creation.box((40, 40, 10)))
     small = _print_advice_cube("Klein", slots=(white,))
-    settings = print_settings.with_path(
+    # Eine eigene Wahl: ohne Herkunft wäre der Rand seit Stufe A Grundlage, und
+    # der Vorschlag für den kleinen Würfel stünde als übertragbar daneben.
+    settings = print_settings.with_choice(
         print_settings.resolve(profiles.make_profile()), "adhesion.kind", "brim"
     )
     dialog = _print_advice_dialog(qt_app, [large, small], settings=settings)

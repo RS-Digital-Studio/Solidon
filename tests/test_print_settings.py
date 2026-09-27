@@ -5520,6 +5520,11 @@ def test_a_slicer_that_arrived_is_picked_up_without_reopening(
     keine sauber. Das Aufgreifen misst sich an einem Slicer ohne
     Profilpflicht; den Wächter der Orca-Familie hält
     ``tests/test_print_settings_ui.py`` fest.
+
+    Seit Stufe C sieht der Dialog auch bei PrusaSlicer den Profilbestand
+    durch, und bis dahin ist der Knopf zu. Der Test wartet deshalb auch auf
+    diese Suche. Findet sie nichts, druckt PrusaSlicer mit Solidons Werten,
+    und der Hinweis darf nicht behaupten, er lehne den Auftrag ab.
     """
     from app.core import discover
     from app.ui.print_settings_dialog import PrintSettingsDialog
@@ -5539,9 +5544,12 @@ def test_a_slicer_that_arrived_is_picked_up_without_reopening(
 
     dialog.recheck_slicer()
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    assert dialog.wait_for_profiles(), "die Profilsuche kam nicht zurück"
 
     assert dialog.slice_button.isEnabled(), "jetzt gibt es einen"
     assert dialog.setup_button.isHidden(), "und nichts mehr zu holen"
+    assert "lehnt" not in dialog.profile_note.text(), dialog.profile_note.text()
+    assert "Solidons eigene Werte" in dialog.profile_note.text()
 
 
 def test_a_wall_below_one_nozzle_line_becomes_a_finding_not_a_suggestion() -> None:
@@ -5810,6 +5818,15 @@ def test_several_slicers_become_a_choice(
         "Cura",
     ], "benannt nach dem Installationsordner, nicht nach der Datei"
     assert dialog._slicer_path == drei[0]
+    # Die Wahl steht über dem Abschnitt der Profile, nicht in ihm: zugeklappt
+    # war sie nicht zu finden (Robert, 27.09.2026: „den slicer kann ich im
+    # druckeinstellungen auch nicht einstellen").
+    toggle = dialog.slicer_toggle
+    assert toggle is not None
+    toggle.setChecked(False)
+    assert not dialog.slicer_inner.isVisibleTo(dialog), "der Abschnitt ist zu"
+    assert dialog.slicer_choice.isVisibleTo(dialog), "und der Slicer bleibt wählbar"
+    assert dialog.slicer_label.isVisibleTo(dialog)
 
     monkeypatch.setattr(discover, "find_programs", lambda *_args: drei[:1])
     einer = PrintSettingsDialog(Session(), UiSettings())
