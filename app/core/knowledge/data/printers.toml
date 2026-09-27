@@ -31,7 +31,9 @@
 # im Slicer des Herstellers (27.09.2026): ElegooSlicer, Bambu Studio, PrusaSlicer,
 # Creality Print; Anycubic und Sovol aus OrcaSlicer. Dort steht sie gegen die
 # Waagerechte (support_threshold_angle 30 → 60 hier; PrusaSlicers
-# support_material_threshold MK4S 35 → 55, MINI 50 → 40, XL 45 → 45; SV06 40 → 50).
+# support_material_threshold 35 → 55 am MK4S, 40 → 50 an MINI und XL, jeweils im
+# Standardprozess mit Input Shaper — die älteren Prozesse ohne ihn führen 50 und
+# 45, sind bei Prusa aber abgelöst; SV06 40 → 50).
 # Ohne Angabe gilt die Startregel von 45 Grad; eine Kalibrierung geht vor.
 # Konturen: XY relativ zur nominellen Bettmitte; Z ab Bett. Ohne Kontur gilt
 # das nominale Rechteck. Brim-/Skirt-Ränder gehören zum Auftrag, nicht hierher.
@@ -245,7 +247,7 @@ speed_first_layer = 20.0
 speed_bridge = 25.0
 acceleration = 1000.0
 outer_wall_acceleration = 700.0
-overhang_limit = 40.0
+overhang_limit = 50.0
 
 [prusa-xl]
 title = "Prusa XL"
@@ -267,7 +269,7 @@ speed_bridge = 50.0
 acceleration = 2500.0
 outer_wall_acceleration = 2500.0
 flow_factor = 1.25
-overhang_limit = 45.0
+overhang_limit = 50.0
 
 [creality-k1]
 title = "Creality K1"
