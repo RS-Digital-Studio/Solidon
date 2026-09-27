@@ -35,6 +35,11 @@
 # Standardprozess mit Input Shaper — die älteren Prozesse ohne ihn führen 50 und
 # 45, sind bei Prusa aber abgelöst; SV06 40 → 50).
 # Ohne Angabe gilt die Startregel von 45 Grad; eine Kalibrierung geht vor.
+# first_layer_acceleration ist die Beschleunigung der ersten Schicht aus demselben
+# Standardprozess wie die Tempi (Orca initial_layer_acceleration, PrusaSlicer
+# first_layer_acceleration im Input-Shaper-Prozess; 27.09.2026). Nur Cura liest
+# sie, die anderen Slicer nehmen sie aus dem Profil des Herstellers. Ohne Angabe
+# 500 wie die meisten Werksprofile; der SV06 führt dort keine (0).
 # cura_definition ist die Druckerdefinition in Cura 5.13 (Dateiname ohne
 # .def.json unter share/cura/resources/definitions). Aus ihr kommen Start- und
 # Endcode des Druckers in die Konsolenübergabe. Cura führt die meisten Drucker
@@ -77,6 +82,7 @@ acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.75
 overhang_limit = 60.0
+first_layer_acceleration = 500.0
 
 [elegoo-neptune-4]
 title = "Elegoo Neptune 4"
@@ -99,6 +105,7 @@ acceleration = 6000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.25
 overhang_limit = 60.0
+first_layer_acceleration = 500.0
 cura_definition = "elegoo_neptune_4"
 
 [elegoo-neptune-4-plus]
@@ -122,6 +129,7 @@ acceleration = 5000.0
 outer_wall_acceleration = 2500.0
 flow_factor = 1.25
 overhang_limit = 60.0
+first_layer_acceleration = 500.0
 cura_definition = "elegoo_neptune_4plus"
 
 [bambu-a1]
@@ -144,6 +152,7 @@ speed_bridge = 50.0
 acceleration = 6000.0
 outer_wall_acceleration = 5000.0
 overhang_limit = 60.0
+first_layer_acceleration = 500.0
 
 [bambu-a1-mini]
 title = "Bambu Lab A1 mini"
@@ -165,6 +174,7 @@ speed_bridge = 50.0
 acceleration = 6000.0
 outer_wall_acceleration = 5000.0
 overhang_limit = 60.0
+first_layer_acceleration = 500.0
 
 [bambu-p1s]
 title = "Bambu Lab P1S"
@@ -189,6 +199,7 @@ speed_bridge = 50.0
 acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 overhang_limit = 60.0
+first_layer_acceleration = 500.0
 
 [bambu-x1c]
 title = "Bambu Lab X1 Carbon"
@@ -212,6 +223,7 @@ speed_bridge = 50.0
 acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 overhang_limit = 60.0
+first_layer_acceleration = 500.0
 
 [prusa-mk4s]
 title = "Prusa MK4S"
@@ -234,6 +246,7 @@ acceleration = 4000.0
 outer_wall_acceleration = 4000.0
 flow_factor = 1.25
 overhang_limit = 55.0
+first_layer_acceleration = 500.0
 
 [prusa-mini]
 title = "Prusa MINI+"
@@ -255,6 +268,7 @@ speed_bridge = 25.0
 acceleration = 1000.0
 outer_wall_acceleration = 700.0
 overhang_limit = 50.0
+first_layer_acceleration = 500.0
 
 [prusa-xl]
 title = "Prusa XL"
@@ -277,6 +291,7 @@ acceleration = 2500.0
 outer_wall_acceleration = 2500.0
 flow_factor = 1.25
 overhang_limit = 50.0
+first_layer_acceleration = 500.0
 
 [creality-k1]
 title = "Creality K1"
@@ -299,6 +314,7 @@ acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.17
 overhang_limit = 60.0
+first_layer_acceleration = 1000.0
 
 [creality-k1-max]
 title = "Creality K1 Max"
@@ -321,6 +337,7 @@ acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.17
 overhang_limit = 60.0
+first_layer_acceleration = 1000.0
 cura_definition = "creality_k1max"
 
 [creality-ender3-v3]
@@ -344,6 +361,7 @@ acceleration = 12000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.5
 overhang_limit = 60.0
+first_layer_acceleration = 500.0
 
 [anycubic-kobra-2]
 title = "Anycubic Kobra 2"
@@ -364,6 +382,7 @@ speed_bridge = 40.0
 acceleration = 2500.0
 outer_wall_acceleration = 700.0
 overhang_limit = 60.0
+first_layer_acceleration = 2000.0
 cura_definition = "anycubic_kobra2"
 
 [sovol-sv06]

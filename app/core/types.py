@@ -840,6 +840,16 @@ class PrinterProfile:
     die Übergabe sagt es (``handover.machine_missing``): Dessen Startcode
     fährt nach Hause, fördert drei Millimeter Filament in die Luft und legt
     weder eine Spüllinie noch ein Bettnetz an."""
+    first_layer_acceleration: float | None = None
+    """Die Beschleunigung der ersten Schicht in mm/s², aus demselben
+    Standardprozess des Herstellers wie die Tempi (Orca
+    ``initial_layer_acceleration``, PrusaSlicer ``first_layer_acceleration``).
+
+    Gebraucht wird sie bei Cura, wo Solidons Satz die Grundlage bleibt: Dort
+    erbte die erste Schicht die Druckbeschleunigung — 12 000 mm/s² am
+    Ender-3 V3, wo Creality mit 500 anfährt. Die anderen Slicer nehmen sie aus
+    dem Profil des Herstellers selbst. Ohne Angabe gilt die Vorgabe der
+    Werksprofile (``handover._FIRST_LAYER_ACCELERATION``)."""
 
     @property
     def is_resin(self) -> bool:

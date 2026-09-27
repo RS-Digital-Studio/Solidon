@@ -404,6 +404,7 @@ _PRINTER_FIELDS_NO_OPERATION_READS: dict[str, str] = {
     "outer_wall_acceleration": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
     "flow_factor": "Druckeinstellungen und Slicerübergabe, keine Geometrie",
     "cura_definition": "nur die Cura-Übergabe (Start- und Endcode), keine Geometrie",
+    "first_layer_acceleration": "nur die Cura-Übergabe, keine Geometrie",
 }
 _MATERIAL_FIELDS_NO_OPERATION_READS: dict[str, str] = {
     "title": "nur Anzeige; die Kennung steht im Schlüssel",

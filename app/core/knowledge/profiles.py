@@ -176,6 +176,7 @@ PRINTER_PACE_FIELDS: Final = (
     "speed_bridge",
     "acceleration",
     "outer_wall_acceleration",
+    "first_layer_acceleration",
 )
 
 

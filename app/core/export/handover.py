@@ -144,7 +144,6 @@ _SKIN_OVERLAP: Final = 5.0
 _INFILL_OVERLAP: Final = 10.0
 _MAX_RESOLUTION: Final = 0.5
 _IRONING_FLOW: Final = 10.0
-_TRAVEL_ACCELERATION: Final = 5000.0
 _SUPPORT_GROWTH: Final = 0.4
 _SUPPORT_BRIM_LINES: Final = 3.0
 _STAIR_STEP: Final = 0.3
@@ -154,6 +153,11 @@ _SKIN_SUPPORT_BELOW: Final = 0.4
 #: Ab dieser Fülldichte lässt Cura die Überlappung weg — die Füllung stößt
 #: dann ohnehin an die Wand.
 _DENSE_INFILL: Final = 0.95
+
+#: Die Beschleunigung der ersten Schicht, wenn der Drucker keine eigene trägt
+#: (``PrinterProfile.first_layer_acceleration``), in mm/s²: der Wert der
+#: Werksprozesse von Elegoo, Bambu, Prusa und Creality-Orca am Ender-3 V3.
+_FIRST_LAYER_ACCELERATION: Final = 500.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -565,7 +569,7 @@ def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
     values = as_mapping(settings, flavour)
     values |= _machine_keys(profile, flavour)
     if flavour == "cura":
-        values = _cura_dependants(values, settings)
+        values = _cura_dependants(values, settings, profile)
     _without_line_break(values, flavour)
     return values
 
@@ -697,7 +701,9 @@ def _support_spacing(
     return written
 
 
-def _cura_dependants(written: dict[str, str], settings: PrintSettings) -> dict[str, str]:
+def _cura_dependants(
+    written: dict[str, str], settings: PrintSettings, profile: Profile
+) -> dict[str, str]:
     """Was ``CuraEngine`` aus einem geschriebenen Wert nicht selbst ableitet (§29).
 
     ``fdmprinter.def.json`` gibt jeder abgeleiteten Einstellung zweierlei mit:
@@ -720,7 +726,7 @@ def _cura_dependants(written: dict[str, str], settings: PrintSettings) -> dict[s
     """
     # Erst rechnen, dann spiegeln: ``support_line_distance`` und
     # ``skin_preshrink`` sind selbst Quellen für weitere Schlüssel.
-    _cura_computed(written, settings)
+    _cura_computed(written, settings, profile)
     for source, targets in slicer_keys.CURA_MIRRORED.items():
         copied = written.get(source)
         if copied is not None:
@@ -784,7 +790,7 @@ def _cura_fan_start(written: dict[str, str], settings: PrintSettings) -> dict[st
     return written
 
 
-def _cura_computed(written: dict[str, str], settings: PrintSettings) -> None:
+def _cura_computed(written: dict[str, str], settings: PrintSettings, profile: Profile) -> None:
     """Die gerechneten Ableitungen — je Zeile die Formel aus der Definition.
 
     Keine eigene Meinung darüber, was richtig wäre: was hier steht, hätte das
@@ -792,7 +798,7 @@ def _cura_computed(written: dict[str, str], settings: PrintSettings) -> None:
     """
     _from_line_width(written, settings)
     _for_supports(written, settings)
-    _for_speeds(written, settings)
+    _for_speeds(written, settings, profile)
     _full_fan_layer(written)
 
 
@@ -892,7 +898,7 @@ def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
     written["support_tree_angle"] = f"{max(min(angle, 85.0), 20.0):g}"
 
 
-def _for_speeds(written: dict[str, str], settings: PrintSettings) -> None:
+def _for_speeds(written: dict[str, str], settings: PrintSettings, profile: Profile) -> None:
     """Geschwindigkeiten, Temperaturen und die Schalter, ohne die sie nicht gelten."""
     # Ohne diesen gelten weder die Brückengeschwindigkeit noch der
     # Brückenlüfter — beide stehen in Cura dahinter, und Solidon schreibt beide.
@@ -902,7 +908,20 @@ def _for_speeds(written: dict[str, str], settings: PrintSettings) -> None:
     # angeboten.
     written["connect_infill_polygons"] = "false"
     written["skirt_height"] = "3" if settings.adhesion.skirt_distance > 0.0 else "1"
-    written["acceleration_travel_layer_0"] = f"{_TRAVEL_ACCELERATION:g}"
+    # **Die erste Schicht mit der Beschleunigung des Herstellers** (Prüfbericht
+    # Cura, B2). ``acceleration_layer_0`` spiegelte ``acceleration_print``, und
+    # der Ender-3 V3 fuhr Skirt und erste Schicht mit 12 000 mm/s² — Creality
+    # fährt dort 500. Nie schneller als der Rest; die Blätter folgen über
+    # ``CURA_MIRRORED``. Die Leerfahrt der ersten Schicht rechnet Cura mit
+    # ``acceleration_layer_0 * acceleration_travel / acceleration_print``, und
+    # weil die Fahrt mit der Druckbeschleunigung fährt (``CURA_MIRRORED``),
+    # ist das die Beschleunigung der ersten Schicht selbst.
+    printing_acceleration = _as_float(written.get("acceleration_print"))
+    if printing_acceleration:
+        first = profile.printer.first_layer_acceleration or _FIRST_LAYER_ACCELERATION
+        first = min(first, printing_acceleration)
+        written["acceleration_layer_0"] = f"{first:g}"
+        written["acceleration_travel_layer_0"] = f"{first:g}"
 
     printing = _as_float(written.get("speed_print"))
     if printing:

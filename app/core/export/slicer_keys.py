@@ -577,32 +577,41 @@ CURA: Final[tuple[Row, ...]] = (
 #:
 #: Hier stehen nur die **reinen Kopien**; was Cura rechnet, rechnet
 #: :func:`app.core.export.handover._cura_dependants` nach. Absichtlich nicht
-#: dabei: ``acceleration_travel`` (Cura leitet sie nur beim Spiralisieren aus
-#: der Druckbeschleunigung ab, sonst sind es feste 5000) und alles am Prime
-#: Tower, den ein Lauf mit einem Extruder nie baut.
+#: dabei: alles am Prime Tower, den ein Lauf mit einem Extruder nie baut.
+#:
+#: **Zwei Zeilen folgen nicht Curas Formel, sondern den Werksprofilen**
+#: (Stufe D, 27.09.2026). ``acceleration_travel`` leitet Cura nur beim
+#: Spiralisieren aus der Druckbeschleunigung ab, sonst fährt es feste 5000 —
+#: Elegoo setzt in Cura dieselbe Formel ohne Bedingung, Orca fährt am
+#: Ender-3 V3 12 000. Und die erste Schicht hat eine eigene Beschleunigung
+#: (``acceleration_layer_0`` aus ``PrinterProfile.first_layer_acceleration``,
+#: gesetzt in ``handover._for_speeds``); die Raft-Basis gehört zu ihr, denn
+#: sie ist die erste Schicht.
 CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
     "acceleration_print": (
         "acceleration_flooring",
         "acceleration_infill",
         "acceleration_ironing",
-        "acceleration_layer_0",
-        "acceleration_print_layer_0",
         "acceleration_roofing",
-        "acceleration_skirt_brim",
         "acceleration_support",
         "acceleration_support_bottom",
         "acceleration_support_infill",
         "acceleration_support_interface",
         "acceleration_support_roof",
         "acceleration_topbottom",
+        "acceleration_travel",
         "acceleration_wall",
         "acceleration_wall_x",
         "acceleration_wall_x_flooring",
         "acceleration_wall_x_roofing",
         "raft_acceleration",
-        "raft_base_acceleration",
         "raft_interface_acceleration",
         "raft_surface_acceleration",
+    ),
+    "acceleration_layer_0": (
+        "acceleration_print_layer_0",
+        "acceleration_skirt_brim",
+        "raft_base_acceleration",
     ),
     "acceleration_wall_0": ("acceleration_wall_0_flooring", "acceleration_wall_0_roofing"),
     "bottom_layers": ("initial_bottom_layers",),
@@ -753,7 +762,6 @@ CURA_UNTOUCHED: Final[dict[str, str]] = {
     "raft_base_infill_overlap_mm": "die Überlappung dahinter steht auf 0, gerechnet bleibt 0.",
     "raft_interface_infill_overlap_mm": "wie oben",
     "raft_surface_infill_overlap_mm": "wie oben",
-    "acceleration_travel": "Cura leitet sie nur beim Spiralisieren ab; sonst sind es feste 5000.",
     "zig_zaggify_infill": "wird falsch für jedes Muster, das Solidon anbietet — die Vorgabe.",
 }
 

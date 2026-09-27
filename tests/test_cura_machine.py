@@ -344,3 +344,64 @@ def test_every_cura_definition_in_the_printer_table_is_installed() -> None:
         {"material_print_temperature_layer_0": "215", "material_bed_temperature_layer_0": "60"},
     ).codes["machine_start_gcode"]
     assert "START_PRINT EXTRUDER_TEMP=215 BED_TEMP=60" in start
+
+
+# --- Die Befunde B2 bis B12 des Prüfberichts ------------------------------------
+
+
+def _cura_values(printer: str, material: str = "pla", **paths: object) -> dict[str, str]:
+    """Was CuraEngine für diesen Drucker bekommt: Einstellungen, Maschine, Abgeleitetes.
+
+    ``paths`` setzt Einstellungen vorher, ``speed__travel=80`` für ``speed.travel``.
+    """
+    profile = profiles.make_profile(printer, material)
+    settings = print_settings.resolve(profile)
+    for path, value in paths.items():
+        settings = print_settings.with_path(settings, path.replace("__", "."), value)
+    return handover.values_for(settings, profile, "cura")
+
+
+@pytest.mark.parametrize(
+    ("printer", "expected"),
+    [
+        # Aus demselben Standardprozess wie die Tempi: Creality im Bestand von
+        # Orca 500 am Ender-3 V3 (Prüfbericht §2.2), 1000 am K1 Max, Anycubic 2000.
+        ("creality-ender3-v3", 500.0),
+        ("creality-k1-max", 1000.0),
+        ("anycubic-kobra-2", 2000.0),
+        # Ohne Angabe des Herstellers die Vorgabe der Werksprofile.
+        ("generic-220", 500.0),
+        ("sovol-sv06", 500.0),
+    ],
+)
+def test_the_first_layer_has_its_own_acceleration(printer: str, expected: float) -> None:
+    """Die erste Schicht fuhr mit der Druckbeschleunigung: ``M204 S12000`` am Ender-3 V3.
+
+    ``acceleration_layer_0`` spiegelte ``acceleration_print``; jetzt trägt sie
+    den Wert des Herstellers, und ihre Blätter (erste Schicht, Skirt und Brim,
+    Raft-Basis) folgen ihr. Die Leerfahrt der ersten Schicht rechnet Cura aus
+    ihr, und weil die Fahrt mit der Druckbeschleunigung fährt, ist es derselbe
+    Wert.
+    """
+    values = _cura_values(printer)
+
+    for key in (
+        "acceleration_layer_0",
+        "acceleration_print_layer_0",
+        "acceleration_skirt_brim",
+        "raft_base_acceleration",
+        "acceleration_travel_layer_0",
+    ):
+        assert float(values[key]) == pytest.approx(expected), key
+    assert float(values["acceleration_print"]) > expected, "die übrigen Schichten bleiben schnell"
+    assert values["acceleration_travel"] == values["acceleration_print"], (
+        "die Fahrt beschleunigt wie der Druck, nicht mit festen 5000"
+    )
+
+
+def test_the_first_layer_is_never_faster_than_the_rest() -> None:
+    """Eine Maschine, die sanfter beschleunigt als 500, bekommt keine schnellere erste Schicht."""
+    values = _cura_values("generic-220", speed__acceleration=300.0)
+
+    assert float(values["acceleration_layer_0"]) == pytest.approx(300.0)
+    assert float(values["acceleration_print_layer_0"]) == pytest.approx(300.0)
