@@ -53,13 +53,13 @@ Nutzen da und sonst nichts.
 - Läuft eine Bohrung nach dem Versetzen, Verdoppeln oder Kippen seitlich aus dem Teil, sagt Solidon es auch an abgesetzten Stellen. Eine Kopie, die nicht entstanden ist, fällt auf.
 - Auf Rippen und in Waben meldet eine gekippte Bohrung nicht mehr fälschlich, sie rage über die Kante.
 - Nach dem Versetzen, Kippen oder Verdoppeln zeigt das Merkmalfenster die Maße, die das Ergebnis wirklich hat.
-- Nach dem Versetzen einer Bohrung ist das Übernehmen an großen Modellen in weniger als der halben Zeit fertig. Merkmale abseits der Änderung bleiben dabei, wie sie waren.
+- Nach dem Versetzen einer Bohrung bleiben Merkmale abseits der Änderung, wie sie waren, und das Übernehmen ist an großen Modellen deutlich schneller fertig.
 - Misslingt an einem Körper aus Flächen und Kanten, etwa aus einer STEP-Datei, ein Bohrungsschnitt unbemerkt, erkennt Solidon das und rechnet neu. Vorher konnte ein kaputter Körper zurückbleiben.
-- An Körpern aus Flächen und Kanten stehen Bohrungsschritte nach Sekunden: An einer Lochplatte aus einer STEP-Datei dauert das Versetzen 1,6 statt bis zu 120 Sekunden.
+- An Körpern aus Flächen und Kanten stehen Bohrungsschritte nach Sekunden: An einer Lochplatte aus einer STEP-Datei dauert *Bohrung ändern* 2 statt rund 120 Sekunden.
 - An Körpern aus Flächen und Kanten gibt *Tasche schneiden* keinen fehlerhaften Körper mehr zurück.
 - Ein Langloch lässt sich kürzer ziehen. Auf seine eigene Breite gezogen, wird es wieder eine runde Bohrung.
 - Den Griff am Ende eines Langlochs fassen Sie überall in der Öffnung, und er springt beim ersten Zug nicht mehr zur Hand.
-- Langlöcher nehmen beim Versetzen, Kippen und Verdoppeln ihre Fasen und ihre schräge Mündung mit. Vorher blieben die Fasen an der alten Stelle stehen.
+- Langlöcher nehmen beim Versetzen und Verdoppeln ihre Fasen und ihre schräge Mündung mit. Vorher blieben die Fasen an der alten Stelle stehen.
 - Eine Magnettasche aus den Bausteinen lässt sich versetzen, verdoppeln, vervielfachen und entfernen, samt der Lippe, die den Magneten hält.
 - An einer Magnettasche ändert *Bohrung ändern* den Durchmesser samt Lippe. *Nur Bohrungsdurchmesser* behält die Öffnung für den Magneten und warnt, wenn es zu eng wird.
 - Schräg zur Fläche gesetzt, bleibt die Öffnung einer Magnettasche, eines Schraubenlochs oder eines Lagersitzes frei. Vorher stand ein Keil Material darüber.
@@ -125,8 +125,7 @@ Nutzen da und sonst nichts.
 - Steht ein Teil auf vielen kleinen Füßen, schlägt Solidon einen Brim vor, auch wenn die Füße zusammen genug Fläche hätten.
 - Ein schmaler schräger Streifen an der Außenwand gilt im Prüfbericht nicht mehr als weit gespannte Brücke.
 - Die Übergabe an Cura überträgt die ersten Schichten ohne Lüfter als Hochlauf. Gewarnt wird nur noch, wenn die fertige Druckdatei wirklich abweicht.
-- An großen Modellen findet *Modell teilen* die Naht ein Drittel bis die Hälfte schneller, an mehrfarbigen in einem Bruchteil der Zeit. Geteilt wird wie vorher.
-- Beim automatischen Teilen gehört jede Passung zu ihren eigenen Stiften, auch an einem Stück, das noch einmal geteilt wurde.
+- An großen Modellen findet *Modell teilen* die Naht bis zu doppelt so schnell, an mehrfarbigen in einem Bruchteil der Zeit. Geteilt wird wie vorher.
 - Eine gedruckte Schraube, Mutter oder Dichtung aus den Bausteinen gilt im Prüfbericht nicht mehr als zerfallener Körper. Sie ist ein eigenes Teil, und das ist gewollt.
 - Mit einer Senkkopfschraube aus den Bausteinen bleibt ein Körper aus Flächen und Kanten beim Exportieren dicht: Teil und Schraube gehen je geschlossen in die Datei.
 

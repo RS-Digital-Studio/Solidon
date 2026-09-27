@@ -28,13 +28,13 @@ it into `website/version.json`.
 - If a bore runs out of the side of the part after moving, duplicating or tilting, Solidon now says so at stepped places too. A copy that was not created is noticed.
 - On ribs and in honeycombs, a tilted bore no longer wrongly reports that it runs over the edge.
 - After moving, tilting or duplicating, the feature panel shows the dimensions the result really has.
-- After moving a bore, applying it on large models finishes in less than half the time. Features away from the change stay just as they were.
+- After moving a bore, features away from the change stay just as they were, and applying it on large models finishes much faster.
 - If a bore cut fails unnoticed on a body made of faces and edges, such as one from a STEP file, Solidon notices and computes it again. Before, a broken body could be left behind.
-- On bodies made of faces and edges, bore steps are ready in seconds: on a perforated plate from a STEP file, moving takes 1.6 instead of up to 120 seconds.
+- On bodies made of faces and edges, bore steps are ready in seconds: on a perforated plate from a STEP file, *Change bore* takes 2 instead of about 120 seconds.
 - On bodies made of faces and edges, *Cut pocket* no longer returns a faulty body.
 - A slot can be pulled shorter. Pulled to its own width, it becomes a round bore again.
 - The handle at the end of a slot can be grabbed anywhere in the opening, and it no longer jumps to the pointer on the first drag.
-- Slots take their chamfers and their sloped mouth with them when moved, tilted or duplicated. Before, the chamfers stayed at the old spot.
+- Slots take their chamfers and their sloped mouth with them when moved or duplicated. Before, the chamfers stayed at the old spot.
 - A magnet pocket from the parts catalogue can be moved, duplicated, multiplied and removed, together with the lip that holds the magnet.
 - On a magnet pocket, *Change bore* changes the diameter together with the lip. *Hole diameter only* keeps the opening for the magnet and warns if it gets too tight.
 - Set at an angle to the face, the opening of a magnet pocket, a screw hole or a bearing seat stays clear. Before, a wedge of material stood over it.
@@ -100,8 +100,7 @@ it into `website/version.json`.
 - When a part stands on many small feet, Solidon suggests a brim, even if the feet together would have enough area.
 - A narrow sloping strip along the outer wall no longer counts in the report as a long bridge.
 - The handover to Cura transfers the first layers without fan as a ramp-up. A warning only comes when the finished print file really differs.
-- On large models, *Split the model* finds the seam a third to half faster, and on multi-colour ones in a fraction of the time. Splitting works as before.
-- During automatic splitting, every fit belongs to its own pins, even on a piece that was split again.
+- On large models, *Split the model* finds the seam up to twice as fast, and on multi-colour ones in a fraction of the time. Splitting works as before.
 - A printed screw, nut or seal from the parts catalogue no longer counts in the report as a fragmented body. It is a part of its own, and that is intended.
 - With a countersunk screw from the parts catalogue, a body made of faces and edges stays watertight on export: the part and the screw each go into the file closed.
 

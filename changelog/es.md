@@ -29,13 +29,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro sale por el lateral de la pieza tras desplazarlo, duplicarlo o inclinarlo, Solidon lo indica también en zonas escalonadas. Una copia que no se creó se detecta.
 - En nervaduras y panales, un taladro inclinado ya no indica por error que sobresale del borde.
 - Tras desplazar, inclinar o duplicar, el panel de características muestra las cotas que el resultado tiene de verdad.
-- Tras desplazar un taladro, aplicarlo en modelos grandes termina en menos de la mitad de tiempo. Las características ajenas al cambio quedan tal como estaban.
+- Tras desplazar un taladro, las características ajenas al cambio quedan tal como estaban, y aplicarlo en modelos grandes termina mucho más rápido.
 - Si en un cuerpo de caras y aristas, por ejemplo de un archivo STEP, un corte de taladro falla sin que se note, Solidon lo detecta y vuelve a calcular. Antes podía quedar un cuerpo roto.
-- En cuerpos de caras y aristas, los pasos de taladro están listos en segundos: en una placa perforada de un archivo STEP, desplazar tarda 1,6 en lugar de hasta 120 segundos.
+- En cuerpos de caras y aristas, los pasos de taladro están listos en segundos: en una placa perforada de un archivo STEP, «Cambiar orificio» tarda 2 en lugar de unos 120 segundos.
 - En cuerpos de caras y aristas, «Cortar una cavidad» ya no devuelve un cuerpo defectuoso.
 - Una ranura se puede acortar. Estirada hasta su propio ancho, vuelve a ser un taladro redondo.
 - El tirador del extremo de una ranura se agarra en cualquier punto de la abertura, y ya no salta hacia el puntero en el primer arrastre.
-- Las ranuras se llevan consigo sus chaflanes y su boca oblicua al desplazarlas, inclinarlas o duplicarlas. Antes, los chaflanes se quedaban en el sitio antiguo.
+- Las ranuras se llevan consigo sus chaflanes y su boca oblicua al desplazarlas o duplicarlas. Antes, los chaflanes se quedaban en el sitio antiguo.
 - Un bolsillo para imán del catálogo de bloques se puede desplazar, duplicar, multiplicar y eliminar, junto con el labio que sujeta el imán.
 - En un bolsillo para imán, «Cambiar orificio» cambia el diámetro junto con el labio. «Solo diámetro del orificio» mantiene la abertura para el imán y avisa si queda demasiado justa.
 - Si se coloca en ángulo respecto a la cara, la abertura de un bolsillo para imán, un orificio para tornillo o un asiento de rodamiento queda libre. Antes había una cuña de material encima.
@@ -101,8 +101,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una pieza se apoya en muchos pies pequeños, Solidon propone un brim, aunque los pies juntos tengan superficie suficiente.
 - Una franja estrecha e inclinada junto a la pared exterior ya no cuenta en el informe como un puente largo.
 - La entrega a Cura transmite las primeras capas sin ventilador como arranque progresivo. Solo avisa si el archivo de impresión final difiere de verdad.
-- En modelos grandes, «Dividir el modelo» encuentra la costura entre un tercio y la mitad más rápido, y en los de varios colores en una fracción del tiempo. La división funciona como antes.
-- En la división automática, cada ajuste pertenece a sus propios pasadores, incluso en una pieza que se ha vuelto a dividir.
+- En modelos grandes, «Dividir el modelo» encuentra la costura hasta el doble de rápido, y en los de varios colores en una fracción del tiempo. La división funciona como antes.
 - Un tornillo, tuerca o junta impresos del catálogo de bloques ya no cuentan en el informe como un cuerpo fragmentado. Es una pieza propia, y así está previsto.
 - Con un tornillo avellanado del catálogo de bloques, un cuerpo de caras y aristas se mantiene estanco al exportar: la pieza y el tornillo entran en el archivo cada uno cerrado.
 

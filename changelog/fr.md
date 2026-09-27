@@ -29,13 +29,13 @@ dans `website/version.json`.
 - Si un perçage sort sur le côté de la pièce après déplacement, duplication ou inclinaison, Solidon le dit aussi aux endroits en retrait. Une copie non créée est signalée.
 - Sur les nervures et dans les nids d'abeille, un perçage incliné ne signale plus à tort qu'il dépasse le bord.
 - Après un déplacement, une inclinaison ou une duplication, le panneau des caractéristiques montre les cotes réelles du résultat.
-- Après le déplacement d'un perçage, l'application sur les grands modèles se termine en moins de la moitié du temps. Les caractéristiques éloignées de la modification restent telles qu'elles étaient.
+- Après le déplacement d'un perçage, les caractéristiques éloignées de la modification restent telles qu'elles étaient, et l'application sur les grands modèles se termine bien plus vite.
 - Si une découpe de perçage échoue en silence sur un corps fait de faces et d'arêtes, issu par exemple d'un STEP, Solidon le remarque et recalcule. Avant, un corps cassé pouvait rester.
-- Sur les corps faits de faces et d'arêtes, les étapes de perçage sont prêtes en quelques secondes : sur une plaque perforée issue d'un STEP, le déplacement prend 1,6 seconde au lieu de 120 au plus.
+- Sur les corps faits de faces et d'arêtes, les étapes de perçage sont prêtes en quelques secondes : sur une plaque perforée issue d'un STEP, « Modifier le trou » prend 2 secondes au lieu d'environ 120.
 - Sur les corps faits de faces et d'arêtes, « Découper une poche » ne renvoie plus de corps défectueux.
 - Un trou oblong se laisse raccourcir. Étiré à sa propre largeur, il redevient un perçage rond.
 - La poignée au bout d'un trou oblong se saisit n'importe où dans l'ouverture, et elle ne saute plus vers le pointeur au premier mouvement.
-- Les trous oblongs emportent leurs chanfreins et leur entrée oblique lors d'un déplacement, d'une inclinaison ou d'une duplication. Avant, les chanfreins restaient à l'ancien emplacement.
+- Les trous oblongs emportent leurs chanfreins et leur entrée oblique lors d'un déplacement ou d'une duplication. Avant, les chanfreins restaient à l'ancien emplacement.
 - Une poche à aimant du catalogue de blocs se laisse déplacer, dupliquer, multiplier et supprimer, avec la lèvre qui retient l'aimant.
 - Sur une poche à aimant, « Modifier le trou » change le diamètre avec la lèvre. « Diamètre du trou uniquement » garde l'ouverture pour l'aimant et avertit si elle devient trop juste.
 - Placée en biais par rapport à la face, l'ouverture d'une poche à aimant, d'un trou de vis ou d'un logement de roulement reste dégagée. Avant, un coin de matière la surplombait.
@@ -101,8 +101,7 @@ dans `website/version.json`.
 - Quand une pièce repose sur beaucoup de petits pieds, Solidon propose un brim, même si les pieds réunis auraient assez de surface.
 - Une bande étroite et oblique le long de la paroi extérieure ne compte plus dans le rapport comme un long pont.
 - La transmission à Cura passe les premières couches sans ventilateur sous forme de montée progressive. L'avertissement ne vient que si le fichier d'impression diffère vraiment.
-- Sur les grands modèles, « Scinder le modèle » trouve la jointure un tiers à moitié plus vite, et sur les modèles multicolores en une fraction du temps. Le découpage se fait comme avant.
-- Lors de la division automatique, chaque ajustement appartient à ses propres tenons, même sur une pièce divisée une nouvelle fois.
+- Sur les grands modèles, « Scinder le modèle » trouve la jointure jusqu'à deux fois plus vite, et sur les modèles multicolores en une fraction du temps. Le découpage se fait comme avant.
 - Une vis, un écrou ou un joint imprimés du catalogue de blocs ne comptent plus dans le rapport comme un corps fragmenté. C'est une pièce à part, et c'est voulu.
 - Avec une vis à tête fraisée du catalogue de blocs, un corps fait de faces et d'arêtes reste étanche à l'export : la pièce et la vis entrent chacune fermées dans le fichier.
 

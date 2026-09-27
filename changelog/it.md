@@ -28,13 +28,13 @@ scrive in `website/version.json`.
 - Se un foro esce dal fianco del pezzo dopo uno spostamento, una duplicazione o un'inclinazione, Solidon lo dice anche nei punti a gradino. Una copia non creata viene notata.
 - Su nervature e nidi d'ape, un foro inclinato non segnala più per errore di sporgere oltre il bordo.
 - Dopo spostamento, inclinazione o duplicazione, il pannello delle caratteristiche mostra le quote che il risultato ha davvero.
-- Dopo lo spostamento di un foro, applicarlo su modelli grandi finisce in meno della metà del tempo. Le caratteristiche estranee alla modifica restano come erano.
+- Dopo lo spostamento di un foro, le caratteristiche estranee alla modifica restano come erano, e applicarlo su modelli grandi finisce molto più in fretta.
 - Se su un corpo fatto di facce e spigoli, per esempio da un file STEP, un taglio di foro fallisce senza che si noti, Solidon se ne accorge e ricalcola. Prima poteva restare un corpo rotto.
-- Sui corpi fatti di facce e spigoli, i passaggi di foratura sono pronti in pochi secondi: su una piastra forata proveniente da un file STEP, lo spostamento richiede 1,6 secondi invece di 120.
+- Sui corpi fatti di facce e spigoli, i passaggi di foratura sono pronti in pochi secondi: su una piastra forata proveniente da un file STEP, «Modifica foro» richiede 2 secondi invece di circa 120.
 - Sui corpi fatti di facce e spigoli, «Ritaglia tasca» non restituisce più un corpo difettoso.
 - Un'asola si può accorciare. Tirata alla sua stessa larghezza, torna a essere un foro rotondo.
 - La maniglia all'estremità di un'asola si afferra in qualsiasi punto dell'apertura, e al primo trascinamento non salta più verso il puntatore.
-- Le asole portano con sé gli smussi e l'imboccatura obliqua quando vengono spostate, inclinate o duplicate. Prima gli smussi restavano nel punto vecchio.
+- Le asole portano con sé gli smussi e l'imboccatura obliqua quando vengono spostate o duplicate. Prima gli smussi restavano nel punto vecchio.
 - Una tasca per magnete del catalogo dei blocchi si può spostare, duplicare, moltiplicare e rimuovere, insieme al labbro che trattiene il magnete.
 - Su una tasca per magnete, «Modifica foro» cambia il diametro insieme al labbro. «Solo diametro del foro» mantiene l'apertura per il magnete e avvisa se diventa troppo stretta.
 - Posizionata obliquamente rispetto alla faccia, l'apertura di una tasca per magnete, di un foro per vite o di una sede per cuscinetto resta libera. Prima un cuneo di materiale la copriva.
@@ -100,8 +100,7 @@ scrive in `website/version.json`.
 - Se un pezzo poggia su molti piedini, Solidon propone un brim, anche se i piedini insieme avrebbero superficie sufficiente.
 - Una striscia stretta e inclinata lungo la parete esterna non conta più nel rapporto come un lungo ponte.
 - Il passaggio a Cura trasmette i primi strati senza ventola come avvio graduale. L'avviso arriva solo se il file di stampa finito si discosta davvero.
-- Sui modelli grandi, «Dividi il modello» trova la giunzione da un terzo alla metà più in fretta, e su quelli multicolore in una frazione del tempo. La divisione avviene come prima.
-- Nella divisione automatica, ogni accoppiamento appartiene ai propri perni, anche su un pezzo diviso una seconda volta.
+- Sui modelli grandi, «Dividi il modello» trova la giunzione fino a due volte più in fretta, e su quelli multicolore in una frazione del tempo. La divisione avviene come prima.
 - Una vite, un dado o una guarnizione stampati dal catalogo dei blocchi non contano più nel rapporto come un corpo frammentato. È un pezzo a sé, ed è voluto.
 - Con una vite a testa svasata dal catalogo dei blocchi, un corpo fatto di facce e spigoli resta stagno all'esportazione: pezzo e vite entrano nel file ciascuno chiuso.
 

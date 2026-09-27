@@ -28,13 +28,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo sai pela lateral da peça depois de deslocado, duplicado ou inclinado, o Solidon indica-o também em zonas com degraus. Uma cópia que não foi criada é detetada.
 - Em nervuras e favos, um furo inclinado já não indica por engano que passa do bordo.
 - Depois de deslocar, inclinar ou duplicar, o painel de características mostra as cotas que o resultado tem de facto.
-- Depois de deslocar um furo, aplicar em modelos grandes termina em menos de metade do tempo. As características alheias à alteração ficam como estavam.
+- Depois de deslocar um furo, as características alheias à alteração ficam como estavam, e aplicar em modelos grandes termina muito mais depressa.
 - Se num corpo feito de faces e arestas, por exemplo de um ficheiro STEP, um corte de furo falha sem se notar, o Solidon deteta-o e volta a calcular. Antes podia ficar um corpo danificado.
-- Em corpos feitos de faces e arestas, os passos de furo ficam prontos em segundos: numa placa perfurada de um ficheiro STEP, deslocar demora 1,6 em vez de até 120 segundos.
+- Em corpos feitos de faces e arestas, os passos de furo ficam prontos em segundos: numa placa perfurada de um ficheiro STEP, «Alterar furo» demora 2 em vez de cerca de 120 segundos.
 - Em corpos feitos de faces e arestas, «Cortar bolsa» já não devolve um corpo com defeito.
 - Um furo oblongo pode ser encurtado. Puxado até à sua própria largura, volta a ser um furo redondo.
 - A pega na ponta de um furo oblongo agarra-se em qualquer ponto da abertura, e já não salta para o ponteiro no primeiro arrasto.
-- Os furos oblongos levam consigo os chanfros e a boca oblíqua ao serem deslocados, inclinados ou duplicados. Antes, os chanfros ficavam no local antigo.
+- Os furos oblongos levam consigo os chanfros e a boca oblíqua ao serem deslocados ou duplicados. Antes, os chanfros ficavam no local antigo.
 - Um alojamento de íman do catálogo de blocos pode ser deslocado, duplicado, multiplicado e removido, juntamente com o lábio que segura o íman.
 - Num alojamento de íman, «Alterar furo» muda o diâmetro juntamente com o lábio. «Apenas o diâmetro do furo» mantém a abertura para o íman e avisa se ficar demasiado apertada.
 - Colocada em ângulo com a face, a abertura de um alojamento de íman, de um furo para parafuso ou de um assento de rolamento fica livre. Antes havia uma cunha de material por cima.
@@ -100,8 +100,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Quando uma peça assenta em muitos pés pequenos, o Solidon propõe um brim, mesmo que os pés juntos tenham área suficiente.
 - Uma faixa estreita e inclinada junto à parede exterior já não conta no relatório como uma ponte longa.
 - A entrega ao Cura transfere as primeiras camadas sem ventoinha como arranque gradual. Só avisa quando o ficheiro de impressão final difere de facto.
-- Em modelos grandes, «Dividir o modelo» encontra a costura entre um terço e metade mais depressa, e nos modelos multicor numa fração do tempo. A divisão funciona como antes.
-- Na divisão automática, cada ajuste pertence aos seus próprios pinos, mesmo numa peça que voltou a ser dividida.
+- Em modelos grandes, «Dividir o modelo» encontra a costura até duas vezes mais depressa, e nos modelos multicor numa fração do tempo. A divisão funciona como antes.
 - Um parafuso, uma porca ou um vedante impressos do catálogo de blocos já não contam no relatório como um corpo fragmentado. É uma peça própria, e isso é intencional.
 - Com um parafuso de cabeça escareada do catálogo de blocos, um corpo feito de faces e arestas mantém-se estanque ao exportar: a peça e o parafuso entram no ficheiro cada um fechado.
 
