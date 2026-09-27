@@ -199,7 +199,24 @@ Zugriff. In einer Schleife über Flecken wird daraus Minuten: Die Vorschau von
 `perceive.features._area_and_reach` (Durchsicht 0.5.1, Stapelabzug). Wer in
 einer Schleife auswählt, nimmt `np.asarray(body.faces)[…]` — eine Ansicht der
 Grundklasse, die nichts verfolgt; die gemerkten Werte selbst
-(`body.area_faces[…]`) sind davon nicht betroffen.
+(`body.area_faces[…]`) sind davon nicht betroffen. In `perceive` steht keine
+solche Auswahl mehr; `test_recognition_selects_triangles_and_corners_through_plain_arrays`
+hält den Stand.
+
+## Eine örtliche Frage ist dieselbe Frage wie die am ganzen Körper
+
+Die Nachmessung (`local.detect_known`) fragt Radien, Krümmungssprünge und die
+Flächenzuordnung nur an ihren Ausschnitten (`features.face_radii_at`,
+`curvature_jumps_at`, `_surface_owners_near`). Jede dieser Fragen hat ihre
+Ganzkörperfassung (`face_radii`, `curvature_jumps`, `_surface_owners`), und
+beide rechnen mit denselben Schritten an denselben Zahlen — die Antwort ist
+bitgleich, die Zuordnung dieselbe Zerlegung. **Wer eine der beiden ändert,
+ändert die andere mit**: Gemeinsame Teile stehen einmal da (`_jumps_between`,
+`_piece_filling`, `_rim_of`, `_closing_set`), der Rest ist gespiegelt
+(`_closed_by_notches` zu `_without_notches`, `_near_surfaces` zu
+`_large_facet_faces_read` und `_surface_owners_read`).
+`tests/test_local_detection.py::test_the_spot_reads_the_same_radii_jumps_and_surfaces_as_the_whole_body`
+vergleicht beide an Korpusnetzen, ungeteilt und nach *Kanten verfeinern*.
 
 ## Fehler
 

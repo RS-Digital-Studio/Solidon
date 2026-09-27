@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -1873,3 +1874,145 @@ def test_a_search_region_is_never_welded_again(monkeypatch: pytest.MonkeyPatch) 
     result = local.detect_local(mesh, point, normal=normal, radius=8, seed_faces=(face,))
     assert result.complete
     assert welded == []
+
+
+def _fresh_body(mesh: MeshData) -> MeshData:
+    """Dasselbe Netz als neuer Körper — kalte Merker wie nach einer Operation;
+    der Ursprung nach *Kanten verfeinern* reist mit."""
+    from app.core.geom.mesh import refined_units, remember_refined_units
+
+    body = trimesh.Trimesh(
+        np.asarray(mesh.raw.vertices).copy(), np.asarray(mesh.raw.faces).copy(), process=False
+    )
+    remember_refined_units(body, refined_units(mesh.raw))
+    return MeshData.of(body)
+
+
+@pytest.mark.parametrize(
+    "name", ["plate_countersunk.stl", "post_with_fillet.stl", "plate_chamfered_mouths.stl"]
+)
+@pytest.mark.parametrize("edge", [None, 2.0], ids=["ungeteilt", "verfeinert"])
+def test_the_spot_reads_the_same_radii_jumps_and_surfaces_as_the_whole_body(
+    name: str, edge: float | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Nachmessung fragt örtlich und bekommt dieselben Antworten wie vom ganzen Körper.
+
+    Nach jedem Versetzen ist das Netz neu, und die Nachmessung fragte
+    Krümmungssprünge, Radien und die Flächenzuordnung für den ganzen Körper —
+    am Gartenschlauchhalter (392 532 Dreiecke) die meiste Zeit der Nachmessung
+    (Durchsicht 0.5.1, rest-erkennung2). Jetzt rechnet sie die Umgebung ihrer
+    Ausschnitte: dieselben Radien und Sprünge bitgleich, dieselben Flächen
+    (gleiche Nummer genau dann, wo der ganze Körper gleiche Nummern gibt, keine
+    genau dort) — auch nach *Kanten verfeinern* und über mehrere Ausschnitte an
+    einem Körper, deren Radien er sich merkt.
+    """
+    from app.core.geom.mesh import read_mesh
+    from app.core.geom.mesh_ops import remesh
+    from app.core.ingest.loader import normalise
+    from app.core.perceive import features
+
+    loaded = read_mesh((DATA / "meshes" / name).read_bytes(), ".stl")
+    source = normalise(loaded, "mm", weld_is_reading=True).mesh
+    if edge is not None:
+        source = remesh(source, edge)
+    features.forget_cache()
+    whole = _fresh_body(source).raw
+    radii = features.face_radii(whole)
+    jumps = features.curvature_jumps(whole)
+    owners = features._surface_owners(whole)
+    features.forget_cache()
+    part = _fresh_body(source).raw
+    centres = np.asarray(part.triangles_center, dtype=float)
+    pairs = np.asarray(part.face_adjacency)
+    reach = float(np.linalg.norm(np.ptp(centres, axis=0))) * 0.08
+    # Jeder Ausschnitt rechnet hier örtlich: An einer Platte liest schon der
+    # erste die ganze Deckfläche mit und stünde über der Schwelle.
+    monkeypatch.setattr(features, "LOCAL_RADII_SHARE", 1.0)
+    rng = np.random.default_rng(5)
+    for seed in rng.integers(len(centres), size=4).tolist():
+        near = np.flatnonzero(np.linalg.norm(centres - centres[seed], axis=1) <= reach)
+        inside = np.zeros(len(centres), dtype=bool)
+        inside[near] = True
+        rows = np.flatnonzero(inside[pairs].any(axis=1))
+        assert np.array_equal(features.face_radii_at(part, near), radii[near]), seed
+        assert np.array_equal(features.curvature_jumps_at(part, rows), jumps[rows]), seed
+        sample = near[:: max(1, len(near) // 300)]
+        local = features._surface_owners_near(part, sample)
+        known = owners[sample]
+        assert np.array_equal(known[:, None] == known[None, :], local[:, None] == local[None, :]), (
+            seed
+        )
+        assert np.array_equal(known == -1, local == -1), seed
+    # Die vier Ausschnitte rechnete der Körper selbst; der ganze Körper danach
+    # geht mit der wirklichen Schwelle (``LOCAL_RADII_SHARE``) über sie und
+    # rechnet die Ganzkörperfrage — gemerkt für jede weitere.
+    near_radii = features.remembered("radii_near", part, (), features._NearRadii)
+    assert near_radii.counted > 0
+    assert features._known_answer("face_radii", part) is None
+    monkeypatch.undo()
+    everything = np.arange(len(centres))
+    assert np.array_equal(features.face_radii_at(part, everything), radii)
+    assert features._known_answer("face_radii", part) is not None
+
+
+def _counterbore_in_a_cove() -> MeshData:
+    """Winkel aus Boden 60 × 40 × 10 und Wand 60 × 10 × 40, die Innenkante mit R 8
+    gerundet — eine Hohlkehle entlang x —, in ihrer Mitte senkrecht zur Fläche
+    eine Bohrung Ø 6 mit 90°-Senkung auf Ø 11, wie am Gartenschlauchhalter."""
+    from app.core.brep import edit
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.sketch.planes import frame_of
+
+    floor = edit.box(60.0, 40.0, 10.0)
+    wall = edit.moved(edit.box(60.0, 10.0, 40.0), (0.0, 15.0, 10.0))
+    body = edit.unified(edit.boolean("union", [floor, wall]))
+    inner = [
+        entry
+        for entry in edit.edges_of(body)
+        if abs(entry.middle[1] - 10.0) < 1e-6 and abs(entry.middle[2] - 10.0) < 1e-6
+    ]
+    body = edit.fillet(body, 8.0, selected_edges=edit.native_edge_indices(body, inner))
+    half = 8.0 / math.sqrt(2.0)
+    outline = [(0.0, -12.0), (3.0, -12.0), (3.0, -8.5), (5.5, -6.0), (5.5, 3.0), (0.0, 3.0)]
+    frame = frame_of((0.0, -math.sqrt(0.5), math.sqrt(0.5)), (0.0, 2.0 + half, 18.0 - half))
+    return as_mesh_data(edit.bore_profile(body, [*outline, outline[0]], frame))
+
+
+def test_a_counterbore_that_opens_into_a_cove_is_measured_at_its_spot() -> None:
+    """Eine Senkbohrung, die in eine Hohlkehle mündet, misst die Nachmessung an ihrer Stelle.
+
+    Am Gartenschlauchhalter mündet eine Kette aus Bohrung Ø 6, Senkung und
+    Aufweitung Ø 11 in die Hohlkehle zwischen Boden und Wand. Die Hohlkehle ist
+    eine hohle Verrundung, die jeden Suchradius überragt, und die Nachmessung
+    verwarf die ganze Kette, weil an ihrer Mündung eine „unvollständige
+    Aufweitung“ lag. Dazu fasst keine Kugel um eine einzelne Mitte die ganze
+    Kette, nur die Suche am Kegel dazwischen. Nach jedem Versetzen lief deshalb
+    die volle Erkennung, in der genauen Vorschau 33 statt 5 s je Zahl
+    (Durchsicht 0.5.1, REST-BOHRUNG-07). Jetzt kommen alle drei Glieder — auch
+    wenn jedes gebraucht wird.
+    """
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.perceive import features as detection
+    from app.core.perceive.local import detect_known, forget_known
+    from app.core.perceive.relations import cavity_chains
+
+    mesh = _counterbore_in_a_cove()
+    found = detection.detect(mesh)
+    assert any(
+        feature.kind == "fillet" and feature.params.get("recess") for feature in found.values()
+    ), "die Hohlkehle ist eine hohle Verrundung"
+    chains = cavity_chains(found, mesh)
+    assert [[feature.kind for feature in chain] for chain in chains] == [["hole", "cone", "hole"]]
+    chain = {feature.id: feature for feature in chains[0]}
+    for required in ((), None):
+        forget_known()
+        again = detect_known(mesh, chain, required=required)
+        cavities = [feature for feature in again.values() if feature.kind in ("hole", "cone")]
+        assert sorted(feature.kind for feature in cavities) == ["cone", "hole", "hole"], required
+        diameters = sorted(
+            round(float(feature.params["diameter"]), 2)
+            for feature in cavities
+            if feature.kind == "hole"
+        )
+        assert diameters == [6.0, 11.0], required

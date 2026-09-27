@@ -544,7 +544,16 @@ def _recognise_region(
     # von 38 bis 92 Dreiecken einer Seite heraus, die die Vollerkennung als eine
     # mit 8 840 führt. Für sie gilt weiter die ganze glatte Fläche.
     angle_soft = np.degrees(np.asarray(body.face_adjacency_angles)) < detection.CURVATURE_LIMIT
-    soft_seams = angle_soft & (detection.curvature_jumps(body, check) <= detection.CURVATURE_JUMP)
+    # **Die Sprünge nur an den Nähten, die den Ausschnitt berühren** — nur dort
+    # werden sie gelesen (hier und an den Randnähten der Höhlungen unten).
+    # Am ganzen Körper gerechnet kosteten sie nach jedem Versetzen am
+    # Gartenschlauchhalter 1,15 s (Durchsicht 0.5.1, bohrung); die Zahlen je
+    # Naht sind dieselben (``features.curvature_jumps_at``).
+    touching = np.flatnonzero(angle_soft & inside[pairs].any(axis=1))
+    soft_seams = np.zeros(len(pairs), dtype=bool)
+    soft_seams[touching] = (
+        detection.curvature_jumps_at(body, touching, check) <= detection.CURVATURE_JUMP
+    )
     smooth = inside[pairs].all(axis=1) & angle_soft
 
     def spread(seams: np.ndarray) -> set[int]:
@@ -842,9 +851,18 @@ def _recognise_region(
             continue
         # Eine unvollständige Aufweitung darf nicht als Nachbar wegfallen und
         # dadurch ihre Bohrung zu einem alleinstehenden Hohlraum machen.
+        # **Aufweitung heißt Kettenglied** — Bohrung oder Kegel, die zwei Arten,
+        # die ``relations.cavity_chains`` zu einer Kette verbindet. Eine hohle
+        # Verrundung oder ein Torus, in den eine Mündung öffnet, ist die Fläche
+        # um sie, kein Glied: Am Gartenschlauchhalter mündet eine Senkbohrung
+        # in die Hohlkehle, die jeden Suchradius überragt, und die Nachmessung
+        # verwarf deshalb die ganze Kette — nach jedem Versetzen die volle
+        # Erkennung, in der genauen Vorschau 33 statt 5 s je Zahl (Durchsicht
+        # 0.5.1, REST-BOHRUNG-07).
         for other_name, other in mapped.items():
             if (
                 other_name not in complete
+                and other.kind in ("hole", "cone")
                 and is_a_cavity(other)
                 and not set(neighbours).isdisjoint(other.face_indices)
             ):
@@ -1249,6 +1267,7 @@ def detect_known(
     # vollständig lag.
     results: dict[_SearchKey, LocalDetection] = {}
     gathered_keys: set[_SearchKey] = set()
+    unmeasured: list[tuple[Feature, str]] = []
     for name, feature in features.items():
         _check(check_cancelled)
         needed = required is None or name in required
@@ -1373,11 +1392,18 @@ def detect_known(
                 gathered_keys.add(key)
                 gathered.extend(result.features.values())
             break
-        if failure is not None:
-            if not needed:
-                continue
-            raise local_error(failure)
+        if failure is not None and needed:
+            unmeasured.append((feature, failure))
     measured = _numbered(gathered)
+    # **Ein Glied einer Kette findet oft erst die Suche seines Nachbarn**
+    # (Durchsicht 0.5.1, REST-BOHRUNG-07): Die Kette aus Bohrung, Senkung und
+    # Aufweitung ist länger als jede Kugel um eine ihrer Mitten, und nur die
+    # Suche am Kegel dazwischen fasst sie ganz. Angehalten wird für ein
+    # benötigtes Merkmal erst, wenn auch keine andere Suche es vollständig
+    # zurückgab (:func:`_query_is_complete`, dieselbe Frage wie am Suchrand).
+    for feature, failure in unmeasured:
+        if not _query_is_complete(stitched, feature, measured, check_cancelled=check_cancelled):
+            raise local_error(failure)
     with _KNOWN_LOCK:
         _KNOWN[memo_key] = dict(measured)
         while len(_KNOWN) > KNOWN_MEMORY_LIMIT:

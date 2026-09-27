@@ -24,7 +24,7 @@ import threading
 import weakref
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Final, NamedTuple, cast
 
 import numpy as np
@@ -42,7 +42,7 @@ from app.core.geom.mesh import (
 )
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
-from app.core.perceive.helix import Helix, find_helices
+from app.core.perceive.helix import Helix, _facet_of_face, find_helices
 from app.core.perceive.patterns import patterns_instead_of_cells
 from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
 from app.core.perceive.surfaces import clipped_patches, planar_patch
@@ -6724,6 +6724,8 @@ WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
         "curvature_jumps",
         "face_radii",
         "prepared_surface",
+        "surfaces_near",
+        "radii_near",
     }
 )
 
@@ -6739,7 +6741,15 @@ WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
 #: Mengen steht, gilt als gebunden** — das Teilen ist die Ausnahme, die
 #: jemand geprüft hat; ``test_features`` hält beide Mengen vollständig.
 BODY_BOUND_ANSWERS: Final[frozenset[str]] = frozenset(
-    {"one_body", "merged_copy", "surface_index", "surface_patch", "prepared_surface"}
+    {
+        "one_body",
+        "merged_copy",
+        "surface_index",
+        "surface_patch",
+        "prepared_surface",
+        "surfaces_near",
+        "radii_near",
+    }
 )
 
 #: Die gebundenen Antworten, die selbst ein Körper sind. Derselbe Eingang
@@ -6780,6 +6790,7 @@ SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
         "same_surface_patch",
         "hole_is_clear",
         "has_own_body",
+        "voids",
     }
 )
 
@@ -7037,6 +7048,33 @@ def remembered(
         while len(answers) > limit:
             answers.popitem(last=False)
     return value
+
+
+def _known_answer(name: str, body: trimesh.Trimesh) -> Any:
+    """Die gemerkte Antwort auf eine Frage an den ganzen Körper — oder ``None``, ohne zu rechnen.
+
+    Für die örtlichen Wege (:func:`face_radii_at`, :func:`curvature_jumps_at`):
+    Steht die Antwort für den ganzen Körper schon da, lesen sie daraus, statt
+    ihre Umgebung neu zu rechnen. Derselbe Schlüssel wie :func:`remembered`
+    mit leerem Fleck.
+    """
+    with _MEMORY_LOCK:
+        memory = _MEMORIES.get(id(body))
+        if memory is None or memory.ref() is not body:
+            return None
+    owner = memory.lineage if name in SHARED_ANSWERS else None
+    key = (
+        memory.token if owner is None else owner.token,
+        _patch_digest(memory, ()),
+        None,
+        ROUND_FIT_EVALUATIONS,
+    )
+    with _MEMORY_LOCK:
+        answers = _SUPPORT_CACHE.get(name)
+        if answers is None or key not in answers:
+            return None
+        answers.move_to_end(key)
+        return answers[key]
 
 
 def _surface_support(
@@ -8335,18 +8373,51 @@ def _is_through(
     # 22.09.2026). Der gegenüberliegende Schenkel eines U-Profils grenzt nicht
     # an den Mantel und zählt weiter nicht.
     if patch is not None:
-        members = _faces_beside(mesh.raw, patch)
-        if bounds is not None and len(members):
+        square = (
+            bounds.candidates(axis, basis_u, basis_v, fit, None) if bounds is not None else None
+        )
+        if (
+            _known_answer("surface_owners", mesh.raw) is not None
+            or _known_answer("large_facet_faces", mesh.raw) is not None
+        ):
+            # **Kennt der Körper seine Flächen schon** — die Vollerkennung liest
+            # die großen Facetten vor den Bohrungen —, ist die Zuordnung des
+            # ganzen Körpers nur noch ein Gang über die Rundflecken, und die
+            # Nachbarflächen sind wenige Dreiecke: Gefragt wird an ihnen allein.
+            # Am Filterball mit 140 Bohrungen kostete der örtliche Weg sonst
+            # 5,4 statt 0,7 s der Erkennung (Durchsicht 0.5.1, rest-erkennung2).
+            members = _faces_beside(mesh.raw, patch)
+            if square is not None and len(members):
+                members = members[square[members]]
+            if not len(members):
+                return True
+            beside = np.asarray(mesh.raw.triangles, dtype=float)[members] - centre
+            return not _mouth_covered(beside, basis_u, basis_v, radius)
+        # **Erst, ob überhaupt ein Dreieck außerhalb des Flecks die Mündung
+        # deckt** (Durchsicht 0.5.1, rest-erkennung2). Die Nachbarflächen kommen
+        # aus der Flächenzuordnung des ganzen Körpers (:func:`_surface_owners`,
+        # mit dem Mantelnachweis jeder Rundung) — am Gartenschlauchhalter mit
+        # 392 532 Dreiecken 2,4 s je neuem Netz, und die örtliche Nachmessung
+        # nach jedem Versetzen fragte sie. Deckt kein Dreieck außerhalb des
+        # Flecks die Mündung, deckt auch keines einer Nachbarfläche: Die Antwort
+        # steht, und sie ist dieselbe. Dieselbe Vorauswahl über das
+        # Mündungsquadrat wie darunter.
+        outside = np.ones(len(mesh.raw.faces), dtype=bool)
+        outside[np.asarray(patch, dtype=np.intp)] = False
+        if square is not None:
             # Dieselbe Vorauswahl über das Mündungsquadrat wie oben, ohne den
             # Abschnitt: Die Deckflächen einer Platte mit 200 000 Dreiecken
             # zählen sonst je Bohrung ganz.
-            square = bounds.candidates(axis, basis_u, basis_v, fit, None)
-            if square is not None:
-                members = members[square[members]]
-        if len(members):
-            beside = np.asarray(mesh.raw.triangles, dtype=float)[members] - centre
-            if _mouth_covered(beside, basis_u, basis_v, radius):
-                return False
+            outside &= square
+        chosen = np.flatnonzero(outside)
+        rest = np.asarray(mesh.raw.triangles, dtype=float)[chosen] - centre
+        over = chosen[_covering(rest, basis_u, basis_v, radius)]
+        if not len(over):
+            return True
+        # **Deckt etwas, fragt nur noch, ob es zu einer Nachbarfläche gehört**
+        # (:func:`_beside_covers`) — dieselbe Frage wie über alle Dreiecke der
+        # Nachbarflächen, gerechnet aus ihrer Umgebung.
+        return not _beside_covers(mesh.raw, patch, over)
     return True
 
 
@@ -8359,13 +8430,22 @@ def _mouth_covered(
     Ein Punkt-in-Dreieck-Test in der Projektion senkrecht zur Achse —
     baryzentrische Vorzeichen, kein Strahlwurf und damit kein Raumindex.
     """
+    return bool(_covering(corners, basis_u, basis_v, radius).any())
+
+
+def _covering(
+    corners: np.ndarray, basis_u: np.ndarray, basis_v: np.ndarray, radius: float
+) -> np.ndarray:
+    """Je Dreieck, ob es über der Achse oder einem der Ringe der Mündung liegt
+    (:func:`_mouth_covered`)."""
+    found = np.zeros(len(corners), dtype=bool)
     if not len(corners):
-        return False
+        return found
     flat = np.stack([corners @ basis_u, corners @ basis_v], axis=-1)
     within = (flat.min(axis=1) <= radius).all(axis=1) & (flat.max(axis=1) >= -radius).all(axis=1)
     flat = flat[within]
     if not len(flat):
-        return False
+        return found
     # Die Stichproben aus der genauen Kreistafel (RM-187), nicht aus ``np.cos``.
     circle = np.asarray(units.circle_cos_sin(THROUGH_SAMPLES), dtype=float)
     samples = np.vstack(
@@ -8391,7 +8471,8 @@ def _mouth_covered(
     covers = ((side_a >= 0.0) & (side_b >= 0.0) & (side_c >= 0.0)) | (
         (side_a <= 0.0) & (side_b <= 0.0) & (side_c <= 0.0)
     )
-    return bool(covers.any())
+    found[np.flatnonzero(within)] = covers.any(axis=1)
+    return found
 
 
 def _surface_owners(body: trimesh.Trimesh) -> np.ndarray:
@@ -8444,6 +8525,449 @@ def _faces_beside(body: trimesh.Trimesh, patch: Sequence[int]) -> np.ndarray:
     surfaces = surfaces[surfaces >= 0]
     members = np.flatnonzero(np.isin(owners, surfaces)) if len(surfaces) else beside
     return members[~inside[members]]
+
+
+def _beside_covers(body: trimesh.Trimesh, patch: Sequence[int], over: np.ndarray) -> bool:
+    """Ob eines der Dreiecke ``over`` zu einer Fläche gehört, die an ``patch`` grenzt.
+
+    Dieselbe Frage wie ``np.isin(over, _faces_beside(body, patch)).any()``
+    (:func:`_is_through`). :func:`_faces_beside` liest die Flächenzuordnung des
+    ganzen Körpers (:func:`_surface_owners`) samt dem Mantelnachweis jeder
+    Rundung, und an einem neuen Netz ist das ein Gang über alle Dreiecke: am
+    Gartenschlauchhalter mit 392 532 Dreiecken 2,4 s der örtlichen
+    Nachmessung nach jedem Versetzen — gefragt von der Senkung einer Bohrung,
+    deren Schulter die Mündung deckt (Durchsicht 0.5.1, bohrung). Gebraucht
+    wird die Zuordnung nur für die Nachbarn des Flecks und für ``over``
+    (:func:`_surface_owners_near`). Steht die des ganzen Körpers schon im
+    Merker, wird sie gelesen.
+    """
+    indices = np.asarray(patch, dtype=np.int64)
+    inside = np.zeros(len(body.faces), dtype=bool)
+    inside[indices] = True
+    neighbours, _rows = _neighbour_index(body)
+    if not neighbours.shape[1]:
+        return False
+    beside = neighbours[indices].ravel()
+    beside = beside[beside >= 0]
+    beside = np.unique(beside[~inside[beside]])
+    if not len(beside):
+        return False
+    seeds = np.union1d(beside, over)
+    known = _known_answer("surface_owners", body)
+    owners = (
+        np.asarray(known, dtype=np.int64)[seeds]
+        if known is not None
+        else _surface_owners_near(body, seeds)
+    )
+    near = owners[np.searchsorted(seeds, beside)]
+    surfaces = np.unique(near[near != -1])
+    if not len(surfaces):
+        # Wie :func:`_faces_beside`: ohne eine Fläche zählen die Nachbarn selbst.
+        return bool(np.isin(over, beside).any())
+    return bool(np.isin(owners[np.searchsorted(seeds, over)], surfaces).any())
+
+
+def _surface_owners_near(
+    body: trimesh.Trimesh,
+    seeds: np.ndarray,
+    check_cancelled: Callable[[], None] | None = None,
+) -> np.ndarray:
+    """Die Flächenzuordnung von :func:`_surface_owners` für einzelne Dreiecke — aus ihrer Umgebung.
+
+    Zurück kommt je Dreieck aus ``seeds`` (aufsteigend) eine Nummer: die seiner
+    Facette für eine ebene Fläche, ``-2 - kleinstes Dreieck`` für einen
+    Rundfleck, ``-1`` ohne Fläche. Zwei Dreiecke tragen dieselbe Nummer, wenn
+    :func:`_surface_owners` ihnen dieselbe gibt — die Nummern selbst sind
+    andere.
+
+    **Gerechnet wird dieselbe Zuordnung, nur nicht überall.** Eine geschützte
+    ebene Facette (:func:`_facet_verdicts`: eben und nicht zurückholbar) ist
+    ihre eigene Fläche; jede andere Fläche entsteht aus den übrigen, den
+    **ungeschützten** Dreiecken — der Mantelnachweis aus ihren Flecken
+    (:func:`_large_facet_faces_read`), die Rundflecken aus dem, was danach
+    nicht eben ist (:func:`_surface_owners_read`), beide über Nähte unter
+    :data:`CURVATURE_LIMIT`. Gerechnet wird deshalb an den ungeschützten
+    Flecken um die gefragten Dreiecke und ihre Nachbarn, mit denselben
+    Schritten und jede Kerbe (:func:`_without_notches`) in der Reihenfolge der
+    Flecken. Hängt eine Antwort an einem Fleck außerhalb — eine Kerbe, die ein
+    früherer Fleck schließen könnte, ein geschütztes Dreieck, das ein Fleck
+    als Kerbe nimmt —, wächst die Umgebung um ihn, und es wird neu gerechnet,
+    bis keine Frage mehr hinausreicht. Hat das zusammen so viele Dreiecke
+    gerechnet, wie der Körper ungeschützte hat, kommen die Nummern von
+    :func:`_surface_owners` selbst — dieselbe Zerlegung, einmal gerechnet.
+    """
+    verdicts = _facet_verdicts(body, check_cancelled=check_cancelled)
+    label = verdicts.label
+    count = len(body.faces)
+    in_planar = np.zeros(count, dtype=bool)
+    in_recoverable = np.zeros(count, dtype=bool)
+    labelled = label >= 0
+    if len(verdicts.planar):
+        in_planar[labelled] = verdicts.planar[label[labelled]]
+        in_recoverable[labelled] = verdicts.recoverable[label[labelled]]
+    loose = verdicts.candidate
+    neighbours, rows = _neighbour_index(body)
+    soft = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)) < CURVATURE_LIMIT
+    mesh = MeshData.of(body)
+    facets = body.facets
+    wanted = np.unique(np.asarray(seeds, dtype=np.int64))
+    around = neighbours[wanted].ravel()
+    start = np.union1d(wanted, around[around >= 0])
+    # Auch die Nachbarn des ersten Dreiecks jeder gefragten Facette: Ob sie
+    # ihre Nummer trägt, entscheidet dieses Dreieck.
+    firsts = np.asarray(
+        [int(facets[facet][0]) for facet in np.unique(label[wanted]).tolist() if facet >= 0],
+        dtype=np.int64,
+    )
+    if len(firsts):
+        beside_first = neighbours[firsts].ravel()
+        start = np.union1d(start, np.union1d(firsts, beside_first[beside_first >= 0]))
+    # **Was schon gerechnet ist, gilt weiter** (:class:`_NearSurfaces`): Die
+    # Nachmessung fragt je Bohrung, und am Gartenschlauchhalter reichte schon
+    # die erste Umgebung über die Hälfte des Körpers.
+    known: _NearSurfaces = remembered("surfaces_near", body, (), _NearSurfaces)
+    with known.lock:
+        if known.zone is not None and _settled(known.zone, start, loose, soft, body, neighbours):
+            return _near_owners(known, wanted, label, facets)
+        zone = np.zeros(count, dtype=bool) if known.zone is None else known.zone.copy()
+        _flood_loose(zone, start, loose, neighbours, rows, soft)
+        # **Hat die Umgebung zusammen schon so viel gerechnet, wie der Körper
+        # ungeschützte Dreiecke hat, rechnet die nächste Frage den ganzen
+        # Körper** — einmal, gemerkt, und jede weitere liest daraus. Jede neue
+        # Frage rechnet ihre ganze gewachsene Umgebung neu; an einem Körper mit
+        # vielen Bohrungen wurde daraus mehr als das Ganze.
+        size = int(zone.sum())
+        if known.worked + size > int(loose.sum()):
+            owners: np.ndarray = np.asarray(_surface_owners(body), dtype=np.int64)[wanted]
+            return owners
+        planar, patch_of = _near_surfaces(
+            body,
+            mesh,
+            zone,
+            start,
+            loose,
+            in_planar,
+            in_recoverable,
+            neighbours,
+            rows,
+            soft,
+            check_cancelled,
+        )
+        known.zone, known.planar, known.patch_of = zone, planar, patch_of
+        known.worked += size
+        return _near_owners(known, wanted, label, facets)
+
+
+def _near_surfaces(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    zone: np.ndarray,
+    start: np.ndarray,
+    loose: np.ndarray,
+    in_planar: np.ndarray,
+    in_recoverable: np.ndarray,
+    neighbours: np.ndarray,
+    rows: np.ndarray,
+    soft: np.ndarray,
+    check_cancelled: Callable[[], None] | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Der Rumpf von :func:`_surface_owners_near`: ``zone`` wächst, bis keine Frage hinausreicht.
+
+    Zurück kommen je Dreieck, ob es eben bleibt (gültig in der Umgebung und für
+    die geschützten Dreiecke an ihr), und die Nummer seines Rundflecks
+    (``-2 - kleinstes Dreieck``, sonst ``-1``).
+    """
+    count = len(body.faces)
+    while True:
+        if check_cancelled is not None:
+            check_cancelled()
+        requests: set[int] = set()
+        # Erster Gang, wie :func:`_large_facet_faces_read`: die Flecken der
+        # ungeschützten Dreiecke, ihre Kerben, ihr Mantelnachweis.
+        first = _closed_by_notches(
+            body,
+            _soft_groups(np.flatnonzero(zone), neighbours, rows, soft),
+            zone,
+            loose,
+            loose,
+            neighbours,
+            requests,
+        )
+        rounded = np.zeros(count, dtype=bool)
+        for group, _core in first:
+            if check_cancelled is not None:
+                check_cancelled()
+            patch = in_body_order(body, [group.tolist()])[0]
+            if _face_count(body, patch) < MIN_PATCH_FACES or not in_recoverable[patch].any():
+                continue
+            if _a_sliver(body, patch):
+                continue
+            if _round_surface(body, mesh, patch, check_cancelled=check_cancelled):
+                rounded[np.asarray(patch, dtype=np.int64)] = True
+        planar = in_planar & ~rounded
+        # **Ein geschütztes Dreieck, das ein Fleck als Kerbe nimmt, wird
+        # Rundfleck** und verbindet danach, was an ihm hängt. Gefragt werden die
+        # an den gefragten Dreiecken und die, die weich an einem Rundfleck der
+        # Umgebung liegen — und nur dort, wo ein Fleck an einer ihrer Ecken
+        # überhaupt ausfransen kann (:func:`_frayable`); dann gehören ihre
+        # ungeschützten Nachbarn in die Umgebung.
+        rough = np.flatnonzero((zone | rounded) & ~planar)
+        beside = neighbours[rough]
+        touching = (beside >= 0) & soft[np.maximum(rows[rough], 0)]
+        watched = np.union1d(start, beside[touching])
+        watched = watched[~loose[watched]]
+        if len(watched):
+            risky = watched[_frayable(body, watched, loose, soft)]
+            if len(risky):
+                beyond = neighbours[risky].ravel()
+                beyond = beyond[beyond >= 0]
+                requests.update(beyond[loose[beyond] & ~zone[beyond]].tolist())
+        # Zweiter Gang, wie :func:`_surface_owners_read`: die Rundflecken aus
+        # allem, was nicht eben ist, und ihre Kerben.
+        second = _closed_by_notches(
+            body,
+            _soft_groups(np.flatnonzero((zone | rounded) & ~planar), neighbours, rows, soft),
+            zone,
+            loose,
+            ~planar,
+            neighbours,
+            requests,
+        )
+        if not requests:
+            break
+        _flood_loose(zone, np.fromiter(requests, dtype=np.int64), loose, neighbours, rows, soft)
+    patch_of = np.full(count, -1, dtype=np.int64)
+    for group, core in second:
+        patch_of[group] = -2 - int(core)
+    return planar, patch_of
+
+
+@dataclass(slots=True)
+class _NearSurfaces:
+    """Was :func:`_surface_owners_near` an einem Körper gerechnet hat.
+
+    ``zone`` sind die ungeschützten Dreiecke, deren Flecken vollständig
+    gerechnet sind — samt allem, wonach sie fragten —, ``planar`` je Dreieck,
+    ob es eben bleibt, ``patch_of`` die Nummer seines Rundflecks. Eine neue
+    Frage, deren Umgebung darin liegt (:func:`_settled`), liest daraus; sonst
+    wächst die Umgebung um ihre, und es wird neu gerechnet. ``worked`` zählt
+    die so gerechneten Dreiecke — über die ungeschützten des Körpers hinaus
+    rechnet :func:`_surface_owners_near` den ganzen. Das Schloss hält zwei
+    Fäden an demselben Körper auseinander.
+    """
+
+    zone: np.ndarray | None = None
+    planar: np.ndarray | None = None
+    patch_of: np.ndarray | None = None
+    worked: int = 0
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+
+def _settled(
+    zone: np.ndarray,
+    start: np.ndarray,
+    loose: np.ndarray,
+    soft: np.ndarray,
+    body: trimesh.Trimesh,
+    neighbours: np.ndarray,
+) -> bool:
+    """Ob eine gerechnete Umgebung eine neue Frage schon trägt.
+
+    Jedes ungeschützte Dreieck ihrer Umgebung liegt darin, und an jedem
+    geschützten, an dem ein Fleck ausfransen kann (:func:`_frayable`), auch
+    seine ungeschützten Nachbarn — dieselben Bedingungen, unter denen
+    :func:`_near_surfaces` nichts mehr nachfragt.
+    """
+    if not bool(zone[start[loose[start]]].all()):
+        return False
+    guarded = start[~loose[start]]
+    if not len(guarded):
+        return True
+    risky = guarded[_frayable(body, guarded, loose, soft)]
+    if not len(risky):
+        return True
+    beyond = neighbours[risky].ravel()
+    beyond = beyond[beyond >= 0]
+    return bool(zone[beyond[loose[beyond]]].all())
+
+
+def _near_owners(
+    known: _NearSurfaces, wanted: np.ndarray, label: np.ndarray, facets: Any
+) -> np.ndarray:
+    """Die Nummern aus :func:`_surface_owners_near` für ``wanted``, gelesen aus ``known``."""
+    assert known.planar is not None and known.patch_of is not None
+    owners = np.full(len(wanted), -1, dtype=np.int64)
+    for place, facet in enumerate(label[wanted].tolist()):
+        # Eine Facette trägt ihre Nummer, wenn ihr erstes Dreieck eben blieb.
+        if facet >= 0 and known.planar[int(facets[facet][0])]:
+            owners[place] = facet
+    rounded = known.patch_of[wanted]
+    owners[rounded != -1] = rounded[rounded != -1]
+    return owners
+
+
+def _frayable(
+    body: trimesh.Trimesh, triangles: np.ndarray, members: np.ndarray, soft: np.ndarray
+) -> np.ndarray:
+    """Je Dreieck aus ``triangles``, ob an einer seiner Ecken ein Fleck aus ``members``
+    ausfransen kann.
+
+    Ausgefranst ist ein Fleck an einer Ecke, an der mehr als zwei seiner
+    Randkanten zusammenlaufen (:func:`_rim_of`) — er setzt dort zweimal an.
+    Um eine Ecke bilden die Dreiecke aus ``members`` Bögen, die über weiche
+    Nähte zusammenhängen, und ein Fleck besteht dort aus ganzen Bögen. Wo es
+    höchstens einen gibt, franst an dieser Ecke kein Fleck aus, und kein
+    Dreieck dort wird eine Kerbe. Gezählt als Dreiecke minus Nähte am Fächer
+    der Ecke, ein geschlossener Kranz als ein Bogen; eine Ecke, deren Fächer
+    kein Kranz und kein Bogen ist (eine verzweigte Kante), gilt als ausfransbar.
+    """
+    corners = np.asarray(body.faces, dtype=np.int64)
+    count = len(body.vertices)
+    wanted = np.zeros(count, dtype=bool)
+    wanted[corners[np.asarray(triangles, dtype=np.int64)].ravel()] = True
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    seams = np.asarray(body.face_adjacency_edges, dtype=np.int64).reshape(-1, 2)
+    fan = np.bincount(corners.ravel(), minlength=count)
+    around = np.bincount(seams.ravel(), minlength=count)
+    at = corners[np.flatnonzero(members)].ravel()
+    nodes = np.bincount(at[wanted[at]], minlength=count)
+    joined = soft & members[pairs[:, 0]] & members[pairs[:, 1]]
+    ends = seams[joined].ravel()
+    links = np.bincount(ends[wanted[ends]], minlength=count)
+    closed = (nodes > 0) & (nodes == fan) & (links == nodes)
+    runs = nodes - links + closed
+    irregular = (around != fan) & (around != fan - 1)
+    frayable = wanted & ((runs >= 2) | irregular)
+    return np.asarray(frayable[corners[np.asarray(triangles, dtype=np.int64)]].any(axis=1))
+
+
+def _flood_loose(
+    zone: np.ndarray,
+    seeds: np.ndarray,
+    loose: np.ndarray,
+    neighbours: np.ndarray,
+    rows: np.ndarray,
+    soft: np.ndarray,
+) -> None:
+    """Markiert in ``zone`` die Flecken aus ungeschützten Dreiecken (``loose``) um ``seeds``.
+
+    Über Nähte unter :data:`CURVATURE_LIMIT`, Ring um Ring, wie
+    :func:`_patch_around`; ein geschütztes Dreieck unter ``seeds`` bleibt außen.
+    """
+    frontier = np.unique(np.asarray(seeds, dtype=np.int64))
+    frontier = frontier[loose[frontier] & ~zone[frontier]]
+    zone[frontier] = True
+    while len(frontier):
+        near, via = neighbours[frontier].ravel(), rows[frontier].ravel()
+        present = near >= 0
+        near, via = near[present], via[present]
+        frontier = np.unique(near[soft[via] & loose[near] & ~zone[near]])
+        zone[frontier] = True
+
+
+def _soft_groups(
+    nodes: np.ndarray, neighbours: np.ndarray, rows: np.ndarray, soft: np.ndarray
+) -> list[np.ndarray]:
+    """Die Flecken aus ``nodes`` (aufsteigend) über Nähte unter :data:`CURVATURE_LIMIT`.
+
+    Dieselben Gruppen wie :func:`_connected_patches` vor dem Schließen der
+    Kerben, in derselben Folge — nach ihrem kleinsten Dreieck —, und jede
+    aufsteigend.
+    """
+    if not len(nodes):
+        return []
+    beside = neighbours[nodes]
+    via = rows[nodes]
+    spot = np.minimum(np.searchsorted(nodes, np.maximum(beside, 0)), len(nodes) - 1)
+    joined = (beside >= 0) & (nodes[spot] == beside) & soft[np.maximum(via, 0)]
+    own = np.broadcast_to(np.arange(len(nodes))[:, None], beside.shape)
+    labels = trimesh.graph.connected_component_labels(
+        np.column_stack((own[joined], spot[joined])), node_count=len(nodes)
+    )
+    order = np.argsort(labels, kind="stable")
+    starts = np.flatnonzero(np.r_[True, labels[order][1:] != labels[order][:-1]])
+    return [nodes[part] for part in np.split(order, starts[1:])]
+
+
+def _frayed_groups(body: trimesh.Trimesh, groups: list[np.ndarray]) -> np.ndarray:
+    """Je Fleck, ob :func:`_rim_of` an ihm eine ausgefranste Ecke fände — für alle in einem Zug.
+
+    Dieselbe Zählung: Randkanten sind die Kanten, die genau ein Dreieck des
+    Flecks trägt, ausgefranst ist eine Ecke mit mehr als zwei davon, und ein
+    Fleck mit einer dreifach belegten Kante ist unbrauchbar. Je Fleck ein
+    ``np.unique`` kostete an einer Umgebung mit Hunderten Flecken mehr als
+    alles andere; ausgefranste Flecken sind selten, und nur sie fragen danach
+    einzeln.
+    """
+    found = np.zeros(len(groups), dtype=bool)
+    if not groups:
+        return found
+    sizes = np.fromiter((len(group) for group in groups), dtype=np.int64, count=len(groups))
+    owner = np.tile(np.repeat(np.arange(len(groups), dtype=np.int64), sizes), 3)
+    corners = len(body.vertices)
+    codes = _edge_codes(np.asarray(body.faces)[np.concatenate(groups)], corners)
+    known, code_of = np.unique(codes, return_inverse=True)
+    keys, uses = np.unique(owner * len(known) + code_of, return_counts=True)
+    group_of, edge_of = keys // len(known), keys % len(known)
+    broken = np.zeros(len(groups), dtype=bool)
+    broken[group_of[uses > 2]] = True
+    border = uses == 1
+    ends = known[edge_of[border]]
+    whose = group_of[border]
+    at_ends = np.concatenate((whose * corners + ends // corners, whose * corners + ends % corners))
+    places, degrees = np.unique(at_ends, return_counts=True)
+    found[places[degrees > 2] // corners] = True
+    return found & ~broken
+
+
+def _closed_by_notches(
+    body: trimesh.Trimesh,
+    groups: list[np.ndarray],
+    zone: np.ndarray,
+    loose: np.ndarray,
+    faces: np.ndarray,
+    neighbours: np.ndarray,
+    requests: set[int],
+) -> list[tuple[np.ndarray, int]]:
+    """:func:`_without_notches` für die Flecken ``groups`` einer Umgebung.
+
+    ``faces`` markiert, was zu einem Fleck gehört und deshalb nie eine Kerbe
+    schließt. Zurück kommt je Fleck sein Dreiecke samt geschlossener Kerbe und
+    sein kleinstes Dreieck. Entschieden wird eine Kerbe nur, wo alles über sie
+    bekannt ist: jeder ungeschützte Nachbar liegt in der Umgebung — sonst
+    könnte ein früherer Fleck sie schließen, oder ihr eigener Stand ist offen.
+    Was fehlt, landet in ``requests``.
+    """
+    taken: set[int] = set()
+    closed: list[tuple[np.ndarray, int]] = []
+    frayed = _frayed_groups(body, groups)
+    for group, open_rim in zip(groups, frayed.tolist(), strict=True):
+        core = int(group[0])
+        members = group.tolist()
+        if not open_rim or _face_count(body, members) < MIN_PATCH_FACES:
+            closed.append((group, core))
+            continue
+        rim = _rim_of(body, members)
+        if rim is None or not rim.frayed:
+            closed.append((group, core))
+            continue
+        free: list[int] = []
+        for face in sorted(_candidates_at(body, members, rim.frayed)):
+            around = neighbours[face]
+            around = np.append(around[around >= 0], face)
+            missing = around[loose[around] & ~zone[around]]
+            if len(missing):
+                requests.update(missing.tolist())
+                continue
+            if not faces[face] and face not in taken:
+                free.append(face)
+        closing = _closing_set(body, rim, free)
+        if closing is None:
+            closed.append((group, core))
+            continue
+        taken.update(closing)
+        closed.append((np.union1d(group, np.asarray(closing, dtype=np.int64)), core))
+    return closed
 
 
 def facet_middles(
@@ -8608,51 +9132,282 @@ def _through_the_piece(
         return radii
     members = np.concatenate([np.asarray(facets[number], dtype=np.int64) for number in wanted])
     owner = np.repeat(np.arange(len(wanted), dtype=np.int64), sizes[wanted])
-    values = radii[members]
+    fill, value = _piece_filling(
+        body, members, owner, sizes[wanted], radii[members], check_cancelled
+    )
+    if not bool(fill.any()):
+        return radii
+    carried = np.array(radii, dtype=float, copy=True)
+    carried[members[fill]] = value[fill]
+    return carried
+
+
+def _piece_filling(
+    body: trimesh.Trimesh,
+    members: np.ndarray,
+    owner: np.ndarray,
+    sizes: np.ndarray,
+    values: np.ndarray,
+    check_cancelled: Callable[[], None] | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Der Rumpf von :func:`_through_the_piece` für die gegebenen Facetten.
+
+    ``members`` hält ihre Dreiecke hintereinander, ``owner`` je Dreieck die
+    Facette (``0 … len(sizes) - 1``), ``values`` seinen Radius. Zurück kommt je
+    Dreieck, ob es den Radius seines Teilstücks bekommt, und welchen. Eine
+    Stelle für den ganzen Körper und für einzelne Facetten
+    (:func:`face_radii_at`): Jede Frage hängt nur an der eigenen Facette, also
+    ist die Antwort je Facette dieselbe.
+    """
+    fill = np.zeros(len(members), dtype=bool)
+    value = np.full(len(members), np.inf, dtype=float)
     finite = np.isfinite(values)
     # Gefüllt werden nur Dreiecke ganz im Inneren ihrer Facette, alle drei
     # Kanten zu ihren eigenen: Eines am Umriss hat seine Naht oder eine scharfe
     # Kante, und dort ist ``inf`` die Antwort von ``_face_radii``, nicht eine
-    # Lücke.
-    count = len(body.faces)
-    facet_of = np.full(count, -1, dtype=np.int64)
+    # Lücke. Gezählt am Nachbarindex — dieselben Nähte wie ``face_adjacency``.
+    facet_of = np.full(len(body.faces), -1, dtype=np.int64)
     facet_of[members] = owner
-    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
-    own = (facet_of[pairs[:, 0]] >= 0) & (facet_of[pairs[:, 0]] == facet_of[pairs[:, 1]])
-    shared = np.bincount(pairs[own].ravel(), minlength=count)
-    gap = ~finite & (shared[members] == 3)
+    neighbours, _rows = _neighbour_index(body)
+    beside = neighbours[members]
+    shared = ((beside >= 0) & (facet_of[np.maximum(beside, 0)] == owner[:, None])).sum(axis=1)
+    gap = ~finite & (shared == 3)
     # **Den Umriss nur, wo er etwas entscheidet**: an Facetten mit einer
     # solchen Lücke und einem Radius an einer Naht. Für alle übrigen kostete
     # er am Drachen eine Sekunde (2,3 Millionen Dreiecke), am Bett eine halbe.
-    asked = (np.bincount(owner, weights=gap, minlength=len(wanted)) > 0) & (
-        np.bincount(owner, weights=finite, minlength=len(wanted)) > 0
+    asked = (np.bincount(owner, weights=gap, minlength=len(sizes)) > 0) & (
+        np.bincount(owner, weights=finite, minlength=len(sizes)) > 0
     )
     if not bool(asked.any()):
-        return radii
+        return fill, value
     if check_cancelled is not None:
         check_cancelled()
     chosen = asked[owner]
-    renumbered = np.full(len(wanted), -1, dtype=np.int64)
+    renumbered = np.full(len(sizes), -1, dtype=np.int64)
     renumbered[asked] = np.arange(int(asked.sum()), dtype=np.int64)
-    members, owner = members[chosen], renumbered[owner[chosen]]
-    values, finite, gap = values[chosen], finite[chosen], gap[chosen]
-    corners, inner = _outline_corners(body, members, owner, sizes[wanted[asked]])
+    kept, kept_owner = members[chosen], renumbered[owner[chosen]]
+    kept_values, kept_finite, kept_gap = values[chosen], finite[chosen], gap[chosen]
+    corners, inner = _outline_corners(body, kept, kept_owner, np.asarray(sizes)[asked])
     pieces = _divider_pieces(corners, inner)
     if not bool(pieces.any()):
-        return radii
+        return fill, value
     lowest = np.full(len(pieces), np.inf, dtype=float)
-    np.minimum.at(lowest, owner[finite], values[finite])
+    np.minimum.at(lowest, kept_owner[kept_finite], kept_values[kept_finite])
     highest = np.full(len(pieces), -np.inf, dtype=float)
-    np.maximum.at(highest, owner[finite], values[finite])
+    np.maximum.at(highest, kept_owner[kept_finite], kept_values[kept_finite])
     # Nur wo die Nähte des Stücks einen Radius nennen: innerhalb des Sprungs,
     # an dem die Bögen eines Prismas trennen.
     agreed = pieces & np.isfinite(lowest) & (highest <= lowest * (1.0 + PRISM_ARC_JUMP))
-    fill = gap & agreed[owner]
-    if not bool(fill.any()):
-        return radii
-    carried = np.array(radii, dtype=float, copy=True)
-    carried[members[fill]] = lowest[owner[fill]]
-    return carried
+    fill[chosen] = kept_gap & agreed[kept_owner]
+    value[chosen] = lowest[kept_owner]
+    return fill, value
+
+
+#: Ab welchem Anteil des Körpers :func:`face_radii_at` den ganzen Körper rechnet
+#: statt eines weiteren Ausschnitts. Je Dreieck kostet der örtliche Weg etwa
+#: das Doppelte — er sammelt je Ausschnitt Facetten, Ursprünge und Nähte ein:
+#: Am Gartenschlauchhalter (391 850 Dreiecke) kosteten 30 verstreute
+#: Ausschnitte 1,39 s, der ganze Körper 0,63 s (Durchsicht 0.5.1,
+#: rest-erkennung2). Ab einem Viertel rechnet die nächste Frage den ganzen
+#: Körper, und jede weitere liest seine gemerkte Antwort: Viele Ausschnitte
+#: kosten so höchstens anderthalbmal den ganzen Körper, die Nachmessung eines
+#: einzelnen Merkmals bleibt weit darunter.
+LOCAL_RADII_SHARE: Final = 0.25
+
+
+def face_radii_at(
+    body: trimesh.Trimesh,
+    triangles: np.ndarray,
+    check_cancelled: Callable[[], None] | None = None,
+) -> np.ndarray:
+    """:func:`face_radii` für ausgewählte Dreiecke — dieselben Zahlen, ohne das ganze Netz.
+
+    Für die Erkennung an einer Stelle (:func:`curvature_jumps_at`). Der Radius
+    eines Dreiecks hängt an seiner Facette (ihr Mittelpunkt, :func:`pair_radii`;
+    ihr Teilstück, :func:`_through_the_piece`), an den Facetten seiner
+    Nachbarn und nach *Kanten verfeinern* an den übrigen Stücken seines
+    Ursprungs (:func:`_by_origin`) — gerechnet wird genau diese Umgebung, mit
+    denselben Schritten wie am ganzen Körper: Summen über dieselben Felder in
+    derselben Reihenfolge, Minima unabhängig von ihr. Steht die Antwort für den
+    ganzen Körper schon im Merker, wird sie gelesen.
+
+    **Was einmal gerechnet ist, steht fest** (:class:`_NearRadii`): Die
+    Nachmessung fragt je Merkmal einen Ausschnitt, und benachbarte Ausschnitte
+    überdecken sich. Gerechnet wird nur, was noch fehlt; und reichen die
+    Fragen zusammen über :data:`LOCAL_RADII_SHARE` des Körpers, rechnet die
+    nächste den ganzen Körper (:func:`face_radii`, gemerkt). Viele Ausschnitte
+    an einem Körper kosten so höchstens anderthalbmal den ganzen.
+    """
+    asked = np.asarray(triangles, dtype=np.int64)
+    known = _known_answer("face_radii", body)
+    if known is not None:
+        return np.asarray(known, dtype=float)[asked]
+    near: _NearRadii = remembered("radii_near", body, (), _NearRadii)
+    with near.lock:
+        if near.done is None or near.values is None:
+            near.done = np.zeros(len(body.faces), dtype=bool)
+            near.values = np.full(len(body.faces), np.inf, dtype=float)
+        missing = np.unique(asked[~near.done[asked]])
+        if not len(missing):
+            return np.asarray(near.values[asked], dtype=float)
+        # Gezählt wird, was der Ausschnitt mitliest: Seine Facetten kommen ganz
+        # (das Teilstück, :func:`_through_the_piece`), und an einer Platte ist
+        # das schon beim ersten Ausschnitt die Deckfläche.
+        facets = body.facets
+        labels = _facet_of_face(body)
+        own = np.unique(labels[missing])
+        own = own[own >= 0]
+        sizes = np.fromiter((len(facets[number]) for number in own), dtype=np.int64, count=len(own))
+        read_whole = np.isin(labels[missing], own[sizes >= 3])
+        reach = int((~read_whole).sum()) + int(sizes[sizes >= 3].sum())
+        if near.counted + reach > len(body.faces) * LOCAL_RADII_SHARE:
+            return np.asarray(face_radii(body, check_cancelled), dtype=float)[asked]
+        base, radii = _face_radii_around(body, missing, own, sizes, near, check_cancelled)
+        near.values[base] = radii
+        near.done[base] = True
+        near.counted += len(base)
+        return np.asarray(near.values[asked], dtype=float)
+
+
+@dataclass(slots=True)
+class _NearRadii:
+    """Was :func:`face_radii_at` an einem Körper gerechnet hat.
+
+    ``done`` je Dreieck, ob sein Radius feststeht, ``values`` der Radius. Er
+    steht fest, sobald eine Frage seine Facette, deren Nachbarn und die Stücke
+    seines Ursprungs gelesen hat — und das tut jede, die ihn rechnet
+    (:func:`_face_radii_around`). ``counted`` zählt die so gerechneten
+    Dreiecke gegen :data:`LOCAL_RADII_SHARE`, ``ranking`` sortiert die
+    Ursprünge einmal je Körper. Das Schloss hält zwei Fäden an demselben
+    Körper auseinander.
+    """
+
+    done: np.ndarray | None = None
+    values: np.ndarray | None = None
+    counted: int = 0
+    ranking: np.ndarray | None = None
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+
+def _face_radii_around(
+    body: trimesh.Trimesh,
+    asked: np.ndarray,
+    own: np.ndarray,
+    sizes: np.ndarray,
+    near: _NearRadii,
+    check_cancelled: Callable[[], None] | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Der Rumpf von :func:`face_radii_at`: die Radien von ``asked`` und allen
+    Dreiecken ihrer Facetten (``own`` mit ihren Größen ``sizes``), aufsteigend
+    — jeder davon endgültig."""
+    facets = body.facets
+    # Das Teilstück liest die ganze Facette; eine unter drei Dreiecken hat
+    # keinen inneren Punkt (dieselbe Grenze wie :func:`_through_the_piece`).
+    whole, whole_sizes = own[sizes >= 3], sizes[sizes >= 3]
+    members = (
+        np.concatenate([np.asarray(facets[number], dtype=np.int64) for number in whole])
+        if len(whole)
+        else np.zeros(0, dtype=np.int64)
+    )
+    base = np.union1d(asked, members)
+    units = refined_units(body)
+    measured = base
+    if units is not None:
+        # Das Minimum eines Ursprungs liest alle seine Stücke.
+        present = np.unique(units[base])
+        present = present[present >= 0]
+        if len(present):
+            if near.ranking is None:
+                near.ranking = np.argsort(units, kind="stable")
+            ranking = near.ranking
+            ranked = units[ranking]
+            starts = np.searchsorted(ranked, present, side="left")
+            ends = np.searchsorted(ranked, present, side="right")
+            pieces = [ranking[start:end] for start, end in zip(starts, ends, strict=True)]
+            measured = np.union1d(base, np.concatenate(pieces))
+    raw = _face_radii_of(body, measured, check_cancelled)
+    if units is not None:
+        own_units = units[measured]
+        keyed = own_units >= 0
+        if bool(keyed.any()):
+            lowest = np.full(int(units.max()) + 1, np.inf, dtype=float)
+            np.minimum.at(lowest, own_units[keyed], raw[keyed])
+            raw = np.array(raw, dtype=float, copy=True)
+            raw[keyed] = lowest[own_units[keyed]]
+    radii = raw[np.searchsorted(measured, base)]
+    if len(whole):
+        owner = np.repeat(np.arange(len(whole), dtype=np.int64), whole_sizes)
+        values = radii[np.searchsorted(base, members)]
+        fill, value = _piece_filling(body, members, owner, whole_sizes, values, check_cancelled)
+        if bool(fill.any()):
+            radii = np.array(radii, dtype=float, copy=True)
+            radii[np.searchsorted(base, members[fill])] = value[fill]
+    return base, np.asarray(radii, dtype=float)
+
+
+def _face_radii_of(
+    body: trimesh.Trimesh,
+    triangles: np.ndarray,
+    check_cancelled: Callable[[], None] | None,
+) -> np.ndarray:
+    """:func:`_face_radii` für aufsteigend sortierte Dreiecke — das Minimum über ihre
+    sanften Nähte."""
+    _neighbours, rows = _neighbour_index(body)
+    found = np.full(len(triangles), np.inf, dtype=float)
+    if not rows.shape[1] or not len(triangles):
+        return found
+    around = rows[triangles]
+    seams = np.unique(around[around >= 0])
+    if not len(seams):
+        return found
+    if check_cancelled is not None:
+        check_cancelled()
+    radii = _pair_radii_at(body, seams)
+    degrees = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[seams])
+    usable = (degrees < CURVATURE_LIMIT) & np.isfinite(radii)
+    values = np.full(around.shape, np.inf, dtype=float)
+    present = around >= 0
+    spot = np.searchsorted(seams, around[present])
+    values[present] = np.where(usable[spot], radii[spot], np.inf)
+    return np.asarray(values.min(axis=1), dtype=float)
+
+
+def _pair_radii_at(body: trimesh.Trimesh, seams: np.ndarray) -> np.ndarray:
+    """:func:`pair_radii` für ausgewählte Nähte — dieselben Schritte je Zeile."""
+    pairs = np.asarray(body.face_adjacency)[seams]
+    angles = np.asarray(body.face_adjacency_angles, dtype=float)[seams]
+    edges = np.asarray(body.face_adjacency_edges)[seams]
+    points = np.asarray(body.vertices)
+    along = points[edges[:, 1]] - points[edges[:, 0]]
+    along = along / np.maximum(np.linalg.norm(along, axis=1), EPS_GEOM)[:, None]
+    ends = np.unique(pairs.ravel())
+    middles = _facet_middles_at(body, ends)
+    span = middles[np.searchsorted(ends, pairs[:, 1])] - middles[np.searchsorted(ends, pairs[:, 0])]
+    across = np.linalg.norm(span - np.einsum("ij,ij->i", span, along)[:, None] * along, axis=1)
+    return np.where(np.degrees(angles) >= FLAT_ANGLE, across / np.maximum(angles, EPS_GEOM), np.inf)
+
+
+def _facet_middles_at(body: trimesh.Trimesh, triangles: np.ndarray) -> np.ndarray:
+    """:func:`facet_middles` für aufsteigend sortierte Dreiecke — je Facette dieselbe Summe."""
+    centres = np.asarray(body.triangles_center, dtype=float)
+    middles = centres[triangles].copy()
+    areas = np.asarray(body.area_faces, dtype=float)
+    labels = _facet_of_face(body)[triangles]
+    facets = body.facets
+    order = np.argsort(labels, kind="stable")
+    numbers, starts = np.unique(labels[order], return_index=True)
+    ends = np.append(starts[1:], len(order))
+    for number, start, end in zip(numbers.tolist(), starts.tolist(), ends.tolist(), strict=True):
+        if number < 0:
+            continue
+        members = np.asarray(facets[number])
+        weight = areas[members].sum()
+        if weight <= EPS_GEOM:
+            continue
+        middles[order[start:end]] = (centres[members] * areas[members][:, None]).sum(
+            axis=0
+        ) / weight
+    return np.asarray(middles, dtype=float)
 
 
 def _pieces_at_a_seam(
@@ -9099,7 +9854,13 @@ def _curvature_jumps(
     radii = face_radii(body, check_cancelled)
     if check_cancelled is not None:
         check_cancelled()
-    first, second = radii[pairs[:, 0]], radii[pairs[:, 1]]
+    return _jumps_between(radii[pairs[:, 0]], radii[pairs[:, 1]])
+
+
+def _jumps_between(first: np.ndarray, second: np.ndarray) -> np.ndarray:
+    """Der Sprung zwischen zwei Radien je Naht, als Anteil — eine Rechnung für
+    den ganzen Körper (:func:`_curvature_jumps`) und für einzelne Nähte
+    (:func:`curvature_jumps_at`)."""
     # Nur wo **beide** Seiten einen Radius haben, gibt es einen Sprung. Zwei
     # ebene Nachbarn tragen ``inf``, und deren Differenz wäre ``nan`` — kein
     # Sprung, sondern keine Aussage. Die Rechnung darf die ``inf`` dabei gar
@@ -9108,7 +9869,7 @@ def _curvature_jumps(
     measured = np.isfinite(first) & np.isfinite(second)
     near = np.where(measured, first, 0.0)
     far = np.where(measured, second, 0.0)
-    jump = np.zeros(len(pairs), dtype=float)
+    jump = np.zeros(len(first), dtype=float)
     np.divide(
         np.abs(near - far),
         np.maximum(np.maximum(near, far), EPS_GEOM),
@@ -9125,9 +9886,8 @@ def curvature_jumps(
 
     Die Nachtrennung trennt an diesen Sprüngen, und die Erkennung an einer
     Stelle begrenzt an denselben ihre Randsperre (``local._recognise_region``)
-    — am ganzen Körper gerechnet, denn am Schnittrand eines Ausschnitts fehlen
-    die Nachbarn, aus denen der Radius eines Dreiecks kommt. Am Drachen kostet
-    die erste Frage 3 s, geprüft wird der Abbruch dazwischen.
+    — dort nur an den Nähten ihres Ausschnitts (:func:`curvature_jumps_at`).
+    Am Drachen kostet die erste Frage 3 s, geprüft wird der Abbruch dazwischen.
     """
     result: np.ndarray = remembered(
         "curvature_jumps",
@@ -9137,6 +9897,39 @@ def curvature_jumps(
         check_cancelled=check_cancelled,
     )
     return result
+
+
+def curvature_jumps_at(
+    body: trimesh.Trimesh,
+    rows: np.ndarray,
+    check_cancelled: Callable[[], None] | None = None,
+) -> np.ndarray:
+    """:func:`curvature_jumps` an ausgewählten Nähten (Zeilen von ``face_adjacency``) —
+    dieselben Zahlen, ohne das ganze Netz zu rechnen.
+
+    Die Erkennung an einer Stelle braucht die Sprünge nur an den Nähten ihres
+    Ausschnitts (``local._recognise_region``), fragte sie aber am ganzen
+    Körper: Nach jedem Versetzen oder Aufweiten ist das Netz neu, und am
+    Gartenschlauchhalter mit 392 532 Dreiecken kostete die Frage 1,15 s der
+    örtlichen Nachmessung (Durchsicht 0.5.1, bohrung). Gerechnet werden hier
+    nur die Radien an diesen Nähten (:func:`face_radii_at`), mit denselben
+    Schritten an denselben Zahlen — der Sprung ist bitgleich. Steht die
+    Antwort für den ganzen Körper schon im Merker, wird sie gelesen.
+    """
+    wanted = np.asarray(rows, dtype=np.int64)
+    known = _known_answer("curvature_jumps", body)
+    if known is not None:
+        return np.asarray(known, dtype=float)[wanted]
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    if not len(wanted) or not len(pairs):
+        return np.zeros(len(wanted), dtype=float)
+    chosen = pairs[wanted]
+    triangles = np.unique(chosen.ravel())
+    radii = face_radii_at(body, triangles, check_cancelled)
+    return _jumps_between(
+        radii[np.searchsorted(triangles, chosen[:, 0])],
+        radii[np.searchsorted(triangles, chosen[:, 1])],
+    )
 
 
 def _split_patches_by_curvature(
@@ -11185,7 +11978,34 @@ def _detect_voids(
     sonst die Komponentenzahl des Körpers — :func:`detect` merkt sie sich für
     :func:`unreadable_void_shells`, damit die Auswertung sagen kann, dass hier
     Einschlüsse fehlen könnten.
+
+    **Einmal je Körper** (Durchsicht 0.5.1): Die Erkennung an einer Stelle
+    fragt die Einschlüsse des ganzen Körpers je Suchbereich
+    (``local._recognise_region``), und jede Frage zählte Dichtheit und Teile
+    neu — am Gartenschlauchhalter dreimal 0,18 s je Versetzen.
     """
+    found, unreadable = remembered(
+        "voids",
+        mesh.raw,
+        (),
+        lambda: _detect_voids_read(mesh, check_cancelled),
+        check_cancelled=check_cancelled,
+    )
+    return list(found), int(unreadable)
+
+
+def _detect_voids_read(
+    mesh: MeshData, check_cancelled: Callable[[], None] | None
+) -> tuple[tuple[Feature, ...], int]:
+    """Der Rumpf von :func:`_detect_voids` — die Antwort merkt sich die Hülle."""
+    found, unreadable = _voids_of(mesh, check_cancelled)
+    return tuple(found), unreadable
+
+
+def _voids_of(
+    mesh: MeshData, check_cancelled: Callable[[], None] | None
+) -> tuple[list[Feature], int]:
+    """Die Einschlüsse und die Zahl unlesbarer Schalen, gerechnet (:func:`_detect_voids`)."""
     if check_cancelled is not None:
         check_cancelled()
     body = mesh.raw
