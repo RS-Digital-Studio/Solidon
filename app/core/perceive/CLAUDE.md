@@ -918,6 +918,15 @@ Verweis bleibt je Merkmal eine Warnung
   `MIN_CYLINDER_DIAMETER`, gefragt über `_a_sliver` und `_too_small_to_make`
   — behalten ihre Dreiecke und bleiben aus der Rundformsuche heraus. Ein
   geteilter Streifen zählt damit wie der ungeteilte.
+- **Und ein geteiltes Teilstück trägt seinen Radius auch innen**
+  (`face_radii` über `_through_the_piece`, dieselbe Frage `_divider_pieces`
+  wie die Ebenenregel, R1 der Durchsicht 0.5.1). Ein Dreieck mitten im
+  Mantelstreifen hat nur koplanare Nachbarn und damit keinen eigenen Radius;
+  es bekommt den kleinsten, den die Dreiecke seines Streifens an ihren Nähten
+  lesen. Ohne das zerfiel die Trennung der Prismabögen an jeder Grenze
+  zwischen Innen und Naht, und aus zwei Verrundungen wurde eine gerundete
+  Seite. Eine Facette ohne innere Punkte behält ihre eigenen Radien; an einem
+  ungeteilten Netz ändert die Regel nichts.
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.
 - **Ein Fleck mit einer Kerbe von einem Dreieck bekommt es zurück**
   (`_notch_faces`, `_without_notches`, 17.09.2026). `relations.boundary_rings`

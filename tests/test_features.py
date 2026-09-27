@@ -6526,6 +6526,78 @@ def test_a_strip_below_the_resolution_keeps_its_triangle_count() -> None:
     assert all(counted[number] == sizes[number] for number in splinters)
 
 
+def _two_arcs(segments: int) -> MeshData:
+    """Ein gezogener Umriss: Gerade, Bogen R 3, tangential Bogen R 4,5, Gerade zurück.
+
+    Beide Bögen liegen in **einem** Fleck — ihr Radius springt um ein Drittel,
+    unter dem Krümmungssprung — und die Bögen eines Prismas trennen sie
+    (``features._arcs_of_a_prism``), wie am Besenhalter.
+    """
+    from shapely.geometry import Polygon
+
+    def arc(cx: float, cy: float, radius: float, start: float, stop: float) -> list[tuple]:
+        return [
+            (
+                cx + radius * math.cos(start + (stop - start) * step / segments),
+                cy + radius * math.sin(start + (stop - start) * step / segments),
+            )
+            for step in range(1, segments + 1)
+        ]
+
+    outline = [(0.0, 0.0), (30.0, 0.0), *arc(30.0, 3.0, 3.0, -math.pi / 2, 0.0)]
+    outline += [*arc(28.5, 3.0, 4.5, 0.0, math.pi / 2), (0.0, 7.5)]
+    return MeshData.of(trimesh.creation.extrude_polygon(Polygon(outline), 10.0))
+
+
+@pytest.mark.parametrize("edge", [0.5, 1.0, 2.0])
+@pytest.mark.parametrize("segments", [12, 24])
+def test_the_arcs_of_a_refined_prism_keep_their_radii(segments: int, edge: float) -> None:
+    """Fein geteilt trennt die Erkennung die Bögen eines Prismas wie am Original (R1).
+
+    Die Bögen eines Prismas trennen sich an jedem Radiuswechsel, und den Radius
+    liest die Trennung je Dreieck. *Kanten verfeinern* setzt Punkte in jeden
+    Mantelstreifen, und die Dreiecke in seinem Inneren hatten nur koplanare
+    Nachbarn — keinen Radius. Die Trennung zerfiel an jeder Grenze zwischen
+    Innen und Naht, und aus zwei Verrundungen R 3 und R 4,5 wurde eine
+    gerundete Seite; am Besenhalter nach 2 mm aus 93 Verrundungen 21
+    (Durchsicht 0.5.1). Ein Teilstück trägt seinen Radius jetzt auch innen
+    (``features._through_the_piece``).
+    """
+    mesh = _two_arcs(segments)
+    forget_cache()
+    before = detect(mesh)
+    forget_cache()
+    after = detect(_refined(mesh, edge))
+    forget_cache()
+
+    def rounds(found: dict[FeatureId, Feature]) -> list[tuple[str, float]]:
+        return sorted(
+            (feature.kind, round(float(feature.params.get("radius") or 0.0), 2))
+            for feature in found.values()
+            if feature.kind != "face"
+        )
+
+    assert rounds(before) == [("fillet", 3.0), ("fillet", 4.5)], "der Basisstand trennt beide"
+    assert rounds(after) == rounds(before)
+
+
+def test_an_unrefined_facet_keeps_its_own_radii() -> None:
+    """An einem Netz ohne Teilung trägt kein Dreieck einen geliehenen Radius (R1).
+
+    Der Radius im Inneren eines Teilstücks gilt nur dort, wo ein Teiler innere
+    Punkte gesetzt hat. Ein CAD-Streifen aus zwei Dreiecken behält die Radien
+    seiner Nähte, und ``face_radii`` ist dort dasselbe wie ``_face_radii`` —
+    sonst verschöbe die Regel die Erkennung jedes ungeteilten Körpers.
+    """
+    from app.core.perceive.features import _face_radii, face_radii
+
+    body = _two_arcs(24).raw
+    forget_cache()
+    own = _face_radii(body, np.asarray(body.face_adjacency), features_module.pair_radii(body))
+    np.testing.assert_array_equal(face_radii(body), own)
+    forget_cache()
+
+
 def _turned_bore(entry: list[list[float]]) -> MeshData:
     """Ein gedrehter Ring Ø 24 × 10 mit Bohrung Ø 6; ``entry`` ist der Weg der Mündung.
 

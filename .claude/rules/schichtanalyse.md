@@ -784,6 +784,16 @@ Besenhalters und der anderen Konstruktionen (Radien mit wenigen
 Nachkommastellen, genau rund) gegen Schriftzüge, Logos, Griffe und den
 Eiffelturm, je Datei die neuen Verrundungen mit Kreisfehler und Radius.
 
+**Ein geteilter Streifen leiht seinen Radius nur nach innen** (27.09.2026,
+Durchsicht 0.5.1, R1). Nach *Kanten verfeinern* hat ein Dreieck mitten im
+Mantelstreifen keinen eigenen Radius; `features._through_the_piece` gibt ihm
+den kleinsten seiner Nähte. Zwei Bedingungen, beide am Korpus erzwungen: nur
+Dreiecke **ganz im Inneren** der Facette, und nur wo die Nähte sich auf einen
+Radius **einigen** (`PRISM_ARC_JUMP`). Ohne sie änderte die Regel ungeteilte
+Körper — Fächer aus vier Dreiecken um einen Mittelpunkt lesen an ihren Nähten
+R 1,4 und R 4,0 zugleich. Wer sie lockert, fährt den Korpus gegen den
+Vorstand (`p42_korpus_erkennen.py`) und verlangt null geänderte Körper.
+
 ## Ein Umriss mit wanderndem Radius ist eine gerundete Seite (26.09.2026, RM-243)
 
 `features._wandering_outline` entscheidet über die Stücke eines Flecks

@@ -4949,6 +4949,16 @@ def _outline_corners(
 _TESSELLATION_CORNERS: Final = 4
 
 
+def _divider_pieces(corners: np.ndarray, inner: np.ndarray) -> np.ndarray:
+    """Je Facette, ob ein Teiler sie zerlegt hat: innere Punkte und höchstens
+    :data:`_TESSELLATION_CORNERS` Umrissecken — ein Streifen, ein Dreieck.
+
+    Eine Frage für zwei Leser: die Zählung der Ebenenregel (:func:`_flat_counts`)
+    und den Radius im Inneren eines Teilstücks (:func:`_through_the_piece`).
+    """
+    return (np.asarray(inner) > 0) & (np.asarray(corners) <= _TESSELLATION_CORNERS)
+
+
 def _flat_counts(
     body: trimesh.Trimesh,
     facets: Sequence[np.ndarray],
@@ -5010,7 +5020,7 @@ def _flat_counts(
     )
     # Gedeckelt wird nur ein Teilstück einer Rundung, das ein Teiler zerlegt hat:
     # innere Punkte und höchstens vier Ecken — ein Streifen, ein Dreieck.
-    split_up = (inner > 0) & (corners <= _TESSELLATION_CORNERS)
+    split_up = _divider_pieces(corners, inner)
     counted[wanted[split_up]] = np.minimum(sizes[wanted[split_up]], corners[split_up])
     doubtful = np.flatnonzero((sizes >= MIN_FLAT_FACES) & (counted < MIN_FLAT_FACES))
     if not len(doubtful):
@@ -8186,17 +8196,110 @@ def face_radii(
 
     Die Nachtrennung liest daraus die Sprünge (:func:`curvature_jumps`), die
     Trennung der Bögen eines Prismas die Radien selbst (:func:`_arcs_of_a_prism`).
+    Ein Teilstück, das ein Teiler zerlegt hat, trägt seinen Radius auch in
+    seinem Inneren (:func:`_through_the_piece`).
     """
     result: np.ndarray = remembered(
         "face_radii",
         body,
         (),
-        lambda: _face_radii(
-            body, np.asarray(body.face_adjacency), pair_radii(body, check_cancelled)
+        lambda: _through_the_piece(
+            body,
+            _face_radii(body, np.asarray(body.face_adjacency), pair_radii(body, check_cancelled)),
+            check_cancelled,
         ),
         check_cancelled=check_cancelled,
     )
     return result
+
+
+def _through_the_piece(
+    body: trimesh.Trimesh,
+    radii: np.ndarray,
+    check_cancelled: Callable[[], None] | None = None,
+) -> np.ndarray:
+    """Ein Teilstück, das ein Teiler zerlegt hat, trägt seinen Radius auch innen (R1).
+
+    Der Radius eines Dreiecks kommt von seinen sanften Nachbarn
+    (:func:`_face_radii`). An einem CAD-Netz ist ein Mantelstreifen zwei
+    Dreiecke, und jedes liegt an einer Naht zum Nachbarstreifen. *Kanten
+    verfeinern* setzt Punkte in den Streifen: Die Dreiecke in seinem Inneren
+    haben nur noch koplanare Nachbarn und damit keinen Radius (``inf``), und
+    die Bögen eines Prismas (:func:`_arcs_of_a_prism`) trennten an jeder
+    Grenze zwischen Innen und Naht. Am Besenhalter nach *Kanten verfeinern*
+    2 mm standen so 21 statt 93 Verrundungen und 8 statt 9 Bohrungen im Baum
+    — die Bögen waren in gerundeten Seiten aufgegangen (Durchsicht 0.5.1, R1).
+
+    Welche Facette ein solches Teilstück ist, fragt dieselbe Regel wie die
+    Zählung (:func:`_divider_pieces`): innere Punkte und höchstens
+    :data:`_TESSELLATION_CORNERS` Ecken. Ihre Dreiecke **ganz im Inneren** —
+    alle drei Kanten zu Dreiecken derselben Facette — bekommen den kleinsten
+    Radius ihrer Nähte, dasselbe Minimum wie :func:`_face_radii`; ein Dreieck
+    am Umriss behält seinen eigenen, auch ``inf`` an einer scharfen Kante.
+    Und nur, wo die Nähte des Stücks einen Radius nennen: höchstens
+    :data:`PRISM_ARC_JUMP` auseinander. Beide Bedingungen sind am Korpus
+    gemessen: Ohne sie änderte die Regel zwei ungeteilte Körper — Fächer aus
+    vier Dreiecken um einen Mittelpunkt, deren Nähte R 1,4 und R 4,0 zugleich
+    lasen, nahmen am Poolbrunnen eine Verrundung R 2 in eine gerundete Seite
+    mit und teilten am Gartenschlauchhalter eine R 7,4 in drei. Mit ihnen
+    ändert sie an den 553 Körpern keinen. ``minimum.at`` und ``maximum.at``
+    hängen nicht von der Reihenfolge ab.
+    """
+    facets = body.facets
+    if not len(facets):
+        return radii
+    sizes = np.fromiter((len(facet) for facet in facets), dtype=np.int64, count=len(facets))
+    # Ein innerer Punkt braucht mindestens drei Dreiecke um sich.
+    wanted = np.flatnonzero(sizes >= 3)
+    if not len(wanted):
+        return radii
+    members = np.concatenate([np.asarray(facets[number], dtype=np.int64) for number in wanted])
+    owner = np.repeat(np.arange(len(wanted), dtype=np.int64), sizes[wanted])
+    values = radii[members]
+    finite = np.isfinite(values)
+    # Gefüllt werden nur Dreiecke ganz im Inneren ihrer Facette, alle drei
+    # Kanten zu ihren eigenen: Eines am Umriss hat seine Naht oder eine scharfe
+    # Kante, und dort ist ``inf`` die Antwort von ``_face_radii``, nicht eine
+    # Lücke.
+    count = len(body.faces)
+    facet_of = np.full(count, -1, dtype=np.int64)
+    facet_of[members] = owner
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    own = (facet_of[pairs[:, 0]] >= 0) & (facet_of[pairs[:, 0]] == facet_of[pairs[:, 1]])
+    shared = np.bincount(pairs[own].ravel(), minlength=count)
+    gap = ~finite & (shared[members] == 3)
+    # **Den Umriss nur, wo er etwas entscheidet**: an Facetten mit einer
+    # solchen Lücke und einem Radius an einer Naht. Für alle übrigen kostete
+    # er am Drachen eine Sekunde (2,3 Millionen Dreiecke), am Bett eine halbe.
+    asked = (np.bincount(owner, weights=gap, minlength=len(wanted)) > 0) & (
+        np.bincount(owner, weights=finite, minlength=len(wanted)) > 0
+    )
+    if not bool(asked.any()):
+        return radii
+    if check_cancelled is not None:
+        check_cancelled()
+    chosen = asked[owner]
+    renumbered = np.full(len(wanted), -1, dtype=np.int64)
+    renumbered[asked] = np.arange(int(asked.sum()), dtype=np.int64)
+    members, owner = members[chosen], renumbered[owner[chosen]]
+    values, finite, gap = values[chosen], finite[chosen], gap[chosen]
+    corners, inner = _outline_corners(body, members, owner, sizes[wanted[asked]])
+    pieces = _divider_pieces(corners, inner)
+    if not bool(pieces.any()):
+        return radii
+    lowest = np.full(len(pieces), np.inf, dtype=float)
+    np.minimum.at(lowest, owner[finite], values[finite])
+    highest = np.full(len(pieces), -np.inf, dtype=float)
+    np.maximum.at(highest, owner[finite], values[finite])
+    # Nur wo die Nähte des Stücks einen Radius nennen: innerhalb des Sprungs,
+    # an dem die Bögen eines Prismas trennen.
+    agreed = pieces & np.isfinite(lowest) & (highest <= lowest * (1.0 + PRISM_ARC_JUMP))
+    fill = gap & agreed[owner]
+    if not bool(fill.any()):
+        return radii
+    carried = np.array(radii, dtype=float, copy=True)
+    carried[members[fill]] = lowest[owner[fill]]
+    return carried
 
 
 def _pieces_at_a_seam(
