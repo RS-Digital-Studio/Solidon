@@ -438,6 +438,14 @@ Definition**, nicht die eigene Meinung darüber, was richtig wäre. Was
 absichtlich wegbleibt, kommt mit Begründung in `CURA_UNTOUCHED`;
 `tests/test_print_settings.py` lässt keine dritte Möglichkeit zu.
 
+**Wo die Werksprofile in Cura anders setzen als `fdmprinter`, gilt das
+Werksprofil** (Stufe D, 27.09.2026). Ihre Formeln erreichen die Konsole so
+wenig wie die von `fdmprinter`; ohne Solidons Zeile gälte also nicht das Profil
+des Herstellers, sondern das allgemeine. Solche Werte stehen als Konstante mit
+Herkunft in `handover` (Stütze 150 und Schnittstelle 80 mm/s, Schnittstelle
+in Linien zu einem Drittel, Füllung nach den Wänden, Kämmgrenze), nie als
+Meinung ohne Beleg.
+
 ## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
 
 Solidon schreibt keinen eigenen Startcode (Entscheidung Robert, 26.08.2026:

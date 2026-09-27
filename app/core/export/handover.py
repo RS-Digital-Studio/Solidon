@@ -154,6 +154,17 @@ _SKIN_SUPPORT_BELOW: Final = 0.4
 #: dann ohnehin an die Wand.
 _DENSE_INFILL: Final = 0.95
 
+#: Stütze und Schnittstelle höchstens so schnell, wie die Werksprozesse von
+#: Elegoo, Creality und Bambu sie fahren (``support_speed`` 150,
+#: ``support_interface_speed`` 80 mm/s). ``fdmprinter`` gibt ihnen die
+#: Innenwand und zwei Drittel davon: 214 und 143 mm/s am Ender-3 V3.
+_SUPPORT_SPEED: Final = 150.0
+_SUPPORT_INTERFACE_SPEED: Final = 80.0
+#: Die Schnittstelle zu einem Drittel dicht, wie Creality und Elegoo in Cura
+#: (``support_interface_density`` 33,3 %): Linienabstand drei Bahnbreiten.
+_INTERFACE_SPACING: Final = 3.0
+#: So viel Fläche braucht ein Stützstück mindestens, in mm² (Creality in Cura).
+_MINIMUM_SUPPORT_AREA: Final = 2.0
 #: Die Beschleunigung der ersten Schicht, wenn der Drucker keine eigene trägt
 #: (``PrinterProfile.first_layer_acceleration``), in mm/s²: der Wert der
 #: Werksprozesse von Elegoo, Bambu, Prusa und Creality-Orca am Ender-3 V3.
@@ -860,27 +871,42 @@ def _from_line_width(written: dict[str, str], settings: PrintSettings) -> None:
 
 
 def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
-    """Die Stützen. Ihre Schnittstelle ist bei Cura eine Höhe, keine Schichtzahl."""
+    """Die Stützen, wie die Werksprofile sie in Cura legen (Prüfbericht Cura, B4).
+
+    Die Stütze selbst bleibt Curas ``zigzag``, eine verbundene Linienschar,
+    die nicht kippt; Solidons Gitter ist an Orcas unverbundenem
+    ``rectilinear`` begründet und steht nur dort (``slicer_keys``). Die
+    Schnittstelle ist bei Cura eine Höhe, keine Schichtzahl, und CuraEngine
+    liest nur die Blätter: ``support_roof_pattern``, nicht
+    ``support_interface_pattern``.
+    """
     width = _as_float(written.get("line_width"))
     density = settings.support.density
+    tree = settings.support.style == "tree"
     if width:
-        crossings = slicer_keys.CURA_SUPPORT_CROSSINGS.get(settings.support.style, 1.0)
-        distance = width * crossings / density if density > 0.0 else 0.0
+        # Curas Formel: Der Baum trägt keine Füllung, nur seine Wand
+        # (``support_infill_rate`` 0 beim Baum, ``support_wall_count`` 1).
+        distance = width / density if density > 0.0 and not tree else 0.0
         written["support_line_distance"] = f"{distance:g}"
         # Auf den eben gerechneten Abstand, nicht noch einmal auf die Breite:
         # zwei Formeln für dieselbe Sache laufen irgendwann auseinander.
         written["support_zag_skip_count"] = (
             "0" if distance <= 0.0 else str(round(_SUPPORT_SKIP_PER_MM / distance))
         )
-        # Die Schnittstelle steht bei Cura auf voller Dichte; ihr Linienabstand
-        # ist dann genau eine Bahnbreite.
+        # Die Schnittstelle in Linien zu einem Drittel, wie Creality und Elegoo
+        # in Cura. ``fdmprinter`` legt sie konzentrisch und voll — eine Decke,
+        # die schwer abgeht und die Unterseite mit Ringen zeichnet.
+        for key in ("support_roof_pattern", "support_bottom_pattern"):
+            written[key] = "lines"
+        spacing = width * _INTERFACE_SPACING
         for key in ("support_roof_line_distance", "support_bottom_line_distance"):
-            written[key] = f"{width:g}"
+            written[key] = f"{spacing:g}"
         # Die Stütze wächst um eine Bahnbreite plus Curas festen Zuschlag —
         # beim Baum um nichts.
-        tree = settings.support.style == "tree"
         written["support_offset"] = "0" if tree else f"{width + _SUPPORT_GROWTH:g}"
         written["support_wall_count"] = "1" if tree else "0"
+    # Krümel unter 2 mm² bekommen keine eigene Stütze (Creality in Cura).
+    written["minimum_support_area"] = f"{_MINIMUM_SUPPORT_AREA:g}"
 
     # Ohne den Schalter entsteht gar keine Schnittstelle, und ohne die Höhe
     # wurden aus zwei Schichten zwei Millimeter — das Zehnfache bei 0,2ern.
@@ -925,9 +951,15 @@ def _for_speeds(written: dict[str, str], settings: PrintSettings, profile: Profi
 
     printing = _as_float(written.get("speed_print"))
     if printing:
-        # ``speed_support_interface = speed_support / 1.5``, und die beiden
-        # Seiten der Schnittstelle erben davon.
-        interface = f"{printing / 1.5:g}"
+        # Stütze und Schnittstelle wie in den Werksprozessen, nie schneller als
+        # die Innenwand (``fdmprinter``: ``speed_support = speed_print``) und
+        # die Schnittstelle nie schneller als die Außenwand. Die beiden Seiten
+        # der Schnittstelle und die Stützfüllung erben davon.
+        support = min(printing, _SUPPORT_SPEED)
+        for key in ("speed_support", "speed_support_infill"):
+            written[key] = f"{support:g}"
+        wall = _as_float(written.get("speed_wall_0")) or printing
+        interface = f"{min(wall, _SUPPORT_INTERFACE_SPEED):g}"
         for key in ("speed_support_interface", "speed_support_roof", "speed_support_bottom"):
             written[key] = interface
         first_layer = _as_float(written.get("speed_layer_0"))

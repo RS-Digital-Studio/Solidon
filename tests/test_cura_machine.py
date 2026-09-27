@@ -405,3 +405,34 @@ def test_the_first_layer_is_never_faster_than_the_rest() -> None:
 
     assert float(values["acceleration_layer_0"]) == pytest.approx(300.0)
     assert float(values["acceleration_print_layer_0"]) == pytest.approx(300.0)
+
+
+def test_supports_follow_the_factory_profiles() -> None:
+    """Stützen wie im Werksprofil: verbunden, lockere Schnittstelle, gebremst.
+
+    Die Schnittstelle stand auf ``concentric`` mit voller Dichte und fuhr am
+    Ender-3 V3 mit 143 mm/s, die Stütze mit 214 — Creality und Elegoo legen
+    sie in Cura in Linien zu einem Drittel, Orca fährt Stütze 150 und
+    Schnittstelle 80 mm/s. CuraEngine liest nur die Blätter.
+    """
+    values = _cura_values("creality-ender3-v3", support__style="grid")
+    width = float(values["line_width"])
+
+    assert "support_pattern" not in values, "Curas zigzag bleibt"
+    assert values["support_roof_pattern"] == values["support_bottom_pattern"] == "lines"
+    assert float(values["support_roof_line_distance"]) == pytest.approx(3.0 * width)
+    assert float(values["support_bottom_line_distance"]) == pytest.approx(3.0 * width)
+    assert float(values["speed_support"]) == pytest.approx(150.0)
+    assert values["speed_support_infill"] == values["speed_support"]
+    interface = min(float(values["speed_wall_0"]), 80.0)
+    for key in ("speed_support_interface", "speed_support_roof", "speed_support_bottom"):
+        assert float(values[key]) == pytest.approx(interface), key
+    assert float(values["minimum_support_area"]) == pytest.approx(2.0)
+
+
+def test_a_slow_printer_keeps_its_slower_support() -> None:
+    """Die Deckel gelten nach oben: Der SV06 fährt Stütze und Schnittstelle langsamer."""
+    values = _cura_values("sovol-sv06", support__style="grid")
+
+    assert float(values["speed_support"]) == pytest.approx(float(values["speed_print"]))
+    assert float(values["speed_support_interface"]) == pytest.approx(float(values["speed_wall_0"]))

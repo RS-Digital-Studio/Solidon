@@ -517,10 +517,10 @@ CURA: Final[tuple[Row, ...]] = (
     # An/Aus — wer Baumstützen einstellte, druckte Gitterstützen, und
     # `verify()` sah nichts, weil der Schlüssel nie geschrieben wurde.
     ("support.style", "support_structure", _mapped({"tree": "tree"}, "normal")),
-    # Curas Vorgabe ``zigzag`` ist eine Linienschar in einer Richtung; „Gitter"
-    # ist bei Cura ``grid``, gekreuzt in jeder Schicht. Den Linienabstand dazu
-    # rechnet ``handover`` mit ``CURA_SUPPORT_CROSSINGS``.
-    ("support.style", "support_pattern", _only({"grid": "grid"})),
+    # **Kein ``support_pattern``.** Curas Vorgabe ``zigzag`` verbindet ihre
+    # Linien und kippt nicht; das Kreuzmuster darüber gilt Orcas und Prusas
+    # unverbundenem ``rectilinear`` (Waschschüssel, 25.09.2026). Alle
+    # Werksprofile in Cura fahren ``zigzag`` (Prüfbericht Cura, B4).
     ("support.placement", "support_type", _mapped({"build_plate": "buildplate"}, "everywhere")),
     # Hier **ohne** Umrechnung: Cura zählt gegen die Senkrechte, so wie
     # Solidon. Die beiden anderen Familien drehen die Zählweise um, siehe
@@ -667,7 +667,6 @@ CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
     "retraction_hop": ("retraction_hop_after_extruder_switch_height",),
     "retraction_speed": ("retraction_prime_speed", "retraction_retract_speed"),
     "speed_layer_0": ("skirt_brim_speed", "speed_print_layer_0"),
-    "speed_print": ("speed_support", "speed_support_infill"),
     "speed_topbottom": ("speed_flooring", "speed_roofing"),
     "speed_wall_0": ("speed_wall_0_flooring", "speed_wall_0_roofing"),
     "speed_wall_x": ("speed_wall_x_flooring", "speed_wall_x_roofing"),
@@ -776,12 +775,6 @@ CURA_INFILL_CROSSINGS: Final[dict[str, float]] = {
     "lines": 1.0,
     "gyroid": 1.0,
 }
-
-#: Dasselbe für die Stützfüllung, je Stützart. ``grid`` kreuzt sich in jeder
-#: Schicht, und die fdmprinter-Definition rechnet ``support_line_distance``
-#: dafür mit dem Faktor zwei (nachgelesen in Cura 5.13); ohne Eintrag gilt
-#: eins — beim Baum bleibt Curas ``zigzag``, eine Linienschar.
-CURA_SUPPORT_CROSSINGS: Final[dict[str, float]] = {"grid": 2.0}
 
 #: Wie ein Material beim Slicer heißt. Fast immer die Solidon-Kennung in
 #: Großbuchstaben — nur wo die Schreibweisen auseinandergehen, steht ein
