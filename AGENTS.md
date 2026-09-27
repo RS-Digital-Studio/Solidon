@@ -51,23 +51,16 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 **Sicherheit**
 10. **Kein `eval`** — Parameterausdrücke über den eigenen Auswerter.
 11. **Kein fremder Quelltext wird ausgeführt** (§32) — auch nicht der eines
-    Sprachmodells. Seit dem Ausbau von OpenSCAD (26.08.2026) gibt es keinen
-    Weg mehr dorthin; die Regel steht jetzt als Sperre: Wer einen neuen baut,
-    baut die Prüfung mit.
+    Sprachmodells. Einen Weg dorthin gibt es nicht; wer einen baut, baut die
+    Prüfung mit.
 12. **Keine absoluten Pfade** in Projektdateien.
 13. **Ausführbarer Code reist nie in einer Projektdatei mit** (§24.5). Er
     kommt aus der Installation und dem Nutzerordner, nie aus einer geöffneten
-    Datei — ein eigener Baustein als `.py` bleibt deshalb, wo er liegt. Ein
-    Baustein als **Rezept** darf mitreisen (Entscheidung Robert, 24.08.2026):
-    Er ist eine Liste registrierter Operationen mit Werten, führt also nichts
-    aus, was eine Projektdatei nicht ohnehin auslöst. **Seit dem Ausbau von
-    OpenSCAD (26.08.2026) steht das ohne Vorbehalt.** Vorher konnte ein Wert
-    selbst Quelltext sein — `create_from_scad` trug ihn im Parameter
-    `source` —, und die Erlaubnis hielt nur zusammen mit Regel 11. Diese
-    Öffnung gibt es nicht mehr: Eine Projektdatei trägt Operationen und Werte,
-    und keiner davon wird ausgeführt. `scene/foreign.py` weist fremde Herkunft
-    weiterhin aus (§32) — nicht mehr, weil etwas laufen könnte, sondern weil
-    der Nutzer wissen soll, woher der Inhalt stammt.
+    Datei — ein eigener Baustein als `.py` bleibt, wo er liegt. Ein Baustein
+    als **Rezept** darf mitreisen (Entscheidung Robert): eine Liste
+    registrierter Operationen mit Werten, von denen keiner ausgeführt wird.
+    `scene/foreign.py` weist fremde Herkunft aus (§32), damit der Nutzer
+    weiß, woher der Inhalt stammt.
 14. **Kennzahlen aus Schichtanalyse und G-Code werden nie vermischt** —
     Herkunft immer ausweisen (§22.5).
 15. **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. Einen Slicer
@@ -110,46 +103,26 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 | Oberflächentexte | Deutsche Quelle, je Sprache ein Katalog über `tr()` |
 | Doku und Bauplan | Deutsch |
 
-**Deutsch heißt echte Umlaute** — ä ö ü ß, nie `ae`/`oe`/`ue`/`ss` als Ersatz.
-Das gilt für jeden deutschen Text hier: Docstrings, Kommentare,
-Commit-Meldungen, Doku und die deutsche Quelle der Oberflächentexte.
+**Deutsch heißt echte Umlaute** — ä ö ü ß, nie `ae`/`oe`/`ue`/`ss` als Ersatz,
+in jedem deutschen Text: Docstrings, Kommentare, Commits, Doku und die
+deutsche Quelle der Oberflächentexte.
 
 Eine **weitere Sprache** ist eine Datei in `app/i18n/locales/` und sonst
 nichts: Sprachauswahl, Einsammler, Handbuch, Abbildungen und Prüfung lesen das
 Verzeichnis (`available_languages()`). Unvollständig eingecheckt wird keine —
-`tests/test_translations.py` prüft jede gefundene Datei, nicht nur die
-englische. Derzeit sind es sechs: Deutsch als Quelle, dazu `en`, `es`, `fr`,
-`it` und `pt`.
+`tests/test_translations.py` prüft jede gefundene Datei. Derzeit sind es
+sechs: Deutsch als Quelle, dazu `en`, `es`, `fr`, `it` und `pt`.
 
-Kommentare und Docstrings waren bis dahin englisch. Sie sind es nicht mehr:
-`app/`, `tests/` und `tools/` sind vollständig übersetzt. Was neu dazukommt,
-wird deutsch geschrieben — nachträglich zu übersetzen gibt es nichts mehr.
+**Die Bezeichnerregel gilt `app/` und `tools/`**, weil beide ausgeliefert
+werden bzw. das Paket bauen; `tests/test_language_rules.py` prüft genau diese
+zwei. In `tests/` — auch für Assert-Meldungen — gilt der Bestand der jeweiligen
+Datei: Keine Datei spricht zwei Sprachen, und fremde Dateien werden nicht
+massenhaft umbenannt.
 
-**Assert-Meldungen in Tests fallen nicht darunter.** Sie stehen neben dem
-Bezeichner, den sie erklären, und der ist englisch; zweisprachige Sätze mitten
-im Testcode lesen sich schlechter, nicht besser. Wer eine neue schreibt, hält
-sich an den Bestand der Datei.
-
-**Und die Bezeichnerregel gilt `app/` und `tools/`, nicht `tests/`.** Der Grund
-ist die **Auslieferung**: `app/` reist zum Kunden, `tools/` baut das Paket —
-dort steht Code, den jemand liest, der das Projekt nicht kennt. `tests/` liest
-nur, wer hier arbeitet, und hier wird deutsch geschrieben.
-`tests/test_language_rules.py` prüft deshalb genau diese beiden Verzeichnisse.
-
-**Ausgenommen heißt nicht egal, sondern: am Bestand der Datei orientieren** —
-dieselbe Regel wie für die Assert-Meldungen darüber. Sonst spricht in einem
-Jahr jede Datei ihre eigene Sprache, und das wäre schlechter als beide
-Einzelentscheidungen. (Gezählt am 23.08.2026: 78 deutsche Bezeichner in 27
-Testdateien, 37 verschiedene Namen. Sie werden nicht umbenannt — eine
-Massenänderung in fremden Dateien kostet mehr, als sie einbringt.)
-
-**Was die Prüfung leistet und was nicht:** `GERMAN_STEMS` ist eine **kuratierte
-Liste**, keine Sprachprüfung. Der automatische Weg ist am 23.08.2026 gemessen
-gescheitert — eine aus den deutschen Kommentaren gewonnene Liste meldete 2758
-angebliche Verstöße, darunter `index`, `material`, `parameter` und `value`.
-Deutsch und Englisch überlappen bei technischen Wörtern zu stark. **Wer ein
-deutsches Wort in einem Bezeichner findet, trägt seinen Stamm dort ein**; der
-Test fängt, was schon einmal jemand falsch gemacht hat.
+`GERMAN_STEMS` ist eine **kuratierte Liste**, keine Sprachprüfung — Deutsch und
+Englisch überlappen bei technischen Wörtern zu stark für eine automatische.
+**Wer ein deutsches Wort in einem Bezeichner findet, trägt seinen Stamm dort
+ein.**
 
 Begriffszuordnung (verbindlich): Op → `Operation`, Transaktion →
 `Transaction`, Baustein → `Part`, Steckbrief → `digest`, Prüfbericht →
@@ -161,20 +134,17 @@ Code.
 
 ## Paketstruktur
 
-Was wo liegt und warum, steht in der Karte in `CLAUDE.md` — hier steht nur, was
-daraus folgt.
+Was wo liegt und warum, steht in der Karte in `CLAUDE.md`.
 
-Agenten, die Claude Codes automatische Bereichsladung nicht besitzen, lesen vor
-einer Änderung zusätzlich die `CLAUDE.md`-Karten vom Projekt-Root bis zum
-betroffenen Verzeichnis. Außerdem lesen sie jede Datei unter
-`.claude/rules/`, deren `paths:`-Muster auf die geänderte Datei passt. Die
-Dateien bleiben die gemeinsame Quelle für Claude Code und Codex; sie werden
-nicht in eine zweite Regelhierarchie kopiert.
+Agenten ohne Claude Codes automatische Bereichsladung lesen vor einer Änderung
+die `CLAUDE.md`-Karten vom Root bis zum betroffenen Verzeichnis und jede Datei
+unter `.claude/rules/`, deren `paths:`-Muster auf die geänderte Datei passt.
+Diese Dateien bleiben die gemeinsame Quelle für Claude Code und Codex.
 
-Projekterfahrungen liegen gemeinsam unter `.claude/memory/`. Vor einer
-Änderung wird über `MEMORY.md` nach einschlägigen Einträgen gesucht und nur das
-für die Aufgabe relevante Dokument gelesen. Zugangsdaten oder Schlüssel aus
-diesem Bereich werden nie in Agentenkonfigurationen kopiert.
+Projekterfahrungen liegen unter `.claude/memory/` — **nur auf der jeweiligen
+Maschine**, nicht versioniert. Vor einer Änderung über `MEMORY.md` nach
+einschlägigen Themen suchen und nur diese lesen. Zugangsdaten oder Schlüssel
+von dort werden nie in Agentenkonfigurationen kopiert.
 
 Kommunikation aus dem Kern nach außen nur über den `OpContext`:
 `ctx.progress`, `ctx.ask`, `ctx.cancelled` — keine globalen Objekte, keine
@@ -184,35 +154,29 @@ Dialoge.
 
 ## Arbeitsweise
 
-- **CI-Aufteilung hat einen geprüften Vertrag.** Für Änderungen an Testauswahl,
-  Prozessisolation, Parallelisierung oder Paketabhängigkeiten gilt
-  `konzepte/konzept-ci-testlaufzeiten-2026-09.md`. Die zuständigen Wächter
-  stehen in `tests/test_packaging.py` und `tests/test_ci_runner.py`.
-
-- **Kleine Schritte, und je Schritt nur die betroffenen Tests.** Nach jedem
-  Schritt laufen die Tests der Dateien, die er berührt
-  (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab); die
-  Sammlung ohne Fenstertests und Leistung mit ruff, format und mypy ist
-  das Tor **vor dem Commit**,
-  nicht der Takt der Arbeit (Entscheidung Robert, 02.09.2026 — an dem Tag
-  gingen Stunden für Läufe drauf, die nichts über die Änderung sagten). Ein
-  Schritt, der seine Tests rot lässt, wird nicht auf den
-  nächsten gestapelt. **Fensterdateien und Leistungsprüfungen laufen
-  ausschließlich beim Release**, auch nicht als betroffene Teilmenge nach
-  einem Entwicklungsschritt. Sie bleiben Teil der Release-Abnahme; ein
-  bestandener Entwicklungslauf ersetzt diesen Nachweis nicht. `/pruefen`
-  beschreibt beide Umfänge, `--release` wählt ausdrücklich den Release-Lauf.
-- **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat.**
-  Bildschirmfotos, Website-Bilder, Handbuch und PDFs werden vor einem Release
-  erzeugt, nicht nach jedem Schritt; und dort nur die Sprachen und Bilder,
-  deren Oberfläche oder Texte sich seit dem letzten Lauf geändert haben.
-  Der Weg steht in `/erzeugen`.
+- **Kleine Schritte, je Schritt nur die betroffenen Tests**
+  (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab). Das
+  Entwicklungstor — alle Tests ohne Fenster und Leistung, ruff, format, mypy —
+  läuft **vor dem Commit**, nicht nach jedem Schritt (Entscheidung Robert). Ein
+  Schritt, der seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
+- **Fenstertests und Leistungsprüfungen laufen ausschließlich beim Release**,
+  auch nicht als betroffene Teilmenge. Ein grüner Entwicklungslauf ersetzt
+  diesen Nachweis nicht.
+- **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat**
+  (Weg in `/erzeugen`).
+- **Die CI-Aufteilung hat einen geprüften Vertrag**
+  (`konzepte/konzept-ci-testlaufzeiten-2026-09.md`, Wächter in
+  `tests/test_packaging.py` und `tests/test_ci_runner.py`).
 - **Test zuerst bei Geometrie.** Erst die erwarteten Kennzahlen gegen eine
   Datei aus `tests/data/`, dann die Umsetzung.
 - **Eine Phase gilt als fertig**, wenn ihre Abnahmekriterien aus Bauplan §40
   grün sind — nicht wenn sie sich vollständig anfühlt.
 - **Konsistenz vor Vollständigkeit.** Acht Ops, die überall identisch
   auftauchen, schlagen zwanzig, die auseinanderdriften.
+- **Kein Revert.** Nie `checkout`/`restore`/`reset --hard`/`clean` über Arbeit
+  — vorwärts fixen; an diesem Baum arbeiten oft mehrere Sitzungen zugleich.
+  Rebase, Force-Push und History-Rewrite nur nach Rückfrage. Der Hook fragt
+  (Claude) bzw. sperrt (Codex) vor jedem verwerfenden Git-Befehl.
 - **Neue Fehlerbilder werden Testdateien**, keine Sonderfälle im Code.
 - **Bestehende Struktur nutzen.** Vor einer neuen Datei prüfen, ob die Sache in
   ein vorhandenes Modul gehört.
@@ -237,25 +201,23 @@ Dialoge.
 
 ## Checkliste: neuer Baustein
 
-1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`
+1. `@register_part(...)` mit `name`, `title`, `group`, `params`, `features`,
+   `doc` (Einzelheiten und die volle Signatur: `/neuer-baustein`)
 2. Umsetzung gegen `manifold3d`
 3. Benannte Features zurückgeben (Provenienz-IDs)
-4. `to_scad()` für den Quelltext-Export — **das bleibt.** Es schreibt eine
-   Datei und führt nichts aus; mit dem Ausbau von OpenSCAD (26.08.2026) ist
-   der *Lauf* verschwunden, nicht das Format
-5. Bereichstest **mit Nachweis**, wenn der Baustein oder seine Grenzen sich
-   ändern — wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an den
-   Ecken des Parameterbereichs. `python tools/check_part_ranges.py <name>`
-   fährt ihn (`knowledge/parts/range_check.py`) und schreibt den Nachweis nach
-   `knowledge/data/part_ranges.toml`; die Suite fährt den Bereich nicht, sie
-   vergleicht nur, ob der Nachweis zum Stand jedes Bausteins passt
-   (Entscheidung Robert vom 03.09.2026: kein Bereichslauf im Torlauf). Die
-   Prüflogik selbst — Eckenberechnung, kartesische Grenzen, Wandmessung,
-   Selbstdurchdringung — steht weiter in `test_parts.py`
+4. `to_scad()` für den Quelltext-Export — es schreibt eine Datei und führt
+   nichts aus
+5. Bereichsnachweis, wenn der Baustein oder seine Grenzen sich ändern —
+   wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an den Ecken des
+   Parameterbereichs: `python tools/check_part_ranges.py <name>` schreibt ihn
+   nach `knowledge/data/part_ranges.toml`. Die Suite fährt den Bereich nicht,
+   sie vergleicht nur, ob der Nachweis zum Stand passt (Entscheidung Robert);
+   die Prüflogik selbst steht in `test_parts.py`
 6. Normteilmaße aus der Tabelle, nie im Baustein hart eintragen
-7. Vorschaubild wird gerendert, nicht von Hand gepflegt
-8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen und
-   Änderungsverlauf ergänzen (§24.4)
+7. Vorschaubild wird gerendert (`parts/preview.py`), nicht von Hand gepflegt
+8. Bei Maßänderung an einem bestehenden Baustein: `LIBRARY_VERSION` erhöhen,
+   am Baustein einen `PartChange` in `changes=` ergänzen und danach
+   `tools/make_examples.py` fahren (§24.4)
 
 ## Checkliste: Dateiformat ändern
 
@@ -296,7 +258,7 @@ Dialoge.
 | Geometrie | Kennzahlen je Op gegen den Korpus |
 | Rückfallkette | jede Stufe einmal erzwungen |
 | Determinismus | gleicher Startwert → gleiches Ergebnis |
-| Bausteine | Vorschaubild, versprochene Merkmale, die Prüflogik des Parameterbereichs — **nicht** ihr Lauf über jeden Baustein (siehe Checkliste, Punkt 5) |
+| Bausteine | Vorschaubild, versprochene Merkmale, Prüflogik des Parameterbereichs — nicht ihr Lauf über jeden Baustein |
 | Bausteinversion | geänderter Baustein wird beim Öffnen gemeldet |
 | Schichtanalyse | Kennzahlen gegen analytische Körper, Inselerkennung |
 | Parameter | Grammatik, Zyklen, Ablehnung |
@@ -322,15 +284,10 @@ Plugin-System, Telemetrie, Verzweigungen im Op-Stack, Bearbeitung im
 gehosteten Backend, Betriebsarten-Umschaltung in der Oberfläche, **eigener
 G-Code-Slicer** (Schichtanalyse ja, G-Code nein — §22).
 
-**Gestrichen am 10.09.2026: „Verrundungen auf Mesh-Kanten vor dem B-Rep-Kern".**
-Der Vorbehalt war eine Reihenfolge und kein Verbot — erst der exakte Kern, dann
-das Netz —, und er ist eingelöst: Der exakte Kern steht, und seit Roberts
-Entscheidung an diesem Tag („alles soll immer bearbeitbar sein, egal ob
-importiert Format egal und beim selbst zeichnen") nehmen *Verrunden* und *Fase*
-beide Körperarten an (`geom/edge_ops.py`). Der Unterschied bleibt und wird
-benannt statt versteckt: Am Netz ist der Bogen ein Sehnenzug, dessen Abweichung
-`units.MAX_FACET_SAG` einhält — dieselbe Grenze, mit der der exakte Kern
-tesselliert.
+Verrundung und Fase nehmen beide Körperarten an (`geom/edge_ops.py`, Robert:
+„alles soll immer bearbeitbar sein"). Am Netz ist der Bogen ein Sehnenzug,
+dessen Abweichung `units.MAX_FACET_SAG` einhält — dieselbe Grenze, mit der der
+exakte Kern tesselliert; der Unterschied wird benannt, nicht versteckt.
 
 Wenn eine Aufgabe eines dieser Dinge zu verlangen scheint, ist die Aufgabe
 falsch verstanden — nachfragen statt bauen.

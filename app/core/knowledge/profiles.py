@@ -159,6 +159,7 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
         cura_definition=_cura_definition_or_empty(
             table.get("cura_definition"), f"{identifier}.cura_definition"
         ),
+        prusaslicer_printer=_preset_name_or_empty(table.get("prusaslicer_printer")),
         overhang_speed_factors=_shares(
             table.get("overhang_speed_factors"), f"{identifier}.overhang_speed_factors"
         ),
@@ -262,6 +263,17 @@ def _cura_definition_or_empty(value: object, field: str) -> str:
             values={"value": text},
         )
     return text
+
+
+def _preset_name_or_empty(value: object) -> str:
+    """Der Name eines Profils im Bestand eines Slicers, leer ohne Angabe.
+
+    Aus dem Namen entsteht kein Pfad: Er muss nur einem Profil im Bestand
+    gleichen. Ein Name mit Zeilenumbruch oder Steuerzeichen gleicht keinem und
+    gilt als nicht angegeben, auch wenn ihn eine fremde Projektdatei mitbringt.
+    """
+    text = "" if value is None else str(value).strip()
+    return "" if any(ord(char) < 32 for char in text) else text
 
 
 def _printer_contour(points: Any) -> tuple[tuple[float, float], ...]:
@@ -789,23 +801,37 @@ def material_for(printer_id: str, current: str) -> str:
     return default_material_for(printer_id)
 
 
-def for_process(profile: Profile, settings: PrintSettings | None) -> Profile:
+def for_process(
+    profile: Profile, settings: PrintSettings | None, *, effective: bool = False
+) -> Profile:
     """Bezieht Prozessmessungen auf das tatsächliche Druckraster des Projekts.
 
     Bei Resin bleibt das Profil, wie es ist: Dort gibt es kein Bahnraster,
     das eine Messung binden könnte, und die Werte des FDM-Satzes würden die
     Nullen einer Düse überschreiben, die es nicht gibt.
+
+    **Und die Grenze, ab der der Slicer stützt** (Konzept Herstellerprofil,
+    Entscheidung L): Die Schichtanalyse urteilt mit derselben. Aus
+    ``effective`` Einstellungen — der Grundlage aus dem gewählten Profil samt
+    eigener Wahl — gilt sie immer; dort steht die Schwelle des gewählten
+    Prozesses, bei Prusas „STRUCTURAL" eine andere als beim Standard. Aus einem
+    gespeicherten Satz gilt sie nur als eigene Wahl oder übernommener
+    Vorschlag: Ein Projekt aus 0.5.0 trägt sonst noch die Startregel von 45
+    Grad, und die Analyse riete wieder Stützen, wo der Drucker frei druckt.
+    Eine Messung am eigenen Drucker geht beidem vor
+    (:attr:`Profile.overhang_limit_degrees`).
     """
     if settings is None or profile.printer.is_resin:
         return profile
-    return replace(
-        profile,
-        printer=replace(
-            profile.printer,
-            layer_height=settings.layers.layer_height,
-            extrusion_width=settings.layers.line_width,
-        ),
+    printer = replace(
+        profile.printer,
+        layer_height=settings.layers.layer_height,
+        extrusion_width=settings.layers.line_width,
     )
+    angle = settings.support.threshold_angle
+    if (effective or "support.threshold_angle" in settings.explicit) and 0.0 < angle < 90.0:
+        printer = replace(printer, overhang_limit=angle)
+    return replace(profile, printer=printer)
 
 
 def for_object(profile: Profile, entry: SceneObject | None) -> Profile:

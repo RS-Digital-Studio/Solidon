@@ -1,7 +1,7 @@
 # Die Bibliothek wächst — an fremden Rastern und durch den Kunden
 
 > **Stand 24.08.2026.** Entwurf, nichts davon ist gebaut. Anlass ist eine
-> Kundenanfrage vom 24.08.2026 (Alexander Schneider): SKÅDIS-Haken an ein
+> Kundenanfrage vom 24.08.2026: SKÅDIS-Haken an ein
 > heruntergeladenes Modell hängen, ohne es in einem CAD-Programm
 > nachzukonstruieren. Robert hat dem Kunden zugesagt, es zu bauen — für die
 > nächste oder übernächste Fassung — und den Katalog um weitere Systeme zu

@@ -2046,7 +2046,7 @@ def test_the_clearance_series_are_those_of_iso_273() -> None:
     """Feine, mittlere und grobe Reihe — gegen die Norm, nicht gegen die Tabelle.
 
     Abgeschrieben aus ISO 273 und nicht aus ``standards.toml``, sonst prüfte
-    sich die Tabelle selbst (``.claude/memory/sollwert-aus-dem-pruefling.md``).
+    sich die Tabelle selbst.
     """
     iso_273 = {
         "M2": (2.2, 2.4, 2.6),

@@ -69,9 +69,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | Entschieden mit dem Konzept Herstellerprofil (Entscheidung G): ohne Klick kein Brim je Teil mehr (`aed31c787`, im ElegooSlicer an Platte und Schüssel derselbe Rand wie mit Elegoos Profil allein); offen die Zeile je Teil im Druckdialog und das Schreiben je Teil — Stufe E von [RM-281](#rm-281) |
 | [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt, 4 Abstürze am zweifarbigen Besteckeinsatz sind ein Fehler von ElegooSlicer/OrcaSlicer (Originalprojekt stürzt ohne Solidon ab). Offen für Robert: den Fehler dort melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für die Orca-Familie auf Baumstützen ausweicht |
-| [RM-255 — Ein Drucker ohne Tempodaten überschreibt den gewählten Herstellerprozess mit 40 mm/s](#rm-255) | Geometrie, Erkennung und Druckvorbereitung | Orca-Familie gelöst mit Stufe B (`aed31c787`): auf einem Herstellerprozess schreibt Solidon kein Tempo, das niemand gewählt hat — gemessen am allgemeinen Drucker mit Elegoos Prozess für den Centauri Carbon (160/200/200, Leerfahrt 500 wie im Profil); offen PrusaSlicer mit Stufe C von [RM-281](#rm-281) |
 | [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Konsolenweg gebaut mit Stufe D (`400dde0e2`, Waschschüssel: Stütze 38 % kürzer, Wände gleich); offen Curas Fenster, das die Sperre nicht bekommt (Stufe E von [RM-281](#rm-281)) |
-| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A, B und D stehen und sind im Slicer abgenommen (`aed31c787`, Cura `c667d7dd5`); als Nächstes C (PrusaSlicer auf dem Herstellerbündel), dann E (je Teil) und F (Stufe wählt Prozess); danach Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis D, F und L stehen und sind im Slicer abgenommen (C `44ab90965`, F `d4dd5332b`, L `e0e3cf982`); als Nächstes E (je Teil) und der Rest von K; danach Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
 | [RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie schreibt](#rm-282) | Geometrie, Erkennung und Druckvorbereitung | Anycubic Kobra 2 in OrcaSlicer (Prozente in Feldern ohne Prozent: Dialog zeigt Solidons Wert, gedruckt wird Orcas Vorgabe) und Bambus Listen je Düsenvariante mit High-Flow-Düse — beides messen, dann Rücklesung und Schreibweise festlegen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
@@ -324,7 +323,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   allein und beide zusammen sind sauber; das Zustellen der Ereignisse ist es. Vier
   Sitzungsabschlüsse dagegen — sammeln, Ereignisse zustellen, die QApplication löschen, alle
   Fenster schließen und löschen — fangen ihn **nicht** auf: Der Schaden entsteht beim Zustellen,
-  sichtbar wird er beim Herunterfahren ([[absturz-frame-ist-die-naechste-allokation]]).
+  sichtbar wird er beim Herunterfahren.
 
   **Die Anwendung ist nachweislich nicht betroffen.** Der Kundenweg — `build_application`, STL
   öffnen, `close()`, `quit()`, Prozessende — endet offscreen wie auf der echten Plattform mit
@@ -1409,7 +1408,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   * **offen** P6.2 — Fasen mit zwei Abständen oder Abstand/Winkel
   * **implementiert, Release-Abnahme offen** P6.3 — Aushöhlen mit gewählten Öffnungsflächen. `hollow_object` bekommt `openings` (Flächen, `ParamSpec.feature_kinds` = Fläche; ein Klick trägt eine Fläche dort ein, eine Bohrung nirgends), `wall_side` (innen/außen) und `exact_fallback` (nachfragen/Raster/Teil lassen); `open_at` bleibt als Achsöffnung für gespeicherte Schritte, nach hinten, und mit `openings` zusammen eine Absage. Exakt über `brep.profiles.shell_open_at` (`MakeThickSolidByJoin`, Ergebnis nur als gültiger, geschlossener, veränderter Körper — die Bibliothek gibt bei zu dicker Wand und an konkaven Formen den Eingang unverändert zurück), Merkmale über `_exact_features_after` (ungewählte Flächen behalten Namen und Fläche). Am Netz das Raster mit einem Öffnungswerkzeug je ebener Fläche (`geom/hollow._opening_tool`), außen mit derselben Kugel gewachsen und bündigem Rand; `hollow.opening_misses`, und an allen Netzwegen `hollow.closed_cavities` für Hohlräume, die trotz Öffnung oder Entlüftung geschlossen bleiben. Scheitert OpenCASCADE, entscheidet das Raster zwischen `too_thin` und dem erfragten Rückfall (Regel 21, Antwort im Schritt). Semantik für P9.3: Öffnung = fehlende Fläche, Entlüftung = Loch in einen geschlossenen Hohlraum; P9.3 erweitert `vents`. `tests/test_hollow_faces.py` (27): Sollvolumina auf 1e-9 (Quader oben+vorn, außen mit Minkowski-Summe, Zylinder, schräge Keilfläche), Netz im Rasterband mit Punktproben je Fläche, Gegenfälle, Kundenweg §13.9 je Kern (Verlauf, Wand ändern, Datei, Undo/Redo, Abbruch), fünf goldene Volumina alter Schritte; 14 Mutationen rot. **Befund an echten STEPs:** `MakeThickSolidByJoin` scheitert an allen drei verrundeten Kunden-STEPs in jeder Einstellung; dort trägt der erfragte Rasterweg. Offen: ein exakter Weg für solche Körper (§13.8, Alternative prüfen), Entlüftung je getrenntem Hohlraum (P9.3), Fenster beim Release.
   * **offen** P6.4 — Formschräge an gewählten Flächen
-  * **implementiert, Release-Abnahme offen** P6.5a–c — Schnitt durch Drehen, entlang einer Bahn, durch Überblenden: `sketch_revolve_cut`, `sketch_sweep_cut`, `sketch_loft_cut` als eigene Operationen mit einem Eingang (Erzeugen und Schneiden sind zwei Handlungen, `consumes` steht je Operation fest), ohne eigenen Menüeintrag in der Variantengruppe *Aus Skizze erzeugen …* direkt hinter ihrem Erzeuger (Konzept §10). Werkzeug aus denselben Helfern wie der Erzeuger (`_revolve_section`, `_swept`, `_loft_outlines`), Lage am Zielkörper über einen geprüften Starrkörperzug, Differenz exakt (`brep.edit.boolean`) oder über die Rückfallkette gegen die Tessellierung (`MAX_FACET_SAG`), Stufe in `solver`, `without_effect` mit Vorschlag. Nut: Achse aus Richtung und Punkt oder aus Bohrung/Zapfen (`axis_feature`), Teilwinkel mit Beginn. Kanal: Anfang an Ober- oder Unterseite (eine schon so gezeichnete Bahn bleibt, sonst Drehung um die Querachse ihrer Ebene), Drehung um die Senkrechte; Bahnprüfung für Erzeuger und Schnitt (Kreuzung, Biegung enger als der Querschnitt, Selbstschnitt über `brep.profiles.intersects_itself` — `BRepCheck_Analyzer` lässt ihn durch). Übergang: nächste Ecken um die Mitten, Gleichstand fragt über `ctx.ask` (`twist`), unvereinbare Umrisse mit Satz. Ein ungültiges exaktes Ergebnis geht nicht hinaus (`brep.profiles.is_sound`, Netzrückweg mit `sketch.exact_cut_unsound`). Nebenbei behoben: Nach *Fertig* landete der gezeichnete Umriss bei *Entlang eines Bogens führen* und *Zwischen zwei Umrissen aufspannen* in Bahn bzw. oberem Umriss (`main_window._sketch_param`). `tests/test_sketch_cuts.py` (38): Pappus, Teilwinkel, Achsschnitt, Innennut mit Merkmalsachse, Kanalquerschnitte und Endlagen, Pyramidenstumpf mit End- und Zwischenquerschnitt, Formabweichung Netz gegen exakt unter `MAX_FACET_SAG`, Gleichstand fragt, Spiegelbilder, Absagen, Stapel mit Parameteränderung, Undo und Projektdatei; Gegenprobe ohne Umsetzung 33 rot. Echte Modelle: `broomholdervcd_d35mm.stl` (Innennut in der Bohrung Ø34, Rasterzählung bestätigt), `carpet-corner-clip.step` (exakte Nut ungültig → Netzrückweg, Rasterzählung bestätigt). Werkzeuglast neu gemessen: 39 987 Token bei 150 Werkzeugen, 97,6 % des Fensters (RM-185). **Offen:** Fenstertests und Leistung beim Release; *Tasche schneiden* gibt an derselben STEP-Stelle einen ungültigen Körper still zurück (kein Teil von P6.5, einzutragen); der Erzeuger `sketch_loft` ordnet weiter über OpenCASCADE zu (alte Projekte); Bauplan §30.1 zählt die Skizzen-Operationen einzeln auf und nennt die Schnitte noch nicht (nur mit Ansage)
+  * **implementiert, Release-Abnahme offen** P6.5a–c — Schnitt durch Drehen, entlang einer Bahn, durch Überblenden: `sketch_revolve_cut`, `sketch_sweep_cut`, `sketch_loft_cut` als eigene Operationen mit einem Eingang (Erzeugen und Schneiden sind zwei Handlungen, `consumes` steht je Operation fest), ohne eigenen Menüeintrag in der Variantengruppe *Aus Skizze erzeugen …* direkt hinter ihrem Erzeuger (Konzept §10). Werkzeug aus denselben Helfern wie der Erzeuger (`_revolve_section`, `_swept`, `_loft_outlines`), Lage am Zielkörper über einen geprüften Starrkörperzug, Differenz exakt (`brep.edit.boolean`) oder über die Rückfallkette gegen die Tessellierung (`MAX_FACET_SAG`), Stufe in `solver`, `without_effect` mit Vorschlag. Nut: Achse aus Richtung und Punkt oder aus Bohrung/Zapfen (`axis_feature`), Teilwinkel mit Beginn. Kanal: Anfang an Ober- oder Unterseite (eine schon so gezeichnete Bahn bleibt, sonst Drehung um die Querachse ihrer Ebene), Drehung um die Senkrechte; Bahnprüfung für Erzeuger und Schnitt (Kreuzung, Biegung enger als der Querschnitt, Selbstschnitt über `brep.profiles.intersects_itself` — `BRepCheck_Analyzer` lässt ihn durch). Übergang: nächste Ecken um die Mitten, Gleichstand fragt über `ctx.ask` (`twist`), unvereinbare Umrisse mit Satz. Ein ungültiges exaktes Ergebnis geht nicht hinaus (`brep.profiles.is_sound`, Netzrückweg mit `sketch.exact_cut_unsound`). Nebenbei behoben: Nach *Fertig* landete der gezeichnete Umriss bei *Entlang eines Bogens führen* und *Zwischen zwei Umrissen aufspannen* in Bahn bzw. oberem Umriss (`main_window._sketch_param`). `tests/test_sketch_cuts.py` (38): Pappus, Teilwinkel, Achsschnitt, Innennut mit Merkmalsachse, Kanalquerschnitte und Endlagen, Pyramidenstumpf mit End- und Zwischenquerschnitt, Formabweichung Netz gegen exakt unter `MAX_FACET_SAG`, Gleichstand fragt, Spiegelbilder, Absagen, Stapel mit Parameteränderung, Undo und Projektdatei; Gegenprobe ohne Umsetzung 33 rot. Echte Modelle: `broomholdervcd_d35mm.stl` (Innennut in der Bohrung Ø34, Rasterzählung bestätigt), `carpet-corner-clip.step` (exakte Nut ungültig → Netzrückweg, Rasterzählung bestätigt; *Tasche schneiden* an derselben Stelle nimmt seit RM-227 denselben Rückweg). Werkzeuglast neu gemessen: 39 987 Token bei 150 Werkzeugen, 97,6 % des Fensters (RM-185). **Offen:** Fenstertests und Leistung beim Release; der Erzeuger `sketch_loft` ordnet weiter über OpenCASCADE zu (alte Projekte); Bauplan §30.1 zählt die Skizzen-Operationen einzeln auf und nennt die Schnitte noch nicht (nur mit Ansage)
   * **offen** P6.6a — Ellipse, Ellipsenbogen, Splines bearbeiten; P6.6b — zusätzliche Bedingungen
   * **implementiert, Release-Abnahme offen** P6.7 — Merkmalsmuster: `pattern_feature` („Merkmal vervielfachen", Kategorie `holes`, ein Körper hinein, einer heraus — nicht `pattern`, das Körper kopiert). Linear, kreisförmig, gespiegelt; Anzahl, Abstand, Winkel, Richtung, Punkt, ausgelassene Plätze; mehrere Quellen, eine Kette als Ganzes. Jede Instanz ist das Werkzeug der Quelle, bewegt (Netz: `_placing_tool`/`_chain_copy_tool`; exakt: `_exact_cavity_tool`, `_exact_chain_tool_placed`, `edit.transformed` des Flächenkörpers, Ring aus Kennzahlen), Merkmale über `transformed_features`. Überschneidung und fehlendes Material je Platz erklärt (`pattern_feature.overlap`/`.no_target`), erkannte Quellen brauchen belegte Flächen (`not_evidenced`). Die Quelle bleibt maßgebend durch die Bauart (der Schritt liest sie bei jeder Auswertung). In `QUICK_FEATURES` an jeder angenommenen Art. `tests/test_feature_patterns.py` (24) mit exakten Sollvolumina, radialen Achsen, gespiegeltem Sackloch, Langlochrichtung, Kette, Korpus-Senkplatte, Kundenweg §13.9 je Kern (Quelle Ø5→Ø8, Datei, Undo/Redo, Abbruch); 13 Mutationen rot; Fenstertest neu (Release). **Frage an Robert offen:** Eine spätere Maßänderung an einer **eingelesenen** Quelle hängt sich hinter das Muster; heute trägt „Auf alle N gleichartigen anwenden", sauber wäre P7.1 oder eine vorbelegte Gruppe.
   * **implementiert, Release-Abnahme offen** P7.1 — Verlaufsschritt einfügen; P7.2 — umsortieren; P7.3 — unterdrücken und reaktivieren. Kern (`History.plan_*`, `scene/revision.py`: isoliert rechnen, Verweise folgen ihrem Merkmal, fragen oder absagen), Format 32 (`suppressed`, `revision`, `example_v32.p3d`; die 31 gehört P6.6), Kommandozeile (`move`, `suppress`, `reactivate`, `run … --before`), Verlaufsfeld mit Kontextmenü, Ziehen und Tastatur, Einfügemarke, Steckbrief mit „aus“/„ruht“. Belegt am Korpus und an zwei Modellen aus `F:\3D Dateien` (Besenhalter als Netz, Druckschale als STEP). Offen daraus: **(a)** ein Agentenwerkzeug `edit_history` — gezählt 120 Token gebündelt gegen 224 für drei getrennte, bei 38 318 von 40 960 im Fenster und RM-185 über seinem Ziel; Entscheidung Robert. **(b)** Am exakten Körper sagen Verschieben und Einfügen von Bohrungen ab, sobald eine neue links von einer vorhandenen landet: `drill_brep_hole` nummeriert nach Lage, und ein späterer Verweis hält mit `NativeReferenceLost` an — genauso, wenn man in dieser Reihenfolge von Hand baut; es fehlt der Namenserhalt am exakten Körper. **(c)** Am Netz hängt die Erkennung einer Durchbohrung an der Vorgeschichte: am Besenhalter dieselbe Geometrie, aber eine erkannte Bohrung mehr, wenn vor der Bohrung kein anderer Schritt lag (Durchbohrung Ø 4 in y bei x = −25 durch drei Wände, einmal direkt nach dem Import, einmal nach *Bohrung vergrößern* an `hole_3`: Volumen gleich, die Wand bei y = 0 nur im ersten Fall als Bohrung erkannt). Die Fenstertests `test_history_revision_ui.py` laufen erst beim Release.
@@ -2105,32 +2104,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Elegoo und OrcaSlicer melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für
   die Orca-Familie auf Baumstützen ausweicht (eine Regel gegen einen fremden Fehler).
 
-<a id="rm-255"></a>
-
-- [~] **RM-255 — Ein Drucker ohne Tempodaten überschreibt den gewählten
-  Herstellerprozess mit 40 mm/s.** Aus der Durchsicht v0.5.1 (druck, DRUCK-10). Ein
-  Drucker, der nicht unter den 13 FDM-Einträgen von `printers.toml` steht (eigenes
-  Profil, allgemeiner Drucker — etwa Centauri Carbon der ersten Reihe, Neptune 4 Pro,
-  Bambu H2D, K2), bekommt Solidons Stufe (40/60/80 mm/s, Leerfahrt 150, 8000 mm/s²) und
-  überschreibt damit den im Druckdialog gewählten Herstellerprozess
-  (`print_settings._paced`, `handover.as_mapping`; gemessen an `generic-220`). Der
-  Changelog sagt „statt jeden Drucker auf 40 mm/s zu bremsen“. Warum Robert: Es
-  entscheidet, welche Quelle gewinnt — dieselbe Frage wie beim Filament (Übernahme nur
-  auf Klick, 08.09.2026). Optionen: (a) Tempo, Leerfahrt und Beschleunigung aus dem
-  gewählten Prozessprofil lesen (`slicer_profiles.resolve_profile`), wenn der Drucker
-  keine eigenen hat; (b) für solche Drucker die Tempo-Schlüssel nicht schreiben, der
-  Slicer behält sein Profil — Empfehlung für Orca und Prusa mit gewähltem Prozess: kein
-  geratener Wert, und die Beratung rechnet mit dem, was der Slicer ohnehin fährt; (c)
-  wie heute. Abnahme: Centauri Carbon (erste Reihe) mit Elegoos Prozess —
-  `outer_wall_speed` im G-Code wie im Herstellerprofil.
-
-  **Für die Orca-Familie gelöst mit Stufe B** des Konzepts Herstellerprofil (`aed31c787`,
-  Weg b und mehr): Auf einem Herstellerprozess schreibt Solidon nur, was jemand gewählt
-  hat. Abnahme am 27.09.2026 im ElegooSlicer, `generic-220` mit „0.20mm Standard @Elegoo
-  CC 0.4 nozzle“: Außenwand 160, Innenwand 200, Füllung 200, Leerfahrt 500 mm/s und
-  10 000 mm/s² — wie im Profil. **Offen:** PrusaSlicer, der bis Stufe C von
-  [RM-281](#rm-281) Solidons vollen Satz bekommt.
-
 <a id="rm-257"></a>
 
 - [~] **RM-257 — Kanäle frei halten auch für Cura.** Aus der Durchsicht v0.5.1 (druck).
@@ -2166,16 +2139,21 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   die Punkte unten bei C und L. Dazu `efd4686c2`: Das Tempo der
   ersten Schicht gilt auch für ihre Füllung.
 
-  **Offen, in dieser Reihenfolge:**
-  - **C** PrusaSlicer auf dem Herstellerbündel: Profilwahl im Dialog (Drucker samt
-    Düsenvariante, Prozess, Filament), Bündel vollständig in INI und Beilage,
-    `*_settings_id`, `binary_gcode`, `support_material_auto`, `filament_type`, Gegenprobe.
-    Abnahme: Gleichheit mit dem Herstellerlauf an MK4S (HF0.4), MINI IS und XL IS; `G29`,
-    `M862`, `M572` im G-Code. Schließt RM-255 für PrusaSlicer. Dazu aus dem Review der
-    Stufe A+B: *Werte übernehmen* ohne Herstellergrundlage macht Filamentwerte zur
-    eigenen Wahl, die einen Filamentwechsel überdauert (H12), und eine
-    Spulenübersteuerung schreibt ihre ganze Gruppe über das Herstellerfilament, auch
-    die Werte, die niemand geändert hat (H15) — beides an das Filament binden.
+  - **C steht** (`44ab90965`, dazu `575e5ef83` und `6fc852fb0`): PrusaSlicer bekommt
+    Drucker, Prozess und Filament seines Bündels, aufgelöst in `solidon.ini` und die
+    Beilage der 3MF (`handover.prusa_values`), darüber nur die Abweichung; die Grundlage
+    liest sie zurück (`manufacturer.prusa_chain`, `PRUSA_PROCESS`, eingebaute Vorgaben
+    gemessen). Der Druckdialog bietet dieselbe Profilwahl wie für die Orca-Familie,
+    verlangt sie aber nicht; ohne Drucker im Bündel bleibt Solidons Satz samt
+    `filament_type`, und `slicer.printer_unknown` sagt es. Gemessen am Minigolf-Auftrag in
+    PrusaSlicer 2.9.6: MK4S HF0.4 und XL IS ohne Vorschläge in allen 259 und 260
+    Schlüsseln gleich der Kette, `G29`-Vermessung und Spüllinie im G-Code; der MINI lehnt
+    ab, weil ein Teil 200 mm hoch ist (Bauraum 180). Die automatische Stützschwelle
+    rechnet plattformgleich (`units.exact_atan_degrees`, RM-187). Angeboten werden nur
+    Profile des eigenen Herstellers, wie in PrusaSlicer (`SlicerProfile.vendor`); bis
+    dahin standen am MK4S Prozesse von BIBO2, LulzBot, Trimaker und Zonestar zur Wahl.
+    Schließt RM-255 für PrusaSlicer. Mit C erledigt: H12 (übernommene Filamentwerte gehen
+    mit ihrem Filament) und H15 (eine Spule schreibt nur, was sie ändert).
   - **D steht:** CuraEngine bekommt die Maschine des Druckers (neun Commits im Zweig
     `cura-maschine`, mit A+B zusammengeführt in `c667d7dd5`; Bericht
     `output/review/cura-paket-2026-09-27/bericht.md`). Die Messung in CuraEngine 5.13 an
@@ -2184,18 +2162,32 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     der Gemeinschaftsdefinition des SV06 setzt `M201 X500 Y500` und `M204 P500`, das
     kennt Curas Zeitschätzung nicht, der Druck dauert länger als angezeigt. Die Tempi des
     MINI+ in `printers.toml` stammen aus zwei verschiedenen Prozessen (mit C nachziehen).
+  - **F steht** (`d4dd5332b`): Die Qualität wählt den Prozess des Herstellers
+    (`manufacturer.for_stage`, `slicer_profiles.stage_process`). Abgenommen im Slicer an
+    Centauri Carbon 2 (ElegooSlicer: „0.12mm Fine“, „0.28mm Extra Draft“, „0.20mm
+    Strength“), P1S (Bambu Studio, dieselben Namen) und MK4S HF0.4 (PrusaSlicer: „0.10mm
+    FAST DETAIL“, „0.28mm DRAFT“, „0.20mm STRUCTURAL“): zwölf Läufe mit Schichthöhe und
+    Werten des Herstellerprozesses, Umschalten hin und zurück verlustfrei
+    (`output/review/gesamt-2026-09-27/stufe-f/`). Im Dialog stellt die Qualität das
+    Prozessfeld und eine Wahl im Prozessfeld die Qualität, sonst „Eigener Prozess“.
+    Creality Print nennt jeden Prozess „Standard“; dort liegt die Stufe weiter über dem
+    Standardprozess.
+  - **L steht** (`e0e3cf982`): Prüfbericht, Analysekarten, Druckbefunde, Ratgeber,
+    Agent-Analyse und die Kanalsperre der Übergabe rechnen mit der wirksamen
+    Stützschwelle (`Session.evaluation_profile`, `profiles.for_process(...,
+    effective=True)`); die Schwelle eines gespeicherten Satzes gilt nur als eigene Wahl.
+    Kommt die Grundlage erst nach dem Lauf, wertet das Fenster neu aus. Der
+    Schwellenvorschlag am SV06 aus der Gesamtprüfung fällt damit weg.
+  - Nebenbei aus der Gesamtprüfung behoben: Rand über den Bettrand und zu hohe Teile
+    (`5063fc9f5`), Bambu Studio, das nach der fertigen Druckdatei nicht endet
+    (`64a0e4677`, drei von rund hundert Läufen).
+
+  **Offen, in dieser Reihenfolge:**
   - **E** Je Teil: `for_part` für alle geometrischen Pfade, Objektwerte bei Orca und Prusa,
     Werte je Netz bei Cura (die Netze je Teil stehen seit D, `CuraMesh.settings`), die
     Sperre auch für Curas Fenster (RM-257), die Zeile je Teil im Druckdialog (RM-250). Abnahme: Minigolf-Satz mit einem gestützten Körper — Stütze nur an ihm, Brim
     der übrigen geschlossen.
-  - **F** Die Stufe wählt den Herstellerprozess; dazu die Vorwahl im Dialog ohne Rückfall
-    auf den ersten Prozess der Liste.
   - **K** Rest der Gegenprobe: Identität und Startcode bei PrusaSlicer und Cura.
-  - **L** Die Schichtanalyse rechnet mit der wirksamen Stützschwelle des gewählten
-    Prozesses statt mit der aus `printers.toml`. Dazu lesen Auswertung
-    (`evaluate` über `for_process`), Agent-Analyse und Steckbrief den wirksamen Satz
-    statt des gespeicherten (Review R3; Hauptfenster, Export und Sitzung tun es seit
-    A+B).
   - Danach Paket 3 (Mindestschichtzeit, Keilspitzen, Stützbedarf gegen das Urteil des
     Herstellers, Brückenregel, Inseln an Schrauben) und der Lauf „jedes Modell × jeder
     Slicer“ als Gesamtabnahme.
@@ -3501,8 +3493,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   danach 120 Läufe ohne Fehler bei gleichem Code; `PYTHONMALLOC=debug` zeigte keine
   Heap-Spur. Ursache nach Ausschluss: der Prozessor (Intel Core i9-13900K, Raptor Lake,
   Microcode 0x133, Intels „Vmin Shift Instability“). Dieselbe Familie wie die
-  Erinnerungen `native-bibliotheken-speicher.md` (07.08.2026) und
-  `ast-walk-reisst-im-torlauf.md`, dazu Windows-Absturzprotokolle vom 23. und 24.09.2026
+  nativen Abrisse vom 07.08.2026 und der AST-Lauf, der im Tor riss, dazu Windows-Absturzprotokolle vom 23. und 24.09.2026
   mit verfälschten Befehlszeigern. Zwei Beobachtungen derselben Durchsicht haben dasselbe
   Bild und ließen sich isoliert nicht nachstellen: ein `NameError: name 'type' is not
   defined` in `perceive/local._plain` (RESTVORSCHAU-08) und Zugriffsverletzungen beim

@@ -84,13 +84,35 @@ def maps() -> list[Path]:
     solidon-74, 07.09.2026, behoben am selben Tag). Er blieb dabei nicht still:
     Die Zusicherung über die Zahl der Karten sprang an.
     """
-    skip = {".venv", "build", "dist", "worktrees", "node_modules", "3D Drucker"}
+    skip = {".git", ".venv", "build", "dist", "worktrees", "node_modules", "3D Drucker"}
+    ignored = _ignored_folders(ROOT)
     found: list[Path] = []
     for path, children, files in ROOT.walk():
-        children[:] = [name for name in children if name not in skip]
+        children[:] = [name for name in children if name not in skip and path / name not in ignored]
         if "CLAUDE.md" in files:
             found.append(path / "CLAUDE.md")
     return sorted(found)
+
+
+def _ignored_folders(root: Path) -> set[Path]:
+    """Was Git in diesem Baum ignoriert — Arbeitsreste, Kopien, Erzeugtes.
+
+    Unter ``marketing/`` und ``ui-audit/`` liegen vollständige Kopien älterer
+    Stände samt ihrer Karten; ohne diese Grenze prüften die Tests hier deren
+    Verweise und Größen mit, nur auf der Maschine, die sie hat. Ohne Git (ein
+    Temp-Baum im Test) bleibt es beim Suchlauf allein.
+    """
+    try:
+        listed = subprocess.run(
+            ["git", "ls-files", "--others", "--ignored", "--exclude-standard", "--directory"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+    except OSError, subprocess.CalledProcessError:
+        return set()
+    return {root / line.rstrip("/") for line in listed if line.endswith("/")}
 
 
 def test_excluded_map_trees_are_not_entered(
@@ -145,14 +167,12 @@ def memory_notes() -> list[Path]:
 
 
 def memory_index() -> set[str]:
-    """Die Dateinamen, auf die ``MEMORY.md`` zeigt — mittelbar über seine Sammelindizes.
+    """Die Dateinamen, auf die ``MEMORY.md`` zeigt — mittelbar über Sammelindizes.
 
-    Ein Sammelindex heißt ``index-*.md`` und steht selbst als Zeile in
-    ``MEMORY.md``. Er entstand am 23.09.2026, als der Hauptindex über die
-    Grenze von 17 KB wuchs, ab der die Sitzung ihn nicht mehr vollständig
-    lädt: 39 Messlehren stehen seither wortgleich dort, und der Hauptindex
-    nennt ihre Stichwörter. Eine Erinnerung, die nur dort steht, ist über
-    genau eine Verweisstufe zu finden — tiefer schachtelt kein Index.
+    Die Erinnerungen sind Themendateien, eine Zeile je Thema; ein Sammelindex
+    (``index-*.md``, selbst als Zeile in ``MEMORY.md``) ist deshalb nicht mehr
+    nötig, wird aber weiter gelesen: Eine Erinnerung, die nur dort steht, ist
+    über genau eine Verweisstufe zu finden — tiefer schachtelt kein Index.
     """
     text = (MEMORY / "MEMORY.md").read_text(encoding="utf-8")
     named = {hit.group(1) for hit in MEMORY_ENTRY.finditer(text)}
@@ -181,10 +201,10 @@ def test_the_plan_and_the_maps_are_both_there() -> None:
 def test_the_local_memory_is_read() -> None:
     """Dieselbe Zusicherung für die Erinnerungen, wo es sie gibt."""
     _local_memory()
-    assert len(memory_notes()) > 50, (
-        f"nur {len(memory_notes())} Erinnerungen gefunden — der Suchlauf greift nicht"
+    assert len(memory_notes()) >= 20, (
+        f"nur {len(memory_notes())} Themendateien gefunden — der Suchlauf greift nicht"
     )
-    assert len(memory_index()) > 50, "das Muster für die Einträge in MEMORY.md greift nicht"
+    assert len(memory_index()) >= 20, "das Muster für die Einträge in MEMORY.md greift nicht"
 
 
 def test_memories_stay_out_of_the_repository() -> None:
@@ -216,12 +236,6 @@ def test_every_memory_note_is_named_in_the_index() -> None:
     geladen wird; alles übrige wird über sie gefunden. Wer eine Notiz anlegt und
     den Zeiger vergisst, legt sie ab, wo niemand sucht — und das fällt nie auf,
     weil das Fehlen einer Erinnerung sich nicht meldet.
-
-    Am 30.08.2026 standen drei so da: ``baustein-begriff-je-sprache`` und
-    ``fremde-zwischenstaende-verfaelschen-messungen`` waren seit ``f934a422``
-    committet und in keinem Index, ``sicherung-ist-eine-zeitmaschine`` umgekehrt
-    im Index und in keinem Commit. Die erste von ihnen legt die Begriffe fest,
-    nach denen gerade in fünf Sprachen übersetzt wird.
     """
     _local_memory()
     named = memory_index()
@@ -380,3 +394,75 @@ def test_every_rule_number_in_the_rules_names_a_hard_rule() -> None:
         f"  Regel {number} ({len(places)}x) — {places[0]}"
         for number, places in sorted(unknown.items())
     )
+
+
+# --- Umfang: was eine Sitzung liest, bevor sie Code sieht ------------------------
+
+#: Obergrenzen in KB. Eine Regel sagt, was einzuhalten ist, eine Karte, was wo
+#: liegt — Anlässe, Messwerte und Verläufe stehen in ``konzepte/begruendungen/``.
+RULE_LIMIT_KB = 30
+MAP_LIMIT_KB = 25
+#: Was eine Quelldatei höchstens nachzieht: Wurzel-``CLAUDE.md``, ``AGENTS.md``,
+#: die Karte ihres Verzeichnisses und jede Regel, deren ``paths:`` sie trifft.
+LOAD_LIMIT_KB = 160
+
+#: Ein Datum: ``23.09.2026``, ``(1.10.2026)``.
+DATE = re.compile(r"\b\d{1,2}\.\d{1,2}\.20\d{2}\b")
+
+
+def test_every_rule_and_map_stays_within_its_budget() -> None:
+    """Regeln und Karten laden, bevor eine Sitzung eine Zeile Code sieht.
+
+    Ohne Obergrenze wuchsen sie mit jeder Lehre weiter, bis eine Quelldatei
+    418 KB Prosa nachzog — Anlässe, Messprotokolle und Verläufe über den
+    Regeln, die befolgt werden sollen. Was über die Grenze wächst, gehört mit
+    seinem Warum nach ``konzepte/begruendungen/``.
+    """
+    over = [
+        f"  {path.relative_to(ROOT).as_posix()}: {path.stat().st_size // 1024} KB,"
+        f" höchstens {limit}"
+        for files, limit in ((rule_files(), RULE_LIMIT_KB), (maps(), MAP_LIMIT_KB))
+        for path in files
+        if path.stat().st_size > limit * 1024
+    ]
+    assert not over, (
+        "Zu groß:\n" + "\n".join(over) + "\nDas Warum gehört nach konzepte/begruendungen/."
+    )
+
+
+def test_no_source_file_pulls_more_than_its_budget() -> None:
+    """Die Summe dessen, was beim Anfassen einer Datei mitlädt, bleibt begrenzt.
+
+    Die Grenze je Unterlage reicht nicht: Regeln unter ihrer Grenze laden
+    zusammen trotzdem zu viel, wenn sich ihre ``paths:`` an einer Datei
+    treffen. Gezählt wird wie in ``tools/docs_scan.py``.
+    """
+    from tools import docs_scan
+
+    rules = {
+        rule: set().union(*(docs_scan.matched(pattern) for pattern in docs_scan.scopes(rule)))
+        for rule in docs_scan.rule_files()
+    }
+    sources = docs_scan.sources()
+    assert len(sources) > 300, f"nur {len(sources)} Quelldateien — die Zählung greift nicht"
+    heavy = sorted(
+        (kilobytes, source.relative_to(ROOT).as_posix())
+        for source in sources
+        if (kilobytes := docs_scan.load_for(source, rules)[1]) > LOAD_LIMIT_KB
+    )
+    assert not heavy, (
+        f"Diese Dateien ziehen mehr als {LOAD_LIMIT_KB} KB Unterlagen nach:\n"
+        + "\n".join(f"  {path}: {kilobytes} KB" for kilobytes, path in heavy)
+        + "\n`python tools/docs_scan.py --frage 1` zeigt, woher die Last kommt."
+    )
+
+
+def test_headings_of_rules_and_maps_carry_no_date() -> None:
+    """Eine Überschrift sagt, was gilt — nicht, seit wann."""
+    dated = [
+        f"  {path.relative_to(ROOT).as_posix()}:{number}: {line.strip()}"
+        for path in [*rule_files(), *maps()]
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if line.startswith("#") and DATE.search(line)
+    ]
+    assert not dated, "Überschriften mit Datum:\n" + "\n".join(dated)

@@ -22,7 +22,7 @@ gezielten Dateiauswahl bis zum Release zurückgestellt. Das ist keine fehlende
 Umgebung und kein Anlass, sie mit einem direkten Pytest-Aufruf nachzuholen.
 Keine vollständige Suite allein wegen eines kleinen Doku-Edits.
 
-Ohne Argument oder vor einem beauftragten Commit läuft das Entwicklungstor:
+Ohne Argument und vor jedem Commit läuft das Entwicklungstor:
 alle Tests ohne Fenster (`not windowed`), ohne `performance` und ohne die
 Erzeugnisvergleiche (`not rendered` — sie brauchen einen Lauf von `/erzeugen`
 und gehören wie in der CI zum Release), dazu Ruff, Format und mypy.
@@ -35,8 +35,8 @@ nicht wiederholt werden. Prüfe dazwischenliegende Änderungen, bevor du ihn
 
 ## Umgebung und Protokoll
 
-Lies `CLAUDE.md`, den aktuellen Diff und bei Bedarf `.claude/rules/tests.md`.
-Prüfe den Interpreter dieses Arbeitsbaums gegen `pyproject.toml`; Pakete prüft
+Lies den aktuellen Diff und bei Bedarf `.claude/rules/tests.md`. Prüfe den
+Interpreter dieses Arbeitsbaums gegen `pyproject.toml`; Pakete prüft
 `tools/check_env.py` gegen `constraints.txt`. Keine ungeprüfte andere Umgebung
 als stillen Ersatz benutzen. Jeder Lauf bekommt einen eigenen Protokollordner,
 keine gemeinsam überschriebenen Dateien wie `g1.txt` direkt im Temp-Verzeichnis.
@@ -63,11 +63,11 @@ Ein laufender oder abgebrochener Prozess hat noch kein bestandenes Ergebnis.
 ## Entwicklungstor und Release-Tor
 
 Der normale Lauf enthält alle Tests ohne Fenster. Beim Release kommen
-separate Prozesse für die Fenstertests je Datei hinzu. Die aktuelle Aufteilung liegt in
-`.claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh`, die
-Fenstererkennung in `tools/list_windowed_tests.py`. Das Skript nimmt Fenster
-nur mit `--release` hinzu und lässt Leistungstests immer aus. Beim Release
-gehören die Leistungstests als eigener Lauf auf der Referenzmaschine dazu.
+separate Prozesse für die Fenstertests je Datei hinzu. Die Aufteilung liegt in
+`.claude/scripts/suite-getrennt.sh`, die Fenstererkennung in
+`tools/list_windowed_tests.py`. Das Skript nimmt Fenster nur mit `--release`
+hinzu und lässt Leistungstests immer aus. Beim Release gehören die
+Leistungstests als eigener Lauf auf der Referenzmaschine dazu.
 Getrennt wird je Test: `tests/conftest.py` gibt jedem Test mit `qt_app` im
 Fixture-Graphen den Marker `windowed`, Fenster in Unterprozessen tragen ihn
 ausdrücklich. Das reguläre Tor wählt `not windowed`, das Release-Tor fährt je
@@ -94,7 +94,7 @@ format_status=$?
 mypy_status=$?
 suite_args=()
 if [ "$release_tests" -eq 1 ]; then suite_args+=(--release); fi
-bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh "${suite_args[@]}" > "$CHECK_DIR/suite.txt" 2>&1
+bash .claude/scripts/suite-getrennt.sh "${suite_args[@]}" > "$CHECK_DIR/suite.txt" 2>&1
 suite_status=$?
 performance_status="zurückgestellt"
 if [ "$release_tests" -eq 1 ]; then
@@ -115,10 +115,10 @@ Zum Entwicklungstor gehören vier Ergebnisse: Kernsammlung, Ruff, Format und
 mypy. Zum Release-Tor gehören zusätzlich die Fenstergruppe im Suite-Protokoll
 und der separate Leistungslauf. Zurückgestellte Prüfungen nie als bestanden
 ausweisen; ein grünes Entwicklungstor ist keine vollständige Release-Abnahme.
-Der Wrapper gibt bei einem Fehllauf selbst Nichtnull zurück. Einen abgebrochenen
-Gesamtauftrag nicht durch später weiterlaufende Hintergrundbefehle fortsetzen.
-Bei fehlender Umgebung oder
-systematisch gleichem Infrastrukturfehler erst die Ursache klären.
+Der Wrapper gibt bei einem Fehllauf selbst Nichtnull zurück. Einen
+abgebrochenen Gesamtauftrag nicht durch später weiterlaufende
+Hintergrundbefehle fortsetzen. Bei fehlender Umgebung oder systematisch
+gleichem Infrastrukturfehler erst die Ursache klären.
 
 ## Ergebnis richtig lesen
 

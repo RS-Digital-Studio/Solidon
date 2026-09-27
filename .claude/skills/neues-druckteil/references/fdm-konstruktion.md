@@ -65,8 +65,8 @@ Lebensmittel oder andere zusätzliche Anforderungen.
 
 ## Weiterführende Primärquellen
 
-Am 11.09.2026 als allgemeine Herstellerhinweise geprüft; Aussagen auf das
-konkrete Gerät und Material übertragen, nicht als Elegoo-Profil ausgeben:
+Allgemeine Herstellerhinweise — Aussagen auf das konkrete Gerät und Material
+übertragen, nicht als Elegoo-Profil ausgeben:
 
 - [Prusa: Modellieren für den 3D-Druck](https://help.prusa3d.com/article/modeling-with-3d-printing-in-mind_164135)
 - [Prusa: Infill und Perimeter](https://help.prusa3d.com/article/infill_42)

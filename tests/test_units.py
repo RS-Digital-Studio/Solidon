@@ -457,6 +457,24 @@ def test_exact_cos_and_sin_agree_with_the_library() -> None:
         assert abs(exact_sin(angle) - math.sin(angle)) < 1e-15, f"sin bei {angle}"
 
 
+def test_the_exact_arctangent_agrees_with_the_library_and_hits_its_marks() -> None:
+    """Der Arkustangens rechnet über die Reihe und nicht mit ``math.atan``
+    (RM-187): PrusaSlicers automatische Stützschwelle entscheidet in der
+    Schichtanalyse über Überhänge. Auf dieser Maschine dieselbe Zahl wie die
+    Bibliothek bis auf eine Rundung, dazu die Werte, die exakt sein müssen."""
+    import math
+
+    from app.core.units import exact_atan_degrees
+
+    for ratio in (0.0, 0.05, 0.3, 1.125, 7.5, 2500.0, -0.8):
+        assert abs(exact_atan_degrees(ratio) - math.degrees(math.atan(ratio))) < 1e-12, ratio
+    assert exact_atan_degrees(1.0) == 45.0
+    assert exact_atan_degrees(0.0) == 0.0 and math.copysign(1.0, exact_atan_degrees(-0.0)) == 1.0
+    assert exact_atan_degrees(-1.0) == -45.0
+    with pytest.raises(ValueError):
+        exact_atan_degrees(math.inf)
+
+
 def test_a_right_angle_in_degrees_is_exact() -> None:
     """``exact_cos_degrees(90)`` ist null — nicht -8,5·10⁻⁵⁰.
 

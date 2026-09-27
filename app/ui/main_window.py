@@ -1031,7 +1031,14 @@ class _FoundationWorker(Worker):
         self._quality = quality
 
     def work(self) -> None:
-        setup = remembered_setup(self._ui, self._profile.material.id, self._profile.printer.id)
+        # Die Stufe wählt den Prozess des Herstellers (Entscheidung I) — hier wie
+        # im Druckdialog und beim Export, sonst rechnete die Zahlenzeile mit
+        # einem anderen Prozess, als gedruckt wird.
+        setup = manufacturer.for_stage(
+            remembered_setup(self._ui, self._profile.material.id, self._profile.printer.id),
+            self._profile,
+            self._quality,
+        )
         self.done.emit(self._key, manufacturer.base_settings(self._profile, self._quality, setup))
 
 
@@ -1326,6 +1333,9 @@ class _ExportWorker(Worker):
                 setup = handover.detect(found)
         settings = self._settings
         if settings is not None:
+            # Die Stufe wählt den Prozess des Herstellers (Entscheidung I), für
+            # Grundlage und Datei derselbe.
+            setup = manufacturer.for_stage(setup, self._profile, settings.quality)
             # **Grundlage plus Abweichung, wie im Dialog** (Review Stufe A+B,
             # F6). Gespeichert ist ein Stand: die eigene Wahl und die Grundlage
             # vom letzten Speichern. Unverändert ging er als Solidons Satz
@@ -12091,7 +12101,7 @@ class MainWindow(QMainWindow):
         # *Übernehmen* bei y = 1062, also unter dem Rand. Wer eine Zahl tippte,
         # musste erst rollen, um seinen Schritt abzuschließen. Sie steht
         # deshalb **unter** dem Rollbereich, nicht darin; dieselbe Regel, die
-        # `oberflaeche.md` für die Karten schon kennt („Was unter der Liste
+        # `fenster.md` für die Karten schon kennt („Was unter der Liste
         # steht, gehört in beide Rechnungen … sonst schiebt man den einzigen
         # Weg hinaus, den die Karte anbietet").
         column = QWidget(self)
@@ -13279,7 +13289,7 @@ class MainWindow(QMainWindow):
         """Karten und Schichten gehören zur Geometrie und ihren wirksamen Druckgrenzen."""
         from app.core.scene.hashing import profile_key
 
-        profile = self.session.profile
+        profile = self.session.evaluation_profile
         return (
             entry.id,
             kind,
@@ -13374,7 +13384,7 @@ class MainWindow(QMainWindow):
             accessible_description=tr("Die Analysekarte wird berechnet …"),
         )
         self._update_waiting_state()
-        worker = _MapWorker(kind, entry, self.session.profile, result.scene)
+        worker = _MapWorker(kind, entry, self.session.evaluation_profile, result.scene)
         worker.done.connect(weak_slot(self, MainWindow._map_received, request, forward=True))
         worker.progressed.connect(
             weak_slot(self, MainWindow._map_progressed, request, forward=True)
@@ -13825,10 +13835,10 @@ class MainWindow(QMainWindow):
         self.status_message.setText(tr("Die Schichtanalyse läuft …"))
         # Die Mindestwand ist zugleich die Brückenbreite — zwei
         # Extrusionsbahnen, aus dem Material und nicht aus dem Code (Regel 7).
-        wall, angle = profiles.analysis_limits(self.session.profile, entry)
+        wall, angle = profiles.analysis_limits(self.session.evaluation_profile, entry)
         worker = _SliceWorker(
             entry,
-            self.session.profile.printer.layer_height,
+            self.session.evaluation_profile.printer.layer_height,
             overhang_angle=angle,
             bridge_from=wall,
         )
@@ -17228,8 +17238,8 @@ class MainWindow(QMainWindow):
                     # diese Sperre steht sie wählbar in der Liste, der Dialog
                     # geht durch, und die Auswertung hält danach an — dieselbe
                     # Lage, die bei den Zwillingen schon einmal gemessen wurde
-                    # (`oberflaeche.md`, „Ein Umschalter, dessen Zwilling eine
-                    # Bedingung hat, fragt sie — vorher").
+                    # (`grenzen.md`, „Ein Zwilling, der eine Bedingung hat,
+                    # fragt sie — vorher").
                     #
                     # Gefragt wird über `_reason_locked`, also dieselbe Kette
                     # wie Menüleiste und Kontextmenü: eine dritte Formulierung
@@ -17477,7 +17487,7 @@ class MainWindow(QMainWindow):
             wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
             snapshot = copy(self.session.project.document)
             snapshot.fits = list(snapshot.fits)
-            scene, profile = result.scene, self.session.profile
+            scene, profile = result.scene, self.session.evaluation_profile
 
             def analysis(cancelled: CancelToken) -> str:
                 return analysis_text(
@@ -19579,9 +19589,8 @@ class MainWindow(QMainWindow):
             # ohnehin neu.
             self._print_findings.cancel()
         else:
-            self._print_findings.start(
-                result, self.session.profile, self.effective_print_settings()
-            )
+            effective = self.effective_print_settings()
+            self._print_findings.start(result, self._print_profile(effective), effective)
         steps, planned = self._split_findings
         if planned and steps == len(self.session.project.document.ops):
             # Die Befunde der Suche stehen in keinem Schritt; jede Auswertung
@@ -19937,10 +19946,22 @@ class MainWindow(QMainWindow):
         if result is None or key != self._foundation_key(foundation.settings.quality):
             return
         settings = self.effective_print_settings()
+        if not self.session.evaluation_follows(settings):
+            # **Die Schwelle des gewählten Prozesses kam nach dem Lauf**
+            # (Entscheidung L): Die Grundlage entsteht im Arbeiter, und der
+            # erste Lauf rechnete noch mit der Tabelle. Ein zweiter bringt
+            # Prüfbericht und Analyse auf die Grenze, mit der der Slicer stützt.
+            self.session.evaluate_async()
+            return
         self.filaments.show_scene(list(result.scene.objects.values()), settings)
         self._update_facts()
         if result is not self.session.picture:
-            self._print_findings.start(result, self.session.profile, settings)
+            self._print_findings.start(result, self._print_profile(settings), settings)
+
+    def _print_profile(self, settings: PrintSettings) -> Profile:
+        """Das Profil der Druckbefunde: das des Projekts mit dem Raster und der
+        Stützschwelle der wirksamen Einstellungen (Entscheidung L)."""
+        return profiles.for_process(self.session.profile, settings, effective=True)
 
     def _foundation_crashed(self, detail: str) -> None:
         _log.warning("print foundation worker crashed: %s", detail)

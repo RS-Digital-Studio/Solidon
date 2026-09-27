@@ -49,8 +49,7 @@ Die Senkung trägt dort 240 statt 241. Alle Maße sind gleich (Ø 11,928, Winkel
 einer Acht, daraus keine zwei Randringe, daraus keine Bohrungskette — ein
 Merkmal, das auf Windows bearbeitbar ist und auf dem Mac nicht.
 
-Die Ursache steht in
-[`.claude/memory/arm-rechnet-anders-als-x86.md`](../.claude/memory/arm-rechnet-anders-als-x86.md):
+Die Ursache, eigens gemessen:
 Auf ARM64 entstehen FMA-Instruktionen von selbst, auf x86 erst mit Opt-in;
 `a×b+c` rundet dort einmal statt zweimal. **manifold3d sagt Topologie zu und
 Numerik nicht** — „guaranteed manifold output", kein Wort zu bitgleichen

@@ -1,28 +1,20 @@
 # `konzepte/` — das Warum
 
-Konzepte, Durchsichten und Entscheidungen. **Der Index ist
+Konzepte, Durchsichten, Nachweise und Entscheidungen. **Der Index ist
 `konzepte/README.md`** und nennt zu jedem den Stand.
 
-## Wozu sie da sind — und wozu nicht
+| Ort | Inhalt |
+|---|---|
+| `konzept-*.md` und die übrigen Dokumente | Warum etwas so gebaut wurde — kein Auftrag und keine Arbeitsliste |
+| `nachweise-*/` | Messprotokolle und Belege zu einem Konzept |
+| `begruendungen/` | Das Warum, das aus Regeln und Karten verschoben wurde, als sie auf das Einzuhaltende verdichtet wurden — je Quelle eine Datei (`regel-<name>.md`, `karte-<pfad>.md`), gegliedert nach deren Überschriften |
 
-Ein Konzept beantwortet **warum** etwas so gebaut wurde. Es ist kein Auftrag
-und keine Arbeitsliste.
-
-> **Offene Arbeit steht im Register von `ROADMAP.md` und nirgends sonst.**
-
-## Die Statustabellen altern
-
-Die Konzepte tragen eigene Statusspalten, und die stimmen nicht dauerhaft: Von
-zwölf Punkten, die sie am 22.08.2026 als offen führten, waren **sieben längst
-behoben**.
-
-Wer „offen" in einem Konzept liest, **prüft es am Code, bevor er es glaubt** —
-und trägt es ins Register von `ROADMAP.md` nach, wenn es stimmt.
-
-## Rangfolge
-
-Bei Widerspruch gilt der Bauplan (`3d-agent-bauplan.md`). Ein Konzept schlägt
-vor, der Bauplan entscheidet. Eine Aussage ohne §-Beleg ist eine Vermutung.
+**Offene Arbeit steht im Register von `ROADMAP.md` und nirgends sonst.** Die
+Statustabellen der Konzepte altern: Wer „offen“ in einem Konzept liest,
+**prüft es am Code, bevor er es glaubt**, und trägt es ins Register nach, wenn
+es stimmt. Bei Widerspruch gilt der Bauplan (`3d-agent-bauplan.md`) — ein
+Konzept schlägt vor, der Bauplan entscheidet; eine Aussage ohne §-Beleg ist
+eine Vermutung.
 
 ## Wenn ein Konzept umgesetzt ist
 

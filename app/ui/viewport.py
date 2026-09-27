@@ -4146,7 +4146,7 @@ class _ReticleArm(QWidget):
     in einem Quadrat von 32 mal 32 Punkten in der Fensterfarbe — genau über der
     Stelle, die gewählt werden soll (Bildschirmaufnahme: alle 1024 Bildpunkte
     des Quadrats verdeckt). Eine Fenstermaske ist keine Lösung
-    (``fenstermaske-ueber-vulkan-verliert-das-geraet``). Vier schmale Arme sind
+    (über Vulkan verliert sie das Gerät). Vier schmale Arme sind
     je ein volles Rechteck: dunkler Rand, heller Kern, auf jeder Oberfläche zu
     sehen, und die Mitte bleibt frei.
     """
@@ -4840,7 +4840,7 @@ class Viewport(QWidget):
         self._sketch_measure_pending: Callable[[], float] | None = None
         """Ob gerade ein Maß aussteht — vom Fenster je Skizzenmodus gesetzt
         und beim Verlassen gelöst, sonst hielte die Ansicht den Canvas fest
-        (ein aufbewahrter Rückruf ist eine Referenz, siehe oberflaeche.md)."""
+        (ein aufbewahrter Rückruf ist eine Referenz, siehe wartezeit.md)."""
         self._sketch_measure_begin: Callable[[Any], bool] | None = None
         #: Was einen begonnenen Zug abschließt — Doppelklick oder Eingabetaste.
         #:
@@ -6644,7 +6644,7 @@ class Viewport(QWidget):
 
         Eine eigene Methode und kein Lambda am Zeitgeber: Qt hält eine
         gebundene Methode schwach, ein Lambda hielte die Ansicht am eigenen
-        Kind fest (siehe ``__init__`` und `.claude/rules/oberflaeche.md`).
+        Kind fest (siehe ``__init__`` und `.claude/rules/wartezeit.md`).
         """
         self.show_scene(self._scene_for_rebuild())
 

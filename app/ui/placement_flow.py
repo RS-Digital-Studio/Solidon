@@ -4097,7 +4097,7 @@ class PlacementFlow(QObject):
 
         Gedreht wird **um die Stelle**, und Abstand wie Bildausschnitt bleiben:
         Wer auf ein Detail gezoomt hat, will es weiter sehen — dieselbe Zusage
-        wie bei den Kameravorgaben (`ansicht.md`, „Eine Kameravorgabe dreht um
+        wie bei den Kameravorgaben (`kamera.md`, „Eine Kameravorgabe dreht um
         den Blickpunkt, sie passt nicht ein").
         """
         if self._surface is None or self.viewport.renderer is None:

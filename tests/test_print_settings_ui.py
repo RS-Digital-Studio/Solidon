@@ -478,6 +478,43 @@ def test_adopting_a_prusa_filament_keeps_the_selected_bundle_section(
     assert dialog.settings.filament.max_flow == pytest.approx(5.0)
     assert "Prusament PLA Silk" in dialog.state.text()
     dialog._forget_filament_profile()
+
+
+def test_adopted_values_leave_with_their_filament(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review Stufe A+B, H12: Ohne Herstellergrundlage macht *Werte
+    übernehmen* die Werte zur eigenen Wahl. Wechselte das Filament, blieben
+    sie stehen — ein PETG fuhr mit den Temperaturen des PLA davor. Was noch
+    genau dem vorigen Profil gleicht, geht mit ihm; eine spätere eigene
+    Änderung bleibt."""
+    from app.core.export import slicer_profiles as sp
+
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer.exe"
+    root = executable.parent / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(
+        "[filament:Prusament PLA]\nfilament_type = PLA\ntemperature = 218\n"
+        "filament_max_volumetric_speed = 15\n"
+        "[filament:Prusament PETG]\nfilament_type = PETG\ntemperature = 240\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    pla = sp.profile_by_name(executable, "prusa", "Prusament PLA", "filament")
+    petg = sp.profile_by_name(executable, "prusa", "Prusament PETG", "filament")
+    assert pla is not None and petg is not None
+    dialog._slicer_path = executable
+    dialog._remember_filament_profile(pla)
+    dialog.adopt_filament.click()
+    assert "temperature.nozzle" in dialog.settings.chosen
+    dialog.settings = print_settings.with_choice(dialog.settings, "filament.max_flow", 12.0)
+
+    dialog._remember_filament_profile(petg)
+
+    assert "temperature.nozzle" not in dialog.settings.chosen, "das PLA ist gegangen"
+    assert dialog.settings.temperature.nozzle != 218
+    assert dialog.settings.filament.max_flow == pytest.approx(12.0), "die eigene Änderung bleibt"
+    dialog._forget_filament_profile()
     assert not dialog.adopt_filament.isEnabled()
 
 
@@ -2756,6 +2793,164 @@ def test_the_found_profiles_fill_both_choices(dialog: PrintSettingsDialog) -> No
     assert dialog.process_choice.count() == 2
 
 
+_PRUSA_BUNDLE = """[vendor]
+name = Prusa Research
+
+[printer_model:MK4S]
+name = Original Prusa MK4S
+variants = HF0.4; 0.4
+default_materials = Prusament PLA @MK4S HF0.4
+
+[printer:*common*]
+printer_technology = FFF
+nozzle_diameter = 0.4
+
+[printer:Original Prusa MK4S HF0.4 nozzle]
+inherits = *common*
+printer_model = MK4S
+nozzle_high_flow = 1
+default_print_profile = 0.20mm SPEED @MK4S HF0.4
+
+[printer:Original Prusa MK4S 0.4 nozzle]
+inherits = *common*
+printer_model = MK4S
+nozzle_high_flow = 0
+default_print_profile = 0.20mm SPEED @MK4S 0.4
+
+[print:0.20mm SPEED @MK4S HF0.4]
+layer_height = 0.2
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+
+[print:0.20mm SPEED @MK4S 0.4]
+layer_height = 0.2
+compatible_printers_condition = printer_model=="MK4S" and ! nozzle_high_flow[0]
+
+[filament:Prusament PLA @MK4S HF0.4]
+filament_type = PLA
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+"""
+
+
+def test_prusa_gets_the_profile_choice_and_its_sections_are_told_apart(
+    dialog: PrintSettingsDialog, session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stufe C des Konzepts Herstellerprofil: PrusaSlicer bekommt dieselbe
+    Profilwahl wie die Orca-Familie, vorgewählt wie PrusaSlicer selbst wählt.
+
+    Alle Profile eines Bündels teilen eine Datei. Am Pfad erkannt, war jeder
+    Eintrag derselbe, und die Auswahl zeigte den gewählten Drucker über dem
+    ersten Abschnitt der Datei (``slicer_profiles.identity``). Verlangt wird
+    keine Wahl: Ohne Drucker des Bündels gehen Solidons Werte hinaus.
+    """
+    from app.core.export import slicer_profiles as sp
+
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer-console.exe"
+    root = executable.parent / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(_PRUSA_BUNDLE, encoding="utf-8")
+    executable.write_bytes(b"")
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    _select_printer(dialog, "prusa-mk4s")
+    assert session.wait_for_idle()
+    dialog._slicer_path = executable
+
+    dialog._profiles_found(
+        sp.find_profiles(executable, "prusa", kinds=("machine", "process", "filament"))
+    )
+
+    assert dialog.machine_choice.currentData() == "Original Prusa MK4S HF0.4 nozzle"
+    assert dialog.process_choice.currentData() == "0.20mm SPEED @MK4S HF0.4"
+    assert dialog.process_choice.count() == 1, "der Prozess der Standarddüse passt nicht"
+    setup = dialog._current_setup()
+    assert setup is not None
+    assert setup.base_filament == "Prusament PLA @MK4S HF0.4"
+    assert dialog._profile_gap() == ""
+
+    dialog.machine_choice.setCurrentIndex(-1)
+    assert dialog._profile_gap() == "", "ohne Drucker gilt Solidons Satz"
+
+
+_PRUSA_STAGES = (
+    _PRUSA_BUNDLE
+    + """
+[print:0.10mm FAST DETAIL @MK4S HF0.4]
+layer_height = 0.1
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+
+[print:0.15mm SPEED @MK4S HF0.4]
+layer_height = 0.15
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+
+[print:0.20mm STRUCTURAL @MK4S HF0.4]
+layer_height = 0.2
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+
+[print:0.28mm DRAFT @MK4S HF0.4]
+layer_height = 0.28
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+"""
+)
+
+
+def test_the_quality_picks_the_manufacturers_process(
+    dialog: PrintSettingsDialog, session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stufe F (Entscheidung I): Die Qualität stellt das Prozessfeld auf den
+    Prozess des Herstellers, eine Wahl im Prozessfeld stellt die Qualität, und
+    ein Prozess, der zu keiner gehört, heißt dort „Eigener Prozess". Hin und
+    zurück bleibt es verlustfrei; gemerkt wird der Standard, solange das Feld
+    der Qualität folgt — die Qualität gehört zum Projekt."""
+    from app.core.export import slicer_profiles as sp
+    from app.ui.print_settings_dialog import _OWN_PROCESS
+
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer-console.exe"
+    root = executable.parent / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(_PRUSA_STAGES, encoding="utf-8")
+    executable.write_bytes(b"")
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    _select_printer(dialog, "prusa-mk4s")
+    assert session.wait_for_idle()
+    dialog._slicer_path = executable
+    dialog._profiles_found(
+        sp.find_profiles(executable, "prusa", kinds=("machine", "process", "filament"))
+    )
+    assert dialog.process_choice.currentData() == "0.20mm SPEED @MK4S HF0.4"
+
+    def choose_quality(key: str) -> None:
+        dialog.quality.setCurrentIndex(dialog.quality.findData(key))
+
+    def pick_process(name: str) -> None:
+        index = dialog.process_choice.findData(name)
+        dialog.process_choice.setCurrentIndex(index)
+        dialog.process_choice.activated.emit(index)
+
+    choose_quality("fine")
+    assert dialog.process_choice.currentData() == "0.10mm FAST DETAIL @MK4S HF0.4"
+    assert dialog.settings.layers.layer_height == pytest.approx(0.1)
+    choose_quality("strong")
+    assert dialog.process_choice.currentData() == "0.20mm STRUCTURAL @MK4S HF0.4"
+    choose_quality("fine")
+    assert dialog.process_choice.currentData() == "0.10mm FAST DETAIL @MK4S HF0.4"
+
+    pick_process("0.28mm DRAFT @MK4S HF0.4")
+    assert dialog.quality.currentData() == dialog.settings.quality == "draft"
+
+    pick_process("0.15mm SPEED @MK4S HF0.4")
+    assert dialog.quality.currentData() == _OWN_PROCESS
+    dialog._remember_slicer_choice(require_machine=False)
+    assert dialog.ui_settings.slicer_base_process == "0.15mm SPEED @MK4S HF0.4"
+
+    choose_quality("standard")
+    assert dialog.process_choice.currentData() == "0.20mm SPEED @MK4S HF0.4"
+    assert dialog.quality.findData(_OWN_PROCESS) < 0
+    choose_quality("fine")
+    dialog._remember_slicer_choice(require_machine=False)
+    assert dialog.ui_settings.slicer_base_process == "0.20mm SPEED @MK4S HF0.4", (
+        "gemerkt wird der Standard, die Qualität wählt"
+    )
+
+
 def test_switching_the_slicer_empties_the_profile_choice(
     dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -2763,8 +2958,8 @@ def test_switching_the_slicer_empties_the_profile_choice(
 
     Gemessen: Mit gefüllter Orca-Auswahl und danach eingestelltem CuraEngine
     ging ein ``-j`` auf eine Orca-Datei hinaus, und der Slicer war nach einer
-    Zehntelsekunde tot. ``_start_profile_search`` kehrt für ``cura`` und
-    ``prusa`` früh zurück; geleert wird deshalb am Anfang, nicht am Ende.
+    Zehntelsekunde tot. ``_start_profile_search`` kehrt für ``cura`` früh
+    zurück; geleert wird deshalb am Anfang, nicht am Ende.
 
     Und die gemerkte Wahl bleibt: das Leere zu merken löschte das Profil, das
     zum nächsten Orca-Lauf gehört.
@@ -5564,6 +5759,27 @@ def test_cura_takes_the_channel_advice_like_the_orca_family(qt_app, monkeypatch)
     for flavour in ("cura", "orca"):
         monkeypatch.setattr(dialog, "_current_flavour", lambda chosen=flavour: chosen)
         assert dialog._current_advice() == [advice], flavour
+
+
+def test_the_flow_cap_is_offered_only_where_the_slicer_does_not_cap(qt_app, monkeypatch):
+    """Die Orca-Familie und PrusaSlicer deckeln das Tempo selbst nach dem
+    Volumenstrom des Filaments. Dort ändert der Vorschlag nichts am Druck, und
+    an der Kobra 2 hob er über die Innenwand die Lückenfüllung von 100 auf
+    142 mm/s (Gesamtprüfung, 27.09.2026). Cura deckelt nicht: Dort bleibt er."""
+    from app.core.slice import advise
+    from app.core.types import SettingAdvice
+
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
+    _wait_for_print_advice(dialog, qt_app)
+    cap = SettingAdvice(
+        path="speed.inner_wall", value=142.0, was=150.0, reason=advise.FLOW_LIMIT_REASON
+    )
+    walls = SettingAdvice(path="shell.wall_count", value=3, was=2, reason="Dünne Wand")
+    dialog._advice_entries = [cap, walls]
+
+    for flavour, shown in (("orca", [walls]), ("prusa", [walls]), ("cura", [cap, walls])):
+        monkeypatch.setattr(dialog, "_current_flavour", lambda chosen=flavour: chosen)
+        assert dialog._current_advice() == shown, flavour
 
 
 def test_print_advice_cannot_disable_support_needed_by_another_body(qt_app):

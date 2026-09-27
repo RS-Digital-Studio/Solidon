@@ -628,6 +628,21 @@ def _curved_mouth() -> str:
     return f"{_mesh_print(plug)}|{_mesh_print(tool)}"
 
 
+def _automatic_support_angle() -> str:
+    """PrusaSlicers automatische Stützschwelle, in die Grundlage zurückgelesen.
+
+    Null heißt dort „halbe Außenwand über der Schicht"; der Winkel daraus ist
+    ein Arkustangens, und mit ihm entscheidet die Schichtanalyse über
+    Überhänge (Stufe C des Konzepts Herstellerprofil).
+    """
+    from app.core.export import manufacturer
+
+    angle = manufacturer._prusa_support_angle(
+        {"support_material_threshold": "0"}, {"layers.layer_height": 0.2}, 0.45
+    )
+    return repr(angle)
+
+
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
     "corner_chamfer": lambda: _worked_corner(False),
@@ -640,6 +655,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "orient_for_print": lambda: _oriented_plate(True),
     "orient_heuristic": lambda: _oriented_plate(False),
     "pose_armature": _posed_plate,
+    "prusa_support_angle": _automatic_support_angle,
     "remesh_mesh": _refined_plate,
     "repair_selfint": _resolved_crossings,
     "resize_hole": _changed_bore,

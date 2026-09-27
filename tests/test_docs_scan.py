@@ -2,7 +2,7 @@
 
 `tools/docs_scan.py` misst, was eine Sitzung an Prosa mitliest, bevor sie eine
 Zeile Code sieht. Wie jedes Suchwerkzeug hat es die gefährlichste Fehlerart
-aus `.claude/memory/messwerkzeug-misst-sich-selbst.md`: **es schweigt.** Zu
+eines Messwerkzeugs: **es schweigt.** Zu
 wenig zu finden sieht aus wie nichts zu finden.
 
 Geprüft wird deshalb an gepflanzten Fällen, dass es findet, wofür es gebaut

@@ -425,7 +425,7 @@ def _locked_without_reason(menu: QMenu, path: str = "") -> tuple[list[str], list
     Zwei Befunde in einem Durchgang, weil sie zusammengehören: Ein Grund, den
     das Menü nicht anzeigt, ist so gut wie keiner. `QMenu` steht mit
     ``toolTipsVisible == False`` auf der Welt, und das hat schon einmal eine
-    ganze Kette umsonst gemacht (siehe `oberflaeche.md`).
+    ganze Kette umsonst gemacht (siehe `grenzen.md`).
     """
     silent: list[str] = []
     hidden: list[str] = []

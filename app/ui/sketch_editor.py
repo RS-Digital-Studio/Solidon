@@ -7227,7 +7227,7 @@ class SketchPanel(QWidget):
 
         Als Methode und nicht als Lambda am eigenen Auswahlfeld: Qt hält eine
         gebundene Methode schwach, ein Lambda hielte dieses Feld an seinem
-        eigenen Kind fest (`.claude/rules/oberflaeche.md`).
+        eigenen Kind fest (`.claude/rules/wartezeit.md`).
         """
         plane = str(self.plane_choice.currentData())
         if plane == NEW_PLANE:
@@ -7676,11 +7676,12 @@ class SketchPanel(QWidget):
             # *Fest*. Für einen Anwender ohne CAD-Kenntnis sind acht graue
             # Fachwörter kein Angebot, sondern eine Wand (Robert, 29.08.2026).
             #
-            # Das ist die Ausnahme von „grau und begründet, nicht unsichtbar"
-            # aus `oberflaeche.md`, und sie hat ihren Präzedenzfall zwei
+            # Das folgt heute derselben Regel wie Felder in einem Dialog —
+            # „Was gerade nichts tut, steht nicht da" aus `oberflaeche.md`
+            # (Abschnitt „Gestufte Tiefe"), seit sie drehte: Vorher war das
+            # hier die Ausnahme, heute der Normalfall. Präzedenzfall zwei
             # Zeilen weiter unten: ``selection_tools`` verschwindet seit je,
-            # wenn nichts ausgewählt ist. Die Regel gilt Feldern in einem
-            # Dialog, in dem man sucht; hier folgt eine Werkzeugzeile dem
+            # wenn nichts ausgewählt ist. Hier folgt eine Werkzeugzeile dem
             # Zustand, und was fehlt, fehlt sichtbar mit der Auswahl.
             button.setVisible(offers[kind])
             button.setEnabled(offers[kind])

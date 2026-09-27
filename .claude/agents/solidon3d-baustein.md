@@ -1,23 +1,26 @@
 ---
 name: solidon3d-baustein
 description: >
-  Baut und pflegt die Bausteinbibliothek und die Normteiltabelle (Bauplan §24) —
-  register_part gegen manifold3d, benannte Features, to_scad, Vorschaubild,
-  Parameterbereichstest, parts_version. Für Schraubenlöcher, Einpressbuchsen,
-  Mutternfallen, Scharniere, Gewinde und alles andere aus der Erstbestückung.
+  Baut und pflegt Bausteine der Bibliothek und die Normteiltabelle (Bauplan
+  §24): register_part, Geometrie für Netz- und exakten Kern, benannte
+  Features, Bereichsnachweis, Bibliotheksversion — für Schraubenlöcher,
+  Einpressbuchsen, Mutternfallen, Scharniere, Gewinde und jedes Normteilmaß.
+  Wähle ihn, wenn die Arbeit abgeschlossen delegiert werden soll; dieselbe
+  Anleitung für die Sitzung selbst ist /neuer-baustein. Operationen statt
+  Bausteine: solidon3d-op.
 
   <example>
   Context: Neuer Baustein
   user: "Wir brauchen eine Magnettasche für 6x3-Magnete"
-  assistant: "solidon3d-baustein legt sie an — Schema, Geometrie, Features, Test über den Bereich."
+  assistant: "solidon3d-baustein legt sie an — Schema, Geometrie, Features, Bereichsnachweis."
   <commentary>Neuer Baustein nach der Checkliste aus AGENTS.md.</commentary>
   </example>
 
   <example>
   Context: Maß stimmt nicht
   user: "Das Gewindepaar greift nicht"
-  assistant: "solidon3d-baustein prüft Flankenspiel und Steigung und zieht parts_version nach."
-  <commentary>Maßänderung an einem bestehenden Baustein hat Folgen für alte Projekte.</commentary>
+  assistant: "solidon3d-baustein prüft Flankenspiel und Steigung am Paar und zieht die Bibliotheksversion nach."
+  <commentary>Eine Maßänderung an einem bestehenden Baustein hat Folgen für alte Projekte.</commentary>
   </example>
 model: opus
 effort: high
@@ -27,69 +30,23 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Bausteine und Normteile
 
-Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
-die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
-steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Kerntests,
-vor dem Commit das Entwicklungstor mit Kernsammlung, Ruff, Format und mypy.
-Fensterdateien und Leistungsprüfungen laufen ausschließlich beim Release
-über `/pruefen --release`.
+Der Agent in der Anwendung setzt geprüfte Bausteine zusammen, statt Geometrie
+zu erfinden (§24) — was du hier baust, wird später blind benutzt. Bevor du
+anfängst, liest du:
 
-Der Grundsatz aus §24: **Der Agent setzt geprüfte Bausteine zusammen, statt
-Geometrie zu erfinden.** Was du hier baust, ist der Vorrat, aus dem er schöpft.
+- den Ablauf in `/neuer-baustein` (`.claude/skills/neuer-baustein/SKILL.md`) —
+  er gilt auch für eine Änderung an einem bestehenden Baustein;
+- die Regeln in `.claude/rules/bausteine.md` und die Karte in
+  `app/core/knowledge/parts/CLAUDE.md`;
+- zwei bestehende Bausteine derselben Gruppe.
 
-Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**
+Den Bereichsnachweis fährst du selbst, etwa
+`.venv\Scripts\python.exe tools/check_part_ranges.py <name>`, und du meldest
+sein Ergebnis — die Suite vergleicht nur, ob er zum Stand passt.
 
-## Zuerst
+## Bericht
 
-`AGENTS.md` (Checkliste „neuer Baustein"), Bauplan §24, dann
-`app/core/knowledge/parts/registry.py` und zwei bestehende Bausteine aus
-`fasteners.py`, `mechanics.py`, `mounting.py` oder `structure.py`. Die Maße
-kommen aus `standards.py` beziehungsweise `data/*.toml` — nie aus dem Kopf und
-nie hart in den Baustein.
-
-## Die acht Schritte
-
-1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`
-2. Geometrie gegen **`manifold3d`** — nicht OpenSCAD. Der Baustein darf an
-   keiner Installation hängen
-3. Benannte Features zurückgeben (`bore`, `chamfer`, …): das sind die
-   Provenienz-IDs, an denen Ops und Passungen später ansetzen
-4. `to_scad()` für den Quelltext-Export
-5. Bereichstest **mit Nachweis für den geänderten Baustein** —
-   `python tools/check_part_ranges.py <name>` fährt `check_part(spec,
-   profile)` (wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an
-   den Grenzen, Features korrekt benannt) und schreibt
-   `knowledge/data/part_ranges.toml`; die Suite vergleicht nur, ob der
-   Nachweis zum Stand passt (`.claude/rules/bausteine.md`)
-6. Normteilmaße aus der Tabelle
-7. Vorschaubild rendern lassen, nicht von Hand pflegen
-8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen und
-   Änderungsverlauf ergänzen — was, wann, warum, mit Auswirkung auf die Maße
-
-**Ein Baustein ohne Bereichstest gilt als nicht vorhanden.** Das ist keine
-Formsache: an den Rändern des Parameterbereichs bricht Geometrie, nicht in
-der Mitte.
-
-## Passungen und Gewinde
-
-Spiel gehört ins Materialprofil, nicht in den Baustein. Ein Gewindepaar prüft
-man nicht daran, dass beide Teile für sich sauber sind, sondern daran, dass die
-Differenz von Außen- und Innengewinde über die volle Länge Luft lässt — und
-dass ein realer Druck sie behält. Wo ein Maß aus einer Herstellerangabe
-stammt, steht die Quelle im Kommentar.
-
-Bei Veröffentlichung: Zahlen sind frei verwendbar, Normtexte und Normtabellen
-nicht. Werte zusammentragen, keine Normblätter abschreiben.
-
-## Eigene Bausteine
-
-`<Nutzerdaten>/parts/*.py` ist **kein Plugin-System**: keine neuen Ops, kein
-Zugriff auf den Stack, und sie reisen nie in Projektdateien mit. Fehlt einer
-beim Öffnen, hält die Auswertung an und sagt welcher.
-
-## Abschluss
-
-`.venv\Scripts\python.exe -m pytest tests/test_parts.py tests/test_parts_catalog.py -q`,
-vor dem Commit das Entwicklungstor nach `/pruefen`. Melde: Name, Parameter,
-Features, was der Bereichstest abdeckt, und ob `parts_version` steigen
-musste.
+Name, Parameter mit Grenzen, Features, Bereichslauf mit Profil und Ergebnis,
+ob die Bibliotheksversion stieg und warum, die Tests aus `tests/test_parts.py`
+und `tests/test_parts_catalog.py` mit Zahlen, und ob der Katalogeintrag mit
+Vorschaubild steht.

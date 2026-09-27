@@ -1,0 +1,210 @@
+# Begründungen zu `packaging/CLAUDE.md`
+
+> Stand 27.09.2026. Aus der Karte verschoben, als sie auf Dateien, Abläufe und
+> Stolperfallen verdichtet wurde. Die Karte steht dort; hier stehen die
+> ausführlichen Fassungen, das Warum und die Messwerte und Anlässe ihres Tages —
+> wörtlich, gegliedert nach den Überschriften der Karte. *Früher unter …* nennt
+> die Stelle der alten Karte.
+
+## Die Karte
+
+Die alte Tabelle nannte `de.rsdigital.solidon3d.xml` „AppStream-Zuordnung“ —
+es ist die MIME-Definition (shared-mime-info) — und führte `DATENSCHUTZ.md`
+als Datei dieses Ordners; sie liegt in der Wurzel und reist über die `.spec`
+mit. Dass die Linux- und macOS-Vorlagen erzeugt sind, sagte sie nicht.
+
+*Früher unter „Die Karte“.*
+
+| Datei | Für |
+|---|---|
+| `solidon3d.spec` | PyInstaller — **die Quelle für alle Plattformen** |
+| `solidon3d.iss` | Inno Setup, der Windows-Installer |
+| `de.rsdigital.solidon3d.yml` | Flatpak |
+| `de.rsdigital.solidon3d.xml` | AppStream-Zuordnung |
+| `de.rsdigital.solidon3d.metainfo.xml` | Was der Software-Katalog unter Linux zeigt |
+| `solidon3d.desktop` | Startmenü-Eintrag unter Linux |
+| `macos-distribution.xml`, `macos-conclusion.txt` | Das macOS-Paket |
+| `install.sh` | Linux von Hand |
+| `solidon3d.ico`, `solidon3d.icns` | Symbole je Plattform — **erzeugt** von `tools/make_icon.py` |
+| `eula.txt` | Die Fassung, die der Installer zeigt — **erzeugt** von `tools/make_legal.py` aus `EULA.md` |
+| `DATENSCHUTZ.md` | Lokale, mitgelieferte Fassung für den KI-Hinweis; ohne Webabruf im Fenster gelesen |
+
+## Wie jede Plattform installiert
+
+*Früher unter „Der Installer wird zweimal gerufen, und nicht gleich“.*
+
+**Auf den anderen beiden Plattformen sieht es anders aus, und das ist
+entschieden:** macOS bleibt beim `.pkg` und zeigt Apples Installer (Robert,
+28.08.2026). Linux liefert **ab der nächsten Version** zwei Dateien aus:
+AppImage zum direkten Start und Flatpak zur verwalteten Installation. Das
+AppImage wird nicht installiert; nach dem einmaligen Setzen des Ausführrechts
+startet es per Doppelklick. Werkzeug 1.9.1 und der eingebettete
+Type-2-Laufzeitkern 20251108 kommen aus festen Veröffentlichungen, werden vor
+dem Lauf gegen ihre SHA-256-Prüfsummen geprüft und über
+`APPIMAGETOOL_RUNTIME_FILE` ausdrücklich verbunden. Das Flatpak-Bundle spielt die Anwendung mit
+`flatpak install` ein und kommt mit `flatpak run` zurück — **ohne Repo**, weil
+`flatpak install` eine Bundle-Datei unmittelbar nimmt. Das tar.gz bleibt ein
+Bauartefakt und wird nicht hochgeladen.
+
+**Die Setup-Datei packt blockweise aus, nicht in einem Strom** (Entscheidung
+Robert, 03.09.2026): `SolidCompression=no` und `Compression=lzma2/normal`. Das
+kostet gemessene 23 MB gegenüber der kleinsten baubaren Fassung und nimmt dafür
+beiden Empfindlichkeiten: Ein gekipptes Bit beschädigt eine Datei statt des
+Reststroms, und das Wörterbuch belegt 8 statt 32 bis 64 MB Arbeitsspeicher. Die
+Messreihe, der Anlass und die Falle mit `LZMADictionarySize` — die Direktive
+wirkt nicht — stehen im Kommentar über den beiden Zeilen in `solidon3d.iss`;
+`tests/test_packaging.py` hält sie fest.
+
+## Signieren
+
+*Früher unter „Der Installer wird zweimal gerufen, und nicht gleich“.*
+
+Die macOS-Pipeline trennt drei Vertrauensräume. Der Paketjob bindet den
+vollständigen App-Baum als `ditto`-Archiv samt SHA-256. Ein geschützter Job ohne
+Checkout oder Python prüft Archiv, Produktkennung, Architektur und interne
+Symlinks, importiert die Developer-ID nur für den festen `codesign`-Aufruf und
+löscht den Schlüsselbund noch im selben Schritt. Danach baut ein
+**ungeschützter** Job mit `make_macos_package.py` das `.pkg`; erst ein zweiter
+geschützter Job signiert es mit `productsign`. Die nicht geheime Repository-
+Variable `MACOS_SIGNING_MODE` wählt `unsigned`, `signed` oder `notarized`.
+Nur wenn die Apple-Angaben vollständig sind und `notarytool`, `stapler` und
+`spctl` grün bleiben, nennt der Schlusstext das Paket geprüft. Der unsignierte
+Weg betritt keinen geschützten Job und behält den Gatekeeper-Hinweis.
+
+1. `build.yml` baut die Anwendung und übergibt den **vollständigen** App-Baum
+   sowie die festen Installer-Eingänge als kanonische relative Pfadliste mit
+   SHA-256 (Artefakt `solidon3d-windows-signing-input`, sieben Tage haltbar).
+   Der daneben gebaute unsignierte Installer dient ausschließlich der
+   Releaseprüfung und wird nicht ausgeliefert.
+2. `tools/sign_release.py --phase application` prüft lokal die CI-Herkunft,
+   Archiv, Produktangaben und jede Eingangsprüfsumme. Es signiert und prüft
+   ausschließlich die Anwendung. Die signierte EXE und ihre Herkunftsakte
+   werden als Transport in einem unveröffentlichten Release-Entwurf abgelegt.
+3. `windows-signed-installer.yml` lädt die ursprünglichen Eingänge und die
+   signierte EXE. Der erfolgreiche Anwendungslauf wurde manuell auf `main`
+   oder durch das tatsächliche Versions-Tag ausgelöst. Der manuelle
+   Installerworkflow auf `main` darf einen abweichenden Commit nur verwenden,
+   wenn der gemeinsame Herkunftsprüfer die vollständigen Git-Blatteinträge
+   beider Stände außerhalb der eng benannten Signierablauf-Dateien identisch
+   findet. Derselbe Vergleich läuft nochmals vor der lokalen Setupsignatur.
+   Produktquellen und ursprüngliche Installer-Eingänge bleiben unverändert.
+   Bei abweichendem Commit laufen vorher die Tests der Signierorchestrierung
+   (`test_sign_release.py`, `test_windows_signed_installer.py`); rot endet
+   der Lauf vor jedem Bau.
+   Er prüft Herkunft,
+   Hash, Zeitstempel und Herausgeber, ersetzt nur die EXE und bindet die
+   Übergabe neu. Inno Setup 7
+   baut den Installer in der CI. Das Artefakt
+   `solidon3d-windows-installer-signing-input` enthält Setup, `.sha256` und
+   `windows-installer-build.json` mit dem tatsächlichen Installercommit und
+   seiner Laufnummer; der Workflow veröffentlicht nichts.
+4. `tools/sign_release.py --phase installer` prüft lokal diesen CI-Rückweg,
+   signiert und prüft die Setup-Datei und schreibt Prüfsumme und Releaseakte
+   für das endgültige Kundenpaket. Lokal wird kein Installer gebaut.
+
+Das Certum-Zertifikat liegt in der SimplySign-Cloud und verlangt einen
+Einmalcode vom Handy, den keine CI eingeben kann und soll. Einen Azure- oder
+PFX-Weg gibt es nicht mehr (Entscheidung Robert, 02.09.2026): Azure Artifact
+Signing verlangt eine Organisation mit drei Jahren Bestand, und exportierbare
+PFX-Schlüssel geben die Zertifizierungsstellen seit 2023 nicht mehr heraus.
+Der genaue Aufruf- und Übergabevertrag steht in `Signierung/README.md`.
+
+## Was hier hineinmuss, wenn sich etwas ändert
+
+*Früher unter „Was hier hineinmuss, wenn sich etwas ändert“.*
+
+- **Nach geänderten Projektanforderungen** vor der lokalen Lizenzbeilage die
+  tatsächlich gelesenen Solidon-Metadaten prüfen. Eine alte `solidon3d.egg-info`
+  im Projektwurzelordner kann die frisch installierte `.dist-info` überdecken.
+  Die Editable-Installation allein erneuert diesen Altbestand nicht zwingend;
+  bei vorhandenem Root-Bestand synchronisiert der vorhandene Setuptools-Backend
+  ihn mit `python -c "from setuptools import setup; setup(script_args=['egg_info'])"`.
+  Danach müssen Laufzeitbaum und `tools/check_env.py` die aktuellen Anforderungen
+  bestätigen, bevor `tools/make_licence_notices.py` die Beilage erzeugt.
+- **Eine neue Abhängigkeit** kann in der `.spec` fehlen und erst im gebauten
+  Paket auffallen — dort, wo kein `pip` mehr hilft.
+  Die Ansicht zeichnet mit pygfx über wgpu; ohne Adapter für Direct3D 12,
+  Vulkan oder Metal fällt sie aus. Auf Windows kann der Systemadapter WARP
+  einspringen; Linux benötigt einen installierten Vulkan-Softwareadapter wie
+  lavapipe aus Mesa. wgpu liefert diese Systemtreiber nicht mit. Seit RM-050
+  (23.09.2026) reist auch VTK nicht mehr mit — die Wandstärke der
+  Bereichsprüfung rechnet über `core/geom/mesh.ray_hits_batch`; PyVista,
+  PyVistaQt und QtPy gehörten schon vorher nicht zum Laufzeitbaum. Die
+  Entwicklungsvorschau
+  der Lizenzbeilage wird nach einer Änderung mit dem Interpreter des neuen
+  Versionssatzes erzeugt; sie ersetzt keinen nativen Paketnachweis.
+  Der Schichtkern wird über `build_slice_core.current_extensions()` ausgewählt:
+  Erweiterungen anderer Python-ABIs oder Architekturen erfüllen die Baugrenze
+  nicht und werden nicht mit eingesammelt.
+- **Ein Asset ohne Rechtefreigabe** stoppt die `.spec` vor `Analysis` über
+  `tools/asset_rights.py`. Maßgeblich ist `ASSET-RIGHTS.toml`; das Tor prüft
+  Schema und beigefügte Nachweise sowie die vollständige, überschneidungsfreie
+  Abdeckung aller Anwendungsmedien. Website-Sperren bleiben am Website-Tor,
+  Anwendungssperren gelten gleich für alle dort genannten Zielsysteme. Nach
+  dem fertigen `COLLECT` beziehungsweise macOS-`BUNDLE` schreibt die Spec
+  zusätzlich `Solidon3D-rights.json` in den Datenordner des Artefakts. Der
+  Beleg bindet Manifest, Prüflogik, Spec, Quellbytes und die tatsächlich
+  kopierten App-Medien; jeder nachfolgende Plattform-Paketierer prüft ihn
+  erneut und verwirft veraltete oder nachträglich veränderte `dist`-Bäume.
+- **Die Stückliste** entsteht mit `tools/make_sbom.py` aus PyInstallers
+  `Analysis` und dem anschließend fertigen Kundenartefakt: Nur Distributionen
+  aus Solidons Laufzeitbaum, deren Importpakete tatsächlich im Analyseergebnis
+  stehen, gelangen hinein; CPython, PyInstaller-Bootloader, Kryptografie- und
+  Compilerlaufzeiten sowie jede PE-/ELF-/Mach-O-Datei werden aus dem fertigen
+  Paket inventarisiert. Sie reist genau einmal im Kundenartefakt mit; eine
+  eingecheckte plattformspezifische Kopie gibt es absichtlich nicht. Ihr
+  Dateiname kommt aus `make_sbom.ARTIFACT_SBOM_NAME`, ebenso in den
+  Lizenzbelegen und im lokalen Signierwerkzeug.
+  PySide6-Essentials weist Qt, cadquery-ocp-novtk OCCT und Shapely GEOS
+  ihre nativen Bibliotheken als eigene Komponenten mit gewählter
+  Lizenzgrundlage aus. Windows bindet die exakte libffi-Version an den
+  festgeschriebenen CPython-Patchstand; Linux liest sie über `pkg-config` aus
+  der tatsächlich gebündelten Systembibliothek. Die Microsoft-Laufzeit trägt
+  die sortierte Menge der `FileVersion`-Werte aller mitgereisten PE-Dateien,
+  nicht die bloße Compilerangabe. Die CI prüft auf macOS nur die `.app`, nicht
+  zusätzlich den stehen gebliebenen COLLECT-Zwischenordner.
+- **Das Linux-Paket nimmt Systembibliotheken nur mit Familie mit.** Die Spec
+  lässt auf Linux das GTK-3-Erscheinungsbild von Qt (`platformthemes/libqgtk3`)
+  und den GTK-Stapel, der nur an ihm hing, draußen — die Liste in
+  `make_linux_packages.ORPHANED_LIBRARIES` —, dazu die Terminalmodule
+  `readline`/`curses` (libreadline ist GPL-3, Regel 15). Alles andere reist
+  mit, auch glib, dbus, systemd, fontconfig und freetype: Qt hängt hart daran,
+  und „ist überall vorhanden" ist keine Messung. Was bleibt — libxcb mit den
+  xcb-util-Bibliotheken, xkbcommon, die Kerberos-Familie, der glib-Stapel und
+  die Kompressionsbibliotheken —, ordnet `make_sbom.LINUX_LIBRARY_FAMILIES` je Soname
+  einer Familie zu, und `dpkg-query` liest beim Bau die Fassung aus dem Paket
+  des Bauservers. Symlinks zählen nicht als Datei, CPythons `lib-dynload`
+  gehört CPython, `<name>.libs` seiner Distribution. Eine native Datei ohne
+  Familie lässt `make_licence_notices --release-check` nicht durch — gemessen
+  am 0.2.1-Paket waren es 135, am Windows-Paket 30, am macOS-Paket 41.
+  Beim Kopieren des PyInstaller-Baums in Archiv oder AppDir bleiben interne
+  relative Verweise erhalten (`copytree(..., symlinks=True)`). Dereferenzieren
+  erzeugt zusätzliche Bibliothekskopien außerhalb ihres Paketpfads und
+  verändert das native Inventar. Der Verpackungstest prüft die Verweisziele
+  sowie den unveränderten Dateibestand mit seinen Besitzern.
+- **Die Lizenzbeilage** entsteht nach der SBOM mit
+  `make_licence_notices.py --sbom`: `THIRD-PARTY-NOTICES.md` liegt genau einmal
+  neben der ausführbaren Datei und wird dort auch vom Über-Dialog gelesen. Die
+  PyInstaller-Spec nimmt die eingecheckte Entwicklungsfassung ausdrücklich
+  nicht mit. Das Schema-2-JSON bleibt in der CRA-/Buildakte. Vor der
+  äußersten Veröffentlichung prüft `--release-check` fail-closed die
+  Endartefakt-SBOM, Schema-1-Evidenz, äußeren Pakete, exakte Versionen sowie
+  die Quellenangebote; sie hält seit 0.5.0 den Release an, statt zu warnen
+  (RM-115). Das AppImage trägt eine eigene Stückliste mit dem vorangestellten
+  Laufzeitkern (`make_linux_packages.embed_appimage_runtime`) und wird
+  ausgepackt mit `--artifact-kind appimage` geprüft. Diese Prüfung läuft
+  ungeschützt und erst nach der Signierung; ein Signierjob führt keinen
+  Repositorycode dafür aus. Auf Windows schreibt `sign_release.py` die
+  Evidenz nach der lokalen Signatur neu und wiederholt die Prüfung, weil
+  der äußere Installer dann ein anderer ist als der, den die CI geprüft hat.
+- **Windows-ICU** kommt aus dem Betriebssystem. Die `.spec` verwirft
+  `icuuc.dll` und `icudt*.dll` aus dem `PATH`; eine zufällig eingesammelte
+  Poppler-ICU lässt den fertigen Bau schon beim Import von `QtCore` stehen.
+- **Ein neues Datenverzeichnis** (Kataloge, Profile, Bausteindaten) reist nur
+  mit, wenn die `.spec` es kennt.
+- **Die Version** kommt aus `app/branding.py` über `tools/bump_version.py` —
+  hier wird sie nicht getippt.
+- **Eigene Dateitypen** lesen Endung und MIME-Typ aus `app/branding.py` und
+  werden auf Windows, macOS und Linux gemeinsam eingetragen. `.p3d` bleibt der
+  Projektcontainer; `.solidon-part` ist das portable JSON-Rezept eines
+  Bausteins. Die allgemeine Endung `.json` wird nie Solidon zugeordnet.

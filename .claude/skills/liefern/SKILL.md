@@ -1,93 +1,92 @@
 ---
 name: liefern
 description: >
-  Schließt eine geprüfte Arbeitseinheit ab: Änderungen abgrenzen, mit deutschen
-  Meldungen committen und den beauftragten Push oder Pull prüfen. Nur auf
-  ausdrückliche Anweisung; fremde Änderungen und bestehende Git-Zustände erhalten.
+  Schließt eine fertige, geprüfte Arbeitseinheit ab: eigene Pfade abgrenzen,
+  mit deutscher Meldung committen und pushen — ein Commitauftrag schließt den
+  Push ein. Ist die Gegenstelle weiter, wird per Merge zusammengeführt, nie per
+  Rebase. Nur auf Roberts Ansage.
+argument-hint: "[optional: Thema oder Pfade der Einheit; „nicht pushen“]"
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob
+allowed-tools: Bash, Read, Write, Grep, Glob
 ---
 
 # Liefern
 
-## Auftrag und Prüfstand
+## Auftrag
 
-Die aktuelle Anweisung von Robert bestimmt Commit, Push und Pull getrennt.
-Ein reiner Commitauftrag enthält keine zusätzliche Push-Freigabe; den
-vorhandenen automatischen Push-Hook dann für diesen Prozess mit
-`SOLIDON_KEIN_PUSH=1` unterdrücken. Eine bereits ausdrücklich erteilte
-Push-Freigabe bleibt gültig. Keine neue Nachfrage für autorisierte Schritte.
+**Commit heißt Commit und Push.** Der Push gehört ohne Rückfrage dazu; nur ein
+ausdrückliches „nicht pushen“ von Robert hält den Commit lokal — dann für genau
+diesen Aufruf `SOLIDON_KEIN_PUSH=1`. Holen und Zusammenführen gehören dazu,
+wenn der Push daran scheitert. Tag, Release und Force-Push sind eigene Aufträge.
 
-Vor dem Commit gilt das Entwicklungstor über `/pruefen`: Kernsammlung ohne
-Fensterdateien und Leistung, Ruff, Formatierung und mypy. Fensterdateien und
-Leistungsprüfungen gehören ausschließlich zum Release. Ein passender
-bereits grüner Lauf muss nicht wiederholt werden; relevante Änderungen seit
-dem Nachweis vorher prüfen. Einen Fehllauf mit Ursache und Stand benennen.
+Vorher ist das Entwicklungstor nach `/pruefen` grün. Ein grüner Nachweis über
+denselben Stand muss nicht wiederholt werden; was sich seither geändert hat,
+wird geprüft. Ein roter oder abgebrochener Lauf wird mit Ursache gemeldet und
+nicht committet.
 
-## Änderungen abgrenzen
+## Die Einheit abgrenzen
 
-Prüfe Branch, `HEAD`, `git status --short`, `git diff HEAD`, vorgemerkte und
-unversionierte Dateien sowie laufende Merge-/Rebase-/Cherry-pick-Vorgänge.
-Beachte parallele Schreiber und lokale Betriebssperren. Die Einheit besteht
-aus genauen Dateien und den eigenen darin enthaltenen Änderungen, nicht aus
-pauschalen Verzeichnissen. Änderungen vor dem Commit kurz zusammenfassen.
+Andere Sitzungen arbeiten im selben Baum. Geliefert wird nur, was zu dieser
+Einheit gehört.
 
-Ein Thema ergibt einen Commit. Für neue und gelöschte Dateien muss die
-Aufnahme ausdrücklich geprüft sein. Keine ungezielten `git add .`,
-`git commit -a` oder Stash-Aktionen über fremde Arbeit.
+1. `git status --short`, dann je Datei `git diff HEAD -- <pfad>`: Welche
+   Änderungen sind die eigenen? Einen laufenden Merge, Rebase oder Cherry-pick
+   nicht anfassen.
+2. Ein Thema ergibt einen Commit; mehrere Themen, mehrere Commits.
+3. Nur die eigenen Pfade vormerken, einzeln genannt: `git add -- <pfad> …`.
+   Neue und gelöschte Dateien bewusst aufnehmen. Kein `git add .`, kein
+   `git commit -a`, kein Stash oder Reset über fremde Arbeit.
+4. Trägt eine eigene Datei auch fremde Hunks, nur die eigenen vormerken: den
+   Patch aus `git diff -- <datei>` auf die eigenen Hunks kürzen, mit
+   `git apply --cached` aufnehmen und `git diff --cached -- <datei>` lesen.
+   Lässt sich das nicht sauber trennen, die Datei zurückhalten und im Bericht
+   nennen.
+5. **Vor dem Commit:** `git diff --cached --name-only` nennt genau die eigenen
+   Pfade, `git diff --cached --stat` die erwarteten Zeilen. Steht ein fremder
+   Pfad im Index, nicht committen — er gehört einer anderen Sitzung; klären
+   statt zurücksetzen.
 
-Im geteilten Arbeitsbaum einen eigenen temporären Index verwenden:
-`GIT_INDEX_FILE` pro Prozess setzen, mit `git read-tree HEAD` aus dem **aktuellen**
-Stand aufbauen und nur die vereinbarten Pfade aufnehmen. Vor dem Commit den
-privaten staged Diff vollständig gegen `HEAD`, Dateiliste und erwartete
-Einfügungs-/Löschzahlen prüfen. Der private Index trennt Dateien, nicht
-verschiedene Autoren innerhalb derselben Datei; gemischte Hunks müssen
-abgegrenzt werden. Keine fremde laufende Git-Operation abschließen.
-
-Hat sich `HEAD` oder eine betroffene Datei währenddessen geändert, zunächst
-den neuen Stand prüfen und die Einheit neu aufbauen. Das ist kein Grund für
-einen Reset über fremde Dateien. Nach dem eigenen Vorgang `GIT_INDEX_FILE`
-wiederherstellen und den tatsächlichen Hauptindex prüfen. Einen veralteten
-Hauptindex nur nach Klärung seiner vorgemerkten Änderungen abgleichen.
+Geliefert wird mit einem gewöhnlichen Commit über den Index — kein privater
+Index (`GIT_INDEX_FILE`), kein `git commit -o`.
 
 ## Meldung und Commit
 
-Die deutsche Meldung mit echten Umlauten beschreibt das Ergebnis. Der Rumpf
-nennt den nötigen Grund, am Ende steht der tatsächliche Mitautor: verwendetes
-Claude-Modell mit `noreply@anthropic.com` oder `Codex <noreply@openai.com>`.
-Schreibe die Meldung in eine UTF-8-Datei und übergib sie mit
-`git commit -F <datei>`. Benutze bei privatem Index keinen Pfad-Commit, der
-statt der geprüften Indexfassung erneut ganze Arbeitsdateien aufnehmen kann.
+Die Meldung ist deutsch, mit echten Umlauten, und sagt, was jetzt stimmt
+(Ton wie in `CLAUDE.md`). Der Rumpf nennt den nötigen Grund; am Ende steht der
+tatsächliche Mitautor als `Co-Authored-By:` — das verwendete Claude-Modell mit
+`noreply@anthropic.com` oder `Codex <noreply@openai.com>`.
 
-Die vorhandenen Hooks vorher lesen, insbesondere `core.hooksPath`,
-`.githooks/pre-commit` und `.githooks/post-commit`. Ihre Existenz beweist
-keinen erfolgreichen Lauf. Prüfschritte nicht zum Umgehen eines Fehlers
-abschalten. Eine lokale `solidon.noAutoPush`-Sperre nicht eigenmächtig aufheben.
+Die Meldung mit dem Write-Werkzeug als UTF-8-Datei schreiben und mit
+`git commit -F <datei>` übergeben — nicht über `-m`, `echo` oder ein Heredoc:
+Umlaute und typografische Anführungszeichen überstehen die Shell nicht
+zuverlässig. Fehlt auf der Maschine die Git-Identität (Exit 128), den Bestand
+aus `git log -3 --format="%an <%ae>"` mit `-c user.name=… -c user.email=…`
+fortsetzen, nicht konfigurieren.
 
-## Push und Pull
+Die Hooks laufen mit: `pre-commit` (Bezeichner, neue Texte dieses Commits),
+`commit-msg` (echte Umlaute), `post-commit` (Push). Einen Befund beheben, nicht
+mit `SOLIDON_KEIN_TOR` oder `--no-verify` umgehen.
 
-Bei beauftragtem Pull zuerst fetch ausführen und anschließend Divergenz,
-Dateiüberschneidungen und den aktuellen Arbeitsbaum ansehen. Ohne lokale
-Commits bevorzugt Fast-forward. Bei Divergenz den bestehenden Projektweg
-beachten; kein automatischer Rebase oder Force-Push. Lokale Änderungen nur
-gezielt sichern, mit identifizierbarer Ablage; nach dem Pull wiederherstellen
-und Konflikte anhand beider Änderungen auflösen. Eine Sicherung erst nach
-überprüfter Wiederherstellung entfernen. Bei unklarer Eigentümerschaft
-koordinieren, statt fremde Arbeit zu verschieben oder zu überschreiben.
+## Push
 
-Der post-commit-Hook kann automatisch pushen und meldet auch bei einem
-Pushfehler Prozessausgang 0. Deshalb sein Ergebnis und den Remote-Zweig
-separat prüfen. Ein erfolgreicher Commit beweist keinen erfolgreichen Push.
-Falls ein autorisierter Push ausbleibt, den konkreten Branch ausdrücklich
-pushen und das Ergebnis kontrollieren; keine Betriebssperre dafür umgehen.
+`post-commit` pusht und endet immer mit 0, auch wenn der Push scheitert.
+Maßgeblich ist seine Ausgabe („ist auf der Gegenstelle“ oder „PUSH
+GESCHEITERT“) und danach `git status -sb` beziehungsweise `git rev-parse HEAD`
+gegen `git ls-remote origin <zweig>`.
+
+Ist die Gegenstelle weiter: `git fetch`, die fremden Commits ansehen
+(`git log HEAD..origin/<zweig>`, `git diff --name-only HEAD...origin/<zweig>`),
+dann `git merge origin/<zweig>` und `git push origin <zweig>`. **Merge, nie
+Rebase** — auch wenn die Meldung des Hooks `pull --rebase` vorschlägt.
+Konflikte anhand beider Seiten auflösen. Blockieren ungestagete Änderungen den
+Merge, eigene fertige Arbeit zuerst liefern; fremde oder unfertige Arbeit nie
+stashen oder zurücksetzen, sondern anhalten und melden. Eine gesetzte
+`solidon.noAutoPush` in der lokalen Konfiguration ist die Sperre einer
+laufenden Arbeitsrunde: nicht aufheben, melden.
 
 ## Ergebnis
 
-Die vom Commit ausgegebene Kennung verwenden, nicht ein später weitergewandertes
-`HEAD`. `git show <kennung> --name-status` und `--numstat` gegen die geprüfte
-Einheit halten. Ein frisch geholter Remote-Tip auf dieser Kennung bestätigt die
-Veröffentlichung; bei weitergewandertem Remote seine Abstammung prüfen.
-
-Melden: Commitkennung und Zweck, Prüfstand, separat Push-/Pull-Ergebnis und
-verbleibende lokale Änderungen. Nicht beauftragte Schritte ausdrücklich als
-nicht ausgeführt nennen. Keine History umschreiben, um einen Fehler zu verbergen.
+Die Kennung aus der Ausgabe von `git commit` verwenden, nicht ein später
+weitergewandertes `HEAD`, und `git show --stat <kennung>` gegen die Einheit
+halten. Melden: je Commit Kennung und Aussage, Prüfstand, Push-Ergebnis und
+was an eigenen und fremden Änderungen im Baum bleibt.

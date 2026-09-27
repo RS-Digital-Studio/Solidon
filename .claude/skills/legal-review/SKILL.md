@@ -5,6 +5,10 @@ description: >
   Solidon, Website und Auslieferung. Benutzen bei Fragen zu Nutzungsrechten,
   Datenschutz, Verkauf, Rechtstexten oder gesetzlichen Produktpflichten.
   Prüft zuerst Anwendbarkeit und Rechtsstand; erteilt keine juristische Freigabe.
+  Die technische Lizenzprüfung einer Abhängigkeit am Paket macht der Agent
+  solidon3d-auslieferung.
+argument-hint: "[Frage, Medium, Abhängigkeit oder Rechtstext]"
+allowed-tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, Edit, Write
 ---
 
 # Rechte und rechtliche Vorprüfung

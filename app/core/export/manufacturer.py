@@ -18,8 +18,10 @@ Solidons Wert *für die eigene Rechnung*, :attr:`Foundation.foreign` nennt den
 Herstellerwert für die Anzeige, und geschrieben wird er nicht — der Slicer
 druckt, was sein Profil sagt.
 
-Heute für die Orca-Familie; PrusaSlicer folgt mit seinem Herstellerbündel,
-CuraEngine bleibt bei Solidons Tabellen (Konzept, Entscheidung C).
+Für die Orca-Familie aus Maschine, Prozess und Filament des Herstellers, für
+PrusaSlicer aus Drucker, Prozess und Filament seines Bündels
+(:func:`prusa_chain`); CuraEngine bleibt bei Solidons Tabellen (Konzept,
+Entscheidung C).
 """
 
 from __future__ import annotations
@@ -37,7 +39,7 @@ from app.core.export import slicer_keys, slicer_profiles
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.types import Finding, PrintSettings, Profile, QualityPreset
-from app.core.units import is_zero
+from app.core.units import exact_atan_degrees, is_zero
 from app.i18n import _
 
 if TYPE_CHECKING:
@@ -91,6 +93,10 @@ class Foundation:
     """Ein gewähltes Prozessprofil, das sich nicht lesen ließ — dann ist die
     Grundlage Solidons Tabelle, und der Kunde erfährt es
     (:func:`findings`; Review Stufe A+B, H13)."""
+    has_plates: bool = True
+    """Kennt der Slicer Druckplatten mit eigener Betttemperatur? PrusaSlicer
+    nicht: Dort steht die Betttemperatur am Filament, und eine Platte, die
+    niemand nennt, ist kein Mangel."""
 
     @property
     def has_profile(self) -> bool:
@@ -619,6 +625,493 @@ def _read_filament(
     return read, refuses
 
 
+# --- PrusaSlicer ------------------------------------------------------------------
+
+#: Füllmuster zurück: die Umkehrung von ``slicer_keys._PRUSA_INFILL``.
+_PRUSA_INFILL_BACK: Final = {prusa: solidon for solidon, prusa in slicer_keys._PRUSA_INFILL.items()}
+
+#: Die Prozessschlüssel von PrusaSlicer und ihre Solidon-Pfade — die Tabelle
+#: ``slicer_keys.PRUSA`` rückwärts. Tempi in Prozent eines anderen, die erste
+#: Schicht, Stützart, -winkel, -abstand und -dichte, Haftungsart, Rückzug und
+#: Filament hängen an mehreren Schlüsseln und stehen in :func:`_read_prusa`.
+PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
+    ("layers.layer_height", "layer_height", _positive),
+    ("layers.first_layer_height", "first_layer_height", _positive),
+    ("shell.wall_count", "perimeters", _count),
+    ("shell.top_layers", "top_solid_layers", _count),
+    ("shell.bottom_layers", "bottom_solid_layers", _count),
+    ("shell.outer_wall_first", "external_perimeters_first", _flag),
+    (
+        "shell.seam_position",
+        "seam_position",
+        _choice({"aligned": "aligned", "nearest": "nearest", "random": "random", "rear": "rear"}),
+    ),
+    (
+        "shell.wall_generator",
+        "perimeter_generator",
+        _choice({"classic": "classic", "arachne": "arachne"}),
+    ),
+    ("shell.ironing", "ironing", _flag),
+    ("infill.density", "fill_density", _fraction),
+    ("infill.pattern", "fill_pattern", _choice(_PRUSA_INFILL_BACK)),
+    ("infill.angle", "fill_angle", _number),
+    ("speed.inner_wall", "perimeter_speed", _positive),
+    ("speed.infill", "infill_speed", _positive),
+    ("speed.travel", "travel_speed", _positive),
+    ("speed.bridge", "bridge_speed", _positive),
+    ("speed.acceleration", "default_acceleration", _positive),
+    (
+        "support.placement",
+        "support_material_buildplate_only",
+        _choice({"1": "build_plate", "0": "everywhere"}),
+    ),
+    ("support.z_gap", "support_material_contact_distance", _number),
+    ("support.interface_layers", "support_material_interface_layers", _count),
+    ("adhesion.skirt_loops", "skirts", _count),
+    ("adhesion.skirt_distance", "skirt_distance", _number),
+    ("adhesion.brim_width", "brim_width", _number),
+    ("adhesion.raft_layers", "raft_layers", _count),
+    ("retraction.avoid_crossing_walls", "avoid_crossing_perimeters", _flag),
+)
+
+#: Was PrusaSlicer einsetzt, wo die Kette eines Bündels einen gelesenen
+#: Schlüssel nicht nennt: ``FullPrintConfig::defaults()``, **gemessen** mit
+#: ``--save`` aus einem leeren ``--datadir`` (PrusaSlicer 2.9.6, 27.09.2026).
+#: Prusas Bündel nennen fast alles selbst; offen ließen sie am MK4S, MINI und
+#: XL Haftung, Bügeln und ``avoid_crossing_perimeters``, Sovols SV06 dazu
+#: Wandgenerator, Stützstil und die Füllung der ersten Schicht.
+PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
+    "avoid_crossing_perimeters": "0",
+    "bed_temperature": "0",
+    "bottom_solid_layers": "3",
+    "bridge_fan_speed": "100",
+    "bridge_speed": "60",
+    "brim_type": "outer_only",
+    "brim_width": "0",
+    "chamber_temperature": "0",
+    "default_acceleration": "0",
+    "disable_fan_first_layers": "3",
+    "external_perimeter_acceleration": "0",
+    "external_perimeter_extrusion_width": "0",
+    "external_perimeter_speed": "50%",
+    "external_perimeters_first": "0",
+    "extrusion_multiplier": "1",
+    "extrusion_width": "0",
+    "fan_always_on": "0",
+    "fan_below_layer_time": "60",
+    "filament_density": "0",
+    "filament_diameter": "1.75",
+    "filament_max_volumetric_speed": "0",
+    "fill_angle": "45",
+    "fill_density": "20%",
+    "fill_pattern": "stars",
+    "first_layer_bed_temperature": "0",
+    "first_layer_extrusion_width": "200%",
+    "first_layer_height": "0.35",
+    "first_layer_infill_speed": "0",
+    "first_layer_speed": "30",
+    "first_layer_temperature": "200",
+    "infill_speed": "80",
+    "ironing": "0",
+    "layer_height": "0.3",
+    "max_fan_speed": "100",
+    "min_fan_speed": "35",
+    "perimeter_acceleration": "0",
+    "perimeter_generator": "arachne",
+    "perimeter_speed": "60",
+    "perimeters": "3",
+    "raft_layers": "0",
+    "retract_length": "2",
+    "retract_lift": "0",
+    "retract_speed": "40",
+    "seam_position": "aligned",
+    "skirt_distance": "6",
+    "skirts": "1",
+    "slowdown_below_layer_time": "5",
+    "solid_infill_speed": "20",
+    "support_material": "0",
+    "support_material_auto": "1",
+    "support_material_buildplate_only": "0",
+    "support_material_contact_distance": "0.2",
+    "support_material_interface_layers": "3",
+    "support_material_spacing": "2.5",
+    "support_material_style": "grid",
+    "support_material_threshold": "0",
+    "support_material_xy_spacing": "50%",
+    "temperature": "200",
+    "top_solid_infill_speed": "15",
+    "top_solid_layers": "3",
+    "travel_speed": "130",
+    "wipe": "0",
+}
+
+#: Schlüssel eines Bündels, die ein Profil verwalten und keine Einstellung
+#: sind: die Erbkette, die Verträglichkeit, frühere Namen. In eine
+#: Konfiguration geschrieben, liest PrusaSlicer sie nicht oder bindet damit
+#: ein Profil an Drucker, das keines mehr ist.
+PRUSA_MANAGING_KEYS: Final = frozenset(
+    {
+        "inherits",
+        "compatible_printers",
+        "compatible_printers_condition",
+        "compatible_prints",
+        "compatible_prints_condition",
+        "renamed_from",
+        "alias",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PrusaChain:
+    """Drucker, Prozess und Filament aus PrusaSlicers Bestand, aufgelöst.
+
+    Das ist, was PrusaSlicer druckt, wenn man die drei im Fenster wählt: jede
+    Kette über ihre Erbbasen zusammengelegt, ohne die Schlüssel, die nur das
+    Profil verwalten (:data:`PRUSA_MANAGING_KEYS`). Was keine der drei nennt,
+    setzt PrusaSlicer aus seinen eingebauten Vorgaben ein — gelesen wird es
+    über :data:`PRUSA_PROGRAM_DEFAULTS`, geschrieben muss es nicht werden.
+    """
+
+    printer: str
+    process: str
+    filament: str
+    """Leer, wenn kein Filament des Bestands gewählt ist; dann gilt Solidons Material."""
+    values: Mapping[str, str]
+
+
+def prusa_chain(profile: Profile, setup: SlicerSetup) -> PrusaChain | None:
+    """Die Kette dieser Übergabe — ``None`` ohne Drucker oder Prozess des Bestands.
+
+    Ohne Drucker gibt es keine: Ein Prozess aus Prusas Bündel ist über seine
+    Bedingung an einen Drucker gebunden, und ohne dessen Profil kämen Startcode
+    und Maschine aus PrusaSlicers eingebauten Vorgaben — genau das, was das
+    Bündel ersetzen soll. Dann bleibt Solidons Tabelle die Grundlage, und
+    :func:`app.core.export.handover.machine_missing` sagt, warum.
+
+    Ein gewählter Prozess, der sich nicht finden oder lesen lässt, ist ein
+    Fehler (:class:`ExternalToolError`), keine leere Kette — der Kunde hat ihn
+    gewählt und soll erfahren, dass er nicht gilt (:func:`findings`).
+    """
+    from app.core.export import handover
+
+    if setup.flavour != "prusa" or not setup.base_process:
+        return None
+    printer = handover.machine_for(setup, profile)
+    if not printer:
+        return None
+    roots = handover._profile_roots(setup)
+    parts: list[Mapping[str, Any]] = []
+    for name, kind in ((printer, "machine"), (setup.base_process, "process")):
+        source = handover.profile_source(name, setup, kind)  # type: ignore[arg-type]
+        if source is None:
+            raise ExternalToolError(
+                tool=setup.name,
+                detail=_("Das gewählte Profil ist im Bestand des Slicers nicht zu finden."),
+                values={"profile": name},
+                suggestions=(OPEN_PRINT_SETTINGS,),
+            )
+        parts.append(_prusa_resolved(source, roots))
+    filament = ""
+    if setup.base_filament:
+        source = handover.profile_source(setup.base_filament, setup, "filament")
+        if source is not None:
+            parts.append(_prusa_resolved(source, roots))
+            filament = setup.base_filament
+    values: dict[str, str] = {}
+    for part in parts:
+        values.update(
+            {key: str(value) for key, value in part.items() if key not in PRUSA_MANAGING_KEYS}
+        )
+    return PrusaChain(printer, setup.base_process, filament, values)
+
+
+def _prusa_resolved(
+    source: Path | slicer_profiles.SlicerProfile, roots: tuple[Path, ...]
+) -> dict[str, Any]:
+    """Eine Kette des Bestands, gleich ob als Abschnitt eines Bündels oder als eigene Datei."""
+    if isinstance(source, slicer_profiles.SlicerProfile):
+        return slicer_profiles.resolve_profile(source, roots)
+    return slicer_profiles.resolve_values(source, roots)
+
+
+def _prusa_first(raw: object) -> str | None:
+    """Ein Wert aus einer Prusa-Konfiguration: bei einer Liste je Extruder der
+    erste, ``nil`` und leer heißen nichts."""
+    text = _text(raw)
+    if text is None:
+        return None
+    first = text.split(",")[0].strip().strip('"')
+    return first if first and first != "nil" else None
+
+
+def _read_prusa(
+    values: Mapping[str, Any], context: _Context
+) -> tuple[dict[str, object], dict[str, str]]:
+    """Drucker, Prozess und Filament einer Prusa-Kette in Solidons Pfaden,
+    dazu, was sich nicht übersetzen ließ."""
+    read: dict[str, object] = {}
+    foreign: dict[str, str] = {}
+
+    def take(path: str, value: object) -> None:
+        if isinstance(value, Foreign):
+            foreign[path] = value.raw
+        elif value is not None:
+            read[path] = value
+
+    for path, key, reader in PRUSA_PROCESS:
+        text = _prusa_first(values.get(key))
+        if text is not None:
+            take(path, reader(text, context))
+    take("layers.line_width", _prusa_width(values.get("extrusion_width")))
+    take("layers.first_layer_line_width", _prusa_width(values.get("first_layer_extrusion_width")))
+    inner = read.get("speed.inner_wall")
+    infill = read.get("speed.infill")
+    take("speed.outer_wall", _share_of(values.get("external_perimeter_speed"), inner))
+    solid = _share_of(values.get("solid_infill_speed"), infill)
+    solid_speed = solid if isinstance(solid, float) else None
+    take("speed.top_surface", _share_of(values.get("top_solid_infill_speed"), solid_speed))
+    take("speed.first_layer", _prusa_first_layer_speed(values, solid_speed))
+    take("speed.outer_wall_acceleration", _prusa_outer_wall_acceleration(values))
+    take("support.style", _prusa_support_style(values))
+    outer_width = _prusa_outer_width(values, context)
+    take("support.threshold_angle", _prusa_support_angle(values, read, outer_width))
+    take("support.xy_gap", _prusa_support_gap(values, outer_width))
+    take("support.density", _prusa_support_density(values, read, context))
+    take("adhesion.kind", _prusa_adhesion(values))
+    read.update(_prusa_retraction(values))
+    read.update(_prusa_material(values))
+    return read, foreign
+
+
+def _prusa_width(raw: object) -> object:
+    """Eine Bahnbreite in Millimetern. Null heißt „aus der Düse abgeleitet",
+    Prozent rechnet PrusaSlicer über die Schichthöhe — beides keine Breite,
+    die Solidon als Zahl führt."""
+    text = _prusa_first(raw)
+    if text is None:
+        return None
+    if text.endswith("%"):
+        return Foreign(text)
+    number = _float(text)
+    if number is None:
+        return Foreign(text)
+    return number if number > 0.0 else None
+
+
+def _share_of(raw: object, base: object) -> object:
+    """Ein Tempo in mm/s oder in Prozent eines anderen — PrusaSlicer erlaubt
+    beides (die Außenwand über den Wänden, die volle Füllung über der dünnen,
+    die Deckfläche über der vollen). Null heißt „automatisch" und ist keine
+    Zahl, die Solidon führt."""
+    text = _prusa_first(raw)
+    if text is None:
+        return None
+    if text.endswith("%"):
+        share = _float(text[:-1].strip())
+        if share is None or share <= 0.0 or not isinstance(base, float):
+            return Foreign(text)
+        return base * share / 100.0
+    number = _float(text)
+    return number if number is not None and number > 0.0 else Foreign(text)
+
+
+def _prusa_first_layer_speed(values: Mapping[str, Any], solid: float | None) -> object:
+    """Das Tempo der ersten Schicht, wie sie gedruckt wird — dieselbe Lesart
+    wie :func:`_first_layer_speed` bei der Orca-Familie.
+
+    ``first_layer_speed`` gilt jeder Bahn der ersten Schicht,
+    ``first_layer_infill_speed`` ihrer vollen Füllung: null heißt „wie die
+    erste Schicht", Prozent heißen ein Anteil der vollen Füllung (Hilfe von
+    PrusaSlicer 2.9.6). Am MK4S sind das 40 und 100 mm/s — gedruckt wird der
+    Boden mit 100. Ein ``first_layer_speed`` in Prozent skaliert jedes Tempo
+    und ist deshalb keine Zahl, die Solidon führt.
+    """
+    first = _prusa_first(values.get("first_layer_speed"))
+    if first is None:
+        return None
+    speed = None if first.endswith("%") else _float(first)
+    if speed is None or speed <= 0.0:
+        return Foreign(first)
+    infill = _share_of(values.get("first_layer_infill_speed"), solid)
+    return max(speed, infill) if isinstance(infill, float) else speed
+
+
+def _prusa_outer_wall_acceleration(values: Mapping[str, Any]) -> object:
+    """Die Beschleunigung der Außenwand: null heißt die der Wände, deren Null
+    die allgemeine (Hilfe von PrusaSlicer 2.9.6)."""
+    fallback = ""
+    for key in (
+        "external_perimeter_acceleration",
+        "perimeter_acceleration",
+        "default_acceleration",
+    ):
+        text = _prusa_first(values.get(key))
+        if text is None:
+            continue
+        number = _float(text)
+        if number is None:
+            return Foreign(text)
+        if number > 0.0:
+            return number
+        fallback = text
+    return Foreign(fallback) if fallback else None
+
+
+def _prusa_support_style(values: Mapping[str, Any]) -> str | None:
+    """Stützen aus, oder an in der Art des Bündels.
+
+    Prusas Vorgabe ist ``support_material = 1`` mit ``support_material_auto =
+    0``: Stützen nur an Verstärkern, die jemand gemalt hat. Solidon malt
+    keine, also stützt dieser Zustand nichts — er heißt hier „aus", und wer
+    Stützen einschaltet, bekommt beide Schalter (Entscheidung J).
+    """
+    enabled = _prusa_first(values.get("support_material"))
+    if enabled is None:
+        return None
+    automatic = (_prusa_first(values.get("support_material_auto")) or "1").casefold()
+    if enabled.casefold() in ("0", "false") or automatic in ("0", "false"):
+        return "none"
+    style = (_prusa_first(values.get("support_material_style")) or "").casefold()
+    if style == "organic":
+        return "tree"
+    if style == "grid":
+        return "grid"
+    return "auto"
+
+
+def _prusa_outer_width(values: Mapping[str, Any], context: _Context) -> float | None:
+    """Die Breite der Außenwand in Millimetern — PrusaSlicer leitet sie ohne
+    Angabe aus der Düse ab (1,125-fach, ``Flow::auto_extrusion_width``)."""
+    for key in ("external_perimeter_extrusion_width", "extrusion_width"):
+        width = _prusa_width(values.get(key))
+        if isinstance(width, float):
+            return width
+        if isinstance(width, Foreign):
+            return None
+    return context.nozzle * 1.125 if context.nozzle > 0.0 else None
+
+
+def _prusa_support_angle(
+    values: Mapping[str, Any], read: Mapping[str, object], outer_width: float | None
+) -> float | None:
+    """Der Stützwinkel gegen die Senkrechte — PrusaSlicer zählt gegen die Waagerechte.
+
+    Null heißt dort „automatisch": Überhängend ist, was mehr als die halbe
+    Breite der Außenwand über die Schicht darunter ragt (``SupportMaterial.cpp``,
+    ``0.5f * fw``). Als Winkel ist das ``atan(0,5 · Außenwand / Schicht)`` —
+    bei 0,45 mm und 0,2 mm Schicht 48,4°.
+    """
+    text = _prusa_first(values.get("support_material_threshold"))
+    number = _float(text) if text is not None else None
+    if number is None or not 0.0 <= number < 90.0:
+        return None
+    if not is_zero(number):
+        return 90.0 - number
+    layer = read.get("layers.layer_height")
+    if not isinstance(layer, float) or layer <= 0.0 or outer_width is None:
+        return None
+    # Genau gerechnet, nicht mit ``math.atan``: Mit diesem Winkel entscheidet
+    # die Schichtanalyse über Überhänge, und dort darf die letzte Stelle nicht
+    # an der Plattform hängen (RM-187, ``.claude/rules/kern.md``).
+    return exact_atan_degrees(0.5 * outer_width / layer)
+
+
+def _prusa_support_gap(values: Mapping[str, Any], outer_width: float | None) -> object:
+    """Der seitliche Abstand in Millimetern; Prozent gelten der Außenwand."""
+    text = _prusa_first(values.get("support_material_xy_spacing"))
+    if text is None:
+        return None
+    if text.endswith("%"):
+        share = _float(text[:-1].strip())
+        if share is None or outer_width is None:
+            return Foreign(text)
+        return outer_width * share / 100.0
+    number = _float(text)
+    return Foreign(text) if number is None else number
+
+
+def _prusa_support_density(
+    values: Mapping[str, Any], read: Mapping[str, object], context: _Context
+) -> float | None:
+    """Die Stützdichte aus dem Linienabstand, wie bei der Orca-Familie."""
+    return _support_density(
+        {"support_base_pattern_spacing": _prusa_first(values.get("support_material_spacing"))},
+        read,
+        context,
+    )
+
+
+def _prusa_adhesion(values: Mapping[str, Any]) -> object:
+    """Die Haftungsart: Raft, Brim oder Skirt, was davon gesetzt ist.
+
+    PrusaSlicer hat keinen Auto-Brim; die Art folgt aus den Maßen. Prusas
+    eigene Drucker legen keinen Skirt, weil ihr Startcode eine Spüllinie zieht.
+    """
+
+    def measure(key: str) -> float:
+        return _float(_prusa_first(values.get(key)) or "0") or 0.0
+
+    if measure("raft_layers") > 0.0:
+        return "raft"
+    brim_type = _prusa_first(values.get("brim_type")) or "outer_only"
+    if measure("brim_width") > 0.0 and brim_type != "no_brim":
+        return "brim"
+    return "skirt" if measure("skirts") > 0.0 else "none"
+
+
+def _prusa_retraction(values: Mapping[str, Any]) -> dict[str, object]:
+    """Der Rückzug: am Drucker, außer das Filament sagt etwas anderes.
+
+    ``filament_retract_length`` und seine Geschwister stehen bei den meisten
+    Filamenten auf ``nil`` — dann gilt der Wert des Druckers. Am MINI sind
+    das 2,5 mm für seinen Bowden-Extruder; Solidons Tabelle kannte 0,8.
+    """
+    read: dict[str, object] = {}
+    for path, printer_key in (
+        ("retraction.length", "retract_length"),
+        ("retraction.speed", "retract_speed"),
+        ("retraction.z_hop", "retract_lift"),
+    ):
+        text = _prusa_first(values.get(f"filament_{printer_key}")) or _prusa_first(
+            values.get(printer_key)
+        )
+        number = _float(text) if text is not None else None
+        if number is not None and number >= 0.0:
+            read[path] = number
+    wipe = _prusa_first(values.get("filament_wipe")) or _prusa_first(values.get("wipe"))
+    if wipe is not None and wipe.casefold() in ("0", "1", "true", "false"):
+        read["retraction.wipe"] = wipe.casefold() in ("1", "true")
+    return read
+
+
+def _prusa_material(values: Mapping[str, Any]) -> dict[str, object]:
+    """Temperatur, Kühlung und Materialkennwerte des Filaments.
+
+    Der untere Lüfterwert gilt nur mit ``fan_always_on``; ohne den Schalter
+    läuft der Lüfter bei langen Schichten gar nicht, und das heißt in Solidon
+    ein unterer Wert von null (die Schreibseite rechnet genauso,
+    ``slicer_keys._positive_switch``).
+    """
+    read: dict[str, object] = {}
+    for solidon, native, kind in slicer_profiles.PRUSA_FILAMENT_READBACK:
+        if solidon.startswith("retraction."):
+            continue
+        text = _prusa_first(values.get(native))
+        number = _float(text.rstrip("%")) if text is not None else None
+        if number is None:
+            continue
+        if solidon == "filament.max_flow" and number <= 0.0:
+            continue
+        if solidon in slicer_profiles._AS_FRACTION:
+            number /= 100.0
+        read[solidon] = kind(number)
+    always = (_prusa_first(values.get("fan_always_on")) or "0").casefold()
+    if always in ("0", "false") and "cooling.minimum_fan_speed" in read:
+        read["cooling.minimum_fan_speed"] = 0.0
+    return read
+
+
 def _measured(profile: Profile) -> dict[str, object]:
     """Was der Kunde an seinem Drucker gemessen hat und die Übergabe tragen muss."""
     measured = profile.material.overhang_angle
@@ -693,6 +1186,105 @@ def _runs_the_standard_process(process_file: Path, machine: Mapping[str, Any]) -
     return "standard" in chosen.casefold()
 
 
+def for_stage(
+    setup: SlicerSetup | None, profile: Profile, quality: QualityPreset
+) -> SlicerSetup | None:
+    """Die Einrichtung mit dem Prozess des Herstellers für diese Stufe (Entscheidung I).
+
+    Steht der Standardprozess der Maschine in der Wahl, folgt er der Stufe:
+    „Fein" nimmt am Centauri Carbon 2 „0.12mm Fine", am MK4S „0.10mm FAST
+    DETAIL" (:func:`slicer_profiles.stage_process`). Ein selbst gewählter
+    Prozess bleibt, wie er ist — mit ihm ist die Stufe gewählt. Findet sich
+    keiner, bleibt der Standard, und die Stufe liegt über ihm
+    (:data:`STAGE_PATHS`).
+
+    Gelesen werden nur die Maschine und die Geschwister des Standardprozesses,
+    bei PrusaSlicer der gespeicherte Bestand: Der Druckdialog fragt im
+    Hauptthread, und die ganze Suche kostet am ElegooSlicer 1,8 Sekunden.
+    """
+    if setup is None or quality == settings_table.DEFAULT_QUALITY or not setup.base_process:
+        return setup
+    try:
+        chosen = _stage_process(setup, profile, quality)
+    except ExternalToolError as problem:
+        # Ohne lesbare Kette bleibt der Standard; die Grundlage sagt dann selbst,
+        # was sich nicht lesen ließ.
+        _log.warning("no process for stage %s, keeping the standard: %s", quality, problem)
+        return setup
+    return replace(setup, base_process=chosen) if chosen else setup
+
+
+def _stage_process(setup: SlicerSetup, profile: Profile, quality: QualityPreset) -> str:
+    """Die Auswahlkennung des Stufenprozesses — leer, wo keiner gilt."""
+    from app.core.export import handover
+
+    stage_layer = settings_table.resolve(profile, quality).layers.layer_height
+    if setup.flavour == "prusa":
+        return _prusa_stage_process(setup, profile, quality, stage_layer)
+    if setup.flavour != "orca":
+        return ""
+    roots = handover._profile_roots(setup)
+    process_file = handover.profile_file(setup.base_process, setup, "process")
+    machine_choice = handover.machine_for(setup, profile)
+    machine_file = (
+        handover.profile_file(machine_choice, setup, "machine") if machine_choice else None
+    )
+    if process_file is None or machine_file is None:
+        return ""
+    machine = slicer_profiles.resolve_values(machine_file, roots=roots)
+    if not _runs_the_standard_process(process_file, machine):
+        return ""
+    machine_name = _declared_name(machine_file)
+    standard = slicer_profiles.SlicerProfile(process_file, _declared_name(process_file), "process")
+    # **Die Geschwister mit demselben Zusatz** („@Elegoo CC2 0.4 nozzle"): So
+    # legen die Hersteller ihre Stufen ab, je Drucker und Düse ein Ordner. Die
+    # Verträglichkeit wird trotzdem gefragt, und nur für die, deren Name eine
+    # Stufe nennt — das sind je Stufe eine Handvoll Dateien.
+    family = standard.name.partition("@")[2].strip()
+    indexes: slicer_profiles.ProfileIndexes = {}
+    fitting: list[slicer_profiles.SlicerProfile] = []
+    for path in sorted(process_file.parent.glob("*.json")):
+        if path == process_file:
+            continue
+        name = _declared_name(path)
+        if name.partition("@")[2].strip() != family or not slicer_profiles.names_stage(
+            name, quality
+        ):
+            continue
+        listed = slicer_profiles.binding(path, roots, indexes=indexes).get("compatible_printers")
+        if isinstance(listed, list) and machine_name in listed:
+            fitting.append(slicer_profiles.SlicerProfile(path, name, "process"))
+    chosen = slicer_profiles.stage_process(fitting, standard, quality, stage_layer)
+    return str(chosen.path) if chosen is not None else ""
+
+
+def _prusa_stage_process(
+    setup: SlicerSetup, profile: Profile, quality: QualityPreset, stage_layer: float
+) -> str:
+    """Dasselbe für PrusaSlicer — über den gespeicherten Bestand, der nach dem
+    ersten Lesen 0,02 Sekunden kostet (``slicer_profiles._prusa_store``)."""
+    from app.core.export import handover
+
+    found = slicer_profiles.find_profiles(setup.executable, "prusa", ("machine", "process"))
+    wanted = handover.machine_for(setup, profile)
+    machine = next(
+        (
+            entry
+            for entry in found
+            if entry.kind == "machine" and wanted in (entry.name, slicer_profiles.identity(entry))
+        ),
+        None,
+    )
+    if machine is None or setup.base_process != machine.default_process:
+        return ""
+    fitting = slicer_profiles.processes(found, machine)
+    standard = next((entry for entry in fitting if entry.name == setup.base_process), None)
+    if standard is None:
+        return ""
+    chosen = slicer_profiles.stage_process(fitting, standard, quality, stage_layer)
+    return slicer_profiles.identity(chosen) if chosen is not None else ""
+
+
 def base_settings(
     profile: Profile, quality: QualityPreset, setup: SlicerSetup | None
 ) -> Foundation:
@@ -705,8 +1297,10 @@ def base_settings(
     """
     fallback = settings_table.resolve(profile, quality)
     measured = _measured(profile)
-    if setup is None or setup.flavour != "orca" or not setup.base_process:
+    if setup is None or setup.flavour not in ("orca", "prusa") or not setup.base_process:
         return Foundation(fallback, measured=measured)
+    if setup.flavour == "prusa":
+        return _prusa_foundation(profile, quality, setup, fallback, measured)
     from app.core.export import handover
 
     roots = handover._profile_roots(setup)
@@ -781,6 +1375,68 @@ def base_settings(
     )
 
 
+def _prusa_foundation(
+    profile: Profile,
+    quality: QualityPreset,
+    setup: SlicerSetup,
+    fallback: PrintSettings,
+    measured: Mapping[str, object],
+) -> Foundation:
+    """Die Grundlage aus Drucker, Prozess und Filament eines Prusa-Bündels.
+
+    Dieselbe Rechnung wie für die Orca-Familie, ohne Druckplatte: PrusaSlicer
+    führt die Betttemperatur am Filament. Ohne Drucker des Bestands bleibt
+    Solidons Tabelle die Grundlage (:func:`prusa_chain`).
+    """
+    try:
+        chain = prusa_chain(profile, setup)
+    except ExternalToolError as problem:
+        _log.warning("Prusa profile unreadable, using Solidon's table: %s", problem)
+        return Foundation(
+            fallback, measured=measured, unreadable=setup.base_process, has_plates=False
+        )
+    if chain is None:
+        return Foundation(fallback, measured=measured, has_plates=False)
+    context = _Context(nozzle=profile.printer.nozzle_diameter)
+    read, foreign = _read_prusa({**PRUSA_PROGRAM_DEFAULTS, **chain.values}, context)
+    if not chain.filament:
+        # Ohne Filament des Bestands gilt Solidons Material, nicht PrusaSlicers
+        # eingebaute 200 °C bei kaltem Bett.
+        read = {path: value for path, value in read.items() if not _material_path(path)}
+    read.update(measured)
+    standard = _prusa_first(chain.values.get("default_print_profile"))
+    staged = _stage_values(profile, quality) if chain.process == standard else {}
+
+    base = fallback
+    for path, value in read.items():
+        base = settings_table.with_path(base, path, value)
+    for path, value in staged.items():
+        base = settings_table.with_path(base, path, value)
+    for path in foreign:
+        read.pop(path, None)
+    return Foundation(
+        replace(base, chosen=frozenset(), accepted=frozenset()),
+        from_profile=frozenset(read) - frozenset(measured) - frozenset(staged),
+        foreign=foreign,
+        measured=measured,
+        staged=frozenset(staged),
+        machine=chain.printer,
+        process=chain.process,
+        filament=chain.filament,
+        has_plates=False,
+    )
+
+
+#: Die Gruppen, die am Filament hängen — ohne Filament des Bestands bleiben
+#: sie bei Solidons Material und gehen vollständig hinaus.
+MATERIAL_GROUPS: Final = ("temperature", "cooling", "filament")
+
+
+def _material_path(path: str) -> bool:
+    """Gehört dieser Pfad dem Filament und nicht Drucker oder Prozess?"""
+    return path.partition(".")[0] in MATERIAL_GROUPS
+
+
 def findings(foundation: Foundation) -> list[Finding]:
     """Was der Kunde über die Grundlage wissen muss, bevor er druckt.
 
@@ -803,7 +1459,7 @@ def findings(foundation: Foundation) -> list[Finding]:
         ]
     if not foundation.has_profile:
         return []
-    if not foundation.plate:
+    if foundation.has_plates and not foundation.plate:
         return [
             Finding(
                 code="slicer.plate_unknown",

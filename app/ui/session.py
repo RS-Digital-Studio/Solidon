@@ -875,7 +875,7 @@ class _Snapshot:
         return cls(
             document=copy.deepcopy(shown),
             before=result.scene if result is not None else None,
-            profile=session.profile,
+            profile=session.evaluation_profile,
         )
 
 
@@ -1327,7 +1327,7 @@ class _RevisionWorker(Worker):
         self._baseline = baseline
         self.cancel = cancel
         self._project_generation = session._project_generation
-        self._profile = session.profile
+        self._profile = session.evaluation_profile
         self._quality = session.quality
         self._sources = ProjectSources(session.project, base_dir=session.base_dir)
 
@@ -1738,6 +1738,10 @@ class Session(QObject):
         )
         """Woher die Druckeinstellungen kommen, die gedruckt werden
         (:meth:`follow_print_settings`) — schwach, das Fenster besitzt die Sitzung."""
+        self._evaluation_settings: PrintSettings | None = None
+        """Die wirksamen Druckeinstellungen, mit denen die letzte Auswertung
+        begann (:meth:`evaluation_profile`) — im Hauptthread geholt, vom
+        Arbeiter nur gelesen."""
         self._after_evaluation: list[tuple[int, Callable[[Any], None]]] = []
         """Was nach der nächsten gültigen Auswertung dieses Dokuments noch zu tun
         ist — je Eintrag der Projektstempel und der Abschluss (:meth:`_finish_after`)."""
@@ -1758,6 +1762,43 @@ class Session(QObject):
             ),
             document.print_settings,
         )
+
+    @property
+    def evaluation_profile(self) -> Profile:
+        """Das Profil, mit dem ausgewertet wird: dazu die Stützschwelle, mit
+        der der Slicer stützt (Konzept Herstellerprofil, Entscheidung L).
+
+        :attr:`profile` kennt nur den gespeicherten Satz; die Schwelle des
+        gewählten Herstellerprozesses kennt das Fenster (:meth:`follow_print_settings`).
+        :meth:`evaluate_async` holt dessen wirksame Einstellungen im
+        Hauptthread; ohne Fenster bleibt es beim gespeicherten Satz.
+        """
+        settings = self._evaluation_settings
+        if settings is None:
+            return self.profile
+        return profiles.for_process(self.profile, settings, effective=True)
+
+    def evaluation_follows(self, settings: PrintSettings) -> bool:
+        """Rechnet die letzte Auswertung schon mit diesen Einstellungen?
+
+        Nur was das Profil der Auswertung ändert, zählt: Schichthöhe,
+        Bahnbreite und Stützschwelle. Kommt die Grundlage aus dem
+        Herstellerprofil erst nach dem ersten Lauf, sagt die Antwort, ob ein
+        zweiter nötig ist.
+        """
+        before = self.evaluation_profile.printer
+        after = profiles.for_process(self.profile, settings, effective=True).printer
+        return (before.layer_height, before.extrusion_width, before.overhang_limit) == (
+            after.layer_height,
+            after.extrusion_width,
+            after.overhang_limit,
+        )
+
+    def _current_effective_settings(self) -> PrintSettings | None:
+        """Die wirksamen Einstellungen des Fensters — nur im Hauptthread fragen."""
+        reference = self._effective_print_settings
+        source = reference() if reference is not None else None
+        return source() if source is not None else None
 
     def adopt_carried_printers(self) -> tuple[str, ...]:
         """Übernimmt die Drucker, die das Projekt mitbringt, in die eigenen.
@@ -2682,7 +2723,7 @@ class Session(QObject):
         )
         result = evaluate(
             up_to,
-            self.profile,
+            self.evaluation_profile,
             quality=self.quality,
             cache=self.cache,
             sources=ProjectSources(self.project, base_dir=self.base_dir),
@@ -3841,7 +3882,7 @@ class Session(QObject):
         document = copy.deepcopy(self.project.document)
         document.ops[:] = [entry for entry in document.ops if entry.id < op_id]
         sources = ProjectSources(self.project, base_dir=self.base_dir)
-        profile = self.profile
+        profile = self.evaluation_profile
         self.placement_async(
             lambda: evaluate(
                 document,
@@ -4345,6 +4386,9 @@ class Session(QObject):
             return
         self.cancel_signal.reset()
         self._cancel_by_user = False
+        # Im Hauptthread: Das Fenster rechnet seine Grundlage mit Qt-Objekten,
+        # der Arbeiter liest nur das Ergebnis (:attr:`evaluation_profile`).
+        self._evaluation_settings = self._current_effective_settings()
         worker = _EvaluationWorker(self, picture_first=self.picture_first())
         # **Jeder Slot erfährt, von welchem Lauf er kommt.** Ein Arbeiter ist
         # fertig, bevor Qt seine Signale zugestellt hat — und in dieser Lücke
@@ -4424,7 +4468,7 @@ class Session(QObject):
         document = self.displayed_document()
         result = evaluate(
             document,
-            self.profile,
+            self.evaluation_profile,
             quality=quality or once or self.quality,
             progress=self.report_progress,
             ask=self.ask_from_worker,
@@ -4483,6 +4527,7 @@ class Session(QObject):
         """
         self.cancel_signal.reset()
         self._superseded = self._worker
+        self._evaluation_settings = self._current_effective_settings()
         result = self.run_evaluation("fine")
         self.picture = None
         self.last_result = result

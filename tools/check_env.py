@@ -415,7 +415,7 @@ def hooks_are_wired() -> bool | None:
 
 
 def memory_is_wired() -> bool | None:
-    """Ob das eingecheckte Gedächtnis diese Maschine überhaupt erreicht.
+    """Ob das Gedächtnis dieser Maschine mit dem Arbeitsbaum verknüpft ist.
 
     ``None``, wenn die Frage sich nicht stellt — ``.claude/memory/`` gibt es
     nicht oder das Werkzeug lässt sich nicht laden.
@@ -424,8 +424,7 @@ def memory_is_wired() -> bool | None:
     ``.claude/memory/`` trägt die Projekterfahrungen, und ``AGENTS.md`` verlangt,
     vor einer Änderung dort nachzusehen. Der Ort, an dem sie tatsächlich
     gelesen werden, liegt aber im Nutzerprofil und gilt je Maschine;
-    ``tools/link_memory.py`` macht daraus eine Verknüpfung
-    (:mod:`.claude/memory/erinnerungen-liegen-im-repository`).
+    ``tools/link_memory.py`` macht daraus eine Verknüpfung.
 
     **Am 07.09.2026 war sie auf dieser Maschine nicht eingerichtet**, und
     niemand hat es gemerkt: 218 eingecheckte Einträge standen acht lokalen

@@ -62,6 +62,26 @@ def _layers(
 # --- die drei Ebenen (§29) ----------------------------------------------------------
 
 
+def test_the_stage_names_speak_the_language_of_the_window() -> None:
+    """Regel 20: Die Stufennamen kamen als Titel aus ``print_settings.toml``,
+    ohne ``_()``, und standen in der englischen Oberfläche als „Fein“ und
+    „Belastbar“ da (Fund der Release-Sitzung, 27.09.2026). Mit ihnen der Name,
+    unter dem der Slicer den Prozess zeigt."""
+    from app.i18n import catalog, set_language
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    catalog.install_language("en")
+    set_language("en")
+
+    assert list(print_settings.quality_presets().values()) == [
+        "Draft",
+        "Standard",
+        "Fine",
+        "Strong",
+    ]
+    assert print_settings.resolve(profile, "fine").title == "Fine · PLA"
+
+
 def test_the_quality_preset_decides_the_layer_height() -> None:
     profile = profiles.make_profile("prusa-mk4s", "pla")
     draft = print_settings.resolve(profile, "draft")
@@ -250,11 +270,14 @@ def test_the_outer_wall_never_accelerates_harder_than_the_rest(printer_id: str) 
 
 
 def test_the_mini_accelerates_like_prusas_profile() -> None:
-    """Prusas Standardprozess für den MINI (PrusaSlicer ``[print:*MINI*]``,
-    Orca „0.20mm Standard @MINI"): 1000 mm/s², die Außenwand 700."""
+    """Prusas Standardprozess für den MINI mit Input Shaper, den PrusaSlicer
+    2.9.6 vorwählt („0.20mm SPEED @MINIIS 0.4"): 2000 mm/s², die Außenwand
+    ebenso. Bis zum 27.09.2026 standen hier die 1000 und 700 des abgelösten
+    Prozesses ohne Input Shaper, und mit ihnen Außenwände von 40 statt 140 mm/s."""
     speed = print_settings.resolve(profiles.make_profile("prusa-mini", "pla")).speed
 
-    assert (speed.acceleration, speed.outer_wall_acceleration) == (1000.0, 700.0)
+    assert (speed.acceleration, speed.outer_wall_acceleration) == (2000.0, 2000.0)
+    assert speed.outer_wall == pytest.approx(140.0)
 
 
 @pytest.mark.parametrize("field", ["speed_outer_wall", "acceleration", "flow_factor"])
@@ -1758,6 +1781,18 @@ def test_a_slot_override_can_be_added_changed_and_removed() -> None:
     assert settings.slot_overrides == (), "Projektwerte brauchen keinen leeren Eintrag"
 
 
+def test_the_slicers_that_cap_the_flow_themselves_take_the_limit() -> None:
+    """Wer das Tempo selbst nach dem Volumenstrom deckelt, braucht den Wert:
+    PrusaSlicer und die Orca-Familie bekommen ihn als
+    ``filament_max_volumetric_speed``. Cura liest ihn nicht, dort bleibt der
+    Deckel als Vorschlag der einzige (Gesamtprüfung, 27.09.2026)."""
+    for flavour in ("orca", "prusa", "cura", "other"):
+        caps = slicer_keys.caps_volumetric_speed(flavour)
+        assert caps == (flavour in ("orca", "prusa")), flavour
+        if caps:
+            assert slicer_keys.takes(flavour, "filament.max_flow"), flavour
+
+
 def test_a_slicer_that_takes_one_filament_says_so() -> None:
     """Was ein Slicer nicht entgegennimmt, wird gesagt — nicht verschwiegen.
 
@@ -2516,6 +2551,63 @@ def test_bambus_refusal_in_its_result_file_reaches_the_slicer_output(
             model, print_settings.resolve(profile), profile, setup, output_dir=output_dir
         )
     assert "alt" not in raised.value.values["output"]
+
+
+def test_bambus_result_file_is_this_runs_or_none(tmp_path: Path) -> None:
+    """Bambu Studio endet manchmal nicht nach seiner ``result.json`` — drei von
+    rund hundert Läufen der Gesamtprüfung, auch auf gesunden Kernen
+    (27.09.2026). Ob die Datei dieses Laufs da ist, zählt: nicht die eines
+    älteren im selben Ordner, nicht eine halb geschriebene."""
+    output_dir = tmp_path / "ausgabe"
+    output_dir.mkdir()
+    result = output_dir / "result.json"
+    result.write_text(json.dumps({"return_code": 0}), encoding="utf-8")
+
+    written = handover._result_written(output_dir)
+
+    assert not written(), "die Datei eines älteren Laufs"
+    result.write_text('{"return_code": ', encoding="utf-8")
+    assert not written(), "halb geschrieben"
+    result.write_text(json.dumps({"return_code": 0, "error_string": "Success."}), encoding="utf-8")
+    assert written()
+    assert not handover._result_written(tmp_path / "fehlt")()
+
+
+def test_the_orca_family_is_asked_whether_its_result_is_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Anschluss: ``slice_model`` gibt dem Lauf der Orca-Familie die Frage
+    nach ihrer ``result.json`` mit, und sie sagt erst ja, wenn der Lauf sie
+    geschrieben hat (``process.run_limited`` beendet ihn dann nach einer
+    Frist, statt bis zum Zeitlimit zu warten)."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "bambu-studio.exe"
+    executable.write_bytes(b"")
+    asked: list[bool] = []
+
+    def run(command: list[str], *_args: object, **kwargs: object) -> _Finished:
+        finished = kwargs.get("finished")
+        assert callable(finished), "die Orca-Familie bekommt die Frage mit"
+        asked.append(bool(finished()))
+        target = Path(command[command.index("--outputdir") + 1])
+        (target / "plate_1.gcode").write_text(_gcode_printing_at(-10.0, 10.0), encoding="utf-8")
+        (target / "result.json").write_text(
+            json.dumps({"return_code": 0, "error_string": "Success."}), encoding="utf-8"
+        )
+        asked.append(bool(finished()))
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    outcome = handover.slice_model(
+        model, print_settings.resolve(profile), profile, setup, output_dir=tmp_path / "out"
+    )
+
+    assert asked == [False, True]
+    assert outcome.gcode_path.name == "plate_1.gcode"
 
 
 def test_any_other_silence_keeps_the_old_answer(
@@ -5657,38 +5749,35 @@ def test_choosing_another_slicer_drops_the_profiles_of_the_old_one(
     assert dialog.process_choice.count() == 0, "das Prozessprofil auch"
 
 
-def test_prusa_is_not_warned_about_a_machine_it_never_takes() -> None:
-    """Der Befund galt weiter, als er gemeint war — einen halben Tag lang.
+def test_prusa_is_warned_only_since_it_prints_on_its_bundle() -> None:
+    """Der Befund galt am 03.09.2026 weiter, als er gemeint war — und heute
+    gilt er für PrusaSlicer mit Grund.
 
     ``machine_missing`` entstand für die Orca-Familie, die ihre Maschine als
-    Profil aus dem eigenen Bestand lädt. PrusaSlicer tut das nie: Seine
-    Maschinenseite baut ``_machine_keys`` aus Solidons eigenem Druckerprofil,
-    und eine ``.ini`` ist damit eigenständig lauffähig. Gemessen am
-    03.09.2026, bevor das hier stand:
+    Profil aus dem eigenen Bestand lädt. Gemessen am 03.09.2026:
 
         orca   -> nichts
         cura   -> ['slicer.machine_unset']
         prusa  -> ['slicer.machine_unset']
 
-    Beide bekamen bei **jedem** Export den Rat, im Slicer einen Drucker
-    einzurichten, den sie dafür nicht brauchen. Eine Warnung, die nicht
-    stimmt, ist teurer als keine — der Kunde lernt, sie zu übersehen, und
-    übersieht die richtige mit.
+    Damals schrieb Solidon für PrusaSlicer eine eigenständige ``.ini`` ohne
+    Profil, und der Rat, einen Drucker einzurichten, stimmte nicht. Seit Stufe
+    C des Konzepts Herstellerprofil (27.09.2026) druckt PrusaSlicer auf
+    Drucker, Prozess und Filament seines Bündels; fehlt der Drucker dort,
+    kommt der eingebaute Startcode ohne Bettvermessung und Spüllinie — das
+    sagt der Befund jetzt. Den Weg mit Bündel prüft ``tests/test_manufacturer.py``.
 
     Cura stand bis zum 27.09.2026 mit hier, und dort war das Schweigen falsch:
     Ohne Druckerdefinition druckte CuraEngine mit dem Startcode von
     ``fdmprinter``. Was Cura jetzt gesagt bekommt, prüft
     ``tests/test_cura_machine.py``.
-
-    Die eigenen Tests trugen den Fehler nicht, weil alle drei ``flavour="orca"``
-    setzten: die richtige Regel mit ungeprüftem Rand.
     """
     from pathlib import Path
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
 
     setup = handover.SlicerSetup(executable=Path("prusa.exe"), flavour="prusa")
-    assert handover.machine_missing(setup, profile) == []
+    assert [f.code for f in handover.machine_missing(setup, profile)] == ["slicer.printer_unknown"]
     assert not handover.takes_a_machine_profile("prusa")
     assert not handover.takes_a_machine_profile("cura")
     assert handover.takes_a_machine_profile("orca")

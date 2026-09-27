@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import socket
 import subprocess
 import time
 from pathlib import Path
@@ -13,7 +12,7 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from tests.php_probe import php_executable
+from tests.php_probe import free_port, php_executable
 
 ROOT = Path(__file__).parent.parent
 WEBSITE = ROOT / "website"
@@ -274,9 +273,7 @@ def test_retired_endpoint_is_404_without_state_or_mail(tmp_path: Path, method: s
     """Der frühere Endpunkt ist unerreichbar und erzeugt keinerlei Serverzustand."""
 
     php = php_executable()
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = int(probe.getsockname()[1])
+    port = free_port()
     environment = os.environ.copy()
     environment.update(
         {

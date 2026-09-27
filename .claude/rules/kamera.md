@@ -1,5 +1,5 @@
 ---
-description: "Kamera und Navigation — der zweite Treiber neben der Maus, die eigene Steuerung der Ansicht, der Drehpunkt in der Bildmitte und das Drehen als Drehteller"
+description: "Kamera und Navigation — die eigene Steuerung am Vertrag, der Drehpunkt in der Bildmitte, Drehen als Drehteller, Kameravorgaben und Einpassen, wer nach einer Kamerabewegung zeichnet, und die 3D-Maus als zweiter Treiber"
 paths:
   - "app/ui/spacemouse.py"
   - "app/ui/viewport.py"
@@ -11,316 +11,214 @@ paths:
 
 # Regeln für Kamera und Navigation
 
-Wie sich die Ansicht bewegt, und wer sie bewegen darf: die eigene Steuerung
-statt eines fremden Interaktionsstils, der zweite Treiber der 3D-Maus, der
-Drehpunkt und die Art des Drehens. **Ausgegliedert aus `ansicht.md` am
-18.09.2026** — die übrigen Ansichtsregeln gelten weiter und laden zusätzlich.
+Wie sich die Ansicht bewegt und wer sie bewegen darf. `ansicht.md` lädt am
+Viewport mit. Anlässe und Messwerte: `konzepte/begruendungen/regel-kamera.md`.
 
-## Die Kamera hat einen zweiten Treiber (02.09.2026)
-
-Die 3D-Maus (`app/ui/spacemouse.py`, Konzept `konzept-3d-maus-2026-08`) fährt
-dieselbe Kamera wie die Maus — kein eigenes Navigationsschema, kein Modus,
-keine Operation. (Bis zum 03.09.2026 stand hier „kein fünftes“; die Zahl ist
-seither vergeben, die Zusage nicht.) Drei Regeln:
-
-* **Die Abbildung ist eine reine Funktion.** `camera_step` bekommt sechs
-  Achsen, eine Stellung, eine Zeitspanne und drei Einstellungen und gibt eine
-  Stellung zurück. Kein Qt, kein Renderer, kein HID darin — jeder Achsenfehler
-  (Vorzeichen, Bezugssystem) wird dort behoben und in
-  `tests/test_spacemouse.py` mit einem Test je Achse festgehalten. Wer die
-  Wirkung einer Achse ändert, macht genau einen Test rot. Objektmodus ist die
-  Vorgabe (die Kappe ist das Teil, alle sechs Achsen — Robert, 02.09.2026),
-  „Richtung umkehren" ist der Kameramodus.
-* **Die Kappe ist ein Kraftsensor, und Achsen sprechen über.** Wer dreht,
-  drückt auch; wer schiebt, kippt ein wenig. Die Totzone allein fängt das
-  nicht — sie misst gegen den Vollausschlag, das Übersprechen wächst mit der
-  Kraft. Am Korpus gemessen (07.09.2026): Beim Drehen um die Hochachse lag der
-  Zoom im Median bei einem Viertel der Drehung und in 71 von 71 Berichten über
-  der Totzone; das Teil kam beim Drehen näher, ohne dass jemand gezogen hätte.
-  `quiet_crosstalk` dämpft deshalb jede Nebenachse nach ihrem Anteil an der
-  stärksten: null unter `CROSSTALK_SILENT`, voll ab `CROSSTALK_MEANT`,
-  dazwischen eine glatte Rampe; die stärkste bleibt immer, eine aktive
-  Bewegung bleibt also aktiv. **Eine Rampe, keine Klippe** (16.09.2026): Der
-  harte Schnitt bei einem Viertel schaltete die Zoomachse am Korpus beim
-  Ziehen zur Person dreimal in vier Sekunden an und aus, beim Kippen der
-  Vorderkante sechsmal — der Zoom hakte. Die Anteile der Nebenachsen liegen
-  breit um das Viertel, jede Schwelle dort schaltet ständig; das Viertel ist
-  jetzt die Mitte des Bandes. **Der Preis steht daneben:** Eine bewusst
-  kleine Nebenbewegung unter `CROSSTALK_SILENT` der Hauptbewegung geht
-  verloren, beim Kippen der Vorderkante liest das Gerät einen guten Teil als
-  Zug, und beim Drehen bleiben rund zwei Drittel des Zoom-Lecks — das ist der
-  Sensor. Band und Kennlinie sind an der Aufzeichnung gewählt und **am Gerät
-  noch nicht bestätigt** — wer sie ändert, misst am Korpus und nicht am
-  Gefühl (die Korpus-Tests zum Übersprechen in `test_spacemouse.py`).
-* **Der Viewport bekommt eine Stellung, keine Deltas.** `Viewport.set_camera_pose`
-  setzt Standort, Blickpunkt und Oben und zeichnet einmal. Es ist die einzige
-  Stelle, an der die 3D-Maus den Viewport anfasst; `sketch_active` sagt ihr,
-  dass im Zeichenmodus nur geschoben und gezoomt wird.
-* **Direkt über HID, neben dem Herstellertreiber.** `hidapi` (BSD-3 aus der
-  Dreifachlizenz gewählt) öffnet die Schnittstelle *Multi-axis Controller*;
-  3DxWare darf laufen und liest dieselben Berichte mit — so wie PrusaSlicer und
-  Assist es tun. Raw Input war der erste Anlauf und blieb leer: 3DxWare reicht
-  Rohdaten nur an Programme durch, die es kennt
-  (`<Transport>RawInput</Transport>` in seiner Programmliste). Nicht
-  blockierend, im Hauptthread, ein Takt für Lesen und Fahren; die Vorzeichen
-  der Achsen stammen aus einer aufgezeichneten Lesung im Korpus
-  (`tests/data/spacemouse/`), nicht aus einer Annahme.
-* **Auf dem Mac geht es durch den Treiber, nicht neben ihm.** Dort hält
-  3DxWare das Gerät exklusiv, und `hidapi` bekommt keinen Bericht (der erste
-  Mac-Bericht eines Kunden, 05.09.2026). `DriverReader` lädt das
-  `3DconnexionClient`-Framework des Kunden zur Laufzeit — mitgeliefert wird
-  nichts, Regel 22 bleibt unberührt — und schreibt dessen Zustandsmeldungen
-  in dieselben Berichte um, die das Gerät roh liefert; `decode_report` und
-  alles dahinter kennen den Unterschied nicht. Angemeldet wird mit dem
-  Platzhalter wie in FreeCAD und Blender, gelesen nur, was an Solidons
-  Client-Kennung gerichtet ist. `default_reader` entscheidet je Rechner:
-  Mac mit Treiber → Treiber (HID als Rückfall, wenn er angehalten ist),
-  sonst HID. Die Plattform ist dort ein Parameter, damit der Mac-Zweig auf
-  jeder Maschine prüfbar bleibt. **Am Gerät gemessen ist nur Windows**; der
-  Mac-Weg wartet auf die Rückmeldung des Kunden.
-
-## Die Ansicht hat eine eigene Steuerung (03.09.2026)
-
-Robert: „noch eine änderung zur steuerung weil sie mir nicht gefällt, aber als
-eigene und standart wählen". Vier Schemata bildeten Fremdprogramme nach —
-`slicer` (Cura), `orbit` (Bambu Studio, Orca, PrusaSlicer), `cad` und
-`blender` —, und keines davon war Solidons eigenes. Das
-fünfte heißt `solidon` und ist die Vorgabe: links verschiebt, rechts dreht um
-den Mittelpunkt der Ansicht, das gedrückte Rad kippt nach oben und unten,
-Scrollen zoomt. Umschalt ändert hier nichts — anders als in den vieren, die
-ein Vorbild haben.
-
-* **Links schiebt und wählt trotzdem.** `_left_up` fragt `is_click` und trennt
-  Klick von Zug an der Zugschwelle des Systems; die Auswahl hängt also nicht
-  daran, was `_begin` an der Kamera gestartet hat. Wer eine sechste Steuerung
-  baut, darf `select` und `pan` deshalb auf dieselbe Taste legen — was sich
-  ausschließt, ist `pan` und ein *gezogenes* Werkzeug, nicht `pan` und ein
-  Klick. Auf dem **gewählten** Körper führt links weiter das Teil (Robert,
-  03.09.2026, gegen den Vorschlag, das dem Griff allein zu lassen).
-* **Und dieser Zug rechnet auf einer Ebene, er pickt nicht** (13.09.2026).
-  Gepickt wird zweimal: beim Drücken (liegt dort der gewählte Körper?) und
-  beim Zugbeginn (wo wurde gegriffen?). Jede Bewegung danach schneidet den
-  Sichtstrahl mit der waagerechten Ebene durch den gegriffenen Punkt
-  (`_plane_point` über `render.gizmo.ray_plane_hit`). Vorher stand dort ein
-  `_world_at` je Mausbewegung — gemessen am echten Fenster (`drilled_v6.p3d`,
-  Bild 1030 mal 710, ein Zug über 40 Ereignisse, drei Läufe): 34 Picks je Zug
-  und 3,27 ms je Ereignis im Median, danach zwei Picks und 0,16 ms. **Der Pick
-  beantwortete die Frage auch falsch:** Er gab den Punkt auf der getroffenen
-  *Oberfläche* zurück, und davon wurden x und y genommen — über dem leeren
-  Hintergrund traf er nichts (der Körper blieb stehen und sprang weiter,
-  sobald der Zeiger wieder über etwas stand), und beim Wechsel von einer hohen
-  auf eine tiefe Fläche versprang er um den Unterschied der Perspektive.
-* **Das Kippen ist eine eigene Rechnung, keine Bewegung des Renderers.**
-  (Unter VTK gab es „nur nach oben und unten" im Trackball nicht, und
-  `Rotate` dafür zu überschreiben hieße, am Zustand des Interactors zu
-  drehen.) Gerechnet wird
-  mit `spacemouse.camera_step` — der Navigator meldet nur die senkrechte
-  Strecke seit dem letzten Ereignis (`_tilt_at`), das Rechnen bleibt in der
-  reinen Funktion und damit ohne Fenster prüfbar.
-* **Fliegen ist nicht Zoomen, und der Unterschied ist der Blickpunkt.**
-  `camera_step(..., fly=True)` schiebt Standort **und** Blickpunkt entlang der
-  Blickrichtung; ohne den Schalter ändert die Achse `y` nur den Abstand. Der
-  Zoom fährt bis vor das Teil, der Flug hindurch. Das Vorzeichen folgt dem
-  Zoom, den der Zweig ersetzt: eine Achse, die je nach Schalter in die andere
-  Richtung zieht, wäre die Falle für den Nächsten, der `fly` an ein Gerät hängt.
-* **Die Tastatur wirkt nur in `solidon`.** Die vier anderen bilden
-  Fremdprogramme nach; dort wäre WASD eine Bewegung, die es im Vorbild nicht
-  gibt — in Blender ist sie sogar belegt.
-* **Der Anschlag schaltet ein, er bewegt nicht.** Zuerst war ein Anschlag ein
-  Schritt, und die Wiederholung sollte Qt liefern — das schien der Takt zu
-  sein, den das System ohnehin hat. Nachgerechnet ist es keiner: rund eine
-  halbe Sekunde Stillstand (die Wiederholverzögerung, die niemand hier
-  einstellt), danach 31 Schritte je Sekunde und damit das Viereinhalbfache der
-  Entfernung je Sekunde — der Bauraum in einer Fünftelsekunde. Gefahren wird
-  deshalb in einem eigenen Takt (`FLIGHT_TICK_MS`, 16 ms wie bei der Kappe),
-  solange die Taste liegt, mit der wirklich vergangenen Zeit. `FLIGHT_RATE`
-  sagt die Geschwindigkeit in einer Einheit, die man lesen kann: Entfernungen
-  je Sekunde, derzeit eine. **Wer daran baut, denkt an drei Dinge:** Die
-  Wiederholung des Systems schickt auch *Loslass*-Ereignisse (ohne
-  `isAutoRepeat` stottert der Flug), ein Fokusverlust bringt kein Loslassen
-  mehr (ohne `focusOutEvent` fliegt die Ansicht weiter, während der Kunde
-  tippt), und zwei Tasten auf derselben Achse heben sich auf.
-* **`setFocusPolicy(StrongFocus)` wirkt in allen fünf.** Ohne ihn kommt kein
-  Tastendruck an, und er ist die einzige Änderung dieses Umbaus außerhalb des
-  neuen Schemas: Ein Klick in die Ansicht nimmt seither den Fokus aus einem
-  Eingabefeld. Wer einen Test schreibt, der nach einem Klick in die Ansicht
-  noch tippt, tippt jetzt in die Ansicht. **Für die Bedienung ist das
-  unschädlich, und zwar gemessen** am echten Fenster — offscreen vergibt Qt
-  gar keinen Fokus; ein Feld holt sich den Fokus beim nächsten Klick zurück,
-  und die Eingabetaste wirkt
-  (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
-
-**Was die Suite prüft, und was nur ein Werkzeug von Hand prüft.** Seit dem
-05.09.2026 führt der Navigator die Kamera über den Vertrag, und
-`tests/test_navigator.py` fährt die Tabelle gegen ein Renderer-Doppel — welches
-Schema auf welche Taste was tut, und wo die Kamera danach steht. Was kein Test
-prüft, ist die Kette davor: Qt-Ereignis → Widget des Renderers →
-`PointerEvent`. Offscreen bleibt `Viewport.renderer` auf `None`, die Suite
-kann das Fenster also gar nicht erst nach der Bewegung fragen.
-`.claude/.state/steuerung-2026-09-03/` schließt die Lücke: ein echtes Fenster,
-echte Ereignisse, die Kamerastellung vorher und nachher. Zu fahren nach jeder
-Änderung an `_NAVIGATION`, am Navigator oder an `camera_step` — **und vorher
-umzubauen**: Der Prüfstand schickt noch VTK-Ereignisse an einen Interactor,
-den es nicht mehr gibt (Registerpunkt in `ROADMAP.md`). Die
-README daneben nennt die
-drei Fallen, die dabei zuschnappen — Millimeter sagen nichts (jede Bewegung
-skaliert mit der Entfernung), Bildpunkte hier gar nichts (das Renderfenster
-bleibt 160×160), und `session.apply` blockiert den Hauptthread.
-
-Vier Wächter in `tests/test_viewport_decisions.py` und
-`tests/test_spacemouse.py`, alle ohne Fenster: Jedes Schema belegt alle sechs
-Kombinationen aus Taste und Umschalt (`navigation_action` liest ohne Rückfall
-und würfe sonst beim Drücken — ein Rückfall wäre die schlechtere Antwort, weil
-er die Lücke zur stillen Vorgabe macht); jedes trägt einen Namen im
-Einstellungsdialog (sonst wäre es gebaut, geprüft und unerreichbar); die sechs
-Flugtasten decken drei Achsen in beide Richtungen ohne Dopplung; und der Flug
-nimmt den Blickpunkt mit, wo der Zoom ihn stehen lässt.
-
-## Der Drehpunkt ist, was in der Bildmitte steht (04.09.2026)
-
-Robert: „beim rotieren der ansicht wollen wir uns um den mittelpunkt des
-viewports drehen." Der Bauplan sagt es seit je (§2.9, „dreht um den
-Mittelpunkt der Ansicht“); umgesetzt war eine Näherung.
-
-`_aim_rotation` setzte den Fokus auf die Projektion der **Mitte aller Körper**
-auf den Sichtstrahl. Seitlich war der Drehpunkt damit schon die Bildmitte —
-jeder Punkt des Sichtstrahls ist es —, in der **Tiefe** aber die Mitte des
-ganzen Teils. Wer auf ein Detail zoomt, drehte um einen Punkt eine halbe
-Bauhöhe dahinter, und das Detail schwenkte aus dem Bild.
-
-Gefragt wird deshalb zuerst `centre_hit()`: derselbe Oberflächen-Pick wie bei
-jedem Klick (`_world_at`), in der Mitte des Renderers. Erst wenn dort nichts
-steht, gilt weiter `rotation_centre()`. Vier Dinge daran sind tragend:
-
-* **Die Kulisse kann den Drehpunkt nicht an sich ziehen**, und zwar ohne eine
-  eigene Regel: `_world_at` fragt den Pick nur unter den Körperaktoren
-  (`among`).
-  Das ist dieselbe Zusage, die 2026-08 als „gedreht wurde um die Kulisse"
-  einmal fehlte — sie hängt jetzt an einer Zeile, die beim Aufräumen
-  überflüssig aussieht.
-* **Der Rückfall ist kein Sonderfall, sondern der Normalfall am Rand.** Über
-  dem Hintergrund findet der Picker nichts, und beim senkrechten Blick in eine
-  Durchgangsbohrung ebenfalls nicht (siehe „Ein Klick ist eine Blickrichtung").
-  Beides endet bei der Mitte der Körper, nicht bei „kein Drehpunkt".
-* **Das gedrückte Rad bekommt ihn auch.** `camera_step` kippt um den
-  Blickpunkt, genau wie `turntable_camera` dreht; der `tilt`-Zweig des
-  Navigators ruft `on_rotate_start` deshalb ebenso. Ein Drehpunkt, der
-  je nach Taste ein anderer ist, lässt sich niemandem erklären.
-* **Und das Bild ändert sich beim Setzen um nichts.** Der neue Fokus liegt auf
-  dem Sichtstrahl, Stellung und Blickrichtung bleiben — die Bedingung von
-  Robert (23.08.2026, „kamera bei aktueller position dann immer lassen") gilt
-  unverändert.
-
-**Geprüft wird das nicht in der Suite**, denn offscreen gibt es keinen Picker:
-Die Tests in `tests/test_viewport_decisions.py` setzen an die Stelle des
-Renderers eine Attrappe (`RecordingRenderer`) und prüfen damit die Regel,
-nicht die Kette bis in den Renderer.
-`.claude/.state/drehpunkt-2026-09-04/` fährt sie am echten Fenster. Gemessen,
-`plate_holes.stl`, Blick schräg auf die Platte, Zug nach rechts:
-
-| | Punkt in der Bildmitte |
-|---|---|
-| über `centre_hit` | **0,00 mm** gewandert |
-| nur über `rotation_centre` | 3,14 mm |
-
-**Eine Falle beim Prüfen davon**, sofort zugeschnappt: Eine Gegenprobe, die
-knapp am Teil vorbeizielt, misst die Toleranz des Picks und nicht den
-Hintergrund — sie bekam einen Treffer fünf Millimeter neben der Platte. Wer
-„da ist nichts" prüfen will, blickt in den Himmel.
-
-## Gedreht wird als Drehteller, nicht als Trackball (04.09.2026)
-
-Robert: „das rotieren neigt immer noch statt den winkel zur mitte zu lassen."
-Ein Trackball (bis zum 05.09.2026 VTKs `vtkInteractorStyleTrackballCamera`)
-dreht um das **Oben der Kamera** und führt es dabei mit; hinterher wird es nur
-wieder senkrecht zur Blickrichtung gestellt, nicht auf. Über eine Geste
-summiert sich daraus eine Schräglage — nachgerechnet an zwölf diagonalen
-Zügen: **62,7 Grad** gegen **0,0** beim Drehteller.
-
-`turntable_camera` dreht waagerecht immer um die Welt-Hochachse und senkrecht
-um die Bildwaagerechte; das Oben folgt daraus, statt mitgeschleift zu werden.
-Die Hebung wird an `POLE_LIMIT_DEGREES` **begrenzt und nicht abgeschnitten** —
-wer fast senkrecht darüber steht, dreht weiter waagerecht und kommt jederzeit
-zurück; aus einer Draufsicht des Menüs führt der Weg ebenso heraus. Die
-Empfindlichkeit ist die des alten VTK-Trackballs geblieben (20 Grad je
-Fensterhälfte mal seinem `MotionFactor` von 10, `TURN_MOTION_FACTOR`), damit
-der Umbau nicht nebenbei die gewohnte
-Geschwindigkeit verstellte. Es gilt für alle fünf Schemata: Cura, Bambu Studio
-und Blender bleiben alle aufrecht, und ein Nachbau, der neigt, wo sein Vorbild
-es nicht tut, ist keiner.
-
-**Der erste Anlauf war eine überschriebene `Rotate`-Methode am
-VTK-Interaktionsstil, und er war wirkungslos:** Die Rechnung stimmte, drei
-Einheitstests waren grün, und am laufenden Fenster blieben **35,8 Grad**
-Schräglage — weil VTKs `OnMouseMove` als C++ die Methode **seiner eigenen**
-Klasse rief und nie die einer Python-Unterklasse.
-
-Seit dem 05.09.2026 gibt es diesen Stil nicht mehr: Der `Navigator` liest die
-Zeigerereignisse des Renderers und stellt die Kamera selbst
-(`turntable_camera`, `set_camera_pose`) — es gibt nichts Fremdes mehr, dem
-man sich vorhängen müsste. Die Lehre bleibt, weil sie über VTK hinausgeht:
-**Was ein fremdes Programm selbst führt, lässt sich nicht von außen
-überschreiben** — man hängt sich davor, oder man führt es selbst.
-
-**Und die Lehre über die Prüfung, die teurer war als der Fehler:**
-Einheitstests über eine reine Funktion sagen nichts darüber, ob jemand sie
-ruft. Drei grüne Tests und ein unverändertes Fenster sind kein Widerspruch —
-sie prüfen verschiedene Dinge. Gefangen hat es `.claude/.state/drehpunkt-2026-09-04/`,
-das die Kette am echten Fenster fährt.
-
-## Die Navigation ist eigener Code am Vertrag, kein fremder Interaktionsstil (05.09.2026)
+## Die Navigation ist eigener Code am Vertrag, kein fremder Interaktionsstil
 
 `app/ui/render/navigator.py` liest die Zeigerereignisse des Renderers
-(`add_pointer_listener`) und stellt die Kamera über den Vertrag
-(`camera_pose`, `set_camera_pose`, `dolly`). Der Renderer bringt keinen
-eigenen Kamerastil mit (unter VTK war der Trackball abgeschaltet), und damit
-ist auch die Falle verschwunden, die
-diesen Abschnitt bis zum 05.09.2026 füllte: PyVista führte neben VTK einen
-eigenen Stil (`_style_class`) und setzte ihn bei jeder Gelegenheit über
-`update_style()` wieder durch — auch beim Doppelklick, den es immer anmeldete.
-Die gestufte Auswahl (§18.5) heißt zwei Klicks auf dieselbe Stelle, und nach
-dem zweiten waren Auswahl, Kontextmenü und Schema weg (Vorfall:
-ROADMAP-ARCHIV.md, 04.09.2026). Der Navigator kennt keinen zweiten Halter
-seines Zustands.
+(`add_pointer_listener`) und stellt die Kamera über den Vertrag (`camera_pose`,
+`set_camera_pose`, `dolly`); der Renderer bringt keinen Kamerastil mit, und der
+Navigator kennt keinen zweiten Halter seines Zustands. **Was ein fremdes
+Programm selbst führt, lässt sich nicht von außen überschreiben** — man hängt
+sich davor, oder man führt es selbst.
 
-Was davon als Regel bleibt:
+* **Wer ein Ereignis vor der Navigation braucht, bekommt es vor ihr** — über die
+  eine Vorfahrt in `Viewport._dispatch_pointer`, nie über einen zweiten
+  Beobachter. Reihenfolge und Grund: `griffe.md`.
+* **Die Rückrufe des Navigators gehen über `weakref`** (`on_cursor`,
+  `on_context`, `on_pick` in `_weak_callbacks` als `NavigatorCallbacks`, dazu
+  der Zeiger-Zuhörer am Renderer, `_listen_to`): Stark schließen sie die
+  Schleife Navigator → Viewport → Renderer → Zuhörer → Viewport, den Absturz
+  ohne Zeile am Ende eines Laufs. Allgemein: `wartezeit.md`, „Ein Rückruf an ein
+  eigenes Kind hält schwach“.
+* **Ein Klick ist ein Klick, auch mit Zittern** (`CLICK_SLACK`, `is_click`), und
+  ein Klick, der nichts wählt, lässt die Taste der Kamera
+  (`test_a_wobbly_click_stays_a_click`,
+  `test_where_nothing_is_chosen_the_camera_keeps_the_button`). `is_click` bleibt
+  eine reine Rechnung: Den Faktor für die Gerätepixel (`ansicht.md`) reicht der
+  Navigator als Argument herein — eine Qt-Frage darin wäre ohne Bildschirm
+  unprüfbar.
+* **Die Tabelle `_NAVIGATION` ist ohne Fenster prüfbar**: `tests/test_navigator.py`
+  fährt sie gegen ein Renderer-Doppel — welches Schema auf welcher Taste was tut
+  und wo die Kamera danach steht.
 
-* **Wer ein Ereignis vor der Navigation braucht, bekommt es vor ihr.**
-  `Viewport._dispatch_pointer` reicht jedes Ereignis erst an die Griffe, dann an eine
-  laufende Platzierung, dann an den Zeiger, zuletzt an den Navigator — eine
-  Vorfahrt an einer Stelle statt dreier Beobachter am Interactor. (Bis zum
-  10.09.2026 stand der Zeiger vorn; die heutige Reihenfolge und ihr Anlass
-  stehen unter „Ein Griff steht vor allem, was über der Ansicht liegt".)
-* **Ein Klick ist ein Klick, auch mit Zittern**, und ein Klick, der nichts
-  wählt, lässt die Taste der Kamera (`tests/test_navigator.py`,
-  `test_a_wobbly_click_stays_a_click` und
-  `test_where_nothing_is_chosen_the_camera_keeps_the_button`).
-* **Die Tabelle `_NAVIGATION` ist ohne Fenster prüfbar.** `tests/test_navigator.py`
-  fährt sie gegen ein Renderer-Doppel — welches Schema auf welche Taste was
-  tut, und wo die Kamera danach steht.
+## Die Ansicht hat eine eigene Steuerung
 
-## Wer die Kamera bewegt, meldet zuerst und zeichnet danach einmal (21.09.2026)
+Das Schema `solidon` ist die Vorgabe (Entscheidung Robert): links verschiebt,
+rechts dreht um den Mittelpunkt der Ansicht, das gedrückte Rad kippt, Scrollen
+zoomt; Umschalt ändert nichts. `slicer`, `orbit`, `cad` und `blender` bilden
+Fremdprogramme nach.
+
+* **Links schiebt und wählt trotzdem**: `_left_up` trennt Klick und Zug über
+  `is_click`, unabhängig davon, was `_begin` gestartet hat — `select` und `pan`
+  dürfen auf derselben Taste liegen, nur `pan` und ein *gezogenes* Werkzeug
+  nicht. Auf dem **gewählten** Körper führt links das Teil (Entscheidung Robert).
+* **Dieser Zug rechnet auf einer Ebene, er pickt nicht**: gepickt wird beim
+  Drücken (liegt dort der gewählte Körper?) und beim Zugbeginn (wo gegriffen?),
+  danach schneidet `_plane_point` den Sichtstrahl mit der waagerechten Ebene
+  durch den Griffpunkt (`render.gizmo.ray_plane_hit`). Ein Pick je Bewegung ist
+  teuer **und** falsch: über dem Hintergrund trifft er nichts, zwischen hohen und
+  tiefen Flächen springt er.
+* **Das Kippen ist eine eigene Rechnung**: Der Navigator meldet nur die
+  senkrechte Strecke (`_tilt_at`), gerechnet wird in `spacemouse.camera_step` —
+  ohne Fenster prüfbar.
+* **Fliegen ist nicht Zoomen**: `camera_step(..., fly=True)` schiebt Standort
+  **und** Blickpunkt, ohne den Schalter ändert `y` nur den Abstand — der Zoom
+  fährt bis vor das Teil, der Flug hindurch. Das Vorzeichen folgt dem Zoom, den
+  der Zweig ersetzt.
+* **Die Tastatur wirkt nur in `solidon`** — in den Nachbauten gäbe es die
+  Bewegung im Vorbild nicht (in Blender ist WASD belegt).
+* **Der Anschlag schaltet ein, er bewegt nicht**: Geflogen wird im eigenen Takt
+  (`FLIGHT_TICK_MS`) mit der wirklich vergangenen Zeit, `FLIGHT_RATE` in
+  Entfernungen je Sekunde — die Wiederholung des Systems ist kein Takt. Dabei:
+  `isAutoRepeat` filtern (auch Loslass-Ereignisse wiederholen sich),
+  `focusOutEvent` beendet den Flug, zwei Tasten auf einer Achse heben sich auf.
+* **`setFocusPolicy(StrongFocus)` gilt in allen Schemata** — ohne ihn kommt kein
+  Tastendruck an; ein Klick in die Ansicht nimmt einem Eingabefeld den Fokus,
+  das Feld holt ihn beim nächsten Klick zurück. Ein Test, der danach tippt,
+  tippt in die Ansicht; offscreen vergibt Qt gar keinen Fokus.
+
+Wächter ohne Fenster (`test_viewport_decisions.py`, `test_spacemouse.py`): Jedes
+Schema belegt alle sechs Kombinationen aus Taste und Umschalt
+(`navigation_action` liest ohne Rückfall — eine Lücke soll werfen, nicht still
+auf die Vorgabe fallen); jedes trägt einen Namen im Einstellungsdialog; die sechs
+Flugtasten decken drei Achsen ohne Dopplung; der Flug nimmt den Blickpunkt mit,
+der Zoom nicht.
+
+## Der Drehpunkt ist, was in der Bildmitte steht
+
+§2.9 und Entscheidung Robert: gedreht wird um den Mittelpunkt der Ansicht, auch
+in der Tiefe. `_aim_rotation` fragt zuerst `centre_hit()` — derselbe
+Oberflächen-Pick wie ein Klick (`_world_at`) in der Bildmitte —, erst ohne
+Treffer `rotation_centre()`.
+
+* **Die Kulisse zieht den Drehpunkt nicht an**: `_world_at` pickt nur unter den
+  Körperaktoren (`among`) — eine Zeile, die beim Aufräumen überflüssig aussieht.
+* **Der Rückfall ist der Normalfall am Rand** (Hintergrund, senkrechter Blick in
+  eine Durchgangsbohrung, siehe `ansicht.md`, „Ein Klick ist eine
+  Blickrichtung“): die Mitte der Körper, nie „kein Drehpunkt“.
+* **Das gedrückte Rad bekommt ihn auch** — der `tilt`-Zweig ruft
+  `on_rotate_start` wie das Drehen.
+* **Das Bild ändert sich beim Setzen nicht**: Der Fokus liegt auf dem Sichtstrahl,
+  Stellung und Blickrichtung bleiben (Entscheidung Robert: die Kamera bleibt, wo
+  sie ist).
+* **Wer „da ist nichts“ prüft, blickt in den Himmel** — knapp am Teil vorbei misst
+  man die Toleranz des Picks.
+
+## Gedreht wird als Drehteller, nicht als Trackball
+
+Ein Trackball führt das Oben der Kamera mit und summiert Schräglage.
+`turntable_camera` dreht waagerecht um die Welt-Hochachse und senkrecht um die
+Bildwaagerechte; das Oben folgt daraus. Die Hebung wird an `POLE_LIMIT_DEGREES`
+**begrenzt, nicht abgeschnitten** — fast senkrecht darüber dreht man weiter
+waagerecht und kommt jederzeit zurück, auch aus einer Draufsicht des Menüs. Die
+Empfindlichkeit blieb die des alten VTK-Trackballs (`TURN_MOTION_FACTOR`), damit
+sich die gewohnte Geschwindigkeit nicht verstellt. Es gilt für alle fünf
+Schemata — ein Nachbau, der neigt, wo sein Vorbild es nicht tut, ist keiner.
+
+## Kameravorgaben und Einpassen
+
+* **Die Anwendung setzt ihre Startkamera selbst** (`view_from("iso")` beim
+  Aufbau), sonst erbt sie die des Renderers.
+* **Eine Kameravorgabe dreht um den Blickpunkt, sie passt nicht ein**
+  (Entscheidung Robert, wie in Assist): Strg+0 bis Strg+6 und die ViewBar lassen
+  Fokus und Abstand stehen (`_turn_camera_to`, derselbe Kern wie
+  `_settle_sketch_view`); der Iso-Vektor wird genormt, sonst wächst der Abstand je
+  Klick. Einpassen ist Pos1, die erste Rahmung eines Projekts `_fit_once_for`.
+* **Einpassen nimmt den gewählten Körper, wenn einer gewählt ist**, sonst die
+  Szene (Entscheidung Robert); der Eintrag heißt „Einpassen“, denn ein Name, der in
+  einem Zustand lügt, ist schlechter. Der Versatz gehört dazu (`_selected_bounds`
+  über `_view_offset`); was nicht im Bild ist, wird nicht gerahmt (§18.8, §25).
+  `_fitted_bounds` bleibt die Szene, sonst hielte `outgrown` jede kleine Auswahl
+  für eine gewachsene Szene. Im Skizzenmodus gehört Pos1 dem Blatt
+  (`SketchCanvas.fit_view`), und die ViewBar rahmt nirgends.
+* **Der automatische Weg folgt der Auswahl nicht**
+  (`reset_camera(follow_selection=False)` in `_fit_once_for`) — er rahmt, weil die
+  Szene entwachsen ist.
+* **Eine frische Teilung rahmt einmal neu**: `MainWindow._reveal_split_result`
+  ruft vor dem Auseinanderziehen `Viewport.frame_next_scene` (alle Körper, ohne
+  Auswahl, mit Versatz); danach bleibt die Kamera.
+* **Im Skizzenmodus weicht die Kamera der Werkzeugkarte**: Orthografisch
+  verschiebt `occluded_view_shift` Position und Fokus um die halbe unten
+  verdeckte Bildhöhe (gemeldet über `set_zone_margins`), ohne Richtung und
+  Maßstab, zurückgenommen beim Verlassen. `view_on_plane` und
+  `show_span_on_plane` setzen sie nach jeder Kamerastellung neu; `view_from`
+  nimmt den gespeicherten Weltvektor vor dem Drehen zurück, rechnet den
+  Ausgleich für die neue Richtung und meldet die neue Hauptansicht an das
+  Ebenenfeld. **Ein gespeicherter Versatz wird nie von einer Kamera abgezogen,
+  die ihn nicht mehr enthält, und bleibt nie in einer Richtung stehen, die sie
+  nicht mehr hat.**
+* **Geprüft an der Kamera, nicht an der Vorarbeit** — offscreen steigt
+  `reset_camera` vor dem Rahmen aus; gemessen über `RecordingRenderer.reset_bounds`
+  (`tests/render_fakes.py`).
+
+## Wer die Kamera bewegt, meldet zuerst und zeichnet danach einmal
 
 Eine Kamerabewegung meldet sich über `cameraMoved` (Radzoom über `on_camera`,
-Zugende über `on_end`, 3D-Maus über `settle_camera`, die Ansichtsknöpfe über
-`view_from`). Wer diese Meldung sendet, **zeichnet danach genau ein Bild** —
-und nicht davor.
+Zugende über `on_end`, 3D-Maus über `settle_camera`, Ansichtsknöpfe über
+`view_from`). **Erst melden, dann ein Bild**: Die Hörer legen ihre Punkte neu und
+zeichnen nicht selbst (`PlacementFlow._camera_moved` →
+`redraw(draw=False)`); der Sender zeichnet danach genau eines.
+`set_camera_pose(…, draw=False)`, `_redraw_shadows(draw=False)` und
+`_settle_sketch_view(draw=False)` geben das Bild dem Aufrufer
+(`test_a_camera_move_with_measures_in_the_view_draws_exactly_one_frame`).
 
-Bis zum 21.09.2026 war es umgekehrt: Der Navigator zeichnete die Radraste,
-dann hörte die Maßtinte `cameraMoved` und zeichnete noch einmal; am Zugende
-kamen Einrasten, Schatten und Tinte auf drei Bilder (21,7 ms je Raste
-zusätzlich). Die Regel löst das an einer Stelle: Die Hörer von `cameraMoved`
-legen ihre Punkte neu und zeichnen **nicht** selbst (`PlacementFlow._camera_moved`
-ruft `redraw(draw=False)`), und die Ansicht zeichnet nach der Meldung das eine
-Bild. `set_camera_pose(…, draw=False)`, `_redraw_shadows(draw=False)` und
-`_settle_sketch_view(draw=False)` geben das Bild dem Aufrufer;
-`test_surface_placement_ui.py::test_a_camera_move_with_measures_in_the_view_draws_exactly_one_frame`
-hält für Radraste, Zugende, 3D-Maus und Ansichtswahl fest, dass es genau
-eines bleibt.
+**Wer die Kamera im Takt bewegt, sagt es vorher** (`note_camera_motion`:
+Zeigerzug und Rad über `_on_pointer`, die 3D-Maus je Takt vor
+`set_camera_pose`, die Flugtasten je Takt); was der Renderer daraus macht, steht
+in `ansicht.md`, „Ein Zug zeichnet leichter, sein letztes Bild voll“.
 
-**Wer die Kamera im Takt bewegt, sagt es vorher** (`note_camera_motion`,
-22.09.2026): Zeigerzug und Rad über `_on_pointer`, die 3D-Maus je Takt vor
-`set_camera_pose`, die Flugtasten je Takt. Dann darf der Renderer leichter
-zeichnen; das Ende der Bewegung bringt das volle Bild zurück, genau eines. Die
-Regel dazu steht in `ansicht.md` („Ein Zug zeichnet leichter, sein letztes
-Bild voll").
+## Die Kamera hat einen zweiten Treiber
+
+Die 3D-Maus (`app/ui/spacemouse.py`, Konzept `konzept-3d-maus-2026-08`) fährt
+dieselbe Kamera wie die Maus — kein eigenes Navigationsschema, kein Modus, keine
+Operation.
+
+* **Die Abbildung ist eine reine Funktion**: `camera_step` bekommt sechs Achsen,
+  eine Stellung, eine Zeitspanne und drei Einstellungen und gibt eine Stellung
+  zurück — kein Qt, kein Renderer, kein HID. Jeder Achsenfehler wird dort behoben
+  und in `tests/test_spacemouse.py` mit einem Test je Achse gehalten; wer die
+  Wirkung einer Achse ändert, macht genau einen Test rot. Objektmodus
+  ist die Vorgabe (die Kappe ist das Teil, alle sechs Achsen; Entscheidung
+  Robert), „Richtung umkehren“ der Kameramodus.
+* **Die Kappe ist ein Kraftsensor, Achsen sprechen über**, und die Totzone fängt
+  das nicht. `quiet_crosstalk` dämpft jede Nebenachse nach ihrem Anteil an der
+  stärksten: null unter `CROSSTALK_SILENT`, voll ab `CROSSTALK_MEANT`, dazwischen
+  eine **Rampe, keine Klippe** — eine harte Schwelle schaltet die Zoomachse
+  ständig an und aus. Die stärkste Achse bleibt immer, eine aktive Bewegung also
+  aktiv. Preis: Eine bewusst kleine Nebenbewegung geht verloren, und ein Rest
+  des Übersprechens bleibt — das ist der Sensor. Band und Kennlinie sind an der
+  Aufzeichnung gewählt und **am Gerät noch nicht bestätigt**; geändert wird nur
+  mit Messung am Korpus (Korpus-Tests in `test_spacemouse.py`).
+* **Der Viewport bekommt eine Stellung, keine Deltas**:
+  `Viewport.set_camera_pose` setzt Standort, Blickpunkt und Oben und zeichnet
+  einmal — die einzige Stelle, an der die 3D-Maus den Viewport anfasst;
+  `sketch_active` sagt ihr, dass im Zeichenmodus nur geschoben und gezoomt wird.
+* **Direkt über HID, neben dem Herstellertreiber**: `hidapi` (BSD-3 gewählt)
+  öffnet *Multi-axis Controller*, 3DxWare darf mitlesen. Raw Input bleibt leer
+  (3DxWare reicht Rohdaten nur an bekannte Programme). Nicht blockierend, im
+  Hauptthread, ein Takt für Lesen und Fahren; die Vorzeichen stammen aus einer
+  aufgezeichneten Lesung (`tests/data/spacemouse/`), nicht aus einer Annahme.
+* **Auf dem Mac durch den Treiber**: 3DxWare hält das Gerät exklusiv.
+  `DriverReader` lädt das `3DconnexionClient`-Framework des Kunden zur Laufzeit
+  (mitgeliefert wird nichts, Regel 22) und schreibt seine Meldungen in dieselben
+  Berichte um, die das Gerät roh liefert; `decode_report` und alles dahinter
+  merken keinen Unterschied. Angemeldet mit dem Platzhalter wie FreeCAD und
+  Blender, gelesen nur, was an Solidons Client-Kennung geht. `default_reader`:
+  Mac mit Treiber → Treiber (HID als Rückfall), sonst HID; die Plattform ist ein
+  Parameter, damit der Mac-Zweig überall prüfbar bleibt. **Am Gerät gemessen ist
+  nur Windows**; der Mac-Weg wartet auf die Rückmeldung eines Kunden.
+
+## Was die Suite prüft und was nur das echte Fenster
+
+Offscreen ist `Viewport.renderer` `None`: Die Suite prüft die Regeln gegen
+Attrappen (`RecordingRenderer`, Renderer-Doppel), nie die Kette Qt-Ereignis →
+Widget des Renderers → `PointerEvent` → Renderer. **Einheitstests über eine
+reine Funktion sagen nichts darüber, ob jemand sie ruft.** Die Kette fahren
+`.claude/.state/drehpunkt-2026-09-04/` und `.claude/.state/steuerung-2026-09-03/`
+am echten Fenster — nach jeder Änderung an `_NAVIGATION`, am Navigator oder an
+`camera_step`. Der Steuerungsprüfstand schickt noch VTK-Ereignisse und ist vorher
+umzubauen (Register in `ROADMAP.md`). Seine Fallen: Millimeter sagen nichts (jede
+Bewegung skaliert mit der Entfernung), Bildpunkte dort gar nichts (das
+Renderfenster bleibt 160×160), und `session.apply` blockiert den Hauptthread.

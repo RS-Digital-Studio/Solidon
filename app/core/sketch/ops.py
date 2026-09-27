@@ -1205,8 +1205,9 @@ class SketchRevolveParams(BaseParams):
         # (``shapes.polygon``) und sieht ``width`` nicht, und der Versatz zur
         # Achse nimmt bei Kreis *und* Vieleck ``length / 2`` statt
         # ``width / 2``. Ein aktives Feld, das nichts tut, ist genau der Fall,
-        # den `.claude/rules/oberflaeche.md` unter „Ein Feld ohne Wirkung sagt
-        # es" verbietet — und ein Kommentar, der eine Wirkung behauptet, ohne
+        # den `.claude/rules/oberflaeche.md` unter „Gestufte Tiefe" („ein Feld
+        # ohne Wirkung steht nicht da") verbietet — und ein Kommentar, der
+        # eine Wirkung behauptet, ohne
         # sie gemessen zu haben, ist der Grund, aus dem er zwei Jahre stehen
         # bleibt.
         #

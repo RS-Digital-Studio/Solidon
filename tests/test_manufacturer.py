@@ -24,7 +24,8 @@ from app.core.export import handover, manufacturer, slicer_keys
 from app.core.knowledge import print_settings, profiles
 from app.core.scene import serialise
 from app.core.scene.project import load
-from app.core.types import PrintSettings, Profile
+from app.core.slice import advise
+from app.core.types import MaterialSlot, PrintSettings, Profile, SlotOverride
 
 
 def _write(path: Path, document: dict[str, object]) -> Path:
@@ -472,6 +473,63 @@ def test_the_handover_writes_the_choice_and_the_accepted_suggestion(
     assert filament["hot_plate_temp"] == ["55"], "die übrigen Platten bleiben beim Hersteller"
 
 
+def test_a_field_that_serves_two_keys_never_speeds_up_the_second(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gemessen am 27.09.2026 an Anycubics Kobra 2 in OrcaSlicer: Der Vorschlag
+    „Innenwand 142 mm/s“ hob die Lückenfüllung des Herstellers von 100 auf
+    142 mm/s, weil Solidons Feld beide Schlüssel schreibt. Langsamer darf der
+    mitbediente Schlüssel werden, schneller als beim Hersteller nicht."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    vendor = bestand.parent / "resources" / "profiles" / "Elegoo" / "process" / "ECC2"
+    document = json.loads((vendor / "standard.json").read_text(encoding="utf-8"))
+    document.update(
+        {
+            "inner_wall_speed": "150",
+            "gap_infill_speed": "100",
+            "sparse_infill_speed": "270",
+            "internal_solid_infill_speed": ["250", "300"],
+        }
+    )
+    _write(vendor / "standard.json", document)
+    settings = print_settings.resolve(_cc2())
+    settings = print_settings.with_accepted(settings, "speed.inner_wall", 142.0)
+    settings = print_settings.with_choice(settings, "speed.infill", 200.0)
+
+    process, _filament = _written(tmp_path, settings, _setup(bestand))
+
+    assert process["inner_wall_speed"] == "142"
+    assert process["gap_infill_speed"] == "100", "nicht schneller als beim Hersteller"
+    assert process["sparse_infill_speed"] == "200"
+    assert process["internal_solid_infill_speed"] == "200", "langsamer darf er werden"
+
+
+def test_a_suggestion_slows_the_first_layer_and_never_speeds_its_walls(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Erste Schicht 50 mm/s" an schmalen Stegen (Roberts Minigolf-Platte,
+    27.09.2026) schreibt Wände und Füllung der ersten Schicht. Liegen die Wände
+    beim Hersteller bei 40, bleiben sie dort: Ein Vorschlag bremst, er
+    beschleunigt nicht. Eine eigene Wahl im Dialog darf beides."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    vendor = bestand.parent / "resources" / "profiles" / "Elegoo" / "process" / "ECC2"
+    document = json.loads((vendor / "standard.json").read_text(encoding="utf-8"))
+    document.update({"initial_layer_speed": "40", "initial_layer_infill_speed": "105"})
+    _write(vendor / "standard.json", document)
+    base = print_settings.resolve(_cc2())
+    suggested = print_settings.with_accepted(base, "speed.first_layer", 50.0)
+    chosen = print_settings.with_choice(base, "speed.first_layer", 60.0)
+    (tmp_path / "vorschlag").mkdir()
+    (tmp_path / "wahl").mkdir()
+
+    process, _filament = _written(tmp_path / "vorschlag", suggested, _setup(bestand))
+    own, _filament = _written(tmp_path / "wahl", chosen, _setup(bestand))
+
+    assert process["initial_layer_speed"] == "40", "der Vorschlag bremst, er beschleunigt nicht"
+    assert process["initial_layer_infill_speed"] == "50"
+    assert (own["initial_layer_speed"], own["initial_layer_infill_speed"]) == ("60", "60")
+
+
 def test_the_check_holds_what_the_slicer_prints(
     bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -808,3 +866,416 @@ def test_switched_off_supports_do_not_name_a_type() -> None:
     automatic = print_settings.with_path(settings, "adhesion.kind", "auto")
     assert handover.as_mapping(automatic, "orca")["brim_type"] == "auto_brim"
     assert slicer_keys.TABLES["orca"], "die Tabelle ist nicht leer"
+
+
+# --- PrusaSlicer auf dem Bündel (Stufe C) ------------------------------------------
+
+#: Ein Prusa-Bündel in der Staffelung, die PrusaResearch.ini 2.4.14 nutzt: eine
+#: gemeinsame Basis je Art, der MK4S mit HF-Düse, zwei Prozesse und das PLA, das
+#: den Rückzug des Druckers überstimmt. Werte wie gemessen am 27.09.2026, bis auf
+#: die Prozentangaben, die es am MK4S in dieser Form nicht gibt.
+_PRUSA_BUNDLE = r"""[vendor]
+name = Prusa Research
+
+[printer_model:MK4S]
+name = Original Prusa MK4S
+variants = HF0.4
+default_materials = Prusament PLA @MK4S HF0.4
+
+[printer:*common*]
+printer_technology = FFF
+gcode_flavor = marlin2
+nozzle_diameter = 0.4
+bed_shape = 0x0,250x0,250x210,0x210
+max_print_height = 220
+retract_length = 0.7
+retract_speed = 35
+retract_lift = 0.2
+wipe = 0
+binary_gcode = 1
+machine_limits_usage = emit_to_gcode
+printer_settings_id =
+start_gcode = M862.3 P "[printer_model]" ; printer model check\nG29 P1 ; probe\nG29 A ; activate mbl
+
+[printer:Original Prusa MK4S HF0.4 nozzle]
+inherits = *common*
+printer_model = MK4S
+printer_variant = HF0.4
+nozzle_high_flow = 1
+default_print_profile = 0.20mm SPEED @MK4S HF0.4
+default_filament_profile = "Prusament PLA @MK4S HF0.4"
+
+[print:*common*]
+layer_height = 0.2
+first_layer_height = 0.2
+extrusion_width = 0.45
+first_layer_extrusion_width = 0.5
+external_perimeter_extrusion_width = 0.45
+perimeters = 2
+top_solid_layers = 5
+bottom_solid_layers = 3
+fill_density = 15%
+fill_pattern = grid
+perimeter_speed = 250
+external_perimeter_speed = 80%
+infill_speed = 250
+solid_infill_speed = 250
+top_solid_infill_speed = 40%
+gap_fill_speed = 120
+first_layer_speed = 40
+first_layer_infill_speed = 100
+travel_speed = 300
+bridge_speed = 50
+default_acceleration = 4000
+perimeter_acceleration = 3000
+external_perimeter_acceleration = 0
+support_material = 1
+support_material_auto = 0
+support_material_style = snug
+support_material_threshold = 35
+support_material_xy_spacing = 80%
+support_material_spacing = 2
+support_material_contact_distance = 0.2
+support_material_interface_layers = 3
+skirts = 0
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+
+[print:0.20mm SPEED @MK4S HF0.4]
+inherits = *common*
+
+[print:0.20mm STRUCTURAL @MK4S HF0.4]
+inherits = *common*
+support_material_threshold = 0
+
+[filament:Prusament PLA @MK4S HF0.4]
+filament_type = PLA
+temperature = 230
+first_layer_temperature = 230
+bed_temperature = 60
+first_layer_bed_temperature = 60
+max_fan_speed = 100
+min_fan_speed = 85
+fan_always_on = 0
+fan_below_layer_time = 100
+slowdown_below_layer_time = 8
+disable_fan_first_layers = 1
+extrusion_multiplier = 1
+filament_max_volumetric_speed = 24
+filament_retract_length = 0.8
+filament_retract_lift = nil
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+"""
+
+
+@pytest.fixture
+def prusa_bundle(tmp_path: Path) -> Path:
+    """PrusaSlicer mit dem nachgebauten Bündel, als Programmdatei daneben."""
+    root = tmp_path / "PrusaSlicer" / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(_PRUSA_BUNDLE, encoding="utf-8")
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer-console.exe"
+    executable.write_bytes(b"")
+    return executable
+
+
+def _prusa_setup(
+    executable: Path, process: str = "0.20mm SPEED @MK4S HF0.4"
+) -> handover.SlicerSetup:
+    return handover.SlicerSetup(
+        executable=executable,
+        flavour="prusa",
+        machine_profile="Original Prusa MK4S HF0.4 nozzle",
+        base_process=process,
+        base_filament="Prusament PLA @MK4S HF0.4",
+    )
+
+
+def _mk4s() -> Profile:
+    return profiles.make_profile("prusa-mk4s", "pla")
+
+
+def test_prusas_bundle_is_read_back_like_the_orca_family(prusa_bundle: Path) -> None:
+    """Stufe C, Rücklesung: Drucker, Prozess und Filament des Bündels in
+    Solidons Feldern. Prozentangaben gelten dem Wert, auf den PrusaSlicer sie
+    bezieht; der Rückzug kommt vom Drucker, außer das Filament überstimmt ihn."""
+    foundation = manufacturer.base_settings(_mk4s(), "standard", _prusa_setup(prusa_bundle))
+    base = foundation.settings
+
+    assert foundation.has_profile and not foundation.has_plates
+    assert manufacturer.findings(foundation) == [], "keine Platte zu nennen"
+    assert (base.shell.wall_count, base.shell.bottom_layers) == (2, 3)
+    assert base.speed.first_layer == pytest.approx(100.0), "der Boden der ersten Schicht"
+    assert base.speed.outer_wall == pytest.approx(200.0), "80 % der Wände"
+    assert base.speed.top_surface == pytest.approx(100.0), "40 % der vollen Füllung"
+    assert base.speed.outer_wall_acceleration == pytest.approx(3000.0), "null: die der Wände"
+    assert base.support.style == "none", "nur an Verstärkern stützt nichts"
+    assert base.support.threshold_angle == pytest.approx(55.0), "35 gegen die Waagerechte"
+    assert base.support.xy_gap == pytest.approx(0.36), "80 % der Außenwand"
+    assert base.support.density == pytest.approx(0.45 / 2.0)
+    assert base.adhesion.kind == "none", "die Spüllinie steht im Startcode"
+    assert base.retraction.length == pytest.approx(0.8), "das Filament überstimmt"
+    assert base.retraction.z_hop == pytest.approx(0.2), "nil: der Wert des Druckers"
+    assert base.cooling.minimum_fan_speed == pytest.approx(0.0), "ohne fan_always_on kein Minimum"
+    assert base.temperature.nozzle == 230
+    assert base.filament.max_flow == pytest.approx(24.0)
+    assert not base.explicit
+
+
+def test_prusas_automatic_support_angle_is_half_an_outer_wall(prusa_bundle: Path) -> None:
+    """Null heißt bei PrusaSlicer „automatisch": überhängend ist, was mehr als
+    die halbe Außenwand über die Schicht darunter ragt — bei 0,45 mm und
+    0,2 mm Schicht 48,4° gegen die Senkrechte. Ein gewählter Prozess ist die
+    Stufe; nichts wird über ihn gelegt."""
+    setup = _prusa_setup(prusa_bundle, "0.20mm STRUCTURAL @MK4S HF0.4")
+
+    foundation = manufacturer.base_settings(_mk4s(), "fine", setup)
+
+    assert foundation.settings.support.threshold_angle == pytest.approx(48.37, abs=0.01)
+    assert not foundation.staged, "der Prozess ist nicht der Standard der Maschine"
+
+
+def test_without_prusas_printer_the_base_is_solidons_table(prusa_bundle: Path) -> None:
+    """Das Bündel kennt den Centauri Carbon 2 nicht. Dann bleibt Solidons
+    Tabelle die Grundlage, und der Befund sagt es — PrusaSlicer druckte sonst
+    mit seinem eingebauten Startcode, ohne Bettvermessung und Spüllinie."""
+    profile = _cc2()
+    setup = replace(_prusa_setup(prusa_bundle), machine_profile="")
+
+    foundation = manufacturer.base_settings(profile, "standard", setup)
+    values, _expected = handover.prusa_values(
+        print_settings.resolve(profile), profile, setup, console=True
+    )
+
+    assert not foundation.has_profile
+    assert foundation.settings == print_settings.resolve(profile)
+    assert values["filament_type"] == "PLA", "PETG ging sonst als PLA hinaus (B11)"
+    assert "bed_shape" in values and "start_gcode" not in values
+    assert [f.code for f in handover.machine_missing(setup, profile)] == ["slicer.printer_unknown"]
+
+
+def test_prusa_gets_the_whole_chain_and_only_the_deviation(prusa_bundle: Path) -> None:
+    """Die Abnahme von Stufe C, nachgestellt: Ohne eigene Wahl steht in der
+    Datei, was PrusaSlicer mit den drei Profilen im Fenster druckt — Startcode
+    mit Bettvermessung, ``marlin2``, zwei Wände —, dazu nur die Namen und im
+    Konsolenlauf das Textformat. Bis dahin waren es 63 Schlüssel über
+    PrusaSlicers eingebauten Vorgaben."""
+    profile = _mk4s()
+    setup = _prusa_setup(prusa_bundle)
+    settings = manufacturer.effective(None, manufacturer.base_settings(profile, "standard", setup))
+
+    console, expected = handover.prusa_values(settings, profile, setup, console=True)
+    window, _expected = handover.prusa_values(settings, profile, setup, console=False)
+
+    assert "G29 A" in console["start_gcode"] and console["gcode_flavor"] == "marlin2"
+    assert console["perimeters"] == "2"
+    assert console["machine_limits_usage"] == "emit_to_gcode", "die Grenzen des Druckers"
+    assert console["printer_settings_id"] == "Original Prusa MK4S HF0.4 nozzle"
+    assert console["print_settings_id"] == "0.20mm SPEED @MK4S HF0.4"
+    assert console["filament_settings_id"] == "Prusament PLA @MK4S HF0.4"
+    assert console["binary_gcode"] == "0" and window["binary_gcode"] == "1"
+    assert not {"inherits", "compatible_printers_condition"} & console.keys()
+    assert set(expected) == {
+        "layer_height",
+        "perimeters",
+        "support_material_threshold",
+        *handover.PRUSA_IDENTITY,
+    }, "geprüft wird die Grundlage, abweichen tut nichts"
+
+
+def test_prusa_supports_switched_on_are_automatic_supports(prusa_bundle: Path) -> None:
+    """Prusas Vorgabe stützt nur an gemalten Verstärkern. Wer Stützen
+    einschaltet, bekommt beide Schalter; der Stil bleibt der des Bündels
+    (Entscheidung J)."""
+    profile = _mk4s()
+    setup = _prusa_setup(prusa_bundle)
+    base = manufacturer.effective(None, manufacturer.base_settings(profile, "standard", setup))
+    settings = print_settings.with_choice(base, "support.style", "auto")
+
+    values, expected = handover.prusa_values(settings, profile, setup, console=True)
+
+    assert values["support_material"] == values["support_material_auto"] == "1"
+    assert values["support_material_style"] == "snug"
+    assert expected["support_material"] == "1"
+
+
+def test_a_prusa_suggestion_slows_the_first_layer_and_a_choice_reaches_the_filament(
+    prusa_bundle: Path,
+) -> None:
+    """Dieselben Regeln wie bei der Orca-Familie: Ein Vorschlag bremst nur —
+    „erste Schicht 50" legt den Boden langsamer und lässt die Wände bei 40.
+    Ein gewählter Rückzug steht auch am Filament, das ihn sonst überstimmte."""
+    profile = _mk4s()
+    setup = _prusa_setup(prusa_bundle)
+    base = manufacturer.effective(None, manufacturer.base_settings(profile, "standard", setup))
+    suggested = print_settings.with_accepted(base, "speed.first_layer", 50.0)
+    retraction = print_settings.with_choice(base, "retraction.length", 1.2)
+
+    slowed, _expected = handover.prusa_values(suggested, profile, setup, console=True)
+    retracted, _expected = handover.prusa_values(retraction, profile, setup, console=True)
+
+    assert slowed["first_layer_infill_speed"] == "50"
+    assert slowed["first_layer_speed"] == "40", "die Wände nicht schneller"
+    assert retracted["retract_length"] == retracted["filament_retract_length"] == "1.2"
+
+
+def test_a_spool_writes_only_what_it_changes_over_its_manufacturer(
+    bestand: Path, prusa_bundle: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review Stufe A+B, H15: Eine Spulenübersteuerung ist gruppenweise,
+    vorbelegt mit den Werten, die ohne sie gälten. Wer nur die Düse ändert,
+    schreibt nicht Bett und erste Schicht mit über das Herstellerfilament.
+    Und über Prusas Bündel geht sie überhaupt hinaus — die erste Spule fährt
+    den Satz."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    slot = MaterialSlot(index=0, name="Rot", colour=(1.0, 0.0, 0.0))
+
+    def spool(profile: Profile, setup: handover.SlicerSetup) -> PrintSettings:
+        base = manufacturer.effective(None, manufacturer.base_settings(profile, "standard", setup))
+        hotter = replace(base.temperature, nozzle=base.temperature.nozzle + 15)
+        return replace(
+            base,
+            slot_overrides=(SlotOverride(name="Rot", colour=slot.colour, temperature=hotter),),
+        )
+
+    orca = spool(_cc2(), _setup(bestand))
+    out = tmp_path / "orca"
+    out.mkdir()
+    config = handover.write_config(orca, _cc2(), _setup(bestand), out, slots=(slot,))
+    assert config.filament is not None
+    filament = json.loads(config.filament.read_text(encoding="utf-8"))
+    prusa = spool(_mk4s(), _prusa_setup(prusa_bundle))
+    values, expected = handover.prusa_values(
+        prusa, _mk4s(), _prusa_setup(prusa_bundle), (slot,), console=True
+    )
+
+    assert filament["nozzle_temperature"] == ["225"], "Elegoos 210 und 15 mehr"
+    assert filament["textured_plate_temp"] == ["60"], "das Bett bleibt beim Hersteller"
+    assert "nozzle_temperature" in config.written
+    assert values["temperature"] == expected["temperature"] == "245"
+    assert "first_layer_temperature" not in expected, "nicht geändert, nicht geschrieben"
+
+
+def test_the_analysis_supports_where_the_chosen_process_supports(prusa_bundle: Path) -> None:
+    """Entscheidung L: Die Schichtanalyse stützt ab der Schwelle, mit der der
+    Slicer stützt. Prusas „STRUCTURAL" stützt automatisch ab 48,4° gegen die
+    Senkrechte, der MK4S in Solidons Tabelle ab 55°. Die Analyse folgt dem
+    Prozess, und der Ratgeber schlägt keine zweite Schwelle vor — bis dahin
+    riet er am SV06, den Wert des Herstellers mit Solidons zu überschreiben."""
+    profile = _mk4s()
+    setup = _prusa_setup(prusa_bundle, "0.20mm STRUCTURAL @MK4S HF0.4")
+    printed = manufacturer.effective(None, manufacturer.base_settings(profile, "fine", setup))
+
+    process = profiles.for_process(profile, printed, effective=True)
+
+    assert profile.overhang_limit_degrees == pytest.approx(55.0)
+    assert process.overhang_limit_degrees == pytest.approx(48.37, abs=0.01)
+    paths = {entry.path for entry in advise.advise(printed, process)}
+    assert "support.threshold_angle" not in paths
+    assert "support.threshold_angle" in {
+        entry.path for entry in advise.advise(printed, profiles.for_process(profile, printed))
+    }, "gegen die Tabelle gerechnet stand der Vorschlag"
+
+
+def test_a_stored_threshold_is_the_analysis_limit_only_as_a_choice() -> None:
+    """Ein Projekt aus 0.5.0 trägt die Startregel von 45 Grad, ohne dass sie
+    jemand gewählt hat. Aus dem gespeicherten Satz gilt die Schwelle darum nur
+    als eigene Wahl; aus den wirksamen Einstellungen immer, denn dort steht die
+    des Herstellers darunter. Eine gedruckte Probe geht beidem vor
+    (``Profile.overhang_limit_degrees``, test_calibration)."""
+    profile = _cc2()
+    resolved = print_settings.resolve(profile)
+    legacy = print_settings.with_path(resolved, "support.threshold_angle", 45.0)
+    chosen = print_settings.with_choice(resolved, "support.threshold_angle", 50.0)
+
+    assert profiles.for_process(profile, legacy).overhang_limit_degrees == pytest.approx(60.0)
+    assert profiles.for_process(profile, chosen).overhang_limit_degrees == pytest.approx(50.0)
+    assert profiles.for_process(
+        profile, legacy, effective=True
+    ).overhang_limit_degrees == pytest.approx(45.0)
+
+
+def test_the_session_evaluates_with_what_the_window_prints() -> None:
+    """Der Anschluss von Entscheidung L: Die Sitzung holt die wirksamen
+    Einstellungen des Fensters vor dem Lauf, und Prüfbericht und Szene
+    rechnen mit deren Schwelle. Kommt die Grundlage des Herstellers erst
+    danach, sagt ``evaluation_follows``, ob ein zweiter Lauf nötig ist."""
+    from app.ui.session import Session
+
+    session = Session()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    assert session.import_model(meshes / "near_sphere_ellipsoid.stl", unit="mm")
+    stored = session.profile.overhang_limit_degrees
+    printed = print_settings.with_path(
+        print_settings.resolve(session.profile), "support.threshold_angle", 40.0
+    )
+
+    class Window:
+        def effective_print_settings(self) -> PrintSettings:
+            return printed
+
+    window = Window()
+    session.follow_print_settings(window.effective_print_settings)
+    assert session.evaluation_profile.overhang_limit_degrees == pytest.approx(stored)
+    result = session.evaluate_now()
+
+    assert stored != pytest.approx(40.0)
+    assert session.evaluation_profile.overhang_limit_degrees == pytest.approx(40.0)
+    assert result.scene.profile is not None
+    assert result.scene.profile.overhang_limit_degrees == pytest.approx(40.0)
+    assert session.evaluation_follows(printed)
+    later = print_settings.with_path(printed, "support.threshold_angle", 52.0)
+    assert not session.evaluation_follows(later), "die Grundlage kam mit einer anderen"
+
+
+def test_the_stage_takes_the_manufacturers_process(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stufe F (Entscheidung I): „Fein" nimmt Elegoos „0.12mm Fine", statt
+    Solidons Stufe über den Standardprozess zu legen. Gesucht wird unter den
+    Geschwistern mit demselben Zusatz — der Prozess für die 0,6-mm-Düse daneben
+    zählt nicht. Findet sich keiner, bleibt der Standard und die Stufe liegt
+    darüber; ein selbst gewählter Prozess bleibt, wie er ist."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    folder = bestand.parent / "resources" / "profiles" / "Elegoo" / "process" / "ECC2"
+    for file, name, layer in (
+        ("fine.json", "0.12mm Fine @CC2", "0.12"),
+        ("fine06.json", "0.18mm Fine @CC2 0.6 nozzle", "0.18"),
+    ):
+        _write(
+            folder / file,
+            {
+                "type": "process",
+                "name": name,
+                "inherits": "fdm_process_common",
+                "instantiation": "true",
+                "layer_height": layer,
+                "compatible_printers": ["Elegoo Centauri Carbon 2 0.4 nozzle"],
+            },
+        )
+    setup = _setup(bestand)
+
+    fine = manufacturer.for_stage(setup, _cc2(), "fine")
+    foundation = manufacturer.base_settings(_cc2(), "fine", fine)
+
+    assert fine is not None and Path(fine.base_process).name == "fine.json"
+    assert foundation.settings.layers.layer_height == pytest.approx(0.12)
+    assert not foundation.staged, "nichts liegt mehr über dem Prozess"
+    assert manufacturer.for_stage(setup, _cc2(), "strong") == setup
+    assert manufacturer.base_settings(_cc2(), "strong", setup).staged, "die Stufe liegt darüber"
+    assert manufacturer.for_stage(fine, _cc2(), "draft") == fine, "eine eigene Wahl bleibt"
+    assert manufacturer.for_stage(setup, _cc2(), "standard") == setup
+
+
+def test_prusas_stage_takes_its_structural_process(prusa_bundle: Path) -> None:
+    """Dieselbe Zuordnung im Prusa-Bündel: „Belastbar" nimmt „0.20mm
+    STRUCTURAL", und dessen automatische Stützschwelle gilt; eine feine Stufe
+    führt das nachgebaute Bündel nicht."""
+    setup = _prusa_setup(prusa_bundle)
+
+    strong = manufacturer.for_stage(setup, _mk4s(), "strong")
+
+    assert strong is not None and strong.base_process == "0.20mm STRUCTURAL @MK4S HF0.4"
+    foundation = manufacturer.base_settings(_mk4s(), "strong", strong)
+    assert foundation.process == "0.20mm STRUCTURAL @MK4S HF0.4" and not foundation.staged
+    assert foundation.settings.support.threshold_angle == pytest.approx(48.37, abs=0.01)
+    assert manufacturer.for_stage(setup, _mk4s(), "fine") == setup
