@@ -118,8 +118,10 @@ glatte Fläche) · `autosplit.py` (schneiden, bis es passt) · `symmetry.py`
 (`mirror_plane`) · `pins.py` (Passstifte, `first_pin`)
 
 **Kanten und Flächen** — `edge_ops.py`, `face_ops.py` (der Körper wählt den
-Kern) · `edges.py` (Züge mit `edge_key` wie in `brep.edit`; `edges_in_kernel`,
-`EDGE_SELECTION_REJECTED`, `RadiusLaw`, `ChamferShape`, `sharp_corner`) ·
+Kern) · `edges.py` (Züge mit `edge_key` wie in `brep.edit`; `choose` für die Gruppen
+nach Lage beider Kerne, `edges_in_kernel`, `EDGE_SELECTION_REJECTED`,
+`RadiusLaw`, `ChamferShape`, `sharp_corner`; Werkzeug je Stück als Prisma, am
+gebogenen Zug durch die Knoten, `_swept_tool`) ·
 `faces.py` (Prisma aus dem eigenen Umriss, Versatz je Knoten;
 `pushed_features`)
 

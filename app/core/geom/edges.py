@@ -572,9 +572,10 @@ class SelectableEdge(HasPlacement, Protocol):
     """Was eine Auswahl **nach der Lage** von einer Kante braucht.
 
     Wieder für beide Kerne: ``upright`` und ``flat`` beantworten
-    ``MeshEdge`` und ``brep.edit.EdgeInfo`` gleich, und deshalb gibt es die
-    Auswahl nur einmal. Eine zweite Fassung im exakten Kern hieße, dass „alle
-    senkrechten Kanten" dort bald etwas anderes bedeutet als hier.
+    ``MeshEdge`` und ``brep.edit.EdgeInfo`` gleich, :func:`edge_lie_of` an
+    Ringen auch, und deshalb gibt es die Auswahl nur einmal. Eine zweite
+    Fassung im exakten Kern hieße, dass „alle senkrechten Kanten" dort bald
+    etwas anderes bedeutet als hier.
     """
 
     @property
@@ -584,8 +585,31 @@ class SelectableEdge(HasPlacement, Protocol):
     def flat(self) -> bool: ...
 
 
-def choose[AnyEdge: SelectableEdge](edges: Sequence[AnyEdge], choice: EdgeChoice) -> list[AnyEdge]:
-    """Die Kanten, die eine benannte Auswahl meint."""
+def choose[AnyEdge: SelectableEdge](
+    edges: Sequence[AnyEdge], choice: EdgeChoice, *, rings_by_plane: bool = True
+) -> list[AnyEdge]:
+    """Die Kanten, die eine benannte Auswahl meint.
+
+    **Gerade Kanten nach ihrer Richtung, runde Ränder nur, wenn sie
+    waagerecht liegen** (RM-279, Entscheidung der Release-Sitzung). Ein
+    geschlossener Ring hat keine Richtung; ob er waagerecht liegt, sagt
+    :func:`edge_lie_of` nach seiner Ebene — dieselbe Quelle wie die
+    Beschriftung. Ein waagerechter Rand zählt zu „waagerecht“, „oben“ und
+    „unten“ wie bisher. Ein Rand in einer stehenden oder schrägen Ebene, die
+    Mündung einer Querbohrung, gehört zu **keiner** Gruppe nach Lage, obwohl
+    er „Senkrecht“ heißt: Für den Kunden ist eine senkrechte Kante eine
+    gerade Kante und kein Lochrand. Mit der Vorgabe „senkrecht“ rundete
+    *Verrunden* sonst an jedem Teil mit Querbohrung die Mündungen mit, bei
+    R 5 an einer Bohrung Ø 6 zum Trichter, und an ``pegboard-gs-100`` sank der
+    größte Radius, der passt, von 0,85 auf 0,71 mm. Wer die Mündung meint,
+    wählt sie einzeln. Die senkrechte Gruppe ist deshalb an beiden Wegen
+    dieselbe.
+
+    ``rings_by_plane=False`` ist der Weg, den gespeicherte Schritte bis
+    Format 36 gingen: ``flat`` galt an jedem Ring, auch an der Mündung einer
+    Querbohrung. Die Migration 36 → 37 hält ihn für sie fest, damit ein altes
+    Projekt beim Öffnen nicht andere Kanten rundet.
+    """
     # ``named`` geht nicht nach der Lage, sondern nach Schlüsseln — die kennt
     # nur :func:`wanted`. Hier wäre jede Antwort eine falsche.
     if choice == "named":
@@ -593,22 +617,29 @@ def choose[AnyEdge: SelectableEdge](edges: Sequence[AnyEdge], choice: EdgeChoice
     if choice == "all":
         return list(edges)
     if choice == "vertical":
+        # ``upright`` gilt an keinem Ring (Richtung null) — an beiden Wegen.
         return [entry for entry in edges if entry.upright]
+    if rings_by_plane:
+        # An Strecken und Bögen sagt ``edge_lie_of`` dasselbe wie ``flat``;
+        # anders nur an einem Ring, dessen Ebene nicht waagerecht liegt.
+        flat = [edge_lie_of(entry) == "flat" for entry in edges]
+    else:
+        flat = [entry.flat for entry in edges]
     if choice == "horizontal":
-        return [entry for entry in edges if entry.flat]
+        return [entry for entry, lying in zip(edges, flat, strict=True) if lying]
 
     # **Die Höhe der waagerechten Kanten, nicht aller** (22.09.2026). Eine
     # schräge Kante hat ihre Mitte zwischen ihren Enden: Am Walmdach lagen die
     # Mitten der Grate bei 12,5, die Traufen bei 10, und „oben" suchte
     # waagerechte Kanten auf 12,5 — es gab keine.
-    heights = [entry.middle[2] for entry in edges if entry.flat]
+    heights = [entry.middle[2] for entry, lying in zip(edges, flat, strict=True) if lying]
     if not heights:
         return []
     wanted_height = max(heights) if choice == "top" else min(heights)
     return [
         entry
-        for entry in edges
-        if entry.flat and abs(entry.middle[2] - wanted_height) <= SAME_HEIGHT
+        for entry, lying in zip(edges, flat, strict=True)
+        if lying and abs(entry.middle[2] - wanted_height) <= SAME_HEIGHT
     ]
 
 
@@ -625,20 +656,23 @@ def _lie_along(rise: float) -> EdgeLie:
 
 
 def edge_lie_of(entry: Any) -> EdgeLie:
-    """Wie eine Kante liegt — für ihre **Beschriftung** (RM-269).
+    """Wie eine Kante liegt — für ihre Beschriftung und die Auswahl nach Lage.
 
     Eine Strecke oder ein Bogen nach der Richtung von Anfang zu Ende, wie
     ``upright`` und ``flat``. Ein **geschlossener Ring** hat keine: Anfang
     und Ende fallen zusammen, die Richtung ist null, und ``flat`` galt an
     jedem Ring. Die Mündung einer quer liegenden Bohrung hieß deshalb
-    „Waagerecht“, obwohl sie senkrecht steht. Ein Ring liegt, wie seine Ebene
-    liegt: waagerecht, wenn ihre Normale senkrecht steht, und umgekehrt.
+    „Waagerecht“, obwohl sie senkrecht steht (RM-269). Ein Ring liegt, wie
+    seine Ebene liegt: waagerecht, wenn ihre Normale senkrecht steht, und
+    umgekehrt.
 
-    **Die Auswahl nach Lage** (:func:`choose`) fragt bewusst weiter ``flat``
-    und ``upright``: Sie bestimmt, welche Kanten *Verrunden* trifft, und eine
-    andere Antwort dort änderte gespeicherte Projekte. Deshalb darf die
-    Rechnung hier schnell sein (``np.cross``, ``np.linalg.norm``, RM-187): Sie
-    benennt nur und entscheidet nichts an der Geometrie.
+    **Die Auswahl nach Lage** (:func:`choose`) fragt dieselbe Quelle, ob ein
+    Ring waagerecht liegt (RM-279); ein stehender Ring heißt „Senkrecht“,
+    gehört aber zu keiner Gruppe. Gespeicherte Schritte aus Format 36 und
+    älter behalten ``flat`` an jedem Ring (``rings_by_plane=False``). Die
+    Rechnung bleibt die schnelle (``np.cross``, ``np.linalg.norm``, RM-187);
+    die Schwellen sind dieselben wie bei ``upright`` und ``flat`` an einer
+    Strecke.
 
     ``entry`` ist ein :class:`MeshEdge` (trägt ``points``), ein
     ``brep.edit.EdgeInfo`` (abgetastet über ``edge_points``) oder ein
@@ -728,6 +762,8 @@ def selected_or_wanted[AnyEdge: SelectableEdge](
     choice: EdgeChoice,
     keys: Sequence[str],
     selected_edges: Sequence[int] | None,
+    *,
+    rings_by_plane: bool = True,
 ) -> list[AnyEdge]:
     """Die Kanten dieses Aufrufs: ausdrücklich gewählte vor Schlüsseln vor Gruppe.
 
@@ -738,12 +774,16 @@ def selected_or_wanted[AnyEdge: SelectableEdge](
     zwei Kanten treffen.
     """
     if selected_edges is None:
-        return wanted(edges, choice, keys)
+        return wanted(edges, choice, keys, rings_by_plane=rings_by_plane)
     return [edges[index] for index in checked_indices(selected_edges, len(edges))]
 
 
 def wanted[AnyEdge: SelectableEdge](
-    edges: Sequence[AnyEdge], choice: EdgeChoice, keys: Sequence[str]
+    edges: Sequence[AnyEdge],
+    choice: EdgeChoice,
+    keys: Sequence[str],
+    *,
+    rings_by_plane: bool = True,
 ) -> list[AnyEdge]:
     """Die Kanten, die dieser Aufruf behandelt — genannte vor Gruppe (E4).
 
@@ -774,7 +814,7 @@ def wanted[AnyEdge: SelectableEdge](
                 suggestions=(CHANGE_SELECTION, CANCEL),
             )
         return chosen
-    chosen = choose(edges, choice)
+    chosen = choose(edges, choice, rings_by_plane=rings_by_plane)
     if not chosen:
         raise GeometryError(
             detail=_("Zu dieser Auswahl gehört keine Kante."),
@@ -1383,9 +1423,11 @@ def rounding_tool(
     Handlungen — zwei Funktionen dafür hießen, dass eine von ihnen den
     nächsten Fehler allein bekommt.
 
-    **Gebaut wird stückweise.** Jedes Stück des Zugs bekommt sein eigenes
-    Prisma mit seinem eigenen Querschnitt; vereinigt ergeben sie den ganzen
-    Körper. An einem Bogen dreht sich die Winkelhalbierende dabei mit.
+    **Gebaut wird stückweise, ein Bogen durch seine Knoten.** Jedes Stück
+    eines geraden oder geknickten Zugs bekommt sein eigenes Prisma mit seinem
+    eigenen Querschnitt; vereinigt ergeben sie den ganzen Körper. Ein
+    gebogener Zug entsteht als ein Körper durch Querschnitte an seinen Knoten
+    (:func:`_swept_tool`) — zwischen Prismen klaffte dort ein Keil (RM-279).
 
     Ein gemischter Eckanschluss setzt ``min_steps`` gemeinsam für Torus und
     Zylinder. Dort verhindert ``extend_ends=False`` einen Schnitt auf der
@@ -1418,6 +1460,17 @@ def rounding_tool(
     # Schnittkurve dieselbe, nur die Flanken schneiden Luft. ``EPS_GEOM`` war
     # dafür zu wenig — 499 Eckpunktpaare unter der Schweißtoleranz.
     flank_overlap = BOOLEAN_OVERLAP if subtracted else (0.0 if extend_ends else EPS_GEOM)
+    if shape is None:
+        swept = _swept_tool(
+            entry,
+            radius,
+            rounded,
+            subtracted=subtracted,
+            min_steps=min_steps,
+            flank_overlap=flank_overlap,
+        )
+        if swept is not None:
+            return swept
     pieces: list[MeshData] = []
     for index, (first, second) in enumerate(entry.normals):
         wedge = _wedge(
@@ -1446,6 +1499,215 @@ def rounding_tool(
     # richtiges Volumen, aber ``body_count`` zählte drei Teile, und der
     # Prüfbericht meldet so etwas dem Kunden als Zerfall.
     return boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
+
+
+#: Wie weit ein Zug von einem Stück zum nächsten höchstens abbiegen darf, damit
+#: sein Werkzeug als ein Körper durch die Querschnitte an den Knoten entsteht
+#: (:func:`_swept_tool`). Ein Achteck biegt um 45 Grad; darüber ist der Knoten
+#: eine Ecke, und die Stücke bekommen ihre eigenen Prismen.
+SWEEP_TURN_LIMIT: Final = math.pi / 4.0
+
+
+def _swept_tool(
+    entry: MeshEdge,
+    radius: float,
+    rounded: bool,
+    *,
+    subtracted: bool,
+    min_steps: int,
+    flank_overlap: float,
+    law: RadiusLaw | None = None,
+) -> MeshData | None:
+    """Das Werkzeug eines gebogenen Zugs als **ein** Körper durch die Knoten (RM-279).
+
+    Die Prismen je Stück (:func:`_wedge`) stehen an einem Bogen mit ihren
+    Stirnflächen quer zu ihrem eigenen Stück. Biegt der Zug, klafft zwischen
+    zwei Prismen auf der Außenseite der Biegung ein Keil, und dort bleibt
+    Material stehen. Am Rand einer Bohrung Ø 6 in einer Wand — der Zwickel
+    liegt außen um die Bohrung — trug das Netz bei R 2 5 % und bei R 5 20 %
+    zu wenig ab, die Rundung lag bis 1,9 mm neben der exakten, als Sägezahn
+    um die Mündung; ein Verlauf 2 → 4 → 2 trug 13 % zu wenig ab.
+
+    Hier liegt je **Knoten** ein Querschnitt, quer zur mittleren Richtung der
+    zwei Stücke und mit den gemittelten Flächennormalen, und zwischen zwei
+    Knoten verbindet das Werkzeug gerade — so, wie der exakte Kern einen Torus
+    tesselliert. Ein geschlossener Ring wird ein Schlauch ohne Stirnflächen.
+    Mit ``law`` trägt jeder Querschnitt den Radius seiner Stelle, und wie in
+    :func:`_varying_tool` kommen Querschnitte an jeder Stelle des Verlaufs und
+    so dicht dazwischen dazu, dass die gerade Verbindung der Länge nach
+    höchstens :data:`LENGTHWISE_SAG_SHARE` der Sehnengrenze verbraucht.
+
+    Ein gerader Zug bleibt beim Prisma (``None``), ebenso ein Zug mit einem
+    Knick über :data:`SWEEP_TURN_LIMIT`, mit Normalen, die an einem Knoten
+    springen, oder mit einem Stück ohne Querschnitt.
+    """
+    points = np.asarray(entry.points, dtype=float)
+    count = len(entry.normals)
+    if count < 2 or len(points) != count + 1:
+        return None
+    steps_along = np.diff(points, axis=0)
+    lengths = np.linalg.norm(steps_along, axis=1)
+    if float(lengths.min()) <= EPS_GEOM:
+        return None
+    alongs = steps_along / lengths[:, None]
+    closed = count >= 3 and math.dist(points[0], points[-1]) <= EPS_GEOM
+    pairs = [
+        (np.asarray(first, dtype=float), np.asarray(second, dtype=float))
+        for first, second in entry.normals
+    ]
+    # Welche Normale „die erste“ ist, sagt die Kantensuche je Stück; für einen
+    # Körper durch alle Knoten muss sie am ganzen Zug dieselbe Fläche meinen.
+    for index in range(1, count):
+        previous_one, previous_two = pairs[index - 1]
+        one, two = pairs[index]
+        if units.dot3(previous_one, two) + units.dot3(previous_two, one) > units.dot3(
+            previous_one, one
+        ) + units.dot3(previous_two, two):
+            pairs[index] = (two, one)
+    joints = [(index, index + 1) for index in range(count - 1)]
+    if closed:
+        joints.append((count - 1, 0))
+    turn_cos = math.cos(SWEEP_TURN_LIMIT)
+    bent = False
+    for before, after in joints:
+        turn = units.dot3(alongs[before], alongs[after])
+        if turn < turn_cos:
+            return None
+        if any(units.dot3(pairs[before][side], pairs[after][side]) < turn_cos for side in (0, 1)):
+            return None
+        bent = bent or turn < 1.0 - EPS_GEOM
+    if not bent:
+        return None
+
+    def mean(first: np.ndarray, second: np.ndarray) -> np.ndarray | None:
+        summed = first + second
+        size = _length(summed)
+        return summed / size if size > EPS_GEOM else None
+
+    def constant(_place: float) -> float:
+        return radius
+
+    cumulative = np.concatenate(([0.0], np.cumsum(lengths)))
+    radius_at: Callable[[float], float] = constant
+    stations: list[float] = []
+    spacing = math.inf
+    chord_sag = MAX_FACET_SAG
+    if law is not None:
+        on_chain = law_on_points(points, law)
+        radius_at = on_chain.radius
+        stations = on_chain.places()
+        bend = on_chain.law.curvature_bound() / max(float(cumulative[-1]) ** 2, EPS_GEOM)
+        if bend > EPS_GEOM:
+            chord_sag = MAX_FACET_SAG * (1.0 - LENGTHWISE_SAG_SHARE)
+            # Wie in :func:`_varying_tool`: Ein Querschnittspunkt wandert je
+            # Millimeter Radius höchstens um Mittelpunktsabstand und Radius.
+            halves = [(math.pi - _acos(units.dot3(one, two))) / 2.0 for one, two in pairs]
+            if not all(EPS_GEOM < half < math.pi / 2.0 - EPS_GEOM for half in halves):
+                return None
+            leverage = 1.0 / units.exact_sin(min(halves)) + 1.0
+            spacing = math.sqrt(8.0 * MAX_FACET_SAG * LENGTHWISE_SAG_SHARE / (leverage * bend))
+
+    # Die Knoten des Zugs mit gemitteltem Rahmen, dazwischen die Stellen des
+    # Verlaufs im Rahmen ihres eigenen Stücks.
+    frames: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]] = []
+    for knot in range(count if closed else count + 1):
+        previous = knot - 1 if knot > 0 else (count - 1 if closed else None)
+        following = knot if knot < count else None
+        place = float(cumulative[knot])
+        if previous is None or following is None:
+            piece = following if following is not None else previous
+            assert piece is not None
+            frames.append((points[knot], alongs[piece], *pairs[piece], radius_at(place)))
+        else:
+            mid_along = mean(alongs[previous], alongs[following])
+            mid_one = mean(pairs[previous][0], pairs[following][0])
+            mid_two = mean(pairs[previous][1], pairs[following][1])
+            if mid_along is None or mid_one is None or mid_two is None:
+                return None
+            frames.append((points[knot], mid_along, mid_one, mid_two, radius_at(place)))
+        if following is None:
+            continue
+        low, high = place, float(cumulative[knot + 1])
+        inner = {value for value in stations if low < value < high}
+        if math.isfinite(spacing):
+            parts = max(1, math.ceil((high - low) / spacing))
+            inner.update(low + (high - low) * step / parts for step in range(1, parts))
+        for value in sorted(inner):
+            frames.append(
+                (
+                    points[knot] + (value - low) * alongs[following],
+                    alongs[following],
+                    *pairs[following],
+                    radius_at(value),
+                )
+            )
+
+    steps: int | None = None
+    if rounded:
+        # Der Bogen spannt den Winkel zwischen den Normalen (wie in :func:`_arc`).
+        largest = max(frame[4] for frame in frames)
+        spans = [_acos(units.dot3(one, two)) for one, two in pairs]
+        steps = max(min_steps, *(_arc_steps(largest, span, chord_sag) for span in spans))
+    sections: list[np.ndarray] = []
+    for start, along, one, two, size in frames:
+        section = _wedge_section(
+            start,
+            along,
+            (float(one[0]), float(one[1]), float(one[2])),
+            (float(two[0]), float(two[1]), float(two[2])),
+            size,
+            entry.convex,
+            rounded,
+            flank_overlap=flank_overlap,
+            steps=steps,
+        )
+        if section is None:
+            return None
+        sections.append(np.asarray(section[0], dtype=float))
+    if len({len(section) for section in sections}) != 1:
+        return None
+    if closed:
+        return _tube(sections)
+    overshoot = EDGE_OVERSHOOT if subtracted else 0.0
+    return _loft_along(sections, alongs[0], alongs[-1], overshoot)
+
+
+def _tube(sections: list[np.ndarray]) -> MeshData | None:
+    """Ein geschlossener Schlauch durch gleich lange Querschnitte, rundum verbunden."""
+    import trimesh
+
+    count = len(sections[0])
+    rings = len(sections)
+    faces: list[tuple[int, int, int]] = []
+    for ring in range(rings):
+        here, there = ring * count, ((ring + 1) % rings) * count
+        for corner in range(count):
+            following = (corner + 1) % count
+            faces.append((here + corner, here + following, there + following))
+            faces.append((here + corner, there + following, there + corner))
+    body = trimesh.Trimesh(
+        vertices=np.vstack(sections), faces=np.asarray(faces, dtype=np.int64), process=False
+    )
+    if body.volume < 0.0:
+        body.invert()
+    if body.volume <= EPS_GEOM or not body.is_watertight:
+        return None
+    return MeshData(body)
+
+
+def _loft_along(
+    sections: list[np.ndarray], first: np.ndarray, last: np.ndarray, overshoot: float
+) -> MeshData | None:
+    """:func:`_loft` mit dem Überstand je Ende in der Richtung seines eigenen Stücks."""
+    import trimesh
+
+    rings = list(sections)
+    if overshoot > 0.0:
+        rings = [rings[0] - overshoot * first, *rings, rings[-1] + overshoot * last]
+    body = _loft([list(ring) for ring in rings], first, 0.0)
+    if body is None or not isinstance(body.raw, trimesh.Trimesh) or not body.raw.is_watertight:
+        return None
+    return body
 
 
 def _without_an_angle(radius: float) -> GeometryError:
@@ -1894,6 +2156,7 @@ def round_edges(
     keys: Sequence[str] = (),
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
     narrowest: float = MAX_FACET_SAG,
@@ -1919,6 +2182,7 @@ def round_edges(
         choice,
         keys,
         selected_edges=selected_edges,
+        rings_by_plane=rings_by_plane,
         rounded=True,
         quality=quality,
         cancelled=cancelled,
@@ -1934,6 +2198,7 @@ def bevel_edges(
     keys: Sequence[str] = (),
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
     narrowest: float = MAX_FACET_SAG,
@@ -1952,6 +2217,7 @@ def bevel_edges(
         choice,
         keys,
         selected_edges=selected_edges,
+        rings_by_plane=rings_by_plane,
         rounded=False,
         quality=quality,
         cancelled=cancelled,
@@ -2487,6 +2753,7 @@ def _worked_edges(
     keys: Sequence[str],
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     rounded: bool,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
@@ -2506,7 +2773,9 @@ def _worked_edges(
     gemeint.
     """
     entries = edges_of(mesh)
-    chosen = selected_or_wanted(entries, choice, keys, selected_edges)
+    chosen = selected_or_wanted(
+        entries, choice, keys, selected_edges, rings_by_plane=rings_by_plane
+    )
     skipped = 0
     if selected_edges is None and not keys and choice != "named":
         kept = [entry for entry in chosen if workable(entry)]
@@ -3177,7 +3446,15 @@ def _edge_work(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if law is not None:
-            tool = _varying_tool(entry, law, quality=quality, cancelled=cancelled)
+            tool = _swept_tool(
+                entry,
+                law.largest,
+                True,
+                subtracted=entry.convex,
+                min_steps=0,
+                flank_overlap=BOOLEAN_OVERLAP if entry.convex else 0.0,
+                law=law,
+            ) or _varying_tool(entry, law, quality=quality, cancelled=cancelled)
         else:
             tool = rounding_tool(
                 entry,
@@ -3674,6 +3951,7 @@ def bead_edges(
     keys: Sequence[str] = (),
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
@@ -3703,7 +3981,9 @@ def bead_edges(
             _("Ohne Radius entsteht kein Wulst. Dieser Wert muss größer als null sein."),
             value=radius,
         )
-    chosen = selected_or_wanted(edges_of(mesh), choice, keys, selected_edges)
+    chosen = selected_or_wanted(
+        edges_of(mesh), choice, keys, selected_edges, rings_by_plane=rings_by_plane
+    )
     # **Jedes Stück einzeln in die Kette.** Zusammengelegt (``concatenate``)
     # überlappen sich die Zylinder eines Zugs an ihren Knicken, und ein Körper
     # mit doppelt belegtem Raum hat kein wohldefiniertes Volumen: Am
