@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-27 | [Durchsicht v0.5.1, zweite Runde: zwei Punkte geschlossen (27.09.2026)](#durchsicht-v051-zweite-runde-zwei-punkte-geschlossen-27092026) |
 | 2026-09-26 | [Durchsicht v0.5.1: neun Punkte geschlossen (26.09.2026)](#durchsicht-v051-neun-punkte-geschlossen-26092026) |
 | 2026-09-26 | [Schriftzüge und Streben sind gerundete Seiten (26.09.2026)](#schriftzüge-und-streben-sind-gerundete-seiten-26092026) |
 | 2026-09-26 | [Verschweißen je Blatt, die fehlende Bohrungswand und das Raster mit Zahl (26.09.2026)](#verschweißen-je-blatt-die-fehlende-bohrungswand-und-das-raster-mit-zahl-26092026) |
@@ -32370,4 +32371,121 @@ committet. Diese Punkte sind damit geschlossen.
   Stellen ohne Handlung statt 277, davon 2 Fehler und 50 Warnungen, jede begründet; der
   Rest sind Hinweise. `tests/test_finding_actions.py` belegt, dass die angebotenen
   Knöpfe etwas tun (`e8f9f574d`).
+
+## Durchsicht v0.5.1, zweite Runde: zwei Punkte geschlossen (27.09.2026)
+
+Nach dem ersten Registerstand (`87ae2d0d3`) wurden das Paket bohrung und die zweite
+Runde der Durchsicht übernommen — rest-leistung, rest-verlauf, rest-erkennung,
+rest-vorschau, rest-bohrung und rest-lippe —, je Paket gelesen, im Prüfbaum gegen den
+aktuellen Stand zusammengeführt und mit grünem Entwicklungstor committet (`ae178de8c`
+bis `1e9f21d50`); dazu der Befund ast-flake ohne Codeänderung. Berichte, Sonden und
+Patches liegen unter `F:\3D Druck.review-051\`. Zwei Punkte sind damit geschlossen, drei
+früher geschlossene hat die Durchsicht an ihren Rändern nachgezogen.
+
+<a id="rm-227"></a>
+
+- [x] **RM-227 — Eine Tasche am Teppichclip gibt einen ungültigen exakten Körper mit 0 mm³ Abtrag still zurück.**
+  Nebenbefund beim Bau von P6.5 (Bericht p6c, „Bewusst offen" 3), am Stand davor
+  genauso: `sketch_pocket` mit Ø 11 um die Bohrung von `carpet-corner-clip.step`
+  liefert einen ungültigen exakten Körper und trägt nichts ab — ohne Befund. Das
+  ist ein falsches Ergebnis, das der Kunde erst am Teil sieht.
+  `profiles.is_sound` steht seit P6.5 bereit. Weg: Test zuerst am Clip; nach dem
+  Schnitt Gültigkeit und abgetragenes Volumen prüfen und mit Satz und Weg
+  absagen, statt das Ergebnis weiterzugeben; dann die Ursache (Tasche auf
+  gewölbtem Rand, Tangentialberührung?) eingrenzen. Abnahme: am Clip entweder
+  das richtige Volumen oder eine Absage nach Regel 17.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket bohrung):** Am heutigen Code nicht
+  mehr nachzustellen — die Taschen Ø 11 am Clip sind gültig und dicht, eine zu flache
+  ohne Wirkung sagt `boolean.without_effect`
+  (`F:\3D Druck.review-051\sonden\bohrung\rm227_out.txt`). Die Absicherung ist trotzdem
+  gebaut: *Tasche schneiden* gibt einen ungültigen exakten Körper nicht mehr aus, sondern
+  schneidet am Netz weiter und sagt `sketch.exact_cut_unsound` — derselbe Weg wie die
+  Schnitte mit Werkzeug (`sketch/ops.cut_regions`, Test
+  `tests/test_sketch_cuts.py::test_an_unsound_exact_pocket_is_not_delivered_but_cut_on_the_mesh`,
+  `35fce0fa9`).
+
+<a id="rm-248"></a>
+
+- [x] **RM-248 — Der Deckel einer gekrümmten Mündung folgt der Fläche nicht.**
+  Gefunden am 25.09.2026 bei RM-245. Mündet ein Hohlraum in eine gekrümmte
+  Fläche, schließen ihn beide Kerne beim Versetzen, Kippen und Entfernen mit
+  einem Fächer vom Mittelpunkt des Rands (`prepare_ops._body_from_faces` mit
+  `curved_rims`, `brep.edit.solid_from_faces` mit `fan_caps`). Der Mittelpunkt
+  liegt auf der mittleren Höhe des Rands und nicht auf der Fläche: An einer
+  Platte, deren Unterseite ein Zylinder R 40 ist, bleibt unter einer
+  Zylindersenkung Ø 10 beim Versetzen eine Mulde von 4,9 mm³ am Netz und
+  3,6 mm³ am exakten Körper; an der unteren Schraubbohrung von
+  `pegboard-gs-100-v2.step` 5,0 und 5,4 mm³, am Gartenschlauchhalter (RM-220)
+  1 bis 4 mm³. Gerechnet hätte ein Fächer über einer Fläche z = y²/80 rund
+  6 mm³. Die BSpline-Flächen an der Lochplatte sind genau auf ihren Rand
+  beschnitten und laufen unter dem Loch nicht weiter;
+  `BRepAlgoAPI_Defeaturing` meldet dort fertig und lässt die Kette stehen,
+  eine N-seitige Füllung nur am Rand liegt 8 mm³ (C0) bis 127 mm³ (G1)
+  daneben. Weg: die Fläche um den Rand herum messen — die Nachbardreiecke
+  beziehungsweise Nachbarflächen bis etwa zum halben Durchmesser außerhalb —
+  und den Deckel als ihre glatte Fortsetzung bauen: am Netz als Gitter auf der
+  angepassten Fläche, am exakten Kern als Füllung mit Stützpunkten auf ihr.
+  Die Anpassung ohne LAPACK, in Grundrechenarten wie `units.plane_fit`
+  (RM-187). Abnahme: Versetzen entlang der Zylinderachse an der Platte R 40
+  ändert das Volumen an beiden Kernen um weniger als 0,5 mm³, an gs-100 um
+  weniger als 1 mm³ (`test_a_widened_bore_whose_mouth_lies_in_a_curved_face_
+  is_moved_on_both_kernels` mit der engeren Schranke).
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-bohrung):** `geom.mouth_cap`
+  tastet die Fläche um den Rand als Höhenfeld an den Facetten ab und setzt sie über das
+  Loch fort — ein Polynom dritten Grades in Grundrechenarten (`math.fsum`, Gauß mit
+  Spaltenpivot), plattformgleich: Weg `curved_mouth` in `test_platform_identity._WAYS`,
+  mit `np.linalg.lstsq` rot. Am exakten Kern ist der Deckel der Träger der
+  Nachbarfläche oder eine Füllung über der gemessenen Fläche (`edit._continued_cap`);
+  das Werkzeug der neuen Stelle kommt aus denselben Flächen. Versetzen um 5 mm, Volumen
+  alt → neu, Netz und exakt: Unterseite Zylinder R 40 −4,917 → +0,060 und −3,998 →
+  −0,000 mm³; Rinne R 40 +2,619 → +0,149 und +3,997 → +0,000; Naht Ebene/Zylinder
+  −3,493 → +0,028 und −1,962 → +0,003. Am Gartenschlauchhalter `hole_4` um 1 mm +3,033 →
+  +0,029 mm³, und nach *Merkmal entfernen* steht in der Hohlkehle keine Beule von 26 mm³
+  mehr über der Fläche. Dazu lässt sich eine Senkbohrung in einer gewölbten Fläche jetzt
+  ins Bild klicken (vorher „geht in einen anderen Hohlraum über“), und der Klickweg lässt
+  keine Narben mehr stehen (260 Dreiecke je Zug). Tests:
+  `test_feature_moves_keep_shape.py::test_a_widened_bore_whose_mouth_lies_in_a_curved_face_is_moved_on_both_kernels`
+  (drei Unterseiten × zwei Kerne, Schranke 0,5 mm³),
+  `::test_a_bore_under_a_curved_face_is_closed_up_to_that_face`,
+  `::test_the_exact_filling_asks_the_faces_around_the_rim_and_not_only_its_own`,
+  `test_surface_placement.py::test_a_chain_whose_mouth_lies_in_a_curved_face_can_be_placed_by_hand`,
+  `::test_a_chain_moved_by_hand_leaves_no_scars_in_the_face`; `1880cb13d`. Die Lochplatte
+  gs-100 bleibt bei −3,5 mm³ (3MF) bzw. −4,1 mm³ (STEP): Zwischen Senkung und Fläche
+  liegt dort eine Mündungsrundung, die nicht zur Kette gehört — keine Deckelfrage mehr,
+  sie steht als [RM-259](ROADMAP.md#rm-259).
+
+**Nachträge zu früher geschlossenen Punkten.**
+
+- **RM-215** (Befundstellen ohne Handlung, [Abschluss](#rm-215)): Der Wächter hält; die
+  zweite Runde hat dazu zwei Lücken im Fenster geschlossen, die er nicht sehen kann, und
+  eine seiner Ausnahmen aufgelöst. Der Rat `decimate_first` hatte keinen Handler und
+  erschien im Bericht gar nicht — jetzt *Dreiecke verringern und erneut versuchen* mit nachgezählter Zahl, als
+  eine Transaktion vor dem angehaltenen Schritt (`8b6af9220`). Und die Zeile eines
+  angehaltenen Schritts, dessen Rat nur der Kunde einlösen kann (28 Kennungen an 48
+  Stellen), stand ohne Knopf da; jetzt bietet sie *Eingabe korrigieren*, der Rat steht
+  in der Kurzhilfe (`6b5650dad`). *Glätten*, das umstülpt, sich durch sich selbst
+  schiebt oder zu viel Volumen kostet, bekommt *Kanten verfeinern und erneut versuchen*
+  mit durchgespielter Länge; `mesh.smooth_shrank` ist aus `OHNE_KNOPF` ausgetragen
+  (`ce8b91c7c`).
+- **RM-221** (ineinandersteckende Teile, [Abschluss](#rm-221)): Die Vorfrage
+  `repair.parts_that_cross` sah ein Teil ganz im Material eines anderen nicht — es
+  schneidet keine Wand. Eine Bohrung Ø 6 durch einen Würfel 20 mit einem Würfel 10 ganz
+  innen ließ 8 154,19 statt 7 434,51 mm³ stehen, ohne Befund. `repair.nested_part_families`
+  findet solche Familien, `boolean._nested_united` vereinigt sie wie gedruckt und prüft
+  es am Volumen; ein Teil frei in einem Hohlraum bleibt eines. Lehnt das Auflösen ab,
+  weil sich eine Schale selbst kreuzt, sagt es `boolean.parts_not_united` mit *Stelle
+  zeigen* (Laptop-Ständer, [RM-253](ROADMAP.md#rm-253)). `ae178de8c`, Tests
+  `test_boolean.py::test_a_part_inside_the_material_of_another_is_united_first_and_it_says_so`,
+  `::test_a_part_in_a_hollow_stays_a_part`, `::test_parts_that_cannot_be_united_say_so`.
+- **RM-249** (Kante innerhalb der Hülle, [Abschluss](#rm-249)): Die Kantenprüfung nannte
+  eine Flanke geschlossen, sobald der Kranz der Bohrung an einer einzigen Tiefe ganz im
+  Material lag. Eine Bohrung Ø 6 lief im oberen Absatz eines Blocks 2 mm aus dessen
+  Seite und hatte darunter ringsum Material — Bohren, Versetzen und Verdoppeln schwiegen
+  an beiden Kernen. Jetzt zählt je Punkt nur, was vor einer Seitenfläche entlang der
+  Bohrung liegt (`6bbf02367`). Und eine nicht wiedergefundene Kopie sagte „Die Geometrie
+  stimmt“; jetzt sagt sie, dass sie meist nicht ganz im Teil liegt, mit Ort, *Stelle
+  zeigen* und *Eingabe korrigieren*, an beiden Kernen (`d74a1feff`,
+  `test_feature_moves_keep_shape.py::test_a_copy_over_a_side_inside_the_hull_says_so_on_both_kernels`).
 
