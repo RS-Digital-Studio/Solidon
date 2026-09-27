@@ -307,6 +307,69 @@ GUIDES: Final[tuple[Guide, ...]] = (
             ),
         ),
     ),
+    Guide(
+        key="housing-with-lid",
+        title=_("Ein Gehäuse mit Deckel"),
+        summary=_(
+            "Eine Dose mit passendem Deckel: aushöhlen, Deckel erzeugen, druckfertig hinlegen."
+        ),
+        part="start",
+        steps=(
+            # Klick und Knopf in je einem Bild: Zusammen wurde der Ausschnitt
+            # das ganze Fenster, und *Aushöhlen* war nicht mehr zu lesen
+            # (Probelauf 27.09.2026).
+            step(
+                _(
+                    "Legen Sie wie in *Das erste eigene Teil* einen Quader an "
+                    "und klicken Sie darauf."
+                ),
+                "viewport",
+            ),
+            step(
+                _("Rechts unter *Auswahl*: Klicken Sie auf *Aushöhlen*."),
+                "operation:hollow_object",
+            ),
+            step(
+                _("Tragen Sie die Wandstärke ein, etwa 2 mm, und haken Sie *Oben öffnen* an."),
+                "field:wall",
+                "field:open_top",
+            ),
+            step(_("Klicken Sie auf *Aushöhlen*."), "dialog.accept"),
+            step(
+                _("Öffnen Sie oben *Erzeugen → Bausteine → Deckel erzeugen*."),
+                "operation:create_lid",
+            ),
+            step(
+                _("Das Spiel zur Dose kommt aus dem Material. Klicken Sie auf *Einsetzen*."),
+                "dialog.accept",
+            ),
+            # Ausrichten gilt allen Körpern und steht deshalb, wenn nichts
+            # gewählt ist (Robert, 27.09.2026).
+            step(
+                _("Der Deckel sitzt auf der Dose. Klicken Sie daneben ins Leere."),
+                "viewport",
+            ),
+            step(
+                _("Rechts unter *Auswahl*: Klicken Sie auf *Druckoptimal ausrichten*."),
+                "operation:orient_for_print",
+            ),
+            # Der Knopf öffnet einen Dialog mit Vorschau und richtet erst
+            # damit aus; ohne diesen Schritt zeigte das letzte Bild die
+            # Vorschau statt der fertigen Lage (Probelauf 27.09.2026).
+            step(
+                _("Klicken Sie im Dialog auf *Druckoptimal ausrichten*."),
+                "dialog.accept",
+            ),
+            step(
+                _(
+                    "Dose und Deckel liegen druckfertig nebeneinander. Gedruckt wird wie in "
+                    "*Ein Modell prüfen und drucken*."
+                ),
+                "viewport",
+                "report.slicer",
+            ),
+        ),
+    ),
 )
 
 

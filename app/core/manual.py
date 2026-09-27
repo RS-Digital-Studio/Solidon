@@ -2857,7 +2857,16 @@ def knowledge_pages() -> tuple[Page, ...]:
 OUTLINE: Final[tuple[tuple[Part, tuple[str, ...]], ...]] = (
     (
         "start",
-        ("what", "window-overview", "print-a-model", "drill-a-hole", "first-part", "start", "ways"),
+        (
+            "what",
+            "window-overview",
+            "print-a-model",
+            "drill-a-hole",
+            "first-part",
+            "housing-with-lid",
+            "start",
+            "ways",
+        ),
     ),
     ("tasks", ()),
     (

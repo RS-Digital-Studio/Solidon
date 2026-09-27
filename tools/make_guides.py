@@ -797,6 +797,90 @@ def story_first_part(run: GuideRun) -> None:
     run.capture(9, rings={"viewport": sink})
 
 
+def story_housing_with_lid(run: GuideRun) -> None:
+    """Quader, aushöhlen mit offener Oberseite, Deckel dazu, beide druckfertig hinlegen."""
+    from app.ui import guide_targets
+
+    def open_dialog(what: str) -> Any:
+        dialog = run.window._op_dialog
+        if dialog is None or not dialog.isVisible():
+            raise SystemExit(f"Der Dialog „{what}“ ging nicht auf")
+        return dialog
+
+    # Der Quader entsteht wie in „Das erste eigene Teil"; dort hat der Weg
+    # seine Bilder, hier zählt das Ergebnis.
+    _fresh(run)
+    guide_targets.widget_for(run.window, "start.new").click()
+    run.settle(30)
+    guide_targets.action_for(run.window, "operation:create_brep_box").trigger()
+    run.settle(40)
+    dialog = open_dialog("Quader anlegen")
+    for name, value in (("width", 80.0), ("depth", 60.0), ("height", 40.0)):
+        dialog._editors[name].set_value(value)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Quader")
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(20)
+
+    body = web.select_body(run.window, 0)
+    result = run.session.last_result
+    if result is None:
+        raise SystemExit("Der Quader wurde nicht gerechnet")
+    _face_id, face = _top_face(result.scene.objects[body])
+    centre = tuple(float(value) for value in face.params["centre"])
+    run.capture(1, points={"viewport": _visible(run, (centre[0], centre[1], centre[2]))})
+    run.capture(2)
+
+    guide_targets.widget_for(run.window, "operation:hollow_object").click()
+    run.settle(40)
+    dialog = open_dialog("Aushöhlen")
+    dialog._editors["wall"].set_value(2.0)
+    dialog._editors["open_top"].setChecked(True)
+    run.settle(40)
+    run.capture(3)
+    run.capture(4)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Aushöhlen")
+
+    lid = guide_targets.action_for(run.window, "operation:create_lid")
+    _open_menu(run, lid)
+    run.capture(5)
+    _close_menus(run)
+    lid.trigger()
+    run.settle(40)
+    open_dialog("Deckel erzeugen")
+    run.capture(6)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Deckel")
+
+    # Der Klick ins Leere hebt die Auswahl auf (``Viewport``: ohne Taste der
+    # Weg, sie ohne den Baum loszuwerden); die Stelle liegt vor der Dose auf
+    # dem Bett, wo kein Körper steht.
+    run.window.object_tree.select_object(None)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(30)
+    bounds = run.session.last_result.scene.objects[body].mesh.bounds
+    free = (0.0, float(bounds.minimum[1]) - 15.0, 0.0)
+    run.capture(7, points={"viewport": _visible(run, free)})
+    run.capture(8)
+    guide_targets.widget_for(run.window, "operation:orient_for_print").click()
+    run.settle(40)
+    open_dialog("Druckoptimal ausrichten")
+    # Die Vorschau rechnet die Lage im Hintergrund; aufgenommen wird, wenn sie steht.
+    run.session.wait_for_idle(120_000)
+    run.settle(30)
+    run.capture(9)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Druckoptimal ausrichten")
+
+    # Mit dem Prüfbericht rechts, in dem der Knopf zum Drucken steht.
+    run.window.object_tree.select_object(None)
+    run.window.right.setCurrentWidget(run.window.report)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(30)
+    run.capture(10)
+
+
 #: Je Anleitung ihre Geschichte. ``tests/test_guides.py`` verlangt für jede
 #: Anleitung im Kern genau eine.
 STORIES: Final[dict[str, Callable[[GuideRun], None]]] = {
@@ -804,6 +888,7 @@ STORIES: Final[dict[str, Callable[[GuideRun], None]]] = {
     "print-a-model": story_print_a_model,
     "drill-a-hole": story_drill_a_hole,
     "first-part": story_first_part,
+    "housing-with-lid": story_housing_with_lid,
 }
 
 

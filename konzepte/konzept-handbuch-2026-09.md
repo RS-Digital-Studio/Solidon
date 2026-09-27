@@ -28,10 +28,12 @@ Statustabelle in §9. Mehr braucht es nicht; die Nachweise liegen unter
   gleichzeitig das Release 0.5.1 vor, und ein halb umgebautes Handbuch darf
   nicht in dessen Erzeugerlauf geraten. Fehlt der Arbeitsbaum auf einer
   Maschine: `git worktree add "F:/3D Druck.handbuch" handbuch-umbau`.
-- **Zusammenführen:** `main` wird per Merge hereingeholt, nie per Rebase. Der
-  Zweig geht nach `main`, wenn HB-1 bis HB-4 zusammen stehen und Robert es
-  freigibt, frühestens nach dem Tag v0.5.1. Vorher nicht: Eine Anleitung ohne
-  Aufnahmeweg bliebe beim nächsten Release ohne Bilder.
+- **Zusammenführen:** `main` wird per Merge hereingeholt, nie per Rebase.
+  **Das Handbuch geht mit 0.5.1 hinaus** (Robert, 27.09.2026: „handbuch
+  kommt noch vor 0.5.1 … also mit 0.5.1 wird es hochgeladen"): Der Zweig
+  kommt vor dem Tag v0.5.1 nach `main`, und zwar mit dem Aufnahmeschritt in
+  `/erzeugen` — ohne ihn entstehen beim Release keine Anleitungsbilder, und
+  das Handbuch zeigte an ihrer Stelle nur den Alt-Text.
 - **Tests im Arbeitsbaum:** `cd "F:\3D Druck.handbuch"` und dann
   `& "F:\3D Druck\.venv\Scripts\python.exe" -m pytest …`. Mit `-m` steht das
   Arbeitsverzeichnis vorn im Suchpfad. Ein Skript außerhalb von pytest setzt
@@ -69,13 +71,19 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   `app/core/manual_search.py` auf Faltung, Trefferstärke und Kundenwörtern
   der Befehlspalette; das Fenster zeigt die Treffer in Rangfolge und schlägt
   jede Seite an ihrer Fundstelle auf.
-- **Als Nächstes:** *Ein Gehäuse mit Deckel* (HB-8) — das Wort des
-  Interessenten aus dem Anlass; heute führt „Gehäuse" auf *Aushöhlen* in der
-  Referenz. Vorlage für den Weg ist `story_housing` in
-  `tools/make_longform_video.py`, deren Aufrufe aber teils programmatisch
-  sind: Die Geschichte geht den Weg über die Knöpfe, die die Sätze nennen,
-  wie *Das erste eigene Teil*. Dann HB-5 (Gruppen im Handbuchfenster, „Wo
-  fange ich an?").
+- **HB-8, erste Anleitung gebaut:** *Ein Gehäuse mit Deckel* (zehn
+  Schritte: Quader, *Aushöhlen* mit *Oben öffnen*, *Deckel erzeugen* aus dem
+  Menü, Klick ins Leere, *Druckoptimal ausrichten* im Auswahlfenster und im
+  Dialog, Dose und Deckel druckfertig nebeneinander). Dafür stehen die
+  Handlungen für alle Körper jetzt im Auswahlfenster, wenn nichts gewählt
+  ist, und nicht mehr am gewählten Körper (Robert, 27.09.2026;
+  `.claude/rules/fenster.md`).
+- **Als Nächstes, für 0.5.1:** `main` hereinholen (dort sind `/erzeugen`,
+  das Tor `.claude/scripts/suite-getrennt.sh` und die Regeln umgebaut), den
+  Aufnahmeschritt `make_guides.py` vor `make_manual.py` in `/erzeugen`
+  eintragen, Tor fahren, dann per Merge nach `main` — vor dem Tag v0.5.1.
+  Danach HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"), wenn Robert
+  es noch in 0.5.1 will.
 
 ## §1 Befund
 
@@ -432,7 +440,7 @@ Nachweis.
 | HB-5 | Gliederung im Handbuchfenster, „Wo fange ich an?", Verweise `manual:`, Hilfe-Menü, Startbildschirmknopf | Fenstertests (Release), Kerntests für Reihenfolge und Verweise | [ ] |
 | HB-6 | Suche mit Rangfolge, Fundstelle, Kundenwörtern | Anteil der Suchen mit richtiger Seite unter den ersten drei, vorher und nachher gemessen | [x] 38 von 38 unter den ersten drei (vorher 25), 35 ganz oben (vorher 7), keine ohne Treffer (vorher 4); `tests/test_manual_search.py`, Nachweis `suche.md`. Der Fenstertest über Rangfolge und Fundstelle läuft beim Release |
 | HB-7 | F1 im Zusammenhang | Fenstertest (Release) | [ ] |
-| HB-8 | Weitere Anleitungen (Liste in §4) | je Anleitung wie HB-4 | [ ] |
+| HB-8 | Weitere Anleitungen (Liste in §4) | je Anleitung wie HB-4 | [~] *Ein Gehäuse mit Deckel* gebaut, auf Deutsch aufgenommen und gesichtet, Sätze in sechs Sprachen; offen: *Ein Teil, das nicht auf das Bett passt* und die Aufgaben aus dem Teil *Anleitungen* |
 | HB-9 | Erklärseiten kürzen und neu übersetzen | Wortzahl der Erklärseiten um mindestens ein Drittel kleiner, kein Wissen verloren (verschoben in Anleitungen oder Referenz) | [ ] |
 | HB-10 | Website und PDF nach Teilen gegliedert, Referenz am Ende; PDF mit Lesezeichen und **ohne tote Verweise auf den Bau-Rechner** | Seiten erzeugt beim Release, Tests `rendered` grün, im PDF kein Verweis mit `file:` | [~] Die Verweise um die Bildschirmfotos fallen vor dem Druck weg; `test_the_pdf_links_nowhere_outside_itself_but_the_website` hält es beim Release. Offen: Gliederung, Lesezeichen |
 | HB-11 | Wächter für Menüwege im Text (§6) | Test in der Suite | [ ] |
