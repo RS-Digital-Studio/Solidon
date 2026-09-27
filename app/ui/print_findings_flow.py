@@ -34,17 +34,22 @@ class _PrintFindingsWorker(Worker):
 
     done = Signal(object)
 
-    def __init__(self, scene: Any, profile: Profile, settings: PrintSettings) -> None:
+    def __init__(self, scene: Any, profile: Profile, settings: PrintSettings, fitted: bool) -> None:
         super().__init__()
         self._scene = scene
         self._profile = profile
         self._settings = settings
+        self._fitted = fitted
         self.cancel = CancelSignal()
 
     def work(self) -> None:
         try:
             found = print_findings(
-                self._scene, self._profile, self._settings, cancelled=self.cancel
+                self._scene,
+                self._profile,
+                self._settings,
+                cancelled=self.cancel,
+                fitted=self._fitted,
             )
         except OperationCancelled:
             return
@@ -72,12 +77,18 @@ class PrintFindingsFlow(QObject):
         """Der laufende Arbeiter — für das Warten beim Schließen."""
         return self._worker
 
-    def start(self, result: Any, profile: Profile, settings: PrintSettings) -> None:
-        """Die Befunde für diesen Auswertungsstand rechnen lassen."""
+    def start(
+        self, result: Any, profile: Profile, settings: PrintSettings, *, fitted: bool
+    ) -> None:
+        """Die Befunde für diesen Auswertungsstand rechnen lassen.
+
+        ``fitted`` kommt aus dem Hauptthread, der das Dokument kennt: Trägt die
+        Szene Passungen, eingetragene oder gebaute?
+        """
         self.cancel()
         if result is None or not result.scene.objects:
             return
-        worker = _PrintFindingsWorker(result.scene, profile, settings)
+        worker = _PrintFindingsWorker(result.scene, profile, settings, fitted)
         worker.done.connect(
             lambda found, result=result, worker=worker: self._arrived(found, result, worker)
         )

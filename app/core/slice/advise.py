@@ -1514,7 +1514,11 @@ def _has_thin_layers(result: SliceResult) -> bool:
 
 
 def warnings_for(
-    settings: PrintSettings, profile: Profile, result: SliceResult | None = None
+    settings: PrintSettings,
+    profile: Profile,
+    result: SliceResult | None = None,
+    *,
+    fitted: bool = True,
 ) -> list[Finding]:
     """Was gesagt gehört, obwohl keine Einstellung es behebt (§17.3).
 
@@ -1530,6 +1534,11 @@ def warnings_for(
     Und für Resin nichts — aus demselben Grund wie bei :func:`advise`: ASA
     ist ein Filament, das Bett heizt kein Harz, und eine Brücke gibt es in
     einem Harzbad nicht (Resin-Konzept B4).
+
+    ``fitted`` sagt, ob die Szene Passungen trägt, eingetragene oder gebaute
+    (``scene.fits.fit_kinds_for``). Nur dort wirken die Toleranzen des
+    Materials; ohne sie stand der Hinweis zur Kalibrierung an jedem Teil einer
+    frischen Installation und sagte nichts über den Druck (Durchsicht 0.5.1).
     """
     findings: list[Finding] = []
     if profile.printer.is_resin:
@@ -1554,7 +1563,7 @@ def warnings_for(
             )
         )
 
-    if not profile.material.calibrated:
+    if fitted and not profile.material.calibrated:
         # **Einmal gesagt und mit dem Weg dorthin.** Der Satz stand in keinem
         # Bericht, weil ``warnings_for`` keinen Aufrufer hatte (Durchsicht
         # 0.5.0); jetzt steht er im Prüfbericht, und der Knopf daneben öffnet
