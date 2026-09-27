@@ -624,6 +624,29 @@ def test_a_package_that_left_the_pinned_set_is_reported(monkeypatch: pytest.Monk
     assert any("check_env.py --freeze" in zeile for zeile in suggestions), suggestions
 
 
+def test_metadata_in_the_working_directory_is_not_installed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein liegengebliebener `*.egg-info`-Ordner in der Wurzel ist kein Paket.
+
+    `installed` fragt im Arbeitsverzeichnis des Repositorys. Ohne `-I` stand
+    es vorn im Suchpfad, und die Ordner der alten Projektnamen `3d-agent` und
+    `formwerk` meldete jeder Sitzungsstart als Pakete außerhalb von
+    `constraints.txt` — mit einem `pip uninstall`, das sie nicht fand.
+    """
+    phantom = tmp_path / "phantom_paket.egg-info"
+    phantom.mkdir()
+    (phantom / "PKG-INFO").write_text(
+        "Metadata-Version: 2.1\nName: phantom-paket\nVersion: 0.0.1\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(check_env, "ROOT", tmp_path)
+
+    vorhanden = check_env.installed(Path(sys.executable))
+
+    assert vorhanden, "die Umgebung antwortet und nennt ihre Pakete"
+    assert "phantom-paket" not in vorhanden
+
+
 def test_the_rebuild_command_pins_the_versions() -> None:
     """Ohne das `-c` ist der Vorschlag genau der Fehler, den er beheben soll."""
     for with_venv in (True, False):

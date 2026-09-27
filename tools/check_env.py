@@ -97,7 +97,14 @@ def pinned() -> dict[str, tuple[str, str]]:
 
 
 def installed(python: Path) -> dict[str, str] | None:
-    """Was in dieser Umgebung liegt — oder ``None``, wenn sie nicht antwortet."""
+    """Was in dieser Umgebung liegt — oder ``None``, wenn sie nicht antwortet.
+
+    Gefragt wird mit ``-I``: Ohne den isolierten Modus steht das
+    Arbeitsverzeichnis vorn im Suchpfad, und ``importlib.metadata`` zählte
+    liegengebliebene ``*.egg-info``-Ordner der Wurzel als installierte Pakete
+    — die alten Projektnamen ``3d-agent`` und ``formwerk`` meldete so jeder
+    Sitzungsstart, samt einem Befehl, der sie nicht entfernen konnte.
+    """
     source = (
         "import json,importlib.metadata as m;"
         "print(json.dumps({d.metadata['Name']: d.version for d in m.distributions()"
@@ -105,7 +112,7 @@ def installed(python: Path) -> dict[str, str] | None:
     )
     try:
         result = subprocess.run(
-            [str(python), "-c", source],
+            [str(python), "-I", "-c", source],
             capture_output=True,
             text=True,
             timeout=60,
