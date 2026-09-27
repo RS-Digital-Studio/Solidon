@@ -93,7 +93,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Imprimir y entregar al slicer
 
-- En ElegooSlicer, Bambu Studio, Creality Print y OrcaSlicer rige el perfil del fabricante. Solidon solo escribe lo que usted cambia o acepta de las sugerencias.
+- En PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print y OrcaSlicer rige el perfil del fabricante. Solidon solo escribe lo que usted cambia o acepta de las sugerencias.
 - El nivel «Standard» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.
 - La velocidad de desplazamiento también viene de la impresora: la Centauri Carbon 2 se desplaza a 500 en lugar de 150 mm/s, para que la boquilla gotee menos por el camino.
 - Solidon toma el ángulo de voladizo del perfil del fabricante de su impresora: 60 en lugar de 45 grados en Elegoo, Bambu y Creality. Chaflanes y pendientes suaves ya no reciben soportes innecesarios.
@@ -102,6 +102,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Sin «Aplicar las sugerencias», ninguna pieza recibe ya un brim sin preguntar, ni al exportar ni al entregarla al slicer.
 - Los proyectos de 0.5.0 imprimen con la velocidad de su impresora. Lo que usted había ajustado en ellos se conserva.
 - La velocidad de la primera capa vale ahora también para su relleno. Antes el slicer hacía el fondo a la velocidad del fabricante, 105 mm/s en la Centauri Carbon 2.
+- Con PrusaSlicer, la impresión empieza ahora como con la propia Prusa: con nivelación de la cama, línea de purga y comprobación de la impresora.
+- El PETG llega ahora a PrusaSlicer como PETG, ya no como PLA.
+- Si la primera capa tiene pasos estrechos, Solidon propone hacerla a 50 mm/s. Así las líneas cortas se adhieren mejor.
+- Donde su slicer ya limita la velocidad según el caudal volumétrico, Solidon ya no propone un límite de velocidad propio.
+- Si adopta los valores de un perfil de filamento y después cambia de filamento, vuelven a regir los valores del nuevo.
 - La primera capa imprime ahora líneas tan anchas como el perfil de su impresora, normalmente 0,5 mm con boquilla de 0,4. Con Cura, el cabezal ya no va a paso de tortuga entre ellas.
 - Con Cura, la impresión empieza ahora con el código de inicio de su impresora, como en el fabricante. Si Cura no conoce la impresora, Solidon se lo indica.
 - Con Cura, la primera capa usa ahora la aceleración del perfil del fabricante en lugar de la aceleración de impresión completa.

@@ -93,7 +93,7 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
-- Dans ElegooSlicer, Bambu Studio, Creality Print et OrcaSlicer, le profil du fabricant s'applique. Solidon n'écrit que ce que vous modifiez ou acceptez des suggestions.
+- Dans PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print et OrcaSlicer, le profil du fabricant s'applique. Solidon n'écrit que ce que vous modifiez ou acceptez des suggestions.
 - Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de tout brider à 40 mm/s. Sur une Centauri Carbon 2, les grandes pièces prennent 40 à 50 % de temps en moins.
 - La vitesse des déplacements à vide vient aussi de l'imprimante : la Centauri Carbon 2 se déplace à 500 au lieu de 150 mm/s, pour que la buse suinte moins en route.
 - Solidon prend l'angle de surplomb dans le profil constructeur de votre imprimante : 60 au lieu de 45 degrés chez Elegoo, Bambu et Creality. Chanfreins et pentes douces n'ont plus de supports inutiles.
@@ -102,6 +102,11 @@ dans `website/version.json`.
 - Sans « Appliquer les suggestions », aucune pièce ne reçoit plus de brim sans le demander, ni à l'export ni lors de la transmission au slicer.
 - Les projets de 0.5.0 impriment à la vitesse de votre imprimante. Ce que vous y aviez réglé vous-même est conservé.
 - La vitesse de la première couche vaut désormais aussi pour son remplissage. Avant, le slicer posait le fond à la vitesse du fabricant, 105 mm/s sur la Centauri Carbon 2.
+- Avec PrusaSlicer, l'impression commence désormais comme chez Prusa : avec mesure du plateau, ligne de purge et contrôle de l'imprimante.
+- Le PETG part désormais vers PrusaSlicer comme PETG, et non plus comme PLA.
+- Si la première couche a des passages étroits, Solidon propose de la poser à 50 mm/s. Les lignes courtes adhèrent ainsi mieux.
+- Là où votre slicer limite déjà la vitesse selon le débit volumique, Solidon ne propose plus de limite de vitesse propre.
+- Si vous reprenez les valeurs d'un profil de filament puis changez de filament, les valeurs du nouveau s'appliquent à nouveau.
 - La première couche imprime désormais des lignes aussi larges que le profil de votre imprimante, souvent 0,5 mm avec une buse de 0,4. Avec Cura, la tête ne se traîne plus entre elles.
 - Avec Cura, l'impression commence désormais par le code de démarrage de votre imprimante, comme chez le fabricant. Si Cura ne connaît pas l'imprimante, Solidon vous le dit.
 - Avec Cura, la première couche utilise désormais l'accélération du profil du fabricant au lieu de l'accélération d'impression complète.
