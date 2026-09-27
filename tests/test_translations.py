@@ -1002,3 +1002,78 @@ def test_context_keywords_reach_the_runtime_catalog(language: str) -> None:
         assert str(_("Slot {number}", number=3)).endswith("3")
     finally:
         set_language(SOURCE_LANGUAGE)
+
+
+#: Werkzeuge der Zeile, die eine Operation auslösen, dürfen wie sie heißen.
+#: *Bewegen* legt Schritte *Verschieben* an — zwei deutsche Wörter für einen
+#: Handgriff, in den anderen Sprachen eines.
+TOOL_IS_ITS_OPERATION = frozenset({("Bewegen", "Verschieben")})
+
+
+def _toolbar_names() -> list[str]:
+    """Die Namen der Werkzeugzeile, gelesen an ``self.tools.add(…, tr("…"))``."""
+    tree = ast.parse((UI_DIR / "main_window.py").read_text(encoding="utf-8"))
+    names = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add"
+            and isinstance(node.func.value, ast.Attribute)
+            and node.func.value.attr == "tools"
+            and len(node.args) > 1
+        ):
+            continue
+        label = node.args[1]
+        if (
+            isinstance(label, ast.Call)
+            and label.args
+            and isinstance(label.args[0], ast.Constant)
+            and isinstance(label.args[0].value, str)
+        ):
+            names.append(label.args[0].value)
+    return names
+
+
+@pytest.mark.parametrize(
+    "language", [entry for entry in available_languages() if entry != SOURCE_LANGUAGE]
+)
+def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> None:
+    """Zwei Dinge unter einem Namen sucht der Kunde am falschen Ort.
+
+    Gemessen in der Durchsicht 0.5.1: Das Werkzeug *Trennen* (eine gezogene
+    Linie) und die Operation *Teilen* (eine eingetippte Ebene) hießen en, es,
+    fr und pt gleich — „Split“, „Separar“, „Séparer“ —, it „Dividi“ gegen
+    „Dividere“, dasselbe Verb. Verglichen werden ganze Namen und bei
+    Einwortnamen der Wortstamm (:data:`GROUP_STEM`), wie bei den
+    Katalogruppen.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    catalog = read_catalog(language)
+    tools = _toolbar_names()
+    titles = sorted({spec.title.msgid for spec in REGISTRY.all()})
+    assert "Trennen" in tools and len(tools) >= 5, f"Werkzeugzeile nicht gelesen: {tools}"
+    assert len(titles) > 100, f"nur {len(titles)} Operationstitel — dann prüft das nichts"
+
+    def said(text: str) -> str:
+        return catalog.get(text) or text
+
+    clashes = []
+    seen: dict[str, str] = {}
+    for title in titles:
+        name = said(title)
+        if name in seen:
+            clashes.append(f"{seen[name]!r} und {title!r} heißen beide {name!r}")
+        seen[name] = title
+    for tool in tools:
+        for title in titles:
+            if title == tool or (tool, title) in TOOL_IS_ITS_OPERATION:
+                continue
+            a, b = said(tool), said(title)
+            one_word = " " not in a and " " not in b
+            if a == b or (one_word and _stem(a) == _stem(b)):
+                clashes.append(f"Werkzeug {tool!r} ({a!r}) und Operation {title!r} ({b!r})")
+    assert not clashes, f"{language}: gleiche Namen\n" + "\n".join(clashes)

@@ -69,7 +69,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un tetón escalonado ya no cuenta como rosca. Vuelven los cilindros y taladros que esa confusión se había tragado.
 - El labio de un bolsillo para imán se llama estrechamiento en el árbol y nombra su abertura. Ninguna acción lo convierte ya en avellanado.
 - Tras «Refinar las aristas», Solidon reconoce redondeos, taladros y rótulos igual que en el original, incluso después de un taladro adicional.
-- Tras «Separar» y «Recortar», una cara dividida conserva su nombre en la parte más grande, y los ajustes en ella siguen siendo válidos.
+- Tras «Dividir» y «Recortar», una cara dividida conserva su nombre en la parte más grande, y los ajustes en ella siguen siendo válidos.
 - Si hace clic en el borde de un taladro tumbado, se llama «Vertical», tal como está en realidad.
 - Si un modelo tiene más de 5 000 características, Solidon conserva las más grandes en lugar de quedarse sin ninguna. Escalar no revuelve sus nombres.
 

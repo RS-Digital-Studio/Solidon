@@ -112,6 +112,13 @@ Cambia**, auch in Handbuchstellen mit *Ändern → …*. In den anderen drei
 Sprachen tritt sie nicht auf (editar/modificar, édition/modifier,
 editar/modificar).
 
+**Das Werkzeug *Trennen* und die Operation *Teilen* heißen in jeder Sprache
+verschieden** — en Cut/Split, es Separar/Dividir, fr Séparer/Diviser, it
+Taglia/Dividi, pt Separar/Dividir. Das Werkzeug folgt *An gezeichneter Linie
+trennen*, die es anlegt, die Operation *Automatisch teilen*, dessen Schritte sie
+sind; ein gemeinsamer Name schickte den Kunden an den falschen Ort
+(`test_no_tool_or_operation_shares_its_name_with_another`).
+
 **Portugiesisch:** Operation→operação · Transaktion→transação ·
 Baustein→bloco · Teil→peça · Passung→ajuste · Spiel→folga ·
 Presspassung→ajuste por interferência · Prüfbericht→relatório de verificação ·

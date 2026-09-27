@@ -68,7 +68,7 @@ scrive in `website/version.json`.
 - Un perno a gradino non conta più come filettatura. Tornano i cilindri e i fori che questo scambio aveva inghiottito.
 - Il labbro di una tasca per magnete si chiama restringimento nell'albero e indica la sua apertura. Nessuna azione lo trasforma più in svasatura.
 - Dopo «Affina gli spigoli», Solidon riconosce raccordi, fori e scritte come nell'originale, anche dopo un foro aggiuntivo.
-- Dopo «Dividere» e «Tagliare via», una faccia divisa mantiene il suo nome sul pezzo più grande, e gli accoppiamenti su di essa restano validi.
+- Dopo «Dividi» e «Tagliare via», una faccia divisa mantiene il suo nome sul pezzo più grande, e gli accoppiamenti su di essa restano validi.
 - Se fate clic sullo spigolo di bordo di un foro sdraiato, si chiama «Verticale», come sta davvero.
 - Se un modello ha più di 5 000 caratteristiche, Solidon tiene le più grandi invece di restare senza nessuna. Scalare non rimescola i loro nomi.
 
