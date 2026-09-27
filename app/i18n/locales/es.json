@@ -775,7 +775,6 @@
   "Cura kennt keine Lüfterpause: Der Lüfter läuft schon in Schicht {layer} mit {percent} %.": "Cura no tiene pausa del ventilador: ya funciona al {percent} % en la capa {layer}.",
   "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.": "Cura no conoce «{printer}». Por eso el archivo de impresión empieza sin el código de inicio del fabricante, sin línea de purga y sin malla de la cama.",
   "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: in Cura unter Profile verwalten → Importieren wählen.": "Cura solo acepta ajustes como perfil. Está junto al modelo: en Cura, elija Administrar perfiles → Importar.",
-  "Cura übernimmt keine Stützsperre. Sperren Sie die Kanäle nach „Im Slicer öffnen“ im Cura-Fenster mit dem Stützblocker.": "Cura no adopta el bloqueo de soportes. Tras «Abrir en el slicer», bloquee los canales en la ventana de Cura con la herramienta Bloqueador de soporte.",
   "Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.": "Aquí ha ocurrido algo con lo que nadie contaba.",
   "Dafür braucht Solidon einen Lizenzschlüssel und die einmalige Geräteaktivierung (Hilfe → Solidon freischalten …).": "Para ello, Solidon necesita una clave de licencia y la activación única del dispositivo (Ayuda → Desbloquear Solidon …).",
   "Dafür braucht Solidon hier eine Paketverwaltung, und sie ist nicht eingerichtet": "Para eso Solidon necesita aquí un gestor de paquetes, y no hay ninguno configurado",
