@@ -215,6 +215,15 @@ REACTING_COMMANDS = [
     "git\nrestore app/x.py",
     "git clean -fd",
     "git push origin main --force",
+    "git push -f origin main",
+    "git checkout main -- app/x.py",
+    "git switch --discard-changes main",
+    "git stash drop",
+    "git branch -D feature",
+    "git pull --rebase",
+    "git worktree remove --force ../x",
+    'git -C "F:/3D Druck" restore app/x.py',
+    "git filter-repo --path x",
     "python -m pytest tests/test_example.py -q",
     "& '.venv\\Scripts\\python.exe' -m pytest -q",
     ".venv/Scripts/python.exe tools/affected_tests.py --run",
@@ -268,6 +277,156 @@ def test_shell_prefilter_never_hides_a_command_the_hook_reacts_to(
     assert len(reacting) >= 5, "zu wenige Beispiele, die der Hook meldet"
     assert [c for c in reacting if not _passes(patterns, c)] == []
     assert not _passes(patterns, "ls -la"), "der Vorfilter lässt alles durch"
+
+
+@pytest.mark.parametrize(
+    ("command", "discards"),
+    [
+        ("git reset --hard HEAD", True),
+        ("git -C x reset --hard", True),
+        ('git -C "F:/3D Druck" restore app/x.py', True),
+        ("git -c core.quotepath=off checkout -- .", True),
+        ("git checkout -f main", True),
+        ("git checkout origin/main -- .", True),
+        ("git switch --discard-changes main", True),
+        ("git clean -df", True),
+        ("git clean --force -d", True),
+        ("git push -f origin main", True),
+        ("git push origin +main", True),
+        ("git stash clear", True),
+        ("git branch -D feature", True),
+        ("git rebase main", True),
+        ("git pull origin main --rebase", True),
+        ("git worktree remove --force ../x", True),
+        ("git filter-branch --tree-filter x", True),
+        ("git checkout -b feature", False),
+        ("git checkout main", False),
+        ("git switch -c neu", False),
+        ("git push origin main", False),
+        ("git push --force-with-lease", False),
+        ("git stash", False),
+        ("git branch -d erledigt", False),
+        ("git worktree remove ../x", False),
+        ("git clean -n", False),
+        ("git reset -q -- .claude/memory", False),
+        ("git pull", False),
+    ],
+)
+def test_revert_guard_catches_every_discarding_form(
+    hook: ModuleType, command: str, discards: bool
+) -> None:
+    """Der Schutz fragt vor allem, was Arbeit verwirft oder Geschichte umschreibt.
+
+    `git -C <pfad> …` ist mit mehreren Worktrees die übliche Form und ging
+    anfangs durch, ebenso `push -f`, `checkout <rev> -- <pfad>`, `rebase` und
+    `branch -D`. Ein Zweigwechsel, ein gewöhnlicher Push oder ein
+    Zurücknehmen der Vormerkung verwirft nichts und fragt nicht.
+    """
+    assert bool(hook.VERWIRFT.search(command)) is discards
+
+
+def test_write_prefilter_lets_python_and_memory_through() -> None:
+    """Der Vorfilter vor `nach-aenderung` spart den Python-Start bei Markdown und Co."""
+    patterns = _claude_filter("PostToolUse", 0)
+    assert patterns, "kein Vorfilter gefunden"
+
+    def passes(path: str) -> bool:
+        payload = json.dumps({"tool_input": {"file_path": path, "content": "x"}})
+        return all(any(fnmatch.fnmatchcase(payload, p) for p in group) for group in patterns)
+
+    assert passes("F:\\3D Druck\\app\\core\\units.py")
+    assert passes("C:\\Users\\r\\.claude\\projects\\F--3D-Druck\\memory\\neu.md")
+    assert not passes("F:\\3D Druck\\ROADMAP.md"), "der Vorfilter lässt alles durch"
+
+
+def _memory(root: Path) -> Path:
+    folder = root / ".claude" / "memory"
+    folder.mkdir(parents=True)
+    for name, description in (
+        ("testlaeufe-messen", "Exit-Code, Pipe und Fortschrittszeichen beim Testlauf lesen"),
+        ("git-im-geteilten-baum", "Commit, Index und Worktrees mit mehreren Sitzungen"),
+    ):
+        (folder / f"{name}.md").write_text(
+            f"---\nname: {name}\ndescription: {description}\n---\n", encoding="utf-8"
+        )
+    (folder / "MEMORY.md").write_text(
+        "- [Testläufe](testlaeufe-messen.md)\n- [Git](git-im-geteilten-baum.md)\n",
+        encoding="utf-8",
+    )
+    return folder
+
+
+def test_a_new_memory_file_is_pointed_at_the_nearest_topic(
+    hook: ModuleType, tmp_path: Path
+) -> None:
+    """Erinnerungen sind Themendateien: Eine neue Datei bekommt ihr Thema genannt."""
+    folder = _memory(tmp_path)
+    new = folder / "exit-code-hinter-tail.md"
+    new.write_text(
+        "---\nname: exit-code-hinter-tail\ndescription: Der Exit-Code hinter einer Pipe "
+        "gehört tail, nicht dem Testlauf\n---\n",
+        encoding="utf-8",
+    )
+
+    note = hook.themenhinweis({"tool_input": {"file_path": str(new)}})
+
+    assert "`exit-code-hinter-tail.md`" in note
+    assert "testlaeufe-messen.md" in note, "das Thema mit gemeinsamen Stichwörtern wird genannt"
+    assert "git-im-geteilten-baum.md" not in note, "ohne gemeinsames Stichwort kein Vorschlag"
+
+
+def test_extending_a_known_topic_stays_silent(hook: ModuleType, tmp_path: Path) -> None:
+    """Wer eine Datei ergänzt, die der Index schon nennt, bekommt keinen Hinweis."""
+    folder = _memory(tmp_path)
+    known = folder / "testlaeufe-messen.md"
+    assert hook.themenhinweis({"tool_input": {"file_path": str(known)}}) == ""
+    readme = tmp_path / "README.md"
+    readme.write_text("x", encoding="utf-8")
+    assert hook.themenhinweis({"tool_input": {"file_path": str(readme)}}) == ""
+
+
+def test_session_start_says_nothing_when_nothing_deviates(
+    hook: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Was CLAUDE.md und AGENTS.md sagen, sagt der Start nicht noch einmal.
+
+    Alte Sitzungsmarken räumt er dabei weg, junge bleiben.
+    """
+    _memory(tmp_path)
+    monkeypatch.setattr(hook, "eingabe", lambda: {"session_id": "neu"})
+    monkeypatch.setattr(hook, "umgebungshinweis", lambda: "")
+    state = tmp_path / "state"
+    state.mkdir()
+    old, young = state / "last-test-alt", state / "started-jung"
+    for marker in (old, young):
+        marker.write_text("0", encoding="utf-8")
+    month_ago = old.stat().st_mtime - 30 * 86400
+    os.utime(old, (month_ago, month_ago))
+
+    hook.sitzungsstart()
+
+    assert capsys.readouterr().out == ""
+    assert not old.exists() and young.exists()
+
+
+def test_session_start_restores_memories_a_pull_removed(
+    hook: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fehlt `MEMORY.md`, ruft der Start die Wiederherstellung und nennt ihr Ergebnis."""
+    calls: list[list[str]] = []
+
+    def restored(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "Zurückgeholt: 5 Dateien.\n", "")
+
+    monkeypatch.setattr(hook.subprocess, "run", restored)
+    assert hook.erinnerungshinweis().strip() == "Zurückgeholt: 5 Dateien."
+    assert calls and calls[0][-1] == "--wiederherstellen"
+    _memory(tmp_path)
+    assert hook.erinnerungshinweis() == "", "mit Index gibt es nichts zu tun"
 
 
 def test_test_markers_belong_to_one_session(

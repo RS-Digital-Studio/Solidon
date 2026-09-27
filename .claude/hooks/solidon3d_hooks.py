@@ -2,15 +2,17 @@
 
 Ein Skript, fünf Aufgaben — welche, sagt das erste Argument:
 
-    sitzungsstart    SessionStart: sagt, in welchem Projekt wir sind. Die
-                     globale Konfiguration beschreibt ein Avalonia-Projekt;
-                     dieses hier ist Python. Prüft dabei, ob die Umgebung dem
-                     festgeschriebenen Stand entspricht — drei Maschinen am
-                     selben Repository heißen sonst mehrere Versionssätze.
+    sitzungsstart    SessionStart: meldet nur, was die Unterlagen nicht wissen
+                     können — eine Umgebung, die vom festgeschriebenen Stand
+                     abweicht (drei Maschinen am selben Repository heißen
+                     sonst mehrere Versionssätze), und Erinnerungen, die ein
+                     Pull aus dem Arbeitsbaum genommen hat. Räumt alte
+                     Sitzungsmarken weg.
     nach-aenderung   PostToolUse (Write|Edit): formatiert die geänderte
                      Python-Datei und meldet Lint-Befunde sowie Verstöße gegen
                      die harten Regeln, die sich rein syntaktisch erkennen
-                     lassen.
+                     lassen. Einer neuen Erinnerungsdatei nennt es die
+                     nächstliegenden vorhandenen Themen.
     testlauf         PostToolUse (Bash): merkt sich je Sitzung den letzten
                      erkannten Testaufruf; Erfolg und Abdeckung prüft der Agent.
     abschluss        Stop: erinnert daran, wenn seit der letzten Änderung an
@@ -59,9 +61,22 @@ SESSION_START = WURZEL / ".claude" / ".state" / "sitzungsstart"
 QT_IMPORT = re.compile(r"^\s*(?:from|import)\s+(?:PySide6|PyQt\d|shiboken\d?)\b", re.MULTILINE)
 EVAL_AUFRUF = re.compile(r"(?<![\w.])(?:eval|exec)\s*\(")
 PRINT_AUFRUF = re.compile(r"(?<![\w.])print\s*\(")
+#: Ein Git-Aufruf samt Vorab-Optionen — `git -C <pfad> …` ist in einem Baum mit
+#: mehreren Worktrees die übliche Form, und ohne diesen Teil ging sie durch.
+_GIT = r"git(?:\s+(?:-[Cc]\s+(?:\"[^\"]*\"|'[^']*'|\S+)|--?[\w-]+(?:=\S+)?))*\s+"
 VERWIRFT = re.compile(
-    r"git\s+(?:checkout\s+(?:--|\.|HEAD)|restore\b|reset\s+--hard\b|clean\s+-[a-z]*f)"
-    r"|git\s+push\s+.*--force(?!-with-lease)"
+    _GIT + r"(?:checkout\s+(?:-f\b|--force\b|--(?:\s|$)|\.(?:\s|$)|HEAD\b|\S+\s+--\s)"
+    r"|switch\s+(?:\S+\s+)*(?:-f|--force|--discard-changes)\b"
+    r"|restore\b"
+    r"|reset\s+(?:\S+\s+)*--hard\b"
+    r"|clean\s+(?:\S+\s+)*(?:-[a-zA-Z]*f[a-zA-Z]*|--force)\b"
+    r"|push\s+(?:.*\s)?(?:--force(?!-with-lease)\b|-f\b|\+\S)"
+    r"|stash\s+(?:drop|clear)\b"
+    r"|branch\s+(?:\S+\s+)*-D\b"
+    r"|rebase\b"
+    r"|pull\s+(?:.*\s)?--rebase\b"
+    r"|worktree\s+remove\s+(?:\S+\s+)*(?:-f|--force)\b"
+    r"|filter-(?:branch|repo)\b)"
 )
 CODEX_APPROVAL_MARKER = re.compile(
     r"SOLIDON3D_REVERT_FREIGEGEBEN\s*(?:=|:)\s*['\"]?ja\b", re.IGNORECASE
@@ -220,42 +235,46 @@ def erinnerungshinweis() -> str:
     return " " + zeilen[-1] if zeilen else ""
 
 
+#: Wie alt eine Sitzungsmarke werden darf, bevor der Start sie wegräumt.
+MARKEN_TAGE = 14
+
+
+def marken_aufraeumen() -> None:
+    """Löscht Sitzungsmarken, die älter als zwei Wochen sind.
+
+    Jede Sitzung legt eigene Marken an (`_session_path`); ohne Aufräumen wächst
+    `.claude/.state/` um bis zu drei Dateien je Sitzung.
+    """
+    grenze = time.time() - MARKEN_TAGE * 86400
+    for vorlage in (SESSION_START, MARKE, ERINNERT):
+        for datei in vorlage.parent.glob(f"{vorlage.name}-*"):
+            try:
+                if datei.stat().st_mtime < grenze:
+                    datei.unlink()
+            except OSError:
+                continue
+
+
 def sitzungsstart() -> None:
+    """Meldet nur, was CLAUDE.md und AGENTS.md nicht wissen können.
+
+    Sprache, Kerntrennung, Tor und die harten Regeln laden über die Unterlagen
+    in jede Sitzung; sie hier ein zweites Mal zu sagen, kostete Kontext und
+    veraltete neben dem Original.
+    """
     data = eingabe()
     start = _session_path(SESSION_START, data)
     if not start.exists():
         start.parent.mkdir(parents=True, exist_ok=True)
         start.write_text(str(time.time()), encoding="utf-8")
-    if is_codex():
-        workflow_note = (
-            "Nach jedem Schritt laufen die betroffenen Kerntests; vor dem Commit "
-            "das Entwicklungstor mit `$pruefen` und der Regelcheck mit `$regelcheck`. "
-            "Fensterdateien und Leistungsprüfungen ausschließlich beim Release "
-            "mit `$pruefen --release`. "
-        )
-    else:
-        workflow_note = (
-            "Nach jedem Schritt laufen die betroffenen Kerntests; vor dem Commit "
-            "das Entwicklungstor mit `/pruefen` und der Regelcheck mit `/regelcheck`. "
-            "Fensterdateien und Leistungsprüfungen ausschließlich beim Release "
-            "mit `/pruefen --release`. "
-        )
-    melden(
-        "SessionStart",
-        "Projekt Solidon: Python mit PySide6, kein Avalonia und kein MVVM — "
-        "die Stack-Angaben der globalen Konfiguration gelten hier nicht. "
-        "Bezeichner, Dateinamen und Modulnamen auf Englisch; Docstrings, Kommentare, "
-        "Doku, Commits und Gespräch auf Deutsch mit echten Umlauten. "
-        "Der Kern (app/core) bleibt ohne Qt. "
-        + workflow_note
-        + "Die 22 harten Regeln stehen in AGENTS.md, das Sollverhalten im Bauplan."
-        + umgebungshinweis()
-        + erinnerungshinweis(),
-    )
+    marken_aufraeumen()
+    hinweis = (umgebungshinweis() + erinnerungshinweis()).strip()
+    if hinweis:
+        melden("SessionStart", hinweis)
 
 
-def _changed_files(data: dict) -> list[Path]:
-    """Liest geänderte Pfade aus Claude- oder Codex-Werkzeugeingaben."""
+def _tool_paths(data: dict) -> list[Path]:
+    """Die Pfade, die ein Claude- oder Codex-Werkzeug geschrieben hat, absolut."""
     tool_input = data.get("tool_input") or {}
     if not isinstance(tool_input, dict):
         return []
@@ -273,11 +292,19 @@ def _changed_files(data: dict) -> list[Path]:
             )
         )
 
-    files: list[Path] = []
+    paths: list[Path] = []
     for raw_path in dict.fromkeys(raw_paths):
         path = Path(raw_path)
         if not path.is_absolute():
             path = Path(data.get("cwd") or WURZEL) / path
+        paths.append(path)
+    return paths
+
+
+def _changed_files(data: dict) -> list[Path]:
+    """Die geänderten Python-Dateien dieses Arbeitsbaums."""
+    files: list[Path] = []
+    for path in _tool_paths(data):
         try:
             path.resolve().relative_to(WURZEL)
         except (OSError, ValueError):
@@ -285,6 +312,82 @@ def _changed_files(data: dict) -> list[Path]:
         if path.suffix == ".py" and path.exists():
             files.append(path)
     return files
+
+
+#: Wörter, die in fast jeder Beschreibung stehen und kein Thema kennzeichnen.
+_FUELLWOERTER = frozenset(
+    {
+        "nicht", "einen", "einer", "eines", "wird", "werden", "sind", "auch",
+        "nach", "über", "oder", "sich", "dass", "beim", "eine", "diese", "wenn",
+        "noch", "hier", "immer", "kein", "keine", "erst", "dann", "schon",
+        "statt", "ohne", "zwei",
+    }
+)  # fmt: skip
+
+
+def _stichwoerter(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-zäöüß]{4,}", text.lower()) if w not in _FUELLWOERTER}
+
+
+def _thema(path: Path, zeichen: int = 1500) -> str:
+    """Name und Beschreibung einer Erinnerung, dazu der Anfang ihres Texts."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")[:zeichen]
+    except OSError:
+        return ""
+    beschreibung = re.search(r"^description:\s*(.+)$", text, re.MULTILINE)
+    return f"{path.stem.replace('-', ' ')} {beschreibung.group(1) if beschreibung else ''}"
+
+
+def themenhinweis(data: dict) -> str:
+    """Eine neue Erinnerungsdatei bekommt die nächstliegenden Themen genannt.
+
+    Erinnerungen sind Themendateien: Eine neue Erkenntnis gehört zuerst in das
+    Thema, das sie schon hat. Neu heißt hier: im Verzeichnis und noch nicht in
+    `MEMORY.md` — beim Ergänzen einer vorhandenen Datei schweigt der Hook.
+    """
+    ordner = (WURZEL / ".claude" / "memory").resolve()
+    try:
+        index = (ordner / "MEMORY.md").read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    hinweise: list[str] = []
+    for path in _tool_paths(data):
+        try:
+            path = path.resolve()
+        except OSError:
+            continue
+        if (
+            path.parent != ordner
+            or path.suffix != ".md"
+            or path.name == "MEMORY.md"
+            or not path.exists()
+            or f"]({path.name})" in index
+        ):
+            continue
+        eigene = _stichwoerter(_thema(path, zeichen=3000))
+        rangliste = sorted(
+            (
+                (len(eigene & _stichwoerter(_thema(other))), other.name)
+                for other in ordner.glob("*.md")
+                if other.name not in ("MEMORY.md", path.name)
+            ),
+            reverse=True,
+        )
+        naechste = [f"`{name}`" for treffer, name in rangliste[:3] if treffer > 0]
+        hinweise.append(
+            f"Neue Erinnerungsdatei `{path.name}`. Erinnerungen sind Themendateien: "
+            "Gehört das zu einem vorhandenen Thema, dort als Abschnitt ergänzen und "
+            "diese Datei wieder löschen. "
+            + (
+                f"Nächstliegend: {', '.join(naechste)}. "
+                if naechste
+                else "Kein Thema teilt Stichwörter — den Index trotzdem prüfen. "
+            )
+            + "Nur ein wirklich neues Thema bekommt eine eigene Datei und eine Zeile "
+            "in `MEMORY.md`."
+        )
+    return "\n\n".join(hinweise)
 
 
 def _check_changed_file(path: Path) -> list[str]:
@@ -332,6 +435,9 @@ def nach_aenderung() -> None:
         if not isinstance(response, str) or not response.startswith("Success."):
             return
     hinweise = [note for path in _changed_files(daten) for note in _check_changed_file(path)]
+    thema = themenhinweis(daten)
+    if thema:
+        hinweise.append(thema)
     if hinweise:
         melden("PostToolUse", "\n\n".join(hinweise))
 
