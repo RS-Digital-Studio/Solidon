@@ -1228,3 +1228,198 @@ def test_held_frames_arrive_as_one_after_the_release(qt_app: object, renderer: G
         renderer.release_frames()
         renderer.widget = None
         stand_in.deleteLater()
+
+
+# --- Wiederkehr abgeräumter Überlagerungen (RM-232, 27.09.2026) -----------------------
+
+_MARKING = SurfaceStyle(
+    colour="#ff8800",
+    opacity=0.6,
+    backface_colour="#ff8800",
+    backface_opacity=0.6,
+    lighting=False,
+    pickable=True,
+)
+
+
+def _ring_patch(count: int, radius: float) -> tuple[np.ndarray, np.ndarray]:
+    """Ein Fächer aus ``count`` Dreiecken um den Ursprung — verschieden groß je Merkmal."""
+    angles = np.linspace(0.0, 2.0 * np.pi, count + 1)
+    rim = np.column_stack([radius * np.cos(angles), radius * np.sin(angles), np.zeros(count + 1)])
+    vertices = np.vstack([[0.0, 0.0, 0.0], rim])
+    faces = np.array([[0, index + 1, index + 2] for index in range(count)])
+    return vertices, faces
+
+
+def _add(view: GfxRenderer, kind: str, size: int) -> object:
+    """Ein Element der Bauart ``kind`` — ``size`` bestimmt, wie viel es trägt."""
+    if kind == "surface":
+        return view.add_surface(*_ring_patch(size, 4.0 + size / 4.0), name="mark", style=_MARKING)
+    points = np.array(
+        [[4.0 * index - 20.0, 3.0 * (index % 3) - 6.0, 0.0] for index in range(2 * size)]
+    )
+    if kind == "points":
+        return view.add_points(points, name="mark", colour="#ffffff", size=9, keep_in_front=True)
+    if kind == "labels":
+        return view.add_labels(
+            points[:size],
+            [f"Bohrung {index}" for index in range(size)],
+            name="mark",
+            style=LabelStyle(background="#0000ff", show_points=True, point_size=8),
+        )
+    return view.add_lines(
+        points,
+        name="mark",
+        colour="#ffffff",
+        width=4,
+        connected=kind == "connected",
+        polylines=[size, size] if kind == "chains" else None,
+    )
+
+
+def _objects(item: object) -> list[object]:
+    if isinstance(item, GfxLabels):
+        return [*item.objects, *(label for _text, label, _field in item._idle)]
+    return list(item.objects)  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("kind", ["surface", "pairs", "connected", "chains", "points", "labels"])
+def test_a_removed_overlay_returns_with_its_objects_and_draws_like_a_fresh_one(
+    renderer: GfxRenderer, kind: str
+) -> None:
+    """Abgeräumt, kleiner wieder angelegt: dieselben pygfx-Objekte, dasselbe Bild.
+
+    Die Ansicht baut ihre Überlagerungen je Klick neu, und jedes neue Objekt
+    kostete seine Pipeline im nächsten Bild (RM-232). Kommt ein Element
+    gleicher Bauart zurück, trägt es die Objekte des abgeräumten — und das
+    Bild muss Punkt für Punkt das eines frischen Renderers sein, der nur das
+    neue Element kennt. Erst größer, dann kleiner: So bleibt Platz in den
+    Puffern übrig, und der darf nirgends zu sehen sein.
+    """
+    fresh = GfxRenderer(offscreen=True, size=(400, 300))
+    try:
+        for view in (renderer, fresh):
+            view.set_background("#101418")
+            look_down(view, (-30.0, 30.0, -20.0, 20.0, 0.0, 0.0))
+        first = _add(renderer, kind, 12)
+        renderer.screenshot()
+        kept = _objects(first)
+        renderer.remove(first)  # type: ignore[arg-type]
+        again = _add(renderer, kind, 5)
+        assert again is not first
+        if kind == "labels":
+            assert set(map(id, _objects(again))) <= set(map(id, kept)), "keine neuen Glyphen"
+        else:
+            assert _objects(again) == kept, "dieselben Objekte, keine neue Pipeline"
+            assert again.filled is not None  # type: ignore[attr-defined]
+        reference = _add(fresh, kind, 5)
+        assert again.bounds() == pytest.approx(reference.bounds())  # type: ignore[attr-defined]
+        image = renderer.screenshot()
+        assert image.max() > 0
+        assert np.array_equal(image, fresh.screenshot())
+        # Das abgeräumte Element hält nichts mehr, woran man drehen könnte.
+        first.set_visible(False)  # type: ignore[attr-defined]
+        assert np.array_equal(renderer.screenshot(), image)
+    finally:
+        fresh.close()
+
+
+def test_a_returned_surface_moves_picks_and_refuses_a_wrong_count(renderer: GfxRenderer) -> None:
+    """Punkte tauschen, Picks und Hüllquader folgen — wie beim frischen Element."""
+    first = renderer.add_surface(*_ring_patch(24, 20.0), name="mark", style=_MARKING)
+    renderer.remove(first)
+    vertices, faces = _ring_patch(8, 10.0)
+    surface = renderer.add_surface(vertices, faces, name="mark", style=_MARKING)
+    assert surface.filled == len(vertices)  # type: ignore[attr-defined]
+    look_down(renderer, (-30.0, 30.0, -20.0, 20.0, 0.0, 0.0))
+    hit = renderer.pick_surface(200, 150)
+    assert hit is not None and hit.item is surface
+    assert surface.bounds() == pytest.approx((-10.0, 10.0, -10.0, 10.0, 0.0, 0.0), abs=1e-5)
+    surface.update_points(vertices + np.array([15.0, 0.0, 0.0]))
+    assert surface.bounds() == pytest.approx((5.0, 25.0, -10.0, 10.0, 0.0, 0.0), abs=1e-5)
+    assert renderer.pick_surface(200, 150) is None, "der Fächer liegt nicht mehr am Ursprung"
+    x, y, _depth = renderer.world_to_display((20.0, 1.0, 0.0))
+    hit = renderer.pick_surface(x, y)
+    assert hit is not None and hit.item is surface
+    assert hit.point == pytest.approx((20.0, 1.0, 0.0), abs=0.3)
+    with pytest.raises(ValueError):
+        surface.update_points(vertices[:3])
+
+
+def test_only_what_still_looks_as_built_returns(renderer: GfxRenderer) -> None:
+    """Umgefärbtes, Beleuchtetes, Zellfarben und Kapazität entstehen immer frisch."""
+    recoloured = renderer.add_points(np.zeros((3, 3)), name="mark", colour="#ffffff")
+    recoloured.set_colour("#ff0000")
+    renderer.remove(recoloured)
+    assert renderer.add_points(np.zeros((2, 3)), name="mark", colour="#ffffff").objects[0] not in (
+        recoloured.objects
+    )
+    lit = renderer.add_surface(*cube(), name="body", style=SurfaceStyle())
+    renderer.remove(lit)
+    assert renderer.add_surface(*cube(), name="body", style=SurfaceStyle()).objects != lit.objects
+    ink = renderer.add_lines(np.zeros((4, 3)), name="ink", colour="#ffffff", capacity=8)
+    renderer.remove(ink)
+    again = renderer.add_lines(np.zeros((4, 3)), name="ink", colour="#ffffff", capacity=8)
+    assert again.objects != ink.objects
+    assert not renderer._recycled.get(("points", "#ffffff", 8.0, False, False))
+
+
+def test_waiting_overlays_are_bounded_and_go_with_the_renderer(renderer: GfxRenderer) -> None:
+    """Höchstens drei je Bauart warten, ein zweites Abräumen legt nichts doppelt hin."""
+    from app.ui.render import gfx_renderer
+
+    items = [
+        renderer.add_points(np.zeros((index + 1, 3)), name="mark", colour="#ffffff")
+        for index in range(5)
+    ]
+    for item in items:
+        renderer.remove(item)
+    renderer.remove(items[-1])
+    waiting = renderer._recycled[("points", "#ffffff", 8.0, False, False)]
+    assert len(waiting) == gfx_renderer.RECYCLE_PER_KIND == 3
+    assert list(waiting) == items[2:]
+    assert renderer._recycled_bytes == sum(item.waiting_bytes for item in waiting)
+    smallest = list(items[3].objects)
+    reused = renderer.add_points(np.zeros((4, 3)), name="mark", colour="#ffffff")
+    assert reused.objects == smallest, "das kleinste, in das die Punkte passen"
+    assert items[3].objects == [], "das alte hält nichts mehr"
+    renderer.close()
+    assert not renderer._recycled and not renderer._recycle_order
+    assert renderer._recycled_bytes == 0
+
+
+def test_pointer_events_do_not_ask_the_gpu_for_a_pick(
+    renderer: GfxRenderer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesten der Leinwand lösen kein Zurücklesen des Pickpuffers aus (RM-232).
+
+    pygfx' ``WgpuRenderer`` verteilt Leinwandereignisse von sich aus an
+    pygfx-Objekte und liest dafür je Ereignis den Pickpuffer zurück — vor
+    dem nächsten Bild, synchron. Niemand hier hört darauf; gepickt wird nur,
+    wenn die Ansicht fragt.
+    """
+    asked: list[object] = []
+    monkeypatch.setattr(
+        type(renderer._renderer),
+        "get_pick_info",
+        lambda self, position: asked.append(position) or {"world_object": None},
+    )
+    renderer.add_surface(*cube(), name="body", style=SurfaceStyle(lighting=False))
+    renderer.screenshot()
+    for kind in ("pointer_down", "pointer_move", "pointer_up"):
+        renderer._canvas.submit_event(
+            {
+                "event_type": kind,
+                "x": 200.0,
+                "y": 150.0,
+                "button": 1,
+                "buttons": (1,),
+                "modifiers": (),
+                "ntouches": 0,
+                "touches": {},
+                "time_stamp": 0.0,
+            }
+        )
+    renderer._canvas._events.flush()
+    renderer.screenshot()
+    assert asked == []

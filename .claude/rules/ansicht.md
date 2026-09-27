@@ -1498,6 +1498,18 @@ die niemand nachrechnet. Reißt eine Kapazität, entstehen **alle acht** neu —
 auf das Doppelte des Bedarfs, in ihrer Reihenfolge, sonst käme ein einzelnes
 neues Element im Renderer ans Ende und läge über allem.
 
+**Was die Ansicht abräumt, kommt im Renderer wieder** (RM-232, 27.09.2026).
+Markierung, Kontur, Schwebefläche, Merkmalspunkte, Beschriftung, Verbinder und
+Griffpfeile entstehen je Klick weiter über `add_*` und gehen über `remove`;
+der Renderer gibt einem neuen Element gleicher Bauart die pygfx-Objekte eines
+abgeräumten (Regel und Grenzen in `app/ui/render/CLAUDE.md`). Am Wabenhalter
+kostete Bohrung zu Bohrung damit 79–85 statt 98–102 ms. Zwei Folgen für jeden
+Aufrufer: **Ein abgeräumtes Element wird nicht mehr angefasst** — kommt es
+wieder, hält der alte Griff eine leere Gruppe, und was man daran dreht,
+geschieht nirgends. Und **wer ein Element umfärbt, umdeckt oder anders
+pickbar stellt, nimmt es aus dem Vorrat** (`restyled`): Seine Materialien
+entsprechen nicht mehr der Bauart, unter der ein anderer es bekäme.
+
 ## Die Skizze ist Vordergrund, der Körper Zusammenhang (29.08.2026)
 
 Während des Zeichnens bleibt der vorhandene Körper sichtbar, aber mit

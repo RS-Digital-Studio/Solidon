@@ -149,6 +149,29 @@ AXES_LABEL_SIZE = 12.0
 #: Paare bleiben deshalb verborgen im Baum, bis ihr Name wiederkommt.
 IDLE_LABEL_LIMIT = 256
 
+#: Wie viele abgeräumte Elemente derselben Bauart auf ihre Wiederkehr warten
+#: (:meth:`GfxRenderer.remove`, :meth:`GfxRenderer._reused`).
+#:
+#: **Ein neues pygfx-Objekt kostet seine Pipeline im nächsten Bild**, und die
+#: Ansicht baut ihre Überlagerungen je Klick neu: Markierung, Kontur,
+#: Schwebefläche, Merkmalspunkte, Beschriftung samt Verbindern und die drei
+#: Pfeile des Bewegungsgriffs. Am Wabenhalter, Bohrung zu Bohrung, waren das
+#: elf Objekte je Klick; das erste Bild danach kostete 11 statt 4 ms, und der
+#: Aufbau selbst noch einmal einige Millisekunden (RM-232, 27.09.2026).
+#: Ein Element gleicher Bauart — gleicher Stil, gleiche Farbe, gleiche
+#: Linienart — kommt deshalb mit seinen Objekten, Materialien und Puffern
+#: zurück; nur die Zahlen in den Puffern wechseln. Drei je Bauart decken den
+#: Wechsel zwischen zwei Merkmalen verschiedener Größe und das Abräumen und
+#: Neuanlegen innerhalb desselben Aufrufs.
+RECYCLE_PER_KIND = 3
+
+#: Wie viele Bytes Puffer die wartenden Elemente zusammen höchstens halten;
+#: das älteste geht zuerst. Ein einzelnes Element über
+#: :data:`RECYCLE_ITEM_BYTES` wartet gar nicht erst — die Markierung einer
+#: großen Senkbohrung soll nicht nach dem Abwählen im Speicher liegen bleiben.
+RECYCLE_BYTES = 32 * 1024 * 1024
+RECYCLE_ITEM_BYTES = 8 * 1024 * 1024
+
 
 _STEADY_LIGHT: Any = None
 
@@ -301,6 +324,25 @@ class GfxItem(Item):
         self.changed: Callable[[], None] | None = None
         #: Der zuletzt gerechnete Hüllquader; jede Änderung am Item verwirft ihn.
         self._bounds: Bounds | None = None
+        #: Die Bauart, unter der die Objekte nach dem Abräumen wiederkehren
+        #: dürfen (:data:`RECYCLE_PER_KIND`) — ``None`` für alles, was nicht
+        #: wartet: beleuchtete Körper, Zellfarben, Kapazität.
+        self.recycle_key: tuple[Any, ...] | None = None
+        #: Ob Farbe, Deckkraft, Pickbarkeit oder Linienbreite seit dem Anlegen
+        #: verstellt wurden. Dann entsprechen die Materialien nicht mehr der
+        #: Bauart, und die Objekte kehren nicht zurück.
+        self.restyled = False
+        #: Wie viele Zeilen der Eckpuffer gelten — bei allem, was wiederkehren
+        #: darf (:attr:`recycle_key`). Ein wiederverwendetes Element trägt
+        #: größere Puffer als das Gelieferte, und :meth:`update_points`
+        #: schreibt dann wie bei jedem solchen Element in die vorhandenen
+        #: Puffer, statt eine neue Geometrie mit neuen Bindungen anzulegen.
+        self.filled: int | None = None
+        #: Ob das Element abgeräumt im Vorrat wartet, mit wie vielen Bytes,
+        #: und ob es seine Objekte schon an ein neues abgegeben hat.
+        self.waiting = False
+        self.waiting_bytes = 0
+        self.retired = False
 
     def _changed(self) -> None:
         self._bounds = None
@@ -317,6 +359,7 @@ class GfxItem(Item):
         return bool(self.root.visible)
 
     def set_opacity(self, opacity: float) -> None:
+        self.restyled = self.restyled or float(opacity) != self._opacity
         self._opacity = float(opacity)
         for obj in self.objects:
             if not getattr(obj, "_solidon_coloured", True) and not getattr(
@@ -339,6 +382,7 @@ class GfxItem(Item):
         return self._opacity
 
     def set_colour(self, colour: Colour) -> None:
+        self.restyled = self.restyled or colour != self._colour
         self._colour = colour
         for obj in self._coloured():
             obj.material.color = colour
@@ -363,6 +407,7 @@ class GfxItem(Item):
             if not getattr(obj, "_solidon_face_colours", False):
                 continue
             obj.material.color_mode = "face" if visible else "auto"
+            self.restyled = True
         self._changed()
 
     def set_position(self, position: Vec3) -> None:
@@ -392,6 +437,9 @@ class GfxItem(Item):
         # (rund 65 µs je Item); die Szene fragt ihn zweimal je Bild.
         if self._bounds is not None:
             return self._bounds
+        if self.filled is not None:
+            self._bounds = self._filled_bounds()
+            return self._bounds
         box = self.root.get_world_bounding_box()
         if box is None:
             self._bounds = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -407,7 +455,47 @@ class GfxItem(Item):
             )
         return self._bounds
 
+    def _filled_bounds(self) -> Bounds:
+        """Der Quader des gefüllten Teils — gerechnet wie pygfx, ohne seinen Merker.
+
+        pygfx merkt sich den Quader je Puffer an dessen Revision, und ein
+        Puffer, dessen erste Übertragung noch aussteht, zählt beim
+        Nachschreiben nicht weiter (``Buffer.update_range`` kehrt dann
+        sofort zurück). Ein Element, das im selben Aufruf angelegt,
+        abgeräumt und wiederverwendet wurde, hätte den alten Quader
+        behalten. Hier also dieselbe Rechnung selbst: Quader der endlichen
+        Ecken, seine acht Ecken durch die Weltmatrix.
+        """
+        holders = self._geometry_holders()
+        if not holders or not self.filled:
+            return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        data = np.asarray(holders[0].geometry.positions.data[: self.filled], dtype=float)
+        data = data[np.isfinite(data).all(axis=1)]
+        if not len(data):
+            return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        low, high = data.min(axis=0), data.max(axis=0)
+        corners = np.array(
+            [
+                [x, y, z]
+                for x in (low[0], high[0])
+                for y in (low[1], high[1])
+                for z in (low[2], high[2])
+            ]
+        )
+        matrix = np.asarray(self.root.world.matrix, dtype=float)
+        world = corners @ matrix[:3, :3].T + matrix[:3, 3]
+        low, high = world.min(axis=0), world.max(axis=0)
+        return (
+            float(low[0]),
+            float(high[0]),
+            float(low[1]),
+            float(high[1]),
+            float(low[2]),
+            float(high[2]),
+        )
+
     def set_pickable(self, pickable: bool) -> None:
+        self.restyled = self.restyled or bool(pickable) != self._pickable
         self._pickable = bool(pickable)
         for obj in self.objects:
             obj.material.pick_write = self._pickable and getattr(obj, "_solidon_pickable", True)
@@ -429,6 +517,9 @@ class GfxItem(Item):
             valid = self.point_map >= 0
             mapped[valid] = fresh[self.point_map[valid]]
             fresh = mapped
+        if self.filled is not None:
+            self._write_in_place(source, fresh)
+            return
         replacements: dict[int, Any] = {}
         for obj in self._geometry_holders():
             geometry = obj.geometry
@@ -486,7 +577,32 @@ class GfxItem(Item):
                 indices.draw_range = (0, faces_used)
         self._changed()
 
+    def _write_in_place(self, source: np.ndarray, fresh: np.ndarray) -> None:
+        """Dieselbe Punktzahl in die Puffer eines wiederverwendeten Elements.
+
+        Seine Puffer sind so groß wie beim ersten Anlegen, gezeichnet wird nur
+        der gefüllte Teil (:meth:`GfxRenderer._fill`). Die Dreiecke bleiben,
+        und Normalen gibt es keine nachzurechnen: Wiederverwendet wird nur
+        Unbeleuchtetes, dessen Normalenpuffer Nullen trägt.
+        """
+        assert self.filled is not None
+        if fresh.shape[0] != self.filled:
+            raise ValueError(f"{self.name}: {fresh.shape[0]} Punkte für {self.filled}")
+        seen: set[int] = set()
+        for obj in self._geometry_holders():
+            if hasattr(obj, "_solidon_positions"):
+                obj._solidon_positions = source
+            geometry = obj.geometry
+            if id(geometry) in seen:
+                continue
+            seen.add(id(geometry))
+            buffer = geometry.positions
+            buffer.data[: self.filled] = fresh
+            buffer.update_range(0, self.filled)
+        self._changed()
+
     def set_line_width(self, width: float) -> None:
+        self.restyled = True
         for obj in self.objects:
             material = obj.material
             if hasattr(material, "thickness"):
@@ -504,6 +620,54 @@ class GfxItem(Item):
 
     def _geometry_holders(self) -> list[Any]:
         return [obj for obj in self.objects if getattr(obj, "_solidon_mesh", False)]
+
+
+def _recycle_key(*parts: Any) -> tuple[Any, ...] | None:
+    """Die Bauart als Schlüssel — oder keine, wenn ein Teil nicht hashbar ist
+    (eine Farbe als Liste): Dann entsteht das Element eben frisch."""
+    try:
+        hash(parts)
+    except TypeError:
+        return None
+    return parts
+
+
+def _rooms(item: GfxItem) -> tuple[int, int]:
+    """Wie viele Ecken und Dreiecke die Puffer eines Elements fassen."""
+    holders = item._geometry_holders()
+    if not holders:
+        return 0, 0
+    geometry = holders[0].geometry
+    indices = getattr(geometry, "indices", None)
+    return int(geometry.positions.nitems), int(indices.nitems) if indices is not None else 0
+
+
+def _buffer_bytes(item: GfxItem) -> int:
+    """Die Bytes der Puffer, die ein wartendes Element festhält.
+
+    Bei Beschriftungen zählen die Glyphenpuffer ihrer Texte, bei allen anderen
+    die Puffer ihrer Geometrie — jeder einmal, auch wenn Vorder- und
+    Rückseite ihn teilen.
+    """
+    seen: set[int] = set()
+    total = 0
+    objects = list(item.objects)
+    if isinstance(item, GfxLabels):
+        objects = [
+            *item.objects,
+            *(obj for _text, label, field in item._idle for obj in (label, field)),
+        ]
+    for obj in objects:
+        geometry = getattr(obj, "geometry", None) if obj is not None else None
+        if geometry is None:
+            continue
+        for name in ("positions", "indices", "normals", "colors", "glyph_data"):
+            buffer = getattr(geometry, name, None)
+            if buffer is None or id(buffer) in seen:
+                continue
+            seen.add(id(buffer))
+            total += int(getattr(buffer, "nbytes", 0) or 0)
+    return total
 
 
 def _geometry_like(geometry: Any, positions: np.ndarray) -> Any:
@@ -622,6 +786,33 @@ class GfxLabels(GfxItem, LabelsItem):
             self.rebuilt(self)
         else:
             self._changed()
+
+    def adopt(self, old: GfxLabels) -> None:
+        """Die Paare einer abgeräumten Beschriftung gleichen Stils übernehmen.
+
+        Alle warten zunächst verborgen, die zuletzt gezeigten am jüngsten; der
+        folgende :meth:`build` weckt, was er braucht, und die Grenze
+        :data:`IDLE_LABEL_LIMIT` gilt wie immer. Der Ankerpunkt geht mit —
+        als bisheriges Objekt, damit ``build`` ihn abnimmt, wenn er nicht
+        mehr gebraucht wird. Das alte Element behält nichts davon.
+        """
+        idle = deque(old._idle)
+        fields: Sequence[Any | None] = old.fields or [None] * len(old.texts)
+        for text, label, field in zip(old.labels, old.texts, fields, strict=True):
+            label.visible = False
+            if field is not None:
+                field.visible = False
+            idle.append((text, label, field))
+        self._idle = idle
+        self.dots = old.dots
+        self.objects = [old.dots] if old.dots is not None else []
+        old._idle = deque()
+        old.texts = []
+        old.fields = []
+        old.labels = []
+        old.dots = None
+        old.objects = []
+        old.anchors = np.zeros((0, 3), dtype=np.float32)
 
     def _rest(self, text: str, label: Any, field: Any | None) -> None:
         """Ein ausgeschiedenes Paar verbergen und für seinen Namen aufheben."""
@@ -784,6 +975,12 @@ class GfxRenderer(Renderer):
         self._pick_key: tuple[Any, ...] | None = None
         self._bounds_cache: tuple[int, Bounds | None] | None = None
         self._label_items: list[GfxLabels] = []
+        #: Abgeräumte Elemente je Bauart, die auf ihre Wiederkehr warten
+        #: (:data:`RECYCLE_PER_KIND`), dazu alle in der Reihenfolge ihres
+        #: Abräumens und die Bytes ihrer Puffer.
+        self._recycled: dict[tuple[Any, ...], deque[GfxItem]] = {}
+        self._recycle_order: deque[GfxItem] = deque()
+        self._recycled_bytes = 0
         self._focal = np.zeros(3)
         self._parallel_scale = 1.0
         self._background_colour: Colour = "#000000"
@@ -813,7 +1010,21 @@ class GfxRenderer(Renderer):
         else:
             self._canvas = self._qt_widget(parent)
             self.widget = self._canvas
-        self._renderer = gfx.WgpuRenderer(self._canvas, pixel_scale=1, ppaa="none")
+        # **pygfx' eigenes Ereignissystem bleibt aus** (``enable_events``,
+        # RM-232, 27.09.2026). ``WgpuRenderer`` hängt sich sonst an die
+        # Zeigerereignisse der Leinwand und liest für jedes — Drücken,
+        # Loslassen, jede Bewegung — den Pickpuffer von der Grafikkarte
+        # zurück, um das Ereignis an pygfx-Objekte zu verteilen. Hier hört
+        # niemand darauf: Zeigergesten gehen über :meth:`_pointer` an den
+        # Viewport, Picks über :meth:`pick_item` und :meth:`pick_surface`. Das
+        # Zurücklesen kam trotzdem, und zwar unmittelbar vor dem nächsten
+        # Bild, wenn rendercanvas die gesammelten Ereignisse abgibt: zwei
+        # synchrone Rückfragen je Klick vor dem Bild mit den Maßen. Nachträglich
+        # abschalten geht nicht — ``disable_events`` meldet eine neue
+        # gebundene Methode ab, und rendercanvas vergleicht mit ``is``.
+        self._renderer = gfx.WgpuRenderer(
+            self._canvas, pixel_scale=1, ppaa="none", enable_events=False
+        )
         self._scene = gfx.Scene()
         self._background = gfx.Background(None, gfx.BackgroundMaterial("#000000"))
         self._scene.add(self._background)
@@ -1051,6 +1262,31 @@ class GfxRenderer(Renderer):
         gfx = self._gfx
         positions = _positions(vertices)
         indices = np.ascontiguousarray(np.asarray(faces, dtype=np.uint32).reshape(-1, 3))
+        # **Unbeleuchtetes kehrt wieder** (:data:`RECYCLE_PER_KIND`): Markierung,
+        # Schwebefläche, Griffpfeile. Ein beleuchteter Körper bräuchte seine
+        # Normalen neu, Zellfarben und Kanten hängen an der Dreieckszahl —
+        # die entstehen frisch.
+        recycle_key = (
+            _recycle_key("surface", style)
+            if capacity is None
+            and cell_colours is None
+            and not style.lighting
+            and not (style.show_edges and not style.wireframe)
+            else None
+        )
+        reused = self._reused(recycle_key, len(positions), len(indices)) if len(indices) else None
+        if reused is not None:
+            item = self._renewed(
+                reused, name, style.colour, opacity=style.opacity, pickable=style.pickable
+            )
+            self._fill(
+                item,
+                positions,
+                source=np.asarray(vertices, dtype=float).reshape(-1, 3),
+                faces=indices,
+                by_positions=False,
+            )
+            return self._register(item)
         fields: dict[str, Any] = {"positions": positions, "indices": indices}
         if cell_colours is not None:
             fields["colors"] = _face_colours(cell_colours, len(indices))
@@ -1184,6 +1420,9 @@ class GfxRenderer(Renderer):
             objects.append(edges)
             item.objects = objects
             item.edge_line = edges
+        item.recycle_key = recycle_key
+        if recycle_key is not None:
+            item.filled = len(positions)
         return self._register(item)
 
     def add_lines(
@@ -1221,6 +1460,7 @@ class GfxRenderer(Renderer):
         if keep_in_front:
             extra["depth_test"] = False
             extra["render_queue"] = OVERLAY_QUEUE
+        rows: np.ndarray
         if polylines is not None:
             lengths = [int(length) for length in polylines]
             if any(length < 0 for length in lengths):
@@ -1239,22 +1479,32 @@ class GfxRenderer(Renderer):
                     mapping.append(-1)
                 start += length
             point_map = np.asarray(mapping, dtype=np.int64)
-            chained = np.vstack(pieces) if pieces else positions[:0]
-            line = gfx.Line(
-                _line_geometry(chained),
-                DepthLineMaterial(thickness=float(width), color=colour, **extra),
-            )
+            rows = np.vstack(pieces) if pieces else positions[:0]
+            mode = "chains"
         elif connected:
-            line = gfx.Line(
-                _line_geometry(positions),
-                DepthLineMaterial(thickness=float(width), color=colour, **extra),
-            )
+            rows = positions
+            mode = "connected"
         else:
-            pairs = positions[: 2 * (len(positions) // 2)]
-            line = gfx.Line(
-                _line_geometry(pairs),
-                DepthLineSegmentMaterial(thickness=float(width), color=colour, **extra),
+            rows = positions[: 2 * (len(positions) // 2)]
+            mode = "pairs"
+        recycle_key = (
+            _recycle_key(
+                "lines", mode, colour, float(width), bool(pickable), bool(keep_in_front), draw_order
             )
+            if capacity is None
+            else None
+        )
+        reused = self._reused(recycle_key, len(rows))
+        if reused is not None:
+            item = self._renewed(reused, name, colour, pickable=pickable)
+            item.point_map = point_map
+            item.point_count = len(positions)
+            self._fill(item, _positions(rows))
+            return self._register(item)
+        material = DepthLineSegmentMaterial if mode == "pairs" else DepthLineMaterial
+        line = gfx.Line(
+            _line_geometry(rows), material(thickness=float(width), color=colour, **extra)
+        )
         root = gfx.Group()
         root.add(line)
         root.render_order = float(draw_order)
@@ -1263,6 +1513,9 @@ class GfxRenderer(Renderer):
         item.point_map = point_map
         item.point_count = len(positions)
         item.in_front = keep_in_front
+        item.recycle_key = recycle_key
+        if recycle_key is not None:
+            item.filled = len(rows)
         if capacity is not None:
             item.capacity = int(capacity)
             item._refill(np.asarray(points, dtype=float).reshape(-1, 3), _positions(points))
@@ -1279,28 +1532,66 @@ class GfxRenderer(Renderer):
         keep_in_front: bool = False,
     ) -> Item:
         gfx = self._gfx
+        recycle_key = _recycle_key(
+            "points", colour, float(size), bool(pickable), bool(keep_in_front)
+        )
+        rows = _positions(points)
+        reused = self._reused(recycle_key, len(rows))
+        if reused is not None:
+            item = self._renewed(reused, name, colour, pickable=pickable)
+            self._fill(item, rows)
+            return self._register(item)
         extra: dict[str, Any] = {"pick_write": bool(pickable)}
         if keep_in_front:
             extra["depth_test"] = False
             extra["render_queue"] = OVERLAY_QUEUE
         dots = gfx.Points(
-            _line_geometry(points), gfx.PointsMaterial(size=float(size), color=colour, **extra)
+            gfx.Geometry(positions=rows),
+            gfx.PointsMaterial(size=float(size), color=colour, **extra),
         )
         root = gfx.Group()
         root.add(dots)
         dots._solidon_mesh = True
         item = GfxItem(name, root, [dots], colour, pickable=pickable)
         item.in_front = keep_in_front
+        item.recycle_key = recycle_key
+        if recycle_key is not None:
+            item.filled = len(rows)
         return self._register(item)
 
     def add_labels(
         self, points: np.ndarray, texts: Sequence[str], *, name: str, style: LabelStyle
     ) -> LabelsItem:
         gfx = self._gfx
-        item = GfxLabels(name, gfx.Group(), style)
+        recycle_key = _recycle_key("labels", style)
+        old = self._reused_labels(recycle_key)
+        if old is not None:
+            # Dieselben Namen kommen ohne neues Glyphenlayout und ohne
+            # Shaderaufbau zurück — derselbe Weg wie das Ruhen verborgener
+            # Paare innerhalb einer Beschriftung (:data:`IDLE_LABEL_LIMIT`).
+            item = GfxLabels(name, old.root, style)
+            item.adopt(old)
+            old.root = gfx.Group()
+            old.retired = True
+            item.root.visible = True
+            item._apply_transform()
+        else:
+            item = GfxLabels(name, gfx.Group(), style)
+        item.recycle_key = recycle_key
         item.build(points, texts)
         self._register(item)
         return item
+
+    def _reused_labels(self, key: tuple[Any, ...] | None) -> GfxLabels | None:
+        """Die zuletzt abgeräumte Beschriftung dieses Stils, die noch aussieht wie
+        angelegt — oder keine."""
+        if key is None:
+            return None
+        for candidate in reversed(self._recycled.get(key, ())):
+            if isinstance(candidate, GfxLabels) and not candidate.restyled:
+                self._forget_waiting(candidate)
+                return candidate
+        return None
 
     def remove(self, item: Item) -> None:
         assert isinstance(item, GfxItem)
@@ -1313,6 +1604,135 @@ class GfxRenderer(Renderer):
             self._label_items.remove(item)
             item.rebuilt = None
         self._invalidate_scene()
+        self._recycle(item)
+
+    # --- Wiederverwendung -------------------------------------------------------------
+
+    def _recycle(self, item: GfxItem) -> None:
+        """Ein abgeräumtes Element für seine Bauart aufheben (:data:`RECYCLE_PER_KIND`).
+
+        Nur was seit dem Anlegen genau so aussieht, wie seine Bauart sagt —
+        ein umgefärbter Griffpfeil wartet nicht. Ein zweites Abräumen
+        desselben Elements legt es nicht zweimal hin, und ein schon
+        weitergegebenes (dessen Objekte ein anderes Element trägt) gar nicht.
+        """
+        key = item.recycle_key
+        if key is None or item.restyled or item.waiting or item.retired:
+            return
+        size = _buffer_bytes(item)
+        if size > RECYCLE_ITEM_BYTES:
+            return
+        item.waiting = True
+        item.waiting_bytes = size
+        waiting = self._recycled.setdefault(key, deque())
+        waiting.append(item)
+        self._recycle_order.append(item)
+        self._recycled_bytes += size
+        while len(waiting) > RECYCLE_PER_KIND:
+            self._forget_waiting(waiting[0])
+        while self._recycled_bytes > RECYCLE_BYTES and self._recycle_order:
+            self._forget_waiting(self._recycle_order[0])
+
+    def _forget_waiting(self, item: GfxItem) -> None:
+        """Ein wartendes Element aus dem Vorrat nehmen — freigegeben wird es mit
+        der letzten Referenz."""
+        key = item.recycle_key
+        waiting = self._recycled.get(key) if key is not None else None
+        if waiting is not None and item in waiting:
+            waiting.remove(item)
+            if not waiting:
+                del self._recycled[key]  # type: ignore[arg-type]
+        if item in self._recycle_order:
+            self._recycle_order.remove(item)
+        self._recycled_bytes -= item.waiting_bytes
+        item.waiting = False
+        item.waiting_bytes = 0
+
+    def _reused(self, key: tuple[Any, ...] | None, rows: int, faces: int = 0) -> GfxItem | None:
+        """Das kleinste wartende Element dieser Bauart, in dessen Puffer ``rows``
+        Ecken und ``faces`` Dreiecke passen — oder keines.
+
+        Leeres wird nie wiederverwendet: Ein frisches Element ohne Punkte ist
+        eines ohne Puffer, und das soll es bleiben.
+        """
+        if key is None or rows <= 0:
+            return None
+        best: GfxItem | None = None
+        best_room = 0
+        for candidate in self._recycled.get(key, ()):
+            if candidate.restyled:
+                continue
+            room, face_room = _rooms(candidate)
+            if room < rows or face_room < faces:
+                continue
+            if best is None or room < best_room:
+                best, best_room = candidate, room
+        if best is not None:
+            self._forget_waiting(best)
+        return best
+
+    def _renewed(
+        self,
+        old: GfxItem,
+        name: str,
+        colour: Colour,
+        *,
+        opacity: float = 1.0,
+        pickable: bool = True,
+    ) -> GfxItem:
+        """Ein neues Element um die Objekte eines wartenden.
+
+        Das alte gibt sie ab und behält eine leere Gruppe: Wer es noch hält
+        und daran dreht, dreht an nichts mehr, und nicht an dem, was jetzt
+        ein anderes Element zeigt. Lage und Sichtbarkeit beginnen wie bei
+        einem frischen Element.
+        """
+        item = GfxItem(name, old.root, old.objects, colour, opacity=opacity, pickable=pickable)
+        item.recycle_key = old.recycle_key
+        item.in_front = old.in_front
+        item.edge_line = old.edge_line
+        old.root = self._gfx.Group()
+        old.objects = []
+        old.edge_line = None
+        old.retired = True
+        item.root.visible = True
+        item._apply_transform()
+        return item
+
+    @staticmethod
+    def _fill(
+        item: GfxItem,
+        rows: np.ndarray,
+        *,
+        source: np.ndarray | None = None,
+        faces: np.ndarray | None = None,
+        by_positions: bool = True,
+    ) -> None:
+        """Ecken (und Dreiecke) in die Puffer eines wiederverwendeten Elements.
+
+        Gezeichnet wird nur der gefüllte Teil — bei Linien und Punkten über
+        den Zeichenbereich der Ecken, bei Flächen über den der Dreiecke. Der
+        Rest der Ecken steht auf NaN, damit kein Hüllquader ihn mitzählt;
+        übertragen wird nur, was gilt.
+        """
+        count = len(rows)
+        holders = item._geometry_holders()
+        geometry = holders[0].geometry
+        buffer = geometry.positions
+        buffer.data[:count] = rows
+        buffer.data[count:] = np.nan
+        buffer.update_range(0, count)
+        if by_positions:
+            buffer.draw_range = (0, count)
+        if faces is not None:
+            indices = geometry.indices
+            indices.data[: len(faces)] = faces
+            indices.update_range(0, len(faces))
+            indices.draw_range = (0, len(faces))
+        for obj in holders:
+            if hasattr(obj, "_solidon_positions") and source is not None:
+                obj._solidon_positions = source
+        item.filled = count
 
     def set_draw_order(self, items: Sequence[Item]) -> None:
         # pygfx sortiert Durchscheinendes selbst von hinten nach vorn
@@ -2087,6 +2507,9 @@ class GfxRenderer(Renderer):
         self._listeners.clear()
         for item in list(set(self._items.values()) | set(self._label_items)):
             self.remove(item)
+        self._recycled.clear()
+        self._recycle_order.clear()
+        self._recycled_bytes = 0
         self._axes_scene = None
         self._axes_objects.clear()
         self._occlusion = None
