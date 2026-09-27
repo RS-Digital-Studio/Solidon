@@ -218,7 +218,10 @@ _PRUSA_INFILL: Final = {
     "triangles": "triangles",
 }
 
-_PRUSA_SUPPORT_STYLE: Final = {"grid": "grid", "tree": "organic", "none": "grid"}
+#: Nur die ausdrücklichen Arten. ``auto`` und ``none`` schweigen: Dann gilt
+#: der Stil des Prusa-Profils (``snug``), und ausgeschaltete Stützen haben
+#: keinen Stil, den jemand gewählt hätte (Entscheidung J, 27.09.2026).
+_PRUSA_SUPPORT_STYLE: Final = {"grid": "grid", "tree": "organic"}
 
 PRUSA: Final[tuple[Row, ...]] = (
     ("layers.layer_height", "layer_height", _number),
@@ -272,7 +275,7 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("speed.travel", "travel_speed", _number),
     ("retraction.avoid_crossing_walls", "avoid_crossing_perimeters", _flag),
     ("support.style", "support_material", _support_on),
-    ("support.style", "support_material_style", _mapped(_PRUSA_SUPPORT_STYLE, "grid")),
+    ("support.style", "support_material_style", _only(_PRUSA_SUPPORT_STYLE)),
     # „Gitter" heißt Gitter: Das Muster des Herstellers ist bei der Orca-Familie
     # und bei PrusaSlicer oft ``rectilinear`` — Linien, die in jeder Schicht in
     # dieselbe Richtung laufen und als freistehende Wände umkippen. Gemessen an
@@ -317,10 +320,13 @@ _ORCA_INFILL: Final = {
     "triangles": "triangles",
 }
 
+#: Nur die ausdrücklichen Arten (Entscheidung J, 27.09.2026). Hier stand
+#: auch ``"none": "normal(auto)"`` — ausgeschaltete Stützen schrieben Gitter
+#: über Elegoos und Bambus Baum, und wer sie im Slicerfenster einschaltete,
+#: bekam Gitter. ``auto`` heißt: Stützen an, die Art des Herstellerprofils.
 _ORCA_SUPPORT_TYPE: Final = {
     "grid": "normal(auto)",
     "tree": "tree(auto)",
-    "none": "normal(auto)",
 }
 
 _ORCA_SEAM: Final = {
@@ -398,7 +404,7 @@ ORCA: Final[tuple[Row, ...]] = (
     # "0" und "1", nicht "true" und "false". Ein "true" hier bleibt still
     # wirkungslos — der Slicer meldet nichts, er stützt bloß nicht.
     ("support.style", "enable_support", _support_on),
-    ("support.style", "support_type", _mapped(_ORCA_SUPPORT_TYPE, "normal(auto)")),
+    ("support.style", "support_type", _only(_ORCA_SUPPORT_TYPE)),
     # Dasselbe Kreuzmuster wie bei PrusaSlicer, siehe dort.
     ("support.style", "support_base_pattern", _only({"grid": "rectilinear-grid"})),
     ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "1"}, "0")),
@@ -406,7 +412,14 @@ ORCA: Final[tuple[Row, ...]] = (
     ("support.z_gap", "support_top_z_distance", _number),
     ("support.xy_gap", "support_object_xy_distance", _number),
     ("support.interface_layers", "support_interface_top_layers", _integer),
-    ("adhesion.kind", "brim_type", _mapped({"brim": "outer_only"}, "no_brim")),
+    # ``auto`` ist Orcas ``auto_brim``: Es entscheidet aus Material, Geometrie
+    # und Tempo selbst und ist die Vorgabe jedes Herstellerprofils. Bis zum
+    # 27.09.2026 kannte Solidon es nicht und schrieb ``no_brim`` darüber.
+    (
+        "adhesion.kind",
+        "brim_type",
+        _mapped({"brim": "outer_only", "auto": "auto_brim"}, "no_brim"),
+    ),
     ("adhesion.skirt_loops", "skirt_loops", _integer),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),

@@ -576,7 +576,12 @@ def test_a_lattice_of_small_self_supporting_pieces_gets_no_supports() -> None:
 
 
 def test_one_ceiling_of_the_same_area_still_gets_supports() -> None:
-    """Dieselbe Fläche an einem Stück ist die Decke, um die es beim Deckel ging."""
+    """Dieselbe Fläche an einem Stück ist die Decke, um die es beim Deckel ging.
+
+    Vorgeschlagen wird „Stützen an", die Art bestimmt das Profil des Slicers
+    (Konzept Herstellerprofil, Entscheidung J) — bis zum 27.09.2026 hieß das
+    Gitter, auch über Elegoos und Bambus Baum.
+    """
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
     ceiling = _overhang_layers(_pieces(1, 16.7), layers=1)
@@ -584,7 +589,7 @@ def test_one_ceiling_of_the_same_area_still_gets_supports() -> None:
     entries = advise.advise(settings, profile, ceiling)
 
     chosen = next(entry for entry in entries if entry.path == "support.style")
-    assert chosen.value == "grid"
+    assert chosen.value == "auto"
 
 
 # --- Die Leerfahrt gehört dem Drucker -------------------------------------------

@@ -109,6 +109,10 @@ class SlicerProfile:
     nozzle: float = 0.0
     compatible_printers: tuple[str, ...] = ()
     default_process: str = ""
+    default_filament: str = ""
+    """Nur bei Maschinenprofilen: das Filament, das der Hersteller für diese
+    Maschine vorwählt (``default_filament_profile``) — bei Bambu „Bambu PLA
+    Basic @BBL A1", bei Prusa „Prusament PLA @MK4S HF0.4"."""
     filament_type: str = ""
     """Nur bei Filamentprofilen: ``PETG``, ``PLA``, … — daran hängt die
     Zuordnung zum Material, das in Solidon eingestellt ist."""
@@ -912,6 +916,16 @@ def machine_with_nozzle(
     Düse. Findet sich keine, bleibt es leer — das ist Regel 21, denn eine
     fremde Maschine brächte den Startcode eines anderen Druckers mit.
     """
+    # **Eine Datei, die schon passt, braucht keinen Bestand.** Der Druckdialog
+    # reicht die gewählte Maschine als Pfad weiter, und unten fände der
+    # Vergleich über den Namen sie ohnehin nicht — gesucht wurde trotzdem in
+    # jedem Maschinenprofil des Slicers, gemessen 0,35 Sekunden je Aufruf, und
+    # die Grundlage aus dem Herstellerprofil fragt bei jeder Profilwahl.
+    direct = Path(machine)
+    if direct.suffix == ".json" and direct.is_file():
+        own = _read(direct, "machine", False)
+        if own is not None and abs(own.nozzle - printer.nozzle_diameter) < 1e-6:
+            return machine
     machines_here = [
         entry
         for entry in find_profiles(executable, flavour, ("machine",))
@@ -990,6 +1004,7 @@ def _read(
         nozzle=_first_number(loaded.get("nozzle_diameter")),
         compatible_printers=tuple(_strings(loaded.get("compatible_printers"))),
         default_process=str(loaded.get("default_print_profile", "")),
+        default_filament=_first_string(loaded.get("default_filament_profile")),
         filament_type=_first_string(loaded.get("filament_type")),
         from_user=from_user or own,
         inherits=str(loaded.get("inherits", "")),
@@ -1755,6 +1770,9 @@ def _prusa_profiles(
             printer_model=model,
             nozzle=_first_number(str(values.get("nozzle_diameter", "")).split(",")[0]),
             default_process=str(values.get("default_print_profile", "")),
+            default_filament=next(
+                iter(_prusa_list(str(values.get("default_filament_profile", "")))), ""
+            ),
             filament_type=str(values.get("filament_type", "")),
             compatible_printers=tuple(_prusa_list(str(values.get("compatible_printers", "")))),
         )
@@ -2177,7 +2195,35 @@ def match_filament(
     ]
     if not fitting:
         return None
-    return min(fitting, key=lambda entry: (not entry.from_user, len(entry.name), entry.name))
+    # **Das Filament des Herstellers vor dem kürzesten Namen.** Der kürzeste
+    # Name ist die Grundausführung *innerhalb einer Marke* (PETG vor PETG
+    # PRO) — über Marken hinweg ist er Zufall: Bis zum 27.09.2026 bekam ein
+    # Bambu A1 „eSUN PLA+ @BBL A1" statt „Bambu PLA Basic @BBL A1" und ein
+    # SV06 „FilAr PLA Oro". Seit das Herstellerprofil die Grundlage ist,
+    # sind das Temperatur, Kühlung und Volumenstrom des ganzen Drucks. Zuerst
+    # zählt deshalb, was die Maschine selbst vorwählt, dann die Marke der
+    # Maschine.
+    vendor = _vendor_folder(machine.path, "machine")
+    return min(
+        fitting,
+        key=lambda entry: (
+            not entry.from_user,
+            entry.name != machine.default_filament,
+            not vendor or _vendor_folder(entry.path, "filament") != vendor,
+            len(entry.name),
+            entry.name,
+        ),
+    )
+
+
+def _vendor_folder(path: Path, kind: str) -> str:
+    """Der Herstellerordner über dem Ordner einer Profilart — leer, wo es
+    keinen gibt (Prusa-Bündel, eigene Profile)."""
+    parts = list(path.parts)
+    if kind not in parts:
+        return ""
+    position = parts.index(kind)
+    return parts[position - 1] if position else ""
 
 
 def type_of(

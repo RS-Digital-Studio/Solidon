@@ -11,10 +11,34 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 | `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3); `default_scheme` nennt das Namensmuster, nach dem ohne eigene Angabe benannt wird — das Fenster zeigt es im Dateidialog (RM-141). `mesh_for_export` vernetzt einen exakten Körper so fein, wie das Verfahren des Druckers es verlangt (`Profile.export_deflection`: ein Achtel des kleinsten Details, gedeckelt von der Zahl des Kerns — FDM bleibt bei 0,05 mm, ein Resin-Drucker mit 50-µm-Pixeln bekommt 0,006), an allen drei Stellen des Schreibers; `export.tessellated` nennt das Maß. Bei einem Resin-Drucker lässt `write_assembly` den FDM-Satz fallen: keine Haftungs- und Filamentbefunde, keine Beilage |
 | `threemf.py` | 3MF **schreiben** — ein Körper oder eine Baugruppe, mit Farbgruppen und Slicer-Beilagen (§20, §29); `AssemblyPart.support_blocker` legt eine Stützsperre an — für die Orca-Familie als eigenes Teil (`support_blocker` in `model_settings.config`), für PrusaSlicer als Bereich im Netz (`SupportBlocker` in der Prusa-Beilage, dazu `slic3rpe:Version3mf`), je nach `blocker_as_part`. Gelesen wird in `ingest/threemf.py` |
 | `handover.py` | Übergabe an den Slicer (§29, §28.1) |
+| `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, dazu `slicer_profiles.FILAMENT_READBACK`), mit den eingebauten Vorgaben der vier Orca-Programme (`PROGRAM_DEFAULTS`, gemessen), der Druckplatte (`default_plate`, `PLATE_TEMPERATURES`) und dem Gemessenen (`Foundation.measured`); über dem Standardprozess die Werte der gewählten Stufe (`STAGE_PATHS`, `Foundation.staged`); die Platten, für die das Filament eine Betttemperatur nennt (`plate_temperatures`), ob der Drucker eine Plattenwahl hat (`offers_plates`); `written_paths` sagt, was die Übergabe davon schreibt, `findings`, was der Kunde über Platte und unlesbares Profil wissen muss |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt |
 | `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt; ein Durchgang liest jede Datei einmal (`ProfileDocuments`, geteilt von Auswahl, Namensindex und Erbkette) |
 
 STEP geht über `brep/step.py`, nicht von hier.
+
+**Auf dem Herstellerprofil schreibt die Übergabe nur die Abweichung**
+(Bauplan §29, Konzept `konzept-herstellerprofil-als-grundlage-2026-09`).
+`write_config` und `project_settings` fragen für die Orca-Familie
+`manufacturer.base_settings`; liegt ein lesbarer Herstellerprozess darunter,
+gehen aus `PrintSettings` nur die Pfade in `chosen` und `accepted` hinaus
+(`as_mapping(paths=)`, `by_section(paths=)`), dazu das Gemessene,
+`curr_bed_type` und die Objektmarken. Jedes Dokument entscheidet für sich:
+Ein Filament ohne Herstellerunterlage — eine lokale Spule anderen Typs —
+bekommt Solidons ganzen Satz. Ohne Herstellerprozess schreibt Solidon wie
+vor dem 27.09.2026 alles, und die Betttemperatur auf jede Platte
+(`_with_every_plate`); mit einem gilt die gewählte Platte
+(`SlicerSetup.plate`, sonst `manufacturer.default_plate`), und eine eigene
+Betttemperatur bekommt deren Schlüssel (`_on_the_plate`). Der Druckdialog,
+`MainWindow.effective_print_settings` (im `_FoundationWorker`) und der
+Menüexport legen dieselbe Grundlage unter die eigene Wahl
+(`print_settings.on_base`). Was ohne Partner nicht wirkt, geht mit ihm
+(`COUPLED_PATHS`: Haftungsart mit allen Maßen, Lüfter-Obergrenze mit dem
+unteren Ende); „Automatisch" als Haftung heißt bei PrusaSlicer und Cura
+die Art aus Solidons Tabelle (`_adhesion_for`). Die Gegenprobe hält die
+eigenen Werte und eine Stichprobe der Grundlage (`FOUNDATION_SAMPLE`,
+Listen je Düsenvariante über `_printed`); `foundation_findings` meldet
+Platte und unlesbares Profil in Slicen und Export.
 
 **Die Stützsperre reist nur mit, wenn sie übernommen ist**
 (`support.block_channels`) — und nur in der direkten Übergabe an einen
@@ -163,7 +187,8 @@ man sie importiert. Eingelegte Materialien liest `configured_filaments` aus
 Curas Konfigurationsordner (`cura.cfg` → aktiver Drucker → Extruderstapel,
 Platz 4 ist das Material).
 
-**Jede Rolle bekommt Solidons Wert** (RM-191): PrusaSlicer schreibt Solidon
+**Ohne Herstellerprofil bekommt jede Rolle Solidons Wert** (RM-191):
+PrusaSlicer schreibt Solidon
 volle Füllung und Lücken (`solid_infill_speed`, `gap_fill_speed`) und setzt
 `machine_limits_usage = ignore`, damit die Zeitschätzung nicht mit
 erfundenen 1 500 mm/s² rechnet; die Orca-Familie bekommt dieselben zwei

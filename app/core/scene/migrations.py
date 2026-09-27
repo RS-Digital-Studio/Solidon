@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 35
+FORMAT_VERSION: Final = 36
 
 
 @dataclass(frozen=True, slots=True)
@@ -887,6 +887,100 @@ def _keep_repairs_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _mark_own_print_settings(data: dict[str, Any]) -> dict[str, Any]:
+    """35 → 36: Welche Druckeinstellungen eine eigene Wahl waren.
+
+    Ab Format 36 weiß jeder Wert, woher er kommt (Konzept Herstellerprofil,
+    27.09.2026): Nur die eigene Wahl und der übernommene Vorschlag gehen als
+    Abweichung zum Slicer, alles andere kommt aus dem Profil des Herstellers.
+    Eine ältere Datei trägt einen vollen Satz ohne Herkunft, und er belegt
+    keine Entscheidung — die Übergabe, die Filamentzuweisung und das
+    Rückgängigmachen schrieben den aufgelösten Satz ungefragt hinein.
+
+    Als eigene Wahl gilt, was **weder** der heutigen Auflösung für Drucker,
+    Material und Stufe des Projekts **noch** der Vorgabe der Dataclass
+    gleicht (:func:`app.core.knowledge.print_settings.legacy_choices`) — und
+    auch nicht der Auflösung, mit der die schreibende Version rechnete: bis
+    0.5.0 die Tempi der Stufe ohne das Tempo des Druckers. Früher übernommene
+    Vorschläge werden dabei eigene Wahl; sie galten schon bisher der ganzen
+    Platte.
+
+    **Wie** :func:`_bind_old_lid_fits` **ruft dieser Schritt die heutigen
+    Funktionen** — die Auflösung von heute ist der Vergleich. Festgehalten
+    ist er an ``tests/data/projects/print_settings_v33.p3d``, gespeichert von
+    Solidon 0.5.0 selbst. Das Profil ist das der Sitzung, einschließlich eines
+    Druckers, den nur das Projekt mitbringt
+    (:func:`app.core.knowledge.profiles.project_profile`).
+    """
+    stored = data.get("print_settings")
+    if not isinstance(stored, dict) or not _readable_print_settings(stored):
+        # Ein beschädigter Satz bleibt, wie er ist: Die Schemaprüfung nach der
+        # Migration meldet ihn mit Handlungsvorschlag. Hier gelesen, wäre er
+        # ein ``AttributeError`` — ein Programmierfehler mit Fehlerbericht
+        # (Review Stufe A+B, R1).
+        return data
+    from app.core.errors import AppError
+    from app.core.knowledge import print_settings, profiles
+    from app.core.scene.serialise import print_settings_from_data
+    from app.core.types import PrintSettings
+
+    found = data.get("scene")
+    scene: dict[str, Any] = found if isinstance(found, dict) else {}
+    printer = str(scene.get("printer", ""))
+    material = profiles.material_for(printer, str(scene.get("material", "")))
+    settings = print_settings_from_data(stored, material)
+    carried = data.get("carried_profiles")
+    references: tuple[PrintSettings, ...]
+    try:
+        profile = profiles.project_profile(
+            printer, material, carried if isinstance(carried, dict) else None
+        )
+        references = (
+            print_settings.resolve(profile, settings.quality),
+            print_settings.resolve(profile, settings.quality, legacy=True),
+        )
+    except AppError, KeyError, ValueError:
+        references = ()
+    stored["chosen"] = sorted(print_settings.legacy_choices(settings, *references))
+    stored["accepted"] = []
+    return data
+
+
+#: Die Gruppen eines Druckeinstellungssatzes — je eine Zuordnung.
+_SETTING_GROUP_NAMES: Final = (
+    "layers",
+    "shell",
+    "infill",
+    "temperature",
+    "cooling",
+    "speed",
+    "support",
+    "adhesion",
+    "retraction",
+    "filament",
+)
+
+
+def _readable_print_settings(stored: dict[str, Any]) -> bool:
+    """Hat der Satz die Form, die ``print_settings_from_data`` liest?
+
+    Geprüft wird nur die Form, nicht der Inhalt: jede Gruppe eine Zuordnung,
+    die Stufe ein Text, die Spulen- und Slotlisten Listen aus Zuordnungen.
+    Einen falschen Wert darin meldet die Schemaprüfung selbst.
+    """
+    if not all(isinstance(stored.get(group, {}), dict) for group in _SETTING_GROUP_NAMES):
+        return False
+    if not isinstance(stored.get("quality", "standard"), str):
+        return False
+    for key in ("spool_bindings", "slot_overrides", "slot_profile_bindings"):
+        value = stored.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+            return False
+    return isinstance(stored.get("slot_profiles", []), list)
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -923,6 +1017,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=32, to_version=33, apply=_read_step_assemblies),
     Step(from_version=33, to_version=34, apply=_allow_large_recognition_answers),
     Step(from_version=34, to_version=35, apply=_keep_repairs_as_they_were),
+    Step(from_version=35, to_version=36, apply=_mark_own_print_settings),
 )
 
 

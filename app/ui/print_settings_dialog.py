@@ -73,7 +73,7 @@ from app.core.errors import (
     OperationCancelled,
     OutOfBuildVolume,
 )
-from app.core.export import handover, slicer_keys, slicer_profiles, threemf
+from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour, knows_plates, takes_a_machine_profile
 from app.core.export.writer import arrangement_holds, write_assembly
 from app.core.filament_usage import UsageRequest, from_gcode
@@ -129,6 +129,7 @@ from app.ui.labels import (
     explain_choices,
     length,
     localised,
+    plate_title,
 )
 from app.ui.labels import slicer_title as _slicer_title
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
@@ -164,6 +165,12 @@ class Field:
     """Anzeige geteilt durch Modellwert. Der Kern rechnet Anteile in 0…1, die
     Werkstatt spricht in Prozent — ein Feld mit ``[%]`` und einer 0,15 darin
     ist schlicht falsch beschriftet (§19.3)."""
+    choice_notes: tuple[tuple[str, str | TranslatableText], ...] = ()
+    """Sätze zu einzelnen Auswahlwerten, die nur für dieses Feld gelten.
+
+    „Automatisch" erklärte ``labels.choice_note`` für alle Felder gleich —
+    als Parameter, der „aus dem Zusammenhang bestimmt wird". Bei Stützen und
+    Haftung heißt es etwas anderes (Review Stufe A+B, H8)."""
     note: str | TranslatableText = ""
     """Was der Wert tut, und woran man ihn ändert — als Tooltip am Feld.
 
@@ -231,32 +238,6 @@ FIELD_WIDTH: Final[dict[str, int]] = {
     "enum": 280,
     "colour": 160,
 }
-
-
-#: Wann zwei Einstellungswerte als gleich gelten — feiner als jedes Feld
-#: anzeigt.
-#:
-#: Nicht ``EPS_GEOM`` (0,001 mm): Ein Flussverhältnis steht auf 0,98, eine
-#: Schichthöhe auf 0,08, und ein Anteil der Füllung auf 0,15 — dort wären
-#: tausendstel Schritte eine echte Änderung. Sechs Stellen liegen unter jeder
-#: Anzeige (höchstens drei Nachkommastellen) und über dem Rauschen, das beim
-#: Hin- und Herrechnen durch ``factor`` entsteht.
-EPS_SETTING: Final = 1e-6
-
-
-def _same_value(a: object, b: object) -> bool:
-    """Ob zwei Einstellungswerte dasselbe sagen.
-
-    Regel 6: Fließkomma nie mit ``==``. Die Felder tragen dreierlei — Zahlen,
-    Wahrheitswerte und Zeichenketten —, und ein Wahrheitswert ist in Python
-    eine Zahl: Ohne die Abfrage davor wäre ``True`` gleich ``1,0``, und ein
-    Haken, den jemand gesetzt hat, sähe aus wie eine unveränderte Eins.
-    """
-    if isinstance(a, bool) or isinstance(b, bool):
-        return a is b
-    if isinstance(a, int | float) and isinstance(b, int | float):
-        return is_close(float(a), float(b), EPS_SETTING)
-    return bool(a == b)
 
 
 def group_title(group: str) -> str:
@@ -746,11 +727,13 @@ FIELDS: tuple[Field, ...] = (
         _("Stützen"),
         "support",
         kind="enum",
-        choices=("none", "grid", "tree"),
+        choices=("none", "auto", "grid", "tree"),
         front=True,
+        choice_notes=(("auto", _("Stützen an. Welche Art, bestimmt das Profil Ihres Slicers.")),),
         note=_(
-            "Ob und wie gestützt wird. Baum braucht weniger Material und lässt sich leichter "
-            "abnehmen, Gitter trägt schwere Überhänge sicherer."
+            "Ob und wie gestützt wird. Automatisch nimmt die Art aus dem Profil Ihres Slicers. "
+            "Baum braucht weniger Material und lässt sich leichter abnehmen, Gitter trägt "
+            "schwere Überhänge sicherer."
         ),
     ),
     Field(
@@ -842,11 +825,20 @@ FIELDS: tuple[Field, ...] = (
         _("Druckbetthaftung"),
         "adhesion",
         kind="enum",
-        choices=("none", "skirt", "brim", "raft"),
+        choices=("none", "auto", "skirt", "brim", "raft"),
+        choice_notes=(
+            (
+                "auto",
+                _(
+                    "Ihr Slicer entscheidet je Teil. Bei PrusaSlicer und Cura gilt Solidons "
+                    "Vorgabe für das Material."
+                ),
+            ),
+        ),
         note=_(
-            "Was zusätzlich auf das Bett kommt, damit das Teil hält. Brim legt einen Rand an, "
-            "Raft eine ganze Unterlage; Skirt berührt das Teil nicht und hält nur die Düse im "
-            "Fluss."
+            "Was zusätzlich auf das Bett kommt, damit das Teil hält. Automatisch entscheidet der "
+            "Slicer nach Teil und Material. Brim legt einen Rand an, Raft eine ganze Unterlage; "
+            "Skirt berührt das Teil nicht und hält nur die Düse im Fluss."
         ),
     ),
     Field(
@@ -1165,6 +1157,7 @@ def remembered_setup(
         machine_profile=settings.slicer_machine_profile,
         base_process=settings.slicer_base_process,
         base_filament=filament,
+        plate=settings.slicer_bed_plate,
     )
 
 
@@ -1255,6 +1248,13 @@ def _make_setting_editor(
         for choice in field.choices:
             combo.addItem(choice_label(choice), choice)
         explain_choices(combo)
+        for value, choice_note_text in field.choice_notes:
+            index = combo.findData(value)
+            if index >= 0:
+                combo.setItemData(index, str(choice_note_text), Qt.ItemDataRole.ToolTipRole)
+                combo.setItemData(
+                    index, str(choice_note_text), Qt.ItemDataRole.AccessibleDescriptionRole
+                )
         combo.currentIndexChanged.connect(changed)
         editor = combo
     elif field.kind == "colour":
@@ -2521,6 +2521,10 @@ class PrintSettingsDialog(QDialog):
 
         self._editors: dict[str, QWidget] = {}
         self._labels: dict[str, QLabel] = {}
+        self._resets: dict[str, QToolButton] = {}
+        """Der Knopf *Zurücksetzen* je Feld — sichtbar bei eigener Wahl."""
+        self._foreign_notes: dict[str, QLabel] = {}
+        """Der Herstellerwert je Feld, den Solidon nicht übersetzen kann."""
         #: Wo die Suche gerade steht — Begriff, Trefferliste, Platz darin.
         self._search_term = ""
         self._search_hits: list[str] = []
@@ -2606,9 +2610,19 @@ class PrintSettingsDialog(QDialog):
         # Erst ohne eigene Einstellungen wird aus Stufe, Material und Drucker
         # aufgelöst.
         stored = session.project.document.print_settings
-        self.settings = stored or print_settings.resolve(
-            session.profile, self._remembered_quality()
-        )
+        # **Gespeichert ist die Abweichung, nicht die Grundlage** (Konzept
+        # Herstellerprofil, Entscheidung A). Bis das Profil des Herstellers
+        # gelesen ist, steht Solidons Tabelle darunter; :meth:`_rebase` legt
+        # danach das Herstellerprofil unter dieselbe Abweichung.
+        quality = stored.quality if stored is not None else self._remembered_quality()
+        table = print_settings.resolve(session.profile, quality)
+        self.settings = print_settings.on_base(stored, table) if stored is not None else table
+        self._foundation: manufacturer.Foundation | None = None
+        """Worauf die Einstellungen gerade stehen — das Herstellerprofil oder
+        Solidons Tabelle (:func:`manufacturer.base_settings`)."""
+        self._foundation_key: tuple[object, ...] | None = None
+        self._built = False
+        """Erst wenn jede Zeile steht, darf die Grundlage die Felder füllen."""
         # Woran :meth:`has_changes` misst, ob dieser Dialog etwas bewirkt hat.
         # Bis zum 03.09.2026 schrieb schon das bloße Öffnen die aufgelösten
         # Werte ins Projekt: Wer nur nachsah, welche Temperatur vorgeschlagen
@@ -2631,6 +2645,13 @@ class PrintSettingsDialog(QDialog):
         # ``_build_state`` — dort, wo der Kunde sie braucht.
         self._make_plate_row()
         layout.addLayout(self._build_head())
+        # **Unter der Kopfzeile steht die Grundlage** (Konzept Herstellerprofil,
+        # Entscheidung H): worauf Solidon aufsetzt, in einem Satz. Im Kasten
+        # „Profile des Slicers" las ihn nur, wer den Kasten aufklappte (Review
+        # Stufe A+B, H11).
+        self.foundation_note = QLabel("", self)
+        self.foundation_note.setWordWrap(True)
+        layout.addWidget(self.foundation_note)
         self.front_box = self._build_front()
         layout.addWidget(self.front_box)
         # **Über der Klappe, nicht darin.** Wer sucht, weiß gerade nicht, wo
@@ -2670,6 +2691,9 @@ class PrintSettingsDialog(QDialog):
         # ganzen Dialog. Zehn Formulare rechneten sie bis hierhin einzeln, und
         # die Felder begannen an zehn Stellen (B8/B11).
         align_forms(self)
+        self._built = True
+        self._mark_origins()
+        self._show_foundation()
 
     def has_changes(self) -> bool:
         """Hat der Kunde in diesem Dialog etwas bewirkt?
@@ -2684,8 +2708,12 @@ class PrintSettingsDialog(QDialog):
         Druckeinstellungen, und eine exportierte 3MF trägt weiter nur
         Geometrie. Das ist kein Verlust — beim nächsten Öffnen löst der Dialog
         aus Stufe, Material und Drucker dieselben Werte wieder auf.
+
+        **Gemessen an dem, was dem Projekt gehört** (Konzept Herstellerprofil):
+        Die Grundlage wechselt, sobald das Herstellerprofil gelesen ist, und
+        das ist kein Tun des Kunden.
         """
-        return self.settings != self._opened_with
+        return print_settings.own_part(self.settings) != print_settings.own_part(self._opened_with)
 
     # --- Aufbau ---------------------------------------------------------------
 
@@ -3190,17 +3218,6 @@ class PrintSettingsDialog(QDialog):
         wechseln *heißt*, alles neu vorgeben zu lassen; einen Drucker zu
         wechseln heißt es nicht.
         """
-        # Vor dem Umschalten lesen: danach ist ``session.profile`` das neue.
-        old_defaults = print_settings.resolve(self.session.profile, self.settings.quality)
-        chosen = {
-            field.path: print_settings.read_path(self.settings, field.path)
-            for field in FIELDS
-            if not _same_value(
-                print_settings.read_path(self.settings, field.path),
-                print_settings.read_path(old_defaults, field.path),
-            )
-        }
-
         document = self.session.project.document
         printer_id = str(self.printer_choice.currentData())
         self.session.change_scene_profile(
@@ -3214,10 +3231,14 @@ class PrintSettingsDialog(QDialog):
         self._show_nozzle_count()
         # Und ein Wechsel des Verfahrens zeigt nur noch, was gilt.
         self._fit_to_technology()
-        settings = self._resolved(self.settings.quality)
-        for path, value in chosen.items():
-            settings = print_settings.with_path(settings, path, value)
-        self.settings = settings
+        # Was eine Entscheidung ist, sagt seit Format 36 die Herkunft je Wert
+        # und nicht mehr der Vergleich mit den alten Vorgaben: die eigene Wahl
+        # und die übernommenen Vorschläge bleiben, der Rest ist Grundlage.
+        self.settings = print_settings.on_base(
+            self.settings, print_settings.resolve(self.session.profile, self.settings.quality)
+        )
+        self._foundation = None
+        self._foundation_key = None
         self._load_into_editors()
         self._refresh_advice()
         self._refill_slicer_profiles()
@@ -3679,6 +3700,8 @@ class PrintSettingsDialog(QDialog):
         # Der Slicen-Knopf fragt die Profilwahl vor dem Klick (Regel 19) —
         # also muss er jede Änderung daran erfahren, nicht nur die Maschine.
         self.process_choice.currentIndexChanged.connect(self._show_slicer_state)
+        # Ein anderer Prozess ist eine andere Grundlage — Wände, Tempo, Stützen.
+        self.process_choice.currentIndexChanged.connect(self._rebase)
         # **Keine zweite Auswahl für dieselbe Angabe** (Entscheidung Robert,
         # 08.09.2026). Das Slicer-Profil gehört zur Spule und wird dort
         # gewählt: Der Filamentwähler schreibt es in den Katalogeintrag, die
@@ -3716,6 +3739,23 @@ class PrintSettingsDialog(QDialog):
         form.addRow(tr("Drucker"), self.machine_choice)
         form.addRow(tr("Grundprofil"), self.process_choice)
         form.addRow(tr("Filament"), filament_row)
+        # **Die Druckplatte ist eine Angabe, keine Vermutung** (Konzept
+        # Herstellerprofil, Entscheidung F): Zur Wahl stehen die Platten, für
+        # die das Filament des Herstellers eine Betttemperatur nennt; eine, die
+        # er für dieses Filament sperrt, steht da, ist aber nicht wählbar.
+        self.bed_plate_choice = QComboBox(self.slicer_inner)
+        self.bed_plate_choice.activated.connect(self._bed_plate_chosen)
+        self.bed_plate_label = QLabel(tr("Druckplatte"), self.slicer_inner)
+        self.bed_plate_label.setBuddy(self.bed_plate_choice)
+        form.addRow(self.bed_plate_label, self.bed_plate_choice)
+        self.bed_plate_label.setVisible(False)
+        self.bed_plate_choice.setVisible(False)
+        self._bed_plate = (
+            self.ui_settings.slicer_bed_plate
+            if self.ui_settings.slicer_profile_printer in ("", self.session.profile.printer.id)
+            else ""
+        )
+        """Die gewählte Druckplatte — leer heißt die Standardplatte der Maschine."""
 
         # Je Materialslot eine Zeile — aber nur, wenn es mehr als einen gibt.
         # Ein einfarbiges Teil hat eine Farbe und braucht keine Liste darüber;
@@ -4126,7 +4166,7 @@ class PrintSettingsDialog(QDialog):
             self.profile_note.setText(
                 tr(
                     "Automatisch zugeordnet. Was hier steht, bringt der Slicer mit; Solidon legt "
-                    "seine Werte darauf."
+                    "nur Ihre Änderungen und übernommene Vorschläge darauf."
                 )
             )
         self._show_slicer_state()
@@ -4319,6 +4359,7 @@ class PrintSettingsDialog(QDialog):
                 tr("Erst einen Drucker wählen — dann steht hier das Filament.")
             )
             fill_slot_choices(-1)
+            self._rebase()
             return
 
         # Erst was für *dieses* Material zuletzt galt, dann der allgemeine
@@ -4369,6 +4410,7 @@ class PrintSettingsDialog(QDialog):
                     )
                 )
                 fill_slot_choices(-1)
+                self._rebase()
                 return
             chosen = preferred
         self._remember_filament_profile(chosen)
@@ -4376,6 +4418,7 @@ class PrintSettingsDialog(QDialog):
         # Dieselbe Liste in jede Slot-Zeile. Vorbelegt mit dem, was das Projekt
         # dazu sagt; ohne Angabe mit dem Filament der Platte.
         fill_slot_choices(fitting.index(chosen))
+        self._rebase()
 
     def _remember_filament_profile(self, entry: slicer_profiles.SlicerProfile) -> None:
         """Das zugeordnete Profil festhalten, anzeigen und übernehmbar machen."""
@@ -4721,6 +4764,28 @@ class PrintSettingsDialog(QDialog):
         chosen = self._filament_profile
         if not chosen:
             return
+        if self._foundation is not None and self._foundation.has_profile:
+            # **Das Herstellerprofil ist die Grundlage** (Konzept
+            # Herstellerprofil): Seine Werte gelten schon. Übernehmen heißt
+            # jetzt, die eigene Wahl an allem zurückzunehmen, was am Filament
+            # hängt — dann gilt wieder, was das Profil sagt.
+            owned = [
+                path
+                for path in sorted(self.settings.explicit)
+                if path.partition(".")[0] in ("temperature", "cooling", "filament")
+                or path in ("retraction.length", "retraction.speed", "retraction.z_hop")
+            ]
+            settings = self.settings
+            for path in owned:
+                settings = print_settings.without_choice(settings, path, self._base())
+            self.settings = settings
+            self._load_into_editors()
+            self._mark_origins()
+            self._refresh_advice()
+            self.state.setText(
+                tr("Werte aus {profile} übernommen.").replace("{profile}", self._filament_title)
+            )
+            return
         source = self._filament_source or Path(str(chosen))
         # **Nie stumm** (Regel 17): Ein Profil ohne lesbare Werte ließ den
         # Klick folgenlos, und ein Wert wie ``nan`` warf aus dem Slot. Beides
@@ -4729,7 +4794,10 @@ class PrintSettingsDialog(QDialog):
             values = slicer_profiles.filament_values(source, self._profile_roots())
             settings = self.settings
             for path, value in values.items():
-                settings = print_settings.with_path(settings, path, value)
+                # Ohne Herstellergrundlage schreibt die Übergabe nur, was
+                # abweichen soll — übernommene Werte müssen also eigene Wahl
+                # werden, sonst kämen sie nie beim Slicer an.
+                settings = print_settings.with_choice(settings, path, value)
         except AppError as problem:
             _log.warning("filament values could not be adopted: %s", problem)
             self.state.setText(problem_text(problem))
@@ -5329,10 +5397,42 @@ class PrintSettingsDialog(QDialog):
         self._refresh_advice()
 
     def _add_row(self, form: QFormLayout, field: Field) -> None:
-        """Beschriftung und Feld in eine Zeile — bei einem Haken antwortet beides."""
+        """Beschriftung und Feld in eine Zeile — bei einem Haken antwortet beides.
+
+        Dahinter ein Knopf *Zurücksetzen*, sichtbar nur bei einer eigenen Wahl
+        oder einem übernommenen Vorschlag: Er nimmt den Wert aus dem Profil
+        des Herstellers zurück (Konzept Herstellerprofil, Entscheidung H).
+        Zusammen mit der fetten Beschriftung ist das die zweite Kodierung,
+        die Regel 18 verlangt — nichts hängt an einer Farbe.
+        """
         label, editor = self._label(field), self._editor(field)
         label.setBuddy(editor)
-        form.addRow(label, editor)
+        holder = QWidget(form.parentWidget())
+        line = QHBoxLayout(holder)
+        line.setContentsMargins(0, 0, 0, 0)
+        line.setSpacing(TIGHT)
+        line.addWidget(editor)
+        reset = QToolButton(holder)
+        reset.setText(tr("Zurücksetzen"))
+        reset.setAccessibleName(tr("Zurücksetzen"))
+        reset.setAutoRaise(True)
+        # Über ``weak_slot``, nicht über ein Lambda: Der Knopf ist ein Kind des
+        # Dialogs, und ein Lambda hielte den Dialog bis zum Prozessende
+        # (``wartezeit.md``; Review Stufe A+B, H4).
+        reset.clicked.connect(weak_slot(self, PrintSettingsDialog._reset_field, field.path))
+        reset.hide()
+        line.addWidget(reset)
+        # **Was der Hersteller sagt und Solidon nicht übersetzen kann**, steht
+        # daneben (``Foundation.foreign``): Elegoos „crosshatch" hat kein
+        # Gegenstück unter Solidons Mustern, das Feld zeigt deshalb Solidons
+        # Wert — gedruckt wird der des Herstellers (Review Stufe A+B, R5).
+        foreign = QLabel(holder)
+        foreign.hide()
+        line.addWidget(foreign)
+        line.addStretch(1)
+        self._resets[field.path] = reset
+        self._foreign_notes[field.path] = foreign
+        form.addRow(label, holder)
         if isinstance(editor, RowCheckBox):
             caption_toggles(label, editor)
 
@@ -5384,7 +5484,9 @@ class PrintSettingsDialog(QDialog):
         das Kästchen. Ein Ziel ist sie erst als :class:`RowCheckBox`: Ein
         ``QCheckBox`` ohne Text nahm nur das Kästchen selbst an.
         """
-        editor = _make_setting_editor(field, self, self._editor_changed)
+        editor = _make_setting_editor(
+            field, self, weak_slot(self, PrintSettingsDialog._editor_changed, field.path)
+        )
         self._editors[field.path] = editor
         # **Der Satz gehört an beide Hälften der Zeile.** Ein Tooltip nur am
         # Eingabefeld findet, wer schon dort steht; wer die Zeile liest, zeigt
@@ -5395,6 +5497,175 @@ class PrintSettingsDialog(QDialog):
         return editor
 
     # --- Werte hin und her ----------------------------------------------------
+
+    # --- Grundlage und Herkunft ------------------------------------------------
+
+    def _rebase(self, *_args: object) -> None:
+        """Legt das gewählte Herstellerprofil unter die eigene Wahl.
+
+        **Das Herstellerprofil ist die Grundlage** (Konzept Herstellerprofil,
+        27.09.2026): Die Felder zeigen, was gedruckt wird — Elegoos zwei Wände
+        und seine erste Schicht, nicht Solidons Stufe —, und nur, was der
+        Kunde selbst setzt oder als Vorschlag übernimmt, weicht davon ab.
+        Gefragt wird bei jeder Profilwahl; eine Auflösung kostet am
+        ElegooSlicer-Bestand 0,06 Sekunden, und gleiche Wahl rechnet nichts.
+        """
+        if self._settling or not self._built:
+            return
+        setup = self._current_setup()
+        key = (setup, self.session.profile, self.settings.quality)
+        if key == self._foundation_key:
+            return
+        foundation = manufacturer.base_settings(self.session.profile, self.settings.quality, setup)
+        self._foundation = foundation
+        self._foundation_key = key
+        settings = print_settings.on_base(self.settings, foundation.settings)
+        if settings != self.settings:
+            self.settings = settings
+            self._load_into_editors()
+            self._mark_fields_this_slicer_ignores()
+            self._refresh_advice()
+        self._mark_origins()
+        self._show_foundation()
+
+    def _base(self) -> PrintSettings:
+        """Die Grundlage ohne eigene Wahl — das Herstellerprofil oder Solidons Tabelle."""
+        if self._foundation is not None:
+            return self._foundation.settings
+        return print_settings.resolve(self.session.profile, self.settings.quality)
+
+    def _mark_origins(self) -> None:
+        """Eigene Wahl und übernommener Vorschlag sind zu sehen — an der fetten
+        Beschriftung und am Knopf *Zurücksetzen*, der den Wert des Profils nennt.
+        """
+        base = self._base()
+        source = self._foundation_title()
+        for path, reset in self._resets.items():
+            own = path in self.settings.explicit
+            reset.setVisible(own)
+            label = self._labels.get(path)
+            if label is not None:
+                font = label.font()
+                if font.bold() != own:
+                    font.setBold(own)
+                    label.setFont(font)
+            if not own:
+                continue
+            field = self._fields.get(path)
+            shown = (
+                self._shown(path, print_settings.read_path(base, path))
+                if field is not None
+                else str(print_settings.read_path(base, path))
+            )
+            what = (
+                (
+                    str(tr("Übernommener Vorschlag. Zurücksetzen auf {value} aus {source}."))
+                    if path in self.settings.accepted
+                    else str(tr("Ihre Einstellung. Zurücksetzen auf {value} aus {source}."))
+                )
+                .replace("{value}", shown)
+                .replace("{source}", source)
+            )
+            reset.setToolTip(what)
+            reset.setStatusTip(what)
+            reset.setAccessibleDescription(what)
+        self._mark_foreign()
+
+    def _mark_foreign(self) -> None:
+        """Zeigt am Feld, was der Hersteller dort sagt und Solidon nicht
+        übersetzen kann — nur, solange keine eigene Wahl darüber liegt."""
+        foreign = self._foundation.foreign if self._foundation is not None else {}
+        explanation = str(
+            tr(
+                "Diesen Wert des Herstellers kann Solidon nicht übersetzen. Gedruckt "
+                "wird er, solange Sie das Feld nicht ändern."
+            )
+        )
+        for path, label in self._foreign_notes.items():
+            raw = foreign.get(path)
+            shown = raw is not None and path not in self.settings.explicit
+            label.setVisible(shown)
+            if not shown:
+                continue
+            label.setText(str(tr("Hersteller: {value}")).replace("{value}", str(raw)))
+            label.setToolTip(explanation)
+            label.setAccessibleDescription(explanation)
+
+    def _foundation_title(self) -> str:
+        """Woher die Grundlage kommt, in einem Wort für den Kunden."""
+        if self._foundation is not None and self._foundation.has_profile:
+            return self._profile_name(self._foundation.process)
+        return str(tr("Solidons Vorgabe"))
+
+    def _show_bed_plates(self) -> None:
+        """Die Plattenwahl füllen — sichtbar, sobald es mehr als eine gibt."""
+        foundation = self._foundation
+        plates = dict(foundation.plates) if foundation is not None else {}
+        box = self.bed_plate_choice
+        box.clear()
+        chosen = foundation.plate if foundation is not None else ""
+        model = box.model()
+        refused = str(tr("Der Hersteller gibt diese Platte für dieses Filament nicht frei."))
+        for plate, temperature in plates.items():
+            box.addItem(plate_title(plate), plate)
+            if temperature <= 0:
+                item = (
+                    model.item(box.count() - 1) if isinstance(model, QStandardItemModel) else None
+                )
+                if item is not None:
+                    item.setEnabled(False)
+                box.setItemData(box.count() - 1, refused, Qt.ItemDataRole.ToolTipRole)
+        index = box.findData(chosen)
+        if index >= 0:
+            box.setCurrentIndex(index)
+        shown = sum(1 for temperature in plates.values() if temperature > 0) > 1
+        self.bed_plate_label.setVisible(shown)
+        box.setVisible(shown)
+
+    def _bed_plate_chosen(self, _index: int) -> None:
+        """Eine andere Druckplatte: Grundlage und Betttemperatur neu."""
+        chosen = self.bed_plate_choice.currentData()
+        self._bed_plate = str(chosen or "")
+        self._foundation_key = None
+        self._rebase()
+
+    def _show_foundation(self) -> None:
+        """Unter den Profilen in einem Satz: worauf Solidon aufsetzt."""
+        self._show_bed_plates()
+        foundation = self._foundation
+        if foundation is None or not foundation.has_profile:
+            self.foundation_note.setText(
+                tr(
+                    "Ohne Profil des Herstellers gelten Solidons Vorgaben. "
+                    "Sie gehen vollständig zum Slicer."
+                )
+            )
+            return
+        parts = [self._profile_name(foundation.process)]
+        if foundation.staged:
+            # Die Stufe liegt über dem Standardprozess, bis sie ihren eigenen
+            # wählt (Entscheidung I) — der Satz sagt beides.
+            parts[0] += f" + {self.quality.currentText()}"
+        if foundation.filament:
+            parts.append(self._profile_name(foundation.filament))
+        if foundation.plate:
+            parts.append(plate_title(foundation.plate))
+        line = str(tr("Grundlage: {profiles}")).replace("{profiles}", " · ".join(parts))
+        if foundation.plate_refuses_filament:
+            line += " " + str(
+                tr("Der Hersteller gibt diese Platte für dieses Filament nicht frei.")
+            )
+        self.foundation_note.setText(line)
+
+    def _reset_field(self, path: str) -> None:
+        """Eine eigene Wahl zurücknehmen: der Wert des Profils gilt wieder."""
+        if path not in self.settings.explicit:
+            return
+        self.settings = print_settings.without_choice(self.settings, path, self._base())
+        self._load_into_editors()
+        self._mark_origins()
+        self._mark_fields_this_slicer_ignores()
+        self._refresh_advice()
 
     def _load_into_editors(self) -> None:
         """Aus dem Modell in die Felder. ``_loading`` hält die Rückmeldung an,
@@ -5408,27 +5679,45 @@ class PrintSettingsDialog(QDialog):
         finally:
             self._loading = False
 
-    def _collect(self) -> PrintSettings:
-        """Aus den Feldern zurück ins Modell."""
-        settings = self.settings
-        for field in FIELDS:
-            editor = self._editors[field.path]
-            value = _setting_editor_value(editor, field)
-            settings = print_settings.with_path(settings, field.path, value)
-        return settings
+    def _editor_changed(self, path: str) -> None:
+        """Ein Feld hat sich geändert: **genau dieses** wird eigene Wahl — und
+        geht damit zum Slicer (Konzept Herstellerprofil, Entscheidung A).
 
-    def _editor_changed(self, *_args: object) -> None:
+        Hier sammelte ein Durchgang alle Felder ein und machte jeden
+        Unterschied zum Modell zur Wahl. Ein Zahlenfeld rundet aber auf seine
+        Stellen: Bambus Stützdichte 0,168 steht als 17 % da und liest sich als
+        0,17 zurück. Wer an der P1S nur die Wandzahl änderte, schrieb danach
+        auch eine Stützdichte, die niemand gewählt hatte (Review Stufe A+B,
+        27.09.2026).
+        """
         if self._loading:
             return
-        self.settings = self._collect()
+        field = self._fields[path]
+        value = _setting_editor_value(self._editors[path], field)
+        if not print_settings.same_value(value, print_settings.read_path(self.settings, path)):
+            before = self.settings.explicit
+            self.settings = print_settings.with_choice(self.settings, path, value)
+            # Eine Haftungsart bringt ihr Maß mit (``print_settings._with_a_measure``);
+            # dessen Feld muss es dann auch zeigen.
+            if self.settings.explicit - before - {path}:
+                self._load_into_editors()
+        self._mark_origins()
         # Ein Hinweis, der am Wert hängt, folgt dem Wert (``slicer_keys.LIMITED``).
         self._mark_fields_this_slicer_ignores()
         self._refresh_advice()
 
     def _quality_changed(self) -> None:
-        """Die Stufe wechseln heißt: neu auflösen. Von Hand Geändertes geht
-        dabei verloren — das ist der Sinn einer Stufe, und rücknehmbar ist es
-        über die Stufe, aus der man kam (Regel 19: keine Rückfrage).
+        """Die Stufe wechseln heißt: ihre Werte gelten (Entscheidung I).
+
+        Eine eigene Wahl an dem, was die Stufe ausmacht — Schichthöhe, erste
+        Schicht, Wände, Deckschichten, Füllung
+        (:data:`app.core.export.manufacturer.STAGE_PATHS`) —, weicht der neuen
+        Stufe; genau diese Frage beantwortet sie. **Alles andere bleibt**: eine
+        eigene Düsentemperatur, die Stützen, ein übernommener Vorschlag haben mit
+        der Stufe nichts zu tun (Review Stufe A+B, R6). Bis dahin verwarf der
+        Wechsel alles, mit dem Satz, das sei über die alte Stufe rücknehmbar —
+        für die von Hand gesetzten Werte stimmte das nicht, nach *OK* gibt es
+        dafür kein Strg+Z.
 
         **Bis auf die Slotbelegung**, und die ist keine Ausnahme von diesem
         Satz, sondern fällt gar nicht unter ihn: Sie kommt von keiner Stufe
@@ -5441,8 +5730,16 @@ class PrintSettingsDialog(QDialog):
         chosen = self.quality.currentData()
         if chosen is None:
             return
-        self.settings = self._resolved(chosen)
+        kept = self.settings
+        for path in manufacturer.STAGE_PATHS:
+            if path in kept.explicit:
+                kept = print_settings.without_choice(kept, path, kept)
+        self.settings = print_settings.on_base(
+            replace(kept, quality=chosen), self._resolved(chosen)
+        )
+        self._foundation_key = None
         self._load_into_editors()
+        self._rebase()
         self._mark_fields_this_slicer_ignores()
         self._refresh_advice()
 
@@ -6199,6 +6496,7 @@ class PrintSettingsDialog(QDialog):
         self.ui_settings.slicer_base_process = str(self.process_choice.currentData() or "")
         filament = self._filament_profile
         self.ui_settings.slicer_base_filament = filament
+        self.ui_settings.slicer_bed_plate = self._bed_plate
         # Zu welchem Drucker die drei gehören. Ohne den Vermerk trägt das
         # nächste Projekt auf einer anderen Maschine dieselben Profile.
         self.ui_settings.slicer_profile_printer = self.session.profile.printer.id
@@ -6233,6 +6531,7 @@ class PrintSettingsDialog(QDialog):
             machine_profile=str(self.machine_choice.currentData() or ""),
             base_process=str(self.process_choice.currentData() or ""),
             base_filament=self._filament_profile,
+            plate=self._bed_plate,
         )
 
     def _remember_handover(self, kind: HandoverKind) -> None:

@@ -684,6 +684,47 @@ def default_material_for(printer_id: str) -> str:
     return DEFAULT_MATERIAL
 
 
+def project_profile(
+    printer_id: str, material_id: str, carried: Mapping[str, Any] | None
+) -> Profile:
+    """Das Paar eines Projekts, wie die Sitzung es nach :func:`carry` rechnet —
+    ohne den Bestand dieses Rechners anzufassen.
+
+    Die Migration einer Datei läuft vor :func:`carry`, und sie darf nichts
+    bekannt machen: Ein Drucker, den nur das Projekt mitbringt, zählt hier mit
+    seiner Beschreibung aus der Datei (durch denselben Prüfer wie eine eigene),
+    ein eigener Drucker dieses Rechners gewinnt wie dort. Was keiner kennt,
+    rechnet mit der Vorgabe wie :func:`scene_profile`. Bis zum Review der
+    Stufe A+B (27.09.2026) war der Vergleich dann ``PrintSettings()``, und die
+    ganze Materialtabelle wurde eigene Wahl.
+    """
+    source = Path("project.json")
+    tables = carried or {}
+    known_printers = printer_profiles()
+    printer_table = (tables.get(CARRIED_PRINTERS) or {}).get(printer_id)
+    chosen_printer: PrinterProfile | None = known_printers.get(printer_id)
+    if chosen_printer is None and isinstance(printer_table, Mapping):
+        try:
+            chosen_printer = _printer_from_table(printer_id, printer_table, source)
+        except (ValidationError, TypeError, ValueError, AttributeError) as problem:
+            _log.warning("the project carries an unreadable printer %r: %s", printer_id, problem)
+    known_materials = material_profiles()
+    material_table = (tables.get(CARRIED_MATERIALS) or {}).get(material_id)
+    chosen_material: MaterialProfile | None = known_materials.get(material_id)
+    if chosen_material is None and isinstance(material_table, Mapping):
+        try:
+            chosen_material = _material_from_table(material_id, material_table, source)
+        except (ValidationError, TypeError, ValueError, AttributeError) as problem:
+            _log.warning("the project carries an unreadable material %r: %s", material_id, problem)
+    if chosen_printer is None or chosen_material is None:
+        fallback = scene_profile(printer_id, material_id)
+        return Profile(
+            printer=chosen_printer or fallback.printer,
+            material=chosen_material or fallback.material,
+        )
+    return Profile(printer=chosen_printer, material=chosen_material)
+
+
 def material_for(printer_id: str, current: str) -> str:
     """Das Material, das an diesem Drucker gilt: das bisherige, wenn es zu
     seinem Verfahren passt, sonst die Vorgabe des Verfahrens.

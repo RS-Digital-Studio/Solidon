@@ -403,7 +403,10 @@ def adhesion_margin(settings: PrintSettings) -> float:
     tragen und der zwischen zwei Nachbarn zweimal zählt.
     """
     kind = settings.adhesion.kind
-    if kind == "brim":
+    # Der Auto-Brim des Slicers legt höchstens die Brimbreite seines Profils —
+    # ob er es tut, weiß erst der Slicer. Der Abstand rechnet mit dem Fall,
+    # in dem er es tut (Entscheidung J, 27.09.2026).
+    if kind in ("brim", "auto"):
         return settings.adhesion.brim_width
     if kind == "skirt":
         return settings.adhesion.skirt_distance
@@ -1042,7 +1045,21 @@ def _part_settings(
     lowest = float(mesh.bounds.minimum[2])
     section = cross_section(mesh, lowest + FOOTPRINT_HEIGHT)
     footprint = 0.0 if section is None or section.is_empty else float(section.area)
-    advice = advise.for_part(settings, mesh.bounds, footprint)
+    # **Nur was übernommen ist** (RM-250, entschieden mit dem Konzept
+    # Herstellerprofil, 27.09.2026). Bis dahin setzte diese Stelle den Brim je
+    # Teil ohne Klick — gegen die Regel vom 26.09.2026, dass ohne „Vorschläge
+    # übernehmen" die Standardeinstellungen zum Slicer gehen. Gemessen an der
+    # Minigolf-Platte im ElegooSlicer: Die Ränder wichen vom Profil des
+    # Herstellers ab (8,5 statt 11,7 m), bei gleicher Konfiguration.
+    # **Bis Stufe E ist dieser Weg ein Vertrag, kein Ablauf**: Jeder
+    # Haftungsvorschlag setzt „brim", und übernommen gilt er der ganzen
+    # Platte — ``for_part`` findet dann nichts mehr zu tun. Stufe E legt die
+    # Platte auf ihre Grundlage und schreibt hier je Teil (RM-250).
+    advice = [
+        entry
+        for entry in advise.for_part(settings, mesh.bounds, footprint)
+        if entry.path in settings.accepted
+    ]
     return handover.object_keys(settings, advice, flavour), advice
 
 
@@ -1386,6 +1403,8 @@ def write_assembly(
             # gerade nicht benutzt. Wer bloß eine 3MF speichert, will von der
             # Einstellung eines fremden Programms nichts hören.
             findings += handover.machine_missing(setup, profile)
+            if settings is not None:
+                findings += handover.foundation_findings(settings, profile, setup)
     target = _written(
         directory / (given_name(project_name, "projekt") + ".3mf"),
         threemf.write_assembly(

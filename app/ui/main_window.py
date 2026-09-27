@@ -124,7 +124,7 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
-from app.core.export import handover
+from app.core.export import handover, manufacturer
 from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome, override_for, with_slot_override
 from app.core.export.writer import (
@@ -230,6 +230,7 @@ from app.core.types import (
     ParamSpec,
     PlaneFrame,
     PrintSettings,
+    Profile,
     QualityPreset,
     SliceResult,
     SolvedSketch,
@@ -1001,6 +1002,38 @@ class _OllamaSizeWorker(Worker):
         self.done.emit(llm.ollama_size_warning(self._model))
 
 
+class _FoundationWorker(Worker):
+    """Die Grundlage aus dem gemerkten Slicerprofil, abseits des Oberflächen-Threads.
+
+    Die Slicersuche in :func:`remembered_setup` kostet eine halbe Sekunde, auf
+    einer Maschine mit mehreren Slicern Sekunden, die Auflösung der Profile
+    ein Zehntel. Gefragt wurde nach jeder Auswertung, und bei jedem Wechsel
+    von Drucker, Material, Stufe oder Profilwahl stand das Fenster so lange
+    (Review Stufe A+B, R7). Die Slicersuche im Druckdialog läuft aus demselben
+    Grund seit dem 13.09.2026 in ``_SlicerWorker``.
+    """
+
+    done = Signal(object, object)
+    """Der Schlüssel, für den gerechnet wurde, und die Grundlage."""
+
+    def __init__(
+        self,
+        key: tuple[object, ...],
+        ui_settings: UiSettings,
+        profile: Profile,
+        quality: QualityPreset,
+    ) -> None:
+        super().__init__()
+        self._key = key
+        self._ui = ui_settings
+        self._profile = profile
+        self._quality = quality
+
+    def work(self) -> None:
+        setup = remembered_setup(self._ui, self._profile.material.id, self._profile.printer.id)
+        self.done.emit(self._key, manufacturer.base_settings(self._profile, self._quality, setup))
+
+
 class _DownloadWorker(Worker):
     """Eine Modelldatei aus dem Netz holen, abseits des Oberflächen-Threads
     (§2.8).
@@ -1290,13 +1323,23 @@ class _ExportWorker(Worker):
             found = discover.find_program("slicer", tools.SLICERS)
             if found is not None:
                 setup = handover.detect(found)
+        settings = self._settings
+        if settings is not None:
+            # **Grundlage plus Abweichung, wie im Dialog** (Review Stufe A+B,
+            # F6). Gespeichert ist ein Stand: die eigene Wahl und die Grundlage
+            # vom letzten Speichern. Unverändert ging er als Solidons Satz
+            # hinaus — Elegoos Werte in einer PrusaSlicer-3MF, nach der
+            # Migration die Tempi aus 0.5.0.
+            settings = manufacturer.effective(
+                settings, manufacturer.base_settings(self._profile, settings.quality, setup)
+            )
         written_path, findings = write_assembly(
             self._objects,
             self._target.parent,
             project_name=self._target.stem,
             profile=self._profile,
             sources=self._sources,
-            settings=self._settings,
+            settings=settings,
             setup=setup,
             flavour=setup.flavour if setup is not None else "orca",
             for_slicer=False,
@@ -2107,9 +2150,15 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.session = session
         self.settings = settings
+        session.follow_print_settings(self.effective_print_settings)
         self.setAcceptDrops(True)
         self.setWindowTitle(APP_NAME)
         self.resize(1280, 820)
+        self._foundation_cache: tuple[tuple[object, ...], manufacturer.Foundation] | None = None
+        """Die zuletzt gerechnete Grundlage aus dem Herstellerprofil und wofür."""
+        self._foundation_worker: Any = None
+        self._foundation_pending: tuple[object, ...] | None = None
+        """Wofür der laufende Arbeiter rechnet — ``None``, wenn keiner rechnet."""
         self._map_cache: dict[tuple[Any, ...], Any] = {}
         self._finding_awaiting_map: tuple[Finding, _MapRequest] | None = None
         """Der angeklickte Befund, dessen Analysekarte noch gerechnet wird.
@@ -7289,14 +7338,10 @@ class MainWindow(QMainWindow):
         """
         if not isinstance(slot, MaterialSlot):
             return
-        document = self.session.project.document
-        quality = cast(
-            QualityPreset,
-            self.settings.print_quality
-            if self.settings.print_quality in print_settings.quality_presets()
-            else print_settings.DEFAULT_QUALITY,
-        )
-        settings = document.print_settings or print_settings.resolve(self.session.profile, quality)
+        # Vorbelegt mit dem, was gedruckt wird (Review Stufe A+B, R3): Die
+        # Spule übersteuert die Werte des Herstellerfilaments, nicht einen
+        # gespeicherten Stand davon.
+        settings = self.effective_print_settings()
         dialog = FilamentOverrideDialog(
             slot,
             settings,
@@ -7517,9 +7562,7 @@ class MainWindow(QMainWindow):
         """
         if estimate is None:
             return
-        settings = self.session.project.document.print_settings or print_settings.resolve(
-            self.session.profile
-        )
+        settings = self.effective_print_settings()
         expected = support_material(estimate.support_volume, settings)
         self.report.add_findings(gcode.compare(expected, measured, "support").findings)
 
@@ -7544,9 +7587,7 @@ class MainWindow(QMainWindow):
             result = self.session.last_result
             if result is None or not result.scene.objects:
                 return
-            settings = self.session.project.document.print_settings or print_settings.resolve(
-                self.session.profile
-            )
+            settings = self.effective_print_settings()
             bodies = [
                 (entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()
             ]
@@ -19258,9 +19299,7 @@ class MainWindow(QMainWindow):
         """
         if "spacing" not in {entry.name for entry in spec.params.spec()}:
             return {}
-        settings = self.session.project.document.print_settings
-        if settings is None:
-            settings = print_settings.resolve(self.session.profile)
+        settings = self.effective_print_settings()
         needed = 2.0 * clearance_margin(settings)
         if needed <= 0.0:
             return {}
@@ -19818,6 +19857,12 @@ class MainWindow(QMainWindow):
         Als eigene Stelle, weil derselbe Ausdruck an vier weiteren stand und
         ``_update_facts`` als fünfte davon abwich. Ein sechster Ort kann jetzt
         nicht mehr anders rechnen.
+
+        **Und auf dem Profil des Herstellers** (Konzept Herstellerprofil,
+        27.09.2026): Das Dokument trägt die eigene Wahl, die Grundlage darunter
+        kommt aus dem gemerkten Slicerprofil. Sonst rechneten Zahlenzeile und
+        Prüfbericht mit Solidons drei Wänden, während Elegoos zwei gedruckt
+        werden — und die Wandstärke eines Teils fiele an der falschen Zahl.
         """
         quality = cast(
             QualityPreset,
@@ -19826,7 +19871,84 @@ class MainWindow(QMainWindow):
             else print_settings.DEFAULT_QUALITY,
         )
         document = self.session.project.document
-        return document.print_settings or print_settings.resolve(self.session.profile, quality)
+        stored = document.print_settings
+        if stored is not None:
+            quality = stored.quality
+        return manufacturer.effective(stored, self._print_foundation(quality))
+
+    def _print_foundation(self, quality: QualityPreset) -> manufacturer.Foundation:
+        """Die Grundlage aus dem gemerkten Slicerprofil — einmal je Wahl.
+
+        Gerechnet wird nur, wenn sich eine der Angaben ändert, aus denen sie
+        entsteht, und dann im :class:`_FoundationWorker`. Bis seine Antwort
+        da ist, gilt die vorige Grundlage, wenn Drucker, Material und Stufe
+        dieselben sind — sonst Solidons Tabelle. Kommt sie, erneuert
+        :meth:`_foundation_found` alles, was mit ihr rechnet.
+        """
+        key = self._foundation_key(quality)
+        cached = self._foundation_cache
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        if self._foundation_pending != key:
+            self._start_foundation(key, quality)
+        if cached is not None and cached[0][:2] == key[:2]:
+            return cached[1]
+        return manufacturer.base_settings(self.session.profile, quality, None)
+
+    def _foundation_key(self, quality: QualityPreset) -> tuple[object, ...]:
+        """Woraus die Grundlage entsteht — Drucker und Material, Stufe, Profilwahl."""
+        profile = self.session.profile
+        ui = self.settings
+        return (
+            profile,
+            quality,
+            ui.slicer_machine_profile,
+            ui.slicer_base_process,
+            ui.slicer_filament_per_material.get(profile.material.id, ui.slicer_base_filament),
+            ui.slicer_profile_printer,
+            ui.slicer_profile_slicer,
+            ui.slicer_bed_plate,
+        )
+
+    def _start_foundation(self, key: tuple[object, ...], quality: QualityPreset) -> None:
+        """Die Grundlage für ``key`` im Arbeiter rechnen lassen."""
+        if self._close_requested:
+            return
+        worker = _FoundationWorker(key, deepcopy(self.settings), self.session.profile, quality)
+        worker.done.connect(self._foundation_found)
+        # Ein Absturz kostet die Herstellergrundlage, nicht das Fenster: Dann
+        # rechnet es mit Solidons Tabelle weiter, und der Grund steht im Protokoll.
+        worker.crashed.connect(self._foundation_crashed)
+        self._retire(self._foundation_worker)
+        self._foundation_worker = worker
+        self._foundation_pending = key
+        worker.finished.connect(lambda done=worker: self._foundation_worker_done(done))
+        self._leash.start(worker)
+
+    def _foundation_found(self, key: tuple[object, ...], foundation: object) -> None:
+        """Die Grundlage ist da: merken, und was mit ihr rechnet, neu zeigen."""
+        if not isinstance(foundation, manufacturer.Foundation):
+            return
+        self._foundation_cache = (key, foundation)
+        if self._foundation_pending == key:
+            self._foundation_pending = None
+        result = self.session.last_result
+        if result is None or key != self._foundation_key(foundation.settings.quality):
+            return
+        settings = self.effective_print_settings()
+        self.filaments.show_scene(list(result.scene.objects.values()), settings)
+        self._update_facts()
+        if result is not self.session.picture:
+            self._print_findings.start(result, self.session.profile, settings)
+
+    def _foundation_crashed(self, detail: str) -> None:
+        _log.warning("print foundation worker crashed: %s", detail)
+        self._foundation_pending = None
+
+    def _foundation_worker_done(self, worker: Any) -> None:
+        if self._foundation_worker is worker:
+            self._foundation_worker = None
+        self._hold_until_done(worker)
 
     def _update_facts(self) -> None:
         """Material und Dauer aus dem, was ohnehin vorliegt.
@@ -22415,6 +22537,10 @@ class MainWindow(QMainWindow):
             self._export_worker,
             self._part_file_worker,
             self._sculpt_wall_worker,
+            # Die Grundlage aus dem Herstellerprofil (Review Stufe A+B, R7): Sie
+            # liest Profildateien und fragt die Slicersuche — beides endet von
+            # selbst, aber nicht nach dem Fenster.
+            self._foundation_worker,
             *self._leash.pending(),
         )
         deadline = time.monotonic() + max(0, timeout_ms) / 1000.0

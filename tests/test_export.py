@@ -36,12 +36,14 @@ from app.core.geom.transform import apply, place_on_bed, translation
 from app.core.ingest import threemf as threemf_reader
 from app.core.ingest.loader import normalise, read_model
 from app.core.knowledge import print_settings, profiles
+from app.core.slice import advise
 from app.core.types import (
     Finding,
     MaterialSlot,
     Profile,
     Scene,
     SceneObject,
+    SettingAdvice,
     Source,
     SourceOrigin,
 )
@@ -1977,15 +1979,79 @@ def test_a_typed_name_still_loses_what_no_disc_can_hold(tmp_path: Path, profile:
     assert write_plan(leer, tmp_path)[0].stem == "projekt", "ein leerer Rest bekommt den Rückfall"
 
 
-def test_a_brim_the_export_adds_by_itself_is_said_out_loud(
+def test_an_accepted_brim_goes_to_the_whole_plate_until_stage_e(
     tmp_path: Path, profile: Profile
 ) -> None:
-    """Der Export ändert eine Einstellung je Teil — und sagt es jetzt.
+    """Der echte Weg heute: *Vorschläge übernehmen* setzt „brim" als
+    übernommenen Vorschlag (``advise.apply``), und er gilt der Platte — jedes
+    Teil bekommt einen Rand, keines einen eigenen, und ``export.part_setting``
+    entsteht nicht (Review Stufe A+B, R8). Stufe E ändert das.
+    """
+    schlank = MeshData.of(trimesh.creation.box(extents=(4.0, 4.0, 80.0)))
+    breit = MeshData.of(trimesh.creation.box(extents=(60.0, 60.0, 10.0)))
+    objects = [
+        replace(scene_object("obj_1", "Turm"), mesh=schlank),
+        replace(scene_object("obj_2", "Platte"), mesh=breit),
+    ]
+    settings = print_settings.resolve(profile, "standard")
+    brim = SettingAdvice(
+        path="adhesion.kind",
+        value="brim",
+        was="skirt",
+        reason="Dieses Teil ist hoch und schmal.",
+        severity="warning",
+    )
+    settings = advise.apply(settings, [brim])
+    assert "adhesion.kind" in settings.accepted
 
-    ``advise.for_part`` ist die eine Stelle, an der eine Einstellung **je
-    Körper** statt je Auftrag gilt: Ein hohes, schmales Teil bekommt einen
-    Brim, auch wenn die Platte auf Skirt steht. Das ist richtig und gewollt
-    (§29); der Kunde erfuhr es nur nicht.
+    written, findings = write_assembly(
+        objects, tmp_path, project_name="Gehäuse", profile=profile, settings=settings
+    )
+
+    assert not [finding for finding in findings if finding.code == "export.part_setting"]
+    config = json.loads(zipfile.ZipFile(written).read("Metadata/project_settings.config"))
+    assert config["brim_type"] == "outer_only", "die ganze Platte"
+
+
+def test_the_export_adds_no_brim_by_itself(tmp_path: Path, profile: Profile) -> None:
+    """Ohne *Vorschläge übernehmen* bekommt kein Teil einen Brim (RM-250).
+
+    Seit dem 03.09.2026 setzte der Export einem hohen, schmalen Teil einen
+    Brim, auch wenn die Platte auf Skirt stand — mit Befund, aber ohne Klick.
+    Roberts Regel vom 26.09.2026: Nur mit „Vorschläge übernehmen" wird auf das
+    Modell zugeschnitten, sonst geht der Standard zum Slicer. Am Minigolf-Satz
+    im ElegooSlicer lief deshalb ein anderer Rand als mit dem Profil des
+    Herstellers allein (8,5 statt 11,7 m), bei gleicher Konfiguration.
+    """
+    schlank = MeshData.of(trimesh.creation.box(extents=(4.0, 4.0, 80.0)))
+    breit = MeshData.of(trimesh.creation.box(extents=(60.0, 60.0, 10.0)))
+    objects = [
+        replace(scene_object("obj_1", "Turm"), mesh=schlank),
+        replace(scene_object("obj_2", "Platte"), mesh=breit),
+    ]
+    settings = print_settings.resolve(profile, "standard")
+    assert settings.adhesion.kind == "skirt", "die Vorbedingung des Tests"
+
+    written, findings = write_assembly(
+        objects, tmp_path, project_name="Gehäuse", profile=profile, settings=settings
+    )
+
+    assert not [finding for finding in findings if finding.code == "export.part_setting"]
+    config = zipfile.ZipFile(written).read("Metadata/model_settings.config").decode("utf-8")
+    assert "brim" not in config, "kein Brim je Teil in der Beilage"
+
+
+def test_an_accepted_brim_for_a_part_is_said_out_loud(tmp_path: Path, profile: Profile) -> None:
+    """**Der Vertrag für Stufe E**: Ist die Haftung angenommen und die Platte
+    noch auf Skirt, schreibt der Export den Brim je Teil — und sagt es.
+
+    Diesen Zustand baut heute kein Ablauf: Jeder Haftungsvorschlag setzt
+    „brim", und übernommen gilt er der ganzen Platte (siehe
+    :func:`test_an_accepted_brim_goes_to_the_whole_plate_until_stage_e`).
+    Stufe E legt die Platte beim Übernehmen auf ihre Grundlage und lässt den
+    Brim nur an den Teilen, die ihn brauchen (Konzept Herstellerprofil,
+    Entscheidung G; Review Stufe A+B, R8). Bis dahin hält dieser Test fest,
+    wie der Writer den Zustand schreibt.
 
     **Der Grund lag dabei fertig da.** ``SettingAdvice`` trägt ihn mit, und
     sein Docstring sagt warum: „eine Zahl ohne Begründung ist im Zweifel
@@ -2009,6 +2075,7 @@ def test_a_brim_the_export_adds_by_itself_is_said_out_loud(
     ]
     settings = print_settings.resolve(profile, "standard")
     assert settings.adhesion.kind == "skirt", "die Vorbedingung des Tests"
+    settings = print_settings.with_accepted(settings, "adhesion.kind", "skirt")
 
     _written, findings = write_assembly(
         objects, tmp_path, project_name="Gehäuse", profile=profile, settings=settings
@@ -2031,7 +2098,7 @@ def test_cura_says_when_part_settings_cannot_be_carried(
     mesh = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 80.0)))
     body = replace(scene_object("obj_1", "Turm"), mesh=mesh)
     settings = print_settings.resolve(profile, "standard")
-    settings = print_settings.with_path(settings, "adhesion.kind", adhesion)
+    settings = print_settings.with_accepted(settings, "adhesion.kind", adhesion)
 
     written, findings = write_assembly(
         [body], tmp_path, project_name="Turm", profile=profile, settings=settings, flavour="cura"
@@ -2217,12 +2284,14 @@ def test_prusa_gets_the_individual_brim_in_its_own_object_configuration(
     tower = trimesh.creation.box(extents=(4.0, 4.0, 20.0))
     tower.apply_translation((0.0, 0.0, 10.0))
     objects = [scene_object(mesh=MeshData.of(tower))]
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_accepted(settings, "adhesion.kind", settings.adhesion.kind)
     path, findings = write_assembly(
         objects,
         tmp_path,
         project_name="Turm",
         profile=profile,
-        settings=print_settings.resolve(profile),
+        settings=settings,
         flavour="prusa",
     )
     assert "export.part_setting" in {entry.code for entry in findings}

@@ -1052,7 +1052,13 @@ class Profile:
 # Zuordnungstabellen Punktpfade wie ``cooling.fan_speed`` benutzen.
 
 InfillPattern = Literal["grid", "gyroid", "honeycomb", "cubic", "lines", "triangles"]
-SupportStyle = Literal["none", "grid", "tree"]
+
+#: Ob und wie gestützt wird. ``auto`` heißt: Stützen an, die Art bestimmt das
+#: Profil des Slicers (Konzept Herstellerprofil, Entscheidung J, 27.09.2026).
+#: Bis dahin hieß „Stützen nötig" immer ``grid`` — und Elegoo wie Bambu, deren
+#: Standardprozess Bäume stützt, bekamen Gitter, auch wer die Stützen erst im
+#: Slicerfenster einschaltete.
+SupportStyle = Literal["none", "auto", "grid", "tree"]
 SupportPlacement = Literal["everywhere", "build_plate"]
 SeamPosition = Literal["aligned", "nearest", "random", "rear"]
 
@@ -1063,7 +1069,13 @@ SeamPosition = Literal["aligned", "nearest", "random", "rear"]
 #: 1,1 mm dicken Federarm etwa liegen zwei Bahnen à 0,55 statt zweier à 0,42
 #: mit einer Lücke dazwischen.
 WallGenerator = Literal["classic", "arachne"]
-AdhesionType = Literal["none", "skirt", "brim", "raft"]
+
+#: Was das Teil auf der Platte hält. ``auto`` ist die Haftung, die das Profil
+#: des Slicers wählt — in der Orca-Familie ``auto_brim``, das aus Material,
+#: Geometrie und Tempo selbst entscheidet und das kein Hersteller abschaltet
+#: (Entscheidung J). Solidon schrieb bis zum 27.09.2026 ``no_brim`` und zwei
+#: Skirt-Runden darüber.
+AdhesionType = Literal["none", "auto", "skirt", "brim", "raft"]
 QualityPreset = Literal["draft", "standard", "fine", "strong"]
 
 #: Die zwei Übergabearten aus §29: den Slicer im Konsolenmodus rechnen lassen
@@ -1363,9 +1375,12 @@ class SlotProfileBinding:
 class PrintSettings:
     """Alle Druckeinstellungen an einer Stelle (§29).
 
-    Der Slicer bekommt sie geschrieben und führt sie aus; er wird nicht mehr
-    von Hand bedient. Was hier fehlt, bleibt beim Slicer-Grundprofil stehen —
-    dieses Modell überschreibt, es ersetzt nicht.
+    Die Gruppen tragen immer einen vollständigen Satz — den, der gedruckt
+    wird. **Welche Werte davon Solidon dem Slicer schreibt, sagen**
+    :attr:`chosen` **und** :attr:`accepted`: die eigene Wahl und der
+    übernommene Vorschlag. Alles andere ist Grundlage und kommt aus dem
+    Profil des Herstellers (``export.manufacturer.base_settings``), ohne
+    eines aus Solidons Tabellen (Konzept Herstellerprofil, 27.09.2026).
     """
 
     id: str = "standard"
@@ -1421,6 +1436,36 @@ class PrintSettings:
     """Beständige Projektkennung für die Wiedererkennung einer Druckvorbereitung."""
     slot_profile_bindings: tuple[SlotProfileBinding, ...] | None = None
     """None liest alte Slotpositionen; eine leere Folge bindet nur nach Identität."""
+    chosen: frozenset[str] = frozenset()
+    """Die Punktpfade (``shell.wall_count``), die der Kunde selbst gesetzt hat.
+
+    **Alles, was weder hier noch in** :attr:`accepted` **steht, ist
+    Grundlage** und wird bei jeder Verwendung neu bestimmt: aus dem gewählten
+    Profil des Herstellers, ohne eines aus Solidons Tabellen. Die Werte dazu
+    stehen trotzdem in den Gruppen — jeder Leser bekommt einen ganzen Satz —,
+    aber zum Slicer geht davon nur die Abweichung.
+
+    Bis zum 27.09.2026 schrieb Solidon jeden Wert über das Herstellerprofil,
+    auch die aus seiner eigenen Stufe: am Centauri Carbon 2 45 Prozess- und
+    22 Filamentwerte, darunter Gitter statt Baum, kein Auto-Brim und die
+    Faustregel von 45 Grad als Stützwinkel. Roberts Minigolf-Druck bekam
+    davon einen Stützfuß in Schicht 1 (Konzept Herstellerprofil,
+    Entscheidung A).
+    """
+    accepted: frozenset[str] = frozenset()
+    """Die Punktpfade aus übernommenen Vorschlägen (``advise.apply``).
+
+    Getrennt von :attr:`chosen`, weil ein Vorschlag dem Körper gelten soll,
+    dessen Geometrie ihn verlangt, und eine eigene Wahl der ganzen Platte
+    (Entscheidung G). Bis Stufe E gilt auch ein übernommener Vorschlag der
+    Platte. Ein Pfad steht in höchstens einer der beiden Mengen: Wer einen
+    übernommenen Wert von Hand ändert, macht ihn zu seiner Wahl.
+    """
+
+    @property
+    def explicit(self) -> frozenset[str]:
+        """Was von der Grundlage abweichen soll: eigene Wahl und Vorschläge."""
+        return self.chosen | self.accepted
 
     @property
     def wall_thickness(self) -> float:

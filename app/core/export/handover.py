@@ -54,7 +54,7 @@ from app.core.errors import (
     FileWriteError,
     OperationCancelled,
 )
-from app.core.export import slicer_keys, slicer_profiles, threemf
+from app.core.export import manufacturer, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_filament_profiles,
@@ -172,6 +172,14 @@ class SlicerSetup:
 
     Ohne das kennt der Slicer nur „PETG"; mit ihm weiß er, *welches* — und
     fährt die Werte des Herstellers für alles, was Solidon nicht setzt.
+    """
+    plate: str = ""
+    """Die Druckplatte, wie die Orca-Familie sie nennt (``Textured PEI Plate``).
+
+    Leer heißt: die Standardplatte der Maschine. Die Konsole nimmt ohne Angabe
+    „Cool Plate" mit 35 °C für PLA — gemessen am ElegooSlicer, während das
+    Fenster am Centauri Carbon 2 die texturierte PEI-Platte wählt (Konzept
+    Herstellerprofil, Entscheidung F, 27.09.2026).
     """
 
     @property
@@ -324,6 +332,16 @@ def _fits_the_printer(machine_profile: str, profile: Profile) -> bool:
     return not belongs or belongs == profile.printer.id
 
 
+def foundation_findings(
+    settings: PrintSettings, profile: Profile, setup: SlicerSetup | None
+) -> list[Finding]:
+    """Was der Kunde über die Grundlage wissen muss — Platte und lesbares
+    Prozessprofil (:func:`app.core.export.manufacturer.findings`)."""
+    if setup is None or setup.flavour != "orca":
+        return []
+    return manufacturer.findings(manufacturer.base_settings(profile, settings.quality, setup))
+
+
 def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
     """Sagt dem Kunden, warum die Maschinenseite fehlt (§29, Regel 21).
 
@@ -470,7 +488,11 @@ def _refuse_untranslated(setup: SlicerSetup) -> None:
         )
 
 
-def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str]:
+def as_mapping(
+    settings: PrintSettings,
+    flavour: SlicerFlavour,
+    paths: frozenset[str] | None = None,
+) -> dict[str, str]:
     """Die Einstellungen in der Sprache dieses Slicers (§29).
 
     Ohne Datei und ohne Aufruf — die Tests prüfen die Zuordnung, ohne dass ein
@@ -482,10 +504,19 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
     sich allein aus den Einstellungen umrechnen lässt. Die Maschine kommt in
     :func:`_machine_keys` dazu, das Abgeleitete in :func:`_cura_dependants` —
     beides führt :func:`values_for` zusammen, und nur diese eine Stelle.
+
+    ``paths`` beschränkt auf die Punktpfade, die vom Herstellerprofil
+    abweichen sollen (Konzept Herstellerprofil, Entscheidung D); ``None``
+    heißt alle — dort, wo kein Herstellerprofil darunter liegt. Was ohne
+    seinen Partner nicht wirkt, kommt mit (:data:`COUPLED_PATHS`).
     """
     settings = _fan_curve_in_order(settings)
+    if paths is not None:
+        paths = _with_partners(paths, settings)
     written: dict[str, str] = {}
     for entry in slicer_keys.TABLES[flavour]:
+        if paths is not None and entry.path not in paths:
+            continue
         value = entry.write(read_path(settings, entry.path))
         # Ein leerer Text heißt „dazu sagt Solidon nichts" (siehe
         # ``_number_or_silent``). Er darf weder in die Datei noch in die
@@ -496,7 +527,41 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
     chosen = _only_chosen_adhesion(written, settings, flavour)
     if flavour == "cura":
         return _cura_fan_start(_first_layer_width(chosen), settings)
+    if paths is not None and "support.density" not in paths:
+        return chosen
     return _support_spacing(chosen, settings, flavour)
+
+
+#: Werte, die ohne ihren Partner nicht tun, was die Wahl verlangt (Review
+#: Stufe A+B, F4 und F7). Eine Haftungsart schreibt die Maße aller Arten,
+#: damit :func:`_only_chosen_adhesion` die nicht gewählten nullen kann —
+#: „Keine" ließ sonst den Skirt des Herstellers stehen. Eine eigene
+#: Lüfter-Obergrenze nimmt das untere Ende mit: Elegoo PLA fährt unten 50 %,
+#: und wer oben 20 % wählte, bekam lange Schichten mit 50.
+COUPLED_PATHS: Final[Mapping[str, tuple[str, ...]]] = {
+    "adhesion.kind": (
+        "adhesion.skirt_loops",
+        "adhesion.brim_width",
+        "adhesion.raft_layers",
+    ),
+    "cooling.fan_speed": ("cooling.minimum_fan_speed",),
+}
+
+
+def _with_partners(paths: frozenset[str], settings: PrintSettings) -> frozenset[str]:
+    """Die Pfade samt ihrer Partner aus :data:`COUPLED_PATHS`.
+
+    Außer bei „Automatisch": Dessen Skirt gehört dem Herstellerprofil, und
+    die Brimbreite misst der Auto-Brim selbst.
+    """
+    extra: set[str] = set()
+    for path, partners in COUPLED_PATHS.items():
+        if path not in paths:
+            continue
+        if path == "adhesion.kind" and settings.adhesion.kind == "auto":
+            continue
+        extra.update(partners)
+    return paths | extra
 
 
 def _fan_curve_in_order(settings: PrintSettings) -> PrintSettings:
@@ -525,7 +590,7 @@ def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
     Düsendurchmesser steht in der Maschine. Wer die Ableitung vor dem
     Zusammenführen laufen ließe, bekäme die Hälfte.
     """
-    values = as_mapping(settings, flavour)
+    values = as_mapping(_adhesion_for(settings, profile, flavour), flavour)
     values |= _machine_keys(profile, flavour)
     if flavour == "cura":
         values = _cura_dependants(values, settings)
@@ -533,8 +598,32 @@ def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
     return values
 
 
+def _adhesion_for(
+    settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
+) -> PrintSettings:
+    """„Automatisch" dort, wo der Slicer keinen Auto-Brim kennt (Entscheidung J).
+
+    Die Orca-Familie hat ``auto_brim``; PrusaSlicer und CuraEngine nicht. Dort
+    heißt „Automatisch" die Art aus Solidons Tabelle für dieses Material —
+    bis Stufe C und D ist sie für beide die Grundlage. Ohne diese Abbildung
+    bekam Cura einen Skirt mit null Linien und PrusaSlicer an jedem Teil einen
+    Brim (Review Stufe A+B, F5).
+    """
+    if settings.adhesion.kind != "auto" or flavour not in ("prusa", "cura"):
+        return settings
+    table = print_settings.resolve(profile, settings.quality).adhesion
+    measures = {
+        name: getattr(table, name)
+        for name in ("skirt_loops", "brim_width", "raft_layers")
+        if getattr(settings.adhesion, name) <= 0
+    }
+    return replace(settings, adhesion=replace(settings.adhesion, kind=table.kind, **measures))
+
+
 def by_section(
-    settings: PrintSettings, flavour: SlicerFlavour
+    settings: PrintSettings,
+    flavour: SlicerFlavour,
+    paths: frozenset[str] | None = None,
 ) -> dict[slicer_keys.ProfileSection, dict[str, str]]:
     """Dieselben Werte, getrennt nach dem Profil, in das sie gehören (§29).
 
@@ -558,7 +647,7 @@ def by_section(
     :func:`_cura_dependants` sieht diese Funktion gar nicht, denn sie liest
     :func:`as_mapping` und nicht :func:`values_for`.
     """
-    complete = as_mapping(settings, flavour)
+    complete = as_mapping(settings, flavour, paths)
     split: dict[slicer_keys.ProfileSection, dict[str, str]] = {"process": {}}
     placed: set[str] = set()
     for entry in slicer_keys.TABLES[flavour]:
@@ -627,7 +716,8 @@ def _only_chosen_adhesion(
     """
     kind = settings.adhesion.kind
     for wanted, keys in slicer_keys.ADHESION_KEYS[flavour].items():
-        if wanted == kind:
+        # Der Auto-Brim misst mit der Brimbreite — sie bleibt stehen.
+        if wanted == kind or (kind == "auto" and wanted == "brim"):
             continue
         for key in keys:
             if key in written:
@@ -1423,7 +1513,18 @@ def write_config(
         return SlicerConfig(process=target, written=flat)
 
     if takes_a_machine_profile(setup.flavour):
+        # **Das Herstellerprofil ist die Grundlage** (Konzept Herstellerprofil,
+        # 27.09.2026). Geschrieben wird darüber nur, was abweichen soll: die
+        # eigene Wahl, der übernommene Vorschlag, das Gemessene. Bis dahin
+        # legte Solidon jeden Tabellenwert darüber — 45 Prozess- und 22
+        # Filamentwerte am Centauri Carbon 2, darunter Gitter statt Baum und
+        # kein Auto-Brim. Ohne lesbares Herstellerprofil schreibt es wie
+        # bisher alles; das entscheidet jedes Dokument für sich.
+        foundation = manufacturer.base_settings(profile, settings.quality, setup)
+        paths = _deviating(settings, foundation)
         split = by_section(settings, setup.flavour)
+        deviating = by_section(settings, setup.flavour, paths)
+        plate = foundation.plate if foundation.has_profile else ""
         # Das Maschinenprofil zuerst: Der Prozess daneben nennt es in
         # ``compatible_printers``, und beide Namen kommen aus
         # ``_machine_name``.
@@ -1434,12 +1535,15 @@ def write_config(
             encoding="utf-8",
         )
         target = directory / "solidon_process.json"
+        process_document = _orca_process(
+            split.get("process", {}),
+            settings,
+            setup,
+            deviating=deviating.get("process", {}),
+            plate=plate,
+        )
         target.write_text(
-            json.dumps(
-                _orca_process(split.get("process", {}), settings, setup),
-                indent=2,
-                ensure_ascii=False,
-            ),
+            json.dumps(process_document, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
         # Je Slot eine Datei. Ohne Slots bleibt es bei einer — der einfarbige
@@ -1463,8 +1567,17 @@ def write_config(
             # noch einmal gerechnet und nicht die von oben genommen.
             mine = settings_for_slot(settings, profile, slot, setup)
             part = split if mine is settings else by_section(mine, setup.flavour)
+            own_paths = _for_the_slot(paths, settings, slot)
             filament_documents.append(
-                _orca_filament(part.get("filament", {}), mine, profile, own, slot)
+                _orca_filament(
+                    part.get("filament", {}),
+                    mine,
+                    profile,
+                    own,
+                    slot,
+                    deviating=by_section(mine, setup.flavour, own_paths).get("filament", {}),
+                    plate=plate or None,
+                )
             )
         # **Erst angleichen, dann schreiben.** Die Orca-Familie indiziert jeden
         # Filamentschlüssel je Filament, ungeprüft; fehlt einer in einem der
@@ -1480,7 +1593,21 @@ def write_config(
                 encoding="utf-8",
             )
             written.append(path)
-        expected = dict(split.get("process", {}))
+        # **Geprüft wird, was Solidon schreibt, und eine Stichprobe der
+        # Grundlage** (Entscheidung K). Die übrigen Prozesswerte gehören dem
+        # Hersteller, und der Slicer liest sie, wie er sie liest: OrcaSlicer
+        # nimmt Anycubics „50%" für die erste Schicht der Kobra 2 nicht an und
+        # druckt mit seinen 30 mm/s. Gegen die ganze Datei gehalten, war das
+        # eine Warnung bei jedem Auftrag, gegen die niemand etwas tun kann
+        # (gemessen 27.09.2026). Ohne Herstellerprofil ist alles eigene Wahl.
+        own_process = deviating.get("process", {})
+        expected = {
+            key: _printed(value)
+            for key, value in process_document.items()
+            if key in own_process or key in FOUNDATION_SAMPLE
+        }
+        if plate:
+            expected["curr_bed_type"] = plate
         firmware = machine_document.get("gcode_flavor")
         if isinstance(firmware, str):
             expected["gcode_flavor"] = firmware
@@ -1489,13 +1616,22 @@ def write_config(
                 entry.key in document for document in filament_documents
             ):
                 continue
-            slot_values: list[str] = []
-            for document in filament_documents:
-                value = document[entry.key]
-                slot_values.extend(
-                    str(item) for item in (value if isinstance(value, list) else [value])
-                )
-            expected[entry.key] = ",".join(slot_values)
+            # Ein Wert je Spule, wie der G-Code sie führt. Die Filamentwerte
+            # des Herstellers bleiben ganz in der Gegenprobe: an ElegooSlicer,
+            # Bambu Studio, Creality Print und OrcaSlicer kam jeder an.
+            expected[entry.key] = ",".join(
+                _printed(document[entry.key]) for document in filament_documents
+            )
+        # Eine eigene Betttemperatur steht unter dem Schlüssel der aufliegenden
+        # Platte (``_on_the_plate``), nicht unter ``hot_plate_temp`` — geprüft
+        # wird sie dort (Review Stufe A+B, H3).
+        bed_key = manufacturer.PLATE_TEMPERATURES.get(plate) if plate else None
+        if bed_key is not None:
+            for key in (bed_key, f"{bed_key}_initial_layer"):
+                if all(key in document for document in filament_documents):
+                    expected[key] = ",".join(
+                        _printed(document[key]) for document in filament_documents
+                    )
         return SlicerConfig(
             process=target, filaments=tuple(written), machine=machine_target, written=expected
         )
@@ -1613,6 +1749,12 @@ def project_settings(
     setup = replace(setup, machine_profile=machine_for(setup, profile))
 
     split = by_section(settings, setup.flavour)
+    # Dieselbe Grundlage wie im Konsolenlauf (:func:`write_config`): auf dem
+    # Herstellerprofil nur die Abweichung, dazu die Druckplatte.
+    foundation = manufacturer.base_settings(profile, settings.quality, setup)
+    paths = _deviating(settings, foundation)
+    deviating = by_section(settings, setup.flavour, paths)
+    plate = foundation.plate if foundation.has_profile else ""
 
     # Eine Projektdatei trägt kein ``inherits`` — sie muss die Werte
     # ausgeschrieben enthalten. Die Erbkette wird deshalb **aufgelöst**, für
@@ -1634,7 +1776,15 @@ def project_settings(
         if found is not None:
             document.update(slicer_profiles.resolve_values(found, roots=_profile_roots(setup)))
 
-    document.update(_orca_process(split.get("process", {}), settings, setup))
+    document.update(
+        _orca_process(
+            split.get("process", {}),
+            settings,
+            setup,
+            deviating=deviating.get("process", {}),
+            plate=plate,
+        )
+    )
     document.update(_machine_keys(profile, setup.flavour))
 
     for key in ("type", "instantiation", "inherits"):
@@ -1661,7 +1811,18 @@ def project_settings(
             else setup
         )
         slot_values = by_section(mine, setup.flavour).get("filament", {})
-        filament_documents.append(_orca_filament(slot_values, mine, profile, own, slot))
+        slot_paths = paths if slot is None else _for_the_slot(paths, settings, slot)
+        filament_documents.append(
+            _orca_filament(
+                slot_values,
+                mine,
+                profile,
+                own,
+                slot,
+                deviating=by_section(mine, setup.flavour, slot_paths).get("filament", {}),
+                plate=plate or None,
+            )
+        )
 
     # Dieselben Schlüssel in jedem Filament — wie bei den Profildateien des
     # Konsolenlaufs, und aus demselben Grund (:func:`_with_equal_keys`); die
@@ -1807,6 +1968,9 @@ def _orca_process(
     values: dict[str, str],
     settings: PrintSettings,
     setup: SlicerSetup,
+    *,
+    deviating: Mapping[str, str] | None = None,
+    plate: str = "",
 ) -> dict[str, object]:
     """Das Prozessprofil für die Orca-Familie.
 
@@ -1845,7 +2009,13 @@ def _orca_process(
         # selbst über ``inherits`` — also aus seinem Bestand, an dem
         # Solidon damit hing.
         document.update(slicer_profiles.resolve_values(base, roots=_profile_roots(setup)))
-    document.update(values)
+    # Auf dem Herstellerprozess nur die Abweichung, ohne ihn alles (Entscheidung D).
+    document.update(values if base is None or deviating is None else deviating)
+    # **Die Druckplatte, ausdrücklich** (Entscheidung F). Ohne sie nimmt die
+    # Konsole „Cool Plate" — gemessen am ElegooSlicer mit 35 °C Bett für PLA,
+    # während das Fenster am Centauri Carbon 2 die texturierte PEI-Platte wählt.
+    if plate:
+        document["curr_bed_type"] = plate
     # Objektmarken, unabhängig von den Einstellungen: Solidon schickt eine
     # Baugruppe mit benannten Teilen, und ohne die Marken im G-Code kann der
     # Drucker keines davon einzeln ausschließen. Löst sich einer von zwölf
@@ -1893,6 +2063,9 @@ def _orca_filament(
     profile: Profile,
     setup: SlicerSetup,
     slot: MaterialSlot | None = None,
+    *,
+    deviating: Mapping[str, str] | None = None,
+    plate: str | None = None,
 ) -> dict[str, object]:
     """Das Filamentprofil für die Orca-Familie.
 
@@ -1966,7 +2139,13 @@ def _orca_filament(
     # mehr, sondern ein Wert aus der falschen Zeile — PLA fährt 210 bei 21.
     # Wo der Slot sein eigenes Profil nennt, gilt deshalb der Hersteller für
     # alles, was am Material hängt.
-    own_values = {key: [value] for key, value in values.items()}
+    # Auf dem Herstellerfilament nur die Abweichung, ohne eines alles — eine
+    # lokale Spule anderen Typs hat keine Unterlage und braucht Solidons
+    # ganzen Satz (Entscheidung D).
+    chosen_values = values if base is None or deviating is None else deviating
+    own_values = {key: [value] for key, value in chosen_values.items()}
+    if plate is not None:
+        own_values = _on_the_plate(own_values, plate)
     if slot is not None and slot.material and inherited:
         override = override_for(settings, slot)
         from_the_material = {
@@ -2005,11 +2184,86 @@ def _orca_filament(
             document["filament_colour_type"] = ["1"]
     if slot is not None and slot.name:
         document["name"] = f"Solidon {slot.name}"
+    if plate is not None:
+        # Die Platte ist bekannt: Die Temperaturen der übrigen Platten bleiben,
+        # wie der Hersteller sie setzt — auch seine Nullen, mit denen er eine
+        # Platte für ein Material sperrt (Entscheidung F).
+        return document
     # Aus dem Dokument, nicht aus ``values``: bei einem Slot mit eigenem
     # Material stehen dort die Werte des Herstellers, und die Platte soll die
     # Temperatur bekommen, die auch sonst gilt — PLA bei 60, nicht bei den 80
     # des Projektmaterials.
     return _with_every_plate(document, _plate_source(document, values))
+
+
+#: Die Stichprobe der Grundlage (Entscheidung K): Prozesswerte, die Solidon
+#: auf einem Herstellerprofil nicht schreibt und trotzdem gegen den G-Code
+#: hält. Stimmen sie, lag das Profil des Herstellers wirklich darunter —
+#: Schichthöhe, Wände und Stützschwelle legt jeder Hersteller für seinen
+#: Drucker fest.
+FOUNDATION_SAMPLE: Final = frozenset({"layer_height", "wall_loops", "support_threshold_angle"})
+
+
+def _printed(value: object) -> str:
+    """Der eine Wert, den der Slicer aus einem Profileintrag druckt.
+
+    Bambu Studio führt viele Prozess- und Filamentwerte je Düsenvariante als
+    Liste: ``inner_wall_speed`` ist ``["300", "400"]`` für Standard und High
+    Flow, ``filament_max_volumetric_speed`` ``["21", "29"]``. Solidon nennt
+    keine Variante; der Slicer nimmt die erste und schreibt nur sie in den
+    G-Code. Gegen die ganze Liste gehalten, meldete die Gegenprobe an jedem
+    Auftrag für die P1S fünfzehn „anders übernommene" Werte (gemessen
+    27.09.2026).
+    """
+    if isinstance(value, list):
+        return str(value[0]) if value else ""
+    return str(value)
+
+
+def _deviating(
+    settings: PrintSettings, foundation: manufacturer.Foundation
+) -> frozenset[str] | None:
+    """Was vom Herstellerprofil abweichen soll — ``None`` heißt alles."""
+    return manufacturer.written_paths(settings, foundation)
+
+
+def _for_the_slot(
+    paths: frozenset[str] | None, settings: PrintSettings, slot: MaterialSlot
+) -> frozenset[str] | None:
+    """Die Abweichungen eines Slots: die des Projekts und die Gruppen, die
+    seine Spule ausdrücklich übersteuert — die gehören ihr, nicht dem
+    Hersteller (§20)."""
+    if paths is None:
+        return None
+    override = override_for(settings, slot)
+    if override is None or override.empty:
+        return paths
+    groups = [
+        group
+        for group in ("temperature", "cooling", "retraction", "filament")
+        if getattr(override, group) is not None
+    ]
+    return paths | frozenset(
+        path for path in print_settings.all_paths() if path.partition(".")[0] in groups
+    )
+
+
+def _on_the_plate(values: dict[str, list[str]], plate: str) -> dict[str, list[str]]:
+    """Eine eigene Betttemperatur gilt der Platte, die aufliegt (Entscheidung F).
+
+    Die Tabelle schreibt sie als ``hot_plate_temp`` — die „High Temp Plate".
+    Liegt eine andere auf, bekommt sie deren Schlüssel, und die Temperaturen
+    der übrigen Platten bleiben, wie der Hersteller sie setzt.
+    """
+    key = manufacturer.PLATE_TEMPERATURES.get(plate)
+    if key is None or key == "hot_plate_temp":
+        return values
+    moved = dict(values)
+    for suffix in ("", "_initial_layer"):
+        value = moved.pop(f"hot_plate_temp{suffix}", None)
+        if value is not None:
+            moved[f"{key}{suffix}"] = value
+    return moved
 
 
 def _hex(colour: tuple[float, float, float]) -> str:
@@ -2098,6 +2352,11 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
     Gemeldet, nicht stillschweigend übernommen: die Einstellung ist die
     Entscheidung des Nutzers. Wer den Hinweis liest, kann ihr widersprechen —
     und genau das soll er können (§2.7).
+
+    **Nur die eigene Wahl** (Konzept Herstellerprofil, 27.09.2026): Was nicht
+    ausdrücklich gesetzt ist, geht nicht mehr zum Slicer, sondern kommt aus
+    dem Profil — ein Unterschied dort wäre eine Meldung über einen Wert, der
+    gar nicht übergeben wird.
     """
     if not has_filament_profiles(setup.flavour) or not setup.base_filament:
         return []
@@ -2111,7 +2370,7 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
         return []
 
     inherited = slicer_profiles.resolve_values(base, roots=_profile_roots(setup))
-    written = by_section(settings, setup.flavour).get("filament", {})
+    written = by_section(settings, setup.flavour, settings.explicit).get("filament", {})
     apart: list[str] = []
     for key, ours in written.items():
         theirs = inherited.get(key)
@@ -3388,6 +3647,7 @@ def slice_model(
         # Slicers statt mit den Werten aus Solidon — oder er scheitert, und die
         # Orca-Familie sagt dazu nur „process not compatible with printer".
         *machine_missing(setup, profile),
+        *foundation_findings(settings, profile, setup),
         *ignored,
         *([beyond] if beyond is not None else []),
         *([short] if short is not None else []),

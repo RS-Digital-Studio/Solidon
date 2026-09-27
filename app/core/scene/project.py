@@ -118,6 +118,10 @@ MAX_PROJECT_CHAT_ENTRIES: Final = 100_000
 #: Projekt nennt einen Drucker und wenige Materialien; mehr ist keine
 #: Projektdatei, sondern ein Profilarchiv.
 MAX_CARRIED_PROFILES: Final = 100
+#: Punktpfade je Herkunftsmenge der Druckeinstellungen (``chosen``,
+#: ``accepted``). Es gibt 59 Einstellungen; das Vielfache hält eine
+#: Erweiterung aus, eine manipulierte Liste nicht.
+MAX_SETTING_PATHS: Final = 512
 MAX_REPORT_FINDINGS: Final = 100_000
 #: Die Summe über **alle** verknüpften Quellen — dieselbe Regel wie für die
 #: eingebetteten und aus demselben Grund. Sie stand bis zum 02.09.2026 auf der
@@ -1164,6 +1168,15 @@ def _validate_current_project_schema(data: dict[str, Any]) -> None:
         ):
             raise ValueError("schema:print_settings.inventory_project_id")
         _validate_spool_bindings(stored.get("spool_bindings", []), "print_settings.spool_bindings")
+        for name in ("chosen", "accepted"):
+            paths = stored.get(name, [])
+            if not isinstance(paths, list) or len(paths) > MAX_SETTING_PATHS:
+                raise ValueError(f"schema:print_settings.{name}")
+            for entry in paths:
+                if not isinstance(entry, str) or not re.fullmatch(
+                    r"[a-z_]{1,32}\.[a-z_0-9]{1,64}", entry
+                ):
+                    raise ValueError(f"schema:print_settings.{name}")
         slot_overrides = stored.get("slot_overrides", [])
         if not isinstance(slot_overrides, list):
             raise ValueError("schema:print_settings.slot_overrides")
