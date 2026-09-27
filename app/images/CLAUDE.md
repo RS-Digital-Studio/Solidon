@@ -18,19 +18,17 @@ Werkzeug laufen.
 ## Die Bildschirmfotos: nur vor einem Release, ein Prozess je Sprache
 
 Erzeugt wird vor einem Release und nur, was sich geändert hat — nicht nach
-jedem Schritt (Entscheidung Robert, 02.09.2026; der Weg steht in `/erzeugen`).
+jedem Schritt (Entscheidung Robert; der Weg steht in `/erzeugen`).
 
 Ein Lauf über alle sechs Sprachen in einem Prozess **stirbt** mit
 Segmentation fault, nach der ersten Sprache. Ein Prozess je Sprache — dieselbe
 Antwort wie bei der Testsuite. Eine Hintergrund-Hülle meldet darüber „exit
 code 0"; der Beweis ist der Bildbestand, nicht der Rückgabewert.
 
-**Und auch ein Ein-Sprachen-Lauf stirbt.** Am 31.08.2026 riss der spanische
-nach drei von neun Bildern; die übrigen sechs blieben acht Stunden alt stehen,
-und die Shell meldete 139. Fünf andere Sprachen liefen in derselben Reihe beim
-ersten Anlauf durch. Ein Prozess je Sprache senkt die Wahrscheinlichkeit, er
-beseitigt sie nicht — **nach jedem Lauf die Zeitstempel zählen und bei einer
-alten Datei denselben Aufruf wiederholen.**
+**Und auch ein Ein-Sprachen-Lauf stirbt** gelegentlich mitten in der Reihe;
+die übrigen Bilder bleiben dann alt stehen. Ein Prozess je Sprache senkt die
+Wahrscheinlichkeit, er beseitigt sie nicht — **nach jedem Lauf die
+Zeitstempel zählen und bei einer alten Datei denselben Aufruf wiederholen.**
 
 Der Ablauf steht im Skill `/erzeugen`, dort auch die Falle mit den fehlenden
 Schriften.

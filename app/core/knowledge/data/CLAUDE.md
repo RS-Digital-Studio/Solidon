@@ -5,8 +5,8 @@ Code nichts zu suchen haben — und ein erzeugter Nachweis.
 
 | Datei | Inhalt | Wer liest |
 |---|---|---|
-| `printers.toml` | Druckerprofile | `profiles.py` |
-| `materials.toml` | Materialprofile — **die Toleranzen** hinter `auto:<material>` | `profiles.py` |
+| `printers.toml` | Druckerprofile, FDM und Resin nach Bauraum (`technology = "resin"`: Pixelgröße und Mindestwand statt Düse und Bahn). Aus dem Standardprozess und dem allgemeinen PLA des Herstellers: `travel_speed`, `speed_*`, die Beschleunigungen, `flow_factor`, `overhang_limit` (Stützgrenze gegen die Senkrechte), `first_layer_line_factor` (erste Bahnbreite als Vielfaches der Düse, für jeden Slicer über `print_settings.resolve`); nur für Cura `first_layer_acceleration` und `overhang_speed_factors` (Überhangstufen in Prozent der Außenwand) sowie `cura_definition`, aus der die Konsolenübergabe Start- und Endcode nimmt | `profiles.py` |
+| `materials.toml` | Materialprofile — **die Toleranzen** hinter `auto:<material>`; `resin` ist das Harz (`technology = "resin"`) | `profiles.py` |
 | `print_settings.toml` | Druckeinstellungen je Stufe | `print_settings.py` |
 | `standards.toml` | Normteilmaße (§24.2) | `standards.py` |
 | `rules.toml` | Die Regelsammlung des Agenten (§39) | `rules.py` |

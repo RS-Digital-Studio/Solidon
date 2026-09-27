@@ -1,17 +1,22 @@
 # `tests/data/` — der Referenzkorpus
 
-Die Modelle und Projekte, gegen die gemessen wird.
+Die Modelle und Projekte, gegen die gemessen wird (§34) — selbst erzeugt und
+unter MIT (`LICENSE`), weil der Korpus mit veröffentlicht wird. **Jede Datei
+hat ihre Zeile in `README.md`**: Inhalt, erwartete Kennzahlen, Test.
 
 | Ordner | Inhalt |
 |---|---|
-| `meshes/` | Netze für die Geometrietests |
+| `meshes/` | Netze für die Geometrietests, erzeugt von `make_corpus.py`; die Erkennungskörper (`recognition_*.npz`, Koordinaten und Dreiecksnummern in doppelter Genauigkeit) von `make_recognition_corpus.py` |
 | `projects/` | Projektdateien, darunter **alte Formatversionen** für die Migrationstests |
-| `step/` | Sechs STEP-Baugruppen aus Konstruktionsmaßen (`make_step_assembly_corpus.py`, P7.4): Instanzen mit Lage und Instanzfarbe, verschachtelt mit SHUO und Spiegelung, ein Teil mit mehreren Körpern, ohne Namen, in Zoll, Flächenmodell — die Sollwerte stehen im Erzeuger, `--check` vergleicht den XCAF-Baum |
+| `step/` | Sechs STEP-Baugruppen aus Konstruktionsmaßen (`make_step_assembly_corpus.py`): Instanzen mit Lage und Instanzfarbe, verschachtelt mit SHUO und Spiegelung, ein Teil mit mehreren Körpern, ohne Namen, in Zoll, Flächenmodell — die Sollwerte stehen im Erzeuger, `--check` vergleicht den XCAF-Baum |
 | `threads/` | Fünf STEP-Gewindekörper aus Konstruktionsmaßen (`make_thread_corpus.py`): M6, M10, M8 innen, zweigängig, eine Naht ohne Rille — die Basis der Fallmatrix in `test_thread_import.py`; alles Abgeleitete baut der Test selbst |
+| `recipes/` · `linux/` · `spacemouse/` | Ein altes Bausteinrezept (`test_part_file.py`) · der Abhängigkeitskorpus eines Linux-Pakets (`test_packaging.py`) · eine SpaceMouse-Aufzeichnung (`test_spacemouse.py`) |
 
-Der STEP-Baumvergleich normalisiert das Vorzeichen gerundeter Nullwerte in
-Transformationsmatrizen (`z.6f`). Negative Maßwerte und Spiegelungen bleiben
-erhalten; `-0.000000` und `0.000000` bezeichnen dieselbe Lage.
+Daneben liegen Referenzwerte einzelner Tests als `*.json` (und
+`check_subject.php` für `test_support.py`). Der STEP-Baumvergleich
+normalisiert das Vorzeichen gerundeter Nullwerte in Transformationsmatrizen
+(`z.6f`); negative Maße und Spiegelungen bleiben, `-0.000000` und `0.000000`
+sind dieselbe Lage.
 
 `ci_window_durations.json` enthält historische Sekunden je Fensterdatei,
 `ci_core_durations.json` dasselbe je Datei der Kernsuite — je mit einem
@@ -38,8 +43,8 @@ fünf Körper in `threads/` liegen deshalb als Ergebnis ihres Skripts hier —
 das Skript bleibt die Quelle, und wer ein Maß oder den Erzeuger ändert, fährt
 es neu; `make_thread_corpus.py --check` sagt, ob Datei und Erzeuger noch
 dasselbe sind, und `test_thread_import.py` fragt das je Lauf für die drei
-genähten Bolzen (RM-195: unter einer halben Sekunde je Körper). Was aus einem
-Körper abzuleiten ist (Spiegelung, Lage, Zuschnitt), baut der Test.
+genähten Bolzen. Was aus einem Körper abzuleiten ist (Spiegelung, Lage,
+Zuschnitt), baut der Test.
 
 ## Alte Projektdateien bleiben liegen
 
