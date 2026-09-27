@@ -850,6 +850,17 @@ class PrinterProfile:
     Ender-3 V3, wo Creality mit 500 anfährt. Die anderen Slicer nehmen sie aus
     dem Profil des Herstellers selbst. Ohne Angabe gilt die Vorgabe der
     Werksprofile (``handover._FIRST_LAYER_ACCELERATION``)."""
+    overhang_speed_factors: tuple[float, ...] = ()
+    """Wie schnell überhängende Außenwände fahren, in Prozent des
+    Außenwandtempos: die Überhangstufen 2/4, 3/4 und 4/4 aus demselben
+    Standardprozess wie die Tempi (Orca ``overhang_2_4_speed`` bis
+    ``overhang_4_4_speed`` geteilt durch ``outer_wall_speed``; PrusaSlicer
+    ``overhang_speed_2``, ``_1`` und ``_0``).
+
+    Nur Cura liest sie (``handover._for_overhangs``), und nötig ist das, seit
+    die Stützgrenze mit dem Herstellerprofil auf 60 Grad stieg: Wände
+    zwischen 45 und 60 Grad druckten dort ohne Stütze und mit voller
+    Wandgeschwindigkeit. Leer heißt, der Hersteller nennt keine."""
 
     @property
     def is_resin(self) -> bool:

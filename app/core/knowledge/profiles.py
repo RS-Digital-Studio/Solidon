@@ -159,6 +159,9 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
         cura_definition=_cura_definition_or_empty(
             table.get("cura_definition"), f"{identifier}.cura_definition"
         ),
+        overhang_speed_factors=_shares(
+            table.get("overhang_speed_factors"), f"{identifier}.overhang_speed_factors"
+        ),
     )
     printable_area(result)
     printable_height(result)
@@ -199,6 +202,19 @@ def _positive_or_none(value: object, field: str) -> float | None:
             values={"value": str(value)},
         )
     return number
+
+
+def _shares(value: object, field: str) -> tuple[float, ...]:
+    """Eine freiwillige Reihe von Prozentwerten — ohne Angabe leer.
+
+    Jeder Wert ist ein Tempo relativ zu einem anderen und damit größer als
+    null; eine Null führe die Wand gar nicht (Regel 17, derselbe Satz wie bei
+    den Tempi).
+    """
+    if value is None:
+        return ()
+    entries = value if isinstance(value, list | tuple) else [value]
+    return tuple(_positive_or_none(entry, field) or 0.0 for entry in entries)
 
 
 def _angle_or_none(value: object, field: str) -> float | None:

@@ -436,3 +436,47 @@ def test_a_slow_printer_keeps_its_slower_support() -> None:
 
     assert float(values["speed_support"]) == pytest.approx(float(values["speed_print"]))
     assert float(values["speed_support_interface"]) == pytest.approx(float(values["speed_wall_0"]))
+
+
+@pytest.mark.parametrize(
+    ("printer", "factors"),
+    [
+        # Elegoo bremst auf 50, 30 und 10 mm/s bei 160 mm/s Außenwand.
+        ("centauri-carbon-2", "[31,19,6,6]"),
+        ("creality-k1-max", "[25,15,5,5]"),
+        # Ohne Stufen des Herstellers die Vorgabe des Prüfberichts.
+        ("generic-220", "[50,25]"),
+    ],
+)
+def test_overhanging_walls_slow_down_like_at_the_manufacturer(printer: str, factors: str) -> None:
+    """Überhänge fuhren mit voller Wandgeschwindigkeit, seit Paket 1 bis 60 Grad ohne Stütze.
+
+    Orca bremst ab einem Viertel Bahnbreite Überhang in Stufen; Cura teilt den
+    Bereich ab ``wall_overhang_angle`` in gleiche Winkelschritte. Der Winkel
+    ist deshalb der eines Viertels der Bahnbreite bei dieser Schichthöhe, und
+    die letzte Stufe gilt zweimal.
+    """
+    import math
+
+    values = _cura_values(printer)
+    width, height = float(values["line_width"]), float(values["layer_height"])
+
+    assert values["wall_overhang_speed_factors"] == factors
+    assert float(values["wall_overhang_angle"]) == round(
+        math.degrees(math.atan(0.25 * width / height))
+    )
+
+
+def test_the_overhang_steps_are_read_from_the_printer_table(tmp_path: Path) -> None:
+    """Eine Null wäre eine Wand, die nicht fährt — die Tabelle sagt es, statt zu raten."""
+    table = {"title": "Eigener", "build_volume": [200.0, 200.0, 200.0]}
+
+    read = profiles._printer_from_table(
+        "eigener", {**table, "overhang_speed_factors": [40, 20, 10]}, Path("printers.toml")
+    )
+    assert read.overhang_speed_factors == (40.0, 20.0, 10.0)
+    assert profiles._printer_from_table("eigener", table, Path("x")).overhang_speed_factors == ()
+    with pytest.raises(ValidationError):
+        profiles._printer_from_table(
+            "eigener", {**table, "overhang_speed_factors": [40, 0]}, Path("printers.toml")
+        )

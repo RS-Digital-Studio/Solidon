@@ -165,6 +165,14 @@ _SUPPORT_INTERFACE_SPEED: Final = 80.0
 _INTERFACE_SPACING: Final = 3.0
 #: So viel Fläche braucht ein Stützstück mindestens, in mm² (Creality in Cura).
 _MINIMUM_SUPPORT_AREA: Final = 2.0
+#: Wie überhängende Wände bremsen, wenn der Hersteller keine Stufen nennt
+#: (``PrinterProfile.overhang_speed_factors``), in Prozent der Wand: der
+#: Vorschlag des Prüfberichts (Cura, B5).
+_OVERHANG_FACTORS: Final = (50.0, 25.0)
+#: Ab welchem Anteil der Bahnbreite eine Wand in Orcas Stufe 2/4 fällt und
+#: gebremst wird (``overhang_2_4_speed``: 25 bis 50 %; die Stufe 1/4 steht
+#: bei jedem Hersteller auf 0, also ungebremst).
+_OVERHANG_ONSET: Final = 0.25
 #: Die Beschleunigung der ersten Schicht, wenn der Drucker keine eigene trägt
 #: (``PrinterProfile.first_layer_acceleration``), in mm/s²: der Wert der
 #: Werksprozesse von Elegoo, Bambu, Prusa und Creality-Orca am Ender-3 V3.
@@ -810,6 +818,7 @@ def _cura_computed(written: dict[str, str], settings: PrintSettings, profile: Pr
     _from_line_width(written, settings)
     _for_supports(written, settings)
     _for_speeds(written, settings, profile)
+    _for_overhangs(written, profile.printer)
     _full_fan_layer(written)
 
 
@@ -977,6 +986,37 @@ def _for_speeds(written: dict[str, str], settings: PrintSettings, profile: Profi
         # Zug etwas kühler. Nachgerechnet, nicht überstimmt.
         written["material_initial_print_temperature"] = f"{nozzle - 10.0:g}"
         written["material_final_print_temperature"] = f"{nozzle - 15.0:g}"
+
+
+def _for_overhangs(written: dict[str, str], printer: PrinterProfile) -> None:
+    """Überhängende Wände bremsen wie beim Hersteller (Prüfbericht Cura, B5).
+
+    Orca bremst ab einem Viertel Bahnbreite Überhang in Stufen
+    (``overhang_2_4_speed`` bis ``overhang_4_4_speed``). Cura teilt den Bereich
+    zwischen ``wall_overhang_angle`` und 90 Grad in gleiche Winkelschritte,
+    einen je Faktor, und misst den Überhang an der Mitte der Außenwand gegen
+    die Schicht darunter (``FffGcodeWriter.cpp``, CuraEngine 5.13) — der Winkel
+    einer Wand, die je Schicht um ein Viertel Bahnbreite auswandert, ist also
+    ``atan(0,25 * Bahnbreite / Schichthöhe)``. Dort beginnt die erste Stufe,
+    und die letzte gilt zweimal: Bei 0,42 auf 0,2 mm liegen Curas Grenzen dann
+    bei 28, 43, 59 und 75 Grad, Orcas bei 28, 46, 58 und 64.
+
+    Ohne Stufen des Herstellers bremst Cura mit 50 und 25 Prozent ab
+    demselben Winkel.
+    """
+    width = _as_float(written.get("line_width"))
+    height = _as_float(written.get("layer_height"))
+    if not width or not height:
+        return
+    factors = printer.overhang_speed_factors
+    steps = (*factors, factors[-1]) if factors else _OVERHANG_FACTORS
+    # Eine Winkelfunktion aus ``math`` ist hier erlaubt: Das Ergebnis ist ein
+    # Wert für den Slicer, auf ganze Grad gerundet, keine Geometrie (kern.md).
+    onset = math.degrees(math.atan(_OVERHANG_ONSET * width / height))
+    written["wall_overhang_angle"] = f"{round(onset)}"
+    written["wall_overhang_speed_factors"] = (
+        "[" + ",".join(f"{round(step)}" for step in steps) + "]"
+    )
 
 
 def _as_float(value: str | None) -> float | None:
