@@ -41,7 +41,9 @@ from app.core.geom.mesh import (
     carry_appended_edges,
     edge_table,
     face_components,
+    refined_units,
     remember_edge_table,
+    remember_refined_units,
     signed_volume,
     stable_areas,
     triple_products,
@@ -96,6 +98,9 @@ def merge_vertices(mesh: MeshData, tolerance: float | None = None) -> tuple[Mesh
     merged = weld(body, weld_digits(limit))
     if not merged:
         return mesh, 0
+    # Das Verschweißen legt Ecken zusammen und lässt jedes Dreieck an seinem
+    # Platz (:func:`weld`) — der Ursprung je Dreieck gilt weiter.
+    remember_refined_units(body, refined_units(mesh.raw))
     return mesh.replacing(body), merged
 
 

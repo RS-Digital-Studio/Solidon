@@ -1263,6 +1263,52 @@ def test_remeshing_keeps_the_colour_of_every_face(profile: Profile) -> None:
     np.testing.assert_allclose(carried[~upward], np.broadcast_to(blue, carried[~upward].shape))
 
 
+def test_the_origin_of_every_piece_travels_with_the_refined_body() -> None:
+    """Nach *Kanten verfeinern* trägt jedes Dreieck seinen Ursprung — und gibt ihn
+    nur weiter, wo er gilt (R1-Rest).
+
+    Die Erkennung zählt die Stücke eines Ursprungs als eines
+    (``geom.mesh.refined_units``). Er gehört zum Netz: Eine starre Bewegung
+    trägt ihn weiter, die Platte auch (sonst erkennte ein wieder geöffnetes
+    Projekt anders als die Sitzung), ein zweites Verfeinern setzt ihn fort.
+    Ein Glätten nicht — danach liegen die Stücke eines Ursprungs nicht mehr in
+    seiner Ebene, und wer sie als eines läse, verschmierte die Krümmung.
+    """
+    from app.core.geom import transform
+    from app.core.geom.mesh import refined_units
+    from app.core.perceive.features import _mesh_key, refinement_note
+
+    source = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 10.0)))
+    refined = mesh_ops.remesh(source, 2.0)
+    units = refined_units(refined.raw)
+    noted = refinement_note(refined)
+    assert units is not None and noted is not None
+    np.testing.assert_array_equal(units, noted[1])
+    assert refined_units(source.raw) is None, "ein ungeteiltes Netz trägt keinen Ursprung"
+
+    turned_body = refined.raw.copy()
+    transform.moved(turned_body, transform.rotation("z", 37.0))
+    turned = refined.replacing(turned_body)
+    np.testing.assert_array_equal(refined_units(turned.raw), units)
+
+    assert refined_units(mesh_ops.smooth(refined, 3).raw) is None
+
+    restored = MeshData.from_bytes(refined.to_bytes())
+    np.testing.assert_array_equal(refined_units(restored.raw), units)
+    assert _mesh_key(restored) == _mesh_key(refined)
+    plain = MeshData.of(
+        trimesh.Trimesh(refined.raw.vertices.copy(), refined.raw.faces.copy(), process=False)
+    )
+    assert _mesh_key(plain) != _mesh_key(refined), "der Ursprung gehört in den Abdruck"
+    assert refined_units(MeshData.from_bytes(source.to_bytes()).raw) is None
+
+    again = refined_units(mesh_ops.remesh(refined, 1.0).raw)
+    assert again is not None
+    assert set(np.unique(again).tolist()) == set(np.unique(units).tolist()), (
+        "zweimal verfeinert zählt jedes Stück zu seinem ersten Ursprung"
+    )
+
+
 def test_a_closed_body_the_exact_core_refuses_is_still_refined() -> None:
     """Dicht, aber gegenläufig gewickelt: Der Kern lehnt ab, ``trimesh`` teilt.
 

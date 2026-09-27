@@ -35,7 +35,7 @@ from app.core.errors import (
     SHOW_LOCATION,
     BooleanFailedError,
 )
-from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
+from app.core.geom.attributes import DEFAULT_CUT_SLOT, carry_refined_units, transfer
 from app.core.geom.mesh import MeshData, enclosed_volume, signed_volume, without_faces
 from app.core.geom.repair import (
     CROSSING_PARTS_MAX,
@@ -178,6 +178,7 @@ def boolean(
         raise ValueError("a boolean operation needs at least two bodies")
 
     chain = stages if stages is not None else (FULL_CHAIN if quality == "fine" else DRAFT_CHAIN)
+    given = meshes
     meshes, united = _parts_united_first(kind, meshes, cancelled)
     attempted: list[SolverStage] = []
     emptied = False
@@ -216,6 +217,10 @@ def boolean(
                 emptied = True
             _log.warning("boolean stage %s produced nothing usable", stage)
             continue
+        # Der Ursprung je Dreieck vor *Kanten verfeinern* hängt an den
+        # Dreiecken, die der Schnitt nicht berührt hat (R1) — gesucht an den
+        # Eingängen, wie sie hereinkamen, vor jeder Vereinigung ihrer Teile.
+        carry_refined_units(result, given)
         return BooleanOutcome(
             # Nichts hat keine Flächen zum Färben, und die Übertragung suchte
             # die nächste Oberfläche eines Körpers, der keine hat.

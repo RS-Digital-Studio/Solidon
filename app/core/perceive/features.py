@@ -35,6 +35,8 @@ from app.core.geom.mesh import (
     MeshData,
     face_components,
     fully_stitched,
+    refined_units,
+    refined_units_key,
     triple_products,
     unique_edges,
 )
@@ -318,7 +320,7 @@ def _rigid_key(body: trimesh.Trimesh, patch: Sequence[int]) -> tuple[Any, ...] |
     Einpassen oder zu groß für die quadratischen Kosten
     (:data:`RIGID_KEY_POINTS`).
     """
-    if len(patch) < MIN_PATCH_FACES:
+    if _face_count(body, patch) < MIN_PATCH_FACES:
         return None
     corners = np.asarray(body.faces, dtype=np.int64)[list(patch)]
     used = np.unique(corners)
@@ -1115,7 +1117,9 @@ CACHE_INDEX_LIMIT = 12_000_000
 
 
 def _mesh_key(mesh: MeshData) -> bytes:
-    """Der Fingerabdruck eines Netzes: Ecken und Dreiecke, sonst nichts.
+    """Der Fingerabdruck eines Netzes: Ecken und Dreiecke — und nach *Kanten
+    verfeinern* der Ursprung je Dreieck (``geom.mesh.refined_units``), denn
+    danach zählt die Erkennung.
 
     Nicht die Objektkennung und nicht ``id()`` — ein freigegebenes Objekt gibt
     seine Adresse wieder her, und der nächste Körper an derselben Stelle bekäme
@@ -1136,19 +1140,28 @@ def _mesh_key(mesh: MeshData) -> bytes:
     """
     body = mesh.raw
     cache = getattr(body, "_cache", None)
+    key: bytes | None = None
     if cache is not None:
         cache.verify()
         known = cache.cache.get("solidon_mesh_key")
         if known is not None:
-            return bytes(known)
-    key = hashlib.blake2b(
-        np.ascontiguousarray(body.vertices, dtype=np.float64).tobytes()
-        + np.ascontiguousarray(body.faces, dtype=np.int64).tobytes(),
-        digest_size=16,
-    ).digest()
-    if cache is not None:
-        cache["solidon_mesh_key"] = key
-    return key
+            key = bytes(known)
+    if key is None:
+        key = hashlib.blake2b(
+            np.ascontiguousarray(body.vertices, dtype=np.float64).tobytes()
+            + np.ascontiguousarray(body.faces, dtype=np.int64).tobytes(),
+            digest_size=16,
+        ).digest()
+        if cache is not None:
+            cache["solidon_mesh_key"] = key
+    # **Und der Ursprung je Dreieck, wo das Netz einen trägt** (R1): Er
+    # entscheidet mit, was die Erkennung liest (``geom.mesh.refined_units``),
+    # also gehört er in den Abdruck, unter dem sie ihre Antwort merkt. Ein Netz
+    # ohne Teilung behält seinen Abdruck von vorher.
+    units = refined_units_key(body)
+    if units is None:
+        return key
+    return hashlib.blake2b(key + units, digest_size=16).digest()
 
 
 def forget_cache() -> None:
@@ -2405,7 +2418,7 @@ def _fitted(
             """Die erste Form, die auf diesen Fleck passt — oder keine."""
             if check_cancelled is not None:
                 check_cancelled()
-            if len(patch) < MIN_PATCH_FACES:
+            if _face_count(body, patch) < MIN_PATCH_FACES:
                 return False
             ball: SphereFit | None = None
             # **Die Normalen entscheiden, welche Form es ist — nicht der
@@ -2512,12 +2525,14 @@ def _fitted(
         # **Erst jeder Fleck als Ganzes.** Was hier eine Form ergibt, ist
         # fertig und zählt für das Urteil unten nicht mehr mit.
         unresolved: list[int] = []
-        whole_weight = sum(_fit_weight(patch) for patch in patches if len(patch) >= MIN_PATCH_FACES)
+        whole_weight = sum(
+            _fit_weight(patch) for patch in patches if _face_count(body, patch) >= MIN_PATCH_FACES
+        )
         weighed = 0.0
         for patch_index, patch in enumerate(patches):
             if check_cancelled is not None:
                 check_cancelled()
-            if len(patch) < MIN_PATCH_FACES:
+            if _face_count(body, patch) < MIN_PATCH_FACES:
                 continue
             if not classify(patch):
                 unresolved.append(patch_index)
@@ -2985,7 +3000,10 @@ def _cylinder_beside_a_torus(
             continue
         candidate = indices[perpendicular].tolist()
         rest = indices[~perpendicular]
-        if len(candidate) < MIN_PATCH_FACES or len(_connected_patches(body, candidate)) != 1:
+        if (
+            _face_count(body, candidate) < MIN_PATCH_FACES
+            or len(_connected_patches(body, candidate)) != 1
+        ):
             continue
         beside = neighbour_table[rest]
         beside = beside[beside >= 0]
@@ -4918,6 +4936,55 @@ def _open_at_the_narrow_end(
     return 2 * outward > len(seams)
 
 
+def _face_count(body: trimesh.Trimesh, faces: Sequence[int] | np.ndarray) -> int:
+    """Wie viele Dreiecke diese Auswahl vor *Kanten verfeinern* war (R1, Durchsicht 0.5.1).
+
+    Die Stücke eines Ursprungs (``geom.mesh.refined_units``) zählen als eines,
+    ein Dreieck ohne Ursprung für sich; an einem ungeteilten Netz ist das
+    ``len(faces)``. **Jede Schwelle, die eine Dreieckszahl meint, fragt
+    hier** (:data:`MIN_PATCH_FACES`): Sie misst, ob ein Fleck genug Form für
+    eine Einpassung trägt, und die Teilung fügt keine Form hinzu. Ohne das
+    wurden am Screen-Cover nach 1 mm und einer Bohrung Splitter aus zwei, drei
+    Dreiecken eines Schriftzugs eingepasst, die am Original unter der Schwelle
+    lagen — 15 Verrundungen mehr als am Original.
+    """
+    units = refined_units(body)
+    if units is None:
+        return len(faces)
+    chosen = units[np.asarray(faces, dtype=np.intp)]
+    kept = chosen[chosen >= 0]
+    return int(len(chosen) - len(kept)) + int(np.unique(kept).size)
+
+
+def _unit_keys(units: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    """Je Dreieck die Nummer, unter der es zählt: sein Ursprung, oder ohne einen es selbst.
+
+    Die Nummern ohne Ursprung liegen im Negativen (``-1 - Dreieck``), damit sie
+    keinem Ursprung gleichen.
+    """
+    own = units[faces]
+    return np.where(own >= 0, own, -1 - faces)
+
+
+def _unit_sizes(
+    body: trimesh.Trimesh, members: np.ndarray, owner: np.ndarray, sizes: np.ndarray
+) -> np.ndarray:
+    """Je Facette, wie viele Dreiecke sie vor *Kanten verfeinern* hatte (:func:`_face_count`).
+
+    Für alle Facetten in einem Zug: ``members`` und ``owner`` wie bei
+    :func:`_facet_table`. An einem ungeteilten Netz kommen ``sizes`` zurück.
+    """
+    units = refined_units(body)
+    if units is None or not len(sizes):
+        return np.asarray(sizes, dtype=np.int64)
+    keys = _unit_keys(units, np.asarray(members, dtype=np.int64))
+    # Facette und Nummer als eine Zahl: die Nummern um ihr Minimum verschoben.
+    shifted = keys - int(keys.min())
+    span = int(shifted.max()) + 1
+    distinct = np.unique(np.asarray(owner, dtype=np.int64) * span + shifted)
+    return np.bincount(distinct // span, minlength=len(sizes)).astype(np.int64)
+
+
 def _curved_faces(body: trimesh.Trimesh) -> set[int]:
     """Dreiecke, die auf einer gerundeten Oberfläche sitzen.
 
@@ -5103,9 +5170,17 @@ def _outline_corners(
     # Alle Ecken je Facette, einmal gezählt; innere sind die ohne Randkante.
     corner_of = np.asarray(body.faces, dtype=np.int64)[members]
     keys = np.unique(np.repeat(owner, 3) * len(body.vertices) + corner_of.ravel())
-    every = np.bincount(keys // len(body.vertices), minlength=facet_count)
+    # **Nach *Kanten verfeinern* zählen nur die Ecken, die es vorher gab** (R1):
+    # Die Teilung setzt Punkte in jede Facette, und ohne diese Zeile wäre jede
+    # geteilte Facette ein Teilstück mit inneren Punkten (:func:`_divider_pieces`).
+    # Eine Ecke von vorher trägt Stücke von mindestens drei Ursprüngen um sich;
+    # ein Teilungspunkt auf einer Kante zwei, einer in einem Dreieck einen.
+    before = _corners_before_refining(body, members, corner_of)
+    weight = None if before is None else before[keys % len(body.vertices)]
+    every = np.bincount(keys // len(body.vertices), weights=weight, minlength=facet_count)
+    every = np.rint(every).astype(np.int64)
     if not len(at_facet):
-        return np.where(irregular, sizes, 0).astype(np.int64), every.astype(np.int64)
+        return np.where(irregular, sizes, 0).astype(np.int64), every
     order = np.lexsort((toward, at_vertex, at_facet))
     at_facet, at_vertex, toward = at_facet[order], at_vertex[order], toward[order]
     fresh = np.r_[True, (at_facet[1:] != at_facet[:-1]) | (at_vertex[1:] != at_vertex[:-1])]
@@ -5125,8 +5200,35 @@ def _outline_corners(
     folded = (one * two).sum(axis=1) > 0.0
     corner[through] = bent | folded
     corners = np.bincount(at_facet[starts[corner]], minlength=facet_count).astype(np.int64)
-    inner = (every - np.bincount(at_facet[starts], minlength=facet_count)).astype(np.int64)
+    rim_weight = None if before is None else before[at_vertex[starts]]
+    on_the_rim = np.rint(np.bincount(at_facet[starts], weights=rim_weight, minlength=facet_count))
+    inner = (every - on_the_rim.astype(np.int64)).astype(np.int64)
     return np.where(irregular, np.asarray(sizes, dtype=np.int64), corners), inner
+
+
+def _corners_before_refining(
+    body: trimesh.Trimesh, members: np.ndarray, corner_of: np.ndarray
+) -> np.ndarray | None:
+    """Je Ecke, ob es sie vor *Kanten verfeinern* gab (``1.0``) — ``None`` an einem
+    ungeteilten Netz.
+
+    Gefragt an den Dreiecken der Facetten (``members``, ihre Ecken
+    ``corner_of``): Eine Ecke im Inneren einer Facette hat nur Dreiecke dieser
+    Facette um sich. Stücke von mindestens drei Ursprüngen um eine Ecke —
+    jedes Dreieck ohne Ursprung zählt für sich — machen sie zu einer Ecke von
+    vorher; ein Teilungspunkt auf einer alten Kante hat zwei, einer im Inneren
+    eines alten Dreiecks einen. Für Randecken gilt die Antwort nicht, und dort
+    wird sie auch nicht gefragt.
+    """
+    units = refined_units(body)
+    if units is None:
+        return None
+    keys = np.repeat(_unit_keys(units, np.asarray(members, dtype=np.int64)), 3)
+    shifted = keys - int(keys.min()) if len(keys) else keys
+    span = int(shifted.max()) + 1 if len(keys) else 1
+    pairs = np.unique(corner_of.ravel() * span + shifted)
+    around = np.bincount(pairs // span, minlength=len(body.vertices))
+    return (around >= 3).astype(np.float64)
 
 
 #: Wie viele Ecken ein Teilstück der Vernetzung einer Rundung höchstens hat:
@@ -5193,8 +5295,21 @@ def _flat_counts(
     0,2 mm breit, knickt aber um 3,75 Grad und liegt auf 3 mm; er zählt nach
     Ecken. Ein Splitter ohne weichen Rand gehört zu keiner Rundung und bleibt
     ebenfalls bei seinen Dreiecken.
+
+    **Und nach *Kanten verfeinern* zählen die Dreiecke von vorher** (R1-Rest,
+    Durchsicht 0.5.1). Die Deckelung oben trifft nur Streifen und Dreiecke; die
+    Flanken eines Schriftzugs sind Facetten mit fünf bis neun Ecken, am
+    Screen-Cover mit zwei Dreiecken weniger als Ecken — unter der Schwelle, also Teil der
+    gerundeten Seite. Geteilt trugen sie Dutzende, wurden eben, und die Seite
+    zerfiel nach 1 mm und einer Bohrung in 50 Verrundungen. Aus der Geometrie
+    allein lässt sich eine geteilte Facette von einer gleich geformten
+    ungeteilten nicht trennen (gemessen am Korpus: eine Schätzung der
+    kleinsten Vernetzung kippte an 52 110 Facetten in 204 ungeteilten Körpern);
+    der Ursprung je Dreieck (``geom.mesh.refined_units``) sagt es. Gezählt wird
+    je Ursprung (:func:`_unit_sizes`), innere Punkte nur, wo es sie vorher gab
+    (:func:`_outline_corners`), und jeder Knick am Rand einmal je alter Kante.
     """
-    sizes = np.asarray(sizes, dtype=np.int64)
+    sizes = _unit_sizes(body, members, owner, np.asarray(sizes, dtype=np.int64))
     counted: np.ndarray = sizes.copy()
     # Gefragt werden nur Facetten, die nach Dreiecken als Ebene zählen — die
     # übrigen ändert die Deckelung nicht, und am Drachen sind das 300 000 von
@@ -5234,6 +5349,18 @@ def _flat_counts(
     on_second = rim & (second >= 0) & asked[np.maximum(second, 0)]
     whose = np.concatenate((first[on_first], second[on_second]))
     bends = np.concatenate((angles[on_first], angles[on_second]))
+    units = refined_units(body)
+    if units is not None and len(whose):
+        # Nach *Kanten verfeinern* trägt eine alte Randkante viele Stücke mit
+        # demselben Knick; gezählt wird sie einmal — je Paar ihrer Ursprünge,
+        # die nur diese eine Kante teilen. Sonst verschöbe die Teilung den
+        # Median zu den langen Kanten.
+        inside = np.concatenate((pairs[on_first, 0], pairs[on_second, 1]))
+        outside = np.concatenate((pairs[on_first, 1], pairs[on_second, 0]))
+        seen = np.stack((whose, _unit_keys(units, inside), _unit_keys(units, outside)), axis=1)
+        _rows, once = np.unique(seen, axis=0, return_index=True)
+        once = np.sort(once)
+        whose, bends = whose[once], bends[once]
     order = np.lexsort((bends, whose))
     whose, bends = whose[order], bends[order]
     begins = np.searchsorted(whose, doubtful, side="left")
@@ -5590,7 +5717,7 @@ def _large_facet_faces_read(
         proofs.reach(weighed / planned)
         if check_cancelled is not None:
             check_cancelled()
-        if len(patch) < MIN_PATCH_FACES or recoverable.isdisjoint(patch):
+        if _face_count(body, patch) < MIN_PATCH_FACES or recoverable.isdisjoint(patch):
             continue
         if _a_sliver(body, patch):
             continue
@@ -5702,7 +5829,7 @@ def _planar_facet_read(
             check_cancelled()
         chosen = np.asarray(group, dtype=np.int64)
         if (
-            len(group) < MIN_PATCH_FACES
+            _face_count(body, group) < MIN_PATCH_FACES
             or requested.isdisjoint(group)
             or not (labelled[chosen] & verdicts.recoverable[verdicts.label[chosen]]).any()
         ):
@@ -6926,7 +7053,7 @@ def _surface_support(
     """
     if check_cancelled is not None:
         check_cancelled()
-    if len(patch) < MIN_PATCH_FACES:
+    if _face_count(body, patch) < MIN_PATCH_FACES:
         return None
     support: _SurfaceSupport | None = remembered(
         "support",
@@ -8397,12 +8524,45 @@ def face_radii(
         (),
         lambda: _through_the_piece(
             body,
-            _face_radii(body, np.asarray(body.face_adjacency), pair_radii(body, check_cancelled)),
+            _by_origin(
+                body,
+                _face_radii(
+                    body, np.asarray(body.face_adjacency), pair_radii(body, check_cancelled)
+                ),
+            ),
             check_cancelled,
         ),
         check_cancelled=check_cancelled,
     )
     return result
+
+
+def _by_origin(body: trimesh.Trimesh, radii: np.ndarray) -> np.ndarray:
+    """Je Dreieck der Radius seines Ursprungs vor *Kanten verfeinern* (R1-Rest).
+
+    Der Radius eines Dreiecks ist das Minimum über seine sanften Nachbarn
+    (:func:`_face_radii`). Am Original liegt jedes Dreieck einer schmalen
+    Facette an ihrem Rand und trägt so den Radius seiner Naht; geteilt haben
+    die Stücke im Inneren nur koplanare Nachbarn und damit keinen. Die Stücke
+    am alten Rand tragen dagegen genau die Radien der alten Nähte — dieselben
+    Facetten, dieselben Knicke —, und ihr Minimum ist der Radius, den das
+    Dreieck vorher hatte. Den bekommt jedes Stück desselben Ursprungs; ein
+    Dreieck ohne Ursprung behält seinen eigenen. Die Nachtrennung und die
+    Bögen eines Prismas lesen danach, was sie am ungeteilten Netz gelesen
+    hätten: Am Screen-Cover nach 1 mm stand sonst die Verrundung R 11,2 des
+    Schriftzugs in vier Stücken.
+    """
+    units = refined_units(body)
+    if units is None:
+        return radii
+    keyed = units >= 0
+    if not bool(keyed.any()):
+        return radii
+    lowest = np.full(int(units.max()) + 1, np.inf, dtype=float)
+    np.minimum.at(lowest, units[keyed], radii[keyed])
+    carried = np.array(radii, dtype=float, copy=True)
+    carried[keyed] = lowest[units[keyed]]
+    return carried
 
 
 def _through_the_piece(
@@ -8515,7 +8675,7 @@ def _pieces_at_a_seam(
     if check_cancelled is not None:
         check_cancelled()
     neighbours, pair_rows = _neighbour_index(body)
-    if not neighbours.shape[1] or len(patch) < 2 * MIN_PATCH_FACES:
+    if not neighbours.shape[1] or _face_count(body, patch) < 2 * MIN_PATCH_FACES:
         return []
     local = np.unique(np.asarray(patch, dtype=np.intp))
     chosen = neighbours[local]
@@ -8551,7 +8711,11 @@ def _pieces_at_a_seam(
         nodes=np.arange(len(local)),
         engine="scipy",
     )
-    pieces = [local[group].tolist() for group in groups if len(group) >= MIN_PATCH_FACES]
+    pieces = [
+        local[group].tolist()
+        for group in groups
+        if _face_count(body, local[group]) >= MIN_PATCH_FACES
+    ]
     if len(pieces) < 2:
         return []
     return in_body_order(body, pieces)
@@ -8583,7 +8747,7 @@ def _arcs_of_a_prism(
     kommen aus ``face_adjacency_angles`` wie bei der Nachtrennung.
     """
     indices = np.asarray(piece, dtype=np.intp)
-    if len(indices) < MIN_PATCH_FACES:
+    if _face_count(body, indices) < MIN_PATCH_FACES:
         return []
     normals = np.asarray(body.face_normals, dtype=float)[indices]
     first = normals[0]
@@ -8770,7 +8934,7 @@ def _wandering_outline(
     fits: dict[int, CylinderFit] = {}
     confirmed: set[int] = set()
     for number, piece in enumerate(pieces):
-        if len(piece) < MIN_PATCH_FACES:
+        if _face_count(body, piece) < MIN_PATCH_FACES:
             continue
         if check_cancelled is not None:
             check_cancelled()
@@ -9576,7 +9740,7 @@ def _without_notches(
         # und drei Leistungstests rissen ihre Schwelle. Was unter
         # ``MIN_PATCH_FACES`` liegt, kommt an ``classify`` ohnehin nicht vorbei
         # — dort steht dieselbe Grenze.
-        if len(patch) < MIN_PATCH_FACES:
+        if _face_count(body, patch) < MIN_PATCH_FACES:
             healed.append(patch)
             continue
         rim = _rim_of(body, patch)

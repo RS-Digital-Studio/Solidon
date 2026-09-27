@@ -10,6 +10,7 @@ zurück — das ist non-destruktives Bearbeiten, eine Ebene tiefer.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import math
@@ -137,8 +138,14 @@ class MeshData:
 
     def replacing(self, mesh: trimesh.Trimesh) -> MeshData:
         """Eine neue Hülle um einen geänderten Körper; die Slots bleiben, wo
-        sie passen."""
+        sie passen.
+
+        Der Ursprung je Dreieck (:func:`refined_units`) bleibt nur, wo die
+        Dreiecke dieselben sind und ihre Gestalt behalten
+        (:func:`carry_refined_units`) — eine gleiche Zahl allein belegt das
+        nicht."""
         slots = self.slots if len(self.slots) == len(mesh.faces) else ()
+        carry_refined_units(self.raw, mesh)
         return MeshData(raw=mesh, slots=slots)
 
     # --- Serialisierung ---------------------------------------------------------
@@ -159,6 +166,12 @@ class MeshData:
             if colours is not None
             else np.empty((0, 3), dtype=np.uint8)
         )
+        # **Der Ursprung je Dreieck reist mit, wo es einen gibt** (R1): Ohne
+        # ihn erkennt ein von der Platte gelesenes Netz nach *Kanten
+        # verfeinern* anders als in der Sitzung. Ein Netz ohne Teilung legt das
+        # Feld gar nicht erst an — seine Datei bleibt, wie sie war.
+        units = refined_units(self.raw)
+        extra: dict[str, Any] = {} if units is None else {"refined_units": units}
         buffer = io.BytesIO()
         np.savez_compressed(
             buffer,
@@ -176,6 +189,7 @@ class MeshData:
                 if self.cavity is not None
                 else np.empty((0, 3), dtype=np.int64)
             ),
+            **extra,
         )
         return buffer.getvalue()
 
@@ -202,6 +216,12 @@ class MeshData:
                         process=False,
                     )
                 )
+            # Ein Ursprung, der nicht zu den Dreiecken passt, wird nicht
+            # angelegt: Das Netz erkennt dann wie ein ungeteiltes.
+            if "refined_units" in data.files:
+                units = data["refined_units"]
+                if units.dtype.kind in "iu" and units.shape == (len(mesh.faces),):
+                    remember_refined_units(mesh, units)
         return cls(raw=mesh, slots=slots, cavity=cavity)
 
     def to_stl(self) -> bytes:
@@ -288,6 +308,124 @@ def as_mesh_data(mesh: Mesh) -> MeshData:
         # kann.
         suggestions=(CHOOSE, CANCEL),
     )
+
+
+#: Unter diesem Schlüssel trägt ein Netz im Cache von ``trimesh`` je Dreieck
+#: seinen Ursprung vor *Kanten verfeinern* samt dessen Abdruck
+#: (:func:`refined_units`). Er lebt und stirbt mit der Geometrie wie
+#: ``face_adjacency``.
+_REFINED_UNITS_KEY: Final = "solidon_refined_units"
+
+
+def refined_units(body: trimesh.Trimesh) -> np.ndarray | None:
+    """Je Dreieck sein Ursprung vor *Kanten verfeinern* — ``None`` an einem ungeteilten Netz.
+
+    **Die Erkennung zählt Dreiecke, und die Teilung vervielfacht sie**
+    (Durchsicht 0.5.1, R1). *Kanten verfeinern* ändert die Form nicht, aber
+    jede Regel, die an einer Dreieckszahl hängt, liest das feinere Netz
+    anders: Nach 1 mm und einer Bohrung zerfiel die gerundete Seite des
+    Screen-Covers in 50 Verrundungen. Der Schritt selbst trägt seine Merkmale
+    über den Herkunftsvermerk weiter (``perceive.features.note_refinement``);
+    der nächste Schritt baut ein neues Netz, und dort erkennt die Erkennung
+    frisch. Deshalb reist der Ursprung als Eigenschaft des Netzes mit — durch
+    die Boolesche Kette über die Dreiecke, die sie nicht berührt hat
+    (``geom.attributes.carry_refined_units``), und durch jede starre Bewegung
+    (:meth:`MeshData.replacing`) —, und die Erkennung zählt die Stücke eines
+    Ursprungs als eines (``perceive.features.face_count``).
+
+    Gleiche Nummern heißen: Stücke **eines** Dreiecks vor der Teilung. ``-1``
+    trägt ein Dreieck, das keine Teilung hervorgebracht hat — eine
+    Schnittfläche, die Wand einer Bohrung —; es zählt für sich.
+    """
+    cache = getattr(body, "_cache", None)
+    if cache is None or _REFINED_UNITS_KEY not in cache.cache:
+        return None
+    cache.verify()
+    held = cache.cache.get(_REFINED_UNITS_KEY)
+    if held is None or len(held[0]) != len(body.faces):
+        return None
+    return cast(np.ndarray, held[0])
+
+
+def refined_units_key(body: trimesh.Trimesh) -> bytes | None:
+    """Der Abdruck des Ursprungs je Dreieck (:func:`refined_units`) — für den Abdruck
+    des Netzes, an dem die Erkennung ihre Antwort merkt."""
+    if refined_units(body) is None:
+        return None
+    return cast(bytes, body._cache.cache[_REFINED_UNITS_KEY][1])
+
+
+def remember_refined_units(body: trimesh.Trimesh, units: np.ndarray | None) -> None:
+    """Legt den Ursprung je Dreieck an ein **frisch gebautes** Netz (:func:`refined_units`).
+
+    Frisch heißt: Noch hat niemand dieses Netz nach etwas gefragt, das am
+    Ursprung hängt — der Merker der Erkennung hält seine Antworten je Körper,
+    und eine Antwort von davor zählte die Stücke einzeln. Die Aufrufer bauen
+    das Netz unmittelbar davor: *Kanten verfeinern*, die Boolesche Kette,
+    :meth:`MeshData.replacing`, das Verschweißen und der Plattencache.
+
+    Ohne ein Dreieck mit Ursprung wird nichts abgelegt: Ein Netz, in dem nichts
+    geteilt ist, zählt ohnehin jedes Dreieck für sich.
+    """
+    cache = getattr(body, "_cache", None)
+    if units is None or cache is None:
+        return
+    held = np.array(units, dtype=np.int64, copy=True)
+    if held.shape != (len(body.faces),) or not bool((held >= 0).any()):
+        return
+    held.flags.writeable = False
+    digest = hashlib.blake2b(held.tobytes(), digest_size=16).digest()
+    cache.verify()
+    cache[_REFINED_UNITS_KEY] = (held, digest)
+
+
+def carry_refined_units(source: trimesh.Trimesh, target: trimesh.Trimesh) -> None:
+    """Gibt den Ursprung je Dreieck weiter, wenn ``target`` dieselben Dreiecke in
+    derselben Gestalt trägt.
+
+    Dieselben Dreiecke: dieselben Eckennummern je Dreieck. Dieselbe Gestalt:
+    jede Seite so lang wie vorher, bis auf einen gemeinsamen Maßstab — eine
+    starre Bewegung, ein gleichmäßiges Skalieren, der Weg einer Bohrung in
+    ihren Rahmen und zurück (``prepare.drill``). Dann liegen die Stücke eines
+    Ursprungs weiter in seiner Ebene, und die Erkennung darf sie als eines
+    lesen.
+
+    **Ein Netz, dessen Ecken sich gegeneinander bewegt haben, trägt keinen
+    Ursprung weiter** — Glätten, Biegen, Formen, Verschieben einzelner Ecken:
+    Die Stücke eines Ursprungs liegen danach nicht mehr in einer Ebene, und
+    wer sie als eines läse, verschmierte die Krümmung über den ganzen
+    Ursprung. Gleiche Dreieckszahl allein ist kein Beleg (dieselbe Lehre wie
+    bei den Slots, ``boolean._keep_slots``).
+    """
+    cache = getattr(source, "_cache", None)
+    if cache is None or _REFINED_UNITS_KEY not in cache.cache or target is source:
+        return
+    units = refined_units(source)
+    if units is None or refined_units(target) is not None:
+        return
+    faces = np.asarray(source.faces)
+    if faces.shape != np.asarray(target.faces).shape or not np.array_equal(faces, target.faces):
+        return
+    before = _side_lengths(np.asarray(source.vertices, dtype=np.float64)[faces])
+    after = _side_lengths(np.asarray(target.vertices, dtype=np.float64)[faces])
+    total = float(before.sum())
+    if total <= 0.0:
+        return
+    scale = float(after.sum()) / total
+    # Eine Rechengrenze, keine Geometrietoleranz: Eine starre Bewegung
+    # verschiebt die letzten Stellen, jede Verformung Mikrometer und mehr.
+    if float(np.abs(after - before * scale).max()) > EPS_GEOM * max(1.0, scale):
+        return
+    remember_refined_units(target, units)
+
+
+def _side_lengths(triangles: np.ndarray) -> np.ndarray:
+    """Die drei Seitenlängen je Dreieck, mit Grundrechenarten und ``sqrt``."""
+    sides = np.empty(triangles.shape[:2], dtype=np.float64)
+    for column, (first, second) in enumerate(((0, 1), (1, 2), (2, 0))):
+        step = triangles[:, second] - triangles[:, first]
+        sides[:, column] = np.sqrt((step * step).sum(axis=1))
+    return sides
 
 
 def fully_stitched(mesh: trimesh.Trimesh) -> bool:

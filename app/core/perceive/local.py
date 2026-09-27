@@ -16,7 +16,7 @@ import numpy as np
 from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, refined_units, remember_refined_units
 from app.core.perceive import features as detection
 from app.core.perceive import recognition_time
 from app.core.perceive.helix import _facet_of_face
@@ -265,6 +265,11 @@ def _part(mesh: MeshData, indices: np.ndarray) -> MeshData:
             np.asarray(mesh.raw.vertices)[vertices], inverse.reshape(-1, 3), process=False
         )
     )
+    # Der Ausschnitt zählt seine Dreiecke wie der Körper, aus dem er stammt:
+    # nach *Kanten verfeinern* je Ursprung (``geom.mesh.refined_units``, R1).
+    units = refined_units(mesh.raw)
+    if units is not None:
+        remember_refined_units(part.raw, units[np.asarray(indices, dtype=np.intp)])
     detection.as_its_own_body(part)
     return part
 

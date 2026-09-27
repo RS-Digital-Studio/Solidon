@@ -23,9 +23,12 @@ zufällig die richtige Länge hat.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Any, Final
+
 import numpy as np
 
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, refined_units, remember_refined_units
 from app.core.log import get_logger
 from app.core.types import CancelToken, Mesh
 
@@ -141,6 +144,99 @@ def _nearest(mesh: MeshData, points: np.ndarray) -> tuple[np.ndarray, np.ndarray
     slots = np.asarray(mesh.slots, dtype=np.int32)
     _closest, distance, triangle = on_surface(mesh.raw, points)
     return slots[triangle], distance
+
+
+def carry_refined_units(result: MeshData, sources: Sequence[MeshData]) -> None:
+    """Der Ursprung je Dreieck vor *Kanten verfeinern* durch eine Boolesche Operation (R1).
+
+    ``geom.mesh.refined_units`` sagt je Dreieck, aus welchem Dreieck vor der
+    Teilung es stammt, und die Erkennung zählt die Stücke eines Ursprungs als
+    eines. Eine Boolesche Operation baut ein neues Netz — **aber jedes
+    Dreieck, das sie nicht berührt hat, übernimmt der Kern bitgleich** (samt
+    seiner drei Ecken; gemessen an ``manifold3d`` 3.5.3: 1 122 von 1 282
+    Dreiecken nach einer Bohrung in einen fein geteilten Quader). An diesen
+    Dreiecken hängt der Ursprung weiter; alles, was der Schnitt neu gebaut
+    hat, zählt für sich (``-1``), wie am ungeteilten Netz.
+
+    Der Weg über gleiche Ecken und nicht über die Nummern, die der Kern
+    mitführen kann (``face_id``): Mit eigenen Nummern je Dreieck vernetzt der
+    Kern angeschnittene Flächen anders (1 390 statt 1 282 Dreiecke am selben
+    Quader), und ein Netz ohne Teilung bekäme so ein anderes Ergebnis als
+    bisher. Hier bleibt die Rechnung dieselbe, und gesucht wird nur, wenn ein
+    Eingang einen Ursprung trägt.
+
+    Mehrere Eingänge mit Ursprung behalten verschiedene Nummern. Das Ergebnis
+    muss frisch gebaut sein (``geom.mesh.remember_refined_units``).
+    """
+    body = result.raw
+    carried = [(mesh.raw, refined_units(mesh.raw)) for mesh in sources]
+    if not len(body.faces) or all(units is None for _raw, units in carried):
+        return
+    found = np.full(len(body.faces), -1, dtype=np.int64)
+    offset = 0
+    for raw, units in carried:
+        if units is None:
+            continue
+        match = _same_triangles(raw, body)
+        taken = (match >= 0) & (found < 0)
+        own = units[match[taken]]
+        found[taken] = np.where(own >= 0, own + offset, -1)
+        offset += int(units.max()) + 1
+    remember_refined_units(body, found)
+
+
+def _same_triangles(source: Any, result: Any) -> np.ndarray:
+    """Je Dreieck von ``result`` ein Dreieck von ``source`` mit denselben drei Ecken, sonst ``-1``.
+
+    Dieselben Ecken heißt bitgleich: Zwei Punkte gelten nur dann als einer,
+    wenn alle drei Koordinaten gleich sind. Beide Punktlisten werden
+    gemeinsam sortiert, gleiche Orte bekommen eine Nummer, und ein Dreieck ist
+    sein aufsteigend geordnetes Nummerntripel — als eine Zahl, solange drei
+    Nummern in 63 Bit passen, sonst als Zeile. Gesucht wird sortiert, nicht je
+    Dreieck: an 405 304 Dreiecken des geteilten Screen-Covers nach einer
+    Bohrung 0,10 s, als Zeilensortierung 0,16 s (die Boolesche selbst 0,6 s;
+    gemessen unter der Last der Durchsicht 0.5.1).
+    """
+    before = np.asarray(source.vertices, dtype=np.float64)
+    after = np.asarray(result.vertices, dtype=np.float64)
+    points = np.concatenate((before, after))
+    order = np.lexsort((points[:, 2], points[:, 1], points[:, 0]))
+    ordered = points[order]
+    fresh = np.ones(len(points), dtype=bool)
+    fresh[1:] = (ordered[1:] != ordered[:-1]).any(axis=1)
+    place = np.empty(len(points), dtype=np.int64)
+    place[order] = np.cumsum(fresh) - 1
+    old = np.sort(place[: len(before)][np.asarray(source.faces, dtype=np.int64)], axis=1)
+    new = np.sort(place[len(before) :][np.asarray(result.faces, dtype=np.int64)], axis=1)
+    if not len(old) or not len(new):
+        return np.full(len(new), -1, dtype=np.int64)
+    distinct = int(place.max()) + 1
+    if distinct < _CODE_LIMIT:
+        # Drei Nummern als eine Zahl; der stabile Sortierlauf lässt bei gleichen
+        # Dreiecken im Eingang das erste vorn stehen.
+        old_codes = (old[:, 0] * distinct + old[:, 1]) * distinct + old[:, 2]
+        new_codes = (new[:, 0] * distinct + new[:, 1]) * distinct + new[:, 2]
+        ranking = np.argsort(old_codes, kind="stable")
+        ranked = old_codes[ranking]
+        spot = np.minimum(np.searchsorted(ranked, new_codes), len(ranked) - 1)
+        return np.where(ranked[spot] == new_codes, ranking[spot], -1)
+    rows = np.concatenate((old, new))
+    # Bei gleichen Ecken steht das alte Dreieck vorn: Die Herkunft sortiert mit.
+    late = np.concatenate((np.zeros(len(old), dtype=np.int64), np.ones(len(new), dtype=np.int64)))
+    order = np.lexsort((late, rows[:, 2], rows[:, 1], rows[:, 0]))
+    ordered_rows = rows[order]
+    start = np.ones(len(rows), dtype=bool)
+    start[1:] = (ordered_rows[1:] != ordered_rows[:-1]).any(axis=1)
+    first = np.maximum.accumulate(np.where(start, np.arange(len(rows)), 0))
+    leader = order[first]
+    match = np.full(len(rows), -1, dtype=np.int64)
+    match[order] = np.where(leader < len(old), leader, -1)
+    return match[len(old) :]
+
+
+#: Bis zu wie vielen verschiedenen Punkten drei Punktnummern als eine Zahl in
+#: ``int64`` passen: ``2 097 151³`` liegt knapp unter ``2⁶³``.
+_CODE_LIMIT: Final = 2_097_151
 
 
 def with_slot(mesh: MeshData, slot: int) -> MeshData:

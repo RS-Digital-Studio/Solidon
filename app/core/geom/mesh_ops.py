@@ -44,6 +44,8 @@ from app.core.geom.mesh import (
     edge_table,
     face_components,
     max_distance_to_surface,
+    refined_units,
+    remember_refined_units,
     signed_volume,
     stable_vertex_normals,
     unique_edges,
@@ -1365,6 +1367,20 @@ def _inherited(mesh: MeshData, body: Any, origin: np.ndarray) -> MeshData:
     """
     from app.core.perceive.features import note_refinement
 
+    # **Und der Ursprung vor jeder Teilung reist als Eigenschaft des Netzes
+    # weiter** (``geom.mesh.refined_units``, R1): Der Vermerk darunter gilt
+    # nur diesem Schritt, der nächste formende Schritt baut ein neues Netz und
+    # erkennt frisch — und zählte dort jedes Stück für sich. Wer schon einen
+    # Ursprung trägt, gibt ihn weiter; ein Dreieck ohne (die Wand einer
+    # Bohrung von vorher) wird hier selbst einer.
+    before = refined_units(mesh.raw)
+    count = mesh.triangle_count
+    if before is None:
+        parents = np.arange(count, dtype=np.int64)
+    else:
+        start = int(before.max()) + 1 if len(before) else 0
+        parents = np.where(before >= 0, before, start + np.arange(count, dtype=np.int64))
+    remember_refined_units(body, parents[origin])
     colours = face_colours(mesh.raw)
     if colours is not None:
         taken = np.rint(colours[origin] * 255.0).astype(np.uint8)

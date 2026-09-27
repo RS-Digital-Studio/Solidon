@@ -6598,6 +6598,110 @@ def test_an_unrefined_facet_keeps_its_own_radii() -> None:
     forget_cache()
 
 
+def _lettered_plate() -> MeshData:
+    """Eine Platte 60 × 30 × 4 mit erhabenem „RS“ in Comfortaa, 20 mm hoch, 2 mm erhaben.
+
+    Gebaut mit der eigenen Operation *Text aufbringen* und der mitgelieferten
+    Schrift: Die Buchstabenflanken sind Facetten aus zwei, drei fast
+    koplanaren Streifen — dieselbe Bauart wie am Screen-Cover, an dem R1 fiel.
+    """
+    from app.core.knowledge import profiles
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    load_operations()
+    plate = trimesh.creation.box((60.0, 30.0, 4.0))
+    plate.apply_translation((0.0, 0.0, 2.0))
+    entry = SceneObject(id="obj_1", name="Platte", mesh=MeshData.of(plate), kind="mesh")
+    spec = REGISTRY.get("label_text")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(
+                text="RS", size=20.0, depth=2.0, font="Comfortaa", x=0.0, y=0.0, z=4.0
+            ),
+            profile=profiles.make_profile("centauri-carbon-2", "petg"),
+            quality="fine",
+            seed=1,
+            progress=lambda *_: None,
+            ask=lambda _question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    mesh = result.outputs[0].mesh
+    assert isinstance(mesh, MeshData)
+    return mesh
+
+
+def _bored_from_below(mesh: MeshData) -> MeshData:
+    """Eine Sackbohrung Ø 3 × 1 mm von unten in die Platte, weit weg vom Schriftzug."""
+    from app.core.geom.prepare import drill
+    from app.core.knowledge import profiles
+
+    return drill(
+        mesh,
+        position=(25.0, 10.0, 0.0),
+        axis="z",
+        normal=(0.0, 0.0, -1.0),
+        diameter=3.0,
+        depth=1.0,
+        profile=profiles.make_profile("centauri-carbon-2", "petg"),
+    ).mesh
+
+
+def _read_as_shapes(found: dict[FeatureId, Feature]) -> list[tuple[str, float]]:
+    """Art und Hauptmaß je Merkmal — die Fläche einer Seite, sonst der Radius."""
+    rows = []
+    for feature in found.values():
+        params = feature.params
+        if feature.kind in ("face", "curved_face"):
+            value = float(params.get("area") or 0.0)
+        else:
+            value = float(params.get("radius") or (params.get("diameter") or 0.0) / 2.0)
+        rows.append((feature.kind, value))
+    return sorted(rows)
+
+
+@pytest.mark.parametrize("edge", [1.0, 2.0])
+def test_lettering_is_read_like_its_original_after_refining_and_a_bore(edge: float) -> None:
+    """Nach *Kanten verfeinern* und einer Bohrung liest die Erkennung den Schriftzug
+    wie vorher (R1-Rest).
+
+    Die Bohrung baut ein neues Netz, und dort erkannte die Erkennung frisch:
+    Die Flanken der Buchstaben — Facetten mit fünf und mehr Ecken und am
+    Original weniger als acht Dreiecken — trugen geteilt Dutzende Dreiecke
+    und wurden eben, ihre Stücke im Inneren verloren den Radius. Am
+    Screen-Cover zerfiel die gerundete Seite nach 1 mm in 50 Verrundungen; an
+    dieser Platte ging die Verrundung R 0,8 des „S“ in eine zu große
+    gerundete Seite auf. Der Ursprung je Dreieck reist jetzt durch die
+    Boolesche Kette (``geom.mesh.refined_units``), und die Erkennung zählt
+    und misst je Ursprung.
+    """
+    from app.core.geom.mesh import refined_units
+    from app.core.geom.mesh_ops import remesh
+
+    plate = _lettered_plate()
+    forget_cache()
+    before = detect(_bored_from_below(plate))
+    refined = _bored_from_below(remesh(plate, edge))
+    forget_cache()
+    after = detect(refined)
+    forget_cache()
+
+    assert refined_units(refined.raw) is not None, "die Bohrung hat den Ursprung verloren"
+    expected, found = _read_as_shapes(before), _read_as_shapes(after)
+    kinds = [kind for kind, _value in expected]
+    assert kinds.count("curved_face") == 2 and kinds.count("fillet") == 1 and "hole" in kinds, (
+        "der Basisstand liest zwei gerundete Seiten, eine Verrundung und die Bohrung"
+    )
+    assert [kind for kind, _value in found] == kinds
+    assert [value for _kind, value in found] == pytest.approx(
+        [value for _kind, value in expected], rel=1e-3, abs=1e-3
+    )
+
+
 def _turned_bore(entry: list[list[float]]) -> MeshData:
     """Ein gedrehter Ring Ø 24 × 10 mit Bohrung Ø 6; ``entry`` ist der Weg der Mündung.
 

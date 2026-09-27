@@ -114,7 +114,14 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   Umrissecke, eine Naht teilt einen Mantel in Bohrung und Kegel, ein
 #:   exakter Baustein liest sein Ergebnis aus der Topologie, und ein Lochfeld
 #:   am Netz gibt nur noch seine benannten Bohrungen aus.
-CACHE_FORMAT_VERSION: Final = 29
+#: - 30 (27.09.2026, R1-Rest): Ein Netz nach *Kanten verfeinern* trägt je
+#:   Dreieck seinen Ursprung (``geom.mesh.refined_units``) durch die folgenden
+#:   Schritte und auf die Platte (``MeshData.to_bytes``), und die Erkennung
+#:   zählt danach je Ursprung. Ein älterer Eintrag hat ihn nicht; an einem
+#:   geteilten und danach gebohrten Netz läse die Erkennung nach dem Öffnen
+#:   anders als in der Sitzung. Und am exakten Körper gehört die Fase einer
+#:   schrägen Mündung zum Langloch, auch wo OpenCASCADE sie als BSpline führt.
+CACHE_FORMAT_VERSION: Final = 30
 
 
 @dataclass(frozen=True, slots=True)

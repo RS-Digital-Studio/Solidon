@@ -1172,3 +1172,46 @@ def test_the_welded_stage_keeps_a_needle_that_holds_a_closed_tool_together() -> 
     assert outcome.solver.strategy == "welded"
     assert outcome.mesh.is_watertight
     assert outcome.mesh.raw.volume == pytest.approx(27000.0 - 1000.0, abs=1e-6)
+
+
+def test_a_boolean_keeps_the_origin_of_every_triangle_it_did_not_cut() -> None:
+    """Der Ursprung je Dreieck nach *Kanten verfeinern* überlebt eine Bohrung (R1-Rest).
+
+    Die Erkennung zählt die Stücke eines Ursprungs als eines
+    (``geom.mesh.refined_units``); nach der nächsten Booleschen Operation
+    erkennt sie frisch, und ohne den Ursprung zählte sie wieder jedes Stück.
+    Jedes Dreieck, das der Schnitt nicht berührt, übernimmt der Kern
+    bitgleich — es behält seinen Ursprung. Was der Schnitt neu baut, hat
+    keinen. Zwei geteilte Eingänge behalten verschiedene Nummern.
+    """
+    from app.core.geom.mesh import refined_units
+    from app.core.geom.mesh_ops import remesh
+
+    refined = remesh(box(20.0, (0.0, 0.0, 0.0)), 2.0)
+    before = refined_units(refined.raw)
+    assert before is not None
+    tool = MeshData.of(trimesh.creation.cylinder(radius=3.0, height=40.0, sections=32))
+
+    cut = boolean("difference", [refined, tool]).mesh
+    after = refined_units(cut.raw)
+    assert after is not None, "die Bohrung hat den Ursprung verloren"
+    kept = after >= 0
+    assert 0 < int((~kept).sum()) < len(after), "Schnittflächen ohne Ursprung, der Rest mit"
+    # Jedes Dreieck mit Ursprung steht bitgleich im Eingang, mit demselben Ursprung.
+    old = {
+        tuple(sorted(map(tuple, triangle))): unit
+        for triangle, unit in zip(
+            np.asarray(refined.raw.triangles).tolist(), before.tolist(), strict=True
+        )
+    }
+    triangles = np.asarray(cut.raw.triangles).tolist()
+    for triangle, unit in zip(triangles, after.tolist(), strict=True):
+        if unit >= 0:
+            assert old[tuple(sorted(map(tuple, triangle)))] == unit
+
+    other = remesh(box(20.0, (30.0, 0.0, 0.0)), 2.0)
+    joined = refined_units(boolean("union", [refined, other]).mesh.raw)
+    assert joined is not None
+    assert np.unique(joined[joined >= 0]).size == 2 * np.unique(before).size, (
+        "zwei geteilte Körper teilen sich keine Nummer"
+    )
