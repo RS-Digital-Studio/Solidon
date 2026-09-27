@@ -1225,3 +1225,57 @@ def test_the_session_evaluates_with_what_the_window_prints() -> None:
     assert session.evaluation_follows(printed)
     later = print_settings.with_path(printed, "support.threshold_angle", 52.0)
     assert not session.evaluation_follows(later), "die Grundlage kam mit einer anderen"
+
+
+def test_the_stage_takes_the_manufacturers_process(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stufe F (Entscheidung I): „Fein" nimmt Elegoos „0.12mm Fine", statt
+    Solidons Stufe über den Standardprozess zu legen. Gesucht wird unter den
+    Geschwistern mit demselben Zusatz — der Prozess für die 0,6-mm-Düse daneben
+    zählt nicht. Findet sich keiner, bleibt der Standard und die Stufe liegt
+    darüber; ein selbst gewählter Prozess bleibt, wie er ist."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    folder = bestand.parent / "resources" / "profiles" / "Elegoo" / "process" / "ECC2"
+    for file, name, layer in (
+        ("fine.json", "0.12mm Fine @CC2", "0.12"),
+        ("fine06.json", "0.18mm Fine @CC2 0.6 nozzle", "0.18"),
+    ):
+        _write(
+            folder / file,
+            {
+                "type": "process",
+                "name": name,
+                "inherits": "fdm_process_common",
+                "instantiation": "true",
+                "layer_height": layer,
+                "compatible_printers": ["Elegoo Centauri Carbon 2 0.4 nozzle"],
+            },
+        )
+    setup = _setup(bestand)
+
+    fine = manufacturer.for_stage(setup, _cc2(), "fine")
+    foundation = manufacturer.base_settings(_cc2(), "fine", fine)
+
+    assert fine is not None and Path(fine.base_process).name == "fine.json"
+    assert foundation.settings.layers.layer_height == pytest.approx(0.12)
+    assert not foundation.staged, "nichts liegt mehr über dem Prozess"
+    assert manufacturer.for_stage(setup, _cc2(), "strong") == setup
+    assert manufacturer.base_settings(_cc2(), "strong", setup).staged, "die Stufe liegt darüber"
+    assert manufacturer.for_stage(fine, _cc2(), "draft") == fine, "eine eigene Wahl bleibt"
+    assert manufacturer.for_stage(setup, _cc2(), "standard") == setup
+
+
+def test_prusas_stage_takes_its_structural_process(prusa_bundle: Path) -> None:
+    """Dieselbe Zuordnung im Prusa-Bündel: „Belastbar" nimmt „0.20mm
+    STRUCTURAL", und dessen automatische Stützschwelle gilt; eine feine Stufe
+    führt das nachgebaute Bündel nicht."""
+    setup = _prusa_setup(prusa_bundle)
+
+    strong = manufacturer.for_stage(setup, _mk4s(), "strong")
+
+    assert strong is not None and strong.base_process == "0.20mm STRUCTURAL @MK4S HF0.4"
+    foundation = manufacturer.base_settings(_mk4s(), "strong", strong)
+    assert foundation.process == "0.20mm STRUCTURAL @MK4S HF0.4" and not foundation.staged
+    assert foundation.settings.support.threshold_angle == pytest.approx(48.37, abs=0.01)
+    assert manufacturer.for_stage(setup, _mk4s(), "fine") == setup

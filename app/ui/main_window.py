@@ -1030,7 +1030,14 @@ class _FoundationWorker(Worker):
         self._quality = quality
 
     def work(self) -> None:
-        setup = remembered_setup(self._ui, self._profile.material.id, self._profile.printer.id)
+        # Die Stufe wählt den Prozess des Herstellers (Entscheidung I) — hier wie
+        # im Druckdialog und beim Export, sonst rechnete die Zahlenzeile mit
+        # einem anderen Prozess, als gedruckt wird.
+        setup = manufacturer.for_stage(
+            remembered_setup(self._ui, self._profile.material.id, self._profile.printer.id),
+            self._profile,
+            self._quality,
+        )
         self.done.emit(self._key, manufacturer.base_settings(self._profile, self._quality, setup))
 
 
@@ -1325,6 +1332,9 @@ class _ExportWorker(Worker):
                 setup = handover.detect(found)
         settings = self._settings
         if settings is not None:
+            # Die Stufe wählt den Prozess des Herstellers (Entscheidung I), für
+            # Grundlage und Datei derselbe.
+            setup = manufacturer.for_stage(setup, self._profile, settings.quality)
             # **Grundlage plus Abweichung, wie im Dialog** (Review Stufe A+B,
             # F6). Gespeichert ist ein Stand: die eigene Wahl und die Grundlage
             # vom letzten Speichern. Unverändert ging er als Solidons Satz

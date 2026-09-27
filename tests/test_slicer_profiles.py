@@ -2008,3 +2008,101 @@ def test_cancelled_prusa_spool_search_stops_at_the_read_profile(prusa, monkeypat
     with pytest.raises(OperationCancelled):
         sp.configured_filaments("prusa", prusa, cancelled=cancelled)
     assert read[-1] == "Meine Spule.ini"
+
+
+def _processes(*names: str, own: tuple[str, ...] = ()) -> list[sp.SlicerProfile]:
+    return [
+        sp.SlicerProfile(Path(f"{name}.json"), name, "process", from_user=name in own)
+        for name in names
+    ]
+
+
+@pytest.mark.parametrize(
+    ("names", "standard", "expected"),
+    [
+        (
+            (
+                "0.12mm Fine @CC2",
+                "0.16mm Optimal @CC2",
+                "0.20mm Standard @CC2",
+                "0.20mm Strength @CC2",
+                "0.24mm Draft @CC2",
+                "0.28mm Extra Draft @CC2",
+            ),
+            "0.20mm Standard @CC2",
+            ("0.12mm Fine @CC2", "0.28mm Extra Draft @CC2", "0.20mm Strength @CC2"),
+        ),
+        (
+            (
+                "0.08mm Extra Fine @BBL X1C",
+                "0.08mm High Quality @BBL X1C",
+                "0.12mm Fine @BBL X1C",
+                "0.12mm High Quality @BBL X1C",
+                "0.16mm Optimal @BBL X1C",
+                "0.20mm Standard @BBL X1C",
+                "0.20mm Strength @BBL X1C",
+                "0.24mm Draft @BBL X1C",
+                "0.28mm Extra Draft @BBL X1C",
+            ),
+            "0.20mm Standard @BBL X1C",
+            ("0.12mm Fine @BBL X1C", "0.28mm Extra Draft @BBL X1C", "0.20mm Strength @BBL X1C"),
+        ),
+        (
+            (
+                "0.10mm FAST DETAIL @MK4S 0.4",
+                "0.15mm SPEED @MK4S HF0.4",
+                "0.15mm STRUCTURAL @MK4S 0.4",
+                "0.20mm SPEED @MK4S HF0.4",
+                "0.20mm STRUCTURAL @MK4S 0.4",
+                "0.25mm STRUCTURAL @MK4S HF0.4",
+                "0.28mm DRAFT @MK4S HF0.4",
+            ),
+            "0.20mm SPEED @MK4S HF0.4",
+            (
+                "0.10mm FAST DETAIL @MK4S 0.4",
+                "0.28mm DRAFT @MK4S HF0.4",
+                "0.20mm STRUCTURAL @MK4S 0.4",
+            ),
+        ),
+        (
+            ("0.08mm Standard @K1", "0.16mm Standard @K1", "0.20mm Standard @K1"),
+            "0.20mm Standard @K1",
+            (None, None, None),
+        ),
+    ],
+    ids=["centauri-carbon-2", "bambu-p1s", "prusa-mk4s", "creality-print"],
+)
+def test_a_stage_names_the_manufacturers_process(
+    names: tuple[str, ...], standard: str, expected: tuple[str | None, ...]
+) -> None:
+    """Entscheidung I, gemessen an den Beständen vom 27.09.2026: Fein, Entwurf
+    und Belastbar nehmen den Prozess, dessen Name die Stufe nennt — Fein und
+    Entwurf mit der Schichthöhe nächst Solidons 0,12 und 0,28 mm, Belastbar bei
+    der des Standards; „0.25mm STRUCTURAL" ist gröber, nicht belastbarer.
+    Creality Print nennt jeden Prozess „Standard", und dort bleibt es beim
+    Standardprozess."""
+    fitting = _processes(*names)
+    base = next(entry for entry in fitting if entry.name == standard)
+
+    chosen = [
+        sp.stage_process(fitting, base, quality, layer)
+        for quality, layer in (("fine", 0.12), ("draft", 0.28), ("strong", 0.20))
+    ]
+
+    assert [entry.name if entry else None for entry in chosen] == list(expected)
+    assert sp.stage_process(fitting, base, "standard", 0.20) is base
+
+
+def test_an_own_copy_is_no_stage() -> None:
+    """Eine eigene Kopie hat ihren eigenen Zweck: Bei gleicher Schichthöhe
+    gilt der mitgelieferte Prozess."""
+    fitting = _processes(
+        "0.12mm Fine @CC2 - Kopieren",
+        "0.12mm Fine @CC2",
+        "0.20mm Standard @CC2",
+        own=("0.12mm Fine @CC2 - Kopieren",),
+    )
+
+    chosen = sp.stage_process(fitting, fitting[2], "fine", 0.12)
+
+    assert chosen is not None and chosen.name == "0.12mm Fine @CC2"
