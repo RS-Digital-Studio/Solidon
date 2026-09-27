@@ -64,7 +64,7 @@ Ein laufender oder abgebrochener Prozess hat noch kein bestandenes Ergebnis.
 
 Der normale Lauf enthält alle Tests ohne Fenster. Beim Release kommen
 separate Prozesse für die Fenstertests je Datei hinzu. Die aktuelle Aufteilung liegt in
-`.claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh`, die
+`.claude/scripts/suite-getrennt.sh`, die
 Fenstererkennung in `tools/list_windowed_tests.py`. Das Skript nimmt Fenster
 nur mit `--release` hinzu und lässt Leistungstests immer aus. Beim Release
 gehören die Leistungstests als eigener Lauf auf der Referenzmaschine dazu.
@@ -94,7 +94,7 @@ format_status=$?
 mypy_status=$?
 suite_args=()
 if [ "$release_tests" -eq 1 ]; then suite_args+=(--release); fi
-bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh "${suite_args[@]}" > "$CHECK_DIR/suite.txt" 2>&1
+bash .claude/scripts/suite-getrennt.sh "${suite_args[@]}" > "$CHECK_DIR/suite.txt" 2>&1
 suite_status=$?
 performance_status="zurückgestellt"
 if [ "$release_tests" -eq 1 ]; then

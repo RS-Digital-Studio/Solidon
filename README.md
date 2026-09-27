@@ -166,7 +166,7 @@ dem Repository, deshalb steht sie hier und nicht in einer Datei.
 
 | Befehl | Zweck |
 |---|---|
-| `bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh` | Suite wie in der CI, Fensterdateien getrennt |
+| `bash .claude/scripts/suite-getrennt.sh` | Suite wie in der CI, Fensterdateien getrennt |
 | `.venv/Scripts/python.exe -m pytest -q -m performance` | Leistungsbudgets aus §31 |
 | `.venv/Scripts/python.exe -m ruff check .` | Stil und Fehlerbilder |
 | `.venv/Scripts/python.exe -m ruff format --check .` | Formatierung prüfen |

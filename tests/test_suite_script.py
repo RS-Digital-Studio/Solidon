@@ -23,13 +23,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = (
-    Path(__file__).parent.parent
-    / ".claude"
-    / ".state"
-    / "oberflaechen-durchsicht-2026-08-19"
-    / "suite-getrennt.sh"
-)
+SCRIPT = Path(__file__).parent.parent / ".claude" / "scripts" / "suite-getrennt.sh"
 
 BASH = shutil.which("bash")
 
@@ -61,7 +55,7 @@ def ask(question: str, log: str, tmp_path: Path) -> bool:
     environment = dict(os.environ)
     # Beide Variablen setzen: Ohne ``SUITE_WURZEL`` kopiert sich das Skript und
     # startet neu, ohne ``SUITE_KOPIE`` scheitert sein ``trap`` am Ende.
-    environment["SUITE_WURZEL"] = str(SCRIPT.parent.parent.parent.parent)
+    environment["SUITE_WURZEL"] = str(SCRIPT.parent.parent.parent)
     environment["SUITE_KOPIE"] = str(tmp_path / "kopie.sh")
     environment["SUITE_NUR_FUNKTIONEN"] = "1"
     # Der Interpreter, der diesen Test fährt — sonst sucht das Skript die
@@ -90,7 +84,7 @@ def explain(question: str, log: str, tmp_path: Path) -> str:
     protocol = tmp_path / "protokoll.txt"
     protocol.write_text(log, encoding="utf-8")
     environment = dict(os.environ)
-    environment["SUITE_WURZEL"] = str(SCRIPT.parent.parent.parent.parent)
+    environment["SUITE_WURZEL"] = str(SCRIPT.parent.parent.parent)
     environment["SUITE_KOPIE"] = str(tmp_path / "kopie.sh")
     environment["SUITE_NUR_FUNKTIONEN"] = "1"
     # Der Interpreter, der diesen Test fährt — sonst sucht das Skript die

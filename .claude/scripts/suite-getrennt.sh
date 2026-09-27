@@ -2,8 +2,8 @@
 # Reguläres Tor ohne Fenstertests und Leistung; --release nimmt die Fenster dazu.
 # Leistungsprüfungen bleiben dem getrennten Release-Lauf vorbehalten.
 #
-# In einem Prozess baut die Suite über siebenhundert VTK-Fenster nacheinander
-# auf, und irgendwann reißt eine Grenze — eine Zugriffsverletzung ohne Zeile,
+# In einem Prozess baut die Suite über siebenhundert Fenster mit Ansicht
+# nacheinander auf, und irgendwann reißt eine Grenze — eine Zugriffsverletzung ohne Zeile,
 # irgendwann und selten reproduzierbar. Der CI-Workflow löst das seit dem
 # 12.08.2026 so; lokal auf Windows ging es bisher gut, bis es nicht mehr ging.
 #
@@ -41,7 +41,7 @@ set -u
 # Die Kopie macht einen laufenden Lauf gegen jede Änderung immun — auch gegen
 # die eigene. Sie kostet drei Zeilen und erzieht niemanden zu etwas.
 if [ -z "${SUITE_WURZEL:-}" ]; then
-  SUITE_WURZEL=$(cd "$(dirname "$0")/../../.." && pwd) || exit 1
+  SUITE_WURZEL=$(cd "$(dirname "$0")/../.." && pwd) || exit 1
   SUITE_KOPIE=$(mktemp) || exit 1
   cp "$0" "$SUITE_KOPIE" || exit 1
   export SUITE_WURZEL SUITE_KOPIE
