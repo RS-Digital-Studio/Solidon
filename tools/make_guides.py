@@ -61,6 +61,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import (
+    QAction,
     QColor,
     QFont,
     QImage,
@@ -70,7 +71,7 @@ from PySide6.QtGui import (
     QPen,
     QPolygonF,
 )
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMenu
 
 from app.branding import APP_VERSION
 from app.core import figures, guides
@@ -433,6 +434,12 @@ class GuideRun:
             focus = QRect()
             for spot in spots:
                 focus = focus.united(_reach(spot))
+            # Ein offenes Menü steht ganz im Bild, mit seinem Titel im
+            # Menübalken: Markiert ist der Eintrag, gefunden wird er über den
+            # Weg dorthin.
+            menus = _open_menu_area(self.window)
+            if not menus.isNull():
+                focus = focus.united(menus.translated(-origin))
             crop = framed(focus.intersected(image.rect()), RATIO, image.rect(), MARGIN)
         corner = crop.topLeft()
         inside = [Spot(spot.rect.translated(-corner), spot.point, spot.pointer) for spot in spots]
@@ -512,6 +519,72 @@ def _top_face(entry: Any) -> tuple[str, Any]:
     if not faces:
         raise SystemExit("Der Körper hat keine Fläche, die nach oben zeigt")
     return max(faces, key=lambda item: float(item[1].params["area"]))
+
+
+def _menu_trail(window: Any, action: QAction) -> list[QAction]:
+    """Die Aktionen vom Menübalken bis zu ``action``: Titel, Untermenüs, Eintrag."""
+
+    def walk(actions: list[QAction]) -> list[QAction] | None:
+        for candidate in actions:
+            if candidate is action:
+                return [candidate]
+            sub = candidate.menu()
+            if isinstance(sub, QMenu):
+                below = walk(sub.actions())
+                if below is not None:
+                    return [candidate, *below]
+        return None
+
+    trail = walk(window.menuBar().actions())
+    if trail is None:
+        raise SystemExit(f"„{action.text()}“ steht in keinem Menü")
+    return trail
+
+
+def _open_menu(run: GuideRun, action: QAction) -> None:
+    """Das Menü bis zu ``action`` aufklappen und den Eintrag hervorheben, wie mit der Maus.
+
+    Ausgelöst wird nichts: Den Eintrag führt die Geschichte danach selbst aus,
+    wenn das Bild steht und die Menüs wieder zu sind.
+    """
+    trail = _menu_trail(run.window, action)
+    run.window.menuBar().setActiveAction(trail[0])
+    run.settle(10)
+    menu = trail[0].menu()
+    for step in trail[1:]:
+        if not isinstance(menu, QMenu) or not menu.isVisible():
+            raise SystemExit(f"Das Menü vor „{step.text()}“ ging nicht auf")
+        menu.setActiveAction(step)
+        run.settle(10)
+        menu = step.menu()
+    run.settle(20)
+
+
+def _close_menus(run: GuideRun) -> None:
+    """Alle offenen Menüs schließen, ohne einen Eintrag auszulösen."""
+    for _attempt in range(10):
+        popup = QApplication.activePopupWidget()
+        if popup is None:
+            break
+        popup.close()
+        run.settle(4)
+    run.settle(10)
+
+
+def _open_menu_area(window: Any) -> QRect:
+    """Wo gerade Menüs offen sind, samt ihrem Titel im Menübalken; global, leer ohne Menü."""
+    area = QRect()
+    for widget in QApplication.topLevelWidgets():
+        if isinstance(widget, QMenu) and widget.isVisible():
+            area = area.united(QRect(widget.mapToGlobal(QPoint(0, 0)), widget.size()))
+    if area.isNull():
+        return area
+    bar = window.menuBar()
+    active = bar.activeAction()
+    if active is not None:
+        title = bar.actionGeometry(active)
+        area = area.united(QRect(bar.mapToGlobal(title.topLeft()), title.size()))
+    return area
 
 
 def story_drill_a_hole(run: GuideRun) -> None:
@@ -614,12 +687,123 @@ def story_print_a_model(run: GuideRun) -> None:
     run.settle(20)
 
 
+def story_first_part(run: GuideRun) -> None:
+    """Vom leeren Projekt zur Platte mit gesenktem Schraubenloch, jeder Schritt am Knopf."""
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts import PARTS
+    from app.ui import guide_targets
+    from app.ui.catalog import PartCatalog
+
+    _fresh(run)
+    run.capture(1)
+    guide_targets.widget_for(run.window, "start.new").click()
+    run.settle(30)
+
+    box = guide_targets.action_for(run.window, "operation:create_brep_box")
+    _open_menu(run, box)
+    run.capture(2)
+    _close_menus(run)
+    box.trigger()
+    run.settle(40)
+    dialog = run.window._op_dialog
+    if dialog is None or not dialog.isVisible():
+        raise SystemExit("Der Dialog „Quader anlegen“ ging nicht auf")
+    for name, value in (("width", 60.0), ("depth", 30.0), ("height", 5.0)):
+        dialog._editors[name].set_value(value)
+    run.settle(40)
+    run.capture(3)
+    run.capture(4)
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Quader")
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(20)
+
+    body = web.select_body(run.window, 0)
+    result = run.session.last_result
+    if result is None:
+        raise SystemExit("Der Quader wurde nicht gerechnet")
+    face_id, face = _top_face(result.scene.objects[body])
+    run.window.object_tree.select_feature(body, face_id)
+    run.settle(30)
+    centre = tuple(float(value) for value in face.params["centre"])
+    # Neben die Mitte: Dort sitzt das Werkzeugkreuz der gewählten Fläche, und
+    # ein Klickpunkt darauf sah im Probelauf aus wie ein Griff am Kreuz.
+    spot = (centre[0] + 18.0, centre[1], centre[2])
+    run.capture(5, points={"viewport": _visible(run, spot)})
+
+    run.capture(6)
+
+    def in_catalog(opened: Any) -> None:
+        # Die Vorschaubilder füllen sich nacheinander, in rund zwei Sekunden;
+        # vorher trug die Kachel im Probelauf einen leeren Platzhalter.
+        for _round in range(200):
+            if all(spec.name in opened._previews for spec in PARTS.all()):
+                break
+            run.settle(2)
+        else:
+            raise SystemExit("Die Vorschaubilder des Katalogs wurden nicht fertig")
+        tile = next(
+            (
+                item
+                for row in range(opened.list.count())
+                if (item := opened.list.item(row)) is not None
+                and item.data(Qt.ItemDataRole.UserRole) == "screw_hole"
+            ),
+            None,
+        )
+        if tile is None:
+            raise SystemExit("Der Katalog zeigt kein „Schraubenloch mit Senkung“")
+        # Gewählt wie mit einem Klick: Die Detailspalte sagt dann, was er tut.
+        opened.list.setCurrentItem(tile)
+        run.settle(10)
+        run.capture(7)
+        # Der Doppelklick über das Signal der Liste, denselben Weg, den ein
+        # echter nimmt. Ein nachgestellter Mausdoppelklick (``QTest``) wählte
+        # die Kachel nur und löste nichts aus; der Katalog schloss dann mit
+        # „Abbrechen", und der Dialog des Bausteins kam nie.
+        opened.list.itemDoubleClicked.emit(tile)
+
+    parts = guide_targets.widget_for(run.window, "selection.parts")
+    web.while_open(PartCatalog, parts.click, in_catalog)
+    run.settle(40)
+    dialog = run.window._op_dialog
+    if dialog is None or not dialog.isVisible():
+        raise SystemExit("Der Dialog „Schraubenloch mit Senkung“ ging nicht auf")
+    size = dialog._editors["size"]
+    index = size.findData("M4")
+    if index < 0:
+        raise SystemExit("Die Schraubengröße M4 steht nicht zur Wahl")
+    size.setCurrentIndex(index)
+    run.settle(40)
+    run.capture(8)
+    chosen = dialog.values()
+    mouth = (float(chosen["x"]), float(chosen["y"]), float(chosen["z"]))
+    radius = standards.screw(str(chosen["size"])).countersink / 2.0
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Schraubenloch")
+
+    # Ohne Auswahl, damit kein Werkzeugkreuz über der Senkung liegt, und mit
+    # dem Prüfbericht rechts, in dem der Knopf zum Drucken steht.
+    run.window.object_tree.select_object(None)
+    run.window.right.setCurrentWidget(run.window.report)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(30)
+    rim = [
+        _visible(run, (mouth[0] + dx, mouth[1] + dy, mouth[2]))
+        for dx, dy in ((radius, 0.0), (-radius, 0.0), (0.0, radius), (0.0, -radius))
+    ]
+    xs, ys = [point.x() for point in rim], [point.y() for point in rim]
+    sink = QRect(QPoint(min(xs), min(ys)), QPoint(max(xs), max(ys)))
+    run.capture(9, rings={"viewport": sink})
+
+
 #: Je Anleitung ihre Geschichte. ``tests/test_guides.py`` verlangt für jede
 #: Anleitung im Kern genau eine.
 STORIES: Final[dict[str, Callable[[GuideRun], None]]] = {
     "window-overview": story_window_overview,
     "print-a-model": story_print_a_model,
     "drill-a-hole": story_drill_a_hole,
+    "first-part": story_first_part,
 }
 
 

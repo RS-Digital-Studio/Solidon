@@ -58,24 +58,24 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   HB-13 — der Ort je Operation in der Referenz, `**Ort:** <menu_path>` an
   allen 142 Einträgen (Commit „Die Referenz sagt jetzt bei jeder Operation,
   wo man sie findet").
-- **HB-4, drei Anleitungen gebaut** und am Fenster auf Deutsch
-  aufgenommen und angesehen: *Das Fenster auf einen Blick*, *Ein Modell prüfen
-  und drucken* (`d36503d57`, sechs Schritte an
-  `tests/data/meshes/broken_open.stl`) und *Ein Loch bohren* (`3d2af85fd`,
-  sieben Schritte an `plate_holes.stl`; der sechste zeigt das fertige Loch
-  nah, mit einem Ring aus dem echten Lochdurchmesser). Alle Sätze in sechs
-  Sprachen.
-- **HB-6, Suche mit Rangfolge, gebaut** (§7): `app/core/manual_search.py` auf
-  Faltung, Trefferstärke und Kundenwörtern der Befehlspalette; das Fenster
-  zeigt die Treffer in Rangfolge und schlägt jede Seite an ihrer Fundstelle
-  auf. Die Palette hat dafür „Gehäuse" und „Zoll" als Kundenwörter bekommen.
-- **Als Nächstes:** *Das erste eigene Teil* (Weg 2: Grundform, Maß, Baustein,
-  Drucken) und *Ein Gehäuse mit Deckel* — Vorlage für den Weg ist
-  `story_housing` in `tools/make_longform_video.py`, deren Aufrufe aber teils
-  programmatisch sind: Die Geschichte muss den Weg über die Knöpfe gehen, die
-  die Sätze nennen. *Ein Gehäuse mit Deckel* ist das Wort des Interessenten
-  aus dem Anlass; heute führt „Gehäuse" auf *Aushöhlen* in der Referenz. Dann
-  HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?").
+- **HB-4 fertig, vier Anleitungen** am Fenster auf Deutsch aufgenommen und
+  angesehen: *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken*
+  (`d36503d57`, an `tests/data/meshes/broken_open.stl`), *Ein Loch bohren*
+  (`3d2af85fd`, an `plate_holes.stl`) und *Das erste eigene Teil* (neun
+  Schritte: neues Projekt, Quader über das aufgeklappte Menü, Maße, Oberseite
+  wählen, *Bausteine*, Doppelklick auf *Schraubenloch mit Senkung*, M4,
+  fertige Platte mit Ring um die Senkung). Alle Sätze in sechs Sprachen.
+- **HB-6, Suche mit Rangfolge, gebaut** (`6bf35e5cb`, §7):
+  `app/core/manual_search.py` auf Faltung, Trefferstärke und Kundenwörtern
+  der Befehlspalette; das Fenster zeigt die Treffer in Rangfolge und schlägt
+  jede Seite an ihrer Fundstelle auf.
+- **Als Nächstes:** *Ein Gehäuse mit Deckel* (HB-8) — das Wort des
+  Interessenten aus dem Anlass; heute führt „Gehäuse" auf *Aushöhlen* in der
+  Referenz. Vorlage für den Weg ist `story_housing` in
+  `tools/make_longform_video.py`, deren Aufrufe aber teils programmatisch
+  sind: Die Geschichte geht den Weg über die Knöpfe, die die Sätze nennen,
+  wie *Das erste eigene Teil*. Dann HB-5 (Gruppen im Handbuchfenster, „Wo
+  fange ich an?").
 
 ## §1 Befund
 
@@ -277,7 +277,15 @@ Ein Ziel ist ein Name aus einem festen Vokabular im Kern:
   „Einsetzen"; *Übernehmen* steht im Auswahlfenster und in der
   Platzierungsleiste;
 - im Prüfbericht: `report.action` (die erste angebotene Handlung); im
-  Verlauf: `history.last` (der letzte Schritt).
+  Verlauf: `history.last` (der letzte Schritt);
+- im Auswahlfenster: `selection.parts`, der Knopf *Bausteine*; im offenen
+  Bausteinkatalog: `part:<name>`, die Kachel eines Bausteins über seinen
+  Registernamen (`part:screw_hole`).
+
+Ein Menüeintrag hat nur einen Ort, solange sein Menü offen ist. Die
+Aufnahme klappt deshalb das Menü bis zum Eintrag auf
+(`guide_targets.action_for` nennt die Aktion), und das offene Menü steht
+samt Titel im Menübalken ganz im Bild.
 
 Die Auflösung in ein Rechteck geschieht in der Oberfläche. Ein Name, den sie
 nicht kennt, ist ein Fehler, keine leere Markierung. `MainWindow._flash_area`
@@ -313,9 +321,14 @@ ist eine Vermutung, bis sein Bild vorliegt. Zweimal hat der Probelauf den
 Entwurf widerlegt: Unter einem Befund stand kein Knopf „beheben", sondern
 *Stelle zeigen* und *Offen lassen*, weil Solidon beim Einlesen schon
 repariert; und die Vorschau eines Lochs war im Bild neben dem Dialog nicht
-zu sehen, weil das Werkzeugkreuz der gewählten Fläche darüber lag. Deshalb
-wird eine Anleitung erst aufgenommen und angesehen, dann werden Sätze und
-Übersetzungen festgeschrieben.
+zu sehen, weil das Werkzeugkreuz der gewählten Fläche darüber lag. Beim
+ersten eigenen Teil kamen drei Korrekturen dazu: Kachel und *Einfügen* in
+einem Bild machten den Ausschnitt zum ganzen Katalog, also fügt ein
+Doppelklick ein; das Datei-Menü war ein Umweg, denn an der gewählten Fläche
+steht rechts der Knopf *Bausteine*; und ein Klickpunkt mitten auf dem
+Werkzeugkreuz sah aus wie ein Griff daran. Deshalb wird eine Anleitung erst
+aufgenommen und angesehen, dann werden Sätze und Übersetzungen
+festgeschrieben.
 
 **Ringe für Stellen im Modell.** Wo geklickt wird, steht der Mauszeiger mit
 Klickring; wo etwas zu sehen ist, ein Ring ohne Zeiger, bei einem Loch aus
@@ -327,9 +340,14 @@ auf einen Blick* zeigt das ganze Fenster.
 
 **Format und Größe.** Die Bilder reisen mit der Anwendung, und bei rund
 sechzig Schritten in sechs Sprachen zählt jedes Kilobyte. Ziel ist ein Budget
-von höchstens 15 MB für alle Anleitungsbilder aller Sprachen zusammen; das
-Format (WebP, falls das Qt-Bildformat im Paket liegt, sonst verkleinertes PNG)
-wird beim Bau von HB-3 gemessen und festgelegt.
+von höchstens 15 MB für alle Anleitungsbilder aller Sprachen zusammen.
+Festgelegt ist WebP mit Qualität 86, höchstens 1600 Punkte breit; das
+Qt-Bildformat dafür liegt im Paket (`qwebp.dll` unter
+`_internal/PySide6/plugins/imageformats/` im Windows-Bau). Gemessen, als die
+vier Anleitungen aus HB-4 standen: 23 Bilder wiegen 0,69 MB je Sprache, im
+Mittel 30 KB je Bild. Sechzig Schritte in sechs Sprachen kämen damit auf rund
+11 MB, unter dem Budget. Zum Vergleich: Die bisherigen Handbuchbilder wiegen
+1,3 MB je Sprache.
 
 ### §5.4 Anzeige
 
@@ -409,8 +427,8 @@ Nachweis.
 | HB-0 | Konzept, Registerpunkt, Nachweise, Übergabe | Dieses Dokument, RM-283, §0 | [x] |
 | HB-1 | `app/core/guides.py`: Anleitungen, Schritte, Zielvokabular; Handbuchseiten aus Anleitungen; Gliederung `manual.OUTLINE` und Feld `Page.part`; Abbildungen der Schritte im Katalog; nummerierte Listen in `markup.py` | Kerntests: jede Anleitung vollständig, Schritte kurz, Ziele aus dem Vokabular, Seiten in Teilreihenfolge; Übersetzungen vollständig | [x] `54e83a72e`; `tests/test_guides.py` (14 Tests), betroffene Kerntests grün; rot nur die `rendered`-Vergleiche gegen die Website, davon vier schon am Ausgangsstand und der fünfte, weil die neue Seite erst beim Release in die Website kommt |
 | HB-2 | `app/ui/guide_targets.py`: Namen → Widget/Rechteck; `_flash_area` benutzt sie | Test: jedes Wort des Vokabulars wird aufgelöst (Fenstertest, läuft beim Release) | [x] Auflösung und Tour gebaut; Kerntest: Wortschatz und Auflösung decken sich. Der Fenstertest über alle festen Namen läuft beim Release |
-| HB-3 | `tools/make_guides.py`: Geschichten, Markierung, Ausschnitt, Format, Kindprozess je Sprache, `--ziel`, `--nur`, Stempel; Schritt in `/erzeugen` | Ein Lauf in einer Sprache in einen fremden Ordner; Bildbudget gemessen; Fehler bei fehlendem Ziel belegt | [~] Werkzeug gebaut: Rahmen, Nummern, Pfeile, Abdunkeln, Rand, Ausschnitt, WebP (Übersichtsbild 82 KB statt 408 KB als PNG), Kindprozess je Sprache, Stempel. Deutsch in einen fremden Ordner gelaufen; ein fehlendes Ziel beendet den Lauf mit Exit 1 und nennt Anleitung und Schritt. **Offen:** der Schritt in `/erzeugen` — der Skill wird auf `main` gerade umgebaut, der Schritt kommt mit dem Merge; das Bildbudget, gemessen, sobald HB-4 steht |
-| HB-4 | Erste Anleitungen: *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken*, *Ein Loch in ein heruntergeladenes Modell*, *Das erste eigene Teil* | Bilder in einer Sprache gesichtet; Texte in sechs Sprachen | [~] *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken* und *Ein Loch bohren* gebaut und auf Deutsch gesichtet; *Das erste eigene Teil* offen |
+| HB-3 | `tools/make_guides.py`: Geschichten, Markierung, Ausschnitt, Format, Kindprozess je Sprache, `--ziel`, `--nur`, Stempel; Schritt in `/erzeugen` | Ein Lauf in einer Sprache in einen fremden Ordner; Bildbudget gemessen; Fehler bei fehlendem Ziel belegt | [~] Werkzeug gebaut: Rahmen, Nummern, Pfeile, Abdunkeln, Rand, Ausschnitt, WebP (Übersichtsbild 82 KB statt 408 KB als PNG), Kindprozess je Sprache, Stempel. Deutsch in einen fremden Ordner gelaufen; ein fehlendes Ziel beendet den Lauf mit Exit 1 und nennt Anleitung und Schritt. Bildbudget gemessen (§5.3): 30 KB je Bild, rund 11 MB für sechzig Schritte in sechs Sprachen. **Offen:** der Schritt in `/erzeugen` — der Skill wird auf `main` gerade umgebaut, der Schritt kommt mit dem Merge |
+| HB-4 | Erste Anleitungen: *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken*, *Ein Loch in ein heruntergeladenes Modell*, *Das erste eigene Teil* | Bilder in einer Sprache gesichtet; Texte in sechs Sprachen | [x] alle vier gebaut, auf Deutsch aufgenommen und gesichtet, Sätze in sechs Sprachen; der Menüweg im Satz ist gegen das Menü geprüft, in jeder Sprache (`test_a_menu_path_in_a_step_is_the_one_the_menu_shows`) |
 | HB-5 | Gliederung im Handbuchfenster, „Wo fange ich an?", Verweise `manual:`, Hilfe-Menü, Startbildschirmknopf | Fenstertests (Release), Kerntests für Reihenfolge und Verweise | [ ] |
 | HB-6 | Suche mit Rangfolge, Fundstelle, Kundenwörtern | Anteil der Suchen mit richtiger Seite unter den ersten drei, vorher und nachher gemessen | [x] 38 von 38 unter den ersten drei (vorher 25), 35 ganz oben (vorher 7), keine ohne Treffer (vorher 4); `tests/test_manual_search.py`, Nachweis `suche.md`. Der Fenstertest über Rangfolge und Fundstelle läuft beim Release |
 | HB-7 | F1 im Zusammenhang | Fenstertest (Release) | [ ] |
@@ -427,8 +445,10 @@ Nachweis.
   Anleitung geht, zeigt sich beim Release als roter Lauf. Das ist gewollt:
   Es ist der Nachweis, dass das Handbuch stimmt. Der Preis ist Pflegearbeit
   am Release, und die ist kleiner als ein Handbuch, das still veraltet.
-- **Paketgröße.** Das Budget aus §5.3 wird gemessen, bevor die Zahl der
-  Anleitungen wächst.
+- **Paketgröße.** Gemessen (§5.3): hochgerechnet rund 11 MB für sechzig
+  Schritte in sechs Sprachen, unter dem Budget von 15 MB. Ein Bild über
+  100 KB ist ein Zeichen für einen zu großen Ausschnitt, nicht für ein
+  falsches Format.
 - **Sechs Sprachen.** Jeder neue Satz braucht fünf Übersetzungen, bevor er
   eingecheckt werden kann (`pre-commit`).
 - **Fenstertests nur beim Release.** HB-2, HB-5 und HB-7 sind erst beim

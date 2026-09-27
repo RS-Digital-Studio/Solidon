@@ -25,7 +25,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Final
 
-from PySide6.QtCore import QPoint, QRect
+from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -109,6 +109,12 @@ def _report_slicer(window: MainWindow) -> QWidget:
     return button
 
 
+def _selection_parts(window: MainWindow) -> QWidget:
+    """„Bausteine" unten im Auswahlfenster — sichtbar ohne Auswahl und an einer Fläche."""
+    button: QWidget = window.selection_operations.catalog_button
+    return button
+
+
 def _print_dialog(window: MainWindow) -> QWidget:
     """Der Druckdialog. Er läuft modal über ``exec()`` und hängt an keinem Attribut."""
     from app.ui.print_settings_dialog import PrintSettingsDialog
@@ -157,6 +163,7 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "statusbar": lambda window: window.statusBar(),
     "report.action": _report_action,
     "report.slicer": _report_slicer,
+    "selection.parts": _selection_parts,
     "start.drop": _drop_area,
     "dialog": _open_dialog,
     "dialog.accept": _accept_button,
@@ -212,6 +219,8 @@ def area_for(window: MainWindow, name: str) -> QRect:
     if name == "viewport":
         return _open_view(window)
     kind, _separator, rest = name.partition(":")
+    if kind == "part":
+        return _catalog_tile(rest, name)
     if kind in ("command", "operation"):
         action = _action_for(window, kind, rest)
         if kind == "operation":
@@ -260,6 +269,27 @@ def _open_view(window: MainWindow) -> QRect:
     return QRect(QPoint(left, top), QPoint(right, bottom))
 
 
+def _catalog_tile(part: str, name: str) -> QRect:
+    """Die Kachel eines Bausteins im Katalog, der gerade offen ist.
+
+    Der Katalog läuft modal über ``exec()`` und hängt an keinem Attribut des
+    Fensters; seine Kachel ist eine Listenzeile ohne eigenes Widget.
+    """
+    from app.ui.catalog import PartCatalog
+
+    catalog = QApplication.activeModalWidget()
+    if not isinstance(catalog, PartCatalog):
+        raise MissingTargetError(f"{name}: der Bausteinkatalog ist nicht offen")
+    view = catalog.list
+    for row in range(view.count()):
+        item = view.item(row)
+        if item is not None and item.data(Qt.ItemDataRole.UserRole) == part:
+            view.scrollToItem(item)
+            rect = view.visualItemRect(item)
+            return QRect(view.viewport().mapToGlobal(rect.topLeft()), rect.size())
+    raise MissingTargetError(f"{name}: der Katalog zeigt keinen Baustein dieses Namens")
+
+
 def _last_row(view: QListWidget, name: str) -> QRect:
     if view.count() == 0:
         raise MissingTargetError(f"{name}: die Liste ist leer")
@@ -267,6 +297,19 @@ def _last_row(view: QListWidget, name: str) -> QRect:
     view.scrollToItem(item)
     rect = view.visualItemRect(item)
     return QRect(view.viewport().mapToGlobal(rect.topLeft()), rect.size())
+
+
+def action_for(window: MainWindow, name: str) -> QAction:
+    """Die Menüaktion hinter einem ``command:``- oder ``operation:``-Ziel.
+
+    Für die Aufnahme, die das Menü bis zu diesem Eintrag öffnet, bevor sie ihn
+    markiert: :func:`area_for` findet einen Menüeintrag nur, solange sein Menü
+    offen ist.
+    """
+    kind, _separator, rest = name.partition(":")
+    if kind not in ("command", "operation"):
+        raise MissingTargetError(f"{name}: nur Befehle und Operationen stehen in einem Menü")
+    return _action_for(window, kind, rest)
 
 
 def _action_for(window: MainWindow, kind: str, rest: str) -> QAction:

@@ -72,10 +72,58 @@ def test_the_vocabulary_accepts_named_kinds_and_nothing_else() -> None:
     assert guides.is_target("command:file.open")
     assert guides.is_target("operation:drill_hole")
     assert guides.is_target("field:diameter")
+    assert guides.is_target("part:screw_hole")
     assert not guides.is_target("reports")
     assert not guides.is_target("command:")
     assert not guides.is_target("widget:report")
     assert not guides.is_target("field:Durchmesser")
+
+
+def test_every_named_operation_and_part_exists() -> None:
+    """Ein umbenannter Baustein fiele sonst erst bei der Aufnahme zum Release auf."""
+    from app.core.knowledge.parts import PARTS
+    from app.core.registry import REGISTRY
+
+    parts = {spec.name for spec in PARTS.all()}
+    for guide in guides.GUIDES:
+        for number, one in enumerate(guide.steps, 1):
+            for mark in one.marks:
+                kind, _separator, name = mark.target.partition(":")
+                where = f"{guide.key} Schritt {number}: {mark.target}"
+                if kind == "operation":
+                    assert REGISTRY.has(name), where
+                if kind == "part":
+                    assert name in parts, where
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_a_menu_path_in_a_step_is_the_one_the_menu_shows(language: str) -> None:
+    """Der Weg im Satz ist der Weg im Menü, in jeder Sprache (Konzept Handbuch §6).
+
+    Die Aufnahme beim Release prüft den Weg am Fenster; dieser Test prüft
+    vorher den Satz dazu — auch den übersetzten, den kein Bild prüft.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.registry.surfaces import menu_path
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+
+    install_language(language)
+    set_language(language)
+    for guide in guides.GUIDES:
+        for number, one in enumerate(guide.steps, 1):
+            text = str(one.text)
+            if "→" not in text:
+                continue
+            named = [
+                mark.target.partition(":")[2]
+                for mark in one.marks
+                if mark.target.startswith("operation:")
+            ]
+            assert named, f"{guide.key} Schritt {number}: ein Menüweg ohne Operation"
+            for name in named:
+                path = menu_path(REGISTRY.get(name))
+                assert path in text, f"{language}, {guide.key} Schritt {number}: {path!r}"
 
 
 def test_the_tour_points_at_targets_of_the_same_vocabulary() -> None:

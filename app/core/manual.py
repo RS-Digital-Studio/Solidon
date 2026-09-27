@@ -2855,7 +2855,10 @@ def knowledge_pages() -> tuple[Page, ...]:
 #: Eine Seite, die hier fehlt, fehlt im Handbuch. ``tests/test_guides.py``
 #: verlangt deshalb jede geschriebene Seite und jede Anleitung genau einmal.
 OUTLINE: Final[tuple[tuple[Part, tuple[str, ...]], ...]] = (
-    ("start", ("what", "window-overview", "print-a-model", "drill-a-hole", "start", "ways")),
+    (
+        "start",
+        ("what", "window-overview", "print-a-model", "drill-a-hole", "first-part", "start", "ways"),
+    ),
     ("tasks", ()),
     (
         "topics",

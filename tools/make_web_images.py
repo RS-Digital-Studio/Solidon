@@ -567,6 +567,11 @@ def while_open(
     aufnehmen und schließt ihn mit *Abbrechen*. Ein Fehler in ``act`` wird nach
     dem Schließen weitergereicht: In einem Qt-Slot verschluckt, endete der Lauf
     sonst mit „Fertig." und einem fehlenden Bild.
+
+    Hat ``act`` den Dialog selbst geschlossen — eine Bildanleitung klickt
+    *Einfügen*, weil der nächste Schritt das Ergebnis braucht —, bleibt es
+    dabei. Ein nachgeschobenes *Abbrechen* setzte das Ergebnis sonst auf
+    „abgebrochen", bevor ``exec()`` zurückkehrt.
     """
     state: dict[str, Any] = {"done": False, "error": None}
     deadline = time.monotonic() + seconds
@@ -580,7 +585,8 @@ def while_open(
                 state["error"] = error
             finally:
                 state["done"] = True
-                dialog.reject()
+                if dialog.isVisible():
+                    dialog.reject()
             return
         if time.monotonic() > deadline:
             state["error"] = SystemExit(f"{kind.__name__} ging nicht auf")

@@ -60,6 +60,9 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # „An den Slicer übergeben …" im Prüfbericht — der letzte Meter, wenn
         # nichts mehr zu beanstanden ist
         "report.slicer",
+        # „Bausteine" unten im Auswahlfenster: der Katalog, von der gewählten
+        # Fläche aus, ohne Umweg über das Menü
+        "selection.parts",
         # Der Druckdialog: Drucker oben, „Slicen" und „Druckdatei speichern …"
         "print.printer",
         "print.slice",
@@ -86,8 +89,10 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``operation:drill_hole`` — eine Operation über ihren Registernamen, im
 #:   Bild ihr Eintrag im Auswahlfenster oder im Menü;
 #: * ``field:diameter`` — ein Feld im offenen Operationsdialog über den Namen
-#:   seines Parameters.
-TARGET_KINDS: Final[tuple[str, ...]] = ("command", "operation", "field")
+#:   seines Parameters;
+#: * ``part:screw_hole`` — ein Baustein über seinen Registernamen, im Bild
+#:   seine Kachel im offenen Bausteinkatalog.
+TARGET_KINDS: Final[tuple[str, ...]] = ("command", "operation", "field", "part")
 
 _NAME: Final = re.compile(r"[a-z0-9_.]+")
 
@@ -254,6 +259,51 @@ GUIDES: Final[tuple[Guide, ...]] = (
                     "öffnet ihn wieder."
                 ),
                 "history.last",
+            ),
+        ),
+    ),
+    Guide(
+        key="first-part",
+        title=_("Das erste eigene Teil"),
+        summary=_("Eine Platte mit gesenktem Schraubenloch, vom leeren Projekt bis zum Druck."),
+        part="start",
+        steps=(
+            step(_("Klicken Sie auf dem Startbildschirm auf *Neues Projekt*."), "start.new"),
+            step(
+                _("Öffnen Sie oben *Erzeugen → Grundformen → Quader anlegen*."),
+                "operation:create_brep_box",
+            ),
+            step(
+                _("Tragen Sie die Maße ein, zum Beispiel 60, 30 und 5 mm."),
+                "field:width",
+                "field:depth",
+                "field:height",
+            ),
+            step(_("Klicken Sie auf *Quader anlegen*."), "dialog.accept"),
+            step(
+                _(
+                    "Klicken Sie zweimal auf die Oberseite: erst ist das Teil gewählt, "
+                    "dann die Fläche."
+                ),
+                "viewport",
+            ),
+            step(_("Rechts unter *Auswahl*: Klicken Sie auf *Bausteine*."), "selection.parts"),
+            # Ein Doppelklick fügt ein. Mit „Einfügen" im selben Bild wurde der
+            # Ausschnitt der ganze Katalog, und die Kachel war nicht mehr zu
+            # lesen (Probelauf 27.09.2026).
+            step(_("Doppelklicken Sie auf *Schraubenloch mit Senkung*."), "part:screw_hole"),
+            step(
+                _(
+                    "Wählen Sie die Schraubengröße, zum Beispiel M4, "
+                    "und klicken Sie auf *Einsetzen*."
+                ),
+                "field:size",
+                "dialog.accept",
+            ),
+            step(
+                _("Die Platte ist fertig. Gedruckt wird wie in *Ein Modell prüfen und drucken*."),
+                "viewport",
+                "report.slicer",
             ),
         ),
     ),

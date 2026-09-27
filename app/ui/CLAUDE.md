@@ -2098,8 +2098,10 @@ Rangfolge, und schlägt jede Seite an ihrer Fundstelle auf) · `tour.py` ·
 `shortcut_schemes.py` (zwei Belegungen, eine Quelle) · `command_palette.py` ·
 `guide_targets.py` (welches Bedienelement ein Name aus dem Wortschatz der
 Bildanleitungen meint — `widget_for` für das Widget, `area_for` für den Ort
-auf dem Schirm; die Tour und die Aufnahme `tools/make_guides.py` fragen
-dieselbe Auflösung, und ein Name ohne Ziel ist `MissingTargetError`)
+auf dem Schirm, auch eines Menüeintrags oder einer Katalogkachel,
+`action_for` für die Menüaktion, deren Menü die Aufnahme vorher aufklappt;
+die Tour und die Aufnahme `tools/make_guides.py` fragen dieselbe Auflösung,
+und ein Name ohne Ziel ist `MissingTargetError`)
 
 Die Befehlspalette trennt Titel und Kürzel nur in der ersten Zeile. Ein
 Sperrgrund oder erklärender Satz bleibt darunter in der Titelspalte; das
