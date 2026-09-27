@@ -739,6 +739,25 @@ Für die ausdrückliche Wertübernahme hält der Druckdialog das gewählte
 `SlicerProfile` einschließlich seines Prusa-Abschnitts fest. Der Dateipfad
 allein beschreibt bei Herstellerbündeln noch kein bestimmtes Filament.
 
+**Die Felder zeigen, was gedruckt wird** (Konzept Herstellerprofil,
+27.09.2026). `_rebase` legt nach jeder Profilwahl das Herstellerprofil
+(`manufacturer.base_settings`) unter die eigene Wahl; eine gleiche Wahl
+rechnet nicht noch einmal (`_foundation_key`). `_editor_changed(path)` macht
+nur das berührte Feld zur eigenen Wahl — ein Zahlenfeld rundet, und ein
+Durchgang über alle Felder machte gerundete Grundlagewerte zur Wahl; eine
+Zeile trägt dann eine fette Beschriftung und den Knopf *Zurücksetzen*
+(`_resets`, `_mark_origins`, über `weak_slot`). Was der Hersteller sagt und
+Solidon nicht übersetzt, steht am Feld (`_foreign_notes`). `foundation_note`
+steht unter der Kopfzeile und nennt Prozess (mit Stufe, wenn sie darüber
+liegt), Filament und Platte; die Druckplatte wählt `bed_plate_choice`
+(gemerkt als `UiSettings.slicer_bed_plate`). Ein Stufenwechsel nimmt nur die
+eigene Wahl an den Stufenwerten zurück (`manufacturer.STAGE_PATHS`).
+`has_changes` misst an `print_settings.own_part` — eine neue Grundlage ist
+kein Tun des Kunden. Das Hauptfenster bestimmt die Grundlage im
+`_FoundationWorker` und rechnet bis zur Antwort mit der vorigen oder mit
+Solidons Tabelle; die Sitzung liest sie über `follow_print_settings`. *Werte übernehmen* nimmt auf einem Herstellerprofil die
+eigene Wahl an allem zurück, was am Filament hängt.
+
 Der Dialog erscheint, bevor jemand nach Slicern gesucht hat: `_SlicerWorker`
 fragt `discover.find_programs` außerhalb des Qt-Hauptthreads, vorläufig gilt
 der gemerkte Pfad (`_remembered_slicer`), und `_slicers_found` übernimmt Liste

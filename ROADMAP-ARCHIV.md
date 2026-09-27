@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen A und B: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-a-und-b-ein-punkt-geschlossen-27092026) |
 | 2026-09-27 | [Durchsicht v0.5.1, dritte Runde: elf Punkte geschlossen (27.09.2026)](#durchsicht-v051-dritte-runde-elf-punkte-geschlossen-27092026) |
 | 2026-09-27 | [Durchsicht v0.5.1, zweite Runde: zwei Punkte geschlossen (27.09.2026)](#durchsicht-v051-zweite-runde-zwei-punkte-geschlossen-27092026) |
 | 2026-09-26 | [Durchsicht v0.5.1: neun Punkte geschlossen (26.09.2026)](#durchsicht-v051-neun-punkte-geschlossen-26092026) |
@@ -32906,3 +32907,39 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   geschrieben (Formatversion 35, Vorschaubilder aus demselben Lauf). Nachweis der
   Hauptsitzung: `test_examples`, `test_wording` ohne `rendered`, `test_translations`,
   `test_language_rules` und `test_tour` — 655 passed, Exit 0. `bd33620c5`.
+
+## Übergabe auf dem Herstellerprofil, Stufen A und B: ein Punkt geschlossen (27.09.2026)
+
+Mit den Stufen A und B aus dem Konzept Herstellerprofil (RM-281 in der Roadmap)
+ist ein Punkt der Durchsicht v0.5.1 erledigt; RM-250 und RM-255 sind dort
+teilweise umgesetzt und bleiben offen.
+
+<a id="rm-256"></a>
+
+- [x] **RM-256 — Ältere Projekte behalten 40 mm/s und bekommen nur die Leerfahrt
+  angeboten.** Aus der Durchsicht v0.5.1 (druck, DRUCK-11). Ein Projekt trägt seine
+  Einstellungen selbst; eines von vor 0.5.1 (Roberts Schüssel vom 25.09. eingeschlossen)
+  behält Stufe „Standard“ mit 40/60/80 mm/s, und der Druckdialog bietet nur „Dieser
+  Drucker fährt leer schneller“ an. Die Tempi des Druckers erreicht es erst, wenn der
+  Kunde die Stufe neu wählt — die Schüssel bleibt damit bei 30 statt 18 Stunden. Warum
+  Robert: Beide Wege berühren gespeicherte Projekteinstellungen (Öffnen schreibt nichts
+  ins Projekt, 03.09.2026; ohne *Vorschläge übernehmen* gehen die Standardeinstellungen
+  hinaus, 26.09.2026). Optionen: ein Vorschlag „Tempo des Druckers“ als eine Zeile, die
+  alle acht Felder setzt (Empfehlung: sichtbar, abwählbar, keine stille Änderung); oder
+  beim Öffnen die Stufe neu auflösen, wenn die gespeicherten Tempi genau die allgemeinen
+  der Stufe sind. Abnahme: die Schüssel vom 25.09. öffnen, eine Zeile übernehmen,
+  Herstellertempo im G-Code.
+
+  **Erledigt am 27.09.2026 mit Stufe A** des Konzepts Herstellerprofil (`aed31c787`),
+  auf dem zweiten Weg und ohne Vorschlagszeile: Format 36 ordnet eine ältere Datei beim
+  Öffnen ein. Eigene Wahl ist nur, was weder der heutigen Auflösung noch der von 0.5.0
+  noch der Vorgabe der Dataclass gleicht (`print_settings.legacy_choices`); die
+  40/60/80 mm/s von damals sind es nicht und kommen danach aus dem Herstellerprofil
+  oder, ohne eines, aus der heutigen Stufe. Die Schüssel vom 25.09. liegt nicht als
+  Projektdatei vor. Abgenommen im ElegooSlicer am Centauri Carbon 2 an einer
+  nachgebauten Datei in Format 35 (40 mm/s, vier Wände): Tempo wie in Elegoos Profil
+  (160/200/200, Leerfahrt 500 mm/s), vier Wände als eigene Wahl erhalten. Seit dem
+  Review der Stufe A+B hält der Test eine Datei, die 0.5.0 selbst gespeichert hat
+  (`tests/data/projects/print_settings_v33.p3d`, Stufe „Fein“): Die Tempi von damals
+  gelten nicht als Wahl, vier Wände und 25 % Füllung schon
+  (`test_a_file_from_0_5_0_keeps_what_someone_set`).

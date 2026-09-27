@@ -1218,7 +1218,16 @@ def test_orca_gets_names_it_knows(key: str) -> None:
     settings = print_settings.resolve(profiles.make_profile())
     path = next(entry[0] for entry in slicer_keys.ORCA if entry[1] == key)
     for choice in _possible(path):
-        written = handover.as_mapping(print_settings.with_path(settings, path, choice), "orca")[key]
+        mapping = handover.as_mapping(print_settings.with_path(settings, path, choice), "orca")
+        # Eine Wahl ohne Art — Stützen aus oder „wie das Profil" — nennt
+        # keine (Konzept Herstellerprofil, Entscheidung J). Was sie nennt,
+        # muss der Slicer kennen.
+        written = mapping.get(key)
+        if written is None:
+            assert (path, choice) in {("support.style", "none"), ("support.style", "auto")}, (
+                f"{path}={choice} schreibt {key} gar nicht"
+            )
+            continue
         assert written in ORCA_VALUES[key], f"{path}={choice} wird zu {written!r}"
 
 
@@ -1543,7 +1552,13 @@ def test_an_orca_process_keeps_what_the_base_profile_knew(tmp_path: Path) -> Non
     document = json.loads(written.process.read_text(encoding="utf-8"))
 
     assert document["compatible_printers"] == ["Irgendein Drucker 0.4 nozzle"]
-    assert document["wall_loops"] == str(settings.shell.wall_count)
+    # Solidons Stufe sagt drei Wände, der Hersteller zwei — und ohne eigene
+    # Wahl gilt der Hersteller (Konzept Herstellerprofil, Entscheidung D).
+    assert document["wall_loops"] == "2"
+    chosen = print_settings.with_choice(settings, "shell.wall_count", 4)
+    (tmp_path / "wahl").mkdir()
+    again = handover.write_config(chosen, profile, setup, tmp_path / "wahl")
+    assert json.loads(again.process.read_text(encoding="utf-8"))["wall_loops"] == "4"
     # Was ins Filamentprofil gehört, hat im Prozessprofil nichts verloren —
     # dort liest der Slicer es nicht.
     assert "nozzle_temperature" not in document
@@ -3452,8 +3467,8 @@ def test_a_filament_profile_that_disagrees_is_reported(tmp_path: Path) -> None:
     )
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
-    settings = print_settings.with_path(settings, "temperature.nozzle", 240)
-    settings = print_settings.with_path(settings, "temperature.bed", 80)
+    settings = print_settings.with_choice(settings, "temperature.nozzle", 240)
+    settings = print_settings.with_choice(settings, "temperature.bed", 80)
     setup = handover.SlicerSetup(
         executable=Path("orca-slicer.exe"), flavour="orca", base_filament=str(besonders)
     )
@@ -3692,7 +3707,7 @@ def test_a_profile_that_says_nothing_is_no_disagreement(tmp_path: Path) -> None:
     )
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
-    settings = print_settings.with_path(settings, "temperature.nozzle", 240)
+    settings = print_settings.with_choice(settings, "temperature.nozzle", 240)
     setup = handover.SlicerSetup(
         executable=Path("orca-slicer.exe"), flavour="orca", base_filament=str(schweigend)
     )
@@ -3824,7 +3839,8 @@ def test_a_project_file_carries_its_values_written_out(tmp_path, monkeypatch) ->
     Genau daran ging ein Druck vorbei: die 3MF trug 122 der 546 Schlüssel, in
     ihr standen drei Wände, gedruckt wurden zwei, und der Unterschied waren
     127 Gramm. Geprüft wird deshalb, dass die Erbkette **aufgelöst** wird und
-    Solidons eigene Werte trotzdem obenauf liegen.
+    die eigene Wahl des Kunden trotzdem obenauf liegt — aber nur sie: Die
+    Stufe ist keine Wahl (Konzept Herstellerprofil, Entscheidung D).
     """
     from pathlib import Path
 
@@ -3850,11 +3866,13 @@ def test_a_project_file_carries_its_values_written_out(tmp_path, monkeypatch) ->
     )
 
     werte = handover.project_settings(settings, profile, setup)
+    gewaehlt = handover.project_settings(
+        print_settings.with_choice(settings, "shell.wall_count", 4), profile, setup
+    )
 
     assert werte["bridge_angle"] == "45", "was nur geerbt ist, steht trotzdem in der Datei"
-    assert werte["wall_loops"] == str(settings.shell.wall_count), (
-        "Solidons eigener Wert liegt über dem geerbten"
-    )
+    assert werte["wall_loops"] == "2", "ohne eigene Wahl gilt der Hersteller"
+    assert gewaehlt["wall_loops"] == "4", "die eigene Wahl liegt über dem geerbten"
 
 
 def test_the_project_settings_ids_are_names_not_paths() -> None:

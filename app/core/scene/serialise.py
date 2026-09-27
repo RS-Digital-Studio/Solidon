@@ -948,11 +948,31 @@ def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
         "slot_overrides": [_override_to_data(one) for one in settings.slot_overrides],
         "inventory_project_id": settings.inventory_project_id,
         "spool_bindings": [_spool_binding_to_data(binding) for binding in settings.spool_bindings],
+        # Was vom Profil des Herstellers abweichen soll (Konzept
+        # Herstellerprofil, Entscheidung A): die eigene Wahl und die
+        # übernommenen Vorschläge. Die Werte der Gruppen darunter stehen
+        # vollständig da, aber nur diese Pfade gelten beim Öffnen weiter —
+        # alles andere ist Grundlage und kommt neu aus dem Profil.
+        "chosen": sorted(settings.chosen),
+        "accepted": sorted(settings.accepted),
     }
     for group in _SETTING_GROUPS:
         section = getattr(settings, group)
         data[group] = {entry.name: getattr(section, entry.name) for entry in fields(section)}
     return data
+
+
+def _known_paths(values: object) -> frozenset[str]:
+    """Die Punktpfade, die es gibt — was eine Datei sonst nennt, fällt weg.
+
+    Ein Pfad, den keine Einstellung trägt, ist keine Abweichung, sondern
+    ein Rest: Eine Einstellung, die es nicht mehr gibt, hält nichts vom
+    Herstellerprofil ab.
+    """
+    known = frozenset(print_settings.all_paths())
+    if not isinstance(values, list | tuple):
+        return frozenset()
+    return frozenset(str(value) for value in values if str(value) in known)
 
 
 def print_settings_from_data(data: dict[str, Any], material: str = "") -> PrintSettings:
@@ -986,6 +1006,8 @@ def print_settings_from_data(data: dict[str, Any], material: str = "") -> PrintS
             _spool_binding_from_data(item) for item in data.get("spool_bindings", ())
         ),
         inventory_project_id=data.get("inventory_project_id", ""),
+        chosen=_known_paths(data.get("chosen", ())),
+        accepted=_known_paths(data.get("accepted", ())) - _known_paths(data.get("chosen", ())),
         **groups,
     )
 

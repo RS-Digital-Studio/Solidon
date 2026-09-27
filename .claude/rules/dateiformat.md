@@ -401,6 +401,62 @@ bei der Vernetzung des Körpers; die Datei geht in den Slicer, und an
 50-µm-Pixeln ist eine Facette von fünf Hundertsteln eine Stufe. Der Befund
 `export.tessellated` sagt es einmal je Export, nie je Körper.
 
+## Auf dem Herstellerprofil wird nur die Abweichung geschrieben
+
+**Entscheidung Robert, 27.09.2026** (Bauplan §29). Solidon schrieb bis dahin
+jeden Tabellenwert über das Profil des Herstellers — am Centauri Carbon 2 45
+Prozess- und 22 Filamentwerte, darunter Gitter statt Elegoos Baum, kein
+Auto-Brim, eine erste Schicht von 0,25/0,449 mm und die Faustregel von 45
+Grad. Roberts Minigolf-Druck bekam davon einen Stützfuß in Schicht 1
+(46,4 m Stütze; mit Elegoos Satz 0 m). Seitdem gilt:
+
+- **Nur `chosen`, `accepted`, das Gemessene und die Werte der Stufe gehen
+  über das Herstellerprofil.** Wer einen neuen Weg in die Übergabe baut,
+  fragt `manufacturer.written_paths` — ein Wert ohne Herkunft ist Grundlage
+  und steht schon im Profil. Die Stufe legt ihre Werte
+  (`manufacturer.STAGE_PATHS`) nur über den Standardprozess der Maschine;
+  ein selbst gewählter Prozess ist die Stufe.
+- **Was ohne Partner nicht wirkt, geht mit ihm** (`handover.COUPLED_PATHS`):
+  eine Haftungsart mit den Maßen aller Arten, eine Lüfter-Obergrenze mit dem
+  unteren Ende. Eine gewählte Haftungsart bringt ihr Maß mit, wenn es auf
+  null steht (`print_settings._with_a_measure`). Wer einen neuen gekoppelten
+  Wert findet, trägt ihn dort ein.
+- **`with_path` setzt keine Herkunft.** Eine Eingabe im Dialog ist
+  `with_choice`, ein übernommener Vorschlag `with_accepted`
+  (`advise.apply`), das Zurücksetzen `without_choice`. Eine Rücklesung aus
+  einem Profil ist keine Wahl.
+- **Die Druckplatte ist eine Angabe, keine Vermutung.** Ohne `curr_bed_type`
+  nimmt die Konsole „Cool Plate" — gemessen mit 35 °C Bett für PLA. Es gilt
+  die im Druckdialog gewählte Platte (`SlicerSetup.plate`), sonst die
+  Standardplatte der Maschine oder ihres Modells; Elegoos
+  `default_bed_type = 4` ist die texturierte PEI-Platte (belegt an 34
+  gespeicherten Projekten). Nur ein Drucker ohne Plattenwahl
+  (`support_multi_bed_types` fehlt) hat die eine Betttemperatur
+  `hot_plate_temp` (`manufacturer.SINGLE_PLATE`); einer mit Wahl und ohne
+  Standardplatte bekommt keine geratene, sondern den Befund
+  `slicer.plate_unknown`. Die Betttemperatur der Grundlage kommt nur aus dem
+  Schlüssel der aufliegenden Platte. Eine 0 °C des Herstellers sperrt die
+  Platte für das Filament: Die Grundlage liest dort nichts, und
+  `slicer.plate_refuses_filament` führt in die Druckeinstellungen. Eine
+  eigene Betttemperatur schreibt die Übergabe trotzdem in den Schlüssel
+  dieser Platte — sie ist die Wahl des Kunden.
+- **Was sich nicht übersetzen lässt, wird nicht umgedeutet**
+  (`Foundation.foreign`): `crosshatch` bleibt `crosshatch`, geschrieben wird
+  es nicht, und der Druckdialog zeigt am Feld „Hersteller: crosshatch".
+- **Die Gegenprobe hält, was Solidon schreibt, und eine Stichprobe der
+  Grundlage** (`handover.FOUNDATION_SAMPLE`). Listen je Düsenvariante gelten
+  mit dem ersten Eintrag (`handover._printed`), den der Slicer ohne
+  Variantenwahl druckt.
+- **Die Abnahme ist der Konfigurationsblock**: Ohne Vorschläge ist Solidons
+  G-Code-Konfiguration gleich der des Herstellerprofils allein, bis auf
+  Namen, Objektmarken und `filament_self_index`. Der Stand der Messungen
+  steht in `ROADMAP.md` (RM-281).
+- **Ältere Dateien ordnet die Migration gegen jede Auflösung ein, mit der
+  eine Version schrieb** (`print_settings.legacy_choices`): die heutige und
+  die von 0.5.0 (`resolve(..., legacy=True)`). Wer die Auflösung ändert,
+  prüft die Einordnung an einer Datei, die die alte Version selbst
+  gespeichert hat (`tests/data/projects/print_settings_v33.p3d`).
+
 ## Die drei Stufen der Übergabe
 
 Was ein Slicer bekommt, entsteht in dieser Reihenfolge, und `values_for` ist

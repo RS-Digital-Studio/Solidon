@@ -18,6 +18,7 @@ import app.core.scene.project as project_module
 from app.branding import PROJECT_SUFFIX
 from app.core import examples
 from app.core.errors import ValidationError
+from app.core.knowledge import print_settings, profiles
 from app.core.paths import user_data_dir
 from app.core.scene import History, OperationDraft
 from app.core.scene.migrations import FORMAT_VERSION, Step, migrate
@@ -590,6 +591,12 @@ def build_example_project() -> Project:
         (Finding(code="ingest.welded", severity="info", message="Verschweißt.", op_id=1),)
     )
     project.thumbnail = b"\x89PNG\r\n\x1a\n"
+    # Seit Format 36 weiß jeder Wert, woher er kommt (Konzept Herstellerprofil):
+    # eine eigene Wahl und ein übernommener Vorschlag, damit die Datei beide
+    # Mengen wirklich trägt (Review Stufe A+B, H6).
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+    settings = print_settings.with_choice(settings, "shell.wall_count", 4)
+    document.print_settings = print_settings.with_accepted(settings, "support.style", "auto")
     return project
 
 
@@ -2152,6 +2159,11 @@ def test_the_checked_in_example_still_opens() -> None:
     generated = project.document.sources["src_2"].origin
     assert generated is not None
     assert (generated.prompt, generated.seed) == ("eine kleine Figur", 7)
+    settings = project.document.print_settings
+    assert settings is not None
+    assert settings.chosen == {"shell.wall_count"}, "Format 36: die eigene Wahl reist mit"
+    assert settings.accepted == {"support.style"}, "und der übernommene Vorschlag"
+    assert (settings.shell.wall_count, settings.support.style) == (4, "auto")
 
 
 def test_every_older_example_migrates_to_today() -> None:

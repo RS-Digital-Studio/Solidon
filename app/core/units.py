@@ -35,6 +35,15 @@ EPS_MATCH_RELATIVE: Final[float] = 0.005
 #: vergleichbar bleiben.
 EPS_MATCH_MINIMUM: Final[float] = EPS_DISPLAY
 
+#: Wann zwei Werte der Druckeinstellungen dasselbe sagen — Regel 6 für
+#: Flussverhältnis, Schichthöhe, Füllanteil und alles, was der Druckdialog
+#: führt. Sechs Stellen liegen unter jeder Anzeige (höchstens drei
+#: Nachkommastellen) und über dem Rauschen, das beim Hin- und Herrechnen
+#: durch den Umrechnungsfaktor eines Feldes entsteht. Dieselbe Zahl wie
+#: :data:`EPS_GEOM`, aber eine andere Frage: Die eine ist eine Länge, die
+#: andere eine Einstellung jeder Einheit.
+EPS_SETTING: Final[float] = 1e-6
+
 # --- Wie fein eine Krümmung zu Facetten wird -------------------------------------
 
 #: Wie weit eine ebene Facette von der Rundung abweichen darf, die sie ersetzt.

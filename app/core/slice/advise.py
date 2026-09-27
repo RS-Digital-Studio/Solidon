@@ -306,9 +306,12 @@ def combine(
 def _combined_value(path: str, values: Sequence[object]) -> object:
     """Nimmt je Einstellungsart die Anforderung, die alle Körper einschließt."""
     ranks = {
-        "support.style": ("none", "grid", "tree"),
+        # ``auto`` steht über „aus" und unter jeder ausdrücklichen Art: Wo ein
+        # Körper Bäume verlangt, schließt das den ein, der nur Stützen will.
+        "support.style": ("none", "auto", "grid", "tree"),
         "support.placement": ("build_plate", "everywhere"),
-        "adhesion.kind": ("none", "skirt", "brim", "raft"),
+        # Der Auto-Brim des Slicers kann einen Brim legen, ein Skirt nie.
+        "adhesion.kind": ("none", "skirt", "auto", "brim", "raft"),
         "shell.wall_generator": ("classic", "arachne"),
     }
     if path in ranks:
@@ -585,6 +588,12 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
     return advice
 
 
+#: Haftungsarten, die ein Teil auf wenig Fläche nicht sicher halten: der Skirt
+#: berührt es nicht, und der Auto-Brim des Slicers fragt seine eigene Regel,
+#: nicht die Füße und nicht die Höhe, die Solidon misst.
+UNANCHORED: Final = frozenset({"skirt", "auto"})
+
+
 def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]:
     """Was am Filament hängt und die Stufe nicht wissen kann."""
     advice: list[SettingAdvice] = []
@@ -715,7 +724,10 @@ def _from_geometry(
     needs_support = _may_need_support(result, islands, overhang, patch, model.channel_layers)
 
     if needs_support and settings.support.style == "none":
-        style = "tree" if len(islands) >= TREE_FROM_ISLANDS else "grid"
+        # **Stützen an, die Art des Slicers** — außer das Modell verlangt eine
+        # (Entscheidung J, 27.09.2026). Hier stand ``grid``, und Elegoo wie
+        # Bambu, deren Standardprozess Bäume stützt, bekamen Gitter.
+        style = "tree" if len(islands) >= TREE_FROM_ISLANDS else "auto"
         advice.append(
             _advice(
                 settings,
@@ -814,7 +826,10 @@ def _from_geometry(
             )
         )
 
-    if 0.0 < result.first_layer_area < SMALL_FOOTPRINT and settings.adhesion.kind == "skirt":
+    # **Auch über dem Auto-Brim des Slicers** (Entscheidung J): Er entscheidet
+    # nach seiner Regel, Solidon nach der Geometrie.
+    unanchored = settings.adhesion.kind in UNANCHORED
+    if 0.0 < result.first_layer_area < SMALL_FOOTPRINT and unanchored:
         advice.append(
             _advice(
                 settings,
@@ -833,11 +848,7 @@ def _from_geometry(
     # (447 Körper, 26.09.2026) trifft das außer der Schüssel sechs: den
     # Eiffelturm auf vier Beinen, eine Katze auf drei Pfoten, einen Schaber
     # auf zwei Auflagen.
-    if (
-        settings.adhesion.kind == "skirt"
-        and result.first_layer_area >= SMALL_FOOTPRINT
-        and _on_small_feet(result)
-    ):
+    if unanchored and result.first_layer_area >= SMALL_FOOTPRINT and _on_small_feet(result):
         advice.append(
             _advice(
                 settings,
@@ -851,7 +862,7 @@ def _from_geometry(
             )
         )
 
-    if bounds is not None and _slender(bounds) and settings.adhesion.kind == "skirt":
+    if bounds is not None and _slender(bounds) and unanchored:
         advice.append(
             _advice(
                 settings,
@@ -1200,7 +1211,7 @@ def for_part(settings: PrintSettings, bounds: BoundingBox, footprint: float) -> 
     oder an der Maschine, und je Teil verstellt wären sie ein Widerspruch, den
     der Slicer auflösen müsste.
     """
-    if settings.adhesion.kind != "skirt":
+    if settings.adhesion.kind not in UNANCHORED:
         return []
     if 0.0 < footprint < SMALL_FOOTPRINT:
         reason = _("Dieses Teil steht auf zu wenig Fläche, um ohne Brim zu halten.")
@@ -1570,5 +1581,8 @@ def apply(settings: PrintSettings, advice: list[SettingAdvice]) -> PrintSettings
     """
     result = settings
     for entry in advice:
-        result = settings_table.with_path(result, entry.path, entry.value)
+        # Als übernommener Vorschlag markiert (Entscheidung A, 27.09.2026):
+        # Über das Profil des Herstellers geht nur, was so markiert oder
+        # selbst gewählt ist.
+        result = settings_table.with_accepted(result, entry.path, entry.value)
     return result

@@ -2952,3 +2952,23 @@ def trial_days(days: int, *, way: bool = False) -> str:
             tr("Testzeitraum: noch {days} Tag.") if one else tr("Testzeitraum: noch {days} Tage.")
         )
     return template.format(days=days)
+
+
+#: Die Druckplatten der Orca-Familie in der Sprache des Kunden. Der Slicer
+#: nennt sie englisch und nach seinem Innenleben — „High Temp Plate" ist die
+#: glatte PEI-Platte, und das weiß nur, wer Bambu Studio kennt.
+_PLATE_TITLES: Final[dict[str, TranslatableText]] = {
+    "Cool Plate": _("Kühle Platte"),
+    "Engineering Plate": _("Engineering-Platte"),
+    "High Temp Plate": _("Glatte PEI-Platte"),
+    "Textured PEI Plate": _("Texturierte PEI-Platte"),
+    "Supertack Plate": _("Supertack-Platte"),
+    "Textured Cool Plate": _("Texturierte kühle Platte"),
+    "Epoxy Resin Plate": _("Epoxidharz-Platte"),
+}
+
+
+def plate_title(name: str) -> str:
+    """Die Druckplatte, wie der Kunde sie nennt — unbekannte bleiben, wie sie heißen."""
+    title = _PLATE_TITLES.get(name)
+    return str(title) if title is not None else name

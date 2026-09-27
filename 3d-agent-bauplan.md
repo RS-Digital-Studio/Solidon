@@ -880,7 +880,11 @@ Zusätzlich zum gezeigten Grundfall gehören zum Format:
 - `print_settings` trägt bei zugewiesenen Druckeinstellungen die portablen
   Drucker-, Filament-, Slicer- und Kalibrierdaten im Projekt. `null` bedeutet
   keine gespeicherte Zuweisung. Ein unbekanntes Material bleibt unbekannt;
-  beim Öffnen wird daraus nicht stillschweigend PLA.
+  beim Öffnen wird daraus nicht stillschweigend PLA. **Verbindlich sind
+  darin `chosen` (eigene Wahl) und `accepted` (übernommener Vorschlag)**;
+  die übrigen Werte der Gruppen sind der Stand der Grundlage beim Speichern
+  und werden bei jeder Verwendung neu aus dem Herstellerprofil bestimmt
+  (§29). Ältere Dateien ordnet die Migration nach Format 36 ein.
 - Umfangreiche gesammelte Parameterwerte werden im Container unter
   `sources/gathered/` abgelegt und im gespeicherten Parameter über `source:`
   referenziert (§16.1). Im Arbeitsdokument steht der aufgelöste Wert.
@@ -2291,9 +2295,22 @@ nennt den Weg über das Fenster. An einem Resin-Drucker reisen keine
 Druckeinstellungen mit der Datei — der Satz ist ein FDM-Vertrag, und ein
 Resin-Slicer liest ihn nicht.
 
-Prozesswerte und Filamentzuordnungen werden aus den gespeicherten
-Druckeinstellungen des Projekts aufgelöst. Jeder Materialslot verwendet sein
-eigenes Materialprofil; ausdrückliche Werte der Spule haben Vorrang. Geerbte
+**Das Profil des Herstellers ist die Grundlage** (Entscheidung Robert,
+27.09.2026, nach dem Minigolf-Druck am Centauri Carbon 2; Konzept
+`konzept-herstellerprofil-als-grundlage-2026-09`). Der Slicer rechnet mit
+Maschine, Prozess und Filament, die sein Hersteller für diesen Drucker
+abstimmt; Solidon schreibt darüber nur, was davon abweichen soll: die
+eigene Wahl des Kunden im Druckdialog, den übernommenen Vorschlag mit einem
+Grund am Modell oder Material, das am eigenen Drucker Gemessene (§28.3) und
+das technisch Nötige — die Druckplatte, die Filamentzuordnung, die
+Stützsperre. Jeder Wert der Druckeinstellungen trägt dafür seine Herkunft;
+alles ohne eigene Wahl ist Grundlage und kommt bei jeder Verwendung neu aus
+dem Profil. Druckdialog, Prüfbericht und Vorschläge rechnen mit dieser
+Grundlage — also mit dem, was gedruckt wird. **Ohne Herstellerprofil**
+— kein Slicer, ein Drucker, den sein Bestand nicht kennt, CuraEngine, das
+die Formeln seiner Definitionen nicht auswertet — sind Solidons Tabellen
+die Grundlage und gehen vollständig hinaus. Jeder Materialslot verwendet
+sein eigenes Materialprofil; ausdrückliche Werte der Spule haben Vorrang. Geerbte
 Profile werden über die vollständigen Profilwurzeln des gewählten Slicers
 aufgelöst. Format oder Ziel-Slicer dürfen eine nicht unterstützte Einstellung
 nicht als erfolgreich übertragen ausgeben; erkennbare Verluste werden vor der

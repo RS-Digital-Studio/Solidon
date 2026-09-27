@@ -1733,6 +1733,11 @@ class Session(QObject):
         self._accepted: dict[str, str | None] = {}
         self._rerun_pending = False
         self._dirty = False
+        self._effective_print_settings: weakref.WeakMethod[Callable[[], PrintSettings]] | None = (
+            None
+        )
+        """Woher die Druckeinstellungen kommen, die gedruckt werden
+        (:meth:`follow_print_settings`) — schwach, das Fenster besitzt die Sitzung."""
         self._after_evaluation: list[tuple[int, Callable[[Any], None]]] = []
         """Was nach der nächsten gültigen Auswertung dieses Dokuments noch zu tun
         ist — je Eintrag der Projektstempel und der Abschluss (:meth:`_finish_after`)."""
@@ -3445,12 +3450,29 @@ class Session(QObject):
         self._changed()
         return generation.object_id
 
+    def follow_print_settings(self, source: Callable[[], PrintSettings]) -> None:
+        """Woher die Druckeinstellungen kommen, die gedruckt werden.
+
+        Das Fenster kennt die Grundlage aus dem Herstellerprofil, die Sitzung
+        nicht: Gespeichert ist die eigene Wahl samt dem Stand der Grundlage
+        vom letzten Speichern (Review Stufe A+B, R3). Gehalten wird schwach,
+        über ``WeakMethod`` — das Fenster besitzt die Sitzung, und ein
+        Rückverweis schlösse einen Ring.
+        """
+        self._effective_print_settings = weakref.WeakMethod(source)
+
     def split_margin(self) -> float:
         """Der Rand, den *Automatisch teilen* zum Bettrand lässt (:func:`bed_margin`).
 
-        Aus den Druckeinstellungen des Projekts, sonst aus denen, die das
-        Profil vorgibt — dieselbe Quelle wie die Vorbelegung des Anordnens.
+        Aus den Druckeinstellungen, die gedruckt werden
+        (:meth:`follow_print_settings`), sonst aus denen des Projekts oder,
+        ohne sie, aus denen, die das Profil vorgibt — dieselbe Quelle wie die
+        Vorbelegung des Anordnens.
         """
+        reference = self._effective_print_settings
+        source = reference() if reference is not None else None
+        if source is not None:
+            return bed_margin(source())
         settings = self.project.document.print_settings
         if settings is None:
             settings = print_settings.resolve(self.profile)

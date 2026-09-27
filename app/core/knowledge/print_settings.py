@@ -22,8 +22,8 @@ Was die Geometrie darüber hinaus verlangt, kommt nicht von hier, sondern aus
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
-from dataclasses import replace
+from collections.abc import Callable, Mapping
+from dataclasses import fields, replace
 from pathlib import Path
 from typing import Any, Final, TypedDict, get_args
 
@@ -48,6 +48,7 @@ from app.core.types import (
     SupportSettings,
     TemperatureSettings,
 )
+from app.core.units import EPS_SETTING, is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -191,11 +192,30 @@ def _material_table(material_id: str) -> dict[str, Any]:
     return {}
 
 
-def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> PrintSettings:
-    """Die drei Ebenen zu einem Satz Einstellungen (§29)."""
+def resolve(
+    profile: Profile,
+    quality: QualityPreset = DEFAULT_QUALITY,
+    *,
+    legacy: bool = False,
+) -> PrintSettings:
+    """Die drei Ebenen zu einem Satz Einstellungen (§29).
+
+    ``legacy=True`` löst so auf, wie Solidon es bis 0.5.0 tat: die Tempi aus
+    der Stufe allein — ohne das Tempo des Druckers, ohne seine Leerfahrt und
+    ohne den Deckel auf den Volumenstrom —, und die erste Bahn 1,07
+    Bahnbreiten breit statt so breit wie beim Hersteller. All das kam erst
+    danach. Gebraucht wird das nur, um ältere Dateien einzuordnen
+    (:func:`legacy_choices`): Eine Datei aus 0.5.0 mit „Fein" trägt
+    30/45/60 mm/s, die heutige Auflösung am Centauri Carbon 2 120/150/150, und
+    „Entwurf" füllt dort mit 120 statt gedeckelten 119. Die erste Bahn war dort
+    0,449 mm breit, heute 0,5 mm wie bei Elegoo.
+    """
     stage = _quality_table(quality)
     stuff = _material_table(profile.material.id)
     printer = profile.printer
+
+    def paced(key: str, printer_value: float | None) -> float:
+        return _paced(stage, key, None if legacy else printer_value)
 
     if printer.is_resin:
         # Ein Resin-Drucker hat keine Düse, an der die Stufe ihre Schichthöhe
@@ -219,10 +239,12 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
         # schmaler als jedes Werksprofil und bleibt der Rückfall. Die eine
         # Stelle, an der ``resolve`` für Stufe D anders rechnet: Bei Cura ist
         # dieser Satz die Grundlage, und die anderen Slicer bekommen damit den
-        # Wert, den ihr Herstellerprofil ohnehin trägt.
+        # Wert, den ihr Herstellerprofil ohnehin trägt. ``legacy`` rechnet wie
+        # 0.5.0, sonst hielte die Einordnung einer Datei von damals ihre
+        # 0,449 mm für eine eigene Wahl und schriebe sie über das Profil.
         first_layer_line_width = (
             round(printer.nozzle_diameter * printer.first_layer_line_factor, 3)
-            if printer.first_layer_line_factor is not None
+            if printer.first_layer_line_factor is not None and not legacy
             else round(printer.extrusion_width * 1.07, 3)
         )
 
@@ -254,19 +276,19 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
             minimum_layer_time=float(stage["minimum_layer_time"]),
         ),
         speed=SpeedSettings(
-            outer_wall=_paced(stage, "speed_outer_wall", printer.speed_outer_wall),
-            inner_wall=_paced(stage, "speed_inner_wall", printer.speed_inner_wall),
-            infill=_paced(stage, "speed_infill", printer.speed_infill),
-            top_surface=_paced(stage, "speed_top_surface", printer.speed_top_surface),
-            first_layer=_paced(stage, "speed_first_layer", printer.speed_first_layer),
-            bridge=_paced(stage, "speed_bridge", printer.speed_bridge),
-            acceleration=_paced(stage, "acceleration", printer.acceleration),
-            outer_wall_acceleration=_paced(
-                stage, "outer_wall_acceleration", printer.outer_wall_acceleration
+            outer_wall=paced("speed_outer_wall", printer.speed_outer_wall),
+            inner_wall=paced("speed_inner_wall", printer.speed_inner_wall),
+            infill=paced("speed_infill", printer.speed_infill),
+            top_surface=paced("speed_top_surface", printer.speed_top_surface),
+            first_layer=paced("speed_first_layer", printer.speed_first_layer),
+            bridge=paced("speed_bridge", printer.speed_bridge),
+            acceleration=paced("acceleration", printer.acceleration),
+            outer_wall_acceleration=paced(
+                "outer_wall_acceleration", printer.outer_wall_acceleration
             ),
             # Die Leerfahrt gehört dem Drucker, nicht der Stufe
             # (``PrinterProfile.travel_speed``); ohne Angabe gilt die Vorgabe.
-            **({} if printer.travel_speed is None else {"travel": printer.travel_speed}),
+            **({} if printer.travel_speed is None or legacy else {"travel": printer.travel_speed}),
         ),
         # Der Slicer stützt ab derselben Grenze, mit der die Schichtanalyse
         # rechnet — gemessen, sonst die des Druckers, sonst die Startregel
@@ -291,7 +313,7 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
             * (printer.flow_factor if profile.material.id == HOTEND_FLOW_MATERIAL else 1.0),
         ),
     )
-    return _within_flow(settings)
+    return settings if legacy else _within_flow(settings)
 
 
 def bead_area(settings: PrintSettings, *, first_layer: bool = False) -> float:
@@ -472,3 +494,159 @@ def with_path(settings: PrintSettings, path: str, value: Any) -> PrintSettings:
     read_path(settings, path)
     section = getattr(settings, group)
     return replace(settings, **{group: replace(section, **{name: value})})
+
+
+# --- Herkunft: eigene Wahl, Vorschlag, Grundlage -------------------------------
+#
+# Konzept Herstellerprofil, Entscheidung A (27.09.2026): Die Gruppen tragen
+# immer einen vollständigen Satz, aber nur die Pfade in ``chosen`` und
+# ``accepted`` sollen vom Profil des Herstellers abweichen. Die Funktionen
+# darunter sind die einzigen, die diese Mengen setzen — ``with_path`` bleibt
+# herkunftslos, denn eine Rücklesung aus dem Herstellerprofil ist keine Wahl.
+
+
+def same_value(a: object, b: object) -> bool:
+    """Ob zwei Einstellungswerte dasselbe sagen.
+
+    Fließkomma nie mit ``==`` (Regel 6). Ein Wahrheitswert ist in Python eine
+    Zahl: Ohne die Abfrage davor wäre ``True`` gleich ``1,0``, und ein Haken,
+    den jemand gesetzt hat, sähe aus wie eine unveränderte Eins.
+    """
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a is b
+    if isinstance(a, int | float) and isinstance(b, int | float):
+        return is_close(float(a), float(b), EPS_SETTING)
+    return bool(a == b)
+
+
+def all_paths() -> tuple[str, ...]:
+    """Jeder Punktpfad, den ein :class:`PrintSettings` führt, in Gruppenfolge."""
+    template = PrintSettings()
+    return tuple(
+        f"{group}.{entry.name}" for group in GROUPS for entry in fields(getattr(template, group))
+    )
+
+
+def with_choice(settings: PrintSettings, path: str, value: Any) -> PrintSettings:
+    """Ein Wert, den der Kunde selbst gesetzt hat — er geht zum Slicer.
+
+    War der Pfad ein übernommener Vorschlag, wird er zur eigenen Wahl: Die
+    eigene Wahl gilt der ganzen Platte, ein Vorschlag soll dem Körper gelten,
+    der ihn verlangt (Entscheidung G, gebaut mit Stufe E).
+    """
+    changed = with_path(settings, path, value)
+    changed = replace(changed, chosen=changed.chosen | {path}, accepted=changed.accepted - {path})
+    return _with_a_measure(changed, path, with_choice)
+
+
+def with_accepted(settings: PrintSettings, path: str, value: Any) -> PrintSettings:
+    """Ein Wert aus einem übernommenen Vorschlag — er geht zum Slicer. Gelten
+    soll er dem Körper, der ihn verlangt; bis Stufe E gilt er der Platte."""
+    changed = with_path(settings, path, value)
+    changed = replace(changed, accepted=changed.accepted | {path}, chosen=changed.chosen - {path})
+    return _with_a_measure(changed, path, with_accepted)
+
+
+#: Das Maß, ohne das eine Haftungsart nichts tut.
+ADHESION_MEASURES: Final = {
+    "skirt": "adhesion.skirt_loops",
+    "brim": "adhesion.brim_width",
+    "raft": "adhesion.raft_layers",
+}
+
+
+def _with_a_measure(
+    settings: PrintSettings,
+    path: str,
+    mark: Callable[[PrintSettings, str, Any], PrintSettings],
+) -> PrintSettings:
+    """Eine gewählte Haftungsart bekommt ihr Maß (Review Stufe A+B, F4).
+
+    Elegoos Standardprozess führt null Skirt-Runden und null Raft-Schichten.
+    Wer darauf „Raft" wählte, schrieb die Art und behielt das Maß des
+    Herstellers — gedruckt wurde kein Raft. Steht das Maß auf null, gilt
+    Solidons Vorgabe, mit derselben Herkunft wie die Art.
+    """
+    if path != "adhesion.kind":
+        return settings
+    measure = ADHESION_MEASURES.get(settings.adhesion.kind)
+    if measure is None:
+        return settings
+    current = read_path(settings, measure)
+    if isinstance(current, int | float) and current > 0:
+        return settings
+    return mark(settings, measure, read_path(PrintSettings(), measure))
+
+
+def without_choice(settings: PrintSettings, path: str, base: PrintSettings) -> PrintSettings:
+    """Zurück zur Grundlage: der Wert aus ``base``, keine Herkunft mehr."""
+    changed = with_path(settings, path, read_path(base, path))
+    return replace(changed, chosen=changed.chosen - {path}, accepted=changed.accepted - {path})
+
+
+def on_base(stored: PrintSettings, base: PrintSettings) -> PrintSettings:
+    """Die wirksamen Einstellungen: die Grundlage, darüber nur, was abweichen soll.
+
+    ``stored`` bringt seine eigene Wahl und seine übernommenen Vorschläge mit,
+    dazu alles, was keine Druckeinstellung im engeren Sinn ist — Stufe,
+    Übergabeart, Spulen und Slotprofile. Jeder andere Wert kommt aus ``base``.
+    Ein gespeicherter Wert ohne Herkunft war einmal Grundlage und ist es
+    nicht mehr, wenn sich die Grundlage geändert hat: ein anderer Drucker,
+    ein anderer Prozess, ein Update des Herstellerprofils.
+    """
+    result = base
+    for path in sorted(stored.explicit):
+        result = with_path(result, path, read_path(stored, path))
+    # Kennung und Titel beschreiben Stufe und Material der Grundlage —
+    # nach einem Wechsel stand sonst „Standard · PLA" über PETG-Werten
+    # (Review Stufe A+B, H7), die Verwechslung, vor der die Übergabe warnt.
+    carried = {
+        entry.name: getattr(stored, entry.name)
+        for entry in fields(PrintSettings)
+        if entry.name not in GROUPS and entry.name not in ("id", "title")
+    }
+    return replace(result, **carried)
+
+
+def own_part(settings: PrintSettings) -> tuple[object, ...]:
+    """Was an diesen Einstellungen dem Projekt gehört — ohne die Grundlage.
+
+    Die Grundlage wechselt mit dem Herstellerprofil, das gerade darunterliegt:
+    ein anderer Prozess, eine andere Platte, ein Update des Slicers. Wer nur
+    nachsieht, hat damit nichts am Projekt geändert. Was sich ändert, wenn
+    jemand etwas **tut**, steht hier: die Werte der eigenen Wahl und der
+    übernommenen Vorschläge, dazu Stufe, Übergabeart und Spulen.
+    """
+    carried = tuple(
+        (entry.name, getattr(settings, entry.name))
+        for entry in fields(PrintSettings)
+        if entry.name not in GROUPS
+    )
+    deviating = tuple((path, read_path(settings, path)) for path in sorted(settings.explicit))
+    return carried + deviating
+
+
+def legacy_choices(stored: PrintSettings, *references: PrintSettings) -> frozenset[str]:
+    """Welche Werte einer Datei vor Format 36 eine eigene Wahl waren (Entscheidung E).
+
+    Eine ältere Datei kennt keine Herkunft, und ihr voller Satz belegt keine
+    Entscheidung: Bis 0.5.1 schrieben die Übergabe, die Filamentzuweisung und
+    das Rückgängigmachen den aufgelösten Satz ungefragt ins Projekt. Als
+    eigene Wahl gilt deshalb nur, was **keinem** der ``references`` gleicht —
+    der heutigen Auflösung für Drucker, Material und Stufe des Projekts und
+    der, mit der die schreibende Version auflöste (``resolve(...,
+    legacy=True)``) — **und auch nicht** der Vorgabe der Dataclass. So
+    fallen die alten Tabellenwerte heraus: die 40 mm/s von vor dem 25.09.2026,
+    die die Vorgabe der Dataclass sind (RM-256), und die Tempi der Stufen
+    Fein, Entwurf und Belastbar aus 0.5.0 (Review Stufe A+B, F3). Was jemand
+    selbst eingetragen hat, bleibt.
+    """
+    compared = (*references, PrintSettings())
+    return frozenset(
+        path
+        for path in all_paths()
+        if not any(
+            same_value(read_path(stored, path), read_path(reference, path))
+            for reference in compared
+        )
+    )

@@ -67,11 +67,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen](#rm-254) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-243: am `Screen-Cover_RS.stl` noch R 11,2 (zwei Stücke) und das Wandband R 13,73 an den Buchstaben, an verrauschten Ellipsen ein bis vier von acht bis fünfzehn Stücken — eine Bestätigung, die kurze Stücke nicht gegenseitig trägt, ohne dem Korbbogen echte Bögen zu nehmen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Die Auskunft steht (`boolean.parts_not_united` mit *Stelle zeigen*, `ae178de8c`); offen die Geometrie: Teil 10 kreuzt sich 1 121-mal selbst, die 21 Teile lassen sich deshalb nicht vereinigen — gekippt 15° liegen 32,6 mm³ jenseits der alten Kappe, Verdoppeln bleibt ohne Wirkung, Versetzen „geht nicht mehr durch“; Weg über das Auflösen der Eigenkreuzung |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
-| [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: Automatik behalten, Vorschlag je Teil im Druckdialog (Empfehlung der Durchsicht 0.5.1) oder Automatik als abwählbare Zeile — `for_part` setzt ihn heute ohne Klick, gegen die Regel vom 26.09.2026 |
+| [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | Entschieden mit dem Konzept Herstellerprofil (Entscheidung G): ohne Klick kein Brim je Teil mehr (`aed31c787`, im ElegooSlicer an Platte und Schüssel derselbe Rand wie mit Elegoos Profil allein); offen die Zeile je Teil im Druckdialog und das Schreiben je Teil — Stufe E von [RM-281](#rm-281) |
 | [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt, 4 Abstürze am zweifarbigen Besteckeinsatz sind ein Fehler von ElegooSlicer/OrcaSlicer (Originalprojekt stürzt ohne Solidon ab). Offen für Robert: den Fehler dort melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für die Orca-Familie auf Baumstützen ausweicht |
-| [RM-255 — Ein Drucker ohne Tempodaten überschreibt den gewählten Herstellerprozess mit 40 mm/s](#rm-255) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: Tempo aus dem gewählten Prozessprofil lesen, die Tempo-Schlüssel für solche Drucker gar nicht schreiben (Empfehlung) oder wie heute |
-| [RM-256 — Ältere Projekte behalten 40 mm/s und bekommen nur die Leerfahrt angeboten](#rm-256) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: eine Vorschlagszeile „Tempo des Druckers“ (Empfehlung) oder die Stufe beim Öffnen neu auflösen |
-| [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert, ob die neue Fähigkeit gebaut wird (Weg und Abnahme stehen am Punkt) |
+| [RM-255 — Ein Drucker ohne Tempodaten überschreibt den gewählten Herstellerprozess mit 40 mm/s](#rm-255) | Geometrie, Erkennung und Druckvorbereitung | Orca-Familie gelöst mit Stufe B (`aed31c787`): auf einem Herstellerprozess schreibt Solidon kein Tempo, das niemand gewählt hat — gemessen am allgemeinen Drucker mit Elegoos Prozess für den Centauri Carbon (160/200/200, Leerfahrt 500 wie im Profil); offen PrusaSlicer mit Stufe C von [RM-281](#rm-281) |
+| [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Beauftragt mit dem Konzept Herstellerprofil (Entscheidung G: Sperrnetz bei CuraEngine), gebaut wird es mit Stufe E von [RM-281](#rm-281) |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A und B stehen und sind im Slicer abgenommen (`aed31c787`); als Nächstes C (PrusaSlicer auf dem Herstellerbündel), dann E (je Teil) und F (Stufe wählt Prozess); D (Cura mit Maschine) läuft; danach Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
+| [RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie schreibt](#rm-282) | Geometrie, Erkennung und Druckvorbereitung | Anycubic Kobra 2 in OrcaSlicer (Prozente in Feldern ohne Prozent: Dialog zeigt Solidons Wert, gedruckt wird Orcas Vorgabe) und Bambus Listen je Düsenvariante mit High-Flow-Düse — beides messen, dann Rücklesung und Schreibweise festlegen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
 | [RM-273 — Das Übernehmen rechnet die Operation noch einmal](#rm-273) | Geometrie, Erkennung und Druckvorbereitung | Gartenschlauchhalter, Versetzen einer Bohrung übernehmen: 16 bis 17,5 s unter Last, davon 9 bis 10 s die Operation in voller Güte nach der Vorschau in Entwurfsgüte (rund 5 s ihre örtliche Nachmessung) — das Vorschauergebnis übernehmen, wo beide Güten dieselbe Geometrie liefern, sonst die Nachmessung im Übernehmen auslassen |
@@ -2031,7 +2032,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
 <a id="rm-250"></a>
 
-- [ ] **RM-250 — Der Brim je Teil beim Export ist eine Automatik.**
+- [~] **RM-250 — Der Brim je Teil beim Export ist eine Automatik.**
   Gefunden am 26.09.2026 bei RM-247. `advise.for_part` setzt beim Export
   einem einzelnen Teil einen Brim, wenn es auf weniger als `SMALL_FOOTPRINT`
   steht oder schlank ist, auch wenn die Platte auf Schürze steht und niemand
@@ -2052,6 +2053,16 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   zum Vorschlag „kleine Füße“, der schon so gebaut ist; `_TargetedAdvice` trägt schon
   Ziele (Spulen), ein Ziel „Teil“ wäre dieselbe Bauart. **C** — Automatik, aber vorher
   sichtbar als gesetzte, abwählbare Zeile im Dialog. Empfehlung der Durchsicht: B.
+
+  **Entschieden am 27.09.2026 mit dem Konzept Herstellerprofil** (Entscheidung G, im
+  Wesentlichen Weg B): Ein Brim je Teil kommt nur noch mit der Übernahme des
+  Vorschlags, und dann nur an den Teilen, die ihn brauchen. Seit `aed31c787` schreibt
+  `writer._part_settings` nur noch Pfade aus `PrintSettings.accepted`; ohne Klick geht
+  Elegoos Auto-Brim hinaus. Gemessen im ElegooSlicer: Minigolf-Platte 11,67 m und
+  Waschschüssel 0,93 m Rand, jeweils gleich dem Lauf mit Elegoos Profil allein (vorher
+  8,51 und 0,40 m). **Offen:** die Zeile „Brim · <Teil>“ im Druckdialog und das Schreiben
+  je Teil statt für die Platte — Stufe E von [RM-281](#rm-281). Bis dahin gilt ein
+  übernommener Brim der ganzen Platte.
 
 <a id="rm-252"></a>
 
@@ -2095,7 +2106,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
 <a id="rm-255"></a>
 
-- [ ] **RM-255 — Ein Drucker ohne Tempodaten überschreibt den gewählten
+- [~] **RM-255 — Ein Drucker ohne Tempodaten überschreibt den gewählten
   Herstellerprozess mit 40 mm/s.** Aus der Durchsicht v0.5.1 (druck, DRUCK-10). Ein
   Drucker, der nicht unter den 13 FDM-Einträgen von `printers.toml` steht (eigenes
   Profil, allgemeiner Drucker — etwa Centauri Carbon der ersten Reihe, Neptune 4 Pro,
@@ -2112,21 +2123,12 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   wie heute. Abnahme: Centauri Carbon (erste Reihe) mit Elegoos Prozess —
   `outer_wall_speed` im G-Code wie im Herstellerprofil.
 
-<a id="rm-256"></a>
-
-- [ ] **RM-256 — Ältere Projekte behalten 40 mm/s und bekommen nur die Leerfahrt
-  angeboten.** Aus der Durchsicht v0.5.1 (druck, DRUCK-11). Ein Projekt trägt seine
-  Einstellungen selbst; eines von vor 0.5.1 (Roberts Schüssel vom 25.09. eingeschlossen)
-  behält Stufe „Standard“ mit 40/60/80 mm/s, und der Druckdialog bietet nur „Dieser
-  Drucker fährt leer schneller“ an. Die Tempi des Druckers erreicht es erst, wenn der
-  Kunde die Stufe neu wählt — die Schüssel bleibt damit bei 30 statt 18 Stunden. Warum
-  Robert: Beide Wege berühren gespeicherte Projekteinstellungen (Öffnen schreibt nichts
-  ins Projekt, 03.09.2026; ohne *Vorschläge übernehmen* gehen die Standardeinstellungen
-  hinaus, 26.09.2026). Optionen: ein Vorschlag „Tempo des Druckers“ als eine Zeile, die
-  alle acht Felder setzt (Empfehlung: sichtbar, abwählbar, keine stille Änderung); oder
-  beim Öffnen die Stufe neu auflösen, wenn die gespeicherten Tempi genau die allgemeinen
-  der Stufe sind. Abnahme: die Schüssel vom 25.09. öffnen, eine Zeile übernehmen,
-  Herstellertempo im G-Code.
+  **Für die Orca-Familie gelöst mit Stufe B** des Konzepts Herstellerprofil (`aed31c787`,
+  Weg b und mehr): Auf einem Herstellerprozess schreibt Solidon nur, was jemand gewählt
+  hat. Abnahme am 27.09.2026 im ElegooSlicer, `generic-220` mit „0.20mm Standard @Elegoo
+  CC 0.4 nozzle“: Außenwand 160, Innenwand 200, Füllung 200, Leerfahrt 500 mm/s und
+  10 000 mm/s² — wie im Profil. **Offen:** PrusaSlicer, der bis Stufe C von
+  [RM-281](#rm-281) Solidons vollen Satz bekommt.
 
 <a id="rm-257"></a>
 
@@ -2138,6 +2140,75 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   ist Curas Stützsperre — damit bekäme die Konsole dieselbe Sperre, das Cura-Fenster
   (STL) nicht. Abnahme: Okarina in CuraEngine mit und ohne, Modellbahn gleich, Stütze im
   Kanal weg.
+
+<a id="rm-281"></a>
+
+- [~] **RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F.** Beauftragt am
+  27.09.2026 nach Roberts Minigolf-Druck am Centauri Carbon 2
+  ([Konzept](konzepte/konzept-herstellerprofil-als-grundlage-2026-09.md), Abschnitt 4).
+  **A und B stehen** (`aed31c787`): Herkunft je Wert, Grundlage aus dem Herstellerprofil,
+  Format 36, die Orca-Familie bekommt nur die Abweichung samt Druckplatte, „automatisch“
+  für Stützen und Haftung, der Druckdialog zeigt, was gedruckt wird. Abgenommen im
+  ElegooSlicer (Minigolf-Platte, Waschschüssel, Wedge-Lock: Konfiguration, Rand, Zeit und
+  Stütze gleich dem Herstellerlauf) und in Bambu Studio (dieselben drei gegen die
+  Herstellerkette: 0 von 429 Schlüsseln verschieden). Ein unabhängiges Review vor dem
+  Commit (sieben Fehler, acht Risiken, fünfzehn Hinweise;
+  `output/review/herstellerprofil-2026-09-27/review-a-b.md`) ist eingearbeitet, bis auf
+  die Punkte unten bei C und L. Dazu `efd4686c2`: Das Tempo der
+  ersten Schicht gilt auch für ihre Füllung.
+
+  **Offen, in dieser Reihenfolge:**
+  - **C** PrusaSlicer auf dem Herstellerbündel: Profilwahl im Dialog (Drucker samt
+    Düsenvariante, Prozess, Filament), Bündel vollständig in INI und Beilage,
+    `*_settings_id`, `binary_gcode`, `support_material_auto`, `filament_type`, Gegenprobe.
+    Abnahme: Gleichheit mit dem Herstellerlauf an MK4S (HF0.4), MINI IS und XL IS; `G29`,
+    `M862`, `M572` im G-Code. Schließt RM-255 für PrusaSlicer. Dazu aus dem Review der
+    Stufe A+B: *Werte übernehmen* ohne Herstellergrundlage macht Filamentwerte zur
+    eigenen Wahl, die einen Filamentwechsel überdauert (H12), und eine
+    Spulenübersteuerung schreibt ihre ganze Gruppe über das Herstellerfilament, auch
+    die Werte, die niemand geändert hat (H15) — beides an das Filament binden.
+  - **D** CuraEngine mit der Maschine des Druckers: gebaut im Zweig `cura-maschine`
+    (neun Commits, Tor grün, Messung in CuraEngine 5.13; Bericht
+    `output/review/cura-paket-2026-09-27/bericht.md`), Merge nach A+B.
+  - **E** Je Teil: `for_part` für alle geometrischen Pfade, Objektwerte bei Orca und Prusa,
+    Netze je Teil und das Sperrnetz bei Cura (RM-257), die Zeile je Teil im Druckdialog
+    (RM-250). Abnahme: Minigolf-Satz mit einem gestützten Körper — Stütze nur an ihm, Brim
+    der übrigen geschlossen.
+  - **F** Die Stufe wählt den Herstellerprozess; dazu die Vorwahl im Dialog ohne Rückfall
+    auf den ersten Prozess der Liste.
+  - **K** Rest der Gegenprobe: Identität und Startcode bei PrusaSlicer und Cura.
+  - **L** Die Schichtanalyse rechnet mit der wirksamen Stützschwelle des gewählten
+    Prozesses statt mit der aus `printers.toml`. Dazu lesen Auswertung
+    (`evaluate` über `for_process`), Agent-Analyse und Steckbrief den wirksamen Satz
+    statt des gespeicherten (Review R3; Hauptfenster, Export und Sitzung tun es seit
+    A+B).
+  - Danach Paket 3 (Mindestschichtzeit, Keilspitzen, Stützbedarf gegen das Urteil des
+    Herstellers, Brückenregel, Inseln an Schrauben) und der Lauf „jedes Modell × jeder
+    Slicer“ als Gesamtabnahme.
+
+  Aus Roberts Probedruck am 27.09.2026 (Minigolf-Platte, Elegoos Standard): An den
+  schmalen Stegen zwischen Loch 3, Loch 4 und dem inneren Bogen rissen kurze
+  Bodenbahnen der ersten beiden Schichten (105 mm/s in Schicht 1, bis 250 mm/s in
+  Schicht 2). Der zweite Druck mit der ganzen ersten Schicht auf 50 mm/s lief sauber, die
+  Stege geschlossen (Fotos bis Schicht 4; Roberts Urteil: die Einstellungen passen).
+  Geändert waren dabei zwei Dinge, das Tempo und die frisch gereinigte Platte.
+  `efd4686c2` sorgt dafür, dass das Feld „Erste Schicht“ auch die Füllung trifft. Ob
+  Solidon an schmalen Stegen von sich aus langsamer vorschlägt, gehört in Paket 3.
+
+<a id="rm-282"></a>
+
+- [ ] **RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie
+  schreibt.** Gefunden am 27.09.2026 bei der Gegenprobe von Stufe B (RM-281).
+  (a) Anycubics „0.20mm Standard @Anycubic Kobra2“ in OrcaSlicer führt
+  `initial_layer_speed` als „50%“ und `support_object_xy_distance` als „60%“; beide Felder
+  nehmen keine Prozente, OrcaSlicer druckt mit seinen Vorgaben 30 mm/s und 0,35 mm. Die
+  Rücklesung lässt den Wert als fremd stehen, der Dialog zeigt deshalb Solidons Wert, nicht
+  den gedruckten. (b) Bambu Studio führt Tempo, Beschleunigung und Filamentwerte je
+  Düsenvariante (`inner_wall_speed` [300, 400] für Standard und High Flow); ohne Angabe
+  druckt es die erste. Eine eigene Wahl schreibt Solidon als Liste mit einem Eintrag —
+  ungemessen ist, was eine High-Flow-Düse daraus macht. Abnahme: je Fall ein Konsolenlauf,
+  (a) Dialog und G-Code zeigen dasselbe, (b) eine eigene Außenwandgeschwindigkeit kommt
+  mit `nozzle_volume_type = High Flow` im G-Code an.
 
 <a id="rm-259"></a>
 

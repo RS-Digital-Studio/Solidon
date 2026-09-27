@@ -92,9 +92,15 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Imprimir e entregar ao slicer
 
+- No ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale o perfil do fabricante. O Solidon só escreve o que altera ou aceita das sugestões.
 - O nível «Standard» imprime com as velocidades e acelerações do perfil do fabricante em vez de travar cada impressora a 40 mm/s. Numa Centauri Carbon 2, as peças grandes levam 40 a 50 % menos tempo.
 - A velocidade dos percursos em vazio também vem da impressora: a Centauri Carbon 2 desloca-se a 500 em vez de 150 mm/s, para que o bico escorra menos pelo caminho.
 - O Solidon usa o ângulo de saliência do perfil do fabricante da sua impressora: 60 em vez de 45 graus na Elegoo, Bambu e Creality. Chanfros e inclinações suaves já não recebem suportes desnecessários.
+- As definições de impressão mostram o que é impresso: a base é o perfil do fabricante, e os seus próprios valores ficam marcados e podem ser repostos um a um.
+- A placa de impressão escolhe-se nas definições de impressão, e a temperatura da mesa acompanha-a. Se o fabricante não autoriza a placa para o seu filamento, o Solidon avisa antes.
+- Sem «Aplicar as sugestões», nenhuma peça recebe mais um brim sem pedir, nem na exportação nem na entrega ao slicer.
+- Os projetos da 0.5.0 imprimem com a velocidade da sua impressora. O que tinha definido neles mantém-se.
+- A velocidade da primeira camada vale agora também para o seu enchimento. Antes, o slicer fazia o fundo à velocidade do fabricante, 105 mm/s na Centauri Carbon 2.
 - Um teto sobre um canal de água ou um túnel já não atrai suportes para o modelo. Se mais nada precisar deles sobre o modelo, o Solidon propõe-nos só a partir da mesa.
 - Nova sugestão «Manter os canais livres»: aplicada, coloca um bloqueador de suportes nos canais para PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
 - Os suportes em grelha chegam ao slicer como grelha verdadeira, com a direção a mudar em cada camada, em vez de linhas soltas que se deslocam na impressão.

@@ -92,9 +92,15 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
+- In ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale il profilo del produttore. Solidon scrive solo ciò che modificate o accettate dai suggerimenti.
 - Il livello «Standard» stampa con velocità e accelerazioni del profilo del produttore invece di frenare tutto a 40 mm/s. Su una Centauri Carbon 2 i pezzi grandi richiedono il 40-50 % di tempo in meno.
 - Anche la velocità degli spostamenti a vuoto viene dalla stampante: la Centauri Carbon 2 si sposta a 500 invece di 150 mm/s, perché l'ugello coli meno lungo il tragitto.
 - Solidon prende l'angolo di sbalzo dal profilo del produttore della stampante: 60 invece di 45 gradi per Elegoo, Bambu e Creality. Smussi e pendenze lievi non ricevono più supporti inutili.
+- Le impostazioni di stampa mostrano ciò che viene stampato: la base è il profilo del produttore, i vostri valori sono evidenziati e si ripristinano uno per uno.
+- Il piatto di stampa si sceglie nelle impostazioni di stampa e la temperatura del piano lo segue. Se il produttore non ammette il piatto per il vostro filamento, Solidon lo dice prima.
+- Senza «Applica i suggerimenti» nessun pezzo riceve più un brim senza chiederlo, né all'esportazione né nel passaggio allo slicer.
+- I progetti della 0.5.0 stampano alla velocità della vostra stampante. Ciò che avevate impostato voi resta.
+- La velocità del primo strato vale ora anche per il suo riempimento. Prima lo slicer stendeva il fondo alla velocità del produttore, 105 mm/s sulla Centauri Carbon 2.
 - Un soffitto sopra un canale d'acqua o un tunnel non richiama più supporti sul modello. Se nient'altro li richiede sul modello, Solidon li propone solo dal piano.
 - Nuovo suggerimento «Tenere liberi i canali»: applicato, mette un blocco dei supporti nei canali per PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
 - I supporti a griglia arrivano allo slicer come vera griglia, con la direzione che cambia a ogni strato, invece che come linee sciolte che si spostano in stampa.

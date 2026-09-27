@@ -116,6 +116,10 @@ class UiSettings:
     unterscheiden sich am Ordner, und ihre Profilbestände sind verschieden.
     Leer heißt „von früher", dann wird nicht verglichen — eine Einstellung aus
     einer älteren Version ist keine falsche."""
+    slicer_bed_plate: str = ""
+    """Welche Druckplatte auf dem Drucker aus ``slicer_profile_printer`` liegt —
+    der Name, wie die Orca-Familie ihn schreibt (Konzept Herstellerprofil,
+    Entscheidung F). Leer heißt: die Standardplatte der Maschine."""
     slicer_filament_per_material: dict[str, str] = field(default_factory=dict)
     """Welche Spule zuletzt für welches Material gewählt wurde (§29).
 

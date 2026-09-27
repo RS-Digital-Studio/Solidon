@@ -93,9 +93,15 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
+- Dans ElegooSlicer, Bambu Studio, Creality Print et OrcaSlicer, le profil du fabricant s'applique. Solidon n'écrit que ce que vous modifiez ou acceptez des suggestions.
 - Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de tout brider à 40 mm/s. Sur une Centauri Carbon 2, les grandes pièces prennent 40 à 50 % de temps en moins.
 - La vitesse des déplacements à vide vient aussi de l'imprimante : la Centauri Carbon 2 se déplace à 500 au lieu de 150 mm/s, pour que la buse suinte moins en route.
 - Solidon prend l'angle de surplomb dans le profil constructeur de votre imprimante : 60 au lieu de 45 degrés chez Elegoo, Bambu et Creality. Chanfreins et pentes douces n'ont plus de supports inutiles.
+- Les réglages d'impression montrent ce qui sera imprimé : la base est le profil du fabricant, et vos propres valeurs sont marquées et se rétablissent une par une.
+- Vous choisissez le plateau d'impression dans les réglages d'impression, et la température du lit suit. Si le fabricant n'autorise pas ce plateau pour votre filament, Solidon le dit avant.
+- Sans « Appliquer les suggestions », aucune pièce ne reçoit plus de brim sans le demander, ni à l'export ni lors de la transmission au slicer.
+- Les projets de 0.5.0 impriment à la vitesse de votre imprimante. Ce que vous y aviez réglé vous-même est conservé.
+- La vitesse de la première couche vaut désormais aussi pour son remplissage. Avant, le slicer posait le fond à la vitesse du fabricant, 105 mm/s sur la Centauri Carbon 2.
 - Un plafond au-dessus d'un canal d'eau ou d'un tunnel n'attire plus de supports sur le modèle. Si rien d'autre n'en a besoin sur le modèle, Solidon les propose depuis le plateau uniquement.
 - Nouvelle suggestion « Garder les canaux libres » : appliquée, elle pose un bloqueur de supports dans les canaux pour PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print.
 - Les supports en grille arrivent au slicer comme une vraie grille, dont la direction change à chaque couche, au lieu de lignes libres qui se décalent à l'impression.

@@ -223,6 +223,11 @@ def prepare(
                 "slot_profiles",
                 "slot_profile_bindings",
                 "slot_overrides",
+                # Woher ein Wert kommt, ändert den Druck nicht: dieselbe Zahl
+                # als eigene Wahl und als übernommener Vorschlag ist ein Druck
+                # (Review Stufe A+B, H10).
+                "chosen",
+                "accepted",
             ):
                 values.pop(field, None)
             effective.append((identities[key], values))
