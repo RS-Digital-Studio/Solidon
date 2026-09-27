@@ -302,7 +302,7 @@ Absage mit Weg, nicht eine stille Wahl (Regel 21).
 Kontur an Kante 1 hängt, verrundet eine Kette zur Hälfte mit dem Endradius.
 Und ein eigenes `Law_Function` nimmt OCCT 8.0.1 gar nicht an.
 
-### Gruppen nach Lage: ein Rand nur waagerecht
+### Kantengruppen und gebogene Züge
 
 Ein geschlossener Ring hat keine Richtung von Anfang zu Ende, und `flat`
 (`|z| < 0,1`) galt bis Format 36 an jedem: „alle waagerechten Kanten“ nahm am
@@ -319,6 +319,21 @@ Kunden ist eine senkrechte Kante eine gerade Kante und kein Lochrand. Ein Rand
 in einer Seitenwand gehört deshalb zu keiner Gruppe, und die doc-Sätze von
 `edges` und `rings_by_plane` sagen es, weil die Beschriftung „Senkrecht“ zeigt.
 Gespeicherte Schritte behalten den alten Weg (Migration 36 → 37).
+
+**Ein gebogener Zug ist kein Satz Prismen.** Am Netz bekam jedes Stück eines
+Zugs sein eigenes Prisma, mit Stirnflächen quer zum eigenen Stück. Biegt der Zug
+und liegt der Zwickel außen um die Biegung — am Rand einer Bohrung in einer
+Wand —, klafft zwischen zwei Prismen ein Keil, und dort bleibt Material stehen:
+Quader mit Bohrung Ø 6, R 2 5,4 % und R 5 20,5 % zu wenig, Fase 2 14,4 %, die
+Rundung bis 1,95 mm neben dem Torus, als Sägezahn um die Mündung. Jetzt liegt
+je Knoten ein Querschnitt mit gemittelter Richtung und gemittelten Normalen,
+dazwischen verbindet das Werkzeug gerade, wie der exakte Kern einen Torus
+tesselliert; ein Ring wird ein Schlauch ohne Stirnflächen. Danach liegt die
+Rundung höchstens 0,043 mm (R 5) neben dem Torus, innerhalb
+`units.MAX_FACET_SAG`; der Sehnenzug des Bogens trägt rund 4 % mehr ab als der
+Kreis — dieselbe Grenze. Ein gerader Zug, ein Knick über `SWEEP_TURN_LIMIT`
+(45 Grad) und eine Fase mit zwei Maßen (`shape`) bleiben beim Prisma, ebenso
+ein Radiusverlauf (`_varying_tool`).
 
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 

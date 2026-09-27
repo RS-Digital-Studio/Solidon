@@ -1423,9 +1423,11 @@ def rounding_tool(
     Handlungen — zwei Funktionen dafür hießen, dass eine von ihnen den
     nächsten Fehler allein bekommt.
 
-    **Gebaut wird stückweise.** Jedes Stück des Zugs bekommt sein eigenes
-    Prisma mit seinem eigenen Querschnitt; vereinigt ergeben sie den ganzen
-    Körper. An einem Bogen dreht sich die Winkelhalbierende dabei mit.
+    **Gebaut wird stückweise, ein Bogen durch seine Knoten.** Jedes Stück
+    eines geraden oder geknickten Zugs bekommt sein eigenes Prisma mit seinem
+    eigenen Querschnitt; vereinigt ergeben sie den ganzen Körper. Ein
+    gebogener Zug entsteht als ein Körper durch Querschnitte an seinen Knoten
+    (:func:`_swept_tool`) — zwischen Prismen klaffte dort ein Keil (RM-279).
 
     Ein gemischter Eckanschluss setzt ``min_steps`` gemeinsam für Torus und
     Zylinder. Dort verhindert ``extend_ends=False`` einen Schnitt auf der
@@ -1458,6 +1460,17 @@ def rounding_tool(
     # Schnittkurve dieselbe, nur die Flanken schneiden Luft. ``EPS_GEOM`` war
     # dafür zu wenig — 499 Eckpunktpaare unter der Schweißtoleranz.
     flank_overlap = BOOLEAN_OVERLAP if subtracted else (0.0 if extend_ends else EPS_GEOM)
+    if shape is None:
+        swept = _swept_tool(
+            entry,
+            radius,
+            rounded,
+            subtracted=subtracted,
+            min_steps=min_steps,
+            flank_overlap=flank_overlap,
+        )
+        if swept is not None:
+            return swept
     pieces: list[MeshData] = []
     for index, (first, second) in enumerate(entry.normals):
         wedge = _wedge(
@@ -1486,6 +1499,215 @@ def rounding_tool(
     # richtiges Volumen, aber ``body_count`` zählte drei Teile, und der
     # Prüfbericht meldet so etwas dem Kunden als Zerfall.
     return boolean("union", pieces, quality=quality, cancelled=cancelled).mesh
+
+
+#: Wie weit ein Zug von einem Stück zum nächsten höchstens abbiegen darf, damit
+#: sein Werkzeug als ein Körper durch die Querschnitte an den Knoten entsteht
+#: (:func:`_swept_tool`). Ein Achteck biegt um 45 Grad; darüber ist der Knoten
+#: eine Ecke, und die Stücke bekommen ihre eigenen Prismen.
+SWEEP_TURN_LIMIT: Final = math.pi / 4.0
+
+
+def _swept_tool(
+    entry: MeshEdge,
+    radius: float,
+    rounded: bool,
+    *,
+    subtracted: bool,
+    min_steps: int,
+    flank_overlap: float,
+    law: RadiusLaw | None = None,
+) -> MeshData | None:
+    """Das Werkzeug eines gebogenen Zugs als **ein** Körper durch die Knoten (RM-279).
+
+    Die Prismen je Stück (:func:`_wedge`) stehen an einem Bogen mit ihren
+    Stirnflächen quer zu ihrem eigenen Stück. Biegt der Zug, klafft zwischen
+    zwei Prismen auf der Außenseite der Biegung ein Keil, und dort bleibt
+    Material stehen. Am Rand einer Bohrung Ø 6 in einer Wand — der Zwickel
+    liegt außen um die Bohrung — trug das Netz bei R 2 5 % und bei R 5 20 %
+    zu wenig ab, die Rundung lag bis 1,9 mm neben der exakten, als Sägezahn
+    um die Mündung; ein Verlauf 2 → 4 → 2 trug 13 % zu wenig ab.
+
+    Hier liegt je **Knoten** ein Querschnitt, quer zur mittleren Richtung der
+    zwei Stücke und mit den gemittelten Flächennormalen, und zwischen zwei
+    Knoten verbindet das Werkzeug gerade — so, wie der exakte Kern einen Torus
+    tesselliert. Ein geschlossener Ring wird ein Schlauch ohne Stirnflächen.
+    Mit ``law`` trägt jeder Querschnitt den Radius seiner Stelle, und wie in
+    :func:`_varying_tool` kommen Querschnitte an jeder Stelle des Verlaufs und
+    so dicht dazwischen dazu, dass die gerade Verbindung der Länge nach
+    höchstens :data:`LENGTHWISE_SAG_SHARE` der Sehnengrenze verbraucht.
+
+    Ein gerader Zug bleibt beim Prisma (``None``), ebenso ein Zug mit einem
+    Knick über :data:`SWEEP_TURN_LIMIT`, mit Normalen, die an einem Knoten
+    springen, oder mit einem Stück ohne Querschnitt.
+    """
+    points = np.asarray(entry.points, dtype=float)
+    count = len(entry.normals)
+    if count < 2 or len(points) != count + 1:
+        return None
+    steps_along = np.diff(points, axis=0)
+    lengths = np.linalg.norm(steps_along, axis=1)
+    if float(lengths.min()) <= EPS_GEOM:
+        return None
+    alongs = steps_along / lengths[:, None]
+    closed = count >= 3 and math.dist(points[0], points[-1]) <= EPS_GEOM
+    pairs = [
+        (np.asarray(first, dtype=float), np.asarray(second, dtype=float))
+        for first, second in entry.normals
+    ]
+    # Welche Normale „die erste“ ist, sagt die Kantensuche je Stück; für einen
+    # Körper durch alle Knoten muss sie am ganzen Zug dieselbe Fläche meinen.
+    for index in range(1, count):
+        previous_one, previous_two = pairs[index - 1]
+        one, two = pairs[index]
+        if units.dot3(previous_one, two) + units.dot3(previous_two, one) > units.dot3(
+            previous_one, one
+        ) + units.dot3(previous_two, two):
+            pairs[index] = (two, one)
+    joints = [(index, index + 1) for index in range(count - 1)]
+    if closed:
+        joints.append((count - 1, 0))
+    turn_cos = math.cos(SWEEP_TURN_LIMIT)
+    bent = False
+    for before, after in joints:
+        turn = units.dot3(alongs[before], alongs[after])
+        if turn < turn_cos:
+            return None
+        if any(units.dot3(pairs[before][side], pairs[after][side]) < turn_cos for side in (0, 1)):
+            return None
+        bent = bent or turn < 1.0 - EPS_GEOM
+    if not bent:
+        return None
+
+    def mean(first: np.ndarray, second: np.ndarray) -> np.ndarray | None:
+        summed = first + second
+        size = _length(summed)
+        return summed / size if size > EPS_GEOM else None
+
+    def constant(_place: float) -> float:
+        return radius
+
+    cumulative = np.concatenate(([0.0], np.cumsum(lengths)))
+    radius_at: Callable[[float], float] = constant
+    stations: list[float] = []
+    spacing = math.inf
+    chord_sag = MAX_FACET_SAG
+    if law is not None:
+        on_chain = law_on_points(points, law)
+        radius_at = on_chain.radius
+        stations = on_chain.places()
+        bend = on_chain.law.curvature_bound() / max(float(cumulative[-1]) ** 2, EPS_GEOM)
+        if bend > EPS_GEOM:
+            chord_sag = MAX_FACET_SAG * (1.0 - LENGTHWISE_SAG_SHARE)
+            # Wie in :func:`_varying_tool`: Ein Querschnittspunkt wandert je
+            # Millimeter Radius höchstens um Mittelpunktsabstand und Radius.
+            halves = [(math.pi - _acos(units.dot3(one, two))) / 2.0 for one, two in pairs]
+            if not all(EPS_GEOM < half < math.pi / 2.0 - EPS_GEOM for half in halves):
+                return None
+            leverage = 1.0 / units.exact_sin(min(halves)) + 1.0
+            spacing = math.sqrt(8.0 * MAX_FACET_SAG * LENGTHWISE_SAG_SHARE / (leverage * bend))
+
+    # Die Knoten des Zugs mit gemitteltem Rahmen, dazwischen die Stellen des
+    # Verlaufs im Rahmen ihres eigenen Stücks.
+    frames: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]] = []
+    for knot in range(count if closed else count + 1):
+        previous = knot - 1 if knot > 0 else (count - 1 if closed else None)
+        following = knot if knot < count else None
+        place = float(cumulative[knot])
+        if previous is None or following is None:
+            piece = following if following is not None else previous
+            assert piece is not None
+            frames.append((points[knot], alongs[piece], *pairs[piece], radius_at(place)))
+        else:
+            mid_along = mean(alongs[previous], alongs[following])
+            mid_one = mean(pairs[previous][0], pairs[following][0])
+            mid_two = mean(pairs[previous][1], pairs[following][1])
+            if mid_along is None or mid_one is None or mid_two is None:
+                return None
+            frames.append((points[knot], mid_along, mid_one, mid_two, radius_at(place)))
+        if following is None:
+            continue
+        low, high = place, float(cumulative[knot + 1])
+        inner = {value for value in stations if low < value < high}
+        if math.isfinite(spacing):
+            parts = max(1, math.ceil((high - low) / spacing))
+            inner.update(low + (high - low) * step / parts for step in range(1, parts))
+        for value in sorted(inner):
+            frames.append(
+                (
+                    points[knot] + (value - low) * alongs[following],
+                    alongs[following],
+                    *pairs[following],
+                    radius_at(value),
+                )
+            )
+
+    steps: int | None = None
+    if rounded:
+        # Der Bogen spannt den Winkel zwischen den Normalen (wie in :func:`_arc`).
+        largest = max(frame[4] for frame in frames)
+        spans = [_acos(units.dot3(one, two)) for one, two in pairs]
+        steps = max(min_steps, *(_arc_steps(largest, span, chord_sag) for span in spans))
+    sections: list[np.ndarray] = []
+    for start, along, one, two, size in frames:
+        section = _wedge_section(
+            start,
+            along,
+            (float(one[0]), float(one[1]), float(one[2])),
+            (float(two[0]), float(two[1]), float(two[2])),
+            size,
+            entry.convex,
+            rounded,
+            flank_overlap=flank_overlap,
+            steps=steps,
+        )
+        if section is None:
+            return None
+        sections.append(np.asarray(section[0], dtype=float))
+    if len({len(section) for section in sections}) != 1:
+        return None
+    if closed:
+        return _tube(sections)
+    overshoot = EDGE_OVERSHOOT if subtracted else 0.0
+    return _loft_along(sections, alongs[0], alongs[-1], overshoot)
+
+
+def _tube(sections: list[np.ndarray]) -> MeshData | None:
+    """Ein geschlossener Schlauch durch gleich lange Querschnitte, rundum verbunden."""
+    import trimesh
+
+    count = len(sections[0])
+    rings = len(sections)
+    faces: list[tuple[int, int, int]] = []
+    for ring in range(rings):
+        here, there = ring * count, ((ring + 1) % rings) * count
+        for corner in range(count):
+            following = (corner + 1) % count
+            faces.append((here + corner, here + following, there + following))
+            faces.append((here + corner, there + following, there + corner))
+    body = trimesh.Trimesh(
+        vertices=np.vstack(sections), faces=np.asarray(faces, dtype=np.int64), process=False
+    )
+    if body.volume < 0.0:
+        body.invert()
+    if body.volume <= EPS_GEOM or not body.is_watertight:
+        return None
+    return MeshData(body)
+
+
+def _loft_along(
+    sections: list[np.ndarray], first: np.ndarray, last: np.ndarray, overshoot: float
+) -> MeshData | None:
+    """:func:`_loft` mit dem Überstand je Ende in der Richtung seines eigenen Stücks."""
+    import trimesh
+
+    rings = list(sections)
+    if overshoot > 0.0:
+        rings = [rings[0] - overshoot * first, *rings, rings[-1] + overshoot * last]
+    body = _loft([list(ring) for ring in rings], first, 0.0)
+    if body is None or not isinstance(body.raw, trimesh.Trimesh) or not body.raw.is_watertight:
+        return None
+    return body
 
 
 def _without_an_angle(radius: float) -> GeometryError:
@@ -3224,7 +3446,15 @@ def _edge_work(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if law is not None:
-            tool = _varying_tool(entry, law, quality=quality, cancelled=cancelled)
+            tool = _swept_tool(
+                entry,
+                law.largest,
+                True,
+                subtracted=entry.convex,
+                min_steps=0,
+                flank_overlap=BOOLEAN_OVERLAP if entry.convex else 0.0,
+                law=law,
+            ) or _varying_tool(entry, law, quality=quality, cancelled=cancelled)
         else:
             tool = rounding_tool(
                 entry,

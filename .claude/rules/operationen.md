@@ -102,10 +102,11 @@ Knotennummer oder erster Punkt; beide Kerne und jeder Verbraucher fragen
 dieselben Funktionen. Ohne Form (Ring mit verschiedenen Endradien, verschiedene
 Radien an einer Ecke) eine Absage mit Weg (Regel 21).
 
-### Gruppen nach Lage: ein Rand nur waagerecht
+### Kantengruppen und gebogene Züge
 
 Nur `edges.choose` fragt die Lage: Strecken nach Richtung, Ränder nur waagerecht
-(`edge_lie_of`); ein „Senkrecht“ beschrifteter Rand gehört zu keiner (RM-279).
+(`edge_lie_of`), ein „Senkrecht“ beschrifteter zu keiner. Ein gebogener
+Zug wird durch seine Knoten gezogen (`_swept_tool`, RM-279).
 
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
