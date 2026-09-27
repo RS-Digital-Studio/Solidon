@@ -226,7 +226,6 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("speed.inner_wall", "inner_wall_speed", _positive),
     ("speed.infill", "sparse_infill_speed", _positive),
     ("speed.top_surface", "top_surface_speed", _positive),
-    ("speed.first_layer", "initial_layer_speed", _positive),
     ("speed.travel", "travel_speed", _positive),
     ("speed.bridge", "bridge_speed", _positive),
     ("speed.acceleration", "default_acceleration", _positive),
@@ -432,6 +431,11 @@ def _read_process(
             foreign[path] = value.raw
         elif value is not None:
             read[path] = value
+    first = _first_layer_speed(values, context)
+    if isinstance(first, Foreign):
+        foreign["speed.first_layer"] = first.raw
+    elif first is not None:
+        read["speed.first_layer"] = first
     style = _support_style(values)
     if style is not None:
         read["support.style"] = style
@@ -450,6 +454,27 @@ def _read_process(
     if density is not None:
         read["support.density"] = density
     return read, foreign
+
+
+def _first_layer_speed(values: Mapping[str, Any], context: _Context) -> object:
+    """Das Tempo der ersten Schicht, wie sie gedruckt wird: das schnellere aus
+    Wänden (``initial_layer_speed``) und Füllung (``initial_layer_infill_speed``).
+
+    Solidons Feld schreibt beide (``slicer_keys``). Läse es nur die Wände,
+    stünde am Centauri Carbon 2 „50 mm/s“ im Dialog, während der Boden mit 105
+    läuft — und wer dann 50 einstellt, änderte nichts, weil der Wert schon
+    dasteht. Ist keiner der beiden eine Zahl, bleibt der Wert fremd
+    (:class:`Foreign`) wie jeder andere, der sich nicht übersetzen lässt.
+    """
+    found = [
+        _positive(text, context)
+        for key in ("initial_layer_speed", "initial_layer_infill_speed")
+        if (text := _text(values.get(key))) is not None
+    ]
+    speeds = [value for value in found if isinstance(value, float)]
+    if speeds:
+        return max(speeds)
+    return next((value for value in found if isinstance(value, Foreign)), None)
 
 
 def _support_style(values: Mapping[str, Any]) -> str | None:

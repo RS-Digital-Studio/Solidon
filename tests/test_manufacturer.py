@@ -740,6 +740,32 @@ def test_an_unreadable_chosen_process_is_said(bestand: Path) -> None:
     assert found[0].suggestions
 
 
+def test_the_first_layer_is_the_whole_first_layer(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Orca fährt die Füllung der ersten Schicht mit eigenem Tempo — am
+    Centauri Carbon 2 105 mm/s, Wände und Brim 50. Solidons Feld erreichte sie
+    nicht, und am Minigolf-Satz rissen genau die kurzen Bodenbahnen der
+    schmalen Stege (27.09.2026). Der Dialog zeigt jetzt das schnellere Tempo,
+    und eine eigene Wahl gilt beiden."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    vendor = bestand.parent / "resources" / "profiles" / "Elegoo"
+    process = vendor / "process" / "ECC2" / "standard.json"
+    document = json.loads(process.read_text(encoding="utf-8"))
+    document.update({"initial_layer_speed": "50", "initial_layer_infill_speed": "105"})
+    _write(process, document)
+
+    base = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+    assert base.settings.speed.first_layer == pytest.approx(105.0)
+
+    settings = print_settings.with_choice(print_settings.resolve(_cc2()), "speed.first_layer", 50)
+    written, _filament = _written(tmp_path, settings, _setup(bestand))
+    assert written["initial_layer_speed"] == "50"
+    assert written["initial_layer_infill_speed"] == "50"
+    prusa = handover.as_mapping(settings, "prusa")
+    assert prusa["first_layer_speed"] == prusa["first_layer_infill_speed"] == "50"
+
+
 def test_without_a_manufacturer_profile_solidon_writes_everything(tmp_path: Path) -> None:
     """Die Rückfallseite von Entscheidung D: Ohne Herstellerprofil ist Solidons
     Tabelle die Grundlage, und sie geht ganz hinaus — wie bisher."""

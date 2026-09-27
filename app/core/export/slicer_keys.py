@@ -272,6 +272,9 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("speed.inner_wall", "gap_fill_speed", _number),
     ("speed.top_surface", "top_solid_infill_speed", _number),
     ("speed.first_layer", "first_layer_speed", _number),
+    # Die Füllung der ersten Schicht hat bei PrusaSlicer ein eigenes Tempo, das
+    # ``first_layer_speed`` nicht erreicht — wie bei Orca, siehe dort.
+    ("speed.first_layer", "first_layer_infill_speed", _number),
     ("speed.travel", "travel_speed", _number),
     ("retraction.avoid_crossing_walls", "avoid_crossing_perimeters", _flag),
     ("support.style", "support_material", _support_on),
@@ -399,6 +402,11 @@ ORCA: Final[tuple[Row, ...]] = (
     ("speed.inner_wall", "gap_infill_speed", _number),
     ("speed.top_surface", "top_surface_speed", _number),
     ("speed.first_layer", "initial_layer_speed", _number),
+    # **Die erste Schicht ist die ganze erste Schicht.** Orca fährt ihre
+    # Füllung eigens: am Centauri Carbon 2 mit 105 mm/s, Wände und Brim mit
+    # 50. Solidons Feld erreichte die Füllung nicht, und am Minigolf-Satz
+    # rissen genau die kurzen Bodenbahnen der schmalen Stege (27.09.2026).
+    ("speed.first_layer", "initial_layer_infill_speed", _number),
     ("speed.travel", "travel_speed", _number),
     # Orca hat PrusaSlicer als Vorfahren und schreibt Wahrheitswerte wie es:
     # "0" und "1", nicht "true" und "false". Ein "true" hier bleibt still
