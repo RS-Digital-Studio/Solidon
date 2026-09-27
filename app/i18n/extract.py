@@ -27,11 +27,13 @@ PACKAGE_DIR = Path(__file__).parent.parent
 # schreibt Oberflächentexte in Bilder, die der Kunde sieht — ein ``tr()``, das
 # die Sammlung nicht kennt, fällt in fünf Sprachen still auf Deutsch zurück
 # („Halter für die Werkbank" stand auf jedem fremdsprachigen own-part-Bild).
+# ``make_guide_video`` ebenso: Seine Einblendungen stehen im Film.
 EXTRA_SOURCES = (
     PACKAGE_DIR.parent / "tools" / "make_examples.py",
     PACKAGE_DIR.parent / "tools" / "make_figures.py",
     PACKAGE_DIR.parent / "tools" / "make_changelog.py",
     PACKAGE_DIR.parent / "tools" / "make_manual.py",
+    PACKAGE_DIR.parent / "tools" / "make_guide_video.py",
     PACKAGE_DIR.parent / "tools" / "site_nav.py",
 )
 

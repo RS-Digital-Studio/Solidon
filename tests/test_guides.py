@@ -10,6 +10,8 @@ passen, prüft ein Test mit Marker ``rendered``.
 from __future__ import annotations
 
 import json
+import re
+from pathlib import Path
 from typing import get_args
 
 import pytest
@@ -396,6 +398,84 @@ def test_every_guide_is_named_at_the_end_of_a_page_that_explains_its_topic() -> 
             page = manual.find(key)
             assert page is not None, key
             assert f"](manual:{guide.key})" in str(page.body), f"{key} nennt {guide.key} nicht"
+
+
+def test_the_films_follow_where_to_start_and_hold_every_guide_once() -> None:
+    """Zwei Filme wie die zwei Listen auf „Wo fange ich an?“ (HB-12)."""
+    from tools import make_guide_video
+
+    films = make_guide_video.films([])
+    assert [film.name for film in films] == ["start", "tasks"]
+    for film in films:
+        assert [guide.part for guide in film.chapters] == [film.name] * len(film.chapters)
+    shown = [guide.key for film in films for guide in film.chapters]
+    assert shown == [guide.key for guide in guides.GUIDES if guide.part in ("start", "tasks")]
+    assert sorted(shown) == sorted(guide.key for guide in guides.GUIDES)
+    single = make_guide_video.films(["drill-a-hole"])
+    assert [(film.name, len(film.chapters)) for film in single] == [("drill-a-hole", 1)]
+
+
+def test_a_film_stops_at_pictures_that_no_longer_fit_their_guide(tmp_path: Path) -> None:
+    """Ein Film, der einen anderen Schritt zeigt, als er einblendet, entsteht nicht."""
+    from tools import make_guide_video
+
+    drill = next(guide for guide in guides.GUIDES if guide.key == "drill-a-hole")
+    with pytest.raises(SystemExit, match="make_guides"):
+        make_guide_video.check_pictures(tmp_path, (drill,))
+
+    def stamp(version: str, fingerprint: str) -> None:
+        entry = {"version": version, "fingerprint": fingerprint}
+        (tmp_path / "guides.json").write_text(
+            json.dumps({"guides": {drill.key: entry}}), encoding="utf-8"
+        )
+
+    stamp(APP_VERSION, guides.fingerprint(drill))
+    make_guide_video.check_pictures(tmp_path, (drill,))
+    stamp(APP_VERSION, "0" * 16)
+    with pytest.raises(SystemExit, match="drill-a-hole: seit der Aufnahme geändert"):
+        make_guide_video.check_pictures(tmp_path, (drill,))
+    stamp("0.0.1", guides.fingerprint(drill))
+    with pytest.raises(SystemExit, match=re.escape("drill-a-hole: aufgenommen mit 0.0.1")):
+        make_guide_video.check_pictures(tmp_path, (drill,))
+
+
+def test_a_caption_colours_the_names_and_keeps_a_link_as_its_text() -> None:
+    """Im Film ist nichts anklickbar; der Name, den der Kunde sucht, steht in der
+    Farbe der Markierung, und nichts aus dem Satz wird zu HTML."""
+    from tools import make_guide_video
+
+    text = "Klicken Sie auf *Verrunden* wie in [Das erste eigene Teil](manual:first-part) <b>"
+    shown = make_guide_video.caption_html(text, "#f0a54a")
+    assert '<span style="color:#f0a54a; font-weight:600">Verrunden</span>' in shown
+    assert "Das erste eigene Teil" in shown
+    assert "manual:" not in shown
+    assert "*" not in shown
+    assert "&lt;b&gt;" in shown
+
+
+def test_the_chapters_follow_what_youtube_takes() -> None:
+    """Ab drei Kapiteln, das erste bei 0:00 — sonst keine Marken."""
+    from tools import make_guide_video
+
+    events = [
+        {"start": 0.0, "chapter": ""},
+        {"start": 7.27, "chapter": "Eins"},
+        {"start": 65.5, "chapter": "Zwei"},
+        {"start": 130.0, "chapter": "Drei"},
+    ]
+    assert make_guide_video.chapter_marks(events) == "0:00 Eins\n1:05 Zwei\n2:10 Drei\n"
+    assert make_guide_video.chapter_marks(events[:3]) == ""
+
+
+def test_a_picture_stands_as_long_as_its_words_need_within_bounds() -> None:
+    from tools import make_guide_video
+
+    low, high = make_guide_video.STEP_SECONDS
+    assert make_guide_video.reading_seconds(0, (low, high)) == low
+    assert make_guide_video.reading_seconds(200, (low, high)) == high
+    assert make_guide_video.reading_seconds(12, (low, high)) < make_guide_video.reading_seconds(
+        18, (low, high)
+    )
 
 
 def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
