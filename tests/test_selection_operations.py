@@ -138,6 +138,54 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
     assert quick_names(2, "hole") == quick_names(1, "hole")
 
 
+def test_what_the_feature_does_not_offer_leaves_the_front_row() -> None:
+    """Am Kegel, der die Mündung verengt, steht *Senken* nicht vorn (R3).
+
+    Die Hauptaktionen folgen der Merkmalsart, und am Kegel war *Senken* die
+    erste — auch an der Haltelippe einer Magnettasche, wo der Trichter die
+    Lippe mitnahm. Was am gewählten Merkmal nichts Sinnvolles tut, nennt der
+    Kern (``perceive.actions.not_offered_at``); ohne gewähltes Merkmal gilt
+    die Menge nicht.
+    """
+    load_operations()
+    narrowing = frozenset({"countersink_hole"})
+
+    assert quick_names(1, "cone")[0] == "countersink_hole"
+    assert quick_names(1, "cone", left_out=narrowing) == ("pattern_feature",)
+    assert quick_names(1, "", left_out=narrowing) == QUICK_BODY
+
+
+def test_the_panel_leaves_out_what_the_feature_does_not_offer(qt_app: QApplication) -> None:
+    """*Senken* steht an einer Verengung weder vorn noch in der Liste (R3).
+
+    Dieselbe Menge für beide Stellen (:meth:`SelectionOperationsPanel.set_context`):
+    Stünde der Knopf unten weiter, führte er zu einer Handlung, die das Panel
+    oben gerade weggelassen hat. An einem anderen Kegel kommt er zurück.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+
+    def listed() -> set[str]:
+        return {
+            str(button.property("operationName"))
+            for _section, _toggle, buttons in panel._groups.values()
+            for button in buttons
+            if not button.isHidden()
+        }
+
+    def front() -> set[str]:
+        return {name for name, button in panel._quick_buttons.items() if not button.isHidden()}
+
+    panel.set_context(
+        1, _availability(1), feature_kind="cone", left_out=frozenset({"countersink_hole"})
+    )
+    assert "countersink_hole" not in front() | listed()
+    assert "pattern_feature" in front()
+
+    panel.set_context(1, _availability(1), feature_kind="cone")
+    assert "countersink_hole" in front()
+
+
 def test_selection_changes_update_in_place_and_explain_disabled_actions(
     qt_app: QApplication,
 ) -> None:

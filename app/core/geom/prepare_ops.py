@@ -26,6 +26,7 @@ from app.core.errors import (
     RECOUNT_AND_RETRY,
     REPAIR_AND_RETRY,
     RESIZE_THE_WIDENING,
+    SHOW_FEATURE,
     SHOW_LOCATION,
     SPLIT_AND_RETRY,
     SPLIT_MODEL,
@@ -3034,7 +3035,7 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
     Der Satz dazu kommt aus derselben Tabelle, aus der das Panel seine
     ausgegraute Zeile beschriftet — ``perceive.actions.reason_against``.
     """
-    from app.core.perceive.actions import cone_piece_blocked, reason_against
+    from app.core.perceive.actions import cone_piece_blocked, cone_reason, reason_against
 
     feature = source.features.get(name)
     if feature is None:
@@ -3046,8 +3047,11 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
     # Ein Kegelstück ohne eigenen Körper: derselbe Satz wie im Panel, bevor
-    # ``_body_from_faces`` an seinem Rand scheitert.
-    against = cone_piece_blocked(feature) or reason_against(op, feature.kind)
+    # ``_body_from_faces`` an seinem Rand scheitert. Eine Verengung ändert
+    # *Merkmal ändern* nicht (R3) — auch nicht über Chat oder Kommandozeile.
+    against = (
+        cone_piece_blocked(feature) or cone_reason(feature, op) or reason_against(op, feature.kind)
+    )
     if against is None:
         return feature
     raise ValidationError(
@@ -8079,6 +8083,8 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
     if widening is None:
         return []
     outer = float(widening.params.get("diameter") or 0.0)
+    if widening.params.get("narrowing"):
+        return [_narrowing_after_resize(feature, widening, diameter, outer)]
     values: dict[str, float | str | TranslatableText] = {
         "widening": widening.id,
         "outer": outer,
@@ -8121,6 +8127,49 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
             suggestions=(RESIZE_THE_WIDENING,),
         )
     ]
+
+
+def _narrowing_after_resize(
+    feature: Feature, narrowing: Feature, diameter: float, outer: float
+) -> Finding:
+    """Sagt es, wenn an der Mündung der geänderten Bohrung eine Verengung sitzt (R3).
+
+    Die Haltelippe einer Magnettasche hieß hier „Senkung“, und *Senkung
+    mitziehen* führte zu *Merkmal ändern* an der Lippe — das dort absagt
+    (``perceive.actions.NARROWING_HAS_NO_SIZE``). Eine Verengung folgt der
+    Bohrung nicht; so weit wie ihr weites Ende oder weiter verschwindet sie.
+    Wie viel von ihr bei einem engeren Maß bleibt, rechnen die Kerne heute
+    verschieden — der Satz sagt deshalb nur, dass sie nicht mitging, und
+    *Merkmal zeigen* führt zu ihr.
+    """
+    values: dict[str, float | str | TranslatableText] = {
+        "narrowing": narrowing.id,
+        "diameter": diameter,
+        "previous": float(feature.params.get("diameter") or 0.0),
+    }
+    if diameter >= outer - EPS_GEOM:
+        return Finding(
+            code="resize.narrowing_swallowed",
+            severity="warning",
+            message=_(
+                "An der Mündung dieser Bohrung sitzt eine Verengung. Bei diesem Durchmesser "
+                "verschwindet sie — soll sie bleiben, wählen Sie einen kleineren."
+            ),
+            feature_ids=(narrowing.id, feature.id),
+            values=values,
+            suggestions=(CORRECT_INPUT,),
+        )
+    return Finding(
+        code="resize.narrowing_kept",
+        severity="info",
+        message=_(
+            "An der Mündung dieser Bohrung sitzt eine Verengung, und sie geht nicht mit. "
+            "Sehen Sie nach, ob die Öffnung noch passt."
+        ),
+        feature_ids=(narrowing.id, feature.id),
+        values=values,
+        suggestions=(SHOW_FEATURE,),
+    )
 
 
 #: Ab welchem Unterschied ein Zug nicht mehr in Richtung des bestehenden
@@ -8241,9 +8290,10 @@ def _chosen_bore(source: SceneObject, name: str, *, op: str = "") -> Feature:
             values={"known": ", ".join(sorted(source.features))},
         )
     if op:
-        from app.core.perceive.actions import reason_against
+        from app.core.perceive.actions import cone_reason, reason_against
 
-        against = reason_against(op, feature.kind)
+        # An einer Verengung oder Verjüngung ihr eigener Satz, wie im Panel (R3).
+        against = cone_reason(feature, op) or reason_against(op, feature.kind)
         if against is None:
             return feature
         raise ValidationError(
@@ -8500,6 +8550,14 @@ def _entrance_side(
             if sections and inner < sections[-1].outer_radius - MAX_FACET_SAG:
                 raise _entrance_error()
         elif entry.kind == "cone" and sections and sections[-1].feature.kind == "hole":
+            if entry.params.get("narrowing"):
+                # **Eine Verengung wird nach außen enger** (R3), und die Profile
+                # hier kennen nur den Kegel, der sich zur Mündung weitet: Die
+                # Haltelippe einer Magnettasche kam nach *Bohrung ändern* mit
+                # Einlauf an beiden Kernen als Senkung zurück (Mündung Ø 8,75
+                # über der Tasche Ø 8,49), nach *Merkmal verschieben* am exakten
+                # Körper ebenso — der Magnet hielt nicht mehr.
+                raise _entrance_error()
             angle = float(entry.params.get("angle", 0.0))
             if not EPS_GEOM < angle < 180.0 - EPS_GEOM:
                 raise _entrance_error()
@@ -10969,18 +11027,21 @@ def _exact_chain_tool_turned(
 def _exact_move_chain(
     ctx: OpContext, source: SceneObject, feature: Feature, chain: Sequence[Feature], target: Vec3
 ) -> OpResult:
-    """Bohrung samt Senkung am exakten Körper versetzen (P2.4)."""
-    entrance = _exact_chain_entrance(source, chain)
+    """Bohrung samt Senkung am exakten Körper versetzen (P2.4) — eine Kette,
+    die nach außen enger wird, ganz über ihre eigenen Flächen
+    (:func:`_exact_chain_own_cavity`), ohne je ein Einlaufprofil zu bauen."""
     travel = np.asarray(target, dtype=float) - np.asarray(feature.params["centre"], dtype=float)
-    ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
-    filled = _exact_chain_filled(source, entrance)
-    ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
     own = _exact_chain_own_cavity(source, chain)
-    placed, tool = (
-        _exact_own_cut(filled, own, travel)
-        if own is not None
-        else _exact_chain_cut_moved(filled, entrance, travel)
-    )
+    ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
+    if own is not None:
+        filled = _exact_own_chain_filled(source, chain, own)
+        ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+        placed, tool = _exact_own_cut(filled, own, travel)
+    else:
+        entrance = _exact_chain_entrance(source, chain)
+        filled = _exact_chain_filled(source, entrance)
+        ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+        placed, tool = _exact_chain_cut_moved(filled, entrance, travel)
     expected = [
         dataclasses.replace(
             related,
@@ -11017,8 +11078,8 @@ def _exact_move_chain(
 def _exact_duplicate_chain(
     ctx: OpContext, source: SceneObject, feature: Feature, chain: Sequence[Feature], target: Vec3
 ) -> OpResult:
-    """Bohrung samt Senkung am exakten Körper ein zweites Mal schneiden (P2.4)."""
-    entrance = _exact_chain_entrance(source, chain)
+    """Bohrung samt Senkung am exakten Körper ein zweites Mal schneiden (P2.4) —
+    eine Kette, die nach außen enger wird, über ihre eigenen Flächen."""
     solid = _exact_body(source)
     travel = np.asarray(target, dtype=float) - np.asarray(feature.params["centre"], dtype=float)
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
@@ -11026,7 +11087,7 @@ def _exact_duplicate_chain(
     placed, tool = (
         _exact_own_cut(solid, own, travel)
         if own is not None
-        else _exact_chain_cut_moved(solid, entrance, travel)
+        else _exact_chain_cut_moved(solid, _exact_chain_entrance(source, chain), travel)
     )
     taken: set[str] = {*source.reserved_feature_ids, *source.features}
     copies = []
@@ -11300,18 +11361,24 @@ def _exact_own_filled(source: SceneObject, solid: Any, feature: Feature) -> Any:
     :func:`_exact_chain_filled`: Eine Vereinigung, die ihn still fallen ließe,
     ließe den Schlitz offen stehen.
     """
-    from app.core.brep import edit
-
     body = _exact_slot_body(source, feature)
     if body is None:
         air = _exact_air_of_the_bore(source, feature)
         body = air.body if air is not None else None
-    if body is None:
-        return _exact_cavity_filled(solid, feature)
+    filled = _exact_body_filled(solid, body) if body is not None else None
+    return filled if filled is not None else _exact_cavity_filled(solid, feature)
+
+
+def _exact_body_filled(solid: Any, body: Any) -> Any | None:
+    """``solid`` mit dem Hohlraumkörper ``body`` gefüllt — ``None``, wo die
+    Vereinigung ihn still fallen ließ (an den Zwillingen gemessen, wie in
+    :func:`_exact_chain_filled`)."""
+    from app.core.brep import edit
+
     filled = edit.unified(edit.boolean("union", [solid, body]))
     gained = as_mesh_data(filled).volume - as_mesh_data(solid).volume
     if gained < as_mesh_data(body).volume * _PLUG_KEPT:
-        return _exact_cavity_filled(solid, feature)
+        return None
     return filled
 
 
@@ -11350,19 +11417,15 @@ def _own_mouths(source: SceneObject, feature: Feature) -> tuple[tuple[SectionPla
 def _narrows_outward(chain: Sequence[Feature]) -> bool:
     """Ob eine Kette nach außen enger wird — eine Haltelippe statt einer Senkung.
 
-    Eine Senkung ist an ihrem weiten Ende weiter als die Bohrung darunter; ein
-    Kegel, dessen weites Ende nicht weiter ist, verengt die Mündung. So führt
-    die Erkennung seit der Zuordnung zu Baustein-Merkmalen die Lippe einer
-    Magnettasche (``cone_1`` Ø 8,25 über der Bohrung Ø 8,25).
+    **Die Erkennung sagt es** (``perceive.actions.narrows_the_mouth``, das
+    Flag ``narrowing`` am Kegel): dieselbe Frage, die der Einlauf an einer
+    Verengung absagen lässt (:func:`_entrance_side`) und die das
+    Merkmalfenster „Verengung" nennt. Ein Kriterium für alle drei — hier stand
+    bis zur Übernahme von rest-erkennung ein eigener Durchmesservergleich.
     """
-    from app.core.perceive.relations import cavity_sides
+    from app.core.perceive.actions import narrows_the_mouth
 
-    for side in cavity_sides(chain):
-        inner = _bore_number(side[0], "diameter")
-        for section in side[1:]:
-            if section.kind == "cone" and _bore_number(section, "diameter") <= inner + EPS_DISPLAY:
-                return True
-    return False
+    return any(narrows_the_mouth(section) for section in chain)
 
 
 def _exact_chain_own_cavity(source: SceneObject, chain: Sequence[Feature]) -> _OwnCavity | None:
@@ -11391,6 +11454,16 @@ def _exact_chain_own_cavity(source: SceneObject, chain: Sequence[Feature]) -> _O
         return None
     mouths = _own_mouths(source, chain[0])
     return _OwnCavity(body, mouths) if mouths else None
+
+
+def _exact_own_chain_filled(source: SceneObject, chain: Sequence[Feature], own: _OwnCavity) -> Any:
+    """Die Kette aus :func:`_exact_chain_own_cavity` geschlossen — mit ihrem
+    Körper aus den eigenen Flächen, samt Lippe; kommt er nicht an, sagt die
+    Handlung mit dem Satz der Kette ab (``CHAIN_NOT_READABLE``)."""
+    filled = _exact_body_filled(_exact_body(source), own.body)
+    if filled is None:
+        raise _chain_not_readable(chain)
+    return filled
 
 
 def _exact_own_cut(solid: Any, own: _OwnCavity, travel: NDArray[np.float64]) -> tuple[Any, Any]:
@@ -11433,10 +11506,15 @@ def _exact_own_cut(solid: Any, own: _OwnCavity, travel: NDArray[np.float64]) -> 
 def _exact_remove_chain(
     ctx: OpContext, source: SceneObject, feature: Feature, chain: Sequence[Feature]
 ) -> OpResult:
-    """Die ganze Kette am exakten Körper schließen (P2.4)."""
-    entrance = _exact_chain_entrance(source, chain)
+    """Die ganze Kette am exakten Körper schließen (P2.4) — eine Kette, die
+    nach außen enger wird, mit ihrem Körper aus den eigenen Flächen."""
     ctx.progress(0.2, str(_("Der ganze Hohlraum wird geschlossen …")))
-    filled = _exact_chain_filled(source, entrance)
+    own = _exact_chain_own_cavity(source, chain)
+    filled = (
+        _exact_own_chain_filled(source, chain, own)
+        if own is not None
+        else _exact_chain_filled(source, _exact_chain_entrance(source, chain))
+    )
     gone = tuple(section.id for section in chain)
     findings = [
         Finding(

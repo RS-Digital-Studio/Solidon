@@ -1347,6 +1347,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "intersection": _("Durchdringung"),
     "last_angle": _("Letzter Winkel"),
     "length": _("Länge"),
+    "narrowing": _("Verengung"),
     "nominal_side_clearance": _("Seitliches Nennspiel"),
     "normal": _("Richtung der Fläche"),
     "outer": _("Senkung"),
@@ -2251,18 +2252,35 @@ _AXIS_ALIGNED = 0.9
 
 
 def cavity_name(feature_id: FeatureId, feature: Feature, cavity: Sequence[Feature] = ()) -> str:
-    """Den belegten Zusammenhang schon an der obersten Bohrungszeile nennen."""
+    """Den belegten Zusammenhang schon an der obersten Bohrungszeile nennen.
+
+    **Ein Kegel ist nicht immer eine Senkung** (Durchsicht 0.5.1, R3): Die
+    Haltelippe einer Magnettasche verengt die Mündung (``narrowing`` aus der
+    Erkennung), und „Sackbohrung 1 mit Senkung" versprach einen Trichter, wo
+    der Magnet gehalten wird. Dasselbe Wort wie am Kegel selbst
+    (:func:`feature_name`).
+    """
     name = feature_name(feature_id, feature)
     if not cavity or cavity[0].id != feature_id or feature.kind != "hole":
         return name
     stepped = sum(member.kind == "hole" for member in cavity) > 1
-    countersunk = any(member.kind == "cone" for member in cavity)
+    cones = [member for member in cavity if member.kind == "cone"]
+    narrowed = any(member.params.get("narrowing") for member in cones)
+    countersunk = any(not member.params.get("narrowing") for member in cones)
+    if stepped and countersunk and narrowed:
+        return tr("{feature} mit Stufen, Senkung und Verengung").format(feature=name)
     if stepped and countersunk:
         return tr("{feature} mit Stufen und Senkung").format(feature=name)
+    if stepped and narrowed:
+        return tr("{feature} mit Stufen und Verengung").format(feature=name)
     if stepped:
         return tr("{feature} mit Stufen").format(feature=name)
+    if countersunk and narrowed:
+        return tr("{feature} mit Senkung und Verengung").format(feature=name)
     if countersunk:
         return tr("{feature} mit Senkung").format(feature=name)
+    if narrowed:
+        return tr("{feature} mit Verengung").format(feature=name)
     return name
 
 
@@ -2321,6 +2339,10 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
         # Steckbrief (``perceive/digest.py``).
         if feature.params.get("partial"):
             return tr("Kegelfläche")
+        # Ein hohler Kegel, der sich zu seiner Bohrung hin öffnet, verengt die
+        # Mündung — die Haltelippe einer Magnettasche (``narrowing``, R3).
+        if feature.params.get("narrowing"):
+            return tr("Verengung")
         return tr("Senkung") if feature.params.get("recess") else tr("Verjüngung")
     # Dieselbe Trennung wie beim Kegel, und deshalb dieselbe Frage: hinein oder
     # heraus. Eine ausgehöhlte Kugel ist eine Pfanne (Kugelgelenk,
@@ -2481,9 +2503,13 @@ def feature_measure(feature: Feature, *, compact: bool = False) -> str:
     if feature.kind == "face" or feature.kind == "curved_face":
         return measure_text(feature, "area", format_value=area, compact=compact)
     if feature.kind == "cone":
+        # Eine Verengung nennt die Weite, die sie lässt: Ihr weites Ende ist die
+        # Bohrung selbst, und „Verengung Ø8,25" neben „Sackbohrung Ø8,25" sagte
+        # nicht, wie eng die Mündung ist (R3). Dasselbe Maß im Steckbrief.
+        size = "opening" if feature.params.get("narrowing") and "opening" in params else "diameter"
         return _measure_group(
             feature,
-            (("angle", "", lambda value: f"{value:.0f}°"), ("diameter", "Ø", length)),
+            (("angle", "", lambda value: f"{value:.0f}°"), (size, "Ø", length)),
             " ",
             compact=compact,
         )

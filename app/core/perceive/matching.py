@@ -1305,6 +1305,8 @@ def transformed_features(
         "cell_depth",
         "carrier_diameter",
         "travel",
+        # Die Öffnung einer Verengung (``features.narrowings_marked``, R3).
+        "opening",
         "fit_error",
         "radial_min",
         "radial_max",

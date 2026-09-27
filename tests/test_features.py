@@ -6659,6 +6659,135 @@ def test_a_rounded_mouth_is_no_seam() -> None:
     assert with_seams == without_seams
 
 
+def _lip_or_lead_in(narrows: bool) -> MeshData:
+    """Ein gedrehter Ring mit Bohrung Ø 6 und einem Kegel über 1,5 mm an der Mündung.
+
+    ``narrows``: Der Kegel verengt die Mündung auf Ø 4,91 (eine Haltelippe);
+    sonst weitet er sie auf Ø 7,09 (ein Einführkegel, eine Senkung). Beide
+    stehen um 20 Grad gegen die Wand.
+    """
+    lead = 1.5
+    step = lead * math.tan(math.radians(20.0))
+    return _turned_bore([[3.0, 10.0 - lead], [3.0 - step if narrows else 3.0 + step, 10.0]])
+
+
+@pytest.mark.parametrize("narrows", [True, False])
+def test_a_cone_that_narrows_the_mouth_is_no_countersink(narrows: bool) -> None:
+    """Ein Kegel, dessen weites Ende an der Bohrung liegt, verengt die Mündung (R3).
+
+    Die Haltelippe einer Magnettasche hieß „Senkung“: Jeder hohle Kegel war
+    eine. Eine Senkung weitet die Öffnung zur Mündung, die Lippe macht sie
+    enger. Unterscheidbar ist es am Kegel selbst — liegt sein weites Ende an
+    der Bohrung, trägt er ``narrowing`` und die Weite, die er lässt
+    (``opening``); der Einführkegel daneben bleibt eine Senkung.
+    """
+    forget_cache()
+    found = detect(_lip_or_lead_in(narrows))
+    forget_cache()
+    cones = [feature for feature in found.values() if feature.kind == "cone"]
+    assert len(cones) == 1, found
+    cone = cones[0]
+    assert bool(cone.params.get("narrowing")) is narrows
+    if narrows:
+        opening = 6.0 - 2.0 * 1.5 * math.tan(math.radians(20.0))
+        assert cone.params["opening"] == pytest.approx(opening, abs=1e-6)
+        assert cone.measure_sources["opening"] == "facets"
+    else:
+        assert "opening" not in cone.params
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["plate_countersunk.stl", "plate_countersunk_blind.stl", "plate_chamfer_and_taper.stl"],
+)
+def test_a_countersink_stays_a_countersink(name: str) -> None:
+    """Eine Senkung, eine Fase und eine Verjüngung verengen keine Mündung (R3, Gegenprobe)."""
+    forget_cache()
+    found = detect(plate(name))
+    forget_cache()
+    cones = [feature for feature in found.values() if feature.kind == "cone"]
+    assert cones, "der Körper trägt Kegel"
+    assert not [cone.id for cone in cones if cone.params.get("narrowing")]
+
+
+@pytest.mark.parametrize(
+    "profile",
+    [
+        # Sackbohrung mit Bohrspitze: Das enge Ende ist eine Spitze.
+        [[0.0, 0.0], [12.0, 0.0], [12.0, 10.0], [3.0, 10.0], [3.0, 4.0], [0.0, 2.2]],
+        # Sackbohrung mit Fase am Grund: Das enge Ende deckt der Boden zu.
+        [[0.0, 0.0], [12.0, 0.0], [12.0, 10.0], [3.0, 10.0], [3.0, 5.0], [2.0, 4.0], [0.0, 4.0]],
+        # Wulst in einer Bohrung: Das enge Ende läuft als Zylinder weiter.
+        [
+            [3.0, 0.0],
+            [12.0, 0.0],
+            [12.0, 10.0],
+            [3.0, 10.0],
+            [3.0, 6.0],
+            [2.5, 5.5],
+            [2.5, 4.5],
+            [3.0, 4.0],
+            [3.0, 0.0],
+        ],
+    ],
+    ids=["bohrspitze", "bodenfase", "wulst"],
+)
+def test_a_cone_that_closes_or_steps_is_no_narrowing(profile: list[list[float]]) -> None:
+    """Ein Kegel, weit an der Bohrung, verengt nur, wenn sein enges Ende offen ist (R3).
+
+    Am Korpus wurden so ohne die Prüfung des engen Endes zwei flache
+    Kegelböden einer Murmelbahn, eine Fase am Grund einer Düsenbox und die
+    Flanken einer Wulst in einem Siebring Verengung: Alle liegen mit dem
+    weiten Ende an ihrer Bohrung, aber keiner öffnet sich zu einer Mündung.
+    """
+    forget_cache()
+    found = detect(MeshData.of(trimesh.creation.revolve(profile, sections=48)))
+    forget_cache()
+    cones = [feature for feature in found.values() if feature.kind == "cone"]
+    assert cones and [feature for feature in found.values() if feature.kind == "hole"]
+    assert not [cone.id for cone in cones if cone.params.get("narrowing")]
+
+
+def test_a_narrowing_offers_only_what_does_something_there() -> None:
+    """An einer Verengung stehen die Senkungshandlungen nicht zur Wahl (R3).
+
+    *Merkmal ändern* setzt das weite Ende des Kegels — an der Lippe die Tasche
+    selbst; am exakten Körper stand danach eine Hinterschneidung über der
+    Tasche, am Netz sagte die Operation mit einem Satz über eine Senkung ab.
+    *Senken* schnitt einen Trichter, der die Lippe mitnahm. Was bleibt, tut an
+    ihr das Richtige: *Merkmal entfernen* macht die Mündung so weit wie die
+    Bohrung. Am Einführkegel bleibt alles, wie es war.
+    """
+    from app.core.perceive.actions import (
+        NARROWING_HAS_NO_SIZE,
+        NARROWING_STAYS_ROUND,
+        cone_reason,
+        not_offered_at,
+    )
+
+    load_operations()
+    for narrows in (True, False):
+        mesh = _lip_or_lead_in(narrows)
+        forget_cache()
+        found = detect(mesh)
+        forget_cache()
+        cone = next(feature for feature in found.values() if feature.kind == "cone")
+        rows = {str(action.title): action for action in actions_for(cone, found, mesh=mesh)}
+        if narrows:
+            assert rows["Merkmal ändern"].op is None
+            assert rows["Merkmal ändern"].reason is NARROWING_HAS_NO_SIZE
+            assert rows["Zum Langloch ziehen"].reason is NARROWING_STAYS_ROUND
+            assert rows["Merkmal entfernen"].op == "remove_feature"
+            assert not_offered_at(cone) == frozenset({"countersink_hole"})
+            # Chat und Kommandozeile hören denselben Satz wie das Panel.
+            assert cone_reason(cone, "resize_feature") is NARROWING_HAS_NO_SIZE
+            assert cone_reason(cone, "resize_hole") is NARROWING_HAS_NO_SIZE
+        else:
+            assert rows["Merkmal ändern"].op == "resize_feature"
+            assert not_offered_at(cone) == frozenset()
+            assert cone_reason(cone, "resize_feature") is None
+
+
 def test_the_recognition_tells_how_far_it_is() -> None:
     """Die Vollerkennung meldet ihren erledigten Anteil, nur wachsend, bis eins (KUNDE-14).
 

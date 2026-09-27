@@ -4889,6 +4889,9 @@ class MainWindow(QMainWindow):
         # Derselbe Registervertrag wie Menü und Palette, ohne eine dritte
         # Freigabelogik. Das Panel hält seine Knöpfe über Auswahlwechsel hinweg
         # und ändert hier nur Zustand und Hinweise.
+        from app.core.perceive.actions import not_offered_at
+
+        picked = self._selected_feature_object()
         self.selection_operations.set_context(
             chosen,
             lambda name: self._palette_availability(name, locked=locked, gesturing=gesturing),
@@ -4898,6 +4901,10 @@ class MainWindow(QMainWindow):
             feature_kind=self.selected_feature_kind() or "",
             label=self.selection_label(),
             part_selected=self._common_part_step(self.object_tree.selected_features()) is not None,
+            # An einem Kegel, der keine Senkung ist — der Haltelippe einer
+            # Magnettasche —, tut *Senken* nichts Sinnvolles (R3); die Karte
+            # bietet es dort nicht an.
+            left_out=not_offered_at(picked) if picked is not None else frozenset(),
         )
         selected_ids = self.object_tree.selected_objects()
         result = self.session.last_result

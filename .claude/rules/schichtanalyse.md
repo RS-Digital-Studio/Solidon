@@ -866,6 +866,36 @@ Schriftzüge und Streben gegen Flaschentaschen, Besenhalter, Rack,
 Pegboards, Bohrerhalter, Schmierwerkzeug, Toilettenpapierhalter und die
 Korbbögen aus `test_features.py`.
 
+## Eine Verengung ist keine Senkung (27.09.2026, Durchsicht 0.5.1, R3)
+
+Ein hohler Kegel ist eine **Verengung**, wenn sein weites Ende auf seiner
+Bohrung sitzt und das enge die Mündung ist — die Haltelippe einer
+Magnettasche (`features.narrowings_marked`, an beiden Kernen). Die Richtung
+allein reicht nicht; vier Bedingungen, jede an einem Korpuskörper erzwungen,
+an dem die schwächere Fassung falsch lag:
+
+* **Das weite Ende mehrheitlich auf einer Bohrung** — ein eingepasster Kegel
+  am Töpfchendeckel lag zur Hälfte an der Außenfläche.
+* **Das enge Ende auf keiner Bohrung** — sonst ist es eine Stufe mit
+  schrägem Absatz.
+* **Das enge Ende offen**: Die dritte Ecke der Nachbardreiecke liegt weiter
+  außen als ihre Naht. Eine Fase am Grund einer Tasche liegt innen (Düsenbox),
+  eine Wulst läuft auf der engen Weite weiter (Siebring).
+* **Eine Öffnung und keine Spitze**: weiter als die Vergleichstoleranz des
+  Körpers — flache Kegelböden enden in einer Spitze (Murmelbahn).
+
+Im Zweifel bleibt der Kegel, was er war. Wer eine Bedingung lockert, fährt
+den Korpus und sieht sich jeden neu markierten Kegel an; bis heute ist keiner
+darunter eine Lippe. Was eine Verengung nicht anbietet, steht bei ihren
+Handlungen (`perceive.actions.cone_reason`, `not_offered_at`); die
+Einlaufprofile der Bohrungswerkzeuge kennen sie nicht und sagen an ihr ab
+(`prepare_ops._entrance_side`) — das betrifft nur *Bohrung ändern* mit
+Einlauf. Versetzen, Verdoppeln, Vervielfachen und Entfernen der ganzen Kette
+bauen an einer Verengung kein Profil: Sie gehen an beiden Kernen über die
+eigenen Flächen der Tasche, samt Lippe (am exakten Körper
+`prepare_ops._exact_chain_own_cavity`, dasselbe Flag über
+`_narrows_outward`).
+
 ## Ein Hohlraum ohne Weg nach außen ist keine Bohrung (10.09.2026)
 
 Dasselbe Modell trug acht eigene geschlossene Schalen mit **negativem**

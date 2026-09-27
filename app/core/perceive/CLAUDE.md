@@ -596,6 +596,14 @@ Zwei Entscheidungen darin sind Absicht und keine Bequemlichkeit:
   nur den Stumpf unter der Senkung gekippt oder kopiert; seit RM-172 nehmen
   sie die Kette mit (`prepare_ops._chain_tool`), und die Zeile bleibt
   bedienbar.
+- **An einer Verengung** (`cone_reason`, R3 der Durchsicht 0.5.1) stehen
+  *Merkmal ändern* und *Zum Langloch ziehen* grau mit ihrem Satz — das eine
+  setzte das weite Ende, also die Tasche selbst, das andere nahm die Lippe
+  mit. *Senken* fehlt dort ganz (`not_offered_at`), auch in der Schnellzeile
+  der Oberfläche. Dieselben Sätze sagen die Operationen selbst
+  (`prepare_ops._movable_feature`, `_named_bore`), damit Chat und
+  Kommandozeile hören, was das Panel zeigt. *Merkmal entfernen* bleibt: Es
+  macht die Mündung so weit wie die Bohrung.
 
 Die Oberfläche fragt die Merkmalsart **nicht** — sie rendert die Liste. Sonst
 führt sie dieselbe Tabelle ein zweites Mal.
@@ -1259,6 +1267,12 @@ Verweis bleibt je Merkmal eine Warnung
   ringsum gleich (`SEAM_SPREAD`). So wird die Haltelippe einer Magnettasche
   am Netz ein Kegel an der Bohrung, wie am exakten Körper; eine grob geteilte
   Rundung knickt an jeder Reihe gleich und bleibt ungeteilt.
+- **Ein Kegel, dessen weites Ende an der Bohrung liegt, verengt die Mündung**
+  (`narrowings_marked`, nach `_partial_bores_marked`; der exakte Kern fragt
+  dieselbe Regel an seiner Tessellierung). Er trägt `narrowing` und die Weite,
+  die er lässt (`opening`); Baum, Maßspalte und Steckbrief nennen ihn
+  Verengung, nicht Senkung. Welche Handlungen dort fehlen, steht bei
+  `actions` (`not_offered_at`, `cone_reason`).
 - **Ein Umriss mit wanderndem Radius ist eine gerundete Seite**
   (`_wandering_outline`, zweite Runde in `_fitted`, RM-243). Die
   Nachtrennung zerlegt einen verrauschten Schriftzug, eine geschwungene

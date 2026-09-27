@@ -546,7 +546,10 @@ deren Tiefenversatz kommt in Bildpunkten aus dem Renderer. Beim
 Vorher-Vergleich kehren Geometrie, Maße und Markierung gemeinsam zurück.
 
 Der Objektbaum und die Auswahlüberschrift nennen bei der Hauptbohrung schon
-die belegten Stufen und Senkungen (`labels.cavity_name`). Untergeordnete
+die belegten Stufen, Senkungen und Verengungen (`labels.cavity_name`). Ein
+Kegel, der die Mündung verengt (`narrowing`, die Haltelippe einer
+Magnettasche), heißt Verengung, und die Maßspalte nennt die Weite, die er
+lässt (`opening`) — nicht das weite Ende an der Tasche. Untergeordnete
 Abschnitte behalten ihre eigenen Namen und Kennungen. Dieselbe Kettenauskunft
 steuert Gruppierung, Beschriftung und Auswahl; ein Verwendungszweck wie
 „Magnettasche“ wird aus einer bloßen Sackbohrung nicht abgeleitet.
@@ -1807,7 +1810,10 @@ keine gemessenen Werte, die das Merkmalfenster als Felder zeigen könnte, und
 steht deshalb nicht in `ACTION_ORDER`, sondern öffnet den Dialog mit dem
 gewählten Merkmal in `at_features`. Die Knöpfe dieser Lagen entstehen
 einmal (`all_quick_names`) und werden nur ein- und ausgehängt; was oben
-stehen kann, steht nicht auch in der Suchliste darunter.
+stehen kann, steht nicht auch in der Suchliste darunter. Was am gewählten
+Merkmal nichts Sinnvolles tut, obwohl seine Art es trägt, nennt der Kern
+(`perceive.actions.not_offered_at`, *Senken* an einer Verengung);
+`set_context(left_out=...)` nimmt es vorn und aus der Liste.
 
 **Was aus einem Baustein kam, meint den Baustein.** Ein Schlüsselloch
 bringt zwölf Merkmale mit — zwei Bohrungen, **zehn Verrundungen** und die

@@ -676,10 +676,14 @@ des Radius), ist das Werkzeug die Hülle der erklärten Maße minus Körper
 oder ein Zapfen reicht weiter zur Achse und bleibt `HOLE_IS_NOT_EMPTY`. Das
 Kriterium ist der Rand, nicht „Merkmal ohne Dreiecke“: Die Erkennung ordnet
 einem Baustein-Merkmal Flächen zu (`declared_partners`) und führt die Lippe
-dann als Kegel einer Kette. Eine Kette, die nach außen enger wird
-(`_narrows_outward`), reist am exakten Kern aus ihren Flächen
-(`_exact_chain_own_cavity`) — die Profile einer Kette weiten sich nach außen
-und schnitten die Lippe weg. Die Kopie eines Merkmals, das die Erkennung
+dann als Kegel einer Kette, markiert als Verengung (`narrowing`). Eine
+solche Kette (`_narrows_outward` liest dasselbe Flag über
+`perceive.actions.narrows_the_mouth`) reist am exakten Kern ganz aus ihren
+Flächen: gefüllt (`_exact_own_chain_filled`, auch beim Entfernen) und
+geschnitten (`_exact_own_cut`), ohne je ein Einlaufprofil zu bauen — die
+Profile einer Kette weiten sich nach außen, schnitten die Lippe weg, und
+`_entrance_side` sagt an einer Verengung ohnehin ab. Die Absage gilt nur für
+*Bohrung ändern* mit Einlauf. Die Kopie eines Merkmals, das die Erkennung
 nicht sieht, wird nicht nachgemessen (`_copies_found`).
 **Und eine Mündung, die an der neuen Stelle unter Material liegt, wird
 gemeldet** (`_mouth_covered`, `{op}.mouth_covered`): Eine Sackbohrung hat keinen

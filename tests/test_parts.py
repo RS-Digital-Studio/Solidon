@@ -3094,6 +3094,150 @@ def test_a_magnet_pocket_in_a_mesh_is_a_bore_with_its_lip(profile: Profile) -> N
     assert set(lips[0].face_indices).isdisjoint(pocket.face_indices)
 
 
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+def test_the_lip_of_a_magnet_pocket_is_a_narrowing_on_both_kernels(
+    profile: Profile, box: str
+) -> None:
+    """Die Haltelippe heißt Verengung, am Netz wie am exakten Körper (R3).
+
+    Der Baum nannte die Tasche „Sackbohrung 1 mit Senkung“ und die Lippe
+    „Senkung“ — eine Senkung weitet die Mündung für einen Schraubenkopf, die
+    Lippe macht sie enger, damit der Magnet nicht herausfällt. Die Erkennung
+    trägt die Richtung in den Kegel (``narrowing``, ``opening``), und Baum,
+    Maßspalte und Steckbrief nennen sie mit demselben Wort. Beide Kerne gleich:
+    Am exakten Körper fragt ``brep.features.features_of`` dieselbe Regel an
+    seiner Tessellierung.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.digest import _feature_line
+    from app.core.perceive.relations import cavity_chains
+    from app.ui.labels import cavity_name, feature_measure, feature_name, length
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op=box, params={"width": 40.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply(
+        "Magnet",
+        [
+            OperationDraft(
+                op="insert_magnet_pocket",
+                inputs=("obj_1",),
+                params={"size": "8x3", "x": 0.0, "y": 0.0, "z": 10.0},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    entry = result.scene.objects["obj_1"]
+    features = entry.features
+    pocket = features["magnet_pocket_pocket_1"]
+    lips = [feature for feature in features.values() if feature.kind == "cone"]
+    assert len(lips) == 1, features
+    lip = lips[0]
+    assert lip.params.get("narrowing") is True
+    # Die Mündung ist enger als die Tasche und als der Magnet: Magnet minus
+    # Übermaß der Lippe — die Zahl, die die Maßspalte jetzt nennt.
+    assert 7.5 < lip.params["opening"] < 8.0 < pocket.params["diameter"]
+    assert feature_name(lip.id, lip) == "Verengung"
+    assert f"Ø{length(lip.params['opening'])}" in feature_measure(lip)
+    chain = next(chain for chain in cavity_chains(features, as_mesh_data(entry.mesh)))
+    assert cavity_name(chain[0].id, chain[0], chain) == "Sackbohrung 1 mit Verengung"
+    line = _feature_line(lip.id, lip)
+    assert "Verengung" in line and "Öffnung Ø " in line and "Senkung" not in line
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+def test_a_chain_action_never_turns_the_lip_into_a_countersink(profile: Profile, box: str) -> None:
+    """Kettenhandlungen an einer Magnettasche behalten die Lippe (R3).
+
+    Der Einlauf einer Bohrung kannte nur den Kegel, der sich zur Mündung
+    weitet (``prepare_ops._entrance_side``): *Bohrung ändern* mit Einlauf
+    machte an beiden Kernen aus der Lippe eine Senkung (Mündung Ø 8,75 über
+    der Tasche Ø 8,49), am exakten Körper ebenso *Merkmal verschieben* und
+    *verdoppeln* — ohne einen Satz, und der Magnet hielt nicht mehr. Jetzt
+    sagt der Einlauf an einer Verengung ab. *Bohrung ändern* nur an der
+    Bohrung sagt, dass die Verengung verschwindet — ohne *Senkung mitziehen*,
+    das an ihr absagte. Versetzen geht an **beiden** Kernen über die eigenen
+    Flächen der Tasche und baut kein Einlaufprofil (am exakten Körper
+    ``prepare_ops._exact_chain_own_cavity``, Durchsicht 0.5.1, BOHRUNG-13):
+    Danach steht an der neuen Stelle genau eine Verengung.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.errors import RESIZE_THE_WIDENING, ValidationError
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.prepare_ops import bore_entrance
+    from app.core.perceive.features import detect, forget_cache
+
+    load_operations()
+
+    def pocket() -> tuple[Project, History]:
+        project = new_project("centauri-carbon-2", "petg")
+        history = History(project.document)
+        size = {"width": 40.0, "depth": 40.0, "height": 10.0}
+        history.apply("Quader", [OperationDraft(op=box, params=size)])
+        history.apply(
+            "Magnet",
+            [
+                OperationDraft(
+                    op="insert_magnet_pocket",
+                    inputs=("obj_1",),
+                    params={"size": "8x3", "x": 0.0, "y": 0.0, "z": 10.0},
+                )
+            ],
+        )
+        return project, history
+
+    project, history = pocket()
+    entry = evaluate(project.document, profile, sources=ProjectSources(project)).scene.objects[
+        "obj_1"
+    ]
+    with pytest.raises(ValidationError):
+        bore_entrance(entry.mesh, entry.features["magnet_pocket_pocket_1"], entry.features)
+
+    history.apply(
+        "Größer",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={"at_feature": "magnet_pocket_pocket_1", "diameter": 8.5},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    told = [f for f in result.scene.report.findings if f.code.startswith("resize.")]
+    assert [f.code for f in told] == ["resize.narrowing_swallowed"]
+    assert RESIZE_THE_WIDENING not in told[0].suggestions
+
+    project, history = pocket()
+    history.apply(
+        "Versetzen",
+        [
+            OperationDraft(
+                op="move_feature",
+                inputs=("obj_1",),
+                params={"at_feature": "cone_1", "x": 10.0, "y": 0.0, "z": 9.6},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    forget_cache()
+    lips = [
+        feature
+        for feature in detect(as_mesh_data(result.scene.objects["obj_1"].mesh)).values()
+        if feature.kind == "cone" and abs(float(feature.params["centre"][0]) - 10.0) < 0.1
+    ]
+    forget_cache()
+    assert len(lips) == 1 and lips[0].params.get("narrowing") is True
+
+
 def test_the_play_comes_from_the_material_profile(profile: Profile) -> None:
     """AGENTS.md Regel 7: nie eine feste Zahl in der Datei."""
     project = project_with_plate()

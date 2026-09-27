@@ -317,6 +317,17 @@ def features_of(
         _void_features(solid, cancelled=cancelled),
         check_cancelled=cancelled.raise_if_cancelled if cancelled else None,
     )
+    # **Eine Verengung ist am exakten Körper dieselbe wie am Netz** (R3): Die
+    # Haltelippe einer Magnettasche öffnet sich zur Tasche hin. Gefragt wird an
+    # den Dreiecken der Tessellierung, dieselbe Regel wie in ``detect``.
+    from app.core.perceive.features import narrowings_marked
+
+    found = narrowings_marked(
+        mesh,
+        found,
+        source="native",
+        check_cancelled=cancelled.raise_if_cancelled if cancelled else None,
+    )
 
     # Erst die endgültigen Auswahlen schneiden die Originalteilträger zu:
     # Langloch, Ring und Luftkammer können mehrere unterschiedliche tragen.

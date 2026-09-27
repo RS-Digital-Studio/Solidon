@@ -617,6 +617,7 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
 #: Herkunft teilen.
 _LINE_MEASURES: Final = (
     "diameter",
+    "opening",
     "length",
     "area",
     "carrier_diameter",
@@ -735,13 +736,24 @@ def _feature_text(feature_id: str, feature: Feature, shared: str | None) -> str:
         # daran keine Senkung suchen, die sich ändern ließe.
         if params.get("partial"):
             shape = tr("Kegelfläche")
+        elif params.get("narrowing"):
+            # Die Haltelippe einer Magnettasche verengt die Mündung — dasselbe
+            # Wort wie im Objektbaum (``ui.labels.feature_name``, R3).
+            shape = tr("Verengung")
         else:
             shape = tr("Senkung") if params.get("recess") else tr("Verjüngung")
         axis = oriented("axis", _axis_name)
+        # Eine Verengung nennt ihre Öffnung, nicht ihr weites Ende — das ist die
+        # Bohrung selbst (R3, dasselbe Maß wie im Objektbaum).
+        size = (
+            f"{tr('Öffnung')} {shown('opening', prefix='Ø ')}"
+            if params.get("narrowing") and "opening" in params
+            else shown("diameter", prefix="Ø ")
+        )
         return (
             f"{feature_id}  {shape} "
             f"{shown('angle', format_value=lambda value: f'{value:.0f}°')}, "
-            f"{shown('diameter', prefix='Ø ')}, "
+            f"{size}, "
             f"{tr('Achse')} {axis}{at}"
         )
     if feature.kind == "pin":

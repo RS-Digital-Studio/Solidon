@@ -739,8 +739,15 @@ def actions_for(
             # des Panels — sie fehlt, und die Oberfläche bietet sie nicht an.
             continue
         fitting = next((spec for spec in known if feature.kind in spec.applies_to), None)
+        # Ein Kegel, der keine Senkung ist (Verengung, Verjüngung), sagt an den
+        # Zeilen, die für die Senkung gebaut sind, seinen eigenen Satz (R3).
+        not_this_cone = cone_reason(feature, (fitting or known[0]).name)
         if fitting is not None and piece_blocked is not None:
             actions.append(FeatureAction(title=fitting.title, op=None, reason=piece_blocked))
+        elif not_this_cone is not None:
+            actions.append(
+                FeatureAction(title=(fitting or known[0]).title, op=None, reason=not_this_cone)
+            )
         elif (
             fitting is not None
             and own_body_blocked is not None
@@ -908,6 +915,87 @@ def no_own_body(
     if has_own_body(mesh, feature, alone=not touches_other):
         return None
     return NO_BODY_FROM_FACES
+
+
+#: Warum *Merkmal ändern* an einer **Verengung** nicht angeboten wird (R3).
+#:
+#: Eine Verengung ist ein hohler Kegel, der sich zu seiner Bohrung hin öffnet
+#: — die Haltelippe einer Magnettasche (``features.narrowings_marked``). Das
+#: Maß, das *Merkmal ändern* am Kegel setzt, ist sein weites Ende, und das
+#: ist an der Lippe die Tasche selbst: Am exakten Körper stand danach über der
+#: Tasche eine Hinterschneidung (Mündung 7,97 → 8,47 mm bei einer Tasche von
+#: 8,24), am Netz sagte die Operation ab — mit einem Satz über eine Senkung
+#: (gemessen 26.09.2026, Durchsicht 0.5.1). Was an ihr gilt, steht im Satz.
+NARROWING_HAS_NO_SIZE: Final = _(
+    "Die Weite einer Verengung lässt sich hier nicht ändern. „Merkmal entfernen“ nimmt "
+    "sie weg; danach ist die Bohrung bis zur Mündung gleich weit."
+)
+
+#: *Zum Langloch ziehen* an einer Verengung — der Satz des Kegels sprach von
+#: einer Senkung, die es dort nicht gibt.
+NARROWING_STAYS_ROUND: Final = _(
+    "Ein Langloch nimmt eine Verengung nicht mit. Nehmen Sie sie zuerst mit „Merkmal "
+    "entfernen“ weg, oder lassen Sie die Bohrung rund."
+)
+
+#: Und an einer **Verjüngung**, einem aufgesetzten Kegel: Gezogen wird ein
+#: Loch, und die Verjüngung ist Material — der Satz über die Senkung auf ihrer
+#: Bohrung stand bis zur Durchsicht 0.5.1 auch dort.
+TAPER_IS_MATERIAL: Final = _(
+    "Gezogen wird ein Loch, und eine Verjüngung ist Material. Ihr Maß ändert „Merkmal ändern“."
+)
+
+#: Was nur an einer **Senkung** etwas Sinnvolles tut: *Senken* heißt an einem
+#: gewählten Kegel „anders senken" (``countersink_hole``, ``applies_to``). An
+#: einer Verengung schnitt es einen Trichter, der die Haltelippe mitnahm
+#: (Mündung 7,98 → 9,87 mm, gemessen 26.09.2026), an einer Verjüngung einen
+#: Trichter in das Material, das sie ist.
+_ONLY_AT_A_COUNTERSINK: Final[frozenset[str]] = frozenset({"countersink_hole"})
+
+
+def narrows_the_mouth(feature: Feature) -> bool:
+    """Ob dieser Kegel eine Verengung ist — die Erkennung trägt es als ``narrowing`` (R3)."""
+    return feature.kind == "cone" and bool(feature.params.get("narrowing"))
+
+
+def not_offered_at(feature: Feature) -> frozenset[str]:
+    """Die Handlungen, die an diesem Merkmal gar nicht erst angeboten werden (R3).
+
+    ``applies_to`` fragt nach der Art, und ein Kegel war dort eine Senkung.
+    Ist er eine Verengung oder eine Verjüngung, fällt weg, was nur an einer
+    Senkung etwas tut (:data:`_ONLY_AT_A_COUNTERSINK`). Die Karte rechts liest
+    diese Menge (``ui.selection_operations``) — oben in der Schnellzeile wie
+    in der Liste darunter.
+    """
+    if feature.kind != "cone" or feature.params.get("partial"):
+        return frozenset()
+    if narrows_the_mouth(feature) or not feature.params.get("recess"):
+        return _ONLY_AT_A_COUNTERSINK
+    return frozenset()
+
+
+def cone_reason(feature: Feature, op: str) -> TranslatableText | None:
+    """Der Satz, wo ein Kegel keine Senkung ist und die Handlung nicht passt — oder ``None``.
+
+    Die Tabellen oben fragen nach der Art, und ein Kegel war dort eine
+    Senkung. An einer **Verengung** (:func:`narrows_the_mouth`) gilt *Merkmal
+    ändern* nicht, und *Zum Langloch ziehen* sagt, warum es sie nicht mitnimmt;
+    an einer **Verjüngung** sagt *Zum Langloch ziehen*, dass sie Material ist.
+    Panel und Operation lesen denselben Satz (``prepare_ops._movable_feature``).
+    """
+    if feature.kind != "cone" or feature.params.get("partial"):
+        return None
+    if narrows_the_mouth(feature):
+        # Beide Operationen der Zeile *Größe ändern* — auch die der Bohrung,
+        # sonst verwiese deren Absage auf die gesperrte Schwester.
+        if op in ("resize_feature", "resize_hole"):
+            return NARROWING_HAS_NO_SIZE
+        if op == "slot_hole":
+            return NARROWING_STAYS_ROUND
+        return None
+    if op == "slot_hole" and not feature.params.get("recess"):
+        return TAPER_IS_MATERIAL
+    return None
 
 
 def cone_piece_blocked(feature: Feature) -> TranslatableText | None:

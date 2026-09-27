@@ -172,8 +172,14 @@ rollt, und was frei bleibt, zeigt das Modell.
 """
 
 
-def quick_names(bodies: int, feature_kind: str = "") -> tuple[str, ...]:
+def quick_names(
+    bodies: int, feature_kind: str = "", *, left_out: frozenset[str] = frozenset()
+) -> tuple[str, ...]:
     """Die Hauptaktionen für diese Auswahl, in ihrer Rangfolge.
+
+    ``left_out`` nennt, was am gewählten Merkmal nicht angeboten wird, obwohl
+    seine Art es trägt — am Kegel, der keine Senkung ist, *Senken* (R3). Die
+    Menge kommt aus dem Kern (``perceive.actions.not_offered_at``).
 
     **Das Merkmal hat Vorrang vor der Menge.** Wer eine Bohrung angeklickt
     hat, meint die Bohrung und nicht den Körper darunter — und mehr als ein
@@ -202,7 +208,11 @@ def quick_names(bodies: int, feature_kind: str = "") -> tuple[str, ...]:
         wanted = QUICK_FEATURES.get(feature_kind, QUICK_FEATURE)
         offered = {spec.name for spec in REGISTRY.for_feature(feature_kind)}
         fields = _shown_as_fields()
-        return tuple(name for name in wanted if name in offered and name not in fields)
+        return tuple(
+            name
+            for name in wanted
+            if name in offered and name not in fields and name not in left_out
+        )
     return QUICK_BODIES if bodies > 1 else QUICK_BODY
 
 
@@ -398,6 +408,9 @@ class SelectionOperationsPanel(QWidget):
         erste :meth:`set_context` muss deshalb filtern, auch wenn er die
         Körperstufe meldet. Mit ``""`` als Startwert tat er es nicht — und an
         einem Körper standen die Merkmalshandlungen weiter in der Liste."""
+        self._left_out: frozenset[str] = frozenset()
+        """Was am gewählten Merkmal nicht angeboten wird, obwohl seine Art es
+        trägt — am Kegel, der keine Senkung ist, *Senken* (R3)."""
 
         self.summary = QLabel("", self)
         self.summary.setWordWrap(True)
@@ -707,6 +720,7 @@ class SelectionOperationsPanel(QWidget):
         feature_kind: str = "",
         label: str = "",
         part_selected: bool = False,
+        left_out: frozenset[str] = frozenset(),
     ) -> None:
         """Auswahl, Lage und Freigaben nachführen, ohne die Liste neu zu bauen.
 
@@ -714,7 +728,9 @@ class SelectionOperationsPanel(QWidget):
         ``hole`` und so fort — und leer, solange nur Körper gewählt sind. Sie
         entscheidet zusammen mit ``selected``, welche Hauptaktionen oben
         stehen (:func:`quick_names`) und **welche Handlungen überhaupt
-        dastehen** (:meth:`_fits_the_level`).
+        dastehen** (:meth:`_fits_the_level`). ``left_out`` nennt dazu, was am
+        gewählten Merkmal nicht angeboten wird (``perceive.actions.not_offered_at``,
+        R3): Es steht dann weder oben noch in der Liste.
 
         **``feature_chosen`` ist mit dem Knopf *Merkmale* weggefallen**
         (07.09.2026). Es beantwortete dieselbe Frage wie ``feature_kind`` — ob
@@ -753,8 +769,11 @@ class SelectionOperationsPanel(QWidget):
         # aus dem nichts an diese Stelle passt — und er stand dabei unter einer
         # Liste, für die man scrollen muss.
         self.catalog_button.setVisible(feature_kind in ("", "face"))
-        if self._feature_kind != feature_kind:
+        if not feature_kind:
+            left_out = frozenset()
+        if self._feature_kind != feature_kind or self._left_out != left_out:
             self._feature_kind = feature_kind
+            self._left_out = left_out
             self._filter()
         # **Was gewählt ist, nicht wie viel.** „1 Objekt gewählt" stand über
         # Merkmalshandlungen und nannte dabei die Körperzahl, während die
@@ -786,7 +805,7 @@ class SelectionOperationsPanel(QWidget):
         self._lay_out_quick(
             tuple(
                 name
-                for name in quick_names(selected, feature_kind)
+                for name in quick_names(selected, feature_kind, left_out=left_out)
                 if self._buttons[name].isEnabled()
             )
         )
@@ -922,6 +941,8 @@ class SelectionOperationsPanel(QWidget):
             return False
         if self._feature_kind:
             if name in _shown_as_fields():
+                return False
+            if name in self._left_out:
                 return False
             return self._feature_kind in self._at_which_kind.get(name, frozenset())
         # Eine Handlung, die auch ohne Merkmal gilt (``also_on_body``), steht

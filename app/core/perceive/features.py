@@ -44,7 +44,7 @@ from app.core.perceive.helix import Helix, find_helices
 from app.core.perceive.patterns import patterns_instead_of_cells
 from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
 from app.core.perceive.surfaces import clipped_patches, planar_patch
-from app.core.types import Feature, FeatureId, SurfacePatch, Vec3, is_a_cavity
+from app.core.types import Feature, FeatureId, MeasureSource, SurfacePatch, Vec3, is_a_cavity
 from app.core.units import (
     EPS_GEOM,
     TANGENT_TO_THE_ARC,
@@ -1500,6 +1500,9 @@ def detect(
         if check_cancelled is not None:
             check_cancelled()
         found = _partial_bores_marked(mesh, found, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        found = narrowings_marked(mesh, found, check_cancelled=check_cancelled)
         if check_cancelled is not None:
             check_cancelled()
         freeform = is_a_freeform(
@@ -4724,6 +4727,195 @@ def _partial_bores_marked(
         else:
             kept[identifier] = replace(feature, params={**feature.params, "partial": True})
     return kept
+
+
+def narrowings_marked(
+    mesh: MeshData,
+    found: Mapping[FeatureId, Feature],
+    *,
+    source: MeasureSource = "facets",
+    check_cancelled: Callable[[], None] | None = None,
+) -> dict[FeatureId, Feature]:
+    """Ein hohler Kegel, dessen weites Ende an seiner Bohrung liegt, verengt die Öffnung (R3).
+
+    **Die Haltelippe einer Magnettasche hieß „Senkung".** Eine Senkung weitet
+    die Öffnung zur Mündung hin, damit ein Schraubenkopf versinkt; die Lippe
+    tut das Gegenteil — sie ist zur Mündung hin enger als die Tasche darunter
+    (Ø 8,25 → 7,9), damit der Magnet nicht herausfällt. Wer ohne CAD-Kenntnis
+    „Senkung" liest, erwartet einen Trichter (Durchsicht 0.5.1, R3).
+
+    **Unterscheidbar ist es am Kegel selbst.** Seine Achse zeigt von der Spitze
+    zum weiten Ende, und dort liegt ``centre``, an beiden Kernen gleich. Jede
+    Naht nach draußen gehört zu dem Ende, dem sie näher liegt. Sitzt das
+    **weite** Ende mehrheitlich auf einer Bohrung und das enge auf keiner,
+    öffnet sich der Kegel zur Bohrung hin; ist sein enges Ende dazu offen
+    (:func:`_open_at_the_narrow_end`) und eine Öffnung, keine Spitze, verengt
+    er die Mündung und trägt ``narrowing``. Eine Senkung sitzt
+    mit ihrem engen Ende auf der Bohrung; ein Kegel zwischen zwei Bohrungen
+    (eine Stufe mit schrägem Absatz), ein Kegel ohne Bohrung und einer, dessen
+    weites Ende nur zum Teil an einer Bohrung liegt, bleiben, wie sie waren —
+    dort sagt die Lage allein nicht, wo die Mündung ist (Regel 21). Gemessen am
+    Korpus (553 Körper): Ohne die Mehrheit wurde ein eingepasster Kegel am
+    Deckel eines Töpfchens Verengung, ohne das offene Ende eine Fase am Grund
+    einer Düsenbox, ohne die Frage nach der Spitze zwei flache Kegelböden
+    einer Murmelbahn. Eine Verengung trägt dazu ihre
+    Öffnung (``opening``): die Weite an ihrem engen Ende, gemessen an den
+    Ecken ihrer Dreiecke. ``source`` ist die Herkunft dieses Maßes — am Netz
+    ``facets``; am exakten Körper liegen die Ecken der Tessellierung auf dem
+    Randkreis der Topologie, dort gibt der Aufrufer ``native`` an.
+
+    Gemessen wird an den Dreiecken, die beide Merkmale tragen: an welcher Höhe
+    entlang der Kegelachse ihre gemeinsamen Nähte liegen, gegen die Höhen des
+    Kegels selbst. Am exakten Körper sind das die Dreiecke seiner Tessellierung
+    (``brep.features.features_of``) — dieselbe Regel für beide Kerne.
+    Gerechnet mit Grundrechenarten (RM-187).
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    cones = [
+        (identifier, feature)
+        for identifier, feature in found.items()
+        if feature.kind == "cone"
+        and feature.params.get("recess")
+        and not feature.params.get("partial")
+        and feature.face_indices
+    ]
+    holes = [
+        feature for feature in found.values() if feature.kind == "hole" and feature.face_indices
+    ]
+    if not cones or not holes:
+        return dict(found)
+    body = mesh.raw
+    count = len(body.faces)
+    bore_of = np.full(count, -1, dtype=np.int64)
+    for number, hole in enumerate(holes):
+        indices = np.asarray(hole.face_indices, dtype=np.int64)
+        bore_of[indices[(indices >= 0) & (indices < count)]] = number
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    seams = np.asarray(body.face_adjacency_edges, dtype=np.int64).reshape(-1, 2)
+    vertices = np.asarray(body.vertices, dtype=float)
+    faces = np.asarray(body.faces, dtype=np.int64)
+    tolerance = units.match_tolerance(mesh.bounds.diagonal)
+    # **Die Nähte je Dreieck, einmal für alle Kegel** — nicht je Kegel eine
+    # Maske über das ganze Netz: So wäre der Aufwand Kegel mal Dreiecke, und
+    # genau das kostete die Kanalfrage am Eiffelturm eine halbe Stunde.
+    # Gebraucht werden nur Nähte, die einen Kegel berühren; jede steht
+    # zweimal, einmal von jeder Seite.
+    in_a_cone = np.zeros(count, dtype=bool)
+    for _identifier, cone in cones:
+        indices = np.asarray(cone.face_indices, dtype=np.int64)
+        in_a_cone[indices[(indices >= 0) & (indices < count)]] = True
+    near = in_a_cone[pairs[:, 0]] | in_a_cone[pairs[:, 1]]
+    pairs, seams = pairs[near], seams[near]
+    sides = np.concatenate([pairs[:, 0], pairs[:, 1]])
+    across_all = np.concatenate([pairs[:, 1], pairs[:, 0]])
+    rims_all = np.concatenate([seams, seams])
+    order = np.argsort(sides, kind="stable")
+    starts = np.searchsorted(sides[order], np.arange(count + 1, dtype=np.int64))
+    kept = dict(found)
+    for identifier, cone in cones:
+        if check_cancelled is not None:
+            check_cancelled()
+        axis = axis_of(cone)
+        wide = centre_of(cone)
+        if axis is None or wide is None:
+            continue
+        indices = np.asarray(cone.face_indices, dtype=np.int64)
+        indices = np.unique(indices[(indices >= 0) & (indices < count)])
+        if not len(indices):
+            continue
+        counts = starts[indices + 1] - starts[indices]
+        total = int(counts.sum())
+        if not total:
+            continue
+        first = np.repeat(starts[indices] - (np.cumsum(counts) - counts), counts)
+        entries = order[first + np.arange(total, dtype=np.int64)]
+        outside = ~np.isin(across_all[entries], indices)
+        if not bool(outside.any()):
+            continue
+        neighbours = across_all[entries][outside]
+        rims = rims_all[entries][outside]
+        corners = vertices[np.unique(faces[indices])] - wide
+        heights = (corners * axis).sum(axis=1)
+        narrow_end, wide_end = float(heights.min()), float(heights.max())
+        # Jede Naht nach draußen gehört zu dem Ende, dem ihre Mitte näher liegt.
+        levels = ((vertices[rims] - wide) * axis).sum(axis=2).sum(axis=1) / 2.0
+        at_wide_end = wide_end - levels < levels - narrow_end
+        to_a_bore = bore_of[neighbours] >= 0
+        # **Das weite Ende sitzt auf seiner Bohrung, das enge auf keiner** — und
+        # zwar mehrheitlich: Am Deckel eines Töpfchens lag ein eingepasster
+        # Kegel mit dem weiten Ende zur Hälfte an der Außenfläche, zur Hälfte an
+        # einer Bohrung, und welches Ende die Mündung ist, sagt das nicht
+        # (Regel 21, gemessen am Korpus).
+        if 2 * int((at_wide_end & to_a_bore).sum()) <= int(at_wide_end.sum()):
+            continue
+        if bool((~at_wide_end & to_a_bore).any()):
+            continue
+        if not _open_at_the_narrow_end(
+            vertices, faces, rims[~at_wide_end], neighbours[~at_wide_end], wide, axis, tolerance
+        ):
+            continue
+        # **Und die Weite, die sie lässt** (``opening``): Das Maß des Kegels
+        # ist sein weites Ende, an der Lippe also die Tasche selbst — im Baum
+        # stand „Verengung Ø 8,25" neben „Sackbohrung Ø 8,25", und wie eng
+        # die Mündung ist, sagte keine Zahl. Gemessen an den Ecken ihrer
+        # Dreiecke, der engste Abstand zur Achse. Enger als die
+        # Vergleichstoleranz des Körpers ist es keine Öffnung, sondern eine
+        # Spitze.
+        radial = corners - heights[:, None] * axis
+        opening = 2.0 * float(np.sqrt((radial * radial).sum(axis=1)).min())
+        if opening <= tolerance:
+            continue
+        kept[identifier] = replace(
+            cone,
+            params={**cone.params, "narrowing": True, "opening": opening},
+            measure_sources={**cone.measure_sources, "opening": source},
+        )
+    return kept
+
+
+def _open_at_the_narrow_end(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    seams: np.ndarray,
+    neighbours: np.ndarray,
+    wide: np.ndarray,
+    axis: np.ndarray,
+    tolerance: float,
+) -> bool:
+    """Ob ein Kegel an seinem engen Ende offen ist — ob dort eine Mündung liegt.
+
+    ``seams`` sind die Nähte seines engen Endes nach draußen, ``neighbours``
+    die Dreiecke jenseits davon. Gefragt wird je Dreieck seine dritte Ecke, die
+    nicht auf der Naht liegt: Steht sie um mehr als ``tolerance`` weiter von
+    der Achse als die Naht, läuft dort die Oberfläche um die Öffnung herum —
+    die Deckfläche über einer Haltelippe, eine Rundung an ihrer Kante. Offen
+    heißt: mehr als die Hälfte so. Ein Boden unter einer Fase am Grund einer
+    Tasche liegt innen, auch ohne Mittelpunkt vernetzt (seine dritten Ecken
+    liegen auf dem Rand oder davor); ein Zylinder, der mit der engen Weite
+    weiterläuft, bleibt auf ihr — das ist eine Stufe zwischen zwei
+    Durchmessern, keine Mündung (die Wulst im Siebring des Korpus). Ohne Naht
+    am engen Ende endet der Kegel in einer Spitze. Gerechnet mit
+    Grundrechenarten (RM-187).
+    """
+    if not len(seams):
+        return False
+
+    def radial(points: np.ndarray) -> np.ndarray:
+        along = (points * axis).sum(axis=-1)
+        sideways = points - along[..., None] * axis
+        distances: np.ndarray = np.sqrt((sideways * sideways).sum(axis=-1))
+        return distances
+
+    corners = faces[neighbours]
+    far = (corners != seams[:, :1]) & (corners != seams[:, 1:])
+    single = far.sum(axis=1) == 1
+    if not bool(single.any()):
+        return False
+    third = corners[single][far[single]]
+    ring = radial(vertices[seams[single]] - wide).max(axis=1)
+    outward = int((radial(vertices[third] - wide) > ring + tolerance).sum())
+    return 2 * outward > len(seams)
 
 
 def _curved_faces(body: trimesh.Trimesh) -> set[int]:

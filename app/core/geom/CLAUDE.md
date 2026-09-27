@@ -389,6 +389,15 @@ Beide Kerne schneiden dieselben Profile an denselben Randebenen. Der exakte
 Füllkörper bildet das alte Profil nach, damit er keine tieferen Nachbarlöcher
 unter der weiten Senkung füllt. Hinterschnitte, Verzweigungen, doppelte Ränder,
 versetzte Stufen und ungeklärte Profile nennen die vorhandene `keep`-Wahl.
+Eine **Verengung** (`narrowing`, die Haltelippe einer Magnettasche) gehört
+dazu: Die Profile kennen nur den Kegel, der sich zur Mündung weitet, und
+`_entrance_side` sagt an ihr ab, statt sie als Senkung neu zu bauen — beim
+Ändern mit Einlauf. Die übrigen Kettenwege am exakten Körper (Versetzen,
+Verdoppeln, Muster, Entfernen) bauen an einer Verengung gar kein Profil,
+sondern gehen über den Körper aus den eigenen Flächen
+(`_exact_chain_own_cavity`, `_exact_own_chain_filled`, `_exact_own_cut`).
+`_widening_findings` meldet sie mit eigenem Satz und ohne *Senkung mitziehen*
+(`_narrowing_after_resize`).
 Ein einzelner Zylinder behandelt beide Umfänge gleich. Eine gleichzeitige
 Lageänderung mit Einlauf läuft als **ein** Schritt (`_moved_after_resizing`,
 22.09.2026): erst der Neuschnitt an der alten Stelle, dann die ganze Kette
