@@ -77,13 +77,15 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   Dialog, Dose und Deckel druckfertig nebeneinander). Dafür stehen die
   Handlungen für alle Körper jetzt im Auswahlfenster, wenn nichts gewählt
   ist, und nicht mehr am gewählten Körper (Robert, 27.09.2026;
-  `.claude/rules/fenster.md`).
-- **Als Nächstes, für 0.5.1:** `main` hereinholen (dort sind `/erzeugen`,
-  das Tor `.claude/scripts/suite-getrennt.sh` und die Regeln umgebaut), den
-  Aufnahmeschritt `make_guides.py` vor `make_manual.py` in `/erzeugen`
-  eintragen, Tor fahren, dann per Merge nach `main` — vor dem Tag v0.5.1.
-  Danach HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"), wenn Robert
-  es noch in 0.5.1 will.
+  `.claude/rules/grenzen.md`, „Die Karte der Handlungen").
+- **`main` hereingeholt** (Stand 27.09.2026, 50 Commits) und der
+  Aufnahmeschritt in `/erzeugen` eingetragen: `make_guides.py` bei jedem
+  Release in allen Sprachen, nach dem Versionssprung, vor `make_manual.py`.
+  Das Tor heißt jetzt `bash .claude/scripts/suite-getrennt.sh`.
+- **Als Nächstes, für 0.5.1:** per Merge nach `main`, vor dem Tag v0.5.1 —
+  Robert Bescheid geben, damit die Release-Sitzung nicht vorher taggt. Danach
+  HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"), wenn Robert es noch
+  in 0.5.1 will.
 
 ## §1 Befund
 
@@ -435,7 +437,7 @@ Nachweis.
 | HB-0 | Konzept, Registerpunkt, Nachweise, Übergabe | Dieses Dokument, RM-283, §0 | [x] |
 | HB-1 | `app/core/guides.py`: Anleitungen, Schritte, Zielvokabular; Handbuchseiten aus Anleitungen; Gliederung `manual.OUTLINE` und Feld `Page.part`; Abbildungen der Schritte im Katalog; nummerierte Listen in `markup.py` | Kerntests: jede Anleitung vollständig, Schritte kurz, Ziele aus dem Vokabular, Seiten in Teilreihenfolge; Übersetzungen vollständig | [x] `54e83a72e`; `tests/test_guides.py` (14 Tests), betroffene Kerntests grün; rot nur die `rendered`-Vergleiche gegen die Website, davon vier schon am Ausgangsstand und der fünfte, weil die neue Seite erst beim Release in die Website kommt |
 | HB-2 | `app/ui/guide_targets.py`: Namen → Widget/Rechteck; `_flash_area` benutzt sie | Test: jedes Wort des Vokabulars wird aufgelöst (Fenstertest, läuft beim Release) | [x] Auflösung und Tour gebaut; Kerntest: Wortschatz und Auflösung decken sich. Der Fenstertest über alle festen Namen läuft beim Release |
-| HB-3 | `tools/make_guides.py`: Geschichten, Markierung, Ausschnitt, Format, Kindprozess je Sprache, `--ziel`, `--nur`, Stempel; Schritt in `/erzeugen` | Ein Lauf in einer Sprache in einen fremden Ordner; Bildbudget gemessen; Fehler bei fehlendem Ziel belegt | [~] Werkzeug gebaut: Rahmen, Nummern, Pfeile, Abdunkeln, Rand, Ausschnitt, WebP (Übersichtsbild 82 KB statt 408 KB als PNG), Kindprozess je Sprache, Stempel. Deutsch in einen fremden Ordner gelaufen; ein fehlendes Ziel beendet den Lauf mit Exit 1 und nennt Anleitung und Schritt. Bildbudget gemessen (§5.3): 30 KB je Bild, rund 11 MB für sechzig Schritte in sechs Sprachen. **Offen:** der Schritt in `/erzeugen` — der Skill wird auf `main` gerade umgebaut, der Schritt kommt mit dem Merge |
+| HB-3 | `tools/make_guides.py`: Geschichten, Markierung, Ausschnitt, Format, Kindprozess je Sprache, `--ziel`, `--nur`, Stempel; Schritt in `/erzeugen` | Ein Lauf in einer Sprache in einen fremden Ordner; Bildbudget gemessen; Fehler bei fehlendem Ziel belegt | [~] Werkzeug gebaut: Rahmen, Nummern, Pfeile, Abdunkeln, Rand, Ausschnitt, WebP (Übersichtsbild 82 KB statt 408 KB als PNG), Kindprozess je Sprache, Stempel. Deutsch in einen fremden Ordner gelaufen; ein fehlendes Ziel beendet den Lauf mit Exit 1 und nennt Anleitung und Schritt. Bildbudget gemessen (§5.3): 30 KB je Bild, rund 11 MB für sechzig Schritte in sechs Sprachen. `/erzeugen` nimmt die Anleitungen bei jedem Release in allen Sprachen auf, nach dem Versionssprung und vor `make_manual.py`; `test_guides` steht bei den Wächtern vor dem Tag. [x] |
 | HB-4 | Erste Anleitungen: *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken*, *Ein Loch in ein heruntergeladenes Modell*, *Das erste eigene Teil* | Bilder in einer Sprache gesichtet; Texte in sechs Sprachen | [x] alle vier gebaut, auf Deutsch aufgenommen und gesichtet, Sätze in sechs Sprachen; der Menüweg im Satz ist gegen das Menü geprüft, in jeder Sprache (`test_a_menu_path_in_a_step_is_the_one_the_menu_shows`) |
 | HB-5 | Gliederung im Handbuchfenster, „Wo fange ich an?", Verweise `manual:`, Hilfe-Menü, Startbildschirmknopf | Fenstertests (Release), Kerntests für Reihenfolge und Verweise | [ ] |
 | HB-6 | Suche mit Rangfolge, Fundstelle, Kundenwörtern | Anteil der Suchen mit richtiger Seite unter den ersten drei, vorher und nachher gemessen | [x] 38 von 38 unter den ersten drei (vorher 25), 35 ganz oben (vorher 7), keine ohne Treffer (vorher 4); `tests/test_manual_search.py`, Nachweis `suche.md`. Der Fenstertest über Rangfolge und Fundstelle läuft beim Release |

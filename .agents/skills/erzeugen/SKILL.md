@@ -41,6 +41,7 @@ belegte Werte ersetzen.
 |---|---|
 | Beispielprojekte | `tools/make_examples.py`, ohne Argumente; nach jeder Änderung an `LIBRARY_VERSION` oder einer Beispielkette — `tests/test_examples.py` hält die Bausteinversion der Beispiele fest. |
 | Handbuch-Bildschirmfotos | `tools/make_figures.py <sprache>`; `--schirm N` wählt den Monitor. |
+| Bildanleitungen | `tools/make_guides.py` ohne Sprache für alle, `--schirm N` wählt den Monitor. Läuft **bei jedem Release in allen Sprachen**, nach dem Versionssprung und vor `make_manual.py`: Der Stempel `app/images/manual/<sprache>/guides.json` trägt die Version, und `test_guides` verlangt die aktuelle. Endet es mit Exit 1, nennt es Anleitung und Schritt — dann die Anleitung oder ihre Geschichte nachziehen, nie den Schritt auslassen. |
 | Verkaufsbilder | `tools/make_web_images.py <sprache>`: das maximierte Hauptfenster, ein Kindprozess je Sprache, Zuschnitte nur aus der Vollbildaufnahme. Der Bausteinkatalog braucht vorher einen gültigen Bereichsnachweis. |
 | Website-Loops | `tools/make_video.py <ordner> webloop anpassen <sprache>` und `… formen loop website/teile/weg4-stein-formen.p3d --name weg4-formen <sprache>`, ein Prozess je Sprache. |
 | Schaustück, Galerie, Funktionsbilder | `tools/make_showpiece.py`, `tools/make_gallery.py`, `tools/make_feature_images.py` — Funktionsbilder erst in einen Prüfordner, nach der Sichtprüfung das WebP nach `website/bilder/`. |
@@ -84,8 +85,8 @@ plausibel vorübergehenden Fehler einmal gezielt wiederholen; bei wiederholt
 gleichem Fehler die Ursache klären und den offenen Umfang nennen.
 
 Sind alle betroffen, gilt die Reihenfolge Beispielprojekte → Handbuchbilder →
-Verkaufsbilder und Videos → Handbuch → Changelog- und Rechtsseiten → SEO →
-Asset-Stempel. Handgepflegte Bildmaße im HTML danach mit den tatsächlichen
+Bildanleitungen → Verkaufsbilder und Videos → Handbuch → Changelog- und
+Rechtsseiten → SEO → Asset-Stempel. Handgepflegte Bildmaße im HTML danach mit den tatsächlichen
 Dateien abgleichen. Prüfbilder aus `.agents/skills/website-review/SKILL.md` sind keine
 Release-Bilder und gehören nicht in den Uploadpfad.
 
@@ -110,7 +111,7 @@ Release-Bilder und gehören nicht in den Uploadpfad.
 6. **Erzeugen**, was sich geändert hat, in der Reihenfolge oben.
 7. **Kein zweites Tor vor dem Tag.** Nach Versionssprung und Erzeugern nur die
    betroffenen Wächter (`test_changelog`, `test_toolchain`, `test_website`,
-   `test_wording`, `test_manual`), committen, taggen — die CI fährt die Suiten
+   `test_wording`, `test_manual`, `test_guides`), committen, taggen — die CI fährt die Suiten
    am Tag auf allen Plattformen.
 8. **CI-Bau:** `.github/workflows/build.yml` bestimmt Trigger, Plattformen und
    die getrennten Signier- und Prüfjobs. Vor Tag oder Handstart Commit und
