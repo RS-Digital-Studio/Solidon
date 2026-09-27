@@ -117,9 +117,15 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Übergabe an den Slicer
 
+- In ElegooSlicer, Bambu Studio, Creality Print und OrcaSlicer gilt das Profil des Herstellers. Solidon schreibt nur, was Sie ändern oder an Vorschlägen übernehmen.
 - Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 sind große Teile so 40 bis 50 Prozent früher fertig.
 - Auch das Tempo der Leerfahrten kommt vom Drucker: Der Centauri Carbon 2 fährt sie mit 500 statt 150 mm/s, damit die Düse unterwegs weniger ausläuft.
 - Den Überhangwinkel nimmt Solidon aus dem Herstellerprofil Ihres Druckers, bei Elegoo, Bambu und Creality 60 statt 45 Grad. Fasen und flache Schrägen bekommen keine unnötigen Stützen mehr.
+- Der Druckdialog zeigt, was gedruckt wird: Grundlage ist das Herstellerprofil, Ihre eigenen Werte sind markiert und lassen sich einzeln zurücksetzen.
+- Die Druckplatte wählen Sie im Druckdialog, und die Betttemperatur folgt ihr. Gibt der Hersteller die Platte für Ihr Filament nicht frei, sagt Solidon es vor dem Druck.
+- Ohne *Vorschläge übernehmen* bekommt kein Teil mehr ungefragt einen Brim, weder beim Export noch bei der Übergabe an den Slicer.
+- Projekte aus 0.5.0 drucken mit dem Tempo Ihres Druckers. Was Sie darin selbst eingestellt hatten, bleibt erhalten.
+- Das Tempo der ersten Schicht gilt jetzt auch für ihre Füllung. Vorher legte der Slicer den Boden mit dem Tempo des Herstellers, am Centauri Carbon 2 mit 105 mm/s.
 - Eine Decke über einem Wasserkanal oder Tunnel holt keine Stützen mehr aufs Modell. Braucht sonst keine Stelle Stützen auf dem Modell, schlägt Solidon sie nur vom Bett vor.
 - Neu ist der Vorschlag *Kanäle frei halten*: Übernommen legt die Übergabe an PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print eine Stützsperre in die Kanäle.
 - Gitterstützen kommen als echtes Gitter beim Slicer an, mit wechselnder Richtung je Schicht, statt als lose Linien, die sich im Druck verschieben.

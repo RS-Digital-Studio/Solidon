@@ -92,9 +92,15 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
+- In ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer the manufacturer's profile applies. Solidon only writes what you change or accept from suggestions.
 - The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.
 - Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, so the nozzle oozes less along the way.
 - Solidon takes the overhang angle from your printer's manufacturer profile, 60 instead of 45 degrees for Elegoo, Bambu and Creality. Chamfers and gentle slopes no longer get needless supports.
+- The print settings show what will be printed: the manufacturer's profile is the basis, and your own values are marked and can be reset one by one.
+- You choose the build plate in the print settings, and the bed temperature follows it. If the manufacturer does not approve the plate for your filament, Solidon says so before printing.
+- Without *Apply suggestions*, no part gets a brim unasked any more, neither on export nor when handing over to the slicer.
+- Projects from 0.5.0 print at your printer's speed. Whatever you had set yourself in them is kept.
+- The first-layer speed now also applies to its infill. Before, the slicer laid the bottom at the manufacturer's speed, 105 mm/s on the Centauri Carbon 2.
 - A ceiling over a water channel or tunnel no longer draws supports onto the model. If nothing else needs supports on the model, Solidon suggests them from the bed only.
 - New suggestion *Keep channels clear*: once applied, the handover to PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print puts a support blocker in the channels.
 - Grid supports arrive at the slicer as a real grid, with the direction changing each layer, instead of loose lines that shift during printing.

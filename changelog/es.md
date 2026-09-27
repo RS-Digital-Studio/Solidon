@@ -93,9 +93,15 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Imprimir y entregar al slicer
 
+- En ElegooSlicer, Bambu Studio, Creality Print y OrcaSlicer rige el perfil del fabricante. Solidon solo escribe lo que usted cambia o acepta de las sugerencias.
 - El nivel «Standard» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.
 - La velocidad de desplazamiento también viene de la impresora: la Centauri Carbon 2 se desplaza a 500 en lugar de 150 mm/s, para que la boquilla gotee menos por el camino.
 - Solidon toma el ángulo de voladizo del perfil del fabricante de su impresora: 60 en lugar de 45 grados en Elegoo, Bambu y Creality. Chaflanes y pendientes suaves ya no reciben soportes innecesarios.
+- Los ajustes de impresión muestran lo que se imprime: la base es el perfil del fabricante, y sus propios valores están marcados y se pueden restablecer uno a uno.
+- La placa de impresión se elige en los ajustes de impresión y la temperatura de la cama la sigue. Si el fabricante no autoriza la placa para su filamento, Solidon lo avisa antes.
+- Sin «Aplicar las sugerencias», ninguna pieza recibe ya un brim sin preguntar, ni al exportar ni al entregarla al slicer.
+- Los proyectos de 0.5.0 imprimen con la velocidad de su impresora. Lo que usted había ajustado en ellos se conserva.
+- La velocidad de la primera capa vale ahora también para su relleno. Antes el slicer hacía el fondo a la velocidad del fabricante, 105 mm/s en la Centauri Carbon 2.
 - Un techo sobre un canal de agua o un túnel ya no atrae soportes sobre el modelo. Si nada más los necesita sobre el modelo, Solidon los propone solo desde la cama.
 - Nueva sugerencia «Mantener libres los canales»: aplicada, coloca un bloqueador de soportes en los canales para PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer y Creality Print.
 - Los soportes de rejilla llegan al slicer como rejilla de verdad, con la dirección cambiando en cada capa, en lugar de líneas sueltas que se desplazan al imprimir.
