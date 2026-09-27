@@ -597,6 +597,17 @@ Platte von 8 256. Abnahme:
 `test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths`,
 `test_a_tilted_bore_reports_its_neighbour_on_both_kernels`,
 `test_a_countersink_tilted_past_its_flank_is_refused_with_the_largest_angle`.
+**Und eine einzelne Sackbohrung kippt genauso** (RM-263, Durchsicht 0.5.1):
+Ihr Werkzeug war die gemessene Bohrung, gedreht, und endete an ihrem alten
+Deckel — über der Seite, zu der die Mündung sinkt, blieb eine Haut stehen
+(Magnettasche ohne Lippe um 10°: bis 0,72 mm, an beiden Kernen; die Kerne lagen
+nur um die Zugabe aus §39 auseinander). `_blind_mouth` liest die offene
+Mündung an den Randringen, `_blind_reach` rechnet die Verlängerung wie an
+Kette und Durchgang, der Boden kippt ohne Zugabe mit, und `_old_rim_caps`
+kappt an der alten Mündung (Netz `_turned_blind_bore`, exakt
+`_exact_turned_blind_tool`). Abnahme:
+`test_a_tilted_blind_hole_stays_open_at_its_mouth`,
+`test_a_magnet_pocket_tilts_only_without_its_lip`.
 
 **Wer eine Kette nur versetzt, verlängert den exakten Körper an seinen
 Mündungen** (`_past_the_mouths`). Das Werkzeug aus Kennzahlen stand am

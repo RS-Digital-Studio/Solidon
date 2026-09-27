@@ -5249,7 +5249,9 @@ class RotateFeatureParams(BaseParams):
     # endet an seinen alten Randebenen (Durchsicht 0.5.1).
     # 5: eine gekrümmte Mündung schließt mit der fortgesetzten Fläche (RM-248,
     # Durchsicht 0.5.1).
-    cache_version="5",
+    # 6: eine gekippte Sackbohrung reicht über ihre Mündung hinaus, statt über
+    # der tiefen Seite eine Haut stehen zu lassen (RM-263, Durchsicht 0.5.1).
+    cache_version="6",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -5363,6 +5365,16 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     )
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     tool = _turned_through_bore(body, feature, spun, centre, turned_axis)
+    if tool is None and cavity and (feature.kind != "hole" or hole_is_clear(body, feature)):
+        # Eine Sackbohrung reicht gekippt über ihre Mündung hinaus (RM-263); wo
+        # im Zylinder Material steht, sagt ``_placing_tool`` wie bisher ab.
+        tool = _turned_blind_bore(
+            body,
+            feature,
+            spun,
+            source.features,
+            np.asarray(transform.rotation(params.axis, params.angle, centre), dtype=np.float64),
+        )
     if tool is None and cavity and feature.kind == "cone":
         tool = _turned_open_cone(
             body,
@@ -5637,6 +5649,11 @@ def _old_rim_caps(
     elif feature.kind == "cone":
         # Eine Senkung ohne Bohrung weitet sich entlang ihrer Achse nach außen.
         towards = np.asarray(_feature_direction(feature), dtype=float)
+    elif (mouth := _blind_mouth(body, feature, features)) is not None:
+        # **Eine einzelne Sackbohrung endet an ihrer offenen Mündung** (RM-263):
+        # Ihr gekipptes Werkzeug reicht darüber hinaus (:func:`_turned_blind_bore`),
+        # der Boden kippt mit und bekommt keine Ebene.
+        towards = mouth[0]
     else:
         return ()
     return tuple(plane for plane in rims if units.dot3(plane.normal, towards) > 0.0)
@@ -5813,6 +5830,118 @@ def _turned_through_bore(
     )
     stretched = dataclasses.replace(spun, params={**spun.params, "depth": 2.0 * reach})
     return _feature_solid(stretched, centre, axis=turned_axis, oversize=0.0)
+
+
+def _blind_mouth(
+    body: MeshData, feature: Feature, features: Mapping[FeatureId, Feature]
+) -> tuple[NDArray[np.float64], float, float] | None:
+    """Die offene Mündung einer einzelnen Sackbohrung oder eines Sacklanglochs:
+    die Achse nach außen, der Abstand der Mitte zum äußersten Randpunkt der
+    Mündung und der zum Boden, beide entlang dieser Achse — ``None``, wo die
+    Ränder keine zwei flachen Ringe mit genau einer offenen Mündung sind.
+
+    Gefragt wird an den Randringen und ihrer Luftprobe (:func:`_bore_end_rims`),
+    wie an jeder anderen Mündung; welches Vorzeichen die gemessene Achse trägt,
+    ist gleich. Der exakte Kern fragt dasselbe an seinem Netz-Zwilling.
+    """
+    if feature.kind not in ("hole", "slot") or feature.params.get("through"):
+        return None
+    rims = _bore_end_rims(body, feature, features, grows=True)
+    opened = [rim for rim in rims if rim.open]
+    closed = [rim for rim in rims if not rim.open]
+    if len(opened) != 1 or len(closed) != 1:
+        return None
+    centre = np.asarray(feature.params["centre"], dtype=np.float64)
+    axis = np.asarray(_feature_direction(feature), dtype=np.float64)
+    axis = axis / math.hypot(*(float(value) for value in axis))
+    mouth_along = transform.along(opened[0].points - centre, axis)
+    floor_along = transform.along(closed[0].points - centre, axis)
+    if float(mouth_along.mean()) < float(floor_along.mean()):
+        axis, mouth_along, floor_along = -axis, -mouth_along, -floor_along
+    to_mouth = float(mouth_along.max())
+    to_floor = -float(floor_along.mean())
+    if to_mouth <= EPS_GEOM or to_floor <= EPS_GEOM:
+        return None
+    return axis, to_mouth, to_floor
+
+
+def _turned_blind_bore(
+    body: MeshData,
+    feature: Feature,
+    spun: Feature,
+    features: Mapping[FeatureId, Feature],
+    matrix: NDArray[np.float64],
+) -> MeshData | None:
+    """Das Werkzeug einer gekippten **Sackbohrung** — über die Mündung hinaus, so
+    weit die Neigung verlangt, am Boden genau; ``None`` für alles andere.
+
+    **Die Mündung einer Sackbohrung liegt nach dem Kippen schräg zur Fläche**,
+    und das Werkzeug aus der gemessenen Bohrung endete dort, wo vorher ihr
+    Deckel lag: Auf der Seite, zu der die Mündung sinkt, blieb eine Haut aus
+    Material über der Öffnung stehen — an der Magnettasche ohne Lippe um 10°
+    gekippt bis 0,72 mm dick, an einer Sackbohrung Ø 6 in 6 mm Tiefe 3,9 mm³
+    (RM-263, Durchsicht 0.5.1). Dass die Kerne dort um 0,56 mm³ verschieden
+    lagen, war nur die Zugabe aus §39, die am Netz die Haut dünner machte. Eine
+    Kette und eine Durchgangsbohrung reichen längst über ihre Mündung hinaus
+    (:func:`_chain_tool`, :func:`_turned_through_bore`); die einzelne
+    Sackbohrung jetzt auch, mit derselben Rechnung
+    (:func:`_reach_past_a_tilted_face`) und derselben Kappe an der alten
+    Randebene (:func:`_old_rim_caps`). Der Boden kippt mit, ohne Zugabe — eine
+    Verlängerung dort machte die Bohrung tiefer. Das Gegenstück am exakten Kern
+    ist :func:`_exact_turned_blind_tool`, mit denselben Zahlen.
+    """
+    reach = _blind_reach(body, feature, features, matrix)
+    if reach is None:
+        return None
+    outward, to_mouth, to_floor = reach
+    turned = matrix[:3, :3] @ outward
+    length = to_floor + to_mouth
+    middle = _moved_point(
+        np.asarray(feature.params["centre"], dtype=np.float64)
+        + outward * ((to_mouth - to_floor) / 2.0),
+        matrix,
+    )
+    # ``_feature_solid`` gibt der Länge an beiden Enden die Zugabe; die Mündung
+    # hat sie in ``to_mouth`` schon, der Boden bekommt keine.
+    stretched = dataclasses.replace(
+        spun, params={**spun.params, "depth": length - 2.0 * FEATURE_OVERLAP}
+    )
+    return _feature_solid(
+        stretched,
+        cast(Vec3, tuple(float(value) for value in middle)),
+        axis=cast(Vec3, tuple(float(value) for value in turned)),
+        oversize=0.0,
+    )
+
+
+def _blind_reach(
+    body: MeshData,
+    feature: Feature,
+    features: Mapping[FeatureId, Feature],
+    matrix: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], float, float] | None:
+    """Wie weit das gekippte Werkzeug einer Sackbohrung von ihrer Mitte aus
+    reicht: die Achse nach außen (vor dem Kippen), bis hinter die Mündung samt
+    Zugabe, und bis zum Boden — für beide Kerne dieselben Zahlen
+    (:func:`_turned_blind_bore`, :func:`_exact_turned_blind_tool`)."""
+    mouth = _blind_mouth(body, feature, features)
+    if mouth is None:
+        return None
+    outward, to_mouth, to_floor = mouth
+    turned = matrix[:3, :3] @ outward
+    tilt = math.degrees(math.acos(min(1.0, abs(units.dot3(outward, turned)))))
+    if tilt <= EPS_DISPLAY:
+        # Um die eigene Achse gedreht, bleibt die Mündung, wo sie war — wie bei
+        # der Durchgangsbohrung (:func:`_turned_through_bore`) der Weg über die
+        # eigenen Flächen, ohne neues Vieleck.
+        return None
+    across = float(feature.params.get("diameter", 0.0)) / 2.0
+    if feature.kind == "slot":
+        across = max(across, float(feature.params.get("length", 0.0)) / 2.0)
+    if across <= EPS_GEOM:
+        return None
+    reach = _reach_past_a_tilted_face(to_mouth, across, tilt, at_most=float(body.bounds.diagonal))
+    return outward, reach + FEATURE_OVERLAP, to_floor
 
 
 def _sink_must_close(cone: Feature, tilt: float, angle: float) -> None:
@@ -10835,6 +10964,49 @@ def _exact_cavity_tool(
     return edit._centred_bore(centre, axis, diameter, depth, 0.0)
 
 
+def _exact_turned_blind_tool(
+    source: SceneObject, feature: Feature, spun: Feature, matrix: NDArray[np.float64]
+) -> Any | None:
+    """Das exakte Gegenstück zu :func:`_turned_blind_bore`: dieselben Zahlen
+    vom Netz-Zwilling (:func:`_blind_reach`), der Zylinder oder das Langloch
+    exakt — ``None``, wo es keine einzelne Sackbohrung mit offener Mündung ist.
+
+    Aus der gemessenen Tiefe allein endete das gekippte Werkzeug an der Stelle
+    des alten Deckels, und über der tiefen Seite der Mündung blieb eine Haut
+    stehen, am exakten Körper um die Zugabe dicker als am Netz (RM-263).
+    Gekappt wird danach an der alten Mündung (:func:`_old_rim_caps`).
+    """
+    from app.core.brep import edit
+
+    twin = as_mesh_data(source.mesh)
+    if feature.kind == "hole" and not hole_is_clear(twin, feature):
+        return None
+    reach = _blind_reach(twin, feature, source.features, matrix)
+    if reach is None:
+        return None
+    outward, to_mouth, to_floor = reach
+    turned = matrix[:3, :3] @ outward
+    middle = _moved_point(
+        np.asarray(feature.params["centre"], dtype=np.float64)
+        + outward * ((to_mouth - to_floor) / 2.0),
+        matrix,
+    )
+    position = cast(Vec3, tuple(float(value) for value in middle))
+    direction = cast(Vec3, tuple(float(value) for value in turned))
+    diameter = _bore_number(feature, "diameter")
+    if feature.kind == "slot":
+        return edit._slot_tool(
+            position,
+            direction,
+            diameter,
+            to_mouth + to_floor,
+            _bore_number(feature, "length"),
+            _slot_angle_in_frame(spun, direction),
+            0.0,
+        )
+    return edit._centred_bore(position, direction, diameter, to_mouth + to_floor, 0.0)
+
+
 def _exact_body_checked(solid: Any) -> Any:
     """Ob nach dem Schnitt noch ein geschlossener Körper da ist — dieselben zwei
     Fragen wie in ``resize_hole``, mit denselben Sätzen.
@@ -11303,8 +11475,17 @@ def _exact_rotate_cavity(
     # Langloch schnitt gekippt über die ganze Zielhülle ohne Kappe — am
     # ``build_tray_v3.step`` fehlten danach 8 012 mm³ vor seiner Mündung, quer
     # durch die Schale. Jetzt endet es an den alten Randebenen wie die Bohrung.
-    tool = _exact_cavity_tool(filled, spun, centre, turned_axis)
-    if feature.params.get("through"):
+    matrix = np.asarray(
+        transform.rotation(
+            cast(RotateFeatureParams, ctx.params).axis,
+            cast(RotateFeatureParams, ctx.params).angle,
+            centre,
+        ),
+        dtype=np.float64,
+    )
+    blind = _exact_turned_blind_tool(source, feature, spun, matrix)
+    tool = blind if blind is not None else _exact_cavity_tool(filled, spun, centre, turned_axis)
+    if feature.params.get("through") or blind is not None:
         caps = _old_rim_caps(as_mesh_data(source.mesh), feature, source.features)
         if caps:
             tool = edit.clipped_bore_tool(tool, caps)

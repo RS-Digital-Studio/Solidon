@@ -919,8 +919,15 @@ tiefen führt die Öffnung als Schacht ihrer Weite bis zur Fläche, und ein
 Zylinder, der mit der engen Weite weiterläuft, ist nach der dritten Bedingung
 oben eine Stufe, keine Mündung. Am exakten Körper stand sie dann als Kegel
 („Senkung“) im Baum, am Netz mit Tasche und Schacht als gerundete Seite.
+Nachgemessen mit dem gebauten Drehweg (Durchsicht 0.5.1, rest-muendung,
+RM-262): Der exakte Kern liest Tasche, einen **angeschnittenen** Kegel ohne
+Verengung und den Schacht als Zylinderstück — das Teilstück berührt die Tasche,
+also keine Kette, und Versetzen sagt danach „kein eigener Körper“; das Netz
+liest nur eine gerundete Seite, die Tasche ist keine Bohrung mehr (Lippe unter
+der Knickgrenze, keine Krümmungssprünge zwischen 3,98 und 4,13 mm Radius).
 Deshalb kippt *Merkmal drehen* eine Kette mit Verengung nicht
-(`perceive.actions.narrowing_reason`). Dieselbe gekippte Lippe entsteht aber,
+(`perceive.actions.narrowing_reason`); der Drehweg liegt als Patch bereit,
+bis beide Erkennungen Tasche, Lippe und Schacht als Kette lesen. Dieselbe gekippte Lippe entsteht aber,
 wenn die Magnettasche mit einer Richtung eingesetzt wird, die nicht senkrecht
 auf der Fläche steht — ein offener Registerpunkt (Bericht rest-lippe), keine
 Regel zum Lockern ohne Korpuslauf.

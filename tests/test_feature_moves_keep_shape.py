@@ -2202,8 +2202,27 @@ def test_a_magnet_pocket_tilts_only_without_its_lip(
         twin = twin_of(after.scene.objects["obj_1"].mesh)
         assert twin.is_watertight
         # Die gekippte Tasche ist leer, seitlich der Kippachse steht ihre Wand,
-        # und ihr Boden steht quer zur gekippten Achse.
-        pocket = turned([(-26.0, -20.0, 3.5), (-34.0, -20.0, 3.5), (-30.0, -20.0, 2.05)])
+        # und ihr Boden steht quer zur gekippten Achse. **Und die Mündung ist
+        # auch auf der Seite offen, zu der sie sinkt** (RM-263): 1,8 mm über
+        # der Mitte und 3 mm zur tiefen Seite lag dort eine Haut, bis 0,72 mm
+        # dick — an beiden Kernen, am Netz um die Zugabe aus §39 dünner.
+        pocket = turned(
+            [(-26.0, -20.0, 3.5), (-34.0, -20.0, 3.5), (-30.0, -20.0, 2.05), (-30.0, -23.0, 5.3)]
+        )
         wall = turned([(-25.7, -20.0, 3.5), (-34.3, -20.0, 3.5), (-30.0, -20.0, 1.95)])
         assert not contains(twin, pocket).any(), box
         assert contains(twin, wall).all(), box
+        # Der Hohlraum: jede Säule von ihrem gekippten Boden bis zur Deckfläche,
+        # im Mittel 1,5/cos 10° + 1,5 mm lang. Die Kerne gleich bis auf das
+        # 48-Eck der Netzwand; vorher exakt 152,724, am Netz umgerechnet 153,282.
+        cavity = math.pi * 4.125 * 4.125 * (1.5 / math.cos(math.radians(10.0)) + 1.5)
+        sides = 48.0 / math.tau * math.sin(math.tau / 48.0)
+        removed = 80.0 * 60.0 * 5.0 - (
+            float(after.scene.objects["obj_1"].mesh.volume)
+            if box == "create_brep_box"
+            else float(twin.volume)
+        )
+        if box == "create_brep_box":
+            assert removed == pytest.approx(cavity, abs=0.01), box
+        else:
+            assert removed == pytest.approx(cavity * sides, abs=0.05), box

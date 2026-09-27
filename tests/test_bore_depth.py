@@ -633,6 +633,52 @@ def test_a_tilted_countersunk_blind_hole_keeps_its_floor(profile: Profile, kerne
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_tilted_blind_hole_stays_open_at_its_mouth(profile: Profile, kernel: str) -> None:
+    """Ein Sackloch um 10° kippen: Die Mündung bleibt ganz offen, der Boden kippt mit (RM-263).
+
+    Das Werkzeug einer einzelnen Sackbohrung war die gemessene Bohrung, gedreht —
+    ohne Verlängerung über die Mündung, die eine Kette und eine
+    Durchgangsbohrung längst bekommen. Auf der Seite, zu der die Mündung sank,
+    blieb eine Haut aus Material über der Öffnung stehen, bis 0,5 mm dick; am
+    Netz um die Zugabe aus §39 dünner als am exakten Körper, und so kippte die
+    Magnettasche ohne Lippe an den Kernen um 0,56 mm³ verschieden.
+    """
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    tilt = math.radians(10.0)
+    axis = (0.0, -math.sin(tilt), math.cos(tilt))
+    # Die Vorlage: dasselbe Sackloch um seine Mitte (z = 7) gedreht und über
+    # die Oberseite hinaus weitergeführt; was darüber liegt, ist Luft.
+    truth = edit.bore_profile(
+        edit.box(60.0, 40.0, 10.0),
+        [(0, -3), (3, -3), (3, 6), (0, 6), (0, -3)],
+        frame_of(axis, (0.0, 0.0, 7.0)),
+    )
+    source = _blind(kernel)
+
+    changed, findings = _evaluated(
+        source, profile, "rotate_feature", at_feature=_hole(source).id, axis="x", angle=10.0
+    )
+
+    removed = PLATE - _volume(changed)
+    expected = PLATE - float(truth.volume)
+    assert removed == pytest.approx(expected, abs=1e-6 if kernel == "brep" else 0.005 * expected)
+    # 3,3 mm entlang der gekippten Achse über der Mitte und 2,5 mm zur tiefen
+    # Seite: Das liegt über dem alten Deckel der Bohrung und unter der
+    # Oberseite — Luft, wo vorher die Haut stand. Unter dem gekippten Boden
+    # bleibt Material.
+    mouth = (
+        0.0,
+        -3.3 * math.sin(tilt) - 2.5 * math.cos(tilt),
+        7.0 + 3.3 * math.cos(tilt) - 2.5 * math.sin(tilt),
+    )
+    floor = (0.0, 3.1 * math.sin(tilt), 7.0 - 3.1 * math.cos(tilt))
+    assert _material_at(changed, mouth, floor) == [False, True]
+    assert [code for code in _codes(findings) if code.endswith(".mouth_covered")] == []
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
 @pytest.mark.parametrize("op", ["move_feature", "rotate_feature"])
 def test_a_moved_or_tilted_countersunk_bore_leaves_no_scars(
     profile: Profile, kernel: str, op: str
