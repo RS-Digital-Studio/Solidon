@@ -139,6 +139,12 @@ class SlicerProfile:
     vorschlägt (``default_materials``), in ihrer Reihenfolge. Der MK4S erbt
     als ``default_filament_profile`` das PLA des MK4, das zu ihm nicht passt;
     sein Modell nennt „Prusament PLA @MK4S HF0.4"."""
+    vendor: str = ""
+    """Nur bei Prusa: der Hersteller, dem das Profil gehört — das Bündel, aus
+    dem es stammt (``PrusaResearch``, ``Sovol``), bei einem eigenen Profil das
+    seines ersten Vorfahren mit Hersteller. Leer bei Vorlagen
+    (``templates_profile = 1``) und bei eigenen Profilen ohne Herstellerbasis
+    (:meth:`_PrusaStore.vendor_of`)."""
 
     def title(self, own: str = "eigenes") -> str:
         """Der Name für die Auswahl. Ein selbst angelegtes Profil wird
@@ -1968,6 +1974,38 @@ class _PrusaStore:
         self.resolved[key] = values
         return values
 
+    def vendor_of(
+        self, profile: SlicerProfile, active: frozenset[tuple[Path, str]] = frozenset()
+    ) -> str:
+        """Der Hersteller eines Profils, wie PrusaSlicer ihn zuordnet.
+
+        Ein Abschnitt eines Bündels gehört dessen Hersteller, benannt nach der
+        Datei wie bei PrusaSlicer (``VendorProfile::id``). Ein eigenes Profil
+        gehört dem Hersteller seines ersten Vorfahren, der einen hat
+        (``get_preset_with_vendor_profile``). Leer bleibt es bei einem Bündel
+        mit ``templates_profile = 1`` — Vorlagen passen zu jedem Hersteller —
+        und bei eigenen Profilen ohne Herstellerbasis.
+        """
+        document = self.documents.get(profile.path)
+        if document is None:
+            return ""
+        if document.has_section("vendor"):
+            if document["vendor"].get("templates_profile", "").strip() == "1":
+                return ""
+            return profile.path.stem
+        key = (profile.path, profile.section)
+        section = profile.section or _PRUSA_HEAD
+        if key in active or len(active) >= MAX_INHERITANCE or not document.has_section(section):
+            return ""
+        for name in _prusa_list(document[section].get("inherits", "")):
+            for parent in self.by_name.get((profile.kind, name), ()):
+                if (parent.path, parent.section) == key:
+                    continue
+                vendor = self.vendor_of(parent, active | {key})
+                if vendor:
+                    return vendor
+        return ""
+
 
 @dataclass(slots=True)
 class _PrusaCache:
@@ -2100,6 +2138,7 @@ def _prusa_listing(store: _PrusaStore, cancelled: CancelToken | None) -> list[Sl
                 else ()
             ),
             default_materials=materials if entry.kind == "machine" else (),
+            vendor=store.vendor_of(entry),
         )
         key = (profile.kind, profile.name)
         if key not in found or profile.from_user or not found[key].from_user:
@@ -2486,12 +2525,23 @@ def _of_kind(
 
 
 def _prusa_fits(entry: SlicerProfile, machine: SlicerProfile, values: Mapping[str, str]) -> bool:
-    """PrusaSlicers Regel: Eine Liste gewinnt, sonst die Bedingung, sonst passt es.
+    """PrusaSlicers Regel: erst der Hersteller, dann gewinnt eine Liste, sonst
+    die Bedingung, sonst passt es.
+
+    **Der Hersteller zuerst** (``is_compatible_with_printer``, PrusaSlicer
+    2.9.6): Ein Profil aus dem Bündel eines anderen Herstellers passt nie, auch
+    ohne Liste und Bedingung. Ohne diese Prüfung standen am MK4S HF0.4 Prozesse
+    von BIBO2, LulzBot, Trimaker und Zonestar zur Wahl und Sovols PLA unter den
+    Filamenten (27.09.2026). Vorlagen und eigene Profile ohne Herstellerbasis
+    tragen keinen (:attr:`SlicerProfile.vendor`) und gehen weiter nach
+    Bedingung.
 
     Eine Bedingung, die sich nicht auswerten lässt, schließt das Profil aus
     (:class:`~app.core.export.prusa_conditions.ConditionError`): Eine Auswahl zu
     wenig lässt sich im Dialog erweitern, eine unpassende druckt falsch.
     """
+    if entry.vendor and entry.vendor != machine.vendor:
+        return False
     if entry.compatible_printers:
         return machine.name in entry.compatible_printers
     try:
