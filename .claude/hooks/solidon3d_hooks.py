@@ -50,6 +50,12 @@ SESSION_START = WURZEL / ".claude" / ".state" / "sitzungsstart"
 
 # Regeln, die sich am Text einer Datei erkennen lassen. Alles andere prüfen die
 # Tests — ein Hook, der raten muss, meldet lieber nichts.
+#
+# Vor `vor-bash` und `testlauf` steht in `.claude/settings.json` ein
+# `case`-Vorfilter: Python startet nur, wenn die Nutzlast ein Wort trägt, auf
+# das VERWIRFT, SCHREIBT_DATEI oder `_test_command` reagieren können. Wer einen
+# Auslöser ergänzt, zieht die Muster dort nach;
+# `tests/test_solidon3d_hooks.py` prüft die Obermenge.
 QT_IMPORT = re.compile(r"^\s*(?:from|import)\s+(?:PySide6|PyQt\d|shiboken\d?)\b", re.MULTILINE)
 EVAL_AUFRUF = re.compile(r"(?<![\w.])(?:eval|exec)\s*\(")
 PRINT_AUFRUF = re.compile(r"(?<![\w.])print\s*\(")

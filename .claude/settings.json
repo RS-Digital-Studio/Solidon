@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || { echo \"Solidon-Hook übersprungen: keine .venv gefunden\" >&2; exit 0; }; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" vor-bash",
+            "command": "in=$(cat); case \"$in\" in *git*) ;; *) exit 0;; esac; case \"$in\" in *checkout*|*restore*|*reset*|*clean*|*push*) ;; *) exit 0;; esac; P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || { echo \"Solidon-Hook übersprungen: keine .venv gefunden\" >&2; exit 0; }; printf '%s' \"$in\" | \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" vor-bash",
             "shell": "bash",
             "timeout": 20
           }
@@ -73,7 +73,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || { echo \"Solidon-Hook übersprungen: keine .venv gefunden\" >&2; exit 0; }; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" testlauf",
+            "command": "in=$(cat); case \"$in\" in *pytest*|*py.test*|*suite-getrennt*|*affected_tests*|*write_text*|*writelines*|*sed*-i*|*tee*|*ruff*|*'>'*.py*) ;; *) exit 0;; esac; P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || { echo \"Solidon-Hook übersprungen: keine .venv gefunden\" >&2; exit 0; }; printf '%s' \"$in\" | \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" testlauf",
             "shell": "bash",
             "timeout": 20
           }

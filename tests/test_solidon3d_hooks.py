@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import fnmatch
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -199,6 +201,73 @@ def test_test_marker_requires_a_test_invocation(
 ) -> None:
     """Dokumentations- und Sammlungsbefehle machen den Prüfhinweis nicht stumm."""
     assert hook._test_command(command) is expected
+
+
+CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
+
+#: Befehle, auf die `vor-bash` oder `testlauf` reagieren müssen — samt
+#: Tabulator und Zeilenumbruch, die im JSON als Escape-Folge ankommen.
+REACTING_COMMANDS = [
+    "git reset --hard HEAD",
+    "git checkout -- app/core/units.py",
+    "git checkout .",
+    "git\tcheckout HEAD",
+    "git\nrestore app/x.py",
+    "git clean -fd",
+    "git push origin main --force",
+    "python -m pytest tests/test_example.py -q",
+    "& '.venv\\Scripts\\python.exe' -m pytest -q",
+    ".venv/Scripts/python.exe tools/affected_tests.py --run",
+    "bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh",
+    'bash -lc "py.test -q"',
+    "python - <<'PY'\nPath('a.py').write_text('x')\nPY",
+    "handle.writelines(lines)",
+    "sed  -i 's/a/b/' app/x.py",
+    "echo x >app/x.py",
+    "cat a | tee app/b.py",
+    "python -m ruff format app/x.py",
+]
+
+
+def _claude_filter(event: str, group: int) -> list[list[str]]:
+    """Die `case`-Muster vor einem Claude-Hook: alle Gruppen müssen treffen."""
+    handlers = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))["hooks"][event]
+    command = handlers[group]["hooks"][0]["command"]
+    groups = re.findall(r'case "\$in" in (.*?)\) ;;', command)
+    return [[pattern.replace("'", "") for pattern in found.split("|")] for found in groups]
+
+
+def _passes(patterns: list[list[str]], command: str) -> bool:
+    """Wie die Shell die Nutzlast gegen die Muster hält — nach JSON-Kodierung."""
+    payload = json.dumps(
+        {"session_id": "s", "tool_input": {"command": command}},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return all(any(fnmatch.fnmatchcase(payload, p) for p in group) for group in patterns)
+
+
+@pytest.mark.parametrize(("event", "group"), [("PreToolUse", 0), ("PostToolUse", 1)])
+def test_shell_prefilter_never_hides_a_command_the_hook_reacts_to(
+    hook: ModuleType, event: str, group: int
+) -> None:
+    """Der Vorfilter in `.claude/settings.json` spart den Python-Start, nie eine Meldung.
+
+    Er ist eine Obermenge der Auslöser im Skript. Wer `VERWIRFT`,
+    `SCHREIBT_DATEI` oder `_test_command` erweitert, zieht die Muster nach —
+    sonst schweigt der Hook genau bei dem neuen Befehl.
+    """
+    patterns = _claude_filter(event, group)
+    assert patterns, "kein Vorfilter gefunden"
+    if event == "PreToolUse":
+        reacting = [c for c in REACTING_COMMANDS if hook.VERWIRFT.search(c)]
+    else:
+        reacting = [
+            c for c in REACTING_COMMANDS if hook._test_command(c) or hook.SCHREIBT_DATEI.search(c)
+        ]
+    assert len(reacting) >= 5, "zu wenige Beispiele, die der Hook meldet"
+    assert [c for c in reacting if not _passes(patterns, c)] == []
+    assert not _passes(patterns, "ls -la"), "der Vorfilter lässt alles durch"
 
 
 def test_test_markers_belong_to_one_session(
