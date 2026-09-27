@@ -100,6 +100,10 @@ MESHES: Final = Path(__file__).resolve().parent.parent / "tests" / "data" / "mes
 #: etwas zu sagen, und seine Handlung behebt es.
 BROKEN_MODEL: Final = MESHES / "broken_open.stl"
 
+#: Eine Platte mit ebener Oberseite und schon vorhandenen Löchern — dorthin
+#: kommt in *Ein Loch bohren* eine weitere Bohrung.
+PLATE_MODEL: Final = MESHES / "plate_holes.stl"
+
 #: Wie breit ein Schrittbild höchstens gespeichert wird. Die Bilder reisen mit
 #: der Anwendung, sechs Sprachen lang; das Handbuchfenster zeigt sie ohnehin
 #: in der Breite seiner Textspalte.
@@ -157,7 +161,11 @@ class Spot:
 
     rect: QRect
     point: bool = False
-    """Ein Punkt statt eines Bereichs — dort, wo die Geschichte geklickt hat."""
+    """Ein Punkt statt eines Bereichs — ein Ring um eine Stelle im Modell."""
+    pointer: bool = False
+    """Am Punkt steht der Mauszeiger mit Klickring: Hier wird geklickt. Ohne ihn
+    zeigt der Ring nur, wo etwas zu sehen ist — die Vorschau eines Lochs ist
+    keine Stelle zum Klicken."""
 
 
 # --- Zeichnen -------------------------------------------------------------------
@@ -197,19 +205,24 @@ def annotate(piece: QImage, spots: list[Spot], *, legend: bool, number: int) -> 
         shade = QPainterPath()
         shade.setFillRule(Qt.FillRule.OddEvenFill)
         shade.addRect(shot)
-        for frame in frames:
-            shade.addRoundedRect(frame, 8, 8)
+        for spot, frame in zip(spots, frames, strict=True):
+            if spot.point:
+                shade.addEllipse(frame)
+            else:
+                shade.addRoundedRect(frame, 8, 8)
         painter.fillPath(shade, DIM)
     painter.setPen(QPen(QColor(palette["line"]), 1))
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawRect(shot.adjusted(-0.5, -0.5, 0.5, 0.5))
 
-    for frame in frames:
+    for spot, frame in zip(spots, frames, strict=True):
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(halo, 7))
-        painter.drawRoundedRect(frame, 8, 8)
-        painter.setPen(QPen(amber, 3.5))
-        painter.drawRoundedRect(frame, 8, 8)
+        for colour, width in ((halo, 7.0), (amber, 3.5)):
+            painter.setPen(QPen(colour, width))
+            if spot.point:
+                painter.drawEllipse(frame)
+            else:
+                painter.drawRoundedRect(frame, 8, 8)
 
     taken: list[QPointF] = []
     bounds = QRectF(canvas.rect())
@@ -227,7 +240,7 @@ def annotate(piece: QImage, spots: list[Spot], *, legend: bool, number: int) -> 
     painter.end()
 
     for spot in spots:
-        if spot.point:
+        if spot.pointer:
             _pointer(canvas, spot.rect.center() + QPoint(BORDER, BORDER))
     return canvas
 
@@ -237,7 +250,10 @@ def _small(spot: Spot) -> bool:
 
 
 def _frame(spot: Spot) -> QRectF:
-    if spot.point:
+    """Der Rahmen um ein Ziel. Ein Punkt ohne eigene Größe bekommt einen Ring
+    von fester Größe; eine Stelle mit Größe — ein Loch, auf den Schirm
+    projiziert — einen Ring, der sie umschließt."""
+    if spot.point and spot.rect.width() <= 1 and spot.rect.height() <= 1:
         centre = QPointF(spot.rect.center())
         return QRectF(centre.x() - 22, centre.y() - 22, 44, 44)
     return QRectF(spot.rect).adjusted(-PADDING, -PADDING, PADDING, PADDING)
@@ -370,12 +386,20 @@ class GuideRun:
     def settle(self, rounds: int = 12) -> None:
         shots.settle(self.app, rounds)
 
-    def capture(self, number: int, *, points: dict[str, QPoint] | None = None) -> None:
+    def capture(
+        self,
+        number: int,
+        *,
+        points: dict[str, QPoint] | None = None,
+        rings: dict[str, QPoint | QRect] | None = None,
+    ) -> None:
         """Den Zustand für Schritt ``number`` aufnehmen, markiert und zugeschnitten.
 
-        ``points`` setzt für ein Ziel einen Punkt statt seines Rahmens: dort,
-        wo die Geschichte in die Ansicht geklickt hat. Global, wie
-        ``mapToGlobal`` ihn liefert.
+        ``points`` setzt für ein Ziel einen Punkt mit Mauszeiger statt seines
+        Rahmens: dort, wo die Geschichte in die Ansicht geklickt hat. ``rings``
+        setzt einen Ring ohne Zeiger: eine Stelle, an der etwas zu sehen ist,
+        als Punkt oder als Rechteck, das der Ring umschließt. Beides global,
+        wie ``mapToGlobal`` es liefert.
         """
         from app.ui import guide_targets
 
@@ -390,7 +414,12 @@ class GuideRun:
         for mark in step.marks:
             if points and mark.target in points:
                 where = points[mark.target] - origin
-                spots.append(Spot(QRect(where, QSize(1, 1)), point=True))
+                spots.append(Spot(QRect(where, QSize(1, 1)), point=True, pointer=True))
+                continue
+            if rings and mark.target in rings:
+                ring = rings[mark.target]
+                box = ring if isinstance(ring, QRect) else QRect(ring, QSize(1, 1))
+                spots.append(Spot(box.translated(-origin), point=True))
                 continue
             try:
                 area = guide_targets.area_for(self.window, mark.target)
@@ -406,7 +435,7 @@ class GuideRun:
                 focus = focus.united(_reach(spot))
             crop = framed(focus.intersected(image.rect()), RATIO, image.rect(), MARGIN)
         corner = crop.topLeft()
-        inside = [Spot(spot.rect.translated(-corner), spot.point) for spot in spots]
+        inside = [Spot(spot.rect.translated(-corner), spot.point, spot.pointer) for spot in spots]
         picture = annotate(image.copy(crop), inside, legend=step.is_legend, number=number)
         if picture.width() > MAX_WIDTH:
             picture = picture.scaledToWidth(MAX_WIDTH, Qt.TransformationMode.SmoothTransformation)
@@ -465,6 +494,81 @@ def story_window_overview(run: GuideRun) -> None:
     run.capture(1)
 
 
+def _visible(run: GuideRun, world: tuple[float, float, float]) -> QPoint:
+    """Wo ein Weltpunkt auf dem Schirm steht — global, für ``capture(points=…)``."""
+    from tools.make_video import _world_to_window
+
+    x, y = _world_to_window(run.window, world)
+    return run.window.mapToGlobal(QPoint(round(x), round(y)))
+
+
+def _top_face(entry: Any) -> tuple[str, Any]:
+    """Die größte nach oben zeigende Fläche eines Körpers — dorthin kommt das Loch."""
+    faces = [
+        (feature_id, feature)
+        for feature_id, feature in entry.features.items()
+        if feature.kind == "face" and float(feature.params["normal"][2]) > 0.99
+    ]
+    if not faces:
+        raise SystemExit("Der Körper hat keine Fläche, die nach oben zeigt")
+    return max(faces, key=lambda item: float(item[1].params["area"]))
+
+
+def story_drill_a_hole(run: GuideRun) -> None:
+    """Teil wählen, Fläche wählen, Bohrung setzen, im Verlauf wiederfinden."""
+    from app.ui import guide_targets
+
+    _import(run, PLATE_MODEL)
+    body = web.select_body(run.window, 0)
+    result = run.session.last_result
+    if result is None:
+        raise SystemExit(f"{PLATE_MODEL.name}: keine Auswertung")
+    face_id, face = _top_face(result.scene.objects[body])
+    centre = tuple(float(value) for value in face.params["centre"])
+    run.capture(1, points={"viewport": _visible(run, (centre[0], centre[1], centre[2]))})
+
+    run.window.object_tree.select_feature(body, face_id)
+    run.settle(30)
+    # Neben die Mitte, damit der Klick nicht in einem der vorhandenen Löcher liegt.
+    spot = (centre[0] + 12.0, centre[1], centre[2])
+    run.capture(2, points={"viewport": _visible(run, spot)})
+
+    run.capture(3)
+    guide_targets.widget_for(run.window, "operation:drill_hole").click()
+    run.settle(40)
+    dialog = run.window._op_dialog
+    if dialog is None or not dialog.isVisible():
+        raise SystemExit("Der Dialog „Bohrung setzen“ ging nicht auf")
+    dialog._editors["diameter"].set_value(5.0)
+    run.settle(40)
+    run.capture(4)
+    run.capture(5)
+    # Wo das Loch sitzt: die Werte des Dialogs, die er aus der gewählten
+    # Fläche übernommen hat, gelesen vor dem Schließen.
+    chosen = dialog.values()
+    mouth = (float(chosen["x"]), float(chosen["y"]), float(chosen["z"]))
+    guide_targets.widget_for(run.window, "dialog.accept").click()
+    web.until_quiet(run.app, run.session, "Bohrung")
+    # Ohne Auswahl und näher heran: Das Werkzeugkreuz einer gewählten Fläche
+    # läge sonst über dem Loch, und fünf Millimeter in einer Platte von
+    # hundert sind aus der Ferne ein Punkt. Ein Ring ohne Zeiger — hier wird
+    # nicht geklickt, hier ist etwas zu sehen.
+    run.window.object_tree.select_object(None)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.window.viewport.zoom(2.5)
+    run.settle(30)
+    # Der Ring umschließt das Loch: sein Rand, auf den Schirm projiziert.
+    radius = float(chosen["diameter"]) / 2.0
+    rim = [
+        _visible(run, (mouth[0] + dx, mouth[1] + dy, mouth[2]))
+        for dx, dy in ((radius, 0.0), (-radius, 0.0), (0.0, radius), (0.0, -radius))
+    ]
+    xs, ys = [point.x() for point in rim], [point.y() for point in rim]
+    hole = QRect(QPoint(min(xs), min(ys)), QPoint(max(xs), max(ys)))
+    run.capture(6, rings={"viewport": hole})
+    run.capture(7)
+
+
 def story_print_a_model(run: GuideRun) -> None:
     """Vom Startbildschirm über den Prüfbericht in den Druckdialog."""
     from app.ui import guide_targets
@@ -515,6 +619,7 @@ def story_print_a_model(run: GuideRun) -> None:
 STORIES: Final[dict[str, Callable[[GuideRun], None]]] = {
     "window-overview": story_window_overview,
     "print-a-model": story_print_a_model,
+    "drill-a-hole": story_drill_a_hole,
 }
 
 

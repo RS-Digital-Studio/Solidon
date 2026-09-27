@@ -17,6 +17,7 @@ import pytest
 from app.branding import APP_VERSION
 from app.core import figures, guides, manual, tour
 from app.core.bootstrap import load_operations
+from app.i18n import tr
 from app.i18n.catalog import available_languages
 
 load_operations()
@@ -153,14 +154,22 @@ def test_a_legend_lists_what_its_numbers_stand_for() -> None:
 
 
 def test_the_text_output_keeps_the_steps_and_drops_their_pictures() -> None:
-    """Das Schrittbild wiederholt den Satz; im reinen Text stünde er sonst zweimal."""
+    """Das Schrittbild wiederholt den Satz; im reinen Text stünde er sonst zweimal.
+
+    Gezählt wird die Zeile des Schritts mit ihrer Nummer, nicht der Satz allein:
+    „Klicken Sie auf *Bohrung setzen*." steht als eigener Schritt und zugleich
+    im Satz des Schritts davor.
+    """
     for guide in guides.GUIDES:
         page = manual.find(guide.key)
         assert page is not None, guide.key
         text = manual.without_figures(page.text())
         assert "figure:" not in text
-        for one in guide.steps:
-            assert text.count(str(one.text)) == 1, one.text
+        assert f"*{tr('Abbildung')}:" not in text, guide.key
+        numbered = len(guide.steps) > 1
+        for number, one in enumerate(guide.steps, 1):
+            line = f"**{number}.** {one.text}" if numbered else str(one.text)
+            assert text.count(line) == 1, line
 
 
 def test_every_name_of_the_vocabulary_has_its_resolution_in_the_interface() -> None:

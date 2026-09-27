@@ -227,6 +227,36 @@ GUIDES: Final[tuple[Guide, ...]] = (
             ),
         ),
     ),
+    Guide(
+        key="drill-a-hole",
+        title=_("Ein Loch bohren"),
+        summary=_("Eine Bohrung in ein vorhandenes Modell setzen und später verschieben."),
+        part="start",
+        steps=(
+            step(_("Klicken Sie auf das Teil. Es ist jetzt gewählt."), "viewport"),
+            # Nur der Punkt: Mit dem Auswahlfenster am rechten Rand im selben
+            # Bild wurde der Ausschnitt das ganze Fenster, und der Punkt auf
+            # der Fläche war nicht mehr zu erkennen (Probelauf 27.09.2026).
+            step(_("Klicken Sie noch einmal, genau auf die Fläche für das Loch."), "viewport"),
+            step(
+                _("Rechts unter *Auswahl*: Klicken Sie auf *Bohrung setzen*."),
+                "operation:drill_hole",
+            ),
+            # Die Vorschau hat ihr eigenes Bild nach dem Übernehmen: Im selben
+            # Bild wie das Feld lag das Werkzeugkreuz über dem Loch, und der
+            # Ausschnitt wurde das ganze Fenster (Probelauf 27.09.2026).
+            step(_("Tragen Sie den Durchmesser ein, zum Beispiel 5 mm."), "field:diameter"),
+            step(_("Klicken Sie auf *Bohrung setzen*."), "dialog.accept"),
+            step(_("Das Loch sitzt jetzt in der Fläche."), "viewport"),
+            step(
+                _(
+                    "Sitzt es falsch? Ein Doppelklick auf den Schritt im *Verlauf* "
+                    "öffnet ihn wieder."
+                ),
+                "history.last",
+            ),
+        ),
+    ),
 )
 
 

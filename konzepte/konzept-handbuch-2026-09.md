@@ -58,18 +58,21 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   HB-13 — der Ort je Operation in der Referenz, `**Ort:** <menu_path>` an
   allen 142 Einträgen (Commit „Die Referenz sagt jetzt bei jeder Operation,
   wo man sie findet").
-- **HB-4, erste Hälfte gebaut:** *Ein Modell prüfen und drucken*
-  (`print-a-model`, sechs Schritte) — Anleitung, Ziele `report.slicer` und
-  `print.*`, Geschichte an `tests/data/meshes/broken_open.stl`,
-  Übersetzungen; am Fenster auf Deutsch aufgenommen und angesehen. Der
-  Probelauf hat einen Satz des Entwurfs widerlegt: Solidon repariert beim
-  Einlesen selbst, unter einem Befund stehen *Stelle zeigen* und *Offen
-  lassen*, kein Knopf „beheben".
-- **Als Nächstes:** *Ein Loch bohren* (`drill-a-hole`) — Sätze, Ziele,
-  Geschichte und Übersetzungen als Entwurf in
-  `nachweise-handbuch-2026-09/entwurf-hb4.md`, dort auch, was am Fenster zu
-  prüfen ist. Danach *Das erste eigene Teil* und *Ein Gehäuse mit Deckel*
-  (Vorlage: `story_housing` in `tools/make_longform_video.py`).
+- **HB-4, drei Anleitungen gebaut** und am Fenster auf Deutsch
+  aufgenommen und angesehen: *Das Fenster auf einen Blick*, *Ein Modell prüfen
+  und drucken* (`d36503d57`, sechs Schritte an
+  `tests/data/meshes/broken_open.stl`) und *Ein Loch bohren* (sieben Schritte
+  an `plate_holes.stl`; der sechste zeigt das fertige Loch nah, mit einem Ring
+  aus dem echten Lochdurchmesser). Alle Sätze in sechs Sprachen.
+- **Als Nächstes:** HB-6, die Suche mit Rangfolge — `manual.search` mit
+  Gewichten für Titel, Zusammenfassung und Text, Kundenwörtern und einem Test
+  über die 38 Kundensuchen aus `nachweise-handbuch-2026-09/findbarkeit.md`
+  (Ausgang: 50 % unter den ersten drei, Ziel mindestens 80 %). Danach *Das
+  erste eigene Teil* (Weg 2: Grundform, Maß, Baustein, Drucken) und *Ein
+  Gehäuse mit Deckel* — Vorlage für den Weg ist `story_housing` in
+  `tools/make_longform_video.py`, deren Aufrufe aber teils programmatisch
+  sind: Die Geschichte muss den Weg über die Knöpfe gehen, die die Sätze
+  nennen. Dann HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?").
 
 ## §1 Befund
 
@@ -302,6 +305,19 @@ unter 48 Bildpunkten), zeigt zusätzlich ein Pfeil darauf. Der Rest des Bildes
 wird leicht abgedunkelt, damit das Ziel ohne Suchen auffällt. Die Nummer ist
 die zweite Kodierung neben der Farbe (Regel 18).
 
+**Erst das Bild, dann der Satz.** Ein Satz, der eine Bedienung beschreibt,
+ist eine Vermutung, bis sein Bild vorliegt. Zweimal hat der Probelauf den
+Entwurf widerlegt: Unter einem Befund stand kein Knopf „beheben", sondern
+*Stelle zeigen* und *Offen lassen*, weil Solidon beim Einlesen schon
+repariert; und die Vorschau eines Lochs war im Bild neben dem Dialog nicht
+zu sehen, weil das Werkzeugkreuz der gewählten Fläche darüber lag. Deshalb
+wird eine Anleitung erst aufgenommen und angesehen, dann werden Sätze und
+Übersetzungen festgeschrieben.
+
+**Ringe für Stellen im Modell.** Wo geklickt wird, steht der Mauszeiger mit
+Klickring; wo etwas zu sehen ist, ein Ring ohne Zeiger, bei einem Loch aus
+seinem echten Durchmesser auf den Schirm projiziert.
+
 **Ausschnitt.** Ein Schritt zeigt, was er braucht: den Umkreis seiner Ziele
 mit genug Rand, damit der Kunde erkennt, wo im Fenster er ist. *Das Fenster
 auf einen Blick* zeigt das ganze Fenster.
@@ -386,7 +402,7 @@ Nachweis.
 | HB-1 | `app/core/guides.py`: Anleitungen, Schritte, Zielvokabular; Handbuchseiten aus Anleitungen; Gliederung `manual.OUTLINE` und Feld `Page.part`; Abbildungen der Schritte im Katalog; nummerierte Listen in `markup.py` | Kerntests: jede Anleitung vollständig, Schritte kurz, Ziele aus dem Vokabular, Seiten in Teilreihenfolge; Übersetzungen vollständig | [x] `54e83a72e`; `tests/test_guides.py` (14 Tests), betroffene Kerntests grün; rot nur die `rendered`-Vergleiche gegen die Website, davon vier schon am Ausgangsstand und der fünfte, weil die neue Seite erst beim Release in die Website kommt |
 | HB-2 | `app/ui/guide_targets.py`: Namen → Widget/Rechteck; `_flash_area` benutzt sie | Test: jedes Wort des Vokabulars wird aufgelöst (Fenstertest, läuft beim Release) | [x] Auflösung und Tour gebaut; Kerntest: Wortschatz und Auflösung decken sich. Der Fenstertest über alle festen Namen läuft beim Release |
 | HB-3 | `tools/make_guides.py`: Geschichten, Markierung, Ausschnitt, Format, Kindprozess je Sprache, `--ziel`, `--nur`, Stempel; Schritt in `/erzeugen` | Ein Lauf in einer Sprache in einen fremden Ordner; Bildbudget gemessen; Fehler bei fehlendem Ziel belegt | [~] Werkzeug gebaut: Rahmen, Nummern, Pfeile, Abdunkeln, Rand, Ausschnitt, WebP (Übersichtsbild 82 KB statt 408 KB als PNG), Kindprozess je Sprache, Stempel. Deutsch in einen fremden Ordner gelaufen; ein fehlendes Ziel beendet den Lauf mit Exit 1 und nennt Anleitung und Schritt. **Offen:** der Schritt in `/erzeugen` — der Skill wird auf `main` gerade umgebaut, der Schritt kommt mit dem Merge; das Bildbudget, gemessen, sobald HB-4 steht |
-| HB-4 | Erste Anleitungen: *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken*, *Ein Loch in ein heruntergeladenes Modell*, *Das erste eigene Teil* | Bilder in einer Sprache gesichtet; Texte in sechs Sprachen | [~] *Das Fenster auf einen Blick* und *Ein Modell prüfen und drucken* gebaut und auf Deutsch gesichtet; *Ein Loch bohren* und *Das erste eigene Teil* offen |
+| HB-4 | Erste Anleitungen: *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken*, *Ein Loch in ein heruntergeladenes Modell*, *Das erste eigene Teil* | Bilder in einer Sprache gesichtet; Texte in sechs Sprachen | [~] *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken* und *Ein Loch bohren* gebaut und auf Deutsch gesichtet; *Das erste eigene Teil* offen |
 | HB-5 | Gliederung im Handbuchfenster, „Wo fange ich an?", Verweise `manual:`, Hilfe-Menü, Startbildschirmknopf | Fenstertests (Release), Kerntests für Reihenfolge und Verweise | [ ] |
 | HB-6 | Suche mit Rangfolge, Fundstelle, Kundenwörtern | Anteil der Suchen mit richtiger Seite unter den ersten drei, vorher und nachher gemessen | [ ] |
 | HB-7 | F1 im Zusammenhang | Fenstertest (Release) | [ ] |
