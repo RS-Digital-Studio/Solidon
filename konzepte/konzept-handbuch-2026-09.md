@@ -127,9 +127,29 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   Release-Sitzung zu Teil 1: Legende der Werkzeugleiste mit allen sieben
   Knöpfen, *Ein Loch bohren* zeigt das Verschieben als Schritt 8, Verweise in
   Schrittsätzen sind echte Seitenverweise, Alt-Texte ohne Auszeichnung.
-- **Als Nächstes:** HB-8 (§12.1, Punkt 3), dann HB-12; danach B und C
-  zusammenführen, `tools/make_manual.py` Zeile ~722/~728 (Texte „von den ersten
-  fünfzehn Minuten“) auf „Wo fange ich an?“ nachziehen, Tor, Meldung.
+- **HB-8 fertig, fünfzehn Anleitungen:** dazu *Ein zu großes Teil teilen* in
+  den Ersten Schritten und neun Aufgaben (verschieben und drehen, ein Maß
+  ändern, einen Schritt zurücknehmen, Gewinde, Kanten, Beschriftung, zeichnen
+  und hochziehen, zweifarbig, reparieren). Alle fünfzehn sind auf Deutsch mit
+  dem fertigen Werkzeug aufgenommen und angesehen. Die Aufnahme legt nach dem
+  Anheben ihres Fensters die eigenen Menüs wieder darüber; sonst fehlten sie
+  im Bild. Jede Erklärseite endet mit „Schritt für Schritt:“ und den
+  Anleitungen zu ihrem Thema, erzeugt aus `Guide.topics` (etwa `trouble` →
+  *Ein Modell reparieren*); die Seitentexte selbst bleiben unberührt.
+- **HB-12 fertig:** `tools/make_guide_video.py` schneidet aus denselben Bildern
+  und Sätzen je Sprache zwei Filme, *Vom Start bis zum Druck* und *Einzelne
+  Aufgaben*, mit Kapitelmarken. Er läuft beim Release nach `make_guides.py`
+  (`/erzeugen`); die Filme liegen unter `marketing/` und werden von Hand
+  hochgeladen.
+- **Durchsicht von Strang B:** Die Release-Sitzung hat B gelesen (Teil 1 die
+  deutschen Seiten, Teil 2 die Übersetzungen mit 42 Befunden,
+  `F:\3D Druck.review-051\reports\strang-b-uebersetzung.md`). Der Agent von B
+  behebt sie auf `handbuch-texte`; danach gibt die Release-Sitzung B frei.
+- **Als Nächstes:** B nach der Behebung und C zusammenführen (Kataloge
+  schlüsselweise), danach `python -m app.i18n.extract`.
+  `tools/make_manual.py` Zeile ~722/~728 (Texte „von den ersten fünfzehn
+  Minuten“) auf „Wo fange ich an?“ nachziehen, Tor, Meldung „Handbuch
+  fertig“.
 
 ## §1 Befund
 
@@ -486,11 +506,11 @@ Nachweis.
 | HB-5 | Gliederung im Handbuchfenster, „Wo fange ich an?", Verweise `manual:`, Hilfe-Menü, Startbildschirmknopf | Fenstertests (Release), Kerntests für Reihenfolge und Verweise | [x] „Wo fange ich an?“ als erste Seite, Listen aus `guides.GUIDES`; Teilüberschriften im Fenster, gesperrt und von den Pfeiltasten übersprungen, in voller Schriftfarbe; Hilfe-Menü und Startknopf sprechen vom Lernweg. Kerntests `test_the_manual_begins_where_to_start`, `test_where_to_start_leads_to_every_guide_by_its_title` (sechs Sprachen); Fenstertests für Gruppen und Startknopf laufen beim Release, das Verhalten ist per Sonde am Stand belegt |
 | HB-6 | Suche mit Rangfolge, Fundstelle, Kundenwörtern | Anteil der Suchen mit richtiger Seite unter den ersten drei, vorher und nachher gemessen | [x] 38 von 38 unter den ersten drei (vorher 25), 35 ganz oben (vorher 7), keine ohne Treffer (vorher 4); `tests/test_manual_search.py`, Nachweis `suche.md`. Der Fenstertest über Rangfolge und Fundstelle läuft beim Release |
 | HB-7 | F1 im Zusammenhang | Fenstertest (Release) | [x] F1 im Operationsdialog meldet `manual.help_for` (Anleitung aus `Guide.teaches`, sonst Referenzeintrag an seiner Überschrift, markiert); verdrahtet in `_open_operation_dialog` und im Bearbeitungsdialog der lokalen Suche. F1 im Hauptfenster: neu geöffnet „Wo fange ich an?“, offen bleibt die Leseseite, minimiert kommt es zurück. Kerntest über alle 142 Operationen; Fenstertests laufen beim Release, per Sonde belegt |
-| HB-8 | Weitere Anleitungen (Liste in §4) | je Anleitung wie HB-4 | [~] *Ein Gehäuse mit Deckel* gebaut, auf Deutsch aufgenommen und gesichtet, Sätze in sechs Sprachen; offen: *Ein Teil, das nicht auf das Bett passt* und die Aufgaben aus dem Teil *Anleitungen* |
+| HB-8 | Weitere Anleitungen (Liste in §4) | je Anleitung wie HB-4 | [x] Fünfzehn Anleitungen. Zu den fünf aus HB-4 und *Ein Gehäuse mit Deckel* kommen *Ein zu großes Teil teilen* (Erste Schritte) sowie *Ein Teil verschieben und drehen*, *Ein Maß nachträglich ändern*, *Einen Schritt zurücknehmen oder ändern*, *Ein Gewinde in eine Bohrung*, *Kanten abrunden oder anfasen*, *Ein Teil beschriften*, *Eine Form zeichnen und hochziehen*, *Zweifarbig drucken* und *Ein Modell reparieren*. Je Aufgabe drei bis sieben Schritte, alle fünfzehn auf Deutsch mit dem fertigen Werkzeug aufgenommen und gesichtet. Sätze in sechs Sprachen, jeder hervorgehobene Name gegen den Katalog; F1 lehrt über `Guide.teaches`, „Wo fange ich an?“ führt zu allen, die Kundensuchen finden sie (`test_manual_search`), und jede steht am Ende ihrer Erklärseite unter „Schritt für Schritt:“ (`Guide.topics`). Neue Ziele: `dialog.naming`, `transform.values`, `parameters.first`, `toolbar.draw`, `sketch.*`, `history:*`, `tool:`, `transform:`, `section:` |
 | HB-9 | Erklärseiten kürzen und neu übersetzen | Wortzahl der Erklärseiten um mindestens ein Drittel kleiner, kein Wissen verloren (verschoben in Anleitungen oder Referenz) | [ ] |
 | HB-10 | Website und PDF nach Teilen gegliedert, Referenz am Ende; PDF mit Lesezeichen und **ohne tote Verweise auf den Bau-Rechner** | Seiten erzeugt beim Release, Tests `rendered` grün, im PDF kein Verweis mit `file:` | [~] Die Verweise um die Bildschirmfotos fallen vor dem Druck weg; `test_the_pdf_links_nowhere_outside_itself_but_the_website` hält es beim Release. Mit den Anleitungen wiegt das deutsche PDF 21,5 statt 13,9 MB: Chromium bettet jedes Rasterbild verlustfrei ein, ein Schrittbild mit rund 210 kB, so viel wie ein bisheriges Bildschirmfoto. Die PDFs liegen nur im Repository, nicht im Paket und nicht auf der Website. Offen: Gliederung, Lesezeichen, Bildschirmfotos als JPEG in den Druck geben |
 | HB-11 | Wächter für Menüwege im Text (§6) | Test in der Suite | [ ] |
-| HB-12 | Video-Tutorial aus denselben Geschichten (die Zusage an den Kunden) | erst, wenn HB-4 und HB-8 stehen und die Bedienung ruhiger ist | [ ] |
+| HB-12 | Video-Tutorial aus denselben Geschichten (die Zusage an den Kunden) | erst, wenn HB-4 und HB-8 stehen und die Bedienung ruhiger ist | [x] `tools/make_guide_video.py`: je Sprache *Vom Start bis zum Druck* (sechs Anleitungen, auf Deutsch 5:19) und *Einzelne Aufgaben* (neun, 6:20), `--nur` je Anleitung ein Film. 1920 × 1080, 30 Bilder je Sekunde, H.264 und AAC, von ffprobe geprüft; Kapitelmarken nach den Regeln von YouTube, Titelbild, Ablauf als JSON. Der Satz steht unter dem Bild, die Namen in der Farbe der Markierung; die Standzeit folgt der Wortzahl, dazwischen Überblendungen, darunter das Musikbett aus `make_longform_video`. Passen Bilder und Anleitungen nicht zusammen, bricht es ab. Die Einblendungen passen in allen sechs Sprachen, deutsch geschnitten und angesehen; `/erzeugen` nach `make_guides.py` |
 | HB-13 | Die Referenz nennt je Operation ihren Weg in der Oberfläche (Menü oder Auswahlfenster), erzeugt aus dem Menüaufbau | Kerntest: jede Operation mit Weg; heute 2 von 142 | [x] 142 von 142 aus `registry.menu_path`; `test_every_operation_names_where_it_is_found`. Die Website zeigt es nach dem nächsten Handbuchlauf |
 
 ## §10 Risiken und offene Entscheidungen
