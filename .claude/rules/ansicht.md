@@ -1057,6 +1057,13 @@ gerahmt, *weil* die Szene entwachsen ist — ein neuer 400er Körper
 neben einem Zwei-Millimeter-Teil, die Kamera in seinem Inneren. Ein Rahmen um
 den kleinen Ausgewählten beantwortete genau das nicht.
 
+**Eine frische Teilung rahmt einmal neu** (RM-269, KUNDE-11). Die Teile stehen
+auseinandergezogen da und überdecken den alten Rahmen noch; `outgrown` sah
+darin nichts, und am Organizer ×2,3 standen danach 29 % aller Teile im Bild.
+`Viewport.frame_next_scene` lässt den nächsten Aufbau einmal auf alle Körper
+rahmen (ohne Auswahl, mit Versatz); `MainWindow._reveal_split_result` ruft es
+vor dem Auseinanderziehen. Danach gilt wieder, dass die Kamera bleibt.
+
 Der Test dazu (heute `test_fitting_frames_the_bodies_with_air`) war in seiner ersten
 Fassung **grün, als ich die Änderung wieder ausbaute**: Er maß
 `_selected_bounds` und `_fit_once_for`, also die Vorarbeit, und nicht die

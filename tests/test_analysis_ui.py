@@ -2549,6 +2549,29 @@ def test_the_camera_follows_a_body_that_dwarfs_the_scene(window: MainWindow) -> 
     assert renderer.reset_bounds, "der Sprung wird neu gerahmt"
 
 
+def test_a_fresh_split_asks_the_view_to_frame_all_parts(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-269 (4), KUNDE-11: Wer die Teile einer Teilung aufzieht, rahmt sie auch.
+
+    Die Rahmung selbst prüft ``test_viewport_decisions``
+    (``test_a_fresh_split_is_framed_once_with_all_its_parts``); hier der Draht:
+    Das Aufziehen nach einer Teilung bittet die Ansicht darum, und zwar vor dem
+    Auseinanderziehen, dessen Aufbau die Rahmung einlöst.
+    """
+    from types import SimpleNamespace
+
+    order: list[str] = []
+    monkeypatch.setattr(window.viewport, "frame_next_scene", lambda: order.append("frame"))
+    monkeypatch.setattr(window.explode_bar, "reveal", lambda: order.append("reveal"))
+    parts = SimpleNamespace(scene=SimpleNamespace(objects={"obj_2": None, "obj_3": None}))
+
+    window._pending_split_reveal = frozenset({"obj_2", "obj_3"})
+    window._reveal_split_result(parts)  # type: ignore[arg-type]
+
+    assert order == ["frame", "reveal"]
+
+
 def test_the_build_volume_is_a_hint_not_a_cage() -> None:
     """Als geschlossener Drahtkasten war die Oberkante aus der Vorgabeansicht
     eine große Raute weit über dem Bett — und das Teil darunter ein Fleck.

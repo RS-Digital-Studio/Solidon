@@ -15419,6 +15419,19 @@ class Viewport(QWidget):
                     self.renderer.set_parallel_scale(scale)
                 self.renderer.reset_clipping_range()
 
+    def frame_next_scene(self) -> None:
+        """Rahmt den nächsten Aufbau **einmal** auf alle Körper im Bild.
+
+        Für einen Inhalt, der neu dasteht, ohne dass :func:`outgrown` es
+        bemerkt: Nach *Modell teilen* stehen die Teile auseinandergezogen da,
+        überdecken den alten Rahmen noch und sind kleiner als das Fünffache —
+        die Kamera blieb, und am Organizer (2,3-fach, sechs Teile) stand danach
+        weniger als ein Drittel davon im Bild (RM-269, KUNDE-11). Gerahmt wird
+        wie beim ersten Bild, ohne der Auswahl zu folgen und mit dem
+        Ansichtsversatz; der Aufbau danach lässt die Kamera wieder in Ruhe.
+        """
+        self._fitted_to = ""
+
     def _fit_once_for(self, result: EvaluationResult | None) -> None:
         """Passt ein, wenn die Ansicht zum ersten Mal etwas zu zeigen hat.
 

@@ -5206,6 +5206,62 @@ def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
     assert gefragt == [False], "die Rahmung nach dem Wachsen nimmt die ganze Szene"
 
 
+def test_a_fresh_split_is_framed_once_with_all_its_parts(qt_app):
+    """RM-269 (4), KUNDE-11: Nach *Modell teilen* stand die Kamera zu nah.
+
+    Die Teile stehen auseinandergezogen da, und die Kamera blieb, wo sie beim
+    ganzen Körper stand: ``outgrown`` rahmt erst ab dem Fünffachen, und die
+    auseinandergezogenen Teile überdecken den alten Rahmen noch. Am Organizer
+    (2,3-fach, sechs Teile) standen danach 29 % des Rahmens aller Teile im Bild
+    (``sonden/rest-kunde/out/teilen-vorher-organizer.txt``).
+    ``frame_next_scene`` rahmt den nächsten Aufbau **einmal** auf alle Körper —
+    samt Ansichtsversatz —, danach gilt wieder, dass die Kamera bleibt.
+    """
+    from dataclasses import replace
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    left = SceneObject(id="a", name="A", mesh=MeshData.of(trimesh.creation.box((40, 40, 40))))
+    right = replace(
+        left,
+        id="b",
+        name="B",
+        mesh=MeshData.of(trimesh.creation.box((40, 40, 40)).apply_translation((60, 0, 0))),
+    )
+    viewport = Viewport()
+    try:
+        renderer = RecordingRenderer()
+        viewport.renderer = renderer
+        result = EvaluationResult(scene=Scene(objects={left.id: left, right.id: right}))
+        viewport._result = result
+        viewport._fitted_to = "objects"
+        viewport._fitted_objects = frozenset(result.scene.objects)
+        viewport._fitted_bounds = viewport._object_bounds()
+        viewport._selected = "a"
+
+        viewport._fit_once_for(result)
+        assert renderer.reset_bounds == [], "ohne den Auftrag bleibt die Kamera"
+
+        viewport.frame_next_scene()
+        viewport._fit_once_for(result)
+        assert renderer.reset_bounds, "der nächste Aufbau rahmt"
+        framed = renderer.reset_bounds[-1]
+        assert framed is not None and framed[1] - framed[0] > 100.0, (
+            "alle Teile, nicht der gewählte"
+        )
+
+        renderer.reset_bounds.clear()
+        viewport._fit_once_for(result)
+        assert renderer.reset_bounds == [], "einmal, nicht bei jedem weiteren Aufbau"
+    finally:
+        viewport.deleteLater()
+
+
 def test_fitting_all_plates_frames_displayed_offsets_and_only_visible_bodies(qt_app):
     """Die zweite Platte muss beim Einpassen im selben Raum wie ihre Körper liegen."""
     from dataclasses import replace

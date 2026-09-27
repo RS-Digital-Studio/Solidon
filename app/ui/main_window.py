@@ -14517,6 +14517,9 @@ class MainWindow(QMainWindow):
         if len(wanted) < 2 or not wanted.issubset(result.scene.objects):
             return
         self._pending_split_reveal = frozenset()
+        # Alle Teile ins Bild (KUNDE-11): Die Kamera stand noch, wo sie beim
+        # ganzen Körper stand, und die auseinandergezogenen Teile ragten hinaus.
+        self.viewport.frame_next_scene()
         self.tools.activate("explode")
         self.explode_bar.reveal()
 
