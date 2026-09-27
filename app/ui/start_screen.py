@@ -809,7 +809,15 @@ class StartScreen(QWidget):
         set_level(title, "title")
 
         self.recent_list = QListWidget(self)
+        # **Ein Klick öffnet** (RM-269): Ein Eintrag sieht aus wie ein Verweis,
+        # ``itemActivated`` allein hieß unter Windows aber Doppelklick oder
+        # Eingabetaste. Die Tastatur bleibt über ``itemActivated``; dass ein
+        # Doppelklick beide meldet, fängt :meth:`_on_recent` ab.
+        self.recent_list.itemClicked.connect(self._on_recent)
         self.recent_list.itemActivated.connect(self._on_recent)
+        self.recent_list.viewport().setCursor(Qt.CursorShape.PointingHandCursor)
+        self._recent_opened: tuple[str, float] = ("", 0.0)
+        """Welcher Eintrag zuletzt öffnete, und wann (``time.monotonic``)."""
         # Zehn Einträge, und was einmal darin stand, blieb bis es hinausrutschte:
         # ein Versuchsprojekt hielt sich länger als das Interesse daran.
         self.recent_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -1238,9 +1246,22 @@ class StartScreen(QWidget):
             self._order_the_tab_chain()
 
     def _on_recent(self, item: QListWidgetItem) -> None:
+        """Einen Eintrag öffnen — einmal, auch wenn ein Doppelklick zwei Signale meldet.
+
+        Ein Doppelklick kommt als ``itemClicked`` und ``itemActivated``; unter
+        Stilen, die schon beim Einfachklick aktivieren, kommen beide mit einem
+        Klick. Derselbe Eintrag innerhalb der Doppelklickzeit öffnet nicht noch
+        einmal — ein zweites Laden desselben Projekts wäre kein Gewinn.
+        """
         stored = item.data(Qt.ItemDataRole.UserRole)
-        if stored:
-            self.openRequested.emit(Path(stored))
+        if not stored:
+            return
+        now = time.monotonic()
+        last, when = self._recent_opened
+        if last == str(stored) and now - when < QApplication.doubleClickInterval() / 1000.0:
+            return
+        self._recent_opened = (str(stored), now)
+        self.openRequested.emit(Path(stored))
 
     def _on_recent_menu(self, position: QPoint) -> None:
         """Einen Eintrag vergessen — die Datei selbst bleibt, wo sie ist."""

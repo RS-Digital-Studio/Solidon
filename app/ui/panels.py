@@ -6605,7 +6605,10 @@ class FeaturePanel(QWidget):
         die Maße kommt.
         """
         self._say_nothing_is_chosen = on
-        if self._feature_id is None and self._part_operation is None:
+        # **Was dasteht, entscheidet** (RM-269): Eine Kante (``show_edge``) und
+        # ein Paar (``show_pair``) sind kein Merkmal, und neben ihnen stand
+        # „Kein Merkmal gewählt …“, sobald die Karte danach neu aufgebaut wurde.
+        if self._feature_id is None and self._part_operation is None and not self._built:
             self._empty.setVisible(on)
 
     def show_feature(

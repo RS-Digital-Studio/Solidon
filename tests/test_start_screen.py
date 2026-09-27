@@ -413,6 +413,46 @@ def test_an_empty_recent_list_is_a_line_not_a_box(screen: StartScreen) -> None:
     assert screen.recent_list.count() == 2
 
 
+def test_one_click_opens_a_recent_project_once(screen: StartScreen) -> None:
+    """RM-269 (1): Ein Eintrag unter „Zuletzt geöffnet“ öffnet mit **einem** Klick.
+
+    Er sieht aus wie ein Verweis, hing aber an ``itemActivated`` — unter Windows
+    ein Doppelklick oder die Eingabetaste; ein Klick tat nichts
+    (``sonden/rest-kunde/s269_zuletzt_vorher.txt``). Und der Doppelklick, den
+    der Kunde aus dem Explorer kennt, öffnet trotzdem nur einmal: Er meldet
+    ``itemClicked`` und ``itemActivated`` hintereinander, und dasselbe Projekt
+    zweimal zu öffnen hieße, es zweimal zu laden. Die Tastatur bleibt.
+    """
+    from PySide6.QtTest import QTest
+
+    screen.show_recent([Path("a.p3d"), Path("b.p3d")])
+    screen.resize(1200, 900)
+    screen.show()
+    QApplication.processEvents()
+    opened: list[str] = []
+    screen.openRequested.connect(lambda path: opened.append(Path(path).name))
+    view = screen.recent_list
+    spot = view.visualItemRect(view.item(0)).center()
+
+    QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=spot)
+    assert opened == ["a.p3d"], "ein Klick öffnet"
+    QTest.qWait(QApplication.doubleClickInterval() + 50)
+
+    opened.clear()
+    QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=spot)
+    QTest.mouseDClick(view.viewport(), Qt.MouseButton.LeftButton, pos=spot)
+    assert opened == ["a.p3d"], "ein Doppelklick öffnet nicht zweimal"
+    QTest.qWait(QApplication.doubleClickInterval() + 50)
+
+    opened.clear()
+    view.setCurrentRow(1)
+    view.setFocus()
+    QTest.keyClick(view, Qt.Key.Key_Return)
+    assert opened == ["b.p3d"], "die Eingabetaste öffnet weiter"
+    assert view.viewport().cursor().shape() == Qt.CursorShape.PointingHandCursor
+    screen.hide()
+
+
 def test_the_recent_menu_does_not_stay_behind(screen: StartScreen) -> None:
     """Ein Menü je Rechtsklick auf „Zuletzt geöffnet“, und keines bleibt liegen (RM-233).
 

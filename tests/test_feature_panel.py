@@ -3437,6 +3437,37 @@ def test_the_waiting_panel_already_shows_its_feature(qt_app: QApplication) -> No
     assert panel._empty.isHidden(), "der Leersatz stand unter dem gewählten Merkmal"
 
 
+def test_a_chosen_edge_or_pair_is_not_called_nothing_chosen(qt_app: QApplication) -> None:
+    """RM-269 (2): Neben einer gewählten Kante stand „Kein Merkmal gewählt …“.
+
+    ``show_edge`` blendet den Leersatz aus; der Aufbau der Karte danach
+    (``MainWindow._update_actions``) ruft ``say_nothing_is_chosen(True)`` — ein
+    Körper ist ja gewählt —, und das Fenster galt als leer, weil eine Kante kein
+    Merkmal ist (MASSBILD-09). Dasselbe bei zwei gewählten Merkmalen und ihrem
+    Abstand. Was dasteht, entscheidet, nicht die Art der Auswahl.
+    """
+    load_operations()
+    mesh = plate()
+    found = features.detect(mesh)
+    holes = [key for key, value in found.items() if value.kind == "hole"][:2]
+    panel = FeaturePanel()
+    try:
+        panel.show_edge("e:-20.00,0.00,20.00:0.000,1.000,0.000", "Waagerecht · 30,00 mm")
+        panel.say_nothing_is_chosen(True)
+        assert panel._empty.isHidden(), "der Leersatz stand neben der gewählten Kante"
+
+        panel.show_pair(holes[0], found[holes[0]], holes[1], found[holes[1]])
+        panel.say_nothing_is_chosen(True)
+        assert panel._empty.isHidden(), "der Leersatz stand über dem Abstand"
+
+        panel.clear()
+        panel.say_nothing_is_chosen(True)
+        assert not panel._empty.isHidden(), "ohne Inhalt bleibt der Satz"
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
 def test_a_fresh_row_that_is_hidden_stays_hidden_after_qt_lays_it_out(
     qt_app: QApplication,
 ) -> None:
