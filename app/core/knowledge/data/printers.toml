@@ -35,6 +35,11 @@
 # Standardprozess mit Input Shaper — die älteren Prozesse ohne ihn führen 50 und
 # 45, sind bei Prusa aber abgelöst; SV06 40 → 50).
 # Ohne Angabe gilt die Startregel von 45 Grad; eine Kalibrierung geht vor.
+# cura_definition ist die Druckerdefinition in Cura 5.13 (Dateiname ohne
+# .def.json unter share/cura/resources/definitions). Aus ihr kommen Start- und
+# Endcode des Druckers in die Konsolenübergabe. Cura führt die meisten Drucker
+# hier nicht (Centauri Carbon 2, Bambu, Prusa, K1, Ender-3 V3); die tragen
+# keinen Eintrag, und die Übergabe sagt es.
 # Konturen: XY relativ zur nominellen Bettmitte; Z ab Bett. Ohne Kontur gilt
 # das nominale Rechteck. Brim-/Skirt-Ränder gehören zum Auftrag, nicht hierher.
 
@@ -94,6 +99,7 @@ acceleration = 6000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.25
 overhang_limit = 60.0
+cura_definition = "elegoo_neptune_4"
 
 [elegoo-neptune-4-plus]
 title = "Elegoo Neptune 4 Plus"
@@ -116,6 +122,7 @@ acceleration = 5000.0
 outer_wall_acceleration = 2500.0
 flow_factor = 1.25
 overhang_limit = 60.0
+cura_definition = "elegoo_neptune_4plus"
 
 [bambu-a1]
 title = "Bambu Lab A1"
@@ -314,6 +321,7 @@ acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.17
 overhang_limit = 60.0
+cura_definition = "creality_k1max"
 
 [creality-ender3-v3]
 title = "Creality Ender-3 V3"
@@ -356,6 +364,7 @@ speed_bridge = 40.0
 acceleration = 2500.0
 outer_wall_acceleration = 700.0
 overhang_limit = 60.0
+cura_definition = "anycubic_kobra2"
 
 [sovol-sv06]
 title = "Sovol SV06"
@@ -374,6 +383,7 @@ speed_infill = 60.0
 speed_top_surface = 30.0
 speed_bridge = 25.0
 overhang_limit = 50.0
+cura_definition = "sovol_sv06"
 
 # --- Resin (MSLA) --------------------------------------------------------------
 #

@@ -5624,14 +5624,14 @@ def test_choosing_another_slicer_drops_the_profiles_of_the_old_one(
     assert dialog.process_choice.count() == 0, "das Prozessprofil auch"
 
 
-def test_cura_and_prusa_are_not_warned_about_a_machine_they_never_take() -> None:
+def test_prusa_is_not_warned_about_a_machine_it_never_takes() -> None:
     """Der Befund galt weiter, als er gemeint war — einen halben Tag lang.
 
     ``machine_missing`` entstand für die Orca-Familie, die ihre Maschine als
-    Profil aus dem eigenen Bestand lädt. Cura und PrusaSlicer tun das nie:
-    Ihre Maschinenseite baut ``_machine_keys`` aus Solidons eigenem
-    Druckerprofil, und eine PrusaSlicer-``.ini`` ist damit eigenständig
-    lauffähig. Gemessen am 03.09.2026, bevor das hier stand:
+    Profil aus dem eigenen Bestand lädt. PrusaSlicer tut das nie: Seine
+    Maschinenseite baut ``_machine_keys`` aus Solidons eigenem Druckerprofil,
+    und eine ``.ini`` ist damit eigenständig lauffähig. Gemessen am
+    03.09.2026, bevor das hier stand:
 
         orca   -> nichts
         cura   -> ['slicer.machine_unset']
@@ -5642,6 +5642,11 @@ def test_cura_and_prusa_are_not_warned_about_a_machine_they_never_take() -> None
     stimmt, ist teurer als keine — der Kunde lernt, sie zu übersehen, und
     übersieht die richtige mit.
 
+    Cura stand bis zum 27.09.2026 mit hier, und dort war das Schweigen falsch:
+    Ohne Druckerdefinition druckte CuraEngine mit dem Startcode von
+    ``fdmprinter``. Was Cura jetzt gesagt bekommt, prüft
+    ``tests/test_cura_machine.py``.
+
     Die eigenen Tests trugen den Fehler nicht, weil alle drei ``flavour="orca"``
     setzten: die richtige Regel mit ungeprüftem Rand.
     """
@@ -5649,11 +5654,10 @@ def test_cura_and_prusa_are_not_warned_about_a_machine_they_never_take() -> None
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
 
-    for flavour in ("cura", "prusa"):
-        setup = handover.SlicerSetup(executable=Path(f"{flavour}.exe"), flavour=flavour)
-        assert handover.machine_missing(setup, profile) == [], flavour
-        assert not handover.takes_a_machine_profile(flavour)
-
+    setup = handover.SlicerSetup(executable=Path("prusa.exe"), flavour="prusa")
+    assert handover.machine_missing(setup, profile) == []
+    assert not handover.takes_a_machine_profile("prusa")
+    assert not handover.takes_a_machine_profile("cura")
     assert handover.takes_a_machine_profile("orca")
 
 

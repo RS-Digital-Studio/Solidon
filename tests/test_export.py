@@ -1578,6 +1578,10 @@ def test_every_flavour_answers_every_property() -> None:
         # es gibt, denn CuraEngine schreibt seine wirksame Konfiguration nicht
         # in den G-Code — Prusa und Orca tun es und prüfen sich damit selbst.
         "has_key_definitions": {"prusa": False, "orca": False, "cura": True, "other": False},
+        # Die Maschine aus einer Druckerdefinition der Installation (Stufe D,
+        # 27.09.2026): Nur CuraEngine bekommt sie so; die Orca-Familie lädt
+        # ein Profil, PrusaSlicer bekommt sie in Solidons ``.ini``.
+        "machine_from_definition": {"prusa": False, "orca": False, "cura": True, "other": False},
         # Mehrere Platten in einer Projektdatei — die Orca-Familie speichert
         # ihre Projekte so; PrusaSlicer und Cura kennen eine Platte je Datei.
         "knows_plates": {"prusa": False, "orca": True, "cura": False, "other": False},

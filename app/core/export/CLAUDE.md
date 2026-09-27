@@ -153,6 +153,20 @@ Kunde, dem die Konsole eine gerettete Datei gab, soll im Fenster nicht an der
 ungeretteten scheitern. Die Originaldatei, der allgemeine Mehrplattenexport
 und andere Slicer benutzen die vollständige Datei.
 
+**CuraEngine bekommt seine Maschine aus der Druckerdefinition.**
+`write_config` fragt `_cura_machine`: Trägt der Drucker eine
+`PrinterProfile.cura_definition` und führt die Installation die Datei, lädt
+`_command` sie mit `-j` (davor `-d` mit den Ordnern `definitions` und
+`extruders`; CuraEngine löst die Erbkette und die Extruderzüge selbst auf),
+sonst `fdmprinter` mit `fdmextruder` wie bisher. Start- und Endcode kommen aus
+der Kette, ihre Platzhalter füllt `_filled` aus Solidons Werten und den
+Vorgabewerten der Kette, und sie reisen als je ein `-s` mit Umbrüchen —
+`solidon_cura.txt` trägt keine. `_temperature_switches` schaltet
+`material_bed_temp_prepend`/`material_print_temp_prepend` ab, wo der
+Startcode die Temperatur selbst setzt. Ohne Definition sagt es
+`machine_missing` (`slicer.cura_printer_unknown`). Die Regeln dazu stehen in
+`.claude/rules/dateiformat.md`.
+
 **Cura übernimmt Einstellungen nur als Profil.** Seine Kommandozeile liest
 Werte, das Fenster nicht; `cura_profile_beside` legt deshalb neben das Modell
 eine `.curaprofile` (Qualitätsänderungen im Containerformat, das Curas

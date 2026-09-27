@@ -409,14 +409,24 @@ die einzige Stelle, an der sie zusammenkommen:
 Wer eine Stufe einzeln benutzt, bekommt einen halben Satz. Für Prusa und Orca
 ist die dritte leer.
 
-## CuraEngine löst keine Vererbung auf
+Für Cura kommt danach die Maschine dazu (`_cura_machine`, in `write_config`):
+die Druckerdefinition hinter `-j`, Start- und Endcode als eigene `-s`, die
+zwei Schalter für Curas Temperaturbefehle. Sie braucht die Installation und
+die fertigen Werte, deshalb steht sie nicht in `values_for`.
+
+## CuraEngine rechnet keine Formeln
 
 In `fdmprinter.def.json` trägt jede abgeleitete Einstellung zweierlei: einen
 `value`-Ausdruck und einen `default_value`. Das Fenster wertet den Ausdruck
 aus, die Rechenmaschine dahinter nimmt den Vorgabewert. Ein geschriebener Wert
 bleibt damit an seinem Schlüssel stehen und erreicht die nicht, aus denen
 gerechnet wird — die Bahnbreite ihre zwölf Bahnbreiten nicht, die Füllung
-ihren Linienabstand nicht.
+ihren Linienabstand nicht. Die Erbkette selbst löst CuraEngine auf, auch die
+einer Druckerdefinition (gemessen am 27.09.2026 mit 5.13): Es liest die
+Vorgabewerte von `fdmprinter` bis zum Drucker und lädt dessen Extruderzüge
+aus `machine_extruder_trains`, sofern `-d` den Ordner `extruders` nennt. Die
+Umgebungsvariable `CURA_ENGINE_SEARCH_PATH` fand die Züge unter Windows
+nicht; `-d` mit `os.pathsep` schon.
 
 Gemessen an einem 20-mm-Würfel: **1100 mm Filament statt 818, 753 Sekunden
 statt 660.**
@@ -427,6 +437,36 @@ neuen Schlüssel? Reine Kopien kommen in `CURA_MIRRORED`, einfache Faktoren in
 Definition**, nicht die eigene Meinung darüber, was richtig wäre. Was
 absichtlich wegbleibt, kommt mit Begründung in `CURA_UNTOUCHED`;
 `tests/test_print_settings.py` lässt keine dritte Möglichkeit zu.
+
+## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
+
+Solidon schreibt keinen eigenen Startcode (Entscheidung Robert, 26.08.2026:
+„Der Anfahrcode bleibt der des Herstellers"). Bei Cura kommt er aus der
+Druckerdefinition (`PrinterProfile.cura_definition`), und weil CuraEngine
+keinen Platzhalter füllt — gemessen: `START_PRINT EXTRUDER_TEMP={…}` stand
+wörtlich im G-Code —, füllt ihn `handover._filled`:
+
+- `{name}` und `{name, n}` sind **Textersetzung** mit dem Wert, den Solidon
+  schreibt, sonst dem Vorgabewert der Kette. Eine Formel der Kette ist kein
+  Wert und füllt nichts.
+- Eine **Rechnung** wie `{machine_depth - 5}` (Endcode des Neptune 4) geht durch
+  `app.core.expressions` — Solidons eigene Grammatik, kein `eval` (Regel 10) —,
+  und nur über Zahlen, die Solidon kennt. Das Konzept sah hier zunächst nur
+  Textersetzung vor; ohne die Rechnung hielte jede Übergabe an den Neptune 4
+  und 4 Plus an (Stufe D, 27.09.2026).
+- **Was so nicht zu füllen ist, hält die Übergabe an** (`_unfillable`, Regel
+  21): ein unbekannter Name, `{if …}`, ein Wert, den erst das Fenster nach dem
+  Schneiden kennt (`{print_time}`). Wörtlich im G-Code bräche ein
+  Klipper-Makro am Drucker ab.
+
+Setzt der Startcode eine Temperatur selbst (Platzhalter auf
+`material_bed_temperature…` bzw. eine der Düsentemperaturen, Kommentare
+ausgenommen), steht `material_bed_temp_prepend`/`material_print_temp_prepend`
+auf `false` — dieselbe Regel wie `StartSliceJob.py` im Fenster. Sonst stünde
+Curas `M190`/`M109` vor dem des Herstellers.
+
+Ein Drucker ohne Definition bekommt `fdmprinter` und einen Befund
+(`slicer.cura_printer_unknown`) — kein stiller Rückfall.
 
 ## Winkel zählen nicht überall gleich
 

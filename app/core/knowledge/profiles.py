@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import tempfile
 from collections.abc import Collection, Mapping
 from dataclasses import asdict, replace
@@ -155,6 +156,9 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
         },
         flow_factor=_positive_or_none(table.get("flow_factor"), f"{identifier}.flow_factor") or 1.0,
         overhang_limit=_angle_or_none(table.get("overhang_limit"), f"{identifier}.overhang_limit"),
+        cura_definition=_cura_definition_or_empty(
+            table.get("cura_definition"), f"{identifier}.cura_definition"
+        ),
     )
     printable_area(result)
     printable_height(result)
@@ -215,6 +219,29 @@ def _angle_or_none(value: object, field: str) -> float | None:
             values={"value": str(value)},
         )
     return number
+
+
+#: Wie eine Druckerdefinition in Cura heißt: ihr Dateiname ohne ``.def.json``
+#: (``creality_k1max``, ``SV01``). Mehr lässt die Kennung nicht zu, denn die
+#: Übergabe macht daraus einen Pfad im Definitionsordner der Installation —
+#: und ein mitgebrachter Drucker kommt aus einer fremden Projektdatei, in der
+#: ``..`` oder ein Trenner aus diesem Ordner herauszeigen könnte.
+CURA_DEFINITION: Final = re.compile(r"[A-Za-z0-9_]+")
+
+
+def _cura_definition_or_empty(value: object, field: str) -> str:
+    """Die Cura-Definition eines Druckers — leer, wenn Cura ihn nicht führt."""
+    text = "" if value is None else str(value).strip()
+    if text and CURA_DEFINITION.fullmatch(text) is None:
+        raise ValidationError(
+            field=field,
+            detail=_(
+                "Die Cura-Definition ist der Dateiname ohne „.def.json“: nur Buchstaben, "
+                "Ziffern und Unterstriche."
+            ),
+            values={"value": text},
+        )
+    return text
 
 
 def _printer_contour(points: Any) -> tuple[tuple[float, float], ...]:

@@ -1071,12 +1071,11 @@ def takes_a_machine_profile(flavour: SlicerFlavour) -> bool:
        statt geerbt, nicht das Profil des Herstellers —, und die Kommandozeile
        reicht beide zusammen mit einem Semikolon getrennt weiter.
 
-    Cura und PrusaSlicer bekommen ihre Maschinenseite dagegen von Solidon
-    selbst (:func:`_machine_keys`): Bauraum, Düse und Bettform aus dem eigenen
-    Druckerprofil, und für PrusaSlicer ist eine ``.ini`` damit eigenständig
-    lauffähig — eine Datei, keine zwei. Dass dort kein fremdes Profil steht,
-    ist die Bauart und kein Mangel — wer es als Mangel meldet, warnt bei jedem
-    Export ohne Anlass (:func:`machine_missing`).
+    PrusaSlicer bekommt seine Maschinenseite dagegen von Solidon selbst
+    (:func:`_machine_keys`): Bauraum, Düse und Bettform aus dem eigenen
+    Druckerprofil, und eine ``.ini`` ist damit eigenständig lauffähig — eine
+    Datei, keine zwei. Cura bekommt seine aus einer Druckerdefinition seiner
+    Installation (:func:`machine_from_definition`).
 
     **Beide Fragen fallen heute zusammen, aber nicht aus Notwendigkeit:** Eine
     künftige Familie mit eigenem Maschinenbestand, aber einer einzigen
@@ -1086,6 +1085,24 @@ def takes_a_machine_profile(flavour: SlicerFlavour) -> bool:
     eines für die Dateizahl.
     """
     return flavour == "orca"
+
+
+def machine_from_definition(flavour: SlicerFlavour) -> bool:
+    """Kommt die Maschine dieses Slicers aus einer Druckerdefinition seiner Installation?
+
+    Nur bei CuraEngine. Solidon wählt dort die Definition des Druckers
+    (``PrinterProfile.cura_definition``), CuraEngine löst ihre Erbkette
+    selbst auf, und Start- und Endcode kommen mit gefüllten Platzhaltern als
+    eigene Werte dazu (``handover._cura_machine``). Führt die Installation den
+    Drucker nicht, bleibt es bei ``fdmprinter`` — und das ist ein Mangel, den
+    ``handover.machine_missing`` benennt: Der Druck beginnt ohne den Startcode
+    des Herstellers, ohne Spüllinie und ohne Bettnetz.
+
+    Die Orca-Familie lädt ihre Maschine als Profil
+    (:func:`takes_a_machine_profile`), PrusaSlicer bekommt sie von Solidon in
+    seiner ``.ini``.
+    """
+    return flavour == "cura"
 
 
 def reads_settings_from_project_file(flavour: SlicerFlavour) -> bool:

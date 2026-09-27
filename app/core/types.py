@@ -829,6 +829,17 @@ class PrinterProfile:
     treppenförmiger Stützfuß mit einem Brim aus tausenden Stückchen. Ohne
     Angabe gilt die Startregel (:data:`app.core.knowledge.rules.OVERHANG_LIMIT_DEGREES`);
     eine Kalibrierung geht beidem vor (§28.3)."""
+    cura_definition: str = ""
+    """Die Druckerdefinition dieses Druckers in Cura, als Kennung
+    (``creality_k1max``): Start- und Endcode des Herstellers und die
+    Vorgaben seiner Maschine für die Konsolenübergabe
+    (``handover._cura_machine``).
+
+    Leer heißt, Cura führt diesen Drucker nicht (Centauri Carbon 2, Bambu,
+    Prusa, K1, Ender-3 V3). Dann rechnet CuraEngine auf ``fdmprinter``, und
+    die Übergabe sagt es (``handover.machine_missing``): Dessen Startcode
+    fährt nach Hause, fördert drei Millimeter Filament in die Luft und legt
+    weder eine Spüllinie noch ein Bettnetz an."""
 
     @property
     def is_resin(self) -> bool:

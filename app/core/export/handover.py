@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import subprocess
 import tempfile
@@ -33,7 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 from xml.etree import ElementTree as ET
 
-from app.core import activation, discover
+from app.core import activation, discover, expressions
 from app.core.errors import (
     ARRANGE_ON_BED,
     CANCEL,
@@ -53,12 +54,14 @@ from app.core.errors import (
     ExternalToolError,
     FileWriteError,
     OperationCancelled,
+    ValidationError,
 )
 from app.core.export import slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_filament_profiles,
     has_key_definitions,
+    machine_from_definition,
     names_its_own_output,
     reads_settings_from_project_file,
     takes_a_machine_profile,
@@ -80,6 +83,7 @@ from app.core.types import (
     CancelToken,
     Finding,
     MaterialSlot,
+    PrinterProfile,
     PrintSettings,
     Profile,
     SettingAdvice,
@@ -344,16 +348,24 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
     Nichts zu melden ist der Regelfall: Steht die Maschine, ist die Datei
     vollständig, und eine Beruhigung wäre eine Zeile, die nichts unterscheidet.
 
-    **Und nur für die Orca-Familie.** Der Befund galt einen halben Tag lang
-    weiter, als er gemeint war: Cura und PrusaSlicer bekommen von Solidon
-    **nie** ein Maschinenprofil aus fremdem Bestand — ihre Maschinenseite baut
+    **PrusaSlicer bekommt keinen Befund.** Der Befund galt einen halben Tag
+    lang weiter, als er gemeint war: Seine Maschinenseite baut
     :func:`_machine_keys` aus dem eigenen Druckerprofil, und eine ``.ini`` ist
-    eigenständig lauffähig, sobald Düse und Bettform darin stehen. Für sie ist
-    „keine Maschinenseite" kein Mangel, sondern die Bauart. Gemessen am
-    03.09.2026: Beide bekamen bei jedem Export ein ``slicer.machine_unset``
-    und den Rat, im Slicer einen Drucker einzurichten, den sie dafür nicht
-    brauchen. Eine Warnung, die nicht stimmt, ist teurer als keine.
+    eigenständig lauffähig, sobald Düse und Bettform darin stehen. Gemessen am
+    03.09.2026 bekam es bei jedem Export ein ``slicer.machine_unset`` und den
+    Rat, im Slicer einen Drucker einzurichten, den es dafür nicht braucht.
+    Eine Warnung, die nicht stimmt, ist teurer als keine.
+
+    **Cura bekommt einen, wenn es den Drucker nicht kennt.** Bis zum
+    27.09.2026 schwieg die Stelle auch für Cura, mit derselben Begründung —
+    und die war dort falsch: CuraEngine druckte dann mit dem Startcode von
+    ``fdmprinter`` (``G28``, drei Millimeter Filament in 15 mm Höhe, keine
+    Spüllinie, kein Bettnetz). Jetzt kommt die Maschine aus der
+    Druckerdefinition (:func:`_cura_machine`); fehlt sie, sagt es dieser
+    Befund.
     """
+    if machine_from_definition(setup.flavour):
+        return _cura_printer_unknown(setup, profile)
     if not takes_a_machine_profile(setup.flavour):
         return []
     if machine_for(setup, profile):
@@ -432,6 +444,31 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
             ),
             values={"slicer": setup.name, "printer": profile.printer.title},
             suggestions=(CHECK_SLICER_PROFILE, EXPORT_ONLY),
+        )
+    ]
+
+
+def _cura_printer_unknown(setup: SlicerSetup, profile: Profile) -> list[Finding]:
+    """Der Befund, wenn diese Cura-Installation den Drucker nicht führt.
+
+    Ohne lesbare Definitionen sagt er nichts: Dann startet CuraEngine gar
+    nicht, und die Absage des Laufs nennt den Grund.
+    """
+    if not _cura_base(setup.executable) or _cura_printer_definition(
+        setup.executable, profile.printer
+    ):
+        return []
+    return [
+        Finding(
+            code="slicer.cura_printer_unknown",
+            severity="warning",
+            message=_(
+                "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den "
+                "Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.",
+                printer=profile.printer.title,
+            ),
+            values={"printer": profile.printer.title, "slicer": setup.name},
+            suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
         )
     ]
 
@@ -908,11 +945,17 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
 
     ``cura`` stand lange bei Orca, und das war falsch: ``CuraEngine`` ist
     nicht die Kommandozeile eines Slicers, sondern die Rechenmaschine hinter
-    dem Fenster. Sie löst keine Vererbung auf — was das Fenster sonst aus
-    Definition, Qualität, Material und Variante zusammenrechnet, muss ihr
-    einzeln mitgegeben werden. Ohne Bettmaße rechnete sie einen G-Code, in
-    dessen Kopf ``MINX:2.14748e+06`` stand: der Grenzwert eines Ganzzahltyps,
-    also gar keine Angabe.
+    dem Fenster. Sie liest aus einer Definition nur Vorgabewerte, keine
+    Formeln — was das Fenster sonst aus Definition, Qualität, Material und
+    Variante zusammenrechnet, muss ihr einzeln mitgegeben werden. Die
+    Maschine selbst (Start- und Endcode, Name, Grenzen) kommt aus der
+    Druckerdefinition (:func:`_cura_machine`); die Werte hier gelten über ihr.
+
+    Der Kopf der Druckdatei bleibt dabei ein Platzhalter: ``;TIME:6666``,
+    ``;Filament used: 0m`` und ``;MINX:2.14748e+06`` schreibt CuraEngine im
+    Konsolenbetrieb immer, mit oder ohne Bettmaße — das Fenster ersetzt den
+    Kopf erst nachträglich. Zeit und Material liest :mod:`app.core.slice.gcode`
+    deshalb aus ``;TIME_ELAPSED`` und der Summe der Förderung.
     """
     if flavour == "cura":
         width, depth, height = profile.printer.build_volume
@@ -984,6 +1027,31 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
 
 
 @dataclass(frozen=True, slots=True)
+class CuraMachine:
+    """Was CuraEngine über die Maschine bekommt, neben Solidons Werten.
+
+    ``definition`` ist die Datei hinter ``-j``: die Druckerdefinition aus
+    ``PrinterProfile.cura_definition``, sonst ``fdmprinter``. CuraEngine löst
+    ihre Erbkette selbst auf und lädt die Extruderzüge aus
+    ``machine_extruder_trains`` (gemessen mit Cura 5.13, 27.09.2026); dafür
+    braucht es die Ordner in ``search_path`` hinter ``-d``, sonst meldet es
+    „Couldn't find definition file with ID: creality_base_extruder_0".
+
+    ``codes`` sind Start- und Endcode mit gefüllten Platzhaltern. Sie tragen
+    Zeilenumbrüche und reisen deshalb als eigene ``-s``-Argumente, nicht in
+    ``solidon_cura.txt``. ``switches`` sind die zwei Schalter, mit denen
+    CuraEngine seine eigenen Temperaturbefehle vor den Startcode setzt.
+    """
+
+    definition: Path | None = None
+    from_printer: bool = False
+    """Kommt die Maschine aus einer Druckerdefinition und nicht aus ``fdmprinter``?"""
+    search_path: tuple[Path, ...] = ()
+    codes: Mapping[str, str] = field(default_factory=dict)
+    switches: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class SlicerConfig:
     """Die Profildateien für einen Lauf.
 
@@ -1003,6 +1071,8 @@ class SlicerConfig:
     machine: Path | None = None
     written: Mapping[str, str] = field(default_factory=dict)
     """Die tatsächlich geschriebenen Sollwerte, einschließlich aller Filamentplätze."""
+    cura_machine: CuraMachine | None = None
+    """Nur bei Cura: Druckerdefinition, Start- und Endcode (:func:`_cura_machine`)."""
 
     @property
     def filament(self) -> Path | None:
@@ -1504,14 +1574,17 @@ def write_config(
     # Hier wiegt der Umbruch schwerer als bei Prusa: ``_command`` liest diese
     # Datei mit ``splitlines()`` zurück und macht aus jeder Zeile ein eigenes
     # ``-s``-Argument. Eine zweite Zeile wäre damit ein zusätzliches Argument
-    # für CuraEngine.
+    # für CuraEngine. Start- und Endcode tragen Umbrüche und stehen deshalb
+    # nicht hier, sondern in ``cura_machine`` (:func:`_command`).
     flat = flat_values()
+    machine = _cura_machine(setup, profile, flat)
+    flat |= machine.switches
     _without_line_break(flat, setup.name)
     target.write_text(
         "\n".join(f"{key}={value}" for key, value in sorted(flat.items())) + "\n",
         encoding="utf-8",
     )
-    return SlicerConfig(process=target, written=flat)
+    return SlicerConfig(process=target, written=flat, cura_machine=machine)
 
 
 #: Schlüssel, die eine Spule aus sich selbst ergänzt und nie vom Nachbarn
@@ -2290,7 +2363,16 @@ def _command(
     # und der Lauf endete ohne Druckdatei (RM-252). Ohne den Schalter bleiben
     # Warnungen und Fehler, 50 kB — mehr liest die Übergabe nicht daraus.
     arguments = [binary, "slice"]
-    basis = setup.machine_profile or _cura_base(setup.executable)
+    engine = config.cura_machine or CuraMachine()
+    if engine.search_path:
+        # Vor ``-j``: CuraEngine sucht die Erbkette und die Extruderzüge beim
+        # Laden der Definition, nicht danach.
+        arguments += ["-d", os.pathsep.join(str(folder) for folder in engine.search_path)]
+    basis = (
+        str(engine.definition)
+        if engine.definition is not None
+        else setup.machine_profile or _cura_base(setup.executable)
+    )
     if basis:
         arguments += ["-j", basis]
     values: list[str] = []
@@ -2298,6 +2380,11 @@ def _command(
         if line.strip():
             values += ["-s", line.strip()]
     arguments += values
+    # **Start- und Endcode des Druckers, je ein Argument mit Umbrüchen.**
+    # Gemessen: Ein mehrzeiliges ``-s machine_start_gcode=…`` kommt Zeile für
+    # Zeile im G-Code an. Sie gelten der Maschine, nicht dem Extruder-Zug.
+    for key, code in engine.codes.items():
+        arguments += ["-s", f"{key}={code}"]
     # **Und dieselben Werte noch einmal auf dem Extruder.** ``CuraEngine`` hält
     # zwei Ebenen: was global gilt, und was der Extruder-Zug sagt — und das
     # meiste, was einen Druck ausmacht, liest es vom Zug. Was nur global steht,
@@ -2308,7 +2395,10 @@ def _command(
     # Male zu setzen kommt am selben Ort heraus und braucht die Definition
     # nicht zu lesen.
     arguments += ["-e0"]
-    extruder = _cura_extruder_base(setup.executable)
+    # Eine Druckerdefinition bringt ihren Extruderzug selbst mit
+    # (``machine_extruder_trains``); ``fdmextruder`` darüber setzte dessen
+    # Vorgaben auf die allgemeinen zurück. Nur zu ``fdmprinter`` gehört er.
+    extruder = "" if engine.from_printer else _cura_extruder_base(setup.executable)
     if extruder:
         arguments += ["-j", extruder]
     arguments += values
@@ -2359,10 +2449,9 @@ def _cura_base(executable: Path) -> str:
 
     ``CuraEngine`` braucht mindestens eine Definition, sonst kennt es keinen
     einzigen Einstellungsnamen. ``fdmprinter.def.json`` ist die Wurzel, von
-    der alle Druckerdefinitionen erben — die Maschine selbst beschreibt
-    Solidon daneben über :func:`_machine_keys`, statt eine der
-    zwölfhundert Herstellerdefinitionen zu wählen und deren Vererbungskette
-    nachzubauen. Die kennt nur das Fenster.
+    der alle Druckerdefinitionen erben, und der Rückfall für einen Drucker,
+    den Cura nicht führt; sonst lädt der Lauf die Druckerdefinition
+    (:func:`_cura_machine`), und CuraEngine löst deren Erbkette selbst auf.
 
     Nichts, wenn sie nicht daliegt: dann scheitert der Lauf und sagt das,
     statt einen Pfad zu erfinden.
@@ -2390,6 +2479,189 @@ def _cura_definition(executable: Path, filename: str) -> str:
         if found.is_file():
             return str(found)
     return ""
+
+
+def _cura_printer_definition(executable: Path, printer: PrinterProfile) -> str:
+    """Die Druckerdefinition dieses Druckers in dieser Cura-Installation — oder nichts.
+
+    Nichts heißt zweierlei, und beides endet gleich: Der Drucker trägt keine
+    (``PrinterProfile.cura_definition`` ist leer, weil Cura ihn nicht führt),
+    oder diese Installation hat die Datei nicht, etwa eine ältere Cura. Die
+    Kennung ist beim Lesen geprüft (``profiles.CURA_DEFINITION``); hier wird
+    sie noch einmal geprüft, weil ein Profil auch ohne Tabelle entsteht.
+    """
+    name = printer.cura_definition
+    if not name or profiles.CURA_DEFINITION.fullmatch(name) is None:
+        return ""
+    return _cura_definition(executable, f"{name}.def.json")
+
+
+#: Woran das Cura-Fenster erkennt, dass der Startcode die Temperaturen selbst
+#: setzt. Steht einer dieser Namen als Platzhalter darin, schaltet es
+#: ``material_bed_temp_prepend`` bzw. ``material_print_temp_prepend`` ab, und
+#: CuraEngine setzt kein eigenes ``M190``/``M109`` davor. Dieselben Namen wie
+#: ``plugins/CuraEngineBackend/StartSliceJob.py`` (Cura 5.13).
+_BED_TEMPERATURES: Final = ("material_bed_temperature", "material_bed_temperature_layer_0")
+_PRINT_TEMPERATURES: Final = (
+    "material_print_temperature",
+    "material_print_temperature_layer_0",
+    "default_material_print_temperature",
+    "material_initial_print_temperature",
+    "material_final_print_temperature",
+    "material_standby_temperature",
+    "print_temperature",
+)
+
+#: Was das Cura-Fenster unter einem zweiten Namen füllt (``_buildReplacementTokens``).
+_CURA_ALIASES: Final = {
+    "print_temperature": "material_print_temperature",
+    "print_bed_temperature": "material_bed_temperature",
+    "travel_speed": "speed_travel",
+}
+
+#: Ein Platzhalter im Start- und Endcode: was zwischen zwei geschweiften
+#: Klammern steht, wie im ``GcodeStartEndFormatter`` des Fensters.
+_PLACEHOLDER: Final = re.compile(r"\{([^{}]*)\}")
+
+#: Die zwei Maschinencodes, die Solidon aus der Definition übergibt.
+MACHINE_CODES: Final = ("machine_start_gcode", "machine_end_gcode")
+
+
+def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str]) -> CuraMachine:
+    """Die Maschine für CuraEngine: Definition, Start- und Endcode (§29).
+
+    **Die Rechenmaschine liest aus einer Definition nur ``default_value``,
+    und Platzhalter füllt sie nicht.** Das Fenster wertet Formeln und
+    Platzhalter aus, bevor es CuraEngine ruft; die Konsole bekommt nichts
+    davon. Solidon wertet keine Formel aus (Regel 10) — die Maschine kommt
+    deshalb aus der Druckerdefinition, und was darin für den Druck zählt,
+    Start- und Endcode, füllt :func:`_filled` aus den Werten, die Solidon
+    ohnehin schreibt.
+
+    Ohne Druckerdefinition bleibt es bei ``fdmprinter``; dessen Codes haben
+    keine Platzhalter, und :func:`machine_missing` sagt, was fehlt.
+    """
+    base = _cura_base(setup.executable)
+    if not base:
+        return CuraMachine()
+    own = _cura_printer_definition(setup.executable, profile.printer)
+    definition = Path(own or base)
+    chain = slicer_profiles.resolve_values(definition)
+    known = _placeholder_values(chain, values)
+    codes = {
+        key: _filled(str(chain.get(key) or ""), known, key, setup.name) for key in MACHINE_CODES
+    }
+    # Beide Ordner hinter ``-d``, getrennt wie auf dieser Plattform üblich. Ein
+    # Pfad, der den Trenner selbst trägt, bliebe zwei Pfade — dann sucht
+    # CuraEngine die Züge nicht, der Lauf gelingt trotzdem, nur mit den
+    # Vorgaben der Maschine statt denen ihres Zugs.
+    folder = definition.parent
+    extruders = folder.parent / "extruders"
+    searchable = extruders.is_dir() and os.pathsep not in f"{folder}{extruders}"
+    search = (folder, extruders) if own and searchable else ()
+    return CuraMachine(
+        definition=definition,
+        from_printer=bool(own),
+        search_path=search,
+        codes=codes,
+        switches=_temperature_switches(str(chain.get("machine_start_gcode") or "")),
+    )
+
+
+def _placeholder_values(chain: Mapping[str, object], written: Mapping[str, str]) -> dict[str, str]:
+    """Womit Platzhalter gefüllt werden: Solidons Werte, sonst die der Definition.
+
+    Aus der Definition nur Einzelwerte, wie ``str()`` sie im Fenster schriebe
+    — keine Listen und keinen Text mit Umbruch, denn ein Platzhalter, der den
+    Startcode in sich selbst schriebe, ist keine Angabe.
+    """
+    known: dict[str, str] = {}
+    for key, value in chain.items():
+        if isinstance(value, bool):
+            known[key] = str(value)
+        elif isinstance(value, int | float):
+            known[key] = f"{value:g}"
+        elif isinstance(value, str) and _single_line(value):
+            known[key] = value
+    known |= written
+    for alias, source in _CURA_ALIASES.items():
+        if source in known:
+            known[alias] = known[source]
+    return known
+
+
+def _filled(text: str, known: Mapping[str, str], setting: str, tool: str) -> str:
+    """Füllt die Platzhalter eines Maschinencodes — oder hält an (Regel 21).
+
+    ``{name}`` und ``{name, n}`` sind Textersetzung. Eine Rechnung wie
+    ``{machine_depth - 5}`` (Endcode des Neptune 4) geht durch Solidons
+    eigenen Auswerter (``app.core.expressions``, Regel 10), nur über Zahlen,
+    die Solidon kennt. Was so nicht zu füllen ist — ein unbekannter Name,
+    ``{if …}``, ein Wert, den erst das Fenster nach dem Schneiden kennt —,
+    hält die Übergabe an: Wörtlich im G-Code bräche ein Makro wie
+    ``START_PRINT EXTRUDER_TEMP=…`` am Drucker ab.
+    """
+
+    def value_of(match: re.Match[str]) -> str:
+        expression, _comma, extruder = match.group(1).partition(",")
+        expression = expression.strip()
+        if extruder.strip() and not extruder.strip().isdigit():
+            raise _unfillable(match.group(0), setting, tool)
+        if expression in known:
+            return known[expression]
+        number = _arithmetic(expression, known)
+        if number is None:
+            raise _unfillable(match.group(0), setting, tool)
+        return f"{number:g}"
+
+    return _PLACEHOLDER.sub(value_of, text)
+
+
+def _arithmetic(expression: str, known: Mapping[str, str]) -> float | None:
+    """Eine Rechnung über bekannte Zahlen, mit Solidons eigener Grammatik."""
+    numbers: dict[str, float] = {}
+    for key, text in known.items():
+        try:
+            numbers[key] = float(text)
+        except ValueError:
+            continue
+    try:
+        return expressions.evaluate(expressions.canonical(expression, numbers), numbers)
+    except ValidationError:
+        return None
+
+
+def _unfillable(placeholder: str, setting: str, tool: str) -> ExternalToolError:
+    """Die Absage für einen Platzhalter, den Solidon nicht füllen kann."""
+    return ExternalToolError(
+        tool=tool,
+        title=SLICER_FAILED,
+        detail=_(
+            "Der Start- oder Endcode dieses Druckers in Cura verlangt einen Wert, "
+            "den Solidon nicht einsetzen kann. Ungefüllt bräche der Drucker den Druck ab."
+        ),
+        values={"setting": setting, "text": placeholder},
+        suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
+    )
+
+
+def _temperature_switches(start: str) -> dict[str, str]:
+    """Ob CuraEngine eigene Temperaturbefehle vor den Startcode setzt.
+
+    Dieselbe Regel wie im Cura-Fenster: Kommentare heraus, dann nach einem
+    Temperatur-Platzhalter suchen. Setzt der Startcode die Temperatur selbst,
+    bleibt Curas eigenes ``M190``/``M109`` weg — sonst stünden beide da,
+    gemessen am K1 Max: ``M190 S60`` vor ``START_PRINT … BED_TEMP=60``.
+    """
+    code = re.sub(r";.+?(\n|$)", "\n", start)
+
+    def sets(names: tuple[str, ...]) -> bool:
+        return re.search(r"\{(" + "|".join(names) + r")(,\s?\w+)?\}", code) is not None
+
+    return {
+        "material_bed_temp_prepend": "false" if sets(_BED_TEMPERATURES) else "true",
+        "material_print_temp_prepend": "false" if sets(_PRINT_TEMPERATURES) else "true",
+    }
 
 
 @dataclass(slots=True)
