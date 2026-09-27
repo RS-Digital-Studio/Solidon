@@ -2289,6 +2289,56 @@ def test_cura_takes_supports_back_where_a_part_does_not_need_them(
     ]
 
 
+def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Profile) -> None:
+    """Die Schrägnaht gilt dem runden Teil (Entscheidung G): Das Rohr hat
+    keine Ecke, in der die Naht verschwindet, der Klotz daneben vier. Die
+    Platte bleibt ohne, das Rohr bekommt sie als Objektwert bei der
+    Orca-Familie und PrusaSlicer, und bei Cura nimmt das Netz des Klotzes sie
+    zurück."""
+    tube = trimesh.creation.cylinder(radius=12.5, height=40.0, sections=128)
+    tube.apply_translation((0.0, 0.0, 20.0))
+    block = trimesh.creation.box(extents=(25.0, 25.0, 40.0))
+    block.apply_translation((0.0, 0.0, 20.0))
+    objects = [
+        replace(scene_object("obj_1", "Rohr"), mesh=MeshData.of(tube)),
+        replace(scene_object("obj_2", "Klotz"), mesh=MeshData.of(block)),
+    ]
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile, "standard"), "shell.scarf_seam", True
+    )
+
+    def written(flavour: SlicerFlavour) -> tuple[Path, list[Finding]]:
+        return write_assembly(
+            objects,
+            tmp_path / flavour,
+            project_name="Rohre",
+            profile=profile,
+            settings=settings,
+            flavour=flavour,
+        )
+
+    orca, findings = written("orca")
+    assert _plate_value(orca, "orca", "seam_slope_type") == "none", "die Platte bleibt"
+    values = _object_values(orca, "Metadata/model_settings.config")
+    assert values["Rohr"]["seam_slope_type"] == "external"
+    assert values["Rohr"]["seam_slope_min_length"] == "20"
+    assert "seam_slope_type" not in values["Klotz"]
+    said = [
+        finding.values["objects"] for finding in findings if finding.code == "export.part_setting"
+    ]
+    assert said == [1], "einmal, für das Rohr"
+
+    prusa, _findings = written("prusa")
+    parts = _object_values(prusa, "Metadata/Slic3r_PE_model.config")
+    assert parts["Rohr"]["scarf_seam_placement"] == "contours"
+    assert "scarf_seam_placement" not in parts["Klotz"]
+
+    cura, _findings = written("cura")
+    meshes = {mesh.path.name: dict(mesh.settings) for mesh in handover.cura_meshes(cura)}
+    assert meshes["Rohre-part-1.stl"]["scarf_joint_seam_length"] == "20"
+    assert meshes["Rohre-part-2.stl"]["scarf_joint_seam_length"] == "0"
+
+
 def test_a_plate_wide_reason_keeps_the_accepted_value_on_the_plate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

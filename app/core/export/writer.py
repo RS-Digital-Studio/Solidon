@@ -1110,6 +1110,7 @@ _SLICED_PART_PATHS: Final = frozenset(
         "adhesion.kind",
         "shell.wall_generator",
         "shell.outer_wall_first",
+        "shell.scarf_seam",
         "layers.line_width",
     }
 )

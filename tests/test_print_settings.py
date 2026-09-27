@@ -1228,6 +1228,7 @@ ORCA_VALUES = {
         "crosshatch",
     },
     "seam_position": {"aligned", "nearest", "back", "aligned_back", "random"},
+    "seam_slope_type": {"none", "external", "all"},
     "support_type": {"normal(auto)", "tree(auto)", "normal(manual)", "tree(manual)"},
     "brim_type": {"no_brim", "outer_only", "auto_brim", "inner_only", "outer_and_inner"},
     "wall_sequence": {"inner wall/outer wall", "outer wall/inner wall", "inner-outer-inner wall"},
@@ -1252,6 +1253,79 @@ def test_orca_gets_names_it_knows(key: str) -> None:
             )
             continue
         assert written in ORCA_VALUES[key], f"{path}={choice} wird zu {written!r}"
+
+
+def test_the_scarf_seam_reaches_every_slicer_with_its_length() -> None:
+    """Die Schrägnaht braucht ihre Länge: Elegoos Basisprozess führt
+    ``seam_slope_min_length = 0``, und mit der Art allein setzte ElegooSlicer am
+    Minigolf-Schaft keine einzige Rampe (0 von 1000 Außenschleifen, mit 20 mm
+    997). Jede Familie bekommt deshalb Art und Länge, nur für die Außenwand
+    und, wo es geht, nur an glatten Schleifen."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    on = print_settings.with_path(print_settings.resolve(profile), "shell.scarf_seam", True)
+
+    orca = handover.values_for(on, profile, "orca")
+    prusa = handover.values_for(on, profile, "prusa")
+    cura = handover.values_for(on, profile, "cura")
+
+    assert {key: orca[key] for key in orca if key.startswith("seam_slope_")} == {
+        "seam_slope_type": "external",
+        "seam_slope_min_length": "20",
+        "seam_slope_conditional": "1",
+        "seam_slope_inner_walls": "0",
+    }
+    # Bambu Studio führt die Schrägnaht auch im Filament, und das sticht ohne
+    # diesen Schalter: am P1S kein einziger Rampenanfang.
+    assert orca["override_filament_scarf_seam_setting"] == "1"
+    assert {key: prusa[key] for key in prusa if key.startswith("scarf_seam_")} == {
+        "scarf_seam_placement": "contours",
+        "scarf_seam_length": "20",
+        "scarf_seam_only_on_smooth": "1",
+        "scarf_seam_on_inner_perimeters": "0",
+    }
+    assert cura["scarf_joint_seam_length"] == "20"
+    assert "scarf_joint_seam_length" in handover.CURA_PER_MESH, "Cura nimmt sie je Netz"
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        ({}, None),
+        ({"seam_slope_type": "none", "seam_slope_min_length": "20"}, False),
+        # Elegoos Basisprozess: Art gesetzt, Länge null — keine Rampe.
+        ({"seam_slope_type": "external", "seam_slope_min_length": "0"}, False),
+        ({"seam_slope_type": "external", "seam_slope_min_length": "20"}, True),
+        # Ohne Länge in der Kette gilt die Vorgabe des Programms, größer null.
+        ({"seam_slope_type": "all"}, True),
+        (
+            {
+                "seam_slope_type": "external",
+                "seam_slope_min_length": "0",
+                "seam_slope_entire_loop": "1",
+            },
+            True,
+        ),
+    ],
+)
+def test_the_foundation_reads_a_scarf_seam_only_when_it_ramps(
+    values: dict[str, str], expected: bool | None
+) -> None:
+    """Die Grundlage liest „an" nur, wo der Slicer wirklich eine Rampe setzt —
+    sonst stünde im Dialog eine Schrägnaht, die nicht gedruckt wird."""
+    from app.core.export import manufacturer
+
+    assert manufacturer._scarf_seam(values) is expected
+    prusa = {
+        "seam_slope_type": "scarf_seam_placement",
+        "seam_slope_min_length": "scarf_seam_length",
+        "seam_slope_entire_loop": "scarf_seam_entire_loop",
+    }
+    placement = {"none": "nowhere", "external": "contours", "all": "everywhere"}
+    translated = {
+        prusa[key]: placement.get(value, value) if key == "seam_slope_type" else value
+        for key, value in values.items()
+    }
+    assert manufacturer._prusa_scarf_seam(translated) is expected
 
 
 def _possible(path: str) -> tuple[object, ...]:

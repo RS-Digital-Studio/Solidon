@@ -887,3 +887,51 @@ def test_the_stack_tells_which_body_carries_a_fit() -> None:
     assert lid is not None
     assert fit_kinds_for(document, lid_outputs) == ("clearance",)
     assert fit_kinds_for(document, {pin_id}) == ()
+
+
+# --- Schrägnaht an runden Außenwänden -------------------------------------------
+
+
+def _standing(mesh: trimesh.Trimesh) -> SliceResult:
+    """Der Körper auf dem Bett, geschnitten im Raster von 0,2 mm."""
+    mesh.apply_translation((0.0, 0.0, -mesh.bounds[0][2]))
+    return slice_body(MeshData.of(mesh), 0.2)
+
+
+def test_a_round_outer_wall_asks_for_a_scarf_seam() -> None:
+    """Roberts Minigolf-Schäfte (27.09.2026): Auf der runden Außenwand fand die
+    Naht keine Ecke und zog sich als Linie über 200 mm. Der runde Körper
+    bekommt die Schrägnaht vorgeschlagen, der eckige nicht — dort verschwindet
+    die Naht in einer Kante —, und ein Stift unter zwei Rampenlängen Umfang
+    auch nicht."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+
+    def scarf(mesh: trimesh.Trimesh) -> list[SettingAdvice]:
+        return [
+            entry
+            for entry in advise.advise(settings, profile, _standing(mesh))
+            if entry.path == "shell.scarf_seam"
+        ]
+
+    round_one = scarf(trimesh.creation.cylinder(radius=12.5, height=40.0, sections=128))
+    assert [(entry.value, entry.severity) for entry in round_one] == [(True, "info")]
+    assert not scarf(trimesh.creation.box(extents=(25.0, 25.0, 40.0)))
+    assert not scarf(trimesh.creation.cylinder(radius=4.0, height=40.0, sections=64))
+    assert not scarf(trimesh.creation.cylinder(radius=12.5, height=6.0, sections=128)), (
+        "unter der Mindesthöhe wird aus der Naht keine Linie"
+    )
+    assert "shell.scarf_seam" in advise.PART_PATHS
+
+
+def test_a_polygon_with_corners_hides_its_seam_itself() -> None:
+    """Glatt heißt: kein Knick über 25°, das Gegenstück zu Orcas Schwelle von
+    155°. Ein Zwölfkant knickt an jeder Ecke um 30° und behält seine Naht in
+    einer Ecke; mit 128 Seiten knickt der Zylinder um knapp 3°."""
+    from app.core.slice.analysis import smooth_outline_height
+
+    twelve = _standing(trimesh.creation.cylinder(radius=12.5, height=20.0, sections=12))
+    fine = _standing(trimesh.creation.cylinder(radius=12.5, height=20.0, sections=128))
+
+    assert smooth_outline_height(twelve, advise.SCARF_MIN_LOOP) == 0.0
+    assert smooth_outline_height(fine, advise.SCARF_MIN_LOOP) == pytest.approx(20.0, abs=0.3)

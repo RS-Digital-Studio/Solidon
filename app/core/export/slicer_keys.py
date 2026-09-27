@@ -209,6 +209,11 @@ def _angle_from_horizontal(value: object) -> str:
 
 # --- PrusaSlicer und SuperSlicer ------------------------------------------------
 
+#: Wie lang die Rampe der Schrägnaht ist, in Millimetern (``shell.scarf_seam``):
+#: die Vorgabe von OrcaSlicer und PrusaSlicer. Cura hat keine eigene, bei ihm
+#: schaltet eine Länge über null die Schrägnaht erst ein.
+SCARF_LENGTH: Final = 20.0
+
 _PRUSA_INFILL: Final = {
     "grid": "grid",
     "gyroid": "gyroid",
@@ -233,6 +238,10 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("shell.bottom_layers", "bottom_solid_layers", _integer),
     ("shell.outer_wall_first", "external_perimeters_first", _flag),
     ("shell.seam_position", "seam_position", _plain),
+    ("shell.scarf_seam", "scarf_seam_placement", _mapped({"True": "contours"}, "nowhere")),
+    ("shell.scarf_seam", "scarf_seam_length", _only({"True": f"{SCARF_LENGTH:g}"})),
+    ("shell.scarf_seam", "scarf_seam_only_on_smooth", _only({"True": "1"})),
+    ("shell.scarf_seam", "scarf_seam_on_inner_perimeters", _only({"True": "0"})),
     ("shell.wall_generator", "perimeter_generator", _plain),
     # PrusaSlicer kennt keine gesonderte „genaue Außenwand" — dort heißt die
     # Sache Kompensation der Bahnbreite und ist immer an. Kein Eintrag ist
@@ -363,6 +372,21 @@ ORCA: Final[tuple[Row, ...]] = (
         _mapped({"True": "outer wall/inner wall"}, "inner wall/outer wall"),
     ),
     ("shell.seam_position", "seam_position", _mapped(_ORCA_SEAM, "aligned")),
+    # **Die Schrägnaht braucht ihre Länge.** Elegoos Basisprozess führt
+    # ``seam_slope_min_length = 0``, und dann setzt ElegooSlicer keine Rampe:
+    # gemessen am Minigolf-Schaft 0 von 1000 Außenschleifen, mit 20 mm 997.
+    # Nur die Außenwand und nur glatte Schleifen — eine Schleife mit Ecke
+    # versteckt die Naht selbst, und schräg angesetzte Innenwände kosten Zeit,
+    # die niemand sieht (dort 1:22 h statt 8 min je Schaft).
+    ("shell.scarf_seam", "seam_slope_type", _mapped({"True": "external"}, "none")),
+    ("shell.scarf_seam", "seam_slope_min_length", _only({"True": f"{SCARF_LENGTH:g}"})),
+    ("shell.scarf_seam", "seam_slope_conditional", _only({"True": "1"})),
+    ("shell.scarf_seam", "seam_slope_inner_walls", _only({"True": "0"})),
+    # Bambu Studio führt die Schrägnaht auch im Filament
+    # (``filament_scarf_seam_type``), und das Filament sticht Prozess und
+    # Objekt, solange dieser Schalter aus ist: gemessen am P1S, Objektwert
+    # geschrieben und keine einzige Rampe.
+    ("shell.scarf_seam", "override_filament_scarf_seam_setting", _only({"True": "1"})),
     ("shell.wall_generator", "wall_generator", _plain),
     ("shell.precise_outer_wall", "precise_outer_wall", _flag),
     # Orca kennt vier Stufen des Bügelns; Solidon entscheidet nur, **ob** —
@@ -492,6 +516,13 @@ CURA: Final[tuple[Row, ...]] = (
     # Lagen begannen außen, mit dem richtigen Namen neunundvierzig.
     ("shell.outer_wall_first", "inset_direction", _mapped({"True": "outside_in"}, "inside_out")),
     ("shell.seam_position", "z_seam_type", _mapped(_CURA_SEAM, "sharpest_corner")),
+    # Cura setzt die Schrägnaht nur an die Außenwand und kennt kein „nur an
+    # glatten Schleifen“; eine Länge von null schaltet sie aus.
+    (
+        "shell.scarf_seam",
+        "scarf_joint_seam_length",
+        _mapped({"True": f"{SCARF_LENGTH:g}"}, "0"),
+    ),
     ("shell.ironing", "ironing_enabled", _boolean),
     # CuraEngine hat keinen umschaltbaren Wandgenerator und keine gesonderte
     # genaue Außenwand: es rechnet ohnehin mit variabler Bahnbreite. Was es

@@ -761,9 +761,9 @@ def object_keys(
 
 #: Was CuraEngine je Netz annimmt, gelesen aus ``settable_per_mesh`` in
 #: ``fdmprinter.def.json`` (Cura 5.13): Wände, Füllung, Bahnbreite, Bügeln,
-#: Außenwand mit Tempo und Beschleunigung, und ob überhaupt gestützt wird.
-#: Haftungsart (``adhesion_type``), Stützort (``support_type``) und Stützart
-#: (``support_structure``) gelten nur der ganzen Platte.
+#: Außenwand mit Tempo und Beschleunigung, die Schrägnaht, und ob überhaupt
+#: gestützt wird. Haftungsart (``adhesion_type``), Stützort (``support_type``)
+#: und Stützart (``support_structure``) gelten nur der ganzen Platte.
 CURA_PER_MESH: Final = frozenset(
     {
         "support_enable",
@@ -774,6 +774,7 @@ CURA_PER_MESH: Final = frozenset(
         "wall_line_count",
         "speed_wall_0",
         "acceleration_wall_0",
+        "scarf_joint_seam_length",
     }
 )
 

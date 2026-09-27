@@ -193,6 +193,14 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
 
 ## Was welcher Slicer bekommt
 
+- **Die Schrägnaht braucht Art und Länge** (`shell.scarf_seam`): Elegoos
+  Basisprozess führt `seam_slope_min_length = 0`, und mit der Art allein setzt
+  ElegooSlicer keine Rampe. Geschrieben werden nur Außenwand und glatte
+  Schleifen mit `slicer_keys.SCARF_LENGTH`; Bambu Studio bekommt dazu
+  `override_filament_scarf_seam_setting`, sonst sticht die Schrägnaht seines
+  Filaments (Elegoo, Orca und Creality kennen den Schlüssel nicht und
+  übergehen ihn). Cura: `scarf_joint_seam_length` je Netz. Die Grundlage liest
+  „an“ nur mit einer Länge über null.
 - **Eine Stützsperre gehört zu ihrem Objekt, und jede Familie schreibt sie
   anders** (`slicer_keys.helpers_as_parts`): Orca-Familie als eigenes Teil
   (`model_settings.config` nennt die zweite Komponente `support_blocker`),

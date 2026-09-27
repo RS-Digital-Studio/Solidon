@@ -31,7 +31,7 @@ from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
 from app.core.log import get_logger
-from app.core.types import CancelToken, LayerInfo, Polygon, SliceResult
+from app.core.types import CancelToken, LayerInfo, Polygon, Ring, SliceResult
 from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
 from app.i18n import _
 
@@ -3369,6 +3369,60 @@ def tapered_layers(result: SliceResult) -> int:
     (``advise.TAPERED_LAYERS_SHARE``), nicht nach einzelnen Schichten.
     """
     return sum(1 for layer in result.layers if layer.taper_length > EPS_GEOM)
+
+
+#: Wie weit eine Außenkontur an einer Stelle abknicken darf und noch als glatt
+#: gilt, in Grad: 180° weniger ``scarf_angle_threshold`` der Orca-Familie
+#: (155°), an dem sie ihre bedingte Schrägnaht festmacht. Knickt eine Schleife
+#: stärker, hat die Naht dort eine Ecke, in der sie verschwindet.
+SMOOTH_TURN_DEGREES: Final = 25.0
+
+#: Um so viel wird eine Kontur vereinfacht, bevor die Knicke zählen, in mm —
+#: knapp die Auflösung, mit der die Orca-Familie ihre Bahnen glättet
+#: (``resolution`` 0,012). Ohne sie gälte ein Facettenrest von einem
+#: Tausendstelmillimeter als Ecke.
+SMOOTH_SIMPLIFY: Final = 0.01
+
+
+def smooth_outline_height(result: SliceResult, min_length: float) -> float:
+    """Über wie viel Höhe der Körper eine glatte Außenkontur trägt, in mm.
+
+    Glatt heißt: kein Knick über :data:`SMOOTH_TURN_DEGREES`, also keine Ecke,
+    in der ein Slicer die Naht verstecken kann. Gezählt werden Umrisse, keine
+    Löcher, und nur solche ab ``min_length`` Umfang; die Höhe ist die Zahl der
+    Schichten mit so einem Umriss mal ihrem Abstand.
+    """
+    if not result.layers:
+        return 0.0
+    heights = [layer.z for layer in result.layers]
+    spacing = float(np.median(np.diff(heights))) if len(heights) > 1 else heights[0]
+    smooth = sum(
+        1
+        for layer in result.layers
+        if any(_smooth_ring(contour.outline, min_length) for contour in layer.contours)
+    )
+    return smooth * spacing
+
+
+def _smooth_ring(ring: Ring, min_length: float) -> bool:
+    """Ob dieser Umriss lang genug ist und nirgends stärker abknickt als
+    :data:`SMOOTH_TURN_DEGREES` (:func:`smooth_outline_height`)."""
+    points = np.asarray(ring, dtype=float)
+    if len(points) > 1 and np.allclose(points[0], points[-1]):
+        points = points[:-1]
+    if len(points) < 3:
+        return False
+    closed = np.vstack([points, points[:1]])
+    if float(np.hypot(*np.diff(closed, axis=0).T).sum()) < min_length:
+        return False
+    simple = np.asarray(shapely.LinearRing(points).simplify(SMOOTH_SIMPLIFY).coords)[:-1]
+    if len(simple) < 3:
+        return False
+    ahead = np.roll(simple, -1, axis=0) - simple
+    behind = simple - np.roll(simple, 1, axis=0)
+    cross = behind[:, 0] * ahead[:, 1] - behind[:, 1] * ahead[:, 0]
+    turn = np.degrees(np.abs(np.arctan2(cross, (behind * ahead).sum(axis=1))))
+    return bool(turn.max() <= SMOOTH_TURN_DEGREES)
 
 
 def narrowest(result: SliceResult) -> float:

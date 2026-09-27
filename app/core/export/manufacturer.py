@@ -445,6 +445,9 @@ def _read_process(
     style = _support_style(values)
     if style is not None:
         read["support.style"] = style
+    scarf = _scarf_seam(values)
+    if scarf is not None:
+        read["shell.scarf_seam"] = scarf
     angle = _support_angle(values)
     if angle is not None:
         read["support.threshold_angle"] = angle
@@ -496,6 +499,26 @@ def _support_style(values: Mapping[str, Any]) -> str | None:
     if kind.startswith("normal"):
         return "grid"
     return "auto"
+
+
+def _scarf_seam(values: Mapping[str, Any]) -> bool | None:
+    """Die Schrägnaht an, wenn Art **und** Länge greifen.
+
+    Elegoos Basisprozess führt ``seam_slope_type = none`` mit der Länge 0 —
+    und mit der Art allein setzt ElegooSlicer keine Rampe (gemessen am
+    Minigolf-Schaft, 0 von 1000 Außenschleifen). Fehlt die Länge in der
+    Kette, gilt die Vorgabe des Programms, und die ist bei Orca und Bambu
+    größer als null.
+    """
+    kind = _text(values.get("seam_slope_type"))
+    if kind is None:
+        return None
+    if kind.casefold() == "none":
+        return False
+    if (_text(values.get("seam_slope_entire_loop")) or "0").casefold() in ("1", "true"):
+        return True
+    length = _text(values.get("seam_slope_min_length"))
+    return length is None or (_float(length) or 0.0) > 0.0
 
 
 def _support_angle(values: Mapping[str, Any]) -> float | None:
@@ -724,6 +747,9 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "retract_length": "2",
     "retract_lift": "0",
     "retract_speed": "40",
+    "scarf_seam_entire_loop": "0",
+    "scarf_seam_length": "20",
+    "scarf_seam_placement": "nowhere",
     "seam_position": "aligned",
     "skirt_distance": "6",
     "skirts": "1",
@@ -874,6 +900,7 @@ def _read_prusa(
     take("speed.first_layer", _prusa_first_layer_speed(values, solid_speed))
     take("speed.outer_wall_acceleration", _prusa_outer_wall_acceleration(values))
     take("support.style", _prusa_support_style(values))
+    take("shell.scarf_seam", _prusa_scarf_seam(values))
     outer_width = _prusa_outer_width(values, context)
     take("support.threshold_angle", _prusa_support_angle(values, read, outer_width))
     take("support.xy_gap", _prusa_support_gap(values, outer_width))
@@ -978,6 +1005,20 @@ def _prusa_support_style(values: Mapping[str, Any]) -> str | None:
     if style == "grid":
         return "grid"
     return "auto"
+
+
+def _prusa_scarf_seam(values: Mapping[str, Any]) -> bool | None:
+    """Die Schrägnaht an, wenn sie einen Ort hat und eine Länge — wie
+    :func:`_scarf_seam` für die Orca-Familie."""
+    placement = _prusa_first(values.get("scarf_seam_placement"))
+    if placement is None:
+        return None
+    if placement == "nowhere":
+        return False
+    if _prusa_first(values.get("scarf_seam_entire_loop")) == "1":
+        return True
+    length = _prusa_first(values.get("scarf_seam_length"))
+    return length is None or (_float(length) or 0.0) > 0.0
 
 
 def _prusa_outer_width(values: Mapping[str, Any], context: _Context) -> float | None:

@@ -376,6 +376,16 @@ FIELDS: tuple[Field, ...] = (
         ),
     ),
     Field(
+        "shell.scarf_seam",
+        _("Schrägnaht"),
+        "shell",
+        kind="bool",
+        note=_(
+            "Setzt Anfang und Ende der Außenwand schräg übereinander statt an eine Stelle. "
+            "Runde Teile zeigen dann keine Nahtlinie; es kostet etwas Druckzeit."
+        ),
+    ),
+    Field(
         "shell.wall_generator",
         _("Wandbahnen"),
         "shell",

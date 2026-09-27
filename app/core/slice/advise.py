@@ -43,6 +43,7 @@ from app.core.slice.analysis import (
     narrow_share,
     narrowest_measured,
     piece_area,
+    smooth_outline_height,
     tapered_layers,
     thinnest_spot,
     total_overhang,
@@ -191,6 +192,16 @@ CHAMBER_FOR_WARPING: Final = 50
 #: dieselbe Frage ließen dazwischen einen Bereich, in dem beide Antworten
 #: falsch sind.
 NARROW_LINE_SHARE: Final = 0.85
+
+#: Ab welchem Umfang eine glatte Außenschleife ihre Naht als Linie zeigt, in
+#: mm: zwei Rampen der Schrägnaht (``slicer_keys.SCARF_LENGTH``). Ein Stift
+#: unter Ø 13 mm hat keinen Platz für die Rampe, und seine Naht fällt kaum auf.
+SCARF_MIN_LOOP: Final = 40.0
+
+#: Über wie viel Höhe die glatte Außenwand reichen muss, bevor die Schrägnaht
+#: vorgeschlagen wird, in mm. Auf einem flachen Rand wird keine Linie aus der
+#: Naht, und die Rampe kostet trotzdem Zeit.
+SCARF_MIN_HEIGHT: Final = 10.0
 
 
 def advise(
@@ -1039,6 +1050,30 @@ def _from_geometry(
             )
         )
 
+    # **Eine runde Außenwand hat keine Ecke für die Naht.** Roberts
+    # Minigolf-Schäfte (Ø 25,7 mm, 200 mm hoch, 27.09.2026) trugen mit Elegoos
+    # Naht „aligned“ eine Linie über die ganze Höhe: Der Slicer fand keine
+    # Ecke, in der er sie verstecken kann, und am Ende jeder Schleife stand
+    # die Düse zum Rückzug still. Die Schrägnaht setzt Anfang und Ende flach
+    # übereinander; nur an der Außenwand kostete sie je Schaft 8 von 558
+    # Minuten.
+    if (
+        not settings.shell.scarf_seam
+        and smooth_outline_height(result, SCARF_MIN_LOOP) >= SCARF_MIN_HEIGHT
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="shell.scarf_seam",
+                value=True,
+                reason=_(
+                    "Die Außenwand ist rund, und die Naht findet keine Ecke: Sie bleibt als "
+                    "Linie sichtbar. Eine Schrägnaht setzt Anfang und Ende flach "
+                    "übereinander und kostet etwas Druckzeit."
+                ),
+            )
+        )
+
     if _has_thin_layers(result) and settings.cooling.minimum_layer_time < THIN_LAYER_SECONDS:
         advice.append(
             _advice(
@@ -1275,6 +1310,7 @@ PART_PATHS: Final = frozenset(
         "shell.precise_outer_wall",
         "shell.outer_wall_first",
         "shell.ironing",
+        "shell.scarf_seam",
         "speed.outer_wall",
         "speed.outer_wall_acceleration",
         "shell.wall_count",

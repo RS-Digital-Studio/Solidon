@@ -136,6 +136,10 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
   als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;
   seine Brim-Regeln aus dem Schnitt behalten das letzte Wort.
+- **Eine runde Außenwand bekommt die Schrägnaht vorgeschlagen**: glatte
+  Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, ab
+  `advise.SCARF_MIN_LOOP` Umfang) über `SCARF_MIN_HEIGHT`. Eine Ecke
+  versteckt die Naht selbst.
 - **Schmale Stege bekommen eine langsame erste Schicht**: Liegt mindestens
   `advise.NARROW_WEB_SHARE` der ersten Schicht in Stegen unter
   `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) und ist sie schneller als

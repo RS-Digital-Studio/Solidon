@@ -2180,6 +2180,17 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   - Nebenbei aus der Gesamtprüfung behoben: Rand über den Bettrand und zu hohe Teile
     (`5063fc9f5`), Bambu Studio, das nach der fertigen Druckdatei nicht endet
     (`64a0e4677`, drei von rund hundert Läufen).
+  - **Schrägnaht steht**, aus Roberts Druck des Minigolf-Satzes mit 50 mm/s in der
+    ersten Schicht: Die Naht an den vier Schäften (Ø 25,7, 200 mm) kam aus Elegoos Profil
+    („aligned“, keine Schrägnaht, Rampenlänge 0), am Ende jeder Außenschleife liefen 0,73
+    von 0,8 mm Rückzug im Stillstand. Solidon schlägt für runde Außenwände je Teil die
+    Schrägnaht vor (`shell.scarf_seam`, `analysis.smooth_outline_height`) und schreibt
+    sie in jeder Familie mit Länge, nur an der Außenwand (Robert: „bei allen Slicern“).
+    Abgenommen am Rohr neben einem Klotz: ElegooSlicer, OrcaSlicer, Bambu Studio,
+    PrusaSlicer und CuraEngine rampen je 199 von 200 Außenschleifen nur am Rohr, bei
+    2 bis 4 % mehr Druckzeit (`output/review/gesamt-2026-09-27/naht/`); Bambu braucht
+    dazu `override_filament_scarf_seam_setting`. Creality Print rechnet 3MF nur im
+    Fenster (RM-164), sein Kern kennt dieselben Schlüssel.
 
   **Offen, in dieser Reihenfolge:**
   - **E** Je Teil. Stehen: `for_part` fragt mit Profil jede Regel für die geometrischen
@@ -2191,16 +2202,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     gestützten Körper — Stütze nur an ihm, Brim der übrigen geschlossen.
   - **K** Rest der Gegenprobe: Identität und Startcode bei PrusaSlicer und Cura.
   - Danach Paket 3 (Mindestschichtzeit, Keilspitzen, Stützbedarf gegen das Urteil des
-    Herstellers, Brückenregel, Inseln an Schrauben, Schrägnaht an runden Außenwänden) und
-    der Lauf „jedes Modell × jeder Slicer“ als Gesamtabnahme.
-  - **Schrägnaht**, aus Roberts Druck des Minigolf-Satzes mit 50 mm/s in der ersten Schicht:
-    Die Naht an den vier Schäften (Ø 25,7, 200 mm) kommt aus Elegoos Profil („aligned“,
-    keine Schrägnaht, Rampenlänge 0); am Ende jeder Außenschleife laufen 0,73 von 0,8 mm
-    Rückzug im Stillstand, weil das Wischen mit 500 mm/s zu kurz ist. Nachgeschnitten
-    greift die Schrägnaht erst mit Rampenlänge (20 mm: 997 von 1000 Schleifen, 9:18 →
-    10:39 h mit Elegoos Rampe auch an Innenwänden). Vorschlag je Teil für runde
-    Außenwände, für jeden Slicer, der eine Schrägnaht kennt, nicht nur ElegooSlicer
-    (Robert); Kosten nur Außenwand messen.
+    Herstellers, Brückenregel, Inseln an Schrauben) und der Lauf „jedes Modell × jeder
+    Slicer“ als Gesamtabnahme.
 
   Aus Roberts Probedruck am 27.09.2026 (Minigolf-Platte, Elegoos Standard): An den
   schmalen Stegen zwischen Loch 3, Loch 4 und dem inneren Bogen rissen kurze
