@@ -2691,3 +2691,86 @@ def test_a_rim_is_named_after_the_plane_it_lies_in(backend: str) -> None:
 
     box = {edge_lie_of(entry) for entry in edges_of(block())}
     assert box == {"upright", "flat"}, "Strecken liegen nach ihrer Richtung"
+
+
+def _cross_bored_block(backend: str) -> list[Any]:
+    """Quader 40 × 30 × 20 mit Querbohrung Ø 6 entlang Y (RM-279).
+
+    Von außen gezählt: vier stehende Kanten, je vier waagerechte oben und
+    unten, und die zwei Mündungen der Bohrung in den senkrechten Wänden bei
+    y = ±15 — Ringe, deren Ebene senkrecht steht.
+    """
+    if backend == "mesh":
+        box = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
+        box.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+        bore = trimesh.creation.cylinder(radius=3.0, height=3.0 * DEPTH, sections=48)
+        bore.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+        bore.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+        outcome = boolean("difference", [MeshData(box), MeshData(bore)])
+        return edges_of(outcome.mesh)
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    solid = brep.bore(
+        brep.box(WIDTH, DEPTH, HEIGHT),
+        position=(0.0, -DEPTH / 2.0, HEIGHT / 2.0),
+        axis="y",
+        diameter=6.0,
+    )
+    return brep.edges_of(solid)
+
+
+@pytest.mark.parametrize("backend", ["mesh", "brep"])
+def test_a_group_takes_a_rim_only_when_it_lies_flat(backend: str) -> None:
+    """RM-279: „Alle waagerechten Kanten“ nahm die Mündungen einer Querbohrung mit.
+
+    Ein geschlossener Ring hat keine Richtung, und ``flat`` galt an jedem.
+    Entschieden (Release-Sitzung 0.5.1): Gerade Kanten zählen nach ihrer
+    Richtung, ein runder Rand nur, wenn er waagerecht liegt. Die Mündungen in
+    den Seitenwänden heißen „Senkrecht“ und gehören zu keiner Gruppe —
+    „senkrecht“, die Vorgabe von Verrunden, bleibt bei den vier stehenden
+    Kanten. Ein waagerechter Rand (stehende Bohrung) zählt weiter zu
+    „waagerecht“ und „oben“.
+    """
+    from app.core.geom.edges import choose, edge_lie_of
+
+    edges = _cross_bored_block(backend)
+    rims = [entry for entry in edges if math.dist(entry.direction, (0.0, 0.0, 0.0)) < 1e-6]
+    assert len(edges) == 14 and len(rims) == 2, "sonst prüft der Test keine Querbohrung"
+    assert {edge_lie_of(entry) for entry in rims} == {"upright"}
+
+    horizontal = choose(edges, "horizontal")
+    assert len(horizontal) == 8 and not any(entry in rims for entry in horizontal)
+    vertical = choose(edges, "vertical")
+    assert len(vertical) == 4 and not any(entry in rims for entry in vertical)
+    assert len(choose(edges, "top")) == 4
+    assert len(choose(edges, "bottom")) == 4
+    assert {edge_lie_of(entry) for entry in horizontal} == {"flat"}
+    # Der Weg gespeicherter Schritte bis Format 36 bleibt, wie er war.
+    assert len(choose(edges, "horizontal", rings_by_plane=False)) == 10
+    assert len(choose(edges, "vertical", rings_by_plane=False)) == 4
+
+    standing = _upright_bored_block(backend)
+    flat_rims = [e for e in standing if math.dist(e.direction, (0.0, 0.0, 0.0)) < 1e-6]
+    assert len(flat_rims) == 2 and {edge_lie_of(entry) for entry in flat_rims} == {"flat"}
+    assert all(entry in choose(standing, "horizontal") for entry in flat_rims)
+    top = choose(standing, "top")
+    assert len(top) == 5 and sum(entry in flat_rims for entry in top) == 1
+
+
+def _upright_bored_block(backend: str) -> list[Any]:
+    """Derselbe Quader mit einer stehenden Bohrung Ø 6: zwei waagerechte Ränder."""
+    if backend == "mesh":
+        box = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
+        box.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+        bore = trimesh.creation.cylinder(radius=3.0, height=3.0 * HEIGHT, sections=48)
+        bore.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+        outcome = boolean("difference", [MeshData(box), MeshData(bore)])
+        return edges_of(outcome.mesh)
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    solid = brep.bore(
+        brep.box(WIDTH, DEPTH, HEIGHT), position=(0.0, 0.0, HEIGHT), axis="z", diameter=6.0
+    )
+    return brep.edges_of(solid)

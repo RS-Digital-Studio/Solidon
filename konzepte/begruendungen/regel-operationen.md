@@ -302,6 +302,24 @@ Absage mit Weg, nicht eine stille Wahl (Regel 21).
 Kontur an Kante 1 hängt, verrundet eine Kette zur Hälfte mit dem Endradius.
 Und ein eigenes `Law_Function` nimmt OCCT 8.0.1 gar nicht an.
 
+### Gruppen nach Lage: ein Rand nur waagerecht
+
+Ein geschlossener Ring hat keine Richtung von Anfang zu Ende, und `flat`
+(`|z| < 0,1`) galt bis Format 36 an jedem: „alle waagerechten Kanten“ nahm am
+Quader 40 × 30 × 20 mit Querbohrung Ø 6 zehn Kanten statt acht, die zwei
+stehenden Mündungen eingeschlossen, und *Verrunden* rundete sie mit (RM-279).
+Die Beschriftung nannte den Ring da schon nach seiner Ebene „Senkrecht“
+(RM-269). Die naheliegende Einheit — die Mündung auch zu „alle senkrechten
+Kanten“ zu zählen — hat die Release-Sitzung 0.5.1 nach Messung verworfen: Die
+Vorgabe von Verrunden, Fase und Wulst ist „senkrecht“, und sie hätte an jedem
+Teil mit Querbohrung die Mündungen mitgerundet, bei R 5 an Ø 6 zum Trichter;
+am Netz kam die Rundung eines Rings damals zudem zu flach heraus, und an
+`pegboard-gs-100` sank der größte passende Radius von 0,85 auf 0,71 mm. Für den
+Kunden ist eine senkrechte Kante eine gerade Kante und kein Lochrand. Ein Rand
+in einer Seitenwand gehört deshalb zu keiner Gruppe, und die doc-Sätze von
+`edges` und `rings_by_plane` sagen es, weil die Beschriftung „Senkrecht“ zeigt.
+Gespeicherte Schritte behalten den alten Weg (Migration 36 → 37).
+
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
 Die Formschräge rechnet am Netz Werkzeuge zwischen alter und neuer Fläche;

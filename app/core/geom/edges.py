@@ -572,9 +572,10 @@ class SelectableEdge(HasPlacement, Protocol):
     """Was eine Auswahl **nach der Lage** von einer Kante braucht.
 
     Wieder für beide Kerne: ``upright`` und ``flat`` beantworten
-    ``MeshEdge`` und ``brep.edit.EdgeInfo`` gleich, und deshalb gibt es die
-    Auswahl nur einmal. Eine zweite Fassung im exakten Kern hieße, dass „alle
-    senkrechten Kanten" dort bald etwas anderes bedeutet als hier.
+    ``MeshEdge`` und ``brep.edit.EdgeInfo`` gleich, :func:`edge_lie_of` an
+    Ringen auch, und deshalb gibt es die Auswahl nur einmal. Eine zweite
+    Fassung im exakten Kern hieße, dass „alle senkrechten Kanten" dort bald
+    etwas anderes bedeutet als hier.
     """
 
     @property
@@ -584,8 +585,31 @@ class SelectableEdge(HasPlacement, Protocol):
     def flat(self) -> bool: ...
 
 
-def choose[AnyEdge: SelectableEdge](edges: Sequence[AnyEdge], choice: EdgeChoice) -> list[AnyEdge]:
-    """Die Kanten, die eine benannte Auswahl meint."""
+def choose[AnyEdge: SelectableEdge](
+    edges: Sequence[AnyEdge], choice: EdgeChoice, *, rings_by_plane: bool = True
+) -> list[AnyEdge]:
+    """Die Kanten, die eine benannte Auswahl meint.
+
+    **Gerade Kanten nach ihrer Richtung, runde Ränder nur, wenn sie
+    waagerecht liegen** (RM-279, Entscheidung der Release-Sitzung). Ein
+    geschlossener Ring hat keine Richtung; ob er waagerecht liegt, sagt
+    :func:`edge_lie_of` nach seiner Ebene — dieselbe Quelle wie die
+    Beschriftung. Ein waagerechter Rand zählt zu „waagerecht“, „oben“ und
+    „unten“ wie bisher. Ein Rand in einer stehenden oder schrägen Ebene, die
+    Mündung einer Querbohrung, gehört zu **keiner** Gruppe nach Lage, obwohl
+    er „Senkrecht“ heißt: Für den Kunden ist eine senkrechte Kante eine
+    gerade Kante und kein Lochrand. Mit der Vorgabe „senkrecht“ rundete
+    *Verrunden* sonst an jedem Teil mit Querbohrung die Mündungen mit, bei
+    R 5 an einer Bohrung Ø 6 zum Trichter, und an ``pegboard-gs-100`` sank der
+    größte Radius, der passt, von 0,85 auf 0,71 mm. Wer die Mündung meint,
+    wählt sie einzeln. Die senkrechte Gruppe ist deshalb an beiden Wegen
+    dieselbe.
+
+    ``rings_by_plane=False`` ist der Weg, den gespeicherte Schritte bis
+    Format 36 gingen: ``flat`` galt an jedem Ring, auch an der Mündung einer
+    Querbohrung. Die Migration 36 → 37 hält ihn für sie fest, damit ein altes
+    Projekt beim Öffnen nicht andere Kanten rundet.
+    """
     # ``named`` geht nicht nach der Lage, sondern nach Schlüsseln — die kennt
     # nur :func:`wanted`. Hier wäre jede Antwort eine falsche.
     if choice == "named":
@@ -593,22 +617,29 @@ def choose[AnyEdge: SelectableEdge](edges: Sequence[AnyEdge], choice: EdgeChoice
     if choice == "all":
         return list(edges)
     if choice == "vertical":
+        # ``upright`` gilt an keinem Ring (Richtung null) — an beiden Wegen.
         return [entry for entry in edges if entry.upright]
+    if rings_by_plane:
+        # An Strecken und Bögen sagt ``edge_lie_of`` dasselbe wie ``flat``;
+        # anders nur an einem Ring, dessen Ebene nicht waagerecht liegt.
+        flat = [edge_lie_of(entry) == "flat" for entry in edges]
+    else:
+        flat = [entry.flat for entry in edges]
     if choice == "horizontal":
-        return [entry for entry in edges if entry.flat]
+        return [entry for entry, lying in zip(edges, flat, strict=True) if lying]
 
     # **Die Höhe der waagerechten Kanten, nicht aller** (22.09.2026). Eine
     # schräge Kante hat ihre Mitte zwischen ihren Enden: Am Walmdach lagen die
     # Mitten der Grate bei 12,5, die Traufen bei 10, und „oben" suchte
     # waagerechte Kanten auf 12,5 — es gab keine.
-    heights = [entry.middle[2] for entry in edges if entry.flat]
+    heights = [entry.middle[2] for entry, lying in zip(edges, flat, strict=True) if lying]
     if not heights:
         return []
     wanted_height = max(heights) if choice == "top" else min(heights)
     return [
         entry
-        for entry in edges
-        if entry.flat and abs(entry.middle[2] - wanted_height) <= SAME_HEIGHT
+        for entry, lying in zip(edges, flat, strict=True)
+        if lying and abs(entry.middle[2] - wanted_height) <= SAME_HEIGHT
     ]
 
 
@@ -625,20 +656,23 @@ def _lie_along(rise: float) -> EdgeLie:
 
 
 def edge_lie_of(entry: Any) -> EdgeLie:
-    """Wie eine Kante liegt — für ihre **Beschriftung** (RM-269).
+    """Wie eine Kante liegt — für ihre Beschriftung und die Auswahl nach Lage.
 
     Eine Strecke oder ein Bogen nach der Richtung von Anfang zu Ende, wie
     ``upright`` und ``flat``. Ein **geschlossener Ring** hat keine: Anfang
     und Ende fallen zusammen, die Richtung ist null, und ``flat`` galt an
     jedem Ring. Die Mündung einer quer liegenden Bohrung hieß deshalb
-    „Waagerecht“, obwohl sie senkrecht steht. Ein Ring liegt, wie seine Ebene
-    liegt: waagerecht, wenn ihre Normale senkrecht steht, und umgekehrt.
+    „Waagerecht“, obwohl sie senkrecht steht (RM-269). Ein Ring liegt, wie
+    seine Ebene liegt: waagerecht, wenn ihre Normale senkrecht steht, und
+    umgekehrt.
 
-    **Die Auswahl nach Lage** (:func:`choose`) fragt bewusst weiter ``flat``
-    und ``upright``: Sie bestimmt, welche Kanten *Verrunden* trifft, und eine
-    andere Antwort dort änderte gespeicherte Projekte. Deshalb darf die
-    Rechnung hier schnell sein (``np.cross``, ``np.linalg.norm``, RM-187): Sie
-    benennt nur und entscheidet nichts an der Geometrie.
+    **Die Auswahl nach Lage** (:func:`choose`) fragt dieselbe Quelle, ob ein
+    Ring waagerecht liegt (RM-279); ein stehender Ring heißt „Senkrecht“,
+    gehört aber zu keiner Gruppe. Gespeicherte Schritte aus Format 36 und
+    älter behalten ``flat`` an jedem Ring (``rings_by_plane=False``). Die
+    Rechnung bleibt die schnelle (``np.cross``, ``np.linalg.norm``, RM-187);
+    die Schwellen sind dieselben wie bei ``upright`` und ``flat`` an einer
+    Strecke.
 
     ``entry`` ist ein :class:`MeshEdge` (trägt ``points``), ein
     ``brep.edit.EdgeInfo`` (abgetastet über ``edge_points``) oder ein
@@ -728,6 +762,8 @@ def selected_or_wanted[AnyEdge: SelectableEdge](
     choice: EdgeChoice,
     keys: Sequence[str],
     selected_edges: Sequence[int] | None,
+    *,
+    rings_by_plane: bool = True,
 ) -> list[AnyEdge]:
     """Die Kanten dieses Aufrufs: ausdrücklich gewählte vor Schlüsseln vor Gruppe.
 
@@ -738,12 +774,16 @@ def selected_or_wanted[AnyEdge: SelectableEdge](
     zwei Kanten treffen.
     """
     if selected_edges is None:
-        return wanted(edges, choice, keys)
+        return wanted(edges, choice, keys, rings_by_plane=rings_by_plane)
     return [edges[index] for index in checked_indices(selected_edges, len(edges))]
 
 
 def wanted[AnyEdge: SelectableEdge](
-    edges: Sequence[AnyEdge], choice: EdgeChoice, keys: Sequence[str]
+    edges: Sequence[AnyEdge],
+    choice: EdgeChoice,
+    keys: Sequence[str],
+    *,
+    rings_by_plane: bool = True,
 ) -> list[AnyEdge]:
     """Die Kanten, die dieser Aufruf behandelt — genannte vor Gruppe (E4).
 
@@ -774,7 +814,7 @@ def wanted[AnyEdge: SelectableEdge](
                 suggestions=(CHANGE_SELECTION, CANCEL),
             )
         return chosen
-    chosen = choose(edges, choice)
+    chosen = choose(edges, choice, rings_by_plane=rings_by_plane)
     if not chosen:
         raise GeometryError(
             detail=_("Zu dieser Auswahl gehört keine Kante."),
@@ -1894,6 +1934,7 @@ def round_edges(
     keys: Sequence[str] = (),
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
     narrowest: float = MAX_FACET_SAG,
@@ -1919,6 +1960,7 @@ def round_edges(
         choice,
         keys,
         selected_edges=selected_edges,
+        rings_by_plane=rings_by_plane,
         rounded=True,
         quality=quality,
         cancelled=cancelled,
@@ -1934,6 +1976,7 @@ def bevel_edges(
     keys: Sequence[str] = (),
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
     narrowest: float = MAX_FACET_SAG,
@@ -1952,6 +1995,7 @@ def bevel_edges(
         choice,
         keys,
         selected_edges=selected_edges,
+        rings_by_plane=rings_by_plane,
         rounded=False,
         quality=quality,
         cancelled=cancelled,
@@ -2487,6 +2531,7 @@ def _worked_edges(
     keys: Sequence[str],
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     rounded: bool,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
@@ -2506,7 +2551,9 @@ def _worked_edges(
     gemeint.
     """
     entries = edges_of(mesh)
-    chosen = selected_or_wanted(entries, choice, keys, selected_edges)
+    chosen = selected_or_wanted(
+        entries, choice, keys, selected_edges, rings_by_plane=rings_by_plane
+    )
     skipped = 0
     if selected_edges is None and not keys and choice != "named":
         kept = [entry for entry in chosen if workable(entry)]
@@ -3674,6 +3721,7 @@ def bead_edges(
     keys: Sequence[str] = (),
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
@@ -3703,7 +3751,9 @@ def bead_edges(
             _("Ohne Radius entsteht kein Wulst. Dieser Wert muss größer als null sein."),
             value=radius,
         )
-    chosen = selected_or_wanted(edges_of(mesh), choice, keys, selected_edges)
+    chosen = selected_or_wanted(
+        edges_of(mesh), choice, keys, selected_edges, rings_by_plane=rings_by_plane
+    )
     # **Jedes Stück einzeln in die Kette.** Zusammengelegt (``concatenate``)
     # überlappen sich die Zylinder eines Zugs an ihren Knicken, und ein Körper
     # mit doppelt belegtem Raum hat kein wohldefiniertes Volumen: Am

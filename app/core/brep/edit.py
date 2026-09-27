@@ -344,6 +344,8 @@ def _edges_for(
     choice: SharedEdgeChoice,
     keys: Sequence[str],
     checked: tuple[int, ...] | None,
+    *,
+    rings_by_plane: bool = True,
 ) -> list[EdgeInfo]:
     """Die Kanten dieses Aufrufs: ausdrücklich gewählte vor Schlüsseln vor Gruppe.
 
@@ -353,7 +355,7 @@ def _edges_for(
     fällt nie auf Schlüssel oder Gruppe zurück (§21.3).
     """
     if checked is None:
-        return _wanted(working, choice, keys)
+        return _wanted(working, choice, keys, rings_by_plane=rings_by_plane)
     return _edges_at(working, [working._copied_edges[index] for index in checked])
 
 
@@ -721,12 +723,14 @@ def named_edges(solid: Solid, keys: Sequence[str]) -> list[EdgeInfo]:
     return edges_named(edges_of(solid), keys)
 
 
-def choose(solid: Solid, choice: EdgeChoice) -> list[EdgeInfo]:
+def choose(solid: Solid, choice: EdgeChoice, *, rings_by_plane: bool = True) -> list[EdgeInfo]:
     """Die Kanten, die eine benannte Auswahl meint."""
-    return choose_by_place(edges_of(solid), choice)
+    return choose_by_place(edges_of(solid), choice, rings_by_plane=rings_by_plane)
 
 
-def _wanted(solid: Solid, choice: EdgeChoice, keys: Sequence[str]) -> list[EdgeInfo]:
+def _wanted(
+    solid: Solid, choice: EdgeChoice, keys: Sequence[str], *, rings_by_plane: bool = True
+) -> list[EdgeInfo]:
     """Die Kanten, die dieser Aufruf behandelt — genannte vor Gruppe (E4).
 
     **Die Auswahl selbst steht in ``geom.edges``**, aus demselben Grund wie
@@ -735,7 +739,7 @@ def _wanted(solid: Solid, choice: EdgeChoice, keys: Sequence[str]) -> list[EdgeI
     „alle senkrechten Kanten" hier bald etwas anderes bedeutet als am Netz —
     bei derselben Menüzeile und demselben Parameter.
     """
-    return edges_wanted(edges_of(solid), choice, keys)
+    return edges_wanted(edges_of(solid), choice, keys, rings_by_plane=rings_by_plane)
 
 
 def fillet(
@@ -745,6 +749,7 @@ def fillet(
     keys: Sequence[str] = (),
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     cancelled: CancelToken | None = None,
     law: RadiusLaw | None = None,
 ) -> Solid:
@@ -759,6 +764,9 @@ def fillet(
     Radiuswechsel für die belegte scharfe Kante nimmt. ``cancelled`` wird
     vor und nach jedem teuren Schritt gefragt: Wandkarte, je Trägerfläche,
     je Kante, um den nativen Bau und um die Prüfung danach.
+
+    ``rings_by_plane`` wie bei :func:`app.core.geom.edges.choose`: aus nur für
+    Schritte, die vor Format 37 gespeichert wurden (RM-279).
 
     ``law`` gibt jeder Kante einen veränderlichen Radius (P6.1): Jede Kontur
     — eine Kante mit allen tangential anschließenden, so wie OpenCASCADE sie
@@ -777,7 +785,7 @@ def fillet(
         radius = law.largest
     checked = None if selected_edges is None else solid.checked_edge_indices(selected_edges)
     working = replace(solid)
-    chosen = _edges_for(working, choice, keys, checked)
+    chosen = _edges_for(working, choice, keys, checked, rings_by_plane=rings_by_plane)
 
     builder = BRepFilletAPI_MakeFillet(working.shape)
     if varying:
@@ -950,12 +958,14 @@ def chamfer(
     keys: Sequence[str] = (),
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     shape: ChamferShape | None = None,
     cancelled: CancelToken | None = None,
 ) -> Solid:
     """Bricht die gewählten Kanten im 45-Grad-Winkel — oder mit ``shape`` asymmetrisch.
 
-    ``keys``, ``selected_edges`` und ``cancelled`` wie bei :func:`fillet`:
+    ``keys``, ``selected_edges``, ``rings_by_plane`` und ``cancelled`` wie bei
+    :func:`fillet`:
     einzelne Kanten haben Vorrang vor der Gruppe, eine ausdrückliche Auswahl
     vor beidem.
 
@@ -971,7 +981,7 @@ def chamfer(
     _check(cancelled)
     checked = None if selected_edges is None else solid.checked_edge_indices(selected_edges)
     working = replace(solid)
-    chosen = _edges_for(working, choice, keys, checked)
+    chosen = _edges_for(working, choice, keys, checked, rings_by_plane=rings_by_plane)
 
     asymmetric = shape is not None and (shape.second is not None or shape.angle is not None)
     reaches: list[tuple[Any, float, float]] = []

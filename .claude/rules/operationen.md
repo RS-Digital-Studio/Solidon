@@ -51,9 +51,7 @@ Zwillinge (`drill_brep_hole`, `shell_exact`; Netz-Zwilling der Grundkörper nur
 in der Befehlspalette) und die Erzeuger an einem Träger, samt neuem Teil.
 
 **Den Unterschied nennt der `caveat`** (Sehnenzug bis `units.MAX_FACET_SAG`) und
-sagt, wann man den anderen Weg braucht:
-Ein Unterschied, den man benennt, ist eine Eigenschaft; einer, den man
-verschweigt, ist ein Fehlerbericht.
+sagt, wann man den anderen Weg braucht.
 
 ## Ein Parameter sagt, was er bewirkt
 
@@ -102,9 +100,12 @@ Offene Kante: linkes Ende, dann vorn, dann unten (`edges.starts_at_first`);
 Ring: Punkt kleinster Lage (`LOOP_START`), Richtung `LOOP_WAY` — nie
 Knotennummer oder erster Punkt; beide Kerne und jeder Verbraucher fragen
 dieselben Funktionen. Ohne Form (Ring mit verschiedenen Endradien, verschiedene
-Radien an einer Ecke) eine Absage mit Weg (Regel 21). OCCT:
-`SetRadius(UandR, IC, IinC)` gilt der Kante `IinC`, nicht der Kontur; ein
-eigenes `Law_Function` nimmt 8.0.1 nicht an.
+Radien an einer Ecke) eine Absage mit Weg (Regel 21).
+
+### Gruppen nach Lage: ein Rand nur waagerecht
+
+Nur `edges.choose` fragt die Lage: Strecken nach Richtung, Ränder nur waagerecht
+(`edge_lie_of`); ein „Senkrecht“ beschrifteter Rand gehört zu keiner (RM-279).
 
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
