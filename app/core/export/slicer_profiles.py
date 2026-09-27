@@ -773,6 +773,13 @@ def _named_profile(
     return None
 
 
+def _printer_name(value: str) -> str:
+    """Ein Druckername, vergleichbar gemacht: ohne Groß- und Kleinschreibung,
+    ohne „Original " und mit einem MINI, gleich wie Prusa ihn nennt."""
+    value = value.casefold().removeprefix("original ")
+    return re.sub(r"^prusa mini(?:\+| is)?(?=\s|$)", "prusa mini", value)
+
+
 def _names_the_printer(machine: str, title: str) -> bool:
     """Meint dieser Maschinenname diesen Drucker?
 
@@ -780,17 +787,27 @@ def _names_the_printer(machine: str, title: str) -> bool:
     Solidon nicht; verglichen wird deshalb am Anfang. Ein leerer Titel meint
     nichts — sonst passte er auf jede Maschine.
 
+    **Und der Anfang muss ein ganzes Wort sein.** „Creality K1" ist nicht
+    „Creality K1C": Bis zum 27.09.2026 passte der Titel auf jeden Namen, der
+    mit ihm begann, und OrcaSlicer führt neben dem K1 den K1C, den K1 SE, den
+    K1 Max und ihre CFS-Ausführungen. Seit bei gleicher Düse der kürzeste Name
+    gewinnt (:func:`match`), gewann „Creality K1C 0.4 nozzle" gegen „Creality
+    K1 (0.4 nozzle)" — ein K1 bekam die Maschine eines anderen Geräts und den
+    Prozess „0.08mm SuperDetail". Was nach dem Titel folgt, darf deshalb kein
+    Buchstabe und keine Ziffer sein; verwandte Modelle mit Leerzeichen („K1
+    Max") trennt :func:`match` über das Modellfeld.
+
     Die eine Stelle für diesen Vergleich: :func:`printer_for` fragt „welcher
     meiner Drucker ist das", :func:`supports_printer` fragt „kennt dieser
     Slicer meinen Drucker". Zwei Formulierungen desselben Vergleichs würden
     auseinanderlaufen, sobald einer von beiden verfeinert wird.
     """
-
-    def normalized(value: str) -> str:
-        value = value.casefold().removeprefix("original ")
-        return re.sub(r"^prusa mini(?:\+| is)?(?=\s|$)", "prusa mini", value)
-
-    return bool(title) and normalized(machine).startswith(normalized(title))
+    wanted = _printer_name(title)
+    name = _printer_name(machine)
+    if not title or not name.startswith(wanted):
+        return False
+    rest = name[len(wanted) :]
+    return not rest or not rest[0].isalnum()
 
 
 def known_printers(flavour: SlicerFlavour, executable: Path) -> tuple[str, ...]:
@@ -2198,6 +2215,16 @@ def match(
     ]
     if not candidates:
         return None, None
+    # **Das Gerät selbst vor seinen Verwandten.** „Creality K1" beginnt auch
+    # „Creality K1 Max" und „Creality K1_CFS-C"; wo eine Maschine genau dieses
+    # Modell nennt, zählt nur sie.
+    own_model = [
+        entry
+        for entry in candidates
+        if entry.printer_model
+        and _printer_name(entry.printer_model) == _printer_name(printer.title)
+    ]
+    candidates = own_model or candidates
 
     exact = [entry for entry in candidates if abs(entry.nozzle - printer.nozzle_diameter) < 1e-6]
     # Bei gleicher Düse die Grundausführung, wie bei :func:`match_filament`:
@@ -2217,7 +2244,47 @@ def match(
 
     fitting = processes(profiles, chosen)
     named = [entry for entry in fitting if entry.name == chosen.default_process]
-    return chosen, (named[0] if named else (fitting[0] if fitting else None))
+    if named:
+        return chosen, named[0]
+    return chosen, _standard_process(fitting, printer)
+
+
+#: Die Schichthöhe am Anfang eines Prozessnamens, wie alle Hersteller ihn
+#: schreiben: „0.20mm Standard @…", „0.2mm Standard @…", „0.20mm SPEED @…".
+_LAYER_IN_NAME: Final = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*mm\b", re.IGNORECASE)
+
+
+def _standard_process(
+    fitting: Sequence[SlicerProfile], printer: PrinterProfile
+) -> SlicerProfile | None:
+    """Der Standardprozess, wenn die Maschine keinen nennt, den es gibt.
+
+    OrcaSlicers Ender-3 V3 nennt als Standard „0.20mm Standard @Creality
+    Ender3 V3"; im Bestand 2.4.2 heißt er „…@Creality Ender-3 V3". Genommen
+    wurde bis zum 27.09.2026 der erste passende Prozess im Ordner, und das war
+    „0.12mm Fine" — eine andere Schichthöhe, als der Drucker vorgibt, und seit
+    das Herstellerprofil die Grundlage ist, der ganze Druck.
+
+    Gesucht wird deshalb, was ein Hersteller Standard nennt: die Schichthöhe
+    des Druckers und „Standard" im Namen, sonst die Schichthöhe allein. Findet
+    sich nichts, bleibt es leer — der Druckdialog fragt, statt zu raten
+    (Regel 21).
+    """
+
+    def layer(entry: SlicerProfile) -> float | None:
+        found = _LAYER_IN_NAME.match(entry.name)
+        return float(found.group(1)) if found else None
+
+    same = [
+        entry
+        for entry in fitting
+        if (height := layer(entry)) is not None and abs(height - printer.layer_height) < 1e-6
+    ]
+    standard = [entry for entry in same if "standard" in entry.name.casefold()]
+    pool = standard or same
+    if not pool:
+        return None
+    return min(pool, key=lambda entry: (not entry.from_user, len(entry.name), entry.name))
 
 
 #: Was ein Filamentprofil des Slicers über das Material sagt, in Solidons
