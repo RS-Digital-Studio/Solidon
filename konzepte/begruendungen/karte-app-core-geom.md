@@ -1899,7 +1899,9 @@ das größte Maß; der exakte Kern fragt dasselbe, wenn OpenCASCADE abgelehnt ha
 (`edge_ops._why_it_does_not_fit`). Schmaler als `edge_ops.narrowest_face`
 (kleinstes Druckerdetail) zählt nicht. Eine **Gruppe** („alle", „oben" …)
 überspringt Züge, an denen keine zwei Flächen unter einem Winkel stoßen
-(`workable`, Befund `edges.skipped`); eine benannte Kante hält an.
+(`workable`, Befund `edges.skipped`), und seit dem 28.09.2026 auch Züge, die das
+Maß nicht tragen (`contact_band_limits`, Befund `edges.too_narrow`, RM-279 (ii));
+sie sagt nur ab, wenn keine Kante trägt. Eine benannte Kante hält an.
 
 *Früher unter „Kanten“.*
 

@@ -332,8 +332,35 @@ tesselliert; ein Ring wird ein Schlauch ohne Stirnflächen. Danach liegt die
 Rundung höchstens 0,043 mm (R 5) neben dem Torus, innerhalb
 `units.MAX_FACET_SAG`; der Sehnenzug des Bogens trägt rund 4 % mehr ab als der
 Kreis — dieselbe Grenze. Ein gerader Zug, ein Knick über `SWEEP_TURN_LIMIT`
-(45 Grad) und eine Fase mit zwei Maßen (`shape`) bleiben beim Prisma, ebenso
-ein Radiusverlauf (`_varying_tool`).
+(45 Grad) und eine Fase mit zwei Maßen (`shape`) bleiben beim Prisma; ein
+Radiusverlauf geht denselben Weg (2 → 4 → 2 an der Mündung: 0,87 → 1,05 × exakt),
+und nur wo er nicht trägt, bleibt es beim Loft je Stück (`_varying_tool`).
+
+**Eine Gruppe lässt aus, was das Maß nicht trägt** (28.09.2026, Entscheidung der
+Release-Sitzung 0.5.1 nach Kundensicht; Robert gemeldet). Vom 23.09. an sagte
+die ganze Gruppe ab, sobald eine Kante auf einer schmalen Fläche lag — mit dem
+größten Maß, das überall passt (Durchsicht vor 0.5.0, Paket „merkmalsops“:
+vorher machte das Netz die Wand still niedriger). An Kundenteilen mit einer
+einzigen schmalen Fläche war „senkrecht“ damit bei jedem Radius unbenutzbar
+(pegboard-goot ab 0,37 mm, pb3041 ab 0,21 mm), und einzeln wählen kann ein
+Kunde ohne CAD nicht. Jetzt fragt `edges.contact_band_limits` je Kante; die
+Gruppe bearbeitet, was trägt, und `edges.too_narrow` nennt die übrigen mit dem
+kleinsten Maß, das dort passt, und *Stelle zeigen* — derselbe Grundsatz wie für
+Züge ohne Winkel (`edges.skipped`). Stoßen zwei gewählte Kanten auf derselben
+schmalen Fläche aneinander, fallen beide heraus: welche bleiben soll, wäre
+geraten. Trägt keine Kante das Maß, bleibt die Absage; eine einzeln gewählte
+Kante hält weiter an. Die Wand bleibt dabei so hoch, wie sie war.
+
+**Der exakte Kern fragt dasselbe, baut aber nicht immer den Rest.** Die Frage
+stellt er an seiner Tessellierung (`edge_ops._group_that_fits`) und nimmt die
+exakten Kanten, die auf einem tragenden Zug liegen (zwei innere Punkte, die
+Enden teilt eine Kante mit ihren Nachbarn); glatte Kanten ohne Zug fallen wie am
+Netz mit `edges.skipped` heraus. Wo OpenCASCADE die verkleinerte Gruppe nicht
+baut (Hohlkasten 3 mm, „alle“ R 2: 17 Kanten, jede einzeln baubar, zusammen
+nicht) oder offen tesselliert (zwei Rundungen an pegboard-goot, bei jedem Radius
+und auch einzeln), bleibt die Absage mit der größten Zahl. Ein Suchen nach dem
+baubaren Rest durch wiederholtes Bauen wurde gemessen und verworfen: 15 bis 37 s
+je Vorschau an den Pegboards, und der Rest war teils offen.
 
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 

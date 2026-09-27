@@ -1396,18 +1396,26 @@ def test_a_selection_that_matches_nothing_says_so() -> None:
         edit.fillet(edit.cylinder(10.0, 20.0), 1.0, "vertical")
 
 
-def test_the_same_radius_gets_the_same_answer_on_both_kernels() -> None:
-    """Derselbe Radius, dieselbe Antwort — am Netz wie am exakten Körper.
+def test_both_kernels_ask_the_same_question_of_a_thin_walled_box(profile: Profile) -> None:
+    """Derselbe Radius, dieselbe Frage — am Netz wie am exakten Körper.
 
     Gemessen am 14.09.2026 an einem Hohlkasten 40 x 30 x 20 mit 3 mm Wand
     (offen nach oben): Über **alle** Kanten nahm das Netz einen Radius von
     2 mm an, der exakte Kern sagte ihn ab, und ein Vorbehalt im Register
     erklärte den Unterschied. Am 22.09.2026 gemessen, *wie* das Netz ihn
     annahm: Zwei Bänder zu je 2 mm auf einer 3 mm breiten Stirnfläche
-    überlappen, und die Wand kam still niedriger heraus. Seither stellen beide
-    Kerne dieselbe Frage (``edges.contact_band_limit``) und sagen denselben
-    Radius mit demselben größten Wert ab; der Vorbehalt über zwei Antworten
-    ist gefallen.
+    überlappen, und die Wand kam still niedriger heraus. Vom 23.09.2026 an
+    stellten beide Kerne dieselbe Frage (``edges.contact_band_limit``) und
+    sagten denselben Radius mit demselben größten Wert ab.
+
+    **Seit dem 28.09.2026 lässt eine Gruppe die Kanten aus, die das Maß nicht
+    tragen** (RM-279 (ii), Entscheidung der Release-Sitzung 0.5.1 nach
+    Kundensicht, Robert gemeldet): Die Frage ist an beiden Kernen dieselbe
+    (``edges.contact_band_limits``). Das Netz rundet hier 17 Kanten und nennt
+    die vier ausgelassenen mit 1,5 mm; die Wand bleibt 20 mm hoch. Der exakte
+    Kern fragt dasselbe, aber OpenCASCADE baut die verbleibenden 17 Kanten an
+    diesem Kasten nicht — dort bleibt es bei der Absage mit demselben größten
+    Wert (gemessen am 28.09.2026).
     """
     from app.core.geom.edges import round_edges
     from app.core.geom.mesh import MeshData
@@ -1419,11 +1427,19 @@ def test_the_same_radius_gets_the_same_answer_on_both_kernels() -> None:
     with pytest.raises(GeometryError):
         edit.fillet(kasten, 2.0, "all")
 
-    netz = MeshData.of(tessellate(kasten.shape, 0.05).raw)
+    exakt = SceneObject(id="obj_1", name="Kasten", mesh=kasten, kind="brep")
     with pytest.raises(GeometryError) as abgesagt:
-        round_edges(netz, 2.0, "all", quality="draft")
+        run("fillet_edges", exakt, profile, radius=2.0, edges="all")
     assert abgesagt.value.values["largest_mm"] == pytest.approx(1.5, abs=0.01)
-    assert abgesagt.value.suggestions, "die Absage nennt einen Ausweg"
+
+    netz = MeshData.of(tessellate(kasten.shape, 0.05).raw)
+    teils = round_edges(netz, 2.0, "all", quality="draft")
+    ausgelassen = next(f for f in teils.findings if f.code == "edges.too_narrow")
+    assert ausgelassen.values["largest_mm"] == pytest.approx(1.5, abs=0.01)
+    assert (ausgelassen.values["skipped"], ausgelassen.values["worked"]) == (4, 17)
+    assert ausgelassen.suggestions, "der Befund nennt einen Ausweg"
+    assert teils.mesh.is_watertight
+    assert teils.mesh.bounds.size[2] == pytest.approx(20.0, abs=1e-6)
 
     gerundet = round_edges(netz, 1.4, "all", quality="draft")
     assert gerundet.mesh.is_watertight, "unter der Grenze rundet das Netz"
