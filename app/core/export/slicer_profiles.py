@@ -34,6 +34,7 @@ from xml.etree import ElementTree as ET
 
 from app.core import discover
 from app.core.errors import CHECK_SLICER_PROFILE, ExternalToolError, ValidationError
+from app.core.export import prusa_conditions
 from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_readable_profiles,
@@ -125,6 +126,18 @@ class SlicerProfile:
     ihre Angaben nicht selbst; woher sie kommen, steht hier."""
     section: str = ""
     """Bei Prusa-Bündeln der Abschnitt; der Dateipfad allein ist nicht eindeutig."""
+    condition: str = ""
+    """Nur bei Prusa-Prozessen und -Filamenten: ``compatible_printers_condition``,
+    die Verträglichkeit als Bedingung über die Werte des Druckers
+    (:mod:`app.core.export.prusa_conditions`)."""
+    variables: tuple[tuple[str, str], ...] = ()
+    """Nur bei Prusa-Maschinen: die Werte, die solche Bedingungen lesen
+    (:data:`PRUSA_CONDITION_KEYS`), wie sie in der INI stehen."""
+    default_materials: tuple[str, ...] = ()
+    """Nur bei Prusa-Maschinen: die Filamente, die das Druckermodell im Bündel
+    vorschlägt (``default_materials``), in ihrer Reihenfolge. Der MK4S erbt
+    als ``default_filament_profile`` das PLA des MK4, das zu ihm nicht passt;
+    sein Modell nennt „Prusament PLA @MK4S HF0.4"."""
 
     def title(self, own: str = "eigenes") -> str:
         """Der Name für die Auswahl. Ein selbst angelegtes Profil wird
@@ -1956,6 +1969,20 @@ class _PrusaStore:
         return values
 
 
+#: Die Werte eines Prusa-Druckers, die die Verträglichkeitsbedingungen der
+#: Bündel lesen — gezählt über alle Bündel von PrusaSlicer 2.9.6 (27.09.2026).
+#: ``num_extruders`` leitet der Auswerter aus ``nozzle_diameter`` ab.
+PRUSA_CONDITION_KEYS: Final = (
+    "printer_model",
+    "printer_notes",
+    "printer_variant",
+    "printer_technology",
+    "nozzle_diameter",
+    "nozzle_high_flow",
+    "single_extruder_multi_material",
+)
+
+
 def _prusa_profiles(
     executable: Path, wanted: frozenset[ProfileKind], cancelled: CancelToken | None = None
 ) -> list[SlicerProfile]:
@@ -1976,8 +2003,14 @@ def _prusa_profiles(
         model = str(values.get("printer_model", ""))
         section = f"printer_model:{model}"
         document = store.documents[entry.path]
+        materials: tuple[str, ...] = ()
         if document.has_section(section):
             model = document[section].get("name", model)
+            materials = tuple(
+                name.strip()
+                for name in document[section].get("default_materials", "").split(";")
+                if name.strip()
+            )
         profile = replace(
             entry,
             printer_model=model,
@@ -1988,6 +2021,17 @@ def _prusa_profiles(
             ),
             filament_type=str(values.get("filament_type", "")),
             compatible_printers=tuple(_prusa_list(str(values.get("compatible_printers", "")))),
+            condition=(
+                str(values.get("compatible_printers_condition", "")).strip()
+                if entry.kind != "machine"
+                else ""
+            ),
+            variables=(
+                tuple((key, str(values[key])) for key in PRUSA_CONDITION_KEYS if key in values)
+                if entry.kind == "machine"
+                else ()
+            ),
+            default_materials=materials if entry.kind == "machine" else (),
         )
         key = (profile.kind, profile.name)
         if key not in found or profile.from_user or not found[key].from_user:
@@ -2323,6 +2367,17 @@ def _of_kind(
     entries = [entry for entry in profiles if entry.kind == kind]
     if machine is None:
         return sorted(entries, key=lambda entry: entry.name)
+    if machine.variables:
+        # **PrusaSlicer bindet über Bedingungen**, nicht über Listen: Ohne sie
+        # galten am MK4S 6740 von 6772 Filamenten als verträglich, und die
+        # Suche stand 43 Sekunden (27.09.2026). Hier gibt es keinen Rückfall
+        # auf „alle ohne Angabe" — ein Profil ohne Liste und ohne Bedingung
+        # passt ohnehin zu jedem Drucker.
+        values = dict(machine.variables)
+        return sorted(
+            (entry for entry in entries if _prusa_fits(entry, machine, values)),
+            key=lambda entry: entry.name,
+        )
 
     known = {entry.name: entry for entry in entries}
     # **Ein Index für alle Einträge dieser Art.** ``compatible_with`` löst je
@@ -2341,6 +2396,22 @@ def _of_kind(
         entry for entry in entries if not compatible_with(entry, known, indexes=indexes)
     ]
     return sorted(chosen, key=lambda entry: entry.name)
+
+
+def _prusa_fits(entry: SlicerProfile, machine: SlicerProfile, values: Mapping[str, str]) -> bool:
+    """PrusaSlicers Regel: Eine Liste gewinnt, sonst die Bedingung, sonst passt es.
+
+    Eine Bedingung, die sich nicht auswerten lässt, schließt das Profil aus
+    (:class:`~app.core.export.prusa_conditions.ConditionError`): Eine Auswahl zu
+    wenig lässt sich im Dialog erweitern, eine unpassende druckt falsch.
+    """
+    if entry.compatible_printers:
+        return machine.name in entry.compatible_printers
+    try:
+        return prusa_conditions.holds(entry.condition, values)
+    except prusa_conditions.ConditionError as problem:
+        _log.debug("Prusa condition of %s not evaluated: %s", entry.name, problem)
+        return False
 
 
 def processes(
@@ -2416,22 +2487,31 @@ def match_filament(
     # sind das Temperatur, Kühlung und Volumenstrom des ganzen Drucks. Zuerst
     # zählt deshalb, was die Maschine selbst vorwählt, dann die Marke der
     # Maschine.
-    vendor = _vendor_folder(machine.path, "machine")
+    vendor = _vendor_of(machine.path, "machine")
+    # Bei Prusa zählt danach, was das Druckermodell vorschlägt: Der MK4S erbt
+    # als Standard das PLA des MK4, das laut eigener Bedingung nicht zu ihm
+    # passt, und ohne diese Stufe gewann der kürzeste Name, „Generic PLA
+    # @SOVOL" aus Sovols Bündel (27.09.2026).
+    suggested = {name: rank for rank, name in enumerate(machine.default_materials)}
     return min(
         fitting,
         key=lambda entry: (
             not entry.from_user,
             entry.name != machine.default_filament,
-            not vendor or _vendor_folder(entry.path, "filament") != vendor,
+            suggested.get(entry.name, len(suggested)),
+            not vendor or _vendor_of(entry.path, "filament") != vendor,
             len(entry.name),
             entry.name,
         ),
     )
 
 
-def _vendor_folder(path: Path, kind: str) -> str:
-    """Der Herstellerordner über dem Ordner einer Profilart — leer, wo es
-    keinen gibt (Prusa-Bündel, eigene Profile)."""
+def _vendor_of(path: Path, kind: str) -> str:
+    """Der Hersteller eines Profils: der Ordner über dem Ordner seiner Art, bei
+    PrusaSlicer die Bündeldatei (``PrusaResearch``, ``Sovol``). Leer, wo es
+    keinen gibt (eigene Profile)."""
+    if path.suffix == ".ini":
+        return path.stem
     parts = list(path.parts)
     if kind not in parts:
         return ""
@@ -2465,8 +2545,18 @@ def match(
     Varianten desselben Geräts. Trifft nichts, bleibt es leer: eine falsche
     Vorauswahl wäre schlimmer als keine, weil sie wie eine Entscheidung
     aussieht.
+
+    Nennt der Drucker sein Profil in PrusaSlicers Bündel
+    (``PrinterProfile.prusaslicer_printer``) und steht es im Bestand, gilt
+    dieses. Die Namenssuche traf dort am MINI und XL die abgelösten Profile
+    ohne Input Shaper und den SV06 gar nicht (27.09.2026).
     """
-    candidates = [
+    named_in_bundle = [
+        entry
+        for entry in machines(profiles)
+        if printer.prusaslicer_printer and entry.name == printer.prusaslicer_printer
+    ]
+    candidates = named_in_bundle or [
         entry
         for entry in machines(profiles)
         if _names_the_printer(entry.printer_model, printer.title)

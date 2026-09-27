@@ -1623,6 +1623,203 @@ def test_a_prusa_installation_without_bundles_is_no_crash(tmp_path: Path) -> Non
     assert sp.known_printers("prusa", tmp_path / "nirgends.exe") == ()
 
 
+@pytest.fixture
+def prusa_mini(tmp_path: Path) -> Path:
+    """PrusaSlicer 2.9.6 führt den MINI zweimal: das abgelöste Profil und das
+    mit Input Shaper, das es heute vorwählt — jedes mit seinem Standardprozess."""
+    root = tmp_path / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(
+        "[vendor]\nname = Prusa Research\n\n"
+        "[printer_model:MINI]\nname = Original Prusa MINI & MINI+\nvariants = 0.4\n\n"
+        "[printer_model:MINIIS]\nname = Original Prusa MINI & MINI+ Input Shaper\n"
+        "variants = 0.4\n\n"
+        "[printer:*common*]\nprinter_technology = FFF\nnozzle_diameter = 0.4\n\n"
+        "[printer:Original Prusa MINI & MINI+]\ninherits = *common*\nprinter_model = MINI\n"
+        "default_print_profile = 0.15mm QUALITY @MINI\n\n"
+        "[printer:Original Prusa MINI & MINI+ Input Shaper]\ninherits = *common*\n"
+        "printer_model = MINIIS\ndefault_print_profile = 0.20mm SPEED @MINIIS 0.4\n\n"
+        "[print:0.15mm QUALITY @MINI]\nlayer_height = 0.15\n"
+        'compatible_printers = "Original Prusa MINI & MINI+"\n\n'
+        "[print:0.20mm SPEED @MINIIS 0.4]\nlayer_height = 0.2\n"
+        'compatible_printers = "Original Prusa MINI & MINI+ Input Shaper"\n',
+        encoding="utf-8",
+    )
+    executable = tmp_path / "prusa-slicer.exe"
+    executable.write_bytes(b"")
+    return executable
+
+
+def test_a_printer_that_names_its_bundle_profile_gets_it(prusa_mini: Path) -> None:
+    """Die Namenssuche traf am MINI das abgelöste Profil samt „0.15mm QUALITY
+    @MINI", am XL ebenso, und den SV06 gar nicht, weil Sovols Bündel ihn nur
+    „SV06" nennt (27.09.2026). ``prusaslicer_printer`` nennt das Profil, das
+    PrusaSlicer selbst vorwählt; fehlt es im Bestand, bleibt die Namenssuche."""
+    mini = PrinterProfile(
+        id="prusa-mini",
+        title="Prusa MINI+",
+        build_volume=(180.0, 180.0, 180.0),
+        prusaslicer_printer="Original Prusa MINI & MINI+ Input Shaper",
+    )
+    found = sp.find_profiles(prusa_mini, "prusa", ("machine", "process"))
+
+    machine, process = sp.match(found, mini)
+
+    assert machine is not None and machine.name == "Original Prusa MINI & MINI+ Input Shaper"
+    assert process is not None and process.name == "0.20mm SPEED @MINIIS 0.4"
+    by_name, _process = sp.match(found, replace(mini, prusaslicer_printer=""))
+    assert by_name is not None and by_name.name == "Original Prusa MINI & MINI+", "so war es"
+    missing, _process = sp.match(found, replace(mini, prusaslicer_printer="Gibt es nicht"))
+    assert missing is not None and missing.name == by_name.name, "die Namenssuche als Rückfall"
+
+
+_MK4S_HF04 = {
+    "printer_model": "MK4S",
+    "printer_notes": r"Don't remove!\nPRINTER_VENDOR_PRUSA3D\nPRINTER_MODEL_MK4S\nHF_NOZZLE",
+    "nozzle_diameter": "0.4",
+    "nozzle_high_flow": "1",
+    "single_extruder_multi_material": "0",
+}
+
+
+@pytest.mark.parametrize(
+    ("condition", "expected"),
+    [
+        # Wörtlich aus PrusaResearch.ini 2.9.6: das PLA des MK4S und das des MK4,
+        # das der MK4S als Standard erbt und das trotzdem nicht zu ihm passt.
+        (
+            "printer_model=~/(MK4S|MK4SMMU3|MK3.9S|MK3.9SMMU3)/ and nozzle_diameter[0]!=0.8 "
+            "and nozzle_diameter[0]!=0.6 and nozzle_diameter[0]!=0.5 and nozzle_high_flow[0]",
+            True,
+        ),
+        (
+            "printer_model=~/(MK4|MK4IS|MK4ISMMU3|MK3.9|MK3.9MMU3)/ and nozzle_diameter[0]!=0.8 "
+            "and nozzle_diameter[0]!=0.6 and nozzle_diameter[0]!=0.5 and nozzle_high_flow[0]",
+            False,
+        ),
+        ('printer_model=="MK4S" and nozzle_diameter[0]=="0.4"', True),
+        ("nozzle_diameter[0]>=0.4 and printer_notes=~/.*MINI.*/", False),
+        ("printer_notes=~/.*PRINTER_MODEL_MK4S.*/ and num_extruders==1", True),
+        (
+            "! (printer_notes=~/.*PRINTER_VENDOR_PRUSA3D.*/ and single_extruder_multi_material)"
+            " and printer_notes!~/.*PG.*/",
+            True,
+        ),
+        ("(nozzle_diameter[0]==0.3 or nozzle_diameter[0]==0.4) and not nozzle_high_flow[0]", False),
+        ("", True),
+    ],
+)
+def test_prusas_conditions_are_read_without_eval(condition: str, expected: bool) -> None:
+    """PrusaSlicer bindet Prozesse und Filamente über Bedingungen an Drucker.
+    Solidon las nur die Liste; am MK4S galten 6740 von 6772 Filamenten als
+    verträglich (27.09.2026). Ausgewertet wird ohne ``eval`` (Regel 10)."""
+    from app.core.export import prusa_conditions
+
+    assert prusa_conditions.holds(condition, _MK4S_HF04) is expected
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        "printer_model=~",  # endet zu früh
+        "nozzle_diameter==0.4",  # Liste ohne Index
+        "gibt_es_nicht==1",  # unbekannter Wert
+        "printer_model==/MK4S/",  # Muster ohne =~
+        "__import__('os')",  # kein Python
+        "nozzle_diameter[5]==0.4",  # außerhalb der Liste
+    ],
+)
+def test_an_unreadable_condition_is_an_error_not_a_guess(condition: str) -> None:
+    """Was über die Teilmenge der Bündel hinausgeht, ist ein Fehler, und das
+    Profil gilt als unverträglich: lieber eine Auswahl zu wenig als eine, die
+    nicht passt."""
+    from app.core.export import prusa_conditions
+
+    with pytest.raises(prusa_conditions.ConditionError):
+        prusa_conditions.holds(condition, _MK4S_HF04)
+
+
+@pytest.fixture
+def prusa_mk4s(tmp_path: Path) -> Path:
+    """Ein Bündel mit dem MK4S, zwei Filamenten, die ihn über eine Bedingung
+    meinen oder nicht, und einem fremden ohne Angabe."""
+    root = tmp_path / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(
+        "[vendor]\nname = Prusa Research\n\n"
+        "[printer_model:MK4S]\nname = Original Prusa MK4S\nvariants = HF0.4\n"
+        "default_materials = Prusament PLA @MK4S HF0.4; Prusament PETG @MK4S HF0.4\n\n"
+        "[printer:Original Prusa MK4S HF0.4 nozzle]\nprinter_technology = FFF\n"
+        "printer_model = MK4S\nnozzle_diameter = 0.4\nnozzle_high_flow = 1\n"
+        "default_print_profile = 0.20mm SPEED @MK4S HF0.4\n"
+        "default_filament_profile = Prusament PLA @HF0.4\n\n"
+        "[print:0.20mm SPEED @MK4S HF0.4]\nlayer_height = 0.2\n"
+        'compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]\n\n'
+        "[filament:Prusament PLA @HF0.4]\nfilament_type = PLA\n"
+        'compatible_printers_condition = printer_model=="MK4" and nozzle_high_flow[0]\n\n'
+        "[filament:Prusament PLA @MK4S HF0.4]\nfilament_type = PLA\n"
+        'compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]\n\n'
+        "[filament:Prusament PETG @MK4S HF0.4]\nfilament_type = PETG\n"
+        'compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]\n',
+        encoding="utf-8",
+    )
+    (root / "Sovol.ini").write_text(
+        "[vendor]\nname = Sovol\n\n[filament:Generic PLA @SOVOL]\nfilament_type = PLA\n",
+        encoding="utf-8",
+    )
+    executable = tmp_path / "prusa-slicer.exe"
+    executable.write_bytes(b"")
+    return executable
+
+
+def test_prusa_filaments_fit_by_condition_and_the_models_suggestion_wins(
+    prusa_mk4s: Path,
+) -> None:
+    """Der MK4S erbt als Standard das PLA des MK4, das laut eigener Bedingung
+    nicht zu ihm passt. Ohne Bedingungen gewann danach der kürzeste Name,
+    „Generic PLA @SOVOL" aus Sovols Bündel. Das Modell schlägt „Prusament PLA
+    @MK4S HF0.4" vor, und das nimmt auch PrusaSlicer (27.09.2026)."""
+    mk4s = PrinterProfile(
+        id="prusa-mk4s",
+        title="Prusa MK4S",
+        build_volume=(250.0, 210.0, 220.0),
+        prusaslicer_printer="Original Prusa MK4S HF0.4 nozzle",
+    )
+    found = sp.find_profiles(prusa_mk4s, "prusa", ("machine", "process"))
+    filaments = sp.find_profiles(prusa_mk4s, "prusa", ("filament",))
+    machine, process = sp.match(found, mk4s)
+    assert machine is not None and process is not None
+
+    fitting = {entry.name for entry in sp.filaments(filaments, machine)}
+
+    assert fitting == {
+        "Prusament PLA @MK4S HF0.4",
+        "Prusament PETG @MK4S HF0.4",
+        "Generic PLA @SOVOL",
+    }, "das PLA des MK4 fällt heraus, das ohne Angabe bleibt"
+    pla = sp.match_filament(filaments, machine, "PLA")
+    petg = sp.match_filament(filaments, machine, "PETG")
+    assert pla is not None and pla.name == "Prusament PLA @MK4S HF0.4"
+    assert petg is not None and petg.name == "Prusament PETG @MK4S HF0.4"
+
+
+def test_a_bundle_name_with_a_line_break_is_no_name() -> None:
+    """Der Name kommt auch aus mitgebrachten Druckern fremder Projektdateien.
+    Einer mit Steuerzeichen gleicht keinem Profil und gilt als nicht angegeben."""
+    from app.core.knowledge import profiles
+
+    table = {"title": "Fremd", "build_volume": [200.0, 200.0, 200.0]}
+    odd = profiles._printer_from_table(
+        "fremd", {**table, "prusaslicer_printer": "SV06\n[print:x]"}, Path("fremd.toml")
+    )
+    plain = profiles._printer_from_table(
+        "fremd", {**table, "prusaslicer_printer": " SV06 "}, Path("fremd.toml")
+    )
+
+    assert odd.prusaslicer_printer == ""
+    assert plain.prusaslicer_printer == "SV06"
+
+
 @pytest.mark.parametrize("value", ["nan", "inf", "-inf", "1e999"])
 @pytest.mark.parametrize("key", ["nozzle_temperature", "filament_max_volumetric_speed"])
 def test_nonfinite_filament_values_are_rejected_with_a_profile_error(

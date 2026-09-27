@@ -840,6 +840,15 @@ class PrinterProfile:
     die Übergabe sagt es (``handover.machine_missing``): Dessen Startcode
     fährt nach Hause, fördert drei Millimeter Filament in die Luft und legt
     weder eine Spüllinie noch ein Bettnetz an."""
+    prusaslicer_printer: str = ""
+    """Das Druckerprofil dieses Druckers in PrusaSlicers Herstellerbündel,
+    mit seinem Namen dort (``Original Prusa MK4S HF0.4 nozzle``).
+
+    Die Namenssuche trifft dort das falsche Profil: am MINI und XL die
+    abgelösten Profile ohne Input Shaper, am MK4S die Düse, die PrusaSlicer
+    nicht vorwählt, und den SV06 gar nicht, weil sein Bündel ihn nur „SV06"
+    nennt (27.09.2026). Leer heißt, PrusaSlicer führt diesen Drucker nicht;
+    dann bleibt die Namenssuche."""
     first_layer_acceleration: float | None = None
     """Die Beschleunigung der ersten Schicht in mm/s², aus demselben
     Standardprozess des Herstellers wie die Tempi (Orca

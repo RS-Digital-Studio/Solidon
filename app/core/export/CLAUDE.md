@@ -14,6 +14,7 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 | `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, dazu `slicer_profiles.FILAMENT_READBACK`), mit den eingebauten Vorgaben der vier Orca-Programme (`PROGRAM_DEFAULTS`, gemessen), der Druckplatte (`default_plate`, `PLATE_TEMPERATURES`) und dem Gemessenen (`Foundation.measured`); über dem Standardprozess die Werte der gewählten Stufe (`STAGE_PATHS`, `Foundation.staged`); die Platten, für die das Filament eine Betttemperatur nennt (`plate_temperatures`), ob der Drucker eine Plattenwahl hat (`offers_plates`); `written_paths` sagt, was die Übergabe davon schreibt, `findings`, was der Kunde über Platte und unlesbares Profil wissen muss |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt |
 | `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt; ein Durchgang liest jede Datei einmal (`ProfileDocuments`, geteilt von Auswahl, Namensindex und Erbkette) |
+| `prusa_conditions.py` | PrusaSlicers Verträglichkeitsbedingungen (`printer_model=~/…/ and nozzle_diameter[0]!=0.8`) mit eigenem Parser, ohne `eval` (Regel 10); `slicer_profiles` bindet damit Prusa-Prozesse und -Filamente an den Drucker (`_prusa_fits`) |
 
 STEP geht über `brep/step.py`, nicht von hier.
 

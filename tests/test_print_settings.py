@@ -250,11 +250,14 @@ def test_the_outer_wall_never_accelerates_harder_than_the_rest(printer_id: str) 
 
 
 def test_the_mini_accelerates_like_prusas_profile() -> None:
-    """Prusas Standardprozess für den MINI (PrusaSlicer ``[print:*MINI*]``,
-    Orca „0.20mm Standard @MINI"): 1000 mm/s², die Außenwand 700."""
+    """Prusas Standardprozess für den MINI mit Input Shaper, den PrusaSlicer
+    2.9.6 vorwählt („0.20mm SPEED @MINIIS 0.4"): 2000 mm/s², die Außenwand
+    ebenso. Bis zum 27.09.2026 standen hier die 1000 und 700 des abgelösten
+    Prozesses ohne Input Shaper, und mit ihnen Außenwände von 40 statt 140 mm/s."""
     speed = print_settings.resolve(profiles.make_profile("prusa-mini", "pla")).speed
 
-    assert (speed.acceleration, speed.outer_wall_acceleration) == (1000.0, 700.0)
+    assert (speed.acceleration, speed.outer_wall_acceleration) == (2000.0, 2000.0)
+    assert speed.outer_wall == pytest.approx(140.0)
 
 
 @pytest.mark.parametrize("field", ["speed_outer_wall", "acceleration", "flow_factor"])

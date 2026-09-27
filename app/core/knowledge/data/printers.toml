@@ -43,11 +43,17 @@
 # overhang_speed_factors sind die Überhangstufen 2/4, 3/4 und 4/4 desselben
 # Prozesses in Prozent seines Außenwandtempos (Orca overhang_2_4_speed bis
 # overhang_4_4_speed durch outer_wall_speed, Elegoo 50/30/10 bei 160 → 31/19/6;
-# PrusaSlicer overhang_speed_2, _1, _0). Nur Cura liest sie. Die Tempi des MINI+
-# stammen noch aus dem Prozess ohne Input Shaper (Außenwand 40 statt 140).
+# PrusaSlicer overhang_speed_2, _1, _0). Nur Cura liest sie.
 # first_layer_line_factor ist die erste Bahnbreite desselben Prozesses als
 # Vielfaches der Düse (initial_layer_line_width 0,5 mm an 0,4 → 1,25). Ohne
 # Angabe gilt 1,07 × Bahnbreite.
+# prusaslicer_printer ist das Druckerprofil in PrusaSlicers Herstellerbündel,
+# mit seinem Namen dort. Die Übergabe legt dieses Profil samt Prozess und
+# Filament des Herstellers unter Solidons Abweichungen (Stufe C). Der Name
+# steht hier, weil die Suche nach dem Namen am MINI und XL die abgelösten
+# Profile ohne Input Shaper trifft, am MK4S nicht die HF-Düse, die PrusaSlicer
+# vorwählt, und den SV06 gar nicht (27.09.2026). Ohne Angabe führt PrusaSlicer
+# den Drucker nicht (K1, Ender-3 V3, Kobra 2, Neptune 4 fehlen in 2.9.6).
 # cura_definition ist die Druckerdefinition in Cura 5.13 (Dateiname ohne
 # .def.json unter share/cura/resources/definitions). Aus ihr kommen Start- und
 # Endcode des Druckers in die Konsolenübergabe. Cura führt die meisten Drucker
@@ -271,6 +277,7 @@ overhang_limit = 55.0
 first_layer_line_factor = 1.25
 overhang_speed_factors = [29, 15, 9]
 first_layer_acceleration = 500.0
+prusaslicer_printer = "Original Prusa MK4S HF0.4 nozzle"
 
 [prusa-mini]
 title = "Prusa MINI+"
@@ -282,19 +289,21 @@ extrusion_width = 0.45
 enclosed = false
 bed_temperature_max = 100
 nozzle_temperature_max = 280
-travel_speed = 150.0
-speed_outer_wall = 40.0
-speed_inner_wall = 50.0
+travel_speed = 400.0
+speed_outer_wall = 140.0
+speed_inner_wall = 140.0
 speed_infill = 140.0
-speed_top_surface = 40.0
-speed_first_layer = 20.0
-speed_bridge = 25.0
-acceleration = 1000.0
-outer_wall_acceleration = 700.0
+speed_top_surface = 80.0
+speed_first_layer = 30.0
+speed_bridge = 50.0
+acceleration = 2000.0
+outer_wall_acceleration = 2000.0
+flow_factor = 1.17
 overhang_limit = 50.0
 first_layer_line_factor = 1.25
 overhang_speed_factors = [18, 14, 11]
 first_layer_acceleration = 500.0
+prusaslicer_printer = "Original Prusa MINI & MINI+ Input Shaper"
 
 [prusa-xl]
 title = "Prusa XL"
@@ -320,6 +329,7 @@ overhang_limit = 50.0
 first_layer_line_factor = 1.25
 overhang_speed_factors = [18, 15, 9]
 first_layer_acceleration = 500.0
+prusaslicer_printer = "Original Prusa XL Input Shaper 0.4 nozzle"
 
 [creality-k1]
 title = "Creality K1"
@@ -499,6 +509,7 @@ overhang_limit = 50.0
 first_layer_line_factor = 1.05
 overhang_speed_factors = [80, 60, 40]
 cura_definition = "sovol_sv06"
+prusaslicer_printer = "SV06"
 
 # --- Resin (MSLA) --------------------------------------------------------------
 #
