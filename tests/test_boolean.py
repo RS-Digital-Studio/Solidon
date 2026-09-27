@@ -1215,3 +1215,59 @@ def test_a_boolean_keeps_the_origin_of_every_triangle_it_did_not_cut() -> None:
     assert np.unique(joined[joined >= 0]).size == 2 * np.unique(before).size, (
         "zwei geteilte Körper teilen sich keine Nummer"
     )
+
+
+def test_a_boolean_keeps_the_layout_of_every_triangle_it_did_not_cut() -> None:
+    """Was der Schnitt nicht berührt, behält Eckenfolge und Eckenreihenfolge (RM-261).
+
+    ``manifold3d`` übernimmt ein unberührtes Dreieck mit denselben drei Ecken,
+    beginnt es aber an einer anderen Ecke und nummeriert die Ecken neu. Die
+    Erkennung rechnet Normalen aus der Eckenfolge und summiert in der
+    Reihenfolge der Ecken; nach der ersten Booleschen las sie deshalb jeden
+    Fleck mit anderen letzten Stellen. Der Eingang hier ist absichtlich
+    durcheinander nummeriert und gedreht — so, wie ihn der Kern nie liefern
+    würde. Die Dreiecksfolge und die Geometrie bleiben die des Kerns.
+    """
+    from app.core.geom import attributes
+    from app.core.geom.boolean import _run_stage
+    from app.core.geom.mesh_ops import remesh
+
+    refined = remesh(box(20.0, (0.0, 0.0, 0.0)), 2.0).raw
+    rng = np.random.default_rng(261)
+    order = rng.permutation(len(refined.vertices))
+    renumbered = np.empty(len(order), dtype=np.int64)
+    renumbered[order] = np.arange(len(order))
+    turns = rng.integers(0, 3, size=len(refined.faces))
+    faces = renumbered[np.asarray(refined.faces, dtype=np.int64)]
+    faces = faces[np.arange(len(faces))[:, None], (np.arange(3)[None, :] + turns[:, None]) % 3]
+    source = MeshData.of(trimesh.Trimesh(np.asarray(refined.vertices)[order], faces, process=False))
+    tool = MeshData.of(trimesh.creation.cylinder(radius=3.0, height=40.0, sections=32))
+
+    cut = boolean("difference", [source, tool]).mesh
+    kernel = _run_stage("difference", [source, tool], "direct", None)
+    assert kernel is not None
+    # Dieselben Dreiecke in derselben Folge und dieselben Orte: umgelegt, nicht umgebaut.
+    assert cut.triangle_count == kernel.triangle_count
+    assert np.array_equal(
+        np.sort(np.asarray(cut.raw.triangles).reshape(-1, 9), axis=1),
+        np.sort(np.asarray(kernel.raw.triangles).reshape(-1, 9), axis=1),
+    )
+    match = attributes._same_triangles(source.raw, cut.raw)
+    kept = np.flatnonzero(match >= 0)
+    assert 0 < len(kept) < cut.triangle_count, "ein Teil übernommen, der Schnitt neu"
+    # Jedes übernommene Dreieck beginnt an derselben Ecke wie sein Vorbild ...
+    assert np.array_equal(
+        np.asarray(cut.raw.triangles)[kept], np.asarray(source.raw.triangles)[match[kept]]
+    )
+    assert np.array_equal(
+        np.asarray(cut.raw.face_normals)[kept], np.asarray(source.raw.face_normals)[match[kept]]
+    )
+    # ... und seine Ecken stehen in der Reihenfolge des Eingangs.
+    ours = np.asarray(cut.raw.faces, dtype=np.int64)[kept].ravel()
+    theirs = np.asarray(source.raw.faces, dtype=np.int64)[match[kept]].ravel()
+    pairs = np.unique(np.column_stack((ours, theirs)), axis=0)
+    assert len(np.unique(pairs[:, 0])) == len(pairs), "jede Ecke hat genau ein Vorbild"
+    assert np.all(np.diff(pairs[:, 1]) > 0), "die übernommenen Ecken folgen dem Eingang"
+    # Der Kern selbst tat es nicht — sonst prüfte der Test nichts.
+    rotated = np.asarray(kernel.raw.triangles)[kept]
+    assert not np.array_equal(rotated, np.asarray(source.raw.triangles)[match[kept]])

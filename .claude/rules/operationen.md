@@ -324,6 +324,21 @@ nicht an ihm vorbei.
 Nach `voxel` ist die Materialslot-Zuweisung neu zu übertragen — die Vernetzung
 wurde ersetzt (§20).
 
+**Was der Kern nicht geschnitten hat, gibt er in der Darstellung des Eingangs
+zurück** (RM-261, `attributes.in_source_layout`): dieselbe Eckenfolge je
+Dreieck, dieselbe Reihenfolge der Ecken. `manifold3d` übernimmt ein
+unberührtes Dreieck bitgleich, beginnt es aber an einer anderen Ecke und
+nummeriert neu — und die Erkennung liest Normalen aus der Eckenfolge und
+summiert in der Reihenfolge der Ecken. Nach der ersten Booleschen stand
+deshalb jede Rundform in den letzten Stellen anders da, und an einer Schwelle
+kippte ein Merkmal fern vom Schritt (am Gartenschlauchhalter ging eine
+Verrundung 113 mm von der versetzten Bohrung in einem Kegel auf). Die
+Dreiecksfolge bleibt die des Kerns, keine Koordinate ändert sich. **Wer
+`manifold3d` außerhalb von `boolean()` ein Netz zurückgeben lässt, das in der
+Szene landet** (`prepare_ops._without_scars` mit `simplify`), legt es ebenso
+zurück. Das ist die Voraussetzung dafür, dass der Merker über die
+Körpergrenze (`kern.md`) nach einem Schritt trifft.
+
 ## Beide Qualitätsstufen
 
 `ctx.quality` kennt Entwurf und Fein. Entwurf ist das, womit iteriert wird und

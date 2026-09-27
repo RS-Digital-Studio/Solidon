@@ -2238,7 +2238,7 @@ def _without_scars(outcome: BooleanOutcome) -> BooleanOutcome:
     """
     import manifold3d
 
-    from app.core.geom.attributes import transfer
+    from app.core.geom.attributes import in_source_layout, transfer
 
     joined = outcome.mesh
     raw = joined.raw
@@ -2280,7 +2280,9 @@ def _without_scars(outcome: BooleanOutcome) -> BooleanOutcome:
         or abs(float(candidate.volume) - joined.volume) > noise
     ):
         return outcome
-    simplified = transfer(MeshData.of(candidate), [joined])
+    # Was ``simplify`` nicht zusammengelegt hat, behält die Darstellung der
+    # Vereinigung — wie nach jeder Booleschen (``attributes.in_source_layout``).
+    simplified = transfer(in_source_layout(MeshData.of(candidate), [joined]), [joined])
     return dataclasses.replace(outcome, mesh=simplified)
 
 

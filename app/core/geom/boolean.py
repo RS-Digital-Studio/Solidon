@@ -35,7 +35,12 @@ from app.core.errors import (
     SHOW_LOCATION,
     BooleanFailedError,
 )
-from app.core.geom.attributes import DEFAULT_CUT_SLOT, carry_refined_units, transfer
+from app.core.geom.attributes import (
+    DEFAULT_CUT_SLOT,
+    carry_refined_units,
+    in_source_layout,
+    transfer,
+)
 from app.core.geom.mesh import MeshData, enclosed_volume, signed_volume, without_faces
 from app.core.geom.repair import (
     CROSSING_PARTS_MAX,
@@ -217,6 +222,11 @@ def boolean(
                 emptied = True
             _log.warning("boolean stage %s produced nothing usable", stage)
             continue
+        # **Was der Schnitt nicht berührt hat, behält die Darstellung seines
+        # Eingangs** (RM-261): Eckenfolge und Eckenreihenfolge. Sonst liest die
+        # Erkennung nach der ersten Booleschen jeden Fleck mit verschobenen
+        # letzten Stellen — und kippt an Schwellen fern vom Schritt.
+        result = in_source_layout(result, given)
         # Der Ursprung je Dreieck vor *Kanten verfeinern* hängt an den
         # Dreiecken, die der Schnitt nicht berührt hat (R1) — gesucht an den
         # Eingängen, wie sie hereinkamen, vor jeder Vereinigung ihrer Teile.

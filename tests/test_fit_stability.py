@@ -739,3 +739,133 @@ def test_the_patches_are_asked_in_the_same_order_in_every_pose(
     assert sequences[0] == sequences[1] == sequences[2], (
         "the order of the questions must not follow the pose"
     )
+
+
+# --- Derselbe Fleck an einem neuen Körper (RM-261) ------------------------------
+#
+# Nach jedem Schritt erkennt die Auswertung den ganzen Körper neu (§21.1). Eine
+# Boolesche übernimmt jedes Dreieck, das sie nicht schneidet, bitgleich und —
+# seit ``geom.attributes.in_source_layout`` — in der Darstellung seines
+# Eingangs. Ein unberührter Fleck liest dann dieselben Zahlen und bekommt
+# dieselbe Antwort; der Merker über die Körpergrenze gibt sie ohne Rechnung.
+
+#: Körper mit Rundformen, deren Einpassung den Löser braucht — und eine Stelle
+#: auf ihrer größten Fläche, weit weg von allen Rundformen.
+_ROUNDS_AND_A_FAR_SPOT = (
+    "post_with_fillet.stl",
+    "plate_chamfer_and_taper.stl",
+    "plate_countersunk.stl",
+    "sphere_socket.stl",
+)
+_ROUND_KINDS = frozenset({"fillet", "cone", "sphere", "torus", "hole", "pin"})
+
+
+def _bored_far_away(mesh: MeshData, found: dict[str, Any]) -> MeshData:
+    """Eine Bohrung Ø 2 in die größte Fläche, am weitesten weg von jeder Rundform."""
+    from app.core.geom.boolean import boolean
+
+    rounds = [feature for feature in found.values() if feature.kind in _ROUND_KINDS]
+    largest = max(
+        (feature for feature in found.values() if feature.kind == "face"),
+        key=lambda feature: float(feature.params["area"]),
+    )
+    centres = np.asarray(mesh.raw.triangles_center, dtype=float)
+    taken = centres[sorted({index for feature in rounds for index in feature.face_indices})]
+    spots = centres[sorted(largest.face_indices)]
+    gaps = np.min(np.linalg.norm(spots[:, None, :] - taken[None, :, :], axis=2), axis=1)
+    tool = trimesh.creation.cylinder(radius=1.0, height=6.0, sections=32)
+    tool.apply_transform(
+        trimesh.geometry.align_vectors(
+            np.array([0.0, 0.0, 1.0]), np.asarray(largest.params["normal"], dtype=float)
+        )
+    )
+    tool.apply_translation(spots[int(np.argmax(gaps))])
+    return boolean("difference", [mesh, MeshData.of(tool)]).mesh
+
+
+def _every_bit(feature: Any) -> tuple[Any, ...]:
+    """Art und jedes Maß Bit für Bit."""
+    rows: list[Any] = [feature.kind]
+    for key in sorted(feature.params):
+        value = feature.params[key]
+        if isinstance(value, float):
+            rows.append((key, value.hex()))
+        elif isinstance(value, (list, tuple)) and all(isinstance(i, (int, float)) for i in value):
+            rows.append((key, tuple(float(item).hex() for item in value)))
+        else:
+            rows.append((key, repr(value)))
+    return tuple(rows)
+
+
+@pytest.mark.parametrize("name", _ROUNDS_AND_A_FAR_SPOT)
+def test_untouched_round_forms_read_the_same_numbers_after_a_bore_elsewhere(name: str) -> None:
+    """Eine Bohrung weit weg ändert an einer Verrundung, einem Kegel, einer Kugel nichts.
+
+    Gerechnet wird frisch, ohne Merker: Es ist die Darstellung, die es trägt.
+    Vor ``in_source_layout`` las die Erkennung nach der ersten Booleschen jede
+    Rundform in den letzten Stellen anders — an diesen vier Körpern 6 der 8
+    unberührten —, und am Gartenschlauchhalter verschwand eine Verrundung
+    113 mm von der Bohrung entfernt in einem Kegel.
+    """
+    from app.core.geom import attributes
+
+    mesh = plate(name)
+    forget_cache()
+    before = detect(mesh)
+    bored = _bored_far_away(mesh, before)
+    forget_cache()
+    after = detect(bored)
+
+    match = attributes._same_triangles(mesh.raw, bored.raw)
+    to_after = np.full(mesh.triangle_count, -1, dtype=np.int64)
+    rows = np.flatnonzero(match >= 0)
+    to_after[match[rows]] = rows
+    by_triangles = {frozenset(feature.face_indices): feature for feature in after.values()}
+    untouched = 0
+    for feature in before.values():
+        if feature.kind not in _ROUND_KINDS:
+            continue
+        mapped = to_after[sorted(feature.face_indices)]
+        if (mapped < 0).any():
+            continue
+        untouched += 1
+        partner = by_triangles.get(frozenset(mapped.tolist()))
+        assert partner is not None, (name, feature.id)
+        assert _every_bit(partner) == _every_bit(feature), (name, feature.id)
+    assert untouched, f"{name}: the bore must leave a round form untouched"
+
+
+def test_moving_a_bore_keeps_the_layout_of_the_rest_of_the_body(profile: Any) -> None:
+    """*Merkmal verschieben* füllt, glättet die Narben und schneidet — der Rest bleibt, wie er war.
+
+    Drei Aufrufe des Kerns, und der zweite (``_without_scars``) läuft an
+    ``boolean()`` vorbei: Jeder legt zurück, was er nicht geschnitten hat
+    (``attributes.in_source_layout``). Am Ende beginnt jedes übernommene
+    Dreieck an derselben Ecke wie im Eingang — sonst läse die Erkennung nach
+    dem Schritt jeden Fleck in den letzten Stellen anders.
+    """
+    from app.core.geom import attributes
+    from tests.helpers import feature_operation
+
+    mesh = plate("plate_holes.stl")
+    forget_cache()
+    found = detect(mesh)
+    bore = min((f for f in found.values() if f.kind == "hole"), key=lambda f: f.id)
+    centre = np.asarray(bore.params["centre"], dtype=float)
+    result = feature_operation(
+        "move_feature",
+        mesh,
+        found,
+        bore,
+        profile,
+        x=float(centre[0]) + 1.0,
+        y=float(centre[1]),
+        z=float(centre[2]),
+    )
+    moved = result.outputs[0].mesh
+    match = attributes._same_triangles(mesh.raw, moved.raw)
+    kept = np.flatnonzero(match >= 0)
+    assert len(kept) > moved.triangle_count // 2, "der größte Teil der Platte bleibt unberührt"
+    assert np.array_equal(
+        np.asarray(moved.raw.triangles)[kept], np.asarray(mesh.raw.triangles)[match[kept]]
+    ), "jedes übernommene Dreieck beginnt an der Ecke seines Vorbilds"

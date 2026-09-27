@@ -121,7 +121,13 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   geteilten und danach gebohrten Netz läse die Erkennung nach dem Öffnen
 #:   anders als in der Sitzung. Und am exakten Körper gehört die Fase einer
 #:   schrägen Mündung zum Langloch, auch wo OpenCASCADE sie als BSpline führt.
-CACHE_FORMAT_VERSION: Final = 30
+#: - 31 (27.09.2026, RM-261): Das Ergebnis einer Booleschen trägt jedes
+#:   Dreieck, das der Schnitt nicht berührt hat, in der Darstellung seines
+#:   Eingangs — Eckenfolge und Reihenfolge der Ecken
+#:   (``geom.attributes.in_source_layout``). Ein älterer Eintrag trägt die des
+#:   Kerns, und die Erkennung läse nach dem Öffnen in den letzten Stellen
+#:   anders als in der Sitzung.
+CACHE_FORMAT_VERSION: Final = 31
 
 
 @dataclass(frozen=True, slots=True)

@@ -28,6 +28,7 @@ from typing import Any, Final
 
 import numpy as np
 
+from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData, as_mesh_data, refined_units, remember_refined_units
 from app.core.log import get_logger
 from app.core.types import CancelToken, Mesh
@@ -197,6 +198,15 @@ def _same_triangles(source: Any, result: Any) -> np.ndarray:
     Bohrung 0,10 s, als Zeilensortierung 0,16 s (die Boolesche selbst 0,6 s;
     gemessen unter der Last der Durchsicht 0.5.1).
     """
+    return _same_triangles_at(source, result, *_places(source, result))
+
+
+def _places(source: Any, result: Any) -> tuple[np.ndarray, np.ndarray]:
+    """Je Ecke beider Netze die Nummer ihres Orts — bitgleiche Koordinaten, dieselbe Nummer.
+
+    Beide Punktlisten werden gemeinsam sortiert; zurück kommen die Nummern der
+    Ecken von ``source`` und die von ``result``.
+    """
     before = np.asarray(source.vertices, dtype=np.float64)
     after = np.asarray(result.vertices, dtype=np.float64)
     points = np.concatenate((before, after))
@@ -206,11 +216,18 @@ def _same_triangles(source: Any, result: Any) -> np.ndarray:
     fresh[1:] = (ordered[1:] != ordered[:-1]).any(axis=1)
     place = np.empty(len(points), dtype=np.int64)
     place[order] = np.cumsum(fresh) - 1
-    old = np.sort(place[: len(before)][np.asarray(source.faces, dtype=np.int64)], axis=1)
-    new = np.sort(place[len(before) :][np.asarray(result.faces, dtype=np.int64)], axis=1)
+    return place[: len(before)], place[len(before) :]
+
+
+def _same_triangles_at(
+    source: Any, result: Any, place_before: np.ndarray, place_after: np.ndarray
+) -> np.ndarray:
+    """:func:`_same_triangles` mit den Ortsnummern aus :func:`_places`."""
+    old = np.sort(place_before[np.asarray(source.faces, dtype=np.int64)], axis=1)
+    new = np.sort(place_after[np.asarray(result.faces, dtype=np.int64)], axis=1)
     if not len(old) or not len(new):
         return np.full(len(new), -1, dtype=np.int64)
-    distinct = int(place.max()) + 1
+    distinct = int(max(place_before.max(initial=-1), place_after.max(initial=-1))) + 1
     if distinct < _CODE_LIMIT:
         # Drei Nummern als eine Zahl; der stabile Sortierlauf lässt bei gleichen
         # Dreiecken im Eingang das erste vorn stehen.
@@ -237,6 +254,82 @@ def _same_triangles(source: Any, result: Any) -> np.ndarray:
 #: Bis zu wie vielen verschiedenen Punkten drei Punktnummern als eine Zahl in
 #: ``int64`` passen: ``2 097 151³`` liegt knapp unter ``2⁶³``.
 _CODE_LIMIT: Final = 2_097_151
+
+
+def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
+    """Das Ergebnis einer Booleschen in der Darstellung seiner Eingänge (RM-261).
+
+    ``manifold3d`` übernimmt jedes Dreieck, das der Schnitt nicht berührt,
+    mit denselben drei Ecken — **aber nicht in derselben Darstellung**: Es
+    nummeriert die Ecken neu und beginnt ein Dreieck an einer anderen Ecke.
+    Gemessen am Gartenschlauchhalter nach *Merkmal verschieben*: 385 522 von
+    391 850 Dreiecken übernommen, davon 101 110 mit derselben Eckenfolge und
+    185 387 mit derselben Normale Bit für Bit. Die Erkennung summiert in der
+    Reihenfolge der Ecken und rechnet die Normale aus der Eckenfolge; an jedem
+    Fleck verschoben sich deshalb die letzten Stellen, und an einer Schwelle
+    kippte ein Merkmal weit weg vom Schritt (eine Verrundung 113 mm von der
+    Bohrung ging in einem Kegel auf). Ein Merker über die Körpergrenze
+    (``perceive.features``, :data:`~app.core.perceive.features.GEOMETRY_KEYED_ANSWERS`)
+    traf so nie.
+
+    Hier bekommt jedes übernommene Dreieck die Eckenfolge seines Vorbilds, und
+    die übernommenen Ecken stehen in der Reihenfolge ihres Eingangs; neue
+    Ecken folgen dahinter in der Reihenfolge des Kerns. **Die Dreiecksfolge
+    bleibt die des Kerns** — an ihr hängen die Nummern der Merkmale —, und
+    keine Koordinate ändert sich: Es wird nur umnummeriert und gedreht, wie
+    der Eingang es vorgab. Zwischen zwei Ergebnissen des Kerns blieb die
+    Darstellung auch vorher schon stehen (gemessen: jede Ecke, jede
+    Eckenfolge, jede Stützpunktlesung gleich); neu ist sie ab dem ersten
+    Schritt nach dem Laden. Weil der Kern danach die Darstellung des Eingangs
+    liest, vernetzt er neue Schnittflächen mitunter anders als ohne sie — am
+    Korpus vier bis fünf von 250 Körpern je Schritt, am
+    Schraubendreherhalter vier Dreiecke mehr nach dem Versetzen einer
+    Bohrung, dieselbe Form.
+
+    Gleich heißt bitgleich (:func:`_places`). Mehrere Eingänge gelten in ihrer
+    Reihenfolge; ein Dreieck, das in keiner Drehung auf seinem Vorbild liegt
+    (umgekehrter Umlauf, entartet), bleibt, wie der Kern es lieferte.
+    """
+    body = result.raw
+    faces = np.asarray(body.faces, dtype=np.int64)
+    if not len(faces):
+        return result
+    corners = faces.copy()
+    unset = np.iinfo(np.int64).max
+    rank = np.full(len(body.vertices), unset, dtype=np.int64)
+    taken = np.zeros(len(faces), dtype=bool)
+    offset = 0
+    turns = np.arange(3)
+    for source in sources:
+        raw = source.raw
+        model = np.asarray(raw.faces, dtype=np.int64)
+        if len(model):
+            place_before, place_after = _places(raw, body)
+            match = _same_triangles_at(raw, body, place_before, place_after)
+            rows = np.flatnonzero((match >= 0) & ~taken)
+            wanted = place_before[model[match[rows]]]
+            given = place_after[faces[rows]]
+            turn = np.full(len(rows), -1, dtype=np.int64)
+            for shift in turns.tolist():
+                fits = (turn < 0) & np.all(given[:, (turns + shift) % 3] == wanted, axis=1)
+                turn[fits] = shift
+            kept = turn >= 0
+            rows, turn = rows[kept], turn[kept]
+            corners[rows] = faces[rows][np.arange(len(rows))[:, None], (turns + turn[:, None]) % 3]
+            np.minimum.at(rank, corners[rows].ravel(), model[match[rows]].ravel() + offset)
+            taken[rows] = True
+        offset += len(raw.vertices)
+    if not taken.any():
+        return result
+    order = np.argsort(
+        np.where(rank < unset, rank, offset + np.arange(len(rank), dtype=np.int64)), kind="stable"
+    )
+    if np.array_equal(order, np.arange(len(order))) and np.array_equal(corners, faces):
+        return result
+    renumbered = np.empty(len(order), dtype=np.int64)
+    renumbered[order] = np.arange(len(order))
+    vertices = np.asarray(body.vertices, dtype=np.float64)[order]
+    return result.replacing(trimesh.Trimesh(vertices, renumbered[corners], process=False))
 
 
 def with_slot(mesh: MeshData, slot: int) -> MeshData:
