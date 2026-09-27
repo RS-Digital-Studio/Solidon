@@ -403,9 +403,13 @@ def best_face_candidate(
     Eine Lage muss stehen können, dann gewinnt das echte interne
     Stützvolumen, bei höchstens fünf Prozent Abstand die Grundfläche.
     """
-    coarse = ranked_orientations(mesh, limit=count, cancelled=cancelled, printer=profile.printer)[
-        : max(1, count)
-    ]
+    coarse = ranked_orientations(
+        mesh,
+        limit=count,
+        cancelled=cancelled,
+        printer=profile.printer,
+        overhang_limit=profile.overhang_limit_degrees,
+    )[: max(1, count)]
     if not coarse:
         raise NoFittingOrientationError()
     footing = profile.printer.layer_height / 2.0
@@ -517,9 +521,12 @@ def search(
         (on_original if index < trusted else on_proxy).append(direction)
     # Gestapelt statt einzeln: die Projektionen aller Lagen in einem Zug je
     # Netz (``orient.evaluate_directions``), so weit die Speichergrenze reicht.
+    # Mit derselben Überhanggrenze wie das Endurteil darunter — sonst ordnet
+    # die Vorauswahl nach Schrägen, die der Drucker ohne Stütze druckt.
+    limit: dict[str, float] = {} if overhang_angle is None else {"overhang_limit": overhang_angle}
     scored: list[Orientation] = [
-        *evaluate_directions(mesh, on_original, cancelled),
-        *evaluate_directions(proxy, on_proxy, cancelled),
+        *evaluate_directions(mesh, on_original, cancelled, **limit),
+        *evaluate_directions(proxy, on_proxy, cancelled, **limit),
     ]
     if not scored:
         raise NoFittingOrientationError()
