@@ -933,5 +933,25 @@ def test_a_polygon_with_corners_hides_its_seam_itself() -> None:
     twelve = _standing(trimesh.creation.cylinder(radius=12.5, height=20.0, sections=12))
     fine = _standing(trimesh.creation.cylinder(radius=12.5, height=20.0, sections=128))
 
-    assert smooth_outline_height(twelve, advise.SCARF_MIN_LOOP) == 0.0
-    assert smooth_outline_height(fine, advise.SCARF_MIN_LOOP) == pytest.approx(20.0, abs=0.3)
+    assert smooth_outline_height(twelve, advise.SCARF_MIN_LOOP, 0.4) == 0.0
+    assert smooth_outline_height(fine, advise.SCARF_MIN_LOOP, 0.4) == pytest.approx(20.0, abs=0.3)
+
+
+def test_a_tight_rounding_is_a_corner_for_the_slicer() -> None:
+    """Der Knick zählt über Arme von der Düsenbreite, wie im Slicer. Zwischen
+    benachbarten Facetten gemessen, galt der Rumpf von Roberts Minigolf-Satz
+    als glatt — seine engen Rundungen knicken dort nur wenige Grad je Facette —,
+    und ElegooSlicer sah Ecken von 45° und setzte keine Schrägnaht. Eine
+    Rundung von 0,3 mm ist eine Ecke, eine von 4 mm nicht."""
+    import shapely
+
+    from app.core.slice.analysis import smooth_outline_height
+
+    def extruded(radius: float) -> SliceResult:
+        outline = shapely.box(-10.0, -10.0, 10.0, 10.0).buffer(radius, quad_segs=16)
+        return _standing(trimesh.creation.extrude_polygon(outline, 20.0))
+
+    assert smooth_outline_height(extruded(0.3), advise.SCARF_MIN_LOOP, 0.4) == 0.0
+    assert smooth_outline_height(extruded(4.0), advise.SCARF_MIN_LOOP, 0.4) == pytest.approx(
+        20.0, abs=0.3
+    )

@@ -1059,7 +1059,8 @@ def _from_geometry(
     # Minuten.
     if (
         not settings.shell.scarf_seam
-        and smooth_outline_height(result, SCARF_MIN_LOOP) >= SCARF_MIN_HEIGHT
+        and smooth_outline_height(result, SCARF_MIN_LOOP, profile.printer.nozzle_diameter)
+        >= SCARF_MIN_HEIGHT
     ):
         advice.append(
             _advice(

@@ -3377,20 +3377,18 @@ def tapered_layers(result: SliceResult) -> int:
 #: stärker, hat die Naht dort eine Ecke, in der sie verschwindet.
 SMOOTH_TURN_DEGREES: Final = 25.0
 
-#: Um so viel wird eine Kontur vereinfacht, bevor die Knicke zählen, in mm —
-#: knapp die Auflösung, mit der die Orca-Familie ihre Bahnen glättet
-#: (``resolution`` 0,012). Ohne sie gälte ein Facettenrest von einem
-#: Tausendstelmillimeter als Ecke.
-SMOOTH_SIMPLIFY: Final = 0.01
 
-
-def smooth_outline_height(result: SliceResult, min_length: float) -> float:
+def smooth_outline_height(result: SliceResult, min_length: float, arm: float) -> float:
     """Über wie viel Höhe der Körper eine glatte Außenkontur trägt, in mm.
 
     Glatt heißt: kein Knick über :data:`SMOOTH_TURN_DEGREES`, also keine Ecke,
-    in der ein Slicer die Naht verstecken kann. Gezählt werden Umrisse, keine
-    Löcher, und nur solche ab ``min_length`` Umfang; die Höhe ist die Zahl der
-    Schichten mit so einem Umriss mal ihrem Abstand.
+    in der ein Slicer die Naht verstecken kann. Gemessen wird der Knick wie im
+    Slicer über Arme von ``arm`` Länge, der Düsenbreite: Zwischen benachbarten
+    Facetten gemessen, galt der Rumpf von Roberts Minigolf-Satz mit seinen
+    engen Rundungen als glatt, während ElegooSlicer dort Ecken von 45° sah und
+    keine Schrägnaht setzte. Gezählt werden Umrisse, keine Löcher, und nur
+    solche ab ``min_length`` Umfang; die Höhe ist die Zahl der Schichten mit so
+    einem Umriss mal ihrem Abstand.
     """
     if not result.layers:
         return 0.0
@@ -3399,27 +3397,34 @@ def smooth_outline_height(result: SliceResult, min_length: float) -> float:
     smooth = sum(
         1
         for layer in result.layers
-        if any(_smooth_ring(contour.outline, min_length) for contour in layer.contours)
+        if any(_smooth_ring(contour.outline, min_length, arm) for contour in layer.contours)
     )
     return smooth * spacing
 
 
-def _smooth_ring(ring: Ring, min_length: float) -> bool:
-    """Ob dieser Umriss lang genug ist und nirgends stärker abknickt als
-    :data:`SMOOTH_TURN_DEGREES` (:func:`smooth_outline_height`)."""
+def _smooth_ring(ring: Ring, min_length: float, arm: float) -> bool:
+    """Ob dieser Umriss lang genug ist und nirgends über Arme von ``arm``
+    stärker abknickt als :data:`SMOOTH_TURN_DEGREES`
+    (:func:`smooth_outline_height`)."""
     points = np.asarray(ring, dtype=float)
     if len(points) > 1 and np.allclose(points[0], points[-1]):
         points = points[:-1]
     if len(points) < 3:
         return False
     closed = np.vstack([points, points[:1]])
-    if float(np.hypot(*np.diff(closed, axis=0).T).sum()) < min_length:
+    along = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(closed, axis=0).T))])
+    total = float(along[-1])
+    if total < min_length:
         return False
-    simple = np.asarray(shapely.LinearRing(points).simplify(SMOOTH_SIMPLIFY).coords)[:-1]
-    if len(simple) < 3:
-        return False
-    ahead = np.roll(simple, -1, axis=0) - simple
-    behind = simple - np.roll(simple, 1, axis=0)
+
+    def at(distance: np.ndarray) -> np.ndarray:
+        wrapped = np.mod(distance, total)
+        return np.column_stack(
+            [np.interp(wrapped, along, closed[:, 0]), np.interp(wrapped, along, closed[:, 1])]
+        )
+
+    behind = points - at(along[:-1] - arm)
+    ahead = at(along[:-1] + arm) - points
     cross = behind[:, 0] * ahead[:, 1] - behind[:, 1] * ahead[:, 0]
     turn = np.degrees(np.abs(np.arctan2(cross, (behind * ahead).sum(axis=1))))
     return bool(turn.max() <= SMOOTH_TURN_DEGREES)

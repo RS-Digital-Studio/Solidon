@@ -2190,7 +2190,11 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     PrusaSlicer und CuraEngine rampen je 199 von 200 Außenschleifen nur am Rohr, bei
     2 bis 4 % mehr Druckzeit (`output/review/gesamt-2026-09-27/naht/`); Bambu braucht
     dazu `override_filament_scarf_seam_setting`. Creality Print rechnet 3MF nur im
-    Fenster (RM-164), sein Kern kennt dieselben Schlüssel.
+    Fenster (RM-164), sein Kern kennt dieselben Schlüssel. Der Knick zählt über Arme der
+    Düsenbreite wie im Slicer: Am Minigolf-Satz bekommen die vier Schäfte die Schrägnaht,
+    der Rumpf mit seinen engen Rundungen nicht, in Solidon wie in ElegooSlicer; Druckdatei
+    zum Vergleich `output/druckbereit/minigolf-2026-09-27/…-schraegnaht.gcode` (9:49 statt
+    9:18 h).
 
   **Offen, in dieser Reihenfolge:**
   - **E** Je Teil. Stehen: `for_part` fragt mit Profil jede Regel für die geometrischen
