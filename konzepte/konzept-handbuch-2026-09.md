@@ -42,6 +42,29 @@ Statustabelle in §9. Mehr braucht es nicht; die Nachweise liegen unter
   `app/images/manual/` schreibt es nur beim Release (§6).
 - **Commit:** je abgeschlossenem Paket, mit Push des Zweigs (der
   `post-commit`-Hook pusht den aktuellen Zweig).
+- **Probelauf einer Anleitung**, eine Sprache, in einen fremden Ordner, auf
+  dem zweiten Monitor:
+  `& "F:\3D Druck\.venv\Scripts\python.exe" tools/make_guides.py de --nur <anleitung> --ziel <ordner> --schirm 1`.
+  Das Werkzeug öffnet ein echtes Fenster; die Bilder danach ansehen, erst
+  dann gilt ein Schritt als gebaut.
+
+### Stand und nächster Schritt
+
+Diese Liste wird nach jedem Schritt fortgeschrieben, damit eine Sitzung, die
+am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
+
+- **Committet und gepusht:** HB-0 (`daadc88fe`), HB-1 (`54e83a72e`), HB-2
+  und HB-3 (`0f28f4368`), die toten PDF-Verweise aus HB-10 (`6af8fb5c7`),
+  HB-13 — der Ort je Operation in der Referenz, `**Ort:** <menu_path>` an
+  allen 142 Einträgen (Commit „Die Referenz sagt jetzt bei jeder Operation,
+  wo man sie findet").
+- **Als Nächstes:** HB-4 — die Anleitungen *Ein Modell prüfen und drucken*
+  (`print-a-model`) und *Ein Loch bohren* (`drill-a-hole`). Ihre Sätze, Ziele,
+  Geschichten und Übersetzungen stehen als Entwurf in
+  `nachweise-handbuch-2026-09/entwurf-hb4.md`; dort steht auch, was am
+  Fenster noch zu prüfen ist. Danach *Das erste eigene Teil* und *Ein
+  Gehäuse mit Deckel* (Vorlage: `story_housing` in
+  `tools/make_longform_video.py`).
 
 ## §1 Befund
 
@@ -367,7 +390,7 @@ Nachweis.
 | HB-10 | Website und PDF nach Teilen gegliedert, Referenz am Ende; PDF mit Lesezeichen und **ohne tote Verweise auf den Bau-Rechner** | Seiten erzeugt beim Release, Tests `rendered` grün, im PDF kein Verweis mit `file:` | [~] Die Verweise um die Bildschirmfotos fallen vor dem Druck weg; `test_the_pdf_links_nowhere_outside_itself_but_the_website` hält es beim Release. Offen: Gliederung, Lesezeichen |
 | HB-11 | Wächter für Menüwege im Text (§6) | Test in der Suite | [ ] |
 | HB-12 | Video-Tutorial aus denselben Geschichten (die Zusage an den Kunden) | erst, wenn HB-4 und HB-8 stehen und die Bedienung ruhiger ist | [ ] |
-| HB-13 | Die Referenz nennt je Operation ihren Weg in der Oberfläche (Menü oder Auswahlfenster), erzeugt aus dem Menüaufbau | Kerntest: jede Operation mit Weg; heute 2 von 142 | [ ] |
+| HB-13 | Die Referenz nennt je Operation ihren Weg in der Oberfläche (Menü oder Auswahlfenster), erzeugt aus dem Menüaufbau | Kerntest: jede Operation mit Weg; heute 2 von 142 | [x] 142 von 142 aus `registry.menu_path`; `test_every_operation_names_where_it_is_found`. Die Website zeigt es nach dem nächsten Handbuchlauf |
 
 ## §10 Risiken und offene Entscheidungen
 

@@ -445,6 +445,21 @@ def test_every_operation_appears_by_name() -> None:
         assert str(spec.title) in text, spec.name
 
 
+def test_every_operation_names_where_it_is_found() -> None:
+    """Von 142 Referenzeinträgen nannten zwei ihren Ort in der Oberfläche.
+
+    Wer in der Referenz liest, sucht als Nächstes den Knopf
+    (``konzepte/nachweise-handbuch-2026-09/findbarkeit.md``, Teil 4). Der Ort
+    kommt aus ``menu_path``, derselben Auskunft, die der Chat bekommt.
+    """
+    from app.core.registry.surfaces import documentation, menu_path
+
+    text = documentation()
+    for spec in REGISTRY.all():
+        entry = text.split(f"(`{spec.name}`)", 1)[1].split("\n### ", 1)[0]
+        assert f"**{tr('Ort')}:** {menu_path(spec)}" in entry, spec.name
+
+
 def test_the_written_pages_come_first() -> None:
     """Erst erklären, dann nachschlagen — wer das Handbuch öffnet, sucht nicht immer."""
     pages = manual.pages()
