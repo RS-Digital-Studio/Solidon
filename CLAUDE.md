@@ -3,175 +3,87 @@
 # Solidon — Anweisungen für Claude Code
 
 `AGENTS.md` oben ist die Hausordnung und gilt vollständig. Diese Datei ergänzt,
-was nur Claude Code betrifft: Befehle, Werkzeuge, und die Stellen, an denen
-meine globalen Vorgaben auf dieses Projekt nicht passen.
+was nur Claude Code betrifft: Unterlagen, Befehle, Werkzeuge, Arbeitsweise.
 
 ## Was dieses Projekt ist
 
-Solidon — eine Desktop-Anwendung in **Python (3.14 oder neuer) mit PySide6**,
-kein Avalonia/.NET. Die Untergrenze steht in `pyproject.toml`; die
-Arbeitsumgebung und CI verwenden CPython 3.14.7.
-
-Die Unterlagen in ihrer Rangfolge:
+Solidon — eine Desktop-Anwendung in **Python (3.14 oder neuer) mit PySide6**.
+Die Untergrenze steht in `pyproject.toml`; Arbeitsumgebung und CI verwenden
+CPython 3.14.7.
 
 | Datei | Beantwortet |
 |---|---|
 | `3d-agent-bauplan.md` | **Was** gebaut wird — die Spezifikation, §-Nummern sind verbindlich |
 | `AGENTS.md` | **Wie** gearbeitet wird — 22 harte Regeln, jede mit Test |
-| `ROADMAP.md` | **Was als Nächstes** — Arbeitsliste, oben das Register der offenen Punkte |
-| `ROADMAP-ARCHIV.md` | **Was schon versucht wurde** — historische Befunde und Nachweise, mit Verweis auf noch offene Arbeit |
-| `konzepte/README.md` | **Warum** — vollständiger Index der Konzepte und Durchsichten, mit dem Stand je Dokument |
+| `ROADMAP.md` | **Was als Nächstes** — oben das Register der offenen Punkte |
+| `ROADMAP-ARCHIV.md` | **Was schon versucht wurde** — Befunde und Nachweise |
+| `konzepte/README.md` | **Warum** — Index der Konzepte und Durchsichten mit ihrem Stand |
 | `README.md` | Was der Nutzer sieht |
-| `<verzeichnis>/CLAUDE.md` | **Was wo liegt** — die Karte des Gebiets; lädt mit, sobald ich eine Datei darin anfasse |
-| `.claude/rules/*.md` | **Was dort einzuhalten ist** — greift über `paths:`, quer zu den Verzeichnissen |
+| `<verzeichnis>/CLAUDE.md` | **Was wo liegt** — lädt, sobald eine Datei darin angefasst wird |
+| `.claude/rules/*.md` | **Was einzuhalten ist** — lädt über `paths:` |
 
-Bei Widerspruch gilt der Bauplan. Eine Aussage ohne §-Beleg ist eine Vermutung.
-
+Bei Widerspruch gilt der Bauplan; eine Aussage ohne §-Beleg ist eine Vermutung.
 **Offene Arbeit steht im Register von `ROADMAP.md` und nirgends sonst.** Die
-Konzepte tragen Statustabellen, und die altern: von zwölf Punkten, die sie am
-22.08.2026 als offen führten, waren sieben längst behoben. Wer „offen" in einem
-Konzept liest, prüft es am Code, bevor er es glaubt — und trägt es ins Register
-nach, wenn es stimmt.
+Statustabellen der Konzepte altern — ein „offen" dort wird am Code geprüft und,
+wenn es stimmt, ins Register übernommen.
 
-## Sprache — die wichtigste Falle
-
-Die Sprachregelung steht verbindlich in `AGENTS.md` und lädt über `@AGENTS.md`
-in jeder Sitzung mit — Bezeichner, Docstrings, Oberflächentexte, Kataloge und
-die kuratierte Stammliste stehen dort vollständig. Hier nur, was dort fehlt:
-
-- **Gespräch mit Robert: Deutsch.**
-
-Commit-Meldungen dieses Projekts sind eine Aussage, kein Etikett: „Hohle
-Querschnitte kamen als nichts zurück", nicht „fix: section". Diesen Ton halten.
+Gespräch mit Robert auf Deutsch. Commit-Meldungen sind eine Aussage, kein
+Etikett: „Hohle Querschnitte kamen als nichts zurück", nicht „fix: section".
 
 ## Befehle
 
-Die CI-Aufteilung folgt `konzepte/konzept-ci-testlaufzeiten-2026-09.md`:
-Stil, Kernmatrix und Release-Fenstergruppen starten unabhängig; Paketbau
-wartet auf alle Pflichtprüfungen. `tests/test_packaging.py` und
-`tests/test_ci_runner.py` schützen diesen Vertrag. Die lokalen Umfänge
-darunter bleiben Entwicklungstor und zusätzliche Release-Abnahme.
+Alles über die virtuelle Umgebung, nie über das System-Python. Beide Editoren
+setzen `PYTHONUTF8=1` für ihre Unterprozesse.
 
-Alles läuft über die virtuelle Umgebung, nie über das System-Python:
-
-Beide Editoren setzen für ihre Unterprozesse `PYTHONUTF8=1`, damit auch unter
-Windows umgeleitete Ausgaben und Hook-Nachrichten echte Umlaute behalten.
+**Je Schritt** die betroffenen Tests — der Importgraph wählt sie aus:
 
 ```
-bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh
+.venv\Scripts\python.exe tools/affected_tests.py app/core/units.py --run   # Dateien nennen
+.venv\Scripts\python.exe tools/affected_tests.py --run                     # alle ungestageten Änderungen
+```
+
+Ohne Dateiliste nimmt es alle ungestageten Änderungen im Baum, auch fremde.
+Meldet es „das ist die Suite" (`i18n`, `types.py`, `errors.py`, `log.py`),
+gleich das Tor fahren.
+
+**Vor dem Commit** das Entwicklungstor, zusammengefasst in `/pruefen`:
+
+```
+bash .claude/scripts/suite-getrennt.sh
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m mypy
 ```
 
-Diese vier sind zusammen das Entwicklungstor: alle Tests ohne Fenster und
-Leistung, Ruff, Formatierung und mypy. `/pruefen` fasst sie zusammen —
-**vor dem Commit**, nicht nach jedem Schritt. Je Schritt laufen nur die
-betroffenen Kern- und statischen Tests. **Fenstertests und Leistungsprüfungen
-laufen ausschließlich beim Release**, auch nicht als betroffene Teilmenge:
+**Fenstertests und Leistungsprüfungen laufen ausschließlich beim Release** —
+auch nicht als betroffene Teilmenge. `pytest -q` am Stück kommt nicht durch
+(nativer Abriss nach rund 700 Fenstern); das Tor trennt die Fenstergruppe ab:
 
 ```
-.venv\Scripts\python.exe tools/affected_tests.py                      # geändert + neu gegenüber HEAD
-.venv\Scripts\python.exe tools/affected_tests.py app/core/units.py     # oder die Dateien ausdrücklich
-.venv\Scripts\python.exe tools/affected_tests.py --run                 # fahren, Exit-Code direkt gelesen
+bash .claude/scripts/suite-getrennt.sh --release
+.venv\Scripts\python.exe -m pytest -q -m performance   # Budget §31, Referenzmaschine
 ```
 
-`--why` nennt je Testdatei den Grund, `--split` zeigt die regulären Aufrufe.
-Fenstertests und Leistung bleiben bis zum Release zurückgestellt;
-`--release` schaltet die getrennten Fensterläufe hinzu. **Ohne Argumente nimmt es alle ungestageten
-Änderungen im Baum**; wer nur bestimmte meint, nennt sie. Bei Änderungen an `i18n`, `types.py`, `errors.py`
-oder `log.py` meldet es „das ist die Suite" — dann direkt `/pruefen`.
-
-**`pytest -q` am Stück kommt seit dem 16.08.2026 nicht mehr durch.** Rund 22
-Minuten, dann ein nativer Abriss bei über 3 GB, ohne Ergebniszeile — die Suite
-baut in einem Prozess über siebenhundert Fenster mit Ansicht nacheinander auf,
-und irgendwann reißt eine Grenze. Das Entwicklungstor lässt die Fenstertests
-aus. **Beim Release** laufen sie mit `--release` je Datei in getrennten
-Prozessen; die Leistungsprüfung folgt separat auf der Referenzmaschine:
-
-```
-bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh --release
-.venv\Scripts\python.exe -m pytest -q -m performance   # ausschließlich beim Release (§31)
-```
-
-**Getrennt wird je Test, nicht je Datei** (seit 22.09.2026). `tests/conftest.py`
-gibt jedem Test mit `qt_app` im Fixture-Graphen den Marker `windowed`; Tests,
-die ein Fenster im Unterprozess öffnen, tragen ihn ausdrücklich. Das
-Entwicklungstor wählt mit `-m "not windowed"` ab, das Release-Tor fährt je
-Datei, die einen Fenstertest trägt (`tools/list_windowed_tests.py`), nur deren
-Fenstertests. Vorher nahm ein einziger Fenstertest seine ganze Datei aus dem
-Tor — 1709 Tests ohne Fenster, darunter fast ganz `test_translations`,
-`test_print_settings` und `test_toolchain`. Ein Test, der ein Widget baut,
-fordert `qt_app` an; ohne sie stürzt er im Tor ab. **Erzeugnisvergleiche
-(`rendered`) laufen wie in der CI nur beim Release** (23.09.2026): Sie prüfen
-Handbuch, Website-Bilder und deren Rechtenachweis gegen die Dateien, die erst
-`/erzeugen` beim Paketbau neu schreibt — dazwischen sind sie erwartbar rot, und
-als Teil ihrer Fensterdateien lagen sie bis zur Trennung je Test ohnehin draußen.
-Eine gesonderte Dateiliste wird nicht gepflegt. Das Skript liegt unter `.claude/.state/` und ist
-seit dem 22.08.2026 eingecheckt — vorher schloss `.gitignore` den ganzen Ordner
-aus, und ein frischer Klon hatte damit den einzigen Weg nicht, auf dem das Tor
-durchläuft.
-
-Erst beide Release-Läufe zusammen mit ruff, `ruff format --check` und mypy
-belegen das vollständige Release-Tor. Ein Entwicklungstor behauptet keine
-Fenster- oder Leistungsabnahme.
-
-Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt — die erste in einer zweiten Gestalt am 24.08.2026 noch einmal:
-
-- **Auf den Exit-Code sehen, nicht auf eine Schlusszeile — und den Exit-Code
-  nicht durch eine Pipeline lesen.** Wer `FAILED` grept, liest die
-  Zusammenfassung, und die schreibt pytest erst am Ende; im laufenden
-  Fortschritt bleiben zwei `F` unsichtbar. Eine Pipeline dagegen meldet den
-  Status ihres letzten Glieds, und `tail` gelingt immer:
-  `suite-getrennt.sh … | tail -30` berichtete „Exit 0" über einem
-  `Läufe mit Fehler: 4`. Wer beides zusammen falsch macht, liest eine gültige
-  Zahl und glaubt ihr — wer nur eine der beiden Fallen kennt, verlässt sich
-  ausgerechnet auf die andere. Sicher ist: **Ausgabe in eine Datei, danach
-  lesen.** Das gibt den Code **und** die Namen. `set -o pipefail` oder
-  `${PIPESTATUS[0]}` retten nur den Code — gemessen, sie wirken, aber sie sagen
-  nicht, *welche* vier Läufe es waren.
-
-  **Und nicht nur die Pipeline verdeckt den Code: alles, was danach kommt,
-  auch.** Am 24.08.2026 stand „exit code 0" über einer Ausgabedatei mit
-  `Läufe mit Fehler: 4` — kein `tail` diesmal, sondern ein
-  eigenes `echo` als letzter Befehl der Kette. Der Shell-Status ist immer der
-  des **letzten** Befehls, und `echo` gelingt so zuverlässig wie `tail`. Wer
-  den Code braucht, liest ihn unmittelbar (`befehl > datei; echo "Exit: $?"`),
-  bevor irgendetwas anderes läuft — nicht am Ende einer Kette.
-- **Jeder Nichtnull-Prozessausgang macht das Tor rot**, auch nach „passed"
-  oder vollständigen Fortschrittszeichen. Ein nativer Abbruch und eine
-  fehlgeschlagene Zusicherung sind unterschiedliche Ursachen, aber beide
-  verhindern die Abnahme. Die Shell kann verschiedene Windows-Nativcodes
-  als 127 melden; zur Diagnose zählt der direkte Prozessausgang.
-- **Diagnosewiederholungen löschen keinen früheren Fehler.** Das geteilte
-  Tor halbiert weiterhin Portionen mit fehlenden Tests. Es zählt den
-  ursprünglichen Abbruch vor der Teilung und endet insgesamt mit Exit 1.
-  Ein späterer sauberer Lauf ist ein eigener Nachweis.
-- **Sammlungsfehler werden nicht übergangen.** Die Fenstergruppe kommt aus
-  Pytests Fixture-Graphen, einschließlich mittelbarer `qt_app`-Abhängigkeiten.
-  Scheitert die Gruppen- oder Testnamensammlung, bleibt das Tor rot; eine
-  teilweise ausgegebene Liste wird nicht als vollständig gefahren. Ein
-  ausdrücklich gesetztes `SUITE_PYTHON` wird nie still ersetzt.
+**Das Ergebnis ist der Exit-Code**, direkt nach dem Befehl gelesen, dazu die
+Zahl gelaufener gegen gesammelter Tests. Jeder Nichtnull-Ausgang ist rot, auch
+nach „passed". Wie die Fenstergruppe abgetrennt wird und wie ein Lauf gelesen
+wird, steht in `/pruefen` und `.claude/rules/tests.md`.
 
 Weiteres:
 
 ```
-.venv\Scripts\python.exe tools/affected_tests.py tests/test_parts.py --run  # betroffene reguläre Tests
-.venv\Scripts\python.exe -m pytest -q -m performance            # nur Release, Budget §31
-.venv\Scripts\python.exe -m app.ui.app                          # Anwendung starten
-.venv\Scripts\python.exe -m app.cli.main --help                 # Kommandozeile
-.venv\Scripts\python.exe tools/run_agent_suite.py               # kostet Geld, kein Testlauf
+.venv\Scripts\python.exe -m app.ui.app                    # Anwendung starten
+.venv\Scripts\python.exe -m app.cli.main --help           # Kommandozeile
+.venv\Scripts\python.exe tools/run_agent_suite.py         # kostet Geld, kein Testlauf
 ```
 
-Was **nicht Code** erzeugt — Bildschirmfotos, Handbuch, Website-Bilder,
-SEO-Dateien, Symbol, Installationsdatei, Linux-Pakete, Download-Kasten,
-ComfyUI, Website-Upload — dazu Erstaufbau und Versionspflege über
-`check_env.py`: `/erzeugen`. Dort stehen auch die Reihenfolge, der eigene
-Arbeitsbaum fürs Paketieren und die Falle mit den fehlenden Schriften.
+Was **nicht Code** erzeugt — Bildschirmfotos, Handbuch, Website-Bilder, SEO,
+Symbol, Pakete, Download-Kasten, ComfyUI, Upload — und Umgebung und Version
+über `check_env.py`: `/erzeugen`.
 
-Qt-Tests brauchen kein Bild: `QT_QPA_PLATFORM=offscreen` setzt
-`tests/conftest.py` selbst. Dieselbe Datei biegt die Nutzerverzeichnisse in
-einen Temp-Ordner um (§38) — läuft ein Test außerhalb der Suite, fehlt ihm das.
+Qt-Tests brauchen kein Bild: `tests/conftest.py` setzt
+`QT_QPA_PLATFORM=offscreen` und biegt die Nutzerverzeichnisse in einen
+Temp-Ordner (§38) — außerhalb der Suite fehlt beides.
 
 ## Karte
 
@@ -181,214 +93,106 @@ app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
   scene/      Szene, Stapel, Auswertung, Projektdatei, Parameter, Passungen
   geom/       Ops gegen manifold3d/trimesh, Boolesche Rückfallkette, Reparatur
   sketch/     Skizzen mit Zwangsbedingungen (§30.1): Löser, Profile, Ebenen
-  brep/       zweiter Kern (OpenCASCADE) — optional, meldet sich ab wenn er fehlt
+  brep/       zweiter Kern (OpenCASCADE) — optional, meldet sich ab, wenn er fehlt
   slice/      Schichtanalyse und G-Code lesen, nie G-Code schreiben;
               advise.py schließt aus der Geometrie auf Druckeinstellungen
   ingest/     Einlesen, Einheitenerkennung, 3MF als Baugruppe
   perceive/   Feature-Erkennung, stabile IDs, Analysekarten, Steckbrief
-  knowledge/  Profile, Normteile, Regelsammlung, Kalibrierung, parts/ Bausteine,
+  knowledge/  Profile, Normteile, Regelsammlung, Kalibrierung, parts/ Bausteine;
               print_settings.py löst Stufe + Material + Drucker auf
   agent/      LLM-Schicht: Sitzung, Vorschlag als eine Transaktion, Prüfungen
-  backends/   LLM und Mesh-Erzeuger — beides extern, beides abschaltbar
-              comfy_setup.py richtet ein fremdes ComfyUI für Weg 3 ein,
-              data/comfyui/ sind die Knoten dazu (TripoSG, MIT): beides im
-              Kern, weil tools/ im gebauten Paket nicht mitreist
+  backends/   LLM und Mesh-Erzeuger — extern und abschaltbar; comfy_setup.py
+              und data/comfyui/ (TripoSG, MIT) liegen im Kern, weil tools/
+              nicht im Paket mitreist
   export/     STL/3MF/OBJ/PLY/GLB/STEP, Plattenbelegung, Slicer-Übergabe
-              (handover.py ruft ihn, slicer_keys.py übersetzt die Namen)
-  activation/ Freischaltung: Kaufcode, Geräteidentität, signiertes Zertifikat,
-              Demo- und optionale Testfrist
-  updates.py  Update: fragen, holen, prüfen — gestartet wird nur auf Klick,
-              die Punkte dazu stehen in changelog/<sprache>.md
+  activation/ Freischaltung: Kaufcode, Geräteidentität, Zertifikat, Fristen
+  updates.py  Update fragen, holen, prüfen — gestartet nur auf Klick
   report.py   Fehlerbericht als Ordner — schreibt, sendet nie
   support.py  der einzige Weg hinaus: Rückmeldung an den Support, an einem Knopf
-  manual.py   Handbuch: geschriebene Seiten, Referenz aus dem Register erzeugt
-  figures.py  Abbildungskatalog — gezeichnet, gerendert, aufgenommen
-  drawing.py  SVG ohne Qt: Maßlinien, Schemata, Netzprojektion
-  markup.py   Markdown → HTML, nur die selbst erzeugte Teilmenge
+  manual.py · figures.py · drawing.py · markup.py   Handbuch, Abbildungen, SVG, Markdown
 app/ui/       PySide6 — darf core benutzen, nie umgekehrt
 app/images/   Bildschirmfotos fürs Handbuch, je Sprache ein Ordner
 app/cli/      Kommandozeile auf core
 tests/        eine Datei je Testart, data/ ist der Referenzkorpus
 tools/        Hilfsprogramme, nicht Teil der Anwendung
-website/      öffentliche Seiten; handbuch.html und <sprache>/manual.html erzeugt
-              tools/make_manual.py, die Rechtstexte tools/make_legal.py,
-              Changelog-Seiten tools/make_changelog.py,
-              robots/sitemap/llms tools/make_seo.py — der Rest von Hand
-              api/support.php nimmt Rückmeldungen an; die activation-Endpunkte
-              aktivieren und deaktivieren Geräte, api/operator.php nimmt nur
-              die lokale Support-Verwaltung mit externem Token an; alles muss
-              nach httpdocs/api/
-              bilder/ Schaustücke von Hand, beleg-*.png von tools/make_web_images.py
-              dl/ die Pakete, von tools/make_download.py angelegt
-changelog/    was im Update-Fenster steht, je Sprache eine Datei — Auswahl
-              in Kundensprache, keine Liste der Änderungen. **Hier liegt keine
-              CLAUDE.md**, und zwar bewusst: Test und `make_download.py`
-              sammeln den Ordner über `glob("*.md")` und lesen jeden Stem als
-              Sprache. Eine Fremddatei wird dort zur Sprache „CLAUDE" — in der
-              Prüfung und in der ausgelieferten `version.json`
-3D Drucker/   physische Druckprojekte, eigene CLAUDE.md — kein Programmcode
-              und **nicht** in diesem Repository: der Ordner hat sein eigenes
-              `.git` und steht hier in `.gitignore`. Wer dort committet, tut
-              es in seinem eigenen Repository
+website/      öffentliche Seiten; erzeugt wird, was die tools/make_*.py nennen,
+              api/ gehört nach httpdocs/api/
+changelog/    was im Update-Fenster steht, je Sprache eine Datei. Hier liegt
+              bewusst keine CLAUDE.md: Test und make_download.py lesen jeden
+              Dateinamen des Ordners als Sprache
+3D Drucker/   physische Druckprojekte — eigenes Repository, hier in .gitignore
 ```
 
-**Jedes dieser Verzeichnisse trägt eine eigene `CLAUDE.md`** mit der
-Architektur seines Gebiets — sie lädt mit, sobald ich eine Datei darin anfasse.
-Wie die Ebenen zusammenspielen, steht im nächsten Abschnitt.
+Jedes Verzeichnis mit Code trägt seine eigene Karte; `tests/test_directory_docs.py`
+prüft, dass sie da ist und ihre §-Verweise treffen.
 
 ## Die Unterlagen-Pyramide
-
-Zwei Sorten Datei begleiten jedes Gebiet, und sie beantworten
-**verschiedene Fragen**:
 
 | | `<verzeichnis>/CLAUDE.md` | `.claude/rules/<gebiet>.md` |
 |---|---|---|
 | Frage | **Was liegt hier?** | **Was ist einzuhalten?** |
-| Inhalt | Karte, Datenfluss, Einstieg, Muster | Regeln, Verbote, Stolperfallen |
+| Inhalt | Module, Datenfluss, Einstieg | Regeln, Verbote, Stolperfallen — je mit kurzem Grund |
 | Lädt | beim Anfassen einer Datei im Verzeichnis | über `paths:` im Frontmatter |
 | Ändert sich | wenn Module dazukommen oder umziehen | wenn eine Entscheidung fällt |
 
-Die Karte sagt „`boolean.py` löst die Rückfallkette"; die Regel sagt „die
-benutzte Stufe wird in die Operation geschrieben". **Keine wiederholt die
-andere** — die Karte verweist auf die Regel und umgekehrt.
+Keine wiederholt die andere; sie verweisen aufeinander. Ändert sich der Code,
+ändert sich die Karte; ändert sich eine Entscheidung, ändert sich die Regel.
+**Beide bleiben knapp**, denn eine Sitzung liest sie, bevor sie Code sieht:
+Messprotokolle, Anlässe, Datumsangaben und Verläufe gehören in `konzepte/`,
+`ROADMAP-ARCHIV.md` oder die Git-Historie. Was in `.claude/` liegt und was
+davon ins Repository gehört, sagt `.claude/README.md`.
 
-Von oben nach unten:
+`ruff format` formatiert auch ```` ```python ````-Blöcke in Markdown — eine
+Feldliste steht deshalb als Tabelle, nicht als Codeblock.
 
-```
-~/.claude/CLAUDE.md      WIE ich arbeite — projektübergreifend
-   └─ AGENTS.md          die 22 harten Regeln, jede mit Test
-   └─ CLAUDE.md (hier)   Befehle, Karte, Werkzeuge, Arbeitsweise
-        └─ app/CLAUDE.md          die vier Schichten und ihre Richtung
-             └─ app/core/CLAUDE.md         Verträge, OpContext, Unterpakete
-                  └─ app/core/geom/CLAUDE.md    die Rückfallkette und ihre Module
-        └─ tests/ tools/ website/ konzepte/ changelog/ packaging/
-```
+## Werkzeuge
 
-Dazu die Regeldateien, die quer dazu greifen: `kern.md` deckt ganz
-`app/core/**`, `operationen.md` zusätzlich `geom/`, `registry/` und `scene/`,
-`dateiformat.md` `ingest/`, `export/` und `scene/project*.py`. In `app/ui/`
-sind es vier, nach dem, was man anfasst: `oberflaeche.md` immer, dazu
-`ansicht.md` beim Viewport, `wartezeit.md` bei allem, was rechnen lässt, und
-`zeichenflaeche.md` beim Skizzeneditor. Für `tools/`, `packaging/` und die
-Workflows gilt `auslieferung.md` — Version, Lizenz, Signierung, die
-verteilte Menge. Über allem in `app/` liegt `zwillinge.md`: dieselbe Auskunft
-an zwei Stellen, die vier Klassen und das Werkzeug, das die Kandidaten misst.
-
-Welche Regel welche Frage beantwortet, steht seit dem 18.09.2026 in ihrem
-`description:` — lesbar, ohne die Datei zu öffnen. Und was in `.claude/`
-selbst liegt, wer davon die Quelle ist und was ins Repository gehört, sagt
-`.claude/README.md`.
-
-**Wohin etwas gehört**, in einem Satz: Ändert sich der Code, ändert sich die
-Karte; ändert sich eine Entscheidung, ändert sich die Regel. Datums-Marker,
-Phasenberichte und Verifikations-Stände gehören in **keines** von beiden — sie
-stehen in `ROADMAP.md`, `ROADMAP-ARCHIV.md` und der Git-History.
-
-Zwei Verzeichnisse haben **keine** eigene Regeldatei und nur eine Karte:
-`app/cli/` und `website/`. Für sie gilt `AGENTS.md` unmittelbar.
-
-**Eine Falle beim Schreiben einer Karte:** `ruff format` formatiert
-Python-Blöcke **innerhalb** von Markdown mit. Ein ```` ```python ````-Block mit
-ausgerichteten Kommentaren macht das Tor rot, ohne dass eine Zeile Code
-betroffen wäre. Wer eine Feldliste zeigen will, nimmt eine Tabelle — sie liest
-sich ohnehin besser und hält still.
-
-Dass die Karten vollständig bleiben und ihre §-Verweise treffen, prüft
-`tests/test_directory_docs.py`.
-
-## Werkzeuge in diesem Projekt
-
-Agents (`.claude/agents/`) — die globalen .NET-Agents passen hier nicht.
-Befehle liegen in `.claude/skills/`. Beide Listen stehen bereits in der
-Auflistung der Sitzung; hier stünden sie ein drittes Mal.
-
-**Agenten und Skills haben je eine Quelle:** `.claude/agents/*.md` und
-`.claude/skills/`. `tools/sync_agents.py` erzeugt daraus die Codex-Profile
-unter `.codex/agents/` und die Skills samt Referenzen unter `.agents/skills/`.
-Modell, Aufwand und Sandbox stammen aus dem Agenten-Frontmatter; Skillverweise
-und Aufrufregeln werden für Codex übersetzt. Nach Änderungen an einer Quelle
-das Werkzeug ausführen. `tests/test_agent_mirror.py` prüft mit `--check` auch
-fehlende, veraltete und verwaiste Spiegeldateien. Die erzeugten Dateien werden
-nicht von Hand bearbeitet.
-
-**Die Projekt-Hooks teilen sich `.claude/hooks/solidon3d_hooks.py`.** Die
-Einstiege stehen in `.claude/settings.json` und `.codex/hooks.json`.
-Codex verlangt zusätzlich zur Projektfreigabe die Prüfung und Freigabe jeder
-Hook-Definition über `/hooks`; nach Änderungen an der Definition erneut.
-Ein vorhandener oder als aktiviert gelisteter Hook ist noch kein ausgeführter
-Hook. Die Auflistung `hooks/list` unterscheidet `trusted`, `untrusted` und
-`modified`. Testmarken sind sitzungsbezogene Erinnerungen, kein Nachweis für
-ein bestandenes oder vollständiges Tor.
-**Python-Sprachhilfe für Claude:** `pyright-lsp` ist projektbezogen aktiviert;
-der eigentliche Sprachserver wird je Rechner separat installiert
-(`npm install --global pyright`). Das npm-Bin-Verzeichnis muss im `PATH` des
-gestarteten Editors liegen; nach einer PATH-Änderung den Editor neu starten.
-`[tool.pyright]` in `pyproject.toml` begrenzt die Suche auf den Quelltext und
-verweist auf `.venv`, damit Druckprojekte und Prüfartefakte nicht mitindiziert
-werden. Die verbindliche Typprüfung im Tor bleibt mypy. C#-Sprachhilfe und
-Unity-Server sind für Solidon projektlokal abgeschaltet.
-
-**Bibliotheksdoku für Claude und Codex:** `context7` ist projektbezogen
-eingerichtet (Entscheidung Robert, 11.09.2026): bei Claude über das Plugin,
-bei Codex über `[mcp_servers.context7]` in `.codex/config.toml`. Beide nutzen
-den gehosteten MCP-Server von Upstash, ohne lokalen Prozess und ohne
-erforderlichen Schlüssel. Bibliotheks- und Versionsabdeckung bei der Anfrage
-prüfen. Anfragen auf Bibliotheksnamen und fachliche Fragen beschränken,
-keinen Projektcode oder Zugangsdaten übertragen. Die Konfiguration allein
-belegt keine Verbindung in einer bereits laufenden Sitzung; dort die
-verfügbaren Werkzeuge prüfen und gegebenenfalls den MCP-Server neu laden.
-
-Bei einer Einrichtungsprüfung den tatsächlich laufenden Editor bestimmen:
-Claude Desktop kann eine andere gebündelte Claude-Code-Version verwenden als
-der Befehl `claude` im `PATH`. Dessen `auth status` prüft den aufgerufenen
-CLI-Kontext und belegt keine fehlende Desktop-Anmeldung. Gemeinsame
-Projektdateien und sichtbar ausgeführte Editorfunktionen getrennt prüfen;
-eine konfigurierte Terminal-Statuszeile ist noch kein Nachweis für ihre
-Darstellung in der Desktop-Oberfläche.
-
-Wie die Sitzung selbst bedienbar sein soll, steht in
-`.claude/bedienkonzept-ueberblick.md` (die Sitzung als Ganzes) und
-`.claude/bedienkonzept-funktionen.md` (sechzehn Funktionen einzeln). **Entwurf,
-und zwar vollständig:** Umgesetzt ist von den sechs Konzepten und sechzehn
-Regeln bis heute keines.
-
-Den **Stand** nennt im Überblick eine vierte Spalte der Schlusstabelle (§10);
-bei den Funktionen eine **eigene Tabelle darunter** — deren Schlusstabelle
-selbst nennt nur Ort und Aufwand. Beide Dateien vermerken den Unterschied
-inzwischen selbst; wer den Stand sucht, sucht die Tabelle mit der Spalte
-„Stand" und nicht die letzte der Datei.
+- **Agenten und Skills** haben je eine Quelle: `.claude/agents/*.md` und
+  `.claude/skills/`. `tools/sync_agents.py` erzeugt daraus die Codex-Seite
+  (`.codex/agents/`, `.agents/skills/`) — nach jeder Änderung an einer Quelle
+  ausführen; `tests/test_agent_mirror.py` prüft den Spiegel. Die erzeugten
+  Dateien werden nie von Hand bearbeitet.
+- **Hooks** teilen sich `.claude/hooks/solidon3d_hooks.py`; die Einstiege
+  stehen in `.claude/settings.json` und `.codex/hooks.json`. Codex verlangt je
+  Hook-Definition eine Freigabe über `/hooks`, nach jeder Änderung erneut.
+  Testmarken sind Erinnerungen, kein Nachweis eines Tors.
+- **`pyright-lsp`** gibt Sprachhilfe (Einrichtung je Rechner in `/erzeugen`);
+  die verbindliche Typprüfung bleibt mypy.
+- **`context7`** liefert Bibliotheksdoku, bei Claude als Plugin, bei Codex
+  über `.codex/config.toml`. Gefragt wird nach Bibliothek und Fachfrage — nie
+  mit Projektcode oder Zugangsdaten.
 
 ## Arbeitsweise hier
 
 Kleine Schritte, Test zuerst bei Geometrie, kein Revert, nie stillschweigend
-raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
+raten — das steht in `AGENTS.md`. Dazu:
 
-- **Auf ausdrücklichen Auftrag committen**, in logischen Einheiten, mit `Co-Authored-By`.
-  `/liefern` führt das aus — Tor laufen lassen, in Einheiten aufteilen,
-  deutsche Meldungen. Der Skill ruft sich nicht selbst auf
-  (`disable-model-invocation`), er wird angesagt.
-- **Der Push-Hook läuft nach dem Commit.** `.githooks/post-commit` pusht, weil
-  auf drei Maschinen gearbeitet wird und ein liegengebliebener Commit auf den
-  anderen zweien nicht existiert. Der Hook holt und rebasiert **nicht** — ist
-  die Gegenstelle weiter, scheitert er und sagt, was zu tun ist.
-  `SOLIDON_KEIN_PUSH=1` schaltet ihn für einen Lauf ab; bei einem reinen
-  Commitauftrag ohne Push-Freigabe wird diese Variable pro Prozess gesetzt.
-- **Vor jedem Commit an `app/` oder `tools/` laufen die Bezeichnerprüfung
-  und die statische Prüfung neuer Oberflächentexte.** `.githooks/pre-commit`
-  fährt `test_language_rules` und unabhängig von dessen Ergebnis
-  `tools/check_new_texts.py`. Sprachbefunde zu Dateien **aus diesem Commit**
-  und fehlende Übersetzungen seiner neuen Texte verhindern den Commit.
-  `test_translations` läuft mit seinen Tests ohne Fenster im Entwicklungstor;
-  nur sein Fenstertest und die übrigen Fenster- und Leistungsprüfungen laufen
-  ausschließlich beim Release.
-  `SOLIDON_KEIN_TOR=1` schaltet den Hook für einen Lauf ganz ab.
-  Beides läuft nur, wenn `core.hooksPath` auf `.githooks` zeigt — `check_env`
-  meldet es beim Sitzungsstart, und `tests/test_toolchain.py` prüft zusätzlich,
-  dass jeder Hook im Repository ausführbar ist. Seinen Interpreter sucht der
-  Hook am **Hauptklon** (`git rev-parse --git-common-dir`) und nicht im
-  Arbeitsverzeichnis: In einem `git worktree` gibt es keine `.venv`, und mit
-  einem relativen Pfad meldete er „keine .venv gefunden" und ließ jeden Commit
-  durch — abgeschaltet also genau dort, wo mehrere Sitzungen nebeneinander
-  committen.
-- **Nach Pattern-Änderungen**: die betroffene Regel in `.claude/rules/`
-  nachziehen, `ROADMAP.md` fortschreiben, Bauplan nur mit Ansage ändern.
+- **Nach jedem abgeschlossenen Punkt committen und pushen**, sobald das Tor
+  grün ist — in logischen Einheiten, nur die eigenen Pfade, mit
+  `Co-Authored-By`. Zusammengeführt wird per Merge. `/liefern` bündelt das,
+  wenn Robert es ansagt.
+- **`.githooks/post-commit` pusht** jeden Commit, weil auf drei Maschinen
+  gearbeitet wird. Er holt und rebasiert nicht — ist die Gegenstelle weiter,
+  scheitert er und sagt es. `SOLIDON_KEIN_PUSH=1` hält einen Commit lokal,
+  wenn Robert ausdrücklich „nicht pushen" sagt.
+- **`.githooks/pre-commit`** fährt bei Änderungen an `app/` oder `tools/` die
+  Bezeichnerprüfung und `tools/check_new_texts.py`; Befunde an Dateien dieses
+  Commits halten ihn an. `SOLIDON_KEIN_TOR=1` schaltet ihn für einen Lauf ab.
+  Beide Hooks laufen nur mit `core.hooksPath = .githooks` (`check_env`
+  meldet es) und suchen ihren Interpreter am Hauptklon, auch aus einem Worktree.
+- **Nach einer Muster- oder Entscheidungsänderung** die Regel in
+  `.claude/rules/` nachziehen und `ROADMAP.md` fortschreiben; den Bauplan nur
+  mit Ansage ändern.
+
+## Erinnerungen
+
+Sie liegen in `.claude/memory/` — **nur auf dieser Maschine** (`.gitignore`),
+weil das Repository zu jedem Release öffentlich wird. Der Ort im Nutzerprofil
+ist eine Verknüpfung darauf (`tools/link_memory.py`); fehlen sie nach einem
+Pull, holt der Sitzungsstart den letzten versionierten Stand zurück.
+
+- **Eine Datei je Thema.** Eine neue Erkenntnis kommt als Abschnitt in das
+  passende Thema aus `MEMORY.md`; eine neue Datei nur für ein neues Thema. Der
+  Schreib-Hook nennt einer neuen Datei die nächstliegenden Themen.
+- Was jede Sitzung auf jedem Rechner braucht, gehört in eine Regel oder Karte —
+  nicht in die Erinnerungen. Geheimnisse gehören in keines von beiden.
