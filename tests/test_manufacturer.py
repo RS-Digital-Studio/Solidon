@@ -11,6 +11,7 @@ gegen ein installiertes Programm.
 from __future__ import annotations
 
 import json
+import math
 import zipfile
 from collections.abc import Callable
 from dataclasses import replace
@@ -416,6 +417,79 @@ def test_a_measured_overhang_goes_to_the_slicer_like_a_choice() -> None:
     foundation = manufacturer.base_settings(measured, "standard", None)
 
     assert foundation.measured == {"support.threshold_angle": 52.0}
+
+
+def _probed(profile: Profile, settings: PrintSettings, angle: float = 52.0) -> Profile:
+    """Eine Überhangprobe, gedruckt auf dem Raster dieser Einstellungen."""
+    return replace(
+        profile,
+        material=replace(
+            profile.material,
+            overhang_angle=angle,
+            calibration_printer=profile.printer.id,
+            calibration_nozzle_diameter=profile.printer.nozzle_diameter,
+            calibration_layer_height=settings.layers.layer_height,
+            calibration_extrusion_width=settings.layers.line_width,
+        ),
+    )
+
+
+def test_a_measured_overhang_holds_only_on_the_raster_of_its_probe() -> None:
+    """§28.3: Die Probe gilt für Schichthöhe und Bahnbreite, auf denen sie
+    entstand. Mit einer breiteren Bahn oder der Stufe „Fein" stützen Analyse
+    und Übergabe wieder ab der Grenze ohne Messung — bis zum 27.09.2026 blieb
+    der gemessene Winkel stehen, weil die Grundlage ihn trug."""
+    plain = _cc2()
+    measured = _probed(plain, print_settings.resolve(plain))
+    without = plain.overhang_limit_degrees
+    assert not math.isclose(without, 52.0)
+    foundation = manufacturer.base_settings(measured, "standard", None)
+    assert foundation.settings.support.threshold_angle == pytest.approx(52.0)
+
+    width = foundation.settings.layers.line_width
+    wider = print_settings.with_choice(foundation.settings, "layers.line_width", width + 0.05)
+    printed = manufacturer.effective(wider, foundation)
+    assert printed.support.threshold_angle == pytest.approx(without)
+    assert profiles.for_process(measured, printed, effective=True).overhang_limit_degrees == (
+        pytest.approx(without)
+    )
+
+    back = print_settings.with_choice(printed, "layers.line_width", width)
+    assert manufacturer.measured_on(back, foundation).support.threshold_angle == pytest.approx(52.0)
+
+    fine = manufacturer.base_settings(measured, "fine", None)
+    assert fine.measured == {}
+    assert fine.settings.support.threshold_angle == pytest.approx(without)
+    assert print_settings.resolve(measured, "fine").support.threshold_angle == pytest.approx(
+        without
+    )
+
+    chosen = print_settings.with_choice(wider, "support.threshold_angle", 40.0)
+    assert manufacturer.effective(chosen, foundation).support.threshold_angle == pytest.approx(40.0)
+
+
+def test_a_measured_overhang_leaves_the_handover_with_its_raster(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auf dem Herstellerprofil geht die Messung als Abweichung hinaus, solange
+    sie gilt — auf einem anderen Raster gilt wieder Elegoos Winkel, und den
+    kennt der Slicer selbst."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    raster = manufacturer.base_settings(_cc2(), "standard", _setup(bestand)).settings
+    measured = _probed(_cc2(), raster)
+    foundation = manufacturer.base_settings(measured, "standard", _setup(bestand))
+    assert foundation.has_profile
+    assert foundation.measured == {"support.threshold_angle": 52.0}
+
+    kept = manufacturer.effective(foundation.settings, foundation)
+    assert "support.threshold_angle" in (manufacturer.written_paths(kept, foundation) or ())
+
+    wider = print_settings.with_choice(
+        foundation.settings, "layers.line_width", raster.layers.line_width + 0.05
+    )
+    printed = manufacturer.effective(wider, foundation)
+    assert printed.support.threshold_angle == pytest.approx(raster.support.threshold_angle)
+    assert "support.threshold_angle" not in (manufacturer.written_paths(printed, foundation) or ())
 
 
 # --- Übergabe: nur die Abweichung --------------------------------------------------

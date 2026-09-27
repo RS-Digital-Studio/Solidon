@@ -2554,6 +2554,33 @@ class PrintSettingsDialog(QDialog):
     _oversize_shown: OutOfBuildVolume | bool | None
     """Was die Zeile zeigt — ``False``, solange sie nie gebaut wurde."""
 
+    @property
+    def settings(self) -> PrintSettings:
+        """Was gedruckt wird: die Grundlage, darüber eigene Wahl und Vorschläge."""
+        return self._settings
+
+    @settings.setter
+    def settings(self, value: PrintSettings) -> None:
+        # **Die Messung gilt auf dem Raster, mit dem gedruckt wird**
+        # (``manufacturer.measured_on``). Jede Zuweisung geht hier durch, auch
+        # eine andere Bahnbreite im Feld: Danach stützten Analyse und Übergabe
+        # sonst weiter ab dem Winkel einer Probe, die für diesen Druck nichts
+        # mehr sagt.
+        self._settings = manufacturer.measured_on(value, self._measuring_foundation(value))
+
+    def _measuring_foundation(self, settings: PrintSettings) -> manufacturer.Foundation:
+        """Die Grundlage, an der die Messung hängt — die gelesene, solange sie zu
+        Drucker, Material und Stufe passt, sonst Solidons Tabelle."""
+        foundation: manufacturer.Foundation | None = getattr(self, "_foundation", None)
+        key: tuple[object, ...] | None = getattr(self, "_foundation_key", None)
+        if (
+            foundation is not None
+            and key is not None
+            and key[1:] == (self.session.profile, settings.quality)
+        ):
+            return foundation
+        return manufacturer.base_settings(self.session.profile, settings.quality, None)
+
     def __init__(
         self,
         session: Session,

@@ -100,9 +100,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   je Schicht — kleine Stegunterseiten tragen sich selbst. Ein Ergebnis ohne
   Stücke gilt schichtweise als eines; lange Stege fängt die Brückenregel.
 - **Den Stützwinkel sagt, womit der Slicer stützt** (Konzept Herstellerprofil,
-  Entscheidung L): gemessen, sonst die Schwelle des gewählten
-  Herstellerprozesses, sonst `overhang_limit` aus `printers.toml`, sonst die
-  Startregel (`Profile.overhang_limit_degrees`). Die Auswertung rechnet mit
+  Entscheidung L): gemessen auf dem Raster der Probe, sonst die Schwelle des
+  gewählten Herstellerprozesses, sonst `overhang_limit` aus `printers.toml`,
+  sonst die Startregel (`Profile.overhang_limit_degrees`). Die Auswertung rechnet mit
   `Session.evaluation_profile` — den wirksamen Einstellungen des Fensters, im
   Hauptthread vor jedem Lauf geholt —, Druckdialog-Rat und Kanalsperre der
   Übergabe mit `profiles.for_process(..., effective=True)`. Aus einem

@@ -267,6 +267,12 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
 - **`with_path` setzt keine Herkunft**: Dialog `with_choice`, übernommener
   Vorschlag `with_accepted` (`advise.apply`), Zurücksetzen `without_choice`;
   eine Rücklesung aus einem Profil ist keine Wahl.
+- **Das Gemessene gilt auf dem Raster seiner Probe**
+  (`manufacturer.measured_on`): Wirksame Einstellungen entstehen über
+  `manufacturer.effective`, im Druckdialog über sein Attribut `settings`. Eine
+  andere Schichthöhe oder Bahnbreite setzt den gemessenen Überhangwinkel auf
+  die Grundlage ohne Messung zurück (`Foundation.unmeasured`), sonst stützten
+  Analyse und Slicer nach einer Probe, die für diesen Druck nichts sagt.
 - **Was aus dem Körper folgt, steht am Teil** (`handover.split_for_parts`):
   Ein übernommener Pfad aus `advise.PART_PATHS` ohne plattenweiten Grund
   (`advise.plate_paths`) fällt auf der Platte auf die Grundlage zurück, und
