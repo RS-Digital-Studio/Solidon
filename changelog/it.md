@@ -42,8 +42,8 @@ scrive in `website/version.json`.
 - Su una tasca per magnete con labbro, «Allunga in asola» rifiuta ora anche sui corpi fatti di facce e spigoli, invece di tagliare il labbro.
 - Su una svasatura, «Modifica elemento» taglia la nuova misura come se fosse stata svasata così fin dall'inizio. Prima Solidon rifiutava oppure lasciava una pellicola sottile di traverso sul foro.
 - Se parti di un modello sono infilate l'una nell'altra, Solidon le unisce prima del calcolo, come verranno stampate. Volume e fori tornano, e il rapporto lo dice.
-- Quando allargate un foro, l'anteprima precisa mostra tutto il materiale asportato, anche sui modelli grandi e sui corpi con canali chiusi.
-- Mentre digitate una quota su una figura grande, l'anteprima grossolana compare in meno di un secondo invece che fino a diciannove, e l'anteprima di un foro riesce.
+- Quando allarghi un foro, l'anteprima precisa mostra tutto il materiale asportato, anche sui modelli grandi e sui corpi con canali chiusi.
+- Mentre digiti una quota su una figura grande, l'anteprima grossolana compare in meno di un secondo invece che fino a diciannove, e l'anteprima di un foro riesce.
 - Se un passaggio su un modello aperto calcola solo in modo approssimato e il volume cresce, il rapporto indica lo scostamento e propone «Prima ripara, poi ricalcola».
 
 ### Quote nella vista
@@ -59,7 +59,7 @@ scrive in `website/version.json`.
 
 ### Riconoscimento
 
-- Le caratteristiche vengono riconosciute da sole fino a 1,5 milioni di triangoli. Fino a cinque milioni Solidon chiede prima e indica la memoria necessaria e la durata sul vostro computer.
+- Le caratteristiche vengono riconosciute da sole fino a 1,5 milioni di triangoli. Fino a cinque milioni Solidon chiede prima e indica la memoria necessaria e la durata sul tuo computer.
 - Rifiutato il riconoscimento completo, «Riconosci tutte le caratteristiche» lo recupera nel rapporto. Se dura troppo, «Carica senza riconoscimento delle caratteristiche» lo salta.
 - Sui modelli grandi «Riconosci elementi in un punto» trova facce, sedi e appiattimenti dove prima segnalava troppi triangoli. Il punto si sceglie anche da tastiera.
 - I modelli grandi vengono riconosciuti molto più in fretta: un letto da casa delle bambole generato, 1,2 milioni di triangoli, in 27 secondi invece di 174. Annulla agisce in pochi secondi.
@@ -69,7 +69,7 @@ scrive in `website/version.json`.
 - Il labbro di una tasca per magnete si chiama restringimento nell'albero e indica la sua apertura. Nessuna azione lo trasforma più in svasatura.
 - Dopo «Affina gli spigoli», Solidon riconosce raccordi, fori e scritte come nell'originale, anche dopo un foro aggiuntivo.
 - Dopo «Dividi» e «Tagliare via», una faccia divisa mantiene il suo nome sul pezzo più grande, e gli accoppiamenti su di essa restano validi.
-- Se fate clic sullo spigolo di bordo di un foro sdraiato, si chiama «Verticale», come sta davvero.
+- Se fai clic sullo spigolo di bordo di un foro sdraiato, si chiama «Verticale», come sta davvero.
 - Se un modello ha più di 5 000 caratteristiche, Solidon tiene le più grandi invece di restare senza nessuna. Scalare non rimescola i loro nomi.
 
 ### Importare e riparare
@@ -92,28 +92,28 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
-- In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale il profilo del produttore. Solidon scrive solo ciò che modificate o accettate dai suggerimenti.
+- In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale il profilo del produttore. Solidon scrive solo ciò che modifichi o accetti dai suggerimenti.
 - Il livello «Standard» stampa con velocità e accelerazioni del profilo del produttore invece di frenare tutto a 40 mm/s. Su una Centauri Carbon 2 i pezzi grandi richiedono il 40-50 % di tempo in meno.
-- I livelli «Fine», «Bozza» e «Resistente» scelgono ora il processo corrispondente del vostro slicer, ad esempio «0.12mm Fine» per «Fine».
+- I livelli «Fine», «Bozza» e «Resistente» scelgono ora il processo corrispondente del tuo slicer, ad esempio «0.12mm Fine» per «Fine».
 - I livelli di qualità nella finestra di stampa appaiono ora nella lingua dell'interfaccia.
 - Anche la velocità degli spostamenti a vuoto viene dalla stampante: la Centauri Carbon 2 si sposta a 500 invece di 150 mm/s, perché l'ugello coli meno lungo il tragitto.
 - Solidon prende l'angolo di sbalzo dal profilo del produttore della stampante: 60 invece di 45 gradi per Elegoo, Bambu e Creality. Smussi e pendenze lievi non ricevono più supporti inutili.
-- Anche il rapporto calcola ora gli sbalzi con l'angolo a partire dal quale il vostro profilo dello slicer mette i supporti.
-- Le impostazioni di stampa mostrano ciò che viene stampato: la base è il profilo del produttore, i vostri valori sono evidenziati e si ripristinano uno per uno.
-- Il piatto di stampa si sceglie nelle impostazioni di stampa e la temperatura del piano lo segue. Se il produttore non ammette il piatto per il vostro filamento, Solidon lo dice prima.
+- Anche il rapporto calcola ora gli sbalzi con l'angolo a partire dal quale il tuo profilo dello slicer mette i supporti.
+- Le impostazioni di stampa mostrano ciò che viene stampato: la base è il profilo del produttore, i tuoi valori sono evidenziati e si ripristinano uno per uno.
+- Il piatto di stampa si sceglie nelle impostazioni di stampa e la temperatura del piano lo segue. Se il produttore non ammette il piatto per il tuo filamento, Solidon lo dice prima.
 - Senza «Applica i suggerimenti» nessun pezzo riceve più un brim senza chiederlo, né all'esportazione né nel passaggio allo slicer.
 - Se un brim, uno skirt o un raft sporge oltre il piano, Solidon lo segnala nel passaggio allo slicer e propone «Disponi sul piano».
 - Se lo slicer rifiuta un pezzo troppo alto, Solidon indica entrambe le altezze e propone «Dividi il modello», «Riduci al volume di stampa» o un'altra stampante.
 - Se Bambu Studio resta bloccato dopo lo slicing, Solidon prende il file di stampa finito invece di segnalare un errore dopo cinque minuti.
-- I progetti della 0.5.0 stampano alla velocità della vostra stampante. Ciò che avevate impostato voi resta.
+- I progetti della 0.5.0 stampano alla velocità della tua stampante. Ciò che avevi impostato tu resta.
 - La velocità del primo strato vale ora anche per il suo riempimento. Prima lo slicer stendeva il fondo alla velocità del produttore, 105 mm/s sulla Centauri Carbon 2.
 - Con PrusaSlicer la stampa inizia ora come con Prusa stessa: con livellamento del piano, linea di spurgo e controllo della stampante.
 - Il PETG arriva ora a PrusaSlicer come PETG, non più come PLA.
 - Se il primo strato ha passaggi stretti, Solidon propone di stenderlo a 50 mm/s. Così le linee corte aderiscono meglio.
 - Dove il vostro slicer limita già la velocità in base al flusso volumetrico, Solidon non propone più un proprio limite di velocità.
-- Se adottate i valori di un profilo di filamento e poi cambiate filamento, tornano a valere i valori del nuovo.
-- Il primo strato stampa ora linee larghe quanto il profilo della vostra stampante, di solito 0,5 mm con ugello da 0,4. Con Cura la testina non va più a passo d'uomo tra una e l'altra.
-- Con Cura la stampa inizia ora con il codice di avvio della vostra stampante, come dal produttore. Se Cura non conosce la stampante, Solidon ve lo dice.
+- Se adotti i valori di un profilo di filamento e poi cambi filamento, tornano a valere i valori del nuovo.
+- Il primo strato stampa ora linee larghe quanto il profilo della tua stampante, di solito 0,5 mm con ugello da 0,4. Con Cura la testina non va più a passo d'uomo tra una e l'altra.
+- Con Cura la stampa inizia ora con il codice di avvio della tua stampante, come dal produttore. Se Cura non conosce la stampante, Solidon te lo dice.
 - Con Cura il primo strato usa ora l'accelerazione del profilo del produttore invece dell'accelerazione di stampa piena.
 - I supporti di Cura seguono ora lo schema dei profili di fabbrica: collegati, con un tetto leggero e velocità moderata.
 - Con Cura le pareti a sbalzo si stampano ora più lentamente, come dal produttore. Le stampe con molti sbalzi durano fino a circa il 20 % in più.
@@ -150,7 +150,7 @@ scrive in `website/version.json`.
 - Ogni passaggio interrotto nel rapporto ha un pulsante: «Correggi l'inserimento» lo apre con il cursore nel campo interessato.
 - Dopo la divisione, il rapporto non mostra più, sulle righe relative al corpo vecchio, pulsanti che non fanno nulla.
 - Un disegno tracciato liberamente senza quota non genera più un avviso nel rapporto.
-- Un rapporto di errore indica le cartelle nella vostra directory utente senza il vostro nome utente, anche se Solidon stesso è installato lì.
+- Un rapporto di errore indica le cartelle nella tua directory utente senza il tuo nome utente, anche se Solidon stesso è installato lì.
 
 ### Manuale e sito web
 

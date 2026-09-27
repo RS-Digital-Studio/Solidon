@@ -1102,3 +1102,47 @@ def test_french_names_the_escape_key_as_its_keyboard_does() -> None:
         start for start in FRENCH_ESC_ON_MANUAL_PAGES if not any(k.startswith(start) for k in found)
     ]
     assert not stale, f"nachgezogen — aus FRENCH_ESC_ON_MANUAL_PAGES austragen: {stale}"
+
+
+#: Woran man die Anrede „voi“ erkennt: Pronomen, Hilfsverben und die
+#: Imperative, mit denen Befunde und Hinweise einen Satz beginnen. Kuratiert
+#: wie ``GERMAN_STEMS`` — ein Partizip im Plural („facce selezionate“) sieht
+#: aus wie ein Imperativ, deshalb nur am Satzanfang.
+ITALIAN_VOI = re.compile(
+    r"\b(voi|vostr[oaie]|avete|potete|potrete|dovete|volete|avevate)\b"
+    r"|(?:^|[.!?:;—]\s+)(Selezionate|Scegliete|Modificate|Aumentate|Riducete|Spostate|"
+    r"Ruotate|Verificate|Inserite|Annullate|Trascinate|Disegnate|Convertite|Liberate|"
+    r"Assegnate|Associate|Inseritela|Annullatelo|Aumentatene|Modificateli)\b",
+    re.MULTILINE,
+)
+
+
+def test_italian_says_tu_outside_the_manual() -> None:
+    """Italienisch spricht den Kunden mit „tu“ an (Imperativ der 2. Person).
+
+    Entschieden am 27.09.2026 nach Kundensicht: 429 Einträge mit „tu“ gegen 31
+    mit „voi“. Die Handbuchseiten und Anleitungen stellt die Handbuch-Sitzung
+    um; sie sind hier ausgenommen, solange sie nur dort stehen.
+    """
+    manual_only = message_ids(
+        [
+            PACKAGE_DIR / "core" / "manual.py",
+            PACKAGE_DIR / "core" / "guides.py",
+            PACKAGE_DIR.parent / "tools" / "make_guides.py",
+        ]
+    ) - message_ids(
+        [
+            path
+            for path in sorted(PACKAGE_DIR.rglob("*.py"))
+            if path.name not in {"manual.py", "guides.py"}
+        ]
+    )
+    catalog = read_catalog("it")
+    voi = [
+        f"{key[:50]!r}: {match.group(0).strip()!r}"
+        for key, value in catalog.items()
+        if key not in manual_only
+        for match in [ITALIAN_VOI.search(value)]
+        if match
+    ]
+    assert not voi, "it spricht „voi“:\n" + "\n".join(voi)
