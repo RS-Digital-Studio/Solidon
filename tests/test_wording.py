@@ -567,6 +567,11 @@ ZITAT_DARF_ABWEICHEN: dict[tuple[str, str], str] = {
         "Alle Maße in Millimetern.",
         "Presssitz",
     ): "Begriff im Satz, nicht der Feldname; klein im Satz.",
+    (
+        "Eine STL-Datei enthält Dreiecke und sonst nichts.",
+        "Oberseite innen",
+    ): "Handbuchseite: fr sagt noch „Face supérieure intérieur“, die Handbuch-Sitzung "
+    "zieht „Face supérieure intérieure“ nach — danach austragen.",
 }
 
 

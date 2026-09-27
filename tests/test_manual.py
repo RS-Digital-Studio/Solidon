@@ -1265,7 +1265,7 @@ def test_the_manual_names_a_face_the_way_the_labels_do() -> None:
         assert str(positiv) in text or str(negativ) in text, (
             f"weder „{positiv}“ noch „{negativ}“ steht im Handbuch"
         )
-    innen = str(tr("{side} innen")).format(side=str(labels._SIDES[2][0]))
+    innen = str(labels._INNER_SIDES[2][0])
     assert innen in text, f"„{innen}“ — der Name der Innenwand steht nicht im Handbuch"
 
 
