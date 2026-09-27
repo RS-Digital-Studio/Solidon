@@ -219,15 +219,28 @@ def _region(
     for start in range(0, len(faces), SCAN_BLOCK):
         _check(check)
         triangles = vertices[faces[start : start + SCAN_BLOCK]]
-        keep = (triangles.min(axis=1) <= point + radius).all(axis=1)
-        keep &= (triangles.max(axis=1) >= point - radius).all(axis=1)
-        indices = np.flatnonzero(keep) + start
+        indices = np.flatnonzero(_touching(triangles, point, radius)) + start
         count += len(indices)
         if bounded and count > LOCAL_FACE_LIMIT:
             return None
         selected.append(indices)
     _check(check)
     return np.concatenate(selected) if selected else np.empty(0, dtype=np.int64)
+
+
+def _touching(triangles: np.ndarray, point: np.ndarray, radius: float) -> np.ndarray:
+    """Welche Dreiecke mit ihrem Hüllquader den Würfel um ``point`` treffen."""
+    keep = (triangles.min(axis=1) <= point + radius).all(axis=1)
+    keep &= (triangles.max(axis=1) >= point - radius).all(axis=1)
+    return np.asarray(keep)
+
+
+def _within(mesh: MeshData, indices: np.ndarray, point: np.ndarray, radius: float) -> np.ndarray:
+    """Was :func:`_region` im kleineren Würfel wählte — gefragt an einer Vorauswahl,
+    die ihn enthält, ohne das ganze Netz noch einmal zu lesen. Dieselbe Frage je
+    Dreieck, dieselbe Reihenfolge."""
+    triangles = np.asarray(mesh.raw.vertices)[np.asarray(mesh.raw.faces)[indices]]
+    return np.asarray(indices[_touching(triangles, point, radius)])
 
 
 def _connected_to(mesh: MeshData, indices: np.ndarray, seed: int) -> np.ndarray:
@@ -506,6 +519,7 @@ def _recognise_region(
     radius: float,
     proven: Collection[int] = (),
     recorded: float | None = None,
+    alone: bool = False,
 ) -> LocalDetection:
     """Fits am Ausschnitt, Begrenzung und Hohlraum am vollständigen Original.
 
@@ -514,12 +528,24 @@ def _recognise_region(
     Suchradius hinausreicht. ``recorded`` ist der Suchumfang, den die
     gefundenen Merkmale als ``local_search_radius`` weitertragen, wenn er
     größer ist als der gerade durchsuchte (:func:`detect_known`).
+
+    ``alone`` heißt: Der Ausschnitt ist die Facette allein, weil das Budget
+    für den Bereich nicht reichte, und kein Einschluss kann den Treffer
+    tragen (:func:`_reaches_beyond`). Trägt die Facette kein Merkmal, das
+    vollständig sein könnte (:func:`_could_be_complete`), steht die Antwort
+    fest, bevor der ganze Körper gefragt wird — der Aufrufer macht aus jedem
+    Grund die Absage am Budget (RM-265). Sie trägt dann nur diesen Grund;
+    ``unfinished`` und ``open_curvature`` liest an einer Absage niemand.
     """
     _check(check)
     local = _part(mesh, indices)
     found = detection.detect(local, check_cancelled=check)
     _check(check)
     body = mesh.raw
+    if alone and not _could_be_complete(body, found, indices, point, radius):
+        return LocalDetection(
+            examined_faces=tuple(int(index) for index in indices), reason="no_feature"
+        )
     pairs = np.asarray(body.face_adjacency)
     inside = np.zeros(mesh.triangle_count, dtype=bool)
     inside[indices] = True
@@ -965,6 +991,69 @@ def _recognise_region(
     )
 
 
+def _could_be_complete(
+    body: Any,
+    found: Mapping[FeatureId, Feature],
+    indices: np.ndarray,
+    point: np.ndarray,
+    radius: float,
+) -> bool:
+    """Ob eines der Merkmale des Ausschnitts die Prüfung am ganzen Körper bestehen könnte.
+
+    Die notwendigen Bedingungen aus ``is_complete`` in :func:`_recognise_region`,
+    an denselben Zahlen und ohne den ganzen Körper zu fragen: Eine gerundete
+    Seite braucht ihren Anteil an seiner Oberfläche (``large``), jedes andere
+    Merkmal außer einer Fläche muss ganz im Suchradius liegen
+    (:func:`_inside_radius`, in ``bounded``). Eine Fläche besteht die Frage
+    immer — ob sie abgeschnitten ist und eine Ebene nach der Regel des ganzen
+    Körpers, sagt erst die Prüfung selbst. Am Mausoleum-Drachen trug die
+    Facette an der Stelle eine gerundete Seite von 101 mm², ein Hundertstel
+    seiner Oberfläche sind 108.
+    """
+    side_floor: float | None = None
+    for feature in found.values():
+        if not feature.face_indices or feature.kind in {"edge_loop", "void"}:
+            continue
+        if feature.kind == "face":
+            return True
+        faces = indices[list(feature.face_indices)]
+        if feature.kind == "curved_face":
+            if side_floor is None:
+                side_floor = max(
+                    detection.MIN_FACE_AREA, float(body.area) * detection.CURVED_SIDE_SHARE
+                )
+            if float(np.asarray(body.area_faces, dtype=float)[faces].sum()) >= side_floor:
+                return True
+        elif _inside_radius(
+            body, replace(feature, face_indices=tuple(int(index) for index in faces)), point, radius
+        ):
+            return True
+    return False
+
+
+def _reaches_beyond(mesh: MeshData, region: np.ndarray, point: np.ndarray, radius: float) -> bool:
+    """Ob die Schale am Treffer über den Suchradius hinausreicht.
+
+    ``region`` ist der zusammenhängende Teil des Suchwürfels am Treffer
+    (:func:`_connected_to`). Grenzt er an ein Dreieck außerhalb, gehört es zur
+    selben Schale, und liegt eine seiner Ecken weiter als der Suchradius, liegt
+    die Schale nicht ganz darin — und ein Einschluss, den sie begrenzt, auch
+    nicht (:func:`_inside_radius`). Die Nachbarschaft ist dieselbe, die den
+    Teil gebildet hat, und eine Teilmenge der, nach der die Einschlüsse ihre
+    Schalen zählen (``geom.mesh.face_components``).
+    """
+    inside = np.zeros(mesh.triangle_count, dtype=bool)
+    inside[region] = True
+    pairs = np.asarray(mesh.raw.face_adjacency)
+    crossing = pairs[inside[pairs[:, 0]] != inside[pairs[:, 1]]]
+    if not len(crossing):
+        return False
+    outside = np.where(inside[crossing[:, 0]], crossing[:, 1], crossing[:, 0])
+    corners = np.asarray(mesh.raw.faces)[outside]
+    delta = np.asarray(mesh.raw.vertices)[np.unique(corners)] - point
+    return bool((np.linalg.norm(delta, axis=1) > radius + EPS_GEOM).any())
+
+
 def _inside_radius(
     body: Any,
     feature: Feature,
@@ -1096,8 +1185,17 @@ def detect_local(
     # Sonst entschied das Budget des Suchbereichs schon darüber, ob überhaupt
     # eine Stelle gewählt ist.
     reach = max(EPS_GEOM, weld_tolerance(mesh.bounds.diagonal))
-    near = _region(stitched, place, reach, check_cancelled, bounded=False)
-    if near is None or not len(near):
+    # **Ein Durchgang über das Original für beide Würfel** (RM-265): Der
+    # kleinere liegt im größeren, und am Mausoleum-Drachen (2,3 Millionen
+    # Dreiecke) kostete jeder Durchgang eine halbe Sekunde — an jeder Suche,
+    # auch an einer, die danach am Budget endet.
+    wide = _region(stitched, place, max(radius, reach), check_cancelled, bounded=False)
+    assert wide is not None
+    if radius >= reach:
+        indices, near = wide, _within(stitched, wide, place, reach)
+    else:
+        indices, near = _within(stitched, wide, place, radius), wide
+    if not len(near):
         return LocalDetection(reason="seed")
     seeds = _seeds(stitched, near, place, direction, seed_faces)
     if not seeds:
@@ -1105,15 +1203,13 @@ def detect_local(
     if len(seeds) > 1:
         return LocalDetection(reason="ambiguous_seed", seed_choices=seeds)
     seed = seeds[0]
-    indices = _region(stitched, place, radius, check_cancelled, bounded=False)
-    assert indices is not None
     _check(check_cancelled)
     # Ein naher zweiter Körper wird nicht zur gleichen Auswahl, und **das
     # Budget gilt dem, was zur Stelle gehört** (RM-235): Der Würfel zählte jede
     # dichte Fläche in seiner Ecke mit, auch eine, die mit der angeklickten
     # nichts zu tun hat; am Drachen reichte schon ein Suchradius von 8 mm über
     # die Grenze. Die Flutung verändert keine Originalindizes.
-    indices = _connected_to(stitched, indices, seed)
+    connected = _connected_to(stitched, indices, seed)
     # **Die ebene Fläche am Treffer gehört immer dazu**, auch über den
     # Suchradius hinaus: Ihre Facette begrenzt sie selbst. Am Drachen lag
     # zwischen „Suchrand“ und „zu viele Dreiecke“ kein Radius, der eine
@@ -1124,11 +1220,18 @@ def detect_local(
         # Eine Ebene über dem Budget trägt die Suche nicht; dann gilt der
         # begrenzte Bereich wie ohne sie, und ein kleinerer Suchradius hilft.
         plane = np.empty(0, np.int64)
-    indices, crowded = _with_its_facet(indices, plane)
+    indices, crowded = _with_its_facet(connected, plane)
     if not len(indices):
         return LocalDetection(reason="budget")
     result = _recognise_region(
-        stitched, indices, seeds, check_cancelled, place, radius, proven=plane
+        stitched,
+        indices,
+        seeds,
+        check_cancelled,
+        place,
+        radius,
+        proven=plane,
+        alone=crowded and _reaches_beyond(stitched, connected, place, radius),
     )
     # Fand die Facette allein nichts, lag es am Budget und nicht am Suchrand:
     # Gesucht war der ganze Teil im Suchradius.

@@ -981,6 +981,64 @@ def test_a_facet_that_tips_the_budget_is_searched_alone(
     assert [set(feature.face_indices) for feature in faces] == [set(top.tolist())]
 
 
+def test_a_facet_that_carries_nothing_says_budget_before_the_whole_body_is_asked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Über dem Budget sucht die Stelle ihre Facette allein — und fragt den ganzen
+    Körper erst, wenn die Facette ein vollständiges Merkmal tragen könnte (RM-265).
+
+    Am Mausoleum-Drachen (2,3 Millionen Dreiecke) lag eine Stelle auf einer
+    Facette aus 32 832 Dreiecken, die eine gerundete Seite von 101 mm² trägt —
+    zu klein für eine Seite des ganzen Körpers. Die Suche las trotzdem
+    Einschlüsse, Krümmungssprünge und Kantenzählung des ganzen Körpers, kalt
+    2,3 s, und sagte danach „zu viele Dreiecke“. Dieselbe Absage steht jetzt
+    davor. Hier ist die Facette ein Streifen des Mantels aus zwei Dreiecken
+    unter der Mindestfläche; der Deckel ist der Gegenfall, an dem die Facette
+    allein ihre Fläche trägt und die Suche sie wie bisher findet.
+    """
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    mesh = MeshData.of(trimesh.creation.cylinder(radius=8.0, height=2.0, sections=64))
+    normals = np.asarray(mesh.raw.face_normals)
+    centres = np.asarray(mesh.raw.triangles_center)
+    side = int(np.flatnonzero(np.abs(normals[:, 2]) < 1e-6)[0])
+    cap = int(np.flatnonzero(normals[:, 2] > 0.999)[0])
+    asked: list[str] = []
+    for name in ("curvature_jumps_at", "detect_voids"):
+        original = getattr(detection, name)
+
+        def counted(*args: Any, _name: str = name, _original: Any = original, **kwargs: Any) -> Any:
+            asked.append(_name)
+            return _original(*args, **kwargs)
+
+        monkeypatch.setattr(detection, name, counted)
+
+    def search(face: int) -> Any:
+        asked.clear()
+        return local.detect_local(
+            mesh, tuple(centres[face]), normal=tuple(normals[face]), radius=5.0, seed_faces=(face,)
+        )
+
+    # Kontrollfall: Ohne Budgetgrenze fragt dieselbe Stelle den ganzen Körper.
+    free = search(side)
+    assert free.reason == "boundary" and asked, (free.reason, asked)
+
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", 40)
+    refused = search(side)
+    assert refused.reason == "budget"
+    assert not refused.features
+    assert asked == [], f"the whole body was asked before the refusal: {asked}"
+
+    monkeypatch.setattr(local, "LOCAL_FACE_LIMIT", 65)
+    salvaged = search(cap)
+    assert salvaged.reason is None
+    assert [
+        (feature.kind, len(feature.face_indices)) for feature in salvaged.features.values()
+    ] == [("face", 64)]
+    assert "detect_voids" in asked, "a facet that carries a face is verified as before"
+
+
 def test_a_needed_feature_is_not_hidden_behind_an_unneeded_one_with_the_same_region() -> None:
     """Zwei Merkmale mit demselben Suchbereich: Das benötigte hält an, auch wenn das
     unbenötigte davor übersprungen wurde (Review B6)."""
