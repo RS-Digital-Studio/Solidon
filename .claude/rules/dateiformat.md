@@ -238,9 +238,16 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
 
 - **Nur `chosen`, `accepted`, das Gemessene und die Werte der Stufe gehen über
   das Herstellerprofil.** Ein neuer Weg in die Übergabe fragt
-  `manufacturer.written_paths`; ein Wert ohne Herkunft ist Grundlage. Die Stufe
-  (`manufacturer.STAGE_PATHS`) legt sich nur über den Standardprozess der
-  Maschine; ein selbst gewählter Prozess ist die Stufe.
+  `manufacturer.written_paths`; ein Wert ohne Herkunft ist Grundlage.
+- **Die Stufe wählt den Herstellerprozess** (`manufacturer.for_stage`,
+  Zuordnung `slicer_profiles.stage_process`): Jede Stelle, die eine
+  Einrichtung aus `remembered_setup` baut, wendet sie an, und der Druckdialog
+  zeigt den Stufenprozess im Prozessfeld. `UiSettings.slicer_base_process`
+  trägt den Standardprozess der Maschine, solange das Feld der Stufe folgt,
+  sonst die eigene Wahl — nie den abgeleiteten Stufenprozess, denn die Stufe
+  gehört zum Projekt. Nur wo der Hersteller keinen nennt (Creality Print heißt
+  jeden Prozess „Standard"), liegen `STAGE_PATHS` über dem Standardprozess;
+  ein selbst gewählter Prozess ist die Stufe.
 - **Was ohne Partner nicht wirkt, geht mit ihm** (`handover.COUPLED_PATHS`):
   Haftungsart mit den Maßen aller Arten, Lüfter-Obergrenze mit dem unteren
   Ende; eine gewählte Haftungsart bringt ihr Maß mit, wenn es null ist
@@ -295,6 +302,13 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Profile) — Auswahlen über Profile nehmen diese Kennung. Den gelesenen
   Bestand hält `slicer_profiles._prusa_store`, geprüft an Größe und
   Zeitstempel jeder Bündeldatei.
+- **Bei PrusaSlicer erst der Hersteller, dann Liste und Bedingung**
+  (`slicer_profiles._prusa_fits`, wie PrusaSlicers
+  `is_compatible_with_printer`): Ein Systemprofil passt nur zum Drucker
+  desselben Bündels (`SlicerProfile.vendor`, der Dateistamm); Vorlagen
+  (`templates_profile = 1`) und eigene Profile ohne Herstellerbasis gehen nach
+  Bedingung, ein eigenes Profil gehört dem Hersteller seines Elternprofils
+  (`_PrusaStore.vendor_of`).
 - **Die Gegenprobe hält, was Solidon schreibt, plus eine Stichprobe der
   Grundlage** (`handover.FOUNDATION_SAMPLE`; PrusaSlicer
   `PRUSA_FOUNDATION_SAMPLE` und `PRUSA_IDENTITY`: Druckermodell, Profilname,
@@ -399,6 +413,16 @@ Fehlalarm entwertet den echten Befund.
 `NTSTATUS` ab `0xC0000000`) und steht **vor** den Ausgabeprüfungen — ein
 abgestürztes Programm schreibt keinen Satz, und der Rat, das Slicer-Profil zu
 prüfen, führte ins Leere.
+
+## Über Erfolg entscheidet die Druckdatei, nicht das Prozessende
+
+Bambu Studio legt Druckdatei und `result.json` ab und endet manchmal nicht
+mehr. Läufe der Orca-Familie bekommen deshalb
+`finished=handover._result_written(target)`, und `process.run_limited`
+beendet den Baum `FINISHED_LINGER_SECONDS` nach dem gemeldeten Ergebnis.
+Gezählt wird nur eine **neue**, lesbare `result.json` dieses Laufs — eine
+ältere im Ordner des Kunden oder die des ersten Versuchs zählt nicht. Ein
+Slicer, der sein Ende sonst anzeigt, bekommt dieselbe Frage mit.
 
 ## Ein Wert gehört an einen Schlüssel, der dasselbe meint
 
