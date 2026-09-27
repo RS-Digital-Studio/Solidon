@@ -39,7 +39,7 @@ from app.core.export import slicer_keys, slicer_profiles
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.types import Finding, PrintSettings, Profile, QualityPreset
-from app.core.units import is_zero
+from app.core.units import exact_atan_degrees, is_zero
 from app.i18n import _
 
 if TYPE_CHECKING:
@@ -1011,7 +1011,10 @@ def _prusa_support_angle(
     layer = read.get("layers.layer_height")
     if not isinstance(layer, float) or layer <= 0.0 or outer_width is None:
         return None
-    return math.degrees(math.atan(0.5 * outer_width / layer))
+    # Genau gerechnet, nicht mit ``math.atan``: Mit diesem Winkel entscheidet
+    # die Schichtanalyse über Überhänge, und dort darf die letzte Stelle nicht
+    # an der Plattform hängen (RM-187, ``.claude/rules/kern.md``).
+    return exact_atan_degrees(0.5 * outer_width / layer)
 
 
 def _prusa_support_gap(values: Mapping[str, Any], outer_width: float | None) -> object:
@@ -1181,6 +1184,105 @@ def _runs_the_standard_process(process_file: Path, machine: Mapping[str, Any]) -
     if standard:
         return chosen == standard
     return "standard" in chosen.casefold()
+
+
+def for_stage(
+    setup: SlicerSetup | None, profile: Profile, quality: QualityPreset
+) -> SlicerSetup | None:
+    """Die Einrichtung mit dem Prozess des Herstellers für diese Stufe (Entscheidung I).
+
+    Steht der Standardprozess der Maschine in der Wahl, folgt er der Stufe:
+    „Fein" nimmt am Centauri Carbon 2 „0.12mm Fine", am MK4S „0.10mm FAST
+    DETAIL" (:func:`slicer_profiles.stage_process`). Ein selbst gewählter
+    Prozess bleibt, wie er ist — mit ihm ist die Stufe gewählt. Findet sich
+    keiner, bleibt der Standard, und die Stufe liegt über ihm
+    (:data:`STAGE_PATHS`).
+
+    Gelesen werden nur die Maschine und die Geschwister des Standardprozesses,
+    bei PrusaSlicer der gespeicherte Bestand: Der Druckdialog fragt im
+    Hauptthread, und die ganze Suche kostet am ElegooSlicer 1,8 Sekunden.
+    """
+    if setup is None or quality == settings_table.DEFAULT_QUALITY or not setup.base_process:
+        return setup
+    try:
+        chosen = _stage_process(setup, profile, quality)
+    except ExternalToolError as problem:
+        # Ohne lesbare Kette bleibt der Standard; die Grundlage sagt dann selbst,
+        # was sich nicht lesen ließ.
+        _log.warning("no process for stage %s, keeping the standard: %s", quality, problem)
+        return setup
+    return replace(setup, base_process=chosen) if chosen else setup
+
+
+def _stage_process(setup: SlicerSetup, profile: Profile, quality: QualityPreset) -> str:
+    """Die Auswahlkennung des Stufenprozesses — leer, wo keiner gilt."""
+    from app.core.export import handover
+
+    stage_layer = settings_table.resolve(profile, quality).layers.layer_height
+    if setup.flavour == "prusa":
+        return _prusa_stage_process(setup, profile, quality, stage_layer)
+    if setup.flavour != "orca":
+        return ""
+    roots = handover._profile_roots(setup)
+    process_file = handover.profile_file(setup.base_process, setup, "process")
+    machine_choice = handover.machine_for(setup, profile)
+    machine_file = (
+        handover.profile_file(machine_choice, setup, "machine") if machine_choice else None
+    )
+    if process_file is None or machine_file is None:
+        return ""
+    machine = slicer_profiles.resolve_values(machine_file, roots=roots)
+    if not _runs_the_standard_process(process_file, machine):
+        return ""
+    machine_name = _declared_name(machine_file)
+    standard = slicer_profiles.SlicerProfile(process_file, _declared_name(process_file), "process")
+    # **Die Geschwister mit demselben Zusatz** („@Elegoo CC2 0.4 nozzle"): So
+    # legen die Hersteller ihre Stufen ab, je Drucker und Düse ein Ordner. Die
+    # Verträglichkeit wird trotzdem gefragt, und nur für die, deren Name eine
+    # Stufe nennt — das sind je Stufe eine Handvoll Dateien.
+    family = standard.name.partition("@")[2].strip()
+    indexes: slicer_profiles.ProfileIndexes = {}
+    fitting: list[slicer_profiles.SlicerProfile] = []
+    for path in sorted(process_file.parent.glob("*.json")):
+        if path == process_file:
+            continue
+        name = _declared_name(path)
+        if name.partition("@")[2].strip() != family or not slicer_profiles.names_stage(
+            name, quality
+        ):
+            continue
+        listed = slicer_profiles.binding(path, roots, indexes=indexes).get("compatible_printers")
+        if isinstance(listed, list) and machine_name in listed:
+            fitting.append(slicer_profiles.SlicerProfile(path, name, "process"))
+    chosen = slicer_profiles.stage_process(fitting, standard, quality, stage_layer)
+    return str(chosen.path) if chosen is not None else ""
+
+
+def _prusa_stage_process(
+    setup: SlicerSetup, profile: Profile, quality: QualityPreset, stage_layer: float
+) -> str:
+    """Dasselbe für PrusaSlicer — über den gespeicherten Bestand, der nach dem
+    ersten Lesen 0,02 Sekunden kostet (``slicer_profiles._prusa_store``)."""
+    from app.core.export import handover
+
+    found = slicer_profiles.find_profiles(setup.executable, "prusa", ("machine", "process"))
+    wanted = handover.machine_for(setup, profile)
+    machine = next(
+        (
+            entry
+            for entry in found
+            if entry.kind == "machine" and wanted in (entry.name, slicer_profiles.identity(entry))
+        ),
+        None,
+    )
+    if machine is None or setup.base_process != machine.default_process:
+        return ""
+    fitting = slicer_profiles.processes(found, machine)
+    standard = next((entry for entry in fitting if entry.name == setup.base_process), None)
+    if standard is None:
+        return ""
+    chosen = slicer_profiles.stage_process(fitting, standard, quality, stage_layer)
+    return slicer_profiles.identity(chosen) if chosen is not None else ""
 
 
 def base_settings(

@@ -90,7 +90,7 @@ from app.core.types import (
     SlotOverride,
     SlotProfileBinding,
 )
-from app.core.units import is_close, is_zero
+from app.core.units import EPS_GEOM, is_close, is_zero
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -3340,6 +3340,8 @@ def _run_slicer(
     timeout: float,
     setup: SlicerSetup,
     cancelled: CancelToken | None,
+    *,
+    finished: Callable[[], bool] | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
     """Führt den Slicer aus — abbrechbar, und mit der Zeitgrenze als Antwort.
 
@@ -3348,6 +3350,10 @@ def _run_slicer(
     der Dialog stand dauerhaft auf „Der Slicer rechnet …" (Regel 17, §2.8).
     Und abzubrechen gab es nichts: der Kindprozess lief, bis er fertig war,
     gleich was der Nutzer wollte.
+
+    ``finished`` sagt, ob der Slicer sein Ergebnis abgelegt hat
+    (:func:`_result_written`); endet er danach nicht, beendet ihn
+    :func:`app.core.process.run_limited`.
     """
     # **Aus einem Flatpak heraus startet der Slicer auf dem Rechner, nicht im
     # Sandkasten.** Dort gibt es keinen — und keine der fünf Suchstufen von
@@ -3364,6 +3370,7 @@ def _run_slicer(
             timeout=timeout,
             output_limit=SLICER_OUTPUT_LIMIT,
             cancelled=(lambda: cancelled.is_cancelled) if cancelled is not None else None,
+            finished=finished,
         )
     except OSError as problem:
         # Eine gewählte Datei kann `flavour_of` bestehen und trotzdem kein
@@ -4088,12 +4095,16 @@ def slice_model(
         wanted_arrangement = keep_arrangement and setup.executable not in _REFUSES_THE_ARRANGE_FLAG
         # Ab wann eine Ergebnisdatei zu diesem Lauf gehört (``_result_reason``).
         started = time.time()
+        # **Bambu Studio endet manchmal nicht** nach seiner ``result.json``:
+        # Druckdatei geschrieben, Prozess steht (Gesamtprüfung, 27.09.2026).
+        # Ob die Datei dieses Laufs da ist, fragt :func:`_result_written`.
         completed = _run_slicer(
             _command(setup, cli_models, config, target, wanted_arrangement),
             workspace,
             timeout,
             setup,
             cancelled,
+            finished=_result_written(target) if setup.flavour == "orca" else None,
         )
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -4122,6 +4133,7 @@ def slice_model(
                 timeout,
                 setup,
                 cancelled,
+                finished=_result_written(target),
             )
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
@@ -4214,13 +4226,7 @@ def slice_model(
                     suggestions=(CHOOSE_SLICER, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
                 )
             if _says_outside_the_volume(output):
-                raise ExternalToolError(
-                    tool=setup.name,
-                    title=SLICER_FAILED,
-                    detail=_("Der Slicer sagt, die Teile liegen außerhalb seines Bauraums."),
-                    values={"output": output},
-                    suggestions=(ARRANGE_ON_BED, SCALE_TO_FIT, SHOW_SLICER_OUTPUT),
-                )
+                raise _outside_the_volume(setup, profile, output, model_height)
             if _says_no_layers(output):
                 raise ExternalToolError(
                     tool=setup.name,
@@ -4762,6 +4768,35 @@ def _refuses_arrange_flag(output: str) -> bool:
     )
 
 
+def _outside_the_volume(
+    setup: SlicerSetup, profile: Profile, output: str, model_height: float | None
+) -> ExternalToolError:
+    """Die Absage „außerhalb des Bauraums", mit dem Grund, den Solidon kennt.
+
+    PrusaSlicer sagt denselben Satz, gleich ob ein Teil neben dem Bett liegt
+    oder zu hoch ist. Am Minigolf-Auftrag auf dem MINI war es ein Teil von
+    200 mm bei 180 mm Bauhöhe (27.09.2026), und der Rat „Anordnen" half dort
+    nicht. Ist das höchste Teil höher als der Bauraum, sagt die Meldung das
+    und bietet Teilen, Verkleinern und einen anderen Drucker an.
+    """
+    limit = profile.printer.build_volume[2]
+    if model_height is not None and model_height > limit + EPS_GEOM:
+        return ExternalToolError(
+            tool=setup.name,
+            title=SLICER_FAILED,
+            detail=_("Ein Teil ist höher, als dieser Drucker drucken kann."),
+            values={"output": output, "height_mm": model_height, "limit_mm": limit},
+            suggestions=(SPLIT_MODEL, SCALE_TO_FIT, CHOOSE_PRINTER, SHOW_SLICER_OUTPUT),
+        )
+    return ExternalToolError(
+        tool=setup.name,
+        title=SLICER_FAILED,
+        detail=_("Der Slicer sagt, die Teile liegen außerhalb seines Bauraums."),
+        values={"output": output},
+        suggestions=(ARRANGE_ON_BED, SCALE_TO_FIT, SHOW_SLICER_OUTPUT),
+    )
+
+
 def _says_outside_the_volume(output: str) -> bool:
     """Sagt die Ausgabe des Slicers, dass nichts im Bauraum liegt?"""
     lowered = output.lower()
@@ -4858,6 +4893,40 @@ def _result_reason(directory: Path, since: float) -> str:
     if not isinstance(code, int) or code == 0 or not isinstance(text, str) or not text.strip():
         return ""
     return f"{text.strip()} (return_code {code})"
+
+
+def _result_written(directory: Path) -> Callable[[], bool]:
+    """Die Frage, ob der Slicer die ``result.json`` dieses Laufs abgelegt hat.
+
+    Bambu Studio schreibt sie als Letztes, nach der Druckdatei — auch bei
+    einer Absage (:func:`_result_reason`). Gefragt wird nach einer **anderen**
+    Datei als der beim Start: Der Zielordner kann der des Kunden sein, mit
+    dem Ergebnis eines älteren Laufs, und beim zweiten Versuch ohne
+    Anordnungsvorgabe liegt die des ersten daneben. Halb geschrieben zählt sie
+    nicht — erst, wenn sie sich als JSON mit ``return_code`` lesen lässt.
+    """
+    path = directory / RESULT_FILE
+
+    def signature() -> tuple[int, int] | None:
+        try:
+            info = path.stat()
+        except OSError:
+            return None
+        return info.st_mtime_ns, info.st_size
+
+    before = signature()
+
+    def written() -> bool:
+        now = signature()
+        if now is None or now == before or not 0 < now[1] <= _RESULT_LIMIT:
+            return False
+        try:
+            data = json.loads(path.read_bytes())
+        except OSError, ValueError:
+            return False
+        return isinstance(data, dict) and isinstance(data.get("return_code"), int)
+
+    return written
 
 
 def _tail(*streams: bytes, limit: int = 800) -> str:

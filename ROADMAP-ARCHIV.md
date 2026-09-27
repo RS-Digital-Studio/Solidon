@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen C, F und L: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-c-f-und-l-ein-punkt-geschlossen-27092026) |
 | 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen A und B: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-a-und-b-ein-punkt-geschlossen-27092026) |
 | 2026-09-27 | [Durchsicht v0.5.1, dritte Runde: elf Punkte geschlossen (27.09.2026)](#durchsicht-v051-dritte-runde-elf-punkte-geschlossen-27092026) |
 | 2026-09-27 | [Durchsicht v0.5.1, zweite Runde: zwei Punkte geschlossen (27.09.2026)](#durchsicht-v051-zweite-runde-zwei-punkte-geschlossen-27092026) |
@@ -32907,6 +32908,39 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   geschrieben (Formatversion 35, Vorschaubilder aus demselben Lauf). Nachweis der
   Hauptsitzung: `test_examples`, `test_wording` ohne `rendered`, `test_translations`,
   `test_language_rules` und `test_tour` — 655 passed, Exit 0. `bd33620c5`.
+
+## Übergabe auf dem Herstellerprofil, Stufen C, F und L: ein Punkt geschlossen (27.09.2026)
+
+Aus [RM-281](ROADMAP.md#rm-281), Stufen C, F und L, abgeschlossen:
+
+<a id="rm-255"></a>
+
+- [x] **RM-255 — Ein Drucker ohne Tempodaten überschreibt den gewählten
+  Herstellerprozess mit 40 mm/s.** Aus der Durchsicht v0.5.1 (druck, DRUCK-10). Ein
+  Drucker, der nicht unter den 13 FDM-Einträgen von `printers.toml` steht (eigenes
+  Profil, allgemeiner Drucker — etwa Centauri Carbon der ersten Reihe, Neptune 4 Pro,
+  Bambu H2D, K2), bekommt Solidons Stufe (40/60/80 mm/s, Leerfahrt 150, 8000 mm/s²) und
+  überschreibt damit den im Druckdialog gewählten Herstellerprozess
+  (`print_settings._paced`, `handover.as_mapping`; gemessen an `generic-220`). Der
+  Changelog sagt „statt jeden Drucker auf 40 mm/s zu bremsen“. Warum Robert: Es
+  entscheidet, welche Quelle gewinnt — dieselbe Frage wie beim Filament (Übernahme nur
+  auf Klick, 08.09.2026). Optionen: (a) Tempo, Leerfahrt und Beschleunigung aus dem
+  gewählten Prozessprofil lesen (`slicer_profiles.resolve_profile`), wenn der Drucker
+  keine eigenen hat; (b) für solche Drucker die Tempo-Schlüssel nicht schreiben, der
+  Slicer behält sein Profil — Empfehlung für Orca und Prusa mit gewähltem Prozess: kein
+  geratener Wert, und die Beratung rechnet mit dem, was der Slicer ohnehin fährt; (c)
+  wie heute. Abnahme: Centauri Carbon (erste Reihe) mit Elegoos Prozess —
+  `outer_wall_speed` im G-Code wie im Herstellerprofil.
+
+  **Für die Orca-Familie gelöst mit Stufe B** des Konzepts Herstellerprofil (`aed31c787`,
+  Weg b und mehr): Auf einem Herstellerprozess schreibt Solidon nur, was jemand gewählt
+  hat. Abnahme am 27.09.2026 im ElegooSlicer, `generic-220` mit „0.20mm Standard @Elegoo
+  CC 0.4 nozzle“: Außenwand 160, Innenwand 200, Füllung 200, Leerfahrt 500 mm/s und
+  10 000 mm/s² — wie im Profil. **Für PrusaSlicer gelöst mit Stufe C** von [RM-281](ROADMAP.md#rm-281) (`44ab90965`):
+  Mit einem Drucker des Bündels geht dessen ganze Kette hinaus, darüber nur die
+  Abweichung; gemessen am Minigolf-Auftrag in PrusaSlicer 2.9.6 gleich der Kette in
+  allen 259 (MK4S HF0.4) und 260 (XL IS) Schlüsseln. Ohne Drucker des Bündels gibt es
+  keinen gewählten Herstellerprozess, den ein Tempo überschreiben könnte.
 
 ## Übergabe auf dem Herstellerprofil, Stufen A und B: ein Punkt geschlossen (27.09.2026)
 

@@ -99,11 +99,19 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
 - **„Viel auf einmal“ heißt an einem Stück** (`largest_overhang_patch`), nicht
   je Schicht — kleine Stegunterseiten tragen sich selbst. Ein Ergebnis ohne
   Stücke gilt schichtweise als eines; lange Stege fängt die Brückenregel.
-- **Den Stützwinkel sagt der Drucker** (`overhang_limit` in `printers.toml`,
-  aus dem Herstellerslicer): `Profile.overhang_limit_degrees` fragt Probe,
-  Drucker, Startregel; `print_settings.resolve` schreibt ihn als
-  `support.threshold_angle`; ältere Projekte bekommen ihn als Vorschlag.
-  **Wer einen Winkel einführt, reicht ihn bis in jede Vorauswahl durch.**
+- **Den Stützwinkel sagt, womit der Slicer stützt** (Konzept Herstellerprofil,
+  Entscheidung L): gemessen, sonst die Schwelle des gewählten
+  Herstellerprozesses, sonst `overhang_limit` aus `printers.toml`, sonst die
+  Startregel (`Profile.overhang_limit_degrees`). Die Auswertung rechnet mit
+  `Session.evaluation_profile` — den wirksamen Einstellungen des Fensters, im
+  Hauptthread vor jedem Lauf geholt —, Druckdialog-Rat und Kanalsperre der
+  Übergabe mit `profiles.for_process(..., effective=True)`. Aus einem
+  gespeicherten Satz gilt die Schwelle nur als eigene Wahl (Projekte aus 0.5.0
+  tragen 45° ohne Wahl); kommt die Grundlage mit anderer Schwelle erst nach
+  dem Lauf, wertet das Fenster neu aus (`Session.evaluation_follows`).
+  `print_settings.resolve` schreibt den Druckerwert als
+  `support.threshold_angle`. **Wer einen Winkel einführt, reicht ihn bis in
+  jede Vorauswahl durch.**
 - **Ein Überhangwinkel wird an der Normalen mit dem Sinus verglichen**
   (z < −sin(Grenze)) und an einem Winkel ungleich 45 geprüft, wo sich Sinus
   und Kosinus unterscheiden

@@ -2870,6 +2870,87 @@ def test_prusa_gets_the_profile_choice_and_its_sections_are_told_apart(
     assert dialog._profile_gap() == "", "ohne Drucker gilt Solidons Satz"
 
 
+_PRUSA_STAGES = (
+    _PRUSA_BUNDLE
+    + """
+[print:0.10mm FAST DETAIL @MK4S HF0.4]
+layer_height = 0.1
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+
+[print:0.15mm SPEED @MK4S HF0.4]
+layer_height = 0.15
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+
+[print:0.20mm STRUCTURAL @MK4S HF0.4]
+layer_height = 0.2
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+
+[print:0.28mm DRAFT @MK4S HF0.4]
+layer_height = 0.28
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+"""
+)
+
+
+def test_the_quality_picks_the_manufacturers_process(
+    dialog: PrintSettingsDialog, session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stufe F (Entscheidung I): Die Qualität stellt das Prozessfeld auf den
+    Prozess des Herstellers, eine Wahl im Prozessfeld stellt die Qualität, und
+    ein Prozess, der zu keiner gehört, heißt dort „Eigener Prozess". Hin und
+    zurück bleibt es verlustfrei; gemerkt wird der Standard, solange das Feld
+    der Qualität folgt — die Qualität gehört zum Projekt."""
+    from app.core.export import slicer_profiles as sp
+    from app.ui.print_settings_dialog import _OWN_PROCESS
+
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer-console.exe"
+    root = executable.parent / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(_PRUSA_STAGES, encoding="utf-8")
+    executable.write_bytes(b"")
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    _select_printer(dialog, "prusa-mk4s")
+    assert session.wait_for_idle()
+    dialog._slicer_path = executable
+    dialog._profiles_found(
+        sp.find_profiles(executable, "prusa", kinds=("machine", "process", "filament"))
+    )
+    assert dialog.process_choice.currentData() == "0.20mm SPEED @MK4S HF0.4"
+
+    def choose_quality(key: str) -> None:
+        dialog.quality.setCurrentIndex(dialog.quality.findData(key))
+
+    def pick_process(name: str) -> None:
+        index = dialog.process_choice.findData(name)
+        dialog.process_choice.setCurrentIndex(index)
+        dialog.process_choice.activated.emit(index)
+
+    choose_quality("fine")
+    assert dialog.process_choice.currentData() == "0.10mm FAST DETAIL @MK4S HF0.4"
+    assert dialog.settings.layers.layer_height == pytest.approx(0.1)
+    choose_quality("strong")
+    assert dialog.process_choice.currentData() == "0.20mm STRUCTURAL @MK4S HF0.4"
+    choose_quality("fine")
+    assert dialog.process_choice.currentData() == "0.10mm FAST DETAIL @MK4S HF0.4"
+
+    pick_process("0.28mm DRAFT @MK4S HF0.4")
+    assert dialog.quality.currentData() == dialog.settings.quality == "draft"
+
+    pick_process("0.15mm SPEED @MK4S HF0.4")
+    assert dialog.quality.currentData() == _OWN_PROCESS
+    dialog._remember_slicer_choice(require_machine=False)
+    assert dialog.ui_settings.slicer_base_process == "0.15mm SPEED @MK4S HF0.4"
+
+    choose_quality("standard")
+    assert dialog.process_choice.currentData() == "0.20mm SPEED @MK4S HF0.4"
+    assert dialog.quality.findData(_OWN_PROCESS) < 0
+    choose_quality("fine")
+    dialog._remember_slicer_choice(require_machine=False)
+    assert dialog.ui_settings.slicer_base_process == "0.20mm SPEED @MK4S HF0.4", (
+        "gemerkt wird der Standard, die Qualität wählt"
+    )
+
+
 def test_switching_the_slicer_empties_the_profile_choice(
     dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

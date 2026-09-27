@@ -2533,6 +2533,63 @@ def test_bambus_refusal_in_its_result_file_reaches_the_slicer_output(
     assert "alt" not in raised.value.values["output"]
 
 
+def test_bambus_result_file_is_this_runs_or_none(tmp_path: Path) -> None:
+    """Bambu Studio endet manchmal nicht nach seiner ``result.json`` — drei von
+    rund hundert Läufen der Gesamtprüfung, auch auf gesunden Kernen
+    (27.09.2026). Ob die Datei dieses Laufs da ist, zählt: nicht die eines
+    älteren im selben Ordner, nicht eine halb geschriebene."""
+    output_dir = tmp_path / "ausgabe"
+    output_dir.mkdir()
+    result = output_dir / "result.json"
+    result.write_text(json.dumps({"return_code": 0}), encoding="utf-8")
+
+    written = handover._result_written(output_dir)
+
+    assert not written(), "die Datei eines älteren Laufs"
+    result.write_text('{"return_code": ', encoding="utf-8")
+    assert not written(), "halb geschrieben"
+    result.write_text(json.dumps({"return_code": 0, "error_string": "Success."}), encoding="utf-8")
+    assert written()
+    assert not handover._result_written(tmp_path / "fehlt")()
+
+
+def test_the_orca_family_is_asked_whether_its_result_is_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Anschluss: ``slice_model`` gibt dem Lauf der Orca-Familie die Frage
+    nach ihrer ``result.json`` mit, und sie sagt erst ja, wenn der Lauf sie
+    geschrieben hat (``process.run_limited`` beendet ihn dann nach einer
+    Frist, statt bis zum Zeitlimit zu warten)."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "bambu-studio.exe"
+    executable.write_bytes(b"")
+    asked: list[bool] = []
+
+    def run(command: list[str], *_args: object, **kwargs: object) -> _Finished:
+        finished = kwargs.get("finished")
+        assert callable(finished), "die Orca-Familie bekommt die Frage mit"
+        asked.append(bool(finished()))
+        target = Path(command[command.index("--outputdir") + 1])
+        (target / "plate_1.gcode").write_text(_gcode_printing_at(-10.0, 10.0), encoding="utf-8")
+        (target / "result.json").write_text(
+            json.dumps({"return_code": 0, "error_string": "Success."}), encoding="utf-8"
+        )
+        asked.append(bool(finished()))
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    outcome = handover.slice_model(
+        model, print_settings.resolve(profile), profile, setup, output_dir=tmp_path / "out"
+    )
+
+    assert asked == [False, True]
+    assert outcome.gcode_path.name == "plate_1.gcode"
+
+
 def test_any_other_silence_keeps_the_old_answer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

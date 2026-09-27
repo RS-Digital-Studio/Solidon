@@ -232,6 +232,11 @@ GROUPS = print_settings.GROUPS
 #: Farbknopf etwa nennt in seinem Tooltip den Hexwert, den sonst nichts zeigt.
 _OWN_TIP: Final = "solidonOwnTip"
 
+#: Die Kennung des Eintrags „Eigener Prozess" im Stufenfeld — keine Stufe,
+#: sondern der Zustand, dass der gewählte Prozess zu keiner gehört
+#: (:meth:`PrintSettingsDialog._show_own_process`).
+_OWN_PROCESS: Final = "solidon-own-process"
+
 FIELD_WIDTH: Final[dict[str, int]] = {
     "float": 130,
     "int": 130,
@@ -1897,11 +1902,17 @@ class _AdviceWorker(Worker):
                     self.settings, self.profile, slot, self.setup
                 )
                 processes.append(
-                    (slot, profiles.for_process(material_profile, effective), effective)
+                    (
+                        slot,
+                        profiles.for_process(material_profile, effective, effective=True),
+                        effective,
+                    )
                 )
             angle = min(
                 (process.overhang_limit_degrees for _slot, process, _effective in processes),
-                default=profiles.for_process(own_profile, self.settings).overhang_limit_degrees,
+                default=profiles.for_process(
+                    own_profile, self.settings, effective=True
+                ).overhang_limit_degrees,
             )
             # **Und die Brückenbreite gehört dazu** (Regel 7, RM-097): Sie sind
             # zwei Extrusionsbahnen, also die Mindestwand — und wie beim Winkel
@@ -1912,7 +1923,9 @@ class _AdviceWorker(Worker):
             # spräche über einen Drucker, den niemand mehr gemeint hat.
             wall = max(
                 (process.minimum_wall_thickness for _slot, process, _effective in processes),
-                default=profiles.for_process(own_profile, self.settings).minimum_wall_thickness,
+                default=profiles.for_process(
+                    own_profile, self.settings, effective=True
+                ).minimum_wall_thickness,
             )
             previous = self.previous.get(body.id)
             result = (
@@ -2609,6 +2622,13 @@ class PrintSettingsDialog(QDialog):
         """Worauf die Einstellungen gerade stehen — das Herstellerprofil oder
         Solidons Tabelle (:func:`manufacturer.base_settings`)."""
         self._foundation_key: tuple[object, ...] | None = None
+        self._follows_stage = True
+        """Folgt das Prozessfeld der Stufe (Konzept Herstellerprofil, Entscheidung
+        I)? Dann steht dort der Prozess, den die Stufe beim Hersteller wählt, und
+        gemerkt wird der Standardprozess der Maschine; sonst ist es eine eigene
+        Wahl, und das Stufenfeld sagt „Eigener Prozess"."""
+        self._standard_process = ""
+        """Der Standardprozess der gewählten Maschine als Auswahlkennung."""
         self._built = False
         """Erst wenn jede Zeile steht, darf die Grundlage die Felder füllen."""
         # Woran :meth:`has_changes` misst, ob dieser Dialog etwas bewirkt hat.
@@ -3690,6 +3710,8 @@ class PrintSettingsDialog(QDialog):
         self.process_choice.currentIndexChanged.connect(self._show_slicer_state)
         # Ein anderer Prozess ist eine andere Grundlage — Wände, Tempo, Stützen.
         self.process_choice.currentIndexChanged.connect(self._rebase)
+        # Und eine Wahl von Hand stellt die Stufe (Entscheidung I).
+        self.process_choice.activated.connect(self._process_picked)
         # **Keine zweite Auswahl für dieselbe Angabe** (Entscheidung Robert,
         # 08.09.2026). Das Slicer-Profil gehört zur Spule und wird dort
         # gewählt: Der Filamentwähler schreibt es in den Katalogeintrag, die
@@ -4193,6 +4215,14 @@ class PrintSettingsDialog(QDialog):
         self.process_choice.clear()
         for entry in fitting:
             self.process_choice.addItem(entry.title(tr("eigenes")), slicer_profiles.identity(entry))
+        # Gemerkt, weil jede Stufenfrage von ihm ausgeht und die Liste der
+        # passenden Prozesse am ElegooSlicer 0,16 Sekunden kostet.
+        standard = (
+            slicer_profiles.standard_process(fitting, machine, self.session.profile.printer)
+            if machine is not None
+            else None
+        )
+        self._standard_process = slicer_profiles.identity(standard) if standard else ""
 
         wanted = self.ui_settings.slicer_base_process
         index = self.process_choice.findData(wanted) if wanted else -1
@@ -4203,7 +4233,105 @@ class PrintSettingsDialog(QDialog):
             if named:
                 index = self.process_choice.findData(slicer_profiles.identity(named[0]))
         self.process_choice.setCurrentIndex(max(index, 0))
+        # **Die Stufe wählt den Prozess** (Entscheidung I): Steht der
+        # Standardprozess der Maschine da oder schon der Prozess der Stufe, folgt
+        # das Feld der Stufe — gemerkt ist dann der Standard. Alles andere ist
+        # eine eigene Wahl und bleibt stehen.
+        picked = str(self.process_choice.currentData() or "")
+        self._follows_stage = not picked or picked in (
+            self._machine_standard(),
+            self._stage_process_for(self.settings.quality),
+        )
+        if self._follows_stage:
+            self._show_stage_process()
+        self._show_own_process()
         self._fill_filaments(machine)
+
+    def _machine_standard(self) -> str:
+        """Der Standardprozess der gewählten Maschine als Auswahlkennung — leer
+        ohne (gemerkt von :meth:`_fill_processes`)."""
+        return self._standard_process
+
+    def _stage_process_for(self, quality: str) -> str:
+        """Der Prozess, den diese Stufe beim Hersteller wählt, als Auswahlkennung.
+
+        Dieselbe Frage wie beim Export und in der Zahlenzeile
+        (:func:`manufacturer.for_stage`) — der Dialog darf keinen anderen
+        Prozess zeigen, als gedruckt wird. Ohne Prozess der Stufe der Standard.
+        """
+        standard = self._machine_standard()
+        setup = self._current_setup()
+        if not standard or setup is None or quality not in print_settings.quality_presets():
+            return standard
+        staged = manufacturer.for_stage(
+            replace(setup, base_process=standard),
+            self.session.profile,
+            cast(QualityPreset, quality),
+        )
+        return staged.base_process if staged is not None else standard
+
+    def _show_stage_process(self) -> None:
+        """Das Prozessfeld auf den Prozess der Stufe stellen — als Folge der Stufe,
+        nicht als Wahl; der Wechsel legt die neue Grundlage (:meth:`_rebase`)."""
+        target = self._stage_process_for(self.settings.quality)
+        index = self.process_choice.findData(target) if target else -1
+        if index >= 0 and index != self.process_choice.currentIndex():
+            self.process_choice.setCurrentIndex(index)
+
+    def _show_own_process(self) -> None:
+        """Das Stufenfeld sagt, wenn der Prozess zu keiner Stufe gehört.
+
+        Dann steht dort „Eigener Prozess", grau und nicht wählbar: Eine Stufe zu
+        wählen stellt den Prozess des Herstellers wieder ein. Gesetzt wird ohne
+        Signal — das Feld zeigt einen Zustand, es wechselt keine Stufe.
+        """
+        own = self.quality.findData(_OWN_PROCESS)
+        with QSignalBlocker(self.quality):
+            if self._follows_stage:
+                if own >= 0:
+                    self.quality.removeItem(own)
+                index = self.quality.findData(self.settings.quality)
+                if index >= 0:
+                    self.quality.setCurrentIndex(index)
+                return
+            if own < 0:
+                self.quality.addItem(tr("Eigener Prozess"), _OWN_PROCESS)
+                own = self.quality.count() - 1
+                model = self.quality.model()
+                item = model.item(own) if isinstance(model, QStandardItemModel) else None
+                if item is not None:
+                    item.setEnabled(False)
+                note = str(
+                    tr(
+                        "Sie haben selbst einen Prozess gewählt. Mit einer Qualität gilt "
+                        "wieder der passende Prozess des Herstellers."
+                    )
+                )
+                self.quality.setItemData(own, note, Qt.ItemDataRole.ToolTipRole)
+            self.quality.setCurrentIndex(own)
+
+    def _process_picked(self, _index: int) -> None:
+        """Eine Wahl im Prozessfeld stellt die Stufe (Entscheidung I).
+
+        Ist es der Prozess einer Stufe, gilt diese Stufe, und das Feld folgt ihr
+        weiter; sonst ist es ein eigener Prozess. Nur die Hand löst das aus
+        (``activated``) — was eine Stufe ins Feld stellt, ist keine Wahl.
+        """
+        picked = str(self.process_choice.currentData() or "")
+        stage = next(
+            (
+                quality
+                for quality in print_settings.quality_presets()
+                if self._stage_process_for(quality) == picked
+            ),
+            None,
+        )
+        self._follows_stage = stage is not None
+        if stage is not None and stage != self.settings.quality:
+            index = self.quality.findData(stage)
+            if index >= 0:
+                self.quality.setCurrentIndex(index)
+        self._show_own_process()
 
     def _machines_worth_showing(
         self, machines: list[slicer_profiles.SlicerProfile]
@@ -5776,7 +5904,7 @@ class PrintSettingsDialog(QDialog):
         dem Filament der Platte.
         """
         chosen = self.quality.currentData()
-        if chosen is None:
+        if chosen not in print_settings.quality_presets():
             return
         kept = self.settings
         for path in manufacturer.STAGE_PATHS:
@@ -5787,6 +5915,12 @@ class PrintSettingsDialog(QDialog):
         )
         self._foundation_key = None
         self._load_into_editors()
+        # **Und sie wählt den Prozess des Herstellers** (Stufe F): „Fein" stellt
+        # am Centauri Carbon 2 „0.12mm Fine" ins Prozessfeld, auch nach einem
+        # eigenen Prozess — wer eine Stufe wählt, meint die Stufe.
+        self._follows_stage = True
+        self._show_stage_process()
+        self._show_own_process()
         self._rebase()
         self._mark_fields_this_slicer_ignores()
         self._refresh_advice()
@@ -6004,8 +6138,13 @@ class PrintSettingsDialog(QDialog):
             if self._advice_worker is not None:
                 self._advice_worker.cancel()
             try:
+                # Gegen die Schwelle dieser Einstellungen, wie im Arbeiter
+                # (Entscheidung L) — sonst riete der Dialog, die des
+                # Herstellers mit Solidons Tabelle zu überschreiben.
                 self._advice_entries = advise.advise(
-                    self.settings, self.session.profile, self.slice_result
+                    self.settings,
+                    profiles.for_process(self.session.profile, self.settings, effective=True),
+                    self.slice_result,
                 )
             except AppError as problem:
                 self._set_advice_problem(problem)
@@ -6532,7 +6671,13 @@ class PrintSettingsDialog(QDialog):
         if require_machine and not machine:
             return
         self.ui_settings.slicer_machine_profile = machine
-        self.ui_settings.slicer_base_process = str(self.process_choice.currentData() or "")
+        # Folgt das Prozessfeld der Stufe, wird der Standard gemerkt: Die Stufe
+        # gehört zum Projekt, und das nächste wählt mit seiner eigenen
+        # (``manufacturer.for_stage``). Ein eigener Prozess gilt für alle.
+        shown = str(self.process_choice.currentData() or "")
+        self.ui_settings.slicer_base_process = (
+            (self._machine_standard() or shown) if self._follows_stage else shown
+        )
         filament = self._filament_profile
         self.ui_settings.slicer_base_filament = filament
         self.ui_settings.slicer_bed_plate = self._bed_plate

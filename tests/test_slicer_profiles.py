@@ -1778,7 +1778,9 @@ def test_prusa_filaments_fit_by_condition_and_the_models_suggestion_wins(
     """Der MK4S erbt als Standard das PLA des MK4, das laut eigener Bedingung
     nicht zu ihm passt. Ohne Bedingungen gewann danach der kürzeste Name,
     „Generic PLA @SOVOL" aus Sovols Bündel. Das Modell schlägt „Prusament PLA
-    @MK4S HF0.4" vor, und das nimmt auch PrusaSlicer (27.09.2026)."""
+    @MK4S HF0.4" vor, und das nimmt auch PrusaSlicer (27.09.2026). Sovols
+    Filament passt dabei gar nicht: Es gehört einem anderen Hersteller
+    (``test_prusa_offers_only_the_printers_own_bundle``)."""
     mk4s = PrinterProfile(
         id="prusa-mk4s",
         title="Prusa MK4S",
@@ -1795,12 +1797,60 @@ def test_prusa_filaments_fit_by_condition_and_the_models_suggestion_wins(
     assert fitting == {
         "Prusament PLA @MK4S HF0.4",
         "Prusament PETG @MK4S HF0.4",
-        "Generic PLA @SOVOL",
-    }, "das PLA des MK4 fällt heraus, das ohne Angabe bleibt"
+    }, "das PLA des MK4 fällt heraus, Sovols gehört einem anderen Hersteller"
     pla = sp.match_filament(filaments, machine, "PLA")
     petg = sp.match_filament(filaments, machine, "PETG")
     assert pla is not None and pla.name == "Prusament PLA @MK4S HF0.4"
     assert petg is not None and petg.name == "Prusament PETG @MK4S HF0.4"
+
+
+def test_prusa_offers_only_the_printers_own_bundle(
+    prusa_mk4s: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PrusaSlicers eigene Regel (``is_compatible_with_printer``, 2.9.6): erst
+    der Hersteller, dann Liste und Bedingung. Am MK4S HF0.4 standen sonst
+    Prozesse von BIBO2, LulzBot, Trimaker und Zonestar zur Wahl — Profile ohne
+    Bedingung galten als passend (Gesamtprüfung, 27.09.2026). Vorlagen passen zu
+    jedem Hersteller, ein eigenes Profil gehört dem seines Elternprofils, und
+    eines ohne Herstellerbasis geht nach Bedingung."""
+    root = prusa_mk4s.parent / "resources" / "profiles"
+    (root / "BIBO.ini").write_text(
+        "[vendor]\nname = BIBO\n\n[print:0.12mm DETAIL @BIBO2]\nlayer_height = 0.12\n",
+        encoding="utf-8",
+    )
+    (root / "Templates.ini").write_text(
+        "[vendor]\nname = Templates\ntemplates_profile = 1\n\n"
+        "[filament:Generic PETG @Vorlage]\nfilament_type = PETG\n"
+        "compatible_printers_condition = nozzle_diameter[0]!=0.8\n",
+        encoding="utf-8",
+    )
+    config = tmp_path / "config" / "PrusaSlicer"
+    (config / "print").mkdir(parents=True)
+    (config / "print" / "Mein SPEED.ini").write_text(
+        "inherits = 0.20mm SPEED @MK4S HF0.4\nperimeters = 3\n", encoding="utf-8"
+    )
+    (config / "print" / "Mein BIBO.ini").write_text(
+        "inherits = 0.12mm DETAIL @BIBO2\nperimeters = 3\n", encoding="utf-8"
+    )
+    (config / "print" / "Ganz eigen.ini").write_text("layer_height = 0.16\n", encoding="utf-8")
+    monkeypatch.setattr(sp, "config_home", lambda _platform: str(tmp_path / "config"))
+    mk4s = PrinterProfile(
+        id="prusa-mk4s",
+        title="Prusa MK4S",
+        build_volume=(250.0, 210.0, 220.0),
+        prusaslicer_printer="Original Prusa MK4S HF0.4 nozzle",
+    )
+    found = sp.find_profiles(prusa_mk4s, "prusa", ("machine", "process"))
+    filaments = sp.find_profiles(prusa_mk4s, "prusa", ("filament",))
+    machine, _process = sp.match(found, mk4s)
+    assert machine is not None and machine.vendor == "PrusaResearch"
+
+    processes = {entry.name for entry in sp.processes(found, machine)}
+    fitting = {entry.name for entry in sp.filaments(filaments, machine)}
+
+    assert processes == {"0.20mm SPEED @MK4S HF0.4", "Mein SPEED", "Ganz eigen"}
+    assert "Generic PETG @Vorlage" in fitting, "Vorlagen passen zu jedem Hersteller"
+    assert "Generic PLA @SOVOL" not in fitting
 
 
 def test_a_bundle_name_with_a_line_break_is_no_name() -> None:
@@ -1958,3 +2008,101 @@ def test_cancelled_prusa_spool_search_stops_at_the_read_profile(prusa, monkeypat
     with pytest.raises(OperationCancelled):
         sp.configured_filaments("prusa", prusa, cancelled=cancelled)
     assert read[-1] == "Meine Spule.ini"
+
+
+def _processes(*names: str, own: tuple[str, ...] = ()) -> list[sp.SlicerProfile]:
+    return [
+        sp.SlicerProfile(Path(f"{name}.json"), name, "process", from_user=name in own)
+        for name in names
+    ]
+
+
+@pytest.mark.parametrize(
+    ("names", "standard", "expected"),
+    [
+        (
+            (
+                "0.12mm Fine @CC2",
+                "0.16mm Optimal @CC2",
+                "0.20mm Standard @CC2",
+                "0.20mm Strength @CC2",
+                "0.24mm Draft @CC2",
+                "0.28mm Extra Draft @CC2",
+            ),
+            "0.20mm Standard @CC2",
+            ("0.12mm Fine @CC2", "0.28mm Extra Draft @CC2", "0.20mm Strength @CC2"),
+        ),
+        (
+            (
+                "0.08mm Extra Fine @BBL X1C",
+                "0.08mm High Quality @BBL X1C",
+                "0.12mm Fine @BBL X1C",
+                "0.12mm High Quality @BBL X1C",
+                "0.16mm Optimal @BBL X1C",
+                "0.20mm Standard @BBL X1C",
+                "0.20mm Strength @BBL X1C",
+                "0.24mm Draft @BBL X1C",
+                "0.28mm Extra Draft @BBL X1C",
+            ),
+            "0.20mm Standard @BBL X1C",
+            ("0.12mm Fine @BBL X1C", "0.28mm Extra Draft @BBL X1C", "0.20mm Strength @BBL X1C"),
+        ),
+        (
+            (
+                "0.10mm FAST DETAIL @MK4S 0.4",
+                "0.15mm SPEED @MK4S HF0.4",
+                "0.15mm STRUCTURAL @MK4S 0.4",
+                "0.20mm SPEED @MK4S HF0.4",
+                "0.20mm STRUCTURAL @MK4S 0.4",
+                "0.25mm STRUCTURAL @MK4S HF0.4",
+                "0.28mm DRAFT @MK4S HF0.4",
+            ),
+            "0.20mm SPEED @MK4S HF0.4",
+            (
+                "0.10mm FAST DETAIL @MK4S 0.4",
+                "0.28mm DRAFT @MK4S HF0.4",
+                "0.20mm STRUCTURAL @MK4S 0.4",
+            ),
+        ),
+        (
+            ("0.08mm Standard @K1", "0.16mm Standard @K1", "0.20mm Standard @K1"),
+            "0.20mm Standard @K1",
+            (None, None, None),
+        ),
+    ],
+    ids=["centauri-carbon-2", "bambu-p1s", "prusa-mk4s", "creality-print"],
+)
+def test_a_stage_names_the_manufacturers_process(
+    names: tuple[str, ...], standard: str, expected: tuple[str | None, ...]
+) -> None:
+    """Entscheidung I, gemessen an den Beständen vom 27.09.2026: Fein, Entwurf
+    und Belastbar nehmen den Prozess, dessen Name die Stufe nennt — Fein und
+    Entwurf mit der Schichthöhe nächst Solidons 0,12 und 0,28 mm, Belastbar bei
+    der des Standards; „0.25mm STRUCTURAL" ist gröber, nicht belastbarer.
+    Creality Print nennt jeden Prozess „Standard", und dort bleibt es beim
+    Standardprozess."""
+    fitting = _processes(*names)
+    base = next(entry for entry in fitting if entry.name == standard)
+
+    chosen = [
+        sp.stage_process(fitting, base, quality, layer)
+        for quality, layer in (("fine", 0.12), ("draft", 0.28), ("strong", 0.20))
+    ]
+
+    assert [entry.name if entry else None for entry in chosen] == list(expected)
+    assert sp.stage_process(fitting, base, "standard", 0.20) is base
+
+
+def test_an_own_copy_is_no_stage() -> None:
+    """Eine eigene Kopie hat ihren eigenen Zweck: Bei gleicher Schichthöhe
+    gilt der mitgelieferte Prozess."""
+    fitting = _processes(
+        "0.12mm Fine @CC2 - Kopieren",
+        "0.12mm Fine @CC2",
+        "0.20mm Standard @CC2",
+        own=("0.12mm Fine @CC2 - Kopieren",),
+    )
+
+    chosen = sp.stage_process(fitting, fitting[2], "fine", 0.12)
+
+    assert chosen is not None and chosen.name == "0.12mm Fine @CC2"

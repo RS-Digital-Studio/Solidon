@@ -12,10 +12,10 @@ stehen in `.claude/rules/dateiformat.md`; Herleitungen in
 | `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3): `check_before_export`, `default_scheme` (Namensmuster, im Dateidialog), `mesh_for_export` an allen drei Stellen des Schreibers, `export_part_scad` (erst `activation.require(EXPORT)`); bei Resin lässt `write_assembly` den FDM-Satz fallen (keine Haftungs- und Filamentbefunde, keine Beilage) |
 | `threemf.py` | 3MF **schreiben** — Körper oder Baugruppe, Farbgruppen, Slicer-Beilagen (§20, §29), `AssemblyPart.support_blocker` je nach `blocker_as_part`; gelesen wird in `ingest/threemf.py` |
 | `handover.py` | Übergabe an den Slicer (§29, §28.1): `write_config`, `project_settings`, `values_for`, `slice_model` und seine Gegenproben, `prusa_values` |
-| `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, `slicer_profiles.FILAMENT_READBACK`), mit den eingebauten Vorgaben der vier Orca-Programme (`PROGRAM_DEFAULTS`, gemessen), der Druckplatte (`default_plate`, `PLATE_TEMPERATURES`) und dem Gemessenen (`Foundation.measured`); über dem Standardprozess die Werte der gewählten Stufe (`STAGE_PATHS`, `Foundation.staged`); `plate_temperatures`, `offers_plates`; `written_paths` (was die Übergabe davon schreibt), `findings` (Platte, unlesbares Profil). Für PrusaSlicer löst `prusa_chain` Drucker, Prozess und Filament des Bündels auf (`PrusaChain`), `PRUSA_PROCESS` und `PRUSA_PROGRAM_DEFAULTS` lesen sie zurück |
+| `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, `slicer_profiles.FILAMENT_READBACK`), mit den eingebauten Vorgaben der vier Orca-Programme (`PROGRAM_DEFAULTS`, gemessen), der Druckplatte (`default_plate`, `PLATE_TEMPERATURES`) und dem Gemessenen (`Foundation.measured`); die Stufe wählt den Prozess des Herstellers (`for_stage`), nur wo keiner passt, liegen ihre Werte über dem Standardprozess (`STAGE_PATHS`, `Foundation.staged`); `plate_temperatures`, `offers_plates`; `written_paths` (was die Übergabe davon schreibt), `findings` (Platte, unlesbares Profil). Für PrusaSlicer löst `prusa_chain` Drucker, Prozess und Filament des Bündels auf (`PrusaChain`), `PRUSA_PROCESS` und `PRUSA_PROGRAM_DEFAULTS` lesen sie zurück |
 | `prusa_conditions.py` | PrusaSlicers Verträglichkeitsbedingungen mit eigenem Parser, ohne `eval` (Regel 10); `slicer_profiles._prusa_fits` bindet damit Prozesse und Filamente an den Drucker |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt; die Prädikate je Familie |
-| `slicer_profiles.py` | Die Profile eines installierten Slicers; ein Durchgang liest jede Datei einmal (`ProfileDocuments`); `_prusa_store` hält den Prusa-Bestand, bis sich eine Bündeldatei ändert; `identity` (Kennung in einer Auswahl) |
+| `slicer_profiles.py` | Die Profile eines installierten Slicers; ein Durchgang liest jede Datei einmal (`ProfileDocuments`); `_prusa_store` hält den Prusa-Bestand, bis sich eine Bündeldatei ändert; `identity` (Kennung in einer Auswahl); `stage_process` und `standard_process` ordnen Stufe und Standardprozess zu (`STAGE_WORDS`); Prusa-Profile passen nur zum Drucker ihres Bündels (`SlicerProfile.vendor`) |
 
 ## Auf dem Herstellerprofil schreibt die Übergabe nur die Abweichung
 
@@ -39,7 +39,9 @@ aus Solidons Tabelle (`_adhesion_for`), im Bündel die des Profils.
 Füllung und Lücken (`solid_infill_speed`, `gap_fill_speed`) und
 `machine_limits_usage = ignore` (keine erfundenen Beschleunigungen), die
 Orca-Familie dieselben Tempi und die Bahnbreite aller fünf Rollen. Bambus
-Absage liest `_result_reason` aus `result.json`, nur vom letzten Lauf.
+Absage liest `_result_reason` aus `result.json`, nur vom letzten Lauf;
+`_result_written` fragt, ob der Lauf sie abgelegt hat, und `slice_model` gibt
+das der Orca-Familie als `finished` mit (Bambu endet manchmal nicht danach).
 
 ## Die Lüfterkurve
 

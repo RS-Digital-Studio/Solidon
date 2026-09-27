@@ -42,7 +42,8 @@ from app.core.export.slicer_keys import (
     has_user_profile_tree,
 )
 from app.core.log import get_logger
-from app.core.types import CancelToken, PrinterProfile
+from app.core.types import CancelToken, PrinterProfile, QualityPreset
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -139,6 +140,12 @@ class SlicerProfile:
     vorschlägt (``default_materials``), in ihrer Reihenfolge. Der MK4S erbt
     als ``default_filament_profile`` das PLA des MK4, das zu ihm nicht passt;
     sein Modell nennt „Prusament PLA @MK4S HF0.4"."""
+    vendor: str = ""
+    """Nur bei Prusa: der Hersteller, dem das Profil gehört — das Bündel, aus
+    dem es stammt (``PrusaResearch``, ``Sovol``), bei einem eigenen Profil das
+    seines ersten Vorfahren mit Hersteller. Leer bei Vorlagen
+    (``templates_profile = 1``) und bei eigenen Profilen ohne Herstellerbasis
+    (:meth:`_PrusaStore.vendor_of`)."""
 
     def title(self, own: str = "eigenes") -> str:
         """Der Name für die Auswahl. Ein selbst angelegtes Profil wird
@@ -1968,6 +1975,38 @@ class _PrusaStore:
         self.resolved[key] = values
         return values
 
+    def vendor_of(
+        self, profile: SlicerProfile, active: frozenset[tuple[Path, str]] = frozenset()
+    ) -> str:
+        """Der Hersteller eines Profils, wie PrusaSlicer ihn zuordnet.
+
+        Ein Abschnitt eines Bündels gehört dessen Hersteller, benannt nach der
+        Datei wie bei PrusaSlicer (``VendorProfile::id``). Ein eigenes Profil
+        gehört dem Hersteller seines ersten Vorfahren, der einen hat
+        (``get_preset_with_vendor_profile``). Leer bleibt es bei einem Bündel
+        mit ``templates_profile = 1`` — Vorlagen passen zu jedem Hersteller —
+        und bei eigenen Profilen ohne Herstellerbasis.
+        """
+        document = self.documents.get(profile.path)
+        if document is None:
+            return ""
+        if document.has_section("vendor"):
+            if document["vendor"].get("templates_profile", "").strip() == "1":
+                return ""
+            return profile.path.stem
+        key = (profile.path, profile.section)
+        section = profile.section or _PRUSA_HEAD
+        if key in active or len(active) >= MAX_INHERITANCE or not document.has_section(section):
+            return ""
+        for name in _prusa_list(document[section].get("inherits", "")):
+            for parent in self.by_name.get((profile.kind, name), ()):
+                if (parent.path, parent.section) == key:
+                    continue
+                vendor = self.vendor_of(parent, active | {key})
+                if vendor:
+                    return vendor
+        return ""
+
 
 @dataclass(slots=True)
 class _PrusaCache:
@@ -2100,6 +2139,7 @@ def _prusa_listing(store: _PrusaStore, cancelled: CancelToken | None) -> list[Sl
                 else ()
             ),
             default_materials=materials if entry.kind == "machine" else (),
+            vendor=store.vendor_of(entry),
         )
         key = (profile.kind, profile.name)
         if key not in found or profile.from_user or not found[key].from_user:
@@ -2486,12 +2526,23 @@ def _of_kind(
 
 
 def _prusa_fits(entry: SlicerProfile, machine: SlicerProfile, values: Mapping[str, str]) -> bool:
-    """PrusaSlicers Regel: Eine Liste gewinnt, sonst die Bedingung, sonst passt es.
+    """PrusaSlicers Regel: erst der Hersteller, dann gewinnt eine Liste, sonst
+    die Bedingung, sonst passt es.
+
+    **Der Hersteller zuerst** (``is_compatible_with_printer``, PrusaSlicer
+    2.9.6): Ein Profil aus dem Bündel eines anderen Herstellers passt nie, auch
+    ohne Liste und Bedingung. Ohne diese Prüfung standen am MK4S HF0.4 Prozesse
+    von BIBO2, LulzBot, Trimaker und Zonestar zur Wahl und Sovols PLA unter den
+    Filamenten (27.09.2026). Vorlagen und eigene Profile ohne Herstellerbasis
+    tragen keinen (:attr:`SlicerProfile.vendor`) und gehen weiter nach
+    Bedingung.
 
     Eine Bedingung, die sich nicht auswerten lässt, schließt das Profil aus
     (:class:`~app.core.export.prusa_conditions.ConditionError`): Eine Auswahl zu
     wenig lässt sich im Dialog erweitern, eine unpassende druckt falsch.
     """
+    if entry.vendor and entry.vendor != machine.vendor:
+        return False
     if entry.compatible_printers:
         return machine.name in entry.compatible_printers
     try:
@@ -2678,16 +2729,106 @@ def match(
         ),
     )
 
-    fitting = processes(profiles, chosen)
-    named = [entry for entry in fitting if entry.name == chosen.default_process]
+    return chosen, standard_process(processes(profiles, chosen), chosen, printer)
+
+
+def standard_process(
+    fitting: Sequence[SlicerProfile], machine: SlicerProfile, printer: PrinterProfile
+) -> SlicerProfile | None:
+    """Der Standardprozess einer Maschine unter den passenden: der, den sie
+    nennt (``default_print_profile``), sonst der, den ihr Hersteller Standard
+    nennt (:func:`_standard_process`). Die Stufe „Standard" meint ihn, und die
+    übrigen Stufen suchen von ihm aus (:func:`stage_process`)."""
+    named = [entry for entry in fitting if entry.name == machine.default_process]
     if named:
-        return chosen, named[0]
-    return chosen, _standard_process(fitting, printer)
+        return named[0]
+    return _standard_process(fitting, printer)
 
 
 #: Die Schichthöhe am Anfang eines Prozessnamens, wie alle Hersteller ihn
 #: schreiben: „0.20mm Standard @…", „0.2mm Standard @…", „0.20mm SPEED @…".
 _LAYER_IN_NAME: Final = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*mm\b", re.IGNORECASE)
+
+
+def layer_in_name(name: str) -> float | None:
+    """Die Schichthöhe am Anfang eines Prozessnamens — ``None``, wo keine steht."""
+    found = _LAYER_IN_NAME.match(name)
+    return float(found.group(1)) if found else None
+
+
+#: Woran ein Hersteller im Namen sagt, welcher Stufe ein Prozess dient (Konzept
+#: Herstellerprofil, Entscheidung I). Gezählt an den Beständen von
+#: ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print und PrusaSlicer 2.9.6
+#: (27.09.2026): „Fine", „High Quality", „DETAIL", „FastDetail"; „Draft",
+#: „Extra Draft", „DRAFT"; „Strength", „STRUCTURAL". Die Reihenfolge ist der
+#: Vorrang bei gleicher Schichthöhe — Bambus „0.12mm Fine" vor „0.12mm High
+#: Quality". Creality Print nennt jeden Prozess „Standard"; dort findet sich
+#: keiner, und die Stufe liegt über dem Standardprozess.
+STAGE_WORDS: Final[dict[str, tuple[str, ...]]] = {
+    "fine": ("fine", "detail", "quality"),
+    "draft": ("draft",),
+    "strong": ("strength", "structural"),
+}
+
+#: Wie weit „Belastbar" von der Schichthöhe des Standards abweichen darf, in
+#: Millimetern. Die Hersteller legen die Stufe auf sie — Prusas „0.20mm
+#: STRUCTURAL", Bambus „0.20mm Strength"; ein „0.25mm STRUCTURAL" ist eine
+#: gröbere Wahl, keine belastbarere.
+STRONG_LAYER_TOLERANCE: Final = 0.02
+
+
+def names_stage(name: str, quality: QualityPreset) -> bool:
+    """Nennt dieser Prozessname die Stufe (:data:`STAGE_WORDS`)?"""
+    text = name.casefold()
+    return any(word in text for word in STAGE_WORDS.get(quality, ()))
+
+
+def stage_process(
+    fitting: Sequence[SlicerProfile],
+    standard: SlicerProfile,
+    quality: QualityPreset,
+    stage_layer: float,
+) -> SlicerProfile | None:
+    """Der Prozess des Herstellers für eine Stufe (Entscheidung I).
+
+    „Standard" ist der Standardprozess der Maschine. „Fein", „Entwurf" und
+    „Belastbar" sind der Prozess, dessen Name die Stufe nennt: Fein feiner als
+    der Standard, Entwurf gröber, beide mit der Schichthöhe, die
+    ``stage_layer`` — der von Solidons Stufe — am nächsten liegt; Belastbar bei
+    der Schichthöhe des Standards. Mitgelieferte Profile gehen eigenen vor:
+    Eine Kopie hat ihren eigenen Zweck und ist keine Stufe.
+
+    Gemessen an den Abnahmedruckern (27.09.2026): Centauri Carbon 2 und P1S
+    „0.12mm Fine", „0.28mm Extra Draft", „0.20mm Strength"; MK4S HF0.4 „0.10mm
+    FAST DETAIL", „0.28mm DRAFT", „0.20mm STRUCTURAL".
+
+    ``None``, wo keiner passt — dann bleibt der Standardprozess, und die Stufe
+    liegt über ihm (``manufacturer.STAGE_PATHS``).
+    """
+    if quality == "standard":
+        return standard
+    words = STAGE_WORDS.get(quality, ())
+    base = layer_in_name(standard.name)
+    if not words or base is None:
+        return None
+    ranked: list[tuple[tuple[bool, float, int, int, str], SlicerProfile]] = []
+    for entry in fitting:
+        layer = layer_in_name(entry.name)
+        if layer is None or entry.name == standard.name:
+            continue
+        text = entry.name.casefold()
+        rank = next((index for index, word in enumerate(words) if word in text), None)
+        if rank is None:
+            continue
+        if quality == "strong":
+            distance = abs(layer - base)
+            wrong_side = distance > STRONG_LAYER_TOLERANCE
+        else:
+            distance = abs(layer - stage_layer)
+            wrong_side = layer > base - EPS_GEOM if quality == "fine" else layer < base + EPS_GEOM
+        if not wrong_side:
+            ranked.append(((entry.from_user, distance, rank, len(entry.name), entry.name), entry))
+    return min(ranked, key=lambda item: item[0])[1] if ranked else None
 
 
 def _standard_process(
@@ -2707,14 +2848,11 @@ def _standard_process(
     (Regel 21).
     """
 
-    def layer(entry: SlicerProfile) -> float | None:
-        found = _LAYER_IN_NAME.match(entry.name)
-        return float(found.group(1)) if found else None
-
     same = [
         entry
         for entry in fitting
-        if (height := layer(entry)) is not None and abs(height - printer.layer_height) < 1e-6
+        if (height := layer_in_name(entry.name)) is not None
+        and abs(height - printer.layer_height) < 1e-6
     ]
     standard = [entry for entry in same if "standard" in entry.name.casefold()]
     pool = standard or same

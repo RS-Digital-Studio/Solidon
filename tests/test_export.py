@@ -21,6 +21,7 @@ from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import (
     arrangement_holds,
     check_adhesion_clearance,
+    check_adhesion_on_bed,
     check_before_export,
     check_filament_changes,
     export_bytes,
@@ -1185,6 +1186,52 @@ def test_two_parts_may_be_apart_and_their_brims_still_collide() -> None:
         (_boxed("weit", (10.0, 10.0, 5.0), (30.0, 0.0)).mesh),
     ]
     assert check_adhesion_clearance(weit, settings) == []
+
+
+def test_a_rim_beyond_the_bed_edge_is_said() -> None:
+    """Die Körper liegen auf dem Bett, ihr Rand nicht (27.09.2026): Am
+    Minigolf-Auftrag für den Centauri Carbon 2 fuhr der Auto-Brim am Neptune 4
+    210 Züge neben das Bett, PrusaSlicers Skirt am SV06 24. Der Skirt zählt
+    dabei mit seiner Breite — am Bettrand liegt er ganz außen."""
+    profile = profiles.make_profile()
+    half = profile.printer.build_volume[0] / 2.0
+    settings = print_settings.resolve(profile)
+    brim = print_settings.with_path(settings, "adhesion.kind", "brim")
+    brim = print_settings.with_path(brim, "adhesion.brim_width", 5.0)
+    skirt = print_settings.with_path(settings, "adhesion.kind", "skirt")
+    skirt = print_settings.with_path(skirt, "adhesion.skirt_distance", 2.0)
+    skirt = print_settings.with_path(skirt, "adhesion.skirt_loops", 1)
+    edge = _boxed("Rand", (10.0, 10.0, 5.0), (half - 7.0, 0.0)).mesh
+    middle = _boxed("Mitte", (10.0, 10.0, 5.0), (0.0, 0.0)).mesh
+    beside = _boxed("Daneben", (10.0, 10.0, 5.0), (half + 20.0, 0.0)).mesh
+
+    [found] = check_adhesion_on_bed([edge, middle], brim, profile, ["Rand", "Mitte"])
+
+    assert found.code == "arrange.adhesion_off_bed" and found.object_id == "Rand"
+    assert found.suggestions, "Regel 17: Anordnen"
+    assert [f.code for f in check_adhesion_on_bed([edge], skirt, profile)] == [
+        "arrange.adhesion_off_bed"
+    ], "2 mm Abstand und eine Bahn über 2 mm Luft"
+    assert check_adhesion_on_bed([middle], brim, profile) == []
+    assert check_adhesion_on_bed([beside], brim, profile) == [], "das sagt die Bauraumprüfung"
+    none = print_settings.with_path(settings, "adhesion.kind", "none")
+    assert check_adhesion_on_bed([edge], none, profile) == []
+
+
+def test_a_part_too_tall_for_the_printer_is_named_as_such() -> None:
+    """PrusaSlicer sagt „outside of the print volume", gleich ob ein Teil
+    daneben liegt oder zu hoch ist. Am Minigolf-Auftrag auf dem MINI war es
+    ein Teil von 200 mm bei 180 mm Bauhöhe, und „Anordnen" half dort nicht."""
+    profile = profiles.make_profile("prusa-mini", "pla")
+    setup = handover.SlicerSetup(executable=Path("prusa-slicer-console.exe"), flavour="prusa")
+
+    tall = handover._outside_the_volume(setup, profile, "outside of the print volume", 200.0)
+    flat = handover._outside_the_volume(setup, profile, "outside of the print volume", 20.0)
+
+    assert tall.values["height_mm"] == 200.0 and tall.values["limit_mm"] == 180.0
+    assert tall.suggestions[0].id == "split_model"
+    assert "limit_mm" not in flat.values
+    assert flat.suggestions[0].id == "arrange_on_bed"
 
 
 def test_the_support_structure_needs_its_own_room_beside_the_part() -> None:
@@ -3170,6 +3217,39 @@ def test_the_blocker_takes_the_reports_layers(
     assert reused is not None
     assert reused.raw.volume == pytest.approx(fresh.raw.volume, rel=1e-9)
     assert reused.triangle_count == fresh.triangle_count
+
+
+def test_the_blocker_cuts_with_the_threshold_that_goes_out(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Entscheidung L: Die Sperre schneidet mit der Stützschwelle der
+    Einstellungen, die hinausgehen — auf einem Herstellerprozess dessen
+    Schwelle, nicht die des Druckers in Solidons Tabelle (am Centauri 60°).
+    Sonst sperrte sie nach einer Grenze, nach der der Slicer nicht stützt."""
+    from app.core.export import writer
+    from app.core.slice import analysis
+
+    class SeenError(Exception):
+        pass
+
+    angles: list[float] = []
+
+    def capture(*_args: object, **kwargs: float) -> None:
+        angles.append(kwargs["overhang_angle"])
+        raise SeenError
+
+    block = trimesh.creation.box(extents=(30.0, 30.0, 30.0))
+    block.apply_translation((0.0, 0.0, 15.0))
+    entry = scene_object(mesh=MeshData.of(block))
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+    printed = print_settings.with_path(settings, "support.threshold_angle", 41.0)
+    monkeypatch.setattr(analysis, "slice_body", capture)
+
+    with pytest.raises(SeenError):
+        writer._support_blocker(entry, as_mesh_data(entry.mesh), printed, profile)
+
+    assert profile.overhang_limit_degrees == pytest.approx(60.0)
+    assert angles == [pytest.approx(41.0)]
 
 
 def test_the_blocker_stops_when_the_customer_cancels(tmp_path: Path, profile: Profile) -> None:

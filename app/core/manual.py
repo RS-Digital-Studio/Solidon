@@ -1427,6 +1427,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Studio, ElegooSlicer, Creality Print) kommen Drucker, Prozess und "
             "Filament aus dem Bestand des Slicers und sind vorgewählt; Solidon "
             "legt nur Ihre Änderungen und übernommene Vorschläge darauf. Die "
+            "Qualität wählt dabei den passenden Prozess des Herstellers; wählen "
+            "Sie selbst einen anderen, bleibt Ihre Wahl. Die "
             "Orca-Familie verlangt Drucker- und Prozessprofil; solange eines "
             "fehlt, sagt die Statuszeile, welches. Cura bekommt die Maschine aus "
             "seiner Druckerdefinition und die übrigen Werte von Solidon.\n\n"
