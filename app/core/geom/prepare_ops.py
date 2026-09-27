@@ -1143,7 +1143,9 @@ def _curved_rim_cap(
     return added, mapping[triangles][:, ::-1]
 
 
-def _past_curved_mouths(mesh: MeshData, chain: Sequence[Feature]) -> MeshData | None:
+def _past_curved_mouths(
+    mesh: MeshData, chain: Sequence[Feature], *, mouth_blends: bool = False
+) -> MeshData | None:
     """Der Hohlraum einer Kette aus ihren Flächen, an einer gekrümmten Mündung
     entlang der Achse über ihren äußersten Randpunkt hinaus verlängert — das
     Werkzeug, wo :func:`_paired_cavity_body` an der Mündung keine Ebene findet
@@ -1154,13 +1156,15 @@ def _past_curved_mouths(mesh: MeshData, chain: Sequence[Feature]) -> MeshData | 
     axis = np.asarray(_feature_direction(chain[0]), dtype=np.float64)
     return _body_from_faces(
         mesh,
-        cavity_surface_indices(mesh, chain),
+        cavity_surface_indices(mesh, chain, mouth_blends=mouth_blends),
         allowed_rings=(2,),
         past_curved=(axis, FEATURE_OVERLAP),
     )
 
 
-def _paired_cavity_body(mesh: MeshData, *features: Feature) -> MeshData | None:
+def _paired_cavity_body(
+    mesh: MeshData, *features: Feature, mouth_blends: bool = False
+) -> MeshData | None:
     """Der gemeinsame Hohlraum aller topologisch verbundenen Abschnitte.
 
     Die Kegelfläche allein hat zwei Randringe und darf deshalb nicht als
@@ -1173,7 +1177,7 @@ def _paired_cavity_body(mesh: MeshData, *features: Feature) -> MeshData | None:
 
     return _body_from_faces(
         mesh,
-        cavity_surface_indices(mesh, features),
+        cavity_surface_indices(mesh, features, mouth_blends=mouth_blends),
         allowed_rings=(2,),
     )
 
@@ -1292,6 +1296,7 @@ def _chain_plug(
     quality: Quality,
     seed: int | None,
     cancelled: CancelToken | None,
+    mouth_blends: bool = False,
 ) -> MeshData | None:
     """Ein Stopfen über die **ganze** Kette — derselbe Weg, den der Absagetext nennt.
 
@@ -1330,7 +1335,9 @@ def _chain_plug(
     """
     from app.core.perceive.relations import cavity_surface_indices
 
-    indices = np.unique(np.asarray(cavity_surface_indices(mesh, chain), dtype=np.int64))
+    indices = np.unique(
+        np.asarray(cavity_surface_indices(mesh, chain, mouth_blends=mouth_blends), dtype=np.int64)
+    )
     if not indices.size:
         return None
     raw = mesh.raw
@@ -1371,6 +1378,7 @@ def _cavity_plug(
     quality: Quality,
     seed: int | None,
     cancelled: CancelToken | None,
+    mouth_blends: bool = False,
 ) -> MeshData | None:
     """Der Körper, der diesen Hohlraum **füllt** — aus seinen Flächen oder als Stopfen.
 
@@ -1381,10 +1389,14 @@ def _cavity_plug(
     trotzdem hängen nach dem Verschweißen vier Kanten an je vier Dreiecken; der
     Deckelbau endet nicht wasserdicht, und **beide** Wege des Entfernens sagten
     ab (Robert, 10.09.2026). Dann kommt der Stopfen (:func:`_chain_plug`).
+
+    ``mouth_blends`` wie in ``relations.cavity_surface_indices``: Wer den ganzen
+    Hohlraum versetzt oder entfernt, füllt die gerundete Mündungskante mit
+    (RM-259).
     """
     from app.core.perceive.relations import cavity_surface_indices
 
-    indices = cavity_surface_indices(mesh, sections)
+    indices = cavity_surface_indices(mesh, sections, mouth_blends=mouth_blends)
     built = _body_from_faces(mesh, indices, allowed_rings=(1, 2))
     if built is not None:
         return built
@@ -1398,7 +1410,14 @@ def _cavity_plug(
     built = _body_from_faces(mesh, indices, allowed_rings=(1, 2), curved_rims=True)
     if built is not None:
         return built
-    return _chain_plug(mesh, sections, quality=quality, seed=seed, cancelled=cancelled)
+    return _chain_plug(
+        mesh,
+        sections,
+        quality=quality,
+        seed=seed,
+        cancelled=cancelled,
+        mouth_blends=mouth_blends,
+    )
 
 
 def _cavity_tool(
@@ -2919,7 +2938,7 @@ def feature_placement_geometry(
     centre = cast(Vec3, tuple(float(value) for value in feature.params["centre"]))
     related = chain or (feature,)
     built = (
-        _paired_cavity_body(body, *chain)
+        _paired_cavity_body(body, *chain, mouth_blends=True)
         if chain
         else _tool_for(body, feature, centre, alone=True, rooted=True)
     )
@@ -2931,7 +2950,7 @@ def feature_placement_geometry(
         # wollte, las „geht in einen anderen Hohlraum über", obwohl *Merkmal
         # versetzen* mit Zahlen dieselbe Kette versetzt. Dieselbe Reihenfolge
         # wie :func:`_chain_copy_tool`; gefüllt wird mit dem Stopfen (``flush``).
-        built = _past_curved_mouths(body, chain) or _chain_tool(
+        built = _past_curved_mouths(body, chain, mouth_blends=True) or _chain_tool(
             body, chain, pivot=np.asarray(centre, dtype=np.float64), tilt=0.0
         )
     if built is None:
@@ -3009,6 +3028,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
                     quality=ctx.quality,
                     seed=ctx.seed,
                     cancelled=ctx.cancelled,
+                    mouth_blends=True,
                 )
             if filler is None:
                 raise ValidationError(
@@ -3541,7 +3561,9 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 5: eine gekrümmte Mündung schließt mit der fortgesetzten Fläche, das
     # Werkzeug kommt aus den Flächen der Kette, und der Klick ins Bild nimmt
     # sie an und lässt keine Narben stehen (RM-248, Durchsicht 0.5.1).
-    cache_version="5",
+    # 6: die gerundete Mündungskante einer Kette reist mit, statt an der alten
+    # Stelle eine Mulde und an der neuen eine Haut zu lassen (RM-259).
+    cache_version="6",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -3636,7 +3658,12 @@ def move_feature(ctx: OpContext) -> OpResult:
         # dem Werkzeug der Kopie (:func:`_chain_copy_tool`); wo die Flächen
         # tragen, sind beide der Flächenkörper wie bisher.
         cavity_body = _cavity_plug(
-            body, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+            body,
+            chain,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+            mouth_blends=True,
         )
         if cavity_body is None:
             raise ValidationError(
@@ -3898,7 +3925,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 0.5.1).
     # 4: an einer gekrümmten Mündung kommt das Werkzeug aus den Flächen der
     # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
-    cache_version="4",
+    # 5: die Kopie einer Kette nimmt ihre gerundete Mündungskante mit (RM-259).
+    cache_version="5",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -4326,7 +4354,8 @@ class _PatternPlace:
     # 0.5.1).
     # 3: an einer gekrümmten Mündung kommt das Werkzeug aus den Flächen der
     # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
-    cache_version="3",
+    # 4: jede Instanz einer Kette trägt ihre gerundete Mündungskante (RM-259).
+    cache_version="4",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -4930,7 +4959,10 @@ def _chain_copy_tool(
     # (RM-248): Der Stopfen kommt aus den Flächen, und ein Zylinder aus
     # Kennzahlen mit anderer Teilung schnitt an der neuen Stelle mehr ab, als
     # er zurückgab — an der Platte mit Zylinder R 40 1,1 mm³ je Versetzen.
-    exact = _paired_cavity_body(body, *chain) or _past_curved_mouths(body, chain)
+    # Die Kopie nimmt die gerundete Mündungskante mit (RM-259).
+    exact = _paired_cavity_body(body, *chain, mouth_blends=True) or _past_curved_mouths(
+        body, chain, mouth_blends=True
+    )
     tool = (
         _past_the_mouths(body, exact)
         if exact is not None
@@ -5036,7 +5068,8 @@ class RemoveFeatureParams(BaseParams):
     # (Durchsicht 0.5.1).
     # 10: eine gekrümmte Mündung schließt mit der fortgesetzten Fläche statt
     # mit einem Fächer vom Mittelpunkt ihres Rands (RM-248, Durchsicht 0.5.1).
-    cache_version="10",
+    # 11: die ganze Kette schließt samt gerundeter Mündungskante (RM-259).
+    cache_version="11",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -5110,7 +5143,12 @@ def remove_feature(ctx: OpContext) -> OpResult:
         # hergibt, dieselben Abschnitte aus ihren Kennzahlen (Robert,
         # 10.09.2026 — an der eingelesenen Halterung ging beides nicht).
         filled = _cavity_plug(
-            body, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+            body,
+            chain,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+            mouth_blends=True,
         )
         if filled is None:
             raise ValidationError(
@@ -10264,6 +10302,7 @@ def _bore_end_rims(
     features: Mapping[FeatureId, Feature],
     *,
     grows: bool,
+    mouth_blends: bool = False,
 ) -> tuple[_Rim, ...]:
     """Die Endringe aus :func:`_bore_end_planes`, je mit Luftprobe und Punkten —
     leer, wo die Ränder keine zwei flachen Ringe sind.
@@ -10293,7 +10332,11 @@ def _bore_end_rims(
             names = [section.id for section in side]
             if feature.id in names:
                 scope = side[names.index(feature.id) :]
-    indices = cavity_surface_indices(mesh, scope) if grows else feature.face_indices
+    indices = (
+        cavity_surface_indices(mesh, scope, mouth_blends=mouth_blends)
+        if grows
+        else feature.face_indices
+    )
     # Auch unverschweißte STL-Dreiecke teilen geometrisch dieselben Ränder.
     # Verschweißen ändert hier weder Flächenreihenfolge noch Eingangsmodell.
     body = _welded(mesh)
@@ -12306,10 +12349,19 @@ def _exact_own_cavity(source: SceneObject, feature: Feature) -> _OwnCavity | Non
     return _exact_air_of_the_bore(source, feature)
 
 
-def _own_mouths(source: SceneObject, feature: Feature) -> tuple[tuple[SectionPlane, bool], ...]:
+def _own_mouths(
+    source: SceneObject, feature: Feature, *, mouth_blends: bool = False
+) -> tuple[tuple[SectionPlane, bool], ...]:
     """Die zwei Endringe eines Hohlraums (samt Kette) als Ebenen bündig in der
-    Oberfläche, je mit der Luftprobe — leer, wo es keine zwei flachen gibt."""
-    rims = _bore_end_rims(as_mesh_data(source.mesh), feature, source.features, grows=True)
+    Oberfläche, je mit der Luftprobe — leer, wo es keine zwei flachen gibt.
+    ``mouth_blends`` wie in ``relations.cavity_surface_indices``."""
+    rims = _bore_end_rims(
+        as_mesh_data(source.mesh),
+        feature,
+        source.features,
+        grows=True,
+        mouth_blends=mouth_blends,
+    )
     if len(rims) != 2:
         return ()
     return tuple(
@@ -12338,7 +12390,8 @@ def _narrows_outward(chain: Sequence[Feature]) -> bool:
 
 
 def _exact_chain_own_cavity(source: SceneObject, chain: Sequence[Feature]) -> _OwnCavity | None:
-    """Eine Kette, die nach außen enger wird (:func:`_narrows_outward`), als
+    """Eine Kette, die nach außen enger wird (:func:`_narrows_outward`) oder
+    einen Übergang trägt, den kein Profil kennt (:func:`_carries_a_blend`), als
     Hohlraum aus ihren nativen Flächen — ``None`` für jede andere.
 
     **Die Profile kannten damals nur Ketten, die sich nach außen weiten**
@@ -12354,17 +12407,33 @@ def _exact_chain_own_cavity(source: SceneObject, chain: Sequence[Feature]) -> _O
     from app.core.brep import edit
     from app.core.perceive.relations import cavity_surface_indices
 
-    if not _narrows_outward(chain):
+    if not _narrows_outward(chain) and not _carries_a_blend(source, chain):
         return None
     solid = _exact_body(source)
     native = solid.faces_of_triangles(
-        cavity_surface_indices(as_mesh_data(source.mesh), tuple(chain))
+        cavity_surface_indices(as_mesh_data(source.mesh), tuple(chain), mouth_blends=True)
     )
     body = edit.solid_from_faces(solid, native, allowed_rings=(2,)) if native else None
     if body is None:
         return None
-    mouths = _own_mouths(source, chain[0])
+    mouths = _own_mouths(source, chain[0], mouth_blends=True)
     return _OwnCavity(body, mouths) if mouths else None
+
+
+def _carries_a_blend(source: SceneObject, chain: Sequence[Feature]) -> bool:
+    """Ob der Hohlraum einer Kette Flächen trägt, die keinem Abschnitt gehören
+    und keine Schulter sind — die gerundete Kante an ihrer Mündung etwa
+    (``relations.cavity_blend_indices``, RM-259).
+
+    Ein Einlaufprofil kennt nur Zylinder, Kegel und ebene Stufen. Aus ihm
+    gebaut, ließ der Stopfen an der alten Stelle die Rundung als Mulde stehen
+    — 1 mm tief unter einer Zylindersenkung Ø 10 —, und das Werkzeug an der
+    neuen Stelle endete an ihrem inneren Rand: Eine Haut deckte die Senkung
+    zu. Dieselbe Frage stellt das Netz an denselben Dreiecken des Zwillings.
+    """
+    from app.core.perceive.relations import cavity_blend_indices
+
+    return bool(cavity_blend_indices(as_mesh_data(source.mesh), tuple(chain)))
 
 
 def _exact_own_chain_filled(source: SceneObject, chain: Sequence[Feature], own: _OwnCavity) -> Any:

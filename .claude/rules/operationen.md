@@ -625,6 +625,21 @@ einem Deckel aus Material, und ein Werkzeug, das dort um die Zugabe über die
 Ebene hinausreicht, trug bei jedem Versetzen ein Scheibchen ab — 1,33 mm³ an
 Ø 9,2 (Review, 21.09.2026).
 
+**Die gerundete Mündungskante einer Zylindersenkung reist mit** (RM-259,
+Durchsicht 0.5.1): Versetzen, Verdoppeln, Muster und Entfernen der ganzen
+Kette fragen die Hohlraumflächen mit `mouth_blends=True`
+(`relations.cavity_surface_indices`); dann gehört die Rundung zur Kette, ihr
+äußerer Rand ist die Mündung, und der exakte Kern geht den Weg aus den
+eigenen Flächen (`_carries_a_blend` → `_exact_chain_own_cavity`). Ohne sie
+blieb an einer ebenen Platte an der alten Stelle eine Mulde von 1 mm, und an
+der neuen deckte eine Haut die Senkung zu. *Bohrung ändern* und *Kippen*
+fragen ohne — sie schneiden aus Profilen und Kennzahlen neu, die keine
+Rundung kennen, und ein Stopfen samt Rundung ließ dort eine Haut über der
+neuen Mündung stehen. In einer **gekrümmten** Fläche reist die Rundung noch
+nicht (gs-100, Registerpunkt): Am Netz findet die Erkennung die Senkung hinter
+einer Rollkugelrundung nicht, und um den Rand von gs-100 steht keine Fläche,
+sondern drei. Abnahme: `test_a_rounded_mouth_travels_with_its_counterbore`.
+
 **Gibt der Flächenkörper nichts her, füllt der Stopfen und schneidet das
 Werkzeug der Kopie** (`_cavity_plug`, `_chain_copy_tool`) — wie beim Kippen
 und Verdoppeln derselben Kette; bis zum 25.09.2026 sagte allein das Versetzen

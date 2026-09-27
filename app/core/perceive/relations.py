@@ -1313,13 +1313,23 @@ def _shape_key(features: Iterable[Feature]) -> tuple[Any, ...]:
     )
 
 
-def cavity_surface_indices(mesh: MeshData, features: Iterable[Feature]) -> tuple[int, ...]:
+def cavity_surface_indices(
+    mesh: MeshData, features: Iterable[Feature], *, mouth_blends: bool = False
+) -> tuple[int, ...]:
     """Die belegten Hohlraumflächen einschließlich ihrer ebenen Ringschultern.
 
     Der Aufrufer übergibt die zuvor ermittelte vollständige Kette. Zusätzliche
     Flächen kommen nur hinzu, wenn ihre beiden Randringe eindeutig zu zwei
     verschiedenen, koaxialen Abschnitten gehören. So benutzt die Bearbeitung
     dieselben echten Schulterflächen wie die Erkennung des Zusammenhangs.
+
+    ``mouth_blends`` nimmt auch die gerundete Mündungskante einer Kette mit
+    Schulter dazu (:func:`_blended_cavity_faces`, RM-259) — für die Wege, auf
+    denen der ganze Hohlraum reist oder geht: Versetzen, Verdoppeln, Muster
+    und Entfernen. Ändern und Kippen schneiden aus Profilen und Kennzahlen neu,
+    die eine Rundung nicht kennen; ein Stopfen samt Rundung ließe dort eine
+    Haut über der neuen Mündung stehen (gemessen am Nachbau mit Rundung R 1,
+    ``m21_aendern``). Dort bleibt die Rundung, wie sie war.
 
     Gemerkt je Körper und Kette (:func:`features.remembered`): Ansicht,
     Merkmalfenster und die Frage nach dem eigenen Körper stellen sie nach
@@ -1332,23 +1342,23 @@ def cavity_surface_indices(mesh: MeshData, features: Iterable[Feature]) -> tuple
         "cavity_surface",
         body,
         (),
-        lambda: _cavity_surface_indices_read(body, candidates),
+        lambda: _cavity_surface_indices_read(body, candidates, mouth_blends=mouth_blends),
         # Nach Kennung sortiert: Die Antwort hängt nicht an der Reihenfolge,
         # in der Ansicht und Merkmalfenster die Kette nennen.
-        extra=_shape_key(candidates[name] for name in sorted(candidates)),
+        extra=(mouth_blends, _shape_key(candidates[name] for name in sorted(candidates))),
     )
     return answer
 
 
 def _cavity_surface_indices_read(
-    body: trimesh.Trimesh, candidates: Mapping[FeatureId, Feature]
+    body: trimesh.Trimesh, candidates: Mapping[FeatureId, Feature], *, mouth_blends: bool = False
 ) -> tuple[int, ...]:
     """Der Rumpf von :func:`cavity_surface_indices` — die Antwort merkt sich die Hülle."""
     owners: dict[frozenset[tuple[int, int]], list[FeatureId]] = {}
     indices = {index for feature in candidates.values() for index in feature.face_indices}
     if not indices or min(indices) < 0 or max(indices) >= len(body.faces):
         return ()
-    indices = _blended_cavity_faces(body, candidates, indices)
+    indices = _blended_cavity_faces(body, candidates, indices, mouth_blends=mouth_blends)
     for identifier, feature in candidates.items():
         rings = boundary_rings(body, feature)
         if rings is None:
@@ -1372,7 +1382,11 @@ def _cavity_surface_indices_read(
 
 
 def _blended_cavity_faces(
-    body: trimesh.Trimesh, candidates: Mapping[FeatureId, Feature], indices: set[int]
+    body: trimesh.Trimesh,
+    candidates: Mapping[FeatureId, Feature],
+    indices: set[int],
+    *,
+    mouth_blends: bool = False,
 ) -> set[int]:
     """Tangentiale Innenübergänge bis zu den beiden äußeren Randringen ergänzen.
 
@@ -1430,9 +1444,76 @@ def _blended_cavity_faces(
     if bool(np.any(inward < -EPS_GEOM)):
         return indices
     rings = _face_boundary_rings(body, expanded)
-    if rings is None or len(rings) != 2:
+    if not mouth_blends:
+        if rings is None or len(rings) != 2:
+            return indices
+        return {int(index) for index in expanded}
+    # **So viele Randringe wie vorher, nicht zwei** (RM-259, Durchsicht 0.5.1):
+    # Ein Übergang ersetzt den Rand, an dem er beginnt, durch seinen äußeren —
+    # mehr ändert sich nicht. Eine Kette mit Zylindersenkung hat vor ihren
+    # Schultern (:func:`_shoulder_connections`, die erst danach dazukommen)
+    # vier Ringe, und die gerundete Mündungskante unter der Senkung fiel
+    # deshalb heraus: Beim Versetzen blieb an der alten Stelle eine Mulde von
+    # 1 mm, an der neuen deckte eine Haut die Senkung zu.
+    before = _face_boundary_rings(body, np.asarray(sorted(indices), dtype=np.int64))
+    if rings is None or len(rings) != (2 if before is None else len(before)):
+        return indices
+    # **Und nah an der Wand** — ein Übergang ist schmal. Eine Bohrung am Grund
+    # einer glatten Mulde erreichte sonst über die Flut die ganze Mulde.
+    if not _near_the_wall(body, candidates, extra, axis, centre):
         return indices
     return {int(index) for index in expanded}
+
+
+def _near_the_wall(
+    body: trimesh.Trimesh,
+    candidates: Mapping[FeatureId, Feature],
+    extra: NDArray[np.int64],
+    axis: Any,
+    centre: Any,
+) -> bool:
+    """Ob ein ergänzter Übergang (``extra``) nah an der Wand bleibt: keine seiner
+    Ecken weiter von der Achse als das Doppelte des weitesten Abschnitts.
+
+    Eine gerundete oder gefaste Mündungskante reicht so weit, wie ihre Rundung
+    breit ist — an der Lochplatte gs-100 1 mm über eine Senkung Ø 10. Was die
+    Flut darüber hinaus erreicht, ist die Fläche, in die die Bohrung mündet, und
+    die gehört nicht zum Hohlraum. Elementweise gerechnet (RM-187).
+    """
+    radii = [float(feature.params.get("diameter") or 0.0) / 2.0 for feature in candidates.values()]
+    widest = max(radii, default=0.0)
+    if widest <= EPS_GEOM:
+        return False
+    corners = np.asarray(body.vertices, dtype=np.float64)[
+        np.unique(np.asarray(body.faces, dtype=np.int64)[extra])
+    ]
+    offset = corners - np.asarray(centre, dtype=np.float64)
+    direction = np.asarray(axis, dtype=np.float64)
+    along = offset[:, 0] * direction[0] + offset[:, 1] * direction[1] + offset[:, 2] * direction[2]
+    across = offset - along[:, None] * direction
+    distance = (
+        across[:, 0] * across[:, 0] + across[:, 1] * across[:, 1] + across[:, 2] * across[:, 2]
+    )
+    limit = 2.0 * widest
+    return bool(np.all(distance <= limit * limit))
+
+
+def cavity_blend_indices(mesh: MeshData, features: Iterable[Feature]) -> tuple[int, ...]:
+    """Die Dreiecke eines Hohlraums, die keinem seiner Abschnitte gehören und
+    keine Schulter sind — seine glatten Übergänge, etwa die gerundete Kante an
+    der Mündung (:func:`_blended_cavity_faces`).
+
+    Der exakte Kern fragt danach, ob die Kette ganz aus ihren Profilen gebaut
+    werden kann: Ein Profil kennt die Rundung nicht, und ein Stopfen daraus
+    ließ an der alten Stelle die Mulde der Rundung stehen (RM-259). Nicht
+    gemerkt — gefragt wird je Kettenhandlung einmal, nicht je Klick.
+    """
+    body = _one_body(mesh).raw
+    candidates = {feature.id: feature for feature in features}
+    own = {index for feature in candidates.values() for index in feature.face_indices}
+    if not own or min(own) < 0 or max(own) >= len(body.faces):
+        return ()
+    return tuple(sorted(_blended_cavity_faces(body, candidates, set(own), mouth_blends=True) - own))
 
 
 def _ordered_cavity(

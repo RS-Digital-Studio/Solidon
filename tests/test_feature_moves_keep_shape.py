@@ -1337,6 +1337,89 @@ def test_a_widened_bore_whose_mouth_lies_in_a_curved_face_is_moved_on_both_kerne
     assert _chain_ids(moved) == members
 
 
+def _rounded_mouth(*, at: float = -8.0, rounding: float = 1.0) -> Any:
+    """Die Platte 44 × 24 × 12 mit Zylindersenkung und Fase (``BOTH_ENDS``) bei
+    x = ``at`` — die Mündungskante der Zylindersenkung in der ebenen Unterseite
+    um ``rounding`` gerundet, wie an der Lochplatte gs-100 (dort in einer
+    gekrümmten Fläche, RM-259)."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+
+    from app.core.brep import edit
+    from app.core.sketch.planes import frame_of
+
+    solid = edit.bore_profile(
+        edit.box(44.0, 24.0, 12.0),
+        list(BOTH_ENDS["Zylindersenkung und Fase"]),
+        frame_of((0, 0, 1), (at, 0, 0)),
+    )
+    picked = []
+    for index, edge in enumerate(solid.edges()):
+        curve = BRepAdaptor_Curve(edge)
+        middle = curve.Value((curve.FirstParameter() + curve.LastParameter()) / 2.0)
+        if abs(math.hypot(middle.X() - at, middle.Y()) - 5.0) < 0.05 and middle.Z() < 2.0:
+            picked.append(index)
+    assert len(picked) >= 1
+    return edit.fillet(solid, rounding, selected_edges=picked)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_rounded_mouth_travels_with_its_counterbore(profile: Profile, kernel: str) -> None:
+    """Die gerundete Mündungskante einer Zylindersenkung gehört zu ihr (RM-259).
+
+    Die Rundung R 1 zwischen Senkung und ebener Unterseite ist kein eigenes
+    Merkmal der Kette. Am Netz ergänzte ``relations._blended_cavity_faces`` sie
+    schon — und verwarf sie wieder, weil der Hohlraum mit der offenen Schulter
+    vier Randringe hat statt zwei; am exakten Kern kamen Stopfen und Werkzeug
+    aus den Profilen der Kette, die die Rundung nicht kennen. An beiden Kernen
+    blieb beim Versetzen an der alten Stelle eine Mulde von 1 mm stehen, und an
+    der neuen deckte eine Haut die Senkung zu („geht nicht mehr durch“);
+    Entfernen gab 570,5 statt 655,9 mm³ zurück.
+
+    Jetzt reist die Rundung mit: an der alten Stelle ist die Unterseite wieder
+    eben, an der neuen ist die Senkung offen und ihre Kante gerundet.
+    """
+    from app.core.brep import edit
+    from tests.test_bore_depth import _evaluated
+
+    source = _body(kernel, _rounded_mouth())
+    before = abs(float(source.mesh.volume))
+    bore = _narrowest_hole(source)
+    x, y, z = (float(value) for value in bore.params["centre"])
+    members = {feature.id for feature in _cavity_members(source)}
+
+    moved, findings = _evaluated(
+        source, profile, "move_feature", at_feature=bore.id, x=x + 5.0, y=y, z=z
+    )
+    assert _warnings(findings) == [], findings
+    assert abs(float(moved.mesh.volume)) == pytest.approx(before, abs=0.05)
+    assert _chain_ids(moved) == members
+    twin = as_mesh_data(moved.mesh)
+    # Alte Stelle, abseits der neuen: in der Senkung und im Band der Rundung
+    # wieder Material.
+    assert contains(twin, [(-11.0, 0.0, 0.5), (-11.0, 0.0, 3.0), (-13.5, 0.0, 0.05)]).all()
+    # Neue Stelle: offen bis in die Unterseite, und 5,5 mm neben der Achse
+    # liegt dicht über der Unterseite die Luft der mitgereisten Rundung.
+    assert not contains(twin, [(-3.0, 0.0, 0.1), (-3.0, 0.0, 3.0), (2.5, 0.0, 0.05)]).any()
+
+    closed, findings = _evaluated(
+        source, profile, "remove_feature", at_feature=bore.id, sections="chain"
+    )
+    assert _warnings(findings) == [], findings
+    plate = abs(float(as_mesh_data(edit.box(44.0, 24.0, 12.0)).volume))
+    assert abs(float(closed.mesh.volume)) == pytest.approx(plate, abs=0.05)
+
+    # Die Kopie trägt dieselbe Rundung: Sie nimmt so viel ab, wie der Hohlraum
+    # samt Rundung groß ist, und dicht über der Unterseite 5,5 mm neben ihrer
+    # Achse ist Luft.
+    copied, findings = _evaluated(
+        source, profile, "duplicate_feature", at_feature=bore.id, x=x + 16.0, y=y, z=z
+    )
+    assert _warnings(findings) == [], findings
+    taken = before - abs(float(copied.mesh.volume))
+    assert taken == pytest.approx(plate - before, abs=0.05)
+    assert not contains(as_mesh_data(copied.mesh), [(13.5, 0.0, 0.05)]).any()
+
+
 @pytest.mark.parametrize("bottom", CURVED_BOTTOMS)
 def test_a_bore_under_a_curved_face_is_closed_up_to_that_face(
     profile: Profile, bottom: str
