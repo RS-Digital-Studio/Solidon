@@ -181,11 +181,14 @@ Startcode die Temperatur selbst setzt. Ohne Definition sagt es
 Werte, das Fenster nicht; `cura_profile_beside` legt deshalb neben das Modell
 eine `.curaprofile` (Qualitätsänderungen im Containerformat, das Curas
 `CuraProfileReader` liest: `setting_version` aus der installierten
-`fdmprinter.def.json`, Wahrheitswerte als `True`/`False`, `quality_type` nur,
-wenn die Maschine ihn führt), und der Befund `handover.cura_profile` sagt, wo
-man sie importiert. Eingelegte Materialien liest `configured_filaments` aus
-Curas Konfigurationsordner (`cura.cfg` → aktiver Drucker → Extruderstapel,
-Platz 4 ist das Material).
+`fdmprinter.def.json`, Wahrheitswerte als `True`/`False`, `quality_type` aus
+den Stufen des Druckers, der in Cura aktiv ist, für Düse und Spule seines
+ersten Fachs), und der Befund `handover.cura_profile` sagt, wo man sie
+importiert. Den aktiven Drucker liest `slicer_profiles.cura_active_machine`
+aus Curas Konfigurationsordner (`cura.cfg` → Maschinenstapel → Definition,
+Extruderstapel Platz 5 die Düse, Platz 4 das Material), die eingelegten
+Materialien `configured_filaments` aus denselben Stapeln. Ohne eingerichteten
+Drucker entsteht keine Datei, sondern `handover.cura_profile_unbound`.
 
 **Jede Rolle bekommt Solidons Wert** (RM-191): PrusaSlicer schreibt Solidon
 volle Füllung und Lücken (`solid_infill_speed`, `gap_fill_speed`) und setzt

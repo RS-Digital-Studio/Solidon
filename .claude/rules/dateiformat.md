@@ -483,6 +483,24 @@ Curas `M190`/`M109` vor dem des Herstellers.
 Ein Drucker ohne Definition bekommt `fdmprinter` und einen Befund
 (`slicer.cura_printer_unknown`) — kein stiller Rückfall.
 
+## Das Cura-Profil gehört dem Drucker, der in Cura aktiv ist
+
+Curas Fenster nimmt Einstellungen nur als `.curaprofile`
+(`handover.cura_profile_beside`), und sein Importer setzt das Profil auf die
+**aktive Maschine** um: Eine Qualitätsstufe, die sie nicht führt, lehnt er ab;
+eine, die es für Düse und Spule ihres ersten Fachs nicht gibt, importiert er
+unsichtbar. Die Stufe kommt deshalb aus `slicer_profiles.cura_active_machine`
+(`cura.cfg` → Maschinenstapel → Definition; erstes Fach → Düse und Spule) und
+`cura_quality_types(…, variant=…, material_type=…)` — nie aus den Stufen von
+`fdmprinter` für eine Maschine mit eigenen. Gemessen an der Installation 5.13:
+mit `draft` abgelehnt an Neptune 4 und Centauri Carbon, unsichtbar an K1 Max,
+Ender-3 V3 SE und KE und SV06; mit der Stufe der aktiven Maschine überall
+sichtbar.
+
+Ist in Cura kein Drucker eingerichtet, zu dem das Profil passt, entsteht
+**keine Datei**, sondern der Befund `handover.cura_profile_unbound`. Ein
+Profil, das beim Import still verschwindet, ist schlimmer als keines.
+
 ## Winkel zählen nicht überall gleich
 
 `support.threshold_angle` misst **gegen die Senkrechte**: 0° stützt jeden

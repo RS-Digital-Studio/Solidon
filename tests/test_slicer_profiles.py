@@ -1158,6 +1158,68 @@ def test_cura_names_the_spools_of_its_active_machine(
     )
 
 
+def _cura_maschine(root: Path, name: str, definition: str) -> None:
+    """Ein Maschinenstapel, wie Cura 5.13 ihn schreibt.
+
+    Der Dateiname ist kodiert, die Kennung steht in ``[general]``, und die
+    Druckerdefinition steht an letzter Stelle (``_ContainerIndexes.Definition``).
+    """
+    place = root / "machine_instances"
+    place.mkdir(exist_ok=True)
+    (place / f"{name.replace(' ', '+')}.global.cfg").write_text(
+        f"[general]\nversion = 5\nname = {name}\nid = {name}\n\n"
+        "[metadata]\nsetting_version = 27\ntype = machine\n\n"
+        f"[containers]\n0 = {name}_user\n1 = empty_quality_changes\n2 = empty_intent\n"
+        f"3 = normal\n4 = empty_material\n5 = empty_variant\n6 = {name}_settings\n"
+        f"7 = {definition}\n",
+        encoding="utf-8",
+    )
+
+
+def test_cura_names_its_active_machine_with_nozzle_and_spool(
+    cura: Path, cura_bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auf den Drucker, der in Cura aktiv ist, setzt Cura ein importiertes Profil um.
+
+    ``cura.cfg`` nennt ihn, sein Stapel die Definition, das erste Fach Düse und
+    Spule — die Spule über ihre abgeleitete Kennung. Die andere Maschine
+    bleibt draußen (Prüfbericht Cura, B9).
+    """
+    root = _cura_konfiguration(tmp_path, monkeypatch)
+    _cura_maschine(root, "Andere Maschine", "ohne_angabe")
+    _cura_maschine(root, "Meine Werkstatt", "abax_pri3")
+    stack = root / "extruders" / "meine+werkstatt_0.extruder.cfg"
+    stack.write_text(
+        stack.read_text(encoding="utf-8").replace("5 = empty_variant", "5 = abax_pri3_0.4"),
+        encoding="utf-8",
+    )
+    variant = cura_bestand / "variants" / "abax" / "abax_pri3_0.4.inst.cfg"
+    variant.parent.mkdir(parents=True)
+    variant.write_text(
+        "[general]\ndefinition = abax_pri3\nname = 0.4mm Nozzle\nversion = 4\n\n"
+        "[metadata]\nhardware_type = nozzle\ntype = variant\n",
+        encoding="utf-8",
+    )
+
+    assert sp.cura_active_machine(cura) == sp.CuraActiveMachine(
+        name="Meine Werkstatt",
+        definition=cura_bestand / "definitions" / "abax_pri3.def.json",
+        variant="0.4mm Nozzle",
+        material_type="PLA",
+    )
+
+
+def test_cura_without_a_set_up_printer_names_no_machine(
+    cura: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keine aktive Maschine, oder eine ohne Stapel: keine Maschine, kein Fehler."""
+    root = _cura_konfiguration(tmp_path, monkeypatch)
+
+    assert sp.cura_active_machine(cura) is None, "cura.cfg nennt eine Maschine ohne Stapel"
+    _cura_maschine(root, "Meine Werkstatt", "gibt_es_nicht")
+    assert sp.cura_active_machine(cura) is None, "eine Definition, die nirgends liegt"
+
+
 def test_cura_without_an_active_machine_names_no_spools(
     cura: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1238,6 +1300,53 @@ def test_cura_knows_which_quality_types_a_machine_offers(cura: Path, cura_bestan
     assert sp.cura_quality_types(cura, eins) == {"standard": 0.2}
     abax = cura_bestand / "definitions" / "abax_pri3.def.json"
     assert sp.cura_quality_types(cura, abax) == {"draft": 0.2, "normal": 0.1}
+
+
+def test_cura_offers_only_the_qualities_of_nozzle_and_spool(cura: Path, cura_bestand: Path) -> None:
+    """Eine Stufe, die es für Düse und Spule nicht gibt, importiert Cura unsichtbar.
+
+    So erging es dem Profil an Creality und Sovol (Prüfbericht Cura, B9): Die
+    allgemeine Stufe mit der passenden Schichthöhe gab es, für 0,4 mm und PLA
+    aber kein Profil. Liegt für eine Kombination keines, nimmt Cura die
+    allgemeinen — dann bleiben alle.
+    """
+    _write(
+        cura_bestand / "definitions" / "werkstatt_basis.def.json",
+        {
+            "version": 2,
+            "name": "Werkstatt Basis",
+            "inherits": "fdmprinter",
+            "metadata": {"visible": False, "has_machine_quality": True},
+        },
+    )
+    quality = cura_bestand / "quality" / "werkstatt"
+    quality.mkdir(parents=True)
+    for kind, height in (("fein", 0.2), ("standard", 0.24)):
+        (quality / f"werkstatt_global_{kind}.inst.cfg").write_text(
+            f"[general]\ndefinition = werkstatt_basis\nname = {kind}\nversion = 4\n\n"
+            f"[metadata]\nglobal_quality = True\nquality_type = {kind}\ntype = quality\n\n"
+            f"[values]\nlayer_height = {height}\n",
+            encoding="utf-8",
+        )
+    (quality / "werkstatt_0.4_pla_standard.inst.cfg").write_text(
+        "[general]\ndefinition = werkstatt_basis\nname = Standard\nversion = 4\n\n"
+        "[metadata]\nmaterial = generic_pla\nquality_type = standard\ntype = quality\n"
+        "variant = 0.4mm Nozzle\n\n[values]\n",
+        encoding="utf-8",
+    )
+    basis = cura_bestand / "definitions" / "werkstatt_basis.def.json"
+    alle = {"fein": 0.2, "standard": 0.24}
+
+    assert sp.cura_quality_types(cura, basis) == alle
+    assert sp.cura_quality_types(cura, basis, variant="0.4mm Nozzle", material_type="PLA") == {
+        "standard": 0.24
+    }
+    assert sp.cura_quality_types(cura, basis, variant="0.4mm Nozzle", material_type="PETG") == (
+        alle
+    ), "für PETG liegt kein eigenes Profil"
+    assert sp.cura_quality_types(cura, basis, variant="0.6mm Nozzle", material_type="PLA") == (
+        alle
+    ), "für eine andere Düse ebenso wenig"
 
 
 # --- PrusaSlicer: eine Datei, ein kopfloser Anfang ---------------------------------

@@ -4062,28 +4062,52 @@ def cura_profile_beside(
     ``position``; eine einzelne legt Cura beim Import selbst auf das erste
     Fach.
 
-    Die Qualitätsstufe muss es für die Maschine geben, sonst lehnt Cura ab;
-    gewählt wird die mit der nächstliegenden Schichthöhe. ``None`` heißt:
-    kein Cura, oder eine Installation ohne lesbare Definitionen — dann wird
-    nichts geschrieben, und ein Profil mit geratener Version wäre schlimmer
-    als keines. Der zurückgegebene Befund ist der eine Satz, den der Dialog
-    dazu zeigt.
+    **Die Qualitätsstufe gehört dem Drucker, der in Cura aktiv ist**
+    (Prüfbericht Cura, B9). Cura setzt ein importiertes Profil auf seine aktive
+    Maschine um, lehnt es ab, wenn deren Stufen die genannte nicht führen, und
+    zeigt es nicht an, wenn es sie für Düse und Spule nicht gibt. Gewählt wird
+    deshalb unter den Stufen dieses Druckers für seine Düse und seine Spule,
+    und zwar die mit der nächstliegenden Schichthöhe. Mit den Stufen von
+    ``fdmprinter`` (bei 0,2 mm ``draft``) lehnte Cura das Profil an Elegoos
+    Druckern ab und zeigte es an Creality und Sovol nicht an. Ist in Cura
+    kein Drucker eingerichtet, zu dem es passt, entsteht keine Datei, und der
+    Befund sagt, was zu tun ist.
+
+    ``None`` heißt: kein Cura, oder eine Installation ohne lesbare
+    Definitionen — dann wird nichts geschrieben, und ein Profil mit geratener
+    Version wäre schlimmer als keines. Der zurückgegebene Befund ist der eine
+    Satz, den der Dialog dazu zeigt.
     """
     if setup.flavour != "cura":
         return None
     version = slicer_profiles.cura_setting_version(setup.executable)
     if version is None:
         return None
-    machine_name = machine_for(setup, profile)
-    machine = profile_file(machine_name, setup, "machine") if machine_name else None
-    qualities = slicer_profiles.cura_quality_types(setup.executable, machine)
-    if not qualities:
-        return None
+    active = slicer_profiles.cura_active_machine(setup.executable)
+    qualities = (
+        slicer_profiles.cura_quality_types(
+            setup.executable,
+            active.definition,
+            variant=active.variant,
+            material_type=active.material_type,
+        )
+        if active is not None
+        else {}
+    )
+    if active is None or not qualities:
+        return Finding(
+            code="handover.cura_profile_unbound",
+            severity="warning",
+            message=_(
+                "In Cura ist kein Drucker eingerichtet, zu dem das Profil passt. Richten Sie "
+                "Ihren Drucker in Cura ein und wählen Sie dann noch einmal „Im Slicer öffnen“."
+            ),
+            values={"slicer": setup.name},
+            suggestions=(CHOOSE_SLICER,),
+        )
     wanted = float(settings.layers.layer_height)
     quality = min(sorted(qualities), key=lambda kind: abs(qualities[kind] - wanted))
-    definition = (
-        slicer_profiles.cura_definition_id(machine) if machine is not None else "fdmprinter"
-    )
+    definition = slicer_profiles.cura_quality_definition(setup.executable, active.definition)
     name = _one_line(model.stem) or "solidon"
 
     def container(values: Mapping[str, str], position: int | None) -> str:
@@ -4126,7 +4150,13 @@ def cura_profile_beside(
         raise FileWriteError(
             target=target.name, detail=problem.strerror or str(problem)
         ) from problem
-    _log.info("wrote a Cura profile beside %s (%s, quality %s)", model.name, definition, quality)
+    _log.info(
+        "wrote a Cura profile beside %s for %s (%s, quality %s)",
+        model.name,
+        active.name,
+        definition,
+        quality,
+    )
     return Finding(
         code="handover.cura_profile",
         severity="info",
@@ -4134,7 +4164,7 @@ def cura_profile_beside(
             "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: "
             "in Cura unter Profile verwalten → Importieren wählen."
         ),
-        values={"file": target.name},
+        values={"file": target.name, "machine": active.name},
     )
 
 
