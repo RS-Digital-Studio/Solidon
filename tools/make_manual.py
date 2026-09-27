@@ -870,7 +870,19 @@ def write_pdf(language: str, page_file: Path) -> Path:
             # Die Zahl daneben ist deshalb keine Zierde: Sie sagt, wie viele
             # Bilder die Seite kennt, und trennt „Seite ohne Abbildungen" von
             # „Abbildungen, die nicht mitgedruckt werden".
-            page.runJavaScript("document.images.length", count_then_print)
+            #
+            # **Vorher fallen die Verweise um die Bildschirmfotos weg.** Auf der
+            # Website öffnet ein Tippen das Bild in voller Größe (``_staged``);
+            # im Druck wurde daraus ein Verweis auf den Pfad des Bau-Rechners,
+            # ``file:///F:/3D%20Druck/website/handbuch/…`` — neun je Sprache,
+            # gemessen an den PDFs von 0.5.0. Beim Kunden führt er ins Leere
+            # und zeigt einen fremden Pfad. Das Bild bleibt, nur der Verweis geht.
+            page.runJavaScript(
+                "document.querySelectorAll('figure.screenshot .stage > a')"
+                ".forEach(link => link.replaceWith(...link.childNodes));"
+                "document.images.length",
+                count_then_print,
+            )
 
         page.loadFinished.connect(loaded)
         page.load(QUrl.fromLocalFile(str(page_file.resolve())))

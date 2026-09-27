@@ -2373,6 +2373,9 @@ RENDERED_TESTS: Final[frozenset[str]] = frozenset(
         # Die Bildanleitungen des Handbuchs: Version und Abdruck je Anleitung
         # stimmen erst nach dem Aufnahmelauf beim Release (Konzept Handbuch §6).
         "test_the_guide_pictures_belong_to_this_version",
+        # Die toten Verweise auf den Bau-Rechner verschwinden erst mit dem
+        # nächsten Druck der PDFs.
+        "test_the_pdf_links_nowhere_outside_itself_but_the_website",
     }
 )
 

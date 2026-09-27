@@ -130,6 +130,33 @@ def test_the_checked_in_pdf_carries_the_current_version(language: str) -> None:
     assert APP_VERSION in cover, f"{path.name}: Titelseite nicht auf {APP_VERSION}"
 
 
+@pytest.mark.rendered
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_the_pdf_links_nowhere_outside_itself_but_the_website(language: str) -> None:
+    """Jedes Bildschirmfoto im PDF von 0.5.0 verwies auf ``file:///F:/3D%20Druck/…``.
+
+    Auf der Website öffnet ein Tippen das Bild in voller Größe; im Druck wurde
+    aus demselben Verweis der Pfad des Bau-Rechners — neun je Sprache, beim
+    Kunden ein Klick ins Leere, der einen fremden Pfad zeigt
+    (``konzepte/nachweise-handbuch-2026-09/findbarkeit.md``, Teil 3). Erlaubt
+    sind Sprünge im Dokument und Verweise ins Netz.
+    """
+    from pypdf import PdfReader
+
+    path = RELEASES / f"Solidon3D-Handbuch-{language}.pdf"
+    assert path.is_file(), f"{path.name} fehlt — tools/make_manual.py ausführen"
+    local: list[str] = []
+    for page in PdfReader(path).pages:
+        for reference in page.get("/Annots") or []:
+            action = reference.get_object().get("/A") or {}
+            target = str(action.get("/URI", ""))
+            if target and not target.startswith(("https://", "http://", "mailto:")):
+                local.append(target)
+    assert not local, (
+        f"{path.name}: {len(local)} Verweise aus dem Dokument hinaus, z. B. {local[0]}"
+    )
+
+
 def test_written_manual_covers_the_current_demo_and_visible_controls() -> None:
     """Die handgeschriebenen Kapitel nennen den ausgelieferten Zustand."""
     pages = {page.key: str(page.body) for page in manual.pages()}
