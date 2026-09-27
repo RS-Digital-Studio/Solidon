@@ -979,6 +979,19 @@ def takes(flavour: SlicerFlavour, path: str) -> bool:
     return path not in NOT_TAKEN_BY[flavour]
 
 
+def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
+    """Deckelt dieser Slicer das Tempo selbst nach dem Volumenstrom des Filaments?
+
+    PrusaSlicer und die Orca-Familie tun es mit dem Wert, den Solidon ihnen
+    als ``filament_max_volumetric_speed`` schreibt: Jede Bahn fährt höchstens
+    so schnell, wie das Filament fördert. Ein Tempodeckel als Vorschlag
+    (``advise.limits_flow``) ändert dort nichts am Druck. Cura liest den Wert
+    nicht (:data:`NOT_TAKEN_BY`) und deckelt nicht; dort ist der Vorschlag der
+    einzige Deckel.
+    """
+    return flavour in ("orca", "prusa")
+
+
 def limitation(
     flavour: SlicerFlavour, path: str, settings: PrintSettings | None = None
 ) -> TranslatableText | None:

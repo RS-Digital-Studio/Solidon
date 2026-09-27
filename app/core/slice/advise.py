@@ -406,18 +406,33 @@ def _from_flow(settings: PrintSettings) -> list[SettingAdvice]:
             continue
         advice.append(
             SettingAdvice(
-                path=path,
-                value=allowed,
-                was=speed,
-                reason=_(
-                    "Dieses Tempo hält den eingestellten maximalen Volumenstrom ein. "
-                    "Mehr Durchsatz braucht einen gemessenen Wert für dieses Filament "
-                    "und Hotend; eine höhere Temperatur allein belegt ihn nicht."
-                ),
-                severity="warning",
+                path=path, value=allowed, was=speed, reason=FLOW_LIMIT_REASON, severity="warning"
             )
         )
     return advice
+
+
+#: Der Grund jedes Tempodeckels aus :func:`_from_flow` — und woran er zu
+#: erkennen ist (:func:`limits_flow`).
+FLOW_LIMIT_REASON: Final = _(
+    "Dieses Tempo hält den eingestellten maximalen Volumenstrom ein. "
+    "Mehr Durchsatz braucht einen gemessenen Wert für dieses Filament "
+    "und Hotend; eine höhere Temperatur allein belegt ihn nicht."
+)
+
+
+def limits_flow(entry: SettingAdvice) -> bool:
+    """Ist dieser Vorschlag ein Tempodeckel nach dem Volumenstrom?
+
+    Die Orca-Familie und PrusaSlicer deckeln das Tempo selbst nach dem
+    Volumenstrom des Filaments, den Solidon ihnen schreibt
+    (``slicer_keys.caps_volumetric_speed``). Dort ändert der Vorschlag nichts
+    am Druck; an der Kobra 2 hob er über die Innenwand sogar die Lückenfüllung
+    des Herstellers an (Gesamtprüfung, 27.09.2026). Der Druckdialog lässt ihn
+    dort weg. Erkannt wird er am Grund, nicht am Feld: Ein Tempo kann auch
+    aus anderem Anlass einen Vorschlag bekommen.
+    """
+    return entry.reason == FLOW_LIMIT_REASON
 
 
 def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]:

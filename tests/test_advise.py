@@ -167,6 +167,22 @@ def test_after_the_flow_advice_the_limit_holds() -> None:
     assert advise.flow_of(applied, fastest) <= applied.filament.max_flow + 1e-6
 
 
+def test_the_flow_advice_can_be_told_apart() -> None:
+    """Die Orca-Familie und PrusaSlicer deckeln das Tempo selbst nach dem
+    Volumenstrom, den Solidon ihnen als Filamentwert schreibt. Derselbe Deckel
+    als Vorschlag ändert dort nichts am Druck, und an der Kobra 2 hob er über
+    die Innenwand die Lückenfüllung an (Gesamtprüfung, 27.09.2026). Der
+    Druckdialog muss ihn erkennen können, ohne am angezeigten Text zu raten."""
+    settings, profile = hot_and_fast()
+
+    entries = advise.advise(settings, profile)
+
+    inner = next(entry for entry in entries if entry.path == "speed.inner_wall")
+    assert advise.limits_flow(inner)
+    other = replace(inner, reason="Ein anderer Grund für dasselbe Feld")
+    assert not advise.limits_flow(other), "am Grund erkannt, nicht am Feld"
+
+
 # --- die Deckelung der Strukturbreite ist keine Messung --------------------------
 
 

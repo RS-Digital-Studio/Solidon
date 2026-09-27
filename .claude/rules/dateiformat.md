@@ -443,6 +443,17 @@ Grad. Roberts Minigolf-Druck bekam davon einen Stützfuß in Schicht 1
 - **Was sich nicht übersetzen lässt, wird nicht umgedeutet**
   (`Foundation.foreign`): `crosshatch` bleibt `crosshatch`, geschrieben wird
   es nicht, und der Druckdialog zeigt am Feld „Hersteller: crosshatch".
+- **Ein mitbedienter Schlüssel wird nie schneller als beim Hersteller**
+  (`handover._followers_not_faster`). Solidons Innenwand schreibt auch die
+  Lückenfüllung, die Füllung auch die innere Vollfüllung, weil Solidons
+  eigener Satz dafür einen Wert braucht. Über dem Herstellerprozess dürfen
+  sie mit ihrem Feld langsamer werden, schneller nicht: Der Vorschlag
+  „Innenwand 142" hob an der Kobra 2 die Lückenfüllung von 100 auf 142 mm/s.
+  Wer einem Feld einen weiteren Schlüssel gibt, prüft, ob er dazugehört.
+- **Ein Vorschlag, der beim Slicer nichts ändert, wird nicht angeboten.**
+  Tempodeckel nach dem Volumenstrom (`advise.limits_flow`) fallen weg, wo der
+  Slicer selbst danach deckelt (`slicer_keys.caps_volumetric_speed`: Orca-Familie
+  und PrusaSlicer), und bleiben bei Cura.
 - **Die Gegenprobe hält, was Solidon schreibt, und eine Stichprobe der
   Grundlage** (`handover.FOUNDATION_SAMPLE`). Listen je Düsenvariante gelten
   mit dem ersten Eintrag (`handover._printed`), den der Slicer ohne

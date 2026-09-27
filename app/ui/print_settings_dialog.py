@@ -5746,13 +5746,21 @@ class PrintSettingsDialog(QDialog):
         Solange kein Slicer gewählt ist, wird nichts weggelassen: Dann steht
         noch nicht fest, was ankommt, und eine leere Liste wäre die schlechtere
         Auskunft.
+
+        Ebenso fällt ein Tempodeckel nach dem Volumenstrom weg, wo der Slicer
+        selbst danach deckelt (``slicer_keys.caps_volumetric_speed``): Er
+        änderte dort nichts am Druck, und an der Kobra 2 hob er über die
+        Innenwand die Lückenfüllung des Herstellers an (27.09.2026).
         """
         entries = self._advice_entries
         flavour = self._current_flavour()
         if flavour is None:
             return entries
+        caps = slicer_keys.caps_volumetric_speed(flavour)
         shown: list[SettingAdvice] = []
         for entry in entries:
+            if caps and advise.limits_flow(entry):
+                continue
             if slicer_keys.takes(flavour, entry.path):
                 shown.append(entry)
         return shown

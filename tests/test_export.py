@@ -1594,6 +1594,10 @@ def test_every_flavour_answers_every_property() -> None:
         # Netz (Prusa-Beilage) — jede Familie liest nur ihre Schreibweise und
         # druckte die andere als Kunststoff (26.09.2026). Cura bekommt ein STL.
         "helpers_as_parts": {"prusa": False, "orca": True, "cura": False, "other": False},
+        # Das Tempo nach dem Volumenstrom des Filaments deckeln PrusaSlicer und
+        # die Orca-Familie selbst; ein Tempodeckel als Vorschlag ändert dort
+        # nichts am Druck (Gesamtprüfung, 27.09.2026). Cura liest den Wert nicht.
+        "caps_volumetric_speed": {"prusa": True, "orca": True, "cura": False, "other": False},
     }
     flavours = set(get_args(SlicerFlavour))
     assert len(flavours) >= 4, f"zu wenige Familien gefunden: {flavours}"

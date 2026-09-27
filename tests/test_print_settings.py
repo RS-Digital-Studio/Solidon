@@ -1758,6 +1758,18 @@ def test_a_slot_override_can_be_added_changed_and_removed() -> None:
     assert settings.slot_overrides == (), "Projektwerte brauchen keinen leeren Eintrag"
 
 
+def test_the_slicers_that_cap_the_flow_themselves_take_the_limit() -> None:
+    """Wer das Tempo selbst nach dem Volumenstrom deckelt, braucht den Wert:
+    PrusaSlicer und die Orca-Familie bekommen ihn als
+    ``filament_max_volumetric_speed``. Cura liest ihn nicht, dort bleibt der
+    Deckel als Vorschlag der einzige (Gesamtprüfung, 27.09.2026)."""
+    for flavour in ("orca", "prusa", "cura", "other"):
+        caps = slicer_keys.caps_volumetric_speed(flavour)
+        assert caps == (flavour in ("orca", "prusa")), flavour
+        if caps:
+            assert slicer_keys.takes(flavour, "filament.max_flow"), flavour
+
+
 def test_a_slicer_that_takes_one_filament_says_so() -> None:
     """Was ein Slicer nicht entgegennimmt, wird gesagt — nicht verschwiegen.
 

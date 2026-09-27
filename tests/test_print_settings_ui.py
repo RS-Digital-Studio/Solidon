@@ -5566,6 +5566,27 @@ def test_cura_takes_the_channel_advice_like_the_orca_family(qt_app, monkeypatch)
         assert dialog._current_advice() == [advice], flavour
 
 
+def test_the_flow_cap_is_offered_only_where_the_slicer_does_not_cap(qt_app, monkeypatch):
+    """Die Orca-Familie und PrusaSlicer deckeln das Tempo selbst nach dem
+    Volumenstrom des Filaments. Dort ändert der Vorschlag nichts am Druck, und
+    an der Kobra 2 hob er über die Innenwand die Lückenfüllung von 100 auf
+    142 mm/s (Gesamtprüfung, 27.09.2026). Cura deckelt nicht: Dort bleibt er."""
+    from app.core.slice import advise
+    from app.core.types import SettingAdvice
+
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
+    _wait_for_print_advice(dialog, qt_app)
+    cap = SettingAdvice(
+        path="speed.inner_wall", value=142.0, was=150.0, reason=advise.FLOW_LIMIT_REASON
+    )
+    walls = SettingAdvice(path="shell.wall_count", value=3, was=2, reason="Dünne Wand")
+    dialog._advice_entries = [cap, walls]
+
+    for flavour, shown in (("orca", [walls]), ("prusa", [walls]), ("cura", [cap, walls])):
+        monkeypatch.setattr(dialog, "_current_flavour", lambda chosen=flavour: chosen)
+        assert dialog._current_advice() == shown, flavour
+
+
 def test_print_advice_cannot_disable_support_needed_by_another_body(qt_app):
     """Der Würfel braucht keine Stützen; der Kegel auf derselben Platte behält sie."""
     import math
