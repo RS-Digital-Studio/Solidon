@@ -2736,6 +2736,40 @@ def test_open_in_slicer_starts_the_window_with_the_file(
     assert "OPENAI_API_KEY" not in options["env"]
 
 
+def test_the_console_gets_the_same_plate_as_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Übernommene Stützen stehen an den Teilen, die sie brauchen, und die
+    Platte bleibt auf der Grundlage (Konzept Herstellerprofil, Entscheidung
+    G). ``slice_model`` fragt dafür dieselbe Trennung wie ``write_assembly``
+    — sonst schriebe die Datei die Stützen je Teil, und der Prozess des
+    Konsolenlaufs schaltete sie für alle ein."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    assert settings.support.style == "none", "die Vorbedingung des Tests"
+    settings = print_settings.with_accepted(settings, "support.style", "auto")
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    processes: list[dict[str, object]] = []
+
+    def run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        path = Path(command[command.index("--load-settings") + 1].split(";")[-1])
+        processes.append(json.loads(path.read_text(encoding="utf-8")))
+        target = Path(command[command.index("--outputdir") + 1])
+        (target / "plate_1.gcode").write_text(_gcode_printing_at(1.0, 5.0), encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    handover.slice_model(
+        model, settings, profile, handover.SlicerSetup(executable=executable, flavour="orca")
+    )
+
+    assert len(processes) == 1
+    assert processes[0]["enable_support"] in ("0", ["0"])
+
+
 def test_an_unknown_arrange_flag_falls_back_and_reports(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

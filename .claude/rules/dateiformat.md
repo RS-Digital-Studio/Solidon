@@ -255,6 +255,16 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
 - **`with_path` setzt keine Herkunft**: Dialog `with_choice`, übernommener
   Vorschlag `with_accepted` (`advise.apply`), Zurücksetzen `without_choice`;
   eine Rücklesung aus einem Profil ist keine Wahl.
+- **Was aus dem Körper folgt, steht am Teil** (`handover.split_for_parts`):
+  Ein übernommener Pfad aus `advise.PART_PATHS` ohne plattenweiten Grund
+  (`advise.plate_paths`) fällt auf der Platte auf die Grundlage zurück, und
+  der Rat je Körper (`advise.for_part`) schreibt ihn als Objektwert
+  (`writer._part_values`). CuraEngine nimmt nur `CURA_PER_MESH` je Netz: Dort
+  behält die Platte die Übernahme, ein Teil ohne Bedarf bekommt je Netz die
+  Grundlage zurück (`PartSplit.revert`). Was ein Slicer nicht je Teil annimmt,
+  bleibt plattenweit (`export.part_setting_unavailable`). `write_assembly` und
+  `slice_model` fragen dieselbe Trennung; Haftungsprüfung und Stützsperre
+  fragen den Wert, den das Teil bekommt. Eine eigene Wahl gilt der Platte.
 - **Die Druckplatte ist eine Angabe, keine Vermutung** (ohne `curr_bed_type`
   nimmt die Konsole „Cool Plate"): die im Druckdialog gewählte
   (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres

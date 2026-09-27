@@ -70,7 +70,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | Entschieden mit dem Konzept Herstellerprofil (Entscheidung G): ohne Klick kein Brim je Teil mehr (`aed31c787`, im ElegooSlicer an Platte und Schüssel derselbe Rand wie mit Elegoos Profil allein); offen die Zeile je Teil im Druckdialog und das Schreiben je Teil — Stufe E von [RM-281](#rm-281) |
 | [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt, 4 Abstürze am zweifarbigen Besteckeinsatz sind ein Fehler von ElegooSlicer/OrcaSlicer (Originalprojekt stürzt ohne Solidon ab). Offen für Robert: den Fehler dort melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für die Orca-Familie auf Baumstützen ausweicht |
 | [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Konsolenweg gebaut mit Stufe D (`400dde0e2`, Waschschüssel: Stütze 38 % kürzer, Wände gleich); offen Curas Fenster, das die Sperre nicht bekommt (Stufe E von [RM-281](#rm-281)) |
-| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis D, F und L stehen und sind im Slicer abgenommen (C `44ab90965`, F `d4dd5332b`, L `e0e3cf982`); als Nächstes E (je Teil) und der Rest von K; danach Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis D, F und L stehen und sind im Slicer abgenommen (C `44ab90965`, F `d4dd5332b`, L `e0e3cf982`); von E stehen Rat und Werte je Teil, offen die Zeile im Druckdialog, Curas Fenster und die Abnahme im Slicer; dann der Rest von K, Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
 | [RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie schreibt](#rm-282) | Geometrie, Erkennung und Druckvorbereitung | Anycubic Kobra 2 in OrcaSlicer (Prozente in Feldern ohne Prozent: Dialog zeigt Solidons Wert, gedruckt wird Orcas Vorgabe) und Bambus Listen je Düsenvariante mit High-Flow-Düse — beides messen, dann Rücklesung und Schreibweise festlegen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
@@ -2182,14 +2182,25 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     (`64a0e4677`, drei von rund hundert Läufen).
 
   **Offen, in dieser Reihenfolge:**
-  - **E** Je Teil: `for_part` für alle geometrischen Pfade, Objektwerte bei Orca und Prusa,
-    Werte je Netz bei Cura (die Netze je Teil stehen seit D, `CuraMesh.settings`), die
-    Sperre auch für Curas Fenster (RM-257), die Zeile je Teil im Druckdialog (RM-250). Abnahme: Minigolf-Satz mit einem gestützten Körper — Stütze nur an ihm, Brim
-    der übrigen geschlossen.
+  - **E** Je Teil. Stehen: `for_part` fragt mit Profil jede Regel für die geometrischen
+    Pfade (`advise.PART_PATHS`), `handover.split_for_parts` setzt die Platte dort auf die
+    Grundlage, Orca und Prusa bekommen Objektwerte, Cura je Netz die Rücknahme
+    (`CURA_PER_MESH`); Haftungsprüfung und Stützsperre fragen den Wert je Teil, der
+    Konsolenlauf dieselbe Platte. Offen: die Zeile je Teil im Druckdialog (RM-250), die
+    Sperre für Curas Fenster (RM-257) und die Abnahme im Slicer: Minigolf-Satz mit einem
+    gestützten Körper — Stütze nur an ihm, Brim der übrigen geschlossen.
   - **K** Rest der Gegenprobe: Identität und Startcode bei PrusaSlicer und Cura.
   - Danach Paket 3 (Mindestschichtzeit, Keilspitzen, Stützbedarf gegen das Urteil des
-    Herstellers, Brückenregel, Inseln an Schrauben) und der Lauf „jedes Modell × jeder
-    Slicer“ als Gesamtabnahme.
+    Herstellers, Brückenregel, Inseln an Schrauben, Schrägnaht an runden Außenwänden) und
+    der Lauf „jedes Modell × jeder Slicer“ als Gesamtabnahme.
+  - **Schrägnaht**, aus Roberts Druck des Minigolf-Satzes mit 50 mm/s in der ersten Schicht:
+    Die Naht an den vier Schäften (Ø 25,7, 200 mm) kommt aus Elegoos Profil („aligned“,
+    keine Schrägnaht, Rampenlänge 0); am Ende jeder Außenschleife laufen 0,73 von 0,8 mm
+    Rückzug im Stillstand, weil das Wischen mit 500 mm/s zu kurz ist. Nachgeschnitten
+    greift die Schrägnaht erst mit Rampenlänge (20 mm: 997 von 1000 Schleifen, 9:18 →
+    10:39 h mit Elegoos Rampe auch an Innenwänden). Vorschlag je Teil für runde
+    Außenwände, für jeden Slicer, der eine Schrägnaht kennt, nicht nur ElegooSlicer
+    (Robert); Kosten nur Außenwand messen.
 
   Aus Roberts Probedruck am 27.09.2026 (Minigolf-Platte, Elegoos Standard): An den
   schmalen Stegen zwischen Loch 3, Loch 4 und dem inneren Bogen rissen kurze

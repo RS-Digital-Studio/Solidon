@@ -9,9 +9,9 @@ stehen in `.claude/rules/dateiformat.md`; Herleitungen in
 
 | Datei | Rolle |
 |---|---|
-| `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3): `check_before_export`, `default_scheme` (Namensmuster, im Dateidialog), `mesh_for_export` an allen drei Stellen des Schreibers, `export_part_scad` (erst `activation.require(EXPORT)`); bei Resin lässt `write_assembly` den FDM-Satz fallen (keine Haftungs- und Filamentbefunde, keine Beilage) |
+| `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3): `check_before_export`, `default_scheme` (Namensmuster, im Dateidialog), `mesh_for_export` an allen drei Stellen des Schreibers, `export_part_scad` (erst `activation.require(EXPORT)`); bei Resin lässt `write_assembly` den FDM-Satz fallen (keine Haftungs- und Filamentbefunde, keine Beilage); `_part_values` fragt je Körper den Rat und schreibt Objekt- oder Netzwerte |
 | `threemf.py` | 3MF **schreiben** — Körper oder Baugruppe, Farbgruppen, Slicer-Beilagen (§20, §29), `AssemblyPart.support_blocker` je nach `blocker_as_part`; gelesen wird in `ingest/threemf.py` |
-| `handover.py` | Übergabe an den Slicer (§29, §28.1): `write_config`, `project_settings`, `values_for`, `slice_model` und seine Gegenproben, `prusa_values` |
+| `handover.py` | Übergabe an den Slicer (§29, §28.1): `write_config`, `project_settings`, `values_for`, `slice_model` und seine Gegenproben, `prusa_values`; `split_for_parts` trennt übernommene Werte in plattenweite und solche je Teil (`PartSplit`, `CURA_PER_MESH`) |
 | `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, `slicer_profiles.FILAMENT_READBACK`), mit den eingebauten Vorgaben der vier Orca-Programme (`PROGRAM_DEFAULTS`, gemessen), der Druckplatte (`default_plate`, `PLATE_TEMPERATURES`) und dem Gemessenen (`Foundation.measured`); die Stufe wählt den Prozess des Herstellers (`for_stage`), nur wo keiner passt, liegen ihre Werte über dem Standardprozess (`STAGE_PATHS`, `Foundation.staged`); `plate_temperatures`, `offers_plates`; `written_paths` (was die Übergabe davon schreibt), `findings` (Platte, unlesbares Profil). Für PrusaSlicer löst `prusa_chain` Drucker, Prozess und Filament des Bündels auf (`PrusaChain`), `PRUSA_PROCESS` und `PRUSA_PROGRAM_DEFAULTS` lesen sie zurück |
 | `prusa_conditions.py` | PrusaSlicers Verträglichkeitsbedingungen mit eigenem Parser, ohne `eval` (Regel 10); `slicer_profiles._prusa_fits` bindet damit Prozesse und Filamente an den Drucker |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt; die Prädikate je Familie |
@@ -90,7 +90,7 @@ ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädik
   Fenster je Teil und je Sperre ein STL und die Netzliste `<name>.meshes.json`
   (`write_cura_meshes`); `_command` liest sie (`cura_meshes`) und setzt je Netz
   `-l` mit seinen Werten, die Sperre mit `anti_overhang_mesh=true`;
-  `support_enable` je Teil setzt `writer._cura_meshes`.
+  die Werte je Netz kommen aus `writer._part_values` (Rücknahme je Netz, `handover.PartSplit`).
 - **CuraEngine bekommt seine Maschine aus der Druckerdefinition**
   (`_cura_machine`): mit `PrinterProfile.cura_definition` und installierter
   Datei `-j`, sonst `fdmprinter`; Start- und Endcode aus der Kette, gefüllt von

@@ -759,6 +759,115 @@ def object_keys(
     return {key: value for key, value in changed.items() if key in keys or before.get(key) != value}
 
 
+#: Was CuraEngine je Netz annimmt, gelesen aus ``settable_per_mesh`` in
+#: ``fdmprinter.def.json`` (Cura 5.13): Wände, Füllung, Bahnbreite, Bügeln,
+#: Außenwand mit Tempo und Beschleunigung, und ob überhaupt gestützt wird.
+#: Haftungsart (``adhesion_type``), Stützort (``support_type``) und Stützart
+#: (``support_structure``) gelten nur der ganzen Platte.
+CURA_PER_MESH: Final = frozenset(
+    {
+        "support_enable",
+        "infill_sparse_density",
+        "line_width",
+        "ironing_enabled",
+        "inset_direction",
+        "wall_line_count",
+        "speed_wall_0",
+        "acceleration_wall_0",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PartSplit:
+    """Welche übernommenen Vorschläge je Teil gelten und was die Platte behält
+    (Konzept Herstellerprofil, Entscheidung G).
+
+    Bei der Orca-Familie und PrusaSlicer trägt die Platte die Grundlage, und die
+    Teile, deren Geometrie es verlangt, bekommen den übernommenen Wert als
+    Objektwert. CuraEngine nimmt Haftungs-, Stützart und Stützort nicht je Netz
+    an; dort behält die Platte die Übernahme, und die Teile, die sie nicht
+    brauchen, bekommen je Netz die Grundlage zurück (``revert``) — so stützt
+    Cura nur das Teil, das es braucht, und mit der gewählten Stützart.
+    """
+
+    plate: PrintSettings
+    """Was die ganze Platte bekommt."""
+    base: PrintSettings
+    """Die Einstellungen ohne die Übernahmen je Teil: der Stand, an dem der Rat
+    je Körper gefragt wird."""
+    per_part: frozenset[str] = frozenset()
+    """Die Pfade, die je Teil geschrieben werden."""
+    revert: bool = False
+    unavailable: frozenset[str] = frozenset()
+    """Was die Geometrie je Teil will, der Slicer aber nicht je Teil annimmt —
+    es bleibt plattenweit, und der Export sagt, wo es nicht reicht."""
+
+
+def _part_paths(flavour: SlicerFlavour) -> frozenset[str]:
+    """Welche Pfade dieser Slicer je Teil annehmen kann."""
+    from app.core.slice import advise
+
+    if flavour in ("orca", "prusa"):
+        return advise.PART_PATHS
+    if flavour == "cura":
+        return frozenset(
+            entry.path
+            for entry in slicer_keys.TABLES["cura"]
+            if entry.path in advise.PART_PATHS and entry.key in CURA_PER_MESH
+        )
+    return frozenset()
+
+
+def cura_takes_whole(path: str) -> bool:
+    """Ob CuraEngine jeden Schlüssel dieses Pfads je Netz annimmt.
+
+    ``support.style`` geht dort nur halb: ob gestützt wird
+    (``support_enable``) je Netz, die Stützart (``support_structure``) nur für
+    die ganze Platte. Ein Teil bekommt dann den Wert der Platte, nicht seinen
+    eigenen.
+    """
+    keys = [entry.key for entry in slicer_keys.TABLES["cura"] if entry.path == path]
+    return bool(keys) and all(key in CURA_PER_MESH for key in keys)
+
+
+def split_for_parts(
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    flavour: SlicerFlavour,
+) -> PartSplit:
+    """Trennt die übernommenen Vorschläge in plattenweite und solche je Teil.
+
+    Je Teil geht, was die Geometrie eines Körpers verlangt
+    (:data:`app.core.slice.advise.PART_PATHS`) und keine plattenweite Regel —
+    Maschine, Material, Volumenstrom (:func:`app.core.slice.advise.plate_paths`)
+    — ebenfalls. Die Grundlage ist die des Herstellerprofils, ohne eines
+    Solidons Tabelle (:func:`app.core.export.manufacturer.base_settings`).
+    ``write_assembly`` und ``slice_model`` fragen dasselbe und bekommen
+    dieselbe Platte.
+    """
+    from app.core.export import manufacturer
+    from app.core.slice import advise
+
+    wanted = frozenset(settings.accepted) & advise.PART_PATHS
+    if not wanted:
+        return PartSplit(settings, settings)
+    foundation = manufacturer.base_settings(profile, settings.quality, setup).settings
+    base = settings
+    for path in sorted(wanted):
+        base = print_settings.without_choice(base, path, foundation)
+    wanted -= advise.plate_paths(base, profiles.for_process(profile, base, effective=True))
+    per_part = wanted & _part_paths(flavour)
+    unavailable = wanted - per_part
+    trimmed = settings
+    for path in sorted(per_part):
+        trimmed = print_settings.without_choice(trimmed, path, foundation)
+    if flavour == "cura":
+        return PartSplit(settings, trimmed, per_part, revert=True, unavailable=unavailable)
+    return PartSplit(trimmed, trimmed, per_part, unavailable=unavailable)
+
+
 def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintSettings:
     """Die Einstellungen mit den Abweichungen dieses Teils darin.
 
@@ -4058,6 +4167,9 @@ def slice_model(
         )
 
     started = time.perf_counter()
+    # **Dieselbe Platte wie in der Datei** (Entscheidung G): Was je Teil gilt,
+    # trägt das Modell aus ``write_assembly`` als Objektwert oder Netzwert.
+    settings = split_for_parts(settings, profile, setup, setup.flavour).plate
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).
     with discover.workspace_for(setup.executable, "solidon-slice-") as workspace:

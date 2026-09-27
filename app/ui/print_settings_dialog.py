@@ -83,7 +83,7 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import filaments, print_settings, profiles
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.fits import active_fits
+from app.core.scene.fits import fit_kinds_for
 from app.core.slice import advise, gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import estimate
@@ -186,27 +186,6 @@ class Field:
     einen Tooltip hat, lehrt niemanden, dass es Tooltips gibt (Konsistenz vor
     Vollständigkeit). ``tests/test_print_settings_ui.py`` hält das fest."""
 
-
-#: Operationen, die eine Passung **herstellen**, ohne sie einzutragen.
-#:
-#: Jede von ihnen legt zwei Flächen mit einem gerechneten Spiel aufeinander —
-#: aus dem Materialprofil oder der Normteiltabelle. Für den Druck heißt das
-#: dasselbe wie eine eingetragene Passung: die Außenwand muss auf Maß, und
-#: schnell darf sie dabei nicht sein.
-FITTING_OPS: frozenset[str] = frozenset(
-    {
-        "create_lid",
-        "screw_lid",
-        "split_pinned",
-        "insert_snap_fit",
-        "insert_dowel",
-        "insert_magnet_pocket",
-        "insert_heatset_m4",
-        "insert_nut_trap",
-        "insert_printed_thread",
-        "thread_exact",
-    }
-)
 
 #: Gruppen in der Reihenfolge, in der sie erscheinen.
 #: Die Reiter der Tiefe, in der Reihenfolge, in der sie stehen.
@@ -5973,76 +5952,18 @@ class PrintSettingsDialog(QDialog):
         return slicer_keys.flavour_of(self._slicer_path.name)
 
     def _connector_diameters(self) -> tuple[float, ...]:
-        """Die Durchmesser der Zapfen, die beim Teilen entstanden sind.
-
-        Aus den Merkmalen und nicht aus dem Stapel: Die Stiftplanung rechnet
-        den Durchmesser aus der Schnittfläche, er ist also kein Parameter, den
-        jemand eingetragen hätte. Wo er steht, ist das erzeugte Merkmal.
-
-        Nur die Zapfen, nicht die Bohrungen — es ist dasselbe Maß plus Spiel,
-        und zweimal gezählt sähe es nach doppelt so vielen Verbindern aus.
-
-        **Und nur die erzeugten.** Ein „Zapfen" aus der Merkmalserkennung ist
-        eine Vermutung über eine Form, und sein Durchmesser ist, was der
-        Erkenner hineingepasst hat — an einem gerippten Bogen kann das alles
-        sein. Gemessen an einem heruntergeladenen Sockel von 160 auf 231 auf
-        14 mm: erkannt wurden zehn Zapfen, der dickste mit **Ø 631,6 mm**, und
-        die Wandregel daneben rechnete daraus einen Vorschlag von **376 Wänden**.
-        *Vorschläge übernehmen* schrieb ihn ins Projekt. Eine Vermutung darf
-        keine Einstellung setzen; der Docstring oben sagt es seit je — „wo er
-        steht, ist das **erzeugte** Merkmal".
-        """
-        result = self.session.last_result
-        if result is None:
+        """Die Zapfendurchmesser der Körper auf der Platte
+        (:func:`app.core.slice.advise.connector_diameters`)."""
+        if self.session.last_result is None:
             return ()
-        return tuple(
-            float(feature.params["diameter"])
-            for entry in self._plate_bodies()
-            for feature in entry.features.values()
-            if feature.kind == "pin"
-            and feature.provenance == "generated"
-            and "diameter" in feature.params
-        )
+        return advise.connector_diameters(self._plate_bodies())
 
     def _fits_in_play(self) -> tuple[str, ...]:
-        """Welche Passungen trägt dieses Projekt — eingetragene und gebaute?
-
-        Eingetragene Passungen tragen ihre Art und gegebenenfalls eine
-        Bedingung. Ein Deckel ohne Kragen deaktiviert seine Beziehung; der
-        ergänzende Blick auf den Stapel darf sie nicht wieder einschalten.
-        Er gilt deshalb nur für Schritte ohne ausdrücklich gebundene Passung,
-        etwa eine ältere Mutternfalle mit Spiel aus der Normteiltabelle.
-
-        Zurück kommen die **Arten**, nicht bloß ein Ja: eine bündige Passung
-        verlangt eine Einstellung mehr als ein Schiebesitz, und die Regel
-        nebenan kann das nur unterscheiden, wenn sie es erfährt. Was aus dem
-        Stapel kommt, zählt als Schiebesitz — welche Flächen ein Baustein
-        aufeinanderlegt, steht nirgends, und eine geratene Art wäre schlechter
-        als keine.
-        """
-        document = self.session.project.document
-        wanted = {body.id for body in self._plate_bodies()}
-        relevant_operations: set[int] = set()
-        for operation in reversed(document.ops):
-            if wanted.intersection(operation.outputs):
-                relevant_operations.add(operation.id)
-                wanted.update(operation.inputs)
-        kinds = [
-            entry.kind
-            for entry in active_fits(document)
-            if entry.a.object_id in wanted or entry.b.object_id in wanted
-        ]
-        bound_operations = {
-            entry.when_positive[0] for entry in document.fits if entry.when_positive is not None
-        }
-        if any(
-            entry.op in FITTING_OPS
-            and entry.id in relevant_operations
-            and entry.id not in bound_operations
-            for entry in document.ops
-        ):
-            kinds.append("clearance")
-        return tuple(dict.fromkeys(kinds))
+        """Welche Passungen die Körper der Platte tragen
+        (:func:`app.core.scene.fits.fit_kinds_for`)."""
+        return fit_kinds_for(
+            self.session.project.document, {body.id for body in self._plate_bodies()}
+        )
 
     def _bounds(self) -> BoundingBox | None:
         """Der Hüllquader über alles, was auf die Platte geht — daran hängt der

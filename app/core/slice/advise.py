@@ -52,6 +52,7 @@ from app.core.types import (
     Finding,
     PrintSettings,
     Profile,
+    SceneObject,
     SettingAdvice,
     Severity,
     SliceResult,
@@ -1259,37 +1260,122 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
     ]
 
 
-def for_part(settings: PrintSettings, bounds: BoundingBox, footprint: float) -> list[SettingAdvice]:
+#: Was je Teil geschrieben wird, wenn sein Grund an der Geometrie hängt
+#: (Konzept Herstellerprofil, Entscheidung G): Stützen mit Art, Ort und
+#: Sperre, die Haftung, die Werte einer Passung, Wände und Füllung um
+#: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Temperatur,
+#: Kühlung, Rückzug und Volumenstrom bleiben plattenweit — sie hängen an der
+#: Spule, nicht am Teil.
+PART_PATHS: Final = frozenset(
+    {
+        "support.style",
+        "support.placement",
+        "support.block_channels",
+        "adhesion.kind",
+        "shell.precise_outer_wall",
+        "shell.outer_wall_first",
+        "shell.ironing",
+        "speed.outer_wall",
+        "speed.outer_wall_acceleration",
+        "shell.wall_count",
+        "infill.density",
+        "shell.wall_generator",
+        "layers.line_width",
+    }
+)
+
+
+def plate_paths(settings: PrintSettings, profile: Profile) -> frozenset[str]:
+    """Was die plattenweiten Regeln an diesen Einstellungen ändern wollen.
+
+    Maschine, Material und Volumenstrom (:func:`advise` ohne Schnitt, Passung
+    und Verbinder). ``_from_material`` bremst weiches Filament auch an der
+    Außenwand und legt bei ABS einen Brim; ein übernommener Vorschlag auf so
+    einem Pfad gilt der ganzen Platte, auch wo die Geometrie ihn ebenfalls
+    verlangt.
+    """
+    return frozenset(entry.path for entry in advise(settings, profile))
+
+
+def connector_diameters(bodies: Sequence[SceneObject]) -> tuple[float, ...]:
+    """Die Durchmesser der Zapfen, die beim Teilen an diesen Körpern entstanden sind.
+
+    Aus den Merkmalen und nicht aus dem Stapel: Die Stiftplanung rechnet den
+    Durchmesser aus der Schnittfläche, er ist kein eingetragener Parameter.
+    Nur erzeugte Zapfen (``provenance == "generated"``): Ein erkannter ist eine
+    Vermutung über eine Form, und an einem heruntergeladenen Sockel von 160 auf
+    231 auf 14 mm passte die Erkennung einen „Zapfen" von Ø 631,6 mm hinein —
+    die Wandregel schlug daraus 376 Wände vor, und *Vorschläge übernehmen*
+    schrieb sie ins Projekt. Nur die Zapfen, nicht ihre Bohrungen: dasselbe
+    Maß plus Spiel, zweimal gezählt sähe es nach doppelt so vielen Verbindern
+    aus.
+    """
+    return tuple(
+        float(feature.params["diameter"])
+        for entry in bodies
+        for feature in entry.features.values()
+        if feature.kind == "pin"
+        and feature.provenance == "generated"
+        and "diameter" in feature.params
+    )
+
+
+def for_part(
+    settings: PrintSettings,
+    bounds: BoundingBox,
+    footprint: float,
+    *,
+    profile: Profile | None = None,
+    result: SliceResult | None = None,
+    fit_kinds: Sequence[str] = (),
+    connectors: Sequence[float] = (),
+) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
-    Die Druckbetthaftung ist die eine Einstellung, die je Teil zählt statt je
-    Auftrag: sie hängt daran, worauf ein Körper steht, und das ist bei jedem
-    ein anderer Wert. Beim Gewürzset stehen zwölf Behälter auf Ø 40 und drei
-    Streuscheiben auf je drei 1,1-mm-Federarmen — dieselbe Platte, und der
-    Brim gehört nur unter die Scheiben. Ohne diese Unterscheidung gäbe es nur
-    „alle bekommen einen" oder „keiner".
+    Die Druckbetthaftung zählt je Teil statt je Auftrag: sie hängt daran,
+    worauf ein Körper steht. Beim Gewürzset stehen zwölf Behälter auf Ø 40 und
+    drei Streuscheiben auf je drei 1,1-mm-Federarmen — dieselbe Platte, und der
+    Brim gehört nur unter die Scheiben.
 
-    Temperatur, Kühlung und Stützen bleiben plattenweit: sie hängen am Material
-    oder an der Maschine, und je Teil verstellt wären sie ein Widerspruch, den
-    der Slicer auflösen müsste.
+    **Mit ``profile`` alles, was an der Geometrie dieses Teils hängt**
+    (Entscheidung G): der Rat aus Schnitt, Passung und Verbindern, beschränkt
+    auf :data:`PART_PATHS`. So bekommt nur der Körper Stützen, der sie
+    braucht, und die übrigen drucken wie die Platte. Die Haftungsregeln hier
+    kommen danach und behalten beim Brim das letzte Wort: Sie kennen die
+    Grundfläche aus dem Schnitt, die Regel der Platte nur den Hüllquader.
     """
-    if settings.adhesion.kind not in UNANCHORED:
-        return []
-    if 0.0 < footprint < SMALL_FOOTPRINT:
-        reason = _("Dieses Teil steht auf zu wenig Fläche, um ohne Brim zu halten.")
-    elif _slender(bounds):
-        reason = _("Dieses Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.")
-    else:
-        return []
-    return [
-        _advice(
-            settings,
-            path="adhesion.kind",
-            value="brim",
-            reason=reason,
-            severity="warning",
-        )
-    ]
+    advice: list[SettingAdvice] = []
+    if profile is not None:
+        advice += [
+            entry
+            for entry in advise(
+                settings,
+                profile,
+                result,
+                bounds=bounds,
+                fit_kinds=fit_kinds,
+                connectors=connectors,
+            )
+            if entry.path in PART_PATHS
+        ]
+    if settings.adhesion.kind in UNANCHORED:
+        if 0.0 < footprint < SMALL_FOOTPRINT:
+            reason = _("Dieses Teil steht auf zu wenig Fläche, um ohne Brim zu halten.")
+        elif _slender(bounds):
+            reason = _("Dieses Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.")
+        else:
+            reason = None
+        if reason is not None:
+            advice.append(
+                _advice(
+                    settings,
+                    path="adhesion.kind",
+                    value="brim",
+                    reason=reason,
+                    severity="warning",
+                )
+            )
+    return _merged(settings, advice)
 
 
 def _may_need_support(

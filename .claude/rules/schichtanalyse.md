@@ -134,8 +134,8 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
-  als Vorschlag; `for_part` setzt beim Export weiter nur Summenregel und
-  schlanken Körper.
+  als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;
+  seine Brim-Regeln aus dem Schnitt behalten das letzte Wort.
 - **Schmale Stege bekommen eine langsame erste Schicht**: Liegt mindestens
   `advise.NARROW_WEB_SHARE` der ersten Schicht in Stegen unter
   `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) und ist sie schneller als

@@ -13,6 +13,7 @@ Projekte erreichen, die vor ihr gebaut wurden.
 from __future__ import annotations
 
 import math
+from collections.abc import Collection
 from dataclasses import dataclass
 
 import numpy as np
@@ -283,6 +284,68 @@ def active_fits(document: Document) -> list[Fit]:
             pass
         active.append(fit)
     return active
+
+
+#: Schritte, die eine Passung **herstellen**, ohne sie einzutragen — Deckel,
+#: Verbinder, Einsätze, Gewinde. Jeder legt zwei Flächen mit einem gerechneten
+#: Spiel aufeinander, aus dem Materialprofil oder der Normteiltabelle; für den
+#: Druck heißt das dasselbe wie eine eingetragene Passung: Die Außenwand muss
+#: auf Maß, und schnell darf sie dabei nicht sein. Welche Flächen es sind,
+#: steht nirgends; für den Ratgeber zählen sie als Schiebesitz
+#: (:func:`fit_kinds_for`).
+FITTING_OPS: frozenset[str] = frozenset(
+    {
+        "create_lid",
+        "screw_lid",
+        "split_pinned",
+        "insert_snap_fit",
+        "insert_dowel",
+        "insert_magnet_pocket",
+        "insert_heatset_m4",
+        "insert_nut_trap",
+        "insert_printed_thread",
+        "thread_exact",
+    }
+)
+
+
+def fit_kinds_for(document: Document, object_ids: Collection[str]) -> tuple[str, ...]:
+    """Welche Passungen diese Körper tragen — eingetragene und gebaute.
+
+    Die Körper und alles, woraus sie entstanden sind: Der Stapel wird rückwärts
+    gegangen, jeder Schritt, der einen der Körper erzeugt, bringt seine
+    Eingänge dazu. Eine eingetragene Passung zählt mit ihrer Art, ein
+    deaktivierter Deckel ohne Kragen nicht (:func:`active_fits`). Ein
+    passender Schritt ohne gebundene Passung zählt als Schiebesitz
+    (:data:`FITTING_OPS`), etwa eine ältere Mutternfalle mit Spiel aus der
+    Normteiltabelle.
+
+    Zurück kommen die **Arten**, nicht bloß ein Ja: Eine bündige Passung
+    verlangt eine Einstellung mehr als ein Schiebesitz. Der Druckdialog fragt
+    für die Körper der Platte, der Export je Teil (Entscheidung G).
+    """
+    wanted = set(object_ids)
+    relevant_operations: set[int] = set()
+    for operation in reversed(document.ops):
+        if wanted.intersection(operation.outputs):
+            relevant_operations.add(operation.id)
+            wanted.update(operation.inputs)
+    kinds: list[str] = [
+        entry.kind
+        for entry in active_fits(document)
+        if entry.a.object_id in wanted or entry.b.object_id in wanted
+    ]
+    bound_operations = {
+        entry.when_positive[0] for entry in document.fits if entry.when_positive is not None
+    }
+    if any(
+        entry.op in FITTING_OPS
+        and entry.id in relevant_operations
+        and entry.id not in bound_operations
+        for entry in document.ops
+    ):
+        kinds.append("clearance")
+    return tuple(dict.fromkeys(kinds))
 
 
 def check(

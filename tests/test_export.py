@@ -2037,13 +2037,39 @@ def test_a_typed_name_still_loses_what_no_disc_can_hold(tmp_path: Path, profile:
     assert write_plan(leer, tmp_path)[0].stem == "projekt", "ein leerer Rest bekommt den Rückfall"
 
 
-def test_an_accepted_brim_goes_to_the_whole_plate_until_stage_e(
+def _object_values(written: Path, member: str) -> dict[str, dict[str, str]]:
+    """Die Objektwerte einer Baugruppe je Objektname — aus
+    ``model_settings.config`` (Orca-Familie) oder ``Slic3r_PE_model.config``
+    (PrusaSlicer)."""
+    config = ET.fromstring(zipfile.ZipFile(written).read(member))
+    values: dict[str, dict[str, str]] = {}
+    for node in config.iter("object"):
+        own = {meta.get("key", ""): meta.get("value", "") for meta in node.findall("metadata")}
+        values[own.pop("name", node.get("id", ""))] = own
+    return values
+
+
+def _plate_value(written: Path, flavour: SlicerFlavour, key: str) -> object:
+    """Ein Wert der Platte, wie die Baugruppe ihn trägt."""
+    archive = zipfile.ZipFile(written)
+    if flavour == "prusa":
+        for line in archive.read("Metadata/Slic3r_PE.config").decode("utf-8").splitlines():
+            name, _sep, value = line.removeprefix("; ").partition(" = ")
+            if name == key:
+                return value
+        return None
+    return json.loads(archive.read("Metadata/project_settings.config")).get(key)
+
+
+def test_an_accepted_brim_goes_only_to_the_part_that_needs_it(
     tmp_path: Path, profile: Profile
 ) -> None:
-    """Der echte Weg heute: *Vorschläge übernehmen* setzt „brim" als
-    übernommenen Vorschlag (``advise.apply``), und er gilt der Platte — jedes
-    Teil bekommt einen Rand, keines einen eigenen, und ``export.part_setting``
-    entsteht nicht (Review Stufe A+B, R8). Stufe E ändert das.
+    """*Vorschläge übernehmen* setzt „brim" als übernommenen Vorschlag
+    (``advise.apply``), und seit Stufe E bekommt ihn nur das Teil, das ihn
+    braucht (Konzept Herstellerprofil, Entscheidung G; RM-250). Die Platte
+    behält die Grundlage, der schlanke Turm trägt den Brim als Objektwert, die
+    breite Platte nichts. Vorher bekam jedes Teil einen Rand, auch das, das
+    breit auf dem Bett steht — Material, das der Kunde wieder abschneidet.
     """
     schlank = MeshData.of(trimesh.creation.box(extents=(4.0, 4.0, 80.0)))
     breit = MeshData.of(trimesh.creation.box(extents=(60.0, 60.0, 10.0)))
@@ -2052,6 +2078,7 @@ def test_an_accepted_brim_goes_to_the_whole_plate_until_stage_e(
         replace(scene_object("obj_2", "Platte"), mesh=breit),
     ]
     settings = print_settings.resolve(profile, "standard")
+    assert settings.adhesion.kind == "skirt", "die Vorbedingung des Tests"
     brim = SettingAdvice(
         path="adhesion.kind",
         value="brim",
@@ -2066,9 +2093,12 @@ def test_an_accepted_brim_goes_to_the_whole_plate_until_stage_e(
         objects, tmp_path, project_name="Gehäuse", profile=profile, settings=settings
     )
 
-    assert not [finding for finding in findings if finding.code == "export.part_setting"]
-    config = json.loads(zipfile.ZipFile(written).read("Metadata/project_settings.config"))
-    assert config["brim_type"] == "outer_only", "die ganze Platte"
+    treffer = [finding for finding in findings if finding.code == "export.part_setting"]
+    assert [finding.values["objects"] for finding in treffer] == [1], "nur der Turm"
+    assert _plate_value(written, "orca", "brim_type") == "no_brim", "die Platte bleibt"
+    values = _object_values(written, "Metadata/model_settings.config")
+    assert values["Turm"]["brim_type"] == "outer_only"
+    assert "brim_type" not in values["Platte"]
 
 
 def test_the_export_adds_no_brim_by_itself(tmp_path: Path, profile: Profile) -> None:
@@ -2100,16 +2130,13 @@ def test_the_export_adds_no_brim_by_itself(tmp_path: Path, profile: Profile) -> 
 
 
 def test_an_accepted_brim_for_a_part_is_said_out_loud(tmp_path: Path, profile: Profile) -> None:
-    """**Der Vertrag für Stufe E**: Ist die Haftung angenommen und die Platte
-    noch auf Skirt, schreibt der Export den Brim je Teil — und sagt es.
+    """Ist die Haftung übernommen, schreibt der Export den Brim je Teil — und
+    sagt es.
 
-    Diesen Zustand baut heute kein Ablauf: Jeder Haftungsvorschlag setzt
-    „brim", und übernommen gilt er der ganzen Platte (siehe
-    :func:`test_an_accepted_brim_goes_to_the_whole_plate_until_stage_e`).
-    Stufe E legt die Platte beim Übernehmen auf ihre Grundlage und lässt den
-    Brim nur an den Teilen, die ihn brauchen (Konzept Herstellerprofil,
-    Entscheidung G; Review Stufe A+B, R8). Bis dahin hält dieser Test fest,
-    wie der Writer den Zustand schreibt.
+    Gleich, welcher Wert übernommen ist: Die Platte bekommt die Grundlage, und
+    der Brim steht an den Teilen, deren Geometrie ihn verlangt (Konzept
+    Herstellerprofil, Entscheidung G; siehe
+    :func:`test_an_accepted_brim_goes_only_to_the_part_that_needs_it`).
 
     **Der Grund lag dabei fertig da.** ``SettingAdvice`` trägt ihn mit, und
     sein Docstring sagt warum: „eine Zahl ohne Begründung ist im Zweifel
@@ -2173,6 +2200,128 @@ def test_cura_says_when_part_settings_cannot_be_carried(
         assert unavailable[0].values["value"] == "brim"
         assert unavailable[0].values["objects"] == 1
         assert str(unavailable[0].values["reason"])
+
+
+def _mushroom_and_block() -> list[SceneObject]:
+    """Ein Pilz — Stiel 10 × 10 × 20, Hut 40 × 40 × 3, 15 mm frei auskragend,
+    ohne Stützen nicht zu drucken — und daneben ein Klotz ohne Überhang."""
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 20.0))
+    stem.apply_translation((0.0, 0.0, 10.0))
+    cap = trimesh.creation.box(extents=(40.0, 40.0, 3.0))
+    cap.apply_translation((0.0, 0.0, 21.5))
+    block = trimesh.creation.box(extents=(30.0, 30.0, 10.0))
+    block.apply_translation((0.0, 0.0, 5.0))
+    return [
+        replace(
+            scene_object("obj_1", "Pilz"), mesh=MeshData.of(trimesh.boolean.union([stem, cap]))
+        ),
+        replace(scene_object("obj_2", "Klotz"), mesh=MeshData.of(block)),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("flavour", "member", "key"),
+    [
+        ("orca", "Metadata/model_settings.config", "enable_support"),
+        ("prusa", "Metadata/Slic3r_PE_model.config", "support_material"),
+    ],
+)
+def test_supports_go_only_to_the_part_whose_geometry_needs_them(
+    tmp_path: Path, profile: Profile, flavour: SlicerFlavour, member: str, key: str
+) -> None:
+    """Ein übernommener Stützvorschlag gilt dem Körper, der ihn braucht
+    (Konzept Herstellerprofil, Entscheidung G): Die Platte bleibt ohne
+    Stützen, der Pilz bekommt sie als Objektwert, der Klotz nichts. Vorher
+    stützte der Slicer die ganze Platte, und an jedem Teil ohne Überhang stand
+    ein Satz Stützeinstellungen, der nur Zeit kostete, wo er griff."""
+    settings = print_settings.resolve(profile, "standard")
+    assert settings.support.style == "none", "die Vorbedingung des Tests"
+    settings = print_settings.with_accepted(settings, "support.style", "auto")
+
+    written, findings = write_assembly(
+        _mushroom_and_block(),
+        tmp_path,
+        project_name="Pilze",
+        profile=profile,
+        settings=settings,
+        flavour=flavour,
+    )
+
+    assert _plate_value(written, flavour, key) in ("0", ["0"]), "die Platte stützt nicht"
+    values = _object_values(written, member)
+    assert values["Pilz"][key] == "1"
+    assert key not in values["Klotz"]
+    treffer = [finding for finding in findings if finding.code == "export.part_setting"]
+    assert [(finding.values["objects"], finding.values["setting"]) for finding in treffer] == [
+        (1, "support.style")
+    ]
+
+
+def test_cura_takes_supports_back_where_a_part_does_not_need_them(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """CuraEngine nimmt ob gestützt wird je Netz an (``support_enable``), die
+    Stützart aber nur für die Platte (``support_structure``, Cura 5.13). Die
+    Übernahme bleibt deshalb auf der Platte, und der Klotz bekommt sie je Netz
+    zurückgenommen; der Pilz behält die Stützart der Platte, und der Befund
+    nennt diese. Je Netz steht nur, was Cura dort liest."""
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile, "standard"), "support.style", "tree"
+    )
+
+    written, findings = write_assembly(
+        _mushroom_and_block(),
+        tmp_path,
+        project_name="Pilze",
+        profile=profile,
+        settings=settings,
+        flavour="cura",
+    )
+
+    meshes = {mesh.path.name: dict(mesh.settings) for mesh in handover.cura_meshes(written)}
+    assert meshes == {
+        "Pilze-part-1.stl": {"support_enable": "true"},
+        "Pilze-part-2.stl": {"support_enable": "false"},
+    }
+    treffer = [finding for finding in findings if finding.code == "export.part_setting"]
+    assert [(finding.values["objects"], finding.values["value"]) for finding in treffer] == [
+        (1, "tree")
+    ]
+
+
+def test_a_plate_wide_reason_keeps_the_accepted_value_on_the_plate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verlangt das Material den Brim (ABS auf einem offenen Drucker), gilt er
+    übernommen der ganzen Platte — auch wo zusätzlich ein Teil schlank ist.
+    Bei PLA auf demselben Drucker geht er je Teil (``advise.plate_paths``).
+
+    Die Grundlage ist hier eine mit Schürze, wie der Hersteller sie oft führt;
+    Solidons eigene Tabelle legt für ABS schon selbst einen Brim, und dann
+    gäbe es nichts zu trennen."""
+    from types import SimpleNamespace
+
+    from app.core.export import manufacturer
+
+    def split(material: str) -> handover.PartSplit:
+        chosen = profiles.make_profile("prusa-mk4s", material)
+        skirted = print_settings.with_path(print_settings.resolve(chosen), "adhesion.kind", "skirt")
+        monkeypatch.setattr(
+            manufacturer,
+            "base_settings",
+            lambda *_args, **_kwargs: SimpleNamespace(settings=skirted),
+        )
+        accepted = print_settings.with_accepted(skirted, "adhesion.kind", "brim")
+        return handover.split_for_parts(accepted, chosen, None, "orca")
+
+    material = split("abs")
+    assert material.per_part == frozenset()
+    assert material.plate.adhesion.kind == "brim"
+
+    geometry = split("pla")
+    assert geometry.per_part == frozenset({"adhesion.kind"})
+    assert geometry.plate.adhesion.kind == "skirt"
+    assert geometry.base.adhesion.kind == "skirt"
 
 
 def test_nothing_is_said_when_every_part_takes_the_plates_setting(
@@ -3118,6 +3267,52 @@ def test_prusaslicer_gets_the_blocker_as_a_range_of_the_mesh(
     assert '<metadata name="slic3rpe:Version3mf">1</metadata>' in model
     read_back = threemf_reader.read_objects(written.read_bytes(), [])
     assert [part.mesh.triangle_count for part in read_back] == [triangles]
+
+
+@pytest.mark.parametrize("flavour", ["orca", "cura"])
+def test_only_the_part_that_is_supported_gets_a_blocker(
+    tmp_path: Path, profile: Profile, flavour: SlicerFlavour
+) -> None:
+    """Die Sperre folgt den Stützen (Entscheidung G): Übernommen sind Stützen
+    und Sperre, aber nur der Tunnelblock mit dem auskragenden Arm braucht
+    Stützen — also sperrt nur er seine Kanäle, und der Klotz daneben bekommt
+    weder das eine noch das andere. Gesagt wird es einmal, im Befund der
+    Sperre mit dem Namen des Teils, nicht noch einmal als „andere Einstellung
+    je Teil"."""
+    arm = trimesh.creation.box(extents=(30.0, 20.0, 4.0))
+    arm.apply_translation((44.0, 0.0, 36.0))
+    with_arm = trimesh.boolean.union([tunnel_block().raw, arm])
+    block = trimesh.creation.box(extents=(30.0, 30.0, 10.0))
+    block.apply_translation((0.0, 0.0, 5.0))
+    objects = [
+        replace(scene_object("obj_1", "Tunnel"), mesh=MeshData.of(with_arm)),
+        replace(scene_object("obj_2", "Klotz"), mesh=MeshData.of(block)),
+    ]
+    settings = print_settings.resolve(profile, "standard")
+    settings = print_settings.with_accepted(settings, "support.style", "auto")
+    settings = print_settings.with_accepted(settings, "support.block_channels", True)
+
+    written, findings = write_assembly(
+        objects, tmp_path, project_name="t", profile=profile, settings=settings, flavour=flavour
+    )
+
+    blocked = [
+        finding.object_id for finding in findings if finding.code == "export.support_blocker"
+    ]
+    assert blocked == ["obj_1"]
+    said = [
+        finding.values["setting"] for finding in findings if finding.code == "export.part_setting"
+    ]
+    assert said == ["support.style"], "die Sperre nennt sich selbst"
+    if flavour == "orca":
+        assert _orca_parts(written) == [("2", "normal_part"), ("2", "support_blocker")]
+    else:
+        meshes = [(mesh.path.name, dict(mesh.settings)) for mesh in handover.cura_meshes(written)]
+        assert meshes == [
+            ("t-part-1.stl", {"support_enable": "true"}),
+            ("t-blocker-1.stl", {"anti_overhang_mesh": "true"}),
+            ("t-part-2.stl", {"support_enable": "false"}),
+        ]
 
 
 def test_the_simplified_blocker_still_covers_the_whole_channel(profile: Profile) -> None:

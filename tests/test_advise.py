@@ -813,3 +813,77 @@ def test_a_sloped_foot_the_printer_carries_gets_no_supports() -> None:
 
     assert support_advised("generic-220"), "unter der Startregel ist es ein Überhang"
     assert not support_advised("centauri-carbon-2")
+
+
+# --- je Teil (Konzept Herstellerprofil, Entscheidung G) ---------------------------
+
+
+def test_a_part_asks_for_supports_only_where_its_own_geometry_needs_them() -> None:
+    """Was an der Geometrie hängt, gilt dem Körper: Der mit der freien Decke
+    bekommt Stützen, der daneben ohne Überhang nichts. Plattenweite Regeln —
+    Maschine, Material, Volumenstrom — gehören nicht in den Rat je Teil."""
+    from app.core.types import BoundingBox
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    box = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(40.0, 40.0, 20.0))
+
+    hanging = advise.for_part(
+        settings, box, 1600.0, profile=profile, result=result_with([0.0, 0.0, 138.0, 0.0])
+    )
+    plain = advise.for_part(
+        settings, box, 1600.0, profile=profile, result=result_with([0.0, 0.0, 0.0, 0.0])
+    )
+
+    assert "support.style" in paths(hanging)
+    assert paths(hanging) <= advise.PART_PATHS
+    assert "support.style" not in paths(plain)
+    assert advise.for_part(settings, box, 1600.0) == [], "ohne Profil nur die Brim-Regeln"
+
+
+def test_a_material_reason_keeps_its_value_on_the_plate() -> None:
+    """ABS auf einem offenen Drucker verlangt einen Brim wegen des Materials.
+    Übernommen gilt er der ganzen Platte, auch wo die Geometrie eines Teils ihn
+    ebenfalls verlangt (:func:`advise.plate_paths`)."""
+    abs_open = profiles.make_profile("prusa-mk4s", "abs")
+    pla_open = profiles.make_profile("prusa-mk4s", "pla")
+
+    def skirted(profile: Profile) -> PrintSettings:
+        # Eine Grundlage mit Schürze, wie der Hersteller sie oft trägt;
+        # Solidons Tabelle legt für ABS schon selbst einen Brim.
+        return print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "skirt")
+
+    assert "adhesion.kind" in advise.plate_paths(skirted(abs_open), abs_open)
+    assert "adhesion.kind" not in advise.plate_paths(skirted(pla_open), pla_open)
+
+
+def test_the_stack_tells_which_body_carries_a_fit() -> None:
+    """Der Deckel legt zwei Flächen mit Spiel aufeinander; der Stift daneben
+    trägt keine Passung. Der Dialog fragt für die Platte, der Export je Teil
+    (``fits.fit_kinds_for``)."""
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.fits import fit_kinds_for
+    from app.core.types import Document
+
+    document = Document(format_version=1, app_version="0.0.1")
+    history = History(document)
+    history.apply(
+        "Dose", [OperationDraft(op="create_cylinder", params={"diameter": 40.0, "height": 20.0})]
+    )
+    history.apply(
+        "Stift", [OperationDraft(op="create_cylinder", params={"diameter": 8.0, "height": 10.0})]
+    )
+    lid = history.apply(
+        "Deckel", [OperationDraft(op="create_lid", inputs=("obj_1",), params={"thickness": 2.4})]
+    )
+    result = evaluate(document, profiles.make_profile())
+    lid_outputs = set(document.ops[-1].outputs)
+    pin_id = next(
+        entry.id
+        for entry in result.scene.objects.values()
+        if entry.id not in lid_outputs and entry.id != "obj_1"
+    )
+
+    assert lid is not None
+    assert fit_kinds_for(document, lid_outputs) == ("clearance",)
+    assert fit_kinds_for(document, {pin_id}) == ()
