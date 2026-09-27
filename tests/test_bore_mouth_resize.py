@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import math
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -16,7 +17,9 @@ from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect
 from app.core.perceive.relations import cavity_chain_at
 from app.core.registry import REGISTRY
+from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import NeverCancelled
+from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Feature, OpContext, OpResult, Profile, Quality, Scene, SceneObject
 from app.core.units import EPS_GEOM
 from tests.helpers import contains as _contains
@@ -1674,3 +1677,137 @@ def test_a_pocket_with_a_lip_says_why_it_stays_straight(
     with pytest.raises(ValidationError) as refused:
         _on_the_lip(source, "slot_hole", profile, at_feature=feature.id, slot_length=4.0)
     assert refused.value.detail == NARROWING_STAYS_ROUND
+
+
+# --- Eine Senkung auf ihrer Bohrung ändern (Durchsicht 0.5.1, rest-lippe) ----------
+
+
+def _countersunk_plate(kind: str, sink: float) -> tuple[Any, History]:
+    """Platte 40 × 40 × 10, Bohrung Ø 5,2 ganz durch, oben gesenkt auf ``sink`` —
+    über die Operationen des Kunden, am Netz oder am exakten Körper."""
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    box = "create_brep_box" if kind == "brep" else "create_box"
+    history.apply(
+        "Quader",
+        [OperationDraft(op=box, params={"width": 40.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply(
+        "Bohren",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.2, "x": 0.0, "y": 0.0, "z": 10.0, "axis": "z", "depth": 0.0},
+            )
+        ],
+    )
+    history.apply(
+        "Senken",
+        [
+            OperationDraft(
+                op="countersink_hole",
+                inputs=("obj_1",),
+                params={"diameter": sink, "x": 0.0, "y": 0.0, "z": 10.0, "axis": "z"},
+            )
+        ],
+    )
+    return project, history
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("diameter", [9.0, 11.0])
+def test_a_countersink_on_its_bore_changes_like_one_sunk_that_wide(
+    profile: Profile, kind: str, diameter: float
+) -> None:
+    """*Merkmal ändern* an einer Senkung auf ihrer Bohrung schneidet sie neu,
+    so wie *Senken* sie gleich in diesem Maß geschnitten hätte — an beiden Kernen.
+
+    Das Merkmalfenster bot die Handlung an jeder Senkung an. Am Netz sagte sie
+    an einer Senkbohrung ab („geht in einen anderen Hohlraum über"), am exakten
+    Körper streckte sie den Kegelstumpf um die Mündung: Enger blieb unter der
+    Senkung eine Haut quer über der Bohrung stehen (Ø 10 → 9: die Achse bei
+    z 7,75 bis 7,85 zu, 5,9 mm³ zu viel, kein Befund), weiter ein Absatz, auf
+    dem der Schraubenkopf 0,27 mm zu hoch aufsaß (Durchsicht 0.5.1, rest-lippe).
+    Sollwerte: am exakten Körper die Platte, gleich auf das neue Maß gesenkt;
+    am Netz dieselbe Senkung aus ihren Maßen, als 48-Eck.
+    """
+    from app.core.geom.mesh import as_mesh_data
+
+    project, history = _countersunk_plate(kind, 10.0)
+    sources = ProjectSources(project)
+    before = evaluate(project.document, profile, sources=sources).scene.objects["obj_1"]
+    bore = next(f for f in before.features.values() if f.kind == "hole")
+    history.apply(
+        "Ändern",
+        [
+            OperationDraft(
+                op="resize_feature",
+                inputs=("obj_1",),
+                params={"at_feature": "cone_1", "diameter": diameter},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=sources)
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    assert not [f.code for f in result.scene.report.findings if f.severity != "info"]
+    changed = result.scene.objects["obj_1"]
+    mesh = as_mesh_data(changed.mesh)
+    assert mesh.is_watertight
+    # Die Bohrung geht weiter durch: keine Haut auf ihrer Achse.
+    assert not _contains(mesh, [(0.0, 0.0, z) for z in np.linspace(0.1, 9.9, 50)]).any()
+    if kind == "brep":
+        direct, _history = _countersunk_plate(kind, diameter)
+        sunk = evaluate(direct.document, profile, sources=ProjectSources(direct))
+        assert changed.mesh.volume == pytest.approx(
+            sunk.scene.objects["obj_1"].mesh.volume, abs=1e-3
+        )
+    else:
+        wide, narrow = diameter / 2.0, float(bore.params["diameter"]) / 2.0
+        depth = wide - narrow  # 90°-Senkung
+        cavity = math.pi * narrow**2 * (10.0 - depth) + _frustum(depth, wide, narrow)
+        assert mesh.volume == pytest.approx(_POLYGON_48 * (-cavity) + 16000.0, abs=0.02)
+    sink = changed.features["cone_1"]
+    assert float(sink.params["diameter"]) == pytest.approx(diameter, abs=0.05)
+    assert changed.features[bore.id].params.get("through") is True
+
+
+def test_a_cone_between_two_steps_is_not_offered_what_the_operation_refuses(
+    profile: Profile,
+) -> None:
+    """Ein Kegel zwischen zwei Stufen einer Bohrung hat kein eigenes Maß:
+    Merkmalfenster und Operation sagen denselben Satz (Regel 17).
+
+    *Merkmal ändern* setzt an einer Senkung das Maß ihrer Mündung. Ein Kegel,
+    der eine Bohrung mit einer weiteren Stufe verbindet, hat keine Mündung;
+    sein weites Ende ist die Stufe darüber. Beide Kerne gleich.
+    """
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.errors import ValidationError
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.prepare_ops import NOT_AT_THE_MOUTH
+    from app.core.perceive.actions import actions_for
+    from app.core.sketch.planes import frame_of
+
+    outline = [(0.0, 0.0), (2.5, 0.0), (2.5, 6.0), (5.0, 8.5), (5.0, 10.0), (0.0, 10.0), (0.0, 0.0)]
+    exact = edit.bore_profile(
+        edit.box(40.0, 40.0, 10.0), outline, frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    )
+    for kind in ("brep", "mesh"):
+        mesh = as_mesh_data(exact)
+        body = exact if kind == "brep" else mesh
+        features = features_of(exact) if kind == "brep" else detect(mesh)
+        cones = [f for f in features.values() if f.kind == "cone"]
+        assert len(cones) == 1, (kind, sorted(features))
+        change = str(REGISTRY.get("resize_feature").title)
+        rows = actions_for(cones[0], features, mesh=as_mesh_data(body))
+        row = next(action for action in rows if str(action.title) == change)
+        assert row.op is None and row.reason == NOT_AT_THE_MOUTH, (kind, row)
+        source = SceneObject(id="obj_1", name="Stufe", kind=kind, mesh=body, features=features)
+        with pytest.raises(ValidationError) as refused:
+            _on_the_lip(source, "resize_feature", profile, at_feature=cones[0].id, diameter=11.0)
+        assert refused.value.detail == NOT_AT_THE_MOUTH, kind

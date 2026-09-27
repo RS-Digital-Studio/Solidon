@@ -6353,7 +6353,9 @@ class ResizeFeatureParams(BaseParams):
     # um einen Zylinder füllt die Tasche bis zum Boden, und zwei Zweige haben
     # am selben Tag unabhängig auf 6 erhöht. 8: Der Stopfen wird an den
     # Facettengrenzen konform geteilt und endet an den Stirnflächen des Stifts.
-    cache_version="8",
+    # 9: Eine Senkung auf ihrer Bohrung wird aus den Einlaufprofilen neu
+    # geschnitten, statt um ihre Mündung gestreckt (Durchsicht 0.5.1, rest-lippe).
+    cache_version="9",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -6426,6 +6428,10 @@ def resize_feature(ctx: OpContext) -> OpResult:
 
     scale = params.diameter / previous if previous > EPS_GEOM else 1.0
     cavity = is_a_cavity(feature)
+    if cavity and feature.kind == "cone":
+        chain = _cavity_chain_of(as_mesh_data(source.mesh), feature, source.features)
+        if chain is not None:
+            return _resize_chain_countersink(ctx, source, feature, chain, params.diameter)
     if source.kind == "brep" and feature.kind in ("pin", "cone", "sphere"):
         return _exact_resize_by_faces(ctx, source, feature, centre, params.diameter, scale)
     stands_alone = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
@@ -6485,6 +6491,209 @@ def resize_feature(ctx: OpContext) -> OpResult:
             *_edge_findings(closed.mesh, [changed]),
         ],
         solver=placed.solver,
+    )
+
+
+#: Warum *Merkmal ändern* an einem Kegel einer Bohrungskette absagt, der keine
+#: Senkung an ihrer Mündung ist — der schräge Absatz zwischen zwei Stufen etwa:
+#: Sein Maß hängt an den Stufen, und die ändert *Bohrung ändern*.
+NOT_AT_THE_MOUTH: Final = _(
+    "Diese Senkung sitzt zwischen zwei Stufen der Bohrung und hat kein eigenes Maß. Ändern "
+    "Sie sie mit der Bohrung über „Bohrung ändern“."
+)
+
+
+def countersink_resize_refusal(
+    mesh: Mesh, feature: Feature, features: Mapping[FeatureId, Feature], chain: Sequence[Feature]
+) -> TranslatableText | None:
+    """Warum *Merkmal ändern* an diesem Kegel einer Bohrungskette absagt — oder
+    ``None``, wo es seine Senkung neu schneidet (:func:`_resize_chain_countersink`).
+
+    Dieselbe Frage für die Operation und die Zeile im Merkmalfenster
+    (``perceive.actions.actions_for``). Bis zur Durchsicht 0.5.1 bot das Fenster
+    *Merkmal ändern* an jeder Senkung an, und am Netz sagte die Operation dann
+    mit dem Satz über eine Senkung ab, die in ihre Bohrung übergeht.
+    """
+    side = _countersink_side(mesh, feature, features, chain)
+    return None if isinstance(side, tuple) else side
+
+
+def _countersink_side(
+    mesh: Mesh, feature: Feature, features: Mapping[FeatureId, Feature], chain: Sequence[Feature]
+) -> tuple[_BoreEntrance, Vec3, tuple[_EntranceSection, ...]] | TranslatableText:
+    """Der Einlauf der Kette, in dem diese Senkung der äußere Abschnitt ihrer
+    Seite ist — samt Richtung und Abschnitten dieser Seite —, sonst der Satz,
+    mit dem *Merkmal ändern* absagt (:func:`countersink_resize_refusal`)."""
+    try:
+        entrance = bore_entrance(mesh, chain[0], features, cavity=tuple(chain), touches_other=False)
+    except ValidationError:
+        return CHAIN_NOT_READABLE
+    if entrance is None:
+        return CHAIN_NOT_READABLE
+    for way, sections, _open in entrance.sides():
+        last = sections[-1]
+        if last.feature.id == feature.id and last.feature.kind == "cone" and not last.narrowing:
+            return entrance, way, sections
+    return NOT_AT_THE_MOUTH
+
+
+def _resize_chain_countersink(
+    ctx: OpContext, source: SceneObject, feature: Feature, chain: Sequence[Feature], diameter: float
+) -> OpResult:
+    """*Merkmal ändern* an einer Senkung auf ihrer Bohrung: der neue Durchmesser
+    in der Mündung, derselbe Winkel, die Bohrung bleibt — an beiden Kernen aus
+    denselben Einlaufprofilen (``mouths``, :func:`_side_tools`), nach dem
+    Muster von *Bohrung ändern* mit Einlauf: ganzer Hohlraum zu, frisch
+    geschnitten (Durchsicht 0.5.1, rest-lippe).
+
+    **Vorher rechneten die Kerne dieselbe Handlung verschieden.** Das
+    Merkmalfenster bot *Merkmal ändern* an jeder Senkung an; am Netz sagte die
+    Operation an einer Senkbohrung ab („geht in einen anderen Hohlraum über"),
+    am exakten Körper streckte sie den Kegelstumpf aus seinen Flächen um die
+    Mündung. Enger ließ das unter der Senkung eine Haut quer über der Bohrung
+    stehen — an einer Senkbohrung Ø 5,4 mit Senkung Ø 10 auf Ø 9 war die Achse
+    bei z 7,75 bis 7,85 zu, 5,9 mm³ zu viel und kein Befund —, weiter einen
+    Absatz, auf dem der Schraubenkopf 0,27 mm zu hoch aufsaß. Wie weit die
+    Senkung an einer schrägen Mündung reicht, rechnet derselbe Kegel wie in
+    :func:`_resize_bore_entrance`: Ihr Durchmesser ist der weiteste Rand.
+    """
+    side = _countersink_side(source.mesh, feature, source.features, chain)
+    if not isinstance(side, tuple):
+        raise ValidationError(
+            field="at_feature",
+            detail=side,
+            values={"feature": feature.id},
+            constraint="not_movable",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    entrance, way, sections = side
+    section = sections[-1]
+    axis = np.asarray(way, dtype=float)
+    normal = np.asarray(section.upper.normal, dtype=float)
+    along = float(normal @ axis)
+    tilt = float(np.linalg.norm(np.cross(normal, axis)))
+    slope = (section.outer_radius - section.inner_radius) / (section.end - section.start)
+    if along <= EPS_GEOM or along - tilt * slope <= EPS_GEOM:
+        raise _chain_not_readable(chain)
+    # Der genannte Durchmesser ist der weiteste Rand; das Profil braucht den
+    # Radius, wo die Mündungsebene die Achse schneidet.
+    mouth = diameter / 2.0 * (along - tilt * slope) / along
+    below = sections[-2].outer_radius
+    if mouth <= below + EPS_GEOM:
+        raise ValidationError(
+            field="diameter",
+            detail=_(
+                "Eine Senkung ist weiter als ihre Bohrung ({bore:.2f} mm). Wählen Sie einen "
+                "größeren Durchmesser, oder nehmen Sie die Senkung mit „Merkmal entfernen“ weg.",
+                bore=2.0 * below,
+            ),
+            value=diameter,
+            constraint="minimum",
+            values={"minimum": 2.0 * below},
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    mouths = {feature.id: mouth}
+    origin = np.asarray(entrance.origin, dtype=float)
+    expected: list[Feature] = []
+    for member in chain:
+        params = dict(member.params)
+        if member.id == feature.id:
+            height = section.end + tilt * mouth / (along - tilt * slope)
+            params.update(
+                diameter=diameter,
+                centre=tuple(float(v) for v in origin + height * axis),
+                axis=way,
+            )
+        elif member.id == sections[-2].feature.id and not section.shoulder:
+            # Die Senkung trifft ihre Bohrung jetzt höher oder tiefer: Die Wand
+            # darunter endet dort (dieselbe Seite, entlang ``way`` gemessen).
+            meets = section.end - (mouth - below) / slope
+            start = sections[-2].start
+            params.update(
+                centre=tuple(float(v) for v in origin + (start + meets) / 2.0 * axis),
+                depth=meets - start,
+            )
+        expected.append(dataclasses.replace(member, params=params, provenance="generated"))
+    changed = next(member for member in expected if member.id == feature.id)
+    reach = float(as_mesh_data(source.mesh).bounds.diagonal)
+    ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
+    if source.kind == "brep":
+        from app.core.sketch.planes import frame_of
+
+        filled = _exact_chain_filled(source, entrance)
+        frame = frame_of(entrance.axis, entrance.origin)
+        ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
+        placed, tool = _exact_chain_cut_holding(
+            filled,
+            lambda overlap: _exact_chain_solid(
+                entrance,
+                reach,
+                filling=False,
+                frame=frame,
+                planes_of=lambda _index, lower, upper: (lower, upper),
+                overlap=overlap,
+                mouths=mouths,
+            ),
+        )
+        findings = _edge_findings(as_mesh_data(filled), [changed])
+        findings += _without_opened_twice(
+            _neighbour_bore_findings(source, chain[0], as_mesh_data(tool), ctx), findings
+        )
+        return _exact_cavity_result(
+            ctx,
+            source,
+            placed,
+            op="resize_feature",
+            expected=expected,
+            findings=findings,
+            mouths=_chain_mouths(chain),
+        )
+    body = as_mesh_data(source.mesh)
+    plug = _cavity_plug(body, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
+    if plug is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=NO_OWN_BODY,
+            values={"feature": feature.id, "bore": chain[0].id},
+            constraint="not_movable",
+        )
+    closed = _without_scars(
+        boolean("union", [body, plug], quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
+    )
+    ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
+    cutting = _entrance_mesh_tool(
+        entrance, 2.0 * entrance.sections[0].inner_radius, reach, ctx, mouths=mouths
+    )
+    # Ohne Narben wie der Einlauf an einer Verengung (``_resize_bore_entrance``):
+    # Die Kappe des Werkzeugs setzte eine Ecke in die Mitte jeder Wandkante.
+    placed = _without_scars(
+        boolean(
+            "difference",
+            [closed.mesh, cutting.mesh],
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+    )
+    features = _without_old_triangles(source.features)
+    for member in expected:
+        features[member.id] = dataclasses.replace(member, face_indices=(), surface_patches=())
+    measured = _measured_on(placed.mesh, expected, check_cancelled=ctx.cancelled.raise_if_cancelled)
+    features.update(measured)
+    findings = [*closed.findings, *cutting.findings, *placed.findings]
+    findings += [
+        _cavity_lost_finding("resize_feature", member)
+        for member in expected
+        if member.id not in measured
+    ]
+    findings += _edge_findings(closed.mesh, [changed])
+    findings += _without_opened_twice(
+        _neighbour_bore_findings(source, chain[0], cutting.mesh, ctx), findings
+    )
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=placed.mesh, features=features)],
+        findings=findings,
+        solver=deepest((closed.solver, cutting.solver, placed.solver)),
     )
 
 

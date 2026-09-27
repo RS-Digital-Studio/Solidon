@@ -790,6 +790,10 @@ def actions_for(
             )
         ):
             actions.append(FeatureAction(title=fitting.title, op=None, reason=shared))
+        elif fitting is not None and (
+            unsized := _countersink_unsized(fitting.name, feature, features, mesh, cavity)
+        ):
+            actions.append(FeatureAction(title=fitting.title, op=None, reason=unsized))
         elif fitting is not None:
             fields = _fields_of(fitting, feature)
             if fitting.name == "resize_hole" and mesh is not None and features is not None:
@@ -1166,6 +1170,32 @@ def _shares_its_cavity(
     return (
         CAVITY_TOPOLOGY_UNKNOWN if reason == "cavity_topology_unavailable" else NEEDS_A_PLAIN_BORE
     )
+
+
+def _countersink_unsized(
+    op: str,
+    feature: Feature,
+    features: Mapping[FeatureId, Feature] | None,
+    mesh: MeshData | None,
+    cavity: tuple[Feature, ...] | None,
+) -> TranslatableText | None:
+    """Warum *Merkmal ändern* an einem Kegel einer Bohrungskette absagen würde —
+    mit dem Satz der Operation (``prepare_ops.countersink_resize_refusal``) —,
+    oder ``None``, wo sie die Senkung neu schneidet.
+
+    Bis zur Durchsicht 0.5.1 stand die Zeile an jeder Senkung offen, und am
+    Netz sagte die Operation an einer Senkbohrung mit dem Satz über eine
+    Senkung ab, die in ihre Bohrung übergeht. **Nur mit Netz und Kette**: Ohne
+    die Ringe der Kette gibt es keine Antwort, und eine Vermutung stellt keine
+    Zeile grau.
+    """
+    if op != "resize_feature" or feature.kind != "cone" or not cavity:
+        return None
+    if mesh is None or features is None:
+        return None
+    from app.core.geom.prepare_ops import countersink_resize_refusal
+
+    return countersink_resize_refusal(mesh, feature, features, cavity)
 
 
 def _note_for(

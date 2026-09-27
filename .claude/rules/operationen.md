@@ -750,6 +750,12 @@ Bohrungsdurchmesser* auf Ø 8,1: 472 Dreiecke in der Fußebene der Lippe, die
 Tasche eine gerundete Seite). Das hintere Werkzeug reicht in das vordere
 hinein, wie der Kegel einer Senkung in ihren Schaft. Geprüft wird es nicht am
 Volumen, sondern an Flächen in dieser Ebene und an der Erkennung danach.
+**Eine Senkung auf ihrer Bohrung ändert ihr Maß über dieselben Profile**
+(`_resize_chain_countersink`): Der exakte Kern streckte den Kegelstumpf aus
+seinen Flächen um die Mündung und ließ enger eine Haut über der Bohrung
+stehen, das Netz sagte ab. Was eine Operation an einem Kegel einer Kette
+nicht kann, fragen Operation und Merkmalfenster an derselben Stelle
+(`countersink_resize_refusal`).
 **Und eine Mündung, die an der neuen Stelle unter Material liegt, wird
 gemeldet** (`_mouth_covered`, `{op}.mouth_covered`): Eine Sackbohrung hat keinen
 Durchgang, den sie verlieren könnte, und schwieg — an einer schrägen
