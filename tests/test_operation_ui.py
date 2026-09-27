@@ -5475,7 +5475,9 @@ def test_the_hint_to_aim_in_the_view_belongs_to_the_running_placement(
 
 
 @pytest.mark.parametrize("name", ["fillet_edges", "chamfer_edges", "bead_edges"])
-def test_the_rim_switch_sits_at_the_back_and_follows_the_group(name: str) -> None:
+def test_the_rim_switch_sits_at_the_back_and_follows_the_group(
+    name: str, qt_app: QApplication
+) -> None:
     """RM-279: „Runde Ränder nach ihrer Lage“ steht hinten und nur bei einer Gruppe.
 
     Ein neuer Schritt trägt den Haken; ein alter aus Format 36 öffnet ohne ihn

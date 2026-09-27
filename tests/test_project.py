@@ -3659,6 +3659,11 @@ def test_v36_rounding_at_horizontal_keeps_the_mouths_of_a_cross_bore(profile) ->
     Volumina hat derselbe Stand beim Schreiben gemessen. Mit dem Haken, den
     ein neuer Schritt trägt, bleiben die Mündungen scharf — es geht weniger
     weg; Strg+Z legt die alte Fassung wieder mit dem alten Weg zurück.
+
+    Der exakte Körper rechnet auf die Stelle genau wie gespeichert. Am Netz
+    hat RM-279 (i) die Rundung eines Rings selbst berichtigt (``cache_version``,
+    kein Format): Dieselben Kanten, aber die Mündung nicht mehr zu flach — das
+    Volumen darf sich um den Sehnenzug über der Rundungsfläche bewegen.
     """
     from app.core.scene.evaluate import evaluate
     from app.core.scene.project import ProjectSources
@@ -3686,7 +3691,10 @@ def test_v36_rounding_at_horizontal_keeps_the_mouths_of_a_cross_bore(profile) ->
     assert stored.complete
     volumes = {key: entry.mesh.volume for key, entry in stored.scene.objects.items()}
     assert stored.scene.objects["obj_2"].kind == "brep"
-    assert volumes["obj_1"] == pytest.approx(23026.0667, abs=0.01)
+    # Zwei Mündungen zu R 1 an Ø 6: Rundungsfläche rund 2 · 34 mm², mal die Sehnengrenze.
+    from app.core.units import MAX_FACET_SAG
+
+    assert volumes["obj_1"] == pytest.approx(23026.0667, abs=2 * 34.0 * MAX_FACET_SAG)
     assert volumes["obj_2"] == pytest.approx(23025.9949, abs=0.01)
 
     history = History(project.document)
