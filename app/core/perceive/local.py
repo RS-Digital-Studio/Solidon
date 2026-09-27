@@ -1338,9 +1338,12 @@ def detect_known(
 
     ``standing`` nennt Merkmale, deren Belege am neuen Netz unverändert
     gelten — nach einer belegten starren Bewegung die exakt mitbewegten
-    (Review R6). Sie werden übernommen, nicht gesucht: Die Nachmessung
-    einer starren Bewegung kann ihr Ergebnis nicht ändern und kostete am
-    Drachen je Verschieben und Auswertung vier bis sechs Sekunden mehr.
+    (:func:`~app.core.perceive.features.moved_twin`, Review R6), nach einer
+    belegten Teilung die in ihre Nachfahren übertragenen
+    (:func:`~app.core.perceive.features.refined_twin`, RM-223). Sie werden
+    übernommen, nicht gesucht: Die Nachmessung einer starren Bewegung kann
+    ihr Ergebnis nicht ändern und kostete am Drachen je Verschieben und
+    Auswertung vier bis sechs Sekunden mehr.
 
     **Und dieselbe Nachmessung wird einmal gerechnet** (Review S2): Das
     Ergebnis ist eine reine Funktion von Netz, Merkmalen, Anspruch und

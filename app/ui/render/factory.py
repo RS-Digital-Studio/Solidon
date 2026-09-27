@@ -2,8 +2,10 @@
 
 Gezeichnet wird mit pygfx über wgpu (Vulkan, DX12, Metal; in einer virtuellen
 Maschine WARP beziehungsweise lavapipe, soweit vom System bereitgestellt).
-VTK ist vollständig ausgebaut, auch aus der Bereichsprüfung (RM-050);
-``tests/test_core_isolation.py`` hält, dass kein Weg dorthin zurückkehrt.
+``vtk`` ist seit RM-050 (23.09.2026) ganz aus der Anwendung; die
+Bereichsprüfung (``app/core/knowledge/parts/range_check.py``) misst über
+``app.core.geom.mesh.ray_hits_batch``; ``tests/test_core_isolation.py`` hält,
+dass kein Weg dorthin zurückkehrt.
 
 Alles, was einen Renderer baut, geht über :func:`make_renderer` — der
 Viewport, seine Bildaufnahme und die Ansichten für den Agenten —, damit ein
