@@ -6131,6 +6131,34 @@ class _ActionRow:
     """Die Felder, die gerade weichen, weil die Maßgruppe im Bild sie trägt."""
 
 
+#: Wie viele Maßgruppen verschiedener Bauart auf ihre Wiederkehr warten
+#: (:meth:`FeaturePanel.keep_measure_group`) — die älteste geht zuerst.
+SPARE_MEASURE_GROUPS: Final = 4
+
+
+@dataclasses.dataclass(slots=True)
+class _MeasureGroup:
+    """Eine gebaute Maßgruppe und ihre Teile — die Widgets bleiben, Texte und Werte wechseln.
+
+    Dasselbe Muster wie :class:`_ActionRow` (RM-204), eine Ebene weiter: Die
+    Maßgruppe im Bild entstand bis zum 27.09.2026 bei jedem Merkmalklick neu,
+    am Wabenhalter von Bohrung zu Bohrung rund siebzehn Widgets je Klick,
+    die gebaut, poliert und wieder gelöscht wurden, obwohl sich nur Werte
+    und Texte änderten (RM-232). ``released`` trägt, was der Empfänger beim
+    Binden angehängt hat — er löst es beim Zurückgeben selbst
+    (:meth:`FeaturePanel.keep_measure_group`).
+    """
+
+    box: QWidget
+    signature: tuple[Any, ...] | None
+    title: QLabel
+    current: QLabel | None
+    note: QLabel | None
+    widgets: dict[str, QWidget]
+    labels: dict[str, QLabel]
+    released: list[Callable[[], None]] = dataclasses.field(default_factory=list)
+
+
 def _set_shown(widget: QWidget, visible: bool) -> None:
     """Zeigt oder verbirgt ein Widget — aber nur, wenn sich dabei etwas ändert.
 
@@ -6155,6 +6183,33 @@ def _set_shown(widget: QWidget, visible: bool) -> None:
         Qt.WidgetAttribute.WA_WState_ExplicitShowHide
     ):
         widget.setVisible(False)
+
+
+def _measure_group_alive(group: _MeasureGroup) -> bool:
+    """Ob jedes Widget einer Maßgruppe noch lebt — sonst wird neu gebaut."""
+    parts: list[QWidget | None] = [
+        group.box,
+        group.title,
+        group.current,
+        group.note,
+        *group.widgets.values(),
+        *group.labels.values(),
+    ]
+    return all(part is None or isValid(part) for part in parts)
+
+
+def _discard_measure_group(group: _MeasureGroup) -> None:
+    """Eine wartende Maßgruppe, die keiner mehr nimmt, geht wie jede andere."""
+    if isValid(group.box):
+        group.box.hide()
+        group.box.deleteLater()
+
+
+def _discard_spare_measures(spares: dict[tuple[Any, ...], _MeasureGroup], *_args: object) -> None:
+    """Alle wartenden Maßgruppen eines Merkmalfensters, das gerade geht."""
+    for group in list(spares.values()):
+        _discard_measure_group(group)
+    spares.clear()
 
 
 def _focus_stops(row: QWidget) -> list[QWidget]:
@@ -6481,6 +6536,15 @@ class FeaturePanel(QWidget):
         """Je gezeigter Handlungszeile ihr Inhalt — die Quelle der Wiederverwendung."""
         self._spare_rows: dict[tuple[Any, ...], list[_ActionRow]] = {}
         """Zeilen des vorigen Merkmals, die auf eine gleichartige Handlung warten (RM-204)."""
+        self._measure_groups: dict[int, _MeasureGroup] = {}
+        """Die ausgegebenen Maßgruppen, je Kästchen — die Quelle der Rückgabe."""
+        self._spare_measures: dict[tuple[Any, ...], _MeasureGroup] = {}
+        """Zurückgegebene Maßgruppen, die auf eine gleichartige Handlung warten (RM-232).
+
+        Sie warten ohne Elternteil, so wie sie ausgegeben werden — und gehen
+        deshalb nicht von selbst mit dem Fenster. ``destroyed`` nimmt sie mit;
+        der Empfänger hält nur das Wörterbuch, nicht das Fenster."""
+        self.destroyed.connect(partial(_discard_spare_measures, self._spare_measures))
         self._rows_reused = False
         """Ob der laufende Aufbau eine Zeile wiederverwendet hat — dann zieht
         :meth:`_settle_tab_order` die Fokuskette neu."""
@@ -8258,13 +8322,61 @@ class FeaturePanel(QWidget):
         ``parent`` ist ``None``, wenn der Empfänger das Kästchen gleich in sein
         eigenes Layout nimmt: Ein Umweg über die Ansicht machte es nativ
         (``overlay.hold_above_the_view``).
-        """
-        from app.ui.op_dialog import ValueField
 
+        **Eine zurückgegebene Gruppe derselben Bauart kommt wieder** (RM-232):
+        dieselbe Handlung mit denselben Feldern (:meth:`_measure_signature`),
+        neu geschrieben werden Werte, Grenzen, Beschriftungen und Erklärungen
+        — dieselben Aufrufe wie beim Bau (:meth:`_fill_measure_group`). Nur
+        ohne Elternteil: Wer eines vorgibt, bekommt ein frisches Kästchen darin.
+        """
         entry = next((entry for entry in self._runs.values() if entry.op == op), None)
         if entry is None or entry.action is None:
             return None
         action = entry.action
+        signature = self._measure_signature(action, feature) if parent is None else None
+        group = self._spare_measures.pop(signature, None) if signature is not None else None
+        if group is not None and not _measure_group_alive(group):
+            group = None
+        if group is None:
+            group = self._new_measure_group(action, parent, feature, signature)
+        else:
+            for field in action.fields:
+                configure_feature_field(group.widgets[str(field.name)], field)
+            for line in group.box.findChildren(QLineEdit):
+                # Ein frisches Feld gilt als unberührt; was im vorigen Fluss
+                # getippt war, hielte sonst ``refresh`` vom Schreiben ab.
+                line.setModified(False)
+        self._fill_measure_group(group, action, feature)
+        # Was nie zurückkam (der Empfänger starb vorher), geht hier aus der
+        # Buchführung — samt dem, was an ihm gebunden war.
+        self._measure_groups = {
+            key: held for key, held in self._measure_groups.items() if isValid(held.box)
+        }
+        self._measure_groups[id(group.box)] = group
+        return action, group.box, dict(group.widgets)
+
+    def _measure_signature(self, action: Any, feature: Feature | None) -> tuple[Any, ...] | None:
+        """Woran eine Maßgruppe erkennt, dass sie eine andere Handlung tragen kann.
+
+        Die Signatur der Handlungszeile (:meth:`_row_signature`) und dazu, was
+        die Gruppe an Zeilen mehr hat: die Zeile mit dem aktuellen Maß und die
+        mit dem Satz zur Lage.
+        """
+        row = self._row_signature(action)
+        if row is None:
+            return None
+        return (row, feature is not None, bool(action.note))
+
+    def _new_measure_group(
+        self,
+        action: Any,
+        parent: QWidget | None,
+        feature: Feature | None,
+        signature: tuple[Any, ...] | None,
+    ) -> _MeasureGroup:
+        """Baut die Widgets einer Maßgruppe — Texte schreibt :meth:`_fill_measure_group`."""
+        from app.ui.op_dialog import ValueField
+
         box = QWidget(parent)
         form = QFormLayout(box)
         form.setContentsMargins(0, 0, 0, 0)
@@ -8275,45 +8387,116 @@ class FeaturePanel(QWidget):
         title.setWordWrap(True)
         set_level(title, "caption")
         form.addRow(title)
+        current: QLabel | None = None
         if feature is not None:
-            caption = (
-                tr("Am fertigen Teil: {measure}")
-                if getattr(action, "step", None) is not None
-                else tr("Aktuell: {measure}")
-            ).format(measure=feature_measure(feature))
-            current = QLabel(caption, box)
+            current = QLabel(box)
             current.setObjectName("feature-measure-source")
             current.setWordWrap(True)
-            hint = feature_measure_tip(feature)
-            current.setToolTip(hint)
-            current.setStatusTip(hint)
-            current.setAccessibleDescription(hint)
-            fit_wrapped(current)
             form.addRow(current)
+        note: QLabel | None = None
         if action.note:
             note = QLabel(str(action.note), box)
             note.setWordWrap(True)
-            fit_wrapped(note)
             form.addRow(note)
         widgets: dict[str, QWidget] = {}
+        labels: dict[str, QLabel] = {}
         for field in action.fields:
             editor = self._build_field(field, box)
             label = QLabel(str(field.label), box)
             label.setWordWrap(True)
             label.setBuddy(editor)
-            label.setToolTip(editor.toolTip())
-            label.setStatusTip(editor.statusTip())
-            label.setAccessibleDescription(editor.accessibleDescription())
             if isinstance(editor, ValueField):
                 editor.captionChanged.connect(label.setText)
                 wheel_needs_focus(editor.spin)
             elif isinstance(editor, QAbstractSpinBox | QComboBox):
                 wheel_needs_focus(editor)
-            editor.setAccessibleName(f"{action.title} — {field.label}")
-            editor.setProperty(FIELD_PROPERTY, str(field.name))
             form.addRow(label, editor)
             widgets[str(field.name)] = editor
-        return action, box, widgets
+            labels[str(field.name)] = label
+        return _MeasureGroup(box, signature, title, current, note, widgets, labels)
+
+    def _fill_measure_group(
+        self, group: _MeasureGroup, action: Any, feature: Feature | None
+    ) -> None:
+        """Was eine Maßgruppe über ihre Handlung sagt — beim Bau und beim Wiederverwenden.
+
+        Die Werte der Felder stehen dann schon (:func:`configure_feature_field`);
+        Beschriftung, Kurzhilfe und zugänglicher Name folgen ihnen.
+        """
+        group.title.setText(str(action.title))
+        if group.current is not None and feature is not None:
+            caption = (
+                tr("Am fertigen Teil: {measure}")
+                if getattr(action, "step", None) is not None
+                else tr("Aktuell: {measure}")
+            ).format(measure=feature_measure(feature))
+            group.current.setText(caption)
+            hint = feature_measure_tip(feature)
+            group.current.setToolTip(hint)
+            group.current.setStatusTip(hint)
+            group.current.setAccessibleDescription(hint)
+            fit_wrapped(group.current)
+        if group.note is not None:
+            group.note.setText(str(action.note))
+            fit_wrapped(group.note)
+        for field in action.fields:
+            name = str(field.name)
+            editor = group.widgets[name]
+            label = group.labels[name]
+            label.setText(str(field.label))
+            label.setToolTip(editor.toolTip())
+            label.setStatusTip(editor.statusTip())
+            label.setAccessibleDescription(editor.accessibleDescription())
+            editor.setAccessibleName(f"{action.title} — {field.label}")
+            editor.setProperty(FIELD_PROPERTY, name)
+
+    def bind_measure_group(self, box: QWidget, release: Callable[[], None]) -> None:
+        """Hängt an eine ausgegebene Maßgruppe, was ihr Empfänger beim Zurückgeben löst."""
+        group = self._measure_groups.get(id(box))
+        if group is not None and group.box is box:
+            group.released.append(release)
+
+    def keep_measure_group(self, box: QWidget) -> bool:
+        """Eine Maßgruppe zurücknehmen, statt sie zu löschen — ``False``, wenn sie geht.
+
+        Der Empfänger hat sie aus seinem Layout genommen (ohne Elternteil);
+        hier löst sich, was er daran gebunden hatte, und sie wartet
+        verborgen auf die nächste Handlung gleicher Bauart. Was keine
+        Signatur hat, einen Elternteil behielt oder nicht mehr ganz lebt, geht
+        wie bisher: Der Aufrufer löscht es.
+        """
+        group = self._measure_groups.pop(id(box), None)
+        if group is None or group.box is not box:
+            return False
+        for release in group.released:
+            release()
+        group.released.clear()
+        if (
+            group.signature is None
+            or not _measure_group_alive(group)
+            or box.parentWidget() is not None
+        ):
+            return False
+        box.hide()
+        # **Was der Empfänger hineingehängt hat, geht mit ihm.** Der Haken
+        # *Auf alle anwenden* entsteht im Kästchen und zieht erst in den
+        # Umfangsbereich des Flusses um; endet der Fluss vorher, stünde er
+        # beim nächsten Merkmal verwaist oben links in der Gruppe.
+        own = {
+            id(part) for part in (group.title, group.current, group.note) if part is not None
+        } | {id(part) for part in (*group.widgets.values(), *group.labels.values())}
+        for child in box.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly):
+            if id(child) not in own:
+                child.hide()
+                child.deleteLater()
+        previous = self._spare_measures.pop(group.signature, None)
+        if previous is not None and previous is not group:
+            _discard_measure_group(previous)
+        self._spare_measures[group.signature] = group
+        while len(self._spare_measures) > SPARE_MEASURE_GROUPS:
+            oldest = next(iter(self._spare_measures))
+            _discard_measure_group(self._spare_measures.pop(oldest))
+        return True
 
     def measure_group(self, op: str) -> Any:
         """Das belegte Gruppenangebot zum Binden an den angezeigten Entwurf."""

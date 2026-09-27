@@ -4639,3 +4639,51 @@ def test_several_redraws_in_one_event_round_draw_one_frame(
     assert frames == [], "gezeichnet wird nach der Runde, nicht je Aufruf"
     qt_app.processEvents()
     assert frames == [1], f"{len(frames)} Bilder für eine Runde"
+
+
+def test_a_released_measure_group_goes_back_only_without_a_parent(qt_app: QApplication) -> None:
+    """Wer die Gruppe ausgab, bekommt sie zurück — sonst wird sie gelöscht wie bisher (RM-232).
+
+    Der Fluss gibt sie ohne Elternteil ab, so wie ``QScrollArea.takeWidget``
+    sie herausnimmt. Nimmt der Geber sie (``True``), bleibt sie verborgen am
+    Leben; lehnt er ab, fehlt er oder hat sie noch einen Elternteil, geht sie
+    mit ``deleteLater``.
+    """
+    from PySide6.QtCore import QEvent, QObject
+    from PySide6.QtWidgets import QScrollArea
+    from shiboken6 import isValid
+
+    from app.ui.placement_flow import _release_measure_group
+
+    def settle() -> None:
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    asked: list[QObject] = []
+    scroll = QScrollArea()
+    try:
+        kept = QWidget()
+        scroll.setWidget(kept)
+        taken = scroll.takeWidget()
+        assert taken is kept and kept.parentWidget() is None, "die Voraussetzung: ohne Elternteil"
+        _release_measure_group(kept, lambda group: asked.append(group) or True)
+        settle()
+        assert asked == [kept] and isValid(kept) and kept.isHidden()
+
+        refused = QWidget()
+        _release_measure_group(refused, lambda group: asked.append(group) or False)
+        settle()
+        assert not isValid(refused)
+
+        orphan = QWidget()
+        _release_measure_group(orphan, None)
+        settle()
+        assert not isValid(orphan)
+
+        parented = QWidget(scroll)
+        _release_measure_group(parented, lambda group: asked.append(group) or True)
+        settle()
+        assert not isValid(parented) and asked[-1] is not parented
+        kept.deleteLater()
+    finally:
+        scroll.deleteLater()
+        settle()

@@ -3260,6 +3260,114 @@ def test_measure_source_is_shared_by_tree_caption_fields_and_accessibility(
         panel.deleteLater()
 
 
+def _measure_group_state(group: QWidget) -> list[list[tuple[Any, ...]]]:
+    """Was eine Maßgruppe zeigt, Zeile für Zeile: Texte, Werte, Grenzen, Hilfen."""
+    from PySide6.QtWidgets import QFormLayout
+
+    layout = group.layout()
+    assert isinstance(layout, QFormLayout)
+    rows: list[list[tuple[Any, ...]]] = []
+    for row in range(layout.rowCount()):
+        entry: list[tuple[Any, ...]] = []
+        for role in (
+            QFormLayout.ItemRole.LabelRole,
+            QFormLayout.ItemRole.FieldRole,
+            QFormLayout.ItemRole.SpanningRole,
+        ):
+            item = layout.itemAt(row, role)
+            widget = item.widget() if item is not None else None
+            if widget is None:
+                continue
+            state: tuple[Any, ...] = (
+                type(widget).__name__,
+                widget.toolTip(),
+                widget.statusTip(),
+                widget.accessibleName(),
+                widget.accessibleDescription(),
+                widget.isHidden(),
+            )
+            if isinstance(widget, LengthSpin):
+                state += (
+                    widget.text(),
+                    round(widget.value_mm(), 6),
+                    widget.minimum(),
+                    widget.maximum(),
+                    widget.suffix(),
+                    widget.lineEdit().isModified(),
+                )
+            elif isinstance(widget, QLabel):
+                state += (widget.text(), widget.minimumHeight(), widget.objectName())
+            entry.append(state)
+        rows.append(entry)
+    return rows
+
+
+def test_a_returned_measure_group_shows_what_a_fresh_one_would(qt_app: QApplication) -> None:
+    """Eine zurückgegebene Maßgruppe kommt für die nächste Bohrung wieder — wie neu gebaut (RM-232).
+
+    Vergleich mit einem zweiten Fenster, das dieselbe Bohrung zum ersten Mal
+    zeigt: dieselben Zeilen, Texte, Werte, Grenzen und Hilfen, kein getippter
+    Rest, und nichts, was der vorige Fluss hineingehängt hatte. Was der
+    Empfänger gebunden hatte, löst die Rückgabe; mit Elternteil wird nicht
+    zurückgenommen.
+    """
+    from PySide6.QtCore import QEvent
+    from shiboken6 import isValid
+
+    found = [
+        (key, value) for key, value in features.detect(plate()).items() if value.kind == "hole"
+    ]
+    assert len(found) >= 2, "die Voraussetzung: zwei Bohrungen"
+    (first_id, first), (second_id, second) = found[:2]
+    second = replace(second, params={**second.params, "diameter": 7.25})
+    panel, reference = FeaturePanel(), FeaturePanel()
+    owner = QWidget()
+    try:
+        panel.show_feature(first_id, first)
+        built = panel.measure_fields("resize_hole", None, feature=first)
+        assert built is not None
+        _action, group, editors = built
+        # Getippt im vorigen Fluss — auch in einem Feld, dessen Wert gleich
+        # bleibt: Qt schreibt dessen Text dann nicht neu und ließe den Merker.
+        for editor in editors.values():
+            if isinstance(editor, LengthSpin):
+                editor.lineEdit().setModified(True)
+        stray = QCheckBox(group)
+        released: list[int] = []
+        panel.bind_measure_group(group, lambda: released.append(1))
+        assert panel.keep_measure_group(group)
+        assert released == [1] and group.isHidden()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert stray not in group.findChildren(QCheckBox), "der Haken des vorigen Flusses ist weg"
+
+        panel.show_feature(second_id, second)
+        again = panel.measure_fields("resize_hole", None, feature=second)
+        reference.show_feature(second_id, second)
+        fresh = reference.measure_fields("resize_hole", None, feature=second)
+        assert again is not None and fresh is not None
+        assert again[1] is group, "dieselbe Gruppe kommt zurück"
+        assert [again[2][name] for name in editors] == list(editors.values())
+        assert _measure_group_state(again[1]) == _measure_group_state(fresh[1])
+        assert again[2]["diameter"].value_mm() == pytest.approx(7.25)
+
+        group.setParent(owner)
+        assert not panel.keep_measure_group(group), "mit Elternteil geht sie wie bisher"
+
+        # Eine wartende Gruppe hat keinen Elternteil — sie geht mit dem Fenster.
+        leaving = FeaturePanel()
+        leaving.show_feature(first_id, first)
+        waiting = leaving.measure_fields("resize_hole", None, feature=first)
+        assert waiting is not None and leaving.keep_measure_group(waiting[1])
+        leaving.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert not isValid(waiting[1]), "keine Waise nach dem Fenster"
+    finally:
+        for widget in (owner, panel, reference):
+            widget.close()
+            widget.deleteLater()
+
+
 def test_measure_group_owns_the_editable_fields_and_the_only_completion(
     qt_app: QApplication,
 ) -> None:

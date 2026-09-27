@@ -31,7 +31,17 @@ from threading import Lock
 from typing import Any, Final, cast
 from uuid import uuid4
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QSignalBlocker, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import (
+    QEvent,
+    QMetaObject,
+    QObject,
+    QPoint,
+    QSignalBlocker,
+    Qt,
+    QTimer,
+    QUrl,
+    Signal,
+)
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
@@ -16637,11 +16647,17 @@ class MainWindow(QMainWindow):
                 host.begin_edit()
                 show_values()
 
+        # **Die Gruppe kann wiederkommen** (RM-232): Das Merkmalfenster hebt
+        # sie nach diesem Fluss für die nächste gleichartige Handlung auf
+        # (``FeaturePanel.keep_measure_group``). Was dieser Aufbau an ihre
+        # Felder bindet, löst er deshalb bei der Rückgabe selbst — sonst
+        # läse ein alter ``read_fields`` in den Träger eines alten Flusses.
+        bound: list[QMetaObject.Connection] = []
         for editor in editors.values():
             if isinstance(editor, QCheckBox):
-                editor.toggled.connect(read_fields)
+                bound.append(editor.toggled.connect(read_fields))
             elif isinstance(editor, QComboBox):
-                editor.currentIndexChanged.connect(read_fields)
+                bound.append(editor.currentIndexChanged.connect(read_fields))
             else:
                 signal = getattr(editor, "valueChangedMm", None)
                 if signal is None:
@@ -16649,7 +16665,22 @@ class MainWindow(QMainWindow):
                 if signal is None:
                     signal = getattr(editor, "changed", None)
                 if signal is not None:
-                    signal.connect(read_fields)
+                    bound.append(signal.connect(read_fields))
+
+        def unbind() -> None:
+            for connection in bound:
+                QObject.disconnect(connection)
+            bound.clear()
+
+        self.feature_panel.bind_measure_group(fields, unbind)
+
+        def release_group(group: QWidget) -> bool:
+            window = window_ref()
+            if window is None:
+                unbind()
+                return False
+            return bool(window.feature_panel.keep_measure_group(group))
+
         if every is not None:
             every.toggled.connect(scope_changed)
         host.valuesChanged.connect(show_values)
@@ -16662,6 +16693,7 @@ class MainWindow(QMainWindow):
             interpret=lambda: read_fields(interpret=True),
             refresh=refresh,
             scope=every,
+            release=release_group,
         )
         # **Erst umstellen, dann starten** (RM-232, 25.09.2026). Der Start
         # blendet Felder über der Grafikfläche ein, und das malt das ganze

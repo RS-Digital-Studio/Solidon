@@ -400,6 +400,19 @@ def _forget_parked(key: int) -> None:
     _PARKED_WATCHED.discard(key)
 
 
+def _release_measure_group(group: QWidget, release: Callable[[QWidget], bool] | None) -> None:
+    """Eine abgegebene Maßgruppe verbergen und zurückgeben — oder löschen.
+
+    Ohne Elternteil geht sie zurück: So nimmt ``QScrollArea.takeWidget`` sie
+    heraus, und so hat der Geber sie ausgegeben. Löscht der Geber sie nicht
+    selbst und nimmt sie auch nicht, geht sie wie bisher mit ``deleteLater``.
+    """
+    group.hide()
+    if group.parentWidget() is None and release is not None and release(group):
+        return
+    group.deleteLater()
+
+
 def _floating_widgets(floating: Mapping[str, Any]) -> list[QObject]:
     """Jedes Qt-Objekt eines abgelegten Satzes, die Listen aufgelöst — ohne die Tinte."""
     found: list[QObject] = []
@@ -1434,6 +1447,9 @@ class PlacementFlow(QObject):
         self._measure_scope: QWidget | None = None
         self._measure_interpret: Callable[[], bool] | None = None
         self._measure_refresh: Callable[[Mapping[str, Any]], None] | None = None
+        #: Wem die Maßgruppe zurückgeht, wenn der Fluss sie abgibt — ``True``
+        #: heißt genommen (RM-232); sonst wird sie gelöscht wie bisher.
+        self._measure_release: Callable[[QWidget], bool] | None = None
         self._interpreting_fields = False
         self._reference_pick: int | None = None
         self._held_references: tuple[placement.EdgeReference, ...] | None = None
@@ -1537,15 +1553,20 @@ class PlacementFlow(QObject):
         interpret: Callable[[], bool],
         refresh: Callable[[Mapping[str, Any]], None],
         scope: QWidget | None = None,
+        release: Callable[[QWidget], bool] | None = None,
     ) -> None:
         """Gemeinsame Fachfelder anzeigen; alle Werte bleiben ausschließlich beim Träger.
 
         Der Erzeuger liefert dieselben Felder und Leser wie das Merkmalfenster.
         Der Fluss besitzt ihre Lebensdauer, Anordnung und das gemeinsame Ende.
         ``refresh`` schreibt nur Anzeige und erhält noch nicht gelesene Texte.
+        ``release`` bekommt die Gruppe, wenn der Fluss sie abgibt, ohne
+        Elternteil und verborgen; nimmt es sie (``True``), wird sie nicht
+        gelöscht — das Merkmalfenster hebt sie für die nächste gleichartige
+        Handlung auf (RM-232, ``FeaturePanel.keep_measure_group``).
         """
         if self._disposed:
-            group.deleteLater()
+            _release_measure_group(group, release)
             return
         for target in self._measure_targets:
             if isValid(target):
@@ -1557,9 +1578,9 @@ class PlacementFlow(QObject):
         self._measure_targets = []
         previous = self._measure_scroll.takeWidget()
         if previous is not None and previous is not group:
-            previous.hide()
-            previous.deleteLater()
+            _release_measure_group(previous, self._measure_release)
         self._measure_group = group
+        self._measure_release = release
         previous_scope = self._measure_scope
         if previous_scope is not None and previous_scope is not scope:
             self._measure_scope_layout.removeWidget(previous_scope)
@@ -2481,8 +2502,8 @@ class PlacementFlow(QObject):
         floating = {name: getattr(self, name) for name in _FLOATING}
         group = self._measure_scroll.takeWidget()
         if group is not None:
-            group.hide()
-            group.deleteLater()
+            _release_measure_group(group, self._measure_release)
+        self._measure_release = None
         scope = self._measure_scope
         if scope is not None and isValid(scope):
             self._measure_scope_layout.removeWidget(scope)
@@ -4404,6 +4425,7 @@ class PlacementFlow(QObject):
                 self._measure_group = None
                 self._measure_interpret = None
                 self._measure_refresh = None
+                self._measure_release = None
             if watched is self._measure_scope:
                 self._measure_scope = None
             return False

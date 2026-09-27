@@ -382,6 +382,8 @@ def test_first_measure_edit_releases_split_but_passive_measures_do_not(
         measure_fields=lambda *args, **kwargs: (action, object(), {}),
         measure_group=lambda op: None,
         set_measuring=lambda enabled, **kwargs: (measuring.append(kwargs), order.append("messen")),
+        bind_measure_group=lambda group, release: None,
+        keep_measure_group=lambda group: False,
     )
     view._lay_out_now = lambda: order.append("legen")
     view.session = SimpleNamespace(
