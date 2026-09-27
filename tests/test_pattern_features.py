@@ -1086,14 +1086,14 @@ def test_a_coarse_pattern_around_a_handle_is_one_pattern_on_the_handle(
     assert kinds(out.features) == {"pin": 1, "face": 2, "pattern": 1}, kinds(out.features)
 
 
-def grooved_to_end_face(pattern: str, *, z: float = 8.0) -> SceneObject:
+def grooved_to_end_face(pattern: str, *, z: float = 8.0, pitch: float = 3.0) -> SceneObject:
     """Ein Griff mit einem vertieften Muster, dessen Feld über eine Stirnfläche hinausreicht."""
     entry = SceneObject(id="obj_1", name="Griff", mesh=cylinder())
     out, _findings = run_op(
         "apply_texture",
         entry,
         pattern=pattern,
-        pitch=3.0,
+        pitch=pitch,
         depth=0.8,
         mode="engraved",
         width=CIRCUMFERENCE,
@@ -1135,6 +1135,164 @@ def test_grooves_running_out_of_the_end_face_are_one_pattern_around_the_handle(
     # dasselbe Maß wie für ein Muster mitten auf dem Griff.
     assert kinds(plain.features) == {"pin": 1, "face": 2}, kinds(plain.features)
     assert math.isclose(plain.mesh.volume, cylinder().volume, abs_tol=0.05), plain.mesh.volume
+
+
+def _reference(mesh: trimesh.Trimesh) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Mitte, Richtung und Anker des einen Musters — frisch erkannt."""
+    params = only_pattern(detect(MeshData.of(mesh))).params
+    return (
+        np.asarray(params["centre"], dtype=float),
+        np.asarray(params["direction"], dtype=float),
+        np.asarray(params["anchor"], dtype=float),
+    )
+
+
+def _reordered(mesh: trimesh.Trimesh, seed: int) -> trimesh.Trimesh:
+    """Dasselbe Netz mit anderer Ecken- und Dreiecksfolge, jede Ecke eines Dreiecks gedreht."""
+    rng = np.random.default_rng(seed)
+    vertices = np.asarray(mesh.vertices, dtype=float)
+    faces = np.asarray(mesh.faces, dtype=np.int64)
+    order = rng.permutation(len(vertices))
+    inverse = np.empty_like(order)
+    inverse[order] = np.arange(len(order))
+    faces = inverse[faces][rng.permutation(len(faces))]
+    faces = np.stack(
+        [
+            np.roll(row, int(shift))
+            for row, shift in zip(faces, rng.integers(0, 3, len(faces)), strict=True)
+        ]
+    )
+    return trimesh.Trimesh(vertices[order], faces, process=False)
+
+
+#: Muster ganz um den Griff: aus ganzen Zellen und aus Randstücken wie am
+#: Deckel des Gewürzregals, je mit ungerader Zellenzahl (31, die Mitte liegt
+#: auf einer Zelle) und gerader (24 wie am Deckel, die Mitte liegt zwischen
+#: zwei Zellen).
+FULL_TURNS = {
+    "ganze-zellen-31": ("whole", 3.0),
+    "ganze-zellen-24": ("whole", 3.9),
+    "randstuecke-31": ("rim", 3.0),
+    "randstuecke-24": ("rim", 3.9),
+}
+
+
+def _full_turn(name: str) -> trimesh.Trimesh:
+    cells, pitch = FULL_TURNS[name]
+    if cells == "whole":
+        out, _findings = wrapped("rib", "engraved", CIRCUMFERENCE, pitch=pitch)
+    else:
+        out = grooved_to_end_face("rib", pitch=pitch)
+    return as_mesh_data(out.mesh).raw
+
+
+def _cells_around(pitch: float) -> int:
+    return round(CIRCUMFERENCE / wrap_pitch("rib", pitch, CYLINDER_DIAMETER, CIRCUMFERENCE))
+
+
+def _turned(angle: float) -> float:
+    """Ein Winkel auf (-π, π]."""
+    return (angle + math.pi) % (2.0 * math.pi) - math.pi
+
+
+@pytest.mark.parametrize("name", list(FULL_TURNS))
+def test_the_middle_of_a_full_turn_lies_opposite_the_gap_at_the_fixed_direction(
+    name: str,
+) -> None:
+    """Welche der gleichen Zellen Mitte und Anker stellt, sagt eine feste Weltrichtung (RM-275).
+
+    Um einen Träger herum sind alle Zellen gleich. Am Deckel des Gewürzregals
+    entschied die Naht der Abwicklung — die größte von 24 gleich großen
+    Lücken, oder die Mulde, die der ersten Ebenenachse gegenüberlag, je nach
+    dem Vorzeichen einer Summe nahe null —, und nach einem Schritt weit weg
+    vom Muster stand seine Mitte eine Zelle weiter, seine Richtung gespiegelt.
+    Jetzt trägt die Naht die Lücke, deren Mitte ``SEAM_DIRECTION`` am nächsten
+    liegt; die Mitte des Feldes liegt ihr gegenüber, und von zwei gleich nahen
+    Zellen ist die weiter in dieser Richtung der Anker. Der Sollwert kommt aus
+    der Lage der Zellen, nicht aus der Erkennung.
+    """
+    params = only_pattern(detect(MeshData.of(_full_turn(name)))).params
+    count = _cells_around(FULL_TURNS[name][1])
+    assert params["count"] + params["partial"] == count
+    step = 2.0 * math.pi / count
+    anchor = np.asarray(params["anchor"], dtype=float)
+    first = math.atan2(anchor[1], anchor[0])
+    towards = np.asarray(patterns.SEAM_DIRECTION, dtype=float)
+    toward = math.atan2(towards[1], towards[0])
+    gaps = [first + (index + 0.5) * step for index in range(count)]
+    seam = min(gaps, key=lambda gap: abs(_turned(gap - toward)))
+    middle = seam + math.pi
+    centre = np.asarray(params["centre"], dtype=float)
+    assert abs(_turned(math.atan2(centre[1], centre[0]) - middle)) < 1e-3, (
+        math.degrees(math.atan2(centre[1], centre[0])),
+        math.degrees(middle),
+    )
+    # Der Anker: die Zelle in der Mitte, oder von den zwei gleich nahen die
+    # weiter in der festen Richtung.
+    if count % 2:
+        expected = middle
+    else:
+        expected = max(
+            (middle - step / 2.0, middle + step / 2.0),
+            key=lambda angle: math.cos(angle) * towards[0] + math.sin(angle) * towards[1],
+        )
+    assert abs(_turned(first - expected)) < 1e-3, (math.degrees(first), math.degrees(expected))
+
+
+@pytest.mark.parametrize("name", list(FULL_TURNS))
+def test_the_reference_of_a_full_turn_does_not_hang_on_the_order_of_the_mesh(name: str) -> None:
+    """Dieselbe Geometrie in anderer Ecken- und Dreiecksfolge ergibt denselben Bezug (RM-275)."""
+    mesh = _full_turn(name)
+    centre, direction, anchor = _reference(mesh)
+    for seed in (1, 2, 3):
+        again = _reference(_reordered(mesh, seed))
+        np.testing.assert_allclose(again[0], centre, atol=1e-6)
+        np.testing.assert_allclose(again[1], direction, atol=1e-6)
+        np.testing.assert_allclose(again[2], anchor, atol=1e-6)
+
+
+def _around_z(sign: float) -> patterns.Frame:
+    return patterns.Frame.cylinder(
+        np.array([0.0, 0.0, sign]), np.zeros(3), 20.0, reference=np.array([1.0, 0.0, 0.0]), sag=0.0
+    )
+
+
+def _seam_in_the_world(frame: patterns.Frame, angles: np.ndarray) -> np.ndarray:
+    """Wohin die Naht zeigt, in der Welt — der ersten Achse gegenüber."""
+    reference = patterns._seam_reference(angles, patterns._seam_toward(frame))
+    return -(frame.x_axis * math.cos(reference) + frame.y_axis * math.sin(reference))
+
+
+def test_equal_gaps_choose_the_seam_by_the_fixed_direction_not_by_rounding() -> None:
+    """Gleich große Lücken wählt nicht der Rundungsrest, eine größere bleibt die Naht (RM-275)."""
+    step = 2.0 * math.pi / 24
+    regular = np.arange(24) * step
+    frame = _around_z(1.0)
+    seams = [
+        _seam_in_the_world(frame, regular + noise)
+        for noise in (
+            np.zeros(24),
+            np.linspace(-1e-12, 1e-12, 24),
+            np.linspace(1e-12, -1e-12, 24),
+            np.random.default_rng(275).normal(0.0, 1e-10, 24),
+        )
+    ]
+    for seam in seams[1:]:
+        np.testing.assert_allclose(seam, seams[0], atol=1e-9)
+    # Die Lücke, deren Mitte der festen Richtung am nächsten liegt: 52,5 Grad.
+    np.testing.assert_allclose(
+        seams[0], (math.cos(math.radians(52.5)), math.sin(math.radians(52.5)), 0.0), atol=1e-9
+    )
+    # Die andersherum eingepasste Achse zählt die Winkel andersherum und wählt
+    # dieselbe Lücke am Mantel.
+    np.testing.assert_allclose(_seam_in_the_world(_around_z(-1.0), -regular), seams[0], atol=1e-9)
+    # Ein Feld, das nicht herumreicht: Die Naht liegt in seiner einen großen
+    # Lücke, gleich wo die feste Richtung steht.
+    partial = np.arange(12) * step
+    widest = (11 * step + 2.0 * math.pi) / 2.0
+    np.testing.assert_allclose(
+        _seam_in_the_world(frame, partial), (math.cos(widest), math.sin(widest), 0.0), atol=1e-9
+    )
 
 
 def test_a_regular_polygon_gets_back_the_facets_a_pattern_cut_away() -> None:
