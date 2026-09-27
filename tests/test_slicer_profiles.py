@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -344,6 +345,84 @@ def test_the_plain_machine_wins_over_a_variant_with_the_same_nozzle(
     machine, _process = sp.match(found, _printer())
 
     assert machine is not None and machine.name == "Elegoo Centauri Carbon 2 0.4 nozzle"
+
+
+def _creality(bestand: Path, name: str, model: str, default: str = "") -> None:
+    document: dict[str, object] = {
+        "type": "machine",
+        "name": name,
+        "instantiation": "true",
+        "printer_model": model,
+        "nozzle_diameter": ["0.4"],
+    }
+    if default:
+        document["default_print_profile"] = default
+    _write(bestand / "Creality" / "machine" / f"{name}.json", document)
+
+
+def test_a_printer_does_not_take_a_relatives_machine(slicer: Path, bestand: Path) -> None:
+    """OrcaSlicer führt neben dem Creality K1 den K1C, den K1 Max und die
+    CFS-Ausführungen, alle mit 0,4er Düse. Der Titel „Creality K1" begann jeden
+    dieser Namen, und seit bei gleicher Düse der kürzeste gewinnt, bekam ein K1
+    „Creality K1C 0.4 nozzle" — gemessen am 27.09.2026 samt Prozess
+    „0.08mm SuperDetail @Creality K1C"."""
+    for name, model in (
+        ("Creality K1C 0.4 nozzle", "Creality K1C"),
+        ("Creality K1 (0.4 nozzle)", "Creality K1"),
+        ("Creality K1 Max (0.4 nozzle)", "Creality K1 Max"),
+        ("Creality K1_CFS-C 0.4 nozzle", "Creality K1_CFS-C"),
+    ):
+        _creality(bestand, name, model)
+    k1 = PrinterProfile(id="k1", title="Creality K1", build_volume=(220.0, 220.0, 250.0))
+    k1_max = PrinterProfile(id="k1max", title="Creality K1 Max", build_volume=(300.0, 300.0, 300.0))
+    found = sp.find_profiles(slicer, "orca")
+    assert min(len(entry.name) for entry in sp.machines(found) if "K1" in entry.name) == len(
+        "Creality K1C 0.4 nozzle"
+    ), "sonst prüft der Fall nichts: der K1C muss der kürzeste Name sein"
+
+    machine, _process = sp.match(found, k1)
+
+    assert machine is not None and machine.name == "Creality K1 (0.4 nozzle)"
+    known = {"k1": k1, "k1max": k1_max}
+    assert sp.printer_for("Creality K1C 0.4 nozzle", known) == ""
+    assert sp.printer_for("Creality K1 Max (0.4 nozzle)", known) == "k1max"
+    assert sp.printer_for("Creality K1 (0.4 nozzle)", known) == "k1"
+
+
+def test_a_standard_process_that_is_not_there_is_not_replaced_by_the_first(
+    slicer: Path, bestand: Path
+) -> None:
+    """Orcas Ender-3 V3 nennt „0.20mm Standard @Creality Ender3 V3", der Bestand
+    führt „…@Creality Ender-3 V3". Genommen wurde der erste passende Prozess im
+    Ordner, „0.12mm Fine" — eine andere Schichthöhe als die des Druckers."""
+    _creality(
+        bestand,
+        "Creality Ender-3 V3 0.4 nozzle",
+        "Creality Ender-3 V3",
+        default="0.20mm Standard @Creality Ender3 V3",
+    )
+    for name in ("0.12mm Fine @Creality Ender-3 V3", "0.20mm Standard @Creality Ender-3 V3"):
+        _write(
+            bestand / "Creality" / "process" / f"{name}.json",
+            {
+                "type": "process",
+                "name": name,
+                "instantiation": "true",
+                "compatible_printers": ["Creality Ender-3 V3 0.4 nozzle"],
+            },
+        )
+    ender = PrinterProfile(
+        id="e3v3", title="Creality Ender-3 V3", build_volume=(220.0, 220.0, 250.0), layer_height=0.2
+    )
+    found = sp.find_profiles(slicer, "orca")
+    fitting = sp.processes(found, sp.match(found, ender)[0])
+    assert fitting[0].name.startswith("0.12mm"), "sonst prüft der Fall nichts"
+
+    _machine, process = sp.match(found, ender)
+
+    assert process is not None and process.name == "0.20mm Standard @Creality Ender-3 V3"
+    finer = replace(ender, layer_height=0.16)
+    assert sp.match(found, finer)[1] is None, "nichts passt — dann fragt der Dialog"
 
 
 def test_an_unknown_printer_gets_no_guess(slicer: Path) -> None:
