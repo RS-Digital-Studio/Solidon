@@ -20,7 +20,7 @@ danach zwei unabhängige Körper. :func:`read` bleibt der bisherige Weg — ein
 Körper aus ``OneShape`` — für Schritte, die vor P7.4 gespeichert wurden.
 
 Welcher Name und welche Farbe gilt, steht bei :func:`read_assembly`; beides
-ist Vertrag und in ``app/core/brep/CLAUDE.md`` festgehalten.
+ist Vertrag, und dort steht er vollständig.
 """
 
 from __future__ import annotations

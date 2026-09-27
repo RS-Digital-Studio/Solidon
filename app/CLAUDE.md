@@ -17,16 +17,15 @@ app/ui/     ──┘         │
 - **`ui/`** und **`cli/`** sind zwei Oberflächen über demselben Kern. Beide
   lesen dasselbe Register (§10) — deshalb bekommt eine neue Operation Menü,
   Dialog und Kommandozeilenbefehl, ohne dass jemand sie dort einträgt.
-- **`i18n/`** hängt an nichts. Der Kern darf es benutzen, ohne Qt zu holen.
+- **`i18n/`** hängt an nichts — auch seinen Logger nimmt es aus `logging`,
+  nicht aus `core`. Der Kern darf es benutzen, ohne Qt zu holen.
 
 **Die Gegenrichtung gibt es nicht.** `core` importiert nie aus `ui` oder
 `cli` — nicht in einer Hilfsfunktion, nicht „nur für den Typ". Kommunikation
 aus dem Kern nach außen läuft über den `OpContext` (`ctx.progress`,
 `ctx.ask`, `ctx.cancelled`) und über nichts sonst. Alle vier Pfeile prüft
 `tests/test_layer_direction.py` über den Quelltext — auch träge Importe in
-Funktionen und solche unter `TYPE_CHECKING`. Der einzige Verstoß, den er beim
-ersten Lauf fand, war `i18n`, das seinen Logger aus `core` holte; seither
-nimmt es `logging` direkt.
+Funktionen und solche unter `TYPE_CHECKING`.
 
 ## Was direkt hier liegt
 

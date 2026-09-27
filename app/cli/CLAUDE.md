@@ -29,9 +29,9 @@ Fehlerfang im CLI-Befehl verwenden `report.exception_report()`; auch ein
 Fehler beim Schreiben des Berichts lässt die ursprüngliche Diagnose und den
 Fehlerausgang erhalten. Qt wird für den Bericht nicht geladen.
 
-Die festen Befehle daneben — `ops`, `docs`, `profiles`, `new`, `info`,
-`import`, `run`, `undo`, `move`, `suppress`, `reactivate`, `recognize`,
-`export` — sind die, die kein Register erzeugen kann, weil sie über dem
+Die festen Befehle daneben — `ops`, `docs`, `profiles`, `scad`, `new`,
+`info`, `import`, `run`, `undo`, `move`, `suppress`, `reactivate`,
+`recognize`, `export` — sind die, die kein Register erzeugen kann, weil sie über dem
 Dokument stehen statt in ihm.
 
 `recognize <datei> [--on obj_1 …]` ist *Alle Merkmale erkennen*: Er nimmt
@@ -43,7 +43,7 @@ beim Import ohne Vollerkennung. Genannte Körper fragt er wie das Fenster
 (`declined_only`). Findet er nichts, nennt er die Körper mit gespeicherter
 Wahl.
 
-**Den Verlauf umbauen geht denselben Weg wie im Fenster** (RM-188 P7):
+**Den Verlauf umbauen geht denselben Weg wie im Fenster**:
 `move <datei> <schritte> --before <schritt> | --end`, `suppress` und
 `reactivate` planen über `History.plan_*`, `_revised` rechnet den Vorschlag
 isoliert (`scene.revision.revise`, mit `terminal_ask` für eine Rückfrage) und

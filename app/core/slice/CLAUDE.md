@@ -1,270 +1,151 @@
 # `app/core/slice/` — Schichtanalyse
 
-Kennzahlen und Konturen aus dem Modell. **Bewusst kein G-Code-Slicer** (§22).
-
-Die Regeln stehen in `.claude/rules/schichtanalyse.md`.
-
-## Die Abgrenzung, die nicht verhandelbar ist
-
-Die Datei, die auf den Drucker geht, kommt vom **externen** Slicer. Was hier
-entsteht, ist Analyse: Ebene-Mesh-Schnitt, Konturen, Kennzahlen — in
-Millisekunden, ohne Fremdprozess.
-
-**G-Code wird gelesen, nie geschrieben.**
-
-## Zwei Herkünfte, die nie verschmelzen
+Kennzahlen und Konturen aus dem Modell — **Analyse, kein G-Code-Slicer**
+(§22): Die Datei für den Drucker kommt vom externen Slicer, G-Code wird hier
+nur gelesen. Einzuhalten ist `.claude/rules/schichtanalyse.md`; Messwerte und
+Anlässe dieser Karte stehen in `konzepte/begruendungen/karte-app-core-slice.md`.
 
 ```
 analysis.py  ──> geschätzt   (aus der Geometrie, sofort)
 gcode.py     ──> geplant     (aus dem G-Code des Slicers, nach dem Lauf)
 ```
 
-Regel 14: **Kennzahlen aus beiden Quellen werden nie vermischt.** Jeder Wert
-weist seine Herkunft aus — ein geschätztes Stützvolumen ist etwas anderes als
-ein aus G-Code geplantes, und der Prüfbericht sagt welches. Erst eine
-Feststellung am gedruckten Werkstück ist eine Messung des Verbrauchs.
-
-In der Oberfläche heißt es „Schichtanalyse", nicht „Vorschau".
+Beide Herkünfte verschmelzen nie (Regel 14); erst eine Feststellung am
+gedruckten Werkstück ist eine Messung des Verbrauchs.
 
 ## Die Karte
 
 | Datei | Rolle |
 |---|---|
-| `analysis.py` | Der Analyse-Schneider: Konturen, Überhänge, Inseln, Brücken (§22); `model_support` merkt seine Antwort je Messung (Identität des Schichttupels) |
-| `advise.py` | Einstellungen aus Geometrie, Material und Maschine (§22.2, §29); `combine` vereint die Anforderungen des Ausgabeumfangs ohne benötigte Stützen zu verlieren; Stützort über `analysis.model_support` (außen, Kanal oder Insel), Kanalsperre als Vorschlag, Leerfahrt aus dem Drucker, Brim auch für viele kleine Füße, langsame erste Schicht über schmalen Stegen (`analysis.narrow_share`); der Volumenstrom rechnet über `knowledge.print_settings.flow_speed_limit`, sein Deckel ist an `limits_flow` zu erkennen |
-| `gcode.py` | G-Code zurücklesen (§28.1, §28.2), in einem Durchlauf — auch die erste Schicht, in der mit Bauteillüfter gedruckt wird (`fan_start`) |
+| `analysis.py` | Der Analyse-Schneider: Konturen, Überhänge, Inseln, Brücken, Stützvolumen (§22); `model_support` merkt seine Antwort je Messung (Identität des Schichttupels) |
+| `_chain.pyx` · `_chain.pyi` | Übersetzter Ebenenschnitt und Konturverkettung (`tools/build_slice_core.py`, Budget §31); ohne ihn derselbe Weg über NumPy und `shapely.polygonize` |
+| `advise.py` | Einstellungen aus Geometrie, Material und Maschine (§22.2, §29): Stützort über `analysis.model_support` (außen, Kanal, Insel), Kanalsperre als Vorschlag, Leerfahrt aus dem Drucker, Brim auch für viele kleine Füße, langsame erste Schicht über schmalen Stegen (`analysis.narrow_share`), Volumenstrom über `knowledge.print_settings.flow_speed_limit` (sein Deckel ist an `limits_flow` zu erkennen); `combine` vereint den Ausgabeumfang, ohne benötigte Stützen zu verlieren |
+| `gcode.py` | G-Code zurücklesen (§28.1, §28.2) in einem Durchlauf, auch die erste Schicht mit Bauteillüfter (`fan_start`) |
 | `estimate.py` | Was ein Teil kostet, ohne es zu schneiden |
-| `findings.py` | Die Schichtanalyse im Prüfbericht (§17.3, §22.2, §22.3): Inseln mit Ort und Stützbedarf, größter frei hängender Überhang außerhalb der Kanäle (dieselbe Ausnahme wie in `advise`, gefragt über `model_support(..., only=)` nur für die Stücke über der Meldeschwelle), lange Brücke und schmalste Stelle mit Ort (`advise.located_warnings`), gesparte Stütze einer anderen Lage mit Drehwinkel; gemerkt im Cache des Netzes, gerufen von `ui/print_findings_flow.py` nach jeder Auswertung. `remembered_analysis` gibt diese Messung heraus, ohne zu rechnen — Druckdialog (`_AdviceWorker`) und Stützsperre (`export.writer._support_blocker`) fragen dort, bevor sie selbst schneiden |
-| `orientation.py` | Die Suche nach einer Druckorientierung; eine kleine Grundflächen-Vorauswahl für Auto Split wird mit demselben echten Stützvolumen und derselben Fünf-Prozent-Grenze entschieden (§22.3) |
+| `findings.py` | Die Schichtanalyse im Prüfbericht (§17.3, §22.2, §22.3): Inseln mit Ort, größter frei hängender Überhang außerhalb der Kanäle (`model_support(..., only=)` nur über der Meldeschwelle), lange Brücke und schmalste Stelle mit Ort (`advise.located_warnings`), gesparte Stütze einer anderen Lage; gemerkt im Netzcache, gerufen von `ui/print_findings_flow.py`. `remembered_analysis` gibt die Messung heraus, ohne zu rechnen — Druckdialog (`_AdviceWorker`) und Stützsperre (`export.writer._support_blocker`) fragen dort zuerst |
+| `orientation.py` | Die Suche nach einer Druckorientierung (§28.2); dazu eine kleine Grundflächen-Vorauswahl für Auto Split mit demselben Stützvolumen und derselben Fünf-Prozent-Grenze (§22.3) |
 
-Die Orientierungskandidaten kommen deterministisch aus den flächengeordneten
-Normalen der konvexen Hülle, den Achsen und den großen Körperflächen (§28.2).
-Der echte Druckbereich wird vor der Schichtanalyse geprüft. Geschnitten
-werden höchstens acht Finalisten der Heuristik (`FINALISTS`, nach Standfläche
-und Überhangfläche), dazu die acht Lagen mit dem kleinsten **geschätzten
-Stützraum** (`SUPPORT_FINALISTS`, `geom.orient.Orientation.support`:
-Überhangfläche in Projektion mal Höhe über dem Bett; spiegelgleiche Lagen mit
-bitgleichen Zahlen einmal), die sechs Achsen und eine zulässige
-Ausgangslage; der Bericht trennt betrachtete, passende und geschnittene Lagen.
-Die Überhangfläche allein weiß nicht, wie hoch ein Überhang hängt — an Roberts
-Getränkehalter standen die besten Lagen von Schirm und Mast dort auf Rang 182
-und 51 (RM-190).
-Eine unzulässige Ausgangslage hat `baseline=None`, und dafür wird keine
-Einsparung behauptet. Stützräume misst die Suche am auf 20 000 Dreiecke
-ausgedünnten Ersatznetz, **Standfläche und Stand am Original**, und die
-Vorauswahl bewertet Ausgangslage, Achsen und große Körperflächen ebenfalls
-am Original: Ein schmaler flacher Rand überlebt die Ausdünnung nicht als
-Ebene, und ein Gitter zeigt in jeder Lage die Hälfte seiner Flächen nach
-unten — beides ließ die Suche am Gitterbecher (20.09.2026) die Lage
-verwerfen, die ohne Stützen druckt.
-Der Schwerpunkt muss in der Hülle der tatsächlichen Auflage liegen, und
-**stehen heißt, die erste Schicht lässt sich drucken**: Mit Druckerprofil misst
-`judge(…, line_width=)` die Auflage um eine halbe Linienbreite nach innen
-versetzt (`Candidate.footing`), und daran gilt die kleinste Aufstandsfläche —
-eine Kante trägt keine Linie, auch eine lange nicht. Unter
-stehenden Kandidaten entscheidet Stützvolumen, innerhalb fünf Prozent die
-Auflagefläche. `SearchResult.transform` beschreibt die vollständige geprüfte
-Bewegung; `seed` bleibt als Aufrufparameter für bestehende Projekte lesbar,
-hat aber keinen Einfluss auf die geometrische Kandidatenauswahl.
+## Die Orientierungssuche
 
-**Das Original wird dabei nie kopiert.** Zweihundert Kandidatenlagen hießen
-bis zum 21.09.2026 zweihundert Kopien des ganzen Netzes (`print_transform`,
-`fitting_transform`), und jede beurteilte Lage drehte das Original noch
-einmal und rechnete seinen Schwerpunkt neu — an 1,3 Millionen Dreiecken
-35 s je Suche, 755 ms je `judge`. Jetzt kennt das Netz seine äußersten
-Ecken einmal (`geom.orient.extreme_points`, im Cache des Netzes; bei einer
-Kugel sind das alle), und die Hüllbox jeder Lage kommt aus ihnen
-(`turned_extents`, bitgleich mit der Kopie); `judge` dreht nur Schwerpunkt
-und die Dreiecke, die die Aufstandsebene kreuzen (`_contact`). Die Lagen
-der Vorauswahl werden je Netz in einem Zug bewertet
-(`evaluate_directions`), die Hüllnormalen der Kandidaten kommen aus einer
-Stichprobe der Ecken (`HULL_SAMPLE`). Gemessen: 200 000 Dreiecke 4,8 → 1,2 s
-ohne und 9,2 → 1,2 s mit Druckerprofil, 1,3 Millionen 35,4 → 5,4 s, `judge`
-755 → 90 ms — dieselben Lagen, dieselben Matrizen.
+- **Kandidaten** kommen deterministisch aus den flächengeordneten Normalen der
+  konvexen Hülle (Stichprobe `HULL_SAMPLE`), den Achsen und großen
+  Körperflächen; der Druckbereich wird vor der Schichtanalyse geprüft.
+- **Geschnitten** werden höchstens `FINALISTS` der Heuristik (Standfläche,
+  Überhangfläche), die `SUPPORT_FINALISTS` mit dem kleinsten geschätzten
+  Stützraum (`geom.orient.Orientation.support`: Überhangfläche in Projektion
+  mal Höhe über dem Bett, spiegelgleiche Lagen einmal), die sechs Achsen und
+  eine zulässige Ausgangslage; der Bericht trennt betrachtete, passende und
+  geschnittene Lagen. Eine unzulässige Ausgangslage hat `baseline=None` —
+  dafür wird keine Einsparung behauptet.
+- **Stützräume am ausgedünnten Ersatznetz** (20 000 Dreiecke), **Standfläche
+  und Stand am Original**, auch in der Vorauswahl.
+- **Stehen heißt, die erste Schicht lässt sich drucken**: Schwerpunkt in der
+  Hülle der Auflage; mit Druckerprofil misst `judge(…, line_width=)` die
+  Auflage eine halbe Linienbreite nach innen (`Candidate.footing`) — eine
+  Kante trägt keine Linie. Unter Stehenden entscheidet das Stützvolumen,
+  innerhalb fünf Prozent die Auflagefläche.
+- **Das Original wird nie kopiert**: `geom.orient.extreme_points` (im
+  Netzcache) liefert die Hüllbox jeder Lage (`turned_extents`), `judge` dreht
+  nur Schwerpunkt und die Dreiecke an der Aufstandsebene (`_contact`), die
+  Vorauswahl rechnet je Netz in einem Zug (`evaluate_directions`), und die
+  Suchen rufen `slice_body(..., with_layers=False)`.
+- `SearchResult.transform` ist die ganze geprüfte Bewegung; `seed` bleibt
+  lesbar und wirkt nicht auf die Auswahl.
 
-Ebenenschnitt und Konturverkettung haben einen übersetzten Teil —
-`tools/build_slice_core.py` baut ihn, das Budget dafür steht in §31.
-Der Ebenenschnitt verlangt `PLANE_SEGMENTS_API = 2`, einschließlich des
-optionalen Abbruchrückrufs. Ein älterer oder unbekannter lokaler Bau nimmt
-für diese Rechnung den NumPy-Weg. Die nativen Vergleichstests nennen den
-nötigen Neubau, statt einen unpassenden Aufruf zu versuchen.
+## Der Schnitt
 
-Eine geschlossene verkettete Kontur kann geometrisch trotzdem ungültig sein,
-etwa wenn eine Ebene genau durch die auslaufende Ecke eines Verbinders geht
-und der Rand auf derselben Linie vor- und zurückläuft. Dann bekommt
-`polygonize` die **ursprünglichen losen Segmente**. Ein schon daraus gebauter
-ungültiger `LinearRing` hat die nötigen Knoten verloren und darf nicht als
-Reparatureingang dienen. Der analytische Korpusfall dazu steht in
-`tests/data/meshes/dovetail_vertex_plane.ply`; `tests/test_slice_core.py`
-hält Schichtfolge, Querschnitt und Stützvolumen zwischen beiden Wegen gleich.
+- **`PLANE_SEGMENTS_API = 2`** verlangt der Ebenenschnitt vom übersetzten
+  Teil, samt Abbruchrückruf; ein älterer Bau nimmt den NumPy-Weg, die nativen
+  Vergleichstests nennen den nötigen Neubau.
+- **Eine ungültige geschlossene Kontur** (eine Ebene durch die auslaufende Ecke
+  eines Verbinders) bekommt `polygonize` mit den **ursprünglichen losen
+  Segmenten**, nie über einen daraus gebauten `LinearRing` — dem fehlen die
+  Knoten. Korpusfall `tests/data/meshes/dovetail_vertex_plane.ply`;
+  `tests/test_slice_core.py` hält beide Wege gleich.
+- **`slice_body` und `cross_sections` nehmen optional einen `CancelToken`**:
+  ohne ihn der native Weg ohne Python-Rückruf, mit ihm prüfen Cython-Kern,
+  NumPy-Blöcke, Polygonaufbau, GEOS und Stützvolumen periodisch — bei
+  gleicher Segmentfolge und gleichen Werten. Die Analysekarten reichen Abbruch
+  und Budget über `solid_field` hinein; ein abgebrochenes Voxelfeld wird nicht
+  veröffentlicht.
+- **`slice_body(overhang_angle=…)`** bekommt den Winkel gegen die Senkrechte
+  aus dem wirksamen Profil (`Profile.overhang_limit_degrees`: Probe, Drucker,
+  Startregel), ohne Angabe die Startregel. Denselben Vertrag nutzen
+  Analysekarten, Orientierungssuche samt Vorauswahl
+  (`evaluate_directions(overhang_limit=)`), Agentenbericht und Übergabe;
+  Messwerte fremder Düse oder fremden Rasters verwirft schon das Profil.
+- **`slice_body(first_layer_height=…)`** setzt das Druckraster, ohne Angabe
+  gilt das gleichmäßige Suchraster. Offene Brücken zählen nur zwischen
+  beidseitigen Auflagern; ein seitlich ungestützter kurzer Querschnitt ist
+  keine kürzere Brücke.
 
-`slice_body` und `cross_sections` nehmen optional einen `CancelToken`. Ohne
-Token bleibt der native Fastpath ohne Python-Rückruf. Mit Token prüft der
-Cython-Kern periodisch im Flächen- und Flächen-mal-Schichten-Lauf;
-der NumPy-Rückfallweg verarbeitet
-begrenzte Flächenblöcke. Polygonaufbau, GEOS-Messung und Stützvolumen prüfen
-zwischen Schichten beziehungsweise Differenzen. Jeder Weg behält dieselbe
-Segmentreihenfolge und dieselben Analysewerte.
+## Wo die Zeit hingeht
 
-Die Analysekarten reichen ihr Abbruch- und Budgetsignal über `solid_field`
-auch in diesen Schnittweg. Das Füllen des Voxelfelds prüft es vor jedem
-Querschnitt und vor der Rückgabe; ein abgebrochenes Feld wird nicht veröffentlicht.
+- **Gleiche Schicht, gleiche Zahlen**: `_measure_all` misst nur, was seiner
+  Vorgängerin nicht gleicht (`_same_layer`: Fläche, Umfang, Hüllbox,
+  kanonische Ecken); gleiche erben die Zahlen (`_repeated`).
+- **Gestapelt statt je Schicht**: Arbeiter bekommen Blöcke von höchstens
+  `BATCH_LAYERS`, `_measure_batch` stellt jede Frage als **einen**
+  vektorisierten GEOS-Aufruf; die Einzelfunktionen (`_measure`, `_islands`,
+  `minimum_width`, `_opening_loss`, `_survives_opening`) sind Blöcke aus einem
+  Element. `_islands_many` baut den GEOS-Index der Vorgänger einmal.
+  `FULL_WORKERS` steht bei sechs, die Messreihe an der Konstante.
+- **Spannweiten ohne Overlay**: `_supported_span` bündelt gleiche Richtungen
+  und schneidet als Abtastzeile in NumPy (`_cuts_along`, Paritätsregel).
+- **Der Keil an jeder `TAPER_SAMPLE`. Schicht**, dazwischen fortgeschrieben;
+  ein kürzerer Keil wird verfehlt oder fünffach gezählt (Test in
+  `test_slice.py`).
+- **Kleine Ringe** rechnet `largest_overhang_patch` mit `units.ring_area` in
+  Python, ohne GEOS und NumPy; **mehrere verkettete Ringe** ohne `polygonize`
+  (`_nested`: ein Punkt je Ring, gerade Tiefe ist Material).
+- **Die Öffnung** (`_opening_loss`, `_protrusion`, `_minimum_widths`,
+  `_halved`, `_width_outline`, `_canonical`) folgt der Regel „Die Öffnung
+  zählt, was der Form fehlt“ in `schichtanalyse.md`.
+- **Die Säulen**: `_support_volume` läuft einmal von oben nach unten; ab
+  `SUPPORT_SHARE_FROM` offenen Stücken teilen sich `SUPPORT_WORKERS` die
+  Stücke einer Schicht (`_above_material_shared`), zurück in einfädiger Folge;
+  die untere Schicht lesen alle gemeinsam.
+  Einfädig nimmt `_above_material` den Baum nur für Hüllboxtreffer, sortiert
+  sie und prüft exakt mit den eigenen Säulenteilen als erstem Operand. **Ein
+  vorbereiteter GEOS-Index wird nie parallel als Prädikatindex benutzt** —
+  GEOS baut darin Suchstrukturen erst bei der Abfrage.
+  `slice_body(support_volume=False)` lässt die Säulen aus (Druckvorschläge);
+  der Druckdialog behält die Messung in der Sitzung
+  (`Session.remember_analyses`).
+- **Der Stützort auf Arbeitern** (`model_support`): Gruppen je Startschicht,
+  jede mit eigener Kopie der Schicht (aus WKB), Differenzen einer Schicht in
+  einem Aufruf, Baumtreffer sortiert; die Kanalfrage je Schicht
+  (`_in_channels`), der Kanalraum auf Arbeitern (`channel_space`).
 
-**Wo die Zeit hingeht, und was dagegen steht** (gemessen 19.09.2026, Befund
-Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
+## G-Code und Verbrauch
 
-- **Gleiche Schicht, gleiche Zahlen.** `_measure_all` misst eine Schicht nur,
-  wenn sie ihrer Vorgängerin nicht gleicht (`_same_layer`: Fläche, Umfang,
-  Hüllbox, dann die kanonisch geordneten Ecken ohne Kollineare); gleiche
-  bekommen die Zahlen der Quelle (`_repeated`) — kein Überhang, keine Insel,
-  keine Brücke gegen eine identische Schicht darunter. Hilft prismatischen
-  Körpern; ein Gitterbecher oder eine Figur ändert sich je Schicht.
-- **Spannweiten ohne Overlay.** `_supported_span` bündelt gleiche Richtungen
-  über den Winkel in einem Zug (nicht jede gegen jede vorige), nimmt die
-  Bänder aus der vereinfachten Kontur und schneidet die Bahnen als
-  Abtastzeile in numpy (`_cuts_along`, Paritätsregel über alle Ringe) statt
-  mit `shapely.intersection`. Drachenfigur, 2,3 Mio. Dreiecke: 120 s → 7,6 s
-  für die Brücken aller Schichten, dieselben Zahlen.
-- **Säulen nur, wo sie jemand liest.** `slice_body(support_volume=False)`
-  lässt `_support_volume` aus; die Druckvorschläge nehmen den Weg, und der
-  Druckdialog behält den letzten gemessenen Stand in der Sitzung
-  (`Session.remember_analyses`), damit ein zweites Öffnen nicht wieder
-  schneidet.
-- **Der Keil an jeder fünften Schicht.** `taper_length` kostete an einer Vase
-  ein Drittel der Analyse; `_measure_all` fragt ihn nur an jeder
-  `TAPER_SAMPLE`. gemessenen Schicht und schreibt den Wert dazwischen fort.
-  Ein Keil kürzer als fünf Schichten wird dabei je nach Lage verfehlt oder
-  fünffach gezählt — unter jeder Schwelle, die ihn liest (`advise`, ein
-  Fünftel der Schichten). Die Grenze steht als Test in `test_slice.py`.
-- **Stückflächen ohne GEOS und ohne NumPy.** `largest_overhang_patch` rechnet
-  tausende kleine Ringe mit `units.ring_area` (die Schnürsenkelformel in einer
-  Python-Schleife, gemessen zwanzigmal schneller als das Umpacken in ein
-  Feld): 287 → 19 ms je Vorschlagsrechnung am Gitterbecher.
-
-- **Gestapelt statt je Schicht.** `_measure_all` gibt jedem Arbeiter einen
-  Block von höchstens `BATCH_LAYERS` Schichten, und `_measure_batch` stellt
-  jede Frage (Überhang, Inseln, Breitensuche) als **einen** vektorisierten
-  GEOS-Aufruf über den Block. Einzeln gestellt warteten die kleinen Aufrufe
-  auf den Interpreter-Lock, und sechs Arbeiter waren kaum schneller als
-  einer. Die Einzelfunktionen (`_measure`, `_islands`, `minimum_width`,
-  `_opening_loss`, `_survives_opening`) sind Blöcke aus einem Element.
-- **Den Vorgänger nur einmal vorbereiten.** `_islands_many` baut den
-  GEOS-Index der Vorgängerschichten vor ihren wiederholten räumlichen
-  Prädikaten auf; tausende Konturen teilen denselben Index. Die Konturen,
-  Randberührungen und Schwelle für gemeinsame Fläche bleiben unverändert.
-- **Die Öffnung zählt, was der Form fehlt.** Die gefaste Aufweitung kann
-  Nadeln über die Form hinaus treiben; `_opening_loss` wirft Splitter unter
-  `WIDTH_SIMPLIFY` weg und rechnet die Fläche außerhalb (`_protrusion`:
-  Identität, Rasterabgleich der Ecken, Schranke, erst dann Fenster um die
-  Nadeln). Die Halbierung läuft über die Bilanz, die größte bestandene Weite
-  wird genau nachgefragt (`_minimum_widths`, `_halved`). Geöffnet wird an
-  einer Douglas-Peucker-Kontur (`_width_outline`), vereinfacht und
-  abgetastet wird eine geordnete (`_canonical`) — Anfangspunkt und
-  Umlaufsinn eines Rings sind Sache des Wegs, nicht des Körpers.
-- **Mehrere verkettete Ringe ohne `polygonize`** (`_nested`): ein Punkt je
-  Ring gegen die übrigen, gerade Tiefe ist Material.
-- **Die Säulen auf Arbeitern, je Schicht.** `_support_volume` läuft einmal
-  von oben nach unten; ab `SUPPORT_SHARE_FROM` offenen Stücken teilen sich
-  `SUPPORT_WORKERS` Arbeiter die Stücke der Schicht
-  (`_above_material_shared`, gestreut), und die Liste kommt in der Folge
-  zurück, in der sie einfädig entstünde. Die Summe hat damit eine einzige
-  feste Folge, gleich wie viele Kerne (RM-266; vorher Gruppen je
-  Startschicht, deren Summe in der letzten Stelle an der Kernzahl hing und
-  deren Last an einer einzigen Gruppe). Einfädig benutzt `_above_material`
-  den räumlichen Baum nur für Hüllboxtreffer, **sortiert** sie und prüft
-  exakt mit den eigenen Säulenteilen als erstem Operand. Die untere Schicht
-  wird gemeinsam gelesen; ein vorbereiteter GEOS-Index darf nicht parallel
-  als Prädikatindex verwendet werden: GEOS baut darin weitere
-  Suchstrukturen erst bei der Abfrage auf.
-- **Die Suchen lesen nur Zahlen.** `judge` ruft `slice_body(...,
-  with_layers=False)`: Stützvolumen und Aufstandsfläche bitgleich, ohne
-  Schichten in Konturen zurückzuübersetzen.
-- **Der Stützort auf Arbeitern** (`model_support`, 26.09.2026). Er führt
-  denselben Abstieg je Stück, in Gruppen je Startschicht; jede Gruppe
-  bereitet ihre eigene Kopie der Schicht vor (aus WKB), die Differenzen
-  einer Schicht gehen in einem Aufruf, und die Baumtreffer werden
-  sortiert — sonst hinge die letzte
-  Stelle der Flächen an der Arbeiterzahl. Die Kanalfrage wird **je Schicht**
-  gestellt (`_in_channels`: Material Teil für Teil aufgeweitet und vereinigt,
-  dann die umschriebene Scheibe je Punkt), der Kanalraum vereinigt die
-  Umkreise je Scheibe auf Arbeitern (`channel_space`). Am Eiffelturm aus dem
-  Korpus (16 323 Stücke, 14 755 davon auf dem Modell): die Beratung eine
-  halbe Stunde → 2,8 s, der Kanalraum 9 → 2,3 s; an der Waschschüssel 1,1 →
-  0,8 s und 1,1 → 0,3 s, mit denselben Antworten.
-
-Die Arbeiterzahl der vollständigen Messung steht bei sechs (`FULL_WORKERS`);
-die Messreihe dazu steht an der Konstante.
-
-## Grenzen
-
-`slice_body(overhang_angle=...)` erhält den zulässigen Winkel gegen die
-Senkrechte aus dem wirksamen Material- und Prozessprofil
-(`Profile.overhang_limit_degrees`: Probe, sonst die Grenze des Druckers aus
-dem Herstellerprofil, sonst die Startregel). Ohne Angabe gilt die Startregel.
-Der Winkel bestimmt die Reichweite zur unteren Schicht; Analysekarten,
-Orientierungssuche samt ihrer Vorauswahl (`geom.orient.evaluate_directions(
-overhang_limit=)`), Agentenbericht und der Stützwinkel der Übergabe
-verwenden denselben Vertrag. Messwerte aus einer anderen Düse oder einem anderen Druckraster
-werden bereits im Profil verworfen, nicht erst in der Darstellung.
-
-`slice_body(first_layer_height=...)` setzt das tatsächliche Druckraster und
-die Abstände zur darunterliegenden Schicht. Ohne Angabe bleibt das
-gleichmäßige Suchraster erhalten. Offene Brückenbereiche werden anhand ihrer
-beidseitigen Auflager gemessen; ein seitlich ungestützter kurzer Querschnitt
-gilt nicht als kürzere Brücke.
-
-- **Kein eigener Slicer**, auch nicht „nur für den Anfang".
-- Leistung wird gemessen, nicht gefühlt: `pytest -m performance`, Zielwerte
-  §31, Regressionsschwelle 25 %.
-- Messungen unter Fremdlast sind keine Messungen — die Marke allein fahren.
-
-## Materialvorgaben und Verbrauch
-
-Warnungen vergleichen ungekürzte Materialvorgaben mit den Grenzen des
-Druckers. Ein vorher auf das Düsenmaximum gedeckelter Sollwert kann eine
-unzureichende Temperatur nicht mehr nachweisen. G-Code-Verbrauchslisten
-bleiben zusätzlich als `filament_mm_by_tool` und `filament_grams_by_tool`
-erhalten: Der Index ist die Werkzeugnummer der jeweiligen Platte,
-einschließlich Werkzeug 0, ungenutzter Nullen und unbekannter Einträge als
-`None`. Nur vollständige Listen ergeben eine Summe; eine ausdrücklich
-ausgewiesene Gesamtsumme hat Vorrang vor gerundeten Einzelwerten und füllt
-keine Lücken. `combine` verbindet Werkzeugnummern verschiedener Platten
-nicht, denn sie können unterschiedliche Spulen bezeichnen.
-
-`used_tools` hält zusätzlich Werkzeugwechsel mit tatsächlicher Extrusion
-fest. Dadurch wird eine kommentarlose Gesamtlänge nicht irrtümlich dem
-einzigen Modellfilament zugeschlagen, wenn der Slicer weiteres Material
-verwendet. Unbelegte Einzelwerte werden aus solchen Wechseln nicht geraten.
-
-`grams_by_tool` wandelt fehlende Grammmengen nur mit belegter Dichte und
-belegtem Durchmesser je Werkzeug um. Angaben im Dateikopf gewinnen vor
-mitgegebenen Materialdaten. Bewegungen liefern werkzeugweise Längen;
-`M200` liefert direkt Volumen, auch ohne bekannten Filamentdurchmesser.
-Die Mengenbilanz zählt neue Förderung auch stationär und bei `G0`.
-Rückzug bleibt je Werkzeug als offener Weg erhalten; Wiederförderung verbraucht
-ihn zuerst, und ein Endrückzug senkt keinen bereits entstandenen Verbrauch.
-Ein Wechsel zwischen linearer und volumetrischer Extrusion rechnet offene
-Rückzüge mit dem belegten Durchmesser um; fehlt er, bleibt die Menge unbekannt.
-Druckbahnen, Modellgrenzen und Stützvolumen bleiben von stationärer Reinigung
-und Leerfahrten getrennt. Ausdrückliche Mengenheader behalten ihren Vorrang.
-Angegebene Grammmengen gelten auch
-bei null. Eigene Ausgaben tragen `resolved_filament_grams` aus demselben
-eingefrorenen Bedarf wie das Lagerangebot. Die Gesamtmethode `grams` verwendet
-diese Auflösung; spätere Dialogwerte dürfen das Ergebnis nicht verändern.
-Jede dieser Mengen ist aus G-Code geplanter Verbrauch, keine Messung am Werkstück.
-
-Bambus `T255`, `T1000` und `T1100` wechseln kein Filament. Dieser Vertrag
-gilt bei belegter Bambu-Herkunft oder dessen Maschinenbefehlen; fremde
-Firmware erbt ihn nicht. Komprimierte Bambu-Kopfwerte folgen den
-einsbasierten Kennungen in `filament:`. Werkzeugnummern und Kopfkennungen
-werden vor der Allokation werkzeugweiser Ergebnislisten begrenzt.
-
-`handover.off_the_bed` prüft zuerst die Hüllbox. Reicht sie für eine
-polygonale Druckkontur oder Sperrfläche nicht aus, prüft ein abbrechbarer
-zweiter Lesedurchlauf die tatsächlichen Geraden und Bögen. Dabei werden keine
-Bahnen gesammelt. Dateiangaben haben Vorrang vor dem Druckerprofil;
-Reinigung vor der ersten Modellschicht zählt nicht als Modellbahn.
-
-G-Code-Wörter benötigen keinen Leerraum als Trenner. `E` bezeichnet die
-Extrusion auch unmittelbar hinter einer Koordinate; wissenschaftliche
-Zahlenschreibweise darf deshalb keine Extrusionswörter verschlucken.
+- Warnungen vergleichen **ungekürzte** Materialvorgaben mit den Grenzen des
+  Druckers — ein gedeckelter Sollwert beweist keine zu niedrige Temperatur.
+- **`filament_mm_by_tool`, `filament_grams_by_tool`**: Index ist die
+  Werkzeugnummer der Platte, samt Werkzeug 0, Nullen und `None` für
+  Unbekanntes. Nur vollständige Listen ergeben eine Summe; eine ausgewiesene
+  Gesamtsumme geht gerundeten Einzelwerten vor und füllt keine Lücken.
+  `combine` verbindet Werkzeugnummern verschiedener Platten nicht.
+- **`used_tools`** hält Wechsel mit tatsächlicher Extrusion fest; eine
+  kommentarlose Gesamtlänge gehört dann nicht dem einzigen Modellfilament, und
+  Einzelwerte werden nicht geraten.
+- **`grams_by_tool`** wandelt nur mit belegter Dichte und belegtem Durchmesser
+  je Werkzeug; der Dateikopf geht mitgegebenen Daten vor, `M200` liefert
+  Volumen. Die Bilanz zählt Förderung auch stationär und bei `G0`; Rückzug
+  bleibt je Werkzeug offen, ein Endrückzug senkt nichts; ein Wechsel zwischen
+  linearer und volumetrischer Extrusion ohne belegten Durchmesser ist
+  unbekannt. Reinigung und Leerfahrt bleiben von Druckbahnen, Modellgrenzen
+  und Stützvolumen getrennt; Mengenheader haben Vorrang, Grammangaben gelten
+  auch bei null. Eigene Ausgaben tragen `resolved_filament_grams` aus dem
+  eingefrorenen Bedarf; `grams` nutzt ihn, spätere Dialogwerte nicht.
+- **Bambu `T255`, `T1000`, `T1100` wechseln kein Filament** — bei belegter
+  Bambu-Herkunft oder ihren Maschinenbefehlen, fremde Firmware erbt das nicht;
+  komprimierte Kopfwerte folgen den einsbasierten Kennungen in
+  `filament:`; Werkzeugnummern und Kopfkennungen werden vor der Allokation
+  begrenzt.
+- **`handover.off_the_bed`** prüft erst die Hüllbox, dann abbrechbar Geraden
+  und Bögen, ohne Bahnen zu sammeln; Dateiangaben gehen dem Druckerprofil vor,
+  Reinigung vor der ersten Modellschicht ist keine Modellbahn.
+- **G-Code-Wörter brauchen keinen Leerraum**: `E` gilt auch direkt hinter einer
+  Koordinate, und wissenschaftliche Zahlenschreibweise darf kein
+  Extrusionswort verschlucken.

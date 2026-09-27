@@ -1,10 +1,9 @@
 # `app/core/` — der kopflose Kern
 
-Alles, was rechnet, nichts, was zeichnet. Der Kern muss auf einem Rechner ohne
-installiertes Qt importierbar bleiben.
-
-Die Regeln dieses Gebiets stehen in `.claude/rules/kern.md` und laden sich
-selbst. Hier steht, **was wo liegt**.
+Alles, was rechnet, nichts, was zeichnet: ohne installiertes Qt importierbar
+(Regel 1). Einzuhalten sind `.claude/rules/kern.md` und `zwillinge.md`, beide
+laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
+`konzepte/begruendungen/karte-app-core.md`.
 
 ## Die Unterpakete
 
@@ -27,198 +26,123 @@ selbst. Hier steht, **was wo liegt**.
 
 ## Die Module direkt hier
 
-`Feature.measure_sources` nennt je Parameter die tatsächliche Wertequelle:
-`native`, `facets`, `fit` oder `parameter`. Die reine Abfrage
-`measure_status(feature, name)` prüft vorhandene Werte und liefert
-Genauigkeitsauskunft samt Quelle; fehlende Quelle bleibt unbekannt.
-`provenance`, Erzeuger und Körperart sind kein Ersatz. Der Zahlenwert steht
-weiter nur in `params`; Normmaße und Drucktoleranzen werden daraus nicht geraten.
-
-`Feature.surface_patches` erhält vorhandene analytische Teilträger zusammen
-mit ihren ursprünglichen Dreiecksindizes. Zusammengesetzte Merkmale können
-mehrere tragen. `SurfacePatch` enthält ausschließlich Zahlen, Vektoren,
-Indizes und Quelle; native Handles oder neue semantische Kennungen gehören
-nicht hinein. Eine deklarierte Maßvorgabe erzeugt noch keinen Trägernachweis.
-
 **Verträge und Zahlen** — was alle anderen benutzen:
 
 | Datei | Rolle |
 |---|---|
-| `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile`. Signaturen stehen fest, bevor ein Modul entsteht. Dazu die zwei Fragen, die an einem Merkmal nur einmal beantwortet werden: `is_a_cavity` und `thread_is_left_handed` (belegt links heißt gesetzt, nativ gelesen oder am Netz an den Kanten gemessen; die Schätzung des Spektrums, `fit`, sperrt nicht) |
-| `build_area.py` | Tatsächliche Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29); die Projektion eines geschlossenen Netzes kommt aus seinen Umrisskanten statt aus der Vereinigung aller Dreiecke |
-| `errors.py` | Die Ausnahmen-Hierarchie (§33.1). Jede trägt mindestens eine `Action` — ein Fehler endet nie mit „fehlgeschlagen" |
-| `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11). Fließkommavergleich über `is_close`/`is_zero`, nie mit `==`. **Und die Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben** — `circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin` und ihre Gradgeschwister, gerechnet über `decimal` (RM-187) |
-| `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — es gibt kein `eval` |
-| `filament_usage.py` | Ausgabeumfang und Verbrauchsbedarf (§20, §29): stabile Vorbereitungsfingerabdrücke, explizite Spulenbindungen und werkzeugweise G-Code-Mengen; das Journal schreibt `knowledge/filaments.py` |
+| `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile` — Signaturen stehen fest, bevor ein Modul entsteht. Die zwei Fragen, die an einem Merkmal nur einmal beantwortet werden: `is_a_cavity` und `thread_is_left_handed` (links heißt gesetzt, nativ gelesen oder an den Kanten gemessen; die Schätzung `fit` sperrt nicht) |
+| `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11); `is_close`/`is_zero` statt `==`; Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben (`circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin`, über `decimal`); `format_length_bound` formatiert Schranken gerichtet (untere nach unten, obere nach oben) |
+| `errors.py` | Die Ausnahmen-Hierarchie (§33.1); jede trägt mindestens eine `Action` |
+| `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — kein `eval` |
+| `build_area.py` | Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29); die Projektion eines geschlossenen Netzes kommt aus seinen Umrisskanten |
+| `filament_usage.py` | Ausgabeumfang und Verbrauchsbedarf (§20, §29): Vorbereitungsfingerabdrücke, Spulenbindungen, werkzeugweise G-Code-Mengen; `costs_for` rechnet Kosten je Währung aus übergebenen Daten. Das Journal schreibt `knowledge/filaments.py` |
 
-Bei gebundenen externen Filamentprofilen gelten Dichte und Durchmesser ohne
-belegten Snapshot als unbekannt. Ein ausdrücklicher Filament-Override liefert
-beide Kennwerte; direkte G-Code-Grammwerte benötigen keine Umrechnung.
-Zusätzliche Werkzeuge des Slicers erhalten eigene ungebundene Bedarfzeilen.
-Eine Werkzeugnummer beweist weder eine Materialart noch eine lokale Spule;
-fehlende Einzelmengen bleiben auch bei bekannter Gesamtsumme unbekannt.
+- **`Feature.measure_sources`** nennt je Parameter die Wertequelle (`native`,
+  `facets`, `fit`, `parameter`); `measure_status(feature, name)` liefert die
+  Genauigkeitsauskunft, eine fehlende Quelle bleibt unbekannt — `provenance`,
+  Erzeuger und Körperart ersetzen sie nicht. Der Wert steht nur in `params`.
+- **`Feature.surface_patches`** trägt analytische Teilträger mit ihren
+  ursprünglichen Dreiecksindizes; `SurfacePatch` enthält nur Zahlen, Vektoren,
+  Indizes und Quelle, nie native Handles. Eine Maßvorgabe ist kein
+  Trägernachweis.
+- **Filamentbedarf**: Ohne belegten Snapshot sind Dichte und Durchmesser
+  gebundener Profile unbekannt, ein Override liefert beide; zusätzliche
+  Werkzeuge des Slicers bekommen eigene ungebundene Zeilen. Eine
+  Werkzeugnummer beweist weder Materialart noch Spule; fehlt ein Einzelwert,
+  bleiben Menge und Kosten der Auswahl unbekannt, ein gespeicherter Nullpreis
+  bleibt unterscheidbar.
+- **Anzeige kleiner Werte**: Flächen und Volumina unter einem Quadrat- bzw.
+  Kubikmillimeter bekommen mehr Nachkommastellen, unter der Anzeigegrenze eine
+  Schranke mit Vorzeichen statt null (auch in Zoll); nur der Text, nie die
+  Rechnung. `ui.labels.length_bound` ergänzt nur die Zahlenschreibweise.
 
-`filament_usage.costs_for` berechnet aus übergebenen Buchungspositionen und
-Spulendaten ungerundete Kosten je Währung, ohne selbst Dateien zu lesen.
-Fehlt ein nötiger Einzelwert, bleibt die gesamte Auswahl unbekannt. Ein
-gespeicherter Nullpreis bleibt von fehlenden Preisangaben unterscheidbar.
+**Umgebung, Prozesse, Grenzen nach außen:**
 
-Flächen- und Volumenanzeigen bewahren kleine Nichtnullwerte: Unter einem
-Quadrat- beziehungsweise Kubikmillimeter wächst die Zahl der Nachkommastellen,
-unter der Anzeigegrenze steht eine Schranke mit Vorzeichen statt null.
-Die gemeinsame private Formatierung gilt ebenso in Zoll. Dies betrifft nur
-den Text; Geometrie und Kennzahlen behalten ihre ungerundeten Werte.
+| Datei | Rolle |
+|---|---|
+| `paths.py` | Wo Nutzerdaten liegen (§38); `opened_path` (kanonischer Pfad hinter einem offenen Handle, für `scene/project` und `updates`); `lock_file()` als Lebensdauersperre für Wiederherstellung und Absturzprotokoll |
+| `log.py` | Lokales Protokoll (§33.2); `install_crash_logging()` beim Prozessstart, nie beim Import; `redact_user_paths` setzt `~` für den Nutzerordner |
+| `discover.py` · `tools.py` · `install.py` | Installierte Programme außerhalb des PATH finden · externe Programme · Fehlendes aus der Anwendung nachinstallieren (§36) |
+| `process.py` · `http.py` · `json_boundary.py` | Sichere Grenze für externe Prozesse (§32) · für kleine HTTP-Transporte (`apply_header_deadline`) · für JSON aus fremden Vertrauensräumen |
+| `network.py` | CA-Satz für macOS und Pakete ohne nutzbaren Vertrauensspeicher (Flatpak) |
 
-`units.format_length_bound` formatiert numerische Längenschranken gerichtet:
-untere Grenzen nach unten, obere nach oben, bereits bei der Umrechnung der
-Anzeigeeinheit. Kleine Nichtnullwerte bleiben gegebenenfalls wissenschaftlich
-lesbar. Diese Anzeige verändert weder die Rechnung noch ihre Toleranz;
-`ui.labels.length_bound` ergänzt nur die sprachabhängige Zahlenschreibweise.
+- **Absturz**: `faulthandler` hält einen eigenen rohen Deskriptor bis zum
+  Prozessende. Haupt- und Nebenfadenfehler nehmen mit der CLI denselben
+  redigierten Bericht (`report.exception_report()`, ohne Quellzeilen und
+  lokale Variablen), das Fenster `report.crash_detail()`; die Versionsauskunft
+  lädt im Fehlerpfad keine native Bibliothek nach. Fünf beendete Läufe
+  bleiben, lebende Prozesse unangetastet, leere Dateien sind kein Beleg;
+  automatische Berichte je Lauf höchstens fünf, bewusst abgelegte bleiben.
+  `report.diagnostic_attachments()` ist ein begrenzter Schnappschuss —
+  versandt wird nur auf Nutzerhandlung.
+- **Programmsuche** in Einzahl und Mehrzahl über dieselben Quellen
+  (App-Paths, Flatpak-Exporte, Installationsordner, AppImages, Host-PATH):
+  `find_programs()` sammelt alle, `find_program()` hält beim ersten Treffer;
+  zusammengeführt wird erst nach dem Sammeln, jede AppImage-Datei zählt
+  einzeln.
 
-**Umgebung und Nutzerdaten:**
+**Abläufe, die mehrere Operationen bündeln** — `lid_flow.py` (Deckel
+erzeugen) · `split.py` (Auto Split) · `generate.py` (Weg 3: Text oder Bild zu
+einem Körper) · `counterpart.py` (beide Hälften einer Verbindung). Ein Ablauf
+statt einer Op, weil eine Op ihre Szene nur liest (Regel 3) und die
+Auswertung rein ist (§15.1): Die Schritte gehen in **eine** Transaktion, was
+kein Schritt ist, reist als `DocumentChange` mit (§15.5).
 
-`paths.py` (wo Nutzerdaten liegen, §38 — und der kanonische Pfad hinter
-einem offenen Handle: `opened_path`, geteilt von `scene/project` und
-`updates`, weil beide daran eine Sicherheitsfrage hängen) · `discover.py` (installierte Programme
-finden, die nicht im PATH stehen) · `install.py` (Fehlendes aus der Anwendung
-heraus nachinstallieren, §36) · `network.py` (CA-Satz für macOS und Pakete ohne nutzbaren Vertrauensspeicher, etwa Flatpak) ·
-`tools.py` (externe Programme) · `log.py`
-(lokales Protokoll, §33.2)
+- `split.py`: `protected_patches` macht aus den Kennungen in
+  `Document.protected` die Punktwolken der Ebenenprüfung (§22.3); `bed_margin`
+  ist der Rand beim Anordnen; `apply_planned` hängt Passungen eines im selben
+  Lauf erneut geteilten Stücks um (`SplitPlan.connectors`) und schreibt jedem
+  Schritt die erste Nummer seiner Stifte in `first_pin`.
+- `counterpart.py`: **Die Kennung eines erzeugten Merkmals wird gelesen, nicht
+  vorausgesagt** — sie entsteht bei der Auswertung (`evaluate._with_features`
+  über `perceive.matching.apply_mapping`). Deshalb zwei Aufrufe:
+  `apply_counterpart` legt an, `attach_fit` liest die Namen aus der Szene und
+  hängt die Passung an dieselbe Transaktion; ein Undo nimmt alles.
+  **Ein Gewinde bringt seine Hälfte mit**: `thread_counterpart_draft` setzt am
+  anderen Teil das gegengleiche Bausteingewinde im **Tabellenmaß**
+  (`thread_size_for`, Grenze `THREAD_SIZE_REACH` — Ø 6,4 × 1,1 wird nicht still
+  M6, sondern nennt die nächste Größe), `apply_thread_counterpart` legt an,
+  `attach_thread_fit` hängt die Gewindepassung an. `_made_feature` nimmt das
+  **erzeugte** Merkmal, nicht das daneben erkannte zweite; der Schritt bleibt
+  beim Nachtragen der letzte, ein geänderter Verlauf bekommt einen Befund.
 
-`log.install_crash_logging()` wird ausdrücklich beim Prozessstart aufgerufen,
-nicht beim Modulimport. `faulthandler` hält einen eigenen rohen Deskriptor bis
-zum Prozessende; Logger-Rotation, Qt-Ende und Python-Abbau schließen ihn nicht.
-Unbehandelte Haupt- und Nebenfadenfehler benutzen mit der CLI denselben
-redigierten Bericht aus `report.exception_report()`, ohne Quellzeilen oder
-lokale Variablen; der Fehlerbericht aus dem Fenster nimmt `report.crash_detail()`.
-`log.redact_user_paths` setzt dabei für den Nutzerordner `~` (Stapel,
-Ausnahmetext, Protokollanhang in `diagnostic_attachments`) — eine Installation
-für den eigenen Nutzer liegt darunter (RM-231). Versionsauskunft liest geladene Module und Paketmetadaten,
-ohne im Fehlerpfad native Bibliotheken nachzuladen.
+**Dokumentation, ohne Qt gezeichnet** — `manual.py` (geschriebene Seiten plus
+Referenz aus dem Register; `spacemouse_access_help`, USB-Regel nur bei
+bekannter Hersteller-/Produktkennung) · `figures.py` (Abbildungskatalog) ·
+`drawing.py` (SVG; lange Beschriftungen umbricht `Canvas.wrapped`, der Text
+bleibt vollständig im SVG) · `markup.py` (Markdown → HTML, nur die selbst
+erzeugte Teilmenge) · `examples.py` · `tour.py` (Beispielprojekte und Touren).
 
-Absturzdateien liegen unter den lokalen Protokollen. `paths.lock_file()` ist
-die gemeinsame Lebensdauersperre für Wiederherstellung und Absturzprotokoll:
-fünf beendete Läufe bleiben erhalten, lebende Prozesse bleiben unangetastet.
-Leere beendete Dateien werden entfernt und sind kein Absturznachweis. Die
-automatischen Berichte bleiben je Lauf auf fünf begrenzt; bewusst abgelegte
-Berichte werden nicht aufgeräumt. `report.diagnostic_attachments()` erzeugt
-einen begrenzten, unveränderlichen Schnappschuss aus normalem Protokoll und
-vorhandenen Absturzstapeln. Versand bleibt ausschließlich eine Nutzerhandlung.
+**Kundenkontakt — der Weg hinaus** — `updates.py` (fragen, holen, prüfen,
+einspielen, nur auf Klick; **wie**, entscheidet `install_kind()`, nicht die
+Plattform) · `changes.py` (was neu ist) · `report.py` (Fehlerbericht als
+Ordner: schreibt, sendet nie) · `support.py` (**der einzige Weg hinaus**, an
+einem Knopf) · `licence_service.py` (Aktivierung und Abmeldung, nur nach
+ausdrücklichem Klick) · `feedback.py`: Unter `versions[APP_VERSION]` in
+`feedback.json` stehen aktive Nutzungszeit und Einladungsstand. Jede
+Demo-Version fragt nach 15 aktiven Minuten genau einmal, auch über Neustarts;
+Antwort, Absage und gezeigte Einladung gelten nur dieser Version. Dort stehen
+auch `deliveries` (Exporte und Slicer-Starts, bis drei) und
+`support_invited`: Die Einladung zur Unterstützung kommt je Version einmal nach
+dem dritten Erfolg, in Demo und Kaufversion (`support_due`).
 
-Die Programmsuche bietet dieselben Quellen in Einzahl und Mehrzahl:
-Windows-App-Paths, Flatpak-Exporte, Installationsordner, AppImages und den
-Host-PATH. `find_programs()` sammelt jede passende Installation, während
-`find_program()` beim ersten Treffer anhält. Gewählte Pfade werden gemeinsam
-geprüft; dazu zählen auch macOS-App-Bundles und außerhalb des eigenen
-Flatpak-Sandkastens liegende Host-Pfade. Erst nach dem Sammeln werden doppelte
-Pfade und Startprogramme derselben Installation zusammengeführt. Jede
-AppImage-Datei zählt dabei als eigene Installation, auch bei mehreren
-Versionen im selben Ordner.
-
-**Abläufe, die mehrere Operationen bündeln:**
-
-`lid_flow.py` (Deckel erzeugen) · `split.py` (Auto Split als eine Transaktion;
-`protected_patches` macht aus den Merkmalkennungen in `Document.protected` die
-Punktwolken, gegen die die Suche ihre Ebenen prüft, §22.3; `bed_margin` ist der
-Rand zum Bettrand, mit dem danach angeordnet wird; `apply_planned` hängt die
-Passungen eines im selben Lauf noch einmal geteilten Stücks um, über die
-Verbinderplanung je Schnitt in `SplitPlan.connectors`, und schreibt jedem
-Schritt die erste Nummer seiner Stifte in `first_pin` — dieselbe, mit der die
-Passungen ihn nennen)
-· `generate.py` (Weg 3: Text oder Bild zu einem Körper) · `counterpart.py`
-(beide Hälften einer Verbindung auf zwei Körpern)
-
-**Warum ein Ablauf und keine Operation**, bei allen vieren aus demselben
-Grund: Eine Op bekommt ihre Szene nur lesend (Regel 3), und die Auswertung ist
-eine reine Funktion (§15.1) — sie darf keine Passung und keinen Parameter ins
-Dokument schreiben, sonst käme bei jedem Neurechnen einer dazu. Der Ablauf legt
-seine Schritte in **eine** Transaktion, und was kein Schritt ist, reist als
-`DocumentChange` in derselben mit (§15.5). Bei `counterpart.py` sind das zwei
-Bausteinschritte und die Passung dazwischen; ein Undo nimmt alles drei.
-
-**Und die Kennung eines erzeugten Merkmals wird gelesen, nicht vorausgesagt.**
-Sie entsteht bei der Auswertung (`evaluate._with_features` über
-`perceive.matching.apply_mapping`), nicht beim Anlegen des
-Schritts. Deshalb sind es dort zwei Aufrufe: `apply_counterpart` legt die
-Geometrie an, `attach_fit` liest die Namen aus der gerechneten Szene und hängt
-die Passung an dieselbe Transaktion.
-**Und ein Gewinde bringt seine Hälfte mit** (P2.6, Entscheidung 15): Die
-drei Paare setzen beide Hälften neu; ein eingelesener Bolzen oder ein
-gedrucktes Gewinde hat seine schon. `thread_counterpart_draft` macht aus dem
-vorhandenen Gewinde den einen Schritt — das gegengleiche Bausteingewinde am
-anderen Teil, im **Tabellenmaß** (`thread_size_for`, Grenze
-`THREAD_SIZE_REACH` gegen die Normteiltabelle; ein Gewinde Ø 6,4 mit
-Steigung 1,1 wird nicht still zu M6, sondern nennt die nächste Größe) —,
-`apply_thread_counterpart` legt ihn an, `attach_thread_fit` hängt die
-Gewindepassung zwischen dem vorhandenen und dem neuen an dieselbe
-Transaktion. `_made_feature` nimmt dabei das **erzeugte** Merkmal des
-Schritts, nicht das daneben erkannte: Am Netz liest die Erkennung über
-denselben Gängen ein zweites, gemessenes Gewinde mit demselben Stamm.
-Dieser Schritt muss beim Nachtragen weiterhin der letzte sein. Ein inzwischen
-geänderter Verlauf bleibt unangetastet und bekommt einen erklärenden Befund.
-
-**Dokumentation, ohne Qt gezeichnet:**
-
-`manual.py` (Handbuch: geschriebene Seiten plus Referenz aus dem Register;
-`spacemouse_access_help` liefert außerdem die kopierbare Betriebssystemhilfe,
-mit gerätebezogener USB-Regel nur bei bekannter Hersteller-/Produktkennung) ·
-`figures.py` (Abbildungskatalog) · `drawing.py` (SVG: Maßlinien, Schemata,
-Netzprojektion) · `markup.py` (Markdown → HTML, nur die selbst erzeugte
-Teilmenge) · `examples.py` · `tour.py`
-
-Lange Beschriftungen gezeichneter Schemata werden mit `Canvas.wrapped` innerhalb
-ihres Feldes umbrochen. Der vollständige übersetzte Text bleibt im SVG erhalten;
-die Bildkante ist kein Ersatz für den Textumbruch.
-
-**Kundenkontakt — der Weg hinaus:**
-
-`updates.py` (fragen, holen, prüfen, einspielen — angestoßen wird nur auf
-Klick; **wie** eingespielt wird, entscheidet `install_kind()` und nicht die
-Plattform) ·
-`changes.py` (was neu ist) · `report.py` (Fehlerbericht als Ordner: schreibt,
-sendet nie) · `support.py` (**der einzige Weg hinaus**, an einem Knopf) ·
-`feedback.py` · `licence_service.py` (Online-Aktivierung und -Abmeldung, nur
-nach ausdrücklichem Klick; der Freischaltzustand selbst bleibt vollständig
-lokal)
-
-`feedback.py` speichert unter `versions[branding.APP_VERSION]` in
-`feedback.json` die aktive Nutzungszeit und den Einladungsstand. Jede
-Demo-Version fragt nach 15 aktiven Minuten genau einmal, auch über Neustarts
-hinweg. Antwort, Absage und bereits gezeigte Einladung gelten nur für diese
-Version; der frühere globale Stand wird nicht übernommen. Bekannte Versionen
-behalten ihren Stand auch beim Zurückwechseln. Im selben Versionsstand stehen
-`deliveries` (erfolgreiche Exporte und Slicer-Starts, gezählt bis drei) und
-`support_invited`: Die Einladung zur Unterstützung erscheint je Version einmal
-nach dem dritten Erfolg, in Demo und Kaufversion gleich (`support_due`).
-
-**Technik:** `bootstrap.py` füllt das Register · `lazy.py` verhindert
-Import-Deadlocks zwischen Kernpaketen (siehe unten) · `deferred.py` hält
-`trimesh`/`scipy`/`networkx` bis zum ersten wirklichen Rechenschritt aus dem
-Kundenstart heraus
+**Technik** — `bootstrap.py` füllt das Register · `lazy.py` (siehe unten) ·
+`deferred.py` hält `trimesh`/`scipy`/`networkx` bis zum ersten wirklichen
+Rechenschritt aus dem Kundenstart heraus.
 
 ## Zwei Muster, die überall wiederkehren
 
 **1. Lazy-Import in den Paket-`__init__.py`.** `scene`, `registry`, `agent`,
-`brep` exportieren ihre Namen über ein `_EXPORTS`-Wörterbuch und
-`app.core.lazy.install()`. Der Grund ist kein Startzeitgewinn, sondern ein
+`brep` exportieren über `_EXPORTS` und `app.core.lazy.install()` — gegen einen
 Deadlock: Zwei Threads, die gleichzeitig importieren, verklemmen sich sonst
-über die Modul-Locks. Wer einen Namen hinzufügt, trägt ihn an **drei** Stellen
-ein — `TYPE_CHECKING`-Block, `_EXPORTS`, `__all__`.
-`tests/test_lazy_exports.py` hält die drei zusammen und prüft, dass jeder
-Eintrag auf ein Untermodul und ein Attribut zeigt, das es gibt.
-
-**Und der Deadlock hat einen Grund, den die Karte lange nicht nannte: die
-Pakete hängen im Kreis.** Acht der vierzehn Unterpakete stehen
-in **einem** Kreis über eifrige Importe — `brep`, `geom`,
-`ingest`, `knowledge`, `perceive`, `scene`, `sketch`, `slice`, mit `geom` als
-Nabe. Weitere Kanten sind bewusst träge, also in eine Funktion gelegt,
-damit sie den Kreis beim Import nicht schließen.
-`tests/test_core_package_direction.py` friert diesen Stand ein — jede eifrige
-und jede träge Kante einzeln aufgeführt; wie viele es sind, sagt der Test und
-nicht diese Karte, denn die Zahl hier war zweimal hintereinander veraltet.
-Eine neue Kante ist damit eine
-Entscheidung und keine stille Zeile, eine abgebaute verschwindet auch aus der
-Liste, und ein Paket, das neu in den Kreis gerät, macht den Lauf rot.
+über die Modul-Locks. Ein neuer Name steht an **drei** Stellen
+(`TYPE_CHECKING`-Block, `_EXPORTS`, `__all__`); `tests/test_lazy_exports.py`
+hält sie zusammen. Der Grund des Deadlocks: **Acht Unterpakete hängen über
+eifrige Importe im Kreis** — `brep`, `geom`, `ingest`, `knowledge`,
+`perceive`, `scene`, `sketch`, `slice`, mit `geom` als Nabe; weitere Kanten
+sind bewusst träge. `tests/test_core_package_direction.py` friert jede Kante
+ein (die Zahl sagt der Test, nicht diese Karte): Eine neue ist eine
+Entscheidung, ein Paket, das neu in den Kreis gerät, macht den Lauf rot.
 
 **2. Der `OpContext` ist die einzige Tür nach außen.**
 
@@ -235,13 +159,7 @@ Liste, und ein Paket, das neu in den Kreis gerät, macht den Lauf rot.
 | `ctx.cancelled` | Kooperativer Abbruch |
 | `ctx.sources` | Zugriff auf die Quelldateien, wenn eine Op sie braucht |
 
-Kein globales Objekt, kein Logger, der etwas anzeigt, kein Dialog. Was eine
-Operation zurückgibt, ist ein `OpResult` — nie eine veränderte Eingabe.
-
-## Grenzen
-
-- **Kein `PySide6`, kein Qt, kein `print`, kein `input`.**
-- **Keine Zahlenkonstante für Toleranzen** — Verweis ins Materialprofil
-  (`auto:<material>`).
-- **Kein `eval`, kein fremder Quelltext** (Regeln 10 und 11).
-- **Keine absoluten Pfade** in Projektdateien.
+Was eine Operation zurückgibt, ist ein `OpResult`, nie eine veränderte
+Eingabe. Die Grenzen des Kerns (kein Qt, kein `print`, keine
+Toleranzkonstante, kein `eval`, keine absoluten Pfade) stehen in `AGENTS.md`
+und `kern.md`.
