@@ -200,8 +200,9 @@ Formabweichung liest nur vorhandene `SurfacePatch`-Belege.
   die Innenlage. Der Rundungsgang `continues_tangentially` beantwortet nur die
   Langlochfrage.
 - **Nachtrennung**: Geteilt wird nur, was jemand liest (`worth_splitting`);
-  eine Kerbe wird nur geschlossen, wenn genau ein Dreieck sie schließt
-  (`_without_notches`), gesucht am Knoten (`_vertex_faces_index` — trimeshs
+  eine Kerbe schließt nur die kleinste eindeutige Menge freier Dreiecke, die
+  über eine Naht unter `CURVATURE_LIMIT` anliegen (`_without_notches`,
+  `_candidates_at`), gesucht am Knoten (`_vertex_faces_index` — trimeshs
   `vertex_faces` schleift bei einem entarteten Dreieck je Ecke); kein Feld in
   Netzgröße je Fleck; `_ThroughBounds` nur je Körper, nie persistent.
 - **Der Merkmalscache hat zwei Schranken** (`CACHE_LIMIT`,

@@ -10854,10 +10854,24 @@ def _vertex_faces_index(body: trimesh.Trimesh) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _candidates_at(body: trimesh.Trimesh, patch: Sequence[int], frayed: frozenset[int]) -> set[int]:
-    """Die Dreiecke außerhalb des Flecks, die an ihn grenzen und einen fransigen Knoten tragen."""
+    """Die Dreiecke außerhalb des Flecks, glatt angrenzend, mit einem fransigen Knoten.
+
+    **Glatt heißt: über eine Naht unter** :data:`CURVATURE_LIMIT` — dieselbe
+    Schwelle, an der :func:`_connected_patches` einen Fleck enden lässt. Eine
+    Kerbe ist ein herausgefallenes Segment derselben Fläche (siehe
+    :data:`NOTCH_AT_MOST`), und das setzt sie ohne Kante fort. Was nur über
+    eine Kante anliegt, gehört zu einer anderen Fläche: Am Ringabsatz einer
+    Senkbohrung schloss sonst ein Paar ebener Dreiecke über einen Knick von
+    39° die Kerbe des Senkkegels, und der Kegel las sich danach als Torus — je
+    nach Vernetzung des Absatzes, an derselben Bohrung in einer Lage ja, in
+    der nächsten nicht (RM-274, ``sonden/bohren/p12_kippe.py``).
+    """
     inside = np.zeros(len(body.faces), dtype=bool)
     inside[np.asarray(patch, dtype=np.intp)] = True
-    neighbours, _rows = _neighbour_index(body)
+    neighbours, rows = _neighbour_index(body)
+    # Die Winkel im Bogenmaß aus dem Cache von trimesh; in Grad umgerechnet
+    # wird je Kandidat nur seine Naht, wie in :func:`_connected_patches`.
+    angles = np.asarray(body.face_adjacency_angles, dtype=float)
     ranges, vertex_faces = _vertex_faces_index(body)
     found: set[int] = set()
     for node in frayed:
@@ -10867,9 +10881,13 @@ def _candidates_at(body: trimesh.Trimesh, patch: Sequence[int], frayed: frozense
             # Nur die unmittelbaren Nachbarn des Flecks kommen in Frage: Ein
             # Dreieck, das den Knoten teilt, aber nirgends anliegt, schließt
             # keine Kerbe.
-            beside = neighbours[face]
-            beside = beside[beside >= 0]
-            if len(beside) and inside[beside].any():
+            present = neighbours[face] >= 0
+            beside = neighbours[face][present]
+            seams = rows[face][present]
+            touching = inside[beside]
+            if touching.any() and bool(
+                np.any(np.degrees(angles[seams[touching]]) < CURVATURE_LIMIT)
+            ):
                 found.add(int(face))
     return found
 
