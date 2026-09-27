@@ -1117,14 +1117,10 @@ ITALIAN_VOI = re.compile(
 )
 
 
-def test_italian_says_tu_outside_the_manual() -> None:
-    """Italienisch spricht den Kunden mit „tu“ an (Imperativ der 2. Person).
-
-    Entschieden am 27.09.2026 nach Kundensicht: 429 Einträge mit „tu“ gegen 31
-    mit „voi“. Die Handbuchseiten und Anleitungen stellt die Handbuch-Sitzung
-    um; sie sind hier ausgenommen, solange sie nur dort stehen.
-    """
-    manual_only = message_ids(
+def _manual_only() -> set[str]:
+    """Texte, die nur auf Handbuchseiten und in Anleitungen stehen — die gehören
+    der Handbuch-Sitzung und ziehen dort nach."""
+    return message_ids(
         [
             PACKAGE_DIR / "core" / "manual.py",
             PACKAGE_DIR / "core" / "guides.py",
@@ -1137,6 +1133,16 @@ def test_italian_says_tu_outside_the_manual() -> None:
             if path.name not in {"manual.py", "guides.py"}
         ]
     )
+
+
+def test_italian_says_tu_outside_the_manual() -> None:
+    """Italienisch spricht den Kunden mit „tu“ an (Imperativ der 2. Person).
+
+    Entschieden am 27.09.2026 nach Kundensicht: 429 Einträge mit „tu“ gegen 31
+    mit „voi“. Die Handbuchseiten und Anleitungen stellt die Handbuch-Sitzung
+    um; sie sind hier ausgenommen, solange sie nur dort stehen.
+    """
+    manual_only = _manual_only()
     catalog = read_catalog("it")
     voi = [
         f"{key[:50]!r}: {match.group(0).strip()!r}"
@@ -1146,3 +1152,20 @@ def test_italian_says_tu_outside_the_manual() -> None:
         if match
     ]
     assert not voi, "it spricht „voi“:\n" + "\n".join(voi)
+
+
+@pytest.mark.parametrize("language", ["fr", "it"])
+def test_no_entry_mixes_two_apostrophes(language: str) -> None:
+    """Ein Text schreibt den Apostroph auf eine Art (``uebersetzung.md``).
+
+    Durchsicht 0.5.1: „Supprimer l’étape“ neben „l'étape“ im Satz, der den
+    Menüeintrag zitiert; für den Kunden derselbe Knopf, für die Zitatprüfung
+    ein anderer.
+    """
+    manual_only = _manual_only()
+    mixed = [
+        key[:60]
+        for key, value in read_catalog(language).items()
+        if key not in manual_only and "'" in value and "’" in value
+    ]
+    assert not mixed, f"{language}: beide Apostrophe in einem Text:\n" + "\n".join(mixed)
