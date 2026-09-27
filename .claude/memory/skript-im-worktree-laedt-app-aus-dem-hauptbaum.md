@@ -33,7 +33,7 @@ und prüft einmal `app.__file__`, bevor es misst. Siehe
 **Der Vorsatz allein reicht nicht — das ausgefuehrte Skript setzt den Pfad
 selbst.** Am 22.09.2026 stand die Regel hier und war befolgt: Der Aufruf
 lautete `python -c "sys.path.insert(0, worktree); exec(open(sonde).read())"`.
-Die Sonde brachte ihren eigenen `sys.path.insert(0, r"F:D Druck")` mit, und
+Die Sonde brachte ihren eigenen `sys.path.insert(0, r"F:\3D Druck")` mit, und
 der lief **nach** meinem. Gemessen wurde der Hauptbaum. Zwei Minuten lang sah
 die Ausgabe plausibel aus; aufgefallen ist es erst an einem Wert, der nicht
 zum Stand passte.

@@ -19,6 +19,7 @@ Tokens und nicht das AST: Erst die Schreibweise unterscheidet ``\\x03`` von
 from __future__ import annotations
 
 import io
+import os
 import re
 import tokenize
 from pathlib import Path
@@ -85,6 +86,61 @@ def test_no_string_carries_a_swallowed_backslash() -> None:
         f"{len(offenders)} Zeichenketten tragen ein Oktal-Escape oder ein rohes "
         f"Steuerzeichen — gemeint war ein Backslash (\\\\): {offenders[:10]}"
     )
+
+
+#: Was beim Durchsuchen nach Markdown nicht betreten wird: fremde Pakete,
+#: Git-Innereien, Arbeitsbäume, Bauerzeugnisse und der Ordner mit den
+#: Druckprojekten, der ein eigenes Repository ist.
+_NOT_OURS: frozenset[str] = frozenset(
+    {".venv", ".git", "node_modules", "worktrees", "__pycache__", "build", "dist", "3D Drucker"}
+)
+
+
+def control_characters(data: bytes) -> list[int]:
+    """Die Zeilen, in denen ein Steuerzeichen außer Tab und Zeilenende steht."""
+    return [
+        number
+        for number, line in enumerate(data.split(b"\n"), 1)
+        if any(byte < 32 and byte not in (9, 13) for byte in line)
+    ]
+
+
+def _markdown() -> list[Path]:
+    found: list[Path] = []
+    for folder, directories, files in os.walk(ROOT):
+        directories[:] = [name for name in directories if name not in _NOT_OURS]
+        found.extend(Path(folder) / name for name in files if name.endswith(".md"))
+    # Eine leere Menge wäre ein grüner Lauf ohne Prüfung.
+    assert len(found) > 100, f"nur {len(found)} Markdown-Dateien gefunden"
+    return sorted(found)
+
+
+def test_no_markdown_carries_a_control_character() -> None:
+    """Auch Karten, Regeln, Erinnerungen und Register tragen keinen verschluckten Backslash.
+
+    Markdown kennt keine Escapes, und jedes Steuerzeichen außer Tab und
+    Zeilenende ist dort ein Backslash, den eine Python-Zeichenkette ohne
+    Rohpräfix gefressen hat. Am 27.09.2026 trug eine neue Regel in
+    ``.claude/rules/wartezeit.md`` ``F:`` mit dem Steuerzeichen 0x03 statt
+    ``F:\\3D Dateien``, geschrieben von einer Sonde; ``ROADMAP-ARCHIV.md`` und
+    eine Erinnerung trugen dasselbe schon länger, und niemand hatte es gesehen
+    — im Editor steht dort ein leeres Kästchen oder gar nichts.
+    """
+    offenders = [
+        f"{path.relative_to(ROOT)}:{line}"
+        for path in _markdown()
+        for line in control_characters(path.read_bytes())
+    ]
+    assert not offenders, (
+        f"{len(offenders)} Markdown-Zeilen tragen ein Steuerzeichen — gemeint war "
+        f"vermutlich ein Backslash (\\\\): {offenders[:10]}"
+    )
+
+
+def test_the_markdown_check_finds_the_swallowed_backslash() -> None:
+    """Die Gegenprobe: 0x03 fällt, Tab und Windows-Zeilenende nicht."""
+    assert control_characters(b"aus `F:\x03D Dateien`\n") == [1]
+    assert control_characters(b"eins\r\n\tzwei\r\n") == []
 
 
 @pytest.mark.parametrize(

@@ -32103,7 +32103,7 @@ Dazu aus dem Bericht, je mit Test:
   `…_RS.stl` behält zwei Buchstabenstücke R 11,2, die einander bestätigen,
   und das Wandband R 13,73 — beides steht als RM-254 im Register. Vor RM-219
   trugen die drei Dateien 20 bis 23 solcher Stücke, danach 44 bis 45.
-  Über 187 Dateien aus `F:D Dateien`, Basis und Stand auf demselben
+  Über 187 Dateien aus `F:\3D Dateien`, Basis und Stand auf demselben
   `main`: 176 Merkmal für Merkmal gleich, darunter Flaschenhalter,
   Besenhalter, Toilettenpapierhalter, Rack, Pegboards, Bohrerhalter und
   Blessed. Verändert elf, alle in dieser Klasse: die drei Screen-Cover, der
