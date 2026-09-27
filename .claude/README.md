@@ -13,9 +13,10 @@ wiederholt — wo etwas anderswo steht, steht hier der Verweis.
 | `rules/` | Die Regeln je Gebiet. Laden über `paths:` im Frontmatter, sobald eine passende Datei angefasst wird; `description:` sagt, worum es geht, ohne die Datei zu öffnen | Quelle |
 | `agents/` | Die Fachagenten als Markdown mit Frontmatter | **Quelle.** `.codex/agents/*.toml` entsteht daraus über `tools/sync_agents.py`; `tests/test_agent_mirror.py` fährt `--check` |
 | `skills/` | Die Befehle (`/pruefen`, `/liefern`, …) | **Quelle.** `.agents/skills/` entsteht aus derselben Datei, ebenfalls über `tools/sync_agents.py` |
-| `memory/` | Die Erfahrungen dieses Projekts, eine Datei je Fakt, dazu `MEMORY.md` als Index | Quelle. Den Index schreibt `tools/memory_index.py` |
+| `memory/` | Die Erfahrungen dieses Projekts, eine Datei je Fakt, dazu `MEMORY.md` als Index | Quelle, **nur auf der Maschine** (`.gitignore`). Den Index schreibt `tools/memory_index.py`, die Verknüpfung aus dem Nutzerprofil `tools/link_memory.py` |
 | `hooks/` | `solidon3d_hooks.py` — ein Skript für beide Editoren | Quelle. Die Einstiege stehen in `settings.json` und `.codex/hooks.json` |
-| `.state/` | Ein Ordner je Durchsicht: Messskripte, Rohfunde, Auftragstexte, meist ein `README.md`. Hier liegt auch `oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh` — Kernsammlung im Standardlauf, Fensterdateien nur beim Release mit `--release`; der gesamte Prüfweg steht in `/pruefen` | Quelle |
+| `scripts/` | `suite-getrennt.sh` — das Entwicklungstor: Kernsammlung im Standardlauf, Fensterdateien nur beim Release mit `--release`; der gesamte Prüfweg steht in `/pruefen` | Quelle |
+| `.state/` | Ein Ordner je Durchsicht: Messskripte, Rohfunde, Auftragstexte, meist ein `README.md` | Quelle |
 | `audits/` | Datierte Durchsichten der Unterlagen selbst — nicht des Codes | Quelle |
 | `settings.json` | Rechte, Hooks, Umgebung, Plugins | Quelle |
 | `launch.json` | Startprofil für das Vorschaufenster | Quelle |
@@ -40,7 +41,7 @@ Ausgenommen ist, was wirklich **dieser** Maschine gehört:
 |---|---|
 | `.state/sitzungsstart-*`, `.state/letzter-testlauf-*`, `.state/letzte-erinnerung-*` | Marken, die der Hook bei jedem Lauf neu schreibt — getrackt wären sie auf jeder Maschine eine andere Änderung im Baum |
 | `settings.local.json` | Rechte, die jemand für seine Maschine erteilt hat |
-| `memory/.*.lock`, `memory/.memory-index-*` | Sperr- und Zwischendateien des Indexlaufs |
+| `memory/` | Das Repository wird zu jedem Release öffentlich, und die Erinnerungen nennen Zugangswege, Schlüsselablagen, Kundennamen und Verkaufszahlen. `tests/test_directory_docs.py` hält fest, dass keine Datei darunter versioniert ist |
 | `.state/release-*/` | Protokolle eines Release-Laufs. Die Sondenordner daneben bleiben eingecheckt: Sie tragen ein README und ein Skript, das jemand wieder fahren kann — ein Protokoll von sechs Megabyte trägt das nicht |
 
 **Im Zweifel `git ls-files .claude` fahren statt raten.**

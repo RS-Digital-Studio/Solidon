@@ -1,20 +1,25 @@
-"""Die Erinnerungen dieser Sitzung ins Repository hängen (einmal je Maschine).
+"""Die Erinnerungen dieser Sitzung in den Arbeitsbaum hängen (einmal je Maschine).
 
 Claude Code legt seine Erinnerungen unter dem Nutzerprofil ab:
-``~/.claude/projects/<Pfadkürzel>/memory``. Das ist ein Ort je Maschine — und
-an Solidon wird auf drei gearbeitet. Was auf der einen gelernt wurde, kannte
-die andere nicht: die Git-Identität, der geteilte Index, die Pipeline, die den
-Exit-Code frisst. Jede Maschine hat dieselben Fallen einzeln gefunden.
+``~/.claude/projects/<Pfadkürzel>/memory``. Dieses Werkzeug macht aus dem Ort
+eine **Verknüpfung** auf ``.claude/memory`` im Arbeitsbaum, damit Claude Code
+und Codex dieselben Dateien lesen und schreiben.
 
-Dieses Werkzeug macht aus dem Ort eine **Verknüpfung** auf ``.claude/memory``
-im Arbeitsbaum. Damit trägt Git die Erinnerungen, und jede Maschine liest und
-schreibt dieselben Dateien — ohne Kopierschritt, ohne zweite Wahrheit.
+**Git trägt die Erinnerungen nicht.** ``.claude/memory/`` steht in
+``.gitignore``: Das Repository wird zu jedem Release öffentlich, und die
+Erinnerungen nennen Zugangswege, Schlüsselablagen, Kundennamen und
+Verkaufszahlen (Entscheidung Robert). Bis dahin waren sie versioniert; der
+Pull, der sie aus dem Index nahm, löscht sie auf jeder anderen Maschine aus dem
+Arbeitsbaum. ``--wiederherstellen`` holt dort den letzten versionierten Stand
+zurück, ohne eine vorhandene Datei zu überschreiben; der Sitzungsstart ruft es
+auf, sobald ``MEMORY.md`` fehlt.
 
-Was schon im Nutzerprofil liegt, wird vorher ins Repository übernommen; nichts
-geht verloren. Läuft das Werkzeug zweimal, sagt es das und tut nichts.
+Was schon im Nutzerprofil liegt, wird vorher in den Arbeitsbaum übernommen;
+nichts geht verloren. Läuft das Werkzeug zweimal, sagt es das und tut nichts.
 
-    python tools/link_memory.py            # einrichten
-    python tools/link_memory.py --pruefen  # nur sagen, wie es steht
+    python tools/link_memory.py                   # einrichten
+    python tools/link_memory.py --pruefen         # nur sagen, wie es steht
+    python tools/link_memory.py --wiederherstellen
 
 Auf Windows entsteht eine Verzeichnisverknüpfung (Junction) — die braucht keine
 erhöhten Rechte, anders als eine symbolische Verknüpfung. Auf Linux und macOS
@@ -24,14 +29,64 @@ ein Symlink.
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
+#: Die Wurzel des Arbeitsbaums, zu dem dieses Werkzeug gehört.
+ROOT = Path(__file__).resolve().parent.parent
+
+#: Der Ort der Erinnerungen, so wie Git ihn nennt.
+GIT_PATH = ".claude/memory"
+
 #: Wo die Erinnerungen im Arbeitsbaum liegen.
-IN_REPO = Path(__file__).resolve().parent.parent / ".claude" / "memory"
+IN_REPO = ROOT / GIT_PATH
+
+
+def restore_from_history(root: Path) -> list[str]:
+    """Holt fehlende Erinnerungen aus dem letzten versionierten Stand zurück.
+
+    Der Stand steht im Elternteil des Commits, der ``MEMORY.md`` aus dem Index
+    genommen hat. Zurück kommt jede Datei, **die hier fehlt**; eine vorhandene
+    bleibt, wie sie ist — sie kann auf dieser Maschine weitergeschrieben sein.
+    Ohne diesen Commit in der Historie gibt es nichts zurückzuholen.
+    """
+    found = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--diff-filter=D", "--", f"{GIT_PATH}/MEMORY.md"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    removal = found.stdout.strip()
+    if found.returncode != 0 or not removal:
+        return []
+    archive = subprocess.run(
+        ["git", "archive", "--format=tar", f"{removal}^", "--", GIT_PATH],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    if archive.returncode != 0:
+        return []
+    restored: list[str] = []
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as bundle:
+        for member in bundle.getmembers():
+            name = member.name
+            if not member.isfile() or not name.startswith(GIT_PATH + "/") or ".." in name:
+                continue
+            target = root / name
+            content = bundle.extractfile(member)
+            if target.exists() or content is None:
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content.read())
+            restored.append(name.removeprefix(GIT_PATH + "/"))
+    return restored
 
 
 def harness_dir(project: Path) -> Path:
@@ -116,9 +171,22 @@ def _keep_local(entry: Path, destination: Path) -> Path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pruefen", action="store_true", help="nur berichten, nichts ändern")
+    parser.add_argument(
+        "--wiederherstellen",
+        action="store_true",
+        help="fehlende Erinnerungen aus dem letzten versionierten Stand zurückholen",
+    )
     args = parser.parse_args(argv)
 
-    project = Path(__file__).resolve().parent.parent
+    if args.wiederherstellen:
+        restored = restore_from_history(ROOT)
+        if restored:
+            print(f"Erinnerungen aus der Git-Historie zurückgeholt: {len(restored)} Dateien.")
+        else:
+            print("Nichts zurückzuholen: Jede versionierte Erinnerung liegt schon hier.")
+        return 0
+
+    project = ROOT
     target = harness_dir(project)
     print(f"Erinnerungen im Arbeitsbaum: {IN_REPO}")
     print(f"Ort der Sitzung:             {target}")
@@ -191,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     target.parent.mkdir(parents=True, exist_ok=True)
     link(target, IN_REPO)
     print("Eingerichtet. Ab jetzt liest und schreibt jede Sitzung dieses Projekts")
-    print("dieselben Dateien, und Git trägt sie auf die anderen Maschinen.")
+    print("dieselben Dateien; sie bleiben auf dieser Maschine.")
     return 0
 
 

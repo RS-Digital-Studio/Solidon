@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from collections import defaultdict
 from pathlib import Path
 
@@ -164,15 +165,48 @@ def memory_index() -> set[str]:
     return named
 
 
+def _local_memory() -> None:
+    """Die Erinnerungen liegen nur auf der Maschine — ein frischer Klon hat keine."""
+    if not (MEMORY / "MEMORY.md").is_file():
+        pytest.skip("keine lokalen Erinnerungen: .claude/memory/ steht in .gitignore")
+
+
 def test_the_plan_and_the_maps_are_both_there() -> None:
     """Ohne diese Zusicherung prüfte alles darunter gegen eine leere Menge."""
     assert PLAN.exists(), "der Bauplan fehlt"
     assert len(plan_sections()) > 100, "das Überschriften-Muster greift nicht"
     assert len(maps()) > 20, f"nur {len(maps())} Karten gefunden — der Suchlauf greift nicht"
+
+
+def test_the_local_memory_is_read() -> None:
+    """Dieselbe Zusicherung für die Erinnerungen, wo es sie gibt."""
+    _local_memory()
     assert len(memory_notes()) > 50, (
         f"nur {len(memory_notes())} Erinnerungen gefunden — der Suchlauf greift nicht"
     )
     assert len(memory_index()) > 50, "das Muster für die Einträge in MEMORY.md greift nicht"
+
+
+def test_memories_stay_out_of_the_repository() -> None:
+    """Das Repository wird zu jedem Release öffentlich.
+
+    Die Erinnerungen nennen Zugangswege, Schlüsselablagen, Kundennamen und
+    Verkaufszahlen; `.claude/memory/` steht deshalb in `.gitignore`. Das hält
+    ein `git add` ab, aber keinen Merge eines Zweigs, der eine Erinnerung noch
+    versioniert — diese Zusicherung fängt beides.
+    """
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", ".claude/memory"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert not tracked, (
+        "Versionierte Erinnerungen:\n"
+        + "\n".join(f"  {name}" for name in tracked)
+        + "\nMit `git rm --cached` aus dem Index nehmen; die Datei bleibt auf der Maschine."
+    )
 
 
 def test_every_memory_note_is_named_in_the_index() -> None:
@@ -189,6 +223,7 @@ def test_every_memory_note_is_named_in_the_index() -> None:
     im Index und in keinem Commit. Die erste von ihnen legt die Begriffe fest,
     nach denen gerade in fünf Sprachen übersetzt wird.
     """
+    _local_memory()
     named = memory_index()
     without = [note.name for note in memory_notes() if note.name not in named]
     assert not without, (
@@ -201,16 +236,16 @@ def test_every_memory_note_is_named_in_the_index() -> None:
 def test_every_entry_of_the_index_has_its_note() -> None:
     """Die Gegenrichtung: ein Zeiger auf eine Datei, die es nicht gibt.
 
-    Sie entsteht auf der Maschine, auf der die Notiz liegt, gar nicht — dort
-    stimmt beides. Sichtbar wird sie erst auf den beiden anderen, und dort als
-    Verweis ins Leere.
+    Sie entsteht, wenn eine Notiz gelöscht oder umbenannt wird und ihr Zeiger
+    stehen bleibt — ein Verweis ins Leere.
     """
+    _local_memory()
     present = {note.name for note in memory_notes()}
     missing = sorted(name for name in memory_index() if name not in present)
     assert not missing, (
         "Zeiger in MEMORY.md ohne Datei:\n"
         + "\n".join(f"  {name}" for name in missing)
-        + "\nEntweder fehlt der Commit der Notiz, oder der Zeiger ist zu löschen."
+        + "\nEntweder fehlt die Notiz, oder der Zeiger ist zu löschen."
     )
 
 

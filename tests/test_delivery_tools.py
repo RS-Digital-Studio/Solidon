@@ -81,6 +81,42 @@ def test_the_memory_move_stops_before_deleting_what_it_could_not_keep(
     assert (local / "topic.md").read_text(encoding="utf-8") == "wertvoll", "nichts ist weg"
 
 
+def test_the_memory_returns_from_history_without_overwriting(tmp_path: Path) -> None:
+    """`.claude/memory/` steht in `.gitignore`. Der Pull, der die Dateien aus
+    dem Index nahm, löscht sie auf den anderen Maschinen; ihr Inhalt steht im
+    Elternteil dieses Commits. Zurück kommt, was fehlt — eine Notiz, die dort
+    weitergeschrieben wurde, bleibt, wie sie ist."""
+    git = ["git", "-C", str(tmp_path), "-c", "user.name=Probe", "-c", "user.email=p@x.invalid"]
+
+    def run(*arguments: str) -> None:
+        subprocess.run([*git, *arguments], check=True, capture_output=True)
+
+    run("init", "-q")
+    notes = tmp_path / ".claude" / "memory"
+    notes.mkdir(parents=True)
+    (notes / "MEMORY.md").write_text("Index", encoding="utf-8")
+    (notes / "notiz.md").write_text("aus der Historie", encoding="utf-8")
+    run("add", ".")
+    run("commit", "-q", "--no-verify", "-m", "Erinnerungen")
+    run("rm", "-r", "-q", "--cached", ".claude/memory")
+    run("commit", "-q", "--no-verify", "-m", "Erinnerungen bleiben auf der Maschine")
+    # Was der Pull auf einer anderen Maschine hinterlässt: der Index ist weg,
+    # die Notiz wurde dort inzwischen weitergeschrieben.
+    (notes / "MEMORY.md").unlink()
+    (notes / "notiz.md").write_text("dort weitergeschrieben", encoding="utf-8")
+
+    assert link_memory.restore_from_history(tmp_path) == ["MEMORY.md"]
+    assert (notes / "MEMORY.md").read_text(encoding="utf-8") == "Index"
+    assert (notes / "notiz.md").read_text(encoding="utf-8") == "dort weitergeschrieben"
+    assert link_memory.restore_from_history(tmp_path) == [], "ein zweiter Lauf tut nichts"
+
+
+def test_without_the_removal_there_is_nothing_to_restore(tmp_path: Path) -> None:
+    """Ein Verzeichnis ohne diesen Commit — oder ganz ohne Git — bleibt unberührt."""
+    assert link_memory.restore_from_history(tmp_path) == []
+    assert not (tmp_path / ".claude").exists()
+
+
 # --- upload_website --------------------------------------------------------------
 
 
