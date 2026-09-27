@@ -1216,7 +1216,14 @@ def _support_blocker(
     from app.core.slice.analysis import channel_space, model_support, slice_body
     from app.core.slice.findings import remembered_analysis
 
-    wall, angle = profile_table.analysis_limits(profile, entry)
+    # **Mit der Schwelle, mit der der Slicer stützt** (Konzept Herstellerprofil,
+    # Entscheidung L): ``settings`` ist, was hinausgeht, samt der Grundlage des
+    # Herstellers. Mit dem Profil allein sperrte Solidon Kanäle nach seiner
+    # Tabelle, während der Slicer nach dem gewählten Prozess stützt — und die
+    # gemerkten Schichten des Druckdialogs träfen den Winkel nicht mehr.
+    wall, angle = profile_table.analysis_limits(
+        profile_table.for_process(profile, settings, effective=True), entry
+    )
     # **Erst die Schichten des Prüfberichts** (DRUCK-14, Durchsicht 0.5.1): Er
     # hat dasselbe Netz mit demselben Raster, Winkel und derselben
     # Brückenbreite schon geschnitten, und seine Überhänge und Inseln sind

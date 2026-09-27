@@ -1897,11 +1897,17 @@ class _AdviceWorker(Worker):
                     self.settings, self.profile, slot, self.setup
                 )
                 processes.append(
-                    (slot, profiles.for_process(material_profile, effective), effective)
+                    (
+                        slot,
+                        profiles.for_process(material_profile, effective, effective=True),
+                        effective,
+                    )
                 )
             angle = min(
                 (process.overhang_limit_degrees for _slot, process, _effective in processes),
-                default=profiles.for_process(own_profile, self.settings).overhang_limit_degrees,
+                default=profiles.for_process(
+                    own_profile, self.settings, effective=True
+                ).overhang_limit_degrees,
             )
             # **Und die Brückenbreite gehört dazu** (Regel 7, RM-097): Sie sind
             # zwei Extrusionsbahnen, also die Mindestwand — und wie beim Winkel
@@ -1912,7 +1918,9 @@ class _AdviceWorker(Worker):
             # spräche über einen Drucker, den niemand mehr gemeint hat.
             wall = max(
                 (process.minimum_wall_thickness for _slot, process, _effective in processes),
-                default=profiles.for_process(own_profile, self.settings).minimum_wall_thickness,
+                default=profiles.for_process(
+                    own_profile, self.settings, effective=True
+                ).minimum_wall_thickness,
             )
             previous = self.previous.get(body.id)
             result = (
@@ -6004,8 +6012,13 @@ class PrintSettingsDialog(QDialog):
             if self._advice_worker is not None:
                 self._advice_worker.cancel()
             try:
+                # Gegen die Schwelle dieser Einstellungen, wie im Arbeiter
+                # (Entscheidung L) — sonst riete der Dialog, die des
+                # Herstellers mit Solidons Tabelle zu überschreiben.
                 self._advice_entries = advise.advise(
-                    self.settings, self.session.profile, self.slice_result
+                    self.settings,
+                    profiles.for_process(self.session.profile, self.settings, effective=True),
+                    self.slice_result,
                 )
             except AppError as problem:
                 self._set_advice_problem(problem)

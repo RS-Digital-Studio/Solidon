@@ -24,6 +24,7 @@ from app.core.export import handover, manufacturer, slicer_keys
 from app.core.knowledge import print_settings, profiles
 from app.core.scene import serialise
 from app.core.scene.project import load
+from app.core.slice import advise
 from app.core.types import MaterialSlot, PrintSettings, Profile, SlotOverride
 
 
@@ -1152,3 +1153,75 @@ def test_a_spool_writes_only_what_it_changes_over_its_manufacturer(
     assert "nozzle_temperature" in config.written
     assert values["temperature"] == expected["temperature"] == "245"
     assert "first_layer_temperature" not in expected, "nicht geändert, nicht geschrieben"
+
+
+def test_the_analysis_supports_where_the_chosen_process_supports(prusa_bundle: Path) -> None:
+    """Entscheidung L: Die Schichtanalyse stützt ab der Schwelle, mit der der
+    Slicer stützt. Prusas „STRUCTURAL" stützt automatisch ab 48,4° gegen die
+    Senkrechte, der MK4S in Solidons Tabelle ab 55°. Die Analyse folgt dem
+    Prozess, und der Ratgeber schlägt keine zweite Schwelle vor — bis dahin
+    riet er am SV06, den Wert des Herstellers mit Solidons zu überschreiben."""
+    profile = _mk4s()
+    setup = _prusa_setup(prusa_bundle, "0.20mm STRUCTURAL @MK4S HF0.4")
+    printed = manufacturer.effective(None, manufacturer.base_settings(profile, "fine", setup))
+
+    process = profiles.for_process(profile, printed, effective=True)
+
+    assert profile.overhang_limit_degrees == pytest.approx(55.0)
+    assert process.overhang_limit_degrees == pytest.approx(48.37, abs=0.01)
+    paths = {entry.path for entry in advise.advise(printed, process)}
+    assert "support.threshold_angle" not in paths
+    assert "support.threshold_angle" in {
+        entry.path for entry in advise.advise(printed, profiles.for_process(profile, printed))
+    }, "gegen die Tabelle gerechnet stand der Vorschlag"
+
+
+def test_a_stored_threshold_is_the_analysis_limit_only_as_a_choice() -> None:
+    """Ein Projekt aus 0.5.0 trägt die Startregel von 45 Grad, ohne dass sie
+    jemand gewählt hat. Aus dem gespeicherten Satz gilt die Schwelle darum nur
+    als eigene Wahl; aus den wirksamen Einstellungen immer, denn dort steht die
+    des Herstellers darunter. Eine gedruckte Probe geht beidem vor
+    (``Profile.overhang_limit_degrees``, test_calibration)."""
+    profile = _cc2()
+    resolved = print_settings.resolve(profile)
+    legacy = print_settings.with_path(resolved, "support.threshold_angle", 45.0)
+    chosen = print_settings.with_choice(resolved, "support.threshold_angle", 50.0)
+
+    assert profiles.for_process(profile, legacy).overhang_limit_degrees == pytest.approx(60.0)
+    assert profiles.for_process(profile, chosen).overhang_limit_degrees == pytest.approx(50.0)
+    assert profiles.for_process(
+        profile, legacy, effective=True
+    ).overhang_limit_degrees == pytest.approx(45.0)
+
+
+def test_the_session_evaluates_with_what_the_window_prints() -> None:
+    """Der Anschluss von Entscheidung L: Die Sitzung holt die wirksamen
+    Einstellungen des Fensters vor dem Lauf, und Prüfbericht und Szene
+    rechnen mit deren Schwelle. Kommt die Grundlage des Herstellers erst
+    danach, sagt ``evaluation_follows``, ob ein zweiter Lauf nötig ist."""
+    from app.ui.session import Session
+
+    session = Session()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    assert session.import_model(meshes / "near_sphere_ellipsoid.stl", unit="mm")
+    stored = session.profile.overhang_limit_degrees
+    printed = print_settings.with_path(
+        print_settings.resolve(session.profile), "support.threshold_angle", 40.0
+    )
+
+    class Window:
+        def effective_print_settings(self) -> PrintSettings:
+            return printed
+
+    window = Window()
+    session.follow_print_settings(window.effective_print_settings)
+    assert session.evaluation_profile.overhang_limit_degrees == pytest.approx(stored)
+    result = session.evaluate_now()
+
+    assert stored != pytest.approx(40.0)
+    assert session.evaluation_profile.overhang_limit_degrees == pytest.approx(40.0)
+    assert result.scene.profile is not None
+    assert result.scene.profile.overhang_limit_degrees == pytest.approx(40.0)
+    assert session.evaluation_follows(printed)
+    later = print_settings.with_path(printed, "support.threshold_angle", 52.0)
+    assert not session.evaluation_follows(later), "die Grundlage kam mit einer anderen"

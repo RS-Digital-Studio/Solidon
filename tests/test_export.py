@@ -3219,6 +3219,39 @@ def test_the_blocker_takes_the_reports_layers(
     assert reused.triangle_count == fresh.triangle_count
 
 
+def test_the_blocker_cuts_with_the_threshold_that_goes_out(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Entscheidung L: Die Sperre schneidet mit der Stützschwelle der
+    Einstellungen, die hinausgehen — auf einem Herstellerprozess dessen
+    Schwelle, nicht die des Druckers in Solidons Tabelle (am Centauri 60°).
+    Sonst sperrte sie nach einer Grenze, nach der der Slicer nicht stützt."""
+    from app.core.export import writer
+    from app.core.slice import analysis
+
+    class SeenError(Exception):
+        pass
+
+    angles: list[float] = []
+
+    def capture(*_args: object, **kwargs: float) -> None:
+        angles.append(kwargs["overhang_angle"])
+        raise SeenError
+
+    block = trimesh.creation.box(extents=(30.0, 30.0, 30.0))
+    block.apply_translation((0.0, 0.0, 15.0))
+    entry = scene_object(mesh=MeshData.of(block))
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+    printed = print_settings.with_path(settings, "support.threshold_angle", 41.0)
+    monkeypatch.setattr(analysis, "slice_body", capture)
+
+    with pytest.raises(SeenError):
+        writer._support_blocker(entry, as_mesh_data(entry.mesh), printed, profile)
+
+    assert profile.overhang_limit_degrees == pytest.approx(60.0)
+    assert angles == [pytest.approx(41.0)]
+
+
 def test_the_blocker_stops_when_the_customer_cancels(tmp_path: Path, profile: Profile) -> None:
     """Die Sperre rechnet am Eiffelturm aus dem Korpus eine Viertelminute —
     Schnitt, Kanalfrage, Kanalraum — vor dem Start des Slicers. *Abbrechen*
