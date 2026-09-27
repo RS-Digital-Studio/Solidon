@@ -29,7 +29,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
-from typing import Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 
 import numpy as np
 
@@ -47,6 +47,9 @@ from app.core.slice.orientation import SUPPORT_TIE, best_face_candidate, stands
 from app.core.types import CancelToken, Finding, PrinterProfile, Profile, ProgressFn, Vec3
 from app.core.units import EPS_GEOM, is_close
 from app.i18n import _
+
+if TYPE_CHECKING:
+    from app.core.geom.pins import PinPlan
 
 _log = get_logger(__name__)
 
@@ -393,6 +396,15 @@ def split_to_fit(
     if margin > MARGIN + EPS_GEOM:
         profile = _narrowed(profile, margin - MARGIN)
 
+    # **Die Suche schneidet ohne Filamente** (RM-266). Jeder Probeschnitt gab
+    # seinen Hälften die Slots der Oberfläche mit (``section._keeping_slots``,
+    # je Dreieck der nächste Ort auf dem alten Netz), und nichts in der Suche
+    # liest sie: Nahtlage, Stifte und Stützvolumen hängen allein an der
+    # Geometrie, und die Stücke, die der Kunde bekommt, schneidet der Verlauf
+    # danach selbst, samt Farben. Am Besteckeinsatz aus dem Korpus (fünf
+    # Teile, farbig) kostete das 4,7 von 4,8 s je Probeschnitt — 14 Schnitte,
+    # 65 der 69 s der Suche.
+    mesh = MeshData(raw=mesh.raw, cavity=mesh.cavity) if mesh.slots else mesh
     outcome = SplitOutcome(parts=[mesh])
     budget = _Budget(PLAN_BUDGET)
     planned = False
@@ -1780,6 +1792,8 @@ def _best_by_support(
         # Eine Lücke hat keine Fläche für einen Verbinder — gemessen werden
         # die nackten Stücke, wie der Schritt sie dann auch baut.
         count = 0 if candidate.gap else connector_count
+        # Einmal je Naht geplant, für beide Stiftseiten.
+        plan = _connector_plan(mesh, candidate, count) if count > 0 else None
         on_a = _support_after_cut(
             mesh,
             candidate,
@@ -1787,8 +1801,15 @@ def _best_by_support(
             orientation_candidates=orientation_candidates,
             cancelled=cancelled,
             connector_count=count,
+            plan=plan,
         )
-        if count <= 0:
+        # **Ohne Platz für einen Verbinder gibt es keine zweite Zuordnung**
+        # (RM-266): ``add_pins`` gibt beide Hälften unverändert zurück, und
+        # „Stifte an B" hieße dieselben zwei Hälften in anderer Folge — dieselbe
+        # Summe, und B gewinnt nur mit weniger. An der Waschschüssel und am
+        # Besteckeinsatz aus dem Korpus (Bambu A1 mini) trug keine Naht einen
+        # Verbinder, und jede zweite Beurteilung war dieselbe noch einmal.
+        if plan is None or not plan.count:
             return candidate, on_a
         on_b = _support_after_cut(
             mesh,
@@ -1798,6 +1819,7 @@ def _best_by_support(
             cancelled=cancelled,
             connector_count=count,
             pins_on_b=True,
+            plan=plan,
         )
         if np.isfinite(on_b) and (
             not np.isfinite(on_a) or on_b < on_a - max(on_a, on_b, EPS_GEOM) * SUPPORT_TIE
@@ -1830,6 +1852,7 @@ def _support_after_cut(
     cancelled: CancelToken | None,
     connector_count: int = 0,
     pins_on_b: bool = False,
+    plan: PinPlan | None = None,
 ) -> float:
     """Internes Stützvolumen der zwei fertigen, unabhängig gestellten Stücke.
 
@@ -1838,6 +1861,8 @@ def _support_after_cut(
     automatische Form wie der spätere Auto-Split-Schritt und beurteilt deren
     wirklich hinzugefügte bzw. abgetragene Geometrie. ``pins_on_b`` setzt
     die Stifte an die zweite Hälfte, wie ``split_pinned`` es dann tut.
+    ``plan`` ist diese Planung, wenn der Aufrufer sie schon hat
+    (:func:`_connector_plan`) — sie hängt nur an Körper und Ebene.
     """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -1852,16 +1877,14 @@ def _support_after_cut(
 
     parts = (first, second)
     if connector_count > 0:
-        # Späte Importe halten den gegenseitigen Vertrag von ``pins`` und
-        # ``autosplit`` importierbar. Der öffentliche PARTS-Zugriff lädt die
-        # mitgelieferten Verbinder auch für einen direkten Kernaufruf.
-        from app.core.geom.pins import AUTO, add_pins, plan_pins
-        from app.core.knowledge.parts import PARTS
+        # Später Import: hält den gegenseitigen Vertrag von ``pins`` und
+        # ``autosplit`` importierbar.
+        from app.core.geom.pins import add_pins
 
-        PARTS.all()
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        plan = plan_pins(mesh, candidate.plane, count=connector_count, shape=AUTO)
+        if plan is None:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            plan = _connector_plan(mesh, candidate, connector_count)
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if pins_on_b:
@@ -1917,6 +1940,19 @@ def _support_after_cut(
             return float("inf")
         total += orientation.support_volume
     return total
+
+
+def _connector_plan(mesh: MeshData, candidate: Candidate, count: int) -> PinPlan:
+    """Die Verbinder, die ``split_pinned`` an dieser Naht setzen würde — dieselbe
+    automatische Form wie der spätere Schritt (T4)."""
+    # Späte Importe halten den gegenseitigen Vertrag von ``pins`` und
+    # ``autosplit`` importierbar. Der öffentliche PARTS-Zugriff lädt die
+    # mitgelieferten Verbinder auch für einen direkten Kernaufruf.
+    from app.core.geom.pins import AUTO, plan_pins
+    from app.core.knowledge.parts import PARTS
+
+    PARTS.all()
+    return plan_pins(mesh, candidate.plane, count=count, shape=AUTO)
 
 
 def _axis_to_cut(mesh: MeshData, profile: Profile, reserve: Vec3 = (0.0, 0.0, 0.0)) -> Axis | None:

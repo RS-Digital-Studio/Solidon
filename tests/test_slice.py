@@ -247,6 +247,135 @@ def test_the_support_volume_can_be_left_out_where_nobody_reads_it() -> None:
     assert lean.first_layer_area == full.first_layer_area
 
 
+@pytest.mark.parametrize("footing", [None, 0.1])
+@pytest.mark.parametrize("name", ["mushroom", "island_tower.stl"])
+def test_the_numbers_alone_are_the_numbers_of_the_full_analysis(
+    footing: float | None, name: str
+) -> None:
+    """``with_layers=False`` lässt die Schichten weg, nicht die Zahlen (RM-266).
+
+    Die Orientierungs- und die Nahtsuche lesen nur Stützvolumen und
+    Aufstandsfläche; die Schichten dafür in Konturen zurückzuübersetzen ist
+    Arbeit, die niemand ansieht. Die Zahlen müssen bitgleich bleiben — sonst
+    entschiede die Suche an einer anderen Zahl als der Bericht. Der Inselturm
+    hat eine Insel, deren Säule mitzählt.
+    """
+    body = place_on_bed(mushroom()) if name == "mushroom" else corpus(name)
+
+    full = slice_body(body, 1.0, detail="support", footing_height=footing)
+    numbers = slice_body(body, 1.0, detail="support", footing_height=footing, with_layers=False)
+
+    assert numbers.layers == ()
+    assert numbers.support_volume == full.support_volume
+    assert numbers.first_layer_area == full.first_layer_area
+    assert numbers.first_layer_area > 0.0
+
+
+def ceilings_over_drafted_walls(levels: int) -> MeshData:
+    """Decken auf mehreren Höhen über Wänden, die nach unten breiter werden.
+
+    Jede Decke hängt 3 mm über einem Gitter aus geneigten Wänden; ihre Säule
+    zerfällt beim Absinken in Zellen, und jede Zelle verliert Schicht für
+    Schicht ein wenig Fläche — dieselbe Lage wie an der großen Hälfte des
+    Laptop-Ständers, wo 146 Überhangstücke zu über 500 Säulenstücken
+    zerfallen (RM-266). Mehrere Decken heißen mehrere Startschichten, und
+    genau die verteilte der Säulendurchgang früher auf seine Arbeiter.
+    """
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    def brick(size: tuple[float, float, float], at: tuple[float, float, float]) -> trimesh.Trimesh:
+        body = trimesh.creation.box(extents=size)
+        body.apply_translation(at)
+        return body
+
+    parts = [brick((66.0, 66.0, 2.0), (0.0, 0.0, 1.0))]
+    for level in range(levels):
+        side = 66.0 - 8.0 * level
+        parts.append(brick((side, side, 2.0), (0.0, 0.0, 20.0 * (level + 1) + 1.0)))
+    height = 20.0 * levels + 2.0
+    for size, at in (
+        ((3.0, 66.0), (-31.5, 0.0)),
+        ((3.0, 66.0), (31.5, 0.0)),
+        ((66.0, 3.0), (0.0, -31.5)),
+        ((66.0, 3.0), (0.0, 31.5)),
+    ):
+        parts.append(brick((*size, height), (*at, height / 2.0)))
+    for index in range(4):
+        x = -22.5 + 15.0 * index
+        profile = ShapelyPolygon(
+            [(x - 3.1, 2.0), (x + 2.9, 2.0), (x + 0.55, 17.0), (x - 0.65, 17.0)]
+        )
+        wall = trimesh.creation.extrude_polygon(profile, 60.0)
+        wall.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+        wall.apply_translation((0.0, 30.0, 0.0))
+        across = wall.copy()
+        across.apply_transform(
+            trimesh.transformations.rotation_matrix(math.pi / 2.0 + 0.013, (0, 0, 1))
+        )
+        for level in range(levels):
+            for piece in (wall.copy(), across.copy()):
+                piece.apply_translation((0.0, 0.0, 20.0 * level))
+                parts.append(piece)
+    return place_on_bed(MeshData.of(trimesh.boolean.union(parts)))
+
+
+def test_the_support_volume_comes_out_the_same_on_any_number_of_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Zahl der Arbeiter hängt an der Maschine, das Stützvolumen darf es
+    nicht (RM-187, RM-266).
+
+    Die Säulen liefen in Gruppen je Startschicht, und die Gruppensummen kamen
+    über ``math.fsum`` zusammen — an diesen drei Decken 108 243,12043751762
+    mm³ mit einem Arbeiter, …759 mit zweien, …76 mit dreien. Die Auto-Split-
+    Suche vergleicht Nähte an diesem Wert; auf einem Rechner mit vier Kernen
+    rechnete sie mit einer anderen Zahl als auf einem mit acht. Jetzt teilen
+    sich die Arbeiter die Stücke **einer** Schicht, und die Summe entsteht in
+    einer einzigen, festen Folge.
+    """
+    body = ceilings_over_drafted_walls(3)
+    shared = analysis._above_material_shared
+    asked: list[int] = []
+
+    def counting(pending: list[Any], *args: Any) -> list[Any]:
+        asked.append(len(pending))
+        return shared(pending, *args)
+
+    monkeypatch.setattr(analysis, "_above_material_shared", counting)
+    answers = []
+    for workers in (1, 2, 3, 6):
+        monkeypatch.setattr(analysis, "SUPPORT_WORKERS", workers)
+        answers.append(slice_body(body, 0.25, detail="support").support_volume)
+
+    assert asked, "die Arbeiter teilten sich keine Schicht — der Test prüfte nur einen Faden"
+    assert answers[0] > 50_000.0, "drei Decken stehen auf einem zerfallenden Gitter"
+    assert answers[1:] == [answers[0]] * 3, [repr(value) for value in answers]
+
+
+def test_the_pieces_of_one_layer_are_cut_the_same_on_a_pool() -> None:
+    """Die Arbeiter teilen sich die Stücke einer Schicht (RM-266). Was dabei
+    zurückkommt, sind dieselben Stücke in derselben Folge wie ohne sie —
+    Stück für Stück bitgleich, denn jede Differenz bleibt derselbe GEOS-Aufruf."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    import shapely
+
+    below = shapely.box(0.0, 0.0, 100.0, 100.0).difference(shapely.box(10.0, 10.0, 90.0, 90.0))
+    pending = [
+        shapely.box(-1.0 + 0.37 * index, 5.0 + 0.9 * index, 3.0 + 0.37 * index, 5.5 + 0.9 * index)
+        for index in range(90)
+    ]
+    alone = analysis._above_material(pending, below)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        shared = analysis._above_material(pending, below, pool=pool, workers=4)
+
+    assert len(shared) == len(alone)
+    assert all(
+        shapely.equals_exact(mine, theirs, tolerance=0.0)
+        for mine, theirs in zip(shared, alone, strict=True)
+    )
+
+
 @pytest.mark.parametrize("groups", [15, 16, 17])
 @pytest.mark.parametrize("prepared", [False, True])
 def test_parallel_support_columns_keep_holes_and_boundary_contacts(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, field
 from typing import Final, cast
 
@@ -51,6 +52,17 @@ AXES: Final[tuple[Vec3, ...]] = (
 #: Zielgrenze je Projektionsmatrix; daneben liegen Normalen, Höhen und Masken.
 #: Kleine Stapel halten diese Zwischenfelder im Cache. Eine größere Lage bleibt einzeln.
 MAX_PROJECTION_VALUES = 100_000
+
+#: Höchstens so viele Arbeiter bewerten Stapel von Lagen gleichzeitig
+#: (:func:`evaluate_directions`).
+PROJECTION_WORKERS = 6
+
+#: So viele Werte je Feld dürfen alle Arbeiter zusammen in Arbeit haben. Eine
+#: Lage hält rund zehn Felder von der Länge des Netzes; bei 1,2 Millionen
+#: Werten sind das knapp 100 MB, so viel wie ein Netz mit 1,2 Millionen
+#: Dreiecken schon einfädig braucht. Größere Netze rechnen deshalb einfädig
+#: weiter, kleinere teilen sich die Lagen.
+PARALLEL_PROJECTION_VALUES = 1_200_000
 
 #: Mehr Eckpunkte sieht Qhull für die Kandidatenrichtungen nicht. Die
 #: Hüllnormalen sind Vorschläge, die die Schichtanalyse danach beurteilt; ob
@@ -281,11 +293,10 @@ def evaluate_directions(
     # Die Rechengrenze ``OVERHANG_EDGE`` schiebt die Schwelle um das Rauschen
     # eines Einheitsvektors auf die Seite, die die Regel meint.
     threshold = -units.exact_cos_degrees(OVERHANG_LIMIT_DEGREES) - OVERHANG_EDGE
-    scored: list[Orientation] = []
-    for start in range(0, len(directions), batch_size):
+
+    def score(batch: list[Vec3]) -> list[Orientation]:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        batch = directions[start : start + batch_size]
         verticals = np.asarray([rotation_to_down(direction)[2, :3] for direction in batch])
         vertex_heights = _heights(verticals, vertices)
         normal_heights = _heights(verticals, normals)
@@ -304,17 +315,41 @@ def evaluate_directions(
             hanging, areas[None, :] * -normal_heights * (centre_heights - bottom[:, None]), 0.0
         )
         supports = [IntegerGrid.of(row).total() for row in lifted]
-        for index, direction in enumerate(batch):
-            scored.append(
-                Orientation(
-                    direction=direction,
-                    footprint=float(footprints[index]),
-                    overhang=float(overhangs[index]),
-                    height=float(height[index]),
-                    support=supports[index],
-                )
+        return [
+            Orientation(
+                direction=direction,
+                footprint=float(footprints[index]),
+                overhang=float(overhangs[index]),
+                height=float(height[index]),
+                support=supports[index],
             )
-    return scored
+            for index, direction in enumerate(batch)
+        ]
+
+    batches = [
+        directions[start : start + batch_size] for start in range(0, len(directions), batch_size)
+    ]
+    # **Die Stapel auf Arbeitern** (RM-266). Jede Lage rechnet für sich — die
+    # Rechnung ist Element für Element dieselbe, auf welchem Faden sie läuft,
+    # und ``map`` gibt die Stapel in ihrer Folge zurück. NumPy gibt den
+    # Interpreter-Lock in diesen Feldern frei. Am Laptop-Ständer beurteilt
+    # *Modell teilen* die Vorauswahl je fertiger Hälfte (173 000 Dreiecke,
+    # 206 Lagen einzeln): 1,5 s auf einem Faden, 0,6 s auf sechs (unter
+    # Fremdlast, 27.09.2026), dieselbe Rangfolge. So viele Arbeiter, wie
+    # :data:`PARALLEL_PROJECTION_VALUES` Werte je Feld zulässt — mehr
+    # gleichzeitige Stapel hießen mehr Speicher, nicht mehr Tempo.
+    workers = min(
+        len(batches),
+        PROJECTION_WORKERS,
+        os.cpu_count() or 1,
+        max(1, PARALLEL_PROJECTION_VALUES // max(len(vertices), len(normals), 1)),
+    )
+    if workers < 2:
+        return [entry for batch in batches for entry in score(batch)]
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return [entry for scored in pool.map(score, batches) for entry in scored]
 
 
 def _heights(verticals: np.ndarray, points: np.ndarray) -> np.ndarray:

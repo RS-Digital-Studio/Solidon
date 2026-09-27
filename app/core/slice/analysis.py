@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 import threading
 from dataclasses import dataclass, replace
-from typing import Any, Final, Literal, cast
+from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 import numpy as np
 import shapely
@@ -34,6 +34,9 @@ from app.core.log import get_logger
 from app.core.types import CancelToken, LayerInfo, Polygon, SliceResult
 from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
 from app.i18n import _
+
+if TYPE_CHECKING:
+    from concurrent.futures import Executor
 
 _log = get_logger(__name__)
 
@@ -192,6 +195,11 @@ FULL_WORKERS = 6
 #: Wie viele Arbeiter die Stützsäulen unter sich aufteilen (:func:`_support_volume`).
 SUPPORT_WORKERS = 6
 
+#: Ab so vielen offenen Säulenstücken einer Schicht teilen sich die Arbeiter
+#: die Fragen und Differenzen (:func:`_above_material_shared`); darunter
+#: kostet das Herumreichen mehr, als es spart.
+SUPPORT_SHARE_FROM = 16
+
 #: So viele Schichten misst ein Arbeiter in einem Block (:func:`_measure_batch`).
 #: Groß genug, dass jeder GEOS-Aufruf ein Feld statt einer Schicht fragt;
 #: klein genug, dass sechs Arbeiter an 400 Schichten gleichmäßig zu tun haben
@@ -239,6 +247,7 @@ def slice_body(
     bridge_from: float | None = None,
     cancelled: CancelToken | None = None,
     support_volume: bool = True,
+    with_layers: bool = True,
 ) -> SliceResult:
     """Schneidet den Körper in Schichten und misst jede (§22.1, §22.2).
 
@@ -271,6 +280,14 @@ def slice_body(
     (Regel 7, RM-097). Ohne Angabe gilt :data:`BRIDGE_FROM`, der runde
     Millimeter für einen Aufrufer ohne Profil. Gelesen wird sie nur bei
     ``detail="full"``: Die Stützenmessung kennt keine Brücken.
+
+    ``with_layers=False`` gibt nur die Zahlen zurück — Stützvolumen und
+    Aufstandsfläche — und keine Schichten (``layers`` bleibt leer). Die
+    Orientierungssuche und die Nahtsuche von *Modell teilen* lesen nichts
+    anderes; die Schichten in Konturen zurückzuübersetzen kostete an der
+    großen Hälfte des Laptop-Ständers ein Zehntel jeder Beurteilung (RM-266).
+    Die Zahlen sind dieselben, bitgleich. Die Inselfrage bleibt: Sie auszulassen
+    sparte an einer Hälfte der Waschschüssel drei Prozent der Messung.
 
     ``first_layer_height`` setzt zusätzlich das tatsächliche Druckraster:
     Die erste Schnittmitte liegt auf seiner halben Höhe, die zweite eine
@@ -350,7 +367,7 @@ def slice_body(
         # in der Mitte, wo er sicher Material trifft.
         heights = np.array([(low + high) / 2.0], dtype=float)
     sections, section_contours = _cross_sections(
-        mesh, heights, capture_contours=True, cancelled=cancelled
+        mesh, heights, capture_contours=with_layers, cancelled=cancelled
     )
     measured = _measure_all(
         sections,
@@ -372,6 +389,24 @@ def slice_body(
         if support_volume
         else 0.0
     )
+
+    if not with_layers:
+        first_area = next(
+            (
+                metrics.area
+                for shape, metrics in zip(sections, measured, strict=True)
+                if shape is not None and not shape.is_empty and metrics is not None
+            ),
+            None,
+        )
+        return SliceResult(
+            layers=(),
+            support_volume=float(support),
+            first_layer_area=_footing_area(
+                mesh, low, footing_height, first_area, cancelled=cancelled
+            ),
+            source="internal",
+        )
 
     for z, shape, metrics, contours in zip(
         heights, sections, measured, section_contours, strict=True
@@ -408,7 +443,9 @@ def slice_body(
     return SliceResult(
         layers=tuple(layers),
         support_volume=float(support),
-        first_layer_area=_footing_area(mesh, low, footing_height, layers, cancelled=cancelled),
+        first_layer_area=_footing_area(
+            mesh, low, footing_height, layers[0].area if layers else None, cancelled=cancelled
+        ),
         source="internal",
     )
 
@@ -417,22 +454,23 @@ def _footing_area(
     mesh: MeshData,
     low: float,
     footing_height: float | None,
-    layers: list[LayerInfo],
+    first_area: float | None,
     *,
     cancelled: CancelToken | None = None,
 ) -> float:
     """Die Fläche, auf der das Teil steht.
 
-    Ohne ``footing_height`` die erste geschnittene Schicht — was die Suche
-    ohnehin schon hat. Mit ``footing_height`` ein eigener Schnitt auf der
+    ``first_area`` ist die Fläche der ersten Schicht mit Material, ``None``
+    ohne eine. Ohne ``footing_height`` gilt sie — was die Suche ohnehin schon
+    hat. Mit ``footing_height`` ein eigener Schnitt auf der
     genannten Höhe: Ein Schnitt mehr auf zweihundert Kandidaten fällt neben
     fünfzig bis zweihundert je Kandidat nicht auf, und er nimmt der Zahl die
     Abhängigkeit von der Suchauflösung.
     """
-    if not layers:
+    if first_area is None:
         return 0.0
     if footing_height is None:
-        return layers[0].area
+        return first_area
     sections, _ = _cross_sections(
         mesh,
         np.array([low + footing_height], dtype=float),
@@ -489,56 +527,58 @@ def _support_volume(
     dieselbe Zahl (4016,6 mm³ an derselben Kugel), einer davon in einem
     Hundertachtzigstel der Zeit.
 
-    **Und die Säulen verteilen sich auf Arbeiter** (23.09.2026, RM-201). Weil
-    keine Säule eine andere beschneidet, rechnet jeder Arbeiter denselben
-    Durchgang von oben nach unten für die Überhänge seiner Schichten — jeder
-    Schicht, die einen trägt, der Reihe nach einer Gruppe zugeteilt. An einer
-    Hohlkugel hielt die eine Liste bis zu 317 konzentrische Ringe, deren
-    Hüllboxen sich alle überlappen, und lief auf einem Kern. Die Summe
-    entsteht mit ``math.fsum`` in fester Gruppenfolge, also unabhängig davon,
-    welcher Arbeiter zuerst fertig ist; von der Summe über eine einzige Liste
-    weicht sie höchstens in der letzten Stelle ab.
+    **Und die Stücke einer Schicht verteilen sich auf Arbeiter** (RM-266).
+    Weil keine Säule eine andere beschneidet, ist jede Differenz einer Schicht
+    unabhängig von den übrigen; :func:`_above_material_shared` verteilt sie
+    auf die Arbeiter und setzt die Stücke in der Folge wieder zusammen, in der
+    sie einfädig entstünden. Bis dahin rechnete je Arbeiter eine Gruppe von
+    Startschichten ihren eigenen Durchgang (RM-201), und das trug nur, solange
+    die Überhänge sich über viele Startschichten verteilten: An der großen
+    Hälfte des Laptop-Ständers zerfallen die Säulen einer einzigen Startschicht
+    in über 500 Stücke, eine Gruppe rechnete 2,1 s, die übrigen fünf zusammen
+    0,2 s. Und die Gruppensumme hing in der letzten Stelle an der Zahl der
+    Kerne — dieselbe Naht kostete auf vier Kernen eine andere Zahl als auf
+    acht. Jetzt entsteht die Summe in einer einzigen, festen Folge, gleich wie
+    viele Arbeiter es sind.
     """
-    starting = [
-        index
-        for index, metrics in enumerate(measured)
-        if metrics is not None and metrics.overhang is not None and not metrics.overhang.is_empty
-    ]
-    if not starting:
+    if not any(
+        metrics is not None and metrics.overhang is not None and not metrics.overhang.is_empty
+        for metrics in measured
+    ):
         return 0.0
-    groups = min(_workers(SUPPORT_WORKERS), len(starting)) if len(sections) >= PARALLEL_FROM else 1
-    # Je Gruppe die Überhänge jeder so vielten Schicht, die einen trägt —
-    # verteilt über die Höhe, damit keine Gruppe alle Decken bekommt.
-    member = {index: number % groups for number, index in enumerate(starting)}
+    workers = _workers(SUPPORT_WORKERS) if len(sections) >= PARALLEL_FROM else 1
+    from concurrent.futures import ThreadPoolExecutor
 
-    def columns(group: int) -> float:
+    pool = ThreadPoolExecutor(max_workers=workers) if workers > 1 else None
+    try:
         pending: list[ShapelyPolygon] = []
         volume = 0.0
         for index in range(len(sections) - 1, -1, -1):
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
-            if member.get(index) == group:
-                region = measured[index].overhang  # type: ignore[union-attr]
-                pending += _areas_of(region)
+            metrics = measured[index]
+            if (
+                metrics is not None
+                and metrics.overhang is not None
+                and not metrics.overhang.is_empty
+            ):
+                pending += _areas_of(metrics.overhang)
             if not pending:
                 continue
             below = sections[index - 1] if index else None
             if below is not None and not below.is_empty:
-                pending = _above_material(pending, below, cancelled=cancelled)
+                pending = _above_material(
+                    pending, below, cancelled=cancelled, pool=pool, workers=workers
+                )
                 if not pending:
                     continue
             volume += float(shapely.area(np.asarray(pending, dtype=object)).sum()) * _layer_step(
                 index, layer_height, first_layer_height
             )
         return volume
-
-    if groups == 1:
-        return columns(0)
-    from concurrent.futures import ThreadPoolExecutor
-
-    with ThreadPoolExecutor(max_workers=groups) as pool:
-        shares = list(pool.map(columns, range(groups)))
-    return math.fsum(shares)
+    finally:
+        if pool is not None:
+            pool.shutdown(wait=True, cancel_futures=True)
 
 
 def _layer_step(index: int, layer_height: float, first_layer_height: float | None) -> float:
@@ -566,6 +606,8 @@ def _above_material(
     below: ShapelyPolygon,
     *,
     cancelled: CancelToken | None = None,
+    pool: Executor | None = None,
+    workers: int = 1,
 ) -> list[ShapelyPolygon]:
     """Was von den Säulen übrig bleibt, wenn die Schicht darunter trägt.
 
@@ -574,10 +616,20 @@ def _above_material(
     ist das vektorisierte Prädikat am billigsten. Ab ``SUPPORT_TREE_FROM``
     spart ein räumlicher Index genug Paarfragen, um seinen Aufbau zu bezahlen;
     unterhalb dieser gemessenen Grenze bleibt er bewusst weg.
+
+    **Die Stücke bleiben in ihrer Folge**: erst die unberührten, dann die
+    Reste der berührten, beide nach ihrer Stelle in ``pending``. Der Baum
+    liefert seine Treffer in seiner eigenen Folge, und die wird sortiert —
+    sonst hinge die Summe der Flächen in der letzten Stelle daran, wie der
+    Baum gebaut ist, und an nichts am Körper.
+
+    Mit ``pool`` teilen sich die Arbeiter die Stücke (:func:`_above_material_shared`).
     """
+    if pool is not None and workers > 1 and len(pending) >= SUPPORT_SHARE_FROM:
+        return _above_material_shared(pending, below, cancelled, pool, workers)
     if len(pending) >= SUPPORT_TREE_FROM:
-        candidates = shapely.STRtree(pending).query(below)
-        # ``below`` teilen alle Säulengruppen. Ein Baum-Prädikat würde dessen
+        candidates = np.sort(shapely.STRtree(pending).query(below))
+        # ``below`` teilen die Arbeiter. Ein Baum-Prädikat würde dessen
         # vorbereiteten GEOS-Index nebenläufig erst vervollständigen. Deshalb
         # nur die Hüllboxen im Baum, dann exakt mit den eigenen Säulen zuerst.
         parts = np.asarray(pending, dtype=object)[candidates]
@@ -593,6 +645,51 @@ def _above_material(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         kept += _areas_of(pending[number].difference(below))
+    return kept
+
+
+def _above_material_shared(
+    pending: list[ShapelyPolygon],
+    below: ShapelyPolygon,
+    cancelled: CancelToken | None,
+    pool: Executor,
+    workers: int,
+) -> list[ShapelyPolygon]:
+    """:func:`_above_material` auf mehreren Arbeitern — dieselben Stücke in
+    derselben Folge (RM-266).
+
+    Jeder Arbeiter nimmt jedes so vielte Stück (``pending[first::shares]``),
+    fragt, ob es die Schicht darunter berührt, und schneidet die berührten.
+    Gestreut statt in Blöcken, weil die Differenzen sehr verschieden viel
+    kosten und schwere Stücke nebeneinander liegen. Beide Fragen bleiben
+    dieselben GEOS-Aufrufe wie einfädig, nur ohne Baum: Der fragt ebenfalls
+    nur Hüllboxen, und die prüft GEOS vor jedem Prädikat selbst. Zurück kommt
+    dieselbe Liste wie einfädig, Stück für Stück bitgleich.
+
+    Abgebrochen wird zwischen den Anteilen; einer ist höchstens ein Bruchteil
+    einer Schicht.
+    """
+    parts = np.asarray(pending, dtype=object)
+    shares = min(len(parts), workers)
+
+    def share(first: int) -> tuple[Any, Any]:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        own = parts[first::shares]
+        touching = shapely.intersects(own, below)
+        return touching, shapely.difference(own[touching], below)
+
+    touched = np.zeros(len(parts), dtype=bool)
+    rests = np.empty(len(parts), dtype=object)
+    for first, (touching, cut) in enumerate(pool.map(share, range(shares))):
+        numbers = np.arange(first, len(parts), shares)
+        touched[numbers] = touching
+        rests[numbers[touching]] = cut
+    if not touched.any():
+        return pending
+    kept = [part for part, hit in zip(pending, touched.tolist(), strict=True) if not hit]
+    for rest in rests[touched]:
+        kept += _areas_of(rest)
     return kept
 
 

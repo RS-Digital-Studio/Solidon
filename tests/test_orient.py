@@ -756,6 +756,42 @@ def test_batched_scores_match_physical_rotations_across_batch_boundaries(
         assert actual.height == pytest.approx(physical.bounds.size[2], abs=1e-7)
 
 
+def test_the_scores_are_the_same_bits_on_any_number_of_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Stapel laufen auf Arbeitern (RM-266); Folge und letzte Stelle der
+    vier Kennzahlen bleiben, wie sie auf einem Faden wären — sie entscheiden
+    Gleichstände symmetrischer Körper und damit die Lage."""
+    import app.core.geom.orient as orient
+
+    body = apply(plate(), translation((71.0, -43.0, 28.0)) @ rotation("y", 23.0))
+    directions = [
+        (float(np.cos(angle)), float(np.sin(angle)), 0.25 * index - 1.0)
+        for index, angle in enumerate(np.linspace(0.2, 6.3, 9))
+    ]
+    monkeypatch.setattr(
+        orient, "MAX_PROJECTION_VALUES", max(body.vertex_count, body.triangle_count)
+    )
+    answers = []
+    for workers in (1, 2, 6):
+        monkeypatch.setattr(orient, "PROJECTION_WORKERS", workers)
+        answers.append(
+            [
+                (
+                    score.direction,
+                    *(
+                        value.hex()
+                        for value in (score.footprint, score.overhang, score.height, score.support)
+                    ),
+                )
+                for score in orient.evaluate_directions(body, directions)
+            ]
+        )
+
+    assert [row[0] for row in answers[0]] == directions
+    assert answers[1:] == [answers[0]] * 2
+
+
 def test_stacked_projections_match_physical_turns_bit_for_bit() -> None:
     """Die Vorauswahl liest dieselben Höhen wie die tatsächliche Bewegung."""
     from app.core.geom.orient import _heights

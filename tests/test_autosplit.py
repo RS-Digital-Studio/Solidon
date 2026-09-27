@@ -265,6 +265,89 @@ def test_a_failed_probe_cut_does_not_hide_a_usable_candidate(
     assert chosen is usable
 
 
+def test_a_seam_without_room_for_a_connector_is_judged_once(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Passt kein Verbinder auf die Naht, gibt es keine zweite Stiftseite (RM-266).
+
+    ``add_pins`` gibt die Hälften dann unverändert zurück; „Stifte an B"
+    wären dieselben zwei Hälften in anderer Folge, dieselbe Summe — und B
+    gewinnt nur mit weniger. Die Suche beurteilte sie trotzdem zweimal: an der
+    Waschschüssel und am Besteckeinsatz aus dem Korpus jede zweite
+    Beurteilung. Ein Stab mit 4 mm Querschnitt hat für keinen Stift Platz.
+    """
+    stick = MeshData.of(trimesh.creation.box(extents=(300.0, 4.0, 4.0)))
+    seam = autosplit.Candidate("x", 0.0, 16.0, 1, 0.0)
+    assert not autosplit._connector_plan(stick, seam, pins.PIN_COUNT).count, (
+        "der Stab trägt einen Verbinder — dann prüft der Test nichts"
+    )
+    both = [
+        autosplit._support_after_cut(
+            stick,
+            seam,
+            profile,
+            orientation_candidates=3,
+            cancelled=None,
+            connector_count=pins.PIN_COUNT,
+            pins_on_b=pins_on_b,
+        )
+        for pins_on_b in (False, True)
+    ]
+    assert both[0] == both[1], "ohne Verbinder sind beide Zuordnungen dieselbe Summe"
+
+    judged: list[tuple[float, bool]] = []
+    support_after_cut = autosplit._support_after_cut
+
+    def record(*args: Any, **kwargs: Any) -> float:
+        judged.append((args[1].position, bool(kwargs.get("pins_on_b", False))))
+        return support_after_cut(*args, **kwargs)
+
+    monkeypatch.setattr(autosplit, "_support_after_cut", record)
+    chosen = autosplit.find_plane(stick, profile)
+
+    assert chosen is not None and not chosen.pins_on_b
+    assert judged, "die Suche beurteilte keine Naht"
+    assert not any(pins_on_b for _, pins_on_b in judged)
+    assert len({position for position, _ in judged}) == len(judged), "je Naht einmal"
+
+
+def test_the_seam_search_cuts_without_filaments(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Probeschnitte tragen keine Filamente weiter (RM-266).
+
+    Jeder Schnitt gab seinen Hälften die Slots der Oberfläche mit, je Dreieck
+    über den nächsten Ort auf dem alten Netz — am farbigen Besteckeinsatz aus
+    dem Korpus 4,7 von 4,8 s je Probeschnitt. Die Suche liest davon nichts:
+    Dieselbe Form, einmal farbig, einmal nicht, bekommt dieselbe Teilung.
+    """
+    from app.core.geom import attributes
+
+    plain = bar()
+    coloured = MeshData(
+        raw=plain.raw.copy(), slots=tuple(index % 2 for index in range(plain.triangle_count))
+    )
+    carried: list[int] = []
+    transfer = attributes.transfer
+
+    def counting(result: MeshData, sources: list[MeshData], **kwargs: Any) -> MeshData:
+        if any(source.slots for source in sources):
+            carried.append(result.triangle_count)
+        return transfer(result, sources, **kwargs)
+
+    monkeypatch.setattr(attributes, "transfer", counting)
+    with_colour = plan_split(coloured, "obj_1", profile)
+
+    assert not carried, "die Suche übertrug Filamente auf Stücke, die niemand bekommt"
+    without = plan_split(plain, "obj_1", profile)
+    assert with_colour.drafts and [draft.params for draft in with_colour.drafts] == [
+        draft.params for draft in without.drafts
+    ]
+    assert [plan.positions if plan else None for plan in with_colour.connectors] == [
+        plan.positions if plan else None for plan in without.connectors
+    ]
+
+
 def test_only_the_fixed_shortlist_is_sliced(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:

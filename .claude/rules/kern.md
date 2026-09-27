@@ -81,7 +81,12 @@ hängt:
 - keine Winkel- und Exponentialfunktion aus NumPy oder `math`;
 - kein `x ** 2` (Pythons Potenz ruft `pow` der Plattform) — `x * x`;
 - Zufall nur aus den Rohbits des Generators (`Generator.random`,
-  `integers`), nie `normal` oder andere Verteilungen über `exp`/`log`.
+  `integers`), nie `normal` oder andere Verteilungen über `exp`/`log`;
+- keine Summe, deren Folge an der Zahl der Arbeiter hängt: Wer Arbeit auf
+  Fäden verteilt, setzt die Teile in der Folge zusammen, die ein Faden
+  ergäbe. Die Stützsäulen summierten bis zur Durchsicht 0.5.1 je Gruppe von
+  Startschichten, und dieselbe Naht kostete auf vier Kernen eine andere
+  letzte Stelle als auf acht (RM-266, `analysis._above_material_shared`).
 
 Die Ersatzwerkzeuge stehen in `app/core/geom/CLAUDE.md` (Tabelle
 „Plattformgleich gerechnet"). Wer einen neuen Weg baut, der am Ende

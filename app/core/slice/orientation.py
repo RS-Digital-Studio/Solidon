@@ -276,13 +276,15 @@ def judge(
     turned = place_on_bed(apply(mesh, turn))
     # §28.2: die Suche liest eine Zahl daraus. Strukturbreiten an einem
     # Körper zu messen, der gleich wieder gedreht wird, ist Arbeit, die
-    # niemand ansieht.
+    # niemand ansieht — und die Schichten als Konturen zurückzugeben ebenso
+    # (RM-266): gelesen werden Stützvolumen und Aufstandsfläche.
     result = slice_body(
         turned,
         layer_height,
         detail="support",
         footing_height=footing_height,
         overhang_angle=overhang_angle,
+        with_layers=False,
     )
     standing = mesh if footing_mesh is None else footing_mesh
     # Die Fläche allein trägt nicht: Bei einem Ausleger kann sein Schwerpunkt

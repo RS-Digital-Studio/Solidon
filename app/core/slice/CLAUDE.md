@@ -163,18 +163,27 @@ Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
   Umlaufsinn eines Rings sind Sache des Wegs, nicht des Körpers.
 - **Mehrere verkettete Ringe ohne `polygonize`** (`_nested`): ein Punkt je
   Ring gegen die übrigen, gerade Tiefe ist Material.
-- **Die Säulen auf Arbeitern.** `_support_volume` teilt die Überhänge
-  reihum `SUPPORT_WORKERS` Gruppen zu; keine Säule beschneidet eine andere,
-  die Summe entsteht mit `math.fsum` in fester Folge. Die untere Schicht wird
-  dabei gemeinsam gelesen. `_above_material` benutzt den räumlichen Baum
-  nur für Hüllboxtreffer und prüft diese exakt mit den eigenen Säulenteilen
-  als erstem Operand. Ein vorbereiteter GEOS-Index der gemeinsamen Schicht
-  darf nicht parallel als Prädikatindex verwendet werden: GEOS baut darin
-  weitere Suchstrukturen erst bei der Abfrage auf.
-- **Der Stützort ebenso** (`model_support`, 26.09.2026). Er führt denselben
-  Abstieg je Stück, auf denselben Arbeitern; jede Gruppe bereitet ihre eigene
-  Kopie der Schicht vor (aus WKB), die Differenzen einer Schicht gehen in
-  einem Aufruf, und die Baumtreffer werden sortiert — sonst hinge die letzte
+- **Die Säulen auf Arbeitern, je Schicht.** `_support_volume` läuft einmal
+  von oben nach unten; ab `SUPPORT_SHARE_FROM` offenen Stücken teilen sich
+  `SUPPORT_WORKERS` Arbeiter die Stücke der Schicht
+  (`_above_material_shared`, gestreut), und die Liste kommt in der Folge
+  zurück, in der sie einfädig entstünde. Die Summe hat damit eine einzige
+  feste Folge, gleich wie viele Kerne (RM-266; vorher Gruppen je
+  Startschicht, deren Summe in der letzten Stelle an der Kernzahl hing und
+  deren Last an einer einzigen Gruppe). Einfädig benutzt `_above_material`
+  den räumlichen Baum nur für Hüllboxtreffer, **sortiert** sie und prüft
+  exakt mit den eigenen Säulenteilen als erstem Operand. Die untere Schicht
+  wird gemeinsam gelesen; ein vorbereiteter GEOS-Index darf nicht parallel
+  als Prädikatindex verwendet werden: GEOS baut darin weitere
+  Suchstrukturen erst bei der Abfrage auf.
+- **Die Suchen lesen nur Zahlen.** `judge` ruft `slice_body(...,
+  with_layers=False)`: Stützvolumen und Aufstandsfläche bitgleich, ohne
+  Schichten in Konturen zurückzuübersetzen.
+- **Der Stützort auf Arbeitern** (`model_support`, 26.09.2026). Er führt
+  denselben Abstieg je Stück, in Gruppen je Startschicht; jede Gruppe
+  bereitet ihre eigene Kopie der Schicht vor (aus WKB), die Differenzen
+  einer Schicht gehen in einem Aufruf, und die Baumtreffer werden
+  sortiert — sonst hinge die letzte
   Stelle der Flächen an der Arbeiterzahl. Die Kanalfrage wird **je Schicht**
   gestellt (`_in_channels`: Material Teil für Teil aufgeweitet und vereinigt,
   dann die umschriebene Scheibe je Punkt), der Kanalraum vereinigt die
