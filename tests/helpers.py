@@ -24,6 +24,7 @@ hier, dort noch als eigene Kopie.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import struct
 from pathlib import Path
@@ -366,3 +367,17 @@ def contains(mesh: MeshData, points: Any) -> np.ndarray:
         angle = 2.0 * np.arctan2(numerator, denominator).sum()
         inside.append(abs(angle) > 2.0 * np.pi)
     return np.asarray(inside)
+
+
+def at_the_start_rule(profile: Profile) -> Profile:
+    """Derselbe Drucker mit der Überhang-Startregel (45 Grad) statt der Grenze
+    seines Herstellers.
+
+    Für Tests, deren Sollwerte vor dem 27.09.2026 an der Startregel gemessen
+    sind und die etwas anderes prüfen als den Winkel — eine Standfläche, eine
+    Stiftzuordnung. Am Centauri Carbon 2 gilt seither 60 Grad, und dieselbe
+    Geometrie braucht dort weniger Stütze; das ist richtig und nicht die Frage
+    dieser Tests.
+    """
+    printer = dataclasses.replace(profile.printer, overhang_limit=None)
+    return dataclasses.replace(profile, printer=printer)

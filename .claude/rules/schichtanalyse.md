@@ -171,6 +171,31 @@ zusammenhängende Stück (`largest_overhang_patch`); ein Ergebnis, das seine
 Stücke nicht mitbringt, gilt schichtweise als eines. Lange freie Stege fängt
 die Brückenregel weiter ab.
 
+**Ab welchem Winkel gestützt wird, sagt der Drucker, nicht die Startregel**
+(27.09.2026). Bis dahin rechnete jeder Drucker mit 45 Grad, und die Übergabe
+schrieb sie als Stützwinkel über den Wert des Herstellers. Am Minigolf-Satz
+(`F:\3D Dateien\Mini+Golf+All+Set-P1S_stls`) verlangte das für die Fase einer
+2-mm-Bodenplatte und 45 bis 55 Grad geneigte Wände Stützen (320 mm² in
+Stücken bis 25 mm²). Der ElegooSlicer legte daraufhin 46 m Stütze in die
+untersten 5 mm, 11 m davon in Schicht 1. Roberts erste Schicht am Centauri
+Carbon 2 war ein treppenförmiger Stützfuß mit einem Brim aus 7 216 Stücken,
+5 700 davon kürzer als ein Millimeter. Elegoo stützt ab 60 Grad, und ohne
+Stütze ist das Teil dasselbe, 20 min schneller. Die Grenze steht deshalb je
+Drucker in `printers.toml` (`overhang_limit`, Standardprozess im Slicer des
+Herstellers). `Profile.overhang_limit_degrees` fragt Probe, Drucker,
+Startregel in dieser Folge, und `print_settings.resolve` schreibt denselben
+Winkel als `support.threshold_angle`. Ein Projekt von vorher bekommt ihn als
+Vorschlag. **Wer einen Winkel an einer Stelle einführt, reicht ihn bis in jede
+Vorauswahl durch**: Die Orientierungsheuristik urteilte bis dahin fest mit 45.
+
+**Und ein Überhangwinkel wird an der Normalen mit dem Sinus verglichen.** Eine
+Fläche, die um α gegen die Senkrechte überhängt, trägt die Normale z = −sin α;
+über der Grenze heißt z < −sin(Grenze). Die Vorauswahl verglich mit dem
+Kosinus, und bei 45 Grad sind beide dieselbe Zahl, bitgenau. Mit 60 Grad hätte
+sie ab 30 Grad Überhang gezählt statt ab 60. Wer eine Winkelgrenze an einer
+Normalen prüft, prüft sie an einem Winkel ungleich 45
+(`test_orient.py::test_the_preselection_counts_overhangs_against_the_printers_limit`).
+
 **Eine Decke im Kanal verlangt keine Stütze auf dem Modell** (25.09.2026).
 „Überall" war die Antwort auf jede Säule, die auf dem Modell endet — auch auf
 die im Wasserkanal der Waschschüssel, den der Slicer daraufhin 40 mm hoch mit

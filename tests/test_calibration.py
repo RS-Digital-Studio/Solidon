@@ -198,14 +198,19 @@ def test_process_measurements_require_their_print_process() -> None:
 def test_orientation_operation_and_agent_use_the_body_material(
     own_profiles: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Eine Projektprobe verbessert nicht die Druckbarkeit eines anderen Körpermaterials."""
+    """Eine Projektprobe verbessert nicht die Druckbarkeit eines anderen Körpermaterials.
+
+    Die Probe liegt absichtlich neben der Grenze des Druckers: Seit dem
+    27.09.2026 gilt ohne Probe die des Herstellers (am Centauri 60 Grad), und
+    eine Probe mit derselben Zahl ließe nicht erkennen, woher der Winkel kommt.
+    """
     from app.core.agent import analysis
     from app.core.geom import prepare_ops
     from app.core.slice.orientation import search
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     after = calibration.apply(
-        calibration.from_measurements("pla", overhang_angle=60.0), process=profile
+        calibration.from_measurements("pla", overhang_angle=52.0), process=profile
     )
     measured = dataclasses.replace(profile, material=after)
     project = new_project("centauri-carbon-2", "pla")
@@ -228,11 +233,19 @@ def test_orientation_operation_and_agent_use_the_body_material(
 
     result = run("orient_for_print", body, measured, thorough=True)
     assert result.outputs
-    assert seen == pytest.approx([45.0, 45.0])
+    assert measured.overhang_limit_degrees == pytest.approx(52.0), "die Probe gilt dem PLA"
+    unmeasured = profiles.make_profile("centauri-carbon-2", "petg").overhang_limit_degrees
+    assert unmeasured == pytest.approx(60.0)
+    assert seen == pytest.approx([unmeasured, unmeasured])
 
 
 def test_calibration_changes_the_real_overhang_map_and_slice(own_profiles: Path) -> None:
-    """Eine gedruckte 60-Grad-Probe ändert die Auskunft am echten 55-Grad-Körper."""
+    """Eine gedruckte 50-Grad-Probe ändert die Auskunft am 55-Grad-Körper.
+
+    Ohne Probe trägt der Centauri die Schräge nach der Grenze seines
+    Herstellers (60 Grad); die strengere Probe verlangt Stütze, und eine andere
+    Bahnbreite ist ein anderer Prozess — dort gilt wieder der Hersteller (§28.3).
+    """
     import math
 
     import trimesh
@@ -247,7 +260,7 @@ def test_calibration_changes_the_real_overhang_map_and_slice(own_profiles: Path)
     settings = print_settings.resolve(profile)
     process = profiles.for_process(profile, settings)
     calibration.apply(
-        calibration.from_measurements("petg", minimum_wall=0.55, overhang_angle=60.0),
+        calibration.from_measurements("petg", minimum_wall=0.55, overhang_angle=50.0),
         process=process,
     )
     calibrated = profiles.for_process(profiles.make_profile("centauri-carbon-2", "petg"), settings)
@@ -266,13 +279,13 @@ def test_calibration_changes_the_real_overhang_map_and_slice(own_profiles: Path)
             overhang_angle=angle,
         ).support_volume
 
-    assert support(process) > 0.0
-    assert support(calibrated) == pytest.approx(0.0, abs=1e-6)
+    assert support(process) == pytest.approx(0.0, abs=1e-6)
+    assert support(calibrated) > 0.0
     changed = dataclasses.replace(
         settings,
         layers=dataclasses.replace(settings.layers, line_width=settings.layers.line_width * 1.5),
     )
-    assert support(profiles.for_process(calibrated, changed)) > 0.0
+    assert support(profiles.for_process(calibrated, changed)) == pytest.approx(0.0, abs=1e-6)
 
 
 def test_analysis_keeps_the_stricter_material_and_unknown_slots(own_profiles: Path) -> None:

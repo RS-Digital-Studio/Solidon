@@ -32,6 +32,7 @@ from app.core.slice.orientation import best_face_candidate
 from app.core.split import apply_line_split, apply_planned, apply_split, plan_split
 from app.core.types import Finding, OpContext, Profile, Scene, SceneObject, Source
 from app.i18n import source_text
+from tests.helpers import at_the_start_rule
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -2410,9 +2411,14 @@ def test_the_pins_go_to_the_half_that_needs_less_support(profile: Profile) -> No
     Prozent, mehr als die fünf, mit denen eine Naht die andere schlägt.
     Beide Zuordnungen werden jetzt fertig gebaut, und die bessere steht im
     Schritt.
+
+    Die Zahlen gelten der Startregel. Mit den 60 Grad des Centauri trägt dieselbe
+    Naht die Stifte besser an A (3 620 gegen 4 255 mm³) — die Wahl dreht sich mit
+    dem Winkel, und genau deshalb werden beide gebaut.
     """
     from app.core.slice.orientation import SUPPORT_TIE
 
+    profile = at_the_start_rule(profile)
     mesh = crossed_overhangs()
     seam = autosplit.Candidate("x", 3.25, 144.0, 1, 0.0)
     on_a = autosplit._support_after_cut(

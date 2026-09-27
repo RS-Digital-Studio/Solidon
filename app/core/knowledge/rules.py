@@ -38,6 +38,12 @@ _DATA_FILE: Final = Path(__file__).parent / "data" / "rules.toml"
 #:
 #: Sie wohnt hier, weil §39 sie zieht: die Regelsammlung ist die Stelle, an
 #: der Druckwissen steht (Robert, 27.08.2026).
+#:
+#: **Und sie ist die Startregel, nicht die Grenze jedes Druckers** (§28.3,
+#: 27.09.2026). Wer seinen Drucker kennt, trägt dessen Stützgrenze in
+#: ``printers.toml`` (``PrinterProfile.overhang_limit``, aus dem
+#: Standardprozess des Herstellers); eine Kalibrierung geht beidem vor. Die
+#: Frage stellt man ``Profile.overhang_limit_degrees``, nicht diese Zahl.
 OVERHANG_LIMIT_DEGREES: Final = 45.0
 
 #: Wie weit eine Schicht seitlich wachsen darf, in Schichthöhen — dieselbe

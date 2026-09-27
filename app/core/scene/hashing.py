@@ -82,6 +82,11 @@ def profile_key(profile: Profile) -> str:
         printer.bed_exclusions,
         printer.printable_height,
         printer.nozzles,
+        # Die Überhanggrenze des Herstellers (27.09.2026). Sie wirkt über
+        # ``profile.overhang_limit_degrees`` darunter — aber nur ohne passende
+        # Probe; das Feld selbst steht hier, damit der Schlüssel nicht davon
+        # abhängt, ob gerade eine Messung davorsteht.
+        printer.overhang_limit,
         material.id,
         material.clearance,
         material.press,

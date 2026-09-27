@@ -198,10 +198,13 @@ die Messreihe dazu steht an der Konstante.
 ## Grenzen
 
 `slice_body(overhang_angle=...)` erhält den zulässigen Winkel gegen die
-Senkrechte aus dem wirksamen Material- und Prozessprofil. Ohne Angabe gilt
-die Startregel. Der Winkel bestimmt die Reichweite zur unteren Schicht;
-Analysekarten, Orientierungssuche und Agentenbericht verwenden denselben
-Vertrag. Messwerte aus einer anderen Düse oder einem anderen Druckraster
+Senkrechte aus dem wirksamen Material- und Prozessprofil
+(`Profile.overhang_limit_degrees`: Probe, sonst die Grenze des Druckers aus
+dem Herstellerprofil, sonst die Startregel). Ohne Angabe gilt die Startregel.
+Der Winkel bestimmt die Reichweite zur unteren Schicht; Analysekarten,
+Orientierungssuche samt ihrer Vorauswahl (`geom.orient.evaluate_directions(
+overhang_limit=)`), Agentenbericht und der Stützwinkel der Übergabe
+verwenden denselben Vertrag. Messwerte aus einer anderen Düse oder einem anderen Druckraster
 werden bereits im Profil verworfen, nicht erst in der Darstellung.
 
 `slice_body(first_layer_height=...)` setzt das tatsächliche Druckraster und

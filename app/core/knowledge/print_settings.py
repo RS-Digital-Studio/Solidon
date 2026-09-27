@@ -257,7 +257,12 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
             # (``PrinterProfile.travel_speed``); ohne Angabe gilt die Vorgabe.
             **({} if printer.travel_speed is None else {"travel": printer.travel_speed}),
         ),
-        support=SupportSettings(),
+        # Der Slicer stützt ab derselben Grenze, mit der die Schichtanalyse
+        # rechnet — gemessen, sonst die des Druckers, sonst die Startregel
+        # (``Profile.overhang_limit_degrees``). Bis zum 27.09.2026 stand hier
+        # immer die Startregel, auch über einer Kalibrierung, und sie ersetzte
+        # in jeder Übergabe den Winkel des Herstellers.
+        support=SupportSettings(threshold_angle=profile.overhang_limit_degrees),
         adhesion=AdhesionSettings(kind=_adhesion(stuff.get("adhesion", "skirt"))),
         retraction=RetractionSettings(
             length=float(stuff.get("retraction_length", 0.8)),
