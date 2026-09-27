@@ -162,8 +162,9 @@ gegeneinander stehen. Jetzt liegt es im Fenster rechts, das rollt — eine
 Untergrenze genügt, und eine Obergrenze braucht es gar nicht mehr.
 
 **Und sie gilt dem vollen Zustand, nicht jedem.** Seit dem 18.09.2026 hat die
-Karte zwei leere Gestalten, in denen Suche und Liste fehlen: ohne Auswahl
-(Hauptaktionen weg, Katalogknopf und ein Satz) und an einer Auswahl, deren
+Karte zwei leere Gestalten, in denen Suche und Liste fehlen: ohne Auswahl in
+einer leeren Szene (Hauptaktionen weg, Katalogknopf und ein Satz; stehen
+Körper da, kommen die Handlungen für alle Körper dazu) und an einer Auswahl, deren
 Handlungen oben im Merkmalfenster stehen — ein Langloch, eine Kante. Dort
 reserviert die Zahl mehr, als dasteht. Das ist Absicht und kein Rest: Eine
 Untergrenze, die mit dem Inhalt schwankte, ließe die Karte bei jedem
@@ -364,8 +365,6 @@ class SelectionOperationsPanel(QWidget):
         self._at_which_kind = {
             spec.name: frozenset(spec.applies_to) for spec in feature_operations(specs)
         }
-        self._on_body = frozenset(spec.name for spec in specs if spec.also_on_body)
-        """Merkmalshandlungen, die auch am ganzen Körper gelten (``also_on_body``)."""
         """Und an **welcher Art** von Merkmal jede von ihnen etwas tut.
 
         Dieselbe Quelle, einen Schritt genauer: ``applies_to`` nennt nicht nur
@@ -376,6 +375,19 @@ class SelectionOperationsPanel(QWidget):
         ``face`` etwas tun. Zuständig sind an einer Bohrung neun, an einer
         Senkung sechs (gemessen 09.09.2026; Robert: „bei einer Bohrung oder
         Senkung brauchen wir Filament und die Körperliste gar nicht")."""
+        self._on_body = frozenset(spec.name for spec in specs if spec.also_on_body)
+        """Merkmalshandlungen, die auch am ganzen Körper gelten (``also_on_body``)."""
+        self._for_all_bodies = frozenset(spec.name for spec in operations if spec.takes_whole_scene)
+        """Handlungen, die alle Körper der Szene nehmen — Ausrichten, Anordnen,
+        Überschneidungen prüfen.
+
+        **Sie stehen da, wenn nichts gewählt ist, und nicht an einer Auswahl**
+        (Robert, 27.09.2026: „sollten wir aber anzeigen, wenn keins ausgewählt
+        ist und nicht wenn eins ausgewählt ist, da es eine operation für alle
+        ist"). Am gewählten Körper sagte der Knopf, er gelte diesem Körper, und
+        tat es nicht."""
+        self._nothing_chosen = False
+        """Ob gerade nichts gewählt ist — die Stufe der ganzen Szene."""
         self._buttons: dict[str, QToolButton] = {}
         self._groups: dict[str, tuple[QWidget, QToolButton, tuple[QToolButton, ...]]] = {}
         """Je Gruppe ihr Abschnitt, sein Umschalter und ihre Knöpfe.
@@ -749,7 +761,8 @@ class SelectionOperationsPanel(QWidget):
         self.setVisible(not part_selected)
         if part_selected:
             return
-        if selected <= 0:
+        self._nothing_chosen = selected <= 0
+        if self._nothing_chosen:
             # **Ohne Auswahl bleibt der Weg zu den Bausteinen** (Befund
             # Robert, 18.09.2026: „bei keiner Auswahl sollte das merkmalpanel
             # auch da sein um Bausteine setzen zu können"). Die Karte
@@ -758,8 +771,9 @@ class SelectionOperationsPanel(QWidget):
             # niemand sucht, der gerade auf eine leere Fläche klickt. Drei
             # der siebenundzwanzig Bausteine stehen frei (``standalone``) und
             # brauchen gar keinen Körper; der Katalog lässt sie durch und
-            # sagt bei den übrigen selbst, was fehlt.
-            self._empty_but_for_the_catalogue()
+            # sagt bei den übrigen selbst, was fehlt. Dazu kommen die
+            # Handlungen für alle Körper (:attr:`_for_all_bodies`).
+            self._without_a_selection(availability)
             return
         # **Bausteine setzt man auf eine Fläche, nicht in ein Loch** (Robert,
         # 10.09.2026: „ganz unten wenn wir runterscrollen noch bauteile, das
@@ -787,21 +801,7 @@ class SelectionOperationsPanel(QWidget):
             if selected != 1
             else tr("1 Objekt gewählt")
         )
-        for name, button in self._buttons.items():
-            enabled, reason = availability(name)
-            state = (enabled, reason)
-            if self._states.get(name) == state:
-                continue
-            self._states[name] = state
-            button.setEnabled(enabled)
-            spec_tip = button.property("operationTip")
-            if spec_tip is None:
-                spec_tip = button.toolTip()
-                button.setProperty("operationTip", spec_tip)
-            tip = str(spec_tip) if enabled or not reason else reason
-            button.setToolTip(tip)
-            button.setStatusTip(tip)
-            button.setAccessibleDescription(tip)
+        self._take_availability(availability)
         self._lay_out_quick(
             tuple(
                 name
@@ -823,7 +823,9 @@ class SelectionOperationsPanel(QWidget):
         """
         if query is not None:
             self._query = query
-        wanted = self._query.strip().casefold()
+        # Ohne Auswahl ist das Suchfeld verborgen; ein Suchtext von der
+        # letzten Auswahl filterte sonst unsichtbar die Handlungen weg.
+        wanted = "" if self._nothing_chosen else self._query.strip().casefold()
         found = 0
         for title, (section, toggle, buttons) in self._groups.items():
             shown = 0
@@ -851,15 +853,34 @@ class SelectionOperationsPanel(QWidget):
         # Beschriftung in die Spalte passt, ist eine Frage je Knopf.
         self._wrap_labels()
 
-    def _empty_but_for_the_catalogue(self) -> None:
-        """Ohne Auswahl bleibt nur der Weg zu den Bausteinen.
+    def _take_availability(self, availability: Callable[[str], tuple[bool, str]]) -> None:
+        """Freigabe und Hinweis jedes Knopfes nachführen — nur, wo sie sich ändern."""
+        for name, button in self._buttons.items():
+            enabled, reason = availability(name)
+            state = (enabled, reason)
+            if self._states.get(name) == state:
+                continue
+            self._states[name] = state
+            button.setEnabled(enabled)
+            spec_tip = button.property("operationTip")
+            if spec_tip is None:
+                spec_tip = button.toolTip()
+                button.setProperty("operationTip", spec_tip)
+            tip = str(spec_tip) if enabled or not reason else reason
+            button.setToolTip(tip)
+            button.setStatusTip(tip)
+            button.setAccessibleDescription(tip)
 
-        Keine Operationsliste — die gilt einer Auswahl, und die gibt es
-        nicht. Was bleibt, ist der Knopf und ein Satz, der sagt, woran es
-        liegt.
+    def _without_a_selection(self, availability: Callable[[str], tuple[bool, str]]) -> None:
+        """Ohne Auswahl: die Handlungen für alle Körper und der Weg zu den Bausteinen.
+
+        Keine Hauptaktionen und keine Suche — beides gilt einer Auswahl, und
+        die gibt es nicht. Was dasteht, sind die Handlungen, die ohnehin jeden
+        Körper nehmen (:attr:`_for_all_bodies`), freigegeben wie an jeder
+        anderen Stelle, und der Knopf zum Katalog. Ist die Szene leer, bleiben
+        der Knopf und ein Satz, der sagt, woran es liegt
+        (:meth:`_say_there_is_nothing`).
         """
-        for section, _toggle, _buttons in self._groups.values():
-            section.setVisible(False)
         # **Die Hauptaktionen gehen über ihren eigenen Weg weg, nicht über
         # ``setVisible``.** `_lay_out_quick` kürzt ab, wenn dieselbe Liste
         # schon steht — wer die Knöpfe hier von Hand versteckte, ließ
@@ -870,9 +891,8 @@ class SelectionOperationsPanel(QWidget):
         self._lay_out_quick(())
         self.summary.setText(tr("Nichts gewählt"))
         self.catalog_button.setVisible(True)
-        self._only_this_sentence(
-            tr("Wählen Sie einen Körper oder eine Fläche — Bausteine gehen auch so.")
-        )
+        self._take_availability(availability)
+        self._filter()
 
     def _say_there_is_nothing(self, found: int, searching: bool) -> None:
         """Die leere Liste sagt, warum sie leer ist — und lädt nicht zum Suchen ein.
@@ -888,6 +908,19 @@ class SelectionOperationsPanel(QWidget):
         darunter leer ist und leer bleibt, stellt eine Frage, auf die es
         keine Antwort gibt (Befund Robert, 18.09.2026).
         """
+        if self._nothing_chosen:
+            # Ohne Auswahl gibt es nichts zu durchsuchen: Was dasteht, sind
+            # die wenigen Handlungen für alle Körper, und der Satz sagt das.
+            if found > 0:
+                self.search.setVisible(False)
+                self.scroller.setVisible(True)
+                self._nothing.setText(tr("Gilt für alle Körper."))
+                self._nothing.setVisible(True)
+            else:
+                self._only_this_sentence(
+                    tr("Wählen Sie einen Körper oder eine Fläche — Bausteine gehen auch so.")
+                )
+            return
         if found > 0:
             self.search.setVisible(True)
             self.scroller.setVisible(True)
@@ -939,6 +972,13 @@ class SelectionOperationsPanel(QWidget):
         """
         if name in PICKER_HANDLES:
             return False
+        # Die Handlungen für alle Körper gehören zur Stufe ohne Auswahl und zu
+        # keiner anderen (:attr:`_for_all_bodies`); ohne Auswahl steht nichts
+        # sonst da.
+        if name in self._for_all_bodies:
+            return self._nothing_chosen
+        if self._nothing_chosen:
+            return False
         if self._feature_kind:
             if name in _shown_as_fields():
                 return False
@@ -953,6 +993,9 @@ class SelectionOperationsPanel(QWidget):
         """Die Stufe, auf die das Panel gerade eingestellt ist.
 
         Für Tests und für das Fenster: ``""`` heißt Körperstufe, ein
-        Merkmalsname die Art des gewählten Merkmals, ``None`` noch gar nichts.
+        Merkmalsname die Art des gewählten Merkmals, ``"scene"`` nichts gewählt
+        — dann stehen die Handlungen für alle Körper da.
         """
+        if self._nothing_chosen:
+            return "scene"
         return self._feature_kind or ""

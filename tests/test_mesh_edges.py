@@ -2691,3 +2691,195 @@ def test_a_rim_is_named_after_the_plane_it_lies_in(backend: str) -> None:
 
     box = {edge_lie_of(entry) for entry in edges_of(block())}
     assert box == {"upright", "flat"}, "Strecken liegen nach ihrer Richtung"
+
+
+def _cross_bored_block(backend: str) -> list[Any]:
+    """Quader 40 × 30 × 20 mit Querbohrung Ø 6 entlang Y (RM-279).
+
+    Von außen gezählt: vier stehende Kanten, je vier waagerechte oben und
+    unten, und die zwei Mündungen der Bohrung in den senkrechten Wänden bei
+    y = ±15 — Ringe, deren Ebene senkrecht steht.
+    """
+    if backend == "mesh":
+        box = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
+        box.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+        bore = trimesh.creation.cylinder(radius=3.0, height=3.0 * DEPTH, sections=48)
+        bore.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+        bore.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+        outcome = boolean("difference", [MeshData(box), MeshData(bore)])
+        return edges_of(outcome.mesh)
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    solid = brep.bore(
+        brep.box(WIDTH, DEPTH, HEIGHT),
+        position=(0.0, -DEPTH / 2.0, HEIGHT / 2.0),
+        axis="y",
+        diameter=6.0,
+    )
+    return brep.edges_of(solid)
+
+
+@pytest.mark.parametrize("backend", ["mesh", "brep"])
+def test_a_group_takes_a_rim_only_when_it_lies_flat(backend: str) -> None:
+    """RM-279: „Alle waagerechten Kanten“ nahm die Mündungen einer Querbohrung mit.
+
+    Ein geschlossener Ring hat keine Richtung, und ``flat`` galt an jedem.
+    Entschieden (Release-Sitzung 0.5.1): Gerade Kanten zählen nach ihrer
+    Richtung, ein runder Rand nur, wenn er waagerecht liegt. Die Mündungen in
+    den Seitenwänden heißen „Senkrecht“ und gehören zu keiner Gruppe —
+    „senkrecht“, die Vorgabe von Verrunden, bleibt bei den vier stehenden
+    Kanten. Ein waagerechter Rand (stehende Bohrung) zählt weiter zu
+    „waagerecht“ und „oben“.
+    """
+    from app.core.geom.edges import choose, edge_lie_of
+
+    edges = _cross_bored_block(backend)
+    rims = [entry for entry in edges if math.dist(entry.direction, (0.0, 0.0, 0.0)) < 1e-6]
+    assert len(edges) == 14 and len(rims) == 2, "sonst prüft der Test keine Querbohrung"
+    assert {edge_lie_of(entry) for entry in rims} == {"upright"}
+
+    horizontal = choose(edges, "horizontal")
+    assert len(horizontal) == 8 and not any(entry in rims for entry in horizontal)
+    vertical = choose(edges, "vertical")
+    assert len(vertical) == 4 and not any(entry in rims for entry in vertical)
+    assert len(choose(edges, "top")) == 4
+    assert len(choose(edges, "bottom")) == 4
+    assert {edge_lie_of(entry) for entry in horizontal} == {"flat"}
+    # Der Weg gespeicherter Schritte bis Format 36 bleibt, wie er war.
+    assert len(choose(edges, "horizontal", rings_by_plane=False)) == 10
+    assert len(choose(edges, "vertical", rings_by_plane=False)) == 4
+
+    standing = _upright_bored_block(backend)
+    flat_rims = [e for e in standing if math.dist(e.direction, (0.0, 0.0, 0.0)) < 1e-6]
+    assert len(flat_rims) == 2 and {edge_lie_of(entry) for entry in flat_rims} == {"flat"}
+    assert all(entry in choose(standing, "horizontal") for entry in flat_rims)
+    top = choose(standing, "top")
+    assert len(top) == 5 and sum(entry in flat_rims for entry in top) == 1
+
+
+def _upright_bored_block(backend: str) -> list[Any]:
+    """Derselbe Quader mit einer stehenden Bohrung Ø 6: zwei waagerechte Ränder."""
+    if backend == "mesh":
+        box = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
+        box.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+        bore = trimesh.creation.cylinder(radius=3.0, height=3.0 * HEIGHT, sections=48)
+        bore.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+        outcome = boolean("difference", [MeshData(box), MeshData(bore)])
+        return edges_of(outcome.mesh)
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    solid = brep.bore(
+        brep.box(WIDTH, DEPTH, HEIGHT), position=(0.0, 0.0, HEIGHT), axis="z", diameter=6.0
+    )
+    return brep.edges_of(solid)
+
+
+@pytest.mark.parametrize("axis", ["y", "z"])
+@pytest.mark.parametrize(("size", "rounded"), [(2.0, True), (5.0, True), (2.0, False)])
+def test_the_mouth_of_a_bore_is_rounded_as_deep_as_pappus_says(
+    axis: str, size: float, rounded: bool
+) -> None:
+    """RM-279 (i): Am Netz kam die Rundung eines Bohrungsrands zu flach heraus.
+
+    Die Prismen je Stück standen mit ihren Stirnflächen quer zum eigenen
+    Stück; wo der Zwickel außen um die Bohrung liegt, klaffte zwischen zwei
+    Prismen ein Keil, und dort blieb Material stehen. Quader 40 × 30 × 20,
+    Bohrung Ø 6 (48 Seiten), quer oder stehend, beide Mündungen: Verrunden
+    R 2 trug 5,4 % zu wenig ab, R 5 20,5 %, Fase 2 14,4 %; die Rundung lag bis
+    1,95 mm neben dem Torus. Der Sollwert ist Pappus: der Zwickel
+    R²(1 − π/4) mit dem Schwerpunkt (10 − 3π)/(12 − 3π)·R vom Eck, bei der
+    Fase d²/2 mit d/3, einmal um die Bohrachse. Der Sehnenzug des Bogens
+    trägt etwas mehr ab als der Kreis; wie viel, begrenzt
+    ``MAX_FACET_SAG`` über der Rundungsfläche. Und jeder Punkt der Rundung
+    liegt höchstens ``MAX_FACET_SAG`` neben dem Torus.
+    """
+    bore_radius = 3.0
+    box = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
+    box.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+    bore = trimesh.creation.cylinder(radius=bore_radius, height=3.0 * DEPTH, sections=48)
+    if axis == "y":
+        bore.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+    bore.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+    body = boolean("difference", [MeshData(box), MeshData(bore)]).mesh
+    rims = [edge_key(e) for e in edges_of(body) if math.dist(e.direction, (0, 0, 0)) < 1e-6]
+    assert len(rims) == 2
+
+    work = round_edges if rounded else bevel_edges
+    worked = work(body, size, "named", rims).mesh
+    removed = body.volume - worked.volume
+
+    if rounded:
+        area = size * size * (1.0 - math.pi / 4.0)
+        centroid = (10.0 - 3.0 * math.pi) / (12.0 - 3.0 * math.pi) * size
+        surface = math.pi * size / 2.0 * 2.0 * math.pi * (bore_radius + size - 2.0 * size / math.pi)
+    else:
+        area = size * size / 2.0
+        centroid = size / 3.0
+        surface = size * math.sqrt(2.0) * 2.0 * math.pi * (bore_radius + size / 2.0)
+    pappus = 2 * 2.0 * math.pi * (bore_radius + centroid) * area
+    assert worked.is_watertight and worked.component_count == 1
+    assert pappus * 0.99 <= removed <= pappus + 2 * surface * MAX_FACET_SAG, (removed, pappus)
+
+    if rounded:
+        points = np.vstack(
+            [worked.raw.vertices, trimesh.sample.sample_surface(worked.raw, 200000, seed=3)[0]]
+        )
+        if axis == "y":
+            rho = np.hypot(points[:, 0], points[:, 2] - HEIGHT / 2.0)
+            depth = DEPTH / 2.0 - np.abs(points[:, 1])
+        else:
+            rho = np.hypot(points[:, 0], points[:, 1])
+            depth = np.minimum(HEIGHT - points[:, 2], points[:, 2])
+        zone = (
+            (rho > bore_radius + 1e-3)
+            & (rho < bore_radius + size)
+            & (depth > 1e-3)
+            & (depth < size)
+        )
+        off = np.abs(np.hypot(rho[zone] - (bore_radius + size), depth[zone] - size) - size)
+        assert zone.sum() > 1000 and off.max() <= MAX_FACET_SAG, off.max()
+
+
+def test_a_radius_law_around_the_mouth_of_a_bore_is_not_too_flat() -> None:
+    """RM-279 (i), derselbe Keil mit Radiusverlauf: 2 → 4 → 2 an einer Mündung.
+
+    Mit Prismen je Stück trug das Netz an der Querbohrung Ø 6 13 % weniger ab
+    als der exakte Kern (41,78 gegen 47,83 mm³). Jetzt liegt es darüber, um
+    höchstens, was der Sehnenzug über der Rundungsfläche ausmacht.
+    """
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    from app.core.geom.edges import RadiusLaw
+
+    box = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
+    box.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+    bore = trimesh.creation.cylinder(radius=3.0, height=3.0 * DEPTH, sections=48)
+    bore.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+    bore.apply_translation((0.0, 0.0, HEIGHT / 2.0))
+    body = boolean("difference", [MeshData(box), MeshData(bore)]).mesh
+    solid = brep.bore(
+        brep.box(WIDTH, DEPTH, HEIGHT),
+        position=(0.0, -DEPTH / 2.0, HEIGHT / 2.0),
+        axis="y",
+        diameter=6.0,
+    )
+
+    def front_rim(entries: list[Any]) -> Any:
+        return next(
+            e
+            for e in entries
+            if math.dist(e.direction, (0.0, 0.0, 0.0)) < 1e-6 and e.middle[1] < 0.0
+        )
+
+    law = RadiusLaw((0.0, 0.5, 1.0), (2.0, 4.0, 2.0))
+    worked = round_edges(body, 4.0, "named", [edge_key(front_rim(edges_of(body)))], law=law)
+    exact_key = brep.edge_key(front_rim(brep.edges_of(solid)))
+    exact = brep.fillet(solid, 4.0, "named", [exact_key], law=law)
+    removed = body.volume - worked.mesh.volume
+    expected = solid.volume - exact.volume
+    surface = math.pi / 2.0 * 4.0 * 2.0 * math.pi * (3.0 + 4.0)
+    assert worked.mesh.is_watertight
+    assert expected * 0.99 <= removed <= expected + surface * MAX_FACET_SAG, (removed, expected)

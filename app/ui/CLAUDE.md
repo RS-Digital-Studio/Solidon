@@ -119,7 +119,7 @@ Karte, dort das Gesetz.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
-| `selection_operations.py` | Operationen zur Auswahl in einer Karte unter Bericht und Chat, einmal aus dem Register gebaut (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`) — für Auswahlhandlungen der einzige Ort |
+| `selection_operations.py` | Operationen zur Auswahl in einer Karte unter Bericht und Chat, einmal aus dem Register gebaut (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`) — für Auswahlhandlungen der einzige Ort; ohne Auswahl stehen dort die Handlungen für alle Körper |
 | `tool_strip.py` | Werkzeugzeile unter der Ansicht (§2.4, §2.5) |
 | `analysis_bar.py` | Analysekarten, Legende und Schichtvorschau (§18.4, §18.10) |
 | `section_bar.py` | Schnittebene (§18.2) |
@@ -226,7 +226,8 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 
 | Datei | Zweck |
 |---|---|
-| `manual_window.py` | das Handbuchfenster (§2.7, §19.2) |
+| `manual_window.py` | das Handbuchfenster (§2.7, §19.2); Rangfolge und Fundstelle aus `core/manual_search.py` |
+| `guide_targets.py` | was ein Name der Bildanleitungen meint (`widget_for`, `area_for`, `action_for`) — für Tour und `tools/make_guides.py`; ein fehlendes Ziel ist `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
 | `shortcut_schemes.py` | zwei Kürzelbelegungen, eine Quelle; `NavigationKeys` lässt Pos1, Ende, Bild auf und Bild ab dem fokussierten Inhalt |

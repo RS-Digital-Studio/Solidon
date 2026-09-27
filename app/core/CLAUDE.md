@@ -106,9 +106,16 @@ kein Schritt ist, reist als `DocumentChange` mit (§15.5).
   **erzeugte** Merkmal, nicht das daneben erkannte zweite; der Schritt bleibt
   beim Nachtragen der letzte, ein geänderter Verlauf bekommt einen Befund.
 
-**Dokumentation, ohne Qt gezeichnet** — `manual.py` (geschriebene Seiten plus
-Referenz aus dem Register; `spacemouse_access_help`, USB-Regel nur bei
-bekannter Hersteller-/Produktkennung) · `figures.py` (Abbildungskatalog) ·
+**Dokumentation, ohne Qt gezeichnet** — `manual.py` (geschriebene Seiten,
+Bildanleitungen und Referenz aus dem Register, gegliedert in fünf Teile über
+`OUTLINE`; `spacemouse_access_help`, USB-Regel nur bei bekannter
+Hersteller-/Produktkennung) · `manual_search.py` (die Suche im Handbuch:
+Rangfolge nach Titel, Kurzfassung, Stichwort und Text, Fundstelle je Seite;
+Faltung, Trefferstärke und Kundenwörter aus `registry/search.py`) ·
+`guides.py` (Bildanleitungen: Schritte, Sätze und die Namen der Ziele, auf
+die ein Bild zeigt; aufgenommen beim Release in der echten Oberfläche,
+Konzept `konzepte/konzept-handbuch-2026-09.md`) · `figures.py`
+(Abbildungskatalog, dazu je Anleitungsschritt ein Bildschirmfoto) ·
 `drawing.py` (SVG; lange Beschriftungen umbricht `Canvas.wrapped`, der Text
 bleibt vollständig im SVG) · `markup.py` (Markdown → HTML, nur die selbst
 erzeugte Teilmenge) · `examples.py` · `tour.py` (Beispielprojekte und Touren).

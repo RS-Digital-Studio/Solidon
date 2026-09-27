@@ -61,6 +61,7 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 |---|---|
 | `make_manual.py` · `site_nav.py` | Handbuch als Seite und PDF · Wege aus einem sprachneutralen Pfadschema. Sichtbare Texte und PDF-Rahmen kommen aus dem Katalog — eine neue Sprache verlangt keine Tabellenzeile |
 | `make_figures.py` · `make_web_images.py` | Handbuchbilder · Website-Bilder aus dem maximierten Hauptfenster |
+| `make_guides.py` | Die Bildanleitungen des Handbuchs: je Anleitung eine Geschichte durch die echte Oberfläche, Rahmen, Nummern und Pfeile an den Zielen aus `app/ui/guide_targets.py`, WebP je Schritt, ein Kindprozess je Sprache. Menüeinträge mit aufgeklapptem Menü, modale Dialoge wie der Bausteinkatalog über `make_web_images.while_open`. Läuft vor `make_manual.py`; ein fehlendes Ziel hält den Lauf an |
 | `make_feature_images.py` | Textfreie Funktionsbilder aus registrierten Operationen: ein Motiv je nativem Prozess, eigene Konfigurationsverzeichnisse, der pygfx-Renderer des Viewports. `--output` nennt einen Prüfungsordner, WebP und JSON-Geometriebeleg entstehen gemeinsam; erst nach Sichtprüfung nach `website/bilder/feature-*.webp`, der Beleg bleibt intern |
 | `make_showpiece.py` · `make_gallery.py` | Das Schaustück, über die Operations-API gebaut wie von einem Nutzer · Galeriebilder im Viewport mit Licht und Schatten, nie über die flache Projektion der Katalogvorschau |
 | `make_video.py` · `speak_chatterbox.py` | Videos aus der laufenden Anwendung · Sprachsynthese mit `voice-reference.wav` (intern) |

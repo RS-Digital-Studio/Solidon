@@ -94,6 +94,8 @@ it into `website/version.json`.
 
 - In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer the manufacturer's profile applies. Solidon only writes what you change or accept from suggestions.
 - The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.
+- The *Fine*, *Draft* and *Strong* qualities now choose your slicer's matching process, for example “0.12mm Fine” for *Fine*.
+- The quality levels in the print dialog now appear in the language of the interface.
 - Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, so the nozzle oozes less along the way.
 - Solidon takes the overhang angle from your printer's manufacturer profile, 60 instead of 45 degrees for Elegoo, Bambu and Creality. Chamfers and gentle slopes no longer get needless supports.
 - The report, too, now calculates overhangs with the angle from which your slicer profile adds supports.
@@ -143,11 +145,19 @@ it into `website/version.json`.
 - If a file in *Recently opened* has been moved, Solidon says so and offers *Choose another file*.
 - A file that could not be read no longer ends up in *Recently opened*, and the next file no longer reports its name while loading.
 - Recently opened projects on the start page open with one click.
+- With nothing selected, the selection panel offers what applies to all bodies: *Orient for printing*, *Arrange on the bed* and *Check overlaps*.
 - After *Split the model*, all parts stand fully in view.
 - Every halted step in the report has a button: *Correct the input* opens it with the cursor in the affected field.
 - After splitting, the report no longer shows buttons that do nothing on lines about the old body.
 - A freely drawn sketch without dimensions no longer generates a notice in the report.
 - An error report names folders under your user directory without your username, even when Solidon itself is installed there.
+
+### Manual and website
+
+- The manual shows step by step, in pictures from the application, how to check and print a model, drill a hole and build your own part or an enclosure with a lid.
+- An overview picture explains the window: each number in the picture marks one area.
+- The search in the manual finds the right page even with everyday words, lists it first and opens it where the word appears.
+- The reference names, for every operation, where to find it in the menu or in the selection panel.
 
 ## 0.5.0
 

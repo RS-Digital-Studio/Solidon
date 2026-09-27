@@ -275,6 +275,7 @@ from app.ui.facts import PrintFacts
 from app.ui.filament_picker import CatalogueWrites, FilamentPanel, colours_of, spool_slot
 from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
+from app.ui.guide_targets import MissingTargetError, widget_for
 from app.ui.header import ALL_PLATES, HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
@@ -22284,18 +22285,18 @@ class MainWindow(QMainWindow):
         Zeigt der Schritt auf den Prüfbericht, wird der Reiter gleich
         mitgeholt: er teilt sich die Spalte mit der Tour, und ihn suchen zu
         lassen hieße, die Tour aus dem Blick zu nehmen.
+
+        Welches Widget ein Name meint, sagt :mod:`app.ui.guide_targets` —
+        dieselbe Auflösung, mit der die Bildanleitungen ihre Rahmen setzen.
+        Hier stand bis dahin eine zweite Zuordnung derselben sieben Namen.
+        Ein Aufleuchten, das sein Ziel nicht findet, ist nur ein fehlender
+        Hinweis; es wird protokolliert und nicht zum Fehler, anders als bei
+        der Aufnahme, die daran den Release anhält.
         """
-        areas: dict[str, QWidget] = {
-            "tree": self.object_tree,
-            "parameters": self.parameters,
-            "history": self.history_panel,
-            "report": self.report,
-            "viewport": self.viewport,
-            "toolbar": self.toolbar,
-            "tools": self.tools,
-        }
-        area = areas.get(target)
-        if area is None:
+        try:
+            area = widget_for(self, target)
+        except MissingTargetError as missing:
+            _log.warning("tour flash without target: %s", missing)
             return
         if area is self.report:
             self.right.setCurrentWidget(self.report)

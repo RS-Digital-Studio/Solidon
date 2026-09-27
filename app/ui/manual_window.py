@@ -50,7 +50,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME, WEBSITE_URL
-from app.core import drawing, figures, manual
+from app.core import drawing, figures, manual, manual_search
 from app.core.log import get_logger
 from app.i18n import get_language, tr
 from app.ui.dialogs import open_link
@@ -322,6 +322,10 @@ class ManualWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.close)
 
         self._visible: list[manual.Page] = []
+        self._spots: list[str] = []
+        # Zerlegt wird beim ersten Suchwort und nicht beim Öffnen: Wer das
+        # Handbuch nur liest, wartet nicht auf einen Index, den er nie braucht.
+        self._index: manual_search.SearchIndex | None = None
         self._fill(self._pages)
 
     def _open_link(self, address: QUrl) -> None:
@@ -347,9 +351,16 @@ class ManualWindow(QMainWindow):
 
     # --- Inhalt ---------------------------------------------------------------
 
-    def _fill(self, pages: list[manual.Page] | tuple[manual.Page, ...]) -> None:
-        """Die Seitenliste neu setzen und die erste zeigen."""
+    def _fill(
+        self, pages: list[manual.Page] | tuple[manual.Page, ...], spots: list[str] | None = None
+    ) -> None:
+        """Die Seitenliste neu setzen und die erste zeigen.
+
+        ``spots`` nennt je Seite die Stelle, an der sie nach einer Suche
+        aufschlägt; ohne Suche beginnt jede oben.
+        """
         self._visible = list(pages)
+        self._spots = spots or []
         self.contents.clear()
         for page in self._visible:
             item = QListWidgetItem(str(page.title))
@@ -389,6 +400,25 @@ class ManualWindow(QMainWindow):
             # deshalb im Kern und nicht zweimal.
             self.text.setMarkdown(manual.titled(page, self._with_figures(page)))
             self.text.moveCursor(self.text.textCursor().MoveOperation.Start)
+            if row < len(self._spots) and self._spots[row]:
+                self._show_spot(self._spots[row])
+
+    def _show_spot(self, spot: str) -> None:
+        """Die Seite an der Stelle aufschlagen, die zur Suche passt, und sie markieren.
+
+        Vorher begann jede Seite oben. Bei *Gehäuse* stand das passende Wort in
+        der Referenz „Bausteine" bei Wort 5 368 von 6 483, rund dreizehn
+        Bildschirmhöhen tiefer (``konzepte/nachweise-handbuch-2026-09/
+        findbarkeit.md``). Die Stelle rückt ins obere Drittel, damit der Satz
+        davor noch zu sehen ist. Findet das Fenster sie nicht — etwa weil die
+        Anzeige ein Zeichen anders setzt als der Text —, bleibt die Seite oben
+        stehen, wie früher.
+        """
+        if not self.text.find(spot, QTextDocument.FindFlag.FindWholeWords):
+            return
+        bar = self.text.verticalScrollBar()
+        above = self.text.viewport().height() // 3
+        bar.setValue(bar.value() + self.text.cursorRect().top() - above)
 
     # --- Abbildungen ------------------------------------------------------------------
 
@@ -418,18 +448,20 @@ class ManualWindow(QMainWindow):
         return manual.FIGURE_PATTERN.sub(replace, page.text())
 
     def _filter(self, needle: str) -> None:
-        """Über Titel *und* Text suchen — wer sucht, weiß das Kapitel nicht."""
-        wanted = needle.strip().casefold()
-        if not wanted:
+        """Über Titel *und* Text suchen, die passendste Seite zuerst.
+
+        Wer sucht, weiß das Kapitel nicht. Wie die Treffer geordnet werden und
+        welche Kundenwörter zu welchem Handbuchwort führen, steht im Kern
+        (``manual_search``); hier wird nur gezeigt.
+        """
+        if not needle.strip():
             self._fill(self._pages)
             return
-        self._fill(
-            [
-                page
-                for page in self._pages
-                if wanted in str(page.title).casefold() or wanted in page.text().casefold()
-            ]
-        )
+        index = self._index
+        if index is None:
+            index = self._index = manual_search.SearchIndex(self._pages)
+        found = index.search(needle)
+        self._fill([hit.page for hit in found], [hit.spot for hit in found])
 
     def show_page(self, key: str) -> None:
         """Eine bestimmte Seite zeigen — der Weg von einer Operation ins Kapitel."""

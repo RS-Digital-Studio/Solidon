@@ -147,6 +147,12 @@ Operationen sind Benutzereingaben, und die übersetzt die Anwendung nicht.
 Einblendungen, sichtbare Dialoge und Formeln werden gemeinsam geprüft; nur den
 Text über einer deutschen Aufnahme zu ersetzen reicht nicht.
 
+**Ein Name im Satz einer Bildanleitung ist der Name am Bildschirm.** Was ein
+Schritt hervorhebt (*Aushöhlen*, *Oben öffnen*, *Erzeugen → Bausteine →
+Deckel erzeugen*), steht in der Übersetzung genau so, wie der Katalog Knopf,
+Feld oder Menüeintrag übersetzt — kein Synonym, keine Kurzform, denn der Kunde
+sucht das Wort im Fenster. `tests/test_guides.py` prüft es in jeder Sprache.
+
 ## Neue Schlüssel nachtragen
 
 Die neuen Texte in jede Katalogdatei eintragen — `test_translations.py` sagt,

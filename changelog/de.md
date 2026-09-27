@@ -119,6 +119,8 @@ Nutzen da und sonst nichts.
 
 - In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print und OrcaSlicer gilt das Profil des Herstellers. Solidon schreibt nur, was Sie ändern oder an Vorschlägen übernehmen.
 - Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 sind große Teile so 40 bis 50 Prozent früher fertig.
+- Die Stufen *Fein*, *Entwurf* und *Belastbar* wählen jetzt den passenden Prozess Ihres Slicers, etwa „0.12mm Fine“ bei *Fein*.
+- Die Qualitätsstufen im Druckdialog stehen jetzt in der Sprache der Oberfläche.
 - Auch das Tempo der Leerfahrten kommt vom Drucker: Der Centauri Carbon 2 fährt sie mit 500 statt 150 mm/s, damit die Düse unterwegs weniger ausläuft.
 - Den Überhangwinkel nimmt Solidon aus dem Herstellerprofil Ihres Druckers, bei Elegoo, Bambu und Creality 60 statt 45 Grad. Fasen und flache Schrägen bekommen keine unnötigen Stützen mehr.
 - Auch der Prüfbericht rechnet Überhänge jetzt mit dem Winkel, ab dem Ihr Slicerprofil stützt.
@@ -168,11 +170,19 @@ Nutzen da und sonst nichts.
 - Ist eine Datei aus *Zuletzt geöffnet* verschoben worden, sagt Solidon das und bietet *Andere Datei wählen* an.
 - Eine Datei, die sich nicht lesen ließ, landet nicht mehr in *Zuletzt geöffnet*, und die nächste Datei meldet beim Laden nicht deren Namen.
 - Zuletzt geöffnete Projekte auf der Startseite öffnen mit einem Klick.
+- Ist nichts gewählt, bietet das Auswahlfenster an, was für alle Körper gilt: *Druckoptimal ausrichten*, *Auf dem Bett anordnen* und *Überschneidungen prüfen*.
 - Nach *Modell teilen* stehen alle Teile ganz im Bild.
 - Jeder angehaltene Schritt im Prüfbericht hat einen Knopf: *Eingabe korrigieren* öffnet ihn mit dem Cursor im betroffenen Feld.
 - Nach dem Teilen zeigt der Prüfbericht an Zeilen zum alten Körper keine Knöpfe mehr, die nichts bewirken.
 - Eine frei gezogene Zeichnung ohne Maß erzeugt keinen Hinweis mehr im Prüfbericht.
 - Ein Fehlerbericht nennt Ordner unter Ihrem Benutzerverzeichnis ohne Ihren Benutzernamen, auch wenn Solidon selbst dort installiert ist.
+
+### Handbuch und Website
+
+- Das Handbuch zeigt Schritt für Schritt in Bildern aus der Anwendung, wie man ein Modell prüft und druckt, ein Loch bohrt und ein eigenes Teil oder ein Gehäuse mit Deckel baut.
+- Ein Übersichtsbild erklärt das Fenster: Jede Nummer im Bild steht für einen Bereich.
+- Die Suche im Handbuch findet die passende Seite auch mit Alltagswörtern, zeigt sie zuerst und schlägt sie an der Stelle auf, an der das Wort steht.
+- Die Referenz nennt bei jeder Operation, wo sie im Menü oder im Auswahlfenster zu finden ist.
 
 ## 0.5.0
 

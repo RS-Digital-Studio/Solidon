@@ -6,11 +6,15 @@ Slicer nennen dieselbe Sache verschieden: die Wandzahl ist bei PrusaSlicer
 ``wall_line_count``. Diese Datei ist das Wörterbuch dazwischen — Daten, keine
 Logik, damit ein weiterer Slicer eine Tabelle kostet und keinen Eingriff.
 
-Drei Familien decken die verbreiteten Programme ab:
+Drei Familien übersetzen die verbreiteten Programme:
 
 ``prusa``   PrusaSlicer und SuperSlicer — ``key = value`` in einer ``.ini``
-``orca``    OrcaSlicer und Bambu Studio — JSON, aus PrusaSlicer hervorgegangen
+``orca``    OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print ab
+            Version 6 — JSON, aus PrusaSlicer hervorgegangen
 ``cura``    CuraEngine — ``-s key=value`` auf der Kommandozeile
+
+Die vierte, ``other``, übersetzt nichts: Ein Programm ohne Familie bekommt
+die Datei und keinen Wert (§29, zweite Übergabeart).
 
 Was in einer Tabelle fehlt, bleibt beim Grundprofil des Slicers stehen. Das
 ist Absicht: Solidon überschreibt, was es versteht, und lässt den Rest in

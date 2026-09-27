@@ -130,6 +130,33 @@ def test_the_checked_in_pdf_carries_the_current_version(language: str) -> None:
     assert APP_VERSION in cover, f"{path.name}: Titelseite nicht auf {APP_VERSION}"
 
 
+@pytest.mark.rendered
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_the_pdf_links_nowhere_outside_itself_but_the_website(language: str) -> None:
+    """Jedes Bildschirmfoto im PDF von 0.5.0 verwies auf ``file:///F:/3D%20Druck/…``.
+
+    Auf der Website öffnet ein Tippen das Bild in voller Größe; im Druck wurde
+    aus demselben Verweis der Pfad des Bau-Rechners — neun je Sprache, beim
+    Kunden ein Klick ins Leere, der einen fremden Pfad zeigt
+    (``konzepte/nachweise-handbuch-2026-09/findbarkeit.md``, Teil 3). Erlaubt
+    sind Sprünge im Dokument und Verweise ins Netz.
+    """
+    from pypdf import PdfReader
+
+    path = RELEASES / f"Solidon3D-Handbuch-{language}.pdf"
+    assert path.is_file(), f"{path.name} fehlt — tools/make_manual.py ausführen"
+    local: list[str] = []
+    for page in PdfReader(path).pages:
+        for reference in page.get("/Annots") or []:
+            action = reference.get_object().get("/A") or {}
+            target = str(action.get("/URI", ""))
+            if target and not target.startswith(("https://", "http://", "mailto:")):
+                local.append(target)
+    assert not local, (
+        f"{path.name}: {len(local)} Verweise aus dem Dokument hinaus, z. B. {local[0]}"
+    )
+
+
 def test_written_manual_covers_the_current_demo_and_visible_controls() -> None:
     """Die handgeschriebenen Kapitel nennen den ausgelieferten Zustand."""
     pages = {page.key: str(page.body) for page in manual.pages()}
@@ -418,6 +445,21 @@ def test_every_operation_appears_by_name() -> None:
         assert str(spec.title) in text, spec.name
 
 
+def test_every_operation_names_where_it_is_found() -> None:
+    """Von 142 Referenzeinträgen nannten zwei ihren Ort in der Oberfläche.
+
+    Wer in der Referenz liest, sucht als Nächstes den Knopf
+    (``konzepte/nachweise-handbuch-2026-09/findbarkeit.md``, Teil 4). Der Ort
+    kommt aus ``menu_path``, derselben Auskunft, die der Chat bekommt.
+    """
+    from app.core.registry.surfaces import documentation, menu_path
+
+    text = documentation()
+    for spec in REGISTRY.all():
+        entry = text.split(f"(`{spec.name}`)", 1)[1].split("\n### ", 1)[0]
+        assert f"**{tr('Ort')}:** {menu_path(spec)}" in entry, spec.name
+
+
 def test_the_written_pages_come_first() -> None:
     """Erst erklären, dann nachschlagen — wer das Handbuch öffnet, sucht nicht immer."""
     pages = manual.pages()
@@ -582,6 +624,24 @@ def test_dash_bullets_become_a_list_too() -> None:
     assert "<p>- <code>" not in manual.as_html()
 
 
+def test_numbered_lines_become_a_numbered_list() -> None:
+    """Die drei Schritte der Seite über zusätzliche Programme klebten auf der
+    Website zu einem Absatz zusammen; das Handbuchfenster, das Qts Markdown
+    liest, zeigte sie als Liste. Die Legenden der Bildanleitungen brauchen sie
+    auch: Ihre Nummern sind die Nummern im Bild.
+    """
+    from app.core import markup
+
+    html = markup.to_html("1. **Läuft es?** Ja.\n2. Ein Modell holen.\n\nDanach.")
+    assert html.startswith("<ol><li><strong>Läuft es?</strong> Ja.</li><li>")
+    assert html.count("<li>") == 2
+    assert "<p>Danach.</p>" in html
+    assert '<ol start="3">' in markup.to_html("3. Weiter.")
+    mixed = markup.to_html("- Punkt\n1. Schritt")
+    assert mixed == "<ul><li>Punkt</li></ul>\n<ol><li>Schritt</li></ol>"
+    assert "<p>1. " not in manual.as_html()
+
+
 def test_a_drawn_figure_offers_its_dark_version() -> None:
     """Wo eine dunkle Version existiert, steht sie als zweite Quelle daneben.
 
@@ -688,6 +748,27 @@ def test_searching_looks_inside_the_pages(qt_app: QApplication) -> None:
 
     assert window.contents.count() >= 1
     assert window.contents.count() < len(manual.pages())
+
+
+def test_the_search_lists_the_best_page_first_and_opens_it_where_the_word_stands(
+    qt_app: QApplication,
+) -> None:
+    """Die Liste folgt der Rangfolge des Kerns, und die Seite schlägt an der
+    Fundstelle auf, markiert (Konzept Handbuch §7). „abrunden" steht nirgends
+    im Handbuch und führt über die Kundenwörter zu *Verrunden*, weit unten in
+    der Referenz."""
+    from app.core import manual_search
+
+    window = ManualWindow()
+    try:
+        window.search.setText("abrunden")
+        found = manual_search.search("abrunden")
+        assert found and found[0].spot
+        assert window.contents.item(0).text() == str(found[0].page.title)
+        assert window.text.textCursor().selectedText() == found[0].spot
+    finally:
+        window.close()
+        window.deleteLater()
 
 
 def test_a_search_without_a_hit_says_so_instead_of_showing_nothing(
