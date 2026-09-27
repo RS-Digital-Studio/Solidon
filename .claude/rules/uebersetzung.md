@@ -27,6 +27,9 @@ Wie ein Text für den Kunden klingt (kurz, nicht nach einem Sprachmodell,
   Überschriften), Zeilenumbrüche bleiben als `\n`-Escape.
 - **`![](figure:xyz)` byte-gleich übernehmen** — der Schlüssel ist eine
   Adresse, kein Text.
+- **Seitenverweise `[Text](manual:schlüssel)`:** den Text übersetzen, das Ziel
+  byte-gleich übernehmen und keinen Verweis auslassen — `test_manual` hält
+  die Ziele je Seite gegen das Deutsche.
 - **Platzhalter in `{}` / `{name}`** unverändert samt Inhalt.
 - **Produktnamen:** Solidon, OrcaSlicer, PrusaSlicer, Bambu Studio, Cura,
   ElegooSlicer, ComfyUI, Ollama, OpenSCAD, Claude, Hunyuan3D, Inno Setup,

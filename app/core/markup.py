@@ -4,8 +4,8 @@ Ein vollständiger Markdown-Übersetzer wäre hier eine Abhängigkeit für ein
 Problem, das es nicht gibt: das Markdown, das umgewandelt wird, ist selbst
 erzeugt (:mod:`app.core.manual`, :func:`app.core.registry.documentation`).
 Damit ist die Menge dessen, was vorkommen kann, bekannt und geschlossen —
-Überschriften, Absätze, Aufzählungen, Tabellen, Fettdruck, Kursives, Code und
-Bildverweise.
+Überschriften, Absätze, Aufzählungen, Tabellen, Fettdruck, Kursives, Code,
+Bildverweise und Verweise auf andere Seiten des Handbuchs.
 
 Der Grund, es überhaupt selbst zu tun: Qt kann Markdown, aber Qt gehört nicht
 in den Kern. So lässt sich das Handbuch auch dort als Seite ausgeben, wo kein
@@ -39,6 +39,19 @@ _FIGURE: Final = re.compile(r"^!\[\]\(figure:([a-z0-9-]+)\)$")
 _ROW: Final = re.compile(r"^\|(.+)\|$")
 _SEPARATOR: Final = re.compile(r"^\|[\s:|-]+\|$")
 
+MANUAL_LINK: Final = re.compile(r"\[([^\]\n]+)\]\(manual:([a-z0-9-]+)\)")
+"""Ein Verweis auf eine andere Seite: ``[Ein Loch bohren](manual:drill-a-hole)``.
+
+Die einzige Art Verweis, die das Handbuch kennt. Das Ziel ist der Schlüssel
+einer Seite, und wohin er führt, entscheidet, wer ausgibt: Das Fenster schlägt
+die Seite auf, Website und PDF springen zu ihrem Anker, die Textausgabe und die
+Suche behalten nur den Text (:func:`unlinked`). Ein Schlüssel statt einer
+Adresse, weil eine Seite in drei Ausgaben drei verschiedene Adressen hat."""
+
+#: Wohin ein Seitenverweis führt: der Schlüssel hinein, eine Adresse heraus —
+#: oder ``None``, dann bleibt der Text ohne Verweis stehen.
+LinkResolver = Callable[[str], str | None]
+
 
 class FigureSource(NamedTuple):
     """Was aus einem Bildverweis wird.
@@ -62,29 +75,56 @@ class FigureSource(NamedTuple):
 FigureResolver = Callable[[str], FigureSource | tuple[str, str, str] | None]
 
 
-def inline(text: str) -> str:
-    """Fettdruck, Kursives und Code einer Zeile — der Rest wird maskiert."""
+def inline(text: str, link: LinkResolver | None = None) -> str:
+    """Fettdruck, Kursives, Code und Seitenverweise einer Zeile — der Rest wird maskiert.
+
+    ``link`` sagt, wohin ein Seitenverweis führt. Ohne die Funktion, oder wenn
+    sie für einen Schlüssel nichts weiß, bleibt sein Text stehen: Ein Verweis
+    ins Leere wäre schlechter als keiner.
+    """
     pieces: list[str] = []
 
-    def keep_code(match: re.Match[str]) -> str:
-        pieces.append(f"<code>{escape(match.group(1))}</code>")
+    def stash(html: str) -> str:
+        pieces.append(html)
         return f"\x00{len(pieces) - 1}\x00"
 
-    stashed = _CODE.sub(keep_code, text)
-    result = escape(stashed)
-    result = _STRONG.sub(r"<strong>\1</strong>", result)
-    result = _EMPHASIS.sub(r"<em>\1</em>", result)
-    for index, piece in enumerate(pieces):
-        result = result.replace(f"\x00{index}\x00", piece)
+    def keep_link(match: re.Match[str]) -> str:
+        label = _emphasised(escape(match.group(1)))
+        target = link(match.group(2)) if link else None
+        if not target:
+            return stash(label)
+        return stash(f'<a href="{escape(target, quote=True)}">{label}</a>')
+
+    stashed = _CODE.sub(lambda match: stash(f"<code>{escape(match.group(1))}</code>"), text)
+    stashed = MANUAL_LINK.sub(keep_link, stashed)
+    result = _emphasised(escape(stashed))
+    # Rückwärts, weil ein Verweis einen Codeschnipsel tragen kann: Sein Platzhalter
+    # steht erst im Text, wenn der Verweis selbst eingesetzt ist.
+    for index in reversed(range(len(pieces))):
+        result = result.replace(f"\x00{index}\x00", pieces[index])
     return result
 
 
-def to_html(markdown: str, figure: FigureResolver | None = None) -> str:
+def _emphasised(html: str) -> str:
+    """Fettdruck und Kursives in schon maskiertem Text."""
+    html = _STRONG.sub(r"<strong>\1</strong>", html)
+    return _EMPHASIS.sub(r"<em>\1</em>", html)
+
+
+def unlinked(text: str) -> str:
+    """Seitenverweise durch ihren Text ersetzen — für Textausgabe und Suche."""
+    return MANUAL_LINK.sub(r"\1", text)
+
+
+def to_html(
+    markdown: str, figure: FigureResolver | None = None, link: LinkResolver | None = None
+) -> str:
     """Ein Markdown-Text als HTML-Rumpf, ohne Kopf und ohne Gerüst.
 
     ``figure`` beantwortet einen Bildschlüssel mit Quelle, Alt-Text und
     Unterschrift. Ohne die Funktion — oder wenn sie nichts weiß — bleibt der
-    Alt-Text als Absatz stehen, damit die Aussage nicht verschwindet.
+    Alt-Text als Absatz stehen, damit die Aussage nicht verschwindet. ``link``
+    beantwortet einen Seitenverweis mit seiner Adresse (:func:`inline`).
     """
     out: list[str] = []
     table: list[list[str]] = []
@@ -95,16 +135,16 @@ def to_html(markdown: str, figure: FigureResolver | None = None) -> str:
 
     def flush_paragraph() -> None:
         if paragraph:
-            out.append(f"<p>{inline(' '.join(paragraph))}</p>")
+            out.append(f"<p>{inline(' '.join(paragraph), link)}</p>")
             paragraph.clear()
 
     def flush_bullets() -> None:
         if bullets:
-            items = "".join(f"<li>{inline(entry)}</li>" for entry in bullets)
+            items = "".join(f"<li>{inline(entry, link)}</li>" for entry in bullets)
             out.append(f"<ul>{items}</ul>")
             bullets.clear()
         if numbered:
-            items = "".join(f"<li>{inline(entry)}</li>" for entry in numbered)
+            items = "".join(f"<li>{inline(entry, link)}</li>" for entry in numbered)
             start = f' start="{first_number[0]}"' if first_number[0] != 1 else ""
             out.append(f"<ol{start}>{items}</ol>")
             numbered.clear()
@@ -113,9 +153,10 @@ def to_html(markdown: str, figure: FigureResolver | None = None) -> str:
         if not table:
             return
         head, *body = table
-        header = "".join(f"<th>{inline(cell)}</th>" for cell in head)
+        header = "".join(f"<th>{inline(cell, link)}</th>" for cell in head)
         rows = "".join(
-            "<tr>" + "".join(f"<td>{inline(cell)}</td>" for cell in row) + "</tr>" for row in body
+            "<tr>" + "".join(f"<td>{inline(cell, link)}</td>" for cell in row) + "</tr>"
+            for row in body
         )
         out.append(f"<table><thead><tr>{header}</tr></thead><tbody>{rows}</tbody></table>")
         table.clear()
@@ -154,7 +195,7 @@ def to_html(markdown: str, figure: FigureResolver | None = None) -> str:
         if heading:
             flush_all()
             level = min(len(heading.group(1)) + 1, 6)
-            out.append(f"<h{level}>{inline(heading.group(2))}</h{level}>")
+            out.append(f"<h{level}>{inline(heading.group(2), link)}</h{level}>")
             continue
 
         bullet = _BULLET.match(line)

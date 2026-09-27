@@ -697,10 +697,17 @@ def _footer(language: str) -> str:
 
 
 def page_html(language: str, prefix: str) -> str:
+    # Ein Verweis auf eine andere Seite springt zu ihrem Kapitel. Erste
+    # gewinnt, wie bei ``manual.find``: Die geschriebene Seite „Die Bausteine"
+    # und das erzeugte Kapitel „Bausteine" teilen sich den Schlüssel ``parts``.
+    anchors: dict[str, str] = {}
+    for page in manual.pages():
+        anchors.setdefault(page.key, _anchor(page))
     body = _classify(
         manual.as_html(
             figure_source=lambda key: f"{prefix}/{key}.{_suffix(key)}",
             dark_source=lambda key: "" if _suffix(key) != "svg" else f"{prefix}/{key}-dark.svg",
+            link_target=lambda key: f"#{anchors[key]}" if key in anchors else None,
         )
     )
     # Die Bildschirmfotos bekommen die Bühne der Startseite. Erkannt werden

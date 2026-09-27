@@ -343,7 +343,13 @@ class ManualWindow(QMainWindow):
         auf dem Rechner ein Protokoll angemeldet hat, weiß Solidon nicht.
         Verglichen wird der **Host**, nicht ein Präfix: ``solidon3d.de.fremd``
         beginnt sonst mit der eigenen Adresse und ist es nicht.
+
+        Ein Verweis auf eine andere Seite des Handbuchs (``manual:<schlüssel>``,
+        :data:`app.core.markup.MANUAL_LINK`) schlägt sie hier im Fenster auf.
         """
+        if address.scheme() == "manual":
+            self.show_page(address.path())
+            return
         if address.scheme() == "https" and address.host() == QUrl(WEBSITE_URL).host():
             # Über ``open_link``: Ohne Browser liegt die Adresse danach in der
             # Zwischenablage, statt dass der Klick wortlos verpufft.

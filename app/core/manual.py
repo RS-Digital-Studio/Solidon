@@ -2990,16 +2990,19 @@ def titled(page: Page, text: str) -> str:
 def as_markdown(registry: Registry | None = None, *, with_figures: bool = False) -> str:
     """Das ganze Handbuch am Stück, für die Kommandozeile und zum Nachlesen.
 
-    ``with_figures`` behält die Bildverweise, wie sie im Text stehen — das
-    braucht, wer daraus HTML oder ein PDF macht. Ohne das tritt an jede Stelle
-    der Alt-Text der Abbildung: eine Textausgabe, in der plötzlich eine Aussage
-    fehlt, weil sie im Bild stand, wäre eine unvollständige.
+    ``with_figures`` behält die Bildverweise und die Verweise zwischen den
+    Seiten, wie sie im Text stehen — das braucht, wer daraus HTML oder ein PDF
+    macht. Ohne das tritt an jede Stelle der Alt-Text der Abbildung: eine
+    Textausgabe, in der plötzlich eine Aussage fehlt, weil sie im Bild stand,
+    wäre eine unvollständige. Von einem Seitenverweis bleibt dann sein Text.
     """
+    from app.core.markup import unlinked
+
     parts = []
     for page in pages(registry):
         # Über ``Page.text`` und nicht über ``page.body``: Die Kurzfassung
         # gehört zur Seite, und das Handbuchfenster liest dieselbe Methode.
-        text = page.text() if with_figures else without_figures(page.text())
+        text = page.text() if with_figures else unlinked(without_figures(page.text()))
         parts.append(titled(page, text))
     return "\n\n".join(parts).rstrip() + "\n"
 
@@ -3009,6 +3012,7 @@ def as_html(
     *,
     figure_source: Callable[[str], str] | None = None,
     dark_source: Callable[[str], str] | None = None,
+    link_target: Callable[[str], str | None] | None = None,
 ) -> str:
     """Das ganze Handbuch als HTML-Rumpf — für die Website und für das PDF.
 
@@ -3020,6 +3024,10 @@ def as_html(
     ``dark_source`` beantwortet dieselbe Frage für ein dunkles Farbschema. Wer
     für einen Schlüssel nichts liefert, bekommt dort ein gewöhnliches Bild —
     ein Bildschirmfoto hat keine zweite Version, eine Zeichnung schon.
+
+    ``link_target`` sagt, wohin ein Verweis auf eine andere Seite führt
+    (:data:`app.core.markup.MANUAL_LINK`), auf der Website etwa zum Anker des
+    Kapitels. Ohne die Funktion bleibt der Text des Verweises stehen.
     """
     from app.core import figures
     from app.core.markup import FigureSource, to_html
@@ -3032,7 +3040,7 @@ def as_html(
         dark = dark_source(key) if dark_source else ""
         return FigureSource(source, str(figure.alt), str(figure.caption), dark)
 
-    return to_html(as_markdown(registry, with_figures=True), resolve)
+    return to_html(as_markdown(registry, with_figures=True), resolve, link_target)
 
 
 def without_figures(body: str) -> str:

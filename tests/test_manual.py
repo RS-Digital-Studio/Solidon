@@ -687,6 +687,80 @@ def test_markup_leaves_asterisks_inside_code_alone() -> None:
     assert markup.to_html("`a * b`") == "<p><code>a * b</code></p>"
 
 
+def test_a_link_to_another_page_leads_where_the_output_says_and_else_stays_text() -> None:
+    """``[Text](manual:schlüssel)``: Die Ausgabe sagt, wohin; ohne Ziel bleibt der Text.
+
+    Ein Verweis im Code bleibt Code, und Code im Verweis bleibt Code — die
+    Platzhalter beider stehen ineinander.
+    """
+    text = "Siehe [Ein **Loch** bohren](manual:drill-a-hole) und `[x](manual:y)`."
+    assert markup.to_html(text, link=lambda key: f"#{key}") == (
+        '<p>Siehe <a href="#drill-a-hole">Ein <strong>Loch</strong> bohren</a> '
+        "und <code>[x](manual:y)</code>.</p>"
+    )
+    assert markup.to_html(text) == (
+        "<p>Siehe Ein <strong>Loch</strong> bohren und <code>[x](manual:y)</code>.</p>"
+    )
+    assert markup.to_html("[Knopf `OK`](manual:x)", link=lambda key: "#x") == (
+        '<p><a href="#x">Knopf <code>OK</code></a></p>'
+    )
+    assert markup.to_html("[a <b>](manual:z)", link=lambda key: None) == "<p>a &lt;b&gt;</p>"
+    assert markup.unlinked("Erst [das](manual:what), dann das.") == "Erst das, dann das."
+
+
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_every_link_between_pages_leads_to_a_page(language: str) -> None:
+    """Ein Verweis auf eine Seite, die es nicht gibt, führte ins Leere.
+
+    Im Fenster wäre der Klick ohne Wirkung, auf der Website ein toter Anker,
+    und bemerkt hätte es nur, wer genau diesen Verweis anklickt. Geprüft wird
+    in jeder Sprache, denn der Verweis steht im übersetzten Text.
+    """
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        written = manual.pages()
+        keys = {page.key for page in written}
+        dangling = [
+            f"{page.key} → {target}"
+            for page in written
+            for label, target in markup.MANUAL_LINK.findall(page.text())
+            if target not in keys or not label.strip()
+        ]
+    finally:
+        set_language("de")
+
+    assert not dangling, f"{language}: Verweise ins Leere:\n" + "\n".join(dangling)
+
+
+@pytest.mark.parametrize("language", sorted(set(WEBSITE_PAGES) - {"de"}))
+def test_a_translation_keeps_every_link_of_its_page(language: str) -> None:
+    """Die Übersetzung übersetzt den Text eines Verweises, nie sein Ziel, und lässt keinen aus."""
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    def targets() -> dict[str, list[str]]:
+        return {
+            page.key: sorted(target for _label, target in markup.MANUAL_LINK.findall(page.text()))
+            for page in manual.pages()
+            if not page.generated
+        }
+
+    source = targets()
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        translated = targets()
+    finally:
+        set_language("de")
+
+    differing = [key for key in source if translated.get(key) != source[key]]
+    assert not differing, f"{language}: andere Verweise als im Deutschen auf {differing}"
+
+
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_no_page_prints_its_own_markup(language: str) -> None:
     """Keine Auszeichnung darf als Sternchenpaar im Handbuch landen.
@@ -822,6 +896,21 @@ def test_a_page_can_be_opened_by_name(qt_app: QApplication) -> None:
     window.show_page("tolerances")
 
     assert "Material" in window.contents.currentItem().text()
+
+
+def test_a_link_to_another_page_opens_it_in_the_window(qt_app: QApplication) -> None:
+    """Ein Klick auf ``manual:<schlüssel>`` schlägt die Seite auf, im selben Fenster."""
+    from PySide6.QtCore import QUrl
+
+    window = ManualWindow()
+    try:
+        window.show_page("what")
+        window.text.anchorClicked.emit(QUrl("manual:tolerances"))
+
+        assert "Material" in window.contents.currentItem().text()
+    finally:
+        window.close()
+        window.deleteLater()
 
 
 def test_a_generated_chapter_shows_its_title_in_the_window_too(qt_app: QApplication) -> None:

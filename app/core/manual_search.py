@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from app.core.manual import FIGURE_PATTERN, Page, Part, pages
+from app.core.markup import unlinked
 from app.core.registry.registry import REGISTRY, Registry
 from app.core.registry.search import customer_phrases, fold, request_terms, says, strength
 
@@ -190,13 +191,14 @@ class SearchIndex:
         vocabulary: set[str] = set()
         for order, page in enumerate(pages(registry) if source is None else source):
             title = str(page.title)
-            body = FIGURE_PATTERN.sub(" ", str(page.body))
+            # Von einem Seitenverweis zählt, was der Leser sieht, nicht sein Ziel.
+            body = unlinked(FIGURE_PATTERN.sub(" ", str(page.body)))
             entry = _Entry(
                 page=page,
                 order=order,
                 title=_field(title),
                 marked=_field(_marked(body, title)),
-                summary=_field(str(page.summary)),
+                summary=_field(unlinked(str(page.summary))),
                 body=_field(body),
             )
             for field in (entry.title, entry.summary, entry.body):
