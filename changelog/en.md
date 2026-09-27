@@ -101,8 +101,17 @@ it into `website/version.json`.
 - Without *Apply suggestions*, no part gets a brim unasked any more, neither on export nor when handing over to the slicer.
 - Projects from 0.5.0 print at your printer's speed. Whatever you had set yourself in them is kept.
 - The first-layer speed now also applies to its infill. Before, the slicer laid the bottom at the manufacturer's speed, 105 mm/s on the Centauri Carbon 2.
+- The first layer now prints lines as wide as your printer's profile, usually 0.5 mm on a 0.4 nozzle. With Cura, the head no longer crawls between them.
+- With Cura, printing now begins with your printer's start code, as with the manufacturer. If Cura does not know the printer, Solidon tells you.
+- With Cura, the first layer now uses the acceleration from the manufacturer's profile instead of the full printing acceleration.
+- Supports from Cura now follow the factory profiles: connected, with a loose top and moderate speed.
+- With Cura, overhanging walls now print more slowly, as with the manufacturer. Prints with many overhangs take up to about 20 percent longer.
+- With Cura, infill now prints after the walls, and travel moves avoid supports and retract the filament on long paths.
+- The profile for the Cura window now matches the printer set up in Cura. Before, Cura rejected it for some printers or did not show it.
+- The print settings no longer offer the volumetric flow for Cura, because Cura does not read it.
+- New are the Creality Ender-3 V3 SE and V3 KE. Until now an SE got the values of the much faster Ender-3 V3.
 - A ceiling over a water channel or tunnel no longer draws supports onto the model. If nothing else needs supports on the model, Solidon suggests them from the bed only.
-- New suggestion *Keep channels clear*: once applied, the handover to PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print puts a support blocker in the channels.
+- New suggestion *Keep channels clear*: once applied, the handover blocks supports in the channels in every supported slicer, for Cura when slicing from Solidon.
 - Grid supports arrive at the slicer as a real grid, with the direction changing each layer, instead of loose lines that shift during printing.
 - When a part stands on many small feet, Solidon suggests a brim, even if the feet together would have enough area.
 - A narrow sloping strip along the outer wall no longer counts in the report as a long bridge.

@@ -101,8 +101,17 @@ scrive in `website/version.json`.
 - Senza «Applica i suggerimenti» nessun pezzo riceve più un brim senza chiederlo, né all'esportazione né nel passaggio allo slicer.
 - I progetti della 0.5.0 stampano alla velocità della vostra stampante. Ciò che avevate impostato voi resta.
 - La velocità del primo strato vale ora anche per il suo riempimento. Prima lo slicer stendeva il fondo alla velocità del produttore, 105 mm/s sulla Centauri Carbon 2.
+- Il primo strato stampa ora linee larghe quanto il profilo della vostra stampante, di solito 0,5 mm con ugello da 0,4. Con Cura la testina non va più a passo d'uomo tra una e l'altra.
+- Con Cura la stampa inizia ora con il codice di avvio della vostra stampante, come dal produttore. Se Cura non conosce la stampante, Solidon ve lo dice.
+- Con Cura il primo strato usa ora l'accelerazione del profilo del produttore invece dell'accelerazione di stampa piena.
+- I supporti di Cura seguono ora lo schema dei profili di fabbrica: collegati, con un tetto leggero e velocità moderata.
+- Con Cura le pareti a sbalzo si stampano ora più lentamente, come dal produttore. Le stampe con molti sbalzi durano fino a circa il 20 % in più.
+- Con Cura il riempimento si stampa ora dopo le pareti, e gli spostamenti evitano i supporti e ritraggono il filamento sui percorsi lunghi.
+- Il profilo per la finestra di Cura corrisponde ora alla stampante configurata in Cura. Prima Cura lo rifiutava con alcune stampanti o non lo mostrava.
+- Le impostazioni di stampa non offrono più il flusso volumetrico per Cura, perché Cura non lo legge.
+- Nuove: le Creality Ender-3 V3 SE e V3 KE. Finora una SE riceveva i valori della molto più veloce Ender-3 V3.
 - Un soffitto sopra un canale d'acqua o un tunnel non richiama più supporti sul modello. Se nient'altro li richiede sul modello, Solidon li propone solo dal piano.
-- Nuovo suggerimento «Tenere liberi i canali»: applicato, mette un blocco dei supporti nei canali per PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
+- Nuovo suggerimento «Tenere liberi i canali»: applicato, il passaggio blocca i supporti nei canali in ogni slicer supportato, per Cura quando lo slicing parte da Solidon.
 - I supporti a griglia arrivano allo slicer come vera griglia, con la direzione che cambia a ogni strato, invece che come linee sciolte che si spostano in stampa.
 - Se un pezzo poggia su molti piedini, Solidon propone un brim, anche se i piedini insieme avrebbero superficie sufficiente.
 - Una striscia stretta e inclinata lungo la parete esterna non conta più nel rapporto come un lungo ponte.
