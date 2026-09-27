@@ -1070,6 +1070,9 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
     owners: list[int] = []
     source_faces = ShapeMap()
     TopExp.MapShapes_s(shape, TopAbs_FACE, source_faces)
+    # Je Punkt der Körper, zu dessen Fläche er gehört — nur bei mehr als einem.
+    solid_of_face = _solid_of_faces(shape, source_faces)
+    point_solids: list[int] = []
     for face_index in range(source_faces.Extent()):
         # Die Kopie muss nicht dieselbe Besuchsreihenfolge haben. Der Builder
         # benennt die Kopie jeder Originalfläche; derselbe Indexraum wie faces().
@@ -1085,6 +1088,8 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
         for index in range(1, triangulation.NbNodes() + 1):
             node = triangulation.Node(index).Transformed(transform)
             points.append((node.X(), node.Y(), node.Z()))
+        if solid_of_face is not None:
+            point_solids.extend([solid_of_face[face_index]] * triangulation.NbNodes())
 
         # ModifiedShape liefert die Unterform ohne die im Körper komponierte
         # Orientierung. Der Umlaufsinn stammt deshalb aus der Originalfläche.
@@ -1137,14 +1142,84 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
     kept = ~degenerate
     if not kept.any():
         return MeshData.of(trimesh.Trimesh())
-    body = trimesh.Trimesh(
-        vertices=vertices,
-        faces=triangles[kept],
-        face_attributes={_FACE_ATTRIBUTE: np.asarray(owners, dtype=np.int64)[kept]},
-        process=True,
-    )
+    attributes: dict[str, Any] = {_FACE_ATTRIBUTE: np.asarray(owners, dtype=np.int64)[kept]}
+    if solid_of_face is None:
+        body = trimesh.Trimesh(
+            vertices=vertices, faces=triangles[kept], face_attributes=attributes, process=True
+        )
+    else:
+        body = _welded_per_solid(
+            vertices, triangles[kept], np.asarray(point_solids, dtype=np.int64), attributes
+        )
     _log.info("tessellated a B-Rep body into %d triangles", len(body.faces))
     return _stitched(MeshData.of(body))
+
+
+def _solid_of_faces(shape: Any, faces: Any) -> list[int] | None:
+    """Je Fläche (Index wie in ``faces``) der Körper, zu dem sie gehört.
+
+    ``None`` bei höchstens einem Körper: Dann verschweißt die Tessellierung
+    wie immer, und das Netz eines einzelnen Körpers bleibt bitgleich. Eine
+    Fläche ohne Körper (eine lose Schale im Verbund) bekommt ``-1`` und wird
+    nur mit ihresgleichen verschweißt.
+    """
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SOLID
+    from OCP.TopExp import TopExp
+
+    solids = ShapeMap()
+    TopExp.MapShapes_s(shape, TopAbs_SOLID, solids)
+    if solids.Extent() <= 1:
+        return None
+    owner = [-1] * faces.Extent()
+    for solid_index in range(solids.Extent()):
+        own = ShapeMap()
+        TopExp.MapShapes_s(solids.FindKey(solid_index + 1), TopAbs_FACE, own)
+        for index in range(own.Extent()):
+            found = faces.FindIndex(own.FindKey(index + 1))
+            if found and owner[found - 1] < 0:
+                owner[found - 1] = solid_index
+    return owner
+
+
+def _welded_per_solid(
+    vertices: Any, triangles: Any, point_solids: Any, attributes: dict[str, Any]
+) -> Any:
+    """Verschweißt gleiche Ecken wie trimesh — aber nur innerhalb eines Körpers.
+
+    **Zwei Körper eines Verbunds teilen keine Ecke.** Eine gedruckte
+    Senkkopfschraube liegt am exakten Kern als Verbund bündig in ihrer
+    Senkung, und Kopf und Senkung enden am selben oberen Rand. Das
+    Verschweißen über die ganze Form (``process=True``) machte aus den
+    42 Ecken dieses Rands gemeinsame — jede Randkante trug danach vier
+    Dreiecke, das Netz des Szenenobjekts war undicht und zählte fünf Teile
+    statt drei (Durchsicht 0.5.1, Prüfer rest-schraube). Am Netzkern hängt
+    ``knowledge.parts.ops._concatenated_with_slots`` die Teile ohne
+    Verschweißen an; das hier ist dieselbe Regel am exakten.
+
+    Gerechnet wie ``trimesh.grouping.merge_vertices`` (dieselbe Stellenzahl
+    aus ``tol.merge``, nur benutzte Ecken, Reihenfolge der ersten Nennung),
+    mit dem Körper als weiterer Spalte des Schlüssels.
+    """
+    import numpy as np
+    import trimesh
+
+    # Ohne Typangaben in trimesh; dieselbe Funktion, die ``merge_vertices`` ruft.
+    grouping: Any = trimesh.grouping
+    digits = trimesh.util.decimal_to_digits(trimesh.tol.merge)
+    referenced = np.zeros(len(vertices), dtype=bool)
+    referenced[triangles] = True
+    stacked = np.column_stack((vertices * (10**digits), point_solids)).round().astype(np.int64)
+    unique, index = grouping.unique_rows(stacked[referenced], keep_order=True)
+    inverse = np.zeros(len(vertices), dtype=np.int64)
+    inverse[referenced] = index
+    kept = np.nonzero(referenced)[0][unique]
+    return trimesh.Trimesh(
+        vertices=vertices[kept],
+        faces=inverse[triangles],
+        face_attributes=attributes,
+        process=False,
+    )
 
 
 def _stitched(mesh: MeshData) -> MeshData:

@@ -1460,6 +1460,36 @@ def test_the_tessellation_is_closed_and_keeps_the_volume() -> None:
     assert mesh.volume > 0.0, "not inside out"
 
 
+def test_two_touching_bodies_of_a_compound_share_no_corner() -> None:
+    """Ein Verbund aus zwei Körpern wird zwei geschlossene Netze, auch wo sie sich berühren.
+
+    Durchsicht 0.5.1 (Prüfer rest-schraube): Die Senkkopfschraube liegt am
+    exakten Kern als Verbund in ihrer Senkung, und Kopf und Senkung haben
+    denselben oberen Rand. Die Tessellierung verschweißte die 42 Ecken dieses
+    Rands über beide Körper hinweg — das Netz des Szenenobjekts war danach
+    nicht mehr dicht, fünf Teile statt drei, und der Assistent las nach jeder
+    Schraube „Dieses Objekt ist nicht mehr geschlossen“. Hier dasselbe an zwei
+    Würfeln, die sich in einer ganzen Fläche berühren.
+    """
+    from app.core.knowledge.parts.exact import compound
+
+    left = edit.box(10.0, 10.0, 10.0)
+    right = edit.transformed(
+        edit.box(10.0, 10.0, 10.0),
+        ((1.0, 0.0, 0.0, 10.0), (0.0, 1.0, 0.0, 0.0), (0.0, 0.0, 1.0, 0.0), (0.0, 0.0, 0.0, 1.0)),
+    )
+    pair = compound(left, right)
+
+    mesh = as_mesh_data(pair)
+    assert pair.solid_count == 2
+    assert mesh.component_count == 2
+    assert mesh.is_watertight
+    assert mesh.volume == pytest.approx(2000.0)
+    # Ein einzelner Körper verschweißt weiter wie bisher: dieselben Ecken.
+    alone = as_mesh_data(left)
+    assert alone.is_watertight and len(alone.raw.vertices) == 8
+
+
 def test_a_finer_setting_gives_more_triangles_and_less_error() -> None:
     solid = edit.fillet(block(), 3.0, "vertical")
 
