@@ -1,10 +1,11 @@
 ---
 name: regelcheck
 description: >
-  Prüft die aktuellen Änderungen gegen die 22 harten Regeln aus AGENTS.md —
-  Aufbau, Zahlen, Sicherheit, Bedienung, Haltung — und nennt je Verstoß die
-  Regelnummer, die Stelle und den Fix. Benutzen vor dem Commit oder wenn unklar
-  ist, ob eine Änderung regelkonform ist.
+  Prüft die aktuellen Änderungen oder ein genanntes Modul Regel für Regel gegen
+  die 22 harten Regeln aus AGENTS.md und nennt je Verstoß Regelnummer, Stelle
+  und Fix. Schneller Durchgang in der Sitzung, vor dem Commit oder bei der
+  Frage, ob eine Änderung regelkonform ist; das vollständige Review mit
+  Korrektheit und Testqualität macht der Agent solidon3d-review.
 argument-hint: "[optional: Datei oder Modul]"
 allowed-tools: Bash, Read, Grep, Glob
 ---
@@ -12,53 +13,50 @@ allowed-tools: Bash, Read, Grep, Glob
 # Regelcheck
 
 Jede Regel aus `AGENTS.md` hat einen Test. Dieser Durchgang findet, was der
-Test erst später fände — oder was er gar nicht sieht.
+Test erst später fände — oder gar nicht sieht.
 
 ## Umfang
 
-Ohne Argument: `git diff` und `git diff --cached`, dazu unversionierte Dateien.
-Mit Argument: die genannte Datei oder das genannte Modul vollständig. Eine
-Prüfanfrage liefert Befunde; Änderungen nur im Rahmen eines Reparaturauftrags.
-Zuständige `CLAUDE.md`-Karten und passende `.claude/rules/` mitlesen.
+Ohne Argument: `git diff HEAD` samt unversionierter Dateien. Mit Argument: die
+genannte Datei oder das Modul vollständig. Karten und Regeln der berührten
+Verzeichnisse mitlesen. Eine Prüfanfrage liefert Befunde; geändert wird nur
+im Rahmen eines Reparaturauftrags.
 
 ## Durchgang
 
-Geh die Regeln in dieser Reihenfolge durch und prüfe jede ausdrücklich am
-geänderten Code. Regeln, die das geänderte Gebiet nicht berühren, überspringst
-du stillschweigend — behaupte nicht, sie geprüft zu haben.
+Die 22 Regeln aus `AGENTS.md` in ihrer Reihenfolge, jede ausdrücklich am
+geänderten Code. Regeln, die das Gebiet nicht berühren, überspringst du — und
+behauptest nicht, sie geprüft zu haben. Was dabei am häufigsten übersehen
+wird:
 
-**Aufbau (1–5)** — Qt unterhalb `ui/`? Geometrieänderung außerhalb einer Op?
-Schreiben auf `ctx.scene`? Op ohne Registereintrag, Schema, Test, Texte?
-Signatur abweichend von Bauplan §9?
+- **Aufbau (1–5):** Qt, das über einen Umweg unter `core` landet, auch nur für
+  Typen; eine Vorschau im Editor, die Dokumentzustand schreibt statt einen
+  Parameterwert zu sammeln; Schreiben auf `ctx.scene` über ein veränderliches
+  Objekt der Szene.
+- **Zahlen (6–9):** Rundung im Kern; `==` auf Fließkomma; Fertigungsspiel am
+  Materialprofil vorbei; numerische Grenzen außerhalb ihrer zuständigen
+  Quelle; Zufall ohne `ctx.seed` oder ohne `deterministic=False`.
+- **Sicherheit (10–15):** Jeder Weg, der Quelltext annimmt, braucht eine
+  Prüfung und einen Eintrag in `foreign.SCRIPTED_OPS`; externe Programme wie
+  Slicer sind davon zu unterscheiden. Rezepte aus registrierten
+  Ops dürfen mitreisen, ein Baustein als `.py` nie. Absolute Pfade in
+  Projektdateien; Kennzahlen aus Schichtanalyse und G-Code ohne Herkunft;
+  Abhängigkeit außerhalb der Lizenzfreigabe.
+- **Bedienung (16–20):** ein Agentenvorschlag mit mehr als einer
+  Transaktion; eine Ausnahme ohne Handlungsvorschlag; Farbe ohne zweite
+  Kodierung; eine Nachfrage vor rücknehmbarer Handlung außerhalb der
+  ausdrücklich erlaubten Ausnahmen; eine feste Zeichenkette statt `tr()`,
+  auch in Auswahlwerten.
+- **Haltung (21–22):** geraten, wo `ctx.ask` hingehört; neue Abhängigkeit
+  ohne Eintrag in der Lizenzliste.
 
-**Zahlen (6–9)** — Rundung im Kern? `==` auf Fließkomma? Fertigungstoleranz
-am Materialprofil vorbei? Numerische Grenzwerte außerhalb ihrer zuständigen
-zentralen Quelle? Streuzahl statt Projektparameter?
-Zufall ohne `ctx.seed` oder ohne `deterministic=False`?
-
-**Sicherheit (10–15)** — `eval` oder Ausführung fremden Quelltexts?
-`foreign.SCRIPTED_OPS` ist nach dem OpenSCAD-Ausbau leer; ein neuer
-Ausführungspfad benötigt eine eigene Prüfung. Erlaubte externe Programme
-wie Slicer sind davon zu unterscheiden. Absoluter Pfad oder ausführbarer
-Bausteincode in einer Projektdatei? Rezepte aus registrierten Ops dürfen
-gemäß Regel 13 mitreisen. Kennzahlen aus Schichtanalyse und G-Code vermischt?
-Abhängigkeit außerhalb der Lizenzfreigabe?
-
-**Bedienung (16–20)** — Agentenvorschlag mit mehr als einer Transaktion?
-Ausnahme ohne Handlungsvorschlag? Bedeutung allein über Farbe?
-Bestätigungsdialog vor einer rücknehmbaren Handlung außerhalb der ausdrücklich
-erlaubten Nachfrage beim Löschen von Verlaufsschritten? Feste Zeichenkette statt
-`tr()`?
-
-**Haltung (21–22)** — Wurde geraten, wo `ctx.ask` hingehört? Neue Abhängigkeit
-ohne Eintrag in der Lizenzliste?
-
-Dazu, ohne Regelnummer, aber genauso ein Fund: deutscher Bezeichner in
-`app/` oder `tools/`, fehlende Übersetzung, fehlender erforderlicher Nachweis.
+Dazu, ohne Regelnummer und genauso ein Fund: ein deutscher Bezeichner in
+`app/` oder `tools/`, eine fehlende Übersetzung, ein fehlender Test oder
+Nachweis, den eine Checkliste aus `AGENTS.md` verlangt.
 
 ## Ergebnis
 
 Je Verstoß: Regelnummer, Datei:Zeile, was dagegen verstößt, der Fix. Am Ende
-ein Satz über den geprüften Umfang und verbleibende Grenzen. „Keine Verstöße
-im geprüften Umfang gefunden“ ist ein gültiges Ergebnis, aber keine Zusage
-über ungeprüfte Pfade. Tests und tatsächliche Ausführung getrennt ausweisen.
+ein Satz über den geprüften Umfang und seine Grenzen. „Keine Verstöße im
+geprüften Umfang“ ist ein gültiges Ergebnis, aber keine Zusage über
+ungeprüfte Pfade. Gelesenes und tatsächlich Ausgeführtes getrennt ausweisen.
