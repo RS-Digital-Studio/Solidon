@@ -39,7 +39,7 @@ from app.core.export import slicer_keys, slicer_profiles
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.types import Finding, PrintSettings, Profile, QualityPreset
-from app.core.units import is_zero
+from app.core.units import exact_atan_degrees, is_zero
 from app.i18n import _
 
 if TYPE_CHECKING:
@@ -1011,7 +1011,10 @@ def _prusa_support_angle(
     layer = read.get("layers.layer_height")
     if not isinstance(layer, float) or layer <= 0.0 or outer_width is None:
         return None
-    return math.degrees(math.atan(0.5 * outer_width / layer))
+    # Genau gerechnet, nicht mit ``math.atan``: Mit diesem Winkel entscheidet
+    # die Schichtanalyse über Überhänge, und dort darf die letzte Stelle nicht
+    # an der Plattform hängen (RM-187, ``.claude/rules/kern.md``).
+    return exact_atan_degrees(0.5 * outer_width / layer)
 
 
 def _prusa_support_gap(values: Mapping[str, Any], outer_width: float | None) -> object:

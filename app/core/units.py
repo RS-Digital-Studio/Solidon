@@ -750,6 +750,65 @@ def exact_sin_degrees(degrees: float) -> float:
     return _exact_degrees(float(degrees))[1]
 
 
+def exact_atan_degrees(ratio: float) -> float:
+    """Arkustangens in Grad, auf jeder Maschine dieselbe Zahl.
+
+    Für Winkel, die entscheiden (RM-187): ``math.atan`` ist eine
+    Bibliotheksfunktion, und ihre letzte Stelle hängt an der Plattform. Hier
+    rechnet die Reihe in genauer Arithmetik wie bei :func:`exact_cos`, und erst
+    das Ergebnis wird ``float``. Anlass ist PrusaSlicers automatische
+    Stützschwelle, ein Arkustangens aus Außenwand und Schichthöhe, mit dem die
+    Schichtanalyse über Überhänge entscheidet.
+    """
+    if not math.isfinite(ratio):
+        raise ValueError(f"Ein Verhältnis muss endlich sein, nicht {ratio}")
+    return _exact_atan_degrees(float(ratio))
+
+
+@functools.lru_cache(maxsize=ANGLE_CACHE)
+def _exact_atan_degrees(ratio: float) -> float:
+    """Der Arkustangens über die Reihe, nach Rückführung auf ein kleines Argument.
+
+    Über eins gilt die Ergänzung ``π/2 - atan(1/x)``; darunter halbiert
+    ``atan x = 2·atan(x / (1 + √(1 + x²)))`` das Argument, bis die Reihe nach
+    wenigen Gliedern endet. ``Decimal.sqrt`` rundet korrekt und ist damit so
+    plattformgleich wie die Grundrechenarten.
+    """
+    with decimal.localcontext() as context:
+        context.prec = EXACT_DIGITS
+        value = decimal.Decimal(ratio)
+        negative = value < 0
+        value = abs(value)
+        complement = value > 1
+        if complement:
+            value = 1 / value
+        halvings = 0
+        limit = decimal.Decimal("0.1")
+        while value > limit:
+            value = value / (1 + (1 + value * value).sqrt())
+            halvings += 1
+        angle = _atan_series(value) * (2**halvings)
+        if complement:
+            angle = _PI / 2 - angle
+        if negative:
+            angle = -angle
+        return float(angle * 180 / _PI) + 0.0
+
+
+def _atan_series(value: decimal.Decimal) -> decimal.Decimal:
+    """Arkustangens über ``x - x³/3 + x⁵/5 - …``, abgebrochen wie :func:`_cos_series`."""
+    index, power, sign, total = 1, value, 1, value
+    square = value * value
+    while True:
+        index += 2
+        power *= square
+        sign = -sign
+        term = sign * power / index
+        if total + term == total:
+            return +total
+        total += term
+
+
 @functools.lru_cache(maxsize=ANGLE_CACHE)
 def _exact_degrees(degrees: float) -> tuple[float, float]:
     """Kosinus und Sinus zu einem Gradwinkel, ohne vorher zu runden."""
