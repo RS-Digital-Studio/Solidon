@@ -159,6 +159,7 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
         cura_definition=_cura_definition_or_empty(
             table.get("cura_definition"), f"{identifier}.cura_definition"
         ),
+        prusaslicer_printer=_preset_name_or_empty(table.get("prusaslicer_printer")),
         overhang_speed_factors=_shares(
             table.get("overhang_speed_factors"), f"{identifier}.overhang_speed_factors"
         ),
@@ -262,6 +263,17 @@ def _cura_definition_or_empty(value: object, field: str) -> str:
             values={"value": text},
         )
     return text
+
+
+def _preset_name_or_empty(value: object) -> str:
+    """Der Name eines Profils im Bestand eines Slicers, leer ohne Angabe.
+
+    Aus dem Namen entsteht kein Pfad: Er muss nur einem Profil im Bestand
+    gleichen. Ein Name mit Zeilenumbruch oder Steuerzeichen gleicht keinem und
+    gilt als nicht angegeben, auch wenn ihn eine fremde Projektdatei mitbringt.
+    """
+    text = "" if value is None else str(value).strip()
+    return "" if any(ord(char) < 32 for char in text) else text
 
 
 def _printer_contour(points: Any) -> tuple[tuple[float, float], ...]:

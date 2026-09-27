@@ -250,11 +250,14 @@ def test_the_outer_wall_never_accelerates_harder_than_the_rest(printer_id: str) 
 
 
 def test_the_mini_accelerates_like_prusas_profile() -> None:
-    """Prusas Standardprozess für den MINI (PrusaSlicer ``[print:*MINI*]``,
-    Orca „0.20mm Standard @MINI"): 1000 mm/s², die Außenwand 700."""
+    """Prusas Standardprozess für den MINI mit Input Shaper, den PrusaSlicer
+    2.9.6 vorwählt („0.20mm SPEED @MINIIS 0.4"): 2000 mm/s², die Außenwand
+    ebenso. Bis zum 27.09.2026 standen hier die 1000 und 700 des abgelösten
+    Prozesses ohne Input Shaper, und mit ihnen Außenwände von 40 statt 140 mm/s."""
     speed = print_settings.resolve(profiles.make_profile("prusa-mini", "pla")).speed
 
-    assert (speed.acceleration, speed.outer_wall_acceleration) == (1000.0, 700.0)
+    assert (speed.acceleration, speed.outer_wall_acceleration) == (2000.0, 2000.0)
+    assert speed.outer_wall == pytest.approx(140.0)
 
 
 @pytest.mark.parametrize("field", ["speed_outer_wall", "acceleration", "flow_factor"])
@@ -1756,6 +1759,18 @@ def test_a_slot_override_can_be_added_changed_and_removed() -> None:
     settings = handover.with_slot_override(settings, slot, None)
     assert handover.override_for(settings, slot) is None
     assert settings.slot_overrides == (), "Projektwerte brauchen keinen leeren Eintrag"
+
+
+def test_the_slicers_that_cap_the_flow_themselves_take_the_limit() -> None:
+    """Wer das Tempo selbst nach dem Volumenstrom deckelt, braucht den Wert:
+    PrusaSlicer und die Orca-Familie bekommen ihn als
+    ``filament_max_volumetric_speed``. Cura liest ihn nicht, dort bleibt der
+    Deckel als Vorschlag der einzige (Gesamtprüfung, 27.09.2026)."""
+    for flavour in ("orca", "prusa", "cura", "other"):
+        caps = slicer_keys.caps_volumetric_speed(flavour)
+        assert caps == (flavour in ("orca", "prusa")), flavour
+        if caps:
+            assert slicer_keys.takes(flavour, "filament.max_flow"), flavour
 
 
 def test_a_slicer_that_takes_one_filament_says_so() -> None:
@@ -5657,38 +5672,35 @@ def test_choosing_another_slicer_drops_the_profiles_of_the_old_one(
     assert dialog.process_choice.count() == 0, "das Prozessprofil auch"
 
 
-def test_prusa_is_not_warned_about_a_machine_it_never_takes() -> None:
-    """Der Befund galt weiter, als er gemeint war — einen halben Tag lang.
+def test_prusa_is_warned_only_since_it_prints_on_its_bundle() -> None:
+    """Der Befund galt am 03.09.2026 weiter, als er gemeint war — und heute
+    gilt er für PrusaSlicer mit Grund.
 
     ``machine_missing`` entstand für die Orca-Familie, die ihre Maschine als
-    Profil aus dem eigenen Bestand lädt. PrusaSlicer tut das nie: Seine
-    Maschinenseite baut ``_machine_keys`` aus Solidons eigenem Druckerprofil,
-    und eine ``.ini`` ist damit eigenständig lauffähig. Gemessen am
-    03.09.2026, bevor das hier stand:
+    Profil aus dem eigenen Bestand lädt. Gemessen am 03.09.2026:
 
         orca   -> nichts
         cura   -> ['slicer.machine_unset']
         prusa  -> ['slicer.machine_unset']
 
-    Beide bekamen bei **jedem** Export den Rat, im Slicer einen Drucker
-    einzurichten, den sie dafür nicht brauchen. Eine Warnung, die nicht
-    stimmt, ist teurer als keine — der Kunde lernt, sie zu übersehen, und
-    übersieht die richtige mit.
+    Damals schrieb Solidon für PrusaSlicer eine eigenständige ``.ini`` ohne
+    Profil, und der Rat, einen Drucker einzurichten, stimmte nicht. Seit Stufe
+    C des Konzepts Herstellerprofil (27.09.2026) druckt PrusaSlicer auf
+    Drucker, Prozess und Filament seines Bündels; fehlt der Drucker dort,
+    kommt der eingebaute Startcode ohne Bettvermessung und Spüllinie — das
+    sagt der Befund jetzt. Den Weg mit Bündel prüft ``tests/test_manufacturer.py``.
 
     Cura stand bis zum 27.09.2026 mit hier, und dort war das Schweigen falsch:
     Ohne Druckerdefinition druckte CuraEngine mit dem Startcode von
     ``fdmprinter``. Was Cura jetzt gesagt bekommt, prüft
     ``tests/test_cura_machine.py``.
-
-    Die eigenen Tests trugen den Fehler nicht, weil alle drei ``flavour="orca"``
-    setzten: die richtige Regel mit ungeprüftem Rand.
     """
     from pathlib import Path
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
 
     setup = handover.SlicerSetup(executable=Path("prusa.exe"), flavour="prusa")
-    assert handover.machine_missing(setup, profile) == []
+    assert [f.code for f in handover.machine_missing(setup, profile)] == ["slicer.printer_unknown"]
     assert not handover.takes_a_machine_profile("prusa")
     assert not handover.takes_a_machine_profile("cura")
     assert handover.takes_a_machine_profile("orca")

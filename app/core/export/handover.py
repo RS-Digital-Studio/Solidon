@@ -376,7 +376,7 @@ def foundation_findings(
 ) -> list[Finding]:
     """Was der Kunde über die Grundlage wissen muss — Platte und lesbares
     Prozessprofil (:func:`app.core.export.manufacturer.findings`)."""
-    if setup is None or setup.flavour != "orca":
+    if setup is None or setup.flavour not in ("orca", "prusa"):
         return []
     return manufacturer.findings(manufacturer.base_settings(profile, settings.quality, setup))
 
@@ -401,13 +401,13 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
     Nichts zu melden ist der Regelfall: Steht die Maschine, ist die Datei
     vollständig, und eine Beruhigung wäre eine Zeile, die nichts unterscheidet.
 
-    **PrusaSlicer bekommt keinen Befund.** Der Befund galt einen halben Tag
-    lang weiter, als er gemeint war: Seine Maschinenseite baut
-    :func:`_machine_keys` aus dem eigenen Druckerprofil, und eine ``.ini`` ist
-    eigenständig lauffähig, sobald Düse und Bettform darin stehen. Gemessen am
-    03.09.2026 bekam es bei jedem Export ein ``slicer.machine_unset`` und den
-    Rat, im Slicer einen Drucker einzurichten, den es dafür nicht braucht.
-    Eine Warnung, die nicht stimmt, ist teurer als keine.
+    **PrusaSlicer bekommt einen, seit es auf dem Bündel druckt** (Konzept
+    Herstellerprofil, Stufe C). Bis dahin schwieg die Stelle mit Absicht: Eine
+    ``.ini`` ist lauffähig, sobald Düse und Bettform darin stehen, und am
+    03.09.2026 bekam PrusaSlicer bei jedem Export den Rat, einen Drucker
+    einzurichten, den es dafür nicht brauchte. Heute druckt es ohne das
+    Druckerprofil des Bündels mit seinem eingebauten Startcode — ohne
+    Bettvermessung und Spüllinie —, und das ist eine Auskunft wert.
 
     **Cura bekommt einen, wenn es den Drucker nicht kennt.** Bis zum
     27.09.2026 schwieg die Stelle auch für Cura, mit derselben Begründung —
@@ -419,7 +419,7 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
     """
     if machine_from_definition(setup.flavour):
         return _cura_printer_unknown(setup, profile)
-    if not takes_a_machine_profile(setup.flavour):
+    if not takes_a_machine_profile(setup.flavour) and setup.flavour != "prusa":
         return []
     if machine_for(setup, profile):
         return []
@@ -1157,8 +1157,10 @@ def _as_float(value: str | None) -> float | None:
 def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
     """Was der Slicer über die Maschine wissen muss, wenn kein Profil greift.
 
-    Für ``prusa`` ist eine ``.ini`` eigenständig lauffähig, sobald Düse und
-    Bettform darin stehen. Orca lädt ein Maschinenprofil aus seinem Bestand,
+    Für ``prusa`` ohne Druckerprofil des Bündels ist eine ``.ini``
+    eigenständig lauffähig, sobald Düse und Bettform darin stehen; mit ihm
+    kommt die Maschine aus dem Bündel (:func:`prusa_values`), und diese
+    Schlüssel entfallen. Orca lädt ein Maschinenprofil aus seinem Bestand,
     und dem hier hineinzureden hieße, seine Anfahrwege und seinen Startcode
     zu überschreiben.
 
@@ -1756,6 +1758,98 @@ def _without_line_break(values: Mapping[str, str], tool_name: str) -> None:
     )
 
 
+#: Die Stichprobe der Grundlage bei PrusaSlicer (Entscheidung K), wie
+#: :data:`FOUNDATION_SAMPLE` für die Orca-Familie.
+PRUSA_FOUNDATION_SAMPLE: Final = frozenset(
+    {"layer_height", "perimeters", "support_material_threshold"}
+)
+#: Woran die Gegenprobe sieht, dass Drucker und Startcode des Bündels
+#: darunter lagen: das Modell, das die Firmware mit ``M862.3`` prüft, und der
+#: Startcode selbst mit Bettvermessung und Spüllinie (Entscheidung K).
+PRUSA_IDENTITY: Final = ("printer_model", "printer_settings_id", "start_gcode")
+
+
+def prusa_values(
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    slots: Sequence[MaterialSlot] = (),
+    *,
+    console: bool,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Was PrusaSlicer bekommt — und was davon die Gegenprobe hält.
+
+    **Mit Drucker und Prozess aus PrusaSlicers Bestand** (Konzept
+    Herstellerprofil, Stufe C) steht die ganze Kette in der Datei, wie
+    PrusaSlicer sie druckt, wenn man die drei im Fenster wählt
+    (:func:`manufacturer.prusa_chain`), und darüber nur die Abweichung: die
+    eigene Wahl, der übernommene Vorschlag, das Gemessene. Bis dahin bekam
+    PrusaSlicer 63 Schlüssel über seinen eingebauten Vorgaben — ohne
+    Bettvermessung, Spüllinie, Druckerprüfung und Pressure Advance, mit
+    ``reprap`` statt ``marlin2`` und 4000 statt 500 mm/s² in der ersten Schicht.
+
+    Technisch nötig kommt dazu: die Namen der drei Profile, damit das Fenster
+    sie wiederfindet und nur Solidons Abweichung als „geändert" zeigt;
+    ``support_material_auto``, sobald Solidon Stützen einschaltet, denn Prusas
+    Vorgabe stützt nur an gemalten Verstärkern (Entscheidung J); der Rückzug
+    auch am Filament, wo das Filament ihn sonst überstimmte; und für den
+    Konsolenlauf ``binary_gcode = 0``, weil Solidon die Druckdatei als Text
+    liest. Die 3MF behält das binäre Format des Herstellers.
+
+    **Ohne Drucker des Bestands** bleibt es bei Solidons vollständigem Satz
+    samt Maschine (:func:`_machine_keys`), und der Filamenttyp geht mit: Ohne
+    ihn ging PETG als PLA hinaus (Prüfbericht Prusa, B11).
+    """
+    effective = settings_for_handover(settings, profile, "prusa", slots, setup)
+    chain: manufacturer.PrusaChain | None = None
+    if setup is not None:
+        try:
+            chain = manufacturer.prusa_chain(profile, setup)
+        except ExternalToolError as problem:
+            # Den Grund nennt der Befund der Grundlage (``slicer.process_unreadable``).
+            _log.warning("Prusa profile unreadable, writing Solidon's table: %s", problem)
+    if setup is None or chain is None:
+        flat = values_for(effective, profile, "prusa")
+        flat["filament_type"] = slicer_keys.filament_type(profile.material.id)
+        return flat, flat
+    foundation = manufacturer.base_settings(profile, settings.quality, setup)
+    paths = manufacturer.written_paths(effective, foundation) or frozenset()
+    if slots:
+        # Die erste Spule fährt den Satz (``settings_for_shared_slicer``), und
+        # was sie ausdrücklich anders will, gehört mit hinaus.
+        paths = _for_the_slot(paths, settings, slots[0], profile, setup) or paths
+    if not chain.filament:
+        paths |= frozenset(
+            path for path in print_settings.all_paths() if manufacturer._material_path(path)
+        )
+    own = _followers_not_faster(
+        {**manufacturer.PRUSA_PROGRAM_DEFAULTS, **chain.values},
+        as_mapping(effective, "prusa", paths),
+        _suggested_speed_keys(effective, "prusa"),
+        followers=_PRUSA_FOLLOWERS,
+    )
+    document = dict(chain.values)
+    document.update(own)
+    if own.get("support_material") == "1":
+        document["support_material_auto"] = "1"
+    for key in ("retract_length", "retract_speed", "retract_lift", "wipe"):
+        if key in own:
+            document[f"filament_{key}"] = own[key]
+    if chain.filament:
+        document["filament_settings_id"] = chain.filament
+    else:
+        document["filament_type"] = slicer_keys.filament_type(profile.material.id)
+    document["printer_settings_id"] = chain.printer
+    document["print_settings_id"] = chain.process
+    if console:
+        document["binary_gcode"] = "0"
+    expected = {key: document[key] for key in own}
+    for key in (*PRUSA_FOUNDATION_SAMPLE, *PRUSA_IDENTITY):
+        if key in document:
+            expected[key] = document[key]
+    return document, expected
+
+
 def write_config(
     settings: PrintSettings,
     profile: Profile,
@@ -1791,13 +1885,14 @@ def write_config(
         # einer INI trennt der Umbruch die Einträge, und der Titel kommt aus
         # der Projektdatei. Ein Umbruch darin schrieb sonst eine zweite Zeile,
         # die PrusaSlicer als Einstellung liest — mit ``post_process`` als
-        # Befehl, den niemand gesetzt hat.
-        flat = flat_values()
+        # Befehl, den niemand gesetzt hat. Die Werte des Bündels tragen ihre
+        # Umbrüche maskiert (``\n``), wie PrusaSlicer selbst sie schreibt.
+        flat, expected = prusa_values(settings, profile, setup, slots, console=True)
         _without_line_break(flat, setup.name)
         lines = [f"# {_one_line(settings.title)} — von Solidon geschrieben, nicht von Hand"]
         lines += [f"{key} = {value}" for key, value in sorted(flat.items())]
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return SlicerConfig(process=target, written=flat)
+        return SlicerConfig(process=target, written=expected)
 
     if takes_a_machine_profile(setup.flavour):
         # **Das Herstellerprofil ist die Grundlage** (Konzept Herstellerprofil,
@@ -1828,6 +1923,7 @@ def write_config(
             setup,
             deviating=deviating.get("process", {}),
             plate=plate,
+            suggested=_suggested_speed_keys(settings, setup.flavour),
         )
         target.write_text(
             json.dumps(process_document, indent=2, ensure_ascii=False),
@@ -1854,7 +1950,7 @@ def write_config(
             # noch einmal gerechnet und nicht die von oben genommen.
             mine = settings_for_slot(settings, profile, slot, setup)
             part = split if mine is settings else by_section(mine, setup.flavour)
-            own_paths = _for_the_slot(paths, settings, slot)
+            own_paths = _for_the_slot(paths, settings, slot, profile, setup)
             filament_documents.append(
                 _orca_filament(
                     part.get("filament", {}),
@@ -2073,6 +2169,7 @@ def project_settings(
             setup,
             deviating=deviating.get("process", {}),
             plate=plate,
+            suggested=_suggested_speed_keys(settings, setup.flavour),
         )
     )
     document.update(_machine_keys(profile, setup.flavour))
@@ -2101,7 +2198,7 @@ def project_settings(
             else setup
         )
         slot_values = by_section(mine, setup.flavour).get("filament", {})
-        slot_paths = paths if slot is None else _for_the_slot(paths, settings, slot)
+        slot_paths = paths if slot is None else _for_the_slot(paths, settings, slot, profile, setup)
         filament_documents.append(
             _orca_filament(
                 slot_values,
@@ -2254,6 +2351,57 @@ def _orca_machine(setup: SlicerSetup) -> dict[str, object]:
     return document
 
 
+#: Schlüssel, die ein Solidon-Feld nur mitbedient, weil Solidon sie nicht eigens
+#: führt: die Lückenfüllung mit der Innenwand, die innere Vollfüllung mit der
+#: Füllung (``slicer_keys``). Solidons eigener Satz braucht für sie einen Wert;
+#: über einem Herstellerprozess hat der Hersteller sie eigens abgestimmt.
+_ORCA_FOLLOWERS: Final = frozenset({"gap_infill_speed", "internal_solid_infill_speed"})
+#: Dieselben zwei bei PrusaSlicer: Lückenfüllung und volle Füllung.
+_PRUSA_FOLLOWERS: Final = frozenset({"gap_fill_speed", "solid_infill_speed"})
+
+
+def _followers_not_faster(
+    base: Mapping[str, object],
+    deviating: Mapping[str, str],
+    suggested: frozenset[str] = frozenset(),
+    followers: frozenset[str] = _ORCA_FOLLOWERS,
+) -> dict[str, str]:
+    """Eine Abweichung macht einen mitbedienten Schlüssel nie schneller als beim Hersteller.
+
+    Gemessen am 27.09.2026 an Anycubics Kobra 2 in OrcaSlicer: Der Vorschlag
+    „Innenwand 142 mm/s“ hob die Lückenfüllung des Herstellers von 100 auf
+    142 mm/s, weil ``speed.inner_wall`` beide Schlüssel schreibt. Langsamer
+    darf sie werden, denn wer die Innenwand bremst, meint die Lückenfüllung
+    mit. Schneller nicht: Das wäre eine Abweichung, die niemand gewählt hat.
+    Ein Herstellerwert, der keine Zahl ist, bleibt, wie er ist.
+
+    Dasselbe gilt für jedes Tempo, das nur ein übernommener Vorschlag setzt
+    (``suggested``, :func:`_suggested_speed_keys`): Ein Vorschlag bremst, er
+    beschleunigt nicht. „Erste Schicht 50 mm/s" an schmalen Stegen legt die
+    Füllung langsamer und lässt Wände, die der Hersteller mit 40 legt, bei 40.
+    Eine eigene Wahl im Dialog darf beides.
+    """
+    kept = dict(deviating)
+    for key in (followers | suggested) & kept.keys():
+        vendor = _as_float(_printed(base.get(key, "")))
+        own = _as_float(kept[key])
+        if vendor is None or own is None or own > vendor:
+            del kept[key]
+    return kept
+
+
+def _suggested_speed_keys(settings: PrintSettings, flavour: SlicerFlavour) -> frozenset[str]:
+    """Die Tempo-Schlüssel, die nur ein übernommener Vorschlag setzt, keine eigene Wahl."""
+    suggested = settings.accepted - settings.chosen
+    return frozenset(
+        entry.key
+        for entry in slicer_keys.TABLES[flavour]
+        if entry.path in suggested
+        and entry.path.startswith("speed.")
+        and entry.key.endswith("_speed")
+    )
+
+
 def _orca_process(
     values: dict[str, str],
     settings: PrintSettings,
@@ -2261,6 +2409,7 @@ def _orca_process(
     *,
     deviating: Mapping[str, str] | None = None,
     plate: str = "",
+    suggested: frozenset[str] = frozenset(),
 ) -> dict[str, object]:
     """Das Prozessprofil für die Orca-Familie.
 
@@ -2300,7 +2449,11 @@ def _orca_process(
         # Solidon damit hing.
         document.update(slicer_profiles.resolve_values(base, roots=_profile_roots(setup)))
     # Auf dem Herstellerprozess nur die Abweichung, ohne ihn alles (Entscheidung D).
-    document.update(values if base is None or deviating is None else deviating)
+    document.update(
+        values
+        if base is None or deviating is None
+        else _followers_not_faster(document, deviating, suggested)
+    )
     # **Die Druckplatte, ausdrücklich** (Entscheidung F). Ohne sie nimmt die
     # Konsole „Cool Plate" — gemessen am ElegooSlicer mit 35 °C Bett für PLA,
     # während das Fenster am Centauri Carbon 2 die texturierte PEI-Platte wählt.
@@ -2518,11 +2671,22 @@ def _deviating(
 
 
 def _for_the_slot(
-    paths: frozenset[str] | None, settings: PrintSettings, slot: MaterialSlot
+    paths: frozenset[str] | None,
+    settings: PrintSettings,
+    slot: MaterialSlot,
+    profile: Profile | None = None,
+    setup: SlicerSetup | None = None,
 ) -> frozenset[str] | None:
-    """Die Abweichungen eines Slots: die des Projekts und die Gruppen, die
-    seine Spule ausdrücklich übersteuert — die gehören ihr, nicht dem
-    Hersteller (§20)."""
+    """Die Abweichungen eines Slots: die des Projekts und was seine Spule
+    ausdrücklich anders will als ihre Grundlage — das gehört ihr, nicht dem
+    Hersteller (§20).
+
+    Übersteuert wird gruppenweise (:class:`SlotOverride`), vorbelegt mit den
+    Werten, die ohne die Übersteuerung gälten. Geschrieben wird nur, was davon
+    abweicht: Wer an einer Spule die Düsentemperatur ändert, schreibt nicht
+    Bett, erste Schicht und Kammer mit über das Herstellerfilament (Review
+    Stufe A+B, H15). Ohne Drucker zum Vergleich bleibt es bei der ganzen Gruppe.
+    """
     if paths is None:
         return None
     override = override_for(settings, slot)
@@ -2533,8 +2697,21 @@ def _for_the_slot(
         for group in ("temperature", "cooling", "retraction", "filament")
         if getattr(override, group) is not None
     ]
-    return paths | frozenset(
+    candidates = frozenset(
         path for path in print_settings.all_paths() if path.partition(".")[0] in groups
+    )
+    if profile is None:
+        return paths | candidates
+    without = replace(
+        settings,
+        slot_overrides=tuple(entry for entry in settings.slot_overrides if entry is not override),
+    )
+    base = settings_for_slot(without, profile, slot, setup)
+    mine = settings_for_slot(settings, profile, slot, setup)
+    return paths | frozenset(
+        path
+        for path in candidates
+        if not print_settings.same_value(read_path(mine, path), read_path(base, path))
     )
 
 

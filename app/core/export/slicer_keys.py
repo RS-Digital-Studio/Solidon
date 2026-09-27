@@ -979,6 +979,19 @@ def takes(flavour: SlicerFlavour, path: str) -> bool:
     return path not in NOT_TAKEN_BY[flavour]
 
 
+def caps_volumetric_speed(flavour: SlicerFlavour) -> bool:
+    """Deckelt dieser Slicer das Tempo selbst nach dem Volumenstrom des Filaments?
+
+    PrusaSlicer und die Orca-Familie tun es mit dem Wert, den Solidon ihnen
+    als ``filament_max_volumetric_speed`` schreibt: Jede Bahn fährt höchstens
+    so schnell, wie das Filament fördert. Ein Tempodeckel als Vorschlag
+    (``advise.limits_flow``) ändert dort nichts am Druck. Cura liest den Wert
+    nicht (:data:`NOT_TAKEN_BY`) und deckelt nicht; dort ist der Vorschlag der
+    einzige Deckel.
+    """
+    return flavour in ("orca", "prusa")
+
+
 def limitation(
     flavour: SlicerFlavour, path: str, settings: PrintSettings | None = None
 ) -> TranslatableText | None:
@@ -1098,11 +1111,12 @@ def takes_a_machine_profile(flavour: SlicerFlavour) -> bool:
        statt geerbt, nicht das Profil des Herstellers —, und die Kommandozeile
        reicht beide zusammen mit einem Semikolon getrennt weiter.
 
-    PrusaSlicer bekommt seine Maschinenseite dagegen von Solidon selbst
-    (:func:`_machine_keys`): Bauraum, Düse und Bettform aus dem eigenen
-    Druckerprofil, und eine ``.ini`` ist damit eigenständig lauffähig — eine
-    Datei, keine zwei. Cura bekommt seine aus einer Druckerdefinition seiner
-    Installation (:func:`machine_from_definition`).
+    PrusaSlicer bekommt seine Maschine aus dem Druckerprofil seines Bündels,
+    aufgelöst in dieselbe eine ``.ini`` wie Prozess und Filament
+    (``handover.prusa_values``); ohne Druckerprofil schreibt Solidon Bauraum,
+    Düse und Bettform selbst (:func:`_machine_keys`) — eine Datei, keine
+    zwei. Cura bekommt seine aus einer Druckerdefinition seiner Installation
+    (:func:`machine_from_definition`).
 
     **Beide Fragen fallen heute zusammen, aber nicht aus Notwendigkeit:** Eine
     künftige Familie mit eigenem Maschinenbestand, aber einer einzigen
@@ -1126,8 +1140,8 @@ def machine_from_definition(flavour: SlicerFlavour) -> bool:
     des Herstellers, ohne Spüllinie und ohne Bettnetz.
 
     Die Orca-Familie lädt ihre Maschine als Profil
-    (:func:`takes_a_machine_profile`), PrusaSlicer bekommt sie von Solidon in
-    seiner ``.ini``.
+    (:func:`takes_a_machine_profile`), PrusaSlicer bekommt sie aus seinem
+    Bündel in Solidons ``.ini``.
     """
     return flavour == "cura"
 
@@ -1164,13 +1178,13 @@ def names_its_own_output(flavour: SlicerFlavour) -> bool:
 def has_readable_profiles(flavour: SlicerFlavour) -> bool:
     """Gibt es Profildateien, die Solidon lesen und anbieten kann?
 
-    Für ``prusa`` nicht, und das ist kein Mangel: Eine PrusaSlicer-``.ini``
-    läuft eigenständig, sobald Düse und Bettform darin stehen, und die
-    schreibt Solidon selbst (§29). Es gibt dort also nichts auszuwählen.
-    Für ``other`` auch nicht — Solidon kennt den Bestand dieses Programms
-    nicht und liest ihn nicht.
+    Für ``prusa`` seit Stufe C des Konzepts Herstellerprofil: Drucker, Prozess
+    und Filament kommen aus seinen Bündeln, und ohne sie druckte PrusaSlicer
+    mit seinen eingebauten Vorgaben — ohne Bettvermessung und Spüllinie. Für
+    ``other`` nicht — Solidon kennt den Bestand dieses Programms nicht und
+    liest ihn nicht.
     """
-    return flavour in {"orca", "cura"}
+    return flavour in {"orca", "prusa", "cura"}
 
 
 def reads_assembly_file(flavour: SlicerFlavour) -> bool:

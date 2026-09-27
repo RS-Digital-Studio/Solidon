@@ -167,6 +167,22 @@ def test_after_the_flow_advice_the_limit_holds() -> None:
     assert advise.flow_of(applied, fastest) <= applied.filament.max_flow + 1e-6
 
 
+def test_the_flow_advice_can_be_told_apart() -> None:
+    """Die Orca-Familie und PrusaSlicer deckeln das Tempo selbst nach dem
+    Volumenstrom, den Solidon ihnen als Filamentwert schreibt. Derselbe Deckel
+    als Vorschlag ändert dort nichts am Druck, und an der Kobra 2 hob er über
+    die Innenwand die Lückenfüllung an (Gesamtprüfung, 27.09.2026). Der
+    Druckdialog muss ihn erkennen können, ohne am angezeigten Text zu raten."""
+    settings, profile = hot_and_fast()
+
+    entries = advise.advise(settings, profile)
+
+    inner = next(entry for entry in entries if entry.path == "speed.inner_wall")
+    assert advise.limits_flow(inner)
+    other = replace(inner, reason="Ein anderer Grund für dasselbe Feld")
+    assert not advise.limits_flow(other), "am Grund erkannt, nicht am Feld"
+
+
 # --- die Deckelung der Strukturbreite ist keine Messung --------------------------
 
 
@@ -709,6 +725,54 @@ def test_an_overhang_limit_outside_the_quadrant_is_refused(angle: object) -> Non
     with pytest.raises(ValidationError) as raised:
         profiles._printer_from_table("probe", table, Path("printers.toml"))
     assert raised.value.suggestions, "Regel 17"
+
+
+def _plate_with_webs(web: float) -> MeshData:
+    """Eine Platte 60 × 60 × 2 mm mit einem Raster aus 8-mm-Löchern, zwischen
+    denen Stege von ``web`` mm stehen — wie die Bahnen der Minigolf-Platte
+    zwischen Loch 3, Loch 4 und dem inneren Bogen (27.09.2026)."""
+    plate = trimesh.creation.box(extents=(60.0, 60.0, 2.0))
+    hole, step = 8.0, 8.0 + web
+    count = int(50.0 // step)
+    start = -(count * step - web) / 2.0 + hole / 2.0
+    holes = []
+    for i in range(count):
+        for j in range(count):
+            box = trimesh.creation.box(extents=(hole, hole, 4.0))
+            box.apply_translation((start + i * step, start + j * step, 0.0))
+            holes.append(box)
+    body = trimesh.boolean.difference([plate, *holes], engine="manifold")
+    body.apply_translation((0.0, 0.0, 1.0))
+    return MeshData.of(body)
+
+
+def test_narrow_webs_get_a_slow_first_layer() -> None:
+    """Roberts Minigolf-Platte am Centauri Carbon 2 (27.09.2026): Bei 105 mm/s
+    rissen an den schmalen Stegen die kurzen Bodenbahnen der ersten Schicht,
+    mit 50 mm/s für die ganze erste Schicht lief derselbe Druck sauber. Breite
+    Stege halten, und eine erste Schicht, die schon langsam ist, bleibt."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    fast = print_settings.with_path(print_settings.resolve(profile), "speed.first_layer", 105.0)
+
+    def first_layer_advice(body: MeshData, settings: PrintSettings) -> list[SettingAdvice]:
+        result = slice_body(
+            body,
+            settings.layers.layer_height,
+            first_layer_height=settings.layers.first_layer_height,
+            overhang_angle=profile.overhang_limit_degrees,
+            bridge_from=profile.minimum_wall_thickness,
+            support_volume=False,
+        )
+        entries = advise.advise(settings, profile, result, bounds=body.bounds)
+        return [entry for entry in entries if entry.path == "speed.first_layer"]
+
+    narrow = first_layer_advice(_plate_with_webs(2.0), fast)
+
+    assert len(narrow) == 1 and number(narrow[0]) == pytest.approx(advise.NARROW_WEB_SPEED)
+    assert narrow[0].severity == "warning"
+    assert not first_layer_advice(_plate_with_webs(6.0), fast), "breite Stege halten"
+    slow = print_settings.with_path(fast, "speed.first_layer", 40.0)
+    assert not first_layer_advice(_plate_with_webs(2.0), slow), "schon langsam genug"
 
 
 def _plate_on_a_sloped_foot(angle: float) -> MeshData:

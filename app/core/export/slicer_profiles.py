@@ -25,6 +25,7 @@ import math
 import os
 import re
 import sys
+import threading
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -34,6 +35,7 @@ from xml.etree import ElementTree as ET
 
 from app.core import discover
 from app.core.errors import CHECK_SLICER_PROFILE, ExternalToolError, ValidationError
+from app.core.export import prusa_conditions
 from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_readable_profiles,
@@ -125,6 +127,18 @@ class SlicerProfile:
     ihre Angaben nicht selbst; woher sie kommen, steht hier."""
     section: str = ""
     """Bei Prusa-Bündeln der Abschnitt; der Dateipfad allein ist nicht eindeutig."""
+    condition: str = ""
+    """Nur bei Prusa-Prozessen und -Filamenten: ``compatible_printers_condition``,
+    die Verträglichkeit als Bedingung über die Werte des Druckers
+    (:mod:`app.core.export.prusa_conditions`)."""
+    variables: tuple[tuple[str, str], ...] = ()
+    """Nur bei Prusa-Maschinen: die Werte, die solche Bedingungen lesen
+    (:data:`PRUSA_CONDITION_KEYS`), wie sie in der INI stehen."""
+    default_materials: tuple[str, ...] = ()
+    """Nur bei Prusa-Maschinen: die Filamente, die das Druckermodell im Bündel
+    vorschlägt (``default_materials``), in ihrer Reihenfolge. Der MK4S erbt
+    als ``default_filament_profile`` das PLA des MK4, das zu ihm nicht passt;
+    sein Modell nennt „Prusament PLA @MK4S HF0.4"."""
 
     def title(self, own: str = "eigenes") -> str:
         """Der Name für die Auswahl. Ein selbst angelegtes Profil wird
@@ -1031,10 +1045,9 @@ def known_printers(flavour: SlicerFlavour, executable: Path) -> tuple[str, ...]:
     """Welche Drucker dieser Slicer überhaupt kennt (§29).
 
     **Nicht dasselbe wie** :func:`find_profiles` **mit** ``machine``: Dort
-    geht es um die Auswahl eines Profils, und für PrusaSlicer gibt es die
-    nicht — es braucht keines, Solidon beschreibt die Maschine selbst. Hier
-    geht es um Wissen: Wer zwei Drucker und zwei Slicer hat, will sehen,
-    welcher davon den vor ihm stehenden überhaupt kennt.
+    geht es um die Auswahl eines Profils mit Düse und Variante. Hier geht es
+    um Wissen: Wer zwei Drucker und zwei Slicer hat, will sehen, welcher davon
+    den vor ihm stehenden überhaupt kennt.
 
     PrusaSlicer führt seine Modelle in den Herstellerbündeln unter
     ``[printer_model:…]``. Gelesen wird zeilenweise und nicht über
@@ -1956,15 +1969,97 @@ class _PrusaStore:
         return values
 
 
+@dataclass(slots=True)
+class _PrusaCache:
+    """Ein gelesener Prusa-Bestand und woran er erkannt wird."""
+
+    key: tuple[tuple[Path, ...], tuple[tuple[str, int, int], ...]]
+    store: _PrusaStore
+    profiles: list[SlicerProfile] | None = None
+
+
+#: **Der zuletzt gelesene Prusa-Bestand.** PrusaResearch.ini allein trägt über
+#: neuntausend Abschnitte; den Bestand zu lesen und jeden Abschnitt aufzulösen
+#: kostet 1,5 Sekunden, ein Name über :func:`profile_by_name` 1,1 und die
+#: Auflösung einer Kette 0,6 (gemessen 27.09.2026, PrusaSlicer 2.9.6). Die
+#: Grundlage fragt bei jeder Profilwahl im Druckdialog nach Drucker, Prozess
+#: und Filament — ungespeichert stand der Dialog dafür fünf Sekunden.
+#:
+#: Anders als :data:`ProfileIndexes` lebt dieser Speicher über einen Aufruf
+#: hinaus, und das darf er nur, weil er vor jeder Antwort nachsieht: Jede
+#: Bündeldatei geht mit Größe und Zeitstempel in seinen Schlüssel. Legt der
+#: Kunde ein Profil an, benennt eines um oder aktualisiert PrusaSlicer seine
+#: Bündel, passt der Schlüssel nicht mehr, und der Bestand wird neu gelesen.
+_PRUSA_LOCK: Final = threading.RLock()
+_prusa_cache: _PrusaCache | None = None
+
+
+def _prusa_signature(roots: Sequence[Path]) -> tuple[tuple[str, int, int], ...]:
+    """Woran ein Prusa-Bestand erkannt wird: jede Datei mit Größe und Zeitstempel."""
+    signature: list[tuple[str, int, int]] = []
+    for root in roots:
+        for path in _prusa_files(root):
+            try:
+                status = path.stat()
+            except OSError:
+                continue
+            signature.append((str(path), status.st_mtime_ns, status.st_size))
+    return tuple(signature)
+
+
+def _prusa_store(roots: Sequence[Path], cancelled: CancelToken | None = None) -> _PrusaCache:
+    """Der gelesene Bestand zu diesen Wurzeln — aus dem Speicher, solange er stimmt."""
+    global _prusa_cache
+    key = (tuple(roots), _prusa_signature(roots))
+    with _PRUSA_LOCK:
+        if _prusa_cache is not None and _prusa_cache.key == key:
+            return _prusa_cache
+    # Gelesen wird außerhalb der Sperre: Das dauert, und ein abgebrochener
+    # Suchauftrag hinterlässt so keinen halben Bestand im Speicher.
+    cache = _PrusaCache(key, _PrusaStore(roots, cancelled=cancelled))
+    with _PRUSA_LOCK:
+        _prusa_cache = cache
+    return cache
+
+
+#: Die Werte eines Prusa-Druckers, die die Verträglichkeitsbedingungen der
+#: Bündel lesen — gezählt über alle Bündel von PrusaSlicer 2.9.6 (27.09.2026).
+#: ``num_extruders`` leitet der Auswerter aus ``nozzle_diameter`` ab.
+PRUSA_CONDITION_KEYS: Final = (
+    "printer_model",
+    "printer_notes",
+    "printer_variant",
+    "printer_technology",
+    "nozzle_diameter",
+    "nozzle_high_flow",
+    "single_extruder_multi_material",
+)
+
+
 def _prusa_profiles(
     executable: Path, wanted: frozenset[ProfileKind], cancelled: CancelToken | None = None
 ) -> list[SlicerProfile]:
-    """Native Profile, mit aufgelöster Maschinenidentität und unsichtbaren Erbbasen."""
-    store = _PrusaStore(profile_roots("prusa", executable), cancelled=cancelled)
+    """Native Profile, mit aufgelöster Maschinenidentität und unsichtbaren Erbbasen.
+
+    Die Liste gilt für alle drei Arten und wird mit dem Bestand gespeichert
+    (:func:`_prusa_store`); gefiltert wird je Aufruf.
+    """
+    cache = _prusa_store(profile_roots("prusa", executable), cancelled)
+    # Unter der Sperre, damit zwei Aufrufer den Bestand nicht zugleich
+    # auflösen; ein Abbruch lässt die Liste leer statt halb.
+    with _PRUSA_LOCK:
+        if cache.profiles is None:
+            cache.profiles = _prusa_listing(cache.store, cancelled)
+        listed = cache.profiles
+    return [entry for entry in listed if entry.kind in wanted]
+
+
+def _prusa_listing(store: _PrusaStore, cancelled: CancelToken | None) -> list[SlicerProfile]:
+    """Alle wählbaren Profile eines gelesenen Bestands, je Art und Name eines."""
     found: dict[tuple[ProfileKind, str], SlicerProfile] = {}
     for entry in store.entries:
         _check_cancelled(cancelled)
-        if entry.kind not in wanted or (entry.name.startswith("*") and entry.name.endswith("*")):
+        if entry.name.startswith("*") and entry.name.endswith("*"):
             continue
         try:
             values = store.resolve(entry)
@@ -1976,8 +2071,14 @@ def _prusa_profiles(
         model = str(values.get("printer_model", ""))
         section = f"printer_model:{model}"
         document = store.documents[entry.path]
+        materials: tuple[str, ...] = ()
         if document.has_section(section):
             model = document[section].get("name", model)
+            materials = tuple(
+                name.strip()
+                for name in document[section].get("default_materials", "").split(";")
+                if name.strip()
+            )
         profile = replace(
             entry,
             printer_model=model,
@@ -1988,11 +2089,38 @@ def _prusa_profiles(
             ),
             filament_type=str(values.get("filament_type", "")),
             compatible_printers=tuple(_prusa_list(str(values.get("compatible_printers", "")))),
+            condition=(
+                str(values.get("compatible_printers_condition", "")).strip()
+                if entry.kind != "machine"
+                else ""
+            ),
+            variables=(
+                tuple((key, str(values[key])) for key in PRUSA_CONDITION_KEYS if key in values)
+                if entry.kind == "machine"
+                else ()
+            ),
+            default_materials=materials if entry.kind == "machine" else (),
         )
         key = (profile.kind, profile.name)
         if key not in found or profile.from_user or not found[key].from_user:
             found[key] = profile
     return list(found.values())
+
+
+def identity(entry: SlicerProfile) -> str:
+    """Woran eine Auswahl ein Profil wiedererkennt: der Pfad seiner Datei, bei
+    einem Abschnitt eines Prusa-Bündels sein Name.
+
+    Ein Bündel trägt tausende Profile in einer Datei, PrusaResearch.ini allein
+    über neuntausend. Am Pfad erkannt, wäre jedes davon dasselbe, und die
+    Auswahl zeigte den gewählten Drucker über dem ersten Abschnitt der Datei.
+    Der Name ist dort eindeutig (:func:`_prusa_listing` führt je Art und Name
+    eines), reist wie jeder Profilname in die Projektdatei (Regel 12), und
+    :func:`app.core.export.handover.profile_source` löst ihn auf.
+    """
+    if entry.section and entry.section != _PRUSA_HEAD:
+        return entry.name
+    return str(entry.path)
 
 
 def profile_by_name(
@@ -2019,8 +2147,11 @@ def resolve_profile(
     """
     _check_cancelled(cancelled)
     if profile.path.suffix == ".ini":
-        store = _PrusaStore(roots, eager=False, cancelled=cancelled)
-        return dict(store.resolve(profile))
+        store = _prusa_store(roots, cancelled).store
+        # Unter der Sperre: Eine Datei außerhalb der Wurzeln liest der Bestand
+        # beim Auflösen nach, und zwei Aufrufer dürfen ihn dabei nicht teilen.
+        with _PRUSA_LOCK:
+            return dict(store.resolve(profile))
     return resolve_values(profile.path, roots, indexes=indexes, cancelled=cancelled)
 
 
@@ -2323,6 +2454,17 @@ def _of_kind(
     entries = [entry for entry in profiles if entry.kind == kind]
     if machine is None:
         return sorted(entries, key=lambda entry: entry.name)
+    if machine.variables:
+        # **PrusaSlicer bindet über Bedingungen**, nicht über Listen: Ohne sie
+        # galten am MK4S 6740 von 6772 Filamenten als verträglich, und die
+        # Suche stand 43 Sekunden (27.09.2026). Hier gibt es keinen Rückfall
+        # auf „alle ohne Angabe" — ein Profil ohne Liste und ohne Bedingung
+        # passt ohnehin zu jedem Drucker.
+        values = dict(machine.variables)
+        return sorted(
+            (entry for entry in entries if _prusa_fits(entry, machine, values)),
+            key=lambda entry: entry.name,
+        )
 
     known = {entry.name: entry for entry in entries}
     # **Ein Index für alle Einträge dieser Art.** ``compatible_with`` löst je
@@ -2341,6 +2483,22 @@ def _of_kind(
         entry for entry in entries if not compatible_with(entry, known, indexes=indexes)
     ]
     return sorted(chosen, key=lambda entry: entry.name)
+
+
+def _prusa_fits(entry: SlicerProfile, machine: SlicerProfile, values: Mapping[str, str]) -> bool:
+    """PrusaSlicers Regel: Eine Liste gewinnt, sonst die Bedingung, sonst passt es.
+
+    Eine Bedingung, die sich nicht auswerten lässt, schließt das Profil aus
+    (:class:`~app.core.export.prusa_conditions.ConditionError`): Eine Auswahl zu
+    wenig lässt sich im Dialog erweitern, eine unpassende druckt falsch.
+    """
+    if entry.compatible_printers:
+        return machine.name in entry.compatible_printers
+    try:
+        return prusa_conditions.holds(entry.condition, values)
+    except prusa_conditions.ConditionError as problem:
+        _log.debug("Prusa condition of %s not evaluated: %s", entry.name, problem)
+        return False
 
 
 def processes(
@@ -2416,22 +2574,31 @@ def match_filament(
     # sind das Temperatur, Kühlung und Volumenstrom des ganzen Drucks. Zuerst
     # zählt deshalb, was die Maschine selbst vorwählt, dann die Marke der
     # Maschine.
-    vendor = _vendor_folder(machine.path, "machine")
+    vendor = _vendor_of(machine.path, "machine")
+    # Bei Prusa zählt danach, was das Druckermodell vorschlägt: Der MK4S erbt
+    # als Standard das PLA des MK4, das laut eigener Bedingung nicht zu ihm
+    # passt, und ohne diese Stufe gewann der kürzeste Name, „Generic PLA
+    # @SOVOL" aus Sovols Bündel (27.09.2026).
+    suggested = {name: rank for rank, name in enumerate(machine.default_materials)}
     return min(
         fitting,
         key=lambda entry: (
             not entry.from_user,
             entry.name != machine.default_filament,
-            not vendor or _vendor_folder(entry.path, "filament") != vendor,
+            suggested.get(entry.name, len(suggested)),
+            not vendor or _vendor_of(entry.path, "filament") != vendor,
             len(entry.name),
             entry.name,
         ),
     )
 
 
-def _vendor_folder(path: Path, kind: str) -> str:
-    """Der Herstellerordner über dem Ordner einer Profilart — leer, wo es
-    keinen gibt (Prusa-Bündel, eigene Profile)."""
+def _vendor_of(path: Path, kind: str) -> str:
+    """Der Hersteller eines Profils: der Ordner über dem Ordner seiner Art, bei
+    PrusaSlicer die Bündeldatei (``PrusaResearch``, ``Sovol``). Leer, wo es
+    keinen gibt (eigene Profile)."""
+    if path.suffix == ".ini":
+        return path.stem
     parts = list(path.parts)
     if kind not in parts:
         return ""
@@ -2465,8 +2632,18 @@ def match(
     Varianten desselben Geräts. Trifft nichts, bleibt es leer: eine falsche
     Vorauswahl wäre schlimmer als keine, weil sie wie eine Entscheidung
     aussieht.
+
+    Nennt der Drucker sein Profil in PrusaSlicers Bündel
+    (``PrinterProfile.prusaslicer_printer``) und steht es im Bestand, gilt
+    dieses. Die Namenssuche traf dort am MINI und XL die abgelösten Profile
+    ohne Input Shaper und den SV06 gar nicht (27.09.2026).
     """
-    candidates = [
+    named_in_bundle = [
+        entry
+        for entry in machines(profiles)
+        if printer.prusaslicer_printer and entry.name == printer.prusaslicer_printer
+    ]
+    candidates = named_in_bundle or [
         entry
         for entry in machines(profiles)
         if _names_the_printer(entry.printer_model, printer.title)
@@ -2743,7 +2920,7 @@ def machine_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
     return {key: resolved[key] for key in MACHINE_READBACK if key in resolved}
 
 
-_PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
+PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
     ("temperature.nozzle", "temperature", int),
     ("temperature.nozzle_first_layer", "first_layer_temperature", int),
     ("temperature.bed", "bed_temperature", int),
@@ -2801,7 +2978,7 @@ def filament_values(
     source = path.path if isinstance(path, SlicerProfile) else path
     readback = FILAMENT_READBACK
     if source.suffix == ".ini":
-        readback = _PRUSA_FILAMENT_READBACK
+        readback = PRUSA_FILAMENT_READBACK
     elif source.name.endswith((".xml.fdm_material", ".inst.cfg")):
         readback = _CURA_FILAMENT_READBACK
     values: dict[str, float | int] = {}
