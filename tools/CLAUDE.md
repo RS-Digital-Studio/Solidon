@@ -131,6 +131,6 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
   auf POSIX an.
 - **Kleinigkeiten mit Folgen**: `LicenseRef-Proprietary` mit `license-files`
   braucht setuptools ≥ 77.0.3; der Linux-Installer maskiert im Desktop-Entry
-  erst das Exec-Argument, dann die Backslashes; PDF-Kapitelköpfe lesen ihre
-  Seiten aus den benannten Zielen der HTML-Anker, das Stempeln behält den
-  Dokumentkatalog.
+  erst das Exec-Argument, dann die Backslashes; PDF-Kapitelköpfe und
+  Lesezeichen lesen ihre Seiten aus den benannten Zielen der HTML-Anker, das
+  Stempeln behält den Dokumentkatalog.

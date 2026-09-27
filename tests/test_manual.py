@@ -2143,3 +2143,61 @@ def test_stamping_preserves_pdf_link_targets(
     target = reader.named_destinations[link["/Dest"]]
     assert reader.get_destination_page_number(target) == 2
     assert make_manual._chapter_of_each_page(pdf) == ["", "", *("Die vier Wege",) * 4]
+
+
+def test_the_pdf_bookmarks_hold_the_parts_and_under_them_their_chapters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Lesezeichen des PDF: oben die Teile, darunter ihre Kapitel.
+
+    Jedes springt auf seine erste Seite, gebaut aus denselben benannten Zielen
+    wie Kopfzeile und Inhaltsverzeichnis: Ein Kapitel springt an die Stelle,
+    die auch sein Eintrag im Verzeichnis anspringt, ein Teil an den Kopf der
+    Seite, auf der sein erstes Kapitel beginnt. Das PDF öffnet mit sichtbaren
+    Lesezeichen — vorher war die Seitenleiste des Betrachters leer.
+    """
+    from pypdf import PdfReader
+
+    from tools import make_manual
+
+    pages = (
+        manual.Page("what", "Was Solidon ist", "", part="start"),
+        manual.Page("ways", "Die vier Wege", "", part="start"),
+        manual.Page("window", "Das Fenster", "", part="topics"),
+        manual.Page("glossary", "Wörterbuch", "", part="reference"),
+        manual.Page("mesh", "Netz", "", generated=True),
+    )
+    monkeypatch.setattr(manual, "pages", lambda: pages)
+    pdf = tmp_path / "manual.pdf"
+    _pdf_with_chapter_targets(
+        pdf, {"what": 2, "ways": 2, "window": 3, "glossary": 4, "ref-mesh": 5}, dictionary=True
+    )
+
+    def overlay(path: Path, chapters: list[str], total: int, language: str) -> Path:
+        """Die Seitendarstellung bleibt hier unabhängig vom Qt-Zeichner."""
+        _pdf_with_chapter_targets(path, {}, dictionary=True)
+        return path
+
+    monkeypatch.setattr(make_manual, "_overlay", overlay)
+    make_manual._stamp(pdf, "de")
+    reader = PdfReader(pdf)
+
+    parts: list[tuple[str, int]] = []
+    chapters: list[list[tuple[str, int]]] = []
+    for item in reader.outline:
+        if isinstance(item, list):
+            chapters.append(
+                [(str(one.title), reader.get_destination_page_number(one)) for one in item]
+            )
+        else:
+            parts.append((str(item.title), reader.get_destination_page_number(item)))
+    assert parts == [("Erste Schritte", 2), ("Funktionen", 3), ("Nachschlagen", 4)]
+    assert chapters == [
+        [("Was Solidon ist", 2), ("Die vier Wege", 2)],
+        [("Das Fenster", 3)],
+        [("Wörterbuch", 4), ("Netz", 5)],
+    ]
+    first_part, first_chapters = reader.outline[0], reader.outline[1]
+    assert (first_part.typ, float(first_part.top)) == ("/XYZ", 842.0), "Teil: Kopf der Seite"
+    assert [one.typ for one in first_chapters] == ["/Fit", "/Fit"], "Kapitel: sein Ziel"
+    assert reader.page_mode == "/UseOutlines"

@@ -209,6 +209,8 @@ Die PDF-Kapitelköpfe lesen die tatsächlichen Seiten aus den benannten Zielen
 der HTML-Kapitelanker. Beim Stempeln bleibt der ganze PDF-Dokumentkatalog
 erhalten, damit auch das Inhaltsverzeichnis diese Ziele weiter erreicht.
 PDF-Leser arbeiten dabei aus dem Speicher und halten die Zieldatei nicht offen.
+Die Lesezeichen entstehen im selben Schritt aus denselben Zielen: die Teile
+des Handbuchs oben, ihre Kapitel darunter.
 
 ## Bauen, signieren, ausliefern
 

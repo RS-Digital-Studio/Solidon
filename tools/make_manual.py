@@ -17,6 +17,7 @@ Was entsteht:
   die Schrittbilder der Anleitungen als WebP, weil sie nun einmal Pixel sind.
 * ``Releases/Solidon3D-Handbuch-<sprache>.pdf`` — über Qt gesetzt, damit dafür
   keine Abhängigkeit dazukommt, deren Lizenz erst geprüft werden müsste (§36).
+  Mit Lesezeichen nach Teilen und Kapiteln.
 
 Das PDF braucht Qt und damit die echte Plattform; zu den Schriften unter
 ``offscreen`` steht alles in ``tools/make_figures.py``.
@@ -32,6 +33,11 @@ from collections.abc import Iterable
 from html import escape
 from itertools import groupby
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import Fit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -993,48 +999,92 @@ FOOTER_BASELINE = 32.0
 STAMP_INSET = PDF_MARGIN_SIDE * 72.0 / 25.4
 
 
-def _chapter_of_each_page(pdf: Path) -> list[str]:
-    """Welches Kapitel auf welcher Seite läuft.
+def _chapter_starts(reader: PdfReader) -> list[tuple[manual.Page, int, Fit]]:
+    """Jedes Kapitel mit der Seite, auf der es beginnt, und seiner Stelle darauf.
 
     Die HTML-Anker werden beim Drucken zu benannten PDF-Zielen. Sie halten
     die tatsächliche Seite auch bei umbrochenen Überschriften und fehlenden
-    Leerzeichen der Textextraktion fest. Kopfzeile und Inhaltsverzeichnis
-    lesen dadurch dieselbe Seitenauskunft. Beginnen mehrere Kapitel auf
-    einem Blatt, führt dessen Kopf das letzte davon.
+    Leerzeichen der Textextraktion fest. Kopfzeile, Inhaltsverzeichnis und
+    Lesezeichen lesen dadurch dieselbe Seitenauskunft.
     """
+    from pypdf.generic import Fit
+
+    destinations = {
+        str(key).removeprefix("/"): value for key, value in reader.named_destinations.items()
+    }
+    starts: list[tuple[manual.Page, int, Fit]] = []
+    for chapter in manual.pages():
+        target = destinations.get(_anchor(chapter))
+        number = reader.get_destination_page_number(target) if target is not None else None
+        if target is None or number is None or number < 0:
+            raise RuntimeError(
+                f"Das PDF-Ziel für „{chapter.title}“ fehlt. "
+                "Erzeugen Sie das Handbuch erneut aus der vollständigen HTML-Seite."
+            )
+        kind, *arguments = target.dest_array[1:]
+        starts.append((chapter, number, Fit(str(kind), arguments)))
+    return starts
+
+
+def _running_chapters(starts: list[tuple[manual.Page, int, Fit]], total: int) -> list[str]:
+    """Welches Kapitel auf welcher Seite läuft.
+
+    Beginnen mehrere Kapitel auf einem Blatt, führt dessen Kopf das letzte
+    davon.
+    """
+    titles = {number: str(chapter.title) for chapter, number, _where in starts}
+    running = ""
+    found: list[str] = []
+    for number in range(total):
+        running = titles.get(number, running)
+        found.append(running)
+    return found
+
+
+def _chapter_of_each_page(pdf: Path) -> list[str]:
+    """Welches Kapitel auf welcher Seite des PDF läuft."""
     from io import BytesIO
 
     from pypdf import PdfReader
 
     reader = PdfReader(BytesIO(pdf.read_bytes()))
-    destinations = {
-        str(key).removeprefix("/"): value for key, value in reader.named_destinations.items()
-    }
-    starts: dict[int, str] = {}
-    for chapter in manual.pages():
-        target = destinations.get(_anchor(chapter))
-        number = reader.get_destination_page_number(target) if target is not None else None
-        if number is None or number < 0:
-            raise RuntimeError(
-                f"Das PDF-Ziel für „{chapter.title}“ fehlt. "
-                "Erzeugen Sie das Handbuch erneut aus der vollständigen HTML-Seite."
+    return _running_chapters(_chapter_starts(reader), len(reader.pages))
+
+
+def _bookmark(writer: PdfWriter, starts: list[tuple[manual.Page, int, Fit]]) -> None:
+    """Die Lesezeichen: die Teile oben, ihre Kapitel darunter.
+
+    Ein Kapitel springt an die Stelle seiner Überschrift, dieselbe, die das
+    Inhaltsverzeichnis anspringt. Ein Teil springt an den Kopf der Seite, auf
+    der sein erstes Kapitel beginnt: Dort steht im Druck seine Überschrift,
+    denn ein Teil beginnt auf einem neuen Blatt. Die Teile kommen aus
+    ``Page.part`` wie im Verzeichnis. Das PDF öffnet mit sichtbaren
+    Lesezeichen: Ohne sie blieb die Seitenleiste des Betrachters leer, und
+    ein Kapitel fand man nur über das Verzeichnis.
+    """
+    from pypdf.generic import Fit
+
+    part: manual.Part | None = None
+    parent = None
+    for chapter, number, where in starts:
+        if chapter.part != part:
+            part = chapter.part
+            top = float(writer.pages[number].mediabox.top)
+            parent = writer.add_outline_item(
+                str(manual.PART_TITLES[part]), number, fit=Fit.xyz(0, top, None)
             )
-        starts[number] = str(chapter.title)
-    running = ""
-    found: list[str] = []
-    for number in range(len(reader.pages)):
-        running = starts.get(number, running)
-        found.append(running)
-    return found
+        writer.add_outline_item(str(chapter.title), number, parent=parent, fit=where)
+    writer.page_mode = "/UseOutlines"
 
 
 def _stamp(pdf: Path, language: str) -> None:
-    """Kopf- und Fußzeile auf jede Seite legen.
+    """Kopf- und Fußzeile auf jede Seite legen, dazu die Lesezeichen.
 
     Chromium druckt keine — CSS Paged Media kennt Randboxen mit Seitenzähler,
     Chromium setzt sie nicht um. Also wird eine zweite, durchsichtige Lage
     gezeichnet und darübergelegt: oben das laufende Kapitel und der Name,
-    unten Version und Seitenzahl.
+    unten Version und Seitenzahl. Die Lesezeichen (`_bookmark`) entstehen im
+    selben Schritt aus denselben Zielen.
 
     Deckblatt und Inhaltsverzeichnis bleiben frei — ein Titelblatt mit
     Kolumnentitel sieht aus wie eine Seite, die verrutscht ist.
@@ -1043,12 +1093,14 @@ def _stamp(pdf: Path, language: str) -> None:
 
     from pypdf import PdfReader, PdfWriter
 
-    chapters = _chapter_of_each_page(pdf)
     # Aus dem Speicher: Der verzögert lesende Reader darf die Datei beim
     # anschließenden Ersetzen nicht mehr offen halten.
     reader = PdfReader(BytesIO(pdf.read_bytes()))
+    starts = _chapter_starts(reader)
     total = len(reader.pages)
-    overlay = _overlay(pdf.with_suffix(".stamp.pdf"), chapters, total, language)
+    overlay = _overlay(
+        pdf.with_suffix(".stamp.pdf"), _running_chapters(starts, total), total, language
+    )
 
     # Einzelne Seiten zu kopieren verliert den Dokumentkatalog und damit
     # die Ziele, auf die die Links im Inhaltsverzeichnis zeigen.
@@ -1058,6 +1110,7 @@ def _stamp(pdf: Path, language: str) -> None:
     for number, page in enumerate(writer.pages):
         if number >= SKIP_STAMP:
             page.merge_page(marks.pages[number])
+    _bookmark(writer, starts)
     writer.add_metadata(
         {
             "/Title": f"{site_text('Handbuch', language)} — {APP_NAME}",
