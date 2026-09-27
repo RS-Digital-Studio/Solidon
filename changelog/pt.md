@@ -94,6 +94,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - O nível «Standard» imprime com as velocidades e acelerações do perfil do fabricante em vez de travar cada impressora a 40 mm/s. Numa Centauri Carbon 2, as peças grandes levam 40 a 50 % menos tempo.
 - A velocidade dos percursos em vazio também vem da impressora: a Centauri Carbon 2 desloca-se a 500 em vez de 150 mm/s, para que o bico escorra menos pelo caminho.
+- O Solidon usa o ângulo de saliência do perfil do fabricante da sua impressora: 60 em vez de 45 graus na Elegoo, Bambu e Creality. Chanfros e inclinações suaves já não recebem suportes desnecessários.
 - Um teto sobre um canal de água ou um túnel já não atrai suportes para o modelo. Se mais nada precisar deles sobre o modelo, o Solidon propõe-nos só a partir da mesa.
 - Nova sugestão «Manter os canais livres»: aplicada, coloca um bloqueador de suportes nos canais para PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
 - Os suportes em grelha chegam ao slicer como grelha verdadeira, com a direção a mudar em cada camada, em vez de linhas soltas que se deslocam na impressão.

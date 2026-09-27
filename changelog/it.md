@@ -94,6 +94,7 @@ scrive in `website/version.json`.
 
 - Il livello «Standard» stampa con velocità e accelerazioni del profilo del produttore invece di frenare tutto a 40 mm/s. Su una Centauri Carbon 2 i pezzi grandi richiedono il 40-50 % di tempo in meno.
 - Anche la velocità degli spostamenti a vuoto viene dalla stampante: la Centauri Carbon 2 si sposta a 500 invece di 150 mm/s, perché l'ugello coli meno lungo il tragitto.
+- Solidon prende l'angolo di sbalzo dal profilo del produttore della stampante: 60 invece di 45 gradi per Elegoo, Bambu e Creality. Smussi e pendenze lievi non ricevono più supporti inutili.
 - Un soffitto sopra un canale d'acqua o un tunnel non richiama più supporti sul modello. Se nient'altro li richiede sul modello, Solidon li propone solo dal piano.
 - Nuovo suggerimento «Tenere liberi i canali»: applicato, mette un blocco dei supporti nei canali per PrusaSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print.
 - I supporti a griglia arrivano allo slicer come vera griglia, con la direzione che cambia a ogni strato, invece che come linee sciolte che si spostano in stampa.
