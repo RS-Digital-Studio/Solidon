@@ -1580,6 +1580,13 @@ def test_every_flavour_answers_every_property() -> None:
         # es gibt, denn CuraEngine schreibt seine wirksame Konfiguration nicht
         # in den G-Code — Prusa und Orca tun es und prüfen sich damit selbst.
         "has_key_definitions": {"prusa": False, "orca": False, "cura": True, "other": False},
+        # Die Maschine aus einer Druckerdefinition der Installation (Stufe D,
+        # 27.09.2026): Nur CuraEngine bekommt sie so; die Orca-Familie lädt
+        # ein Profil, PrusaSlicer bekommt sie in Solidons ``.ini``.
+        "machine_from_definition": {"prusa": False, "orca": False, "cura": True, "other": False},
+        # Je Teil ein Netz mit eigenen Werten auf der Kommandozeile (Stufe D):
+        # So reist die Stützsperre zu CuraEngine als ``anti_overhang_mesh``.
+        "takes_mesh_settings": {"prusa": False, "orca": False, "cura": True, "other": False},
         # Mehrere Platten in einer Projektdatei — die Orca-Familie speichert
         # ihre Projekte so; PrusaSlicer und Cura kennen eine Platte je Datei.
         "knows_plates": {"prusa": False, "orca": True, "cura": False, "other": False},
@@ -2590,9 +2597,58 @@ def _cura_install(tmp_path: Path) -> Path:
             f"[values]\nlayer_height = {height}\n",
             encoding="utf-8",
         )
+    # Ein Drucker ohne eigene Qualitäten, wie der Kobra 2 in Cura: Er nimmt
+    # die allgemeinen Stufen von ``fdmprinter``.
+    (resources / "definitions" / "werkstatt.def.json").write_text(
+        json.dumps({"version": 2, "name": "Werkstatt", "inherits": "fdmprinter"}),
+        encoding="utf-8",
+    )
     engine = install / "CuraEngine.exe"
     engine.write_bytes(b"")
     return engine
+
+
+def _cura_active(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str = "Werkstatt",
+    definition: str = "werkstatt",
+    *,
+    variant: str = "empty_variant",
+    material: str = "empty_material",
+) -> None:
+    """Curas Konfigurationsordner mit einem eingerichteten, aktiven Drucker.
+
+    Wie Cura 5.13 ihn schreibt: ``cura.cfg`` nennt ihn, sein Stapel in
+    ``machine_instances`` die Definition an letzter Stelle, der Stapel des
+    ersten Fachs Düse (Stelle 5) und Spule (Stelle 4).
+    """
+    from app.core.export import slicer_profiles
+
+    config = tmp_path / "config"
+    root = config / "cura" / "5.13"
+    (root / "machine_instances").mkdir(parents=True)
+    (root / "extruders").mkdir()
+    (root / "cura.cfg").write_text(
+        f"[general]\nversion = 7\n\n[cura]\nactive_machine = {name}\n", encoding="utf-8"
+    )
+    (root / "machine_instances" / f"{name.replace(' ', '+')}.global.cfg").write_text(
+        f"[general]\nversion = 5\nname = {name}\nid = {name}\n\n"
+        "[metadata]\nsetting_version = 27\ntype = machine\n\n"
+        f"[containers]\n0 = {name}_user\n1 = empty_quality_changes\n2 = empty_intent\n"
+        f"3 = empty_quality\n4 = empty_material\n5 = empty_variant\n6 = {name}_settings\n"
+        f"7 = {definition}\n",
+        encoding="utf-8",
+    )
+    (root / "extruders" / f"{name.replace(' ', '+')}_0.extruder.cfg").write_text(
+        f"[general]\nversion = 5\nname = Extruder 1\nid = {name}_0\n\n"
+        f"[metadata]\ntype = extruder_train\nmachine = {name}\nposition = 0\n\n"
+        "[containers]\n0 = empty_user_changes\n1 = empty_quality_changes\n"
+        f"2 = empty_intent\n3 = empty_quality\n4 = {material}\n5 = {variant}\n"
+        "6 = empty_definition_changes\n7 = fdmextruder\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(slicer_profiles, "config_home", lambda _platform: str(config))
 
 
 def _cura_containers(target: Path) -> dict[str, dict[str, dict[str, str]]]:
@@ -2609,7 +2665,7 @@ def _cura_containers(target: Path) -> dict[str, dict[str, dict[str, str]]]:
 
 
 def test_cura_opens_with_its_settings_as_an_importable_profile(
-    tmp_path: Path, profile: Profile
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """„Im Slicer öffnen" gab Cura ein bloßes STL — die Einstellungen blieben zurück.
 
@@ -2623,6 +2679,7 @@ def test_cura_opens_with_its_settings_as_an_importable_profile(
     Fenster rechnet seine Formeln selbst.
     """
     engine = _cura_install(tmp_path)
+    _cura_active(tmp_path, monkeypatch)
     setup = handover.SlicerSetup(engine, "cura")
     settings = print_settings.resolve(profile)
     settings = replace(settings, support=replace(settings.support, style="tree"))
@@ -2633,6 +2690,7 @@ def test_cura_opens_with_its_settings_as_an_importable_profile(
 
     assert said is not None and said.code == "handover.cura_profile"
     assert said.values["file"] == "halter.curaprofile"
+    assert said.values["machine"] == "Werkstatt", "der Befund nennt den Drucker in Cura"
     containers = _cura_containers(model.with_suffix(".curaprofile"))
     assert list(containers) == ["solidon"], "eine einzelne Spule legt Cura selbst aufs erste Fach"
     entry = containers["solidon"]
@@ -2648,9 +2706,12 @@ def test_cura_opens_with_its_settings_as_an_importable_profile(
     assert not [value for value in values.values() if value in {"true", "false"}]
 
 
-def test_cura_gets_one_extruder_profile_per_spool(tmp_path: Path, profile: Profile) -> None:
+def test_cura_gets_one_extruder_profile_per_spool(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Zwei Spulen, zwei Fächer: je Spule ein Extruderprofil mit ``position``."""
     engine = _cura_install(tmp_path)
+    _cura_active(tmp_path, monkeypatch)
     model = tmp_path / "zweifarbig.stl"
     model.write_bytes(b"solid z\nendsolid z\n")
     slots = (
@@ -2672,6 +2733,110 @@ def test_cura_gets_one_extruder_profile_per_spool(tmp_path: Path, profile: Profi
         containers["solidon_extruder_0"]["values"]["material_print_temperature"]
         != containers["solidon_extruder_1"]["values"]["material_print_temperature"]
     ), "PETG und PLA fahren verschiedene Temperaturen"
+
+
+def test_the_profile_takes_a_quality_of_the_printer_active_in_cura(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mit den Stufen von ``fdmprinter`` lehnte Cura das Profil ab oder versteckte es.
+
+    An Elegoos Druckern hieß es „Quality type 'draft' is not compatible", an
+    Creality und Sovol war es importiert und unsichtbar (Prüfbericht Cura,
+    B9). Die Stufe kommt jetzt vom Drucker, der in Cura aktiv ist, und zwar
+    eine, die es für seine Düse und seine Spule gibt: „fein" liegt genau auf
+    der Schichthöhe, ein Profil für 0,4 mm und PLA hat aber nur „standard".
+    """
+    engine = _cura_install(tmp_path)
+    resources = engine.parent / "share" / "cura" / "resources"
+    for name, body in (
+        ("kaste_basis", {"inherits": "fdmprinter", "metadata": {"has_machine_quality": True}}),
+        (
+            "kaste_k1",
+            {"inherits": "kaste_basis", "metadata": {"quality_definition": "kaste_basis"}},
+        ),
+    ):
+        (resources / "definitions" / f"{name}.def.json").write_text(
+            json.dumps({"version": 2, "name": name, **body}), encoding="utf-8"
+        )
+    quality = resources / "quality" / "kaste"
+    quality.mkdir()
+    for kind, height in (("fein", 0.2), ("standard", 0.24), ("draft", 0.32)):
+        (quality / f"kaste_global_{kind}.inst.cfg").write_text(
+            f"[general]\ndefinition = kaste_basis\nname = {kind}\nversion = 4\n\n"
+            f"[metadata]\nglobal_quality = True\nquality_type = {kind}\n"
+            "setting_version = 27\ntype = quality\n\n"
+            f"[values]\nlayer_height = {height}\n",
+            encoding="utf-8",
+        )
+    (quality / "kaste_0.4_pla_standard.inst.cfg").write_text(
+        "[general]\ndefinition = kaste_basis\nname = Standard\nversion = 4\n\n"
+        "[metadata]\nmaterial = generic_pla\nquality_type = standard\n"
+        "setting_version = 27\ntype = quality\nvariant = 0.4mm Nozzle\n\n[values]\n",
+        encoding="utf-8",
+    )
+    (resources / "variants" / "kaste").mkdir(parents=True)
+    (resources / "variants" / "kaste" / "kaste_basis_0.4.inst.cfg").write_text(
+        "[general]\ndefinition = kaste_basis\nname = 0.4mm Nozzle\nversion = 4\n\n"
+        "[metadata]\nhardware_type = nozzle\ntype = variant\n",
+        encoding="utf-8",
+    )
+    (resources / "materials").mkdir()
+    (resources / "materials" / "generic_pla.xml.fdm_material").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<fdmmaterial xmlns="http://www.ultimaker.com/material" version="1.3">\n'
+        "  <metadata><name><brand>Generic</brand><material>PLA</material>"
+        "<color>Generic</color></name></metadata>\n"
+        "</fdmmaterial>\n",
+        encoding="utf-8",
+    )
+    _cura_active(
+        tmp_path,
+        monkeypatch,
+        "Kaste K1",
+        "kaste_k1",
+        variant="kaste_basis_0.4",
+        material="generic_pla_175_kaste_k1_0.4",
+    )
+    model = tmp_path / "halter.stl"
+    model.write_bytes(b"solid halter\nendsolid halter\n")
+    settings = print_settings.resolve(profile)
+    assert settings.layers.layer_height == pytest.approx(0.2), "die Probe braucht 0,2 mm"
+
+    said = handover.cura_profile_beside(
+        model, settings, profile, handover.SlicerSetup(engine, "cura")
+    )
+
+    assert said is not None and said.code == "handover.cura_profile"
+    assert said.values["machine"] == "Kaste K1"
+    entry = _cura_containers(model.with_suffix(".curaprofile"))["solidon"]
+    assert entry["general"]["definition"] == "kaste_basis", "so führt Cura die Qualitäten"
+    assert entry["metadata"]["quality_type"] == "standard", "die Stufe für Düse und Spule"
+
+
+def test_without_a_printer_in_cura_there_is_no_profile_but_a_way(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne eingerichteten Drucker gibt es keine Stufe, auf die das Profil passt.
+
+    Vorher entstand die Datei trotzdem, mit ``draft`` von ``fdmprinter``, und
+    ging beim Import still verloren (Prüfbericht Cura, B9). Jetzt sagt ein
+    Befund, was zu tun ist, und es liegt keine Datei neben dem Modell.
+    """
+    from app.core.export import slicer_profiles
+
+    engine = _cura_install(tmp_path)
+    monkeypatch.setattr(slicer_profiles, "config_home", lambda _platform: str(tmp_path / "leer"))
+    model = tmp_path / "halter.stl"
+    model.write_bytes(b"solid halter\nendsolid halter\n")
+
+    said = handover.cura_profile_beside(
+        model, print_settings.resolve(profile), profile, handover.SlicerSetup(engine, "cura")
+    )
+
+    assert said is not None and said.code == "handover.cura_profile_unbound"
+    assert said.severity == "warning"
+    assert [action.id for action in said.suggestions] == ["choose_slicer"]
+    assert not model.with_suffix(".curaprofile").exists()
 
 
 def test_only_cura_gets_a_profile_beside_the_model(tmp_path: Path, profile: Profile) -> None:
@@ -3035,10 +3200,10 @@ def test_the_blocker_stops_when_the_customer_cancels(tmp_path: Path, profile: Pr
     assert not list(tmp_path.glob("*.3mf")), "keine halbe Übergabe"
 
 
-def test_a_saved_file_and_cura_carry_no_blocker(tmp_path: Path, profile: Profile) -> None:
+def test_a_saved_file_carries_no_blocker(tmp_path: Path, profile: Profile) -> None:
     """Eine gespeicherte 3MF ist das Projekt des Kunden und keine Übergabe:
     Sie trägt keine Sperre, die ein anderes Programm als Material lesen
-    könnte. Ein STL für CuraEngine kennt sie ohnehin nicht."""
+    könnte."""
     entry = scene_object(mesh=tunnel_block())
     taken = print_settings.with_path(
         print_settings.with_path(print_settings.resolve(profile), "support.style", "grid"),
@@ -3055,13 +3220,62 @@ def test_a_saved_file_and_cura_carry_no_blocker(tmp_path: Path, profile: Profile
         for_slicer=False,
     )
     assert [kind for kind, _first, _last in _blocker_ranges(saved)] == ["ModelPart"]
+
+
+def test_cura_gets_every_part_and_the_blocker_as_meshes_of_their_own(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Die Stützsperre reist zu CuraEngine als eigenes Netz (Prüfbericht Cura, B10).
+
+    Bis zum 27.09.2026 bekam Cura alle Teile als ein STL, und die Sperre fiel
+    weg — am Minigolf-Körper im Prüfbericht gemessen: mit der Sperre als
+    eigenem Netz und ``anti_overhang_mesh`` 18 476 Stützbewegungen weniger,
+    die Modellbahn gleich. Das zusammengelegte STL bleibt für Curas Fenster,
+    und dort setzt der Kunde die Sperre selbst — der Befund sagt es.
+    """
+    entry = scene_object(mesh=tunnel_block())
+    second = scene_object("obj_2", "Zweites")
+    second = replace(second, mesh=apply(second.mesh, translation((60.0, 0.0, 0.0))))
+    taken = print_settings.with_path(
+        print_settings.with_path(print_settings.resolve(profile), "support.style", "grid"),
+        "support.block_channels",
+        True,
+    )
+
     stl, findings = write_assembly(
-        [entry],
-        tmp_path / "cura",
+        [entry, second], tmp_path, project_name="t", profile=profile, settings=taken, flavour="cura"
+    )
+
+    assert stl.suffix == ".stl", "das Fenster bekommt weiter ein STL mit allen Teilen"
+    meshes = handover.cura_meshes(stl)
+    assert [mesh.path.name for mesh in meshes] == [
+        "t-part-1.stl",
+        "t-blocker-1.stl",
+        "t-part-2.stl",
+    ]
+    assert [dict(mesh.settings) for mesh in meshes] == [{}, {"anti_overhang_mesh": "true"}, {}]
+    part = read_mesh(meshes[0].path.read_bytes(), ".stl")
+    assert part.volume == pytest.approx(as_mesh_data(entry.mesh).raw.volume, rel=1e-6)
+    blocker = read_mesh(meshes[1].path.read_bytes(), ".stl")
+    assert blocker.volume > 0.0
+    [said] = [finding for finding in findings if finding.code == "export.support_blocker"]
+    assert "Cura-Fenster" in str(said.message), "der Befund nennt den Handgriff im Fenster"
+
+
+def test_cura_gets_parts_without_a_blocker_when_none_is_taken(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Ohne übernommene Sperre: je Teil ein Netz, keines mit Werten."""
+    stl, findings = write_assembly(
+        [scene_object(mesh=tunnel_block())],
+        tmp_path,
         project_name="t",
         profile=profile,
-        settings=taken,
+        settings=print_settings.resolve(profile),
         flavour="cura",
     )
-    assert stl.suffix == ".stl"
+
+    assert [(mesh.path.name, dict(mesh.settings)) for mesh in handover.cura_meshes(stl)] == [
+        ("t-part-1.stl", {})
+    ]
     assert "export.support_blocker" not in {finding.code for finding in findings}

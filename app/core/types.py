@@ -829,6 +829,48 @@ class PrinterProfile:
     treppenförmiger Stützfuß mit einem Brim aus tausenden Stückchen. Ohne
     Angabe gilt die Startregel (:data:`app.core.knowledge.rules.OVERHANG_LIMIT_DEGREES`);
     eine Kalibrierung geht beidem vor (§28.3)."""
+    cura_definition: str = ""
+    """Die Druckerdefinition dieses Druckers in Cura, als Kennung
+    (``creality_k1max``): Start- und Endcode des Herstellers und die
+    Vorgaben seiner Maschine für die Konsolenübergabe
+    (``handover._cura_machine``).
+
+    Leer heißt, Cura führt diesen Drucker nicht (Centauri Carbon 2, Bambu,
+    Prusa, K1, Ender-3 V3). Dann rechnet CuraEngine auf ``fdmprinter``, und
+    die Übergabe sagt es (``handover.machine_missing``): Dessen Startcode
+    fährt nach Hause, fördert drei Millimeter Filament in die Luft und legt
+    weder eine Spüllinie noch ein Bettnetz an."""
+    first_layer_acceleration: float | None = None
+    """Die Beschleunigung der ersten Schicht in mm/s², aus demselben
+    Standardprozess des Herstellers wie die Tempi (Orca
+    ``initial_layer_acceleration``, PrusaSlicer ``first_layer_acceleration``).
+
+    Gebraucht wird sie bei Cura, wo Solidons Satz die Grundlage bleibt: Dort
+    erbte die erste Schicht die Druckbeschleunigung — 12 000 mm/s² am
+    Ender-3 V3, wo Creality mit 500 anfährt. Die anderen Slicer nehmen sie aus
+    dem Profil des Herstellers selbst. Ohne Angabe gilt die Vorgabe der
+    Werksprofile (``handover._FIRST_LAYER_ACCELERATION``)."""
+    overhang_speed_factors: tuple[float, ...] = ()
+    """Wie schnell überhängende Außenwände fahren, in Prozent des
+    Außenwandtempos: die Überhangstufen 2/4, 3/4 und 4/4 aus demselben
+    Standardprozess wie die Tempi (Orca ``overhang_2_4_speed`` bis
+    ``overhang_4_4_speed`` geteilt durch ``outer_wall_speed``; PrusaSlicer
+    ``overhang_speed_2``, ``_1`` und ``_0``).
+
+    Nur Cura liest sie (``handover._for_overhangs``), und nötig ist das, seit
+    die Stützgrenze mit dem Herstellerprofil auf 60 Grad stieg: Wände
+    zwischen 45 und 60 Grad druckten dort ohne Stütze und mit voller
+    Wandgeschwindigkeit. Leer heißt, der Hersteller nennt keine."""
+    first_layer_line_factor: float | None = None
+    """Die Breite der ersten Bahn als Vielfaches der Düse, aus demselben
+    Standardprozess wie die Tempi (Orca ``initial_layer_line_width``,
+    PrusaSlicer ``first_layer_extrusion_width``: 0,5 mm an der 0,4er Düse sind
+    1,25; der Kobra 2 legt 0,8 mm, also 2,0).
+
+    Als Vielfaches und nicht in Millimetern, weil der Druckdialog das Profil
+    mit einer anderen Düse kopiert — die erste Bahn geht dann mit. Ohne Angabe
+    bleibt Solidons 1,07-fache Bahnbreite (``print_settings.resolve``); sie war
+    schmaler als jedes Werksprofil (Prüfbericht Cura, B7)."""
 
     @property
     def is_resin(self) -> bool:

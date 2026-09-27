@@ -35,6 +35,24 @@
 # Standardprozess mit Input Shaper — die älteren Prozesse ohne ihn führen 50 und
 # 45, sind bei Prusa aber abgelöst; SV06 40 → 50).
 # Ohne Angabe gilt die Startregel von 45 Grad; eine Kalibrierung geht vor.
+# first_layer_acceleration ist die Beschleunigung der ersten Schicht aus demselben
+# Standardprozess wie die Tempi (Orca initial_layer_acceleration, PrusaSlicer
+# first_layer_acceleration im Input-Shaper-Prozess; 27.09.2026). Nur Cura liest
+# sie, die anderen Slicer nehmen sie aus dem Profil des Herstellers. Ohne Angabe
+# 500 wie die meisten Werksprofile; der SV06 führt dort keine (0).
+# overhang_speed_factors sind die Überhangstufen 2/4, 3/4 und 4/4 desselben
+# Prozesses in Prozent seines Außenwandtempos (Orca overhang_2_4_speed bis
+# overhang_4_4_speed durch outer_wall_speed, Elegoo 50/30/10 bei 160 → 31/19/6;
+# PrusaSlicer overhang_speed_2, _1, _0). Nur Cura liest sie. Die Tempi des MINI+
+# stammen noch aus dem Prozess ohne Input Shaper (Außenwand 40 statt 140).
+# first_layer_line_factor ist die erste Bahnbreite desselben Prozesses als
+# Vielfaches der Düse (initial_layer_line_width 0,5 mm an 0,4 → 1,25). Ohne
+# Angabe gilt 1,07 × Bahnbreite.
+# cura_definition ist die Druckerdefinition in Cura 5.13 (Dateiname ohne
+# .def.json unter share/cura/resources/definitions). Aus ihr kommen Start- und
+# Endcode des Druckers in die Konsolenübergabe. Cura führt die meisten Drucker
+# hier nicht (Centauri Carbon 2, Bambu, Prusa, K1, Ender-3 V3); die tragen
+# keinen Eintrag, und die Übergabe sagt es.
 # Konturen: XY relativ zur nominellen Bettmitte; Z ab Bett. Ohne Kontur gilt
 # das nominale Rechteck. Brim-/Skirt-Ränder gehören zum Auftrag, nicht hierher.
 
@@ -72,6 +90,9 @@ acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.75
 overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [31, 19, 6]
+first_layer_acceleration = 500.0
 
 [elegoo-neptune-4]
 title = "Elegoo Neptune 4"
@@ -94,6 +115,10 @@ acceleration = 6000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.25
 overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [31, 19, 6]
+first_layer_acceleration = 500.0
+cura_definition = "elegoo_neptune_4"
 
 [elegoo-neptune-4-plus]
 title = "Elegoo Neptune 4 Plus"
@@ -116,6 +141,10 @@ acceleration = 5000.0
 outer_wall_acceleration = 2500.0
 flow_factor = 1.25
 overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [31, 19, 6]
+first_layer_acceleration = 500.0
+cura_definition = "elegoo_neptune_4plus"
 
 [bambu-a1]
 title = "Bambu Lab A1"
@@ -137,6 +166,9 @@ speed_bridge = 50.0
 acceleration = 6000.0
 outer_wall_acceleration = 5000.0
 overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [25, 15, 5]
+first_layer_acceleration = 500.0
 
 [bambu-a1-mini]
 title = "Bambu Lab A1 mini"
@@ -158,6 +190,9 @@ speed_bridge = 50.0
 acceleration = 6000.0
 outer_wall_acceleration = 5000.0
 overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [25, 15, 5]
+first_layer_acceleration = 500.0
 
 [bambu-p1s]
 title = "Bambu Lab P1S"
@@ -182,6 +217,9 @@ speed_bridge = 50.0
 acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [25, 15, 5]
+first_layer_acceleration = 500.0
 
 [bambu-x1c]
 title = "Bambu Lab X1 Carbon"
@@ -205,6 +243,9 @@ speed_bridge = 50.0
 acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [25, 15, 5]
+first_layer_acceleration = 500.0
 
 [prusa-mk4s]
 title = "Prusa MK4S"
@@ -227,6 +268,9 @@ acceleration = 4000.0
 outer_wall_acceleration = 4000.0
 flow_factor = 1.25
 overhang_limit = 55.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [29, 15, 9]
+first_layer_acceleration = 500.0
 
 [prusa-mini]
 title = "Prusa MINI+"
@@ -248,6 +292,9 @@ speed_bridge = 25.0
 acceleration = 1000.0
 outer_wall_acceleration = 700.0
 overhang_limit = 50.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [18, 14, 11]
+first_layer_acceleration = 500.0
 
 [prusa-xl]
 title = "Prusa XL"
@@ -270,6 +317,9 @@ acceleration = 2500.0
 outer_wall_acceleration = 2500.0
 flow_factor = 1.25
 overhang_limit = 50.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [18, 15, 9]
+first_layer_acceleration = 500.0
 
 [creality-k1]
 title = "Creality K1"
@@ -292,6 +342,9 @@ acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.17
 overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [25, 15, 5]
+first_layer_acceleration = 1000.0
 
 [creality-k1-max]
 title = "Creality K1 Max"
@@ -314,6 +367,10 @@ acceleration = 10000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.17
 overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [25, 15, 5]
+first_layer_acceleration = 1000.0
+cura_definition = "creality_k1max"
 
 [creality-ender3-v3]
 title = "Creality Ender-3 V3"
@@ -336,6 +393,67 @@ acceleration = 12000.0
 outer_wall_acceleration = 5000.0
 flow_factor = 1.5
 overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [25, 15, 5]
+first_layer_acceleration = 500.0
+
+# Der SE ist kein langsamer V3, sondern ein anderes Gerät: ein Drucker mit
+# fahrendem Bett und 2500 mm/s² statt 12 000. Tempi und Beschleunigungen aus
+# Orcas „0.20mm Standard @Creality Ender3V3SE 0.4", die Temperaturgrenzen aus
+# Crealitys Datenblatt.
+[creality-ender3-v3-se]
+title = "Creality Ender-3 V3 SE"
+vendor = "Creality"
+build_volume = [220.0, 220.0, 250.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 100
+nozzle_temperature_max = 260
+travel_speed = 150.0
+speed_outer_wall = 60.0
+speed_inner_wall = 90.0
+speed_infill = 180.0
+speed_top_surface = 50.0
+speed_first_layer = 30.0
+speed_bridge = 100.0
+acceleration = 2500.0
+outer_wall_acceleration = 1000.0
+flow_factor = 1.5
+overhang_limit = 60.0
+first_layer_line_factor = 1.15
+overhang_speed_factors = [33, 25, 17]
+first_layer_acceleration = 500.0
+cura_definition = "creality_ender3v3se"
+
+# Der KE aus Orcas „0.20mm Standard @Creality Ender3V3KE". Die Bauhöhe 240
+# nennen Creality, Creality Print und Cura; Orca führt 245.
+[creality-ender3-v3-ke]
+title = "Creality Ender-3 V3 KE"
+vendor = "Creality"
+build_volume = [220.0, 220.0, 240.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 100
+nozzle_temperature_max = 300
+travel_speed = 400.0
+speed_outer_wall = 200.0
+speed_inner_wall = 300.0
+speed_infill = 300.0
+speed_top_surface = 250.0
+speed_first_layer = 50.0
+speed_bridge = 65.0
+acceleration = 5000.0
+outer_wall_acceleration = 4000.0
+flow_factor = 1.5
+overhang_limit = 60.0
+first_layer_line_factor = 1.25
+overhang_speed_factors = [25, 18, 5]
+first_layer_acceleration = 1000.0
+cura_definition = "creality_ender3v3ke"
 
 [anycubic-kobra-2]
 title = "Anycubic Kobra 2"
@@ -356,6 +474,10 @@ speed_bridge = 40.0
 acceleration = 2500.0
 outer_wall_acceleration = 700.0
 overhang_limit = 60.0
+first_layer_line_factor = 2.0
+overhang_speed_factors = [13, 10, 7]
+first_layer_acceleration = 2000.0
+cura_definition = "anycubic_kobra2"
 
 [sovol-sv06]
 title = "Sovol SV06"
@@ -374,6 +496,9 @@ speed_infill = 60.0
 speed_top_surface = 30.0
 speed_bridge = 25.0
 overhang_limit = 50.0
+first_layer_line_factor = 1.05
+overhang_speed_factors = [80, 60, 40]
+cura_definition = "sovol_sv06"
 
 # --- Resin (MSLA) --------------------------------------------------------------
 #

@@ -200,13 +200,15 @@ def resolve(
 ) -> PrintSettings:
     """Die drei Ebenen zu einem Satz Einstellungen (§29).
 
-    ``legacy=True`` löst die Tempi so auf, wie Solidon es bis 0.5.0 tat: aus
+    ``legacy=True`` löst so auf, wie Solidon es bis 0.5.0 tat: die Tempi aus
     der Stufe allein — ohne das Tempo des Druckers, ohne seine Leerfahrt und
-    ohne den Deckel auf den Volumenstrom, die beide erst danach kamen.
-    Gebraucht wird das nur, um ältere Dateien einzuordnen
+    ohne den Deckel auf den Volumenstrom —, und die erste Bahn 1,07
+    Bahnbreiten breit statt so breit wie beim Hersteller. All das kam erst
+    danach. Gebraucht wird das nur, um ältere Dateien einzuordnen
     (:func:`legacy_choices`): Eine Datei aus 0.5.0 mit „Fein" trägt
     30/45/60 mm/s, die heutige Auflösung am Centauri Carbon 2 120/150/150, und
-    „Entwurf" füllt dort mit 120 statt gedeckelten 119.
+    „Entwurf" füllt dort mit 120 statt gedeckelten 119. Die erste Bahn war dort
+    0,449 mm breit, heute 0,5 mm wie bei Elegoo.
     """
     stage = _quality_table(quality)
     stuff = _material_table(profile.material.id)
@@ -231,7 +233,20 @@ def resolve(
         layer_height = min(float(stage["layer_height"]) * scale, ceiling)
         first_layer = min(float(stage["first_layer_height"]) * scale, ceiling)
         line_width = printer.extrusion_width
-        first_layer_line_width = round(printer.extrusion_width * 1.07, 3)
+        # Die erste Bahn so breit wie beim Hersteller, als Vielfaches der Düse
+        # (``PrinterProfile.first_layer_line_factor``): 0,5 mm am Centauri
+        # Carbon 2, 0,8 am Kobra 2. Solidons 1,07-fache Bahnbreite war
+        # schmaler als jedes Werksprofil und bleibt der Rückfall. Die eine
+        # Stelle, an der ``resolve`` für Stufe D anders rechnet: Bei Cura ist
+        # dieser Satz die Grundlage, und die anderen Slicer bekommen damit den
+        # Wert, den ihr Herstellerprofil ohnehin trägt. ``legacy`` rechnet wie
+        # 0.5.0, sonst hielte die Einordnung einer Datei von damals ihre
+        # 0,449 mm für eine eigene Wahl und schriebe sie über das Profil.
+        first_layer_line_width = (
+            round(printer.nozzle_diameter * printer.first_layer_line_factor, 3)
+            if printer.first_layer_line_factor is not None and not legacy
+            else round(printer.extrusion_width * 1.07, 3)
+        )
 
     settings = PrintSettings(
         id=f"{quality}-{profile.material.id}",

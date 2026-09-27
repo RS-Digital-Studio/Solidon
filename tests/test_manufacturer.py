@@ -112,6 +112,21 @@ def test_a_file_from_0_5_0_keeps_what_someone_set() -> None:
     assert not settings.accepted
 
 
+def test_the_resolution_of_0_5_0_lays_the_first_line_as_0_5_0_did() -> None:
+    """Seit Stufe D ist die erste Bahn so breit wie beim Hersteller, am
+    Centauri Carbon 2 0,5 mm. Die Nachbildung von 0.5.0 rechnet weiter mit
+    1,07 Bahnbreiten: Beim Zusammenführen beider Stufen hielt die Einordnung
+    die 0,449 mm der Datei von 0.5.0 sonst für eine eigene Wahl und schrieb sie
+    über Elegoos Profil."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+
+    today = print_settings.resolve(profile)
+    then = print_settings.resolve(profile, legacy=True)
+
+    assert today.layers.first_layer_line_width == pytest.approx(0.5)
+    assert then.layers.first_layer_line_width == pytest.approx(0.449)
+
+
 def _older_project(tmp_path: Path, mutate: Callable[[dict[str, Any]], None]) -> Path:
     """Die Beispieldatei in Format 35, im Projektinhalt verändert."""
     source = Path(__file__).parent / "data" / "projects" / "example_v35.p3d"

@@ -1789,18 +1789,6 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
     )
 
 
-#: Vorschläge, die ein Slicer nicht als Wert annimmt, die sich in seinem
-#: Fenster aber von Hand umsetzen lassen — je Familie und Feld der Handgriff
-#: (:meth:`PrintSettingsDialog._current_advice`). Cura liest ein STL und keine
-#: Stützsperre; sein Fenster hat dafür den Stützblocker.
-_BY_HAND_IN_THE_SLICER: Final[dict[tuple[str, str], TranslatableText]] = {
-    ("cura", "support.block_channels"): _(
-        "Cura übernimmt keine Stützsperre. Sperren Sie die Kanäle nach „Im Slicer öffnen“ "
-        "im Cura-Fenster mit dem Stützblocker."
-    ),
-}
-
-
 @dataclass(frozen=True, slots=True)
 class _TargetedAdvice(SettingAdvice):
     """Ein Rat behält die Spule und deren wirklich aufgelöste Ausgangswerte."""
@@ -5767,23 +5755,6 @@ class PrintSettingsDialog(QDialog):
         for entry in entries:
             if slicer_keys.takes(flavour, entry.path):
                 shown.append(entry)
-            elif (flavour, entry.path) in _BY_HAND_IN_THE_SLICER:
-                # **Was sich im Slicer von Hand machen lässt, verschwindet
-                # nicht still.** Mit Cura fiel *Kanäle frei halten* aus der
-                # Liste, und an der Okarina füllten danach 53 m Stütze die
-                # Kanäle, ohne dass der Dialog es erwähnt hätte (Durchsicht
-                # 0.5.1, Bericht druck). Die Zeile bleibt, nicht anhakbar, mit
-                # dem Handgriff im Slicer.
-                shown.append(
-                    _TargetedAdvice(
-                        path=entry.path,
-                        value=entry.value,
-                        was=entry.was,
-                        reason=entry.reason,
-                        severity=entry.severity,
-                        unavailable=_BY_HAND_IN_THE_SLICER[flavour, entry.path],
-                    )
-                )
         return shown
 
     def _profile_roots(self) -> tuple[Path, ...]:

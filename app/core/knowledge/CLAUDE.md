@@ -39,7 +39,7 @@ Die Module hier **laden und lösen auf**; die Werte selbst liegen daneben:
 
 | Datei | Inhalt |
 |---|---|
-| `printers.toml` | Druckerprofile — sechzehn FDM-Geräte und zwei Resin-Geräte nach Bauraum (`technology = "resin"`, Pixelgröße und Mindestwand statt Düse und Bahn); `travel_speed`, `speed_*`, die Beschleunigungen und `flow_factor` aus dem Standardprozess und dem allgemeinen PLA des Herstellers; `overhang_limit` aus dem Standardprozess im Slicer des Herstellers (Stützgrenze gegen die Senkrechte) |
+| `printers.toml` | Druckerprofile — achtzehn FDM-Geräte und zwei Resin-Geräte nach Bauraum (`technology = "resin"`, Pixelgröße und Mindestwand statt Düse und Bahn); `travel_speed`, `speed_*`, die Beschleunigungen und `flow_factor` aus dem Standardprozess und dem allgemeinen PLA des Herstellers; `overhang_limit` aus dem Standardprozess im Slicer des Herstellers (Stützgrenze gegen die Senkrechte); `cura_definition` die Druckerdefinition in Cura, aus der die Konsolenübergabe Start- und Endcode nimmt; `first_layer_acceleration` und `overhang_speed_factors` (Überhangstufen in Prozent der Außenwand) aus demselben Standardprozess wie die Tempi, nur für Cura; `first_layer_line_factor` (erste Bahnbreite als Vielfaches der Düse) aus demselben Prozess, über `print_settings.resolve` für jeden Slicer |
 | `materials.toml` | Materialprofile — hier stehen die Toleranzen; `resin` ist das Harz, mit `technology = "resin"` |
 | `print_settings.toml` | Druckeinstellungen je Stufe |
 | `standards.toml` | Normteilmaße |

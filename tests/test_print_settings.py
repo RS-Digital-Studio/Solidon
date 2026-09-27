@@ -747,7 +747,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
     },
     "cura": {
-        "support.block_channels": "ein STL trägt keine Stützsperre — ``NOT_TAKEN_BY``.",
+        "support.block_channels": "reist als eigenes Netz (``AS_GEOMETRY``).",
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
         "adhesion.kind": "in ``adhesion_type`` enthalten, das die Tabelle schreibt.",
@@ -755,6 +755,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "filament.density": "steht im Materialprofil des Fensters, nicht in der Rechenmaschine.",
         "filament.colour": "wie oben",
         "filament.cost_per_kg": "wie oben",
+        "filament.max_flow": "CuraEngine liest den Volumenstrom nicht; Solidon deckelt die Tempi.",
     },
 }
 
@@ -1152,6 +1153,9 @@ def test_grid_supports_reach_every_slicer_as_a_grid() -> None:
     """„Gitter" kam als Elegoos ``rectilinear`` an: Linien in einer Richtung,
     die ab Schicht 2 als freistehende Wände umkippten (Waschschüssel,
     25.09.2026). Bäume behalten das Muster des Herstellers.
+
+    Cura nicht: Sein ``zigzag`` verbindet die Linien und kippt nicht, und alle
+    Werksprofile in Cura fahren es (Stufe D, Prüfbericht Cura B4).
     """
     base = print_settings.resolve(profiles.make_profile())
     grid = print_settings.with_path(base, "support.style", "grid")
@@ -1159,26 +1163,30 @@ def test_grid_supports_reach_every_slicer_as_a_grid() -> None:
 
     assert handover.as_mapping(grid, "orca")["support_base_pattern"] == "rectilinear-grid"
     assert handover.as_mapping(grid, "prusa")["support_material_pattern"] == "rectilinear-grid"
-    assert handover.as_mapping(grid, "cura")["support_pattern"] == "grid"
+    assert "support_pattern" not in handover.as_mapping(grid, "cura")
     assert "support_base_pattern" not in handover.as_mapping(tree, "orca")
     assert "support_material_pattern" not in handover.as_mapping(tree, "prusa")
     assert "support_pattern" not in handover.as_mapping(tree, "cura")
 
 
-def test_a_cura_grid_keeps_its_density() -> None:
-    """Cura rechnet ``support_line_distance`` für ``grid`` mit dem Faktor zwei
-    (fdmprinter-Definition): Dieselbe Dichte heißt beim Gitter den doppelten
-    Linienabstand, sonst wäre die Stütze doppelt so dicht wie eingestellt."""
-    base = print_settings.with_path(
-        print_settings.resolve(profiles.make_profile()), "support.style", "tree"
-    )
-    grid = print_settings.with_path(base, "support.style", "grid")
+def test_curas_zigzag_keeps_the_density_and_a_tree_carries_none() -> None:
+    """Curas ``zigzag`` ist eine Linienschar: Linienabstand gleich Bahnbreite
+    durch Dichte (fdmprinter-Definition, Faktor eins). Der Baum trägt nach
+    Curas Formel keine Füllung, nur seine Wand — Solidon gab ihm 15 % dazu
+    (Prüfbericht Cura, B4)."""
     profile = profiles.make_profile()
+    base = print_settings.resolve(profile)
+    grid = print_settings.with_path(base, "support.style", "grid")
+    tree = print_settings.with_path(base, "support.style", "tree")
 
-    lines = float(handover.values_for(base, profile, "cura")["support_line_distance"])
-    crossed = float(handover.values_for(grid, profile, "cura")["support_line_distance"])
-
-    assert crossed == pytest.approx(2.0 * lines)
+    lines = handover.values_for(grid, profile, "cura")
+    assert float(lines["support_line_distance"]) == pytest.approx(
+        grid.layers.line_width / grid.support.density
+    )
+    assert lines["support_wall_count"] == "0"
+    branches = handover.values_for(tree, profile, "cura")
+    assert branches["support_line_distance"] == "0"
+    assert branches["support_wall_count"] == "1"
 
 
 #: Was die Orca-Familie an diesen Stellen annimmt, abgelesen am ausgelieferten
@@ -5440,12 +5448,19 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "entgegen; sie zum Slicer zu tragen brächte niemandem etwas."
     ),
     ("filament.cost_per_kg", "cura"): "Wie die Dichte darüber — Solidon rechnet, nicht der Slicer.",
+    ("filament.max_flow", "cura"): (
+        "CuraEngine liest ``material_max_flowrate`` nicht (null Treffer in ``CuraEngine.exe`` "
+        "5.13); den Volumenstrom hält Solidon über die Tempi (``print_settings._within_flow``)."
+    ),
     ("support.block_channels", "prusa"): (
         "Reist als Stützsperre in der 3MF, nicht als Wert (``slicer_keys.AS_GEOMETRY``); "
         "``test_threemf_assembly`` prüft den Bereich."
     ),
     ("support.block_channels", "orca"): "Wie bei PrusaSlicer — dieselbe Beilage.",
-    ("support.block_channels", "cura"): "CuraEngine bekommt ein STL; darin reist keine Sperre.",
+    ("support.block_channels", "cura"): (
+        "Reist als eigenes Netz mit ``anti_overhang_mesh`` neben den Teilen "
+        "(``slicer_keys.takes_mesh_settings``); ``test_export`` prüft die Netzliste."
+    ),
 }
 
 
@@ -5642,14 +5657,14 @@ def test_choosing_another_slicer_drops_the_profiles_of_the_old_one(
     assert dialog.process_choice.count() == 0, "das Prozessprofil auch"
 
 
-def test_cura_and_prusa_are_not_warned_about_a_machine_they_never_take() -> None:
+def test_prusa_is_not_warned_about_a_machine_it_never_takes() -> None:
     """Der Befund galt weiter, als er gemeint war — einen halben Tag lang.
 
     ``machine_missing`` entstand für die Orca-Familie, die ihre Maschine als
-    Profil aus dem eigenen Bestand lädt. Cura und PrusaSlicer tun das nie:
-    Ihre Maschinenseite baut ``_machine_keys`` aus Solidons eigenem
-    Druckerprofil, und eine PrusaSlicer-``.ini`` ist damit eigenständig
-    lauffähig. Gemessen am 03.09.2026, bevor das hier stand:
+    Profil aus dem eigenen Bestand lädt. PrusaSlicer tut das nie: Seine
+    Maschinenseite baut ``_machine_keys`` aus Solidons eigenem Druckerprofil,
+    und eine ``.ini`` ist damit eigenständig lauffähig. Gemessen am
+    03.09.2026, bevor das hier stand:
 
         orca   -> nichts
         cura   -> ['slicer.machine_unset']
@@ -5660,6 +5675,11 @@ def test_cura_and_prusa_are_not_warned_about_a_machine_they_never_take() -> None
     stimmt, ist teurer als keine — der Kunde lernt, sie zu übersehen, und
     übersieht die richtige mit.
 
+    Cura stand bis zum 27.09.2026 mit hier, und dort war das Schweigen falsch:
+    Ohne Druckerdefinition druckte CuraEngine mit dem Startcode von
+    ``fdmprinter``. Was Cura jetzt gesagt bekommt, prüft
+    ``tests/test_cura_machine.py``.
+
     Die eigenen Tests trugen den Fehler nicht, weil alle drei ``flavour="orca"``
     setzten: die richtige Regel mit ungeprüftem Rand.
     """
@@ -5667,11 +5687,10 @@ def test_cura_and_prusa_are_not_warned_about_a_machine_they_never_take() -> None
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
 
-    for flavour in ("cura", "prusa"):
-        setup = handover.SlicerSetup(executable=Path(f"{flavour}.exe"), flavour=flavour)
-        assert handover.machine_missing(setup, profile) == [], flavour
-        assert not handover.takes_a_machine_profile(flavour)
-
+    setup = handover.SlicerSetup(executable=Path("prusa.exe"), flavour="prusa")
+    assert handover.machine_missing(setup, profile) == []
+    assert not handover.takes_a_machine_profile("prusa")
+    assert not handover.takes_a_machine_profile("cura")
     assert handover.takes_a_machine_profile("orca")
 
 

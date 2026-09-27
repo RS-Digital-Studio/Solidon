@@ -5119,9 +5119,9 @@ def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
             if not works:
                 measured.add(field.path)
         assert checked > 50, f"{flavour}: nur {checked} Felder geprüft — der Lauf sagt nichts"
-        # Was als Geometrie in der Baugruppe reist, sieht diese Messung nicht;
-        # wo es trotzdem nicht ankommt (Cura, ein STL), steht es in der Liste.
-        if slicer_keys.reads_assembly_file(flavour):
+        # Was als Geometrie reist, sieht diese Messung nicht: in der Baugruppe
+        # oder, bei Cura, als eigenes Netz neben den Teilen (Stufe D).
+        if slicer_keys.reads_assembly_file(flavour) or slicer_keys.takes_mesh_settings(flavour):
             measured -= slicer_keys.AS_GEOMETRY
         assert measured == slicer_keys.NOT_TAKEN_BY[flavour], (
             f"{flavour}: gemessen {sorted(measured)}, "
@@ -5542,13 +5542,15 @@ def test_print_advice_uses_the_actual_body_material(qt_app, from_spool):
     )
 
 
-def test_cura_keeps_the_channel_advice_as_a_hand_step(qt_app, monkeypatch):
-    """*Kanäle frei halten* verschwindet mit Cura nicht still aus der Liste.
+def test_cura_takes_the_channel_advice_like_the_orca_family(qt_app, monkeypatch):
+    """*Kanäle frei halten* ist bei Cura seit Stufe D ein Vorschlag zum Übernehmen.
 
-    Cura nimmt die Stützsperre nicht an (``slicer_keys.NOT_TAKEN_BY``), und an
-    der Okarina füllten danach 53 m Stütze die Kanäle. Die Zeile bleibt,
-    nicht anhakbar, mit dem Handgriff im Cura-Fenster; die Orca-Familie
-    bekommt sie wie bisher zum Übernehmen.
+    Bis zum 27.09.2026 nahm Cura die Stützsperre nicht an, und die Zeile stand
+    nicht anhakbar mit dem Handgriff im Cura-Fenster da (an der Okarina hatten
+    53 m Stütze die Kanäle gefüllt, ohne dass der Dialog es erwähnte). Jetzt
+    reist die Sperre zu CuraEngine als eigenes Netz mit ``anti_overhang_mesh``
+    (``slicer_keys.takes_mesh_settings``); für das Fenster nennt der Befund der
+    Übergabe den Handgriff.
     """
     from app.core.types import SettingAdvice
 
@@ -5559,17 +5561,9 @@ def test_cura_keeps_the_channel_advice_as_a_hand_step(qt_app, monkeypatch):
     )
     dialog._advice_entries = [advice]
 
-    monkeypatch.setattr(dialog, "_current_flavour", lambda: "cura")
-    [shown] = dialog._current_advice()
-    assert shown.unavailable and "Stützblocker" in str(shown.unavailable)
-    dialog._show_advice()
-    item = dialog.advice_view.topLevelItem(0)
-    assert not item.flags() & Qt.ItemFlag.ItemIsUserCheckable
-    assert "Stützblocker" in item.toolTip(0)
-    assert not dialog.apply_button.isEnabled()
-
-    monkeypatch.setattr(dialog, "_current_flavour", lambda: "orca")
-    assert dialog._current_advice() == [advice]
+    for flavour in ("cura", "orca"):
+        monkeypatch.setattr(dialog, "_current_flavour", lambda chosen=flavour: chosen)
+        assert dialog._current_advice() == [advice], flavour
 
 
 def test_print_advice_cannot_disable_support_needed_by_another_body(qt_app):

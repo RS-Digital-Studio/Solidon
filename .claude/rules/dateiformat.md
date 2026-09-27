@@ -334,14 +334,21 @@ Komponente PrusaSlicer (+38,8 g), gemessen am 26.09.2026. Geprüft wird eine
 Sperre deshalb an der **Modellbahn** mit und ohne sie — nicht an der Stütze:
 Eine als Kunststoff gedruckte Sperre verdrängt die Stütze auch.
 Geschrieben wird sie nur in die direkte Übergabe, nicht in eine gespeicherte
-3MF.
+3MF. **CuraEngine bekommt sie als eigenes Netz** mit `anti_overhang_mesh=true`
+(`slicer_keys.takes_mesh_settings`) — gemessen im Prüfbericht Cura (Abschnitt 1.5):
+18 476 Stützbewegungen wurden 0, die Modellbahn blieb bis auf zwei Bewegungen
+gleich. Im Cura-Fenster gilt sie nicht; der Befund sagt dort den Handgriff.
 
 `write_assembly` schreibt eine 3MF-Baugruppe — außer für `cura`. `CuraEngine`
 liest kein 3MF (die 3MF-Seite sitzt in Curas Fenster, nicht in der
 Rechenmaschine dahinter), und ein 3MF endete dort in „Der Slicer hat keine
 Druckdatei geschrieben", ohne dass irgendwo stand, warum. Cura bekommt ein STL
-mit allen Teilen der Platte; Namen und Materialslots liest es ohnehin nicht,
-und die Einstellungen kommen bei ihm über die Kommandozeile.
+mit allen Teilen der Platte — für das Fenster — und daneben je Teil ein Netz
+und eine Netzliste für die Kommandozeile, denn ein `-s` nach `-l` gilt nur
+diesem Netz. Namen und Materialslots liest es ohnehin nicht, und die
+Einstellungen kommen bei ihm über die Kommandozeile. **Eine Netzliste, die
+nicht hält** (fremder Pfad, fehlende Datei, Wert mit Umbruch), hält die
+Übergabe an, statt still ohne Sperre zu rechnen.
 
 **Mehrere Platten: eine Datei, wo der Slicer Platten kennt**
 (`knows_plates`). Die Orca-Familie speichert ihre Projekte mit je einem
@@ -465,14 +472,24 @@ die einzige Stelle, an der sie zusammenkommen:
 Wer eine Stufe einzeln benutzt, bekommt einen halben Satz. Für Prusa und Orca
 ist die dritte leer.
 
-## CuraEngine löst keine Vererbung auf
+Für Cura kommt danach die Maschine dazu (`_cura_machine`, in `write_config`):
+die Druckerdefinition hinter `-j`, Start- und Endcode als eigene `-s`, die
+zwei Schalter für Curas Temperaturbefehle. Sie braucht die Installation und
+die fertigen Werte, deshalb steht sie nicht in `values_for`.
+
+## CuraEngine rechnet keine Formeln
 
 In `fdmprinter.def.json` trägt jede abgeleitete Einstellung zweierlei: einen
 `value`-Ausdruck und einen `default_value`. Das Fenster wertet den Ausdruck
 aus, die Rechenmaschine dahinter nimmt den Vorgabewert. Ein geschriebener Wert
 bleibt damit an seinem Schlüssel stehen und erreicht die nicht, aus denen
 gerechnet wird — die Bahnbreite ihre zwölf Bahnbreiten nicht, die Füllung
-ihren Linienabstand nicht.
+ihren Linienabstand nicht. Die Erbkette selbst löst CuraEngine auf, auch die
+einer Druckerdefinition (gemessen am 27.09.2026 mit 5.13): Es liest die
+Vorgabewerte von `fdmprinter` bis zum Drucker und lädt dessen Extruderzüge
+aus `machine_extruder_trains`, sofern `-d` den Ordner `extruders` nennt. Die
+Umgebungsvariable `CURA_ENGINE_SEARCH_PATH` fand die Züge unter Windows
+nicht; `-d` mit `os.pathsep` schon.
 
 Gemessen an einem 20-mm-Würfel: **1100 mm Filament statt 818, 753 Sekunden
 statt 660.**
@@ -483,6 +500,62 @@ neuen Schlüssel? Reine Kopien kommen in `CURA_MIRRORED`, einfache Faktoren in
 Definition**, nicht die eigene Meinung darüber, was richtig wäre. Was
 absichtlich wegbleibt, kommt mit Begründung in `CURA_UNTOUCHED`;
 `tests/test_print_settings.py` lässt keine dritte Möglichkeit zu.
+
+**Wo die Werksprofile in Cura anders setzen als `fdmprinter`, gilt das
+Werksprofil** (Stufe D, 27.09.2026). Ihre Formeln erreichen die Konsole so
+wenig wie die von `fdmprinter`; ohne Solidons Zeile gälte also nicht das Profil
+des Herstellers, sondern das allgemeine. Solche Werte stehen als Konstante mit
+Herkunft in `handover` (Stütze 150 und Schnittstelle 80 mm/s, Schnittstelle
+in Linien zu einem Drittel, Füllung nach den Wänden, Kämmgrenze), nie als
+Meinung ohne Beleg.
+
+## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
+
+Solidon schreibt keinen eigenen Startcode (Entscheidung Robert, 26.08.2026:
+„Der Anfahrcode bleibt der des Herstellers"). Bei Cura kommt er aus der
+Druckerdefinition (`PrinterProfile.cura_definition`), und weil CuraEngine
+keinen Platzhalter füllt — gemessen: `START_PRINT EXTRUDER_TEMP={…}` stand
+wörtlich im G-Code —, füllt ihn `handover._filled`:
+
+- `{name}` und `{name, n}` sind **Textersetzung** mit dem Wert, den Solidon
+  schreibt, sonst dem Vorgabewert der Kette. Eine Formel der Kette ist kein
+  Wert und füllt nichts.
+- Eine **Rechnung** wie `{machine_depth - 5}` (Endcode des Neptune 4) geht durch
+  `app.core.expressions` — Solidons eigene Grammatik, kein `eval` (Regel 10) —,
+  und nur über Zahlen, die Solidon kennt. Das Konzept sah hier zunächst nur
+  Textersetzung vor; ohne die Rechnung hielte jede Übergabe an den Neptune 4
+  und 4 Plus an (Stufe D, 27.09.2026).
+- **Was so nicht zu füllen ist, hält die Übergabe an** (`_unfillable`, Regel
+  21): ein unbekannter Name, `{if …}`, ein Wert, den erst das Fenster nach dem
+  Schneiden kennt (`{print_time}`). Wörtlich im G-Code bräche ein
+  Klipper-Makro am Drucker ab.
+
+Setzt der Startcode eine Temperatur selbst (Platzhalter auf
+`material_bed_temperature…` bzw. eine der Düsentemperaturen, Kommentare
+ausgenommen), steht `material_bed_temp_prepend`/`material_print_temp_prepend`
+auf `false` — dieselbe Regel wie `StartSliceJob.py` im Fenster. Sonst stünde
+Curas `M190`/`M109` vor dem des Herstellers.
+
+Ein Drucker ohne Definition bekommt `fdmprinter` und einen Befund
+(`slicer.cura_printer_unknown`) — kein stiller Rückfall.
+
+## Das Cura-Profil gehört dem Drucker, der in Cura aktiv ist
+
+Curas Fenster nimmt Einstellungen nur als `.curaprofile`
+(`handover.cura_profile_beside`), und sein Importer setzt das Profil auf die
+**aktive Maschine** um: Eine Qualitätsstufe, die sie nicht führt, lehnt er ab;
+eine, die es für Düse und Spule ihres ersten Fachs nicht gibt, importiert er
+unsichtbar. Die Stufe kommt deshalb aus `slicer_profiles.cura_active_machine`
+(`cura.cfg` → Maschinenstapel → Definition; erstes Fach → Düse und Spule) und
+`cura_quality_types(…, variant=…, material_type=…)` — nie aus den Stufen von
+`fdmprinter` für eine Maschine mit eigenen. Gemessen an der Installation 5.13:
+mit `draft` abgelehnt an Neptune 4 und Centauri Carbon, unsichtbar an K1 Max,
+Ender-3 V3 SE und KE und SV06; mit der Stufe der aktiven Maschine überall
+sichtbar.
+
+Ist in Cura kein Drucker eingerichtet, zu dem das Profil passt, entsteht
+**keine Datei**, sondern der Befund `handover.cura_profile_unbound`. Ein
+Profil, das beim Import still verschwindet, ist schlimmer als keines.
 
 ## Winkel zählen nicht überall gleich
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import subprocess
 import tempfile
@@ -33,7 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 from xml.etree import ElementTree as ET
 
-from app.core import activation, discover
+from app.core import activation, discover, expressions
 from app.core.errors import (
     ARRANGE_ON_BED,
     CANCEL,
@@ -53,12 +54,14 @@ from app.core.errors import (
     ExternalToolError,
     FileWriteError,
     OperationCancelled,
+    ValidationError,
 )
 from app.core.export import manufacturer, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_filament_profiles,
     has_key_definitions,
+    machine_from_definition,
     names_its_own_output,
     reads_settings_from_project_file,
     takes_a_machine_profile,
@@ -80,6 +83,7 @@ from app.core.types import (
     CancelToken,
     Finding,
     MaterialSlot,
+    PrinterProfile,
     PrintSettings,
     Profile,
     SettingAdvice,
@@ -140,7 +144,6 @@ _SKIN_OVERLAP: Final = 5.0
 _INFILL_OVERLAP: Final = 10.0
 _MAX_RESOLUTION: Final = 0.5
 _IRONING_FLOW: Final = 10.0
-_TRAVEL_ACCELERATION: Final = 5000.0
 _SUPPORT_GROWTH: Final = 0.4
 _SUPPORT_BRIM_LINES: Final = 3.0
 _STAIR_STEP: Final = 0.3
@@ -150,6 +153,42 @@ _SKIN_SUPPORT_BELOW: Final = 0.4
 #: Ab dieser Fülldichte lässt Cura die Überlappung weg — die Füllung stößt
 #: dann ohnehin an die Wand.
 _DENSE_INFILL: Final = 0.95
+
+#: Stütze und Schnittstelle höchstens so schnell, wie die Werksprozesse von
+#: Elegoo, Creality und Bambu sie fahren (``support_speed`` 150,
+#: ``support_interface_speed`` 80 mm/s). ``fdmprinter`` gibt ihnen die
+#: Innenwand und zwei Drittel davon: 214 und 143 mm/s am Ender-3 V3.
+_SUPPORT_SPEED: Final = 150.0
+_SUPPORT_INTERFACE_SPEED: Final = 80.0
+#: Die Schnittstelle zu einem Drittel dicht, wie Creality und Elegoo in Cura
+#: (``support_interface_density`` 33,3 %): Linienabstand drei Bahnbreiten.
+_INTERFACE_SPACING: Final = 3.0
+#: So viel Fläche braucht ein Stützstück mindestens, in mm² (Creality in Cura).
+_MINIMUM_SUPPORT_AREA: Final = 2.0
+#: Wie überhängende Wände bremsen, wenn der Hersteller keine Stufen nennt
+#: (``PrinterProfile.overhang_speed_factors``), in Prozent der Wand: der
+#: Vorschlag des Prüfberichts (Cura, B5).
+_OVERHANG_FACTORS: Final = (50.0, 25.0)
+#: Ab welchem Anteil der Bahnbreite eine Wand in Orcas Stufe 2/4 fällt und
+#: gebremst wird (``overhang_2_4_speed``: 25 bis 50 %; die Stufe 1/4 steht
+#: bei jedem Hersteller auf 0, also ungebremst).
+_OVERHANG_ONSET: Final = 0.25
+#: Wie weit der Kopf ohne Rückzug durch das Teil kämmt, in mm: 30 wie
+#: Creality in Cura; 10 für ein Filament, das Fäden zieht (Elegoo 9 bis 14,
+#: der KE 5). ``fdmprinter`` kennt keine Grenze, und ohne sie kämmte der Kopf
+#: beliebig weit ohne Rückzug.
+_COMBING_LIMIT: Final = 30.0
+_COMBING_LIMIT_STRINGING: Final = 10.0
+_STRINGING_MATERIALS: Final = frozenset({"petg", "petg-cf"})
+#: Die Leerfahrt der ersten Schicht nie langsamer als die Werksprofile in
+#: Cura sie fahren (Elegoo 100 bis 120, Kobra 2 125, Creality 150 mm/s) —
+#: oder die Leerfahrt selbst, wenn sie langsamer ist. Curas Formel gab dem
+#: Kobra 2 16,9 mm/s (Prüfbericht Cura, B7).
+_FIRST_LAYER_TRAVEL: Final = 100.0
+#: Die Beschleunigung der ersten Schicht, wenn der Drucker keine eigene trägt
+#: (``PrinterProfile.first_layer_acceleration``), in mm/s²: der Wert der
+#: Werksprozesse von Elegoo, Bambu, Prusa und Creality-Orca am Ender-3 V3.
+_FIRST_LAYER_ACCELERATION: Final = 500.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -362,16 +401,24 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
     Nichts zu melden ist der Regelfall: Steht die Maschine, ist die Datei
     vollständig, und eine Beruhigung wäre eine Zeile, die nichts unterscheidet.
 
-    **Und nur für die Orca-Familie.** Der Befund galt einen halben Tag lang
-    weiter, als er gemeint war: Cura und PrusaSlicer bekommen von Solidon
-    **nie** ein Maschinenprofil aus fremdem Bestand — ihre Maschinenseite baut
+    **PrusaSlicer bekommt keinen Befund.** Der Befund galt einen halben Tag
+    lang weiter, als er gemeint war: Seine Maschinenseite baut
     :func:`_machine_keys` aus dem eigenen Druckerprofil, und eine ``.ini`` ist
-    eigenständig lauffähig, sobald Düse und Bettform darin stehen. Für sie ist
-    „keine Maschinenseite" kein Mangel, sondern die Bauart. Gemessen am
-    03.09.2026: Beide bekamen bei jedem Export ein ``slicer.machine_unset``
-    und den Rat, im Slicer einen Drucker einzurichten, den sie dafür nicht
-    brauchen. Eine Warnung, die nicht stimmt, ist teurer als keine.
+    eigenständig lauffähig, sobald Düse und Bettform darin stehen. Gemessen am
+    03.09.2026 bekam es bei jedem Export ein ``slicer.machine_unset`` und den
+    Rat, im Slicer einen Drucker einzurichten, den es dafür nicht braucht.
+    Eine Warnung, die nicht stimmt, ist teurer als keine.
+
+    **Cura bekommt einen, wenn es den Drucker nicht kennt.** Bis zum
+    27.09.2026 schwieg die Stelle auch für Cura, mit derselben Begründung —
+    und die war dort falsch: CuraEngine druckte dann mit dem Startcode von
+    ``fdmprinter`` (``G28``, drei Millimeter Filament in 15 mm Höhe, keine
+    Spüllinie, kein Bettnetz). Jetzt kommt die Maschine aus der
+    Druckerdefinition (:func:`_cura_machine`); fehlt sie, sagt es dieser
+    Befund.
     """
+    if machine_from_definition(setup.flavour):
+        return _cura_printer_unknown(setup, profile)
     if not takes_a_machine_profile(setup.flavour):
         return []
     if machine_for(setup, profile):
@@ -450,6 +497,31 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
             ),
             values={"slicer": setup.name, "printer": profile.printer.title},
             suggestions=(CHECK_SLICER_PROFILE, EXPORT_ONLY),
+        )
+    ]
+
+
+def _cura_printer_unknown(setup: SlicerSetup, profile: Profile) -> list[Finding]:
+    """Der Befund, wenn diese Cura-Installation den Drucker nicht führt.
+
+    Ohne lesbare Definitionen sagt er nichts: Dann startet CuraEngine gar
+    nicht, und die Absage des Laufs nennt den Grund.
+    """
+    if not _cura_base(setup.executable) or _cura_printer_definition(
+        setup.executable, profile.printer
+    ):
+        return []
+    return [
+        Finding(
+            code="slicer.cura_printer_unknown",
+            severity="warning",
+            message=_(
+                "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den "
+                "Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.",
+                printer=profile.printer.title,
+            ),
+            values={"printer": profile.printer.title, "slicer": setup.name},
+            suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
         )
     ]
 
@@ -593,7 +665,7 @@ def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
     values = as_mapping(_adhesion_for(settings, profile, flavour), flavour)
     values |= _machine_keys(profile, flavour)
     if flavour == "cura":
-        values = _cura_dependants(values, settings)
+        values = _cura_dependants(values, settings, profile)
     _without_line_break(values, flavour)
     return values
 
@@ -750,7 +822,9 @@ def _support_spacing(
     return written
 
 
-def _cura_dependants(written: dict[str, str], settings: PrintSettings) -> dict[str, str]:
+def _cura_dependants(
+    written: dict[str, str], settings: PrintSettings, profile: Profile
+) -> dict[str, str]:
     """Was ``CuraEngine`` aus einem geschriebenen Wert nicht selbst ableitet (§29).
 
     ``fdmprinter.def.json`` gibt jeder abgeleiteten Einstellung zweierlei mit:
@@ -773,7 +847,7 @@ def _cura_dependants(written: dict[str, str], settings: PrintSettings) -> dict[s
     """
     # Erst rechnen, dann spiegeln: ``support_line_distance`` und
     # ``skin_preshrink`` sind selbst Quellen für weitere Schlüssel.
-    _cura_computed(written, settings)
+    _cura_computed(written, settings, profile)
     for source, targets in slicer_keys.CURA_MIRRORED.items():
         copied = written.get(source)
         if copied is not None:
@@ -837,7 +911,7 @@ def _cura_fan_start(written: dict[str, str], settings: PrintSettings) -> dict[st
     return written
 
 
-def _cura_computed(written: dict[str, str], settings: PrintSettings) -> None:
+def _cura_computed(written: dict[str, str], settings: PrintSettings, profile: Profile) -> None:
     """Die gerechneten Ableitungen — je Zeile die Formel aus der Definition.
 
     Keine eigene Meinung darüber, was richtig wäre: was hier steht, hätte das
@@ -845,7 +919,9 @@ def _cura_computed(written: dict[str, str], settings: PrintSettings) -> None:
     """
     _from_line_width(written, settings)
     _for_supports(written, settings)
-    _for_speeds(written, settings)
+    _for_speeds(written, settings, profile)
+    _for_overhangs(written, profile.printer)
+    _factory_habits(written, profile)
     _full_fan_layer(written)
 
 
@@ -907,27 +983,42 @@ def _from_line_width(written: dict[str, str], settings: PrintSettings) -> None:
 
 
 def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
-    """Die Stützen. Ihre Schnittstelle ist bei Cura eine Höhe, keine Schichtzahl."""
+    """Die Stützen, wie die Werksprofile sie in Cura legen (Prüfbericht Cura, B4).
+
+    Die Stütze selbst bleibt Curas ``zigzag``, eine verbundene Linienschar,
+    die nicht kippt; Solidons Gitter ist an Orcas unverbundenem
+    ``rectilinear`` begründet und steht nur dort (``slicer_keys``). Die
+    Schnittstelle ist bei Cura eine Höhe, keine Schichtzahl, und CuraEngine
+    liest nur die Blätter: ``support_roof_pattern``, nicht
+    ``support_interface_pattern``.
+    """
     width = _as_float(written.get("line_width"))
     density = settings.support.density
+    tree = settings.support.style == "tree"
     if width:
-        crossings = slicer_keys.CURA_SUPPORT_CROSSINGS.get(settings.support.style, 1.0)
-        distance = width * crossings / density if density > 0.0 else 0.0
+        # Curas Formel: Der Baum trägt keine Füllung, nur seine Wand
+        # (``support_infill_rate`` 0 beim Baum, ``support_wall_count`` 1).
+        distance = width / density if density > 0.0 and not tree else 0.0
         written["support_line_distance"] = f"{distance:g}"
         # Auf den eben gerechneten Abstand, nicht noch einmal auf die Breite:
         # zwei Formeln für dieselbe Sache laufen irgendwann auseinander.
         written["support_zag_skip_count"] = (
             "0" if distance <= 0.0 else str(round(_SUPPORT_SKIP_PER_MM / distance))
         )
-        # Die Schnittstelle steht bei Cura auf voller Dichte; ihr Linienabstand
-        # ist dann genau eine Bahnbreite.
+        # Die Schnittstelle in Linien zu einem Drittel, wie Creality und Elegoo
+        # in Cura. ``fdmprinter`` legt sie konzentrisch und voll — eine Decke,
+        # die schwer abgeht und die Unterseite mit Ringen zeichnet.
+        for key in ("support_roof_pattern", "support_bottom_pattern"):
+            written[key] = "lines"
+        spacing = width * _INTERFACE_SPACING
         for key in ("support_roof_line_distance", "support_bottom_line_distance"):
-            written[key] = f"{width:g}"
+            written[key] = f"{spacing:g}"
         # Die Stütze wächst um eine Bahnbreite plus Curas festen Zuschlag —
         # beim Baum um nichts.
-        tree = settings.support.style == "tree"
         written["support_offset"] = "0" if tree else f"{width + _SUPPORT_GROWTH:g}"
         written["support_wall_count"] = "1" if tree else "0"
+    # Krümel unter 2 mm² bekommen keine eigene Stütze (Creality in Cura).
+    written["minimum_support_area"] = f"{_MINIMUM_SUPPORT_AREA:g}"
 
     # Ohne den Schalter entsteht gar keine Schnittstelle, und ohne die Höhe
     # wurden aus zwei Schichten zwei Millimeter — das Zehnfache bei 0,2ern.
@@ -945,7 +1036,7 @@ def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
     written["support_tree_angle"] = f"{max(min(angle, 85.0), 20.0):g}"
 
 
-def _for_speeds(written: dict[str, str], settings: PrintSettings) -> None:
+def _for_speeds(written: dict[str, str], settings: PrintSettings, profile: Profile) -> None:
     """Geschwindigkeiten, Temperaturen und die Schalter, ohne die sie nicht gelten."""
     # Ohne diesen gelten weder die Brückengeschwindigkeit noch der
     # Brückenlüfter — beide stehen in Cura dahinter, und Solidon schreibt beide.
@@ -955,19 +1046,40 @@ def _for_speeds(written: dict[str, str], settings: PrintSettings) -> None:
     # angeboten.
     written["connect_infill_polygons"] = "false"
     written["skirt_height"] = "3" if settings.adhesion.skirt_distance > 0.0 else "1"
-    written["acceleration_travel_layer_0"] = f"{_TRAVEL_ACCELERATION:g}"
+    # **Die erste Schicht mit der Beschleunigung des Herstellers** (Prüfbericht
+    # Cura, B2). ``acceleration_layer_0`` spiegelte ``acceleration_print``, und
+    # der Ender-3 V3 fuhr Skirt und erste Schicht mit 12 000 mm/s² — Creality
+    # fährt dort 500. Nie schneller als der Rest; die Blätter folgen über
+    # ``CURA_MIRRORED``. Die Leerfahrt der ersten Schicht rechnet Cura mit
+    # ``acceleration_layer_0 * acceleration_travel / acceleration_print``, und
+    # weil die Fahrt mit der Druckbeschleunigung fährt (``CURA_MIRRORED``),
+    # ist das die Beschleunigung der ersten Schicht selbst.
+    printing_acceleration = _as_float(written.get("acceleration_print"))
+    if printing_acceleration:
+        first = profile.printer.first_layer_acceleration or _FIRST_LAYER_ACCELERATION
+        first = min(first, printing_acceleration)
+        written["acceleration_layer_0"] = f"{first:g}"
+        written["acceleration_travel_layer_0"] = f"{first:g}"
 
     printing = _as_float(written.get("speed_print"))
     if printing:
-        # ``speed_support_interface = speed_support / 1.5``, und die beiden
-        # Seiten der Schnittstelle erben davon.
-        interface = f"{printing / 1.5:g}"
+        # Stütze und Schnittstelle wie in den Werksprozessen, nie schneller als
+        # die Innenwand (``fdmprinter``: ``speed_support = speed_print``) und
+        # die Schnittstelle nie schneller als die Außenwand. Die beiden Seiten
+        # der Schnittstelle und die Stützfüllung erben davon.
+        support = min(printing, _SUPPORT_SPEED)
+        for key in ("speed_support", "speed_support_infill"):
+            written[key] = f"{support:g}"
+        wall = _as_float(written.get("speed_wall_0")) or printing
+        interface = f"{min(wall, _SUPPORT_INTERFACE_SPEED):g}"
         for key in ("speed_support_interface", "speed_support_roof", "speed_support_bottom"):
             written[key] = interface
         first_layer = _as_float(written.get("speed_layer_0"))
         travel = _as_float(written.get("speed_travel"))
         if first_layer and travel:
-            written["speed_travel_layer_0"] = f"{first_layer * travel / printing:g}"
+            formula = first_layer * travel / printing
+            floor = min(travel, _FIRST_LAYER_TRAVEL)
+            written["speed_travel_layer_0"] = f"{max(formula, floor):g}"
 
     surface = _as_float(written.get("speed_topbottom"))
     if surface:
@@ -979,6 +1091,60 @@ def _for_speeds(written: dict[str, str], settings: PrintSettings) -> None:
         # Zug etwas kühler. Nachgerechnet, nicht überstimmt.
         written["material_initial_print_temperature"] = f"{nozzle - 10.0:g}"
         written["material_final_print_temperature"] = f"{nozzle - 15.0:g}"
+
+
+def _for_overhangs(written: dict[str, str], printer: PrinterProfile) -> None:
+    """Überhängende Wände bremsen wie beim Hersteller (Prüfbericht Cura, B5).
+
+    Orca bremst ab einem Viertel Bahnbreite Überhang in Stufen
+    (``overhang_2_4_speed`` bis ``overhang_4_4_speed``). Cura teilt den Bereich
+    zwischen ``wall_overhang_angle`` und 90 Grad in gleiche Winkelschritte,
+    einen je Faktor, und misst den Überhang an der Mitte der Außenwand gegen
+    die Schicht darunter (``FffGcodeWriter.cpp``, CuraEngine 5.13) — der Winkel
+    einer Wand, die je Schicht um ein Viertel Bahnbreite auswandert, ist also
+    ``atan(0,25 * Bahnbreite / Schichthöhe)``. Dort beginnt die erste Stufe,
+    und die letzte gilt zweimal: Bei 0,42 auf 0,2 mm liegen Curas Grenzen dann
+    bei 28, 43, 59 und 75 Grad, Orcas bei 28, 46, 58 und 64.
+
+    Ohne Stufen des Herstellers bremst Cura mit 50 und 25 Prozent ab
+    demselben Winkel.
+    """
+    width = _as_float(written.get("line_width"))
+    height = _as_float(written.get("layer_height"))
+    if not width or not height:
+        return
+    factors = printer.overhang_speed_factors
+    steps = (*factors, factors[-1]) if factors else _OVERHANG_FACTORS
+    # Eine Winkelfunktion aus ``math`` ist hier erlaubt: Das Ergebnis ist ein
+    # Wert für den Slicer, auf ganze Grad gerundet, keine Geometrie (kern.md).
+    onset = math.degrees(math.atan(_OVERHANG_ONSET * width / height))
+    written["wall_overhang_angle"] = f"{round(onset)}"
+    written["wall_overhang_speed_factors"] = (
+        "[" + ",".join(f"{round(step)}" for step in steps) + "]"
+    )
+
+
+def _factory_habits(written: dict[str, str], profile: Profile) -> None:
+    """Was ``fdmprinter`` anders vorgibt als die Werksprofile in Cura (B6, B11, B12).
+
+    Creality, Anycubic, Sovol und Elegoo setzen diese Werte in Cura als
+    Formel, und Formeln liest die Konsole nicht — ohne Solidons Zeile gälte
+    ``fdmprinter``, nicht das Profil des Herstellers.
+    """
+    # Die Füllung nach den Wänden. ``fdmprinter`` druckt sie vorher, und ihr
+    # Muster zeichnet sich durch die Außenwand (gemessen: FILL, WALL-INNER,
+    # WALL-OUTER). Creality, Anycubic und Sovol stellen in Cura ``false``.
+    written["infill_before_walls"] = "false"
+    # Kämmen ohne Rückzug nur ein Stück weit, bei PETG kürzer.
+    stringing = profile.material.id in _STRINGING_MATERIALS
+    limit = _COMBING_LIMIT_STRINGING if stringing else _COMBING_LIMIT
+    written["retraction_combing_max_distance"] = f"{limit:g}"
+    # Der Z-Sprung nur über gedruckten Teilen, nicht bei jedem Rückzug, und
+    # die Fahrt umgeht Stützen (Creality, Anycubic in Cura).
+    written["retraction_hop_only_when_collides"] = "true"
+    written["travel_avoid_supports"] = "true"
+    # Die Naht bevorzugt verdeckte Ecken, wie Creality, Sovol und Elegoo.
+    written["z_seam_corner"] = "z_seam_corner_weighted"
 
 
 def _as_float(value: str | None) -> float | None:
@@ -998,11 +1164,17 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
 
     ``cura`` stand lange bei Orca, und das war falsch: ``CuraEngine`` ist
     nicht die Kommandozeile eines Slicers, sondern die Rechenmaschine hinter
-    dem Fenster. Sie löst keine Vererbung auf — was das Fenster sonst aus
-    Definition, Qualität, Material und Variante zusammenrechnet, muss ihr
-    einzeln mitgegeben werden. Ohne Bettmaße rechnete sie einen G-Code, in
-    dessen Kopf ``MINX:2.14748e+06`` stand: der Grenzwert eines Ganzzahltyps,
-    also gar keine Angabe.
+    dem Fenster. Sie liest aus einer Definition nur Vorgabewerte, keine
+    Formeln — was das Fenster sonst aus Definition, Qualität, Material und
+    Variante zusammenrechnet, muss ihr einzeln mitgegeben werden. Die
+    Maschine selbst (Start- und Endcode, Name, Grenzen) kommt aus der
+    Druckerdefinition (:func:`_cura_machine`); die Werte hier gelten über ihr.
+
+    Der Kopf der Druckdatei bleibt dabei ein Platzhalter: ``;TIME:6666``,
+    ``;Filament used: 0m`` und ``;MINX:2.14748e+06`` schreibt CuraEngine im
+    Konsolenbetrieb immer, mit oder ohne Bettmaße — das Fenster ersetzt den
+    Kopf erst nachträglich. Zeit und Material liest :mod:`app.core.slice.gcode`
+    deshalb aus ``;TIME_ELAPSED`` und der Summe der Förderung.
     """
     if flavour == "cura":
         width, depth, height = profile.printer.build_volume
@@ -1074,6 +1246,119 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
 
 
 @dataclass(frozen=True, slots=True)
+class CuraMesh:
+    """Ein Netz für CuraEngine und die Werte, die nur ihm gelten (``-s`` nach ``-l``).
+
+    Heute trägt nur die Stützsperre Werte (``anti_overhang_mesh``); Stufe E des
+    Konzepts setzt an den Teilen ``support_enable`` je Teil.
+    """
+
+    path: Path
+    settings: Mapping[str, str] = field(default_factory=dict)
+
+
+#: Wie die Netzliste neben dem Modell heißt (:func:`write_cura_meshes`).
+CURA_MESHES_SUFFIX: Final = ".meshes.json"
+
+#: Wie ein Einstellungsname aussieht, der je Netz mitreisen darf.
+_SETTING_NAME: Final = re.compile(r"[a-z0-9_]+")
+
+
+def write_cura_meshes(model: Path, meshes: Sequence[CuraMesh]) -> Path:
+    """Legt neben das Modell die Liste seiner Netze für CuraEngine.
+
+    Das Modell selbst bleibt das zusammengelegte STL — die Datei, die Curas
+    Fenster öffnet. Die Kommandozeile liest stattdessen diese Liste
+    (:func:`cura_meshes`): je Teil ein Netz und jede Sperre als eigenes, mit
+    ihren Werten. So geht der Weg über den Druckdialog unverändert: Er reicht
+    ein Modell weiter, und die Übergabe findet daneben, was dazugehört.
+    """
+    target = model.with_suffix(CURA_MESHES_SUFFIX)
+    document = {
+        "meshes": [{"file": mesh.path.name, "settings": dict(mesh.settings)} for mesh in meshes]
+    }
+    try:
+        target.write_text(json.dumps(document, indent=1, ensure_ascii=False), encoding="utf-8")
+    except OSError as problem:
+        raise FileWriteError(
+            target=target.name, detail=problem.strerror or str(problem)
+        ) from problem
+    return target
+
+
+def cura_meshes(model: Path) -> tuple[CuraMesh, ...]:
+    """Die Netze, die CuraEngine für dieses Modell lädt — ohne Liste das Modell selbst.
+
+    Die Liste schreibt Solidon selbst (:func:`write_cura_meshes`), aber sie
+    liegt in einem Ordner, und was dort steht, wird geprüft, bevor es zu
+    Argumenten wird: Dateinamen ohne Pfad, die daneben liegen, Werte ohne
+    Umbruch unter einfachen Namen. Eine Liste, die das nicht erfüllt, hält
+    an, statt still das Modell ohne Sperre zu rechnen.
+    """
+    listing = model.with_suffix(CURA_MESHES_SUFFIX)
+    if not listing.is_file():
+        return (CuraMesh(model),)
+    try:
+        document = json.loads(listing.read_text(encoding="utf-8"))
+        meshes: list[CuraMesh] = []
+        for entry in document["meshes"]:
+            name, values = entry["file"], entry.get("settings", {})
+            if not isinstance(name, str) or Path(name).name != name or not name.endswith(".stl"):
+                raise ValueError(name)
+            path = model.parent / name
+            if not path.is_file() or not isinstance(values, dict):
+                raise ValueError(name)
+            for key, value in values.items():
+                if not (
+                    isinstance(key, str)
+                    and _SETTING_NAME.fullmatch(key)
+                    and isinstance(value, str)
+                    and _single_line(value)
+                ):
+                    raise ValueError(key)
+            meshes.append(CuraMesh(path, dict(values)))
+        if not meshes:
+            raise ValueError(listing.name)
+    except (OSError, ValueError, KeyError, TypeError) as problem:
+        raise ExternalToolError(
+            tool=model.name,
+            title=SLICER_FAILED,
+            detail=_(
+                "Die Teile für Cura sind unvollständig geschrieben. Slicen Sie noch "
+                "einmal, dann entstehen sie neu."
+            ),
+            values={"file": listing.name},
+            suggestions=(RETRY, EXPORT_ONLY),
+        ) from problem
+    return tuple(meshes)
+
+
+@dataclass(frozen=True, slots=True)
+class CuraMachine:
+    """Was CuraEngine über die Maschine bekommt, neben Solidons Werten.
+
+    ``definition`` ist die Datei hinter ``-j``: die Druckerdefinition aus
+    ``PrinterProfile.cura_definition``, sonst ``fdmprinter``. CuraEngine löst
+    ihre Erbkette selbst auf und lädt die Extruderzüge aus
+    ``machine_extruder_trains`` (gemessen mit Cura 5.13, 27.09.2026); dafür
+    braucht es die Ordner in ``search_path`` hinter ``-d``, sonst meldet es
+    „Couldn't find definition file with ID: creality_base_extruder_0".
+
+    ``codes`` sind Start- und Endcode mit gefüllten Platzhaltern. Sie tragen
+    Zeilenumbrüche und reisen deshalb als eigene ``-s``-Argumente, nicht in
+    ``solidon_cura.txt``. ``switches`` sind die zwei Schalter, mit denen
+    CuraEngine seine eigenen Temperaturbefehle vor den Startcode setzt.
+    """
+
+    definition: Path | None = None
+    from_printer: bool = False
+    """Kommt die Maschine aus einer Druckerdefinition und nicht aus ``fdmprinter``?"""
+    search_path: tuple[Path, ...] = ()
+    codes: Mapping[str, str] = field(default_factory=dict)
+    switches: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class SlicerConfig:
     """Die Profildateien für einen Lauf.
 
@@ -1093,6 +1378,8 @@ class SlicerConfig:
     machine: Path | None = None
     written: Mapping[str, str] = field(default_factory=dict)
     """Die tatsächlich geschriebenen Sollwerte, einschließlich aller Filamentplätze."""
+    cura_machine: CuraMachine | None = None
+    """Nur bei Cura: Druckerdefinition, Start- und Endcode (:func:`_cura_machine`)."""
 
     @property
     def filament(self) -> Path | None:
@@ -1640,14 +1927,17 @@ def write_config(
     # Hier wiegt der Umbruch schwerer als bei Prusa: ``_command`` liest diese
     # Datei mit ``splitlines()`` zurück und macht aus jeder Zeile ein eigenes
     # ``-s``-Argument. Eine zweite Zeile wäre damit ein zusätzliches Argument
-    # für CuraEngine.
+    # für CuraEngine. Start- und Endcode tragen Umbrüche und stehen deshalb
+    # nicht hier, sondern in ``cura_machine`` (:func:`_command`).
     flat = flat_values()
+    machine = _cura_machine(setup, profile, flat)
+    flat |= machine.switches
     _without_line_break(flat, setup.name)
     target.write_text(
         "\n".join(f"{key}={value}" for key, value in sorted(flat.items())) + "\n",
         encoding="utf-8",
     )
-    return SlicerConfig(process=target, written=flat)
+    return SlicerConfig(process=target, written=flat, cura_machine=machine)
 
 
 #: Schlüssel, die eine Spule aus sich selbst ergänzt und nie vom Nachbarn
@@ -2549,7 +2839,16 @@ def _command(
     # und der Lauf endete ohne Druckdatei (RM-252). Ohne den Schalter bleiben
     # Warnungen und Fehler, 50 kB — mehr liest die Übergabe nicht daraus.
     arguments = [binary, "slice"]
-    basis = setup.machine_profile or _cura_base(setup.executable)
+    engine = config.cura_machine or CuraMachine()
+    if engine.search_path:
+        # Vor ``-j``: CuraEngine sucht die Erbkette und die Extruderzüge beim
+        # Laden der Definition, nicht danach.
+        arguments += ["-d", os.pathsep.join(str(folder) for folder in engine.search_path)]
+    basis = (
+        str(engine.definition)
+        if engine.definition is not None
+        else setup.machine_profile or _cura_base(setup.executable)
+    )
     if basis:
         arguments += ["-j", basis]
     values: list[str] = []
@@ -2557,6 +2856,11 @@ def _command(
         if line.strip():
             values += ["-s", line.strip()]
     arguments += values
+    # **Start- und Endcode des Druckers, je ein Argument mit Umbrüchen.**
+    # Gemessen: Ein mehrzeiliges ``-s machine_start_gcode=…`` kommt Zeile für
+    # Zeile im G-Code an. Sie gelten der Maschine, nicht dem Extruder-Zug.
+    for key, code in engine.codes.items():
+        arguments += ["-s", f"{key}={code}"]
     # **Und dieselben Werte noch einmal auf dem Extruder.** ``CuraEngine`` hält
     # zwei Ebenen: was global gilt, und was der Extruder-Zug sagt — und das
     # meiste, was einen Druck ausmacht, liest es vom Zug. Was nur global steht,
@@ -2567,12 +2871,22 @@ def _command(
     # Male zu setzen kommt am selben Ort heraus und braucht die Definition
     # nicht zu lesen.
     arguments += ["-e0"]
-    extruder = _cura_extruder_base(setup.executable)
+    # Eine Druckerdefinition bringt ihren Extruderzug selbst mit
+    # (``machine_extruder_trains``); ``fdmextruder`` darüber setzte dessen
+    # Vorgaben auf die allgemeinen zurück. Nur zu ``fdmprinter`` gehört er.
+    extruder = "" if engine.from_printer else _cura_extruder_base(setup.executable)
     if extruder:
         arguments += ["-j", extruder]
     arguments += values
-    for entry in files:
-        arguments += ["-l", entry]
+    # **Je Netz ein ``-l``, und seine Werte gleich dahinter** — ein ``-s`` nach
+    # ``-l`` gilt nur diesem Netz (``CommandLine.cpp``). Die Stützsperre reist
+    # so als eigenes Netz mit ``anti_overhang_mesh``; ohne Netzliste bleibt es
+    # beim Modell selbst.
+    for model in models:
+        for mesh in cura_meshes(Path(model)):
+            arguments += ["-l", str(mesh.path)]
+            for key, value in mesh.settings.items():
+                arguments += ["-s", f"{key}={value}"]
     arguments += ["-o", str(output / OUTPUT_NAME)]
     return arguments
 
@@ -2618,10 +2932,9 @@ def _cura_base(executable: Path) -> str:
 
     ``CuraEngine`` braucht mindestens eine Definition, sonst kennt es keinen
     einzigen Einstellungsnamen. ``fdmprinter.def.json`` ist die Wurzel, von
-    der alle Druckerdefinitionen erben — die Maschine selbst beschreibt
-    Solidon daneben über :func:`_machine_keys`, statt eine der
-    zwölfhundert Herstellerdefinitionen zu wählen und deren Vererbungskette
-    nachzubauen. Die kennt nur das Fenster.
+    der alle Druckerdefinitionen erben, und der Rückfall für einen Drucker,
+    den Cura nicht führt; sonst lädt der Lauf die Druckerdefinition
+    (:func:`_cura_machine`), und CuraEngine löst deren Erbkette selbst auf.
 
     Nichts, wenn sie nicht daliegt: dann scheitert der Lauf und sagt das,
     statt einen Pfad zu erfinden.
@@ -2649,6 +2962,189 @@ def _cura_definition(executable: Path, filename: str) -> str:
         if found.is_file():
             return str(found)
     return ""
+
+
+def _cura_printer_definition(executable: Path, printer: PrinterProfile) -> str:
+    """Die Druckerdefinition dieses Druckers in dieser Cura-Installation — oder nichts.
+
+    Nichts heißt zweierlei, und beides endet gleich: Der Drucker trägt keine
+    (``PrinterProfile.cura_definition`` ist leer, weil Cura ihn nicht führt),
+    oder diese Installation hat die Datei nicht, etwa eine ältere Cura. Die
+    Kennung ist beim Lesen geprüft (``profiles.CURA_DEFINITION``); hier wird
+    sie noch einmal geprüft, weil ein Profil auch ohne Tabelle entsteht.
+    """
+    name = printer.cura_definition
+    if not name or profiles.CURA_DEFINITION.fullmatch(name) is None:
+        return ""
+    return _cura_definition(executable, f"{name}.def.json")
+
+
+#: Woran das Cura-Fenster erkennt, dass der Startcode die Temperaturen selbst
+#: setzt. Steht einer dieser Namen als Platzhalter darin, schaltet es
+#: ``material_bed_temp_prepend`` bzw. ``material_print_temp_prepend`` ab, und
+#: CuraEngine setzt kein eigenes ``M190``/``M109`` davor. Dieselben Namen wie
+#: ``plugins/CuraEngineBackend/StartSliceJob.py`` (Cura 5.13).
+_BED_TEMPERATURES: Final = ("material_bed_temperature", "material_bed_temperature_layer_0")
+_PRINT_TEMPERATURES: Final = (
+    "material_print_temperature",
+    "material_print_temperature_layer_0",
+    "default_material_print_temperature",
+    "material_initial_print_temperature",
+    "material_final_print_temperature",
+    "material_standby_temperature",
+    "print_temperature",
+)
+
+#: Was das Cura-Fenster unter einem zweiten Namen füllt (``_buildReplacementTokens``).
+_CURA_ALIASES: Final = {
+    "print_temperature": "material_print_temperature",
+    "print_bed_temperature": "material_bed_temperature",
+    "travel_speed": "speed_travel",
+}
+
+#: Ein Platzhalter im Start- und Endcode: was zwischen zwei geschweiften
+#: Klammern steht, wie im ``GcodeStartEndFormatter`` des Fensters.
+_PLACEHOLDER: Final = re.compile(r"\{([^{}]*)\}")
+
+#: Die zwei Maschinencodes, die Solidon aus der Definition übergibt.
+MACHINE_CODES: Final = ("machine_start_gcode", "machine_end_gcode")
+
+
+def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str]) -> CuraMachine:
+    """Die Maschine für CuraEngine: Definition, Start- und Endcode (§29).
+
+    **Die Rechenmaschine liest aus einer Definition nur ``default_value``,
+    und Platzhalter füllt sie nicht.** Das Fenster wertet Formeln und
+    Platzhalter aus, bevor es CuraEngine ruft; die Konsole bekommt nichts
+    davon. Solidon wertet keine Formel aus (Regel 10) — die Maschine kommt
+    deshalb aus der Druckerdefinition, und was darin für den Druck zählt,
+    Start- und Endcode, füllt :func:`_filled` aus den Werten, die Solidon
+    ohnehin schreibt.
+
+    Ohne Druckerdefinition bleibt es bei ``fdmprinter``; dessen Codes haben
+    keine Platzhalter, und :func:`machine_missing` sagt, was fehlt.
+    """
+    base = _cura_base(setup.executable)
+    if not base:
+        return CuraMachine()
+    own = _cura_printer_definition(setup.executable, profile.printer)
+    definition = Path(own or base)
+    chain = slicer_profiles.resolve_values(definition)
+    known = _placeholder_values(chain, values)
+    codes = {
+        key: _filled(str(chain.get(key) or ""), known, key, setup.name) for key in MACHINE_CODES
+    }
+    # Beide Ordner hinter ``-d``, getrennt wie auf dieser Plattform üblich. Ein
+    # Pfad, der den Trenner selbst trägt, bliebe zwei Pfade — dann sucht
+    # CuraEngine die Züge nicht, der Lauf gelingt trotzdem, nur mit den
+    # Vorgaben der Maschine statt denen ihres Zugs.
+    folder = definition.parent
+    extruders = folder.parent / "extruders"
+    searchable = extruders.is_dir() and os.pathsep not in f"{folder}{extruders}"
+    search = (folder, extruders) if own and searchable else ()
+    return CuraMachine(
+        definition=definition,
+        from_printer=bool(own),
+        search_path=search,
+        codes=codes,
+        switches=_temperature_switches(str(chain.get("machine_start_gcode") or "")),
+    )
+
+
+def _placeholder_values(chain: Mapping[str, object], written: Mapping[str, str]) -> dict[str, str]:
+    """Womit Platzhalter gefüllt werden: Solidons Werte, sonst die der Definition.
+
+    Aus der Definition nur Einzelwerte, wie ``str()`` sie im Fenster schriebe
+    — keine Listen und keinen Text mit Umbruch, denn ein Platzhalter, der den
+    Startcode in sich selbst schriebe, ist keine Angabe.
+    """
+    known: dict[str, str] = {}
+    for key, value in chain.items():
+        if isinstance(value, bool):
+            known[key] = str(value)
+        elif isinstance(value, int | float):
+            known[key] = f"{value:g}"
+        elif isinstance(value, str) and _single_line(value):
+            known[key] = value
+    known |= written
+    for alias, source in _CURA_ALIASES.items():
+        if source in known:
+            known[alias] = known[source]
+    return known
+
+
+def _filled(text: str, known: Mapping[str, str], setting: str, tool: str) -> str:
+    """Füllt die Platzhalter eines Maschinencodes — oder hält an (Regel 21).
+
+    ``{name}`` und ``{name, n}`` sind Textersetzung. Eine Rechnung wie
+    ``{machine_depth - 5}`` (Endcode des Neptune 4) geht durch Solidons
+    eigenen Auswerter (``app.core.expressions``, Regel 10), nur über Zahlen,
+    die Solidon kennt. Was so nicht zu füllen ist — ein unbekannter Name,
+    ``{if …}``, ein Wert, den erst das Fenster nach dem Schneiden kennt —,
+    hält die Übergabe an: Wörtlich im G-Code bräche ein Makro wie
+    ``START_PRINT EXTRUDER_TEMP=…`` am Drucker ab.
+    """
+
+    def value_of(match: re.Match[str]) -> str:
+        expression, _comma, extruder = match.group(1).partition(",")
+        expression = expression.strip()
+        if extruder.strip() and not extruder.strip().isdigit():
+            raise _unfillable(match.group(0), setting, tool)
+        if expression in known:
+            return known[expression]
+        number = _arithmetic(expression, known)
+        if number is None:
+            raise _unfillable(match.group(0), setting, tool)
+        return f"{number:g}"
+
+    return _PLACEHOLDER.sub(value_of, text)
+
+
+def _arithmetic(expression: str, known: Mapping[str, str]) -> float | None:
+    """Eine Rechnung über bekannte Zahlen, mit Solidons eigener Grammatik."""
+    numbers: dict[str, float] = {}
+    for key, text in known.items():
+        try:
+            numbers[key] = float(text)
+        except ValueError:
+            continue
+    try:
+        return expressions.evaluate(expressions.canonical(expression, numbers), numbers)
+    except ValidationError:
+        return None
+
+
+def _unfillable(placeholder: str, setting: str, tool: str) -> ExternalToolError:
+    """Die Absage für einen Platzhalter, den Solidon nicht füllen kann."""
+    return ExternalToolError(
+        tool=tool,
+        title=SLICER_FAILED,
+        detail=_(
+            "Der Start- oder Endcode dieses Druckers in Cura verlangt einen Wert, "
+            "den Solidon nicht einsetzen kann. Ungefüllt bräche der Drucker den Druck ab."
+        ),
+        values={"setting": setting, "text": placeholder},
+        suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
+    )
+
+
+def _temperature_switches(start: str) -> dict[str, str]:
+    """Ob CuraEngine eigene Temperaturbefehle vor den Startcode setzt.
+
+    Dieselbe Regel wie im Cura-Fenster: Kommentare heraus, dann nach einem
+    Temperatur-Platzhalter suchen. Setzt der Startcode die Temperatur selbst,
+    bleibt Curas eigenes ``M190``/``M109`` weg — sonst stünden beide da,
+    gemessen am K1 Max: ``M190 S60`` vor ``START_PRINT … BED_TEMP=60``.
+    """
+    code = re.sub(r";.+?(\n|$)", "\n", start)
+
+    def sets(names: tuple[str, ...]) -> bool:
+        return re.search(r"\{(" + "|".join(names) + r")(,\s?\w+)?\}", code) is not None
+
+    return {
+        "material_bed_temp_prepend": "false" if sets(_BED_TEMPERATURES) else "true",
+        "material_print_temp_prepend": "false" if sets(_PRINT_TEMPERATURES) else "true",
+    }
 
 
 @dataclass(slots=True)
@@ -3826,28 +4322,52 @@ def cura_profile_beside(
     ``position``; eine einzelne legt Cura beim Import selbst auf das erste
     Fach.
 
-    Die Qualitätsstufe muss es für die Maschine geben, sonst lehnt Cura ab;
-    gewählt wird die mit der nächstliegenden Schichthöhe. ``None`` heißt:
-    kein Cura, oder eine Installation ohne lesbare Definitionen — dann wird
-    nichts geschrieben, und ein Profil mit geratener Version wäre schlimmer
-    als keines. Der zurückgegebene Befund ist der eine Satz, den der Dialog
-    dazu zeigt.
+    **Die Qualitätsstufe gehört dem Drucker, der in Cura aktiv ist**
+    (Prüfbericht Cura, B9). Cura setzt ein importiertes Profil auf seine aktive
+    Maschine um, lehnt es ab, wenn deren Stufen die genannte nicht führen, und
+    zeigt es nicht an, wenn es sie für Düse und Spule nicht gibt. Gewählt wird
+    deshalb unter den Stufen dieses Druckers für seine Düse und seine Spule,
+    und zwar die mit der nächstliegenden Schichthöhe. Mit den Stufen von
+    ``fdmprinter`` (bei 0,2 mm ``draft``) lehnte Cura das Profil an Elegoos
+    Druckern ab und zeigte es an Creality und Sovol nicht an. Ist in Cura
+    kein Drucker eingerichtet, zu dem es passt, entsteht keine Datei, und der
+    Befund sagt, was zu tun ist.
+
+    ``None`` heißt: kein Cura, oder eine Installation ohne lesbare
+    Definitionen — dann wird nichts geschrieben, und ein Profil mit geratener
+    Version wäre schlimmer als keines. Der zurückgegebene Befund ist der eine
+    Satz, den der Dialog dazu zeigt.
     """
     if setup.flavour != "cura":
         return None
     version = slicer_profiles.cura_setting_version(setup.executable)
     if version is None:
         return None
-    machine_name = machine_for(setup, profile)
-    machine = profile_file(machine_name, setup, "machine") if machine_name else None
-    qualities = slicer_profiles.cura_quality_types(setup.executable, machine)
-    if not qualities:
-        return None
+    active = slicer_profiles.cura_active_machine(setup.executable)
+    qualities = (
+        slicer_profiles.cura_quality_types(
+            setup.executable,
+            active.definition,
+            variant=active.variant,
+            material_type=active.material_type,
+        )
+        if active is not None
+        else {}
+    )
+    if active is None or not qualities:
+        return Finding(
+            code="handover.cura_profile_unbound",
+            severity="warning",
+            message=_(
+                "In Cura ist kein Drucker eingerichtet, zu dem das Profil passt. Richten Sie "
+                "Ihren Drucker in Cura ein und wählen Sie dann noch einmal „Im Slicer öffnen“."
+            ),
+            values={"slicer": setup.name},
+            suggestions=(CHOOSE_SLICER,),
+        )
     wanted = float(settings.layers.layer_height)
     quality = min(sorted(qualities), key=lambda kind: abs(qualities[kind] - wanted))
-    definition = (
-        slicer_profiles.cura_definition_id(machine) if machine is not None else "fdmprinter"
-    )
+    definition = slicer_profiles.cura_quality_definition(setup.executable, active.definition)
     name = _one_line(model.stem) or "solidon"
 
     def container(values: Mapping[str, str], position: int | None) -> str:
@@ -3890,7 +4410,13 @@ def cura_profile_beside(
         raise FileWriteError(
             target=target.name, detail=problem.strerror or str(problem)
         ) from problem
-    _log.info("wrote a Cura profile beside %s (%s, quality %s)", model.name, definition, quality)
+    _log.info(
+        "wrote a Cura profile beside %s for %s (%s, quality %s)",
+        model.name,
+        active.name,
+        definition,
+        quality,
+    )
     return Finding(
         code="handover.cura_profile",
         severity="info",
@@ -3898,7 +4424,7 @@ def cura_profile_beside(
             "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: "
             "in Cura unter Profile verwalten → Importieren wählen."
         ),
-        values={"file": target.name},
+        values={"file": target.name, "machine": active.name},
     )
 
 

@@ -538,10 +538,10 @@ CURA: Final[tuple[Row, ...]] = (
     # An/Aus — wer Baumstützen einstellte, druckte Gitterstützen, und
     # `verify()` sah nichts, weil der Schlüssel nie geschrieben wurde.
     ("support.style", "support_structure", _mapped({"tree": "tree"}, "normal")),
-    # Curas Vorgabe ``zigzag`` ist eine Linienschar in einer Richtung; „Gitter"
-    # ist bei Cura ``grid``, gekreuzt in jeder Schicht. Den Linienabstand dazu
-    # rechnet ``handover`` mit ``CURA_SUPPORT_CROSSINGS``.
-    ("support.style", "support_pattern", _only({"grid": "grid"})),
+    # **Kein ``support_pattern``.** Curas Vorgabe ``zigzag`` verbindet ihre
+    # Linien und kippt nicht; das Kreuzmuster darüber gilt Orcas und Prusas
+    # unverbundenem ``rectilinear`` (Waschschüssel, 25.09.2026). Alle
+    # Werksprofile in Cura fahren ``zigzag`` (Prüfbericht Cura, B4).
     ("support.placement", "support_type", _mapped({"build_plate": "buildplate"}, "everywhere")),
     # Hier **ohne** Umrechnung: Cura zählt gegen die Senkrechte, so wie
     # Solidon. Die beiden anderen Familien drehen die Zählweise um, siehe
@@ -580,7 +580,9 @@ CURA: Final[tuple[Row, ...]] = (
     ("retraction.avoid_crossing_walls", "retraction_combing", _mapped({"True": "noskin"}, "off")),
     ("filament.diameter", "material_diameter", _number),
     ("filament.flow_ratio", "material_flow", _percent),
-    ("filament.max_flow", "material_max_flowrate", _number),
+    # **Kein ``material_max_flowrate``.** CuraEngine liest den Schlüssel nicht
+    # (null Treffer in ``CuraEngine.exe`` 5.13, in ``fdmprinter`` abgeschaltet);
+    # den Volumenstrom hält Solidon über die Tempi (``print_settings._within_flow``).
 )
 
 #: Was ``CuraEngine`` aus einem geschriebenen Wert **nicht** selbst ableitet.
@@ -598,32 +600,41 @@ CURA: Final[tuple[Row, ...]] = (
 #:
 #: Hier stehen nur die **reinen Kopien**; was Cura rechnet, rechnet
 #: :func:`app.core.export.handover._cura_dependants` nach. Absichtlich nicht
-#: dabei: ``acceleration_travel`` (Cura leitet sie nur beim Spiralisieren aus
-#: der Druckbeschleunigung ab, sonst sind es feste 5000) und alles am Prime
-#: Tower, den ein Lauf mit einem Extruder nie baut.
+#: dabei: alles am Prime Tower, den ein Lauf mit einem Extruder nie baut.
+#:
+#: **Zwei Zeilen folgen nicht Curas Formel, sondern den Werksprofilen**
+#: (Stufe D, 27.09.2026). ``acceleration_travel`` leitet Cura nur beim
+#: Spiralisieren aus der Druckbeschleunigung ab, sonst fährt es feste 5000 —
+#: Elegoo setzt in Cura dieselbe Formel ohne Bedingung, Orca fährt am
+#: Ender-3 V3 12 000. Und die erste Schicht hat eine eigene Beschleunigung
+#: (``acceleration_layer_0`` aus ``PrinterProfile.first_layer_acceleration``,
+#: gesetzt in ``handover._for_speeds``); die Raft-Basis gehört zu ihr, denn
+#: sie ist die erste Schicht.
 CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
     "acceleration_print": (
         "acceleration_flooring",
         "acceleration_infill",
         "acceleration_ironing",
-        "acceleration_layer_0",
-        "acceleration_print_layer_0",
         "acceleration_roofing",
-        "acceleration_skirt_brim",
         "acceleration_support",
         "acceleration_support_bottom",
         "acceleration_support_infill",
         "acceleration_support_interface",
         "acceleration_support_roof",
         "acceleration_topbottom",
+        "acceleration_travel",
         "acceleration_wall",
         "acceleration_wall_x",
         "acceleration_wall_x_flooring",
         "acceleration_wall_x_roofing",
         "raft_acceleration",
-        "raft_base_acceleration",
         "raft_interface_acceleration",
         "raft_surface_acceleration",
+    ),
+    "acceleration_layer_0": (
+        "acceleration_print_layer_0",
+        "acceleration_skirt_brim",
+        "raft_base_acceleration",
     ),
     "acceleration_wall_0": ("acceleration_wall_0_flooring", "acceleration_wall_0_roofing"),
     "bottom_layers": ("initial_bottom_layers",),
@@ -679,7 +690,6 @@ CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
     "retraction_hop": ("retraction_hop_after_extruder_switch_height",),
     "retraction_speed": ("retraction_prime_speed", "retraction_retract_speed"),
     "speed_layer_0": ("skirt_brim_speed", "speed_print_layer_0"),
-    "speed_print": ("speed_support", "speed_support_infill"),
     "speed_topbottom": ("speed_flooring", "speed_roofing"),
     "speed_wall_0": ("speed_wall_0_flooring", "speed_wall_0_roofing"),
     "speed_wall_x": ("speed_wall_x_flooring", "speed_wall_x_roofing"),
@@ -774,7 +784,6 @@ CURA_UNTOUCHED: Final[dict[str, str]] = {
     "raft_base_infill_overlap_mm": "die Überlappung dahinter steht auf 0, gerechnet bleibt 0.",
     "raft_interface_infill_overlap_mm": "wie oben",
     "raft_surface_infill_overlap_mm": "wie oben",
-    "acceleration_travel": "Cura leitet sie nur beim Spiralisieren ab; sonst sind es feste 5000.",
     "zig_zaggify_infill": "wird falsch für jedes Muster, das Solidon anbietet — die Vorgabe.",
 }
 
@@ -789,12 +798,6 @@ CURA_INFILL_CROSSINGS: Final[dict[str, float]] = {
     "lines": 1.0,
     "gyroid": 1.0,
 }
-
-#: Dasselbe für die Stützfüllung, je Stützart. ``grid`` kreuzt sich in jeder
-#: Schicht, und die fdmprinter-Definition rechnet ``support_line_distance``
-#: dafür mit dem Faktor zwei (nachgelesen in Cura 5.13); ohne Eintrag gilt
-#: eins — beim Baum bleibt Curas ``zigzag``, eine Linienschar.
-CURA_SUPPORT_CROSSINGS: Final[dict[str, float]] = {"grid": 2.0}
 
 #: Wie ein Material beim Slicer heißt. Fast immer die Solidon-Kennung in
 #: Großbuchstaben — nur wo die Schreibweisen auseinandergehen, steht ein
@@ -931,17 +934,20 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
             "retraction.wipe",
             "filament.density",
             "filament.cost_per_kg",
-            # CuraEngine bekommt ein STL, und darin reist keine Stützsperre.
-            "support.block_channels",
+            # Den Volumenstrom liest CuraEngine nicht; er wirkt nur über die
+            # Tempi, die Solidon danach deckelt.
+            "filament.max_flow",
         }
     ),
     "other": frozenset(),
 }
 
-#: Einstellungen, die nicht als Wert reisen, sondern als **Geometrie** in der
-#: 3MF-Baugruppe (``writer.write_assembly``) — die Messung über ``values_for``
-#: sieht sie deshalb nicht. ``support.block_channels`` wird die Stützsperre,
-#: ein ``SupportBlocker``-Bereich, den PrusaSlicer und die Orca-Familie lesen.
+#: Einstellungen, die nicht als Wert reisen, sondern als **Geometrie**
+#: (``writer.write_assembly``) — die Messung über ``values_for`` sieht sie
+#: deshalb nicht. ``support.block_channels`` wird die Stützsperre: in der
+#: 3MF-Baugruppe für PrusaSlicer und die Orca-Familie (:func:`helpers_as_parts`),
+#: für CuraEngine als eigenes Netz mit ``anti_overhang_mesh``
+#: (:func:`takes_mesh_settings`).
 AS_GEOMETRY: Final[frozenset[str]] = frozenset({"support.block_channels"})
 
 
@@ -1092,12 +1098,11 @@ def takes_a_machine_profile(flavour: SlicerFlavour) -> bool:
        statt geerbt, nicht das Profil des Herstellers —, und die Kommandozeile
        reicht beide zusammen mit einem Semikolon getrennt weiter.
 
-    Cura und PrusaSlicer bekommen ihre Maschinenseite dagegen von Solidon
-    selbst (:func:`_machine_keys`): Bauraum, Düse und Bettform aus dem eigenen
-    Druckerprofil, und für PrusaSlicer ist eine ``.ini`` damit eigenständig
-    lauffähig — eine Datei, keine zwei. Dass dort kein fremdes Profil steht,
-    ist die Bauart und kein Mangel — wer es als Mangel meldet, warnt bei jedem
-    Export ohne Anlass (:func:`machine_missing`).
+    PrusaSlicer bekommt seine Maschinenseite dagegen von Solidon selbst
+    (:func:`_machine_keys`): Bauraum, Düse und Bettform aus dem eigenen
+    Druckerprofil, und eine ``.ini`` ist damit eigenständig lauffähig — eine
+    Datei, keine zwei. Cura bekommt seine aus einer Druckerdefinition seiner
+    Installation (:func:`machine_from_definition`).
 
     **Beide Fragen fallen heute zusammen, aber nicht aus Notwendigkeit:** Eine
     künftige Familie mit eigenem Maschinenbestand, aber einer einzigen
@@ -1107,6 +1112,24 @@ def takes_a_machine_profile(flavour: SlicerFlavour) -> bool:
     eines für die Dateizahl.
     """
     return flavour == "orca"
+
+
+def machine_from_definition(flavour: SlicerFlavour) -> bool:
+    """Kommt die Maschine dieses Slicers aus einer Druckerdefinition seiner Installation?
+
+    Nur bei CuraEngine. Solidon wählt dort die Definition des Druckers
+    (``PrinterProfile.cura_definition``), CuraEngine löst ihre Erbkette
+    selbst auf, und Start- und Endcode kommen mit gefüllten Platzhaltern als
+    eigene Werte dazu (``handover._cura_machine``). Führt die Installation den
+    Drucker nicht, bleibt es bei ``fdmprinter`` — und das ist ein Mangel, den
+    ``handover.machine_missing`` benennt: Der Druck beginnt ohne den Startcode
+    des Herstellers, ohne Spüllinie und ohne Bettnetz.
+
+    Die Orca-Familie lädt ihre Maschine als Profil
+    (:func:`takes_a_machine_profile`), PrusaSlicer bekommt sie von Solidon in
+    seiner ``.ini``.
+    """
+    return flavour == "cura"
 
 
 def reads_settings_from_project_file(flavour: SlicerFlavour) -> bool:
@@ -1180,6 +1203,19 @@ def helpers_as_parts(flavour: SlicerFlavour) -> bool:
     bitgleich, PrusaSlicer auf 0,1 %).
     """
     return flavour == "orca"
+
+
+def takes_mesh_settings(flavour: SlicerFlavour) -> bool:
+    """Bekommt dieser Slicer jedes Teil als eigenes Netz, mit Werten nur für dieses Netz?
+
+    Nur CuraEngine: Ein ``-s`` nach ``-l`` gilt dem zuletzt geladenen Netz
+    (``CommandLine.cpp``). So reist die Stützsperre als eigenes Netz mit
+    ``anti_overhang_mesh`` — gemessen im Prüfbericht Cura (Abschnitt 1.5): 18 476
+    Stützbewegungen wurden 0, die Modellbahn blieb gleich —, und Stufe E des
+    Konzepts setzt dort ``support_enable`` je Teil. Die Orca-Familie und
+    PrusaSlicer tragen dasselbe in ihrer 3MF-Beilage (:func:`helpers_as_parts`).
+    """
+    return flavour == "cura"
 
 
 def knows_plates(flavour: SlicerFlavour) -> bool:

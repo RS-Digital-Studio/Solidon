@@ -70,8 +70,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | Entschieden mit dem Konzept Herstellerprofil (Entscheidung G): ohne Klick kein Brim je Teil mehr (`aed31c787`, im ElegooSlicer an Platte und Schüssel derselbe Rand wie mit Elegoos Profil allein); offen die Zeile je Teil im Druckdialog und das Schreiben je Teil — Stufe E von [RM-281](#rm-281) |
 | [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt, 4 Abstürze am zweifarbigen Besteckeinsatz sind ein Fehler von ElegooSlicer/OrcaSlicer (Originalprojekt stürzt ohne Solidon ab). Offen für Robert: den Fehler dort melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für die Orca-Familie auf Baumstützen ausweicht |
 | [RM-255 — Ein Drucker ohne Tempodaten überschreibt den gewählten Herstellerprozess mit 40 mm/s](#rm-255) | Geometrie, Erkennung und Druckvorbereitung | Orca-Familie gelöst mit Stufe B (`aed31c787`): auf einem Herstellerprozess schreibt Solidon kein Tempo, das niemand gewählt hat — gemessen am allgemeinen Drucker mit Elegoos Prozess für den Centauri Carbon (160/200/200, Leerfahrt 500 wie im Profil); offen PrusaSlicer mit Stufe C von [RM-281](#rm-281) |
-| [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Beauftragt mit dem Konzept Herstellerprofil (Entscheidung G: Sperrnetz bei CuraEngine), gebaut wird es mit Stufe E von [RM-281](#rm-281) |
-| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A und B stehen und sind im Slicer abgenommen (`aed31c787`); als Nächstes C (PrusaSlicer auf dem Herstellerbündel), dann E (je Teil) und F (Stufe wählt Prozess); D (Cura mit Maschine) läuft; danach Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
+| [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Konsolenweg gebaut mit Stufe D (`400dde0e2`, Waschschüssel: Stütze 38 % kürzer, Wände gleich); offen Curas Fenster, das die Sperre nicht bekommt (Stufe E von [RM-281](#rm-281)) |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A, B und D stehen und sind im Slicer abgenommen (`aed31c787`, Cura `c667d7dd5`); als Nächstes C (PrusaSlicer auf dem Herstellerbündel), dann E (je Teil) und F (Stufe wählt Prozess); danach Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
 | [RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie schreibt](#rm-282) | Geometrie, Erkennung und Druckvorbereitung | Anycubic Kobra 2 in OrcaSlicer (Prozente in Feldern ohne Prozent: Dialog zeigt Solidons Wert, gedruckt wird Orcas Vorgabe) und Bambus Listen je Düsenvariante mit High-Flow-Düse — beides messen, dann Rücklesung und Schreibweise festlegen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
@@ -2132,7 +2132,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
 <a id="rm-257"></a>
 
-- [ ] **RM-257 — Kanäle frei halten auch für Cura.** Aus der Durchsicht v0.5.1 (druck).
+- [~] **RM-257 — Kanäle frei halten auch für Cura.** Aus der Durchsicht v0.5.1 (druck).
   Nicht gebaut, weil es eine neue Fähigkeit ist und nicht die Behebung einer Zusage: Der
   Changelog verspricht Cura nichts, und seit `12b7e9174` sagt der Druckdialog, wo Cura
   die Kanäle von Hand sperrt (Stützblocker im Cura-Fenster). CuraEngine nimmt nach `-l
@@ -2140,6 +2140,14 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   ist Curas Stützsperre — damit bekäme die Konsole dieselbe Sperre, das Cura-Fenster
   (STL) nicht. Abnahme: Okarina in CuraEngine mit und ohne, Modellbahn gleich, Stütze im
   Kanal weg.
+
+  **Für den Konsolenweg gebaut mit Stufe D** (`400dde0e2`, gemergt mit `c667d7dd5`): Jedes
+  Teil geht als eigenes Netz in CuraEngine, jede Sperre als Netz mit
+  `anti_overhang_mesh`. Gemessen an der Waschschüssel statt der Okarina, in CuraEngine
+  5.13 am K1 Max, Neptune 4 und Centauri Carbon 2: Stütze 38 % kürzer, Wände auf 0,1 m
+  gleich. **Offen:** Curas Fenster öffnet das zusammengelegte STL und bekommt die Sperre
+  nicht, der Exportbefund sagt es dem Kunden. Der Weg dorthin, eine 3MF mit der Sperre
+  als Objekt, gehört zu Stufe E von [RM-281](#rm-281).
 
 <a id="rm-281"></a>
 
@@ -2167,12 +2175,17 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     eigenen Wahl, die einen Filamentwechsel überdauert (H12), und eine
     Spulenübersteuerung schreibt ihre ganze Gruppe über das Herstellerfilament, auch
     die Werte, die niemand geändert hat (H15) — beides an das Filament binden.
-  - **D** CuraEngine mit der Maschine des Druckers: gebaut im Zweig `cura-maschine`
-    (neun Commits, Tor grün, Messung in CuraEngine 5.13; Bericht
-    `output/review/cura-paket-2026-09-27/bericht.md`), Merge nach A+B.
+  - **D steht:** CuraEngine bekommt die Maschine des Druckers (neun Commits im Zweig
+    `cura-maschine`, mit A+B zusammengeführt in `c667d7dd5`; Bericht
+    `output/review/cura-paket-2026-09-27/bericht.md`). Die Messung in CuraEngine 5.13 an
+    Minigolf-Körper und Waschschüssel über acht Drucker ist vor und nach dem Merge gleich.
+    Offen daraus: Curas Fenster bekommt die Stützsperre nicht (gehört zu E). Der Startcode
+    der Gemeinschaftsdefinition des SV06 setzt `M201 X500 Y500` und `M204 P500`, das
+    kennt Curas Zeitschätzung nicht, der Druck dauert länger als angezeigt. Die Tempi des
+    MINI+ in `printers.toml` stammen aus zwei verschiedenen Prozessen (mit C nachziehen).
   - **E** Je Teil: `for_part` für alle geometrischen Pfade, Objektwerte bei Orca und Prusa,
-    Netze je Teil und das Sperrnetz bei Cura (RM-257), die Zeile je Teil im Druckdialog
-    (RM-250). Abnahme: Minigolf-Satz mit einem gestützten Körper — Stütze nur an ihm, Brim
+    Werte je Netz bei Cura (die Netze je Teil stehen seit D, `CuraMesh.settings`), die
+    Sperre auch für Curas Fenster (RM-257), die Zeile je Teil im Druckdialog (RM-250). Abnahme: Minigolf-Satz mit einem gestützten Körper — Stütze nur an ihm, Brim
     der übrigen geschlossen.
   - **F** Die Stufe wählt den Herstellerprozess; dazu die Vorwahl im Dialog ohne Rückfall
     auf den ersten Prozess der Liste.
