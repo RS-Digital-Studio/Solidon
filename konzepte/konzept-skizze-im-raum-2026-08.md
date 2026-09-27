@@ -328,7 +328,7 @@ eins.
 Berechnete auch anzeigt. Dafür gibt es einen Prüfstand mit echtem Fenster und
 `QTimer.singleShot`-Kette (nicht Warteschleife — die hängt dort), und der
 zugehörige Schritt steht als manueller Schritt im Paket, nicht als grüner
-Test. `.claude/rules/oberflaeche.md`, Abschnitt „Was nur das Bild zeigt".
+Test. `.claude/rules/ansicht.md`, Abschnitt „Was nur das Bild zeigt".
 
 ### C — Der Zeiger trifft die Ebene rechnerisch, nicht über einen Picker
 

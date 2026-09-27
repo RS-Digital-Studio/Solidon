@@ -24,8 +24,8 @@ Ist-Zustand als erster Zeile:
   Liste und damit sichtbar den Stand.
 
 Eifrig und träge werden unterschieden, weil nur eifrig ein Kreis ist, der beim
-Import zuschlagen kann; ein Import in einer Funktion ist Kopplung, kein Kreis
-(``.claude/memory/architektur-sonde-type-checking.md``). Importe unter
+Import zuschlagen kann; ein Import in einer Funktion ist Kopplung, kein Kreis.
+Importe unter
 ``TYPE_CHECKING`` zählen hier nicht: Sie laufen nie. Relative Importe werden
 aufgelöst, nicht übersprungen — ``from ..geom import x`` verlässt sein Paket
 genauso wie die ausgeschriebene Form.

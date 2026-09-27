@@ -52,6 +52,15 @@ gibt es hier keine Themen-Unterordner**, obwohl das Schwesterprojekt Assist
 sie führt: Ein Umzug bräche dieselben sechsundachtzig Verweise, und der
 Gewinn — Auffindbarkeit — steht in dieser Tabelle.
 
+## Begründungen zu Regeln und Karten
+
+`begruendungen/` trägt, was aus den Regeln (`.claude/rules/`) und Karten
+(`<verzeichnis>/CLAUDE.md`) herausgenommen wurde, als sie auf das
+Einzuhaltende verdichtet wurden: Messwerte, Anlässe, widerlegte Annahmen und
+Roberts Begründungen, wortgetreu und unter denselben Überschriften wie die
+Regel. Je Quelle eine Datei — `regel-<name>.md`, `karte-<pfad>.md`. Die Regel
+sagt, **was** gilt; hier steht, **warum** — mit dem Stand ihres Tages.
+
 ## Der Stand, Dokument für Dokument
 
 Sortiert nach Brauchbarkeit von heute aus, nicht nach Datum: oben, was noch

@@ -92,7 +92,7 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
-- In ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale il profilo del produttore. Solidon scrive solo ciò che modificate o accettate dai suggerimenti.
+- In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale il profilo del produttore. Solidon scrive solo ciò che modificate o accettate dai suggerimenti.
 - Il livello «Standard» stampa con velocità e accelerazioni del profilo del produttore invece di frenare tutto a 40 mm/s. Su una Centauri Carbon 2 i pezzi grandi richiedono il 40-50 % di tempo in meno.
 - Anche la velocità degli spostamenti a vuoto viene dalla stampante: la Centauri Carbon 2 si sposta a 500 invece di 150 mm/s, perché l'ugello coli meno lungo il tragitto.
 - Solidon prende l'angolo di sbalzo dal profilo del produttore della stampante: 60 invece di 45 gradi per Elegoo, Bambu e Creality. Smussi e pendenze lievi non ricevono più supporti inutili.
@@ -101,6 +101,11 @@ scrive in `website/version.json`.
 - Senza «Applica i suggerimenti» nessun pezzo riceve più un brim senza chiederlo, né all'esportazione né nel passaggio allo slicer.
 - I progetti della 0.5.0 stampano alla velocità della vostra stampante. Ciò che avevate impostato voi resta.
 - La velocità del primo strato vale ora anche per il suo riempimento. Prima lo slicer stendeva il fondo alla velocità del produttore, 105 mm/s sulla Centauri Carbon 2.
+- Con PrusaSlicer la stampa inizia ora come con Prusa stessa: con livellamento del piano, linea di spurgo e controllo della stampante.
+- Il PETG arriva ora a PrusaSlicer come PETG, non più come PLA.
+- Se il primo strato ha passaggi stretti, Solidon propone di stenderlo a 50 mm/s. Così le linee corte aderiscono meglio.
+- Dove il vostro slicer limita già la velocità in base al flusso volumetrico, Solidon non propone più un proprio limite di velocità.
+- Se adottate i valori di un profilo di filamento e poi cambiate filamento, tornano a valere i valori del nuovo.
 - Il primo strato stampa ora linee larghe quanto il profilo della vostra stampante, di solito 0,5 mm con ugello da 0,4. Con Cura la testina non va più a passo d'uomo tra una e l'altra.
 - Con Cura la stampa inizia ora con il codice di avvio della vostra stampante, come dal produttore. Se Cura non conosce la stampante, Solidon ve lo dice.
 - Con Cura il primo strato usa ora l'accelerazione del profilo del produttore invece dell'accelerazione di stampa piena.

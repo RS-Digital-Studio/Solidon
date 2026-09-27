@@ -1,23 +1,25 @@
 ---
-description: "Die Sprachkataloge — eine Sprache ist eine Datei, verbindliche Glossare je Sprache, neue Schlüssel ziehen überall nach"
+description: "Die Sprachkataloge — eine Sprache ist eine Datei, was nie übersetzt wird, verbindliche Glossare je Sprache und der Genus, der durch den Satz zieht, neu übersetzen statt flicken, neue Schlüssel ziehen überall nach"
 paths:
   - "app/i18n/**"
 ---
 
 # Regeln für die Sprachkataloge
 
-Eine Sprache ist **eine Datei** in `app/i18n/locales/` und sonst nichts.
-`available_languages()` liest das Verzeichnis; Sprachauswahl, Einsammler,
-Handbuch, Abbildungen und Prüfung finden sie von dort. Wer eine Sprache
-hinzufügt, legt eine Datei ab — es gibt keine zweite Stelle, die nachgezogen
-werden müsste.
-
-Derzeit sechs: Deutsch als Quelle, dazu `en`, `es`, `fr`, `it`, `pt`.
+Eine Sprache ist **eine Datei** in `app/i18n/locales/` und sonst nichts
+(`AGENTS.md`, Sprachregelung): `available_languages()` liest das Verzeichnis,
+Sprachauswahl, Einsammler, Handbuch, Abbildungen und Prüfung finden sie dort —
+eine zweite Stelle zum Nachziehen gibt es nicht. Derzeit sechs: Deutsch als
+Quelle, dazu `en`, `es`, `fr`, `it`, `pt`.
 
 **Unvollständig wird keine eingecheckt.** `tests/test_translations.py` prüft
-jede gefundene Datei — Vollständigkeit, verwaiste Schlüssel, und dass keine
-Sprache mitten im Satz auf Deutsch zurückfällt. Eine halb übersetzte Datei ist
-ein roter Lauf, kein Zwischenstand.
+jede gefundene Datei auf Vollständigkeit, verwaiste Schlüssel und Rückfall ins
+Deutsche mitten im Satz — eine halb übersetzte Datei ist ein roter Lauf, kein
+Zwischenstand.
+
+Wie ein Text für den Kunden klingt (kurz, nicht nach einem Sprachmodell,
+„Version“): `oberflaeche.md` unter „Texte, die der Kunde liest“. Warum:
+`konzepte/begruendungen/regel-uebersetzung.md`.
 
 ## Was nie übersetzt wird
 
@@ -38,8 +40,22 @@ ein roter Lauf, kein Zwischenstand.
 ## Glossare je Sprache — verbindlich
 
 Wer einen neuen Schlüssel nachträgt, nimmt diese Wörter. Sie sind über den
-gesamten Bestand durchgehalten; ein abweichendes Synonym lässt die Oberfläche
-in sich auseinanderlaufen, ohne dass ein Test es merkt.
+ganzen Bestand durchgehalten; ein abweichendes Synonym lässt die Oberfläche
+auseinanderlaufen, ohne dass ein Test es merkt.
+
+**Vorher lesen: Der Genus zieht durch den Satz.** `bloque`, `bloc` und `bloco`
+sind maskulin, `pieza`, `pièce` und `peça` feminin. Wer beim Baustein nur das
+Substantiv tauscht, hinterlässt einen Satz, der wie eine geprüfte Übersetzung
+aussieht und in sich nicht stimmt — schlechter als der Fehler davor. Artikel,
+Partizipien und Pronomen ziehen mit („Esta pieza … la rechazaría“ → „Este
+bloque … lo rechazaría“, „partagée telle quelle“ → „partagé tel quel“, „la
+suya“ → „el suyo“). Das Italienische bleibt maskulin (`componente`, `blocco`)
+und verführt so zum Schluss, ein Wörtertausch genüge. Ersetzt wird nur, wo die
+Quelle „Baustein“ sagt: `pieza`/`pièce`/`peça` für das Werkstück (Teil) und
+`componenti normalizzati` für Normteile bleiben. Geprüft wird je Sprache über die Schlüssel
+mit „Baustein“ — dort steht kein anderer Begriff mehr; die Website zitiert
+Dialogtitel wörtlich, `website/{es,fr,it,pt}/index.html` und `features.html`
+ziehen nach.
 
 **Spanisch:** Operation→operación · Transaktion→transacción · Baustein→bloque ·
 Teil→pieza · Passung→ajuste · Spiel→holgura · Presspassung→ajuste a presión ·
@@ -90,12 +106,11 @@ Materialprofil→profilo del materiale · Op-Stapel→pila.
 Ton: Imperativ 2. Person bei Bedienaktionen, volle Akzente,
 Anführungszeichen «…» (so steht es im ganzen Bestand).
 
-**Eine italienische Kollision, die vorentschieden ist.** „Bearbeiten" (Edit)
-steht im Bestand als **Modifica**. Damit ist das naheliegende Wort für
-„Ändern" (Modify) verbraucht — zwei Menüs dürfen nicht gleich heißen.
-Festgelegt: **Ändern → Cambia**. Wer den Menütext oder eine Handbuchstelle mit
-*Ändern → …* übersetzt, nimmt Cambia. In den anderen drei Sprachen tritt die
-Kollision nicht auf (editar/modificar, édition/modifier, editar/modificar).
+**Eine italienische Kollision ist vorentschieden:** „Bearbeiten“ (Edit) heißt
+im Bestand **Modifica**, zwei Menüs dürfen nicht gleich heißen — also **Ändern →
+Cambia**, auch in Handbuchstellen mit *Ändern → …*. In den anderen drei
+Sprachen tritt sie nicht auf (editar/modificar, édition/modifier,
+editar/modificar).
 
 **Portugiesisch:** Operation→operação · Transaktion→transação ·
 Baustein→bloco · Teil→peça · Passung→ajuste · Spiel→folga ·
@@ -114,21 +129,31 @@ Materialprofil→perfil de material.
 Ton: Orthographie nach Acordo Ortográfico 1990, europäisch geprägt aber in
 Brasilien lesbar, Infinitiv bei Bedienaktionen, volle Diakritika.
 
+## Übersetzen heißt neu schreiben, nicht flicken
+
+**Neu übersetzen, wenn es sauberer ist** (Entscheidung Robert). Ein
+Katalogschlüssel ist oft der ganze Text — ein Handbuchkapitel unter einem
+Schlüssel —, und ein Zusatz erzeugt einen neuen. Anhängen nur, wenn der Zusatz
+ein eigenständiger Absatz am Ende ist und die alte Übersetzung trägt (Absatzzahl
+und Ton verglichen; der neue Absatz wird frisch übersetzt). Neu übersetzen,
+sobald der Zusatz in den Text greift oder seine Aussage verschiebt — ein
+geflickter Text liest sich wie zwei Handschriften —, und immer, wenn die alte
+Übersetzung schwächer ist als das Deutsche: Der Kunde liest das Ganze, nicht den
+Diff. Der alte Schlüssel muss hinaus (`test_every_text_is_translated`).
+
+**Ein mehrsprachiges Bildschirmvideo übersetzt auch, was der Film selbst
+anlegt:** Objekt- und Parameternamen samt den `@`-Verweisen in allen
+Operationen sind Benutzereingaben, und die übersetzt die Anwendung nicht.
+Einblendungen, sichtbare Dialoge und Formeln werden gemeinsam geprüft; nur den
+Text über einer deutschen Aufnahme zu ersetzen reicht nicht.
+
 ## Neue Schlüssel nachtragen
 
-Der Normalfall: die Oberfläche bekommt einen Text, `en.json` wächst, die
-anderen fünf müssen nach. Dafür braucht es kein Verfahren — die neuen Texte in
-jede Katalogdatei eintragen, `test_translations.py` sagt, welche fehlen.
+Die neuen Texte in jede Katalogdatei eintragen — `test_translations.py` sagt,
+welche fehlen; ein eigenes Verfahren braucht es nicht. Wer eine ganze Sprache
+am Stück übersetzt, arbeitet gegen eine eingefrorene Basis: Der lebende Katalog
+wächst mitten im Lauf und verschiebt jede Indexangabe. Werkzeuge und Ablauf dafür
+stehen in der Historie unter `.claude/i18n-wip/` (bis Commit `93f0989`).
 
-Die vier Kataloge `es`, `fr`, `it` und `pt` sind am 13.08.2026 in einem Zug
-entstanden: acht Hintergrund-Agenten, je zwei pro Sprache, gegen eine
-eingefrorene Basis, weil der lebende Katalog mitten im Lauf um fünfzehn
-Schlüssel wuchs und jede Indexangabe darüber verschob. Wer so etwas noch
-einmal braucht — eine siebte Sprache am Stück —, findet Werkzeuge und
-Ablaufbeschreibung in der Historie unter `.claude/i18n-wip/`, bis
-Commit `93f0989`. Für alles Kleinere ist der Ordner nicht nötig, und deshalb
-liegt er nicht mehr im Baum.
-
-Was danach noch aussteht, ist kein Katalogthema: `tools/make_figures.py` und
-`tools/make_manual.py` erzeugen Handbuchbilder und -seiten je Sprache neu. Das
-läuft **nicht** offscreen (siehe `CLAUDE.md`) und ist ein eigener Schritt.
+Handbuchbilder und -seiten je Sprache erzeugen `tools/make_figures.py` und
+`tools/make_manual.py` — **nicht** offscreen, ein eigener Schritt (`/erzeugen`).

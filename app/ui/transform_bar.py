@@ -167,7 +167,7 @@ class TransformBar(QWidget):
         eingestellt, was er eingestellt hat (Regel 19).
 
         **Und ein wortloser Knopf trägt seinen Namen an drei Stellen**
-        (``oberflaeche.md``): im Barrierefreiheitsbaum, im Tooltip und in der
+        (``grenzen.md``): im Barrierefreiheitsbaum, im Tooltip und in der
         Statuszeile. Das Zeichen ist ein Punkt im Raster — das Einrasten
         selbst, nicht ein Zahnrad: Ein Zahnrad hieße „Einstellungen" und stünde
         damit für alles.

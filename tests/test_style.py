@@ -597,7 +597,7 @@ def test_no_window_wears_an_accent_it_never_asked_for(qt_app: object) -> None:
 
     * **Angezeigt wird.** Vor dem ``show()`` meldet ``isDefault()`` überall
       ``False``; ein Test ohne Anzeigen ist grün und prüft nichts. Dieselbe
-      Familie wie „Qt lügt vor dem Anzeigen" in ``oberflaeche.md``.
+      Familie wie „Qt lügt vor dem Anzeigen".
     * **Gefragt wird nach der Rolle, nicht nach dem Text.** „Schließen" heißt
       in sechs Sprachen sechsmal anders; ``QDialogButtonBox.buttonRole``
       antwortet in allen.

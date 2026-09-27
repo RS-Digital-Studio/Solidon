@@ -339,7 +339,7 @@ def test_the_fast_decimation_is_the_display_path_and_keeps_a_hole_readable(
 
     Die grobe Vorschau verkleinert große Körper damit (Entscheidung Robert,
     23.09.2026): Kern nach Sehnenfehler, dann Raster, ohne Messung. Geprüft
-    wird, was die Tabelle der groben Stufe in ``wartezeit.md`` zusagt — die
+    wird, was ``wartezeit.md`` unter „Die grobe Vorschaustufe“ zusagt — die
     Oberfläche bleibt innerhalb des Sehnenfehlers, mit dem beide Kerne
     tessellieren, und eine Bohrung danach bleibt eine Bohrung: Geschlecht
     eins, erkannter Durchmesser, derselbe Abtrag wie am genauen Körper. Und

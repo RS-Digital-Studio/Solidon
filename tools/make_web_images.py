@@ -638,8 +638,8 @@ def take_screens(language: str) -> list[Path]:
     werden die Nutzerverzeichnisse deshalb **in der Umgebung des Kindes**, also
     vor dessen erstem Import: Im eigenen Prozess käme jede Umbiegung nach
     ``import app`` zu spät, weil ``filaments`` den Pfad über einen lokal
-    gebundenen Namen auflöst (Gedächtnis: ``config-dir-hat-keinen-schalter``,
-    zweimal zugeschnappt). Dieselbe Bauart wie ``make_feature_images.py``.
+    gebundenen Namen auflöst (zweimal
+    zugeschnappt). Dieselbe Bauart wie ``make_feature_images.py``.
     """
     with tempfile.TemporaryDirectory(prefix="solidon-web-fenster-") as room:
         environment = dict(os.environ)

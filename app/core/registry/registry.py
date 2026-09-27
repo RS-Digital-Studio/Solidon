@@ -483,8 +483,8 @@ VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
         # Sie war die erste der Gruppe mit einem **Eingang**: `consumes=1`,
         # `applies_to=("face",)`. Ein Umschalter, dessen Ziel eine Bedingung
         # hat, fragt sie vorher — sonst führt er in eine Auswertung, die
-        # anhält (`oberflaeche.md`, „Ein Umschalter, dessen Zwilling eine
-        # Bedingung hat"). Der Dialog sperrt den Eintrag deshalb, solange kein
+        # anhält (`grenzen.md`, „Ein Zwilling, der eine Bedingung hat, fragt
+        # sie — vorher"). Der Dialog sperrt den Eintrag deshalb, solange kein
         # Körper gewählt ist, und nennt den Grund.
         #
         # **Und die drei Schnitte mit Werkzeug gehören seit P6.5 dazu**, je

@@ -162,7 +162,7 @@ Weitere Funktionen: `material_temperature` :162 (ungedeckelter Materialwunsch f�
 | 20→21 | `_add_spool_bindings` :548 | |
 | 21→22 | `_add_slot_profile_bindings` :557 | `slot_profile_bindings: None`, also alte Positionsfolge |
 
-Ein eigener Formatschritt für die Lüfterkurve existiert nicht. Die Begründung steht in `.claude/rules/dateiformat.md:495–503`.
+Ein eigener Formatschritt für die Lüfterkurve existiert nicht. Die Begründung steht in `.claude/rules/dateiformat.md` unter „Ein Wert gehört an einen Schlüssel, der dasselbe meint“ (zweiter Absatz).
 
 ### 1.4 Wer bei `None` auflöst und wer implizit schreibt
 

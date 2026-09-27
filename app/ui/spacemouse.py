@@ -118,7 +118,7 @@ DEADZONE: Final = 0.03
 #: das ist der Sensor, kein Filter fängt es, ohne die Drehung mitzunehmen.
 #: Der Preis ist derselbe wie vorher: Eine bewusst kleine Nebenbewegung unter
 #: diesem Anteil geht verloren, zwischen den Grenzen kommt sie gedämpft an.
-#: Am Gerät ist die Rampe noch nicht bestätigt (siehe ``ansicht.md``).
+#: Am Gerät ist die Rampe noch nicht bestätigt (siehe ``kamera.md``).
 CROSSTALK_SILENT: Final = 0.15
 #: Ab diesem Anteil der stärksten Achse ist eine Nebenachse gemeint und geht
 #: ungedämpft mit; das alte Viertel liegt genau in der Mitte des Bandes.

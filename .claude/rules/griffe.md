@@ -1,575 +1,291 @@
 ---
-description: "Die Griffe in der Szene — der Langlochgriff zieht die Form und nicht die Lage, der Bewegen-Griff ist eigener Code, und was an einem Griff steht, ist ASCII"
+description: "Die Griffe in der Szene — Vorfahrt der Zeigerereignisse, Bewegen- und Skaliergriff als eigener Code, der Griff am gewählten Merkmal und am Baustein, der Langlochgriff zieht die Form und nicht die Lage, Maße und Platzierung am Merkmal, und was an einem Griff steht, ist ASCII"
 paths:
   - "app/ui/slot_handle.py"
   - "app/ui/viewport.py"
   - "app/ui/transform_bar.py"
+  - "app/ui/render/gizmo.py"
+  - "app/ui/scale_widget.py"
+  - "app/ui/placement_flow.py"
 ---
 
 # Regeln für die Griffe in der Szene
 
-Was der Nutzer unmittelbar am Modell anfasst: der Griff am Langloch, der
-Bewegen-Griff, die Beschriftung daran. **Ausgegliedert aus `ansicht.md` am
-18.09.2026** — die übrigen Ansichtsregeln gelten weiter und laden zusätzlich,
-sobald jemand am Viewport arbeitet. Der Grund für den Schnitt: Diese vierzig
-Kilobyte gelten für zwei Dateien, luden aber für dreiundzwanzig.
+Was der Nutzer unmittelbar am Modell anfasst: Bewegen-, Skalier- und
+Langlochgriff, die Maße daran, ihre Beschriftung. `ansicht.md` und `kamera.md`
+laden am Viewport mit. Anlässe und Messwerte:
+`konzepte/begruendungen/regel-griffe.md`.
 
-## Der Langlochgriff zieht die Form, nicht die Lage (10.09.2026)
+## Ein Griff steht vor allem, was über der Ansicht liegt
 
-Der Bewegungsgriff schiebt und dreht, der Würfel skaliert den Körper — und aus
-einer Bohrung wird damit nie ein Langloch. Der Weg dorthin war ein Dialog mit
-zwei Zahlen, und Robert hat ihn am gefahrenen Weg abgelehnt: „das langloch soll
-auch über den viewport einstellbar/erstellbar/änderbar von bohrung zu langloch
-sein". `app/ui/slot_handle.py` ist die Antwort — zwei Knöpfe an den Enden des
-Lochs, gezogen wird in der Ebene seiner Mündung.
+`Viewport._dispatch_pointer` hat eine feste Vorfahrt: **Griffe, dann eine
+laufende Platzierung, dann der Zeiger, zuletzt die Kamera.** Stünde die
+Platzierung vorn, nähme sie jede Bewegung als Zielversuch, und die Griffe wären
+sichtbar und tot.
 
-Für die Griffe gilt:
+* **Verschluckt wird nichts**: `move` nimmt ein Griff nur gedrückt, `press` nur
+  über einem getroffenen Teil.
+* **Mit gedrückter Taste wird kein Griff gefragt, der nicht selbst zieht**
+  (`pressing`) — wer hält, führt Kamera oder Körper, und jede Frage kostet ein
+  `pick_item`. Der ziehende Griff bekommt seine Bewegungen weiter
+  (`test_a_held_button_leaves_the_grips_out_of_the_way`); freies Schweben ohne
+  Taste hebt weiter hervor.
+* **Die zweite Ebene ist Qt**: Ein Widget über der Renderfläche bekommt die
+  Ereignisse zuerst. Wer etwas darüberlegt, hält `Viewport.gizmo_reach()` frei,
+  wie `PlacementFlow` für seine Maßfelder.
+* **Betätigt ist ein Griff mit dem Weg, nicht mit dem Druck**: `CLICK_SLACK` wie
+  im Navigator (`kamera.md`, „Ein Klick ist ein Klick, auch mit Zittern“);
+  jenseits davon rechnet der Zug vom Druckpunkt.
+* `test_viewport_decisions.py` liest die Vorfahrt im Quelltext nach der Bauart
+  der Griff-Felder (`Gizmo` oder `…Handle`), nicht nach Namen.
 
-* **Der Formwechsel behält den begonnenen Entwurf.** Wird aus einer Bohrung
-  durch Ziehen ein Langloch, wechseln die Fachfelder zu Länge, Richtung und
-  Breite. Bereits geänderte Breite und Mitte gehen mit. Der neue Flächenbezug
-  beginnt an dieser Zielmitte, nicht erneut am ursprünglichen Loch. Solange
-  eine Tiefenänderung offen ist, bleibt deren Editor zuständig und der
-  Langlochzug wird mit dem vorhandenen Abschlusshinweis verworfen.
-* **Ein Feldwert überlebt den Neuaufbau seines Griffs.** Länge, Richtung und
-  effektive Breite werden an das gewählte Merkmal gebunden, bevor der Griff
-  aufgebaut wird. Panel und Maßgruppe übernehmen denselben vollständigen
-  Vorschauauftrag; ein Griffsignal darf keine zusätzliche Breite verlieren.
+## Der Bewegen-Griff ist eigener Code, kein fremdes Widget
 
-* **Der Winkel kommt aus einer Quelle.** Gezählt wird gegen die x-Achse von
-  `sketch.planes.frame_of` — dieselbe, gegen die `prepare.slot_profile`
-  schneidet und `prepare_ops.slot_angle_of` ein erkanntes Langloch nachmisst.
-  Eine eigene Achse in der Ansicht wäre ein Loch, das um einen Winkel neben dem
-  Umriss liegt, den der Kunde beim Ziehen gesehen hat — und kein Test über
-  Zahlen allein sähe es. `tests/test_slot_handle.py` schneidet deshalb wirklich
-  und misst die Richtung am erkannten Ergebnis nach.
-* **Der Umriss im Bild ist der Umriss des Schnitts.** `slot_outline` baut ihn
-  aus `slot_profile` und tastet dessen Bögen über `profile.arc_through` ab. Eine
-  zweite Konstruktion daneben liefe beim nächsten Zuwachs auseinander. Nur der
-  Kreis der runden Bohrung entsteht ohne `slot_profile` (das keinen Umriss
-  ohne Weg kennt) — gebaut wie ein Langloch mit zwei Flanken der Länge null,
-  **mit derselben Punktzahl**: Der Renderer tauscht beim Einrasten nur Punkte,
-  und eine andere Zahl wäre ein Fehler im nächsten `update_points`.
-* **Beim Längenziehen bleibt die Mitte stehen.** Der gegenüberliegende Knopf
-  spiegelt den gegriffenen. Ein zusätzliches Versetzen kommt vom Bewegungsgriff
-  oder den Lagefeldern und reist im selben Auftrag mit.
-* **Der Maßeditor einer Bohrung erscheint mit der Auswahl.** Die erste
-  Feld- oder Griffbetätigung beginnt den gebundenen Entwurf (§18.11).
-  **Betätigt ist ein Griff mit dem Weg, nicht mit dem Druck.**
-  `Viewport._dispatch_pointer` meldet `placementDragStarted` bei der ersten
-  Bewegung jenseits von `CLICK_SLACK` (`Gizmo.dragging`,
-  `SlotHandle.dragging`), auch für den Druck ins gewählte Loch
-  (`_pull_at_the_hole`). Ein Klick ohne Weg auf Griff oder Loch bewegt
-  nichts, meldet nichts und bindet nichts — die nächste Bohrung bleibt
-  wählbar. Bis zum 27.09.2026 kam die Meldung beim Drücken: Am Wabenhalter
-  hielt ein Klick auf die Mitte der gewählten Bohrung (dort beginnen die
-  Pfeile) die Auswahl fest, und die Statuszeile verlangte, eine Änderung zu
-  übernehmen, die es nicht gab (`test_render_gizmo.py`,
-  `test_a_click_on_the_placement_grip_does_not_bind_the_draft`). Der Satz
-  dazu geht mit dem Entwurf (`MainWindow.end_quiet_placement`).
-  `PlacementFlow` besitzt die Fachfelder und seine Platzierungsgriffe; der
-  allgemeine Merkmalsgriff bleibt dabei über `set_feature_gizmo_blocked`
-  gesperrt. Ein reiner Verschiebungsauftrag zeigt keine Drehringe.
-  Für weitere, noch nicht angeschlossene Merkmalsarten gilt der vorhandene
-  ausdrückliche Einstieg über *Im Bild einstellen*.
-* **Gesperrt heißt: ohne Pfeile, Ringe und Würfel — nicht ohne Knöpfe.**
-  Die Sperre über `set_feature_gizmo_blocked` und der Platzierungsgriff am
-  Werkzeugkörper nehmen dem Loch nur den Bewegungsgriff; Flächenscheibe und
-  die zwei Langlochknöpfe bleiben (`set_gizmo`, `only_knobs`), und
-  `grip_placement` baut sie nach dem ersten Griff wieder auf. Bis zum
-  21.09.2026 nahm die Sperre die Knöpfe mit, und mit dem Maßeditor fehlten sie
-  an jeder gewählten Bohrung (Robert: „wo sind eigentlich die markierungen um
-  es zum langloch zu ziehen?") — geprüft an zwei Bildern derselben Lage, am
-  Stand vor dem Editor genauso. Die Gizmo-Ansage bleibt dabei leer: Ein Satz
-  über Pfeile, die nicht da sind, wäre die falsche Auskunft.
-* **Und am Langloch stehen beide Griffe** — die Knöpfe für Länge und Richtung
-  und die Pfeile und Ringe des Bewegungsgriffs, seit es sich versetzen und
-  drehen lässt (RM-153). Der Ring um die Bohrachse dreht die Mittellinie.
-* **Solange die Platzierung läuft, ist ein Zug am Bewegungsgriff ein
-  Vorschlag** — wie am Langlochgriff. Pfeil: `featureMoveProposed`, Ring:
-  `featureTurnProposed`; die Zahlen landen in *Merkmal verschieben* bzw.
-  *Merkmal drehen*, der Griff bleibt an der neuen Stelle stehen
-  (`_grip_shift`, `move_proposal_waits()`), die Maßlinien folgen über
-  `PlacementFlow.move_to`, und erst das Übernehmen rechts macht einen Schritt
-  (Regel 2). Ohne Platzierung — an einem Zapfen, Kegel, einer Kugel, die
-  keinen Knopf ins Bild haben — bleibt der Zug ein Schritt wie seit dem
-  03.09.2026. Anlass: Robert, 11.09.2026, „nach dem verschieben verschwindet
-  das gizmo gleich ohne auf übernehmen zu klicken".
-* **Nach dem Übernehmen kommen Maße und Griffe wieder** — am selben Merkmal,
-  an seiner neuen Stelle (`MainWindow._measures_to_resume`, eingelöst in
-  `_show_feature_fields` über denselben Weg wie der Knopf). Jede Operation
-  beendet die Platzierung; wer aus ihr heraus übernommen hat, will danach
-  weiter im Bild arbeiten (Konzept Merkmalbedienung §4, Abnahme 1). Wechselt
-  das Merkmal dabei seinen Namen (`hole_1` → `slot_1`, zugesagt), findet
-  `_reselect_the_renamed` es an der Stelle wieder, die der Schritt genannt
-  hat — nach Baum **und** Ansicht, sonst geht die Nachwahl im Aufbau verloren.
-* **Ein wartender Langlochzug und ein Versetzen warten zusammen.** Der Zug am
-  Bewegungsgriff lässt den gezogenen Umriss stehen (`_end_drag` beendet ihn
-  nicht mehr, `_detach_gizmo` leert `_slot_target` nicht mehr; der neue Griff
-  trägt `_slot_waiting`), die Stelle geht in die Felder von *Zum Langloch
-  ziehen*, und `slot_hole` schneidet Länge und Stelle in **einem** Schritt
-  (`slotDragged` trägt die Stelle als viertes Argument). Verworfen wird der
-  Zug nur, wenn er selbst endet: Übernehmen, Escape (`cancel_slot_drag`),
-  Auswahlwechsel, Szenenaufbau (`drop_move_proposal`). Anlass: Robert,
-  11.09.2026, „das langloch ziehe und dann das langloch nochmal über das gizmo
-  verschieben will ist es wie abbrechen".
-* **Und die Maße bleiben dabei im Bild.** Die Länge wächst um die Mitte, die
-  Kantenmaße gelten ihr weiter; `PlacementFlow.redraw` hält Linien und Felder
-  der gebundenen Maßgruppe, solange der Zug wartet, und zeichnet sie bei jeder
-  Kameradrehung neu — nur der runde Umriss der Mündung weicht dem gezogenen
-  des Griffs. Bis zum 21.09.2026 nahm sie die nächste Kameradrehung mit
-  (Robert: „wenn wir das langloch ziehen und dann die ansicht drehen sind die
-  maße weg"). Ohne Maßgruppe — beim Setzen eines neuen Werkzeugs aus dem
-  Dialog — tritt die Platzierung weiter ganz zurück.
-* **Am Merkmal zielt die Platzierung nie.** Bis zum Abend des 11.09.2026 war
-  ein Klick neben dem Griff die Ansage, „woanders hinzuwollen": Die
-  Platzierung löste sich vom Merkmal, die Bohrungsvorschau klebte am Zeiger
-  wie beim Setzen einer neuen, und der Weg heraus war nicht zu finden
-  (Robert: „auf einmal war ich im modus eine neue Bohrung zu setzen … er
-  sollte an der stelle ja nichtmal kommen"). Wohin ein vorhandenes Loch soll,
-  sagen der Griff und die Felder rechts; ein Klick ins Bild gehört der Auswahl
-  (`PlacementFlow.pointer` gibt ihn im Zustand „sitzt am Merkmal" zurück).
-* **Escape verlässt die Maße** (`MainWindow._leave_the_measures`) — vor der
-  Auswahlstufe, wie jedes Werkzeug: Ein wartender Langlochzug und ein
-  vorgeschlagenes Versetzen werden verworfen, gerechnet ist bis dahin nichts;
-  die Auswahl bleibt, das nächste Escape geht die Stufe zurück.
-* **Die Maßlinien weichen dem Griff — soweit sie über ihn hinausreichen.**
-  Sie laufen alle in der Mitte des Merkmals zusammen, und dort sitzen Pfeile
-  und Ringe; die Maßtinte lässt das Stück in der Griffspanne weg
-  (`_Dimensions.clearing`, aus `gizmo_reach()` wie die Felder — die Aussparung
-  ist seit der Tinte im Renderer Kosmetik, die Striche nehmen keinen Klick
-  an). Eine Linie, von der außerhalb weniger als ein Pfeil bliebe, kommt
-  dagegen ganz, mit beiden Pfeilen: Nach dem Zug zum Langloch greift der
-  Griff über Knöpfe und Umriss hinaus, und ein Maß ohne Linie sagt nicht,
-  wohin es geht (Robert, 21.09.2026: „manche maßlinien fehlen aber"). Der
-  Umriss des Lochs bleibt darunter sichtbar; gegen Griff und Knöpfe trägt
-  die Tinte `draw_order` unter null, damit die Lage der Platte im Bauraum
-  nicht entscheidet, was oben liegt. Anlass: „das verschieben ist auch schwer
-  durch die maßlinien zu treffen/sehen".
-* **Ein Baustein sitzt sofort, und am gesetzten Baustein hängt ein Griff.**
-  Ein Baustein aus dem Katalog geht von selbst in die Platzierung — und seit
-  dem 11.09.2026 sitzt er dort ohne Klick auf der gewählten Fläche, sonst auf
-  der größten nach oben zeigenden (`PlacementFlow._begin_on_a_face`,
-  `UPWARD_FACE`), mit Werkzeugkörper, Maßlinien und den Feldern im Dialog.
-  Vorher stand mit gewähltem Körper und der Maus neben dem Teil nichts im
-  Bild, und *Übernehmen* schrieb einen roten Schritt ohne Position (Robert:
-  „im viewport gab es weder vorschau, noch das gizmo dazu"; gemessen an allen
-  24 einsetzbaren Bausteinen). Sobald die Stelle steht, hängt am
-  Werkzeugkörper der Bewegungsgriff (`viewport.grip_placement`,
-  `placementDragged` → `_dragged_at_the_tool` → `move_to`); der Griff der
-  Auswahl weicht ihm, weil beide an derselben Stelle säßen, und kommt mit
-  Escape zurück. **Ein Klick bestätigt keine Stelle, die niemand gewählt
-  hat**: Nach dem Sitz von selbst setzt er um (`_seated_by_default`), erst
-  der nächste übernimmt. Nur Bausteine — die Bohrung wird gezielt gesetzt, und
-  dieser Weg ist eingespielt.
-* **Das gewählte Loch ist selbst der Griff.** Ein Druck der linken Taste auf
-  ein gewähltes Loch (oder Langloch), solange keine Platzierung läuft, baut
-  den Langlochgriff für diesen einen Zug und gibt ihm den Druck
-  (`_pull_at_the_hole` → `SlotHandle.take_press`, der nähere Knopf). **Am
-  Langloch zählt die ganze Öffnung** — auch ihre Enden: Die Zielhilfe rechnet
-  gegen den Umriss des Langlochs und nicht gegen einen Kreis um seine Mitte
-  (`bore_span` mit `travel`/`heading`, `_feature_inside` gegen die
-  Mittellinie). Bis zum 24.09.2026 fiel ein Druck in das Ende eines
-  Langlochs in der Draufsicht durch das Loch hindurch, und die linke Taste zog
-  den Körper. **Und der Knopf wandert um den Weg der Hand, er springt nicht
-  auf sie** (`SlotHandle._grab`, `_grab_at`): Wer ihn neben seiner Mitte oder
-  in der Öffnung greift, verschob das Langloch sonst beim ersten Bildpunkt —
-  am Wedge-Lock gemessen 16 Grad Drehung, bevor die Hand sich bewegt hatte.
-  Nur an der runden Bohrung rechnet ein Druck ins Loch aus der Mitte heraus:
-  Sie hat keine Richtung, die zu erhalten wäre. Das Loslassen ist der
-  gewohnte Vorschlag (`slotProposed`), und das Fenster holt dazu die Maße ins
-  Bild (`_on_slot_proposed` → `request_in_view`) — ab da stehen Knöpfe,
-  Umriss, Griff und Maßlinien wie nach dem Knopf. Neben dem Loch bleibt die
-  linke Taste beim Körper, wie das `solidon`-Schema es sagt. Anlass: Robert,
-  11.09.2026, „wenn ich jetzt eine bohrung an einer ecke zum langloch ziehen
-  will verschiebe ich immer den körper" — die Knöpfe kamen erst mit dem Knopf,
-  und ein Zug am Loch war bis dahin ein Zug am Körper darunter.
-* **Der Ring um die Bohrachse dreht das Langloch** — nicht seine Achse.
-  `_slot_turn_sign` erkennt den Ring, der parallel zur Achse des
-  Langlochgriffs läuft (`SLOT_RING_ALIGNED`); während des Zugs folgen Griff,
-  Marke und Beschriftung dem gerasteten Winkel (`_turn_slot_with`, Ansatz in
-  `_slot_turn_base`), und das Loslassen ist derselbe Vorschlag wie ein Zug an
-  den Knöpfen (`_on_slot_released` → *Zum Langloch ziehen* mit neuer
-  Richtung). Die zwei anderen Ringe kippen die Achse und bleiben *Merkmal
-  drehen*. Anlass: Robert, 11.09.2026, „bei gizmo vom langloch dreht sich
-  die vorschau vom langloch noch nicht".
-* **Die Marke folgt dem Griff, solange er steht** (`_slot_form_of`): dem
-  wartenden Zug, dem Zwischenstand einer Geste an Knöpfen oder Ring, sonst
-  den Maßen des Merkmals. `_repaint_preview` tauscht dabei nur die Punkte
-  (`update_points`), solange die Form ihre Punktzahl behält — ein Aktor je
-  Mausbewegung wäre ein Neuaufbau je Mausbewegung.
-* **Und je Mausbewegung entsteht ein Bild, nicht zwei.** Während eines Zugs
-  an den Knöpfen zeichnet `SlotHandle._drag` nicht selbst
-  (`_redraw(render=False)`); die Marke folgt über `_on_slot_interacted`, und
-  `_repaint_preview` sagt, ob sie gezeichnet hat — nur wenn nicht, rendert
-  der Viewport nach. Gemessen am 21.09.2026 im echten Fenster mit `cProfile`:
-  32 ms je Bewegung mit zwei Bildern, 21 ms mit einem; der Grundpreis je Bild
-  ist der Durchgang mit Umgebungsverdeckung, 12 bis 17 ms (RM-200).
-* **Die erste Eingabe bindet die Auswahl.** Vorher bleibt die passive
-  Maßanzeige abwählbar; danach erhalten Außenklick und andere Auswahltasten
-  den Entwurf. `Viewport.user_selection_allowed` liegt vor der Mutation in
-  Bild und Kantenwahl, `_ObjectTreeView` vor Qts Maus-/Tastaturauswahl.
-  Kamera und Scrollen bleiben frei. Fremde Befehle werden nicht vorgemerkt:
-  erst Übernehmen oder Abbrechen gibt sie wieder frei. Escape und das
-  gemeinsame Abbrechen verwerfen den Entwurf; eine echte Dokument- oder
-  Ergebnisänderung entwertet seinen Bezug. **Abbrechen hebt dazu die Auswahl
-  auf** (Entscheidung Robert, 24.09.2026: „abbrechen = deselektieren";
-  `QuietHost.cancel` → `MainWindow._measures_cancelled`, derselbe Weg wie ein
-  Klick ins Leere). Vorher blieb das Merkmal gewählt, ohne Maße und Knöpfe
-  im Bild, und rechts stand die Handlung des verworfenen Entwurfs scharf.
-  **Escape tut dasselbe** (Entscheidung Robert, 25.09.2026: „wie abbrechen
-  zurücknehmen und abwählen"): im Maßfeld über `PlacementFlow.step_back`,
-  sonst über `MainWindow._escape`. Bis dahin verließ es nur die Maße, und
-  rechts blieb der verworfene Entwurf scharf. Die eigene synchrone
-  Dokumentmeldung beim Commit wartet bis zum booleschen Erfolg des Callbacks.
-* **Die Marke trägt die Langlochform, und sie geht beim Zug mit.** Ein
-  wartender Langlochzug (`_slot_waiting`) und ein erkanntes Langloch werden
-  als Stadion gezeigt, in die Tiefe gezogen (`_feature_shape` →
-  `_slot_form_of`, `shapes.prism` über `slot_outline`) — nicht als Zylinder
-  der Bohrung, aus der es kommt. Nach dem Zug an den Knöpfen und nach jeder
-  getippten Zahl wird die Marke neu gezeichnet (`_repaint_preview`). Ein Zug
-  am Bewegungsgriff nimmt Marke, Knöpfe **und** Umriss mit
-  (`SlotHandle.shift`), und der frisch gebaute Griff danach trägt den Umriss
-  von Anfang an (`outlined=`), nicht erst mit dem nächsten Zug. Anlass:
-  Robert, 11.09.2026, „wenn ich die bohrung zum langloch schiebe im viewport
-  und das langloch dann verschiebe fehlt die richtige vorschau".
-* **Unter `prepare.shortest_slot` rastet er auf die runde Bohrung**
-  (Entscheidung Robert, 24.09.2026: „wenn man ein langloch so zieht, dass es
-  wieder eine normale Bohrung wäre, sollte es kurz einrasten"). Zwischen der
-  Breite und der kürzesten Länge gibt es kein Loch, das die Erkennung hält;
-  `settled_length` hält im oberen halben Streifen die kürzeste Länge und
-  legt den unteren auf die Breite selbst. Rund ist genau die Breite
-  (`prepare.is_round_length`, auf die halbe Anzeigestufe), und dieselbe
-  Funktion fragen Griff, Felder, Vorschauwerkzeug (`placement.prepare_tool`)
-  und beide Kerne. Eingerastet zeigt der Umriss einen Kreis und die Zahl am
-  Zeiger heißt „Bohrung" statt „Länge" — Form und Wort, nicht die Form
-  allein (Regel 18). Die Richtung bleibt beim Einrasten die, die galt — an
-  beiden Knöpfen, auch am gespiegelten: Ein rundes Loch hat keine, und ein
-  Zug hinaus und zurück bleibt so ein Zug ohne Vorschlag; was an einer runden
-  Bohrung rund endet, schlägt nichts vor (`Viewport._on_slot_released`).
-  **Eine eingetragene Zahl rastet nicht** (`shown_length`): Zwischen Breite
-  und kürzester Länge zeigt der Umriss die kürzeste Länge, und der Grund der
-  Absage steht über der Vorschau — ein Kreis dort verspräche die runde
-  Bohrung, die der Schnitt nicht macht. Übernommen macht *Zum Langloch ziehen* mit Länge = Breite wieder
-  eine runde Bohrung; **war das Langloch aus einem Schritt gezogen und steht
-  danach genau die Bohrung da, aus der es kam, fällt der Schritt**
-  (`MainWindow._commit_slot_change`, `_slot_step_undone` liest die Bohrung aus
-  der Sichtung vor dem Schritt), statt als Schritt ohne Wirkung im Verlauf zu
-  stehen — Strg+Z holt ihn zurück, und die Quittung sagt es. **Außer ein
-  späterer Schritt nennt das Langloch** (`_slot_named_later`): Dann wird der
-  Schritt geändert, sonst verwiese eine Fase an `slot_1` auf ein Merkmal, das
-  der Verlauf nie erzeugt hat. Bis zu dieser Entscheidung stand hier:
-  „kürzer lässt er sich nicht ziehen, der Rückweg zum runden Loch ist
-  Strg+Z".
+`app/ui/render/gizmo.py` zeichnet Pfeile, Ringe und Würfel über den Vertrag.
 
-  **Die Zahl steht im Kern, nicht hier.** Bis zum 11.09.2026 führte der Griff
-  eine eigene (`SHORTEST_SHARE = 1.05`) — und rastete damit genau dort, wo die
-  Merkmalserkennung kippt: Wer bis zum Anschlag zurückzog, hatte danach im
-  Objektbaum eine Bohrung statt seines Langlochs oder gar nichts mehr. Warum
-  die Grenze da liegt, wo sie liegt, steht in
-  `.claude/rules/operationen.md`; der Griff und die Leiste fragen.
-* **Ein Klick in das Zwillingsfeld rechts gibt die Maße im Bild nicht auf.**
-  Stehen die Maße von *Bohrung ändern* im Bild, und der Kunde klickt rechts in
-  ein Feld von *Zum Langloch ziehen* (oder umgekehrt), wechselt die Maßgruppe
-  auf den Zwilling, statt zu verschwinden (`MainWindow._hand_the_measures_over`,
-  aus `_on_handling_armed`), und der Fokus geht in dasselbe Feld der neuen
-  Gruppe (`_focus_measure_field`, gefunden über die Feldkennung
-  `panels.FIELD_PROPERTY`). Nur solange nichts begonnen ist und die Handlung
-  demselben Merkmal gilt; ein begonnener Entwurf bleibt, wo er ist. Anlass:
-  Robert, 24.09.2026, „vor allem mit dem merkmalpanel nebenan". **Und der
-  Zwilling rechts zeigt nur, was er allein hat** (`FeaturePanel._in_the_view`):
-  Breite, Durchmesser, X, Y, Z und Materialtoleranz stehen schon im Bild — an
-  einem Langloch stand darunter *Bohrung ändern* mit demselben Wert als
-  Durchmesser, zwei Felder für eine Zahl, von denen nur eines das Bild führt.
-
-Wo er sitzt, sagt das Register (`slot_feature_kinds()` aus dem `applies_to` von
-*Zum Langloch ziehen*) — eine Aufzählung in der Ansicht wüsste beim nächsten
-Zuwachs die Hälfte. Und er steht in der Vorfahrt von `_dispatch_pointer`, wie jeder
-Griff: `tests/test_viewport_decisions.py` liest sie im Quelltext gegen die
-Griff-Felder und kennt seit diesem Griff keine Namensliste mehr, sondern die
-Bauart (`Gizmo` oder `…Handle`).
-
-### Ein Zug an einer Form endet in einer Leiste, nicht im Verlauf
-
-Bei einer **Bewegung** ist die Stelle, an der man loslässt, die Aussage — dort
-wird der Zug sofort ein Schritt. Bei einer **Form** nicht: Länge und Richtung
-sind zwei Zahlen, und wer sie auf den Millimeter meint, trifft sie mit der Maus
-nicht. Ein Schritt, der beim Loslassen entsteht, wird dann zu einer Kette aus
-Korrekturen statt einer Handlung.
-
-Zwischen Zug und Operation steht deshalb eine dritte Stufe: Der Umriss bleibt
-stehen, `Viewport.slotProposed` schreibt Länge und Richtung in den gemeinsamen
-Maßentwurf von *Zum Langloch ziehen*. Übernehmen verarbeitet den vollständigen
-Auftrag einschließlich Breite und Zielmitte. Der Tastaturweg über
-`Viewport.apply_slot_drag` meldet `slotDragged` an denselben Abschluss; er
-ersetzt den Entwurf nicht durch die zwei Griffwerte. Escape verwirft und
-stellt die gemessenen Werte wieder her (`_drag_kind` bleibt dafür auf
-`"slot"`).
-
-**Die Stufe hatte bis zum 11.09.2026 eine eigene Leiste** (`slot_bar.py`),
-unten mittig neben der Leiste der Flächenplatzierung. Das Argument dafür war,
-dass zwei Leisten, die dasselbe tun, an dieselbe Stelle gehören — und es war
-richtig, solange die Zahlen nirgends sonst standen. Seit sie im
-Merkmalfenster stehen, waren es zwei Bedienstellen über demselben Loch, mit
-zwei Übernehmen (Robert: „auch 2 mal übernehmen einmal unten und einmal
-rechts … die untere leiste uns sparen und nur die rechte verwenden mit dem
-was schon drin ist").
-
-**Was von ihr bleibt, ist eine Frage und kein Widget:**
-`Viewport.slot_drag_waits()` sagt, ob ein Zug auf seine Bestätigung wartet —
-gemessen am gemerkten Merkmal (`_slot_target`) und nicht an `_drag_kind`,
-denn jenes setzt erst die Zugbewegung, und ein ohne Bewegung losgelassener
-Griff wartet genauso.
-
-**Der Versatz eines Knopfes zählt gegen die gebaute Geometrie.**
-`Item.set_position` verschiebt gegen das, was einmal in den Puffer geschrieben
-wurde; gerechnet wurde er aus dem Stand beim **Drücken**. Beim ersten Zug ist
-das dasselbe, ab dem zweiten wandert der Bezug mit, während der Puffer bleibt
-— die Knöpfe laufen aus dem Umriss heraus, und weil ihr `reach` das Vorzeichen
-tauscht, in entgegengesetzte Richtungen. `SlotHandle._built_seats` hält, wo sie
-gebaut wurden.
-
-**Gefragt wird der Zustand und nie `isVisible()`.** Das galt schon der
-gefallenen Leiste (`SlotBar.active`) und gilt der Frage, die an ihre Stelle
-getreten ist: Qt beantwortet die Sichtbarkeit falsch, solange nichts gezeigt
-wurde — offscreen also immer. Wer eine Bedingung daran hängt, prüft die
-Prüfumgebung statt der Sache.
-
-### Ein Griff steht vor allem, was über der Ansicht liegt (11.09.2026)
-
-`Viewport._dispatch_pointer` hat eine feste Vorfahrt, und sie ist am 11.09.2026 um
-eine Stufe gewachsen: **Griffe, dann eine laufende Platzierung, dann der
-Zeiger, zuletzt die Kamera.** Die Platzierung stand davor und nahm jede
-Mausbewegung als Zielversuch — ein Griff sah danach kein `move` mehr, seine
-Hover-Auswahl blieb leer, und sein `press` fiel an `self._selected is None`
-durch. Pfeile, Ringe und die zwei Knöpfe am Loch waren sichtbar und tot,
-sobald eine Bohrung gewählt war und die Platzierung von selbst begann.
-
-Verschluckt wird dabei nichts: Ein Griff nimmt ein `move` nur, wenn er
-gedrückt gehalten wird, und ein `press` nur über einem getroffenen Pfeil.
-
-**Und mit gedrückter Taste wird er gar nicht erst gefragt** (13.09.2026). Wer
-eine Taste hält, führt die Kamera oder den Körper; die Hervorhebung unter dem
-Zeiger sagt dabei nichts — dieselbe Regel, die der Zeiger seit je befolgt („Ein
-Zug an der Kamera stoppt die Suche ganz"). Jeder Griff, der nicht selbst zieht,
-stellte dafür einen eigenen `pick_item`, und das liest den Kennungspuffer.
-Gemessen am echten Fenster (`drilled_v6.p3d`, Bild 1030 mal 710, Drehgeste über
-40 Ereignisse, Median aus drei Läufen):
-
-| | je Zeigerereignis | `pick_item` |
-|---|---|---|
-| ohne Griff | 0,47 ms | 0 |
-| mit Bewegungsgriff und Würfel | **4,31 ms** | 80 für 40 Bewegungen |
-| dieselbe Geste danach | 0,45 ms | 0 |
-
-`_dispatch_pointer` überspringt dafür jeden Griff, der nicht `pressing` ist, sobald
-`event.buttons` belegt ist — der **ziehende** Griff bekommt seine Bewegungen
-weiter, sonst bliebe der Zug am Pfeil beim ersten Bildpunkt stehen
-(`tests/test_viewport_decisions.py::test_a_held_button_leaves_the_grips_out_of_the_way`).
-Freies Schweben ohne Taste hebt weiter hervor; dort ist die Suche die Auskunft.
-
-**Und die zweite Ebene ist Qt selbst.** Was als Widget über der Renderfläche
-liegt, bekommt die Zeigerereignisse vor jedem `PointerEvent` — die Vorfahrt
-oben kommt dann gar nicht zum Zug. Wer etwas darüberlegt, fragt
-`Viewport.gizmo_reach()` und hält den Platz frei; `PlacementFlow` tut das für
-seine Maßfelder.
-
-### Ein Zug an einer Form schreibt erst, wenn er übernommen wird
-
-Der Langlochgriff und die Flächenplatzierung meinen dasselbe Loch und etwas
-Verschiedenes damit: der eine ein Langloch, die andere eine runde Bohrung.
-Nebeneinander offen nahm der eine zurück, was der andere gerade getan hatte.
-
-**Gemeldet wird deshalb das Übernehmen und nicht das Ziehen**
-(`Viewport.slotStarted`). Solange die Leiste offen ist, ist nichts geschehen
-(Regel 2) — und die Maße der Platzierung sollen währenddessen im Bild stehen.
-Wer den Zug beim Beginn meldet, schließt genau die Maße weg, um die es geht.
-
-### Wo etwas schon sitzt, zielt der Zeiger nicht
-
-**Auch wenn keine Trägerfläche gefunden wird** (`_no_seat_at_feature`): Die
-gebundene Maßgruppe misst dann ohne Fläche weiter, statt in das Zielen
-zurückzufallen — sonst setzte die nächste Mausbewegung das vorhandene Loch an
-den Zeiger. Und wo eine gefunden wird, liegt die Mündung auch hinter einer
-Fase auf ihr (`placement.seat_of`, `mouth_reach`): Eine gefaste Mündung endet
-nicht in der Ebene ihrer Fläche, und ohne diese Suche hatte das Merkmal keine
-Maße im Bild.
-
-`PlacementFlow._seated_at_feature`: Beginnt die Platzierung an einem
-vorhandenen Merkmal, gehört die Stelle ihm. Eine Mausbewegung darüber verschob
-sie samt aller Maßlinien unter der Hand, und die Abstände liefen vom Zeiger
-statt von der Bohrungsmitte. Ein **Klick** ist die ausdrückliche Ansage, das
-Loch woanders hinzusetzen; danach zielt wieder der Zeiger. Beim Setzen einer
-neuen Bohrung wird der Merker nie gesetzt.
-
-**Geschluckt wird nur die freie Bewegung.** Ohne die Frage nach
-`event.buttons` nahm die Zusage auch jeden Kamerazug mit — Drehen und Schieben
-mit rechter und mittlerer Taste waren tot, solange eine Bohrung gewählt war.
-Was die Platzierung nicht braucht, gehört der Kamera; das ist dieselbe Regel,
-die für die linke Taste seit je gilt.
-
-**Und der Klick, der neu zielt, ist verbraucht.** Er hebt zusätzlich den
-eingefrorenen Zustand auf und kehrt sofort zurück. Ohne das fiele er in die
-`confirm`-Kette und **übernähme** die Platzierung, statt sie neu auszurichten —
-auch der Klick daneben, der nach §18.5 die Auswahl aufheben soll.
-
-### Ein gewähltes Merkmal bekommt seinen Griff ohne Werkzeug (10.09.2026)
-
-Der Schalter des Werkzeugs *Bewegen* gilt dem **ganzen Körper**: Dort trägt der
-Griff einen Skalierwürfel, und der ändert auf einen Zug die Maße des Teils — er
-gehört an ein Werkzeug, das man ausdrücklich öffnet. Ein angeklicktes Merkmal
-ist dagegen selbst die Ansage (Robert, 10.09.2026: „über den viewport sehen wir
-weder maße noch etwas zum verschieben, verlängern, drehen usw" — gewählt war
-eine Bohrung, das Merkmalsfenster zeigte sechs Felder, und im Bild stand
-nichts). §2.6 verspricht, dass am Merkmal alles direkt steht; der Würfel bleibt
-dabei weg, und die Bedingung dafür ist dieselbe wie eh und je.
-
-**An einer Fläche geht der Zug bis in den Verlauf durch** (Anschluss geprüft
-am 14.09.2026): `gizmo_feature` sagt, wo der Griff sitzt, `gizmo_target`, was
-er tut, `_face_seat` setzt ihn auf Mitte und Normale **dieser** Fläche, und
-`faceDragged` meldet ihre Kennung — nicht mehr ihre Normale. Das Fenster macht
-daraus `push_face` mit `face=<Kennung>`; die Richtungsfelder `nx/ny/nz` bleiben
-nur für gespeicherte Schritte stehen.
-
-**Außer die Fläche kam aus einem Baustein** (16.09.2026). Dann antwortet
-`gizmo_target` mit nichts — es gibt kein Press/Pull an einer Fläche, die mit
-dem Träger verschmolzen ist —, `gizmo_feature` hängt den Bewegungsgriff daran,
-`_emit_feature_drag` meldet `featureMoved`, und der Zug geht in den Schritt des
-Bausteins; ein Vorschlag (`proposing`) wird daraus nie, denn rechts stehen die
-Handlungen des Bausteins und keine Felder von *Merkmal verschieben*. An der
-Rippe, die aus nichts als Flächen besteht, stand bis dahin der Pfeil entlang
-der Normalen und der Satz über Press/Pull (Robert: „bei manchen bausteinen
-keine möglichkeit zum verschieben"). Die Regel selbst steht in
-`fenster.md` unter „Ein Merkmal aus einem Baustein meint den Baustein".
-
-**Und zwei weitere Lagen bekamen dort gar keinen Griff.** Beide sind
-Nebenwirkungen von Bedingungen, die für ein *freies* Merkmal richtig sind:
-
-* **Die Bohrung eines Bausteins.** `placed_feature_kinds` hält Griffe an
-  Bohrung und Langloch zurück, bis *Im Bild einstellen* gedrückt ist — und
-  diesen Knopf zeigt nur `show_feature`, nicht `show_part`. An einem
-  Schraubenloch trug die Senkung damit einen Griff und die Bohrung daneben
-  keinen. `set_gizmo` nimmt die Sperre für Bausteinmerkmale heraus und lässt
-  dort die Langlochknöpfe weg: Ihr Zug schnitte ein Langloch neben den
-  Schritt, und beim nächsten Verschieben bliebe es stehen.
-* **Das Dach im Objektbaum.** Es wählt alle Merkmale des Bausteins, und
-  `_remember_feature_refs` setzt „das gewählte Merkmal" bei mehreren auf
-  nichts — der Griff fiel auf den Körper zurück, mit Skalierwürfel.
-  `set_part_grip` nimmt vom Fenster entgegen, an welchem Merkmal er hängt;
-  die Ansicht könnte nur je Merkmal fragen, ob es aus *irgendeinem* Baustein
-  kam, und nicht, ob die ganze Auswahl **ein** Baustein ist. Vorher trug der Schritt die Richtung, und
-die Operation bewegte jede Fläche, die dorthin zeigt — an einer Treppe alle
-Stufen zugleich. **Die vier Stücke waren einzeln geprüft und die Kette nicht**
-(`test_the_handle_of_a_chosen_face_pushes_that_face` fährt sie am Stück).
-
-## Der Bewegen-Griff ist eigener Code, kein fremdes Widget (05.09.2026)
-
-Bis zum 05.09.2026 war der Griff PyVistas `AffineWidget3D`, und er hatte zwei
-Fehler übereinander, die einander verdeckten (Vorfall: ROADMAP-ARCHIV.md,
-04.09.2026): Das Widget suchte seinen Renderer über den Interaktionsstil
-(`_parent`), den Solidons eigener Stil nicht hatte — jede Mausbewegung über
-dem Griff endete in einem `AttributeError`, den pyvistaqt zu einer Warnung
-machte, die niemand sieht. Und sein `vtkHardwarePicker` traf in dieser
-Umgebung nichts, nicht einmal den Körper in der Bildmitte. **Der Griff war
-nicht greifbar**; was weiter ging, war die eigene Zuggeste am Körper.
-
-Beides ist mit dem Widget verschwunden. `app/ui/render/gizmo.py` zeichnet
-Pfeile, Ringe und Würfel über den Vertrag, pickt über `pick_item` und
-bekommt die Zeigerereignisse **vor** dem Navigator (`Viewport._dispatch_pointer`).
-Was davon bleibt, sind zwei Regeln:
-
-* **Der Griff pickt über den Vertrag, nie mit einem eigenen Picker.**
-  `pick_item` fragt in zwei Stufen — erst, was vor dem Material liegt
-  (`keep_in_front`), dann alles andere — mit einer Toleranz in Bildpunkten
-  (`PICK_SLACK_PIXELS`). Ein Griff, der seinen eigenen Picker mitbringt,
-  trifft auf der einen Maschine und auf der anderen nicht.
-* **Was der Griff zeigt, solange gezogen wird, ist Vorschau** (Regel 2):
-  `set_matrix` am Element des Körpers, und beim Loslassen wird die Matrix zu
-  Operationen (`_on_gizmo_released`) — oder zu nichts, wenn der Zug unter der
-  Fangschwelle blieb. Deshalb wird der Griff nach jedem Zug **frisch gebaut**:
-  Er rechnet gegen die Matrix, mit der er anfing, und ein stehen gelassener
-  Griff hinge nach der Auswertung an einem Element, das nicht mehr im Bild ist.
-* **`Gizmo.fits` sagt, wann ein frischer Griff dasselbe ergäbe.** Der
-  Platzierungsfluss zeichnet je Kamerageste neu und hängte den Bewegungsgriff
-  dabei jedes Mal ab und wieder an — sechs Renderer-Objekte für nichts (5,7 ms
-  von 22 je `redraw`, 21.09.2026). `grip_placement` behält ihn jetzt, wenn er
-  am selben Ziel hängt und entweder im Zug ist (`grip.pressing`) oder passt:
-  gleiches Ziel, gleiche Ringe, gleicher Maßstab (auf ein Hundertstel,
-  `SCALE_TOLERANCE` — der Maßstab hängt am Zoom und wandert in der Perspektive
-  mit jeder Kameradrehung) und **gleiche Matrix** (`np.array_equal` gegen die
-  gemerkte Matrix des Ziels). Beides sind genau die Fälle, in denen die Regel
-  „immer frisch" nichts verlöre: Im Zug hat sich die Matrix seit dem Greifen
-  nicht geändert, bei einem passenden Griff steht das Ziel unbewegt. Ein Griff
-  **im Zug** neu zu bauen kostete den Zug — aus ihm wurde ein Kameraschwenk.
-
-### Am Bausteinmerkmal zieht der ganze Baustein mit (RM-174, 22.09.2026)
-
-Ein Zug an einem Merkmal, das als Baustein zieht (`moves_as_a_part`), zeigt
-die Dreiecke **aller** Merkmale desselben Schritts (`created_by`) als einen
-Aktor vor dem Körper, geführt mit der Matrix des Griffs
-(`_show_part_drag`, `_drag_part`) — vorher wanderte nur die Marke des
-angefassten Merkmals, und der Rest rückte erst beim Loslassen nach. Führt
-das Verschieben den Sitz aus der ebenen Fläche (plus der eigenen Grundfläche,
-`_landing_of`), wird der Baustein rot (`PART_OFF_FACE_COLOUR`) **und** das
-Zugfeld sagt „neben der Fläche" — nie die Farbe allein (Regel 18). Sitzt der
-Baustein auf keiner ebenen Fläche, gibt es keine Aussage statt einer
-falschen. Der Aktor gehört dem Zug und geht mit dem Geist (`_drop_ghost`).
-
-**Die eigene Grundfläche ist der Umriss, nicht die Böden** (Durchsicht
-0.5.1): die konvexe Hülle der eigenen Dreiecke in der Ebene samt der Öffnung
-am Sitz (`_footprint_fan`). Der Sitz eines Schlüssellochs liegt über seiner
-durchgehenden Bohrung, deren Wände die Erkennung einem Merkmal ohne Baustein
-zuschlägt; nur mit den eigenen Dreiecken gab es dort keinen Grund, die
-Landefläche hieß `None`, und am Wabenhalter blieb der Zug neben die Deckfläche
-stumm, bis nach dem Loslassen „Der Schnitt hat nichts abgetragen“ kam. „Auf
-keiner ebenen Fläche“ heißt jetzt: kein fremdes Dreieck in der Höhe des Sitzes.
+* **Er pickt über den Vertrag, nie mit eigenem Picker** (`pick_item`: erst
+  `keep_in_front`, dann der Rest, Toleranz `PICK_SLACK_PIXELS`) — ein eigener
+  Picker trifft auf der einen Maschine und auf der anderen nicht.
+* **Beim Ziehen ist alles Vorschau** (Regel 2): `set_matrix` am Element, beim
+  Loslassen Operationen (`_on_gizmo_released`) oder nichts unter der
+  Fangschwelle.
+* **Nach jedem Zug frisch gebaut** — er rechnet gegen die Matrix beim Greifen;
+  ein stehen gelassener wendete den Zug doppelt an und hinge an einem
+  verschwundenen Element. **Zwei Ausnahmen** in `Viewport.grip_placement`, wo ein
+  frischer Griff dasselbe ergäbe: im Zug (`grip.pressing` — neu gebaut würde der
+  Zug ein Kameraschwenk) und wenn er passt (`Gizmo.fits`: gleiches Ziel, gleiche
+  Ringe, Maßstab auf `SCALE_TOLERANCE`, Matrix per `np.array_equal`).
+* **Ein Zug am Griff lässt die Navigation in Ruhe**: Der Griff sieht die
+  Zeigerereignisse vor dem Navigator und gibt frei, was er nicht braucht; kein
+  Zugende baut den Navigator neu
+  (`test_a_drag_leaves_the_navigation_in_place`).
+* **Der Skaliergriff** (`app/ui/scale_widget.py`) folgt demselben Muster — Hover
+  über `pick_item`, Zug in der Kameraebene (`ray_plane_hit`), Ergebnis beim
+  Loslassen. Wer das Muster ändert, ändert beide.
 
 ### Frei drehen, aber 45 Grad treffen
 
-Der Winkelfang stand auf null, weil ein hartes Raster jeden kleinen Zug
-verschluckte. Damit trifft aber niemand genau 45 Grad. Robert: „freies drehen,
-aber kurzes einrasten bei allen 45 grad winkeln außer man dreht weiter."
+Frei drehen, kurz einrasten bei jedem Vielfachen von 45 Grad (Entscheidung
+Robert). `geom.transform.snap_near` zieht nur nahe einem Vielfachen;
+`_settled_angle` nimmt den Winkelfang der Leiste hart, sonst den Magneten
+(`TURN_MAGNET_STEP` 45°, `TURN_MAGNET_ZONE` 4°). Der `interact_callback` gibt
+die berichtigte Matrix zurück, die gesetzt wird (`_on_gizmo_interacted`,
+`rotation_about` im Kern); der Griff rechnet weiter von der Matrix beim Greifen
+(`test_the_magnet_corrects_the_turn_while_it_runs`).
 
-`geom.transform.snap_near(wert, schritt, zone)` ist das Gegenstück zu
-`snap_to_step`: Es zieht **nur in der Nähe** eines Vielfachen. Der Viewport
-fragt es über `_settled_angle` — hat die Leiste einen Winkelfang eingestellt,
-gilt der hart, sonst der Magnet (`TURN_MAGNET_STEP` 45°, `TURN_MAGNET_ZONE` 4°).
+## Ein gewähltes Merkmal bekommt seinen Griff ohne Werkzeug
 
-**Sichtbar wird das über den `interact_callback` des Griffs**: Er bekommt
-jeden Zwischenstand und darf eine berichtigte Matrix zurückgeben, und die
-wird gesetzt, nicht die rohe (`_on_gizmo_interacted`, gedreht über
-`rotation_about` im Kern, denn die Ansicht rechnet keine Geometrie). Die
-Rechnung des Griffs bleibt unberührt: Sie geht jedes Mal von der Matrix beim
-Greifen und der Zeigerstelle aus, nicht vom letzten Ergebnis. PyVistas Widget
-rief seinen Rückruf **vor** dem Setzen und übergab die alte Matrix; dafür
-brauchte es einen eigenen Beobachter am `MouseMoveEvent` (`_magnetise_turn`),
-und den gibt es nicht mehr (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026). Geprüft
-in `tests/test_transform_ui.py::test_the_magnet_corrects_the_turn_while_it_runs`.
+*Bewegen* gilt dem Körper und trägt den Skalierwürfel; ein angeklicktes Merkmal
+ist selbst die Ansage (§2.6) — Griff ja, Würfel nein.
+
+* **An einer Fläche geht der Zug bis in den Verlauf**: `gizmo_feature` (wo),
+  `gizmo_target` (was), `_face_seat` (Mitte und Normale), `faceDragged` meldet die
+  **Kennung**, das Fenster macht `push_face` mit `face=<Kennung>` — mit der
+  Richtung bewegte die Operation jede gleich gerichtete Fläche. `nx/ny/nz` nur
+  noch für gespeicherte Schritte (`test_the_handle_of_a_chosen_face_pushes_that_face`
+  fährt die Kette am Stück).
+* **Eine Fläche aus einem Baustein**: `gizmo_target` antwortet nichts, der Zug
+  meldet `featureMoved` in den Schritt des Bausteins, nie als Vorschlag
+  (`proposing`) — Regel in `fenster.md`, „Ein Merkmal aus einem Baustein meint
+  den Baustein“.
+* **Die Bohrung eines Bausteins** bekommt ihren Griff (`set_gizmo` hebt die
+  Sperre aus `placed_feature_kinds` auf), aber ohne Langlochknöpfe — deren
+  Schnitt bliebe beim nächsten Verschieben stehen.
+* **Das Dach im Objektbaum**: `set_part_grip` sagt, an welchem Merkmal der Griff
+  hängt; die Ansicht weiß nicht, ob die Auswahl **ein** Baustein ist.
+
+### Am Bausteinmerkmal zieht der ganze Baustein mit
+
+Ein Zug an einem Merkmal mit `moves_as_a_part` zeigt alle Merkmale desselben
+Schritts (`created_by`) als einen Aktor (`_show_part_drag`, `_drag_part`, weg
+mit `_drop_ghost`). Verlässt der Sitz die ebene Fläche (`_landing_of`), wird der
+Baustein rot (`PART_OFF_FACE_COLOUR`) **und** das Zugfeld sagt „neben der
+Fläche“ (Regel 18); ohne ebene Fläche keine Aussage statt einer falschen. **Die
+eigene Grundfläche ist der Umriss, nicht die Böden** (`_footprint_fan`: Hülle
+der eigenen Dreiecke samt Öffnung); „keine ebene Fläche“ heißt kein fremdes
+Dreieck in Sitzhöhe.
+
+## Der Langlochgriff zieht die Form, nicht die Lage
+
+Das Langloch wird im Bild gezogen, nicht im Dialog (Entscheidung Robert):
+`app/ui/slot_handle.py`, zwei Knöpfe an den Enden, gezogen in der Ebene der
+Mündung. Wo er sitzt, sagt das Register (`slot_feature_kinds()` aus dem
+`applies_to` von *Zum Langloch ziehen*), nie eine Aufzählung in der Ansicht.
+
+* **Der Winkel zählt gegen die x-Achse von `sketch.planes.frame_of`** — wie
+  `prepare.slot_profile` schneidet und `prepare_ops.slot_angle_of` nachmisst;
+  eine eigene Achse legte das Loch neben den gezeigten Umriss.
+  `tests/test_slot_handle.py` schneidet wirklich und misst nach.
+* **Der Umriss im Bild ist der des Schnitts** (`slot_outline` aus
+  `slot_profile`, Bögen über `profile.arc_through`), keine zweite Konstruktion.
+  Der Kreis der runden Bohrung entsteht als Langloch mit Flanken null, **mit
+  derselben Punktzahl** — beim Einrasten tauscht `update_points` nur Punkte.
+* **Beim Längenziehen bleibt die Mitte stehen**, der Gegenknopf spiegelt;
+  Versetzen kommt vom Bewegungsgriff oder den Lagefeldern im selben Auftrag.
+* **Die Grenze steht im Kern** (`prepare.shortest_slot`,
+  `prepare.is_round_length` auf die halbe Anzeigestufe); Griff, Felder,
+  `placement.prepare_tool` und beide Kerne fragen sie. Die Regel: `operationen.md`,
+  „Ein Langloch in neuer Richtung ist ein gedrehtes Langloch“ („Die kürzeste
+  Länge ist gemessen“); warum sie dort liegt, unter derselben Überschrift in
+  `konzepte/begruendungen/regel-operationen.md`.
+* **Darunter rastet er auf die runde Bohrung** (Entscheidung Robert) — zwischen
+  Breite und kürzester Länge hält die Erkennung kein Loch: `settled_length` hält
+  im oberen halben Streifen die kürzeste Länge, im unteren die Breite;
+  eingerastet zeigt der Umriss einen Kreis, und die Zahl heißt „Bohrung“ statt
+  „Länge“ (Regel 18). Die Richtung bleibt an beiden Knöpfen die alte; rund
+  geendet an einer runden Bohrung schlägt nichts vor
+  (`Viewport._on_slot_released`). **Eine eingetragene Zahl rastet nicht**
+  (`shown_length`): Der Umriss zeigt die kürzeste Länge, der Grund der Absage
+  steht über der Vorschau.
+* **Länge = Breite macht wieder eine runde Bohrung; steht danach genau die
+  Bohrung da, aus der ein Schritt das Langloch zog, fällt der Schritt**
+  (`MainWindow._commit_slot_change`, `_slot_step_undone`), mit Quittung und
+  Strg+Z — **außer ein späterer Schritt nennt das Langloch**
+  (`_slot_named_later`), dann wird er geändert.
+* **Das gewählte Loch ist selbst der Griff**: Ein Linksdruck darauf ohne laufende
+  Platzierung baut den Griff für diesen Zug (`_pull_at_the_hole` →
+  `SlotHandle.take_press`, der nähere Knopf); am Langloch zählt die ganze
+  Öffnung samt Enden (`bore_span` mit `travel`/`heading`). **Der Knopf wandert
+  um den Weg der Hand, er springt nicht auf sie** (`SlotHandle._grab`,
+  `_grab_at`); nur die runde Bohrung rechnet aus der Mitte. Loslassen ist
+  `slotProposed`, das Fenster holt die Maße (`_on_slot_proposed` →
+  `request_in_view`). Neben dem Loch führt links den Körper.
+* **Der Ring um die Bohrachse dreht das Langloch**, nicht seine Achse
+  (`_slot_turn_sign`, `SLOT_RING_ALIGNED`): Griff, Marke und Beschriftung folgen
+  dem gerasteten Winkel (`_turn_slot_with`, `_slot_turn_base`), das Loslassen
+  schlägt *Zum Langloch ziehen* mit neuer Richtung vor (`_on_slot_released`);
+  die anderen Ringe bleiben *Merkmal drehen*.
+* **Der Versatz eines Knopfes zählt gegen die gebaute Geometrie**
+  (`SlotHandle._built_seats`) — `Item.set_position` verschiebt gegen den Puffer.
+* **Die Marke trägt die Langlochform und folgt dem Griff** (`_slot_form_of`,
+  `shapes.prism` über `slot_outline`): wartender Zug, Zwischenstand, sonst die
+  Maße; neu gezeichnet nach jedem Zug und jeder getippten Zahl
+  (`_repaint_preview`, nur Punkte, solange die Punktzahl bleibt). Ein Zug am
+  Bewegungsgriff nimmt Marke, Knöpfe und Umriss mit (`SlotHandle.shift`), der neue
+  Griff trägt den Umriss sofort (`outlined=`).
+* **Je Mausbewegung ein Bild**: `SlotHandle._drag` zeichnet nicht selbst
+  (`_redraw(render=False)`); nur wenn `_repaint_preview` nichts zeichnete,
+  rendert der Viewport.
+
+### Ein Zug an einer Form endet im Merkmalfenster, nicht im Verlauf
+
+Länge und Richtung trifft man mit der Maus nicht auf den Millimeter. Der Umriss
+bleibt, `Viewport.slotProposed` schreibt in den Maßentwurf von *Zum Langloch
+ziehen*, Übernehmen nimmt den ganzen Auftrag samt Breite und Zielmitte — eine
+Bedienstelle rechts, keine zweite Leiste (Entscheidung Robert). Der Tastaturweg
+(`apply_slot_drag` → `slotDragged`) ersetzt den Entwurf nicht; Escape verwirft
+und stellt die gemessenen Werte wieder her (`_drag_kind` bleibt `"slot"`).
+
+* **Ob ein Zug wartet, sagt `Viewport.slot_drag_waits()`** am gemerkten Merkmal
+  (`_slot_target`), nicht an `_drag_kind` — auch ein ohne Bewegung losgelassener
+  Griff wartet.
+* **Gefragt wird der Zustand, nie `isVisible()`** — offscreen antwortet Qt immer
+  falsch.
+* **Gemeldet wird das Übernehmen, nicht das Ziehen** (`Viewport.slotStarted`):
+  Langlochgriff und Flächenplatzierung meinen dasselbe Loch verschieden, und bis
+  zum Übernehmen ist nichts geschehen (Regel 2) — die Maße bleiben im Bild.
+
+## Maße und Platzierung am Merkmal
+
+* **Der Maßeditor einer Bohrung erscheint mit der Auswahl**; die erste Feld- oder
+  Griffbetätigung beginnt den gebundenen Entwurf (§18.11). `placementDragStarted`
+  kommt erst jenseits von `CLICK_SLACK` (`Gizmo.dragging`, `SlotHandle.dragging`),
+  auch beim Druck ins gewählte Loch: Ein Klick ohne Weg bewegt, meldet und bindet
+  nichts (`test_a_click_on_the_placement_grip_does_not_bind_the_draft`); der Satz
+  dazu geht mit dem Entwurf (`MainWindow.end_quiet_placement`).
+* **`PlacementFlow` besitzt Fachfelder und Platzierungsgriffe**; der allgemeine
+  Merkmalsgriff ist dann über `set_feature_gizmo_blocked` gesperrt. Reines
+  Verschieben zeigt keine Drehringe; weitere Merkmalsarten gehen über *Im Bild
+  einstellen*.
+* **Gesperrt heißt ohne Pfeile, Ringe und Würfel.** Sperre und Platzierungsgriff
+  am Werkzeugkörper nehmen nur den Bewegungsgriff; Flächenscheibe und
+  Langlochknöpfe bleiben, wo der Aufrufer es sagt (`knobs=True`, in `set_gizmo`
+  `only_knobs`: der Maßeditor an einer gewählten Bohrung — nicht
+  Erkennungsdialog und Ganzflächentextur). `grip_placement` baut sie nach dem
+  ersten Griff wieder auf; die Gizmo-Ansage bleibt leer.
+* **Der Formwechsel behält den Entwurf**: Aus der Bohrung wird ein Langloch mit
+  Länge, Richtung und Breite; geänderte Breite und Mitte gehen mit, der
+  Flächenbezug beginnt an der Zielmitte. Ist eine Tiefenänderung offen, bleibt
+  deren Editor zuständig, und der Langlochzug wird mit Hinweis verworfen.
+* **Ein Feldwert überlebt den Neuaufbau seines Griffs**: Länge, Richtung und
+  Breite werden vor dem Aufbau an das Merkmal gebunden; Panel und Maßgruppe
+  teilen denselben vollständigen Auftrag, kein Griffsignal verliert die Breite.
+* **Die erste Eingabe bindet die Auswahl.** Vorher ist die Maßanzeige abwählbar;
+  danach halten Außenklick und Auswahltasten den Entwurf
+  (`Viewport.user_selection_allowed`, `_ObjectTreeView`). Kamera und Scrollen
+  bleiben frei; fremde Befehle werden nicht vorgemerkt, erst Übernehmen oder
+  Abbrechen gibt sie frei. Eine echte Dokument- oder Ergebnisänderung entwertet
+  den Bezug; die eigene Dokumentmeldung beim Commit wartet auf den Erfolg des
+  Callbacks.
+* **Abbrechen hebt die Auswahl auf** (Entscheidung Robert; `QuietHost.cancel` →
+  `MainWindow._measures_cancelled`, wie ein Klick ins Leere). **Escape tut
+  dasselbe** (Entscheidung Robert): `MainWindow._leave_the_measures` vor der
+  Auswahlstufe, im Maßfeld `PlacementFlow.step_back`; verworfen werden ein
+  wartender Langlochzug und ein vorgeschlagenes Versetzen — gerechnet ist
+  nichts.
+* **Am Langloch stehen beide Griffe**: Knöpfe für Länge und Richtung, Pfeile und
+  Ringe zum Versetzen und Drehen.
+* **Solange die Platzierung läuft, ist ein Zug am Bewegungsgriff ein
+  Vorschlag**: `featureMoveProposed`/`featureTurnProposed` füllen *Merkmal
+  verschieben*/*drehen*, der Griff bleibt stehen (`_grip_shift`,
+  `move_proposal_waits()`), die Maßlinien folgen (`PlacementFlow.move_to`), erst
+  Übernehmen macht den Schritt (Regel 2). Ohne Platzierung (Zapfen, Kegel,
+  Kugel) bleibt der Zug ein Schritt.
+* **Ein wartender Langlochzug und ein Versetzen warten zusammen** (`_end_drag`
+  und `_detach_gizmo` lassen `_slot_target` stehen, der neue Griff trägt
+  `_slot_waiting`); die Stelle geht in die Felder von *Zum Langloch ziehen*, und
+  `slot_hole` schneidet Länge und Stelle in **einem** Schritt (`slotDragged` mit
+  der Stelle als viertem Argument). Verworfen nur bei Übernehmen, Escape
+  (`cancel_slot_drag`), Auswahlwechsel, Szenenaufbau (`drop_move_proposal`).
+* **Die Maße bleiben dabei im Bild**: Die Länge wächst um die Mitte, die
+  Kantenmaße gelten weiter; `PlacementFlow.redraw` hält Linien und Felder der
+  gebundenen Maßgruppe, auch über Kameradrehungen, nur der runde Umriss weicht.
+  Ohne Maßgruppe tritt die Platzierung zurück.
+* **Nach dem Übernehmen kommen Maße und Griffe wieder**
+  (`MainWindow._measures_to_resume`, eingelöst in `_show_feature_fields`;
+  Konzept Merkmalbedienung, Abnahme 1); nach einer Umbenennung (`hole_1` →
+  `slot_1`) findet `_reselect_the_renamed` das Merkmal an der gemeldeten Stelle
+  — in Baum **und** Ansicht.
+* **Die Maßlinien weichen dem Griff, soweit sie über ihn hinausreichen**
+  (`_Dimensions.clearing` aus `gizmo_reach()`, Kosmetik — die Striche nehmen
+  keinen Klick); bliebe außen weniger als ein Pfeil, kommt die ganze Linie, der
+  Umriss des Lochs bleibt sichtbar. Gegen Griff und Knöpfe trägt die Tinte
+  `draw_order` unter null, damit nicht die Lage der Platte entscheidet, was oben
+  liegt.
+* **Ein Klick ins Zwillingsfeld rechts gibt die Maße nicht auf**: Die Maßgruppe
+  wechselt auf den Zwilling (`MainWindow._hand_the_measures_over` aus
+  `_on_handling_armed`), der Fokus ins selbe Feld (`_focus_measure_field`,
+  `panels.FIELD_PROPERTY`) — solange nichts begonnen ist und dasselbe Merkmal
+  gemeint ist. **Der Zwilling zeigt nur, was er allein hat**
+  (`FeaturePanel._in_the_view`): Breite, Durchmesser, X, Y, Z und Toleranz
+  stehen schon im Bild.
+
+### Wo etwas schon sitzt, zielt der Zeiger nicht
+
+* **Am Merkmal zielt die Platzierung nie**: Wohin ein Loch soll, sagen Griff und
+  Felder; ein Klick ins Bild gehört der Auswahl (`PlacementFlow.pointer` gibt ihn
+  zurück). Die Stelle gehört dem Merkmal (`PlacementFlow._seated_at_feature`),
+  eine Mausbewegung verschiebt sie nicht; beim Setzen einer neuen Bohrung wird
+  der Merker nie gesetzt.
+* **Auch ohne Trägerfläche** (`_no_seat_at_feature`) misst die Maßgruppe
+  weiter; eine gefaste Mündung findet ihre Fläche über `placement.seat_of`,
+  `mouth_reach`.
+* **Geschluckt wird nur die freie Bewegung** — mit Taste gehört sie der Kamera.
+* **Ein Klick, der neu zielt, ist verbraucht**, statt in die `confirm`-Kette zu
+  fallen und zu übernehmen.
+* **Ein Baustein sitzt sofort**: ohne Klick auf der gewählten, sonst der größten
+  nach oben zeigenden Fläche (`PlacementFlow._begin_on_a_face`, `UPWARD_FACE`),
+  mit Werkzeugkörper, Maßen und Feldern; daran hängt der Bewegungsgriff
+  (`grip_placement`, `placementDragged` → `_dragged_at_the_tool` → `move_to`),
+  der Auswahlgriff weicht bis Escape. **Ein Klick bestätigt keine Stelle, die
+  niemand gewählt hat** (`_seated_by_default`: der erste setzt um, der nächste
+  übernimmt). Nur Bausteine — die Bohrung wird gezielt gesetzt.
 
 ## Was am Griff steht, ist ASCII — und sonst nichts
 
-Die Griffbeschriftung war ein `vtkStringArray` in PyVistas Hand, und PyVista
-lehnte darin jedes Zeichen außerhalb von ASCII ab — nicht mit einer Warnung,
-sondern mit `ValueError: String array contains non-ASCII characters that are
-not supported by VTK`; der ganze Griffaufbau stürzte damit ab. Diese Grenze
-war VTKs und ist mit ihm gegangen: Der Renderer zeichnet Beschriftungen
-selbst. **Die Regel bleibt trotzdem**, denn ihr zweiter Grund steht noch:
-Der Griff ist der eine Ort in der Oberfläche, an den ein übersetzter Text nicht
-gehört — überall sonst zeichnet Qt, und ein Wort am Griff stünde in sechs
-Sprachen an einer Stelle, die keine Prüfung sieht.
-
-**Der Fall wäre auf Deutsch nie aufgefallen.** Deutsch ist „Oberseite",
-„Unterseite", „Vorderseite" — alles ASCII. Französisch nicht: `Face
-supérieure`, `Arrière`, `Côté gauche`, `Côté droit`, vier von sechs. Ein Torlauf
-in deutscher Umgebung hätte geschwiegen — die Sorte Fehler, die es bis zum
-Kunden schafft (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
-
-**Wohin der Text stattdessen gehört:** in die Statusleiste. Sie zeigt bei
-gewähltem Merkmal ohnehin „Platte · Oberseite", dort zeichnet Qt, und dort
-darf jede Sprache stehen. Am Griff bleibt, was keine Übersetzung braucht —
-`X`, `Y`, `Z`, `S` und `<->` für eine Fläche, die nur vor und zurück kennt.
-
-Gesichert durch `tests/test_selection.py::test_nothing_on_the_gizmo_leaves_ascii`,
-und zwar mit genau diesen vier französischen Namen als Eingabe. Ein Absatz
-hier wird gelesen, wenn jemand ihn sucht; der Test wird rot, wenn jemand es
-wieder tut.
+Am Griff steht kein übersetzter Text — überall sonst zeichnet Qt, hier stünde
+ein Wort in sechs Sprachen, wo keine Prüfung hinsieht. Es bleiben `X`, `Y`, `Z`,
+`S` und `<->`; Namen wie „Platte · Oberseite“ gehören in die Statusleiste.
+Deutsch fiele nie auf, Französisch sofort:
+`tests/test_selection.py::test_nothing_on_the_gizmo_leaves_ascii` prüft mit
+`Face supérieure`, `Arrière`, `Côté gauche`, `Côté droit`.

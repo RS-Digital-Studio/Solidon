@@ -415,7 +415,7 @@ Am 24.09.2026 abgeschlossen: vollständiger erfolgreicher Tagbau `35982366247` a
   mit unsigniertem Setup hinaus. Abnahme für Windows: Zugang einrichten, den Signiereingang von
   Lauf 34785006709 (oder dem nächsten Tag) lokal signieren und das signierte Setup hochladen.
 
-  **Und Windows ist seit dem 14.09.2026 ein Kundenbefund.** Ralph Dietrich, 08:43: „Jetzt
+  **Und Windows ist seit dem 14.09.2026 ein Kundenbefund.** Ein Kunde, 08:43: „Jetzt
   fängt WIN11 auch mit dem Käse an — ich muss Smart App Control deaktivieren, damit Solidon3D
   startet." Smart App Control (Windows 11) lässt nur signierte Anwendungen zu; das unsignierte
   Setup startet damit gar nicht, und der blaue SmartScreen-Hinweis mit *Trotzdem ausführen*
@@ -11282,7 +11282,7 @@ den Webserver und die Paketierung. Fünf Funde:
       der Fall lässt sich hier nicht erzeugen. Belegt ist, dass der Weg den
       beschriebenen Defekt schließt und nichts verschlimmern kann; ob er den
       Fall trifft, sagt der erste Lauf dort. Ein Testbericht von einem Mac
-      steht für die nächsten Tage an (Alexander Schneider, Buchprojekt).
+      steht für die nächsten Tage an (ein Kunde, Buchprojekt).
 - **Historischer Befund RM-011 (weiter offen; aktuelle Aufgabe [RM-011](ROADMAP.md#rm-011)):** **Auf einem fremden Rechner installieren** (ohne Python, ohne venv, ohne
       Ollama/ComfyUI). Der Punkt, der erfahrungsgemäß mehr findet als alle
       Tests.
@@ -18820,7 +18820,7 @@ gebaut wird. Hier stehen die zwei Punkte, die es zu Arbeit machen.
   echten Platte gemessen, bevor eine Zeile entsteht, und der Wert kommt mit
   Datum und Herkunft in die Tabelle (§24.2).
 
-  **Gemessen am 27.08.2026** (Alexander Schneider, Messschieber, eine Platte;
+  **Gemessen am 27.08.2026** (ein Kunde, Messschieber, eine Platte;
   weitere angekündigt): Schlitzbreite 4,9–5,1, Schlitzhöhe 14,9–15,1, über
   zwei benachbarte Schlitze außen 45,0. Die 45,0 sind Raster plus eine
   Schlitzbreite und bestätigen die hinterlegten 40,00 — von drei möglichen

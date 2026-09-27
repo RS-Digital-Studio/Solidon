@@ -5,8 +5,7 @@ Weg ``F:\\3D`` als Oktal-Escape — Python liest daraus das Steuerzeichen 0x03 �
 oder das Steuerzeichen gleich roh in die Datei. Beides fiel nur zufällig auf:
 am 25.09.2026 sechs Docstrings in ``tests/``, alle mit demselben Pfad, einer
 davon mit dem Steuerzeichen roh als Byte, und der Heredoc der Shell hatte an
-diesem Tag zweimal Backslashs verschluckt
-(``.claude/memory/heredoc-frisst-den-backslash.md``).
+diesem Tag zweimal Backslashs verschluckt.
 
 Gewollte Steuerzeichen stehen in diesem Code als Hex-Escape oder als ``\\0``
 da (``\\x00``, ``\\x04``); jedes andere Oktal-Escape und jedes rohe

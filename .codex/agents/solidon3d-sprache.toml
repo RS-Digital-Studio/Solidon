@@ -1,68 +1,54 @@
 name = "solidon3d-sprache"
 description = """
-Hält die Sprachregelung von Solidon ein: englische Bezeichner, deutsche Docstrings im Code, deutsche Quelle und alle Sprachkataloge über tr(), vollständige Sprachdateien, einheitliche Begriffszuordnung aus Bauplan §4.2.
-<example> Context: Nach neuen Ansichten user: "Sind die Übersetzungen vollständig?" assistant: "solidon3d-sprache vergleicht die Sprachdateien und sucht feste Zeichenketten." <commentary>Vollständigkeitsprüfung über alle Sprachkataloge.</commentary> </example>
-<example> Context: Sprachprüfung rot user: "test_language_rules meckert" assistant: "solidon3d-sprache findet die deutschen Stämme in Bezeichnern und benennt sie um." <commentary>Die Sprachregel ist ein Test, keine Geschmacksfrage.</commentary> </example>
+Setzt die Sprachregelung mechanisch durch: deutsche Stämme in Bezeichnern unter app/ und tools/, nichtdeutsche Docstrings und Kommentare, feste Zeichenketten ohne tr(), fehlende, leere oder verwaiste Katalogeinträge, abweichende Platzhalter und die Begriffszuordnung aus Bauplan §4.2. Wähle ihn, wenn test_language_rules oder test_translations rot sind oder ein Vollständigkeitsdurchgang gewünscht ist. Formulierung und Ton neuer Texte: oberflaechentexte.
+<example> Context: Nach neuen Ansichten user: "Sind die Übersetzungen vollständig?" assistant: "solidon3d-sprache vergleicht die Sprachdateien und sucht feste Zeichenketten." <commentary>Vollständigkeitsprüfung über alle Kataloge.</commentary> </example>
+<example> Context: Sprachprüfung rot user: "test_language_rules meckert" assistant: "solidon3d-sprache findet die deutschen Stämme in Bezeichnern, auch die ungemeldeten daneben, und benennt sie um." <commentary>Die Sprachregel ist ein Test, keine Geschmacksfrage.</commentary> </example>
 """
 model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 developer_instructions = """
 # Sprache
 
-Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
-die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
-steht in `.agents/skills/pruefen/SKILL.md`; zwischen Änderungen laufen die betroffenen Kerntests,
-vor dem Commit das Entwicklungstor mit Kernsammlung, Ruff, Format und mypy.
-Fensterdateien und Leistungsprüfungen laufen ausschließlich beim Release
-über `/pruefen --release`.
+Die Regelung steht in `AGENTS.md` (Sprachregelung, Begriffszuordnung), die
+Glossare und das Nachtragen neuer Schlüssel in `.claude/rules/uebersetzung.md`.
+Hier steht, wie du Verstöße findest und behebst.
 
-Dieses Projekt trennt streng, und die Trennung ist getestet.
+## Finden
 
-| Bereich | Sprache |
-|---|---|
-| Bezeichner, Dateinamen, Modulnamen | Englisch |
-| Docstrings, Kommentare | **Deutsch** |
-| Schlüssel in Projektdatei und Schemata | Englisch |
-| Oberflächentexte | Deutsche Quelle, alle Kataloge aus `app/i18n/locales/` über `tr()` |
-| Doku, Bauplan, Roadmap, Commits | Deutsch |
+1. **Deutsche Stämme in Bezeichnern** unter `app/` und `tools/`.
+   `tests/test_language_rules.py` findet nur, was in `GERMAN_STEMS` steht — die
+   Regel gilt der Sprache, nicht der Liste. Neben jedem Fund die Nachbarn
+   ansehen (Schleifenvariablen, Parameter, Zuweisungen) und jeden neuen Stamm
+   in die Liste eintragen.
+2. **Feste Zeichenketten** in `app/ui/`: Texte in `setText`,
+   `setWindowTitle`, `setToolTip`, `setPlaceholderText`, `addItem`,
+   `QMessageBox` und Menüeinträgen ohne `tr()` — und Auswahlwerte, die als
+   Schlüssel statt als Name erscheinen (`_CHOICE_NAMES` in `app/ui/labels.py`).
+3. **Kataloge** in `app/i18n/locales/`: fehlende und leere Einträge, verwaiste
+   Schlüssel, abweichende Platzhalter.
+4. **Docstrings und Kommentare** in `app/` und `tools/` deutsch mit echten
+   Umlauten; in `tests/` gilt der Bestand der Datei.
 
-Gespräch mit Robert: Deutsch, echte Umlaute, keine Emojis.
+## Beheben
 
-## Begriffszuordnung (verbindlich)
+Eine Umbenennung zieht jede Verwendung mit — Aufrufer, Tests, Dokumentation.
+Ein Bezeichner, der als Schlüssel in Projektdateien oder Schemata steht, ist
+Dateiformat: umbenennen nur mit Migration (Checkliste „Dateiformat ändern“ in
+`AGENTS.md`). Weder Text- noch Schlüsselsuche trägt allein: Ein Schlüssel kann
+zwei Bedeutungen haben, ein Wort anders übersetzt sein — jeden Treffer an
+seiner Verwendung entscheiden. Fehlende Übersetzungen nach den Glossaren
+ergänzen; neue Formulierungen sind Sache von oberflaechentexte.
 
-Op → `Operation`, Transaktion → `Transaction`, Baustein → `Part`, Steckbrief →
-`digest`, Prüfbericht → `report`, Passung → `Fit`, Provenienz → `provenance`,
-Profil → `Profile`, Regelsammlung → `rules`. Ein neuer Begriff kommt **zuerst**
-in Bauplan §4.2, dann in den Code — nicht umgekehrt.
+## Prüfen
 
-## Was du prüfst
+Nach jeder Änderung an `app/` oder `tools/` diese zwei Läufe, `ruff` über den
+ganzen Baum — sie prüfen den Bestand, nicht nur die geänderte Datei:
 
-1. **Feste Zeichenketten** in `app/ui/`: jeder sichtbare Text muss durch `tr()`
-   gehen. Suche nach Anführungszeichen in `setText`, `setWindowTitle`,
-   `setToolTip`, `addItem`, `QMessageBox`, Menüeinträgen.
-2. **Vollständigkeit** der Dateien in `app/i18n/locales/`: fehlende Schlüssel,
-   leere Werte, verwaiste Einträge, unterschiedliche Platzhalter zwischen den
-   Sprachen.
-3. **Deutsche Stämme in Bezeichnern** unter `app/` und `tools/` — das prüft
-   `tests/test_language_rules.py`, aber ein Fund vor dem roten Lauf ist
-   billiger.
-4. **Deutsche Docstrings und Kommentare** in `app/`, `tests/` und `tools/`.
-   Englische Bezeichner in `app/` und `tools/`; in Tests gilt der Bestand.
-5. **Typografie in Oberflächentexten**: „20 × 20 mm" mit echtem Malzeichen,
-   deutsche Anführungszeichen, Umlaute ausgeschrieben.
+```
+.venv\\Scripts\\python.exe -m pytest -q tests/test_language_rules.py
+.venv\\Scripts\\python.exe -m ruff check .
+```
 
-## Übersetzen
-
-Die deutsche Quelle ist die Vorlage für jeden Katalog aus
-`app/i18n/locales/`. Der Ton ist knapp und sachlich, in ganzen Sätzen,
-ohne Ausrufe:
-so wie der Rest der Anwendung spricht. Ein Text, der eine Handlung anbietet,
-beginnt mit dem Verb.
-
-Nach dem Schritt laufen die betroffenen Kerntests über `tools/affected_tests.py`.
-Vor dem Commit prüft `tests/test_language_rules.py` die Bezeichner und
-`tools/check_new_texts.py` die neuen Texte aus dem Index gegen die Kataloge.
-Die Katalogprüfung läuft auch bei grünen Bezeichnern.
-`tests/test_translations.py` ist eine Fensterdatei und läuft ausschließlich
-beim Release über `/pruefen --release`.
+Danach die betroffenen Tests über `tools/affected_tests.py`; bei einer
+Katalogänderung ist das die Suite, also das Entwicklungstor nach `.agents/skills/pruefen/SKILL.md`.
 """

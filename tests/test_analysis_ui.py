@@ -6747,7 +6747,7 @@ def test_a_face_of_a_part_carries_the_grip_of_the_part(window: MainWindow) -> No
     Bis zum 16.09.2026 hing an einer Bausteinfläche der Griff der Fläche: ein
     Pfeil entlang der Normalen, dessen Zug ein ``push_face`` auf den
     verschmolzenen Körper wurde (Robert: „bei manchen bausteinen keine
-    möglichkeit zum verschieben"). Jetzt gilt die Regel aus `oberflaeche.md`
+    möglichkeit zum verschieben"). Jetzt gilt die Regel aus `fenster.md`
     auch dort: Was aus einem Baustein kam, meint den Baustein — der Griff
     sitzt an der Fläche, kennt kein Press/Pull, und der Zug geht in den
     Schritt.

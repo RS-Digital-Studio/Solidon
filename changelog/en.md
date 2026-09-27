@@ -92,7 +92,7 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
-- In ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer the manufacturer's profile applies. Solidon only writes what you change or accept from suggestions.
+- In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer the manufacturer's profile applies. Solidon only writes what you change or accept from suggestions.
 - The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.
 - Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, so the nozzle oozes less along the way.
 - Solidon takes the overhang angle from your printer's manufacturer profile, 60 instead of 45 degrees for Elegoo, Bambu and Creality. Chamfers and gentle slopes no longer get needless supports.
@@ -101,6 +101,11 @@ it into `website/version.json`.
 - Without *Apply suggestions*, no part gets a brim unasked any more, neither on export nor when handing over to the slicer.
 - Projects from 0.5.0 print at your printer's speed. Whatever you had set yourself in them is kept.
 - The first-layer speed now also applies to its infill. Before, the slicer laid the bottom at the manufacturer's speed, 105 mm/s on the Centauri Carbon 2.
+- With PrusaSlicer, printing now starts as it does with Prusa itself, with bed levelling, purge line and printer check.
+- PETG now goes to PrusaSlicer as PETG, no longer as PLA.
+- If the first layer has narrow webs, Solidon suggests laying it at 50 mm/s. The short lines stick better that way.
+- Where your slicer limits speed by volumetric flow itself, Solidon no longer suggests a speed limit of its own for it.
+- If you adopt the values of a filament profile and then change the filament, the values of the new one apply again.
 - The first layer now prints lines as wide as your printer's profile, usually 0.5 mm on a 0.4 nozzle. With Cura, the head no longer crawls between them.
 - With Cura, printing now begins with your printer's start code, as with the manufacturer. If Cura does not know the printer, Solidon tells you.
 - With Cura, the first layer now uses the acceleration from the manufacturer's profile instead of the full printing acceleration.
