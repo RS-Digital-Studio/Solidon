@@ -4,7 +4,7 @@ Gehört zu [`konzept-handbuch-2026-09.md`](../konzept-handbuch-2026-09.md),
 Paket HB-9. Gekürzt sind alle Seiten aus `manual.INTRODUCTION` außer `start`
 und `glossary`, in vier Teilen und einer Nachkürzung auf dem Zweig
 `handbuch-texte` (Commits `14f862070`, `1363c4f90`, `fb61a5ef7` und der
-Abschlusscommit mit diesem Nachweis).
+Abschlusscommit mit diesem Nachweis; nach der Durchsicht der Release-Sitzung nachgezählt).
 
 ## Wie gezählt wurde
 
@@ -27,7 +27,7 @@ die Zahlen stimmen bis auf `print` (seither ergänzt) mit dem Anhang von
 | `sketch` | 1 427 | 892 | −37 % |
 | `ways` | 212 | 170 | −20 % |
 | `sculpting` | 368 | 259 | −30 % |
-| `history` | 386 | 299 | −23 % |
+| `history` | 386 | 301 | −22 % |
 | `parameters` | 388 | 269 | −31 % |
 | `tolerances` | 299 | 222 | −26 % |
 | `parts` | 752 | 565 | −25 % |
@@ -45,8 +45,8 @@ die Zahlen stimmen bis auf `print` (seither ergänzt) mit dem Anhang von
 | `labels` | 351 | 242 | −31 % |
 | `remote` | 210 | 146 | −30 % |
 | `activation` | 282 | 207 | −27 % |
-| `trouble` | 890 | 555 | −38 % |
-| **zusammen** | **14 827** | **9 817** | **−33,8 %** |
+| `trouble` | 890 | 597 | −33 % |
+| **zusammen** | **14 827** | **9 861** | **−33,5 %** |
 
 Die Schwelle „ein Drittel weniger“ liegt bei 9 884 Wörtern. Kleine Seiten wie
 `what` und `variants` sinken weniger, weil dort wenig zu streichen war;
@@ -67,7 +67,7 @@ Anleitungen aus HB-4 und HB-8 und geschriebene oder erzeugte Seiten.
 | `moving` | Der Schlussabsatz, der den Verlauf wiederholte | erster Absatz |
 | `sketch` | Entwicklerbegründungen zum Raster, „ein Menü mit festen Maßen gibt es nicht mehr“ (Versionsgeschichte), Kameradetails | Kamera: `window` |
 | `ways` | Die Werkzeugleiste zu Weg 2, TripoSG und ComfyUI zu Weg 3 | Anleitungen `print-a-model`, `drill-a-hole`, `first-part`; Seiten `sketch`, `generating`, `sculpting` |
-| `history` | Klickweg zum Ändern eines Schritts | Anleitung *Ein Loch bohren* (`drill-a-hole`) |
+| `history` | Klickweg zum Ändern eines Schritts | Anleitung *Ein Loch bohren* (`drill-a-hole`). **Berichtigt:** Die Rückfrage vor dem Löschen ist die einzige im Verlauf, nicht im ganzen Programm (Regel 19) |
 | `tolerances` | Toleranz-Testkörper, Wandstärkenleiter, Überhangfächer und der Winkel aus dem Herstellerprofil (standen auf `tolerances` und `variants`) | nur noch `variants`, `tolerances` verweist darauf |
 | `parts` | „eine Bibliothek, die man nicht sieht, gibt es nicht“, „ausdrücklich ein halbes Scharnier“, der Klickweg Fläche → Baustein → Größe | Anleitung *Das erste eigene Teil* (`first-part`) |
 | `own-parts` | – (Reihenfolge umgestellt: erst Parameter, dann Auswahl, weil der Knopf sonst gesperrt bleibt) | – |
@@ -80,7 +80,7 @@ Anleitungen aus HB-4 und HB-8 und geschriebene oder erzeugte Seiten.
 | `extras` | Messung „knapp acht Token je Sekunde auf Intel-Arc-Grafik“, die fünf Einzelschritte der ComfyUI-Einrichtung, der Start aus den Quellen | Modellwahl und Messungen: *Welche Modelle Solidon benutzt* (`models`) |
 | `remote` | **Widerspruch aufgelöst:** „Eine eigene Schnittstellenliste gibt es deshalb nicht“ stand gegen die erzeugte Seite *Die Werkzeuge der Fernsteuerung* | Verweis auf `remote-tools`, das bleibt, wo es ist; MCP und Claude Code in einem Satz erklärt |
 | `activation` | „Es muss kein langer Code abgetippt werden“, „Fassung“ | „Version“ |
-| `trouble` | Der Einleitungssatz (wiederholte die Kurzfassung), das Beispiel „Wählen Sie links in der Liste einen Baustein“, Einzelheiten zu Kalibrierung und Teilen | Verweise auf `splitting`, `variants`, `chat` |
+| `trouble` | Der Einleitungssatz (wiederholte die Kurzfassung), das Beispiel „Wählen Sie links in der Liste einen Baustein“, Einzelheiten zu Kalibrierung und Teilen | Verweise auf `splitting`, `variants`, `chat`. **Berichtigt:** Der Abschnitt über offene Modelle zitierte „Das Modell ist nicht geschlossen.“ (kommt nur bei abgeschalteter Reparatur beim Einlesen) und schickte zu *Reparieren*; er beschreibt jetzt, was der Prüfbericht nach der Reparatur beim Einlesen wirklich zeigt |
 | `resin`, `surfaces`, `labels`, `sculpting`, `parameters`, `variants` | nur gestrafft | – |
 
 ## Was die Suite dazu sagt
