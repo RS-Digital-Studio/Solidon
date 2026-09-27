@@ -94,6 +94,8 @@ it into `website/version.json`.
 
 - In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer the manufacturer's profile applies. Solidon only writes what you change or accept from suggestions.
 - The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.
+- The *Fine*, *Draft* and *Strong* qualities now choose your slicer's matching process, for example “0.12mm Fine” for *Fine*.
+- The quality levels in the print dialog now appear in the language of the interface.
 - Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, so the nozzle oozes less along the way.
 - Solidon takes the overhang angle from your printer's manufacturer profile, 60 instead of 45 degrees for Elegoo, Bambu and Creality. Chamfers and gentle slopes no longer get needless supports.
 - The report, too, now calculates overhangs with the angle from which your slicer profile adds supports.

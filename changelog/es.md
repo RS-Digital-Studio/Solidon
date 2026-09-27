@@ -94,7 +94,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Imprimir y entregar al slicer
 
 - En PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print y OrcaSlicer rige el perfil del fabricante. Solidon solo escribe lo que usted cambia o acepta de las sugerencias.
-- El nivel «Standard» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.
+- El nivel «Estándar» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.
+- Los niveles «Fino», «Borrador» y «Resistente» eligen ahora el proceso correspondiente de su slicer, por ejemplo «0.12mm Fine» con «Fino».
+- Los niveles de calidad del diálogo de impresión aparecen ahora en el idioma de la interfaz.
 - La velocidad de desplazamiento también viene de la impresora: la Centauri Carbon 2 se desplaza a 500 en lugar de 150 mm/s, para que la boquilla gotee menos por el camino.
 - Solidon toma el ángulo de voladizo del perfil del fabricante de su impresora: 60 en lugar de 45 grados en Elegoo, Bambu y Creality. Chaflanes y pendientes suaves ya no reciben soportes innecesarios.
 - También el informe calcula ahora los voladizos con el ángulo a partir del cual su perfil del slicer pone soportes.

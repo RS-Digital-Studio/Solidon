@@ -95,6 +95,8 @@ dans `website/version.json`.
 
 - Dans PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print et OrcaSlicer, le profil du fabricant s'applique. Solidon n'écrit que ce que vous modifiez ou acceptez des suggestions.
 - Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de tout brider à 40 mm/s. Sur une Centauri Carbon 2, les grandes pièces prennent 40 à 50 % de temps en moins.
+- Les niveaux « Fin », « Brouillon » et « Résistant » choisissent désormais le processus correspondant de votre slicer, par exemple « 0.12mm Fine » pour « Fin ».
+- Les niveaux de qualité de la boîte de dialogue d'impression s'affichent désormais dans la langue de l'interface.
 - La vitesse des déplacements à vide vient aussi de l'imprimante : la Centauri Carbon 2 se déplace à 500 au lieu de 150 mm/s, pour que la buse suinte moins en route.
 - Solidon prend l'angle de surplomb dans le profil constructeur de votre imprimante : 60 au lieu de 45 degrés chez Elegoo, Bambu et Creality. Chanfreins et pentes douces n'ont plus de supports inutiles.
 - Le rapport calcule lui aussi désormais les surplombs avec l'angle à partir duquel votre profil de slicer ajoute des supports.

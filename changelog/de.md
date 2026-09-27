@@ -119,6 +119,8 @@ Nutzen da und sonst nichts.
 
 - In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print und OrcaSlicer gilt das Profil des Herstellers. Solidon schreibt nur, was Sie ändern oder an Vorschlägen übernehmen.
 - Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 sind große Teile so 40 bis 50 Prozent früher fertig.
+- Die Stufen *Fein*, *Entwurf* und *Belastbar* wählen jetzt den passenden Prozess Ihres Slicers, etwa „0.12mm Fine“ bei *Fein*.
+- Die Qualitätsstufen im Druckdialog stehen jetzt in der Sprache der Oberfläche.
 - Auch das Tempo der Leerfahrten kommt vom Drucker: Der Centauri Carbon 2 fährt sie mit 500 statt 150 mm/s, damit die Düse unterwegs weniger ausläuft.
 - Den Überhangwinkel nimmt Solidon aus dem Herstellerprofil Ihres Druckers, bei Elegoo, Bambu und Creality 60 statt 45 Grad. Fasen und flache Schrägen bekommen keine unnötigen Stützen mehr.
 - Auch der Prüfbericht rechnet Überhänge jetzt mit dem Winkel, ab dem Ihr Slicerprofil stützt.

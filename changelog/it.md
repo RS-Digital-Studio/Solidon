@@ -94,6 +94,8 @@ scrive in `website/version.json`.
 
 - In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale il profilo del produttore. Solidon scrive solo ciò che modificate o accettate dai suggerimenti.
 - Il livello «Standard» stampa con velocità e accelerazioni del profilo del produttore invece di frenare tutto a 40 mm/s. Su una Centauri Carbon 2 i pezzi grandi richiedono il 40-50 % di tempo in meno.
+- I livelli «Fine», «Bozza» e «Resistente» scelgono ora il processo corrispondente del vostro slicer, ad esempio «0.12mm Fine» per «Fine».
+- I livelli di qualità nella finestra di stampa appaiono ora nella lingua dell'interfaccia.
 - Anche la velocità degli spostamenti a vuoto viene dalla stampante: la Centauri Carbon 2 si sposta a 500 invece di 150 mm/s, perché l'ugello coli meno lungo il tragitto.
 - Solidon prende l'angolo di sbalzo dal profilo del produttore della stampante: 60 invece di 45 gradi per Elegoo, Bambu e Creality. Smussi e pendenze lievi non ricevono più supporti inutili.
 - Anche il rapporto calcola ora gli sbalzi con l'angolo a partire dal quale il vostro profilo dello slicer mette i supporti.
