@@ -1159,7 +1159,10 @@ seither für beide gelten — Namen, Träger und Handlung, nicht bloß die Zahl:
   schräge Flanken, mit ihren Trägern, an beiden Kernen
   (`_partial_cones_folded`/`_mouth_flanks_folded`, `_mouth_chamfers_folded`).
   Die Zugehörigkeit kommt aus der Nachbarschaft; ein Kegelstück zwischen
-  zwei Langlöchern bleibt unentschieden, nie dem alphabetisch ersten.
+  zwei Langlöchern bleibt unentschieden, nie dem alphabetisch ersten. Ob
+  eine Freiformfläche des exakten Körpers ein Kegelstück ist, entscheidet
+  die Einpassung des Netzes an ihren Dreiecken (`partial_cone_patch`) —
+  keine zweite Schwelle am exakten Kern.
 * **Eine Bohrung unter der vollen Umdrehung ist angeschnitten** (`partial`),
   und ob sie für sich bearbeitbar ist, sagt nicht der Winkel: Grenzt ihr
   Mantel an eine andere Höhlung, ist sie berührt — keine Kette, kein eigener

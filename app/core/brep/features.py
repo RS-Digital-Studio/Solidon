@@ -26,7 +26,7 @@ zusammen, nachdem jede Fläche für sich beschrieben ist.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -38,7 +38,7 @@ from app.core.brep.canonical import (
     Surface,
     TorusSurface,
 )
-from app.core.brep.kernel import Solid, boolean_builder, listed, nearest_distance
+from app.core.brep.kernel import Solid, boolean_builder, face_sources, listed, nearest_distance
 from app.core.brep.properties import properties
 from app.core.log import get_logger
 from app.core.types import (
@@ -242,7 +242,9 @@ def features_of(
         surfaces,
         cancelled=cancelled,
     )
-    found = _mouth_chamfers_folded(solid, found, named, surfaces, cancelled=cancelled)
+    found = _mouth_chamfers_folded(
+        solid, found, named, surfaces, threads=covered, cancelled=cancelled
+    )
 
     # **Ein Gewinde statt einer Handvoll Erfundener** — dieselbe Regel wie am
     # Netz, gemessen an den Kanten statt an der Konzentration der Dreiecke
@@ -1219,6 +1221,7 @@ def _mouth_chamfers_folded(
     named: dict[int, FeatureId],
     surfaces: dict[int, Surface | None],
     *,
+    threads: Collection[int] = (),
     cancelled: CancelToken | None = None,
 ) -> dict[FeatureId, Feature]:
     """Die Mündungsfase eines Langlochs geht im Langloch auf — wie am Netz.
@@ -1237,15 +1240,31 @@ def _mouth_chamfers_folded(
     * Ein Teilkegel, der genau **ein** Langloch berührt, gehört zu dessen
       Mündung. Berührt er zwei, bleibt er, was er ist — welcher Öffnung er
       gehört, hat dann niemand belegt.
-    * Eine ebene Fläche, die an einen so übernommenen Kegel **und** an den
-      Mantel desselben Langlochs grenzt und schräg zu dessen Achse steht, ist
-      die gerade Flanke derselben Fase. Deckel und Boden stehen quer zur
-      Achse, die Wände des Langlochs längs — beide sind keine.
+    * **Eine Fläche ohne Merkmal, die das Netz als Kegelstück liest**
+      (``perceive.features.partial_cone_patch``), ist ebenso ein Teilkegel.
+      Auf einer schrägen Fläche fast OpenCASCADE einen Bogen nicht als Kegel,
+      sondern als BSpline-Fläche; die Erkennung zählte sie nirgends hin, und
+      am Teppichclip (``carpet-corner-clip.step``) blieb die untere Fase beim
+      Versetzen stehen (Durchsicht 0.5.1). Ob sie ein Kegelstück ist,
+      entscheidet dieselbe Einpassung wie am Netz, an ihren Dreiecken; ihr
+      Träger reist als eingepasster Kegel im Langloch mit.
+    * Von den Teilkegeln aus wächst die Fase über Nachbarn, die ebenfalls an
+      den Mantel grenzen und schräg zu dessen Achse stehen: eine ebene Fläche
+      (die gerade Flanke) oder eine Fläche ohne Merkmal, deren Dreiecke alle
+      schräg stehen — die Zwickel, mit denen OpenCASCADE Bogen und Flanke
+      verbindet. Am Netz ist das das Band über freie, schräge Dreiecke
+      (``perceive.features._mouth_flanks_folded``). Deckel und Boden stehen
+      quer zur Achse, die Wände des Langlochs längs — beide sind keine.
 
     Die Träger bleiben: Kegel mit Spitze und Halbwinkel, Ebene mit Normale —
     der abschließende Zuschnitt in :func:`features_of` liest sie von den
     nativen Flächen ab. Maße des Langlochs bleiben die Nennmaße ohne Fase.
+    ``threads`` sind die Flächen eines bekannten Gewindes: Sie tragen hier
+    noch kein Merkmal und gehören trotzdem keiner Fase.
     """
+    import numpy as np
+
+    from app.core.perceive.features import partial_cone_patch
     from app.core.perceive.slots import ACROSS_THE_AXIS
     from app.core.units import exact_cos_degrees
 
@@ -1254,66 +1273,123 @@ def _mouth_chamfers_folded(
         for identifier, feature in found.items()
         if feature.kind == "slot"
     }
+    if not slots:
+        return found
     cones = [
-        (index, identifier)
+        index
         for index, identifier in named.items()
         if identifier in found
         and found[identifier].kind == "cone"
         and found[identifier].params.get("partial")
     ]
-    if not slots or not cones:
+    # Welche Flächen schon ein Merkmal tragen, in einem Zug aus der Zuordnung
+    # der Tessellation — nicht je Merkmal über :meth:`Solid.faces_of_triangles`,
+    # das jede Dreiecksnummer einzeln prüft.
+    sources = face_sources(solid.mesh)
+    chosen = np.zeros(len(sources), dtype=bool)
+    for feature in found.values():
+        if feature.face_indices:
+            chosen[np.asarray(feature.face_indices, dtype=np.intp)] = True
+    owned = set(np.unique(sources[chosen]).tolist())
+    loose = {index for index in surfaces if index not in owned and index not in threads}
+    if not cones and not loose:
         return found
 
-    def neighbours_of(index: int) -> frozenset[int]:
-        return solid.face_neighbours(index)
-
-    folded: dict[FeatureId, set[int]] = {}
-    for index, _identifier in cones:
+    def check() -> None:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        beside = neighbours_of(index)
+
+    def owner_of(index: int) -> FeatureId | None:
+        """Das eine Langloch, an dessen Mantel die Fläche grenzt — sonst ``None``."""
+        beside = solid.face_neighbours(index)
         owners = [name for name, members in slots.items() if beside & members]
-        if len(owners) != 1:
+        return owners[0] if len(owners) == 1 else None
+
+    def along_the_axis(normals: np.ndarray, axis: np.ndarray) -> np.ndarray:
+        """|n·Achse| je Zeile, komponentenweise: Die Antwort entscheidet, welche
+        Flächen zur Fase gehören, und entscheidet deshalb ohne BLAS (RM-187,
+        ``.claude/rules/kern.md``) — wie die Fassung vor der Durchsicht 0.5.1."""
+        rows = np.atleast_2d(np.asarray(normals, dtype=np.float64))
+        along = rows[:, 0] * axis[0] + rows[:, 1] * axis[1] + rows[:, 2] * axis[2]
+        return np.abs(np.asarray(along, dtype=np.float64))
+
+    def tilted(along: np.ndarray) -> bool:
+        """Ob alle Werte |n·Achse| schräg sind: weder Deckel (quer) noch Wand (längs)."""
+        return bool(
+            len(along) and np.all((along >= ACROSS_THE_AXIS) & (along < exact_cos_degrees(1.0)))
+        )
+
+    folded: dict[FeatureId, set[int]] = {}
+    fitted: dict[FeatureId, list[SurfacePatch]] = {}
+    for index in cones:
+        check()
+        name = owner_of(index)
+        if name is not None:
+            folded.setdefault(name, set()).add(index)
+    for index in sorted(loose):
+        check()
+        name = owner_of(index)
+        if name is None:
             continue
-        folded.setdefault(owners[0], set()).add(index)
+        patch = partial_cone_patch(
+            solid.mesh,
+            solid.triangles_of_face(index),
+            check_cancelled=cancelled.raise_if_cancelled if cancelled is not None else None,
+        )
+        if patch is None:
+            continue
+        folded.setdefault(name, set()).add(index)
+        fitted.setdefault(name, []).append(patch)
     if not folded:
         return found
 
+    normals = np.asarray(solid.mesh.raw.face_normals, dtype=np.float64)
     for name, pieces in folded.items():
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
+        check()
         slot = found[name]
-        axis = slot.params["axis"]
+        axis = np.asarray(slot.params["axis"], dtype=np.float64)
         members = slots[name]
-        flanks: set[int] = set()
-        for piece in sorted(pieces):
-            for index in sorted(neighbours_of(piece)):
-                if index in members or index in pieces or index in flanks:
-                    continue
-                surface = surfaces.get(index)
-                if not isinstance(surface, PlaneSurface):
-                    continue
-                identifier = named.get(index)
-                if identifier is None or found.get(identifier) is None:
-                    continue
-                if found[identifier].kind != "face":
-                    continue
-                normal = surface.normal
-                along = abs(normal[0] * axis[0] + normal[1] * axis[1] + normal[2] * axis[2])
-                if along < ACROSS_THE_AXIS or along >= exact_cos_degrees(1.0):
-                    continue
-                if not neighbours_of(index) & members:
-                    continue
-                flanks.add(index)
+        band = set(pieces)
+        frontier = sorted(pieces)
+        while frontier:
+            check()
+            following: set[int] = set()
+            for piece in frontier:
+                for index in sorted(solid.face_neighbours(piece)):
+                    if index in members or index in band or index in following:
+                        continue
+                    if owner_of(index) != name:
+                        continue
+                    if index in loose:
+                        triangles = np.asarray(solid.triangles_of_face(index), dtype=np.intp)
+                        if tilted(along_the_axis(normals[triangles], axis)):
+                            following.add(index)
+                        continue
+                    surface = surfaces.get(index)
+                    identifier = named.get(index)
+                    if (
+                        isinstance(surface, PlaneSurface)
+                        and identifier is not None
+                        and identifier in found
+                        and found[identifier].kind == "face"
+                        and tilted(along_the_axis(np.asarray(surface.normal), axis))
+                    ):
+                        following.add(index)
+            band.update(following)
+            frontier = sorted(following)
         indices = set(slot.face_indices)
-        for index in (*pieces, *flanks):
+        for index in sorted(band):
             indices.update(solid.triangles_of_face(index))
             identifier = named.get(index)
             if identifier is not None:
                 found.pop(identifier, None)
         # Nur die Auswahl wächst; Länge, Tiefe und Durchgang bleiben die
         # Nennmaße ohne die Fase — wie am Netz.
-        found[name] = replace(slot, face_indices=tuple(sorted(indices)))
+        found[name] = replace(
+            slot,
+            face_indices=tuple(sorted(indices)),
+            surface_patches=slot.surface_patches + tuple(fitted.get(name, ())),
+        )
     return found
 
 

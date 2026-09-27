@@ -1780,8 +1780,8 @@ def _sloped_slot_plate(*, chamfer: bool, slotted: bool = True) -> Any:
 
 @pytest.mark.parametrize(
     ("kernel", "chamfer"),
-    [("mesh", False), ("mesh", True), ("brep", False)],
-    ids=["Netz", "Netz gefast", "exakt"],
+    [("mesh", False), ("mesh", True), ("brep", False), ("brep", True)],
+    ids=["Netz", "Netz gefast", "exakt", "exakt gefast"],
 )
 @pytest.mark.parametrize("way", ["entlang", "gegen", "quer", "Kopie"])
 def test_a_slot_through_a_sloped_wall_moves_as_a_whole(
@@ -1801,11 +1801,12 @@ def test_a_slot_through_a_sloped_wall_moves_as_a_whole(
     (``_seated``); das Netz ließ dort eine Haut stehen und sagte „geht nicht
     mehr durch".
 
-    Am exakten Körper nur ohne Fase: Eine Fase von OpenCASCADE auf der
-    schrägen Unterseite endet an den Bögen in BSpline-Flächen, die die
-    Erkennung nicht zum Langloch zählt, und ihr Rand ist keine ebene Kurve.
-    Am Teppichclip sind die Fasen eigene Merkmale und bleiben beim Versetzen
-    stehen (Bericht bohrung, „Für Nachbarn").
+    Am exakten Körper auch mit Fase: OpenCASCADE fast die Bögen auf der
+    schrägen Unterseite als BSpline-Flächen, und die Erkennung zählte sie
+    nicht zum Langloch — der Rand der Auswahl lag dann mitten in der Fase und
+    in keiner Ebene, und am Teppichclip blieb die Fase beim Versetzen stehen.
+    Seit sie das Netz fragt, ob es ein Kegelstück ist, geht sie mit
+    (``brep.features._mouth_chamfers_folded``).
 
     Sollwerte: Quer versetzt ist die Wand an der neuen Stelle so dick wie an der
     alten, das Volumen bleibt. Entlang der Neigung um 0,5 mm ist sie um

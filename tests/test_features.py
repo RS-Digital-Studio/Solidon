@@ -6239,6 +6239,53 @@ def test_the_mouth_chamfer_of_a_slot_belongs_to_it_on_both_cores() -> None:
         )
 
 
+def test_the_mouth_chamfer_on_a_sloped_face_belongs_to_the_slot_on_both_cores() -> None:
+    """Auch die Fase an einer schrägen Mündung gehört an beiden Kernen zum Langloch.
+
+    Auf der um 4° geneigten Unterseite fast OpenCASCADE die Bögen nicht als
+    Kegel, sondern als BSpline-Flächen. Die exakte Erkennung zählte sie
+    nirgends hin, und die zwei geraden Flanken dazwischen blieben Flächen —
+    das Netz derselben Platte las die Bögen als Kegelstücke und nahm die ganze
+    Fase ins Langloch. Am Teppichclip (``carpet-corner-clip.step``) blieb die
+    untere Fase deshalb beim Versetzen stehen (Durchsicht 0.5.1, Bericht
+    bohrung, „Für Nachbarn"). Jetzt fragt der exakte Kern an einer
+    Freiformfläche am Mantel dasselbe wie das Netz: Liest es sie als
+    Kegelstück, ist sie Mündungsfase. Beide Kerne wählen danach dieselben
+    Dreiecke.
+    """
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+    from tests.test_feature_moves_keep_shape import _sloped_slot_plate
+
+    solid = _sloped_slot_plate(chamfer=True)
+    native = features_of(solid)
+    mesh = as_mesh_data(solid)
+    netted = detect(mesh)
+    for found, tag in ((native, "nativ"), (netted, "netz")):
+        kinds = sorted(entry.kind for entry in found.values())
+        assert kinds == ["face"] * 6 + ["slot"], (tag, kinds)
+    slots = {
+        tag: next(entry for entry in found.values() if entry.kind == "slot")
+        for found, tag in ((native, "nativ"), (netted, "netz"))
+    }
+    for tag, slot in slots.items():
+        assert slot.params["diameter"] == pytest.approx(6.0, abs=1e-3), tag
+        assert slot.params["length"] == pytest.approx(20.0, abs=1e-2), tag
+        assert slot.params["through"] is True, tag
+    # Keine Fläche des Körpers bleibt ohne Merkmal, und das Langloch trägt
+    # zwölf: vier Mantelflächen und je vier der beiden Fasen.
+    owned = {
+        index for entry in native.values() for index in solid.faces_of_triangles(entry.face_indices)
+    }
+    assert owned == set(range(len(solid.faces()))), sorted(owned)
+    assert len(solid.faces_of_triangles(slots["nativ"].face_indices)) == 12
+    assert set(slots["nativ"].face_indices) == set(slots["netz"].face_indices)
+    cones = [patch for patch in slots["nativ"].surface_patches if patch.kind == "cone"]
+    assert len(cones) == 4, [patch.kind for patch in slots["nativ"].surface_patches]
+
+
 def _cone_between_two_slots() -> Any:
     """Platte 60 × 30 × 8, zwei Langlöcher Ø 6 × 26 bei y = ±4, dazwischen eine Senkung Ø 12 → 6.
 

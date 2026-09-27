@@ -4454,6 +4454,49 @@ def detect_cones(
     ]
 
 
+def partial_cone_patch(
+    mesh: MeshData,
+    patch: Sequence[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> SurfacePatch | None:
+    """Der Kegelträger, den das Netz einem Fleck als Kegelstück gäbe — sonst ``None``.
+
+    Dieselben Fragen wie :func:`detect_cones` (Einpassung, Werkzeugschranke,
+    Breite, gezeigter Bogen, belegte Normalen) und wie
+    :func:`_partial_cones_folded` (unter dem vollen Umlauf) — für einen Fleck,
+    den nicht die Zerlegung des Netzes gebildet hat. Der exakte Kern fragt
+    hier an einer Freiformfläche am Mantel eines Langlochs
+    (``brep.features._mouth_chamfers_folded``): OpenCASCADE fast einen Bogen
+    auf einer schrägen Fläche nicht als Kegel, sondern als BSpline-Fläche,
+    und das Netz liest dieselbe Fläche als Kegelstück. Ob sie eines ist,
+    entscheidet an beiden Kernen dieselbe Einpassung.
+    """
+    body = mesh.raw
+    faces = sorted({int(index) for index in patch})
+    if _face_count(body, faces) < MIN_PATCH_FACES:
+        return None
+    fit = fit_cone(body, faces, check_cancelled=check_cancelled)
+    if fit is None:
+        return None
+    if (
+        _too_small_to_make(fit.radius * 2.0)
+        or _a_sliver(body, faces)
+        or not _shows_enough_arc(body, fit, faces)
+        or not _cone_is_recognisable(body, fit, faces, check_cancelled=check_cancelled)
+    ):
+        return None
+    axis = np.asarray(fit.axis, dtype=float)
+    if span_about(body, axis, np.asarray(fit.centre, dtype=float), faces) >= FULL_TURN_SPAN:
+        return None
+    return SurfacePatch(
+        "cone",
+        {"apex": fit.apex, "axis": fit.axis, "half_angle": math.radians(fit.half_angle)},
+        tuple(faces),
+        "fit",
+    )
+
+
 def _partial_cones_folded(
     mesh: MeshData,
     found: Mapping[FeatureId, Feature],
