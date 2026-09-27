@@ -422,7 +422,11 @@ def _prusa_settings_xml(
             ET.SubElement(
                 blocker,
                 "metadata",
-                {"type": "volume", "key": "volume_type", "value": "SupportBlocker"},
+                {
+                    "type": "volume",
+                    "key": "volume_type",
+                    "value": slicer_keys.PRUSA_SUPPORT_BLOCKER,
+                },
             )
             ET.SubElement(
                 blocker,
@@ -474,7 +478,7 @@ def _settings_xml(
             # anlegt; die Matrix ist die Einheit, gelegt wird über den Build.
             for child, kind, title in (
                 (helpers[number][0], "normal_part", part.name),
-                (helpers[number][1], "support_blocker", str(_("Stützsperre"))),
+                (helpers[number][1], slicer_keys.ORCA_SUPPORT_BLOCKER, str(_("Stützsperre"))),
             ):
                 piece = ET.SubElement(node, "part", {"id": str(child), "subtype": kind})
                 if title:
@@ -810,7 +814,7 @@ def _assembly_xml(
             if cura:
                 # Curas Stützsperre ist ein Netz mit diesem Wert — so legt
                 # sein eigenes Werkzeug „Stützblocker“ sie an.
-                _cura_values(shield, {"anti_overhang_mesh": "True"})
+                _cura_values(shield, {slicer_keys.CURA_SUPPORT_BLOCKER: "True"})
             blocks.append(
                 _write_geometry(shield, part.support_blocker, group_id, {}, number=own[1])
             )

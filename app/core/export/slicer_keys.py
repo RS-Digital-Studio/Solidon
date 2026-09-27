@@ -896,6 +896,9 @@ def keys_for(path: str) -> tuple[str, ...]:
         for entry in entries:
             if entry.path == path and entry.key not in seen:
                 seen.append(entry.key)
+    # Was als Geometrie reist, hat keinen Wertschlüssel, aber einen Namen im
+    # Slicer (:data:`GEOMETRY_KEYS`).
+    seen += [key for key in GEOMETRY_KEYS.get(path, ()) if key not in seen]
     return tuple(seen)
 
 
@@ -980,6 +983,18 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
 #: für CuraEngine als eigenes Netz mit ``anti_overhang_mesh``
 #: (:func:`takes_mesh_settings`).
 AS_GEOMETRY: Final[frozenset[str]] = frozenset({"support.block_channels"})
+
+#: Die Namen, unter denen diese Geometrie im Slicer steht: die Teilart der
+#: Orca-Familie, die Bereichsart von PrusaSlicer und Curas Netzwert. Die
+#: Übergabe schreibt sie von hier, und die Suche im Druckdialog findet das
+#: Feld unter ihnen (:func:`keys_for`) — wer aus seinem Slicer „support
+#: blocker“ kennt, sucht danach.
+ORCA_SUPPORT_BLOCKER: Final = "support_blocker"
+PRUSA_SUPPORT_BLOCKER: Final = "SupportBlocker"
+CURA_SUPPORT_BLOCKER: Final = "anti_overhang_mesh"
+GEOMETRY_KEYS: Final[dict[str, tuple[str, ...]]] = {
+    "support.block_channels": (ORCA_SUPPORT_BLOCKER, CURA_SUPPORT_BLOCKER),
+}
 
 
 #: Einstellungen, die ankommen, aber je nach Wert nur angenähert. Dazu

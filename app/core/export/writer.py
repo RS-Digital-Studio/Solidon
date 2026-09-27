@@ -36,6 +36,7 @@ from app.core.errors import (
 )
 from app.core.export import threemf
 from app.core.export.slicer_keys import (
+    CURA_SUPPORT_BLOCKER,
     SlicerFlavour,
     helpers_as_parts,
     needs_bed_translation,
@@ -1840,7 +1841,7 @@ def _cura_meshes(
                 target.with_name(f"{target.stem}-blocker-{number}.stl"),
                 _cura_assembly([blocker], bed),
             )
-            meshes.append(handover.CuraMesh(barrier, {"anti_overhang_mesh": "true"}))
+            meshes.append(handover.CuraMesh(barrier, {CURA_SUPPORT_BLOCKER: "true"}))
     handover.write_cura_meshes(target, meshes)
     return findings
 
