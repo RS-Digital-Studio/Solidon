@@ -19,9 +19,18 @@ import socket
 import subprocess
 import sys
 from pathlib import Path
-from typing import NoReturn
+from typing import Final, NoReturn
 
 import pytest
+
+#: Jeder PHP-Prüfserver läuft ohne OPcache. Der eingebaute Server hat ihn an,
+#: und unter Windows teilen sich alle PHP-Prozesse denselben Speicher dafür:
+#: Ein paralleler Prüfserver mit anderen Erweiterungen führte fremden Opcode
+#: aus (``mb_substr`` lief als ``sodium_crypto_auth_keygen``), der Server
+#: stürzte ab, und der Test sah einen zurückgesetzten Anschluss. Nur unter
+#: Last und nur mit mehreren Prüfservern — ohne den Schalter sechs von sechs
+#: Läufen rot, mit ihm sechs von sechs grün (27.09.2026).
+WITHOUT_OPCACHE: Final = ("-d", "opcache.enable=0")
 
 
 def missing_php(reason: str) -> NoReturn:
@@ -58,7 +67,7 @@ def php_command(*extensions: str) -> list[str]:
 def _php_command(extensions: tuple[str, ...]) -> tuple[str, ...]:
     """Die eigentliche Suche — je Prozess und Erweiterungsmenge genau einmal."""
     executable = php_executable()
-    command = [executable]
+    command = [executable, *WITHOUT_OPCACHE]
     if not extensions:
         return tuple(command)
     modules = subprocess.run(
