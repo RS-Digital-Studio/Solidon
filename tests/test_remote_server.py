@@ -176,13 +176,23 @@ def test_a_call_comes_through_and_reaches_the_bridge(
     assert bridge.calls and bridge.calls[0][0] == "place_on_bed"
 
 
-def test_any_other_path_gets_nothing(server: tuple[RemoteServer, _Bridge]) -> None:
-    """Ein Server, der auf jeden Pfad antwortet, lädt zum Stöbern ein."""
+def test_any_other_path_gets_nothing(
+    server: tuple[RemoteServer, _Bridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Server, der auf jeden Pfad antwortet, lädt zum Stöbern ein.
+
+    Den mitgeschickten Rumpf verwirft er trotzdem vor dem Schließen. Ohne das
+    schloss er mit ungelesenen Bytes, Windows antwortete mit einem RST, und
+    unter Last bekam der Client statt der 404 einen ``ConnectionAbortedError``
+    (zweimal im Tor am 27. und 28.09.2026).
+    """
     running, bridge = server
+    drained = _record_rejected_body_discard(monkeypatch)
 
     status, _body = post(running.port, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}, "/")
 
     assert status == 404
+    assert drained.wait(1.0), "anliegende Rumpfbytes wurden vor dem Schließen nicht verworfen"
     assert bridge.calls == [], "und gerechnet wurde dabei nichts"
 
 
@@ -705,10 +715,15 @@ def test_a_simple_browser_post_never_reaches_the_handler() -> None:
     "origin", ["http://localhost:abc", "http://localhost:99999", "http://[::1"]
 )
 def test_a_malformed_origin_gets_403_and_never_reaches_the_bridge(
-    server: tuple[RemoteServer, _Bridge], origin: str
+    server: tuple[RemoteServer, _Bridge], origin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ein kaputter Origin-Kopf bekommt eine HTTP-Antwort; der Server arbeitet danach weiter."""
+    """Ein kaputter Origin-Kopf bekommt eine HTTP-Antwort; der Server arbeitet danach weiter.
+
+    Auch hier verwirft er den anliegenden Rumpf vor dem Schließen, wie bei
+    jeder Ablehnung (siehe ``test_any_other_path_gets_nothing``).
+    """
     running, bridge = server
+    drained = _record_rejected_body_discard(monkeypatch)
     call = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -726,6 +741,7 @@ def test_a_malformed_origin_gets_403_and_never_reaches_the_bridge(
     )
 
     assert status == 403
+    assert drained.wait(1.0), "anliegende Rumpfbytes wurden vor dem Schließen nicht verworfen"
     assert bridge.calls == []
     accepted, _body = post(running.port, call)
     assert accepted == 200 and len(bridge.calls) == 1

@@ -333,7 +333,7 @@ class _Handler(BaseHTTPRequestHandler):
             # Die zweite der drei Prüfungen. Die erste ist die Bindung; wer
             # trotzdem hier ankommt, kam über eine Weiterleitung.
             _log.warning("remote call refused from %s", self.client_address[0])
-            self._send(403, b"")
+            self._refuse(403)
             return
         # ``server_port`` und nicht ``server_address[1]``: Die Adresse ist am
         # ``BaseServer`` als Vereinigung mit ``str`` und ``Buffer`` typisiert
@@ -347,7 +347,7 @@ class _Handler(BaseHTTPRequestHandler):
             # Die dritte, und die einzige, die einen Browser aufhält: der sitzt
             # auf diesem Rechner und besteht die Adressprüfung.
             _log.warning("remote call refused, origin %s", origin)
-            self._send(403, b"")
+            self._refuse(403)
             return
         if not _host_allowed(self.headers.get("Host"), port):
             # Die vierte, und sie ist bewusst redundant. Ein DNS-Rebinding —
@@ -357,7 +357,7 @@ class _Handler(BaseHTTPRequestHandler):
             # und keine zweite Verteidigung: Wer ``origin_allowed`` je
             # weitete, nähme sie mit. Der ``Host`` steht deshalb eigenständig.
             _log.warning("remote call refused, host %s", self.headers.get("Host"))
-            self._send(403, b"")
+            self._refuse(403)
             return
         if not _json_request(self.headers.get("Content-Type")):
             # Und die fünfte, die vor dem Browser wirkt statt nach ihm: Ein
@@ -370,7 +370,7 @@ class _Handler(BaseHTTPRequestHandler):
             # nur die Antwort. Verborgen ist dann die Antwort, ausgeführt der
             # Aufruf.
             _log.warning("remote call refused, content type %s", self.headers.get("Content-Type"))
-            self._send(415, b"")
+            self._refuse(415)
             return
         length, length_error = self._content_length()
         if length_error is not None:
@@ -380,6 +380,7 @@ class _Handler(BaseHTTPRequestHandler):
         assert length is not None
         if self.path.rstrip("/") != ENDPOINT:
             self._send(404, b"")
+            self._discard_rejected_body(length)
             return
         if length > MAX_BODY:
             self._send(413, b"")
@@ -421,6 +422,17 @@ class _Handler(BaseHTTPRequestHandler):
         if not raw or len(raw) > len(str(MAX_BODY)) or not raw.isascii() or not raw.isdigit():
             return None, 400
         return int(raw), None
+
+    def _refuse(self, status: int) -> None:
+        """Vor dem Lesen der Länge ablehnen und den anliegenden Rumpf verwerfen.
+
+        Jede Ablehnung schließt die Leitung. Lagen dabei ungelesene Bytes an,
+        antwortete Windows mit einem RST, und der Client bekam statt der
+        Antwort einen ``ConnectionAbortedError`` — gesehen unter Last am 404
+        (Tor 27. und 28.09.2026), und 403 und 415 lehnen genauso ab.
+        """
+        self._send(status, b"")
+        self._discard_rejected_body(REJECT_DRAIN_LIMIT)
 
     def _discard_rejected_body(self, limit: int) -> None:
         """Nach der Ablehnung kurz anliegende Bytes ohne Verarbeitung lesen.
