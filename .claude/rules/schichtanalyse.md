@@ -312,6 +312,12 @@ Korpus `F:\3D Dateien` gegen den Vorstand und sieht sich jedes geänderte
 Merkmal an. Eine Rückfallregel, die im Korpus nie ihren Fall trifft, zeigt
 dort nur ihre Fehlgriffe. Im Zweifel bleibt ein Merkmal, was es war.
 
+## Ein Löserlauf entfällt nur mit dem Nein des Stapels
+
+Nur `refine.exhausted` lässt einen Kegel- oder Ringlauf aus, kein Sieb aus
+Fleckmerkmalen. Seine Residuen folgen `_cone_from_plan`/`_torus_from_plan`
+(`tests/test_refine.py`).
+
 ## Auf einer Freiform sind Kugel, Ring, Kegel und Verrundung keine Merkmale
 
 `features.is_a_freeform` urteilt an der fertigen Liste
