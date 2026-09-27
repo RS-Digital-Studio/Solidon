@@ -2251,6 +2251,11 @@ def test_supports_go_only_to_the_part_whose_geometry_needs_them(
     values = _object_values(written, member)
     assert values["Pilz"][key] == "1"
     assert key not in values["Klotz"]
+    if flavour == "prusa":
+        # Prusas Grundlage stützt nur an Verstärkern (``support_material_auto =
+        # 0``); ohne den zweiten Schalter am Teil blieb der Pilz ohne Stütze —
+        # gemessen in der Abnahme von Stufe E, PrusaSlicer 2.9.6.
+        assert values["Pilz"]["support_material_auto"] == "1"
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
     assert [(finding.values["objects"], finding.values["setting"]) for finding in treffer] == [
         (1, "support.style")

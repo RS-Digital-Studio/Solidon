@@ -759,7 +759,25 @@ def object_keys(
     }
     before = as_mapping(settings, flavour)
     changed = as_mapping(_applied(settings, advice), flavour)
-    return {key: value for key, value in changed.items() if key in keys or before.get(key) != value}
+    written = {
+        key: value for key, value in changed.items() if key in keys or before.get(key) != value
+    }
+    return _with_automatic_prusa_support(written) if flavour == "prusa" else written
+
+
+def _with_automatic_prusa_support(written: dict[str, str]) -> dict[str, str]:
+    """Wer bei PrusaSlicer Stützen einschaltet, schaltet auch die automatischen ein.
+
+    Prusas Vorgabe ist ``support_material = 1`` mit ``support_material_auto =
+    0``: Stützen nur an gemalten Verstärkern (Entscheidung J). Für die Platte
+    stand die Regel in :func:`prusa_values`; der Objektwert eines Teils kannte
+    sie nicht, und der Pilz der Abnahme von Stufe E erbte „nur Verstärker":
+    kein einziger Stützweg im G-Code von PrusaSlicer 2.9.6, während
+    ElegooSlicer und CuraEngine ihn stützten (27.09.2026).
+    """
+    if written.get("support_material") == "1":
+        written["support_material_auto"] = "1"
+    return written
 
 
 #: Was CuraEngine je Netz annimmt, gelesen aus ``settable_per_mesh`` in
@@ -2020,9 +2038,7 @@ def prusa_values(
         followers=_PRUSA_FOLLOWERS,
     )
     document = dict(chain.values)
-    document.update(own)
-    if own.get("support_material") == "1":
-        document["support_material_auto"] = "1"
+    document.update(_with_automatic_prusa_support(dict(own)))
     for key in ("retract_length", "retract_speed", "retract_lift", "wipe"):
         if key in own:
             document[f"filament_{key}"] = own[key]
