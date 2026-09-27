@@ -58,7 +58,8 @@ else
   echo "post-commit: PUSH GESCHEITERT — der Commit liegt lokal." >&2
   echo "post-commit: meist ist die Gegenstelle weiter. Erst holen, dann" >&2
   echo "post-commit: zusammenführen, dann von Hand pushen:" >&2
-  echo "post-commit:   git pull --rebase origin $zweig && git push origin $zweig" >&2
+  echo "post-commit:   git pull --no-rebase origin $zweig && git push origin $zweig" >&2
+  echo "post-commit: Zusammengeführt wird per Merge, nie per Rebase." >&2
 fi
 
 exit 0

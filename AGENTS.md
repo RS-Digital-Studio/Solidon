@@ -201,7 +201,8 @@ Dialoge.
 
 ## Checkliste: neuer Baustein
 
-1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`
+1. `@register_part(...)` mit `name`, `title`, `group`, `params`, `features`,
+   `doc` (Einzelheiten und die volle Signatur: `/neuer-baustein`)
 2. Umsetzung gegen `manifold3d`
 3. Benannte Features zurückgeben (Provenienz-IDs)
 4. `to_scad()` für den Quelltext-Export — es schreibt eine Datei und führt
@@ -213,9 +214,10 @@ Dialoge.
    sie vergleicht nur, ob der Nachweis zum Stand passt (Entscheidung Robert);
    die Prüflogik selbst steht in `test_parts.py`
 6. Normteilmaße aus der Tabelle, nie im Baustein hart eintragen
-7. Vorschaubild wird gerendert, nicht von Hand gepflegt
-8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen und
-   Änderungsverlauf ergänzen (§24.4)
+7. Vorschaubild wird gerendert (`parts/preview.py`), nicht von Hand gepflegt
+8. Bei Maßänderung an einem bestehenden Baustein: `LIBRARY_VERSION` erhöhen,
+   am Baustein einen `PartChange` in `changes=` ergänzen und danach
+   `tools/make_examples.py` fahren (§24.4)
 
 ## Checkliste: Dateiformat ändern
 
