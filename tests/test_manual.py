@@ -1148,7 +1148,8 @@ def test_an_additional_language_needs_no_manual_generator_code(
     assert 'href="/nl/#pricing">NL·Preis</a>' in html
     assert '<a class="skip" href="#content">NL·Zum Inhalt springen</a>' in html
     assert '<h2 class="toc-title">NL·Inhalt</h2>' in html
-    assert "NL·Referenz — jede Operation mit ihren Werten" in html
+    assert '<h3 class="toc-part">NL·Erste Schritte</h3>' in html
+    assert '<h2 class="part">NL·Nachschlagen</h2>' in html
     assert "NL·Handbuch: 3D-Modelle für den Druck vorbereiten" in html
     assert "NL·Konstruieren, Erzeugen und Bearbeiten für den 3D-Druck" in html
 
@@ -1160,6 +1161,8 @@ def test_an_additional_language_needs_no_manual_generator_code(
         ">Preis</a>",
         ">Zum Inhalt springen</a>",
         '<h2 class="toc-title">Inhalt</h2>',
+        '<h3 class="toc-part">Erste Schritte</h3>',
+        '<h2 class="part">Nachschlagen</h2>',
     )
     assert not [text for text in german_fallbacks if text in html]
 
@@ -1217,6 +1220,89 @@ def test_the_contents_lead_to_the_chapter_they_name(language: str) -> None:
     assert got == wanted, (
         f"{language}: das Verzeichnis nennt {len(wanted)} Kapitel, die Anker im Text sind {got}"
     )
+
+
+@pytest.mark.parametrize("language", ["de", "en", "fr"])
+def test_the_parts_stand_in_the_contents_and_in_the_text_alike(language: str) -> None:
+    """Verzeichnis und Text gliedern sich nach denselben Teilen (Konzept Handbuch §4).
+
+    Je Teil mit Seiten steht im Verzeichnis sein Titel über seinen Kapiteln
+    und im Text eine Teilüberschrift vor seinem ersten Kapitel — in der
+    Reihenfolge von ``manual.pages()`` und aus ``Page.part``, derselben
+    Auskunft, nach der das Handbuchfenster gruppiert. Verglichen wird die
+    ganze Folge aus Teilen und Kapiteln: Stünde ein Teil an der falschen
+    Stelle, fehlte er im Text oder stünde ein Kapitel unter dem falschen, wiche
+    sie ab.
+    """
+    import re
+    from html import escape as html_escape
+    from itertools import groupby
+
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+    from tools.make_manual import _anchor, _classify, anchored, contents
+
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        expected: list[str] = []
+        for part, members in groupby(manual.pages(), key=lambda page: page.part):
+            expected.append(f"teil:{html_escape(str(manual.PART_TITLES[part]), quote=False)}")
+            expected.extend(f"kapitel:{_anchor(page)}" for page in members)
+        toc = [
+            f"teil:{title}" if title else f"kapitel:{target}"
+            for title, target in re.findall(
+                r'<h3 class="toc-part">([^<]+)</h3>|<a href="#([^"]+)">', contents(language)
+            )
+        ]
+        text = [
+            f"teil:{title}" if title else f"kapitel:{target}"
+            for title, target in re.findall(
+                r'<h\d class="part">([^<]+)</h\d>|<h\d id="([^"]+)"',
+                anchored(_classify(manual.as_html())),
+            )
+        ]
+    finally:
+        set_language("de")
+
+    parts = [entry for entry in expected if entry.startswith("teil:")]
+    assert len(parts) >= 3, f"{language}: nur diese Teile haben Seiten: {parts}"
+    assert toc == expected, f"{language}: das Verzeichnis folgt den Teilen nicht"
+    assert text == expected, f"{language}: der Text folgt den Teilen nicht"
+
+
+def test_a_part_without_pages_has_no_heading_and_the_numbers_run_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Teil ohne Seiten verspräche Kapitel, die es nicht gibt.
+
+    Sein Titel steht weder im Verzeichnis noch im Text. Die Nummern laufen über
+    die Teile hinweg durch, wie über den Kapiteln im Text. Die Teilüberschrift
+    steht unmittelbar vor dem ersten Kapitel, auch vor einem erzeugten: Daran
+    hängt im Druck, dass ein Referenzkapitel am Anfang eines Teils kein
+    zweites Blatt beginnt und die Überschrift allein zurücklässt.
+    """
+    from tools.make_manual import _classify, anchored, contents
+
+    pages = (
+        manual.Page("one", "Eins", "Der erste Text über etwas.", part="start"),
+        manual.Page("two", "Zwei", "Der zweite Text über etwas.", part="start"),
+        manual.Page("three", "Drei", "Der dritte Text über etwas.", part="topics"),
+        manual.Page("scene", "Szene", "## Szene\n\nErzeugt aus dem Register.", generated=True),
+    )
+    monkeypatch.setattr(manual, "pages", lambda registry=None: pages)
+    toc = contents("de")
+    text = anchored(_classify(manual.as_html()))
+
+    for absent in ("tasks", "help"):
+        assert str(manual.PART_TITLES[absent]) not in toc + text, absent
+    assert '<h3 class="toc-part">Erste Schritte</h3><ol>' in toc
+    assert '<h3 class="toc-part">Funktionen</h3><ol start="3">' in toc
+    assert '<h3 class="toc-part">Nachschlagen</h3><ol start="4">' in toc
+    assert '<h2 class="part">Erste Schritte</h2><h3 id="one">' in text
+    assert '<h2 class="part">Funktionen</h2><h3 id="three">' in text
+    assert '<h2 class="part">Nachschlagen</h2><h3 id="ref-scene" class="chapter">' in text
+    assert text.count('class="part"') == 3
 
 
 def test_the_knowledge_pages_stand_before_the_reference() -> None:

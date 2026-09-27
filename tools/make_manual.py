@@ -8,13 +8,14 @@ das an drei Stellen gepflegt wird, sagt nach dem zweiten Monat dreierlei.
 
 Was entsteht:
 
-* ``website/handbuch.html`` und ``website/en/manual.html`` — je eine Seite,
-  passend zum vorhandenen ``style.css``, ohne JavaScript und ohne fremde
-  Ressourcen, wie der Rest der Seite auch.
+* ``website/handbuch.html`` und ``website/<sprache>/manual.html`` — je eine
+  Seite, passend zum vorhandenen ``style.css``, ohne JavaScript und ohne fremde
+  Ressourcen, wie der Rest der Seite auch. Verzeichnis und Text gliedern sich
+  nach den Teilen des Handbuchs (``Page.part``), wie das Handbuchfenster.
 * ``website/handbuch/`` mit den Abbildungen. Gezeichnetes und Gerendertes als
   SVG, weil es dann in jeder Größe scharf bleibt; die Bildschirmfotos als PNG,
-  weil sie nun einmal Pixel sind.
-* ``Releases/Solidon-Handbuch-<sprache>.pdf`` — über Qt gesetzt, damit dafür
+  die Schrittbilder der Anleitungen als WebP, weil sie nun einmal Pixel sind.
+* ``Releases/Solidon3D-Handbuch-<sprache>.pdf`` — über Qt gesetzt, damit dafür
   keine Abhängigkeit dazukommt, deren Lizenz erst geprüft werden müsste (§36).
 
 Das PDF braucht Qt und damit die echte Plattform; zu den Schriften unter
@@ -27,6 +28,9 @@ import os
 import re
 import struct
 import sys
+from collections.abc import Iterable
+from html import escape
+from itertools import groupby
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -108,6 +112,16 @@ STYLE = """
       font-size: .68em; font-weight: 600; color: var(--muted);
       margin-right: .8rem; font-variant-numeric: tabular-nums;
     }
+    /* Ein Teil beginnt: dieselbe Kennzeile wie im Verzeichnis, mit einer
+       Linie darüber, eine Ebene über den Kapiteln. Sie trägt weder Anker
+       noch Nummer — gezählt und angesprungen werden die Kapitel, der Teil
+       ordnet sie nur. Die Breite ist die der Kapitelüberschrift, damit
+       beide an derselben Kante stehen. */
+    main > h2.part { max-width: 38rem; margin-top: 5rem; padding-top: 1.1rem;
+                     border-top: 2px solid var(--line); color: var(--muted);
+                     font-size: var(--t-sm); font-weight: 750; letter-spacing: .06em;
+                     text-transform: uppercase; }
+    main > h2.part + h3[id] { margin-top: 1.2rem; }
     h3 { margin-top: 2rem; }
     figure { margin: 2rem auto; text-align: center; max-width: 72rem; }
     figure img { max-width: 100%; height: auto; border-radius: 6px; }
@@ -173,11 +187,12 @@ STYLE = """
                 padding: .28rem 0; border-bottom: 1px solid var(--line);
                 text-decoration: none; color: var(--fg); font-size: var(--t-md); }
     nav.toc li:last-child a { border-bottom: none; }
-    /* Die Fuge zwischen den geschriebenen Kapiteln und der Referenz —
-       gedämpft, weil sie ordnet und nicht ruft. */
-    nav.toc .toc-divider { margin: 1.6rem 0 .8rem; border: none; padding: 0;
-                           font-size: var(--t-md); color: var(--muted);
-                           font-weight: 600; letter-spacing: .02em; }
+    /* Die Teile des Handbuchs, jeder über seinen Kapiteln — gedämpft, weil
+       sie ordnen und nicht rufen. */
+    nav.toc .toc-part { margin: 1.6rem 0 .5rem; border: none; padding: 0;
+                        font-size: var(--t-xs); color: var(--muted); font-weight: 750;
+                        letter-spacing: .06em; text-transform: uppercase; }
+    nav.toc .toc-title + .toc-part { margin-top: 0; }
     nav.toc a:hover { color: var(--accent); }
     nav.toc .num { color: var(--accent); font-size: var(--t-xs); font-weight: 600;
                    min-width: 1.6rem; font-variant-numeric: tabular-nums; }
@@ -237,8 +252,12 @@ STYLE = """
       nav.toc { break-after: page; background: none; border: none;
                 border-radius: 0; padding: 0; margin: 0; }
       nav.toc .toc-title { font-size: 18pt; margin-bottom: 1.2rem; }
+      nav.toc .toc-part { break-after: avoid; }
       nav.toc ol { columns: 2; column-gap: 2rem; }
-      nav.toc a { color: var(--fg); font-size: 9.5pt; padding: .22rem 0; }
+      /* Auf Papier braucht kein Eintrag den Mindestraum für den Finger
+         (``style.css``, Zielräume): Mit ihm stand jede Zeile über einen
+         Zentimeter hoch, und das Verzeichnis lief über zwei Blätter. */
+      nav.toc a { color: var(--fg); font-size: 9.5pt; padding: .22rem 0; min-block-size: 0; }
 
       /* Eine Überschrift steht nie allein am Fuß, und ein Bild wird nie
          zwischen zwei Blättern zerschnitten — das war der auffälligste
@@ -253,6 +272,16 @@ STYLE = """
          stehen als ``<h3>`` da, und ein ``h2.chapter`` allein griffe nie. */
       h2.chapter, h3.chapter { break-before: page; margin-top: 0; }
       h3 { break-after: avoid; }
+      /* Ein Teil beginnt auf einem neuen Blatt — ein Umbruch je Teil, und
+         sein Lesezeichen landet oben auf dieser Seite. Das erste Kapitel
+         steht gleich darunter, auch ein Referenzkapitel, das sonst selbst
+         ein Blatt beginnen und die Kennzeile allein zurücklassen würde. So
+         spezifisch wie die Wahl für den Bildschirm, sonst gewännen deren
+         Linie, Abstand und Breite auch auf dem Papier. */
+      main > h2.part { break-before: page; max-width: none; margin: 0 0 .4rem;
+                       padding-top: 0; border-top: none; font-size: 9pt; }
+      main > h2.part + h3[id] { margin-top: 0; }
+      main > h2.part + .chapter { break-before: auto; }
       figure { break-inside: avoid; margin: 1.2rem auto; }
       /* Höher als das hier passt ein Bildschirmfoto kaum je noch neben Text
          auf ein Blatt — es rutscht dann allein auf die nächste Seite und
@@ -452,15 +481,46 @@ def _anchor(page: manual.Page) -> str:
     return f"ref-{page.key}" if page.generated else page.key
 
 
+def _parts(
+    pages: Iterable[manual.Page],
+) -> list[tuple[manual.Part, list[tuple[int, manual.Page]]]]:
+    """Die Kapitel nach den Teilen des Handbuchs, jedes mit seiner Nummer.
+
+    Der Teil steht an der Seite (``Page.part``) und kommt aus derselben
+    Gliederung, nach der das Handbuchfenster gruppiert — hier entsteht keine
+    zweite Zuordnung. Ein Teil ohne Seiten kommt nicht vor; eine leere
+    Überschrift verspräche Kapitel, die es nicht gibt. Die Nummern laufen über
+    die Teile hinweg durch, wie über den Kapiteln im Text.
+    """
+    return [
+        (part, list(members))
+        for part, members in groupby(enumerate(pages, start=1), key=lambda item: item[1].part)
+    ]
+
+
+def _part_title(part: manual.Part) -> str:
+    """Der Titel eines Teils in der eingestellten Sprache, für HTML maskiert."""
+    return escape(str(manual.PART_TITLES[part]), quote=False)
+
+
 def contents(language: str) -> str:
-    """Ein Inhaltsverzeichnis — bei dreiunddreißig Kapiteln kein Luxus.
+    """Ein Inhaltsverzeichnis — bei so vielen Kapiteln kein Luxus.
 
-    Mit gezählten Kapiteln und zweispaltig: eine Punktliste über
-    dreiunddreißig Zeilen ist eine Aufzählung, kein Verzeichnis — man findet
-    darin nichts wieder, weil nichts eine Stelle hat. Die Nummer gibt jedem
-    Kapitel eine.
+    Gegliedert nach den Teilen des Handbuchs (:func:`_parts`), darunter je
+    Teil seine Kapitel: Wer anfängt, findet die ersten Schritte, wer
+    nachschlagen will, das Nachschlagewerk, ohne durch das andere hindurch zu
+    lesen. Die erzeugten Kapitel stehen am Ende des letzten Teils,
+    *Nachschlagen*, zusammen mit dem Wörterbuch und den Wissensseiten — so
+    gruppiert sie auch das Handbuchfenster. Ein eigener Zwischentitel für die
+    Referenz („jede Operation mit ihren Werten") stand früher auch über den
+    Wissensseiten und beschrieb sie falsch.
 
-    Die Anker dazu setzt `anchored`; hier steht nur die Liste.
+    Mit gezählten Kapiteln und zweispaltig: eine lange Punktliste ist eine
+    Aufzählung, kein Verzeichnis — man findet darin nichts wieder, weil nichts
+    eine Stelle hat. Die Nummer gibt jedem Kapitel eine.
+
+    Die Anker und die Teilüberschriften im Text setzt `anchored`; hier steht
+    nur die Liste.
     """
 
     def entry(number: int, page: manual.Page) -> str:
@@ -469,21 +529,14 @@ def contents(language: str) -> str:
             f'<span class="num">{number:02d}</span>{page.title}</a></li>'
         )
 
-    pages = list(manual.pages())
-    written = [(number, page) for number, page in enumerate(pages, start=1) if not page.generated]
-    generated = [(number, page) for number, page in enumerate(pages, start=1) if page.generated]
-
     heading = site_text("Inhalt", language)
     blocks = [f'<h2 class="toc-title">{heading}</h2>']
-    blocks.append("<ol>" + "".join(entry(number, page) for number, page in written) + "</ol>")
-    if generated:
-        # Die Fuge, an der aus Lesen Nachschlagen wird. Die Nummern laufen
-        # durch: sie stehen so auch über den Kapiteln selbst.
-        divider = site_text("Referenz — jede Operation mit ihren Werten", language)
-        blocks.append(f'<h3 class="toc-divider">{divider}</h3>')
+    for part, numbered in _parts(manual.pages()):
+        first = numbered[0][0]
+        blocks.append(f'<h3 class="toc-part">{_part_title(part)}</h3>')
         blocks.append(
-            f'<ol start="{generated[0][0]}">'
-            + "".join(entry(number, page) for number, page in generated)
+            (f'<ol start="{first}">' if first != 1 else "<ol>")
+            + "".join(entry(number, page) for number, page in numbered)
             + "</ol>"
         )
     return f'<nav class="toc" id="toc">{"".join(blocks)}</nav>'
@@ -514,12 +567,18 @@ def anchored(html: str) -> str:
     mitten in Kapitel 24. Gesucht wird deshalb nur vorwärts — die Kapitel stehen
     im Text in derselben Reihenfolge wie in ``manual.pages()`` — und nur auf der
     Ebene der Kapitel.
+
+    **Vor dem ersten Kapitel eines Teils steht der Teil**, eine Ebene über den
+    Kapiteln und ohne Anker — dieselbe Gliederung wie im Verzeichnis
+    (`contents`). Findet sich ein Kapitel nicht, rückt die Teilüberschrift vor
+    das nächste gefundene desselben Teils.
     """
     from app.core.markup import inline
 
     pieces: list[str] = []
     cursor = 0
     level = ""
+    part: manual.Part | None = None
     for page in manual.pages():
         title = inline(str(page.title))
         pattern = re.compile(rf"<h([1-6])>{re.escape(title)}</h\1>")
@@ -539,6 +598,10 @@ def anchored(html: str) -> str:
             # Einführung liest man am Stück (siehe ``@media print``).
             css = ' class="chapter"' if page.generated else ""
             pieces.append(html[cursor : found.start()])
+            if page.part != part:
+                part = page.part
+                above = max(int(level) - 1, 1)
+                pieces.append(f'<h{above} class="part">{_part_title(part)}</h{above}>')
             pieces.append(f'<h{level} id="{_anchor(page)}"{css}>{title}</h{level}>')
             cursor = found.end()
             break
