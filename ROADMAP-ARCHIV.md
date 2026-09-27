@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-27 | [Durchsicht v0.5.1, dritte Runde: elf Punkte geschlossen (27.09.2026)](#durchsicht-v051-dritte-runde-elf-punkte-geschlossen-27092026) |
 | 2026-09-27 | [Durchsicht v0.5.1, zweite Runde: zwei Punkte geschlossen (27.09.2026)](#durchsicht-v051-zweite-runde-zwei-punkte-geschlossen-27092026) |
 | 2026-09-26 | [Durchsicht v0.5.1: neun Punkte geschlossen (26.09.2026)](#durchsicht-v051-neun-punkte-geschlossen-26092026) |
 | 2026-09-26 | [Schriftzüge und Streben sind gerundete Seiten (26.09.2026)](#schriftzüge-und-streben-sind-gerundete-seiten-26092026) |
@@ -32489,3 +32490,419 @@ früher geschlossene hat die Durchsicht an ihren Rändern nachgezogen.
   zeigen* und *Eingabe korrigieren*, an beiden Kernen (`d74a1feff`,
   `test_feature_moves_keep_shape.py::test_a_copy_over_a_side_inside_the_hull_says_so_on_both_kernels`).
 
+## Durchsicht v0.5.1, dritte Runde: elf Punkte geschlossen (27.09.2026)
+
+Nach dem Registerstand der zweiten Runde (`eb7e7afae`) wurde die dritte Runde der
+Durchsicht übernommen — rest-kunde, rest-teilen, rest-klick, rest-auswahl, rest-muendung,
+rest-schraube, rest-kern und rest-merker, dazu rest-erkennung2 aus der zweiten Runde —,
+je Paket gelesen, im Prüfbaum gegen den aktuellen Stand zusammengeführt und mit grünem
+Entwicklungstor committet (`c3271ecd8` bis `e1b897ca2`); RM-270 hat die Hauptsitzung
+danach selbst gebaut (`bd33620c5`). Berichte, Sonden und Patches liegen unter
+`F:\3D Druck.review-051\`. Elf Punkte sind damit geschlossen. RM-259 ist
+für die ebene Fläche gebaut und für die gekrümmte mit neuem Sollwert fortgeschrieben,
+RM-232 steht bei 74 bis 79 ms und wartet auf die Abnahme am echten Monitor, RM-262 behält
+seine Absage mit neuer Begründung, RM-187 führt drei neue Wege; die neuen Registersätze
+der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
+
+<a id="rm-231"></a>
+
+- [x] **RM-231 — Der Fehlerbericht aus dem Fenster geht ohne Schwärzung hinaus.**
+  Gemeldet aus der Durchsicht 0.5.0 (dienste, für das Paket fenster):
+  `main_window.report_error` nimmt `traceback.format_exception` ungekürzt und
+  ohne die Schwärzung von `log.exception_text` — Quellzeilen und Pfade gehen in
+  den Bericht (Stichprobe: `main_window.py:19698`). Der Nutzer sieht den Text
+  vor dem Senden (§37.2), die Länge fängt seit `736d4a46` die Kürzung ab; ein
+  Pfad mit dem Benutzernamen steht trotzdem darin. Weg: denselben Weg wie der
+  Absturzschutz (`log.exception_text`), Test mit einem Pfad unter dem
+  Nutzerordner. Abnahme: kein Benutzerpfad im gesendeten Text, die Fehlerstelle
+  bleibt lesbar.
+
+  **Stand nach der Durchsicht v0.5.1:** unverändert — kein Paket hat den Weg berührt,
+  `report_error` nimmt am Stand `1e9f21d50` weiter `traceback.format_exception`
+  (`main_window.py:21883`).
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kunde):** Nachgestellt mit einer
+  Ausnahme aus einem Modul unter `%LOCALAPPDATA%\Programs\Solidon\…` und einem Kundenpfad
+  im Text (`F:\3D Druck.review-051\sonden\rest-kunde\s231_bericht.py`): Der Bericht trug
+  Quellzeilen samt Unterstreichung und `C:\Users\…` mit dem Benutzernamen im Stapel und im
+  Ausnahmetext. Auch `log.exception_text`, der Weg des Absturzschutzes, schwärzte keinen
+  Nutzerordner. Weil die Installation mit `PrivilegesRequired=lowest` unter dem
+  Nutzerordner liegt (`packaging/solidon3d.iss`), stand der Name in jeder Stapelzeile — im
+  Fensterbericht, im Absturzprotokoll und im Bericht der Kommandozeile.
+  `log.redact_user_paths` ersetzt den Nutzerordner durch `~` (erst der eigene wörtlich,
+  dann ein Muster für fremde Profile, Namen mit Leerzeichen und 8.3-Kurznamen);
+  `exception_text`, `report.exception_report` und `report.diagnostic_attachments` fragen
+  es — Letzteres für das angehängte Protokoll, in dem 49 Aufrufe Pfade nennen; das lokale
+  Protokoll bleibt, wie es ist. `MainWindow.report_error` nimmt nur noch
+  `report.crash_detail`. Nachher: `File "~\AppData\Local\Programs\Solidon\_internal\app\probe.py", line 2, in boom`
+  — die Stelle bleibt lesbar, kein Name, keine Quellzeile. Tests
+  `tests/test_support.py::test_a_crash_report_names_the_place_without_the_user_folder` und
+  `::test_attached_logs_carry_no_user_folder`, beide am alten Stand rot; der Fensterbericht
+  in `test_first_run.py` läuft im Release-Tor ([RM-213](ROADMAP.md#rm-213)). `c3271ecd8`.
+
+<a id="rm-260"></a>
+
+- [x] **RM-260 — `geom.mesh.on_surface` baut seine Suchbäume je Aufruf neu.** Aus der
+  Durchsicht v0.5.1 (rest-bohrung, REST-BOHRUNG-04). Jede Abfrage baut die Bäume ihrer
+  Größenbänder neu (`_nearest_on`, `cKDTree(centroids[indices])` je Band) — am
+  Gartenschlauchhalter (392 532 Dreiecke) 68 bis 75 ms Grundlast je Aufruf, gleich wie
+  viele Punkte gefragt werden. `_past_the_mouths` fragte deshalb die 614 ebenen Stücke
+  eines Werkzeugs in 41 s; seit `e2ba4e516` fragt es alle Ränder in einer Abfrage
+  (Versetzen einer Kette dort 20,0 → 4,3 s, bitgleich). Die übrigen Aufrufer zahlen die
+  Grundlast weiter. Weg: die Bäume je Band im `_SurfaceIndex` halten, der ohnehin am Netz
+  gemerkt ist. Abnahme: ein zweiter Aufruf am selben Netz baut keinen Baum neu, die
+  Antworten sind bitgleich.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kern, REST-KERN-01):**
+  `_SurfaceIndex.bands` (`functools.cached_property`, dasselbe Muster wie
+  `relations._SurfacePatch`) hält je Band Nummern, Baum und größte Spanne, beim ersten
+  Gebrauch gebaut; `_nearest_on` liest sie. Die Aufrufer, die denselben Körper mehrmals
+  fragen, halten ihren Index — am Szenenkörper `prepare.surface_index_of`, in Portionen und
+  Schleifen einen eigenen —, und `measure._inward_direction` fragt zuerst das ganze Netz.
+  Gartenschlauchhalter (19 Größenbänder), im selben Prozess abwechselnd gegen den Stand
+  davor, Median, unter Last: zweiter Aufruf am gehaltenen Index 67,3 ms und 19 Bäume →
+  0,7 ms und keiner, mit 64 Punkten 88,4 → 24,4 ms; *Merkmal versetzen* `hole_10`
+  4,31 → 4,01 s, `hole_4` 4,81 → 4,50 s, *Merkmal verdoppeln* 2,81 → 2,37 s; *Wandstärke
+  messen*, fünf Klicks, 1,47 → 0,38 s. Alle Antworten bitgleich, auch `_inward_direction`
+  an 363 Stellen, davon 63 an Nullflächen. Tests
+  `tests/test_slots.py::test_a_held_surface_index_builds_its_trees_once` und
+  `tests/test_measure.py::test_a_second_click_measures_the_wall_without_a_new_search_tree`,
+  am alten Stand rot. `450067ead`. Der gemerkte Index trägt am Gartenschlauchhalter damit
+  15,7 MB Felder mehr, gut 90 statt rund 75 MB; der Kommentar an
+  `features.WHOLE_BODY_ANSWERS` nennt noch 75.
+
+<a id="rm-261"></a>
+
+- [x] **RM-261 — Nach jedem Schritt erkennt die Auswertung den ganzen Körper neu, am
+  Gartenschlauchhalter rund 30 s.** Aus der Durchsicht v0.5.1 (rest-bohrung
+  REST-BOHRUNG-07, rest-erkennung2 REST-ERKENNUNG2-05 und -06). Unter
+  `FEATURE_LIMIT_TRIANGLES` (1,5 Mio.) ruft `evaluate._with_features` `detect` am
+  Ergebnis jedes Schritts; nur darüber misst es bekannte Merkmale örtlich
+  (`_measured_locally`). Am Gartenschlauchhalter (392 532 Dreiecke) kostet das je
+  übernommenen Schritt rund 30 s, auch wenn die Operation vorher schon örtlich
+  nachgemessen hat (4 bis 5 s). So verlangt es Bauplan §21.1 („seine Folgeschritte
+  erkennen bis 5 000 000 Dreiecken vollständig nach“); eine örtliche Wiedererkennung
+  darunter wäre eine Bauplanänderung und änderte Antworten, die am ganzen Körper hängen
+  (Anteil einer gerundeten Seite, Muster, Durchgang durch ferne Wände, Nummerierung) —
+  das entscheidet Robert. Der Weg ohne Planänderung: Eine Boolesche Operation übernimmt
+  jedes Dreieck, das sie nicht schneidet, bitgleich, und die teuren Antworten der
+  Vollerkennung — Einpassung je Fleck, Mantelnachweise der Facetten — hängen an der
+  Geometrie des Flecks und seines ersten Nachbarrings. Ein Merker über die Körpergrenze
+  hinweg, nach dieser Geometrie geschlüsselt, gäbe dieselbe Antwort; ob er sich lohnt und
+  wo er nicht trägt, ist am Korpus gegen die Vollerkennung zu messen. Die örtliche
+  Nachmessung selbst fand an einer Senkbohrung in der Hohlkehle die Kette nicht und fiel
+  auf die volle Erkennung zurück (in der genauen Vorschau 33 statt rund 5 s je Zahl);
+  rest-erkennung2 hat das gebaut (Versetzen dort 37,0 → 10,0 s), die Übernahme steht aus.
+  Abnahme: Versetzen einer Bohrung am Gartenschlauchhalter übernimmt in unter 10 s, und
+  am Korpus ist kein Körper anders als mit der Vollerkennung.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-merker):** Gebaut ohne
+  Bauplanänderung; die Vollerkennung nach jedem Schritt bleibt (§21.1). Zwei Teile, beide
+  nötig. (1) Die erste Boolesche nach dem Laden gab jedes unberührte Dreieck mit denselben
+  drei Ecken zurück, aber mit anderer Eckenfolge und neu nummerierten Ecken (am
+  Gartenschlauchhalter 385 522 von 391 850 bitgleich übernommen, nur 101 110 mit derselben
+  Eckenfolge). Die Erkennung las danach jeden Fleck in den letzten Stellen anders, kein
+  Merker nach Inhalt konnte treffen, und an Schwellen kippten Merkmale fern vom Schritt:
+  `fillet_137`, 113 mm von der versetzten Bohrung, ging in einem Kegel auf, und die
+  Auswertung meldete nach jedem Versetzen `perceive.orphaned`. `attributes.in_source_layout`
+  legt das Ergebnis jeder Booleschen und von `_without_scars` in die Darstellung des
+  Eingangs zurück, ohne Gleitkommarechnung (0,2 s an 391 850 Dreiecken), Cache-Format 31
+  (`e6e6f3ba0`). (2) Die vier Einpassungen und drei Nachweise (`GEOMETRY_KEYED_ANSWERS`)
+  antworten über die Körpergrenze (`features._by_geometry`), Bit für Bit geschlüsselt nach
+  der Stützpunktlesung samt Dreiecken des Flecks, der Toleranz, dem geprüften Fit und den
+  Löserbudgets; die Antworten gehen mit der letzten Abstammung, die sie fragte
+  (`e1b897ca2`). Die Nachmessung an der Senkbohrung in der Hohlkehle kam mit rest-erkennung2
+  (`84aa9a5aa`, Versetzen dort 37,0 → 10,0 s). Gemessen am Gartenschlauchhalter,
+  Versetzen einer Bohrung übernehmen, drei Runden im Wechsel je ein Prozess, Median, unter
+  Last: Erkennung 28,3 / 28,1 / 27,9 s → 7,5 / 5,7 / 6,1 s (`hole_10`, `hole_4`,
+  `hole_9`), das ganze Übernehmen 37,2 / 38,3 / 37,4 s → 17,4 / 16,2 / 16,6 s; nach
+  *Bohrung setzen* achsparallel die Erkennung 46,2 → 10,7 s; Laden unverändert (32,8 gegen
+  32,4 s). Am Korpus: 539 geladene Netzkörper Bit für Bit wie vorher; 346 Körper mit vier
+  Schritten (Bohren, Versetzen, Aufweiten, Entfernen), der Merker gegen dieselbe
+  Vollerkennung ohne ihn in 1 365 Zuständen 0 anders — die zweite Hälfte der Abnahme;
+  40 exakte Körper 0 anders. Das Ziel „unter 10 s“ ist für die Erkennung je Schritt
+  erreicht, an der dieser Punkt die 30 s gemessen hatte. Das ganze Übernehmen bleibt bei
+  16 bis 17,5 s, weil die Operation nach dem Klick in voller Güte 9 bis 10 s neu rechnet;
+  dieser Teil der Abnahme steht als [RM-273](ROADMAP.md#rm-273). Tests
+  `tests/test_boolean.py::test_a_boolean_keeps_the_layout_of_every_triangle_it_did_not_cut`,
+  `tests/test_fit_stability.py::test_moving_a_bore_keeps_the_layout_of_the_rest_of_the_body`,
+  `::test_untouched_round_forms_read_the_same_numbers_after_a_bore_elsewhere`,
+  `::test_the_next_body_takes_the_answers_of_its_untouched_patches`,
+  `::test_answers_across_bodies_go_with_the_last_body_that_asked` und
+  `tests/test_features.py::test_every_question_across_bodies_is_named_and_shared`, alle am
+  Stand davor rot.
+
+<a id="rm-263"></a>
+
+- [x] **RM-263 — Eine Tasche ohne Lippe kippt an den Kernen um 0,56 mm³ verschieden.**
+  Aus der Durchsicht v0.5.1 (rest-lippe, „Für Nachbarn“). Magnettasche mit entfernter
+  Lippe, um 10° um X gekippt: exakt 152,724 mm³ abgetragen, am Netz 152,845 — auf das
+  48-Eck umgerechnet 153,282; gerade eingesetzt stimmen beide auf 10⁻⁴. Der Boden liegt
+  an beiden gleich; der Unterschied sitzt als 0,62 mm³ auf der Seite, zu der die Mündung
+  kippt, vom tiefsten Punkt des Bodens bis zur Deckfläche — dort trägt der exakte Kern
+  mehr Material. Nicht neu in 0.5.1, der Drehweg einer einzelnen Bohrung ist unverändert.
+  Sonden `r10_ohne_lippe_kippen.py`, `r10b_boden.py`, `r10c_unterschied.py` unter
+  `F:\3D Druck.review-051\sonden\rest-lippe\`. Weg: den Keil an der Mündungsseite an
+  beiden Kernen gegen das gekippte Profil rechnen und klären, welcher Kern die alte
+  Mündung falsch schließt. Abnahme: beide Kerne gleich bis auf den Faktor des Vielecks.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-muendung, REST-MUENDUNG-01):**
+  Geklärt: Beide Kerne schlossen die alte Mündung gleich falsch. Eine einzelne Sackbohrung
+  wurde gekippt ohne Verlängerung über ihre Mündung gesetzt — Kette (`_chain_tool`) und
+  Durchgangsbohrung (`_turned_through_bore`) reichen seit RM-172 und RM-133 darüber
+  hinaus, die Sackbohrung nicht. Auf der Seite, zu der die Mündung sinkt, lag das erste
+  Material an beiden Kernen bei z = 4,9, direkt unter der Deckfläche: eine Haut bis
+  0,72 mm dick. Die 0,56 mm³ zwischen den Kernen waren allein die Zugabe aus §39
+  (`FEATURE_OVERLAP` 0,02 mm auf der halben Öffnungsfläche, 26,7 mm² × 0,02 mm =
+  0,53 mm³). `_blind_mouth` liest die offene Mündung an ihren Randringen, `_blind_reach`
+  rechnet die Verlängerung mit derselben Formel wie Kette und Durchgang
+  (`_reach_past_a_tilted_face`); am Netz `_turned_blind_bore`, exakt
+  `_exact_turned_blind_tool`, beide an der alten Mündungsebene gekappt (`_old_rim_caps`);
+  `rotate_feature` `cache_version` 6. Magnettasche ohne Lippe, 10° um X: exakt 161,6055,
+  am Netz auf das Kreisprofil umgerechnet 161,6055 mm³, analytisch
+  π · 4,125² · (1,5/cos 10° + 1,5) = 161,605 (vorher 152,724 und 153,282); das erste
+  Material auf der tiefen Seite liegt an zwei Proben bei z = 1,358 und 1,624 statt 4,9,
+  an beiden Kernen gleich. Tests
+  `tests/test_bore_depth.py::test_a_tilted_blind_hole_stays_open_at_its_mouth` (beide
+  Kerne) und erweitert
+  `tests/test_feature_moves_keep_shape.py::test_a_magnet_pocket_tilts_only_without_its_lip`;
+  mit dem alten Kippweg 3 von 3 rot. `2e496575b`.
+
+<a id="rm-264"></a>
+
+- [x] **RM-264 — *Zum Langloch ziehen* fragt am exakten Körper eine andere Erkennung als
+  das Fenster.** Aus der Durchsicht v0.5.1 (rest-lippe, „Für Nachbarn“). `slot_hole`
+  fragt am exakten Körper die Netz-Erkennung seiner Tessellierung (`detect(body)`, seit
+  `c7e0df453`, als `features_of` noch keine Kegel kannte), das Merkmalfenster die
+  Merkmale der Szene. Am Drehprofil mit Lippe findet die Netz-Erkennung der
+  Tessellierung gar nichts: Das Fenster stellt die Zeile grau, die Operation zöge das
+  Langloch durch die Lippe (`sonden\rest-lippe\r9_langloch_wt1.txt`). An der
+  Magnettasche aus dem Baustein sagen beide dasselbe. Weg: auch am exakten Körper
+  `source.features` fragen, wie `rotate_feature` es tut. Abnahme: am Drehprofil mit
+  Lippe sagen Fenster und Operation an beiden Kernen dasselbe.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kern, REST-KERN-02):** `slot_hole`
+  fragt an beiden Kernen `cavity_chain_state_at(feature, source.features, body)` —
+  dieselben Merkmale wie das Fenster und wie `rotate_feature`. Vorher schnitt die Operation
+  an der gedrehten Tasche mit Haltelippe über Chat, Kommandozeile oder einen gespeicherten
+  Schritt ein Langloch von 12 mm durch die Lippe, während das Fenster die Zeile grau
+  stellte. Korpusprobe an 29 Löchern exakter Körper (neun STEP-Dateien aus
+  `F:\3D Dateien`, Deckel mit Magnettasche aus dem Baustein, Tasche mit Haltelippe,
+  Platten mit Kegel- und Zylindersenkung): alte und neue Frage verschieden an genau einem
+  Loch, der Lippe, Fenster und neue Frage an keinem. Test
+  `tests/test_bore_mouth_resize.py::test_a_pocket_with_a_lip_says_why_it_stays_straight`
+  ohne die Ausnahme für `[hole-brep]`, prüft jetzt auch, dass der Körper unverändert
+  bleibt; am alten Stand rot. `02b11be45`.
+
+<a id="rm-265"></a>
+
+- [x] **RM-265 — Die Suche an einer Stelle sagt „zu viele Dreiecke“ erst nach der
+  Rechnung.** Aus der Durchsicht v0.5.1 (fenster, Rest von FENSTER-10). Am
+  Mausoleum-Drachen steht *Merkmale an einer Stelle erkennen* seit `c2ebc0fe0` nach
+  21,6 statt 58 s da (die Suche rechnet in der Qualität der Sitzung und trifft deren
+  Cache), davon 15 bis 19 s in `perceive/local.py`, bis die Suche bei 10 mm Radius mit
+  `local_budget` absagt („Dieser Bereich enthält zu viele Dreiecke …“; unter Last). Die
+  Absage hängt an der Dreieckszahl des Bereichs und könnte vor der Einpassung stehen.
+  Weg: messen, wo die 15 bis 19 s liegen, und die Budgetfrage vor die teure Rechnung
+  ziehen (Sonde `F:\3D Druck.review-051\sonden\fenster\p07_stelle.py`). Abnahme: dieselbe
+  Absage an derselben Stelle, ohne dass vorher gerechnet wird, was sie verwirft.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kern, REST-KERN-03):** Gemessen am
+  Drachen (2 330 374 Dreiecke, Kundenweg mit „Sofort laden“): Die Suche mit 10 mm sagt an
+  zwölf zufälligen Stellen überall „budget“; kalt 5,4 bis 8,1 s, davon
+  `_recognise_region` 2,3 bis 3,8 s — die ganze Prüfung am vollständigen Körper
+  (Einschlüsse, Krümmungssprünge, Kantenzählung, Rollen der Flächen), deren Ergebnis die
+  Absage verwirft. Die „Facette“ an der ersten Stelle ist ein sanft gewölbtes Stück aus
+  32 832 Dreiecken, dessen gerundete Seite (101 mm²) unter einem Hundertstel des Körpers
+  (108 mm²) bleibt und nie vollständig sein kann. Die 15 bis 19 s aus FENSTER-10 stellen
+  sich am heutigen Stand nicht mehr ein (an `fa0320fe7` kalt 6,5 s); der Rest war
+  Fensterweg und Last. Behoben in `perceive/local.py`: Trägt die Facette allein kein
+  Merkmal, das vollständig sein könnte (`_could_be_complete`, die notwendigen Bedingungen
+  aus `is_complete`), steht die Antwort vor der Prüfung am ganzen Körper fest — nur wo kein
+  Einschluss den Treffer tragen kann (`_reaches_beyond`); dazu ein Durchgang über das
+  Original statt zwei (`_within`). Im selben Prozess abwechselnd gegen den Stand davor,
+  unter Last: erste Suche kalt 6,04 / 6,19 / 6,57 → 2,95 / 2,99 / 2,91 s, 48 Suchen warm
+  1,57 → 0,84 s im Median, an allen 48 dieselbe Antwort; am Korpus (neun echte Modelle,
+  720 Suchen mit zwei Budgets) keine verschieden. Test
+  `tests/test_local_detection.py::test_a_facet_that_carries_nothing_says_budget_before_the_whole_body_is_asked`,
+  am alten Stand rot. `53e816290`.
+
+<a id="rm-266"></a>
+
+- [x] **RM-266 — *Modell teilen* am Laptop-Ständer rechnet 51 s an Stützvolumen der
+  Nahtsuche.** Aus der Durchsicht v0.5.1 (reparatur, REPARATUR-07, „Für Nachbarn“).
+  Seit `f58ef38ca` gelingt das Teilen am `parametric-laptop-riser.stl` und braucht 56 s
+  statt 93 bis 131 s (unter Last). Im Profil
+  (`F:\3D Druck.review-051\sonden\reparatur\laeufe\k10c-riser-prof.txt`, vor der
+  Behebung genommen, dieser Anteil ist davon unberührt) stecken 51 s in acht Aufrufen von
+  `orientation.best_face_candidate` — 24 × `judge` → `slice_body`, Shapely-Differenzen
+  für die Stützvolumen der probeweise geteilten Hälften. Weg: die Stützschätzung der
+  Nahtsuche an ihrem Anteil messen und verkürzen (gröbere Schichten für den Vergleich,
+  Schichten je Hälfte merken, nur die Kandidaten schätzen, die den Ausschlag geben).
+  Abnahme: am Laptop-Ständer dieselbe Naht und dieselben Stifte, die Nahtsuche abwechselnd
+  gegen den Stand davor gemessen deutlich kürzer.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-teilen):** Abnahme erfüllt.
+  Nahtsuche (`plan_split`) am Laptop-Ständer, Centauri Carbon 2, abwechselnd gegen den
+  Stand davor, drei Paare, Median: 47,86 → 30,15 s (−37 %); die Stützschätzung der Hälften
+  (`best_face_candidate`) 34,2 → 16,6 s. Dieselbe Naht (`split_pinned`, Achse y),
+  Schwalbenschwanz mit zwei Verbindern, Stifte an A, Stiftlagen bitgleich, dieselben
+  Befunde. Gebaut: Die Arbeiter teilen sich die Stützsäulen je Schicht statt je
+  Startschicht — vorher rechnete eine von sechs Gruppen 2,1 s und die übrigen zusammen
+  0,2 s, und die Summe hing an der Kernzahl ([RM-187](ROADMAP.md#rm-187));
+  `slice_body(with_layers=False)` gibt der Suche nur die Zahlen, bitgleich; die Vorauswahl
+  der Lagen läuft auf Arbeitern (auch für *Druckoptimal ausrichten*); an einer Naht ohne
+  Platz für einen Verbinder entfällt die zweite Stiftseite (dieselbe Summe); die
+  Probeschnitte übertragen keine Filamente mehr (am mehrfarbigen Besteckeinsatz 4,75 von
+  4,78 s je Probeschnitt). Am Korpus, Bambu A1 mini: Waschschüssel 16,81 → 7,81 s,
+  mehrfarbiger Besteckeinsatz 62,13 → 2,91 s, Laptop-Ständer 26,10 → 20,30 s; sieben
+  Teilungen an sechs Modellen mit denselben Schritten, Parametern und Verbinderlagen,
+  `tests/test_autosplit.py` (123 Fälle) grün. Gröbere Schichten und Schichten je Hälfte
+  sind begründet nicht gebaut: Beide gefährden die Entscheidung an der
+  Fünf-Prozent-Grenze, an der die drei Lagen der großen Hälfte innerhalb 0,1 % liegen.
+  Tests `tests/test_slice.py::test_the_support_volume_comes_out_the_same_on_any_number_of_workers`,
+  `::test_the_numbers_alone_are_the_numbers_of_the_full_analysis`,
+  `tests/test_orient.py::test_the_scores_are_the_same_bits_on_any_number_of_workers`,
+  `tests/test_autosplit.py::test_a_seam_without_room_for_a_connector_is_judged_once` und
+  `::test_the_seam_search_cuts_without_filaments`. `1d8dd68aa`. Was am Laptop-Ständer
+  bleibt, ist nicht mehr die Stützschätzung: 8,3 s einmalige Eigenkreuzungssuche der
+  großen Hälfte (eine Schale kreuzt sich 1 121-mal selbst, [RM-253](ROADMAP.md#rm-253))
+  und 7,7 s Schnitte über den GEOS-Weg, der den Interpreter-Lock hält. Naht- und
+  Stiftlagen über BLAS (REST-TEILEN-06) stehen bei [RM-187](ROADMAP.md#rm-187).
+
+<a id="rm-267"></a>
+
+- [x] **RM-267 — Die Verbindernummern des Auto-Split zählen erkannte Zapfen mit.** Aus der
+  Durchsicht v0.5.1 (erkennung, „Für Nachbarn“, Folge von ERKENNUNG-16). `geom/autosplit`
+  plant die Passungen einer Teilung mit den Namen der Verbinder, bevor die Schritte
+  rechnen (`stift_3` → `obj_4:pin_3` ↔ `obj_10:bore_3`), und `pins.next_connector_index`
+  vergibt die nächste Nummer nach jedem Namen `pin_…`/`bore_…`, den der Körper trägt. Die
+  Erkennung nennt ihre Zapfen aber ebenfalls `pin_…`: Findet ein erkannter Zapfen keinen
+  erklärten Zwilling, heißt er `pin_N`, jeder spätere Verbinder rückt eine Nummer weiter,
+  und die geplanten Passungen zeigen ins Leere (`fit.missing_feature`). `1afc1852d`
+  schließt den Fall der Gabel (`matching.declared_partners`); die Empfindlichkeit
+  bleibt. Weg: Verbindernummern nur nach erzeugten Verbindern zählen und erkannten
+  Zapfen einen eigenen Namensraum geben, oder die Passungen nach dem Schritt an den
+  tatsächlich vergebenen Namen festmachen. Abnahme: Ein Körper mit einem erkannten Zapfen
+  ohne Zwilling teilt sich mit Stiften, und keine Passung meldet `fit.missing_feature`.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kern, REST-KERN-04):**
+  Nachgestellt an der Gabel aus `test_autosplit` mit einer Zuordnung, die jeden erkannten
+  Stift umkämpft lässt (`F:\3D Druck.review-051\sonden\rest-kern\r267_nachstellen.py`):
+  fünf Schnitte, sechs Stücke; am Stück `obj_4` heißt der erkannte Mantel eines Verbinders
+  frisch `pin_3`, der Schritt nummeriert seine Stifte ab 4, zwei `fit.missing_feature`,
+  und `stift_3` zeigt auf den fremden Stift. An echten Modellen trat es am heutigen Stand
+  nicht auf, weil ERKENNUNG-16 die Gabel geschlossen hat. Entschieden nach dem Besten für
+  Kunde und alte Projekte: Der Plan gibt jedem Schritt die erste Nummer seiner Stifte mit
+  (`first_pin` an *Teilen* und *An gezeichneter Linie trennen*, unter „Weitere
+  Einstellungen“, Vorgabe 0 zählt wie bisher; `split.apply_planned` vergibt die Nummern
+  beim Vorbereiten der Schritte), und ein erkanntes Merkmal, das schon den Namen eines neuen
+  Verbinders trägt, weicht auf den nächsten freien Namen aus (`_clear_of`). Keine
+  Formatänderung und keine Migration: Gespeicherte Schritte ohne das Feld rechnen
+  unverändert, eine ältere Version lehnt das unbekannte Feld mit Satz ab — derselbe Weg
+  wie bei `pins_on_b` und `glue_hint`. Verworfen: ein eigener Namensraum (bräuchte eine
+  Migration je Verweis, die nur die Auswertung entscheiden kann) und das Umhängen der
+  Passungen nach dem Schritt (eine zweite Transaktion neben dem Strg+Z der Teilung, Regel
+  16). Nachher an der Gabel keine `fit.missing_feature`, jede der zehn Passungen an zwei
+  erklärten Verbindern derselben Stelle; Besenhalter ×4,5 und ×6 bitgleich wie vorher.
+  Test `tests/test_autosplit.py::test_a_recognised_pin_without_a_twin_does_not_shift_a_later_seam`,
+  am alten Stand rot; zwei neue Katalogschlüssel in allen Sprachen. `6f7eafc25`.
+
+<a id="rm-268"></a>
+
+- [x] **RM-268 — Befunde über einen verbrauchten Körper bieten Knöpfe an, die ins Leere
+  gehen.** Aus der Durchsicht v0.5.1 (reparatur, „Für Nachbarn“). Nach *Modell teilen* am
+  Laptop-Ständer stand „Das Modell besteht aus 21 Teilen …“ am Körper `obj_1`, den es
+  nicht mehr gibt, mit *Überschneidungen auflösen* und *In Einzelteile zerlegen*
+  (`F:\3D Druck.review-051\sonden\reparatur\laeufe\k10d-riser.txt`); ein Klick legt eine
+  Reparatur an einem Körper an, der nicht mehr da ist. Am Code bestätigt:
+  `panels.actions_for_document` nimmt bei einem verbrauchten Körper nur *Stelle zeigen*
+  und *Dreiecke verringern* heraus. Seit `5948a79a5` stehen nach dem Teilen zwei statt 22
+  Zeilen im Bericht; ob diese Zeile dort noch kommt, ist nicht nachgemessen — die Lücke im
+  Filter bleibt für jeden Befund an einem verbrauchten Körper. Weg: jede Handlung, die
+  einen Körper braucht, dort weglassen (dieselbe Schranke wie für *Dreiecke verringern*),
+  mit Test. Abnahme: kein Knopf an einem Befund, dessen Körper der Verlauf verbraucht hat,
+  außer denen, die ohne ihn gelten.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kunde):** Nachgemessen am
+  `parametric-laptop-riser.stl` (Laden, *Teilen* in der Mitte der längsten Achse über
+  `split.apply_pinned_split`, derselbe Ablauf wie der Dialog): Die Zeile
+  `ingest.multiple_components` am verbrauchten `obj_1` kam auch nach `5948a79a5` noch, mit
+  *Überschneidungen auflösen* und *In Einzelteile zerlegen*. Eine Quelle
+  `panels.NEEDS_LIVE_BODY` nennt die 19 Handlungen, die einen Körper brauchen, mit einer
+  schmalen Ausnahme: *Überschneidungen auflösen* an einem Reparaturschritt ändert den
+  Schritt und gilt ohne Körper. Am verbrauchten Körper fallen alle heraus; es bleiben, was
+  einen Schritt ändert (*Eingabe korrigieren*, *Offen lassen*, *Kanten verfeinern und
+  erneut versuchen*), die ganze Szene meint (*Auf dem Bett anordnen*) oder bewusst am
+  Ladeschritt steht (*Alle Merkmale erkennen*). Nachher am selben Modell
+  `ingest.multiple_components @ obj_1: []`. Tests
+  `tests/test_finding_actions.py::test_a_consumed_body_offers_nothing_that_needs_it` und
+  `::test_every_handler_that_reads_the_body_of_a_finding_is_listed`, ein AST-Wächter über
+  `MainWindow.error_handlers`, der beim ersten Lauf `decimate_and_retry` fand; am alten
+  Stand rot. `8615dc1e6`.
+
+<a id="rm-269"></a>
+
+- [x] **RM-269 — Vier Kleinigkeiten vom Kundenweg der Durchsicht v0.5.1.** Gesehen am
+  echten Fenster (kunde, massbild) und keinem Paket zugeteilt: (1) *Zuletzt geöffnet* auf
+  der Startfläche öffnet erst mit Doppelklick, ein Eintrag wirkt aber wie ein Verweis (am
+  Code: `StartScreen` hängt an `itemActivated`); (2) bei gewählter Kante sagt das
+  Auswahlfenster „Kein Merkmal gewählt. Klicken Sie eine Bohrung, eine Fläche oder eine
+  Verrundung an …“ (MASSBILD-09; am Code: `say_nothing_is_chosen` fragt Auswahl und
+  Merkmale, nicht die Kante); (3) die Rundkante einer waagerecht liegenden Bohrung heißt
+  „Waagerecht · 13,82 mm“, obwohl sie senkrecht steht; (4) nach *Modell teilen* steht die
+  Kamera zu nah an einer Hälfte (KUNDE-11). Dazu eine Frage aus KUNDE-08: Soll der
+  Hinweis „Nicht jedes Maß der Zeichnung ist festgelegt …“ bei einem frei gezogenen
+  Rechteck ganz ohne Maß überhaupt kommen? Bewusst nicht aufgenommen: *Modell einfügen*
+  und *Bausteinkatalog* auch im Menü *Erzeugen* — so gewollt (Kommentar am Menübau).
+  Weg: je Stelle der kleinste Fix mit Test. Abnahme: vier Tests, die Frage entschieden
+  und begründet.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kunde):** Alle vier behoben und die
+  Frage entschieden, gemessen am gebauten Fenster
+  (`F:\3D Druck.review-051\sonden\rest-kunde\probe.py`) gegen den Stand davor. (1)
+  *Zuletzt geöffnet* hängt zusätzlich an `itemClicked`; ein Doppelklick öffnet den Eintrag
+  einmal, die Eingabetaste bleibt. Vorher öffnete ein Einfachklick nichts, nachher öffnet
+  er (`3eef03427`). (2) Der Leersatz erscheint nur, wenn im Merkmalfenster nichts steht,
+  auch bei zwei gewählten Merkmalen mit ihrem Abstand; am Schraubendreherhalter steht neben
+  der Kante kein „Kein Merkmal gewählt“ mehr (`3eef03427`). (3) Ein Ring heißt nach der
+  Ebene, in der er liegt (`edges.edge_lie_of`, Normale nach Newell, am exakten Kern über
+  `brep.edit.edge_points`); Beschriftung und Kantenfrage fragen diese Quelle, und die sechs
+  Ränder der Querbohrungen am Schraubendreherhalter heißen „Senkrecht · 14,13 mm“
+  (`6bcffec39`). Die Auswahl nach Lage fragt weiter `flat`; das steht als
+  [RM-279](ROADMAP.md#rm-279). (4) `Viewport.frame_next_scene` rahmt nach *Modell teilen*
+  einmal auf alle Teile; am Organizer ×2,3 mit sechs Teilen stehen 100 statt 29 % im Bild,
+  über alle fünf Teilungswege (`9f821c70c`). Nach *Skalieren* bleibt die Kamera weiter
+  stehen; das steht als [RM-280](ROADMAP.md#rm-280). **KUNDE-08, entschieden: nein.** Der
+  Hinweis „Nicht jedes Maß der Zeichnung ist festgelegt …“ kommt nur noch an einer
+  Zeichnung, die mindestens ein Maß trägt und trotzdem wandern kann. Wer ganz ohne Maß
+  zeichnet, druckt, was er sieht, und las den Satz im Prüfbericht wie einen Mangel ohne
+  Handlung; der Skizzeneditor zeigt die offenen Maße beim Zeichnen weiter an
+  (`66ba71ba5`). Tests ohne Fenster:
+  `tests/test_mesh_edges.py::test_a_rim_is_named_after_the_plane_it_lies_in` (beide Kerne)
+  und `tests/test_geometry_review_regressions.py::test_a_freehand_drawing_without_any_measure_is_no_finding`,
+  beide am alten Stand rot; die Fenstertests zu (1), (2) und (4) laufen im Release-Tor
+  ([RM-213](ROADMAP.md#rm-213)).
+
+<a id="rm-270"></a>
+
+- [x] **RM-270 — Der Katalogschlüssel „Tasche“ trägt zwei Dinge.** Aus der Durchsicht
+  v0.5.1 (texte). Derselbe Schlüssel ist die Gummifuß-Tasche des Standfußes
+  (`ui/labels.py`, es „Alojamiento“) und der Verlaufstitel des Beispiels
+  (`tools/make_examples.py`), den die Tour zitiert („Doppelklick auf „Tasche““, es
+  „«Rebaje»“). `test_wording::test_a_quoted_control_is_named_as_the_control_says` führt
+  ihn deshalb als Ausnahme. Nicht in der Durchsicht gebaut, weil Erzeugnisse daran
+  hängen. Weg: in `make_examples.py` den Titel auf einen eigenen Schlüssel stellen
+  („Tasche schneiden“, der Titel der Operation), die Beispiele beim nächsten `/erzeugen`
+  neu schreiben, die Tour zitieren lassen und die Ausnahme austragen. Abnahme: Ausnahme
+  „Tasche“ aus `test_wording` entfernt, der Test grün.
+
+  **Abschluss 27.09.2026 (Durchsicht v0.5.1, Hauptsitzung):** `tools/make_examples.py`
+  nennt den Verlaufsschritt `_("Tasche schneiden")` wie die Operation, `app/core/tour.py`
+  zitiert „Tasche schneiden“, und der Satz der Tour zitiert in den fünf Katalogen den
+  Knopf, wie er dort heißt (en “Cut pocket”, es «Cortar una cavidad», fr « Découper une
+  poche », it «Ritaglia tasca», pt «Cortar bolsa»). Die Ausnahme ist aus `ZITAT_DARF_ABWEICHEN` in
+  `tests/test_wording.py` ausgetragen; die Beispiele sind mit `tools/make_examples.py` neu
+  geschrieben (Formatversion 35, Vorschaubilder aus demselben Lauf). Nachweis der
+  Hauptsitzung: `test_examples`, `test_wording` ohne `rendered`, `test_translations`,
+  `test_language_rules` und `test_tour` — 655 passed, Exit 0. `bd33620c5`.
