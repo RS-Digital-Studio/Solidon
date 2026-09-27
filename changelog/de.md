@@ -46,16 +46,28 @@ Nutzen da und sonst nichts.
 
 - Eine Bohrung mit Senkung auf der einen und Fase auf der anderen Seite lässt sich kippen, versetzen und verdoppeln. Vorher sagte Solidon dort ab.
 - Eine gekippte Bohrung oder Senkung schneidet nichts mehr weg, was vor ihrer Mündung steht, etwa eine Rippe oder die Waben daneben.
-- Mündet eine Senkbohrung in eine gewölbte Fläche, lässt sie sich versetzen, und nach dem Kippen oder Entfernen steht kein Pfropfen mehr über der Fläche.
+- Eine Senkbohrung in einer gewölbten Fläche lässt sich versetzen, auch per Klick im Bild. Nach Versetzen, Kippen oder Entfernen schließt die alte Stelle glatt mit der Fläche.
+- Eine Senkbohrung mit gerundeter Mündungskante auf einer ebenen Fläche lässt sich samt Rundung versetzen, verdoppeln und entfernen. Vorher blieb eine Mulde zurück.
+- Eine gekippte Sackbohrung, etwa eine Magnettasche ohne Lippe, bleibt an ihrer Mündung ganz offen. Vorher deckte auf der tieferen Seite eine dünne Haut die Öffnung halb zu.
 - Versetzen und Verdoppeln warnen, wenn die Wand zur Nachbarbohrung zu dünn wird oder aufreißt.
 - Läuft eine Bohrung nach dem Versetzen, Verdoppeln oder Kippen seitlich aus dem Teil, sagt Solidon es auch an abgesetzten Stellen. Eine Kopie, die nicht entstanden ist, fällt auf.
 - Auf Rippen und in Waben meldet eine gekippte Bohrung nicht mehr fälschlich, sie rage über die Kante.
 - Nach dem Versetzen, Kippen oder Verdoppeln zeigt das Merkmalfenster die Maße, die das Ergebnis wirklich hat.
+- Nach dem Versetzen einer Bohrung ist das Übernehmen an großen Modellen in weniger als der halben Zeit fertig. Merkmale abseits der Änderung bleiben dabei, wie sie waren.
 - Misslingt an einem Körper aus Flächen und Kanten, etwa aus einer STEP-Datei, ein Bohrungsschnitt unbemerkt, erkennt Solidon das und rechnet neu. Vorher konnte ein kaputter Körper zurückbleiben.
+- An Körpern aus Flächen und Kanten stehen Bohrungsschritte nach Sekunden: An einer Lochplatte aus einer STEP-Datei dauert das Versetzen 1,6 statt bis zu 120 Sekunden.
+- An Körpern aus Flächen und Kanten gibt *Tasche schneiden* keinen fehlerhaften Körper mehr zurück.
 - Ein Langloch lässt sich kürzer ziehen. Auf seine eigene Breite gezogen, wird es wieder eine runde Bohrung.
 - Den Griff am Ende eines Langlochs fassen Sie überall in der Öffnung, und er springt beim ersten Zug nicht mehr zur Hand.
+- Langlöcher nehmen beim Versetzen, Kippen und Verdoppeln ihre Fasen und ihre schräge Mündung mit. Vorher blieben die Fasen an der alten Stelle stehen.
+- Eine Magnettasche aus den Bausteinen lässt sich versetzen, verdoppeln, vervielfachen und entfernen, samt der Lippe, die den Magneten hält.
+- An einer Magnettasche ändert *Bohrung ändern* den Durchmesser samt Lippe. *Nur Bohrungsdurchmesser* behält die Öffnung für den Magneten und warnt, wenn es zu eng wird.
+- Schräg zur Fläche gesetzt, bleibt die Öffnung einer Magnettasche, eines Schraubenlochs oder eines Lagersitzes frei. Vorher stand ein Keil Material darüber.
+- Trägt ein Baustein wie eine Magnettasche an der gewählten Stelle nichts ab, sagt Solidon es und rät, die Fläche anzuklicken.
+- An einer Magnettasche mit Lippe sagt *Zum Langloch ziehen* auch an Körpern aus Flächen und Kanten ab, statt die Lippe zu durchschneiden.
+- An einer Senkung schneidet *Merkmal ändern* das neue Maß, als wäre sie gleich so gesenkt. Vorher sagte Solidon ab oder ließ eine dünne Haut quer über der Bohrung stehen.
 - Stecken Teile eines Modells ineinander, vereinigt Solidon sie vor dem Rechnen, so wie sie gedruckt werden. Volumen und Bohrungen stimmen dann, und der Bericht sagt es.
-- Weiten Sie an einem großen Modell eine Bohrung auf, zeigt die genaue Vorschau wieder das ganze abgetragene Material, statt sich unvollständig zu nennen.
+- Weiten Sie eine Bohrung auf, zeigt die genaue Vorschau das ganze abgetragene Material, auch an großen Modellen und an Körpern mit eingeschlossenen Kanälen.
 - Beim Tippen eines Maßes an einer großen Figur steht die grobe Vorschau in unter einer Sekunde statt nach bis zu neunzehn, und die Vorschau einer Bohrung darauf gelingt.
 - Rechnet ein Schritt an einem offenen Modell nur angenähert und wächst dabei das Volumen, nennt der Bericht die Abweichung und bietet *Erst reparieren, dann neu rechnen* an.
 
@@ -63,10 +75,12 @@ Nutzen da und sonst nichts.
 
 - Von Bohrung zu Bohrung stehen die Maße im Bild in einem Drittel der Zeit. Der erste Klick auf ein Merkmal hält das Fenster auch an großen Modellen nicht mehr an.
 - Ein Klick auf eine Bohrung zeigt keine Zwischenbilder mehr: Auswahlfenster und Maßkarte erscheinen gleich an ihrem Platz, ohne zu springen.
+- Ein Klick auf die Pfeile einer gewählten Bohrung hält die Auswahl nicht mehr fest: Die nächste Bohrung lässt sich wie gewohnt anklicken.
 - Escape an den Maßen im Bild verwirft den Entwurf und hebt die Auswahl auf, wie *Abbrechen*.
 - Ein Klick auf *Übernehmen* verfällt nicht mehr still, und Maße, die Sie nicht getippt haben, bleiben genau so, wie sie gemessen wurden.
 - Ein begonnener Bohrungsentwurf geht nicht mehr nebenbei verloren: Ein Klick in den Prüfbericht, ein Werkzeugwechsel oder Strg+Z bittet erst, ihn zu übernehmen oder abzubrechen.
 - Beim Tippen einer Koordinate verschwinden die Maßfelder nicht mehr nach der zweiten Ziffer.
+- An großen Modellen antwortet *Wandstärke messen* etwa viermal so schnell.
 
 ### Erkennen
 
@@ -77,6 +91,10 @@ Nutzen da und sonst nichts.
 - Schriftzüge und Streben stehen im Baum als gerundete Seiten statt als Dutzende Verrundungen mit wechselnden Radien.
 - Umrisse aus Bögen und Geraden werden Bogen für Bogen mit ihrem Radius erkannt. *In Flächen und Kanten umwandeln* geht dadurch um ein Vielfaches schneller.
 - Ein abgesetzter Zapfen gilt nicht mehr als Gewinde. Zylinder und Bohrungen, die diese Verwechslung verschluckt hatte, sind wieder da.
+- Die Lippe einer Magnettasche heißt im Baum Verengung und nennt ihre Öffnung. Keine Handlung macht mehr eine Senkung daraus.
+- Nach *Kanten verfeinern* erkennt Solidon Verrundungen, Bohrungen und Schriftzüge wie am Original, auch nach einer weiteren Bohrung.
+- Nach *Teilen* und *Abschneiden* behält eine geteilte Fläche ihren Namen am größten Stück, und Passungen daran bleiben gültig.
+- Klicken Sie die Randkante einer liegenden Bohrung an, heißt sie „Senkrecht“, so wie sie steht.
 - Hat ein Modell mehr als 5 000 Merkmale, behält Solidon die größten, statt ohne jedes Merkmal dazustehen. Skalieren bringt ihre Namen nicht durcheinander.
 
 ### Einlesen und Reparieren
@@ -92,6 +110,9 @@ Nutzen da und sonst nichts.
 - Eine 3MF aus PrusaSlicer lädt Modifikatoren, Stützsperren und Stützverstärker nicht mehr als festes Material. Eine Aussparung wird vom Teil abgezogen.
 - Mit *Kanten verfeinern* bleiben alle Merkmale erhalten, und es entstehen bis zu viermal weniger Dreiecke: ein Bohrmaschinenhalter bei 1 mm Kantenlänge in fünf Sekunden statt vierzehn Minuten.
 - Ein geschlossenes Modell bleibt dabei dicht und behält seine Filamentfarben. Bei zu vielen Dreiecken nennt Solidon eine Kantenlänge, die wirklich geht.
+- Die Vorschau von *Kanten verfeinern* steht in Sekunden, statt das Fenster anzuhalten, und eine zu feine Länge sagt sofort ab.
+- Ist ein Modell für *Kanten verfeinern* zu fein, bietet der Prüfbericht *Dreiecke verringern und erneut versuchen* mit einer Zahl an, die wirklich trägt.
+- Würde *Glätten* einen Körper umstülpen, sagt Solidon es und bietet *Kanten verfeinern und erneut versuchen* mit einer Kantenlänge an, die trägt.
 - Große Baugruppen lesen schneller ein: Die Reparatur beim Einlesen eines Piratenschiffs mit 1,2 Millionen Dreiecken braucht rund 30 Prozent weniger Zeit.
 
 ### Drucken und Übergabe an den Slicer
@@ -104,6 +125,10 @@ Nutzen da und sonst nichts.
 - Steht ein Teil auf vielen kleinen Füßen, schlägt Solidon einen Brim vor, auch wenn die Füße zusammen genug Fläche hätten.
 - Ein schmaler schräger Streifen an der Außenwand gilt im Prüfbericht nicht mehr als weit gespannte Brücke.
 - Die Übergabe an Cura überträgt die ersten Schichten ohne Lüfter als Hochlauf. Gewarnt wird nur noch, wenn die fertige Druckdatei wirklich abweicht.
+- An großen Modellen findet *Modell teilen* die Naht ein Drittel bis die Hälfte schneller, an mehrfarbigen in einem Bruchteil der Zeit. Geteilt wird wie vorher.
+- Beim automatischen Teilen gehört jede Passung zu ihren eigenen Stiften, auch an einem Stück, das noch einmal geteilt wurde.
+- Eine gedruckte Schraube, Mutter oder Dichtung aus den Bausteinen gilt im Prüfbericht nicht mehr als zerfallener Körper. Sie ist ein eigenes Teil, und das ist gewollt.
+- Mit einer Senkkopfschraube aus den Bausteinen bleibt ein Körper aus Flächen und Kanten beim Exportieren dicht: Teil und Schraube gehen je geschlossen in die Datei.
 
 ### Assistent mit lokalem Modell
 
@@ -118,6 +143,12 @@ Nutzen da und sonst nichts.
 - Ein Modell auf einem langsamen oder nicht antwortenden Laufwerk friert das Fenster beim Öffnen nicht mehr ein.
 - Ist eine Datei aus *Zuletzt geöffnet* verschoben worden, sagt Solidon das und bietet *Andere Datei wählen* an.
 - Eine Datei, die sich nicht lesen ließ, landet nicht mehr in *Zuletzt geöffnet*, und die nächste Datei meldet beim Laden nicht deren Namen.
+- Zuletzt geöffnete Projekte auf der Startseite öffnen mit einem Klick.
+- Nach *Modell teilen* stehen alle Teile ganz im Bild.
+- Jeder angehaltene Schritt im Prüfbericht hat einen Knopf: *Eingabe korrigieren* öffnet ihn mit dem Cursor im betroffenen Feld.
+- Nach dem Teilen zeigt der Prüfbericht an Zeilen zum alten Körper keine Knöpfe mehr, die nichts bewirken.
+- Eine frei gezogene Zeichnung ohne Maß erzeugt keinen Hinweis mehr im Prüfbericht.
+- Ein Fehlerbericht nennt Ordner unter Ihrem Benutzerverzeichnis ohne Ihren Benutzernamen, auch wenn Solidon selbst dort installiert ist.
 
 ## 0.5.0
 

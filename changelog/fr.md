@@ -22,16 +22,28 @@ dans `website/version.json`.
 
 - Un perçage avec une fraisure d'un côté et un chanfrein de l'autre se laisse incliner, déplacer et dupliquer. Avant, Solidon refusait.
 - Un perçage ou une fraisure inclinés n'enlèvent plus ce qui se trouve devant leur entrée, comme une nervure ou le nid d'abeille voisin.
-- Un perçage fraisé qui débouche sur une face bombée se laisse déplacer, et après inclinaison ou suppression plus aucun bouchon ne dépasse de la face.
+- Un perçage fraisé sur une face bombée se laisse déplacer, y compris par un clic dans la vue. Après déplacement, inclinaison ou suppression, l'ancien emplacement affleure la face.
+- Un perçage fraisé à l'entrée arrondie sur une face plane se laisse déplacer, dupliquer et supprimer avec son arrondi. Avant, un creux restait.
+- Un perçage borgne incliné, comme une poche à aimant sans lèvre, reste entièrement ouvert à son entrée. Avant, une fine peau du côté le plus profond recouvrait à moitié l'ouverture.
 - Déplacer et dupliquer avertissent quand la paroi vers le perçage voisin devient trop mince ou se rompt.
 - Si un perçage sort sur le côté de la pièce après déplacement, duplication ou inclinaison, Solidon le dit aussi aux endroits en retrait. Une copie non créée est signalée.
 - Sur les nervures et dans les nids d'abeille, un perçage incliné ne signale plus à tort qu'il dépasse le bord.
 - Après un déplacement, une inclinaison ou une duplication, le panneau des caractéristiques montre les cotes réelles du résultat.
+- Après le déplacement d'un perçage, l'application sur les grands modèles se termine en moins de la moitié du temps. Les caractéristiques éloignées de la modification restent telles qu'elles étaient.
 - Si une découpe de perçage échoue en silence sur un corps fait de faces et d'arêtes, issu par exemple d'un STEP, Solidon le remarque et recalcule. Avant, un corps cassé pouvait rester.
+- Sur les corps faits de faces et d'arêtes, les étapes de perçage sont prêtes en quelques secondes : sur une plaque perforée issue d'un STEP, le déplacement prend 1,6 seconde au lieu de 120 au plus.
+- Sur les corps faits de faces et d'arêtes, « Découper une poche » ne renvoie plus de corps défectueux.
 - Un trou oblong se laisse raccourcir. Étiré à sa propre largeur, il redevient un perçage rond.
 - La poignée au bout d'un trou oblong se saisit n'importe où dans l'ouverture, et elle ne saute plus vers le pointeur au premier mouvement.
+- Les trous oblongs emportent leurs chanfreins et leur entrée oblique lors d'un déplacement, d'une inclinaison ou d'une duplication. Avant, les chanfreins restaient à l'ancien emplacement.
+- Une poche à aimant du catalogue de blocs se laisse déplacer, dupliquer, multiplier et supprimer, avec la lèvre qui retient l'aimant.
+- Sur une poche à aimant, « Modifier le trou » change le diamètre avec la lèvre. « Diamètre du trou uniquement » garde l'ouverture pour l'aimant et avertit si elle devient trop juste.
+- Placée en biais par rapport à la face, l'ouverture d'une poche à aimant, d'un trou de vis ou d'un logement de roulement reste dégagée. Avant, un coin de matière la surplombait.
+- Si un bloc comme une poche à aimant n'enlève rien à l'endroit choisi, Solidon le signale et conseille de cliquer sur la face.
+- Sur une poche à aimant avec lèvre, « Étirer en trou oblong » refuse aussi sur les corps faits de faces et d'arêtes, plutôt que de trancher la lèvre.
+- Sur une fraisure, « Modifier l'élément » découpe la nouvelle cote comme si elle avait été fraisée ainsi dès le départ. Avant, Solidon refusait ou laissait une fine peau en travers du perçage.
 - Quand des pièces d'un modèle s'emboîtent, Solidon les unit avant le calcul, comme elles seront imprimées. Volume et perçages sont alors justes, et le rapport le dit.
-- Si vous agrandissez un perçage sur un grand modèle, l'aperçu précis montre à nouveau toute la matière enlevée au lieu de se dire incomplet.
+- Quand vous agrandissez un perçage, l'aperçu précis montre toute la matière enlevée, même sur les grands modèles et sur les corps aux canaux fermés.
 - Pendant la saisie d'une cote sur une grande figure, l'aperçu grossier apparaît en moins d'une seconde au lieu de dix-neuf au plus, et l'aperçu d'un perçage y réussit.
 - Si une étape sur un modèle ouvert ne calcule qu'approximativement et que le volume augmente, le rapport indique l'écart et propose « Réparer d'abord, puis recalculer ».
 
@@ -39,10 +51,12 @@ dans `website/version.json`.
 
 - D'un perçage à l'autre, les cotes dans la vue apparaissent en un tiers du temps. Le premier clic sur une caractéristique ne fige plus la fenêtre, même sur un grand modèle.
 - Un clic sur un perçage ne montre plus d'images intermédiaires : le panneau de sélection et la carte des cotes apparaissent directement à leur place, sans sauter.
+- Un clic sur les flèches d'un perçage sélectionné ne bloque plus la sélection : le perçage suivant se clique comme d'habitude.
 - Échap sur les cotes dans la vue abandonne le brouillon et désélectionne, comme « Annuler ».
 - Un clic sur « Appliquer » ne se perd plus en silence, et les cotes que vous n'avez pas saisies restent exactement telles qu'elles ont été mesurées.
 - Un perçage commencé ne se perd plus en chemin : un clic dans le rapport, un changement d'outil ou Ctrl+Z demande d'abord de l'appliquer ou de l'annuler.
 - Saisir une coordonnée ne fait plus disparaître les champs de cote après le deuxième chiffre.
+- Sur les grands modèles, « Mesurer l'épaisseur de paroi » répond environ quatre fois plus vite.
 
 ### Reconnaissance
 
@@ -53,6 +67,10 @@ dans `website/version.json`.
 - Lettrages et entretoises apparaissent dans l'arbre comme des côtés arrondis au lieu de dizaines de congés aux rayons changeants.
 - Les contours faits d'arcs et de droites sont reconnus arc par arc avec leur rayon. « Convertir en faces et arêtes » est ainsi bien plus rapide.
 - Un tenon épaulé ne passe plus pour un filetage. Les cylindres et les perçages que cette confusion avait avalés sont de retour.
+- La lèvre d'une poche à aimant s'appelle rétrécissement dans l'arbre et nomme son ouverture. Aucune action n'en fait plus une fraisure.
+- Après « Affiner les arêtes », Solidon reconnaît congés, perçages et lettrages comme sur l'original, même après un perçage supplémentaire.
+- Après « Séparer » et « Découper », une face divisée garde son nom sur le plus grand morceau, et les ajustements qui s'y trouvent restent valides.
+- Si vous cliquez sur l'arête de bord d'un perçage couché, elle s'appelle « Vertical », comme il se tient réellement.
 - Si un modèle a plus de 5 000 caractéristiques, Solidon garde les plus grandes au lieu de n'en afficher aucune. Une mise à l'échelle ne mélange pas leurs noms.
 
 ### Importer et réparer
@@ -66,8 +84,11 @@ dans `website/version.json`.
 - La carte des défauts de maillage montre les zones saines dans la couleur du corps, pour que chaque défaut ressorte, et porte « Réparer » directement dans la légende.
 - La recherche de recouvrements va jusqu'au bout aussi sur les modèles aux éventails de triangles étroits. Carte des défauts et réparation voient alors tout le modèle.
 - Un 3MF de PrusaSlicer ne charge plus les modificateurs, bloqueurs et renforts de supports comme matière pleine. Un volume négatif est soustrait de la pièce.
-- « Affiner les arêtes » garde toutes les caractéristiques et crée jusqu'à quatre fois moins de triangles : un support de perceuse aux arêtes de 1 mm en cinq secondes au lieu de quatorze minutes.
+- Avec « Affiner les arêtes », toutes les caractéristiques restent, avec jusqu'à quatre fois moins de triangles : un support de perceuse à 1 mm en cinq secondes au lieu de quatorze minutes.
 - Un modèle fermé reste étanche et garde ses couleurs de filament. S'il y a trop de triangles, Solidon indique une longueur d'arête qui marche vraiment.
+- L'aperçu de « Affiner les arêtes » est prêt en quelques secondes au lieu de figer la fenêtre, et une longueur trop fine est refusée aussitôt.
+- Si un modèle est trop fin pour « Affiner les arêtes », le rapport propose « Réduire les triangles et réessayer » avec un nombre qui fonctionne vraiment.
+- Si « Lisser » risque de retourner un corps, Solidon le signale et propose « Affiner les arêtes et réessayer » avec une longueur d'arête qui fonctionne.
 - Les grands assemblages s'importent plus vite : la réparation à l'import d'un bateau pirate de 1,2 million de triangles prend environ 30 % de temps en moins.
 
 ### Imprimer et transmettre au slicer
@@ -80,6 +101,10 @@ dans `website/version.json`.
 - Quand une pièce repose sur beaucoup de petits pieds, Solidon propose un brim, même si les pieds réunis auraient assez de surface.
 - Une bande étroite et oblique le long de la paroi extérieure ne compte plus dans le rapport comme un long pont.
 - La transmission à Cura passe les premières couches sans ventilateur sous forme de montée progressive. L'avertissement ne vient que si le fichier d'impression diffère vraiment.
+- Sur les grands modèles, « Scinder le modèle » trouve la jointure un tiers à moitié plus vite, et sur les modèles multicolores en une fraction du temps. Le découpage se fait comme avant.
+- Lors de la division automatique, chaque ajustement appartient à ses propres tenons, même sur une pièce divisée une nouvelle fois.
+- Une vis, un écrou ou un joint imprimés du catalogue de blocs ne comptent plus dans le rapport comme un corps fragmenté. C'est une pièce à part, et c'est voulu.
+- Avec une vis à tête fraisée du catalogue de blocs, un corps fait de faces et d'arêtes reste étanche à l'export : la pièce et la vis entrent chacune fermées dans le fichier.
 
 ### Assistant avec un modèle local
 
@@ -94,6 +119,12 @@ dans `website/version.json`.
 - Un modèle sur un disque lent ou qui ne répond pas ne fige plus la fenêtre à l'ouverture.
 - Si un fichier de « Ouverts récemment » a été déplacé, Solidon le dit et propose « Choisir un autre fichier ».
 - Un fichier illisible n'atterrit plus dans « Ouverts récemment », et le fichier suivant n'annonce plus son nom au chargement.
+- Les projets ouverts récemment sur la page d'accueil s'ouvrent en un clic.
+- Après « Scinder le modèle », toutes les pièces tiennent entièrement dans la vue.
+- Chaque étape arrêtée dans le rapport a un bouton : « Corriger la saisie » l'ouvre avec le curseur dans le champ concerné.
+- Après la division, le rapport ne montre plus, sur les lignes concernant l'ancien corps, de boutons sans effet.
+- Un dessin tracé librement sans cote ne génère plus d'avertissement dans le rapport.
+- Un rapport d'erreur nomme les dossiers sous votre répertoire utilisateur sans votre nom d'utilisateur, même si Solidon lui-même y est installé.
 
 ## 0.5.0
 

@@ -21,16 +21,28 @@ scrive in `website/version.json`.
 
 - Un foro con svasatura da un lato e smusso dall'altro si può inclinare, spostare e duplicare. Prima Solidon rifiutava.
 - Un foro o una svasatura inclinati non tagliano più ciò che sta davanti alla loro imboccatura, come una nervatura o il nido d'ape accanto.
-- Un foro svasato che sbocca su una faccia bombata si può spostare, e dopo averlo inclinato o rimosso non sporge più alcun tappo dalla faccia.
+- Un foro svasato su una faccia bombata si può spostare, anche con un clic nella vista. Dopo lo spostamento, l'inclinazione o la rimozione, il vecchio punto torna a filo con la faccia.
+- Un foro svasato con il bordo dell'imboccatura arrotondato su una faccia piana si può spostare, duplicare e rimuovere insieme all'arrotondamento. Prima restava un avvallamento.
+- Un foro cieco inclinato, come una tasca per magnete senza labbro, resta del tutto aperto alla sua imboccatura. Prima, una pellicola sottile sul lato più profondo copriva a metà l'apertura.
 - Spostare e duplicare avvisano quando la parete verso il foro vicino diventa troppo sottile o si rompe.
 - Se un foro esce dal fianco del pezzo dopo uno spostamento, una duplicazione o un'inclinazione, Solidon lo dice anche nei punti a gradino. Una copia non creata viene notata.
 - Su nervature e nidi d'ape, un foro inclinato non segnala più per errore di sporgere oltre il bordo.
 - Dopo spostamento, inclinazione o duplicazione, il pannello delle caratteristiche mostra le quote che il risultato ha davvero.
+- Dopo lo spostamento di un foro, applicarlo su modelli grandi finisce in meno della metà del tempo. Le caratteristiche estranee alla modifica restano come erano.
 - Se su un corpo fatto di facce e spigoli, per esempio da un file STEP, un taglio di foro fallisce senza che si noti, Solidon se ne accorge e ricalcola. Prima poteva restare un corpo rotto.
+- Sui corpi fatti di facce e spigoli, i passaggi di foratura sono pronti in pochi secondi: su una piastra forata proveniente da un file STEP, lo spostamento richiede 1,6 secondi invece di 120.
+- Sui corpi fatti di facce e spigoli, «Ritaglia tasca» non restituisce più un corpo difettoso.
 - Un'asola si può accorciare. Tirata alla sua stessa larghezza, torna a essere un foro rotondo.
 - La maniglia all'estremità di un'asola si afferra in qualsiasi punto dell'apertura, e al primo trascinamento non salta più verso il puntatore.
+- Le asole portano con sé gli smussi e l'imboccatura obliqua quando vengono spostate, inclinate o duplicate. Prima gli smussi restavano nel punto vecchio.
+- Una tasca per magnete del catalogo dei blocchi si può spostare, duplicare, moltiplicare e rimuovere, insieme al labbro che trattiene il magnete.
+- Su una tasca per magnete, «Modifica foro» cambia il diametro insieme al labbro. «Solo diametro del foro» mantiene l'apertura per il magnete e avvisa se diventa troppo stretta.
+- Posizionata obliquamente rispetto alla faccia, l'apertura di una tasca per magnete, di un foro per vite o di una sede per cuscinetto resta libera. Prima un cuneo di materiale la copriva.
+- Se un blocco come una tasca per magnete non asporta nulla nel punto scelto, Solidon lo segnala e consiglia di fare clic sulla faccia.
+- Su una tasca per magnete con labbro, «Allunga in asola» rifiuta ora anche sui corpi fatti di facce e spigoli, invece di tagliare il labbro.
+- Su una svasatura, «Modifica elemento» taglia la nuova misura come se fosse stata svasata così fin dall'inizio. Prima Solidon rifiutava oppure lasciava una pellicola sottile di traverso sul foro.
 - Se parti di un modello sono infilate l'una nell'altra, Solidon le unisce prima del calcolo, come verranno stampate. Volume e fori tornano, e il rapporto lo dice.
-- Se allargate un foro su un modello grande, l'anteprima precisa mostra di nuovo tutto il materiale asportato invece di dirsi incompleta.
+- Quando allargate un foro, l'anteprima precisa mostra tutto il materiale asportato, anche sui modelli grandi e sui corpi con canali chiusi.
 - Mentre digitate una quota su una figura grande, l'anteprima grossolana compare in meno di un secondo invece che fino a diciannove, e l'anteprima di un foro riesce.
 - Se un passaggio su un modello aperto calcola solo in modo approssimato e il volume cresce, il rapporto indica lo scostamento e propone «Prima ripara, poi ricalcola».
 
@@ -38,10 +50,12 @@ scrive in `website/version.json`.
 
 - Da un foro all'altro le quote nella vista compaiono in un terzo del tempo. Il primo clic su una caratteristica non blocca più la finestra, nemmeno sui modelli grandi.
 - Un clic su un foro non mostra più immagini intermedie: pannello di selezione e scheda delle quote compaiono subito al loro posto, senza saltare.
+- Un clic sulle frecce di un foro selezionato non blocca più la selezione: il foro successivo si può cliccare come sempre.
 - Esc sulle quote nella vista scarta la bozza e toglie la selezione, come «Annulla».
 - Un clic su «Applica» non va più perso in silenzio, e le quote che non avete digitato restano esattamente come sono state misurate.
 - Un foro iniziato non va più perso per strada: un clic nel rapporto, un cambio di strumento o Ctrl+Z chiedono prima di applicarlo o annullarlo.
 - Digitando una coordinata, i campi quota non spariscono più dopo la seconda cifra.
+- Sui modelli grandi, «Misura lo spessore di parete» risponde circa quattro volte più in fretta.
 
 ### Riconoscimento
 
@@ -52,6 +66,10 @@ scrive in `website/version.json`.
 - Scritte e montanti compaiono nell'albero come lati arrotondati invece che come decine di raccordi dai raggi variabili.
 - I contorni fatti di archi e rette vengono riconosciuti arco per arco con il loro raggio. «Converti in facce e spigoli» diventa così molto più rapido.
 - Un perno a gradino non conta più come filettatura. Tornano i cilindri e i fori che questo scambio aveva inghiottito.
+- Il labbro di una tasca per magnete si chiama restringimento nell'albero e indica la sua apertura. Nessuna azione lo trasforma più in svasatura.
+- Dopo «Affina gli spigoli», Solidon riconosce raccordi, fori e scritte come nell'originale, anche dopo un foro aggiuntivo.
+- Dopo «Dividere» e «Tagliare via», una faccia divisa mantiene il suo nome sul pezzo più grande, e gli accoppiamenti su di essa restano validi.
+- Se fate clic sullo spigolo di bordo di un foro sdraiato, si chiama «Verticale», come sta davvero.
 - Se un modello ha più di 5 000 caratteristiche, Solidon tiene le più grandi invece di restare senza nessuna. Scalare non rimescola i loro nomi.
 
 ### Importare e riparare
@@ -67,6 +85,9 @@ scrive in `website/version.json`.
 - Un 3MF di PrusaSlicer non carica più modificatori, blocchi e rinforzi dei supporti come materiale pieno. Un volume negativo viene sottratto dal pezzo.
 - Con «Affina gli spigoli» restano tutte le caratteristiche e i triangoli sono fino a quattro volte meno: un supporto per trapano con spigoli di 1 mm in cinque secondi invece di quattordici minuti.
 - Un modello chiuso resta stagno e conserva i colori del filamento. Con troppi triangoli, Solidon indica una lunghezza di spigolo che funziona davvero.
+- L'anteprima di «Affina gli spigoli» è pronta in pochi secondi invece di bloccare la finestra, e una lunghezza troppo fine viene rifiutata subito.
+- Se un modello è troppo fine per «Affina gli spigoli», il rapporto propone «Riduci i triangoli e riprova» con un numero che funziona davvero.
+- Se «Leviga» rischiasse di rovesciare un corpo, Solidon lo segnala e propone «Affina gli spigoli e riprova» con una lunghezza di spigolo che funziona.
 - I grandi assiemi si importano più in fretta: la riparazione all'importazione di una nave pirata da 1,2 milioni di triangoli richiede circa il 30 % di tempo in meno.
 
 ### Stampare e passare allo slicer
@@ -79,6 +100,10 @@ scrive in `website/version.json`.
 - Se un pezzo poggia su molti piedini, Solidon propone un brim, anche se i piedini insieme avrebbero superficie sufficiente.
 - Una striscia stretta e inclinata lungo la parete esterna non conta più nel rapporto come un lungo ponte.
 - Il passaggio a Cura trasmette i primi strati senza ventola come avvio graduale. L'avviso arriva solo se il file di stampa finito si discosta davvero.
+- Sui modelli grandi, «Dividi il modello» trova la giunzione da un terzo alla metà più in fretta, e su quelli multicolore in una frazione del tempo. La divisione avviene come prima.
+- Nella divisione automatica, ogni accoppiamento appartiene ai propri perni, anche su un pezzo diviso una seconda volta.
+- Una vite, un dado o una guarnizione stampati dal catalogo dei blocchi non contano più nel rapporto come un corpo frammentato. È un pezzo a sé, ed è voluto.
+- Con una vite a testa svasata dal catalogo dei blocchi, un corpo fatto di facce e spigoli resta stagno all'esportazione: pezzo e vite entrano nel file ciascuno chiuso.
 
 ### Assistente con modello locale
 
@@ -93,6 +118,12 @@ scrive in `website/version.json`.
 - Un modello su un'unità lenta o che non risponde non blocca più la finestra all'apertura.
 - Se un file in «Aperti di recente» è stato spostato, Solidon lo dice e propone «Scegli un altro file».
 - Un file che non si è potuto leggere non finisce più in «Aperti di recente», e il file successivo non ne annuncia più il nome durante il caricamento.
+- I progetti aperti di recente nella pagina iniziale si aprono con un clic.
+- Dopo «Dividi il modello», tutti i pezzi stanno interamente nella vista.
+- Ogni passaggio interrotto nel rapporto ha un pulsante: «Correggi l'inserimento» lo apre con il cursore nel campo interessato.
+- Dopo la divisione, il rapporto non mostra più, sulle righe relative al corpo vecchio, pulsanti che non fanno nulla.
+- Un disegno tracciato liberamente senza quota non genera più un avviso nel rapporto.
+- Un rapporto di errore indica le cartelle nella vostra directory utente senza il vostro nome utente, anche se Solidon stesso è installato lì.
 
 ## 0.5.0
 

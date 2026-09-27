@@ -21,16 +21,28 @@ it into `website/version.json`.
 
 - A bore with a countersink on one side and a chamfer on the other can be tilted, moved and duplicated. Before, Solidon declined there.
 - A tilted bore or countersink no longer cuts away what stands in front of its mouth, such as a rib or the honeycomb next to it.
-- A countersunk bore that opens into a curved face can be moved, and after tilting or removing it no plug is left standing proud of the face.
+- A countersunk bore in a curved face can be moved, including by clicking in the view. After moving, tilting or removing it, the old spot closes flush with the face.
+- A countersunk bore with a rounded mouth edge on a flat face can be moved, duplicated and removed together with the rounding. Before, a dip was left behind.
+- A tilted blind bore, such as a magnet pocket without a lip, stays fully open at its mouth. Before, a thin skin on the deeper side half covered the opening.
 - Moving and duplicating warn when the wall to the neighbouring bore gets too thin or breaks open.
 - If a bore runs out of the side of the part after moving, duplicating or tilting, Solidon now says so at stepped places too. A copy that was not created is noticed.
 - On ribs and in honeycombs, a tilted bore no longer wrongly reports that it runs over the edge.
 - After moving, tilting or duplicating, the feature panel shows the dimensions the result really has.
+- After moving a bore, applying it on large models finishes in less than half the time. Features away from the change stay just as they were.
 - If a bore cut fails unnoticed on a body made of faces and edges, such as one from a STEP file, Solidon notices and computes it again. Before, a broken body could be left behind.
+- On bodies made of faces and edges, bore steps are ready in seconds: on a perforated plate from a STEP file, moving takes 1.6 instead of up to 120 seconds.
+- On bodies made of faces and edges, *Cut pocket* no longer returns a faulty body.
 - A slot can be pulled shorter. Pulled to its own width, it becomes a round bore again.
 - The handle at the end of a slot can be grabbed anywhere in the opening, and it no longer jumps to the pointer on the first drag.
+- Slots take their chamfers and their sloped mouth with them when moved, tilted or duplicated. Before, the chamfers stayed at the old spot.
+- A magnet pocket from the parts catalogue can be moved, duplicated, multiplied and removed, together with the lip that holds the magnet.
+- On a magnet pocket, *Change bore* changes the diameter together with the lip. *Hole diameter only* keeps the opening for the magnet and warns if it gets too tight.
+- Set at an angle to the face, the opening of a magnet pocket, a screw hole or a bearing seat stays clear. Before, a wedge of material stood over it.
+- If a part such as a magnet pocket removes nothing at the chosen spot, Solidon says so and suggests clicking the face instead.
+- On a magnet pocket with a lip, *Pull into a slot* now declines on bodies made of faces and edges too, instead of cutting through the lip.
+- On a countersink, *Change feature* cuts the new size as if it had been countersunk that way from the start. Before, Solidon declined or left a thin skin across the bore.
 - When parts of a model are stuck into each other, Solidon unites them before computing, as they will be printed. Volume and bores are then right, and the report says so.
-- When you widen a bore on a large model, the precise preview again shows all the removed material instead of calling itself incomplete.
+- When you widen a bore, the precise preview shows all the removed material, even on large models and on bodies with enclosed channels.
 - While you type a dimension on a large figure, the coarse preview appears in under a second instead of up to nineteen, and the preview of a bore on it succeeds.
 - If a step on an open model can only compute approximately and the volume grows, the report names the deviation and offers *Repair first, then recalculate*.
 
@@ -38,10 +50,12 @@ it into `website/version.json`.
 
 - From bore to bore, the dimensions in the view appear in a third of the time. The first click on a feature no longer freezes the window, even on large models.
 - Clicking a bore shows no intermediate pictures any more: the selection panel and the dimension card appear in place straight away, without jumping.
+- Clicking the arrows on a selected bore no longer keeps the selection stuck: the next bore can be clicked as usual.
 - Escape at the dimensions in the view discards the draft and clears the selection, like *Cancel*.
 - A click on *Apply* is no longer silently lost, and dimensions you did not type stay exactly as they were measured.
 - A bore draft you have started is no longer lost along the way: a click in the report, a tool change or Ctrl+Z first asks you to apply or cancel it.
 - Typing a coordinate no longer makes the dimension fields vanish after the second digit.
+- On large models, *Measure wall thickness* responds about four times as fast.
 
 ### Recognition
 
@@ -52,6 +66,10 @@ it into `website/version.json`.
 - Lettering and struts appear in the tree as rounded sides instead of dozens of fillets with changing radii.
 - Outlines made of arcs and lines are recognised arc by arc with their radius. *Convert to faces and edges* is many times faster as a result.
 - A stepped pin no longer counts as a thread. Cylinders and bores that this mix-up had swallowed are back.
+- The lip of a magnet pocket is called a narrowing in the tree and names its opening. No action turns it into a countersink any more.
+- After *Refine edges*, Solidon recognises fillets, bores and lettering just as on the original, even after an additional bore.
+- After *Split* and *Cut away*, a divided face keeps its name on the largest piece, and fits on it stay valid.
+- Click the rim edge of a bore lying on its side, and it is named “Vertical”, matching how it really stands.
 - If a model has more than 5,000 features, Solidon keeps the largest instead of showing none at all. Scaling does not shuffle their names.
 
 ### Importing and repairing
@@ -67,6 +85,9 @@ it into `website/version.json`.
 - A 3MF from PrusaSlicer no longer loads modifiers, support blockers and support enforcers as solid material. A negative volume is subtracted from the part.
 - With *Refine edges*, all features stay and up to four times fewer triangles are created: a drill holder at 1 mm edge length in five seconds instead of fourteen minutes.
 - A closed model stays free of holes and keeps its filament colours. With too many triangles, Solidon names an edge length that really works.
+- The preview of *Refine edges* is ready in seconds instead of freezing the window, and a length that is too fine is declined right away.
+- If a model is too fine for *Refine edges*, the report offers *Reduce triangles and try again* with a number that really works.
+- If *Smooth* would turn a body inside out, Solidon says so and offers *Refine edges and try again* with an edge length that works.
 - Large assemblies import faster: the repair while importing a pirate ship with 1.2 million triangles takes about 30 percent less time.
 
 ### Printing and slicer handover
@@ -79,6 +100,10 @@ it into `website/version.json`.
 - When a part stands on many small feet, Solidon suggests a brim, even if the feet together would have enough area.
 - A narrow sloping strip along the outer wall no longer counts in the report as a long bridge.
 - The handover to Cura transfers the first layers without fan as a ramp-up. A warning only comes when the finished print file really differs.
+- On large models, *Split the model* finds the seam a third to half faster, and on multi-colour ones in a fraction of the time. Splitting works as before.
+- During automatic splitting, every fit belongs to its own pins, even on a piece that was split again.
+- A printed screw, nut or seal from the parts catalogue no longer counts in the report as a fragmented body. It is a part of its own, and that is intended.
+- With a countersunk screw from the parts catalogue, a body made of faces and edges stays watertight on export: the part and the screw each go into the file closed.
 
 ### Assistant with a local model
 
@@ -93,6 +118,12 @@ it into `website/version.json`.
 - A model on a slow or unresponsive drive no longer freezes the window when you open it.
 - If a file in *Recently opened* has been moved, Solidon says so and offers *Choose another file*.
 - A file that could not be read no longer ends up in *Recently opened*, and the next file no longer reports its name while loading.
+- Recently opened projects on the start page open with one click.
+- After *Split the model*, all parts stand fully in view.
+- Every halted step in the report has a button: *Correct the input* opens it with the cursor in the affected field.
+- After splitting, the report no longer shows buttons that do nothing on lines about the old body.
+- A freely drawn sketch without dimensions no longer generates a notice in the report.
+- An error report names folders under your user directory without your username, even when Solidon itself is installed there.
 
 ## 0.5.0
 

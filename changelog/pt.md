@@ -21,16 +21,28 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Um furo com escareamento de um lado e chanfro do outro pode ser inclinado, deslocado e duplicado. Antes, o Solidon recusava.
 - Um furo ou escareamento inclinado já não corta o que está à frente da sua boca, como uma nervura ou o favo ao lado.
-- Um furo escareado que desemboca numa face curva pode ser deslocado, e depois de o inclinar ou remover já não fica nenhum tampão saliente sobre a face.
+- Um furo escareado numa face curva pode ser deslocado, também com um clique na vista. Depois de deslocado, inclinado ou removido, o local antigo fica rente com a face.
+- Um furo escareado com a aresta da boca arredondada numa face plana pode ser deslocado, duplicado e removido juntamente com o arredondamento. Antes ficava uma depressão.
+- Um furo cego inclinado, como um alojamento de íman sem lábio, fica totalmente aberto na sua boca. Antes, uma película fina no lado mais fundo tapava metade da abertura.
 - Deslocar e duplicar avisam quando a parede até ao furo vizinho fica demasiado fina ou se rompe.
 - Se um furo sai pela lateral da peça depois de deslocado, duplicado ou inclinado, o Solidon indica-o também em zonas com degraus. Uma cópia que não foi criada é detetada.
 - Em nervuras e favos, um furo inclinado já não indica por engano que passa do bordo.
 - Depois de deslocar, inclinar ou duplicar, o painel de características mostra as cotas que o resultado tem de facto.
+- Depois de deslocar um furo, aplicar em modelos grandes termina em menos de metade do tempo. As características alheias à alteração ficam como estavam.
 - Se num corpo feito de faces e arestas, por exemplo de um ficheiro STEP, um corte de furo falha sem se notar, o Solidon deteta-o e volta a calcular. Antes podia ficar um corpo danificado.
+- Em corpos feitos de faces e arestas, os passos de furo ficam prontos em segundos: numa placa perfurada de um ficheiro STEP, deslocar demora 1,6 em vez de até 120 segundos.
+- Em corpos feitos de faces e arestas, «Cortar bolsa» já não devolve um corpo com defeito.
 - Um furo oblongo pode ser encurtado. Puxado até à sua própria largura, volta a ser um furo redondo.
 - A pega na ponta de um furo oblongo agarra-se em qualquer ponto da abertura, e já não salta para o ponteiro no primeiro arrasto.
+- Os furos oblongos levam consigo os chanfros e a boca oblíqua ao serem deslocados, inclinados ou duplicados. Antes, os chanfros ficavam no local antigo.
+- Um alojamento de íman do catálogo de blocos pode ser deslocado, duplicado, multiplicado e removido, juntamente com o lábio que segura o íman.
+- Num alojamento de íman, «Alterar furo» muda o diâmetro juntamente com o lábio. «Apenas o diâmetro do furo» mantém a abertura para o íman e avisa se ficar demasiado apertada.
+- Colocada em ângulo com a face, a abertura de um alojamento de íman, de um furo para parafuso ou de um assento de rolamento fica livre. Antes havia uma cunha de material por cima.
+- Se um bloco como um alojamento de íman não remove nada no ponto escolhido, o Solidon avisa e aconselha clicar na face.
+- Num alojamento de íman com lábio, «Esticar para furo oblongo» também recusa em corpos feitos de faces e arestas, em vez de cortar o lábio.
+- Num escareamento, «Alterar elemento» corta a nova medida como se tivesse sido escareado logo assim. Antes, o Solidon recusava ou deixava uma película fina atravessada sobre o furo.
 - Quando peças de um modelo estão metidas umas nas outras, o Solidon une-as antes de calcular, tal como serão impressas. Volume e furos batem certo, e o relatório di-lo.
-- Se alargar um furo num modelo grande, a pré-visualização precisa volta a mostrar todo o material removido em vez de se dizer incompleta.
+- Quando alarga um furo, a pré-visualização precisa mostra todo o material removido, também em modelos grandes e em corpos com canais fechados.
 - Ao escrever uma cota numa figura grande, a pré-visualização grosseira aparece em menos de um segundo em vez de até dezanove, e a de um furo nela resulta.
 - Se um passo num modelo aberto só calcula de forma aproximada e o volume cresce, o relatório indica o desvio e oferece «Reparar primeiro e voltar a calcular».
 
@@ -38,10 +50,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - De furo em furo, as cotas na vista aparecem num terço do tempo. O primeiro clique numa característica já não congela a janela, mesmo em modelos grandes.
 - Um clique num furo já não mostra imagens intermédias: o painel de seleção e o cartão de cotas aparecem logo no seu lugar, sem saltar.
+- Um clique nas setas de um furo selecionado já não mantém a seleção presa: o furo seguinte pode ser clicado como habitualmente.
 - Escape nas cotas da vista descarta o rascunho e retira a seleção, como «Cancelar».
 - Um clique em «Aplicar» já não se perde em silêncio, e as cotas que não escreveu ficam exatamente como foram medidas.
 - Um furo começado já não se perde pelo caminho: um clique no relatório, uma troca de ferramenta ou Ctrl+Z pedem primeiro para o aplicar ou cancelar.
 - Ao escrever uma coordenada, os campos de cota já não desaparecem depois do segundo algarismo.
+- Em modelos grandes, «Medir a espessura de parede» responde cerca de quatro vezes mais depressa.
 
 ### Reconhecimento
 
@@ -52,6 +66,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Letreiros e escoras aparecem na árvore como lados arredondados em vez de dezenas de arredondamentos com raios variáveis.
 - Os contornos feitos de arcos e retas são reconhecidos arco a arco com o seu raio. «Converter em faces e arestas» fica assim muito mais rápido.
 - Um pino escalonado já não conta como rosca. Voltam os cilindros e furos que essa confusão tinha engolido.
+- O lábio de um alojamento de íman chama-se estreitamento na árvore e nomeia a sua abertura. Nenhuma ação o transforma mais num escareamento.
+- Depois de «Refinar as arestas», o Solidon reconhece arredondamentos, furos e letreiros tal como no original, mesmo depois de um furo adicional.
+- Depois de «Separar» e «Cortar fora», uma face dividida mantém o nome na peça maior, e os ajustes nela continuam válidos.
+- Se clicar na aresta de bordo de um furo deitado, ela chama-se «Vertical», tal como está realmente.
 - Se um modelo tem mais de 5 000 características, o Solidon mantém as maiores em vez de ficar sem nenhuma. Escalar não baralha os seus nomes.
 
 ### Importar e reparar
@@ -67,6 +85,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um 3MF do PrusaSlicer já não carrega modificadores, bloqueadores e reforços de suportes como material maciço. Um volume negativo é subtraído da peça.
 - Com «Refinar as arestas» mantêm-se todas as características e surgem até quatro vezes menos triângulos: um suporte de berbequim com arestas de 1 mm em cinco segundos em vez de catorze minutos.
 - Um modelo fechado continua estanque e conserva as cores de filamento. Com triângulos a mais, o Solidon indica um comprimento de aresta que funciona de facto.
+- A pré-visualização de «Refinar as arestas» fica pronta em segundos em vez de congelar a janela, e um comprimento demasiado fino é recusado de imediato.
+- Se um modelo for demasiado fino para «Refinar as arestas», o relatório oferece «Reduzir triângulos e tentar de novo» com um número que realmente resulta.
+- Se «Suavizar» fosse virar um corpo do avesso, o Solidon avisa e oferece «Refinar as arestas e tentar de novo» com um comprimento de aresta que resulta.
 - Os conjuntos grandes importam mais depressa: a reparação ao importar um navio pirata com 1,2 milhões de triângulos demora cerca de 30 % menos tempo.
 
 ### Imprimir e entregar ao slicer
@@ -79,6 +100,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Quando uma peça assenta em muitos pés pequenos, o Solidon propõe um brim, mesmo que os pés juntos tenham área suficiente.
 - Uma faixa estreita e inclinada junto à parede exterior já não conta no relatório como uma ponte longa.
 - A entrega ao Cura transfere as primeiras camadas sem ventoinha como arranque gradual. Só avisa quando o ficheiro de impressão final difere de facto.
+- Em modelos grandes, «Dividir o modelo» encontra a costura entre um terço e metade mais depressa, e nos modelos multicor numa fração do tempo. A divisão funciona como antes.
+- Na divisão automática, cada ajuste pertence aos seus próprios pinos, mesmo numa peça que voltou a ser dividida.
+- Um parafuso, uma porca ou um vedante impressos do catálogo de blocos já não contam no relatório como um corpo fragmentado. É uma peça própria, e isso é intencional.
+- Com um parafuso de cabeça escareada do catálogo de blocos, um corpo feito de faces e arestas mantém-se estanque ao exportar: a peça e o parafuso entram no ficheiro cada um fechado.
 
 ### Assistente com modelo local
 
@@ -93,6 +118,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um modelo numa unidade lenta ou que não responde já não congela a janela ao abrir.
 - Se um ficheiro de «Abertos recentemente» tiver sido movido, o Solidon di-lo e oferece «Escolher outro ficheiro».
 - Um ficheiro que não foi possível ler já não vai parar a «Abertos recentemente», e o ficheiro seguinte já não anuncia o nome dele ao carregar.
+- Os projetos abertos recentemente na página inicial abrem com um clique.
+- Depois de «Dividir o modelo», todas as peças ficam completamente à vista.
+- Cada passo interrompido no relatório tem um botão: «Corrigir a entrada» abre-o com o cursor no campo afetado.
+- Depois da divisão, o relatório já não mostra, nas linhas sobre o corpo antigo, botões que não fazem nada.
+- Um desenho traçado livremente sem cota já não gera um aviso no relatório.
+- Um relatório de erro indica as pastas na sua pasta de utilizador sem o seu nome de utilizador, mesmo quando o próprio Solidon está aí instalado.
 
 ## 0.5.0
 

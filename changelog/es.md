@@ -22,16 +22,28 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Un taladro con avellanado en un lado y chaflán en el otro se puede inclinar, desplazar y duplicar. Antes, Solidon lo rechazaba.
 - Un taladro o avellanado inclinado ya no corta lo que está delante de su boca, como una nervadura o el panal de al lado.
-- Un taladro avellanado que desemboca en una cara curva se puede desplazar, y tras inclinarlo o quitarlo ya no sobresale ningún tapón de la cara.
+- Un taladro avellanado en una cara curva se puede desplazar, también con un clic en la vista. Tras desplazarlo, inclinarlo o quitarlo, el punto antiguo queda a ras con la cara.
+- Un taladro avellanado con el borde de entrada redondeado en una cara plana se puede desplazar, duplicar y quitar junto con el redondeo. Antes quedaba un hueco.
+- Un taladro ciego inclinado, como un bolsillo para imán sin labio, queda del todo abierto en su boca. Antes, una fina piel en el lado más profundo tapaba media abertura.
 - Desplazar y duplicar avisan cuando la pared hacia el taladro vecino se vuelve demasiado fina o se rompe.
 - Si un taladro sale por el lateral de la pieza tras desplazarlo, duplicarlo o inclinarlo, Solidon lo indica también en zonas escalonadas. Una copia que no se creó se detecta.
 - En nervaduras y panales, un taladro inclinado ya no indica por error que sobresale del borde.
 - Tras desplazar, inclinar o duplicar, el panel de características muestra las cotas que el resultado tiene de verdad.
+- Tras desplazar un taladro, aplicarlo en modelos grandes termina en menos de la mitad de tiempo. Las características ajenas al cambio quedan tal como estaban.
 - Si en un cuerpo de caras y aristas, por ejemplo de un archivo STEP, un corte de taladro falla sin que se note, Solidon lo detecta y vuelve a calcular. Antes podía quedar un cuerpo roto.
+- En cuerpos de caras y aristas, los pasos de taladro están listos en segundos: en una placa perforada de un archivo STEP, desplazar tarda 1,6 en lugar de hasta 120 segundos.
+- En cuerpos de caras y aristas, «Cortar una cavidad» ya no devuelve un cuerpo defectuoso.
 - Una ranura se puede acortar. Estirada hasta su propio ancho, vuelve a ser un taladro redondo.
 - El tirador del extremo de una ranura se agarra en cualquier punto de la abertura, y ya no salta hacia el puntero en el primer arrastre.
+- Las ranuras se llevan consigo sus chaflanes y su boca oblicua al desplazarlas, inclinarlas o duplicarlas. Antes, los chaflanes se quedaban en el sitio antiguo.
+- Un bolsillo para imán del catálogo de bloques se puede desplazar, duplicar, multiplicar y eliminar, junto con el labio que sujeta el imán.
+- En un bolsillo para imán, «Cambiar orificio» cambia el diámetro junto con el labio. «Solo diámetro del orificio» mantiene la abertura para el imán y avisa si queda demasiado justa.
+- Si se coloca en ángulo respecto a la cara, la abertura de un bolsillo para imán, un orificio para tornillo o un asiento de rodamiento queda libre. Antes había una cuña de material encima.
+- Si un bloque como un bolsillo para imán no elimina nada en el punto elegido, Solidon lo indica y aconseja hacer clic en la cara.
+- En un bolsillo para imán con labio, «Estirar a ranura» también rechaza actuar en cuerpos de caras y aristas, en lugar de cortar el labio.
+- En un avellanado, «Cambiar elemento» corta la nueva medida como si se hubiera avellanado así desde el principio. Antes, Solidon se negaba o dejaba una fina piel atravesando el taladro.
 - Si piezas de un modelo están metidas unas en otras, Solidon las une antes de calcular, tal como se imprimirán. Volumen y taladros cuadran entonces, y el informe lo dice.
-- Si agranda un taladro en un modelo grande, la vista previa precisa vuelve a mostrar todo el material retirado en lugar de declararse incompleta.
+- Si agranda un taladro, la vista previa precisa muestra todo el material retirado, también en modelos grandes y en cuerpos con canales cerrados.
 - Al escribir una cota en una figura grande, la vista previa aproximada aparece en menos de un segundo en lugar de hasta diecinueve, y la de un taladro en ella funciona.
 - Si un paso en un modelo abierto solo calcula de forma aproximada y el volumen crece, el informe indica la desviación y ofrece «Reparar primero y volver a calcular».
 
@@ -39,10 +51,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - De taladro en taladro, las cotas en la vista aparecen en un tercio del tiempo. El primer clic en una característica ya no congela la ventana, ni siquiera en modelos grandes.
 - Un clic en un taladro ya no muestra imágenes intermedias: el panel de selección y la tarjeta de cotas aparecen directamente en su sitio, sin saltar.
+- Un clic en las flechas de un taladro seleccionado ya no retiene la selección: el siguiente taladro se puede seleccionar como siempre.
 - Escape en las cotas de la vista descarta el borrador y quita la selección, como «Cancelar».
 - Un clic en «Aplicar» ya no se pierde en silencio, y las cotas que no ha escrito se quedan exactamente como se midieron.
 - Un taladro empezado ya no se pierde por el camino: un clic en el informe, un cambio de herramienta o Ctrl+Z piden primero aplicarlo o cancelarlo.
 - Al escribir una coordenada, los campos de cota ya no desaparecen tras la segunda cifra.
+- En modelos grandes, «Medir el espesor de pared» responde unas cuatro veces más rápido.
 
 ### Reconocimiento
 
@@ -53,6 +67,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Rótulos y tirantes aparecen en el árbol como lados redondeados en lugar de decenas de redondeos con radios cambiantes.
 - Los contornos de arcos y rectas se reconocen arco a arco con su radio. «Convertir en caras y aristas» es así mucho más rápido.
 - Un tetón escalonado ya no cuenta como rosca. Vuelven los cilindros y taladros que esa confusión se había tragado.
+- El labio de un bolsillo para imán se llama estrechamiento en el árbol y nombra su abertura. Ninguna acción lo convierte ya en avellanado.
+- Tras «Refinar las aristas», Solidon reconoce redondeos, taladros y rótulos igual que en el original, incluso después de un taladro adicional.
+- Tras «Separar» y «Recortar», una cara dividida conserva su nombre en la parte más grande, y los ajustes en ella siguen siendo válidos.
+- Si hace clic en el borde de un taladro tumbado, se llama «Vertical», tal como está en realidad.
 - Si un modelo tiene más de 5 000 características, Solidon conserva las más grandes en lugar de quedarse sin ninguna. Escalar no revuelve sus nombres.
 
 ### Importar y reparar
@@ -68,6 +86,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un 3MF de PrusaSlicer ya no carga modificadores, bloqueadores ni reforzadores de soportes como material macizo. Un volumen negativo se resta de la pieza.
 - Con «Refinar las aristas» se conservan todas las características y salen hasta cuatro veces menos triángulos: un soporte de taladradora con aristas de 1 mm en cinco segundos en vez de catorce minutos.
 - Un modelo cerrado sigue estanco y conserva sus colores de filamento. Con demasiados triángulos, Solidon indica una longitud de arista que funciona de verdad.
+- La vista previa de «Refinar las aristas» está lista en segundos en lugar de congelar la ventana, y una longitud demasiado fina se rechaza de inmediato.
+- Si un modelo es demasiado fino para «Refinar las aristas», el informe ofrece «Reducir triángulos y volver a intentarlo» con una cifra que realmente funciona.
+- Si «Suavizar» fuera a volver del revés un cuerpo, Solidon lo indica y ofrece «Refinar las aristas y volver a intentarlo» con una longitud de arista que funciona.
 - Los conjuntos grandes se importan más rápido: la reparación al importar un barco pirata de 1,2 millones de triángulos tarda alrededor de un 30 % menos.
 
 ### Imprimir y entregar al slicer
@@ -80,6 +101,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una pieza se apoya en muchos pies pequeños, Solidon propone un brim, aunque los pies juntos tengan superficie suficiente.
 - Una franja estrecha e inclinada junto a la pared exterior ya no cuenta en el informe como un puente largo.
 - La entrega a Cura transmite las primeras capas sin ventilador como arranque progresivo. Solo avisa si el archivo de impresión final difiere de verdad.
+- En modelos grandes, «Dividir el modelo» encuentra la costura entre un tercio y la mitad más rápido, y en los de varios colores en una fracción del tiempo. La división funciona como antes.
+- En la división automática, cada ajuste pertenece a sus propios pasadores, incluso en una pieza que se ha vuelto a dividir.
+- Un tornillo, tuerca o junta impresos del catálogo de bloques ya no cuentan en el informe como un cuerpo fragmentado. Es una pieza propia, y así está previsto.
+- Con un tornillo avellanado del catálogo de bloques, un cuerpo de caras y aristas se mantiene estanco al exportar: la pieza y el tornillo entran en el archivo cada uno cerrado.
 
 ### Asistente con modelo local
 
@@ -94,6 +119,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un modelo en una unidad lenta o que no responde ya no congela la ventana al abrirlo.
 - Si un archivo de «Abiertos recientemente» se ha movido, Solidon lo dice y ofrece «Elegir otro archivo».
 - Un archivo que no se pudo leer ya no acaba en «Abiertos recientemente», y el siguiente archivo ya no anuncia su nombre al cargar.
+- Los proyectos abiertos recientemente en la página de inicio se abren con un clic.
+- Tras «Dividir el modelo», todas las piezas quedan completamente a la vista.
+- Cada paso detenido en el informe tiene un botón: «Corregir la entrada» lo abre con el cursor en el campo afectado.
+- Tras la división, el informe ya no muestra en las líneas del cuerpo antiguo botones que no hacen nada.
+- Un dibujo trazado libremente sin cota ya no genera un aviso en el informe.
+- Un informe de error nombra las carpetas de su directorio de usuario sin su nombre de usuario, incluso si Solidon está instalado allí.
 
 ## 0.5.0
 
